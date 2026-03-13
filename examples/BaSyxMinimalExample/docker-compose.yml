@@ -1,27 +1,11 @@
 services:
-  aas-env:
-    container_name: aas-environment
-    image: eclipsebasyx/aas-environment:2.0.0-SNAPSHOT
-    volumes:
-      - ./basyx/aas-env.properties:/application/application.properties
-      - ./aas:/application/aas
-    ports:
-        - 8081:8081
-    depends_on:
-        aas-registry:
-            condition: service_healthy
-        sm-registry:
-            condition: service_healthy
-        aas-discovery:
-            condition: service_healthy
-            
   aas-registry:
     container_name: aas-registry
     image: eclipsebasyx/aasregistry-go:SNAPSHOT
     ports:
-      - 8082:8080
+      - 8082:5004
     environment:
-      - SERVER_PORT=8080
+      - SERVER_PORT=5004
       - CORS_ALLOWEDORIGINS=*
       - CORS_ALLOWEDHEADERS=*
       - CORS_ALLOWEDCREDENTIALS=true
@@ -35,29 +19,41 @@ services:
       - POSTGRES_MAXIDLECONNECTIONS=500
       - POSTGRES_CONNMAXLIFETIMEMINUTES=5
       - ABAC_ENABLED=false
-    healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--output-document=-", "http://localhost:8080/health"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 10s
     depends_on:
       db:
         condition: service_healthy
-    
+    restart: unless-stopped
+  
   sm-registry:
     container_name: sm-registry
-    image: eclipsebasyx/submodel-registry-log-mem:2.0.0-SNAPSHOT
+    image: eclipsebasyx/submodelregistry-go:SNAPSHOT
+    environment:
+      - SERVER_PORT=5004
+      - CORS_ALLOWEDORIGINS=*
+      - CORS_ALLOWEDHEADERS=*
+      - CORS_ALLOWEDCREDENTIALS=true
+      - CORS_ALLOWEDMETHODS=GET,POST,PUT,PATCH,DELETE,OPTIONS
+      - POSTGRES_HOST=db
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=admin
+      - POSTGRES_PASSWORD=admin123
+      - POSTGRES_DBNAME=basyxTestDB
+      - POSTGRES_MAXOPENCONNECTIONS=500
+      - POSTGRES_MAXIDLECONNECTIONS=500
+      - POSTGRES_CONNMAXLIFETIMEMINUTES=5
+      - ABAC_ENABLED=false
     ports:
-      - 8083:8080
-    volumes:
-      - ./basyx/sm-registry.yml:/workspace/config/application.yml
+      - 8083:5004
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
 
   aas-discovery:
     container_name: aas-discovery
     image: eclipsebasyx/aasdiscovery-go:SNAPSHOT
     environment:
-      - SERVER_PORT=8081
+      - SERVER_PORT=5004
       - CORS_ALLOWEDORIGINS=*
       - CORS_ALLOWEDHEADERS=*
       - CORS_ALLOWEDCREDENTIALS=true
@@ -72,17 +68,11 @@ services:
       - POSTGRES_CONNMAXLIFETIMEMINUTES=5
       - ABAC_ENABLED=false
     ports:
-      - "8084:8081"
-    healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--output-document=-", "http://localhost:8081/health"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 10s
+      - "8084:5004"
     depends_on:
       db:
         condition: service_healthy
-
+    restart: unless-stopped
       
   aas-ui:
     container_name: aas-web-ui
@@ -93,13 +83,88 @@ services:
       AAS_REGISTRY_PATH: "http://localhost:8082/shell-descriptors"
       SUBMODEL_REGISTRY_PATH: "http://localhost:8083/submodel-descriptors"
       AAS_DISCOVERY_PATH: "http://localhost:8084/lookup/shells"
-      AAS_REPO_PATH: "http://localhost:8081/shells"
-      SUBMODEL_REPO_PATH: "http://localhost:8081/submodels"
-      CD_REPO_PATH: "http://localhost:8081/concept-descriptions"
-    restart: always
+      AAS_REPO_PATH: "http://localhost:8090/shells"
+      SUBMODEL_REPO_PATH: "http://localhost:8091/submodels"
+      CD_REPO_PATH: "http://localhost:8092/concept-descriptions"
+    restart: unless-stopped
+
+  aas_repository:
+    container_name: aas-repository
+    image: eclipsebasyx/aasrepository-go:SNAPSHOT
+    environment:
+      - SERVER_PORT=5004
+      - CORS_ALLOWEDORIGINS=*
+      - CORS_ALLOWEDHEADERS=*
+      - CORS_ALLOWEDCREDENTIALS=true
+      - CORS_ALLOWEDMETHODS=GET,POST,PUT,PATCH,DELETE,OPTIONS
+      - POSTGRES_HOST=db
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=admin
+      - POSTGRES_PASSWORD=admin123
+      - POSTGRES_DBNAME=basyxTestDB
+      - POSTGRES_MAXOPENCONNECTIONS=500
+      - POSTGRES_MAXIDLECONNECTIONS=500
+      - POSTGRES_CONNMAXLIFETIMEMINUTES=5
+      - ABAC_ENABLED=false
+    ports:
+      - "8090:5004"
     depends_on:
-      aas-env:
+      db:
         condition: service_healthy
+    restart: unless-stopped
+
+  submodel_repository:
+    container_name: submodel-repository
+    image: eclipsebasyx/submodelrepository-go:SNAPSHOT      
+    environment:
+      - SERVER_PORT=5004
+      - CORS_ALLOWEDORIGINS=*
+      - CORS_ALLOWEDHEADERS=*
+      - CORS_ALLOWEDCREDENTIALS=true
+      - CORS_ALLOWEDMETHODS=GET,POST,PUT,PATCH,DELETE,OPTIONS
+      - POSTGRES_HOST=db
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=admin
+      - POSTGRES_PASSWORD=admin123
+      - POSTGRES_DBNAME=basyxTestDB
+      - POSTGRES_MAXOPENCONNECTIONS=500
+      - POSTGRES_MAXIDLECONNECTIONS=500
+      - POSTGRES_CONNMAXLIFETIMEMINUTES=5
+      - JWS_PRIVATEKEYPATH=/app/rsa-key.pem
+      - ABAC_ENABLED=false
+    volumes:
+      - ./basyx/rsa-key.pem:/app/rsa-key.pem:ro
+    ports:
+      - "8091:5004"
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  concept-description-repository:
+    container_name: concept-description-repository
+    image: eclipsebasyx/conceptdescriptionrepository-go:SNAPSHOT
+    environment:
+      - SERVER_PORT=5004
+      - CORS_ALLOWEDORIGINS=*
+      - CORS_ALLOWEDHEADERS=*
+      - CORS_ALLOWEDCREDENTIALS=true
+      - CORS_ALLOWEDMETHODS=GET,POST,PUT,PATCH,DELETE,OPTIONS
+      - POSTGRES_HOST=db
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=admin
+      - POSTGRES_PASSWORD=admin123
+      - POSTGRES_DBNAME=basyxTestDB
+      - POSTGRES_MAXOPENCONNECTIONS=500
+      - POSTGRES_MAXIDLECONNECTIONS=500
+      - POSTGRES_CONNMAXLIFETIMEMINUTES=5
+      - ABAC_ENABLED=false
+    ports:
+      - "8092:5004"
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
 
   # PostgreSQL database
   db:
@@ -109,11 +174,10 @@ services:
       POSTGRES_USER: admin
       POSTGRES_PASSWORD: admin123
       POSTGRES_DB: basyxTestDB
-    ports:
-      - "5432:5432"
     command: ["postgres", "-c", "listen_addresses=*"]
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U admin -d basyxTestDB"]
       interval: 10s
       timeout: 5s
       retries: 5
+    restart: unless-stopped

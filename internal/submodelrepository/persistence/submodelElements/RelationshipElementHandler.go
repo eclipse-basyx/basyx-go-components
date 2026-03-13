@@ -101,7 +101,7 @@ func (p PostgreSQLRelationshipElementHandler) Update(submodelID string, idShortO
 	}
 
 	var err error
-	cu, localTx, err := persistenceutils.StartTXIfNeeded(tx, err, p.db)
+	cu, localTx, err := common.StartTXIfNeeded(tx, err, p.db)
 	if err != nil {
 		return err
 	}
@@ -146,7 +146,7 @@ func (p PostgreSQLRelationshipElementHandler) Update(submodelID string, idShortO
 		}
 	}
 
-	return persistenceutils.CommitTransactionIfNeeded(tx, localTx)
+	return common.CommitTransactionIfNeeded(tx, localTx)
 }
 
 // UpdateValueOnly updates only the value fields of an existing RelationshipElement.

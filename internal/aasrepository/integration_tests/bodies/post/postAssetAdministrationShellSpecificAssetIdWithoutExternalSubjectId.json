@@ -1,0 +1,14 @@
+{
+  "id": "https://example.com/ids/aas/3039_2377_4123_8115",
+  "idShort": "TestShell",
+  "assetInformation": {
+    "assetKind": "Instance",
+    "specificAssetIds": [
+      {
+        "name": "MyName",
+        "value": "Hello"
+      }
+    ]
+  },
+  "modelType": "AssetAdministrationShell"
+}

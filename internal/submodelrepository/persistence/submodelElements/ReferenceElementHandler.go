@@ -107,7 +107,7 @@ func (p PostgreSQLReferenceElementHandler) Update(submodelID string, idShortOrPa
 	}
 
 	var err error
-	cu, localTx, err := persistenceutils.StartTXIfNeeded(tx, err, p.db)
+	cu, localTx, err := common.StartTXIfNeeded(tx, err, p.db)
 	if err != nil {
 		return err
 	}
@@ -167,7 +167,7 @@ func (p PostgreSQLReferenceElementHandler) Update(submodelID string, idShortOrPa
 		}
 	}
 
-	return persistenceutils.CommitTransactionIfNeeded(tx, localTx)
+	return common.CommitTransactionIfNeeded(tx, localTx)
 }
 
 // UpdateValueOnly updates only the value of an existing ReferenceElement identified by its idShort or full path.

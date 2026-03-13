@@ -58,6 +58,7 @@ var terminalColumnMappings = map[string]terminalColumnMapping{
 		ByContext: map[resolveContext]string{
 			ctxSM:                 "submodel.id_short",
 			ctxSME:                "submodel_element.id_short",
+			ctxCD:                 "concept_description.id_short",
 			ctxAASDesc:            "aas_descriptor.id_short",
 			ctxSMDesc:             "submodel_descriptor.id_short",
 			ctxSubmodelDescriptor: "submodel_descriptor.id_short",
@@ -67,6 +68,7 @@ var terminalColumnMappings = map[string]terminalColumnMapping{
 	"id": {
 		ByContext: map[resolveContext]string{
 			ctxSM:                 "submodel.submodel_identifier",
+			ctxCD:                 "concept_description.id",
 			ctxAASDesc:            "aas_descriptor.id",
 			ctxSMDesc:             "submodel_descriptor.id",
 			ctxSubmodelDescriptor: "submodel_descriptor.id",
@@ -193,7 +195,7 @@ var terminalColumnMappings = map[string]terminalColumnMapping{
 func ResolveAASQLFieldToSQLColumn(fieldStr string) (string, error) {
 	ctx := contextFromFieldPrefix(fieldStr)
 	if ctx == ctxUnknown {
-		return "", fmt.Errorf("unsupported field root (expected $aasdesc#, $smdesc#, $sm#, $sme...#, or $bd#): %q", fieldStr)
+		return "", fmt.Errorf("unsupported field root (expected $aasdesc#, $smdesc#, $sm#, $sme...#, $cd#, or $bd#): %q", fieldStr)
 	}
 
 	tokens := builder.TokenizeField(fieldStr)

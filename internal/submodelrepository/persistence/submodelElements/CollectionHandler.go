@@ -86,7 +86,7 @@ func (p PostgreSQLSubmodelElementCollectionHandler) Update(submodelID string, id
 	}
 
 	var err error
-	cu, localTx, err := persistenceutils.StartTXIfNeeded(tx, err, p.db)
+	cu, localTx, err := common.StartTXIfNeeded(tx, err, p.db)
 	if err != nil {
 		return err
 	}
@@ -144,7 +144,7 @@ func (p PostgreSQLSubmodelElementCollectionHandler) Update(submodelID string, id
 		}
 	}
 
-	return persistenceutils.CommitTransactionIfNeeded(tx, localTx)
+	return common.CommitTransactionIfNeeded(tx, localTx)
 }
 
 // UpdateValueOnly updates only the value of an existing SubmodelElementCollection submodel element identified by its idShort or path.

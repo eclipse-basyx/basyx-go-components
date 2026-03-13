@@ -105,21 +105,24 @@ func getSMEValueExpressionForRead(dialect goqu.DialectWrapper) exp.CaseExpressio
 		).
 		When(
 			goqu.I("sme.model_type").Eq(types.ModelTypeMultiLanguageProperty),
-			dialect.From(goqu.T("multilanguage_property").As("mlp")).
-				Select(goqu.Func("jsonb_build_object",
-					goqu.V("value_id"), goqu.COALESCE(goqu.I("mlp.value_id_payload"), goqu.L("'[]'::jsonb")),
-					goqu.V("value_id_referred"), goqu.L("'[]'::jsonb"),
-					goqu.V("value"),
-					dialect.From(goqu.T("multilanguage_property_value").As("mlpv")).
-						Select(goqu.Func("jsonb_agg", goqu.Func("jsonb_build_object",
-							goqu.V("language"), goqu.I("mlpv.language"),
-							goqu.V("text"), goqu.I("mlpv.text"),
-							goqu.V("id"), goqu.I("mlpv.id"),
-						))).
-						Where(goqu.I("mlpv.mlp_id").Eq(goqu.I("sme.id"))),
-				)).
-				Where(goqu.I("mlp.id").Eq(goqu.I("sme.id"))).
-				Limit(1),
+			goqu.Func("jsonb_build_object",
+				goqu.V("value_id"), goqu.COALESCE(
+					dialect.From(goqu.T("multilanguage_property_payload").As("mlpp")).
+						Select(goqu.I("mlpp.value_id_payload")).
+						Where(goqu.I("mlpp.submodel_element_id").Eq(goqu.I("sme.id"))).
+						Limit(1),
+					goqu.L("'[]'::jsonb"),
+				),
+				goqu.V("value_id_referred"), goqu.L("'[]'::jsonb"),
+				goqu.V("value"),
+				dialect.From(goqu.T("multilanguage_property_value").As("mlpv")).
+					Select(goqu.Func("jsonb_agg", goqu.Func("jsonb_build_object",
+						goqu.V("language"), goqu.I("mlpv.language"),
+						goqu.V("text"), goqu.I("mlpv.text"),
+						goqu.V("id"), goqu.I("mlpv.id"),
+					))).
+					Where(goqu.I("mlpv.submodel_element_id").Eq(goqu.I("sme.id"))),
+			),
 		).
 		When(
 			goqu.I("sme.model_type").Eq(types.ModelTypeOperation),

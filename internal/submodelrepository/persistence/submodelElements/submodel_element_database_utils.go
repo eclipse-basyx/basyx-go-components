@@ -452,9 +452,9 @@ func insertMultiLanguagePropertyValues(tx *sql.Tx, dialect goqu.DialectWrapper, 
 
 		for _, val := range mlp.Value() {
 			mlpRows = append(mlpRows, goqu.Record{
-				"mlp_id":   node.dbID,
-				"language": val.Language(),
-				"text":     val.Text(),
+				"submodel_element_id": node.dbID,
+				"language":            val.Language(),
+				"text":                val.Text(),
 			})
 		}
 	}
@@ -467,9 +467,50 @@ func insertMultiLanguagePropertyValues(tx *sql.Tx, dialect goqu.DialectWrapper, 
 		tx,
 		dialect,
 		"multilanguage_property_value",
-		[]string{"mlp_id", "language", "text"},
+		[]string{"submodel_element_id", "language", "text"},
 		mlpRows,
 		"SMREPO-INSSME-INSMLPVAL",
+	)
+}
+
+func insertMultiLanguagePropertyPayloadRows(tx *sql.Tx, dialect goqu.DialectWrapper, nodes []*flattenedInsertNode) error {
+	mlpPayloadRows := make([]goqu.Record, 0)
+	for _, node := range nodes {
+		if node.element.ModelType() != types.ModelTypeMultiLanguageProperty {
+			continue
+		}
+
+		mlp, ok := node.element.(*types.MultiLanguageProperty)
+		if !ok {
+			continue
+		}
+
+		valueIDPayload := "[]"
+		if mlp.ValueID() != nil && !isEmptyReference(mlp.ValueID()) {
+			valueIDJSONString, serErr := serializeIClassSliceToJSON([]types.IClass{mlp.ValueID()}, "SMREPO-INSSME-MLP-VALREF")
+			if serErr != nil {
+				return serErr
+			}
+			valueIDPayload = valueIDJSONString
+		}
+
+		mlpPayloadRows = append(mlpPayloadRows, goqu.Record{
+			"submodel_element_id": node.dbID,
+			"value_id_payload":    goqu.L("?::jsonb", valueIDPayload),
+		})
+	}
+
+	if len(mlpPayloadRows) == 0 {
+		return nil
+	}
+
+	return executeRecordInsertChunked(
+		tx,
+		dialect,
+		"multilanguage_property_payload",
+		[]string{"submodel_element_id", "value_id_payload"},
+		mlpPayloadRows,
+		"SMREPO-INSSME-INSMLPPAYLOAD",
 	)
 }
 

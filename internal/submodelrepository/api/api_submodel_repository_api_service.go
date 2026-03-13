@@ -16,7 +16,6 @@ import (
 	"bytes"
 	"context"
 	"database/sql"
-	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -91,27 +90,6 @@ func submodelValueToAnyMap(value gen.SubmodelValue) map[string]any {
 		result[key] = val
 	}
 	return result
-}
-
-func decodeBase64RawStd(value string) (string, error) {
-	if value == "" {
-		return "", nil
-	}
-
-	decodedBytes, err := base64.RawStdEncoding.DecodeString(value)
-	if err != nil {
-		return "", err
-	}
-
-	return string(decodedBytes), nil
-}
-
-func encodeBase64RawStd(value string) string {
-	if value == "" {
-		return ""
-	}
-
-	return base64.RawStdEncoding.EncodeToString([]byte(value))
 }
 
 func buildLimitPtr(limit int32) *int {
@@ -445,7 +423,7 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodels(
 
 	decodedCursor := ""
 	if cursor != "" {
-		decodedCursorBytes, decodeErr := base64.RawStdEncoding.DecodeString(cursor)
+		decodedCursorBytes, decodeErr := common.DecodeString(cursor)
 		if decodeErr != nil {
 			return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "BadCursor"), nil
 		}
@@ -498,7 +476,7 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodels(
 	// using the openAPI provided response struct to include paging metadata
 	encodedNextCursor := ""
 	if nextCursor != "" {
-		encodedNextCursor = base64.RawStdEncoding.EncodeToString([]byte(nextCursor))
+		encodedNextCursor = common.EncodeString(nextCursor)
 	}
 
 	res := gen.GetSubmodelsResult{
@@ -530,7 +508,7 @@ func (s *SubmodelRepositoryAPIAPIService) GetSubmodelByID(
 ) (gen.ImplResponse, error) {
 	const operation = "GetSubmodelByID"
 
-	decodedSubmodelIdentifier, decodeErr := base64.RawStdEncoding.DecodeString(id)
+	decodedSubmodelIdentifier, decodeErr := common.DecodeString(id)
 	if decodeErr != nil {
 		return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "MalformedSubmodelIdentifier"), nil
 	}
@@ -567,7 +545,7 @@ func (s *SubmodelRepositoryAPIAPIService) GetSignedSubmodelByID(
 ) (gen.ImplResponse, error) {
 	const operation = "GetSignedSubmodelByID"
 
-	decodedSubmodelIdentifier, decodeErr := decodeBase64RawStd(id)
+	decodedSubmodelIdentifier, decodeErr := common.DecodeString(id)
 	if decodeErr != nil {
 		return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "MalformedSubmodelIdentifier"), nil
 	}
@@ -595,7 +573,7 @@ func (s *SubmodelRepositoryAPIAPIService) GetSignedSubmodelByIDValueOnly(
 ) (gen.ImplResponse, error) {
 	const operation = "GetSignedSubmodelByIDValueOnly"
 
-	decodedSubmodelIdentifier, decodeErr := decodeBase64RawStd(id)
+	decodedSubmodelIdentifier, decodeErr := common.DecodeString(id)
 	if decodeErr != nil {
 		return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "MalformedSubmodelIdentifier"), nil
 	}
@@ -630,7 +608,7 @@ func (s *SubmodelRepositoryAPIAPIService) DeleteSubmodelByID(
 ) (gen.ImplResponse, error) {
 	const operation = "DeleteSubmodelByID"
 
-	decodedSubmodelIdentifier, decodeErr := decodeBase64RawStd(id)
+	decodedSubmodelIdentifier, decodeErr := common.DecodeString(id)
 	if decodeErr != nil {
 		return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "MalformedSubmodelIdentifier"), nil
 	}
@@ -718,7 +696,7 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelsMetadata(
 
 	decodedCursor := ""
 	if cursor != "" {
-		decodedCursorBytes, decodeErr := base64.RawStdEncoding.DecodeString(cursor)
+		decodedCursorBytes, decodeErr := common.DecodeString(cursor)
 		if decodeErr != nil {
 			return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "BadCursor"), nil
 		}
@@ -778,7 +756,7 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelsMetadata(
 
 	encodedCursor := ""
 	if nextCursor != "" {
-		encodedCursor = base64.RawStdEncoding.EncodeToString([]byte(nextCursor))
+		encodedCursor = common.EncodeString(nextCursor)
 	}
 
 	result := gen.GetSubmodelsMetadataResult{
@@ -799,7 +777,7 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelsValueOnly(ctx context.C
 
 	decodedCursor := ""
 	if cursor != "" {
-		decodedCursorBytes, decodeErr := base64.RawStdEncoding.DecodeString(cursor)
+		decodedCursorBytes, decodeErr := common.DecodeString(cursor)
 		if decodeErr != nil {
 			return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "BadCursor"), nil
 		}
@@ -851,7 +829,7 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelsValueOnly(ctx context.C
 
 	encodedNextCursor := ""
 	if nextCursor != "" {
-		encodedNextCursor = base64.RawStdEncoding.EncodeToString([]byte(nextCursor))
+		encodedNextCursor = common.EncodeString(nextCursor)
 	}
 
 	res := gen.GetSubmodelsValueResult{
@@ -872,14 +850,14 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelsReference(ctx context.C
 	_ = level
 	const operation = "GetAllSubmodelsReference"
 
-	decodedCursor, decodeErr := decodeBase64RawStd(cursor)
+	decodedCursor, decodeErr := common.DecodeString(cursor)
 	if decodeErr != nil {
 		return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "BadCursor"), nil
 	}
 
 	decodedSemanticID := ""
 	if semanticID != "" {
-		decodedSemanticID, decodeErr = decodeBase64RawStd(semanticID)
+		decodedSemanticID, decodeErr = common.DecodeString(semanticID)
 		if decodeErr != nil {
 			return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "BadSemanticID"), nil
 		}
@@ -903,7 +881,7 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelsReference(ctx context.C
 	}
 
 	res := gen.GetReferencesResult{
-		PagingMetadata: gen.PagedResultPagingMetadata{Cursor: encodeBase64RawStd(nextCursor)},
+		PagingMetadata: gen.PagedResultPagingMetadata{Cursor: common.EncodeString(nextCursor)},
 		Result:         jsonReferences,
 	}
 
@@ -945,7 +923,7 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelsPath(ctx context.Contex
 func (s *SubmodelRepositoryAPIAPIService) PutSubmodelByID(ctx context.Context, submodelIdentifier string, submodel types.ISubmodel) (gen.ImplResponse, error) {
 	const operation = "PutSubmodelByID"
 
-	decodedIdentifier, decodeErr := decodeBase64RawStd(submodelIdentifier)
+	decodedIdentifier, decodeErr := common.DecodeString(submodelIdentifier)
 	if decodeErr != nil {
 		return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "MalformedSubmodelIdentifier"), nil
 	}
@@ -991,7 +969,7 @@ func (s *SubmodelRepositoryAPIAPIService) PatchSubmodelByID(ctx context.Context,
 	_ = level
 	const operation = "PatchSubmodelByID"
 
-	decodedIdentifier, decodeErr := decodeBase64RawStd(submodelIdentifier)
+	decodedIdentifier, decodeErr := common.DecodeString(submodelIdentifier)
 	if decodeErr != nil {
 		return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "MalformedSubmodelIdentifier"), nil
 	}
@@ -1135,7 +1113,7 @@ func (s *SubmodelRepositoryAPIAPIService) GetSubmodelByIDValueOnly(ctx context.C
 	_ = extent
 	const operation = "GetSubmodelByIDValueOnly"
 
-	decodedSubmodelIdentifier, decodeErr := base64.RawStdEncoding.DecodeString(submodelIdentifier)
+	decodedSubmodelIdentifier, decodeErr := common.DecodeString(submodelIdentifier)
 	if decodeErr != nil {
 		return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "MalformedSubmodelIdentifier"), nil
 	}
@@ -1168,7 +1146,7 @@ func (s *SubmodelRepositoryAPIAPIService) PatchSubmodelByIDValueOnly(ctx context
 	_ = level
 	const operation = "PatchSubmodelByIDValueOnly"
 
-	decodedIdentifier, err := base64.RawStdEncoding.DecodeString(submodelIdentifier)
+	decodedIdentifier, err := common.DecodeString(submodelIdentifier)
 	if err != nil {
 		return newAPIErrorResponse(err, http.StatusBadRequest, operation, "MalformedSubmodelIdentifier"), nil
 	}
@@ -1194,7 +1172,7 @@ func (s *SubmodelRepositoryAPIAPIService) GetSubmodelByIDReference(ctx context.C
 	_ = ctx
 	const operation = "GetSubmodelByIDReference"
 
-	decodedSubmodelIdentifier, decodeErr := decodeBase64RawStd(submodelIdentifier)
+	decodedSubmodelIdentifier, decodeErr := common.DecodeString(submodelIdentifier)
 	if decodeErr != nil {
 		return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "MalformedSubmodelIdentifier"), nil
 	}
@@ -1264,14 +1242,14 @@ func (s *SubmodelRepositoryAPIAPIService) GetSubmodelByIDPath(ctx context.Contex
 func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelElements(ctx context.Context, submodelIdentifier string, limit int32, cursor string, level string, _ /*extent*/ string) (gen.ImplResponse, error) {
 	const operation = "GetAllSubmodelElements"
 
-	decodedSubmodelIdentifier, decodeErr := base64.RawStdEncoding.DecodeString(submodelIdentifier)
+	decodedSubmodelIdentifier, decodeErr := common.DecodeString(submodelIdentifier)
 	if decodeErr != nil {
 		return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "MalformedSubmodelIdentifier"), nil
 	}
 
 	decodedCursor := ""
 	if cursor != "" {
-		decodedCursorBytes, err := base64.RawStdEncoding.DecodeString(cursor)
+		decodedCursorBytes, err := common.DecodeString(cursor)
 		if err != nil {
 			return newAPIErrorResponse(err, http.StatusBadRequest, operation, "BadCursor"), nil
 		}
@@ -1310,7 +1288,7 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelElements(ctx context.Con
 
 	encodedNextCursor := ""
 	if nextCursor != "" {
-		encodedNextCursor = base64.RawStdEncoding.EncodeToString([]byte(nextCursor))
+		encodedNextCursor = common.EncodeString(nextCursor)
 	}
 
 	res := gen.GetSubmodelElementsResult{
@@ -1335,7 +1313,7 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelElements(ctx context.Con
 func (s *SubmodelRepositoryAPIAPIService) PostSubmodelElementSubmodelRepo(ctx context.Context, submodelIdentifier string, submodelElement types.ISubmodelElement) (gen.ImplResponse, error) {
 	const operation = "PostSubmodelElementSubmodelRepo"
 
-	decodedSubmodelIdentifier, decodeErr := decodeBase64RawStd(submodelIdentifier)
+	decodedSubmodelIdentifier, decodeErr := common.DecodeString(submodelIdentifier)
 	if decodeErr != nil {
 		return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "MalformedSubmodelIdentifier"), nil
 	}
@@ -1366,12 +1344,12 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelElementsMetadataSubmodel
 	_ = ctx
 	const operation = "GetAllSubmodelElementsMetadataSubmodelRepo"
 
-	decodedSubmodelIdentifier, decodeErr := decodeBase64RawStd(submodelIdentifier)
+	decodedSubmodelIdentifier, decodeErr := common.DecodeString(submodelIdentifier)
 	if decodeErr != nil {
 		return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "MalformedSubmodelIdentifier"), nil
 	}
 
-	decodedCursor, cursorDecodeErr := decodeBase64RawStd(cursor)
+	decodedCursor, cursorDecodeErr := common.DecodeString(cursor)
 	if cursorDecodeErr != nil {
 		return newAPIErrorResponse(cursorDecodeErr, http.StatusBadRequest, operation, "BadCursor"), nil
 	}
@@ -1397,7 +1375,7 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelElementsMetadataSubmodel
 	}
 
 	res := gen.GetSubmodelElementsMetadataResult{
-		PagingMetadata: gen.PagedResultPagingMetadata{Cursor: encodeBase64RawStd(nextCursor)},
+		PagingMetadata: gen.PagedResultPagingMetadata{Cursor: common.EncodeString(nextCursor)},
 		Result:         metadataResult,
 	}
 
@@ -1412,14 +1390,14 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelElementsValueOnlySubmode
 	_ = extent
 	const operation = "GetAllSubmodelElementsValueOnlySubmodelRepo"
 
-	decodedSubmodelIdentifier, decodeErr := base64.RawStdEncoding.DecodeString(submodelIdentifier)
+	decodedSubmodelIdentifier, decodeErr := common.DecodeString(submodelIdentifier)
 	if decodeErr != nil {
 		return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "MalformedSubmodelIdentifier"), nil
 	}
 
 	decodedCursor := ""
 	if cursor != "" {
-		decodedCursorBytes, err := base64.RawStdEncoding.DecodeString(cursor)
+		decodedCursorBytes, err := common.DecodeString(cursor)
 		if err != nil {
 			return newAPIErrorResponse(err, http.StatusBadRequest, operation, "BadCursor"), nil
 		}
@@ -1465,7 +1443,7 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelElementsValueOnlySubmode
 
 	encodedNextCursor := ""
 	if nextCursor != "" {
-		encodedNextCursor = base64.RawStdEncoding.EncodeToString([]byte(nextCursor))
+		encodedNextCursor = common.EncodeString(nextCursor)
 	}
 
 	res := gen.GetSubmodelElementsValueResult{
@@ -1484,12 +1462,12 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelElementsReferenceSubmode
 	_ = level
 	const operation = "GetAllSubmodelElementsReferenceSubmodelRepo"
 
-	decodedSubmodelIdentifier, decodeErr := decodeBase64RawStd(submodelIdentifier)
+	decodedSubmodelIdentifier, decodeErr := common.DecodeString(submodelIdentifier)
 	if decodeErr != nil {
 		return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "MalformedSubmodelIdentifier"), nil
 	}
 
-	decodedCursor, cursorDecodeErr := decodeBase64RawStd(cursor)
+	decodedCursor, cursorDecodeErr := common.DecodeString(cursor)
 	if cursorDecodeErr != nil {
 		return newAPIErrorResponse(cursorDecodeErr, http.StatusBadRequest, operation, "BadCursor"), nil
 	}
@@ -1515,7 +1493,7 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelElementsReferenceSubmode
 	}
 
 	res := gen.GetReferencesResult{
-		PagingMetadata: gen.PagedResultPagingMetadata{Cursor: encodeBase64RawStd(nextCursor)},
+		PagingMetadata: gen.PagedResultPagingMetadata{Cursor: common.EncodeString(nextCursor)},
 		Result:         jsonableArray,
 	}
 
@@ -1529,12 +1507,12 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelElementsPathSubmodelRepo
 	_ = ctx
 	const operation = "GetAllSubmodelElementsPathSubmodelRepo"
 
-	decodedSubmodelIdentifier, decodeErr := decodeBase64RawStd(submodelIdentifier)
+	decodedSubmodelIdentifier, decodeErr := common.DecodeString(submodelIdentifier)
 	if decodeErr != nil {
 		return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "MalformedSubmodelIdentifier"), nil
 	}
 
-	decodedCursor, cursorDecodeErr := decodeBase64RawStd(cursor)
+	decodedCursor, cursorDecodeErr := common.DecodeString(cursor)
 	if cursorDecodeErr != nil {
 		return newAPIErrorResponse(cursorDecodeErr, http.StatusBadRequest, operation, "BadCursor"), nil
 	}
@@ -1564,7 +1542,7 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelElementsPathSubmodelRepo
 	}
 
 	res := gen.GetPathItemsResult{
-		PagingMetadata: gen.PagedResultPagingMetadata{Cursor: encodeBase64RawStd(nextCursor)},
+		PagingMetadata: gen.PagedResultPagingMetadata{Cursor: common.EncodeString(nextCursor)},
 		Result:         paths,
 	}
 
@@ -1582,7 +1560,7 @@ func (s *SubmodelRepositoryAPIAPIService) GetSubmodelElementByPathSubmodelRepo(c
 		return newAPIErrorResponse(errors.New("invalid level parameter"), http.StatusBadRequest, operation, "InvalidLevelParameter"), nil
 	}
 
-	decodedSubmodelIdentifier, decodeErr := decodeBase64RawStd(submodelIdentifier)
+	decodedSubmodelIdentifier, decodeErr := common.DecodeString(submodelIdentifier)
 	if decodeErr != nil {
 		return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "MalformedSubmodelIdentifier"), nil
 	}
@@ -1622,7 +1600,7 @@ func (s *SubmodelRepositoryAPIAPIService) GetSubmodelElementByPathSubmodelRepo(c
 func (s *SubmodelRepositoryAPIAPIService) PutSubmodelElementByPathSubmodelRepo(ctx context.Context, submodelIdentifier string, idShortPath string, submodelElement types.ISubmodelElement, _ /*level*/ string) (gen.ImplResponse, error) {
 	const operation = "PutSubmodelElementByPathSubmodelRepo"
 
-	decodedSubmodelIdentifier, decodeErr := decodeBase64RawStd(submodelIdentifier)
+	decodedSubmodelIdentifier, decodeErr := common.DecodeString(submodelIdentifier)
 	if decodeErr != nil {
 		return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "MalformedSubmodelIdentifier"), nil
 	}
@@ -1662,7 +1640,7 @@ func (s *SubmodelRepositoryAPIAPIService) PutSubmodelElementByPathSubmodelRepo(c
 func (s *SubmodelRepositoryAPIAPIService) PostSubmodelElementByPathSubmodelRepo(_ /*ctx*/ context.Context, submodelIdentifier string, idShortPath string, submodelElement types.ISubmodelElement) (gen.ImplResponse, error) {
 	const operation = "PostSubmodelElementByPathSubmodelRepo"
 
-	decodedSubmodelIdentifier, decodeErr := decodeBase64RawStd(submodelIdentifier)
+	decodedSubmodelIdentifier, decodeErr := common.DecodeString(submodelIdentifier)
 	if decodeErr != nil {
 		return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "MalformedSubmodelIdentifier"), nil
 	}
@@ -1698,7 +1676,7 @@ func (s *SubmodelRepositoryAPIAPIService) PostSubmodelElementByPathSubmodelRepo(
 func (s *SubmodelRepositoryAPIAPIService) DeleteSubmodelElementByPathSubmodelRepo(ctx context.Context, submodelIdentifier string, idShortPath string) (gen.ImplResponse, error) {
 	const operation = "DeleteSubmodelElementByPathSubmodelRepo"
 
-	decodedSubmodelIdentifier, decodeErr := decodeBase64RawStd(submodelIdentifier)
+	decodedSubmodelIdentifier, decodeErr := common.DecodeString(submodelIdentifier)
 	if decodeErr != nil {
 		return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "MalformedSubmodelIdentifier"), nil
 	}
@@ -1727,7 +1705,7 @@ func (s *SubmodelRepositoryAPIAPIService) PatchSubmodelElementByPathSubmodelRepo
 	_ = ctx
 	const operation = "PatchSubmodelElementByPathSubmodelRepo"
 
-	decodedSubmodelIdentifier, decodeErr := decodeBase64RawStd(submodelIdentifier)
+	decodedSubmodelIdentifier, decodeErr := common.DecodeString(submodelIdentifier)
 	if decodeErr != nil {
 		return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "MalformedSubmodelIdentifier"), nil
 	}
@@ -1789,7 +1767,7 @@ func (s *SubmodelRepositoryAPIAPIService) PatchSubmodelElementByPathSubmodelRepo
 func (s *SubmodelRepositoryAPIAPIService) GetSubmodelElementByPathMetadataSubmodelRepo(ctx context.Context, submodelIdentifier string, idShortPath string) (gen.ImplResponse, error) {
 	const operation = "GetSubmodelElementByPathMetadataSubmodelRepo"
 
-	decodedSubmodelIdentifier, decodeErr := decodeBase64RawStd(submodelIdentifier)
+	decodedSubmodelIdentifier, decodeErr := common.DecodeString(submodelIdentifier)
 	if decodeErr != nil {
 		return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "MalformedSubmodelIdentifier"), nil
 	}
@@ -1852,7 +1830,7 @@ func (s *SubmodelRepositoryAPIAPIService) GetSubmodelElementByPathValueOnlySubmo
 	_ = extent
 	const operation = "GetSubmodelElementByPathValueOnlySubmodelRepo"
 
-	decodedSubmodelIdentifier, decodeErr := base64.RawStdEncoding.DecodeString(submodelIdentifier)
+	decodedSubmodelIdentifier, decodeErr := common.DecodeString(submodelIdentifier)
 	if decodeErr != nil {
 		return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "MalformedSubmodelIdentifier"), nil
 	}
@@ -1889,7 +1867,7 @@ func (s *SubmodelRepositoryAPIAPIService) PatchSubmodelElementByPathValueOnlySub
 	_ = level
 	const operation = "PatchSubmodelElementByPathValueOnlySubmodelRepo"
 
-	decodedIdentifier, decodeErr := base64.RawStdEncoding.DecodeString(submodelIdentifier)
+	decodedIdentifier, decodeErr := common.DecodeString(submodelIdentifier)
 	if decodeErr != nil {
 		return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "MalformedSubmodelIdentifier"), nil
 	}
@@ -1914,7 +1892,7 @@ func (s *SubmodelRepositoryAPIAPIService) PatchSubmodelElementByPathValueOnlySub
 func (s *SubmodelRepositoryAPIAPIService) GetSubmodelElementByPathReferenceSubmodelRepo(ctx context.Context, submodelIdentifier string, idShortPath string) (gen.ImplResponse, error) {
 	const operation = "GetSubmodelElementByPathReferenceSubmodelRepo"
 
-	decodedSubmodelIdentifier, decodeErr := decodeBase64RawStd(submodelIdentifier)
+	decodedSubmodelIdentifier, decodeErr := common.DecodeString(submodelIdentifier)
 	if decodeErr != nil {
 		return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "MalformedSubmodelIdentifier"), nil
 	}
@@ -1988,7 +1966,7 @@ func (s *SubmodelRepositoryAPIAPIService) GetSubmodelElementByPathReferenceSubmo
 func (s *SubmodelRepositoryAPIAPIService) GetSubmodelElementByPathPathSubmodelRepo(ctx context.Context, submodelIdentifier string, idShortPath string, level string) (gen.ImplResponse, error) {
 	const operation = "GetSubmodelElementByPathPathSubmodelRepo"
 
-	decodedSubmodelIdentifier, decodeErr := decodeBase64RawStd(submodelIdentifier)
+	decodedSubmodelIdentifier, decodeErr := common.DecodeString(submodelIdentifier)
 	if decodeErr != nil {
 		return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "MalformedSubmodelIdentifier"), nil
 	}
@@ -2013,7 +1991,7 @@ func (s *SubmodelRepositoryAPIAPIService) GetSubmodelElementByPathPathSubmodelRe
 func (s *SubmodelRepositoryAPIAPIService) GetFileByPathSubmodelRepo(ctx context.Context, submodelIdentifier string, idShortPath string) (gen.ImplResponse, error) {
 	const operation = "GetFileByPathSubmodelRepo"
 
-	decodedSubmodelIdentifier, decodeErr := decodeBase64RawStd(submodelIdentifier)
+	decodedSubmodelIdentifier, decodeErr := common.DecodeString(submodelIdentifier)
 	if decodeErr != nil {
 		return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "MalformedSubmodelIdentifier"), nil
 	}
@@ -2067,7 +2045,7 @@ func (s *SubmodelRepositoryAPIAPIService) PutFileByPathSubmodelRepo(ctx context.
 	_ = ctx
 	const operation = "PutFileByPathSubmodelRepo"
 
-	decodedSubmodelIdentifier, decodeErr := decodeBase64RawStd(submodelIdentifier)
+	decodedSubmodelIdentifier, decodeErr := common.DecodeString(submodelIdentifier)
 	if decodeErr != nil {
 		return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "MalformedSubmodelIdentifier"), nil
 	}
@@ -2109,7 +2087,7 @@ func (s *SubmodelRepositoryAPIAPIService) DeleteFileByPathSubmodelRepo(ctx conte
 	_ = ctx
 	const operation = "DeleteFileByPathSubmodelRepo"
 
-	decodedSubmodelIdentifier, decodeErr := decodeBase64RawStd(submodelIdentifier)
+	decodedSubmodelIdentifier, decodeErr := common.DecodeString(submodelIdentifier)
 	if decodeErr != nil {
 		return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "MalformedSubmodelIdentifier"), nil
 	}

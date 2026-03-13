@@ -88,6 +88,7 @@ const (
 	CollectorRootSMDesc  CollectorRoot = "smdesc"
 	CollectorRootSM      CollectorRoot = "sm"
 	CollectorRootSME     CollectorRoot = "sme"
+	CollectorRootCD      CollectorRoot = "cd"
 	CollectorRootBD      CollectorRoot = "bd"
 )
 
@@ -102,6 +103,8 @@ func ParseCollectorRoot(root string) (CollectorRoot, error) {
 		return CollectorRootSM, nil
 	case string(CollectorRootSME):
 		return CollectorRootSME, nil
+	case string(CollectorRootCD):
+		return CollectorRootCD, nil
 	case string(CollectorRootBD):
 		return CollectorRootBD, nil
 	default:
@@ -111,7 +114,7 @@ func ParseCollectorRoot(root string) (CollectorRoot, error) {
 
 func (r CollectorRoot) isValid() bool {
 	switch r {
-	case CollectorRootAASDesc, CollectorRootSMDesc, CollectorRootSM, CollectorRootSME, CollectorRootBD:
+	case CollectorRootAASDesc, CollectorRootSMDesc, CollectorRootSM, CollectorRootSME, CollectorRootCD, CollectorRootBD:
 		return true
 	default:
 		return false
@@ -139,6 +142,8 @@ func joinPlanConfigForRoot(root CollectorRoot) (JoinPlanConfig, error) {
 		return joinPlanConfigForSM(), nil
 	case CollectorRootSME:
 		return joinPlanConfigForSME(), nil
+	case CollectorRootCD:
+		return joinPlanConfigForCD(), nil
 	case CollectorRootBD:
 		return joinPlanConfigForBD(), nil
 	default:
@@ -160,7 +165,7 @@ func normalizeRoot(root string) string {
 func joinPlanConfigForSM() JoinPlanConfig {
 	return JoinPlanConfig{
 		PreferredBase: "s",
-		BaseAliases:   []string{"s", "semantic_id_reference", "semantic_id_reference_key", "submodel_element", "property_element", "multilanguage_property", "multilanguage_property_value", "sme_semantic_id_reference", "sme_semantic_id_reference_key"},
+		BaseAliases:   []string{"s", "semantic_id_reference", "semantic_id_reference_key", "submodel_element", "property_element", "multilanguage_property_value", "sme_semantic_id_reference", "sme_semantic_id_reference_key"},
 		Rules: map[string]existsJoinRule{
 			"s": {
 				Alias: "s",
@@ -209,23 +214,13 @@ func joinPlanConfigForSM() JoinPlanConfig {
 					)
 				},
 			},
-			"multilanguage_property": {
-				Alias: "multilanguage_property",
+			"multilanguage_property_value": {
+				Alias: "multilanguage_property_value",
 				Deps:  []string{"submodel_element"},
 				Apply: func(ds *goqu.SelectDataset) *goqu.SelectDataset {
 					return ds.LeftJoin(
-						goqu.T("multilanguage_property"),
-						goqu.On(goqu.I("multilanguage_property.id").Eq(goqu.I("submodel_element.id"))),
-					)
-				},
-			},
-			"multilanguage_property_value": {
-				Alias: "multilanguage_property_value",
-				Deps:  []string{"multilanguage_property"},
-				Apply: func(ds *goqu.SelectDataset) *goqu.SelectDataset {
-					return ds.LeftJoin(
 						goqu.T("multilanguage_property_value"),
-						goqu.On(goqu.I("multilanguage_property_value.mlp_id").Eq(goqu.I("multilanguage_property.id"))),
+						goqu.On(goqu.I("multilanguage_property_value.submodel_element_id").Eq(goqu.I("submodel_element.id"))),
 					)
 				},
 			},
@@ -262,8 +257,6 @@ func joinPlanConfigForSM() JoinPlanConfig {
 				return "submodel_element", true
 			case "property_element":
 				return "property_element", true
-			case "multilanguage_property":
-				return "multilanguage_property", true
 			case "multilanguage_property_value":
 				return "multilanguage_property_value", true
 			case "sme_semantic_id_reference":
@@ -326,7 +319,7 @@ func joinPlanConfigForSMDesc() JoinPlanConfig {
 func joinPlanConfigForSME() JoinPlanConfig {
 	return JoinPlanConfig{
 		PreferredBase: "submodel_element",
-		BaseAliases:   []string{"submodel_element", "submodel", "property_element", "semantic_id_reference", "semantic_id_reference_key", "sme_semantic_id_reference", "sme_semantic_id_reference_key"},
+		BaseAliases:   []string{"submodel_element", "submodel", "property_element", "multilanguage_property_value", "semantic_id_reference", "semantic_id_reference_key", "sme_semantic_id_reference", "sme_semantic_id_reference_key"},
 		Rules: map[string]existsJoinRule{
 			"submodel_element": {
 				Alias: "submodel_element",
@@ -352,6 +345,16 @@ func joinPlanConfigForSME() JoinPlanConfig {
 					return ds.Join(
 						goqu.T("property_element").As("property_element"),
 						goqu.On(goqu.I("property_element.id").Eq(goqu.I("submodel_element.id"))),
+					)
+				},
+			},
+			"multilanguage_property_value": {
+				Alias: "multilanguage_property_value",
+				Deps:  []string{"submodel_element"},
+				Apply: func(ds *goqu.SelectDataset) *goqu.SelectDataset {
+					return ds.Join(
+						goqu.T("multilanguage_property_value").As("multilanguage_property_value"),
+						goqu.On(goqu.I("multilanguage_property_value.submodel_element_id").Eq(goqu.I("submodel_element.id"))),
 					)
 				},
 			},
@@ -404,6 +407,8 @@ func joinPlanConfigForSME() JoinPlanConfig {
 				return "submodel", true
 			case "property_element":
 				return "property_element", true
+			case "multilanguage_property_value":
+				return "multilanguage_property_value", true
 			case "semantic_id_reference":
 				return "submodel_semantic_id_reference", true
 			case "semantic_id_reference_key":
@@ -433,6 +438,46 @@ func joinPlanConfigForSME() JoinPlanConfig {
 		},
 		Correlatable: func(alias string) bool {
 			return alias == "submodel_element"
+		},
+	}
+}
+
+func joinPlanConfigForCD() JoinPlanConfig {
+	return JoinPlanConfig{
+		PreferredBase: "concept_description",
+		BaseAliases:   []string{"concept_description"},
+		Rules: map[string]existsJoinRule{
+			"concept_description": {
+				Alias: "concept_description",
+				Deps:  nil,
+				Apply: func(ds *goqu.SelectDataset) *goqu.SelectDataset {
+					return ds
+				},
+			},
+		},
+		TableForAlias: func(alias string) (string, bool) {
+			if alias == "concept_description" {
+				return "concept_description", true
+			}
+			return "", false
+		},
+		GroupKeyForBase: func(base string) (exp.IdentifierExpression, error) {
+			if base == "concept_description" {
+				return goqu.I("concept_description.id"), nil
+			}
+			return nil, fmt.Errorf("unsupported CD base alias %q", base)
+		},
+		RootJoinKey: func() exp.IdentifierExpression {
+			return goqu.I("concept_description.id")
+		},
+		RootJoinKeyAlias: func() string {
+			return "concept_description"
+		},
+		RootJoinKeyColumn: func() string {
+			return "id"
+		},
+		Correlatable: func(alias string) bool {
+			return alias == "concept_description"
 		},
 	}
 }

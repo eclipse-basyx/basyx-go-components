@@ -1,0 +1,49 @@
+{
+    "assetKind": "Instance",
+    "assetType": "assetType",
+    "globalAssetId": "assetIdValue",
+    "specificAssetIds": [
+        {
+            "externalSubjectId": {
+                "keys": [
+                    {
+                        "type": "GlobalReference",
+                        "value": "https://example.com/ids/externalSubjectId"
+                    }
+                ],
+                "type": "ExternalReference"
+            },
+            "name": "specificAssetIdName",
+            "semanticId": {
+                "keys": [
+                    {
+                        "type": "GlobalReference",
+                        "value": "https://example.com/ids/semanticId"
+                    }
+                ],
+                "type": "ExternalReference"
+            },
+            "supplementalSemanticIds": [
+                {
+                    "keys": [
+                        {
+                            "type": "GlobalReference",
+                            "value": "https://example.com/ids/supplementalSemanticId"
+                        }
+                    ],
+                    "referredSemanticId": {
+                        "keys": [
+                            {
+                                "type": "GlobalReference",
+                                "value": "https://example.com/ids/referredSemanticId"
+                            }
+                        ],
+                        "type": "ExternalReference"
+                    },
+                    "type": "ExternalReference"
+                }
+            ],
+            "value": "specificAssetIdValue"
+        }
+    ]
+}

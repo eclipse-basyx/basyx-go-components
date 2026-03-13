@@ -1,0 +1,62 @@
+{
+  "AllAccessPermissionRules": {
+    "DEFATTRIBUTES": [
+      { "name": "role_attr", "attributes": [ { "CLAIM": "role" } ] },
+      { "name": "member_attr", "attributes": [ { "CLAIM": "role" }, { "CLAIM": "clear" } ] }
+    ],
+    "DEFOBJECTS": [
+      {
+        "name": "all_cd_routes",
+        "objects": [
+          { "ROUTE": "/concept-descriptions" },
+          { "ROUTE": "/concept-descriptions/*" }
+        ]
+      },
+      {
+        "name": "all_cd_identifiable",
+        "objects": [
+          { "IDENTIFIABLE": "$cd(\"*\")" }
+        ]
+      }
+    ],
+    "DEFACLS": [
+      { "name": "read_role", "acl": { "USEATTRIBUTES": "role_attr", "RIGHTS": ["READ"], "ACCESS": "ALLOW" } },
+      { "name": "write_role", "acl": { "USEATTRIBUTES": "role_attr", "RIGHTS": ["CREATE", "UPDATE", "DELETE"], "ACCESS": "ALLOW" } },
+      { "name": "admin_all", "acl": { "USEATTRIBUTES": "member_attr", "RIGHTS": ["ALL"], "ACCESS": "ALLOW" } }
+    ],
+    "DEFFORMULAS": [
+      {
+        "name": "viewer_visible_cd",
+        "formula": {
+          "$and": [
+            { "$eq": [ { "$attribute": { "CLAIM": "role" } }, { "$strVal": "viewer" } ] },
+            { "$eq": [ { "$field": "$cd#idShort" }, { "$strVal": "ViewerAllowed" } ] }
+          ]
+        }
+      },
+      {
+        "name": "editor_allowed_cd",
+        "formula": {
+          "$and": [
+            { "$eq": [ { "$attribute": { "CLAIM": "role" } }, { "$strVal": "editor" } ] },
+            { "$eq": [ { "$field": "$cd#idShort" }, { "$strVal": "EditorAllowed" } ] }
+          ]
+        }
+      },
+      {
+        "name": "is_admin",
+        "formula": {
+          "$and": [
+            { "$eq": [ { "$attribute": { "CLAIM": "role" } }, { "$strVal": "admin" } ] },
+            { "$ge": [ { "$numCast": { "$attribute": { "CLAIM": "clear" } } }, { "$numVal": 10 } ] }
+          ]
+        }
+      }
+    ],
+    "rules": [
+      { "USEACL": "admin_all", "USEOBJECTS": ["all_cd_routes"], "USEFORMULA": "is_admin" },
+      { "USEACL": "read_role", "USEOBJECTS": ["all_cd_identifiable"], "USEFORMULA": "viewer_visible_cd" },
+      { "USEACL": "write_role", "USEOBJECTS": ["all_cd_routes"], "USEFORMULA": "editor_allowed_cd" }
+    ]
+  }
+}
