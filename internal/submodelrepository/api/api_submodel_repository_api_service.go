@@ -128,7 +128,7 @@ func mergeJSONObjects(base map[string]any, patch map[string]any) map[string]any 
 }
 
 func decodeSubmodelIdentifierOrAPIError(submodelIdentifier string, operation string) (string, gen.ImplResponse, bool) {
-	decodedSubmodelIdentifier, decodeErr := decodeBase64RawStd(submodelIdentifier)
+	decodedSubmodelIdentifier, decodeErr := common.DecodeString(submodelIdentifier)
 	if decodeErr != nil {
 		return "", newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "MalformedSubmodelIdentifier"), false
 	}
@@ -2200,7 +2200,7 @@ func (s *SubmodelRepositoryAPIAPIService) InvokeOperationAsync(ctx context.Conte
 		return newAPIErrorResponse(timeoutErr, http.StatusBadRequest, operation, "InvalidClientTimeoutDuration"), nil
 	}
 
-	handleID := encodeBase64RawStd(fmt.Sprintf("%s|%s|%d", decodedSubmodelIdentifier, idShortPath, time.Now().UnixNano()))
+	handleID := common.EncodeString(fmt.Sprintf("%s|%s|%d", decodedSubmodelIdentifier, idShortPath, time.Now().UnixNano()))
 	persistDelegatedAsyncRecord(handleID, delegatedOperationAsyncRecord{
 		SubmodelIdentifier: decodedSubmodelIdentifier,
 		IDShortPath:        idShortPath,
