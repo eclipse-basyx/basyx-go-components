@@ -57,6 +57,7 @@ func (s *DescriptionAPIAPIService) GetSelfDescription(_ context.Context) (model.
 	sd := model.ServiceDescription{
 		Profiles: []string{
 			"https://admin-shell.io/aas/API/3/1/ConceptDescriptionRepositoryServiceSpecification/SSP-001",
+			"https://basyx.org/aas/go-server/API/ConceptDescriptionRepositoryService/1.0",
 		},
 	}
 	return model.Response(http.StatusOK, sd), nil
