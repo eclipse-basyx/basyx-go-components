@@ -36,6 +36,8 @@ services:
       - ./rsa-key.pem:/app/rsa-key.pem:ro
     ports:
       - "6004:5004"
+    extra_hosts:
+      - "localhost:host-gateway"
     depends_on:
       db_it:
         condition: service_healthy

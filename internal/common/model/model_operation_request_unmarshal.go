@@ -14,6 +14,7 @@ type operationRequestJSON struct {
 	ClientTimeoutDuration string          `json:"clientTimeoutDuration,omitempty"`
 }
 
+// UnmarshalJSON decodes operation request arguments in array/object forms and preserves timeout settings.
 func (o *OperationRequest) UnmarshalJSON(data []byte) error {
 	var raw operationRequestJSON
 	if err := json.Unmarshal(data, &raw); err != nil {

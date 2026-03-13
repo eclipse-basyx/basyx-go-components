@@ -6,6 +6,10 @@ type authorizationHeaderContextKey struct{}
 
 // WithAuthorizationHeader stores the inbound Authorization header in context.
 func WithAuthorizationHeader(ctx context.Context, authorizationHeader string) context.Context {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+
 	return context.WithValue(ctx, authorizationHeaderContextKey{}, authorizationHeader)
 }
 

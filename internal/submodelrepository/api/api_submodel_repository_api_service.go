@@ -20,7 +20,9 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
+	"net/netip"
 	"net/url"
 	"os"
 	"strconv"
@@ -51,6 +53,10 @@ const componentName = "SMREPO"
 const (
 	invocationDelegationQualifierType = "invocationDelegation"
 	defaultDelegationTimeout          = 30 * time.Second
+	defaultDelegationAsyncTTL         = 15 * time.Minute
+	delegationAsyncTTLKey             = "SMREPO_DELEGATION_ASYNC_TTL"
+	delegationTrustedHostsKey         = "SMREPO_DELEGATION_TRUSTED_HOSTS"
+	delegationAsyncCleanupInterval    = time.Minute
 )
 
 type delegatedOperationAsyncRecord struct {
@@ -60,11 +66,14 @@ type delegatedOperationAsyncRecord struct {
 	Result             any
 	ErrorStatus        int
 	ErrorBody          any
+	CreatedAt          time.Time
+	ExpiresAt          time.Time
 }
 
 var delegatedOperationAsyncState = struct {
 	sync.RWMutex
-	records map[string]delegatedOperationAsyncRecord
+	records       map[string]delegatedOperationAsyncRecord
+	lastCleanupAt time.Time
 }{
 	records: map[string]delegatedOperationAsyncRecord{},
 }
@@ -273,13 +282,164 @@ func serializeDelegatedOperationPayload(payload []types.IOperationVariable) ([]b
 	return requestBody, nil
 }
 
-func toDelegatedOperationResultPayload(outputArguments []types.IOperationVariable) map[string]any {
+func toDelegatedOperationResultPayload(outputArguments []types.IOperationVariable, inoutputArguments []types.IOperationVariable) map[string]any {
 	return map[string]any{
 		"executionState":    "Completed",
 		"success":           true,
 		"outputArguments":   outputArguments,
-		"inoutputArguments": outputArguments,
+		"inoutputArguments": inoutputArguments,
 	}
+}
+
+func toOperationVariables(payload any) ([]types.IOperationVariable, bool) {
+	if payload == nil {
+		return nil, false
+	}
+
+	if alreadyTyped, ok := payload.([]types.IOperationVariable); ok {
+		return alreadyTyped, true
+	}
+
+	switch typedPayload := payload.(type) {
+	case []any:
+		operationVariables := make([]types.IOperationVariable, 0, len(typedPayload))
+		for _, item := range typedPayload {
+			operationVariable, err := jsonization.OperationVariableFromJsonable(item)
+			if err != nil {
+				return nil, false
+			}
+			operationVariables = append(operationVariables, operationVariable)
+		}
+		return operationVariables, true
+	case []map[string]any:
+		operationVariables := make([]types.IOperationVariable, 0, len(typedPayload))
+		for _, item := range typedPayload {
+			operationVariable, err := jsonization.OperationVariableFromJsonable(item)
+			if err != nil {
+				return nil, false
+			}
+			operationVariables = append(operationVariables, operationVariable)
+		}
+		return operationVariables, true
+	case map[string]any:
+		if _, hasValue := typedPayload["value"]; !hasValue {
+			return nil, false
+		}
+		operationVariable, err := jsonization.OperationVariableFromJsonable(typedPayload)
+		if err != nil {
+			return nil, false
+		}
+		return []types.IOperationVariable{operationVariable}, true
+	default:
+		return nil, false
+	}
+}
+
+func toDelegatedOperationResultPayloadFromBody(delegatedBody any) (map[string]any, bool) {
+	if delegatedOutput, ok := delegatedBody.([]types.IOperationVariable); ok {
+		return toDelegatedOperationResultPayload(delegatedOutput, []types.IOperationVariable{}), true
+	}
+
+	delegatedBodyMap, ok := delegatedBody.(map[string]any)
+	if !ok {
+		return nil, false
+	}
+
+	outputArguments, outputOK := toOperationVariables(delegatedBodyMap["outputArguments"])
+	inoutputArguments, inoutputOK := toOperationVariables(delegatedBodyMap["inoutputArguments"])
+	if !outputOK && !inoutputOK {
+		return nil, false
+	}
+
+	if !outputOK {
+		outputArguments = []types.IOperationVariable{}
+	}
+	if !inoutputOK {
+		inoutputArguments = []types.IOperationVariable{}
+	}
+
+	return toDelegatedOperationResultPayload(outputArguments, inoutputArguments), true
+}
+
+func parseDelegationAsyncTTL() time.Duration {
+	rawTTL := strings.TrimSpace(os.Getenv(delegationAsyncTTLKey))
+	if rawTTL == "" {
+		return defaultDelegationAsyncTTL
+	}
+
+	parsedTTL, err := time.ParseDuration(rawTTL)
+	if err != nil || parsedTTL <= 0 {
+		return defaultDelegationAsyncTTL
+	}
+
+	return parsedTTL
+}
+
+func parseTrustedDelegationHosts() map[string]struct{} {
+	rawHosts := strings.TrimSpace(os.Getenv(delegationTrustedHostsKey))
+	if rawHosts == "" {
+		return map[string]struct{}{}
+	}
+
+	trustedHosts := map[string]struct{}{}
+	for _, rawHost := range strings.Split(rawHosts, ",") {
+		host := strings.ToLower(strings.TrimSpace(rawHost))
+		if host == "" {
+			continue
+		}
+		trustedHosts[host] = struct{}{}
+	}
+
+	return trustedHosts
+}
+
+func isTrustedDelegationHost(host string) bool {
+	normalizedHost := strings.ToLower(strings.TrimSpace(host))
+	if normalizedHost == "" {
+		return false
+	}
+
+	if normalizedHost == "localhost" || strings.HasSuffix(normalizedHost, ".localhost") {
+		return true
+	}
+
+	if ip, parseErr := netip.ParseAddr(normalizedHost); parseErr == nil {
+		return ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast()
+	}
+
+	if parsedIP := net.ParseIP(normalizedHost); parsedIP != nil {
+		return parsedIP.IsLoopback() || parsedIP.IsPrivate() || parsedIP.IsLinkLocalUnicast() || parsedIP.IsLinkLocalMulticast()
+	}
+
+	if strings.HasSuffix(normalizedHost, ".internal") || strings.HasSuffix(normalizedHost, ".svc") || strings.HasSuffix(normalizedHost, ".cluster.local") {
+		return true
+	}
+
+	trustedHosts := parseTrustedDelegationHosts()
+	_, trusted := trustedHosts[normalizedHost]
+	return trusted
+}
+
+func shouldForwardAuthorizationHeader(parsedDelegationURL *url.URL) bool {
+	if parsedDelegationURL == nil {
+		return false
+	}
+
+	return isTrustedDelegationHost(parsedDelegationURL.Hostname())
+}
+
+func maybeCleanupDelegatedAsyncRecordsLocked(now time.Time) {
+	if !delegatedOperationAsyncState.lastCleanupAt.IsZero() && now.Sub(delegatedOperationAsyncState.lastCleanupAt) < delegationAsyncCleanupInterval {
+		return
+	}
+
+	for handleID, record := range delegatedOperationAsyncState.records {
+		if !record.ExpiresAt.IsZero() && now.After(record.ExpiresAt) {
+			delete(delegatedOperationAsyncState.records, handleID)
+		}
+	}
+
+	delegatedOperationAsyncState.lastCleanupAt = now
 }
 
 func doDelegatedOperationCall(ctx context.Context, delegationURL string, payload []types.IOperationVariable, timeout time.Duration) (int, any, error) {
@@ -306,7 +466,7 @@ func doDelegatedOperationCall(ctx context.Context, delegationURL string, payload
 
 	request.Header.Set("Content-Type", "application/json")
 	authorizationHeader := common.AuthorizationHeaderFromContext(ctx)
-	if strings.TrimSpace(authorizationHeader) != "" {
+	if strings.TrimSpace(authorizationHeader) != "" && shouldForwardAuthorizationHeader(parsedDelegationURL) {
 		request.Header.Set("Authorization", authorizationHeader)
 	}
 
@@ -359,23 +519,47 @@ func loadOperationElement(ctx context.Context, backend persistencepostgresql.Sub
 
 func persistDelegatedAsyncRecord(handleID string, record delegatedOperationAsyncRecord) {
 	delegatedOperationAsyncState.Lock()
+	now := time.Now().UTC()
+	maybeCleanupDelegatedAsyncRecordsLocked(now)
+
 	deferredRecord := record
+	deferredRecord.CreatedAt = now
+	deferredRecord.ExpiresAt = now.Add(parseDelegationAsyncTTL())
 	delegatedOperationAsyncState.records[handleID] = deferredRecord
 	delegatedOperationAsyncState.Unlock()
 }
 
 func getDelegatedAsyncRecord(handleID string) (delegatedOperationAsyncRecord, bool) {
-	delegatedOperationAsyncState.RLock()
+	delegatedOperationAsyncState.Lock()
+	now := time.Now().UTC()
+	maybeCleanupDelegatedAsyncRecordsLocked(now)
+
 	record, found := delegatedOperationAsyncState.records[handleID]
-	delegatedOperationAsyncState.RUnlock()
+	if found && !record.ExpiresAt.IsZero() && now.After(record.ExpiresAt) {
+		delete(delegatedOperationAsyncState.records, handleID)
+		delegatedOperationAsyncState.Unlock()
+		return delegatedOperationAsyncRecord{}, false
+	}
+
+	delegatedOperationAsyncState.Unlock()
 	return record, found
 }
 
 func updateDelegatedAsyncRecord(handleID string, updateFn func(record delegatedOperationAsyncRecord) delegatedOperationAsyncRecord) {
 	delegatedOperationAsyncState.Lock()
+	now := time.Now().UTC()
+	maybeCleanupDelegatedAsyncRecordsLocked(now)
+
 	record, found := delegatedOperationAsyncState.records[handleID]
+	if found && !record.ExpiresAt.IsZero() && now.After(record.ExpiresAt) {
+		delete(delegatedOperationAsyncState.records, handleID)
+		found = false
+	}
 	if found {
-		delegatedOperationAsyncState.records[handleID] = updateFn(record)
+		updatedRecord := updateFn(record)
+		updatedRecord.CreatedAt = record.CreatedAt
+		updatedRecord.ExpiresAt = record.ExpiresAt
+		delegatedOperationAsyncState.records[handleID] = updatedRecord
 	}
 	delegatedOperationAsyncState.Unlock()
 }
@@ -2166,12 +2350,11 @@ func (s *SubmodelRepositoryAPIAPIService) InvokeOperationSubmodelRepo(ctx contex
 		return gen.Response(statusCode, delegatedBody), nil
 	}
 
-	delegatedOutput, ok := delegatedBody.([]types.IOperationVariable)
-	if !ok {
-		return gen.Response(http.StatusOK, delegatedBody), nil
+	if resultPayload, ok := toDelegatedOperationResultPayloadFromBody(delegatedBody); ok {
+		return gen.Response(http.StatusOK, resultPayload), nil
 	}
 
-	return gen.Response(http.StatusOK, toDelegatedOperationResultPayload(delegatedOutput)), nil
+	return gen.Response(http.StatusOK, delegatedBody), nil
 }
 
 // InvokeOperationValueOnly - Synchronously or asynchronously invokes an Operation at a specified path
@@ -2254,10 +2437,9 @@ func (s *SubmodelRepositoryAPIAPIService) InvokeOperationAsync(ctx context.Conte
 			return
 		}
 
-		delegatedOutput, outputOK := delegatedBody.([]types.IOperationVariable)
 		finalResult := delegatedBody
-		if outputOK {
-			finalResult = toDelegatedOperationResultPayload(delegatedOutput)
+		if resultPayload, resultOK := toDelegatedOperationResultPayloadFromBody(delegatedBody); resultOK {
+			finalResult = resultPayload
 		}
 
 		updateDelegatedAsyncRecord(handleID, func(record delegatedOperationAsyncRecord) delegatedOperationAsyncRecord {
@@ -2308,7 +2490,14 @@ func (s *SubmodelRepositoryAPIAPIService) GetOperationAsyncStatus(ctx context.Co
 		return gen.Response(http.StatusOK, map[string]any{"executionState": "Running", "success": true}), nil
 	}
 
-	return gen.Response(http.StatusFound, nil), nil
+	location := fmt.Sprintf(
+		"/submodels/%s/submodel-elements/%s/operation-results/%s",
+		url.PathEscape(submodelIdentifier),
+		url.PathEscape(idShortPath),
+		url.PathEscape(handleID),
+	)
+
+	return gen.Response(http.StatusFound, openapi.Redirect{Location: location}), nil
 }
 
 // GetOperationAsyncResult - Returns the Operation result of an asynchronously invoked Operation

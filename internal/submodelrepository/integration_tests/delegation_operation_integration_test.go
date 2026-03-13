@@ -23,33 +23,22 @@
 * SPDX-License-Identifier: MIT
 ******************************************************************************/
 
-package api
+package main
 
 import (
 	"bytes"
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net"
 	"net/http"
-	"os"
 	"strconv"
 	"testing"
 	"time"
 
-	"github.com/eclipse-basyx/basyx-go-components/internal/common/testenv"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/stretchr/testify/require"
 )
-
-func TestMain(m *testing.M) {
-	os.Exit(testenv.RunComposeTestMain(m, testenv.ComposeTestMainOptions{
-		ComposeFile:     "../integration_tests/docker_compose/docker_compose.yml",
-		PreDownBeforeUp: true,
-		HealthURL:       "http://localhost:6004/health",
-		HealthTimeout:   150 * time.Second,
-	}))
-}
 
 func startAdderMicroservice(t *testing.T) (string, func()) {
 	t.Helper()
@@ -137,7 +126,7 @@ func startAdderMicroservice(t *testing.T) (string, func()) {
 		_ = json.NewEncoder(w).Encode(responsePayload)
 	})
 
-	// #nosec G102 -- integration test listener must be reachable from repository container via host.docker.internal.
+	// #nosec G102 -- integration test listener must be reachable from repository container via host gateway mapping.
 	listener, err := net.Listen("tcp", "0.0.0.0:0")
 	require.NoError(t, err)
 
@@ -151,7 +140,7 @@ func startAdderMicroservice(t *testing.T) (string, func()) {
 	}()
 
 	port := listener.Addr().(*net.TCPAddr).Port
-	delegationURL := fmt.Sprintf("http://host.docker.internal:%d/delegate/add?a=5&b=3", port)
+	delegationURL := fmt.Sprintf("http://localhost:%d/delegate/add?a=5&b=3", port)
 
 	shutdown := func() {
 		_ = server.Close()
@@ -168,7 +157,7 @@ func TestDelegationOperation(t *testing.T) {
 	defer shutdown()
 
 	submodelID := "DelegationOperationSubmodelIntegrationTest"
-	encodedSubmodelID := base64.RawStdEncoding.EncodeToString([]byte(submodelID))
+	encodedSubmodelID := common.EncodeString(submodelID)
 
 	submodelPayload := map[string]any{
 		"modelType": "Submodel",
@@ -210,7 +199,7 @@ func TestDelegationOperation(t *testing.T) {
 		if requestErr != nil {
 			return
 		}
-		//nolint:all
+		// #nosec G704 -- integration test calls fixed local repository endpoint.
 		response, responseErr := (&http.Client{Timeout: 10 * time.Second}).Do(request)
 		if responseErr == nil {
 			_ = response.Body.Close()
@@ -228,7 +217,7 @@ func TestDelegationOperation(t *testing.T) {
 	require.NoError(t, err)
 	invokeRequest.Header.Set("Content-Type", "application/json")
 
-	//nolint:all
+	// #nosec G704 -- integration test calls fixed local repository endpoint.
 	invokeResponse, err := (&http.Client{Timeout: 15 * time.Second}).Do(invokeRequest)
 	require.NoError(t, err)
 	defer func() { _ = invokeResponse.Body.Close() }()

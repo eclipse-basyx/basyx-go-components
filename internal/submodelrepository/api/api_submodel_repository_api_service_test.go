@@ -3,12 +3,15 @@ package api
 import (
 	"context"
 	"encoding/base64"
+	"encoding/json"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/FriedJannik/aas-go-sdk/types"
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	persistencepostgresql "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence"
+	openapi "github.com/eclipse-basyx/basyx-go-components/pkg/submodelrepositoryapi/go"
 	"github.com/stretchr/testify/require"
 )
 
@@ -120,4 +123,98 @@ func TestInvokeOperationValueOnlyReturnsBadRequest(t *testing.T) {
 	response, err := sut.InvokeOperationValueOnly(context.Background(), "", "", "", gen.OperationRequestValueOnly{}, false)
 	require.NoError(t, err)
 	require.Equal(t, 400, response.Code)
+}
+
+func TestToDelegatedOperationResultPayloadFromBodyForArrayKeepsInoutputEmpty(t *testing.T) {
+	t.Parallel()
+
+	delegatedBody := []types.IOperationVariable{&types.OperationVariable{}}
+	resultPayload, ok := toDelegatedOperationResultPayloadFromBody(delegatedBody)
+	require.True(t, ok)
+	resultPayloadBytes, err := json.Marshal(resultPayload)
+	require.NoError(t, err)
+
+	resultPayloadJSON := map[string]any{}
+	require.NoError(t, json.Unmarshal(resultPayloadBytes, &resultPayloadJSON))
+
+	outputArguments, outputOK := resultPayloadJSON["outputArguments"].([]any)
+	require.True(t, outputOK)
+	require.Len(t, outputArguments, 1)
+
+	inoutputArguments, inoutputOK := resultPayloadJSON["inoutputArguments"].([]any)
+	require.True(t, inoutputOK)
+	require.Len(t, inoutputArguments, 0)
+}
+
+func TestToDelegatedOperationResultPayloadFromBodyForMapSeparatesOutputAndInoutput(t *testing.T) {
+	t.Parallel()
+
+	delegatedBody := map[string]any{
+		"outputArguments": []map[string]any{{
+			"value": map[string]any{"modelType": "Property", "idShort": "out", "valueType": "xs:string", "value": "output"},
+		}},
+		"inoutputArguments": []map[string]any{{
+			"value": map[string]any{"modelType": "Property", "idShort": "inout", "valueType": "xs:string", "value": "inoutput"},
+		}},
+	}
+
+	resultPayload, ok := toDelegatedOperationResultPayloadFromBody(delegatedBody)
+	require.True(t, ok)
+	resultPayloadBytes, err := json.Marshal(resultPayload)
+	require.NoError(t, err)
+
+	resultPayloadJSON := map[string]any{}
+	require.NoError(t, json.Unmarshal(resultPayloadBytes, &resultPayloadJSON))
+
+	outputArguments, outputOK := resultPayloadJSON["outputArguments"].([]any)
+	require.True(t, outputOK)
+	require.Len(t, outputArguments, 1)
+
+	inoutputArguments, inoutputOK := resultPayloadJSON["inoutputArguments"].([]any)
+	require.True(t, inoutputOK)
+	require.Len(t, inoutputArguments, 1)
+}
+
+func TestShouldForwardAuthorizationHeaderTrustedByDefaultLocalhost(t *testing.T) {
+	t.Parallel()
+
+	require.True(t, isTrustedDelegationHost("localhost"))
+	require.True(t, isTrustedDelegationHost("127.0.0.1"))
+	require.False(t, isTrustedDelegationHost("example.com"))
+}
+
+func TestShouldForwardAuthorizationHeaderTrustedByAllowlist(t *testing.T) {
+	t.Setenv(delegationTrustedHostsKey, "delegate.example.com")
+	require.True(t, isTrustedDelegationHost("delegate.example.com"))
+}
+
+func TestParseDelegationAsyncTTLUsesDefaultOnInvalidValue(t *testing.T) {
+	t.Setenv(delegationAsyncTTLKey, "invalid")
+	require.Equal(t, defaultDelegationAsyncTTL, parseDelegationAsyncTTL())
+}
+
+func TestGetOperationAsyncStatusReturnsRedirectWithLocation(t *testing.T) {
+	sut := NewSubmodelRepositoryAPIAPIService(persistencepostgresql.SubmodelDatabase{})
+
+	delegatedOperationAsyncState.Lock()
+	delegatedOperationAsyncState.records = map[string]delegatedOperationAsyncRecord{}
+	delegatedOperationAsyncState.lastCleanupAt = time.Time{}
+	delegatedOperationAsyncState.Unlock()
+
+	decodedSubmodelID := "sm-redirect"
+	encodedSubmodelID := base64.RawURLEncoding.EncodeToString([]byte(decodedSubmodelID))
+	handleID := "handle-redirect"
+	persistDelegatedAsyncRecord(handleID, delegatedOperationAsyncRecord{
+		SubmodelIdentifier: decodedSubmodelID,
+		IDShortPath:        "Ops.Add",
+		State:              "Completed",
+	})
+
+	response, err := sut.GetOperationAsyncStatus(context.Background(), encodedSubmodelID, "Ops.Add", handleID)
+	require.NoError(t, err)
+	require.Equal(t, 302, response.Code)
+
+	redirect, ok := response.Body.(openapi.Redirect)
+	require.True(t, ok)
+	require.True(t, strings.Contains(redirect.Location, "/operation-results/"))
 }
