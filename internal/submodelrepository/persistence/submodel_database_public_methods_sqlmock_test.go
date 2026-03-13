@@ -171,7 +171,7 @@ func TestGetSubmodelElementWithLevelCoreReturnsElementWithoutChildren(t *testing
 	mock.ExpectQuery(`SELECT .*"sme"\."id".*FROM "submodel_element" AS "sme".*"sme"\."idshort_path" =.*LIMIT 1`).
 		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(10))
 
-	mock.ExpectQuery(`SELECT .*FROM "submodel_element" AS "sme" LEFT JOIN "submodel_element_payload" AS "sme_p".*"sme"\."idshort_path" =`).
+	mock.ExpectQuery(`SELECT .*FROM "submodel_element" AS "sme".*"sme"\."idshort_path" =`).
 		WillReturnRows(sqlmock.NewRows(submodelElementReadColumns()).
 			AddRow(
 				10,
@@ -192,6 +192,8 @@ func TestGetSubmodelElementWithLevelCoreReturnsElementWithoutChildren(t *testing
 				[]byte("[]"),
 				[]byte("[]"),
 				[]byte(`{"type":"ExternalReference","keys":[{"type":"GlobalReference","value":"urn:test:semantic"}]}`),
+				true,
+				true,
 			),
 		)
 
@@ -263,6 +265,8 @@ func TestGetSubmodelElementsCoreReturnsOnlyRootElements(t *testing.T) {
 				[]byte("[]"),
 				[]byte("[]"),
 				[]byte(`{"type":"ExternalReference","keys":[{"type":"GlobalReference","value":"urn:test:semantic"}]}`),
+				true,
+				true,
 			),
 		)
 
@@ -316,6 +320,8 @@ func TestGetSubmodelElementsDeepReturnsRootWithChildren(t *testing.T) {
 				[]byte("[]"),
 				[]byte("[]"),
 				[]byte(`{"type":"ExternalReference","keys":[{"type":"GlobalReference","value":"urn:test:semantic:root"}]}`),
+				true,
+				true,
 			).
 			AddRow(
 				11,
@@ -336,6 +342,8 @@ func TestGetSubmodelElementsDeepReturnsRootWithChildren(t *testing.T) {
 				[]byte("[]"),
 				[]byte("[]"),
 				[]byte(`{"type":"ExternalReference","keys":[{"type":"GlobalReference","value":"urn:test:semantic:child"}]}`),
+				true,
+				true,
 			),
 		)
 
@@ -372,6 +380,8 @@ func submodelElementReadColumns() []string {
 		"supplemental_semantic_ids_referred_payload",
 		"qualifiers_payload",
 		"parent_reference_payload",
+		"semantic_visible",
+		"value_visible",
 	}
 }
 
