@@ -214,13 +214,18 @@ func SelectPutFormulaByExistence(ctx context.Context, dataExists bool) context.C
 	if qf == nil {
 		return ctx
 	}
-	if qf.FormulasByRight == nil {
-		return ctx
-	}
 
 	right := grammar.RightsEnumCREATE
 	if dataExists {
 		right = grammar.RightsEnumUPDATE
+	}
+
+	if qf.FormulasByRight == nil {
+		qf.FormulasByRight = make(map[grammar.RightsEnum]grammar.LogicalExpression)
+		fallback := boolExpression(false)
+		qf.FormulasByRight[right] = fallback
+		qf.Formula = &fallback
+		return context.WithValue(ctx, filterKey, qf)
 	}
 
 	if selected, ok := qf.FormulasByRight[right]; ok {

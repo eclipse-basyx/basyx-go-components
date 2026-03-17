@@ -74,6 +74,19 @@ func TestSelectPutFormulaByExistence_DefaultsToFalseIfMissing(t *testing.T) {
 	assertFormulaByRightBoolean(t, qf, grammar.RightsEnumUPDATE, false)
 }
 
+func TestSelectPutFormulaByExistence_DefaultsToFalseIfMapIsNil(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.WithValue(context.Background(), filterKey, &QueryFilter{})
+	createCtx := SelectPutFormulaByExistence(ctx, false)
+	qf := GetQueryFilter(createCtx)
+	if qf == nil {
+		t.Fatalf("expected query filter in context")
+	}
+	assertBooleanFormulaPointer(t, qf.Formula, false)
+	assertFormulaByRightBoolean(t, qf, grammar.RightsEnumCREATE, false)
+}
+
 func mustParsePUTAccessModelWithSingleRight(t *testing.T, right grammar.RightsEnum) *AccessModel {
 	t.Helper()
 
