@@ -556,35 +556,89 @@ func evalComparisonOnly(le LogicalExpression, resolve AttributeResolver) bool {
 
 func convertEnumLiteralIfNeeded(left, right Value) (Value, Value) {
 	if field, _ := extractFieldOperandAndCast(&left); field != nil && right.StrVal != nil {
-		if converted, ok := convertEnumLiteralForField(*field, right); ok {
+		if converted, ok, isEnumField := convertEnumLiteralForField(*field, right); ok {
 			right = converted
+		} else if isEnumField {
+			// Keep comparisons against enum-backed fields SQL-safe even when
+			// implicit casts are disabled and the enum literal is invalid.
+			left = WrapCastAroundField(left, KindString)
 		}
 		return left, right
 	}
 	if field, _ := extractFieldOperandAndCast(&right); field != nil && left.StrVal != nil {
-		if converted, ok := convertEnumLiteralForField(*field, left); ok {
+		if converted, ok, isEnumField := convertEnumLiteralForField(*field, left); ok {
 			left = converted
+		} else if isEnumField {
+			right = WrapCastAroundField(right, KindString)
 		}
 	}
 	return left, right
 }
 
-func convertEnumLiteralForField(field Value, lit Value) (Value, bool) {
+type enumColumnKind int
+
+const (
+	enumColumnUnknown enumColumnKind = iota
+	enumColumnDataTypeDefXSD
+	enumColumnReferenceType
+	enumColumnKeyType
+	enumColumnAssetKind
+)
+
+func convertEnumLiteralForField(field Value, lit Value) (Value, bool, bool) {
 	if field.Field == nil || lit.StrVal == nil {
-		return Value{}, false
+		return Value{}, false, false
 	}
 	fieldName := string(*field.Field)
 	f := ModelStringPattern(fieldName)
 	resolved, err := ResolveScalarFieldToSQL(&f)
 	if err != nil {
-		return Value{}, false
+		return Value{}, false, false
 	}
-	if !strings.Contains(strings.ToLower(resolved.Column), "value_type") {
-		return Value{}, false
+	columnKind := enumKindForResolvedColumn(resolved.Column)
+	if columnKind == enumColumnUnknown {
+		return Value{}, false, false
 	}
-	if enumVal, ok := stringification.DataTypeDefXSDFromString(string(*lit.StrVal)); ok {
-		if converted, ok := enumValueToValue(enumVal); ok {
-			return converted, true
+	converted, ok := convertEnumLiteralValue(columnKind, string(*lit.StrVal))
+	if !ok {
+		return Value{}, false, true
+	}
+	return converted, true, true
+}
+
+func enumKindForResolvedColumn(column string) enumColumnKind {
+	col := strings.ToLower(strings.TrimSpace(column))
+	switch {
+	case strings.Contains(col, "value_type"):
+		return enumColumnDataTypeDefXSD
+	case strings.HasSuffix(col, ".asset_kind"):
+		return enumColumnAssetKind
+	case strings.HasSuffix(col, "_key.type"):
+		return enumColumnKeyType
+	case strings.HasSuffix(col, ".type"):
+		return enumColumnReferenceType
+	default:
+		return enumColumnUnknown
+	}
+}
+
+func convertEnumLiteralValue(columnKind enumColumnKind, literal string) (Value, bool) {
+	switch columnKind {
+	case enumColumnDataTypeDefXSD:
+		if enumVal, ok := stringification.DataTypeDefXSDFromString(literal); ok {
+			return enumValueToValue(enumVal)
+		}
+	case enumColumnAssetKind:
+		if enumVal, ok := stringification.AssetKindFromString(literal); ok {
+			return enumValueToValue(enumVal)
+		}
+	case enumColumnReferenceType:
+		if enumVal, ok := stringification.ReferenceTypesFromString(literal); ok {
+			return enumValueToValue(enumVal)
+		}
+	case enumColumnKeyType:
+		if enumVal, ok := stringification.KeyTypesFromString(literal); ok {
+			return enumValueToValue(enumVal)
 		}
 	}
 	return Value{}, false

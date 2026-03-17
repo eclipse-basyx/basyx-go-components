@@ -1,5 +1,11 @@
 [ 
     {
+        "context": "000 - Description endpoint",
+        "method": "GET",
+        "endpoint": "http://localhost:6004/description",
+        "expectedStatus": 200
+    },
+    {
         "context": "001 - Get All Concept Descriptions (Empty)",
         "method": "GET",
         "endpoint": "http://localhost:6004/concept-descriptions",

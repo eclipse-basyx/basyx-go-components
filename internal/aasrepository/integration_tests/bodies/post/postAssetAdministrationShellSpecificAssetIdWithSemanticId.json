@@ -1,0 +1,23 @@
+{
+  "id": "https://example.com/ids/aas/withSemanticId",
+  "idShort": "AASWithSpecificAssetSemanticId",
+  "assetInformation": {
+    "assetKind": "Instance",
+    "specificAssetIds": [
+      {
+        "name": "specific-with-semantic-id",
+        "value": "value-with-semantic-id",
+        "semanticId": {
+          "type": "ExternalReference",
+          "keys": [
+            {
+              "type": "GlobalReference",
+              "value": "https://example.com/ids/semanticId/only"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "modelType": "AssetAdministrationShell"
+}

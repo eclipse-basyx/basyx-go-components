@@ -47,17 +47,17 @@ func NewDescriptionAPIAPIController(s DescriptionAPIAPIServicer, opts ...Descrip
 // Routes returns all the api routes for the DescriptionAPIAPIController
 func (c *DescriptionAPIAPIController) Routes() Routes {
 	return Routes{
-		"GetDescription": Route{
+		"GetSelfDescription": Route{
 			strings.ToUpper("Get"),
 			"/description",
-			c.GetDescription,
+			c.GetSelfDescription,
 		},
 	}
 }
 
-// GetDescription - Returns the self-describing information of a network resource (ServiceDescription)
-func (c *DescriptionAPIAPIController) GetDescription(w http.ResponseWriter, r *http.Request) {
-	result, err := c.service.GetDescription(r.Context())
+// GetSelfDescription - Returns the self-describing information of a network resource (ServiceDescription)
+func (c *DescriptionAPIAPIController) GetSelfDescription(w http.ResponseWriter, r *http.Request) {
+	result, err := c.service.GetSelfDescription(r.Context())
 	// If an error occurred, encode the error with the status code
 	if err != nil {
 		c.errorHandler(w, r, err, &result)

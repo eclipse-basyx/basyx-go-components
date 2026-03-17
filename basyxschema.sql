@@ -56,8 +56,7 @@ CREATE TABLE IF NOT EXISTS aas (
   id_short varchar(128),
   category varchar(128),
   model_type int NOT NULL DEFAULT 3
-  -- submodel missing
-); -- asset_information in asset_information
+);
 
 CREATE TABLE IF NOT EXISTS aas_payload ( 
   aas_id BIGINT PRIMARY KEY REFERENCES aas(id) ON DELETE CASCADE,
@@ -74,9 +73,43 @@ CREATE TABLE IF NOT EXISTS asset_information (
   asset_kind int, 
   global_asset_id varchar(2048),
   asset_type varchar(2048),
-  default_thumbnail JSONB,
   model_type int NOT NULL DEFAULT 4 
-); -- specific_asset_id in specific_asset_id
+);
+
+CREATE TABLE IF NOT EXISTS aas_submodel_reference (
+  id BIGSERIAL PRIMARY KEY,
+  aas_id BIGINT NOT NULL REFERENCES aas(id) ON DELETE CASCADE,
+  position     INTEGER NOT NULL,
+  type int NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS aas_submodel_reference_key (
+  id           BIGSERIAL PRIMARY KEY,
+  reference_id BIGINT NOT NULL REFERENCES aas_submodel_reference(id) ON DELETE CASCADE,
+  position     INTEGER NOT NULL,
+  type         int NOT NULL,
+  value        TEXT NOT NULL,
+  UNIQUE(reference_id, position)
+);
+
+CREATE TABLE IF NOT EXISTS aas_submodel_reference_payload (
+  id           BIGSERIAL PRIMARY KEY,
+  reference_id BIGINT NOT NULL REFERENCES aas_submodel_reference(id) ON DELETE CASCADE,
+  parent_reference_payload JSONB NOT NULL,
+  UNIQUE(reference_id)
+);
+
+CREATE TABLE IF NOT EXISTS thumbnail_file_element (
+  id           BIGINT PRIMARY KEY REFERENCES asset_information(asset_information_id) ON DELETE CASCADE,
+  content_type TEXT,
+  file_name    TEXT,
+  value        TEXT
+);
+
+CREATE TABLE IF NOT EXISTS thumbnail_file_data (
+  id BIGINT PRIMARY KEY REFERENCES thumbnail_file_element(id) ON DELETE CASCADE,
+  file_oid oid
+);
 -- 
 -- ------------------------------------------
 
@@ -497,6 +530,13 @@ CREATE TABLE IF NOT EXISTS submodel_descriptor_supplemental_semantic_id_referenc
 -- Indexes
 -- ------------------------------------------
 
+CREATE INDEX IF NOT EXISTS ix_aas_identifier ON aas(aas_id);
+CREATE INDEX IF NOT EXISTS ix_aas_idshort ON aas(id_short);
+
+CREATE INDEX IF NOT EXISTS ix_asset_information_asset_kind ON asset_information(asset_kind);
+CREATE INDEX IF NOT EXISTS ix_asset_information_asset_type ON asset_information(asset_type);
+CREATE INDEX IF NOT EXISTS ix_asset_information_global_asset_id ON asset_information(global_asset_id);
+
 CREATE INDEX IF NOT EXISTS ix_sm_identifier  ON submodel(submodel_identifier);
 CREATE INDEX IF NOT EXISTS ix_sm_idshort     ON submodel(id_short);
 
@@ -535,8 +575,9 @@ CREATE INDEX IF NOT EXISTS ix_aas_identifier_created_at ON aas_identifier(create
 CREATE INDEX IF NOT EXISTS ix_specasset_descriptor_id_name ON specific_asset_id(descriptor_id, name);
 CREATE INDEX IF NOT EXISTS ix_specasset_descriptor_id_position ON specific_asset_id(descriptor_id, position);
 CREATE INDEX IF NOT EXISTS ix_specasset_aasref ON specific_asset_id(aasRef);
-CREATE INDEX IF NOT EXISTS ix_specasset_aas ON specific_asset_id(asset_information_id);
 CREATE INDEX IF NOT EXISTS ix_specasset_name_value_aasref ON specific_asset_id(name, value, aasRef);
+CREATE INDEX IF NOT EXISTS ix_specasset_aas ON specific_asset_id(asset_information_id);
+CREATE INDEX IF NOT EXISTS ix_specasset_name_value_aas ON specific_asset_id(name, value, asset_information_id);
 CREATE INDEX IF NOT EXISTS ix_specasset_descriptor_id ON specific_asset_id(descriptor_id);
 CREATE INDEX IF NOT EXISTS ix_specasset_name ON specific_asset_id(name);
 CREATE INDEX IF NOT EXISTS ix_specasset_name_value ON specific_asset_id(name, value);

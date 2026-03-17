@@ -84,6 +84,7 @@ type JoinPlanConfig struct {
 type CollectorRoot string
 
 const (
+	CollectorRootAAS     CollectorRoot = "aas"
 	CollectorRootAASDesc CollectorRoot = "aasdesc"
 	CollectorRootSMDesc  CollectorRoot = "smdesc"
 	CollectorRootSM      CollectorRoot = "sm"
@@ -95,6 +96,8 @@ const (
 // ParseCollectorRoot converts roots like "$aasdesc" or "aasdesc" into a CollectorRoot.
 func ParseCollectorRoot(root string) (CollectorRoot, error) {
 	switch normalizeRoot(root) {
+	case string(CollectorRootAAS):
+		return CollectorRootAAS, nil
 	case string(CollectorRootAASDesc):
 		return CollectorRootAASDesc, nil
 	case string(CollectorRootSMDesc):
@@ -114,7 +117,7 @@ func ParseCollectorRoot(root string) (CollectorRoot, error) {
 
 func (r CollectorRoot) isValid() bool {
 	switch r {
-	case CollectorRootAASDesc, CollectorRootSMDesc, CollectorRootSM, CollectorRootSME, CollectorRootCD, CollectorRootBD:
+	case CollectorRootAAS, CollectorRootAASDesc, CollectorRootSMDesc, CollectorRootSM, CollectorRootSME, CollectorRootCD, CollectorRootBD:
 		return true
 	default:
 		return false
@@ -134,6 +137,8 @@ func NewResolvedFieldPathCollectorForRoot(root CollectorRoot) (*ResolvedFieldPat
 
 func joinPlanConfigForRoot(root CollectorRoot) (JoinPlanConfig, error) {
 	switch root {
+	case CollectorRootAAS:
+		return joinPlanConfigForAAS(), nil
 	case CollectorRootAASDesc:
 		return defaultJoinPlanConfig(), nil
 	case CollectorRootSMDesc:
@@ -160,6 +165,133 @@ func normalizeRoot(root string) string {
 		r = r[:idx]
 	}
 	return r
+}
+
+func joinPlanConfigForAAS() JoinPlanConfig {
+	return JoinPlanConfig{
+		PreferredBase: "aas",
+		BaseAliases:   []string{"aas", "asset_information", "specific_asset_id", "aas_submodel_reference", "aas_submodel_reference_key", "external_subject_reference", "external_subject_reference_key"},
+		Rules: map[string]existsJoinRule{
+			"aas": {
+				Alias: "aas",
+				Deps:  nil,
+				Apply: func(ds *goqu.SelectDataset) *goqu.SelectDataset {
+					return ds
+				},
+			},
+			"asset_information": {
+				Alias: "asset_information",
+				Deps:  []string{"aas"},
+				Apply: func(ds *goqu.SelectDataset) *goqu.SelectDataset {
+					return ds.LeftJoin(
+						goqu.T("asset_information").As("asset_information"),
+						goqu.On(goqu.I("asset_information.asset_information_id").Eq(goqu.I("aas.id"))),
+					)
+				},
+			},
+			"specific_asset_id": {
+				Alias: "specific_asset_id",
+				Deps:  []string{"aas"},
+				Apply: func(ds *goqu.SelectDataset) *goqu.SelectDataset {
+					return ds.LeftJoin(
+						goqu.T("specific_asset_id").As("specific_asset_id"),
+						goqu.On(goqu.I("specific_asset_id.asset_information_id").Eq(goqu.I("aas.id"))),
+					)
+				},
+			},
+			"external_subject_reference": {
+				Alias: "external_subject_reference",
+				Deps:  []string{"specific_asset_id"},
+				Apply: func(ds *goqu.SelectDataset) *goqu.SelectDataset {
+					return ds.LeftJoin(
+						goqu.T("specific_asset_id_external_subject_id_reference").As("external_subject_reference"),
+						goqu.On(goqu.I("external_subject_reference.id").Eq(goqu.I("specific_asset_id.id"))),
+					)
+				},
+			},
+			"external_subject_reference_key": {
+				Alias: "external_subject_reference_key",
+				Deps:  []string{"external_subject_reference"},
+				Apply: func(ds *goqu.SelectDataset) *goqu.SelectDataset {
+					return ds.LeftJoin(
+						goqu.T("specific_asset_id_external_subject_id_reference_key").As("external_subject_reference_key"),
+						goqu.On(goqu.I("external_subject_reference_key.reference_id").Eq(goqu.I("external_subject_reference.id"))),
+					)
+				},
+			},
+			"aas_submodel_reference": {
+				Alias: "aas_submodel_reference",
+				Deps:  []string{"aas"},
+				Apply: func(ds *goqu.SelectDataset) *goqu.SelectDataset {
+					return ds.LeftJoin(
+						goqu.T("aas_submodel_reference").As("aas_submodel_reference"),
+						goqu.On(goqu.I("aas_submodel_reference.aas_id").Eq(goqu.I("aas.id"))),
+					)
+				},
+			},
+			"aas_submodel_reference_key": {
+				Alias: "aas_submodel_reference_key",
+				Deps:  []string{"aas_submodel_reference"},
+				Apply: func(ds *goqu.SelectDataset) *goqu.SelectDataset {
+					return ds.LeftJoin(
+						goqu.T("aas_submodel_reference_key").As("aas_submodel_reference_key"),
+						goqu.On(goqu.I("aas_submodel_reference_key.reference_id").Eq(goqu.I("aas_submodel_reference.id"))),
+					)
+				},
+			},
+		},
+		TableForAlias: func(alias string) (string, bool) {
+			switch alias {
+			case "aas":
+				return "aas", true
+			case "asset_information":
+				return "asset_information", true
+			case "specific_asset_id":
+				return "specific_asset_id", true
+			case "external_subject_reference":
+				return "specific_asset_id_external_subject_id_reference", true
+			case "external_subject_reference_key":
+				return "specific_asset_id_external_subject_id_reference_key", true
+			case "aas_submodel_reference":
+				return "aas_submodel_reference", true
+			case "aas_submodel_reference_key":
+				return "aas_submodel_reference_key", true
+			default:
+				return "", false
+			}
+		},
+		GroupKeyForBase: func(base string) (exp.IdentifierExpression, error) {
+			switch base {
+			case "aas":
+				return goqu.I("aas.id"), nil
+			case "asset_information":
+				return goqu.I("asset_information.asset_information_id"), nil
+			case "specific_asset_id":
+				return goqu.I("specific_asset_id.asset_information_id"), nil
+			case "aas_submodel_reference":
+				return goqu.I("aas_submodel_reference.aas_id"), nil
+			default:
+				return nil, fmt.Errorf("unsupported AAS base alias %q", base)
+			}
+		},
+		RootJoinKey: func() exp.IdentifierExpression {
+			return goqu.I("aas.id")
+		},
+		RootJoinKeyAlias: func() string {
+			return "aas"
+		},
+		RootJoinKeyColumn: func() string {
+			return "id"
+		},
+		Correlatable: func(alias string) bool {
+			switch alias {
+			case "aas", "asset_information", "specific_asset_id", "aas_submodel_reference":
+				return true
+			default:
+				return false
+			}
+		},
+	}
 }
 
 func joinPlanConfigForSM() JoinPlanConfig {
@@ -1756,16 +1888,26 @@ func normalizeSemanticShorthand(operand *Value) {
 	if inner == nil || inner.Field == nil {
 		return
 	}
+
 	field := string(*inner.Field)
-	// Already explicit -> nothing to do
-	if strings.Contains(field, ".keys[") {
+
+	parts := strings.SplitN(field, "#", 2)
+	if len(parts) != 2 {
 		return
 	}
-	if strings.HasSuffix(field, ".semanticId") || strings.HasSuffix(field, ".externalSubjectId") {
-		field += ".keys[0].value"
-		*inner.Field = ModelStringPattern(field)
+
+	prefix := parts[0]
+	suffix := parts[1]
+
+	// Already explicit -> nothing to do
+	if strings.Contains(suffix, ".keys[") {
+		return
 	}
 
+	if strings.HasSuffix(suffix, "semanticId") || strings.HasSuffix(suffix, "externalSubjectId") {
+		suffix += ".keys[0].value"
+		*inner.Field = ModelStringPattern(prefix + "#" + suffix)
+	}
 }
 
 func toSQLComponent(operand *Value, position string) (interface{}, error) {

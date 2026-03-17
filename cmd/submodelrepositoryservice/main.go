@@ -74,7 +74,7 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 	smCtrl := openapi.NewSubmodelRepositoryAPIAPIController(smSvc, "", config.Server.StrictVerification)
 
 	// ==== Description Service ====
-	descSvc := openapi.NewDescriptionAPIAPIService()
+	descSvc := api.NewDescriptionAPIAPIService()
 	descCtrl := openapi.NewDescriptionAPIAPIController(descSvc)
 	base := common.NormalizeBasePath(config.Server.ContextPath)
 

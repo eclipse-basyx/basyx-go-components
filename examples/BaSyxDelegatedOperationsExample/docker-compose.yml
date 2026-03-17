@@ -1,0 +1,109 @@
+services:
+  aas-ui:
+    container_name: delegated-operations-aas-web-ui
+    image: eclipsebasyx/aas-gui:SNAPSHOT
+    ports:
+      - "3000:3000"
+    environment:
+      AAS_REPO_PATH: "http://localhost:8090/shells"
+      SUBMODEL_REPO_PATH: "http://localhost:8091/submodels"
+    depends_on:
+      aas_repository:
+        condition: service_started
+      submodel_repository:
+        condition: service_started
+    restart: unless-stopped
+
+  aas_repository:
+    container_name: delegated-operations-aas-repository
+    image: eclipsebasyx/aasrepository-go:SNAPSHOT
+    environment:
+      - SERVER_PORT=5004
+      - CORS_ALLOWEDORIGINS=*
+      - CORS_ALLOWEDHEADERS=*
+      - CORS_ALLOWEDCREDENTIALS=true
+      - CORS_ALLOWEDMETHODS=GET,POST,PUT,PATCH,DELETE,OPTIONS
+      - POSTGRES_HOST=db
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=admin
+      - POSTGRES_PASSWORD=admin123
+      - POSTGRES_DBNAME=basyxDelegationDB
+      - POSTGRES_MAXOPENCONNECTIONS=500
+      - POSTGRES_MAXIDLECONNECTIONS=500
+      - POSTGRES_CONNMAXLIFETIMEMINUTES=5
+      - ABAC_ENABLED=false
+    ports:
+      - "8090:5004"
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  submodel_repository:
+    container_name: delegated-operations-submodel-repository
+    build:
+      context: ../..
+      dockerfile: ./cmd/submodelrepositoryservice/Dockerfile
+    environment:
+      - SERVER_PORT=5004
+      - CORS_ALLOWEDORIGINS=*
+      - CORS_ALLOWEDHEADERS=*
+      - CORS_ALLOWEDCREDENTIALS=true
+      - CORS_ALLOWEDMETHODS=GET,POST,PUT,PATCH,DELETE,OPTIONS
+      - POSTGRES_HOST=db
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=admin
+      - POSTGRES_PASSWORD=admin123
+      - POSTGRES_DBNAME=basyxDelegationDB
+      - POSTGRES_MAXOPENCONNECTIONS=500
+      - POSTGRES_MAXIDLECONNECTIONS=500
+      - POSTGRES_CONNMAXLIFETIMEMINUTES=5
+      - JWS_PRIVATEKEYPATH=/app/rsa-key.pem
+      - ABAC_ENABLED=false
+    volumes:
+      - ./basyx/rsa-key.pem:/app/rsa-key.pem:ro
+    ports:
+      - "8091:5004"
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  delegated-operation-service:
+    container_name: delegated-operation-service
+    build:
+      context: ./delegated-operation-service
+      dockerfile: Dockerfile
+    environment:
+      - PORT=8080
+    ports:
+      - "8099:8080"
+    restart: unless-stopped
+
+  data-init:
+    container_name: delegated-operations-data-init
+    image: curlimages/curl:latest
+    volumes:
+      - ./startup.sh:/startup.sh:ro
+      - ./data:/data:ro
+    entrypoint: ["/bin/sh", "/startup.sh"]
+    depends_on:
+      aas_repository:
+        condition: service_started
+      submodel_repository:
+        condition: service_started
+
+  db:
+    container_name: delegated-operations-postgres-db
+    image: postgres:18
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: admin123
+      POSTGRES_DB: basyxDelegationDB
+    command: ["postgres", "-c", "listen_addresses=*"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U admin -d basyxDelegationDB"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped

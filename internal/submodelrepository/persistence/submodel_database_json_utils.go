@@ -31,7 +31,7 @@ import (
 
 	"github.com/FriedJannik/aas-go-sdk/jsonization"
 	"github.com/FriedJannik/aas-go-sdk/types"
-	submodel_repository_utils "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/utils"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	jsoniter "github.com/json-iterator/go"
 )
 
@@ -51,14 +51,14 @@ func jsonizeSubmodelPayload(submodel types.ISubmodel) (*submodelPayloadJSON, err
 	var err error
 
 	if submodel.DisplayName() != nil && len(submodel.DisplayName()) > 0 {
-		result.displayName, err = submodel_repository_utils.JsonStringFromJsonableSlice(jsonAPI, submodel.DisplayName())
+		result.displayName, err = common.JsonStringFromJsonableSlice(jsonAPI, submodel.DisplayName())
 		if err != nil {
 			return nil, err
 		}
 	}
 
 	if submodel.Description() != nil && len(submodel.Description()) > 0 {
-		result.description, err = submodel_repository_utils.JsonStringFromJsonableSlice(jsonAPI, submodel.Description())
+		result.description, err = common.JsonStringFromJsonableSlice(jsonAPI, submodel.Description())
 		if err != nil {
 			return nil, err
 		}
@@ -67,7 +67,7 @@ func jsonizeSubmodelPayload(submodel types.ISubmodel) (*submodelPayloadJSON, err
 	if submodel.Administration() != nil {
 		administration := submodel.Administration()
 		if administration != nil {
-			result.administrativeInformation, err = submodel_repository_utils.JsonStringFromJsonableObject(jsonAPI, administration)
+			result.administrativeInformation, err = common.JsonStringFromJsonableObject(jsonAPI, administration)
 			if err != nil {
 				return nil, err
 			}
@@ -75,28 +75,28 @@ func jsonizeSubmodelPayload(submodel types.ISubmodel) (*submodelPayloadJSON, err
 	}
 
 	if submodel.EmbeddedDataSpecifications() != nil && len(submodel.EmbeddedDataSpecifications()) > 0 {
-		result.embeddedDataSpecification, err = submodel_repository_utils.JsonStringFromJsonableSlice(jsonAPI, submodel.EmbeddedDataSpecifications())
+		result.embeddedDataSpecification, err = common.JsonStringFromJsonableSlice(jsonAPI, submodel.EmbeddedDataSpecifications())
 		if err != nil {
 			return nil, err
 		}
 	}
 
 	if submodel.SupplementalSemanticIDs() != nil && len(submodel.SupplementalSemanticIDs()) > 0 {
-		result.supplementalSemanticIDs, err = submodel_repository_utils.JsonStringFromJsonableSlice(jsonAPI, submodel.SupplementalSemanticIDs())
+		result.supplementalSemanticIDs, err = common.JsonStringFromJsonableSlice(jsonAPI, submodel.SupplementalSemanticIDs())
 		if err != nil {
 			return nil, err
 		}
 	}
 
 	if submodel.Extensions() != nil && len(submodel.Extensions()) > 0 {
-		result.extensions, err = submodel_repository_utils.JsonStringFromJsonableSlice(jsonAPI, submodel.Extensions())
+		result.extensions, err = common.JsonStringFromJsonableSlice(jsonAPI, submodel.Extensions())
 		if err != nil {
 			return nil, err
 		}
 	}
 
 	if submodel.Qualifiers() != nil && len(submodel.Qualifiers()) > 0 {
-		result.qualifiers, err = submodel_repository_utils.JsonStringFromJsonableSlice(jsonAPI, submodel.Qualifiers())
+		result.qualifiers, err = common.JsonStringFromJsonableSlice(jsonAPI, submodel.Qualifiers())
 		if err != nil {
 			return nil, err
 		}

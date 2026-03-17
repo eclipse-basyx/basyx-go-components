@@ -1,0 +1,20 @@
+{
+  "idShort": "testAAS2",
+  "id": "https://example.com/ids/aas/7301_3150_9442_7849",
+  "assetInformation": {
+    "assetKind": "Instance",
+    "globalAssetId": "assetId"
+  },
+  "submodels": [
+    {
+      "type": "ModelReference",
+      "keys": [
+        {
+          "type": "Submodel",
+          "value": "https://example.com/ids/sm/1111_2222_3333_4444"
+        }
+      ]
+    }
+  ],
+  "modelType": "AssetAdministrationShell"
+}

@@ -1,0 +1,9 @@
+{
+  "id": "https://example.com/ids/aas/assetids_global_only",
+  "idShort": "AASAssetIdsGlobalOnly",
+  "assetInformation": {
+    "assetKind": "Instance",
+    "globalAssetId": "assetId-global-only"
+  },
+  "modelType": "AssetAdministrationShell"
+}

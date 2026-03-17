@@ -1,0 +1,14 @@
+{
+    "paging_metadata": {},
+    "result": [
+        {
+            "assetInformation": {
+                "assetKind": "Instance",
+                "globalAssetId": "assetIdValueX"
+            },
+            "id": "https://example.com/ids/aas/filter3",
+            "idShort": "aasTestC",
+            "modelType": "AssetAdministrationShell"
+        }
+    ]
+}

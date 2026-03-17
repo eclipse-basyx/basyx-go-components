@@ -1,0 +1,9 @@
+{
+  "type": "ModelReference",
+  "keys": [
+    {
+      "type": "Submodel",
+      "value": "https://example.com/ids/sm/1111_7777_4444_8888"
+    }
+  ]
+}

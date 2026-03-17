@@ -13,15 +13,22 @@
 package api
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
-	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
+	"net"
 	"net/http"
+	"net/netip"
+	"net/url"
 	"os"
+	"strconv"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/FriedJannik/aas-go-sdk/jsonization"
 	"github.com/FriedJannik/aas-go-sdk/types"
@@ -42,6 +49,34 @@ type SubmodelRepositoryAPIAPIService struct {
 }
 
 const componentName = "SMREPO"
+
+const (
+	invocationDelegationQualifierType = "invocationDelegation"
+	defaultDelegationTimeout          = 30 * time.Second
+	defaultDelegationAsyncTTL         = 15 * time.Minute
+	delegationAsyncTTLKey             = "SMREPO_DELEGATION_ASYNC_TTL"
+	delegationTrustedHostsKey         = "SMREPO_DELEGATION_TRUSTED_HOSTS"
+	delegationAsyncCleanupInterval    = time.Minute
+)
+
+type delegatedOperationAsyncRecord struct {
+	SubmodelIdentifier string
+	IDShortPath        string
+	State              string
+	Result             any
+	ErrorStatus        int
+	ErrorBody          any
+	CreatedAt          time.Time
+	ExpiresAt          time.Time
+}
+
+var delegatedOperationAsyncState = struct {
+	sync.RWMutex
+	records       map[string]delegatedOperationAsyncRecord
+	lastCleanupAt time.Time
+}{
+	records: map[string]delegatedOperationAsyncRecord{},
+}
 
 // NewSubmodelRepositoryAPIAPIService creates a default api service
 func NewSubmodelRepositoryAPIAPIService(databaseBackend persistencepostgresql.SubmodelDatabase) *SubmodelRepositoryAPIAPIService {
@@ -64,27 +99,6 @@ func submodelValueToAnyMap(value gen.SubmodelValue) map[string]any {
 		result[key] = val
 	}
 	return result
-}
-
-func decodeBase64RawStd(value string) (string, error) {
-	if value == "" {
-		return "", nil
-	}
-
-	decodedBytes, err := base64.RawStdEncoding.DecodeString(value)
-	if err != nil {
-		return "", err
-	}
-
-	return string(decodedBytes), nil
-}
-
-func encodeBase64RawStd(value string) string {
-	if value == "" {
-		return ""
-	}
-
-	return base64.RawStdEncoding.EncodeToString([]byte(value))
 }
 
 func buildLimitPtr(limit int32) *int {
@@ -120,6 +134,437 @@ func mergeJSONObjects(base map[string]any, patch map[string]any) map[string]any 
 	}
 
 	return merged
+}
+
+func decodeSubmodelIdentifierOrAPIError(submodelIdentifier string, operation string) (string, gen.ImplResponse, bool) {
+	decodedSubmodelIdentifier, decodeErr := common.DecodeString(submodelIdentifier)
+	if decodeErr != nil {
+		return "", newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "MalformedSubmodelIdentifier"), false
+	}
+
+	return decodedSubmodelIdentifier, gen.ImplResponse{}, true
+}
+
+func parseDelegationTimeout(clientTimeoutDuration string) (time.Duration, error) {
+	if strings.TrimSpace(clientTimeoutDuration) == "" {
+		return defaultDelegationTimeout, nil
+	}
+
+	trimmed := strings.TrimSpace(clientTimeoutDuration)
+	if !strings.HasPrefix(trimmed, "P") && !strings.HasPrefix(trimmed, "-P") {
+		return 0, fmt.Errorf("SMREPO-PARSETO-INVALID clientTimeoutDuration '%s' is not an ISO8601 duration", clientTimeoutDuration)
+	}
+
+	sign := 1.0
+	if strings.HasPrefix(trimmed, "-P") {
+		sign = -1.0
+		trimmed = strings.TrimPrefix(trimmed, "-")
+	}
+
+	trimmed = strings.TrimPrefix(trimmed, "P")
+	parts := strings.SplitN(trimmed, "T", 2)
+	datePart := parts[0]
+	timePart := ""
+	if len(parts) == 2 {
+		timePart = parts[1]
+	}
+
+	if strings.Contains(datePart, "Y") || strings.Contains(datePart, "M") {
+		return 0, fmt.Errorf("SMREPO-PARSETO-UNSUPPORTED years and months are not supported in clientTimeoutDuration")
+	}
+
+	remainingDate := datePart
+	var totalDuration time.Duration
+	if strings.Contains(remainingDate, "D") {
+		dayParts := strings.SplitN(remainingDate, "D", 2)
+		days, err := strconv.Atoi(dayParts[0])
+		if err != nil {
+			return 0, fmt.Errorf("SMREPO-PARSETO-PARSEDAYS %w", err)
+		}
+		totalDuration += time.Duration(days) * 24 * time.Hour
+		remainingDate = dayParts[1]
+	}
+
+	if remainingDate != "" {
+		return 0, fmt.Errorf("SMREPO-PARSETO-INVALIDDATE unsupported date part '%s'", remainingDate)
+	}
+
+	remainingTime := timePart
+	if strings.Contains(remainingTime, "H") {
+		hourParts := strings.SplitN(remainingTime, "H", 2)
+		hours, err := strconv.Atoi(hourParts[0])
+		if err != nil {
+			return 0, fmt.Errorf("SMREPO-PARSETO-PARSEHOURS %w", err)
+		}
+		totalDuration += time.Duration(hours) * time.Hour
+		remainingTime = hourParts[1]
+	}
+
+	if strings.Contains(remainingTime, "M") {
+		minuteParts := strings.SplitN(remainingTime, "M", 2)
+		minutes, err := strconv.Atoi(minuteParts[0])
+		if err != nil {
+			return 0, fmt.Errorf("SMREPO-PARSETO-PARSEMINUTES %w", err)
+		}
+		totalDuration += time.Duration(minutes) * time.Minute
+		remainingTime = minuteParts[1]
+	}
+
+	if strings.Contains(remainingTime, "S") {
+		secondsParts := strings.SplitN(remainingTime, "S", 2)
+		seconds, err := strconv.ParseFloat(secondsParts[0], 64)
+		if err != nil {
+			return 0, fmt.Errorf("SMREPO-PARSETO-PARSESECONDS %w", err)
+		}
+		totalDuration += time.Duration(seconds * float64(time.Second))
+		remainingTime = secondsParts[1]
+	}
+
+	if strings.TrimSpace(remainingTime) != "" {
+		return 0, fmt.Errorf("SMREPO-PARSETO-INVALIDTIME unsupported time part '%s'", remainingTime)
+	}
+
+	computedDuration := time.Duration(float64(totalDuration) * sign)
+	if computedDuration <= 0 {
+		return 0, errors.New("SMREPO-PARSETO-NONPOSITIVE clientTimeoutDuration must resolve to a positive duration")
+	}
+
+	return computedDuration, nil
+}
+
+func resolveDelegationURL(element types.ISubmodelElement) (string, error) {
+	if element == nil {
+		return "", errors.New("SMREPO-RSLVDEL-NILELEMENT submodel element is nil")
+	}
+
+	if element.ModelType() != types.ModelTypeOperation {
+		return "", common.NewErrBadRequest("invoke is only valid for Operation submodel elements")
+	}
+
+	for _, qualifier := range element.Qualifiers() {
+		if qualifier == nil {
+			continue
+		}
+		if qualifier.Type() == invocationDelegationQualifierType && qualifier.Value() != nil {
+			delegationTarget := strings.TrimSpace(*qualifier.Value())
+			if delegationTarget == "" {
+				return "", errors.New("SMREPO-RSLVDEL-EMPTYURL invocationDelegation qualifier value is empty")
+			}
+			return delegationTarget, nil
+		}
+	}
+
+	return "", errors.New("SMREPO-RSLVDEL-MISSINGQUAL invocationDelegation qualifier not found on operation")
+}
+
+func buildDelegatedOperationInput(operationRequest gen.OperationRequest) []types.IOperationVariable {
+	delegatedInput := make([]types.IOperationVariable, 0, len(operationRequest.InputArguments)+len(operationRequest.InoutputArguments))
+	delegatedInput = append(delegatedInput, operationRequest.InputArguments...)
+	delegatedInput = append(delegatedInput, operationRequest.InoutputArguments...)
+	return delegatedInput
+}
+
+func serializeDelegatedOperationPayload(payload []types.IOperationVariable) ([]byte, error) {
+	jsonablePayload := make([]any, 0, len(payload))
+	for index, operationVariable := range payload {
+		jsonableValue, err := jsonization.ToJsonable(operationVariable)
+		if err != nil {
+			return nil, fmt.Errorf("SMREPO-SERDEL-TOJSONABLE-%d %w", index, err)
+		}
+		jsonablePayload = append(jsonablePayload, jsonableValue)
+	}
+
+	requestBody, err := json.Marshal(jsonablePayload)
+	if err != nil {
+		return nil, fmt.Errorf("SMREPO-SERDEL-MARSHAL %w", err)
+	}
+
+	return requestBody, nil
+}
+
+func toDelegatedOperationResultPayload(outputArguments []types.IOperationVariable, inoutputArguments []types.IOperationVariable) map[string]any {
+	return map[string]any{
+		"executionState":    "Completed",
+		"success":           true,
+		"outputArguments":   outputArguments,
+		"inoutputArguments": inoutputArguments,
+	}
+}
+
+func toOperationVariables(payload any) ([]types.IOperationVariable, bool) {
+	if payload == nil {
+		return nil, false
+	}
+
+	if alreadyTyped, ok := payload.([]types.IOperationVariable); ok {
+		return alreadyTyped, true
+	}
+
+	switch typedPayload := payload.(type) {
+	case []any:
+		operationVariables := make([]types.IOperationVariable, 0, len(typedPayload))
+		for _, item := range typedPayload {
+			operationVariable, err := jsonization.OperationVariableFromJsonable(item)
+			if err != nil {
+				return nil, false
+			}
+			operationVariables = append(operationVariables, operationVariable)
+		}
+		return operationVariables, true
+	case []map[string]any:
+		operationVariables := make([]types.IOperationVariable, 0, len(typedPayload))
+		for _, item := range typedPayload {
+			operationVariable, err := jsonization.OperationVariableFromJsonable(item)
+			if err != nil {
+				return nil, false
+			}
+			operationVariables = append(operationVariables, operationVariable)
+		}
+		return operationVariables, true
+	case map[string]any:
+		if _, hasValue := typedPayload["value"]; !hasValue {
+			return nil, false
+		}
+		operationVariable, err := jsonization.OperationVariableFromJsonable(typedPayload)
+		if err != nil {
+			return nil, false
+		}
+		return []types.IOperationVariable{operationVariable}, true
+	default:
+		return nil, false
+	}
+}
+
+func toDelegatedOperationResultPayloadFromBody(delegatedBody any) (map[string]any, bool) {
+	if delegatedOutput, ok := delegatedBody.([]types.IOperationVariable); ok {
+		return toDelegatedOperationResultPayload(delegatedOutput, []types.IOperationVariable{}), true
+	}
+
+	delegatedBodyMap, ok := delegatedBody.(map[string]any)
+	if !ok {
+		return nil, false
+	}
+
+	outputArguments, outputOK := toOperationVariables(delegatedBodyMap["outputArguments"])
+	inoutputArguments, inoutputOK := toOperationVariables(delegatedBodyMap["inoutputArguments"])
+	if !outputOK && !inoutputOK {
+		return nil, false
+	}
+
+	if !outputOK {
+		outputArguments = []types.IOperationVariable{}
+	}
+	if !inoutputOK {
+		inoutputArguments = []types.IOperationVariable{}
+	}
+
+	return toDelegatedOperationResultPayload(outputArguments, inoutputArguments), true
+}
+
+func parseDelegationAsyncTTL() time.Duration {
+	rawTTL := strings.TrimSpace(os.Getenv(delegationAsyncTTLKey))
+	if rawTTL == "" {
+		return defaultDelegationAsyncTTL
+	}
+
+	parsedTTL, err := time.ParseDuration(rawTTL)
+	if err != nil || parsedTTL <= 0 {
+		return defaultDelegationAsyncTTL
+	}
+
+	return parsedTTL
+}
+
+func parseTrustedDelegationHosts() map[string]struct{} {
+	rawHosts := strings.TrimSpace(os.Getenv(delegationTrustedHostsKey))
+	if rawHosts == "" {
+		return map[string]struct{}{}
+	}
+
+	trustedHosts := map[string]struct{}{}
+	for _, rawHost := range strings.Split(rawHosts, ",") {
+		host := strings.ToLower(strings.TrimSpace(rawHost))
+		if host == "" {
+			continue
+		}
+		trustedHosts[host] = struct{}{}
+	}
+
+	return trustedHosts
+}
+
+func isTrustedDelegationHost(host string) bool {
+	normalizedHost := strings.ToLower(strings.TrimSpace(host))
+	if normalizedHost == "" {
+		return false
+	}
+
+	if normalizedHost == "localhost" || strings.HasSuffix(normalizedHost, ".localhost") {
+		return true
+	}
+
+	if ip, parseErr := netip.ParseAddr(normalizedHost); parseErr == nil {
+		return ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast()
+	}
+
+	if parsedIP := net.ParseIP(normalizedHost); parsedIP != nil {
+		return parsedIP.IsLoopback() || parsedIP.IsPrivate() || parsedIP.IsLinkLocalUnicast() || parsedIP.IsLinkLocalMulticast()
+	}
+
+	if strings.HasSuffix(normalizedHost, ".internal") || strings.HasSuffix(normalizedHost, ".svc") || strings.HasSuffix(normalizedHost, ".cluster.local") {
+		return true
+	}
+
+	trustedHosts := parseTrustedDelegationHosts()
+	_, trusted := trustedHosts[normalizedHost]
+	return trusted
+}
+
+func shouldForwardAuthorizationHeader(parsedDelegationURL *url.URL) bool {
+	if parsedDelegationURL == nil {
+		return false
+	}
+
+	return isTrustedDelegationHost(parsedDelegationURL.Hostname())
+}
+
+func maybeCleanupDelegatedAsyncRecordsLocked(now time.Time) {
+	if !delegatedOperationAsyncState.lastCleanupAt.IsZero() && now.Sub(delegatedOperationAsyncState.lastCleanupAt) < delegationAsyncCleanupInterval {
+		return
+	}
+
+	for handleID, record := range delegatedOperationAsyncState.records {
+		if !record.ExpiresAt.IsZero() && now.After(record.ExpiresAt) {
+			delete(delegatedOperationAsyncState.records, handleID)
+		}
+	}
+
+	delegatedOperationAsyncState.lastCleanupAt = now
+}
+
+func doDelegatedOperationCall(ctx context.Context, delegationURL string, payload []types.IOperationVariable, timeout time.Duration) (int, any, error) {
+	parsedDelegationURL, parseErr := url.Parse(delegationURL)
+	if parseErr != nil {
+		return 0, nil, fmt.Errorf("SMREPO-DOOPDELG-PARSEURL %w", parseErr)
+	}
+	if parsedDelegationURL.Scheme != "http" && parsedDelegationURL.Scheme != "https" {
+		return 0, nil, errors.New("SMREPO-DOOPDELG-UNSUPPORTEDSCHEME delegation URL must use http or https")
+	}
+	if strings.TrimSpace(parsedDelegationURL.Host) == "" {
+		return 0, nil, errors.New("SMREPO-DOOPDELG-MISSINGHOST delegation URL host is missing")
+	}
+	if !isTrustedDelegationHost(parsedDelegationURL.Hostname()) {
+		return 0, nil, fmt.Errorf("SMREPO-DOOPDELG-UNTRUSTEDHOST delegation URL host %q is not in SMREPO_DELEGATION_TRUSTED_HOSTS allowlist", parsedDelegationURL.Host)
+	}
+
+	requestBody, marshalErr := serializeDelegatedOperationPayload(payload)
+	if marshalErr != nil {
+		return 0, nil, fmt.Errorf("SMREPO-DOOPDELG-MARSHALREQ %w", marshalErr)
+	}
+
+	request, requestErr := http.NewRequestWithContext(ctx, http.MethodPost, delegationURL, bytes.NewReader(requestBody))
+	if requestErr != nil {
+		return 0, nil, fmt.Errorf("SMREPO-DOOPDELG-CREATEREQ %w", requestErr)
+	}
+
+	request.Header.Set("Content-Type", "application/json")
+	authorizationHeader := common.AuthorizationHeaderFromContext(ctx)
+	if strings.TrimSpace(authorizationHeader) != "" && shouldForwardAuthorizationHeader(parsedDelegationURL) {
+		request.Header.Set("Authorization", authorizationHeader)
+	}
+
+	httpClient := &http.Client{Timeout: timeout}
+	// #nosec G704 -- delegation target is validated for scheme and host before request execution.
+	response, responseErr := httpClient.Do(request)
+	if responseErr != nil {
+		return 0, nil, fmt.Errorf("SMREPO-DOOPDELG-EXECREQ %w", responseErr)
+	}
+	defer func() {
+		_ = response.Body.Close()
+	}()
+
+	responseBytes, readErr := io.ReadAll(response.Body)
+	if readErr != nil {
+		return 0, nil, fmt.Errorf("SMREPO-DOOPDELG-READRESP %w", readErr)
+	}
+
+	if len(responseBytes) == 0 {
+		return response.StatusCode, []types.IOperationVariable{}, nil
+	}
+
+	var delegatedOutput []types.IOperationVariable
+	if unmarshalErr := json.Unmarshal(responseBytes, &delegatedOutput); unmarshalErr == nil {
+		return response.StatusCode, delegatedOutput, nil
+	}
+
+	var passthroughBody any
+	if unmarshalErr := json.Unmarshal(responseBytes, &passthroughBody); unmarshalErr != nil {
+		passthroughBody = map[string]any{"message": string(responseBytes)}
+	}
+
+	return response.StatusCode, passthroughBody, nil
+}
+
+func loadOperationElement(ctx context.Context, backend persistencepostgresql.SubmodelDatabase, decodedSubmodelIdentifier string, idShortPath string, operation string) (types.ISubmodelElement, gen.ImplResponse, bool) {
+	element, err := backend.GetSubmodelElementWithContext(ctx, decodedSubmodelIdentifier, idShortPath, false, "")
+	if err != nil {
+		if common.IsErrNotFound(err) || errors.Is(err, sql.ErrNoRows) {
+			return nil, newAPIErrorResponse(err, http.StatusNotFound, operation, "SubmodelElementNotFound"), false
+		}
+		if common.IsErrBadRequest(err) {
+			return nil, newAPIErrorResponse(err, http.StatusBadRequest, operation, "BadRequest"), false
+		}
+		return nil, newAPIErrorResponse(err, http.StatusInternalServerError, operation, "GetSubmodelElement"), false
+	}
+
+	return element, gen.ImplResponse{}, true
+}
+
+func persistDelegatedAsyncRecord(handleID string, record delegatedOperationAsyncRecord) {
+	delegatedOperationAsyncState.Lock()
+	now := time.Now().UTC()
+	maybeCleanupDelegatedAsyncRecordsLocked(now)
+
+	deferredRecord := record
+	deferredRecord.CreatedAt = now
+	deferredRecord.ExpiresAt = now.Add(parseDelegationAsyncTTL())
+	delegatedOperationAsyncState.records[handleID] = deferredRecord
+	delegatedOperationAsyncState.Unlock()
+}
+
+func getDelegatedAsyncRecord(handleID string) (delegatedOperationAsyncRecord, bool) {
+	delegatedOperationAsyncState.Lock()
+	now := time.Now().UTC()
+	maybeCleanupDelegatedAsyncRecordsLocked(now)
+
+	record, found := delegatedOperationAsyncState.records[handleID]
+	if found && !record.ExpiresAt.IsZero() && now.After(record.ExpiresAt) {
+		delete(delegatedOperationAsyncState.records, handleID)
+		delegatedOperationAsyncState.Unlock()
+		return delegatedOperationAsyncRecord{}, false
+	}
+
+	delegatedOperationAsyncState.Unlock()
+	return record, found
+}
+
+func updateDelegatedAsyncRecord(handleID string, updateFn func(record delegatedOperationAsyncRecord) delegatedOperationAsyncRecord) {
+	delegatedOperationAsyncState.Lock()
+	now := time.Now().UTC()
+	maybeCleanupDelegatedAsyncRecordsLocked(now)
+
+	record, found := delegatedOperationAsyncState.records[handleID]
+	if found && !record.ExpiresAt.IsZero() && now.After(record.ExpiresAt) {
+		delete(delegatedOperationAsyncState.records, handleID)
+		found = false
+	}
+	if found {
+		updatedRecord := updateFn(record)
+		updatedRecord.CreatedAt = record.CreatedAt
+		updatedRecord.ExpiresAt = record.ExpiresAt
+		delegatedOperationAsyncState.records[handleID] = updatedRecord
+	}
+	delegatedOperationAsyncState.Unlock()
 }
 
 func toSubmodelElementMetadata(element types.ISubmodelElement) (gen.SubmodelElementMetadata, error) {
@@ -183,7 +628,7 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodels(
 
 	decodedCursor := ""
 	if cursor != "" {
-		decodedCursorBytes, decodeErr := base64.RawStdEncoding.DecodeString(cursor)
+		decodedCursorBytes, decodeErr := common.DecodeString(cursor)
 		if decodeErr != nil {
 			return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "BadCursor"), nil
 		}
@@ -236,7 +681,7 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodels(
 	// using the openAPI provided response struct to include paging metadata
 	encodedNextCursor := ""
 	if nextCursor != "" {
-		encodedNextCursor = base64.RawStdEncoding.EncodeToString([]byte(nextCursor))
+		encodedNextCursor = common.EncodeString(nextCursor)
 	}
 
 	res := gen.GetSubmodelsResult{
@@ -268,7 +713,7 @@ func (s *SubmodelRepositoryAPIAPIService) GetSubmodelByID(
 ) (gen.ImplResponse, error) {
 	const operation = "GetSubmodelByID"
 
-	decodedSubmodelIdentifier, decodeErr := base64.RawStdEncoding.DecodeString(id)
+	decodedSubmodelIdentifier, decodeErr := common.DecodeString(id)
 	if decodeErr != nil {
 		return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "MalformedSubmodelIdentifier"), nil
 	}
@@ -305,7 +750,7 @@ func (s *SubmodelRepositoryAPIAPIService) GetSignedSubmodelByID(
 ) (gen.ImplResponse, error) {
 	const operation = "GetSignedSubmodelByID"
 
-	decodedSubmodelIdentifier, decodeErr := decodeBase64RawStd(id)
+	decodedSubmodelIdentifier, decodeErr := common.DecodeString(id)
 	if decodeErr != nil {
 		return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "MalformedSubmodelIdentifier"), nil
 	}
@@ -333,7 +778,7 @@ func (s *SubmodelRepositoryAPIAPIService) GetSignedSubmodelByIDValueOnly(
 ) (gen.ImplResponse, error) {
 	const operation = "GetSignedSubmodelByIDValueOnly"
 
-	decodedSubmodelIdentifier, decodeErr := decodeBase64RawStd(id)
+	decodedSubmodelIdentifier, decodeErr := common.DecodeString(id)
 	if decodeErr != nil {
 		return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "MalformedSubmodelIdentifier"), nil
 	}
@@ -368,7 +813,7 @@ func (s *SubmodelRepositoryAPIAPIService) DeleteSubmodelByID(
 ) (gen.ImplResponse, error) {
 	const operation = "DeleteSubmodelByID"
 
-	decodedSubmodelIdentifier, decodeErr := decodeBase64RawStd(id)
+	decodedSubmodelIdentifier, decodeErr := common.DecodeString(id)
 	if decodeErr != nil {
 		return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "MalformedSubmodelIdentifier"), nil
 	}
@@ -456,7 +901,7 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelsMetadata(
 
 	decodedCursor := ""
 	if cursor != "" {
-		decodedCursorBytes, decodeErr := base64.RawStdEncoding.DecodeString(cursor)
+		decodedCursorBytes, decodeErr := common.DecodeString(cursor)
 		if decodeErr != nil {
 			return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "BadCursor"), nil
 		}
@@ -516,7 +961,7 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelsMetadata(
 
 	encodedCursor := ""
 	if nextCursor != "" {
-		encodedCursor = base64.RawStdEncoding.EncodeToString([]byte(nextCursor))
+		encodedCursor = common.EncodeString(nextCursor)
 	}
 
 	result := gen.GetSubmodelsMetadataResult{
@@ -537,7 +982,7 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelsValueOnly(ctx context.C
 
 	decodedCursor := ""
 	if cursor != "" {
-		decodedCursorBytes, decodeErr := base64.RawStdEncoding.DecodeString(cursor)
+		decodedCursorBytes, decodeErr := common.DecodeString(cursor)
 		if decodeErr != nil {
 			return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "BadCursor"), nil
 		}
@@ -589,7 +1034,7 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelsValueOnly(ctx context.C
 
 	encodedNextCursor := ""
 	if nextCursor != "" {
-		encodedNextCursor = base64.RawStdEncoding.EncodeToString([]byte(nextCursor))
+		encodedNextCursor = common.EncodeString(nextCursor)
 	}
 
 	res := gen.GetSubmodelsValueResult{
@@ -610,14 +1055,14 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelsReference(ctx context.C
 	_ = level
 	const operation = "GetAllSubmodelsReference"
 
-	decodedCursor, decodeErr := decodeBase64RawStd(cursor)
+	decodedCursor, decodeErr := common.DecodeString(cursor)
 	if decodeErr != nil {
 		return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "BadCursor"), nil
 	}
 
 	decodedSemanticID := ""
 	if semanticID != "" {
-		decodedSemanticID, decodeErr = decodeBase64RawStd(semanticID)
+		decodedSemanticID, decodeErr = common.DecodeString(semanticID)
 		if decodeErr != nil {
 			return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "BadSemanticID"), nil
 		}
@@ -641,7 +1086,7 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelsReference(ctx context.C
 	}
 
 	res := gen.GetReferencesResult{
-		PagingMetadata: gen.PagedResultPagingMetadata{Cursor: encodeBase64RawStd(nextCursor)},
+		PagingMetadata: gen.PagedResultPagingMetadata{Cursor: common.EncodeString(nextCursor)},
 		Result:         jsonReferences,
 	}
 
@@ -683,7 +1128,7 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelsPath(ctx context.Contex
 func (s *SubmodelRepositoryAPIAPIService) PutSubmodelByID(ctx context.Context, submodelIdentifier string, submodel types.ISubmodel) (gen.ImplResponse, error) {
 	const operation = "PutSubmodelByID"
 
-	decodedIdentifier, decodeErr := decodeBase64RawStd(submodelIdentifier)
+	decodedIdentifier, decodeErr := common.DecodeString(submodelIdentifier)
 	if decodeErr != nil {
 		return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "MalformedSubmodelIdentifier"), nil
 	}
@@ -729,7 +1174,7 @@ func (s *SubmodelRepositoryAPIAPIService) PatchSubmodelByID(ctx context.Context,
 	_ = level
 	const operation = "PatchSubmodelByID"
 
-	decodedIdentifier, decodeErr := decodeBase64RawStd(submodelIdentifier)
+	decodedIdentifier, decodeErr := common.DecodeString(submodelIdentifier)
 	if decodeErr != nil {
 		return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "MalformedSubmodelIdentifier"), nil
 	}
@@ -873,7 +1318,7 @@ func (s *SubmodelRepositoryAPIAPIService) GetSubmodelByIDValueOnly(ctx context.C
 	_ = extent
 	const operation = "GetSubmodelByIDValueOnly"
 
-	decodedSubmodelIdentifier, decodeErr := base64.RawStdEncoding.DecodeString(submodelIdentifier)
+	decodedSubmodelIdentifier, decodeErr := common.DecodeString(submodelIdentifier)
 	if decodeErr != nil {
 		return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "MalformedSubmodelIdentifier"), nil
 	}
@@ -906,7 +1351,7 @@ func (s *SubmodelRepositoryAPIAPIService) PatchSubmodelByIDValueOnly(ctx context
 	_ = level
 	const operation = "PatchSubmodelByIDValueOnly"
 
-	decodedIdentifier, err := base64.RawStdEncoding.DecodeString(submodelIdentifier)
+	decodedIdentifier, err := common.DecodeString(submodelIdentifier)
 	if err != nil {
 		return newAPIErrorResponse(err, http.StatusBadRequest, operation, "MalformedSubmodelIdentifier"), nil
 	}
@@ -932,7 +1377,7 @@ func (s *SubmodelRepositoryAPIAPIService) GetSubmodelByIDReference(ctx context.C
 	_ = ctx
 	const operation = "GetSubmodelByIDReference"
 
-	decodedSubmodelIdentifier, decodeErr := decodeBase64RawStd(submodelIdentifier)
+	decodedSubmodelIdentifier, decodeErr := common.DecodeString(submodelIdentifier)
 	if decodeErr != nil {
 		return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "MalformedSubmodelIdentifier"), nil
 	}
@@ -1002,14 +1447,14 @@ func (s *SubmodelRepositoryAPIAPIService) GetSubmodelByIDPath(ctx context.Contex
 func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelElements(ctx context.Context, submodelIdentifier string, limit int32, cursor string, level string, _ /*extent*/ string) (gen.ImplResponse, error) {
 	const operation = "GetAllSubmodelElements"
 
-	decodedSubmodelIdentifier, decodeErr := base64.RawStdEncoding.DecodeString(submodelIdentifier)
+	decodedSubmodelIdentifier, decodeErr := common.DecodeString(submodelIdentifier)
 	if decodeErr != nil {
 		return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "MalformedSubmodelIdentifier"), nil
 	}
 
 	decodedCursor := ""
 	if cursor != "" {
-		decodedCursorBytes, err := base64.RawStdEncoding.DecodeString(cursor)
+		decodedCursorBytes, err := common.DecodeString(cursor)
 		if err != nil {
 			return newAPIErrorResponse(err, http.StatusBadRequest, operation, "BadCursor"), nil
 		}
@@ -1048,7 +1493,7 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelElements(ctx context.Con
 
 	encodedNextCursor := ""
 	if nextCursor != "" {
-		encodedNextCursor = base64.RawStdEncoding.EncodeToString([]byte(nextCursor))
+		encodedNextCursor = common.EncodeString(nextCursor)
 	}
 
 	res := gen.GetSubmodelElementsResult{
@@ -1073,7 +1518,7 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelElements(ctx context.Con
 func (s *SubmodelRepositoryAPIAPIService) PostSubmodelElementSubmodelRepo(ctx context.Context, submodelIdentifier string, submodelElement types.ISubmodelElement) (gen.ImplResponse, error) {
 	const operation = "PostSubmodelElementSubmodelRepo"
 
-	decodedSubmodelIdentifier, decodeErr := decodeBase64RawStd(submodelIdentifier)
+	decodedSubmodelIdentifier, decodeErr := common.DecodeString(submodelIdentifier)
 	if decodeErr != nil {
 		return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "MalformedSubmodelIdentifier"), nil
 	}
@@ -1104,12 +1549,12 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelElementsMetadataSubmodel
 	_ = ctx
 	const operation = "GetAllSubmodelElementsMetadataSubmodelRepo"
 
-	decodedSubmodelIdentifier, decodeErr := decodeBase64RawStd(submodelIdentifier)
+	decodedSubmodelIdentifier, decodeErr := common.DecodeString(submodelIdentifier)
 	if decodeErr != nil {
 		return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "MalformedSubmodelIdentifier"), nil
 	}
 
-	decodedCursor, cursorDecodeErr := decodeBase64RawStd(cursor)
+	decodedCursor, cursorDecodeErr := common.DecodeString(cursor)
 	if cursorDecodeErr != nil {
 		return newAPIErrorResponse(cursorDecodeErr, http.StatusBadRequest, operation, "BadCursor"), nil
 	}
@@ -1135,7 +1580,7 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelElementsMetadataSubmodel
 	}
 
 	res := gen.GetSubmodelElementsMetadataResult{
-		PagingMetadata: gen.PagedResultPagingMetadata{Cursor: encodeBase64RawStd(nextCursor)},
+		PagingMetadata: gen.PagedResultPagingMetadata{Cursor: common.EncodeString(nextCursor)},
 		Result:         metadataResult,
 	}
 
@@ -1150,14 +1595,14 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelElementsValueOnlySubmode
 	_ = extent
 	const operation = "GetAllSubmodelElementsValueOnlySubmodelRepo"
 
-	decodedSubmodelIdentifier, decodeErr := base64.RawStdEncoding.DecodeString(submodelIdentifier)
+	decodedSubmodelIdentifier, decodeErr := common.DecodeString(submodelIdentifier)
 	if decodeErr != nil {
 		return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "MalformedSubmodelIdentifier"), nil
 	}
 
 	decodedCursor := ""
 	if cursor != "" {
-		decodedCursorBytes, err := base64.RawStdEncoding.DecodeString(cursor)
+		decodedCursorBytes, err := common.DecodeString(cursor)
 		if err != nil {
 			return newAPIErrorResponse(err, http.StatusBadRequest, operation, "BadCursor"), nil
 		}
@@ -1203,7 +1648,7 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelElementsValueOnlySubmode
 
 	encodedNextCursor := ""
 	if nextCursor != "" {
-		encodedNextCursor = base64.RawStdEncoding.EncodeToString([]byte(nextCursor))
+		encodedNextCursor = common.EncodeString(nextCursor)
 	}
 
 	res := gen.GetSubmodelElementsValueResult{
@@ -1222,12 +1667,12 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelElementsReferenceSubmode
 	_ = level
 	const operation = "GetAllSubmodelElementsReferenceSubmodelRepo"
 
-	decodedSubmodelIdentifier, decodeErr := decodeBase64RawStd(submodelIdentifier)
+	decodedSubmodelIdentifier, decodeErr := common.DecodeString(submodelIdentifier)
 	if decodeErr != nil {
 		return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "MalformedSubmodelIdentifier"), nil
 	}
 
-	decodedCursor, cursorDecodeErr := decodeBase64RawStd(cursor)
+	decodedCursor, cursorDecodeErr := common.DecodeString(cursor)
 	if cursorDecodeErr != nil {
 		return newAPIErrorResponse(cursorDecodeErr, http.StatusBadRequest, operation, "BadCursor"), nil
 	}
@@ -1253,7 +1698,7 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelElementsReferenceSubmode
 	}
 
 	res := gen.GetReferencesResult{
-		PagingMetadata: gen.PagedResultPagingMetadata{Cursor: encodeBase64RawStd(nextCursor)},
+		PagingMetadata: gen.PagedResultPagingMetadata{Cursor: common.EncodeString(nextCursor)},
 		Result:         jsonableArray,
 	}
 
@@ -1267,12 +1712,12 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelElementsPathSubmodelRepo
 	_ = ctx
 	const operation = "GetAllSubmodelElementsPathSubmodelRepo"
 
-	decodedSubmodelIdentifier, decodeErr := decodeBase64RawStd(submodelIdentifier)
+	decodedSubmodelIdentifier, decodeErr := common.DecodeString(submodelIdentifier)
 	if decodeErr != nil {
 		return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "MalformedSubmodelIdentifier"), nil
 	}
 
-	decodedCursor, cursorDecodeErr := decodeBase64RawStd(cursor)
+	decodedCursor, cursorDecodeErr := common.DecodeString(cursor)
 	if cursorDecodeErr != nil {
 		return newAPIErrorResponse(cursorDecodeErr, http.StatusBadRequest, operation, "BadCursor"), nil
 	}
@@ -1302,7 +1747,7 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelElementsPathSubmodelRepo
 	}
 
 	res := gen.GetPathItemsResult{
-		PagingMetadata: gen.PagedResultPagingMetadata{Cursor: encodeBase64RawStd(nextCursor)},
+		PagingMetadata: gen.PagedResultPagingMetadata{Cursor: common.EncodeString(nextCursor)},
 		Result:         paths,
 	}
 
@@ -1320,7 +1765,7 @@ func (s *SubmodelRepositoryAPIAPIService) GetSubmodelElementByPathSubmodelRepo(c
 		return newAPIErrorResponse(errors.New("invalid level parameter"), http.StatusBadRequest, operation, "InvalidLevelParameter"), nil
 	}
 
-	decodedSubmodelIdentifier, decodeErr := decodeBase64RawStd(submodelIdentifier)
+	decodedSubmodelIdentifier, decodeErr := common.DecodeString(submodelIdentifier)
 	if decodeErr != nil {
 		return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "MalformedSubmodelIdentifier"), nil
 	}
@@ -1360,7 +1805,7 @@ func (s *SubmodelRepositoryAPIAPIService) GetSubmodelElementByPathSubmodelRepo(c
 func (s *SubmodelRepositoryAPIAPIService) PutSubmodelElementByPathSubmodelRepo(ctx context.Context, submodelIdentifier string, idShortPath string, submodelElement types.ISubmodelElement, _ /*level*/ string) (gen.ImplResponse, error) {
 	const operation = "PutSubmodelElementByPathSubmodelRepo"
 
-	decodedSubmodelIdentifier, decodeErr := decodeBase64RawStd(submodelIdentifier)
+	decodedSubmodelIdentifier, decodeErr := common.DecodeString(submodelIdentifier)
 	if decodeErr != nil {
 		return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "MalformedSubmodelIdentifier"), nil
 	}
@@ -1400,7 +1845,7 @@ func (s *SubmodelRepositoryAPIAPIService) PutSubmodelElementByPathSubmodelRepo(c
 func (s *SubmodelRepositoryAPIAPIService) PostSubmodelElementByPathSubmodelRepo(_ /*ctx*/ context.Context, submodelIdentifier string, idShortPath string, submodelElement types.ISubmodelElement) (gen.ImplResponse, error) {
 	const operation = "PostSubmodelElementByPathSubmodelRepo"
 
-	decodedSubmodelIdentifier, decodeErr := decodeBase64RawStd(submodelIdentifier)
+	decodedSubmodelIdentifier, decodeErr := common.DecodeString(submodelIdentifier)
 	if decodeErr != nil {
 		return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "MalformedSubmodelIdentifier"), nil
 	}
@@ -1436,7 +1881,7 @@ func (s *SubmodelRepositoryAPIAPIService) PostSubmodelElementByPathSubmodelRepo(
 func (s *SubmodelRepositoryAPIAPIService) DeleteSubmodelElementByPathSubmodelRepo(ctx context.Context, submodelIdentifier string, idShortPath string) (gen.ImplResponse, error) {
 	const operation = "DeleteSubmodelElementByPathSubmodelRepo"
 
-	decodedSubmodelIdentifier, decodeErr := decodeBase64RawStd(submodelIdentifier)
+	decodedSubmodelIdentifier, decodeErr := common.DecodeString(submodelIdentifier)
 	if decodeErr != nil {
 		return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "MalformedSubmodelIdentifier"), nil
 	}
@@ -1465,7 +1910,7 @@ func (s *SubmodelRepositoryAPIAPIService) PatchSubmodelElementByPathSubmodelRepo
 	_ = ctx
 	const operation = "PatchSubmodelElementByPathSubmodelRepo"
 
-	decodedSubmodelIdentifier, decodeErr := decodeBase64RawStd(submodelIdentifier)
+	decodedSubmodelIdentifier, decodeErr := common.DecodeString(submodelIdentifier)
 	if decodeErr != nil {
 		return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "MalformedSubmodelIdentifier"), nil
 	}
@@ -1527,7 +1972,7 @@ func (s *SubmodelRepositoryAPIAPIService) PatchSubmodelElementByPathSubmodelRepo
 func (s *SubmodelRepositoryAPIAPIService) GetSubmodelElementByPathMetadataSubmodelRepo(ctx context.Context, submodelIdentifier string, idShortPath string) (gen.ImplResponse, error) {
 	const operation = "GetSubmodelElementByPathMetadataSubmodelRepo"
 
-	decodedSubmodelIdentifier, decodeErr := decodeBase64RawStd(submodelIdentifier)
+	decodedSubmodelIdentifier, decodeErr := common.DecodeString(submodelIdentifier)
 	if decodeErr != nil {
 		return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "MalformedSubmodelIdentifier"), nil
 	}
@@ -1590,7 +2035,7 @@ func (s *SubmodelRepositoryAPIAPIService) GetSubmodelElementByPathValueOnlySubmo
 	_ = extent
 	const operation = "GetSubmodelElementByPathValueOnlySubmodelRepo"
 
-	decodedSubmodelIdentifier, decodeErr := base64.RawStdEncoding.DecodeString(submodelIdentifier)
+	decodedSubmodelIdentifier, decodeErr := common.DecodeString(submodelIdentifier)
 	if decodeErr != nil {
 		return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "MalformedSubmodelIdentifier"), nil
 	}
@@ -1627,7 +2072,7 @@ func (s *SubmodelRepositoryAPIAPIService) PatchSubmodelElementByPathValueOnlySub
 	_ = level
 	const operation = "PatchSubmodelElementByPathValueOnlySubmodelRepo"
 
-	decodedIdentifier, decodeErr := base64.RawStdEncoding.DecodeString(submodelIdentifier)
+	decodedIdentifier, decodeErr := common.DecodeString(submodelIdentifier)
 	if decodeErr != nil {
 		return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "MalformedSubmodelIdentifier"), nil
 	}
@@ -1652,7 +2097,7 @@ func (s *SubmodelRepositoryAPIAPIService) PatchSubmodelElementByPathValueOnlySub
 func (s *SubmodelRepositoryAPIAPIService) GetSubmodelElementByPathReferenceSubmodelRepo(ctx context.Context, submodelIdentifier string, idShortPath string) (gen.ImplResponse, error) {
 	const operation = "GetSubmodelElementByPathReferenceSubmodelRepo"
 
-	decodedSubmodelIdentifier, decodeErr := decodeBase64RawStd(submodelIdentifier)
+	decodedSubmodelIdentifier, decodeErr := common.DecodeString(submodelIdentifier)
 	if decodeErr != nil {
 		return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "MalformedSubmodelIdentifier"), nil
 	}
@@ -1726,7 +2171,7 @@ func (s *SubmodelRepositoryAPIAPIService) GetSubmodelElementByPathReferenceSubmo
 func (s *SubmodelRepositoryAPIAPIService) GetSubmodelElementByPathPathSubmodelRepo(ctx context.Context, submodelIdentifier string, idShortPath string, level string) (gen.ImplResponse, error) {
 	const operation = "GetSubmodelElementByPathPathSubmodelRepo"
 
-	decodedSubmodelIdentifier, decodeErr := decodeBase64RawStd(submodelIdentifier)
+	decodedSubmodelIdentifier, decodeErr := common.DecodeString(submodelIdentifier)
 	if decodeErr != nil {
 		return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "MalformedSubmodelIdentifier"), nil
 	}
@@ -1751,7 +2196,7 @@ func (s *SubmodelRepositoryAPIAPIService) GetSubmodelElementByPathPathSubmodelRe
 func (s *SubmodelRepositoryAPIAPIService) GetFileByPathSubmodelRepo(ctx context.Context, submodelIdentifier string, idShortPath string) (gen.ImplResponse, error) {
 	const operation = "GetFileByPathSubmodelRepo"
 
-	decodedSubmodelIdentifier, decodeErr := decodeBase64RawStd(submodelIdentifier)
+	decodedSubmodelIdentifier, decodeErr := common.DecodeString(submodelIdentifier)
 	if decodeErr != nil {
 		return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "MalformedSubmodelIdentifier"), nil
 	}
@@ -1805,7 +2250,7 @@ func (s *SubmodelRepositoryAPIAPIService) PutFileByPathSubmodelRepo(ctx context.
 	_ = ctx
 	const operation = "PutFileByPathSubmodelRepo"
 
-	decodedSubmodelIdentifier, decodeErr := decodeBase64RawStd(submodelIdentifier)
+	decodedSubmodelIdentifier, decodeErr := common.DecodeString(submodelIdentifier)
 	if decodeErr != nil {
 		return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "MalformedSubmodelIdentifier"), nil
 	}
@@ -1847,7 +2292,7 @@ func (s *SubmodelRepositoryAPIAPIService) DeleteFileByPathSubmodelRepo(ctx conte
 	_ = ctx
 	const operation = "DeleteFileByPathSubmodelRepo"
 
-	decodedSubmodelIdentifier, decodeErr := decodeBase64RawStd(submodelIdentifier)
+	decodedSubmodelIdentifier, decodeErr := common.DecodeString(submodelIdentifier)
 	if decodeErr != nil {
 		return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "MalformedSubmodelIdentifier"), nil
 	}
@@ -1870,233 +2315,238 @@ func (s *SubmodelRepositoryAPIAPIService) DeleteFileByPathSubmodelRepo(ctx conte
 //
 //nolint:revive
 func (s *SubmodelRepositoryAPIAPIService) InvokeOperationSubmodelRepo(ctx context.Context, submodelIdentifier string, idShortPath string, operationRequest gen.OperationRequest, async bool) (gen.ImplResponse, error) {
-	// TODO - update InvokeOperationSubmodelRepo with the required logic for this service method.
-	// Add api_submodel_repository_api_service.go to the .openapi-generator-ignore to avoid overwriting this service implementation when updating open api generation.
+	const operation = "InvokeOperationSubmodelRepo"
 
-	// TODO: Uncomment the next line to return response Response(200, OperationResult{}) or use other options such as http.Ok ...
-	// return gen.Response(200, OperationResult{}), nil
+	if async {
+		return s.InvokeOperationAsync(ctx, submodelIdentifier, idShortPath, operationRequest)
+	}
 
-	// TODO: Uncomment the next line to return response Response(400, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(400, Result{}), nil
+	decodedSubmodelIdentifier, response, ok := decodeSubmodelIdentifierOrAPIError(submodelIdentifier, operation)
+	if !ok {
+		return response, nil
+	}
 
-	// TODO: Uncomment the next line to return response Response(401, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(401, Result{}), nil
+	element, response, ok := loadOperationElement(ctx, s.submodelBackend, decodedSubmodelIdentifier, idShortPath, operation)
+	if !ok {
+		return response, nil
+	}
 
-	// TODO: Uncomment the next line to return response Response(403, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(403, Result{}), nil
+	delegationURL, delegationErr := resolveDelegationURL(element)
+	if delegationErr != nil {
+		if common.IsErrBadRequest(delegationErr) {
+			return newAPIErrorResponse(delegationErr, http.StatusMethodNotAllowed, operation, "InvokeOnlyValidForOperation"), nil
+		}
+		return newAPIErrorResponse(delegationErr, http.StatusNotImplemented, operation, "OperationDelegationMissing"), nil
+	}
 
-	// TODO: Uncomment the next line to return response Response(404, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(404, Result{}), nil
+	timeout, timeoutErr := parseDelegationTimeout(operationRequest.ClientTimeoutDuration)
+	if timeoutErr != nil {
+		return newAPIErrorResponse(timeoutErr, http.StatusBadRequest, operation, "InvalidClientTimeoutDuration"), nil
+	}
 
-	// TODO: Uncomment the next line to return response Response(405, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(405, Result{}), nil
+	statusCode, delegatedBody, delegateErr := doDelegatedOperationCall(ctx, delegationURL, buildDelegatedOperationInput(operationRequest), timeout)
+	if delegateErr != nil {
+		return newAPIErrorResponse(delegateErr, http.StatusInternalServerError, operation, "DelegateOperationCall"), nil
+	}
 
-	// TODO: Uncomment the next line to return response Response(500, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(500, Result{}), nil
+	if statusCode < http.StatusOK || statusCode >= http.StatusMultipleChoices {
+		return gen.Response(statusCode, delegatedBody), nil
+	}
 
-	// TODO: Uncomment the next line to return response Response(0, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(0, Result{}), nil
+	if resultPayload, ok := toDelegatedOperationResultPayloadFromBody(delegatedBody); ok {
+		return gen.Response(http.StatusOK, resultPayload), nil
+	}
 
-	notImplementedErr := errors.New("InvokeOperationSubmodelRepo method not implemented")
-	return newAPIErrorResponse(notImplementedErr, http.StatusNotImplemented, "InvokeOperationSubmodelRepo", "NotImplemented"), nil
+	return gen.Response(http.StatusOK, delegatedBody), nil
 }
 
 // InvokeOperationValueOnly - Synchronously or asynchronously invokes an Operation at a specified path
 //
 //nolint:revive
 func (s *SubmodelRepositoryAPIAPIService) InvokeOperationValueOnly(ctx context.Context, aasIdentifier string, submodelIdentifier string, idShortPath string, operationRequestValueOnly gen.OperationRequestValueOnly, async bool) (gen.ImplResponse, error) {
-	// TODO - update InvokeOperationValueOnly with the required logic for this service method.
-	// Add api_submodel_repository_api_service.go to the .openapi-generator-ignore to avoid overwriting this service implementation when updating open api generation.
+	_ = ctx
+	_ = aasIdentifier
+	_ = submodelIdentifier
+	_ = idShortPath
+	_ = operationRequestValueOnly
+	_ = async
 
-	// TODO: Uncomment the next line to return response Response(200, OperationResultValueOnly{}) or use other options such as http.Ok ...
-	// return gen.Response(200, OperationResultValueOnly{}), nil
-
-	// TODO: Uncomment the next line to return response Response(400, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(400, Result{}), nil
-
-	// TODO: Uncomment the next line to return response Response(401, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(401, Result{}), nil
-
-	// TODO: Uncomment the next line to return response Response(403, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(403, Result{}), nil
-
-	// TODO: Uncomment the next line to return response Response(404, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(404, Result{}), nil
-
-	// TODO: Uncomment the next line to return response Response(500, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(500, Result{}), nil
-
-	// TODO: Uncomment the next line to return response Response(0, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(0, Result{}), nil
-
-	notImplementedErr := errors.New("InvokeOperationValueOnly method not implemented")
-	return newAPIErrorResponse(notImplementedErr, http.StatusNotImplemented, "InvokeOperationValueOnly", "NotImplemented"), nil
+	delegationUnsupportedErr := errors.New("SMREPO-INVOPVAL-DELEGUNSUPPORTED value-only delegation is not supported")
+	return newAPIErrorResponse(delegationUnsupportedErr, http.StatusBadRequest, "InvokeOperationValueOnly", "DelegationValueOnlyNotSupported"), nil
 }
 
 // InvokeOperationAsync - Asynchronously invokes an Operation at a specified path
 //
 //nolint:revive
 func (s *SubmodelRepositoryAPIAPIService) InvokeOperationAsync(ctx context.Context, submodelIdentifier string, idShortPath string, operationRequest gen.OperationRequest) (gen.ImplResponse, error) {
-	// TODO - update InvokeOperationAsync with the required logic for this service method.
-	// Add api_submodel_repository_api_service.go to the .openapi-generator-ignore to avoid overwriting this service implementation when updating open api generation.
+	const operation = "InvokeOperationAsync"
 
-	// TODO: Uncomment the next line to return response Response(202, {}) or use other options such as http.Ok ...
-	// return gen.Response(202, nil),nil
+	decodedSubmodelIdentifier, response, ok := decodeSubmodelIdentifierOrAPIError(submodelIdentifier, operation)
+	if !ok {
+		return response, nil
+	}
 
-	// TODO: Uncomment the next line to return response Response(400, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(400, Result{}), nil
+	element, response, ok := loadOperationElement(ctx, s.submodelBackend, decodedSubmodelIdentifier, idShortPath, operation)
+	if !ok {
+		return response, nil
+	}
 
-	// TODO: Uncomment the next line to return response Response(401, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(401, Result{}), nil
+	delegationURL, delegationErr := resolveDelegationURL(element)
+	if delegationErr != nil {
+		if common.IsErrBadRequest(delegationErr) {
+			return newAPIErrorResponse(delegationErr, http.StatusMethodNotAllowed, operation, "InvokeOnlyValidForOperation"), nil
+		}
+		return newAPIErrorResponse(delegationErr, http.StatusNotImplemented, operation, "OperationDelegationMissing"), nil
+	}
 
-	// TODO: Uncomment the next line to return response Response(403, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(403, Result{}), nil
+	timeout, timeoutErr := parseDelegationTimeout(operationRequest.ClientTimeoutDuration)
+	if timeoutErr != nil {
+		return newAPIErrorResponse(timeoutErr, http.StatusBadRequest, operation, "InvalidClientTimeoutDuration"), nil
+	}
 
-	// TODO: Uncomment the next line to return response Response(404, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(404, Result{}), nil
+	handleID := common.EncodeString(fmt.Sprintf("%s|%s|%d", decodedSubmodelIdentifier, idShortPath, time.Now().UnixNano()))
+	persistDelegatedAsyncRecord(handleID, delegatedOperationAsyncRecord{
+		SubmodelIdentifier: decodedSubmodelIdentifier,
+		IDShortPath:        idShortPath,
+		State:              "Running",
+	})
 
-	// TODO: Uncomment the next line to return response Response(405, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(405, Result{}), nil
+	authorizationHeader := common.AuthorizationHeaderFromContext(ctx)
 
-	// TODO: Uncomment the next line to return response Response(500, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(500, Result{}), nil
+	go func() {
+		delegationCtx := context.Background()
+		if strings.TrimSpace(authorizationHeader) != "" {
+			delegationCtx = common.WithAuthorizationHeader(delegationCtx, authorizationHeader)
+		}
 
-	// TODO: Uncomment the next line to return response Response(0, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(0, Result{}), nil
+		statusCode, delegatedBody, delegateErr := doDelegatedOperationCall(delegationCtx, delegationURL, buildDelegatedOperationInput(operationRequest), timeout)
+		if delegateErr != nil {
+			updateDelegatedAsyncRecord(handleID, func(record delegatedOperationAsyncRecord) delegatedOperationAsyncRecord {
+				record.State = "Failed"
+				record.ErrorStatus = http.StatusInternalServerError
+				record.ErrorBody = map[string]any{"message": delegateErr.Error()}
+				return record
+			})
+			return
+		}
 
-	notImplementedErr := errors.New("InvokeOperationAsync method not implemented")
-	return newAPIErrorResponse(notImplementedErr, http.StatusNotImplemented, "InvokeOperationAsync", "NotImplemented"), nil
+		if statusCode < http.StatusOK || statusCode >= http.StatusMultipleChoices {
+			updateDelegatedAsyncRecord(handleID, func(record delegatedOperationAsyncRecord) delegatedOperationAsyncRecord {
+				record.State = "Failed"
+				record.ErrorStatus = statusCode
+				record.ErrorBody = delegatedBody
+				return record
+			})
+			return
+		}
+
+		finalResult := delegatedBody
+		if resultPayload, resultOK := toDelegatedOperationResultPayloadFromBody(delegatedBody); resultOK {
+			finalResult = resultPayload
+		}
+
+		updateDelegatedAsyncRecord(handleID, func(record delegatedOperationAsyncRecord) delegatedOperationAsyncRecord {
+			record.State = "Completed"
+			record.Result = finalResult
+			record.ErrorStatus = 0
+			record.ErrorBody = nil
+			return record
+		})
+	}()
+
+	return gen.Response(http.StatusAccepted, map[string]any{"handleId": handleID}), nil
 }
 
 // InvokeOperationAsyncValueOnly - Asynchronously invokes an Operation at a specified path
 //
 //nolint:revive
 func (s *SubmodelRepositoryAPIAPIService) InvokeOperationAsyncValueOnly(ctx context.Context, aasIdentifier string, submodelIdentifier string, idShortPath string, operationRequestValueOnly gen.OperationRequestValueOnly) (gen.ImplResponse, error) {
-	// TODO - update InvokeOperationAsyncValueOnly with the required logic for this service method.
-	// Add api_submodel_repository_api_service.go to the .openapi-generator-ignore to avoid overwriting this service implementation when updating open api generation.
+	_ = ctx
+	_ = aasIdentifier
+	_ = submodelIdentifier
+	_ = idShortPath
+	_ = operationRequestValueOnly
 
-	// TODO: Uncomment the next line to return response Response(202, {}) or use other options such as http.Ok ...
-	// return gen.Response(202, nil),nil
-
-	// TODO: Uncomment the next line to return response Response(400, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(400, Result{}), nil
-
-	// TODO: Uncomment the next line to return response Response(401, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(401, Result{}), nil
-
-	// TODO: Uncomment the next line to return response Response(403, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(403, Result{}), nil
-
-	// TODO: Uncomment the next line to return response Response(404, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(404, Result{}), nil
-
-	// TODO: Uncomment the next line to return response Response(500, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(500, Result{}), nil
-
-	// TODO: Uncomment the next line to return response Response(0, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(0, Result{}), nil
-
-	notImplementedErr := errors.New("InvokeOperationAsyncValueOnly method not implemented")
-	return newAPIErrorResponse(notImplementedErr, http.StatusNotImplemented, "InvokeOperationAsyncValueOnly", "NotImplemented"), nil
+	delegationUnsupportedErr := errors.New("SMREPO-INVOPASYVAL-DELEGUNSUPPORTED value-only delegation is not supported")
+	return newAPIErrorResponse(delegationUnsupportedErr, http.StatusBadRequest, "InvokeOperationAsyncValueOnly", "DelegationValueOnlyNotSupported"), nil
 }
 
 // GetOperationAsyncStatus - Returns the status of an asynchronously invoked Operation
 //
 //nolint:revive
 func (s *SubmodelRepositoryAPIAPIService) GetOperationAsyncStatus(ctx context.Context, submodelIdentifier string, idShortPath string, handleID string) (gen.ImplResponse, error) {
-	// TODO - update GetOperationAsyncStatus with the required logic for this service method.
-	// Add api_submodel_repository_api_service.go to the .openapi-generator-ignore to avoid overwriting this service implementation when updating open api generation.
+	_ = ctx
+	const operation = "GetOperationAsyncStatus"
 
-	// TODO: Uncomment the next line to return response Response(200, BaseOperationResult{}) or use other options such as http.Ok ...
-	// return gen.Response(200, BaseOperationResult{}), nil
+	decodedSubmodelIdentifier, response, ok := decodeSubmodelIdentifierOrAPIError(submodelIdentifier, operation)
+	if !ok {
+		return response, nil
+	}
 
-	// TODO: Uncomment the next line to return response Response(302, {}) or use other options such as http.Ok ...
-	// return gen.Response(302, nil),nil
+	record, found := getDelegatedAsyncRecord(handleID)
+	if !found || record.SubmodelIdentifier != decodedSubmodelIdentifier || record.IDShortPath != idShortPath {
+		handleErr := common.NewErrNotFound(handleID)
+		return newAPIErrorResponse(handleErr, http.StatusNotFound, operation, "HandleNotFound"), nil
+	}
 
-	// TODO: Uncomment the next line to return response Response(400, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(400, Result{}), nil
+	if record.State == "Running" {
+		return gen.Response(http.StatusOK, map[string]any{"executionState": "Running", "success": true}), nil
+	}
 
-	// TODO: Uncomment the next line to return response Response(401, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(401, Result{}), nil
+	location := fmt.Sprintf(
+		"/submodels/%s/submodel-elements/%s/operation-results/%s",
+		url.PathEscape(submodelIdentifier),
+		url.PathEscape(idShortPath),
+		url.PathEscape(handleID),
+	)
 
-	// TODO: Uncomment the next line to return response Response(403, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(403, Result{}), nil
-
-	// TODO: Uncomment the next line to return response Response(404, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(404, Result{}), nil
-
-	// TODO: Uncomment the next line to return response Response(500, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(500, Result{}), nil
-
-	// TODO: Uncomment the next line to return response Response(0, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(0, Result{}), nil
-
-	notImplementedErr := errors.New("GetOperationAsyncStatus method not implemented")
-	return newAPIErrorResponse(notImplementedErr, http.StatusNotImplemented, "GetOperationAsyncStatus", "NotImplemented"), nil
+	return gen.Response(http.StatusFound, openapi.Redirect{Location: location}), nil
 }
 
 // GetOperationAsyncResult - Returns the Operation result of an asynchronously invoked Operation
 //
 //nolint:revive
 func (s *SubmodelRepositoryAPIAPIService) GetOperationAsyncResult(ctx context.Context, submodelIdentifier string, idShortPath string, handleID string) (gen.ImplResponse, error) {
-	// TODO - update GetOperationAsyncResult with the required logic for this service method.
-	// Add api_submodel_repository_api_service.go to the .openapi-generator-ignore to avoid overwriting this service implementation when updating open api generation.
+	_ = ctx
+	const operation = "GetOperationAsyncResult"
 
-	// TODO: Uncomment the next line to return response Response(200, OperationResult{}) or use other options such as http.Ok ...
-	// return gen.Response(200, OperationResult{}), nil
+	decodedSubmodelIdentifier, response, ok := decodeSubmodelIdentifierOrAPIError(submodelIdentifier, operation)
+	if !ok {
+		return response, nil
+	}
 
-	// TODO: Uncomment the next line to return response Response(400, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(400, Result{}), nil
+	record, found := getDelegatedAsyncRecord(handleID)
+	if !found || record.SubmodelIdentifier != decodedSubmodelIdentifier || record.IDShortPath != idShortPath {
+		handleErr := common.NewErrNotFound(handleID)
+		return newAPIErrorResponse(handleErr, http.StatusNotFound, operation, "HandleNotFound"), nil
+	}
 
-	// TODO: Uncomment the next line to return response Response(401, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(401, Result{}), nil
+	if record.State == "Running" {
+		notCompletedErr := errors.New("SMREPO-GETOPASYRES-RUNNING operation is still running")
+		return newAPIErrorResponse(notCompletedErr, http.StatusBadRequest, operation, "OperationStillRunning"), nil
+	}
 
-	// TODO: Uncomment the next line to return response Response(403, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(403, Result{}), nil
+	if record.State == "Failed" {
+		if record.ErrorStatus <= 0 {
+			return newAPIErrorResponse(errors.New("SMREPO-GETOPASYRES-FAILED delegated operation failed"), http.StatusInternalServerError, operation, "DelegatedOperationFailed"), nil
+		}
+		return gen.Response(record.ErrorStatus, record.ErrorBody), nil
+	}
 
-	// TODO: Uncomment the next line to return response Response(404, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(404, Result{}), nil
-
-	// TODO: Uncomment the next line to return response Response(500, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(500, Result{}), nil
-
-	// TODO: Uncomment the next line to return response Response(0, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(0, Result{}), nil
-
-	notImplementedErr := errors.New("GetOperationAsyncResult method not implemented")
-	return newAPIErrorResponse(notImplementedErr, http.StatusNotImplemented, "GetOperationAsyncResult", "NotImplemented"), nil
+	return gen.Response(http.StatusOK, record.Result), nil
 }
 
 // GetOperationAsyncResultValueOnly - Returns the Operation result of an asynchronously invoked Operation
 //
 //nolint:revive
 func (s *SubmodelRepositoryAPIAPIService) GetOperationAsyncResultValueOnly(ctx context.Context, submodelIdentifier string, idShortPath string, handleID string) (gen.ImplResponse, error) {
-	// TODO - update GetOperationAsyncResultValueOnly with the required logic for this service method.
-	// Add api_submodel_repository_api_service.go to the .openapi-generator-ignore to avoid overwriting this service implementation when updating open api generation.
+	_ = ctx
+	_ = submodelIdentifier
+	_ = idShortPath
+	_ = handleID
 
-	// TODO: Uncomment the next line to return response Response(200, OperationResultValueOnly{}) or use other options such as http.Ok ...
-	// return gen.Response(200, OperationResultValueOnly{}), nil
-
-	// TODO: Uncomment the next line to return response Response(400, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(400, Result{}), nil
-
-	// TODO: Uncomment the next line to return response Response(401, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(401, Result{}), nil
-
-	// TODO: Uncomment the next line to return response Response(403, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(403, Result{}), nil
-
-	// TODO: Uncomment the next line to return response Response(404, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(404, Result{}), nil
-
-	// TODO: Uncomment the next line to return response Response(500, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(500, Result{}), nil
-
-	// TODO: Uncomment the next line to return response Response(0, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(0, Result{}), nil
-
-	notImplementedErr := errors.New("GetOperationAsyncResultValueOnly method not implemented")
-	return newAPIErrorResponse(notImplementedErr, http.StatusNotImplemented, "GetOperationAsyncResultValueOnly", "NotImplemented"), nil
+	delegationUnsupportedErr := errors.New("SMREPO-GETOPASYRESVAL-DELEGUNSUPPORTED value-only async result for delegated operation is not supported")
+	return newAPIErrorResponse(delegationUnsupportedErr, http.StatusNotImplemented, "GetOperationAsyncResultValueOnly", "DelegationValueOnlyNotSupported"), nil
 }
 
 // QuerySubmodels returns all Submodels that match the input query.

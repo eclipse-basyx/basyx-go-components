@@ -51,14 +51,14 @@ func NewDescriptionAPIAPIController(s DescriptionAPIAPIServicer, opts ...Descrip
 // Routes returns all the api routes for the DescriptionAPIAPIController
 func (c *DescriptionAPIAPIController) Routes() model.Routes {
 	return model.Routes{
-		"GetSelfDescription": model.Route{Name: "GetSelfDescription", Method: strings.ToUpper("Get"), Pattern: "/api/v3/description", HandlerFunc: c.GetSelfDescription},
+		"GetSelfDescription": model.Route{Name: "GetSelfDescription", Method: strings.ToUpper("Get"), Pattern: "/description", HandlerFunc: c.GetSelfDescription},
 	}
 }
 
 // OrderedRoutes returns all the api routes in a deterministic order for the DescriptionAPIAPIController
 func (c *DescriptionAPIAPIController) OrderedRoutes() []model.Route {
 	return []model.Route{
-		model.Route{Name: "GetSelfDescription", Method: strings.ToUpper("Get"), Pattern: "/api/v3/description", HandlerFunc: c.GetSelfDescription},
+		model.Route{Name: "GetSelfDescription", Method: strings.ToUpper("Get"), Pattern: "/description", HandlerFunc: c.GetSelfDescription},
 	}
 }
 

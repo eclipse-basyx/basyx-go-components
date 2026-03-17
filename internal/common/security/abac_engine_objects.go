@@ -144,6 +144,33 @@ var identifiableRouteMappings = []identifiableRouteMapping{
 		filterField: "$sm#id",
 		hasWildcard: true,
 	},
+	// AAS Repository collection/query endpoints use an additional filter
+	// on $aas#id when a concrete IDENTIFIABLE is provided.
+	{
+		scope:       "$aas",
+		route:       "/shells",
+		filterField: "$aas#id",
+		hasWildcard: false,
+	},
+	{
+		scope:       "$aas",
+		route:       "/shells/$reference",
+		filterField: "$aas#id",
+		hasWildcard: false,
+	},
+	// Covers all concrete AAS endpoints under /shells/{aasIdentifier}/...
+	{
+		scope:       "$aas",
+		route:       "/shells/%s",
+		filterField: "$aas#id",
+		hasWildcard: true,
+	},
+	{
+		scope:       "$aas",
+		route:       "/shells/%s/**",
+		filterField: "$aas#id",
+		hasWildcard: true,
+	},
 	{
 		scope:       "$cd",
 		route:       "/concept-descriptions",

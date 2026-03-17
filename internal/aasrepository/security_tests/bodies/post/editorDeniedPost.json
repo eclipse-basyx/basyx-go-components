@@ -1,0 +1,9 @@
+{
+  "id": "urn:example:aas:editor:denied-post",
+  "idShort": "EditorDeniedPost",
+  "modelType": "AssetAdministrationShell",
+  "assetInformation": {
+    "assetKind": "Instance",
+    "assetType": "editor-hidden"
+  }
+}

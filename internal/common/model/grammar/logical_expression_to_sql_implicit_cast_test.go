@@ -80,3 +80,64 @@ func TestLogicalExpression_ToSQL_WithCollector_ExistsPredicateUsesTextCast(t *te
 		t.Fatalf("expected args to contain %d, got %#v", 1, args)
 	}
 }
+
+func TestLogicalExpression_SimplifyForBackendFilter_EnumTypeString_ConvertsToNumericLiteral(t *testing.T) {
+	le := LogicalExpression{
+		Eq: ComparisonItems{
+			field("$aasdesc#specificAssetIds[0].externalSubjectId.type"),
+			strVal("ExternalReference"),
+		},
+	}
+
+	opts := DefaultSimplifyOptions()
+	opts.EnableImplicitCasts = false
+	simplified, decision := le.SimplifyForBackendFilterWithOptions(func(AttributeValue) any { return nil }, opts)
+	if decision != SimplifyUndecided {
+		t.Fatalf("expected undecided simplification result, got %v", decision)
+	}
+	if len(simplified.Eq) != 2 {
+		t.Fatalf("expected 2 operands in simplified comparison, got %d", len(simplified.Eq))
+	}
+	if simplified.Eq[1].NumVal == nil {
+		t.Fatalf("expected enum literal to be converted to numeric value, got %#v", simplified.Eq[1])
+	}
+	if simplified.Eq[1].StrVal != nil {
+		t.Fatalf("did not expect enum literal to remain string, got %#v", simplified.Eq[1])
+	}
+	if simplified.Eq[0].StrCast != nil {
+		t.Fatalf("did not expect field to be cast to text for valid enum literal, got %#v", simplified.Eq[0])
+	}
+}
+
+func TestLogicalExpression_SimplifyForBackendFilter_EnumTypeInvalidString_FallsBackToTextCast(t *testing.T) {
+	le := LogicalExpression{
+		Eq: ComparisonItems{
+			field("$aasdesc#specificAssetIds[0].externalSubjectId.type"),
+			strVal("VIEWER_KEY"),
+		},
+	}
+
+	opts := DefaultSimplifyOptions()
+	opts.EnableImplicitCasts = false
+	simplified, decision := le.SimplifyForBackendFilterWithOptions(func(AttributeValue) any { return nil }, opts)
+	if decision != SimplifyUndecided {
+		t.Fatalf("expected undecided simplification result, got %v", decision)
+	}
+	if len(simplified.Eq) != 2 {
+		t.Fatalf("expected 2 operands in simplified comparison, got %d", len(simplified.Eq))
+	}
+	if simplified.Eq[0].StrCast == nil {
+		t.Fatalf("expected enum field to be wrapped in text cast for invalid enum literal, got %#v", simplified.Eq[0])
+	}
+	if simplified.Eq[1].StrVal == nil {
+		t.Fatalf("expected invalid enum literal to stay string, got %#v", simplified.Eq[1])
+	}
+
+	sql, args := toPreparedSQLForDescriptor(t, simplified)
+	if !strings.Contains(sql, "::text") {
+		t.Fatalf("expected SQL to contain text cast for enum mismatch fallback, got: %s", sql)
+	}
+	if !argListContains(args, "VIEWER_KEY") {
+		t.Fatalf("expected args to contain %q, got %#v", "VIEWER_KEY", args)
+	}
+}

@@ -1,0 +1,9 @@
+{
+  "idShort": "aasTestC",
+  "id": "https://example.com/ids/aas/filter3",
+  "assetInformation": {
+    "assetKind": "Instance",
+    "globalAssetId": "assetIdValueX"
+  },
+  "modelType": "AssetAdministrationShell"
+}
