@@ -135,9 +135,10 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) PostAssetAdministrationS
 				err, http.StatusConflict, componentName, "InsertAdministrationShellDescriptor", "Conflict",
 			), nil
 		case common.IsErrNotFound(err):
+			deniedErr := common.NewErrDenied("AAS Descriptor access not allowed")
 			log.Printf("🧩 [%s] Error in InsertAdministrationShellDescriptor: not allowed (aasId=%q): %v", componentName, assetAdministrationShellDescriptor.Id, err)
 			return common.NewErrorResponse(
-				err, http.StatusForbidden, componentName, "InsertAdministrationShellDescriptor", "DENIED",
+				deniedErr, http.StatusForbidden, componentName, "InsertAdministrationShellDescriptor", "DENIED",
 			), nil
 		default:
 			log.Printf("🧩 [%s] Error in InsertAdministrationShellDescriptor: internal (aasId=%q): %v", componentName, assetAdministrationShellDescriptor.Id, err)
@@ -221,6 +222,7 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) PutAssetAdministrationSh
 			chkErr, http.StatusInternalServerError, componentName, "PutAssetAdministrationShellDescriptorById", "Unhandled-Precheck",
 		), chkErr
 	} else if !exists {
+		ctx = auth.SelectPutFormulaByExistence(ctx, false)
 
 		result, err := s.aasRegistryBackend.InsertAdministrationShellDescriptor(ctx, assetAdministrationShellDescriptor)
 		if err != nil {
@@ -236,9 +238,10 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) PutAssetAdministrationSh
 					err, http.StatusConflict, componentName, "InsertAdministrationShellDescriptor", "Conflict",
 				), nil
 			case common.IsErrNotFound(err):
+				deniedErr := common.NewErrDenied("AAS Descriptor access not allowed")
 				log.Printf("🧩 [%s] Error in InsertAdministrationShellDescriptor: not allowed (aasId=%q): %v", componentName, assetAdministrationShellDescriptor.Id, err)
 				return common.NewErrorResponse(
-					err, http.StatusForbidden, componentName, "InsertAdministrationShellDescriptor", "DENIED",
+					deniedErr, http.StatusForbidden, componentName, "InsertAdministrationShellDescriptor", "DENIED",
 				), nil
 			default:
 				log.Printf("🧩 [%s] Error in InsertAdministrationShellDescriptor: internal (aasId=%q): %v", componentName, assetAdministrationShellDescriptor.Id, err)
@@ -258,6 +261,8 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) PutAssetAdministrationSh
 		return model.Response(http.StatusCreated, j), nil
 	}
 
+	ctx = auth.SelectPutFormulaByExistence(ctx, true)
+
 	_, err = s.aasRegistryBackend.ReplaceAdministrationShellDescriptor(ctx, assetAdministrationShellDescriptor)
 	if err != nil {
 		switch {
@@ -272,9 +277,10 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) PutAssetAdministrationSh
 				err, http.StatusConflict, componentName, "PutAssetAdministrationShellDescriptorById", "Conflict",
 			), nil
 		case common.IsErrNotFound(err):
+			deniedErr := common.NewErrDenied("AAS Descriptor access not allowed")
 			log.Printf("🧩 [%s] Error in PutAssetAdministrationShellDescriptorById: not allowed (aasId=%q): %v", componentName, assetAdministrationShellDescriptor.Id, err)
 			return common.NewErrorResponse(
-				err, http.StatusForbidden, componentName, "PutAssetAdministrationShellDescriptorById", "DENIED",
+				deniedErr, http.StatusForbidden, componentName, "PutAssetAdministrationShellDescriptorById", "DENIED",
 			), nil
 		default:
 			log.Printf("🧩 [%s] Error in PutAssetAdministrationShellDescriptorById: internal (aasId=%q): %v", componentName, decodedAAS, err)
@@ -512,6 +518,7 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) PutSubmodelDescriptorByI
 			chkErr, http.StatusInternalServerError, componentName, "PutSubmodelDescriptorByIdThroughSuperpath", "Unhandled-Precheck",
 		), chkErr
 	} else if !exists {
+		ctx = auth.SelectPutFormulaByExistence(ctx, false)
 		result, err := s.aasRegistryBackend.InsertSubmodelDescriptorForAAS(ctx, decodedAAS, submodelDescriptor)
 		// Persist submodel descriptor under the AAS
 		if err != nil {
@@ -553,6 +560,8 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) PutSubmodelDescriptorByI
 		}
 		return model.Response(http.StatusCreated, jsonable), nil
 	}
+
+	ctx = auth.SelectPutFormulaByExistence(ctx, true)
 
 	// Replace in a single transaction (delete + insert)
 	_, err = s.aasRegistryBackend.ReplaceSubmodelDescriptorForAAS(ctx, decodedAAS, submodelDescriptor)

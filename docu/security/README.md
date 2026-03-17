@@ -136,6 +136,8 @@ The ABAC engine evaluates rules in order and either denies, allows, or allows wi
 
 Evaluation gates:
 1. Map HTTP method + route to required rights (deny if no mapping).
+   - Rights within one mapping entry are ORed (example: `PUT -> [CREATE, UPDATE]` means either right is sufficient).
+   - Multiple matching mapping entries are also OR alternatives.
 2. Check rights in rule ACLs.
 3. Check attribute requirements (CLAIM presence or GLOBAL=ANONYMOUS).
 4. Match object routes and descriptor objects.
@@ -158,6 +160,8 @@ Relevant code:
 - QueryFilter is stored in request context after ABAC evaluation.
 - Controllers can enforce it on payloads or results.
 - Persistence helpers apply it to SQL queries and fragment projections.
+- QueryFilter now can carry right-scoped formulas in `FormulasByRight` (for example, separate formulas for `CREATE` and `UPDATE`).
+- PUT handlers can switch the active `Formula` via `SelectPutFormulaByExistence(ctx, dataExists)` so create-vs-update checks are enforced consistently.
 
 Relevant code:
 - [internal/common/security/authorize.go](internal/common/security/authorize.go)

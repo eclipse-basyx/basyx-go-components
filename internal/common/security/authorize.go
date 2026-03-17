@@ -201,3 +201,35 @@ func MergeQueryFilter(ctx context.Context, query grammar.Query) context.Context 
 
 	return context.WithValue(ctx, filterKey, qf)
 }
+
+// SelectPutFormulaByExistence selects the active QueryFilter.Formula based on
+// PUT upsert semantics:
+//   - dataExists=true  -> UPDATE formula
+//   - dataExists=false -> CREATE formula
+//
+// If the requested right-specific formula is unavailable, Formula is set to a
+// constant false expression.
+func SelectPutFormulaByExistence(ctx context.Context, dataExists bool) context.Context {
+	qf := GetQueryFilter(ctx)
+	if qf == nil {
+		return ctx
+	}
+	if qf.FormulasByRight == nil {
+		return ctx
+	}
+
+	right := grammar.RightsEnumCREATE
+	if dataExists {
+		right = grammar.RightsEnumUPDATE
+	}
+
+	if selected, ok := qf.FormulasByRight[right]; ok {
+		qf.Formula = &selected
+		return context.WithValue(ctx, filterKey, qf)
+	}
+
+	fallback := boolExpression(false)
+	qf.FormulasByRight[right] = fallback
+	qf.Formula = &fallback
+	return context.WithValue(ctx, filterKey, qf)
+}

@@ -426,22 +426,20 @@ func (b *ConceptDescriptionBackend) PutConceptDescription(ctx context.Context, i
 	}
 	defer cleanup(&err)
 
-	existingExists := false
-	if shouldEnforceABACWriteCheck(ctx) {
-		exists, visible, visErr := b.checkConceptDescriptionVisibilityInTx(ctx, tx, id)
+	existingExists, existsErr := conceptDescriptionExistsInTx(ctx, tx, id)
+	if existsErr != nil {
+		return existsErr
+	}
+	ctx = auth.SelectPutFormulaByExistence(ctx, existingExists)
+
+	if shouldEnforceABACWriteCheck(ctx) && existingExists {
+		_, visible, visErr := b.checkConceptDescriptionVisibilityInTx(ctx, tx, id)
 		if visErr != nil {
 			return visErr
 		}
-		if exists && !visible {
+		if !visible {
 			return common.NewErrDenied("CDREPO-PUTCD-ABACDENIED existing concept description is not accessible under ABAC constraints")
 		}
-		existingExists = exists
-	} else {
-		exists, existsErr := conceptDescriptionExistsInTx(ctx, tx, id)
-		if existsErr != nil {
-			return existsErr
-		}
-		existingExists = exists
 	}
 
 	if existingExists {

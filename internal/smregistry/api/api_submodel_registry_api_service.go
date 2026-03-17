@@ -44,6 +44,7 @@ import (
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
+	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 	smregistrypostgresql "github.com/eclipse-basyx/basyx-go-components/internal/smregistry/persistence"
 )
 
@@ -214,40 +215,43 @@ func (s *SubmodelRegistryAPIAPIService) PutSubmodelDescriptorById(ctx context.Co
 		return common.NewErrorResponse(
 			chkErr, http.StatusInternalServerError, componentName, "PutSubmodelDescriptorById", "Unhandled-Precheck",
 		), chkErr
-	} else if !exists {
-		result, err := s.smRegistryBackend.InsertSubmodelDescriptor(ctx, submodelDescriptor)
-		if err != nil {
-			switch {
-			case common.IsErrBadRequest(err):
-				log.Printf("[ERROR] [%s] Error in InsertSubmodelDescriptor: bad request (submodelId=%q): %v", componentName, submodelDescriptor.Id, err)
-				return common.NewErrorResponse(
-					err, http.StatusBadRequest, componentName, "InsertSubmodelDescriptor", "BadRequest",
-				), nil
-			case common.IsErrConflict(err):
-				log.Printf("[ERROR] [%s] Error in InsertSubmodelDescriptor: conflict (submodelId=%q): %v", componentName, submodelDescriptor.Id, err)
-				return common.NewErrorResponse(
-					err, http.StatusConflict, componentName, "InsertSubmodelDescriptor", "Conflict",
-				), nil
-			case common.IsErrDenied(err):
-				log.Printf("[ERROR] [%s] Error in InsertSubmodelDescriptor: denied (submodelId=%q): %v", componentName, submodelDescriptor.Id, err)
-				return common.NewErrorResponse(
-					err, http.StatusForbidden, componentName, "InsertSubmodelDescriptor", "Denied",
-				), nil
-			default:
-				log.Printf("[ERROR] [%s] Error in InsertSubmodelDescriptor: internal (submodelId=%q): %v", componentName, submodelDescriptor.Id, err)
-				return common.NewErrorResponse(
-					err, http.StatusInternalServerError, componentName, "InsertSubmodelDescriptor", "Unhandled",
-				), err
+	} else {
+		ctx = auth.SelectPutFormulaByExistence(ctx, exists)
+		if !exists {
+			result, err := s.smRegistryBackend.InsertSubmodelDescriptor(ctx, submodelDescriptor)
+			if err != nil {
+				switch {
+				case common.IsErrBadRequest(err):
+					log.Printf("[ERROR] [%s] Error in InsertSubmodelDescriptor: bad request (submodelId=%q): %v", componentName, submodelDescriptor.Id, err)
+					return common.NewErrorResponse(
+						err, http.StatusBadRequest, componentName, "InsertSubmodelDescriptor", "BadRequest",
+					), nil
+				case common.IsErrConflict(err):
+					log.Printf("[ERROR] [%s] Error in InsertSubmodelDescriptor: conflict (submodelId=%q): %v", componentName, submodelDescriptor.Id, err)
+					return common.NewErrorResponse(
+						err, http.StatusConflict, componentName, "InsertSubmodelDescriptor", "Conflict",
+					), nil
+				case common.IsErrDenied(err):
+					log.Printf("[ERROR] [%s] Error in InsertSubmodelDescriptor: denied (submodelId=%q): %v", componentName, submodelDescriptor.Id, err)
+					return common.NewErrorResponse(
+						err, http.StatusForbidden, componentName, "InsertSubmodelDescriptor", "Denied",
+					), nil
+				default:
+					log.Printf("[ERROR] [%s] Error in InsertSubmodelDescriptor: internal (submodelId=%q): %v", componentName, submodelDescriptor.Id, err)
+					return common.NewErrorResponse(
+						err, http.StatusInternalServerError, componentName, "InsertSubmodelDescriptor", "Unhandled",
+					), err
+				}
 			}
+			j, toJsonErr := result.ToJsonable()
+			if toJsonErr != nil {
+				log.Printf("[ERROR] [%s] Error in PutSubmodelDescriptorById: ToJsonable failed (submodelId=%q): %v", componentName, result.Id, toJsonErr)
+				return common.NewErrorResponse(
+					toJsonErr, http.StatusInternalServerError, componentName, "PutSubmodelDescriptorById", "Unhandled-ToJsonable",
+				), toJsonErr
+			}
+			return model.Response(http.StatusCreated, j), nil
 		}
-		j, toJsonErr := result.ToJsonable()
-		if toJsonErr != nil {
-			log.Printf("[ERROR] [%s] Error in PutSubmodelDescriptorById: ToJsonable failed (submodelId=%q): %v", componentName, result.Id, toJsonErr)
-			return common.NewErrorResponse(
-				toJsonErr, http.StatusInternalServerError, componentName, "PutSubmodelDescriptorById", "Unhandled-ToJsonable",
-			), toJsonErr
-		}
-		return model.Response(http.StatusCreated, j), nil
 	}
 
 	_, err = s.smRegistryBackend.ReplaceSubmodelDescriptor(ctx, submodelDescriptor)

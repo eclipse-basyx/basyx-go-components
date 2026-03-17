@@ -135,6 +135,8 @@ func TestPutSubmodelCreatePathReturnsFalse(t *testing.T) {
 	mock.ExpectBegin()
 	mock.ExpectQuery(`SELECT .*FROM .*submodel`).
 		WillReturnError(sql.ErrNoRows)
+	mock.ExpectQuery(`SELECT .*FROM .*submodel`).
+		WillReturnError(sql.ErrNoRows)
 	mock.ExpectQuery(`INSERT INTO .*submodel.*RETURNING`).
 		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(300))
 	mock.ExpectExec(`INSERT INTO .*submodel_payload`).
@@ -160,6 +162,8 @@ func TestPutSubmodelUpdatePathReturnsTrue(t *testing.T) {
 	submodel.SetIDShort(&idShort)
 
 	mock.ExpectBegin()
+	mock.ExpectQuery(`SELECT .*FROM .*submodel`).
+		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(400))
 	mock.ExpectQuery(`SELECT .*FROM .*submodel`).
 		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(400))
 	mock.ExpectQuery(`SELECT .*file_oid.*FROM .*submodel_element.*file_data`).

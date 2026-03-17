@@ -651,6 +651,7 @@ func (s *AssetAdministrationShellDatabase) PutAssetAdministrationShellByID(ctx c
 		}
 		isUpdate = false
 	}
+	ctx = auth.SelectPutFormulaByExistence(ctx, isUpdate)
 
 	if auth.ShouldEnforceABACWriteCheck(ctx) && isUpdate {
 		exists, visible, visErr := s.checkAASVisibilityInTx(ctx, tx, aasIdentifier)
@@ -936,6 +937,38 @@ func (s *AssetAdministrationShellDatabase) PutThumbnailByAASID(ctx context.Conte
 		return common.NewInternalServerError("AASREPO-PUTTHUMBNAIL-STARTTX " + err.Error())
 	}
 	defer cleanup(&err)
+
+	aasDBID, dbIDErr := persistenceutils.GetAssetAdministrationShellDatabaseID(tx, aasIdentifier)
+	if dbIDErr != nil {
+		if dbIDErr == sql.ErrNoRows {
+			return common.NewErrNotFound("AASREPO-PUTTHUMBNAIL-AASNOTFOUND Asset Administration Shell with ID '" + aasIdentifier + "' not found")
+		}
+		return common.NewInternalServerError("AASREPO-PUTTHUMBNAIL-GETAASDBID " + dbIDErr.Error())
+	}
+
+	dialect := goqu.Dialect("postgres")
+	fileQuery, fileArgs, fileBuildErr := dialect.
+		From("thumbnail_file_data").
+		Select("file_oid").
+		Where(
+			goqu.C("id").Eq(aasDBID),
+			goqu.C("file_oid").IsNotNull(),
+		).
+		Limit(1).
+		ToSQL()
+	if fileBuildErr != nil {
+		return common.NewInternalServerError("AASREPO-PUTTHUMBNAIL-BUILDEXISTSQL " + fileBuildErr.Error())
+	}
+
+	thumbnailExists := true
+	var fileOID int64
+	if scanErr := tx.QueryRow(fileQuery, fileArgs...).Scan(&fileOID); scanErr != nil {
+		if scanErr != sql.ErrNoRows {
+			return common.NewInternalServerError("AASREPO-PUTTHUMBNAIL-EXECEXISTSQL " + scanErr.Error())
+		}
+		thumbnailExists = false
+	}
+	ctx = auth.SelectPutFormulaByExistence(ctx, thumbnailExists)
 
 	if auth.ShouldEnforceABACWriteCheck(ctx) {
 		exists, visible, visErr := s.checkAASVisibilityInTx(ctx, tx, aasIdentifier)

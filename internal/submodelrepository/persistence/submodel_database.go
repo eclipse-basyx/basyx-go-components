@@ -885,13 +885,19 @@ func (s *SubmodelDatabase) UpdateSubmodelElementWithContext(ctx context.Context,
 	}
 	defer cleanup(&err)
 
+	exists, _, visErr := s.checkSubmodelElementVisibilityInTx(ctx, tx, submodelID, idShortOrPath)
+	if visErr != nil {
+		return visErr
+	}
+	if !exists {
+		return common.NewErrNotFound("SMREPO-UPDSME-NOTFOUND Submodel-Element ID-Short: " + idShortOrPath)
+	}
+	ctx = auth.SelectPutFormulaByExistence(ctx, exists)
+
 	if shouldEnforceABACWriteCheck(ctx) {
-		exists, visible, visErr := s.checkSubmodelElementVisibilityInTx(ctx, tx, submodelID, idShortOrPath)
+		_, visible, visErr := s.checkSubmodelElementVisibilityInTx(ctx, tx, submodelID, idShortOrPath)
 		if visErr != nil {
 			return visErr
-		}
-		if !exists {
-			return common.NewErrNotFound("SMREPO-UPDSME-NOTFOUND Submodel-Element ID-Short: " + idShortOrPath)
 		}
 		if !visible {
 			return common.NewErrDenied("SMREPO-UPDSME-ABACDENIED Existing submodel element is not accessible under ABAC constraints")
@@ -1053,6 +1059,12 @@ func (s *SubmodelDatabase) PutSubmodelWithContext(ctx context.Context, submodelI
 		return false, common.NewInternalServerError("SMREPO-PUTSM-STARTTX " + err.Error())
 	}
 	defer cleanup(&err)
+
+	exists, _, visErr := s.checkSubmodelVisibilityInTx(ctx, tx, submodelID)
+	if visErr != nil {
+		return false, visErr
+	}
+	ctx = auth.SelectPutFormulaByExistence(ctx, exists)
 
 	if shouldEnforceABACWriteCheck(ctx) {
 		exists, visible, visErr := s.checkSubmodelVisibilityInTx(ctx, tx, submodelID)

@@ -43,12 +43,12 @@ var mapMethodAndPatternToRightsData = []mapMethodAndPatternToRights{
 
 	// aas registry
 	{"GET", "/shell-descriptors/{aasIdentifier}", []grammar.RightsEnum{grammar.RightsEnumREAD}},
-	{"PUT", "/shell-descriptors/{aasIdentifier}", []grammar.RightsEnum{grammar.RightsEnumDELETE, grammar.RightsEnumCREATE}},
+	{"PUT", "/shell-descriptors/{aasIdentifier}", []grammar.RightsEnum{grammar.RightsEnumCREATE, grammar.RightsEnumUPDATE}},
 	{"DELETE", "/shell-descriptors/{aasIdentifier}", []grammar.RightsEnum{grammar.RightsEnumDELETE}},
 	{"GET", "/shell-descriptors", []grammar.RightsEnum{grammar.RightsEnumREAD}},
 	{"POST", "/shell-descriptors", []grammar.RightsEnum{grammar.RightsEnumCREATE}},
 	{"GET", "/shell-descriptors/{aasIdentifier}/submodel-descriptors/{submodelIdentifier}", []grammar.RightsEnum{grammar.RightsEnumREAD}},
-	{"PUT", "/shell-descriptors/{aasIdentifier}/submodel-descriptors/{submodelIdentifier}", []grammar.RightsEnum{grammar.RightsEnumDELETE, grammar.RightsEnumCREATE}},
+	{"PUT", "/shell-descriptors/{aasIdentifier}/submodel-descriptors/{submodelIdentifier}", []grammar.RightsEnum{grammar.RightsEnumCREATE, grammar.RightsEnumUPDATE}},
 	{"DELETE", "/shell-descriptors/{aasIdentifier}/submodel-descriptors/{submodelIdentifier}", []grammar.RightsEnum{grammar.RightsEnumDELETE}},
 	{"GET", "/shell-descriptors/{aasIdentifier}/submodel-descriptors", []grammar.RightsEnum{grammar.RightsEnumREAD}},
 	{"POST", "/shell-descriptors/{aasIdentifier}/submodel-descriptors", []grammar.RightsEnum{grammar.RightsEnumCREATE}},
@@ -57,7 +57,7 @@ var mapMethodAndPatternToRightsData = []mapMethodAndPatternToRights{
 
 	// sm registry
 	{"GET", "/submodel-descriptors/{submodelIdentifier}", []grammar.RightsEnum{grammar.RightsEnumREAD}},
-	{"PUT", "/submodel-descriptors/{submodelIdentifier}", []grammar.RightsEnum{grammar.RightsEnumDELETE, grammar.RightsEnumCREATE}},
+	{"PUT", "/submodel-descriptors/{submodelIdentifier}", []grammar.RightsEnum{grammar.RightsEnumCREATE, grammar.RightsEnumUPDATE}},
 	{"DELETE", "/submodel-descriptors/{submodelIdentifier}", []grammar.RightsEnum{grammar.RightsEnumDELETE}},
 	{"GET", "/submodel-descriptors", []grammar.RightsEnum{grammar.RightsEnumREAD}},
 	{"POST", "/submodel-descriptors", []grammar.RightsEnum{grammar.RightsEnumCREATE}},
@@ -66,7 +66,7 @@ var mapMethodAndPatternToRightsData = []mapMethodAndPatternToRights{
 	{"GET", "/concept-descriptions", []grammar.RightsEnum{grammar.RightsEnumREAD}},
 	{"POST", "/concept-descriptions", []grammar.RightsEnum{grammar.RightsEnumCREATE}},
 	{"GET", "/concept-descriptions/{cdIdentifier}", []grammar.RightsEnum{grammar.RightsEnumREAD}},
-	{"PUT", "/concept-descriptions/{cdIdentifier}", []grammar.RightsEnum{grammar.RightsEnumCREATE, grammar.RightsEnumDELETE}},
+	{"PUT", "/concept-descriptions/{cdIdentifier}", []grammar.RightsEnum{grammar.RightsEnumCREATE, grammar.RightsEnumUPDATE}},
 	{"DELETE", "/concept-descriptions/{cdIdentifier}", []grammar.RightsEnum{grammar.RightsEnumDELETE}},
 
 	// sm repository
@@ -78,7 +78,7 @@ var mapMethodAndPatternToRightsData = []mapMethodAndPatternToRights{
 	{"GET", "/submodels/$reference", []grammar.RightsEnum{grammar.RightsEnumREAD}},
 	{"GET", "/submodels/$path", []grammar.RightsEnum{grammar.RightsEnumREAD}},
 	{"GET", "/submodels/{submodelIdentifier}", []grammar.RightsEnum{grammar.RightsEnumREAD}},
-	{"PUT", "/submodels/{submodelIdentifier}", []grammar.RightsEnum{grammar.RightsEnumDELETE, grammar.RightsEnumCREATE}},
+	{"PUT", "/submodels/{submodelIdentifier}", []grammar.RightsEnum{grammar.RightsEnumCREATE, grammar.RightsEnumUPDATE}},
 	{"DELETE", "/submodels/{submodelIdentifier}", []grammar.RightsEnum{grammar.RightsEnumDELETE}},
 	{"PATCH", "/submodels/{submodelIdentifier}", []grammar.RightsEnum{grammar.RightsEnumUPDATE}},
 	{"GET", "/submodels/{submodelIdentifier}/$metadata", []grammar.RightsEnum{grammar.RightsEnumREAD}},
@@ -94,7 +94,7 @@ var mapMethodAndPatternToRightsData = []mapMethodAndPatternToRights{
 	{"GET", "/submodels/{submodelIdentifier}/submodel-elements/$reference", []grammar.RightsEnum{grammar.RightsEnumREAD}},
 	{"GET", "/submodels/{submodelIdentifier}/submodel-elements/$path", []grammar.RightsEnum{grammar.RightsEnumREAD}},
 	{"GET", "/submodels/{submodelIdentifier}/submodel-elements/{idShortPath}", []grammar.RightsEnum{grammar.RightsEnumREAD}},
-	{"PUT", "/submodels/{submodelIdentifier}/submodel-elements/{idShortPath}", []grammar.RightsEnum{grammar.RightsEnumDELETE, grammar.RightsEnumCREATE}},
+	{"PUT", "/submodels/{submodelIdentifier}/submodel-elements/{idShortPath}", []grammar.RightsEnum{grammar.RightsEnumCREATE, grammar.RightsEnumUPDATE}},
 	{"POST", "/submodels/{submodelIdentifier}/submodel-elements/{idShortPath}", []grammar.RightsEnum{grammar.RightsEnumCREATE}},
 	{"DELETE", "/submodels/{submodelIdentifier}/submodel-elements/{idShortPath}", []grammar.RightsEnum{grammar.RightsEnumDELETE}},
 	{"PATCH", "/submodels/{submodelIdentifier}/submodel-elements/{idShortPath}", []grammar.RightsEnum{grammar.RightsEnumUPDATE}},
@@ -105,7 +105,7 @@ var mapMethodAndPatternToRightsData = []mapMethodAndPatternToRights{
 	{"GET", "/submodels/{submodelIdentifier}/submodel-elements/{idShortPath}/$reference", []grammar.RightsEnum{grammar.RightsEnumREAD}},
 	{"GET", "/submodels/{submodelIdentifier}/submodel-elements/{idShortPath}/$path", []grammar.RightsEnum{grammar.RightsEnumREAD}},
 	{"GET", "/submodels/{submodelIdentifier}/submodel-elements/{idShortPath}/attachment", []grammar.RightsEnum{grammar.RightsEnumREAD}},
-	{"PUT", "/submodels/{submodelIdentifier}/submodel-elements/{idShortPath}/attachment", []grammar.RightsEnum{grammar.RightsEnumDELETE, grammar.RightsEnumCREATE}},
+	{"PUT", "/submodels/{submodelIdentifier}/submodel-elements/{idShortPath}/attachment", []grammar.RightsEnum{grammar.RightsEnumCREATE, grammar.RightsEnumUPDATE}},
 	{"DELETE", "/submodels/{submodelIdentifier}/submodel-elements/{idShortPath}/attachment", []grammar.RightsEnum{grammar.RightsEnumDELETE}},
 	{"POST", "/submodels/{submodelIdentifier}/submodel-elements/{idShortPath}/invoke", []grammar.RightsEnum{grammar.RightsEnumEXECUTE}},
 	{"POST", "/submodels/{submodelIdentifier}/submodel-elements/{idShortPath}/invoke/$value", []grammar.RightsEnum{grammar.RightsEnumEXECUTE}},
@@ -122,13 +122,13 @@ var mapMethodAndPatternToRightsData = []mapMethodAndPatternToRights{
 	{"POST", "/shells", []grammar.RightsEnum{grammar.RightsEnumCREATE}},
 	{"GET", "/shells/$reference", []grammar.RightsEnum{grammar.RightsEnumREAD}},
 	{"GET", "/shells/{aasIdentifier}", []grammar.RightsEnum{grammar.RightsEnumREAD}},
-	{"PUT", "/shells/{aasIdentifier}", []grammar.RightsEnum{grammar.RightsEnumDELETE, grammar.RightsEnumCREATE}},
+	{"PUT", "/shells/{aasIdentifier}", []grammar.RightsEnum{grammar.RightsEnumCREATE, grammar.RightsEnumUPDATE}},
 	{"DELETE", "/shells/{aasIdentifier}", []grammar.RightsEnum{grammar.RightsEnumDELETE}},
 	{"GET", "/shells/{aasIdentifier}/$reference", []grammar.RightsEnum{grammar.RightsEnumREAD}},
 	{"GET", "/shells/{aasIdentifier}/asset-information", []grammar.RightsEnum{grammar.RightsEnumREAD}},
 	{"PUT", "/shells/{aasIdentifier}/asset-information", []grammar.RightsEnum{grammar.RightsEnumUPDATE}},
 	{"GET", "/shells/{aasIdentifier}/asset-information/thumbnail", []grammar.RightsEnum{grammar.RightsEnumREAD}},
-	{"PUT", "/shells/{aasIdentifier}/asset-information/thumbnail", []grammar.RightsEnum{grammar.RightsEnumDELETE, grammar.RightsEnumCREATE}},
+	{"PUT", "/shells/{aasIdentifier}/asset-information/thumbnail", []grammar.RightsEnum{grammar.RightsEnumCREATE, grammar.RightsEnumUPDATE}},
 	{"DELETE", "/shells/{aasIdentifier}/asset-information/thumbnail", []grammar.RightsEnum{grammar.RightsEnumDELETE}},
 	{"GET", "/shells/{aasIdentifier}/submodel-refs", []grammar.RightsEnum{grammar.RightsEnumREAD}},
 	{"POST", "/shells/{aasIdentifier}/submodel-refs", []grammar.RightsEnum{grammar.RightsEnumCREATE}},
@@ -139,7 +139,7 @@ var mapMethodAndPatternToRightsData = []mapMethodAndPatternToRights{
 	{"GET", "/lookup/shells", []grammar.RightsEnum{grammar.RightsEnumREAD}},
 	{"POST", "/lookup/shellsByAssetLink", []grammar.RightsEnum{grammar.RightsEnumREAD}}, // this is one of the reasons why we need this complex mapping
 	{"GET", "/lookup/shells/{aasIdentifier}", []grammar.RightsEnum{grammar.RightsEnumREAD}},
-	{"POST", "/lookup/shells/{aasIdentifier}", []grammar.RightsEnum{grammar.RightsEnumDELETE, grammar.RightsEnumCREATE}},
+	{"POST", "/lookup/shells/{aasIdentifier}", []grammar.RightsEnum{grammar.RightsEnumCREATE, grammar.RightsEnumUPDATE}},
 	{"DELETE", "/lookup/shells/{aasIdentifier}", []grammar.RightsEnum{grammar.RightsEnumDELETE}},
 }
 
@@ -147,8 +147,8 @@ var mapMethodAndPatternToRightsData = []mapMethodAndPatternToRights{
 // It returns:
 //   - mapped=false, routeFound=false when the route does not exist
 //   - mapped=false, routeFound=true when the route exists but has no rights mapping
-//   - mapped=true, routeFound=true with resolved rights when mapping exists
-func (m *AccessModel) mapMethodAndPathToRights(in EvalInput) ([]grammar.RightsEnum, bool, bool) {
+//   - mapped=true, routeFound=true with one or more rights alternatives
+func (m *AccessModel) mapMethodAndPathToRights(in EvalInput) ([][]grammar.RightsEnum, bool, bool) {
 	matchPath := stripBasePath(m.basePath, in.Path)
 	rctx := api.NewRouteContext()
 	pattern := m.apiRouter.Find(rctx, in.Method, matchPath)
@@ -157,6 +157,7 @@ func (m *AccessModel) mapMethodAndPathToRights(in EvalInput) ([]grammar.RightsEn
 	}
 
 	patternWithBase := joinBasePath(m.basePath, pattern)
+	var alternatives [][]grammar.RightsEnum
 	for _, mapping := range mapMethodAndPatternToRightsData {
 		if mapping.Method != in.Method {
 			continue
@@ -164,36 +165,13 @@ func (m *AccessModel) mapMethodAndPathToRights(in EvalInput) ([]grammar.RightsEn
 
 		mappingWithBase := joinBasePath(m.basePath, mapping.Pattern)
 		if mappingWithBase == patternWithBase {
-			return mapping.Rights, true, true
+			alternatives = append(alternatives, mapping.Rights)
 		}
+	}
+
+	if len(alternatives) > 0 {
+		return alternatives, true, true
 	}
 
 	return nil, false, true
-}
-
-func rightsContainsAll(hay []grammar.RightsEnum, needles []grammar.RightsEnum) bool {
-	// If hay contains ALL → automatically has everything
-	for _, r := range hay {
-		if r == grammar.RightsEnumALL {
-			return true
-		}
-	}
-
-	// Check each needle individually
-	for _, n := range needles {
-		found := false
-		for _, r := range hay {
-			if r == n {
-				found = true
-				break
-			}
-		}
-
-		// If one needle is missing → fail
-		if !found {
-			return false
-		}
-	}
-
-	return true
 }
