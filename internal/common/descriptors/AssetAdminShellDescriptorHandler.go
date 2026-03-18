@@ -453,9 +453,15 @@ func buildListAASDescriptorPageQuery(
 		)
 
 	var err error
-	ds, err = auth.AddFormulaQueryFromContext(ctx, ds, collector)
-	if err != nil {
-		return nil, err
+	shouldEnforceFormula, enforceErr := auth.ShouldEnforceFormula(ctx)
+	if enforceErr != nil {
+		return nil, common.NewInternalServerError("AASDESC-LIST-SHOULDENFORCE " + enforceErr.Error())
+	}
+	if shouldEnforceFormula {
+		ds, err = auth.AddFormulaQueryFromContext(ctx, ds, collector)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	if cursor != "" {

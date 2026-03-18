@@ -105,15 +105,6 @@ func normalizeCtx(ctx context.Context) context.Context {
 	return ctx
 }
 
-func shouldEnforceABACWriteCheck(ctx context.Context) bool {
-	cfg, ok := common.ConfigFromContext(ctx)
-	if !ok || !cfg.ABAC.Enabled {
-		return false
-	}
-	queryFilter := auth.GetQueryFilter(ctx)
-	return queryFilter != nil && queryFilter.Formula != nil
-}
-
 func conceptDescriptionToJSONString(cd types.IConceptDescription) (string, error) {
 	jsonable, err := jsonization.ToJsonable(cd)
 	if err != nil {
@@ -196,7 +187,11 @@ func (b *ConceptDescriptionBackend) checkConceptDescriptionVisibilityInTx(ctx co
 		return false, false, nil
 	}
 
-	if !shouldEnforceABACWriteCheck(ctx) {
+	shouldEnforceFormula, enforceErr := auth.ShouldEnforceFormula(ctx)
+	if enforceErr != nil {
+		return false, false, common.NewInternalServerError("CDREPO-ABACCHKCD-SHOULDENFORCE " + enforceErr.Error())
+	}
+	if !shouldEnforceFormula {
 		return true, true, nil
 	}
 
@@ -252,7 +247,11 @@ func (b *ConceptDescriptionBackend) CreateConceptDescription(ctx context.Context
 		return err
 	}
 
-	if shouldEnforceABACWriteCheck(ctx) {
+	shouldEnforceFormula, enforceErr := auth.ShouldEnforceFormula(ctx)
+	if enforceErr != nil {
+		return common.NewInternalServerError("CDREPO-CRTCD-SHOULDENFORCE " + enforceErr.Error())
+	}
+	if shouldEnforceFormula {
 		exists, visible, visErr := b.checkConceptDescriptionVisibilityInTx(ctx, tx, cd.ID())
 		if visErr != nil {
 			return visErr
@@ -318,9 +317,16 @@ func (b *ConceptDescriptionBackend) GetConceptDescriptions(ctx context.Context, 
 		return nil, "", common.NewInternalServerError("CDREPO-GCDS-BADCOLLECTOR " + collectorErr.Error())
 	}
 
-	query, addFormulaErr := auth.AddFormulaQueryFromContext(ctx, query, collector)
-	if addFormulaErr != nil {
-		return nil, "", common.NewInternalServerError("CDREPO-GCDS-ABACFORMULA " + addFormulaErr.Error())
+	shouldEnforceFormula, enforceErr := auth.ShouldEnforceFormula(ctx)
+	if enforceErr != nil {
+		return nil, "", common.NewInternalServerError("CDREPO-GCDS-SHOULDENFORCE " + enforceErr.Error())
+	}
+	if shouldEnforceFormula {
+		var addFormulaErr error
+		query, addFormulaErr = auth.AddFormulaQueryFromContext(ctx, query, collector)
+		if addFormulaErr != nil {
+			return nil, "", common.NewInternalServerError("CDREPO-GCDS-ABACFORMULA " + addFormulaErr.Error())
+		}
 	}
 
 	sqlQuery, args, err := query.ToSQL()
@@ -386,9 +392,16 @@ func (b *ConceptDescriptionBackend) GetConceptDescriptionByID(ctx context.Contex
 		Where(goqu.C("id").Eq(id)).
 		Limit(1)
 
-	query, err := auth.AddFormulaQueryFromContext(ctx, query, collector)
-	if err != nil {
-		return nil, common.NewInternalServerError("CDREPO-GCDBYID-ABACFORMULA " + err.Error())
+	shouldEnforceFormula, enforceErr := auth.ShouldEnforceFormula(ctx)
+	if enforceErr != nil {
+		return nil, common.NewInternalServerError("CDREPO-GCDBYID-SHOULDENFORCE " + enforceErr.Error())
+	}
+	if shouldEnforceFormula {
+		var addFormulaErr error
+		query, addFormulaErr = auth.AddFormulaQueryFromContext(ctx, query, collector)
+		if addFormulaErr != nil {
+			return nil, common.NewInternalServerError("CDREPO-GCDBYID-ABACFORMULA " + addFormulaErr.Error())
+		}
 	}
 
 	sqlQuery, args, err := query.ToSQL()
@@ -430,15 +443,21 @@ func (b *ConceptDescriptionBackend) PutConceptDescription(ctx context.Context, i
 	if existsErr != nil {
 		return existsErr
 	}
-	ctx = auth.SelectPutFormulaByExistence(ctx, existingExists)
 
-	if shouldEnforceABACWriteCheck(ctx) && existingExists {
-		_, visible, visErr := b.checkConceptDescriptionVisibilityInTx(ctx, tx, id)
-		if visErr != nil {
-			return visErr
-		}
-		if !visible {
-			return common.NewErrDenied("CDREPO-PUTCD-ABACDENIED existing concept description is not accessible under ABAC constraints")
+	shouldEnforceFormula, enforceErr := auth.ShouldEnforceFormula(ctx)
+	if enforceErr != nil {
+		return common.NewInternalServerError("CDREPO-PUTCD-SHOULDENFORCE " + enforceErr.Error())
+	}
+	if shouldEnforceFormula {
+		ctx = auth.SelectPutFormulaByExistence(ctx, existingExists)
+		if existingExists {
+			_, visible, visErr := b.checkConceptDescriptionVisibilityInTx(ctx, tx, id)
+			if visErr != nil {
+				return visErr
+			}
+			if !visible {
+				return common.NewErrDenied("CDREPO-PUTCD-ABACDENIED existing concept description is not accessible under ABAC constraints")
+			}
 		}
 	}
 
@@ -452,7 +471,7 @@ func (b *ConceptDescriptionBackend) PutConceptDescription(ctx context.Context, i
 		return err
 	}
 
-	if shouldEnforceABACWriteCheck(ctx) {
+	if shouldEnforceFormula {
 		exists, visible, visErr := b.checkConceptDescriptionVisibilityInTx(ctx, tx, cd.ID())
 		if visErr != nil {
 			return visErr
@@ -480,7 +499,11 @@ func (b *ConceptDescriptionBackend) DeleteConceptDescription(ctx context.Context
 	}
 	defer cleanup(&err)
 
-	if shouldEnforceABACWriteCheck(ctx) {
+	shouldEnforceFormula, enforceErr := auth.ShouldEnforceFormula(ctx)
+	if enforceErr != nil {
+		return common.NewInternalServerError("CDREPO-DELCD-SHOULDENFORCE " + enforceErr.Error())
+	}
+	if shouldEnforceFormula {
 		exists, visible, visErr := b.checkConceptDescriptionVisibilityInTx(ctx, tx, id)
 		if visErr != nil {
 			return visErr

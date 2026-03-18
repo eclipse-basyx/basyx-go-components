@@ -141,7 +141,6 @@ func (m *AccessModel) AuthorizeWithFilterWithOptions(in EvalInput, opts grammar.
 	var ruleExprs []QueryFilter
 	var allFragments []grammar.FragmentStringPattern
 	relevantRights := collectRelevantRights(rightAlternatives)
-	enableRightScopedFormulas := len(relevantRights) > 1
 	ruleExprsByRight := make(map[grammar.RightsEnum][]grammar.LogicalExpression, len(relevantRights))
 
 	for _, r := range m.rules {
@@ -219,13 +218,11 @@ func (m *AccessModel) AuthorizeWithFilterWithOptions(in EvalInput, opts grammar.
 			}
 		}
 
-		if enableRightScopedFormulas {
-			for _, right := range relevantRights {
-				if !ruleAllowsRight(acl.RIGHTS, right) {
-					continue
-				}
-				ruleExprsByRight[right] = append(ruleExprsByRight[right], adapted)
+		for _, right := range relevantRights {
+			if !ruleAllowsRight(acl.RIGHTS, right) {
+				continue
 			}
+			ruleExprsByRight[right] = append(ruleExprsByRight[right], adapted)
 		}
 
 		ruleExprs = append(ruleExprs, QueryFilter{
@@ -274,26 +271,24 @@ func (m *AccessModel) AuthorizeWithFilterWithOptions(in EvalInput, opts grammar.
 	}
 	simplified, decision := combined.SimplifyForBackendFilterWithOptions(resolver, opts)
 	combinedByRight := make(map[grammar.RightsEnum]grammar.LogicalExpression, len(relevantRights))
-	if enableRightScopedFormulas {
-		for _, right := range relevantRights {
-			combinedByRight[right] = boolExpression(false)
-			expressions := ruleExprsByRight[right]
-			if len(expressions) == 0 {
-				continue
-			}
+	for _, right := range relevantRights {
+		combinedByRight[right] = boolExpression(false)
+		expressions := ruleExprsByRight[right]
+		if len(expressions) == 0 {
+			continue
+		}
 
-			combinedRight := grammar.LogicalExpression{
-				Or: expressions,
-			}
-			simplifiedRight, rightDecision := combinedRight.SimplifyForBackendFilterWithOptions(resolver, opts)
-			switch rightDecision {
-			case grammar.SimplifyFalse:
-				combinedByRight[right] = boolExpression(false)
-			case grammar.SimplifyTrue:
-				combinedByRight[right] = boolExpression(true)
-			default:
-				combinedByRight[right] = simplifiedRight
-			}
+		combinedRight := grammar.LogicalExpression{
+			Or: expressions,
+		}
+		simplifiedRight, rightDecision := combinedRight.SimplifyForBackendFilterWithOptions(resolver, opts)
+		switch rightDecision {
+		case grammar.SimplifyFalse:
+			combinedByRight[right] = boolExpression(false)
+		case grammar.SimplifyTrue:
+			combinedByRight[right] = boolExpression(true)
+		default:
+			combinedByRight[right] = simplifiedRight
 		}
 	}
 

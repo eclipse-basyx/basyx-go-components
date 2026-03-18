@@ -89,9 +89,16 @@ func ensureSubmodelElementPathMatchesFormula(ctx context.Context, db *sql.DB, su
 		return common.NewInternalServerError("SMREPO-GETSMEBYPATH-BADCOLLECTOR " + collectorErr.Error())
 	}
 
-	query, addFormulaErr := auth.AddFormulaQueryFromContext(ctx, query, collector)
-	if addFormulaErr != nil {
-		return common.NewInternalServerError("SMREPO-GETSMEBYPATH-ABACFORMULA " + addFormulaErr.Error())
+	shouldEnforceFormula, enforceErr := auth.ShouldEnforceFormula(ctx)
+	if enforceErr != nil {
+		return common.NewInternalServerError("SMREPO-GETSMEBYPATH-SHOULDENFORCE " + enforceErr.Error())
+	}
+	if shouldEnforceFormula {
+		var addFormulaErr error
+		query, addFormulaErr = auth.AddFormulaQueryFromContext(ctx, query, collector)
+		if addFormulaErr != nil {
+			return common.NewInternalServerError("SMREPO-GETSMEBYPATH-ABACFORMULA " + addFormulaErr.Error())
+		}
 	}
 
 	sqlQuery, args, toSQLErr := query.ToSQL()
@@ -421,9 +428,16 @@ func getRootElementPage(ctx context.Context, db *sql.DB, submodelDatabaseID int6
 	if collectorErr != nil {
 		return nil, "", common.NewInternalServerError("SMREPO-GETROOTPATHS-BADCOLLECTOR " + collectorErr.Error())
 	}
-	query, addFormulaErr := auth.AddFormulaQueryFromContext(ctx, query, collector)
-	if addFormulaErr != nil {
-		return nil, "", common.NewInternalServerError("SMREPO-GETROOTPATHS-ABACFORMULA " + addFormulaErr.Error())
+	shouldEnforceFormula, enforceErr := auth.ShouldEnforceFormula(ctx)
+	if enforceErr != nil {
+		return nil, "", common.NewInternalServerError("SMREPO-GETROOTPATHS-SHOULDENFORCE " + enforceErr.Error())
+	}
+	if shouldEnforceFormula {
+		var addFormulaErr error
+		query, addFormulaErr = auth.AddFormulaQueryFromContext(ctx, query, collector)
+		if addFormulaErr != nil {
+			return nil, "", common.NewInternalServerError("SMREPO-GETROOTPATHS-ABACFORMULA " + addFormulaErr.Error())
+		}
 	}
 
 	sqlQuery, args, toSQLErr := query.ToSQL()

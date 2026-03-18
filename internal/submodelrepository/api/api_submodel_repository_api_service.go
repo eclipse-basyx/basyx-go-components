@@ -1786,8 +1786,11 @@ func (s *SubmodelRepositoryAPIAPIService) PutFileByPathSubmodelRepo(ctx context.
 	if decodeErr != nil {
 		return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "MalformedSubmodelIdentifier"), nil
 	}
-
-	if auth.ShouldEnforceABACWriteCheck(ctx) {
+	shouldEnforceExtraSecurityCheck, err := auth.ShouldEnforceFormula(ctx)
+	if err != nil {
+		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "ShouldEnforceFormula"), err
+	}
+	if shouldEnforceExtraSecurityCheck {
 
 		hasAttachment, err := s.submodelBackend.FileAttachmentExists(decodedSubmodelIdentifier, idShortPath)
 		if err != nil {
@@ -1797,7 +1800,7 @@ func (s *SubmodelRepositoryAPIAPIService) PutFileByPathSubmodelRepo(ctx context.
 			if common.IsErrBadRequest(err) {
 				return newAPIErrorResponse(err, http.StatusBadRequest, operation, "BadRequest"), nil
 			}
-			return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "ShouldEnforceABACWriteCheck"), err
+			return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "ShouldEnforceFormula"), err
 		}
 
 		ctx = auth.SelectPutFormulaByExistence(ctx, hasAttachment)
@@ -1810,11 +1813,11 @@ func (s *SubmodelRepositoryAPIAPIService) PutFileByPathSubmodelRepo(ctx context.
 			if common.IsErrBadRequest(err) {
 				return newAPIErrorResponse(err, http.StatusBadRequest, operation, "BadRequest"), nil
 			}
-			return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "ShouldEnforceABACWriteCheck"), err
+			return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "ShouldEnforceFormula"), err
 		}
 	}
 
-	err := s.submodelBackend.UploadFileAttachment(decodedSubmodelIdentifier, idShortPath, file, fileName)
+	err = s.submodelBackend.UploadFileAttachment(decodedSubmodelIdentifier, idShortPath, file, fileName)
 	if err != nil {
 		if common.IsErrNotFound(err) || errors.Is(err, sql.ErrNoRows) {
 			return newAPIErrorResponse(err, http.StatusNotFound, operation, "SubmodelElementNotFound"), nil

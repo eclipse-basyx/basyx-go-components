@@ -210,13 +210,23 @@ func (s *SubmodelRegistryAPIAPIService) PutSubmodelDescriptorById(ctx context.Co
 	}
 	submodelDescriptor.Id = decoded
 
+	shouldEnforceFormula, enforceErr := auth.ShouldEnforceFormula(ctx)
+	if enforceErr != nil {
+		log.Printf("[ERROR] [%s] Error in PutSubmodelDescriptorById: should enforce check failed (submodelId=%q): %v", componentName, submodelDescriptor.Id, enforceErr)
+		return common.NewErrorResponse(
+			enforceErr, http.StatusInternalServerError, componentName, "PutSubmodelDescriptorById", "ShouldEnforceFormula",
+		), enforceErr
+	}
+
 	if exists, chkErr := s.smRegistryBackend.ExistsSubmodelByID(ctx, submodelDescriptor.Id); chkErr != nil {
 		log.Printf("[ERROR] [%s] Error in PutSubmodelDescriptorById: existence check failed (submodelId=%q): %v", componentName, submodelDescriptor.Id, chkErr)
 		return common.NewErrorResponse(
 			chkErr, http.StatusInternalServerError, componentName, "PutSubmodelDescriptorById", "Unhandled-Precheck",
 		), chkErr
 	} else {
-		ctx = auth.SelectPutFormulaByExistence(ctx, exists)
+		if shouldEnforceFormula {
+			ctx = auth.SelectPutFormulaByExistence(ctx, exists)
+		}
 		if !exists {
 			result, err := s.smRegistryBackend.InsertSubmodelDescriptor(ctx, submodelDescriptor)
 			if err != nil {

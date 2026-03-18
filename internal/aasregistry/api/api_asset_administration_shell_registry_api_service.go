@@ -216,13 +216,22 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) PutAssetAdministrationSh
 		), nil
 	}
 
+	shouldEnforceFormula, enforceErr := auth.ShouldEnforceFormula(ctx)
+	if enforceErr != nil {
+		return common.NewErrorResponse(
+			enforceErr, http.StatusInternalServerError, componentName, "PutAssetAdministrationShellDescriptorById", "ShouldEnforceFormula",
+		), enforceErr
+	}
+
 	if exists, chkErr := s.aasRegistryBackend.ExistsAASByID(ctx, assetAdministrationShellDescriptor.Id); chkErr != nil {
 		log.Printf("🧩 [%s] Error in PutAssetAdministrationShellDescriptorById: existence check failed (aasId=%q): %v", componentName, assetAdministrationShellDescriptor.Id, chkErr)
 		return common.NewErrorResponse(
 			chkErr, http.StatusInternalServerError, componentName, "PutAssetAdministrationShellDescriptorById", "Unhandled-Precheck",
 		), chkErr
 	} else if !exists {
-		ctx = auth.SelectPutFormulaByExistence(ctx, false)
+		if shouldEnforceFormula {
+			ctx = auth.SelectPutFormulaByExistence(ctx, false)
+		}
 
 		result, err := s.aasRegistryBackend.InsertAdministrationShellDescriptor(ctx, assetAdministrationShellDescriptor)
 		if err != nil {
@@ -261,7 +270,9 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) PutAssetAdministrationSh
 		return model.Response(http.StatusCreated, j), nil
 	}
 
-	ctx = auth.SelectPutFormulaByExistence(ctx, true)
+	if shouldEnforceFormula {
+		ctx = auth.SelectPutFormulaByExistence(ctx, true)
+	}
 
 	_, err = s.aasRegistryBackend.ReplaceAdministrationShellDescriptor(ctx, assetAdministrationShellDescriptor)
 	if err != nil {
@@ -511,13 +522,22 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) PutSubmodelDescriptorByI
 		), nil
 	}
 
+	shouldEnforceFormula, enforceErr := auth.ShouldEnforceFormula(ctx)
+	if enforceErr != nil {
+		return common.NewErrorResponse(
+			enforceErr, http.StatusInternalServerError, componentName, "PutSubmodelDescriptorByIdThroughSuperpath", "ShouldEnforceFormula",
+		), enforceErr
+	}
+
 	if exists, chkErr := s.aasRegistryBackend.ExistsSubmodelForAAS(ctx, decodedAAS, decodedSMD); chkErr != nil {
 		log.Printf("🧩 [%s] Error in PutSubmodelDescriptorByIdThroughSuperpath: existence check failed (aasId=%q): %v", componentName, decodedAAS, chkErr)
 		return common.NewErrorResponse(
 			chkErr, http.StatusInternalServerError, componentName, "PutSubmodelDescriptorByIdThroughSuperpath", "Unhandled-Precheck",
 		), chkErr
 	} else if !exists {
-		ctx = auth.SelectPutFormulaByExistence(ctx, false)
+		if shouldEnforceFormula {
+			ctx = auth.SelectPutFormulaByExistence(ctx, false)
+		}
 		result, err := s.aasRegistryBackend.InsertSubmodelDescriptorForAAS(ctx, decodedAAS, submodelDescriptor)
 		// Persist submodel descriptor under the AAS
 		if err != nil {
@@ -560,7 +580,9 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) PutSubmodelDescriptorByI
 		return model.Response(http.StatusCreated, jsonable), nil
 	}
 
-	ctx = auth.SelectPutFormulaByExistence(ctx, true)
+	if shouldEnforceFormula {
+		ctx = auth.SelectPutFormulaByExistence(ctx, true)
+	}
 
 	// Replace in a single transaction (delete + insert)
 	_, err = s.aasRegistryBackend.ReplaceSubmodelDescriptorForAAS(ctx, decodedAAS, submodelDescriptor)

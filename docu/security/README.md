@@ -219,8 +219,22 @@ Notes:
 - QueryFilter is stored in request context after ABAC evaluation.
 - Controllers can enforce it on payloads or results.
 - Persistence helpers apply it to SQL queries and fragment projections.
-- QueryFilter now can carry right-scoped formulas in `FormulasByRight` (for example, separate formulas for `CREATE` and `UPDATE`).
-- PUT handlers can switch the active `Formula` via `SelectPutFormulaByExistence(ctx, dataExists)` so create-vs-update checks are enforced consistently.
+- QueryFilter carries right-scoped formulas in `FormulasByRight` (for example, separate formulas for `CREATE` and `UPDATE`).
+- `SelectPutFormulaByExistence(ctx, dataExists)` switches the active `Formula` for PUT upsert checks (create vs update).
+
+## Formula enforcement gate
+
+- `ShouldEnforceFormula(ctx)` is the single helper used by components to decide if formula-based ABAC checks must run.
+- It returns `(false, nil)` when ABAC is disabled or when no `QueryFilter` is present.
+- It returns an error when configuration is missing in context.
+- It validates the invariant `Formula != nil => len(FormulasByRight) > 0` and returns an error when violated.
+- Components must propagate helper errors as internal errors with component-specific error codes.
+
+## Runtime context requirements
+
+- Security-sensitive code paths must use context-aware methods and pass `ctx` through all checks.
+- Do not use runtime fallback logic that bypasses context-based security decisions.
+- Security-specific work should be scoped inside `if shouldEnforce { ... }` to avoid unnecessary overhead when formula checks are not required.
 
 Relevant code:
 - [internal/common/security/authorize.go](internal/common/security/authorize.go)
@@ -249,6 +263,8 @@ Example file:
 - Security-focused tests use dedicated access rules and Keycloak configs under the service-specific security test folders.
   - Example: [internal/aasregistry/security_tests](internal/aasregistry/security_tests)
   - Example: [internal/discoveryservice/security_tests](internal/discoveryservice/security_tests)
+- Tests that intentionally run without ABAC enforcement must provide explicit config context with ABAC disabled.
+- Production/runtime code must not inject ABAC-disabled fallback config to compensate for missing context.
 
 ## Operational checklist
 

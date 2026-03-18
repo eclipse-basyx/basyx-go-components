@@ -155,9 +155,7 @@ func (s *SubmodelDatabase) GetSubmodelByIDWithContext(ctx context.Context, submo
 	submodelElements := make([]types.ISubmodelElement, 0)
 	eg.Go(func() error {
 		unlimited := -1
-		// Exact /submodels/{id} reads should use the ABAC formula only as a gate for
-		// returning the submodel, not to prune the returned SME tree.
-		smes, _, err := s.GetSubmodelElements(submodelIdentifier, &unlimited, "", false, level)
+		smes, _, err := s.GetSubmodelElementsWithContext(ctx, submodelIdentifier, &unlimited, "", false, level)
 		if err != nil {
 			return err
 		}
@@ -291,7 +289,11 @@ func (s *SubmodelDatabase) CreateSubmodelWithContext(ctx context.Context, submod
 		return err
 	}
 
-	if shouldEnforceABACWriteCheck(ctx) {
+	shouldEnforce, enforceErr := shouldEnforceFormula(ctx, "SMREPO-NEWSM-SHOULDENFORCE")
+	if enforceErr != nil {
+		return enforceErr
+	}
+	if shouldEnforce {
 		exists, visible, visErr := s.checkSubmodelVisibilityInTx(ctx, tx, submodel.ID())
 		if visErr != nil {
 			return visErr
@@ -422,13 +424,12 @@ func normalizeCtx(ctx context.Context) context.Context {
 	return ctx
 }
 
-func shouldEnforceABACWriteCheck(ctx context.Context) bool {
-	cfg, ok := common.ConfigFromContext(ctx)
-	if !ok || !cfg.ABAC.Enabled {
-		return false
+func shouldEnforceFormula(ctx context.Context, step string) (bool, error) {
+	shouldEnforce, err := auth.ShouldEnforceFormula(ctx)
+	if err != nil {
+		return false, common.NewInternalServerError(step + " " + err.Error())
 	}
-	queryFilter := auth.GetQueryFilter(ctx)
-	return queryFilter != nil && queryFilter.Formula != nil
+	return shouldEnforce, nil
 }
 
 func (s *SubmodelDatabase) checkSubmodelVisibilityInTx(ctx context.Context, tx *sql.Tx, submodelID string) (bool, bool, error) {
@@ -440,7 +441,11 @@ func (s *SubmodelDatabase) checkSubmodelVisibilityInTx(ctx context.Context, tx *
 		return false, false, common.NewInternalServerError("SMREPO-ABACCHKSM-GETSMDATABASEID " + err.Error())
 	}
 
-	if !shouldEnforceABACWriteCheck(ctx) {
+	shouldEnforce, enforceErr := shouldEnforceFormula(ctx, "SMREPO-ABACCHKSM-SHOULDENFORCE")
+	if enforceErr != nil {
+		return false, false, enforceErr
+	}
+	if !shouldEnforce {
 		return true, true, nil
 	}
 
@@ -511,7 +516,11 @@ func (s *SubmodelDatabase) checkSubmodelElementVisibilityInTx(ctx context.Contex
 		return false, false, common.NewInternalServerError("SMREPO-ABACCHKSME-EXECEXISTSQ " + existsErr.Error())
 	}
 
-	if !shouldEnforceABACWriteCheck(ctx) {
+	shouldEnforce, enforceErr := shouldEnforceFormula(ctx, "SMREPO-ABACCHKSME-SHOULDENFORCE")
+	if enforceErr != nil {
+		return false, false, enforceErr
+	}
+	if !shouldEnforce {
 		return true, true, nil
 	}
 
@@ -698,7 +707,11 @@ func (s *SubmodelDatabase) AddSubmodelElementWithContext(ctx context.Context, su
 		return err
 	}
 
-	if shouldEnforceABACWriteCheck(ctx) && insertedPath != "" {
+	shouldEnforce, enforceErr := shouldEnforceFormula(ctx, "SMREPO-ADDSME-SHOULDENFORCE")
+	if enforceErr != nil {
+		return enforceErr
+	}
+	if shouldEnforce && insertedPath != "" {
 		exists, visible, visErr := s.checkSubmodelElementVisibilityInTx(ctx, tx, submodelID, insertedPath)
 		if visErr != nil {
 			return visErr
@@ -837,7 +850,11 @@ func (s *SubmodelDatabase) DeleteSubmodelElementByPathWithContext(ctx context.Co
 	}
 	defer cleanup(&err)
 
-	if shouldEnforceABACWriteCheck(ctx) {
+	shouldEnforce, enforceErr := shouldEnforceFormula(ctx, "SMREPO-DELSMEBPATH-SHOULDENFORCE")
+	if enforceErr != nil {
+		return enforceErr
+	}
+	if shouldEnforce {
 		exists, visible, visErr := s.checkSubmodelElementVisibilityInTx(ctx, tx, submodelID, idShortPath)
 		if visErr != nil {
 			return visErr
@@ -892,9 +909,12 @@ func (s *SubmodelDatabase) UpdateSubmodelElementWithContext(ctx context.Context,
 	if !exists {
 		return common.NewErrNotFound("SMREPO-UPDSME-NOTFOUND Submodel-Element ID-Short: " + idShortOrPath)
 	}
-	ctx = auth.SelectPutFormulaByExistence(ctx, exists)
-
-	if shouldEnforceABACWriteCheck(ctx) {
+	shouldEnforce, enforceErr := shouldEnforceFormula(ctx, "SMREPO-UPDSME-SHOULDENFORCE")
+	if enforceErr != nil {
+		return enforceErr
+	}
+	if shouldEnforce {
+		ctx = auth.SelectPutFormulaByExistence(ctx, exists)
 		_, visible, visErr := s.checkSubmodelElementVisibilityInTx(ctx, tx, submodelID, idShortOrPath)
 		if visErr != nil {
 			return visErr
@@ -909,7 +929,7 @@ func (s *SubmodelDatabase) UpdateSubmodelElementWithContext(ctx context.Context,
 		return err
 	}
 
-	if shouldEnforceABACWriteCheck(ctx) {
+	if shouldEnforce {
 		exists, visible, visErr := s.checkSubmodelElementVisibilityInTx(ctx, tx, submodelID, idShortOrPath)
 		if visErr != nil {
 			return visErr
@@ -1103,13 +1123,16 @@ func (s *SubmodelDatabase) PutSubmodelWithContext(ctx context.Context, submodelI
 	}
 	defer cleanup(&err)
 
-	exists, _, visErr := s.checkSubmodelVisibilityInTx(ctx, tx, submodelID)
-	if visErr != nil {
-		return false, visErr
+	shouldEnforce, enforceErr := shouldEnforceFormula(ctx, "SMREPO-PUTSM-SHOULDENFORCE")
+	if enforceErr != nil {
+		return false, enforceErr
 	}
-	ctx = auth.SelectPutFormulaByExistence(ctx, exists)
-
-	if shouldEnforceABACWriteCheck(ctx) {
+	if shouldEnforce {
+		exists, _, visErr := s.checkSubmodelVisibilityInTx(ctx, tx, submodelID)
+		if visErr != nil {
+			return false, visErr
+		}
+		ctx = auth.SelectPutFormulaByExistence(ctx, exists)
 		exists, visible, visErr := s.checkSubmodelVisibilityInTx(ctx, tx, submodelID)
 		if visErr != nil {
 			return false, visErr
@@ -1124,7 +1147,7 @@ func (s *SubmodelDatabase) PutSubmodelWithContext(ctx context.Context, submodelI
 		return false, err
 	}
 
-	if shouldEnforceABACWriteCheck(ctx) {
+	if shouldEnforce {
 		exists, visible, visErr := s.checkSubmodelVisibilityInTx(ctx, tx, submodelID)
 		if visErr != nil {
 			return false, visErr
@@ -1158,7 +1181,11 @@ func (s *SubmodelDatabase) DeleteSubmodelWithContext(ctx context.Context, submod
 	}
 	defer cleanup(&err)
 
-	if shouldEnforceABACWriteCheck(ctx) {
+	shouldEnforce, enforceErr := shouldEnforceFormula(ctx, "SMREPO-DELSM-SHOULDENFORCE")
+	if enforceErr != nil {
+		return enforceErr
+	}
+	if shouldEnforce {
 		exists, visible, visErr := s.checkSubmodelVisibilityInTx(ctx, tx, submodelID)
 		if visErr != nil {
 			return visErr
@@ -1460,9 +1487,15 @@ func (s *SubmodelDatabase) getSubmodelsWithOptionalSemanticIDFilter(ctx context.
 	if collectorErr != nil {
 		return nil, "", common.NewInternalServerError("SMREPO-GETSMS-BADCOLLECTOR " + collectorErr.Error())
 	}
-	selectDS, err = auth.AddFormulaQueryFromContext(ctx, selectDS, collector)
-	if err != nil {
-		return nil, "", common.NewInternalServerError("SMREPO-GETSMS-ABACFORMULA " + err.Error())
+	shouldEnforce, enforceErr := shouldEnforceFormula(ctx, "SMREPO-GETSMS-SHOULDENFORCE")
+	if enforceErr != nil {
+		return nil, "", enforceErr
+	}
+	if shouldEnforce {
+		selectDS, err = auth.AddFormulaQueryFromContext(ctx, selectDS, collector)
+		if err != nil {
+			return nil, "", common.NewInternalServerError("SMREPO-GETSMS-ABACFORMULA " + err.Error())
+		}
 	}
 	query, args, err := selectDS.ToSQL()
 	if err != nil {
