@@ -21,8 +21,8 @@ import (
 	persistenceutils "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/utils"
 )
 
-// GetSubmodelElementByIDShortOrPathWithContext loads a submodel element by path and applies optional ABAC formula filters from ctx.
-func GetSubmodelElementByIDShortOrPathWithContext(ctx context.Context, db *sql.DB, submodelID string, idShortOrPath string, level string) (types.ISubmodelElement, error) {
+// GetSubmodelElementByIDShortOrPath loads a submodel element by path and applies optional ABAC formula filters from ctx.
+func GetSubmodelElementByIDShortOrPath(ctx context.Context, db *sql.DB, submodelID string, idShortOrPath string, level string) (types.ISubmodelElement, error) {
 	if submodelID == "" {
 		return nil, common.NewErrBadRequest("SMREPO-GETSMEBYPATH-EMPTYSMID Submodel id must not be empty")
 	}

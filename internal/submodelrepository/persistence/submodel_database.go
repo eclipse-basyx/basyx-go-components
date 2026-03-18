@@ -84,14 +84,14 @@ func NewSubmodelDatabase(dsn string, maxOpenConnections int, maxIdleConnections 
 	}, nil
 }
 
-// GetSignedSubmodelWithContext retrieves and signs a submodel (or its value-only representation)
+// GetSignedSubmodel retrieves and signs a submodel (or its value-only representation)
 // while preserving ABAC visibility checks from ctx.
-func (s *SubmodelDatabase) GetSignedSubmodelWithContext(ctx context.Context, submodelID string, valueOnly bool) (string, error) {
+func (s *SubmodelDatabase) GetSignedSubmodel(ctx context.Context, submodelID string, valueOnly bool) (string, error) {
 	if s.privateKey == nil {
 		return "", errors.New("JWS signing not configured: private key not loaded")
 	}
 
-	submodel, err := s.GetSubmodelByIDWithContext(ctx, submodelID, "deep")
+	submodel, err := s.GetSubmodelByID(ctx, submodelID, "deep")
 	if err != nil {
 		return "", err
 	}
@@ -130,13 +130,13 @@ func (s *SubmodelDatabase) GetSignedSubmodelWithContext(ctx context.Context, sub
 	return jws.CompactSerialize()
 }
 
-// GetSubmodelByIDWithContext retrieves a submodel by identifier and applies optional ABAC formula filters from ctx.
-func (s *SubmodelDatabase) GetSubmodelByIDWithContext(ctx context.Context, submodelIdentifier string, level string) (types.ISubmodel, error) {
+// GetSubmodelByID retrieves a submodel by identifier and applies optional ABAC formula filters from ctx.
+func (s *SubmodelDatabase) GetSubmodelByID(ctx context.Context, submodelIdentifier string, level string) (types.ISubmodel, error) {
 	eg := errgroup.Group{}
 	var submodels []types.ISubmodel
 	eg.Go(func() error {
 		var err error
-		submodels, _, err = s.GetSubmodelsWithContext(ctx, 0, "", submodelIdentifier)
+		submodels, _, err = s.GetSubmodels(ctx, 0, "", submodelIdentifier)
 		if err != nil {
 			return err
 		}
@@ -151,7 +151,7 @@ func (s *SubmodelDatabase) GetSubmodelByIDWithContext(ctx context.Context, submo
 	submodelElements := make([]types.ISubmodelElement, 0)
 	eg.Go(func() error {
 		unlimited := -1
-		smes, _, err := s.GetSubmodelElementsWithContext(ctx, submodelIdentifier, &unlimited, "", false, level)
+		smes, _, err := s.GetSubmodelElements(ctx, submodelIdentifier, &unlimited, "", false, level)
 		if err != nil {
 			return err
 		}
@@ -175,13 +175,13 @@ func (s *SubmodelDatabase) GetSubmodelByIDWithContext(ctx context.Context, submo
 	return submodels[0], nil
 }
 
-// GetSubmodelsWithContext retrieves submodels and applies optional ABAC formula filters from ctx.
-func (s *SubmodelDatabase) GetSubmodelsWithContext(ctx context.Context, limit int32, cursor string, submodelIdentifier string) ([]types.ISubmodel, string, error) {
+// GetSubmodels retrieves submodels and applies optional ABAC formula filters from ctx.
+func (s *SubmodelDatabase) GetSubmodels(ctx context.Context, limit int32, cursor string, submodelIdentifier string) ([]types.ISubmodel, string, error) {
 	return s.getSubmodelsWithOptionalSemanticIDFilter(ctx, limit, cursor, submodelIdentifier, "")
 }
 
-// GetSubmodelReferencesWithContext retrieves references and applies optional ABAC formula filters from ctx.
-func (s *SubmodelDatabase) GetSubmodelReferencesWithContext(ctx context.Context, limit int32, cursor string, submodelIdentifier string, semanticID string) ([]types.IReference, string, error) {
+// GetSubmodelReferences retrieves references and applies optional ABAC formula filters from ctx.
+func (s *SubmodelDatabase) GetSubmodelReferences(ctx context.Context, limit int32, cursor string, submodelIdentifier string, semanticID string) ([]types.IReference, string, error) {
 	submodels, nextCursor, err := s.getSubmodelsWithOptionalSemanticIDFilter(ctx, limit, cursor, submodelIdentifier, semanticID)
 	if err != nil {
 		return nil, "", err
@@ -204,14 +204,14 @@ func (s *SubmodelDatabase) GetSubmodelReferencesWithContext(ctx context.Context,
 	return references, nextCursor, nil
 }
 
-// GetSubmodelReferenceWithContext retrieves the model reference for a single submodel
+// GetSubmodelReference retrieves the model reference for a single submodel
 // while preserving ABAC visibility checks from ctx.
-func (s *SubmodelDatabase) GetSubmodelReferenceWithContext(ctx context.Context, submodelIdentifier string) (types.IReference, error) {
+func (s *SubmodelDatabase) GetSubmodelReference(ctx context.Context, submodelIdentifier string) (types.IReference, error) {
 	if submodelIdentifier == "" {
 		return nil, common.NewErrBadRequest("SMREPO-GETSMREFONE-EMPTYIDENTIFIER submodel identifier is required")
 	}
 
-	submodels, _, err := s.GetSubmodelsWithContext(ctx, 1, "", submodelIdentifier)
+	submodels, _, err := s.GetSubmodels(ctx, 1, "", submodelIdentifier)
 	if err != nil {
 		return nil, err
 	}
@@ -239,18 +239,18 @@ func buildSubmodelModelReference(submodelIdentifier string) (types.IReference, e
 	return reference, nil
 }
 
-// QuerySubmodelsWithContext applies query conditions to the context and reuses the regular submodel listing logic.
-func (s *SubmodelDatabase) QuerySubmodelsWithContext(ctx context.Context, limit int32, cursor string, queryWrapper *grammar.QueryWrapper, _ bool) ([]types.ISubmodel, string, error) {
+// QuerySubmodels applies query conditions to the context and reuses the regular submodel listing logic.
+func (s *SubmodelDatabase) QuerySubmodels(ctx context.Context, limit int32, cursor string, queryWrapper *grammar.QueryWrapper, _ bool) ([]types.ISubmodel, string, error) {
 	if queryWrapper == nil || queryWrapper.Query.Condition == nil {
 		return nil, "", common.NewErrBadRequest("SMREPO-QUERYSMS-INVALIDQUERY query condition is required")
 	}
 
 	ctx = auth.MergeQueryFilter(ctx, queryWrapper.Query)
-	return s.GetSubmodelsWithContext(ctx, limit, cursor, "")
+	return s.GetSubmodels(ctx, limit, cursor, "")
 }
 
-// CreateSubmodelWithContext creates a new submodel and performs an ABAC re-check before commit when ABAC is enabled.
-func (s *SubmodelDatabase) CreateSubmodelWithContext(ctx context.Context, submodel types.ISubmodel) (err error) {
+// CreateSubmodel creates a new submodel and performs an ABAC re-check before commit when ABAC is enabled.
+func (s *SubmodelDatabase) CreateSubmodel(ctx context.Context, submodel types.ISubmodel) (err error) {
 	if err := s.verifySubmodel(submodel, "SMREPO-NEWSM-VERIFY"); err != nil {
 		return err
 	}
@@ -629,23 +629,23 @@ func (s *SubmodelDatabase) updateSubmodelElementInTransaction(tx *sql.Tx, submod
 	return handler.Update(submodelID, idShortOrPath, submodelElement, tx, isPut)
 }
 
-// GetSubmodelElementWithContext retrieves a submodel element by path and applies optional ABAC formula filters from ctx.
-func (s *SubmodelDatabase) GetSubmodelElementWithContext(ctx context.Context, submodelID string, idShortOrPath string, _ bool, level string) (types.ISubmodelElement, error) {
-	return submodelelements.GetSubmodelElementByIDShortOrPathWithContext(ctx, s.db, submodelID, idShortOrPath, level)
+// GetSubmodelElement retrieves a submodel element by path and applies optional ABAC formula filters from ctx.
+func (s *SubmodelDatabase) GetSubmodelElement(ctx context.Context, submodelID string, idShortOrPath string, _ bool, level string) (types.ISubmodelElement, error) {
+	return submodelelements.GetSubmodelElementByIDShortOrPath(ctx, s.db, submodelID, idShortOrPath, level)
 }
 
-// GetSubmodelElementsWithContext retrieves submodel elements and applies optional ABAC formula filters from ctx.
-func (s *SubmodelDatabase) GetSubmodelElementsWithContext(ctx context.Context, submodelID string, limit *int, cursor string, _ bool, level string) ([]types.ISubmodelElement, string, error) {
+// GetSubmodelElements retrieves submodel elements and applies optional ABAC formula filters from ctx.
+func (s *SubmodelDatabase) GetSubmodelElements(ctx context.Context, submodelID string, limit *int, cursor string, _ bool, level string) ([]types.ISubmodelElement, string, error) {
 	return submodelelements.GetSubmodelElementsBySubmodelID(ctx, s.db, submodelID, limit, cursor, level)
 }
 
-// GetSubmodelElementReferencesWithContext retrieves SME references and applies optional ABAC formula filters from ctx.
-func (s *SubmodelDatabase) GetSubmodelElementReferencesWithContext(ctx context.Context, submodelID string, limit *int, cursor string) ([]types.IReference, string, error) {
+// GetSubmodelElementReferences retrieves SME references and applies optional ABAC formula filters from ctx.
+func (s *SubmodelDatabase) GetSubmodelElementReferences(ctx context.Context, submodelID string, limit *int, cursor string) ([]types.IReference, string, error) {
 	return submodelelements.GetSubmodelElementReferencesBySubmodelID(ctx, s.db, submodelID, limit, cursor)
 }
 
-// AddSubmodelElementWithContext adds a top-level submodel element and performs an ABAC re-check before commit when ABAC is enabled.
-func (s *SubmodelDatabase) AddSubmodelElementWithContext(ctx context.Context, submodelID string, submodelElement types.ISubmodelElement) (err error) {
+// AddSubmodelElement adds a top-level submodel element and performs an ABAC re-check before commit when ABAC is enabled.
+func (s *SubmodelDatabase) AddSubmodelElement(ctx context.Context, submodelID string, submodelElement types.ISubmodelElement) (err error) {
 	tx, cleanup, err := common.StartTransaction(s.db)
 	if err != nil {
 		return err
@@ -677,9 +677,9 @@ func (s *SubmodelDatabase) AddSubmodelElementWithContext(ctx context.Context, su
 	return tx.Commit()
 }
 
-// AddSubmodelElementWithPathWithContext adds a submodel element under an existing container path
+// AddSubmodelElementWithPath adds a submodel element under an existing container path
 // while preserving ABAC visibility checks from ctx.
-func (s *SubmodelDatabase) AddSubmodelElementWithPathWithContext(ctx context.Context, submodelID string, parentPath string, submodelElement types.ISubmodelElement) error {
+func (s *SubmodelDatabase) AddSubmodelElementWithPath(ctx context.Context, submodelID string, parentPath string, submodelElement types.ISubmodelElement) error {
 	tx, cleanup, err := common.StartTransaction(s.db)
 	if err != nil {
 		return err
@@ -709,7 +709,7 @@ func (s *SubmodelDatabase) AddSubmodelElementWithPathWithContext(ctx context.Con
 		return err
 	}
 
-	parentElement, err := submodelelements.GetSubmodelElementByIDShortOrPathWithContext(ctx, s.db, submodelID, parentPath, "")
+	parentElement, err := submodelelements.GetSubmodelElementByIDShortOrPath(ctx, s.db, submodelID, parentPath, "")
 	if err != nil {
 		return err
 	}
@@ -788,8 +788,8 @@ func isSiblingIDShortCollision(tx *sql.Tx, submodelDatabaseID int, parentElement
 	return count > 0
 }
 
-// DeleteSubmodelElementByPathWithContext deletes a submodel element and checks ABAC access on the current element when ABAC is enabled.
-func (s *SubmodelDatabase) DeleteSubmodelElementByPathWithContext(ctx context.Context, submodelID string, idShortPath string) (err error) {
+// DeleteSubmodelElementByPath deletes a submodel element and checks ABAC access on the current element when ABAC is enabled.
+func (s *SubmodelDatabase) DeleteSubmodelElementByPath(ctx context.Context, submodelID string, idShortPath string) (err error) {
 	tx, cleanup, err := common.StartTransaction(s.db)
 	if err != nil {
 		return err
@@ -821,27 +821,8 @@ func (s *SubmodelDatabase) DeleteSubmodelElementByPathWithContext(ctx context.Co
 	return tx.Commit()
 }
 
-// UpdateSubmodelElement updates a submodel element by path.
-func (s *SubmodelDatabase) UpdateSubmodelElement(submodelID string, idShortOrPath string, submodelElement types.ISubmodelElement, isPut bool) error {
-	modelType, err := submodelelements.GetModelTypeByIdShortPathAndSubmodelID(s.db, submodelID, idShortOrPath)
-	if err != nil {
-		return err
-	}
-
-	if modelType == nil {
-		return common.NewErrNotFound("SMREPO-UPDSME-NOTFOUND Submodel-Element ID-Short: " + idShortOrPath)
-	}
-
-	handler, err := submodelelements.GetSMEHandlerByModelType(*modelType, s.db)
-	if err != nil {
-		return err
-	}
-
-	return handler.Update(submodelID, idShortOrPath, submodelElement, nil, isPut)
-}
-
-// UpdateSubmodelElementWithContext updates a submodel element and checks ABAC access on old and new state when ABAC is enabled.
-func (s *SubmodelDatabase) UpdateSubmodelElementWithContext(ctx context.Context, submodelID string, idShortOrPath string, submodelElement types.ISubmodelElement, isPut bool) (err error) {
+// UpdateSubmodelElement updates a submodel element and checks ABAC access on old and new state when ABAC is enabled.
+func (s *SubmodelDatabase) UpdateSubmodelElement(ctx context.Context, submodelID string, idShortOrPath string, submodelElement types.ISubmodelElement, isPut bool) (err error) {
 	tx, cleanup, err := common.StartTransaction(s.db)
 	if err != nil {
 		return err
@@ -888,9 +869,9 @@ func (s *SubmodelDatabase) UpdateSubmodelElementWithContext(ctx context.Context,
 	return tx.Commit()
 }
 
-// UpdateSubmodelElementValueOnlyWithContext updates a submodel element using value-only representation
+// UpdateSubmodelElementValueOnly updates a submodel element using value-only representation
 // while preserving ABAC visibility checks from ctx.
-func (s *SubmodelDatabase) UpdateSubmodelElementValueOnlyWithContext(_ context.Context, submodelID string, idShortOrPath string, valueOnly gen.SubmodelElementValue) error {
+func (s *SubmodelDatabase) UpdateSubmodelElementValueOnly(_ context.Context, submodelID string, idShortOrPath string, valueOnly gen.SubmodelElementValue) error {
 	modelType, err := submodelelements.GetModelTypeByIdShortPathAndSubmodelID(s.db, submodelID, idShortOrPath)
 	if err != nil {
 		return err
@@ -908,11 +889,11 @@ func (s *SubmodelDatabase) UpdateSubmodelElementValueOnlyWithContext(_ context.C
 	return handler.UpdateValueOnly(submodelID, idShortOrPath, valueOnly)
 }
 
-// UpdateSubmodelValueOnlyWithContext updates all included top-level submodel elements using value-only representation
+// UpdateSubmodelValueOnly updates all included top-level submodel elements using value-only representation
 // while preserving ABAC visibility checks from ctx.
-func (s *SubmodelDatabase) UpdateSubmodelValueOnlyWithContext(ctx context.Context, submodelID string, valueOnly gen.SubmodelValue) error {
+func (s *SubmodelDatabase) UpdateSubmodelValueOnly(ctx context.Context, submodelID string, valueOnly gen.SubmodelValue) error {
 	for idShort, elementValue := range valueOnly {
-		if err := s.UpdateSubmodelElementValueOnlyWithContext(ctx, submodelID, idShort, elementValue); err != nil {
+		if err := s.UpdateSubmodelElementValueOnly(ctx, submodelID, idShort, elementValue); err != nil {
 			return err
 		}
 	}
@@ -993,9 +974,9 @@ func (s *SubmodelDatabase) DeleteFileAttachment(submodelID string, idShortPath s
 	return fileHandler.DeleteFileAttachment(submodelID, idShortPath)
 }
 
-// PatchSubmodelWithContext updates an existing submodel in the database with the provided submodel data
+// PatchSubmodel updates an existing submodel in the database with the provided submodel data
 // while preserving ABAC visibility checks from ctx.
-func (s *SubmodelDatabase) PatchSubmodelWithContext(_ context.Context, submodelID string, submodel types.ISubmodel) error {
+func (s *SubmodelDatabase) PatchSubmodel(_ context.Context, submodelID string, submodel types.ISubmodel) error {
 	if submodelID != submodel.ID() {
 		return common.NewErrBadRequest("SMREPO-PATCHSM-IDMISMATCH Submodel ID in path and body do not match")
 	}
@@ -1023,9 +1004,9 @@ func (s *SubmodelDatabase) PatchSubmodelWithContext(_ context.Context, submodelI
 	return nil
 }
 
-// PatchSubmodelMetadataWithContext updates a submodel without rewriting submodel elements
+// PatchSubmodelMetadata updates a submodel without rewriting submodel elements
 // while preserving ABAC visibility checks from ctx.
-func (s *SubmodelDatabase) PatchSubmodelMetadataWithContext(_ context.Context, submodelID string, submodel types.ISubmodel) error {
+func (s *SubmodelDatabase) PatchSubmodelMetadata(_ context.Context, submodelID string, submodel types.ISubmodel) error {
 	if submodelID != submodel.ID() {
 		return common.NewErrBadRequest("SMREPO-PATCHSMMETA-IDMISMATCH Submodel ID in path and body do not match")
 	}
@@ -1052,8 +1033,8 @@ func (s *SubmodelDatabase) PatchSubmodelMetadataWithContext(_ context.Context, s
 	return nil
 }
 
-// PutSubmodelWithContext creates or replaces a submodel and checks ABAC access on old/new state before commit when ABAC is enabled.
-func (s *SubmodelDatabase) PutSubmodelWithContext(ctx context.Context, submodelID string, submodel types.ISubmodel) (bool, error) {
+// PutSubmodel creates or replaces a submodel and checks ABAC access on old/new state before commit when ABAC is enabled.
+func (s *SubmodelDatabase) PutSubmodel(ctx context.Context, submodelID string, submodel types.ISubmodel) (bool, error) {
 	if submodelID != submodel.ID() {
 		return false, common.NewErrBadRequest("SMREPO-PUTSM-IDMISMATCH Submodel ID in path and body do not match")
 	}
@@ -1113,8 +1094,8 @@ func (s *SubmodelDatabase) PutSubmodelWithContext(ctx context.Context, submodelI
 	return isUpdate, nil
 }
 
-// DeleteSubmodelWithContext deletes a submodel and checks ABAC access on the existing submodel before delete when ABAC is enabled.
-func (s *SubmodelDatabase) DeleteSubmodelWithContext(ctx context.Context, submodelID string) (err error) {
+// DeleteSubmodel deletes a submodel and checks ABAC access on the existing submodel before delete when ABAC is enabled.
+func (s *SubmodelDatabase) DeleteSubmodel(ctx context.Context, submodelID string) (err error) {
 	tx, cleanup, err := common.StartTransaction(s.db)
 	if err != nil {
 		return common.NewInternalServerError("SMREPO-DELSM-STARTTX " + err.Error())

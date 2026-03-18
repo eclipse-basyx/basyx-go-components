@@ -61,7 +61,7 @@ func TestGetSignedSubmodelWithoutPrivateKeyReturnsError(t *testing.T) {
 
 	sut := &SubmodelDatabase{}
 
-	jws, err := sut.GetSignedSubmodelWithContext(contextWithABACDisabled(t), "sm", false)
+	jws, err := sut.GetSignedSubmodel(contextWithABACDisabled(t), "sm", false)
 	require.Error(t, err)
 	require.Empty(t, jws)
 	require.Contains(t, err.Error(), "private key not loaded")
@@ -84,7 +84,7 @@ func TestGetSignedSubmodelPropagatesSubmodelLookupError(t *testing.T) {
 	sut := &SubmodelDatabase{db: db, privateKey: privateKey}
 	mock.ExpectQuery(`SELECT .*`).WillReturnError(errors.New("lookup failed"))
 
-	jws, err := sut.GetSignedSubmodelWithContext(contextWithABACDisabled(t), "sm", false)
+	jws, err := sut.GetSignedSubmodel(contextWithABACDisabled(t), "sm", false)
 	require.Error(t, err)
 	require.Empty(t, jws)
 	require.Contains(t, err.Error(), "lookup failed")
@@ -108,7 +108,7 @@ func TestGetSignedSubmodelSignsFullRepresentation(t *testing.T) {
 	sut := &SubmodelDatabase{db: db, privateKey: privateKey}
 	setupSignedSubmodelHappyPathExpectations(mock, "sm-signed")
 
-	jwsCompact, err := sut.GetSignedSubmodelWithContext(contextWithABACDisabled(t), "sm-signed", false)
+	jwsCompact, err := sut.GetSignedSubmodel(contextWithABACDisabled(t), "sm-signed", false)
 	require.NoError(t, err)
 	require.NotEmpty(t, jwsCompact)
 	require.Equal(t, 2, strings.Count(jwsCompact, "."))
@@ -141,7 +141,7 @@ func TestGetSignedSubmodelSignsValueOnlyRepresentation(t *testing.T) {
 	sut := &SubmodelDatabase{db: db, privateKey: privateKey}
 	setupSignedSubmodelHappyPathExpectations(mock, "sm-value-only")
 
-	jwsCompact, err := sut.GetSignedSubmodelWithContext(contextWithABACDisabled(t), "sm-value-only", true)
+	jwsCompact, err := sut.GetSignedSubmodel(contextWithABACDisabled(t), "sm-value-only", true)
 	require.NoError(t, err)
 	require.NotEmpty(t, jwsCompact)
 	require.Equal(t, 2, strings.Count(jwsCompact, "."))
