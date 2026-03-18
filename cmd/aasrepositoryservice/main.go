@@ -9,7 +9,6 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"strconv"
 
 	"github.com/go-chi/chi/v5"
 
@@ -26,65 +25,75 @@ var openapiSpec embed.FS
 func runServer(ctx context.Context, configPath string, databaseSchema string) error {
 	log.Default().Println("Loading Asset Administration Shell Repository Service...")
 	log.Default().Println("Config Path:", configPath)
-	// Load configuration
-	config, err := common.LoadConfig(configPath)
+
+	cfg, err := common.LoadConfig(configPath)
 	if err != nil {
 		return err
 	}
 
-	common.PrintConfiguration(config)
-
-	// Create Chi router
 	r := chi.NewRouter()
-	r.Use(common.ConfigMiddleware(config))
-	common.AddCors(r, config)
+	r.Use(common.ConfigMiddleware(cfg))
 
-	// Add health endpoint
-	common.AddHealthEndpoint(r, config)
+	common.AddCors(r, cfg)
 
-	// Add Swagger UI
-	if err := common.AddSwaggerUIFromFS(r, openapiSpec, "openapi.yaml", "Asset Administration Shell Repository API", "/swagger", "/api-docs/openapi.yaml", config); err != nil {
+	common.AddHealthEndpoint(r, cfg)
+
+	if err := common.AddSwaggerUIFromFS(r, openapiSpec, "openapi.yaml", "Asset Administration Shell Repository API", "/swagger", "/api-docs/openapi.yaml", cfg); err != nil {
 		log.Printf("Warning: failed to load OpenAPI spec for Swagger UI: %v", err)
 	}
 
-	// Instantiate generated services & controllers
-	// ==== Asset Administration Shell Repository Service ====
+	dsn := fmt.Sprintf("postgres://%s:%s@%s:%d/%s?sslmode=disable",
+		cfg.Postgres.User,
+		cfg.Postgres.Password,
+		cfg.Postgres.Host,
+		cfg.Postgres.Port,
+		cfg.Postgres.DBName,
+	)
+	log.Printf("🗄️  Connecting to Postgres with DSN: postgres://%s:****@%s:%d/%s?sslmode=disable",
+		cfg.Postgres.User, cfg.Postgres.Host, cfg.Postgres.Port, cfg.Postgres.DBName)
 
-	aasDatabase, err := persistencepostgresql.NewAssetAdministrationShellDatabase("postgres://"+config.Postgres.User+":"+config.Postgres.Password+"@"+config.Postgres.Host+":"+strconv.Itoa(config.Postgres.Port)+"/"+config.Postgres.DBName+"?sslmode=disable", config.Postgres.MaxOpenConnections, config.Postgres.MaxIdleConnections, config.Postgres.ConnMaxLifetimeMinutes, databaseSchema, config.Server.StrictVerification)
+	aasDatabase, err := persistencepostgresql.NewAssetAdministrationShellDatabase(
+		dsn,
+		cfg.Postgres.MaxOpenConnections,
+		cfg.Postgres.MaxIdleConnections,
+		cfg.Postgres.ConnMaxLifetimeMinutes,
+		databaseSchema,
+		cfg.Server.StrictVerification,
+	)
 	if err != nil {
+		log.Printf("❌ DB connect failed: %v", err)
 		return err
 	}
+	log.Println("✅ Postgres connection established")
 
 	aasSvc := api.NewAssetAdministrationShellRepositoryAPIAPIService(*aasDatabase)
-	aasCtrl := openapi.NewAssetAdministrationShellRepositoryAPIAPIController(aasSvc, config.Server.ContextPath, config.Server.StrictVerification)
+	aasCtrl := openapi.NewAssetAdministrationShellRepositoryAPIAPIController(aasSvc, "", cfg.Server.StrictVerification)
 
-	// ==== Description Service ====
 	descSvc := openapi.NewDescriptionAPIAPIService()
 	descCtrl := openapi.NewDescriptionAPIAPIController(descSvc)
 
-	base := common.NormalizeBasePath(config.Server.ContextPath)
+	base := common.NormalizeBasePath(cfg.Server.ContextPath)
 
-	// === Protected API Subrouter ===
 	apiRouter := chi.NewRouter()
 	common.AddDefaultRouterErrorHandlers(apiRouter, "AASRepositoryService")
 
-	if err := auth.SetupSecurity(ctx, config, apiRouter); err != nil {
+	if err := auth.SetupSecurity(ctx, cfg, apiRouter); err != nil {
 		return err
 	}
 
 	for _, rt := range aasCtrl.Routes() {
 		apiRouter.Method(rt.Method, rt.Pattern, rt.HandlerFunc)
 	}
+
 	for _, rt := range descCtrl.Routes() {
 		apiRouter.Method(rt.Method, rt.Pattern, rt.HandlerFunc)
 	}
 
 	r.Mount(base, apiRouter)
 
-	// Start the server
-	addr := "0.0.0.0:" + fmt.Sprintf("%d", config.Server.Port)
-	log.Printf("▶️  Asset Administration Shell Repository listening on %s\n", addr)
-	// Start server in a goroutine
+	addr := "0.0.0.0:" + fmt.Sprintf("%d", cfg.Server.Port)
+	log.Printf("▶️  Asset Administration Shell Repository listening on %s (contextPath=%q)\n", addr, cfg.Server.ContextPath)
+
 	go func() {
 		//nolint:gosec // implementing this fix would cause errors.
 		if err := http.ListenAndServe(addr, r); err != http.ErrServerClosed {
@@ -103,7 +112,7 @@ func main() {
 	configPath := ""
 	databaseSchema := ""
 	flag.StringVar(&configPath, "config", "", "Path to config file")
-	flag.StringVar(&databaseSchema, "databaseSchema", "", "Path to Database Schema")
+	flag.StringVar(&databaseSchema, "databaseSchema", "", "Path to Database Schema SQL file (overrides default)")
 	flag.Parse()
 
 	if databaseSchema != "" {
