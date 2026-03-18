@@ -902,18 +902,18 @@ func (s *SubmodelDatabase) UpdateSubmodelElementWithContext(ctx context.Context,
 	}
 	defer cleanup(&err)
 
-	exists, _, visErr := s.checkSubmodelElementVisibilityInTx(ctx, tx, submodelID, idShortOrPath)
-	if visErr != nil {
-		return visErr
-	}
-	if !exists {
-		return common.NewErrNotFound("SMREPO-UPDSME-NOTFOUND Submodel-Element ID-Short: " + idShortOrPath)
-	}
 	shouldEnforce, enforceErr := shouldEnforceFormula(ctx, "SMREPO-UPDSME-SHOULDENFORCE")
 	if enforceErr != nil {
 		return enforceErr
 	}
 	if shouldEnforce {
+		exists, _, visErr := s.checkSubmodelElementVisibilityInTx(ctx, tx, submodelID, idShortOrPath)
+		if visErr != nil {
+			return visErr
+		}
+		if !exists {
+			return common.NewErrNotFound("SMREPO-UPDSME-NOTFOUND Submodel-Element ID-Short: " + idShortOrPath)
+		}
 		ctx = auth.SelectPutFormulaByExistence(ctx, exists)
 		_, visible, visErr := s.checkSubmodelElementVisibilityInTx(ctx, tx, submodelID, idShortOrPath)
 		if visErr != nil {
