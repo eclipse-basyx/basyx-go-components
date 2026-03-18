@@ -494,6 +494,94 @@ func TestUpdateSubmodelValueOnlyPropagatesElementError(t *testing.T) {
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 
+func TestFileAttachmentExistsReturnsTrueWhenOIDExists(t *testing.T) {
+	t.Parallel()
+
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer func() {
+		_ = db.Close()
+	}()
+
+	sut := &SubmodelDatabase{db: db}
+
+	rows := sqlmock.NewRows([]string{"file_element_id", "file_oid"}).AddRow(int64(7), int64(42))
+	mock.ExpectQuery(`SELECT .*file_element_id.*file_oid.*FROM .*submodel.*submodel_element.*file_element.*file_data`).
+		WillReturnRows(rows)
+
+	exists, err := sut.FileAttachmentExists("sm", "file.path")
+	require.NoError(t, err)
+	require.True(t, exists)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestFileAttachmentExistsReturnsFalseWhenOIDMissing(t *testing.T) {
+	t.Parallel()
+
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer func() {
+		_ = db.Close()
+	}()
+
+	sut := &SubmodelDatabase{db: db}
+
+	rows := sqlmock.NewRows([]string{"file_element_id", "file_oid"}).AddRow(int64(7), nil)
+	mock.ExpectQuery(`SELECT .*file_element_id.*file_oid.*FROM .*submodel.*submodel_element.*file_element.*file_data`).
+		WillReturnRows(rows)
+
+	exists, err := sut.FileAttachmentExists("sm", "file.path")
+	require.NoError(t, err)
+	require.False(t, exists)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestFileAttachmentExistsReturnsNotFoundWhenElementMissing(t *testing.T) {
+	t.Parallel()
+
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer func() {
+		_ = db.Close()
+	}()
+
+	sut := &SubmodelDatabase{db: db}
+
+	rows := sqlmock.NewRows([]string{"file_element_id", "file_oid"})
+	mock.ExpectQuery(`SELECT .*file_element_id.*file_oid.*FROM .*submodel.*submodel_element.*file_element.*file_data`).
+		WillReturnRows(rows)
+
+	exists, err := sut.FileAttachmentExists("sm", "file.path")
+	require.Error(t, err)
+	require.False(t, exists)
+	require.True(t, common.IsErrNotFound(err))
+	require.Contains(t, err.Error(), "SMREPO-FILEATTEXISTS-NOTFOUND")
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestFileAttachmentExistsReturnsBadRequestWhenElementIsNotFile(t *testing.T) {
+	t.Parallel()
+
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer func() {
+		_ = db.Close()
+	}()
+
+	sut := &SubmodelDatabase{db: db}
+
+	rows := sqlmock.NewRows([]string{"file_element_id", "file_oid"}).AddRow(nil, nil)
+	mock.ExpectQuery(`SELECT .*file_element_id.*file_oid.*FROM .*submodel.*submodel_element.*file_element.*file_data`).
+		WillReturnRows(rows)
+
+	exists, err := sut.FileAttachmentExists("sm", "not-file")
+	require.Error(t, err)
+	require.False(t, exists)
+	require.True(t, common.IsErrBadRequest(err))
+	require.Contains(t, err.Error(), "SMREPO-FILEATTEXISTS-NOTFILE")
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
 func TestUploadFileAttachmentSubmodelLookupFails(t *testing.T) {
 	t.Parallel()
 

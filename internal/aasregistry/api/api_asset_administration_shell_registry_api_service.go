@@ -209,10 +209,10 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) PutAssetAdministrationSh
 	}
 
 	// Enforce id consistency with path
-	if strings.TrimSpace(assetAdministrationShellDescriptor.Id) != "" && assetAdministrationShellDescriptor.Id != decodedAAS {
-		log.Printf("🧩 [%s] Error in PutAssetAdministrationShellDescriptorById: body id does not match path id (body=%q path=%q)", componentName, assetAdministrationShellDescriptor.Id, decodedAAS)
+	if strings.TrimSpace(assetAdministrationShellDescriptor.Id) == "" || assetAdministrationShellDescriptor.Id != decodedAAS {
+		log.Printf("🧩 [%s] Error in PutAssetAdministrationShellDescriptorById: body id is empty or does not match path id (body=%q path=%q)", componentName, assetAdministrationShellDescriptor.Id, decodedAAS)
 		return common.NewErrorResponse(
-			errors.New("body id does not match path id"), http.StatusBadRequest, componentName, "PutAssetAdministrationShellDescriptorById", "BadRequest-IdMismatch",
+			errors.New("body id is empty or does not match path id"), http.StatusBadRequest, componentName, "PutAssetAdministrationShellDescriptorById", "BadRequest-IdMismatch",
 		), nil
 	}
 
@@ -504,13 +504,12 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) PutSubmodelDescriptorByI
 	}
 
 	// Enforce id consistency
-	if strings.TrimSpace(submodelDescriptor.Id) != "" && submodelDescriptor.Id != decodedSMD {
-		log.Printf("🧩 [%s] Error in PutSubmodelDescriptorByIdThroughSuperpath: body id does not match path id (body=%q path=%q)", componentName, submodelDescriptor.Id, decodedSMD)
+	if strings.TrimSpace(submodelDescriptor.Id) == "" || submodelDescriptor.Id != decodedSMD {
+		log.Printf("🧩 [%s] Error in PutSubmodelDescriptorByIdThroughSuperpath: body id is empty or does not match path id (body=%q path=%q)", componentName, submodelDescriptor.Id, decodedSMD)
 		return common.NewErrorResponse(
-			errors.New("body id does not match path id"), http.StatusBadRequest, componentName, "PutSubmodelDescriptorByIdThroughSuperpath", "BadRequest-IdMismatch",
+			errors.New("body id is empty or does not match path id"), http.StatusBadRequest, componentName, "PutSubmodelDescriptorByIdThroughSuperpath", "BadRequest-IdMismatch",
 		), nil
 	}
-	submodelDescriptor.Id = decodedSMD
 
 	if exists, chkErr := s.aasRegistryBackend.ExistsSubmodelForAAS(ctx, decodedAAS, decodedSMD); chkErr != nil {
 		log.Printf("🧩 [%s] Error in PutSubmodelDescriptorByIdThroughSuperpath: existence check failed (aasId=%q): %v", componentName, decodedAAS, chkErr)

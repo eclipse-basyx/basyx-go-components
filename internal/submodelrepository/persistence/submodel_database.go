@@ -952,6 +952,49 @@ func (s *SubmodelDatabase) UpdateSubmodelValueOnly(submodelID string, valueOnly 
 	return nil
 }
 
+// FileAttachmentExists reports whether a File submodel element currently has
+// attachment data stored in file_data.file_oid.
+func (s *SubmodelDatabase) FileAttachmentExists(submodelID string, idShortPath string) (bool, error) {
+	dialect := goqu.Dialect(common.Dialect)
+	sm := goqu.T("submodel").As("sm")
+	sme := goqu.T("submodel_element").As("sme")
+	fe := goqu.T("file_element").As("fe")
+	fd := goqu.T("file_data").As("fd")
+
+	query, args, err := dialect.From(sm).
+		Join(sme, goqu.On(goqu.I("sme.submodel_id").Eq(goqu.I("sm.id")))).
+		LeftJoin(fe, goqu.On(goqu.I("fe.id").Eq(goqu.I("sme.id")))).
+		LeftJoin(fd, goqu.On(goqu.I("fd.id").Eq(goqu.I("sme.id")))).
+		Select(
+			goqu.I("fe.id").As("file_element_id"),
+			goqu.I("fd.file_oid").As("file_oid"),
+		).
+		Where(
+			goqu.I("sm.submodel_identifier").Eq(submodelID),
+			goqu.I("sme.idshort_path").Eq(idShortPath),
+		).
+		Limit(1).
+		ToSQL()
+	if err != nil {
+		return false, common.NewInternalServerError("SMREPO-FILEATTEXISTS-BUILDSQL " + err.Error())
+	}
+
+	var fileElementID sql.NullInt64
+	var fileOID sql.NullInt64
+	if scanErr := s.db.QueryRow(query, args...).Scan(&fileElementID, &fileOID); scanErr != nil {
+		if errors.Is(scanErr, sql.ErrNoRows) {
+			return false, common.NewErrNotFound("SMREPO-FILEATTEXISTS-NOTFOUND Submodel element not found")
+		}
+		return false, common.NewInternalServerError("SMREPO-FILEATTEXISTS-QUERY " + scanErr.Error())
+	}
+
+	if !fileElementID.Valid {
+		return false, common.NewErrBadRequest("SMREPO-FILEATTEXISTS-NOTFILE Submodel element is not of type File")
+	}
+
+	return fileOID.Valid, nil
+}
+
 // UploadFileAttachment uploads attachment content for a File submodel element.
 func (s *SubmodelDatabase) UploadFileAttachment(submodelID string, idShortPath string, file *os.File, fileName string) error {
 	fileHandler, err := submodelelements.NewPostgreSQLFileHandler(s.db)

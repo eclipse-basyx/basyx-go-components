@@ -1787,39 +1787,34 @@ func (s *SubmodelRepositoryAPIAPIService) PutFileByPathSubmodelRepo(ctx context.
 		return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "MalformedSubmodelIdentifier"), nil
 	}
 
-	fileSme, err := s.submodelBackend.GetSubmodelElement(decodedSubmodelIdentifier, idShortPath, false, "")
-	if err != nil {
-		if common.IsErrNotFound(err) || errors.Is(err, sql.ErrNoRows) {
-			return newAPIErrorResponse(err, http.StatusNotFound, operation, "SubmodelElementNotFound"), nil
+	if auth.ShouldEnforceABACWriteCheck(ctx) {
+
+		hasAttachment, err := s.submodelBackend.FileAttachmentExists(decodedSubmodelIdentifier, idShortPath)
+		if err != nil {
+			if common.IsErrNotFound(err) || errors.Is(err, sql.ErrNoRows) {
+				return newAPIErrorResponse(err, http.StatusNotFound, operation, "SubmodelElementNotFound"), nil
+			}
+			if common.IsErrBadRequest(err) {
+				return newAPIErrorResponse(err, http.StatusBadRequest, operation, "BadRequest"), nil
+			}
+			return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "ShouldEnforceABACWriteCheck"), err
 		}
-		if common.IsErrBadRequest(err) {
-			return newAPIErrorResponse(err, http.StatusBadRequest, operation, "BadRequest"), nil
+
+		ctx = auth.SelectPutFormulaByExistence(ctx, hasAttachment)
+		_, err = s.submodelBackend.GetSubmodelElementWithContext(ctx, decodedSubmodelIdentifier, idShortPath, false, "")
+		if err != nil {
+			if common.IsErrNotFound(err) || errors.Is(err, sql.ErrNoRows) || common.IsErrDenied(err) {
+				deniedErr := common.NewErrDenied("SMREPO-PUTFILEBYPATH-ABACDENIED writing this file attachment is not allowed")
+				return newAPIErrorResponse(deniedErr, http.StatusForbidden, operation, "Denied"), nil
+			}
+			if common.IsErrBadRequest(err) {
+				return newAPIErrorResponse(err, http.StatusBadRequest, operation, "BadRequest"), nil
+			}
+			return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "ShouldEnforceABACWriteCheck"), err
 		}
-		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "GetSubmodelElement"), err
 	}
 
-	fileValue, ok := fileSme.(*types.File)
-	if !ok {
-		notFileErr := common.NewErrBadRequest("SMREPO-PUTFILEBYPATH-NOTFILE Submodel element is not of type File")
-		return newAPIErrorResponse(notFileErr, http.StatusBadRequest, operation, "ElementNotAFile"), nil
-	}
-
-	hasAttachment := fileValue.Value() != nil && *fileValue.Value() != ""
-	ctx = auth.SelectPutFormulaByExistence(ctx, hasAttachment)
-
-	_, err = s.submodelBackend.GetSubmodelElementWithContext(ctx, decodedSubmodelIdentifier, idShortPath, false, "")
-	if err != nil {
-		if common.IsErrNotFound(err) || errors.Is(err, sql.ErrNoRows) || common.IsErrDenied(err) {
-			deniedErr := common.NewErrDenied("SMREPO-PUTFILEBYPATH-ABACDENIED writing this file attachment is not allowed")
-			return newAPIErrorResponse(deniedErr, http.StatusForbidden, operation, "Denied"), nil
-		}
-		if common.IsErrBadRequest(err) {
-			return newAPIErrorResponse(err, http.StatusBadRequest, operation, "BadRequest"), nil
-		}
-		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "GetSubmodelElement"), err
-	}
-
-	err = s.submodelBackend.UploadFileAttachment(decodedSubmodelIdentifier, idShortPath, file, fileName)
+	err := s.submodelBackend.UploadFileAttachment(decodedSubmodelIdentifier, idShortPath, file, fileName)
 	if err != nil {
 		if common.IsErrNotFound(err) || errors.Is(err, sql.ErrNoRows) {
 			return newAPIErrorResponse(err, http.StatusNotFound, operation, "SubmodelElementNotFound"), nil

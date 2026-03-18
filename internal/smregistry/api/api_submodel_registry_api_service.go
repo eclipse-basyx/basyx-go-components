@@ -202,10 +202,10 @@ func (s *SubmodelRegistryAPIAPIService) PutSubmodelDescriptorById(ctx context.Co
 		return *resp, err
 	}
 
-	if strings.TrimSpace(submodelDescriptor.Id) != "" && submodelDescriptor.Id != decoded {
-		log.Printf("[ERROR] [%s] Error in PutSubmodelDescriptorById: body id does not match path id (body=%q path=%q)", componentName, submodelDescriptor.Id, decoded)
+	if strings.TrimSpace(submodelDescriptor.Id) == "" || submodelDescriptor.Id != decoded {
+		log.Printf("[ERROR] [%s] Error in PutSubmodelDescriptorById: body id is empty or does not match path id (body=%q path=%q)", componentName, submodelDescriptor.Id, decoded)
 		return common.NewErrorResponse(
-			errors.New("body id does not match path id"), http.StatusBadRequest, componentName, "PutSubmodelDescriptorById", "BadRequest-IdMismatch",
+			errors.New("body id is empty or does not match path id"), http.StatusBadRequest, componentName, "PutSubmodelDescriptorById", "BadRequest-IdMismatch",
 		), nil
 	}
 	submodelDescriptor.Id = decoded
