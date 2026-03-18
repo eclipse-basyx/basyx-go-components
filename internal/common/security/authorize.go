@@ -187,12 +187,17 @@ func MergeQueryFilter(ctx context.Context, query grammar.Query) context.Context 
 	}
 
 	if query.Condition != nil {
+		if qf.FormulasByRight == nil {
+			qf.FormulasByRight = make(map[grammar.RightsEnum]grammar.LogicalExpression)
+		}
 		if qf.Formula != nil {
 			combinedQuery := grammar.LogicalExpression{And: []grammar.LogicalExpression{*qf.Formula, *query.Condition}}
 			combinedQuery, _ = combinedQuery.SimplifyForBackendFilterWithOptions(resolver, opts)
+			qf.FormulasByRight[grammar.RightsEnumREAD] = combinedQuery
 			qf.Formula = &combinedQuery
 		} else {
 			simplifiedQuery, _ := query.Condition.SimplifyForBackendFilterWithOptions(resolver, opts)
+			qf.FormulasByRight[grammar.RightsEnumREAD] = simplifiedQuery
 			qf.Formula = &simplifiedQuery
 		}
 	}

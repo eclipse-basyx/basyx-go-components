@@ -98,13 +98,6 @@ func testDBConnection(db *sql.DB) (bool, error) {
 	return true, nil
 }
 
-func normalizeCtx(ctx context.Context) context.Context {
-	if ctx == nil {
-		return context.Background()
-	}
-	return ctx
-}
-
 func conceptDescriptionToJSONString(cd types.IConceptDescription) (string, error) {
 	jsonable, err := jsonization.ToJsonable(cd)
 	if err != nil {
@@ -136,7 +129,7 @@ func (b *ConceptDescriptionBackend) createConceptDescriptionInTx(ctx context.Con
 		return common.NewInternalServerError("CDREPO-CRTCD-BUILDSQL " + err.Error())
 	}
 
-	if _, err = tx.ExecContext(normalizeCtx(ctx), insertQuery, args...); err != nil {
+	if _, err = tx.ExecContext(ctx, insertQuery, args...); err != nil {
 		return common.NewInternalServerError("CDREPO-CRTCD-EXECSQL " + err.Error())
 	}
 
@@ -149,7 +142,7 @@ func (b *ConceptDescriptionBackend) deleteConceptDescriptionInTx(ctx context.Con
 		return common.NewInternalServerError("CDREPO-DELCD-BUILDSQL " + err.Error())
 	}
 
-	if _, err = tx.ExecContext(normalizeCtx(ctx), delQuery, args...); err != nil {
+	if _, err = tx.ExecContext(ctx, delQuery, args...); err != nil {
 		return common.NewInternalServerError("CDREPO-DELCD-EXECSQL " + err.Error())
 	}
 
@@ -167,7 +160,7 @@ func conceptDescriptionExistsInTx(ctx context.Context, tx *sql.Tx, id string) (b
 	}
 
 	var existsMarker int
-	scanErr := tx.QueryRowContext(normalizeCtx(ctx), query, args...).Scan(&existsMarker)
+	scanErr := tx.QueryRowContext(ctx, query, args...).Scan(&existsMarker)
 	if scanErr == nil {
 		return true, nil
 	}
@@ -216,7 +209,7 @@ func (b *ConceptDescriptionBackend) checkConceptDescriptionVisibilityInTx(ctx co
 	}
 
 	var visibleID string
-	scanErr := tx.QueryRowContext(normalizeCtx(ctx), sqlQuery, args...).Scan(&visibleID)
+	scanErr := tx.QueryRowContext(ctx, sqlQuery, args...).Scan(&visibleID)
 	if scanErr == nil {
 		return true, true, nil
 	}
@@ -334,7 +327,7 @@ func (b *ConceptDescriptionBackend) GetConceptDescriptions(ctx context.Context, 
 		return nil, "", fmt.Errorf("CDREPO-GCDS-BUILDSQL failed to build SQL query: %w", err)
 	}
 
-	rows, err := b.db.QueryContext(normalizeCtx(ctx), sqlQuery, args...)
+	rows, err := b.db.QueryContext(ctx, sqlQuery, args...)
 	if err != nil {
 		return nil, "", fmt.Errorf("CDREPO-GCDS-EXECQUERY failed to execute SQL query: %w", err)
 	}
@@ -410,7 +403,7 @@ func (b *ConceptDescriptionBackend) GetConceptDescriptionByID(ctx context.Contex
 	}
 
 	var data string
-	scanErr := b.db.QueryRowContext(normalizeCtx(ctx), sqlQuery, args...).Scan(&data)
+	scanErr := b.db.QueryRowContext(ctx, sqlQuery, args...).Scan(&data)
 	if scanErr != nil {
 		if errors.Is(scanErr, sql.ErrNoRows) {
 			return nil, common.NewErrNotFound("Concept description with the given ID does not exist")
