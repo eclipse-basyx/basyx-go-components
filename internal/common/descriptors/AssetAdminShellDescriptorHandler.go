@@ -452,16 +452,9 @@ func buildListAASDescriptorPageQuery(
 			common.TAASDescriptor.Col(common.ColAASID).As("sort_aas_id"),
 		)
 
-	var err error
-	shouldEnforceFormula, enforceErr := auth.ShouldEnforceFormula(ctx)
-	if enforceErr != nil {
-		return nil, common.NewInternalServerError("AASDESC-LIST-SHOULDENFORCE " + enforceErr.Error())
-	}
-	if shouldEnforceFormula {
-		ds, err = auth.AddFormulaQueryFromContext(ctx, ds, collector)
-		if err != nil {
-			return nil, err
-		}
+	ds, err := auth.AddFormulaQueryFromContext(ctx, ds, collector)
+	if err != nil {
+		return nil, err
 	}
 
 	if cursor != "" {

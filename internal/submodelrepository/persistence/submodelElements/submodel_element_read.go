@@ -21,12 +21,6 @@ import (
 	persistenceutils "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/utils"
 )
 
-// GetSubmodelElementByIDShortOrPath loads a submodel element by submodel ID and idShort path,
-// including all nested children in original structure.
-func GetSubmodelElementByIDShortOrPath(db *sql.DB, submodelID string, idShortOrPath string) (types.ISubmodelElement, error) {
-	return GetSubmodelElementByIDShortOrPathWithContext(context.Background(), db, submodelID, idShortOrPath, "")
-}
-
 // GetSubmodelElementByIDShortOrPathWithContext loads a submodel element by path and applies optional ABAC formula filters from ctx.
 func GetSubmodelElementByIDShortOrPathWithContext(ctx context.Context, db *sql.DB, submodelID string, idShortOrPath string, level string) (types.ISubmodelElement, error) {
 	if submodelID == "" {
