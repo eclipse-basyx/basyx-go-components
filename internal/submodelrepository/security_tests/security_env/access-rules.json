@@ -58,6 +58,9 @@
       ]},
       { "name": "demo_security_update_check_property_route", "objects": [
         { "ROUTE": "/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/SecurityUpdateCheckProperty" }
+      ]},
+      { "name": "demo_file_attachment_route", "objects": [
+        { "ROUTE": "/submodels/*/submodel-elements/DemoFile/attachment" }
       ]}
     ],
 
@@ -199,6 +202,7 @@
 
       { "USEACL": "update_role", "USEOBJECTS": [ "demo_security_allowed_property_route" ], "USEFORMULA": "editor_update_security_allowed_requires_old_and_new_value" },
       { "USEACL": "update_member", "USEOBJECTS": [ "demo_security_update_check_property_route" ], "USEFORMULA": "editor_member_update_security_check_requires_old_and_new_value" },
+      { "USEACL": "update_role", "USEOBJECTS": [ "demo_file_attachment_route" ], "USEFORMULA": "editor_only" },
 
       { "USEACL": "delete_role", "USEOBJECTS": [ "relationship_referable" ], "USEFORMULA": "editor_only" }
     ]

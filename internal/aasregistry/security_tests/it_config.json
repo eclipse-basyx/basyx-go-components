@@ -426,6 +426,15 @@
   { "context": "GET ALL Submodels - User X - ALLOWED", "token": { "user": "userx", "password": "pwd" }, "method": "GET", "endpoint": "http://localhost:6004/shell-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9Y/submodel-descriptors", "shouldMatch": "expected/expectedSMDUserX.json", "expectedStatus": 200 },
   { "context": "GET ALL Submodels - User Y - ALLOWED", "token": { "user": "usery", "password": "pwd" }, "method": "GET", "endpoint": "http://localhost:6004/shell-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9Y/submodel-descriptors", "shouldMatch": "expected/expectedSMDUserY.json", "expectedStatus": 200 },
   { "context": "GET ALL Submodels - ADMIN - ALLOWED", "token": { "user": "admin", "password": "pwd" }, "method": "GET", "endpoint": "http://localhost:6004/shell-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9Y/submodel-descriptors", "shouldMatch": "expected/expectedSMDAdmin.json", "expectedStatus": 200 },
+
+  { "context": "PUT AAS create - User X allowed via CREATE", "token": { "user": "userx", "password": "pwd" }, "method": "PUT", "endpoint": "http://localhost:6004/shell-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9QVVQtWA", "data": "postBody/put_create_aas_userx.json", "expectedStatus": 201 },
+  { "context": "PUT AAS update - User X denied without UPDATE", "token": { "user": "userx", "password": "pwd" }, "method": "PUT", "endpoint": "http://localhost:6004/shell-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9QVVQtWA", "data": "postBody/put_update_aas_userx.json", "expectedStatus": 403 },
+  { "context": "PUT AAS update - Admin allowed with UPDATE", "token": { "user": "admin", "password": "pwd" }, "method": "PUT", "endpoint": "http://localhost:6004/shell-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9QVVQtWA", "data": "postBody/put_update_aas_userx.json", "expectedStatus": 204 },
+
+  { "context": "PUT Submodel create - User X allowed via CREATE", "token": { "user": "userx", "password": "pwd" }, "method": "PUT", "endpoint": "http://localhost:6004/shell-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9Y/submodel-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9YL1NNLVBVVC1Y", "data": "postBody/put_create_smd_userx.json", "expectedStatus": 201 },
+  { "context": "PUT Submodel update - User X denied without UPDATE", "token": { "user": "userx", "password": "pwd" }, "method": "PUT", "endpoint": "http://localhost:6004/shell-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9Y/submodel-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9YL1NNLVBVVC1Y", "data": "postBody/put_update_smd_userx.json", "expectedStatus": 403 },
+  { "context": "PUT Submodel update - Admin allowed with UPDATE", "token": { "user": "admin", "password": "pwd" }, "method": "PUT", "endpoint": "http://localhost:6004/shell-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9Y/submodel-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9YL1NNLVBVVC1Y", "data": "postBody/put_update_smd_userx.json", "expectedStatus": 204 },
+
   { "context": "GET Non Existing Endpoint - ANON - NOT FOUND", "token": null, "method": "GET", "endpoint": "http://localhost:6004/does-not-exist", "expectedStatus": 404 },
   { "context": "PATCH Health Endpoint - ANON - METHOD NOT ALLOWED", "token": null, "method": "PATCH", "endpoint": "http://localhost:6004/health", "expectedStatus": 405 }
 ]

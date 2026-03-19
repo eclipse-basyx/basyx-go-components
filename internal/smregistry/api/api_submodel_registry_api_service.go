@@ -44,6 +44,7 @@ import (
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
+	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 	smregistrypostgresql "github.com/eclipse-basyx/basyx-go-components/internal/smregistry/persistence"
 )
 
@@ -201,53 +202,66 @@ func (s *SubmodelRegistryAPIAPIService) PutSubmodelDescriptorById(ctx context.Co
 		return *resp, err
 	}
 
-	if strings.TrimSpace(submodelDescriptor.Id) != "" && submodelDescriptor.Id != decoded {
-		log.Printf("[ERROR] [%s] Error in PutSubmodelDescriptorById: body id does not match path id (body=%q path=%q)", componentName, submodelDescriptor.Id, decoded)
+	if strings.TrimSpace(submodelDescriptor.Id) == "" || submodelDescriptor.Id != decoded {
+		log.Printf("[ERROR] [%s] Error in PutSubmodelDescriptorById: body id is empty or does not match path id (body=%q path=%q)", componentName, submodelDescriptor.Id, decoded)
 		return common.NewErrorResponse(
-			errors.New("body id does not match path id"), http.StatusBadRequest, componentName, "PutSubmodelDescriptorById", "BadRequest-IdMismatch",
+			errors.New("body id is empty or does not match path id"), http.StatusBadRequest, componentName, "PutSubmodelDescriptorById", "BadRequest-IdMismatch",
 		), nil
 	}
 	submodelDescriptor.Id = decoded
+
+	shouldEnforceFormula, enforceErr := auth.ShouldEnforceFormula(ctx)
+	if enforceErr != nil {
+		log.Printf("[ERROR] [%s] Error in PutSubmodelDescriptorById: should enforce check failed (submodelId=%q): %v", componentName, submodelDescriptor.Id, enforceErr)
+		return common.NewErrorResponse(
+			enforceErr, http.StatusInternalServerError, componentName, "PutSubmodelDescriptorById", "ShouldEnforceFormula",
+		), enforceErr
+	}
 
 	if exists, chkErr := s.smRegistryBackend.ExistsSubmodelByID(ctx, submodelDescriptor.Id); chkErr != nil {
 		log.Printf("[ERROR] [%s] Error in PutSubmodelDescriptorById: existence check failed (submodelId=%q): %v", componentName, submodelDescriptor.Id, chkErr)
 		return common.NewErrorResponse(
 			chkErr, http.StatusInternalServerError, componentName, "PutSubmodelDescriptorById", "Unhandled-Precheck",
 		), chkErr
-	} else if !exists {
-		result, err := s.smRegistryBackend.InsertSubmodelDescriptor(ctx, submodelDescriptor)
-		if err != nil {
-			switch {
-			case common.IsErrBadRequest(err):
-				log.Printf("[ERROR] [%s] Error in InsertSubmodelDescriptor: bad request (submodelId=%q): %v", componentName, submodelDescriptor.Id, err)
-				return common.NewErrorResponse(
-					err, http.StatusBadRequest, componentName, "InsertSubmodelDescriptor", "BadRequest",
-				), nil
-			case common.IsErrConflict(err):
-				log.Printf("[ERROR] [%s] Error in InsertSubmodelDescriptor: conflict (submodelId=%q): %v", componentName, submodelDescriptor.Id, err)
-				return common.NewErrorResponse(
-					err, http.StatusConflict, componentName, "InsertSubmodelDescriptor", "Conflict",
-				), nil
-			case common.IsErrDenied(err):
-				log.Printf("[ERROR] [%s] Error in InsertSubmodelDescriptor: denied (submodelId=%q): %v", componentName, submodelDescriptor.Id, err)
-				return common.NewErrorResponse(
-					err, http.StatusForbidden, componentName, "InsertSubmodelDescriptor", "Denied",
-				), nil
-			default:
-				log.Printf("[ERROR] [%s] Error in InsertSubmodelDescriptor: internal (submodelId=%q): %v", componentName, submodelDescriptor.Id, err)
-				return common.NewErrorResponse(
-					err, http.StatusInternalServerError, componentName, "InsertSubmodelDescriptor", "Unhandled",
-				), err
+	} else {
+		if shouldEnforceFormula {
+			ctx = auth.SelectPutFormulaByExistence(ctx, exists)
+		}
+		if !exists {
+			result, err := s.smRegistryBackend.InsertSubmodelDescriptor(ctx, submodelDescriptor)
+			if err != nil {
+				switch {
+				case common.IsErrBadRequest(err):
+					log.Printf("[ERROR] [%s] Error in InsertSubmodelDescriptor: bad request (submodelId=%q): %v", componentName, submodelDescriptor.Id, err)
+					return common.NewErrorResponse(
+						err, http.StatusBadRequest, componentName, "InsertSubmodelDescriptor", "BadRequest",
+					), nil
+				case common.IsErrConflict(err):
+					log.Printf("[ERROR] [%s] Error in InsertSubmodelDescriptor: conflict (submodelId=%q): %v", componentName, submodelDescriptor.Id, err)
+					return common.NewErrorResponse(
+						err, http.StatusConflict, componentName, "InsertSubmodelDescriptor", "Conflict",
+					), nil
+				case common.IsErrDenied(err):
+					log.Printf("[ERROR] [%s] Error in InsertSubmodelDescriptor: denied (submodelId=%q): %v", componentName, submodelDescriptor.Id, err)
+					return common.NewErrorResponse(
+						err, http.StatusForbidden, componentName, "InsertSubmodelDescriptor", "Denied",
+					), nil
+				default:
+					log.Printf("[ERROR] [%s] Error in InsertSubmodelDescriptor: internal (submodelId=%q): %v", componentName, submodelDescriptor.Id, err)
+					return common.NewErrorResponse(
+						err, http.StatusInternalServerError, componentName, "InsertSubmodelDescriptor", "Unhandled",
+					), err
+				}
 			}
+			j, toJsonErr := result.ToJsonable()
+			if toJsonErr != nil {
+				log.Printf("[ERROR] [%s] Error in PutSubmodelDescriptorById: ToJsonable failed (submodelId=%q): %v", componentName, result.Id, toJsonErr)
+				return common.NewErrorResponse(
+					toJsonErr, http.StatusInternalServerError, componentName, "PutSubmodelDescriptorById", "Unhandled-ToJsonable",
+				), toJsonErr
+			}
+			return model.Response(http.StatusCreated, j), nil
 		}
-		j, toJsonErr := result.ToJsonable()
-		if toJsonErr != nil {
-			log.Printf("[ERROR] [%s] Error in PutSubmodelDescriptorById: ToJsonable failed (submodelId=%q): %v", componentName, result.Id, toJsonErr)
-			return common.NewErrorResponse(
-				toJsonErr, http.StatusInternalServerError, componentName, "PutSubmodelDescriptorById", "Unhandled-ToJsonable",
-			), toJsonErr
-		}
-		return model.Response(http.StatusCreated, j), nil
 	}
 
 	_, err = s.smRegistryBackend.ReplaceSubmodelDescriptor(ctx, submodelDescriptor)
