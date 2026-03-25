@@ -74,21 +74,21 @@ func NewRegistryOfInfrastructuresAPIAPIService(registryOfInfrastructuresBackend 
 }
 
 // GetAllInfrastructureDescriptors - Returns all Infrastructure Descriptors
-func (s *RegistryOfInfrastructuresAPIAPIService) GetAllInfrastructureDescriptors(ctx context.Context, limit int32, cursor string, company string, endpointInterface string) (model.ImplResponse, error) {
+func (s *RegistryOfInfrastructuresAPIAPIService) GetAllInfrastructureDescriptors(ctx context.Context, limit int32, cursor string, name string, domain string, endpointInterface string) (model.ImplResponse, error) {
 	var internalCursor string
 	if strings.TrimSpace(cursor) != "" {
 		dec, decErr := common.DecodeString(cursor)
 		if decErr != nil {
-			log.Printf("📍 [%s] Error in GetAllInfrastructureDescriptors: decode cursor=%q limit=%d company=%q endpointInterface=%q: %v", componentName, cursor, limit, company, endpointInterface, decErr)
+			log.Printf("📍 [%s] Error in GetAllInfrastructureDescriptors: decode cursor=%q limit=%d name=%q domain=%q endpointInterface=%q: %v", componentName, cursor, limit, name, domain, endpointInterface, decErr)
 			return common.NewErrorResponse(
 				decErr, http.StatusBadRequest, componentName, "GetAllInfrastructureDescriptors", "BadCursor",
 			), nil
 		}
 		internalCursor = dec
 	}
-	infrastructureDescriptors, nextCursor, err := s.registryOfInfrastructuresBackend.ListInfrastructureDescriptors(ctx, limit, internalCursor, company, endpointInterface)
+	infrastructureDescriptors, nextCursor, err := s.registryOfInfrastructuresBackend.ListInfrastructureDescriptors(ctx, limit, internalCursor, name, domain, endpointInterface)
 	if err != nil {
-		log.Printf("📍 [%s] Error in GetAllInfrastructureDescriptors: list failed (limit=%d cursor=%q company=%q endpointInterface=%q): %v", componentName, limit, internalCursor, company, endpointInterface, err)
+		log.Printf("📍 [%s] Error in GetAllInfrastructureDescriptors: list failed (limit=%d cursor=%q name=%q domain=%q endpointInterface=%q): %v", componentName, limit, internalCursor, name, domain, endpointInterface, err)
 		switch {
 		case common.IsErrBadRequest(err):
 			return common.NewErrorResponse(

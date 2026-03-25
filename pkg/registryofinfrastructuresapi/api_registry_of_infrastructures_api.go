@@ -14,7 +14,7 @@ import (
 )
 
 const (
-	componentName = "AASROR_VAL"
+	componentName = "ROI"
 )
 
 // RegistryOfInfrastructuresAPIAPIController binds http requests to an api service and writes the service results to the http response
@@ -118,18 +118,22 @@ func (c *RegistryOfInfrastructuresAPIAPIController) GetAllInfrastructureDescript
 	if query.Has("cursor") {
 		cursorParam = query.Get("cursor")
 	}
-	var companyParam string
-	if query.Has("company") {
-		companyParam = query.Get("company")
+	var nameParam string
+	if query.Has("name") {
+		nameParam = query.Get("name")
+	}
+	var domainParam string
+	if query.Has("domain") {
+		domainParam = query.Get("domain")
 	}
 	var endpointInterfaceParam string
 	if query.Has("endpointInterface") {
 		endpointInterfaceParam = query.Get("endpointInterface")
 	}
 
-	result, err := c.service.GetAllInfrastructureDescriptors(r.Context(), limitParam, cursorParam, companyParam, endpointInterfaceParam)
+	result, err := c.service.GetAllInfrastructureDescriptors(r.Context(), limitParam, cursorParam, nameParam, domainParam, endpointInterfaceParam)
 	if err != nil {
-		log.Printf("📍 [%s] Error in GetAllInfrastructureDescriptors: service failure (limit=%d cursor=%q company=%q endpointInterface=%q): %v", componentName, limitParam, cursorParam, companyParam, endpointInterfaceParam, err)
+		log.Printf("📍 [%s] Error in GetAllInfrastructureDescriptors: service failure (limit=%d cursor=%q name=%q domain=%q endpointInterface=%q): %v", componentName, limitParam, cursorParam, nameParam, domainParam, endpointInterfaceParam, err)
 		c.errorHandler(w, r, err, &result)
 		return
 	}

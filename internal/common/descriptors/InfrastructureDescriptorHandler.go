@@ -29,6 +29,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"strings"
 
 	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
@@ -79,6 +80,10 @@ func InsertInfrastructureDescriptor(ctx context.Context, db *sql.DB, infrastruct
 // entities (display name/description/admin info/endpoints). If any step fails,
 // the error is returned and the caller is responsible for rolling back the transaction.
 func InsertInfrastructureDescriptorTx(_ context.Context, tx *sql.Tx, infdesc model.InfrastructureDescriptor) error {
+	if err := model.AssertInfrastructureDescriptorConstraints(infdesc); err != nil {
+		return common.NewErrBadRequest(err.Error())
+	}
+
 	d := goqu.Dialect(common.Dialect)
 
 	descTbl := goqu.T(common.TblDescriptor)
@@ -131,7 +136,8 @@ func InsertInfrastructureDescriptorTx(_ context.Context, tx *sql.Tx, infdesc mod
 			common.ColGlobalAssetID: infdesc.GlobalAssetId,
 			common.ColIDShort:       infdesc.IdShort,
 			common.ColInfDescID:     infdesc.Id,
-			common.ColCompany:       infdesc.Company,
+			common.ColCompanyName:   infdesc.Name,
+			common.ColCompanyDomain: infdesc.Domain,
 		}).
 		ToSQL()
 	if buildErr != nil {
@@ -143,6 +149,10 @@ func InsertInfrastructureDescriptorTx(_ context.Context, tx *sql.Tx, infdesc mod
 
 	if err = CreateEndpoints(tx, descriptorID, infdesc.Endpoints); err != nil {
 		return common.NewInternalServerError("Failed to create Endpoints - no changes applied - see console for details")
+	}
+
+	if err = CreateInfrastructureNameOptions(tx, descriptorID, infdesc.NameOptions); err != nil {
+		return err
 	}
 
 	return nil
@@ -169,7 +179,8 @@ func GetInfrastructureDescriptorByID(ctx context.Context, db *sql.DB, infrastruc
 			inf.Col(common.ColDescriptorID),
 			inf.Col(common.ColGlobalAssetID),
 			inf.Col(common.ColIDShort),
-			inf.Col(common.ColCompany),
+			inf.Col(common.ColCompanyName),
+			inf.Col(common.ColCompanyDomain),
 			inf.Col(common.ColInfDescID),
 			payload.Col(common.ColAdministrativeInfoPayload),
 			payload.Col(common.ColDisplayNamePayload),
@@ -183,19 +194,21 @@ func GetInfrastructureDescriptorByID(ctx context.Context, db *sql.DB, infrastruc
 	}
 
 	var (
-		descID                          int64
-		globalAssetID, idShort, company sql.NullString
-		idStr                           string
-		administrativeInfoPayload       []byte
-		displayNamePayload              []byte
-		descriptionPayload              []byte
+		descID                    int64
+		globalAssetID, idShort    sql.NullString
+		name, domain              sql.NullString
+		idStr                     string
+		administrativeInfoPayload []byte
+		displayNamePayload        []byte
+		descriptionPayload        []byte
 	)
 
 	if err := db.QueryRowContext(ctx, sqlStr, args...).Scan(
 		&descID,
 		&globalAssetID,
 		&idShort,
-		&company,
+		&name,
+		&domain,
 		&idStr,
 		&administrativeInfoPayload,
 		&displayNamePayload,
@@ -223,11 +236,17 @@ func GetInfrastructureDescriptorByID(ctx context.Context, db *sql.DB, infrastruc
 	if err != nil {
 		return model.InfrastructureDescriptor{}, err
 	}
+	nameOptions, err := ReadInfrastructureNameOptionsByDescriptorID(ctx, db, descID)
+	if err != nil {
+		return model.InfrastructureDescriptor{}, err
+	}
 
 	return model.InfrastructureDescriptor{
 		GlobalAssetId:  globalAssetID.String,
 		IdShort:        idShort.String,
-		Company:        company.String,
+		Name:           name.String,
+		Domain:         domain.String,
+		NameOptions:    nameOptions,
 		Id:             idStr,
 		Administration: adminInfo,
 		DisplayName:    displayName,
@@ -255,7 +274,8 @@ func GetInfrastructureDescriptorByIDTx(ctx context.Context, tx *sql.Tx, infrastr
 			inf.Col(common.ColDescriptorID),
 			inf.Col(common.ColGlobalAssetID),
 			inf.Col(common.ColIDShort),
-			inf.Col(common.ColCompany),
+			inf.Col(common.ColCompanyName),
+			inf.Col(common.ColCompanyDomain),
 			inf.Col(common.ColInfDescID),
 			payload.Col(common.ColAdministrativeInfoPayload),
 			payload.Col(common.ColDisplayNamePayload),
@@ -268,19 +288,21 @@ func GetInfrastructureDescriptorByIDTx(ctx context.Context, tx *sql.Tx, infrastr
 		return model.InfrastructureDescriptor{}, buildErr
 	}
 	var (
-		descID                          int64
-		globalAssetID, idShort, company sql.NullString
-		idStr                           string
-		administrativeInfoPayload       []byte
-		displayNamePayload              []byte
-		descriptionPayload              []byte
+		descID                    int64
+		globalAssetID, idShort    sql.NullString
+		name, domain              sql.NullString
+		idStr                     string
+		administrativeInfoPayload []byte
+		displayNamePayload        []byte
+		descriptionPayload        []byte
 	)
 
 	if err := tx.QueryRowContext(ctx, sqlStr, args...).Scan(
 		&descID,
 		&globalAssetID,
 		&idShort,
-		&company,
+		&name,
+		&domain,
 		&idStr,
 		&administrativeInfoPayload,
 		&displayNamePayload,
@@ -307,11 +329,17 @@ func GetInfrastructureDescriptorByIDTx(ctx context.Context, tx *sql.Tx, infrastr
 	if err != nil {
 		return model.InfrastructureDescriptor{}, err
 	}
+	nameOptions, err := ReadInfrastructureNameOptionsByDescriptorID(ctx, tx, descID)
+	if err != nil {
+		return model.InfrastructureDescriptor{}, err
+	}
 
 	return model.InfrastructureDescriptor{
 		GlobalAssetId:  globalAssetID.String,
 		IdShort:        idShort.String,
-		Company:        company.String,
+		Name:           name.String,
+		Domain:         domain.String,
+		NameOptions:    nameOptions,
 		Id:             idStr,
 		Administration: adminInfo,
 		DisplayName:    displayName,
@@ -403,7 +431,7 @@ func ReplaceInfrastructureDescriptor(ctx context.Context, db *sql.DB, infrastruc
 }
 
 // ListInfrastructureDescriptors lists Infrastructure Descriptors with optional
-// filtering by company and endpoint interface. Results are ordered by Infrastructure Id
+// filtering by name/domain and endpoint interface. Results are ordered by Infrastructure Id
 // ascending and support cursor‑based pagination where the cursor is the Infrastructure Id
 // of the first element to include (i.e. Id >= cursor).
 //
@@ -417,7 +445,8 @@ func ListInfrastructureDescriptors(
 	db *sql.DB,
 	limit int32,
 	cursor string,
-	company string,
+	name string,
+	domain string,
 	endpointInterface string,
 ) ([]model.InfrastructureDescriptor, string, error) {
 	if limit <= 0 {
@@ -429,6 +458,7 @@ func ListInfrastructureDescriptors(
 	inf := goqu.T(common.TblInfrastructureDescriptor).As("inf")
 	payload := common.TDescriptorPayload.As("inf_payload")
 	aasdescendp := goqu.T(common.TblAASDescriptorEndpoint).As("aasdescendp")
+	infNameOpt := goqu.T(common.TblInfrastructureDescriptorNameOption).As("inf_name_opt")
 
 	ds := d.
 		From(inf).
@@ -440,7 +470,8 @@ func ListInfrastructureDescriptors(
 			inf.Col(common.ColDescriptorID),
 			inf.Col(common.ColGlobalAssetID),
 			inf.Col(common.ColIDShort),
-			inf.Col(common.ColCompany),
+			inf.Col(common.ColCompanyName),
+			inf.Col(common.ColCompanyDomain),
 			inf.Col(common.ColInfDescID),
 			payload.Col(common.ColAdministrativeInfoPayload),
 			payload.Col(common.ColDisplayNamePayload),
@@ -451,8 +482,26 @@ func ListInfrastructureDescriptors(
 		ds = ds.Where(inf.Col(common.ColInfDescID).Gte(cursor))
 	}
 
-	if company != "" {
-		ds = ds.Where(inf.Col(common.ColCompany).Eq(company))
+	if strings.TrimSpace(name) != "" {
+		nameLower := strings.ToLower(name)
+		ds = ds.
+			LeftJoin(
+				infNameOpt,
+				goqu.On(
+					inf.Col(common.ColDescriptorID).Eq(infNameOpt.Col(common.ColDescriptorID)),
+					goqu.Func("LOWER", infNameOpt.Col(common.ColNameOption)).Eq(nameLower),
+				),
+			).
+			Where(
+				goqu.Or(
+					goqu.Func("LOWER", inf.Col(common.ColCompanyName)).Eq(nameLower),
+					infNameOpt.Col(common.ColDescriptorID).IsNotNull(),
+				),
+			)
+	}
+
+	if strings.TrimSpace(domain) != "" {
+		ds = ds.Where(goqu.Func("LOWER", inf.Col(common.ColCompanyDomain)).Eq(strings.ToLower(domain)))
 	}
 
 	if endpointInterface != "" {
@@ -494,7 +543,8 @@ func ListInfrastructureDescriptors(
 			&r.DescID,
 			&r.GlobalAssetID,
 			&r.IDShort,
-			&r.Company,
+			&r.Name,
+			&r.Domain,
 			&r.IDStr,
 			&r.AdministrativeInfoPayload,
 			&r.DisplayNamePayload,
@@ -536,6 +586,14 @@ func ListInfrastructureDescriptors(
 		}
 	}
 
+	nameOptionsByDesc := map[int64][]string{}
+	if len(descIDs) > 0 {
+		nameOptionsByDesc, err = ReadInfrastructureNameOptionsByDescriptorIDs(ctx, db, descIDs)
+		if err != nil {
+			return nil, "", err
+		}
+	}
+
 	out := make([]model.InfrastructureDescriptor, 0, len(descRows))
 	for _, r := range descRows {
 		adminInfo, err := parseAdministrativeInfoPayload(r.AdministrativeInfoPayload)
@@ -554,7 +612,9 @@ func ListInfrastructureDescriptors(
 		out = append(out, model.InfrastructureDescriptor{
 			GlobalAssetId:  r.GlobalAssetID.String,
 			IdShort:        r.IDShort.String,
-			Company:        r.Company.String,
+			Name:           r.Name.String,
+			Domain:         r.Domain.String,
+			NameOptions:    nameOptionsByDesc[r.DescID],
 			Id:             r.IDStr,
 			Administration: adminInfo,
 			DisplayName:    displayName,

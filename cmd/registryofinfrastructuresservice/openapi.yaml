@@ -20,7 +20,8 @@ paths:
       parameters:
         - $ref: '#/components/parameters/Limit'
         - $ref: '#/components/parameters/Cursor'
-        - $ref: '#/components/parameters/Company'
+        - $ref: '#/components/parameters/Name'
+        - $ref: '#/components/parameters/Domain'
         - $ref: '#/components/parameters/EndpointInterface'
       responses:
         '200':
@@ -188,11 +189,19 @@ components:
       schema:
         type: string
 
-    Company:
-      name: company
+    Name:
+      name: name
       in: query
       required: false
-      description: Filter by company
+      description: Filter by name (matches InfrastructureDescriptor.name or one of InfrastructureDescriptor.nameOptions)
+      schema:
+        type: string
+
+    Domain:
+      name: domain
+      in: query
+      required: false
+      description: Filter by domain
       schema:
         type: string
 
@@ -299,8 +308,14 @@ components:
           type: string
         id:
           type: string
-        company:
+        name:
           type: string
+        domain:
+          type: string
+        nameOptions:
+          type: array
+          items:
+            type: string
         description:
           type: array
           items:
@@ -428,7 +443,11 @@ components:
                 type: "ExternalReference"
               revision: "0"
               version: "1"
-            company: "ExampleCompany"
+            name: "ExampleCompany"
+            domain: "example.com"
+            nameOptions:
+              - "Example Company Inc"
+              - "ExampleCo"
             description:
               - language: "en"
                 text: "Example AAS Registry"
@@ -453,7 +472,11 @@ components:
             type: "ExternalReference"
           revision: "0"
           version: "1"
-        company: "ExampleCompany"
+        name: "ExampleCompany"
+        domain: "example.com"
+        nameOptions:
+          - "Example Company Inc"
+          - "ExampleCo"
         description:
           - language: "en"
             text: "Example AAS Registry"

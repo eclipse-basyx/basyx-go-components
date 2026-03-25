@@ -35,5 +35,12 @@
     ],
     "idShort": "ExampleAASDiscovery",
     "id": "https://example.com/roi/example-aas-discovery",
-    "company": "ExampleCompany"
+    "name": "ExampleCompany",
+    "domain": "example.com",
+    "nameOptions": [
+        "Example Company",
+        "ExCom",
+        "Ex Company",
+        "Company Ex"
+    ]
 }

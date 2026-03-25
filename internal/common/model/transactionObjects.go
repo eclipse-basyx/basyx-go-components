@@ -582,7 +582,8 @@ type InfrastructureDescriptorRow struct {
 	DescID                    int64
 	GlobalAssetID             sql.NullString
 	IDShort                   sql.NullString
-	Company                   sql.NullString
+	Name                      sql.NullString
+	Domain                    sql.NullString
 	IDStr                     string
 	AdministrativeInfoPayload json.RawMessage
 	DisplayNamePayload        json.RawMessage

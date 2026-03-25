@@ -29,5 +29,11 @@
     ],
     "idShort": "D4ETenant0SubmodelRegistry",
     "id": "https://iese.fraunhofer.de/roi/d4e-tenant-0-submodel-registry",
-    "company": "Fraunhofer IESE"
+    "name": "Fraunhofer IESE",
+    "domain": "iese.fraunhofer.de",
+    "nameOptions": [
+        "Fraunhofer-Institut für Experimentelles Software-Engineering",
+        "IESE",
+        "IESE Fraunhofer"
+    ]
 }

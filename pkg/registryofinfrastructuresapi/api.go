@@ -32,7 +32,7 @@ type DescriptionAPIAPIRouter interface {
 // while the service implementation can be ignored with the .openapi-generator-ignore file
 // and updated with the logic required for the API.
 type RegistryOfInfrastructuresAPIAPIServicer interface {
-	GetAllInfrastructureDescriptors(context.Context, int32, string, string, string) (model.ImplResponse, error)
+	GetAllInfrastructureDescriptors(context.Context, int32, string, string, string, string) (model.ImplResponse, error)
 	PostInfrastructureDescriptor(context.Context, model.InfrastructureDescriptor) (model.ImplResponse, error)
 	GetInfrastructureDescriptorById(context.Context, string) (model.ImplResponse, error)
 	PutInfrastructureDescriptorById(context.Context, string, model.InfrastructureDescriptor) (model.ImplResponse, error)

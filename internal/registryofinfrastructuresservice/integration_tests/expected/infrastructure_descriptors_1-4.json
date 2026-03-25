@@ -38,7 +38,14 @@
             ],
             "idShort": "ExampleAASDiscovery",
             "id": "https://example.com/roi/example-aas-discovery",
-            "company": "ExampleCompany"
+            "name": "ExampleCompany",
+            "domain": "example.com",
+            "nameOptions": [
+                "Example Company",
+                "ExCom",
+                "Ex Company",
+                "Company Ex"
+            ]
         },
         {
             "description": [
@@ -77,7 +84,13 @@
             ],
             "idShort": "ExampleAASRegistry",
             "id": "https://example.com/roi/example-aas-registry",
-            "company": "ExampleCompany"
+            "name": "ExampleCompany",
+            "domain": "example.com",
+            "nameOptions": [
+                "Example Company",
+                "ExCom",
+                "Ex Company"
+            ]
         },
         {
             "description": [
@@ -116,7 +129,13 @@
             ],
             "idShort": "D4ETenant0AASDiscovery",
             "id": "https://iese.fraunhofer.de/roi/d4e-tenant-0-aas-discovery",
-            "company": "Fraunhofer IESE"
+            "name": "Fraunhofer IESE",
+            "domain": "iese.fraunhofer.de",
+            "nameOptions": [
+                "Fraunhofer-Institut für Experimentelles Software-Engineering",
+                "IESE",
+                "IESE Fraunhofer"
+            ]
         },
         {
             "description": [
@@ -155,7 +174,13 @@
             ],
             "idShort": "D4ETenant0AASRegistry",
             "id": "https://iese.fraunhofer.de/roi/d4e-tenant-0-aas-registry",
-            "company": "Fraunhofer IESE"
+            "name": "Fraunhofer IESE",
+            "domain": "iese.fraunhofer.de",
+            "nameOptions": [
+                "Fraunhofer-Institut für Experimentelles Software-Engineering",
+                "IESE",
+                "IESE Fraunhofer"
+            ]
         }
     ]
 }

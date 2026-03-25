@@ -4,6 +4,7 @@ package model
 
 import (
 	"errors"
+	"fmt"
 
 	"github.com/FriedJannik/aas-go-sdk/jsonization"
 	"github.com/FriedJannik/aas-go-sdk/types"
@@ -26,7 +27,11 @@ type InfrastructureDescriptor struct {
 
 	Id string `json:"id" validate:"regexp=^([\\\\x09\\\\x0a\\\\x0d\\\\x20-\\\\ud7ff\\\\ue000-\\\\ufffd]|\\\\ud800[\\\\udc00-\\\\udfff]|[\\\\ud801-\\\\udbfe][\\\\udc00-\\\\udfff]|\\\\udbff[\\\\udc00-\\\\udfff])*$"`
 
-	Company string `json:"company,omitempty" validate:"regexp=^[A-Za-z0-9]*$"`
+	Name string `json:"name,omitempty" validate:"regexp=^[A-Za-z0-9 ._-]*$"`
+
+	Domain string `json:"domain,omitempty" validate:"regexp=^[A-Za-z0-9.-]*$"`
+
+	NameOptions []string `json:"nameOptions,omitempty"`
 }
 
 // AssertInfrastructureDescriptorRequired checks if the required fields are not zero-ed
@@ -53,6 +58,17 @@ func AssertInfrastructureDescriptorConstraints(obj InfrastructureDescriptor) err
 		if err := AssertEndpointConstraints(el); err != nil {
 			return err
 		}
+	}
+
+	seen := make(map[string]struct{}, len(obj.NameOptions))
+	for i, option := range obj.NameOptions {
+		if option == "" {
+			return fmt.Errorf("nameOptions[%d] must not be empty", i)
+		}
+		if _, ok := seen[option]; ok {
+			return fmt.Errorf("nameOptions contains duplicate value %q", option)
+		}
+		seen[option] = struct{}{}
 	}
 	return nil
 }
@@ -108,8 +124,14 @@ func (obj InfrastructureDescriptor) ToJsonable() (map[string]any, error) {
 	if obj.Id != "" {
 		ret["id"] = obj.Id
 	}
-	if obj.Company != "" {
-		ret["company"] = obj.Company
+	if obj.Name != "" {
+		ret["name"] = obj.Name
+	}
+	if obj.Domain != "" {
+		ret["domain"] = obj.Domain
+	}
+	if len(obj.NameOptions) > 0 {
+		ret["nameOptions"] = obj.NameOptions
 	}
 	return ret, nil
 }
@@ -129,7 +151,9 @@ func (obj *InfrastructureDescriptor) UnmarshalJSON(data []byte) error {
 		"endpoints":      true,
 		"idShort":        true,
 		"id":             true,
-		"company":        true,
+		"name":           true,
+		"domain":         true,
+		"nameOptions":    true,
 		"description":    true,
 		"displayName":    true,
 		"extensions":     true,
@@ -208,8 +232,20 @@ func (obj *InfrastructureDescriptor) UnmarshalJSON(data []byte) error {
 	if id, ok := jsonable["id"].(string); ok {
 		obj.Id = id
 	}
-	if company, ok := jsonable["company"].(string); ok {
-		obj.Company = company
+	if name, ok := jsonable["name"].(string); ok {
+		obj.Name = name
+	}
+	if domain, ok := jsonable["domain"].(string); ok {
+		obj.Domain = domain
+	}
+	if options, ok := jsonable["nameOptions"].([]any); ok {
+		for i, rawOption := range options {
+			option, ok := rawOption.(string)
+			if !ok {
+				return fmt.Errorf("InfrastructureDescriptor: nameOptions[%d] is not a string", i)
+			}
+			obj.NameOptions = append(obj.NameOptions, option)
+		}
 	}
 
 	// Verify Description
