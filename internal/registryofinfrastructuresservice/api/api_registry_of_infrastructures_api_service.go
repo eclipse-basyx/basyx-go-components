@@ -133,10 +133,10 @@ func (s *RegistryOfInfrastructuresAPIAPIService) GetAllInfrastructureDescriptors
 
 	res := struct {
 		PagingMetadata model.PagedResultPagingMetadata `json:"pagingMetadata"`
-		Result         []map[string]any                `json:"result"`
+		Data           []map[string]any                `json:"data"`
 	}{
 		PagingMetadata: pm,
-		Result:         jsonable,
+		Data:           jsonable,
 	}
 
 	return model.Response(http.StatusOK, res), nil

@@ -295,11 +295,11 @@ components:
       properties:
         pagingMetadata:
           $ref: "#/components/schemas/PagingMetadata"
-        result:
+        data:
           type: array
           items:
             $ref: "#/components/schemas/InfrastructureDescriptor"
-      required: [pagingMetadata, result]
+      required: [pagingMetadata, data]
 
     PagingMetadata:
       type: object
@@ -451,7 +451,7 @@ components:
       value:
         pagingMetadata:
           cursor: "aHR0cHM6Ly9leGFtcGxlLmNvbS9yb2kvZXhhbXBsZS1hYXMtZGlzY292ZXJ5"
-        result:
+        data:
           - administration:
               creator:
                 keys:
