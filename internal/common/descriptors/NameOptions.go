@@ -34,7 +34,7 @@ import (
 	"github.com/lib/pq"
 )
 
-func CreateInfrastructureNameOptions(tx *sql.Tx, descriptorID int64, nameOptions []string) error {
+func createInfrastructureNameOptions(tx *sql.Tx, descriptorID int64, nameOptions []string) error {
 	if len(nameOptions) == 0 {
 		return nil
 	}
@@ -60,15 +60,15 @@ func CreateInfrastructureNameOptions(tx *sql.Tx, descriptorID int64, nameOptions
 	return nil
 }
 
-func ReadInfrastructureNameOptionsByDescriptorID(ctx context.Context, db DBQueryer, descriptorID int64) ([]string, error) {
-	byDescriptor, err := ReadInfrastructureNameOptionsByDescriptorIDs(ctx, db, []int64{descriptorID})
+func readInfrastructureNameOptionsByDescriptorID(ctx context.Context, db DBQueryer, descriptorID int64) ([]string, error) {
+	byDescriptor, err := readInfrastructureNameOptionsByDescriptorIDs(ctx, db, []int64{descriptorID})
 	if err != nil {
 		return nil, err
 	}
 	return byDescriptor[descriptorID], nil
 }
 
-func ReadInfrastructureNameOptionsByDescriptorIDs(ctx context.Context, db DBQueryer, descriptorIDs []int64) (map[int64][]string, error) {
+func readInfrastructureNameOptionsByDescriptorIDs(ctx context.Context, db DBQueryer, descriptorIDs []int64) (map[int64][]string, error) {
 	result := make(map[int64][]string, len(descriptorIDs))
 	if len(descriptorIDs) == 0 {
 		return result, nil

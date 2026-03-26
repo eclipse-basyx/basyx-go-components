@@ -151,15 +151,15 @@ func InsertInfrastructureDescriptorTx(_ context.Context, tx *sql.Tx, infdesc mod
 		return common.NewInternalServerError("Failed to create Endpoints - no changes applied - see console for details")
 	}
 
-	if err = CreateInfrastructureNameOptions(tx, descriptorID, infdesc.NameOptions); err != nil {
+	if err = createInfrastructureNameOptions(tx, descriptorID, infdesc.NameOptions); err != nil {
 		return common.NewInternalServerError("Failed to create Infrastructure Name Options - no changes applied - see console for details")
 	}
 
-	if err = CreateInfrastructureAssetIDRegexPatterns(tx, descriptorID, infdesc.AssetIdRegexPatterns); err != nil {
+	if err = createInfrastructureAssetIDRegexPatterns(tx, descriptorID, infdesc.AssetIdRegexPatterns); err != nil {
 		return common.NewInternalServerError("Failed to create Infrastructure AssetID Regex Patterns - no changes applied - see console for details")
 	}
 
-	if err = CreateInfrastructureIDLinkRegexPatterns(tx, descriptorID, infdesc.IdLinkRegexPatterns); err != nil {
+	if err = createInfrastructureIDLinkRegexPatterns(tx, descriptorID, infdesc.IdLinkRegexPatterns); err != nil {
 		return common.NewInternalServerError("Failed to create Infrastructure IDLink Regex Patterns - no changes applied - see console for details")
 	}
 
@@ -244,15 +244,15 @@ func GetInfrastructureDescriptorByID(ctx context.Context, db *sql.DB, infrastruc
 	if err != nil {
 		return model.InfrastructureDescriptor{}, err
 	}
-	nameOptions, err := ReadInfrastructureNameOptionsByDescriptorID(ctx, db, descID)
+	nameOptions, err := readInfrastructureNameOptionsByDescriptorID(ctx, db, descID)
 	if err != nil {
 		return model.InfrastructureDescriptor{}, err
 	}
-	assetIDRegexPatterns, err := ReadInfrastructureAssetIDRegexPatternsByDescriptorID(ctx, db, descID)
+	assetIDRegexPatterns, err := readInfrastructureAssetIDRegexPatternsByDescriptorID(ctx, db, descID)
 	if err != nil {
 		return model.InfrastructureDescriptor{}, err
 	}
-	idLinkRegexPatterns, err := ReadInfrastructureIDLinkRegexPatternsByDescriptorID(ctx, db, descID)
+	idLinkRegexPatterns, err := readInfrastructureIDLinkRegexPatternsByDescriptorID(ctx, db, descID)
 	if err != nil {
 		return model.InfrastructureDescriptor{}, err
 	}
@@ -347,15 +347,15 @@ func GetInfrastructureDescriptorByIDTx(ctx context.Context, tx *sql.Tx, infrastr
 	if err != nil {
 		return model.InfrastructureDescriptor{}, err
 	}
-	nameOptions, err := ReadInfrastructureNameOptionsByDescriptorID(ctx, tx, descID)
+	nameOptions, err := readInfrastructureNameOptionsByDescriptorID(ctx, tx, descID)
 	if err != nil {
 		return model.InfrastructureDescriptor{}, err
 	}
-	assetIDRegexPatterns, err := ReadInfrastructureAssetIDRegexPatternsByDescriptorID(ctx, tx, descID)
+	assetIDRegexPatterns, err := readInfrastructureAssetIDRegexPatternsByDescriptorID(ctx, tx, descID)
 	if err != nil {
 		return model.InfrastructureDescriptor{}, err
 	}
-	idLinkRegexPatterns, err := ReadInfrastructureIDLinkRegexPatternsByDescriptorID(ctx, tx, descID)
+	idLinkRegexPatterns, err := readInfrastructureIDLinkRegexPatternsByDescriptorID(ctx, tx, descID)
 	if err != nil {
 		return model.InfrastructureDescriptor{}, err
 	}
@@ -644,7 +644,7 @@ func ListInfrastructureDescriptors(
 
 	nameOptionsByDesc := map[int64][]string{}
 	if len(descIDs) > 0 {
-		nameOptionsByDesc, err = ReadInfrastructureNameOptionsByDescriptorIDs(ctx, db, descIDs)
+		nameOptionsByDesc, err = readInfrastructureNameOptionsByDescriptorIDs(ctx, db, descIDs)
 		if err != nil {
 			return nil, "", err
 		}
@@ -652,7 +652,7 @@ func ListInfrastructureDescriptors(
 
 	assetIDRegexByDesc := map[int64][]string{}
 	if len(descIDs) > 0 {
-		assetIDRegexByDesc, err = ReadInfrastructureAssetIDRegexPatternsByDescriptorIDs(ctx, db, descIDs)
+		assetIDRegexByDesc, err = readInfrastructureAssetIDRegexPatternsByDescriptorIDs(ctx, db, descIDs)
 		if err != nil {
 			return nil, "", err
 		}
@@ -660,7 +660,7 @@ func ListInfrastructureDescriptors(
 
 	idLinkRegexByDesc := map[int64][]string{}
 	if len(descIDs) > 0 {
-		idLinkRegexByDesc, err = ReadInfrastructureIDLinkRegexPatternsByDescriptorIDs(ctx, db, descIDs)
+		idLinkRegexByDesc, err = readInfrastructureIDLinkRegexPatternsByDescriptorIDs(ctx, db, descIDs)
 		if err != nil {
 			return nil, "", err
 		}

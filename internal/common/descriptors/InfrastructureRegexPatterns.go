@@ -34,11 +34,11 @@ import (
 	"github.com/lib/pq"
 )
 
-func CreateInfrastructureAssetIDRegexPatterns(tx *sql.Tx, descriptorID int64, patterns []string) error {
+func createInfrastructureAssetIDRegexPatterns(tx *sql.Tx, descriptorID int64, patterns []string) error {
 	return createInfrastructureRegexPatterns(tx, common.TblInfrastructureDescriptorAssetIDRegex, descriptorID, patterns)
 }
 
-func CreateInfrastructureIDLinkRegexPatterns(tx *sql.Tx, descriptorID int64, patterns []string) error {
+func createInfrastructureIDLinkRegexPatterns(tx *sql.Tx, descriptorID int64, patterns []string) error {
 	return createInfrastructureRegexPatterns(tx, common.TblInfrastructureDescriptorIDLinkRegex, descriptorID, patterns)
 }
 
@@ -68,27 +68,27 @@ func createInfrastructureRegexPatterns(tx *sql.Tx, tableName string, descriptorI
 	return nil
 }
 
-func ReadInfrastructureAssetIDRegexPatternsByDescriptorID(ctx context.Context, db DBQueryer, descriptorID int64) ([]string, error) {
-	byDescriptor, err := ReadInfrastructureAssetIDRegexPatternsByDescriptorIDs(ctx, db, []int64{descriptorID})
+func readInfrastructureAssetIDRegexPatternsByDescriptorID(ctx context.Context, db DBQueryer, descriptorID int64) ([]string, error) {
+	byDescriptor, err := readInfrastructureAssetIDRegexPatternsByDescriptorIDs(ctx, db, []int64{descriptorID})
 	if err != nil {
 		return nil, err
 	}
 	return byDescriptor[descriptorID], nil
 }
 
-func ReadInfrastructureAssetIDRegexPatternsByDescriptorIDs(ctx context.Context, db DBQueryer, descriptorIDs []int64) (map[int64][]string, error) {
+func readInfrastructureAssetIDRegexPatternsByDescriptorIDs(ctx context.Context, db DBQueryer, descriptorIDs []int64) (map[int64][]string, error) {
 	return readInfrastructureRegexPatternsByDescriptorIDs(ctx, db, common.TblInfrastructureDescriptorAssetIDRegex, descriptorIDs)
 }
 
-func ReadInfrastructureIDLinkRegexPatternsByDescriptorID(ctx context.Context, db DBQueryer, descriptorID int64) ([]string, error) {
-	byDescriptor, err := ReadInfrastructureIDLinkRegexPatternsByDescriptorIDs(ctx, db, []int64{descriptorID})
+func readInfrastructureIDLinkRegexPatternsByDescriptorID(ctx context.Context, db DBQueryer, descriptorID int64) ([]string, error) {
+	byDescriptor, err := readInfrastructureIDLinkRegexPatternsByDescriptorIDs(ctx, db, []int64{descriptorID})
 	if err != nil {
 		return nil, err
 	}
 	return byDescriptor[descriptorID], nil
 }
 
-func ReadInfrastructureIDLinkRegexPatternsByDescriptorIDs(ctx context.Context, db DBQueryer, descriptorIDs []int64) (map[int64][]string, error) {
+func readInfrastructureIDLinkRegexPatternsByDescriptorIDs(ctx context.Context, db DBQueryer, descriptorIDs []int64) (map[int64][]string, error) {
 	return readInfrastructureRegexPatternsByDescriptorIDs(ctx, db, common.TblInfrastructureDescriptorIDLinkRegex, descriptorIDs)
 }
 
