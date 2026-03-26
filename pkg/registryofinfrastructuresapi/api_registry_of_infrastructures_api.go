@@ -130,10 +130,14 @@ func (c *RegistryOfInfrastructuresAPIAPIController) GetAllInfrastructureDescript
 	if query.Has("endpointInterface") {
 		endpointInterfaceParam = query.Get("endpointInterface")
 	}
+	var assetIdParam string
+	if query.Has("assetId") {
+		assetIdParam = query.Get("assetId")
+	}
 
-	result, err := c.service.GetAllInfrastructureDescriptors(r.Context(), limitParam, cursorParam, nameParam, domainParam, endpointInterfaceParam)
+	result, err := c.service.GetAllInfrastructureDescriptors(r.Context(), limitParam, cursorParam, nameParam, domainParam, endpointInterfaceParam, assetIdParam)
 	if err != nil {
-		log.Printf("📍 [%s] Error in GetAllInfrastructureDescriptors: service failure (limit=%d cursor=%q name=%q domain=%q endpointInterface=%q): %v", componentName, limitParam, cursorParam, nameParam, domainParam, endpointInterfaceParam, err)
+		log.Printf("📍 [%s] Error in GetAllInfrastructureDescriptors: service failure (limit=%d cursor=%q name=%q domain=%q endpointInterface=%q assetId=%q): %v", componentName, limitParam, cursorParam, nameParam, domainParam, endpointInterfaceParam, assetIdParam, err)
 		c.errorHandler(w, r, err, &result)
 		return
 	}

@@ -152,7 +152,15 @@ func InsertInfrastructureDescriptorTx(_ context.Context, tx *sql.Tx, infdesc mod
 	}
 
 	if err = CreateInfrastructureNameOptions(tx, descriptorID, infdesc.NameOptions); err != nil {
-		return err
+		return common.NewInternalServerError("Failed to create Infrastructure Name Options - no changes applied - see console for details")
+	}
+
+	if err = CreateInfrastructureAssetIDRegexPatterns(tx, descriptorID, infdesc.AssetIdRegexPatterns); err != nil {
+		return common.NewInternalServerError("Failed to create Infrastructure AssetID Regex Patterns - no changes applied - see console for details")
+	}
+
+	if err = CreateInfrastructureIDLinkRegexPatterns(tx, descriptorID, infdesc.IdLinkRegexPatterns); err != nil {
+		return common.NewInternalServerError("Failed to create Infrastructure IDLink Regex Patterns - no changes applied - see console for details")
 	}
 
 	return nil
@@ -240,18 +248,28 @@ func GetInfrastructureDescriptorByID(ctx context.Context, db *sql.DB, infrastruc
 	if err != nil {
 		return model.InfrastructureDescriptor{}, err
 	}
+	assetIDRegexPatterns, err := ReadInfrastructureAssetIDRegexPatternsByDescriptorID(ctx, db, descID)
+	if err != nil {
+		return model.InfrastructureDescriptor{}, err
+	}
+	idLinkRegexPatterns, err := ReadInfrastructureIDLinkRegexPatternsByDescriptorID(ctx, db, descID)
+	if err != nil {
+		return model.InfrastructureDescriptor{}, err
+	}
 
 	return model.InfrastructureDescriptor{
-		GlobalAssetId:  globalAssetID.String,
-		IdShort:        idShort.String,
-		Name:           name.String,
-		Domain:         domain.String,
-		NameOptions:    nameOptions,
-		Id:             idStr,
-		Administration: adminInfo,
-		DisplayName:    displayName,
-		Description:    description,
-		Endpoints:      endpoints,
+		GlobalAssetId:        globalAssetID.String,
+		IdShort:              idShort.String,
+		Name:                 name.String,
+		Domain:               domain.String,
+		NameOptions:          nameOptions,
+		AssetIdRegexPatterns: assetIDRegexPatterns,
+		IdLinkRegexPatterns:  idLinkRegexPatterns,
+		Id:                   idStr,
+		Administration:       adminInfo,
+		DisplayName:          displayName,
+		Description:          description,
+		Endpoints:            endpoints,
 	}, nil
 }
 
@@ -333,18 +351,28 @@ func GetInfrastructureDescriptorByIDTx(ctx context.Context, tx *sql.Tx, infrastr
 	if err != nil {
 		return model.InfrastructureDescriptor{}, err
 	}
+	assetIDRegexPatterns, err := ReadInfrastructureAssetIDRegexPatternsByDescriptorID(ctx, tx, descID)
+	if err != nil {
+		return model.InfrastructureDescriptor{}, err
+	}
+	idLinkRegexPatterns, err := ReadInfrastructureIDLinkRegexPatternsByDescriptorID(ctx, tx, descID)
+	if err != nil {
+		return model.InfrastructureDescriptor{}, err
+	}
 
 	return model.InfrastructureDescriptor{
-		GlobalAssetId:  globalAssetID.String,
-		IdShort:        idShort.String,
-		Name:           name.String,
-		Domain:         domain.String,
-		NameOptions:    nameOptions,
-		Id:             idStr,
-		Administration: adminInfo,
-		DisplayName:    displayName,
-		Description:    description,
-		Endpoints:      endpoints,
+		GlobalAssetId:        globalAssetID.String,
+		IdShort:              idShort.String,
+		Name:                 name.String,
+		Domain:               domain.String,
+		NameOptions:          nameOptions,
+		AssetIdRegexPatterns: assetIDRegexPatterns,
+		IdLinkRegexPatterns:  idLinkRegexPatterns,
+		Id:                   idStr,
+		Administration:       adminInfo,
+		DisplayName:          displayName,
+		Description:          description,
+		Endpoints:            endpoints,
 	}, nil
 }
 
@@ -448,6 +476,7 @@ func ListInfrastructureDescriptors(
 	name string,
 	domain string,
 	endpointInterface string,
+	assetID string,
 ) ([]model.InfrastructureDescriptor, string, error) {
 	if limit <= 0 {
 		limit = 100
@@ -459,6 +488,8 @@ func ListInfrastructureDescriptors(
 	payload := common.TDescriptorPayload.As("inf_payload")
 	aasdescendp := goqu.T(common.TblAASDescriptorEndpoint).As("aasdescendp")
 	infNameOpt := goqu.T(common.TblInfrastructureDescriptorNameOption).As("inf_name_opt")
+	assetIdPattern := goqu.T(common.TblInfrastructureDescriptorAssetIDRegex).As("inf_asset_id_pattern")
+	idLinkPattern := goqu.T(common.TblInfrastructureDescriptorIDLinkRegex).As("inf_id_link_pattern")
 
 	ds := d.
 		From(inf).
@@ -513,6 +544,31 @@ func ListInfrastructureDescriptors(
 				),
 			).
 			Where(aasdescendp.Col(common.ColInterface).Eq(endpointInterface))
+	}
+
+	if strings.TrimSpace(assetID) != "" {
+		assetIdRegexExists := d.
+			From(assetIdPattern).
+			Select(goqu.V(true)).
+			Where(
+				assetIdPattern.Col(common.ColDescriptorID).Eq(inf.Col(common.ColDescriptorID)),
+				goqu.L("? ~ ?", assetID, assetIdPattern.Col(common.ColRegexPattern)),
+			)
+
+		idLinkRegexExists := d.
+			From(idLinkPattern).
+			Select(goqu.V(true)).
+			Where(
+				idLinkPattern.Col(common.ColDescriptorID).Eq(inf.Col(common.ColDescriptorID)),
+				goqu.L("? ~ ?", assetID, idLinkPattern.Col(common.ColRegexPattern)),
+			)
+
+		ds = ds.Where(
+			goqu.Or(
+				goqu.L("EXISTS ?", assetIdRegexExists),
+				goqu.L("EXISTS ?", idLinkRegexExists),
+			),
+		)
 	}
 
 	if peekLimit < 0 {
@@ -594,6 +650,22 @@ func ListInfrastructureDescriptors(
 		}
 	}
 
+	assetIDRegexByDesc := map[int64][]string{}
+	if len(descIDs) > 0 {
+		assetIDRegexByDesc, err = ReadInfrastructureAssetIDRegexPatternsByDescriptorIDs(ctx, db, descIDs)
+		if err != nil {
+			return nil, "", err
+		}
+	}
+
+	idLinkRegexByDesc := map[int64][]string{}
+	if len(descIDs) > 0 {
+		idLinkRegexByDesc, err = ReadInfrastructureIDLinkRegexPatternsByDescriptorIDs(ctx, db, descIDs)
+		if err != nil {
+			return nil, "", err
+		}
+	}
+
 	out := make([]model.InfrastructureDescriptor, 0, len(descRows))
 	for _, r := range descRows {
 		adminInfo, err := parseAdministrativeInfoPayload(r.AdministrativeInfoPayload)
@@ -610,16 +682,18 @@ func ListInfrastructureDescriptors(
 		}
 
 		out = append(out, model.InfrastructureDescriptor{
-			GlobalAssetId:  r.GlobalAssetID.String,
-			IdShort:        r.IDShort.String,
-			Name:           r.Name.String,
-			Domain:         r.Domain.String,
-			NameOptions:    nameOptionsByDesc[r.DescID],
-			Id:             r.IDStr,
-			Administration: adminInfo,
-			DisplayName:    displayName,
-			Description:    description,
-			Endpoints:      endpointsByDesc[r.DescID],
+			GlobalAssetId:        r.GlobalAssetID.String,
+			IdShort:              r.IDShort.String,
+			Name:                 r.Name.String,
+			Domain:               r.Domain.String,
+			NameOptions:          nameOptionsByDesc[r.DescID],
+			AssetIdRegexPatterns: assetIDRegexByDesc[r.DescID],
+			IdLinkRegexPatterns:  idLinkRegexByDesc[r.DescID],
+			Id:                   r.IDStr,
+			Administration:       adminInfo,
+			DisplayName:          displayName,
+			Description:          description,
+			Endpoints:            endpointsByDesc[r.DescID],
 		})
 	}
 

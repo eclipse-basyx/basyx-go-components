@@ -23,6 +23,7 @@ paths:
         - $ref: '#/components/parameters/Name'
         - $ref: '#/components/parameters/Domain'
         - $ref: '#/components/parameters/EndpointInterface'
+        - $ref: '#/components/parameters/AssetId'
       responses:
         '200':
           description: Paged list of Infrastructure Descriptors
@@ -213,6 +214,14 @@ components:
       schema:
         type: string
 
+    AssetId:
+      name: assetId
+      in: query
+      required: false
+      description: Base64url encoded asset id used to match InfrastructureDescriptor.assetIdRegexPatterns or InfrastructureDescriptor.idLinkRegexPatterns
+      schema:
+        type: string
+
     InfrastructureIdentifier:
       name: infrastructureIdentifier
       in: path
@@ -313,6 +322,14 @@ components:
         domain:
           type: string
         nameOptions:
+          type: array
+          items:
+            type: string
+        assetIdRegexPatterns:
+          type: array
+          items:
+            type: string
+        idLinkRegexPatterns:
           type: array
           items:
             type: string
@@ -448,6 +465,10 @@ components:
             nameOptions:
               - "Example Company Inc"
               - "ExampleCo"
+            assetIdRegexPatterns:
+              - "^https://i\\.example\\.com/"
+            idLinkRegexPatterns:
+              - "^https://i\\.example\\.com/"
             description:
               - language: "en"
                 text: "Example AAS Registry"
@@ -477,6 +498,10 @@ components:
         nameOptions:
           - "Example Company Inc"
           - "ExampleCo"
+        assetIdRegexPatterns:
+          - "^https://i\\.example\\.com/"
+        idLinkRegexPatterns:
+          - "^https://i\\.example\\.com/"
         description:
           - language: "en"
             text: "Example AAS Registry"

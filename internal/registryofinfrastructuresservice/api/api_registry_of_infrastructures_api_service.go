@@ -74,21 +74,34 @@ func NewRegistryOfInfrastructuresAPIAPIService(registryOfInfrastructuresBackend 
 }
 
 // GetAllInfrastructureDescriptors - Returns all Infrastructure Descriptors
-func (s *RegistryOfInfrastructuresAPIAPIService) GetAllInfrastructureDescriptors(ctx context.Context, limit int32, cursor string, name string, domain string, endpointInterface string) (model.ImplResponse, error) {
+func (s *RegistryOfInfrastructuresAPIAPIService) GetAllInfrastructureDescriptors(ctx context.Context, limit int32, cursor string, name string, domain string, endpointInterface string, assetId string) (model.ImplResponse, error) {
 	var internalCursor string
 	if strings.TrimSpace(cursor) != "" {
 		dec, decErr := common.DecodeString(cursor)
 		if decErr != nil {
-			log.Printf("📍 [%s] Error in GetAllInfrastructureDescriptors: decode cursor=%q limit=%d name=%q domain=%q endpointInterface=%q: %v", componentName, cursor, limit, name, domain, endpointInterface, decErr)
+			log.Printf("📍 [%s] Error in GetAllInfrastructureDescriptors: decode cursor=%q limit=%d name=%q domain=%q endpointInterface=%q assetId=%q: %v", componentName, cursor, limit, name, domain, endpointInterface, assetId, decErr)
 			return common.NewErrorResponse(
 				decErr, http.StatusBadRequest, componentName, "GetAllInfrastructureDescriptors", "BadCursor",
 			), nil
 		}
 		internalCursor = dec
 	}
-	infrastructureDescriptors, nextCursor, err := s.registryOfInfrastructuresBackend.ListInfrastructureDescriptors(ctx, limit, internalCursor, name, domain, endpointInterface)
+
+	var internalAssetID string
+	if strings.TrimSpace(assetId) != "" {
+		dec, decErr := common.DecodeString(assetId)
+		if decErr != nil {
+			log.Printf("📍 [%s] Error in GetAllInfrastructureDescriptors: decode assetId=%q limit=%d cursor=%q name=%q domain=%q endpointInterface=%q: %v", componentName, assetId, limit, internalCursor, name, domain, endpointInterface, decErr)
+			return common.NewErrorResponse(
+				decErr, http.StatusBadRequest, componentName, "GetAllInfrastructureDescriptors", "BadAssetId",
+			), nil
+		}
+		internalAssetID = dec
+	}
+
+	infrastructureDescriptors, nextCursor, err := s.registryOfInfrastructuresBackend.ListInfrastructureDescriptors(ctx, limit, internalCursor, name, domain, endpointInterface, internalAssetID)
 	if err != nil {
-		log.Printf("📍 [%s] Error in GetAllInfrastructureDescriptors: list failed (limit=%d cursor=%q name=%q domain=%q endpointInterface=%q): %v", componentName, limit, internalCursor, name, domain, endpointInterface, err)
+		log.Printf("📍 [%s] Error in GetAllInfrastructureDescriptors: list failed (limit=%d cursor=%q name=%q domain=%q endpointInterface=%q assetId=%q): %v", componentName, limit, internalCursor, name, domain, endpointInterface, internalAssetID, err)
 		switch {
 		case common.IsErrBadRequest(err):
 			return common.NewErrorResponse(

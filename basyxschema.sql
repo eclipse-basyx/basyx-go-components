@@ -383,6 +383,20 @@ CREATE TABLE IF NOT EXISTS infrastructure_descriptor_name_option (
   UNIQUE (descriptor_id, name_option)
 );
 
+CREATE TABLE IF NOT EXISTS infrastructure_descriptor_asset_id_regex (
+  descriptor_id BIGINT NOT NULL REFERENCES descriptor(id) ON DELETE CASCADE,
+  position INTEGER NOT NULL,
+  regex_pattern VARCHAR(2048) NOT NULL,
+  PRIMARY KEY (descriptor_id, position)
+);
+
+CREATE TABLE IF NOT EXISTS infrastructure_descriptor_id_link_regex (
+  descriptor_id BIGINT NOT NULL REFERENCES descriptor(id) ON DELETE CASCADE,
+  position INTEGER NOT NULL,
+  regex_pattern VARCHAR(2048) NOT NULL,
+  PRIMARY KEY (descriptor_id, position)
+);
+
 CREATE TABLE IF NOT EXISTS concept_description (
   id TEXT PRIMARY KEY,
   id_short TEXT,

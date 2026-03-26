@@ -38,26 +38,28 @@ const (
 // here to provide a single source of truth for SQL builders throughout this
 // package and to keep SQL literals out of the query code.
 const (
-	TblDescriptor                         = "descriptor"
-	TblAASDescriptor                      = "aas_descriptor"
-	TblAASDescriptorEndpoint              = "aas_descriptor_endpoint"
-	TblAASIdentifier                      = "aas_identifier"
-	TblSpecificAssetID                    = "specific_asset_id"
-	TblSpecificAssetIDPayload             = "specific_asset_id_payload"
-	TblSpecificAssetIDSuppSemantic        = "specific_asset_id_supplemental_semantic_id_reference"
-	TblSubmodelDescriptor                 = "submodel_descriptor"
-	TblSubmodelDescriptorSuppSemantic     = "submodel_descriptor_supplemental_semantic_id_reference"
-	TblDescriptorPayload                  = "descriptor_payload"
-	TblExtension                          = "extension"
-	TblDescriptorExtension                = "descriptor_extension"
-	TblExtensionSuppSemantic              = "extension_supplemental_semantic_id"
-	TblExtensionRefersTo                  = "extension_refers_to"
-	TblLangStringTextType                 = "lang_string_text_type"
-	TblLangStringNameType                 = "lang_string_name_type"
-	TblReference                          = "reference"
-	TblReferenceKey                       = "reference_key"
-	TblInfrastructureDescriptor           = "infrastructure_descriptor"
-	TblInfrastructureDescriptorNameOption = "infrastructure_descriptor_name_option"
+	TblDescriptor                           = "descriptor"
+	TblAASDescriptor                        = "aas_descriptor"
+	TblAASDescriptorEndpoint                = "aas_descriptor_endpoint"
+	TblAASIdentifier                        = "aas_identifier"
+	TblSpecificAssetID                      = "specific_asset_id"
+	TblSpecificAssetIDPayload               = "specific_asset_id_payload"
+	TblSpecificAssetIDSuppSemantic          = "specific_asset_id_supplemental_semantic_id_reference"
+	TblSubmodelDescriptor                   = "submodel_descriptor"
+	TblSubmodelDescriptorSuppSemantic       = "submodel_descriptor_supplemental_semantic_id_reference"
+	TblDescriptorPayload                    = "descriptor_payload"
+	TblExtension                            = "extension"
+	TblDescriptorExtension                  = "descriptor_extension"
+	TblExtensionSuppSemantic                = "extension_supplemental_semantic_id"
+	TblExtensionRefersTo                    = "extension_refers_to"
+	TblLangStringTextType                   = "lang_string_text_type"
+	TblLangStringNameType                   = "lang_string_name_type"
+	TblReference                            = "reference"
+	TblReferenceKey                         = "reference_key"
+	TblInfrastructureDescriptor             = "infrastructure_descriptor"
+	TblInfrastructureDescriptorNameOption   = "infrastructure_descriptor_name_option"
+	TblInfrastructureDescriptorAssetIDRegex = "infrastructure_descriptor_asset_id_regex"
+	TblInfrastructureDescriptorIDLinkRegex  = "infrastructure_descriptor_id_link_regex"
 )
 
 // Common table aliases used across descriptor queries. Keeping them here avoids
@@ -122,6 +124,7 @@ const (
 	ColCompanyName   = "company_name"
 	ColCompanyDomain = "company_domain"
 	ColNameOption    = "name_option"
+	ColRegexPattern  = "regex_pattern"
 
 	// Generic/common column names used in descriptor queries
 	ColType            = "type"
@@ -132,11 +135,13 @@ const (
 // Goqu table helpers (convenience for Returning/Col) to avoid repetitively
 // constructing the table builders in call sites.
 var (
-	TDescriptor                         = goqu.T(TblDescriptor)
-	TAASDescriptor                      = goqu.T(TblAASDescriptor)
-	TAASDescriptorEndpoint              = goqu.T(TblAASDescriptorEndpoint)
-	TSpecificAssetID                    = goqu.T(TblSpecificAssetID)
-	TDescriptorPayload                  = goqu.T(TblDescriptorPayload)
-	TInfrastructureDescriptor           = goqu.T(TblInfrastructureDescriptor)
-	TInfrastructureDescriptorNameOption = goqu.T(TblInfrastructureDescriptorNameOption)
+	TDescriptor                           = goqu.T(TblDescriptor)
+	TAASDescriptor                        = goqu.T(TblAASDescriptor)
+	TAASDescriptorEndpoint                = goqu.T(TblAASDescriptorEndpoint)
+	TSpecificAssetID                      = goqu.T(TblSpecificAssetID)
+	TDescriptorPayload                    = goqu.T(TblDescriptorPayload)
+	TInfrastructureDescriptor             = goqu.T(TblInfrastructureDescriptor)
+	TInfrastructureDescriptorNameOption   = goqu.T(TblInfrastructureDescriptorNameOption)
+	TInfrastructureDescriptorAssetIDRegex = goqu.T(TblInfrastructureDescriptorAssetIDRegex)
+	TInfrastructureDescriptorIDLinkRegex  = goqu.T(TblInfrastructureDescriptorIDLinkRegex)
 )

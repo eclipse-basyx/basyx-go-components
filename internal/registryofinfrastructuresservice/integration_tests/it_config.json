@@ -315,18 +315,67 @@
         "expectedStatus": 400
     },
     {
-        "context": "046 - Cleanup: Delete All AAS Descriptors - ACTION DELETE_ALL_INFRASTRUCTURE_DESCRIPTORS",
+        "context": "046 - Create Infrastructure Descriptor #8 With Regex Patterns - POST /infrastructure-descriptors",
+        "method": "POST",
+        "endpoint": "http://127.0.0.1:5004/infrastructure-descriptors",
+        "data": "postBody/infrastructure_descriptor_8.json",
+        "shouldMatch": "postBody/infrastructure_descriptor_8.json",
+        "expectedStatus": 201
+    },
+    {
+        "context": "047 - List Infrastructure Descriptors (Filter AssetId Matches assetIdRegexPatterns)",
+        "method": "GET",
+        "endpoint": "http://127.0.0.1:5004/infrastructure-descriptors?assetId=aHR0cHM6Ly9pLmZyYXVuaG9mZXIuZGUvYXNzZXRJZC9hc3NldHMvNDcxMQ",
+        "shouldMatch": "expected/infrastructure_descriptors_filter_7.json",
+        "expectedStatus": 200
+    },
+    {
+        "context": "048 - List Infrastructure Descriptors (Filter AssetId Matches idLinkRegexPatterns)",
+        "method": "GET",
+        "endpoint": "http://127.0.0.1:5004/infrastructure-descriptors?assetId=aHR0cHM6Ly9pLmZyYXVuaG9mZXIuZGUvaWRMaW5rL2Fzc2V0cy81ODIy",
+        "shouldMatch": "expected/infrastructure_descriptors_filter_7.json",
+        "expectedStatus": 200
+    },
+    {
+        "context": "049 - List Infrastructure Descriptors (Filter AssetId No Match)",
+        "method": "GET",
+        "endpoint": "http://127.0.0.1:5004/infrastructure-descriptors?assetId=aHR0cHM6Ly9pLmllc2UuZGUvYXNzZXRJZC9hc3NldHMvMjQ2OA",
+        "shouldMatch": "expected/empty_paged_result.json",
+        "expectedStatus": 200
+    },
+    {
+        "context": "050 - Update Infrastructure Descriptor #8 With Regex - PUT /infrastructure-descriptors/{id}",
+        "method": "PUT",
+        "endpoint": "http://127.0.0.1:5004/infrastructure-descriptors/aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvcm9pL2Q0ZS10ZW5hbnQtMC1hYXMtcmVnaXN0cnktMg",
+        "data": "postBody/infrastructure_descriptor_9.json",
+        "expectedStatus": 204
+    },
+    {
+        "context": "051 - List Infrastructure Descriptors (Filter AssetId Matches assetIdRegexPatterns after Update)",
+        "method": "GET",
+        "endpoint": "http://127.0.0.1:5004/infrastructure-descriptors?assetId=aHR0cHM6Ly9pLmllc2UuZGUvYXNzZXRJZC9hc3NldHMvMjQ2OA",
+        "shouldMatch": "expected/infrastructure_descriptors_filter_8.json",
+        "expectedStatus": 200
+    },
+    {
+        "context": "052 - List Infrastructure Descriptors (Conflict - Invalid AssetId Base64URL)",
+        "method": "GET",
+        "endpoint": "http://127.0.0.1:5004/infrastructure-descriptors?assetId=$$$",
+        "expectedStatus": 400
+    },
+    {
+        "context": "053 - Cleanup: Delete All AAS Descriptors - ACTION DELETE_ALL_INFRASTRUCTURE_DESCRIPTORS",
         "action": "DELETE_ALL_INFRASTRUCTURE_DESCRIPTORS"
     },
     {
-        "context": "047 - Verify that Cleanup has worked - GET /infrastructure-descriptors",
+        "context": "054 - Verify that Cleanup has worked - GET /infrastructure-descriptors",
         "method": "GET",
         "endpoint": "http://127.0.0.1:5004/infrastructure-descriptors",
         "shouldMatch": "expected/empty_paged_result.json",
         "expectedStatus": 200
     },
     {
-        "context": "048 - Verify database is empty - ACTION CHECK_DB_IS_EMPTY",
+        "context": "055 - Verify database is empty - ACTION CHECK_DB_IS_EMPTY",
         "action": "CHECK_DB_IS_EMPTY"
     }
 ]
