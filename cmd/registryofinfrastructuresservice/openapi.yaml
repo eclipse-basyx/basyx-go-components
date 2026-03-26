@@ -12,7 +12,7 @@ info:
 servers:
   - url: 'https://example.com/'
 paths:
-  /infrastructure-descriptors:
+  /companies:
     get:
       tags: [Registry of Infrastructures API]
       summary: Returns all Infrastructure Descriptors
@@ -74,7 +74,7 @@ paths:
         'default':
           $ref: '#/components/responses/DefaultError'
 
-  /infrastructure-descriptors/{infrastructureIdentifier}:
+  /companies/{infrastructureIdentifier}:
     parameters:
       - $ref: '#/components/parameters/InfrastructureIdentifier'
     get:

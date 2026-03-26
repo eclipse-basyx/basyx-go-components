@@ -42,7 +42,7 @@ import (
 func deleteAllInfrastructureDescriptors(t *testing.T, runner *testenv.JSONSuiteRunner, stepNumber int) {
 	response, err := runner.RunStep(testenv.JSONSuiteStep{
 		Method:         http.MethodGet,
-		Endpoint:       "http://127.0.0.1:5004/infrastructure-descriptors",
+		Endpoint:       "http://127.0.0.1:5004/companies",
 		ExpectedStatus: http.StatusOK,
 	}, stepNumber)
 	require.NoError(t, err)
@@ -58,7 +58,7 @@ func deleteAllInfrastructureDescriptors(t *testing.T, runner *testenv.JSONSuiteR
 		enc := base64.RawURLEncoding.EncodeToString([]byte(item.ID))
 		_, err := runner.RunStep(testenv.JSONSuiteStep{
 			Method:         http.MethodDelete,
-			Endpoint:       fmt.Sprintf("http://127.0.0.1:5004/infrastructure-descriptors/%s", enc),
+			Endpoint:       fmt.Sprintf("http://127.0.0.1:5004/companies/%s", enc),
 			ExpectedStatus: http.StatusNoContent,
 		}, stepNumber)
 		require.NoError(t, err)

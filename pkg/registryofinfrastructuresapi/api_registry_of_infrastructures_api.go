@@ -52,27 +52,27 @@ func (c *RegistryOfInfrastructuresAPIAPIController) Routes() Routes {
 	return Routes{
 		"GetAllInfrastructureDescriptors": Route{
 			strings.ToUpper("Get"),
-			"/infrastructure-descriptors",
+			"/companies",
 			c.GetAllInfrastructureDescriptors,
 		},
 		"PostInfrastructureDescriptor": Route{
 			strings.ToUpper("Post"),
-			"/infrastructure-descriptors",
+			"/companies",
 			c.PostInfrastructureDescriptor,
 		},
 		"GetInfrastructureDescriptorById": Route{
 			strings.ToUpper("Get"),
-			"/infrastructure-descriptors/{infrastructureIdentifier}",
+			"/companies/{infrastructureIdentifier}",
 			c.GetInfrastructureDescriptorById,
 		},
 		"PutInfrastructureDescriptorById": Route{
 			strings.ToUpper("Put"),
-			"/infrastructure-descriptors/{infrastructureIdentifier}",
+			"/companies/{infrastructureIdentifier}",
 			c.PutInfrastructureDescriptorById,
 		},
 		"DeleteInfrastructureDescriptorById": Route{
 			strings.ToUpper("Delete"),
-			"/infrastructure-descriptors/{infrastructureIdentifier}",
+			"/companies/{infrastructureIdentifier}",
 			c.DeleteInfrastructureDescriptorById,
 		},
 	}
