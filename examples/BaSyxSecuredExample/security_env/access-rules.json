@@ -2,7 +2,7 @@
   "AllAccessPermissionRules": {
     "DEFATTRIBUTES": [
       { "name": "anonymous_attr", "attributes": [ { "GLOBAL": "ANONYMOUS" } ] },
-      { "name": "username_attr", "attributes": [ { "CLAIM": "preferred_username" } ] }
+      { "name": "username_attr", "attributes": [ { "CLAIM": "role" } ] }
     ],
     "DEFOBJECTS": [
       { "name": "public_description", "objects": [ { "ROUTE": "/description" }, { "ROUTE": "/api/v3/description" } ] },
@@ -30,13 +30,12 @@
       { "name": "userx_all", "acl": { "USEATTRIBUTES": "username_attr", "RIGHTS": ["ALL"], "ACCESS": "ALLOW" } }
     ],
     "DEFFORMULAS": [
-      { "name": "is_anonymous", "formula": { "$eq": [ { "$attribute": { "GLOBAL": "ANONYMOUS" } }, { "$strVal": "true" } ] } },
-      { "name": "is_usera", "formula": { "$eq": [ { "$attribute": { "CLAIM": "preferred_username" } }, { "$strVal": "usera" } ] } },
-      { "name": "is_userb", "formula": { "$eq": [ { "$attribute": { "CLAIM": "preferred_username" } }, { "$strVal": "userb" } ] } },
-      { "name": "is_userx", "formula": { "$eq": [ { "$attribute": { "CLAIM": "preferred_username" } }, { "$strVal": "userx" } ] } }
+      { "name": "is_usera", "formula": { "$eq": [ { "$attribute": { "CLAIM": "role" } }, { "$strVal": "viewer" } ] } },
+      { "name": "is_userb", "formula": { "$eq": [ { "$attribute": { "CLAIM": "role" } }, { "$strVal": "editor" } ] } },
+      { "name": "is_userx", "formula": { "$eq": [ { "$attribute": { "CLAIM": "role" } }, { "$strVal": "admin" } ] } }
     ],
     "rules": [
-      { "USEACL": "anonymous_read", "USEOBJECTS": ["public_description"], "USEFORMULA": "is_anonymous" },
+      { "USEACL": "anonymous_read", "USEOBJECTS": ["public_description"], "FORMULA": {"$boolean": true} },
       { "USEACL": "usera_read", "USEOBJECTS": ["all_api"], "USEFORMULA": "is_usera" },
       { "USEACL": "userb_read_write", "USEOBJECTS": ["all_api"], "USEFORMULA": "is_userb" },
       { "USEACL": "userx_all", "USEOBJECTS": ["all_api"], "USEFORMULA": "is_userx" }

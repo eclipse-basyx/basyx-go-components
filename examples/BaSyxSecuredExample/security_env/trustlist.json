@@ -1,7 +1,7 @@
 [
   {
     "issuer": "http://keycloak.localhost:8080/realms/basyx",
-    "audience": "basyx-ui",
+    "audience": "discovery-service",
     "scopes": ["email", "profile"]
   }
 ]
