@@ -29,6 +29,8 @@ services:
         condition: service_completed_successfully
     volumes:
       - ./security_env:/security_env:ro
+    extra_hosts:
+      - "keycloak.localhost:host-gateway"
     restart: "no"
 
   sm-registry:
@@ -61,6 +63,8 @@ services:
         condition: service_completed_successfully
     volumes:
       - ./security_env:/security_env:ro
+    extra_hosts:
+      - "keycloak.localhost:host-gateway"
     restart: "no"
 
   aas-discovery:
@@ -93,6 +97,8 @@ services:
         condition: service_completed_successfully
     volumes:
       - ./security_env:/security_env:ro
+    extra_hosts:
+      - "keycloak.localhost:host-gateway"
     restart: "no"
 
   aas-ui:
@@ -107,9 +113,11 @@ services:
       AAS_REPO_PATH: "http://localhost:8090/shells"
       SUBMODEL_REPO_PATH: "http://localhost:8091/submodels"
       CD_REPO_PATH: "http://localhost:8092/concept-descriptions"
-      KEYCLOAK_URL: "http://host.docker.internal:8080"
+      KEYCLOAK_URL: "http://keycloak.localhost:8080"
       KEYCLOAK_REALM: basyx
       KEYCLOAK_CLIENT_ID: basyx-ui
+    extra_hosts:
+      - "keycloak.localhost:host-gateway"
     restart: "no"
 
   aas_repository:
@@ -142,6 +150,8 @@ services:
         condition: service_completed_successfully
     volumes:
       - ./security_env:/security_env:ro
+    extra_hosts:
+      - "keycloak.localhost:host-gateway"
     restart: "no"
 
   submodel_repository:
@@ -169,6 +179,8 @@ services:
     volumes:
       - ./security_env:/security_env:ro
       - ./basyx/rsa-key.pem:/app/rsa-key.pem:ro
+    extra_hosts:
+      - "keycloak.localhost:host-gateway"
     ports:
       - "8091:5004"
     depends_on:
@@ -208,6 +220,8 @@ services:
         condition: service_completed_successfully
     volumes:
       - ./security_env:/security_env:ro
+    extra_hosts:
+      - "keycloak.localhost:host-gateway"
     restart: "no"
 
   keycloak:
@@ -218,7 +232,7 @@ services:
       KC_DB_URL: jdbc:postgresql://db:5432/basyxTestDB
       KC_DB_USERNAME: admin
       KC_DB_PASSWORD: admin123
-      KC_HOSTNAME: host.docker.internal
+      KC_HOSTNAME: keycloak.localhost
       KEYCLOAK_ADMIN: admin
       KEYCLOAK_ADMIN_PASSWORD: admin
       KC_HTTP_ENABLED: "true"
