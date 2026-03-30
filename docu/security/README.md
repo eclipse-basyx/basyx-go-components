@@ -136,7 +136,7 @@ The ABAC engine evaluates rules in order and either denies, allows, or allows wi
 
 Evaluation gates:
 1. Map HTTP method + route to required rights (deny if no mapping).
-   - Rights within one mapping entry are ORed (example: `PUT -> [CREATE, UPDATE]` means either right is sufficient).
+   - Rights within one mapping entry are combined using logical OR (example: `PUT -> [CREATE, UPDATE]` means either right is sufficient).
    - Multiple matching mapping entries are also OR alternatives.
 2. Check rights in rule ACLs.
 3. Check attribute requirements (CLAIM presence or GLOBAL=ANONYMOUS).
