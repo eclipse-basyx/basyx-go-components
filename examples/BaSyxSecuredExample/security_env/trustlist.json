@@ -1,7 +1,7 @@
 [
   {
-    "issuer": "http://keycloak.basyx.localhost:8080/realms/basyx",
-    "audience": "discovery-service",
+    "issuer": "http://host.docker.internal:8080/realms/basyx",
+    "audience": "basyx-ui",
     "scopes": ["email", "profile"]
   }
 ]
