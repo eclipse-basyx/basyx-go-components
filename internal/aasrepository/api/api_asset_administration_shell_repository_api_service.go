@@ -14,6 +14,7 @@ package api
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"net/http"
 	"os"
@@ -24,6 +25,7 @@ import (
 	persistencepostgresql "github.com/eclipse-basyx/basyx-go-components/internal/aasrepository/persistence"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
+	submodelpersistencepostgresql "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence"
 	openapi "github.com/eclipse-basyx/basyx-go-components/pkg/aasrepositoryapi/go"
 )
 
@@ -32,14 +34,16 @@ import (
 // Include any external packages or services that will be required by this service.
 type AssetAdministrationShellRepositoryAPIAPIService struct {
 	assetAdministrationShellBackend persistencepostgresql.AssetAdministrationShellDatabase
+	submodelBackend                 submodelpersistencepostgresql.SubmodelDatabase
 }
 
 const componentName = "AASREPO"
 
 // NewAssetAdministrationShellRepositoryAPIAPIService creates a default api service
-func NewAssetAdministrationShellRepositoryAPIAPIService(databaseBackendAssetAdministrationShell persistencepostgresql.AssetAdministrationShellDatabase) *AssetAdministrationShellRepositoryAPIAPIService {
+func NewAssetAdministrationShellRepositoryAPIAPIService(databaseBackendAssetAdministrationShell persistencepostgresql.AssetAdministrationShellDatabase, databaseBackendSubmodel submodelpersistencepostgresql.SubmodelDatabase) *AssetAdministrationShellRepositoryAPIAPIService {
 	return &AssetAdministrationShellRepositoryAPIAPIService{
 		assetAdministrationShellBackend: databaseBackendAssetAdministrationShell,
+		submodelBackend:                 databaseBackendSubmodel,
 	}
 }
 
@@ -486,22 +490,316 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) DeleteSubmodelReferenc
 
 // GetSubmodelByIdAasRepository - Returns the Submodel
 func (s *AssetAdministrationShellRepositoryAPIAPIService) GetSubmodelByIdAasRepository(ctx context.Context, aasIdentifier string, submodelIdentifier string, level string, extent string) (gen.ImplResponse, error) {
-	return gen.Response(http.StatusNotImplemented, nil), errors.New("GetSubmodelByIdAasRepository method not implemented")
+	const operation = "GetSubmodelByIdAasRepository"
+
+	decodedAASIdentifier, decodeAASErr := common.DecodeString(aasIdentifier)
+	if decodeAASErr != nil {
+		return newAPIErrorResponse(decodeAASErr, http.StatusBadRequest, operation, "MalformedAssetAdministrationShellIdentifier"), nil
+	}
+
+	decodedSubmodelIdentifier, decodeSubmodelErr := common.DecodeString(submodelIdentifier)
+	if decodeSubmodelErr != nil {
+		return newAPIErrorResponse(decodeSubmodelErr, http.StatusBadRequest, operation, "MalformedSubmodelIdentifier"), nil
+	}
+
+	if !isLevelValid(level) {
+		return newAPIErrorResponse(errors.New("invalid level parameter"), http.StatusBadRequest, operation, "InvalidLevelParameter"), nil
+	}
+
+	_ = extent
+
+	if err := s.assetAdministrationShellBackend.CheckIfSubmodelReferenceExistsInAssetAdministrationShell(decodedAASIdentifier, decodedSubmodelIdentifier); err != nil {
+		if common.IsErrNotFound(err) {
+			return newAPIErrorResponse(err, http.StatusNotFound, operation, "SubmodelNotFound"), nil
+		}
+		if common.IsErrBadRequest(err) {
+			return newAPIErrorResponse(err, http.StatusBadRequest, operation, "BadRequest"), nil
+		}
+		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "CheckIfSubmodelReferenceExistsInAssetAdministrationShell"), err
+	}
+
+	submodel, err := s.submodelBackend.GetSubmodelByIDWithContext(ctx, decodedSubmodelIdentifier, level)
+	if err != nil {
+		if common.IsErrDenied(err) {
+			return newAPIErrorResponse(err, http.StatusForbidden, operation, "Forbidden"), nil
+		}
+		if common.IsErrNotFound(err) {
+			return newAPIErrorResponse(err, http.StatusNotFound, operation, "SubmodelNotFound"), nil
+		}
+		if common.IsErrBadRequest(err) {
+			return newAPIErrorResponse(err, http.StatusBadRequest, operation, "BadRequest"), nil
+		}
+		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "GetSubmodelByIDWithContext"), err
+	}
+
+	jsonSubmodel, err := jsonization.ToJsonable(submodel)
+	if err != nil {
+		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "ToJsonable"), err
+	}
+
+	return gen.Response(http.StatusOK, jsonSubmodel), nil
+}
+
+func isLevelValid(level string) bool {
+	return level == "core" || level == "" || level == "deep"
+}
+
+func mergeJSONObjects(base map[string]any, patch map[string]any) map[string]any {
+	merged := make(map[string]any, len(base))
+	for key, value := range base {
+		merged[key] = value
+	}
+
+	for key, patchValue := range patch {
+		if patchValue == nil {
+			delete(merged, key)
+			continue
+		}
+
+		baseValue, baseExists := merged[key]
+		baseMap, baseIsMap := baseValue.(map[string]any)
+		patchMap, patchIsMap := patchValue.(map[string]any)
+		if baseExists && baseIsMap && patchIsMap {
+			merged[key] = mergeJSONObjects(baseMap, patchMap)
+			continue
+		}
+
+		merged[key] = patchValue
+	}
+
+	return merged
 }
 
 // PutSubmodelByIdAasRepository - Creates or updates the Submodel
 func (s *AssetAdministrationShellRepositoryAPIAPIService) PutSubmodelByIdAasRepository(ctx context.Context, aasIdentifier string, submodelIdentifier string, submodel types.ISubmodel) (gen.ImplResponse, error) {
-	return gen.Response(http.StatusNotImplemented, nil), errors.New("PutSubmodelByIdAasRepository method not implemented")
+	const operation = "PutSubmodelByIdAasRepository"
+
+	decodedAASIdentifier, decodeAASErr := common.DecodeString(aasIdentifier)
+	if decodeAASErr != nil {
+		return newAPIErrorResponse(decodeAASErr, http.StatusBadRequest, operation, "MalformedAssetAdministrationShellIdentifier"), nil
+	}
+
+	decodedSubmodelIdentifier, decodeSubmodelErr := common.DecodeString(submodelIdentifier)
+	if decodeSubmodelErr != nil {
+		return newAPIErrorResponse(decodeSubmodelErr, http.StatusBadRequest, operation, "MalformedSubmodelIdentifier"), nil
+	}
+
+	if submodel == nil {
+		return newAPIErrorResponse(errors.New("submodel payload is required"), http.StatusBadRequest, operation, "MissingSubmodelPayload"), nil
+	}
+
+	reference := types.NewReference(types.ReferenceTypesModelReference, []types.IKey{types.NewKey(types.KeyTypesSubmodel, decodedSubmodelIdentifier)})
+
+	referenceCreated := false
+	submodelUpdated := false
+	err := s.assetAdministrationShellBackend.ExecuteInTransaction(func(tx *sql.Tx) error {
+		existsErr := s.assetAdministrationShellBackend.CheckIfSubmodelReferenceExistsInAssetAdministrationShellInTransaction(tx, decodedAASIdentifier, decodedSubmodelIdentifier)
+		if existsErr != nil {
+			if !common.IsErrNotFound(existsErr) {
+				return existsErr
+			}
+
+			createErr := s.assetAdministrationShellBackend.CreateSubmodelReferenceInAssetAdministrationShellInTransaction(ctx, tx, decodedAASIdentifier, reference)
+			if createErr != nil {
+				return createErr
+			}
+			referenceCreated = true
+		}
+
+		isUpdate, putErr := s.submodelBackend.PutSubmodelInTransactionWithContext(ctx, tx, decodedSubmodelIdentifier, submodel)
+		if putErr != nil {
+			return putErr
+		}
+
+		submodelUpdated = isUpdate
+		return nil
+	})
+	if err != nil {
+		if common.IsErrDenied(err) {
+			return newAPIErrorResponse(err, http.StatusForbidden, operation, "Forbidden"), nil
+		}
+		if common.IsErrNotFound(err) {
+			return newAPIErrorResponse(err, http.StatusNotFound, operation, "NotFound"), nil
+		}
+		if common.IsErrConflict(err) {
+			return newAPIErrorResponse(err, http.StatusConflict, operation, "Conflict"), nil
+		}
+		if common.IsErrBadRequest(err) {
+			return newAPIErrorResponse(err, http.StatusBadRequest, operation, "BadRequest"), nil
+		}
+		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "ExecuteInTransaction"), err
+	}
+
+	if submodelUpdated && !referenceCreated {
+		return gen.Response(http.StatusNoContent, nil), nil
+	}
+
+	jsonReference, err := jsonization.ToJsonable(reference)
+	if err != nil {
+		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "ToJsonable"), err
+	}
+
+	return gen.Response(http.StatusCreated, jsonReference), nil
 }
 
 // DeleteSubmodelByIdAasRepository - Deletes the submodel from the Asset Administration Shell and the Repository.
 func (s *AssetAdministrationShellRepositoryAPIAPIService) DeleteSubmodelByIdAasRepository(ctx context.Context, aasIdentifier string, submodelIdentifier string) (gen.ImplResponse, error) {
-	return gen.Response(http.StatusNotImplemented, nil), errors.New("DeleteSubmodelByIdAasRepository method not implemented")
+	const operation = "DeleteSubmodelByIdAasRepository"
+
+	decodedAASIdentifier, decodeAASErr := common.DecodeString(aasIdentifier)
+	if decodeAASErr != nil {
+		return newAPIErrorResponse(decodeAASErr, http.StatusBadRequest, operation, "MalformedAssetAdministrationShellIdentifier"), nil
+	}
+
+	decodedSubmodelIdentifier, decodeSubmodelErr := common.DecodeString(submodelIdentifier)
+	if decodeSubmodelErr != nil {
+		return newAPIErrorResponse(decodeSubmodelErr, http.StatusBadRequest, operation, "MalformedSubmodelIdentifier"), nil
+	}
+
+	err := s.assetAdministrationShellBackend.ExecuteInTransaction(func(tx *sql.Tx) error {
+		referenceExistsErr := s.assetAdministrationShellBackend.CheckIfSubmodelReferenceExistsInAssetAdministrationShellInTransaction(tx, decodedAASIdentifier, decodedSubmodelIdentifier)
+		if referenceExistsErr != nil {
+			if !common.IsErrNotFound(referenceExistsErr) {
+				return referenceExistsErr
+			}
+
+			if strings.Contains(referenceExistsErr.Error(), "AASNOTFOUND") {
+				return referenceExistsErr
+			}
+		} else {
+			deleteReferenceErr := s.assetAdministrationShellBackend.DeleteSubmodelReferenceInAssetAdministrationShellInTransaction(tx, decodedAASIdentifier, decodedSubmodelIdentifier)
+			if deleteReferenceErr != nil {
+				return deleteReferenceErr
+			}
+		}
+
+		return s.submodelBackend.DeleteSubmodelInTransactionWithContext(ctx, tx, decodedSubmodelIdentifier)
+	})
+	if err != nil {
+		if common.IsErrDenied(err) {
+			return newAPIErrorResponse(err, http.StatusForbidden, operation, "Forbidden"), nil
+		}
+		if common.IsErrNotFound(err) {
+			if strings.Contains(err.Error(), "AASNOTFOUND") {
+				return newAPIErrorResponse(err, http.StatusNotFound, operation, "AssetAdministrationShellNotFound"), nil
+			}
+
+			return newAPIErrorResponse(err, http.StatusNotFound, operation, "SubmodelNotFound"), nil
+		}
+		if common.IsErrBadRequest(err) {
+			return newAPIErrorResponse(err, http.StatusBadRequest, operation, "BadRequest"), nil
+		}
+		if common.IsErrConflict(err) {
+			return newAPIErrorResponse(err, http.StatusConflict, operation, "Conflict"), nil
+		}
+
+		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "ExecuteInTransaction"), err
+	}
+
+	return gen.Response(http.StatusNoContent, nil), nil
 }
 
 // PatchSubmodelAasRepository - Updates the Submodel
 func (s *AssetAdministrationShellRepositoryAPIAPIService) PatchSubmodelAasRepository(ctx context.Context, aasIdentifier string, submodelIdentifier string, submodel types.ISubmodel, level string) (gen.ImplResponse, error) {
-	return gen.Response(http.StatusNotImplemented, nil), errors.New("PatchSubmodelAasRepository method not implemented")
+	const operation = "PatchSubmodelAasRepository"
+
+	decodedAASIdentifier, decodeAASErr := common.DecodeString(aasIdentifier)
+	if decodeAASErr != nil {
+		return newAPIErrorResponse(decodeAASErr, http.StatusBadRequest, operation, "MalformedAssetAdministrationShellIdentifier"), nil
+	}
+
+	decodedSubmodelIdentifier, decodeSubmodelErr := common.DecodeString(submodelIdentifier)
+	if decodeSubmodelErr != nil {
+		return newAPIErrorResponse(decodeSubmodelErr, http.StatusBadRequest, operation, "MalformedSubmodelIdentifier"), nil
+	}
+
+	if !isLevelValid(level) {
+		return newAPIErrorResponse(errors.New("invalid level parameter"), http.StatusBadRequest, operation, "InvalidLevelParameter"), nil
+	}
+
+	if submodel == nil {
+		return newAPIErrorResponse(errors.New("submodel payload is required"), http.StatusBadRequest, operation, "MissingSubmodelPayload"), nil
+	}
+
+	if submodel.ID() != "" && decodedSubmodelIdentifier != submodel.ID() {
+		return newAPIErrorResponse(errors.New("submodel ID in path and body do not match"), http.StatusBadRequest, operation, "IdMismatch"), nil
+	}
+
+	if err := s.assetAdministrationShellBackend.CheckIfSubmodelReferenceExistsInAssetAdministrationShell(decodedAASIdentifier, decodedSubmodelIdentifier); err != nil {
+		if common.IsErrNotFound(err) {
+			return newAPIErrorResponse(err, http.StatusNotFound, operation, "SubmodelNotFound"), nil
+		}
+		if common.IsErrBadRequest(err) {
+			return newAPIErrorResponse(err, http.StatusBadRequest, operation, "BadRequest"), nil
+		}
+		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "CheckIfSubmodelReferenceExistsInAssetAdministrationShell"), err
+	}
+
+	patchJSON, patchJSONErr := jsonization.ToJsonable(submodel)
+	if patchJSONErr != nil {
+		return newAPIErrorResponse(patchJSONErr, http.StatusBadRequest, operation, "InvalidSubmodelData"), nil
+	}
+
+	_, patchIncludesSubmodelElements := patchJSON["submodelElements"]
+
+	existingSubmodels, _, getErr := s.submodelBackend.GetSubmodelsWithContext(ctx, 1, "", decodedSubmodelIdentifier)
+	if getErr != nil {
+		if common.IsErrNotFound(getErr) || errors.Is(getErr, sql.ErrNoRows) {
+			return newAPIErrorResponse(getErr, http.StatusNotFound, operation, "SubmodelNotFound"), nil
+		}
+		if common.IsErrBadRequest(getErr) {
+			return newAPIErrorResponse(getErr, http.StatusBadRequest, operation, "BadRequest"), nil
+		}
+		return newAPIErrorResponse(getErr, http.StatusInternalServerError, operation, "GetSubmodelsWithContext"), getErr
+	}
+
+	if len(existingSubmodels) == 0 {
+		return newAPIErrorResponse(common.NewErrNotFound(decodedSubmodelIdentifier), http.StatusNotFound, operation, "SubmodelNotFound"), nil
+	}
+
+	existingSubmodel := existingSubmodels[0]
+	if existingSubmodel == nil {
+		nilErr := common.NewInternalServerError("AASREPO-PATCHSM-EXISTINGNIL Existing submodel is nil")
+		return newAPIErrorResponse(nilErr, http.StatusInternalServerError, operation, "GetSubmodelsWithContext"), nilErr
+	}
+
+	existingJSON, existingJSONErr := jsonization.ToJsonable(existingSubmodel)
+	if existingJSONErr != nil {
+		return newAPIErrorResponse(existingJSONErr, http.StatusInternalServerError, operation, "ToJsonableCurrentSubmodel"), existingJSONErr
+	}
+
+	patchJSON["id"] = decodedSubmodelIdentifier
+	mergedJSON := mergeJSONObjects(existingJSON, patchJSON)
+
+	mergedSubmodel, mergedErr := jsonization.SubmodelFromJsonable(mergedJSON)
+	if mergedErr != nil {
+		return newAPIErrorResponse(mergedErr, http.StatusBadRequest, operation, "InvalidPatchedSubmodel"), nil
+	}
+
+	err := error(nil)
+	if patchIncludesSubmodelElements {
+		err = s.submodelBackend.PatchSubmodel(decodedSubmodelIdentifier, mergedSubmodel)
+	} else {
+		err = s.submodelBackend.PatchSubmodelMetadata(decodedSubmodelIdentifier, mergedSubmodel)
+	}
+	if err != nil {
+		if common.IsErrDenied(err) {
+			return newAPIErrorResponse(err, http.StatusForbidden, operation, "Forbidden"), nil
+		}
+		if common.IsErrBadRequest(err) {
+			return newAPIErrorResponse(err, http.StatusBadRequest, operation, "BadRequest"), nil
+		}
+		if common.IsErrNotFound(err) {
+			return newAPIErrorResponse(err, http.StatusNotFound, operation, "SubmodelNotFound"), nil
+		}
+		if common.IsErrConflict(err) {
+			return newAPIErrorResponse(err, http.StatusConflict, operation, "Conflict"), nil
+		}
+
+		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "PatchSubmodel"), err
+	}
+
+	return gen.Response(http.StatusNoContent, nil), nil
 }
 
 // GetSubmodelByIdMetadataAasRepository - Returns the Submodel&#39;s metadata elements

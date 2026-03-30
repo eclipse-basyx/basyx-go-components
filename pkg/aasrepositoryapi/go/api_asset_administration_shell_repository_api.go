@@ -717,21 +717,153 @@ func (c *AssetAdministrationShellRepositoryAPIAPIController) DeleteSubmodelRefer
 // GetSubmodelByIdAasRepository - Returns the Submodel
 // nolint:revive
 func (c *AssetAdministrationShellRepositoryAPIAPIController) GetSubmodelByIdAasRepository(w http.ResponseWriter, r *http.Request) {
+	aasIdentifierParam := chi.URLParam(r, "aasIdentifier")
+	if aasIdentifierParam == "" {
+		c.errorHandler(w, r, &RequiredError{"aasIdentifier"}, nil)
+		return
+	}
+
+	submodelIdentifierParam := chi.URLParam(r, "submodelIdentifier")
+	if submodelIdentifierParam == "" {
+		c.errorHandler(w, r, &RequiredError{"submodelIdentifier"}, nil)
+		return
+	}
+
+	query := r.URL.Query()
+	levelParam := query.Get("level")
+	if levelParam == "" {
+		levelParam = "deep"
+	}
+
+	extentParam := query.Get("extent")
+	if extentParam == "" {
+		extentParam = "withoutBlobValue"
+	}
+
+	result, err := c.service.GetSubmodelByIdAasRepository(r.Context(), aasIdentifierParam, submodelIdentifierParam, levelParam, extentParam)
+	if err != nil {
+		c.errorHandler(w, r, err, &result)
+		return
+	}
+
+	_ = EncodeJSONResponse(result.Body, &result.Code, w)
 }
 
 // PutSubmodelByIdAasRepository - Creates or updates the Submodel
 // nolint:revive
 func (c *AssetAdministrationShellRepositoryAPIAPIController) PutSubmodelByIdAasRepository(w http.ResponseWriter, r *http.Request) {
+	aasIdentifierParam := chi.URLParam(r, "aasIdentifier")
+	if aasIdentifierParam == "" {
+		c.errorHandler(w, r, &RequiredError{"aasIdentifier"}, nil)
+		return
+	}
+
+	submodelIdentifierParam := chi.URLParam(r, "submodelIdentifier")
+	if submodelIdentifierParam == "" {
+		c.errorHandler(w, r, &RequiredError{"submodelIdentifier"}, nil)
+		return
+	}
+
+	bodyBytes, err := io.ReadAll(r.Body)
+	if err != nil {
+		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
+		return
+	}
+	var jsonable interface{}
+	if err := json.Unmarshal(bodyBytes, &jsonable); err != nil {
+		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
+		return
+	}
+	submodelParam, err := aasjsonization.SubmodelFromJsonable(jsonable)
+	if err != nil {
+		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
+		return
+	}
+
+	result, err := c.service.PutSubmodelByIdAasRepository(r.Context(), aasIdentifierParam, submodelIdentifierParam, submodelParam)
+	if err != nil {
+		c.errorHandler(w, r, err, &result)
+		return
+	}
+
+	if result.Code == http.StatusCreated {
+		location := c.buildSubmodelLocation(r, aasIdentifierParam, submodelIdentifierParam)
+		if location != "" {
+			w.Header().Set("Location", location)
+		}
+	}
+
+	_ = EncodeJSONResponse(result.Body, &result.Code, w)
 }
 
 // DeleteSubmodelByIdAasRepository - Deletes the submodel from the Asset Administration Shell and the Repository.
 // nolint:revive
 func (c *AssetAdministrationShellRepositoryAPIAPIController) DeleteSubmodelByIdAasRepository(w http.ResponseWriter, r *http.Request) {
+	aasIdentifierParam := chi.URLParam(r, "aasIdentifier")
+	if aasIdentifierParam == "" {
+		c.errorHandler(w, r, &RequiredError{"aasIdentifier"}, nil)
+		return
+	}
+
+	submodelIdentifierParam := chi.URLParam(r, "submodelIdentifier")
+	if submodelIdentifierParam == "" {
+		c.errorHandler(w, r, &RequiredError{"submodelIdentifier"}, nil)
+		return
+	}
+
+	result, err := c.service.DeleteSubmodelByIdAasRepository(r.Context(), aasIdentifierParam, submodelIdentifierParam)
+	if err != nil {
+		c.errorHandler(w, r, err, &result)
+		return
+	}
+
+	_ = EncodeJSONResponse(result.Body, &result.Code, w)
 }
 
 // PatchSubmodelAasRepository - Updates the Submodel
 // nolint:revive
 func (c *AssetAdministrationShellRepositoryAPIAPIController) PatchSubmodelAasRepository(w http.ResponseWriter, r *http.Request) {
+	aasIdentifierParam := chi.URLParam(r, "aasIdentifier")
+	if aasIdentifierParam == "" {
+		c.errorHandler(w, r, &RequiredError{"aasIdentifier"}, nil)
+		return
+	}
+
+	submodelIdentifierParam := chi.URLParam(r, "submodelIdentifier")
+	if submodelIdentifierParam == "" {
+		c.errorHandler(w, r, &RequiredError{"submodelIdentifier"}, nil)
+		return
+	}
+
+	query := r.URL.Query()
+	levelParam := query.Get("level")
+	if levelParam == "" {
+		levelParam = "core"
+	}
+
+	bodyBytes, err := io.ReadAll(r.Body)
+	if err != nil {
+		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
+		return
+	}
+	var jsonable interface{}
+	if err := json.Unmarshal(bodyBytes, &jsonable); err != nil {
+		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
+		return
+	}
+	submodelParam, err := aasjsonization.SubmodelFromJsonable(jsonable)
+	if err != nil {
+		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
+		return
+	}
+
+	result, err := c.service.PatchSubmodelAasRepository(r.Context(), aasIdentifierParam, submodelIdentifierParam, submodelParam, levelParam)
+	if err != nil {
+		c.errorHandler(w, r, err, &result)
+		return
+	}
+
+	_ = EncodeJSONResponse(result.Body, &result.Code, w)
 }
 
 // GetSubmodelByIdMetadataAasRepository - Returns the Submodel's metadata elements

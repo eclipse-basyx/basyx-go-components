@@ -200,7 +200,7 @@
 		"expectedStatus": 200
 	},
 	{
-		"context": "00A.4 - Cleanup: Delete All AAS - ACTION DELETE_ALL_AAS",
+		"context": "00A.2 - Cleanup: Delete All AAS - ACTION DELETE_ALL_AAS",
 		"action": "DELETE_ALL_AAS"
 	},
 	{
@@ -439,5 +439,9 @@
 		"method": "DELETE",
 		"endpoint": "http://127.0.0.1:6004/shells/aHR0cHM6Ly9leGFtcGxlLmNvbS9pZHMvYWFzLzM0OTRfMjEyMF8zMDYyXzY1MzI/submodel-refs/aHR0cHM6Ly9leGFtcGxlLmNvbS9pZHMvYWFzLzczMDFfMzE1MF85NDQyXzc4NDlfbm9uX2V4aXN0ZW50",
 		"expectedStatus": 404
+	},
+	{
+		"context": "00A.3 - Cleanup: Delete All AAS - ACTION DELETE_ALL_AAS",
+		"action": "DELETE_ALL_AAS"
 	}
 ]
