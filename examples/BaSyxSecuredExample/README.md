@@ -32,6 +32,15 @@ Backends start only after:
 - AAS UI: `http://localhost:3000`
 - Keycloak (direct): `http://keycloak.localhost:8080`
 
+## Important: Clean Browser Storage
+
+Before testing, clear browser local storage for `localhost` (or open a fresh private/incognito window).
+
+Reason:
+
+- The BaSyx UI stores state/config in browser storage.
+- Old stored values can override the current example configuration and lead to misleading behavior.
+
 ## Credentials
 
 - Keycloak Admin Console:
