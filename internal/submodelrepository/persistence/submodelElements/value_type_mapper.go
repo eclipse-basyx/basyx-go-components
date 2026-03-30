@@ -131,7 +131,7 @@ func isValidNumeric(value string) bool {
 //   - valueType: The XS datatype string to check
 //
 // Returns:
-//   - bool: true if the type is a date/time type, false otherwise
+//   - bool: true if the type is xs:dateTime (stored in TIMESTAMPTZ), false otherwise
 func IsDateTimeType(valueType types.DataTypeDefXSD) bool {
 	switch valueType {
 	case types.DataTypeDefXSDDateTime:

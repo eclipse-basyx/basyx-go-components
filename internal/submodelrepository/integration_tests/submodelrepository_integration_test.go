@@ -28,7 +28,6 @@ package main
 
 import (
 	"bytes"
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -41,6 +40,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/testenv"
 	_ "github.com/lib/pq" // PostgreSQL Treiber
 
@@ -49,12 +49,15 @@ import (
 )
 
 var (
-	xsdDurationPattern   = regexp.MustCompile(`^-?P(?:\d+Y)?(?:\d+M)?(?:\d+D)?(?:T(?:\d+H)?(?:\d+M)?(?:\d+(?:\.\d+)?S)?)?$`)
-	xsdGYearPattern      = regexp.MustCompile(`^-?\d{4,}$`)
-	xsdGMonthPattern     = regexp.MustCompile(`^--(0[1-9]|1[0-2])$`)
-	xsdGDayPattern       = regexp.MustCompile(`^---(0[1-9]|[12]\d|3[01])$`)
-	xsdGYearMonthPattern = regexp.MustCompile(`^-?\d{4,}-(0[1-9]|1[0-2])$`)
-	xsdGMonthDayPattern  = regexp.MustCompile(`^--(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$`)
+	xsdTimezonePattern = `(?:Z|[+-](?:0\d|1[0-4]):[0-5]\d)?`
+	xsdDurationPattern = regexp.MustCompile(
+		`^-?P(?:(?:\d+Y(?:\d+M)?(?:\d+D)?|\d+M(?:\d+D)?|\d+D)(?:T(?:\d+H(?:\d+M)?(?:\d+(?:\.\d+)?S)?|\d+M(?:\d+(?:\.\d+)?S)?|\d+(?:\.\d+)?S))?|T(?:\d+H(?:\d+M)?(?:\d+(?:\.\d+)?S)?|\d+M(?:\d+(?:\.\d+)?S)?|\d+(?:\.\d+)?S))$`,
+	)
+	xsdGYearPattern      = regexp.MustCompile(`^-?\d{4,}` + xsdTimezonePattern + `$`)
+	xsdGMonthPattern     = regexp.MustCompile(`^--(0[1-9]|1[0-2])(?:--)?` + xsdTimezonePattern + `$`)
+	xsdGDayPattern       = regexp.MustCompile(`^---(0[1-9]|[12]\d|3[01])` + xsdTimezonePattern + `$`)
+	xsdGYearMonthPattern = regexp.MustCompile(`^-?\d{4,}-(0[1-9]|1[0-2])` + xsdTimezonePattern + `$`)
+	xsdGMonthDayPattern  = regexp.MustCompile(`^--(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])` + xsdTimezonePattern + `$`)
 )
 
 // uploadFileAttachment uploads a file to the attachment endpoint
@@ -243,7 +246,13 @@ func assertXSDTimeLexical(t *testing.T, value string) {
 func TestTemporalXSDRoundTripFormatting(t *testing.T) {
 	baseURL := "http://localhost:6004"
 	submodelID := "urn:basyx:integration:temporal-format"
-	submodelIDEncoded := base64.RawURLEncoding.EncodeToString([]byte(submodelID))
+	submodelIDEncoded := common.EncodeString(submodelID)
+	t.Run("Duration regex guards invalid lexicals", func(t *testing.T) {
+		assert.NotRegexp(t, xsdDurationPattern, "P")
+		assert.NotRegexp(t, xsdDurationPattern, "PT")
+		assert.Regexp(t, xsdDurationPattern, "P1D")
+		assert.Regexp(t, xsdDurationPattern, "PT1S")
+	})
 	t.Cleanup(func() {
 		statusCode, body, err := requestJSON(http.MethodDelete, fmt.Sprintf("%s/submodels/%s", baseURL, submodelIDEncoded), nil)
 		if err != nil {
