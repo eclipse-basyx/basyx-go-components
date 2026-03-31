@@ -5,7 +5,12 @@
       { "name": "username_attr", "attributes": [ { "CLAIM": "role" } ] }
     ],
     "DEFOBJECTS": [
-      { "name": "public_description", "objects": [ { "ROUTE": "/description" }, { "ROUTE": "/api/v3/description" } ] },
+      { "name": "public_description", "objects": [ { "ROUTE": "/description" }] },
+      { "name": "public_aas", "objects": [ 
+        { "IDENTIFIABLE": "$sm(\"https://htw-berlin.de/ids/aas/demoaasv3\")" }, 
+        { "IDENTIFIABLE": "$aas(\"https://htw-berlin.de/ids/aas/demoaasv3\")" },
+        { "DESCRIPTOR": "$aasdesc(\"https://htw-berlin.de/ids/aas/demoaasv3\")" } 
+      ] },
       { "name": "all_api", "objects": [
         { "ROUTE": "/health" },
         { "ROUTE": "/shell-descriptors" },
@@ -25,20 +30,17 @@
     ],
     "DEFACLS": [
       { "name": "anonymous_read", "acl": { "USEATTRIBUTES": "anonymous_attr", "RIGHTS": ["READ"], "ACCESS": "ALLOW" } },
-      { "name": "usera_read", "acl": { "USEATTRIBUTES": "username_attr", "RIGHTS": ["READ"], "ACCESS": "ALLOW" } },
-      { "name": "userb_read_write", "acl": { "USEATTRIBUTES": "username_attr", "RIGHTS": ["READ", "CREATE", "UPDATE"], "ACCESS": "ALLOW" } },
-      { "name": "userx_all", "acl": { "USEATTRIBUTES": "username_attr", "RIGHTS": ["ALL"], "ACCESS": "ALLOW" } }
+      { "name": "user", "acl": { "USEATTRIBUTES": "username_attr", "RIGHTS": ["READ"], "ACCESS": "ALLOW" } },
+      { "name": "admin", "acl": { "USEATTRIBUTES": "username_attr", "RIGHTS": ["ALL"], "ACCESS": "ALLOW" } }
     ],
     "DEFFORMULAS": [
-      { "name": "is_usera", "formula": { "$eq": [ { "$attribute": { "CLAIM": "role" } }, { "$strVal": "viewer" } ] } },
-      { "name": "is_userb", "formula": { "$eq": [ { "$attribute": { "CLAIM": "role" } }, { "$strVal": "editor" } ] } },
-      { "name": "is_userx", "formula": { "$eq": [ { "$attribute": { "CLAIM": "role" } }, { "$strVal": "admin" } ] } }
+      { "name": "is_admin", "formula": { "$eq": [ { "$attribute": { "CLAIM": "role" } }, { "$strVal": "admin" } ] } },
+      { "name": "is_user", "formula": { "$eq": [ { "$attribute": { "CLAIM": "role" } }, { "$strVal": "viewer" } ] } }
     ],
     "rules": [
-      { "USEACL": "anonymous_read", "USEOBJECTS": ["public_description"], "FORMULA": {"$boolean": true} },
-      { "USEACL": "usera_read", "USEOBJECTS": ["all_api"], "USEFORMULA": "is_usera" },
-      { "USEACL": "userb_read_write", "USEOBJECTS": ["all_api"], "USEFORMULA": "is_userb" },
-      { "USEACL": "userx_all", "USEOBJECTS": ["all_api"], "USEFORMULA": "is_userx" }
+      { "USEACL": "anonymous_read", "USEOBJECTS": ["public_description", "public_aas"], "FORMULA": {"$boolean": true} },
+      { "USEACL": "user", "USEOBJECTS": ["all_api"], "USEFORMULA": "is_user" },
+      { "USEACL": "admin", "USEOBJECTS": ["all_api"], "USEFORMULA": "is_admin" }
     ]
   }
 }
