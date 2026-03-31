@@ -185,6 +185,15 @@ func (p *PostgreSQLDiscoveryDatabase) CreateAllAssetLinks(ctx context.Context, a
 	return nil
 }
 
+// AddAllAssetLinks appends missing asset links for an existing aas identifier.
+func (p *PostgreSQLDiscoveryDatabase) AddAllAssetLinks(ctx context.Context, aasID string, specificAssetIDs []types.ISpecificAssetID) error {
+	if err := descriptors.AddSpecificAssetIDsByAASIdentifier(ctx, p.db, aasID, specificAssetIDs); err != nil {
+		_, _ = fmt.Println(err)
+		return common.NewInternalServerError("Failed to store specific asset IDs. See console for information.")
+	}
+	return nil
+}
+
 // SearchAASIDsByAssetLinks searches for AAS identifiers that match the specified asset links.
 //
 // This method performs a search for AAS identifiers based on asset link criteria, with support

@@ -27,15 +27,179 @@
 package digitaltwinregistry
 
 import (
+	"context"
+	"net/http"
+	"strings"
+
+	"github.com/FriedJannik/aas-go-sdk/types"
 	registryapiinternal "github.com/eclipse-basyx/basyx-go-components/internal/aasregistry/api"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/descriptors"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
+	discoveryapiinternal "github.com/eclipse-basyx/basyx-go-components/internal/discoveryservice/api"
 )
+
+const customRegistryComponentName = "DTRREG"
 
 // CustomRegistryService wraps the default registry service to allow custom logic.
 type CustomRegistryService struct {
 	*registryapiinternal.AssetAdministrationShellRegistryAPIAPIService
+	discovery *discoveryapiinternal.AssetAdministrationShellBasicDiscoveryAPIAPIService
 }
 
 // NewCustomRegistryService constructs a custom registry service wrapper.
-func NewCustomRegistryService(base *registryapiinternal.AssetAdministrationShellRegistryAPIAPIService) *CustomRegistryService {
-	return &CustomRegistryService{AssetAdministrationShellRegistryAPIAPIService: base}
+func NewCustomRegistryService(
+	base *registryapiinternal.AssetAdministrationShellRegistryAPIAPIService,
+	discovery *discoveryapiinternal.AssetAdministrationShellBasicDiscoveryAPIAPIService,
+) *CustomRegistryService {
+	return &CustomRegistryService{
+		AssetAdministrationShellRegistryAPIAPIService: base,
+		discovery: discovery,
+	}
+}
+
+// PostAssetAdministrationShellDescriptor executes default POST behavior and
+// appends a discovery asset link from globalAssetId when present.
+func (s *CustomRegistryService) PostAssetAdministrationShellDescriptor(
+	ctx context.Context,
+	assetAdministrationShellDescriptor model.AssetAdministrationShellDescriptor,
+) (model.ImplResponse, error) {
+	baseResp, baseErr := s.AssetAdministrationShellRegistryAPIAPIService.PostAssetAdministrationShellDescriptor(
+		ctx,
+		assetAdministrationShellDescriptor,
+	)
+	if baseErr != nil || !is2xx(baseResp.Code) {
+		return baseResp, baseErr
+	}
+
+	if errResp, err := s.appendGlobalAssetLink(
+		ctx,
+		assetAdministrationShellDescriptor.Id,
+		assetAdministrationShellDescriptor.GlobalAssetId,
+		"PostAssetAdministrationShellDescriptor",
+	); errResp != nil || err != nil {
+		return *errResp, err
+	}
+
+	return baseResp, nil
+}
+
+// PutAssetAdministrationShellDescriptorById executes default PUT behavior and
+// appends a discovery asset link from globalAssetId when present.
+func (s *CustomRegistryService) PutAssetAdministrationShellDescriptorById(
+	ctx context.Context,
+	aasIdentifier string,
+	assetAdministrationShellDescriptor model.AssetAdministrationShellDescriptor,
+) (model.ImplResponse, error) {
+	decodedAASID, decodeErr := common.DecodeString(aasIdentifier)
+	if decodeErr != nil {
+		resp := common.NewErrorResponse(
+			decodeErr,
+			http.StatusBadRequest,
+			customRegistryComponentName,
+			"PutAssetAdministrationShellDescriptorById",
+			"BadRequest-DecodeAAS",
+		)
+		return resp, nil
+	}
+	// DTR customization: path id wins, so base strict-check remains bypassed only here.
+	assetAdministrationShellDescriptor.Id = decodedAASID
+
+	baseResp, baseErr := s.AssetAdministrationShellRegistryAPIAPIService.PutAssetAdministrationShellDescriptorById(
+		ctx,
+		aasIdentifier,
+		assetAdministrationShellDescriptor,
+	)
+	if baseErr != nil || !is2xx(baseResp.Code) {
+		return baseResp, baseErr
+	}
+
+	if errResp, err := s.appendGlobalAssetLink(
+		ctx,
+		decodedAASID,
+		assetAdministrationShellDescriptor.GlobalAssetId,
+		"PutAssetAdministrationShellDescriptorById",
+	); errResp != nil || err != nil {
+		return *errResp, err
+	}
+
+	return baseResp, nil
+}
+
+// PutSubmodelDescriptorByIdThroughSuperpath executes default PUT behavior for
+// submodel descriptors while deactivating strict body-id/path-id mismatch only
+// for Digital Twin Registry.
+func (s *CustomRegistryService) PutSubmodelDescriptorByIdThroughSuperpath(
+	ctx context.Context,
+	aasIdentifier string,
+	submodelIdentifier string,
+	submodelDescriptor model.SubmodelDescriptor,
+) (model.ImplResponse, error) {
+	decodedSMD, decodeErr := common.DecodeString(submodelIdentifier)
+	if decodeErr != nil {
+		resp := common.NewErrorResponse(
+			decodeErr,
+			http.StatusBadRequest,
+			customRegistryComponentName,
+			"PutSubmodelDescriptorByIdThroughSuperpath",
+			"BadRequest-DecodeSubmodel",
+		)
+		return resp, nil
+	}
+	// DTR customization: path id wins, so base strict-check remains bypassed only here.
+	submodelDescriptor.Id = decodedSMD
+
+	return s.AssetAdministrationShellRegistryAPIAPIService.PutSubmodelDescriptorByIdThroughSuperpath(
+		ctx,
+		aasIdentifier,
+		submodelIdentifier,
+		submodelDescriptor,
+	)
+}
+
+func (s *CustomRegistryService) appendGlobalAssetLink(
+	ctx context.Context,
+	aasID string,
+	globalAssetID string,
+	method string,
+) (*model.ImplResponse, error) {
+	if s.discovery == nil {
+		return nil, nil
+	}
+	if strings.TrimSpace(globalAssetID) == "" || strings.TrimSpace(aasID) == "" {
+		return nil, nil
+	}
+
+	aasIdentifier := common.EncodeString(aasID)
+	links := []types.ISpecificAssetID{
+		types.NewSpecificAssetID("globalAssetId", globalAssetID),
+	}
+
+	discoveryOnlyCtx := descriptors.WithDiscoveryOnlySpecificAssetIDs(ctx)
+	addResp, addErr := s.discovery.AddAllAssetLinksByID(discoveryOnlyCtx, aasIdentifier, links)
+	if addErr != nil {
+		resp := common.NewErrorResponse(
+			addErr,
+			http.StatusInternalServerError,
+			customRegistryComponentName,
+			method,
+			"AddGlobalAssetLink",
+		)
+		return &resp, addErr
+	}
+	if !is2xx(addResp.Code) {
+		resp := common.NewErrorResponse(
+			common.NewInternalServerError("failed to add globalAssetId discovery link"),
+			http.StatusInternalServerError,
+			customRegistryComponentName,
+			method,
+			"AddGlobalAssetLink-Non2xx",
+		)
+		return &resp, nil
+	}
+	return nil, nil
+}
+
+func is2xx(code int) bool {
+	return code >= http.StatusOK && code < http.StatusMultipleChoices
 }

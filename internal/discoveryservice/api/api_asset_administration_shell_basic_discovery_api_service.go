@@ -209,6 +209,51 @@ func (s *AssetAdministrationShellBasicDiscoveryAPIAPIService) PostAllAssetLinksB
 	return model.Response(http.StatusCreated, jsonableLinks), nil
 }
 
+// AddAllAssetLinksByID adds missing asset links for the Asset Administration Shell.
+func (s *AssetAdministrationShellBasicDiscoveryAPIAPIService) AddAllAssetLinksByID(
+	ctx context.Context,
+	aasIdentifier string,
+	specificAssetID []types.ISpecificAssetID,
+) (model.ImplResponse, error) {
+	decodeDiscoveryIdentifier, decodeError := common.DecodeString(aasIdentifier)
+	if decodeError != nil {
+		log.Printf("ðŸ§­ [%s] Error AddAllAssetLinksById: decode aasIdentifier=%q failed: %v", componentName, aasIdentifier, decodeError)
+		return common.NewErrorResponse(
+			decodeError, http.StatusBadRequest, componentName, "AddAllAssetLinksById", "BadRequest-Decode",
+		), nil
+	}
+
+	err := s.discoveryBackend.AddAllAssetLinks(ctx, string(decodeDiscoveryIdentifier), specificAssetID)
+	if err != nil {
+		switch {
+		case common.IsErrBadRequest(err):
+			log.Printf("ðŸ§­ [%s] Error AddAllAssetLinksById: bad request (aasId=%q): %v", componentName, string(decodeDiscoveryIdentifier), err)
+			return common.NewErrorResponse(
+				err, http.StatusBadRequest, componentName, "AddAllAssetLinksById", "BadRequest",
+			), nil
+		default:
+			log.Printf("ðŸ§­ [%s] Error AddAllAssetLinksById: internal (aasId=%q): %v", componentName, string(decodeDiscoveryIdentifier), err)
+			return common.NewErrorResponse(
+				err, http.StatusInternalServerError, componentName, "AddAllAssetLinksById", "Unhandled",
+			), err
+		}
+	}
+
+	jsonableLinks := make([]map[string]interface{}, 0, len(specificAssetID))
+	for _, link := range specificAssetID {
+		jsonableLink, err := jsonization.ToJsonable(link)
+		if err != nil {
+			log.Printf("ðŸ§­ [%s] Error AddAllAssetLinksById: failed to convert link to jsonable (aasId=%q): %v", componentName, string(decodeDiscoveryIdentifier), err)
+			return common.NewErrorResponse(
+				err, http.StatusInternalServerError, componentName, "AddAllAssetLinksById", "JsonConversion",
+			), err
+		}
+		jsonableLinks = append(jsonableLinks, jsonableLink)
+	}
+
+	return model.Response(http.StatusCreated, jsonableLinks), nil
+}
+
 // DeleteAllAssetLinksByID - Deletes specified specific asset identifiers linked to an Asset Administration Shell:
 // discovery via these specific asset IDs shall not be supported any longer
 func (s *AssetAdministrationShellBasicDiscoveryAPIAPIService) DeleteAllAssetLinksByID(
