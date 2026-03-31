@@ -71,6 +71,18 @@ type resp struct {
 	QueryFilter *auth.QueryFilter `json:"queryFilter,omitempty"`
 }
 
+func sanitizeQueryFilter(qf *auth.QueryFilter) *auth.QueryFilter {
+	if qf == nil {
+		return nil
+	}
+	sanitized := *qf
+	sanitized.FormulasByRight = nil
+	if sanitized.Formula == nil && len(sanitized.Filters) == 0 {
+		return nil
+	}
+	return &sanitized
+}
+
 // TestAdaptLEForBackend loads cases from unit_tests/adapt_le/testcases.json
 // Each case provides paths (relative to that base) to the input logical expression,
 // expected adapted expression, and optional context (claims/now).
@@ -125,7 +137,7 @@ func TestAdaptLEForBackend(t *testing.T) {
 			got := normJSON(resp{
 				Ok:          ok,
 				Reason:      reason,
-				QueryFilter: qf,
+				QueryFilter: sanitizeQueryFilter(qf),
 			})
 
 			want, err := os.ReadFile(c.Expected)

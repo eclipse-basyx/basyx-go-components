@@ -1,0 +1,18 @@
+{
+  "id": "https://example.org/PUT-X",
+  "specificAssetIds": [
+    {
+      "name": "manufacturerPartId",
+      "value": "PUT-UPDATED",
+      "externalSubjectId": {
+        "type": "ExternalReference",
+        "keys": [
+          {
+            "type": "GlobalReference",
+            "value": "WRITTEN_BY_X"
+          }
+        ]
+      }
+    }
+  ]
+}

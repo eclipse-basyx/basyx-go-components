@@ -41,5 +41,5 @@ debug.test.*
 
 # JetBrains IDEs
 .idea
-
+.gocache/
 logs/

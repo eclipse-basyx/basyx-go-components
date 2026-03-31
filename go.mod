@@ -11,7 +11,7 @@ require (
 	github.com/doug-martin/goqu/v9 v9.19.0
 	github.com/go-chi/cors v1.2.2
 	github.com/json-iterator/go v1.1.12
-	github.com/lib/pq v1.11.2
+	github.com/lib/pq v1.12.1
 	github.com/spf13/viper v1.21.0
 	github.com/stretchr/testify v1.11.1
 	golang.org/x/sync v0.20.0

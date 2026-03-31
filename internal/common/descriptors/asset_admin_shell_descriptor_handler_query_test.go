@@ -2,16 +2,36 @@ package descriptors
 
 import (
 	"context"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 
+	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 )
 
+func contextWithABACDisabled(t *testing.T) context.Context {
+	t.Helper()
+
+	cfg := &common.Config{}
+	var cfgCtx context.Context
+	handler := common.ConfigMiddleware(cfg)(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+		cfgCtx = r.Context()
+	}))
+	handler.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/", nil))
+
+	if cfgCtx == nil {
+		t.Fatal("failed to create config-bearing context")
+	}
+	return cfgCtx
+}
+
 func TestBuildListAssetAdministrationShellDescriptorsQuery_UsesPagedInnerQueryAndPayloadFlags(t *testing.T) {
+	ctx := contextWithABACDisabled(t)
 	ds, err := buildListAssetAdministrationShellDescriptorsQuery(
-		context.Background(),
+		ctx,
 		2,
 		"",
 		"",
@@ -69,7 +89,7 @@ func TestBuildListAssetAdministrationShellDescriptorsQuery_ReusesSameMaskConditi
 	fAssetType := grammar.FragmentStringPattern("$aasdesc#assetType")
 	fDescription := grammar.FragmentStringPattern("$aasdesc#description")
 
-	ctx := auth.MergeQueryFilter(context.Background(), grammar.Query{
+	ctx := auth.MergeQueryFilter(contextWithABACDisabled(t), grammar.Query{
 		FilterConditions: []grammar.SubFilter{
 			{Fragment: &fAssetKind, Condition: &cond},
 			{Fragment: &fAssetType, Condition: &cond},

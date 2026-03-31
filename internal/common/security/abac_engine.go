@@ -84,8 +84,9 @@ type FragmentFilters map[grammar.FragmentStringPattern]grammar.LogicalExpression
 // mutations, or redact fields. The Discovery Service currently does not require
 // a concrete filter structure; extend this struct when needed.
 type QueryFilter struct {
-	Formula *grammar.LogicalExpression `json:"Formula,omitempty" yaml:"Formula,omitempty" mapstructure:"Formula,omitempty"`
-	Filters FragmentFilters            `json:"Filters,omitempty" yaml:"Filters,omitempty" mapstructure:"Filters,omitempty"`
+	Formula         *grammar.LogicalExpression                       `json:"Formula,omitempty" yaml:"Formula,omitempty" mapstructure:"Formula,omitempty"`
+	FormulasByRight map[grammar.RightsEnum]grammar.LogicalExpression `json:"FormulasByRight,omitempty" yaml:"FormulasByRight,omitempty" mapstructure:"FormulasByRight,omitempty"`
+	Filters         FragmentFilters                                  `json:"Filters,omitempty" yaml:"Filters,omitempty" mapstructure:"Filters,omitempty"`
 }
 
 // FragmentExpression pairs a concrete fragment key with its logical expression.
@@ -127,8 +128,9 @@ func (m *AccessModel) AuthorizeWithFilter(in EvalInput) (bool, DecisionCode, *Qu
 
 // AuthorizeWithFilterWithOptions behaves like AuthorizeWithFilter but allows callers
 // to control backend simplification behavior (e.g., implicit casts).
+// nolint:revive // This function is the heart of ABAC and is complicated. Sorry cognitive-complexity!
 func (m *AccessModel) AuthorizeWithFilterWithOptions(in EvalInput, opts grammar.SimplifyOptions) (bool, DecisionCode, *QueryFilter) {
-	rights, mapped, routeFound := m.mapMethodAndPathToRights(in)
+	rightAlternatives, mapped, routeFound := m.mapMethodAndPathToRights(in)
 	if !routeFound {
 		return false, DecisionRouteNotFound, nil
 	}
@@ -138,6 +140,8 @@ func (m *AccessModel) AuthorizeWithFilterWithOptions(in EvalInput, opts grammar.
 
 	var ruleExprs []QueryFilter
 	var allFragments []grammar.FragmentStringPattern
+	relevantRights := collectRelevantRights(rightAlternatives)
+	ruleExprsByRight := make(map[grammar.RightsEnum][]grammar.LogicalExpression, len(relevantRights))
 
 	for _, r := range m.rules {
 		acl, attrs, objs, lexpr := r.acl, r.attrs, r.objs, r.lexpr
@@ -146,7 +150,7 @@ func (m *AccessModel) AuthorizeWithFilterWithOptions(in EvalInput, opts grammar.
 			continue
 		}
 		// Gate 1: rights
-		if !rightsContainsAll(acl.RIGHTS, rights) {
+		if !rightsContainsAny(acl.RIGHTS, rightAlternatives) {
 			continue
 		}
 		// Gate 2: attributes
@@ -214,7 +218,17 @@ func (m *AccessModel) AuthorizeWithFilterWithOptions(in EvalInput, opts grammar.
 			}
 		}
 
-		ruleExprs = append(ruleExprs, QueryFilter{&adapted, fragments})
+		for _, right := range relevantRights {
+			if !ruleAllowsRight(acl.RIGHTS, right) {
+				continue
+			}
+			ruleExprsByRight[right] = append(ruleExprsByRight[right], adapted)
+		}
+
+		ruleExprs = append(ruleExprs, QueryFilter{
+			Formula: &adapted,
+			Filters: fragments,
+		})
 	}
 
 	if len(ruleExprs) == 0 {
@@ -256,6 +270,27 @@ func (m *AccessModel) AuthorizeWithFilterWithOptions(in EvalInput, opts grammar.
 		return resolveAttributeValue(attr, in.Claims)
 	}
 	simplified, decision := combined.SimplifyForBackendFilterWithOptions(resolver, opts)
+	combinedByRight := make(map[grammar.RightsEnum]grammar.LogicalExpression, len(relevantRights))
+	for _, right := range relevantRights {
+		combinedByRight[right] = boolExpression(false)
+		expressions := ruleExprsByRight[right]
+		if len(expressions) == 0 {
+			continue
+		}
+
+		combinedRight := grammar.LogicalExpression{
+			Or: expressions,
+		}
+		simplifiedRight, rightDecision := combinedRight.SimplifyForBackendFilterWithOptions(resolver, opts)
+		switch rightDecision {
+		case grammar.SimplifyFalse:
+			combinedByRight[right] = boolExpression(false)
+		case grammar.SimplifyTrue:
+			combinedByRight[right] = boolExpression(true)
+		default:
+			combinedByRight[right] = simplifiedRight
+		}
+	}
 
 	hasFormula := true
 	switch decision {
@@ -265,11 +300,15 @@ func (m *AccessModel) AuthorizeWithFilterWithOptions(in EvalInput, opts grammar.
 		hasFormula = false
 	}
 
+	hasRightScopedFormulas := len(combinedByRight) > 0
 	var qf *QueryFilter
-	if hasFormula || len(combinedFragments) > 0 {
+	if hasFormula || len(combinedFragments) > 0 || hasRightScopedFormulas {
 		qf = &QueryFilter{}
 		if hasFormula {
 			qf.Formula = &simplified
+		}
+		if hasRightScopedFormulas {
+			qf.FormulasByRight = combinedByRight
 		}
 		if len(combinedFragments) > 0 {
 			qf.Filters = combinedFragments
@@ -277,6 +316,47 @@ func (m *AccessModel) AuthorizeWithFilterWithOptions(in EvalInput, opts grammar.
 	}
 
 	return true, DecisionAllow, qf
+}
+
+func rightsContainsAny(hay []grammar.RightsEnum, alternatives [][]grammar.RightsEnum) bool {
+	for _, rights := range alternatives {
+		for _, right := range rights {
+			if ruleAllowsRight(hay, right) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func collectRelevantRights(alternatives [][]grammar.RightsEnum) []grammar.RightsEnum {
+	seen := make(map[grammar.RightsEnum]struct{})
+	rights := make([]grammar.RightsEnum, 0)
+	for _, alternative := range alternatives {
+		for _, right := range alternative {
+			if _, ok := seen[right]; ok {
+				continue
+			}
+			seen[right] = struct{}{}
+			rights = append(rights, right)
+		}
+	}
+	return rights
+}
+
+func ruleAllowsRight(ruleRights []grammar.RightsEnum, right grammar.RightsEnum) bool {
+	for _, ruleRight := range ruleRights {
+		if ruleRight == grammar.RightsEnumALL || ruleRight == right {
+			return true
+		}
+	}
+	return false
+}
+
+func boolExpression(v bool) grammar.LogicalExpression {
+	return grammar.LogicalExpression{
+		Boolean: &v,
+	}
 }
 
 // FilterExpressionEntriesFor returns all (fragment, expression) pairs from

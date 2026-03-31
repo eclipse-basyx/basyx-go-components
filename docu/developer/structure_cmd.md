@@ -13,7 +13,7 @@ Contains the main entry points for each microservice in the BaSyx Go Components 
 ## Example: submodelrepositoryservice
 - Handles HTTP requests for submodel repository operations
 - Loads configuration from `config.yaml`
-- Exposes REST API as defined in `api/submodelrepository/openapi.yaml`
+- Exposes REST API as defined in `cmd/submodelrepositoryservice/openapi.yaml`
 
 ## How to Extend
 - Add new service folders for additional microservices

@@ -138,9 +138,15 @@ func ReadSpecificAssetIDsByAASRef(
 			common.TSpecificAssetID.Col(common.ColID).Asc(),
 		)
 
-	ds, err = auth.AddFormulaQueryFromContext(ctx, ds, collector)
-	if err != nil {
-		return nil, err
+	shouldEnforceFormula, enforceErr := auth.ShouldEnforceFormula(ctx)
+	if enforceErr != nil {
+		return nil, common.NewInternalServerError("BD-GETSPECIFICASSETID-SHOULDENFORCE " + enforceErr.Error())
+	}
+	if shouldEnforceFormula {
+		ds, err = auth.AddFormulaQueryFromContext(ctx, ds, collector)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	sqlStr, args, err := ds.ToSQL()

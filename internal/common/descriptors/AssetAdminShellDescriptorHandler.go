@@ -452,8 +452,7 @@ func buildListAASDescriptorPageQuery(
 			common.TAASDescriptor.Col(common.ColAASID).As("sort_aas_id"),
 		)
 
-	var err error
-	ds, err = auth.AddFormulaQueryFromContext(ctx, ds, collector)
+	ds, err := auth.AddFormulaQueryFromContext(ctx, ds, collector)
 	if err != nil {
 		return nil, err
 	}

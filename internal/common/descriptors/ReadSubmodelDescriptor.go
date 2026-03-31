@@ -154,9 +154,15 @@ func ReadSubmodelDescriptorsByDescriptorIDs(
 	if err != nil {
 		return nil, err
 	}
-	inner, err = auth.AddFormulaQueryFromContext(ctx, inner, collector)
-	if err != nil {
-		return nil, err
+	shouldEnforceFormula, enforceErr := auth.ShouldEnforceFormula(ctx)
+	if enforceErr != nil {
+		return nil, common.NewInternalServerError("SMDESC-READ-SHOULDENFORCE " + enforceErr.Error())
+	}
+	if shouldEnforceFormula {
+		inner, err = auth.AddFormulaQueryFromContext(ctx, inner, collector)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	ds := d.From(inner.As(dataAlias)).
@@ -300,9 +306,15 @@ func ReadSubmodelDescriptorsByAASDescriptorIDs(
 		return nil, err
 	}
 	if isMain {
-		inner, err = auth.AddFormulaQueryFromContext(ctx, inner, collector)
-		if err != nil {
-			return nil, err
+		shouldEnforceFormula, enforceErr := auth.ShouldEnforceFormula(ctx)
+		if enforceErr != nil {
+			return nil, common.NewInternalServerError("SMDESC-READBYAAS-SHOULDENFORCE " + enforceErr.Error())
+		}
+		if shouldEnforceFormula {
+			inner, err = auth.AddFormulaQueryFromContext(ctx, inner, collector)
+			if err != nil {
+				return nil, err
+			}
 		}
 	}
 
