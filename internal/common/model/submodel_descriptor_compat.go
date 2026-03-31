@@ -9,6 +9,7 @@ const (
 
 var supportsSingularSupplementalSemanticId atomic.Bool
 
+// SetSupportsSingularSupplementalSemanticId toggles support for singular supplemental semantic ID input.
 func SetSupportsSingularSupplementalSemanticId(enabled bool) {
 	supportsSingularSupplementalSemanticId.Store(enabled)
 }

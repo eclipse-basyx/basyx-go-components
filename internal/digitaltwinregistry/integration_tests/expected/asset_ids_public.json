@@ -22,5 +22,9 @@
   {
     "name": "digitalTwinType",
     "value": "PartInstance"
+  },
+  {
+    "name": "globalAssetId",
+    "value": "urn:uuid:019c0005-b2b7-7eec-85e4-f02cd0406de3"
   }
 ]

@@ -190,7 +190,7 @@ func (s *CustomDiscoveryService) PostAllAssetLinksByID(
 		), nil
 	}
 
-	persistResp, persistErr := s.AssetAdministrationShellBasicDiscoveryAPIAPIService.AddAllAssetLinksByID(ctx, aasIdentifier, specificAssetID)
+	persistResp, persistErr := s.AddAllAssetLinksByID(ctx, aasIdentifier, specificAssetID)
 	if persistErr != nil {
 		return persistResp, persistErr
 	}
