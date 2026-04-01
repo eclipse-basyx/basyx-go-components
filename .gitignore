@@ -20,10 +20,12 @@
 # Go workspace file
 go.work
 go.work.sum
-.gocache/
-.tmp_tractus/
 # env file
 .env
+
+# local build files
+.gocache/
+.tmp_tractus/
 
 # VS Code debug files
 .vscode/launch.json.bak
