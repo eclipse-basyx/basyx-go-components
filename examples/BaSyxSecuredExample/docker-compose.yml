@@ -31,7 +31,7 @@ services:
       - ./security_env:/security_env:ro
     extra_hosts:
       - "keycloak.localhost:host-gateway"
-    restart: "no"
+    restart: unless-stopped
 
   sm-registry:
     container_name: sm-registry
@@ -65,7 +65,7 @@ services:
       - ./security_env:/security_env:ro
     extra_hosts:
       - "keycloak.localhost:host-gateway"
-    restart: "no"
+    restart: unless-stopped
 
   aas-discovery:
     container_name: aas-discovery
@@ -99,7 +99,7 @@ services:
       - ./security_env:/security_env:ro
     extra_hosts:
       - "keycloak.localhost:host-gateway"
-    restart: "no"
+    restart: unless-stopped
 
   aas-ui:
     container_name: aas-web-ui
@@ -112,7 +112,7 @@ services:
       - ENDPOINT_CONFIG_AVAILABLE=false
     extra_hosts:
       - "keycloak.localhost:host-gateway"
-    restart: "no"
+    restart: unless-stopped
 
   aas_repository:
     container_name: aas-repository
@@ -146,7 +146,7 @@ services:
       - ./security_env:/security_env:ro
     extra_hosts:
       - "keycloak.localhost:host-gateway"
-    restart: "no"
+    restart: unless-stopped
 
   submodel_repository:
     container_name: submodel-repository
@@ -182,7 +182,7 @@ services:
         condition: service_completed_successfully
       keycloak-healthcheck:
         condition: service_completed_successfully
-    restart: "no"
+    restart: unless-stopped
 
   concept-description-repository:
     container_name: concept-description-repository
@@ -216,7 +216,7 @@ services:
       - ./security_env:/security_env:ro
     extra_hosts:
       - "keycloak.localhost:host-gateway"
-    restart: "no"
+    restart: unless-stopped
 
   keycloak:
     image: keycloak/keycloak:26.0.6
@@ -289,4 +289,4 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
-    restart: "no"
+    restart: unless-stopped

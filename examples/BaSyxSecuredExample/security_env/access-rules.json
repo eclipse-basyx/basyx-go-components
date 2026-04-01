@@ -7,9 +7,10 @@
     "DEFOBJECTS": [
       { "name": "public_description", "objects": [ { "ROUTE": "/description" }] },
       { "name": "public_aas", "objects": [ 
-        { "IDENTIFIABLE": "$sm(\"https://htw-berlin.de/ids/aas/demoaasv3\")" }, 
         { "IDENTIFIABLE": "$aas(\"https://htw-berlin.de/ids/aas/demoaasv3\")" },
-        { "DESCRIPTOR": "$aasdesc(\"https://htw-berlin.de/ids/aas/demoaasv3\")" } 
+        { "IDENTIFIABLE": "$sm(\"https://htw-berlin.de/ids/sm/demosubmodelv3\")" }, 
+        { "DESCRIPTOR": "$aasdesc(\"https://htw-berlin.de/ids/aas/demoaasv3\")" } , 
+        { "DESCRIPTOR": "$smdesc(\"https://htw-berlin.de/ids/sm/demosubmodelv3\")" }
       ] },
       { "name": "all_api", "objects": [
         { "ROUTE": "/health" },

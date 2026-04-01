@@ -29,8 +29,8 @@ Backends start only after:
 
 ## Open The UI
 
-- AAS UI: `http://localhost:3000`
-- Keycloak (direct): `http://keycloak.localhost:8080`
+- AAS UI: [http://localhost:3000](http://localhost:3000)
+- Keycloak (direct): [http://keycloak.localhost:8080](http://keycloak.localhost:8080)
 
 ## Credentials
 
@@ -42,11 +42,65 @@ Backends start only after:
   - `usera` / `pwd`: read-only access to Demo AAS and the second AAS
   - not logged in (anonymous): can read Demo AAS only
 
+## Test Scenario
+
+You can try out this **extremly simplified** test scenario to get a feeling for the security features of basyx.
+Use this AASX file for upload tests:
+
+- [`aas/ExampleV3.aasx`](aas/ExampleV3.aasx)
+
+Only [`aas/ExampleV3.aasx`](aas/ExampleV3.aasx) is supported in this example scenario, because the predefined access-rule objects and expected IDs in this walkthrough are aligned to the content of that file.
+
+### 1) Admin Login + Upload (Required Setup)
+
+1. Open UI at [http://localhost:3000](http://localhost:3000)
+2. Log in as `admin` (see credentials in the section above)
+3. Upload [`aas/ExampleV3.aasx`](aas/ExampleV3.aasx)
+
+Expected behavior:
+
+- Upload succeeds for `admin`
+- Demo AAS and the second AAS are visible in UI
+
+### 2) Read-Only User Check (`usera`)
+
+Login in UI with:
+
+- User: `usera`
+- Password: `pwd`
+
+Expected behavior:
+
+- `usera` can read both AAS entries (Demo AAS + second AAS)
+- Create/update/delete operations are denied (write not allowed)
+
+### 3) Logout Check (Expected: Demo AAS only)
+
+1. Log out
+
+Expected behavior:
+
+- Demo AAS remains visible for anonymous users
+- The second AAS is hidden for anonymous users
+
+### 4) Anonymous Upload Attempt (Expected: Fail)
+
+1. Without logging in, try to upload [`aas/ExampleV3.aasx`](aas/ExampleV3.aasx)
+
+Expected behavior:
+
+- Write is denied by security rules
+- Current UI may show a success message, but data is **not** persisted
+
 ## Access Rules Explained
 
 The behavior above is configured in:
 
-- `security_env/access-rules.json`
+- [`security_env/access-rules.json`](security_env/access-rules.json)
+
+Rule model reference (ACLs, formulas, object groups, and rule wiring):
+
+- [IDTA-01004 Access Rule Model (v3.0.2)](https://industrialdigitaltwin.io/aas-specifications/IDTA-01004/v3.0.2/access-rule-model.html)
 
 This file defines three access types:
 
@@ -69,57 +123,7 @@ This file defines three access types:
 - Formula `is_admin` checks `role = admin`
 - Objects `all_api` allow full API access, including upload/write operations
 
-To change who can see or edit what, update `security_env/access-rules.json` (ACLs, formulas, and object groups).
-
-## Test Scenario
-
-Use this AASX file for upload tests:
-
-- `aas/ExampleV3.aasx`
-
-Only `aas/ExampleV3.aasx` is supported in this example scenario.
-
-### 1) Admin Login + Upload (Required Setup)
-
-1. Open UI at `http://localhost:3000`
-2. Log in as `admin` (see credentials in the section above)
-3. Upload `aas/ExampleV3.aasx`
-
-Expected behavior:
-
-- Upload succeeds for `admin`
-- Demo AAS and the second AAS are visible in UI
-
-### 2) Read-Only User Check (`usera`)
-
-Login in UI with:
-
-- User: `usera`
-- Password: `pwd`
-
-Expected behavior:
-
-- `usera` can read both AAS entries (Demo AAS + second AAS)
-- Create/update/delete operations are denied (write not allowed)
-
-### 3) Logout Check (Expected: Demo AAS only)
-
-1. Log out
-2. Refresh / reopen UI
-
-Expected behavior:
-
-- Demo AAS remains visible for anonymous users
-- The second AAS is hidden for anonymous users
-
-### 4) Anonymous Upload Attempt (Expected: Fail)
-
-1. Without logging in, try to upload `ExampleV3.aasx`
-
-Expected behavior:
-
-- Write is denied by security rules
-- Current UI may show a success message, but data is **not** persisted
+To change who can see or edit what, update [`security_env/access-rules.json`](security_env/access-rules.json) (ACLs, formulas, and object groups).
 
 ## Stop / Clean Up
 
@@ -137,5 +141,5 @@ docker compose down -v
 
 ## Notes
 
-- Security rules are configured in `security_env/access-rules.json`.
+- Security rules are configured in [`security_env/access-rules.json`](security_env/access-rules.json).
 - Trusted OIDC issuer/audience config is in `security_env/trustlist.json`.
