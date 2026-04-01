@@ -21,6 +21,8 @@
 go.work
 go.work.sum
 
+.gocache/
+.tmp_tractus/
 # env file
 .env
 
