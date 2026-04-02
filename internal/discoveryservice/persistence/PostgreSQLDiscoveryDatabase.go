@@ -118,7 +118,6 @@ func (p *PostgreSQLDiscoveryDatabase) GetAllAssetLinks(ctx context.Context, aasI
 		case common.IsErrNotFound(err):
 			return nil, err
 		default:
-			_, _ = fmt.Println(err)
 			return nil, common.NewInternalServerError("Failed to query specific asset IDs. See console for information.")
 		}
 	}
@@ -149,7 +148,6 @@ func (p *PostgreSQLDiscoveryDatabase) DeleteAllAssetLinks(ctx context.Context, a
 	}
 	result, err := p.db.ExecContext(ctx, sqlStr, args...)
 	if err != nil {
-		_, _ = fmt.Println(err)
 		return common.NewInternalServerError("Failed to delete AAS identifier. See console for information.")
 	}
 	if rows, _ := result.RowsAffected(); rows == 0 {
@@ -179,7 +177,14 @@ func (p *PostgreSQLDiscoveryDatabase) DeleteAllAssetLinks(ctx context.Context, a
 // The use of COPY FROM makes this method highly efficient even for large numbers of asset links.
 func (p *PostgreSQLDiscoveryDatabase) CreateAllAssetLinks(ctx context.Context, aasID string, specificAssetIDs []types.ISpecificAssetID) error {
 	if err := descriptors.ReplaceSpecificAssetIDsByAASIdentifier(ctx, p.db, aasID, specificAssetIDs); err != nil {
-		_, _ = fmt.Println(err)
+		return common.NewInternalServerError("Failed to store specific asset IDs. See console for information.")
+	}
+	return nil
+}
+
+// AddAllAssetLinks appends missing asset links for an existing aas identifier.
+func (p *PostgreSQLDiscoveryDatabase) AddAllAssetLinks(ctx context.Context, aasID string, specificAssetIDs []types.ISpecificAssetID) error {
+	if err := descriptors.AddSpecificAssetIDsByAASIdentifier(ctx, p.db, aasID, specificAssetIDs); err != nil {
 		return common.NewInternalServerError("Failed to store specific asset IDs. See console for information.")
 	}
 	return nil

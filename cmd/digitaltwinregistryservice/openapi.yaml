@@ -1,13 +1,33 @@
 openapi: 3.0.3
 info:
   title: Digital Twin Registry API
-  description: >-
+  description: |-
     Combined API for Asset Administration Shell Registry Service and
     Asset Administration Shell Basic Discovery Service.
 
     Edc-Bpn header: Optional header used in the query language for access control
     and filtering. If the end user can change this header, the access control is
     not secure because it is not derived from the token.
+
+    Digital Twin Registry custom additions (beyond IDTA base profile):
+
+    - POST /shell-descriptors and PUT /shell-descriptors/{aasIdentifier} also append a
+      discovery link from globalAssetId (stored as specific asset id name "globalAssetId")
+      when globalAssetId is present in the descriptor.
+    - PUT /shell-descriptors/{aasIdentifier} and PUT
+      /shell-descriptors/{aasIdentifier}/submodel-descriptors/{submodelIdentifier} use
+      path identifiers as source of truth (path id wins over request body id).
+    - SubmodelDescriptor input uses "supplementalSemanticIds" (plural) by default.
+      Singular "supplementalSemanticId" compatibility can be enabled via
+      general.supportsSingularSupplementalSemanticId (env:
+      GENERAL_SUPPORTSSINGULARSUPPLEMENTALSEMANTICID).
+    - POST /lookup/shellsByAssetLink supports createdAfter (RFC3339). Invalid values
+      return HTTP 400.
+    - For DTR compatibility, empty-asset-link requests on /lookup/shellsByAssetLink and
+      /lookup/shells may return {}.
+    - POST /lookup/shells/{aasIdentifier} always appends provided links (no replace, no
+      deduplication; duplicates may occur) and returns 404 when the addressed shell does
+      not exist.
 
     Copyright: Industrial Digital Twin Association (IDTA) 2025
   contact:
@@ -102,6 +122,10 @@ paths:
       tags:
         - Asset Administration Shell Registry API
       summary: Creates a new Asset Administration Shell Descriptor, i.e. registers an AAS
+      description: >-
+        DTR extension: if globalAssetId is present in the descriptor, the service also
+        appends a discovery entry as specific asset id (name "globalAssetId") for the
+        same shell identifier.
       operationId: PostAssetAdministrationShellDescriptor
       x-semanticIds:
         - https://admin-shell.io/aas/API/PostAssetAdministrationShellDescriptor/3/1
@@ -167,6 +191,12 @@ paths:
       tags:
         - Asset Administration Shell Registry API
       summary: Creates or updates an existing Asset Administration Shell Descriptor
+      description: |-
+        DTR extension:
+
+        - Path identifier is authoritative and overwrites descriptor.id from request body.
+        - If globalAssetId is present, the service additionally appends a discovery entry
+          as specific asset id (name "globalAssetId") for the shell.
       operationId: PutAssetAdministrationShellDescriptorById
       x-semanticIds:
         - https://admin-shell.io/aas/API/PutAssetAdministrationShellDescriptorById/3/1
@@ -301,6 +331,9 @@ paths:
       tags:
         - Asset Administration Shell Registry API
       summary: Creates or updates an existing Submodel Descriptor
+      description: >-
+        DTR extension: path identifier is authoritative and overwrites
+        submodelDescriptor.id from request body.
       operationId: PutSubmodelDescriptorByIdThroughSuperpath
       x-semanticIds:
         - https://admin-shell.io/aas/API/PutSubmodelDescriptorById/3/1
@@ -380,6 +413,9 @@ paths:
       tags:
         - Asset Administration Shell Basic Discovery API
       summary: Returns a list of Asset Administration Shell IDs linked to specific asset identifiers or the global asset ID
+      description: >-
+        DTR compatibility note: when no decodable assetIds are provided, the response may
+        be {} (empty object).
       operationId: GetAllAssetAdministrationShellIdsByAssetLink
       x-semanticIds:
         - https://admin-shell.io/aas/API/GetAllAssetAdministrationShellIdsByAssetLink/3/1
@@ -394,14 +430,18 @@ paths:
           content:
             application/json:
               schema:
-                allOf:
-                - $ref: 'https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.1.1#/components/schemas/PagedResult'
-                - type: object
-                  properties:
-                    result:
-                      type: array
-                      items:
-                        type: string
+                oneOf:
+                  - allOf:
+                      - $ref: 'https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.1.1#/components/schemas/PagedResult'
+                      - type: object
+                        properties:
+                          result:
+                            type: array
+                            items:
+                              type: string
+                  - type: object
+                    description: DTR compatibility response for empty assetIds input.
+                    additionalProperties: false
         default:
           $ref: 'https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.1.1#/components/responses/default'
 
@@ -410,6 +450,12 @@ paths:
       tags:
         - Asset Administration Shell Basic Discovery API
       summary: Returns a list of Asset Administration Shell IDs linked to specific asset identifiers or the global asset ID
+      description: |-
+        DTR extension:
+
+        - Supports createdAfter query parameter (RFC3339) to apply additional filtering.
+        - For compatibility, when the request body contains no asset links the response
+          may be {} (empty object).
       operationId: SearchAllAssetAdministrationShellIdsByAssetLink
       x-semanticIds:
         - https://admin-shell.io/aas/API/SearchAllAssetAdministrationShellIdsByAssetLink/3/1
@@ -419,7 +465,9 @@ paths:
         - $ref: 'https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.1.1#/components/parameters/Cursor'
         - name: createdAfter
           in: query
-          description: Filter results by creation timestamp (RFC3339)
+          description: >-
+            DTR extension: filter results by creation timestamp (RFC3339).
+            Invalid values return HTTP 400.
           required: false
           schema:
             type: string
@@ -438,14 +486,20 @@ paths:
           content:
             application/json:
               schema:
-                allOf:
-                - $ref: 'https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.1.1#/components/schemas/PagedResult'
-                - type: object
-                  properties:
-                    result:
-                      type: array
-                      items:
-                        type: string
+                oneOf:
+                  - allOf:
+                      - $ref: 'https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.1.1#/components/schemas/PagedResult'
+                      - type: object
+                        properties:
+                          result:
+                            type: array
+                            items:
+                              type: string
+                  - type: object
+                    description: DTR compatibility response for empty assetLinks input.
+                    additionalProperties: false
+        '400':
+          $ref: 'https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.1.1#/components/responses/bad-request'
         default:
           $ref: 'https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.1.1#/components/responses/default'
 
@@ -474,7 +528,13 @@ paths:
     post:
       tags:
         - Asset Administration Shell Basic Discovery API
-      summary: Creates or replaces all asset links associated to the Asset Administration Shell.
+      summary: Creates or merges asset links associated to the Asset Administration Shell.
+      description: |-
+        DTR extension:
+
+        - Never replaces existing links; always appends provided links.
+        - No deduplication is applied; duplicate links can be created.
+        - Returns 404 if the addressed shell does not exist.
       operationId: PostAllAssetLinksById
       x-semanticIds:
         - https://admin-shell.io/aas/API/PostAllAssetLinksById/3/1
@@ -493,6 +553,14 @@ paths:
       responses:
         '201':
           description: Asset Links created successfully
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: 'https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.1.1#/components/schemas/SpecificAssetId'
+        '404':
+          $ref: 'https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.1.1#/components/responses/not-found'
         default:
           $ref: 'https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.1.1#/components/responses/default'
     delete:

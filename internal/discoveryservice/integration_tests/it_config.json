@@ -413,5 +413,13 @@
     "method": "GET",
     "endpoint": "http://127.0.0.1:5004/lookup/shells?limit=10&assetIds=%25%25ZZ-invalid",
     "expectedStatus": 400
+  },
+  {
+    "context": "060 - Search empty assetLinks with non-empty dataset",
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:5004/lookup/shellsByAssetLink?limit=10",
+    "data": "postBody/search_empty_array.json",
+    "shouldMatch": "expected/empty_paged_result.json",
+    "expectedStatus": 200
   }
 ]
