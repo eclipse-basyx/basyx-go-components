@@ -307,10 +307,12 @@ func runRequest(t *testing.T, client *http.Client, cfg tractusStepRequest) (int,
 
 	fullURL := tractusBaseURL + endpoint
 	requestBody := buildRequestBody(t, cfg.Body)
+	tenant := strings.TrimSpace(cfg.Tenant)
+	require.NotEmpty(t, tenant, "DTR-TRACTUS-EMPTY-TENANT")
 
 	req, err := http.NewRequest(method, fullURL, requestBody)
 	require.NoError(t, err, "DTR-TRACTUS-CREATE-REQUEST")
-	req.Header.Set(edcBpnHeaderName, edcBpnTenantOne)
+	req.Header.Set(edcBpnHeaderName, tenant)
 	if requestBody != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}

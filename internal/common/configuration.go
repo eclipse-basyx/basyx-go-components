@@ -170,7 +170,7 @@ type ServerConfig struct {
 	Port               int    `mapstructure:"port" yaml:"port"`                             // HTTP server port (default: 5004)
 	ContextPath        string `mapstructure:"contextPath" yaml:"contextPath"`               // Base path for all endpoints
 	CacheEnabled       bool   `mapstructure:"cacheEnabled" yaml:"cacheEnabled"`             // Enable/disable response caching
-	StrictVerification bool   `mapstructure:"strictVerification" yaml:"strictVerification"` // Enable/disable strict AAS metamodel verification (default: false)
+	StrictVerification bool   `mapstructure:"strictVerification" yaml:"strictVerification"` // Enable/disable strict AAS metamodel verification (default: true)
 }
 
 // PostgresConfig contains PostgreSQL database connection parameters.

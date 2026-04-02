@@ -78,7 +78,7 @@ func (s *CustomRegistryService) PostAssetAdministrationShellDescriptor(
 		assetAdministrationShellDescriptor.GlobalAssetId,
 		"PostAssetAdministrationShellDescriptor",
 	); errResp != nil || err != nil {
-		return *errResp, err
+		return mapAppendGlobalAssetLinkResult(errResp, err, "PostAssetAdministrationShellDescriptor")
 	}
 
 	return baseResp, nil
@@ -120,7 +120,7 @@ func (s *CustomRegistryService) PutAssetAdministrationShellDescriptorById(
 		assetAdministrationShellDescriptor.GlobalAssetId,
 		"PutAssetAdministrationShellDescriptorById",
 	); errResp != nil || err != nil {
-		return *errResp, err
+		return mapAppendGlobalAssetLinkResult(errResp, err, "PutAssetAdministrationShellDescriptorById")
 	}
 
 	return baseResp, nil
@@ -129,6 +129,12 @@ func (s *CustomRegistryService) PutAssetAdministrationShellDescriptorById(
 // PutSubmodelDescriptorByIdThroughSuperpath executes default PUT behavior for
 // submodel descriptors while deactivating strict body-id/path-id mismatch only
 // for Digital Twin Registry.
+//
+// Payload compatibility note:
+//   - Default field is plural "supplementalSemanticIds".
+//   - Singular "supplementalSemanticId" support is controlled via config key
+//     general.supportsSingularSupplementalSemanticId
+//     (env: GENERAL_SUPPORTSSINGULARSUPPLEMENTALSEMANTICID).
 func (s *CustomRegistryService) PutSubmodelDescriptorByIdThroughSuperpath(
 	ctx context.Context,
 	aasIdentifier string,
@@ -202,4 +208,23 @@ func (s *CustomRegistryService) appendGlobalAssetLink(
 
 func is2xx(code int) bool {
 	return code >= http.StatusOK && code < http.StatusMultipleChoices
+}
+
+func mapAppendGlobalAssetLinkResult(
+	errResp *model.ImplResponse,
+	err error,
+	method string,
+) (model.ImplResponse, error) {
+	if errResp != nil {
+		return *errResp, err
+	}
+
+	resp := common.NewErrorResponse(
+		common.NewInternalServerError("failed to append globalAssetId discovery link"),
+		http.StatusInternalServerError,
+		customRegistryComponentName,
+		method,
+		"AddGlobalAssetLink-NilResponse",
+	)
+	return resp, err
 }

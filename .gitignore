@@ -26,6 +26,7 @@ go.work.sum
 # local build files
 .gocache/
 .tmp_tractus/
+*.log
 
 # VS Code debug files
 .vscode/launch.json.bak

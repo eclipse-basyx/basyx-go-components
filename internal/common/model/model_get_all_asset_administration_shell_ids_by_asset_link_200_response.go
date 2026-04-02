@@ -15,7 +15,7 @@ package model
 type GetAllAssetAdministrationShellIdsByAssetLink200Response struct {
 	PagingMetadata PagedResultPagingMetadata `json:"paging_metadata"`
 
-	Result []string `json:"result,omitempty"`
+	Result []string `json:"result"`
 }
 
 // AssertGetAllAssetAdministrationShellIdsByAssetLink200ResponseRequired checks if the required fields are not zero-ed

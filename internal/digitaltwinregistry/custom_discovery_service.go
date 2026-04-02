@@ -85,7 +85,12 @@ func (s *CustomDiscoveryService) SearchAllAssetAdministrationShellIdsByAssetLink
 		ctx = auth.MergeQueryFilter(ctx, query)
 	}
 
-	return s.AssetAdministrationShellBasicDiscoveryAPIAPIService.SearchAllAssetAdministrationShellIdsByAssetLink(ctx, limit, cursor, assetLink)
+	res, err := s.AssetAdministrationShellBasicDiscoveryAPIAPIService.SearchAllAssetAdministrationShellIdsByAssetLink(ctx, limit, cursor, assetLink)
+	if err != nil {
+		return res, err
+	}
+
+	return omitEmptySearchResultForDTR(res), nil
 }
 
 // GetAllAssetAdministrationShellIdsByAssetLink Custom logic for /lookup/shells
@@ -133,6 +138,31 @@ func (s *CustomDiscoveryService) GetAllAssetAdministrationShellIdsByAssetLink(
 	}
 
 	return s.SearchAllAssetAdministrationShellIdsByAssetLink(ctx, limit, cursor, links)
+}
+
+func omitEmptySearchResultForDTR(res model.ImplResponse) model.ImplResponse {
+	if res.Code != http.StatusOK {
+		return res
+	}
+
+	switch body := res.Body.(type) {
+	case model.GetAllAssetAdministrationShellIdsByAssetLink200Response:
+		if len(body.Result) != 0 {
+			return res
+		}
+		return model.Response(http.StatusOK, map[string]any{
+			"paging_metadata": body.PagingMetadata,
+		})
+	case *model.GetAllAssetAdministrationShellIdsByAssetLink200Response:
+		if body == nil || len(body.Result) != 0 {
+			return res
+		}
+		return model.Response(http.StatusOK, map[string]any{
+			"paging_metadata": body.PagingMetadata,
+		})
+	default:
+		return res
+	}
 }
 
 func baseCheckerOrFallback(checker aasExistenceChecker) aasExistenceChecker {
