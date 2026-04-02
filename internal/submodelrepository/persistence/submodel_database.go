@@ -294,6 +294,12 @@ func (s *SubmodelDatabase) CreateSubmodel(ctx context.Context, submodel types.IS
 func (s *SubmodelDatabase) createSubmodelInTransaction(tx *sql.Tx, submodel types.ISubmodel) error {
 	dialect := goqu.Dialect("postgres")
 
+	var count int
+	tx.QueryRow("SELECT COUNT(id) FROM submodel WHERE submodel_identifier = $1", submodel.ID()).Scan(&count)
+	if count > 0 {
+		return common.NewErrConflict("SMREPO-NEWSM-CREATE-CONFLICT submodel identifier already exists")
+	}
+
 	ids, args, err := buildSubmodelQuery(&dialect, submodel)
 	if err != nil {
 		return common.NewInternalServerError("SMREPO-NEWSM-CREATE-INSERTSQL " + err.Error())
