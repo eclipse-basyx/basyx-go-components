@@ -51,9 +51,7 @@ func TestDeleteSubmodelSuccessCleansLargeObjectsAndDeletesSubmodel(t *testing.T)
 	mock.ExpectQuery(`SELECT .*FROM .*submodel`).
 		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(submodelDatabaseID))
 	mock.ExpectQuery(`SELECT .*file_oid.*FROM .*submodel_element.*file_data`).
-		WillReturnRows(sqlmock.NewRows([]string{"file_oid"}).AddRow(int64(9001)))
-	mock.ExpectExec(`SELECT .*lo_unlink`).
-		WillReturnResult(sqlmock.NewResult(1, 1))
+		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(int64(1)))
 	mock.ExpectExec(`DELETE FROM .*submodel`).
 		WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectCommit()
@@ -98,7 +96,7 @@ func TestDeleteSubmodelDeleteFailsRollsBack(t *testing.T) {
 	mock.ExpectQuery(`SELECT .*FROM .*submodel`).
 		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(submodelDatabaseID))
 	mock.ExpectQuery(`SELECT .*file_oid.*FROM .*submodel_element.*file_data`).
-		WillReturnRows(sqlmock.NewRows([]string{"file_oid"}))
+		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(int64(0)))
 	mock.ExpectExec(`DELETE FROM .*submodel`).
 		WillReturnError(errors.New("delete failed"))
 	mock.ExpectRollback()
@@ -125,7 +123,7 @@ func TestDeleteSubmodelCommitFailsReturnsInternalError(t *testing.T) {
 	mock.ExpectQuery(`SELECT .*FROM .*submodel`).
 		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(submodelDatabaseID))
 	mock.ExpectQuery(`SELECT .*file_oid.*FROM .*submodel_element.*file_data`).
-		WillReturnRows(sqlmock.NewRows([]string{"file_oid"}))
+		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(int64(0)))
 	mock.ExpectExec(`DELETE FROM .*submodel`).
 		WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectCommit().WillReturnError(errors.New("commit failed"))
@@ -152,8 +150,6 @@ func TestDeleteSubmodelOrphanCleanupFailsRollsBack(t *testing.T) {
 	mock.ExpectQuery(`SELECT .*FROM .*submodel`).
 		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(submodelDatabaseID))
 	mock.ExpectQuery(`SELECT .*file_oid.*FROM .*submodel_element.*file_data`).
-		WillReturnRows(sqlmock.NewRows([]string{"file_oid"}).AddRow(int64(9999)))
-	mock.ExpectExec(`SELECT .*lo_unlink`).
 		WillReturnError(errors.New("unlink failed"))
 	mock.ExpectRollback()
 

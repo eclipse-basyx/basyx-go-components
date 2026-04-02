@@ -50,7 +50,7 @@ import (
 	"golang.org/x/sync/errgroup"
 	jose "gopkg.in/go-jose/go-jose.v2"
 
-	_ "github.com/lib/pq"
+	"github.com/lib/pq"
 )
 
 // SubmodelDatabase is the implementation of the SubmodelRepositoryDatabase interface using PostgreSQL as the underlying database.
@@ -294,21 +294,6 @@ func (s *SubmodelDatabase) CreateSubmodel(ctx context.Context, submodel types.IS
 func (s *SubmodelDatabase) createSubmodelInTransaction(tx *sql.Tx, submodel types.ISubmodel) error {
 	dialect := goqu.Dialect("postgres")
 
-	var count int
-	query := dialect.From("submodel").Prepared(true).Select(goqu.COUNT("id")).Where(goqu.C("submodel_identifier").Eq(submodel.ID()))
-	sqlQuery, args, err := query.ToSQL()
-	if err != nil {
-		return common.NewInternalServerError("SMREPO-NEWSM-CREATE-EXISTSQL " + err.Error())
-	}
-	err = tx.QueryRow(sqlQuery, args...).Scan(&count)
-
-	if err != nil {
-		return common.NewInternalServerError("SMREPO-NEWSM-CREATE-EXISTS " + err.Error())
-	}
-	if count > 0 {
-		return common.NewErrConflict("SMREPO-NEWSM-CREATE-CONFLICT submodel identifier already exists")
-	}
-
 	ids, args, err := buildSubmodelQuery(&dialect, submodel)
 	if err != nil {
 		return common.NewInternalServerError("SMREPO-NEWSM-CREATE-INSERTSQL " + err.Error())
@@ -316,6 +301,9 @@ func (s *SubmodelDatabase) createSubmodelInTransaction(tx *sql.Tx, submodel type
 
 	var submodelDBID int64
 	if err := tx.QueryRow(ids, args...).Scan(&submodelDBID); err != nil {
+		if mappedErr := mapCreateSubmodelInsertError(err); mappedErr != nil {
+			return mappedErr
+		}
 		return common.NewInternalServerError("SMREPO-NEWSM-CREATE-EXECSQL " + err.Error())
 	}
 
@@ -380,6 +368,24 @@ func (s *SubmodelDatabase) createSubmodelInTransaction(tx *sql.Tx, submodel type
 		if err != nil {
 			return common.NewInternalServerError("SMREPO-NEWSM-CREATESM-INSERTSME " + err.Error())
 		}
+	}
+
+	return nil
+}
+
+// mapCreateSubmodelInsertError maps database uniqueness violations to submodel conflict errors.
+func mapCreateSubmodelInsertError(err error) error {
+	if err == nil {
+		return nil
+	}
+
+	pqErr, ok := err.(*pq.Error)
+	if !ok {
+		return nil
+	}
+
+	if pqErr.Code == "23505" {
+		return common.NewErrConflict("SMREPO-NEWSM-CREATE-CONFLICT submodel identifier already exists")
 	}
 
 	return nil
@@ -1198,48 +1204,26 @@ func (s *SubmodelDatabase) replaceSubmodelInTransaction(tx *sql.Tx, submodelID s
 func cleanupSubmodelLargeObjects(tx *sql.Tx, submodelDatabaseID int64) error {
 	dialect := goqu.Dialect("postgres")
 
-	selectOIDQuery, selectOIDArgs, err := dialect.From(goqu.T("submodel_element").As("sme")).
+	unlinkSubquery := dialect.From(goqu.T("submodel_element").As("sme")).
+		Prepared(true).
 		Join(goqu.T("file_data").As("fd"), goqu.On(goqu.I("fd.id").Eq(goqu.I("sme.id")))).
-		Select(goqu.I("fd.file_oid")).
+		Select(goqu.Func("lo_unlink", goqu.I("fd.file_oid")).As("unlink_result")).
 		Where(
 			goqu.I("sme.submodel_id").Eq(submodelDatabaseID),
 			goqu.I("fd.file_oid").IsNotNull(),
-		).
+		)
+
+	unlinkQuery, unlinkArgs, err := dialect.From(unlinkSubquery.As("unlink_results")).
+		Prepared(true).
+		Select(goqu.COUNT("*")).
 		ToSQL()
 	if err != nil {
-		return common.NewInternalServerError("SMREPO-DELSM-LISTFILEOIDS " + err.Error())
+		return common.NewInternalServerError("SMREPO-DELSM-BUILDUNLINKQUERY " + err.Error())
 	}
 
-	rows, err := tx.Query(selectOIDQuery, selectOIDArgs...)
-	if err != nil {
-		return common.NewInternalServerError("SMREPO-DELSM-LISTFILEOIDS " + err.Error())
-	}
-	defer func() {
-		_ = rows.Close()
-	}()
-
-	for rows.Next() {
-		var oid sql.NullInt64
-		if err := rows.Scan(&oid); err != nil {
-			return common.NewInternalServerError("SMREPO-DELSM-SCANFILEOID " + err.Error())
-		}
-
-		if !oid.Valid {
-			continue
-		}
-
-		unlinkQuery, unlinkArgs, unlinkErr := dialect.Select(goqu.Func("lo_unlink", oid.Int64)).ToSQL()
-		if unlinkErr != nil {
-			return common.NewInternalServerError("SMREPO-DELSM-BUILDUNLINKQUERY " + unlinkErr.Error())
-		}
-
-		if _, unlinkExecErr := tx.Exec(unlinkQuery, unlinkArgs...); unlinkExecErr != nil {
-			return common.NewInternalServerError("SMREPO-DELSM-UNLINKLO " + unlinkExecErr.Error())
-		}
-	}
-
-	if err := rows.Err(); err != nil {
-		return common.NewInternalServerError("SMREPO-DELSM-LISTFILEOIDSROWS " + err.Error())
+	var unlinkedCount int64
+	if err = tx.QueryRow(unlinkQuery, unlinkArgs...).Scan(&unlinkedCount); err != nil {
+		return common.NewInternalServerError("SMREPO-DELSM-UNLINKLO " + err.Error())
 	}
 
 	return nil
