@@ -106,6 +106,8 @@ func TestCreateSubmodelInsertFailureRollsBack(t *testing.T) {
 	submodel.SetIDShort(&idShort)
 
 	mock.ExpectBegin()
+	mock.ExpectQuery(`SELECT COUNT\("id"\) FROM "submodel" WHERE \("submodel_identifier" = \$1\)`).
+		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(0))
 	mock.ExpectQuery(`INSERT INTO .*submodel.*RETURNING`).
 		WillReturnError(errors.New("insert failed"))
 	mock.ExpectRollback()
@@ -114,6 +116,32 @@ func TestCreateSubmodelInsertFailureRollsBack(t *testing.T) {
 	require.Error(t, err)
 	require.True(t, common.IsInternalServerError(err))
 	require.Contains(t, err.Error(), "SMREPO-NEWSM-CREATE-EXECSQL")
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestCreateSubmodelDuplicateIdentifierReturnsConflict(t *testing.T) {
+	t.Parallel()
+
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer func() {
+		_ = db.Close()
+	}()
+
+	sut := &SubmodelDatabase{db: db}
+	submodel := types.NewSubmodel("sm-duplicate")
+	idShort := "duplicate"
+	submodel.SetIDShort(&idShort)
+
+	mock.ExpectBegin()
+	mock.ExpectQuery(`SELECT COUNT\("id"\) FROM "submodel" WHERE \("submodel_identifier" = \$1\)`).
+		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(1))
+	mock.ExpectRollback()
+
+	err = sut.CreateSubmodel(contextWithABACDisabled(t), submodel)
+	require.Error(t, err)
+	require.True(t, common.IsErrConflict(err))
+	require.Contains(t, err.Error(), "SMREPO-NEWSM-CREATE-CONFLICT")
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 

@@ -294,6 +294,21 @@ func (s *SubmodelDatabase) CreateSubmodel(ctx context.Context, submodel types.IS
 func (s *SubmodelDatabase) createSubmodelInTransaction(tx *sql.Tx, submodel types.ISubmodel) error {
 	dialect := goqu.Dialect("postgres")
 
+	var count int
+	query := dialect.From("submodel").Prepared(true).Select(goqu.COUNT("id")).Where(goqu.C("submodel_identifier").Eq(submodel.ID()))
+	sqlQuery, args, err := query.ToSQL()
+	if err != nil {
+		return common.NewInternalServerError("SMREPO-NEWSM-CREATE-EXISTSQL " + err.Error())
+	}
+	err = tx.QueryRow(sqlQuery, args...).Scan(&count)
+
+	if err != nil {
+		return common.NewInternalServerError("SMREPO-NEWSM-CREATE-EXISTS " + err.Error())
+	}
+	if count > 0 {
+		return common.NewErrConflict("SMREPO-NEWSM-CREATE-CONFLICT submodel identifier already exists")
+	}
+
 	ids, args, err := buildSubmodelQuery(&dialect, submodel)
 	if err != nil {
 		return common.NewInternalServerError("SMREPO-NEWSM-CREATE-INSERTSQL " + err.Error())

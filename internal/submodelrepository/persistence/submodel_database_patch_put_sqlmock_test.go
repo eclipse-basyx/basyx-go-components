@@ -92,6 +92,8 @@ func TestPatchSubmodelSuccessReplacesSubmodel(t *testing.T) {
 		WillReturnRows(sqlmock.NewRows([]string{"file_oid"}))
 	mock.ExpectExec(`DELETE FROM .*submodel`).
 		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectQuery(`SELECT COUNT\("id"\) FROM "submodel" WHERE \("submodel_identifier" = \$1\)`).
+		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(0))
 	mock.ExpectQuery(`INSERT INTO .*submodel.*RETURNING`).
 		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(200))
 	mock.ExpectExec(`INSERT INTO .*submodel_payload`).
@@ -135,6 +137,8 @@ func TestPutSubmodelCreatePathReturnsFalse(t *testing.T) {
 	mock.ExpectBegin()
 	mock.ExpectQuery(`SELECT .*FROM .*submodel`).
 		WillReturnError(sql.ErrNoRows)
+	mock.ExpectQuery(`SELECT COUNT\("id"\) FROM "submodel" WHERE \("submodel_identifier" = \$1\)`).
+		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(0))
 	mock.ExpectQuery(`INSERT INTO .*submodel.*RETURNING`).
 		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(300))
 	mock.ExpectExec(`INSERT INTO .*submodel_payload`).
@@ -166,6 +170,8 @@ func TestPutSubmodelUpdatePathReturnsTrue(t *testing.T) {
 		WillReturnRows(sqlmock.NewRows([]string{"file_oid"}))
 	mock.ExpectExec(`DELETE FROM .*submodel`).
 		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectQuery(`SELECT COUNT\("id"\) FROM "submodel" WHERE \("submodel_identifier" = \$1\)`).
+		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(0))
 	mock.ExpectQuery(`INSERT INTO .*submodel.*RETURNING`).
 		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(401))
 	mock.ExpectExec(`INSERT INTO .*submodel_payload`).
