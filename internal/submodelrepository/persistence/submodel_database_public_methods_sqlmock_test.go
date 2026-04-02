@@ -106,7 +106,7 @@ func TestCreateSubmodelInsertFailureRollsBack(t *testing.T) {
 	submodel.SetIDShort(&idShort)
 
 	mock.ExpectBegin()
-	mock.ExpectQuery(`SELECT COUNT\(id\) FROM submodel WHERE submodel_identifier = \$1`).
+	mock.ExpectQuery(`SELECT COUNT\("id"\) FROM "submodel" WHERE \("submodel_identifier" = \$1\)`).
 		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(0))
 	mock.ExpectQuery(`INSERT INTO .*submodel.*RETURNING`).
 		WillReturnError(errors.New("insert failed"))
@@ -134,7 +134,7 @@ func TestCreateSubmodelDuplicateIdentifierReturnsConflict(t *testing.T) {
 	submodel.SetIDShort(&idShort)
 
 	mock.ExpectBegin()
-	mock.ExpectQuery(`SELECT COUNT\(id\) FROM submodel WHERE submodel_identifier = \$1`).
+	mock.ExpectQuery(`SELECT COUNT\("id"\) FROM "submodel" WHERE \("submodel_identifier" = \$1\)`).
 		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(1))
 	mock.ExpectRollback()
 

@@ -295,7 +295,7 @@ func (s *SubmodelDatabase) createSubmodelInTransaction(tx *sql.Tx, submodel type
 	dialect := goqu.Dialect("postgres")
 
 	var count int
-	query := dialect.From("submodel").Select(goqu.COUNT("id")).Where(goqu.C("submodel_identifier").Eq(submodel.ID()))
+	query := dialect.From("submodel").Prepared(true).Select(goqu.COUNT("id")).Where(goqu.C("submodel_identifier").Eq(submodel.ID()))
 	sqlQuery, args, err := query.ToSQL()
 	if err != nil {
 		return common.NewInternalServerError("SMREPO-NEWSM-CREATE-EXISTSQL " + err.Error())
