@@ -38,6 +38,7 @@ import (
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
+	"github.com/lib/pq"
 	"github.com/stretchr/testify/require"
 )
 
@@ -106,8 +107,6 @@ func TestCreateSubmodelInsertFailureRollsBack(t *testing.T) {
 	submodel.SetIDShort(&idShort)
 
 	mock.ExpectBegin()
-	mock.ExpectQuery(`SELECT COUNT\("id"\) FROM "submodel" WHERE \("submodel_identifier" = \$1\)`).
-		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(0))
 	mock.ExpectQuery(`INSERT INTO .*submodel.*RETURNING`).
 		WillReturnError(errors.New("insert failed"))
 	mock.ExpectRollback()
@@ -134,8 +133,8 @@ func TestCreateSubmodelDuplicateIdentifierReturnsConflict(t *testing.T) {
 	submodel.SetIDShort(&idShort)
 
 	mock.ExpectBegin()
-	mock.ExpectQuery(`SELECT COUNT\("id"\) FROM "submodel" WHERE \("submodel_identifier" = \$1\)`).
-		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(1))
+	mock.ExpectQuery(`INSERT INTO .*submodel.*RETURNING`).
+		WillReturnError(&pq.Error{Code: "23505"})
 	mock.ExpectRollback()
 
 	err = sut.CreateSubmodel(contextWithABACDisabled(t), submodel)

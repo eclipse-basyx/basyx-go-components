@@ -567,9 +567,11 @@ CREATE INDEX IF NOT EXISTS ix_bee_lastupd ON basic_event_element(last_update);
 
 CREATE INDEX IF NOT EXISTS ix_qual_type     ON qualifier(type);
 CREATE INDEX IF NOT EXISTS ix_qual_position ON qualifier(position);
+CREATE INDEX IF NOT EXISTS ix_smeq_sme_id      ON submodel_element_qualifier(sme_id);
 CREATE INDEX IF NOT EXISTS ix_smeq_qualifier_id ON submodel_element_qualifier(qualifier_id);
 CREATE INDEX IF NOT EXISTS ix_smq_submodel_id   ON submodel_qualifier(submodel_id);
 CREATE INDEX IF NOT EXISTS ix_smq_qualifier_id  ON submodel_qualifier(qualifier_id);
+CREATE INDEX IF NOT EXISTS ix_operation_variable_operation_id ON operation_variable(operation_id);
 CREATE INDEX IF NOT EXISTS ix_operation_variable_value_sme ON operation_variable(value_sme);
 
 CREATE UNIQUE INDEX IF NOT EXISTS ix_aas_identifier_aasid ON aas_identifier(aasId);
