@@ -76,7 +76,9 @@ func (s *CustomDiscoveryService) SearchAllAssetAdministrationShellIdsByAssetLink
 	assetLink []model.AssetLink,
 ) (model.ImplResponse, error) {
 	if len(assetLink) == 0 {
-		return model.Response(http.StatusOK, map[string]any{}), nil
+		return model.Response(http.StatusOK, map[string]any{
+			"paging_metadata": model.PagedResultPagingMetadata{},
+		}), nil
 	}
 
 	createdAfter, _ := CreatedAfterFromContext(ctx)
@@ -134,7 +136,9 @@ func (s *CustomDiscoveryService) GetAllAssetAdministrationShellIdsByAssetLink(
 	}
 
 	if len(links) == 0 {
-		return model.Response(http.StatusOK, map[string]any{}), nil
+		return model.Response(http.StatusOK, map[string]any{
+			"paging_metadata": model.PagedResultPagingMetadata{},
+		}), nil
 	}
 
 	return s.SearchAllAssetAdministrationShellIdsByAssetLink(ctx, limit, cursor, links)
