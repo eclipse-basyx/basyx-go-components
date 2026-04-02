@@ -546,6 +546,8 @@ CREATE INDEX IF NOT EXISTS ix_sme_parent_pos ON submodel_element(parent_sme_id, 
 CREATE INDEX IF NOT EXISTS ix_sme_sub_type   ON submodel_element(submodel_id, model_type);
 CREATE INDEX IF NOT EXISTS ix_sme_sub_parent ON submodel_element(submodel_id, parent_sme_id);
 CREATE INDEX IF NOT EXISTS ix_sme_sub_root   ON submodel_element(submodel_id, root_sme_id);
+CREATE INDEX IF NOT EXISTS ix_sme_parent_fk  ON submodel_element(parent_sme_id);
+CREATE INDEX IF NOT EXISTS ix_sme_root_fk    ON submodel_element(root_sme_id);
 CREATE INDEX IF NOT EXISTS ix_sme_sub_depth  ON submodel_element(submodel_id, depth);
 CREATE INDEX IF NOT EXISTS ix_sme_roots_order
   ON submodel_element (submodel_id,
@@ -568,6 +570,7 @@ CREATE INDEX IF NOT EXISTS ix_qual_position ON qualifier(position);
 CREATE INDEX IF NOT EXISTS ix_smeq_qualifier_id ON submodel_element_qualifier(qualifier_id);
 CREATE INDEX IF NOT EXISTS ix_smq_submodel_id   ON submodel_qualifier(submodel_id);
 CREATE INDEX IF NOT EXISTS ix_smq_qualifier_id  ON submodel_qualifier(qualifier_id);
+CREATE INDEX IF NOT EXISTS ix_operation_variable_value_sme ON operation_variable(value_sme);
 
 CREATE UNIQUE INDEX IF NOT EXISTS ix_aas_identifier_aasid ON aas_identifier(aasId);
 CREATE INDEX IF NOT EXISTS ix_aas_identifier_created_at ON aas_identifier(created_at);
