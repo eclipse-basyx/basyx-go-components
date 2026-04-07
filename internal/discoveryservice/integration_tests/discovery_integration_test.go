@@ -42,6 +42,10 @@ const actionShellsByAssetLinkMissingBody = "CHECK_SHELLSBYASSETLINK_MISSING_BODY
 const actionLookupShellsNilBody = "CHECK_LOOKUPSHELLS_NIL_BODY"
 
 func TestMain(m *testing.M) {
+	if os.Getenv("BASYX_EXTERNAL_COMPOSE") == "1" {
+		os.Exit(m.Run())
+	}
+
 	os.Exit(testenv.RunComposeTestMain(m, testenv.ComposeTestMainOptions{
 		ComposeFile:   composeFilePath,
 		HealthURL:     discoveryBaseURL + "/health",

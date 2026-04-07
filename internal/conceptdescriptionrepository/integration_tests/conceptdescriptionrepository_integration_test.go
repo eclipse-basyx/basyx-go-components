@@ -139,6 +139,10 @@ func TestIntegration(t *testing.T) {
 
 // TestMain handles setup and teardown
 func TestMain(m *testing.M) {
+	if os.Getenv("BASYX_EXTERNAL_COMPOSE") == "1" {
+		os.Exit(m.Run())
+	}
+
 	os.Exit(testenv.RunComposeTestMain(m, testenv.ComposeTestMainOptions{
 		ComposeFile:     "docker_compose/docker_compose.yml",
 		UpArgs:          []string{"up", "-d", "--build", "--remove-orphans"},

@@ -79,6 +79,10 @@ func TestIntegration(t *testing.T) {
 }
 
 func TestMain(m *testing.M) {
+	if os.Getenv("BASYX_EXTERNAL_COMPOSE") == "1" {
+		os.Exit(m.Run())
+	}
+
 	os.Exit(testenv.RunComposeTestMain(m, testenv.ComposeTestMainOptions{
 		ComposeFile:   "docker_compose/docker_compose.yml",
 		HealthURL:     "http://127.0.0.1:6005/health",
