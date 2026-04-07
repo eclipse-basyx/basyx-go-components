@@ -27,7 +27,7 @@
     "endpoints": [
         {
             "protocolInformation": {},
-            "interface": "SUBMODEL-REGISTRY-3.0"
+            "interface": "AAS-REGISTRY-3.0"
         }
     ],
     "idShort": "fraunhoferIese",
@@ -37,5 +37,9 @@
         "Fraunhofer-Institut für Experimentelles Software-Engineering",
         "IESE",
         "IESE Fraunhofer"
+    ],
+    "assetIdRegexPatterns": [
+        "^https://i\\.iese.fraunhofer\\.de/assetId/",
+        "^https://i\\.fraun-iese\\.de/assetId/"
     ]
 }

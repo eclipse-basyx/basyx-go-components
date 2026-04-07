@@ -8,7 +8,7 @@
     "displayName": [
         {
             "language": "en",
-            "text": ""
+            "text": "Fraunhofer Institute for Experimental Software Engineering IESE"
         }
     ],
     "administration": {
@@ -27,10 +27,10 @@
     "endpoints": [
         {
             "protocolInformation": {
-                "href": "https://demo.digital-twin.host/sm-registry",
+                "href": "",
                 "endpointProtocol": "HTTPS"
             },
-            "interface": "SUBMODEL-REGISTRY-3.0"
+            "interface": "AAS-REGISTRY-3.0"
         }
     ],
     "idShort": "fraunhoferIese",
@@ -40,5 +40,9 @@
         "Fraunhofer-Institut für Experimentelles Software-Engineering",
         "IESE",
         "IESE Fraunhofer"
+    ],
+    "assetIdRegexPatterns": [
+        "^https://i\\.iese.fraunhofer\\.de/assetId/",
+        "^https://i\\.fraun-iese\\.de/assetId/"
     ]
 }

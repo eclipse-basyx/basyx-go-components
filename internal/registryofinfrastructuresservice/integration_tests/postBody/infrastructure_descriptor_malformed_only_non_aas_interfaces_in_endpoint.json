@@ -2,7 +2,7 @@
     "description": [
         {
             "language": "en",
-            "text": ""
+            "text": "The Fraunhofer Institute for Experimental Software Engineering IESE in Kaiserslautern is a research institute specializing in efficient software and systems engineering."
         }
     ],
     "displayName": [
@@ -27,10 +27,17 @@
     "endpoints": [
         {
             "protocolInformation": {
-                "href": "https://demo.digital-twin.host/sm-registry",
+                "href": "https://demo.digital-twin.host/aas-registry",
                 "endpointProtocol": "HTTPS"
             },
-            "interface": "SUBMODEL-REGISTRY-3.0"
+            "interface": "NON-AAS-3.0"
+        },
+        {
+            "protocolInformation": {
+                "href": "https://demo.digital-twin.host/aas-repository",
+                "endpointProtocol": "HTTPS"
+            },
+            "interface": "STILL-NON-AAS-3.1"
         }
     ],
     "idShort": "fraunhoferIese",
@@ -40,5 +47,9 @@
         "Fraunhofer-Institut für Experimentelles Software-Engineering",
         "IESE",
         "IESE Fraunhofer"
+    ],
+    "assetIdRegexPatterns": [
+        "^https://i\\.iese.fraunhofer\\.de/assetId/",
+        "^https://i\\.fraun-iese\\.de/assetId/"
     ]
 }

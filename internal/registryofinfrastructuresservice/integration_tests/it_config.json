@@ -32,91 +32,112 @@
         "context": "005 - Create Infrastructure Descriptor (Conflict - Missing Identifier) - POST /companies",
         "method": "POST",
         "endpoint": "http://127.0.0.1:5004/companies",
-        "data": "postBody/infrastructure_descriptor_malformed_2.json",
+        "data": "postBody/infrastructure_descriptor_malformed_missing_domain.json",
+        "expectedStatus": 400
+    },
+    {
+        "context": "005 - Create Infrastructure Descriptor (Conflict - Empty Domain) - POST /companies",
+        "method": "POST",
+        "endpoint": "http://127.0.0.1:5004/companies",
+        "data": "postBody/infrastructure_descriptor_malformed_empty_domain.json",
+        "expectedStatus": 400
+    },
+    {
+        "context": "005 - Create Infrastructure Descriptor (Conflict - Empty Name) - POST /companies",
+        "method": "POST",
+        "endpoint": "http://127.0.0.1:5004/companies",
+        "data": "postBody/infrastructure_descriptor_malformed_empty_name.json",
         "expectedStatus": 400
     },
     {
         "context": "006 - Create Infrastructure Descriptor (Conflict - Empty Interface in Endpoint) - POST /companies",
         "method": "POST",
         "endpoint": "http://127.0.0.1:5004/companies",
-        "data": "postBody/infrastructure_descriptor_malformed_3.json",
+        "data": "postBody/infrastructure_descriptor_malformed_empty_interface_in_endpoint.json",
+        "expectedStatus": 400
+    },
+    {
+        "context": "005 - Create Infrastructure Descriptor (Conflict - Only Non-AAS-Interfaces in Endpoint) - POST /companies",
+        "method": "POST",
+        "endpoint": "http://127.0.0.1:5004/companies",
+        "data": "postBody/infrastructure_descriptor_malformed_only_non_aas_interfaces_in_endpoint.json",
         "expectedStatus": 400
     },
     {
         "context": "007 - Create Infrastructure Descriptor (Conflict - Empty Protocol Information in Endpoint) - POST /companies",
         "method": "POST",
         "endpoint": "http://127.0.0.1:5004/companies",
-        "data": "postBody/infrastructure_descriptor_malformed_4.json",
+        "data": "postBody/infrastructure_descriptor_malformed_empty_protocol_information_in_endpoint.json",
         "expectedStatus": 400
     },
     {
         "context": "008 - Create Infrastructure Descriptor (Conflict - Empty HREF in Protocol Information) - POST /companies",
         "method": "POST",
         "endpoint": "http://127.0.0.1:5004/companies",
-        "data": "postBody/infrastructure_descriptor_malformed_5.json",
+        "data": "postBody/infrastructure_descriptor_malformed_empty_href_in_protocol_information.json",
         "expectedStatus": 400
     },
     {
         "context": "009 - Create Infrastructure Descriptor (Conflict - Empty Creator in Administrative Information) - POST /companies",
         "method": "POST",
         "endpoint": "http://127.0.0.1:5004/companies",
-        "data": "postBody/infrastructure_descriptor_malformed_6.json",
+        "data": "postBody/infrastructure_descriptor_malformed_empty_creator_in_administrative_information.json",
         "expectedStatus": 400
     },
     {
         "context": "010 - Create Infrastructure Descriptor (Conflict - Missing Keys in Reference) - POST /companies",
         "method": "POST",
         "endpoint": "http://127.0.0.1:5004/companies",
-        "data": "postBody/infrastructure_descriptor_malformed_7.json",
+        "data": "postBody/infrastructure_descriptor_malformed_missing_keys_in_reference.json",
         "expectedStatus": 400
     },
     {
         "context": "011 - Create Infrastructure Descriptor (Conflict - Empty Keys in Reference) - POST /companies",
         "method": "POST",
         "endpoint": "http://127.0.0.1:5004/companies",
-        "data": "postBody/infrastructure_descriptor_malformed_8.json",
+        "data": "postBody/infrastructure_descriptor_malformed_empty_keys_in_reference.json",
         "expectedStatus": 400
     },
     {
         "context": "012 - Create Infrastructure Descriptor (Conflict - Empty Type in Key) - POST /companies",
         "method": "POST",
         "endpoint": "http://127.0.0.1:5004/companies",
-        "data": "postBody/infrastructure_descriptor_malformed_9.json",
+        "data": "postBody/infrastructure_descriptor_malformed_empty_type_in_key.json",
         "expectedStatus": 400
     },
     {
         "context": "013 - Create Infrastructure Descriptor (Conflict - Empty Value in Key) - POST /companies",
         "method": "POST",
         "endpoint": "http://127.0.0.1:5004/companies",
-        "data": "postBody/infrastructure_descriptor_malformed_10.json",
+        "data": "postBody/infrastructure_descriptor_malformed_empty_value_in_key.json",
         "expectedStatus": 400
     },
     {
         "context": "014 - Create Infrastructure Descriptor (Conflict - Empty Language in Description) - POST /companies",
         "method": "POST",
         "endpoint": "http://127.0.0.1:5004/companies",
-        "data": "postBody/infrastructure_descriptor_malformed_11.json",
+        "data": "postBody/infrastructure_descriptor_malformed_empty_language_in_description.json",
         "expectedStatus": 400
     },
     {
         "context": "015 - Create Infrastructure Descriptor (Conflict - Empty Text in Description) - POST /companies",
         "method": "POST",
         "endpoint": "http://127.0.0.1:5004/companies",
-        "data": "postBody/infrastructure_descriptor_malformed_12.json",
+        "data": "postBody/infrastructure_descriptor_malformed_empty_text_in_description.json",
         "expectedStatus": 400
     },
     {
         "context": "016 - Create Infrastructure Descriptor (Conflict - Empty Language in DisplayName) - POST /companies",
         "method": "POST",
         "endpoint": "http://127.0.0.1:5004/companies",
-        "data": "postBody/infrastructure_descriptor_malformed_13.json",
+        "data": "postBody/infrastructure_descriptor_malformed_empty_language_in_displayname.json",
         "expectedStatus": 400
     },
     {
         "context": "017 - Create Infrastructure Descriptor (Conflict - Empty Text in DisplayName) - POST /companies",
         "method": "POST",
         "endpoint": "http://127.0.0.1:5004/companies",
-        "data": "postBody/infrastructure_descriptor_malformed_14.json",
+        "data": "postBody/infrastructure_descriptor_malformed_empty_text_in_displayname.json",
         "expectedStatus": 400
     },
     {

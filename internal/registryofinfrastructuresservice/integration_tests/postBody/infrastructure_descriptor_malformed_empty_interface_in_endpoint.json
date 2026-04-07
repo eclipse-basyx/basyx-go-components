@@ -27,10 +27,10 @@
     "endpoints": [
         {
             "protocolInformation": {
-                "href": "",
+                "href": "https://demo.digital-twin.host/aas-registry",
                 "endpointProtocol": "HTTPS"
             },
-            "interface": "SUBMODEL-REGISTRY-3.0"
+            "interface": ""
         }
     ],
     "idShort": "fraunhoferIese",
@@ -40,5 +40,9 @@
         "Fraunhofer-Institut für Experimentelles Software-Engineering",
         "IESE",
         "IESE Fraunhofer"
+    ],
+    "assetIdRegexPatterns": [
+        "^https://i\\.iese.fraunhofer\\.de/assetId/",
+        "^https://i\\.fraun-iese\\.de/assetId/"
     ]
 }
