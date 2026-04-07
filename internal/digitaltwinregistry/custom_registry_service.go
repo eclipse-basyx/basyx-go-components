@@ -31,7 +31,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/FriedJannik/aas-go-sdk/types"
+	"github.com/aas-core-works/aas-core3.1-golang/types"
 	registryapiinternal "github.com/eclipse-basyx/basyx-go-components/internal/aasregistry/api"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/descriptors"

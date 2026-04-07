@@ -18,7 +18,7 @@ import (
 	"strconv"
 	"strings"
 
-	aasjsonization "github.com/FriedJannik/aas-go-sdk/jsonization"
+	aasjsonization "github.com/aas-core-works/aas-core3.1-golang/jsonization"
 	"github.com/go-chi/chi/v5"
 )
 

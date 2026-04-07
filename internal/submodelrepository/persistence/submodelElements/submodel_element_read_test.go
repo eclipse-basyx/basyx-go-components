@@ -3,7 +3,7 @@ package submodelelements
 import (
 	"testing"
 
-	"github.com/FriedJannik/aas-go-sdk/types"
+	"github.com/aas-core-works/aas-core3.1-golang/types"
 	"github.com/stretchr/testify/require"
 )
 
