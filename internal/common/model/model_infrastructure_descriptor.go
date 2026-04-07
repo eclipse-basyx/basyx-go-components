@@ -5,12 +5,28 @@ package model
 import (
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/FriedJannik/aas-go-sdk/jsonization"
 	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/FriedJannik/aas-go-sdk/verification"
 	jsoniter "github.com/json-iterator/go"
 )
+
+var allowedInfrastructureEndpointInterfaces = map[string]struct{}{
+	"AAS-DISCOVERY-3.0":       {},
+	"AAS-DISCOVERY-3.1":       {},
+	"AAS-REGISTRY-3.0":        {},
+	"AAS-REGISTRY-3.1":        {},
+	"AAS-REPOSITORY-3.0":      {},
+	"AAS-REPOSITORY-3.1":      {},
+	"SUBMODEL-REGISTRY-3.0":   {},
+	"SUBMODEL-REGISTRY-3.1":   {},
+	"SUBMODEL-REPOSITORY-3.0": {},
+	"SUBMODEL-REPOSITORY-3.1": {},
+	"AASX-FILE-3.0":           {},
+	"AASX-FILE-3.1":           {},
+}
 
 type InfrastructureDescriptor struct {
 	Description []types.ILangStringTextType `json:"description,omitempty"`
@@ -36,13 +52,14 @@ type InfrastructureDescriptor struct {
 
 // AssertInfrastructureDescriptorRequired checks if the required fields are not zero-ed
 func AssertInfrastructureDescriptorRequired(obj InfrastructureDescriptor) error {
-	elements := map[string]any{
-		"domain": obj.Domain,
+	if strings.TrimSpace(obj.Domain) == "" {
+		return &RequiredError{Field: "domain"}
 	}
-	for name, el := range elements {
-		if isZero := IsZeroValue(el); isZero {
-			return &RequiredError{Field: name}
-		}
+	if strings.TrimSpace(obj.Name) == "" {
+		return &RequiredError{Field: "name"}
+	}
+	if len(obj.Endpoints) == 0 {
+		return &RequiredError{Field: "endpoints"}
 	}
 	for _, el := range obj.Endpoints {
 		if err := AssertEndpointRequired(el); err != nil {
@@ -54,10 +71,18 @@ func AssertInfrastructureDescriptorRequired(obj InfrastructureDescriptor) error 
 
 // AssertInfrastructureDescriptorConstraints checks if the values respects the defined constraints
 func AssertInfrastructureDescriptorConstraints(obj InfrastructureDescriptor) error {
+	hasAllowedEndpointInterface := false
 	for _, el := range obj.Endpoints {
 		if err := AssertEndpointConstraints(el); err != nil {
 			return err
 		}
+		if _, ok := allowedInfrastructureEndpointInterfaces[strings.TrimSpace(el.Interface)]; ok {
+			hasAllowedEndpointInterface = true
+		}
+	}
+
+	if !hasAllowedEndpointInterface {
+		return fmt.Errorf("endpoints must contain at least one endpoint with an AAS interface")
 	}
 
 	seen := make(map[string]struct{}, len(obj.NameOptions))
