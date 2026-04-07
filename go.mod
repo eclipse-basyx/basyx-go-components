@@ -6,7 +6,7 @@ require github.com/go-chi/chi/v5 v5.2.5
 
 require (
 	github.com/DATA-DOG/go-sqlmock v1.5.2
-	github.com/FriedJannik/aas-go-sdk v1.0.0
+	github.com/aas-core-works/aas-core3.1-golang v1.0.0-rc1
 	github.com/coreos/go-oidc v2.5.0+incompatible
 	github.com/doug-martin/goqu/v9 v9.19.0
 	github.com/go-chi/cors v1.2.2
@@ -24,7 +24,6 @@ require (
 	codeberg.org/go-latex/latex v0.1.0 // indirect
 	codeberg.org/go-pdf/fpdf v0.10.0 // indirect
 	git.sr.ht/~sbinet/gg v0.6.0 // indirect
-	github.com/aas-core-works/aas-core3.1-golang v1.0.0-rc1 // indirect
 	github.com/ajstarks/svgo v0.0.0-20211024235047-1546f124cd8b // indirect
 	github.com/campoy/embedmd v1.0.0 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
