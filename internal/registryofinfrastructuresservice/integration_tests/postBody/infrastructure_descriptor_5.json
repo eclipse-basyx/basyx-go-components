@@ -2,13 +2,13 @@
     "description": [
         {
             "language": "en",
-            "text": "Updated AAS Discovery"
+            "text": "An example company."
         }
     ],
     "displayName": [
         {
             "language": "en",
-            "text": "AAS Discovery 1"
+            "text": "Example Company"
         }
     ],
     "administration": {
@@ -19,25 +19,37 @@
             "keys": [
                 {
                     "type": "GlobalReference",
-                    "value": "https://example.com"
+                    "value": "https://examplecompany.de"
                 }
             ]
         }
     },
     "endpoints": [
         {
-            "interface": "AAS-DISCOVERY-3.0",
             "protocolInformation": {
-                "href": "https://example.com/aas-discovery",
+                "href": "https://demo.digital-twin.host/aas-discovery",
                 "endpointProtocol": "HTTPS"
-            }
+            },
+            "interface": "AAS-DISCOVERY-3.1"
+        },
+        {
+            "protocolInformation": {
+                "href": "https://demo.digital-twin.host/submodel-repository",
+                "endpointProtocol": "HTTPS"
+            },
+            "interface": "SUBMODEL-REPOSITORY-3.1"
         }
     ],
-    "idShort": "ExampleAASDiscovery",
-    "id": "https://example.com/roi/example-aas-discovery",
-    "name": "ExampleCompany",
-    "domain": "example.com",
+    "idShort": "exampleCompany1",
+    "name": "ExCom1",
+    "domain": "new.ex.com.1.de",
     "nameOptions": [
-        "EXAMPLE Company"
+        "Example Company 1",
+        "EC1",
+        "Com Example 1"
+    ],
+    "assetIdRegexPatterns": [
+        "^https://i\\.excom1\\.de/assetId/",
+        "^https://i\\.example-1-company\\.de/assetId/"
     ]
 }

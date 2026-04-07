@@ -2,13 +2,13 @@
     "description": [
         {
             "language": "en",
-            "text": "AAS Discovery Service for D4E Tenant 0"
+            "text": "An example company."
         }
     ],
     "displayName": [
         {
             "language": "en",
-            "text": "D4E Tenant 0 AAS Discovery"
+            "text": "Example Company"
         }
     ],
     "administration": {
@@ -19,7 +19,7 @@
             "keys": [
                 {
                     "type": "GlobalReference",
-                    "value": "https://iese.fraunhofer.de"
+                    "value": "https://examplecompany.de"
                 }
             ]
         }
@@ -33,13 +33,15 @@
             "interface": "AAS-DISCOVERY-3.0"
         }
     ],
-    "idShort": "D4ETenant0AASDiscovery",
-    "id": "https://iese.fraunhofer.de/roi/d4e-tenant-0-aas-discovery",
-    "name": "Fraunhofer IESE",
-    "domain": "iese.fraunhofer.de",
+    "idShort": "exampleCompany1",
+    "name": "ExCom1",
+    "domain": "ex.com.1.de",
     "nameOptions": [
-        "Fraunhofer-Institut für Experimentelles Software-Engineering",
-        "IESE",
-        "IESE Fraunhofer"
+        "Example Company 1",
+        "EC1",
+        "Com Example 1"
+    ],
+    "assetIdRegexPatterns": [
+        "^https://i\\.excom1\\.de/assetId/"
     ]
 }

@@ -1,51 +1,51 @@
 {
     "pagingMetadata": {
-        "cursor": "aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvcm9pL2Q0ZS10ZW5hbnQtMC1hYXMtcmVnaXN0cnk"
+        "cursor": "aWVzZS5mcmF1bmhvZmVyLmRl"
     },
     "data": [
         {
+            "administration": {
+                "creator": {
+                    "keys": [
+                        {
+                            "type": "GlobalReference",
+                            "value": "https://examplecompany.de"
+                        }
+                    ],
+                    "type": "ExternalReference"
+                },
+                "revision": "0",
+                "version": "1"
+            },
             "description": [
                 {
                     "language": "en",
-                    "text": "AAS Discovery Service for D4E Tenant 0"
+                    "text": "An example company."
                 }
             ],
             "displayName": [
                 {
                     "language": "en",
-                    "text": "D4E Tenant 0 AAS Discovery"
+                    "text": "Example Company"
                 }
             ],
-            "administration": {
-                "version": "1",
-                "revision": "0",
-                "creator": {
-                    "type": "ExternalReference",
-                    "keys": [
-                        {
-                            "type": "GlobalReference",
-                            "value": "https://iese.fraunhofer.de"
-                        }
-                    ]
-                }
-            },
+            "domain": "ex.com.3.de",
             "endpoints": [
                 {
                     "interface": "AAS-DISCOVERY-3.0",
                     "protocolInformation": {
-                        "href": "https://demo.digital-twin.host/aas-discovery",
+                        "href": "https://example.com/aas-discovery",
                         "endpointProtocol": "HTTPS"
                     }
                 }
             ],
-            "idShort": "D4ETenant0AASDiscovery",
-            "id": "https://iese.fraunhofer.de/roi/d4e-tenant-0-aas-discovery",
-            "name": "Fraunhofer IESE",
-            "domain": "iese.fraunhofer.de",
+            "idShort": "exampleCompany3",
+            "name": "ExCom3",
             "nameOptions": [
-                "Fraunhofer-Institut für Experimentelles Software-Engineering",
-                "IESE",
-                "IESE Fraunhofer"
+                "Example Company 3",
+                "EC3",
+                "Com Example 3",
+                "ExCompany"
             ]
         }
     ]

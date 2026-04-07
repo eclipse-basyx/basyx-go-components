@@ -2,13 +2,13 @@
     "description": [
         {
             "language": "en",
-            "text": "Submodel Registry for D4E Tenant 0"
+            "text": "The Fraunhofer Institute for Experimental Software Engineering IESE in Kaiserslautern is a research institute specializing in efficient software and systems engineering."
         }
     ],
     "displayName": [
         {
             "language": "en",
-            "text": "D4E Tenant 0 Submodel Registry"
+            "text": "Fraunhofer Institute for Experimental Software Engineering IESE"
         }
     ],
     "administration": {
@@ -30,8 +30,7 @@
             "interface": "SUBMODEL-REGISTRY-3.0"
         }
     ],
-    "idShort": "D4ETenant0SubmodelRegistry",
-    "id": "https://iese.fraunhofer.de/roi/d4e-tenant-0-submodel-registry",
+    "idShort": "fraunhoferIese",
     "name": "Fraunhofer IESE",
     "domain": "iese.fraunhofer.de",
     "nameOptions": [

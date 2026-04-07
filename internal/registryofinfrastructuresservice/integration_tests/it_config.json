@@ -144,19 +144,19 @@
         "expectedStatus": 201
     },
     {
-        "context": "021 - Get Infrastructure Descriptor by ID - GET /companies/{id}",
+        "context": "021 - Get Infrastructure Descriptor by Domain - GET /companies/{domain}",
         "method": "GET",
-        "endpoint": "http://127.0.0.1:5004/companies/aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvcm9pL2Q0ZS10ZW5hbnQtMC1hYXMtcmVnaXN0cnk",
+        "endpoint": "http://127.0.0.1:5004/companies/aWVzZS5mcmF1bmhvZmVyLmRl",
         "shouldMatch": "postBody/infrastructure_descriptor_1.json",
         "expectedStatus": 200
     },
     {
-        "context": "022 - Get Infrastructure Descriptor by ID (Conflict - Not Found) - GET /companies/{id}",
+        "context": "022 - Get Infrastructure Descriptor by Domain (Conflict - Not Found) - GET /companies/{domain}",
         "method": "GET",
-        "endpoint": "http://127.0.0.1:5004/companies/aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvaWRzL3JlZ2lzdHJ5LzE",
+        "endpoint": "http://127.0.0.1:5004/companies/bm90LmV4aXN0ZW50LmRl",
         "expectedStatus": 404
     },
-    {
+    { 
         "context": "023 - List Infrastructure Descriptors - GET /companies",
         "method": "GET",
         "endpoint": "http://127.0.0.1:5004/companies",
@@ -173,14 +173,14 @@
     {
         "context": "025 - List Infrastructure Descriptors (Limit + Cursor) - GET /companies?limit=1&cursor=...",
         "method": "GET",
-        "endpoint": "http://127.0.0.1:5004/companies?limit=1&cursor=aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvcm9pL2Q0ZS10ZW5hbnQtMC1hYXMtZGlzY292ZXJ5",
+        "endpoint": "http://127.0.0.1:5004/companies?limit=1&cursor=ZXguY29tLjMuZGU",
         "shouldMatch": "expected/infrastructure_descriptor_cursor_limit.json",
         "expectedStatus": 200
     },
     {
         "context": "026 - List Infrastructure Descriptors (Nonexistent Cursor) - GET /companies?cursor=...",
         "method": "GET",
-        "endpoint": "http://127.0.0.1:5004/companies?limit=1&cursor=bHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvcm9yL2Q0ZS10ZW5hbnQtMC1hYXMtZGlzY292ZXJ5",
+        "endpoint": "http://127.0.0.1:5004/companies?limit=1&cursor=enp6enp6",
         "shouldMatch": "expected/empty_paged_result.json",
         "expectedStatus": 200
     },
@@ -199,183 +199,127 @@
     {
         "context": "029 - List Infrastructure Descriptors (Filter Name) - GET /companies?name=Fraunhofer IESE",
         "method": "GET",
-        "endpoint": "http://127.0.0.1:5004/companies?name=Fraunhofer%20IESE",
-        "shouldMatch": "expected/infrastructure_descriptors_filter_1.json",
+        "endpoint": "http://127.0.0.1:5004/companies?name=RnJhdW5ob2ZlciBJRVNF",
+        "shouldMatch": "expected/infrastructure_descriptors_filter_name.json",
         "expectedStatus": 200
     },
     {
-        "context": "030 - List Infrastructure Descriptors (Filter Endpoint Interface) - GET /companies?endpointInterface=AAS-REGISTRY-3.0",
+        "context": "030 - List Infrastructure Descriptors (Filter Name Case-Insensitive) - GET /companies?name=fraunhofer iese",
         "method": "GET",
-        "endpoint": "http://127.0.0.1:5004/companies?endpointInterface=AAS-REGISTRY-3.0",
-        "shouldMatch": "expected/infrastructure_descriptors_filter_2.json",
+        "endpoint": "http://127.0.0.1:5004/companies?name=ZnJhdW5ob2ZlciBpZXNl",
+        "shouldMatch": "expected/infrastructure_descriptors_filter_name.json",
         "expectedStatus": 200
     },
     {
-        "context": "031 - List Infrastructure Descriptors (Filter Name + Filter Endpoint Interface) - GET /companies?name=Fraunhofer IESE&endpointInterface=AAS-REGISTRY-3.0",
+        "context": "031 - List Infrastructure Descriptors (Filter Name Via Name Options) - GET /companies?name=ExCompany",
         "method": "GET",
-        "endpoint": "http://127.0.0.1:5004/companies?name=Fraunhofer%20IESE&endpointInterface=AAS-REGISTRY-3.0",
-        "shouldMatch": "expected/infrastructure_descriptors_filter_3.json",
+        "endpoint": "http://127.0.0.1:5004/companies?name=RXhDb21wYW55",
+        "shouldMatch": "expected/infrastructure_descriptors_filter_name_options.json",
         "expectedStatus": 200
     },
     {
-        "context": "032 - List Infrastructure Descriptors (Filter Domain) - GET /companies?domain=iese.fraunhofer.de",
+        "context": "032 - List Infrastructure Descriptors (Filter Name Via Name Options Case-Insensitive) - GET /companies?name=EXCOMPANY",
         "method": "GET",
-        "endpoint": "http://127.0.0.1:5004/companies?domain=iese.fraunhofer.de",
-        "shouldMatch": "expected/infrastructure_descriptors_filter_4.json",
+        "endpoint": "http://127.0.0.1:5004/companies?name=RVhDT01QQU5Z",
+        "shouldMatch": "expected/infrastructure_descriptors_filter_name_options.json",
         "expectedStatus": 200
     },
     {
-        "context": "033 - List Infrastructure Descriptors (Filter Name + Filter Domain) - GET /companies?name=Company Ex&domain=example.com",
+        "context": "033 - List Infrastructure Descriptors (Filter Name - No Match) - GET /companies?name=NonExistentCompanyName",
         "method": "GET",
-        "endpoint": "http://127.0.0.1:5004/companies?name=Company%20Ex&domain=example.com",
-        "shouldMatch": "expected/infrastructure_descriptors_filter_5.json",
-        "expectedStatus": 200
-    },
-    {
-        "context": "034 - List Infrastructure Descriptors (Filter Name Via Name Options) - GET /companies?name=IESE",
-        "method": "GET",
-        "endpoint": "http://127.0.0.1:5004/companies?name=IESE",
-        "shouldMatch": "expected/infrastructure_descriptors_filter_6.json",
-        "expectedStatus": 200
-    },
-    {
-        "context": "035 - List Infrastructure Descriptors (Filter No Results) - GET /companies?name=IESE&domain=example.com",
-        "method": "GET",
-        "endpoint": "http://127.0.0.1:5004/companies?name=IESE&domain=example.com",
+        "endpoint": "http://127.0.0.1:5004/companies?name=Tm9uRXhpc3RlbnRDb21wYW55TmFtZQ",
         "shouldMatch": "expected/empty_paged_result.json",
         "expectedStatus": 200
     },
     {
-        "context": "036 - List Infrastructure Descriptors (Filter Name Case-Insensitive) - GET /companies?name=fraunhofer iese",
+        "context": "034 - List Infrastructure Descriptors (Filter Endpoint Interface) - GET /companies?endpointInterface=AAS-REGISTRY-3.0",
         "method": "GET",
-        "endpoint": "http://127.0.0.1:5004/companies?name=fraunhofer%20iese",
-        "shouldMatch": "expected/infrastructure_descriptors_filter_1.json",
+        "endpoint": "http://127.0.0.1:5004/companies?endpointInterface=AAS-REGISTRY-3.0",
+        "shouldMatch": "expected/infrastructure_descriptors_filter_endpoint_interface.json",
         "expectedStatus": 200
     },
     {
-        "context": "037 - List Infrastructure Descriptors (Filter Domain Case-Insensitive) - GET /companies?domain=IESE.FRAUNHOFER.DE",
+        "context": "035 - List Infrastructure Descriptors (Filter Name + Filter Endpoint Interface) - GET /companies?name=Fraunhofer IESE&endpointInterface=AAS-REGISTRY-3.0",
         "method": "GET",
-        "endpoint": "http://127.0.0.1:5004/companies?domain=IESE.FRAUNHOFER.DE",
-        "shouldMatch": "expected/infrastructure_descriptors_filter_4.json",
+        "endpoint": "http://127.0.0.1:5004/companies?name=RnJhdW5ob2ZlciBJRVNF&endpointInterface=AAS-REGISTRY-3.0",
+        "shouldMatch": "expected/infrastructure_descriptors_filter_name_and_endpoint_interface.json",
         "expectedStatus": 200
     },
     {
-        "context": "038 - List Infrastructure Descriptors (Filter Name + Domain Case-Insensitive) - GET /companies?name=company ex&domain=EXAMPLE.COM",
+        "context": "036 - List Infrastructure Descriptors (Filter AssetId) - GET /companies?assetId=https://i.iese.fraunhofer.de/assetId/assets/4711",
         "method": "GET",
-        "endpoint": "http://127.0.0.1:5004/companies?name=company%20ex&domain=EXAMPLE.COM",
-        "shouldMatch": "expected/infrastructure_descriptors_filter_5.json",
+        "endpoint": "http://127.0.0.1:5004/companies?assetId=aHR0cHM6Ly9pLmllc2UuZnJhdW5ob2Zlci5kZS9hc3NldElkL2Fzc2V0cy80NzEx",
+        "shouldMatch": "expected/infrastructure_descriptors_filter_asset_id.json",
         "expectedStatus": 200
     },
     {
-        "context": "039 - Delete Infrastructure Descriptor by ID - DELETE /companies/{id}",
-        "method": "DELETE",
-        "endpoint": "http://127.0.0.1:5004/companies/aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvcm9pL2Q0ZS10ZW5hbnQtMC1hYXMtZGlzY292ZXJ5",
-        "expectedStatus": 204
+        "context": "037 - List Infrastructure Descriptors (Filter AssetId - No Match)",
+        "method": "GET",
+        "endpoint": "http://127.0.0.1:5004/companies?assetId=aHR0cHM6Ly9pLmllc2UuZGUvYXNzZXRJZC9hc3NldHMvMjQ2OA",
+        "shouldMatch": "expected/empty_paged_result.json",
+        "expectedStatus": 200
     },
     {
-        "context": "040 - Delete Infrastructure Descriptor by ID (Conflict - Not Found) - DELETE /companies/{id}",
-        "method": "DELETE",
-        "endpoint": "http://127.0.0.1:5004/companies/aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvcm9yL2Q0ZS10ZW5hbnQtMC1hYXMtZGlzY292ZXJ5",
-        "expectedStatus": 404
-    },
-    {
-        "context": "041 - Update Infrastructure Descriptor - PUT /companies/{id}",
+        "context": "038 - Update Infrastructure Descriptor - PUT /companies/{domain}",
         "method": "PUT",
-        "endpoint": "http://127.0.0.1:5004/companies/aHR0cHM6Ly9leGFtcGxlLmNvbS9yb2kvZXhhbXBsZS1hYXMtZGlzY292ZXJ5",
+        "endpoint": "http://127.0.0.1:5004/companies/ZXguY29tLjEuZGU",
         "data": "postBody/infrastructure_descriptor_5.json",
         "expectedStatus": 204
     },
     {
-        "context": "042 - Get Infrastructure Descriptor by ID - GET /companies/{id}",
+        "context": "039 - Get Infrastructure Descriptor by old Domain after Update (Conflict - Nonexistent Domain) - GET /companies/{domain}",
         "method": "GET",
-        "endpoint": "http://127.0.0.1:5004/companies/aHR0cHM6Ly9leGFtcGxlLmNvbS9yb2kvZXhhbXBsZS1hYXMtZGlzY292ZXJ5",
+        "endpoint": "http://127.0.0.1:5004/companies/ZXguY29tLjEuZGU",
         "shouldMatch": "postBody/infrastructure_descriptor_5.json",
         "expectedStatus": 200
     },
     {
-        "context": "043 - Create Infrastructure Descriptor using PUT - PUT /companies/{id}",
-        "method": "PUT",
-        "endpoint": "http://127.0.0.1:5004/companies/aHR0cHM6Ly9leGFtcGxlLmNvbS9yb2kvZXhhbXBsZS1hYXMtZGlzY292ZXJ5LTM",
-        "data": "postBody/infrastructure_descriptor_7.json",
-        "shouldMatch": "postBody/infrastructure_descriptor_7.json",
-        "expectedStatus": 201
+        "context": "040 - Get Infrastructure Descriptor by new Domain after Update - GET /companies/{domain}",
+        "method": "GET",
+        "endpoint": "http://127.0.0.1:5004/companies/bmV3LmV4LmNvbS4xLmRl",
+        "shouldMatch": "postBody/infrastructure_descriptor_5.json",
+        "expectedStatus": 200
     },
     {
-        "context": "044 - Update Infrastructure Descriptor (Conflict - Nonexistent ID) - PUT /companies/{id}",
+        "context": "041 - Delete Infrastructure Descriptor by Domain - DELETE /companies/{domain}",
+        "method": "DELETE",
+        "endpoint": "http://127.0.0.1:5004/companies/bmV3LmV4LmNvbS4xLmRl",
+        "expectedStatus": 204
+    },
+    {
+        "context": "042 - Delete Infrastructure Descriptor by Domain (Conflict - Not Found) - DELETE /companies/{domain}",
+        "method": "DELETE",
+        "endpoint": "http://127.0.0.1:5004/companies/bmV3LmV4LmNvbS4xLmRl",
+        "expectedStatus": 404
+    },
+    {
+        "context": "043 - Create Infrastructure Descriptor using PUT (Conflict - Domain Mismatch) - PUT /companies/{domain}",
         "method": "PUT",
-        "endpoint": "http://127.0.0.1:5004/companies/aHR0cHM6Ly9leGFtcGxlLmNvbS9yb3IvZXhhbXBsZS1hYXMtZGlzY292ZXJ5LW5vbmV4aXN0ZW50",
+        "endpoint": "http://127.0.0.1:5004/companies/ZXguY29tLjEuZGU",
         "data": "postBody/infrastructure_descriptor_5.json",
         "expectedStatus": 400
     },
     {
-        "context": "045 - Update Infrastructure Descriptor (Conflict - Body ID Mismatch) - PUT /companies/{id}",
+        "context": "044 - Create Infrastructure Descriptor using PUT - PUT /companies/{domain}",
         "method": "PUT",
-        "endpoint": "http://127.0.0.1:5004/companies/aHR0cHM6Ly9leGFtcGxlLmNvbS9yb3IvZXhhbXBsZS1hYXMtZGlzY292ZXJ5",
-        "data": "postBody/infrastructure_descriptor_6.json",
-        "expectedStatus": 400
-    },
-    {
-        "context": "046 - Create Infrastructure Descriptor #8 With Regex Patterns - POST /companies",
-        "method": "POST",
-        "endpoint": "http://127.0.0.1:5004/companies",
-        "data": "postBody/infrastructure_descriptor_8.json",
-        "shouldMatch": "postBody/infrastructure_descriptor_8.json",
+        "endpoint": "http://127.0.0.1:5004/companies/bmV3LmV4LmNvbS4xLmRl",
+        "data": "postBody/infrastructure_descriptor_5.json",
+        "shouldMatch": "postBody/infrastructure_descriptor_5.json",
         "expectedStatus": 201
     },
     {
-        "context": "047 - List Infrastructure Descriptors (Filter AssetId Matches assetIdRegexPatterns)",
-        "method": "GET",
-        "endpoint": "http://127.0.0.1:5004/companies?assetId=aHR0cHM6Ly9pLmZyYXVuaG9mZXIuZGUvYXNzZXRJZC9hc3NldHMvNDcxMQ",
-        "shouldMatch": "expected/infrastructure_descriptors_filter_7.json",
-        "expectedStatus": 200
-    },
-    {
-        "context": "048 - List Infrastructure Descriptors (Filter AssetId Matches idLinkRegexPatterns)",
-        "method": "GET",
-        "endpoint": "http://127.0.0.1:5004/companies?assetId=aHR0cHM6Ly9pLmZyYXVuaG9mZXIuZGUvaWRMaW5rL2Fzc2V0cy81ODIy",
-        "shouldMatch": "expected/infrastructure_descriptors_filter_7.json",
-        "expectedStatus": 200
-    },
-    {
-        "context": "049 - List Infrastructure Descriptors (Filter AssetId No Match)",
-        "method": "GET",
-        "endpoint": "http://127.0.0.1:5004/companies?assetId=aHR0cHM6Ly9pLmllc2UuZGUvYXNzZXRJZC9hc3NldHMvMjQ2OA",
-        "shouldMatch": "expected/empty_paged_result.json",
-        "expectedStatus": 200
-    },
-    {
-        "context": "050 - Update Infrastructure Descriptor #8 With Regex - PUT /companies/{id}",
-        "method": "PUT",
-        "endpoint": "http://127.0.0.1:5004/companies/aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvcm9pL2Q0ZS10ZW5hbnQtMC1hYXMtcmVnaXN0cnktMg",
-        "data": "postBody/infrastructure_descriptor_9.json",
-        "expectedStatus": 204
-    },
-    {
-        "context": "051 - List Infrastructure Descriptors (Filter AssetId Matches assetIdRegexPatterns after Update)",
-        "method": "GET",
-        "endpoint": "http://127.0.0.1:5004/companies?assetId=aHR0cHM6Ly9pLmllc2UuZGUvYXNzZXRJZC9hc3NldHMvMjQ2OA",
-        "shouldMatch": "expected/infrastructure_descriptors_filter_8.json",
-        "expectedStatus": 200
-    },
-    {
-        "context": "052 - List Infrastructure Descriptors (Conflict - Invalid AssetId Base64URL)",
-        "method": "GET",
-        "endpoint": "http://127.0.0.1:5004/companies?assetId=$$$",
-        "expectedStatus": 400
-    },
-    {
-        "context": "053 - Cleanup: Delete All AAS Descriptors - ACTION DELETE_ALL_INFRASTRUCTURE_DESCRIPTORS",
+        "context": "045 - Cleanup: Delete All AAS Descriptors - ACTION DELETE_ALL_INFRASTRUCTURE_DESCRIPTORS",
         "action": "DELETE_ALL_INFRASTRUCTURE_DESCRIPTORS"
     },
     {
-        "context": "054 - Verify that Cleanup has worked - GET /companies",
+        "context": "046 - Verify that Cleanup has worked - GET /companies",
         "method": "GET",
         "endpoint": "http://127.0.0.1:5004/companies",
         "shouldMatch": "expected/empty_paged_result.json",
         "expectedStatus": 200
     },
     {
-        "context": "055 - Verify database is empty - ACTION CHECK_DB_IS_EMPTY",
+        "context": "047 - Verify database is empty - ACTION CHECK_DB_IS_EMPTY",
         "action": "CHECK_DB_IS_EMPTY"
     }
 ]

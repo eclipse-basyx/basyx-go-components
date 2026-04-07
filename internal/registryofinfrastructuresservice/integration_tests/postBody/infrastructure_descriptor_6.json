@@ -2,13 +2,13 @@
     "description": [
         {
             "language": "en",
-            "text": "Updated AAS Discovery"
+            "text": "An example company."
         }
     ],
     "displayName": [
         {
             "language": "en",
-            "text": "AAS Discovery 1"
+            "text": "Example Company"
         }
     ],
     "administration": {
@@ -19,7 +19,7 @@
             "keys": [
                 {
                     "type": "GlobalReference",
-                    "value": "https://example.com"
+                    "value": "https://examplecompany.de"
                 }
             ]
         }
@@ -34,12 +34,11 @@
         }
     ],
     "idShort": "ExampleAASDiscovery",
-    "id": "https://example.com/roi/example-aas-discovery-2",
-    "name": "ExampleCompany",
-    "domain": "example.com",
+    "name": "ExCom5",
+    "domain": "ex.com.5.de",
     "nameOptions": [
-        "Example Company",
-        "ExCom",
-        "Ex Company"
+        "Example Company 5",
+        "EC5",
+        "Com Example 5"
     ]
 }

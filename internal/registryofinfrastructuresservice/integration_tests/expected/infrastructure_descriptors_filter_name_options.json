@@ -7,7 +7,7 @@
                     "keys": [
                         {
                             "type": "GlobalReference",
-                            "value": "https://iese.fraunhofer.de"
+                            "value": "https://examplecompany.de"
                         }
                     ],
                     "type": "ExternalReference"
@@ -18,32 +18,32 @@
             "description": [
                 {
                     "language": "en",
-                    "text": "AAS Discovery Service for D4E Tenant 0"
+                    "text": "An example company."
                 }
             ],
             "displayName": [
                 {
                     "language": "en",
-                    "text": "D4E Tenant 0 AAS Discovery"
+                    "text": "Example Company"
                 }
             ],
-            "domain": "iese.fraunhofer.de",
+            "domain": "ex.com.2.de",
             "endpoints": [
                 {
-                    "interface": "AAS-DISCOVERY-3.0",
+                    "interface": "AAS-REGISTRY-3.0",
                     "protocolInformation": {
-                        "href": "https://demo.digital-twin.host/aas-discovery",
+                        "href": "https://example.com/aas-registry",
                         "endpointProtocol": "HTTPS"
                     }
                 }
             ],
-            "id": "https://iese.fraunhofer.de/roi/d4e-tenant-0-aas-discovery",
-            "idShort": "D4ETenant0AASDiscovery",
-            "name": "Fraunhofer IESE",
+            "idShort": "exampleCompany2",
+            "name": "ExCom2",
             "nameOptions": [
-                "Fraunhofer-Institut für Experimentelles Software-Engineering",
-                "IESE",
-                "IESE Fraunhofer"
+                "Example Company 2",
+                "EC2",
+                "Com Example 2",
+                "ExCompany"
             ]
         },
         {
@@ -52,7 +52,7 @@
                     "keys": [
                         {
                             "type": "GlobalReference",
-                            "value": "https://iese.fraunhofer.de"
+                            "value": "https://examplecompany.de"
                         }
                     ],
                     "type": "ExternalReference"
@@ -63,32 +63,32 @@
             "description": [
                 {
                     "language": "en",
-                    "text": "AAS Registry of the AAS Dataspace for Everybody Tenant 0"
+                    "text": "An example company."
                 }
             ],
             "displayName": [
                 {
                     "language": "en",
-                    "text": "D4E Tenant 0 AAS Registry"
+                    "text": "Example Company"
                 }
             ],
-            "domain": "iese.fraunhofer.de",
+            "domain": "ex.com.3.de",
             "endpoints": [
                 {
-                    "interface": "AAS-REGISTRY-3.0",
+                    "interface": "AAS-DISCOVERY-3.0",
                     "protocolInformation": {
-                        "href": "https://demo.digital-twin.host/aas-registry",
+                        "href": "https://example.com/aas-discovery",
                         "endpointProtocol": "HTTPS"
                     }
                 }
             ],
-            "id": "https://iese.fraunhofer.de/roi/d4e-tenant-0-aas-registry",
-            "idShort": "D4ETenant0AASRegistry",
-            "name": "Fraunhofer IESE",
+            "idShort": "exampleCompany3",
+            "name": "ExCom3",
             "nameOptions": [
-                "Fraunhofer-Institut für Experimentelles Software-Engineering",
-                "IESE",
-                "IESE Fraunhofer"
+                "Example Company 3",
+                "EC3",
+                "Com Example 3",
+                "ExCompany"
             ]
         }
     ]
