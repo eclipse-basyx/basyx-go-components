@@ -19,7 +19,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/FriedJannik/aas-go-sdk/jsonization"
+	"github.com/aas-core-works/aas-core3.1-golang/jsonization"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	"github.com/go-chi/chi/v5"
 )

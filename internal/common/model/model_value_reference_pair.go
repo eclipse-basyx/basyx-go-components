@@ -34,7 +34,7 @@
 //nolint:all
 package model
 
-import "github.com/FriedJannik/aas-go-sdk/types"
+import "github.com/aas-core-works/aas-core3.1-golang/types"
 
 // ValueReferencePair struct representing a pair of a value and its reference ID
 type ValueReferencePair struct {

@@ -30,9 +30,9 @@ package model
 import (
 	"errors"
 
-	"github.com/FriedJannik/aas-go-sdk/jsonization"
-	"github.com/FriedJannik/aas-go-sdk/types"
-	"github.com/FriedJannik/aas-go-sdk/verification"
+	"github.com/aas-core-works/aas-core3.1-golang/jsonization"
+	"github.com/aas-core-works/aas-core3.1-golang/types"
+	"github.com/aas-core-works/aas-core3.1-golang/verification"
 	jsoniter "github.com/json-iterator/go"
 )
 

@@ -29,7 +29,7 @@ import (
 	"database/sql"
 	"strconv"
 
-	"github.com/FriedJannik/aas-go-sdk/types"
+	"github.com/aas-core-works/aas-core3.1-golang/types"
 )
 
 // TypedValue represents a value categorized by its XS datatype for database storage.

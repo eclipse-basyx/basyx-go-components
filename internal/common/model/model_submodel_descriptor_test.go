@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/FriedJannik/aas-go-sdk/jsonization"
-	"github.com/FriedJannik/aas-go-sdk/types"
+	"github.com/aas-core-works/aas-core3.1-golang/jsonization"
+	"github.com/aas-core-works/aas-core3.1-golang/types"
 )
 
 func TestSubmodelDescriptorUnmarshalRejectsSingularWhenDisabled(t *testing.T) {

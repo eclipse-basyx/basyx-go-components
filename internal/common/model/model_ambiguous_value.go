@@ -30,7 +30,7 @@ package model
 import (
 	"encoding/json"
 
-	"github.com/FriedJannik/aas-go-sdk/types"
+	"github.com/aas-core-works/aas-core3.1-golang/types"
 )
 
 // AmbiguousSubmodelElementValue represents a submodel element value that can take multiple forms.
