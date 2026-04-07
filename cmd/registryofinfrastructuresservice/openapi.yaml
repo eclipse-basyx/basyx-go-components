@@ -194,7 +194,7 @@ components:
       name: name
       in: query
       required: false
-      description: Filter by name (matches InfrastructureDescriptor.name or one of InfrastructureDescriptor.nameOptions)
+      description: Base64url encoded name filter (matches InfrastructureDescriptor.name or one of InfrastructureDescriptor.nameOptions)
       schema:
         type: string
 

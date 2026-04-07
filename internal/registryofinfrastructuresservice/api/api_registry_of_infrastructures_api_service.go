@@ -87,11 +87,23 @@ func (s *RegistryOfInfrastructuresAPIAPIService) GetAllInfrastructureDescriptors
 		internalCursor = dec
 	}
 
+	var internalName string
+	if strings.TrimSpace(name) != "" {
+		dec, decErr := common.DecodeString(name)
+		if decErr != nil {
+			log.Printf("📍 [%s] Error in GetAllInfrastructureDescriptors: decode name=%q limit=%d cursor=%q domain=%q endpointInterface=%q assetId=%q: %v", componentName, name, limit, internalCursor, domain, endpointInterface, assetId, decErr)
+			return common.NewErrorResponse(
+				decErr, http.StatusBadRequest, componentName, "GetAllInfrastructureDescriptors", "BadName",
+			), nil
+		}
+		internalName = dec
+	}
+
 	var internalAssetID string
 	if strings.TrimSpace(assetId) != "" {
 		dec, decErr := common.DecodeString(assetId)
 		if decErr != nil {
-			log.Printf("📍 [%s] Error in GetAllInfrastructureDescriptors: decode assetId=%q limit=%d cursor=%q name=%q domain=%q endpointInterface=%q: %v", componentName, assetId, limit, internalCursor, name, domain, endpointInterface, decErr)
+			log.Printf("📍 [%s] Error in GetAllInfrastructureDescriptors: decode assetId=%q limit=%d cursor=%q name=%q domain=%q endpointInterface=%q: %v", componentName, assetId, limit, internalCursor, internalName, domain, endpointInterface, decErr)
 			return common.NewErrorResponse(
 				decErr, http.StatusBadRequest, componentName, "GetAllInfrastructureDescriptors", "BadAssetId",
 			), nil
@@ -99,9 +111,9 @@ func (s *RegistryOfInfrastructuresAPIAPIService) GetAllInfrastructureDescriptors
 		internalAssetID = dec
 	}
 
-	infrastructureDescriptors, nextCursor, err := s.registryOfInfrastructuresBackend.ListInfrastructureDescriptors(ctx, limit, internalCursor, name, domain, endpointInterface, internalAssetID)
+	infrastructureDescriptors, nextCursor, err := s.registryOfInfrastructuresBackend.ListInfrastructureDescriptors(ctx, limit, internalCursor, internalName, domain, endpointInterface, internalAssetID)
 	if err != nil {
-		log.Printf("📍 [%s] Error in GetAllInfrastructureDescriptors: list failed (limit=%d cursor=%q name=%q domain=%q endpointInterface=%q assetId=%q): %v", componentName, limit, internalCursor, name, domain, endpointInterface, internalAssetID, err)
+		log.Printf("📍 [%s] Error in GetAllInfrastructureDescriptors: list failed (limit=%d cursor=%q name=%q domain=%q endpointInterface=%q assetId=%q): %v", componentName, limit, internalCursor, internalName, domain, endpointInterface, internalAssetID, err)
 		switch {
 		case common.IsErrBadRequest(err):
 			return common.NewErrorResponse(
