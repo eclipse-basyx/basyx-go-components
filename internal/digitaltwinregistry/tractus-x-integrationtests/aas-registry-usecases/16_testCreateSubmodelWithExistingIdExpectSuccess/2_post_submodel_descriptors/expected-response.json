@@ -1,0 +1,8 @@
+{
+    "status":  201,
+    "content":  true,
+    "assertions":  [
+
+                   ],
+    "expectedPayload":  {"endpoints":[{"interface":"interfaceNameExample","protocolInformation":{"endpointProtocol":"endpointProtocolExample","endpointProtocolVersion":["1.1"],"href":"http://endpoint-address","securityAttributes":[{"key":"Security Attribute key","type":"NONE","value":"Security Attribute value"}],"subprotocolBody":"subprotocolBodyExample","subprotocolBodyEncoding":"subprotocolBodyExample"}}],"id":"0197ad09-8a6e-7f9d-8b09-23a8bbf5aa91","idShort":"KdlMzDfb5r","semanticId":{"keys":[{"type":"Submodel","value":"semanticIdExample"}],"type":"ExternalReference"}}
+}

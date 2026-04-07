@@ -50,10 +50,13 @@ func FindCompose() (bin string, args []string, err error) {
 	if _, e := exec.LookPath("docker"); e == nil {
 		return "docker", []string{"compose"}, nil
 	}
+	if _, e := exec.LookPath("docker-compose"); e == nil {
+		return "docker-compose", []string{}, nil
+	}
 	if _, e := exec.LookPath("podman"); e == nil {
 		return "podman", []string{"compose"}, nil
 	}
-	return "", nil, errors.New("neither docker nor podman found on PATH")
+	return "", nil, errors.New("no compose engine found (docker, docker-compose, podman)")
 }
 
 // RunCompose executes a Docker Compose command with the given base command and arguments.

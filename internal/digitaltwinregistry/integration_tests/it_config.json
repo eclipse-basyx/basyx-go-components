@@ -100,7 +100,7 @@
     "endpoint": "http://127.0.0.1:5004/lookup/shellsByAssetLink",
     "data": "postBody/assetlink_empty.json",
     "expectedStatus": 200,
-    "shouldMatch": "expected/lookup_shells_by_assetlink_BPNL00000000015G.json",
+    "shouldMatch": "expected/lookup_shells_by_assetlink_assetlink_empty.json",
     "headers": {
       "Edc-Bpn": "BPNL00000000015G"
     }
