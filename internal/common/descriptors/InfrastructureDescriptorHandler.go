@@ -436,8 +436,9 @@ func ReplaceInfrastructureDescriptor(ctx context.Context, db *sql.DB, infrastruc
 }
 
 // ListInfrastructureDescriptors lists Infrastructure Descriptors with optional
-// filtering by name/domain and endpoint interface. Results are ordered by Infrastructure Id
-// ascending and support cursor‑based pagination where the cursor is the Infrastructure Id
+// filtering by name, endpoint interface and assetId regex matching.
+// Results are ordered by Infrastructure Id ascending and support
+// cursor‑based pagination where the cursor is the Infrastructure Id
 // of the first element to include (i.e. Id >= cursor).
 //
 // It returns the page of fully assembled descriptors and, when more results are
@@ -451,7 +452,6 @@ func ListInfrastructureDescriptors(
 	limit int32,
 	cursor string,
 	name string,
-	domain string,
 	endpointInterface string,
 	assetID string,
 ) ([]model.InfrastructureDescriptor, string, error) {
@@ -505,10 +505,6 @@ func ListInfrastructureDescriptors(
 					infNameOpt.Col(common.ColDescriptorID).IsNotNull(),
 				),
 			)
-	}
-
-	if strings.TrimSpace(domain) != "" {
-		ds = ds.Where(goqu.Func("LOWER", inf.Col(common.ColCompanyDomain)).Eq(strings.ToLower(domain)))
 	}
 
 	if endpointInterface != "" {
