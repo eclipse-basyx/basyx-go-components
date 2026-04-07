@@ -1,3 +1,4 @@
+// Package aasenvironment provides composition services for the AAS Environment APIs.
 package aasenvironment
 
 import (

@@ -1,3 +1,4 @@
+// Package main starts the AAS Environment Service HTTP server.
 package main
 
 import (
@@ -9,6 +10,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"time"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/aasenvironment"
 	aasregistryapi "github.com/eclipse-basyx/basyx-go-components/internal/aasregistry/api"
@@ -191,14 +193,27 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 
 	addr := fmt.Sprintf("0.0.0.0:%d", cfg.Server.Port)
 	log.Printf("AAS Environment Service listening on %s (contextPath=%q)\n", addr, cfg.Server.ContextPath)
+	server := &http.Server{
+		Addr:              addr,
+		Handler:           r,
+		ReadHeaderTimeout: 15 * time.Second,
+		ReadTimeout:       30 * time.Second,
+		WriteTimeout:      30 * time.Second,
+		IdleTimeout:       60 * time.Second,
+	}
 	go func() {
-		if serveErr := http.ListenAndServe(addr, r); serveErr != http.ErrServerClosed {
+		if serveErr := server.ListenAndServe(); serveErr != nil && serveErr != http.ErrServerClosed {
 			log.Printf("Server error: %v", serveErr)
 		}
 	}()
 
 	<-ctx.Done()
 	log.Println("Shutting down server...")
+	shutdownCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
+	defer cancel()
+	if err := server.Shutdown(shutdownCtx); err != nil {
+		return fmt.Errorf("AASENV-SRV-SHUTDOWN %w", err)
+	}
 	return nil
 }
 

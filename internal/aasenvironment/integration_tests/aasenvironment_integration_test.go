@@ -17,6 +17,15 @@ import (
 const composeFilePath = "./docker_compose/docker_compose.yml"
 const integrationTestDSN = "host=127.0.0.1 port=6432 user=admin password=admin123 dbname=basyxTestDB sslmode=disable"
 
+var allowedIntegrationPackages = map[string]struct{}{
+	"github.com/eclipse-basyx/basyx-go-components/internal/aasregistry/integration_tests":                  {},
+	"github.com/eclipse-basyx/basyx-go-components/internal/smregistry/integration_tests":                   {},
+	"github.com/eclipse-basyx/basyx-go-components/internal/aasrepository/integration_tests":                {},
+	"github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/integration_tests":           {},
+	"github.com/eclipse-basyx/basyx-go-components/internal/conceptdescriptionrepository/integration_tests": {},
+	"github.com/eclipse-basyx/basyx-go-components/internal/discoveryservice/integration_tests":             {},
+}
+
 func TestMain(m *testing.M) {
 	os.Exit(testenv.RunComposeTestMain(m, testenv.ComposeTestMainOptions{
 		ComposeFile:     composeFilePath,
@@ -41,7 +50,10 @@ func TestIntegration(t *testing.T) {
 		t.Run(strings.ReplaceAll(pkg, "/", "_"), func(t *testing.T) {
 			t.Helper()
 			resetDatabase(t)
+			_, ok := allowedIntegrationPackages[pkg]
+			require.True(t, ok, "unsupported integration package: %s", pkg)
 
+			// #nosec G204 -- pkg is validated against a static allow-list above.
 			cmd := exec.Command("go", "test", "-v", pkg)
 			cmd.Env = append(os.Environ(), "BASYX_EXTERNAL_COMPOSE=1")
 			cmd.Stdout = os.Stdout

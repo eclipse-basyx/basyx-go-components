@@ -2,6 +2,7 @@ package common
 
 import "database/sql"
 
+// ExecuteInTransaction starts a transaction, executes fn, and commits on success.
 func ExecuteInTransaction(db *sql.DB, startErrorCode string, commitErrorCode string, fn func(tx *sql.Tx) error) (err error) {
 	if db == nil {
 		return NewErrBadRequest("COMMON-EXECINTX-NILDB database handle must not be nil")
