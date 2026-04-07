@@ -64,7 +64,7 @@ func InsertInfrastructureDescriptor(ctx context.Context, db *sql.DB, infrastruct
 		_ = tx.Rollback()
 		return model.InfrastructureDescriptor{}, err
 	}
-	result, err := GetInfrastructureDescriptorByIDTx(ctx, tx, infrastructureDescriptor.Id)
+	result, err := GetInfrastructureDescriptorByIDTx(ctx, tx, infrastructureDescriptor.Domain)
 	if err != nil {
 		_ = tx.Rollback()
 		return model.InfrastructureDescriptor{}, err
@@ -135,7 +135,6 @@ func InsertInfrastructureDescriptorTx(_ context.Context, tx *sql.Tx, infdesc mod
 			common.ColDescriptorID:  descriptorID,
 			common.ColGlobalAssetID: infdesc.GlobalAssetId,
 			common.ColIDShort:       infdesc.IdShort,
-			common.ColInfDescID:     infdesc.Id,
 			common.ColCompanyName:   infdesc.Name,
 			common.ColCompanyDomain: infdesc.Domain,
 		}).
@@ -189,12 +188,11 @@ func GetInfrastructureDescriptorByID(ctx context.Context, db *sql.DB, infrastruc
 			inf.Col(common.ColIDShort),
 			inf.Col(common.ColCompanyName),
 			inf.Col(common.ColCompanyDomain),
-			inf.Col(common.ColInfDescID),
 			payload.Col(common.ColAdministrativeInfoPayload),
 			payload.Col(common.ColDisplayNamePayload),
 			payload.Col(common.ColDescriptionPayload),
 		).
-		Where(inf.Col(common.ColInfDescID).Eq(infrastructureIdentifier)).
+		Where(inf.Col(common.ColCompanyDomain).Eq(infrastructureIdentifier)).
 		Limit(1).
 		ToSQL()
 	if buildErr != nil {
@@ -205,7 +203,6 @@ func GetInfrastructureDescriptorByID(ctx context.Context, db *sql.DB, infrastruc
 		descID                    int64
 		globalAssetID, idShort    sql.NullString
 		name, domain              sql.NullString
-		idStr                     string
 		administrativeInfoPayload []byte
 		displayNamePayload        []byte
 		descriptionPayload        []byte
@@ -217,7 +214,6 @@ func GetInfrastructureDescriptorByID(ctx context.Context, db *sql.DB, infrastruc
 		&idShort,
 		&name,
 		&domain,
-		&idStr,
 		&administrativeInfoPayload,
 		&displayNamePayload,
 		&descriptionPayload,
@@ -265,7 +261,6 @@ func GetInfrastructureDescriptorByID(ctx context.Context, db *sql.DB, infrastruc
 		NameOptions:          nameOptions,
 		AssetIdRegexPatterns: assetIDRegexPatterns,
 		IdLinkRegexPatterns:  idLinkRegexPatterns,
-		Id:                   idStr,
 		Administration:       adminInfo,
 		DisplayName:          displayName,
 		Description:          description,
@@ -294,12 +289,11 @@ func GetInfrastructureDescriptorByIDTx(ctx context.Context, tx *sql.Tx, infrastr
 			inf.Col(common.ColIDShort),
 			inf.Col(common.ColCompanyName),
 			inf.Col(common.ColCompanyDomain),
-			inf.Col(common.ColInfDescID),
 			payload.Col(common.ColAdministrativeInfoPayload),
 			payload.Col(common.ColDisplayNamePayload),
 			payload.Col(common.ColDescriptionPayload),
 		).
-		Where(inf.Col(common.ColInfDescID).Eq(infrastructureIdentifier)).
+		Where(inf.Col(common.ColCompanyDomain).Eq(infrastructureIdentifier)).
 		Limit(1).
 		ToSQL()
 	if buildErr != nil {
@@ -309,7 +303,6 @@ func GetInfrastructureDescriptorByIDTx(ctx context.Context, tx *sql.Tx, infrastr
 		descID                    int64
 		globalAssetID, idShort    sql.NullString
 		name, domain              sql.NullString
-		idStr                     string
 		administrativeInfoPayload []byte
 		displayNamePayload        []byte
 		descriptionPayload        []byte
@@ -321,7 +314,6 @@ func GetInfrastructureDescriptorByIDTx(ctx context.Context, tx *sql.Tx, infrastr
 		&idShort,
 		&name,
 		&domain,
-		&idStr,
 		&administrativeInfoPayload,
 		&displayNamePayload,
 		&descriptionPayload,
@@ -368,7 +360,6 @@ func GetInfrastructureDescriptorByIDTx(ctx context.Context, tx *sql.Tx, infrastr
 		NameOptions:          nameOptions,
 		AssetIdRegexPatterns: assetIDRegexPatterns,
 		IdLinkRegexPatterns:  idLinkRegexPatterns,
-		Id:                   idStr,
 		Administration:       adminInfo,
 		DisplayName:          displayName,
 		Description:          description,
@@ -396,7 +387,7 @@ func DeleteInfrastructureDescriptorByIDTx(ctx context.Context, tx *sql.Tx, infra
 	sqlStr, args, buildErr := d.
 		From(inf).
 		Select(inf.Col(common.ColDescriptorID)).
-		Where(inf.Col(common.ColInfDescID).Eq(infrastructureIdentifier)).
+		Where(inf.Col(common.ColCompanyDomain).Eq(infrastructureIdentifier)).
 		Limit(1).
 		ToSQL()
 	if buildErr != nil {
@@ -440,7 +431,7 @@ func ReplaceInfrastructureDescriptor(ctx context.Context, db *sql.DB, infrastruc
 	}()
 
 	// delete existing descriptor
-	if err = DeleteInfrastructureDescriptorByIDTx(ctx, tx, infrastructureDescriptor.Id); err != nil {
+	if err = DeleteInfrastructureDescriptorByIDTx(ctx, tx, infrastructureDescriptor.Domain); err != nil {
 		_ = tx.Rollback()
 		return model.InfrastructureDescriptor{}, err
 	}
@@ -450,7 +441,7 @@ func ReplaceInfrastructureDescriptor(ctx context.Context, db *sql.DB, infrastruc
 		return model.InfrastructureDescriptor{}, err
 	}
 
-	result, err := GetInfrastructureDescriptorByIDTx(ctx, tx, infrastructureDescriptor.Id)
+	result, err := GetInfrastructureDescriptorByIDTx(ctx, tx, infrastructureDescriptor.Domain)
 	if err != nil {
 		_ = tx.Rollback()
 		return model.InfrastructureDescriptor{}, err
@@ -503,14 +494,14 @@ func ListInfrastructureDescriptors(
 			inf.Col(common.ColIDShort),
 			inf.Col(common.ColCompanyName),
 			inf.Col(common.ColCompanyDomain),
-			inf.Col(common.ColInfDescID),
+			inf.Col(common.ColCompanyDomain),
 			payload.Col(common.ColAdministrativeInfoPayload),
 			payload.Col(common.ColDisplayNamePayload),
 			payload.Col(common.ColDescriptionPayload),
 		)
 
 	if cursor != "" {
-		ds = ds.Where(inf.Col(common.ColInfDescID).Gte(cursor))
+		ds = ds.Where(inf.Col(common.ColCompanyDomain).Gte(cursor))
 	}
 
 	if strings.TrimSpace(name) != "" {
@@ -576,7 +567,7 @@ func ListInfrastructureDescriptors(
 	}
 
 	ds = ds.
-		Order(inf.Col(common.ColInfDescID).Asc()).
+		Order(inf.Col(common.ColCompanyDomain).Asc()).
 		Limit(uint(peekLimit))
 
 	sqlStr, args, buildErr := ds.ToSQL()
@@ -689,7 +680,6 @@ func ListInfrastructureDescriptors(
 			NameOptions:          nameOptionsByDesc[r.DescID],
 			AssetIdRegexPatterns: assetIDRegexByDesc[r.DescID],
 			IdLinkRegexPatterns:  idLinkRegexByDesc[r.DescID],
-			Id:                   r.IDStr,
 			Administration:       adminInfo,
 			DisplayName:          displayName,
 			Description:          description,
@@ -706,7 +696,7 @@ func ExistsInfrastructureByID(ctx context.Context, db *sql.DB, infrastructureIde
 	d := goqu.Dialect(common.Dialect)
 	inf := goqu.T(common.TblInfrastructureDescriptor).As("inf")
 
-	ds := d.From(inf).Select(goqu.L("1")).Where(inf.Col(common.ColInfDescID).Eq(infrastructureIdentifier)).Limit(1)
+	ds := d.From(inf).Select(goqu.L("1")).Where(inf.Col(common.ColCompanyDomain).Eq(infrastructureIdentifier)).Limit(1)
 	sqlStr, args, err := ds.ToSQL()
 	if err != nil {
 		return false, err

@@ -370,9 +370,8 @@ CREATE TABLE IF NOT EXISTS infrastructure_descriptor (
   descriptor_id BIGINT PRIMARY KEY REFERENCES descriptor(id) ON DELETE CASCADE,
   global_asset_id VARCHAR(2048),
   id_short VARCHAR(128),
-  id VARCHAR(2048) NOT NULL UNIQUE,
   company_name VARCHAR(2048),
-  company_domain VARCHAR(2048)
+  company_domain VARCHAR(2048) NOT NULL UNIQUE
 );
 
 CREATE TABLE IF NOT EXISTS infrastructure_descriptor_name_option (
@@ -636,7 +635,6 @@ CREATE INDEX IF NOT EXISTS ix_regd_id_short ON infrastructure_descriptor(id_shor
 CREATE INDEX IF NOT EXISTS ix_regd_global_asset_id ON infrastructure_descriptor(global_asset_id);
 CREATE INDEX IF NOT EXISTS ix_regd_company_name ON infrastructure_descriptor(company_name);
 CREATE INDEX IF NOT EXISTS ix_regd_company_domain ON infrastructure_descriptor(company_domain);
-CREATE INDEX IF NOT EXISTS ix_regd_id_trgm ON infrastructure_descriptor USING GIN (id gin_trgm_ops);
 CREATE INDEX IF NOT EXISTS ix_regd_global_asset_id_trgm ON infrastructure_descriptor USING GIN (global_asset_id gin_trgm_ops);
 CREATE INDEX IF NOT EXISTS ix_regd_name_option ON infrastructure_descriptor_name_option(name_option);
 

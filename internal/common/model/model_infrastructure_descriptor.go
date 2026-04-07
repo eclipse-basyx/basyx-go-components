@@ -25,8 +25,6 @@ type InfrastructureDescriptor struct {
 
 	IdShort string `json:"idShort,omitempty" validate:"regexp=^[a-zA-Z][a-zA-Z0-9_-]*[a-zA-Z0-9_]+$"`
 
-	Id string `json:"id" validate:"regexp=^([\\\\x09\\\\x0a\\\\x0d\\\\x20-\\\\ud7ff\\\\ue000-\\\\ufffd]|\\\\ud800[\\\\udc00-\\\\udfff]|[\\\\ud801-\\\\udbfe][\\\\udc00-\\\\udfff]|\\\\udbff[\\\\udc00-\\\\udfff])*$"`
-
 	Name string `json:"name,omitempty" validate:"regexp=^[A-Za-z0-9 ._-]*$"`
 
 	Domain string `json:"domain,omitempty" validate:"regexp=^[A-Za-z0-9.-]*$"`
@@ -41,7 +39,7 @@ type InfrastructureDescriptor struct {
 // AssertInfrastructureDescriptorRequired checks if the required fields are not zero-ed
 func AssertInfrastructureDescriptorRequired(obj InfrastructureDescriptor) error {
 	elements := map[string]any{
-		"id": obj.Id,
+		"domain": obj.Domain,
 	}
 	for name, el := range elements {
 		if isZero := IsZeroValue(el); isZero {
@@ -147,9 +145,6 @@ func (obj InfrastructureDescriptor) ToJsonable() (map[string]any, error) {
 	if obj.IdShort != "" {
 		ret["idShort"] = obj.IdShort
 	}
-	if obj.Id != "" {
-		ret["id"] = obj.Id
-	}
 	if obj.Name != "" {
 		ret["name"] = obj.Name
 	}
@@ -182,7 +177,6 @@ func (obj *InfrastructureDescriptor) UnmarshalJSON(data []byte) error {
 		"administration":       true,
 		"endpoints":            true,
 		"idShort":              true,
-		"id":                   true,
 		"name":                 true,
 		"domain":               true,
 		"nameOptions":          true,
@@ -262,9 +256,6 @@ func (obj *InfrastructureDescriptor) UnmarshalJSON(data []byte) error {
 	// Handle other simple fields
 	if idShort, ok := jsonable["idShort"].(string); ok {
 		obj.IdShort = idShort
-	}
-	if id, ok := jsonable["id"].(string); ok {
-		obj.Id = id
 	}
 	if name, ok := jsonable["name"].(string); ok {
 		obj.Name = name

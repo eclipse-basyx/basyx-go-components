@@ -226,7 +226,7 @@ components:
       name: infrastructureIdentifier
       in: path
       required: true
-      description: Infrastructure identifier (base64url-encoded)
+      description: Infrastructure domain identifier (base64url-encoded domain)
       schema:
         type: string
 
@@ -315,8 +315,6 @@ components:
       properties:
         idShort:
           type: string
-        id:
-          type: string
         name:
           type: string
         domain:
@@ -347,7 +345,7 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/Endpoint"
-      required: [id, endpoints]
+      required: [domain, endpoints]
 
     LangStringTextType:
       type: object

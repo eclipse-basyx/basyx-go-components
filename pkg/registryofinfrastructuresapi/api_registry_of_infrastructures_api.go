@@ -188,7 +188,7 @@ func (c *RegistryOfInfrastructuresAPIAPIController) PostInfrastructureDescriptor
 	}
 	result, err := c.service.PostInfrastructureDescriptor(r.Context(), infrastructureDescriptorParam)
 	if err != nil {
-		log.Printf("📍 [%s] Error in PostInfrastructureDescriptor: service failure (bodyId=%q): %v", componentName, infrastructureDescriptorParam.Id, err)
+		log.Printf("📍 [%s] Error in PostInfrastructureDescriptor: service failure (bodyDomain=%q): %v", componentName, infrastructureDescriptorParam.Domain, err)
 		c.errorHandler(w, r, err, &result)
 		return
 	}
@@ -276,7 +276,7 @@ func (c *RegistryOfInfrastructuresAPIAPIController) PutInfrastructureDescriptorB
 	}
 	result, err := c.service.PutInfrastructureDescriptorById(r.Context(), infrastructureIdentifierParam, infrastructureDescriptorParam)
 	if err != nil {
-		log.Printf("📍 [%s] Error in PutInfrastructureDescriptorById: service failure (infrastructureIdentifier=%q bodyId=%q): %v", componentName, infrastructureIdentifierParam, infrastructureDescriptorParam.Id, err)
+		log.Printf("📍 [%s] Error in PutInfrastructureDescriptorById: service failure (infrastructureIdentifier=%q bodyDomain=%q): %v", componentName, infrastructureIdentifierParam, infrastructureDescriptorParam.Domain, err)
 		c.errorHandler(w, r, err, &result)
 		return
 	}

@@ -49,13 +49,13 @@ func deleteAllInfrastructureDescriptors(t *testing.T, runner *testenv.JSONSuiteR
 
 	var list struct {
 		Data []struct {
-			ID string `json:"id"`
+			Domain string `json:"domain"`
 		} `json:"data"`
 	}
 	require.NoError(t, json.Unmarshal([]byte(response.Body), &list))
 
 	for _, item := range list.Data {
-		enc := base64.RawURLEncoding.EncodeToString([]byte(item.ID))
+		enc := base64.RawURLEncoding.EncodeToString([]byte(item.Domain))
 		_, err := runner.RunStep(testenv.JSONSuiteStep{
 			Method:         http.MethodDelete,
 			Endpoint:       fmt.Sprintf("http://127.0.0.1:5004/companies/%s", enc),

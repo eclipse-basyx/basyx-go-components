@@ -118,7 +118,7 @@ func (s *RegistryOfInfrastructuresAPIAPIService) GetAllInfrastructureDescriptors
 	for _, infrastructureDescriptor := range infrastructureDescriptors {
 		j, toJsonErr := infrastructureDescriptor.ToJsonable()
 		if toJsonErr != nil {
-			log.Printf("🧩 [%s] Error in GetAllInfrastructureDescriptors: ToJsonable failed (infrastructureId=%q): %v", componentName, infrastructureDescriptor.Id, toJsonErr)
+			log.Printf("🧩 [%s] Error in GetAllInfrastructureDescriptors: ToJsonable failed (infrastructureDomain=%q): %v", componentName, infrastructureDescriptor.Domain, toJsonErr)
 			return common.NewErrorResponse(
 				toJsonErr, http.StatusInternalServerError, componentName, "GetAllInfrastructureDescriptors", "Unhandled-ToJsonable",
 			), toJsonErr
@@ -148,17 +148,17 @@ func (s *RegistryOfInfrastructuresAPIAPIService) PostInfrastructureDescriptor(ct
 	if err != nil {
 		switch {
 		case common.IsErrBadRequest(err):
-			log.Printf("📍 [%s] Error in InsertInfrastructureDescriptor: bad request (infrastructureId=%q): %v", componentName, infrastructureDescriptor.Id, err)
+			log.Printf("📍 [%s] Error in InsertInfrastructureDescriptor: bad request (infrastructureDomain=%q): %v", componentName, infrastructureDescriptor.Domain, err)
 			return common.NewErrorResponse(
 				err, http.StatusBadRequest, componentName, "InsertInfrastructureDescriptor", "BadRequest",
 			), nil
 		case common.IsErrConflict(err):
-			log.Printf("📍 [%s] Error in InsertInfrastructureDescriptor: conflict (infrastructureId=%q): %v", componentName, infrastructureDescriptor.Id, err)
+			log.Printf("📍 [%s] Error in InsertInfrastructureDescriptor: conflict (infrastructureDomain=%q): %v", componentName, infrastructureDescriptor.Domain, err)
 			return common.NewErrorResponse(
 				err, http.StatusConflict, componentName, "InsertInfrastructureDescriptor", "Conflict",
 			), nil
 		default:
-			log.Printf("📍 [%s] Error in InsertInfrastructureDescriptor: internal (infrastructureId=%q): %v", componentName, infrastructureDescriptor.Id, err)
+			log.Printf("📍 [%s] Error in InsertInfrastructureDescriptor: internal (infrastructureDomain=%q): %v", componentName, infrastructureDescriptor.Domain, err)
 			return common.NewErrorResponse(
 				err, http.StatusInternalServerError, componentName, "InsertInfrastructureDescriptor", "Unhandled",
 			), err
@@ -167,7 +167,7 @@ func (s *RegistryOfInfrastructuresAPIAPIService) PostInfrastructureDescriptor(ct
 
 	j, toJsonErr := result.ToJsonable()
 	if toJsonErr != nil {
-		log.Printf("🧩 [%s] Error in PostInfrastructureDescriptor: ToJsonable failed (infrastructureId=%q): %v", componentName, result.Id, toJsonErr)
+		log.Printf("🧩 [%s] Error in PostInfrastructureDescriptor: ToJsonable failed (infrastructureDomain=%q): %v", componentName, result.Domain, toJsonErr)
 		return common.NewErrorResponse(
 			toJsonErr, http.StatusInternalServerError, componentName, "PostInfrastructureDescriptor", "Unhandled-ToJsonable",
 		), toJsonErr
@@ -229,16 +229,18 @@ func (s *RegistryOfInfrastructuresAPIAPIService) PutInfrastructureDescriptorById
 		), nil
 	}
 
-	// Enforce id consistency with path
-	if strings.TrimSpace(infrastructureDescriptor.Id) != "" && infrastructureDescriptor.Id != decodedInfrastructure {
-		log.Printf("📍 [%s] Error in PutInfrastructureDescriptorById: body id does not match path id (body=%q path=%q)", componentName, infrastructureDescriptor.Id, decodedInfrastructure)
+	// Enforce domain consistency with path.
+	if strings.TrimSpace(infrastructureDescriptor.Domain) == "" {
+		infrastructureDescriptor.Domain = decodedInfrastructure
+	} else if infrastructureDescriptor.Domain != decodedInfrastructure {
+		log.Printf("📍 [%s] Error in PutInfrastructureDescriptorById: body domain does not match path domain (body=%q path=%q)", componentName, infrastructureDescriptor.Domain, decodedInfrastructure)
 		return common.NewErrorResponse(
-			errors.New("body id does not match path id"), http.StatusBadRequest, componentName, "PutInfrastructureDescriptorById", "BadRequest-IdMismatch",
+			errors.New("body domain does not match path domain"), http.StatusBadRequest, componentName, "PutInfrastructureDescriptorById", "BadRequest-DomainMismatch",
 		), nil
 	}
 
-	if exists, chkErr := s.registryOfInfrastructuresBackend.ExistsInfrastructureByID(ctx, infrastructureDescriptor.Id); chkErr != nil {
-		log.Printf("📍 [%s] Error in PutInfrastructureDescriptorById: existence check failed (infrastructureId=%q): %v", componentName, infrastructureDescriptor.Id, chkErr)
+	if exists, chkErr := s.registryOfInfrastructuresBackend.ExistsInfrastructureByID(ctx, infrastructureDescriptor.Domain); chkErr != nil {
+		log.Printf("📍 [%s] Error in PutInfrastructureDescriptorById: existence check failed (infrastructureDomain=%q): %v", componentName, infrastructureDescriptor.Domain, chkErr)
 		return common.NewErrorResponse(
 			chkErr, http.StatusInternalServerError, componentName, "PutInfrastructureDescriptorById", "Unhandled-Precheck",
 		), chkErr
@@ -247,17 +249,17 @@ func (s *RegistryOfInfrastructuresAPIAPIService) PutInfrastructureDescriptorById
 		if err != nil {
 			switch {
 			case common.IsErrBadRequest(err):
-				log.Printf("📍 [%s] Error in InsertInfrastructureDescriptor: bad request (infrastructureId=%q): %v", componentName, infrastructureDescriptor.Id, err)
+				log.Printf("📍 [%s] Error in InsertInfrastructureDescriptor: bad request (infrastructureDomain=%q): %v", componentName, infrastructureDescriptor.Domain, err)
 				return common.NewErrorResponse(
 					err, http.StatusBadRequest, componentName, "InsertInfrastructureDescriptor", "BadRequest",
 				), nil
 			case common.IsErrConflict(err):
-				log.Printf("📍 [%s] Error in InsertInfrastructureDescriptor: conflict (infrastructureId=%q): %v", componentName, infrastructureDescriptor.Id, err)
+				log.Printf("📍 [%s] Error in InsertInfrastructureDescriptor: conflict (infrastructureDomain=%q): %v", componentName, infrastructureDescriptor.Domain, err)
 				return common.NewErrorResponse(
 					err, http.StatusConflict, componentName, "InsertInfrastructureDescriptor", "Conflict",
 				), nil
 			default:
-				log.Printf("📍 [%s] Error in InsertInfrastructureDescriptor: internal (infrastructureId=%q): %v", componentName, infrastructureDescriptor.Id, err)
+				log.Printf("📍 [%s] Error in InsertInfrastructureDescriptor: internal (infrastructureDomain=%q): %v", componentName, infrastructureDescriptor.Domain, err)
 				return common.NewErrorResponse(
 					err, http.StatusInternalServerError, componentName, "InsertInfrastructureDescriptor", "Unhandled",
 				), err
@@ -265,7 +267,7 @@ func (s *RegistryOfInfrastructuresAPIAPIService) PutInfrastructureDescriptorById
 		}
 		j, toJsonErr := result.ToJsonable()
 		if toJsonErr != nil {
-			log.Printf("🧩 [%s] Error in PutInfrastructureDescriptor: ToJsonable failed (infrastructureId=%q): %v", componentName, result.Id, toJsonErr)
+			log.Printf("🧩 [%s] Error in PutInfrastructureDescriptor: ToJsonable failed (infrastructureDomain=%q): %v", componentName, result.Domain, toJsonErr)
 			return common.NewErrorResponse(
 				toJsonErr, http.StatusInternalServerError, componentName, "PutInfrastructureDescriptor", "Unhandled-ToJsonable",
 			), toJsonErr
