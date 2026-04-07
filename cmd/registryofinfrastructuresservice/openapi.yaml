@@ -218,7 +218,7 @@ components:
       name: assetId
       in: query
       required: false
-      description: Base64url encoded asset id used to match InfrastructureDescriptor.assetIdRegexPatterns or InfrastructureDescriptor.idLinkRegexPatterns
+      description: Base64url encoded asset id used to match InfrastructureDescriptor.assetIdRegexPatterns
       schema:
         type: string
 
@@ -324,10 +324,6 @@ components:
           items:
             type: string
         assetIdRegexPatterns:
-          type: array
-          items:
-            type: string
-        idLinkRegexPatterns:
           type: array
           items:
             type: string
@@ -465,8 +461,6 @@ components:
               - "ExampleCo"
             assetIdRegexPatterns:
               - "^https://i\\.example\\.com/"
-            idLinkRegexPatterns:
-              - "^https://i\\.example\\.com/"
             description:
               - language: "en"
                 text: "Example AAS Registry"
@@ -497,8 +491,6 @@ components:
           - "Example Company Inc"
           - "ExampleCo"
         assetIdRegexPatterns:
-          - "^https://i\\.example\\.com/"
-        idLinkRegexPatterns:
           - "^https://i\\.example\\.com/"
         description:
           - language: "en"

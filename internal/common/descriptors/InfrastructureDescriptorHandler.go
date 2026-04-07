@@ -158,10 +158,6 @@ func InsertInfrastructureDescriptorTx(_ context.Context, tx *sql.Tx, infdesc mod
 		return common.NewInternalServerError("Failed to create Infrastructure AssetID Regex Patterns - no changes applied - see console for details")
 	}
 
-	if err = createInfrastructureIDLinkRegexPatterns(tx, descriptorID, infdesc.IdLinkRegexPatterns); err != nil {
-		return common.NewInternalServerError("Failed to create Infrastructure IDLink Regex Patterns - no changes applied - see console for details")
-	}
-
 	return nil
 }
 
@@ -248,10 +244,6 @@ func GetInfrastructureDescriptorByID(ctx context.Context, db *sql.DB, infrastruc
 	if err != nil {
 		return model.InfrastructureDescriptor{}, err
 	}
-	idLinkRegexPatterns, err := readInfrastructureIDLinkRegexPatternsByDescriptorID(ctx, db, descID)
-	if err != nil {
-		return model.InfrastructureDescriptor{}, err
-	}
 
 	return model.InfrastructureDescriptor{
 		GlobalAssetId:        globalAssetID.String,
@@ -260,7 +252,6 @@ func GetInfrastructureDescriptorByID(ctx context.Context, db *sql.DB, infrastruc
 		Domain:               domain.String,
 		NameOptions:          nameOptions,
 		AssetIdRegexPatterns: assetIDRegexPatterns,
-		IdLinkRegexPatterns:  idLinkRegexPatterns,
 		Administration:       adminInfo,
 		DisplayName:          displayName,
 		Description:          description,
@@ -347,10 +338,6 @@ func GetInfrastructureDescriptorByIDTx(ctx context.Context, tx *sql.Tx, infrastr
 	if err != nil {
 		return model.InfrastructureDescriptor{}, err
 	}
-	idLinkRegexPatterns, err := readInfrastructureIDLinkRegexPatternsByDescriptorID(ctx, tx, descID)
-	if err != nil {
-		return model.InfrastructureDescriptor{}, err
-	}
 
 	return model.InfrastructureDescriptor{
 		GlobalAssetId:        globalAssetID.String,
@@ -359,7 +346,6 @@ func GetInfrastructureDescriptorByIDTx(ctx context.Context, tx *sql.Tx, infrastr
 		Domain:               domain.String,
 		NameOptions:          nameOptions,
 		AssetIdRegexPatterns: assetIDRegexPatterns,
-		IdLinkRegexPatterns:  idLinkRegexPatterns,
 		Administration:       adminInfo,
 		DisplayName:          displayName,
 		Description:          description,
@@ -480,7 +466,6 @@ func ListInfrastructureDescriptors(
 	aasdescendp := goqu.T(common.TblAASDescriptorEndpoint).As("aasdescendp")
 	infNameOpt := goqu.T(common.TblInfrastructureDescriptorNameOption).As("inf_name_opt")
 	assetIdPattern := goqu.T(common.TblInfrastructureDescriptorAssetIDRegex).As("inf_asset_id_pattern")
-	idLinkPattern := goqu.T(common.TblInfrastructureDescriptorIDLinkRegex).As("inf_id_link_pattern")
 
 	ds := d.
 		From(inf).
@@ -546,20 +531,7 @@ func ListInfrastructureDescriptors(
 				goqu.L("? ~ ?", assetID, assetIdPattern.Col(common.ColRegexPattern)),
 			)
 
-		idLinkRegexExists := d.
-			From(idLinkPattern).
-			Select(goqu.V(true)).
-			Where(
-				idLinkPattern.Col(common.ColDescriptorID).Eq(inf.Col(common.ColDescriptorID)),
-				goqu.L("? ~ ?", assetID, idLinkPattern.Col(common.ColRegexPattern)),
-			)
-
-		ds = ds.Where(
-			goqu.Or(
-				goqu.L("EXISTS ?", assetIdRegexExists),
-				goqu.L("EXISTS ?", idLinkRegexExists),
-			),
-		)
+		ds = ds.Where(goqu.L("EXISTS ?", assetIdRegexExists))
 	}
 
 	if peekLimit < 0 {
@@ -649,14 +621,6 @@ func ListInfrastructureDescriptors(
 		}
 	}
 
-	idLinkRegexByDesc := map[int64][]string{}
-	if len(descIDs) > 0 {
-		idLinkRegexByDesc, err = readInfrastructureIDLinkRegexPatternsByDescriptorIDs(ctx, db, descIDs)
-		if err != nil {
-			return nil, "", err
-		}
-	}
-
 	out := make([]model.InfrastructureDescriptor, 0, len(descRows))
 	for _, r := range descRows {
 		adminInfo, err := parseAdministrativeInfoPayload(r.AdministrativeInfoPayload)
@@ -679,7 +643,6 @@ func ListInfrastructureDescriptors(
 			Domain:               r.Domain.String,
 			NameOptions:          nameOptionsByDesc[r.DescID],
 			AssetIdRegexPatterns: assetIDRegexByDesc[r.DescID],
-			IdLinkRegexPatterns:  idLinkRegexByDesc[r.DescID],
 			Administration:       adminInfo,
 			DisplayName:          displayName,
 			Description:          description,

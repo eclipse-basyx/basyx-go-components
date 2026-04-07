@@ -32,8 +32,6 @@ type InfrastructureDescriptor struct {
 	NameOptions []string `json:"nameOptions,omitempty"`
 
 	AssetIdRegexPatterns []string `json:"assetIdRegexPatterns,omitempty"`
-
-	IdLinkRegexPatterns []string `json:"idLinkRegexPatterns,omitempty"`
 }
 
 // AssertInfrastructureDescriptorRequired checks if the required fields are not zero-ed
@@ -82,17 +80,6 @@ func AssertInfrastructureDescriptorConstraints(obj InfrastructureDescriptor) err
 			return fmt.Errorf("assetIdRegexPatterns contains duplicate value %q", pattern)
 		}
 		assetRegexSeen[pattern] = struct{}{}
-	}
-
-	idLinkRegexSeen := make(map[string]struct{}, len(obj.IdLinkRegexPatterns))
-	for i, pattern := range obj.IdLinkRegexPatterns {
-		if pattern == "" {
-			return fmt.Errorf("idLinkRegexPatterns[%d] must not be empty", i)
-		}
-		if _, ok := idLinkRegexSeen[pattern]; ok {
-			return fmt.Errorf("idLinkRegexPatterns contains duplicate value %q", pattern)
-		}
-		idLinkRegexSeen[pattern] = struct{}{}
 	}
 	return nil
 }
@@ -156,9 +143,6 @@ func (obj InfrastructureDescriptor) ToJsonable() (map[string]any, error) {
 	}
 	if len(obj.AssetIdRegexPatterns) > 0 {
 		ret["assetIdRegexPatterns"] = obj.AssetIdRegexPatterns
-	}
-	if len(obj.IdLinkRegexPatterns) > 0 {
-		ret["idLinkRegexPatterns"] = obj.IdLinkRegexPatterns
 	}
 	return ret, nil
 }
@@ -279,15 +263,6 @@ func (obj *InfrastructureDescriptor) UnmarshalJSON(data []byte) error {
 				return fmt.Errorf("InfrastructureDescriptor: assetIdRegexPatterns[%d] is not a string", i)
 			}
 			obj.AssetIdRegexPatterns = append(obj.AssetIdRegexPatterns, pattern)
-		}
-	}
-	if patterns, ok := jsonable["idLinkRegexPatterns"].([]any); ok {
-		for i, rawPattern := range patterns {
-			pattern, ok := rawPattern.(string)
-			if !ok {
-				return fmt.Errorf("InfrastructureDescriptor: idLinkRegexPatterns[%d] is not a string", i)
-			}
-			obj.IdLinkRegexPatterns = append(obj.IdLinkRegexPatterns, pattern)
 		}
 	}
 

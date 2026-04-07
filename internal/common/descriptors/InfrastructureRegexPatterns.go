@@ -38,10 +38,6 @@ func createInfrastructureAssetIDRegexPatterns(tx *sql.Tx, descriptorID int64, pa
 	return createInfrastructureRegexPatterns(tx, common.TblInfrastructureDescriptorAssetIDRegex, descriptorID, patterns)
 }
 
-func createInfrastructureIDLinkRegexPatterns(tx *sql.Tx, descriptorID int64, patterns []string) error {
-	return createInfrastructureRegexPatterns(tx, common.TblInfrastructureDescriptorIDLinkRegex, descriptorID, patterns)
-}
-
 func createInfrastructureRegexPatterns(tx *sql.Tx, tableName string, descriptorID int64, patterns []string) error {
 	if len(patterns) == 0 {
 		return nil
@@ -78,18 +74,6 @@ func readInfrastructureAssetIDRegexPatternsByDescriptorID(ctx context.Context, d
 
 func readInfrastructureAssetIDRegexPatternsByDescriptorIDs(ctx context.Context, db DBQueryer, descriptorIDs []int64) (map[int64][]string, error) {
 	return readInfrastructureRegexPatternsByDescriptorIDs(ctx, db, common.TblInfrastructureDescriptorAssetIDRegex, descriptorIDs)
-}
-
-func readInfrastructureIDLinkRegexPatternsByDescriptorID(ctx context.Context, db DBQueryer, descriptorID int64) ([]string, error) {
-	byDescriptor, err := readInfrastructureIDLinkRegexPatternsByDescriptorIDs(ctx, db, []int64{descriptorID})
-	if err != nil {
-		return nil, err
-	}
-	return byDescriptor[descriptorID], nil
-}
-
-func readInfrastructureIDLinkRegexPatternsByDescriptorIDs(ctx context.Context, db DBQueryer, descriptorIDs []int64) (map[int64][]string, error) {
-	return readInfrastructureRegexPatternsByDescriptorIDs(ctx, db, common.TblInfrastructureDescriptorIDLinkRegex, descriptorIDs)
 }
 
 func readInfrastructureRegexPatternsByDescriptorIDs(ctx context.Context, db DBQueryer, tableName string, descriptorIDs []int64) (map[int64][]string, error) {

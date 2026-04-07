@@ -59,7 +59,6 @@ const (
 	TblInfrastructureDescriptor             = "infrastructure_descriptor"
 	TblInfrastructureDescriptorNameOption   = "infrastructure_descriptor_name_option"
 	TblInfrastructureDescriptorAssetIDRegex = "infrastructure_descriptor_asset_id_regex"
-	TblInfrastructureDescriptorIDLinkRegex  = "infrastructure_descriptor_id_link_regex"
 )
 
 // Common table aliases used across descriptor queries. Keeping them here avoids
@@ -143,5 +142,4 @@ var (
 	TInfrastructureDescriptor             = goqu.T(TblInfrastructureDescriptor)
 	TInfrastructureDescriptorNameOption   = goqu.T(TblInfrastructureDescriptorNameOption)
 	TInfrastructureDescriptorAssetIDRegex = goqu.T(TblInfrastructureDescriptorAssetIDRegex)
-	TInfrastructureDescriptorIDLinkRegex  = goqu.T(TblInfrastructureDescriptorIDLinkRegex)
 )
