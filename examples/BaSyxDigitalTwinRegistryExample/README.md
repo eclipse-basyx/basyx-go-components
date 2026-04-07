@@ -54,29 +54,33 @@ docker compose down
 - Base URL: `http://localhost:5004/api/v3`
 - OpenAPI / Swagger UI: `http://localhost:5004/api/v3/swagger`
 
+**Access requirement for this example configuration**
+- For protected Digital Twin Registry endpoints, you must send header `Edc-Bpn: TENANT_ONE`.
+- This is enforced by `security_env/access-rules.json`.
+
 The main endpoints relevant for this example are:
 
 - `POST /shell-descriptors`
   - Use this to create (register) shell descriptors in the registry.
   - In this example, **no access token is required** by default.
   - In a real setup, a claim check in the access rules would enforce appropriate tokens.
-  - Optionally, you can send the BPN of the caller in the HTTP header `Edc-Bpn`. This value is injected as a claim into the access rules engine and can be used there (for example, to match against `externalSubjectId`).
+  - Required in this example: send `Edc-Bpn: TENANT_ONE`. This value is injected as a claim into the access rules engine.
 
 - `GET /shell-descriptors`
   - List shell descriptors from the registry.
   - Shells are filtered based on `externalSubjectId` according to the configured access rules.
   - Currently, `externalSubjectId` values are **still exposed in the response** for this endpoint; this is an in-progress behavior and will later be aligned with the Cross-Cutting Concepts document.
-  - As with `POST /shell-descriptors`, you can optionally send the BPN of the caller in the HTTP header `Edc-Bpn`, which is injected as a claim into the access rules engine and used to filter visible shells.
+  - As with `POST /shell-descriptors`, send `Edc-Bpn: TENANT_ONE` (required in this example configuration). The value is injected as a claim into the access rules engine and used to filter visible shells.
 
 - `GET /lookup/shellsByAssetLink`
   - Lookup shell descriptors by asset link.
   - Queries can include `externalSubjectId`. In this example, such IDs are **queried** but **not exposed in responses** (see below).
-  - Optionally, you can send the BPN of the caller in the HTTP header `Edc-Bpn`. This value is injected as a claim into the access rules engine and is used to filter which data is returned.
+  - Required in this example: send `Edc-Bpn: TENANT_ONE`. This value is injected as a claim into the access rules engine and is used to filter which data is returned.
 
 - `GET /lookup/shells/{id}`
   - Lookup a specific shell descriptor by its ID.
   - As with the previous endpoint, `externalSubjectId` information is currently filtered out from responses.
-  - Optionally, you can send the BPN of the caller in the HTTP header `Edc-Bpn`. This value is injected as a claim into the access rules engine and is used to filter which data is returned.
+  - Required in this example: send `Edc-Bpn: TENANT_ONE`. This value is injected as a claim into the access rules engine and is used to filter which data is returned.
 
 #### `externalSubjectId` behavior (temporary)
 

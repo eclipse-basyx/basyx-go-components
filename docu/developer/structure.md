@@ -104,6 +104,6 @@ This document explains the structure and purpose of each major component in the 
 ## Further Reading
 - See `DeveloperDocumentation/README.md` for onboarding and godoc usage.
 - Explore `basyx-database-wiki/` for database details.
-- Review OpenAPI specs in `api/` for endpoint documentation.
+- Review OpenAPI specs in `cmd/*/openapi.yaml` and generated copies in `pkg/*/api/openapi.yaml` for endpoint documentation.
 
 For questions, open an issue or contact the maintainers.

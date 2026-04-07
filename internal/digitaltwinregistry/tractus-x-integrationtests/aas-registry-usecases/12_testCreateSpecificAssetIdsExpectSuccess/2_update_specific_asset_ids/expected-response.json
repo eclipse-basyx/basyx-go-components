@@ -1,0 +1,17 @@
+{
+    "status":  201,
+    "content":  true,
+    "assertions":  [
+
+                   ],
+    "expectedPayload":  [
+                            {
+                                "name":  "key1",
+                                "value":  "value1"
+                            },
+                            {
+                                "name":  "key2",
+                                "value":  "value2"
+                            }
+                        ]
+}

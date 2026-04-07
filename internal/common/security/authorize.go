@@ -142,19 +142,34 @@ func GetQueryFilter(ctx context.Context) *QueryFilter {
 	return nil
 }
 
-// ShouldEnforceABACWriteCheck determines if ABAC write checks should be enforced
-// based on the presence of a QueryFilter with a non-nil Formula in the context.
+// ShouldEnforceFormula determines whether formula-based ABAC checks must run for
+// the current request context.
 //
-// This function can be used by components that need to decide whether to apply
-// additional ABAC checks for write operations. If it returns true, the component
-// should enforce ABAC write restrictions according to the provided QueryFilter.
-func ShouldEnforceABACWriteCheck(ctx context.Context) bool {
+// Returns false when ABAC is disabled or when no QueryFilter is available.
+// Returns an error when configuration is missing from context while ABAC
+// enforcement decision is required, or when an inconsistent QueryFilter is
+// detected (Formula is set but FormulasByRight is empty).
+func ShouldEnforceFormula(ctx context.Context) (bool, error) {
 	cfg, ok := common.ConfigFromContext(ctx)
-	if !ok || !cfg.ABAC.Enabled {
-		return false
+	if !ok {
+		// return true to be safe in case of misconfiguration, but also return an error to allow proper logging and debugging
+		return true, errors.New("configuration not found in context")
+	}
+	if !cfg.ABAC.Enabled {
+		return false, nil
 	}
 	queryFilter := GetQueryFilter(ctx)
-	return queryFilter != nil && queryFilter.Formula != nil
+
+	// security has no further constraints
+	if queryFilter == nil {
+		return false, nil
+	}
+
+	if queryFilter.Formula != nil && len(queryFilter.FormulasByRight) == 0 {
+		return true, errors.New("ABAC is enabled but QueryFilter has Formula but no FormulasByRight")
+	}
+
+	return len(queryFilter.FormulasByRight) > 0, nil
 }
 
 // MergeQueryFilter combines an existing QueryFilter with a user query.
@@ -172,12 +187,17 @@ func MergeQueryFilter(ctx context.Context, query grammar.Query) context.Context 
 	}
 
 	if query.Condition != nil {
+		if qf.FormulasByRight == nil {
+			qf.FormulasByRight = make(map[grammar.RightsEnum]grammar.LogicalExpression)
+		}
 		if qf.Formula != nil {
 			combinedQuery := grammar.LogicalExpression{And: []grammar.LogicalExpression{*qf.Formula, *query.Condition}}
 			combinedQuery, _ = combinedQuery.SimplifyForBackendFilterWithOptions(resolver, opts)
+			qf.FormulasByRight[grammar.RightsEnumREAD] = combinedQuery
 			qf.Formula = &combinedQuery
 		} else {
 			simplifiedQuery, _ := query.Condition.SimplifyForBackendFilterWithOptions(resolver, opts)
+			qf.FormulasByRight[grammar.RightsEnumREAD] = simplifiedQuery
 			qf.Formula = &simplifiedQuery
 		}
 	}
@@ -199,5 +219,42 @@ func MergeQueryFilter(ctx context.Context, query grammar.Query) context.Context 
 		}
 	}
 
+	return context.WithValue(ctx, filterKey, qf)
+}
+
+// SelectPutFormulaByExistence selects the active QueryFilter.Formula based on
+// PUT upsert semantics:
+//   - dataExists=true  -> UPDATE formula
+//   - dataExists=false -> CREATE formula
+//
+// If the requested right-specific formula is unavailable, Formula is set to a
+// constant false expression.
+func SelectPutFormulaByExistence(ctx context.Context, dataExists bool) context.Context {
+	qf := GetQueryFilter(ctx)
+	if qf == nil {
+		return ctx
+	}
+
+	right := grammar.RightsEnumCREATE
+	if dataExists {
+		right = grammar.RightsEnumUPDATE
+	}
+
+	if qf.FormulasByRight == nil {
+		qf.FormulasByRight = make(map[grammar.RightsEnum]grammar.LogicalExpression)
+		fallback := boolExpression(false)
+		qf.FormulasByRight[right] = fallback
+		qf.Formula = &fallback
+		return context.WithValue(ctx, filterKey, qf)
+	}
+
+	if selected, ok := qf.FormulasByRight[right]; ok {
+		qf.Formula = &selected
+		return context.WithValue(ctx, filterKey, qf)
+	}
+
+	fallback := boolExpression(false)
+	qf.FormulasByRight[right] = fallback
+	qf.Formula = &fallback
 	return context.WithValue(ctx, filterKey, qf)
 }

@@ -38,6 +38,7 @@ import (
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
+	"github.com/lib/pq"
 	"github.com/stretchr/testify/require"
 )
 
@@ -63,7 +64,7 @@ func TestGetSubmodelsDatabaseQueryError(t *testing.T) {
 	mock.ExpectQuery(`SELECT .*FROM .*submodel`).
 		WillReturnError(errors.New("query failed"))
 
-	items, cursor, err := sut.GetSubmodels(10, "", "")
+	items, cursor, err := sut.GetSubmodels(contextWithABACDisabled(t), 10, "", "")
 	require.Error(t, err)
 	require.Nil(t, items)
 	require.Empty(t, cursor)
@@ -85,7 +86,7 @@ func TestGetSubmodelByIDReturnsErrorWhenParallelReadsFail(t *testing.T) {
 
 	mock.ExpectQuery(`SELECT .*`).WillReturnError(errors.New("read failed"))
 
-	item, err := sut.GetSubmodelByID("", "")
+	item, err := sut.GetSubmodelByID(contextWithABACDisabled(t), "", "")
 	require.Error(t, err)
 	require.Nil(t, item)
 	require.NoError(t, mock.ExpectationsWereMet())
@@ -110,10 +111,36 @@ func TestCreateSubmodelInsertFailureRollsBack(t *testing.T) {
 		WillReturnError(errors.New("insert failed"))
 	mock.ExpectRollback()
 
-	err = sut.CreateSubmodel(submodel)
+	err = sut.CreateSubmodel(contextWithABACDisabled(t), submodel)
 	require.Error(t, err)
 	require.True(t, common.IsInternalServerError(err))
 	require.Contains(t, err.Error(), "SMREPO-NEWSM-CREATE-EXECSQL")
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestCreateSubmodelDuplicateIdentifierReturnsConflict(t *testing.T) {
+	t.Parallel()
+
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer func() {
+		_ = db.Close()
+	}()
+
+	sut := &SubmodelDatabase{db: db}
+	submodel := types.NewSubmodel("sm-duplicate")
+	idShort := "duplicate"
+	submodel.SetIDShort(&idShort)
+
+	mock.ExpectBegin()
+	mock.ExpectQuery(`INSERT INTO .*submodel.*RETURNING`).
+		WillReturnError(&pq.Error{Code: "23505"})
+	mock.ExpectRollback()
+
+	err = sut.CreateSubmodel(contextWithABACDisabled(t), submodel)
+	require.Error(t, err)
+	require.True(t, common.IsErrConflict(err))
+	require.Contains(t, err.Error(), "SMREPO-NEWSM-CREATE-CONFLICT")
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 
@@ -128,7 +155,7 @@ func TestGetSubmodelElementEmptyPathReturnsBadRequest(t *testing.T) {
 
 	sut := &SubmodelDatabase{db: db}
 
-	elem, err := sut.GetSubmodelElement("sm", "", false, "")
+	elem, err := sut.GetSubmodelElement(contextWithABACDisabled(t), "sm", "", false, "")
 	require.Error(t, err)
 	require.Nil(t, elem)
 	require.True(t, common.IsErrBadRequest(err))
@@ -146,7 +173,7 @@ func TestGetSubmodelElementWithLevelInvalidLevelReturnsBadRequest(t *testing.T) 
 
 	sut := &SubmodelDatabase{db: db}
 
-	elem, err := sut.GetSubmodelElement("sm", "root", false, "invalid")
+	elem, err := sut.GetSubmodelElement(contextWithABACDisabled(t), "sm", "root", false, "invalid")
 	require.Error(t, err)
 	require.Nil(t, elem)
 	require.True(t, common.IsErrBadRequest(err))
@@ -197,7 +224,7 @@ func TestGetSubmodelElementWithLevelCoreReturnsElementWithoutChildren(t *testing
 			),
 		)
 
-	elem, err := sut.GetSubmodelElement("sm-core", "RootCollection", false, "core")
+	elem, err := sut.GetSubmodelElement(contextWithABACDisabled(t), "sm-core", "RootCollection", false, "core")
 	require.NoError(t, err)
 	require.NotNil(t, elem)
 
@@ -219,7 +246,7 @@ func TestGetSubmodelElementsEmptySubmodelIDReturnsBadRequest(t *testing.T) {
 
 	sut := &SubmodelDatabase{db: db}
 
-	elems, cursor, err := sut.GetSubmodelElements("", nil, "", false, "")
+	elems, cursor, err := sut.GetSubmodelElements(contextWithABACDisabled(t), "", nil, "", false, "")
 	require.Error(t, err)
 	require.Nil(t, elems)
 	require.Empty(t, cursor)
@@ -270,7 +297,7 @@ func TestGetSubmodelElementsCoreReturnsOnlyRootElements(t *testing.T) {
 			),
 		)
 
-	elems, cursor, err := sut.GetSubmodelElements("sm-core", nil, "", false, "core")
+	elems, cursor, err := sut.GetSubmodelElements(contextWithABACDisabled(t), "sm-core", nil, "", false, "core")
 	require.NoError(t, err)
 	require.Empty(t, cursor)
 	require.Len(t, elems, 1)
@@ -347,7 +374,7 @@ func TestGetSubmodelElementsDeepReturnsRootWithChildren(t *testing.T) {
 			),
 		)
 
-	elems, cursor, err := sut.GetSubmodelElements("sm-deep", nil, "", false, "deep")
+	elems, cursor, err := sut.GetSubmodelElements(contextWithABACDisabled(t), "sm-deep", nil, "", false, "deep")
 	require.NoError(t, err)
 	require.Empty(t, cursor)
 	require.Len(t, elems, 1)
@@ -401,7 +428,7 @@ func TestAddSubmodelElementSubmodelNotFoundRollsBack(t *testing.T) {
 	mock.ExpectQuery(`SELECT .*FROM .*submodel`).WillReturnError(sql.ErrNoRows)
 	mock.ExpectRollback()
 
-	err = sut.AddSubmodelElement("missing", elem)
+	err = sut.AddSubmodelElement(contextWithABACDisabled(t), "missing", elem)
 	require.Error(t, err)
 	require.True(t, common.IsErrNotFound(err))
 	require.NoError(t, mock.ExpectationsWereMet())
@@ -423,7 +450,7 @@ func TestAddSubmodelElementWithPathSubmodelNotFoundRollsBack(t *testing.T) {
 	mock.ExpectQuery(`SELECT .*FROM .*submodel`).WillReturnError(sql.ErrNoRows)
 	mock.ExpectRollback()
 
-	err = sut.AddSubmodelElementWithPath("missing", "container", elem)
+	err = sut.AddSubmodelElementWithPath(contextWithABACDisabled(t), "missing", "container", elem)
 	require.Error(t, err)
 	require.True(t, common.IsErrNotFound(err))
 	require.NoError(t, mock.ExpectationsWereMet())
@@ -444,7 +471,7 @@ func TestDeleteSubmodelElementByPathFailureRollsBack(t *testing.T) {
 	mock.ExpectQuery(`SELECT .*`).WillReturnError(errors.New("delete failed"))
 	mock.ExpectRollback()
 
-	err = sut.DeleteSubmodelElementByPath("sm", "a.b")
+	err = sut.DeleteSubmodelElementByPath(contextWithABACDisabled(t), "sm", "a.b")
 	require.Error(t, err)
 	require.NoError(t, mock.ExpectationsWereMet())
 }
@@ -460,9 +487,11 @@ func TestUpdateSubmodelElementModelTypeLookupFails(t *testing.T) {
 
 	sut := &SubmodelDatabase{db: db}
 
+	mock.ExpectBegin()
 	mock.ExpectQuery(`SELECT .*`).WillReturnError(errors.New("lookup failed"))
+	mock.ExpectRollback()
 
-	err = sut.UpdateSubmodelElement("sm", "path", nil, true)
+	err = sut.UpdateSubmodelElement(contextWithABACDisabled(t), "sm", "path", nil, true)
 	require.Error(t, err)
 	require.NoError(t, mock.ExpectationsWereMet())
 }
@@ -480,7 +509,7 @@ func TestUpdateSubmodelElementValueOnlyModelTypeLookupFails(t *testing.T) {
 
 	mock.ExpectQuery(`SELECT .*`).WillReturnError(errors.New("lookup failed"))
 
-	err = sut.UpdateSubmodelElementValueOnly("sm", "path", nil)
+	err = sut.UpdateSubmodelElementValueOnly(contextWithABACDisabled(t), "sm", "path", nil)
 	require.Error(t, err)
 	require.NoError(t, mock.ExpectationsWereMet())
 }
@@ -499,8 +528,96 @@ func TestUpdateSubmodelValueOnlyPropagatesElementError(t *testing.T) {
 	valueOnly := gen.SubmodelValue{"x": nil}
 	mock.ExpectQuery(`SELECT .*`).WillReturnError(errors.New("lookup failed"))
 
-	err = sut.UpdateSubmodelValueOnly("sm", valueOnly)
+	err = sut.UpdateSubmodelValueOnly(contextWithABACDisabled(t), "sm", valueOnly)
 	require.Error(t, err)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestFileAttachmentExistsReturnsTrueWhenOIDExists(t *testing.T) {
+	t.Parallel()
+
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer func() {
+		_ = db.Close()
+	}()
+
+	sut := &SubmodelDatabase{db: db}
+
+	rows := sqlmock.NewRows([]string{"file_element_id", "file_oid"}).AddRow(int64(7), int64(42))
+	mock.ExpectQuery(`SELECT .*file_element_id.*file_oid.*FROM .*submodel.*submodel_element.*file_element.*file_data`).
+		WillReturnRows(rows)
+
+	exists, err := sut.FileAttachmentExists("sm", "file.path")
+	require.NoError(t, err)
+	require.True(t, exists)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestFileAttachmentExistsReturnsFalseWhenOIDMissing(t *testing.T) {
+	t.Parallel()
+
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer func() {
+		_ = db.Close()
+	}()
+
+	sut := &SubmodelDatabase{db: db}
+
+	rows := sqlmock.NewRows([]string{"file_element_id", "file_oid"}).AddRow(int64(7), nil)
+	mock.ExpectQuery(`SELECT .*file_element_id.*file_oid.*FROM .*submodel.*submodel_element.*file_element.*file_data`).
+		WillReturnRows(rows)
+
+	exists, err := sut.FileAttachmentExists("sm", "file.path")
+	require.NoError(t, err)
+	require.False(t, exists)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestFileAttachmentExistsReturnsNotFoundWhenElementMissing(t *testing.T) {
+	t.Parallel()
+
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer func() {
+		_ = db.Close()
+	}()
+
+	sut := &SubmodelDatabase{db: db}
+
+	rows := sqlmock.NewRows([]string{"file_element_id", "file_oid"})
+	mock.ExpectQuery(`SELECT .*file_element_id.*file_oid.*FROM .*submodel.*submodel_element.*file_element.*file_data`).
+		WillReturnRows(rows)
+
+	exists, err := sut.FileAttachmentExists("sm", "file.path")
+	require.Error(t, err)
+	require.False(t, exists)
+	require.True(t, common.IsErrNotFound(err))
+	require.Contains(t, err.Error(), "SMREPO-FILEATTEXISTS-NOTFOUND")
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestFileAttachmentExistsReturnsBadRequestWhenElementIsNotFile(t *testing.T) {
+	t.Parallel()
+
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer func() {
+		_ = db.Close()
+	}()
+
+	sut := &SubmodelDatabase{db: db}
+
+	rows := sqlmock.NewRows([]string{"file_element_id", "file_oid"}).AddRow(nil, nil)
+	mock.ExpectQuery(`SELECT .*file_element_id.*file_oid.*FROM .*submodel.*submodel_element.*file_element.*file_data`).
+		WillReturnRows(rows)
+
+	exists, err := sut.FileAttachmentExists("sm", "not-file")
+	require.Error(t, err)
+	require.False(t, exists)
+	require.True(t, common.IsErrBadRequest(err))
+	require.Contains(t, err.Error(), "SMREPO-FILEATTEXISTS-NOTFILE")
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 
@@ -587,7 +704,7 @@ func TestQuerySubmodelsNilQueryWrapperReturnsBadRequest(t *testing.T) {
 
 	sut := &SubmodelDatabase{}
 
-	items, cursor, err := sut.QuerySubmodels(10, "", nil, false)
+	items, cursor, err := sut.QuerySubmodels(contextWithABACDisabled(t), 10, "", nil, false)
 	require.Error(t, err)
 	require.Nil(t, items)
 	require.Empty(t, cursor)
@@ -601,7 +718,7 @@ func TestQuerySubmodelsMissingConditionReturnsBadRequest(t *testing.T) {
 	sut := &SubmodelDatabase{}
 	queryWrapper := &grammar.QueryWrapper{}
 
-	items, cursor, err := sut.QuerySubmodels(10, "", queryWrapper, false)
+	items, cursor, err := sut.QuerySubmodels(contextWithABACDisabled(t), 10, "", queryWrapper, false)
 	require.Error(t, err)
 	require.Nil(t, items)
 	require.Empty(t, cursor)
@@ -703,7 +820,7 @@ func TestGetSubmodelReferencesReturnsModelReferencesWithSingleSubmodelKey(t *tes
 
 	mock.ExpectQuery(`SELECT .*FROM .*submodel`).WillReturnRows(rows)
 
-	references, cursor, err := sut.GetSubmodelReferences(1, "", "", "")
+	references, cursor, err := sut.GetSubmodelReferences(contextWithABACDisabled(t), 1, "", "", "")
 	require.NoError(t, err)
 	require.Len(t, references, 1)
 	require.Equal(t, "sm-2", cursor)
@@ -753,7 +870,7 @@ func TestGetSubmodelReferencesReturnsBadRequestForEmptySubmodelIdentifier(t *tes
 
 	mock.ExpectQuery(`SELECT .*FROM .*submodel`).WillReturnRows(rows)
 
-	references, cursor, err := sut.GetSubmodelReferences(10, "", "", "")
+	references, cursor, err := sut.GetSubmodelReferences(contextWithABACDisabled(t), 10, "", "", "")
 	require.Error(t, err)
 	require.Nil(t, references)
 	require.Empty(t, cursor)
@@ -793,7 +910,7 @@ func TestGetSubmodelReferencesWithSemanticIDFilterReturnsMatchingReference(t *te
 	semanticID := "urn:semantic:id:test"
 	mock.ExpectQuery(`SELECT .*FROM .*submodel.*ssrk_filter.*` + semanticID).WillReturnRows(rows)
 
-	references, cursor, err := sut.GetSubmodelReferences(10, "", "", semanticID)
+	references, cursor, err := sut.GetSubmodelReferences(contextWithABACDisabled(t), 10, "", "", semanticID)
 	require.NoError(t, err)
 	require.Len(t, references, 1)
 	require.Empty(t, cursor)
@@ -843,7 +960,7 @@ func TestGetSubmodelReferenceReturnsModelReference(t *testing.T) {
 
 	mock.ExpectQuery(`SELECT .*FROM .*submodel`).WillReturnRows(rows)
 
-	reference, err := sut.GetSubmodelReference("sm-single")
+	reference, err := sut.GetSubmodelReference(contextWithABACDisabled(t), "sm-single")
 	require.NoError(t, err)
 	require.NotNil(t, reference)
 
@@ -891,7 +1008,7 @@ func TestGetSubmodelReferenceReturnsNotFoundWhenSubmodelMissing(t *testing.T) {
 
 	mock.ExpectQuery(`SELECT .*FROM .*submodel`).WillReturnRows(rows)
 
-	reference, err := sut.GetSubmodelReference("missing-sm")
+	reference, err := sut.GetSubmodelReference(contextWithABACDisabled(t), "missing-sm")
 	require.Error(t, err)
 	require.Nil(t, reference)
 	require.True(t, common.IsErrNotFound(err))
@@ -904,7 +1021,7 @@ func TestGetSubmodelReferenceReturnsBadRequestForEmptyIdentifier(t *testing.T) {
 
 	sut := &SubmodelDatabase{}
 
-	reference, err := sut.GetSubmodelReference("")
+	reference, err := sut.GetSubmodelReference(contextWithABACDisabled(t), "")
 	require.Error(t, err)
 	require.Nil(t, reference)
 	require.True(t, common.IsErrBadRequest(err))
@@ -936,7 +1053,7 @@ func TestGetSubmodelElementReferencesReturnsReferencesWithPaginationCursor(t *te
 			AddRow(10, int64(types.ModelTypeProperty)).
 			AddRow(20, int64(types.ModelTypeRange)))
 
-	references, cursor, err := sut.GetSubmodelElementReferences("sm-1", &limit, "")
+	references, cursor, err := sut.GetSubmodelElementReferences(contextWithABACDisabled(t), "sm-1", &limit, "")
 	require.NoError(t, err)
 	require.Len(t, references, 1)
 	require.Equal(t, "A|10", cursor)
@@ -968,7 +1085,7 @@ func TestGetSubmodelElementReferencesReturnsBadRequestForEmptySubmodelID(t *test
 	sut := &SubmodelDatabase{}
 	limit := 1
 
-	references, cursor, err := sut.GetSubmodelElementReferences("", &limit, "")
+	references, cursor, err := sut.GetSubmodelElementReferences(contextWithABACDisabled(t), "", &limit, "")
 	require.Error(t, err)
 	require.Nil(t, references)
 	require.Empty(t, cursor)

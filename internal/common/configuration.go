@@ -49,6 +49,7 @@ var DefaultConfig = struct {
 	ServerPort                  int
 	ServerContextPath           string
 	ServerCacheEnabled          bool
+	ServerStrictVerification    bool
 	PgPort                      int
 	PgDBName                    string
 	PgMaxOpen                   int
@@ -65,10 +66,12 @@ var DefaultConfig = struct {
 	GeneralImplicitCasts        bool
 	GeneralDescriptorDebug      bool
 	GeneralDiscoveryIntegration bool
+	GeneralSupportsSingularSSID bool
 }{
 	ServerPort:                  5004,
 	ServerContextPath:           "",
 	ServerCacheEnabled:          false,
+	ServerStrictVerification:    true,
 	PgPort:                      5432,
 	PgDBName:                    "basyxTestDB",
 	PgMaxOpen:                   50,
@@ -85,6 +88,7 @@ var DefaultConfig = struct {
 	GeneralImplicitCasts:        true,
 	GeneralDescriptorDebug:      false,
 	GeneralDiscoveryIntegration: false,
+	GeneralSupportsSingularSSID: false,
 }
 
 // PrintSplash displays the BaSyx Go API ASCII art logo to the console.
@@ -192,9 +196,10 @@ type CorsConfig struct {
 
 // GeneralConfig contains non-domain-specific configuration.
 type GeneralConfig struct {
-	EnableImplicitCasts   bool `mapstructure:"enableImplicitCasts" yaml:"enableImplicitCasts" json:"enableImplicitCasts"`       // Enable implicit casts during backend simplification
-	EnableDescriptorDebug bool `mapstructure:"enableDescriptorDebug" yaml:"enableDescriptorDebug" json:"enableDescriptorDebug"` // Enable descriptor query debug output
-	DiscoveryIntegration  bool `mapstructure:"discoveryIntegration" yaml:"discoveryIntegration" json:"discoveryIntegration"`    // Enable integration with discovery aas_identifier linking
+	EnableImplicitCasts                    bool `mapstructure:"enableImplicitCasts" yaml:"enableImplicitCasts" json:"enableImplicitCasts"`                                                          // Enable implicit casts during backend simplification
+	EnableDescriptorDebug                  bool `mapstructure:"enableDescriptorDebug" yaml:"enableDescriptorDebug" json:"enableDescriptorDebug"`                                                    // Enable descriptor query debug output
+	DiscoveryIntegration                   bool `mapstructure:"discoveryIntegration" yaml:"discoveryIntegration" json:"discoveryIntegration"`                                                       // Enable integration with discovery aas_identifier linking
+	SupportsSingularSupplementalSemanticId bool `mapstructure:"supportsSingularSupplementalSemanticId" yaml:"supportsSingularSupplementalSemanticId" json:"supportsSingularSupplementalSemanticId"` // Use singular supplementalSemanticId for SubmodelDescriptor I/O
 }
 
 // OIDCProviderConfig contains OpenID Connect authentication provider settings.
@@ -290,6 +295,7 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("server.port", 5004)
 	v.SetDefault("server.contextPath", "")
 	v.SetDefault("server.cacheEnabled", false)
+	v.SetDefault("server.strictVerification", true)
 
 	// PostgreSQL defaults
 	v.SetDefault("postgres.host", "db")
@@ -320,6 +326,12 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("swagger.contactName", "Eclipse BaSyx")
 	v.SetDefault("swagger.contactEmail", "basyx-dev@eclipse.org")
 	v.SetDefault("swagger.contactUrl", "https://basyx.org")
+
+	// General defaults
+	v.SetDefault("general.enableImplicitCasts", true)
+	v.SetDefault("general.enableDescriptorDebug", false)
+	v.SetDefault("general.discoveryIntegration", false)
+	v.SetDefault("general.supportsSingularSupplementalSemanticId", false)
 
 }
 
@@ -369,6 +381,7 @@ func PrintConfiguration(cfg *Config) {
 	add("Port", cfg.Server.Port, DefaultConfig.ServerPort)
 	add("Context Path", cfg.Server.ContextPath, DefaultConfig.ServerContextPath)
 	add("Cache Enabled", cfg.Server.CacheEnabled, DefaultConfig.ServerCacheEnabled)
+	add("Strict Verification", cfg.Server.StrictVerification, DefaultConfig.ServerStrictVerification)
 
 	lines = append(lines, divider)
 
