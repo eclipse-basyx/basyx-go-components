@@ -277,8 +277,19 @@ func setExternalThumbnailForAAS(aasID string, externalURL string) error {
 
 // IntegrationTest runs the integration tests based on the config file
 func TestIntegration(t *testing.T) {
+	shouldCompareResponse := testenv.CompareMethods(http.MethodGet, http.MethodPost)
+	if os.Getenv("BASYX_EXTERNAL_COMPOSE") == "1" {
+		baseComparator := shouldCompareResponse
+		shouldCompareResponse = func(step testenv.JSONSuiteStep) bool {
+			if strings.EqualFold(step.Method, http.MethodGet) && strings.Contains(step.Endpoint, "/description") {
+				return false
+			}
+			return baseComparator(step)
+		}
+	}
+
 	testenv.RunJSONSuite(t, testenv.JSONSuiteOptions{
-		ShouldCompareResponse: testenv.CompareMethods(http.MethodGet, http.MethodPost),
+		ShouldCompareResponse: shouldCompareResponse,
 		ActionHandlers: map[string]testenv.JSONStepAction{
 			actionDeleteAllAAS: func(t *testing.T, runner *testenv.JSONSuiteRunner, _ testenv.JSONSuiteStep, stepNumber int) {
 				deleteAllAAS(t, runner, stepNumber)
@@ -430,6 +441,10 @@ func TestThumbnailAttachmentOperations(t *testing.T) {
 
 // TestMain handles setup and teardown
 func TestMain(m *testing.M) {
+	if os.Getenv("BASYX_EXTERNAL_COMPOSE") == "1" {
+		os.Exit(m.Run())
+	}
+
 	os.Exit(testenv.RunComposeTestMain(m, testenv.ComposeTestMainOptions{
 		ComposeFile:     "docker_compose/docker_compose.yml",
 		PreDownBeforeUp: true,

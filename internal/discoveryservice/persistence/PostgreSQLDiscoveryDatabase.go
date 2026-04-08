@@ -93,6 +93,14 @@ func NewPostgreSQLDiscoveryBackend(
 		db.SetConnMaxLifetime(time.Duration(connMaxLifetimeMinutes) * time.Minute)
 	}
 
+	return NewPostgreSQLDiscoveryBackendFromDB(db)
+}
+
+// NewPostgreSQLDiscoveryBackendFromDB creates a new backend instance from an existing DB pool.
+func NewPostgreSQLDiscoveryBackendFromDB(db *sql.DB) (*PostgreSQLDiscoveryDatabase, error) {
+	if db == nil {
+		return nil, common.NewErrBadRequest("DISC-NEWFROMDB-NILDB database handle must not be nil")
+	}
 	return &PostgreSQLDiscoveryDatabase{db: db}, nil
 }
 

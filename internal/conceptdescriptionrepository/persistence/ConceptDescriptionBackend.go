@@ -81,6 +81,15 @@ func NewConceptDescriptionBackend(dsn string, maxOpenConnections int32, maxIdleC
 		db.SetConnMaxLifetime(time.Duration(connMaxLifetimeMinutes) * time.Minute)
 	}
 
+	return NewConceptDescriptionBackendFromDB(db)
+}
+
+// NewConceptDescriptionBackendFromDB creates a new backend instance from an existing DB pool.
+func NewConceptDescriptionBackendFromDB(db *sql.DB) (*ConceptDescriptionBackend, error) {
+	if db == nil {
+		return nil, common.NewErrBadRequest("CDREPO-NEWFROMDB-NILDB database handle must not be nil")
+	}
+
 	healthy, err := testDBConnection(db)
 	if !healthy {
 		_, _ = fmt.Printf("CDREPO-TESTDBCON-FAIL Failed to connect to database: %v\n", err)

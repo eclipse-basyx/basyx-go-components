@@ -77,6 +77,15 @@ func NewPostgreSQLAASRegistryDatabase(
 		db.SetConnMaxLifetime(time.Duration(connMaxLifetimeMinutes) * time.Minute)
 	}
 
+	return NewPostgreSQLAASRegistryDatabaseFromDB(db, cacheEnabled)
+}
+
+// NewPostgreSQLAASRegistryDatabaseFromDB creates a new backend instance from an existing DB pool.
+func NewPostgreSQLAASRegistryDatabaseFromDB(db *sql.DB, cacheEnabled bool) (*PostgreSQLAASRegistryDatabase, error) {
+	if db == nil {
+		return nil, common.NewErrBadRequest("AASREG-NEWFROMDB-NILDB database handle must not be nil")
+	}
+
 	return &PostgreSQLAASRegistryDatabase{
 		db:           db,
 		cacheEnabled: cacheEnabled,

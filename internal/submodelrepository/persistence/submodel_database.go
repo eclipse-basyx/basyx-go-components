@@ -77,6 +77,15 @@ func NewSubmodelDatabase(dsn string, maxOpenConnections int, maxIdleConnections 
 		db.SetConnMaxLifetime(time.Duration(connMaxLifetimeMinutes) * time.Minute)
 	}
 
+	return NewSubmodelDatabaseFromDB(db, privateKey, strictVerification)
+}
+
+// NewSubmodelDatabaseFromDB creates a new repository backend from an existing DB pool.
+func NewSubmodelDatabaseFromDB(db *sql.DB, privateKey *rsa.PrivateKey, strictVerification bool) (*SubmodelDatabase, error) {
+	if db == nil {
+		return nil, common.NewErrBadRequest("SMREPO-NEWFROMDB-NILDB database handle must not be nil")
+	}
+
 	return &SubmodelDatabase{
 		db:                 db,
 		privateKey:         privateKey,

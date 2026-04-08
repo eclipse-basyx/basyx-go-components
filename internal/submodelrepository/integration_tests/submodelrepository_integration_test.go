@@ -132,6 +132,29 @@ func downloadFileAttachment(endpoint string) ([]byte, string, int, error) {
 	return content, contentType, resp.StatusCode, nil
 }
 
+func getStatusWithoutRedirect(endpoint string) (int, error) {
+	req, err := http.NewRequest("GET", endpoint, nil)
+	if err != nil {
+		return 0, fmt.Errorf("failed to create request: %v", err)
+	}
+
+	client := &http.Client{
+		Timeout: 10 * time.Second,
+		CheckRedirect: func(_ *http.Request, _ []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
+	}
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return 0, fmt.Errorf("failed to send request: %v", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	_, _ = io.Copy(io.Discard, resp.Body)
+
+	return resp.StatusCode, nil
+}
+
 func requestJSON(method string, endpoint string, payload any) (int, []byte, error) {
 	var body io.Reader
 	if payload != nil {
@@ -470,7 +493,8 @@ func TestFileAttachmentOperations(t *testing.T) {
 	t.Run("4_Verify_File_Attachment_Removed_After_Value_Update", func(t *testing.T) {
 		// Try to download - should fail since value is now an external URL
 		endpoint := fmt.Sprintf("%s/submodels/%s/submodel-elements/DemoFile/attachment", baseURL, submodelID)
-		_, _, statusCode, _ := downloadFileAttachment(endpoint)
+		statusCode, err := getStatusWithoutRedirect(endpoint)
+		require.NoError(t, err, "File attachment check failed")
 
 		// Should return 404 or redirect to external URL (302)
 		// Since value is now http://example.com/updated-file.png, it should redirect
@@ -518,6 +542,10 @@ func TestFileAttachmentOperations(t *testing.T) {
 
 // TestMain handles setup and teardown
 func TestMain(m *testing.M) {
+	if os.Getenv("BASYX_EXTERNAL_COMPOSE") == "1" {
+		os.Exit(m.Run())
+	}
+
 	os.Exit(testenv.RunComposeTestMain(m, testenv.ComposeTestMainOptions{
 		ComposeFile:     "docker_compose/docker_compose.yml",
 		PreDownBeforeUp: true,

@@ -66,6 +66,15 @@ func NewPostgreSQLSMBackend(
 		db.SetConnMaxLifetime(time.Duration(connMaxLifetimeMinutes) * time.Minute)
 	}
 
+	return NewPostgreSQLSMBackendFromDB(db)
+}
+
+// NewPostgreSQLSMBackendFromDB creates a new backend instance from an existing DB pool.
+func NewPostgreSQLSMBackendFromDB(db *sql.DB) (*PostgreSQLSMDatabase, error) {
+	if db == nil {
+		return nil, common.NewErrBadRequest("SMREG-NEWFROMDB-NILDB database handle must not be nil")
+	}
+
 	return &PostgreSQLSMDatabase{db: db}, nil
 }
 

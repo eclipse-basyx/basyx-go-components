@@ -72,6 +72,15 @@ func NewAssetAdministrationShellDatabase(dsn string, maxOpenConnections int, max
 		db.SetConnMaxLifetime(time.Duration(connMaxLifetimeMinutes) * time.Minute)
 	}
 
+	return NewAssetAdministrationShellDatabaseFromDB(db, strictVerification)
+}
+
+// NewAssetAdministrationShellDatabaseFromDB creates a new repository backend from an existing DB pool.
+func NewAssetAdministrationShellDatabaseFromDB(db *sql.DB, strictVerification bool) (*AssetAdministrationShellDatabase, error) {
+	if db == nil {
+		return nil, common.NewErrBadRequest("AASREPO-NEWFROMDB-NILDB database handle must not be nil")
+	}
+
 	return &AssetAdministrationShellDatabase{
 		db:                 db,
 		strictVerification: strictVerification,
