@@ -29,5 +29,8 @@ func (p *Persistence) ExecuteInTransaction(startErrorCode string, commitErrorCod
 	if p == nil {
 		return common.NewErrBadRequest("AASENV-TX-NILPERSISTENCE persistence bundle must not be nil")
 	}
+	if p.DB == nil {
+		return common.NewErrBadRequest("AASENV-TX-NILDB shared DB pool must not be nil")
+	}
 	return common.ExecuteInTransaction(p.DB, startErrorCode, commitErrorCode, fn)
 }

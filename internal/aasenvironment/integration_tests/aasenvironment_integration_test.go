@@ -54,7 +54,7 @@ func TestIntegration(t *testing.T) {
 			require.True(t, ok, "unsupported integration package: %s", pkg)
 
 			// #nosec G204 -- pkg is validated against a static allow-list above.
-			cmd := exec.Command("go", "test", "-v", pkg)
+			cmd := exec.Command("go", "test", "-v", "-count=1", pkg)
 			cmd.Env = append(os.Environ(), "BASYX_EXTERNAL_COMPOSE=1")
 			cmd.Stdout = os.Stdout
 			cmd.Stderr = os.Stderr

@@ -17,7 +17,6 @@ func NewDescriptionService() *DescriptionService {
 
 // GetDescription returns merged service profile metadata for all bundled components.
 func (s *DescriptionService) GetDescription(_ context.Context) (model.ImplResponse, error) {
-	_ = s
 	return model.Response(http.StatusOK, model.ServiceDescription{
 		Profiles: mergedProfiles(),
 	}), nil
