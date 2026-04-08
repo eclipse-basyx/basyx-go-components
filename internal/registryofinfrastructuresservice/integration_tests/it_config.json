@@ -289,7 +289,8 @@
         "method": "PUT",
         "endpoint": "http://127.0.0.1:5004/companies/ZXguY29tLjEuZGU",
         "data": "postBody/infrastructure_descriptor_5.json",
-        "expectedStatus": 204
+        "shouldMatch": "postBody/infrastructure_descriptor_5.json",
+        "expectedStatus": 200
     },
     {
         "context": "040 - Get Infrastructure Descriptor by Domain - GET /companies/{domain}",

@@ -185,7 +185,7 @@ func (s *RegistryOfInfrastructuresAPIAPIService) PostInfrastructureDescriptor(ct
 		), toJsonErr
 	}
 
-	return model.Response(http.StatusCreated, j), nil
+	return model.Response(http.StatusCreated, map[string]any{"data": j}), nil
 }
 
 // GetInfrastructureDescriptorById - Returns a specific Infrastructure Descriptor
@@ -227,7 +227,7 @@ func (s *RegistryOfInfrastructuresAPIAPIService) GetInfrastructureDescriptorById
 		), toJsonErr
 	}
 
-	return model.Response(http.StatusOK, jsonable), nil
+	return model.Response(http.StatusOK, map[string]any{"data": jsonable}), nil
 }
 
 // PutInfrastructureDescriptorById - Updates an existing Infrastructure Descriptor
@@ -264,7 +264,7 @@ func (s *RegistryOfInfrastructuresAPIAPIService) PutInfrastructureDescriptorById
 		), nil
 	}
 
-	_, err := s.registryOfInfrastructuresBackend.ReplaceInfrastructureDescriptor(ctx, infrastructureDescriptor)
+	result, err := s.registryOfInfrastructuresBackend.ReplaceInfrastructureDescriptor(ctx, infrastructureDescriptor)
 	if err != nil {
 		switch {
 		case common.IsErrBadRequest(err):
@@ -285,7 +285,15 @@ func (s *RegistryOfInfrastructuresAPIAPIService) PutInfrastructureDescriptorById
 		}
 	}
 
-	return model.Response(http.StatusNoContent, nil), nil
+	jsonable, toJsonErr := result.ToJsonable()
+	if toJsonErr != nil {
+		log.Printf("📍 [%s] Error in PutInfrastructureDescriptorById: ToJsonable failed (infrastructureDomain=%q): %v", componentName, result.Domain, toJsonErr)
+		return common.NewErrorResponse(
+			toJsonErr, http.StatusInternalServerError, componentName, "PutInfrastructureDescriptorById", "Unhandled-ToJsonable",
+		), toJsonErr
+	}
+
+	return model.Response(http.StatusOK, map[string]any{"data": jsonable}), nil
 }
 
 // DeleteInfrastructureDescriptorById - Deletes an Infrastructure Descriptor, i.e. de-registers an infrastructure

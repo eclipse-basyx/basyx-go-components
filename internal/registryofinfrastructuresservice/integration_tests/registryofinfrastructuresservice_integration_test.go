@@ -67,7 +67,7 @@ func deleteAllInfrastructureDescriptors(t *testing.T, runner *testenv.JSONSuiteR
 
 func TestIntegration(t *testing.T) {
 	testenv.RunJSONSuite(t, testenv.JSONSuiteOptions{
-		ShouldCompareResponse: testenv.CompareMethods(http.MethodGet),
+		ShouldCompareResponse: testenv.CompareMethods(http.MethodGet, http.MethodPost, http.MethodPut),
 		EnableRequestLog:      true,
 		EnableRawDump:         true,
 		StepName: func(step testenv.JSONSuiteStep, stepNumber int) string {

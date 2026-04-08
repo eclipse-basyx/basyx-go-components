@@ -4,6 +4,7 @@ package registryofinfrastructuresapi
 
 import (
 	"encoding/json"
+	"errors"
 	"log"
 	"net/http"
 	"strings"
@@ -16,6 +17,24 @@ import (
 const (
 	componentName = "ROI"
 )
+
+type infrastructureDescriptorEnvelope struct {
+	Data *model.InfrastructureDescriptor `json:"data"`
+}
+
+func decodeInfrastructureDescriptorEnvelope(r *http.Request) (model.InfrastructureDescriptor, error) {
+	var envelope infrastructureDescriptorEnvelope
+	d := json.NewDecoder(r.Body)
+	d.DisallowUnknownFields()
+	if err := d.Decode(&envelope); err != nil {
+		return model.InfrastructureDescriptor{}, err
+	}
+	if envelope.Data == nil {
+		return model.InfrastructureDescriptor{}, errors.New("missing required field: data")
+	}
+
+	return *envelope.Data, nil
+}
 
 // RegistryOfInfrastructuresAPIAPIController binds http requests to an api service and writes the service results to the http response
 type RegistryOfInfrastructuresAPIAPIController struct {
@@ -138,10 +157,8 @@ func (c *RegistryOfInfrastructuresAPIAPIController) GetAllInfrastructureDescript
 
 // PostInfrastructureDescriptor - Creates a new Infrastructure Descriptor, i.e. registers a registry
 func (c *RegistryOfInfrastructuresAPIAPIController) PostInfrastructureDescriptor(w http.ResponseWriter, r *http.Request) {
-	var infrastructureDescriptorParam model.InfrastructureDescriptor
-	d := json.NewDecoder(r.Body)
-	d.DisallowUnknownFields()
-	if err := d.Decode(&infrastructureDescriptorParam); err != nil {
+	infrastructureDescriptorParam, err := decodeInfrastructureDescriptorEnvelope(r)
+	if err != nil {
 		log.Printf("📍 [%s] Error in PostInfrastructureDescriptor: decode body: %v", componentName, err)
 		result := common.NewErrorResponse(
 			err,
@@ -227,10 +244,8 @@ func (c *RegistryOfInfrastructuresAPIAPIController) PutInfrastructureDescriptorB
 		_ = EncodeJSONResponse(result.Body, &result.Code, w)
 		return
 	}
-	var infrastructureDescriptorParam model.InfrastructureDescriptor
-	d := json.NewDecoder(r.Body)
-	d.DisallowUnknownFields()
-	if err := d.Decode(&infrastructureDescriptorParam); err != nil {
+	infrastructureDescriptorParam, err := decodeInfrastructureDescriptorEnvelope(r)
+	if err != nil {
 		log.Printf("📍 [%s] Error in PutInfrastructureDescriptorById: decode body: %v", componentName, err)
 		result := common.NewErrorResponse(
 			err,
