@@ -41,6 +41,8 @@ jobs:
     strategy:
       matrix:
         service:
+          - name: aasenvironmentservice
+            image: eclipsebasyx/aasenvironment-go
           - name: aasregistryservice
             image: eclipsebasyx/aasregistry-go
           - name: discoveryservice
