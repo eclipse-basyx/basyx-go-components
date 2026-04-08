@@ -34,6 +34,7 @@ import (
 	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
+	"github.com/lib/pq"
 )
 
 // InsertInfrastructureDescriptor creates a new InfrastructureDescriptor
@@ -126,6 +127,9 @@ func InsertInfrastructureDescriptorTx(_ context.Context, tx *sql.Tx, infdesc mod
 		return buildErr
 	}
 	if _, err = tx.Exec(sqlStr, args...); err != nil {
+		if mappedErr := mapInsertInfrastructureDescriptorError(err); mappedErr != nil {
+			return mappedErr
+		}
 		return err
 	}
 
@@ -143,6 +147,9 @@ func InsertInfrastructureDescriptorTx(_ context.Context, tx *sql.Tx, infdesc mod
 		return buildErr
 	}
 	if _, err = tx.Exec(sqlStr, args...); err != nil {
+		if mappedErr := mapInsertInfrastructureDescriptorError(err); mappedErr != nil {
+			return mappedErr
+		}
 		return err
 	}
 
@@ -156,6 +163,23 @@ func InsertInfrastructureDescriptorTx(_ context.Context, tx *sql.Tx, infdesc mod
 
 	if err = createInfrastructureAssetIDRegexPatterns(tx, descriptorID, infdesc.AssetIdRegexPatterns); err != nil {
 		return common.NewInternalServerError("Failed to create Infrastructure AssetID Regex Patterns - no changes applied - see console for details")
+	}
+
+	return nil
+}
+
+func mapInsertInfrastructureDescriptorError(err error) error {
+	if err == nil {
+		return nil
+	}
+
+	pqErr, ok := err.(*pq.Error)
+	if !ok {
+		return nil
+	}
+
+	if pqErr.Code == "23505" {
+		return common.NewErrConflict("ROI-INFDESC-INSERT-CONFLICT Infrastructure Descriptor with given domain already exists")
 	}
 
 	return nil

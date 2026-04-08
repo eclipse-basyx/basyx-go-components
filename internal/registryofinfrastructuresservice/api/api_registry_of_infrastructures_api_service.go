@@ -130,7 +130,7 @@ func (s *RegistryOfInfrastructuresAPIAPIService) GetAllInfrastructureDescriptors
 	for _, infrastructureDescriptor := range infrastructureDescriptors {
 		j, toJsonErr := infrastructureDescriptor.ToJsonable()
 		if toJsonErr != nil {
-			log.Printf("🧩 [%s] Error in GetAllInfrastructureDescriptors: ToJsonable failed (infrastructureDomain=%q): %v", componentName, infrastructureDescriptor.Domain, toJsonErr)
+			log.Printf("📍 [%s] Error in GetAllInfrastructureDescriptors: ToJsonable failed (infrastructureDomain=%q): %v", componentName, infrastructureDescriptor.Domain, toJsonErr)
 			return common.NewErrorResponse(
 				toJsonErr, http.StatusInternalServerError, componentName, "GetAllInfrastructureDescriptors", "Unhandled-ToJsonable",
 			), toJsonErr
@@ -179,7 +179,7 @@ func (s *RegistryOfInfrastructuresAPIAPIService) PostInfrastructureDescriptor(ct
 
 	j, toJsonErr := result.ToJsonable()
 	if toJsonErr != nil {
-		log.Printf("🧩 [%s] Error in PostInfrastructureDescriptor: ToJsonable failed (infrastructureDomain=%q): %v", componentName, result.Domain, toJsonErr)
+		log.Printf("📍 [%s] Error in PostInfrastructureDescriptor: ToJsonable failed (infrastructureDomain=%q): %v", componentName, result.Domain, toJsonErr)
 		return common.NewErrorResponse(
 			toJsonErr, http.StatusInternalServerError, componentName, "PostInfrastructureDescriptor", "Unhandled-ToJsonable",
 		), toJsonErr
@@ -279,7 +279,7 @@ func (s *RegistryOfInfrastructuresAPIAPIService) PutInfrastructureDescriptorById
 		}
 		j, toJsonErr := result.ToJsonable()
 		if toJsonErr != nil {
-			log.Printf("🧩 [%s] Error in PutInfrastructureDescriptor: ToJsonable failed (infrastructureDomain=%q): %v", componentName, result.Domain, toJsonErr)
+			log.Printf("📍 [%s] Error in PutInfrastructureDescriptor: ToJsonable failed (infrastructureDomain=%q): %v", componentName, result.Domain, toJsonErr)
 			return common.NewErrorResponse(
 				toJsonErr, http.StatusInternalServerError, componentName, "PutInfrastructureDescriptor", "Unhandled-ToJsonable",
 			), toJsonErr
