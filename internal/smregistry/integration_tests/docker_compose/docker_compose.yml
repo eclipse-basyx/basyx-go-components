@@ -32,7 +32,7 @@ services:
       - POSTGRES_CONNMAXLIFETIMEMINUTES=5
       - ABAC_ENABLED=false
     ports:
-      - "6005:5004"
+      - "6004:5004"
     depends_on:
       db-it:
         condition: service_healthy
