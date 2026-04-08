@@ -211,7 +211,7 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) PutAssetAdministrationSh
 	if strings.TrimSpace(assetAdministrationShellDescriptor.Id) == "" {
 		log.Printf("🧩 [%s] Error in PutAssetAdministrationShellDescriptorById: body id is empty (path=%q)", componentName, decodedAAS)
 		return common.NewErrorResponse(
-			errors.New("body id is empty"), http.StatusBadRequest, componentName, "PutAssetAdministrationShellDescriptorById", "BadRequest-IdMismatch",
+			errors.New("body id is empty"), http.StatusBadRequest, componentName, "PutAssetAdministrationShellDescriptorById", "BadRequest-MissingIdInBody",
 		), nil
 	}
 
