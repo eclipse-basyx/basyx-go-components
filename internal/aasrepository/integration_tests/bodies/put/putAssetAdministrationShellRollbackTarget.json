@@ -1,0 +1,9 @@
+{
+  "idShort": "rollbackTargetAAS",
+  "id": "https://example.com/ids/aas/rollback_target",
+  "assetInformation": {
+    "assetKind": "Instance",
+    "globalAssetId": "asset-rollback-target"
+  },
+  "modelType": "AssetAdministrationShell"
+}

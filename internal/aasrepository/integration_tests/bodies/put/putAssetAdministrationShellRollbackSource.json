@@ -1,0 +1,9 @@
+{
+  "idShort": "rollbackSourceAAS",
+  "id": "https://example.com/ids/aas/rollback_source",
+  "assetInformation": {
+    "assetKind": "Instance",
+    "globalAssetId": "asset-rollback-source"
+  },
+  "modelType": "AssetAdministrationShell"
+}

@@ -1,0 +1,12 @@
+{
+  "id": "urn:example:sm:rename-global-source",
+  "endpoints": [
+    {
+      "interface": "AAS-3.0",
+      "protocolInformation": {
+        "href": "https://demo3.digital-twin.host/submodels/rename-global-source",
+        "endpointProtocol": "https"
+      }
+    }
+  ]
+}

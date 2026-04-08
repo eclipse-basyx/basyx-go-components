@@ -1,0 +1,12 @@
+{
+  "id": "urn:example:sm:rollback-global-source",
+  "endpoints": [
+    {
+      "interface": "AAS-3.0",
+      "protocolInformation": {
+        "href": "https://demo3.digital-twin.host/submodels/rollback-global-source",
+        "endpointProtocol": "https"
+      }
+    }
+  ]
+}

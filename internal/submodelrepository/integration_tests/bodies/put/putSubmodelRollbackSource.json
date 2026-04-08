@@ -1,0 +1,7 @@
+{
+  "id": "http://iese.fraunhofer.de/id/sm/RollbackSource",
+  "idShort": "RollbackSourceSubmodel",
+  "kind": "Instance",
+  "modelType": "Submodel",
+  "submodelElements": []
+}

@@ -208,11 +208,10 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) PutAssetAdministrationSh
 		return *resp, err
 	}
 
-	// Enforce id consistency with path
-	if strings.TrimSpace(assetAdministrationShellDescriptor.Id) == "" || assetAdministrationShellDescriptor.Id != decodedAAS {
-		log.Printf("🧩 [%s] Error in PutAssetAdministrationShellDescriptorById: body id is empty or does not match path id (body=%q path=%q)", componentName, assetAdministrationShellDescriptor.Id, decodedAAS)
+	if strings.TrimSpace(assetAdministrationShellDescriptor.Id) == "" {
+		log.Printf("🧩 [%s] Error in PutAssetAdministrationShellDescriptorById: body id is empty (path=%q)", componentName, decodedAAS)
 		return common.NewErrorResponse(
-			errors.New("body id is empty or does not match path id"), http.StatusBadRequest, componentName, "PutAssetAdministrationShellDescriptorById", "BadRequest-IdMismatch",
+			errors.New("body id is empty"), http.StatusBadRequest, componentName, "PutAssetAdministrationShellDescriptorById", "BadRequest-IdMismatch",
 		), nil
 	}
 
@@ -223,12 +222,22 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) PutAssetAdministrationSh
 		), enforceErr
 	}
 
-	if exists, chkErr := s.aasRegistryBackend.ExistsAASByID(ctx, assetAdministrationShellDescriptor.Id); chkErr != nil {
-		log.Printf("🧩 [%s] Error in PutAssetAdministrationShellDescriptorById: existence check failed (aasId=%q): %v", componentName, assetAdministrationShellDescriptor.Id, chkErr)
+	existsAtPath, chkErr := s.aasRegistryBackend.ExistsAASByID(ctx, decodedAAS)
+	if chkErr != nil {
+		log.Printf("🧩 [%s] Error in PutAssetAdministrationShellDescriptorById: existence check failed (aasId=%q): %v", componentName, decodedAAS, chkErr)
 		return common.NewErrorResponse(
-			chkErr, http.StatusInternalServerError, componentName, "PutAssetAdministrationShellDescriptorById", "Unhandled-Precheck",
+			chkErr, http.StatusInternalServerError, componentName, "PutAssetAdministrationShellDescriptorById", "Unhandled-PathPrecheck",
 		), chkErr
-	} else if !exists {
+	}
+
+	if !existsAtPath {
+		if assetAdministrationShellDescriptor.Id != decodedAAS {
+			log.Printf("🧩 [%s] Error in PutAssetAdministrationShellDescriptorById: create path requires body id to match path id (body=%q path=%q)", componentName, assetAdministrationShellDescriptor.Id, decodedAAS)
+			return common.NewErrorResponse(
+				errors.New("body id does not match path id for create"), http.StatusBadRequest, componentName, "PutAssetAdministrationShellDescriptorById", "BadRequest-IdMismatch",
+			), nil
+		}
+
 		if shouldEnforceFormula {
 			ctx = auth.SelectPutFormulaByExistence(ctx, false)
 		}
@@ -274,7 +283,24 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) PutAssetAdministrationSh
 		ctx = auth.SelectPutFormulaByExistence(ctx, true)
 	}
 
-	_, err = s.aasRegistryBackend.ReplaceAdministrationShellDescriptor(ctx, assetAdministrationShellDescriptor)
+	if assetAdministrationShellDescriptor.Id != decodedAAS {
+		existsTarget, targetChkErr := s.aasRegistryBackend.ExistsAASByID(ctx, assetAdministrationShellDescriptor.Id)
+		if targetChkErr != nil {
+			log.Printf("🧩 [%s] Error in PutAssetAdministrationShellDescriptorById: target id precheck failed (pathId=%q targetId=%q): %v", componentName, decodedAAS, assetAdministrationShellDescriptor.Id, targetChkErr)
+			return common.NewErrorResponse(
+				targetChkErr, http.StatusInternalServerError, componentName, "PutAssetAdministrationShellDescriptorById", "Unhandled-TargetPrecheck",
+			), targetChkErr
+		}
+		if existsTarget {
+			conflictErr := common.NewErrConflict("AAS with given id already exists")
+			log.Printf("🧩 [%s] Error in PutAssetAdministrationShellDescriptorById: target id already allocated (pathId=%q targetId=%q)", componentName, decodedAAS, assetAdministrationShellDescriptor.Id)
+			return common.NewErrorResponse(
+				conflictErr, http.StatusConflict, componentName, "PutAssetAdministrationShellDescriptorById", "Conflict-TargetAllocated",
+			), nil
+		}
+	}
+
+	_, err = s.aasRegistryBackend.ReplaceAdministrationShellDescriptor(ctx, decodedAAS, assetAdministrationShellDescriptor)
 	if err != nil {
 		switch {
 		case common.IsErrBadRequest(err):
@@ -514,11 +540,10 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) PutSubmodelDescriptorByI
 		return *resp, err
 	}
 
-	// Enforce id consistency
-	if strings.TrimSpace(submodelDescriptor.Id) == "" || submodelDescriptor.Id != decodedSMD {
-		log.Printf("🧩 [%s] Error in PutSubmodelDescriptorByIdThroughSuperpath: body id is empty or does not match path id (body=%q path=%q)", componentName, submodelDescriptor.Id, decodedSMD)
+	if strings.TrimSpace(submodelDescriptor.Id) == "" {
+		log.Printf("🧩 [%s] Error in PutSubmodelDescriptorByIdThroughSuperpath: body id is empty (aasId=%q pathSubmodelId=%q)", componentName, decodedAAS, decodedSMD)
 		return common.NewErrorResponse(
-			errors.New("body id is empty or does not match path id"), http.StatusBadRequest, componentName, "PutSubmodelDescriptorByIdThroughSuperpath", "BadRequest-IdMismatch",
+			errors.New("body id is empty"), http.StatusBadRequest, componentName, "PutSubmodelDescriptorByIdThroughSuperpath", "BadRequest-IdMismatch",
 		), nil
 	}
 
@@ -529,12 +554,22 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) PutSubmodelDescriptorByI
 		), enforceErr
 	}
 
-	if exists, chkErr := s.aasRegistryBackend.ExistsSubmodelForAAS(ctx, decodedAAS, decodedSMD); chkErr != nil {
+	existsAtPath, chkErr := s.aasRegistryBackend.ExistsSubmodelForAAS(ctx, decodedAAS, decodedSMD)
+	if chkErr != nil {
 		log.Printf("🧩 [%s] Error in PutSubmodelDescriptorByIdThroughSuperpath: existence check failed (aasId=%q): %v", componentName, decodedAAS, chkErr)
 		return common.NewErrorResponse(
 			chkErr, http.StatusInternalServerError, componentName, "PutSubmodelDescriptorByIdThroughSuperpath", "Unhandled-Precheck",
 		), chkErr
-	} else if !exists {
+	}
+
+	if !existsAtPath {
+		if submodelDescriptor.Id != decodedSMD {
+			log.Printf("🧩 [%s] Error in PutSubmodelDescriptorByIdThroughSuperpath: create path requires body id to match path id (aasId=%q body=%q path=%q)", componentName, decodedAAS, submodelDescriptor.Id, decodedSMD)
+			return common.NewErrorResponse(
+				errors.New("body id does not match path id for create"), http.StatusBadRequest, componentName, "PutSubmodelDescriptorByIdThroughSuperpath", "BadRequest-IdMismatch",
+			), nil
+		}
+
 		if shouldEnforceFormula {
 			ctx = auth.SelectPutFormulaByExistence(ctx, false)
 		}
@@ -584,8 +619,25 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) PutSubmodelDescriptorByI
 		ctx = auth.SelectPutFormulaByExistence(ctx, true)
 	}
 
+	if submodelDescriptor.Id != decodedSMD {
+		existsTarget, targetChkErr := s.aasRegistryBackend.ExistsSubmodelForAAS(ctx, decodedAAS, submodelDescriptor.Id)
+		if targetChkErr != nil {
+			log.Printf("🧩 [%s] Error in PutSubmodelDescriptorByIdThroughSuperpath: target id precheck failed (aasId=%q pathSubmodelId=%q targetSubmodelId=%q): %v", componentName, decodedAAS, decodedSMD, submodelDescriptor.Id, targetChkErr)
+			return common.NewErrorResponse(
+				targetChkErr, http.StatusInternalServerError, componentName, "PutSubmodelDescriptorByIdThroughSuperpath", "Unhandled-TargetPrecheck",
+			), targetChkErr
+		}
+		if existsTarget {
+			conflictErr := common.NewErrConflict("Submodel with given id already exists for this AAS")
+			log.Printf("🧩 [%s] Error in PutSubmodelDescriptorByIdThroughSuperpath: target id already allocated (aasId=%q pathSubmodelId=%q targetSubmodelId=%q)", componentName, decodedAAS, decodedSMD, submodelDescriptor.Id)
+			return common.NewErrorResponse(
+				conflictErr, http.StatusConflict, componentName, "PutSubmodelDescriptorByIdThroughSuperpath", "Conflict-TargetAllocated",
+			), nil
+		}
+	}
+
 	// Replace in a single transaction (delete + insert)
-	_, err = s.aasRegistryBackend.ReplaceSubmodelDescriptorForAAS(ctx, decodedAAS, submodelDescriptor)
+	_, err = s.aasRegistryBackend.ReplaceSubmodelDescriptorForAAS(ctx, decodedAAS, decodedSMD, submodelDescriptor)
 	if err != nil {
 		switch {
 		case common.IsErrNotFound(err):

@@ -212,14 +212,32 @@ func ReplaceSubmodelDescriptorForAAS(
 	ctx context.Context,
 	db *sql.DB,
 	aasID string,
+	oldSubmodelID string,
 	submodel model.SubmodelDescriptor,
 ) (model.SubmodelDescriptor, error) {
 	tx, err := db.BeginTx(ctx, nil)
 	if err != nil {
 		return model.SubmodelDescriptor{}, common.NewInternalServerError("Failed to start postgres transaction. See console for information.")
 	}
+	defer func() {
+		if rec := recover(); rec != nil {
+			_ = tx.Rollback()
+		}
+	}()
 
-	err = deleteSubmodelDescriptorForAASByIDTx(ctx, tx, aasID, submodel.Id)
+	if oldSubmodelID != submodel.Id {
+		existsTarget, existsErr := existsSubmodelForAASTx(ctx, tx, aasID, submodel.Id)
+		if existsErr != nil {
+			_ = tx.Rollback()
+			return model.SubmodelDescriptor{}, existsErr
+		}
+		if existsTarget {
+			_ = tx.Rollback()
+			return model.SubmodelDescriptor{}, common.NewErrConflict("SMDESC-REPLACE-CONFLICT Submodel with given id already exists for this AAS")
+		}
+	}
+
+	err = deleteSubmodelDescriptorForAASByIDTx(ctx, tx, aasID, oldSubmodelID)
 
 	if err != nil {
 		_ = tx.Rollback()
@@ -359,6 +377,39 @@ func deleteSubmodelDescriptorForAASByIDTx(
 	return err
 }
 
+func existsSubmodelForAASTx(ctx context.Context, tx *sql.Tx, aasID, submodelID string) (bool, error) {
+	d := goqu.Dialect(common.Dialect)
+	smd := goqu.T(common.TblSubmodelDescriptor).As("smd")
+	aas := goqu.T(common.TblAASDescriptor).As("aas")
+
+	ds := d.
+		From(smd).
+		InnerJoin(aas, goqu.On(smd.Col(common.ColAASDescriptorID).Eq(aas.Col(common.ColDescriptorID)))).
+		Select(goqu.L("1")).
+		Where(
+			goqu.And(
+				aas.Col(common.ColAASID).Eq(aasID),
+				smd.Col(common.ColAASID).Eq(submodelID),
+			),
+		).
+		Limit(1)
+
+	sqlStr, args, err := ds.ToSQL()
+	if err != nil {
+		return false, common.NewInternalServerError("SMDESC-EXISTSAASSM-BUILDQ " + err.Error())
+	}
+
+	var one int
+	if scanErr := tx.QueryRowContext(ctx, sqlStr, args...).Scan(&one); scanErr != nil {
+		if errors.Is(scanErr, sql.ErrNoRows) {
+			return false, nil
+		}
+		return false, common.NewInternalServerError("SMDESC-EXISTSAASSM-EXECQ " + scanErr.Error())
+	}
+
+	return true, nil
+}
+
 // ExistsSubmodelForAAS performs a lightweight existence check for a submodel
 // under a given AAS using an inner join and LIMIT 1. Returns true when present,
 // false when absent.
@@ -463,6 +514,7 @@ func InsertSubmodelDescriptor(
 func ReplaceSubmodelDescriptor(
 	ctx context.Context,
 	db *sql.DB,
+	oldSubmodelID string,
 	submodel model.SubmodelDescriptor,
 ) (model.SubmodelDescriptor, error) {
 	tx, err := db.BeginTx(ctx, nil)
@@ -475,7 +527,19 @@ func ReplaceSubmodelDescriptor(
 		}
 	}()
 
-	if err = deleteSubmodelDescriptorByIDTx(ctx, tx, submodel.Id); err != nil {
+	if oldSubmodelID != submodel.Id {
+		existsTarget, existsErr := existsSubmodelByIDTx(ctx, tx, submodel.Id)
+		if existsErr != nil {
+			_ = tx.Rollback()
+			return model.SubmodelDescriptor{}, existsErr
+		}
+		if existsTarget {
+			_ = tx.Rollback()
+			return model.SubmodelDescriptor{}, common.NewErrConflict("SMDESC-REPLACE-CONFLICT Submodel with given id already exists")
+		}
+	}
+
+	if err = deleteSubmodelDescriptorByIDTx(ctx, tx, oldSubmodelID); err != nil {
 		_ = tx.Rollback()
 		return model.SubmodelDescriptor{}, err
 	}
@@ -733,4 +797,35 @@ func deleteSubmodelDescriptorByIDTx(
 	}
 	_, err := tx.Exec(delSQL, delArgs...)
 	return err
+}
+
+func existsSubmodelByIDTx(ctx context.Context, tx *sql.Tx, submodelID string) (bool, error) {
+	d := goqu.Dialect(common.Dialect)
+	smd := goqu.T(common.TblSubmodelDescriptor).As("smd")
+
+	ds := d.
+		From(smd).
+		Select(goqu.L("1")).
+		Where(
+			goqu.And(
+				smd.Col(common.ColAASID).Eq(submodelID),
+				smd.Col(common.ColAASDescriptorID).IsNull(),
+			),
+		).
+		Limit(1)
+
+	sqlStr, args, err := ds.ToSQL()
+	if err != nil {
+		return false, common.NewInternalServerError("SMDESC-EXISTS-BUILDQ " + err.Error())
+	}
+
+	var one int
+	if scanErr := tx.QueryRowContext(ctx, sqlStr, args...).Scan(&one); scanErr != nil {
+		if errors.Is(scanErr, sql.ErrNoRows) {
+			return false, nil
+		}
+		return false, common.NewInternalServerError("SMDESC-EXISTS-EXECQ " + scanErr.Error())
+	}
+
+	return true, nil
 }

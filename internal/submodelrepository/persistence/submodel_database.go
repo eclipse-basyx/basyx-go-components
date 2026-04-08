@@ -1056,10 +1056,6 @@ func (s *SubmodelDatabase) PatchSubmodelMetadata(_ context.Context, submodelID s
 
 // PutSubmodel creates or replaces a submodel and checks ABAC access on old/new state before commit when ABAC is enabled.
 func (s *SubmodelDatabase) PutSubmodel(ctx context.Context, submodelID string, submodel types.ISubmodel) (bool, error) {
-	if submodelID != submodel.ID() {
-		return false, common.NewErrBadRequest("SMREPO-PUTSM-IDMISMATCH Submodel ID in path and body do not match")
-	}
-
 	if err := s.verifySubmodel(submodel, "SMREPO-PUTSM-VERIFY"); err != nil {
 		return false, err
 	}
@@ -1070,16 +1066,21 @@ func (s *SubmodelDatabase) PutSubmodel(ctx context.Context, submodelID string, s
 	}
 	defer cleanup(&err)
 
+	existsBeforeWrite, _, visErr := s.checkSubmodelVisibilityInTx(ctx, tx, submodelID)
+	if visErr != nil {
+		return false, visErr
+	}
+
+	if !existsBeforeWrite && submodelID != submodel.ID() {
+		return false, common.NewErrBadRequest("SMREPO-PUTSM-IDMISMATCH Submodel ID in path and body do not match")
+	}
+
 	shouldEnforce, enforceErr := shouldEnforceFormula(ctx, "SMREPO-PUTSM-SHOULDENFORCE")
 	if enforceErr != nil {
 		return false, enforceErr
 	}
 	if shouldEnforce {
-		exists, _, visErr := s.checkSubmodelVisibilityInTx(ctx, tx, submodelID)
-		if visErr != nil {
-			return false, visErr
-		}
-		ctx = auth.SelectPutFormulaByExistence(ctx, exists)
+		ctx = auth.SelectPutFormulaByExistence(ctx, existsBeforeWrite)
 		exists, visible, visErr := s.checkSubmodelVisibilityInTx(ctx, tx, submodelID)
 		if visErr != nil {
 			return false, visErr
@@ -1095,7 +1096,7 @@ func (s *SubmodelDatabase) PutSubmodel(ctx context.Context, submodelID string, s
 	}
 
 	if shouldEnforce {
-		exists, visible, visErr := s.checkSubmodelVisibilityInTx(ctx, tx, submodelID)
+		exists, visible, visErr := s.checkSubmodelVisibilityInTx(ctx, tx, submodel.ID())
 		if visErr != nil {
 			return false, visErr
 		}

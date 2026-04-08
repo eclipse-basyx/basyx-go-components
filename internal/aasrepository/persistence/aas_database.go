@@ -656,10 +656,6 @@ func (s *AssetAdministrationShellDatabase) GetAssetAdministrationShellByID(ctx c
 
 // PutAssetAdministrationShellByID upserts an AAS and performs ABAC write checks when enabled.
 func (s *AssetAdministrationShellDatabase) PutAssetAdministrationShellByID(ctx context.Context, aasIdentifier string, aas types.IAssetAdministrationShell) (bool, error) {
-	if aasIdentifier != aas.ID() {
-		return false, common.NewErrBadRequest("AASREPO-PUTAAS-IDMISMATCH Asset Administration Shell ID in path and body do not match")
-	}
-
 	if err := s.verifyAssetAdministrationShell(aas, "AASREPO-PUTAAS-VERIFY"); err != nil {
 		return false, err
 	}
@@ -684,6 +680,11 @@ func (s *AssetAdministrationShellDatabase) PutAssetAdministrationShellByID(ctx c
 		}
 		isUpdate = false
 	}
+
+	if !isUpdate && aasIdentifier != aas.ID() {
+		return false, common.NewErrBadRequest("AASREPO-PUTAAS-IDMISMATCH Asset Administration Shell ID in path and body do not match")
+	}
+
 	shouldEnforce, enforceErr := shouldEnforceFormula(ctx, "AASREPO-PUTAAS-SHOULDENFORCE")
 	if enforceErr != nil {
 		return false, enforceErr
@@ -721,7 +722,7 @@ func (s *AssetAdministrationShellDatabase) PutAssetAdministrationShellByID(ctx c
 	}
 
 	if shouldEnforce {
-		exists, visible, visErr := s.checkAASVisibilityInTx(ctx, tx, aasIdentifier)
+		exists, visible, visErr := s.checkAASVisibilityInTx(ctx, tx, aas.ID())
 		if visErr != nil {
 			return false, visErr
 		}

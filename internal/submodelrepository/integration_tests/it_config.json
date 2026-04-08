@@ -2906,5 +2906,63 @@
         "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/NewTestProperty",
         "data": "bodies/put/putPropertyRenameConflict.json",
         "expectedStatus": 409
+    },
+    {
+        "context": "PUT Submodel Rename - Create source submodel",
+        "method": "POST",
+        "endpoint": "http://localhost:6004/submodels",
+        "data": "bodies/put/putSubmodelRenameSource.json",
+        "shouldMatch": "bodies/put/putSubmodelRenameSource.json",
+        "expectedStatus": 201
+    },
+    {
+        "context": "PUT Submodel Rename - Rename existing submodel id",
+        "method": "PUT",
+        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9SZW5hbWVTb3VyY2U",
+        "data": "bodies/put/putSubmodelRenameTarget.json",
+        "expectedStatus": 204
+    },
+    {
+        "context": "PUT Submodel Rename - Verify new id is accessible",
+        "method": "GET",
+        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9SZW5hbWVUYXJnZXQ",
+        "shouldMatch": "bodies/put/putSubmodelRenameTarget.json",
+        "expectedStatus": 200
+    },
+    {
+        "context": "PUT Submodel Rename - Verify old id is no longer accessible",
+        "method": "GET",
+        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9SZW5hbWVTb3VyY2U",
+        "expectedStatus": 404
+    },
+    {
+        "context": "PUT Submodel Rename Rollback - Create source submodel",
+        "method": "POST",
+        "endpoint": "http://localhost:6004/submodels",
+        "data": "bodies/put/putSubmodelRollbackSource.json",
+        "shouldMatch": "bodies/put/putSubmodelRollbackSource.json",
+        "expectedStatus": 201
+    },
+    {
+        "context": "PUT Submodel Rename Rollback - Create target submodel",
+        "method": "POST",
+        "endpoint": "http://localhost:6004/submodels",
+        "data": "bodies/put/putSubmodelRollbackTarget.json",
+        "shouldMatch": "bodies/put/putSubmodelRollbackTarget.json",
+        "expectedStatus": 201
+    },
+    {
+        "context": "PUT Submodel Rename Rollback - Target id already allocated returns 409",
+        "method": "PUT",
+        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9Sb2xsYmFja1NvdXJjZQ",
+        "data": "bodies/put/putSubmodelRollbackTarget.json",
+        "expectedStatus": 409
+    },
+    {
+        "context": "PUT Submodel Rename Rollback - Source still accessible after conflict",
+        "method": "GET",
+        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9Sb2xsYmFja1NvdXJjZQ",
+        "shouldMatch": "bodies/put/putSubmodelRollbackSource.json",
+        "expectedStatus": 200
     }
 ]

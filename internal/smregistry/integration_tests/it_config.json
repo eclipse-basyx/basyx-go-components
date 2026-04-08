@@ -126,6 +126,64 @@
     "expectedStatus": 200
   },
   {
+    "context": "018.1 - Create Rename Source Submodel Descriptor - POST /submodel-descriptors",
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:6005/submodel-descriptors",
+    "data": "postBody/put_submodel_descriptor_rename_source.json",
+    "shouldMatch": "postBody/put_submodel_descriptor_rename_source.json",
+    "expectedStatus": 201
+  },
+  {
+    "context": "018.2 - Rename Submodel Descriptor by PUT body id - PUT /submodel-descriptors/{submodelId}",
+    "method": "PUT",
+    "endpoint": "http://127.0.0.1:6005/submodel-descriptors/dXJuOmV4YW1wbGU6c206cmVuYW1lLWdsb2JhbC1zb3VyY2U",
+    "data": "postBody/put_submodel_descriptor_rename_target.json",
+    "expectedStatus": 204
+  },
+  {
+    "context": "018.3 - Get Renamed Submodel Descriptor by New ID - GET /submodel-descriptors/{submodelId}",
+    "method": "GET",
+    "endpoint": "http://127.0.0.1:6005/submodel-descriptors/dXJuOmV4YW1wbGU6c206cmVuYW1lLWdsb2JhbC10YXJnZXQ",
+    "shouldMatch": "postBody/put_submodel_descriptor_rename_target.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "018.4 - Get Old Submodel Descriptor ID After Rename (Not Found) - GET /submodel-descriptors/{submodelId}",
+    "method": "GET",
+    "endpoint": "http://127.0.0.1:6005/submodel-descriptors/dXJuOmV4YW1wbGU6c206cmVuYW1lLWdsb2JhbC1zb3VyY2U",
+    "expectedStatus": 404
+  },
+  {
+    "context": "018.5 - Create Rollback Source Submodel Descriptor - POST /submodel-descriptors",
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:6005/submodel-descriptors",
+    "data": "postBody/put_submodel_descriptor_rollback_source.json",
+    "shouldMatch": "postBody/put_submodel_descriptor_rollback_source.json",
+    "expectedStatus": 201
+  },
+  {
+    "context": "018.6 - Create Rollback Target Submodel Descriptor - POST /submodel-descriptors",
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:6005/submodel-descriptors",
+    "data": "postBody/put_submodel_descriptor_rollback_target.json",
+    "shouldMatch": "postBody/put_submodel_descriptor_rollback_target.json",
+    "expectedStatus": 201
+  },
+  {
+    "context": "018.7 - Rename to Allocated Target ID Returns Conflict - PUT /submodel-descriptors/{submodelId}",
+    "method": "PUT",
+    "endpoint": "http://127.0.0.1:6005/submodel-descriptors/dXJuOmV4YW1wbGU6c206cm9sbGJhY2stZ2xvYmFsLXNvdXJjZQ",
+    "data": "postBody/put_submodel_descriptor_rollback_target.json",
+    "expectedStatus": 409
+  },
+  {
+    "context": "018.8 - Rollback Verification Source Still Accessible - GET /submodel-descriptors/{submodelId}",
+    "method": "GET",
+    "endpoint": "http://127.0.0.1:6005/submodel-descriptors/dXJuOmV4YW1wbGU6c206cm9sbGJhY2stZ2xvYmFsLXNvdXJjZQ",
+    "shouldMatch": "postBody/put_submodel_descriptor_rollback_source.json",
+    "expectedStatus": 200
+  },
+  {
     "context": "019 - Cleanup: Delete All Submodel Descriptors - ACTION DELETE_ALL_SUBMODEL_DESCRIPTORS",
     "action": "DELETE_ALL_SUBMODEL_DESCRIPTORS"
   },

@@ -89,9 +89,10 @@ func (p *PostgreSQLSMDatabase) InsertSubmodelDescriptor(
 // ReplaceSubmodelDescriptor replaces a global Submodel Descriptor (no AAS association).
 func (p *PostgreSQLSMDatabase) ReplaceSubmodelDescriptor(
 	ctx context.Context,
+	oldSubmodelID string,
 	submodel model.SubmodelDescriptor,
 ) (model.SubmodelDescriptor, error) {
-	return descriptors.ReplaceSubmodelDescriptor(ctx, p.db, submodel)
+	return descriptors.ReplaceSubmodelDescriptor(ctx, p.db, oldSubmodelID, submodel)
 }
 
 // GetSubmodelDescriptorByID returns a global Submodel Descriptor by its id.

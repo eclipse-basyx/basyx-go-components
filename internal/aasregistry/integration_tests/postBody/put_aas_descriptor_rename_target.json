@@ -1,0 +1,14 @@
+{
+  "id": "https://iese.fraunhofer.de/ids/aas/rename-aas-target",
+  "assetKind": "Type",
+  "assetType": "rename-target",
+  "endpoints": [
+    {
+      "interface": "AAS-3.0",
+      "protocolInformation": {
+        "href": "https://demo3.digital-twin.host/aas-environment/shells/rename-target",
+        "endpointProtocol": "https"
+      }
+    }
+  ]
+}

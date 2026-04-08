@@ -31,6 +31,7 @@ import (
 	"database/sql"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
+	"github.com/lib/pq"
 )
 
 // DBQueryer abstracts *sql.DB and *sql.Tx for read-only operations.
@@ -58,4 +59,21 @@ func WithTx(ctx context.Context, db *sql.DB, fn func(tx *sql.Tx) error) (err err
 		return err
 	}
 	return tx.Commit()
+}
+
+func mapDescriptorUniqueViolation(err error, conflictMessage string) error {
+	if err == nil {
+		return nil
+	}
+
+	pqErr, ok := err.(*pq.Error)
+	if !ok {
+		return err
+	}
+
+	if pqErr.Code == "23505" {
+		return common.NewErrConflict(conflictMessage)
+	}
+
+	return err
 }

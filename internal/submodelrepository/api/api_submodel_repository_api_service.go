@@ -1133,10 +1133,6 @@ func (s *SubmodelRepositoryAPIAPIService) PutSubmodelByID(ctx context.Context, s
 		return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "MalformedSubmodelIdentifier"), nil
 	}
 
-	if decodedIdentifier != submodel.ID() {
-		return newAPIErrorResponse(errors.New("submodel ID in path and body do not match"), http.StatusBadRequest, operation, "IdMismatch"), nil
-	}
-
 	isUpdate, err := s.submodelBackend.PutSubmodel(ctx, decodedIdentifier, submodel)
 	if err != nil {
 		if common.IsErrDenied(err) {

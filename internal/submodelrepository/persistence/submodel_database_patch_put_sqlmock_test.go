@@ -113,6 +113,11 @@ func TestPutSubmodelIDMismatchReturnsBadRequest(t *testing.T) {
 	sut := &SubmodelDatabase{db: db}
 	submodel := types.NewSubmodel("sm-body")
 
+	mock.ExpectBegin()
+	mock.ExpectQuery(`SELECT .*FROM .*submodel`).
+		WillReturnError(sql.ErrNoRows)
+	mock.ExpectRollback()
+
 	isUpdate, err := sut.PutSubmodel(contextWithABACDisabled(t), "sm-path", submodel)
 	require.Error(t, err)
 	require.False(t, isUpdate)
@@ -133,6 +138,8 @@ func TestPutSubmodelCreatePathReturnsFalse(t *testing.T) {
 	submodel.SetIDShort(&idShort)
 
 	mock.ExpectBegin()
+	mock.ExpectQuery(`SELECT .*FROM .*submodel`).
+		WillReturnError(sql.ErrNoRows)
 	mock.ExpectQuery(`SELECT .*FROM .*submodel`).
 		WillReturnError(sql.ErrNoRows)
 	mock.ExpectQuery(`INSERT INTO .*submodel.*RETURNING`).
@@ -160,6 +167,41 @@ func TestPutSubmodelUpdatePathReturnsTrue(t *testing.T) {
 	submodel.SetIDShort(&idShort)
 
 	mock.ExpectBegin()
+	mock.ExpectQuery(`SELECT .*FROM .*submodel`).
+		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(400))
+	mock.ExpectQuery(`SELECT .*FROM .*submodel`).
+		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(400))
+	mock.ExpectQuery(`SELECT .*file_oid.*FROM .*submodel_element.*file_data`).
+		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(int64(0)))
+	mock.ExpectExec(`DELETE FROM .*submodel`).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectQuery(`INSERT INTO .*submodel.*RETURNING`).
+		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(401))
+	mock.ExpectExec(`INSERT INTO .*submodel_payload`).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectCommit()
+
+	isUpdate, err := sut.PutSubmodel(contextWithABACDisabled(t), "sm-existing", submodel)
+	require.NoError(t, err)
+	require.True(t, isUpdate)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestPutSubmodelUpdatePathAllowsIDRename(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer func() {
+		_ = db.Close()
+	}()
+
+	sut := &SubmodelDatabase{db: db}
+	submodel := types.NewSubmodel("sm-renamed")
+	idShort := "smrenamed"
+	submodel.SetIDShort(&idShort)
+
+	mock.ExpectBegin()
+	mock.ExpectQuery(`SELECT .*FROM .*submodel`).
+		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(400))
 	mock.ExpectQuery(`SELECT .*FROM .*submodel`).
 		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(400))
 	mock.ExpectQuery(`SELECT .*file_oid.*FROM .*submodel_element.*file_data`).

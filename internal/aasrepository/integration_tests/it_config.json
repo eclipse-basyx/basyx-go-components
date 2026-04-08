@@ -318,6 +318,64 @@
 		"expectedStatus": 404
 	},
 	{
+		"context": "006.7 - POST /shells - create rename source AAS",
+		"method": "POST",
+		"endpoint": "http://127.0.0.1:6004/shells",
+		"data": "bodies/put/putAssetAdministrationShellRenameSource.json",
+		"shouldMatch": "bodies/put/putAssetAdministrationShellRenameSource.json",
+		"expectedStatus": 201
+	},
+	{
+		"context": "006.8 - PUT /shells/{aasIdentifier} - rename existing AAS by body id",
+		"method": "PUT",
+		"endpoint": "http://127.0.0.1:6004/shells/aHR0cHM6Ly9leGFtcGxlLmNvbS9pZHMvYWFzL3JlbmFtZV9zb3VyY2U",
+		"data": "bodies/put/putAssetAdministrationShellRenameTarget.json",
+		"expectedStatus": 204
+	},
+	{
+		"context": "006.9 - GET /shells/{aasIdentifier} - renamed AAS accessible by new id",
+		"method": "GET",
+		"endpoint": "http://127.0.0.1:6004/shells/aHR0cHM6Ly9leGFtcGxlLmNvbS9pZHMvYWFzL3JlbmFtZV90YXJnZXQ",
+		"shouldMatch": "bodies/put/putAssetAdministrationShellRenameTarget.json",
+		"expectedStatus": 200
+	},
+	{
+		"context": "006.10 - GET /shells/{aasIdentifier} - old id no longer accessible after rename",
+		"method": "GET",
+		"endpoint": "http://127.0.0.1:6004/shells/aHR0cHM6Ly9leGFtcGxlLmNvbS9pZHMvYWFzL3JlbmFtZV9zb3VyY2U",
+		"expectedStatus": 404
+	},
+	{
+		"context": "006.11 - POST /shells - create rollback source AAS",
+		"method": "POST",
+		"endpoint": "http://127.0.0.1:6004/shells",
+		"data": "bodies/put/putAssetAdministrationShellRollbackSource.json",
+		"shouldMatch": "bodies/put/putAssetAdministrationShellRollbackSource.json",
+		"expectedStatus": 201
+	},
+	{
+		"context": "006.12 - POST /shells - create rollback target AAS",
+		"method": "POST",
+		"endpoint": "http://127.0.0.1:6004/shells",
+		"data": "bodies/put/putAssetAdministrationShellRollbackTarget.json",
+		"shouldMatch": "bodies/put/putAssetAdministrationShellRollbackTarget.json",
+		"expectedStatus": 201
+	},
+	{
+		"context": "006.13 - PUT /shells/{aasIdentifier} - rename fails when target id already allocated",
+		"method": "PUT",
+		"endpoint": "http://127.0.0.1:6004/shells/aHR0cHM6Ly9leGFtcGxlLmNvbS9pZHMvYWFzL3JvbGxiYWNrX3NvdXJjZQ",
+		"data": "bodies/put/putAssetAdministrationShellRollbackTarget.json",
+		"expectedStatus": 409
+	},
+	{
+		"context": "006.14 - GET /shells/{aasIdentifier} - rollback source still accessible after conflict",
+		"method": "GET",
+		"endpoint": "http://127.0.0.1:6004/shells/aHR0cHM6Ly9leGFtcGxlLmNvbS9pZHMvYWFzL3JvbGxiYWNrX3NvdXJjZQ",
+		"shouldMatch": "bodies/put/putAssetAdministrationShellRollbackSource.json",
+		"expectedStatus": 200
+	},
+	{
 		"context": "007.1 - GET /shells/{aasIdentifier}/$reference",
 		"method": "GET",
 		"endpoint": "http://127.0.0.1:6004/shells/aHR0cHM6Ly9leGFtcGxlLmNvbS9pZHMvYWFzLzM0OTRfMjEyMF8zMDYyXzY1MzI/$reference",

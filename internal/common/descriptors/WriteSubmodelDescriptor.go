@@ -101,7 +101,7 @@ func createSubModelDescriptors(tx *sql.Tx, aasDescriptorID sql.NullInt64, submod
 				return err
 			}
 			if _, err = tx.Exec(sqlStr, args...); err != nil {
-				return err
+				return mapDescriptorUniqueViolation(err, "SMDESC-INSERT-CONFLICT Submodel Descriptor with given id already exists")
 			}
 
 			if err = common.CreateContextReference(

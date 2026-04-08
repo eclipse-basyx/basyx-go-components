@@ -1,0 +1,9 @@
+{
+  "idShort": "renameTargetAAS",
+  "id": "https://example.com/ids/aas/rename_target",
+  "assetInformation": {
+    "assetKind": "Instance",
+    "globalAssetId": "asset-rename-target"
+  },
+  "modelType": "AssetAdministrationShell"
+}

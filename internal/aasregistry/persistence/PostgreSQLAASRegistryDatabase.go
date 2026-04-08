@@ -114,9 +114,10 @@ func (p *PostgreSQLAASRegistryDatabase) DeleteAssetAdministrationShellDescriptor
 // with the given value and reports whether it existed.
 func (p *PostgreSQLAASRegistryDatabase) ReplaceAdministrationShellDescriptor(
 	ctx context.Context,
+	oldAASID string,
 	aasd model.AssetAdministrationShellDescriptor,
 ) (model.AssetAdministrationShellDescriptor, error) {
-	return descriptors.ReplaceAdministrationShellDescriptor(ctx, p.db, aasd)
+	return descriptors.ReplaceAdministrationShellDescriptor(ctx, p.db, oldAASID, aasd)
 }
 
 // ListAssetAdministrationShellDescriptors lists AAS descriptors with optional
@@ -157,9 +158,10 @@ func (p *PostgreSQLAASRegistryDatabase) InsertSubmodelDescriptorForAAS(
 func (p *PostgreSQLAASRegistryDatabase) ReplaceSubmodelDescriptorForAAS(
 	ctx context.Context,
 	aasID string,
+	oldSubmodelID string,
 	submodel model.SubmodelDescriptor,
 ) (model.SubmodelDescriptor, error) {
-	return descriptors.ReplaceSubmodelDescriptorForAAS(ctx, p.db, aasID, submodel)
+	return descriptors.ReplaceSubmodelDescriptorForAAS(ctx, p.db, aasID, oldSubmodelID, submodel)
 }
 
 // GetSubmodelDescriptorForAASByID returns the submodel descriptor identified

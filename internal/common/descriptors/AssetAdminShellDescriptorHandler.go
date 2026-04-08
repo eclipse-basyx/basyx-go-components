@@ -169,7 +169,7 @@ func InsertAdministrationShellDescriptorTx(ctx context.Context, tx *sql.Tx, aasd
 		return buildErr
 	}
 	if _, err = tx.Exec(sqlStr, args...); err != nil {
-		return err
+		return mapDescriptorUniqueViolation(err, "AASDESC-INSERT-CONFLICT AAS with given id already exists")
 	}
 
 	if err = CreateEndpoints(tx, descriptorID, aasd.Endpoints); err != nil {
@@ -306,12 +306,37 @@ func deleteAssetAdministrationShellDescriptorByIDTx(ctx context.Context, tx *sql
 	return nil
 }
 
+func existsAASDescriptorByIDTx(ctx context.Context, tx *sql.Tx, aasIdentifier string) (bool, error) {
+	d := goqu.Dialect(common.Dialect)
+	aas := goqu.T(common.TblAASDescriptor).As("aas")
+
+	sqlStr, args, buildErr := d.
+		From(aas).
+		Select(goqu.L("1")).
+		Where(aas.Col(common.ColAASID).Eq(aasIdentifier)).
+		Limit(1).
+		ToSQL()
+	if buildErr != nil {
+		return false, common.NewInternalServerError("AASDESC-EXISTS-BUILDQ " + buildErr.Error())
+	}
+
+	var one int
+	if err := tx.QueryRowContext(ctx, sqlStr, args...).Scan(&one); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return false, nil
+		}
+		return false, common.NewInternalServerError("AASDESC-EXISTS-EXECQ " + err.Error())
+	}
+
+	return true, nil
+}
+
 // ReplaceAdministrationShellDescriptor atomically replaces the descriptor with
 // the same AAS Id: if a descriptor exists it is deleted (base descriptor row),
 // then the provided descriptor is inserted. Related rows are recreated from the
 // input. The returned descriptor is the stored AssetAdministrationShellDescriptor
 // after replacement.
-func ReplaceAdministrationShellDescriptor(ctx context.Context, db *sql.DB, aasd model.AssetAdministrationShellDescriptor) (model.AssetAdministrationShellDescriptor, error) {
+func ReplaceAdministrationShellDescriptor(ctx context.Context, db *sql.DB, oldAASID string, aasd model.AssetAdministrationShellDescriptor) (model.AssetAdministrationShellDescriptor, error) {
 	tx, err := db.BeginTx(ctx, nil)
 	if err != nil {
 		return model.AssetAdministrationShellDescriptor{}, common.NewInternalServerError("Failed to start postgres transaction. See console for information.")
@@ -323,12 +348,25 @@ func ReplaceAdministrationShellDescriptor(ctx context.Context, db *sql.DB, aasd 
 	}()
 
 	// first check if user is allowed to replace
-	_, err = GetAssetAdministrationShellDescriptorByIDTx(ctx, tx, aasd.Id)
+	_, err = GetAssetAdministrationShellDescriptorByIDTx(ctx, tx, oldAASID)
 	if err != nil {
+		_ = tx.Rollback()
 		return model.AssetAdministrationShellDescriptor{}, err
 	}
+
+	if oldAASID != aasd.Id {
+		existsNewID, existsErr := existsAASDescriptorByIDTx(ctx, tx, aasd.Id)
+		if existsErr != nil {
+			_ = tx.Rollback()
+			return model.AssetAdministrationShellDescriptor{}, existsErr
+		}
+		if existsNewID {
+			_ = tx.Rollback()
+			return model.AssetAdministrationShellDescriptor{}, common.NewErrConflict("AASDESC-REPLACE-CONFLICT AAS with given id already exists")
+		}
+	}
 	// delete existing descriptor
-	if err = deleteAssetAdministrationShellDescriptorByIDTx(ctx, tx, aasd.Id); err != nil {
+	if err = deleteAssetAdministrationShellDescriptorByIDTx(ctx, tx, oldAASID); err != nil {
 		_ = tx.Rollback()
 		return model.AssetAdministrationShellDescriptor{}, err
 	}

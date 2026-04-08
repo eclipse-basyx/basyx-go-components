@@ -259,18 +259,18 @@
     "expectedStatus": 200
   },
   {
-    "context": "038 - Replace Submodel Descriptor (Wrong ID) - PUT /shell-descriptors/{aasId}/submodel-descriptors/{subId}",
+    "context": "038 - Replace Submodel Descriptor (Rename via Body ID, 204) - PUT /shell-descriptors/{aasId}/submodel-descriptors/{subId}",
     "method": "PUT",
     "endpoint": "http://127.0.0.1:6004/shell-descriptors/aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvaWRzL2Fhcy8yMjMzNQ/submodel-descriptors/dXJuOmV4YW1wbGU6c206MDAx",
     "data": "postBody/simple_submodel_descriptor_2.json",
-    "expectedStatus": 400
+    "expectedStatus": 204
   },
   {
-    "context": "039 - Create Submodel Descriptor #2 - POST /shell-descriptors/{aasId}/submodel-descriptors",
+    "context": "039 - Recreate Submodel Descriptor #1 after Rename - POST /shell-descriptors/{aasId}/submodel-descriptors",
     "method": "POST",
     "endpoint": "http://127.0.0.1:6004/shell-descriptors/aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvaWRzL2Fhcy8yMjMzNQ/submodel-descriptors",
-    "data": "postBody/simple_submodel_descriptor_2.json",
-    "shouldMatch": "postBody/simple_submodel_descriptor_2.json",
+    "data": "postBody/simple_submodel_descriptor_1.json",
+    "shouldMatch": "postBody/simple_submodel_descriptor_1.json",
     "expectedStatus": 201
   },
   {
@@ -385,11 +385,11 @@
     "expectedStatus": 200
   },
   {
-    "context": "056 - PUT Submodel in AAS (Wrong ID, 400) - PUT /shell-descriptors/{aasId}/submodel-descriptors/{subId}",
+    "context": "056 - PUT Submodel in AAS (Rename via Body ID, 204) - PUT /shell-descriptors/{aasId}/submodel-descriptors/{subId}",
     "method": "PUT",
     "endpoint": "http://127.0.0.1:6004/shell-descriptors/aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvaWRzL2Fhcy9tYXJ0aW4/submodel-descriptors/aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvaWRzL2Fhcy9zYXRpc2ZhY3Rvcnk",
     "data": "postBody/simple_submodel_descriptor_4.json",
-    "expectedStatus": 400
+    "expectedStatus": 204
   },
   {
     "context": "057 - GET Submodel (Not Found) - GET /shell-descriptors/{aasId}/submodel-descriptors/{subId}",
@@ -398,12 +398,11 @@
     "expectedStatus": 404
   },
   {
-    "context": "058 - PUT Submodel (Create via PUT, 201) - PUT /shell-descriptors/{aasId}/submodel-descriptors/{subId}",
+    "context": "058 - PUT Submodel (Update via PUT, 204) - PUT /shell-descriptors/{aasId}/submodel-descriptors/{subId}",
     "method": "PUT",
     "endpoint": "http://127.0.0.1:6004/shell-descriptors/aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvaWRzL2Fhcy9tYXJ0aW4/submodel-descriptors/aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvaWRzL2Fhcy93cm9uZ2lk",
     "data": "postBody/simple_submodel_descriptor_4.json",
-    "shouldMatch": "expected/submodel_descriptor_simplified.json",
-    "expectedStatus": 201
+    "expectedStatus": 204
   },
   {
     "context": "059 - GET AAS Descriptor (With New Submodel) - GET /shell-descriptors/{aasId}",
@@ -451,6 +450,122 @@
     "method": "GET",
     "endpoint": "http://127.0.0.1:6004/shell-descriptors/aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvaWRzL2Fhcy9tYXJ0aW5pc3Rjb29s",
     "shouldMatch": "postBody/simple_ass_descriptor_8.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "071 - Create AAS Descriptor Rename Source - POST /shell-descriptors",
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:6004/shell-descriptors",
+    "data": "postBody/put_aas_descriptor_rename_source.json",
+    "shouldMatch": "postBody/put_aas_descriptor_rename_source.json",
+    "expectedStatus": 201
+  },
+  {
+    "context": "072 - Rename AAS Descriptor via PUT body id - PUT /shell-descriptors/{aasId}",
+    "method": "PUT",
+    "endpoint": "http://127.0.0.1:6004/shell-descriptors/aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvaWRzL2Fhcy9yZW5hbWUtYWFzLXNvdXJjZQ",
+    "data": "postBody/put_aas_descriptor_rename_target.json",
+    "expectedStatus": 204
+  },
+  {
+    "context": "073 - Get Renamed AAS Descriptor by New ID - GET /shell-descriptors/{aasId}",
+    "method": "GET",
+    "endpoint": "http://127.0.0.1:6004/shell-descriptors/aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvaWRzL2Fhcy9yZW5hbWUtYWFzLXRhcmdldA",
+    "shouldMatch": "postBody/put_aas_descriptor_rename_target.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "074 - Get Old AAS Descriptor ID After Rename (Not Found) - GET /shell-descriptors/{aasId}",
+    "method": "GET",
+    "endpoint": "http://127.0.0.1:6004/shell-descriptors/aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvaWRzL2Fhcy9yZW5hbWUtYWFzLXNvdXJjZQ",
+    "expectedStatus": 404
+  },
+  {
+    "context": "075 - Create AAS Descriptor Rollback Source - POST /shell-descriptors",
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:6004/shell-descriptors",
+    "data": "postBody/put_aas_descriptor_rollback_source.json",
+    "shouldMatch": "postBody/put_aas_descriptor_rollback_source.json",
+    "expectedStatus": 201
+  },
+  {
+    "context": "076 - Create AAS Descriptor Rollback Target - POST /shell-descriptors",
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:6004/shell-descriptors",
+    "data": "postBody/put_aas_descriptor_rollback_target.json",
+    "shouldMatch": "postBody/put_aas_descriptor_rollback_target.json",
+    "expectedStatus": 201
+  },
+  {
+    "context": "077 - Rename AAS Descriptor to Allocated Target ID Returns Conflict - PUT /shell-descriptors/{aasId}",
+    "method": "PUT",
+    "endpoint": "http://127.0.0.1:6004/shell-descriptors/aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvaWRzL2Fhcy9yb2xsYmFjay1hYXMtc291cmNl",
+    "data": "postBody/put_aas_descriptor_rollback_target.json",
+    "expectedStatus": 409
+  },
+  {
+    "context": "078 - AAS Descriptor Rollback Verification Source Still Accessible - GET /shell-descriptors/{aasId}",
+    "method": "GET",
+    "endpoint": "http://127.0.0.1:6004/shell-descriptors/aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvaWRzL2Fhcy9yb2xsYmFjay1hYXMtc291cmNl",
+    "shouldMatch": "postBody/put_aas_descriptor_rollback_source.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "079 - Create AAS-Scoped Submodel Descriptor Rename Source - POST /shell-descriptors/{aasId}/submodel-descriptors",
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:6004/shell-descriptors/aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvaWRzL2Fhcy9yZW5hbWUtYWFzLXRhcmdldA/submodel-descriptors",
+    "data": "postBody/put_aas_submodel_descriptor_rename_source.json",
+    "shouldMatch": "postBody/put_aas_submodel_descriptor_rename_source.json",
+    "expectedStatus": 201
+  },
+  {
+    "context": "080 - Rename AAS-Scoped Submodel Descriptor via PUT body id - PUT /shell-descriptors/{aasId}/submodel-descriptors/{subId}",
+    "method": "PUT",
+    "endpoint": "http://127.0.0.1:6004/shell-descriptors/aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvaWRzL2Fhcy9yZW5hbWUtYWFzLXRhcmdldA/submodel-descriptors/dXJuOmV4YW1wbGU6c206cmVuYW1lLXNvdXJjZQ",
+    "data": "postBody/put_aas_submodel_descriptor_rename_target.json",
+    "expectedStatus": 204
+  },
+  {
+    "context": "081 - Get Renamed AAS-Scoped Submodel Descriptor by New ID - GET /shell-descriptors/{aasId}/submodel-descriptors/{subId}",
+    "method": "GET",
+    "endpoint": "http://127.0.0.1:6004/shell-descriptors/aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvaWRzL2Fhcy9yZW5hbWUtYWFzLXRhcmdldA/submodel-descriptors/dXJuOmV4YW1wbGU6c206cmVuYW1lLXRhcmdldA",
+    "shouldMatch": "postBody/put_aas_submodel_descriptor_rename_target.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "082 - Get Old AAS-Scoped Submodel Descriptor ID After Rename (Not Found) - GET /shell-descriptors/{aasId}/submodel-descriptors/{subId}",
+    "method": "GET",
+    "endpoint": "http://127.0.0.1:6004/shell-descriptors/aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvaWRzL2Fhcy9yZW5hbWUtYWFzLXRhcmdldA/submodel-descriptors/dXJuOmV4YW1wbGU6c206cmVuYW1lLXNvdXJjZQ",
+    "expectedStatus": 404
+  },
+  {
+    "context": "083 - Create AAS-Scoped Submodel Descriptor Rollback Source - POST /shell-descriptors/{aasId}/submodel-descriptors",
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:6004/shell-descriptors/aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvaWRzL2Fhcy9yZW5hbWUtYWFzLXRhcmdldA/submodel-descriptors",
+    "data": "postBody/put_aas_submodel_descriptor_rollback_source.json",
+    "shouldMatch": "postBody/put_aas_submodel_descriptor_rollback_source.json",
+    "expectedStatus": 201
+  },
+  {
+    "context": "084 - Create AAS-Scoped Submodel Descriptor Rollback Target - POST /shell-descriptors/{aasId}/submodel-descriptors",
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:6004/shell-descriptors/aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvaWRzL2Fhcy9yZW5hbWUtYWFzLXRhcmdldA/submodel-descriptors",
+    "data": "postBody/put_aas_submodel_descriptor_rollback_target.json",
+    "shouldMatch": "postBody/put_aas_submodel_descriptor_rollback_target.json",
+    "expectedStatus": 201
+  },
+  {
+    "context": "085 - Rename AAS-Scoped Submodel Descriptor to Allocated Target ID Returns Conflict - PUT /shell-descriptors/{aasId}/submodel-descriptors/{subId}",
+    "method": "PUT",
+    "endpoint": "http://127.0.0.1:6004/shell-descriptors/aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvaWRzL2Fhcy9yZW5hbWUtYWFzLXRhcmdldA/submodel-descriptors/dXJuOmV4YW1wbGU6c206cm9sbGJhY2stc291cmNl",
+    "data": "postBody/put_aas_submodel_descriptor_rollback_target.json",
+    "expectedStatus": 409
+  },
+  {
+    "context": "086 - AAS-Scoped Submodel Descriptor Rollback Verification Source Still Accessible - GET /shell-descriptors/{aasId}/submodel-descriptors/{subId}",
+    "method": "GET",
+    "endpoint": "http://127.0.0.1:6004/shell-descriptors/aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvaWRzL2Fhcy9yZW5hbWUtYWFzLXRhcmdldA/submodel-descriptors/dXJuOmV4YW1wbGU6c206cm9sbGJhY2stc291cmNl",
+    "shouldMatch": "postBody/put_aas_submodel_descriptor_rollback_source.json",
     "expectedStatus": 200
   },
   {
