@@ -266,17 +266,11 @@
     "expectedStatus": 204
   },
   {
-    "context": "038.1 - Delete Submodel Descriptor #2 - DELETE /shell-descriptors/{aasId}/submodel-descriptors/{subId}",
-    "method": "DELETE",
-    "endpoint": "http://127.0.0.1:6004/shell-descriptors/aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvaWRzL2Fhcy8yMjMzNQ/submodel-descriptors/dXJuOmV4YW1wbGU6c206MDAy",
-    "expectedStatus": 204
-  },
-  {
-    "context": "039 - Create Submodel Descriptor #2 - POST /shell-descriptors/{aasId}/submodel-descriptors",
+    "context": "039 - Recreate Submodel Descriptor #1 after Rename - POST /shell-descriptors/{aasId}/submodel-descriptors",
     "method": "POST",
     "endpoint": "http://127.0.0.1:6004/shell-descriptors/aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvaWRzL2Fhcy8yMjMzNQ/submodel-descriptors",
-    "data": "postBody/simple_submodel_descriptor_2.json",
-    "shouldMatch": "postBody/simple_submodel_descriptor_2.json",
+    "data": "postBody/simple_submodel_descriptor_1.json",
+    "shouldMatch": "postBody/simple_submodel_descriptor_1.json",
     "expectedStatus": 201
   },
   {
