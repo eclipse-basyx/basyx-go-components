@@ -230,7 +230,7 @@ func (s *RegistryOfInfrastructuresAPIAPIService) GetInfrastructureDescriptorById
 	return model.Response(http.StatusOK, jsonable), nil
 }
 
-// PutInfrastructureDescriptorById - Creates or updates an existing Infrastructure Descriptor
+// PutInfrastructureDescriptorById - Updates an existing Infrastructure Descriptor
 func (s *RegistryOfInfrastructuresAPIAPIService) PutInfrastructureDescriptorById(ctx context.Context, infrastructureIdentifier string, infrastructureDescriptor model.InfrastructureDescriptor) (model.ImplResponse, error) {
 	// Decode path AAS id
 	decodedInfrastructure, decErr := common.DecodeString(infrastructureIdentifier)
@@ -257,34 +257,11 @@ func (s *RegistryOfInfrastructuresAPIAPIService) PutInfrastructureDescriptorById
 			chkErr, http.StatusInternalServerError, componentName, "PutInfrastructureDescriptorById", "Unhandled-Precheck",
 		), chkErr
 	} else if !exists {
-		result, err := s.registryOfInfrastructuresBackend.InsertInfrastructureDescriptor(ctx, infrastructureDescriptor)
-		if err != nil {
-			switch {
-			case common.IsErrBadRequest(err):
-				log.Printf("📍 [%s] Error in InsertInfrastructureDescriptor: bad request (infrastructureDomain=%q): %v", componentName, infrastructureDescriptor.Domain, err)
-				return common.NewErrorResponse(
-					err, http.StatusBadRequest, componentName, "InsertInfrastructureDescriptor", "BadRequest",
-				), nil
-			case common.IsErrConflict(err):
-				log.Printf("📍 [%s] Error in InsertInfrastructureDescriptor: conflict (infrastructureDomain=%q): %v", componentName, infrastructureDescriptor.Domain, err)
-				return common.NewErrorResponse(
-					err, http.StatusConflict, componentName, "InsertInfrastructureDescriptor", "Conflict",
-				), nil
-			default:
-				log.Printf("📍 [%s] Error in InsertInfrastructureDescriptor: internal (infrastructureDomain=%q): %v", componentName, infrastructureDescriptor.Domain, err)
-				return common.NewErrorResponse(
-					err, http.StatusInternalServerError, componentName, "InsertInfrastructureDescriptor", "Unhandled",
-				), err
-			}
-		}
-		j, toJsonErr := result.ToJsonable()
-		if toJsonErr != nil {
-			log.Printf("📍 [%s] Error in PutInfrastructureDescriptor: ToJsonable failed (infrastructureDomain=%q): %v", componentName, result.Domain, toJsonErr)
-			return common.NewErrorResponse(
-				toJsonErr, http.StatusInternalServerError, componentName, "PutInfrastructureDescriptor", "Unhandled-ToJsonable",
-			), toJsonErr
-		}
-		return model.Response(http.StatusCreated, j), nil
+		notFoundErr := common.NewErrNotFound("Infrastructure Descriptor not found")
+		log.Printf("📍 [%s] Error in PutInfrastructureDescriptorById: not found (infrastructureDomain=%q)", componentName, infrastructureDescriptor.Domain)
+		return common.NewErrorResponse(
+			notFoundErr, http.StatusNotFound, componentName, "PutInfrastructureDescriptorById", "NotFound",
+		), nil
 	}
 
 	_, err := s.registryOfInfrastructuresBackend.ReplaceInfrastructureDescriptor(ctx, infrastructureDescriptor)

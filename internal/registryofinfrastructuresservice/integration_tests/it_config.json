@@ -287,66 +287,58 @@
         "expectedStatus": 200
     },
     {
-        "context": "039 - Update Infrastructure Descriptor - PUT /companies/{domain}",
+        "context": "039 - Delete Infrastructure Descriptor by Domain - DELETE /companies/{domain}",
+        "method": "DELETE",
+        "endpoint": "http://127.0.0.1:5004/companies/ZXguY29tLjIuZGU",
+        "expectedStatus": 204
+    },
+    {
+        "context": "040 - Delete Infrastructure Descriptor by Domain (Conflict - Not Found) - DELETE /companies/{domain}",
+        "method": "DELETE",
+        "endpoint": "http://127.0.0.1:5004/companies/ZXguY29tLjIuZGU",
+        "expectedStatus": 404
+    },
+    {
+        "context": "041 - Update Infrastructure Descriptor using PUT - PUT /companies/{domain}",
         "method": "PUT",
         "endpoint": "http://127.0.0.1:5004/companies/ZXguY29tLjEuZGU",
         "data": "postBody/infrastructure_descriptor_5.json",
         "expectedStatus": 204
     },
     {
-        "context": "040 - Get Infrastructure Descriptor by old Domain after Update (Conflict - Nonexistent Domain) - GET /companies/{domain}",
+        "context": "042 - Get Infrastructure Descriptor by Domain - GET /companies/{domain}",
         "method": "GET",
         "endpoint": "http://127.0.0.1:5004/companies/ZXguY29tLjEuZGU",
         "shouldMatch": "postBody/infrastructure_descriptor_5.json",
         "expectedStatus": 200
     },
     {
-        "context": "041 - Get Infrastructure Descriptor by new Domain after Update - GET /companies/{domain}",
-        "method": "GET",
-        "endpoint": "http://127.0.0.1:5004/companies/bmV3LmV4LmNvbS4xLmRl",
-        "shouldMatch": "postBody/infrastructure_descriptor_5.json",
-        "expectedStatus": 200
-    },
-    {
-        "context": "042 - Delete Infrastructure Descriptor by Domain - DELETE /companies/{domain}",
-        "method": "DELETE",
-        "endpoint": "http://127.0.0.1:5004/companies/bmV3LmV4LmNvbS4xLmRl",
-        "expectedStatus": 204
-    },
-    {
-        "context": "043 - Delete Infrastructure Descriptor by Domain (Conflict - Not Found) - DELETE /companies/{domain}",
-        "method": "DELETE",
-        "endpoint": "http://127.0.0.1:5004/companies/bmV3LmV4LmNvbS4xLmRl",
-        "expectedStatus": 404
-    },
-    {
-        "context": "044 - Create Infrastructure Descriptor using PUT (Conflict - Domain Mismatch) - PUT /companies/{domain}",
+        "context": "043 - Update Infrastructure Descriptor using PUT (Conflict - Domain Mismatch) - PUT /companies/{domain}",
         "method": "PUT",
-        "endpoint": "http://127.0.0.1:5004/companies/ZXguY29tLjEuZGU",
+        "endpoint": "http://127.0.0.1:5004/companies/ZXguY29tLjEuZGUubm90",
         "data": "postBody/infrastructure_descriptor_5.json",
         "expectedStatus": 400
     },
     {
-        "context": "045 - Create Infrastructure Descriptor using PUT - PUT /companies/{domain}",
+        "context": "044 - Update Infrastructure Descriptor using PUT (Conflict - Nonexistent Domain) - PUT /companies/{domain}",
         "method": "PUT",
-        "endpoint": "http://127.0.0.1:5004/companies/bmV3LmV4LmNvbS4xLmRl",
-        "data": "postBody/infrastructure_descriptor_5.json",
-        "shouldMatch": "postBody/infrastructure_descriptor_5.json",
-        "expectedStatus": 201
+        "endpoint": "http://127.0.0.1:5004/companies/ZXguY29tLjQuZGU",
+        "data": "postBody/infrastructure_descriptor_6.json",
+        "expectedStatus": 404
     },
     {
-        "context": "046 - Cleanup: Delete All AAS Descriptors - ACTION DELETE_ALL_INFRASTRUCTURE_DESCRIPTORS",
+        "context": "045 - Cleanup: Delete All AAS Descriptors - ACTION DELETE_ALL_INFRASTRUCTURE_DESCRIPTORS",
         "action": "DELETE_ALL_INFRASTRUCTURE_DESCRIPTORS"
     },
     {
-        "context": "047 - Verify that Cleanup has worked - GET /companies",
+        "context": "046 - Verify that Cleanup has worked - GET /companies",
         "method": "GET",
         "endpoint": "http://127.0.0.1:5004/companies",
         "shouldMatch": "expected/empty_paged_result.json",
         "expectedStatus": 200
     },
     {
-        "context": "048 - Verify database is empty - ACTION CHECK_DB_IS_EMPTY",
+        "context": "047 - Verify database is empty - ACTION CHECK_DB_IS_EMPTY",
         "action": "CHECK_DB_IS_EMPTY"
     }
 ]

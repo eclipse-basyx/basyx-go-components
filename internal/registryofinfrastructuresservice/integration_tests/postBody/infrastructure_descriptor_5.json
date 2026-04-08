@@ -2,13 +2,13 @@
     "description": [
         {
             "language": "en",
-            "text": "An example company."
+            "text": "An example company that has been updated."
         }
     ],
     "displayName": [
         {
             "language": "en",
-            "text": "Example Company"
+            "text": "Updated Example Company"
         }
     ],
     "administration": {
@@ -40,16 +40,16 @@
             "interface": "SUBMODEL-REPOSITORY-3.1"
         }
     ],
-    "idShort": "exampleCompany1",
-    "name": "ExCom1",
-    "domain": "new.ex.com.1.de",
+    "idShort": "exampleCompany1Updated",
+    "name": "ExCom1Updated",
+    "domain": "ex.com.1.de",
     "nameOptions": [
-        "Example Company 1",
-        "EC1",
-        "Com Example 1"
+        "Example Company 1 Updated",
+        "EC1Updated",
+        "Com Example 1 Updated"
     ],
     "assetIdRegexPatterns": [
         "^https://i\\.excom1\\.de/assetId/",
-        "^https://i\\.example-1-company\\.de/assetId/"
+        "^https://i\\.updated.excom1\\.de/assetId/"
     ]
 }

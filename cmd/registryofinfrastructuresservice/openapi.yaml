@@ -101,7 +101,7 @@ paths:
 
     put:
       tags: [Registry of Infrastructures API]
-      summary: Creates or updates an existing Infrastructure Descriptor
+      summary: Updates an existing Infrastructure Descriptor
       operationId: PutInfrastructureDescriptorById
       requestBody:
         description: Infrastructure Descriptor object
@@ -114,19 +114,12 @@ paths:
                 infrastructureDescriptor:
                   $ref: '#/components/examples/InfrastructureDescriptorSingle'
       responses:
-        '201':
-          description: Infrastructure Descriptor created successfully (descriptor did not exist)
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/InfrastructureDescriptor'
-              examples:
-                infrastructureDescriptor:
-                  $ref: '#/components/examples/InfrastructureDescriptorSingle'
         '204':
-          description: Infrastructure Descriptor updated successfully (descriptor existed)
+          description: Infrastructure Descriptor updated successfully
         '400':
           $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
         '409':
           $ref: '#/components/responses/Conflict'
         '500':

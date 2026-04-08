@@ -26,19 +26,20 @@
     },
     "endpoints": [
         {
-            "interface": "AAS-DISCOVERY-3.0",
             "protocolInformation": {
-                "href": "https://example.com/aas-discovery",
+                "href": "https://example.com/submodel-registry",
                 "endpointProtocol": "HTTPS"
-            }
+            },
+            "interface": "SUBMODEL-REGISTRY-3.1"
         }
     ],
-    "idShort": "ExampleAASDiscovery",
-    "name": "ExCom5",
-    "domain": "ex.com.5.de",
+    "idShort": "exampleCompany4",
+    "name": "ExCom4",
+    "domain": "ex.com.4.de",
     "nameOptions": [
-        "Example Company 5",
-        "EC5",
-        "Com Example 5"
+        "Example Company 4",
+        "EC4",
+        "Com Example 4",
+        "ExCompany"
     ]
 }
