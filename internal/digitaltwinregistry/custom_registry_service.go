@@ -91,6 +91,20 @@ func (s *CustomRegistryService) PutAssetAdministrationShellDescriptorById(
 	aasIdentifier string,
 	assetAdministrationShellDescriptor model.AssetAdministrationShellDescriptor,
 ) (model.ImplResponse, error) {
+	decodedAASID, decodeErr := common.DecodeString(aasIdentifier)
+	if decodeErr != nil {
+		resp := common.NewErrorResponse(
+			decodeErr,
+			http.StatusBadRequest,
+			customRegistryComponentName,
+			"PutAssetAdministrationShellDescriptorById",
+			"BadRequest-DecodeAAS",
+		)
+		return resp, nil
+	}
+	// DTR customization: path id wins, so base strict-check remains bypassed only here.
+	assetAdministrationShellDescriptor.Id = decodedAASID
+
 	baseResp, baseErr := s.AssetAdministrationShellRegistryAPIAPIService.PutAssetAdministrationShellDescriptorById(
 		ctx,
 		aasIdentifier,
@@ -102,7 +116,7 @@ func (s *CustomRegistryService) PutAssetAdministrationShellDescriptorById(
 
 	if errResp, err := s.appendGlobalAssetLink(
 		ctx,
-		resolveAASIDForDiscoveryLink(aasIdentifier, assetAdministrationShellDescriptor.Id),
+		decodedAASID,
 		assetAdministrationShellDescriptor.GlobalAssetId,
 		"PutAssetAdministrationShellDescriptorById",
 	); errResp != nil || err != nil {
@@ -113,7 +127,8 @@ func (s *CustomRegistryService) PutAssetAdministrationShellDescriptorById(
 }
 
 // PutSubmodelDescriptorByIdThroughSuperpath executes default PUT behavior for
-// submodel descriptors.
+// submodel descriptors while deactivating strict body-id/path-id mismatch only
+// for Digital Twin Registry.
 //
 // Payload compatibility note:
 //   - Default field is plural "supplementalSemanticIds".
@@ -126,25 +141,26 @@ func (s *CustomRegistryService) PutSubmodelDescriptorByIdThroughSuperpath(
 	submodelIdentifier string,
 	submodelDescriptor model.SubmodelDescriptor,
 ) (model.ImplResponse, error) {
+	decodedSMD, decodeErr := common.DecodeString(submodelIdentifier)
+	if decodeErr != nil {
+		resp := common.NewErrorResponse(
+			decodeErr,
+			http.StatusBadRequest,
+			customRegistryComponentName,
+			"PutSubmodelDescriptorByIdThroughSuperpath",
+			"BadRequest-DecodeSubmodel",
+		)
+		return resp, nil
+	}
+	// DTR customization: path id wins, so base strict-check remains bypassed only here.
+	submodelDescriptor.Id = decodedSMD
+
 	return s.AssetAdministrationShellRegistryAPIAPIService.PutSubmodelDescriptorByIdThroughSuperpath(
 		ctx,
 		aasIdentifier,
 		submodelIdentifier,
 		submodelDescriptor,
 	)
-}
-
-func resolveAASIDForDiscoveryLink(aasIdentifier string, payloadAASID string) string {
-	if strings.TrimSpace(payloadAASID) != "" {
-		return payloadAASID
-	}
-
-	decodedAASID, decodeErr := common.DecodeString(aasIdentifier)
-	if decodeErr != nil {
-		return ""
-	}
-
-	return decodedAASID
 }
 
 func (s *CustomRegistryService) appendGlobalAssetLink(
