@@ -259,86 +259,72 @@
         "expectedStatus": 400
     },
     {
-        "context": "035 - List Infrastructure Descriptors (Filter Endpoint Interface) - GET /companies?endpointInterface=AAS-REGISTRY-3.0",
-        "method": "GET",
-        "endpoint": "http://127.0.0.1:5004/companies?endpointInterface=AAS-REGISTRY-3.0",
-        "shouldMatch": "expected/infrastructure_descriptors_filter_endpoint_interface.json",
-        "expectedStatus": 200
-    },
-    {
-        "context": "036 - List Infrastructure Descriptors (Filter Name + Filter Endpoint Interface) - GET /companies?name=Fraunhofer IESE&endpointInterface=AAS-REGISTRY-3.0",
-        "method": "GET",
-        "endpoint": "http://127.0.0.1:5004/companies?name=RnJhdW5ob2ZlciBJRVNF&endpointInterface=AAS-REGISTRY-3.0",
-        "shouldMatch": "expected/infrastructure_descriptors_filter_name_and_endpoint_interface.json",
-        "expectedStatus": 200
-    },
-    {
-        "context": "037 - List Infrastructure Descriptors (Filter AssetId) - GET /companies?assetId=https://i.iese.fraunhofer.de/assetId/assets/4711",
+        "context": "035 - List Infrastructure Descriptors (Filter AssetId) - GET /companies?assetId=https://i.iese.fraunhofer.de/assetId/assets/4711",
         "method": "GET",
         "endpoint": "http://127.0.0.1:5004/companies?assetId=aHR0cHM6Ly9pLmllc2UuZnJhdW5ob2Zlci5kZS9hc3NldElkL2Fzc2V0cy80NzEx",
         "shouldMatch": "expected/infrastructure_descriptors_filter_asset_id.json",
         "expectedStatus": 200
     },
     {
-        "context": "038 - List Infrastructure Descriptors (Filter AssetId - No Match)",
+        "context": "036 - List Infrastructure Descriptors (Filter AssetId - No Match)",
         "method": "GET",
         "endpoint": "http://127.0.0.1:5004/companies?assetId=aHR0cHM6Ly9pLmllc2UuZGUvYXNzZXRJZC9hc3NldHMvMjQ2OA",
         "shouldMatch": "expected/empty_paged_result.json",
         "expectedStatus": 200
     },
     {
-        "context": "039 - Delete Infrastructure Descriptor by Domain - DELETE /companies/{domain}",
+        "context": "037 - Delete Infrastructure Descriptor by Domain - DELETE /companies/{domain}",
         "method": "DELETE",
         "endpoint": "http://127.0.0.1:5004/companies/ZXguY29tLjIuZGU",
         "expectedStatus": 204
     },
     {
-        "context": "040 - Delete Infrastructure Descriptor by Domain (Conflict - Not Found) - DELETE /companies/{domain}",
+        "context": "038 - Delete Infrastructure Descriptor by Domain (Conflict - Not Found) - DELETE /companies/{domain}",
         "method": "DELETE",
         "endpoint": "http://127.0.0.1:5004/companies/ZXguY29tLjIuZGU",
         "expectedStatus": 404
     },
     {
-        "context": "041 - Update Infrastructure Descriptor using PUT - PUT /companies/{domain}",
+        "context": "039 - Update Infrastructure Descriptor using PUT - PUT /companies/{domain}",
         "method": "PUT",
         "endpoint": "http://127.0.0.1:5004/companies/ZXguY29tLjEuZGU",
         "data": "postBody/infrastructure_descriptor_5.json",
         "expectedStatus": 204
     },
     {
-        "context": "042 - Get Infrastructure Descriptor by Domain - GET /companies/{domain}",
+        "context": "040 - Get Infrastructure Descriptor by Domain - GET /companies/{domain}",
         "method": "GET",
         "endpoint": "http://127.0.0.1:5004/companies/ZXguY29tLjEuZGU",
         "shouldMatch": "postBody/infrastructure_descriptor_5.json",
         "expectedStatus": 200
     },
     {
-        "context": "043 - Update Infrastructure Descriptor using PUT (Conflict - Domain Mismatch) - PUT /companies/{domain}",
+        "context": "041 - Update Infrastructure Descriptor using PUT (Conflict - Domain Mismatch) - PUT /companies/{domain}",
         "method": "PUT",
         "endpoint": "http://127.0.0.1:5004/companies/ZXguY29tLjEuZGUubm90",
         "data": "postBody/infrastructure_descriptor_5.json",
         "expectedStatus": 400
     },
     {
-        "context": "044 - Update Infrastructure Descriptor using PUT (Conflict - Nonexistent Domain) - PUT /companies/{domain}",
+        "context": "042 - Update Infrastructure Descriptor using PUT (Conflict - Nonexistent Domain) - PUT /companies/{domain}",
         "method": "PUT",
         "endpoint": "http://127.0.0.1:5004/companies/ZXguY29tLjQuZGU",
         "data": "postBody/infrastructure_descriptor_6.json",
         "expectedStatus": 404
     },
     {
-        "context": "045 - Cleanup: Delete All AAS Descriptors - ACTION DELETE_ALL_INFRASTRUCTURE_DESCRIPTORS",
+        "context": "043 - Cleanup: Delete All AAS Descriptors - ACTION DELETE_ALL_INFRASTRUCTURE_DESCRIPTORS",
         "action": "DELETE_ALL_INFRASTRUCTURE_DESCRIPTORS"
     },
     {
-        "context": "046 - Verify that Cleanup has worked - GET /companies",
+        "context": "044 - Verify that Cleanup has worked - GET /companies",
         "method": "GET",
         "endpoint": "http://127.0.0.1:5004/companies",
         "shouldMatch": "expected/empty_paged_result.json",
         "expectedStatus": 200
     },
     {
-        "context": "047 - Verify database is empty - ACTION CHECK_DB_IS_EMPTY",
+        "context": "045 - Verify database is empty - ACTION CHECK_DB_IS_EMPTY",
         "action": "CHECK_DB_IS_EMPTY"
     }
 ]

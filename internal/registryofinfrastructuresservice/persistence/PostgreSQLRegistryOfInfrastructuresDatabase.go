@@ -122,10 +122,9 @@ func (p *PostgreSQLRegistryOfInfrastructuresDatabase) ListInfrastructureDescript
 	limit int32,
 	cursor string,
 	name string,
-	endpointInterface string,
 	assetID string,
 ) ([]model.InfrastructureDescriptor, string, error) {
-	return descriptors.ListInfrastructureDescriptors(ctx, p.db, limit, cursor, name, endpointInterface, assetID)
+	return descriptors.ListInfrastructureDescriptors(ctx, p.db, limit, cursor, name, assetID)
 }
 
 // ExistsInfrastructureByID reports whether an Infrastructure with the given ID exists.

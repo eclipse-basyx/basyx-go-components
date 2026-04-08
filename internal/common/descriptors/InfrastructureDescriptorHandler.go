@@ -460,7 +460,7 @@ func ReplaceInfrastructureDescriptor(ctx context.Context, db *sql.DB, infrastruc
 }
 
 // ListInfrastructureDescriptors lists Infrastructure Descriptors with optional
-// filtering by name, endpoint interface and assetId regex matching.
+// filtering by name and assetId regex matching.
 // Results are ordered by Infrastructure Id ascending and support
 // cursor‑based pagination where the cursor is the Infrastructure Id
 // of the first element to include (i.e. Id >= cursor).
@@ -476,7 +476,6 @@ func ListInfrastructureDescriptors(
 	limit int32,
 	cursor string,
 	name string,
-	endpointInterface string,
 	assetID string,
 ) ([]model.InfrastructureDescriptor, string, error) {
 	if limit <= 0 {
@@ -487,7 +486,6 @@ func ListInfrastructureDescriptors(
 	d := goqu.Dialect(common.Dialect)
 	inf := goqu.T(common.TblInfrastructureDescriptor).As("inf")
 	payload := common.TDescriptorPayload.As("inf_payload")
-	aasdescendp := goqu.T(common.TblAASDescriptorEndpoint).As("aasdescendp")
 	infNameOpt := goqu.T(common.TblInfrastructureDescriptorNameOption).As("inf_name_opt")
 	assetIdPattern := goqu.T(common.TblInfrastructureDescriptorAssetIDRegex).As("inf_asset_id_pattern")
 
@@ -529,17 +527,6 @@ func ListInfrastructureDescriptors(
 					infNameOpt.Col(common.ColDescriptorID).IsNotNull(),
 				),
 			)
-	}
-
-	if endpointInterface != "" {
-		ds = ds.
-			LeftJoin(
-				aasdescendp,
-				goqu.On(
-					inf.Col(common.ColDescriptorID).Eq(aasdescendp.Col(common.ColDescriptorID)),
-				),
-			).
-			Where(aasdescendp.Col(common.ColInterface).Eq(endpointInterface))
 	}
 
 	if strings.TrimSpace(assetID) != "" {
