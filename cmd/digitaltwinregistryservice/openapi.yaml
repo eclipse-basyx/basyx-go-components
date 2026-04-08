@@ -14,9 +14,6 @@ info:
     - POST /shell-descriptors and PUT /shell-descriptors/{aasIdentifier} also append a
       discovery link from globalAssetId (stored as specific asset id name "globalAssetId")
       when globalAssetId is present in the descriptor.
-    - PUT /shell-descriptors/{aasIdentifier} and PUT
-      /shell-descriptors/{aasIdentifier}/submodel-descriptors/{submodelIdentifier} use
-      path identifiers as source of truth (path id wins over request body id).
     - SubmodelDescriptor input uses "supplementalSemanticIds" (plural) by default.
       Singular "supplementalSemanticId" compatibility can be enabled via
       general.supportsSingularSupplementalSemanticId (env:
@@ -194,7 +191,6 @@ paths:
       description: |-
         DTR extension:
 
-        - Path identifier is authoritative and overwrites descriptor.id from request body.
         - If globalAssetId is present, the service additionally appends a discovery entry
           as specific asset id (name "globalAssetId") for the shell.
       operationId: PutAssetAdministrationShellDescriptorById
@@ -331,9 +327,6 @@ paths:
       tags:
         - Asset Administration Shell Registry API
       summary: Creates or updates an existing Submodel Descriptor
-      description: >-
-        DTR extension: path identifier is authoritative and overwrites
-        submodelDescriptor.id from request body.
       operationId: PutSubmodelDescriptorByIdThroughSuperpath
       x-semanticIds:
         - https://admin-shell.io/aas/API/PutSubmodelDescriptorById/3/1
