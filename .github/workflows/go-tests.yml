@@ -372,8 +372,8 @@ jobs:
           cd internal/smregistry/integration_tests
           go test -v
 
-  registry-of-infrastructures-integration-tests:
-    name: Registry of Infrastructures Integration Tests
+  company-lookup-integration-tests:
+    name: Company Lookup Integration Tests
     runs-on: ubuntu-latest
     steps:
       - name: Check out code
@@ -387,9 +387,9 @@ jobs:
       - name: Get dependencies
         run: go mod download
 
-      - name: Run registry of infrastructures integration tests
+      - name: Run company lookup integration tests
         run: |
-          cd internal/registryofinfrastructuresservice/integration_tests
+          cd internal/companylookupservice/integration_tests
           go test -v
 
   submodel-registry-security-tests:

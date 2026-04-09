@@ -197,17 +197,17 @@ func (s *CompanyLookupAPIService) PostCompanyDescriptor(ctx context.Context, com
 }
 
 // GetCompanyDescriptorById returns a specific company descriptor.
-func (s *CompanyLookupAPIService) GetCompanyDescriptorById(ctx context.Context, infrastructureIdentifier string) (model.ImplResponse, error) {
-	decoded, decodeErr := common.DecodeString(infrastructureIdentifier)
+func (s *CompanyLookupAPIService) GetCompanyDescriptorById(ctx context.Context, companyIdentifier string) (model.ImplResponse, error) {
+	decoded, decodeErr := common.DecodeString(companyIdentifier)
 	if decodeErr != nil {
-		log.Printf("📍 [%s] Error in GetCompanyDescriptorById: decode infrastructureIdentifier=%q: %v", componentName, infrastructureIdentifier, decodeErr)
+		log.Printf("📍 [%s] Error in GetCompanyDescriptorById: decode companyIdentifier=%q: %v", componentName, companyIdentifier, decodeErr)
 		return common.NewErrorResponse(
 			decodeErr, http.StatusBadRequest, componentName, "GetCompanyDescriptorById", "BadRequest-Decode",
 		), nil
 	}
 	if !model.IsStrictCompanyDomain(decoded) {
 		invalidDomainErr := common.NewErrBadRequest("COMLOOKUP-GETCOMPANYDESCRIPTORBYID-VALIDATEDOMAIN decoded identifier is not a syntactically valid domain")
-		log.Printf("📍 [%s] Error in GetCompanyDescriptorById: invalid decoded domain syntax (infrastructureIdentifier=%q decoded=%q)", componentName, infrastructureIdentifier, decoded)
+		log.Printf("📍 [%s] Error in GetCompanyDescriptorById: invalid decoded domain syntax (companyIdentifier=%q decoded=%q)", componentName, companyIdentifier, decoded)
 		return common.NewErrorResponse(
 			invalidDomainErr, http.StatusBadRequest, componentName, "GetCompanyDescriptorById", "BadRequest-InvalidDomainSyntax",
 		), nil
@@ -246,18 +246,18 @@ func (s *CompanyLookupAPIService) GetCompanyDescriptorById(ctx context.Context, 
 }
 
 // PutCompanyDescriptorById updates an existing company descriptor.
-func (s *CompanyLookupAPIService) PutCompanyDescriptorById(ctx context.Context, infrastructureIdentifier string, companyDescriptor model.CompanyDescriptor) (model.ImplResponse, error) {
+func (s *CompanyLookupAPIService) PutCompanyDescriptorById(ctx context.Context, companyIdentifier string, companyDescriptor model.CompanyDescriptor) (model.ImplResponse, error) {
 	// Decode path AAS id
-	decodedInfrastructure, decErr := common.DecodeString(infrastructureIdentifier)
+	decodedCompany, decErr := common.DecodeString(companyIdentifier)
 	if decErr != nil {
-		log.Printf("📍 [%s] Error in PutCompanyDescriptorById: decode infrastructureIdentifier=%q: %v", componentName, infrastructureIdentifier, decErr)
+		log.Printf("📍 [%s] Error in PutCompanyDescriptorById: decode companyIdentifier=%q: %v", componentName, companyIdentifier, decErr)
 		return common.NewErrorResponse(
 			decErr, http.StatusBadRequest, componentName, "PutCompanyDescriptorById", "BadRequest-Decode",
 		), nil
 	}
-	if !model.IsStrictCompanyDomain(decodedInfrastructure) {
+	if !model.IsStrictCompanyDomain(decodedCompany) {
 		invalidDomainErr := common.NewErrBadRequest("COMLOOKUP-PUTCOMPANYDESCRIPTORBYID-VALIDATEDOMAIN decoded identifier is not a syntactically valid domain")
-		log.Printf("📍 [%s] Error in PutCompanyDescriptorById: invalid decoded domain syntax (infrastructureIdentifier=%q decoded=%q)", componentName, infrastructureIdentifier, decodedInfrastructure)
+		log.Printf("📍 [%s] Error in PutCompanyDescriptorById: invalid decoded domain syntax (companyIdentifier=%q decoded=%q)", componentName, companyIdentifier, decodedCompany)
 		return common.NewErrorResponse(
 			invalidDomainErr, http.StatusBadRequest, componentName, "PutCompanyDescriptorById", "BadRequest-InvalidDomainSyntax",
 		), nil
@@ -265,9 +265,9 @@ func (s *CompanyLookupAPIService) PutCompanyDescriptorById(ctx context.Context, 
 
 	// Enforce domain consistency with path.
 	if strings.TrimSpace(companyDescriptor.Domain) == "" {
-		companyDescriptor.Domain = decodedInfrastructure
-	} else if companyDescriptor.Domain != decodedInfrastructure {
-		log.Printf("📍 [%s] Error in PutCompanyDescriptorById: body domain does not match path domain (body=%q path=%q)", componentName, companyDescriptor.Domain, decodedInfrastructure)
+		companyDescriptor.Domain = decodedCompany
+	} else if companyDescriptor.Domain != decodedCompany {
+		log.Printf("📍 [%s] Error in PutCompanyDescriptorById: body domain does not match path domain (body=%q path=%q)", componentName, companyDescriptor.Domain, decodedCompany)
 		return common.NewErrorResponse(
 			errors.New("body domain does not match path domain"), http.StatusBadRequest, componentName, "PutCompanyDescriptorById", "BadRequest-DomainMismatch",
 		), nil
@@ -290,17 +290,17 @@ func (s *CompanyLookupAPIService) PutCompanyDescriptorById(ctx context.Context, 
 	if err != nil {
 		switch {
 		case common.IsErrBadRequest(err):
-			log.Printf("📍 [%s] Error in PutCompanyDescriptorById: bad request (companyId=%q): %v", componentName, decodedInfrastructure, err)
+			log.Printf("📍 [%s] Error in PutCompanyDescriptorById: bad request (companyId=%q): %v", componentName, decodedCompany, err)
 			return common.NewErrorResponse(
 				err, http.StatusBadRequest, componentName, "PutCompanyDescriptorById", "BadRequest",
 			), nil
 		case common.IsErrConflict(err):
-			log.Printf("📍 [%s] Error in PutCompanyDescriptorById: conflict (companyId=%q): %v", componentName, decodedInfrastructure, err)
+			log.Printf("📍 [%s] Error in PutCompanyDescriptorById: conflict (companyId=%q): %v", componentName, decodedCompany, err)
 			return common.NewErrorResponse(
 				err, http.StatusConflict, componentName, "PutCompanyDescriptorById", "Conflict",
 			), nil
 		default:
-			log.Printf("📍 [%s] Error in PutCompanyDescriptorById: internal (companyId=%q): %v", componentName, decodedInfrastructure, err)
+			log.Printf("📍 [%s] Error in PutCompanyDescriptorById: internal (companyId=%q): %v", componentName, decodedCompany, err)
 			return common.NewErrorResponse(
 				err, http.StatusInternalServerError, componentName, "PutCompanyDescriptorById", "Unhandled-Insert",
 			), err
@@ -319,17 +319,17 @@ func (s *CompanyLookupAPIService) PutCompanyDescriptorById(ctx context.Context, 
 }
 
 // DeleteCompanyDescriptorById deletes a company descriptor.
-func (s *CompanyLookupAPIService) DeleteCompanyDescriptorById(ctx context.Context, infrastructureIdentifier string) (model.ImplResponse, error) {
-	decoded, decodeErr := common.DecodeString(infrastructureIdentifier)
+func (s *CompanyLookupAPIService) DeleteCompanyDescriptorById(ctx context.Context, companyIdentifier string) (model.ImplResponse, error) {
+	decoded, decodeErr := common.DecodeString(companyIdentifier)
 	if decodeErr != nil {
-		log.Printf("📍 [%s] Error DeleteCompanyDescriptorById: decode infrastructureIdentifier=%q failed: %v", componentName, infrastructureIdentifier, decodeErr)
+		log.Printf("📍 [%s] Error DeleteCompanyDescriptorById: decode companyIdentifier=%q failed: %v", componentName, companyIdentifier, decodeErr)
 		return common.NewErrorResponse(
 			decodeErr, http.StatusBadRequest, componentName, "DeleteCompanyDescriptorById", "BadRequest-Decode",
 		), nil
 	}
 	if !model.IsStrictCompanyDomain(decoded) {
 		invalidDomainErr := common.NewErrBadRequest("COMLOOKUP-DELETECOMPANYDESCRIPTORBYID-VALIDATEDOMAIN decoded identifier is not a syntactically valid domain")
-		log.Printf("📍 [%s] Error in DeleteCompanyDescriptorById: invalid decoded domain syntax (infrastructureIdentifier=%q decoded=%q)", componentName, infrastructureIdentifier, decoded)
+		log.Printf("📍 [%s] Error in DeleteCompanyDescriptorById: invalid decoded domain syntax (companyIdentifier=%q decoded=%q)", componentName, companyIdentifier, decoded)
 		return common.NewErrorResponse(
 			invalidDomainErr, http.StatusBadRequest, componentName, "DeleteCompanyDescriptorById", "BadRequest-InvalidDomainSyntax",
 		), nil
