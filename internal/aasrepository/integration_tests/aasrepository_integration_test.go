@@ -439,6 +439,31 @@ func TestThumbnailAttachmentOperations(t *testing.T) {
 	})
 }
 
+func TestContractThumbnailGetUsesApplicationOctetStream(t *testing.T) {
+	baseURL := "http://localhost:6004"
+	aasID := fmt.Sprintf("https://example.com/ids/aas/thumbnail_contract_%d", time.Now().UnixNano())
+	aasIdentifier := base64.RawURLEncoding.EncodeToString([]byte(aasID))
+	thumbnailEndpoint := fmt.Sprintf("%s/shells/%s/asset-information/thumbnail", baseURL, aasIdentifier)
+
+	statusCode, err := createAASForThumbnailTest(baseURL, aasID)
+	require.NoError(t, err, "AAS creation failed")
+	require.Equal(t, http.StatusCreated, statusCode, "Expected 201 Created for AAS creation")
+
+	tempFilePath := filepath.Join(t.TempDir(), "contract-thumbnail.bin")
+	expectedContent := []byte("PNGDATA")
+	require.NoError(t, os.WriteFile(tempFilePath, expectedContent, 0o600), "Failed to create temporary thumbnail file")
+
+	uploadStatusCode, uploadErr := uploadThumbnail(thumbnailEndpoint, tempFilePath, "contract-thumbnail.bin")
+	require.NoError(t, uploadErr, "Thumbnail upload failed")
+	require.Equal(t, http.StatusNoContent, uploadStatusCode, "Expected 204 No Content for thumbnail upload")
+
+	content, contentType, getStatusCode, getErr := downloadThumbnail(thumbnailEndpoint)
+	require.NoError(t, getErr, "Thumbnail download failed")
+	require.Equal(t, http.StatusOK, getStatusCode, "Expected 200 OK for thumbnail download")
+	assert.Equal(t, expectedContent, content, "Downloaded thumbnail content should match uploaded payload")
+	assert.Equal(t, "application/octet-stream", contentType, "Thumbnail GET content type must match API contract")
+}
+
 // TestMain handles setup and teardown
 func TestMain(m *testing.M) {
 	if os.Getenv("BASYX_EXTERNAL_COMPOSE") == "1" {
