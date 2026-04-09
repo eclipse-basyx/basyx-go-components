@@ -415,7 +415,7 @@ func TestTemporalXSDRoundTripFormatting(t *testing.T) {
 	})
 }
 
-func TestContractSubmodelRepositoryKnownIssues(t *testing.T) {
+func TestContractSubmodelRepository(t *testing.T) {
 	baseURL := "http://localhost:6004"
 
 	createSubmodel := func(t *testing.T, submodelID string, submodelIDShort string) string {
