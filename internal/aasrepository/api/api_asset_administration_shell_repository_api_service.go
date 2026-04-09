@@ -317,9 +317,18 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) GetThumbnailAasReposit
 		return gen.Response(http.StatusFound, openapi.Redirect{Location: thumbnailPath}), nil
 	}
 
+	resolvedContentType := strings.TrimSpace(contentType)
+	if resolvedContentType == "" {
+		if len(fileContent) > 0 {
+			resolvedContentType = http.DetectContentType(fileContent)
+		} else {
+			resolvedContentType = "application/octet-stream"
+		}
+	}
+
 	return gen.Response(http.StatusOK, openapi.FileDownload{
 		Content:     fileContent,
-		ContentType: contentType,
+		ContentType: resolvedContentType,
 		Filename:    fileName,
 	}), nil
 }
