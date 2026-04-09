@@ -350,7 +350,7 @@ func (b *ConceptDescriptionBackend) GetConceptDescriptions(ctx context.Context, 
 
 	for rows.Next() {
 		var identifier string
-		var idShortValue string
+		var idShortValue sql.NullString
 		var data string
 		if scanErr := rows.Scan(&identifier, &idShortValue, &data); scanErr != nil {
 			return nil, "", fmt.Errorf("CDREPO-GCDS-SCANROW failed to scan row: %w", scanErr)
