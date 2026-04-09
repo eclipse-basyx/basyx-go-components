@@ -34,7 +34,7 @@ import (
 	"github.com/lib/pq"
 )
 
-func createInfrastructureNameOptions(tx *sql.Tx, descriptorID int64, nameOptions []string) error {
+func createCompanyNameOptions(tx *sql.Tx, descriptorID int64, nameOptions []string) error {
 	if len(nameOptions) == 0 {
 		return nil
 	}
@@ -42,7 +42,7 @@ func createInfrastructureNameOptions(tx *sql.Tx, descriptorID int64, nameOptions
 	d := goqu.Dialect(common.Dialect)
 	for i, option := range nameOptions {
 		sqlStr, args, err := d.
-			Insert(common.TblInfrastructureDescriptorNameOption).
+			Insert(common.TblCompanyDescriptorNameOption).
 			Rows(goqu.Record{
 				common.ColDescriptorID: descriptorID,
 				common.ColPosition:     i,
@@ -60,22 +60,22 @@ func createInfrastructureNameOptions(tx *sql.Tx, descriptorID int64, nameOptions
 	return nil
 }
 
-func readInfrastructureNameOptionsByDescriptorID(ctx context.Context, db DBQueryer, descriptorID int64) ([]string, error) {
-	byDescriptor, err := readInfrastructureNameOptionsByDescriptorIDs(ctx, db, []int64{descriptorID})
+func readCompanyNameOptionsByDescriptorID(ctx context.Context, db DBQueryer, descriptorID int64) ([]string, error) {
+	byDescriptor, err := readCompanyNameOptionsByDescriptorIDs(ctx, db, []int64{descriptorID})
 	if err != nil {
 		return nil, err
 	}
 	return byDescriptor[descriptorID], nil
 }
 
-func readInfrastructureNameOptionsByDescriptorIDs(ctx context.Context, db DBQueryer, descriptorIDs []int64) (map[int64][]string, error) {
+func readCompanyNameOptionsByDescriptorIDs(ctx context.Context, db DBQueryer, descriptorIDs []int64) (map[int64][]string, error) {
 	result := make(map[int64][]string, len(descriptorIDs))
 	if len(descriptorIDs) == 0 {
 		return result, nil
 	}
 
 	d := goqu.Dialect(common.Dialect)
-	nameOpt := goqu.T(common.TblInfrastructureDescriptorNameOption).As("inf_name_opt")
+	nameOpt := goqu.T(common.TblCompanyDescriptorNameOption).As("comp_name_opt")
 	arr := pq.Array(descriptorIDs)
 
 	sqlStr, args, err := d.

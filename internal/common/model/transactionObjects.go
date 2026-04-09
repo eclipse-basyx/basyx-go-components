@@ -573,12 +573,12 @@ type SubmodelDescriptorRow struct {
 	DisplayNamePayload        json.RawMessage
 }
 
-// InfrastructureDescriptorRow represents a single SQL result row for a
-// Infrastructure descriptor. It carries nullable string/integer columns
+// CompanyDescriptorRow represents a single SQL result row for a
+// Company descriptor. It carries nullable string/integer columns
 // from the database and foreign-key references to related records
 // such as registry administrative information, display names, and
 // descriptions.
-type InfrastructureDescriptorRow struct {
+type CompanyDescriptorRow struct {
 	DescID                    int64
 	GlobalAssetID             sql.NullString
 	IDShort                   sql.NullString

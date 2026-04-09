@@ -9,7 +9,7 @@
  * Contact: info@idtwin.org
  */
 
-package registryofinfrastructuresapi
+package companylookupapi
 
 import (
 	"encoding/json"

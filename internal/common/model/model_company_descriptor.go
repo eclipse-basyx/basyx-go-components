@@ -13,7 +13,7 @@ import (
 	jsoniter "github.com/json-iterator/go"
 )
 
-var allowedInfrastructureEndpointInterfaces = map[string]struct{}{
+var allowedCompanyEndpointInterfaces = map[string]struct{}{
 	"AAS-DISCOVERY-3.0":       {},
 	"AAS-DISCOVERY-3.1":       {},
 	"AAS-REGISTRY-3.0":        {},
@@ -29,7 +29,7 @@ var allowedInfrastructureEndpointInterfaces = map[string]struct{}{
 	"MQTT-BROKER-3.1.1":       {},
 }
 
-var requiredCoreInfrastructureEndpointInterfaces = map[string]struct{}{
+var requiredCoreCompanyEndpointInterfaces = map[string]struct{}{
 	"AAS-DISCOVERY-3.0":       {},
 	"AAS-DISCOVERY-3.1":       {},
 	"AAS-REGISTRY-3.0":        {},
@@ -44,42 +44,42 @@ var requiredCoreInfrastructureEndpointInterfaces = map[string]struct{}{
 	"AASX-FILE-3.1":           {},
 }
 
-// InfrastructureEndpointInterfaceConstraintError indicates that endpoint interface
-// values violate the infrastructure descriptor interface policy.
-type InfrastructureEndpointInterfaceConstraintError struct {
+// CompanyEndpointInterfaceConstraintError indicates that endpoint interface
+// values violate the company descriptor interface policy.
+type CompanyEndpointInterfaceConstraintError struct {
 	Message string
 }
 
-func (e *InfrastructureEndpointInterfaceConstraintError) Error() string {
+func (e *CompanyEndpointInterfaceConstraintError) Error() string {
 	return e.Message
 }
 
-// IsInfrastructureEndpointInterfaceConstraintError reports whether err is caused by
+// IsCompanyEndpointInterfaceConstraintError reports whether err is caused by
 // invalid endpoint interface values or a missing required core interface.
-func IsInfrastructureEndpointInterfaceConstraintError(err error) bool {
-	var target *InfrastructureEndpointInterfaceConstraintError
+func IsCompanyEndpointInterfaceConstraintError(err error) bool {
+	var target *CompanyEndpointInterfaceConstraintError
 	return errors.As(err, &target)
 }
 
-func validateInfrastructureEndpointInterfaces(endpoints []Endpoint) error {
+func validateCompanyEndpointInterfaces(endpoints []Endpoint) error {
 	hasRequiredCoreInterface := false
 
 	for i, el := range endpoints {
 		interfaceName := strings.TrimSpace(el.Interface)
 
-		if _, ok := allowedInfrastructureEndpointInterfaces[interfaceName]; !ok {
-			return &InfrastructureEndpointInterfaceConstraintError{
+		if _, ok := allowedCompanyEndpointInterfaces[interfaceName]; !ok {
+			return &CompanyEndpointInterfaceConstraintError{
 				Message: fmt.Sprintf("endpoints[%d].interface %q is not allowed", i, el.Interface),
 			}
 		}
 
-		if _, ok := requiredCoreInfrastructureEndpointInterfaces[interfaceName]; ok {
+		if _, ok := requiredCoreCompanyEndpointInterfaces[interfaceName]; ok {
 			hasRequiredCoreInterface = true
 		}
 	}
 
 	if !hasRequiredCoreInterface {
-		return &InfrastructureEndpointInterfaceConstraintError{
+		return &CompanyEndpointInterfaceConstraintError{
 			Message: "endpoints must contain at least one required core interface",
 		}
 	}
@@ -87,7 +87,7 @@ func validateInfrastructureEndpointInterfaces(endpoints []Endpoint) error {
 	return nil
 }
 
-func IsStrictInfrastructureDomain(domain string) bool {
+func IsStrictCompanyDomain(domain string) bool {
 	domain = strings.TrimSpace(domain)
 	if domain == "" || strings.HasPrefix(domain, ".") || strings.HasSuffix(domain, ".") {
 		return false
@@ -102,7 +102,7 @@ func IsStrictInfrastructureDomain(domain string) bool {
 	}
 
 	for _, label := range labels {
-		if !isValidInfrastructureDomainLabel(label) {
+		if !isValidCompanyDomainLabel(label) {
 			return false
 		}
 	}
@@ -116,7 +116,7 @@ func IsStrictInfrastructureDomain(domain string) bool {
 	return true
 }
 
-func isValidInfrastructureDomainLabel(label string) bool {
+func isValidCompanyDomainLabel(label string) bool {
 	if len(label) == 0 || len(label) > 63 {
 		return false
 	}
@@ -136,7 +136,7 @@ func isValidInfrastructureDomainLabel(label string) bool {
 	return true
 }
 
-type InfrastructureDescriptor struct {
+type CompanyDescriptor struct {
 	Description []types.ILangStringTextType `json:"description,omitempty"`
 
 	DisplayName []types.ILangStringNameType `json:"displayName,omitempty"`
@@ -158,8 +158,8 @@ type InfrastructureDescriptor struct {
 	AssetIdRegexPatterns []string `json:"assetIdRegexPatterns,omitempty"`
 }
 
-// AssertInfrastructureDescriptorRequired checks if the required fields are not zero-ed
-func AssertInfrastructureDescriptorRequired(obj InfrastructureDescriptor) error {
+// AssertCompanyDescriptorRequired checks if the required fields are not zero-ed
+func AssertCompanyDescriptorRequired(obj CompanyDescriptor) error {
 	if strings.TrimSpace(obj.Domain) == "" {
 		return &RequiredError{Field: "domain"}
 	}
@@ -177,9 +177,9 @@ func AssertInfrastructureDescriptorRequired(obj InfrastructureDescriptor) error 
 	return nil
 }
 
-// AssertInfrastructureDescriptorConstraints checks if the values respects the defined constraints
-func AssertInfrastructureDescriptorConstraints(obj InfrastructureDescriptor) error {
-	if strings.TrimSpace(obj.Domain) != "" && !IsStrictInfrastructureDomain(obj.Domain) {
+// AssertCompanyDescriptorConstraints checks if the values respects the defined constraints
+func AssertCompanyDescriptorConstraints(obj CompanyDescriptor) error {
+	if strings.TrimSpace(obj.Domain) != "" && !IsStrictCompanyDomain(obj.Domain) {
 		return fmt.Errorf("domain %q is not a syntactically valid domain", obj.Domain)
 	}
 
@@ -189,7 +189,7 @@ func AssertInfrastructureDescriptorConstraints(obj InfrastructureDescriptor) err
 		}
 	}
 
-	if err := validateInfrastructureEndpointInterfaces(obj.Endpoints); err != nil {
+	if err := validateCompanyEndpointInterfaces(obj.Endpoints); err != nil {
 		return err
 	}
 
@@ -217,7 +217,7 @@ func AssertInfrastructureDescriptorConstraints(obj InfrastructureDescriptor) err
 	return nil
 }
 
-func (obj InfrastructureDescriptor) ToJsonable() (map[string]any, error) {
+func (obj CompanyDescriptor) ToJsonable() (map[string]any, error) {
 	// Marshal every AAS GO SDK Type
 	ret := make(map[string]any)
 	// Description
@@ -282,7 +282,7 @@ func (obj InfrastructureDescriptor) ToJsonable() (map[string]any, error) {
 
 // UnmarshalJSON implements custom unmarshaling for SubmodelDescriptor
 // It handles the FromJsonable Unmarshalling of the aas-go-sdk types
-func (obj *InfrastructureDescriptor) UnmarshalJSON(data []byte) error {
+func (obj *CompanyDescriptor) UnmarshalJSON(data []byte) error {
 	var json = jsoniter.ConfigCompatibleWithStandardLibrary
 	var jsonable map[string]any
 	if err := json.Unmarshal(data, &jsonable); err != nil {
@@ -314,7 +314,7 @@ func (obj *InfrastructureDescriptor) UnmarshalJSON(data []byte) error {
 		for _, desc := range descs {
 			descMap, ok := desc.(map[string]any)
 			if !ok {
-				return errors.New("InfrastructureDescriptor: description is not a map")
+				return errors.New("CompanyDescriptor: description is not a map")
 			}
 			var langString types.ILangStringTextType
 			langString, err := jsonization.LangStringTextTypeFromJsonable(descMap)
@@ -330,7 +330,7 @@ func (obj *InfrastructureDescriptor) UnmarshalJSON(data []byte) error {
 		for _, dn := range dns {
 			dnMap, ok := dn.(map[string]any)
 			if !ok {
-				return errors.New("InfrastructureDescriptor: displayName is not a map")
+				return errors.New("CompanyDescriptor: displayName is not a map")
 			}
 			var langString types.ILangStringNameType
 			langString, err := jsonization.LangStringNameTypeFromJsonable(dnMap)
@@ -346,7 +346,7 @@ func (obj *InfrastructureDescriptor) UnmarshalJSON(data []byte) error {
 		for _, ep := range eps {
 			epMap, ok := ep.(map[string]any)
 			if !ok {
-				return errors.New("InfrastructureDescriptor: endpoint is not a map")
+				return errors.New("CompanyDescriptor: endpoint is not a map")
 			}
 			var endpoint Endpoint
 			endpointBytes, err := json.Marshal(epMap)
@@ -384,7 +384,7 @@ func (obj *InfrastructureDescriptor) UnmarshalJSON(data []byte) error {
 		for i, rawOption := range options {
 			option, ok := rawOption.(string)
 			if !ok {
-				return fmt.Errorf("InfrastructureDescriptor: nameOptions[%d] is not a string", i)
+				return fmt.Errorf("CompanyDescriptor: nameOptions[%d] is not a string", i)
 			}
 			obj.NameOptions = append(obj.NameOptions, option)
 		}
@@ -393,7 +393,7 @@ func (obj *InfrastructureDescriptor) UnmarshalJSON(data []byte) error {
 		for i, rawPattern := range patterns {
 			pattern, ok := rawPattern.(string)
 			if !ok {
-				return fmt.Errorf("InfrastructureDescriptor: assetIdRegexPatterns[%d] is not a string", i)
+				return fmt.Errorf("CompanyDescriptor: assetIdRegexPatterns[%d] is not a string", i)
 			}
 			obj.AssetIdRegexPatterns = append(obj.AssetIdRegexPatterns, pattern)
 		}
@@ -408,7 +408,7 @@ func (obj *InfrastructureDescriptor) UnmarshalJSON(data []byte) error {
 		})
 
 		if len(validationErrors) > 0 {
-			return errors.New("InfrastructureDescriptor: Description verification failed: " + validationErrors[0])
+			return errors.New("CompanyDescriptor: Description verification failed: " + validationErrors[0])
 		}
 	}
 
@@ -421,7 +421,7 @@ func (obj *InfrastructureDescriptor) UnmarshalJSON(data []byte) error {
 		})
 
 		if len(validationErrors) > 0 {
-			return errors.New("InfrastructureDescriptor: DisplayName verification failed: " + validationErrors[0])
+			return errors.New("CompanyDescriptor: DisplayName verification failed: " + validationErrors[0])
 		}
 	}
 
@@ -433,7 +433,7 @@ func (obj *InfrastructureDescriptor) UnmarshalJSON(data []byte) error {
 			return false // Continue collecting all errors
 		})
 		if len(validationErrors) > 0 {
-			return errors.New("InfrastructureDescriptor: Administration verification failed: " + validationErrors[0])
+			return errors.New("CompanyDescriptor: Administration verification failed: " + validationErrors[0])
 		}
 	}
 

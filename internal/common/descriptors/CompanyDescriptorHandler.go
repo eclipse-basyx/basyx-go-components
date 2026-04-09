@@ -37,7 +37,7 @@ import (
 	"github.com/lib/pq"
 )
 
-// InsertInfrastructureDescriptor creates a new InfrastructureDescriptor
+// InsertCompanyDescriptor creates a new CompanyDescriptor
 // and all its related entities (display name, description,
 // administration, and endpoints).
 //
@@ -47,41 +47,41 @@ import (
 // Parameters:
 //   - ctx: request context used for cancellation/deadlines
 //   - db:  open SQL database handle
-//   - infrastructureDescriptor: descriptor to persist
+//   - companyDescriptor: descriptor to persist
 //
 // Returns an error when SQL building/execution fails or when writing any of the
 // dependent rows fails. Errors are wrapped into common errors where relevant.
-func InsertInfrastructureDescriptor(ctx context.Context, db *sql.DB, infrastructureDescriptor model.InfrastructureDescriptor) (model.InfrastructureDescriptor, error) {
+func InsertCompanyDescriptor(ctx context.Context, db *sql.DB, companyDescriptor model.CompanyDescriptor) (model.CompanyDescriptor, error) {
 	tx, err := db.BeginTx(ctx, nil)
 	if err != nil {
-		return model.InfrastructureDescriptor{}, common.NewInternalServerError("Failed to start postgres transaction. See console for information.")
+		return model.CompanyDescriptor{}, common.NewInternalServerError("Failed to start postgres transaction. See console for information.")
 	}
 	defer func() {
 		if rec := recover(); rec != nil {
 			_ = tx.Rollback()
 		}
 	}()
-	if err = InsertInfrastructureDescriptorTx(ctx, tx, infrastructureDescriptor); err != nil {
+	if err = InsertCompanyDescriptorTx(ctx, tx, companyDescriptor); err != nil {
 		_ = tx.Rollback()
-		return model.InfrastructureDescriptor{}, err
+		return model.CompanyDescriptor{}, err
 	}
-	result, err := GetInfrastructureDescriptorByIDTx(ctx, tx, infrastructureDescriptor.Domain)
+	result, err := GetCompanyDescriptorByIDTx(ctx, tx, companyDescriptor.Domain)
 	if err != nil {
 		_ = tx.Rollback()
-		return model.InfrastructureDescriptor{}, err
+		return model.CompanyDescriptor{}, err
 	}
 	return result, tx.Commit()
 }
 
-// InsertInfrastructureDescriptorTx performs the same insert as
-// InsertInfrastructureDescriptor but uses the provided transaction. This allows
+// InsertCompanyDescriptorTx performs the same insert as
+// InsertCompanyDescriptor but uses the provided transaction. This allows
 // callers to compose multiple writes into a single atomic unit.
 //
 // The function inserts the base descriptor row first and then creates related
 // entities (display name/description/admin info/endpoints). If any step fails,
 // the error is returned and the caller is responsible for rolling back the transaction.
-func InsertInfrastructureDescriptorTx(_ context.Context, tx *sql.Tx, infdesc model.InfrastructureDescriptor) error {
-	if err := model.AssertInfrastructureDescriptorConstraints(infdesc); err != nil {
+func InsertCompanyDescriptorTx(_ context.Context, tx *sql.Tx, comdesc model.CompanyDescriptor) error {
+	if err := model.AssertCompanyDescriptorConstraints(comdesc); err != nil {
 		return common.NewErrBadRequest(err.Error())
 	}
 
@@ -101,17 +101,17 @@ func InsertInfrastructureDescriptorTx(_ context.Context, tx *sql.Tx, infdesc mod
 		return err
 	}
 
-	descriptionPayload, err := buildLangStringTextPayload(infdesc.Description)
+	descriptionPayload, err := buildLangStringTextPayload(comdesc.Description)
 	if err != nil {
-		return common.NewInternalServerError("INFDESC-INSERT-DESCRIPTIONPAYLOAD")
+		return common.NewInternalServerError("COMDESC-INSERT-DESCRIPTIONPAYLOAD")
 	}
-	displayNamePayload, err := buildLangStringNamePayload(infdesc.DisplayName)
+	displayNamePayload, err := buildLangStringNamePayload(comdesc.DisplayName)
 	if err != nil {
-		return common.NewInternalServerError("INFDESC-INSERT-DISPLAYNAMEPAYLOAD")
+		return common.NewInternalServerError("COMDESC-INSERT-DISPLAYNAMEPAYLOAD")
 	}
-	administrationPayload, err := buildAdministrativeInfoPayload(infdesc.Administration)
+	administrationPayload, err := buildAdministrativeInfoPayload(comdesc.Administration)
 	if err != nil {
-		return common.NewInternalServerError("INFDESC-INSERT-ADMINPAYLOAD")
+		return common.NewInternalServerError("COMDESC-INSERT-ADMINPAYLOAD")
 	}
 
 	sqlStr, args, buildErr = d.
@@ -127,48 +127,48 @@ func InsertInfrastructureDescriptorTx(_ context.Context, tx *sql.Tx, infdesc mod
 		return buildErr
 	}
 	if _, err = tx.Exec(sqlStr, args...); err != nil {
-		if mappedErr := mapInsertInfrastructureDescriptorError(err); mappedErr != nil {
+		if mappedErr := mapInsertCompanyDescriptorError(err); mappedErr != nil {
 			return mappedErr
 		}
 		return err
 	}
 
 	sqlStr, args, buildErr = d.
-		Insert(common.TblInfrastructureDescriptor).
+		Insert(common.TblCompanyDescriptor).
 		Rows(goqu.Record{
 			common.ColDescriptorID:  descriptorID,
-			common.ColGlobalAssetID: infdesc.GlobalAssetId,
-			common.ColIDShort:       infdesc.IdShort,
-			common.ColCompanyName:   infdesc.Name,
-			common.ColCompanyDomain: infdesc.Domain,
+			common.ColGlobalAssetID: comdesc.GlobalAssetId,
+			common.ColIDShort:       comdesc.IdShort,
+			common.ColCompanyName:   comdesc.Name,
+			common.ColCompanyDomain: comdesc.Domain,
 		}).
 		ToSQL()
 	if buildErr != nil {
 		return buildErr
 	}
 	if _, err = tx.Exec(sqlStr, args...); err != nil {
-		if mappedErr := mapInsertInfrastructureDescriptorError(err); mappedErr != nil {
+		if mappedErr := mapInsertCompanyDescriptorError(err); mappedErr != nil {
 			return mappedErr
 		}
 		return err
 	}
 
-	if err = CreateEndpoints(tx, descriptorID, infdesc.Endpoints); err != nil {
+	if err = CreateEndpoints(tx, descriptorID, comdesc.Endpoints); err != nil {
 		return common.NewInternalServerError("Failed to create Endpoints - no changes applied - see console for details")
 	}
 
-	if err = createInfrastructureNameOptions(tx, descriptorID, infdesc.NameOptions); err != nil {
-		return common.NewInternalServerError("Failed to create Infrastructure Name Options - no changes applied - see console for details")
+	if err = createCompanyNameOptions(tx, descriptorID, comdesc.NameOptions); err != nil {
+		return common.NewInternalServerError("Failed to create Company Name Options - no changes applied - see console for details")
 	}
 
-	if err = createInfrastructureAssetIDRegexPatterns(tx, descriptorID, infdesc.AssetIdRegexPatterns); err != nil {
-		return common.NewInternalServerError("Failed to create Infrastructure AssetID Regex Patterns - no changes applied - see console for details")
+	if err = createCompanyAssetIDRegexPatterns(tx, descriptorID, comdesc.AssetIdRegexPatterns); err != nil {
+		return common.NewInternalServerError("Failed to create Company AssetID Regex Patterns - no changes applied - see console for details")
 	}
 
 	return nil
 }
 
-func mapInsertInfrastructureDescriptorError(err error) error {
+func mapInsertCompanyDescriptorError(err error) error {
 	if err == nil {
 		return nil
 	}
@@ -179,44 +179,44 @@ func mapInsertInfrastructureDescriptorError(err error) error {
 	}
 
 	if pqErr.Code == "23505" {
-		return common.NewErrConflict("ROI-INFDESC-INSERT-CONFLICT Infrastructure Descriptor with given domain already exists")
+		return common.NewErrConflict("ROI-COMDESC-INSERT-CONFLICT Company Descriptor with given domain already exists")
 	}
 
 	return nil
 }
 
-// GetInfrastructureDescriptorByID returns a fully materialized
-// InfrastructureDescriptor by its Infrastructure Id string.
+// GetCompanyDescriptorByID returns a fully materialized
+// CompanyDescriptor by its company domain identifier string.
 // The function loads optional related entities (administration, display name,
 // description, and endpoints) concurrently to minimize latency. If the
-// Infrastructure does not exist, a NotFound error is returned.
-func GetInfrastructureDescriptorByID(ctx context.Context, db *sql.DB, infrastructureIdentifier string) (model.InfrastructureDescriptor, error) {
+// company does not exist, a NotFound error is returned.
+func GetCompanyDescriptorByID(ctx context.Context, db *sql.DB, companyIdentifier string) (model.CompanyDescriptor, error) {
 	d := goqu.Dialect(common.Dialect)
 
-	inf := goqu.T(common.TblInfrastructureDescriptor).As("inf")
-	payload := common.TDescriptorPayload.As("inf_payload")
+	comp := goqu.T(common.TblCompanyDescriptor).As("comp")
+	payload := common.TDescriptorPayload.As("comp_payload")
 
 	sqlStr, args, buildErr := d.
-		From(inf).
+		From(comp).
 		LeftJoin(
 			payload,
-			goqu.On(payload.Col(common.ColDescriptorID).Eq(inf.Col(common.ColDescriptorID))),
+			goqu.On(payload.Col(common.ColDescriptorID).Eq(comp.Col(common.ColDescriptorID))),
 		).
 		Select(
-			inf.Col(common.ColDescriptorID),
-			inf.Col(common.ColGlobalAssetID),
-			inf.Col(common.ColIDShort),
-			inf.Col(common.ColCompanyName),
-			inf.Col(common.ColCompanyDomain),
+			comp.Col(common.ColDescriptorID),
+			comp.Col(common.ColGlobalAssetID),
+			comp.Col(common.ColIDShort),
+			comp.Col(common.ColCompanyName),
+			comp.Col(common.ColCompanyDomain),
 			payload.Col(common.ColAdministrativeInfoPayload),
 			payload.Col(common.ColDisplayNamePayload),
 			payload.Col(common.ColDescriptionPayload),
 		).
-		Where(inf.Col(common.ColCompanyDomain).Eq(infrastructureIdentifier)).
+		Where(comp.Col(common.ColCompanyDomain).Eq(companyIdentifier)).
 		Limit(1).
 		ToSQL()
 	if buildErr != nil {
-		return model.InfrastructureDescriptor{}, buildErr
+		return model.CompanyDescriptor{}, buildErr
 	}
 
 	var (
@@ -239,37 +239,37 @@ func GetInfrastructureDescriptorByID(ctx context.Context, db *sql.DB, infrastruc
 		&descriptionPayload,
 	); err != nil {
 		if err == sql.ErrNoRows {
-			return model.InfrastructureDescriptor{}, common.NewErrNotFound("Infrastructure Descriptor not found")
+			return model.CompanyDescriptor{}, common.NewErrNotFound("Company Descriptor not found")
 		}
-		return model.InfrastructureDescriptor{}, err
+		return model.CompanyDescriptor{}, err
 	}
 
 	adminInfo, err := parseAdministrativeInfoPayload(administrativeInfoPayload)
 	if err != nil {
-		return model.InfrastructureDescriptor{}, common.NewInternalServerError("INFDESC-READ-ADMINPAYLOAD")
+		return model.CompanyDescriptor{}, common.NewInternalServerError("COMDESC-READ-ADMINPAYLOAD")
 	}
 	displayName, err := parseLangStringNamePayload(displayNamePayload)
 	if err != nil {
-		return model.InfrastructureDescriptor{}, common.NewInternalServerError("INFDESC-READ-DISPLAYNAMEPAYLOAD")
+		return model.CompanyDescriptor{}, common.NewInternalServerError("COMDESC-READ-DISPLAYNAMEPAYLOAD")
 	}
 	description, err := parseLangStringTextPayload(descriptionPayload)
 	if err != nil {
-		return model.InfrastructureDescriptor{}, common.NewInternalServerError("INFDESC-READ-DESCRIPTIONPAYLOAD")
+		return model.CompanyDescriptor{}, common.NewInternalServerError("COMDESC-READ-DESCRIPTIONPAYLOAD")
 	}
-	endpoints, err := ReadEndpointsByDescriptorID(ctx, db, descID, "infrastructure")
+	endpoints, err := ReadEndpointsByDescriptorID(ctx, db, descID, "company")
 	if err != nil {
-		return model.InfrastructureDescriptor{}, err
+		return model.CompanyDescriptor{}, err
 	}
-	nameOptions, err := readInfrastructureNameOptionsByDescriptorID(ctx, db, descID)
+	nameOptions, err := readCompanyNameOptionsByDescriptorID(ctx, db, descID)
 	if err != nil {
-		return model.InfrastructureDescriptor{}, err
+		return model.CompanyDescriptor{}, err
 	}
-	assetIDRegexPatterns, err := readInfrastructureAssetIDRegexPatternsByDescriptorID(ctx, db, descID)
+	assetIDRegexPatterns, err := readCompanyAssetIDRegexPatternsByDescriptorID(ctx, db, descID)
 	if err != nil {
-		return model.InfrastructureDescriptor{}, err
+		return model.CompanyDescriptor{}, err
 	}
 
-	return model.InfrastructureDescriptor{
+	return model.CompanyDescriptor{
 		GlobalAssetId:        globalAssetID.String,
 		IdShort:              idShort.String,
 		Name:                 name.String,
@@ -283,36 +283,36 @@ func GetInfrastructureDescriptorByID(ctx context.Context, db *sql.DB, infrastruc
 	}, nil
 }
 
-// GetInfrastructureDescriptorByIDTx returns a fully materialized
-// InfrastructureDescriptor by its Infrastructure Id string using the provided
+// GetCompanyDescriptorByIDTx returns a fully materialized
+// CompanyDescriptor by its company domain identifier string using the provided
 // transaction. It avoids concurrent queries, which are unsafe on *sql.Tx.
-func GetInfrastructureDescriptorByIDTx(ctx context.Context, tx *sql.Tx, infrastructureIdentifier string) (model.InfrastructureDescriptor, error) {
+func GetCompanyDescriptorByIDTx(ctx context.Context, tx *sql.Tx, companyIdentifier string) (model.CompanyDescriptor, error) {
 	d := goqu.Dialect(common.Dialect)
 
-	inf := goqu.T(common.TblInfrastructureDescriptor).As("inf")
-	payload := common.TDescriptorPayload.As("inf_payload")
+	comp := goqu.T(common.TblCompanyDescriptor).As("comp")
+	payload := common.TDescriptorPayload.As("comp_payload")
 
 	sqlStr, args, buildErr := d.
-		From(inf).
+		From(comp).
 		LeftJoin(
 			payload,
-			goqu.On(payload.Col(common.ColDescriptorID).Eq(inf.Col(common.ColDescriptorID))),
+			goqu.On(payload.Col(common.ColDescriptorID).Eq(comp.Col(common.ColDescriptorID))),
 		).
 		Select(
-			inf.Col(common.ColDescriptorID),
-			inf.Col(common.ColGlobalAssetID),
-			inf.Col(common.ColIDShort),
-			inf.Col(common.ColCompanyName),
-			inf.Col(common.ColCompanyDomain),
+			comp.Col(common.ColDescriptorID),
+			comp.Col(common.ColGlobalAssetID),
+			comp.Col(common.ColIDShort),
+			comp.Col(common.ColCompanyName),
+			comp.Col(common.ColCompanyDomain),
 			payload.Col(common.ColAdministrativeInfoPayload),
 			payload.Col(common.ColDisplayNamePayload),
 			payload.Col(common.ColDescriptionPayload),
 		).
-		Where(inf.Col(common.ColCompanyDomain).Eq(infrastructureIdentifier)).
+		Where(comp.Col(common.ColCompanyDomain).Eq(companyIdentifier)).
 		Limit(1).
 		ToSQL()
 	if buildErr != nil {
-		return model.InfrastructureDescriptor{}, buildErr
+		return model.CompanyDescriptor{}, buildErr
 	}
 	var (
 		descID                    int64
@@ -334,36 +334,36 @@ func GetInfrastructureDescriptorByIDTx(ctx context.Context, tx *sql.Tx, infrastr
 		&descriptionPayload,
 	); err != nil {
 		if err == sql.ErrNoRows {
-			return model.InfrastructureDescriptor{}, common.NewErrNotFound("Infrastructure Descriptor not found")
+			return model.CompanyDescriptor{}, common.NewErrNotFound("Company Descriptor not found")
 		}
-		return model.InfrastructureDescriptor{}, err
+		return model.CompanyDescriptor{}, err
 	}
 	adminInfo, err := parseAdministrativeInfoPayload(administrativeInfoPayload)
 	if err != nil {
-		return model.InfrastructureDescriptor{}, common.NewInternalServerError("INFDESC-READ-ADMINPAYLOAD")
+		return model.CompanyDescriptor{}, common.NewInternalServerError("COMDESC-READ-ADMINPAYLOAD")
 	}
 	displayName, err := parseLangStringNamePayload(displayNamePayload)
 	if err != nil {
-		return model.InfrastructureDescriptor{}, common.NewInternalServerError("INFDESC-READ-DISPLAYNAMEPAYLOAD")
+		return model.CompanyDescriptor{}, common.NewInternalServerError("COMDESC-READ-DISPLAYNAMEPAYLOAD")
 	}
 	description, err := parseLangStringTextPayload(descriptionPayload)
 	if err != nil {
-		return model.InfrastructureDescriptor{}, common.NewInternalServerError("INFDESC-READ-DESCRIPTIONPAYLOAD")
+		return model.CompanyDescriptor{}, common.NewInternalServerError("COMDESC-READ-DESCRIPTIONPAYLOAD")
 	}
-	endpoints, err := ReadEndpointsByDescriptorID(ctx, tx, descID, "infrastructure")
+	endpoints, err := ReadEndpointsByDescriptorID(ctx, tx, descID, "company")
 	if err != nil {
-		return model.InfrastructureDescriptor{}, err
+		return model.CompanyDescriptor{}, err
 	}
-	nameOptions, err := readInfrastructureNameOptionsByDescriptorID(ctx, tx, descID)
+	nameOptions, err := readCompanyNameOptionsByDescriptorID(ctx, tx, descID)
 	if err != nil {
-		return model.InfrastructureDescriptor{}, err
+		return model.CompanyDescriptor{}, err
 	}
-	assetIDRegexPatterns, err := readInfrastructureAssetIDRegexPatternsByDescriptorID(ctx, tx, descID)
+	assetIDRegexPatterns, err := readCompanyAssetIDRegexPatternsByDescriptorID(ctx, tx, descID)
 	if err != nil {
-		return model.InfrastructureDescriptor{}, err
+		return model.CompanyDescriptor{}, err
 	}
 
-	return model.InfrastructureDescriptor{
+	return model.CompanyDescriptor{
 		GlobalAssetId:        globalAssetID.String,
 		IdShort:              idShort.String,
 		Name:                 name.String,
@@ -377,27 +377,27 @@ func GetInfrastructureDescriptorByIDTx(ctx context.Context, tx *sql.Tx, infrastr
 	}, nil
 }
 
-// DeleteInfrastructureDescriptorByID deletes the descriptor for the
-// given Infrastructure Descriptor Id string. Deletion happens on the base descriptor row with ON
+// DeleteCompanyDescriptorByID deletes the descriptor for the
+// given Company Descriptor Id string. Deletion happens on the base descriptor row with ON
 // DELETE CASCADE removing dependent rows.
 // The delete runs in its own transaction.
-func DeleteInfrastructureDescriptorByID(ctx context.Context, db *sql.DB, infrastructureIdentifier string) error {
+func DeleteCompanyDescriptorByID(ctx context.Context, db *sql.DB, companyIdentifier string) error {
 	return WithTx(ctx, db, func(tx *sql.Tx) error {
-		return DeleteInfrastructureDescriptorByIDTx(ctx, tx, infrastructureIdentifier)
+		return DeleteCompanyDescriptorByIDTx(ctx, tx, companyIdentifier)
 	})
 }
 
-// DeleteInfrastructureDescriptorByIDTx deletes using the provided
+// DeleteCompanyDescriptorByIDTx deletes using the provided
 // transaction. It resolves the internal descriptor id and removes the base
 // descriptor row. Dependent rows are removed via ON DELETE CASCADE.
-func DeleteInfrastructureDescriptorByIDTx(ctx context.Context, tx *sql.Tx, infrastructureIdentifier string) error {
+func DeleteCompanyDescriptorByIDTx(ctx context.Context, tx *sql.Tx, companyIdentifier string) error {
 	d := goqu.Dialect("postgres")
-	inf := goqu.T(common.TblInfrastructureDescriptor).As("inf")
+	comp := goqu.T(common.TblCompanyDescriptor).As("comp")
 
 	sqlStr, args, buildErr := d.
-		From(inf).
-		Select(inf.Col(common.ColDescriptorID)).
-		Where(inf.Col(common.ColCompanyDomain).Eq(infrastructureIdentifier)).
+		From(comp).
+		Select(comp.Col(common.ColDescriptorID)).
+		Where(comp.Col(common.ColCompanyDomain).Eq(companyIdentifier)).
 		Limit(1).
 		ToSQL()
 	if buildErr != nil {
@@ -407,7 +407,7 @@ func DeleteInfrastructureDescriptorByIDTx(ctx context.Context, tx *sql.Tx, infra
 	var descID int64
 	if scanErr := tx.QueryRowContext(ctx, sqlStr, args...).Scan(&descID); scanErr != nil {
 		if scanErr == sql.ErrNoRows {
-			return common.NewErrNotFound("Infrastructure Descriptor not found")
+			return common.NewErrNotFound("Company Descriptor not found")
 		}
 		return scanErr
 	}
@@ -425,14 +425,14 @@ func DeleteInfrastructureDescriptorByIDTx(ctx context.Context, tx *sql.Tx, infra
 	return nil
 }
 
-// ReplaceInfrastructureDescriptor atomically replaces the descriptor with the same
-// Infrastructure Id: if a descriptor exists it is deleted (base descriptor row), then
+// ReplaceCompanyDescriptor atomically replaces the descriptor with the same
+// Company Id: if a descriptor exists it is deleted (base descriptor row), then
 // the provided descriptor is inserted. Related rows are recreated from the input.
-// The returned descriptor is the stored Infrastructure Descriptor after replacement.
-func ReplaceInfrastructureDescriptor(ctx context.Context, db *sql.DB, infrastructureDescriptor model.InfrastructureDescriptor) (model.InfrastructureDescriptor, error) {
+// The returned descriptor is the stored Company Descriptor after replacement.
+func ReplaceCompanyDescriptor(ctx context.Context, db *sql.DB, companyDescriptor model.CompanyDescriptor) (model.CompanyDescriptor, error) {
 	tx, err := db.BeginTx(ctx, nil)
 	if err != nil {
-		return model.InfrastructureDescriptor{}, common.NewInternalServerError("Failed to start postgres transaction. See console for information.")
+		return model.CompanyDescriptor{}, common.NewInternalServerError("Failed to start postgres transaction. See console for information.")
 	}
 	defer func() {
 		if rec := recover(); rec != nil {
@@ -441,28 +441,28 @@ func ReplaceInfrastructureDescriptor(ctx context.Context, db *sql.DB, infrastruc
 	}()
 
 	// delete existing descriptor
-	if err = DeleteInfrastructureDescriptorByIDTx(ctx, tx, infrastructureDescriptor.Domain); err != nil {
+	if err = DeleteCompanyDescriptorByIDTx(ctx, tx, companyDescriptor.Domain); err != nil {
 		_ = tx.Rollback()
-		return model.InfrastructureDescriptor{}, err
+		return model.CompanyDescriptor{}, err
 	}
 	// insert new descriptor
-	if err = InsertInfrastructureDescriptorTx(ctx, tx, infrastructureDescriptor); err != nil {
+	if err = InsertCompanyDescriptorTx(ctx, tx, companyDescriptor); err != nil {
 		_ = tx.Rollback()
-		return model.InfrastructureDescriptor{}, err
+		return model.CompanyDescriptor{}, err
 	}
 
-	result, err := GetInfrastructureDescriptorByIDTx(ctx, tx, infrastructureDescriptor.Domain)
+	result, err := GetCompanyDescriptorByIDTx(ctx, tx, companyDescriptor.Domain)
 	if err != nil {
 		_ = tx.Rollback()
-		return model.InfrastructureDescriptor{}, err
+		return model.CompanyDescriptor{}, err
 	}
 	return result, tx.Commit()
 }
 
-// ListInfrastructureDescriptors lists Infrastructure Descriptors with optional
+// ListCompanyDescriptors lists Company Descriptors with optional
 // filtering by name and assetId regex matching.
-// Results are ordered by Infrastructure Id ascending and support
-// cursor‑based pagination where the cursor is the Infrastructure Id
+// Results are ordered by company domain identifier ascending and support
+// cursor‑based pagination where the cursor is the company domain identifier
 // of the first element to include (i.e. Id >= cursor).
 //
 // It returns the page of fully assembled descriptors and, when more results are
@@ -470,61 +470,61 @@ func ReplaceInfrastructureDescriptor(ctx context.Context, db *sql.DB, infrastruc
 // limit <= 0, a conservative large default is applied.
 //
 // nolint:revive // complexity is 31 which is +1 above the allowed threshold of 30
-func ListInfrastructureDescriptors(
+func ListCompanyDescriptors(
 	ctx context.Context,
 	db *sql.DB,
 	limit int32,
 	cursor string,
 	name string,
 	assetID string,
-) ([]model.InfrastructureDescriptor, string, error) {
+) ([]model.CompanyDescriptor, string, error) {
 	if limit <= 0 {
 		limit = 100
 	}
 	peekLimit := int(limit) + 1
 
 	d := goqu.Dialect(common.Dialect)
-	inf := goqu.T(common.TblInfrastructureDescriptor).As("inf")
-	payload := common.TDescriptorPayload.As("inf_payload")
-	infNameOpt := goqu.T(common.TblInfrastructureDescriptorNameOption).As("inf_name_opt")
-	assetIdPattern := goqu.T(common.TblInfrastructureDescriptorAssetIDRegex).As("inf_asset_id_pattern")
+	comp := goqu.T(common.TblCompanyDescriptor).As("comp")
+	payload := common.TDescriptorPayload.As("comp_payload")
+	compNameOpt := goqu.T(common.TblCompanyDescriptorNameOption).As("comp_name_opt")
+	assetIdPattern := goqu.T(common.TblCompanyDescriptorAssetIDRegex).As("comp_asset_id_pattern")
 
 	ds := d.
-		From(inf).
+		From(comp).
 		LeftJoin(
 			payload,
-			goqu.On(payload.Col(common.ColDescriptorID).Eq(inf.Col(common.ColDescriptorID))),
+			goqu.On(payload.Col(common.ColDescriptorID).Eq(comp.Col(common.ColDescriptorID))),
 		).
 		Select(
-			inf.Col(common.ColDescriptorID),
-			inf.Col(common.ColGlobalAssetID),
-			inf.Col(common.ColIDShort),
-			inf.Col(common.ColCompanyName),
-			inf.Col(common.ColCompanyDomain),
-			inf.Col(common.ColCompanyDomain),
+			comp.Col(common.ColDescriptorID),
+			comp.Col(common.ColGlobalAssetID),
+			comp.Col(common.ColIDShort),
+			comp.Col(common.ColCompanyName),
+			comp.Col(common.ColCompanyDomain),
+			comp.Col(common.ColCompanyDomain),
 			payload.Col(common.ColAdministrativeInfoPayload),
 			payload.Col(common.ColDisplayNamePayload),
 			payload.Col(common.ColDescriptionPayload),
 		)
 
 	if cursor != "" {
-		ds = ds.Where(inf.Col(common.ColCompanyDomain).Gte(cursor))
+		ds = ds.Where(comp.Col(common.ColCompanyDomain).Gte(cursor))
 	}
 
 	if strings.TrimSpace(name) != "" {
 		nameLower := strings.ToLower(name)
 		ds = ds.
 			LeftJoin(
-				infNameOpt,
+				compNameOpt,
 				goqu.On(
-					inf.Col(common.ColDescriptorID).Eq(infNameOpt.Col(common.ColDescriptorID)),
-					goqu.Func("LOWER", infNameOpt.Col(common.ColNameOption)).Eq(nameLower),
+					comp.Col(common.ColDescriptorID).Eq(compNameOpt.Col(common.ColDescriptorID)),
+					goqu.Func("LOWER", compNameOpt.Col(common.ColNameOption)).Eq(nameLower),
 				),
 			).
 			Where(
 				goqu.Or(
-					goqu.Func("LOWER", inf.Col(common.ColCompanyName)).Eq(nameLower),
-					infNameOpt.Col(common.ColDescriptorID).IsNotNull(),
+					goqu.Func("LOWER", comp.Col(common.ColCompanyName)).Eq(nameLower),
+					compNameOpt.Col(common.ColDescriptorID).IsNotNull(),
 				),
 			)
 	}
@@ -534,7 +534,7 @@ func ListInfrastructureDescriptors(
 			From(assetIdPattern).
 			Select(goqu.V(true)).
 			Where(
-				assetIdPattern.Col(common.ColDescriptorID).Eq(inf.Col(common.ColDescriptorID)),
+				assetIdPattern.Col(common.ColDescriptorID).Eq(comp.Col(common.ColDescriptorID)),
 				goqu.L("? ~ ?", assetID, assetIdPattern.Col(common.ColRegexPattern)),
 			)
 
@@ -546,25 +546,25 @@ func ListInfrastructureDescriptors(
 	}
 
 	ds = ds.
-		Order(inf.Col(common.ColCompanyDomain).Asc()).
+		Order(comp.Col(common.ColCompanyDomain).Asc()).
 		Limit(uint(peekLimit))
 
 	sqlStr, args, buildErr := ds.ToSQL()
 	if buildErr != nil {
-		return nil, "", common.NewInternalServerError("Failed to build Infrastructure Descriptor query. See server logs for details.")
+		return nil, "", common.NewInternalServerError("Failed to build Company Descriptor query. See server logs for details.")
 	}
 
 	rows, err := db.QueryContext(ctx, sqlStr, args...)
 	if err != nil {
-		return nil, "", common.NewInternalServerError("Failed to query Infrastructure Descriptors. See server logs for details.")
+		return nil, "", common.NewInternalServerError("Failed to query Company Descriptors. See server logs for details.")
 	}
 	defer func() {
 		_ = rows.Close()
 	}()
 
-	descRows := make([]model.InfrastructureDescriptorRow, 0, peekLimit)
+	descRows := make([]model.CompanyDescriptorRow, 0, peekLimit)
 	for rows.Next() {
-		var r model.InfrastructureDescriptorRow
+		var r model.CompanyDescriptorRow
 		if err := rows.Scan(
 			&r.DescID,
 			&r.GlobalAssetID,
@@ -576,12 +576,12 @@ func ListInfrastructureDescriptors(
 			&r.DisplayNamePayload,
 			&r.DescriptionPayload,
 		); err != nil {
-			return nil, "", common.NewInternalServerError("Failed to scan Infrastructure Descriptor row. See server logs for details.")
+			return nil, "", common.NewInternalServerError("Failed to scan Company Descriptor row. See server logs for details.")
 		}
 		descRows = append(descRows, r)
 	}
 	if rows.Err() != nil {
-		return nil, "", common.NewInternalServerError("Failed to iterate Infrastructure Descriptors. See server logs for details.")
+		return nil, "", common.NewInternalServerError("Failed to iterate Company Descriptors. See server logs for details.")
 	}
 
 	var nextCursor string
@@ -591,7 +591,7 @@ func ListInfrastructureDescriptors(
 	}
 
 	if len(descRows) == 0 {
-		return []model.InfrastructureDescriptor{}, nextCursor, nil
+		return []model.CompanyDescriptor{}, nextCursor, nil
 	}
 
 	descIDs := make([]int64, 0, len(descRows))
@@ -606,7 +606,7 @@ func ListInfrastructureDescriptors(
 	}
 	endpointsByDesc := map[int64][]model.Endpoint{}
 	if len(descIDs) > 0 {
-		endpointsByDesc, err = ReadEndpointsByDescriptorIDs(ctx, db, descIDs, "infrastructure")
+		endpointsByDesc, err = ReadEndpointsByDescriptorIDs(ctx, db, descIDs, "company")
 		if err != nil {
 			return nil, "", err
 		}
@@ -614,7 +614,7 @@ func ListInfrastructureDescriptors(
 
 	nameOptionsByDesc := map[int64][]string{}
 	if len(descIDs) > 0 {
-		nameOptionsByDesc, err = readInfrastructureNameOptionsByDescriptorIDs(ctx, db, descIDs)
+		nameOptionsByDesc, err = readCompanyNameOptionsByDescriptorIDs(ctx, db, descIDs)
 		if err != nil {
 			return nil, "", err
 		}
@@ -622,28 +622,28 @@ func ListInfrastructureDescriptors(
 
 	assetIDRegexByDesc := map[int64][]string{}
 	if len(descIDs) > 0 {
-		assetIDRegexByDesc, err = readInfrastructureAssetIDRegexPatternsByDescriptorIDs(ctx, db, descIDs)
+		assetIDRegexByDesc, err = readCompanyAssetIDRegexPatternsByDescriptorIDs(ctx, db, descIDs)
 		if err != nil {
 			return nil, "", err
 		}
 	}
 
-	out := make([]model.InfrastructureDescriptor, 0, len(descRows))
+	out := make([]model.CompanyDescriptor, 0, len(descRows))
 	for _, r := range descRows {
 		adminInfo, err := parseAdministrativeInfoPayload(r.AdministrativeInfoPayload)
 		if err != nil {
-			return nil, "", common.NewInternalServerError("INFDESC-LIST-ADMINPAYLOAD")
+			return nil, "", common.NewInternalServerError("COMDESC-LIST-ADMINPAYLOAD")
 		}
 		displayName, err := parseLangStringNamePayload(r.DisplayNamePayload)
 		if err != nil {
-			return nil, "", common.NewInternalServerError("INFDESC-LIST-DISPLAYNAMEPAYLOAD")
+			return nil, "", common.NewInternalServerError("COMDESC-LIST-DISPLAYNAMEPAYLOAD")
 		}
 		description, err := parseLangStringTextPayload(r.DescriptionPayload)
 		if err != nil {
-			return nil, "", common.NewInternalServerError("INFDESC-LIST-DESCRIPTIONPAYLOAD")
+			return nil, "", common.NewInternalServerError("COMDESC-LIST-DESCRIPTIONPAYLOAD")
 		}
 
-		out = append(out, model.InfrastructureDescriptor{
+		out = append(out, model.CompanyDescriptor{
 			GlobalAssetId:        r.GlobalAssetID.String,
 			IdShort:              r.IDShort.String,
 			Name:                 r.Name.String,
@@ -660,13 +660,13 @@ func ListInfrastructureDescriptors(
 	return out, nextCursor, nil
 }
 
-// ExistsInfrastructureByID performs a lightweight existence check for an Infrastructure by its Id
+// ExistsCompanyDescriptorByID performs a lightweight existence check for a company descriptor by its identifier
 // string. It returns true when a descriptor exists, false when it does not.
-func ExistsInfrastructureByID(ctx context.Context, db *sql.DB, infrastructureIdentifier string) (bool, error) {
+func ExistsCompanyDescriptorByID(ctx context.Context, db *sql.DB, companyIdentifier string) (bool, error) {
 	d := goqu.Dialect(common.Dialect)
-	inf := goqu.T(common.TblInfrastructureDescriptor).As("inf")
+	comp := goqu.T(common.TblCompanyDescriptor).As("comp")
 
-	ds := d.From(inf).Select(goqu.L("1")).Where(inf.Col(common.ColCompanyDomain).Eq(infrastructureIdentifier)).Limit(1)
+	ds := d.From(comp).Select(goqu.L("1")).Where(comp.Col(common.ColCompanyDomain).Eq(companyIdentifier)).Limit(1)
 	sqlStr, args, err := ds.ToSQL()
 	if err != nil {
 		return false, err

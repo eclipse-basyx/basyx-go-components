@@ -34,11 +34,11 @@ import (
 	"github.com/lib/pq"
 )
 
-func createInfrastructureAssetIDRegexPatterns(tx *sql.Tx, descriptorID int64, patterns []string) error {
-	return createInfrastructureRegexPatterns(tx, common.TblInfrastructureDescriptorAssetIDRegex, descriptorID, patterns)
+func createCompanyAssetIDRegexPatterns(tx *sql.Tx, descriptorID int64, patterns []string) error {
+	return createCompanyRegexPatterns(tx, common.TblCompanyDescriptorAssetIDRegex, descriptorID, patterns)
 }
 
-func createInfrastructureRegexPatterns(tx *sql.Tx, tableName string, descriptorID int64, patterns []string) error {
+func createCompanyRegexPatterns(tx *sql.Tx, tableName string, descriptorID int64, patterns []string) error {
 	if len(patterns) == 0 {
 		return nil
 	}
@@ -64,26 +64,26 @@ func createInfrastructureRegexPatterns(tx *sql.Tx, tableName string, descriptorI
 	return nil
 }
 
-func readInfrastructureAssetIDRegexPatternsByDescriptorID(ctx context.Context, db DBQueryer, descriptorID int64) ([]string, error) {
-	byDescriptor, err := readInfrastructureAssetIDRegexPatternsByDescriptorIDs(ctx, db, []int64{descriptorID})
+func readCompanyAssetIDRegexPatternsByDescriptorID(ctx context.Context, db DBQueryer, descriptorID int64) ([]string, error) {
+	byDescriptor, err := readCompanyAssetIDRegexPatternsByDescriptorIDs(ctx, db, []int64{descriptorID})
 	if err != nil {
 		return nil, err
 	}
 	return byDescriptor[descriptorID], nil
 }
 
-func readInfrastructureAssetIDRegexPatternsByDescriptorIDs(ctx context.Context, db DBQueryer, descriptorIDs []int64) (map[int64][]string, error) {
-	return readInfrastructureRegexPatternsByDescriptorIDs(ctx, db, common.TblInfrastructureDescriptorAssetIDRegex, descriptorIDs)
+func readCompanyAssetIDRegexPatternsByDescriptorIDs(ctx context.Context, db DBQueryer, descriptorIDs []int64) (map[int64][]string, error) {
+	return readCompanyRegexPatternsByDescriptorIDs(ctx, db, common.TblCompanyDescriptorAssetIDRegex, descriptorIDs)
 }
 
-func readInfrastructureRegexPatternsByDescriptorIDs(ctx context.Context, db DBQueryer, tableName string, descriptorIDs []int64) (map[int64][]string, error) {
+func readCompanyRegexPatternsByDescriptorIDs(ctx context.Context, db DBQueryer, tableName string, descriptorIDs []int64) (map[int64][]string, error) {
 	result := make(map[int64][]string, len(descriptorIDs))
 	if len(descriptorIDs) == 0 {
 		return result, nil
 	}
 
 	d := goqu.Dialect(common.Dialect)
-	patternTbl := goqu.T(tableName).As("inf_pattern")
+	patternTbl := goqu.T(tableName).As("comp_pattern")
 	arr := pq.Array(descriptorIDs)
 
 	sqlStr, args, err := d.
