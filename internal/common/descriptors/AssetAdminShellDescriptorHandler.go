@@ -49,8 +49,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/FriedJannik/aas-go-sdk/stringification"
-	"github.com/FriedJannik/aas-go-sdk/types"
+	"github.com/aas-core-works/aas-core3.1-golang/stringification"
+	"github.com/aas-core-works/aas-core3.1-golang/types"
 	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
@@ -452,8 +452,7 @@ func buildListAASDescriptorPageQuery(
 			common.TAASDescriptor.Col(common.ColAASID).As("sort_aas_id"),
 		)
 
-	var err error
-	ds, err = auth.AddFormulaQueryFromContext(ctx, ds, collector)
+	ds, err := auth.AddFormulaQueryFromContext(ctx, ds, collector)
 	if err != nil {
 		return nil, err
 	}

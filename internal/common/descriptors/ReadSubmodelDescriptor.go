@@ -32,7 +32,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/FriedJannik/aas-go-sdk/types"
+	"github.com/aas-core-works/aas-core3.1-golang/types"
 	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
@@ -154,9 +154,15 @@ func ReadSubmodelDescriptorsByDescriptorIDs(
 	if err != nil {
 		return nil, err
 	}
-	inner, err = auth.AddFormulaQueryFromContext(ctx, inner, collector)
-	if err != nil {
-		return nil, err
+	shouldEnforceFormula, enforceErr := auth.ShouldEnforceFormula(ctx)
+	if enforceErr != nil {
+		return nil, common.NewInternalServerError("SMDESC-READ-SHOULDENFORCE " + enforceErr.Error())
+	}
+	if shouldEnforceFormula {
+		inner, err = auth.AddFormulaQueryFromContext(ctx, inner, collector)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	ds := d.From(inner.As(dataAlias)).
@@ -300,9 +306,15 @@ func ReadSubmodelDescriptorsByAASDescriptorIDs(
 		return nil, err
 	}
 	if isMain {
-		inner, err = auth.AddFormulaQueryFromContext(ctx, inner, collector)
-		if err != nil {
-			return nil, err
+		shouldEnforceFormula, enforceErr := auth.ShouldEnforceFormula(ctx)
+		if enforceErr != nil {
+			return nil, common.NewInternalServerError("SMDESC-READBYAAS-SHOULDENFORCE " + enforceErr.Error())
+		}
+		if shouldEnforceFormula {
+			inner, err = auth.AddFormulaQueryFromContext(ctx, inner, collector)
+			if err != nil {
+				return nil, err
+			}
 		}
 	}
 

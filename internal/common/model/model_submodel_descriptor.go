@@ -30,9 +30,9 @@ package model
 import (
 	"errors"
 
-	"github.com/FriedJannik/aas-go-sdk/jsonization"
-	"github.com/FriedJannik/aas-go-sdk/types"
-	"github.com/FriedJannik/aas-go-sdk/verification"
+	"github.com/aas-core-works/aas-core3.1-golang/jsonization"
+	"github.com/aas-core-works/aas-core3.1-golang/types"
+	"github.com/aas-core-works/aas-core3.1-golang/verification"
 	jsoniter "github.com/json-iterator/go"
 )
 
@@ -173,7 +173,11 @@ func (obj SubmodelDescriptor) ToJsonable() (map[string]any, error) {
 		ret["semanticId"] = semanticID
 	}
 	if len(supplementalSemanticIDs) > 0 {
-		ret["supplementalSemanticIds"] = supplementalSemanticIDs
+		if useSingularSupplementalSemanticId() {
+			ret[supplementalSemanticIdSingularKey] = supplementalSemanticIDs
+		} else {
+			ret[supplementalSemanticIdsKey] = supplementalSemanticIDs
+		}
 	}
 	return ret, nil
 }
@@ -189,15 +193,18 @@ func (obj *SubmodelDescriptor) UnmarshalJSON(data []byte) error {
 
 	// Check for unknown fields
 	allowedFields := map[string]bool{
-		"administration":          true,
-		"endpoints":               true,
-		"idShort":                 true,
-		"id":                      true,
-		"semanticId":              true,
-		"supplementalSemanticIds": true,
-		"description":             true,
-		"displayName":             true,
-		"extensions":              true,
+		"administration":           true,
+		"endpoints":                true,
+		"idShort":                  true,
+		"id":                       true,
+		"semanticId":               true,
+		supplementalSemanticIdsKey: true,
+		"description":              true,
+		"displayName":              true,
+		"extensions":               true,
+	}
+	if useSingularSupplementalSemanticId() {
+		allowedFields[supplementalSemanticIdSingularKey] = true
 	}
 	for key := range jsonable {
 		if !allowedFields[key] {
@@ -290,7 +297,14 @@ func (obj *SubmodelDescriptor) UnmarshalJSON(data []byte) error {
 	}
 
 	// Supplemental Semantic IDs
-	if ssids, ok := jsonable["supplementalSemanticIds"].([]any); ok {
+	ssidsRaw, exists := jsonable[supplementalSemanticIdsKey]
+	if useSingularSupplementalSemanticId() {
+		if singularRaw, singularExists := jsonable[supplementalSemanticIdSingularKey]; singularExists {
+			ssidsRaw = singularRaw
+			exists = true
+		}
+	}
+	if ssids, ok := ssidsRaw.([]any); exists && ok {
 		for _, ssid := range ssids {
 			ssidMap, ok := ssid.(map[string]any)
 			if !ok {
@@ -321,6 +335,10 @@ func (obj *SubmodelDescriptor) UnmarshalJSON(data []byte) error {
 	}
 	if id, ok := jsonable["id"].(string); ok {
 		obj.Id = id
+	}
+
+	if !isStrictVerificationEnabled() {
+		return nil
 	}
 
 	// Verify Description

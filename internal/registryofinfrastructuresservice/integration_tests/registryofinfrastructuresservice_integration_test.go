@@ -42,7 +42,7 @@ import (
 func deleteAllInfrastructureDescriptors(t *testing.T, runner *testenv.JSONSuiteRunner, stepNumber int) {
 	response, err := runner.RunStep(testenv.JSONSuiteStep{
 		Method:         http.MethodGet,
-		Endpoint:       "http://127.0.0.1:5004/companies",
+		Endpoint:       "http://127.0.0.1:6004/companies",
 		ExpectedStatus: http.StatusOK,
 	}, stepNumber)
 	require.NoError(t, err)
@@ -58,7 +58,7 @@ func deleteAllInfrastructureDescriptors(t *testing.T, runner *testenv.JSONSuiteR
 		enc := base64.RawURLEncoding.EncodeToString([]byte(item.Domain))
 		_, err := runner.RunStep(testenv.JSONSuiteStep{
 			Method:         http.MethodDelete,
-			Endpoint:       fmt.Sprintf("http://127.0.0.1:5004/companies/%s", enc),
+			Endpoint:       fmt.Sprintf("http://127.0.0.1:6004/companies/%s", enc),
 			ExpectedStatus: http.StatusNoContent,
 		}, stepNumber)
 		require.NoError(t, err)
@@ -92,6 +92,6 @@ func TestIntegration(t *testing.T) {
 func TestMain(m *testing.M) {
 	os.Exit(testenv.RunComposeTestMain(m, testenv.ComposeTestMainOptions{
 		ComposeFile: "docker_compose/docker-compose.yml",
-		HealthURL:   "http://localhost:5004/health",
+		HealthURL:   "http://localhost:6004/health",
 	}))
 }

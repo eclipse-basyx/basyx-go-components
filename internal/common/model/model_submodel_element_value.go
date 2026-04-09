@@ -34,7 +34,7 @@
 //nolint:all
 package model
 
-import "github.com/FriedJannik/aas-go-sdk/types"
+import "github.com/aas-core-works/aas-core3.1-golang/types"
 
 // SubmodelElementValue is the interface for all Value-Only serialization types.
 // All concrete value types must implement this interface to provide Value-Only serialization

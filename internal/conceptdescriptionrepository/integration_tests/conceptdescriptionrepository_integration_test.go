@@ -28,6 +28,7 @@ package main
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"io"
 	"mime/multipart"
@@ -114,6 +115,40 @@ func downloadFileAttachment(endpoint string) ([]byte, string, int, error) {
 	return content, contentType, resp.StatusCode, nil
 }
 
+func requestJSON(method string, endpoint string, payload any) (int, []byte, error) {
+	var body io.Reader
+	if payload != nil {
+		jsonBody, err := json.Marshal(payload)
+		if err != nil {
+			return 0, nil, fmt.Errorf("failed to marshal payload: %v", err)
+		}
+		body = bytes.NewBuffer(jsonBody)
+	}
+
+	req, err := http.NewRequest(method, endpoint, body)
+	if err != nil {
+		return 0, nil, fmt.Errorf("failed to create request: %v", err)
+	}
+
+	if payload != nil {
+		req.Header.Set("Content-Type", "application/json")
+	}
+
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return 0, nil, fmt.Errorf("failed to send request: %v", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return resp.StatusCode, nil, fmt.Errorf("failed to read response body: %v", err)
+	}
+
+	return resp.StatusCode, respBody, nil
+}
+
 // IntegrationTest runs the integration tests based on the config file
 func TestIntegration(t *testing.T) {
 	testenv.RunJSONSuite(t, testenv.JSONSuiteOptions{
@@ -137,8 +172,64 @@ func TestIntegration(t *testing.T) {
 	})
 }
 
+func TestContractGetAllConceptDescriptionsAllowsNullableIDShort(t *testing.T) {
+	baseURL := "http://localhost:6004"
+	conceptDescriptionID := fmt.Sprintf("https://example.com/ids/cd/contract-null-idshort-%d", time.Now().UnixNano())
+
+	statusCode, responseBody, err := requestJSON(http.MethodPost, baseURL+"/concept-descriptions", map[string]any{
+		"id":        conceptDescriptionID,
+		"modelType": "ConceptDescription",
+	})
+	if err != nil {
+		t.Fatalf("failed to create concept description: %v", err)
+	}
+	if statusCode != http.StatusCreated {
+		t.Fatalf("expected 201 on create, got %d with body: %s", statusCode, string(responseBody))
+	}
+
+	statusCode, responseBody, err = requestJSON(http.MethodGet, baseURL+"/concept-descriptions", nil)
+	if err != nil {
+		t.Fatalf("failed to list concept descriptions: %v", err)
+	}
+	if statusCode != http.StatusOK {
+		t.Fatalf("expected 200 on list, got %d with body: %s", statusCode, string(responseBody))
+	}
+
+	var listResponse map[string]any
+	if err = json.Unmarshal(responseBody, &listResponse); err != nil {
+		t.Fatalf("failed to parse list response: %v", err)
+	}
+
+	resultRaw, ok := listResponse["result"].([]any)
+	if !ok {
+		t.Fatalf("expected result array in list response, got: %T", listResponse["result"])
+	}
+
+	foundCreatedConceptDescription := false
+	for _, entry := range resultRaw {
+		item, ok := entry.(map[string]any)
+		if !ok {
+			continue
+		}
+
+		identifier, ok := item["id"].(string)
+		if ok && identifier == conceptDescriptionID {
+			foundCreatedConceptDescription = true
+			break
+		}
+	}
+
+	if !foundCreatedConceptDescription {
+		t.Fatalf("expected concept description %s in list response, got body: %s", conceptDescriptionID, string(responseBody))
+	}
+}
+
 // TestMain handles setup and teardown
 func TestMain(m *testing.M) {
+	if os.Getenv("BASYX_EXTERNAL_COMPOSE") == "1" {
+		os.Exit(m.Run())
+	}
+
 	os.Exit(testenv.RunComposeTestMain(m, testenv.ComposeTestMainOptions{
 		ComposeFile:     "docker_compose/docker_compose.yml",
 		UpArgs:          []string{"up", "-d", "--build", "--remove-orphans"},

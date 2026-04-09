@@ -265,6 +265,17 @@ F_r & \text{otherwise}
 \end{cases}
 $$
 
+For routes mapped to multiple rights (for example `PUT` with `[CREATE, UPDATE]`),
+the engine also builds right-scoped formulas:
+
+$$
+F_{\text{combined},x} = \bigvee_{r \in R_x} F_r
+$$
+
+where $x$ is a right (for example `CREATE` or `UPDATE`) and $R_x$ are matching
+rules that grant that right. Missing right-specific formulas default to
+`{ "$boolean": false }`.
+
 This logic is implemented in [internal/common/security/abac_engine.go](internal/common/security/abac_engine.go).
 
 Example with two rules:

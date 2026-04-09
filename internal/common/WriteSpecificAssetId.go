@@ -30,7 +30,7 @@ import (
 	"database/sql"
 	"fmt"
 
-	"github.com/FriedJannik/aas-go-sdk/types"
+	"github.com/aas-core-works/aas-core3.1-golang/types"
 	"github.com/doug-martin/goqu/v9"
 )
 
@@ -72,6 +72,26 @@ func InsertSpecificAssetIDs(
 	aasRef sql.NullInt64,
 	specificAssetIDs []types.ISpecificAssetID,
 ) error {
+	return InsertSpecificAssetIDsWithPositionStart(
+		tx,
+		descriptorID,
+		assetInformationID,
+		aasRef,
+		specificAssetIDs,
+		0,
+	)
+}
+
+// InsertSpecificAssetIDsWithPositionStart inserts specific asset IDs while
+// assigning positions starting from positionStart.
+func InsertSpecificAssetIDsWithPositionStart(
+	tx *sql.Tx,
+	descriptorID sql.NullInt64,
+	assetInformationID sql.NullInt64,
+	aasRef sql.NullInt64,
+	specificAssetIDs []types.ISpecificAssetID,
+	positionStart int,
+) error {
 	if descriptorID.Valid && assetInformationID.Valid {
 		return fmt.Errorf("insert into specific_asset_id: descriptor_id and asset_information_id must not both be set")
 	}
@@ -82,13 +102,14 @@ func InsertSpecificAssetIDs(
 		d := goqu.Dialect(Dialect)
 		for i, val := range specificAssetIDs {
 			var err error
+			position := positionStart + i
 
 			sqlStr, args, err := d.
 				Insert(TblSpecificAssetID).
 				Rows(goqu.Record{
 					ColDescriptorID:       descriptorID,
 					ColAssetInformationID: assetInformationID,
-					ColPosition:           i,
+					ColPosition:           position,
 					ColName:               val.Name(),
 					ColValue:              val.Value(),
 					ColAASRef:             aasRef,

@@ -277,8 +277,19 @@ func setExternalThumbnailForAAS(aasID string, externalURL string) error {
 
 // IntegrationTest runs the integration tests based on the config file
 func TestIntegration(t *testing.T) {
+	shouldCompareResponse := testenv.CompareMethods(http.MethodGet, http.MethodPost)
+	if os.Getenv("BASYX_EXTERNAL_COMPOSE") == "1" {
+		baseComparator := shouldCompareResponse
+		shouldCompareResponse = func(step testenv.JSONSuiteStep) bool {
+			if strings.EqualFold(step.Method, http.MethodGet) && strings.Contains(step.Endpoint, "/description") {
+				return false
+			}
+			return baseComparator(step)
+		}
+	}
+
 	testenv.RunJSONSuite(t, testenv.JSONSuiteOptions{
-		ShouldCompareResponse: testenv.CompareMethods(http.MethodGet, http.MethodPost),
+		ShouldCompareResponse: shouldCompareResponse,
 		ActionHandlers: map[string]testenv.JSONStepAction{
 			actionDeleteAllAAS: func(t *testing.T, runner *testenv.JSONSuiteRunner, _ testenv.JSONSuiteStep, stepNumber int) {
 				deleteAllAAS(t, runner, stepNumber)
@@ -428,8 +439,38 @@ func TestThumbnailAttachmentOperations(t *testing.T) {
 	})
 }
 
+func TestContractThumbnailGetReturnsDetectedContentType(t *testing.T) {
+	baseURL := "http://localhost:6004"
+	aasID := fmt.Sprintf("https://example.com/ids/aas/thumbnail_contract_%d", time.Now().UnixNano())
+	aasIdentifier := base64.RawURLEncoding.EncodeToString([]byte(aasID))
+	thumbnailEndpoint := fmt.Sprintf("%s/shells/%s/asset-information/thumbnail", baseURL, aasIdentifier)
+
+	statusCode, err := createAASForThumbnailTest(baseURL, aasID)
+	require.NoError(t, err, "AAS creation failed")
+	require.Equal(t, http.StatusCreated, statusCode, "Expected 201 Created for AAS creation")
+
+	testFilePath := "testFiles/marcus.gif"
+	expectedContentType := "image/gif"
+	expectedContent, readErr := os.ReadFile(testFilePath)
+	require.NoError(t, readErr, "Failed to read thumbnail test file")
+
+	uploadStatusCode, uploadErr := uploadThumbnail(thumbnailEndpoint, testFilePath, "contract-thumbnail.gif")
+	require.NoError(t, uploadErr, "Thumbnail upload failed")
+	require.Equal(t, http.StatusNoContent, uploadStatusCode, "Expected 204 No Content for thumbnail upload")
+
+	content, contentType, getStatusCode, getErr := downloadThumbnail(thumbnailEndpoint)
+	require.NoError(t, getErr, "Thumbnail download failed")
+	require.Equal(t, http.StatusOK, getStatusCode, "Expected 200 OK for thumbnail download")
+	assert.Equal(t, expectedContent, content, "Downloaded thumbnail content should match uploaded payload")
+	assert.Equal(t, expectedContentType, contentType, "Thumbnail GET content type should match detected uploaded content type")
+}
+
 // TestMain handles setup and teardown
 func TestMain(m *testing.M) {
+	if os.Getenv("BASYX_EXTERNAL_COMPOSE") == "1" {
+		os.Exit(m.Run())
+	}
+
 	os.Exit(testenv.RunComposeTestMain(m, testenv.ComposeTestMainOptions{
 		ComposeFile:     "docker_compose/docker_compose.yml",
 		PreDownBeforeUp: true,

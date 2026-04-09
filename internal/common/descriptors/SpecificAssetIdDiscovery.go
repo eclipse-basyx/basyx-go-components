@@ -32,12 +32,25 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/FriedJannik/aas-go-sdk/types"
+	"github.com/aas-core-works/aas-core3.1-golang/types"
 	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 )
+
+type discoveryOnlySpecificAssetIDsKey struct{}
+
+// WithDiscoveryOnlySpecificAssetIDs marks an operation so inserted
+// specific_asset_id rows are linked only via aasRef (descriptor_id stays null).
+func WithDiscoveryOnlySpecificAssetIDs(ctx context.Context) context.Context {
+	return context.WithValue(ctx, discoveryOnlySpecificAssetIDsKey{}, true)
+}
+
+func discoveryOnlySpecificAssetIDsFromContext(ctx context.Context) bool {
+	flag, _ := ctx.Value(discoveryOnlySpecificAssetIDsKey{}).(bool)
+	return flag
+}
 
 var bdColumns = []auth.FilterColumnSpec{
 	auth.Column(common.TSpecificAssetID.Col(common.ColID)),
@@ -125,9 +138,15 @@ func ReadSpecificAssetIDsByAASRef(
 			common.TSpecificAssetID.Col(common.ColID).Asc(),
 		)
 
-	ds, err = auth.AddFormulaQueryFromContext(ctx, ds, collector)
-	if err != nil {
-		return nil, err
+	shouldEnforceFormula, enforceErr := auth.ShouldEnforceFormula(ctx)
+	if enforceErr != nil {
+		return nil, common.NewInternalServerError("BD-GETSPECIFICASSETID-SHOULDENFORCE " + enforceErr.Error())
+	}
+	if shouldEnforceFormula {
+		ds, err = auth.AddFormulaQueryFromContext(ctx, ds, collector)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	sqlStr, args, err := ds.ToSQL()
@@ -234,6 +253,89 @@ func ReplaceSpecificAssetIDsByAASIdentifier(
 			specificAssetIDs,
 		)
 	})
+}
+
+// AddSpecificAssetIDsByAASIdentifier upserts aas_identifier and adds only
+// missing name/value specific asset ids for the linked aasRef.
+func AddSpecificAssetIDsByAASIdentifier(
+	ctx context.Context,
+	db *sql.DB,
+	aasID string,
+	specificAssetIDs []types.ISpecificAssetID,
+) error {
+	return WithTx(ctx, db, func(tx *sql.Tx) error {
+		if len(specificAssetIDs) == 0 {
+			return nil
+		}
+
+		aasRef, err := ensureAASIdentifierTx(ctx, tx, aasID)
+		if err != nil {
+			return err
+		}
+
+		descriptorID := sql.NullInt64{}
+		if !discoveryOnlySpecificAssetIDsFromContext(ctx) {
+			descriptorID, err = descriptorIDForAASIDTx(ctx, tx, aasID)
+			if err != nil {
+				return err
+			}
+		}
+
+		positionStart, err := nextSpecificAssetIDPositionByAASRefTx(ctx, tx, aasRef)
+		if err != nil {
+			return err
+		}
+
+		return common.InsertSpecificAssetIDsWithPositionStart(
+			tx,
+			descriptorID,
+			sql.NullInt64{},
+			sql.NullInt64{Int64: aasRef, Valid: true},
+			specificAssetIDs,
+			positionStart,
+		)
+	})
+}
+
+func descriptorIDForAASIDTx(ctx context.Context, tx *sql.Tx, aasID string) (sql.NullInt64, error) {
+	d := goqu.Dialect(common.Dialect)
+	ds := d.From(common.TAASDescriptor).
+		Select(common.TAASDescriptor.Col(common.ColDescriptorID)).
+		Where(common.TAASDescriptor.Col(common.ColAASID).Eq(aasID)).
+		Limit(1)
+
+	sqlStr, args, err := ds.ToSQL()
+	if err != nil {
+		return sql.NullInt64{}, err
+	}
+
+	var descriptorID int64
+	if err := tx.QueryRowContext(ctx, sqlStr, args...).Scan(&descriptorID); err != nil {
+		if err == sql.ErrNoRows {
+			return sql.NullInt64{}, nil
+		}
+		return sql.NullInt64{}, err
+	}
+
+	return sql.NullInt64{Int64: descriptorID, Valid: true}, nil
+}
+
+func nextSpecificAssetIDPositionByAASRefTx(ctx context.Context, tx *sql.Tx, aasRef int64) (int, error) {
+	d := goqu.Dialect(common.Dialect)
+	ds := d.From(common.TSpecificAssetID).
+		Select(goqu.L("COALESCE(MAX(position), -1) + 1")).
+		Where(common.TSpecificAssetID.Col(common.ColAASRef).Eq(aasRef))
+
+	sqlStr, args, err := ds.ToSQL()
+	if err != nil {
+		return 0, err
+	}
+
+	var positionStart int
+	if err := tx.QueryRowContext(ctx, sqlStr, args...).Scan(&positionStart); err != nil {
+		return 0, err
+	}
+	return positionStart, nil
 }
 
 func ensureAASIdentifierTx(ctx context.Context, tx *sql.Tx, aasID string) (int64, error) {

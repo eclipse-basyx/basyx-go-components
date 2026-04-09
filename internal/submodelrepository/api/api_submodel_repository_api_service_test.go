@@ -4,16 +4,33 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
 
-	"github.com/FriedJannik/aas-go-sdk/types"
+	"github.com/aas-core-works/aas-core3.1-golang/types"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	persistencepostgresql "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence"
 	openapi "github.com/eclipse-basyx/basyx-go-components/pkg/submodelrepositoryapi/go"
 	"github.com/stretchr/testify/require"
 )
+
+func contextWithABACDisabled(t *testing.T) context.Context {
+	t.Helper()
+
+	cfg := &common.Config{}
+	var cfgCtx context.Context
+	handler := common.ConfigMiddleware(cfg)(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+		cfgCtx = r.Context()
+	}))
+	handler.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/", nil))
+
+	require.NotNil(t, cfgCtx)
+	return cfgCtx
+}
 
 func TestResolveModelReferencePathKeysUsesEntityForParentSegment(t *testing.T) {
 	t.Parallel()
@@ -79,7 +96,7 @@ func TestGetSubmodelElementByPathSubmodelRepoRejectsInvalidLevel(t *testing.T) {
 	sut := NewSubmodelRepositoryAPIAPIService(persistencepostgresql.SubmodelDatabase{})
 	encodedSubmodelID := base64.RawStdEncoding.EncodeToString([]byte("sm-1"))
 
-	response, err := sut.GetSubmodelElementByPathSubmodelRepo(context.Background(), encodedSubmodelID, "a.b", "invalid-level", "")
+	response, err := sut.GetSubmodelElementByPathSubmodelRepo(contextWithABACDisabled(t), encodedSubmodelID, "a.b", "invalid-level", "")
 	require.NoError(t, err)
 	require.Equal(t, 400, response.Code)
 }
@@ -120,7 +137,7 @@ func TestInvokeOperationValueOnlyReturnsBadRequest(t *testing.T) {
 	t.Parallel()
 
 	sut := NewSubmodelRepositoryAPIAPIService(persistencepostgresql.SubmodelDatabase{})
-	response, err := sut.InvokeOperationValueOnly(context.Background(), "", "", "", gen.OperationRequestValueOnly{}, false)
+	response, err := sut.InvokeOperationValueOnly(contextWithABACDisabled(t), "", "", "", gen.OperationRequestValueOnly{}, false)
 	require.NoError(t, err)
 	require.Equal(t, 400, response.Code)
 }
@@ -210,7 +227,7 @@ func TestGetOperationAsyncStatusReturnsRedirectWithLocation(t *testing.T) {
 		State:              "Completed",
 	})
 
-	response, err := sut.GetOperationAsyncStatus(context.Background(), encodedSubmodelID, "Ops.Add", handleID)
+	response, err := sut.GetOperationAsyncStatus(contextWithABACDisabled(t), encodedSubmodelID, "Ops.Add", handleID)
 	require.NoError(t, err)
 	require.Equal(t, 302, response.Code)
 

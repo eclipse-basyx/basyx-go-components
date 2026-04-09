@@ -27,10 +27,14 @@
 package submodelelements
 
 import (
-	"github.com/FriedJannik/aas-go-sdk/types"
+	"github.com/aas-core-works/aas-core3.1-golang/types"
 	"github.com/doug-martin/goqu/v9"
 	"github.com/doug-martin/goqu/v9/exp"
 )
+
+func temporalColumnAsText(column exp.IdentifierExpression) exp.LiteralExpression {
+	return goqu.L(`trim(both '"' from to_json(?)::text)`, column)
+}
 
 func getSMEValueExpressionForRead(dialect goqu.DialectWrapper) exp.CaseExpression {
 	return goqu.Case().
@@ -143,9 +147,9 @@ func getSMEValueExpressionForRead(dialect goqu.DialectWrapper) exp.CaseExpressio
 						goqu.I("pe.value_text"),
 						goqu.L("?::text", goqu.I("pe.value_num")),
 						goqu.L("?::text", goqu.I("pe.value_bool")),
-						goqu.L("?::text", goqu.I("pe.value_time")),
-						goqu.L("?::text", goqu.I("pe.value_date")),
-						goqu.L("?::text", goqu.I("pe.value_datetime")),
+						temporalColumnAsText(goqu.I("pe.value_time")),
+						temporalColumnAsText(goqu.I("pe.value_date")),
+						temporalColumnAsText(goqu.I("pe.value_datetime")),
 					),
 					goqu.V("value_type"), goqu.I("pe.value_type"),
 					goqu.V("value_id"), goqu.COALESCE(
@@ -168,16 +172,16 @@ func getSMEValueExpressionForRead(dialect goqu.DialectWrapper) exp.CaseExpressio
 					goqu.V("min"), goqu.COALESCE(
 						goqu.I("re.min_text"),
 						goqu.L("?::text", goqu.I("re.min_num")),
-						goqu.L("?::text", goqu.I("re.min_time")),
-						goqu.L("?::text", goqu.I("re.min_date")),
-						goqu.L("?::text", goqu.I("re.min_datetime")),
+						temporalColumnAsText(goqu.I("re.min_time")),
+						temporalColumnAsText(goqu.I("re.min_date")),
+						temporalColumnAsText(goqu.I("re.min_datetime")),
 					),
 					goqu.V("max"), goqu.COALESCE(
 						goqu.I("re.max_text"),
 						goqu.L("?::text", goqu.I("re.max_num")),
-						goqu.L("?::text", goqu.I("re.max_time")),
-						goqu.L("?::text", goqu.I("re.max_date")),
-						goqu.L("?::text", goqu.I("re.max_datetime")),
+						temporalColumnAsText(goqu.I("re.max_time")),
+						temporalColumnAsText(goqu.I("re.max_date")),
+						temporalColumnAsText(goqu.I("re.max_datetime")),
 					),
 				)).
 				Where(goqu.I("re.id").Eq(goqu.I("sme.id"))).

@@ -19,8 +19,8 @@ import (
 	"os"
 	"strings"
 
-	"github.com/FriedJannik/aas-go-sdk/jsonization"
-	"github.com/FriedJannik/aas-go-sdk/types"
+	"github.com/aas-core-works/aas-core3.1-golang/jsonization"
+	"github.com/aas-core-works/aas-core3.1-golang/types"
 	persistencepostgresql "github.com/eclipse-basyx/basyx-go-components/internal/aasrepository/persistence"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
@@ -317,9 +317,18 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) GetThumbnailAasReposit
 		return gen.Response(http.StatusFound, openapi.Redirect{Location: thumbnailPath}), nil
 	}
 
+	resolvedContentType := strings.TrimSpace(contentType)
+	if resolvedContentType == "" {
+		if len(fileContent) > 0 {
+			resolvedContentType = http.DetectContentType(fileContent)
+		} else {
+			resolvedContentType = "application/octet-stream"
+		}
+	}
+
 	return gen.Response(http.StatusOK, openapi.FileDownload{
 		Content:     fileContent,
-		ContentType: contentType,
+		ContentType: resolvedContentType,
 		Filename:    fileName,
 	}), nil
 }

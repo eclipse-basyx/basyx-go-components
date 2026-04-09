@@ -31,6 +31,8 @@ jobs:
     strategy:
       matrix:
         service:
+          - name: aasenvironmentservice
+            image: eclipsebasyx/aasenvironment-go
           - name: aasregistryservice
             image: eclipsebasyx/aasregistry-go
           - name: discoveryservice
@@ -83,10 +85,10 @@ jobs:
             
             # Build tag list
             TAGS="${{ matrix.service.image }}:${VERSION}"
-            TAGS="${TAGS},${{ matrix.service.image }}:${MAJOR}.${MINOR}.${PATCH}"
             
             # Only add major/minor/latest tags for non-prerelease versions
             if [ -z "$PRERELEASE" ]; then
+              TAGS="${TAGS},${{ matrix.service.image }}:${MAJOR}.${MINOR}.${PATCH}"
               TAGS="${TAGS},${{ matrix.service.image }}:${MAJOR}.${MINOR}"
               TAGS="${TAGS},${{ matrix.service.image }}:${MAJOR}"
               TAGS="${TAGS},${{ matrix.service.image }}:latest"

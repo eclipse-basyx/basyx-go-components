@@ -4,8 +4,7 @@ This file provides a high-level map of the repository and links to in-depth docu
 
 ## Main Components
 
-- [cmd/](structure_cmd.md): Service entry points and configuration
-- [api/](structure_api.md): OpenAPI specifications and API contracts
+- [cmd/](structure_cmd.md): Service entry points, configuration, and OpenAPI contracts (`cmd/*/openapi.yaml`; generated copies in `pkg/*/api/openapi.yaml`)
 - [internal/](structure_internal.md): Core business logic, persistence, and tests
 - [pkg/](structure_pkg.md): Shared libraries and API clients
 - [examples/](structure_examples.md): Sample setups and minimal examples

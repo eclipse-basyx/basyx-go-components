@@ -30,10 +30,10 @@ package model
 import (
 	"errors"
 
-	"github.com/FriedJannik/aas-go-sdk/jsonization"
-	"github.com/FriedJannik/aas-go-sdk/stringification"
-	"github.com/FriedJannik/aas-go-sdk/types"
-	"github.com/FriedJannik/aas-go-sdk/verification"
+	"github.com/aas-core-works/aas-core3.1-golang/jsonization"
+	"github.com/aas-core-works/aas-core3.1-golang/stringification"
+	"github.com/aas-core-works/aas-core3.1-golang/types"
+	"github.com/aas-core-works/aas-core3.1-golang/verification"
 	jsoniter "github.com/json-iterator/go"
 )
 
@@ -90,6 +90,27 @@ func AssertAssetAdministrationShellDescriptorRequired(obj AssetAdministrationShe
 
 // AssertAssetAdministrationShellDescriptorConstraints checks if the values respects the defined constraints
 func AssertAssetAdministrationShellDescriptorConstraints(obj AssetAdministrationShellDescriptor) error {
+	if obj.AssetType != "" {
+		if err := validateUnicodeStringConstraint(obj.AssetType); err != nil {
+			return err
+		}
+	}
+	if obj.GlobalAssetId != "" {
+		if err := validateUnicodeStringConstraint(obj.GlobalAssetId); err != nil {
+			return err
+		}
+	}
+	if obj.IdShort != "" {
+		if err := validateIDShortConstraint(obj.IdShort); err != nil {
+			return err
+		}
+	}
+	if obj.Id != "" {
+		if err := validateUnicodeStringConstraint(obj.Id); err != nil {
+			return err
+		}
+	}
+
 	for _, el := range obj.Endpoints {
 		if err := AssertEndpointConstraints(el); err != nil {
 			return err
@@ -286,6 +307,10 @@ func (obj *AssetAdministrationShellDescriptor) UnmarshalJSON(data []byte) error 
 	}
 	if id, ok := jsonable["id"].(string); ok {
 		obj.Id = id
+	}
+
+	if !isStrictVerificationEnabled() {
+		return nil
 	}
 
 	// Verify Description

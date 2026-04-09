@@ -32,6 +32,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"os"
 	"strconv"
 	"testing"
 	"time"
@@ -151,6 +152,10 @@ func startAdderMicroservice(t *testing.T) (string, func()) {
 }
 
 func TestDelegationOperation(t *testing.T) {
+	if os.Getenv("BASYX_EXTERNAL_COMPOSE") == "1" {
+		t.Skip("delegation callback from container to ephemeral host listener is not reliable in external compose mode")
+	}
+
 	baseURL := "http://localhost:6004"
 
 	delegationURL, shutdown := startAdderMicroservice(t)

@@ -29,7 +29,7 @@ import (
 	"database/sql"
 	"strconv"
 
-	"github.com/FriedJannik/aas-go-sdk/types"
+	"github.com/aas-core-works/aas-core3.1-golang/types"
 )
 
 // TypedValue represents a value categorized by its XS datatype for database storage.
@@ -125,17 +125,16 @@ func isValidNumeric(value string) bool {
 	return err == nil
 }
 
-// IsDateTimeType checks if the given XS datatype is a date/time type (excluding xs:date).
+// IsDateTimeType checks if the given XS datatype should be stored in TIMESTAMPTZ columns.
 //
 // Parameters:
 //   - valueType: The XS datatype string to check
 //
 // Returns:
-//   - bool: true if the type is a date/time type, false otherwise
+//   - bool: true if the type is xs:dateTime (stored in TIMESTAMPTZ), false otherwise
 func IsDateTimeType(valueType types.DataTypeDefXSD) bool {
 	switch valueType {
-	case types.DataTypeDefXSDDateTime, types.DataTypeDefXSDDuration, types.DataTypeDefXSDGDay, types.DataTypeDefXSDGMonth,
-		types.DataTypeDefXSDGMonthDay, types.DataTypeDefXSDGYear, types.DataTypeDefXSDGYearMonth:
+	case types.DataTypeDefXSDDateTime:
 		return true
 	default:
 		return false

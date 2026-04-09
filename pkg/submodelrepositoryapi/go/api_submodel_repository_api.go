@@ -19,8 +19,8 @@ import (
 	"os"
 	"strings"
 
-	aasjsonization "github.com/FriedJannik/aas-go-sdk/jsonization"
-	aasverification "github.com/FriedJannik/aas-go-sdk/verification"
+	aasjsonization "github.com/aas-core-works/aas-core3.1-golang/jsonization"
+	aasverification "github.com/aas-core-works/aas-core3.1-golang/verification"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"

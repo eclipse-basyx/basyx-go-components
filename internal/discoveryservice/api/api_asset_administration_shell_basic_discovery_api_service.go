@@ -18,8 +18,8 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/FriedJannik/aas-go-sdk/jsonization"
-	"github.com/FriedJannik/aas-go-sdk/types"
+	"github.com/aas-core-works/aas-core3.1-golang/jsonization"
+	"github.com/aas-core-works/aas-core3.1-golang/types"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	persistencepostgresql "github.com/eclipse-basyx/basyx-go-components/internal/discoveryservice/persistence"
@@ -78,6 +78,14 @@ func (s *AssetAdministrationShellBasicDiscoveryAPIAPIService) SearchAllAssetAdmi
 	cursor string,
 	assetLink []model.AssetLink,
 ) (model.ImplResponse, error) {
+	if len(assetLink) == 0 {
+		empty := model.GetAllAssetAdministrationShellIdsByAssetLink200Response{
+			PagingMetadata: model.PagedResultPagingMetadata{},
+			Result:         []string{},
+		}
+		return model.Response(http.StatusOK, empty), nil
+	}
+
 	// Decode the incoming cursor only if it’s non-empty; empty means "start from the beginning".
 	var internalCursor string
 	if strings.TrimSpace(cursor) != "" {
@@ -201,6 +209,57 @@ func (s *AssetAdministrationShellBasicDiscoveryAPIAPIService) PostAllAssetLinksB
 			log.Printf("🧭 [%s] Error PostAllAssetLinksById: failed to convert link to jsonable (aasId=%q): %v", componentName, string(decodeDiscoveryIdentifier), err)
 			return common.NewErrorResponse(
 				err, http.StatusInternalServerError, componentName, "PostAllAssetLinksById", "JsonConversion",
+			), err
+		}
+		jsonableLinks = append(jsonableLinks, jsonableLink)
+	}
+
+	return model.Response(http.StatusCreated, jsonableLinks), nil
+}
+
+// AddAllAssetLinksByID adds missing asset links for the Asset Administration Shell. This function does not detect if an asset link already exists, but simply adds the provided asset links to the existing ones.
+// This can lead to duplicate asset links if the same asset link is added multiple times. The global asset ID is added as specific asset ID with "name" equal to "globalAssetId" (see Constraint AASd-116).
+// From Tractus X
+// - AssetAdministrationShellApiDelegate.java:233
+// - Old DB unique constraint on KEY, FK_SHELL_ID was dropped:
+//   - added: db.changelog-v1.yaml:90
+//   - dropped: db.changelog-v1.yaml:331
+func (s *AssetAdministrationShellBasicDiscoveryAPIAPIService) AddAllAssetLinksByID(
+	ctx context.Context,
+	aasIdentifier string,
+	specificAssetID []types.ISpecificAssetID,
+) (model.ImplResponse, error) {
+	decodeDiscoveryIdentifier, decodeError := common.DecodeString(aasIdentifier)
+	if decodeError != nil {
+		log.Printf("🧭­ [%s] Error AddAllAssetLinksById: decode aasIdentifier=%q failed: %v", componentName, aasIdentifier, decodeError)
+		return common.NewErrorResponse(
+			decodeError, http.StatusBadRequest, componentName, "AddAllAssetLinksById", "BadRequest-Decode",
+		), nil
+	}
+
+	err := s.discoveryBackend.AddAllAssetLinks(ctx, string(decodeDiscoveryIdentifier), specificAssetID)
+	if err != nil {
+		switch {
+		case common.IsErrBadRequest(err):
+			log.Printf("🧭­ [%s] Error AddAllAssetLinksById: bad request (aasId=%q): %v", componentName, string(decodeDiscoveryIdentifier), err)
+			return common.NewErrorResponse(
+				err, http.StatusBadRequest, componentName, "AddAllAssetLinksById", "BadRequest",
+			), nil
+		default:
+			log.Printf("🧭­ [%s] Error AddAllAssetLinksById: internal (aasId=%q): %v", componentName, string(decodeDiscoveryIdentifier), err)
+			return common.NewErrorResponse(
+				err, http.StatusInternalServerError, componentName, "AddAllAssetLinksById", "Unhandled",
+			), err
+		}
+	}
+
+	jsonableLinks := make([]map[string]interface{}, 0, len(specificAssetID))
+	for _, link := range specificAssetID {
+		jsonableLink, err := jsonization.ToJsonable(link)
+		if err != nil {
+			log.Printf("🧭­ [%s] Error AddAllAssetLinksById: failed to convert link to jsonable (aasId=%q): %v", componentName, string(decodeDiscoveryIdentifier), err)
+			return common.NewErrorResponse(
+				err, http.StatusInternalServerError, componentName, "AddAllAssetLinksById", "JsonConversion",
 			), err
 		}
 		jsonableLinks = append(jsonableLinks, jsonableLink)

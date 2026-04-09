@@ -31,7 +31,7 @@ import (
 	"testing"
 
 	sqlmock "github.com/DATA-DOG/go-sqlmock"
-	"github.com/FriedJannik/aas-go-sdk/types"
+	"github.com/aas-core-works/aas-core3.1-golang/types"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/stretchr/testify/require"
 )
@@ -46,7 +46,7 @@ func TestPatchSubmodelIDMismatchReturnsBadRequest(t *testing.T) {
 	sut := &SubmodelDatabase{db: db}
 	submodel := types.NewSubmodel("sm-body")
 
-	err = sut.PatchSubmodel("sm-path", submodel)
+	err = sut.PatchSubmodel(contextWithABACDisabled(t), "sm-path", submodel)
 	require.Error(t, err)
 	require.True(t, common.IsErrBadRequest(err))
 	require.NoError(t, mock.ExpectationsWereMet())
@@ -67,7 +67,7 @@ func TestPatchSubmodelNotFoundRollsBack(t *testing.T) {
 		WillReturnError(sql.ErrNoRows)
 	mock.ExpectRollback()
 
-	err = sut.PatchSubmodel("sm-missing", submodel)
+	err = sut.PatchSubmodel(contextWithABACDisabled(t), "sm-missing", submodel)
 	require.Error(t, err)
 	require.True(t, common.IsErrNotFound(err))
 	require.NoError(t, mock.ExpectationsWereMet())
@@ -89,7 +89,7 @@ func TestPatchSubmodelSuccessReplacesSubmodel(t *testing.T) {
 	mock.ExpectQuery(`SELECT .*FROM .*submodel`).
 		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(100))
 	mock.ExpectQuery(`SELECT .*file_oid.*FROM .*submodel_element.*file_data`).
-		WillReturnRows(sqlmock.NewRows([]string{"file_oid"}))
+		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(int64(0)))
 	mock.ExpectExec(`DELETE FROM .*submodel`).
 		WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectQuery(`INSERT INTO .*submodel.*RETURNING`).
@@ -98,7 +98,7 @@ func TestPatchSubmodelSuccessReplacesSubmodel(t *testing.T) {
 		WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectCommit()
 
-	err = sut.PatchSubmodel("sm-1", submodel)
+	err = sut.PatchSubmodel(contextWithABACDisabled(t), "sm-1", submodel)
 	require.NoError(t, err)
 	require.NoError(t, mock.ExpectationsWereMet())
 }
@@ -113,7 +113,7 @@ func TestPutSubmodelIDMismatchReturnsBadRequest(t *testing.T) {
 	sut := &SubmodelDatabase{db: db}
 	submodel := types.NewSubmodel("sm-body")
 
-	isUpdate, err := sut.PutSubmodel("sm-path", submodel)
+	isUpdate, err := sut.PutSubmodel(contextWithABACDisabled(t), "sm-path", submodel)
 	require.Error(t, err)
 	require.False(t, isUpdate)
 	require.True(t, common.IsErrBadRequest(err))
@@ -141,7 +141,7 @@ func TestPutSubmodelCreatePathReturnsFalse(t *testing.T) {
 		WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectCommit()
 
-	isUpdate, err := sut.PutSubmodel("sm-new", submodel)
+	isUpdate, err := sut.PutSubmodel(contextWithABACDisabled(t), "sm-new", submodel)
 	require.NoError(t, err)
 	require.False(t, isUpdate)
 	require.NoError(t, mock.ExpectationsWereMet())
@@ -163,7 +163,7 @@ func TestPutSubmodelUpdatePathReturnsTrue(t *testing.T) {
 	mock.ExpectQuery(`SELECT .*FROM .*submodel`).
 		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(400))
 	mock.ExpectQuery(`SELECT .*file_oid.*FROM .*submodel_element.*file_data`).
-		WillReturnRows(sqlmock.NewRows([]string{"file_oid"}))
+		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(int64(0)))
 	mock.ExpectExec(`DELETE FROM .*submodel`).
 		WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectQuery(`INSERT INTO .*submodel.*RETURNING`).
@@ -172,7 +172,7 @@ func TestPutSubmodelUpdatePathReturnsTrue(t *testing.T) {
 		WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectCommit()
 
-	isUpdate, err := sut.PutSubmodel("sm-existing", submodel)
+	isUpdate, err := sut.PutSubmodel(contextWithABACDisabled(t), "sm-existing", submodel)
 	require.NoError(t, err)
 	require.True(t, isUpdate)
 	require.NoError(t, mock.ExpectationsWereMet())
@@ -188,12 +188,14 @@ func TestPatchSubmodelElementByPathNotFoundReturnsNotFound(t *testing.T) {
 	sut := &SubmodelDatabase{db: db}
 	patchElement := types.NewCapability()
 
+	mock.ExpectBegin()
 	mock.ExpectQuery(`SELECT .*FROM .*submodel`).
 		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(100))
 	mock.ExpectQuery(`SELECT .*model_type.*FROM .*submodel_element`).
 		WillReturnError(sql.ErrNoRows)
+	mock.ExpectRollback()
 
-	err = sut.UpdateSubmodelElement("sm-1", "does.not.exist", patchElement, false)
+	err = sut.UpdateSubmodelElement(contextWithABACDisabled(t), "sm-1", "does.not.exist", patchElement, false)
 	require.Error(t, err)
 	require.True(t, common.IsErrNotFound(err))
 	require.NoError(t, mock.ExpectationsWereMet())
@@ -211,12 +213,11 @@ func TestPatchSubmodelElementByPathSuccess(t *testing.T) {
 	patchedIDShort := "renamedButIgnoredForPatch"
 	patchElement.SetIDShort(&patchedIDShort)
 
+	mock.ExpectBegin()
 	mock.ExpectQuery(`SELECT .*FROM .*submodel`).
 		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(100))
 	mock.ExpectQuery(`SELECT .*model_type.*FROM .*submodel_element`).
 		WillReturnRows(sqlmock.NewRows([]string{"model_type"}).AddRow(types.ModelTypeCapability))
-
-	mock.ExpectBegin()
 	mock.ExpectQuery(`SELECT .*FROM .*submodel`).
 		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(100))
 	mock.ExpectQuery(`SELECT .*id.*,.*id_short.*FROM .*submodel_element`).
@@ -227,7 +228,7 @@ func TestPatchSubmodelElementByPathSuccess(t *testing.T) {
 		WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectCommit()
 
-	err = sut.UpdateSubmodelElement("sm-1", "oldIdShort", patchElement, false)
+	err = sut.UpdateSubmodelElement(contextWithABACDisabled(t), "sm-1", "oldIdShort", patchElement, false)
 	require.NoError(t, err)
 	require.NoError(t, mock.ExpectationsWereMet())
 }

@@ -1,0 +1,27 @@
+infrastructures:
+  default: infra1
+
+  infra1:
+    name: Secured BaSyx
+    components:
+      aasDiscovery:
+        baseUrl: "http://localhost:8084/lookup/shells"
+      aasRegistry:
+        baseUrl: "http://localhost:8082/shell-descriptors"
+        hasDiscoveryIntegration: false
+      submodelRegistry:
+        baseUrl: "http://localhost:8083/submodel-descriptors"
+      aasRepository:
+        baseUrl: "http://localhost:8090/shells"
+        hasRegistryIntegration: false
+      submodelRepository:
+        baseUrl: "http://localhost:8091/submodels"
+        hasRegistryIntegration: false
+      conceptDescriptionRepository:
+        baseUrl: "http://localhost:8092/concept-descriptions"
+    security:
+      type: oauth2
+      config:
+        flow: auth_code
+        issuer: "http://keycloak.localhost:8080/realms/basyx"
+        clientId: "basyx-ui"
