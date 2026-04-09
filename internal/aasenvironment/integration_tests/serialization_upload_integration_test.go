@@ -3,6 +3,7 @@ package main
 import (
 	"archive/zip"
 	"bytes"
+	"embed"
 	"encoding/base64"
 	"encoding/json"
 	"encoding/xml"
@@ -11,9 +12,7 @@ import (
 	"net/http"
 	"net/textproto"
 	"net/url"
-	"os"
 	"path"
-	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -86,6 +85,9 @@ var sampleEnvironmentJSON = []byte(`{
     }
   ]
 }`)
+
+//go:embed aas/environment.json aas/ProductionPlanSFKL.aasx
+var fixtureFiles embed.FS
 
 func TestUploadEndpointMediaTypes(t *testing.T) {
 	jsonPayload, xmlPayload, aasxXMLPayload, aasxXMLWithSupplementaryPayload, aasxJSONPayload := buildSampleEnvironmentPayloads(t)
@@ -724,10 +726,17 @@ func anySlice(value any) []any {
 func mustReadFixtureFile(t *testing.T, fileName string) []byte {
 	t.Helper()
 
-	filePath := filepath.Join("aas", fileName)
-	payload, err := os.ReadFile(filePath)
-	require.NoError(t, err, "failed reading fixture file: %s", filePath)
-	require.NotEmpty(t, payload, "fixture file is empty: %s", filePath)
+	fixturePathByName := map[string]string{
+		"environment.json":        "aas/environment.json",
+		"ProductionPlanSFKL.aasx": "aas/ProductionPlanSFKL.aasx",
+	}
+
+	fixturePath, ok := fixturePathByName[fileName]
+	require.Truef(t, ok, "unsupported fixture file: %s", fileName)
+
+	payload, err := fixtureFiles.ReadFile(fixturePath)
+	require.NoError(t, err, "failed reading fixture file: %s", fixturePath)
+	require.NotEmpty(t, payload, "fixture file is empty: %s", fixturePath)
 
 	return payload
 }

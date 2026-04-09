@@ -319,7 +319,7 @@ func (s *SerializationUploadService) resolveSubmodelsForSerialization(
 func (s *SerializationUploadService) loadSubmodelsByIDs(ctx context.Context, submodelIDs []string) ([]types.ISubmodel, error) {
 	result := make([]types.ISubmodel, 0, len(submodelIDs))
 	for _, submodelID := range deduplicateStrings(submodelIDs) {
-		submodel, err := s.persistence.SubmodelRepository.GetSubmodelByID(ctx, submodelID, "")
+		submodel, err := s.persistence.SubmodelRepository.GetSubmodelByID(ctx, submodelID, "", false)
 		if err != nil {
 			return nil, fmt.Errorf("AASENV-SERIALIZATION-SM-GETBYID %w", err)
 		}
