@@ -44,7 +44,7 @@ import (
 func deleteAllSubmodelDescriptors(t *testing.T, runner *testenv.JSONSuiteRunner, stepNumber int) {
 	response, err := runner.RunStep(testenv.JSONSuiteStep{
 		Method:         http.MethodGet,
-		Endpoint:       "http://127.0.0.1:6005/submodel-descriptors",
+		Endpoint:       "http://127.0.0.1:6004/submodel-descriptors",
 		ExpectedStatus: http.StatusOK,
 	}, stepNumber)
 	require.NoError(t, err)
@@ -60,7 +60,7 @@ func deleteAllSubmodelDescriptors(t *testing.T, runner *testenv.JSONSuiteRunner,
 		enc := base64.RawURLEncoding.EncodeToString([]byte(item.ID))
 		_, err := runner.RunStep(testenv.JSONSuiteStep{
 			Method:         http.MethodDelete,
-			Endpoint:       fmt.Sprintf("http://127.0.0.1:6005/submodel-descriptors/%s", enc),
+			Endpoint:       fmt.Sprintf("http://127.0.0.1:6004/submodel-descriptors/%s", enc),
 			ExpectedStatus: http.StatusNoContent,
 		}, stepNumber)
 		require.NoError(t, err)
@@ -85,7 +85,7 @@ func TestMain(m *testing.M) {
 
 	os.Exit(testenv.RunComposeTestMain(m, testenv.ComposeTestMainOptions{
 		ComposeFile:   "docker_compose/docker_compose.yml",
-		HealthURL:     "http://127.0.0.1:6005/health",
+		HealthURL:     "http://127.0.0.1:6004/health",
 		HealthTimeout: 2 * time.Minute,
 	}))
 }

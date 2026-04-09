@@ -36,7 +36,7 @@ services:
       - ABAC_MODELPATH=/security_env/access-rules.json
       - OIDC_TRUSTLISTPATH=/security_env/trustlist.json
     ports:
-      - "5004:5004"
+      - "6004:5004"
     depends_on:
       db:
         condition: service_healthy
