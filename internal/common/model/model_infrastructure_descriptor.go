@@ -26,6 +26,65 @@ var allowedInfrastructureEndpointInterfaces = map[string]struct{}{
 	"SUBMODEL-REPOSITORY-3.1": {},
 	"AASX-FILE-3.0":           {},
 	"AASX-FILE-3.1":           {},
+	"MQTT-BROKER-3.1.1":       {},
+}
+
+var requiredCoreInfrastructureEndpointInterfaces = map[string]struct{}{
+	"AAS-DISCOVERY-3.0":       {},
+	"AAS-DISCOVERY-3.1":       {},
+	"AAS-REGISTRY-3.0":        {},
+	"AAS-REGISTRY-3.1":        {},
+	"AAS-REPOSITORY-3.0":      {},
+	"AAS-REPOSITORY-3.1":      {},
+	"SUBMODEL-REGISTRY-3.0":   {},
+	"SUBMODEL-REGISTRY-3.1":   {},
+	"SUBMODEL-REPOSITORY-3.0": {},
+	"SUBMODEL-REPOSITORY-3.1": {},
+	"AASX-FILE-3.0":           {},
+	"AASX-FILE-3.1":           {},
+}
+
+// InfrastructureEndpointInterfaceConstraintError indicates that endpoint interface
+// values violate the infrastructure descriptor interface policy.
+type InfrastructureEndpointInterfaceConstraintError struct {
+	Message string
+}
+
+func (e *InfrastructureEndpointInterfaceConstraintError) Error() string {
+	return e.Message
+}
+
+// IsInfrastructureEndpointInterfaceConstraintError reports whether err is caused by
+// invalid endpoint interface values or a missing required core interface.
+func IsInfrastructureEndpointInterfaceConstraintError(err error) bool {
+	var target *InfrastructureEndpointInterfaceConstraintError
+	return errors.As(err, &target)
+}
+
+func validateInfrastructureEndpointInterfaces(endpoints []Endpoint) error {
+	hasRequiredCoreInterface := false
+
+	for i, el := range endpoints {
+		interfaceName := strings.TrimSpace(el.Interface)
+
+		if _, ok := allowedInfrastructureEndpointInterfaces[interfaceName]; !ok {
+			return &InfrastructureEndpointInterfaceConstraintError{
+				Message: fmt.Sprintf("endpoints[%d].interface %q is not allowed", i, el.Interface),
+			}
+		}
+
+		if _, ok := requiredCoreInfrastructureEndpointInterfaces[interfaceName]; ok {
+			hasRequiredCoreInterface = true
+		}
+	}
+
+	if !hasRequiredCoreInterface {
+		return &InfrastructureEndpointInterfaceConstraintError{
+			Message: "endpoints must contain at least one required core interface",
+		}
+	}
+
+	return nil
 }
 
 type InfrastructureDescriptor struct {
@@ -71,18 +130,14 @@ func AssertInfrastructureDescriptorRequired(obj InfrastructureDescriptor) error 
 
 // AssertInfrastructureDescriptorConstraints checks if the values respects the defined constraints
 func AssertInfrastructureDescriptorConstraints(obj InfrastructureDescriptor) error {
-	hasAllowedEndpointInterface := false
 	for _, el := range obj.Endpoints {
 		if err := AssertEndpointConstraints(el); err != nil {
 			return err
 		}
-		if _, ok := allowedInfrastructureEndpointInterfaces[strings.TrimSpace(el.Interface)]; ok {
-			hasAllowedEndpointInterface = true
-		}
 	}
 
-	if !hasAllowedEndpointInterface {
-		return fmt.Errorf("endpoints must contain at least one endpoint with an AAS interface")
+	if err := validateInfrastructureEndpointInterfaces(obj.Endpoints); err != nil {
+		return err
 	}
 
 	seen := make(map[string]struct{}, len(obj.NameOptions))

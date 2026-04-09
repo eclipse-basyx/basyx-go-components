@@ -28,10 +28,24 @@
         "endpoints": [
             {
                 "protocolInformation": {
-                    "href": "https://mqtt.de",
+                    "href": "https://demo.digital-twin.host/aas-registry",
                     "endpointProtocol": "HTTPS"
                 },
-                "interface": "MQTT-BROKER-3.1.1"
+                "interface": "NON-AAS-3.0"
+            },
+            {
+                "protocolInformation": {
+                    "href": "https://demo.digital-twin.host/submodel-registry",
+                    "endpointProtocol": "HTTPS"
+                },
+                "interface": "SUBMODEL-REGISTRY-3.1"
+            },
+            {
+                "protocolInformation": {
+                    "href": "https://demo.digital-twin.host/aas-repository",
+                    "endpointProtocol": "HTTPS"
+                },
+                "interface": "STILL-NON-AAS-3.1"
             }
         ],
         "idShort": "fraunhoferIese",

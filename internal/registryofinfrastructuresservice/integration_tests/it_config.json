@@ -57,6 +57,13 @@
         "expectedStatus": 400
     },
     {
+        "context": "005 - Create Infrastructure Descriptor (Conflict - Disallowed AAS-Interfaces in Endpoint) - POST /companies",
+        "method": "POST",
+        "endpoint": "http://127.0.0.1:5004/companies",
+        "data": "postBody/infrastructure_descriptor_malformed_disallowed_aas_interfaces_in_endpoint.json",
+        "expectedStatus": 400
+    },
+    {
         "context": "005 - Create Infrastructure Descriptor (Conflict - Only Non-AAS-Interfaces in Endpoint) - POST /companies",
         "method": "POST",
         "endpoint": "http://127.0.0.1:5004/companies",
