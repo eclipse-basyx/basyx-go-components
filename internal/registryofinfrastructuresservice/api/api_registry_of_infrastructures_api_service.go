@@ -156,6 +156,14 @@ func (s *RegistryOfInfrastructuresAPIAPIService) GetAllInfrastructureDescriptors
 
 // PostInfrastructureDescriptor - Creates a new Infrastructure Descriptor, i.e. registers an Infrastructure
 func (s *RegistryOfInfrastructuresAPIAPIService) PostInfrastructureDescriptor(ctx context.Context, infrastructureDescriptor model.InfrastructureDescriptor) (model.ImplResponse, error) {
+	if strings.TrimSpace(infrastructureDescriptor.Domain) != "" && !model.IsStrictInfrastructureDomain(infrastructureDescriptor.Domain) {
+		invalidDomainErr := common.NewErrBadRequest("ROI-POSTINFRASTRUCTUREDESCRIPTOR-VALIDATEDOMAIN provided domain is not a syntactically valid domain")
+		log.Printf("📍 [%s] Error in PostInfrastructureDescriptor: invalid domain syntax in body (infrastructureDomain=%q)", componentName, infrastructureDescriptor.Domain)
+		return common.NewErrorResponse(
+			invalidDomainErr, http.StatusBadRequest, componentName, "PostInfrastructureDescriptor", "BadRequest-InvalidDomainSyntax",
+		), nil
+	}
+
 	result, err := s.registryOfInfrastructuresBackend.InsertInfrastructureDescriptor(ctx, infrastructureDescriptor)
 	if err != nil {
 		switch {
@@ -195,6 +203,13 @@ func (s *RegistryOfInfrastructuresAPIAPIService) GetInfrastructureDescriptorById
 		log.Printf("📍 [%s] Error in GetInfrastructureDescriptorById: decode infrastructureIdentifier=%q: %v", componentName, infrastructureIdentifier, decodeErr)
 		return common.NewErrorResponse(
 			decodeErr, http.StatusBadRequest, componentName, "GetInfrastructureDescriptorById", "BadRequest-Decode",
+		), nil
+	}
+	if !model.IsStrictInfrastructureDomain(decoded) {
+		invalidDomainErr := common.NewErrBadRequest("ROI-GETINFRASTRUCTUREDESCRIPTORBYID-VALIDATEDOMAIN decoded identifier is not a syntactically valid domain")
+		log.Printf("📍 [%s] Error in GetInfrastructureDescriptorById: invalid decoded domain syntax (infrastructureIdentifier=%q decoded=%q)", componentName, infrastructureIdentifier, decoded)
+		return common.NewErrorResponse(
+			invalidDomainErr, http.StatusBadRequest, componentName, "GetInfrastructureDescriptorById", "BadRequest-InvalidDomainSyntax",
 		), nil
 	}
 
@@ -238,6 +253,13 @@ func (s *RegistryOfInfrastructuresAPIAPIService) PutInfrastructureDescriptorById
 		log.Printf("📍 [%s] Error in PutInfrastructureDescriptorById: decode infrastructureIdentifier=%q: %v", componentName, infrastructureIdentifier, decErr)
 		return common.NewErrorResponse(
 			decErr, http.StatusBadRequest, componentName, "PutInfrastructureDescriptorById", "BadRequest-Decode",
+		), nil
+	}
+	if !model.IsStrictInfrastructureDomain(decodedInfrastructure) {
+		invalidDomainErr := common.NewErrBadRequest("ROI-PUTINFRASTRUCTUREDESCRIPTORBYID-VALIDATEDOMAIN decoded identifier is not a syntactically valid domain")
+		log.Printf("📍 [%s] Error in PutInfrastructureDescriptorById: invalid decoded domain syntax (infrastructureIdentifier=%q decoded=%q)", componentName, infrastructureIdentifier, decodedInfrastructure)
+		return common.NewErrorResponse(
+			invalidDomainErr, http.StatusBadRequest, componentName, "PutInfrastructureDescriptorById", "BadRequest-InvalidDomainSyntax",
 		), nil
 	}
 
@@ -303,6 +325,13 @@ func (s *RegistryOfInfrastructuresAPIAPIService) DeleteInfrastructureDescriptorB
 		log.Printf("📍 [%s] Error DeleteInfrastructureDescriptorById: decode infrastructureIdentifier=%q failed: %v", componentName, infrastructureIdentifier, decodeErr)
 		return common.NewErrorResponse(
 			decodeErr, http.StatusBadRequest, componentName, "DeleteInfrastructureDescriptorById", "BadRequest-Decode",
+		), nil
+	}
+	if !model.IsStrictInfrastructureDomain(decoded) {
+		invalidDomainErr := common.NewErrBadRequest("ROI-DELETEINFRASTRUCTUREDESCRIPTORBYID-VALIDATEDOMAIN decoded identifier is not a syntactically valid domain")
+		log.Printf("📍 [%s] Error in DeleteInfrastructureDescriptorById: invalid decoded domain syntax (infrastructureIdentifier=%q decoded=%q)", componentName, infrastructureIdentifier, decoded)
+		return common.NewErrorResponse(
+			invalidDomainErr, http.StatusBadRequest, componentName, "DeleteInfrastructureDescriptorById", "BadRequest-InvalidDomainSyntax",
 		), nil
 	}
 

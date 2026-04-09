@@ -183,6 +183,19 @@ func (c *RegistryOfInfrastructuresAPIAPIController) PostInfrastructureDescriptor
 		_ = EncodeJSONResponse(result.Body, &result.Code, w)
 		return
 	}
+	if !model.IsStrictInfrastructureDomain(infrastructureDescriptorParam.Domain) {
+		invalidDomainErr := common.NewErrBadRequest("ROI-POSTINFRASTRUCTUREDESCRIPTOR-VALIDATEDOMAIN provided domain is not a syntactically valid domain")
+		log.Printf("📍 [%s] Error in PostInfrastructureDescriptor: invalid domain syntax in body (infrastructureDomain=%q)", componentName, infrastructureDescriptorParam.Domain)
+		result := common.NewErrorResponse(
+			invalidDomainErr,
+			http.StatusBadRequest,
+			componentName,
+			"PostInfrastructureDescriptor",
+			"RequestBody-InvalidDomainSyntax",
+		)
+		_ = EncodeJSONResponse(result.Body, &result.Code, w)
+		return
+	}
 	if err := model.AssertInfrastructureDescriptorConstraints(infrastructureDescriptorParam); err != nil {
 		log.Printf("📍 [%s] Error in PostInfrastructureDescriptor: constraints validation failed: %v", componentName, err)
 		result := common.NewErrorResponse(

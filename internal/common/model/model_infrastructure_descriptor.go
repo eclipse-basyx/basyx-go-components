@@ -87,6 +87,55 @@ func validateInfrastructureEndpointInterfaces(endpoints []Endpoint) error {
 	return nil
 }
 
+func IsStrictInfrastructureDomain(domain string) bool {
+	domain = strings.TrimSpace(domain)
+	if domain == "" || strings.HasPrefix(domain, ".") || strings.HasSuffix(domain, ".") {
+		return false
+	}
+	if len(domain) > 253 {
+		return false
+	}
+
+	labels := strings.Split(domain, ".")
+	if len(labels) < 2 {
+		return false
+	}
+
+	for _, label := range labels {
+		if !isValidInfrastructureDomainLabel(label) {
+			return false
+		}
+	}
+
+	for _, char := range labels[len(labels)-1] {
+		if (char < 'a' || char > 'z') && (char < 'A' || char > 'Z') {
+			return false
+		}
+	}
+
+	return true
+}
+
+func isValidInfrastructureDomainLabel(label string) bool {
+	if len(label) == 0 || len(label) > 63 {
+		return false
+	}
+	if label[0] == '-' || label[len(label)-1] == '-' {
+		return false
+	}
+
+	for _, char := range label {
+		isUpper := char >= 'A' && char <= 'Z'
+		isLower := char >= 'a' && char <= 'z'
+		isDigit := char >= '0' && char <= '9'
+		if !isUpper && !isLower && !isDigit && char != '-' {
+			return false
+		}
+	}
+
+	return true
+}
+
 type InfrastructureDescriptor struct {
 	Description []types.ILangStringTextType `json:"description,omitempty"`
 
@@ -130,6 +179,10 @@ func AssertInfrastructureDescriptorRequired(obj InfrastructureDescriptor) error 
 
 // AssertInfrastructureDescriptorConstraints checks if the values respects the defined constraints
 func AssertInfrastructureDescriptorConstraints(obj InfrastructureDescriptor) error {
+	if strings.TrimSpace(obj.Domain) != "" && !IsStrictInfrastructureDomain(obj.Domain) {
+		return fmt.Errorf("domain %q is not a syntactically valid domain", obj.Domain)
+	}
+
 	for _, el := range obj.Endpoints {
 		if err := AssertEndpointConstraints(el); err != nil {
 			return err
