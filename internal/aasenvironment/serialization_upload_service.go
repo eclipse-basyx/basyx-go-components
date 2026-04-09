@@ -36,7 +36,6 @@ import (
 	"mime"
 	"net/http"
 	"net/url"
-	"os"
 	"path/filepath"
 	"reflect"
 	"sort"
@@ -614,23 +613,11 @@ func environmentToAASXBytes(environment types.IEnvironment, kind serializationKi
 		return nil, specErr
 	}
 
-	tmpFile, err := os.CreateTemp("", "aasenv-serialization-*.aasx")
-	if err != nil {
-		return nil, common.NewInternalServerError("AASENV-SERIALIZATION-AASX-CREATETEMP " + err.Error())
-	}
-	tmpPath := tmpFile.Name()
-	if closeErr := tmpFile.Close(); closeErr != nil {
-		_ = os.Remove(tmpPath)
-		return nil, common.NewInternalServerError("AASENV-SERIALIZATION-AASX-CLOSETEMP " + closeErr.Error())
-	}
-	defer func() {
-		_ = os.Remove(tmpPath)
-	}()
-
+	stream := &memoryReadWriteSeeker{}
 	packaging := aasx.NewPackaging()
-	pkg, createErr := packaging.Create(tmpPath)
+	pkg, createErr := packaging.CreateInStream(stream)
 	if createErr != nil {
-		return nil, common.NewInternalServerError("AASENV-SERIALIZATION-AASX-CREATE " + createErr.Error())
+		return nil, common.NewInternalServerError("AASENV-SERIALIZATION-AASX-CREATEINSTREAM " + createErr.Error())
 	}
 	defer func() {
 		_ = pkg.Close()
@@ -654,10 +641,13 @@ func environmentToAASXBytes(environment types.IEnvironment, kind serializationKi
 		return nil, common.NewInternalServerError("AASENV-SERIALIZATION-AASX-FLUSH " + flushErr.Error())
 	}
 
-	// #nosec G304 -- tmpPath is created by os.CreateTemp in this function.
-	result, readErr := os.ReadFile(tmpPath)
+	if _, seekErr := stream.Seek(0, io.SeekStart); seekErr != nil {
+		return nil, common.NewInternalServerError("AASENV-SERIALIZATION-AASX-SEEKSTREAM " + seekErr.Error())
+	}
+
+	result, readErr := io.ReadAll(stream)
 	if readErr != nil {
-		return nil, common.NewInternalServerError("AASENV-SERIALIZATION-AASX-READFILE " + readErr.Error())
+		return nil, common.NewInternalServerError("AASENV-SERIALIZATION-AASX-READSTREAM " + readErr.Error())
 	}
 
 	return result, nil
@@ -984,7 +974,61 @@ func writeBinaryResponse(w http.ResponseWriter, statusCode int, contentType stri
 		w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%q", safeName))
 	}
 	w.WriteHeader(statusCode)
-	_, _ = w.Write(payload)
+	_, _ = io.Copy(w, bytes.NewReader(payload))
+}
+
+type memoryReadWriteSeeker struct {
+	buffer []byte
+	offset int64
+}
+
+func (m *memoryReadWriteSeeker) Read(p []byte) (int, error) {
+	if m.offset >= int64(len(m.buffer)) {
+		return 0, io.EOF
+	}
+
+	n := copy(p, m.buffer[m.offset:])
+	m.offset += int64(n)
+	return n, nil
+}
+
+func (m *memoryReadWriteSeeker) Write(p []byte) (int, error) {
+	if m.offset < 0 {
+		return 0, common.NewInternalServerError("AASENV-SERIALIZATION-AASX-NEGATIVEOFFSET negative stream offset")
+	}
+
+	end := m.offset + int64(len(p))
+	if end > int64(len(m.buffer)) {
+		grown := make([]byte, end)
+		copy(grown, m.buffer)
+		m.buffer = grown
+	}
+
+	copy(m.buffer[m.offset:end], p)
+	m.offset = end
+	return len(p), nil
+}
+
+func (m *memoryReadWriteSeeker) Seek(offset int64, whence int) (int64, error) {
+	var base int64
+	switch whence {
+	case io.SeekStart:
+		base = 0
+	case io.SeekCurrent:
+		base = m.offset
+	case io.SeekEnd:
+		base = int64(len(m.buffer))
+	default:
+		return 0, common.NewInternalServerError("AASENV-SERIALIZATION-AASX-BADSEEKWHENCE invalid seek whence")
+	}
+
+	next := base + offset
+	if next < 0 {
+		return 0, common.NewInternalServerError("AASENV-SERIALIZATION-AASX-NEGATIVESEEK negative seek position")
+	}
+
+	m.offset = next
+	return m.offset, nil
 }
 
 func statusFromError(err error) int {
