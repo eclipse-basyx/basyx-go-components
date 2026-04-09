@@ -150,6 +150,7 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 		discoveryapi.NewAssetAdministrationShellBasicDiscoveryAPIAPIService(*discoveryPersistence),
 		persistence,
 	)
+	serializationUploadService := aasenvironment.NewSerializationUploadService(persistence)
 
 	aasRegistryCtrl := aasregistryopenapi.NewAssetAdministrationShellRegistryAPIAPIController(customAASRegistry, cfg.Server.ContextPath)
 	smRegistryCtrl := smregistryopenapi.NewSubmodelRegistryAPIAPIController(customSMRegistry, cfg.Server.ContextPath)
@@ -188,6 +189,7 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 	for _, rt := range descriptionCtrl.Routes() {
 		apiRouter.Method(rt.Method, rt.Pattern, rt.HandlerFunc)
 	}
+	serializationUploadService.RegisterRoutes(apiRouter)
 
 	r.Mount(base, apiRouter)
 
