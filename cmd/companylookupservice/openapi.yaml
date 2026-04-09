@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
-  title: BaSyx Registry of Infrastructures API
-  description: Registry of Infrastructures (RoI) API for registering and discovering infrastructure components.
+  title: BaSyx Company Lookup API
+  description: Company Lookup (ComLookup) API for registering and discovering company components.
   contact:
     name: BaSyx Developers
     email: basyx-dev@eclipse.org
@@ -14,9 +14,9 @@ servers:
 paths:
   /companies:
     get:
-      tags: [Registry of Infrastructures API]
-      summary: Returns all Infrastructure Descriptors
-      operationId: GetAllInfrastructureDescriptors
+      tags: [Company Lookup API]
+      summary: Returns all Company Descriptors
+      operationId: GetAllCompanyDescriptors
       parameters:
         - $ref: '#/components/parameters/Limit'
         - $ref: '#/components/parameters/Cursor'
@@ -24,14 +24,14 @@ paths:
         - $ref: '#/components/parameters/AssetId'
       responses:
         '200':
-          description: Paged list of Infrastructure Descriptors
+          description: Paged list of Company Descriptors
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PagedInfrastructureDescriptors'
+                $ref: '#/components/schemas/PagedCompanyDescriptors'
               examples:
-                infrastructureDescriptor:
-                  $ref: '#/components/examples/InfrastructureDescriptor'
+                companyDescriptor:
+                  $ref: '#/components/examples/CompanyDescriptor'
         '400':
           $ref: '#/components/responses/BadRequest'
         '500':
@@ -40,29 +40,29 @@ paths:
           $ref: '#/components/responses/DefaultError'
 
     post:
-      tags: [Registry of Infrastructures API]
-      summary: Creates a new Infrastructure Descriptor
-      operationId: PostInfrastructureDescriptor
+      tags: [Company Lookup API]
+      summary: Creates a new Company Descriptor
+      operationId: PostCompanyDescriptor
       requestBody:
-        description: Infrastructure Descriptor envelope object
+        description: Company Descriptor envelope object
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/InfrastructureDescriptorEnvelope'
+              $ref: '#/components/schemas/CompanyDescriptorEnvelope'
             examples:
-              infrastructureDescriptor:
-                $ref: '#/components/examples/InfrastructureDescriptorSingleEnvelope'
+              companyDescriptor:
+                $ref: '#/components/examples/CompanyDescriptorSingleEnvelope'
       responses:
         '201':
-          description: Infrastructure Descriptor created successfully
+          description: Company Descriptor created successfully
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/InfrastructureDescriptorEnvelope'
+                $ref: '#/components/schemas/CompanyDescriptorEnvelope'
               examples:
-                infrastructureDescriptor:
-                  $ref: '#/components/examples/InfrastructureDescriptorSingleEnvelope'
+                companyDescriptor:
+                  $ref: '#/components/examples/CompanyDescriptorSingleEnvelope'
         '400':
           $ref: '#/components/responses/BadRequest'
         '409':
@@ -72,23 +72,23 @@ paths:
         'default':
           $ref: '#/components/responses/DefaultError'
 
-  /companies/{infrastructureIdentifier}:
+  /companies/{companyIdentifier}:
     parameters:
-      - $ref: '#/components/parameters/InfrastructureIdentifier'
+      - $ref: '#/components/parameters/CompanyIdentifier'
     get:
-      tags: [Registry of Infrastructures API]
-      summary: Returns a specific Infrastructure Descriptor
-      operationId: GetInfrastructureDescriptorById
+      tags: [Company Lookup API]
+      summary: Returns a specific Company Descriptor
+      operationId: GetCompanyDescriptorById
       responses:
         '200':
-          description: Infrastructure Descriptor
+          description: Company Descriptor
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/InfrastructureDescriptorEnvelope'
+                $ref: '#/components/schemas/CompanyDescriptorEnvelope'
               examples:
-                infrastructureDescriptor:
-                  $ref: '#/components/examples/InfrastructureDescriptorSingleEnvelope'
+                companyDescriptor:
+                  $ref: '#/components/examples/CompanyDescriptorSingleEnvelope'
         '400':
           $ref: '#/components/responses/BadRequest'
         '404':
@@ -99,29 +99,29 @@ paths:
           $ref: '#/components/responses/DefaultError'
 
     put:
-      tags: [Registry of Infrastructures API]
-      summary: Updates an existing Infrastructure Descriptor
-      operationId: PutInfrastructureDescriptorById
+      tags: [Company Lookup API]
+      summary: Updates an existing Company Descriptor
+      operationId: PutCompanyDescriptorById
       requestBody:
-        description: Infrastructure Descriptor envelope object
+        description: Company Descriptor envelope object
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/InfrastructureDescriptorEnvelope'
+              $ref: '#/components/schemas/CompanyDescriptorEnvelope'
             examples:
-                infrastructureDescriptor:
-                  $ref: '#/components/examples/InfrastructureDescriptorSingleEnvelope'
+                companyDescriptor:
+                  $ref: '#/components/examples/CompanyDescriptorSingleEnvelope'
       responses:
         '200':
-          description: Infrastructure Descriptor updated successfully
+          description: Company Descriptor updated successfully
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/InfrastructureDescriptorEnvelope'
+                $ref: '#/components/schemas/CompanyDescriptorEnvelope'
               examples:
-                infrastructureDescriptor:
-                  $ref: '#/components/examples/InfrastructureDescriptorSingleEnvelope'
+                companyDescriptor:
+                  $ref: '#/components/examples/CompanyDescriptorSingleEnvelope'
         '400':
           $ref: '#/components/responses/BadRequest'
         '404':
@@ -134,12 +134,12 @@ paths:
           $ref: '#/components/responses/DefaultError'
 
     delete:
-      tags: [Registry of Infrastructures API]
-      summary: Deletes an Infrastructure Descriptor
-      operationId: DeleteInfrastructureDescriptorById
+      tags: [Company Lookup API]
+      summary: Deletes an Company Descriptor
+      operationId: DeleteCompanyDescriptorById
       responses:
         '204':
-          description: Infrastructure Descriptor deleted successfully
+          description: Company Descriptor deleted successfully
         '400':
           $ref: '#/components/responses/BadRequest'
         '404':
@@ -192,7 +192,7 @@ components:
       name: name
       in: query
       required: false
-      description: Base64url encoded name filter (matches InfrastructureDescriptor.name or one of InfrastructureDescriptor.nameOptions)
+      description: Base64url encoded name filter (matches CompanyDescriptor.name or one of CompanyDescriptor.nameOptions)
       schema:
         type: string
 
@@ -200,15 +200,15 @@ components:
       name: assetId
       in: query
       required: false
-      description: Base64url encoded asset id used to match InfrastructureDescriptor.assetIdRegexPatterns
+      description: Base64url encoded asset id used to match CompanyDescriptor.assetIdRegexPatterns
       schema:
         type: string
 
-    InfrastructureIdentifier:
-      name: infrastructureIdentifier
+    CompanyIdentifier:
+      name: companyIdentifier
       in: path
       required: true
-      description: Infrastructure domain identifier (base64url-encoded domain)
+      description: Company domain identifier (base64url-encoded domain)
       schema:
         type: string
 
@@ -271,7 +271,7 @@ components:
         profiles:
           - TODO
 
-    PagedInfrastructureDescriptors:
+    PagedCompanyDescriptors:
       type: object
       additionalProperties: false
       properties:
@@ -280,7 +280,7 @@ components:
         data:
           type: array
           items:
-            $ref: "#/components/schemas/InfrastructureDescriptor"
+            $ref: "#/components/schemas/CompanyDescriptor"
       required: [pagingMetadata, data]
 
     PagingMetadata:
@@ -291,7 +291,7 @@ components:
           type: string
           description: Cursor to request the next page (base64url-encoded)
 
-    InfrastructureDescriptor:
+    CompanyDescriptor:
       type: object
       additionalProperties: false
       properties:
@@ -325,12 +325,12 @@ components:
             $ref: "#/components/schemas/Endpoint"
       required: [domain, endpoints]
 
-    InfrastructureDescriptorEnvelope:
+    CompanyDescriptorEnvelope:
       type: object
       additionalProperties: false
       properties:
         data:
-          $ref: "#/components/schemas/InfrastructureDescriptor"
+          $ref: "#/components/schemas/CompanyDescriptor"
       required: [data]
 
     LangStringTextType:
@@ -431,7 +431,7 @@ components:
           pattern: ^-?(([1-9][0-9][0-9][0-9]+)|(0[0-9][0-9][0-9]))-((0[1-9])|(1[0-2]))-((0[1-9])|([12][0-9])|(3[01]))T(((([01][0-9])|(2[0-3])):[0-5][0-9]:([0-5][0-9])(\\.[0-9]+)?)|24:00:00(\\.0+)?)(Z|\\+00:00|-00:00)$
 
   examples:
-    InfrastructureDescriptor:
+    CompanyDescriptor:
       value:
         pagingMetadata:
           cursor: "aHR0cHM6Ly9leGFtcGxlLmNvbS9yb2kvZXhhbXBsZS1hYXMtZGlzY292ZXJ5"
@@ -463,9 +463,9 @@ components:
                     href: "https://example.com/aas-registry"
                     endpointProtocol: "HTTPS"
             id: "https://example.com/roi/example-aas-registry"
-            idShort: "AASRegistry"
+            idShort: "exampleCompany"
 
-    InfrastructureDescriptorSingle:
+    CompanyDescriptorSingle:
       value:
         administration:
           creator:
@@ -493,10 +493,9 @@ components:
             protocolInformation:
                 href: "https://example.com/aas-registry"
                 endpointProtocol: "HTTPS"
-        id: "https://example.com/roi/example-aas-registry"
-        idShort: "AASRegistry"
+        idShort: "exampleCompany"
 
-    InfrastructureDescriptorSingleEnvelope:
+    CompanyDescriptorSingleEnvelope:
       value:
         data:
           administration:
@@ -525,8 +524,7 @@ components:
               protocolInformation:
                   href: "https://example.com/aas-registry"
                   endpointProtocol: "HTTPS"
-          id: "https://example.com/roi/example-aas-registry"
-          idShort: "AASRegistry"
+          idShort: "exampleCompany"
 
     DescriptionResponse:
       value:

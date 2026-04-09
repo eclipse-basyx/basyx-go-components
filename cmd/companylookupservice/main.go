@@ -1,4 +1,4 @@
-// Package main implements the Registry of Infrastructures Service server.
+// Package main implements the Company Lookup Service server.
 package main
 
 import (
@@ -12,9 +12,9 @@ import (
 	"strconv"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
-	"github.com/eclipse-basyx/basyx-go-components/internal/registryofinfrastructuresservice/api"
-	registryofinfrastructurespostgresql "github.com/eclipse-basyx/basyx-go-components/internal/registryofinfrastructuresservice/persistence"
-	"github.com/eclipse-basyx/basyx-go-components/pkg/registryofinfrastructuresapi"
+	"github.com/eclipse-basyx/basyx-go-components/internal/companylookupservice/api"
+	companylookuppostgresql "github.com/eclipse-basyx/basyx-go-components/internal/companylookupservice/persistence"
+	"github.com/eclipse-basyx/basyx-go-components/pkg/companylookupapi"
 	"github.com/go-chi/chi/v5"
 )
 
@@ -22,7 +22,7 @@ import (
 var openapiSpec embed.FS
 
 func runServer(ctx context.Context, configPath string, databaseSchema string) error {
-	log.Default().Println("Loading Registry of Infrastructures Service...")
+	log.Default().Println("Loading Company Lookup Service...")
 	log.Default().Println("Config Path:", configPath)
 
 	cfg, err := common.LoadConfig(configPath)
@@ -39,14 +39,14 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 	common.AddHealthEndpoint(r, cfg)
 
 	// Add Swagger UI
-	if err := common.AddSwaggerUIFromFS(r, openapiSpec, "openapi.yaml", "Registry of Infrastructures Service API", "/swagger", "/api-docs/openapi.yaml", cfg); err != nil {
+	if err := common.AddSwaggerUIFromFS(r, openapiSpec, "openapi.yaml", "Company Lookup Service API", "/swagger", "/api-docs/openapi.yaml", cfg); err != nil {
 		log.Printf("Warning: failed to load OpenAPI spec for Swagger UI: %v", err)
 	}
 
 	log.Printf("🗄️  Connecting to Postgres with DSN: postgres://%s:****@%s:%d/%s?sslmode=disable",
 		cfg.Postgres.User, cfg.Postgres.Host, cfg.Postgres.Port, cfg.Postgres.DBName)
 
-	rorDatabase, err := registryofinfrastructurespostgresql.NewPostgreSQLRegistryOfInfrastructuresBackend(
+	companyLookupDatabase, err := companylookuppostgresql.NewPostgreSQLCompanyLookupBackend(
 		"postgres://"+cfg.Postgres.User+":"+cfg.Postgres.Password+"@"+cfg.Postgres.Host+":"+strconv.Itoa(cfg.Postgres.Port)+"/"+cfg.Postgres.DBName+"?sslmode=disable",
 		//nolint:gosec // configured value is bounded by deployment configuration
 		int32(cfg.Postgres.MaxOpenConnections),
@@ -61,21 +61,21 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 	}
 	log.Println("✅ Postgres connection established")
 
-	rorSvc := api.NewRegistryOfInfrastructuresAPIAPIService(*rorDatabase)
-	rorCtrl := registryofinfrastructuresapi.NewRegistryOfInfrastructuresAPIAPIController(rorSvc)
+	companyLookupSvc := api.NewCompanyLookupAPIService(*companyLookupDatabase)
+	companyLookupCtrl := companylookupapi.NewCompanyLookupAPIAPIController(companyLookupSvc)
 
 	// === Description Service (public) ===
-	descSvc := registryofinfrastructuresapi.NewDescriptionAPIAPIService()
-	descCtrl := registryofinfrastructuresapi.NewDescriptionAPIAPIController(descSvc)
+	descSvc := companylookupapi.NewDescriptionAPIAPIService()
+	descCtrl := companylookupapi.NewDescriptionAPIAPIController(descSvc)
 
 	base := common.NormalizeBasePath(cfg.Server.ContextPath)
 
 	// === Protected API Subrouter ===
 	apiRouter := chi.NewRouter()
-	common.AddDefaultRouterErrorHandlers(apiRouter, "RegistryOfInfrastructuresService")
+	common.AddDefaultRouterErrorHandlers(apiRouter, "CompanyLookupService")
 
-	// Register all Registry of Infrastructures routes
-	for _, rt := range rorCtrl.Routes() {
+	// Register all company lookup routes
+	for _, rt := range companyLookupCtrl.Routes() {
 		apiRouter.Method(rt.Method, rt.Pattern, rt.HandlerFunc)
 	}
 
@@ -89,7 +89,7 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 
 	// === Start Server ===
 	addr := fmt.Sprintf("0.0.0.0:%d", cfg.Server.Port)
-	log.Printf("▶️ Registry of Infrastructures listening on %s (contextPath=%q)\n", addr, cfg.Server.ContextPath)
+	log.Printf("▶️ Company Lookup listening on %s (contextPath=%q)\n", addr, cfg.Server.ContextPath)
 
 	go func() {
 		//nolint:gosec // implementing this fix would cause errors.
