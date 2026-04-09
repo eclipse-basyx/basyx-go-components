@@ -1,0 +1,364 @@
+[
+    {
+        "context": "001 - Health Check - GET /health",
+        "method": "GET",
+        "endpoint": "http://127.0.0.1:6004/health",
+        "shouldMatch": "expected/expected_health_endpoint.json",
+        "expectedStatus": 200
+    },
+    {
+        "context": "002 - List Company Descriptors (Empty) - GET /companies",
+        "method": "GET",
+        "endpoint": "http://127.0.0.1:6004/companies",
+        "shouldMatch": "expected/empty_paged_result.json",
+        "expectedStatus": 200
+    },
+    {
+        "context": "003 - Create Company Descriptor #1 - POST /companies",
+        "method": "POST",
+        "endpoint": "http://127.0.0.1:6004/companies",
+        "data": "postBody/company_descriptor_1.json",
+        "shouldMatch": "postBody/company_descriptor_1.json",
+        "expectedStatus": 201
+    },
+    {
+        "context": "004 - Create Company Descriptor (Conflict - Duplicate) - POST /companies",
+        "method": "POST",
+        "endpoint": "http://127.0.0.1:6004/companies",
+        "data": "postBody/company_descriptor_1.json",
+        "expectedStatus": 409
+    },
+    {
+        "context": "005 - Create Company Descriptor (Conflict - Missing Identifier) - POST /companies",
+        "method": "POST",
+        "endpoint": "http://127.0.0.1:6004/companies",
+        "data": "postBody/company_descriptor_malformed_missing_domain.json",
+        "expectedStatus": 400
+    },
+    {
+        "context": "006 - Create Company Descriptor (Conflict - Empty Domain) - POST /companies",
+        "method": "POST",
+        "endpoint": "http://127.0.0.1:6004/companies",
+        "data": "postBody/company_descriptor_malformed_empty_domain.json",
+        "expectedStatus": 400
+    },
+    {
+        "context": "007 - Create Company Descriptor (Conflict - Invalid Domain Syntax) - POST /companies",
+        "method": "POST",
+        "endpoint": "http://127.0.0.1:6004/companies",
+        "data": "postBody/company_descriptor_malformed_invalid_domain_syntax.json",
+        "expectedStatus": 400
+    },
+    {
+        "context": "008 - Create Company Descriptor (Conflict - Empty Name) - POST /companies",
+        "method": "POST",
+        "endpoint": "http://127.0.0.1:6004/companies",
+        "data": "postBody/company_descriptor_malformed_empty_name.json",
+        "expectedStatus": 400
+    },
+    {
+        "context": "009 - Create Company Descriptor (Conflict - Empty Interface in Endpoint) - POST /companies",
+        "method": "POST",
+        "endpoint": "http://127.0.0.1:6004/companies",
+        "data": "postBody/company_descriptor_malformed_empty_interface_in_endpoint.json",
+        "expectedStatus": 400
+    },
+    {
+        "context": "010 - Create Company Descriptor (Conflict - Disallowed AAS-Interfaces in Endpoint) - POST /companies",
+        "method": "POST",
+        "endpoint": "http://127.0.0.1:6004/companies",
+        "data": "postBody/company_descriptor_malformed_disallowed_aas_interfaces_in_endpoint.json",
+        "expectedStatus": 400
+    },
+    {
+        "context": "011 - Create Company Descriptor (Conflict - Only Non-AAS-Interfaces in Endpoint) - POST /companies",
+        "method": "POST",
+        "endpoint": "http://127.0.0.1:6004/companies",
+        "data": "postBody/company_descriptor_malformed_only_non_aas_interfaces_in_endpoint.json",
+        "expectedStatus": 400
+    },
+    {
+        "context": "012 - Create Company Descriptor (Conflict - Empty Protocol Information in Endpoint) - POST /companies",
+        "method": "POST",
+        "endpoint": "http://127.0.0.1:6004/companies",
+        "data": "postBody/company_descriptor_malformed_empty_protocol_information_in_endpoint.json",
+        "expectedStatus": 400
+    },
+    {
+        "context": "013 - Create Company Descriptor (Conflict - Empty HREF in Protocol Information) - POST /companies",
+        "method": "POST",
+        "endpoint": "http://127.0.0.1:6004/companies",
+        "data": "postBody/company_descriptor_malformed_empty_href_in_protocol_information.json",
+        "expectedStatus": 400
+    },
+    {
+        "context": "014 - Create Company Descriptor (Conflict - Empty Creator in Administrative Information) - POST /companies",
+        "method": "POST",
+        "endpoint": "http://127.0.0.1:6004/companies",
+        "data": "postBody/company_descriptor_malformed_empty_creator_in_administrative_information.json",
+        "expectedStatus": 400
+    },
+    {
+        "context": "015 - Create Company Descriptor (Conflict - Missing Keys in Reference) - POST /companies",
+        "method": "POST",
+        "endpoint": "http://127.0.0.1:6004/companies",
+        "data": "postBody/company_descriptor_malformed_missing_keys_in_reference.json",
+        "expectedStatus": 400
+    },
+    {
+        "context": "016 - Create Company Descriptor (Conflict - Empty Keys in Reference) - POST /companies",
+        "method": "POST",
+        "endpoint": "http://127.0.0.1:6004/companies",
+        "data": "postBody/company_descriptor_malformed_empty_keys_in_reference.json",
+        "expectedStatus": 400
+    },
+    {
+        "context": "017 - Create Company Descriptor (Conflict - Empty Type in Key) - POST /companies",
+        "method": "POST",
+        "endpoint": "http://127.0.0.1:6004/companies",
+        "data": "postBody/company_descriptor_malformed_empty_type_in_key.json",
+        "expectedStatus": 400
+    },
+    {
+        "context": "018 - Create Company Descriptor (Conflict - Empty Value in Key) - POST /companies",
+        "method": "POST",
+        "endpoint": "http://127.0.0.1:6004/companies",
+        "data": "postBody/company_descriptor_malformed_empty_value_in_key.json",
+        "expectedStatus": 400
+    },
+    {
+        "context": "019 - Create Company Descriptor (Conflict - Empty Language in Description) - POST /companies",
+        "method": "POST",
+        "endpoint": "http://127.0.0.1:6004/companies",
+        "data": "postBody/company_descriptor_malformed_empty_language_in_description.json",
+        "expectedStatus": 400
+    },
+    {
+        "context": "020 - Create Company Descriptor (Conflict - Empty Text in Description) - POST /companies",
+        "method": "POST",
+        "endpoint": "http://127.0.0.1:6004/companies",
+        "data": "postBody/company_descriptor_malformed_empty_text_in_description.json",
+        "expectedStatus": 400
+    },
+    {
+        "context": "021 - Create Company Descriptor (Conflict - Empty Language in DisplayName) - POST /companies",
+        "method": "POST",
+        "endpoint": "http://127.0.0.1:6004/companies",
+        "data": "postBody/company_descriptor_malformed_empty_language_in_displayname.json",
+        "expectedStatus": 400
+    },
+    {
+        "context": "022 - Create Company Descriptor (Conflict - Empty Text in DisplayName) - POST /companies",
+        "method": "POST",
+        "endpoint": "http://127.0.0.1:6004/companies",
+        "data": "postBody/company_descriptor_malformed_empty_text_in_displayname.json",
+        "expectedStatus": 400
+    },
+    {
+        "context": "023 - Create Company Descriptor #2 - POST /companies",
+        "method": "POST",
+        "endpoint": "http://127.0.0.1:6004/companies",
+        "data": "postBody/company_descriptor_2.json",
+        "shouldMatch": "postBody/company_descriptor_2.json",
+        "expectedStatus": 201
+    },
+    {
+        "context": "024 - Create Company Descriptor #3 - POST /companies",
+        "method": "POST",
+        "endpoint": "http://127.0.0.1:6004/companies",
+        "data": "postBody/company_descriptor_3.json",
+        "shouldMatch": "postBody/company_descriptor_3.json",
+        "expectedStatus": 201
+    },
+    {
+        "context": "025 - Create Company Descriptor #4 - POST /companies",
+        "method": "POST",
+        "endpoint": "http://127.0.0.1:6004/companies",
+        "data": "postBody/company_descriptor_4.json",
+        "shouldMatch": "postBody/company_descriptor_4.json",
+        "expectedStatus": 201
+    },
+    {
+        "context": "026 - Get Company Descriptor by Domain - GET /companies/{domain}",
+        "method": "GET",
+        "endpoint": "http://127.0.0.1:6004/companies/aWVzZS5mcmF1bmhvZmVyLmRl",
+        "shouldMatch": "postBody/company_descriptor_1.json",
+        "expectedStatus": 200
+    },
+    {
+        "context": "027 - Get Company Descriptor by Domain (Conflict - Not Found) - GET /companies/{domain}",
+        "method": "GET",
+        "endpoint": "http://127.0.0.1:6004/companies/bm90LmV4aXN0ZW50LmRl",
+        "expectedStatus": 404
+    },
+    {
+        "context": "028 - Get Company Descriptor by Domain (Conflict - Invalid Domain Syntax) - GET /companies/{domain}",
+        "method": "GET",
+        "endpoint": "http://127.0.0.1:6004/companies/aW52YWxpZF9kb21haW4uZGU",
+        "expectedStatus": 400
+    },
+    { 
+        "context": "029 - List Company Descriptors - GET /companies",
+        "method": "GET",
+        "endpoint": "http://127.0.0.1:6004/companies",
+        "shouldMatch": "expected/company_descriptors_1-4.json",
+        "expectedStatus": 200
+    },
+    {
+        "context": "030 - List Company Descriptors (Limit) - GET /companies?limit=2",
+        "method": "GET",
+        "endpoint": "http://127.0.0.1:6004/companies?limit=2",
+        "shouldMatch": "expected/company_descriptors_1-2.json",
+        "expectedStatus": 200
+    },
+    {
+        "context": "031 - List Company Descriptors (Limit + Cursor) - GET /companies?limit=1&cursor=...",
+        "method": "GET",
+        "endpoint": "http://127.0.0.1:6004/companies?limit=1&cursor=ZXguY29tLjMuZGU",
+        "shouldMatch": "expected/company_descriptor_cursor_limit.json",
+        "expectedStatus": 200
+    },
+    {
+        "context": "032 - List Company Descriptors (Nonexistent Cursor) - GET /companies?cursor=...",
+        "method": "GET",
+        "endpoint": "http://127.0.0.1:6004/companies?limit=1&cursor=enp6enp6",
+        "shouldMatch": "expected/empty_paged_result.json",
+        "expectedStatus": 200
+    },
+    {
+        "context": "033 - List Company Descriptors (Conflict - Invalid Cursor (Not Base64)) - GET /companies?cursor=...",
+        "method": "GET",
+        "endpoint": "http://127.0.0.1:6004/companies?cursor=$HR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvcm9yL2Q0ZS10ZW5hbnQtMC1hYXMtZGlzY292ZXJ5",
+        "expectedStatus": 400
+    },
+    {
+        "context": "034 - List Company Descriptors (Conflict - Invalid Cursor (Non-UTF8 Bytes)) - GET /companies?cursor=...",
+        "method": "GET",
+        "endpoint": "http://127.0.0.1:6004/companies?cursor=aaa",
+        "expectedStatus": 400
+    },
+    {
+        "context": "035 - List Company Descriptors (Filter Name) - GET /companies?name=Fraunhofer IESE",
+        "method": "GET",
+        "endpoint": "http://127.0.0.1:6004/companies?name=RnJhdW5ob2ZlciBJRVNF",
+        "shouldMatch": "expected/company_descriptors_filter_name.json",
+        "expectedStatus": 200
+    },
+    {
+        "context": "036 - List Company Descriptors (Filter Name Case-Insensitive) - GET /companies?name=fraunhofer iese",
+        "method": "GET",
+        "endpoint": "http://127.0.0.1:6004/companies?name=ZnJhdW5ob2ZlciBpZXNl",
+        "shouldMatch": "expected/company_descriptors_filter_name.json",
+        "expectedStatus": 200
+    },
+    {
+        "context": "037 - List Company Descriptors (Filter Name Via Name Options) - GET /companies?name=ExCompany",
+        "method": "GET",
+        "endpoint": "http://127.0.0.1:6004/companies?name=RXhDb21wYW55",
+        "shouldMatch": "expected/company_descriptors_filter_name_options.json",
+        "expectedStatus": 200
+    },
+    {
+        "context": "038 - List Company Descriptors (Filter Name Via Name Options Case-Insensitive) - GET /companies?name=EXCOMPANY",
+        "method": "GET",
+        "endpoint": "http://127.0.0.1:6004/companies?name=RVhDT01QQU5Z",
+        "shouldMatch": "expected/company_descriptors_filter_name_options.json",
+        "expectedStatus": 200
+    },
+    {
+        "context": "039 - List Company Descriptors (Filter Name - No Match) - GET /companies?name=NonExistentCompanyName",
+        "method": "GET",
+        "endpoint": "http://127.0.0.1:6004/companies?name=Tm9uRXhpc3RlbnRDb21wYW55TmFtZQ",
+        "shouldMatch": "expected/empty_paged_result.json",
+        "expectedStatus": 200
+    },
+    {
+        "context": "040 - List Company Descriptors (Conflict - Invalid Name (Not Base64Url Encoded)) - GET /companies?name=...",
+        "method": "GET",
+        "endpoint": "http://127.0.0.1:6004/companies?name=$mFsd29ybWQ",
+        "expectedStatus": 400
+    },
+    {
+        "context": "041 - List Company Descriptors (Filter AssetId) - GET /companies?assetId=https://i.iese.fraunhofer.de/assetId/assets/4711",
+        "method": "GET",
+        "endpoint": "http://127.0.0.1:6004/companies?assetId=aHR0cHM6Ly9pLmllc2UuZnJhdW5ob2Zlci5kZS9hc3NldElkL2Fzc2V0cy80NzEx",
+        "shouldMatch": "expected/company_descriptors_filter_asset_id.json",
+        "expectedStatus": 200
+    },
+    {
+        "context": "042 - List Company Descriptors (Filter AssetId - No Match)",
+        "method": "GET",
+        "endpoint": "http://127.0.0.1:6004/companies?assetId=aHR0cHM6Ly9pLmllc2UuZGUvYXNzZXRJZC9hc3NldHMvMjQ2OA",
+        "shouldMatch": "expected/empty_paged_result.json",
+        "expectedStatus": 200
+    },
+    {
+        "context": "043 - Delete Company Descriptor by Domain - DELETE /companies/{domain}",
+        "method": "DELETE",
+        "endpoint": "http://127.0.0.1:6004/companies/ZXguY29tLjIuZGU",
+        "expectedStatus": 204
+    },
+    {
+        "context": "044 - Delete Company Descriptor by Domain (Conflict - Invalid Domain Syntax) - DELETE /companies/{domain}",
+        "method": "DELETE",
+        "endpoint": "http://127.0.0.1:6004/companies/aW52YWxpZF9kb21haW4uZGU",
+        "expectedStatus": 400
+    },
+    {
+        "context": "045 - Delete Company Descriptor by Domain (Conflict - Not Found) - DELETE /companies/{domain}",
+        "method": "DELETE",
+        "endpoint": "http://127.0.0.1:6004/companies/ZXguY29tLjIuZGU",
+        "expectedStatus": 404
+    },
+    {
+        "context": "046 - Update Company Descriptor using PUT - PUT /companies/{domain}",
+        "method": "PUT",
+        "endpoint": "http://127.0.0.1:6004/companies/ZXguY29tLjEuZGU",
+        "data": "postBody/company_descriptor_5.json",
+        "shouldMatch": "postBody/company_descriptor_5.json",
+        "expectedStatus": 200
+    },
+    {
+        "context": "047 - Get Company Descriptor by Domain - GET /companies/{domain}",
+        "method": "GET",
+        "endpoint": "http://127.0.0.1:6004/companies/ZXguY29tLjEuZGU",
+        "shouldMatch": "postBody/company_descriptor_5.json",
+        "expectedStatus": 200
+    },
+    {
+        "context": "048 - Update Company Descriptor using PUT (Conflict - Domain Mismatch) - PUT /companies/{domain}",
+        "method": "PUT",
+        "endpoint": "http://127.0.0.1:6004/companies/ZXguY29tLjEuZGUubm90",
+        "data": "postBody/company_descriptor_5.json",
+        "expectedStatus": 400
+    },
+    {
+        "context": "049 - Update Company Descriptor using PUT (Conflict - Invalid Domain Syntax) - PUT /companies/{domain}",
+        "method": "PUT",
+        "endpoint": "http://127.0.0.1:6004/companies/aW52YWxpZF9kb21haW4uZGU",
+        "data": "postBody/company_descriptor_5.json",
+        "expectedStatus": 400
+    },
+    {
+        "context": "050 - Update Company Descriptor using PUT (Conflict - Nonexistent Domain) - PUT /companies/{domain}",
+        "method": "PUT",
+        "endpoint": "http://127.0.0.1:6004/companies/ZXguY29tLjQuZGU",
+        "data": "postBody/company_descriptor_6.json",
+        "expectedStatus": 404
+    },
+    {
+        "context": "051 - Cleanup: Delete All AAS Descriptors - ACTION DELETE_ALL_COMPANY_DESCRIPTORS",
+        "action": "DELETE_ALL_COMPANY_DESCRIPTORS"
+    },
+    {
+        "context": "052 - Verify that Cleanup has worked - GET /companies",
+        "method": "GET",
+        "endpoint": "http://127.0.0.1:6004/companies",
+        "shouldMatch": "expected/empty_paged_result.json",
+        "expectedStatus": 200
+    },
+    {
+        "context": "053 - Verify database is empty - ACTION CHECK_DB_IS_EMPTY",
+        "action": "CHECK_DB_IS_EMPTY"
+    }
+]

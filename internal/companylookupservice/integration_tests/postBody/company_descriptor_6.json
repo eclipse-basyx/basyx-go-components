@@ -1,0 +1,47 @@
+{
+    "data": {
+        "description": [
+            {
+                "language": "en",
+                "text": "An example company."
+            }
+        ],
+        "displayName": [
+            {
+                "language": "en",
+                "text": "Example Company"
+            }
+        ],
+        "administration": {
+            "version": "1",
+            "revision": "0",
+            "creator": {
+                "type": "ExternalReference",
+                "keys": [
+                    {
+                        "type": "GlobalReference",
+                        "value": "https://examplecompany.de"
+                    }
+                ]
+            }
+        },
+        "endpoints": [
+            {
+                "protocolInformation": {
+                    "href": "https://example.com/submodel-registry",
+                    "endpointProtocol": "HTTPS"
+                },
+                "interface": "SUBMODEL-REGISTRY-3.1"
+            }
+        ],
+        "idShort": "exampleCompany4",
+        "name": "ExCom4",
+        "domain": "ex.com.4.de",
+        "nameOptions": [
+            "Example Company 4",
+            "EC4",
+            "Com Example 4",
+            "ExCompany"
+        ]
+    }
+}
