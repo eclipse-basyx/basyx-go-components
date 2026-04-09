@@ -100,7 +100,7 @@ func (s *SubmodelDatabase) GetSignedSubmodel(ctx context.Context, submodelID str
 		return "", errors.New("JWS signing not configured: private key not loaded")
 	}
 
-	submodel, err := s.GetSubmodelByID(ctx, submodelID, "deep")
+	submodel, err := s.GetSubmodelByID(ctx, submodelID, "deep", false)
 	if err != nil {
 		return "", err
 	}
@@ -140,7 +140,7 @@ func (s *SubmodelDatabase) GetSignedSubmodel(ctx context.Context, submodelID str
 }
 
 // GetSubmodelByID retrieves a submodel by identifier and applies optional ABAC formula filters from ctx.
-func (s *SubmodelDatabase) GetSubmodelByID(ctx context.Context, submodelIdentifier string, level string) (types.ISubmodel, error) {
+func (s *SubmodelDatabase) GetSubmodelByID(ctx context.Context, submodelIdentifier string, level string, metadataOnly bool) (types.ISubmodel, error) {
 	eg := errgroup.Group{}
 	var submodels []types.ISubmodel
 	eg.Go(func() error {
@@ -158,15 +158,17 @@ func (s *SubmodelDatabase) GetSubmodelByID(ctx context.Context, submodelIdentifi
 		return nil
 	})
 	submodelElements := make([]types.ISubmodelElement, 0)
-	eg.Go(func() error {
-		unlimited := -1
-		smes, _, err := s.GetSubmodelElements(ctx, submodelIdentifier, &unlimited, "", false, level)
-		if err != nil {
-			return err
-		}
-		submodelElements = smes
-		return nil
-	})
+	if !metadataOnly {
+		eg.Go(func() error {
+			unlimited := -1
+			smes, _, err := s.GetSubmodelElements(ctx, submodelIdentifier, &unlimited, "", false, level)
+			if err != nil {
+				return err
+			}
+			submodelElements = smes
+			return nil
+		})
+	}
 
 	err := eg.Wait()
 	if err != nil {

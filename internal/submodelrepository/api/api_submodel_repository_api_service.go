@@ -25,6 +25,7 @@ import (
 	"net/netip"
 	"net/url"
 	"os"
+	"reflect"
 	"strconv"
 	"strings"
 	"sync"
@@ -143,6 +144,18 @@ func decodeSubmodelIdentifierOrAPIError(submodelIdentifier string, operation str
 	}
 
 	return decodedSubmodelIdentifier, gen.ImplResponse{}, true
+}
+
+func deleteSubmodelElementsIfEmpty(jsonSubmodel map[string]any) {
+	rawElements, hasSubmodelElements := jsonSubmodel["submodelElements"]
+	if !hasSubmodelElements || rawElements == nil {
+		return
+	}
+
+	elementsValue := reflect.ValueOf(rawElements)
+	if elementsValue.Kind() == reflect.Slice && elementsValue.Len() == 0 {
+		delete(jsonSubmodel, "submodelElements")
+	}
 }
 
 func parseDelegationTimeout(clientTimeoutDuration string) (time.Duration, error) {
@@ -722,7 +735,7 @@ func (s *SubmodelRepositoryAPIAPIService) GetSubmodelByID(
 		return newAPIErrorResponse(errors.New("invalid level parameter"), http.StatusBadRequest, operation, "InvalidLevelParameter"), nil
 	}
 
-	sm, err := s.submodelBackend.GetSubmodelByID(ctx, string(decodedSubmodelIdentifier), level)
+	sm, err := s.submodelBackend.GetSubmodelByID(ctx, string(decodedSubmodelIdentifier), level, false)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return newAPIErrorResponse(err, http.StatusNotFound, operation, "SubmodelNotFound"), nil
@@ -738,6 +751,7 @@ func (s *SubmodelRepositoryAPIAPIService) GetSubmodelByID(
 		_, _ = fmt.Printf("[DEBUG] GetSubmodelByID: Error converting submodel '%s' to JSON: %v\n", string(decodedSubmodelIdentifier), err)
 		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "ToJsonable"), err
 	}
+	deleteSubmodelElementsIfEmpty(jsonSubmodel)
 	return gen.Response(200, jsonSubmodel), nil
 }
 
@@ -1251,32 +1265,30 @@ func (s *SubmodelRepositoryAPIAPIService) PatchSubmodelByID(ctx context.Context,
 //
 //nolint:revive
 func (s *SubmodelRepositoryAPIAPIService) GetSubmodelByIDMetadata(ctx context.Context, submodelIdentifier string) (gen.ImplResponse, error) {
-	// TODO - update GetSubmodelByIDMetadata with the required logic for this service method.
-	// Add api_submodel_repository_api_service.go to the .openapi-generator-ignore to avoid overwriting this service implementation when updating open api generation.
+	const operation = "GetSubmodelByIDMetadata"
 
-	// TODO: Uncomment the next line to return response Response(200, SubmodelMetadata{}) or use other options such as http.Ok ...
-	// return gen.Response(200, SubmodelMetadata{}), nil
+	decodedSubmodelIdentifier, decodeErr := common.DecodeString(submodelIdentifier)
+	if decodeErr != nil {
+		return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "MalformedSubmodelIdentifier"), nil
+	}
 
-	// TODO: Uncomment the next line to return response Response(400, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(400, Result{}), nil
+	sm, err := s.submodelBackend.GetSubmodelByID(ctx, string(decodedSubmodelIdentifier), "", true)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) || common.IsErrNotFound(err) {
+			return newAPIErrorResponse(err, http.StatusNotFound, operation, "SubmodelNotFound"), nil
+		}
 
-	// TODO: Uncomment the next line to return response Response(401, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(401, Result{}), nil
+		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "GetSubmodelByID"), err
+	}
 
-	// TODO: Uncomment the next line to return response Response(403, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(403, Result{}), nil
+	jsonSubmodel, err := jsonization.ToJsonable(sm)
+	if err != nil {
+		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "ToJsonable"), err
+	}
 
-	// TODO: Uncomment the next line to return response Response(404, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(404, Result{}), nil
+	delete(jsonSubmodel, "submodelElements")
 
-	// TODO: Uncomment the next line to return response Response(500, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(500, Result{}), nil
-
-	// TODO: Uncomment the next line to return response Response(0, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(0, Result{}), nil
-
-	notImplementedErr := errors.New("GetSubmodelByIDMetadata method not implemented")
-	return newAPIErrorResponse(notImplementedErr, http.StatusNotImplemented, "GetSubmodelByIDMetadata", "NotImplemented"), nil
+	return gen.Response(http.StatusOK, jsonSubmodel), nil
 }
 
 // PatchSubmodelByIDMetadata - Updates the metadata attributes of an existing Submodel
@@ -1327,7 +1339,7 @@ func (s *SubmodelRepositoryAPIAPIService) GetSubmodelByIDValueOnly(ctx context.C
 		return newAPIErrorResponse(errors.New("invalid level parameter"), http.StatusBadRequest, operation, "InvalidLevelParameter"), nil
 	}
 
-	sm, err := s.submodelBackend.GetSubmodelByID(ctx, string(decodedSubmodelIdentifier), level)
+	sm, err := s.submodelBackend.GetSubmodelByID(ctx, string(decodedSubmodelIdentifier), level, false)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) || common.IsErrNotFound(err) {
 			return newAPIErrorResponse(err, http.StatusNotFound, operation, "SubmodelNotFound"), nil
@@ -1537,7 +1549,12 @@ func (s *SubmodelRepositoryAPIAPIService) PostSubmodelElementSubmodelRepo(ctx co
 		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "AddSubmodelElement"), err
 	}
 
-	return gen.Response(http.StatusCreated, submodelElement), nil
+	jsonSubmodelElement, jsonErr := jsonization.ToJsonable(submodelElement)
+	if jsonErr != nil {
+		return newAPIErrorResponse(jsonErr, http.StatusInternalServerError, operation, "ToJsonable"), jsonErr
+	}
+
+	return gen.Response(http.StatusCreated, jsonSubmodelElement), nil
 }
 
 // GetAllSubmodelElementsMetadataSubmodelRepo - Returns the metadata attributes of all submodel elements including their hierarchy
@@ -1862,7 +1879,12 @@ func (s *SubmodelRepositoryAPIAPIService) PostSubmodelElementByPathSubmodelRepo(
 		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "AddSubmodelElementWithPath"), err
 	}
 
-	return gen.Response(http.StatusCreated, submodelElement), nil
+	parsedElement, parseErr := jsonization.ToJsonable(submodelElement)
+	if parseErr != nil {
+		return newAPIErrorResponse(parseErr, http.StatusInternalServerError, operation, "ToJsonable"), parseErr
+	}
+
+	return gen.Response(http.StatusCreated, parsedElement), nil
 }
 
 // DeleteSubmodelElementByPathSubmodelRepo deletes a submodel element at a specified path within the submodel elements hierarchy.

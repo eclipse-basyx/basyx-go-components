@@ -415,6 +415,95 @@ func TestTemporalXSDRoundTripFormatting(t *testing.T) {
 	})
 }
 
+func TestContractSubmodelRepository(t *testing.T) {
+	baseURL := "http://localhost:6004"
+
+	createSubmodel := func(t *testing.T, submodelID string, submodelIDShort string) string {
+		t.Helper()
+
+		statusCode, body, err := requestJSON(http.MethodPost, fmt.Sprintf("%s/submodels", baseURL), map[string]any{
+			"id":        submodelID,
+			"idShort":   submodelIDShort,
+			"kind":      "Instance",
+			"modelType": "Submodel",
+		})
+		require.NoError(t, err)
+		require.Equal(t, http.StatusCreated, statusCode, "response=%s", string(body))
+
+		encodedSubmodelID := common.EncodeString(submodelID)
+		t.Cleanup(func() {
+			deleteStatusCode, deleteBody, deleteErr := requestJSON(http.MethodDelete, fmt.Sprintf("%s/submodels/%s", baseURL, encodedSubmodelID), nil)
+			if deleteErr != nil {
+				t.Logf("cleanup delete failed for submodel %s: %v", submodelID, deleteErr)
+				return
+			}
+
+			if deleteStatusCode != http.StatusNoContent && deleteStatusCode != http.StatusNotFound {
+				t.Logf("cleanup delete returned unexpected status=%d for submodel %s, response=%s", deleteStatusCode, submodelID, string(deleteBody))
+			}
+		})
+
+		return encodedSubmodelID
+	}
+
+	t.Run("GetSubmodelByIDMetadataReturnsMetadataPayload", func(t *testing.T) {
+		submodelID := fmt.Sprintf("https://example.com/ids/sm/contract-metadata-%d", time.Now().UnixNano())
+		submodelIDShort := fmt.Sprintf("contractMetadata%d", time.Now().UnixNano())
+		encodedSubmodelID := createSubmodel(t, submodelID, submodelIDShort)
+
+		statusCode, body, err := requestJSON(http.MethodGet, fmt.Sprintf("%s/submodels/%s/$metadata", baseURL, encodedSubmodelID), nil)
+		require.NoError(t, err)
+		require.Equal(t, http.StatusOK, statusCode, "response=%s", string(body))
+
+		var metadata map[string]any
+		require.NoError(t, json.Unmarshal(body, &metadata), "response=%s", string(body))
+		assert.NotEmpty(t, metadata, "metadata response should not be empty")
+	})
+
+	t.Run("PostSubmodelElementReturnsCreatedPayload", func(t *testing.T) {
+		submodelID := fmt.Sprintf("https://example.com/ids/sm/contract-post-element-%d", time.Now().UnixNano())
+		submodelIDShort := fmt.Sprintf("contractPostElement%d", time.Now().UnixNano())
+		encodedSubmodelID := createSubmodel(t, submodelID, submodelIDShort)
+
+		statusCode, body, err := requestJSON(http.MethodPost, fmt.Sprintf("%s/submodels/%s/submodel-elements", baseURL, encodedSubmodelID), map[string]any{
+			"idShort":   "testProperty",
+			"valueType": "xs:integer",
+			"value":     "1984",
+			"modelType": "Property",
+		})
+		require.NoError(t, err)
+		require.Equal(t, http.StatusCreated, statusCode, "response=%s", string(body))
+
+		var createdElement map[string]any
+		require.NoError(t, json.Unmarshal(body, &createdElement), "response=%s", string(body))
+		assert.NotEmpty(t, createdElement, "created submodel element payload should not be empty")
+		assert.Equal(t, "testProperty", createdElement["idShort"], "created payload should contain idShort")
+		assert.Equal(t, "Property", createdElement["modelType"], "created payload should contain modelType")
+	})
+
+	t.Run("GetSubmodelByIDDoesNotExposeEmptySubmodelElementsArray", func(t *testing.T) {
+		submodelID := fmt.Sprintf("https://example.com/ids/sm/contract-empty-elements-%d", time.Now().UnixNano())
+		submodelIDShort := fmt.Sprintf("contractEmptyElements%d", time.Now().UnixNano())
+		encodedSubmodelID := createSubmodel(t, submodelID, submodelIDShort)
+
+		statusCode, body, err := requestJSON(http.MethodGet, fmt.Sprintf("%s/submodels/%s", baseURL, encodedSubmodelID), nil)
+		require.NoError(t, err)
+		require.Equal(t, http.StatusOK, statusCode, "response=%s", string(body))
+
+		var submodel map[string]any
+		require.NoError(t, json.Unmarshal(body, &submodel), "response=%s", string(body))
+
+		rawSubmodelElements, hasSubmodelElements := submodel["submodelElements"]
+		if !hasSubmodelElements {
+			return
+		}
+
+		submodelElements, ok := rawSubmodelElements.([]any)
+		require.True(t, ok, "submodelElements should be a JSON array when present")
+		assert.NotEmpty(t, submodelElements, "submodelElements must be omitted when empty or contain at least one element")
+	})
+}
+
 // IntegrationTest runs the integration tests based on the config file
 func TestIntegration(t *testing.T) {
 	testenv.RunJSONSuite(t, testenv.JSONSuiteOptions{
