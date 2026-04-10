@@ -249,11 +249,30 @@ Relevant code:
 ## Access model structure (high level)
 
 Access rules define:
-- DEFATTRIBUTES: reusable attribute sets (CLAIM or GLOBAL).
+- DEFATTRIBUTES: reusable attribute sets (CLAIM, GLOBAL, or REFERENCE).
 - DEFOBJECTS: reusable route or descriptor object sets.
 - DEFACLS: reusable rights and attribute bindings.
 - DEFFORMULAS: reusable boolean expressions.
 - rules: ordered rules that combine ACLs, objects, and formulas.
+
+Validation invariants enforced by the current implementation:
+- Rule-level one-of:
+  - exactly one of `ACL` or `USEACL`
+  - exactly one of `FORMULA` or `USEFORMULA`
+  - exactly one of `OBJECTS` or `USEOBJECTS`
+- ACL one-of:
+  - exactly one of `ATTRIBUTES` or `USEATTRIBUTES`
+- Filter validation:
+  - `FILTER` (single) and `FILTERLIST` (multiple) are both supported
+  - each filter entry must define `FRAGMENT`
+  - each filter entry must define exactly one of `CONDITION` or `USEFORMULA`
+- Reference resolution:
+  - `USEACL`, `USEATTRIBUTES`, `USEFORMULA`, and `USEOBJECTS` are resolved during model materialization at startup
+  - unknown references fail fast (`... not found`)
+  - `USEOBJECTS` also rejects empty references and circular references
+- Parsing strictness:
+  - unknown JSON fields are rejected (`DisallowUnknownFields`)
+  - object identifiers in `OBJECTS` use the strict `ObjectItem` grammar (ROUTE / IDENTIFIABLE / REFERABLE / FRAGMENT / DESCRIPTOR forms)
 
 Example file:
 - [cmd/aasregistryservice/config/access_rules/access-rules.json](cmd/aasregistryservice/config/access_rules/access-rules.json)
