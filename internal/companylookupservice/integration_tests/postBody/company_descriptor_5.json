@@ -1,0 +1,57 @@
+{
+    "data": {
+        "description": [
+            {
+                "language": "en",
+                "text": "An example company that has been updated."
+            }
+        ],
+        "displayName": [
+            {
+                "language": "en",
+                "text": "Updated Example Company"
+            }
+        ],
+        "administration": {
+            "version": "1",
+            "revision": "0",
+            "creator": {
+                "type": "ExternalReference",
+                "keys": [
+                    {
+                        "type": "GlobalReference",
+                        "value": "https://examplecompany.de"
+                    }
+                ]
+            }
+        },
+        "endpoints": [
+            {
+                "protocolInformation": {
+                    "href": "https://demo.digital-twin.host/aas-discovery",
+                    "endpointProtocol": "HTTPS"
+                },
+                "interface": "AAS-DISCOVERY-3.1"
+            },
+            {
+                "protocolInformation": {
+                    "href": "https://demo.digital-twin.host/submodel-repository",
+                    "endpointProtocol": "HTTPS"
+                },
+                "interface": "SUBMODEL-REPOSITORY-3.1"
+            }
+        ],
+        "idShort": "exampleCompany1Updated",
+        "name": "ExCom1Updated",
+        "domain": "ex.com.1.de",
+        "nameOptions": [
+            "Example Company 1 Updated",
+            "EC1Updated",
+            "Com Example 1 Updated"
+        ],
+        "assetIdRegexPatterns": [
+            "^https://i\\.excom1\\.de/assetId/",
+            "^https://i\\.updated.excom1\\.de/assetId/"
+        ]
+    }
+}

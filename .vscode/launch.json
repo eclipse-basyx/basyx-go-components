@@ -41,14 +41,14 @@
             ]
         },
         {
-            "name": "Launch RegistryOfInfrastructures Service",
+            "name": "Launch Company Lookup Service",
             "type": "go",
             "request": "launch",
             "mode": "debug",
-            "program": "${workspaceFolder}/cmd/registryofinfrastructuresservice/main.go",
+            "program": "${workspaceFolder}/cmd/companylookupservice/main.go",
             "args": [
                 "-config",
-                "${workspaceFolder}/cmd/registryofinfrastructuresservice/config.yaml",
+                "${workspaceFolder}/cmd/companylookupservice/config.yaml",
                 "-databaseSchema",
                 "${workspaceFolder}/basyxschema.sql"
             ]

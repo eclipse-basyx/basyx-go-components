@@ -1,0 +1,50 @@
+{
+    "data": {
+        "description": [
+            {
+                "language": "en",
+                "text": "The Fraunhofer Institute for Experimental Software Engineering IESE in Kaiserslautern is a research institute specializing in efficient software and systems engineering."
+            }
+        ],
+        "displayName": [
+            {
+                "language": "en",
+                "text": "Fraunhofer Institute for Experimental Software Engineering IESE"
+            }
+        ],
+        "administration": {
+            "version": "1",
+            "revision": "0",
+            "creator": {
+                "type": "ExternalReference",
+                "keys": [
+                    {
+                        "type": "GlobalReference",
+                        "value": "https://iese.fraunhofer.de"
+                    }
+                ]
+            }
+        },
+        "endpoints": [
+            {
+                "protocolInformation": {
+                    "href": "https://mqtt.de",
+                    "endpointProtocol": "HTTPS"
+                },
+                "interface": "MQTT-BROKER-3.1.1"
+            }
+        ],
+        "idShort": "fraunhoferIese",
+        "name": "Fraunhofer IESE",
+        "domain": "iese.fraunhofer.de",
+        "nameOptions": [
+            "Fraunhofer-Institut für Experimentelles Software-Engineering",
+            "IESE",
+            "IESE Fraunhofer"
+        ],
+        "assetIdRegexPatterns": [
+            "^https://i\\.iese.fraunhofer\\.de/assetId/",
+            "^https://i\\.fraun-iese\\.de/assetId/"
+        ]
+    }
+}
