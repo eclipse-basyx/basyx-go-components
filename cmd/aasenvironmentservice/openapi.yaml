@@ -1083,6 +1083,143 @@ paths:
                 $ref: https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.1.1#/components/schemas/ServiceDescription
         default:
           $ref: https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.1.1#/components/responses/default
+  /serialization:
+    get:
+      tags:
+      - Serialization API
+      summary: Returns an Environment serialization as JSON, XML or AASX
+      operationId: GenerateSerializationByIds
+      x-semanticIds:
+      - https://admin-shell.io/aas/API/GenerateSerializationByIds/3/1
+      parameters:
+      - name: aasIds
+        in: query
+        description: The Asset Administration Shells' unique ids (UTF8-BASE64-URL-encoded)
+        style: form
+        explode: true
+        schema:
+          type: array
+          items:
+            type: string
+      - name: submodelIds
+        in: query
+        description: The Submodels' unique ids (UTF8-BASE64-URL-encoded)
+        style: form
+        explode: true
+        schema:
+          type: array
+          items:
+            type: string
+      - name: includeConceptDescriptions
+        in: query
+        description: Include Concept Descriptions?
+        style: form
+        explode: true
+        schema:
+          type: boolean
+          default: true
+      responses:
+        '200':
+          description: Requested serialization based on requested media type
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Environment'
+            application/xml:
+              schema:
+                $ref: '#/components/schemas/Environment'
+            application/aasx+xml:
+              schema:
+                description: AASX package with XML Environment spec
+                type: string
+                format: binary
+            application/asset-administration-shell+xml:
+              schema:
+                description: AASX package with XML Environment spec
+                type: string
+                format: binary
+            application/aasx+json:
+              schema:
+                description: AASX package with JSON Environment spec
+                type: string
+                format: binary
+            application/asset-administration-shell+json:
+              schema:
+                description: AASX package with JSON Environment spec
+                type: string
+                format: binary
+        '400':
+          $ref: https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.1.1#/components/responses/bad-request
+        '401':
+          $ref: https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.1.1#/components/responses/unauthorized
+        '403':
+          $ref: https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.1.1#/components/responses/forbidden
+        '500':
+          $ref: https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.1.1#/components/responses/internal-server-error
+        default:
+          $ref: https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.1.1#/components/responses/default
+  /upload:
+    post:
+      tags:
+      - Serialization API
+      summary: Uploads an Environment payload as JSON, XML or AASX
+      operationId: UploadEnvironment
+      description: |
+        Upload a multipart file part named `file`.
+        Required file-part content types are:
+        `application/json`, `application/xml`, `application/aasx+xml`,
+        `application/asset-administration-shell+xml`, `application/aasx+json`,
+        `application/asset-administration-shell+json`.
+        Clients must set the multipart file-part `Content-Type` explicitly.
+        Swagger UI may generate a curl snippet without `;type=...` for the file part.
+        Use one of the examples below.
+      x-codeSamples:
+      - lang: Curl
+        label: Upload AASX (XML body)
+        source: |
+          curl -X POST "http://localhost:5004/upload" \
+            -H "accept: application/json" \
+            -F "file=@ExampleV3.aasx;type=application/aasx+xml"
+      - lang: Curl
+        label: Upload AASX (JSON body)
+        source: |
+          curl -X POST "http://localhost:5004/upload" \
+            -H "accept: application/json" \
+            -F "file=@ExampleV3.aasx;type=application/aasx+json"
+      - lang: Curl
+        label: Upload plain XML environment
+        source: |
+          curl -X POST "http://localhost:5004/upload" \
+            -H "accept: application/json" \
+            -F "file=@environment.aas.xml;type=application/xml"
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+              - file
+              properties:
+                file:
+                  type: string
+                  format: binary
+            encoding:
+              file:
+                contentType: application/json, application/xml, application/aasx+xml, application/asset-administration-shell+xml, application/aasx+json, application/asset-administration-shell+json
+      responses:
+        '204':
+          description: Environment uploaded successfully
+        '400':
+          $ref: https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.1.1#/components/responses/bad-request
+        '401':
+          $ref: https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.1.1#/components/responses/unauthorized
+        '403':
+          $ref: https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.1.1#/components/responses/forbidden
+        '500':
+          $ref: https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.1.1#/components/responses/internal-server-error
+        default:
+          $ref: https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.1.1#/components/responses/default
   /shell-descriptors:
     get:
       tags:

@@ -1,0 +1,12 @@
+{ 
+"USEACL": "anonymous_read", "USEOBJECTS": ["submodels"], "FORMULA": {
+    "$and": 
+    [
+        {
+        "$eq": [
+            {"$field": "$sm#id"},
+            {"REFERENCE": "$aas(\"https://htw-berlin.de/ids/aas/demoaasv3\")#submodelRefs[]" }
+            ]
+        }
+    ]
+}}

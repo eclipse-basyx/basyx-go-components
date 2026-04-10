@@ -679,6 +679,45 @@ func (s *AssetAdministrationShellDatabase) PutAssetAdministrationShellByID(ctx c
 	}
 	defer cleanup(&err)
 
+	isUpdate, err := s.putAssetAdministrationShellByIDWithTx(ctx, tx, aasIdentifier, aas)
+	if err != nil {
+		return false, err
+	}
+
+	err = tx.Commit()
+	if err != nil {
+		return false, common.NewInternalServerError("AASREPO-PUTAAS-COMMIT " + err.Error())
+	}
+
+	return isUpdate, nil
+}
+
+// PutAssetAdministrationShellByIDWithTx upserts an AAS inside an existing transaction.
+func (s *AssetAdministrationShellDatabase) PutAssetAdministrationShellByIDWithTx(
+	ctx context.Context,
+	tx *sql.Tx,
+	aasIdentifier string,
+	aas types.IAssetAdministrationShell,
+) (bool, error) {
+	if tx == nil {
+		return false, common.NewErrBadRequest("AASREPO-PUTAAS-NILTX transaction must not be nil")
+	}
+	if aasIdentifier != aas.ID() {
+		return false, common.NewErrBadRequest("AASREPO-PUTAAS-IDMISMATCH Asset Administration Shell ID in path and body do not match")
+	}
+	if err := s.verifyAssetAdministrationShell(aas, "AASREPO-PUTAAS-VERIFY"); err != nil {
+		return false, err
+	}
+
+	return s.putAssetAdministrationShellByIDWithTx(ctx, tx, aasIdentifier, aas)
+}
+
+func (s *AssetAdministrationShellDatabase) putAssetAdministrationShellByIDWithTx(
+	ctx context.Context,
+	tx *sql.Tx,
+	aasIdentifier string,
+	aas types.IAssetAdministrationShell,
+) (bool, error) {
 	dialect := goqu.Dialect("postgres")
 	selectSQL, selectArgs, buildErr := buildGetAssetAdministrationShellDBIDByIdentifierQuery(&dialect, aasIdentifier)
 	if buildErr != nil {
@@ -724,8 +763,7 @@ func (s *AssetAdministrationShellDatabase) PutAssetAdministrationShellByID(ctx c
 		}
 	}
 
-	err = s.createAssetAdministrationShellInTransaction(tx, aas)
-	if err != nil {
+	if err := s.createAssetAdministrationShellInTransaction(tx, aas); err != nil {
 		return false, err
 	}
 
@@ -740,11 +778,6 @@ func (s *AssetAdministrationShellDatabase) PutAssetAdministrationShellByID(ctx c
 		if !visible {
 			return false, common.NewErrDenied("AASREPO-PUTAAS-ABACDENIED written AAS is not accessible under ABAC constraints")
 		}
-	}
-
-	err = tx.Commit()
-	if err != nil {
-		return false, common.NewInternalServerError("AASREPO-PUTAAS-COMMIT " + err.Error())
 	}
 
 	return isUpdate, nil

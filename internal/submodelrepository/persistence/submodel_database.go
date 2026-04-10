@@ -1081,6 +1081,35 @@ func (s *SubmodelDatabase) PutSubmodel(ctx context.Context, submodelID string, s
 	}
 	defer cleanup(&err)
 
+	isUpdate, err := s.putSubmodelWithTx(ctx, tx, submodelID, submodel)
+	if err != nil {
+		return false, err
+	}
+
+	err = tx.Commit()
+	if err != nil {
+		return false, common.NewInternalServerError("SMREPO-PUTSM-COMMIT " + err.Error())
+	}
+
+	return isUpdate, nil
+}
+
+// PutSubmodelWithTx creates or replaces a submodel inside an existing transaction.
+func (s *SubmodelDatabase) PutSubmodelWithTx(ctx context.Context, tx *sql.Tx, submodelID string, submodel types.ISubmodel) (bool, error) {
+	if tx == nil {
+		return false, common.NewErrBadRequest("SMREPO-PUTSM-NILTX transaction must not be nil")
+	}
+	if submodelID != submodel.ID() {
+		return false, common.NewErrBadRequest("SMREPO-PUTSM-IDMISMATCH Submodel ID in path and body do not match")
+	}
+	if err := s.verifySubmodel(submodel, "SMREPO-PUTSM-VERIFY"); err != nil {
+		return false, err
+	}
+
+	return s.putSubmodelWithTx(ctx, tx, submodelID, submodel)
+}
+
+func (s *SubmodelDatabase) putSubmodelWithTx(ctx context.Context, tx *sql.Tx, submodelID string, submodel types.ISubmodel) (bool, error) {
 	shouldEnforce, enforceErr := shouldEnforceFormula(ctx, "SMREPO-PUTSM-SHOULDENFORCE")
 	if enforceErr != nil {
 		return false, enforceErr
@@ -1116,11 +1145,6 @@ func (s *SubmodelDatabase) PutSubmodel(ctx context.Context, submodelID string, s
 		if !visible {
 			return false, common.NewErrDenied("SMREPO-PUTSM-ABACDENIED Written submodel is not accessible under ABAC constraints")
 		}
-	}
-
-	err = tx.Commit()
-	if err != nil {
-		return false, common.NewInternalServerError("SMREPO-PUTSM-COMMIT " + err.Error())
 	}
 
 	return isUpdate, nil
