@@ -269,6 +269,40 @@ func TestSerializationEndpointMediaTypes(t *testing.T) {
 	})
 }
 
+func TestUploadAndSerializationRoundTripWithRealFixtureFiles(t *testing.T) {
+	t.Run("RoundTrip_JSON_Real_Example_File", func(t *testing.T) {
+		resetDatabase(t)
+
+		uploadedPayload := mustReadFixtureFile(t, "environment.json")
+		uploadStatusCode, uploadResponse := uploadEnvironmentPayload(t, "application/json", uploadedPayload)
+		require.Equal(t, http.StatusNoContent, uploadStatusCode, "upload failed: %s", uploadResponse)
+
+		serializationStatusCode, contentType, serializedPayload := getSerializationPayload(t, "application/json", "")
+		require.Equal(t, http.StatusOK, serializationStatusCode, "serialization failed: %s", string(serializedPayload))
+		assert.Contains(t, contentType, "application/json")
+
+		expectedEnvironment := parseEnvironmentFromJSONPayload(t, uploadedPayload)
+		actualEnvironment := parseEnvironmentFromJSONPayload(t, serializedPayload)
+		assertEnvironmentEquivalent(t, expectedEnvironment, actualEnvironment)
+	})
+
+	t.Run("RoundTrip_AASX_Real_Example_File", func(t *testing.T) {
+		resetDatabase(t)
+
+		uploadedPayload := mustReadFixtureFile(t, "ProductionPlanSFKL.aasx")
+		uploadStatusCode, uploadResponse := uploadEnvironmentPayload(t, "application/aasx+json", uploadedPayload)
+		require.Equal(t, http.StatusNoContent, uploadStatusCode, "upload failed: %s", uploadResponse)
+
+		serializationStatusCode, contentType, serializedPayload := getSerializationPayload(t, "application/aasx+json", "")
+		require.Equal(t, http.StatusOK, serializationStatusCode, "serialization failed: %s", string(serializedPayload))
+		assert.Contains(t, contentType, "application/aasx+json")
+
+		expectedEnvironment := parseEnvironmentFromAASXPayload(t, uploadedPayload, "json")
+		actualEnvironment := parseEnvironmentFromAASXPayload(t, serializedPayload, "json")
+		assertEnvironmentEquivalent(t, expectedEnvironment, actualEnvironment)
+	})
+}
+
 func buildSampleEnvironmentPayloads(t *testing.T) ([]byte, []byte, []byte, []byte, []byte) {
 	t.Helper()
 
@@ -297,6 +331,31 @@ func parseEnvironmentFromJSONPayload(t *testing.T, payload []byte) types.IEnviro
 	environment, err := jsonization.EnvironmentFromJsonable(raw)
 	require.NoError(t, err)
 	return environment
+}
+
+func parseEnvironmentFromXMLPayload(t *testing.T, payload []byte) types.IEnvironment {
+	t.Helper()
+
+	decoder := xml.NewDecoder(bytes.NewReader(sanitizeXMLPayload(payload)))
+	instance, err := xmlization.Unmarshal(decoder)
+	require.NoError(t, err)
+
+	environment, ok := instance.(types.IEnvironment)
+	require.True(t, ok)
+	return environment
+}
+
+func parseEnvironmentFromAASXPayload(t *testing.T, payload []byte, preferredKind string) types.IEnvironment {
+	t.Helper()
+
+	specPayload, detectedKind, err := extractEnvironmentSpecFromAASX(payload, preferredKind)
+	require.NoError(t, err)
+
+	if detectedKind == "json" {
+		return parseEnvironmentFromJSONPayload(t, specPayload)
+	}
+
+	return parseEnvironmentFromXMLPayload(t, specPayload)
 }
 
 func serializeEnvironmentAsXML(environment types.IEnvironment) ([]byte, error) {
@@ -509,12 +568,7 @@ func assertEnvironmentJSONPayload(t *testing.T, payload []byte, expectConceptDes
 func assertEnvironmentXMLPayload(t *testing.T, payload []byte, expectConceptDescriptions bool) {
 	t.Helper()
 
-	decoder := xml.NewDecoder(bytes.NewReader(sanitizeXMLPayload(payload)))
-	instance, err := xmlization.Unmarshal(decoder)
-	require.NoError(t, err)
-
-	environment, ok := instance.(types.IEnvironment)
-	require.True(t, ok)
+	environment := parseEnvironmentFromXMLPayload(t, payload)
 
 	assert.Equal(t, 1, len(environment.AssetAdministrationShells()))
 	assert.Equal(t, 1, len(environment.Submodels()))
@@ -537,6 +591,131 @@ func assertAASXPayloadContainsEnvironment(t *testing.T, payload []byte, preferre
 	}
 
 	assertEnvironmentXMLPayload(t, specPayload, expectConceptDescriptions)
+}
+
+func assertEnvironmentEquivalent(t *testing.T, expected types.IEnvironment, actual types.IEnvironment) {
+	t.Helper()
+
+	assertAssetAdministrationShellsEquivalent(t, expected.AssetAdministrationShells(), actual.AssetAdministrationShells())
+	assertSubmodelsEquivalent(t, expected.Submodels(), actual.Submodels())
+	assertConceptDescriptionsEquivalent(t, expected.ConceptDescriptions(), actual.ConceptDescriptions())
+}
+
+func assertAssetAdministrationShellsEquivalent(t *testing.T, expected []types.IAssetAdministrationShell, actual []types.IAssetAdministrationShell) {
+	t.Helper()
+
+	expectedByID := map[string]types.IAssetAdministrationShell{}
+	for _, shell := range expected {
+		if shell != nil {
+			expectedByID[shell.ID()] = shell
+		}
+	}
+
+	actualByID := map[string]types.IAssetAdministrationShell{}
+	for _, shell := range actual {
+		if shell != nil {
+			actualByID[shell.ID()] = shell
+		}
+	}
+
+	require.Equal(t, len(expectedByID), len(actualByID), "assetAdministrationShells count mismatch")
+	for id, expectedShell := range expectedByID {
+		actualShell, ok := actualByID[id]
+		require.Truef(t, ok, "assetAdministrationShell with id %q is missing in serialized payload", id)
+		assertClassJSONEquivalent(t, expectedShell, actualShell)
+	}
+}
+
+func assertSubmodelsEquivalent(t *testing.T, expected []types.ISubmodel, actual []types.ISubmodel) {
+	t.Helper()
+
+	expectedByID := map[string]types.ISubmodel{}
+	for _, submodel := range expected {
+		if submodel != nil {
+			expectedByID[submodel.ID()] = submodel
+		}
+	}
+
+	actualByID := map[string]types.ISubmodel{}
+	for _, submodel := range actual {
+		if submodel != nil {
+			actualByID[submodel.ID()] = submodel
+		}
+	}
+
+	require.Equal(t, len(expectedByID), len(actualByID), "submodels count mismatch")
+	for id, expectedSubmodel := range expectedByID {
+		actualSubmodel, ok := actualByID[id]
+		require.Truef(t, ok, "submodel with id %q is missing in serialized payload", id)
+		assertClassJSONEquivalent(t, expectedSubmodel, actualSubmodel)
+	}
+}
+
+func assertConceptDescriptionsEquivalent(t *testing.T, expected []types.IConceptDescription, actual []types.IConceptDescription) {
+	t.Helper()
+
+	expectedByID := map[string]types.IConceptDescription{}
+	for _, conceptDescription := range expected {
+		if conceptDescription != nil {
+			expectedByID[conceptDescription.ID()] = conceptDescription
+		}
+	}
+
+	actualByID := map[string]types.IConceptDescription{}
+	for _, conceptDescription := range actual {
+		if conceptDescription != nil {
+			actualByID[conceptDescription.ID()] = conceptDescription
+		}
+	}
+
+	require.Equal(t, len(expectedByID), len(actualByID), "conceptDescriptions count mismatch")
+	for id, expectedConceptDescription := range expectedByID {
+		actualConceptDescription, ok := actualByID[id]
+		require.Truef(t, ok, "conceptDescription with id %q is missing in serialized payload", id)
+		assertClassJSONEquivalent(t, expectedConceptDescription, actualConceptDescription)
+	}
+}
+
+func assertClassJSONEquivalent(t *testing.T, expected types.IClass, actual types.IClass) {
+	t.Helper()
+
+	expectedJSON := classToJSON(t, expected)
+	actualJSON := classToJSON(t, actual)
+	assert.JSONEq(t, string(expectedJSON), string(actualJSON))
+}
+
+func classToJSON(t *testing.T, value types.IClass) []byte {
+	t.Helper()
+
+	jsonable, err := jsonization.ToJsonable(value)
+	require.NoError(t, err)
+
+	payload, err := json.Marshal(normalizeSemanticJSON(jsonable))
+	require.NoError(t, err)
+	return payload
+}
+
+func normalizeSemanticJSON(value any) any {
+	switch typed := value.(type) {
+	case map[string]any:
+		normalized := make(map[string]any, len(typed))
+		for key, entry := range typed {
+			normalizedEntry := normalizeSemanticJSON(entry)
+			if entryString, ok := normalizedEntry.(string); ok && entryString == "" {
+				continue
+			}
+			normalized[key] = normalizedEntry
+		}
+		return normalized
+	case []any:
+		normalized := make([]any, 0, len(typed))
+		for _, entry := range typed {
+			normalized = append(normalized, normalizeSemanticJSON(entry))
+		}
+		return normalized
+	default:
+		return value
+	}
 }
 
 func extractEnvironmentSpecFromAASX(payload []byte, preferredKind string) ([]byte, string, error) {

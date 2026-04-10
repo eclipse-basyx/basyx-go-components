@@ -338,7 +338,23 @@ func (s *SerializationUploadService) resolveSubmodelsForSerialization(
 		return nil, fmt.Errorf("AASENV-SERIALIZATION-SM-LIST %w", err)
 	}
 
-	return submodels, nil
+	submodelIDs := make([]string, 0, len(submodels))
+	for _, submodel := range submodels {
+		if submodel == nil {
+			continue
+		}
+		submodelID := strings.TrimSpace(submodel.ID())
+		if submodelID == "" {
+			continue
+		}
+		submodelIDs = append(submodelIDs, submodelID)
+	}
+
+	if len(submodelIDs) == 0 {
+		return []types.ISubmodel{}, nil
+	}
+
+	return s.loadSubmodelsByIDs(ctx, submodelIDs)
 }
 
 func (s *SerializationUploadService) loadSubmodelsByIDs(ctx context.Context, submodelIDs []string) ([]types.ISubmodel, error) {
