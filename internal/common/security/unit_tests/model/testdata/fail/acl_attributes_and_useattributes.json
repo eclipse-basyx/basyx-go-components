@@ -2,10 +2,10 @@
   "ACCESS": "ALLOW",
   "ATTRIBUTES": [
     {
-      "Kind": "GLOBAL",
-      "Value": "ANONYMOUS"
+      "GLOBAL": "ANONYMOUS"
     }
   ],
+  "USEATTRIBUTES": "named",
   "RIGHTS": [
     "READ"
   ]
