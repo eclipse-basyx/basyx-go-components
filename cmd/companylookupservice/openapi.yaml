@@ -434,7 +434,7 @@ components:
     CompanyDescriptor:
       value:
         pagingMetadata:
-          cursor: "aHR0cHM6Ly9leGFtcGxlLmNvbS9yb2kvZXhhbXBsZS1hYXMtZGlzY292ZXJ5"
+          cursor: "ZXhhbXBsZS5jb21wYW55Mi5jb20"
         data:
           - administration:
               creator:
@@ -462,7 +462,6 @@ components:
                 protocolInformation:
                     href: "https://example.com/aas-registry"
                     endpointProtocol: "HTTPS"
-            id: "https://example.com/roi/example-aas-registry"
             idShort: "exampleCompany"
 
     CompanyDescriptorSingle:
