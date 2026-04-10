@@ -176,7 +176,11 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 		discoveryapi.NewAssetAdministrationShellBasicDiscoveryAPIAPIService(*discoveryPersistence),
 		persistence,
 	)
-	serializationUploadService := aasenvironment.NewSerializationUploadService(persistence)
+	serializationUploadService := aasenvironment.NewSerializationUploadService(
+		customAASRepository,
+		customSMRepository,
+		customCDRepository,
+	)
 
 	aasRegistryCtrl := aasregistryopenapi.NewAssetAdministrationShellRegistryAPIAPIController(customAASRegistry, cfg.Server.ContextPath)
 	smRegistryCtrl := smregistryopenapi.NewSubmodelRegistryAPIAPIController(customSMRegistry, cfg.Server.ContextPath)

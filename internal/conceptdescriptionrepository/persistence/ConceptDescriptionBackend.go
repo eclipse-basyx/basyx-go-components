@@ -441,6 +441,27 @@ func (b *ConceptDescriptionBackend) PutConceptDescription(ctx context.Context, i
 	}
 	defer cleanup(&err)
 
+	if err = b.putConceptDescriptionWithTx(ctx, tx, id, cd); err != nil {
+		return err
+	}
+
+	if err = tx.Commit(); err != nil {
+		return common.NewInternalServerError("CDREPO-PUTCD-COMMIT " + err.Error())
+	}
+
+	return nil
+}
+
+// PutConceptDescriptionWithTx updates or replaces a concept description in an existing transaction.
+func (b *ConceptDescriptionBackend) PutConceptDescriptionWithTx(ctx context.Context, tx *sql.Tx, id string, cd types.IConceptDescription) error {
+	if tx == nil {
+		return common.NewErrBadRequest("CDREPO-PUTCD-NILTX transaction must not be nil")
+	}
+
+	return b.putConceptDescriptionWithTx(ctx, tx, id, cd)
+}
+
+func (b *ConceptDescriptionBackend) putConceptDescriptionWithTx(ctx context.Context, tx *sql.Tx, id string, cd types.IConceptDescription) error {
 	existingExists, existsErr := conceptDescriptionExistsInTx(ctx, tx, id)
 	if existsErr != nil {
 		return existsErr
@@ -464,12 +485,12 @@ func (b *ConceptDescriptionBackend) PutConceptDescription(ctx context.Context, i
 	}
 
 	if existingExists {
-		if err = b.deleteConceptDescriptionInTx(ctx, tx, id); err != nil {
+		if err := b.deleteConceptDescriptionInTx(ctx, tx, id); err != nil {
 			return err
 		}
 	}
 
-	if err = b.createConceptDescriptionInTx(ctx, tx, cd); err != nil {
+	if err := b.createConceptDescriptionInTx(ctx, tx, cd); err != nil {
 		return err
 	}
 
@@ -484,10 +505,6 @@ func (b *ConceptDescriptionBackend) PutConceptDescription(ctx context.Context, i
 		if !visible {
 			return common.NewErrDenied("CDREPO-PUTCD-ABACDENIED written concept description is not accessible under ABAC constraints")
 		}
-	}
-
-	if err = tx.Commit(); err != nil {
-		return common.NewInternalServerError("CDREPO-PUTCD-COMMIT " + err.Error())
 	}
 
 	return nil

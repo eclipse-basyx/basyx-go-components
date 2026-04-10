@@ -113,7 +113,7 @@ var sampleEnvironmentJSON = []byte(`{
   ]
 }`)
 
-//go:embed aas/environment.json aas/ProductionPlanSFKL.aasx
+//go:embed aas/*
 var fixtureFiles embed.FS
 
 func TestUploadEndpointMediaTypes(t *testing.T) {
@@ -300,6 +300,77 @@ func TestUploadAndSerializationRoundTripWithRealFixtureFiles(t *testing.T) {
 		expectedEnvironment := parseEnvironmentFromAASXPayload(t, uploadedPayload, "json")
 		actualEnvironment := parseEnvironmentFromAASXPayload(t, serializedPayload, "json")
 		assertEnvironmentEquivalent(t, expectedEnvironment, actualEnvironment)
+	})
+
+	t.Run("Upload_AASX_4100K_Returns_400", func(t *testing.T) {
+		resetDatabase(t)
+
+		uploadedPayload := mustReadFixtureFile(t, "HARTING_AAS_72MDM4MDM4100K.aasx")
+		uploadStatusCode, uploadResponse := uploadEnvironmentPayload(t, "application/aasx+json", uploadedPayload)
+		assert.Equal(t, http.StatusBadRequest, uploadStatusCode, "unexpected upload status: %s", uploadResponse)
+		assert.Contains(t, uploadResponse, "AASENV-PARSE-AASX")
+	})
+}
+
+func TestSerializationSpecificIdentifiersAndIncludeConceptDescriptions(t *testing.T) {
+	resetDatabase(t)
+
+	jsonPayload, _, _, _, _ := buildSampleEnvironmentPayloads(t)
+	uploadStatusCode, uploadResponse := uploadEnvironmentPayload(t, "application/json", jsonPayload)
+	require.Equal(t, http.StatusNoContent, uploadStatusCode, "upload failed: %s", uploadResponse)
+
+	uploadedEnvironment := parseEnvironmentFromJSONPayload(t, jsonPayload)
+	selectedAASID := mustFirstAssetAdministrationShellID(t, uploadedEnvironment)
+	selectedSubmodelID := mustFirstSubmodelID(t, uploadedEnvironment)
+	expectedConceptDescriptionCount := len(uploadedEnvironment.ConceptDescriptions())
+	require.Greater(t, expectedConceptDescriptionCount, 0, "fixture should contain concept descriptions")
+
+	t.Run("Filter_By_Single_AASID_Without_ConceptDescriptions", func(t *testing.T) {
+		query := "?includeConceptDescriptions=false&aasIds=" + encodedIdentifierQueryValue(selectedAASID)
+		statusCode, contentType, payload := getSerializationPayload(t, "application/json", query)
+		require.Equal(t, http.StatusOK, statusCode, "serialization failed: %s", string(payload))
+		assert.Contains(t, contentType, "application/json")
+
+		environment := parseEnvironmentFromJSONPayload(t, payload)
+		require.Len(t, environment.AssetAdministrationShells(), 1)
+		assert.Equal(t, selectedAASID, environment.AssetAdministrationShells()[0].ID())
+		assert.Len(t, environment.ConceptDescriptions(), 0)
+	})
+
+	t.Run("Filter_By_Single_AASID_With_ConceptDescriptions", func(t *testing.T) {
+		query := "?includeConceptDescriptions=true&aasIds=" + encodedIdentifierQueryValue(selectedAASID)
+		statusCode, contentType, payload := getSerializationPayload(t, "application/json", query)
+		require.Equal(t, http.StatusOK, statusCode, "serialization failed: %s", string(payload))
+		assert.Contains(t, contentType, "application/json")
+
+		environment := parseEnvironmentFromJSONPayload(t, payload)
+		require.Len(t, environment.AssetAdministrationShells(), 1)
+		assert.Equal(t, selectedAASID, environment.AssetAdministrationShells()[0].ID())
+		assert.Len(t, environment.ConceptDescriptions(), expectedConceptDescriptionCount)
+	})
+
+	t.Run("Filter_By_Single_SubmodelID_Without_ConceptDescriptions", func(t *testing.T) {
+		query := "?includeConceptDescriptions=false&submodelIds=" + encodedIdentifierQueryValue(selectedSubmodelID)
+		statusCode, contentType, payload := getSerializationPayload(t, "application/json", query)
+		require.Equal(t, http.StatusOK, statusCode, "serialization failed: %s", string(payload))
+		assert.Contains(t, contentType, "application/json")
+
+		environment := parseEnvironmentFromJSONPayload(t, payload)
+		require.Len(t, environment.Submodels(), 1)
+		assert.Equal(t, selectedSubmodelID, environment.Submodels()[0].ID())
+		assert.Len(t, environment.ConceptDescriptions(), 0)
+	})
+
+	t.Run("Filter_By_Single_SubmodelID_With_ConceptDescriptions", func(t *testing.T) {
+		query := "?includeConceptDescriptions=true&submodelIds=" + encodedIdentifierQueryValue(selectedSubmodelID)
+		statusCode, contentType, payload := getSerializationPayload(t, "application/json", query)
+		require.Equal(t, http.StatusOK, statusCode, "serialization failed: %s", string(payload))
+		assert.Contains(t, contentType, "application/json")
+
+		environment := parseEnvironmentFromJSONPayload(t, payload)
+		require.Len(t, environment.Submodels(), 1)
+		assert.Equal(t, selectedSubmodelID, environment.Submodels()[0].ID())
+		assert.Len(t, environment.ConceptDescriptions(), expectedConceptDescriptionCount)
 	})
 }
 
@@ -932,17 +1003,52 @@ func anySlice(value any) []any {
 func mustReadFixtureFile(t *testing.T, fileName string) []byte {
 	t.Helper()
 
-	fixturePathByName := map[string]string{
-		"environment.json":        "aas/environment.json",
-		"ProductionPlanSFKL.aasx": "aas/ProductionPlanSFKL.aasx",
-	}
-
-	fixturePath, ok := fixturePathByName[fileName]
-	require.Truef(t, ok, "unsupported fixture file: %s", fileName)
+	baseName := path.Base(fileName)
+	require.Equal(t, baseName, fileName, "fixture file name must not contain path separators")
+	fixturePath := path.Join("aas", baseName)
 
 	payload, err := fixtureFiles.ReadFile(fixturePath)
 	require.NoError(t, err, "failed reading fixture file: %s", fixturePath)
 	require.NotEmpty(t, payload, "fixture file is empty: %s", fixturePath)
 
 	return payload
+}
+
+func encodedIdentifierQueryValue(identifier string) string {
+	encoded := base64.RawURLEncoding.EncodeToString([]byte(identifier))
+	return url.QueryEscape(encoded)
+}
+
+func mustFirstAssetAdministrationShellID(t *testing.T, environment types.IEnvironment) string {
+	t.Helper()
+
+	for _, shell := range environment.AssetAdministrationShells() {
+		if shell == nil {
+			continue
+		}
+		identifier := strings.TrimSpace(shell.ID())
+		if identifier != "" {
+			return identifier
+		}
+	}
+
+	require.FailNow(t, "fixture does not contain an AAS identifier")
+	return ""
+}
+
+func mustFirstSubmodelID(t *testing.T, environment types.IEnvironment) string {
+	t.Helper()
+
+	for _, submodel := range environment.Submodels() {
+		if submodel == nil {
+			continue
+		}
+		identifier := strings.TrimSpace(submodel.ID())
+		if identifier != "" {
+			return identifier
+		}
+	}
+
+	require.FailNow(t, "fixture does not contain a submodel identifier")
+	return ""
 }

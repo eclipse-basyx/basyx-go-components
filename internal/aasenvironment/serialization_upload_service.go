@@ -29,6 +29,7 @@ package aasenvironment
 import (
 	"bytes"
 	"context"
+	"database/sql"
 	"encoding/json"
 	"encoding/xml"
 	"fmt"
@@ -84,12 +85,22 @@ type specCandidate struct {
 
 // SerializationUploadService hosts custom AAS Environment upload/serialization endpoints.
 type SerializationUploadService struct {
-	persistence *Persistence
+	aasRepository                *CustomAASRepositoryService
+	submodelRepository           *CustomSubmodelRepositoryService
+	conceptDescriptionRepository *CustomConceptDescriptionRepositoryService
 }
 
 // NewSerializationUploadService constructs upload/serialization endpoint handlers.
-func NewSerializationUploadService(persistence *Persistence) *SerializationUploadService {
-	return &SerializationUploadService{persistence: persistence}
+func NewSerializationUploadService(
+	aasRepository *CustomAASRepositoryService,
+	submodelRepository *CustomSubmodelRepositoryService,
+	conceptDescriptionRepository *CustomConceptDescriptionRepositoryService,
+) *SerializationUploadService {
+	return &SerializationUploadService{
+		aasRepository:                aasRepository,
+		submodelRepository:           submodelRepository,
+		conceptDescriptionRepository: conceptDescriptionRepository,
+	}
 }
 
 // RegisterRoutes attaches /serialization and /upload endpoints.
@@ -100,7 +111,7 @@ func (s *SerializationUploadService) RegisterRoutes(router chi.Router) {
 
 // HandleSerialization serializes the combined environment as JSON, XML or AASX.
 func (s *SerializationUploadService) HandleSerialization(w http.ResponseWriter, r *http.Request) {
-	if s == nil || s.persistence == nil {
+	if s == nil || s.aasRepository == nil || s.submodelRepository == nil || s.conceptDescriptionRepository == nil {
 		s.writeErrorResponse(
 			w,
 			http.StatusInternalServerError,
@@ -164,7 +175,7 @@ func (s *SerializationUploadService) HandleSerialization(w http.ResponseWriter, 
 
 // HandleUpload uploads an Environment payload as JSON, XML or AASX (multipart file part).
 func (s *SerializationUploadService) HandleUpload(w http.ResponseWriter, r *http.Request) {
-	if s == nil || s.persistence == nil {
+	if s == nil || s.aasRepository == nil || s.submodelRepository == nil || s.conceptDescriptionRepository == nil {
 		s.writeErrorResponse(
 			w,
 			http.StatusInternalServerError,
@@ -207,6 +218,16 @@ func (s *SerializationUploadService) upsertEnvironment(ctx context.Context, envi
 		return common.NewErrBadRequest("AASENV-UPLOAD-NILENV parsed environment must not be nil")
 	}
 
+	return s.aasRepository.ExecuteInTransaction(func(tx *sql.Tx) error {
+		return s.upsertEnvironmentInTransaction(ctx, tx, environment)
+	})
+}
+
+func (s *SerializationUploadService) upsertEnvironmentInTransaction(ctx context.Context, tx *sql.Tx, environment types.IEnvironment) error {
+	if tx == nil {
+		return common.NewErrBadRequest("AASENV-UPLOAD-NILTX upload transaction must not be nil")
+	}
+
 	for _, submodel := range environment.Submodels() {
 		if submodel == nil {
 			continue
@@ -215,7 +236,7 @@ func (s *SerializationUploadService) upsertEnvironment(ctx context.Context, envi
 		if identifier == "" {
 			return common.NewErrBadRequest("AASENV-UPLOAD-SM-MISSINGID submodel identifier is required")
 		}
-		if _, err := s.persistence.SubmodelRepository.PutSubmodel(ctx, identifier, submodel); err != nil {
+		if _, err := s.submodelRepository.PutSubmodelWithTxForEnvironment(ctx, tx, identifier, submodel); err != nil {
 			return fmt.Errorf("AASENV-UPLOAD-SM-PUTSUBMODEL %w", err)
 		}
 	}
@@ -228,7 +249,7 @@ func (s *SerializationUploadService) upsertEnvironment(ctx context.Context, envi
 		if identifier == "" {
 			return common.NewErrBadRequest("AASENV-UPLOAD-AAS-MISSINGID shell identifier is required")
 		}
-		if _, err := s.persistence.AASRepository.PutAssetAdministrationShellByID(ctx, identifier, shell); err != nil {
+		if _, err := s.aasRepository.PutAssetAdministrationShellByIDWithTxForEnvironment(ctx, tx, identifier, shell); err != nil {
 			return fmt.Errorf("AASENV-UPLOAD-AAS-PUTAAS %w", err)
 		}
 	}
@@ -241,7 +262,7 @@ func (s *SerializationUploadService) upsertEnvironment(ctx context.Context, envi
 		if identifier == "" {
 			return common.NewErrBadRequest("AASENV-UPLOAD-CD-MISSINGID concept description identifier is required")
 		}
-		if err := s.persistence.ConceptDescriptionRepository.PutConceptDescription(ctx, identifier, conceptDescription); err != nil {
+		if err := s.conceptDescriptionRepository.PutConceptDescriptionWithTxForEnvironment(ctx, tx, identifier, conceptDescription); err != nil {
 			return fmt.Errorf("AASENV-UPLOAD-CD-PUTCD %w", err)
 		}
 	}
@@ -280,14 +301,14 @@ func (s *SerializationUploadService) resolveAASForSerialization(
 	var rawAASPayloads []map[string]any
 	if len(aasIDs) == 0 {
 		var listErr error
-		rawAASPayloads, _, listErr = s.persistence.AASRepository.GetAssetAdministrationShells(ctx, 0, "", "", nil)
+		rawAASPayloads, _, listErr = s.aasRepository.GetAssetAdministrationShellsForEnvironment(ctx, 0, "", "", nil)
 		if listErr != nil {
 			return nil, nil, fmt.Errorf("AASENV-SERIALIZATION-AAS-LIST %w", listErr)
 		}
 	} else {
 		rawAASPayloads = make([]map[string]any, 0, len(aasIDs))
 		for _, aasID := range deduplicateStrings(aasIDs) {
-			aasPayload, getErr := s.persistence.AASRepository.GetAssetAdministrationShellByID(ctx, aasID)
+			aasPayload, getErr := s.aasRepository.GetAssetAdministrationShellByIDForEnvironment(ctx, aasID)
 			if getErr != nil {
 				return nil, nil, fmt.Errorf("AASENV-SERIALIZATION-AAS-GETBYID %w", getErr)
 			}
@@ -333,7 +354,7 @@ func (s *SerializationUploadService) resolveSubmodelsForSerialization(
 		return s.loadSubmodelsByIDs(ctx, derivedSubmodelIDs)
 	}
 
-	submodels, _, err := s.persistence.SubmodelRepository.GetSubmodels(ctx, 0, "", "")
+	submodels, _, err := s.submodelRepository.GetSubmodelsForEnvironment(ctx, 0, "", "")
 	if err != nil {
 		return nil, fmt.Errorf("AASENV-SERIALIZATION-SM-LIST %w", err)
 	}
@@ -360,7 +381,7 @@ func (s *SerializationUploadService) resolveSubmodelsForSerialization(
 func (s *SerializationUploadService) loadSubmodelsByIDs(ctx context.Context, submodelIDs []string) ([]types.ISubmodel, error) {
 	result := make([]types.ISubmodel, 0, len(submodelIDs))
 	for _, submodelID := range deduplicateStrings(submodelIDs) {
-		submodel, err := s.persistence.SubmodelRepository.GetSubmodelByID(ctx, submodelID, "", false)
+		submodel, err := s.submodelRepository.GetSubmodelByIDForEnvironment(ctx, submodelID, "", false)
 		if err != nil {
 			return nil, fmt.Errorf("AASENV-SERIALIZATION-SM-GETBYID %w", err)
 		}
@@ -390,7 +411,7 @@ func (s *SerializationUploadService) resolveConceptDescriptionsForSerialization(
 			cursorPtr = &cursorCopy
 		}
 
-		conceptDescriptions, nextCursor, err := s.persistence.ConceptDescriptionRepository.GetConceptDescriptions(
+		conceptDescriptions, nextCursor, err := s.conceptDescriptionRepository.GetConceptDescriptionsForEnvironment(
 			ctx,
 			nil,
 			nil,
@@ -473,6 +494,10 @@ func parseEnvironmentFromXMLBytes(payload []byte) (types.IEnvironment, error) {
 }
 
 func parseEnvironmentFromAASXBytes(payload []byte, preferredKind serializationKind) (types.IEnvironment, error) {
+	return parseEnvironmentFromAASXPackageBytes(payload, preferredKind)
+}
+
+func parseEnvironmentFromAASXPackageBytes(payload []byte, preferredKind serializationKind) (types.IEnvironment, error) {
 	packaging := aasx.NewPackaging()
 	pkg, err := packaging.OpenReadFromStream(bytes.NewReader(payload))
 	if err != nil {
