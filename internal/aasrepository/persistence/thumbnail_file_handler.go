@@ -222,12 +222,12 @@ func (h *PostgreSQLThumbnailFileHandler) uploadThumbnailByAASIDInTransaction(tx 
 		detectedContentType = http.DetectContentType(contentTypeBuffer[:readBytes])
 	}
 
-	fallbackFileName := fileName
-	if strings.TrimSpace(fallbackFileName) == "" && existingFileName.Valid {
-		fallbackFileName = existingFileName.String
+	resolvedFileName := strings.TrimSpace(fileName)
+	if resolvedFileName == "" && existingFileName.Valid {
+		resolvedFileName = existingFileName.String
 	}
 
-	resolvedContentType, mismatchDetectedVsDeclared := common.ResolveUploadedContentType(detectedContentType, existingContentType.String, fallbackFileName)
+	resolvedContentType, mismatchDetectedVsDeclared := common.ResolveUploadedContentType(detectedContentType, existingContentType.String, resolvedFileName)
 	if mismatchDetectedVsDeclared {
 		log.Printf("[WARN] AASREPO-PUTTHUMBNAIL-RESOLVEMIME detected content type differs from declared content type; using detected content type")
 	}
@@ -306,7 +306,7 @@ func (h *PostgreSQLThumbnailFileHandler) uploadThumbnailByAASIDInTransaction(tx 
 			Rows(goqu.Record{
 				"id":           aasDBID,
 				"content_type": resolvedContentType,
-				"file_name":    fileName,
+				"file_name":    resolvedFileName,
 				"value":        "",
 			}).
 			OnConflict(goqu.DoNothing()).
@@ -333,12 +333,12 @@ func (h *PostgreSQLThumbnailFileHandler) uploadThumbnailByAASIDInTransaction(tx 
 		Rows(goqu.Record{
 			"id":           aasDBID,
 			"content_type": resolvedContentType,
-			"file_name":    fileName,
+			"file_name":    resolvedFileName,
 			"value":        strconv.FormatInt(newOID, 10),
 		}).
 		OnConflict(goqu.DoUpdate("id", goqu.Record{
 			"content_type": resolvedContentType,
-			"file_name":    fileName,
+			"file_name":    resolvedFileName,
 			"value":        strconv.FormatInt(newOID, 10),
 		})).
 		ToSQL()

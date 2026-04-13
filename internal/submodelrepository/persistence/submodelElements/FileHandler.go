@@ -421,12 +421,12 @@ func (p PostgreSQLFileHandler) UploadFileAttachment(submodelID string, idShortPa
 		detectedContentType = http.DetectContentType(contentTypeBuffer[:n])
 	}
 
-	fallbackFileName := fileName
-	if strings.TrimSpace(fallbackFileName) == "" && existingFileName.Valid {
-		fallbackFileName = existingFileName.String
+	resolvedFileName := strings.TrimSpace(fileName)
+	if resolvedFileName == "" && existingFileName.Valid {
+		resolvedFileName = existingFileName.String
 	}
 
-	resolvedContentType, mismatchDetectedVsDeclared := common.ResolveUploadedContentType(detectedContentType, existingContentType.String, fallbackFileName)
+	resolvedContentType, mismatchDetectedVsDeclared := common.ResolveUploadedContentType(detectedContentType, existingContentType.String, resolvedFileName)
 	if mismatchDetectedVsDeclared {
 		log.Printf("[WARN] SMREPO-UPLOADATTACHMENT-RESOLVEMIME detected content type differs from declared content type; using detected content type")
 	}
@@ -532,7 +532,7 @@ func (p PostgreSQLFileHandler) UploadFileAttachment(submodelID string, idShortPa
 	updateFileElementQuery, updateFileElementArgs, err := dialect.Update("file_element").
 		Set(goqu.Record{
 			"value":        fmt.Sprintf("%d", newOID),
-			"file_name":    fileName,
+			"file_name":    resolvedFileName,
 			"content_type": resolvedContentType,
 		}).
 		Where(goqu.C("id").Eq(submodelElementID)).
