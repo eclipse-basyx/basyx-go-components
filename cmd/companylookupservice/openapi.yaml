@@ -135,7 +135,7 @@ paths:
 
     delete:
       tags: [Company Lookup API]
-      summary: Deletes an Company Descriptor
+      summary: Deletes a Company Descriptor
       operationId: DeleteCompanyDescriptorById
       responses:
         '204':
