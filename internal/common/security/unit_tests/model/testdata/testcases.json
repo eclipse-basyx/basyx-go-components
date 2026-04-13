@@ -21,6 +21,12 @@
     "should_fail": true
   },
   {
+    "file": "fail/acl_attributes_and_useattributes.json",
+    "type": "ACL",
+    "should_fail": true,
+    "error_contains": "ATTRIBUTES or USEATTRIBUTES"
+  },
+  {
     "file": "fail/only_one_acl.json",
     "type": "AccessRuleModelSchemaJson",
     "should_fail": true
@@ -34,6 +40,12 @@
     "file": "fail/wrong_object_identifier.json",
     "type": "AccessRuleModelSchemaJson",
     "should_fail": true
+  },
+  {
+    "file": "fail/objects_and_useobjects.json",
+    "type": "AccessRuleModelSchemaJson",
+    "should_fail": true,
+    "error_contains": "OBJECTS or USEOBJECTS"
   },
   {
     "file": "pass/correct_object_identifier.json",

@@ -54,9 +54,6 @@ const RightsEnumEXECUTE RightsEnum = "EXECUTE"
 // RightsEnumREAD right to read elements
 const RightsEnumREAD RightsEnum = "READ"
 
-// RightsEnumTREE right to view the tree structure of elements
-const RightsEnumTREE RightsEnum = "TREE"
-
 // RightsEnumUPDATE right to update elements
 const RightsEnumUPDATE RightsEnum = "UPDATE"
 
@@ -71,7 +68,6 @@ var enumValuesRightsEnum = []interface{}{
 	"EXECUTE",
 	"VIEW",
 	"ALL",
-	"TREE",
 }
 
 // UnmarshalJSON implements json.Unmarshaler.
