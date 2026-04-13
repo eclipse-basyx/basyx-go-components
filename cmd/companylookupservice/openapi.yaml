@@ -184,7 +184,7 @@ components:
       name: cursor
       in: query
       required: false
-      description: A server-generated identifier retrieved from pagingMetadata that specifies from which position the result listing should continue
+      description: A server-generated identifier retrieved from paging_metadata that specifies from which position the result listing should continue
       schema:
         type: string
 
@@ -275,13 +275,13 @@ components:
       type: object
       additionalProperties: false
       properties:
-        pagingMetadata:
+        paging_metadata:
           $ref: "#/components/schemas/PagingMetadata"
         data:
           type: array
           items:
             $ref: "#/components/schemas/CompanyDescriptor"
-      required: [pagingMetadata, data]
+      required: [paging_metadata, data]
 
     PagingMetadata:
       type: object
@@ -433,7 +433,7 @@ components:
   examples:
     CompanyDescriptor:
       value:
-        pagingMetadata:
+        paging_metadata:
           cursor: "ZXhhbXBsZS5jb21wYW55Mi5jb20"
         data:
           - administration:

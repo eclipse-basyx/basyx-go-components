@@ -144,7 +144,7 @@ func (s *CompanyLookupAPIService) GetAllCompanyDescriptors(ctx context.Context, 
 	}
 
 	res := struct {
-		PagingMetadata model.PagedResultPagingMetadata `json:"pagingMetadata"`
+		PagingMetadata model.PagedResultPagingMetadata `json:"paging_metadata"`
 		Data           []map[string]any                `json:"data"`
 	}{
 		PagingMetadata: pm,
