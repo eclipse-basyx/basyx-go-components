@@ -29,6 +29,13 @@
 //nolint:all
 package grammar
 
+import (
+	"fmt"
+	"strings"
+
+	"github.com/eclipse-basyx/basyx-go-components/internal/common"
+)
+
 // AccessPermissionRuleFILTER represents an optional filter component within an access permission rule.
 //
 // Filters provide fine-grained control over which AAS resources or resource fragments an access
@@ -76,4 +83,38 @@ type AccessPermissionRuleFILTER struct {
 
 	// USEFORMULA corresponds to the JSON schema field "USEFORMULA".
 	USEFORMULA *string `json:"USEFORMULA,omitempty" yaml:"USEFORMULA,omitempty" mapstructure:"USEFORMULA,omitempty"`
+}
+
+// UnmarshalJSON implements the json.Unmarshaler interface for AccessPermissionRuleFILTER.
+//
+// It enforces:
+//   - FRAGMENT is required
+//   - exactly one of CONDITION or USEFORMULA must be defined
+func (j *AccessPermissionRuleFILTER) UnmarshalJSON(value []byte) error {
+	type Plain AccessPermissionRuleFILTER
+	var plain Plain
+
+	if err := common.UnmarshalAndDisallowUnknownFields(value, &plain); err != nil {
+		return err
+	}
+
+	isStrSet := func(p *string) bool {
+		return p != nil && strings.TrimSpace(*p) != ""
+	}
+
+	hasCondition := plain.CONDITION != nil
+	hasUseFormula := isStrSet(plain.USEFORMULA)
+
+	if plain.FRAGMENT == nil {
+		return fmt.Errorf("AccessPermissionRuleFILTER: FRAGMENT is required")
+	}
+	if hasCondition == hasUseFormula {
+		if hasCondition {
+			return fmt.Errorf("AccessPermissionRuleFILTER: only one of CONDITION or USEFORMULA may be defined, not both")
+		}
+		return fmt.Errorf("AccessPermissionRuleFILTER: exactly one of CONDITION or USEFORMULA must be defined")
+	}
+
+	*j = AccessPermissionRuleFILTER(plain)
+	return nil
 }
