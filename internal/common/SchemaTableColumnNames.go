@@ -94,7 +94,7 @@ const (
 	ColAssetType                 = "asset_type"
 	ColGlobalAssetID             = "global_asset_id"
 	ColIDShort                   = "id_short"
-	ColCreatedAt                 = "created_at"
+	ColCreatedAt                 = "db_created_at"
 	ColAASID                     = "id"
 	ColInfDescID                 = "id"
 	ColHref                      = "href"
