@@ -111,6 +111,39 @@ func createAASForThumbnailTest(baseURL string, aasID string) (int, error) {
 	return resp.StatusCode, nil
 }
 
+func createAASForThumbnailTestWithDeclaredContentType(baseURL string, aasID string, thumbnailPath string, contentType string) (int, error) {
+	body := fmt.Sprintf(`{"id":"%s","modelType":"AssetAdministrationShell","assetInformation":{"assetKind":"Instance","defaultThumbnail":{"path":"%s","contentType":"%s"}}}`,
+		aasID,
+		thumbnailPath,
+		contentType,
+	)
+
+	req, err := http.NewRequest(http.MethodPost, baseURL+"/shells", strings.NewReader(body))
+	if err != nil {
+		return 0, fmt.Errorf("failed to create request: %v", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return 0, fmt.Errorf("failed to send request: %v", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	return resp.StatusCode, nil
+}
+
+func createTemporaryBinaryTestFile(t *testing.T, fileName string, payload []byte) string {
+	t.Helper()
+
+	filePath := filepath.Join(t.TempDir(), fileName)
+	err := os.WriteFile(filePath, payload, 0o600)
+	require.NoError(t, err, "failed to create temporary test file")
+
+	return filePath
+}
+
 func uploadThumbnail(endpoint string, filePath string, fileName string) (int, error) {
 	file, err := os.Open(filepath.Clean(filePath))
 	if err != nil {
@@ -463,6 +496,44 @@ func TestContractThumbnailGetReturnsDetectedContentType(t *testing.T) {
 	require.Equal(t, http.StatusOK, getStatusCode, "Expected 200 OK for thumbnail download")
 	assert.Equal(t, expectedContent, content, "Downloaded thumbnail content should match uploaded payload")
 	assert.Equal(t, expectedContentType, contentType, "Thumbnail GET content type should match detected uploaded content type")
+}
+
+func TestThumbnailUploadUsesDeclaredContentTypeFallback(t *testing.T) {
+	baseURL := "http://localhost:6004"
+	aasID := fmt.Sprintf("https://example.com/ids/aas/thumbnail_declared_fallback_%d", time.Now().UnixNano())
+	aasIdentifier := base64.RawURLEncoding.EncodeToString([]byte(aasID))
+	thumbnailEndpoint := fmt.Sprintf("%s/shells/%s/asset-information/thumbnail", baseURL, aasIdentifier)
+
+	statusCode, err := createAASForThumbnailTestWithDeclaredContentType(baseURL, aasID, "declared-thumbnail", "image/tiff")
+	require.NoError(t, err, "AAS creation failed")
+	require.Equal(t, http.StatusCreated, statusCode, "Expected 201 Created for AAS creation")
+
+	weakPayload := []byte{0x01, 0x02, 0x03, 0x04}
+	weakFilePath := createTemporaryBinaryTestFile(t, "thumbnail-weak", weakPayload)
+
+	uploadStatusCode, uploadErr := uploadThumbnail(thumbnailEndpoint, weakFilePath, "blue_tiff_jpeg_comp.tif")
+	require.NoError(t, uploadErr, "Thumbnail upload failed")
+	require.Equal(t, http.StatusNoContent, uploadStatusCode, "Expected 204 No Content for thumbnail upload")
+
+	content, contentType, getStatusCode, getErr := downloadThumbnail(thumbnailEndpoint)
+	require.NoError(t, getErr, "Thumbnail download failed")
+	require.Equal(t, http.StatusOK, getStatusCode, "Expected 200 OK for thumbnail download")
+	assert.Equal(t, weakPayload, content, "Downloaded thumbnail content should match uploaded payload")
+	assert.Equal(t, "image/tiff", contentType, "Weak MIME detection should fall back to TIFF content type")
+
+	payload, aasStatusCode, aasErr := getJSONResponse(fmt.Sprintf("%s/shells/%s", baseURL, aasIdentifier))
+	require.NoError(t, aasErr, "AAS retrieval failed")
+	require.Equal(t, http.StatusOK, aasStatusCode, "Expected 200 OK for AAS retrieval")
+
+	assetInformation, ok := payload["assetInformation"].(map[string]any)
+	require.True(t, ok, "assetInformation should be present")
+
+	thumbnail, ok := assetInformation["defaultThumbnail"].(map[string]any)
+	require.True(t, ok, "assetInformation.defaultThumbnail should be present")
+
+	thumbnailContentType, ok := thumbnail["contentType"].(string)
+	require.True(t, ok, "thumbnail.contentType should be a string")
+	assert.Equal(t, "image/tiff", thumbnailContentType, "AAS payload should expose fallback-resolved thumbnail contentType")
 }
 
 // TestMain handles setup and teardown
