@@ -454,7 +454,9 @@ CREATE TABLE IF NOT EXISTS company_descriptor (
   global_asset_id VARCHAR(2048),
   id_short VARCHAR(128),
   company_name VARCHAR(2048),
-  company_domain VARCHAR(2048) NOT NULL UNIQUE
+  company_domain VARCHAR(2048) NOT NULL UNIQUE,
+  db_created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  db_updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 CREATE TABLE IF NOT EXISTS company_descriptor_name_option (
@@ -462,14 +464,18 @@ CREATE TABLE IF NOT EXISTS company_descriptor_name_option (
   position INTEGER NOT NULL,
   name_option VARCHAR(2048) NOT NULL,
   PRIMARY KEY (descriptor_id, position),
-  UNIQUE (descriptor_id, name_option)
+  UNIQUE (descriptor_id, name_option),
+  db_created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  db_updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 CREATE TABLE IF NOT EXISTS company_descriptor_asset_id_regex (
   descriptor_id BIGINT NOT NULL REFERENCES descriptor(id) ON DELETE CASCADE,
   position INTEGER NOT NULL,
   regex_pattern VARCHAR(2048) NOT NULL,
-  PRIMARY KEY (descriptor_id, position)
+  PRIMARY KEY (descriptor_id, position),
+  db_created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  db_updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 CREATE TABLE IF NOT EXISTS concept_description (
