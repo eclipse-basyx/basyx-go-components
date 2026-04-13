@@ -1081,7 +1081,8 @@ func (s *SubmodelDatabase) PutSubmodel(ctx context.Context, submodelID string, s
 	}
 	defer cleanup(&err)
 
-	isUpdate, err := s.putSubmodelWithTx(ctx, tx, submodelID, submodel)
+	var isUpdate bool
+	isUpdate, err = s.putSubmodelWithTx(ctx, tx, submodelID, submodel)
 	if err != nil {
 		return false, err
 	}

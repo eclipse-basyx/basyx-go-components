@@ -462,6 +462,10 @@ func (b *ConceptDescriptionBackend) PutConceptDescriptionWithTx(ctx context.Cont
 }
 
 func (b *ConceptDescriptionBackend) putConceptDescriptionWithTx(ctx context.Context, tx *sql.Tx, id string, cd types.IConceptDescription) error {
+	if id != cd.ID() {
+		return common.NewErrBadRequest("CDREPO-PUTCD-IDMISMATCH Concept description ID in path and body do not match")
+	}
+
 	existingExists, existsErr := conceptDescriptionExistsInTx(ctx, tx, id)
 	if existsErr != nil {
 		return existsErr

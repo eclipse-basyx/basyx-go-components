@@ -31,7 +31,6 @@ import (
 	"archive/zip"
 	"bytes"
 	"embed"
-	"encoding/base64"
 	"encoding/json"
 	"encoding/xml"
 	"io"
@@ -47,6 +46,7 @@ import (
 	"github.com/aas-core-works/aas-core3.1-golang/jsonization"
 	"github.com/aas-core-works/aas-core3.1-golang/types"
 	"github.com/aas-core-works/aas-core3.1-golang/xmlization"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -261,7 +261,7 @@ func TestSerializationEndpointMediaTypes(t *testing.T) {
 	})
 
 	t.Run("Serialization_Filters_By_AAS_Identifier", func(t *testing.T) {
-		encodedAASID := base64.RawURLEncoding.EncodeToString([]byte(sampleAASID))
+		encodedAASID := common.EncodeString(sampleAASID)
 		query := "?aasIds=" + url.QueryEscape(encodedAASID)
 		respStatus, _, payload := getSerializationPayload(t, "application/json", query)
 		assert.Equal(t, http.StatusOK, respStatus)
@@ -1015,7 +1015,7 @@ func mustReadFixtureFile(t *testing.T, fileName string) []byte {
 }
 
 func encodedIdentifierQueryValue(identifier string) string {
-	encoded := base64.RawURLEncoding.EncodeToString([]byte(identifier))
+	encoded := common.EncodeString(identifier)
 	return url.QueryEscape(encoded)
 }
 

@@ -679,7 +679,8 @@ func (s *AssetAdministrationShellDatabase) PutAssetAdministrationShellByID(ctx c
 	}
 	defer cleanup(&err)
 
-	isUpdate, err := s.putAssetAdministrationShellByIDWithTx(ctx, tx, aasIdentifier, aas)
+	var isUpdate bool
+	isUpdate, err = s.putAssetAdministrationShellByIDWithTx(ctx, tx, aasIdentifier, aas)
 	if err != nil {
 		return false, err
 	}

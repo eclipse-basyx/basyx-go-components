@@ -1204,9 +1204,6 @@ paths:
                 file:
                   type: string
                   format: binary
-            encoding:
-              file:
-                contentType: application/json, application/xml, application/aasx+xml, application/asset-administration-shell+xml, application/aasx+json, application/asset-administration-shell+json
       responses:
         '204':
           description: Environment uploaded successfully

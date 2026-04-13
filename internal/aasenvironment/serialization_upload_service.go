@@ -66,6 +66,9 @@ const (
 	mediaTypeAASJSONAlias        = "application/asset-administration-shell+json"
 	mediaTypeAASXMLAlias         = "application/asset-administration-shell+xml"
 	mediaTypeAASXLegacyXMLBundle = "application/asset-administration-shell-package+xml"
+
+	maxUploadFileBytes        int64 = 64 << 20
+	maxUploadRequestBodyBytes int64 = maxUploadFileBytes + (4 << 20)
 )
 
 type serializationKind string
@@ -186,7 +189,7 @@ func (s *SerializationUploadService) HandleUpload(w http.ResponseWriter, r *http
 		return
 	}
 
-	filePayload, fileMediaType, readErr := readUploadedMultipartFile(r)
+	filePayload, fileMediaType, readErr := readUploadedMultipartFile(w, r)
 	if readErr != nil {
 		s.writeErrorResponse(w, http.StatusBadRequest, uploadOperation, "ReadMultipartFile", readErr)
 		return
@@ -713,7 +716,9 @@ func buildAASXSpecPayload(environment types.IEnvironment, kind serializationKind
 	}
 }
 
-func readUploadedMultipartFile(r *http.Request) ([]byte, string, error) {
+func readUploadedMultipartFile(w http.ResponseWriter, r *http.Request) ([]byte, string, error) {
+	r.Body = http.MaxBytesReader(w, r.Body, maxUploadRequestBodyBytes)
+
 	if err := r.ParseMultipartForm(32 << 20); err != nil {
 		return nil, "", common.NewErrBadRequest("AASENV-UPLOAD-PARSEMULTIPART " + err.Error())
 	}
@@ -733,6 +738,10 @@ func readUploadedMultipartFile(r *http.Request) ([]byte, string, error) {
 	}
 
 	fileHeader := fileHeaders[0]
+	if fileHeader.Size > maxUploadFileBytes {
+		return nil, "", common.NewErrBadRequest("AASENV-UPLOAD-FILETOOLARGE multipart file exceeds maximum allowed size")
+	}
+
 	fileMediaType := normalizeMediaType(fileHeader.Header.Get("Content-Type"))
 	if fileMediaType == "" {
 		return nil, "", common.NewErrBadRequest("AASENV-UPLOAD-MISSINGFILEMEDIATYPE multipart file part Content-Type is required")
@@ -746,9 +755,13 @@ func readUploadedMultipartFile(r *http.Request) ([]byte, string, error) {
 		_ = formFile.Close()
 	}()
 
-	payload, readErr := io.ReadAll(formFile)
+	limitedReader := io.LimitReader(formFile, maxUploadFileBytes+1)
+	payload, readErr := io.ReadAll(limitedReader)
 	if readErr != nil {
 		return nil, "", common.NewErrBadRequest("AASENV-UPLOAD-READFILE " + readErr.Error())
+	}
+	if int64(len(payload)) > maxUploadFileBytes {
+		return nil, "", common.NewErrBadRequest("AASENV-UPLOAD-FILETOOLARGE multipart file exceeds maximum allowed size")
 	}
 
 	return payload, fileMediaType, nil
@@ -1040,9 +1053,11 @@ func (m *memoryReadWriteSeeker) Write(p []byte) (int, error) {
 
 	end := m.offset + int64(len(p))
 	if end > int64(len(m.buffer)) {
-		grown := make([]byte, end)
-		copy(grown, m.buffer)
-		m.buffer = grown
+		if end <= int64(cap(m.buffer)) {
+			m.buffer = m.buffer[:end]
+		} else {
+			m.buffer = append(m.buffer, make([]byte, end-int64(len(m.buffer)))...)
+		}
 	}
 
 	copy(m.buffer[m.offset:end], p)
