@@ -1,0 +1,80 @@
+{
+    "data": {
+        "description": [
+            {
+                "language": "en",
+                "text": "The Fraunhofer Institute for Experimental Software Engineering IESE in Kaiserslautern is a research institute specializing in efficient software and systems engineering."
+            }
+        ],
+        "displayName": [
+            {
+                "language": "en",
+                "text": "Fraunhofer Institute for Experimental Software Engineering IESE"
+            }
+        ],
+        "administration": {
+            "version": "1",
+            "revision": "0",
+            "creator": {
+                "type": "ExternalReference",
+                "keys": []
+            }
+        },
+        "endpoints": [
+            {
+                "protocolInformation": {
+                    "href": "https://demo.digital-twin.host/aas-registry",
+                    "endpointProtocol": "HTTPS"
+                },
+                "interface": "AAS-REGISTRY-3.0"
+            },
+            {
+                "protocolInformation": {
+                    "href": "https://demo.digital-twin.host/aas-discovery",
+                    "endpointProtocol": "HTTPS"
+                },
+                "interface": "AAS-DISCOVERY-3.0"
+            },
+            {
+                "protocolInformation": {
+                    "href": "https://demo.digital-twin.host/aas-repository",
+                    "endpointProtocol": "HTTPS"
+                },
+                "interface": "AAS-REPOSITORY-3.0"
+            },
+            {
+                "protocolInformation": {
+                    "href": "https://demo.digital-twin.host/submodel-registry",
+                    "endpointProtocol": "HTTPS"
+                },
+                "interface": "SUBMODEL-REGISTRY-3.0"
+            },
+            {
+                "protocolInformation": {
+                    "href": "https://demo.digital-twin.host/submodel-repository",
+                    "endpointProtocol": "HTTPS"
+                },
+                "interface": "SUBMODEL-REPOSITORY-3.0"
+            },
+            {
+                "protocolInformation": {
+                    "href": "https://demo.digital-twin.host/aasx-file",
+                    "endpointProtocol": "HTTPS"
+                },
+                "interface": "AASX-FILE-3.0"
+            }
+        ],
+        "idShort": "fraunhoferIese",
+        "name": "Fraunhofer IESE",
+        "domain": "iese.fraunhofer.de",
+        "nameOptions": [
+            "Fraunhofer-Institut für Experimentelles Software-Engineering",
+            "IESE",
+            "IESE Fraunhofer"
+        ],
+        "assetIdRegexPatterns": [
+            "^https://i\\.iese.fraunhofer\\.de/assetId/",
+            "^https://i\\.fraun-iese\\.de/assetId/"
+        ]
+    }
+}

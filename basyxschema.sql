@@ -449,12 +449,31 @@ CREATE TABLE IF NOT EXISTS descriptor_payload (
   db_updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE TABLE IF NOT EXISTS infrastructure_descriptor (
+CREATE TABLE IF NOT EXISTS company_descriptor (
   descriptor_id BIGINT PRIMARY KEY REFERENCES descriptor(id) ON DELETE CASCADE,
   global_asset_id VARCHAR(2048),
   id_short VARCHAR(128),
-  id VARCHAR(2048) NOT NULL UNIQUE,
-  company VARCHAR(2048),
+  company_name VARCHAR(2048),
+  company_domain VARCHAR(2048) NOT NULL UNIQUE,
+  db_created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  db_updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS company_descriptor_name_option (
+  descriptor_id BIGINT NOT NULL REFERENCES descriptor(id) ON DELETE CASCADE,
+  position INTEGER NOT NULL,
+  name_option VARCHAR(2048) NOT NULL,
+  PRIMARY KEY (descriptor_id, position),
+  UNIQUE (descriptor_id, name_option),
+  db_created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  db_updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS company_descriptor_asset_id_regex (
+  descriptor_id BIGINT NOT NULL REFERENCES descriptor(id) ON DELETE CASCADE,
+  position INTEGER NOT NULL,
+  regex_pattern VARCHAR(2048) NOT NULL,
+  PRIMARY KEY (descriptor_id, position),
   db_created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   db_updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -784,11 +803,12 @@ CREATE UNIQUE INDEX IF NOT EXISTS ux_smd_id_null_aas ON submodel_descriptor(id) 
 CREATE INDEX IF NOT EXISTS ix_smd_aas_descriptor_position ON submodel_descriptor(aas_descriptor_id, position);
 CREATE INDEX IF NOT EXISTS ix_smd_position ON submodel_descriptor(position);
 
-CREATE INDEX IF NOT EXISTS ix_regd_id_short ON infrastructure_descriptor(id_short);
-CREATE INDEX IF NOT EXISTS ix_regd_global_asset_id ON infrastructure_descriptor(global_asset_id);
-CREATE INDEX IF NOT EXISTS ix_regd_company ON infrastructure_descriptor(company);
-CREATE INDEX IF NOT EXISTS ix_regd_id_trgm ON infrastructure_descriptor USING GIN (id gin_trgm_ops);
-CREATE INDEX IF NOT EXISTS ix_regd_global_asset_id_trgm ON infrastructure_descriptor USING GIN (global_asset_id gin_trgm_ops);
+CREATE INDEX IF NOT EXISTS ix_regd_id_short ON company_descriptor(id_short);
+CREATE INDEX IF NOT EXISTS ix_regd_global_asset_id ON company_descriptor(global_asset_id);
+CREATE INDEX IF NOT EXISTS ix_regd_company_name ON company_descriptor(company_name);
+CREATE INDEX IF NOT EXISTS ix_regd_company_domain ON company_descriptor(company_domain);
+CREATE INDEX IF NOT EXISTS ix_regd_global_asset_id_trgm ON company_descriptor USING GIN (global_asset_id gin_trgm_ops);
+CREATE INDEX IF NOT EXISTS ix_regd_name_option ON company_descriptor_name_option(name_option);
 
 -- Context-specific reference indexes
 CREATE INDEX IF NOT EXISTS ix_submodel_semantic_id_ref_type ON submodel_semantic_id_reference(type);
