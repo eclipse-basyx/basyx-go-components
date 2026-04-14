@@ -88,13 +88,10 @@ services:
     image: eclipsebasyx/aas-gui:SNAPSHOT
     ports:
       - "3000:3000"
+    volumes:
+      - ./basyx-infra.yml:/basyx-infra.yml:ro
     environment:
-      AAS_REGISTRY_PATH: "http://localhost:8082/shell-descriptors"
-      SUBMODEL_REGISTRY_PATH: "http://localhost:8083/submodel-descriptors"
-      AAS_DISCOVERY_PATH: "http://localhost:8084/lookup/shells"
-      AAS_REPO_PATH: "http://localhost:8090/shells"
-      SUBMODEL_REPO_PATH: "http://localhost:8091/submodels"
-      CD_REPO_PATH: "http://localhost:8092/concept-descriptions"
+      - ENDPOINT_CONFIG_AVAILABLE=false
     restart: unless-stopped
 
   aas_repository:

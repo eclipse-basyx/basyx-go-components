@@ -72,3 +72,4 @@ docker compose down -v
 
 - This example is intentionally unsecured (`ABAC_ENABLED=false` for all Go services).
 - The DB schema is initialized by `db-schema-init` and not by the application containers.
+- The AAS UI endpoint mapping is configured via `basyx-infra.yml`.
