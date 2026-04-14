@@ -22,6 +22,7 @@ services:
       - ABAC_ENABLED=true
       - ABAC_MODELPATH=/security_env/access-rules.json
       - OIDC_TRUSTLISTPATH=/security_env/trustlist.json
+      - SERVER_STRICTVERIFICATION=false
     depends_on:
       db-schema-init:
         condition: service_completed_successfully
@@ -54,6 +55,7 @@ services:
       - ABAC_ENABLED=true
       - ABAC_MODELPATH=/security_env/access-rules.json
       - OIDC_TRUSTLISTPATH=/security_env/trustlist.json
+      - SERVER_STRICTVERIFICATION=false
     ports:
       - 8083:5004
     depends_on:
@@ -88,6 +90,7 @@ services:
       - ABAC_ENABLED=true
       - ABAC_MODELPATH=/security_env/access-rules.json
       - OIDC_TRUSTLISTPATH=/security_env/trustlist.json
+      - SERVER_STRICTVERIFICATION=false
     ports:
       - "8084:5004"
     depends_on:
@@ -135,6 +138,7 @@ services:
       - ABAC_ENABLED=true
       - ABAC_MODELPATH=/security_env/access-rules.json
       - OIDC_TRUSTLISTPATH=/security_env/trustlist.json
+      - SERVER_STRICTVERIFICATION=false
     ports:
       - "8090:5004"
     depends_on:
@@ -170,6 +174,7 @@ services:
       - ABAC_ENABLED=true
       - ABAC_MODELPATH=/security_env/access-rules.json
       - OIDC_TRUSTLISTPATH=/security_env/trustlist.json
+      - SERVER_STRICTVERIFICATION=false
     volumes:
       - ./security_env:/security_env:ro
       - ./basyx/rsa-key.pem:/app/rsa-key.pem:ro
@@ -205,6 +210,7 @@ services:
       - ABAC_ENABLED=true
       - ABAC_MODELPATH=/security_env/access-rules.json
       - OIDC_TRUSTLISTPATH=/security_env/trustlist.json
+      - SERVER_STRICTVERIFICATION=false
     ports:
       - "8092:5004"
     depends_on:
