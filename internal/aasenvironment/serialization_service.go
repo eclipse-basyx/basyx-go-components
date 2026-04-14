@@ -357,6 +357,11 @@ func environmentToAASXBytes(environment types.IEnvironment, kind serializationKi
 		return nil, common.NewInternalServerError("AASENV-SERIALIZATION-AASX-MAKESPEC " + makeSpecErr.Error())
 	}
 
+	// TODO AASENV-SERIALIZATION-AASX-SUPPL: Load persisted supplementary files
+	// for this environment, add them with pkg.PutPart, and relate them to the
+	// exported spec with pkg.RelateSupplementaryToSpec. Use pkg.SetThumbnail for
+	// AASX thumbnails if thumbnail persistence is added.
+
 	if flushErr := pkg.Flush(); flushErr != nil {
 		return nil, common.NewInternalServerError("AASENV-SERIALIZATION-AASX-FLUSH " + flushErr.Error())
 	}

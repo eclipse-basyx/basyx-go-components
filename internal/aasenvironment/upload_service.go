@@ -226,6 +226,11 @@ func parseEnvironmentFromAASXPackageBytes(payload []byte, preferredKind serializ
 		_ = pkg.Close()
 	}()
 
+	// TODO AASENV-UPLOAD-AASX-SUPPL: In addition to the selected spec part,
+	// read supplementaries via pkg.SupplementariesFor or
+	// pkg.SupplementaryRelationships and persist them so AASX attachments can be
+	// restored during /serialization export.
+
 	specsByContentType, specsErr := pkg.SpecsByContentType()
 	if specsErr != nil {
 		return nil, common.NewErrBadRequest("AASENV-PARSE-AASX-SPECS " + specsErr.Error())
