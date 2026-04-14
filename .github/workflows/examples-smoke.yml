@@ -165,7 +165,7 @@ jobs:
 
             echo "===> Starting $compose_file"
 
-            non_basyx_services=$(python3 -c "import json, subprocess, sys; cfg = subprocess.check_output(['docker', 'compose', '-f', sys.argv[1], 'config', '--format', 'json'], text=True); services = json.loads(cfg).get('services', {}); print('\\n'.join([name for name, svc in services.items() if str(svc.get('image', '')) and not str(svc.get('image', '')).startswith('eclipsebasyx/')]))" "$compose_file")
+            non_basyx_services=$(python3 -c "import json, subprocess, sys; cfg = subprocess.check_output(['docker', 'compose', '-f', sys.argv[1], 'config', '--format', 'json'], text=True); services = json.loads(cfg).get('services', {}); print('\\n'.join([name for name, svc in services.items() if str(svc.get('image', '')) and not (str(svc.get('image', '')).startswith('eclipsebasyx/') and '-go:' in str(svc.get('image', '')))]))" "$compose_file")
 
             if [ -n "$non_basyx_services" ]; then
               echo "Pulling non-BaSyx services for $compose_file:"
