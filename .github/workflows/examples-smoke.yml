@@ -24,8 +24,44 @@ on:
 
 jobs:
   examples-smoke:
-    name: Start example stacks
+    name: ${{ matrix.target_name }}
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target_name: Minimal + Secured Examples
+            compose_files: |
+              examples/BaSyxMinimalExample/docker-compose.yml
+              examples/BaSyxSecuredExample/docker-compose.yml
+            image_builds: |
+              eclipsebasyx/aasregistry-go:SNAPSHOT|./cmd/aasregistryservice/Dockerfile
+              eclipsebasyx/submodelregistry-go:SNAPSHOT|./cmd/submodelregistryservice/Dockerfile
+              eclipsebasyx/aasdiscovery-go:SNAPSHOT|./cmd/discoveryservice/Dockerfile
+              eclipsebasyx/aasrepository-go:SNAPSHOT|./cmd/aasrepositoryservice/Dockerfile
+              eclipsebasyx/submodelrepository-go:SNAPSHOT|./cmd/submodelrepositoryservice/Dockerfile
+              eclipsebasyx/conceptdescriptionrepository-go:SNAPSHOT|./cmd/conceptdescriptionrepositoryservice/Dockerfile
+          - target_name: Delegated Operations Example
+            compose_files: |
+              examples/BaSyxDelegatedOperationsExample/docker-compose.yml
+            image_builds: |
+              eclipsebasyx/aasrepository-go:SNAPSHOT|./cmd/aasrepositoryservice/Dockerfile
+              eclipsebasyx/submodelrepository-go:SNAPSHOT|./cmd/submodelrepositoryservice/Dockerfile
+          - target_name: Submodel Repository Example
+            compose_files: |
+              examples/BaSyxSubmodelRepositoryExample/docker-compose.yml
+            image_builds: |
+              eclipsebasyx/submodelrepository-go:SNAPSHOT|./cmd/submodelrepositoryservice/Dockerfile
+          - target_name: Digital Twin Registry Example
+            compose_files: |
+              examples/BaSyxDigitalTwinRegistryExample/docker-compose.yml
+            image_builds: |
+              eclipsebasyx/digitaltwinregistry-go:SNAPSHOT|./cmd/digitaltwinregistryservice/Dockerfile
+          - target_name: Company Lookup Example
+            compose_files: |
+              examples/BaSyxCompanyLookup/docker-compose.yml
+            image_builds: |
+              eclipsebasyx/companylookup-go:SNAPSHOT|./cmd/companylookupservice/Dockerfile
 
     steps:
       - name: Checkout code
@@ -34,35 +70,25 @@ jobs:
       - name: Ensure Docker Compose plugin is available
         run: docker compose version
 
-      - name: Build local Go service images used by examples
+      - name: Build local Go service images needed for this target
         run: |
           set -euo pipefail
 
-          docker build -t eclipsebasyx/aasregistry-go:SNAPSHOT -f ./cmd/aasregistryservice/Dockerfile .
-          docker build -t eclipsebasyx/submodelregistry-go:SNAPSHOT -f ./cmd/submodelregistryservice/Dockerfile .
-          docker build -t eclipsebasyx/aasdiscovery-go:SNAPSHOT -f ./cmd/discoveryservice/Dockerfile .
-          docker build -t eclipsebasyx/aasrepository-go:SNAPSHOT -f ./cmd/aasrepositoryservice/Dockerfile .
-          docker build -t eclipsebasyx/submodelrepository-go:SNAPSHOT -f ./cmd/submodelrepositoryservice/Dockerfile .
-          docker build -t eclipsebasyx/conceptdescriptionrepository-go:SNAPSHOT -f ./cmd/conceptdescriptionrepositoryservice/Dockerfile .
-          docker build -t eclipsebasyx/digitaltwinregistry-go:SNAPSHOT -f ./cmd/digitaltwinregistryservice/Dockerfile .
-          docker build -t eclipsebasyx/companylookup-go:SNAPSHOT -f ./cmd/companylookupservice/Dockerfile .
+          while IFS='|' read -r image_tag dockerfile_path; do
+            if [ -z "${image_tag}" ] || [ -z "${dockerfile_path}" ]; then
+              continue
+            fi
+            echo "Building ${image_tag} from ${dockerfile_path}"
+            docker build -t "${image_tag}" -f "${dockerfile_path}" .
+          done <<< "${{ matrix.image_builds }}"
 
-      - name: Start all available examples and verify startup state
+      - name: Start target examples and verify startup state
         run: |
           set -euo pipefail
-
-          EXAMPLES=(
-            "examples/BaSyxSubmodelRepositoryExample/docker-compose.yml"
-            "examples/BaSyxMinimalExample/docker-compose.yml"
-            "examples/BaSyxCompanyLookup/docker-compose.yml"
-            "examples/BaSyxDelegatedOperationsExample/docker-compose.yml"
-            "examples/BaSyxDigitalTwinRegistryExample/docker-compose.yml"
-            "examples/BaSyxSecuredExample/docker-compose.yml"
-          )
 
           check_compose_stack() {
             local compose_file="$1"
-            local timeout_seconds=360
+            local timeout_seconds=240
             local interval_seconds=5
             local elapsed=0
 
@@ -132,10 +158,14 @@ jobs:
             docker compose -f "$compose_file" down -v --remove-orphans || true
           }
 
-          for compose_file in "${EXAMPLES[@]}"; do
+          while IFS= read -r compose_file; do
+            if [ -z "$compose_file" ]; then
+              continue
+            fi
+
             echo "===> Starting $compose_file"
 
-            if ! docker compose -f "$compose_file" up -d --build --remove-orphans; then
+            if ! docker compose -f "$compose_file" up -d --remove-orphans; then
               echo "Failed to start compose stack: $compose_file"
               docker compose -f "$compose_file" ps || true
               docker compose -f "$compose_file" logs --no-color || true
@@ -151,7 +181,7 @@ jobs:
               exit 1
             fi
 
-            sleep 10
+            sleep 3
 
             if ! check_compose_stack "$compose_file"; then
               echo "Stack became unstable during smoke hold: $compose_file"
@@ -163,4 +193,4 @@ jobs:
 
             docker compose -f "$compose_file" ps
             cleanup_stack "$compose_file"
-          done
+          done <<< "${{ matrix.compose_files }}"
