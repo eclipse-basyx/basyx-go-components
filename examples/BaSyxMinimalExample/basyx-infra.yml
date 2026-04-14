@@ -19,3 +19,5 @@ infrastructures:
         hasRegistryIntegration: false
       conceptDescriptionRepository:
         baseUrl: "http://localhost:8092/concept-descriptions"
+    security:
+      type: none

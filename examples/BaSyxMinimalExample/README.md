@@ -34,16 +34,18 @@ Backends start only after:
 
 - AAS UI: [http://localhost:3000](http://localhost:3000)
 
-## Typical Quick Check
+## Quick Start
 
 1. Open UI at [http://localhost:3000](http://localhost:3000)
-2. Upload [`aas/ExampleV3.aasx`](aas/ExampleV3.aasx)
-3. Verify the uploaded shell is visible
-4. Open submodels and concept descriptions in the UI
-
-Alternative test file:
-
-- [`aas/test_demo_full_example.xml`](aas/test_demo_full_example.xml)
+2. Upload [`aas/IESEDriveMotorDM3000.aasx`](aas/IESEDriveMotorDM3000.aasx)
+3. Verify the AAS shell **IESEDriveMotorDM3000** appears in the UI
+4. Open the submodels:
+   - **Nameplate** — digital nameplate with manufacturer info, serial number, markings
+   - **TechnicalData** — electrical and mechanical specifications with product classifications
+   - **HandoverDocumentation** — operating manual, data sheet, declaration of conformity (PDF)
+   - **ContactInformations** — manufacturer contact details
+   - **CarbonFootprint** — product carbon footprint (cradle-to-gate, phases A1–A3)
+5. Check that concept descriptions are loaded (104 entries)
 
 ## Service Endpoints
 
