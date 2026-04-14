@@ -109,6 +109,16 @@ func uploadFileAttachment(endpoint string, filePath string, fileName string) (in
 	return resp.StatusCode, nil
 }
 
+func createTemporaryBinaryTestFile(t *testing.T, fileName string, payload []byte) string {
+	t.Helper()
+
+	filePath := filepath.Join(t.TempDir(), fileName)
+	err := os.WriteFile(filePath, payload, 0o600)
+	require.NoError(t, err, "Failed to create temporary test file")
+
+	return filePath
+}
+
 // downloadFileAttachment downloads a file from the attachment endpoint and returns content and content-type
 func downloadFileAttachment(endpoint string) ([]byte, string, int, error) {
 	req, err := http.NewRequest("GET", endpoint, nil)
@@ -532,6 +542,7 @@ func TestFileAttachmentOperations(t *testing.T) {
 	baseURL := "http://localhost:6004"
 	submodelID := "aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9Pbmx5RmlsZVN1Ym1vZGVsX1Rlc3Q" // base64 encoded: http://iese.fraunhofer.de/id/sm/OnlyFileSubmodel_Test
 	testFilePath := "testFiles/marcus.gif"
+	weakFileContent := []byte{0x00, 0x01, 0x02, 0x03}
 
 	// Read the test file content for later comparison
 	originalFileContent, err := os.ReadFile(testFilePath)
@@ -552,8 +563,7 @@ func TestFileAttachmentOperations(t *testing.T) {
 		require.NoError(t, err, "File download failed")
 		assert.Equal(t, http.StatusOK, statusCode, "Expected 200 OK for file download")
 
-		// Verify Content-Type is set (should be auto-detected as image/png)
-		assert.NotEmpty(t, contentType, "Content-Type should be set")
+		assert.Equal(t, "image/gif", contentType, "Content-Type should match detected MIME type for uploaded GIF")
 		t.Logf("Downloaded file Content-Type: %s", contentType)
 
 		// Verify file content matches uploaded file byte-by-byte
@@ -591,25 +601,43 @@ func TestFileAttachmentOperations(t *testing.T) {
 			"Should redirect to external URL or return 404 after value update")
 	})
 
-	t.Run("5_Reupload_File_Attachment", func(t *testing.T) {
+	t.Run("5_Upload_Weak_File_Attachment_Uses_Declared_ContentType", func(t *testing.T) {
+		weakFilePath := createTemporaryBinaryTestFile(t, "weak-attachment", weakFileContent)
+		endpoint := fmt.Sprintf("%s/submodels/%s/submodel-elements/DemoFile/attachment", baseURL, submodelID)
+		statusCode, err := uploadFileAttachment(endpoint, weakFilePath, "")
+		require.NoError(t, err, "Weak file upload failed")
+		assert.Equal(t, http.StatusNoContent, statusCode, "Expected 204 No Content for weak file upload")
+	})
+
+	t.Run("6_Verify_Weak_File_Attachment_Uses_Declared_ContentType", func(t *testing.T) {
+		time.Sleep(2 * time.Second)
+		endpoint := fmt.Sprintf("%s/submodels/%s/submodel-elements/DemoFile/attachment", baseURL, submodelID)
+		content, contentType, statusCode, err := downloadFileAttachment(endpoint)
+		require.NoError(t, err, "Weak file download failed")
+		assert.Equal(t, http.StatusOK, statusCode, "Expected 200 OK for weak file download")
+		assert.Equal(t, weakFileContent, content, "Weak file content should match uploaded payload")
+		assert.Equal(t, "image/png", contentType, "Weak MIME detection should fall back to declared File contentType")
+	})
+
+	t.Run("7_Reupload_File_Attachment", func(t *testing.T) {
 		endpoint := fmt.Sprintf("%s/submodels/%s/submodel-elements/DemoFile/attachment", baseURL, submodelID)
 		statusCode, err := uploadFileAttachment(endpoint, testFilePath, "test-image-reupload.png")
 		require.NoError(t, err, "File reupload failed")
 		assert.Equal(t, http.StatusNoContent, statusCode, "Expected 204 No Content for file reupload")
 	})
 
-	t.Run("6_Verify_Reuploaded_File", func(t *testing.T) {
+	t.Run("8_Verify_Reuploaded_File", func(t *testing.T) {
 		// Wait a moment to ensure the file is available
 		time.Sleep(2 * time.Second)
 		endpoint := fmt.Sprintf("%s/submodels/%s/submodel-elements/DemoFile/attachment", baseURL, submodelID)
 		content, contentType, statusCode, err := downloadFileAttachment(endpoint)
 		require.NoError(t, err, "File download failed")
 		assert.Equal(t, http.StatusOK, statusCode, "Expected 200 OK for file download")
-		assert.NotEmpty(t, contentType, "Content-Type should be set")
+		assert.Equal(t, "image/gif", contentType, "Content-Type should match detected MIME type for uploaded GIF")
 		assert.Equal(t, originalFileContent, content, "Reuploaded file content should match original")
 	})
 
-	t.Run("7_Delete_File_Attachment", func(t *testing.T) {
+	t.Run("9_Delete_File_Attachment", func(t *testing.T) {
 		endpoint := fmt.Sprintf("%s/submodels/%s/submodel-elements/DemoFile/attachment", baseURL, submodelID)
 		req, err := http.NewRequest("DELETE", endpoint, nil)
 		require.NoError(t, err, "Failed to create DELETE request")
@@ -622,7 +650,7 @@ func TestFileAttachmentOperations(t *testing.T) {
 		assert.Equal(t, http.StatusOK, resp.StatusCode, "Expected 200 OK for file deletion")
 	})
 
-	t.Run("8_Verify_File_Deleted", func(t *testing.T) {
+	t.Run("10_Verify_File_Deleted", func(t *testing.T) {
 		endpoint := fmt.Sprintf("%s/submodels/%s/submodel-elements/DemoFile/attachment", baseURL, submodelID)
 		_, _, statusCode, _ := downloadFileAttachment(endpoint)
 		assert.Equal(t, http.StatusNotFound, statusCode, "Expected 404 Not Found after file deletion")

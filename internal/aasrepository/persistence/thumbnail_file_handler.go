@@ -28,6 +28,7 @@ package persistence
 import (
 	"database/sql"
 	"io"
+	"log"
 	"net/http"
 	"os"
 	"strconv"
@@ -189,6 +190,24 @@ func (h *PostgreSQLThumbnailFileHandler) uploadThumbnailByAASIDInTransaction(tx 
 		return common.NewErrBadRequest("AASREPO-PUTTHUMBNAIL-MISSINGFILE file payload is required")
 	}
 
+	dialect := goqu.Dialect("postgres")
+
+	existingElementSQL, existingElementArgs, existingElementBuildErr := dialect.
+		From("thumbnail_file_element").
+		Select("content_type", "file_name").
+		Where(goqu.I("id").Eq(aasDBID)).
+		ToSQL()
+	if existingElementBuildErr != nil {
+		return common.NewInternalServerError("AASREPO-PUTTHUMBNAIL-BUILDEXISTINGELEMENTSQL " + existingElementBuildErr.Error())
+	}
+
+	var existingContentType sql.NullString
+	var existingFileName sql.NullString
+	existingElementErr := tx.QueryRow(existingElementSQL, existingElementArgs...).Scan(&existingContentType, &existingFileName)
+	if existingElementErr != nil && existingElementErr != sql.ErrNoRows {
+		return common.NewInternalServerError("AASREPO-PUTTHUMBNAIL-EXECEXISTINGELEMENTSQL " + existingElementErr.Error())
+	}
+
 	if _, seekErr := file.Seek(0, 0); seekErr != nil {
 		return common.NewInternalServerError("AASREPO-PUTTHUMBNAIL-SEEKFILE " + seekErr.Error())
 	}
@@ -203,11 +222,20 @@ func (h *PostgreSQLThumbnailFileHandler) uploadThumbnailByAASIDInTransaction(tx 
 		detectedContentType = http.DetectContentType(contentTypeBuffer[:readBytes])
 	}
 
+	resolvedFileName := strings.TrimSpace(fileName)
+	if resolvedFileName == "" && existingFileName.Valid {
+		resolvedFileName = existingFileName.String
+	}
+
+	resolvedContentType, mismatchDetectedVsDeclared := common.ResolveUploadedContentType(detectedContentType, existingContentType.String, resolvedFileName)
+	if mismatchDetectedVsDeclared {
+		log.Printf("[WARN] AASREPO-PUTTHUMBNAIL-RESOLVEMIME detected content type differs from declared content type; using detected content type")
+	}
+
 	if _, seekErr := file.Seek(0, 0); seekErr != nil {
 		return common.NewInternalServerError("AASREPO-PUTTHUMBNAIL-SEEKFILE " + seekErr.Error())
 	}
 
-	dialect := goqu.Dialect("postgres")
 	oldOIDQuery, oldOIDArgs, oldOIDBuildErr := dialect.
 		From("thumbnail_file_data").
 		Select("file_oid").
@@ -277,8 +305,8 @@ func (h *PostgreSQLThumbnailFileHandler) uploadThumbnailByAASIDInTransaction(tx 
 		ensureElementSQL, ensureElementArgs, ensureElementBuildErr := dialect.Insert("thumbnail_file_element").
 			Rows(goqu.Record{
 				"id":           aasDBID,
-				"content_type": detectedContentType,
-				"file_name":    fileName,
+				"content_type": resolvedContentType,
+				"file_name":    resolvedFileName,
 				"value":        "",
 			}).
 			OnConflict(goqu.DoNothing()).
@@ -304,13 +332,13 @@ func (h *PostgreSQLThumbnailFileHandler) uploadThumbnailByAASIDInTransaction(tx 
 	upsertElementSQL, upsertElementArgs, upsertElementBuildErr := dialect.Insert("thumbnail_file_element").
 		Rows(goqu.Record{
 			"id":           aasDBID,
-			"content_type": detectedContentType,
-			"file_name":    fileName,
+			"content_type": resolvedContentType,
+			"file_name":    resolvedFileName,
 			"value":        strconv.FormatInt(newOID, 10),
 		}).
 		OnConflict(goqu.DoUpdate("id", goqu.Record{
-			"content_type": detectedContentType,
-			"file_name":    fileName,
+			"content_type": resolvedContentType,
+			"file_name":    resolvedFileName,
 			"value":        strconv.FormatInt(newOID, 10),
 		})).
 		ToSQL()
