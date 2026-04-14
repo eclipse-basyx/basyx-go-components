@@ -17,6 +17,7 @@ services:
   aas_repository:
     container_name: delegated-operations-aas-repository
     image: eclipsebasyx/aasrepository-go:SNAPSHOT
+    command: ["/app/aasrepositoryservice"]
     environment:
       - SERVER_PORT=5004
       - CORS_ALLOWEDORIGINS=*
@@ -35,6 +36,8 @@ services:
     ports:
       - "8090:5004"
     depends_on:
+      db-schema-init:
+        condition: service_completed_successfully
       db:
         condition: service_healthy
     restart: unless-stopped
@@ -44,6 +47,7 @@ services:
     build:
       context: ../..
       dockerfile: ./cmd/submodelrepositoryservice/Dockerfile
+    command: ["/app/submodelrepositoryservice"]
     environment:
       - SERVER_PORT=5004
       - CORS_ALLOWEDORIGINS=*
@@ -65,6 +69,8 @@ services:
     ports:
       - "8091:5004"
     depends_on:
+      db-schema-init:
+        condition: service_completed_successfully
       db:
         condition: service_healthy
     restart: unless-stopped
@@ -92,6 +98,24 @@ services:
         condition: service_started
       submodel_repository:
         condition: service_started
+
+  db-schema-init:
+    image: postgres:18
+    container_name: delegated-operations-db-schema-init
+    environment:
+      POSTGRES_HOST: db
+      POSTGRES_PORT: 5432
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: admin123
+      POSTGRES_DB: basyxDelegationDB
+    command: ["sh", "/init/init-schema.sh"]
+    volumes:
+      - ../../basyxschema.sql:/schema/basyxschema.sql:ro
+      - ./db_init/init-schema.sh:/init/init-schema.sh:ro
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: "no"
 
   db:
     container_name: delegated-operations-postgres-db
