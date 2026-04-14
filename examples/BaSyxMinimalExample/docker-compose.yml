@@ -2,6 +2,7 @@ services:
   aas-registry:
     container_name: aas-registry
     image: eclipsebasyx/aasregistry-go:SNAPSHOT
+    pull_policy: always
     command: ["/app/aasregistryservice"]
     ports:
       - 8082:5004
@@ -30,6 +31,7 @@ services:
   sm-registry:
     container_name: sm-registry
     image: eclipsebasyx/submodelregistry-go:SNAPSHOT
+    pull_policy: always
     command: ["/app/submodelregistryservice"]
     environment:
       - SERVER_PORT=5004
@@ -58,6 +60,7 @@ services:
   aas-discovery:
     container_name: aas-discovery
     image: eclipsebasyx/aasdiscovery-go:SNAPSHOT
+    pull_policy: always
     command: ["/app/discoveryservice"]
     environment:
       - SERVER_PORT=5004
@@ -86,6 +89,7 @@ services:
   aas-ui:
     container_name: aas-web-ui
     image: eclipsebasyx/aas-gui:SNAPSHOT
+    pull_policy: always
     ports:
       - "3000:3000"
     volumes:
@@ -97,6 +101,7 @@ services:
   aas_repository:
     container_name: aas-repository
     image: eclipsebasyx/aasrepository-go:SNAPSHOT
+    pull_policy: always
     command: ["/app/aasrepositoryservice"]
     environment:
       - SERVER_PORT=5004
@@ -125,6 +130,7 @@ services:
   submodel_repository:
     container_name: submodel-repository
     image: eclipsebasyx/submodelrepository-go:SNAPSHOT      
+    pull_policy: always
     command: ["/app/submodelrepositoryservice"]
     environment:
       - SERVER_PORT=5004
@@ -156,6 +162,7 @@ services:
   concept-description-repository:
     container_name: concept-description-repository
     image: eclipsebasyx/conceptdescriptionrepository-go:SNAPSHOT
+    pull_policy: always
     command: ["/app/conceptdescriptionrepositoryservice"]
     environment:
       - SERVER_PORT=5004

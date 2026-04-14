@@ -18,6 +18,7 @@ services:
   digitaltwinregistry:
     container_name: digitaltwinregistry
     image: eclipsebasyx/digitaltwinregistry-go:SNAPSHOT
+    pull_policy: always
     environment:
       - SERVER_PORT=5004
       - SERVER_CONTEXTPATH=/api/v3

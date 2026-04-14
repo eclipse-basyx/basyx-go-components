@@ -165,7 +165,7 @@ jobs:
 
             echo "===> Starting $compose_file"
 
-            if ! docker compose -f "$compose_file" up -d --remove-orphans; then
+            if ! docker compose -f "$compose_file" up -d --remove-orphans --pull never; then
               echo "Failed to start compose stack: $compose_file"
               docker compose -f "$compose_file" ps || true
               docker compose -f "$compose_file" logs --no-color || true

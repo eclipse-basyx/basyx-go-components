@@ -2,6 +2,7 @@ services:
   aas-ui:
     container_name: delegated-operations-aas-web-ui
     image: eclipsebasyx/aas-gui:SNAPSHOT
+    pull_policy: always
     ports:
       - "3000:3000"
     environment:
@@ -17,6 +18,7 @@ services:
   aas_repository:
     container_name: delegated-operations-aas-repository
     image: eclipsebasyx/aasrepository-go:SNAPSHOT
+    pull_policy: always
     command: ["/app/aasrepositoryservice"]
     environment:
       - SERVER_PORT=5004
