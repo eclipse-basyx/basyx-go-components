@@ -165,6 +165,21 @@ jobs:
 
             echo "===> Starting $compose_file"
 
+            non_basyx_services=$(python3 -c "import json, subprocess, sys; cfg = subprocess.check_output(['docker', 'compose', '-f', sys.argv[1], 'config', '--format', 'json'], text=True); services = json.loads(cfg).get('services', {}); print('\\n'.join([name for name, svc in services.items() if str(svc.get('image', '')) and not str(svc.get('image', '')).startswith('eclipsebasyx/')]))" "$compose_file")
+
+            if [ -n "$non_basyx_services" ]; then
+              echo "Pulling non-BaSyx services for $compose_file:"
+              echo "$non_basyx_services"
+              # Pull infra/base images (e.g., postgres, keycloak), but keep locally built BaSyx SNAPSHOTs.
+              if ! docker compose -f "$compose_file" pull $non_basyx_services; then
+                echo "Failed to pull non-BaSyx services: $compose_file"
+                docker compose -f "$compose_file" ps || true
+                docker compose -f "$compose_file" logs --no-color || true
+                cleanup_stack "$compose_file"
+                exit 1
+              fi
+            fi
+
             if ! docker compose -f "$compose_file" up -d --remove-orphans --pull never; then
               echo "Failed to start compose stack: $compose_file"
               docker compose -f "$compose_file" ps || true
