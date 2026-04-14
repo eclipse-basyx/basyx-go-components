@@ -52,7 +52,7 @@ import (
 )
 
 const (
-	aasEnvironmentBaseURL = "http://127.0.0.1:6004"
+	aasEnvironmentBaseURL = "http://127.0.0.1:6005"
 
 	sampleAASID      = "urn:example:aas:env:1"
 	sampleSubmodelID = "urn:example:submodel:env:1"

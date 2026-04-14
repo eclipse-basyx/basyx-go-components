@@ -44,7 +44,7 @@ import (
 func deleteAllAASDescriptors(t *testing.T, runner *testenv.JSONSuiteRunner, stepNumber int) {
 	response, err := runner.RunStep(testenv.JSONSuiteStep{
 		Method:         http.MethodGet,
-		Endpoint:       "http://127.0.0.1:6004/shell-descriptors",
+		Endpoint:       "http://127.0.0.1:6005/shell-descriptors",
 		ExpectedStatus: http.StatusOK,
 	}, stepNumber)
 	require.NoError(t, err)
@@ -60,7 +60,7 @@ func deleteAllAASDescriptors(t *testing.T, runner *testenv.JSONSuiteRunner, step
 		enc := base64.RawURLEncoding.EncodeToString([]byte(item.ID))
 		_, err := runner.RunStep(testenv.JSONSuiteStep{
 			Method:         http.MethodDelete,
-			Endpoint:       fmt.Sprintf("http://127.0.0.1:6004/shell-descriptors/%s", enc),
+			Endpoint:       fmt.Sprintf("http://127.0.0.1:6005/shell-descriptors/%s", enc),
 			ExpectedStatus: http.StatusNoContent,
 		}, stepNumber)
 		require.NoError(t, err)
@@ -102,6 +102,6 @@ func TestMain(m *testing.M) {
 
 	os.Exit(testenv.RunComposeTestMain(m, testenv.ComposeTestMainOptions{
 		ComposeFile: "docker_compose/docker_compose.yml",
-		HealthURL:   "http://localhost:6004/health",
+		HealthURL:   "http://localhost:6005/health",
 	}))
 }

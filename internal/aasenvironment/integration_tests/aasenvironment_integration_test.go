@@ -30,7 +30,7 @@ func TestMain(m *testing.M) {
 	os.Exit(testenv.RunComposeTestMain(m, testenv.ComposeTestMainOptions{
 		ComposeFile:     composeFilePath,
 		PreDownBeforeUp: true,
-		HealthURL:       "http://127.0.0.1:6004/health",
+		HealthURL:       "http://127.0.0.1:6005/health",
 		HealthTimeout:   3 * time.Minute,
 	}))
 }

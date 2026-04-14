@@ -3,7 +3,7 @@
     "context": "Health endpoint - anonymous allowed",
     "token": null,
     "method": "GET",
-    "endpoint": "http://localhost:6004/health",
+    "endpoint": "http://localhost:6005/health",
     "shouldMatch": "expected/expectedHealthEndpoint.json",
     "expectedStatus": 200
   },
@@ -11,7 +11,7 @@
     "context": "POST viewer descriptor - admin creates fixture",
     "token": { "user": "admin", "password": "pwd" },
     "method": "POST",
-    "endpoint": "http://localhost:6004/shell-descriptors",
+    "endpoint": "http://localhost:6005/shell-descriptors",
     "data": "postBody/viewer_descriptor.json",
     "shouldMatch": "postBody/viewer_descriptor.json",
     "expectedStatus": 201
@@ -20,7 +20,7 @@
     "context": "POST regex descriptor - admin creates fixture",
     "token": { "user": "admin", "password": "pwd" },
     "method": "POST",
-    "endpoint": "http://localhost:6004/shell-descriptors",
+    "endpoint": "http://localhost:6005/shell-descriptors",
     "data": "postBody/regex_descriptor.json",
     "shouldMatch": "postBody/regex_descriptor.json",
     "expectedStatus": 201
@@ -29,7 +29,7 @@
     "context": "POST regex descriptor 2 - admin creates fixture",
     "token": { "user": "admin", "password": "pwd" },
     "method": "POST",
-    "endpoint": "http://localhost:6004/shell-descriptors",
+    "endpoint": "http://localhost:6005/shell-descriptors",
     "data": "postBody/regex_descriptor2.json",
     "shouldMatch": "postBody/regex_descriptor2.json",
     "expectedStatus": 201
@@ -38,7 +38,7 @@
     "context": "POST public descriptor - admin creates fixture",
     "token": { "user": "admin", "password": "pwd" },
     "method": "POST",
-    "endpoint": "http://localhost:6004/shell-descriptors",
+    "endpoint": "http://localhost:6005/shell-descriptors",
     "data": "postBody/public_descriptor.json",
     "shouldMatch": "postBody/public_descriptor.json",
     "expectedStatus": 201
@@ -47,7 +47,7 @@
     "context": "GET viewer descriptor - viewer allowed via $starts-with",
     "token": { "user": "usera", "password": "pwd" },
     "method": "GET",
-    "endpoint": "http://localhost:6004/shell-descriptors/dXJuOmFhczp2aWV3ZXItYXNzZXQ",
+    "endpoint": "http://localhost:6005/shell-descriptors/dXJuOmFhczp2aWV3ZXItYXNzZXQ",
     "shouldMatch": "postBody/viewer_descriptor.json",
     "expectedStatus": 200
   },
@@ -55,14 +55,14 @@
     "context": "GET viewer descriptor - editor denied (prefix rule)",
     "token": { "user": "userx", "password": "pwd" },
     "method": "GET",
-    "endpoint": "http://localhost:6004/shell-descriptors/dXJuOmFhczp2aWV3ZXItYXNzZXQ",
+    "endpoint": "http://localhost:6005/shell-descriptors/dXJuOmFhczp2aWV3ZXItYXNzZXQ",
     "expectedStatus": 404
   },
   {
     "context": "GET regex descriptor - editor allowed via $regex",
     "token": { "user": "userx", "password": "pwd" },
     "method": "GET",
-    "endpoint": "http://localhost:6004/shell-descriptors/dXJuOmFhczpyZWdleC00Mg",
+    "endpoint": "http://localhost:6005/shell-descriptors/dXJuOmFhczpyZWdleC00Mg",
     "shouldMatch": "postBody/regex_descriptor.json",
     "expectedStatus": 200
   },
@@ -70,14 +70,14 @@
     "context": "GET regex descriptor - editor denied (regex rule not matched)",
     "token": { "user": "userx", "password": "pwd" },
     "method": "GET",
-    "endpoint": "http://localhost:6004/shell-descriptors/dXJuOmFhczpyZWdpbWF4LTQy",
+    "endpoint": "http://localhost:6005/shell-descriptors/dXJuOmFhczpyZWdpbWF4LTQy",
     "expectedStatus": 404
   },
   {
     "context": "GET public descriptor - anonymous allowed via $ends-with",
     "token": null,
     "method": "GET",
-    "endpoint": "http://localhost:6004/shell-descriptors/dXJuOmFhczpkZW1vOnB1YmxpYw",
+    "endpoint": "http://localhost:6005/shell-descriptors/dXJuOmFhczpkZW1vOnB1YmxpYw",
     "shouldMatch": "postBody/public_descriptor.json",
     "expectedStatus": 200
   },
@@ -85,14 +85,14 @@
     "context": "GET viewer descriptor - anonymous denied",
     "token": null,
     "method": "GET",
-    "endpoint": "http://localhost:6004/shell-descriptors/dXJuOmFhczp2aWV3ZXItYXNzZXQ",
+    "endpoint": "http://localhost:6005/shell-descriptors/dXJuOmFhczp2aWV3ZXItYXNzZXQ",
     "expectedStatus": 404
   },
   {
     "context": "GET all descriptor - editor ",
     "token": { "user": "userx", "password": "pwd" },
     "method": "GET",
-    "endpoint": "http://localhost:6004/shell-descriptors",
+    "endpoint": "http://localhost:6005/shell-descriptors",
     "shouldMatch": "expected/expectedEditorResult.json",
     "expectedStatus": 200
   },
@@ -100,14 +100,14 @@
     "context": "GET all descriptor - viewer ",
     "token": { "user": "usera", "password": "pwd" },
     "method": "GET",
-    "endpoint": "http://localhost:6004/shell-descriptors",
+    "endpoint": "http://localhost:6005/shell-descriptors",
     "shouldMatch": "expected/expectedViewerResult.json",
     "expectedStatus": 200
   },
   {
     "context": "GET all descriptor - anon ",
     "method": "GET",
-    "endpoint": "http://localhost:6004/shell-descriptors",
+    "endpoint": "http://localhost:6005/shell-descriptors",
     "shouldMatch": "expected/expectedAnonResult.json",
     "expectedStatus": 200
   },
@@ -115,7 +115,7 @@
     "context": "POST time allow descriptor - admin creates fixture",
     "token": { "user": "admin", "password": "pwd" },
     "method": "POST",
-    "endpoint": "http://localhost:6004/shell-descriptors",
+    "endpoint": "http://localhost:6005/shell-descriptors",
     "data": "postBody/time_allow_descriptor.json",
     "shouldMatch": "postBody/time_allow_descriptor.json",
     "expectedStatus": 201
@@ -124,7 +124,7 @@
     "context": "POST time deny descriptor - admin creates fixture",
     "token": { "user": "admin", "password": "pwd" },
     "method": "POST",
-    "endpoint": "http://localhost:6004/shell-descriptors",
+    "endpoint": "http://localhost:6005/shell-descriptors",
     "data": "postBody/time_deny_descriptor.json",
     "shouldMatch": "postBody/time_deny_descriptor.json",
     "expectedStatus": 201
@@ -133,7 +133,7 @@
     "context": "GET time allow descriptor - viewer allowed via datetime compare",
     "token": { "user": "userb", "password": "pwd" },
     "method": "GET",
-    "endpoint": "http://localhost:6004/shell-descriptors/dXJuOmFhczp0aW1lLWFsbG93",
+    "endpoint": "http://localhost:6005/shell-descriptors/dXJuOmFhczp0aW1lLWFsbG93",
     "shouldMatch": "postBody/time_allow_descriptor.json",
     "expectedStatus": 200
   },
@@ -141,14 +141,14 @@
     "context": "GET time deny descriptor - viewer denied via datetime compare",
     "token": { "user": "userb", "password": "pwd" },
     "method": "GET",
-    "endpoint": "http://localhost:6004/shell-descriptors/dXJuOmFhczp0aW1lLWRlbnk=",
+    "endpoint": "http://localhost:6005/shell-descriptors/dXJuOmFhczp0aW1lLWRlbnk=",
     "expectedStatus": 404
   },
   {
     "context": "POST time field allow descriptor - admin creates fixture",
     "token": { "user": "admin", "password": "pwd" },
     "method": "POST",
-    "endpoint": "http://localhost:6004/shell-descriptors",
+    "endpoint": "http://localhost:6005/shell-descriptors",
     "data": "postBody/time_field_allow_descriptor.json",
     "shouldMatch": "postBody/time_field_allow_descriptor.json",
     "expectedStatus": 201
@@ -157,7 +157,7 @@
     "context": "POST time field deny descriptor - admin creates fixture",
     "token": { "user": "admin", "password": "pwd" },
     "method": "POST",
-    "endpoint": "http://localhost:6004/shell-descriptors",
+    "endpoint": "http://localhost:6005/shell-descriptors",
     "data": "postBody/time_field_deny_descriptor.json",
     "shouldMatch": "postBody/time_field_deny_descriptor.json",
     "expectedStatus": 201
@@ -166,7 +166,7 @@
     "context": "GET time field allow descriptor - viewer allowed via field datetime compare",
     "token": { "user": "userb", "password": "pwd" },
     "method": "GET",
-    "endpoint": "http://localhost:6004/shell-descriptors/dXJuOmFhczpkdC1maWVsZC1hbGxvdw",
+    "endpoint": "http://localhost:6005/shell-descriptors/dXJuOmFhczpkdC1maWVsZC1hbGxvdw",
     "shouldMatch": "postBody/time_field_allow_descriptor.json",
     "expectedStatus": 200
   },
@@ -174,14 +174,14 @@
     "context": "GET time field deny descriptor - viewer denied via field datetime compare",
     "token": { "user": "userb", "password": "pwd" },
     "method": "GET",
-    "endpoint": "http://localhost:6004/shell-descriptors/dXJuOmFhczpkdC1maWVsZC1kZW55",
+    "endpoint": "http://localhost:6005/shell-descriptors/dXJuOmFhczpkdC1maWVsZC1kZW55",
     "expectedStatus": 404
   },
   {
     "context": "GET ALL time field allow descriptors - viewer ",
     "token": { "user": "userb", "password": "pwd" },
     "method": "GET",
-    "endpoint": "http://localhost:6004/shell-descriptors",
+    "endpoint": "http://localhost:6005/shell-descriptors",
     "shouldMatch": "expected/expectedTimeResult.json",
     "expectedStatus": 200
   },
@@ -189,7 +189,7 @@
     "context": "POST mixed cast allow descriptor - admin creates fixture",
     "token": { "user": "admin", "password": "pwd" },
     "method": "POST",
-    "endpoint": "http://localhost:6004/shell-descriptors",
+    "endpoint": "http://localhost:6005/shell-descriptors",
     "data": "postBody/mixed_cast_allow_descriptor.json",
     "shouldMatch": "postBody/mixed_cast_allow_descriptor.json",
     "expectedStatus": 201
@@ -198,7 +198,7 @@
     "context": "POST mixed cast deny descriptor - admin creates fixture",
     "token": { "user": "admin", "password": "pwd" },
     "method": "POST",
-    "endpoint": "http://localhost:6004/shell-descriptors",
+    "endpoint": "http://localhost:6005/shell-descriptors",
     "data": "postBody/mixed_cast_deny_descriptor.json",
     "shouldMatch": "postBody/mixed_cast_deny_descriptor.json",
     "expectedStatus": 201
@@ -207,7 +207,7 @@
     "context": "GET mixed cast allow descriptor - editor with clearance allowed via casts",
     "token": { "user": "usery", "password": "pwd" },
     "method": "GET",
-    "endpoint": "http://localhost:6004/shell-descriptors/dXJuOmFhczptaXhlZC1jYXN0LWFsbG93",
+    "endpoint": "http://localhost:6005/shell-descriptors/dXJuOmFhczptaXhlZC1jYXN0LWFsbG93",
     "shouldMatch": "postBody/mixed_cast_allow_descriptor.json",
     "expectedStatus": 200
   },
@@ -215,14 +215,14 @@
     "context": "GET mixed cast deny descriptor - editor with clearance denied via casts",
     "token": { "user": "usery", "password": "pwd" },
     "method": "GET",
-    "endpoint": "http://localhost:6004/shell-descriptors/dXJuOmFhczptaXhlZC1jYXN0LWRlbnk",
+    "endpoint": "http://localhost:6005/shell-descriptors/dXJuOmFhczptaXhlZC1jYXN0LWRlbnk",
     "expectedStatus": 404
   },
   {
     "context": "POST mixed cast allow descriptor 2 - admin creates fixture",
     "token": { "user": "admin", "password": "pwd" },
     "method": "POST",
-    "endpoint": "http://localhost:6004/shell-descriptors",
+    "endpoint": "http://localhost:6005/shell-descriptors",
     "data": "postBody/mixed_cast_allow_descriptor2.json",
     "shouldMatch": "postBody/mixed_cast_allow_descriptor2.json",
     "expectedStatus": 201
@@ -231,7 +231,7 @@
     "context": "POST mixed cast allow descriptor 3 - admin creates fixture",
     "token": { "user": "admin", "password": "pwd" },
     "method": "POST",
-    "endpoint": "http://localhost:6004/shell-descriptors",
+    "endpoint": "http://localhost:6005/shell-descriptors",
     "data": "postBody/mixed_cast_allow_descriptor3.json",
     "shouldMatch": "postBody/mixed_cast_allow_descriptor3.json",
     "expectedStatus": 201
@@ -240,7 +240,7 @@
     "context": "POST mixed cast deny descriptor 3 - admin creates fixture",
     "token": { "user": "admin", "password": "pwd" },
     "method": "POST",
-    "endpoint": "http://localhost:6004/shell-descriptors",
+    "endpoint": "http://localhost:6005/shell-descriptors",
     "data": "postBody/mixed_cast_deny_descriptor3.json",
     "shouldMatch": "postBody/mixed_cast_deny_descriptor3.json",
     "expectedStatus": 201
@@ -249,7 +249,7 @@
     "context": "POST mixed cast deny descriptor 4 - admin creates fixture",
     "token": { "user": "admin", "password": "pwd" },
     "method": "POST",
-    "endpoint": "http://localhost:6004/shell-descriptors",
+    "endpoint": "http://localhost:6005/shell-descriptors",
     "data": "postBody/mixed_cast_deny_descriptor4.json",
     "shouldMatch": "postBody/mixed_cast_deny_descriptor4.json",
     "expectedStatus": 201
@@ -258,7 +258,7 @@
     "context": "POST mixed cast deny descriptor 5 - admin creates fixture",
     "token": { "user": "admin", "password": "pwd" },
     "method": "POST",
-    "endpoint": "http://localhost:6004/shell-descriptors",
+    "endpoint": "http://localhost:6005/shell-descriptors",
     "data": "postBody/mixed_cast_deny_descriptor5.json",
     "shouldMatch": "postBody/mixed_cast_deny_descriptor5.json",
     "expectedStatus": 201
@@ -267,7 +267,7 @@
     "context": "GET mixed cast allow descriptor 2 - editor with clearance allowed via casts",
     "token": { "user": "usery", "password": "pwd" },
     "method": "GET",
-    "endpoint": "http://localhost:6004/shell-descriptors/dXJuOmFhczptaXhlZC1jYXN0LWFsbG93Mg",
+    "endpoint": "http://localhost:6005/shell-descriptors/dXJuOmFhczptaXhlZC1jYXN0LWFsbG93Mg",
     "shouldMatch": "postBody/mixed_cast_allow_descriptor2.json",
     "expectedStatus": 200
   },
@@ -275,7 +275,7 @@
     "context": "GET mixed cast allow descriptor 3 - editor with clearance allowed via casts",
     "token": { "user": "usery", "password": "pwd" },
     "method": "GET",
-    "endpoint": "http://localhost:6004/shell-descriptors/dXJuOmFhczptaXhlZC1jYXN0LWFsbG93Mw",
+    "endpoint": "http://localhost:6005/shell-descriptors/dXJuOmFhczptaXhlZC1jYXN0LWFsbG93Mw",
     "shouldMatch": "postBody/mixed_cast_allow_descriptor3.json",
     "expectedStatus": 200
   },
@@ -283,28 +283,28 @@
     "context": "GET mixed cast deny descriptor 3 - editor with clearance denied via casts",
     "token": { "user": "usery", "password": "pwd" },
     "method": "GET",
-    "endpoint": "http://localhost:6004/shell-descriptors/dXJuOmFhczptaXhlZC1jYXN0LWRlbnkz",
+    "endpoint": "http://localhost:6005/shell-descriptors/dXJuOmFhczptaXhlZC1jYXN0LWRlbnkz",
     "expectedStatus": 404
   },
   {
     "context": "GET mixed cast deny descriptor 4 - editor with clearance denied via casts",
     "token": { "user": "usery", "password": "pwd" },
     "method": "GET",
-    "endpoint": "http://localhost:6004/shell-descriptors/dXJuOmFhczptaXhlZC1jYXN0LWRlbnk0",
+    "endpoint": "http://localhost:6005/shell-descriptors/dXJuOmFhczptaXhlZC1jYXN0LWRlbnk0",
     "expectedStatus": 404
   },
   {
     "context": "GET mixed cast deny descriptor 5 - editor with clearance denied via casts",
     "token": { "user": "usery", "password": "pwd" },
     "method": "GET",
-    "endpoint": "http://localhost:6004/shell-descriptors/dXJuOmFhczptaXhlZC1jYXN0LWRlbnk1",
+    "endpoint": "http://localhost:6005/shell-descriptors/dXJuOmFhczptaXhlZC1jYXN0LWRlbnk1",
     "expectedStatus": 404
   },
   {
     "context": "GET ALL mixed cast allow descriptors - editor with clearance",
     "token": { "user": "usery", "password": "pwd" },
     "method": "GET",
-    "endpoint": "http://localhost:6004/shell-descriptors",
+    "endpoint": "http://localhost:6005/shell-descriptors",
     "shouldMatch": "expected/expectedMixedCastResult.json",
     "expectedStatus": 200
   }

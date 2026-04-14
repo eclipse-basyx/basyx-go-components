@@ -3,14 +3,14 @@
     "context": "Anonymous list denied",
     "token": null,
     "method": "GET",
-    "endpoint": "http://localhost:6004/shells",
+    "endpoint": "http://localhost:6005/shells",
     "expectedStatus": 403
   },
   {
     "context": "POST viewer-visible aas - admin",
     "token": { "user": "admin", "password": "pwd" },
     "method": "POST",
-    "endpoint": "http://localhost:6004/shells",
+    "endpoint": "http://localhost:6005/shells",
     "data": "bodies/post/viewerAllowed.json",
     "expectedStatus": 201
   },
@@ -18,7 +18,7 @@
     "context": "POST viewer-visible-by-key aas - admin",
     "token": { "user": "admin", "password": "pwd" },
     "method": "POST",
-    "endpoint": "http://localhost:6004/shells",
+    "endpoint": "http://localhost:6005/shells",
     "data": "bodies/post/viewerViaKey.json",
     "expectedStatus": 201
   },
@@ -26,7 +26,7 @@
     "context": "POST viewer-hidden aas - admin",
     "token": { "user": "admin", "password": "pwd" },
     "method": "POST",
-    "endpoint": "http://localhost:6004/shells",
+    "endpoint": "http://localhost:6005/shells",
     "data": "bodies/post/viewerHidden.json",
     "expectedStatus": 201
   },
@@ -34,7 +34,7 @@
     "context": "GET /shells - admin full access",
     "token": { "user": "admin", "password": "pwd" },
     "method": "GET",
-    "endpoint": "http://localhost:6004/shells",
+    "endpoint": "http://localhost:6005/shells",
     "shouldMatch": "expected/expectedShellsFullAdmin.json",
     "expectedStatus": 200
   },
@@ -42,7 +42,7 @@
     "context": "GET /shells - editor reduced to specific IDENTIFIABLE object",
     "token": { "user": "userx", "password": "pwd" },
     "method": "GET",
-    "endpoint": "http://localhost:6004/shells",
+    "endpoint": "http://localhost:6005/shells",
     "shouldMatch": "expected/expectedShellsReducedEditorSpecificIdentifiable.json",
     "expectedStatus": 200
   },
@@ -50,7 +50,7 @@
     "context": "GET /shells/$reference - admin full access",
     "token": { "user": "admin", "password": "pwd" },
     "method": "GET",
-    "endpoint": "http://localhost:6004/shells/$reference",
+    "endpoint": "http://localhost:6005/shells/$reference",
     "shouldMatch": "expected/expectedShellRefsFullAdmin.json",
     "expectedStatus": 200
   },
@@ -58,7 +58,7 @@
     "context": "GET /shells/$reference - editor reduced to specific IDENTIFIABLE object",
     "token": { "user": "userx", "password": "pwd" },
     "method": "GET",
-    "endpoint": "http://localhost:6004/shells/$reference",
+    "endpoint": "http://localhost:6005/shells/$reference",
     "shouldMatch": "expected/expectedShellRefsReducedEditorSpecificIdentifiable.json",
     "expectedStatus": 200
   },
@@ -66,28 +66,28 @@
     "context": "GET viewer-visible aas - viewer",
     "token": { "user": "usera", "password": "pwd" },
     "method": "GET",
-    "endpoint": "http://localhost:6004/shells/dXJuOmV4YW1wbGU6YWFzOnZpZXdlcjphbGxvd2Vk",
+    "endpoint": "http://localhost:6005/shells/dXJuOmV4YW1wbGU6YWFzOnZpZXdlcjphbGxvd2Vk",
     "expectedStatus": 200
   },
   {
     "context": "GET viewer-by-key aas - viewer",
     "token": { "user": "usera", "password": "pwd" },
     "method": "GET",
-    "endpoint": "http://localhost:6004/shells/dXJuOmV4YW1wbGU6YWFzOnZpZXdlcjprZXk",
+    "endpoint": "http://localhost:6005/shells/dXJuOmV4YW1wbGU6YWFzOnZpZXdlcjprZXk",
     "expectedStatus": 200
   },
   {
     "context": "GET viewer-hidden aas - viewer receives hidden 404",
     "token": { "user": "usera", "password": "pwd" },
     "method": "GET",
-    "endpoint": "http://localhost:6004/shells/dXJuOmV4YW1wbGU6YWFzOnZpZXdlcjpoaWRkZW4",
+    "endpoint": "http://localhost:6005/shells/dXJuOmV4YW1wbGU6YWFzOnZpZXdlcjpoaWRkZW4",
     "expectedStatus": 404
   },
   {
     "context": "GET viewer-hidden aas - admin full access",
     "token": { "user": "admin", "password": "pwd" },
     "method": "GET",
-    "endpoint": "http://localhost:6004/shells/dXJuOmV4YW1wbGU6YWFzOnZpZXdlcjpoaWRkZW4",
+    "endpoint": "http://localhost:6005/shells/dXJuOmV4YW1wbGU6YWFzOnZpZXdlcjpoaWRkZW4",
     "shouldMatch": "bodies/post/viewerHidden.json",
     "expectedStatus": 200
   },
@@ -95,7 +95,7 @@
     "context": "GET viewer-visible aas - editor allowed by specific IDENTIFIABLE object",
     "token": { "user": "userx", "password": "pwd" },
     "method": "GET",
-    "endpoint": "http://localhost:6004/shells/dXJuOmV4YW1wbGU6YWFzOnZpZXdlcjphbGxvd2Vk",
+    "endpoint": "http://localhost:6005/shells/dXJuOmV4YW1wbGU6YWFzOnZpZXdlcjphbGxvd2Vk",
     "shouldMatch": "bodies/post/viewerAllowed.json",
     "expectedStatus": 200
   },
@@ -103,14 +103,14 @@
     "context": "GET viewer-by-key aas - editor denied outside specific IDENTIFIABLE object",
     "token": { "user": "userx", "password": "pwd" },
     "method": "GET",
-    "endpoint": "http://localhost:6004/shells/dXJuOmV4YW1wbGU6YWFzOnZpZXdlcjprZXk",
+    "endpoint": "http://localhost:6005/shells/dXJuOmV4YW1wbGU6YWFzOnZpZXdlcjprZXk",
     "expectedStatus": 403
   },
   {
     "context": "POST editor-allowed aas - editor",
     "token": { "user": "userx", "password": "pwd" },
     "method": "POST",
-    "endpoint": "http://localhost:6004/shells",
+    "endpoint": "http://localhost:6005/shells",
     "data": "bodies/post/editorAllowed.json",
     "expectedStatus": 201
   },
@@ -118,7 +118,7 @@
     "context": "POST editor-denied aas - editor",
     "token": { "user": "userx", "password": "pwd" },
     "method": "POST",
-    "endpoint": "http://localhost:6004/shells",
+    "endpoint": "http://localhost:6005/shells",
     "data": "bodies/post/editorDeniedPost.json",
     "expectedStatus": 403
   },
@@ -126,7 +126,7 @@
     "context": "POST hidden-existing aas for old-state checks - admin",
     "token": { "user": "admin", "password": "pwd" },
     "method": "POST",
-    "endpoint": "http://localhost:6004/shells",
+    "endpoint": "http://localhost:6005/shells",
     "data": "bodies/post/editorHiddenExisting.json",
     "expectedStatus": 201
   },
@@ -134,7 +134,7 @@
     "context": "PUT invisible existing aas - editor denied by old-state check",
     "token": { "user": "userx", "password": "pwd" },
     "method": "PUT",
-    "endpoint": "http://localhost:6004/shells/dXJuOmV4YW1wbGU6YWFzOmVkaXRvcjpoaWRkZW4tZXhpc3Rpbmc",
+    "endpoint": "http://localhost:6005/shells/dXJuOmV4YW1wbGU6YWFzOmVkaXRvcjpoaWRkZW4tZXhpc3Rpbmc",
     "data": "bodies/put/editorHiddenExistingUpdatedAllowed.json",
     "expectedStatus": 403
   },
@@ -142,7 +142,7 @@
     "context": "PUT visible aas to disallowed state - editor denied by new-state check",
     "token": { "user": "userx", "password": "pwd" },
     "method": "PUT",
-    "endpoint": "http://localhost:6004/shells/dXJuOmV4YW1wbGU6YWFzOmVkaXRvcjphbGxvd2Vk",
+    "endpoint": "http://localhost:6005/shells/dXJuOmV4YW1wbGU6YWFzOmVkaXRvcjphbGxvd2Vk",
     "data": "bodies/put/editorAllowedUpdatedDenied.json",
     "expectedStatus": 403
   },
@@ -150,42 +150,42 @@
     "context": "DELETE invisible existing aas - editor denied",
     "token": { "user": "userx", "password": "pwd" },
     "method": "DELETE",
-    "endpoint": "http://localhost:6004/shells/dXJuOmV4YW1wbGU6YWFzOmVkaXRvcjpoaWRkZW4tZXhpc3Rpbmc",
+    "endpoint": "http://localhost:6005/shells/dXJuOmV4YW1wbGU6YWFzOmVkaXRvcjpoaWRkZW4tZXhpc3Rpbmc",
     "expectedStatus": 403
   },
   {
     "context": "DELETE viewer-visible aas - admin",
     "token": { "user": "admin", "password": "pwd" },
     "method": "DELETE",
-    "endpoint": "http://localhost:6004/shells/dXJuOmV4YW1wbGU6YWFzOnZpZXdlcjphbGxvd2Vk",
+    "endpoint": "http://localhost:6005/shells/dXJuOmV4YW1wbGU6YWFzOnZpZXdlcjphbGxvd2Vk",
     "expectedStatus": 204
   },
   {
     "context": "DELETE viewer-by-key aas - admin",
     "token": { "user": "admin", "password": "pwd" },
     "method": "DELETE",
-    "endpoint": "http://localhost:6004/shells/dXJuOmV4YW1wbGU6YWFzOnZpZXdlcjprZXk",
+    "endpoint": "http://localhost:6005/shells/dXJuOmV4YW1wbGU6YWFzOnZpZXdlcjprZXk",
     "expectedStatus": 204
   },
   {
     "context": "DELETE viewer-hidden aas - admin",
     "token": { "user": "admin", "password": "pwd" },
     "method": "DELETE",
-    "endpoint": "http://localhost:6004/shells/dXJuOmV4YW1wbGU6YWFzOnZpZXdlcjpoaWRkZW4",
+    "endpoint": "http://localhost:6005/shells/dXJuOmV4YW1wbGU6YWFzOnZpZXdlcjpoaWRkZW4",
     "expectedStatus": 204
   },
   {
     "context": "DELETE editor-allowed aas - admin",
     "token": { "user": "admin", "password": "pwd" },
     "method": "DELETE",
-    "endpoint": "http://localhost:6004/shells/dXJuOmV4YW1wbGU6YWFzOmVkaXRvcjphbGxvd2Vk",
+    "endpoint": "http://localhost:6005/shells/dXJuOmV4YW1wbGU6YWFzOmVkaXRvcjphbGxvd2Vk",
     "expectedStatus": 204
   },
   {
     "context": "DELETE hidden-existing aas - admin",
     "token": { "user": "admin", "password": "pwd" },
     "method": "DELETE",
-    "endpoint": "http://localhost:6004/shells/dXJuOmV4YW1wbGU6YWFzOmVkaXRvcjpoaWRkZW4tZXhpc3Rpbmc",
+    "endpoint": "http://localhost:6005/shells/dXJuOmV4YW1wbGU6YWFzOmVkaXRvcjpoaWRkZW4tZXhpc3Rpbmc",
     "expectedStatus": 204
   }
 ]

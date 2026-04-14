@@ -3,7 +3,7 @@
     "context": "POST Descriptor A - Admin - ALLOWED",
     "token": { "user": "admin", "password": "pwd" },
     "method": "POST",
-    "endpoint": "http://localhost:6004/shell-descriptors",
+    "endpoint": "http://localhost:6005/shell-descriptors",
     "data": "postBody/simple_aas_A.json",
     "expectedStatus": 201
   },
@@ -11,7 +11,7 @@
     "context": "POST Descriptor B - Admin - ALLOWED",
     "token": { "user": "admin", "password": "pwd" },
     "method": "POST",
-    "endpoint": "http://localhost:6004/shell-descriptors",
+    "endpoint": "http://localhost:6005/shell-descriptors",
     "data": "postBody/simple_aas_B.json",
     "expectedStatus": 201
   },
@@ -19,14 +19,14 @@
     "context": "GET Descriptor A - User A - ALLOWED",
     "token": { "user": "usera", "password": "pwd" },
     "method": "GET",
-    "endpoint": "http://localhost:6004/shell-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9B",
+    "endpoint": "http://localhost:6005/shell-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9B",
     "expectedStatus": 404
   },
   {
     "context": "GET Descriptor B - User A - ALLOWED",
     "token": { "user": "usera", "password": "pwd" },
     "method": "GET",
-    "endpoint": "http://localhost:6004/shell-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9C",
+    "endpoint": "http://localhost:6005/shell-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9C",
     "shouldMatch": "expected/expectedShellBUserA.json",
     "expectedStatus": 200
   },
@@ -34,7 +34,7 @@
     "context": "GET ALL Descriptor - User A - FILTERED",
     "token": { "user": "usera", "password": "pwd" },
     "method": "GET",
-    "endpoint": "http://localhost:6004/shell-descriptors",
+    "endpoint": "http://localhost:6005/shell-descriptors",
     "shouldMatch": "expected/expectedShellUserA.json",
     "expectedStatus": 200
   }

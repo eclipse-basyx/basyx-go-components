@@ -2,20 +2,20 @@
     {
         "context": "Health endpoint",
         "method": "GET",
-        "endpoint": "http://localhost:6004/health",
+        "endpoint": "http://localhost:6005/health",
         "shouldMatch": "expected/expectedHealthEndpoint.json",
         "expectedStatus": 200
     },
     {
         "context": "Description endpoint",
         "method": "GET",
-        "endpoint": "http://localhost:6004/description",
+        "endpoint": "http://localhost:6005/description",
         "expectedStatus": 200
     },
     {
         "context": "Post Submodel",
         "method": "POST",
-        "endpoint": "http://localhost:6004/submodels",
+        "endpoint": "http://localhost:6005/submodels",
         "data": "bodies/post/postSubmodel.json",
         "shouldMatch": "bodies/post/postSubmodel.json",
         "expectedStatus": 201
@@ -23,2022 +23,2022 @@
     {
         "context": "Create Top Level Property",
         "method": "POST",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements",
         "data": "bodies/post/postTopLevelProperty.json",
         "expectedStatus": 201
     },
     {
         "context": "Get Top Level Property",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/myTopLevelProperty",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/myTopLevelProperty",
         "shouldMatch": "expected/expectedGetTopLevelProperty.json",
         "expectedStatus": 200
     },
     {
         "context": "Get All Submodels Reference",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/$reference",
+        "endpoint": "http://localhost:6005/submodels/$reference",
         "shouldMatch": "expected/expectedGetAllSubmodelsReference.json",
         "expectedStatus": 200
     },
     {
         "context": "Get All Submodel Elements Reference",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/$reference",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/$reference",
         "shouldMatch": "expected/expectedGetAllSubmodelElementsReference.json",
         "expectedStatus": 200
     },
     {
         "context": "Pagination valid",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements",
         "shouldMatch": "expected/expectedGetAllSMEWithPagination.json",
         "expectedStatus": 200
     },
     {
         "context": "PUT - Update Top Level Property",
         "method": "PUT",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/myTopLevelProperty",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/myTopLevelProperty",
         "data": "bodies/put/putTopLevelProperty.json",
         "expectedStatus": 204
     },
     {
         "context": "GET - Verify Updated Top Level Property",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/myTopLevelProperty",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/myTopLevelProperty",
         "shouldMatch": "bodies/put/putTopLevelProperty.json",
         "expectedStatus": 200
     },
     {
         "context": "PUT - Update SubmodelElement",
         "method": "PUT",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/myTopLevelProperty",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/myTopLevelProperty",
         "data": "bodies/put/putTopLevelPropertySubmodelElement.json",
         "expectedStatus": 204
     },
     {
         "context": "GET - Verify Updated SubmodelElement",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/myTopLevelProperty",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/myTopLevelProperty",
         "shouldMatch": "bodies/put/putTopLevelPropertySubmodelElement.json",
         "expectedStatus": 200
     },
     {
         "context": "PUT - Revert Top Level Property",
         "method": "PUT",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/myTopLevelProperty",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/myTopLevelProperty",
         "data": "bodies/put/putTopLevelProperty.json",
         "expectedStatus": 204
     },
     {
         "context": "GET - Verify Reverted Top Level Property",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/myTopLevelProperty",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/myTopLevelProperty",
         "shouldMatch": "bodies/put/putTopLevelProperty.json",
         "expectedStatus": 200
     },
     {
         "context": "Delete item in nested structure",
         "method": "POST",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements",
         "data": "bodies/post/postNestedStructure.json",
         "expectedStatus": 201
     },
     {
         "context": "Delete item in nested structure",
         "method": "DELETE",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/1.2.3.4.5.6[0]",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/1.2.3.4.5.6[0]",
         "data": "bodies/post/postNestedStructure.json",
         "expectedStatus": 204
     },
     {
         "context": "Delete item in nested structure - Delete non-existing item",
         "method": "DELETE",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/1.2.3.4.5.6[3]",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/1.2.3.4.5.6[3]",
         "data": "bodies/post/postNestedStructure.json",
         "expectedStatus": 404
     },
     {
         "context": "Delete item in nested structure",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/1",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/1",
         "shouldMatch": "expected/expectedNestedStructureAfterDeleteListItem.json",
         "expectedStatus": 200
     },
     {
         "context": "Delete item in nested structure",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/1.2.3.4.5.6[0]",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/1.2.3.4.5.6[0]",
         "shouldMatch": "expected/expectedItemInListAfterDelete.json",
         "expectedStatus": 200
     },
     {
         "context": "Delete Top Level Property",
         "method": "DELETE",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/myTopLevelProperty",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/myTopLevelProperty",
         "expectedStatus": 204
     },
     {
         "context": "Get Deleted Top Level Property",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/myTopLevelProperty",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/myTopLevelProperty",
         "expectedStatus": 404
     },
     {
         "context": "Get SMEs From nonexisting Submodel",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWwx/submodel-elements",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWwx/submodel-elements",
         "expectedStatus": 404
     },
     {
         "context": "Create Full Submodel Elements Json",
         "method": "POST",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements",
         "data": "bodies/post/postFullSME.json",
         "expectedStatus": 201
     },
     {
         "context": "Post Full Submodel",
         "method": "POST",
-        "endpoint": "http://localhost:6004/submodels",
+        "endpoint": "http://localhost:6005/submodels",
         "data": "bodies/post/postFullSM.json",
         "expectedStatus": 201
     },
     {
         "context": "Get Full Submodel",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2FjcGx0Lm9yZy9TdWJtb2RlbHMvQXNzZXRzL1Rlc3RBc3NldC9JZGVudGlmaWNhdGlvbg",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2FjcGx0Lm9yZy9TdWJtb2RlbHMvQXNzZXRzL1Rlc3RBc3NldC9JZGVudGlmaWNhdGlvbg",
         "shouldMatch": "expected/expectedGetFullSM.json",
         "expectedStatus": 200
     },
     {
         "context": "Delete Full Submodel",
         "method": "DELETE",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2FjcGx0Lm9yZy9TdWJtb2RlbHMvQXNzZXRzL1Rlc3RBc3NldC9JZGVudGlmaWNhdGlvbg",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2FjcGx0Lm9yZy9TdWJtb2RlbHMvQXNzZXRzL1Rlc3RBc3NldC9JZGVudGlmaWNhdGlvbg",
         "expectedStatus": 204
     },
     {
         "context": "Get Deleted Full Submodel",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2FjcGx0Lm9yZy9TdWJtb2RlbHMvQXNzZXRzL1Rlc3RBc3NldC9JZGVudGlmaWNhdGlvbg",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2FjcGx0Lm9yZy9TdWJtb2RlbHMvQXNzZXRzL1Rlc3RBc3NldC9JZGVudGlmaWNhdGlvbg",
         "expectedStatus": 404
     },
     {
         "context": "GET Get Submodels Metadata with limit",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/$metadata?limit=5",
+        "endpoint": "http://localhost:6005/submodels/$metadata?limit=5",
         "shouldMatch": "expected/expectedGetSubmodelsMetadata.json",
         "expectedStatus": 200
     },
     {
         "context": "GET Get Submodel by Id",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw",
         "shouldMatch": "expected/expectedGetSubmodelById.json",
         "expectedStatus": 200
     },
     {
         "context": "GET Get non-existing Submodel by Id",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2V4YW1wbGUuY29tL2lkL25vbnRoaW5n",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2V4YW1wbGUuY29tL2lkL25vbnRoaW5n",
         "expectedStatus": 404
     },
     {
         "context": "Post heavy Submodel",
         "method": "POST",
-        "endpoint": "http://localhost:6004/submodels",
+        "endpoint": "http://localhost:6005/submodels",
         "data": "bodies//heavySubmodel.json",
         "expectedStatus": 201
     },
     {
         "context": "Get heavy Submodel",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/TWFyY3VzVGhpc0lzQUhlYXZ5U3VibW9kZWw",
+        "endpoint": "http://localhost:6005/submodels/TWFyY3VzVGhpc0lzQUhlYXZ5U3VibW9kZWw",
         "shouldMatch": "bodies//heavySubmodel.json",
         "expectedStatus": 200
     },
     {
         "context": "Post minimal Administration Submodel",
         "method": "POST",
-        "endpoint": "http://localhost:6004/submodels",
+        "endpoint": "http://localhost:6005/submodels",
         "data": "bodies//submodelMinimalAdministration.json",
         "expectedStatus": 201
     },
     {
         "context": "Get minimal Administration Submodel",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/TWFyY3VzVGhpc0lzQU1pbmltYWxBZG1pbmlzdHJhdGlvblN1Ym1vZGVs",
+        "endpoint": "http://localhost:6005/submodels/TWFyY3VzVGhpc0lzQU1pbmltYWxBZG1pbmlzdHJhdGlvblN1Ym1vZGVs",
         "shouldMatch": "bodies//submodelMinimalAdministration.json",
         "expectedStatus": 200
     },
     {
         "context": "Post Submodel with Operation SubmodelElement",
         "method": "POST",
-        "endpoint": "http://localhost:6004/submodels",
+        "endpoint": "http://localhost:6005/submodels",
         "data": "bodies/post/postSubmodelWithOperation.json",
         "expectedStatus": 201
     },
     {
         "context": "Get Submodel with Operation SubmodelElement",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/TWFyY3VzVGhpc0lzQU9ubHlPcGVyYXRpb25TdWJtb2RlbA",
+        "endpoint": "http://localhost:6005/submodels/TWFyY3VzVGhpc0lzQU9ubHlPcGVyYXRpb25TdWJtb2RlbA",
         "shouldMatch": "bodies/post/postSubmodelWithOperation.json",
         "expectedStatus": 200
     },
     {
         "context": "Post Submodel with Entity SubmodelElement",
         "method": "POST",
-        "endpoint": "http://localhost:6004/submodels",
+        "endpoint": "http://localhost:6005/submodels",
         "data": "bodies/post/postSubmodelWithEntity.json",
         "expectedStatus": 201
     },
     {
         "context": "Get Submodel with Entity SubmodelElement",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/TWFyY3VzVGhpc0lzQU9ubHlFbnRpdHlTdWJtb2RlbA",
+        "endpoint": "http://localhost:6005/submodels/TWFyY3VzVGhpc0lzQU9ubHlFbnRpdHlTdWJtb2RlbA",
         "shouldMatch": "bodies/post/postSubmodelWithEntity.json",
         "expectedStatus": 200
     },
     {
         "context": "Get All SubmodelElements Deep - Entity Submodel",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/TWFyY3VzVGhpc0lzQU9ubHlFbnRpdHlTdWJtb2RlbA/submodel-elements?level=deep",
+        "endpoint": "http://localhost:6005/submodels/TWFyY3VzVGhpc0lzQU9ubHlFbnRpdHlTdWJtb2RlbA/submodel-elements?level=deep",
         "shouldMatch": "expected/expectedGetAllSubmodelElementsEntityDeep.json",
         "expectedStatus": 200
     },
     {
         "context": "Get All SubmodelElements Core - Entity Submodel",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/TWFyY3VzVGhpc0lzQU9ubHlFbnRpdHlTdWJtb2RlbA/submodel-elements?level=core",
+        "endpoint": "http://localhost:6005/submodels/TWFyY3VzVGhpc0lzQU9ubHlFbnRpdHlTdWJtb2RlbA/submodel-elements?level=core",
         "shouldMatch": "expected/expectedGetAllSubmodelElementsEntityCore.json",
         "expectedStatus": 200
     },
     {
         "context": "Get Submodel with Entity SubmodelElement - Get Statement",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/TWFyY3VzVGhpc0lzQU9ubHlFbnRpdHlTdWJtb2RlbA/submodel-elements/DemoEntity.StatementProperty1",
+        "endpoint": "http://localhost:6005/submodels/TWFyY3VzVGhpc0lzQU9ubHlFbnRpdHlTdWJtb2RlbA/submodel-elements/DemoEntity.StatementProperty1",
         "shouldMatch": "expected/expectedEntityProperty.json",
         "expectedStatus": 200
     },
     {
         "context": "PUT - Update Entity",
         "method": "PUT",
-        "endpoint": "http://localhost:6004/submodels/TWFyY3VzVGhpc0lzQU9ubHlFbnRpdHlTdWJtb2RlbA/submodel-elements/DemoEntity",
+        "endpoint": "http://localhost:6005/submodels/TWFyY3VzVGhpc0lzQU9ubHlFbnRpdHlTdWJtb2RlbA/submodel-elements/DemoEntity",
         "data": "bodies/put/putEntity.json",
         "expectedStatus": 204
     },
     {
         "context": "GET - Verify Updated Entity",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/TWFyY3VzVGhpc0lzQU9ubHlFbnRpdHlTdWJtb2RlbA/submodel-elements/DemoEntity",
+        "endpoint": "http://localhost:6005/submodels/TWFyY3VzVGhpc0lzQU9ubHlFbnRpdHlTdWJtb2RlbA/submodel-elements/DemoEntity",
         "shouldMatch": "bodies/put/putEntity.json",
         "expectedStatus": 200
     },
     {
         "context": "GET - Verify Entity Statement Was Replaced",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/TWFyY3VzVGhpc0lzQU9ubHlFbnRpdHlTdWJtb2RlbA/submodel-elements/DemoEntity.UpdatedStatementProperty",
+        "endpoint": "http://localhost:6005/submodels/TWFyY3VzVGhpc0lzQU9ubHlFbnRpdHlTdWJtb2RlbA/submodel-elements/DemoEntity.UpdatedStatementProperty",
         "shouldMatch": "expected/expectedEntityUpdatedProperty.json",
         "expectedStatus": 200
     },
     {
         "context": "GET - Verify Old Entity Statement Was Deleted",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/TWFyY3VzVGhpc0lzQU9ubHlFbnRpdHlTdWJtb2RlbA/submodel-elements/DemoEntity.StatementProperty1",
+        "endpoint": "http://localhost:6005/submodels/TWFyY3VzVGhpc0lzQU9ubHlFbnRpdHlTdWJtb2RlbA/submodel-elements/DemoEntity.StatementProperty1",
         "expectedStatus": 404
     },
     {
         "context": "PUT - Revert Entity",
         "method": "PUT",
-        "endpoint": "http://localhost:6004/submodels/TWFyY3VzVGhpc0lzQU9ubHlFbnRpdHlTdWJtb2RlbA/submodel-elements/DemoEntity",
+        "endpoint": "http://localhost:6005/submodels/TWFyY3VzVGhpc0lzQU9ubHlFbnRpdHlTdWJtb2RlbA/submodel-elements/DemoEntity",
         "data": "bodies/put/putEntityRevert.json",
         "expectedStatus": 204
     },
     {
         "context": "GET - Verify Reverted Entity",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/TWFyY3VzVGhpc0lzQU9ubHlFbnRpdHlTdWJtb2RlbA/submodel-elements/DemoEntity",
+        "endpoint": "http://localhost:6005/submodels/TWFyY3VzVGhpc0lzQU9ubHlFbnRpdHlTdWJtb2RlbA/submodel-elements/DemoEntity",
         "shouldMatch": "bodies/put/putEntityRevert.json",
         "expectedStatus": 200
     },
     {
         "context": "Post Submodel with Capability SubmodelElement",
         "method": "POST",
-        "endpoint": "http://localhost:6004/submodels",
+        "endpoint": "http://localhost:6005/submodels",
         "data": "bodies/post/postSubmodelWithCapability.json",
         "expectedStatus": 201
     },
     {
         "context": "Get Submodel with Capability SubmodelElement",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/TWFyY3VzVGhpc0lzQU9ubHlDYXBhYmlsaXR5U3VibW9kZWw",
+        "endpoint": "http://localhost:6005/submodels/TWFyY3VzVGhpc0lzQU9ubHlDYXBhYmlsaXR5U3VibW9kZWw",
         "shouldMatch": "bodies/post/postSubmodelWithCapability.json",
         "expectedStatus": 200
     },
     {
         "context": "Post Submodel with RelationshipElement SubmodelElement",
         "method": "POST",
-        "endpoint": "http://localhost:6004/submodels",
+        "endpoint": "http://localhost:6005/submodels",
         "data": "bodies/post/postSubmodelWithRelationshipElement.json",
         "expectedStatus": 201
     },
     {
         "context": "Get Submodel with RelationshipElement SubmodelElement",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/TWFyY3VzVGhpc0lzQU9ubHlSZWxhdGlvbnNoaXBFbGVtZW50U3VibW9kZWw",
+        "endpoint": "http://localhost:6005/submodels/TWFyY3VzVGhpc0lzQU9ubHlSZWxhdGlvbnNoaXBFbGVtZW50U3VibW9kZWw",
         "shouldMatch": "bodies/post/postSubmodelWithRelationshipElement.json",
         "expectedStatus": 200
     },
     {
         "context": "Post Submodel with AnnotatedRelationshipElement SubmodelElement",
         "method": "POST",
-        "endpoint": "http://localhost:6004/submodels",
+        "endpoint": "http://localhost:6005/submodels",
         "data": "bodies/post/postSubmodelWithAnnotatedRelationshipElement.json",
         "expectedStatus": 201
     },
     {
         "context": "Get Submodel with AnnotatedRelationshipElement SubmodelElement",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/TWFyY3VzVGhpc0lzQU9ubHlBbm5vdGF0ZWRSZWxhdGlvbnNoaXBFbGVtZW50U3VibW9kZWw",
+        "endpoint": "http://localhost:6005/submodels/TWFyY3VzVGhpc0lzQU9ubHlBbm5vdGF0ZWRSZWxhdGlvbnNoaXBFbGVtZW50U3VibW9kZWw",
         "shouldMatch": "bodies/post/postSubmodelWithAnnotatedRelationshipElement.json",
         "expectedStatus": 200
     },
     {
         "context": "Get Submodel with AnnotatedRelationshipElement SubmodelElement - Get Annotation",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/TWFyY3VzVGhpc0lzQU9ubHlBbm5vdGF0ZWRSZWxhdGlvbnNoaXBFbGVtZW50U3VibW9kZWw/submodel-elements/DemoAnnotatedRelationshipElement.AnnotationProperty1",
+        "endpoint": "http://localhost:6005/submodels/TWFyY3VzVGhpc0lzQU9ubHlBbm5vdGF0ZWRSZWxhdGlvbnNoaXBFbGVtZW50U3VibW9kZWw/submodel-elements/DemoAnnotatedRelationshipElement.AnnotationProperty1",
         "shouldMatch": "expected/expectedAREProperty.json",
         "expectedStatus": 200
     },
     {
         "context": "Post Submodel with ReferenceElement SubmodelElement",
         "method": "POST",
-        "endpoint": "http://localhost:6004/submodels",
+        "endpoint": "http://localhost:6005/submodels",
         "data": "bodies/post/postSubmodelWithReferenceElement.json",
         "expectedStatus": 201
     },
     {
         "context": "Get Submodel with ReferenceElement SubmodelElement",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/TWFyY3VzVGhpc0lzQU9ubHlSZWZlcmVuY2VFbGVtZW50U3VibW9kZWw",
+        "endpoint": "http://localhost:6005/submodels/TWFyY3VzVGhpc0lzQU9ubHlSZWZlcmVuY2VFbGVtZW50U3VibW9kZWw",
         "shouldMatch": "bodies/post/postSubmodelWithReferenceElement.json",
         "expectedStatus": 200
     },
     {
         "context": "Post Submodel with Range SubmodelElement",
         "method": "POST",
-        "endpoint": "http://localhost:6004/submodels",
+        "endpoint": "http://localhost:6005/submodels",
         "data": "bodies/post/postSubmodelWithRangeElement.json",
         "expectedStatus": 201
     },
     {
         "context": "Get Submodel with Range SubmodelElement",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/TWFyY3VzVGhpc0lzQU9ubHlSYW5nZVN1Ym1vZGVs",
+        "endpoint": "http://localhost:6005/submodels/TWFyY3VzVGhpc0lzQU9ubHlSYW5nZVN1Ym1vZGVs",
         "shouldMatch": "bodies/post/postSubmodelWithRangeElement.json",
         "expectedStatus": 200
     },
     {
         "context": "Post Submodel with File SubmodelElement",
         "method": "POST",
-        "endpoint": "http://localhost:6004/submodels",
+        "endpoint": "http://localhost:6005/submodels",
         "data": "bodies/post/postSubmodelWithFile.json",
         "expectedStatus": 201
     },
     {
         "context": "Get Submodel with File SubmodelElement",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9Pbmx5RmlsZVN1Ym1vZGVsX1Rlc3Q",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9Pbmx5RmlsZVN1Ym1vZGVsX1Rlc3Q",
         "shouldMatch": "bodies/post/postSubmodelWithFile.json",
         "expectedStatus": 200
     },
     {
         "context": "Get File SubmodelElement",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9Pbmx5RmlsZVN1Ym1vZGVsX1Rlc3Q/submodel-elements/DemoFile",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9Pbmx5RmlsZVN1Ym1vZGVsX1Rlc3Q/submodel-elements/DemoFile",
         "shouldMatch": "expected/expectedFileSubmodelElement.json",
         "expectedStatus": 200
     },
     {
         "context": "Get SubmodelElements",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9Pbmx5RmlsZVN1Ym1vZGVsX1Rlc3Q/submodel-elements",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9Pbmx5RmlsZVN1Ym1vZGVsX1Rlc3Q/submodel-elements",
         "shouldMatch": "expected/expectedSubmodelElements.json",
         "expectedStatus": 200
     },
     {
         "context": "Get All Submodels ValueOnly",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/$value",
+        "endpoint": "http://localhost:6005/submodels/$value",
         "shouldMatch": "expected/expectedAllSubmodelsValueOnly.json",
         "expectedStatus": 200
     },
     {
         "context": "Get Heavy Submodel ValueOnly",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/TWFyY3VzVGhpc0lzQUhlYXZ5U3VibW9kZWw/$value",
+        "endpoint": "http://localhost:6005/submodels/TWFyY3VzVGhpc0lzQUhlYXZ5U3VibW9kZWw/$value",
         "shouldMatch": "expected/expectedHeavySubmodelValueOnly.json",
         "expectedStatus": 200
     },
     {
         "context": "Get Minimal Administration Submodel ValueOnly",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/TWFyY3VzVGhpc0lzQU1pbmltYWxBZG1pbmlzdHJhdGlvblN1Ym1vZGVs/$value",
+        "endpoint": "http://localhost:6005/submodels/TWFyY3VzVGhpc0lzQU1pbmltYWxBZG1pbmlzdHJhdGlvblN1Ym1vZGVs/$value",
         "shouldMatch": "expected/expectedMinimalAdministrationSubmodelValueOnly.json",
         "expectedStatus": 200
     },
     {
         "context": "Get All Submodel Elements ValueOnly - Heavy Submodel",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/TWFyY3VzVGhpc0lzQUhlYXZ5U3VibW9kZWw/submodel-elements/$value",
+        "endpoint": "http://localhost:6005/submodels/TWFyY3VzVGhpc0lzQUhlYXZ5U3VibW9kZWw/submodel-elements/$value",
         "shouldMatch": "expected/expectedHeavySubmodelElementsValueOnly.json",
         "expectedStatus": 200
     },
     {
         "context": "Get ManufacturerName Property ValueOnly",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/TWFyY3VzVGhpc0lzQUhlYXZ5U3VibW9kZWw/submodel-elements/ManufacturerName/$value",
+        "endpoint": "http://localhost:6005/submodels/TWFyY3VzVGhpc0lzQUhlYXZ5U3VibW9kZWw/submodel-elements/ManufacturerName/$value",
         "shouldMatch": "expected/expectedManufacturerNameValueOnly.json",
         "expectedStatus": 200
     },
     {
         "context": "Get ProductSerialNumber Collection ValueOnly",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/TWFyY3VzVGhpc0lzQUhlYXZ5U3VibW9kZWw/submodel-elements/ProductSerialNumber/$value",
+        "endpoint": "http://localhost:6005/submodels/TWFyY3VzVGhpc0lzQUhlYXZ5U3VibW9kZWw/submodel-elements/ProductSerialNumber/$value",
         "shouldMatch": "expected/expectedProductSerialNumberValueOnly.json",
         "expectedStatus": 200
     },
     {
         "context": "PATCH SubmodelElement - Existing Property Partial Update",
         "method": "PATCH",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/ExampleSubmodelElementCollection.ExampleSubmodelElementListOrdered[0]",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/ExampleSubmodelElementCollection.ExampleSubmodelElementListOrdered[0]",
         "data": "bodies/patch/patchSubmodelElementPropertyPartial.json",
         "expectedStatus": 204
     },
     {
         "context": "PATCH SubmodelElement - Verify Property Partial Update",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/ExampleSubmodelElementCollection.ExampleSubmodelElementListOrdered[0]",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/ExampleSubmodelElementCollection.ExampleSubmodelElementListOrdered[0]",
         "shouldMatch": "expected/expectedSubmodelElementPropertyAfterPatch.json",
         "expectedStatus": 200
     },
     {
         "context": "PATCH SubmodelElement - Non Existing Element",
         "method": "PATCH",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/ThisElementDoesNotExist",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/ThisElementDoesNotExist",
         "data": "bodies/patch/patchSubmodelElementPropertyPartial.json",
         "expectedStatus": 404
     },
     {
         "context": "PATCH SubmodelElement - Malformed SubmodelIdentifier",
         "method": "PATCH",
-        "endpoint": "http://localhost:6004/submodels/not-base64/submodel-elements/ExampleSubmodelElementCollection.ExampleSubmodelElementListOrdered[0]",
+        "endpoint": "http://localhost:6005/submodels/not-base64/submodel-elements/ExampleSubmodelElementCollection.ExampleSubmodelElementListOrdered[0]",
         "data": "bodies/patch/patchSubmodelElementPropertyPartial.json",
         "expectedStatus": 400
     },
     {
         "context": "PATCH Property ValueOnly - Update ProductModelName",
         "method": "PATCH",
-        "endpoint": "http://localhost:6004/submodels/TWFyY3VzVGhpc0lzQUhlYXZ5U3VibW9kZWw/submodel-elements/ProductModelName/$value",
+        "endpoint": "http://localhost:6005/submodels/TWFyY3VzVGhpc0lzQUhlYXZ5U3VibW9kZWw/submodel-elements/ProductModelName/$value",
         "data": "bodies/patch/patchPropertyValueOnly.json",
         "expectedStatus": 204
     },
     {
         "context": "PATCH Property ValueOnly - Verify ProductModelName Update",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/TWFyY3VzVGhpc0lzQUhlYXZ5U3VibW9kZWw/submodel-elements/ProductModelName/$value",
+        "endpoint": "http://localhost:6005/submodels/TWFyY3VzVGhpc0lzQUhlYXZ5U3VibW9kZWw/submodel-elements/ProductModelName/$value",
         "shouldMatch": "expected/expectedPropertyValueOnlyAfterPatch.json",
         "expectedStatus": 200
     },
     {
         "context": "PATCH MultiLanguageProperty ValueOnly - Update ExampleMultiLanguageProperty",
         "method": "PATCH",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/ExampleSubmodelElementCollection.ExampleSubmodelElementListOrdered[1]/$value",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/ExampleSubmodelElementCollection.ExampleSubmodelElementListOrdered[1]/$value",
         "data": "bodies/patch/patchMultiLanguagePropertyValueOnly.json",
         "expectedStatus": 204
     },
     {
         "context": "PATCH MultiLanguageProperty ValueOnly - Verify ExampleMultiLanguageProperty Update",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/ExampleSubmodelElementCollection.ExampleSubmodelElementListOrdered[1]/$value",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/ExampleSubmodelElementCollection.ExampleSubmodelElementListOrdered[1]/$value",
         "shouldMatch": "expected/expectedMultiLanguagePropertyValueOnlyAfterPatch.json",
         "expectedStatus": 200
     },
     {
         "context": "PATCH Range ValueOnly - Update DemoRange",
         "method": "PATCH",
-        "endpoint": "http://localhost:6004/submodels/TWFyY3VzVGhpc0lzQU9ubHlSYW5nZVN1Ym1vZGVs/submodel-elements/DemoRange/$value",
+        "endpoint": "http://localhost:6005/submodels/TWFyY3VzVGhpc0lzQU9ubHlSYW5nZVN1Ym1vZGVs/submodel-elements/DemoRange/$value",
         "data": "bodies/patch/patchRangeValueOnly.json",
         "expectedStatus": 204
     },
     {
         "context": "PATCH Range ValueOnly - Verify DemoRange Update",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/TWFyY3VzVGhpc0lzQU9ubHlSYW5nZVN1Ym1vZGVs/submodel-elements/DemoRange/$value",
+        "endpoint": "http://localhost:6005/submodels/TWFyY3VzVGhpc0lzQU9ubHlSYW5nZVN1Ym1vZGVs/submodel-elements/DemoRange/$value",
         "shouldMatch": "expected/expectedRangeValueOnlyAfterPatch.json",
         "expectedStatus": 200
     },
     {
         "context": "PATCH ReferenceElement ValueOnly - Update DemoOperation",
         "method": "PATCH",
-        "endpoint": "http://localhost:6004/submodels/TWFyY3VzVGhpc0lzQU9ubHlSZWZlcmVuY2VFbGVtZW50U3VibW9kZWw/submodel-elements/DemoReferenceElement/$value",
+        "endpoint": "http://localhost:6005/submodels/TWFyY3VzVGhpc0lzQU9ubHlSZWZlcmVuY2VFbGVtZW50U3VibW9kZWw/submodel-elements/DemoReferenceElement/$value",
         "data": "bodies/patch/patchReferenceElementValueOnly.json",
         "expectedStatus": 204
     },
     {
         "context": "PATCH ReferenceElement ValueOnly - Verify DemoOperation Update",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/TWFyY3VzVGhpc0lzQU9ubHlSZWZlcmVuY2VFbGVtZW50U3VibW9kZWw/submodel-elements/DemoReferenceElement/$value",
+        "endpoint": "http://localhost:6005/submodels/TWFyY3VzVGhpc0lzQU9ubHlSZWZlcmVuY2VFbGVtZW50U3VibW9kZWw/submodel-elements/DemoReferenceElement/$value",
         "shouldMatch": "expected/expectedReferenceElementValueOnlyAfterPatch.json",
         "expectedStatus": 200
     },
     {
         "context": "PATCH File ValueOnly - Update DemoFile",
         "method": "PATCH",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9Pbmx5RmlsZVN1Ym1vZGVsX1Rlc3Q/submodel-elements/DemoFile/$value",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9Pbmx5RmlsZVN1Ym1vZGVsX1Rlc3Q/submodel-elements/DemoFile/$value",
         "data": "bodies/patch/patchFileValueOnly.json",
         "expectedStatus": 204
     },
     {
         "context": "PATCH File ValueOnly - Verify DemoFile Update",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9Pbmx5RmlsZVN1Ym1vZGVsX1Rlc3Q/submodel-elements/DemoFile/$value",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9Pbmx5RmlsZVN1Ym1vZGVsX1Rlc3Q/submodel-elements/DemoFile/$value",
         "shouldMatch": "expected/expectedFileValueOnlyAfterPatch.json",
         "expectedStatus": 200
     },
     {
         "context": "PATCH Blob ValueOnly - Update ExampleBlob",
         "method": "PATCH",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/ExampleSubmodelElementCollection.ExampleSubmodelElementCollection.ExampleBlob/$value",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/ExampleSubmodelElementCollection.ExampleSubmodelElementCollection.ExampleBlob/$value",
         "data": "bodies/patch/patchBlobValueOnly.json",
         "expectedStatus": 204
     },
     {
         "context": "PATCH Blob ValueOnly - Verify ExampleBlob Update",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/ExampleSubmodelElementCollection.ExampleSubmodelElementCollection.ExampleBlob/$value",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/ExampleSubmodelElementCollection.ExampleSubmodelElementCollection.ExampleBlob/$value",
         "shouldMatch": "expected/expectedBlobValueOnlyAfterPatch.json",
         "expectedStatus": 200
     },
     {
         "context": "PATCH RelationshipElement ValueOnly - Update DemoRelationshipElement",
         "method": "PATCH",
-        "endpoint": "http://localhost:6004/submodels/TWFyY3VzVGhpc0lzQU9ubHlSZWxhdGlvbnNoaXBFbGVtZW50U3VibW9kZWw/submodel-elements/DemoRelationshipElement/$value",
+        "endpoint": "http://localhost:6005/submodels/TWFyY3VzVGhpc0lzQU9ubHlSZWxhdGlvbnNoaXBFbGVtZW50U3VibW9kZWw/submodel-elements/DemoRelationshipElement/$value",
         "data": "bodies/patch/patchRelationshipElementValueOnly.json",
         "expectedStatus": 204
     },
     {
         "context": "PATCH RelationshipElement ValueOnly - Verify DemoRelationshipElement Update",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/TWFyY3VzVGhpc0lzQU9ubHlSZWxhdGlvbnNoaXBFbGVtZW50U3VibW9kZWw/submodel-elements/DemoRelationshipElement/$value",
+        "endpoint": "http://localhost:6005/submodels/TWFyY3VzVGhpc0lzQU9ubHlSZWxhdGlvbnNoaXBFbGVtZW50U3VibW9kZWw/submodel-elements/DemoRelationshipElement/$value",
         "shouldMatch": "expected/expectedRelationshipElementValueOnlyAfterPatch.json",
         "expectedStatus": 200
     },
     {
         "context": "PATCH AnnotatedRelationshipElement ValueOnly - Update DemoAnnotatedRelationshipElement",
         "method": "PATCH",
-        "endpoint": "http://localhost:6004/submodels/TWFyY3VzVGhpc0lzQU9ubHlBbm5vdGF0ZWRSZWxhdGlvbnNoaXBFbGVtZW50U3VibW9kZWw/submodel-elements/DemoAnnotatedRelationshipElement/$value",
+        "endpoint": "http://localhost:6005/submodels/TWFyY3VzVGhpc0lzQU9ubHlBbm5vdGF0ZWRSZWxhdGlvbnNoaXBFbGVtZW50U3VibW9kZWw/submodel-elements/DemoAnnotatedRelationshipElement/$value",
         "data": "bodies/patch/patchAnnotatedRelationshipElementValueOnly.json",
         "expectedStatus": 204
     },
     {
         "context": "PATCH AnnotatedRelationshipElement ValueOnly - Verify DemoAnnotatedRelationshipElement Update",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/TWFyY3VzVGhpc0lzQU9ubHlBbm5vdGF0ZWRSZWxhdGlvbnNoaXBFbGVtZW50U3VibW9kZWw/submodel-elements/DemoAnnotatedRelationshipElement/$value",
+        "endpoint": "http://localhost:6005/submodels/TWFyY3VzVGhpc0lzQU9ubHlBbm5vdGF0ZWRSZWxhdGlvbnNoaXBFbGVtZW50U3VibW9kZWw/submodel-elements/DemoAnnotatedRelationshipElement/$value",
         "shouldMatch": "expected/expectedAnnotatedRelationshipElementValueOnlyAfterPatch.json",
         "expectedStatus": 200
     },
     {
         "context": "PATCH SubmodelElementCollection ValueOnly - Update ExampleSubmodelElementCollection",
         "method": "PATCH",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/ExampleSubmodelElementCollection/$value",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/ExampleSubmodelElementCollection/$value",
         "data": "bodies/patch/patchSubmodelElementCollectionValueOnly.json",
         "expectedStatus": 204
     },
     {
         "context": "PATCH SubmodelElementCollection ValueOnly - Verify ExampleSubmodelElementCollection Update",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/ExampleSubmodelElementCollection/$value",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/ExampleSubmodelElementCollection/$value",
         "shouldMatch": "expected/expectedSubmodelElementCollectionValueOnlyAfterPatch.json",
         "expectedStatus": 200
     },
     {
         "context": "PATCH SubmodelElementList ValueOnly - Update ExampleSubmodelElementListOrdered",
         "method": "PATCH",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/ExampleSubmodelElementCollection.ExampleSubmodelElementListOrdered/$value",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/ExampleSubmodelElementCollection.ExampleSubmodelElementListOrdered/$value",
         "data": "bodies/patch/patchSubmodelElementListValueOnly.json",
         "expectedStatus": 204
     },
     {
         "context": "PATCH SubmodelElementList ValueOnly - Verify ExampleSubmodelElementListOrdered Update",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/ExampleSubmodelElementCollection.ExampleSubmodelElementListOrdered/$value",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/ExampleSubmodelElementCollection.ExampleSubmodelElementListOrdered/$value",
         "shouldMatch": "expected/expectedSubmodelElementListValueOnlyAfterPatch.json",
         "expectedStatus": 200
     },
     {
         "context": "PATCH Submodel ValueOnly - Non Existing Submodel",
         "method": "PATCH",
-        "endpoint": "http://localhost:6004/submodels/SmFubmlrU2F5c1RoaXNTdWJtb2RlbERvZXNudEV4aXN0c1NvTnVoVWhoaA/$value",
+        "endpoint": "http://localhost:6005/submodels/SmFubmlrU2F5c1RoaXNTdWJtb2RlbERvZXNudEV4aXN0c1NvTnVoVWhoaA/$value",
         "data": "bodies/patch/patchSubmodelValueOnly.json",
         "expectedStatus": 404
     },
     {
         "context": "PATCH Submodel ValueOnly - Existing Submodel",
         "method": "PATCH",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/$value",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/$value",
         "data": "bodies/patch/patchSubmodelValueOnly.json",
         "expectedStatus": 204
     },
     {
         "context": "PATCH Submodel ValueOnly - Verify Patch Submodel",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/$value",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/$value",
         "shouldMatch": "bodies/patch/patchSubmodelValueOnly.json",
         "expectedStatus": 200
     },
     {
         "context": "PATCH Submodel ValueOnly - Existing Submodel Non-Existent SME",
         "method": "PATCH",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/$value",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/$value",
         "data": "bodies/patch/patchSubmodelValueOnlyNonExistingSME.json",
         "expectedStatus": 404
     },
     {
         "context": "PATCH Submodel - Non Existing Submodel",
         "method": "PATCH",
-        "endpoint": "http://localhost:6004/submodels/SmFubmlrU2F5c1RoaXNTdWJtb2RlbERvZXNudEV4aXN0c1NvTnVoVWhoaA",
+        "endpoint": "http://localhost:6005/submodels/SmFubmlrU2F5c1RoaXNTdWJtb2RlbERvZXNudEV4aXN0c1NvTnVoVWhoaA",
         "data": "bodies/patch/patchSubmodelByIDNotFound.json",
         "expectedStatus": 404
     },
     {
         "context": "PATCH Submodel - Malformed SubmodelIdentifier",
         "method": "PATCH",
-        "endpoint": "http://localhost:6004/submodels/not-base64",
+        "endpoint": "http://localhost:6005/submodels/not-base64",
         "data": "bodies/patch/patchSubmodelByIDTopLevelCategory.json",
         "expectedStatus": 400
     },
     {
         "context": "PATCH Submodel - Path and Body ID Mismatch",
         "method": "PATCH",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw",
         "data": "bodies/patch/patchSubmodelByIDIdMismatch.json",
         "expectedStatus": 400
     },
     {
         "context": "PATCH Submodel - Existing Submodel Top-Level Partial Update",
         "method": "PATCH",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw",
         "data": "bodies/patch/patchSubmodelByIDTopLevelCategory.json",
         "expectedStatus": 204
     },
     {
         "context": "PATCH Submodel - Verify SubmodelElements are preserved",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/$value",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/$value",
         "shouldMatch": "bodies/patch/patchSubmodelValueOnly.json",
         "expectedStatus": 200
     },
     {
         "context": "PUT Submodel - Update existing Submodel",
         "method": "PUT",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw",
         "data": "bodies/put/putSubmodelUpdate.json",
         "expectedStatus": 204
     },
     {
         "context": "PUT Submodel - Verify updated Submodel",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw",
         "shouldMatch": "expected/expectedSubmodelAfterPutUpdate.json",
         "expectedStatus": 200
     },
     {
         "context": "PUT Submodel - Create Submodel",
         "method": "PUT",
-        "endpoint": "http://localhost:6004/submodels/QmFTeXg",
+        "endpoint": "http://localhost:6005/submodels/QmFTeXg",
         "data": "bodies/put/putSubmodelCreate.json",
         "expectedStatus": 201
     },
     {
         "context": "PUT Submodel - Verify created Submodel",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/QmFTeXg",
+        "endpoint": "http://localhost:6005/submodels/QmFTeXg",
         "shouldMatch": "expected/expectedSubmodelAfterPutCreate.json",
         "expectedStatus": 200
     },
     {
         "context": "PUT AnnotatedRelationshipElement SubmodelElement (Replace)",
         "method": "PUT",
-        "endpoint": "http://localhost:6004/submodels/TWFyY3VzVGhpc0lzQU9ubHlBbm5vdGF0ZWRSZWxhdGlvbnNoaXBFbGVtZW50U3VibW9kZWw/submodel-elements/DemoAnnotatedRelationshipElement",
+        "endpoint": "http://localhost:6005/submodels/TWFyY3VzVGhpc0lzQU9ubHlBbm5vdGF0ZWRSZWxhdGlvbnNoaXBFbGVtZW50U3VibW9kZWw/submodel-elements/DemoAnnotatedRelationshipElement",
         "data": "bodies/put/putARE.json",
         "expectedStatus": 204
     },
     {
         "context": "PUT AnnotatedRelationshipElement - Verify updated Element",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/TWFyY3VzVGhpc0lzQU9ubHlBbm5vdGF0ZWRSZWxhdGlvbnNoaXBFbGVtZW50U3VibW9kZWw/submodel-elements/DemoAnnotatedRelationshipElement",
+        "endpoint": "http://localhost:6005/submodels/TWFyY3VzVGhpc0lzQU9ubHlBbm5vdGF0ZWRSZWxhdGlvbnNoaXBFbGVtZW50U3VibW9kZWw/submodel-elements/DemoAnnotatedRelationshipElement",
         "shouldMatch": "bodies/put/putARE.json",
         "expectedStatus": 200
     },
     {
         "context": "POST BasicEventElement Submodel",
         "method": "POST",
-        "endpoint": "http://localhost:6004/submodels",
+        "endpoint": "http://localhost:6005/submodels",
         "data": "bodies/post/postSubmodelWithBasicEventElement.json",
         "expectedStatus": 201
     },
     {
         "context": "GET BasicEventElement Submodel",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/TWFyY3VzVGhpc0lzQU9ubHlCYXNpY0V2ZW50RWxlbWVudFN1Ym1vZGVs",
+        "endpoint": "http://localhost:6005/submodels/TWFyY3VzVGhpc0lzQU9ubHlCYXNpY0V2ZW50RWxlbWVudFN1Ym1vZGVs",
         "shouldMatch": "bodies/post/postSubmodelWithBasicEventElement.json",
         "expectedStatus": 200
     },
     {
         "context": "PUT BasicEventElement SubmodelElement (Replace)",
         "method": "PUT",
-        "endpoint": "http://localhost:6004/submodels/TWFyY3VzVGhpc0lzQU9ubHlCYXNpY0V2ZW50RWxlbWVudFN1Ym1vZGVs/submodel-elements/ExampleBasicEvent",
+        "endpoint": "http://localhost:6005/submodels/TWFyY3VzVGhpc0lzQU9ubHlCYXNpY0V2ZW50RWxlbWVudFN1Ym1vZGVs/submodel-elements/ExampleBasicEvent",
         "data": "bodies/put/putBasicEventElement.json",
         "expectedStatus": 204
     },
     {
         "context": "PUT BasicEventElement - Verify updated Element",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/TWFyY3VzVGhpc0lzQU9ubHlCYXNpY0V2ZW50RWxlbWVudFN1Ym1vZGVs/submodel-elements/ExampleBasicEvent",
+        "endpoint": "http://localhost:6005/submodels/TWFyY3VzVGhpc0lzQU9ubHlCYXNpY0V2ZW50RWxlbWVudFN1Ym1vZGVs/submodel-elements/ExampleBasicEvent",
         "shouldMatch": "bodies/put/putBasicEventElement.json",
         "expectedStatus": 200
     },
     {
         "context": "PUT MultiLanguageProperty SubmodelElement (Replace)",
         "method": "PUT",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/ExampleSubmodelElementCollection.ExampleSubmodelElementListOrdered[1]",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/ExampleSubmodelElementCollection.ExampleSubmodelElementListOrdered[1]",
         "data": "bodies/put/putMultiLanguageProperty.json",
         "expectedStatus": 204
     },
     {
         "context": "PUT MultiLanguageProperty - Verify updated Element",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/ExampleSubmodelElementCollection.ExampleSubmodelElementListOrdered[1]",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/ExampleSubmodelElementCollection.ExampleSubmodelElementListOrdered[1]",
         "shouldMatch": "bodies/put/putMultiLanguageProperty.json",
         "expectedStatus": 200
     },
     {
         "context": "PUT Operation SubmodelElement",
         "method": "PUT",
-        "endpoint": "http://localhost:6004/submodels/TWFyY3VzVGhpc0lzQU9ubHlPcGVyYXRpb25TdWJtb2RlbA/submodel-elements/DemoOperation",
+        "endpoint": "http://localhost:6005/submodels/TWFyY3VzVGhpc0lzQU9ubHlPcGVyYXRpb25TdWJtb2RlbA/submodel-elements/DemoOperation",
         "data": "bodies/put/putOperation.json",
         "expectedStatus": 204
     },    
     {
         "context": "PUT Operation - Verify updated Element",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/TWFyY3VzVGhpc0lzQU9ubHlPcGVyYXRpb25TdWJtb2RlbA/submodel-elements/DemoOperation",
+        "endpoint": "http://localhost:6005/submodels/TWFyY3VzVGhpc0lzQU9ubHlPcGVyYXRpb25TdWJtb2RlbA/submodel-elements/DemoOperation",
         "shouldMatch": "bodies/put/putOperation.json",
         "expectedStatus": 200
     },
     {
         "context": "PUT ReferenceElement SubmodelElement (Replace)",
         "method": "PUT",
-        "endpoint": "http://localhost:6004/submodels/TWFyY3VzVGhpc0lzQU9ubHlSZWZlcmVuY2VFbGVtZW50U3VibW9kZWw/submodel-elements/DemoReferenceElement",
+        "endpoint": "http://localhost:6005/submodels/TWFyY3VzVGhpc0lzQU9ubHlSZWZlcmVuY2VFbGVtZW50U3VibW9kZWw/submodel-elements/DemoReferenceElement",
         "data": "bodies/put/putReferenceElement.json",
         "expectedStatus": 204
     },    
     {
         "context": "GET ReferenceElement - Verify updated Element",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/TWFyY3VzVGhpc0lzQU9ubHlSZWZlcmVuY2VFbGVtZW50U3VibW9kZWw/submodel-elements/DemoReferenceElement",
+        "endpoint": "http://localhost:6005/submodels/TWFyY3VzVGhpc0lzQU9ubHlSZWZlcmVuY2VFbGVtZW50U3VibW9kZWw/submodel-elements/DemoReferenceElement",
         "shouldMatch": "bodies/put/putReferenceElement.json",
         "expectedStatus": 200
     },
     {
         "context": "PUT RelationshipElement (Replace)",
         "method": "PUT",
-        "endpoint": "http://localhost:6004/submodels/TWFyY3VzVGhpc0lzQU9ubHlSZWxhdGlvbnNoaXBFbGVtZW50U3VibW9kZWw/submodel-elements/DemoRelationshipElement",
+        "endpoint": "http://localhost:6005/submodels/TWFyY3VzVGhpc0lzQU9ubHlSZWxhdGlvbnNoaXBFbGVtZW50U3VibW9kZWw/submodel-elements/DemoRelationshipElement",
         "data": "bodies/put/putRelationshipElement.json",
         "expectedStatus": 204
     },
     {
         "context": "Get RelationshipElement SubmodelElement",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/TWFyY3VzVGhpc0lzQU9ubHlSZWxhdGlvbnNoaXBFbGVtZW50U3VibW9kZWw/submodel-elements/DemoRelationshipElement",
+        "endpoint": "http://localhost:6005/submodels/TWFyY3VzVGhpc0lzQU9ubHlSZWxhdGlvbnNoaXBFbGVtZW50U3VibW9kZWw/submodel-elements/DemoRelationshipElement",
         "shouldMatch": "bodies/put/putRelationshipElement.json",
         "expectedStatus": 200
     },
     {
         "context": "PUT Range SubmodelElement (Replace)",
         "method": "PUT",
-        "endpoint": "http://localhost:6004/submodels/TWFyY3VzVGhpc0lzQU9ubHlSYW5nZVN1Ym1vZGVs/submodel-elements/DemoRange",
+        "endpoint": "http://localhost:6005/submodels/TWFyY3VzVGhpc0lzQU9ubHlSYW5nZVN1Ym1vZGVs/submodel-elements/DemoRange",
         "data": "bodies/put/putRange.json",
         "expectedStatus": 204
     },
     {
         "context": "PUT Range - Verify updated Element",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/TWFyY3VzVGhpc0lzQU9ubHlSYW5nZVN1Ym1vZGVs/submodel-elements/DemoRange",
+        "endpoint": "http://localhost:6005/submodels/TWFyY3VzVGhpc0lzQU9ubHlSYW5nZVN1Ym1vZGVs/submodel-elements/DemoRange",
         "shouldMatch": "bodies/put/putRange.json",
         "expectedStatus": 200
     },
     {
         "context": "PUT SubmodelElementCollection - Update ExampleSubmodelElementCollection",
         "method": "PUT",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/ExampleSubmodelElementCollection",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/ExampleSubmodelElementCollection",
         "data": "bodies/put/putCollection.json",
         "expectedStatus": 204
     },    
     {
         "context": "PUT SubmodelElementCollection - Verify Update",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/ExampleSubmodelElementCollection",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/ExampleSubmodelElementCollection",
         "shouldMatch": "bodies/put/putCollection.json",
         "expectedStatus": 200
     },
     {
         "context": "PUT - Update Property (Nested)",
         "method": "PUT",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/ExampleSubmodelElementCollection.ExampleSubmodelElementListOrdered[0]",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/ExampleSubmodelElementCollection.ExampleSubmodelElementListOrdered[0]",
         "data": "bodies/put/putProperty.json",
         "expectedStatus": 204
     },
     {
         "context": "GET - Verify Updated Property",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/ExampleSubmodelElementCollection.ExampleSubmodelElementListOrdered[0]",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/ExampleSubmodelElementCollection.ExampleSubmodelElementListOrdered[0]",
         "shouldMatch": "bodies/put/putProperty.json",
         "expectedStatus": 200
     },
     {
         "context": "PUT - Update Blob",
         "method": "PUT",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/ExampleSubmodelElementCollection.ExampleSubmodelElementCollection.ExampleBlob",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/ExampleSubmodelElementCollection.ExampleSubmodelElementCollection.ExampleBlob",
         "data": "bodies/put/putBlob.json",
         "expectedStatus": 204
     },
     {
         "context": "GET - Verify Updated Blob",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/ExampleSubmodelElementCollection.ExampleSubmodelElementCollection.ExampleBlob",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/ExampleSubmodelElementCollection.ExampleSubmodelElementCollection.ExampleBlob",
         "shouldMatch": "bodies/put/putBlob.json",
         "expectedStatus": 200
     },
     {
         "context": "PUT - Update File",
         "method": "PUT",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9Pbmx5RmlsZVN1Ym1vZGVsX1Rlc3Q/submodel-elements/DemoFile",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9Pbmx5RmlsZVN1Ym1vZGVsX1Rlc3Q/submodel-elements/DemoFile",
         "data": "bodies/put/putFile.json",
         "expectedStatus": 204
     },
     {
         "context": "GET - Verify Updated File",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9Pbmx5RmlsZVN1Ym1vZGVsX1Rlc3Q/submodel-elements/DemoFile",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9Pbmx5RmlsZVN1Ym1vZGVsX1Rlc3Q/submodel-elements/DemoFile",
         "shouldMatch": "bodies/put/putFile.json",
         "expectedStatus": 200
     },
     {
         "context": "PUT - Update SubmodelElementList",
         "method": "PUT",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/ExampleSubmodelElementCollection.ExampleSubmodelElementListOrdered",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/ExampleSubmodelElementCollection.ExampleSubmodelElementListOrdered",
         "data": "bodies/put/putList.json",
         "expectedStatus": 204
     },
     {
         "context": "GET - Verify Updated SubmodelElementList",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/ExampleSubmodelElementCollection.ExampleSubmodelElementListOrdered",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/ExampleSubmodelElementCollection.ExampleSubmodelElementListOrdered",
         "shouldMatch": "bodies/put/putList.json",
         "expectedStatus": 200
     },
     {
         "context": "PUT - Update Capability",
         "method": "PUT",
-        "endpoint": "http://localhost:6004/submodels/TWFyY3VzVGhpc0lzQU9ubHlDYXBhYmlsaXR5U3VibW9kZWw/submodel-elements/DemoCapability",
+        "endpoint": "http://localhost:6005/submodels/TWFyY3VzVGhpc0lzQU9ubHlDYXBhYmlsaXR5U3VibW9kZWw/submodel-elements/DemoCapability",
         "data": "bodies/put/putCapability.json",
         "expectedStatus": 204
     },
     {
         "context": "GET - Verify Updated Capability",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/TWFyY3VzVGhpc0lzQU9ubHlDYXBhYmlsaXR5U3VibW9kZWw/submodel-elements/DemoCapability",
+        "endpoint": "http://localhost:6005/submodels/TWFyY3VzVGhpc0lzQU9ubHlDYXBhYmlsaXR5U3VibW9kZWw/submodel-elements/DemoCapability",
         "shouldMatch": "bodies/put/putCapability.json",
         "expectedStatus": 200
     },
     {
         "context": "POST - Create New Property Element",
         "method": "POST",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements",
         "data": "bodies/post/postNewProperty.json",
         "expectedStatus": 201
     },
     {
         "context": "GET - Verify Created Property Element",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/NewTestProperty",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/NewTestProperty",
         "shouldMatch": "bodies/post/postNewProperty.json",
         "expectedStatus": 200
     },
     {
         "context": "POST - Create New Range Element",
         "method": "POST",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements",
         "data": "bodies/post/postNewRange.json",
         "expectedStatus": 201
     },
     {
         "context": "GET - Verify Created Range Element",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/NewTestRange",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/NewTestRange",
         "shouldMatch": "bodies/post/postNewRange.json",
         "expectedStatus": 200
     },
     {
         "context": "POST - Create New MultiLanguageProperty Element",
         "method": "POST",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements",
         "data": "bodies/post/postNewMultiLanguageProperty.json",
         "expectedStatus": 201
     },
     {
         "context": "GET - Verify Created MultiLanguageProperty Element",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/NewTestMultiLanguageProperty",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/NewTestMultiLanguageProperty",
         "shouldMatch": "bodies/post/postNewMultiLanguageProperty.json",
         "expectedStatus": 200
     },
     {
         "context": "POST - Create New ReferenceElement",
         "method": "POST",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements",
         "data": "bodies/post/postNewReferenceElement.json",
         "expectedStatus": 201
     },
     {
         "context": "GET - Verify Created ReferenceElement",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/NewTestReferenceElement",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/NewTestReferenceElement",
         "shouldMatch": "bodies/post/postNewReferenceElement.json",
         "expectedStatus": 200
     },
     {
         "context": "POST - Create New RelationshipElement",
         "method": "POST",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements",
         "data": "bodies/post/postNewRelationshipElement.json",
         "expectedStatus": 201
     },
     {
         "context": "GET - Verify Created RelationshipElement",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/NewTestRelationshipElement",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/NewTestRelationshipElement",
         "shouldMatch": "bodies/post/postNewRelationshipElement.json",
         "expectedStatus": 200
     },
     {
         "context": "POST - Create New Blob Element",
         "method": "POST",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements",
         "data": "bodies/post/postNewBlob.json",
         "expectedStatus": 201
     },
     {
         "context": "GET - Verify Created Blob Element",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/NewTestBlob",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/NewTestBlob",
         "shouldMatch": "bodies/post/postNewBlob.json",
         "expectedStatus": 200
     },
     {
         "context": "POST - Create New File Element",
         "method": "POST",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements",
         "data": "bodies/post/postNewFile.json",
         "expectedStatus": 201
     },
     {
         "context": "GET - Verify Created File Element",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/NewTestFile",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/NewTestFile",
         "shouldMatch": "bodies/post/postNewFile.json",
         "expectedStatus": 200
     },
     {
         "context": "POST - Create New SubmodelElementCollection",
         "method": "POST",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements",
         "data": "bodies/post/postNewCollection.json",
         "expectedStatus": 201
     },
     {
         "context": "GET - Verify Created SubmodelElementCollection",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/NewTestCollection",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/NewTestCollection",
         "shouldMatch": "bodies/post/postNewCollection.json",
         "expectedStatus": 200
     },
     {
         "context": "POST - Create New SubmodelElementList",
         "method": "POST",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements",
         "data": "bodies/post/postNewList.json",
         "expectedStatus": 201
     },
     {
         "context": "GET - Verify Created SubmodelElementList",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/NewTestList",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/NewTestList",
         "shouldMatch": "bodies/post/postNewList.json",
         "expectedStatus": 200
     },
     {
         "context": "POST - Create New Entity Element",
         "method": "POST",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements",
         "data": "bodies/post/postNewEntity.json",
         "expectedStatus": 201
     },
     {
         "context": "GET - Verify Created Entity Element",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/NewTestEntity",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/NewTestEntity",
         "shouldMatch": "bodies/post/postNewEntity.json",
         "expectedStatus": 200
     },
     {
         "context": "POST - Create New BasicEventElement",
         "method": "POST",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements",
         "data": "bodies/post/postNewBasicEventElement.json",
         "expectedStatus": 201
     },
     {
         "context": "GET - Verify Created BasicEventElement",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/NewTestBasicEvent",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/NewTestBasicEvent",
         "shouldMatch": "bodies/post/postNewBasicEventElement.json",
         "expectedStatus": 200
     },
     {
         "context": "POST - Create New AnnotatedRelationshipElement",
         "method": "POST",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements",
         "data": "bodies/post/postNewAnnotatedRelationshipElement.json",
         "expectedStatus": 201
     },
     {
         "context": "GET - Verify Created AnnotatedRelationshipElement",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/NewTestAnnotatedRelationshipElement",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/NewTestAnnotatedRelationshipElement",
         "shouldMatch": "bodies/post/postNewAnnotatedRelationshipElement.json",
         "expectedStatus": 200
     },
     {
         "context": "POST - Create New Capability Element",
         "method": "POST",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements",
         "data": "bodies/post/postNewCapability.json",
         "expectedStatus": 201
     },
     {
         "context": "GET - Verify Created Capability Element",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/NewTestCapability",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/NewTestCapability",
         "shouldMatch": "bodies/post/postNewCapability.json",
         "expectedStatus": 200
     },
     {
         "context": "POST - Create Collection for nested tests",
         "method": "POST",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements",
         "data": "bodies/post/postTestContainerCollection.json",
         "expectedStatus": 201
     },
     {
         "context": "GET - Verify Collection for nested tests",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer",
         "shouldMatch": "bodies/post/postTestContainerCollection.json",
         "expectedStatus": 200
     },
     {
         "context": "POST - Create List for nested tests",
         "method": "POST",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer",
         "data": "bodies/post/postTestContainerList.json",
         "expectedStatus": 201
     },
     {
         "context": "GET - Verify List for nested tests",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.List",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.List",
         "shouldMatch": "bodies/post/postTestContainerList.json",
         "expectedStatus": 200
     },
     {
         "context": "POST - Create Entity for nested tests",
         "method": "POST",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer",
         "data": "bodies/post/postTestContainerEntity.json",
         "expectedStatus": 201
     },
     {
         "context": "GET - Verify Entity for nested tests",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.Entity",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.Entity",
         "shouldMatch": "bodies/post/postTestContainerEntity.json",
         "expectedStatus": 200
     },
     {
         "context": "POST - Create AnnotatedRelationshipElement for nested tests",
         "method": "POST",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer",
         "data": "bodies/post/postTestContainerAnnotatedRelationship.json",
         "expectedStatus": 201
     },
     {
         "context": "GET - Verify AnnotatedRelationshipElement for nested tests",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.AnnotatedRelationship",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.AnnotatedRelationship",
         "shouldMatch": "bodies/post/postTestContainerAnnotatedRelationship.json",
         "expectedStatus": 200
     },
     {
         "context": "POST - Property in Collection",
         "method": "POST",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer",
         "data": "bodies/post/nested/postPropertyInCollection.json",
         "expectedStatus": 201
     },
     {
         "context": "GET - Verify Property in Collection",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.NestedProperty",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.NestedProperty",
         "shouldMatch": "bodies/post/nested/postPropertyInCollection.json",
         "expectedStatus": 200
     },
     {
         "context": "POST - Property in List",
         "method": "POST",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.List",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.List",
         "data": "bodies/post/nested/postPropertyInList.json",
         "expectedStatus": 201
     },
     {
         "context": "GET - Verify Property in List",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.List[0]",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.List[0]",
         "shouldMatch": "bodies/post/nested/postPropertyInList.json",
         "expectedStatus": 200
     },
     {
         "context": "GET - Verify List with level core returns one level",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.List?level=core",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.List?level=core",
         "shouldMatch": "expected/expectedGetTestContainerListLevelCoreOneLevel.json",
         "expectedStatus": 200
     },
     {
         "context": "POST - Property in Entity",
         "method": "POST",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.Entity",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.Entity",
         "data": "bodies/post/nested/postPropertyInEntity.json",
         "expectedStatus": 201
     },
     {
         "context": "GET - Verify Property in Entity",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.Entity.NestedPropertyEntity",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.Entity.NestedPropertyEntity",
         "shouldMatch": "bodies/post/nested/postPropertyInEntity.json",
         "expectedStatus": 200
     },
     {
         "context": "GET - Verify Entity with level core returns one level",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.Entity?level=core",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.Entity?level=core",
         "shouldMatch": "expected/expectedGetTestContainerEntityLevelCoreOneLevel.json",
         "expectedStatus": 200
     },
     {
         "context": "POST - Property in AnnotatedRelationship",
         "method": "POST",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.AnnotatedRelationship",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.AnnotatedRelationship",
         "data": "bodies/post/nested/postPropertyInAnnotatedRelationship.json",
         "expectedStatus": 201
     },
     {
         "context": "GET - Verify Property in AnnotatedRelationship",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.AnnotatedRelationship.NestedPropertyAnnotation",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.AnnotatedRelationship.NestedPropertyAnnotation",
         "shouldMatch": "bodies/post/nested/postPropertyInAnnotatedRelationship.json",
         "expectedStatus": 200
     },
     {
         "context": "GET - Verify AnnotatedRelationship with level core returns one level",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.AnnotatedRelationship?level=core",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.AnnotatedRelationship?level=core",
         "shouldMatch": "expected/expectedGetTestContainerAnnotatedRelationshipLevelCoreOneLevel.json",
         "expectedStatus": 200
     },
     {
         "context": "GET - Verify TestContainer with level core returns one level",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer?level=core",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer?level=core",
         "shouldMatch": "expected/expectedGetTestContainerLevelCoreOneLevel.json",
         "expectedStatus": 200
     },
     {
         "context": "POST - Range in Collection",
         "method": "POST",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer",
         "data": "bodies/post/nested/postRangeInCollection.json",
         "expectedStatus": 201
     },
     {
         "context": "GET - Verify Range in Collection",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.NestedRange",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.NestedRange",
         "shouldMatch": "bodies/post/nested/postRangeInCollection.json",
         "expectedStatus": 200
     },
     {
         "context": "POST - Range in List",
         "method": "POST",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.List",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.List",
         "data": "bodies/post/nested/postRangeInList.json",
         "expectedStatus": 201
     },
     {
         "context": "GET - Verify Range in List",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.List[1]",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.List[1]",
         "shouldMatch": "bodies/post/nested/postRangeInList.json",
         "expectedStatus": 200
     },
     {
         "context": "POST - File in Collection",
         "method": "POST",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer",
         "data": "bodies/post/nested/postFileInCollection.json",
         "expectedStatus": 201
     },
     {
         "context": "GET - Verify File in Collection",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.NestedFile",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.NestedFile",
         "shouldMatch": "bodies/post/nested/postFileInCollection.json",
         "expectedStatus": 200
     },
     {
         "context": "POST - Blob with minimal fields",
         "method": "POST",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements",
         "data": "bodies/post/variations/postBlobMinimal.json",
         "expectedStatus": 201
     },
     {
         "context": "GET - Verify Blob minimal",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/MinimalBlob",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/MinimalBlob",
         "shouldMatch": "bodies/post/variations/postBlobMinimal.json",
         "expectedStatus": 200
     },
     {
         "context": "POST - Property with all optional fields",
         "method": "POST",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements",
         "data": "bodies/post/variations/postPropertyFull.json",
         "expectedStatus": 201
     },
     {
         "context": "GET - Verify Property with all fields",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/FullProperty",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/FullProperty",
         "shouldMatch": "bodies/post/variations/postPropertyFull.json",
         "expectedStatus": 200
     },
     {
         "context": "POST - SubmodelElementList with valueTypeListElement",
         "method": "POST",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements",
         "data": "bodies/post/variations/postListWithValueType.json",
         "expectedStatus": 201
     },
     {
         "context": "GET - Verify List with valueType",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/ListWithValueType",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/ListWithValueType",
         "shouldMatch": "bodies/post/variations/postListWithValueType.json",
         "expectedStatus": 200
     },
     {
         "context": "POST - Entity with specificAssetIds",
         "method": "POST",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements",
         "data": "bodies/post/variations/postEntityWithSpecificAssetIds.json",
         "expectedStatus": 201
     },
     {
         "context": "GET - Verify Entity with specificAssetIds",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/EntityWithAssetIds",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/EntityWithAssetIds",
         "shouldMatch": "bodies/post/variations/postEntityWithSpecificAssetIds.json",
         "expectedStatus": 200
     },
     {
         "context": "POST - MultiLanguageProperty in Collection",
         "method": "POST",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer",
         "data": "bodies/post/nested/postMultiLanguagePropertyInCollection.json",
         "expectedStatus": 201
     },
     {
         "context": "GET - Verify MultiLanguageProperty in Collection",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.NestedMultiLang",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.NestedMultiLang",
         "shouldMatch": "bodies/post/nested/postMultiLanguagePropertyInCollection.json",
         "expectedStatus": 200
     },
     {
         "context": "POST - MultiLanguageProperty in List",
         "method": "POST",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.List",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.List",
         "data": "bodies/post/nested/postMultiLanguagePropertyInList.json",
         "expectedStatus": 201
     },
     {
         "context": "GET - Verify MultiLanguageProperty in List",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.List[2]",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.List[2]",
         "shouldMatch": "bodies/post/nested/postMultiLanguagePropertyInList.json",
         "expectedStatus": 200
     },
     {
         "context": "POST - MultiLanguageProperty in Entity",
         "method": "POST",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.Entity",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.Entity",
         "data": "bodies/post/nested/postMultiLanguagePropertyInEntity.json",
         "expectedStatus": 201
     },
     {
         "context": "GET - Verify MultiLanguageProperty in Entity",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.Entity.NestedMultiLangEntity",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.Entity.NestedMultiLangEntity",
         "shouldMatch": "bodies/post/nested/postMultiLanguagePropertyInEntity.json",
         "expectedStatus": 200
     },
     {
         "context": "POST - MultiLanguageProperty in AnnotatedRelationship",
         "method": "POST",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.AnnotatedRelationship",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.AnnotatedRelationship",
         "data": "bodies/post/nested/postMultiLanguagePropertyInAnnotatedRelationship.json",
         "expectedStatus": 201
     },
     {
         "context": "GET - Verify MultiLanguageProperty in AnnotatedRelationship",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.AnnotatedRelationship.NestedMultiLangAnnotation",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.AnnotatedRelationship.NestedMultiLangAnnotation",
         "shouldMatch": "bodies/post/nested/postMultiLanguagePropertyInAnnotatedRelationship.json",
         "expectedStatus": 200
     },
     {
         "context": "POST - ReferenceElement in Collection",
         "method": "POST",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer",
         "data": "bodies/post/nested/postReferenceElementInCollection.json",
         "expectedStatus": 201
     },
     {
         "context": "GET - Verify ReferenceElement in Collection",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.NestedReference",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.NestedReference",
         "shouldMatch": "bodies/post/nested/postReferenceElementInCollection.json",
         "expectedStatus": 200
     },
     {
         "context": "POST - ReferenceElement in List",
         "method": "POST",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.List",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.List",
         "data": "bodies/post/nested/postReferenceElementInList.json",
         "expectedStatus": 201
     },
     {
         "context": "GET - Verify ReferenceElement in List",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.List[3]",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.List[3]",
         "shouldMatch": "bodies/post/nested/postReferenceElementInList.json",
         "expectedStatus": 200
     },
     {
         "context": "POST - ReferenceElement in Entity",
         "method": "POST",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.Entity",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.Entity",
         "data": "bodies/post/nested/postReferenceElementInEntity.json",
         "expectedStatus": 201
     },
     {
         "context": "GET - Verify ReferenceElement in Entity",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.Entity.NestedReferenceEntity",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.Entity.NestedReferenceEntity",
         "shouldMatch": "bodies/post/nested/postReferenceElementInEntity.json",
         "expectedStatus": 200
     },
     {
         "context": "POST - ReferenceElement in AnnotatedRelationship",
         "method": "POST",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.AnnotatedRelationship",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.AnnotatedRelationship",
         "data": "bodies/post/nested/postReferenceElementInAnnotatedRelationship.json",
         "expectedStatus": 201
     },
     {
         "context": "GET - Verify ReferenceElement in AnnotatedRelationship",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.AnnotatedRelationship.NestedReferenceAnnotation",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.AnnotatedRelationship.NestedReferenceAnnotation",
         "shouldMatch": "bodies/post/nested/postReferenceElementInAnnotatedRelationship.json",
         "expectedStatus": 200
     },
     {
         "context": "POST - RelationshipElement in Collection",
         "method": "POST",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer",
         "data": "bodies/post/nested/postRelationshipElementInCollection.json",
         "expectedStatus": 201
     },
     {
         "context": "GET - Verify RelationshipElement in Collection",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.NestedRelationship",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.NestedRelationship",
         "shouldMatch": "bodies/post/nested/postRelationshipElementInCollection.json",
         "expectedStatus": 200
     },
     {
         "context": "POST - RelationshipElement in List",
         "method": "POST",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.List",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.List",
         "data": "bodies/post/nested/postRelationshipElementInList.json",
         "expectedStatus": 201
     },
     {
         "context": "GET - Verify RelationshipElement in List",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.List[4]",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.List[4]",
         "shouldMatch": "bodies/post/nested/postRelationshipElementInList.json",
         "expectedStatus": 200
     },
     {
         "context": "POST - RelationshipElement in Entity",
         "method": "POST",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.Entity",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.Entity",
         "data": "bodies/post/nested/postRelationshipElementInEntity.json",
         "expectedStatus": 201
     },
     {
         "context": "GET - Verify RelationshipElement in Entity",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.Entity.NestedRelationshipEntity",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.Entity.NestedRelationshipEntity",
         "shouldMatch": "bodies/post/nested/postRelationshipElementInEntity.json",
         "expectedStatus": 200
     },
     {
         "context": "POST - RelationshipElement in AnnotatedRelationship",
         "method": "POST",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.AnnotatedRelationship",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.AnnotatedRelationship",
         "data": "bodies/post/nested/postRelationshipElementInAnnotatedRelationship.json",
         "expectedStatus": 201
     },
     {
         "context": "GET - Verify RelationshipElement in AnnotatedRelationship",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.AnnotatedRelationship.NestedRelationshipAnnotation",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.AnnotatedRelationship.NestedRelationshipAnnotation",
         "shouldMatch": "bodies/post/nested/postRelationshipElementInAnnotatedRelationship.json",
         "expectedStatus": 200
     },
     {
         "context": "POST - Blob in Collection",
         "method": "POST",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer",
         "data": "bodies/post/nested/postBlobInCollection.json",
         "expectedStatus": 201
     },
     {
         "context": "GET - Verify Blob in Collection",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.NestedBlob",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.NestedBlob",
         "shouldMatch": "bodies/post/nested/postBlobInCollection.json",
         "expectedStatus": 200
     },
     {
         "context": "POST - Blob in List",
         "method": "POST",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.List",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.List",
         "data": "bodies/post/nested/postBlobInList.json",
         "expectedStatus": 201
     },
     {
         "context": "GET - Verify Blob in List",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.List[5]",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.List[5]",
         "shouldMatch": "bodies/post/nested/postBlobInList.json",
         "expectedStatus": 200
     },
     {
         "context": "POST - Blob in Entity",
         "method": "POST",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.Entity",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.Entity",
         "data": "bodies/post/nested/postBlobInEntity.json",
         "expectedStatus": 201
     },
     {
         "context": "GET - Verify Blob in Entity",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.Entity.NestedBlobEntity",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.Entity.NestedBlobEntity",
         "shouldMatch": "bodies/post/nested/postBlobInEntity.json",
         "expectedStatus": 200
     },
     {
         "context": "POST - Blob in AnnotatedRelationship",
         "method": "POST",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.AnnotatedRelationship",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.AnnotatedRelationship",
         "data": "bodies/post/nested/postBlobInAnnotatedRelationship.json",
         "expectedStatus": 201
     },
     {
         "context": "GET - Verify Blob in AnnotatedRelationship",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.AnnotatedRelationship.NestedBlobAnnotation",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.AnnotatedRelationship.NestedBlobAnnotation",
         "shouldMatch": "bodies/post/nested/postBlobInAnnotatedRelationship.json",
         "expectedStatus": 200
     },
     {
         "context": "POST - File in List",
         "method": "POST",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.List",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.List",
         "data": "bodies/post/nested/postFileInList.json",
         "expectedStatus": 201
     },
     {
         "context": "GET - Verify File in List",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.List[6]",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.List[6]",
         "shouldMatch": "bodies/post/nested/postFileInList.json",
         "expectedStatus": 200
     },
     {
         "context": "POST - File in Entity",
         "method": "POST",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.Entity",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.Entity",
         "data": "bodies/post/nested/postFileInEntity.json",
         "expectedStatus": 201
     },
     {
         "context": "GET - Verify File in Entity",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.Entity.NestedFileEntity",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.Entity.NestedFileEntity",
         "shouldMatch": "bodies/post/nested/postFileInEntity.json",
         "expectedStatus": 200
     },
     {
         "context": "POST - File in AnnotatedRelationship",
         "method": "POST",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.AnnotatedRelationship",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.AnnotatedRelationship",
         "data": "bodies/post/nested/postFileInAnnotatedRelationship.json",
         "expectedStatus": 201
     },
     {
         "context": "GET - Verify File in AnnotatedRelationship",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.AnnotatedRelationship.NestedFileAnnotation",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.AnnotatedRelationship.NestedFileAnnotation",
         "shouldMatch": "bodies/post/nested/postFileInAnnotatedRelationship.json",
         "expectedStatus": 200
     },
     {
         "context": "POST - Collection in Collection",
         "method": "POST",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer",
         "data": "bodies/post/nested/postCollectionInCollection.json",
         "expectedStatus": 201
     },
     {
         "context": "GET - Verify Collection in Collection",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.NestedCollection",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.NestedCollection",
         "shouldMatch": "bodies/post/nested/postCollectionInCollection.json",
         "expectedStatus": 200
     },
     {
         "context": "POST - Collection in List",
         "method": "POST",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.List",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.List",
         "data": "bodies/post/nested/postCollectionInList.json",
         "expectedStatus": 201
     },
     {
         "context": "GET - Verify Collection in List",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.List[7]",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.List[7]",
         "shouldMatch": "bodies/post/nested/postCollectionInList.json",
         "expectedStatus": 200
     },
     {
         "context": "POST - Collection in Entity",
         "method": "POST",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.Entity",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.Entity",
         "data": "bodies/post/nested/postCollectionInEntity.json",
         "expectedStatus": 201
     },
     {
         "context": "GET - Verify Collection in Entity",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.Entity.NestedCollectionEntity",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.Entity.NestedCollectionEntity",
         "shouldMatch": "bodies/post/nested/postCollectionInEntity.json",
         "expectedStatus": 200
     },
     {
         "context": "POST - Collection in AnnotatedRelationship",
         "method": "POST",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.AnnotatedRelationship",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.AnnotatedRelationship",
         "data": "bodies/post/nested/postCollectionInAnnotatedRelationship.json",
         "expectedStatus": 201
     },
     {
         "context": "GET - Verify Collection in AnnotatedRelationship",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.AnnotatedRelationship.NestedCollectionAnnotation",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.AnnotatedRelationship.NestedCollectionAnnotation",
         "shouldMatch": "bodies/post/nested/postCollectionInAnnotatedRelationship.json",
         "expectedStatus": 200
     },
     {
         "context": "POST - List in Collection",
         "method": "POST",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer",
         "data": "bodies/post/nested/postListInCollection.json",
         "expectedStatus": 201
     },
     {
         "context": "GET - Verify List in Collection",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.NestedList",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.NestedList",
         "shouldMatch": "bodies/post/nested/postListInCollection.json",
         "expectedStatus": 200
     },
     {
         "context": "POST - List in List",
         "method": "POST",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.List",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.List",
         "data": "bodies/post/nested/postListInList.json",
         "expectedStatus": 201
     },
     {
         "context": "GET - Verify List in List",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.List[8]",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.List[8]",
         "shouldMatch": "bodies/post/nested/postListInList.json",
         "expectedStatus": 200
     },
     {
         "context": "POST - List in Entity",
         "method": "POST",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.Entity",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.Entity",
         "data": "bodies/post/nested/postListInEntity.json",
         "expectedStatus": 201
     },
     {
         "context": "GET - Verify List in Entity",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.Entity.NestedListEntity",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.Entity.NestedListEntity",
         "shouldMatch": "bodies/post/nested/postListInEntity.json",
         "expectedStatus": 200
     },
     {
         "context": "POST - List in AnnotatedRelationship",
         "method": "POST",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.AnnotatedRelationship",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.AnnotatedRelationship",
         "data": "bodies/post/nested/postListInAnnotatedRelationship.json",
         "expectedStatus": 201
     },
     {
         "context": "GET - Verify List in AnnotatedRelationship",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.AnnotatedRelationship.NestedListAnnotation",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.AnnotatedRelationship.NestedListAnnotation",
         "shouldMatch": "bodies/post/nested/postListInAnnotatedRelationship.json",
         "expectedStatus": 200
     },
     {
         "context": "POST - Entity in Collection",
         "method": "POST",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer",
         "data": "bodies/post/nested/postEntityInCollection.json",
         "expectedStatus": 201
     },
     {
         "context": "GET - Verify Entity in Collection",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.NestedEntity",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.NestedEntity",
         "shouldMatch": "bodies/post/nested/postEntityInCollection.json",
         "expectedStatus": 200
     },
     {
         "context": "POST - Entity in List",
         "method": "POST",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.List",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.List",
         "data": "bodies/post/nested/postEntityInList.json",
         "expectedStatus": 201
     },
     {
         "context": "GET - Verify Entity in List",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.List[9]",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.List[9]",
         "shouldMatch": "bodies/post/nested/postEntityInList.json",
         "expectedStatus": 200
     },
     {
         "context": "POST - Entity in Entity",
         "method": "POST",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.Entity",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.Entity",
         "data": "bodies/post/nested/postEntityInEntity.json",
         "expectedStatus": 201
     },
     {
         "context": "GET - Verify Entity in Entity",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.Entity.NestedEntityEntity",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.Entity.NestedEntityEntity",
         "shouldMatch": "bodies/post/nested/postEntityInEntity.json",
         "expectedStatus": 200
     },
     {
         "context": "POST - Entity in AnnotatedRelationship",
         "method": "POST",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.AnnotatedRelationship",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.AnnotatedRelationship",
         "data": "bodies/post/nested/postEntityInAnnotatedRelationship.json",
         "expectedStatus": 201
     },
     {
         "context": "GET - Verify Entity in AnnotatedRelationship",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.AnnotatedRelationship.NestedEntityAnnotation",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.AnnotatedRelationship.NestedEntityAnnotation",
         "shouldMatch": "bodies/post/nested/postEntityInAnnotatedRelationship.json",
         "expectedStatus": 200
     },
     {
         "context": "POST - BasicEventElement in Collection",
         "method": "POST",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer",
         "data": "bodies/post/nested/postBasicEventElementInCollection.json",
         "expectedStatus": 201
     },
     {
         "context": "GET - Verify BasicEventElement in Collection",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.NestedEvent",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.NestedEvent",
         "shouldMatch": "bodies/post/nested/postBasicEventElementInCollection.json",
         "expectedStatus": 200
     },
     {
         "context": "POST - BasicEventElement in List",
         "method": "POST",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.List",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.List",
         "data": "bodies/post/nested/postBasicEventElementInList.json",
         "expectedStatus": 201
     },
     {
         "context": "GET - Verify BasicEventElement in List",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.List[10]",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.List[10]",
         "shouldMatch": "bodies/post/nested/postBasicEventElementInList.json",
         "expectedStatus": 200
     },
     {
         "context": "POST - BasicEventElement in Entity",
         "method": "POST",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.Entity",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.Entity",
         "data": "bodies/post/nested/postBasicEventElementInEntity.json",
         "expectedStatus": 201
     },
     {
         "context": "GET - Verify BasicEventElement in Entity",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.Entity.NestedEventEntity",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.Entity.NestedEventEntity",
         "shouldMatch": "bodies/post/nested/postBasicEventElementInEntity.json",
         "expectedStatus": 200
     },
     {
         "context": "POST - BasicEventElement in AnnotatedRelationship",
         "method": "POST",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.AnnotatedRelationship",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.AnnotatedRelationship",
         "data": "bodies/post/nested/postBasicEventElementInAnnotatedRelationship.json",
         "expectedStatus": 201
     },
     {
         "context": "GET - Verify BasicEventElement in AnnotatedRelationship",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.AnnotatedRelationship.NestedEventAnnotation",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.AnnotatedRelationship.NestedEventAnnotation",
         "shouldMatch": "bodies/post/nested/postBasicEventElementInAnnotatedRelationship.json",
         "expectedStatus": 200
     },
     {
         "context": "POST - AnnotatedRelationshipElement in Collection",
         "method": "POST",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer",
         "data": "bodies/post/nested/postAnnotatedRelationshipElementInCollection.json",
         "expectedStatus": 201
     },
     {
         "context": "GET - Verify AnnotatedRelationshipElement in Collection",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.NestedAnnotatedRel",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.NestedAnnotatedRel",
         "shouldMatch": "bodies/post/nested/postAnnotatedRelationshipElementInCollection.json",
         "expectedStatus": 200
     },
     {
         "context": "POST - AnnotatedRelationshipElement in List",
         "method": "POST",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.List",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.List",
         "data": "bodies/post/nested/postAnnotatedRelationshipElementInList.json",
         "expectedStatus": 201
     },
     {
         "context": "GET - Verify AnnotatedRelationshipElement in List",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.List[11]",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.List[11]",
         "shouldMatch": "bodies/post/nested/postAnnotatedRelationshipElementInList.json",
         "expectedStatus": 200
     },
     {
         "context": "POST - AnnotatedRelationshipElement in Entity",
         "method": "POST",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.Entity",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.Entity",
         "data": "bodies/post/nested/postAnnotatedRelationshipElementInEntity.json",
         "expectedStatus": 201
     },
     {
         "context": "GET - Verify AnnotatedRelationshipElement in Entity",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.Entity.NestedAnnotatedRelEntity",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.Entity.NestedAnnotatedRelEntity",
         "shouldMatch": "bodies/post/nested/postAnnotatedRelationshipElementInEntity.json",
         "expectedStatus": 200
     },
     {
         "context": "POST - AnnotatedRelationshipElement in AnnotatedRelationship",
         "method": "POST",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.AnnotatedRelationship",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.AnnotatedRelationship",
         "data": "bodies/post/nested/postAnnotatedRelationshipElementInAnnotatedRelationship.json",
         "expectedStatus": 201
     },
     {
         "context": "GET - Verify AnnotatedRelationshipElement in AnnotatedRelationship",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.AnnotatedRelationship.NestedAnnotatedRelAnnotation",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.AnnotatedRelationship.NestedAnnotatedRelAnnotation",
         "shouldMatch": "bodies/post/nested/postAnnotatedRelationshipElementInAnnotatedRelationship.json",
         "expectedStatus": 200
     },
     {
         "context": "POST - Capability in Collection",
         "method": "POST",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer",
         "data": "bodies/post/nested/postCapabilityInCollection.json",
         "expectedStatus": 201
     },
     {
         "context": "GET - Verify Capability in Collection",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.NestedCapability",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.NestedCapability",
         "shouldMatch": "bodies/post/nested/postCapabilityInCollection.json",
         "expectedStatus": 200
     },
     {
         "context": "POST - Capability in List",
         "method": "POST",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.List",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.List",
         "data": "bodies/post/nested/postCapabilityInList.json",
         "expectedStatus": 201
     },
     {
         "context": "GET - Verify Capability in List",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.List[12]",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.List[12]",
         "shouldMatch": "bodies/post/nested/postCapabilityInList.json",
         "expectedStatus": 200
     },
     {
         "context": "POST - Capability in Entity",
         "method": "POST",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.Entity",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.Entity",
         "data": "bodies/post/nested/postCapabilityInEntity.json",
         "expectedStatus": 201
     },
     {
         "context": "GET - Verify Capability in Entity",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.Entity.NestedCapabilityEntity",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.Entity.NestedCapabilityEntity",
         "shouldMatch": "bodies/post/nested/postCapabilityInEntity.json",
         "expectedStatus": 200
     },
     {
         "context": "POST - Capability in AnnotatedRelationship",
         "method": "POST",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.AnnotatedRelationship",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.AnnotatedRelationship",
         "data": "bodies/post/nested/postCapabilityInAnnotatedRelationship.json",
         "expectedStatus": 201
     },
     {
         "context": "GET - Verify Capability in AnnotatedRelationship",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.AnnotatedRelationship.NestedCapabilityAnnotation",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.AnnotatedRelationship.NestedCapabilityAnnotation",
         "shouldMatch": "bodies/post/nested/postCapabilityInAnnotatedRelationship.json",
         "expectedStatus": 200
     },
     {
         "context": "POST - Range in Entity",
         "method": "POST",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.Entity",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.Entity",
         "data": "bodies/post/nested/postRangeInEntity.json",
         "expectedStatus": 201
     },
     {
         "context": "GET - Verify Range in Entity",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.Entity.NestedRangeEntity",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.Entity.NestedRangeEntity",
         "shouldMatch": "bodies/post/nested/postRangeInEntity.json",
         "expectedStatus": 200
     },
     {
         "context": "POST - Range in AnnotatedRelationship",
         "method": "POST",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.AnnotatedRelationship",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.AnnotatedRelationship",
         "data": "bodies/post/nested/postRangeInAnnotatedRelationship.json",
         "expectedStatus": 201
     },
     {
         "context": "GET - Verify Range in AnnotatedRelationship",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.AnnotatedRelationship.NestedRangeAnnotation",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.AnnotatedRelationship.NestedRangeAnnotation",
         "shouldMatch": "bodies/post/nested/postRangeInAnnotatedRelationship.json",
         "expectedStatus": 200
     },
     {
         "context": "POST (Colliding) - Range in AnnotatedRelationship - Expected 409",
         "method": "POST",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.AnnotatedRelationship",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.AnnotatedRelationship",
         "data": "bodies/post/nested/postRangeInAnnotatedRelationship.json",
         "expectedStatus": 409
     },
     {
         "context": "POST (Colliding) - Range in Entity - Expected 409",
         "method": "POST",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.Entity",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.Entity",
         "data": "bodies/post/nested/postRangeInEntity.json",
         "expectedStatus": 409
     },
     {
         "context": "POST (Colliding) - Capability in List - Expected 409",
         "method": "POST",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.List",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.List",
         "data": "bodies/post/nested/postCapabilityInList.json",
         "expectedStatus": 409
     },
     {
         "context": "POST (Colliding) - Capability in Collection - Expected 409",
         "method": "POST",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer",
         "data": "bodies/post/nested/postCapabilityInCollection.json",
         "expectedStatus": 409
     },
     {
         "context": "POST (Colliding) - Property Element",
         "method": "POST",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements",
         "data": "bodies/post/postNewProperty.json",
         "expectedStatus": 409
     },
     {
         "context": "GET Signed Submodel",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/$signed",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/$signed",
         "shouldMatch": "expected/expectedSignedSubmodel.json",
         "expectedStatus": 200   
     },
     {
         "context": "GET Signed Submodel Value Only",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/$value/$signed",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/$value/$signed",
         "expectedStatus": 200   
     },
     {
         "context": "POST QL Demo Submodels - A",
         "method": "POST",
-        "endpoint": "http://localhost:6004/submodels",
+        "endpoint": "http://localhost:6005/submodels",
         "data":"bodies/post/query/submodelA.json",
         "expectedStatus": 201
     },
     {
         "context": "POST QL Demo Submodels - B",
         "method": "POST",
-        "endpoint": "http://localhost:6004/submodels",
+        "endpoint": "http://localhost:6005/submodels",
         "data":"bodies/post/query/submodelB.json",
         "expectedStatus": 201
     },
     {
         "context": "Query Submodel By ID Starts With",
         "method": "POST",
-        "endpoint": "http://localhost:6004/query/submodels",
+        "endpoint": "http://localhost:6005/query/submodels",
         "data":"bodies/query/queryByIdStartsWith.json",
         "shouldMatch":"expected/query/paginatedSubmodelAB.json",
         "expectedStatus": 200
@@ -2046,7 +2046,7 @@
     {
         "context": "Query Submodel By ID Short Exact",
         "method": "POST",
-        "endpoint": "http://localhost:6004/query/submodels",
+        "endpoint": "http://localhost:6005/query/submodels",
         "data":"bodies/query/queryByIdShortExact.json",
         "shouldMatch":"expected/query/paginatedSubmodelB.json",
         "expectedStatus": 200
@@ -2054,7 +2054,7 @@
     {
         "context": "Query Submodel By ID Short Contains",
         "method": "POST",
-        "endpoint": "http://localhost:6004/query/submodels",
+        "endpoint": "http://localhost:6005/query/submodels",
         "data": "bodies/query/queryByIdShortContains.json",
         "shouldMatch": "expected/query/paginatedSubmodelAB.json",
         "expectedStatus": 200
@@ -2062,7 +2062,7 @@
     {
         "context": "Query Submodel By ID Exact",
         "method": "POST",
-        "endpoint": "http://localhost:6004/query/submodels",
+        "endpoint": "http://localhost:6005/query/submodels",
         "data":"bodies/query/queryByIdExact.json",
         "shouldMatch":"expected/query/paginatedSubmodelA.json",
         "expectedStatus": 200
@@ -2070,7 +2070,7 @@
     {
         "context": "Query Submodel By ID Contains",
         "method": "POST",
-        "endpoint": "http://localhost:6004/query/submodels",
+        "endpoint": "http://localhost:6005/query/submodels",
         "data":"bodies/query/queryByIdContains.json",
         "shouldMatch":"expected/query/paginatedSubmodelA_278.json",
         "expectedStatus": 200
@@ -2078,7 +2078,7 @@
     {
         "context": "Query Submodel By ID Contains 2",
         "method": "POST",
-        "endpoint": "http://localhost:6004/query/submodels",
+        "endpoint": "http://localhost:6005/query/submodels",
         "data":"bodies/query/queryByIdContains2.json",
         "shouldMatch":"expected/query/paginatedSubmodelB.json",
         "expectedStatus": 200
@@ -2086,35 +2086,35 @@
     {
         "context": "POST QL Demo Submodels - C (TechnicalData)",
         "method": "POST",
-        "endpoint": "http://localhost:6004/submodels",
+        "endpoint": "http://localhost:6005/submodels",
         "data":"bodies/post/query/submodelC.json",
         "expectedStatus": 201
     },
     {
         "context": "POST QL Demo Submodels - D (OperationalData)",
         "method": "POST",
-        "endpoint": "http://localhost:6004/submodels",
+        "endpoint": "http://localhost:6005/submodels",
         "data":"bodies/post/query/submodelD.json",
         "expectedStatus": 201
     },
     {
         "context": "POST QL Demo Submodels - E (No SemanticId)",
         "method": "POST",
-        "endpoint": "http://localhost:6004/submodels",
+        "endpoint": "http://localhost:6005/submodels",
         "data":"bodies/post/query/submodelE.json",
         "expectedStatus": 201
     },
     {
         "context": "POST QL Demo Submodels - F (No SemanticId with SME)",
         "method": "POST",
-        "endpoint": "http://localhost:6004/submodels",
+        "endpoint": "http://localhost:6005/submodels",
         "data":"bodies/post/query/submodelF.json",
         "expectedStatus": 201
     },
     {
         "context": "Query Submodel By SemanticId Exact (Nameplate)",
         "method": "POST",
-        "endpoint": "http://localhost:6004/query/submodels",
+        "endpoint": "http://localhost:6005/query/submodels",
         "data":"bodies/query/querySemanticIdExact.json",
         "shouldMatch":"expected/query/paginatedSubmodelB.json",
         "expectedStatus": 200
@@ -2122,7 +2122,7 @@
     {
         "context": "Query Submodel By SemanticId Contains (TechnicalData)",
         "method": "POST",
-        "endpoint": "http://localhost:6004/query/submodels",
+        "endpoint": "http://localhost:6005/query/submodels",
         "data":"bodies/query/querySemanticIdContains.json",
         "shouldMatch":"expected/query/paginatedSubmodelC.json",
         "expectedStatus": 200
@@ -2130,7 +2130,7 @@
     {
         "context": "Query Submodel By SME Value Exact (ManufacturerName=ACME Corporation)",
         "method": "POST",
-        "endpoint": "http://localhost:6004/query/submodels",
+        "endpoint": "http://localhost:6005/query/submodels",
         "data":"bodies/query/querySmeValueExact.json",
         "shouldMatch":"expected/query/paginatedSubmodelB.json",
         "expectedStatus": 200
@@ -2138,7 +2138,7 @@
     {
         "context": "Query Submodel By SME Value Contains (SerialNumber contains 12345)",
         "method": "POST",
-        "endpoint": "http://localhost:6004/query/submodels",
+        "endpoint": "http://localhost:6005/query/submodels",
         "data":"bodies/query/querySmeValueContains.json",
         "shouldMatch":"expected/query/paginatedSubmodelB.json",
         "expectedStatus": 200
@@ -2146,7 +2146,7 @@
     {
         "context": "Query Submodel By SME idShort Exact (Temperature)",
         "method": "POST",
-        "endpoint": "http://localhost:6004/query/submodels",
+        "endpoint": "http://localhost:6005/query/submodels",
         "data":"bodies/query/querySmeIdShortExact.json",
         "shouldMatch":"expected/query/paginatedSubmodelsBFWithTemperature.json",
         "expectedStatus": 200
@@ -2154,7 +2154,7 @@
     {
         "context": "Query Submodel By AND Condition (id contains nuhuh AND idShort contains Query_Language)",
         "method": "POST",
-        "endpoint": "http://localhost:6004/query/submodels",
+        "endpoint": "http://localhost:6005/query/submodels",
         "data":"bodies/query/queryAndCondition.json",
         "shouldMatch":"expected/query/paginatedSubmodelsIdContainsNuhuh.json",
         "expectedStatus": 200
@@ -2162,7 +2162,7 @@
     {
         "context": "Query Submodel By OR Condition (idShort=Submodel_1 OR idShort=Submodel_3)",
         "method": "POST",
-        "endpoint": "http://localhost:6004/query/submodels",
+        "endpoint": "http://localhost:6005/query/submodels",
         "data":"bodies/query/queryOrCondition.json",
         "shouldMatch":"expected/query/paginatedSubmodelsOrCondition.json",
         "expectedStatus": 200
@@ -2170,7 +2170,7 @@
     {
         "context": "Query Submodel By NOT Condition (id NOT contains nuhuh)",
         "method": "POST",
-        "endpoint": "http://localhost:6004/query/submodels",
+        "endpoint": "http://localhost:6005/query/submodels",
         "data":"bodies/query/queryNotCondition.json",
         "shouldMatch":"expected/query/paginatedSubmodelsNotNuhuh.json",
         "expectedStatus": 200
@@ -2178,7 +2178,7 @@
     {
         "context": "Query Submodel By Starts-With (idShort starts with Query_Language)",
         "method": "POST",
-        "endpoint": "http://localhost:6004/query/submodels",
+        "endpoint": "http://localhost:6005/query/submodels",
         "data":"bodies/query/queryStartsWith.json",
         "shouldMatch":"expected/query/paginatedAllQuerySubmodels.json",
         "expectedStatus": 200
@@ -2186,7 +2186,7 @@
     {
         "context": "Query Submodel By Ends-With (idShort ends with Submodel_1)",
         "method": "POST",
-        "endpoint": "http://localhost:6004/query/submodels",
+        "endpoint": "http://localhost:6005/query/submodels",
         "data":"bodies/query/queryEndsWith.json",
         "shouldMatch":"expected/query/paginatedSubmodelA.json",
         "expectedStatus": 200
@@ -2194,7 +2194,7 @@
     {
         "context": "Query Submodel By Regex (idShort matches Query_Language_Submodel_[0-9]+)",
         "method": "POST",
-        "endpoint": "http://localhost:6004/query/submodels",
+        "endpoint": "http://localhost:6005/query/submodels",
         "data":"bodies/query/queryRegex.json",
         "shouldMatch":"expected/query/paginatedAllQuerySubmodels.json",
         "expectedStatus": 200
@@ -2202,7 +2202,7 @@
     {
         "context": "Query Submodel No Match Returns Empty Result",
         "method": "POST",
-        "endpoint": "http://localhost:6004/query/submodels",
+        "endpoint": "http://localhost:6005/query/submodels",
         "data":"bodies/query/queryNoMatch.json",
         "shouldMatch":"expected/query/paginatedEmptyResult.json",
         "expectedStatus": 200
@@ -2210,7 +2210,7 @@
     {
         "context": "Query Submodel By SME ValueType (SimpleProperty valueType=xs:string)",
         "method": "POST",
-        "endpoint": "http://localhost:6004/query/submodels",
+        "endpoint": "http://localhost:6005/query/submodels",
         "data":"bodies/query/querySmeValueType.json",
         "shouldMatch":"expected/query/paginatedSubmodelE.json",
         "expectedStatus": 200
@@ -2218,7 +2218,7 @@
     {
         "context": "Query Submodel By Combined SME and SM (Status=Running AND idShort contains Device1)",
         "method": "POST",
-        "endpoint": "http://localhost:6004/query/submodels",
+        "endpoint": "http://localhost:6005/query/submodels",
         "data":"bodies/query/querySmeAndSmCombined.json",
         "shouldMatch":"expected/query/paginatedSubmodelD.json",
         "expectedStatus": 200
@@ -2226,7 +2226,7 @@
     {
         "context": "Query Submodel Without SemanticId (LEFT JOIN test)",
         "method": "POST",
-        "endpoint": "http://localhost:6004/query/submodels",
+        "endpoint": "http://localhost:6005/query/submodels",
         "data":"bodies/query/queryNoSemanticIdSubmodel.json",
         "shouldMatch":"expected/query/paginatedSubmodelE.json",
         "expectedStatus": 200
@@ -2234,14 +2234,14 @@
     {
         "context": "POST QL Demo Submodels - G (MultiLanguageProperty and SME with SemanticId)",
         "method": "POST",
-        "endpoint": "http://localhost:6004/submodels",
+        "endpoint": "http://localhost:6005/submodels",
         "data":"bodies/post/query/submodelG.json",
         "expectedStatus": 201
     },
     {
         "context": "Query Submodel By SME Language (language=fr AND idShort contains Query_Language)",
         "method": "POST",
-        "endpoint": "http://localhost:6004/query/submodels",
+        "endpoint": "http://localhost:6005/query/submodels",
         "data":"bodies/query/querySmeLanguage.json",
         "shouldMatch":"expected/query/paginatedSubmodelG.json",
         "expectedStatus": 200
@@ -2249,7 +2249,7 @@
     {
         "context": "Query Submodel By SME SemanticId (contains TechnicalSpecification)",
         "method": "POST",
-        "endpoint": "http://localhost:6004/query/submodels",
+        "endpoint": "http://localhost:6005/query/submodels",
         "data":"bodies/query/querySmeSemanticId.json",
         "shouldMatch":"expected/query/paginatedSubmodelG.json",
         "expectedStatus": 200
@@ -2257,14 +2257,14 @@
     {
         "context": "POST QL Demo Submodels - H (Nested SubmodelElementCollection with Properties)",
         "method": "POST",
-        "endpoint": "http://localhost:6004/submodels",
+        "endpoint": "http://localhost:6005/submodels",
         "data":"bodies/post/query/submodelH.json",
         "expectedStatus": 201
     },
     {
         "context": "Query Submodel By Nested SME Value Contains (NestedSerialNumber contains NESTED-SN)",
         "method": "POST",
-        "endpoint": "http://localhost:6004/query/submodels",
+        "endpoint": "http://localhost:6005/query/submodels",
         "data":"bodies/query/querySmeNestedValueContains.json",
         "shouldMatch":"expected/query/paginatedSubmodelH.json",
         "expectedStatus": 200
@@ -2272,7 +2272,7 @@
     {
         "context": "Query Submodel By Nested SME idShort Exact (NestedTemperature)",
         "method": "POST",
-        "endpoint": "http://localhost:6004/query/submodels",
+        "endpoint": "http://localhost:6005/query/submodels",
         "data":"bodies/query/querySmeNestedIdShortExact.json",
         "shouldMatch":"expected/query/paginatedSubmodelH.json",
         "expectedStatus": 200
@@ -2280,7 +2280,7 @@
     {
         "context": "Query Submodel By Deeply Nested SME Value Exact (DeeplyNestedProperty=DeepValue-XYZ)",
         "method": "POST",
-        "endpoint": "http://localhost:6004/query/submodels",
+        "endpoint": "http://localhost:6005/query/submodels",
         "data":"bodies/query/querySmeDeepNestedValueExact.json",
         "shouldMatch":"expected/query/paginatedSubmodelH.json",
         "expectedStatus": 200
@@ -2288,546 +2288,546 @@
     {
         "context": "Post TechnicalData",
         "method": "POST",
-        "endpoint": "http://localhost:6004/submodels",
+        "endpoint": "http://localhost:6005/submodels",
         "data":"bodies/post/smt/TechnicalData.json",
         "expectedStatus": 201
     },
     {
         "context": "GET TechnicalData Submodel",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/aHR0cHM6Ly9iYXN5eC5kZXYvY29tcG9uZW50cy9zdWJtb2RlbC1yZXBvc2l0b3J5L1RlY2huaWNhbERhdGEvMjAyNi0wNC0wMlQxMTowNzowMFo",
+        "endpoint": "http://localhost:6005/submodels/aHR0cHM6Ly9iYXN5eC5kZXYvY29tcG9uZW50cy9zdWJtb2RlbC1yZXBvc2l0b3J5L1RlY2huaWNhbERhdGEvMjAyNi0wNC0wMlQxMTowNzowMFo",
         "shouldMatch":"bodies/post/smt/TechnicalData.json",
         "expectedStatus": 200
     },
     {
         "context": "Post AID (AssetInterfacesDescription)",
         "method": "POST",
-        "endpoint": "http://localhost:6004/submodels",
+        "endpoint": "http://localhost:6005/submodels",
         "data":"bodies/post/smt/AID.json",
         "expectedStatus": 201
     },
     {
         "context": "GET AID Submodel",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/aHR0cHM6Ly9hZG1pbi1zaGVsbC5pby9pZHRhL1N1Ym1vZGVsVGVtcGxhdGUvQXNzZXRJbnRlcmZhY2VzRGVzY3JpcHRpb24",
+        "endpoint": "http://localhost:6005/submodels/aHR0cHM6Ly9hZG1pbi1zaGVsbC5pby9pZHRhL1N1Ym1vZGVsVGVtcGxhdGUvQXNzZXRJbnRlcmZhY2VzRGVzY3JpcHRpb24",
         "shouldMatch":"bodies/post/smt/AID.json",
         "expectedStatus": 200
     },
     {
         "context": "Post AIDataset",
         "method": "POST",
-        "endpoint": "http://localhost:6004/submodels",
+        "endpoint": "http://localhost:6005/submodels",
         "data":"bodies/post/smt/AIDataset.json",
         "expectedStatus": 201
     },
     {
         "context": "GET AIDataset Submodel",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/aHR0cHM6Ly9hZG1pbi1zaGVsbC5pby9pZHRhL1N1Ym1vZGVsVGVtcGxhdGUvQUlEYXRhc2V0LzEvMA",
+        "endpoint": "http://localhost:6005/submodels/aHR0cHM6Ly9hZG1pbi1zaGVsbC5pby9pZHRhL1N1Ym1vZGVsVGVtcGxhdGUvQUlEYXRhc2V0LzEvMA",
         "shouldMatch":"bodies/post/smt/AIDataset.json",
         "expectedStatus": 200
     },
     {
         "context": "Post AIDeployment",
         "method": "POST",
-        "endpoint": "http://localhost:6004/submodels",
+        "endpoint": "http://localhost:6005/submodels",
         "data":"bodies/post/smt/AIDeployment.json",
         "expectedStatus": 201
     },
     {
         "context": "GET AIDeployment Submodel",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/aHR0cHM6Ly9hZG1pbi1zaGVsbC5pby9pZHRhL1N1Ym1vZGVsVGVtcGxhdGUvQUlEZXBsb3ltZW50LzEvMA",
+        "endpoint": "http://localhost:6005/submodels/aHR0cHM6Ly9hZG1pbi1zaGVsbC5pby9pZHRhL1N1Ym1vZGVsVGVtcGxhdGUvQUlEZXBsb3ltZW50LzEvMA",
         "shouldMatch":"bodies/post/smt/AIDeployment.json",
         "expectedStatus": 200
     },
     {
         "context": "Post AIMC (AssetInterfacesMappingConfiguration)",
         "method": "POST",
-        "endpoint": "http://localhost:6004/submodels",
+        "endpoint": "http://localhost:6005/submodels",
         "data":"bodies/post/smt/AIMC.json",
         "expectedStatus": 201
     },
     {
         "context": "GET AIMC Submodel",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/aHR0cHM6Ly9hZG1pbi1zaGVsbC5pby9pZHRhL1N1Ym1vZGVsVGVtcGxhdGUvQXNzZXRJbnRlcmZhY2VzTWFwcGluZ0NvbmZpZ3VyYXRpb24vMS8wLw",
+        "endpoint": "http://localhost:6005/submodels/aHR0cHM6Ly9hZG1pbi1zaGVsbC5pby9pZHRhL1N1Ym1vZGVsVGVtcGxhdGUvQXNzZXRJbnRlcmZhY2VzTWFwcGluZ0NvbmZpZ3VyYXRpb24vMS8wLw",
         "shouldMatch":"bodies/post/smt/AIMC.json",
         "expectedStatus": 200
     },
     {
         "context": "Post AIModelNameplate",
         "method": "POST",
-        "endpoint": "http://localhost:6004/submodels",
+        "endpoint": "http://localhost:6005/submodels",
         "data":"bodies/post/smt/AIModelNameplate.json",
         "expectedStatus": 201
     },
     {
         "context": "GET AIModelNameplate Submodel",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/aHR0cHM6Ly9hZG1pbi1zaGVsbC5pby9pZHRhL1N1Ym1vZGVsVGVtcGxhdGUvQUlNb2RlbE5hbWVwbGF0ZS8xLzA",
+        "endpoint": "http://localhost:6005/submodels/aHR0cHM6Ly9hZG1pbi1zaGVsbC5pby9pZHRhL1N1Ym1vZGVsVGVtcGxhdGUvQUlNb2RlbE5hbWVwbGF0ZS8xLzA",
         "shouldMatch":"bodies/post/smt/AIModelNameplate.json",
         "expectedStatus": 200
     },
     {
         "context": "Post AssetLctn (AssetLocation)",
         "method": "POST",
-        "endpoint": "http://localhost:6004/submodels",
+        "endpoint": "http://localhost:6005/submodels",
         "data":"bodies/post/smt/AssetLctn.json",
         "expectedStatus": 201
     },
     {
         "context": "GET AssetLctn Submodel",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/aHR0cHM6Ly9hZG1pbi1zaGVsbC5pby9pZHRhL1N1Ym1vZGVsVGVtcGxhdGUvRGF0YU1vZGVsZm9yQXNzZXRMb2NhdGlvbi8xLzA",
+        "endpoint": "http://localhost:6005/submodels/aHR0cHM6Ly9hZG1pbi1zaGVsbC5pby9pZHRhL1N1Ym1vZGVsVGVtcGxhdGUvRGF0YU1vZGVsZm9yQXNzZXRMb2NhdGlvbi8xLzA",
         "shouldMatch":"bodies/post/smt/AssetLctn.json",
         "expectedStatus": 200
     },
     {
         "context": "Post BOM (HierarchicalStructures)",
         "method": "POST",
-        "endpoint": "http://localhost:6004/submodels",
+        "endpoint": "http://localhost:6005/submodels",
         "data":"bodies/post/smt/BOM.json",
         "expectedStatus": 201
     },
     {
         "context": "GET BOM Submodel",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/aHR0cHM6Ly9hZG1pbi1zaGVsbC5pby9pZHRhL1N1Ym1vZGVsVGVtcGxhdGUvSGllcmFyY2hpY2FsU3RydWN0dXJlc0JvTS8xLzE",
+        "endpoint": "http://localhost:6005/submodels/aHR0cHM6Ly9hZG1pbi1zaGVsbC5pby9pZHRhL1N1Ym1vZGVsVGVtcGxhdGUvSGllcmFyY2hpY2FsU3RydWN0dXJlc0JvTS8xLzE",
         "shouldMatch":"bodies/post/smt/BOM.json",
         "expectedStatus": 200
     },
     {
         "context": "Post BackendSpecificMatInf",
         "method": "POST",
-        "endpoint": "http://localhost:6004/submodels",
+        "endpoint": "http://localhost:6005/submodels",
         "data":"bodies/post/smt/BackendSpecificMatInf.json",
         "expectedStatus": 201
     },
     {
         "context": "GET BackendSpecificMatInf Submodel",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/aHR0cHM6Ly9hZG1pbi1zaGVsbC5pby9pZHRhL0JhY2tlbmRTcGVjaWZpY01hdGVyaWFsSW5mb3JtYXRpb24vMS8wLw",
+        "endpoint": "http://localhost:6005/submodels/aHR0cHM6Ly9hZG1pbi1zaGVsbC5pby9pZHRhL0JhY2tlbmRTcGVjaWZpY01hdGVyaWFsSW5mb3JtYXRpb24vMS8wLw",
         "shouldMatch":"bodies/post/smt/BackendSpecificMatInf.json",
         "expectedStatus": 200
     },
     {
         "context": "Post CarbFtprnt (CarbonFootprint)",
         "method": "POST",
-        "endpoint": "http://localhost:6004/submodels",
+        "endpoint": "http://localhost:6005/submodels",
         "data":"bodies/post/smt/CarbFtprnt.json",
         "expectedStatus": 201
     },
     {
         "context": "GET CarbFtprnt Submodel",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/aHR0cHM6Ly9hZG1pbi1zaGVsbC5pby9pZHRhL1N1Ym1vZGVsVGVtcGxhdGUvQ2FyYm9uRm9vdHByaW50LzEvMA",
+        "endpoint": "http://localhost:6005/submodels/aHR0cHM6Ly9hZG1pbi1zaGVsbC5pby9pZHRhL1N1Ym1vZGVsVGVtcGxhdGUvQ2FyYm9uRm9vdHByaW50LzEvMA",
         "shouldMatch":"bodies/post/smt/CarbFtprnt.json",
         "expectedStatus": 200
     },
     {
         "context": "Post CntrlCnfgCNC (ControlConfigurationofCNCMachines)",
         "method": "POST",
-        "endpoint": "http://localhost:6004/submodels",
+        "endpoint": "http://localhost:6005/submodels",
         "data":"bodies/post/smt/CntrlCnfgCNC.json",
         "expectedStatus": 201
     },
     {
         "context": "GET CntrlCnfgCNC Submodel",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/aHR0cHM6Ly9hZG1pbi1zaGVsbC5pby9pZHRhL1N1Ym1vZGVsVGVtcGxhdGUvQ29udHJvbENvbmZpZ3VyYXRpb25vZkNOQ01hY2hpbmVzLzEvMA",
+        "endpoint": "http://localhost:6005/submodels/aHR0cHM6Ly9hZG1pbi1zaGVsbC5pby9pZHRhL1N1Ym1vZGVsVGVtcGxhdGUvQ29udHJvbENvbmZpZ3VyYXRpb25vZkNOQ01hY2hpbmVzLzEvMA",
         "shouldMatch":"bodies/post/smt/CntrlCnfgCNC.json",
         "expectedStatus": 200
     },
     {
         "context": "Post ContactInfo (ContactInformation)",
         "method": "POST",
-        "endpoint": "http://localhost:6004/submodels",
+        "endpoint": "http://localhost:6005/submodels",
         "data":"bodies/post/smt/ContactInfo.json",
         "expectedStatus": 201
     },
     {
         "context": "GET ContactInfo Submodel",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/aHR0cHM6Ly9hZG1pbi1zaGVsbC5pby9pZHRhL1N1Ym1vZGVsVGVtcGxhdGUvQ29udGFjdEluZm9ybWF0aW9uLzEvMA",
+        "endpoint": "http://localhost:6005/submodels/aHR0cHM6Ly9hZG1pbi1zaGVsbC5pby9pZHRhL1N1Ym1vZGVsVGVtcGxhdGUvQ29udGFjdEluZm9ybWF0aW9uLzEvMA",
         "shouldMatch":"bodies/post/smt/ContactInfo.json",
         "expectedStatus": 200
     },
     {
         "context": "Post ControlComponent (ControlComponentType)",
         "method": "POST",
-        "endpoint": "http://localhost:6004/submodels",
+        "endpoint": "http://localhost:6005/submodels",
         "data":"bodies/post/smt/ControlComponent.json",
         "expectedStatus": 201
     },
     {
         "context": "GET ControlComponent Submodel",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/aHR0cHM6Ly9hZG1pbi1zaGVsbC5pby9pZHRhL1N1Ym1vZGVsVGVtcGxhdGUvQ29udHJvbENvbXBvbmVudFR5cGUvMi8w",
+        "endpoint": "http://localhost:6005/submodels/aHR0cHM6Ly9hZG1pbi1zaGVsbC5pby9pZHRhL1N1Ym1vZGVsVGVtcGxhdGUvQ29udHJvbENvbXBvbmVudFR5cGUvMi8w",
         "shouldMatch":"bodies/post/smt/ControlComponent.json",
         "expectedStatus": 200
     },
     {
         "context": "Post ControlComponent2 (ControlComponentInstance)",
         "method": "POST",
-        "endpoint": "http://localhost:6004/submodels",
+        "endpoint": "http://localhost:6005/submodels",
         "data":"bodies/post/smt/ControlComponent2.json",
         "expectedStatus": 201
     },
     {
         "context": "GET ControlComponent2 Submodel",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/aHR0cHM6Ly9hZG1pbi1zaGVsbC5pby9pZHRhL1N1Ym1vZGVsVGVtcGxhdGUvQ29udHJvbENvbXBvbmVudC9JbnN0YW5jZS8yLzA",
+        "endpoint": "http://localhost:6005/submodels/aHR0cHM6Ly9hZG1pbi1zaGVsbC5pby9pZHRhL1N1Ym1vZGVsVGVtcGxhdGUvQ29udHJvbENvbXBvbmVudC9JbnN0YW5jZS8yLzA",
         "shouldMatch":"bodies/post/smt/ControlComponent2.json",
         "expectedStatus": 200
     },
     {
         "context": "Post DEXPI",
         "method": "POST",
-        "endpoint": "http://localhost:6004/submodels",
+        "endpoint": "http://localhost:6005/submodels",
         "data":"bodies/post/smt/DEXPI.json",
         "expectedStatus": 201
     },
     {
         "context": "GET DEXPI Submodel",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/aHR0cHM6Ly9hZG1pbi1zaGVsbC5pby9pZHRhL1N1Ym1vZGVsVGVtcGxhdGUvREVYUEkvMS8w",
+        "endpoint": "http://localhost:6005/submodels/aHR0cHM6Ly9hZG1pbi1zaGVsbC5pby9pZHRhL1N1Ym1vZGVsVGVtcGxhdGUvREVYUEkvMS8w",
         "shouldMatch":"bodies/post/smt/DEXPI.json",
         "expectedStatus": 200
     },
     {
         "context": "Post DataRetPol (DataRetentionPolicies)",
         "method": "POST",
-        "endpoint": "http://localhost:6004/submodels",
+        "endpoint": "http://localhost:6005/submodels",
         "data":"bodies/post/smt/DataRetPol.json",
         "expectedStatus": 201
     },
     {
         "context": "GET DataRetPol Submodel",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/aHR0cHM6Ly9hZG1pbi1zaGVsbC5pby9pZHRhL1N1Ym1vZGVsVGVtcGxhdGUvRGF0YVJldGVudGlvblBvbGljaWVzLzEvMA",
+        "endpoint": "http://localhost:6005/submodels/aHR0cHM6Ly9hZG1pbi1zaGVsbC5pby9pZHRhL1N1Ym1vZGVsVGVtcGxhdGUvRGF0YVJldGVudGlvblBvbGljaWVzLzEvMA",
         "shouldMatch":"bodies/post/smt/DataRetPol.json",
         "expectedStatus": 200
     },
     {
         "context": "Post ExecutedProcesses",
         "method": "POST",
-        "endpoint": "http://localhost:6004/submodels",
+        "endpoint": "http://localhost:6005/submodels",
         "data":"bodies/post/smt/ExecutedProcesses.json",
         "expectedStatus": 201
     },
     {
         "context": "GET ExecutedProcesses Submodel",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/aHR0cHM6Ly9hZG1pbi1zaGVsbC5pby9pZHRhL0V4ZWN1dGVkUHJvY2Vzc2VzLzEvMA",
+        "endpoint": "http://localhost:6005/submodels/aHR0cHM6Ly9hZG1pbi1zaGVsbC5pby9pZHRhL0V4ZWN1dGVkUHJvY2Vzc2VzLzEvMA",
         "shouldMatch":"bodies/post/smt/ExecutedProcesses.json",
         "expectedStatus": 200
     },
     {
         "context": "Post FuncSaf (FunctionalSafety)",
         "method": "POST",
-        "endpoint": "http://localhost:6004/submodels",
+        "endpoint": "http://localhost:6005/submodels",
         "data":"bodies/post/smt/FuncSaf.json",
         "expectedStatus": 201
     },
     {
         "context": "GET FuncSaf Submodel",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/aHR0cHM6Ly9hZG1pbi1zaGVsbC5pby9pZHRhL1N1Ym1vZGVsVGVtcGxhdGUvRnVuY3Rpb25hbFNhZmV0eS8xLzA",
+        "endpoint": "http://localhost:6005/submodels/aHR0cHM6Ly9hZG1pbi1zaGVsbC5pby9pZHRhL1N1Ym1vZGVsVGVtcGxhdGUvRnVuY3Rpb25hbFNhZmV0eS8xLzA",
         "shouldMatch":"bodies/post/smt/FuncSaf.json",
         "expectedStatus": 200
     },
     {
         "context": "Post HandoverDoc (HandoverDocumentation)",
         "method": "POST",
-        "endpoint": "http://localhost:6004/submodels",
+        "endpoint": "http://localhost:6005/submodels",
         "data":"bodies/post/smt/HandoverDoc.json",
         "expectedStatus": 201
     },
     {
         "context": "GET HandoverDoc Submodel",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/aHR0cHM6Ly9hZG1pbi1zaGVsbC5pby9pZHRhL1N1Ym1vZGVsVGVtcGxhdGUvSGFuZG92ZXJEb2N1bWVudGF0aW9uLzIvMA",
+        "endpoint": "http://localhost:6005/submodels/aHR0cHM6Ly9hZG1pbi1zaGVsbC5pby9pZHRhL1N1Ym1vZGVsVGVtcGxhdGUvSGFuZG92ZXJEb2N1bWVudGF0aW9uLzIvMA",
         "shouldMatch":"bodies/post/smt/HandoverDoc.json",
         "expectedStatus": 200
     },
     {
         "context": "Post Identification (PlasticsAndRubberMouldsIdentification)",
         "method": "POST",
-        "endpoint": "http://localhost:6004/submodels",
+        "endpoint": "http://localhost:6005/submodels",
         "data":"bodies/post/smt/Identification.json",
         "expectedStatus": 201
     },
     {
         "context": "GET Identification Submodel",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/aHR0cHM6Ly9hZG1pbi1zaGVsbC5pby9pZHRhL2V1cm9tYXAvTW91bGRzL0lkZW50aWZpY2F0aW9uLzEvMA",
+        "endpoint": "http://localhost:6005/submodels/aHR0cHM6Ly9hZG1pbi1zaGVsbC5pby9pZHRhL2V1cm9tYXAvTW91bGRzL0lkZW50aWZpY2F0aW9uLzEvMA",
         "shouldMatch":"bodies/post/smt/Identification.json",
         "expectedStatus": 200
     },
     {
         "context": "Post InspDocOfSteelProd (InspectionDocumentsOfSteelProducts)",
         "method": "POST",
-        "endpoint": "http://localhost:6004/submodels",
+        "endpoint": "http://localhost:6005/submodels",
         "data":"bodies/post/smt/InspDocOfSteelProd.json",
         "expectedStatus": 201
     },
     {
         "context": "GET InspDocOfSteelProd Submodel",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/aHR0cHM6Ly9hZG1pbi1zaGVsbC5pby9pZHRhL1N1Ym1vZGVsVGVtcGxhdGUvSW5zcGVjdGlvbkRvY3VtZW50c09mU3RlZWxQcm9kdWN0cy8xLzA",
+        "endpoint": "http://localhost:6005/submodels/aHR0cHM6Ly9hZG1pbi1zaGVsbC5pby9pZHRhL1N1Ym1vZGVsVGVtcGxhdGUvSW5zcGVjdGlvbkRvY3VtZW50c09mU3RlZWxQcm9kdWN0cy8xLzA",
         "shouldMatch":"bodies/post/smt/InspDocOfSteelProd.json",
         "expectedStatus": 200
     },
     {
         "context": "Post IntInfForUse (IntelligentInformationForUse)",
         "method": "POST",
-        "endpoint": "http://localhost:6004/submodels",
+        "endpoint": "http://localhost:6005/submodels",
         "data":"bodies/post/smt/IntInfForUse.json",
         "expectedStatus": 201
     },
     {
         "context": "GET IntInfForUse Submodel",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/aHR0cHM6Ly9hZG1pbi1zaGVsbC5pby9pZHRhL1N1Ym1vZGVsVGVtcGxhdGUvSW50ZWxsaWdlbnRJbmZvcm1hdGlvbkZvclVzZS8xLzA",
+        "endpoint": "http://localhost:6005/submodels/aHR0cHM6Ly9hZG1pbi1zaGVsbC5pby9pZHRhL1N1Ym1vZGVsVGVtcGxhdGUvSW50ZWxsaWdlbnRJbmZvcm1hdGlvbkZvclVzZS8xLzA",
         "shouldMatch":"bodies/post/smt/IntInfForUse.json",
         "expectedStatus": 200
     },
     {
         "context": "Post M3D (ProvisionOf3DModels)",
         "method": "POST",
-        "endpoint": "http://localhost:6004/submodels",
+        "endpoint": "http://localhost:6005/submodels",
         "data":"bodies/post/smt/M3D.json",
         "expectedStatus": 201
     },
     {
         "context": "GET M3D Submodel",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/aHR0cHM6Ly9hZG1pbi1zaGVsbC5pby9pZHRhL1N1Ym1vZGVsVGVtcGxhdGUvUHJvdmlzaW9uT2YzRE1vZGVscy8xLzA",
+        "endpoint": "http://localhost:6005/submodels/aHR0cHM6Ly9hZG1pbi1zaGVsbC5pby9pZHRhL1N1Ym1vZGVsVGVtcGxhdGUvUHJvdmlzaW9uT2YzRE1vZGVscy8xLzA",
         "shouldMatch":"bodies/post/smt/M3D.json",
         "expectedStatus": 200
     },
     {
         "context": "Post MTP (ModuleTypePackage)",
         "method": "POST",
-        "endpoint": "http://localhost:6004/submodels",
+        "endpoint": "http://localhost:6005/submodels",
         "data":"bodies/post/smt/MTP.json",
         "expectedStatus": 201
     },
     {
         "context": "GET MTP Submodel",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/aHR0cHM6Ly9hZG1pbi1zaGVsbC5pby9pZHRhL1N1Ym1vZGVsVGVtcGxhdGUvTW9kdWxlVHlwZVBhY2thZ2UvMS8w",
+        "endpoint": "http://localhost:6005/submodels/aHR0cHM6Ly9hZG1pbi1zaGVsbC5pby9pZHRhL1N1Ym1vZGVsVGVtcGxhdGUvTW9kdWxlVHlwZVBhY2thZ2UvMS8w",
         "shouldMatch":"bodies/post/smt/MTP.json",
         "expectedStatus": 200
     },
     {
         "context": "Post Nameplate (DigitalNameplate)",
         "method": "POST",
-        "endpoint": "http://localhost:6004/submodels",
+        "endpoint": "http://localhost:6005/submodels",
         "data":"bodies/post/smt/Nameplate.json",
         "expectedStatus": 201
     },
     {
         "context": "GET Nameplate Submodel",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/aHR0cHM6Ly9hZG1pbi1zaGVsbC5pby9pZHRhL1N1Ym1vZGVsVGVtcGxhdGUvRGlnaXRhbE5hbWVwbGF0ZS8zLzA",
+        "endpoint": "http://localhost:6005/submodels/aHR0cHM6Ly9hZG1pbi1zaGVsbC5pby9pZHRhL1N1Ym1vZGVsVGVtcGxhdGUvRGlnaXRhbE5hbWVwbGF0ZS8zLzA",
         "shouldMatch":"bodies/post/smt/Nameplate.json",
         "expectedStatus": 200
     },
     {
         "context": "Post PAMSpecSheet (PAMSpecificationSheet)",
         "method": "POST",
-        "endpoint": "http://localhost:6004/submodels",
+        "endpoint": "http://localhost:6005/submodels",
         "data":"bodies/post/smt/PAMSpecSheet.json",
         "expectedStatus": 201
     },
     {
         "context": "GET PAMSpecSheet Submodel",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/aHR0cHM6Ly9hZG1pbi1zaGVsbC5pby9pZHRhL1N1Ym1vZGVsVGVtcGxhdGUvUEFNU3BlY2lmaWNhdGlvblNoZWV0LzEvMA",
+        "endpoint": "http://localhost:6005/submodels/aHR0cHM6Ly9hZG1pbi1zaGVsbC5pby9pZHRhL1N1Ym1vZGVsVGVtcGxhdGUvUEFNU3BlY2lmaWNhdGlvblNoZWV0LzEvMA",
         "shouldMatch":"bodies/post/smt/PAMSpecSheet.json",
         "expectedStatus": 200
     },
     {
         "context": "Post PredictiveMaintenance",
         "method": "POST",
-        "endpoint": "http://localhost:6004/submodels",
+        "endpoint": "http://localhost:6005/submodels",
         "data":"bodies/post/smt/PredictiveMaintenance.json",
         "expectedStatus": 201
     },
     {
         "context": "GET PredictiveMaintenance Submodel",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/aHR0cHM6Ly9hZG1pbi1zaGVsbC5pby9pZHRhL1N1Ym1vZGVsVGVtcGxhdGUvUHJlZGljdGl2ZU1haW50ZW5hbmNlLzEvMA",
+        "endpoint": "http://localhost:6005/submodels/aHR0cHM6Ly9hZG1pbi1zaGVsbC5pby9pZHRhL1N1Ym1vZGVsVGVtcGxhdGUvUHJlZGljdGl2ZU1haW50ZW5hbmNlLzEvMA",
         "shouldMatch":"bodies/post/smt/PredictiveMaintenance.json",
         "expectedStatus": 200
     },
     {
         "context": "Post ProcessParameters",
         "method": "POST",
-        "endpoint": "http://localhost:6004/submodels",
+        "endpoint": "http://localhost:6005/submodels",
         "data":"bodies/post/smt/ProcessParameters.json",
         "expectedStatus": 201
     },
     {
         "context": "GET ProcessParameters Submodel",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/aHR0cHM6Ly9hZG1pbi1zaGVsbC1pby9pZHRhL1N1Ym1vZGVsVGVtcGxhdGUvUHJvY2Vzc1BhcmFtZXRlcnMvMS8w",
+        "endpoint": "http://localhost:6005/submodels/aHR0cHM6Ly9hZG1pbi1zaGVsbC1pby9pZHRhL1N1Ym1vZGVsVGVtcGxhdGUvUHJvY2Vzc1BhcmFtZXRlcnMvMS8w",
         "shouldMatch":"bodies/post/smt/ProcessParameters.json",
         "expectedStatus": 200
     },
     {
         "context": "Post ProductionCalendar",
         "method": "POST",
-        "endpoint": "http://localhost:6004/submodels",
+        "endpoint": "http://localhost:6005/submodels",
         "data":"bodies/post/smt/ProductionCalendar.json",
         "expectedStatus": 201
     },
     {
         "context": "GET ProductionCalendar Submodel",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/aHR0cHM6Ly9hZG1pbi1zaGVsbC5pby9pZHRhL1N1Ym1vZGVsVGVtcGxhdGUvUHJvZHVjdGlvbkNhbGVuZGFyLzEvMA",
+        "endpoint": "http://localhost:6005/submodels/aHR0cHM6Ly9hZG1pbi1zaGVsbC5pby9pZHRhL1N1Ym1vZGVsVGVtcGxhdGUvUHJvZHVjdGlvbkNhbGVuZGFyLzEvMA",
         "shouldMatch":"bodies/post/smt/ProductionCalendar.json",
         "expectedStatus": 200
     },
     {
         "context": "Post PwrDrvTrainSize (SizingofPowerDriveTrains)",
         "method": "POST",
-        "endpoint": "http://localhost:6004/submodels",
+        "endpoint": "http://localhost:6005/submodels",
         "data":"bodies/post/smt/PwrDrvTrainSize.json",
         "expectedStatus": 201
     },
     {
         "context": "GET PwrDrvTrainSize Submodel",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/aHR0cHM6Ly9hZG1pbi1zaGVsbC5pby9pZHRhL1N1Ym1vZGVsVGVtcGxhdGUvU2l6aW5nb2ZQb3dlckRyaXZlVHJhaW5zLzEvMA",
+        "endpoint": "http://localhost:6005/submodels/aHR0cHM6Ly9hZG1pbi1zaGVsbC5pby9pZHRhL1N1Ym1vZGVsVGVtcGxhdGUvU2l6aW5nb2ZQb3dlckRyaXZlVHJhaW5zLzEvMA",
         "shouldMatch":"bodies/post/smt/PwrDrvTrainSize.json",
         "expectedStatus": 200
     },
     {
         "context": "Post Reliability",
         "method": "POST",
-        "endpoint": "http://localhost:6004/submodels",
+        "endpoint": "http://localhost:6005/submodels",
         "data":"bodies/post/smt/Reliability.json",
         "expectedStatus": 201
     },
     {
         "context": "GET Reliability Submodel",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/aHR0cHM6Ly9hZG1pbi1zaGVsbC5pby9pZHRhL1N1Ym1vZGVsVGVtcGxhdGUvUmVsaWFiaWxpdHkvMS8w",
+        "endpoint": "http://localhost:6005/submodels/aHR0cHM6Ly9hZG1pbi1zaGVsbC5pby9pZHRhL1N1Ym1vZGVsVGVtcGxhdGUvUmVsaWFiaWxpdHkvMS8w",
         "shouldMatch":"bodies/post/smt/Reliability.json",
         "expectedStatus": 200
     },
     {
         "context": "Post SftwrNameplate (SoftwareNameplate)",
         "method": "POST",
-        "endpoint": "http://localhost:6004/submodels",
+        "endpoint": "http://localhost:6005/submodels",
         "data":"bodies/post/smt/SftwrNameplate.json",
         "expectedStatus": 201
     },
     {
         "context": "GET SftwrNameplate Submodel",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/aHR0cHM6Ly9hZG1pbi1zaGVsbC5pby9pZHRhL1N1Ym1vZGVsVGVtcGxhdGUvU29mdHdhcmVOYW1lcGxhdGUvMS8w",
+        "endpoint": "http://localhost:6005/submodels/aHR0cHM6Ly9hZG1pbi1zaGVsbC5pby9pZHRhL1N1Ym1vZGVsVGVtcGxhdGUvU29mdHdhcmVOYW1lcGxhdGUvMS8w",
         "shouldMatch":"bodies/post/smt/SftwrNameplate.json",
         "expectedStatus": 200
     },
     {
         "context": "Post SimModels (SimulationModels)",
         "method": "POST",
-        "endpoint": "http://localhost:6004/submodels",
+        "endpoint": "http://localhost:6005/submodels",
         "data":"bodies/post/smt/SimModels.json",
         "expectedStatus": 201
     },
     {
         "context": "GET SimModels Submodel",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/aHR0cHM6Ly9hZG1pbi1zaGVsbC5pby9pZHRhL1N1Ym1vZGVsVGVtcGxhdGUvU2ltdWxhdGlvbk1vZGVscy8xLzA",
+        "endpoint": "http://localhost:6005/submodels/aHR0cHM6Ly9hZG1pbi1zaGVsbC5pby9pZHRhL1N1Ym1vZGVsVGVtcGxhdGUvU2ltdWxhdGlvbk1vZGVscy8xLzA",
         "shouldMatch":"bodies/post/smt/SimModels.json",
         "expectedStatus": 200
     },
     {
         "context": "Post SrvcReqNot (ServiceRequestNotification)",
         "method": "POST",
-        "endpoint": "http://localhost:6004/submodels",
+        "endpoint": "http://localhost:6005/submodels",
         "data":"bodies/post/smt/SrvcReqNot.json",
         "expectedStatus": 201
     },
     {
         "context": "GET SrvcReqNot Submodel",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/aHR0cHM6Ly9hZG1pbi1zaGVsbC5pby9pZHRhL1N1Ym1vZGVsVGVtcGxhdGUvU2VydmljZVJlcXVlc3ROb3RpZmljYXRpb24vMS8w",
+        "endpoint": "http://localhost:6005/submodels/aHR0cHM6Ly9hZG1pbi1zaGVsbC5pby9pZHRhL1N1Ym1vZGVsVGVtcGxhdGUvU2VydmljZVJlcXVlc3ROb3RpZmljYXRpb24vMS8w",
         "shouldMatch":"bodies/post/smt/SrvcReqNot.json",
         "expectedStatus": 200
     },
     {
         "context": "Post TechnicalDataAGV",
         "method": "POST",
-        "endpoint": "http://localhost:6004/submodels",
+        "endpoint": "http://localhost:6005/submodels",
         "data":"bodies/post/smt/TechnicalDataAGV.json",
         "expectedStatus": 201
     },
     {
         "context": "GET TechnicalDataAGV Submodel",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/aHR0cHM6Ly9hZG1pbi1zaGVsbC5pby9pZHRhL1N1Ym1vZGVsVGVtcGxhdGUvdGVjaG5pY2FsZGF0YWFndi8xLzA",
+        "endpoint": "http://localhost:6005/submodels/aHR0cHM6Ly9hZG1pbi1zaGVsbC5pby9pZHRhL1N1Ym1vZGVsVGVtcGxhdGUvdGVjaG5pY2FsZGF0YWFndi8xLzA",
         "shouldMatch":"bodies/post/smt/TechnicalDataAGV.json",
         "expectedStatus": 200
     },
     {
         "context": "Post TimeSeries",
         "method": "POST",
-        "endpoint": "http://localhost:6004/submodels",
+        "endpoint": "http://localhost:6005/submodels",
         "data":"bodies/post/smt/TimeSeries.json",
         "expectedStatus": 201
     },
     {
         "context": "GET TimeSeries Submodel",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/aHR0cHM6Ly9hZG1pbi1zaGVsbC5pby9pZHRhL1N1Ym1vZGVsVGVtcGxhdGUvVGltZVNlcmllcy8xLzE",
+        "endpoint": "http://localhost:6005/submodels/aHR0cHM6Ly9hZG1pbi1zaGVsbC5pby9pZHRhL1N1Ym1vZGVsVGVtcGxhdGUvVGltZVNlcmllcy8xLzE",
         "shouldMatch":"bodies/post/smt/TimeSeries.json",
         "expectedStatus": 200
     },
     {
         "context": "Post TimeSrsWOP (TimeSeriesWithOperations)",
         "method": "POST",
-        "endpoint": "http://localhost:6004/submodels",
+        "endpoint": "http://localhost:6005/submodels",
         "data":"bodies/post/smt/TimeSrsWOP.json",
         "expectedStatus": 201
     },
     {
         "context": "GET TimeSrsWOP Submodel",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/aHR0cHM6Ly9hZG1pbi1zaGVsbC5pby9pZHRhL1N1Ym1vZGVsVGVtcGxhdGUvVGltZVNlcmllc1dpdGhPcGVyYXRpb25zLzEvMQ",
+        "endpoint": "http://localhost:6005/submodels/aHR0cHM6Ly9hZG1pbi1zaGVsbC5pby9pZHRhL1N1Ym1vZGVsVGVtcGxhdGUvVGltZVNlcmllc1dpdGhPcGVyYXRpb25zLzEvMQ",
         "shouldMatch":"bodies/post/smt/TimeSrsWOP.json",
         "expectedStatus": 200
     },
     {
         "context": "Post WorkstMachine (WorkstationWorkerMatchingData)",
         "method": "POST",
-        "endpoint": "http://localhost:6004/submodels",
+        "endpoint": "http://localhost:6005/submodels",
         "data":"bodies/post/smt/WorkstMachine.json",
         "expectedStatus": 201
     },
     {
         "context": "GET WorkstMachine Submodel",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/aHR0cHM6Ly9hZG1pbi1zaGVsbC5pby9pZHRhL1N1Ym1vZGVsVGVtcGxhdGUvd29ya3N0YXRpb25NYXRjaGluZy8xLzA",
+        "endpoint": "http://localhost:6005/submodels/aHR0cHM6Ly9hZG1pbi1zaGVsbC5pby9pZHRhL1N1Ym1vZGVsVGVtcGxhdGUvd29ya3N0YXRpb25NYXRjaGluZy8xLzA",
         "shouldMatch":"bodies/post/smt/WorkstMachine.json",
         "expectedStatus": 200
     },
     {
         "context": "Post WrlsComm (WirelessCommunication)",
         "method": "POST",
-        "endpoint": "http://localhost:6004/submodels",
+        "endpoint": "http://localhost:6005/submodels",
         "data":"bodies/post/smt/WrlsComm.json",
         "expectedStatus": 201
     },
     {
         "context": "GET WrlsComm Submodel",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/aHR0cHM6Ly9hZG1pbi1zaGVsbC5pby9pZHRhL1N1Ym1vZGVsVGVtcGxhdGUvV2lyZWxlc3NDb21tdW5pY2F0aW9uLzEvMA",
+        "endpoint": "http://localhost:6005/submodels/aHR0cHM6Ly9hZG1pbi1zaGVsbC5pby9pZHRhL1N1Ym1vZGVsVGVtcGxhdGUvV2lyZWxlc3NDb21tdW5pY2F0aW9uLzEvMA",
         "shouldMatch":"bodies/post/smt/WrlsComm.json",
         "expectedStatus": 200
     },
@@ -2835,75 +2835,75 @@
     {
         "context": "PUT (Rename idShort) - Rename Top Level Property",
         "method": "PUT",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/NewTestProperty",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/NewTestProperty",
         "data": "bodies/put/putPropertyRenameIdShort.json",
         "expectedStatus": 204
     },
     {
         "context": "GET (Rename idShort) - Verify Renamed Top Level Property at New Path",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/RenamedTestProperty",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/RenamedTestProperty",
         "shouldMatch": "bodies/put/putPropertyRenameIdShort.json",
         "expectedStatus": 200
     },
     {
         "context": "GET (Rename idShort) - Verify Old Path Returns 404",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/NewTestProperty",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/NewTestProperty",
         "expectedStatus": 404
     },
     {
         "context": "PUT (Rename idShort) - Revert Top Level Property",
         "method": "PUT",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/RenamedTestProperty",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/RenamedTestProperty",
         "data": "bodies/post/postNewProperty.json",
         "expectedStatus": 204
     },
     {
         "context": "GET (Rename idShort) - Verify Reverted Top Level Property",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/NewTestProperty",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/NewTestProperty",
         "shouldMatch": "bodies/post/postNewProperty.json",
         "expectedStatus": 200
     },
     {
         "context": "PUT (Rename idShort) - Rename Nested Property in Collection",
         "method": "PUT",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.NestedProperty",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.NestedProperty",
         "data": "bodies/put/putNestedPropertyRenameIdShort.json",
         "expectedStatus": 204
     },
     {
         "context": "GET (Rename idShort) - Verify Renamed Nested Property at New Path",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.RenamedNestedProperty",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.RenamedNestedProperty",
         "shouldMatch": "bodies/put/putNestedPropertyRenameIdShort.json",
         "expectedStatus": 200
     },
     {
         "context": "GET (Rename idShort) - Verify Old Nested Path Returns 404",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.NestedProperty",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.NestedProperty",
         "expectedStatus": 404
     },
     {
         "context": "PUT (Rename idShort) - Revert Nested Property",
         "method": "PUT",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.RenamedNestedProperty",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.RenamedNestedProperty",
         "data": "bodies/post/nested/postPropertyInCollection.json",
         "expectedStatus": 204
     },
     {
         "context": "GET (Rename idShort) - Verify Reverted Nested Property",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.NestedProperty",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.NestedProperty",
         "shouldMatch": "bodies/post/nested/postPropertyInCollection.json",
         "expectedStatus": 200
     },
     {
         "context": "PUT (Rename idShort Conflict) - Rename to Existing idShort - Expected 409",
         "method": "PUT",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/NewTestProperty",
+        "endpoint": "http://localhost:6005/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/NewTestProperty",
         "data": "bodies/put/putPropertyRenameConflict.json",
         "expectedStatus": 409
     }

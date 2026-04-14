@@ -173,7 +173,7 @@ func TestIntegration(t *testing.T) {
 }
 
 func TestContractGetAllConceptDescriptionsAllowsNullableIDShort(t *testing.T) {
-	baseURL := "http://localhost:6004"
+	baseURL := "http://localhost:6005"
 	conceptDescriptionID := fmt.Sprintf("https://example.com/ids/cd/contract-null-idshort-%d", time.Now().UnixNano())
 
 	statusCode, responseBody, err := requestJSON(http.MethodPost, baseURL+"/concept-descriptions", map[string]any{
@@ -234,7 +234,7 @@ func TestMain(m *testing.M) {
 		ComposeFile:     "docker_compose/docker_compose.yml",
 		UpArgs:          []string{"up", "-d", "--build", "--remove-orphans"},
 		PreDownBeforeUp: true,
-		HealthURL:       "http://localhost:6004/health",
+		HealthURL:       "http://localhost:6005/health",
 		HealthTimeout:   150 * time.Second,
 	}))
 }

@@ -156,7 +156,7 @@ func TestDelegationOperation(t *testing.T) {
 		t.Skip("delegation callback from container to ephemeral host listener is not reliable in external compose mode")
 	}
 
-	baseURL := "http://localhost:6004"
+	baseURL := "http://localhost:6005"
 
 	delegationURL, shutdown := startAdderMicroservice(t)
 	defer shutdown()

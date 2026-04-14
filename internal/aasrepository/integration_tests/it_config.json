@@ -2,28 +2,28 @@
 	{
 		"context": "001.1 - GET /health",
 		"method": "GET",
-		"endpoint": "http://127.0.0.1:6004/health",
+		"endpoint": "http://127.0.0.1:6005/health",
 		"shouldMatch": "expected/expectedHealthEndpoint.json",
 		"expectedStatus": 200
 	},
 	{
 		"context": "002.1 - GET /description",
 		"method": "GET",
-		"endpoint": "http://127.0.0.1:6004/description",
+		"endpoint": "http://127.0.0.1:6005/description",
 		"shouldMatch": "expected/expectedDescriptionEndpoint.json",
 		"expectedStatus": 200
 	},
 	{
 		"context": "004.1 - GET /shells - empty",
 		"method": "GET",
-		"endpoint": "http://127.0.0.1:6004/shells",
+		"endpoint": "http://127.0.0.1:6005/shells",
 		"shouldMatch": "expected/expectedEmpty.json",
 		"expectedStatus": 200
 	},
 	{
 		"context": "004.1a - POST /shells - create AAS with globalAssetId only",
 		"method": "POST",
-		"endpoint": "http://127.0.0.1:6004/shells",
+		"endpoint": "http://127.0.0.1:6005/shells",
 		"data": "bodies/post/postAssetAdministrationShellAssetIdsGlobalOnly.json",
 		"shouldMatch": "bodies/post/postAssetAdministrationShellAssetIdsGlobalOnly.json",
 		"expectedStatus": 201
@@ -31,14 +31,14 @@
 	{
 		"context": "004.1b - GET /shells/{aasIdentifier} - globalAssetId only",
 		"method": "GET",
-		"endpoint": "http://127.0.0.1:6004/shells/aHR0cHM6Ly9leGFtcGxlLmNvbS9pZHMvYWFzL2Fzc2V0aWRzX2dsb2JhbF9vbmx5",
+		"endpoint": "http://127.0.0.1:6005/shells/aHR0cHM6Ly9leGFtcGxlLmNvbS9pZHMvYWFzL2Fzc2V0aWRzX2dsb2JhbF9vbmx5",
 		"shouldMatch": "bodies/post/postAssetAdministrationShellAssetIdsGlobalOnly.json",
 		"expectedStatus": 200
 	},
 	{
 		"context": "004.1c - POST /shells - create AAS with globalAssetId and two specificAssetIds",
 		"method": "POST",
-		"endpoint": "http://127.0.0.1:6004/shells",
+		"endpoint": "http://127.0.0.1:6005/shells",
 		"data": "bodies/post/postAssetAdministrationShellAssetIdsMixedExternalSubjectId.json",
 		"shouldMatch": "bodies/post/postAssetAdministrationShellAssetIdsMixedExternalSubjectId.json",
 		"expectedStatus": 201
@@ -46,14 +46,14 @@
 	{
 		"context": "004.1d - GET /shells/{aasIdentifier} - mixed specificAssetIds with and without externalSubjectId",
 		"method": "GET",
-		"endpoint": "http://127.0.0.1:6004/shells/aHR0cHM6Ly9leGFtcGxlLmNvbS9pZHMvYWFzL2Fzc2V0aWRzX21peGVkX3NwZWNpZmlj",
+		"endpoint": "http://127.0.0.1:6005/shells/aHR0cHM6Ly9leGFtcGxlLmNvbS9pZHMvYWFzL2Fzc2V0aWRzX21peGVkX3NwZWNpZmlj",
 		"shouldMatch": "bodies/post/postAssetAdministrationShellAssetIdsMixedExternalSubjectId.json",
 		"expectedStatus": 200
 	},
 	{
 		"context": "004.1e - POST /shells - create AAS with specificAssetId with semanticId",
 		"method": "POST",
-		"endpoint": "http://127.0.0.1:6004/shells",
+		"endpoint": "http://127.0.0.1:6005/shells",
 		"data": "bodies/post/postAssetAdministrationShellSpecificAssetIdWithSemanticId.json",
 		"shouldMatch": "bodies/post/postAssetAdministrationShellSpecificAssetIdWithSemanticId.json",
 		"expectedStatus": 201
@@ -61,14 +61,14 @@
 	{
 		"context": "004.1f - GET /shells/{aasIdentifier} - specificAssetId with semanticId",
 		"method": "GET",
-		"endpoint": "http://127.0.0.1:6004/shells/aHR0cHM6Ly9leGFtcGxlLmNvbS9pZHMvYWFzL3dpdGhTZW1hbnRpY0lk",
+		"endpoint": "http://127.0.0.1:6005/shells/aHR0cHM6Ly9leGFtcGxlLmNvbS9pZHMvYWFzL3dpdGhTZW1hbnRpY0lk",
 		"shouldMatch": "bodies/post/postAssetAdministrationShellSpecificAssetIdWithSemanticId.json",
 		"expectedStatus": 200
 	},
 	{
 		"context": "004.1g - POST /shells - create AAS with specificAssetId with supplementalSemanticIds",
 		"method": "POST",
-		"endpoint": "http://127.0.0.1:6004/shells",
+		"endpoint": "http://127.0.0.1:6005/shells",
 		"data": "bodies/post/postAssetAdministrationShellSpecificAssetIdWithSupplementalSemanticIds.json",
 		"shouldMatch": "bodies/post/postAssetAdministrationShellSpecificAssetIdWithSupplementalSemanticIds.json",
 		"expectedStatus": 201
@@ -76,14 +76,14 @@
 	{
 		"context": "004.1h - GET /shells/{aasIdentifier} - specificAssetId with supplementalSemanticIds",
 		"method": "GET",
-		"endpoint": "http://127.0.0.1:6004/shells/aHR0cHM6Ly9leGFtcGxlLmNvbS9pZHMvYWFzL3dpdGhTdXBwbGVtZW50YWxTZW1hbnRpY0lkcw",
+		"endpoint": "http://127.0.0.1:6005/shells/aHR0cHM6Ly9leGFtcGxlLmNvbS9pZHMvYWFzL3dpdGhTdXBwbGVtZW50YWxTZW1hbnRpY0lkcw",
 		"shouldMatch": "bodies/post/postAssetAdministrationShellSpecificAssetIdWithSupplementalSemanticIds.json",
 		"expectedStatus": 200
 	},
 	{
 		"context": "004.1i - POST /shells - create AAS with specificAssetId without semanticId and without externalSubjectId",
 		"method": "POST",
-		"endpoint": "http://127.0.0.1:6004/shells",
+		"endpoint": "http://127.0.0.1:6005/shells",
 		"data": "bodies/post/postAssetAdministrationShellSpecificAssetIdWithoutExternalSubjectId.json",
 		"shouldMatch": "bodies/post/postAssetAdministrationShellSpecificAssetIdWithoutExternalSubjectId.json",
 		"expectedStatus": 201
@@ -91,14 +91,14 @@
 	{
 		"context": "004.1j - GET /shells/{aasIdentifier} - specificAssetId without semanticId and without externalSubjectId",
 		"method": "GET",
-		"endpoint": "http://127.0.0.1:6004/shells/aHR0cHM6Ly9leGFtcGxlLmNvbS9pZHMvYWFzLzMwMzlfMjM3N180MTIzXzgxMTU",
+		"endpoint": "http://127.0.0.1:6005/shells/aHR0cHM6Ly9leGFtcGxlLmNvbS9pZHMvYWFzLzMwMzlfMjM3N180MTIzXzgxMTU",
 		"shouldMatch": "bodies/post/postAssetAdministrationShellSpecificAssetIdWithoutExternalSubjectId.json",
 		"expectedStatus": 200
 	},
 	{
 		"context": "004.1k - POST /shells - create AAS with specificAssetId without semanticId and with externalSubjectId",
 		"method": "POST",
-		"endpoint": "http://127.0.0.1:6004/shells",
+		"endpoint": "http://127.0.0.1:6005/shells",
 		"data": "bodies/post/postAssetAdministrationShellSpecificAssetIdWithoutSemanticIdWithExternalSubjectId.json",
 		"shouldMatch": "bodies/post/postAssetAdministrationShellSpecificAssetIdWithoutSemanticIdWithExternalSubjectId.json",
 		"expectedStatus": 201
@@ -106,14 +106,14 @@
 	{
 		"context": "004.1l - GET /shells/{aasIdentifier} - specificAssetId without semanticId and with externalSubjectId",
 		"method": "GET",
-		"endpoint": "http://127.0.0.1:6004/shells/aHR0cHM6Ly9leGFtcGxlLmNvbS9pZHMvYWFzL25vU2VtYW50aWNJZFdpdGhFeHRlcm5hbFN1YmplY3Q",
+		"endpoint": "http://127.0.0.1:6005/shells/aHR0cHM6Ly9leGFtcGxlLmNvbS9pZHMvYWFzL25vU2VtYW50aWNJZFdpdGhFeHRlcm5hbFN1YmplY3Q",
 		"shouldMatch": "bodies/post/postAssetAdministrationShellSpecificAssetIdWithoutSemanticIdWithExternalSubjectId.json",
 		"expectedStatus": 200
 	},
 	{
 		"context": "004.1m - GET /shells - no error for all assetIds scenarios",
 		"method": "GET",
-		"endpoint": "http://127.0.0.1:6004/shells",
+		"endpoint": "http://127.0.0.1:6005/shells",
 		"expectedStatus": 200
 	},
 	{
@@ -123,10 +123,10 @@
 	{
 		"context": "004.2 - POST /shells - create AAS for filter test",
 		"method": "POST",
-		"endpoint": "http://127.0.0.1:6004/shells",
+		"endpoint": "http://127.0.0.1:6005/shells",
 		"data": "bodies/post/postAssetAdministrationShellFilter1.json",
 		"expectedResponseHeaders": {
-			"Location": "http://127.0.0.1:6004/shells/aHR0cHM6Ly9leGFtcGxlLmNvbS9pZHMvYWFzL2ZpbHRlcjE"
+			"Location": "http://127.0.0.1:6005/shells/aHR0cHM6Ly9leGFtcGxlLmNvbS9pZHMvYWFzL2ZpbHRlcjE"
 		},
 		"shouldMatch": "bodies/post/postAssetAdministrationShellFilter1.json",
 		"expectedStatus": 201
@@ -134,10 +134,10 @@
 	{
 		"context": "004.3 - POST /shells - create AAS for filter test",
 		"method": "POST",
-		"endpoint": "http://127.0.0.1:6004/shells",
+		"endpoint": "http://127.0.0.1:6005/shells",
 		"data": "bodies/post/postAssetAdministrationShellFilter2.json",
 		"expectedResponseHeaders": {
-			"Location": "http://127.0.0.1:6004/shells/aHR0cHM6Ly9leGFtcGxlLmNvbS9pZHMvYWFzL2ZpbHRlcjI"
+			"Location": "http://127.0.0.1:6005/shells/aHR0cHM6Ly9leGFtcGxlLmNvbS9pZHMvYWFzL2ZpbHRlcjI"
 		},
 		"shouldMatch": "bodies/post/postAssetAdministrationShellFilter2.json",
 		"expectedStatus": 201
@@ -145,10 +145,10 @@
 	{
 		"context": "004.4 - POST /shells - create AAS for filter test",
 		"method": "POST",
-		"endpoint": "http://127.0.0.1:6004/shells",
+		"endpoint": "http://127.0.0.1:6005/shells",
 		"data": "bodies/post/postAssetAdministrationShellFilter3.json",
 		"expectedResponseHeaders": {
-			"Location": "http://127.0.0.1:6004/shells/aHR0cHM6Ly9leGFtcGxlLmNvbS9pZHMvYWFzL2ZpbHRlcjM"
+			"Location": "http://127.0.0.1:6005/shells/aHR0cHM6Ly9leGFtcGxlLmNvbS9pZHMvYWFzL2ZpbHRlcjM"
 		},
 		"shouldMatch": "bodies/post/postAssetAdministrationShellFilter3.json",
 		"expectedStatus": 201
@@ -156,10 +156,10 @@
 	{
 		"context": "004.5 - POST /shells - create AAS for filter test",
 		"method": "POST",
-		"endpoint": "http://127.0.0.1:6004/shells",
+		"endpoint": "http://127.0.0.1:6005/shells",
 		"data": "bodies/post/postAssetAdministrationShellFilter4.json",
 		"expectedResponseHeaders": {
-			"Location": "http://127.0.0.1:6004/shells/aHR0cHM6Ly9leGFtcGxlLmNvbS9pZHMvYWFzL2ZpbHRlcjQ"
+			"Location": "http://127.0.0.1:6005/shells/aHR0cHM6Ly9leGFtcGxlLmNvbS9pZHMvYWFzL2ZpbHRlcjQ"
 		},
 		"shouldMatch": "bodies/post/postAssetAdministrationShellFilter4.json",
 		"expectedStatus": 201
@@ -167,35 +167,35 @@
 	{
 		"context": "004.6 - GET /shells - filter by assetIds",
 		"method": "GET",
-		"endpoint": "http://127.0.0.1:6004/shells?assetIds=assetIdValueX",
+		"endpoint": "http://127.0.0.1:6005/shells?assetIds=assetIdValueX",
 		"shouldMatch": "expected/expectedAssetAdministrationShellFilterAssetIds.json",
 		"expectedStatus": 200
 	},
 	{
 		"context": "004.7 - GET /shells - filter by idShort",
 		"method": "GET",
-		"endpoint": "http://127.0.0.1:6004/shells?idShort=aasTestB",
+		"endpoint": "http://127.0.0.1:6005/shells?idShort=aasTestB",
 		"shouldMatch": "expected/expectedAssetAdministrationShellFilterIdShort.json",
 		"expectedStatus": 200
 	},
 	{
 		"context": "004.8 - GET /shells - filter by limit",
 		"method": "GET",
-		"endpoint": "http://127.0.0.1:6004/shells?limit=3",
+		"endpoint": "http://127.0.0.1:6005/shells?limit=3",
 		"shouldMatch": "expected/expectedAssetAdministrationShellFilterLimit.json",
 		"expectedStatus": 200
 	},
 	{
 		"context": "004.9 - GET /shells - filter by cursor",
 		"method": "GET",
-		"endpoint": "http://127.0.0.1:6004/shells?cursor=aHR0cHM6Ly9leGFtcGxlLmNvbS9pZHMvYWFzL2ZpbHRlcjQ",
+		"endpoint": "http://127.0.0.1:6005/shells?cursor=aHR0cHM6Ly9leGFtcGxlLmNvbS9pZHMvYWFzL2ZpbHRlcjQ",
 		"shouldMatch": "expected/expectedAssetAdministrationShellFilterCursor.json",
 		"expectedStatus": 200
 	},
 	{
 		"context": "004.10 - GET /shells - filter by cursor",
 		"method": "GET",
-		"endpoint": "http://127.0.0.1:6004/shells?assetIds=assetIdValueX&idShort=aasTestC",
+		"endpoint": "http://127.0.0.1:6005/shells?assetIds=assetIdValueX&idShort=aasTestC",
 		"shouldMatch": "expected/expectedAssetAdministrationShellFilterAssetIdsAndIdShort.json",
 		"expectedStatus": 200
 	},
@@ -206,10 +206,10 @@
 	{
 		"context": "004.11 - POST /shells - create AAS",
 		"method": "POST",
-		"endpoint": "http://127.0.0.1:6004/shells",
+		"endpoint": "http://127.0.0.1:6005/shells",
 		"data": "bodies/post/postAssetAdministrationShellComplex.json",
 		"expectedResponseHeaders": {
-			"Location": "http://127.0.0.1:6004/shells/aHR0cHM6Ly9leGFtcGxlLmNvbS9pZHMvYWFzLzM0OTRfMjEyMF8zMDYyXzY1MzI"
+			"Location": "http://127.0.0.1:6005/shells/aHR0cHM6Ly9leGFtcGxlLmNvbS9pZHMvYWFzLzM0OTRfMjEyMF8zMDYyXzY1MzI"
 		},
 		"shouldMatch": "bodies/post/postAssetAdministrationShellComplex.json",
 		"expectedStatus": 201
@@ -217,10 +217,10 @@
 	{
 		"context": "004.12 - POST /shells - create AAS",
 		"method": "POST",
-		"endpoint": "http://127.0.0.1:6004/shells",
+		"endpoint": "http://127.0.0.1:6005/shells",
 		"data": "bodies/post/postAssetAdministrationShellMinimal.json",
 		"expectedResponseHeaders": {
-			"Location": "http://127.0.0.1:6004/shells/aHR0cHM6Ly9leGFtcGxlLmNvbS9pZHMvYWFzLzczMDFfMzE1MF85NDQyXzc4NDk"
+			"Location": "http://127.0.0.1:6005/shells/aHR0cHM6Ly9leGFtcGxlLmNvbS9pZHMvYWFzLzczMDFfMzE1MF85NDQyXzc4NDk"
 		},
 		"shouldMatch": "bodies/post/postAssetAdministrationShellMinimal.json",
 		"expectedStatus": 201
@@ -228,79 +228,79 @@
 	{
 		"context": "004.13 - GET /shells",
 		"method": "GET",
-		"endpoint": "http://127.0.0.1:6004/shells",
+		"endpoint": "http://127.0.0.1:6005/shells",
 		"shouldMatch": "expected/expectedGetAllAssetAdministrationShells.json",
 		"expectedStatus": 200
 	},
 	{
 		"context": "004.14 - POST /shells - conflict (malformed payload)",
 		"method": "POST",
-		"endpoint": "http://127.0.0.1:6004/shells",
+		"endpoint": "http://127.0.0.1:6005/shells",
 		"data": "bodies/invalid/malformedJson.txt",
 		"expectedStatus": 400
 	},
 	{
 		"context": "004.15 - POST /shells - conflict (duplicate)",
 		"method": "POST",
-		"endpoint": "http://127.0.0.1:6004/shells",
+		"endpoint": "http://127.0.0.1:6005/shells",
 		"data": "bodies/post/postAssetAdministrationShellComplex.json",
 		"expectedStatus": 409
 	},
 	{
 		"context": "005.1 - GET /shells/$reference",
 		"method": "GET",
-		"endpoint": "http://127.0.0.1:6004/shells/$reference",
+		"endpoint": "http://127.0.0.1:6005/shells/$reference",
 		"shouldMatch": "expected/expectedGetAllAssetAdministrationShellsReference.json",
 		"expectedStatus": 200
 	},
 	{
 		"context": "005.2 - GET /shells/$reference - filter by idShort",
 		"method": "GET",
-		"endpoint": "http://127.0.0.1:6004/shells/$reference?idShort=testAAS2",
+		"endpoint": "http://127.0.0.1:6005/shells/$reference?idShort=testAAS2",
 		"shouldMatch": "expected/expectedAssetAdministrationShellReferencesFilterIdShort.json",
 		"expectedStatus": 200
 	},
 	{
 		"context": "005.3 - GET /shells/$reference - filter by limit",
 		"method": "GET",
-		"endpoint": "http://127.0.0.1:6004/shells/$reference?limit=1",
+		"endpoint": "http://127.0.0.1:6005/shells/$reference?limit=1",
 		"shouldMatch": "expected/expectedAssetAdministrationShellReferencesFilterLimit.json",
 		"expectedStatus": 200
 	},
 	{
 		"context": "005.4 - GET /shells/$reference - filter by cursor",
 		"method": "GET",
-		"endpoint": "http://127.0.0.1:6004/shells/$reference?cursor=aHR0cHM6Ly9leGFtcGxlLmNvbS9pZHMvYWFzLzczMDFfMzE1MF85NDQyXzc4NDk",
+		"endpoint": "http://127.0.0.1:6005/shells/$reference?cursor=aHR0cHM6Ly9leGFtcGxlLmNvbS9pZHMvYWFzLzczMDFfMzE1MF85NDQyXzc4NDk",
 		"shouldMatch": "expected/expectedAssetAdministrationShellReferencesFilterCursor.json",
 		"expectedStatus": 200
 	},
 	{
 		"context": "006.1 - GET /shells/{aasIdentifier}",
 		"method": "GET",
-		"endpoint": "http://127.0.0.1:6004/shells/aHR0cHM6Ly9leGFtcGxlLmNvbS9pZHMvYWFzLzM0OTRfMjEyMF8zMDYyXzY1MzI",
+		"endpoint": "http://127.0.0.1:6005/shells/aHR0cHM6Ly9leGFtcGxlLmNvbS9pZHMvYWFzLzM0OTRfMjEyMF8zMDYyXzY1MzI",
 		"shouldMatch": "bodies/post/postAssetAdministrationShellComplex.json",
 		"expectedStatus": 200
 	},
 	{
 		"context": "006.2 - GET /shells/{aasIdentifier} - conflict (not found)",
 		"method": "GET",
-		"endpoint": "http://127.0.0.1:6004/shells/aHR0cHM6Ly9leGFtcGxlLmNvbS9pZHMvYWFzLzM0OTRfMjEyMF8zMDYyXzY1MzJfbm90X2V4aXN0ZW50DQo",
+		"endpoint": "http://127.0.0.1:6005/shells/aHR0cHM6Ly9leGFtcGxlLmNvbS9pZHMvYWFzLzM0OTRfMjEyMF8zMDYyXzY1MzJfbm90X2V4aXN0ZW50DQo",
 		"expectedStatus": 404
 	},
 	{
 		"context": "006.3 - PUT /shells/{aasIdentifier} - update existing AAS",
 		"method": "PUT",
-		"endpoint": "http://127.0.0.1:6004/shells/aHR0cHM6Ly9leGFtcGxlLmNvbS9pZHMvYWFzLzczMDFfMzE1MF85NDQyXzc4NDk",
+		"endpoint": "http://127.0.0.1:6005/shells/aHR0cHM6Ly9leGFtcGxlLmNvbS9pZHMvYWFzLzczMDFfMzE1MF85NDQyXzc4NDk",
 		"data": "bodies/put/putAssetAdministrationShellUpdated.json",
 		"expectedStatus": 204
 	},
 	{
 		"context": "006.4 - PUT /shells/{aasIdentifier} - create new AAS",
 		"method": "PUT",
-		"endpoint": "http://127.0.0.1:6004/shells/aHR0cHM6Ly9leGFtcGxlLmNvbS9pZHMvYWFzLzAwMDBfMTExMV8wMDAwXzExMTE",
+		"endpoint": "http://127.0.0.1:6005/shells/aHR0cHM6Ly9leGFtcGxlLmNvbS9pZHMvYWFzLzAwMDBfMTExMV8wMDAwXzExMTE",
 		"data": "bodies/put/putAssetAdministrationShellCreated.json",
 		"expectedResponseHeaders": {
-			"Location": "http://127.0.0.1:6004/shells/aHR0cHM6Ly9leGFtcGxlLmNvbS9pZHMvYWFzLzAwMDBfMTExMV8wMDAwXzExMTE"
+			"Location": "http://127.0.0.1:6005/shells/aHR0cHM6Ly9leGFtcGxlLmNvbS9pZHMvYWFzLzAwMDBfMTExMV8wMDAwXzExMTE"
 		},
 		"shouldMatch": "bodies/put/putAssetAdministrationShellCreated.json",
 		"expectedStatus": 201
@@ -308,136 +308,136 @@
 	{
 		"context": "006.5 - DELETE /shells/{aasIdentifier}",
 		"method": "DELETE",
-		"endpoint": "http://127.0.0.1:6004/shells/aHR0cHM6Ly9leGFtcGxlLmNvbS9pZHMvYWFzLzczMDFfMzE1MF85NDQyXzc4NDk",
+		"endpoint": "http://127.0.0.1:6005/shells/aHR0cHM6Ly9leGFtcGxlLmNvbS9pZHMvYWFzLzczMDFfMzE1MF85NDQyXzc4NDk",
 		"expectedStatus": 204
 	},
 	{
 		"context": "006.6 - DELETE /shells/{aasIdentifier} - conflict (not found)",
 		"method": "DELETE",
-		"endpoint": "http://127.0.0.1:6004/shells/aHR0cHM6Ly9leGFtcGxlLmNvbS9pZHMvYWFzLzczMDFfMzE1MF85NDQyXzc4NDk",
+		"endpoint": "http://127.0.0.1:6005/shells/aHR0cHM6Ly9leGFtcGxlLmNvbS9pZHMvYWFzLzczMDFfMzE1MF85NDQyXzc4NDk",
 		"expectedStatus": 404
 	},
 	{
 		"context": "007.1 - GET /shells/{aasIdentifier}/$reference",
 		"method": "GET",
-		"endpoint": "http://127.0.0.1:6004/shells/aHR0cHM6Ly9leGFtcGxlLmNvbS9pZHMvYWFzLzM0OTRfMjEyMF8zMDYyXzY1MzI/$reference",
+		"endpoint": "http://127.0.0.1:6005/shells/aHR0cHM6Ly9leGFtcGxlLmNvbS9pZHMvYWFzLzM0OTRfMjEyMF8zMDYyXzY1MzI/$reference",
 		"shouldMatch": "expected/expectedAssetAdministrationShellReference.json",
 		"expectedStatus": 200
 	},
 	{
 		"context": "007.2 - GET /shells/{aasIdentifier}/$reference - conflict (not found)",
 		"method": "GET",
-		"endpoint": "http://127.0.0.1:6004/shells/aHR0cHM6Ly9leGFtcGxlLmNvbS9pZHMvYWFzLzM0OTRfMjEyMF8zMDYyXzY1MzJfbm90X2V4aXN0ZW50DQo/$reference",
+		"endpoint": "http://127.0.0.1:6005/shells/aHR0cHM6Ly9leGFtcGxlLmNvbS9pZHMvYWFzLzM0OTRfMjEyMF8zMDYyXzY1MzJfbm90X2V4aXN0ZW50DQo/$reference",
 		"expectedStatus": 404
 	},
 	{
 		"context": "008.1 - GET /shells/{aasIdentifier}/asset-information",
 		"method": "GET",
-		"endpoint": "http://127.0.0.1:6004/shells/aHR0cHM6Ly9leGFtcGxlLmNvbS9pZHMvYWFzLzM0OTRfMjEyMF8zMDYyXzY1MzI/asset-information",
+		"endpoint": "http://127.0.0.1:6005/shells/aHR0cHM6Ly9leGFtcGxlLmNvbS9pZHMvYWFzLzM0OTRfMjEyMF8zMDYyXzY1MzI/asset-information",
 		"shouldMatch": "expected/expectedAssetAdministrationShellAssetInformation.json",
 		"expectedStatus": 200
 	},
 	{
 		"context": "008.2 - GET /shells/{aasIdentifier}/asset-information - conflict (not found)",
 		"method": "GET",
-		"endpoint": "http://127.0.0.1:6004/shells/aHR0cHM6Ly9leGFtcGxlLmNvbS9pZHMvYWFzLzM0OTRfMjEyMF8zMDYyXzY1MzJfbm90X2V4aXN0ZW50DQo/asset-information",
+		"endpoint": "http://127.0.0.1:6005/shells/aHR0cHM6Ly9leGFtcGxlLmNvbS9pZHMvYWFzLzM0OTRfMjEyMF8zMDYyXzY1MzJfbm90X2V4aXN0ZW50DQo/asset-information",
 		"expectedStatus": 404
 	},
 	{
 		"context": "008.3 - PUT /shells/{aasIdentifier}/asset-information",
 		"method": "PUT",
-		"endpoint": "http://127.0.0.1:6004/shells/aHR0cHM6Ly9leGFtcGxlLmNvbS9pZHMvYWFzLzM0OTRfMjEyMF8zMDYyXzY1MzI/asset-information",
+		"endpoint": "http://127.0.0.1:6005/shells/aHR0cHM6Ly9leGFtcGxlLmNvbS9pZHMvYWFzLzM0OTRfMjEyMF8zMDYyXzY1MzI/asset-information",
 		"data": "bodies/put/putAssetInformationUpdated.json",
 		"expectedStatus": 204
 	},
 	{
 		"context": "008.4 - PUT /shells/{aasIdentifier}/asset-information - conflict (not found)",
 		"method": "PUT",
-		"endpoint": "http://127.0.0.1:6004/shells/aHR0cHM6Ly9leGFtcGxlLmNvbS9pZHMvYWFzLzM0OTRfMjEyMF8zMDYyXzY1MzJfbm90X2V4aXN0ZW50DQo/asset-information",
+		"endpoint": "http://127.0.0.1:6005/shells/aHR0cHM6Ly9leGFtcGxlLmNvbS9pZHMvYWFzLzM0OTRfMjEyMF8zMDYyXzY1MzJfbm90X2V4aXN0ZW50DQo/asset-information",
 		"data": "bodies/put/putAssetInformationUpdated.json",
 		"expectedStatus": 404
 	},
 	{
 		"context": "008.5 - PUT /shells/{aasIdentifier}/asset-information - conflict (malformed)",
 		"method": "PUT",
-		"endpoint": "http://127.0.0.1:6004/shells/aHR0cHM6Ly9leGFtcGxlLmNvbS9pZHMvYWFzLzM0OTRfMjEyMF8zMDYyXzY1MzI/asset-information",
+		"endpoint": "http://127.0.0.1:6005/shells/aHR0cHM6Ly9leGFtcGxlLmNvbS9pZHMvYWFzLzM0OTRfMjEyMF8zMDYyXzY1MzI/asset-information",
 		"data": "bodies/invalid/malformedJson.txt",
 		"expectedStatus": 400
 	},
 	{
 		"context": "009.1 - GET /shells/{aasIdentifier}/submodel-refs",
 		"method": "GET",
-		"endpoint": "http://127.0.0.1:6004/shells/aHR0cHM6Ly9leGFtcGxlLmNvbS9pZHMvYWFzLzM0OTRfMjEyMF8zMDYyXzY1MzI/submodel-refs",
+		"endpoint": "http://127.0.0.1:6005/shells/aHR0cHM6Ly9leGFtcGxlLmNvbS9pZHMvYWFzLzM0OTRfMjEyMF8zMDYyXzY1MzI/submodel-refs",
 		"shouldMatch": "expected/expectedAssetAdministrationShellSubmodelReferences.json",
 		"expectedStatus": 200
 	},
 	{
 		"context": "009.2 - GET /shells/{aasIdentifier}/submodel-refs - conflict (not found)",
 		"method": "GET",
-		"endpoint": "http://127.0.0.1:6004/shells/aHR0cHM6Ly9leGFtcGxlLmNvbS9pZHMvYWFzLzM0OTRfMjEyMF8zMDYyXzY1MzJfbm90X2V4aXN0ZW50DQo/submodel-refs",
+		"endpoint": "http://127.0.0.1:6005/shells/aHR0cHM6Ly9leGFtcGxlLmNvbS9pZHMvYWFzLzM0OTRfMjEyMF8zMDYyXzY1MzJfbm90X2V4aXN0ZW50DQo/submodel-refs",
 		"expectedStatus": 404
 	},
 	{
 		"context": "009.3 - POST /shells/{aasIdentifier}/submodel-refs - create Submodel reference",
 		"method": "POST",
-		"endpoint": "http://127.0.0.1:6004/shells/aHR0cHM6Ly9leGFtcGxlLmNvbS9pZHMvYWFzLzM0OTRfMjEyMF8zMDYyXzY1MzI/submodel-refs",
+		"endpoint": "http://127.0.0.1:6005/shells/aHR0cHM6Ly9leGFtcGxlLmNvbS9pZHMvYWFzLzM0OTRfMjEyMF8zMDYyXzY1MzI/submodel-refs",
 		"data": "bodies/post/postSubmodelReferenceMinimal.json",
 		"expectedResponseHeaders": {
-			"Location": "http://127.0.0.1:6004/shells/aHR0cHM6Ly9leGFtcGxlLmNvbS9pZHMvYWFzLzM0OTRfMjEyMF8zMDYyXzY1MzI/submodel-refs"
+			"Location": "http://127.0.0.1:6005/shells/aHR0cHM6Ly9leGFtcGxlLmNvbS9pZHMvYWFzLzM0OTRfMjEyMF8zMDYyXzY1MzI/submodel-refs"
 		},
 		"expectedStatus": 201
 	},
 	{
 		"context": "009.4 - POST /shells/{aasIdentifier}/submodel-refs - create Submodel reference for filter test",
 		"method": "POST",
-		"endpoint": "http://127.0.0.1:6004/shells/aHR0cHM6Ly9leGFtcGxlLmNvbS9pZHMvYWFzLzM0OTRfMjEyMF8zMDYyXzY1MzI/submodel-refs",
+		"endpoint": "http://127.0.0.1:6005/shells/aHR0cHM6Ly9leGFtcGxlLmNvbS9pZHMvYWFzLzM0OTRfMjEyMF8zMDYyXzY1MzI/submodel-refs",
 		"data": "bodies/post/postSubmodelReferenceMinimal2.json",
 		"expectedResponseHeaders": {
-			"Location": "http://127.0.0.1:6004/shells/aHR0cHM6Ly9leGFtcGxlLmNvbS9pZHMvYWFzLzM0OTRfMjEyMF8zMDYyXzY1MzI/submodel-refs"
+			"Location": "http://127.0.0.1:6005/shells/aHR0cHM6Ly9leGFtcGxlLmNvbS9pZHMvYWFzLzM0OTRfMjEyMF8zMDYyXzY1MzI/submodel-refs"
 		},
 		"expectedStatus": 201
 	},
 	{
 		"context": "009.5 - POST /shells/{aasIdentifier}/submodel-refs - create Submodel reference for filter test",
 		"method": "POST",
-		"endpoint": "http://127.0.0.1:6004/shells/aHR0cHM6Ly9leGFtcGxlLmNvbS9pZHMvYWFzLzM0OTRfMjEyMF8zMDYyXzY1MzI/submodel-refs",
+		"endpoint": "http://127.0.0.1:6005/shells/aHR0cHM6Ly9leGFtcGxlLmNvbS9pZHMvYWFzLzM0OTRfMjEyMF8zMDYyXzY1MzI/submodel-refs",
 		"data": "bodies/post/postSubmodelReferenceMinimal3.json",
 		"expectedResponseHeaders": {
-			"Location": "http://127.0.0.1:6004/shells/aHR0cHM6Ly9leGFtcGxlLmNvbS9pZHMvYWFzLzM0OTRfMjEyMF8zMDYyXzY1MzI/submodel-refs"
+			"Location": "http://127.0.0.1:6005/shells/aHR0cHM6Ly9leGFtcGxlLmNvbS9pZHMvYWFzLzM0OTRfMjEyMF8zMDYyXzY1MzI/submodel-refs"
 		},
 		"expectedStatus": 201
 	},
 	{
 		"context": "009.6 - GET /shells/{aasIdentifier}/submodel-refs - filter by limit",
 		"method": "GET",
-		"endpoint": "http://127.0.0.1:6004/shells/aHR0cHM6Ly9leGFtcGxlLmNvbS9pZHMvYWFzLzM0OTRfMjEyMF8zMDYyXzY1MzI/submodel-refs?limit=2",
+		"endpoint": "http://127.0.0.1:6005/shells/aHR0cHM6Ly9leGFtcGxlLmNvbS9pZHMvYWFzLzM0OTRfMjEyMF8zMDYyXzY1MzI/submodel-refs?limit=2",
 		"shouldMatch": "expected/expectedAssetAdministrationShellSubmodelReferencesFilterLimit.json",
 		"expectedStatus": 200
 	},
 	{
 		"context": "009.7 - GET /shells/{aasIdentifier}/submodel-refs - filter by cursor",
 		"method": "GET",
-		"endpoint": "http://127.0.0.1:6004/shells/aHR0cHM6Ly9leGFtcGxlLmNvbS9pZHMvYWFzLzM0OTRfMjEyMF8zMDYyXzY1MzI/submodel-refs?cursor=NA",
+		"endpoint": "http://127.0.0.1:6005/shells/aHR0cHM6Ly9leGFtcGxlLmNvbS9pZHMvYWFzLzM0OTRfMjEyMF8zMDYyXzY1MzI/submodel-refs?cursor=NA",
 		"shouldMatch": "expected/expectedAssetAdministrationShellSubmodelReferencesFilterCursor.json",
 		"expectedStatus": 200
 	},
 	{
 		"context": "009.8 - POST /shells/{aasIdentifier}/submodel-refs - conflict (malformed)",
 		"method": "POST",
-		"endpoint": "http://127.0.0.1:6004/shells/aHR0cHM6Ly9leGFtcGxlLmNvbS9pZHMvYWFzLzM0OTRfMjEyMF8zMDYyXzY1MzI/submodel-refs",
+		"endpoint": "http://127.0.0.1:6005/shells/aHR0cHM6Ly9leGFtcGxlLmNvbS9pZHMvYWFzLzM0OTRfMjEyMF8zMDYyXzY1MzI/submodel-refs",
 		"data": "bodies/invalid/malformedJson.txt",
 		"expectedStatus": 400
 	},
 	{
 		"context": "010.1 - DELETE /shells/{aasIdentifier}/submodel-refs/{submodelIdentifier}",
 		"method": "DELETE",
-		"endpoint": "http://127.0.0.1:6004/shells/aHR0cHM6Ly9leGFtcGxlLmNvbS9pZHMvYWFzLzM0OTRfMjEyMF8zMDYyXzY1MzI/submodel-refs/aHR0cHM6Ly9leGFtcGxlLmNvbS9pZHMvc20vNDAzMV8zMTIwXzMwNjJfMDI1NQ",
+		"endpoint": "http://127.0.0.1:6005/shells/aHR0cHM6Ly9leGFtcGxlLmNvbS9pZHMvYWFzLzM0OTRfMjEyMF8zMDYyXzY1MzI/submodel-refs/aHR0cHM6Ly9leGFtcGxlLmNvbS9pZHMvc20vNDAzMV8zMTIwXzMwNjJfMDI1NQ",
 		"expectedStatus": 204
 	},
 	{
 		"context": "010.2 - DELETE /shells/{aasIdentifier}/submodel-refs/{submodelIdentifier} - conflict (not found)",
 		"method": "DELETE",
-		"endpoint": "http://127.0.0.1:6004/shells/aHR0cHM6Ly9leGFtcGxlLmNvbS9pZHMvYWFzLzM0OTRfMjEyMF8zMDYyXzY1MzI/submodel-refs/aHR0cHM6Ly9leGFtcGxlLmNvbS9pZHMvYWFzLzczMDFfMzE1MF85NDQyXzc4NDlfbm9uX2V4aXN0ZW50",
+		"endpoint": "http://127.0.0.1:6005/shells/aHR0cHM6Ly9leGFtcGxlLmNvbS9pZHMvYWFzLzM0OTRfMjEyMF8zMDYyXzY1MzI/submodel-refs/aHR0cHM6Ly9leGFtcGxlLmNvbS9pZHMvYWFzLzczMDFfMzE1MF85NDQyXzc4NDlfbm9uX2V4aXN0ZW50",
 		"expectedStatus": 404
 	}
 ]

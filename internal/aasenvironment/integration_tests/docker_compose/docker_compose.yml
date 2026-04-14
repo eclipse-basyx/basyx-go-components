@@ -14,7 +14,6 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
-
   aas_environment_it:
     build:
       context: ../../../..
@@ -35,7 +34,7 @@ services:
     volumes:
       - ../../../submodelrepository/integration_tests/docker_compose/rsa-key.pem:/app/rsa-key.pem:ro
     ports:
-      - "6004:5004"
+      - "6005:5004"
     extra_hosts:
       - "localhost:host-gateway"
     depends_on:

@@ -65,7 +65,7 @@ func deleteAllAAS(t *testing.T, runner *testenv.JSONSuiteRunner, stepNumber int)
 	for {
 		response, err := runner.RunStep(testenv.JSONSuiteStep{
 			Method:         http.MethodGet,
-			Endpoint:       "http://127.0.0.1:6004/shells",
+			Endpoint:       "http://127.0.0.1:6005/shells",
 			ExpectedStatus: http.StatusOK,
 		}, stepNumber)
 		require.NoError(t, err)
@@ -85,7 +85,7 @@ func deleteAllAAS(t *testing.T, runner *testenv.JSONSuiteRunner, stepNumber int)
 			encodedIdentifier := base64.RawURLEncoding.EncodeToString([]byte(item.ID))
 			_, err = runner.RunStep(testenv.JSONSuiteStep{
 				Method:         http.MethodDelete,
-				Endpoint:       fmt.Sprintf("http://127.0.0.1:6004/shells/%s", encodedIdentifier),
+				Endpoint:       fmt.Sprintf("http://127.0.0.1:6005/shells/%s", encodedIdentifier),
 				ExpectedStatus: http.StatusNoContent,
 			}, stepNumber)
 			require.NoError(t, err)
@@ -310,7 +310,7 @@ func TestIntegration(t *testing.T) {
 }
 
 func TestThumbnailAttachmentOperations(t *testing.T) {
-	baseURL := "http://localhost:6004"
+	baseURL := "http://localhost:6005"
 	aasID := fmt.Sprintf("https://example.com/ids/aas/thumbnail_test_%d", time.Now().UnixNano())
 	aasIdentifier := base64.RawURLEncoding.EncodeToString([]byte(aasID))
 	thumbnailEndpoint := fmt.Sprintf("%s/shells/%s/asset-information/thumbnail", baseURL, aasIdentifier)
@@ -440,7 +440,7 @@ func TestThumbnailAttachmentOperations(t *testing.T) {
 }
 
 func TestContractThumbnailGetReturnsDetectedContentType(t *testing.T) {
-	baseURL := "http://localhost:6004"
+	baseURL := "http://localhost:6005"
 	aasID := fmt.Sprintf("https://example.com/ids/aas/thumbnail_contract_%d", time.Now().UnixNano())
 	aasIdentifier := base64.RawURLEncoding.EncodeToString([]byte(aasID))
 	thumbnailEndpoint := fmt.Sprintf("%s/shells/%s/asset-information/thumbnail", baseURL, aasIdentifier)
@@ -474,7 +474,7 @@ func TestMain(m *testing.M) {
 	os.Exit(testenv.RunComposeTestMain(m, testenv.ComposeTestMainOptions{
 		ComposeFile:     "docker_compose/docker_compose.yml",
 		PreDownBeforeUp: true,
-		HealthURL:       "http://localhost:6004/health",
+		HealthURL:       "http://localhost:6005/health",
 		HealthTimeout:   150 * time.Second,
 	}))
 }

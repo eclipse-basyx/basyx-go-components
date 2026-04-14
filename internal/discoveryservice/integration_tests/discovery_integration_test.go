@@ -37,7 +37,7 @@ import (
 )
 
 const composeFilePath = "./docker_compose/docker_compose.yml"
-const discoveryBaseURL = "http://127.0.0.1:6004"
+const discoveryBaseURL = "http://127.0.0.1:6005"
 const actionShellsByAssetLinkMissingBody = "CHECK_SHELLSBYASSETLINK_MISSING_BODY"
 const actionLookupShellsNilBody = "CHECK_LOOKUPSHELLS_NIL_BODY"
 

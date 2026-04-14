@@ -267,7 +267,7 @@ func assertXSDTimeLexical(t *testing.T, value string) {
 }
 
 func TestTemporalXSDRoundTripFormatting(t *testing.T) {
-	baseURL := "http://localhost:6004"
+	baseURL := "http://localhost:6005"
 	submodelID := "urn:basyx:integration:temporal-format"
 	submodelIDEncoded := common.EncodeString(submodelID)
 	t.Run("Duration regex guards invalid lexicals", func(t *testing.T) {
@@ -416,7 +416,7 @@ func TestTemporalXSDRoundTripFormatting(t *testing.T) {
 }
 
 func TestContractSubmodelRepository(t *testing.T) {
-	baseURL := "http://localhost:6004"
+	baseURL := "http://localhost:6005"
 
 	createSubmodel := func(t *testing.T, submodelID string, submodelIDShort string) string {
 		t.Helper()
@@ -529,7 +529,7 @@ func TestIntegration(t *testing.T) {
 
 // TestFileAttachmentOperations tests file upload, download, and deletion for File SME
 func TestFileAttachmentOperations(t *testing.T) {
-	baseURL := "http://localhost:6004"
+	baseURL := "http://localhost:6005"
 	submodelID := "aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9Pbmx5RmlsZVN1Ym1vZGVsX1Rlc3Q" // base64 encoded: http://iese.fraunhofer.de/id/sm/OnlyFileSubmodel_Test
 	testFilePath := "testFiles/marcus.gif"
 
@@ -638,7 +638,7 @@ func TestMain(m *testing.M) {
 	os.Exit(testenv.RunComposeTestMain(m, testenv.ComposeTestMainOptions{
 		ComposeFile:     "docker_compose/docker_compose.yml",
 		PreDownBeforeUp: true,
-		HealthURL:       "http://localhost:6004/health",
+		HealthURL:       "http://localhost:6005/health",
 		HealthTimeout:   150 * time.Second,
 	}))
 }

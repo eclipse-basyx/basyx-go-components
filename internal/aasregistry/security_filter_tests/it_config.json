@@ -3,7 +3,7 @@
     "context": "POST Descriptor A - Admin - ALLOWED",
     "token": { "user": "admin", "password": "pwd" },
     "method": "POST",
-    "endpoint": "http://localhost:6004/shell-descriptors",
+    "endpoint": "http://localhost:6005/shell-descriptors",
     "data": "postBody/simple_aas_A.json",
     "expectedStatus": 201
   },
@@ -11,7 +11,7 @@
     "context": "POST Descriptor B - Admin - ALLOWED",
     "token": { "user": "admin", "password": "pwd" },
     "method": "POST",
-    "endpoint": "http://localhost:6004/shell-descriptors",
+    "endpoint": "http://localhost:6005/shell-descriptors",
     "data": "postBody/simple_aas_B.json",
     "expectedStatus": 201
   },
@@ -19,7 +19,7 @@
     "context": "POST Descriptor C - Admin - ALLOWED",
     "token": { "user": "admin", "password": "pwd" },
     "method": "POST",
-    "endpoint": "http://localhost:6004/shell-descriptors",
+    "endpoint": "http://localhost:6005/shell-descriptors",
     "data": "postBody/simple_aas_C.json",
     "expectedStatus": 201
   },
@@ -27,7 +27,7 @@
     "context": "GET Descriptor A - User A - ALLOWED",
     "token": { "user": "usera", "password": "pwd" },
     "method": "GET",
-    "endpoint": "http://localhost:6004/shell-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9B",
+    "endpoint": "http://localhost:6005/shell-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9B",
     "shouldMatch": "expected/expectedShellAUserA.json",
     "expectedStatus": 200
   },
@@ -35,7 +35,7 @@
     "context": "GET Descriptor B - User A - ALLOWED",
     "token": { "user": "usera", "password": "pwd" },
     "method": "GET",
-    "endpoint": "http://localhost:6004/shell-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9C",
+    "endpoint": "http://localhost:6005/shell-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9C",
     "shouldMatch": "expected/expectedShellBUserA.json",
     "expectedStatus": 200
   },
@@ -43,7 +43,7 @@
     "context": "GET Descriptor C - User A - ALLOWED",
     "token": { "user": "usera", "password": "pwd" },
     "method": "GET",
-    "endpoint": "http://localhost:6004/shell-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9D",
+    "endpoint": "http://localhost:6005/shell-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9D",
     "shouldMatch": "expected/expectedShellCUserA.json",
     "expectedStatus": 200
   },
@@ -51,7 +51,7 @@
     "context": "GET ALL Descriptor - User A - FILTERED",
     "token": { "user": "usera", "password": "pwd" },
     "method": "GET",
-    "endpoint": "http://localhost:6004/shell-descriptors",
+    "endpoint": "http://localhost:6005/shell-descriptors",
     "shouldMatch": "expected/expectedShellUserA.json",
     "expectedStatus": 200
   },
@@ -59,7 +59,7 @@
     "context": "POST SMDESC - Admin - ALLOWED",
     "token": { "user": "admin", "password": "pwd" },
     "method": "POST",
-    "endpoint": "http://localhost:6004/shell-descriptors",
+    "endpoint": "http://localhost:6005/shell-descriptors",
     "data": "postBody/aasdesc_with_smdesc.json",
     "expectedStatus": 201
   },
@@ -67,7 +67,7 @@
     "context": "GET ALL Descriptor - User X - FILTERED",
     "token": { "user": "userx", "password": "pwd" },
     "method": "GET",
-    "endpoint": "http://localhost:6004/shell-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9JQ0hNQUdQSVpaQVNPR0VSTkU/submodel-descriptors",
+    "endpoint": "http://localhost:6005/shell-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9JQ0hNQUdQSVpaQVNPR0VSTkU/submodel-descriptors",
     "shouldMatch": "expected/expectedShellUserX.json",
     "expectedStatus": 200
   },
@@ -75,14 +75,14 @@
     "context": "GET 1 Descriptor - User X - denied",
     "token": { "user": "userx", "password": "pwd" },
     "method": "GET",
-    "endpoint": "http://localhost:6004/shell-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9JQ0hNQUdQSVpaQVNPR0VSTkU/submodel-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9YL1NNLUE",
+    "endpoint": "http://localhost:6005/shell-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9JQ0hNQUdQSVpaQVNPR0VSTkU/submodel-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9YL1NNLUE",
     "expectedStatus": 404
   },
   {
     "context": "GET 1 Descriptor - User X - FILTERED",
     "token": { "user": "userx", "password": "pwd" },
     "method": "GET",
-    "endpoint": "http://localhost:6004/shell-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9JQ0hNQUdQSVpaQVNPR0VSTkU/submodel-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9YL1NNLUQ",
+    "endpoint": "http://localhost:6005/shell-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9JQ0hNQUdQSVpaQVNPR0VSTkU/submodel-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9YL1NNLUQ",
     "shouldMatch": "expected/singlesm.json",
     "expectedStatus": 200
   },
@@ -90,14 +90,14 @@
     "context": "DELETE Descriptor - User X - denied",
     "token": { "user": "userx", "password": "pwd" },
     "method": "DELETE",
-    "endpoint": "http://localhost:6004/shell-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9JQ0hNQUdQSVpaQVNPR0VSTkU/submodel-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9YL1NNLUE",
+    "endpoint": "http://localhost:6005/shell-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9JQ0hNQUdQSVpaQVNPR0VSTkU/submodel-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9YL1NNLUE",
     "expectedStatus": 404
   },
   {
     "context": "GET ALL - ADMIN - ALLOWED",
     "token": { "user": "admin", "password": "pwd" },
     "method": "GET",
-    "endpoint": "http://localhost:6004/shell-descriptors",
+    "endpoint": "http://localhost:6005/shell-descriptors",
     "shouldMatch": "expected/allShellsAdmin.json",
     "expectedStatus": 200
   },
@@ -105,14 +105,14 @@
     "context": "DELETE Descriptor - User X - ALLOWED",
     "token": { "user": "userx", "password": "pwd" },
     "method": "DELETE",
-    "endpoint": "http://localhost:6004/shell-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9JQ0hNQUdQSVpaQVNPR0VSTkU/submodel-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9YL1NNLUQ",
+    "endpoint": "http://localhost:6005/shell-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9JQ0hNQUdQSVpaQVNPR0VSTkU/submodel-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9YL1NNLUQ",
     "expectedStatus": 204
   },
   {
     "context": "GET 1 Descriptor - User X - removed",
     "token": { "user": "userx", "password": "pwd" },
     "method": "GET",
-    "endpoint": "http://localhost:6004/shell-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9JQ0hNQUdQSVpaQVNPR0VSTkU/submodel-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9YL1NNLUQ",
+    "endpoint": "http://localhost:6005/shell-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9JQ0hNQUdQSVpaQVNPR0VSTkU/submodel-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9YL1NNLUQ",
     "expectedStatus": 404
   },
 
@@ -120,7 +120,7 @@
     "context": "POST Descriptor - User X - ALLOWED",
     "token": { "user": "userx", "password": "pwd" },
     "method": "POST",
-    "endpoint": "http://localhost:6004/shell-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9JQ0hNQUdQSVpaQVNPR0VSTkU/submodel-descriptors",
+    "endpoint": "http://localhost:6005/shell-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9JQ0hNQUdQSVpaQVNPR0VSTkU/submodel-descriptors",
     "data": "postBody/singlesm.json",
     "shouldMatch": "expected/singlesm.json",
     "expectedStatus": 201
@@ -129,7 +129,7 @@
     "context": "GET 1 Descriptor - User X - FILTERED",
     "token": { "user": "userx", "password": "pwd" },
     "method": "GET",
-    "endpoint": "http://localhost:6004/shell-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9JQ0hNQUdQSVpaQVNPR0VSTkU/submodel-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9YL1NNLUQ",
+    "endpoint": "http://localhost:6005/shell-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9JQ0hNQUdQSVpaQVNPR0VSTkU/submodel-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9YL1NNLUQ",
     "shouldMatch": "expected/singlesm.json",
     "expectedStatus": 200
   },
@@ -139,7 +139,7 @@
     "context": "PUT Descriptor - User X - denied",
     "token": { "user": "userx", "password": "pwd" },
     "method": "PUT",
-    "endpoint": "http://localhost:6004/shell-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9JQ0hNQUdQSVpaQVNPR0VSTkU/submodel-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9YL1NNLUE",
+    "endpoint": "http://localhost:6005/shell-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9JQ0hNQUdQSVpaQVNPR0VSTkU/submodel-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9YL1NNLUE",
     "data": "postBody/singlesmDenied.json",
     "expectedStatus": 403
   },
@@ -147,7 +147,7 @@
     "context": "PUT Descriptor - User X - ALLOWED",
     "token": { "user": "userx", "password": "pwd" },
     "method": "PUT",
-    "endpoint": "http://localhost:6004/shell-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9JQ0hNQUdQSVpaQVNPR0VSTkU/submodel-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9YL1NNLUQ",
+    "endpoint": "http://localhost:6005/shell-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9JQ0hNQUdQSVpaQVNPR0VSTkU/submodel-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9YL1NNLUQ",
     "data": "postBody/singlesm.json",
     "expectedStatus": 204
   },
@@ -155,7 +155,7 @@
     "context": "GET 1 Descriptor - User X - FILTERED",
     "token": { "user": "userx", "password": "pwd" },
     "method": "GET",
-    "endpoint": "http://localhost:6004/shell-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9JQ0hNQUdQSVpaQVNPR0VSTkU/submodel-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9YL1NNLUQ",
+    "endpoint": "http://localhost:6005/shell-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9JQ0hNQUdQSVpaQVNPR0VSTkU/submodel-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9YL1NNLUQ",
     "shouldMatch": "expected/singlesm.json",
     "expectedStatus": 200
   },
@@ -166,7 +166,7 @@
     "context": "POST Descriptor - User X - ALLOWED",
     "token": { "user": "userx", "password": "pwd" },
     "method": "POST",
-    "endpoint": "http://localhost:6004/shell-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9JQ0hNQUdQSVpaQVNPR0VSTkU/submodel-descriptors",
+    "endpoint": "http://localhost:6005/shell-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9JQ0hNQUdQSVpaQVNPR0VSTkU/submodel-descriptors",
     "data": "postBody/singlesm.json",
     "shouldMatch": "expected/singlesm.json",
     "expectedStatus": 409
@@ -175,7 +175,7 @@
     "context": "GET 1 Descriptor - User X - FILTERED",
     "token": { "user": "userx", "password": "pwd" },
     "method": "GET",
-    "endpoint": "http://localhost:6004/shell-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9JQ0hNQUdQSVpaQVNPR0VSTkU/submodel-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9YL1NNLUQ",
+    "endpoint": "http://localhost:6005/shell-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9JQ0hNQUdQSVpaQVNPR0VSTkU/submodel-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9YL1NNLUQ",
     "shouldMatch": "expected/singlesm.json",
     "expectedStatus": 200
   },
@@ -183,7 +183,7 @@
     "context": "DELETE Descriptor - User X - ALLOWED",
     "token": { "user": "userx", "password": "pwd" },
     "method": "DELETE",
-    "endpoint": "http://localhost:6004/shell-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9JQ0hNQUdQSVpaQVNPR0VSTkU/submodel-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9YL1NNLUQ",
+    "endpoint": "http://localhost:6005/shell-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9JQ0hNQUdQSVpaQVNPR0VSTkU/submodel-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9YL1NNLUQ",
     "expectedStatus": 204
   },
 
@@ -191,7 +191,7 @@
     "context": "PUT Descriptor - User X - denied",
     "token": { "user": "userx", "password": "pwd" },
     "method": "PUT",
-    "endpoint": "http://localhost:6004/shell-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9JQ0hNQUdQSVpaQVNPR0VSTkU/submodel-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9YL1NNLUE",
+    "endpoint": "http://localhost:6005/shell-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9JQ0hNQUdQSVpaQVNPR0VSTkU/submodel-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9YL1NNLUE",
     "data": "postBody/singlesmDenied.json",
     "expectedStatus": 403
   },
@@ -199,7 +199,7 @@
     "context": "PUT Descriptor - User X - ALLOWED",
     "token": { "user": "userx", "password": "pwd" },
     "method": "PUT",
-    "endpoint": "http://localhost:6004/shell-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9JQ0hNQUdQSVpaQVNPR0VSTkU/submodel-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9YL1NNLUQ",
+    "endpoint": "http://localhost:6005/shell-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9JQ0hNQUdQSVpaQVNPR0VSTkU/submodel-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9YL1NNLUQ",
     "data": "postBody/singlesm.json",
     "shouldMatch": "expected/singlesm.json",
     "expectedStatus": 201
@@ -208,7 +208,7 @@
     "context": "GET 1 Descriptor - User X - FILTERED",
     "token": { "user": "userx", "password": "pwd" },
     "method": "GET",
-    "endpoint": "http://localhost:6004/shell-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9JQ0hNQUdQSVpaQVNPR0VSTkU/submodel-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9YL1NNLUQ",
+    "endpoint": "http://localhost:6005/shell-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9JQ0hNQUdQSVpaQVNPR0VSTkU/submodel-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9YL1NNLUQ",
     "shouldMatch": "expected/singlesm.json",
     "expectedStatus": 200
   },
@@ -217,14 +217,14 @@
     "context": "DELETE Descriptor - ADMIN - ALLOWED",
     "token": { "user": "admin", "password": "pwd" },
     "method": "DELETE",
-    "endpoint": "http://localhost:6004/shell-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9JQ0hNQUdQSVpaQVNPR0VSTkU/submodel-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9YL1NNLUE",
+    "endpoint": "http://localhost:6005/shell-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9JQ0hNQUdQSVpaQVNPR0VSTkU/submodel-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9YL1NNLUE",
     "expectedStatus": 204
   },
   {
     "context": "POST Descriptor - User X - denied",
     "token": { "user": "userx", "password": "pwd" },
     "method": "POST",
-    "endpoint": "http://localhost:6004/shell-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9JQ0hNQUdQSVpaQVNPR0VSTkU/submodel-descriptors",
+    "endpoint": "http://localhost:6005/shell-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9JQ0hNQUdQSVpaQVNPR0VSTkU/submodel-descriptors",
     "data": "postBody/singlesmDenied.json",
     "expectedStatus": 403
   }

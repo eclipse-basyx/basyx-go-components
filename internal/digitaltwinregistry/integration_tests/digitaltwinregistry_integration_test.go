@@ -39,7 +39,7 @@ import (
 )
 
 const (
-	BaseURL         = "http://127.0.0.1:6004"
+	BaseURL         = "http://127.0.0.1:6005"
 	ComposeFilePath = "./docker_compose/docker_compose.yml"
 )
 
