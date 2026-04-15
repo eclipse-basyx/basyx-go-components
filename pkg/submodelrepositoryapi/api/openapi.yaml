@@ -519,7 +519,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/GetPathItemsResult'
+                $ref: '#/components/schemas/GetSubmodelPathsByIdentifierResult'
           description: Requested Submodels
         "400":
           content:
@@ -15110,6 +15110,28 @@ components:
         result:
         - null
         - null
+        paging_metadata:
+          cursor: wJlCDLIl6KTWypN7T6vc6nWEmEYe99Hjf1XY1xmqV-M=#
+    GetSubmodelPathsByIdentifierResult:
+      allOf:
+      - $ref: '#/components/schemas/PagedResult'
+      - properties:
+          result:
+            additionalProperties:
+              items:
+                $ref: '#/components/schemas/PathItem'
+              type: array
+            type: object
+        type: object
+      example:
+        result:
+          https://example.com/submodels/path-demo:
+          - TopProperty
+          - MainCollection
+          - MainCollection.NestedProperty
+          - MainCollection.NestedList
+          - MainCollection.NestedList[0]
+          - MainCollection.NestedList[1]
         paging_metadata:
           cursor: wJlCDLIl6KTWypN7T6vc6nWEmEYe99Hjf1XY1xmqV-M=#
     PathItem:

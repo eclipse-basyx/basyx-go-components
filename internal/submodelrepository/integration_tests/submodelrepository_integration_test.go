@@ -504,6 +504,121 @@ func TestContractSubmodelRepository(t *testing.T) {
 	})
 }
 
+func TestPathNotationEndpoints(t *testing.T) {
+	baseURL := "http://localhost:6004"
+	submodelID := fmt.Sprintf("urn:basyx:integration:path-endpoints-%d", time.Now().UnixNano())
+	submodelIDEncoded := common.EncodeString(submodelID)
+
+	payload := map[string]any{
+		"id":        submodelID,
+		"idShort":   "PathEndpointSubmodel",
+		"kind":      "Instance",
+		"modelType": "Submodel",
+		"submodelElements": []map[string]any{
+			{
+				"idShort":   "TopProperty",
+				"modelType": "Property",
+				"valueType": "xs:string",
+				"value":     "top-value",
+			},
+			{
+				"idShort":   "MainCollection",
+				"modelType": "SubmodelElementCollection",
+				"value": []map[string]any{
+					{
+						"idShort":   "NestedProperty",
+						"modelType": "Property",
+						"valueType": "xs:string",
+						"value":     "nested-value",
+					},
+					{
+						"idShort":              "NestedList",
+						"modelType":            "SubmodelElementList",
+						"typeValueListElement": "SubmodelElement",
+						"value": []map[string]any{
+							{
+								"idShort":   "ListProp1",
+								"modelType": "Property",
+								"valueType": "xs:string",
+								"value":     "list-value-1",
+							},
+							{
+								"idShort":   "ListProp2",
+								"modelType": "Property",
+								"valueType": "xs:string",
+								"value":     "list-value-2",
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	statusCode, body, err := requestJSON(http.MethodPost, fmt.Sprintf("%s/submodels", baseURL), payload)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusCreated, statusCode, "response=%s", string(body))
+
+	t.Cleanup(func() {
+		deleteStatusCode, deleteBody, deleteErr := requestJSON(http.MethodDelete, fmt.Sprintf("%s/submodels/%s", baseURL, submodelIDEncoded), nil)
+		if deleteErr != nil {
+			t.Logf("cleanup delete failed for submodel %s: %v", submodelID, deleteErr)
+			return
+		}
+
+		if deleteStatusCode != http.StatusNoContent && deleteStatusCode != http.StatusNotFound {
+			t.Logf("cleanup delete returned unexpected status=%d for submodel %s, response=%s", deleteStatusCode, submodelID, string(deleteBody))
+		}
+	})
+
+	t.Run("GetSubmodelByIDPathDeepReturnsPersistedNestedPaths", func(t *testing.T) {
+		statusCode, body, err := requestJSON(http.MethodGet, fmt.Sprintf("%s/submodels/%s/$path?level=deep", baseURL, submodelIDEncoded), nil)
+		require.NoError(t, err)
+		require.Equal(t, http.StatusOK, statusCode, "response=%s", string(body))
+
+		var paths []string
+		require.NoError(t, json.Unmarshal(body, &paths), "response=%s", string(body))
+
+		assert.Contains(t, paths, "TopProperty")
+		assert.Contains(t, paths, "MainCollection")
+		assert.Contains(t, paths, "MainCollection.NestedProperty")
+		assert.Contains(t, paths, "MainCollection.NestedList")
+		assert.Contains(t, paths, "MainCollection.NestedList[0]")
+		assert.Contains(t, paths, "MainCollection.NestedList[1]")
+	})
+
+	t.Run("GetSubmodelByIDPathCoreReturnsTopLevelOnly", func(t *testing.T) {
+		statusCode, body, err := requestJSON(http.MethodGet, fmt.Sprintf("%s/submodels/%s/$path?level=core", baseURL, submodelIDEncoded), nil)
+		require.NoError(t, err)
+		require.Equal(t, http.StatusOK, statusCode, "response=%s", string(body))
+
+		var paths []string
+		require.NoError(t, json.Unmarshal(body, &paths), "response=%s", string(body))
+
+		assert.Contains(t, paths, "TopProperty")
+		assert.Contains(t, paths, "MainCollection")
+		assert.NotContains(t, paths, "MainCollection.NestedProperty")
+		assert.NotContains(t, paths, "MainCollection.NestedList[0]")
+	})
+
+	t.Run("GetAllSubmodelsPathReturnsMapWithPathsPerSubmodel", func(t *testing.T) {
+		statusCode, body, err := requestJSON(http.MethodGet, fmt.Sprintf("%s/submodels/$path?limit=500&level=deep", baseURL), nil)
+		require.NoError(t, err)
+		require.Equal(t, http.StatusOK, statusCode, "response=%s", string(body))
+
+		var response struct {
+			PagingMetadata map[string]any      `json:"paging_metadata"`
+			Result         map[string][]string `json:"result"`
+		}
+		require.NoError(t, json.Unmarshal(body, &response), "response=%s", string(body))
+
+		submodelPaths, hasSubmodelPaths := response.Result[submodelID]
+		require.True(t, hasSubmodelPaths, "response=%s", string(body))
+		assert.Contains(t, submodelPaths, "TopProperty")
+		assert.Contains(t, submodelPaths, "MainCollection.NestedList[0]")
+	})
+}
+
 // IntegrationTest runs the integration tests based on the config file
 func TestIntegration(t *testing.T) {
 	testenv.RunJSONSuite(t, testenv.JSONSuiteOptions{
@@ -627,6 +742,47 @@ func TestFileAttachmentOperations(t *testing.T) {
 		_, _, statusCode, _ := downloadFileAttachment(endpoint)
 		assert.Equal(t, http.StatusNotFound, statusCode, "Expected 404 Not Found after file deletion")
 	})
+}
+
+func TestUploadAttachmentToNonFileSubmodelElementReturnsMethodNotAllowed(t *testing.T) {
+	baseURL := "http://localhost:6004"
+	submodelID := fmt.Sprintf("urn:basyx:integration:non-file-attachment-%d", time.Now().UnixNano())
+	submodelIDEncoded := common.EncodeString(submodelID)
+	nonFileElementIDShort := "NonFileProperty"
+
+	statusCode, body, err := requestJSON(http.MethodPost, fmt.Sprintf("%s/submodels", baseURL), map[string]any{
+		"id":        submodelID,
+		"idShort":   "NonFileAttachmentSubmodel",
+		"kind":      "Instance",
+		"modelType": "Submodel",
+		"submodelElements": []map[string]any{
+			{
+				"idShort":   nonFileElementIDShort,
+				"valueType": "xs:string",
+				"value":     "initial-value",
+				"modelType": "Property",
+			},
+		},
+	})
+	require.NoError(t, err)
+	require.Equal(t, http.StatusCreated, statusCode, "response=%s", string(body))
+
+	t.Cleanup(func() {
+		deleteStatusCode, deleteBody, deleteErr := requestJSON(http.MethodDelete, fmt.Sprintf("%s/submodels/%s", baseURL, submodelIDEncoded), nil)
+		if deleteErr != nil {
+			t.Logf("cleanup delete failed for submodel %s: %v", submodelID, deleteErr)
+			return
+		}
+
+		if deleteStatusCode != http.StatusNoContent && deleteStatusCode != http.StatusNotFound {
+			t.Logf("cleanup delete returned unexpected status=%d for submodel %s, response=%s", deleteStatusCode, submodelID, string(deleteBody))
+		}
+	})
+
+	attachmentEndpoint := fmt.Sprintf("%s/submodels/%s/submodel-elements/%s/attachment", baseURL, submodelIDEncoded, nonFileElementIDShort)
+	statusCode, err = uploadFileAttachment(attachmentEndpoint, "testFiles/marcus.gif", "should-fail.gif")
+	require.NoError(t, err)
+	assert.Equal(t, http.StatusMethodNotAllowed, statusCode, "Expected 405 Method Not Allowed when uploading attachment to non-File SME")
 }
 
 // TestMain handles setup and teardown

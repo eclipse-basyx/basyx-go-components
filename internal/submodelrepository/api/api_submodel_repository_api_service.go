@@ -71,6 +71,16 @@ type delegatedOperationAsyncRecord struct {
 	ExpiresAt          time.Time
 }
 
+type submodelPathMapResult struct {
+	PagingMetadata gen.PagedResultPagingMetadata `json:"paging_metadata"`
+	Result         map[string][]string           `json:"result"`
+}
+
+type submodelPathEntry struct {
+	identifier string
+	paths      []string
+}
+
 var delegatedOperationAsyncState = struct {
 	sync.RWMutex
 	records       map[string]delegatedOperationAsyncRecord
@@ -1111,29 +1121,87 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelsReference(ctx context.C
 //
 //nolint:revive
 func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelsPath(ctx context.Context, semanticID string, idShort string, limit int32, cursor string, level string) (gen.ImplResponse, error) {
-	// TODO - update GetAllSubmodelsPath with the required logic for this service method.
-	// Add api_submodel_repository_api_service.go to the .openapi-generator-ignore to avoid overwriting this service implementation when updating open api generation.
+	_ = semanticID
+	const operation = "GetAllSubmodelsPath"
 
-	// TODO: Uncomment the next line to return response Response(200, GetPathItemsResult{}) or use other options such as http.Ok ...
-	// return gen.Response(200, GetPathItemsResult{}), nil
+	decodedCursor := ""
+	if cursor != "" {
+		decodedCursorBytes, decodeErr := common.DecodeString(cursor)
+		if decodeErr != nil {
+			return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "BadCursor"), nil
+		}
+		decodedCursor = string(decodedCursorBytes)
+	}
 
-	// TODO: Uncomment the next line to return response Response(400, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(400, Result{}), nil
+	if !isLevelValid(level) {
+		return newAPIErrorResponse(errors.New("invalid level parameter"), http.StatusBadRequest, operation, "InvalidLevelParameter"), nil
+	}
 
-	// TODO: Uncomment the next line to return response Response(401, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(401, Result{}), nil
+	submodels, nextCursor, err := s.submodelBackend.GetSubmodels(ctx, limit, decodedCursor, idShort)
+	if err != nil {
+		if common.IsErrBadRequest(err) {
+			return newAPIErrorResponse(err, http.StatusBadRequest, operation, "BadRequest"), nil
+		}
+		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "GetSubmodels"), err
+	}
 
-	// TODO: Uncomment the next line to return response Response(403, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(403, Result{}), nil
+	entries := make([]submodelPathEntry, len(submodels))
 
-	// TODO: Uncomment the next line to return response Response(500, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(500, Result{}), nil
+	eg, _ := errgroup.WithContext(ctx)
+	eg.SetLimit(8)
 
-	// TODO: Uncomment the next line to return response Response(0, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(0, Result{}), nil
+	for index := range submodels {
+		index := index
+		submodel := submodels[index]
 
-	notImplementedErr := errors.New("GetAllSubmodelsPath method not implemented")
-	return newAPIErrorResponse(notImplementedErr, http.StatusNotImplemented, "GetAllSubmodelsPath", "NotImplemented"), nil
+		eg.Go(func() error {
+			paths, pathsErr := s.submodelBackend.GetSubmodelElementPaths(ctx, submodel.ID(), level)
+			if pathsErr != nil {
+				return pathsErr
+			}
+
+			entries[index] = submodelPathEntry{
+				identifier: submodel.ID(),
+				paths:      paths,
+			}
+			return nil
+		})
+	}
+
+	if waitErr := eg.Wait(); waitErr != nil {
+		if common.IsErrNotFound(waitErr) || errors.Is(waitErr, sql.ErrNoRows) {
+			return newAPIErrorResponse(waitErr, http.StatusNotFound, operation, "SubmodelNotFound"), nil
+		}
+		if common.IsErrBadRequest(waitErr) {
+			return newAPIErrorResponse(waitErr, http.StatusBadRequest, operation, "BadRequest"), nil
+		}
+		return newAPIErrorResponse(waitErr, http.StatusInternalServerError, operation, "GetSubmodelElementPaths"), waitErr
+	}
+
+	result := make(map[string][]string, len(entries))
+	for _, entry := range entries {
+		if entry.identifier == "" {
+			continue
+		}
+
+		if entry.paths == nil {
+			entry.paths = []string{}
+		}
+
+		result[entry.identifier] = entry.paths
+	}
+
+	encodedNextCursor := ""
+	if nextCursor != "" {
+		encodedNextCursor = common.EncodeString(nextCursor)
+	}
+
+	res := submodelPathMapResult{
+		PagingMetadata: gen.PagedResultPagingMetadata{Cursor: encodedNextCursor},
+		Result:         result,
+	}
+
+	return gen.Response(http.StatusOK, res), nil
 }
 
 // PutSubmodelByID - Updates an existing Submodel
@@ -1415,29 +1483,29 @@ func (s *SubmodelRepositoryAPIAPIService) GetSubmodelByIDReference(ctx context.C
 //
 //nolint:revive
 func (s *SubmodelRepositoryAPIAPIService) GetSubmodelByIDPath(ctx context.Context, submodelIdentifier string, level string) (gen.ImplResponse, error) {
-	// TODO - update GetSubmodelByIDPath with the required logic for this service method.
-	// Add api_submodel_repository_api_service.go to the .openapi-generator-ignore to avoid overwriting this service implementation when updating open api generation.
+	const operation = "GetSubmodelByIDPath"
 
-	// TODO: Uncomment the next line to return response Response(200, []string{}) or use other options such as http.Ok ...
-	// return gen.Response(200, []string{}), nil
+	decodedSubmodelIdentifier, decodeErr := common.DecodeString(submodelIdentifier)
+	if decodeErr != nil {
+		return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "MalformedSubmodelIdentifier"), nil
+	}
 
-	// TODO: Uncomment the next line to return response Response(400, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(400, Result{}), nil
+	if !isLevelValid(level) {
+		return newAPIErrorResponse(errors.New("invalid level parameter"), http.StatusBadRequest, operation, "InvalidLevelParameter"), nil
+	}
 
-	// TODO: Uncomment the next line to return response Response(401, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(401, Result{}), nil
+	paths, err := s.submodelBackend.GetSubmodelElementPaths(ctx, decodedSubmodelIdentifier, level)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) || common.IsErrNotFound(err) {
+			return newAPIErrorResponse(err, http.StatusNotFound, operation, "SubmodelNotFound"), nil
+		}
+		if common.IsErrBadRequest(err) {
+			return newAPIErrorResponse(err, http.StatusBadRequest, operation, "BadRequest"), nil
+		}
+		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "GetSubmodelElementPaths"), err
+	}
 
-	// TODO: Uncomment the next line to return response Response(403, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(403, Result{}), nil
-
-	// TODO: Uncomment the next line to return response Response(500, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(500, Result{}), nil
-
-	// TODO: Uncomment the next line to return response Response(0, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(0, Result{}), nil
-
-	notImplementedErr := errors.New("GetSubmodelByIDPath method not implemented")
-	return newAPIErrorResponse(notImplementedErr, http.StatusNotImplemented, "GetSubmodelByIDPath", "NotImplemented"), nil
+	return gen.Response(http.StatusOK, paths), nil
 }
 
 // GetAllSubmodelElements retrieves all submodel elements from a specific submodel including their hierarchy.
@@ -2275,18 +2343,22 @@ func (s *SubmodelRepositoryAPIAPIService) PutFileByPathSubmodelRepo(ctx context.
 	if err != nil {
 		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "ShouldEnforceFormula"), err
 	}
-	if shouldEnforceExtraSecurityCheck {
 
-		hasAttachment, err := s.submodelBackend.FileAttachmentExists(decodedSubmodelIdentifier, idShortPath)
-		if err != nil {
-			if common.IsErrNotFound(err) || errors.Is(err, sql.ErrNoRows) {
-				return newAPIErrorResponse(err, http.StatusNotFound, operation, "SubmodelElementNotFound"), nil
-			}
-			if common.IsErrBadRequest(err) {
-				return newAPIErrorResponse(err, http.StatusBadRequest, operation, "BadRequest"), nil
-			}
-			return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "ShouldEnforceFormula"), err
+	hasAttachment, err := s.submodelBackend.FileAttachmentExists(decodedSubmodelIdentifier, idShortPath)
+	if err != nil {
+		if common.IsErrNotFound(err) || errors.Is(err, sql.ErrNoRows) {
+			return newAPIErrorResponse(err, http.StatusNotFound, operation, "SubmodelElementNotFound"), nil
 		}
+		if common.IsErrMethodNotAllowed(err) {
+			return newAPIErrorResponse(err, http.StatusMethodNotAllowed, operation, "MethodNotAllowed"), nil
+		}
+		if common.IsErrBadRequest(err) {
+			return newAPIErrorResponse(err, http.StatusBadRequest, operation, "BadRequest"), nil
+		}
+		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "ShouldEnforceFormula"), err
+	}
+
+	if shouldEnforceExtraSecurityCheck {
 
 		ctx = auth.SelectPutFormulaByExistence(ctx, hasAttachment)
 		_, err = s.submodelBackend.GetSubmodelElement(ctx, decodedSubmodelIdentifier, idShortPath, false, "")
