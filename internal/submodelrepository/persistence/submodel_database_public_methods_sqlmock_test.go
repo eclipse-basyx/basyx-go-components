@@ -588,7 +588,7 @@ func TestFileAttachmentExistsReturnsNotFoundWhenElementMissing(t *testing.T) {
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 
-func TestFileAttachmentExistsReturnsBadRequestWhenElementIsNotFile(t *testing.T) {
+func TestFileAttachmentExistsReturnsMethodNotAllowedWhenElementIsNotFile(t *testing.T) {
 	t.Parallel()
 
 	db, mock, err := sqlmock.New()
@@ -606,7 +606,7 @@ func TestFileAttachmentExistsReturnsBadRequestWhenElementIsNotFile(t *testing.T)
 	exists, err := sut.FileAttachmentExists("sm", "not-file")
 	require.Error(t, err)
 	require.False(t, exists)
-	require.True(t, common.IsErrBadRequest(err))
+	require.True(t, common.IsErrMethodNotAllowed(err))
 	require.Contains(t, err.Error(), "SMREPO-FILEATTEXISTS-NOTFILE")
 	require.NoError(t, mock.ExpectationsWereMet())
 }
