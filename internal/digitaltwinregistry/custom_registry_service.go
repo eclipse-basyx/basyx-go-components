@@ -73,7 +73,7 @@ func (s *CustomRegistryService) GetAllAssetAdministrationShellDescriptors(
 		query := buildEdcBpnClaimEqualsHeaderExpression(createdAfter, "$aasdesc#createdAt")
 		ctx = auth.MergeQueryFilter(ctx, query)
 	}
-	ctx = registryapiinternal.WithIncludeCreatedAt(ctx)
+	ctx = descriptors.WithIncludeAASDescriptorCreatedAt(ctx)
 
 	return s.AssetAdministrationShellRegistryAPIAPIService.GetAllAssetAdministrationShellDescriptors(
 		ctx,

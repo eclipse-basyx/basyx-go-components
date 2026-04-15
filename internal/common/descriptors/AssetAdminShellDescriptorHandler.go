@@ -367,15 +367,18 @@ func buildListAssetAdministrationShellDescriptorsQuery(
 		pageAlias = "aas_page"
 		dataAlias = "aas_list_data"
 	)
+	includeCreatedAt := includeAASDescriptorCreatedAtFromContext(ctx)
 	maskedColumns := []auth.MaskedInnerColumnSpec{
 		{Fragment: "$aasdesc#assetKind", FlagAlias: "flag_assetkind", RawAlias: "c1"},
 		{Fragment: "$aasdesc#assetType", FlagAlias: "flag_assettype", RawAlias: "c2"},
 		{Fragment: "$aasdesc#globalAssetId", FlagAlias: "flag_globalassetid", RawAlias: "c3"},
 		{Fragment: "$aasdesc#idShort", FlagAlias: "flag_idshort", RawAlias: "c4"},
-		{Fragment: "$aasdesc#createdAt", FlagAlias: "flag_createdat", RawAlias: "c6"},
 		{Fragment: "$aasdesc#administration", FlagAlias: "flag_admin", RawAlias: "raw_admin_payload"},
 		{Fragment: "$aasdesc#displayName", FlagAlias: "flag_displayname", RawAlias: "raw_displayname_payload"},
 		{Fragment: "$aasdesc#description", FlagAlias: "flag_description", RawAlias: "raw_description_payload"},
+	}
+	if includeCreatedAt {
+		maskedColumns = append(maskedColumns, auth.MaskedInnerColumnSpec{Fragment: "$aasdesc#createdAt", FlagAlias: "flag_createdat", RawAlias: "c6"})
 	}
 	maskRuntime, err := auth.BuildSharedFragmentMaskRuntime(ctx, collector, maskedColumns)
 	if err != nil {
@@ -384,6 +387,24 @@ func buildListAssetAdministrationShellDescriptorsQuery(
 	maskedExpressions, err := maskRuntime.MaskedInnerAliasExprs(dataAlias, maskedColumns)
 	if err != nil {
 		return nil, err
+	}
+
+	innerSelectExpressions := []interface{}{
+		common.TAASDescriptor.Col(common.ColDescriptorID).As("c0"),
+		common.TAASDescriptor.Col(common.ColAssetKind).As("c1"),
+		common.TAASDescriptor.Col(common.ColAssetType).As("c2"),
+		common.TAASDescriptor.Col(common.ColGlobalAssetID).As("c3"),
+		common.TAASDescriptor.Col(common.ColIDShort).As("c4"),
+		common.TAASDescriptor.Col(common.ColAASID).As("c5"),
+		goqu.L("?::text", common.TDescriptorPayload.Col(common.ColAdministrativeInfoPayload)).As("raw_admin_payload"),
+		goqu.L("?::text", common.TDescriptorPayload.Col(common.ColDisplayNamePayload)).As("raw_displayname_payload"),
+		goqu.L("?::text", common.TDescriptorPayload.Col(common.ColDescriptionPayload)).As("raw_description_payload"),
+		common.TAASDescriptor.Col(common.ColAASID).As("sort_aas_id"),
+	}
+	if includeCreatedAt {
+		innerSelectExpressions = append(innerSelectExpressions, common.TAASDescriptor.Col(common.ColCreatedAt).As("c6"))
+	} else {
+		innerSelectExpressions = append(innerSelectExpressions, goqu.L("NULL").As("c6"))
 	}
 
 	dataDS := d.From(pageDS.As(pageAlias)).
@@ -399,33 +420,26 @@ func buildListAssetAdministrationShellDescriptorsQuery(
 			common.TDescriptorPayload,
 			goqu.On(common.TDescriptorPayload.Col(common.ColDescriptorID).Eq(common.TDescriptor.Col(common.ColID))),
 		).
-		Select(append([]interface{}{
-			common.TAASDescriptor.Col(common.ColDescriptorID).As("c0"),
-			common.TAASDescriptor.Col(common.ColAssetKind).As("c1"),
-			common.TAASDescriptor.Col(common.ColAssetType).As("c2"),
-			common.TAASDescriptor.Col(common.ColGlobalAssetID).As("c3"),
-			common.TAASDescriptor.Col(common.ColIDShort).As("c4"),
-			common.TAASDescriptor.Col(common.ColAASID).As("c5"),
-			common.TAASDescriptor.Col(common.ColCreatedAt).As("c6"),
-			goqu.L("?::text", common.TDescriptorPayload.Col(common.ColAdministrativeInfoPayload)).As("raw_admin_payload"),
-			goqu.L("?::text", common.TDescriptorPayload.Col(common.ColDisplayNamePayload)).As("raw_displayname_payload"),
-			goqu.L("?::text", common.TDescriptorPayload.Col(common.ColDescriptionPayload)).As("raw_description_payload"),
-			common.TAASDescriptor.Col(common.ColAASID).As("sort_aas_id"),
-		}, maskRuntime.Projections()...)...)
+		Select(append(innerSelectExpressions, maskRuntime.Projections()...)...)
+
+	outerSelectExpressions := []interface{}{
+		goqu.I(dataAlias + ".c0"),
+		maskedExpressions[0],
+		maskedExpressions[1],
+		maskedExpressions[2],
+		maskedExpressions[3],
+		goqu.I(dataAlias + ".c5"),
+	}
+	if includeCreatedAt {
+		outerSelectExpressions = append(outerSelectExpressions, maskedExpressions[7])
+		outerSelectExpressions = append(outerSelectExpressions, maskedExpressions[4], maskedExpressions[5], maskedExpressions[6])
+	} else {
+		outerSelectExpressions = append(outerSelectExpressions, goqu.I(dataAlias+".c6"))
+		outerSelectExpressions = append(outerSelectExpressions, maskedExpressions[4], maskedExpressions[5], maskedExpressions[6])
+	}
 
 	ds := d.From(dataDS.As(dataAlias)).
-		Select(
-			goqu.I(dataAlias+".c0"),
-			maskedExpressions[0],
-			maskedExpressions[1],
-			maskedExpressions[2],
-			maskedExpressions[3],
-			goqu.I(dataAlias+".c5"),
-			maskedExpressions[4],
-			maskedExpressions[5],
-			maskedExpressions[6],
-			maskedExpressions[7],
-		).
+		Select(outerSelectExpressions...).
 		Order(goqu.I(dataAlias + ".sort_aas_id").Asc())
 
 	return ds, nil
