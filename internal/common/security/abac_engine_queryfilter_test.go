@@ -135,3 +135,25 @@ func TestQueryFilter_FilterExpressionFor_WildcardCombinesOr(t *testing.T) {
 		t.Fatalf("expected 2 entries, got %d: %s", len(entries), string(j))
 	}
 }
+
+func TestQueryFilter_FilterExpressionEntriesFor_PropagatesMatchFlag(t *testing.T) {
+	b := true
+	expr := grammar.LogicalExpression{Boolean: &b}
+
+	q := QueryFilter{
+		Filters: FragmentFilters{
+			"$aasdesc#specificAssetIds[]": expr,
+		},
+		FilterMatch: FragmentMatchModes{
+			"$aasdesc#specificAssetIds[]": true,
+		},
+	}
+
+	entries := q.FilterExpressionEntriesFor("$aasdesc#specificAssetIds[]")
+	if len(entries) != 1 {
+		t.Fatalf("expected 1 entry, got %d", len(entries))
+	}
+	if !entries[0].Match {
+		t.Fatalf("expected Match=true for fragment entry")
+	}
+}
