@@ -36,6 +36,7 @@ import (
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/descriptors"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
+	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 	discoveryapiinternal "github.com/eclipse-basyx/basyx-go-components/internal/discoveryservice/api"
 )
 
@@ -56,6 +57,31 @@ func NewCustomRegistryService(
 		AssetAdministrationShellRegistryAPIAPIService: base,
 		discovery: discovery,
 	}
+}
+
+// GetAllAssetAdministrationShellDescriptors - Returns all Asset Administration Shell Descriptors
+func (s *CustomRegistryService) GetAllAssetAdministrationShellDescriptors(
+	ctx context.Context,
+	limit int32,
+	cursor string,
+	assetKind model.AssetKind,
+	assetType string,
+) (model.ImplResponse, error) {
+
+	createdAfter, _ := CreatedAfterFromContext(ctx)
+	if createdAfter != nil {
+		query := buildEdcBpnClaimEqualsHeaderExpression(createdAfter, "$aasdesc#createdAt")
+		ctx = auth.MergeQueryFilter(ctx, query)
+	}
+	ctx = registryapiinternal.WithIncludeCreatedAt(ctx)
+
+	return s.AssetAdministrationShellRegistryAPIAPIService.GetAllAssetAdministrationShellDescriptors(
+		ctx,
+		limit,
+		cursor,
+		assetKind,
+		assetType,
+	)
 }
 
 // PostAssetAdministrationShellDescriptor executes default POST behavior and

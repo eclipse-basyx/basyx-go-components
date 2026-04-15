@@ -53,6 +53,19 @@ const (
 	componentName = "AASR"
 )
 
+type includeCreatedAtKey struct{}
+
+// WithIncludeCreatedAt marks the request context so list responses include
+// createdAt for AAS descriptors.
+func WithIncludeCreatedAt(ctx context.Context) context.Context {
+	return context.WithValue(ctx, includeCreatedAtKey{}, true)
+}
+
+func includeCreatedAtFromContext(ctx context.Context) bool {
+	v, _ := ctx.Value(includeCreatedAtKey{}).(bool)
+	return v
+}
+
 // AssetAdministrationShellRegistryAPIAPIService is a service that implements the logic for the AssetAdministrationShellRegistryAPIAPIServicer
 // This service should implement the business logic for every endpoint for the AssetAdministrationShellRegistryAPIAPI API.
 // Include any external packages or services that will be required by this service.
@@ -73,6 +86,7 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) GetAllAssetAdministratio
 	if resp != nil || err != nil {
 		return *resp, err
 	}
+	includeCreatedAt := includeCreatedAtFromContext(ctx)
 	aasds, nextCursor, err := s.aasRegistryBackend.ListAssetAdministrationShellDescriptors(ctx, limit, internalCursor, assetKind, assetType)
 	if err != nil {
 		log.Printf("🧩 [%s] Error in GetAllAssetAdministrationShellDescriptors: list failed (limit=%d cursor=%q assetKind=%q assetType=%q): %v", componentName, limit, internalCursor, string(assetKind), assetType, err)
@@ -95,6 +109,9 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) GetAllAssetAdministratio
 			return common.NewErrorResponse(
 				toJsonErr, http.StatusInternalServerError, componentName, "GetAllAssetAdministrationShellDescriptors", "Unhandled-ToJsonable",
 			), toJsonErr
+		}
+		if !includeCreatedAt {
+			delete(j, "createdAt")
 		}
 		jsonable = append(jsonable, j)
 	}

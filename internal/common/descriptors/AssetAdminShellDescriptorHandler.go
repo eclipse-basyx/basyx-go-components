@@ -372,6 +372,7 @@ func buildListAssetAdministrationShellDescriptorsQuery(
 		{Fragment: "$aasdesc#assetType", FlagAlias: "flag_assettype", RawAlias: "c2"},
 		{Fragment: "$aasdesc#globalAssetId", FlagAlias: "flag_globalassetid", RawAlias: "c3"},
 		{Fragment: "$aasdesc#idShort", FlagAlias: "flag_idshort", RawAlias: "c4"},
+		{Fragment: "$aasdesc#createdAt", FlagAlias: "flag_createdat", RawAlias: "c6"},
 		{Fragment: "$aasdesc#administration", FlagAlias: "flag_admin", RawAlias: "raw_admin_payload"},
 		{Fragment: "$aasdesc#displayName", FlagAlias: "flag_displayname", RawAlias: "raw_displayname_payload"},
 		{Fragment: "$aasdesc#description", FlagAlias: "flag_description", RawAlias: "raw_description_payload"},
@@ -405,6 +406,7 @@ func buildListAssetAdministrationShellDescriptorsQuery(
 			common.TAASDescriptor.Col(common.ColGlobalAssetID).As("c3"),
 			common.TAASDescriptor.Col(common.ColIDShort).As("c4"),
 			common.TAASDescriptor.Col(common.ColAASID).As("c5"),
+			common.TAASDescriptor.Col(common.ColCreatedAt).As("c6"),
 			goqu.L("?::text", common.TDescriptorPayload.Col(common.ColAdministrativeInfoPayload)).As("raw_admin_payload"),
 			goqu.L("?::text", common.TDescriptorPayload.Col(common.ColDisplayNamePayload)).As("raw_displayname_payload"),
 			goqu.L("?::text", common.TDescriptorPayload.Col(common.ColDescriptionPayload)).As("raw_description_payload"),
@@ -422,6 +424,7 @@ func buildListAssetAdministrationShellDescriptorsQuery(
 			maskedExpressions[4],
 			maskedExpressions[5],
 			maskedExpressions[6],
+			maskedExpressions[7],
 		).
 		Order(goqu.I(dataAlias + ".sort_aas_id").Asc())
 
@@ -561,6 +564,7 @@ func listAssetAdministrationShellDescriptors(
 			&r.GlobalAssetID,
 			&r.IDShort,
 			&r.IDStr,
+			&r.CreatedAt,
 			&adminPayloadText,
 			&displayNamePayloadText,
 			&descriptionPayloadText,
@@ -677,6 +681,7 @@ func listAssetAdministrationShellDescriptors(
 			GlobalAssetId:       r.GlobalAssetID.String,
 			IdShort:             r.IDShort.String,
 			Id:                  r.IDStr,
+			CreatedAt:           nullTimeToPtr(r.CreatedAt),
 			Administration:      adminInfo,
 			DisplayName:         displayName,
 			Description:         description,
@@ -688,6 +693,14 @@ func listAssetAdministrationShellDescriptors(
 	}
 
 	return out, nextCursor, nil
+}
+
+func nullTimeToPtr(nt sql.NullTime) *time.Time {
+	if !nt.Valid {
+		return nil
+	}
+	t := nt.Time
+	return &t
 }
 
 // ExistsAASByID performs a lightweight existence check for an AAS by its Id

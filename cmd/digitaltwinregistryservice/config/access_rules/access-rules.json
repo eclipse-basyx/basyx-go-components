@@ -21,6 +21,9 @@
     "DEFFORMULAS": [
       { "name": "always_true", "formula": { "$boolean": true } },
       { "name": "always_false", "formula": { "$boolean": false } },
+      { "name": "tenant_one", "formula":
+        { "$eq": [ { "$attribute": { "CLAIM": "Edc-Bpn" } }, { "$strVal": "TENANT_ONE"} ] }
+      },
       { "name": "enforce_publicreadable_write_rule", "formula":
         {
           "$or": 
@@ -82,6 +85,7 @@
     ],
 
     "rules": [
+      { "USEACL": "write_anonymous", "USEOBJECTS": ["all_shell_descriptors", "assetlinks", "shells"], "USEFORMULA": "tenant_one" },
       { "USEACL": "read_anonymous", "USEOBJECTS": ["all_shell_descriptors"], "USEFORMULA": "logic", 
         "FILTERLIST": 
         [
@@ -123,7 +127,7 @@
         "FILTERLIST": 
         [
           {
-            "FRAGMENT": "$aasdesc#specificAssetIds[].externalSubjectId",
+            "FRAGMENT": "$aasdesc#specificAssetIds[].externalSubjectId.keys[]",
             "USEFORMULA": "bpn_match"
           }
         ] 

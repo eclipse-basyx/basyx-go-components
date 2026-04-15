@@ -83,7 +83,7 @@ func (s *CustomDiscoveryService) SearchAllAssetAdministrationShellIdsByAssetLink
 
 	createdAfter, _ := CreatedAfterFromContext(ctx)
 	if createdAfter != nil {
-		query := buildEdcBpnClaimEqualsHeaderExpression(createdAfter)
+		query := buildEdcBpnClaimEqualsHeaderExpression(createdAfter, "$bd#createdAt")
 		ctx = auth.MergeQueryFilter(ctx, query)
 	}
 
@@ -260,10 +260,10 @@ func specificAssetIDsToJSONable(specificAssetIDs []types.ISpecificAssetID) ([]ma
 
 // buildEdcBpnClaimEqualsHeaderExpression creates a logical expression that checks
 // whether the Edc-Bpn claim equals the provided header value.
-func buildEdcBpnClaimEqualsHeaderExpression(t *time.Time) grammar.Query {
+func buildEdcBpnClaimEqualsHeaderExpression(t *time.Time, pattern string) grammar.Query {
 	dt := grammar.DateTimeLiteralPattern(t.UTC())
 
-	timePattern := grammar.ModelStringPattern("$bd#createdAt")
+	timePattern := grammar.ModelStringPattern(pattern)
 	timeLe := grammar.LogicalExpression{
 		Le: grammar.ComparisonItems{
 			{DateTimeVal: &dt},
