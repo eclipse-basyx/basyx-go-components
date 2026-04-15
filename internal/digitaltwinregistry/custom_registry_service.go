@@ -67,7 +67,6 @@ func (s *CustomRegistryService) GetAllAssetAdministrationShellDescriptors(
 	assetKind model.AssetKind,
 	assetType string,
 ) (model.ImplResponse, error) {
-
 	createdAfter, _ := CreatedAfterFromContext(ctx)
 	if createdAfter != nil {
 		query := buildEdcBpnClaimEqualsHeaderExpression(createdAfter, "$aasdesc#createdAt")
