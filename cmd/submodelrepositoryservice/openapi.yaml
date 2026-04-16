@@ -222,23 +222,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                required:
-                  - paging_metadata
-                  - result
-                properties:
-                  paging_metadata:
-                    type: object
-                    properties:
-                      cursor:
-                        type: string
-                    additionalProperties: true
-                  result:
-                    type: object
-                    additionalProperties:
-                      type: array
-                      items:
-                        $ref: 'https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.1.1#/components/schemas/PathItem'
+                $ref: 'https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.1.1#/components/schemas/GetPathItemsResult'
         '400':
           $ref: 'https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.1.1#/components/responses/bad-request'
         '401':
