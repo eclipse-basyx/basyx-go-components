@@ -671,6 +671,21 @@ func (s *SubmodelDatabase) GetSubmodelElements(ctx context.Context, submodelID s
 	return submodelelements.GetSubmodelElementsBySubmodelID(ctx, s.db, submodelID, limit, cursor, level)
 }
 
+// GetSubmodelElementPaths retrieves submodel element paths directly from persisted idshort_path values.
+func (s *SubmodelDatabase) GetSubmodelElementPaths(ctx context.Context, submodelID string, level string) ([]string, error) {
+	return submodelelements.GetSubmodelElementPathsBySubmodelID(ctx, s.db, submodelID, level)
+}
+
+// GetSubmodelElementPathPage retrieves paged submodel element paths directly from persisted idshort_path values.
+func (s *SubmodelDatabase) GetSubmodelElementPathPage(ctx context.Context, submodelID string, limit *int, cursor string, level string) ([]string, string, error) {
+	return submodelelements.GetSubmodelElementPathsPageBySubmodelID(ctx, s.db, submodelID, limit, cursor, level)
+}
+
+// GetSubmodelElementPathsByPath retrieves path notation for a specific submodel element path.
+func (s *SubmodelDatabase) GetSubmodelElementPathsByPath(ctx context.Context, submodelID string, idShortPath string, level string) ([]string, error) {
+	return submodelelements.GetSubmodelElementPathsByPath(ctx, s.db, submodelID, idShortPath, level)
+}
+
 // GetSubmodelElementReferences retrieves SME references and applies optional ABAC formula filters from ctx.
 func (s *SubmodelDatabase) GetSubmodelElementReferences(ctx context.Context, submodelID string, limit *int, cursor string) ([]types.IReference, string, error) {
 	return submodelelements.GetSubmodelElementReferencesBySubmodelID(ctx, s.db, submodelID, limit, cursor)
@@ -970,7 +985,7 @@ func (s *SubmodelDatabase) FileAttachmentExists(submodelID string, idShortPath s
 	}
 
 	if !fileElementID.Valid {
-		return false, common.NewErrBadRequest("SMREPO-FILEATTEXISTS-NOTFILE Submodel element is not of type File")
+		return false, common.NewErrMethodNotAllowed("SMREPO-FILEATTEXISTS-NOTFILE Submodel element is not of type File")
 	}
 
 	return fileOID.Valid, nil

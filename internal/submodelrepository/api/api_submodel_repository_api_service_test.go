@@ -101,6 +101,17 @@ func TestGetSubmodelElementByPathSubmodelRepoRejectsInvalidLevel(t *testing.T) {
 	require.Equal(t, 400, response.Code)
 }
 
+func TestGetSubmodelByIDPathRejectsInvalidLevel(t *testing.T) {
+	t.Parallel()
+
+	sut := NewSubmodelRepositoryAPIAPIService(persistencepostgresql.SubmodelDatabase{})
+	encodedSubmodelID := common.EncodeString("sm-1")
+
+	response, err := sut.GetSubmodelByIDPath(contextWithABACDisabled(t), encodedSubmodelID, "invalid-level")
+	require.NoError(t, err)
+	require.Equal(t, 400, response.Code)
+}
+
 func TestParseDelegationTimeoutParsesISO8601Duration(t *testing.T) {
 	t.Parallel()
 

@@ -456,6 +456,19 @@ func TestContractSubmodelRepository(t *testing.T) {
 		return encodedSubmodelID
 	}
 
+	findMetadataByIDShort := func(t *testing.T, metadataList []map[string]any, idShort string) map[string]any {
+		t.Helper()
+
+		for _, metadata := range metadataList {
+			if metadata["idShort"] == idShort {
+				return metadata
+			}
+		}
+
+		t.Fatalf("metadata for idShort=%s not found", idShort)
+		return nil
+	}
+
 	t.Run("GetSubmodelByIDMetadataReturnsMetadataPayload", func(t *testing.T) {
 		submodelID := fmt.Sprintf("https://example.com/ids/sm/contract-metadata-%d", time.Now().UnixNano())
 		submodelIDShort := fmt.Sprintf("contractMetadata%d", time.Now().UnixNano())
@@ -512,6 +525,285 @@ func TestContractSubmodelRepository(t *testing.T) {
 		require.True(t, ok, "submodelElements should be a JSON array when present")
 		assert.NotEmpty(t, submodelElements, "submodelElements must be omitted when empty or contain at least one element")
 	})
+
+	t.Run("GetAllSubmodelElementsMetadataReturnsHierarchyWithoutPropertyValues", func(t *testing.T) {
+		submodelID := fmt.Sprintf("https://example.com/ids/sm/contract-sme-metadata-all-%d", time.Now().UnixNano())
+		submodelIDShort := fmt.Sprintf("contractSMEMetadataAll%d", time.Now().UnixNano())
+		encodedSubmodelID := createSubmodel(t, submodelID, submodelIDShort)
+
+		statusCode, body, err := requestJSON(http.MethodPost, fmt.Sprintf("%s/submodels/%s/submodel-elements", baseURL, encodedSubmodelID), map[string]any{
+			"idShort":   "TopProperty",
+			"modelType": "Property",
+			"valueType": "xs:string",
+			"value":     "top-value",
+		})
+		require.NoError(t, err)
+		require.Equal(t, http.StatusCreated, statusCode, "response=%s", string(body))
+
+		statusCode, body, err = requestJSON(http.MethodPost, fmt.Sprintf("%s/submodels/%s/submodel-elements", baseURL, encodedSubmodelID), map[string]any{
+			"idShort":   "MainCollection",
+			"modelType": "SubmodelElementCollection",
+			"value": []map[string]any{
+				{
+					"idShort":   "NestedProperty",
+					"modelType": "Property",
+					"valueType": "xs:string",
+					"value":     "nested-value",
+				},
+			},
+		})
+		require.NoError(t, err)
+		require.Equal(t, http.StatusCreated, statusCode, "response=%s", string(body))
+
+		statusCode, body, err = requestJSON(http.MethodGet, fmt.Sprintf("%s/submodels/%s/submodel-elements/$metadata?limit=500", baseURL, encodedSubmodelID), nil)
+		require.NoError(t, err)
+		require.Equal(t, http.StatusOK, statusCode, "response=%s", string(body))
+
+		var response struct {
+			PagingMetadata map[string]any   `json:"paging_metadata"`
+			Result         []map[string]any `json:"result"`
+		}
+		require.NoError(t, json.Unmarshal(body, &response), "response=%s", string(body))
+		require.NotEmpty(t, response.Result, "response=%s", string(body))
+
+		topPropertyMetadata := findMetadataByIDShort(t, response.Result, "TopProperty")
+		assert.Equal(t, "Property", topPropertyMetadata["modelType"])
+		assert.Equal(t, "xs:string", topPropertyMetadata["valueType"])
+		_, hasTopPropertyValue := topPropertyMetadata["value"]
+		assert.False(t, hasTopPropertyValue, "property metadata should not include value payload")
+
+		collectionMetadata := findMetadataByIDShort(t, response.Result, "MainCollection")
+		assert.Equal(t, "SubmodelElementCollection", collectionMetadata["modelType"])
+
+		rawNestedMetadata, hasNestedMetadata := collectionMetadata["value"]
+		require.True(t, hasNestedMetadata, "collection metadata should include nested metadata hierarchy")
+
+		nestedMetadata, ok := rawNestedMetadata.([]any)
+		require.True(t, ok, "collection metadata hierarchy must be an array")
+		require.NotEmpty(t, nestedMetadata)
+
+		firstNestedMetadata, ok := nestedMetadata[0].(map[string]any)
+		require.True(t, ok, "nested metadata entry must be an object")
+		assert.Equal(t, "NestedProperty", firstNestedMetadata["idShort"])
+		_, hasNestedValue := firstNestedMetadata["value"]
+		assert.False(t, hasNestedValue, "nested property metadata should not include value payload")
+	})
+
+	t.Run("GetSubmodelElementByPathMetadataReturnsMetadataWithoutPropertyValues", func(t *testing.T) {
+		submodelID := fmt.Sprintf("https://example.com/ids/sm/contract-sme-metadata-path-%d", time.Now().UnixNano())
+		submodelIDShort := fmt.Sprintf("contractSMEMetadataPath%d", time.Now().UnixNano())
+		encodedSubmodelID := createSubmodel(t, submodelID, submodelIDShort)
+
+		statusCode, body, err := requestJSON(http.MethodPost, fmt.Sprintf("%s/submodels/%s/submodel-elements", baseURL, encodedSubmodelID), map[string]any{
+			"idShort":   "TopProperty",
+			"modelType": "Property",
+			"valueType": "xs:string",
+			"value":     "top-value",
+		})
+		require.NoError(t, err)
+		require.Equal(t, http.StatusCreated, statusCode, "response=%s", string(body))
+
+		statusCode, body, err = requestJSON(http.MethodPost, fmt.Sprintf("%s/submodels/%s/submodel-elements", baseURL, encodedSubmodelID), map[string]any{
+			"idShort":   "MainCollection",
+			"modelType": "SubmodelElementCollection",
+			"value": []map[string]any{
+				{
+					"idShort":   "NestedProperty",
+					"modelType": "Property",
+					"valueType": "xs:string",
+					"value":     "nested-value",
+				},
+			},
+		})
+		require.NoError(t, err)
+		require.Equal(t, http.StatusCreated, statusCode, "response=%s", string(body))
+
+		statusCode, body, err = requestJSON(http.MethodGet, fmt.Sprintf("%s/submodels/%s/submodel-elements/TopProperty/$metadata", baseURL, encodedSubmodelID), nil)
+		require.NoError(t, err)
+		require.Equal(t, http.StatusOK, statusCode, "response=%s", string(body))
+
+		var topPropertyMetadata map[string]any
+		require.NoError(t, json.Unmarshal(body, &topPropertyMetadata), "response=%s", string(body))
+		assert.Equal(t, "TopProperty", topPropertyMetadata["idShort"])
+		assert.Equal(t, "Property", topPropertyMetadata["modelType"])
+		assert.Equal(t, "xs:string", topPropertyMetadata["valueType"])
+		_, hasTopPropertyValue := topPropertyMetadata["value"]
+		assert.False(t, hasTopPropertyValue, "property metadata should not include value payload")
+
+		statusCode, body, err = requestJSON(http.MethodGet, fmt.Sprintf("%s/submodels/%s/submodel-elements/MainCollection.NestedProperty/$metadata", baseURL, encodedSubmodelID), nil)
+		require.NoError(t, err)
+		require.Equal(t, http.StatusOK, statusCode, "response=%s", string(body))
+
+		var nestedPropertyMetadata map[string]any
+		require.NoError(t, json.Unmarshal(body, &nestedPropertyMetadata), "response=%s", string(body))
+		assert.Equal(t, "NestedProperty", nestedPropertyMetadata["idShort"])
+		assert.Equal(t, "Property", nestedPropertyMetadata["modelType"])
+		assert.Equal(t, "xs:string", nestedPropertyMetadata["valueType"])
+		_, hasNestedValue := nestedPropertyMetadata["value"]
+		assert.False(t, hasNestedValue, "nested property metadata should not include value payload")
+	})
+}
+
+func TestPathNotationEndpoints(t *testing.T) {
+	baseURL := "http://localhost:6004"
+	submodelID := fmt.Sprintf("urn:basyx:integration:path-endpoints-%d", time.Now().UnixNano())
+	submodelIDEncoded := common.EncodeString(submodelID)
+
+	payload := map[string]any{
+		"id":        submodelID,
+		"idShort":   "PathEndpointSubmodel",
+		"kind":      "Instance",
+		"modelType": "Submodel",
+		"submodelElements": []map[string]any{
+			{
+				"idShort":   "TopProperty",
+				"modelType": "Property",
+				"valueType": "xs:string",
+				"value":     "top-value",
+			},
+			{
+				"idShort":   "MainCollection",
+				"modelType": "SubmodelElementCollection",
+				"value": []map[string]any{
+					{
+						"idShort":   "NestedProperty",
+						"modelType": "Property",
+						"valueType": "xs:string",
+						"value":     "nested-value",
+					},
+					{
+						"idShort":              "NestedList",
+						"modelType":            "SubmodelElementList",
+						"typeValueListElement": "SubmodelElement",
+						"value": []map[string]any{
+							{
+								"idShort":   "ListProp1",
+								"modelType": "Property",
+								"valueType": "xs:string",
+								"value":     "list-value-1",
+							},
+							{
+								"idShort":   "ListProp2",
+								"modelType": "Property",
+								"valueType": "xs:string",
+								"value":     "list-value-2",
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	statusCode, body, err := requestJSON(http.MethodPost, fmt.Sprintf("%s/submodels", baseURL), payload)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusCreated, statusCode, "response=%s", string(body))
+
+	t.Cleanup(func() {
+		deleteStatusCode, deleteBody, deleteErr := requestJSON(http.MethodDelete, fmt.Sprintf("%s/submodels/%s", baseURL, submodelIDEncoded), nil)
+		if deleteErr != nil {
+			t.Logf("cleanup delete failed for submodel %s: %v", submodelID, deleteErr)
+			return
+		}
+
+		if deleteStatusCode != http.StatusNoContent && deleteStatusCode != http.StatusNotFound {
+			t.Logf("cleanup delete returned unexpected status=%d for submodel %s, response=%s", deleteStatusCode, submodelID, string(deleteBody))
+		}
+	})
+
+	t.Run("GetSubmodelByIDPathDeepReturnsPersistedNestedPaths", func(t *testing.T) {
+		statusCode, body, err := requestJSON(http.MethodGet, fmt.Sprintf("%s/submodels/%s/$path?level=deep", baseURL, submodelIDEncoded), nil)
+		require.NoError(t, err)
+		require.Equal(t, http.StatusOK, statusCode, "response=%s", string(body))
+
+		var paths []string
+		require.NoError(t, json.Unmarshal(body, &paths), "response=%s", string(body))
+
+		assert.Contains(t, paths, "TopProperty")
+		assert.Contains(t, paths, "MainCollection")
+		assert.Contains(t, paths, "MainCollection.NestedProperty")
+		assert.Contains(t, paths, "MainCollection.NestedList")
+		assert.Contains(t, paths, "MainCollection.NestedList[0]")
+		assert.Contains(t, paths, "MainCollection.NestedList[1]")
+	})
+
+	t.Run("GetSubmodelByIDPathCoreReturnsTopLevelOnly", func(t *testing.T) {
+		statusCode, body, err := requestJSON(http.MethodGet, fmt.Sprintf("%s/submodels/%s/$path?level=core", baseURL, submodelIDEncoded), nil)
+		require.NoError(t, err)
+		require.Equal(t, http.StatusOK, statusCode, "response=%s", string(body))
+
+		var paths []string
+		require.NoError(t, json.Unmarshal(body, &paths), "response=%s", string(body))
+
+		assert.Contains(t, paths, "TopProperty")
+		assert.Contains(t, paths, "MainCollection")
+		assert.NotContains(t, paths, "MainCollection.NestedProperty")
+		assert.NotContains(t, paths, "MainCollection.NestedList[0]")
+	})
+
+	t.Run("GetAllSubmodelElementsPathDeepReturnsHierarchy", func(t *testing.T) {
+		statusCode, body, err := requestJSON(http.MethodGet, fmt.Sprintf("%s/submodels/%s/submodel-elements/$path?level=deep&limit=500", baseURL, submodelIDEncoded), nil)
+		require.NoError(t, err)
+		require.Equal(t, http.StatusOK, statusCode, "response=%s", string(body))
+
+		var response struct {
+			PagingMetadata map[string]any `json:"paging_metadata"`
+			Result         []string       `json:"result"`
+		}
+		require.NoError(t, json.Unmarshal(body, &response), "response=%s", string(body))
+
+		assert.Contains(t, response.Result, "TopProperty")
+		assert.Contains(t, response.Result, "MainCollection")
+		assert.Contains(t, response.Result, "MainCollection.NestedProperty")
+		assert.Contains(t, response.Result, "MainCollection.NestedList")
+		assert.Contains(t, response.Result, "MainCollection.NestedList[0]")
+		assert.Contains(t, response.Result, "MainCollection.NestedList[1]")
+	})
+
+	t.Run("GetAllSubmodelElementsPathCoreReturnsTopLevelOnly", func(t *testing.T) {
+		statusCode, body, err := requestJSON(http.MethodGet, fmt.Sprintf("%s/submodels/%s/submodel-elements/$path?level=core&limit=500", baseURL, submodelIDEncoded), nil)
+		require.NoError(t, err)
+		require.Equal(t, http.StatusOK, statusCode, "response=%s", string(body))
+
+		var response struct {
+			PagingMetadata map[string]any `json:"paging_metadata"`
+			Result         []string       `json:"result"`
+		}
+		require.NoError(t, json.Unmarshal(body, &response), "response=%s", string(body))
+
+		assert.Contains(t, response.Result, "TopProperty")
+		assert.Contains(t, response.Result, "MainCollection")
+		assert.NotContains(t, response.Result, "MainCollection.NestedProperty")
+		assert.NotContains(t, response.Result, "MainCollection.NestedList[0]")
+	})
+
+	t.Run("GetSubmodelElementByPathPathDeepReturnsSubtree", func(t *testing.T) {
+		statusCode, body, err := requestJSON(http.MethodGet, fmt.Sprintf("%s/submodels/%s/submodel-elements/MainCollection/$path?level=deep", baseURL, submodelIDEncoded), nil)
+		require.NoError(t, err)
+		require.Equal(t, http.StatusOK, statusCode, "response=%s", string(body))
+
+		var paths []string
+		require.NoError(t, json.Unmarshal(body, &paths), "response=%s", string(body))
+
+		assert.Contains(t, paths, "MainCollection")
+		assert.Contains(t, paths, "MainCollection.NestedProperty")
+		assert.Contains(t, paths, "MainCollection.NestedList")
+		assert.Contains(t, paths, "MainCollection.NestedList[0]")
+		assert.Contains(t, paths, "MainCollection.NestedList[1]")
+		assert.NotContains(t, paths, "TopProperty")
+	})
+
+	t.Run("GetSubmodelElementByPathPathCoreReturnsOnlyRequestedPath", func(t *testing.T) {
+		statusCode, body, err := requestJSON(http.MethodGet, fmt.Sprintf("%s/submodels/%s/submodel-elements/MainCollection/$path?level=core", baseURL, submodelIDEncoded), nil)
+		require.NoError(t, err)
+		require.Equal(t, http.StatusOK, statusCode, "response=%s", string(body))
+
+		var paths []string
+		require.NoError(t, json.Unmarshal(body, &paths), "response=%s", string(body))
+
+		assert.Equal(t, []string{"MainCollection"}, paths)
+	})
+
 }
 
 // IntegrationTest runs the integration tests based on the config file
@@ -655,6 +947,47 @@ func TestFileAttachmentOperations(t *testing.T) {
 		_, _, statusCode, _ := downloadFileAttachment(endpoint)
 		assert.Equal(t, http.StatusNotFound, statusCode, "Expected 404 Not Found after file deletion")
 	})
+}
+
+func TestUploadAttachmentToNonFileSubmodelElementReturnsMethodNotAllowed(t *testing.T) {
+	baseURL := "http://localhost:6004"
+	submodelID := fmt.Sprintf("urn:basyx:integration:non-file-attachment-%d", time.Now().UnixNano())
+	submodelIDEncoded := common.EncodeString(submodelID)
+	nonFileElementIDShort := "NonFileProperty"
+
+	statusCode, body, err := requestJSON(http.MethodPost, fmt.Sprintf("%s/submodels", baseURL), map[string]any{
+		"id":        submodelID,
+		"idShort":   "NonFileAttachmentSubmodel",
+		"kind":      "Instance",
+		"modelType": "Submodel",
+		"submodelElements": []map[string]any{
+			{
+				"idShort":   nonFileElementIDShort,
+				"valueType": "xs:string",
+				"value":     "initial-value",
+				"modelType": "Property",
+			},
+		},
+	})
+	require.NoError(t, err)
+	require.Equal(t, http.StatusCreated, statusCode, "response=%s", string(body))
+
+	t.Cleanup(func() {
+		deleteStatusCode, deleteBody, deleteErr := requestJSON(http.MethodDelete, fmt.Sprintf("%s/submodels/%s", baseURL, submodelIDEncoded), nil)
+		if deleteErr != nil {
+			t.Logf("cleanup delete failed for submodel %s: %v", submodelID, deleteErr)
+			return
+		}
+
+		if deleteStatusCode != http.StatusNoContent && deleteStatusCode != http.StatusNotFound {
+			t.Logf("cleanup delete returned unexpected status=%d for submodel %s, response=%s", deleteStatusCode, submodelID, string(deleteBody))
+		}
+	})
+
+	attachmentEndpoint := fmt.Sprintf("%s/submodels/%s/submodel-elements/%s/attachment", baseURL, submodelIDEncoded, nonFileElementIDShort)
+	statusCode, err = uploadFileAttachment(attachmentEndpoint, "testFiles/marcus.gif", "should-fail.gif")
+	require.NoError(t, err)
+	assert.Equal(t, http.StatusMethodNotAllowed, statusCode, "Expected 405 Method Not Allowed when uploading attachment to non-File SME")
 }
 
 // TestMain handles setup and teardown
