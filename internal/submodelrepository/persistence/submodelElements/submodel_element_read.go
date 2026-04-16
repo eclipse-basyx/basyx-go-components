@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -135,6 +136,193 @@ func GetSubmodelElementPathsBySubmodelID(ctx context.Context, db *sql.DB, submod
 
 	if rowsErr := rows.Err(); rowsErr != nil {
 		return nil, common.NewInternalServerError("SMREPO-GETSMEPATHS-ROWSERR " + rowsErr.Error())
+	}
+
+	return paths, nil
+}
+
+// GetSubmodelElementPathsPageBySubmodelID returns paged submodel element paths directly from persisted idshort_path values.
+func GetSubmodelElementPathsPageBySubmodelID(ctx context.Context, db *sql.DB, submodelID string, limit *int, cursor string, level string) ([]string, string, error) {
+	if submodelID == "" {
+		return nil, "", common.NewErrBadRequest("SMREPO-GETSMEPATHSPAGE-EMPTYSMID Submodel id must not be empty")
+	}
+	if level != "" && level != "core" && level != "deep" {
+		return nil, "", common.NewErrBadRequest("SMREPO-GETSMEPATHSPAGE-BADLEVEL level must be one of '', 'core', or 'deep'")
+	}
+	if limit != nil && *limit < 0 {
+		return nil, "", common.NewErrBadRequest("SMREPO-GETSMEPATHSPAGE-BADLIMIT limit must be >= 0")
+	}
+
+	pageLimit := 100
+	if limit != nil {
+		pageLimit = *limit
+	}
+	if pageLimit == 0 {
+		return []string{}, "", nil
+	}
+
+	submodelDatabaseID, submodelIDErr := persistenceutils.GetSubmodelDatabaseIDFromDB(db, submodelID)
+	if submodelIDErr != nil {
+		if errors.Is(submodelIDErr, sql.ErrNoRows) {
+			return nil, "", common.NewErrNotFound(submodelID)
+		}
+		return nil, "", common.NewInternalServerError("SMREPO-GETSMEPATHSPAGE-GETSMDATABASEID " + submodelIDErr.Error())
+	}
+
+	dialect := goqu.Dialect("postgres")
+	query := dialect.
+		From(goqu.T("submodel_element").As("sme")).
+		Select(goqu.I("sme.idshort_path")).
+		Where(goqu.I("sme.submodel_id").Eq(submodelDatabaseID))
+
+	if level == "core" {
+		query = query.Where(goqu.I("sme.parent_sme_id").IsNull())
+	}
+	if cursor != "" {
+		query = query.Where(goqu.I("sme.idshort_path").Gt(cursor))
+	}
+
+	collector, collectorErr := grammar.NewResolvedFieldPathCollectorForRoot(grammar.CollectorRootSME)
+	if collectorErr != nil {
+		return nil, "", common.NewInternalServerError("SMREPO-GETSMEPATHSPAGE-BADCOLLECTOR " + collectorErr.Error())
+	}
+
+	shouldEnforceFormula, enforceErr := auth.ShouldEnforceFormula(ctx)
+	if enforceErr != nil {
+		return nil, "", common.NewInternalServerError("SMREPO-GETSMEPATHSPAGE-SHOULDENFORCE " + enforceErr.Error())
+	}
+	if shouldEnforceFormula {
+		var addFormulaErr error
+		query, addFormulaErr = auth.AddFormulaQueryFromContext(ctx, query, collector)
+		if addFormulaErr != nil {
+			return nil, "", common.NewInternalServerError("SMREPO-GETSMEPATHSPAGE-ABACFORMULA " + addFormulaErr.Error())
+		}
+	}
+
+	query = query.
+		Order(goqu.I("sme.idshort_path").Asc(), goqu.I("sme.id").Asc()).
+		Limit(uint(pageLimit + 1))
+
+	sqlQuery, args, toSQLErr := query.ToSQL()
+	if toSQLErr != nil {
+		return nil, "", common.NewInternalServerError("SMREPO-GETSMEPATHSPAGE-BUILDQ " + toSQLErr.Error())
+	}
+
+	rows, queryErr := db.Query(sqlQuery, args...)
+	if queryErr != nil {
+		return nil, "", common.NewInternalServerError("SMREPO-GETSMEPATHSPAGE-EXECQ " + queryErr.Error())
+	}
+	defer func() { _ = rows.Close() }()
+
+	paths := make([]string, 0)
+	for rows.Next() {
+		var path string
+		if scanErr := rows.Scan(&path); scanErr != nil {
+			return nil, "", common.NewInternalServerError("SMREPO-GETSMEPATHSPAGE-SCANQ " + scanErr.Error())
+		}
+		paths = append(paths, path)
+	}
+
+	if rowsErr := rows.Err(); rowsErr != nil {
+		return nil, "", common.NewInternalServerError("SMREPO-GETSMEPATHSPAGE-ROWSERR " + rowsErr.Error())
+	}
+
+	nextCursor := ""
+	if len(paths) > pageLimit {
+		nextCursor = paths[pageLimit-1]
+		paths = paths[:pageLimit]
+	}
+
+	return paths, nextCursor, nil
+}
+
+// GetSubmodelElementPathsByPath returns persisted idshort_path values for a submodel element path and, for deep level, its descendants.
+func GetSubmodelElementPathsByPath(ctx context.Context, db *sql.DB, submodelID string, idShortPath string, level string) ([]string, error) {
+	if submodelID == "" {
+		return nil, common.NewErrBadRequest("SMREPO-GETSMEPATHSBYPATH-EMPTYSMID Submodel id must not be empty")
+	}
+	if idShortPath == "" {
+		return nil, common.NewErrBadRequest("SMREPO-GETSMEPATHSBYPATH-EMPTYPATH idShort path must not be empty")
+	}
+	if level != "" && level != "core" && level != "deep" {
+		return nil, common.NewErrBadRequest("SMREPO-GETSMEPATHSBYPATH-BADLEVEL level must be one of '', 'core', or 'deep'")
+	}
+
+	submodelDatabaseID, submodelIDErr := persistenceutils.GetSubmodelDatabaseIDFromDB(db, submodelID)
+	if submodelIDErr != nil {
+		if errors.Is(submodelIDErr, sql.ErrNoRows) {
+			return nil, common.NewErrNotFound(submodelID)
+		}
+		return nil, common.NewInternalServerError("SMREPO-GETSMEPATHSBYPATH-GETSMDATABASEID " + submodelIDErr.Error())
+	}
+
+	if formulaCheckErr := ensureSubmodelElementPathMatchesFormula(ctx, db, submodelID, int64(submodelDatabaseID), idShortPath); formulaCheckErr != nil {
+		return nil, formulaCheckErr
+	}
+
+	dialect := goqu.Dialect("postgres")
+	query := dialect.
+		From(goqu.T("submodel_element").As("sme")).
+		Select(goqu.I("sme.idshort_path")).
+		Where(goqu.I("sme.submodel_id").Eq(submodelDatabaseID))
+
+	if level == "core" {
+		query = query.Where(goqu.I("sme.idshort_path").Eq(idShortPath))
+	} else {
+		descendantPattern := "^" + regexp.QuoteMeta(idShortPath) + `(\.|\[)`
+		query = query.Where(
+			goqu.Or(
+				goqu.I("sme.idshort_path").Eq(idShortPath),
+				goqu.L(`"sme"."idshort_path" ~ ?`, descendantPattern),
+			),
+		)
+	}
+
+	collector, collectorErr := grammar.NewResolvedFieldPathCollectorForRoot(grammar.CollectorRootSME)
+	if collectorErr != nil {
+		return nil, common.NewInternalServerError("SMREPO-GETSMEPATHSBYPATH-BADCOLLECTOR " + collectorErr.Error())
+	}
+
+	shouldEnforceFormula, enforceErr := auth.ShouldEnforceFormula(ctx)
+	if enforceErr != nil {
+		return nil, common.NewInternalServerError("SMREPO-GETSMEPATHSBYPATH-SHOULDENFORCE " + enforceErr.Error())
+	}
+	if shouldEnforceFormula {
+		var addFormulaErr error
+		query, addFormulaErr = auth.AddFormulaQueryFromContext(ctx, query, collector)
+		if addFormulaErr != nil {
+			return nil, common.NewInternalServerError("SMREPO-GETSMEPATHSBYPATH-ABACFORMULA " + addFormulaErr.Error())
+		}
+	}
+
+	query = query.Order(goqu.I("sme.idshort_path").Asc(), goqu.I("sme.id").Asc())
+
+	sqlQuery, args, toSQLErr := query.ToSQL()
+	if toSQLErr != nil {
+		return nil, common.NewInternalServerError("SMREPO-GETSMEPATHSBYPATH-BUILDQ " + toSQLErr.Error())
+	}
+
+	rows, queryErr := db.Query(sqlQuery, args...)
+	if queryErr != nil {
+		return nil, common.NewInternalServerError("SMREPO-GETSMEPATHSBYPATH-EXECQ " + queryErr.Error())
+	}
+	defer func() { _ = rows.Close() }()
+
+	paths := make([]string, 0)
+	for rows.Next() {
+		var path string
+		if scanErr := rows.Scan(&path); scanErr != nil {
+			return nil, common.NewInternalServerError("SMREPO-GETSMEPATHSBYPATH-SCANQ " + scanErr.Error())
+		}
+		paths = append(paths, path)
+	}
+
+	if rowsErr := rows.Err(); rowsErr != nil {
+		return nil, common.NewInternalServerError("SMREPO-GETSMEPATHSBYPATH-ROWSERR " + rowsErr.Error())
+	}
+
+	if len(paths) == 0 {
+		return nil, common.NewErrNotFound("SubmodelElement with idShort or path '" + idShortPath + "' not found in submodel '" + submodelID + "'")
 	}
 
 	return paths, nil

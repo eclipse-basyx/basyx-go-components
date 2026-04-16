@@ -601,22 +601,69 @@ func TestPathNotationEndpoints(t *testing.T) {
 		assert.NotContains(t, paths, "MainCollection.NestedList[0]")
 	})
 
-	t.Run("GetAllSubmodelsPathReturnsMapWithPathsPerSubmodel", func(t *testing.T) {
-		statusCode, body, err := requestJSON(http.MethodGet, fmt.Sprintf("%s/submodels/$path?limit=500&level=deep", baseURL), nil)
+	t.Run("GetAllSubmodelElementsPathDeepReturnsHierarchy", func(t *testing.T) {
+		statusCode, body, err := requestJSON(http.MethodGet, fmt.Sprintf("%s/submodels/%s/submodel-elements/$path?level=deep&limit=500", baseURL, submodelIDEncoded), nil)
 		require.NoError(t, err)
 		require.Equal(t, http.StatusOK, statusCode, "response=%s", string(body))
 
 		var response struct {
-			PagingMetadata map[string]any      `json:"paging_metadata"`
-			Result         map[string][]string `json:"result"`
+			PagingMetadata map[string]any `json:"paging_metadata"`
+			Result         []string       `json:"result"`
 		}
 		require.NoError(t, json.Unmarshal(body, &response), "response=%s", string(body))
 
-		submodelPaths, hasSubmodelPaths := response.Result[submodelID]
-		require.True(t, hasSubmodelPaths, "response=%s", string(body))
-		assert.Contains(t, submodelPaths, "TopProperty")
-		assert.Contains(t, submodelPaths, "MainCollection.NestedList[0]")
+		assert.Contains(t, response.Result, "TopProperty")
+		assert.Contains(t, response.Result, "MainCollection")
+		assert.Contains(t, response.Result, "MainCollection.NestedProperty")
+		assert.Contains(t, response.Result, "MainCollection.NestedList")
+		assert.Contains(t, response.Result, "MainCollection.NestedList[0]")
+		assert.Contains(t, response.Result, "MainCollection.NestedList[1]")
 	})
+
+	t.Run("GetAllSubmodelElementsPathCoreReturnsTopLevelOnly", func(t *testing.T) {
+		statusCode, body, err := requestJSON(http.MethodGet, fmt.Sprintf("%s/submodels/%s/submodel-elements/$path?level=core&limit=500", baseURL, submodelIDEncoded), nil)
+		require.NoError(t, err)
+		require.Equal(t, http.StatusOK, statusCode, "response=%s", string(body))
+
+		var response struct {
+			PagingMetadata map[string]any `json:"paging_metadata"`
+			Result         []string       `json:"result"`
+		}
+		require.NoError(t, json.Unmarshal(body, &response), "response=%s", string(body))
+
+		assert.Contains(t, response.Result, "TopProperty")
+		assert.Contains(t, response.Result, "MainCollection")
+		assert.NotContains(t, response.Result, "MainCollection.NestedProperty")
+		assert.NotContains(t, response.Result, "MainCollection.NestedList[0]")
+	})
+
+	t.Run("GetSubmodelElementByPathPathDeepReturnsSubtree", func(t *testing.T) {
+		statusCode, body, err := requestJSON(http.MethodGet, fmt.Sprintf("%s/submodels/%s/submodel-elements/MainCollection/$path?level=deep", baseURL, submodelIDEncoded), nil)
+		require.NoError(t, err)
+		require.Equal(t, http.StatusOK, statusCode, "response=%s", string(body))
+
+		var paths []string
+		require.NoError(t, json.Unmarshal(body, &paths), "response=%s", string(body))
+
+		assert.Contains(t, paths, "MainCollection")
+		assert.Contains(t, paths, "MainCollection.NestedProperty")
+		assert.Contains(t, paths, "MainCollection.NestedList")
+		assert.Contains(t, paths, "MainCollection.NestedList[0]")
+		assert.Contains(t, paths, "MainCollection.NestedList[1]")
+		assert.NotContains(t, paths, "TopProperty")
+	})
+
+	t.Run("GetSubmodelElementByPathPathCoreReturnsOnlyRequestedPath", func(t *testing.T) {
+		statusCode, body, err := requestJSON(http.MethodGet, fmt.Sprintf("%s/submodels/%s/submodel-elements/MainCollection/$path?level=core", baseURL, submodelIDEncoded), nil)
+		require.NoError(t, err)
+		require.Equal(t, http.StatusOK, statusCode, "response=%s", string(body))
+
+		var paths []string
+		require.NoError(t, json.Unmarshal(body, &paths), "response=%s", string(body))
+
+		assert.Equal(t, []string{"MainCollection"}, paths)
+	})
+
 }
 
 // IntegrationTest runs the integration tests based on the config file

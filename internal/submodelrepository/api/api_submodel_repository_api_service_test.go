@@ -112,16 +112,6 @@ func TestGetSubmodelByIDPathRejectsInvalidLevel(t *testing.T) {
 	require.Equal(t, 400, response.Code)
 }
 
-func TestGetAllSubmodelsPathRejectsBadCursor(t *testing.T) {
-	t.Parallel()
-
-	sut := NewSubmodelRepositoryAPIAPIService(persistencepostgresql.SubmodelDatabase{})
-
-	response, err := sut.GetAllSubmodelsPath(contextWithABACDisabled(t), "", "", 10, "not-base64!", "deep")
-	require.NoError(t, err)
-	require.Equal(t, 400, response.Code)
-}
-
 func TestParseDelegationTimeoutParsesISO8601Duration(t *testing.T) {
 	t.Parallel()
 

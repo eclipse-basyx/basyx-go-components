@@ -1117,93 +1117,6 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelsReference(ctx context.C
 	return gen.Response(http.StatusOK, res), nil
 }
 
-// GetAllSubmodelsPath - Returns all Submodels in the Path notation
-//
-//nolint:revive
-func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelsPath(ctx context.Context, semanticID string, idShort string, limit int32, cursor string, level string) (gen.ImplResponse, error) {
-	_ = semanticID
-	const operation = "GetAllSubmodelsPath"
-
-	decodedCursor := ""
-	if cursor != "" {
-		decodedCursorBytes, decodeErr := common.DecodeString(cursor)
-		if decodeErr != nil {
-			return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "BadCursor"), nil
-		}
-		decodedCursor = string(decodedCursorBytes)
-	}
-
-	if !isLevelValid(level) {
-		return newAPIErrorResponse(errors.New("invalid level parameter"), http.StatusBadRequest, operation, "InvalidLevelParameter"), nil
-	}
-
-	submodels, nextCursor, err := s.submodelBackend.GetSubmodels(ctx, limit, decodedCursor, idShort)
-	if err != nil {
-		if common.IsErrBadRequest(err) {
-			return newAPIErrorResponse(err, http.StatusBadRequest, operation, "BadRequest"), nil
-		}
-		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "GetSubmodels"), err
-	}
-
-	entries := make([]submodelPathEntry, len(submodels))
-
-	eg, _ := errgroup.WithContext(ctx)
-	eg.SetLimit(8)
-
-	for index := range submodels {
-		index := index
-		submodel := submodels[index]
-
-		eg.Go(func() error {
-			paths, pathsErr := s.submodelBackend.GetSubmodelElementPaths(ctx, submodel.ID(), level)
-			if pathsErr != nil {
-				return pathsErr
-			}
-
-			entries[index] = submodelPathEntry{
-				identifier: submodel.ID(),
-				paths:      paths,
-			}
-			return nil
-		})
-	}
-
-	if waitErr := eg.Wait(); waitErr != nil {
-		if common.IsErrNotFound(waitErr) || errors.Is(waitErr, sql.ErrNoRows) {
-			return newAPIErrorResponse(waitErr, http.StatusNotFound, operation, "SubmodelNotFound"), nil
-		}
-		if common.IsErrBadRequest(waitErr) {
-			return newAPIErrorResponse(waitErr, http.StatusBadRequest, operation, "BadRequest"), nil
-		}
-		return newAPIErrorResponse(waitErr, http.StatusInternalServerError, operation, "GetSubmodelElementPaths"), waitErr
-	}
-
-	result := make(map[string][]string, len(entries))
-	for _, entry := range entries {
-		if entry.identifier == "" {
-			continue
-		}
-
-		if entry.paths == nil {
-			entry.paths = []string{}
-		}
-
-		result[entry.identifier] = entry.paths
-	}
-
-	encodedNextCursor := ""
-	if nextCursor != "" {
-		encodedNextCursor = common.EncodeString(nextCursor)
-	}
-
-	res := submodelPathMapResult{
-		PagingMetadata: gen.PagedResultPagingMetadata{Cursor: encodedNextCursor},
-		Result:         result,
-	}
-
-	return gen.Response(http.StatusOK, res), nil
-}
-
 // PutSubmodelByID - Updates an existing Submodel
 //
 //nolint:revive
@@ -1792,7 +1705,6 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelElementsReferenceSubmode
 //
 //nolint:revive
 func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelElementsPathSubmodelRepo(ctx context.Context, submodelIdentifier string, limit int32, cursor string, level string) (gen.ImplResponse, error) {
-	_ = ctx
 	const operation = "GetAllSubmodelElementsPathSubmodelRepo"
 
 	decodedSubmodelIdentifier, decodeErr := common.DecodeString(submodelIdentifier)
@@ -1809,7 +1721,7 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelElementsPathSubmodelRepo
 		return newAPIErrorResponse(errors.New("invalid level parameter"), http.StatusBadRequest, operation, "InvalidLevelParameter"), nil
 	}
 
-	elements, nextCursor, err := s.submodelBackend.GetSubmodelElements(ctx, decodedSubmodelIdentifier, buildLimitPtr(limit), decodedCursor, false, level)
+	paths, nextCursor, err := s.submodelBackend.GetSubmodelElementPathPage(ctx, decodedSubmodelIdentifier, buildLimitPtr(limit), decodedCursor, level)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) || common.IsErrNotFound(err) {
 			return newAPIErrorResponse(err, http.StatusNotFound, operation, "SubmodelNotFound"), nil
@@ -1817,16 +1729,7 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelElementsPathSubmodelRepo
 		if common.IsErrBadRequest(err) {
 			return newAPIErrorResponse(err, http.StatusBadRequest, operation, "BadRequest"), nil
 		}
-		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "GetSubmodelElements"), err
-	}
-
-	paths := make([]string, 0, len(elements))
-	for _, element := range elements {
-		idShort := element.IDShort()
-		if idShort == nil || *idShort == "" {
-			continue
-		}
-		paths = append(paths, *idShort)
+		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "GetSubmodelElementPathPage"), err
 	}
 
 	res := gen.GetPathItemsResult{
@@ -2257,12 +2160,16 @@ func (s *SubmodelRepositoryAPIAPIService) GetSubmodelElementByPathReferenceSubmo
 func (s *SubmodelRepositoryAPIAPIService) GetSubmodelElementByPathPathSubmodelRepo(ctx context.Context, submodelIdentifier string, idShortPath string, level string) (gen.ImplResponse, error) {
 	const operation = "GetSubmodelElementByPathPathSubmodelRepo"
 
+	if !isLevelValid(level) {
+		return newAPIErrorResponse(errors.New("invalid level parameter"), http.StatusBadRequest, operation, "InvalidLevelParameter"), nil
+	}
+
 	decodedSubmodelIdentifier, decodeErr := common.DecodeString(submodelIdentifier)
 	if decodeErr != nil {
 		return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "MalformedSubmodelIdentifier"), nil
 	}
 
-	_, err := s.submodelBackend.GetSubmodelElement(ctx, decodedSubmodelIdentifier, idShortPath, false, level)
+	paths, err := s.submodelBackend.GetSubmodelElementPathsByPath(ctx, decodedSubmodelIdentifier, idShortPath, level)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) || common.IsErrNotFound(err) {
 			return newAPIErrorResponse(err, http.StatusNotFound, operation, "SubmodelElementNotFound"), nil
@@ -2270,10 +2177,10 @@ func (s *SubmodelRepositoryAPIAPIService) GetSubmodelElementByPathPathSubmodelRe
 		if common.IsErrBadRequest(err) {
 			return newAPIErrorResponse(err, http.StatusBadRequest, operation, "BadRequest"), nil
 		}
-		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "GetSubmodelElement"), err
+		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "GetSubmodelElementPathsByPath"), err
 	}
 
-	return gen.Response(http.StatusOK, []string{idShortPath}), nil
+	return gen.Response(http.StatusOK, paths), nil
 }
 
 // GetFileByPathSubmodelRepo - Downloads file content from a specific submodel element from the Submodel at a specified path
