@@ -71,16 +71,6 @@ type delegatedOperationAsyncRecord struct {
 	ExpiresAt          time.Time
 }
 
-type submodelPathMapResult struct {
-	PagingMetadata gen.PagedResultPagingMetadata `json:"paging_metadata"`
-	Result         map[string][]string           `json:"result"`
-}
-
-type submodelPathEntry struct {
-	identifier string
-	paths      []string
-}
-
 var delegatedOperationAsyncState = struct {
 	sync.RWMutex
 	records       map[string]delegatedOperationAsyncRecord
