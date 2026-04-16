@@ -140,10 +140,14 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 	}
 
 	for _, rt := range registryCtrl.Routes() {
+		if rt.Method == "GET" && rt.Pattern == "/shell-descriptors" {
+			apiRouter.With(digitaltwinregistry.CreatedAfterMiddleware).Method(rt.Method, rt.Pattern, rt.HandlerFunc)
+			continue
+		}
 		apiRouter.Method(rt.Method, rt.Pattern, rt.HandlerFunc)
 	}
 	for _, rt := range discoveryCtrl.Routes() {
-		if rt.Method == "POST" && rt.Pattern == "/lookup/shellsByAssetLink" {
+		if (rt.Method == "POST" && rt.Pattern == "/lookup/shellsByAssetLink") || (rt.Method == "GET" && rt.Pattern == "/lookup/shells") {
 			apiRouter.With(digitaltwinregistry.CreatedAfterMiddleware).Method(rt.Method, rt.Pattern, rt.HandlerFunc)
 			continue
 		}

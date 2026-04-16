@@ -29,6 +29,7 @@ package model
 
 import (
 	"errors"
+	"time"
 
 	"github.com/aas-core-works/aas-core3.1-golang/jsonization"
 	"github.com/aas-core-works/aas-core3.1-golang/stringification"
@@ -61,6 +62,8 @@ type AssetAdministrationShellDescriptor struct {
 	SpecificAssetIds []types.ISpecificAssetID `json:"specificAssetIds,omitempty"`
 
 	SubmodelDescriptors []SubmodelDescriptor `json:"submodelDescriptors,omitempty"`
+
+	CreatedAt *time.Time `json:"createdAt,omitempty"`
 }
 
 // AssertAssetAdministrationShellDescriptorRequired checks if the required fields are not zero-ed
@@ -147,6 +150,7 @@ func (obj *AssetAdministrationShellDescriptor) UnmarshalJSON(data []byte) error 
 		"id":                  true,
 		"specificAssetIds":    true,
 		"submodelDescriptors": true,
+		"createdAt":           true,
 	}
 	for key := range jsonable {
 		if !allowedFields[key] {
@@ -307,6 +311,13 @@ func (obj *AssetAdministrationShellDescriptor) UnmarshalJSON(data []byte) error 
 	}
 	if id, ok := jsonable["id"].(string); ok {
 		obj.Id = id
+	}
+	if createdAt, ok := jsonable["createdAt"].(string); ok {
+		parsedCreatedAt, err := time.Parse(time.RFC3339Nano, createdAt)
+		if err != nil {
+			return errors.New("AssetAdministrationShellDescriptor: createdAt is not a valid RFC3339 datetime")
+		}
+		obj.CreatedAt = &parsedCreatedAt
 	}
 
 	if !isStrictVerificationEnabled() {
@@ -491,6 +502,9 @@ func (obj AssetAdministrationShellDescriptor) ToJsonable() (map[string]any, erro
 	}
 	if len(submodelDescriptors) > 0 {
 		ret["submodelDescriptors"] = submodelDescriptors
+	}
+	if obj.CreatedAt != nil {
+		ret["createdAt"] = obj.CreatedAt.Format(time.RFC3339Nano)
 	}
 	return ret, nil
 }
