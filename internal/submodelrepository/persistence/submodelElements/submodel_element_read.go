@@ -172,14 +172,27 @@ func GetSubmodelElementPathsPageBySubmodelID(ctx context.Context, db *sql.DB, su
 	dialect := goqu.Dialect("postgres")
 	query := dialect.
 		From(goqu.T("submodel_element").As("sme")).
-		Select(goqu.I("sme.idshort_path")).
+		Select(goqu.I("sme.idshort_path"), goqu.I("sme.id")).
 		Where(goqu.I("sme.submodel_id").Eq(submodelDatabaseID))
 
 	if level == "core" {
 		query = query.Where(goqu.I("sme.parent_sme_id").IsNull())
 	}
 	if cursor != "" {
-		query = query.Where(goqu.I("sme.idshort_path").Gt(cursor))
+		cursorPath, cursorID, hasCursorID := parseRootCursor(cursor)
+		if hasCursorID {
+			query = query.Where(
+				goqu.Or(
+					goqu.I("sme.idshort_path").Gt(cursorPath),
+					goqu.And(
+						goqu.I("sme.idshort_path").Eq(cursorPath),
+						goqu.I("sme.id").Gt(cursorID),
+					),
+				),
+			)
+		} else {
+			query = query.Where(goqu.I("sme.idshort_path").Gt(cursorPath))
+		}
 	}
 
 	collector, collectorErr := grammar.NewResolvedFieldPathCollectorForRoot(grammar.CollectorRootSME)
@@ -214,13 +227,14 @@ func GetSubmodelElementPathsPageBySubmodelID(ctx context.Context, db *sql.DB, su
 	}
 	defer func() { _ = rows.Close() }()
 
-	paths := make([]string, 0)
+	pathRows := make([]rootElementCursorRow, 0, pageLimit+1)
 	for rows.Next() {
 		var path string
-		if scanErr := rows.Scan(&path); scanErr != nil {
+		var id int64
+		if scanErr := rows.Scan(&path, &id); scanErr != nil {
 			return nil, "", common.NewInternalServerError("SMREPO-GETSMEPATHSPAGE-SCANQ " + scanErr.Error())
 		}
-		paths = append(paths, path)
+		pathRows = append(pathRows, rootElementCursorRow{id: id, path: path})
 	}
 
 	if rowsErr := rows.Err(); rowsErr != nil {
@@ -228,9 +242,15 @@ func GetSubmodelElementPathsPageBySubmodelID(ctx context.Context, db *sql.DB, su
 	}
 
 	nextCursor := ""
-	if len(paths) > pageLimit {
-		nextCursor = paths[pageLimit-1]
-		paths = paths[:pageLimit]
+	if len(pathRows) > pageLimit {
+		lastPath := pathRows[pageLimit-1]
+		nextCursor = formatRootCursor(lastPath.path, lastPath.id)
+		pathRows = pathRows[:pageLimit]
+	}
+
+	paths := make([]string, 0, len(pathRows))
+	for _, pathRow := range pathRows {
+		paths = append(paths, pathRow.path)
 	}
 
 	return paths, nextCursor, nil

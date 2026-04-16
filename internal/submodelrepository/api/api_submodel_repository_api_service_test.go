@@ -105,7 +105,7 @@ func TestGetSubmodelByIDPathRejectsInvalidLevel(t *testing.T) {
 	t.Parallel()
 
 	sut := NewSubmodelRepositoryAPIAPIService(persistencepostgresql.SubmodelDatabase{})
-	encodedSubmodelID := base64.RawStdEncoding.EncodeToString([]byte("sm-1"))
+	encodedSubmodelID := common.EncodeString("sm-1")
 
 	response, err := sut.GetSubmodelByIDPath(contextWithABACDisabled(t), encodedSubmodelID, "invalid-level")
 	require.NoError(t, err)
