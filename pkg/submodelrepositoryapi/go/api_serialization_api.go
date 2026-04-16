@@ -18,6 +18,7 @@ import (
 type SerializationAPIAPIController struct {
 	service      SerializationAPIAPIServicer
 	errorHandler ErrorHandler
+	contextPath  string
 }
 
 // SerializationAPIAPIOption for how the controller is set up.
@@ -31,10 +32,11 @@ func WithSerializationAPIAPIErrorHandler(h ErrorHandler) SerializationAPIAPIOpti
 }
 
 // NewSerializationAPIAPIController creates a default api controller
-func NewSerializationAPIAPIController(s SerializationAPIAPIServicer, opts ...SerializationAPIAPIOption) *SerializationAPIAPIController {
+func NewSerializationAPIAPIController(s SerializationAPIAPIServicer, contextPath string, opts ...SerializationAPIAPIOption) *SerializationAPIAPIController {
 	controller := &SerializationAPIAPIController{
 		service:      s,
 		errorHandler: DefaultErrorHandler,
+		contextPath:  contextPath,
 	}
 
 	for _, opt := range opts {
@@ -49,7 +51,7 @@ func (c *SerializationAPIAPIController) Routes() Routes {
 	return Routes{
 		"GenerateSerializationByIDs": Route{
 			strings.ToUpper("Get"),
-			"/serialization",
+			c.contextPath + "/serialization",
 			c.GenerateSerializationByIDs,
 		},
 	}
