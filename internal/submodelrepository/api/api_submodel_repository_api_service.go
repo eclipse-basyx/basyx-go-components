@@ -580,23 +580,102 @@ func updateDelegatedAsyncRecord(handleID string, updateFn func(record delegatedO
 	delegatedOperationAsyncState.Unlock()
 }
 
-func toSubmodelElementMetadata(element types.ISubmodelElement) (gen.SubmodelElementMetadata, error) {
+type submodelElementMetadataPageResult struct {
+	PagingMetadata gen.PagedResultPagingMetadata `json:"paging_metadata"`
+	Result         []map[string]any              `json:"result,omitempty"`
+}
+
+func toSubmodelElementMetadata(element types.ISubmodelElement) (map[string]any, error) {
 	jsonElement, err := jsonization.ToJsonable(element)
 	if err != nil {
-		return gen.SubmodelElementMetadata{}, err
+		return nil, err
 	}
 
-	payload, err := json.Marshal(jsonElement)
-	if err != nil {
-		return gen.SubmodelElementMetadata{}, err
+	sanitizeSubmodelElementMetadata(jsonElement)
+	return jsonElement, nil
+}
+
+func sanitizeSubmodelElementMetadata(metadata map[string]any) {
+	modelType, _ := metadata["modelType"].(string)
+
+	switch modelType {
+	case "Property", "MultiLanguageProperty", "Blob", "File":
+		delete(metadata, "value")
+	case "Range":
+		delete(metadata, "min")
+		delete(metadata, "max")
+	case "SubmodelElementCollection", "SubmodelElementList":
+		sanitizeSubmodelElementSliceField(metadata, "value")
+	case "Operation":
+		sanitizeOperationVariables(metadata, "inputVariables")
+		sanitizeOperationVariables(metadata, "outputVariables")
+		sanitizeOperationVariables(metadata, "inoutputVariables")
+	case "Entity":
+		sanitizeSubmodelElementSliceField(metadata, "statements")
+	case "AnnotatedRelationshipElement":
+		sanitizeSubmodelElementSliceField(metadata, "annotations")
+	}
+}
+
+func sanitizeSubmodelElementSliceField(metadata map[string]any, field string) {
+	rawField, exists := metadata[field]
+	if !exists {
+		return
 	}
 
-	metadata := gen.SubmodelElementMetadata{}
-	if err := json.Unmarshal(payload, &metadata); err != nil {
-		return gen.SubmodelElementMetadata{}, err
+	rawSlice, ok := rawField.([]any)
+	if !ok {
+		delete(metadata, field)
+		return
 	}
 
-	return metadata, nil
+	hasSubmodelElements := false
+	for _, rawElement := range rawSlice {
+		elementMap, mapOK := rawElement.(map[string]any)
+		if !mapOK {
+			continue
+		}
+
+		hasSubmodelElements = true
+		sanitizeSubmodelElementMetadata(elementMap)
+	}
+
+	if !hasSubmodelElements {
+		delete(metadata, field)
+	}
+}
+
+func sanitizeOperationVariables(metadata map[string]any, field string) {
+	rawVariables, exists := metadata[field]
+	if !exists {
+		return
+	}
+
+	variables, ok := rawVariables.([]any)
+	if !ok {
+		delete(metadata, field)
+		return
+	}
+
+	for _, rawVariable := range variables {
+		variableMap, mapOK := rawVariable.(map[string]any)
+		if !mapOK {
+			continue
+		}
+
+		rawValue, hasValue := variableMap["value"]
+		if !hasValue {
+			continue
+		}
+
+		valueElement, valueOK := rawValue.(map[string]any)
+		if !valueOK {
+			delete(variableMap, "value")
+			continue
+		}
+
+		sanitizeSubmodelElementMetadata(valueElement)
+	}
 }
 
 func getModelTypeLiteral(element types.ISubmodelElement) string {
@@ -1556,7 +1635,7 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelElementsMetadataSubmodel
 		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "GetSubmodelElements"), err
 	}
 
-	metadataResult := make([]gen.SubmodelElementMetadata, 0, len(elements))
+	metadataResult := make([]map[string]any, 0, len(elements))
 	for _, element := range elements {
 		metadata, conversionErr := toSubmodelElementMetadata(element)
 		if conversionErr != nil {
@@ -1565,7 +1644,7 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelElementsMetadataSubmodel
 		metadataResult = append(metadataResult, metadata)
 	}
 
-	res := gen.GetSubmodelElementsMetadataResult{
+	res := submodelElementMetadataPageResult{
 		PagingMetadata: gen.PagedResultPagingMetadata{Cursor: common.EncodeString(nextCursor)},
 		Result:         metadataResult,
 	}

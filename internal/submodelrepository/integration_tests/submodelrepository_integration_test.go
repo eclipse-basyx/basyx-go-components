@@ -446,6 +446,19 @@ func TestContractSubmodelRepository(t *testing.T) {
 		return encodedSubmodelID
 	}
 
+	findMetadataByIDShort := func(t *testing.T, metadataList []map[string]any, idShort string) map[string]any {
+		t.Helper()
+
+		for _, metadata := range metadataList {
+			if metadata["idShort"] == idShort {
+				return metadata
+			}
+		}
+
+		t.Fatalf("metadata for idShort=%s not found", idShort)
+		return nil
+	}
+
 	t.Run("GetSubmodelByIDMetadataReturnsMetadataPayload", func(t *testing.T) {
 		submodelID := fmt.Sprintf("https://example.com/ids/sm/contract-metadata-%d", time.Now().UnixNano())
 		submodelIDShort := fmt.Sprintf("contractMetadata%d", time.Now().UnixNano())
@@ -501,6 +514,123 @@ func TestContractSubmodelRepository(t *testing.T) {
 		submodelElements, ok := rawSubmodelElements.([]any)
 		require.True(t, ok, "submodelElements should be a JSON array when present")
 		assert.NotEmpty(t, submodelElements, "submodelElements must be omitted when empty or contain at least one element")
+	})
+
+	t.Run("GetAllSubmodelElementsMetadataReturnsHierarchyWithoutPropertyValues", func(t *testing.T) {
+		submodelID := fmt.Sprintf("https://example.com/ids/sm/contract-sme-metadata-all-%d", time.Now().UnixNano())
+		submodelIDShort := fmt.Sprintf("contractSMEMetadataAll%d", time.Now().UnixNano())
+		encodedSubmodelID := createSubmodel(t, submodelID, submodelIDShort)
+
+		statusCode, body, err := requestJSON(http.MethodPost, fmt.Sprintf("%s/submodels/%s/submodel-elements", baseURL, encodedSubmodelID), map[string]any{
+			"idShort":   "TopProperty",
+			"modelType": "Property",
+			"valueType": "xs:string",
+			"value":     "top-value",
+		})
+		require.NoError(t, err)
+		require.Equal(t, http.StatusCreated, statusCode, "response=%s", string(body))
+
+		statusCode, body, err = requestJSON(http.MethodPost, fmt.Sprintf("%s/submodels/%s/submodel-elements", baseURL, encodedSubmodelID), map[string]any{
+			"idShort":   "MainCollection",
+			"modelType": "SubmodelElementCollection",
+			"value": []map[string]any{
+				{
+					"idShort":   "NestedProperty",
+					"modelType": "Property",
+					"valueType": "xs:string",
+					"value":     "nested-value",
+				},
+			},
+		})
+		require.NoError(t, err)
+		require.Equal(t, http.StatusCreated, statusCode, "response=%s", string(body))
+
+		statusCode, body, err = requestJSON(http.MethodGet, fmt.Sprintf("%s/submodels/%s/submodel-elements/$metadata?limit=500", baseURL, encodedSubmodelID), nil)
+		require.NoError(t, err)
+		require.Equal(t, http.StatusOK, statusCode, "response=%s", string(body))
+
+		var response struct {
+			PagingMetadata map[string]any   `json:"paging_metadata"`
+			Result         []map[string]any `json:"result"`
+		}
+		require.NoError(t, json.Unmarshal(body, &response), "response=%s", string(body))
+		require.NotEmpty(t, response.Result, "response=%s", string(body))
+
+		topPropertyMetadata := findMetadataByIDShort(t, response.Result, "TopProperty")
+		assert.Equal(t, "Property", topPropertyMetadata["modelType"])
+		assert.Equal(t, "xs:string", topPropertyMetadata["valueType"])
+		_, hasTopPropertyValue := topPropertyMetadata["value"]
+		assert.False(t, hasTopPropertyValue, "property metadata should not include value payload")
+
+		collectionMetadata := findMetadataByIDShort(t, response.Result, "MainCollection")
+		assert.Equal(t, "SubmodelElementCollection", collectionMetadata["modelType"])
+
+		rawNestedMetadata, hasNestedMetadata := collectionMetadata["value"]
+		require.True(t, hasNestedMetadata, "collection metadata should include nested metadata hierarchy")
+
+		nestedMetadata, ok := rawNestedMetadata.([]any)
+		require.True(t, ok, "collection metadata hierarchy must be an array")
+		require.NotEmpty(t, nestedMetadata)
+
+		firstNestedMetadata, ok := nestedMetadata[0].(map[string]any)
+		require.True(t, ok, "nested metadata entry must be an object")
+		assert.Equal(t, "NestedProperty", firstNestedMetadata["idShort"])
+		_, hasNestedValue := firstNestedMetadata["value"]
+		assert.False(t, hasNestedValue, "nested property metadata should not include value payload")
+	})
+
+	t.Run("GetSubmodelElementByPathMetadataReturnsMetadataWithoutPropertyValues", func(t *testing.T) {
+		submodelID := fmt.Sprintf("https://example.com/ids/sm/contract-sme-metadata-path-%d", time.Now().UnixNano())
+		submodelIDShort := fmt.Sprintf("contractSMEMetadataPath%d", time.Now().UnixNano())
+		encodedSubmodelID := createSubmodel(t, submodelID, submodelIDShort)
+
+		statusCode, body, err := requestJSON(http.MethodPost, fmt.Sprintf("%s/submodels/%s/submodel-elements", baseURL, encodedSubmodelID), map[string]any{
+			"idShort":   "TopProperty",
+			"modelType": "Property",
+			"valueType": "xs:string",
+			"value":     "top-value",
+		})
+		require.NoError(t, err)
+		require.Equal(t, http.StatusCreated, statusCode, "response=%s", string(body))
+
+		statusCode, body, err = requestJSON(http.MethodPost, fmt.Sprintf("%s/submodels/%s/submodel-elements", baseURL, encodedSubmodelID), map[string]any{
+			"idShort":   "MainCollection",
+			"modelType": "SubmodelElementCollection",
+			"value": []map[string]any{
+				{
+					"idShort":   "NestedProperty",
+					"modelType": "Property",
+					"valueType": "xs:string",
+					"value":     "nested-value",
+				},
+			},
+		})
+		require.NoError(t, err)
+		require.Equal(t, http.StatusCreated, statusCode, "response=%s", string(body))
+
+		statusCode, body, err = requestJSON(http.MethodGet, fmt.Sprintf("%s/submodels/%s/submodel-elements/TopProperty/$metadata", baseURL, encodedSubmodelID), nil)
+		require.NoError(t, err)
+		require.Equal(t, http.StatusOK, statusCode, "response=%s", string(body))
+
+		var topPropertyMetadata map[string]any
+		require.NoError(t, json.Unmarshal(body, &topPropertyMetadata), "response=%s", string(body))
+		assert.Equal(t, "TopProperty", topPropertyMetadata["idShort"])
+		assert.Equal(t, "Property", topPropertyMetadata["modelType"])
+		assert.Equal(t, "xs:string", topPropertyMetadata["valueType"])
+		_, hasTopPropertyValue := topPropertyMetadata["value"]
+		assert.False(t, hasTopPropertyValue, "property metadata should not include value payload")
+
+		statusCode, body, err = requestJSON(http.MethodGet, fmt.Sprintf("%s/submodels/%s/submodel-elements/MainCollection.NestedProperty/$metadata", baseURL, encodedSubmodelID), nil)
+		require.NoError(t, err)
+		require.Equal(t, http.StatusOK, statusCode, "response=%s", string(body))
+
+		var nestedPropertyMetadata map[string]any
+		require.NoError(t, json.Unmarshal(body, &nestedPropertyMetadata), "response=%s", string(body))
+		assert.Equal(t, "NestedProperty", nestedPropertyMetadata["idShort"])
+		assert.Equal(t, "Property", nestedPropertyMetadata["modelType"])
+		assert.Equal(t, "xs:string", nestedPropertyMetadata["valueType"])
+		_, hasNestedValue := nestedPropertyMetadata["value"]
+		assert.False(t, hasNestedValue, "nested property metadata should not include value payload")
 	})
 }
 
