@@ -83,6 +83,16 @@ func (s *CustomRegistryService) GetAllAssetAdministrationShellDescriptors(
 	)
 }
 
+// GetAssetAdministrationShellDescriptorById - Returns a specific Asset Administration Shell Descriptor
+// nolint:revive // defined by standard
+func (s *CustomRegistryService) GetAssetAdministrationShellDescriptorById(
+	ctx context.Context,
+	aasIdentifier string,
+) (model.ImplResponse, error) {
+	ctx = descriptors.WithIncludeAASDescriptorCreatedAt(ctx)
+	return s.AssetAdministrationShellRegistryAPIAPIService.GetAssetAdministrationShellDescriptorById(ctx, aasIdentifier)
+}
+
 // PostAssetAdministrationShellDescriptor executes default POST behavior and
 // appends a discovery asset link from globalAssetId when present.
 func (s *CustomRegistryService) PostAssetAdministrationShellDescriptor(
