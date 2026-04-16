@@ -22,6 +22,7 @@ services:
       dockerfile: ./cmd/digitaltwinregistryservice/Dockerfile
     environment:
       - SERVER_PORT=5004
+      - SERVER_STRICTVERIFICATION=false
       - POSTGRES_HOST=db
       - POSTGRES_PORT=5432
       - POSTGRES_USER=admin
@@ -33,6 +34,7 @@ services:
       - ABAC_ENABLED=true
       - GENERAL_ENABLEIMPLICITCASTS=false
       - GENERAL_ENABLEDESCRIPTORDEBUG=false
+      - GENERAL_SUPPORTSSINGULARSUPPLEMENTALSEMANTICID=true
       - ABAC_MODELPATH=/security_env/access-rules.json
       - OIDC_TRUSTLISTPATH=/security_env/trustlist.json
     ports:
@@ -40,7 +42,48 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      keycloak-healthcheck:
+        condition: service_completed_successfully
     volumes:
       - ./security_env:/security_env:ro
     extra_hosts:
       - "localhost:host-gateway"
+
+  keycloak:
+    image: keycloak/keycloak:26.0.6
+    container_name: keycloak
+    environment:
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://db:5432/basyxTestDB
+      KC_DB_USERNAME: admin
+      KC_DB_PASSWORD: admin123
+      KC_HOSTNAME: localhost
+      KC_HOSTNAME_PORT: "8080"
+      KC_HOSTNAME_URL: "http://localhost:8080"
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: admin
+      KC_HTTP_ENABLED: "true"
+      KC_HTTPS_ENABLED: "false"
+      KC_HEALTH_ENABLED: "true"
+      KC_HOSTNAME_STRICT: "false"
+      KC_HOSTNAME_STRICT_BACKCHANNEL: "false"
+      KC_IMPORT: /opt/keycloak/data/import/
+      KC_HTTP_MANAGEMENT_ENABLED: "true"
+    command: ["start-dev", "--import-realm", "--health-enabled=true"]
+    ports:
+      - 8080:8080
+    volumes:
+      - ./keycloak/realm:/opt/keycloak/data/import
+
+  keycloak-healthcheck:
+    image: curlimages/curl:latest
+    container_name: keycloak-healthcheck
+    command: >
+      sh -c "
+        echo 'Waiting for Keycloak to become ready...';
+        until curl -sf http://keycloak:9000/health/ready; do
+          sleep 5;
+        done;
+        echo 'Keycloak is ready!'"
+    depends_on:
+      - keycloak
