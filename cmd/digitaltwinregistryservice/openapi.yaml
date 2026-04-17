@@ -9,11 +9,12 @@ info:
     and filtering. If the end user can change this header, the access control is
     not secure because it is not derived from the token.
 
+    Discovery integration:
+    Creating or updating shell descriptors also creates/updates discovery entries, including the
+    descriptor globalAssetId as specific asset id name "globalAssetId" when present.
+
     Digital Twin Registry custom additions (beyond IDTA base profile):
 
-    - POST /shell-descriptors and PUT /shell-descriptors/{aasIdentifier} also append a
-      discovery link from globalAssetId (stored as specific asset id name "globalAssetId")
-      when globalAssetId is present in the descriptor.
     - PUT /shell-descriptors/{aasIdentifier} and PUT
       /shell-descriptors/{aasIdentifier}/submodel-descriptors/{submodelIdentifier} use
       path identifiers as source of truth (path id wins over request body id).
@@ -123,9 +124,8 @@ paths:
         - Asset Administration Shell Registry API
       summary: Creates a new Asset Administration Shell Descriptor, i.e. registers an AAS
       description: >-
-        DTR extension: if globalAssetId is present in the descriptor, the service also
-        appends a discovery entry as specific asset id (name "globalAssetId") for the
-        same shell identifier.
+        Creating a shell descriptor also creates discovery entries, including
+        globalAssetId as specific asset id name "globalAssetId" when present.
       operationId: PostAssetAdministrationShellDescriptor
       x-semanticIds:
         - https://admin-shell.io/aas/API/PostAssetAdministrationShellDescriptor/3/1
@@ -192,11 +192,11 @@ paths:
         - Asset Administration Shell Registry API
       summary: Creates or updates an existing Asset Administration Shell Descriptor
       description: |-
-        DTR extension:
+        Path identifier is authoritative and overwrites descriptor.id from request body.
 
-        - Path identifier is authoritative and overwrites descriptor.id from request body.
-        - If globalAssetId is present, the service additionally appends a discovery entry
-          as specific asset id (name "globalAssetId") for the shell.
+        Creating or updating a shell descriptor also creates/updates discovery
+        entries, including globalAssetId as specific asset id name
+        "globalAssetId" when present.
       operationId: PutAssetAdministrationShellDescriptorById
       x-semanticIds:
         - https://admin-shell.io/aas/API/PutAssetAdministrationShellDescriptorById/3/1

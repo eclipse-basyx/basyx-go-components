@@ -55,8 +55,7 @@ func NewCustomRegistryService(
 	}
 }
 
-// PostAssetAdministrationShellDescriptor executes default POST behavior and
-// appends a discovery asset link from globalAssetId when present.
+// PostAssetAdministrationShellDescriptor executes default POST behavior.
 func (s *CustomRegistryService) PostAssetAdministrationShellDescriptor(
 	ctx context.Context,
 	assetAdministrationShellDescriptor model.AssetAdministrationShellDescriptor,
@@ -72,8 +71,7 @@ func (s *CustomRegistryService) PostAssetAdministrationShellDescriptor(
 	return baseResp, nil
 }
 
-// PutAssetAdministrationShellDescriptorById executes default PUT behavior and
-// appends a discovery asset link from globalAssetId when present.
+// PutAssetAdministrationShellDescriptorById executes default PUT behavior.
 func (s *CustomRegistryService) PutAssetAdministrationShellDescriptorById(
 	ctx context.Context,
 	aasIdentifier string,
