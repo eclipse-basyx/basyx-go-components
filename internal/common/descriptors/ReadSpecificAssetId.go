@@ -40,6 +40,8 @@ import (
 	"github.com/lib/pq"
 )
 
+const globalAssetIDSpecificAssetIDName = "globalAssetId"
+
 type rowData struct {
 	descID               int64
 	specificID           int64
@@ -150,7 +152,10 @@ func ReadSpecificAssetIDsByDescriptorIDs(
 		goqu.I(common.AliasExternalSubjectReference + "." + common.ColID).As("c5"),
 		common.TSpecificAssetID.Col(common.ColPosition).As("sort_specific_asset_position"),
 	}, maskRuntime.Projections()...)...).
-		Where(goqu.L(fmt.Sprintf("%s.%s = ANY(?::bigint[])", common.AliasSpecificAssetID, common.ColDescriptorID), arr))
+		Where(
+			goqu.L(fmt.Sprintf("%s.%s = ANY(?::bigint[])", common.AliasSpecificAssetID, common.ColDescriptorID), arr),
+			common.TSpecificAssetID.Col(common.ColName).Neq(globalAssetIDSpecificAssetIDName),
+		)
 
 	inner = inner.
 		Order(
