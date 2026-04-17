@@ -66,5 +66,281 @@
     "headers": {
       "Edc-Bpn": "BPN_COMPANY_002"
     }
+  },
+  {
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:6004/lookup/shellsByAssetLink",
+    "data": "postBody/emptyAssetLink.json",
+    "shouldMatch": "expected/lookup/emptyId.json",
+    "expectedStatus": 200
+  },
+  {
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:6004/lookup/shellsByAssetLink",
+    "data": "postBody/num1AssetLink.json",
+    "shouldMatch": "expected/lookup/emptyId.json",
+    "expectedStatus": 200
+  },
+  {
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:6004/lookup/shellsByAssetLink",
+    "data": "postBody/num2AssetLink.json",
+    "shouldMatch": "expected/lookup/emptyId.json",
+    "expectedStatus": 200
+  },
+  {
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:6004/lookup/shellsByAssetLink",
+    "data": "postBody/num3AssetLink.json",
+    "shouldMatch": "expected/lookup/emptyId.json",
+    "expectedStatus": 200
+  },
+  {
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:6004/lookup/shellsByAssetLink",
+    "data": "postBody/num4AssetLink.json",
+    "shouldMatch": "expected/lookup/publicId.json",
+    "expectedStatus": 200
+  },
+  {
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:6004/lookup/shellsByAssetLink",
+    "data": "postBody/num3and4AssetLink.json",
+    "shouldMatch": "expected/lookup/emptyId.json",
+    "expectedStatus": 200
+  },
+  {
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:6004/lookup/shellsByAssetLink",
+    "data": "postBody/emptyAssetLink.json",
+    "shouldMatch": "expected/lookup/emptyId.json",
+    "expectedStatus": 200,
+    "headers": {
+      "Edc-Bpn": "BPN_COMPANY_001"
+    }
+  },
+  {
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:6004/lookup/shellsByAssetLink",
+    "data": "postBody/num1AssetLink.json",
+    "shouldMatch": "expected/lookup/emptyId.json",
+    "expectedStatus": 200,
+    "headers": {
+      "Edc-Bpn": "BPN_COMPANY_001"
+    }
+  },
+  {
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:6004/lookup/shellsByAssetLink",
+    "data": "postBody/num2AssetLink.json",
+    "shouldMatch": "expected/lookup/publicId.json",
+    "expectedStatus": 200,
+    "headers": {
+      "Edc-Bpn": "BPN_COMPANY_001"
+    }
+  },
+  {
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:6004/lookup/shellsByAssetLink",
+    "data": "postBody/num3AssetLink.json",
+    "shouldMatch": "expected/lookup/publicId.json",
+    "expectedStatus": 200,
+    "headers": {
+      "Edc-Bpn": "BPN_COMPANY_001"
+    }
+  },
+  {
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:6004/lookup/shellsByAssetLink",
+    "data": "postBody/num4AssetLink.json",
+    "shouldMatch": "expected/lookup/publicId.json",
+    "expectedStatus": 200,
+    "headers": {
+      "Edc-Bpn": "BPN_COMPANY_001"
+    }
+  },
+  {
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:6004/lookup/shellsByAssetLink",
+    "data": "postBody/num3and4AssetLink.json",
+    "shouldMatch": "expected/lookup/publicId.json",
+    "expectedStatus": 200,
+    "headers": {
+      "Edc-Bpn": "BPN_COMPANY_001"
+    }
+  },
+  {
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:6004/lookup/shellsByAssetLink",
+    "data": "postBody/emptyAssetLink.json",
+    "shouldMatch": "expected/lookup/emptyId.json",
+    "expectedStatus": 200,
+    "headers": {
+      "Edc-Bpn": "BPN_COMPANY_002"
+    }
+  },
+  {
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:6004/lookup/shellsByAssetLink",
+    "data": "postBody/num1AssetLink.json",
+    "shouldMatch": "expected/lookup/emptyId.json",
+    "expectedStatus": 200,
+    "headers": {
+      "Edc-Bpn": "BPN_COMPANY_002"
+    }
+  },
+  {
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:6004/lookup/shellsByAssetLink",
+    "data": "postBody/num2AssetLink.json",
+    "shouldMatch": "expected/lookup/emptyId.json",
+    "expectedStatus": 200,
+    "headers": {
+      "Edc-Bpn": "BPN_COMPANY_002"
+    }
+  },
+  {
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:6004/lookup/shellsByAssetLink",
+    "data": "postBody/num3AssetLink.json",
+    "shouldMatch": "expected/lookup/publicId.json",
+    "expectedStatus": 200,
+    "headers": {
+      "Edc-Bpn": "BPN_COMPANY_002"
+    }
+  },
+  {
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:6004/lookup/shellsByAssetLink",
+    "data": "postBody/num4AssetLink.json",
+    "shouldMatch": "expected/lookup/publicId.json",
+    "expectedStatus": 200,
+    "headers": {
+      "Edc-Bpn": "BPN_COMPANY_002"
+    }
+  },
+  {
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:6004/lookup/shellsByAssetLink",
+    "data": "postBody/num3and4AssetLink.json",
+    "shouldMatch": "expected/lookup/publicId.json",
+    "expectedStatus": 200,
+    "headers": {
+      "Edc-Bpn": "BPN_COMPANY_002"
+    }
+  },
+  {
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:6004/lookup/shellsByAssetLink",
+    "data": "postBody/emptyAssetLink.json",
+    "shouldMatch": "expected/lookup/emptyId.json",
+    "expectedStatus": 200,
+    "token": { "user": "admin", "password": "pwd" }
+  },
+  {
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:6004/lookup/shellsByAssetLink",
+    "data": "postBody/num1AssetLink.json",
+    "shouldMatch": "expected/lookup/publicId.json",
+    "expectedStatus": 200,
+    "token": { "user": "admin", "password": "pwd" }
+  },
+  {
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:6004/lookup/shellsByAssetLink",
+    "data": "postBody/num2AssetLink.json",
+    "shouldMatch": "expected/lookup/publicId.json",
+    "expectedStatus": 200,
+    "token": { "user": "admin", "password": "pwd" }
+  },
+  {
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:6004/lookup/shellsByAssetLink",
+    "data": "postBody/num3AssetLink.json",
+    "shouldMatch": "expected/lookup/publicId.json",
+    "expectedStatus": 200,
+    "token": { "user": "admin", "password": "pwd" }
+  },
+  {
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:6004/lookup/shellsByAssetLink",
+    "data": "postBody/num4AssetLink.json",
+    "shouldMatch": "expected/lookup/publicId.json",
+    "expectedStatus": 200,
+    "token": { "user": "admin", "password": "pwd" }
+  },
+  {
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:6004/lookup/shellsByAssetLink",
+    "data": "postBody/num3and4AssetLink.json",
+    "shouldMatch": "expected/lookup/publicId.json",
+    "expectedStatus": 200,
+    "token": { "user": "admin", "password": "pwd" }
+  },
+  {
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:6004/lookup/shellsByAssetLink",
+    "data": "postBody/emptyAssetLink.json",
+    "shouldMatch": "expected/lookup/emptyId.json",
+    "expectedStatus": 200,
+    "token": { "user": "admin", "password": "pwd" },
+    "headers": {
+      "Edc-Bpn": "BPNL00000000015G"
+    }
+  },
+  {
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:6004/lookup/shellsByAssetLink",
+    "data": "postBody/num1AssetLink.json",
+    "shouldMatch": "expected/lookup/publicId.json",
+    "expectedStatus": 200,
+    "token": { "user": "admin", "password": "pwd" },
+    "headers": {
+      "Edc-Bpn": "BPNL00000000015G"
+    }
+  },
+  {
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:6004/lookup/shellsByAssetLink",
+    "data": "postBody/num2AssetLink.json",
+    "shouldMatch": "expected/lookup/publicId.json",
+    "expectedStatus": 200,
+    "token": { "user": "admin", "password": "pwd" },
+    "headers": {
+      "Edc-Bpn": "BPNL00000000015G"
+    }
+  },
+  {
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:6004/lookup/shellsByAssetLink",
+    "data": "postBody/num3AssetLink.json",
+    "shouldMatch": "expected/lookup/publicId.json",
+    "expectedStatus": 200,
+    "token": { "user": "admin", "password": "pwd" },
+    "headers": {
+      "Edc-Bpn": "BPNL00000000015G"
+    }
+  },
+  {
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:6004/lookup/shellsByAssetLink",
+    "data": "postBody/num4AssetLink.json",
+    "shouldMatch": "expected/lookup/publicId.json",
+    "expectedStatus": 200,
+    "token": { "user": "admin", "password": "pwd" },
+    "headers": {
+      "Edc-Bpn": "BPNL00000000015G"
+    }
+  },
+  {
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:6004/lookup/shellsByAssetLink",
+    "data": "postBody/num3and4AssetLink.json",
+    "shouldMatch": "expected/lookup/publicId.json",
+    "expectedStatus": 200,
+    "token": { "user": "admin", "password": "pwd" },
+    "headers": {
+      "Edc-Bpn": "BPNL00000000015G"
+    }
   }
 ]
