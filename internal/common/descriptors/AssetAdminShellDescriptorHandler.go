@@ -185,7 +185,13 @@ func InsertAdministrationShellDescriptorTx(ctx context.Context, tx *sql.Tx, aasd
 		aasRef = sql.NullInt64{Int64: ref, Valid: true}
 	}
 
-	if err = common.CreateSpecificAssetIDDescriptor(tx, descriptorID, aasRef, aasd.SpecificAssetIds); err != nil {
+	specificAssetIds := aasd.SpecificAssetIds
+	// Add globalAssetId as a specific asset ID when DiscoveryIntegration is enabled and GlobalAssetId is set.
+	if cfg, ok := common.ConfigFromContext(ctx); ok && cfg.General.DiscoveryIntegration && aasd.GlobalAssetId != "" {
+		specificAssetIds = append(specificAssetIds, types.NewSpecificAssetID(globalAssetIDSpecificAssetIDName, aasd.GlobalAssetId))
+	}
+
+	if err = common.CreateSpecificAssetIDDescriptor(tx, descriptorID, aasRef, specificAssetIds); err != nil {
 		return err
 	}
 
