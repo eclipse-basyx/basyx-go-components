@@ -2,6 +2,7 @@ services:
   aas-ui:
     container_name: aas-web-ui
     image: eclipsebasyx/aas-gui:SNAPSHOT
+    pull_policy: always
     ports:
       - "3000:3000"
     environment:
@@ -29,6 +30,7 @@ services:
   submodel_repository:
     container_name: submodel-repository-go
     image: eclipsebasyx/submodelrepository-go:SNAPSHOT      
+    pull_policy: always
     environment:
       - SERVER_PORT=5004
       - POSTGRES_HOST=db

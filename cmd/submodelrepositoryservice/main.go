@@ -72,6 +72,8 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 
 	smSvc := api.NewSubmodelRepositoryAPIAPIService(*smDatabase)
 	smCtrl := openapi.NewSubmodelRepositoryAPIAPIController(smSvc, "", config.Server.StrictVerification)
+	serializationSvc := api.NewSerializationAPIAPIService()
+	serializationCtrl := openapi.NewSerializationAPIAPIController(serializationSvc, "")
 
 	// ==== Description Service ====
 	descSvc := api.NewDescriptionAPIAPIService()
@@ -88,6 +90,9 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 	}
 
 	for _, rt := range smCtrl.Routes() {
+		apiRouter.Method(rt.Method, rt.Pattern, rt.HandlerFunc)
+	}
+	for _, rt := range serializationCtrl.Routes() {
 		apiRouter.Method(rt.Method, rt.Pattern, rt.HandlerFunc)
 	}
 	for _, rt := range descCtrl.Routes() {

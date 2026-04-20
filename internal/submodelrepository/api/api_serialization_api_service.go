@@ -22,53 +22,30 @@
 *
 * SPDX-License-Identifier: MIT
 ******************************************************************************/
-// Author: Martin Stemmer ( Fraunhofer IESE )
 
-package aasregistryapi
+package api
 
 import (
-	"log"
+	"context"
+	"errors"
 	"net/http"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 )
 
-// decodePathParam decodes an URL path component and builds a consistent error response.
-func decodePathParam(raw, paramName, operation, errorDetail string) (string, *model.ImplResponse, error) {
-	decoded, err := common.DecodeString(raw)
-	if err != nil {
-		log.Printf("🧩 [%s] Error in %s: decode %s=%q: %v", componentName, operation, paramName, raw, err)
-		resp := common.NewErrorResponse(
-			err, http.StatusBadRequest, componentName, operation, errorDetail,
-		)
-		return "", &resp, nil
-	}
-	return decoded, nil, nil
+const errGenerateSerializationByIDsNotImplemented = "SMREPO-GENSERIALIZATIONBYIDS-NOTIMPLEMENTED"
+
+// SerializationAPIAPIService is a service that implements the logic for the SerializationAPIAPIServicer.
+type SerializationAPIAPIService struct{}
+
+// NewSerializationAPIAPIService creates a default api service.
+func NewSerializationAPIAPIService() *SerializationAPIAPIService {
+	return &SerializationAPIAPIService{}
 }
 
-// decodeCursor wraps cursor decoding with shared logging + error response.
-func decodeCursor(raw, operation string) (string, *model.ImplResponse, error) {
-	if raw == "" {
-		return "", nil, nil
-	}
-	return decodePathParam(raw, "cursor", operation, "BadCursor")
-}
-
-// pagedResponse builds the common paged envelope used across list endpoints.
-func pagedResponse[T any](results T, nextCursor string) model.ImplResponse {
-	pm := model.PagedResultPagingMetadata{}
-	if nextCursor != "" {
-		pm.Cursor = common.EncodeString(nextCursor)
-	}
-
-	res := struct {
-		PagingMetadata model.PagedResultPagingMetadata `json:"paging_metadata"`
-		Result         T                               `json:"result"`
-	}{
-		PagingMetadata: pm,
-		Result:         results,
-	}
-
-	return model.Response(http.StatusOK, res)
+// GenerateSerializationByIDs returns the requested serialization for the given identifiers.
+func (s *SerializationAPIAPIService) GenerateSerializationByIDs(_ context.Context, _ []string, _ []string, _ bool) (model.ImplResponse, error) {
+	err := errors.New(errGenerateSerializationByIDsNotImplemented)
+	return common.NewErrorResponse(err, http.StatusNotImplemented, "SubmodelRepository", "GenerateSerializationByIDs", ""), nil
 }

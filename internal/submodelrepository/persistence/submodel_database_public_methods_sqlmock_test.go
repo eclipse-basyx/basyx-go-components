@@ -588,7 +588,7 @@ func TestFileAttachmentExistsReturnsNotFoundWhenElementMissing(t *testing.T) {
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 
-func TestFileAttachmentExistsReturnsBadRequestWhenElementIsNotFile(t *testing.T) {
+func TestFileAttachmentExistsReturnsMethodNotAllowedWhenElementIsNotFile(t *testing.T) {
 	t.Parallel()
 
 	db, mock, err := sqlmock.New()
@@ -606,7 +606,7 @@ func TestFileAttachmentExistsReturnsBadRequestWhenElementIsNotFile(t *testing.T)
 	exists, err := sut.FileAttachmentExists("sm", "not-file")
 	require.Error(t, err)
 	require.False(t, exists)
-	require.True(t, common.IsErrBadRequest(err))
+	require.True(t, common.IsErrMethodNotAllowed(err))
 	require.Contains(t, err.Error(), "SMREPO-FILEATTEXISTS-NOTFILE")
 	require.NoError(t, mock.ExpectationsWereMet())
 }
@@ -1081,4 +1081,60 @@ func TestGetSubmodelElementReferencesReturnsBadRequestForEmptySubmodelID(t *test
 	require.Empty(t, cursor)
 	require.True(t, common.IsErrBadRequest(err))
 	require.Contains(t, err.Error(), "SMREPO-GETSMEREFS-EMPTYSMID")
+}
+
+func TestGetSubmodelElementPathPageReturnsCompositeCursorForDuplicatePaths(t *testing.T) {
+	t.Parallel()
+
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer func() {
+		_ = db.Close()
+	}()
+
+	sut := &SubmodelDatabase{db: db}
+	limit := 1
+
+	mock.ExpectQuery(`SELECT .*FROM "submodel"`).
+		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(42))
+
+	mock.ExpectQuery(`SELECT .*"sme"\."idshort_path".*"sme"\."id".*FROM "submodel_element" AS "sme"`).
+		WillReturnRows(sqlmock.NewRows([]string{"idshort_path", "id"}).
+			AddRow("A", int64(10)).
+			AddRow("A", int64(20)))
+
+	paths, cursor, err := sut.GetSubmodelElementPathPage(contextWithABACDisabled(t), "sm-1", &limit, "", "")
+	require.NoError(t, err)
+	require.Equal(t, []string{"A"}, paths)
+	require.Equal(t, "A|10", cursor)
+
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestGetSubmodelElementPathPageAcceptsCompositeCursor(t *testing.T) {
+	t.Parallel()
+
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer func() {
+		_ = db.Close()
+	}()
+
+	sut := &SubmodelDatabase{db: db}
+	limit := 2
+
+	mock.ExpectQuery(`SELECT .*FROM "submodel"`).
+		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(42))
+
+	mock.ExpectQuery(`SELECT .*FROM "submodel_element" AS "sme".*"sme"\."idshort_path" > 'A'.*"sme"\."idshort_path" = 'A'.*"sme"\."id" > 10`).
+		WillReturnRows(sqlmock.NewRows([]string{"idshort_path", "id"}).
+			AddRow("A", int64(20)).
+			AddRow("B", int64(30)))
+
+	paths, cursor, err := sut.GetSubmodelElementPathPage(contextWithABACDisabled(t), "sm-1", &limit, "A|10", "")
+	require.NoError(t, err)
+	require.Equal(t, []string{"A", "B"}, paths)
+	require.Empty(t, cursor)
+
+	require.NoError(t, mock.ExpectationsWereMet())
 }

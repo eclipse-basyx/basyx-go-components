@@ -94,11 +94,6 @@ func (c *SubmodelRepositoryAPIAPIController) Routes() Routes {
 			c.contextPath + "/submodels/$reference",
 			c.GetAllSubmodelsReference,
 		},
-		"GetAllSubmodelsPath": Route{
-			strings.ToUpper("Get"),
-			c.contextPath + "/submodels/$path",
-			c.GetAllSubmodelsPath,
-		},
 		"GetSubmodelById": Route{
 			strings.ToUpper("Get"),
 			c.contextPath + "/submodels/{submodelIdentifier}",
@@ -573,68 +568,6 @@ func (c *SubmodelRepositoryAPIAPIController) GetAllSubmodelsReference(w http.Res
 		levelParam = param
 	}
 	result, err := c.service.GetAllSubmodelsReference(r.Context(), semanticIDParam, idShortParam, limitParam, cursorParam, levelParam)
-	// If an error occurred, encode the error with the status code
-	if err != nil {
-		c.errorHandler(w, r, err, &result)
-		return
-	}
-	// If no error, encode the body and the result code
-	_ = EncodeJSONResponse(result.Body, &result.Code, w)
-}
-
-// GetAllSubmodelsPath - Returns all Submodels in the Path notation
-func (c *SubmodelRepositoryAPIAPIController) GetAllSubmodelsPath(w http.ResponseWriter, r *http.Request) {
-	query, err := parseQuery(r.URL.RawQuery)
-	if err != nil {
-		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
-		return
-	}
-	var semanticIDParam string
-	if query.Has("semanticId") {
-		param := query.Get("semanticId")
-
-		semanticIDParam = param
-	}
-
-	var idShortParam string
-	if query.Has("idShort") {
-		param := query.Get("idShort")
-
-		idShortParam = param
-	}
-
-	var limitParam int32
-	if query.Has("limit") {
-		param, err := parseNumericParameter[int32](
-			query.Get("limit"),
-			WithParse[int32](parseInt32),
-			WithMinimum[int32](1),
-		)
-		if err != nil {
-			c.errorHandler(w, r, &ParsingError{Param: "limit", Err: err}, nil)
-			return
-		}
-
-		limitParam = param
-	}
-
-	var cursorParam string
-	if query.Has("cursor") {
-		param := query.Get("cursor")
-
-		cursorParam = param
-	}
-
-	var levelParam string
-	if query.Has("level") {
-		param := query.Get("level")
-
-		levelParam = param
-	} else {
-		param := "deep"
-		levelParam = param
-	}
-	result, err := c.service.GetAllSubmodelsPath(r.Context(), semanticIDParam, idShortParam, limitParam, cursorParam, levelParam)
 	// If an error occurred, encode the error with the status code
 	if err != nil {
 		c.errorHandler(w, r, err, &result)

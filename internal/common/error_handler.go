@@ -104,6 +104,22 @@ func NewInternalServerError(message string) error {
 	return errors.New("500 Internal Server Error: " + message)
 }
 
+// NewErrMethodNotAllowed creates a standardized "405 Method Not Allowed" error.
+//
+// Parameters:
+//   - message: Description of the method that is not allowed
+//
+// Returns:
+//   - error: An error with message format "405 Method Not Allowed: <message>"
+//
+// Example:
+//
+//	err := NewErrMethodNotAllowed("POST method not allowed on this endpoint")
+//	// Returns error: "405 Method Not Allowed: POST method not allowed on this endpoint"
+func NewErrMethodNotAllowed(message string) error {
+	return errors.New("405 Method Not Allowed: " + message)
+}
+
 // NewErrConflict creates a standardized "409 Conflict" error.
 //
 // Parameters:
@@ -212,6 +228,17 @@ func IsErrConflict(err error) bool {
 //   - bool: true if the error is a 403 Denied error, false otherwise
 func IsErrDenied(err error) bool {
 	return err != nil && strings.HasPrefix(err.Error(), "403 Denied: ")
+}
+
+// IsErrMethodNotAllowed checks if the given error is a "405 Method Not Allowed" error.
+//
+// Parameters:
+//   - err: The error to check
+//
+// Returns:
+//   - bool: true if the error is a 405 Method Not Allowed error, false otherwise
+func IsErrMethodNotAllowed(err error) bool {
+	return err != nil && strings.HasPrefix(err.Error(), "405 Method Not Allowed: ")
 }
 
 // NewErrorResponse creates a standardized HTTP error response with structured error information.
