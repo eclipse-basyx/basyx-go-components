@@ -25,4 +25,5 @@ abac:
 general:
   enableImplicitCasts: false
   enableDescriptorDebug: true
+  enableCustomMiddlewareHeaderInjection: false
   supportsSingularSupplementalSemanticId: true

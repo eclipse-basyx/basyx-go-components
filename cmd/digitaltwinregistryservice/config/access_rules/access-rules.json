@@ -7,7 +7,7 @@
     ],
 
     "DEFOBJECTS": [
-      { "name": "description", "objects": [ { "ROUTE": "/description" }, { "ROUTE": "/api/v3/description" } ] },
+      { "name": "description", "objects": [ { "ROUTE": "/description" } ] },
       { "name": "assetlinks", "objects": [ { "ROUTE": "/lookup/shells" }, { "ROUTE": "/lookup/shellsByAssetLink" } ] },
       { "name": "shells", "objects": [ { "ROUTE": "/lookup/shells/*" } ] },
       { "name": "all_shell_descriptors", "objects": [ { "DESCRIPTOR": "$aasdesc(\"*\")" } ] }
@@ -133,20 +133,6 @@
             "FRAGMENT": "$aasdesc#idShort",
             "USEFORMULA": "bpn_match"
           },
-          {
-            "FRAGMENT": "$aasdesc#specificAssetIds[]",
-            "USEFORMULA": "bpn_or_public",
-            "MATCH": true
-          },
-          {
-            "FRAGMENT": "$aasdesc#specificAssetIds[].externalSubjectId.keys[]",
-            "USEFORMULA": "bpn_match"
-          }
-        ] 
-      },
-      { "USEACL": "read_anonymous", "USEOBJECTS": ["shells"], "USEFORMULA": "bpn_or_public", 
-        "FILTERLIST": 
-        [
           {
             "FRAGMENT": "$aasdesc#specificAssetIds[]",
             "USEFORMULA": "bpn_or_public",

@@ -135,7 +135,12 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 
 	apiRouter := chi.NewRouter()
 	common.AddDefaultRouterErrorHandlers(apiRouter, "DigitalTwinRegistryService")
-	if err := auth.SetupSecurityWithClaimsMiddleware(ctx, cfg, apiRouter, auth.EdcBpnHeaderMiddleware); err != nil {
+	var claimsMiddleware []func(http.Handler) http.Handler
+	if cfg.General.EnableCustomMiddlewareHeaderInjection {
+		claimsMiddleware = append(claimsMiddleware, auth.EdcBpnHeaderMiddleware)
+	}
+
+	if err := auth.SetupSecurityWithClaimsMiddleware(ctx, cfg, apiRouter, claimsMiddleware...); err != nil {
 		return err
 	}
 
