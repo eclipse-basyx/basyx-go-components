@@ -44,7 +44,7 @@
     "method": "GET",
     "endpoint": "http://127.0.0.1:6004/shell-descriptors/ZTFlYmEzZDctOTFmMC00ZGFjLWE3MzAtZWFhMWQzNWUwMzVjLTI",
     "expectedStatus": 200,
-    "shouldMatch": "expected/public_result.json",
+    "shouldMatch": "expected/bpnRandom.json",
     "headers": {
       "Edc-Bpn": "BPNL00000000015G"
     }
@@ -337,6 +337,28 @@
     "endpoint": "http://127.0.0.1:6004/lookup/shellsByAssetLink",
     "data": "postBody/num3and4AssetLink.json",
     "shouldMatch": "expected/lookup/publicId.json",
+    "expectedStatus": 200,
+    "token": { "user": "admin", "password": "pwd" },
+    "headers": {
+      "Edc-Bpn": "BPNL00000000015G"
+    }
+  },
+  {
+    "method": "GET",
+    "endpoint": "http://127.0.0.1:6004/lookup/shells/ZTFlYmEzZDctOTFmMC00ZGFjLWE3MzAtZWFhMWQzNWUwMzVjLTI",
+    "expectedStatus": 403
+  },
+  {
+    "method": "GET",
+    "endpoint": "http://127.0.0.1:6004/lookup/shells/ZTFlYmEzZDctOTFmMC00ZGFjLWE3MzAtZWFhMWQzNWUwMzVjLTI",
+    "expectedStatus": 403,
+    "headers": {
+      "Edc-Bpn": "BPN_COMPANY_001"
+    }
+  },
+  {
+    "method": "GET",
+    "endpoint": "http://127.0.0.1:6004/lookup/shells/ZTFlYmEzZDctOTFmMC00ZGFjLWE3MzAtZWFhMWQzNWUwMzVjLTI",
     "expectedStatus": 200,
     "token": { "user": "admin", "password": "pwd" },
     "headers": {

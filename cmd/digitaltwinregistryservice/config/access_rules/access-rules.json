@@ -90,6 +90,16 @@
         ]
        }
       },
+      { "name": "bpn_or_public_with_header", "formula":
+       { "$or": [
+          { "$eq": [ { "$attribute": { "CLAIM": "Edc-Bpn" } }, { "$field": "$aasdesc#specificAssetIds[].externalSubjectId.keys[].value" } ] },
+          { "$and": [
+            { "$eq": [ { "$strVal": "PUBLIC_READABLE" }, { "$field": "$aasdesc#specificAssetIds[].externalSubjectId.keys[].value" } ] }, 
+            { "$ne": [ { "$attribute": { "CLAIM": "Edc-Bpn" } }, { "$strVal": "<nil>" } ] }
+          ]}
+        ]
+       }
+      },
       { "name": "bpn_match", 
         "formula":
           { "$eq": [ { "$attribute": { "CLAIM": "Edc-Bpn" } }, { "$field": "$aasdesc#specificAssetIds[].externalSubjectId.keys[].value" } ] }
@@ -135,12 +145,13 @@
           },
           {
             "FRAGMENT": "$aasdesc#specificAssetIds[]",
-            "USEFORMULA": "bpn_or_public",
+            "USEFORMULA": "bpn_or_public_with_header",
             "MATCH": true
           },
           {
             "FRAGMENT": "$aasdesc#specificAssetIds[].externalSubjectId.keys[]",
-            "USEFORMULA": "bpn_match"
+            "USEFORMULA": "bpn_or_public_with_header",
+            "MATCH": true
           }
         ] 
       },

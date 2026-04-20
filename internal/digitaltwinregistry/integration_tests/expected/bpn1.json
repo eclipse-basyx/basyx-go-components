@@ -36,7 +36,16 @@
     },
     {
       "name": "manufacturerPartId",
-      "value": "231982"
+      "value": "231982",
+      "externalSubjectId":{
+        "type":"ExternalReference",
+        "keys":[
+            {
+              "type":"GlobalReference",
+              "value":"PUBLIC_READABLE"
+            }
+        ]
+      }
     }
   ],
   "submodelDescriptors": [

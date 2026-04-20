@@ -1,26 +1,6 @@
 {
-  "description": [
-    {
-      "language": "en",
-      "text": "Example of human readable description of digital twin."
-    }
-  ],
   "id": "e1eba3d7-91f0-4dac-a730-eaa1d35e035c-2",
-  "idShort": "idShortExample",
   "specificAssetIds": [
-    {
-      "externalSubjectId": {
-        "keys": [
-          {
-            "type": "GlobalReference",
-            "value": "BPN_COMPANY_002"
-          }
-        ],
-        "type": "ExternalReference"
-      },
-      "name": "manufacturerId",
-      "value": "123829238"
-    },
     {
       "name": "manufacturerPartId",
       "value": "231982",
@@ -52,7 +32,9 @@
           "interface": "SUBMODEL-3.0",
           "protocolInformation": {
             "endpointProtocol": "HTTP",
-            "endpointProtocolVersion": ["1.1"],
+            "endpointProtocolVersion": [
+              "1.1"
+            ],
             "href": "https://edc.data.plane/mypath/submodel",
             "securityAttributes": [
               {
