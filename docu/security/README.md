@@ -10,7 +10,7 @@ flowchart LR
 
   subgraph Service[BaSyx Service]
     Router[Chi router]
-    OIDC[OIDC middleware\nverify issuer/audience + scopes]
+    OIDC[OIDC middleware\nverify issuer + optional audience + scopes]
     ClaimsMW[Optional claims middleware]
     ABAC[ABAC middleware\naccess model + QueryFilter]
     Ctrl[Controllers]
@@ -53,7 +53,7 @@ sequenceDiagram
       O-->>C: 401 Unauthorized
     end
   else Bearer present
-    O->>O: verify issuer + audience
+    O->>O: verify issuer + optional audience
     O->>O: check required scopes
     alt verification failed
       O-->>C: 401 Unauthorized
@@ -113,14 +113,15 @@ sequenceDiagram
 
 - Security is only active when ABAC is enabled in config. If `abac.enabled` is false, no OIDC or ABAC middleware is applied.
   - Example config: [cmd/aasregistryservice/config.yaml](cmd/aasregistryservice/config.yaml)
-- OIDC uses the trustlist file to allow issuers and audiences.
+- OIDC uses the trustlist file to allow issuers and optional audiences.
   - Example trustlist: [cmd/aasregistryservice/config/trustlist.json](cmd/aasregistryservice/config/trustlist.json)
 - Access rules are loaded from the access model JSON.
   - Example rules: [cmd/aasregistryservice/config/access_rules/access-rules.json](cmd/aasregistryservice/config/access_rules/access-rules.json)
 
 ## OIDC authentication
 
-- OIDC provider verification uses issuer + audience from the trustlist.
+- OIDC provider verification uses issuer + optional audience from the trustlist.
+- If `audience` is omitted (or empty) for a provider, the token audience (`aud`) check is skipped for that provider.
 - Required scopes are listed per provider in the trustlist and checked against the `scope` claim.
 - If the token is valid, claims are injected into the request context.
 - The middleware adds time claims `CLIENTNOW`, `LOCALNOW`, and `UTCNOW` to support time-based ABAC formulas.
@@ -289,7 +290,7 @@ Example file:
 ## Operational checklist
 
 - Enable ABAC in config and set the access model path.
-- Configure the trustlist with issuer, audience, and scopes.
+- Configure the trustlist with issuer, optional audience, and scopes.
 - Confirm route-to-rights mapping covers all endpoints used by the service.
 - Validate the access rules against the intended claims and objects.
 - Restart the service after updating rules (no hot reload).

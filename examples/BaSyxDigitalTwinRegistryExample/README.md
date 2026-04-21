@@ -485,6 +485,7 @@ Why:
 
 - Access rules: `examples/BaSyxDigitalTwinRegistryExample/security_env/access-rules.json`
 - Trust list: `examples/BaSyxDigitalTwinRegistryExample/security_env/trustlist.json`
+- In trust list entries, `audience` is optional. If omitted, OIDC audience (`aud`) validation is skipped for that issuer.
 
 If you want different outcomes, change formulas and role claims there, then restart the stack.
 
