@@ -51,7 +51,7 @@
         ],
         "assetIdRegexPatterns": [
             "^https://i\\.excom1\\.de/assetId/",
-            "^https://i\\.updated.excom1\\.de/assetId/"
+            "^https://i\\.updated\\.excom1\\.de/assetId/"
         ]
     }
 }

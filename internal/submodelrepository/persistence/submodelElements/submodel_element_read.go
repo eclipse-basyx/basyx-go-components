@@ -214,7 +214,8 @@ func GetSubmodelElementPathsPageBySubmodelID(ctx context.Context, db *sql.DB, su
 
 	query = query.
 		Order(goqu.I("sme.idshort_path").Asc(), goqu.I("sme.id").Asc()).
-		Limit(uint(pageLimit + 1))
+		//nolint:gosec // pageLimit is validated to be >= 0
+		Limit(uint(pageLimit) + 1)
 
 	sqlQuery, args, toSQLErr := query.ToSQL()
 	if toSQLErr != nil {

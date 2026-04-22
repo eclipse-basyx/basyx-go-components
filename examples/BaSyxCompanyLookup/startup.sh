@@ -109,7 +109,7 @@ curl --location --request POST 'http://localhost:5080/companies' \
             "IESE Fraunhofer"
         ],
         "assetIdRegexPatterns": [
-            "^https://i\\.iese.fraunhofer\\.de/assetId/",
+            "^https://i\\.iese\\.fraunhofer\\.de/assetId/",
             "^https://i\\.fraun-iese\\.de/assetId/"
         ]
     }
