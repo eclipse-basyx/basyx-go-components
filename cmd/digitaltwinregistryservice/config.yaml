@@ -19,11 +19,11 @@ oidc:
 
 
 abac:
-  enabled: true
+  enabled: false
   modelPath: "config/access_rules/access-rules.json"
 
 general:
-  enableImplicitCasts: false
-  enableDescriptorDebug: true
+  enableImplicitCasts: true
+  enableDescriptorDebug: false
   enableCustomMiddlewareHeaderInjection: false
   supportsSingularSupplementalSemanticId: true

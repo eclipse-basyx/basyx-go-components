@@ -208,7 +208,7 @@ type GeneralConfig struct {
 // OIDCProviderConfig contains OpenID Connect authentication provider settings.
 type OIDCProviderConfig struct {
 	Issuer   string   `mapstructure:"issuer" yaml:"issuer" json:"issuer"`       // OIDC issuer URL
-	Audience string   `mapstructure:"audience" yaml:"audience" json:"audience"` // Optional expected token audience (skip audience validation if empty)
+	Audience string   `mapstructure:"audience" yaml:"audience" json:"audience"` // Optional token audience (skip audience validation if empty)
 	Scopes   []string `mapstructure:"scopes" yaml:"scopes" json:"scopes"`       // Required scopes
 }
 

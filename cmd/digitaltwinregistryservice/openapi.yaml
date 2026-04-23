@@ -7,10 +7,7 @@ info:
 
     Edc-Bpn header: Optional header used in the query language for access control
     and filtering. If the end user can change this header, the access control is
-    not secure because it is not derived from the token. Header injection from
-    this middleware is disabled by default and can be enabled via
-    general.enableCustomMiddlewareHeaderInjection (env:
-    GENERAL_ENABLECUSTOMMIDDLEWAREHEADERINJECTION).
+    not secure because it is not derived from the token.
 
     Discovery integration:
     Creating or updating shell descriptors also creates/updates discovery entries, including the
