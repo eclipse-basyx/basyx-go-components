@@ -81,10 +81,27 @@ func (s *CustomDiscoveryService) SearchAllAssetAdministrationShellIdsByAssetLink
 		}), nil
 	}
 
+	shouldEnforceFormula, enforceErr := auth.ShouldEnforceFormula(ctx)
+	if enforceErr != nil {
+		log.Printf("🧭 [%s] Error SearchAllAssetAdministrationShellIdsByAssetLink: should-enforce-formula failed: %v", customDiscoveryComponentName, enforceErr)
+		return common.NewErrorResponse(
+			enforceErr,
+			http.StatusInternalServerError,
+			customDiscoveryComponentName,
+			"SearchAllAssetAdministrationShellIdsByAssetLink",
+			"ShouldEnforceFormula",
+		), enforceErr
+	}
+
+	if shouldEnforceFormula {
+		assetLinkQuery := buildAssetLinkQuery(ctx, assetLink)
+		ctx = auth.MergeQueryFilter(ctx, assetLinkQuery)
+	}
+
 	createdAfter, _ := CreatedAfterFromContext(ctx)
 	if createdAfter != nil {
-		query := buildEdcBpnClaimEqualsHeaderExpression(createdAfter)
-		ctx = auth.MergeQueryFilter(ctx, query)
+		createdAfterQuery := buildEdcBpnClaimEqualsHeaderExpression(createdAfter, "$bd#createdAt")
+		ctx = auth.MergeQueryFilter(ctx, createdAfterQuery)
 	}
 
 	res, err := s.AssetAdministrationShellBasicDiscoveryAPIAPIService.SearchAllAssetAdministrationShellIdsByAssetLink(ctx, limit, cursor, assetLink)
@@ -260,10 +277,10 @@ func specificAssetIDsToJSONable(specificAssetIDs []types.ISpecificAssetID) ([]ma
 
 // buildEdcBpnClaimEqualsHeaderExpression creates a logical expression that checks
 // whether the Edc-Bpn claim equals the provided header value.
-func buildEdcBpnClaimEqualsHeaderExpression(t *time.Time) grammar.Query {
+func buildEdcBpnClaimEqualsHeaderExpression(t *time.Time, pattern string) grammar.Query {
 	dt := grammar.DateTimeLiteralPattern(t.UTC())
 
-	timePattern := grammar.ModelStringPattern("$bd#createdAt")
+	timePattern := grammar.ModelStringPattern(pattern)
 	timeLe := grammar.LogicalExpression{
 		Le: grammar.ComparisonItems{
 			{DateTimeVal: &dt},
@@ -273,5 +290,129 @@ func buildEdcBpnClaimEqualsHeaderExpression(t *time.Time) grammar.Query {
 
 	return grammar.Query{
 		Condition: &timeLe,
+	}
+}
+
+func buildAssetLinkQuery(ctx context.Context, assetLink []model.AssetLink) grammar.Query {
+	if len(assetLink) == 0 {
+		return grammar.Query{}
+	}
+
+	assetLinkFieldPattern := grammar.ModelStringPattern("$aasdesc#specificAssetIds[].externalSubjectId.keys[].value")
+	assetLinkFieldValue := grammar.ModelStringPattern("$aasdesc#specificAssetIds[].value")
+	assetLinkFieldName := grammar.ModelStringPattern("$aasdesc#specificAssetIds[].name")
+	publicReadable := grammar.StandardString("PUBLIC_READABLE")
+
+	claims := auth.ClaimsFromContext(ctx)
+	edcBpnClaim, hasEdcBpnClaim := claims.GetString("Edc-Bpn")
+	hasEdcBpnClaim = hasEdcBpnClaim && strings.TrimSpace(edcBpnClaim) != ""
+	edcBpn := grammar.StandardString(edcBpnClaim)
+	roleClaim, hasRoleClaim := getClaimAsSearchString(claims, "role")
+	hasRoleClaim = hasRoleClaim && strings.TrimSpace(roleClaim) != ""
+	role := grammar.StandardString(roleClaim)
+	viewDigitalTwin := grammar.StandardString("view_digital_twin")
+
+	assetLinkLe := grammar.LogicalExpression{And: []grammar.LogicalExpression{}}
+	for _, link := range assetLink {
+		assetLinkValue := grammar.StandardString(link.Value)
+		assetLinkName := grammar.StandardString(link.Name)
+
+		assetLinkLeInner := grammar.LogicalExpression{Or: []grammar.LogicalExpression{}}
+		if hasEdcBpnClaim {
+			assetLinkLeInner.Or = append(assetLinkLeInner.Or, grammar.LogicalExpression{
+				Match: []grammar.MatchExpression{
+					{
+						Eq: grammar.ComparisonItems{
+							{Field: &assetLinkFieldValue},
+							{StrVal: &assetLinkValue},
+						},
+					},
+					{
+						Eq: grammar.ComparisonItems{
+							{Field: &assetLinkFieldName},
+							{StrVal: &assetLinkName},
+						},
+					},
+					{
+						Eq: grammar.ComparisonItems{
+							{StrVal: &edcBpn},
+							{Field: &assetLinkFieldPattern},
+						},
+					},
+				},
+			})
+		}
+
+		assetLinkLeInner.Or = append(assetLinkLeInner.Or, grammar.LogicalExpression{
+			Match: []grammar.MatchExpression{
+				{
+					Eq: grammar.ComparisonItems{
+						{Field: &assetLinkFieldValue},
+						{StrVal: &assetLinkValue},
+					},
+				},
+				{
+					Eq: grammar.ComparisonItems{
+						{Field: &assetLinkFieldName},
+						{StrVal: &assetLinkName},
+					},
+				},
+				{
+					Eq: grammar.ComparisonItems{
+						{StrVal: &publicReadable},
+						{Field: &assetLinkFieldPattern},
+					},
+				},
+			},
+		})
+		assetLinkLe.And = append(assetLinkLe.And, assetLinkLeInner)
+	}
+
+	finalCondition := assetLinkLe
+	if hasRoleClaim {
+		finalCondition = grammar.LogicalExpression{
+			Or: []grammar.LogicalExpression{
+				assetLinkLe,
+				{
+					Contains: grammar.StringItems{
+						{StrVal: &role},
+						{StrVal: &viewDigitalTwin},
+					},
+				},
+			},
+		}
+	}
+
+	return grammar.Query{
+		Condition: &finalCondition,
+	}
+}
+
+func getClaimAsSearchString(claims auth.Claims, key string) (string, bool) {
+	v, ok := claims[key]
+	if !ok || v == nil {
+		return "", false
+	}
+
+	switch claim := v.(type) {
+	case string:
+		return claim, true
+	case []string:
+		return strings.Join(claim, " "), true
+	case []any:
+		parts := make([]string, 0, len(claim))
+		for _, item := range claim {
+			part := strings.TrimSpace(fmt.Sprint(item))
+			if part == "" {
+				continue
+			}
+			parts = append(parts, part)
+		}
+		if len(parts) == 0 {
+			return "", false
+		}
+		return strings.Join(parts, " "), true
+	default:
+		return fmt.Sprint(claim), true
 	}
 }

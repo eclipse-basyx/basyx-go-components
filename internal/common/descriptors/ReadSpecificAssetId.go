@@ -104,6 +104,7 @@ func ReadSpecificAssetIDsByDescriptorIDs(
 
 	d := goqu.Dialect(common.Dialect)
 	externalSubjectReferenceAlias := goqu.T("specific_asset_id_external_subject_id_reference").As(common.AliasExternalSubjectReference)
+	externalSubjectReferenceKeyAlias := goqu.T("specific_asset_id_external_subject_id_reference_key").As(common.AliasExternalSubjectReferenceKey)
 	specificAssetIDPayloadAlias := goqu.T(common.TblSpecificAssetIDPayload).As("specific_asset_id_payload")
 
 	arr := pq.Array(descriptorIDs)
@@ -141,9 +142,13 @@ func ReadSpecificAssetIDsByDescriptorIDs(
 			goqu.On(externalSubjectReferenceAlias.Col(common.ColID).Eq(specificAssetIDAlias.Col(common.ColID))),
 		).
 		LeftJoin(
+			externalSubjectReferenceKeyAlias,
+			goqu.On(externalSubjectReferenceKeyAlias.Col(common.ColReferenceID).Eq(externalSubjectReferenceAlias.Col(common.ColID))),
+		).
+		LeftJoin(
 			specificAssetIDPayloadAlias,
 			goqu.On(specificAssetIDPayloadAlias.Col(common.ColSpecificAssetID).Eq(specificAssetIDAlias.Col(common.ColID))),
-		).Select(append([]interface{}{
+		).Distinct().Select(append([]interface{}{
 		common.TSpecificAssetID.Col(common.ColDescriptorID).As("c0"),
 		common.TSpecificAssetID.Col(common.ColID).As("c1"),
 		common.TSpecificAssetID.Col(common.ColName).As("c2"),

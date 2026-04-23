@@ -149,10 +149,10 @@ func compareExpectedPayload(t *testing.T, expectedPayload any, actualBody []byte
 	expectedPayloadBytes, err := json.Marshal(expectedPayload)
 	require.NoError(t, err, "DTR-TRACTUS-MARSHAL-EXPECTED")
 
-	expectedNormalized, err := normalizeJSON(expectedPayloadBytes)
+	expectedNormalized, err := normalizeComparableJSON(expectedPayloadBytes)
 	require.NoError(t, err, "DTR-TRACTUS-NORMALIZE-EXPECTED")
 
-	actualNormalized, err := normalizeJSON(actualBody)
+	actualNormalized, err := normalizeComparableJSON(actualBody)
 	require.NoError(t, err, "DTR-TRACTUS-NORMALIZE-ACTUAL")
 
 	require.Equal(t, expectedNormalized, actualNormalized, "DTR-TRACTUS-PAYLOAD-MISMATCH")
@@ -517,6 +517,36 @@ func normalizeJSON(input []byte) (string, error) {
 	}
 
 	return string(normalized), nil
+}
+
+func normalizeComparableJSON(input []byte) (string, error) {
+	var parsed any
+	if err := json.Unmarshal(input, &parsed); err != nil {
+		return "", err
+	}
+
+	stripDynamicCreatedAt(parsed)
+
+	normalized, err := json.Marshal(parsed)
+	if err != nil {
+		return "", err
+	}
+
+	return string(normalized), nil
+}
+
+func stripDynamicCreatedAt(value any) {
+	switch casted := value.(type) {
+	case map[string]any:
+		delete(casted, "createdAt")
+		for _, nested := range casted {
+			stripDynamicCreatedAt(nested)
+		}
+	case []any:
+		for _, nested := range casted {
+			stripDynamicCreatedAt(nested)
+		}
+	}
 }
 
 func resolveJSONPath(root any, path string) ([]any, error) {

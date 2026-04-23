@@ -1,0 +1,50 @@
+{
+  "id": "e1eba3d7-91f0-4dac-a730-eaa1d35e035c-2",
+  "submodelDescriptors": [
+    {
+      "description": [
+        {
+          "language": "de",
+          "text": "Beispiel einer lesbaren Beschreibung des Submodels."
+        },
+        {
+          "language": "en",
+          "text": "Example of human readable description of submodel"
+        }
+      ],
+      "endpoints": [
+        {
+          "interface": "SUBMODEL-3.0",
+          "protocolInformation": {
+            "endpointProtocol": "HTTP",
+            "endpointProtocolVersion": [
+              "1.1"
+            ],
+            "href": "https://edc.data.plane/mypath/submodel",
+            "securityAttributes": [
+              {
+                "key": "NONE",
+                "type": "NONE",
+                "value": "NONE"
+              }
+            ],
+            "subprotocol": "DSP",
+            "subprotocolBody": "body with information required by subprotocol",
+            "subprotocolBodyEncoding": "plain"
+          }
+        }
+      ],
+      "id": "cd47615b-daf3-4036-8670-d2f89349d388-2",
+      "idShort": "idShortExample",
+      "semanticId": {
+        "keys": [
+          {
+            "type": "Submodel",
+            "value": "urn:bamm:io.catenax.serial_part_typization:1.1.0#SerialPartTypization"
+          }
+        ],
+        "type": "ExternalReference"
+      }
+    }
+  ]
+}

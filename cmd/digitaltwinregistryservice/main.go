@@ -135,15 +135,24 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 
 	apiRouter := chi.NewRouter()
 	common.AddDefaultRouterErrorHandlers(apiRouter, "DigitalTwinRegistryService")
-	if err := auth.SetupSecurityWithClaimsMiddleware(ctx, cfg, apiRouter, auth.EdcBpnHeaderMiddleware); err != nil {
+	var claimsMiddleware []func(http.Handler) http.Handler
+	if cfg.General.EnableCustomMiddlewareHeaderInjection {
+		claimsMiddleware = append(claimsMiddleware, auth.EdcBpnHeaderMiddleware)
+	}
+
+	if err := auth.SetupSecurityWithClaimsMiddleware(ctx, cfg, apiRouter, claimsMiddleware...); err != nil {
 		return err
 	}
 
 	for _, rt := range registryCtrl.Routes() {
+		if rt.Method == "GET" && rt.Pattern == "/shell-descriptors" {
+			apiRouter.With(digitaltwinregistry.CreatedAfterMiddleware).Method(rt.Method, rt.Pattern, rt.HandlerFunc)
+			continue
+		}
 		apiRouter.Method(rt.Method, rt.Pattern, rt.HandlerFunc)
 	}
 	for _, rt := range discoveryCtrl.Routes() {
-		if rt.Method == "POST" && rt.Pattern == "/lookup/shellsByAssetLink" {
+		if (rt.Method == "POST" && rt.Pattern == "/lookup/shellsByAssetLink") || (rt.Method == "GET" && rt.Pattern == "/lookup/shells") {
 			apiRouter.With(digitaltwinregistry.CreatedAfterMiddleware).Method(rt.Method, rt.Pattern, rt.HandlerFunc)
 			continue
 		}

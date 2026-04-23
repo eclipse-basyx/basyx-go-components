@@ -67,6 +67,7 @@ var DefaultConfig = struct {
 	GeneralDescriptorDebug      bool
 	GeneralDiscoveryIntegration bool
 	GeneralSupportsSingularSSID bool
+	GeneralEnableCustomHeaderMW bool
 }{
 	ServerPort:                  5004,
 	ServerContextPath:           "",
@@ -89,6 +90,7 @@ var DefaultConfig = struct {
 	GeneralDescriptorDebug:      false,
 	GeneralDiscoveryIntegration: false,
 	GeneralSupportsSingularSSID: false,
+	GeneralEnableCustomHeaderMW: false,
 }
 
 // PrintSplash displays the BaSyx Go API ASCII art logo to the console.
@@ -199,13 +201,14 @@ type GeneralConfig struct {
 	EnableImplicitCasts                    bool `mapstructure:"enableImplicitCasts" yaml:"enableImplicitCasts" json:"enableImplicitCasts"`                                                          // Enable implicit casts during backend simplification
 	EnableDescriptorDebug                  bool `mapstructure:"enableDescriptorDebug" yaml:"enableDescriptorDebug" json:"enableDescriptorDebug"`                                                    // Enable descriptor query debug output
 	DiscoveryIntegration                   bool `mapstructure:"discoveryIntegration" yaml:"discoveryIntegration" json:"discoveryIntegration"`                                                       // Enable integration with discovery aas_identifier linking
+	EnableCustomMiddlewareHeaderInjection  bool `mapstructure:"enableCustomMiddlewareHeaderInjection" yaml:"enableCustomMiddlewareHeaderInjection" json:"enableCustomMiddlewareHeaderInjection"`    // Enable custom security middleware header injections
 	SupportsSingularSupplementalSemanticId bool `mapstructure:"supportsSingularSupplementalSemanticId" yaml:"supportsSingularSupplementalSemanticId" json:"supportsSingularSupplementalSemanticId"` // Use singular supplementalSemanticId for SubmodelDescriptor I/O
 }
 
 // OIDCProviderConfig contains OpenID Connect authentication provider settings.
 type OIDCProviderConfig struct {
 	Issuer   string   `mapstructure:"issuer" yaml:"issuer" json:"issuer"`       // OIDC issuer URL
-	Audience string   `mapstructure:"audience" yaml:"audience" json:"audience"` // Expected token audience
+	Audience string   `mapstructure:"audience" yaml:"audience" json:"audience"` // Optional token audience (skip audience validation if empty)
 	Scopes   []string `mapstructure:"scopes" yaml:"scopes" json:"scopes"`       // Required scopes
 }
 
@@ -331,6 +334,7 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("general.enableImplicitCasts", true)
 	v.SetDefault("general.enableDescriptorDebug", false)
 	v.SetDefault("general.discoveryIntegration", false)
+	v.SetDefault("general.enableCustomMiddlewareHeaderInjection", false)
 	v.SetDefault("general.supportsSingularSupplementalSemanticId", false)
 
 }
