@@ -369,6 +369,11 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) GetAllSubmodelDescriptor
 	smds, nextCursor, err := s.aasRegistryBackend.ListSubmodelDescriptorsForAAS(ctx, decodedAAS, limit, internalCursor)
 	if err != nil {
 		log.Printf("🧩 [%s] Error in GetAllSubmodelDescriptorsThroughSuperpath: list failed (aasId=%q limit=%d cursor=%q): %v", componentName, decodedAAS, limit, internalCursor, err)
+		if common.IsErrBadRequest(err) {
+			return common.NewErrorResponse(
+				err, http.StatusBadRequest, componentName, "GetAllSubmodelDescriptorsThroughSuperpath", "BadRequest",
+			), nil
+		}
 		return common.NewErrorResponse(
 			err, http.StatusInternalServerError, componentName, "GetAllSubmodelDescriptorsThroughSuperpath", "InternalServerError",
 		), err

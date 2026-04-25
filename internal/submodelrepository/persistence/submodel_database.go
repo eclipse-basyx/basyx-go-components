@@ -1409,6 +1409,13 @@ func (s *SubmodelDatabase) getSubmodelsWithOptionalSemanticIDFilter(ctx context.
 
 	var cursorFilter *string
 	if cursor != "" {
+		cursorExists, cursorErr := s.submodelCursorExists(ctx, &dialect, cursor)
+		if cursorErr != nil {
+			return nil, "", cursorErr
+		}
+		if !cursorExists {
+			return nil, "", common.NewErrBadRequest("SMREPO-GETSMS-BADCURSOR cursor does not reference an existing submodel")
+		}
 		cursorFilter = &cursor
 	}
 
@@ -1517,4 +1524,25 @@ func (s *SubmodelDatabase) getSubmodelsWithOptionalSemanticIDFilter(ctx context.
 	}
 
 	return submodels, nextCursor, nil
+}
+
+func (s *SubmodelDatabase) submodelCursorExists(ctx context.Context, dialect *goqu.DialectWrapper, cursor string) (bool, error) {
+	query, args, buildErr := dialect.
+		From(goqu.T("submodel").As("sm")).
+		Select(goqu.V(1)).
+		Where(goqu.I("sm.submodel_identifier").Eq(cursor)).
+		Limit(1).
+		ToSQL()
+	if buildErr != nil {
+		return false, common.NewInternalServerError("SMREPO-CHECKSMCURSOR-BUILDSQL " + buildErr.Error())
+	}
+
+	var one int
+	if queryErr := s.db.QueryRowContext(ctx, query, args...).Scan(&one); queryErr != nil {
+		if errors.Is(queryErr, sql.ErrNoRows) {
+			return false, nil
+		}
+		return false, common.NewInternalServerError("SMREPO-CHECKSMCURSOR-EXECSQL " + queryErr.Error())
+	}
+	return true, nil
 }

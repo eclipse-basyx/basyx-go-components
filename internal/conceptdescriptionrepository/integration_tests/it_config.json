@@ -68,6 +68,12 @@
         "shouldMatch": "expected/GetAllConceptDescriptionsLimit1Page2.json"
     },
     {
+        "context": "006.1 - Get All Concept Descriptions (Nonexistent Cursor)",
+        "method": "GET",
+        "endpoint": "http://localhost:6004/concept-descriptions?limit=1&cursor=dXJuOmV4YW1wbGU6Y2Q6OTk5",
+        "expectedStatus": 400
+    },
+    {
         "context": "007 - Update Concept Description B via PUT",
         "method": "PUT",
         "endpoint": "http://localhost:6004/concept-descriptions/dXJuOmV4YW1wbGU6Y2Q6Yjoy",

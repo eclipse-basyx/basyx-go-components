@@ -219,6 +219,12 @@
     "expectedStatus": 400
   },
   {
+    "context": "024.1 - List AAS Descriptors (Nonexistent Cursor) - GET /shell-descriptors?cursor=...",
+    "method": "GET",
+    "endpoint": "http://127.0.0.1:6004/shell-descriptors?cursor=ZG9lcy1ub3QtZXhpc3Q",
+    "expectedStatus": 400
+  },
+  {
     "context": "025 - List AAS Descriptors (Filter assetKind=Type) - GET /shell-descriptors?assetKind=Type",
     "method": "GET",
     "endpoint": "http://127.0.0.1:6004/shell-descriptors?assetKind=Type",
@@ -343,6 +349,12 @@
     "context": "042 - List Submodel Descriptors (Bad Cursor) - GET /shell-descriptors/{aasId}/submodel-descriptors?cursor=...",
     "method": "GET",
     "endpoint": "http://127.0.0.1:6004/shell-descriptors/aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvaWRzL2Fhcy8yMjMzNQ/submodel-descriptors?cursor=HELLOWRONGENCODEDURL",
+    "expectedStatus": 400
+  },
+  {
+    "context": "042.1 - List Submodel Descriptors (Nonexistent Cursor) - GET /shell-descriptors/{aasId}/submodel-descriptors?cursor=...",
+    "method": "GET",
+    "endpoint": "http://127.0.0.1:6004/shell-descriptors/aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvaWRzL2Fhcy8yMjMzNQ/submodel-descriptors?cursor=dXJuOmV4YW1wbGU6c206OTk5",
     "expectedStatus": 400
   },
   {
