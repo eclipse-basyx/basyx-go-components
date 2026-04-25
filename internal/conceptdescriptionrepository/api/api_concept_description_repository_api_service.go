@@ -186,7 +186,7 @@ func (s *ConceptDescriptionRepositoryAPIAPIService) PutConceptDescriptionById(ct
 	if err != nil {
 		return common.NewErrorResponse(err, http.StatusBadRequest, componentName, "PutConceptDescriptionById", "URLDecode"), nil
 	}
-	err = s.d.PutConceptDescription(ctx, string(decodedIdentifier), conceptDescription)
+	created, err := s.d.PutConceptDescription(ctx, string(decodedIdentifier), conceptDescription)
 	if err != nil {
 		switch {
 		case common.IsErrBadRequest(err):
@@ -198,12 +198,15 @@ func (s *ConceptDescriptionRepositoryAPIAPIService) PutConceptDescriptionById(ct
 		}
 	}
 
-	jsonable, toJsonErr := jsonization.ToJsonable(conceptDescription)
-	if toJsonErr != nil {
-		return common.NewErrorResponse(toJsonErr, http.StatusInternalServerError, componentName, "PutConceptDescriptionById", "ToJsonable"), toJsonErr
+	if created {
+		jsonable, toJsonErr := jsonization.ToJsonable(conceptDescription)
+		if toJsonErr != nil {
+			return common.NewErrorResponse(toJsonErr, http.StatusInternalServerError, componentName, "PutConceptDescriptionById", "ToJsonable"), toJsonErr
+		}
+		return model.Response(http.StatusCreated, jsonable), nil
 	}
 
-	return model.Response(http.StatusOK, jsonable), nil
+	return model.Response(http.StatusNoContent, nil), nil
 }
 
 // DeleteConceptDescriptionById - Deletes a Concept Description
@@ -219,6 +222,8 @@ func (s *ConceptDescriptionRepositoryAPIAPIService) DeleteConceptDescriptionById
 			return common.NewErrorResponse(err, http.StatusBadRequest, componentName, "DeleteConceptDescriptionById", "BadRequest"), nil
 		case common.IsErrDenied(err):
 			return common.NewErrorResponse(err, http.StatusForbidden, componentName, "DeleteConceptDescriptionById", "Denied"), nil
+		case common.IsErrNotFound(err):
+			return common.NewErrorResponse(err, http.StatusNotFound, componentName, "DeleteConceptDescriptionById", "NotFound"), nil
 		default:
 			return common.NewErrorResponse(err, http.StatusInternalServerError, componentName, "DeleteConceptDescriptionById", "Unhandled"), err
 		}
