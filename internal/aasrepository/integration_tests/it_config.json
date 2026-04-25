@@ -32,6 +32,13 @@
 		"expectedStatus": 405
 	},
 	{
+		"context": "003.4 - POST /shells/ - trailing slash malformed payload",
+		"method": "POST",
+		"endpoint": "http://127.0.0.1:6004/shells/",
+		"data": "bodies/invalid/malformedJson.txt",
+		"expectedStatus": 400
+	},
+	{
 		"context": "004.1 - GET /shells - empty",
 		"method": "GET",
 		"endpoint": "http://127.0.0.1:6004/shells",

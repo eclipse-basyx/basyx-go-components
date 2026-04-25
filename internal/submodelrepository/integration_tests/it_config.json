@@ -31,9 +31,9 @@
         "expectedStatus": 405
     },
     {
-        "context": "Post Submodel",
+        "context": "Post Submodel (Trailing Slash)",
         "method": "POST",
-        "endpoint": "http://localhost:6004/submodels",
+        "endpoint": "http://localhost:6004/submodels/",
         "data": "bodies/post/postSubmodel.json",
         "shouldMatch": "bodies/post/postSubmodel.json",
         "expectedStatus": 201

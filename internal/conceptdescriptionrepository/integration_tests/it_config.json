@@ -31,9 +31,9 @@
         "expectedStatus": 405
     },
     {
-        "context": "002 - Create Concept Description A",
+        "context": "002 - Create Concept Description A (Trailing Slash)",
         "method": "POST",
-        "endpoint": "http://localhost:6004/concept-descriptions",
+        "endpoint": "http://localhost:6004/concept-descriptions/",
         "expectedStatus": 201,
         "data": "bodies/ConceptDescriptionA.json",
         "shouldMatch": "bodies/ConceptDescriptionA.json"
