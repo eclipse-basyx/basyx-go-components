@@ -134,7 +134,7 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 	descriptionCtrl := openapi.NewDescriptionAPIAPIController(descriptionSvc)
 
 	apiRouter := chi.NewRouter()
-	common.AddDefaultRouterErrorHandlers(apiRouter, "DigitalTwinRegistryService")
+	common.ConfigureAPIRouter(apiRouter, "DigitalTwinRegistryService")
 	if err := auth.SetupSecurityWithClaimsMiddleware(ctx, cfg, apiRouter, auth.EdcBpnHeaderMiddleware); err != nil {
 		return err
 	}

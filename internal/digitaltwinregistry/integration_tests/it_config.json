@@ -1,7 +1,31 @@
 [
   {
+    "method": "GET",
+    "endpoint": "http://127.0.0.1:6004/shell-descriptors/",
+    "expectedStatus": 200,
+    "headers": {
+      "Edc-Bpn": "BPNL00000000015G"
+    }
+  },
+  {
+    "method": "PUT",
+    "endpoint": "http://127.0.0.1:6004/shell-descriptors/",
+    "expectedStatus": 405,
+    "headers": {
+      "Edc-Bpn": "BPNL00000000015G"
+    }
+  },
+  {
+    "method": "DELETE",
+    "endpoint": "http://127.0.0.1:6004/shell-descriptors/",
+    "expectedStatus": 405,
+    "headers": {
+      "Edc-Bpn": "BPNL00000000015G"
+    }
+  },
+  {
     "method": "POST",
-    "endpoint": "http://127.0.0.1:6004/shell-descriptors",
+    "endpoint": "http://127.0.0.1:6004/shell-descriptors/",
     "data": "postBody/descriptor_public.json",
     "expectedStatus": 201,
     "headers": {
