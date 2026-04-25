@@ -108,9 +108,6 @@ func ListSubmodelDescriptorsForAAS(
 	})
 
 	if cursor != "" {
-		if !submodelDescriptorListContainsCursor(list, cursor) {
-			return nil, "", common.NewErrBadRequest("AASREG-LISTSMDS-BADCURSOR cursor does not reference an existing submodel descriptor")
-		}
 		lo, hi := 0, len(list)
 		for lo < hi {
 			mid := (lo + hi) / 2
@@ -119,6 +116,9 @@ func ListSubmodelDescriptorsForAAS(
 			} else {
 				hi = mid
 			}
+		}
+		if lo == len(list) || list[lo].Id != cursor {
+			return nil, "", common.NewErrBadRequest("AASREG-LISTSMDS-BADCURSOR cursor does not reference an existing submodel descriptor")
 		}
 		list = list[lo:]
 	}
@@ -601,15 +601,6 @@ func existsSubmodelByID(ctx context.Context, db DBQueryer, submodelID string) (b
 		return false, scanErr
 	}
 	return true, nil
-}
-
-func submodelDescriptorListContainsCursor(list []model.SubmodelDescriptor, cursor string) bool {
-	for _, smd := range list {
-		if smd.Id == cursor {
-			return true
-		}
-	}
-	return false
 }
 
 type submodelDescriptorPageRow struct {
