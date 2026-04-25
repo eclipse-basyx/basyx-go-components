@@ -77,9 +77,8 @@
         "context": "007 - Update Concept Description B via PUT",
         "method": "PUT",
         "endpoint": "http://localhost:6004/concept-descriptions/dXJuOmV4YW1wbGU6Y2Q6Yjoy",
-        "expectedStatus": 200,
-        "data": "bodies/ConceptDescriptionBUpdated.json",
-        "shouldMatch": "bodies/ConceptDescriptionBUpdated.json"
+        "expectedStatus": 204,
+        "data": "bodies/ConceptDescriptionBUpdated.json"
     },
     {
         "context": "008 - Get Updated Concept Description B by ID",
@@ -97,6 +96,12 @@
     {
         "context": "010 - Get Concept Description A by ID (Not Found)",
         "method": "GET",
+        "endpoint": "http://localhost:6004/concept-descriptions/dXJuOmV4YW1wbGU6Y2Q6YTox",
+        "expectedStatus": 404
+    },
+    {
+        "context": "010.1 - Delete Concept Description A by ID (Not Found)",
+        "method": "DELETE",
         "endpoint": "http://localhost:6004/concept-descriptions/dXJuOmV4YW1wbGU6Y2Q6YTox",
         "expectedStatus": 404
     },
@@ -119,6 +124,26 @@
         "endpoint": "http://localhost:6004/concept-descriptions",
         "expectedStatus": 200,
         "shouldMatch": "expected/GetAllConceptDescriptionsEmpty.json"
+    },
+    {
+        "context": "013.1 - Create Concept Description C via PUT",
+        "method": "PUT",
+        "endpoint": "http://localhost:6004/concept-descriptions/dXJuOmV4YW1wbGU6Y2Q6Yzoz",
+        "expectedStatus": 201,
+        "data": "bodies/ConceptDescriptionC.json"
+    },
+    {
+        "context": "013.2 - Get Concept Description C by ID",
+        "method": "GET",
+        "endpoint": "http://localhost:6004/concept-descriptions/dXJuOmV4YW1wbGU6Y2Q6Yzoz",
+        "expectedStatus": 200,
+        "shouldMatch": "bodies/ConceptDescriptionC.json"
+    },
+    {
+        "context": "013.3 - Delete Concept Description C",
+        "method": "DELETE",
+        "endpoint": "http://localhost:6004/concept-descriptions/dXJuOmV4YW1wbGU6Y2Q6Yzoz",
+        "expectedStatus": 204
     },
     {
         "context": "014 - Create Concept Description Full",
