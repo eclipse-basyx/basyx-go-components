@@ -35,6 +35,7 @@ package persistencepostgresql
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"time"
 
@@ -240,6 +241,15 @@ func (p *PostgreSQLDiscoveryDatabase) SearchAASIDsByAssetLinks(
 	if peekLimit < 0 {
 		return nil, "", common.NewErrBadRequest("Limit has to be higher than 0")
 	}
+	if cursor != "" {
+		cursorExists, cursorErr := p.discoveryCursorExists(ctx, cursor)
+		if cursorErr != nil {
+			return nil, "", cursorErr
+		}
+		if !cursorExists {
+			return nil, "", common.NewErrBadRequest("DISCOVERY-SEARCHAASIDS-BADCURSOR cursor does not reference an existing AAS identifier")
+		}
+	}
 
 	d := goqu.Dialect("postgres")
 	ai := goqu.T("aas_identifier")
@@ -326,4 +336,26 @@ func (p *PostgreSQLDiscoveryDatabase) SearchAASIDsByAssetLinks(
 	}
 
 	return buf, "", nil
+}
+
+func (p *PostgreSQLDiscoveryDatabase) discoveryCursorExists(ctx context.Context, cursor string) (bool, error) {
+	d := goqu.Dialect("postgres")
+	query, args, buildErr := d.
+		From(goqu.T("aas_identifier").As("ai")).
+		Select(goqu.V(1)).
+		Where(goqu.I("ai.aasid").Eq(cursor)).
+		Limit(1).
+		ToSQL()
+	if buildErr != nil {
+		return false, common.NewInternalServerError("DISCOVERY-CHECKCURSOR-BUILDSQL " + buildErr.Error())
+	}
+
+	var one int
+	if queryErr := p.db.QueryRowContext(ctx, query, args...).Scan(&one); queryErr != nil {
+		if errors.Is(queryErr, sql.ErrNoRows) {
+			return false, nil
+		}
+		return false, common.NewInternalServerError("DISCOVERY-CHECKCURSOR-EXECSQL " + queryErr.Error())
+	}
+	return true, nil
 }

@@ -1126,6 +1126,9 @@ func TestGetSubmodelElementPathPageAcceptsCompositeCursor(t *testing.T) {
 	mock.ExpectQuery(`SELECT .*FROM "submodel"`).
 		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(42))
 
+	mock.ExpectQuery(`SELECT 1 FROM "submodel_element" AS "sme".*"sme"\."submodel_id" = 42.*"sme"\."idshort_path" = 'A'.*"sme"\."id" = 10`).
+		WillReturnRows(sqlmock.NewRows([]string{"?column?"}).AddRow(1))
+
 	mock.ExpectQuery(`SELECT .*FROM "submodel_element" AS "sme".*"sme"\."idshort_path" > 'A'.*"sme"\."idshort_path" = 'A'.*"sme"\."id" > 10`).
 		WillReturnRows(sqlmock.NewRows([]string{"idshort_path", "id"}).
 			AddRow("A", int64(20)).

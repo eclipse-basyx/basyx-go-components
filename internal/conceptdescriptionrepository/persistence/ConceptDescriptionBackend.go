@@ -311,7 +311,15 @@ func (b *ConceptDescriptionBackend) GetConceptDescriptions(ctx context.Context, 
 	}
 
 	if cursor != nil && strings.TrimSpace(*cursor) != "" {
-		query = query.Where(goqu.C("id").Gte(strings.TrimSpace(*cursor)))
+		trimmedCursor := strings.TrimSpace(*cursor)
+		cursorExists, cursorErr := b.conceptDescriptionCursorExists(ctx, trimmedCursor)
+		if cursorErr != nil {
+			return nil, "", cursorErr
+		}
+		if !cursorExists {
+			return nil, "", common.NewErrBadRequest("CDREPO-GCDS-BADCURSOR cursor does not reference an existing concept description")
+		}
+		query = query.Where(goqu.C("id").Gte(trimmedCursor))
 	}
 
 	collector, collectorErr := grammar.NewResolvedFieldPathCollectorForRoot(grammar.CollectorRootCD)
@@ -380,6 +388,27 @@ func (b *ConceptDescriptionBackend) GetConceptDescriptions(ctx context.Context, 
 	}
 
 	return conceptDescriptions, nextCursor, nil
+}
+
+func (b *ConceptDescriptionBackend) conceptDescriptionCursorExists(ctx context.Context, cursor string) (bool, error) {
+	query, args, buildErr := goqu.
+		From("concept_description").
+		Select(goqu.V(1)).
+		Where(goqu.C("id").Eq(cursor)).
+		Limit(1).
+		ToSQL()
+	if buildErr != nil {
+		return false, common.NewInternalServerError("CDREPO-CHECKCURSOR-BUILDSQL " + buildErr.Error())
+	}
+
+	var one int
+	if queryErr := b.db.QueryRowContext(ctx, query, args...).Scan(&one); queryErr != nil {
+		if errors.Is(queryErr, sql.ErrNoRows) {
+			return false, nil
+		}
+		return false, common.NewInternalServerError("CDREPO-CHECKCURSOR-EXECSQL " + queryErr.Error())
+	}
+	return true, nil
 }
 
 // GetConceptDescriptionByID retrieves a concept description by its identifier.

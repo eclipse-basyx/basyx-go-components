@@ -118,6 +118,12 @@
     "expectedStatus": 200
   },
   {
+    "context": "013.1 - List Submodel Descriptors (Nonexistent Cursor) - GET /submodel-descriptors?cursor=...",
+    "method": "GET",
+    "endpoint": "http://127.0.0.1:6004/submodel-descriptors?cursor=dXJuOmV4YW1wbGU6c206OTk5",
+    "expectedStatus": 400
+  },
+  {
     "context": "014 - Get Submodel Descriptor by ID - GET /submodel-descriptors/{submodelId}",
     "method": "GET",
     "endpoint": "http://127.0.0.1:6004/submodel-descriptors/dXJuOmV4YW1wbGU6c206MDAy",
