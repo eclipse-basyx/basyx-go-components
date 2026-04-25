@@ -14,6 +14,32 @@
     "expectedStatus": 200
   },
   {
+    "context": "002.1 - List Submodel Descriptors (Trailing Slash) - GET /submodel-descriptors/",
+    "method": "GET",
+    "endpoint": "http://127.0.0.1:6004/submodel-descriptors/",
+    "expectedStatus": 200
+  },
+  {
+    "context": "002.2 - Create Submodel Descriptor (Trailing Slash, Malformed) - POST /submodel-descriptors/",
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:6004/submodel-descriptors/",
+    "data": "postBody/simple_submodel_descriptor_malformed.json",
+    "expectedStatus": 400
+  },
+  {
+    "context": "002.3 - Replace Submodel Descriptor (Trailing Slash) - PUT /submodel-descriptors/",
+    "method": "PUT",
+    "endpoint": "http://127.0.0.1:6004/submodel-descriptors/",
+    "data": "postBody/simple_submodel_descriptor_2.json",
+    "expectedStatus": 405
+  },
+  {
+    "context": "002.4 - Delete Submodel Descriptor (Trailing Slash) - DELETE /submodel-descriptors/",
+    "method": "DELETE",
+    "endpoint": "http://127.0.0.1:6004/submodel-descriptors/",
+    "expectedStatus": 405
+  },
+  {
     "context": "003 - Get Submodel Descriptor by ID (Not Found) - GET /submodel-descriptors/{submodelId}",
     "method": "GET",
     "endpoint": "http://127.0.0.1:6004/submodel-descriptors/dXJuOmV4YW1wbGU6c206MDAx",

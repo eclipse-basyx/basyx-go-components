@@ -14,6 +14,32 @@
     "expectedStatus": 200
   },
   {
+    "context": "002.1 - List AAS Descriptors (Trailing Slash) - GET /shell-descriptors/",
+    "method": "GET",
+    "endpoint": "http://127.0.0.1:6004/shell-descriptors/",
+    "expectedStatus": 200
+  },
+  {
+    "context": "002.2 - Create AAS Descriptor (Trailing Slash, Malformed) - POST /shell-descriptors/",
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:6004/shell-descriptors/",
+    "data": "postBody/simple_ass_descriptor_malformed.json",
+    "expectedStatus": 400
+  },
+  {
+    "context": "002.3 - Replace AAS Descriptor (Trailing Slash) - PUT /shell-descriptors/",
+    "method": "PUT",
+    "endpoint": "http://127.0.0.1:6004/shell-descriptors/",
+    "data": "postBody/simple_ass_descriptor_2.json",
+    "expectedStatus": 405
+  },
+  {
+    "context": "002.4 - Delete AAS Descriptor (Trailing Slash) - DELETE /shell-descriptors/",
+    "method": "DELETE",
+    "endpoint": "http://127.0.0.1:6004/shell-descriptors/",
+    "expectedStatus": 405
+  },
+  {
     "context": "003 - Get AAS Descriptor by ID (Not Found) - GET /shell-descriptors/{aasId}",
     "method": "GET",
     "endpoint": "http://127.0.0.1:6004/shell-descriptors/aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvaWRzL2Fhcy8yMjMzNQ",

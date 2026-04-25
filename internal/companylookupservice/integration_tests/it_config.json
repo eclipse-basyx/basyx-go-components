@@ -14,6 +14,31 @@
         "expectedStatus": 200
     },
     {
+        "context": "002.1 - List Company Descriptors (Trailing Slash) - GET /companies/",
+        "method": "GET",
+        "endpoint": "http://127.0.0.1:6004/companies/",
+        "expectedStatus": 200
+    },
+    {
+        "context": "002.2 - Create Company Descriptor (Trailing Slash, Malformed) - POST /companies/",
+        "method": "POST",
+        "endpoint": "http://127.0.0.1:6004/companies/",
+        "data": "postBody/company_descriptor_malformed_missing_domain.json",
+        "expectedStatus": 400
+    },
+    {
+        "context": "002.3 - Replace Company Collection (Trailing Slash) - PUT /companies/",
+        "method": "PUT",
+        "endpoint": "http://127.0.0.1:6004/companies/",
+        "expectedStatus": 405
+    },
+    {
+        "context": "002.4 - Delete Company Collection (Trailing Slash) - DELETE /companies/",
+        "method": "DELETE",
+        "endpoint": "http://127.0.0.1:6004/companies/",
+        "expectedStatus": 405
+    },
+    {
         "context": "003 - Create Company Descriptor #1 - POST /companies",
         "method": "POST",
         "endpoint": "http://127.0.0.1:6004/companies",

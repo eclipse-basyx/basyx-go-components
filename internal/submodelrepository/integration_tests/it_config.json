@@ -13,6 +13,24 @@
         "expectedStatus": 200
     },
     {
+        "context": "Get All Submodels (Trailing Slash)",
+        "method": "GET",
+        "endpoint": "http://localhost:6004/submodels/",
+        "expectedStatus": 200
+    },
+    {
+        "context": "Replace Submodel (Trailing Slash)",
+        "method": "PUT",
+        "endpoint": "http://localhost:6004/submodels/",
+        "expectedStatus": 405
+    },
+    {
+        "context": "Delete Submodel (Trailing Slash)",
+        "method": "DELETE",
+        "endpoint": "http://localhost:6004/submodels/",
+        "expectedStatus": 405
+    },
+    {
         "context": "Post Submodel",
         "method": "POST",
         "endpoint": "http://localhost:6004/submodels",

@@ -108,7 +108,7 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 	// luk
 	// === Protected API Subrouter ===
 	apiRouter := chi.NewRouter()
-	common.AddDefaultRouterErrorHandlers(apiRouter, "SubmodelRegistryService")
+	common.ConfigureAPIRouter(apiRouter, "SubmodelRegistryService")
 
 	// Apply OIDC + ABAC once for all registry endpoints
 	if err := auth.SetupSecurity(ctx, cfg, apiRouter); err != nil {

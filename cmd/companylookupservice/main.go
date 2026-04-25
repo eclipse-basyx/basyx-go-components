@@ -72,7 +72,7 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 
 	// === Protected API Subrouter ===
 	apiRouter := chi.NewRouter()
-	common.AddDefaultRouterErrorHandlers(apiRouter, "CompanyLookupService")
+	common.ConfigureAPIRouter(apiRouter, "CompanyLookupService")
 
 	// Register all company lookup routes
 	for _, rt := range companyLookupCtrl.Routes() {

@@ -14,6 +14,24 @@
 		"expectedStatus": 200
 	},
 	{
+		"context": "003.1 - GET /shells/ - trailing slash collection",
+		"method": "GET",
+		"endpoint": "http://127.0.0.1:6004/shells/",
+		"expectedStatus": 200
+	},
+	{
+		"context": "003.2 - PUT /shells/ - trailing slash method not allowed",
+		"method": "PUT",
+		"endpoint": "http://127.0.0.1:6004/shells/",
+		"expectedStatus": 405
+	},
+	{
+		"context": "003.3 - DELETE /shells/ - trailing slash method not allowed",
+		"method": "DELETE",
+		"endpoint": "http://127.0.0.1:6004/shells/",
+		"expectedStatus": 405
+	},
+	{
 		"context": "004.1 - GET /shells - empty",
 		"method": "GET",
 		"endpoint": "http://127.0.0.1:6004/shells",

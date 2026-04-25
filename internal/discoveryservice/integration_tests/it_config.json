@@ -1,5 +1,23 @@
 [
   {
+    "context": "000 - Lookup Collection (Trailing Slash) - GET /lookup/shells/",
+    "method": "GET",
+    "endpoint": "http://127.0.0.1:6004/lookup/shells/",
+    "expectedStatus": 200
+  },
+  {
+    "context": "000.1 - Lookup Collection (Trailing Slash) - POST /lookup/shells/",
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:6004/lookup/shells/",
+    "expectedStatus": 405
+  },
+  {
+    "context": "000.2 - Lookup Collection (Trailing Slash) - DELETE /lookup/shells/",
+    "method": "DELETE",
+    "endpoint": "http://127.0.0.1:6004/lookup/shells/",
+    "expectedStatus": 405
+  },
+  {
     "context": "001 - Search empty dataset",
     "method": "POST",
     "endpoint": "http://127.0.0.1:6004/lookup/shellsByAssetLink?limit=5",

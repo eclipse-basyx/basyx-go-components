@@ -13,6 +13,24 @@
         "shouldMatch": "expected/GetAllConceptDescriptionsEmpty.json"
     },
     {
+        "context": "001.1 - Get All Concept Descriptions (Trailing Slash)",
+        "method": "GET",
+        "endpoint": "http://localhost:6004/concept-descriptions/",
+        "expectedStatus": 200
+    },
+    {
+        "context": "001.2 - Update Concept Descriptions Collection (Trailing Slash)",
+        "method": "PUT",
+        "endpoint": "http://localhost:6004/concept-descriptions/",
+        "expectedStatus": 405
+    },
+    {
+        "context": "001.3 - Delete Concept Descriptions Collection (Trailing Slash)",
+        "method": "DELETE",
+        "endpoint": "http://localhost:6004/concept-descriptions/",
+        "expectedStatus": 405
+    },
+    {
         "context": "002 - Create Concept Description A",
         "method": "POST",
         "endpoint": "http://localhost:6004/concept-descriptions",
