@@ -186,7 +186,7 @@ func (s *ConceptDescriptionRepositoryAPIAPIService) PutConceptDescriptionById(ct
 	if err != nil {
 		return common.NewErrorResponse(err, http.StatusBadRequest, componentName, "PutConceptDescriptionById", "URLDecode"), nil
 	}
-	created, err := s.d.PutConceptDescription(ctx, string(decodedIdentifier), conceptDescription)
+	isUpdate, err := s.d.PutConceptDescription(ctx, string(decodedIdentifier), conceptDescription)
 	if err != nil {
 		switch {
 		case common.IsErrBadRequest(err):
@@ -198,15 +198,16 @@ func (s *ConceptDescriptionRepositoryAPIAPIService) PutConceptDescriptionById(ct
 		}
 	}
 
-	if created {
-		jsonable, toJsonErr := jsonization.ToJsonable(conceptDescription)
-		if toJsonErr != nil {
-			return common.NewErrorResponse(toJsonErr, http.StatusInternalServerError, componentName, "PutConceptDescriptionById", "ToJsonable"), toJsonErr
-		}
-		return model.Response(http.StatusCreated, jsonable), nil
+	if isUpdate {
+		return model.Response(http.StatusNoContent, nil), nil
 	}
 
-	return model.Response(http.StatusNoContent, nil), nil
+	jsonable, toJsonErr := jsonization.ToJsonable(conceptDescription)
+	if toJsonErr != nil {
+		return common.NewErrorResponse(toJsonErr, http.StatusInternalServerError, componentName, "PutConceptDescriptionById", "ToJsonable"), toJsonErr
+	}
+
+	return model.Response(http.StatusCreated, jsonable), nil
 }
 
 // DeleteConceptDescriptionById - Deletes a Concept Description

@@ -468,7 +468,7 @@ func (b *ConceptDescriptionBackend) GetConceptDescriptionByID(ctx context.Contex
 	return cd, nil
 }
 
-// PutConceptDescription updates or replaces the concept description with the given identifier.
+// PutConceptDescription creates or replaces the concept description with the given identifier and reports whether an existing row was replaced.
 func (b *ConceptDescriptionBackend) PutConceptDescription(ctx context.Context, id string, cd types.IConceptDescription) (bool, error) {
 	tx, cleanup, err := common.StartTransaction(b.db)
 	if err != nil {
@@ -498,8 +498,9 @@ func (b *ConceptDescriptionBackend) PutConceptDescription(ctx context.Context, i
 		}
 	}
 
+	isUpdate := false
 	if existingExists {
-		if _, err = b.deleteConceptDescriptionInTx(ctx, tx, id); err != nil {
+		if isUpdate, err = b.deleteConceptDescriptionInTx(ctx, tx, id); err != nil {
 			return false, err
 		}
 	}
@@ -525,7 +526,7 @@ func (b *ConceptDescriptionBackend) PutConceptDescription(ctx context.Context, i
 		return false, common.NewInternalServerError("CDREPO-PUTCD-COMMIT " + err.Error())
 	}
 
-	return !existingExists, nil
+	return isUpdate, nil
 }
 
 // DeleteConceptDescription removes a concept description by its identifier.
