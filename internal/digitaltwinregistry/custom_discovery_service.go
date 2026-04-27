@@ -298,6 +298,10 @@ func buildAssetLinkQuery(ctx context.Context, assetLink []model.AssetLink) gramm
 		return grammar.Query{}
 	}
 
+	if auth.HasUnrestrictedFormulaForRight(ctx, grammar.RightsEnumREAD) {
+		return grammar.Query{}
+	}
+
 	assetLinkFieldPattern := grammar.ModelStringPattern("$aasdesc#specificAssetIds[].externalSubjectId.keys[].value")
 	assetLinkFieldValue := grammar.ModelStringPattern("$aasdesc#specificAssetIds[].value")
 	assetLinkFieldName := grammar.ModelStringPattern("$aasdesc#specificAssetIds[].name")
@@ -307,10 +311,6 @@ func buildAssetLinkQuery(ctx context.Context, assetLink []model.AssetLink) gramm
 	edcBpnClaim, hasEdcBpnClaim := claims.GetString("Edc-Bpn")
 	hasEdcBpnClaim = hasEdcBpnClaim && strings.TrimSpace(edcBpnClaim) != ""
 	edcBpn := grammar.StandardString(edcBpnClaim)
-	roleClaim, hasRoleClaim := getClaimAsSearchString(claims, "role")
-	hasRoleClaim = hasRoleClaim && strings.TrimSpace(roleClaim) != ""
-	role := grammar.StandardString(roleClaim)
-	viewDigitalTwin := grammar.StandardString("view_digital_twin")
 
 	assetLinkLe := grammar.LogicalExpression{And: []grammar.LogicalExpression{}}
 	for _, link := range assetLink {
@@ -368,51 +368,7 @@ func buildAssetLinkQuery(ctx context.Context, assetLink []model.AssetLink) gramm
 		assetLinkLe.And = append(assetLinkLe.And, assetLinkLeInner)
 	}
 
-	finalCondition := assetLinkLe
-	if hasRoleClaim {
-		finalCondition = grammar.LogicalExpression{
-			Or: []grammar.LogicalExpression{
-				assetLinkLe,
-				{
-					Contains: grammar.StringItems{
-						{StrVal: &role},
-						{StrVal: &viewDigitalTwin},
-					},
-				},
-			},
-		}
-	}
-
 	return grammar.Query{
-		Condition: &finalCondition,
-	}
-}
-
-func getClaimAsSearchString(claims auth.Claims, key string) (string, bool) {
-	v, ok := claims[key]
-	if !ok || v == nil {
-		return "", false
-	}
-
-	switch claim := v.(type) {
-	case string:
-		return claim, true
-	case []string:
-		return strings.Join(claim, " "), true
-	case []any:
-		parts := make([]string, 0, len(claim))
-		for _, item := range claim {
-			part := strings.TrimSpace(fmt.Sprint(item))
-			if part == "" {
-				continue
-			}
-			parts = append(parts, part)
-		}
-		if len(parts) == 0 {
-			return "", false
-		}
-		return strings.Join(parts, " "), true
-	default:
-		return fmt.Sprint(claim), true
+		Condition: &assetLinkLe,
 	}
 }

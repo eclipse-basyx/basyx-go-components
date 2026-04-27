@@ -172,6 +172,22 @@ func ShouldEnforceFormula(ctx context.Context) (bool, error) {
 	return len(queryFilter.FormulasByRight) > 0, nil
 }
 
+// HasUnrestrictedFormulaForRight returns true when the right-scoped formula in
+// context is a boolean true literal.
+func HasUnrestrictedFormulaForRight(ctx context.Context, right grammar.RightsEnum) bool {
+	qf := GetQueryFilter(ctx)
+	if qf == nil || qf.FormulasByRight == nil {
+		return false
+	}
+
+	expr, ok := qf.FormulasByRight[right]
+	if !ok || expr.Boolean == nil {
+		return false
+	}
+
+	return *expr.Boolean
+}
+
 // MergeQueryFilter combines an existing QueryFilter with a user query.
 // It guards nils and merges conditions and filter fragments using logical AND.
 func MergeQueryFilter(ctx context.Context, query grammar.Query) context.Context {
