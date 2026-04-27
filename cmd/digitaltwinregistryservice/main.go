@@ -134,7 +134,7 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 	descriptionCtrl := openapi.NewDescriptionAPIAPIController(descriptionSvc)
 
 	apiRouter := chi.NewRouter()
-	common.AddDefaultRouterErrorHandlers(apiRouter, "DigitalTwinRegistryService")
+	common.ConfigureAPIRouter(apiRouter, "DigitalTwinRegistryService")
 	var claimsMiddleware []func(http.Handler) http.Handler
 	if cfg.General.EnableCustomMiddlewareHeaderInjection {
 		claimsMiddleware = append(claimsMiddleware, auth.EdcBpnHeaderMiddleware)

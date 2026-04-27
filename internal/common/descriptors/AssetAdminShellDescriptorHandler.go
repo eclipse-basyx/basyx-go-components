@@ -549,6 +549,15 @@ func listAssetAdministrationShellDescriptors(
 	if limit <= 0 {
 		limit = 1000000
 	}
+	if cursor != "" {
+		cursorExists, cursorErr := existsAASByID(ctx, db, cursor)
+		if cursorErr != nil {
+			return nil, "", common.NewInternalServerError("AASREG-LISTAAS-CURSORCHECK " + cursorErr.Error())
+		}
+		if !cursorExists {
+			return nil, "", common.NewErrBadRequest("AASREG-LISTAAS-BADCURSOR cursor does not reference an existing AAS descriptor")
+		}
+	}
 	peekLimit := limit + 1
 	ds, err := buildListAssetAdministrationShellDescriptorsQuery(ctx, peekLimit, cursor, assetKind, assetType, identifiable)
 	if err != nil {
@@ -726,6 +735,10 @@ func nullTimeToPtr(nt sql.NullTime) *time.Time {
 // ExistsAASByID performs a lightweight existence check for an AAS by its Id
 // string. It returns true when a descriptor exists, false when it does not.
 func ExistsAASByID(ctx context.Context, db *sql.DB, aasID string) (bool, error) {
+	return existsAASByID(ctx, db, aasID)
+}
+
+func existsAASByID(ctx context.Context, db DBQueryer, aasID string) (bool, error) {
 	d := goqu.Dialect(common.Dialect)
 	aas := goqu.T(common.TblAASDescriptor).As("aas")
 

@@ -82,7 +82,7 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 
 	// === Protected API Subrouter ===
 	apiRouter := chi.NewRouter()
-	common.AddDefaultRouterErrorHandlers(apiRouter, "SubmodelRepositoryService")
+	common.ConfigureAPIRouter(apiRouter, "SubmodelRepositoryService")
 
 	// Apply OIDC + ABAC once for all repository endpoints
 	if err := auth.SetupSecurity(ctx, config, apiRouter); err != nil {

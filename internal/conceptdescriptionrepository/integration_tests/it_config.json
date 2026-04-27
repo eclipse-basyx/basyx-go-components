@@ -13,9 +13,27 @@
         "shouldMatch": "expected/GetAllConceptDescriptionsEmpty.json"
     },
     {
-        "context": "002 - Create Concept Description A",
+        "context": "001.1 - Get All Concept Descriptions (Trailing Slash)",
+        "method": "GET",
+        "endpoint": "http://localhost:6004/concept-descriptions/",
+        "expectedStatus": 200
+    },
+    {
+        "context": "001.2 - Update Concept Descriptions Collection (Trailing Slash)",
+        "method": "PUT",
+        "endpoint": "http://localhost:6004/concept-descriptions/",
+        "expectedStatus": 405
+    },
+    {
+        "context": "001.3 - Delete Concept Descriptions Collection (Trailing Slash)",
+        "method": "DELETE",
+        "endpoint": "http://localhost:6004/concept-descriptions/",
+        "expectedStatus": 405
+    },
+    {
+        "context": "002 - Create Concept Description A (Trailing Slash)",
         "method": "POST",
-        "endpoint": "http://localhost:6004/concept-descriptions",
+        "endpoint": "http://localhost:6004/concept-descriptions/",
         "expectedStatus": 201,
         "data": "bodies/ConceptDescriptionA.json",
         "shouldMatch": "bodies/ConceptDescriptionA.json"
@@ -50,12 +68,17 @@
         "shouldMatch": "expected/GetAllConceptDescriptionsLimit1Page2.json"
     },
     {
+        "context": "006.1 - Get All Concept Descriptions (Nonexistent Cursor)",
+        "method": "GET",
+        "endpoint": "http://localhost:6004/concept-descriptions?limit=1&cursor=dXJuOmV4YW1wbGU6Y2Q6OTk5",
+        "expectedStatus": 400
+    },
+    {
         "context": "007 - Update Concept Description B via PUT",
         "method": "PUT",
         "endpoint": "http://localhost:6004/concept-descriptions/dXJuOmV4YW1wbGU6Y2Q6Yjoy",
-        "expectedStatus": 200,
-        "data": "bodies/ConceptDescriptionBUpdated.json",
-        "shouldMatch": "bodies/ConceptDescriptionBUpdated.json"
+        "expectedStatus": 204,
+        "data": "bodies/ConceptDescriptionBUpdated.json"
     },
     {
         "context": "008 - Get Updated Concept Description B by ID",
@@ -73,6 +96,12 @@
     {
         "context": "010 - Get Concept Description A by ID (Not Found)",
         "method": "GET",
+        "endpoint": "http://localhost:6004/concept-descriptions/dXJuOmV4YW1wbGU6Y2Q6YTox",
+        "expectedStatus": 404
+    },
+    {
+        "context": "010.1 - Delete Concept Description A by ID (Not Found)",
+        "method": "DELETE",
         "endpoint": "http://localhost:6004/concept-descriptions/dXJuOmV4YW1wbGU6Y2Q6YTox",
         "expectedStatus": 404
     },
@@ -95,6 +124,26 @@
         "endpoint": "http://localhost:6004/concept-descriptions",
         "expectedStatus": 200,
         "shouldMatch": "expected/GetAllConceptDescriptionsEmpty.json"
+    },
+    {
+        "context": "013.1 - Create Concept Description C via PUT",
+        "method": "PUT",
+        "endpoint": "http://localhost:6004/concept-descriptions/dXJuOmV4YW1wbGU6Y2Q6Yzoz",
+        "expectedStatus": 201,
+        "data": "bodies/ConceptDescriptionC.json"
+    },
+    {
+        "context": "013.2 - Get Concept Description C by ID",
+        "method": "GET",
+        "endpoint": "http://localhost:6004/concept-descriptions/dXJuOmV4YW1wbGU6Y2Q6Yzoz",
+        "expectedStatus": 200,
+        "shouldMatch": "bodies/ConceptDescriptionC.json"
+    },
+    {
+        "context": "013.3 - Delete Concept Description C",
+        "method": "DELETE",
+        "endpoint": "http://localhost:6004/concept-descriptions/dXJuOmV4YW1wbGU6Y2Q6Yzoz",
+        "expectedStatus": 204
     },
     {
         "context": "014 - Create Concept Description Full",

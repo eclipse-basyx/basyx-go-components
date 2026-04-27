@@ -1,5 +1,23 @@
 [
   {
+    "context": "000 - Lookup Collection (Trailing Slash) - GET /lookup/shells/",
+    "method": "GET",
+    "endpoint": "http://127.0.0.1:6004/lookup/shells/",
+    "expectedStatus": 200
+  },
+  {
+    "context": "000.1 - Lookup Collection (Trailing Slash) - POST /lookup/shells/",
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:6004/lookup/shells/",
+    "expectedStatus": 405
+  },
+  {
+    "context": "000.2 - Lookup Collection (Trailing Slash) - DELETE /lookup/shells/",
+    "method": "DELETE",
+    "endpoint": "http://127.0.0.1:6004/lookup/shells/",
+    "expectedStatus": 405
+  },
+  {
     "context": "001 - Search empty dataset",
     "method": "POST",
     "endpoint": "http://127.0.0.1:6004/lookup/shellsByAssetLink?limit=5",
@@ -399,6 +417,12 @@
     "context": "057 - GET bad cursor",
     "method": "GET",
     "endpoint": "http://127.0.0.1:6004/lookup/shells?limit=1&assetIds=eyJuYW1lIjoicGxhbnQiLCJ2YWx1ZSI6IlNQSURFUlRST04tWUFSRCJ9&cursor=not-base64!!!",
+    "expectedStatus": 400
+  },
+  {
+    "context": "057.1 - GET nonexistent cursor",
+    "method": "GET",
+    "endpoint": "http://127.0.0.1:6004/lookup/shells?limit=1&assetIds=eyJuYW1lIjoicGxhbnQiLCJ2YWx1ZSI6IlNQSURFUlRST04tWUFSRCJ9&cursor=dXJuOmFhczp0ZXN0Om5vdC1oZXJl",
     "expectedStatus": 400
   },
   {

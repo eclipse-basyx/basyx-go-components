@@ -551,7 +551,16 @@ func (s *AssetAdministrationShellDatabase) GetAssetAdministrationShells(ctx cont
 	dialect := goqu.Dialect("postgres")
 
 	if limit < 0 {
-		return nil, "", common.NewErrBadRequest("AASREPO-GETAASLIST-BADLIMIT Limit " + string(limit) + " too small")
+		return nil, "", common.NewErrBadRequest("AASREPO-GETAASLIST-BADLIMIT Limit " + strconv.FormatInt(int64(limit), 10) + " too small")
+	}
+	if cursor != "" {
+		cursorExists, cursorErr := s.assetAdministrationShellCursorExists(ctx, &dialect, cursor)
+		if cursorErr != nil {
+			return nil, "", cursorErr
+		}
+		if !cursorExists {
+			return nil, "", common.NewErrBadRequest("AASREPO-GETAASLIST-BADCURSOR cursor does not reference an existing Asset Administration Shell")
+		}
 	}
 
 	selectDS, err := buildGetAssetAdministrationShellsDataset(&dialect, limit, cursor, idShort, assetIDs)
@@ -623,6 +632,22 @@ func (s *AssetAdministrationShellDatabase) GetAssetAdministrationShells(ctx cont
 	}
 
 	return result, nextCursor, nil
+}
+
+func (s *AssetAdministrationShellDatabase) assetAdministrationShellCursorExists(ctx context.Context, dialect *goqu.DialectWrapper, cursor string) (bool, error) {
+	query, args, buildErr := dialect.From("aas").Select(goqu.V(1)).Where(goqu.I("aas_id").Eq(cursor)).Limit(1).ToSQL()
+	if buildErr != nil {
+		return false, common.NewInternalServerError("AASREPO-CHECKAASCURSOR-BUILDSQL " + buildErr.Error())
+	}
+
+	var one int
+	if queryErr := s.db.QueryRowContext(ctx, query, args...).Scan(&one); queryErr != nil {
+		if errors.Is(queryErr, sql.ErrNoRows) {
+			return false, nil
+		}
+		return false, common.NewInternalServerError("AASREPO-CHECKAASCURSOR-EXECSQL " + queryErr.Error())
+	}
+	return true, nil
 }
 
 // GetAssetAdministrationShellByID returns the JSON-like representation of an AAS by identifier.
@@ -1111,7 +1136,7 @@ func (s *AssetAdministrationShellDatabase) GetAllSubmodelReferencesByAASID(ctx c
 	defer cleanup(&err)
 
 	if limit < 0 {
-		return nil, "", common.NewErrBadRequest("AASREPO-GETSMREFS-BADLIMIT Limit " + string(limit) + " too small")
+		return nil, "", common.NewErrBadRequest("AASREPO-GETSMREFS-BADLIMIT Limit " + strconv.FormatInt(int64(limit), 10) + " too small")
 	}
 
 	cursorID := int64(0)
@@ -1153,6 +1178,15 @@ func (s *AssetAdministrationShellDatabase) GetAllSubmodelReferencesByAASID(ctx c
 			return nil, "", common.NewErrNotFound("AASREPO-GETSMREFS-AASNOTFOUND Asset Administration Shell with ID '" + aasIdentifier + "' not found")
 		}
 		return nil, "", common.NewInternalServerError("AASREPO-GETSMREFS-EXECAASSQL " + queryErr.Error())
+	}
+	if cursorID > 0 {
+		cursorExists, cursorErr := submodelReferenceCursorExists(ctx, tx, &dialect, aasDBID, cursorID)
+		if cursorErr != nil {
+			return nil, "", cursorErr
+		}
+		if !cursorExists {
+			return nil, "", common.NewErrBadRequest("AASREPO-GETSMREFS-BADCURSOR cursor does not reference an existing submodel reference")
+		}
 	}
 
 	sqlQuery, args, buildErr := buildGetAllSubmodelReferencesByAASIDQuery(&dialect, aasDBID, limit, cursorID)
@@ -1206,6 +1240,30 @@ func (s *AssetAdministrationShellDatabase) GetAllSubmodelReferencesByAASID(ctx c
 	}
 
 	return references, nextCursor, nil
+}
+
+func submodelReferenceCursorExists(ctx context.Context, tx *sql.Tx, dialect *goqu.DialectWrapper, aasDBID int64, cursorID int64) (bool, error) {
+	query, args, buildErr := dialect.
+		From(goqu.T("aas_submodel_reference").As("r")).
+		Select(goqu.V(1)).
+		Where(
+			goqu.I("r.id").Eq(cursorID),
+			goqu.I("r.aas_id").Eq(aasDBID),
+		).
+		Limit(1).
+		ToSQL()
+	if buildErr != nil {
+		return false, common.NewInternalServerError("AASREPO-CHECKSMREFCURSOR-BUILDSQL " + buildErr.Error())
+	}
+
+	var one int
+	if queryErr := tx.QueryRowContext(ctx, query, args...).Scan(&one); queryErr != nil {
+		if errors.Is(queryErr, sql.ErrNoRows) {
+			return false, nil
+		}
+		return false, common.NewInternalServerError("AASREPO-CHECKSMREFCURSOR-EXECSQL " + queryErr.Error())
+	}
+	return true, nil
 }
 
 // DeleteSubmodelReferenceInAssetAdministrationShell removes a submodel reference and checks ABAC visibility.

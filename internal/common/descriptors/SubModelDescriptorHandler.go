@@ -117,6 +117,9 @@ func ListSubmodelDescriptorsForAAS(
 				hi = mid
 			}
 		}
+		if lo == len(list) || list[lo].Id != cursor {
+			return nil, "", common.NewErrBadRequest("AASREG-LISTSMDS-BADCURSOR cursor does not reference an existing submodel descriptor")
+		}
 		list = list[lo:]
 	}
 
@@ -405,6 +408,15 @@ func ListSubmodelDescriptors(
 	if limit <= 0 {
 		limit = 10000000
 	}
+	if cursor != "" {
+		cursorExists, cursorErr := existsSubmodelByID(ctx, db, cursor)
+		if cursorErr != nil {
+			return nil, "", common.NewInternalServerError("SMREG-LISTSMDS-CURSORCHECK " + cursorErr.Error())
+		}
+		if !cursorExists {
+			return nil, "", common.NewErrBadRequest("SMREG-LISTSMDS-BADCURSOR cursor does not reference an existing submodel descriptor")
+		}
+	}
 
 	rows, nextCursor, err := listSubmodelDescriptorIDsWithoutAAS(ctx, db, limit, cursor)
 	if err != nil {
@@ -560,6 +572,10 @@ func DeleteSubmodelDescriptorByID(
 // ExistsSubmodelByID performs a lightweight existence check for a submodel
 // descriptor without an AAS association.
 func ExistsSubmodelByID(ctx context.Context, db *sql.DB, submodelID string) (bool, error) {
+	return existsSubmodelByID(ctx, db, submodelID)
+}
+
+func existsSubmodelByID(ctx context.Context, db DBQueryer, submodelID string) (bool, error) {
 	d := goqu.Dialect(common.Dialect)
 	smd := goqu.T(common.TblSubmodelDescriptor).As("smd")
 

@@ -14,6 +14,31 @@
 		"expectedStatus": 200
 	},
 	{
+		"context": "003.1 - GET /shells/ - trailing slash collection",
+		"method": "GET",
+		"endpoint": "http://127.0.0.1:6004/shells/",
+		"expectedStatus": 200
+	},
+	{
+		"context": "003.2 - PUT /shells/ - trailing slash method not allowed",
+		"method": "PUT",
+		"endpoint": "http://127.0.0.1:6004/shells/",
+		"expectedStatus": 405
+	},
+	{
+		"context": "003.3 - DELETE /shells/ - trailing slash method not allowed",
+		"method": "DELETE",
+		"endpoint": "http://127.0.0.1:6004/shells/",
+		"expectedStatus": 405
+	},
+	{
+		"context": "003.4 - POST /shells/ - trailing slash malformed payload",
+		"method": "POST",
+		"endpoint": "http://127.0.0.1:6004/shells/",
+		"data": "bodies/invalid/malformedJson.txt",
+		"expectedStatus": 400
+	},
+	{
 		"context": "004.1 - GET /shells - empty",
 		"method": "GET",
 		"endpoint": "http://127.0.0.1:6004/shells",
@@ -193,6 +218,12 @@
 		"expectedStatus": 200
 	},
 	{
+		"context": "004.9.1 - GET /shells - nonexistent cursor",
+		"method": "GET",
+		"endpoint": "http://127.0.0.1:6004/shells?cursor=aHR0cHM6Ly9leGFtcGxlLmNvbS9pZHMvYWFzL2RvZXMtbm90LWV4aXN0",
+		"expectedStatus": 400
+	},
+	{
 		"context": "004.10 - GET /shells - filter by cursor",
 		"method": "GET",
 		"endpoint": "http://127.0.0.1:6004/shells?assetIds=assetIdValueX&idShort=aasTestC",
@@ -273,6 +304,12 @@
 		"endpoint": "http://127.0.0.1:6004/shells/$reference?cursor=aHR0cHM6Ly9leGFtcGxlLmNvbS9pZHMvYWFzLzczMDFfMzE1MF85NDQyXzc4NDk",
 		"shouldMatch": "expected/expectedAssetAdministrationShellReferencesFilterCursor.json",
 		"expectedStatus": 200
+	},
+	{
+		"context": "005.4.1 - GET /shells/$reference - nonexistent cursor",
+		"method": "GET",
+		"endpoint": "http://127.0.0.1:6004/shells/$reference?cursor=aHR0cHM6Ly9leGFtcGxlLmNvbS9pZHMvYWFzL2RvZXMtbm90LWV4aXN0",
+		"expectedStatus": 400
 	},
 	{
 		"context": "006.1 - GET /shells/{aasIdentifier}",
@@ -420,6 +457,12 @@
 		"endpoint": "http://127.0.0.1:6004/shells/aHR0cHM6Ly9leGFtcGxlLmNvbS9pZHMvYWFzLzM0OTRfMjEyMF8zMDYyXzY1MzI/submodel-refs?cursor=NA",
 		"shouldMatch": "expected/expectedAssetAdministrationShellSubmodelReferencesFilterCursor.json",
 		"expectedStatus": 200
+	},
+	{
+		"context": "009.7.1 - GET /shells/{aasIdentifier}/submodel-refs - nonexistent cursor",
+		"method": "GET",
+		"endpoint": "http://127.0.0.1:6004/shells/aHR0cHM6Ly9leGFtcGxlLmNvbS9pZHMvYWFzLzM0OTRfMjEyMF8zMDYyXzY1MzI/submodel-refs?cursor=OTk5OTk",
+		"expectedStatus": 400
 	},
 	{
 		"context": "009.8 - POST /shells/{aasIdentifier}/submodel-refs - conflict (malformed)",
