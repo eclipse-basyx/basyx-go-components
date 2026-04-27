@@ -559,7 +559,7 @@ func (s *AssetAdministrationShellDatabase) GetAssetAdministrationShells(ctx cont
 			return nil, "", cursorErr
 		}
 		if !cursorExists {
-			return nil, "", common.NewErrBadRequest("AASREPO-GETAASLIST-BADCURSOR cursor does not reference an existing Asset Administration Shell")
+			return []map[string]any{}, "", nil
 		}
 	}
 
@@ -1185,7 +1185,7 @@ func (s *AssetAdministrationShellDatabase) GetAllSubmodelReferencesByAASID(ctx c
 			return nil, "", cursorErr
 		}
 		if !cursorExists {
-			return nil, "", common.NewErrBadRequest("AASREPO-GETSMREFS-BADCURSOR cursor does not reference an existing submodel reference")
+			return []types.IReference{}, "", nil
 		}
 	}
 

@@ -684,7 +684,7 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) QueryAssetAdministration
 		}
 	}
 
-	var jsonable []map[string]any
+	jsonable := make([]map[string]any, 0, len(aasds))
 	for _, aasd := range aasds {
 		j, toJsonErr := aasd.ToJsonable()
 		if toJsonErr != nil {

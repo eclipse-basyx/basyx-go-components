@@ -179,8 +179,12 @@ func GetSubmodelElementPathsPageBySubmodelID(ctx context.Context, db *sql.DB, su
 		query = query.Where(goqu.I("sme.parent_sme_id").IsNull())
 	}
 	if cursor != "" {
-		if cursorErr := ensureSubmodelElementCursorExists(ctx, db, int64(submodelDatabaseID), cursor); cursorErr != nil {
+		cursorExists, cursorErr := submodelElementCursorExists(ctx, db, int64(submodelDatabaseID), cursor)
+		if cursorErr != nil {
 			return nil, "", cursorErr
+		}
+		if !cursorExists {
+			return []string{}, "", nil
 		}
 		cursorPath, cursorID, hasCursorID := parseRootCursor(cursor)
 		if hasCursorID {
@@ -682,8 +686,12 @@ func getRootElementPage(ctx context.Context, db *sql.DB, submodelDatabaseID int6
 	query = query.Order(goqu.I("sme.idshort_path").Asc(), goqu.I("sme.id").Asc())
 
 	if cursor != "" {
-		if cursorErr := ensureSubmodelElementCursorExists(ctx, db, submodelDatabaseID, cursor); cursorErr != nil {
+		cursorExists, cursorErr := submodelElementCursorExists(ctx, db, submodelDatabaseID, cursor)
+		if cursorErr != nil {
 			return nil, "", cursorErr
+		}
+		if !cursorExists {
+			return []rootElementCursorRow{}, "", nil
 		}
 		cursorPath, cursorID, hasCursorID := parseRootCursor(cursor)
 		if hasCursorID {
@@ -788,7 +796,7 @@ func formatRootCursor(path string, id int64) string {
 	return path + "|" + strconv.FormatInt(id, 10)
 }
 
-func ensureSubmodelElementCursorExists(ctx context.Context, db *sql.DB, submodelDatabaseID int64, cursor string) error {
+func submodelElementCursorExists(ctx context.Context, db *sql.DB, submodelDatabaseID int64, cursor string) (bool, error) {
 	cursorPath, cursorID, hasCursorID := parseRootCursor(cursor)
 
 	dialect := goqu.Dialect("postgres")
@@ -804,17 +812,17 @@ func ensureSubmodelElementCursorExists(ctx context.Context, db *sql.DB, submodel
 	}
 	sqlQuery, args, buildErr := query.Limit(1).ToSQL()
 	if buildErr != nil {
-		return common.NewInternalServerError("SMREPO-CHECKSMECURSOR-BUILDQ " + buildErr.Error())
+		return false, common.NewInternalServerError("SMREPO-CHECKSMECURSOR-BUILDQ " + buildErr.Error())
 	}
 
 	var one int
 	if queryErr := db.QueryRowContext(ctx, sqlQuery, args...).Scan(&one); queryErr != nil {
 		if errors.Is(queryErr, sql.ErrNoRows) {
-			return common.NewErrBadRequest("SMREPO-CHECKSMECURSOR-BADCURSOR cursor does not reference an existing submodel element")
+			return false, nil
 		}
-		return common.NewInternalServerError("SMREPO-CHECKSMECURSOR-EXECQ " + queryErr.Error())
+		return false, common.NewInternalServerError("SMREPO-CHECKSMECURSOR-EXECQ " + queryErr.Error())
 	}
-	return nil
+	return true, nil
 }
 
 type loadedSMERow struct {

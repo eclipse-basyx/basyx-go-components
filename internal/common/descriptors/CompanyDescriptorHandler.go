@@ -487,7 +487,7 @@ func ListCompanyDescriptors(
 			return nil, "", common.NewInternalServerError("COMPANY-LIST-CURSORCHECK " + cursorErr.Error())
 		}
 		if !cursorExists {
-			return nil, "", common.NewErrBadRequest("COMPANY-LIST-BADCURSOR cursor does not reference an existing company descriptor")
+			return []model.CompanyDescriptor{}, "", nil
 		}
 	}
 	peekLimit := int(limit) + 1

@@ -1414,7 +1414,7 @@ func (s *SubmodelDatabase) getSubmodelsWithOptionalSemanticIDFilter(ctx context.
 			return nil, "", cursorErr
 		}
 		if !cursorExists {
-			return nil, "", common.NewErrBadRequest("SMREPO-GETSMS-BADCURSOR cursor does not reference an existing submodel")
+			return []types.ISubmodel{}, "", nil
 		}
 		cursorFilter = &cursor
 	}

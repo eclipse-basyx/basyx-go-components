@@ -221,7 +221,8 @@
 		"context": "004.9.1 - GET /shells - nonexistent cursor",
 		"method": "GET",
 		"endpoint": "http://127.0.0.1:6004/shells?cursor=aHR0cHM6Ly9leGFtcGxlLmNvbS9pZHMvYWFzL2RvZXMtbm90LWV4aXN0",
-		"expectedStatus": 400
+		"shouldMatch": "expected/expectedEmpty.json",
+		"expectedStatus": 200
 	},
 	{
 		"context": "004.10 - GET /shells - filter by cursor",
@@ -309,7 +310,8 @@
 		"context": "005.4.1 - GET /shells/$reference - nonexistent cursor",
 		"method": "GET",
 		"endpoint": "http://127.0.0.1:6004/shells/$reference?cursor=aHR0cHM6Ly9leGFtcGxlLmNvbS9pZHMvYWFzL2RvZXMtbm90LWV4aXN0",
-		"expectedStatus": 400
+		"shouldMatch": "expected/expectedEmpty.json",
+		"expectedStatus": 200
 	},
 	{
 		"context": "006.1 - GET /shells/{aasIdentifier}",
@@ -462,7 +464,8 @@
 		"context": "009.7.1 - GET /shells/{aasIdentifier}/submodel-refs - nonexistent cursor",
 		"method": "GET",
 		"endpoint": "http://127.0.0.1:6004/shells/aHR0cHM6Ly9leGFtcGxlLmNvbS9pZHMvYWFzLzM0OTRfMjEyMF8zMDYyXzY1MzI/submodel-refs?cursor=OTk5OTk",
-		"expectedStatus": 400
+		"shouldMatch": "expected/expectedEmpty.json",
+		"expectedStatus": 200
 	},
 	{
 		"context": "009.8 - POST /shells/{aasIdentifier}/submodel-refs - conflict (malformed)",

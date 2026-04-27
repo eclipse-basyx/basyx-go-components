@@ -538,7 +538,7 @@ func listAssetAdministrationShellDescriptors(
 			return nil, "", common.NewInternalServerError("AASREG-LISTAAS-CURSORCHECK " + cursorErr.Error())
 		}
 		if !cursorExists {
-			return nil, "", common.NewErrBadRequest("AASREG-LISTAAS-BADCURSOR cursor does not reference an existing AAS descriptor")
+			return []model.AssetAdministrationShellDescriptor{}, "", nil
 		}
 	}
 	peekLimit := limit + 1

@@ -423,7 +423,8 @@
     "context": "057.1 - GET nonexistent cursor",
     "method": "GET",
     "endpoint": "http://127.0.0.1:6004/lookup/shells?limit=1&assetIds=eyJuYW1lIjoicGxhbnQiLCJ2YWx1ZSI6IlNQSURFUlRST04tWUFSRCJ9&cursor=dXJuOmFhczp0ZXN0Om5vdC1oZXJl",
-    "expectedStatus": 400
+    "shouldMatch": "expected/empty_paged_result.json",
+    "expectedStatus": 200
   },
   {
     "context": "058 - POST bad cursor",
