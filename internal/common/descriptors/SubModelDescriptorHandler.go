@@ -118,7 +118,7 @@ func ListSubmodelDescriptorsForAAS(
 			}
 		}
 		if lo == len(list) || list[lo].Id != cursor {
-			return nil, "", common.NewErrBadRequest("AASREG-LISTSMDS-BADCURSOR cursor does not reference an existing submodel descriptor")
+			return []model.SubmodelDescriptor{}, "", nil
 		}
 		list = list[lo:]
 	}
@@ -414,7 +414,7 @@ func ListSubmodelDescriptors(
 			return nil, "", common.NewInternalServerError("SMREG-LISTSMDS-CURSORCHECK " + cursorErr.Error())
 		}
 		if !cursorExists {
-			return nil, "", common.NewErrBadRequest("SMREG-LISTSMDS-BADCURSOR cursor does not reference an existing submodel descriptor")
+			return []model.SubmodelDescriptor{}, "", nil
 		}
 	}
 

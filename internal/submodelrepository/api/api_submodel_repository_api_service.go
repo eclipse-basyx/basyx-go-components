@@ -1169,7 +1169,7 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelsReference(ctx context.C
 		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "GetSubmodelReferences"), err
 	}
 
-	var jsonReferences []map[string]any
+	jsonReferences := make([]map[string]any, 0, len(references))
 	for _, ref := range references {
 		jsonRef, err := jsonization.ToJsonable(ref)
 		if err != nil {

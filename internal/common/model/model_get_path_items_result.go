@@ -38,7 +38,7 @@ package model
 type GetPathItemsResult struct {
 	PagingMetadata PagedResultPagingMetadata `json:"paging_metadata"`
 
-	Result []string `json:"result,omitempty"`
+	Result []string `json:"result"`
 }
 
 // AssertGetPathItemsResultRequired checks if the required fields are not zero-ed

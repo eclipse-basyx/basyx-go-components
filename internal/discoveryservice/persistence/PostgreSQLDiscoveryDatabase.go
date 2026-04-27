@@ -247,7 +247,7 @@ func (p *PostgreSQLDiscoveryDatabase) SearchAASIDsByAssetLinks(
 			return nil, "", cursorErr
 		}
 		if !cursorExists {
-			return nil, "", common.NewErrBadRequest("DISCOVERY-SEARCHAASIDS-BADCURSOR cursor does not reference an existing AAS identifier")
+			return []string{}, "", nil
 		}
 	}
 

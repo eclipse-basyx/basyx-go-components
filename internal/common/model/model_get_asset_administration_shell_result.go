@@ -38,5 +38,5 @@ package model
 type GetAssetAdministrationShellsResult struct {
 	PagingMetadata PagedResultPagingMetadata `json:"paging_metadata"`
 
-	Result []map[string]any `json:"result,omitempty"`
+	Result []map[string]any `json:"result"`
 }

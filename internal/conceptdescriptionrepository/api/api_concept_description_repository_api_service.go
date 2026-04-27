@@ -115,7 +115,7 @@ func (s *ConceptDescriptionRepositoryAPIAPIService) GetAllConceptDescriptions(ct
 		}
 	}
 
-	var jsonable []map[string]any
+	jsonable := make([]map[string]any, 0, len(cds))
 	for _, cd := range cds {
 		jsonObj, err := jsonization.ToJsonable(cd)
 		if err != nil {

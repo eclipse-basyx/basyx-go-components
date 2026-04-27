@@ -323,7 +323,7 @@ func (b *ConceptDescriptionBackend) GetConceptDescriptions(ctx context.Context, 
 			return nil, "", cursorErr
 		}
 		if !cursorExists {
-			return nil, "", common.NewErrBadRequest("CDREPO-GCDS-BADCURSOR cursor does not reference an existing concept description")
+			return []types.IConceptDescription{}, "", nil
 		}
 		query = query.Where(goqu.C("id").Gte(trimmedCursor))
 	}
