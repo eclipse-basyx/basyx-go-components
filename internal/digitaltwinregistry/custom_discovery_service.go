@@ -293,6 +293,16 @@ func buildEdcBpnClaimEqualsHeaderExpression(t *time.Time, pattern string) gramma
 	}
 }
 
+// buildAssetLinkQuery creates the discovery lookup filter for asset links.
+//
+// Behavior:
+//   - Returns an empty query when no asset links are provided.
+//   - Returns an empty query when ABAC READ access is already unrestricted.
+//   - Otherwise builds an AND of per-link conditions.
+//
+// Per link, the condition is an OR:
+//   - exact link match + Edc-Bpn authorization (when Edc-Bpn claim exists), or
+//   - exact link match + PUBLIC_READABLE authorization.
 func buildAssetLinkQuery(ctx context.Context, assetLink []model.AssetLink) grammar.Query {
 	if len(assetLink) == 0 {
 		return grammar.Query{}
