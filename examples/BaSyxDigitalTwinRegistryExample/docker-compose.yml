@@ -33,6 +33,7 @@ services:
       - ABAC_ENABLED=true
       - GENERAL_ENABLEIMPLICITCASTS=false
       - GENERAL_ENABLEDESCRIPTORDEBUG=false
+      - GENERAL_ENABLECUSTOMMIDDLEWAREHEADERINJECTION=true
       - ABAC_MODELPATH=/security_env/access-rules.json
       - OIDC_TRUSTLISTPATH=/security_env/trustlist.json
     ports:

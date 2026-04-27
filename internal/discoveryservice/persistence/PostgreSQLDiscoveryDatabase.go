@@ -282,17 +282,11 @@ func (p *PostgreSQLDiscoveryDatabase) SearchAASIDsByAssetLinks(
 		_, _ = fmt.Println("SearchAASIDsByAssetLinks: collector error:", err)
 		return nil, "", common.NewInternalServerError("Failed to build query filters. See server logs for details.")
 	}
-	shouldEnforceFormula, enforceErr := auth.ShouldEnforceFormula(ctx)
-	if enforceErr != nil {
-		_, _ = fmt.Println("SearchAASIDsByAssetLinks: should enforce error:", enforceErr)
+
+	ds, err = auth.AddFormulaQueryFromContext(ctx, ds, collector)
+	if err != nil {
+		_, _ = fmt.Println("SearchAASIDsByAssetLinks: filter error:", err)
 		return nil, "", common.NewInternalServerError("Failed to build query filters. See server logs for details.")
-	}
-	if shouldEnforceFormula {
-		ds, err = auth.AddFormulaQueryFromContext(ctx, ds, collector)
-		if err != nil {
-			_, _ = fmt.Println("SearchAASIDsByAssetLinks: filter error:", err)
-			return nil, "", common.NewInternalServerError("Failed to build query filters. See server logs for details.")
-		}
 	}
 
 	sqlStr, args, err := ds.ToSQL()

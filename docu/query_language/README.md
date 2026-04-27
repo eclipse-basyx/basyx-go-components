@@ -402,6 +402,33 @@ Why this matters:
 - The guard keeps unrelated rows in the result set when a fragment filter targets a specific fragment.
 - If a fragment has no bindings, negation would be redundant, so it is skipped.
 
+### Array-ended fragment filters are row-local
+
+For fragment filters whose fragment identifier ends in an array segment (for example, $aasdesc#specificAssetIds[] or $aasdesc#endpoints[]), row-local evaluation can be enabled explicitly with:
+
+```json
+{
+  "FRAGMENT": "$aasdesc#specificAssetIds[]",
+  "MATCH": true,
+  "USEFORMULA": "bpn_or_public"
+}
+```
+
+Default behavior is unchanged (`MATCH` omitted or `false`): legacy descriptor-level fragment guard behavior is used.
+
+Practical effect:
+- Before this behavior, a condition on one array element could make the whole array fragment appear as matched for the parent descriptor.
+- With `MATCH: true`, each array item is included or excluded based on that item's own data.
+
+Scope:
+- This applies to fragment filter WHERE evaluation when `MATCH: true`.
+- Mask flag projections keep collector-based translation behavior.
+
+Implementation reference:
+- AddFilterQueryFromContext in [internal/common/security/filter_helpers.go](internal/common/security/filter_helpers.go)
+- buildFragmentMaskConditionWithOptions in [internal/common/security/filter_helpers.go](internal/common/security/filter_helpers.go)
+- fragmentEndsWithArraySegment in [internal/common/security/filter_helpers.go](internal/common/security/filter_helpers.go)
+
 Implementation reference:
 - EvaluateToExpressionWithNegatedFragments in [internal/common/model/grammar/logical_expression_to_sql.go](internal/common/model/grammar/logical_expression_to_sql.go)
 - ResolveFragmentFieldToSQL in [internal/common/model/grammar/fieldidentifier_processing.go](internal/common/model/grammar/fieldidentifier_processing.go)

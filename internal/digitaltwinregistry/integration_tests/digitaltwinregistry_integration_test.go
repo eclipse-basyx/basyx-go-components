@@ -33,6 +33,7 @@ import (
 	"net/http"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/testenv"
 	"github.com/stretchr/testify/require"
@@ -98,5 +99,10 @@ func TestIntegration(t *testing.T) {
 				deleteAllDescriptors(t, runner, stepNumber, step.Headers)
 			},
 		},
+		TokenProvider: testenv.NewPasswordGrantTokenProvider(
+			"http://localhost:8080/realms/basyx/protocol/openid-connect/token",
+			"basyx-ui",
+			10*time.Second,
+		),
 	})
 }

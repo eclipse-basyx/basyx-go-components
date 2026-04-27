@@ -81,10 +81,27 @@ func (s *CustomDiscoveryService) SearchAllAssetAdministrationShellIdsByAssetLink
 		}), nil
 	}
 
+	shouldEnforceFormula, enforceErr := auth.ShouldEnforceFormula(ctx)
+	if enforceErr != nil {
+		log.Printf("🧭 [%s] Error SearchAllAssetAdministrationShellIdsByAssetLink: should-enforce-formula failed: %v", customDiscoveryComponentName, enforceErr)
+		return common.NewErrorResponse(
+			enforceErr,
+			http.StatusInternalServerError,
+			customDiscoveryComponentName,
+			"SearchAllAssetAdministrationShellIdsByAssetLink",
+			"ShouldEnforceFormula",
+		), enforceErr
+	}
+
+	if shouldEnforceFormula {
+		assetLinkQuery := buildAssetLinkQuery(ctx, assetLink)
+		ctx = auth.MergeQueryFilter(ctx, assetLinkQuery)
+	}
+
 	createdAfter, _ := CreatedAfterFromContext(ctx)
 	if createdAfter != nil {
-		query := buildEdcBpnClaimEqualsHeaderExpression(createdAfter)
-		ctx = auth.MergeQueryFilter(ctx, query)
+		createdAfterQuery := buildEdcBpnClaimEqualsHeaderExpression(createdAfter, "$bd#createdAt")
+		ctx = auth.MergeQueryFilter(ctx, createdAfterQuery)
 	}
 
 	res, err := s.AssetAdministrationShellBasicDiscoveryAPIAPIService.SearchAllAssetAdministrationShellIdsByAssetLink(ctx, limit, cursor, assetLink)
@@ -260,10 +277,10 @@ func specificAssetIDsToJSONable(specificAssetIDs []types.ISpecificAssetID) ([]ma
 
 // buildEdcBpnClaimEqualsHeaderExpression creates a logical expression that checks
 // whether the Edc-Bpn claim equals the provided header value.
-func buildEdcBpnClaimEqualsHeaderExpression(t *time.Time) grammar.Query {
+func buildEdcBpnClaimEqualsHeaderExpression(t *time.Time, pattern string) grammar.Query {
 	dt := grammar.DateTimeLiteralPattern(t.UTC())
 
-	timePattern := grammar.ModelStringPattern("$bd#createdAt")
+	timePattern := grammar.ModelStringPattern(pattern)
 	timeLe := grammar.LogicalExpression{
 		Le: grammar.ComparisonItems{
 			{DateTimeVal: &dt},
@@ -273,5 +290,95 @@ func buildEdcBpnClaimEqualsHeaderExpression(t *time.Time) grammar.Query {
 
 	return grammar.Query{
 		Condition: &timeLe,
+	}
+}
+
+// buildAssetLinkQuery creates the discovery lookup filter for asset links.
+//
+// Behavior:
+//   - Returns an empty query when no asset links are provided.
+//   - Returns an empty query when ABAC READ access is already unrestricted.
+//   - Otherwise builds an AND of per-link conditions.
+//
+// Per link, the condition is an OR:
+//   - exact link match + Edc-Bpn authorization (when Edc-Bpn claim exists), or
+//   - exact link match + PUBLIC_READABLE authorization.
+func buildAssetLinkQuery(ctx context.Context, assetLink []model.AssetLink) grammar.Query {
+	if len(assetLink) == 0 {
+		return grammar.Query{}
+	}
+
+	if auth.HasUnrestrictedFormulaForRight(ctx, grammar.RightsEnumREAD) {
+		return grammar.Query{}
+	}
+
+	assetLinkFieldPattern := grammar.ModelStringPattern("$aasdesc#specificAssetIds[].externalSubjectId.keys[].value")
+	assetLinkFieldValue := grammar.ModelStringPattern("$aasdesc#specificAssetIds[].value")
+	assetLinkFieldName := grammar.ModelStringPattern("$aasdesc#specificAssetIds[].name")
+	publicReadable := grammar.StandardString("PUBLIC_READABLE")
+
+	claims := auth.ClaimsFromContext(ctx)
+	edcBpnClaim, hasEdcBpnClaim := claims.GetString("Edc-Bpn")
+	hasEdcBpnClaim = hasEdcBpnClaim && strings.TrimSpace(edcBpnClaim) != ""
+	edcBpn := grammar.StandardString(edcBpnClaim)
+
+	assetLinkLe := grammar.LogicalExpression{And: []grammar.LogicalExpression{}}
+	for _, link := range assetLink {
+		assetLinkValue := grammar.StandardString(link.Value)
+		assetLinkName := grammar.StandardString(link.Name)
+
+		assetLinkLeInner := grammar.LogicalExpression{Or: []grammar.LogicalExpression{}}
+		if hasEdcBpnClaim {
+			assetLinkLeInner.Or = append(assetLinkLeInner.Or, grammar.LogicalExpression{
+				Match: []grammar.MatchExpression{
+					{
+						Eq: grammar.ComparisonItems{
+							{Field: &assetLinkFieldValue},
+							{StrVal: &assetLinkValue},
+						},
+					},
+					{
+						Eq: grammar.ComparisonItems{
+							{Field: &assetLinkFieldName},
+							{StrVal: &assetLinkName},
+						},
+					},
+					{
+						Eq: grammar.ComparisonItems{
+							{StrVal: &edcBpn},
+							{Field: &assetLinkFieldPattern},
+						},
+					},
+				},
+			})
+		}
+
+		assetLinkLeInner.Or = append(assetLinkLeInner.Or, grammar.LogicalExpression{
+			Match: []grammar.MatchExpression{
+				{
+					Eq: grammar.ComparisonItems{
+						{Field: &assetLinkFieldValue},
+						{StrVal: &assetLinkValue},
+					},
+				},
+				{
+					Eq: grammar.ComparisonItems{
+						{Field: &assetLinkFieldName},
+						{StrVal: &assetLinkName},
+					},
+				},
+				{
+					Eq: grammar.ComparisonItems{
+						{StrVal: &publicReadable},
+						{Field: &assetLinkFieldPattern},
+					},
+				},
+			},
+		})
+		assetLinkLe.And = append(assetLinkLe.And, assetLinkLeInner)
+	}
+
+	return grammar.Query{
+		Condition: &assetLinkLe,
 	}
 }
