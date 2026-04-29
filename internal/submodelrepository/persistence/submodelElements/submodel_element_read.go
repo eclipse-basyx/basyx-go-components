@@ -51,7 +51,7 @@ func getSubmodelElementByIDShortOrPathWithSubmodelDBID(ctx context.Context, db *
 	}
 
 	includeChildren := level != "core"
-	parsedRows, readRowsErr := readSubmodelElementRowsByPath(db, submodelDatabaseID, idShortOrPath, includeChildren)
+	parsedRows, readRowsErr := readSubmodelElementRowsByPath(ctx, db, submodelDatabaseID, idShortOrPath, includeChildren)
 
 	if readRowsErr != nil {
 		return nil, readRowsErr
@@ -438,7 +438,7 @@ func GetSubmodelElementsBySubmodelID(ctx context.Context, db *sql.DB, submodelID
 
 	includeChildren := level != "core"
 	isGetSubmodelElements := true
-	parsedRows, readRowsErr := readSubmodelElementRowsByRootIDs(db, int64(submodelDatabaseID), rootIDs, includeChildren, isGetSubmodelElements)
+	parsedRows, readRowsErr := readSubmodelElementRowsByRootIDs(ctx, db, int64(submodelDatabaseID), rootIDs, includeChildren, isGetSubmodelElements)
 	if readRowsErr != nil {
 		return nil, "", readRowsErr
 	}
@@ -829,14 +829,170 @@ type loadedSMERow struct {
 	row             model.SubmodelElementRow
 	semanticPayload []byte
 	qualifiers      []byte
+	semanticVisible bool
+	valueVisible    bool
 }
 
-func readSubmodelElementRowsByPath(db *sql.DB, submodelDatabaseID int64, idShortOrPath string, includeChildren bool) ([]loadedSMERow, error) {
+type smeMaskFragmentGroups struct {
+	idShort  []grammar.FragmentStringPattern
+	semantic []grammar.FragmentStringPattern
+	value    []grammar.FragmentStringPattern
+}
+
+func buildSMEMaskRuntime(ctx context.Context, collector *grammar.ResolvedFieldPathCollector) (*auth.SharedFragmentMaskRuntime, smeMaskFragmentGroups, error) {
+	idShortFragments := map[grammar.FragmentStringPattern]struct{}{
+		"$sme#idShort": {},
+	}
+	semanticFragments := map[grammar.FragmentStringPattern]struct{}{
+		"$sme#semanticId": {},
+	}
+	valueFragments := map[grammar.FragmentStringPattern]struct{}{
+		"$sme#value":     {},
+		"$sme#valueType": {},
+		"$sme#language":  {},
+	}
+
+	qf := auth.GetQueryFilter(ctx)
+	if qf != nil {
+		for fragment := range qf.Filters {
+			suffix := fragmentSuffix(fragment)
+			switch suffix {
+			case "idShort":
+				idShortFragments[fragment] = struct{}{}
+			case "semanticId":
+				semanticFragments[fragment] = struct{}{}
+			case "value", "valueType", "language":
+				valueFragments[fragment] = struct{}{}
+			default:
+				if strings.HasPrefix(suffix, "semanticId.") {
+					semanticFragments[fragment] = struct{}{}
+				}
+			}
+		}
+	}
+
+	groups := smeMaskFragmentGroups{
+		idShort:  sortedFragments(idShortFragments),
+		semantic: sortedFragments(semanticFragments),
+		value:    sortedFragments(valueFragments),
+	}
+
+	maskedColumns := make([]auth.MaskedInnerColumnSpec, 0, len(groups.idShort)+len(groups.semantic)+len(groups.value))
+	for i, fragment := range groups.idShort {
+		maskedColumns = append(maskedColumns, auth.MaskedInnerColumnSpec{
+			Fragment:  fragment,
+			FlagAlias: "flag_idshort_" + strconv.Itoa(i+1),
+			RawAlias:  "c_id_short",
+		})
+	}
+	for i, fragment := range groups.semantic {
+		maskedColumns = append(maskedColumns, auth.MaskedInnerColumnSpec{
+			Fragment:  fragment,
+			FlagAlias: "flag_semantic_" + strconv.Itoa(i+1),
+			RawAlias:  "raw_semantic_payload",
+		})
+	}
+	for i, fragment := range groups.value {
+		maskedColumns = append(maskedColumns, auth.MaskedInnerColumnSpec{
+			Fragment:  fragment,
+			FlagAlias: "flag_value_" + strconv.Itoa(i+1),
+			RawAlias:  "raw_value_payload",
+		})
+	}
+
+	runtime, err := auth.BuildSharedFragmentMaskRuntime(ctx, collector, maskedColumns)
+	if err != nil {
+		return nil, smeMaskFragmentGroups{}, err
+	}
+
+	return runtime, groups, nil
+}
+
+func fragmentSuffix(fragment grammar.FragmentStringPattern) string {
+	fragmentStr := string(fragment)
+	fragmentIndex := strings.LastIndex(fragmentStr, "#")
+	if fragmentIndex < 0 || fragmentIndex >= len(fragmentStr)-1 {
+		return ""
+	}
+	return fragmentStr[fragmentIndex+1:]
+}
+
+func sortedFragments(items map[grammar.FragmentStringPattern]struct{}) []grammar.FragmentStringPattern {
+	result := make([]grammar.FragmentStringPattern, 0, len(items))
+	for fragment := range items {
+		result = append(result, fragment)
+	}
+	sort.Slice(result, func(i int, j int) bool {
+		return string(result[i]) < string(result[j])
+	})
+	return result
+}
+
+func buildSharedMaskVisibilityExpr(dataAlias string, runtime *auth.SharedFragmentMaskRuntime, fragments []grammar.FragmentStringPattern) (exp.Expression, error) {
+	if len(fragments) == 0 {
+		return goqu.V(true), nil
+	}
+
+	seenAliases := make(map[string]struct{}, len(fragments))
+	conditions := make([]exp.Expression, 0, len(fragments))
+	for _, fragment := range fragments {
+		alias, err := runtime.FlagAlias(fragment)
+		if err != nil {
+			return nil, err
+		}
+		if _, seen := seenAliases[alias]; seen {
+			continue
+		}
+		seenAliases[alias] = struct{}{}
+		conditions = append(conditions, goqu.I(dataAlias+"."+alias))
+	}
+
+	if len(conditions) == 0 {
+		return goqu.V(true), nil
+	}
+	if len(conditions) == 1 {
+		return conditions[0], nil
+	}
+
+	return goqu.And(conditions...), nil
+}
+
+func buildMaskedSMEValuePayloadExpr(rawValueAlias string) exp.Expression {
+	return goqu.L("(COALESCE(?::jsonb, '{}'::jsonb) - 'value')", goqu.I(rawValueAlias))
+}
+
+func readSubmodelElementRowsByPath(ctx context.Context, db *sql.DB, submodelDatabaseID int64, idShortOrPath string, includeChildren bool) ([]loadedSMERow, error) {
 	dialect := goqu.Dialect("postgres")
+	collector, collectorErr := grammar.NewResolvedFieldPathCollectorForRoot(grammar.CollectorRootSME)
+	if collectorErr != nil {
+		return nil, common.NewInternalServerError("SMREPO-GETSMEBYPATH-BADCOLLECTOR " + collectorErr.Error())
+	}
+	maskRuntime, maskGroups, maskRuntimeErr := buildSMEMaskRuntime(ctx, collector)
+	if maskRuntimeErr != nil {
+		return nil, common.NewInternalServerError("SMREPO-GETSMEBYPATH-MASKRUNTIME " + maskRuntimeErr.Error())
+	}
+
+	const dataAlias = "sme_path_data"
+	idShortVisibleExpr, idShortVisibleErr := buildSharedMaskVisibilityExpr(dataAlias, maskRuntime, maskGroups.idShort)
+	if idShortVisibleErr != nil {
+		return nil, common.NewInternalServerError("SMREPO-GETSMEBYPATH-IDSHORTMASK " + idShortVisibleErr.Error())
+	}
+	semanticVisibleExpr, semanticVisibleErr := buildSharedMaskVisibilityExpr(dataAlias, maskRuntime, maskGroups.semantic)
+	if semanticVisibleErr != nil {
+		return nil, common.NewInternalServerError("SMREPO-GETSMEBYPATH-SEMMASK " + semanticVisibleErr.Error())
+	}
+	valueVisibleExpr, valueVisibleErr := buildSharedMaskVisibilityExpr(dataAlias, maskRuntime, maskGroups.value)
+	if valueVisibleErr != nil {
+		return nil, common.NewInternalServerError("SMREPO-GETSMEBYPATH-VALUEMASK " + valueVisibleErr.Error())
+	}
 
 	valueExpr := getSMEValueExpressionForRead(dialect)
-	query := dialect.
+	innerQuery := dialect.
 		From(goqu.T("submodel_element").As("sme")).
+		InnerJoin(
+			goqu.T("submodel_element").As("submodel_element"),
+			goqu.On(goqu.I("submodel_element.id").Eq(goqu.I("sme.id"))),
+		).
 		LeftJoin(
 			goqu.T("submodel_element_payload").As("sme_p"),
 			goqu.On(goqu.I("sme.id").Eq(goqu.I("sme_p.submodel_element_id"))),
@@ -845,29 +1001,29 @@ func readSubmodelElementRowsByPath(db *sql.DB, submodelDatabaseID int64, idShort
 			goqu.T("submodel_element_semantic_id_reference_payload").As("sme_sem_payload"),
 			goqu.On(goqu.I("sme_sem_payload.reference_id").Eq(goqu.I("sme.id"))),
 		).
-		Select(
-			goqu.I("sme.id"),
-			goqu.I("sme.parent_sme_id"),
-			goqu.I("sme.root_sme_id"),
-			goqu.I("sme.id_short"),
-			goqu.I("sme.idshort_path"),
-			goqu.I("sme.category"),
-			goqu.I("sme.model_type"),
-			goqu.COALESCE(goqu.I("sme.position"), 0),
-			goqu.L("COALESCE(sme_p.embedded_data_specification_payload, '[]'::jsonb)"),
-			goqu.L("COALESCE(sme_p.supplemental_semantic_ids_payload, '[]'::jsonb)"),
-			goqu.L("COALESCE(sme_p.extensions_payload, '[]'::jsonb)"),
-			goqu.L("COALESCE(sme_p.displayname_payload, '[]'::jsonb)"),
-			goqu.L("COALESCE(sme_p.description_payload, '[]'::jsonb)"),
-			valueExpr,
-			goqu.L("'[]'::jsonb"),
-			goqu.L("'[]'::jsonb"),
-			goqu.L("COALESCE(sme_p.qualifiers_payload, '[]'::jsonb)"),
-			goqu.L("COALESCE(sme_sem_payload.parent_reference_payload, '{}'::jsonb)"),
-		)
+		Select(append([]interface{}{
+			goqu.I("sme.id").As("c_id"),
+			goqu.I("sme.parent_sme_id").As("c_parent_sme_id"),
+			goqu.I("sme.root_sme_id").As("c_root_sme_id"),
+			goqu.I("sme.id_short").As("c_id_short"),
+			goqu.I("sme.idshort_path").As("c_idshort_path"),
+			goqu.I("sme.category").As("c_category"),
+			goqu.I("sme.model_type").As("c_model_type"),
+			goqu.COALESCE(goqu.I("sme.position"), 0).As("c_position"),
+			goqu.L("COALESCE(sme_p.embedded_data_specification_payload, '[]'::jsonb)").As("raw_embedded_data_specification_payload"),
+			goqu.L("COALESCE(sme_p.supplemental_semantic_ids_payload, '[]'::jsonb)").As("raw_supplemental_semantic_ids_payload"),
+			goqu.L("COALESCE(sme_p.extensions_payload, '[]'::jsonb)").As("raw_extensions_payload"),
+			goqu.L("COALESCE(sme_p.displayname_payload, '[]'::jsonb)").As("raw_displayname_payload"),
+			goqu.L("COALESCE(sme_p.description_payload, '[]'::jsonb)").As("raw_description_payload"),
+			valueExpr.As("raw_value_payload"),
+			goqu.L("'[]'::jsonb").As("raw_semantic_id_referred_payload"),
+			goqu.L("'[]'::jsonb").As("raw_supplemental_semantic_ids_referred_payload"),
+			goqu.L("COALESCE(sme_p.qualifiers_payload, '[]'::jsonb)").As("raw_qualifiers_payload"),
+			goqu.L("COALESCE(sme_sem_payload.parent_reference_payload, '{}'::jsonb)").As("raw_semantic_payload"),
+		}, maskRuntime.Projections()...)...)
 
 	if includeChildren {
-		query = query.Where(
+		innerQuery = innerQuery.Where(
 			goqu.I("sme.submodel_id").Eq(submodelDatabaseID),
 			goqu.Or(
 				goqu.I("sme.idshort_path").Eq(idShortOrPath),
@@ -876,7 +1032,7 @@ func readSubmodelElementRowsByPath(db *sql.DB, submodelDatabaseID int64, idShort
 			),
 		)
 	} else {
-		query = query.Where(
+		innerQuery = innerQuery.Where(
 			goqu.I("sme.submodel_id").Eq(submodelDatabaseID),
 			goqu.Or(
 				goqu.I("sme.idshort_path").Eq(idShortOrPath),
@@ -892,7 +1048,30 @@ func readSubmodelElementRowsByPath(db *sql.DB, submodelDatabaseID int64, idShort
 		)
 	}
 
-	query = query.Order(goqu.I("sme.idshort_path").Asc(), goqu.I("sme.position").Asc())
+	query := dialect.From(innerQuery.As(dataAlias)).
+		Select(
+			goqu.I(dataAlias+".c_id"),
+			goqu.I(dataAlias+".c_parent_sme_id"),
+			goqu.I(dataAlias+".c_root_sme_id"),
+			goqu.Case().When(idShortVisibleExpr, goqu.I(dataAlias+".c_id_short")).Else(nil),
+			goqu.I(dataAlias+".c_idshort_path"),
+			goqu.I(dataAlias+".c_category"),
+			goqu.I(dataAlias+".c_model_type"),
+			goqu.I(dataAlias+".c_position"),
+			goqu.I(dataAlias+".raw_embedded_data_specification_payload"),
+			goqu.I(dataAlias+".raw_supplemental_semantic_ids_payload"),
+			goqu.I(dataAlias+".raw_extensions_payload"),
+			goqu.I(dataAlias+".raw_displayname_payload"),
+			goqu.I(dataAlias+".raw_description_payload"),
+			goqu.Case().When(valueVisibleExpr, goqu.I(dataAlias+".raw_value_payload")).Else(buildMaskedSMEValuePayloadExpr(dataAlias+".raw_value_payload")),
+			goqu.I(dataAlias+".raw_semantic_id_referred_payload"),
+			goqu.I(dataAlias+".raw_supplemental_semantic_ids_referred_payload"),
+			goqu.I(dataAlias+".raw_qualifiers_payload"),
+			goqu.Case().When(semanticVisibleExpr, goqu.I(dataAlias+".raw_semantic_payload")).Else(nil),
+			goqu.Case().When(semanticVisibleExpr, true).Else(false),
+			goqu.Case().When(valueVisibleExpr, true).Else(false),
+		).
+		Order(goqu.I(dataAlias+".c_idshort_path").Asc(), goqu.I(dataAlias+".c_position").Asc())
 
 	sqlQuery, args, toSQLErr := query.ToSQL()
 	if toSQLErr != nil {
@@ -902,12 +1081,34 @@ func readSubmodelElementRowsByPath(db *sql.DB, submodelDatabaseID int64, idShort
 	return executeLoadedSMERowQuery(db, sqlQuery, args, "SMREPO-GETSMEBYPATH")
 }
 
-func readSubmodelElementRowsByRootIDs(db *sql.DB, submodelDatabaseID int64, rootIDs []int64, includeChildren bool, isGetSubmodelElements bool) ([]loadedSMERow, error) {
+func readSubmodelElementRowsByRootIDs(ctx context.Context, db *sql.DB, submodelDatabaseID int64, rootIDs []int64, includeChildren bool, isGetSubmodelElements bool) ([]loadedSMERow, error) {
 	if len(rootIDs) == 0 {
 		return []loadedSMERow{}, nil
 	}
 
 	dialect := goqu.Dialect("postgres")
+	collector, collectorErr := grammar.NewResolvedFieldPathCollectorForRoot(grammar.CollectorRootSME)
+	if collectorErr != nil {
+		return nil, common.NewInternalServerError("SMREPO-GETSMES-BATCHREAD-BADCOLLECTOR " + collectorErr.Error())
+	}
+	maskRuntime, maskGroups, maskRuntimeErr := buildSMEMaskRuntime(ctx, collector)
+	if maskRuntimeErr != nil {
+		return nil, common.NewInternalServerError("SMREPO-GETSMES-BATCHREAD-MASKRUNTIME " + maskRuntimeErr.Error())
+	}
+
+	const dataAlias = "sme_batch_data"
+	idShortVisibleExpr, idShortVisibleErr := buildSharedMaskVisibilityExpr(dataAlias, maskRuntime, maskGroups.idShort)
+	if idShortVisibleErr != nil {
+		return nil, common.NewInternalServerError("SMREPO-GETSMES-BATCHREAD-IDSHORTMASK " + idShortVisibleErr.Error())
+	}
+	semanticVisibleExpr, semanticVisibleErr := buildSharedMaskVisibilityExpr(dataAlias, maskRuntime, maskGroups.semantic)
+	if semanticVisibleErr != nil {
+		return nil, common.NewInternalServerError("SMREPO-GETSMES-BATCHREAD-SEMMASK " + semanticVisibleErr.Error())
+	}
+	valueVisibleExpr, valueVisibleErr := buildSharedMaskVisibilityExpr(dataAlias, maskRuntime, maskGroups.value)
+	if valueVisibleErr != nil {
+		return nil, common.NewInternalServerError("SMREPO-GETSMES-BATCHREAD-VALUEMASK " + valueVisibleErr.Error())
+	}
 
 	rootOrderExpr := goqu.Case().
 		Value(goqu.L("COALESCE(sme.root_sme_id, sme.id)"))
@@ -928,8 +1129,12 @@ func readSubmodelElementRowsByRootIDs(db *sql.DB, submodelDatabaseID int64, root
 	}
 
 	valueExpr := getSMEValueExpressionForRead(dialect)
-	query := dialect.
+	innerQuery := dialect.
 		From(goqu.T("submodel_element").As("sme")).
+		InnerJoin(
+			goqu.T("submodel_element").As("submodel_element"),
+			goqu.On(goqu.I("submodel_element.id").Eq(goqu.I("sme.id"))),
+		).
 		LeftJoin(
 			goqu.T("submodel_element_payload").As("sme_p"),
 			goqu.On(goqu.I("sme.id").Eq(goqu.I("sme_p.submodel_element_id"))),
@@ -938,35 +1143,62 @@ func readSubmodelElementRowsByRootIDs(db *sql.DB, submodelDatabaseID int64, root
 			goqu.T("submodel_element_semantic_id_reference_payload").As("sme_sem_payload"),
 			goqu.On(goqu.I("sme_sem_payload.reference_id").Eq(goqu.I("sme.id"))),
 		).
-		Select(
-			goqu.I("sme.id"),
-			goqu.I("sme.parent_sme_id"),
-			goqu.I("sme.root_sme_id"),
-			goqu.I("sme.id_short"),
-			goqu.I("sme.idshort_path"),
-			goqu.I("sme.category"),
-			goqu.I("sme.model_type"),
-			goqu.COALESCE(goqu.I("sme.position"), 0),
-			goqu.L("COALESCE(sme_p.embedded_data_specification_payload, '[]'::jsonb)"),
-			goqu.L("COALESCE(sme_p.supplemental_semantic_ids_payload, '[]'::jsonb)"),
-			goqu.L("COALESCE(sme_p.extensions_payload, '[]'::jsonb)"),
-			goqu.L("COALESCE(sme_p.displayname_payload, '[]'::jsonb)"),
-			goqu.L("COALESCE(sme_p.description_payload, '[]'::jsonb)"),
-			valueExpr,
-			goqu.L("'[]'::jsonb"),
-			goqu.L("'[]'::jsonb"),
-			goqu.L("COALESCE(sme_p.qualifiers_payload, '[]'::jsonb)"),
-			goqu.L("COALESCE(sme_sem_payload.parent_reference_payload, '{}'::jsonb)"),
-		).
+		Select(append([]interface{}{
+			goqu.I("sme.id").As("c_id"),
+			goqu.I("sme.parent_sme_id").As("c_parent_sme_id"),
+			goqu.I("sme.root_sme_id").As("c_root_sme_id"),
+			goqu.I("sme.id_short").As("c_id_short"),
+			goqu.I("sme.idshort_path").As("c_idshort_path"),
+			goqu.I("sme.category").As("c_category"),
+			goqu.I("sme.model_type").As("c_model_type"),
+			goqu.COALESCE(goqu.I("sme.position"), 0).As("c_position"),
+			goqu.L("COALESCE(sme_p.embedded_data_specification_payload, '[]'::jsonb)").As("raw_embedded_data_specification_payload"),
+			goqu.L("COALESCE(sme_p.supplemental_semantic_ids_payload, '[]'::jsonb)").As("raw_supplemental_semantic_ids_payload"),
+			goqu.L("COALESCE(sme_p.extensions_payload, '[]'::jsonb)").As("raw_extensions_payload"),
+			goqu.L("COALESCE(sme_p.displayname_payload, '[]'::jsonb)").As("raw_displayname_payload"),
+			goqu.L("COALESCE(sme_p.description_payload, '[]'::jsonb)").As("raw_description_payload"),
+			valueExpr.As("raw_value_payload"),
+			goqu.L("'[]'::jsonb").As("raw_semantic_id_referred_payload"),
+			goqu.L("'[]'::jsonb").As("raw_supplemental_semantic_ids_referred_payload"),
+			goqu.L("COALESCE(sme_p.qualifiers_payload, '[]'::jsonb)").As("raw_qualifiers_payload"),
+			goqu.L("COALESCE(sme_sem_payload.parent_reference_payload, '{}'::jsonb)").As("raw_semantic_payload"),
+			goqu.COALESCE(goqu.I("sme.root_sme_id"), goqu.I("sme.id")).As("sort_root_id"),
+			rootOrderExpr.As("sort_root_order"),
+			goqu.I("sme.id").As("sort_id"),
+		}, maskRuntime.Projections()...)...).
 		Where(
 			goqu.I("sme.submodel_id").Eq(submodelDatabaseID),
 			rootFilter,
+		)
+
+	query := dialect.From(innerQuery.As(dataAlias)).
+		Select(
+			goqu.I(dataAlias+".c_id"),
+			goqu.I(dataAlias+".c_parent_sme_id"),
+			goqu.I(dataAlias+".c_root_sme_id"),
+			goqu.Case().When(idShortVisibleExpr, goqu.I(dataAlias+".c_id_short")).Else(nil),
+			goqu.I(dataAlias+".c_idshort_path"),
+			goqu.I(dataAlias+".c_category"),
+			goqu.I(dataAlias+".c_model_type"),
+			goqu.I(dataAlias+".c_position"),
+			goqu.I(dataAlias+".raw_embedded_data_specification_payload"),
+			goqu.I(dataAlias+".raw_supplemental_semantic_ids_payload"),
+			goqu.I(dataAlias+".raw_extensions_payload"),
+			goqu.I(dataAlias+".raw_displayname_payload"),
+			goqu.I(dataAlias+".raw_description_payload"),
+			goqu.Case().When(valueVisibleExpr, goqu.I(dataAlias+".raw_value_payload")).Else(buildMaskedSMEValuePayloadExpr(dataAlias+".raw_value_payload")),
+			goqu.I(dataAlias+".raw_semantic_id_referred_payload"),
+			goqu.I(dataAlias+".raw_supplemental_semantic_ids_referred_payload"),
+			goqu.I(dataAlias+".raw_qualifiers_payload"),
+			goqu.Case().When(semanticVisibleExpr, goqu.I(dataAlias+".raw_semantic_payload")).Else(nil),
+			goqu.Case().When(semanticVisibleExpr, true).Else(false),
+			goqu.Case().When(valueVisibleExpr, true).Else(false),
 		).
 		Order(
-			rootOrderExpr.Asc(),
-			goqu.COALESCE(goqu.I("sme.position"), 0).Asc(),
-			goqu.I("sme.idshort_path").Asc(),
-			goqu.I("sme.id").Asc(),
+			goqu.I(dataAlias+".sort_root_order").Asc(),
+			goqu.I(dataAlias+".c_position").Asc(),
+			goqu.I(dataAlias+".c_idshort_path").Asc(),
+			goqu.I(dataAlias+".sort_id").Asc(),
 		)
 
 	sqlQuery, args, toSQLErr := query.ToSQL()
@@ -1004,6 +1236,8 @@ func executeLoadedSMERowQuery(db *sql.DB, sqlQuery string, args []interface{}, e
 		var supplementalSemanticIDsReferredPayload []byte
 		var qualifiersPayload []byte
 		var semanticPayload []byte
+		var semanticVisible bool
+		var valueVisible bool
 
 		scanErr := rows.Scan(
 			&dbID,
@@ -1024,6 +1258,8 @@ func executeLoadedSMERowQuery(db *sql.DB, sqlQuery string, args []interface{}, e
 			&supplementalSemanticIDsReferredPayload,
 			&qualifiersPayload,
 			&semanticPayload,
+			&semanticVisible,
+			&valueVisible,
 		)
 		if scanErr != nil {
 			return nil, common.NewInternalServerError(errorCodePrefix + "-SCANROW " + scanErr.Error())
@@ -1050,7 +1286,7 @@ func executeLoadedSMERowQuery(db *sql.DB, sqlQuery string, args []interface{}, e
 			Qualifiers:                      bytesToRawMessagePtr([]byte("[]")),
 		}
 
-		parsedRows = append(parsedRows, loadedSMERow{row: row, semanticPayload: semanticPayload, qualifiers: qualifiersPayload})
+		parsedRows = append(parsedRows, loadedSMERow{row: row, semanticPayload: semanticPayload, qualifiers: qualifiersPayload, semanticVisible: semanticVisible, valueVisible: valueVisible})
 	}
 	if rowsErr := rows.Err(); rowsErr != nil {
 		return nil, common.NewInternalServerError(errorCodePrefix + "-ROWSERR " + rowsErr.Error())
@@ -1060,11 +1296,12 @@ func executeLoadedSMERowQuery(db *sql.DB, sqlQuery string, args []interface{}, e
 }
 
 type loadedSMENode struct {
-	id       int64
-	parentID sql.NullInt64
-	path     string
-	position int
-	element  types.ISubmodelElement
+	id           int64
+	parentID     sql.NullInt64
+	path         string
+	position     int
+	element      types.ISubmodelElement
+	valueVisible bool
 }
 
 func buildSubmodelElementTreeFromRows(db *sql.DB, parsedRows []loadedSMERow, submodelID string, idShortOrPath string) (types.ISubmodelElement, error) {
@@ -1172,7 +1409,7 @@ func buildLoadedSubmodelElementNodes(db *sql.DB, parsedRows []loadedSMERow, erro
 			return nil, nil, nil, parseSemanticErr
 		} else if semanticID != nil {
 			element.SetSemanticID(semanticID)
-		} else {
+		} else if item.semanticVisible {
 			if _, exists := missingSemanticReferenceSet[item.row.DbID.Int64]; !exists {
 				missingSemanticReferenceSet[item.row.DbID.Int64] = struct{}{}
 				missingSemanticReferenceIDs = append(missingSemanticReferenceIDs, item.row.DbID.Int64)
@@ -1186,11 +1423,12 @@ func buildLoadedSubmodelElementNodes(db *sql.DB, parsedRows []loadedSMERow, erro
 		}
 
 		n := &loadedSMENode{
-			id:       item.row.DbID.Int64,
-			parentID: item.row.ParentID,
-			path:     item.row.IDShortPath,
-			position: item.row.Position,
-			element:  element,
+			id:           item.row.DbID.Int64,
+			parentID:     item.row.ParentID,
+			path:         item.row.IDShortPath,
+			position:     item.row.Position,
+			element:      element,
+			valueVisible: item.valueVisible,
 		}
 		nodes[n.id] = n
 		elementsByID[n.id] = element
@@ -1255,9 +1493,13 @@ func attachLoadedSubmodelElementChildren(children map[int64][]*loadedSMENode, no
 
 		switch parent.element.ModelType() {
 		case types.ModelTypeSubmodelElementCollection:
-			setCollectionChildren(parent.element, kids)
+			if parent.valueVisible {
+				setCollectionChildren(parent.element, kids)
+			}
 		case types.ModelTypeSubmodelElementList:
-			setListChildren(parent.element, kids)
+			if parent.valueVisible {
+				setListChildren(parent.element, kids)
+			}
 		case types.ModelTypeAnnotatedRelationshipElement:
 			setAnnotatedRelationshipChildren(parent.element, kids)
 		case types.ModelTypeEntity:

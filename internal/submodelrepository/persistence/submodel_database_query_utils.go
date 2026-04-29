@@ -102,25 +102,34 @@ func buildSubmodelSemanticIDReferencePayloadQuery(dialect *goqu.DialectWrapper, 
 	}).ToSQL()
 }
 
-func selectSubmodelGoquQuery(dialect *goqu.DialectWrapper, submodelIdentifier *string, limit *int32, cursor *string) (*goqu.SelectDataset, error) {
+func selectSubmodelGoquQuery(
+	dialect *goqu.DialectWrapper,
+	submodelIdentifier *string,
+	limit *int32,
+	cursor *string,
+	additionalProjections []interface{},
+) (*goqu.SelectDataset, error) {
 	semanticIDSelectExpression := buildSubmodelSemanticIDSelectExpression(dialect)
+
+	baseProjections := []interface{}{
+		goqu.I("submodel.submodel_identifier").As("c0"),
+		goqu.I("submodel.id_short").As("c1"),
+		goqu.I("submodel.category").As("c2"),
+		goqu.I("submodel.kind").As("c3"),
+		goqu.I("submodel_payload.description_payload").As("raw_description_payload"),
+		goqu.I("submodel_payload.displayname_payload").As("raw_displayname_payload"),
+		goqu.I("submodel_payload.administrative_information_payload").As("raw_administrative_information_payload"),
+		goqu.I("submodel_payload.embedded_data_specification_payload").As("raw_embedded_data_specification_payload"),
+		goqu.I("submodel_payload.supplemental_semantic_ids_payload").As("raw_supplemental_semantic_ids_payload"),
+		goqu.I("submodel_payload.extensions_payload").As("raw_extensions_payload"),
+		goqu.I("submodel_payload.qualifiers_payload").As("raw_qualifiers_payload"),
+		semanticIDSelectExpression,
+		goqu.I("submodel.submodel_identifier").As("sort_submodel_identifier"),
+	}
 
 	selectDS := dialect.From("submodel").
 		Join(goqu.T("submodel_payload"), goqu.On(goqu.Ex{"submodel.id": goqu.I("submodel_payload.submodel_id")})).
-		Select(
-			goqu.I("submodel.submodel_identifier"),
-			goqu.I("submodel.id_short"),
-			goqu.I("submodel.category"),
-			goqu.I("submodel.kind"),
-			goqu.I("submodel_payload.description_payload"),
-			goqu.I("submodel_payload.displayname_payload"),
-			goqu.I("submodel_payload.administrative_information_payload"),
-			goqu.I("submodel_payload.embedded_data_specification_payload"),
-			goqu.I("submodel_payload.supplemental_semantic_ids_payload"),
-			goqu.I("submodel_payload.extensions_payload"),
-			goqu.I("submodel_payload.qualifiers_payload"),
-			semanticIDSelectExpression,
-		).
+		Select(append(baseProjections, additionalProjections...)...).
 		Order(goqu.I("submodel.submodel_identifier").Asc())
 
 	if submodelIdentifier != nil {
@@ -196,7 +205,7 @@ func buildSubmodelSemanticIDSelectExpression(dialect *goqu.DialectWrapper) exp.A
 		Where(goqu.I("ssr.id").Eq(goqu.I("submodel.id"))).
 		Limit(1)
 
-	return goqu.COALESCE(semanticIDPayloadSelectDS, semanticIDSelectDS, goqu.L("'{}'::jsonb")).As("semantic_id_payload")
+	return goqu.COALESCE(semanticIDPayloadSelectDS, semanticIDSelectDS, goqu.L("'{}'::jsonb")).As("raw_semantic_id_payload")
 }
 
 func buildReferenceTypeStringSelectExpression(typeColumn exp.Expression) exp.CaseExpression {
