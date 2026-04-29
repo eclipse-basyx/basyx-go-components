@@ -7,8 +7,12 @@ import (
 	"encoding/xml"
 	"errors"
 	"fmt"
+	"io"
+	"log"
 	"net/http"
+	"net/url"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 
@@ -20,7 +24,9 @@ import (
 	commonmodel "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 )
 
-type uploadAPIService struct{}
+type uploadAPIService struct {
+	persistence *Persistence
+}
 
 const (
 	uploadComponent = "AASENV"
@@ -28,8 +34,8 @@ const (
 )
 
 // NewUploadAPIService creates a new UploadAPIService
-func NewUploadAPIService() UploadService {
-	return &uploadAPIService{}
+func NewUploadAPIService(persistence *Persistence) UploadService {
+	return &uploadAPIService{persistence: persistence}
 }
 
 func (s *uploadAPIService) HandleUpload(ctx context.Context, fileName string, contentType string, file *os.File) (commonmodel.ImplResponse, error) {
@@ -155,56 +161,481 @@ func (s *uploadAPIService) handleXMLUpload(ctx context.Context, fileName string,
 	}), nil
 }
 
-func (s *uploadAPIService) processAASXPackage(_ context.Context, _ string, _ string, packageReader *aasx.PackageRead) error {
-	// TODO AASENV-HANDLEUPLOAD-PROCESSAASX: use packageReader to extract specs, supplementary files and persist/import them.
-
-	// Read the specs
-	specs, err := packageReader.Specs()
-	if err != nil {
-		return fmt.Errorf("failed to read AASX specs: %w", err)
-	}
-	fmt.Printf("Read %d specs from AASX package\n", len(specs))
-
-	specsByContentType, err := packageReader.SpecsByContentType()
+func (s *uploadAPIService) processAASXPackage(ctx context.Context, _ string, _ string, packageReader *aasx.PackageRead) error {
+	specPart, environment, err := readEnvironmentFromAASXXMLSpec(packageReader)
 	if err != nil {
 		return err
 	}
 
-	for ct, specs := range specsByContentType {
-		fmt.Printf("%s -> %d\n", ct, len(specs))
+	if err = s.processEnvironment(ctx, "", "", environment); err != nil {
+		return err
+	}
+
+	if err = s.uploadSupplementaryFiles(ctx, packageReader, specPart, environment); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (s *uploadAPIService) processEnvironment(ctx context.Context, _ string, _ string, environment aastypes.IEnvironment) error {
+	if s == nil || s.persistence == nil {
+		return common.NewErrBadRequest("AASENV-PROCESSENV-NILPERSISTENCE persistence is required for environment import")
+	}
+	if s.persistence.ConceptDescriptionRepository == nil || s.persistence.SubmodelRepository == nil || s.persistence.AASRepository == nil {
+		return common.NewErrBadRequest("AASENV-PROCESSENV-NILBACKEND one or more repository backends are not initialized")
+	}
+
+	for _, conceptDescription := range environment.ConceptDescriptions() {
+		if _, err := s.persistence.ConceptDescriptionRepository.PutConceptDescription(ctx, conceptDescription.ID(), conceptDescription); err != nil {
+			return fmt.Errorf("AASENV-PROCESSENV-PUTCD failed to store concept description '%s': %w", conceptDescription.ID(), err)
+		}
+	}
+
+	for _, submodel := range environment.Submodels() {
+		if _, err := s.persistence.SubmodelRepository.PutSubmodel(ctx, submodel.ID(), submodel); err != nil {
+			return fmt.Errorf("AASENV-PROCESSENV-PUTSM failed to store submodel '%s': %w", submodel.ID(), err)
+		}
+	}
+
+	for _, aas := range environment.AssetAdministrationShells() {
+		if _, err := s.persistence.AASRepository.PutAssetAdministrationShellByID(ctx, aas.ID(), aas); err != nil {
+			return fmt.Errorf("AASENV-PROCESSENV-PUTAAS failed to store AAS '%s': %w", aas.ID(), err)
+		}
+	}
+
+	return nil
+}
+
+func readEnvironmentFromAASXXMLSpec(packageReader *aasx.PackageRead) (*aasx.Part, aastypes.IEnvironment, error) {
+	if packageReader == nil {
+		return nil, nil, common.NewErrBadRequest("AASENV-PARSEAASX-NILREADER package reader is required")
+	}
+
+	specs, err := packageReader.Specs()
+	if err != nil {
+		return nil, nil, fmt.Errorf("AASENV-PARSEAASX-READSPECS failed to read AASX specs: %w", err)
+	}
+
+	if len(specs) == 0 {
+		return nil, nil, common.NewErrBadRequest("AASENV-PARSEAASX-NOSPECS no AASX spec parts found")
+	}
+
+	var specPart *aasx.Part
+	for _, spec := range specs {
+		if normalizePartURI(spec.URI) == "/aasx/xml/content.xml" {
+			specPart = spec
+			break
+		}
+	}
+	if specPart == nil {
+		for _, spec := range specs {
+			normalized := strings.ToLower(normalizePartURI(spec.URI))
+			if strings.Contains(strings.ToLower(spec.ContentType), "xml") || strings.HasSuffix(normalized, ".xml") {
+				specPart = spec
+				break
+			}
+		}
+	}
+	if specPart == nil {
+		return nil, nil, common.NewErrBadRequest("AASENV-PARSEAASX-NOXMLSPEC no XML AASX spec found, expected /aasx/xml/content.xml")
+	}
+
+	specContent, err := specPart.ReadAllBytes()
+	if err != nil {
+		return nil, nil, fmt.Errorf("AASENV-PARSEAASX-READXMLSPEC failed to read XML spec content: %w", err)
+	}
+
+	instance, err := parseAASXMLInstance(specContent)
+	if err != nil {
+		return nil, nil, fmt.Errorf("AASENV-PARSEAASX-UNMARSHALXML failed to parse XML spec: %w", err)
+	}
+
+	environment, ok := instance.(aastypes.IEnvironment)
+	if !ok {
+		return nil, nil, common.NewErrBadRequest(fmt.Sprintf("AASENV-PARSEAASX-XMLNOTENV XML spec root is %T, expected AAS Environment", instance))
+	}
+
+	return specPart, environment, nil
+}
+
+func parseAASXMLInstance(specContent []byte) (aastypes.IClass, error) {
+	instance, err := aasxmlization.Unmarshal(xml.NewDecoder(bytes.NewReader(specContent)))
+	if err == nil {
+		return instance, nil
+	}
+
+	normalized := normalizeXMLSpecContent(specContent)
+	if len(normalized) == 0 || bytes.Equal(normalized, specContent) {
+		return nil, err
+	}
+
+	retried, retryErr := aasxmlization.Unmarshal(xml.NewDecoder(bytes.NewReader(normalized)))
+	if retryErr == nil {
+		return retried, nil
+	}
+
+	sanitized, sanitizeErr := sanitizeXMLRootAttributes(normalized)
+	if sanitizeErr == nil && len(sanitized) > 0 {
+		sanitizedRetried, sanitizedRetryErr := aasxmlization.Unmarshal(xml.NewDecoder(bytes.NewReader(sanitized)))
+		if sanitizedRetryErr == nil {
+			return sanitizedRetried, nil
+		}
+		return nil, fmt.Errorf("%w (retry after normalization failed: %v; retry after root attribute sanitization failed: %v)", err, retryErr, sanitizedRetryErr)
+	}
+
+	if sanitizeErr != nil {
+		return nil, fmt.Errorf("%w (retry after normalization failed: %v; root attribute sanitization failed: %v)", err, retryErr, sanitizeErr)
+	}
+
+	return nil, fmt.Errorf("%w (retry after normalization failed: %v)", err, retryErr)
+}
+
+func sanitizeXMLRootAttributes(content []byte) ([]byte, error) {
+	decoder := xml.NewDecoder(bytes.NewReader(content))
+	var output bytes.Buffer
+	encoder := xml.NewEncoder(&output)
+	rootProcessed := false
+
+	for {
+		token, err := decoder.Token()
+		if err != nil {
+			if errors.Is(err, io.EOF) {
+				break
+			}
+			return nil, err
+		}
+
+		start, ok := token.(xml.StartElement)
+		if !ok || rootProcessed {
+			if encodeErr := encoder.EncodeToken(token); encodeErr != nil {
+				return nil, encodeErr
+			}
+			continue
+		}
+
+		filtered := make([]xml.Attr, 0, len(start.Attr))
+		for _, attribute := range start.Attr {
+			if attribute.Name.Space == "xmlns" || (attribute.Name.Space == "" && attribute.Name.Local == "xmlns") {
+				filtered = append(filtered, attribute)
+			}
+		}
+		start.Attr = filtered
+		if encodeErr := encoder.EncodeToken(start); encodeErr != nil {
+			return nil, encodeErr
+		}
+		rootProcessed = true
+	}
+
+	if err := encoder.Flush(); err != nil {
+		return nil, err
+	}
+	return output.Bytes(), nil
+}
+
+func normalizeXMLSpecContent(specContent []byte) []byte {
+	content := bytes.TrimSpace(specContent)
+	content = bytes.TrimPrefix(content, []byte{0xEF, 0xBB, 0xBF})
+	content = bytes.TrimSpace(content)
+
+	start := firstXMLStartElementIndex(content)
+	if start < 0 || start >= len(content) {
+		return content
+	}
+
+	return bytes.TrimSpace(content[start:])
+}
+
+func firstXMLStartElementIndex(content []byte) int {
+	index := 0
+	for index < len(content) {
+		lt := bytes.IndexByte(content[index:], '<')
+		if lt < 0 {
+			return -1
+		}
+		candidate := index + lt
+		if candidate+1 >= len(content) {
+			return -1
+		}
+
+		next := content[candidate+1]
+		if next != '?' && next != '!' {
+			return candidate
+		}
+
+		if next == '?' {
+			endPI := bytes.Index(content[candidate+2:], []byte("?>"))
+			if endPI < 0 {
+				return -1
+			}
+			index = candidate + 2 + endPI + 2
+			continue
+		}
+
+		if bytes.HasPrefix(content[candidate+2:], []byte("--")) {
+			endComment := bytes.Index(content[candidate+4:], []byte("-->"))
+			if endComment < 0 {
+				return -1
+			}
+			index = candidate + 4 + endComment + 3
+			continue
+		}
+
+		endDecl := bytes.IndexByte(content[candidate+2:], '>')
+		if endDecl < 0 {
+			return -1
+		}
+		index = candidate + 2 + endDecl + 1
+	}
+	return -1
+}
+
+type aasxFileLocation struct {
+	SubmodelID  string
+	IDShortPath string
+	FileValue   string
+}
+
+func (s *uploadAPIService) uploadSupplementaryFiles(
+	ctx context.Context,
+	packageReader *aasx.PackageRead,
+	specPart *aasx.Part,
+	environment aastypes.IEnvironment,
+) error {
+	if s == nil || s.persistence == nil || s.persistence.SubmodelRepository == nil {
+		return common.NewErrBadRequest("AASENV-UPLDSUPPL-NILSMREPO submodel repository backend is required")
 	}
 
 	supplementaries, err := packageReader.SupplementaryRelationships()
 	if err != nil {
-		return fmt.Errorf("failed to read AASX supplementary relationships: %w", err)
-	}
-	for _, sups := range supplementaries {
-
-		//content, _ := sups.Supplementary.ReadAllBytes()
-		contentType := sups.Supplementary.ContentType
-		fmt.Println(sups.Spec.URI)
-		fmt.Println(contentType)
-		fmt.Println("----")
+		return fmt.Errorf("AASENV-UPLDSUPPL-READREL failed to read supplementary relationships: %w", err)
 	}
 
-	fmt.Printf("Read %d supplementary relationships from AASX package\n", supplementaries)
+	specURI := normalizePartURI(specPart.URI)
+	fileLocations := collectFileLocations(environment)
+	uploaded := 0
 
-	thumbnail, err := packageReader.Thumbnail()
-	if err != nil {
-		return fmt.Errorf("failed to read AASX thumbnail: %w", err)
+	for _, relationship := range supplementaries {
+		if normalizePartURI(relationship.Spec.URI) != specURI {
+			continue
+		}
+
+		suppBytes, readErr := relationship.Supplementary.ReadAllBytes()
+		if readErr != nil {
+			return fmt.Errorf("AASENV-UPLDSUPPL-READBYTES failed to read supplementary '%s': %w", normalizePartURI(relationship.Supplementary.URI), readErr)
+		}
+
+		matched := false
+		for _, location := range fileLocations {
+			if !matchesSupplementaryTarget(location.FileValue, relationship.Spec.URI, relationship.Supplementary.URI) {
+				continue
+			}
+
+			uploadName := filepath.Base(normalizePartURI(relationship.Supplementary.URI))
+			if uploadName == "." || uploadName == "/" || uploadName == "" {
+				uploadName = filepath.Base(strings.TrimSpace(location.FileValue))
+			}
+			if uploadName == "." || uploadName == "/" || uploadName == "" {
+				uploadName = "supplementary.bin"
+			}
+
+			tempFile, tempErr := createTempFileForUpload(uploadName, suppBytes)
+			if tempErr != nil {
+				return fmt.Errorf("AASENV-UPLDSUPPL-CREATETEMP failed to stage supplementary '%s': %w", uploadName, tempErr)
+			}
+
+			uploadErr := s.persistence.SubmodelRepository.UploadFileAttachment(location.SubmodelID, location.IDShortPath, tempFile, uploadName)
+			tempName := tempFile.Name()
+			_ = tempFile.Close()
+			_ = os.Remove(tempName)
+			if uploadErr != nil {
+				return fmt.Errorf(
+					"AASENV-UPLDSUPPL-UPLOAD failed to upload supplementary '%s' for submodel '%s' at path '%s': %w",
+					uploadName,
+					location.SubmodelID,
+					location.IDShortPath,
+					uploadErr,
+				)
+			}
+
+			matched = true
+			uploaded++
+		}
+
+		if !matched {
+			log.Printf("[WARN] AASENV-UPLDSUPPL-NOMATCH no File element path matched supplementary '%s'", normalizePartURI(relationship.Supplementary.URI))
+		}
 	}
-	if thumbnail != nil {
-		fmt.Printf("Read thumbnail from AASX package: contentType=%s\n", thumbnail.ContentType)
-	} else {
-		fmt.Println("No thumbnail found in AASX package")
+
+	log.Printf("AASENV-UPLDSUPPL uploaded %d supplementary file attachment(s)", uploaded)
+	return nil
+}
+
+func collectFileLocations(environment aastypes.IEnvironment) []aasxFileLocation {
+	locations := make([]aasxFileLocation, 0)
+	for _, submodel := range environment.Submodels() {
+		walkFileElements(submodel.ID(), submodel.SubmodelElements(), "", false, &locations)
+	}
+	return locations
+}
+
+func walkFileElements(
+	submodelID string,
+	elements []aastypes.ISubmodelElement,
+	parentPath string,
+	isFromList bool,
+	locations *[]aasxFileLocation,
+) {
+	for position, element := range elements {
+		idShort := ""
+		if element.IDShort() != nil {
+			idShort = *element.IDShort()
+		}
+
+		idShortPath := buildUploadIDShortPath(parentPath, isFromList, position, idShort)
+		if element.ModelType() == aastypes.ModelTypeFile {
+			if fileElement, ok := element.(*aastypes.File); ok && fileElement.Value() != nil && strings.TrimSpace(*fileElement.Value()) != "" && idShortPath != "" {
+				*locations = append(*locations, aasxFileLocation{
+					SubmodelID:  submodelID,
+					IDShortPath: idShortPath,
+					FileValue:   *fileElement.Value(),
+				})
+			}
+		}
+
+		children := extractSubmodelElementChildren(element)
+		if len(children) == 0 {
+			continue
+		}
+
+		walkFileElements(
+			submodelID,
+			children,
+			idShortPath,
+			element.ModelType() == aastypes.ModelTypeSubmodelElementList,
+			locations,
+		)
+	}
+}
+
+func extractSubmodelElementChildren(element aastypes.ISubmodelElement) []aastypes.ISubmodelElement {
+	switch element.ModelType() {
+	case aastypes.ModelTypeSubmodelElementCollection:
+		if collection, ok := element.(*aastypes.SubmodelElementCollection); ok {
+			return collection.Value()
+		}
+	case aastypes.ModelTypeSubmodelElementList:
+		if list, ok := element.(*aastypes.SubmodelElementList); ok {
+			return list.Value()
+		}
+	case aastypes.ModelTypeAnnotatedRelationshipElement:
+		if annotated, ok := element.(*aastypes.AnnotatedRelationshipElement); ok {
+			children := make([]aastypes.ISubmodelElement, 0, len(annotated.Annotations()))
+			for _, annotation := range annotated.Annotations() {
+				children = append(children, annotation)
+			}
+			return children
+		}
+	case aastypes.ModelTypeEntity:
+		if entity, ok := element.(*aastypes.Entity); ok {
+			return entity.Statements()
+		}
 	}
 	return nil
 }
 
-func (s *uploadAPIService) processEnvironment(_ context.Context, _ string, _ string, environment aastypes.IEnvironment) error {
-	// TODO AASENV-HANDLEUPLOAD-PROCESSENVIRONMENT: use environment to import AAS/Submodels/ConceptDescriptions into repositories.
-	_ = environment
-	return nil
+func buildUploadIDShortPath(parentPath string, isFromList bool, position int, idShort string) string {
+	if parentPath == "" {
+		if isFromList {
+			return "[" + fmt.Sprintf("%d", position) + "]"
+		}
+		return idShort
+	}
+	if isFromList {
+		return parentPath + "[" + fmt.Sprintf("%d", position) + "]"
+	}
+	return parentPath + "." + idShort
+}
+
+func matchesSupplementaryTarget(fileValue string, specURI *url.URL, supplementaryURI *url.URL) bool {
+	reference := strings.TrimSpace(fileValue)
+	if reference == "" {
+		return false
+	}
+	if strings.HasPrefix(reference, "http://") || strings.HasPrefix(reference, "https://") {
+		return false
+	}
+
+	resolvedReference := resolveReferenceAgainstSpec(reference, specURI)
+	resolvedSupplementary := normalizePartURI(supplementaryURI)
+	return resolvedReference != "" && resolvedReference == resolvedSupplementary
+}
+
+func resolveReferenceAgainstSpec(reference string, specURI *url.URL) string {
+	referenceURL, err := url.Parse(reference)
+	if err != nil {
+		return ""
+	}
+	if referenceURL.IsAbs() {
+		return normalizePartURI(referenceURL)
+	}
+
+	if specURI == nil {
+		if strings.HasPrefix(reference, "/") {
+			parsed, parseErr := url.Parse(reference)
+			if parseErr != nil {
+				return ""
+			}
+			return normalizePartURI(parsed)
+		}
+		return ""
+	}
+
+	base := &url.URL{Path: normalizePartURI(specURI)}
+	return normalizePartURI(base.ResolveReference(referenceURL))
+}
+
+func normalizePartURI(uri *url.URL) string {
+	if uri == nil {
+		return ""
+	}
+
+	uriPath := strings.TrimSpace(uri.Path)
+	if uriPath == "" {
+		uriPath = strings.TrimSpace(uri.String())
+	}
+	if uriPath == "" {
+		return ""
+	}
+
+	uriPath = strings.ReplaceAll(uriPath, "\\", "/")
+	if !strings.HasPrefix(uriPath, "/") {
+		uriPath = "/" + uriPath
+	}
+	return path.Clean(uriPath)
+}
+
+func createTempFileForUpload(fileName string, content []byte) (*os.File, error) {
+	baseName := filepath.Base(strings.TrimSpace(fileName))
+	if baseName == "." || baseName == "/" || baseName == "" {
+		baseName = "supplementary.bin"
+	}
+
+	tempFile, err := os.CreateTemp("", baseName+".*")
+	if err != nil {
+		return nil, err
+	}
+	if _, err = tempFile.Write(content); err != nil {
+		_ = tempFile.Close()
+		_ = os.Remove(tempFile.Name())
+		return nil, err
+	}
+	if _, err = tempFile.Seek(0, 0); err != nil {
+		_ = tempFile.Close()
+		_ = os.Remove(tempFile.Name())
+		return nil, err
+	}
+	return tempFile, nil
 }
 
 func newUploadErrorResponse(status int, step string, err error) (commonmodel.ImplResponse, error) {

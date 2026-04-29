@@ -192,7 +192,7 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 	r.Mount(base, apiRouter)
 
 	// Register /upload endpoint
-	uploadService := aasenvironment.NewUploadAPIService()
+	uploadService := aasenvironment.NewUploadAPIService(persistence)
 	aasenvironment.RegisterUploadAPI(apiRouter, uploadService)
 
 	addr := fmt.Sprintf("0.0.0.0:%d", cfg.Server.Port)
