@@ -48,7 +48,11 @@ func (s *uploadAPIService) HandleUpload(ctx context.Context, fileName string, co
 		return newUploadErrorResponse(http.StatusBadRequest, "AASENV-HANDLEUPLOAD-MISSINGFILENAME", fmt.Errorf("file name is required"))
 	}
 
-	rawContent, err := os.ReadFile(file.Name())
+	if _, err := file.Seek(0, io.SeekStart); err != nil {
+		return newUploadErrorResponse(http.StatusInternalServerError, "AASENV-HANDLEUPLOAD-RESETFILEPOINTER", err)
+	}
+
+	rawContent, err := io.ReadAll(file)
 	if err != nil {
 		return newUploadErrorResponse(http.StatusInternalServerError, "AASENV-HANDLEUPLOAD-READFILE", err)
 	}
@@ -482,9 +486,7 @@ func (s *uploadAPIService) uploadSupplementaryFiles(
 			}
 
 			uploadErr := s.persistence.SubmodelRepository.UploadFileAttachment(location.SubmodelID, location.IDShortPath, tempFile, uploadName)
-			tempName := tempFile.Name()
-			_ = tempFile.Close()
-			_ = os.Remove(tempName)
+			closeAndRemoveTempFile(tempFile)
 			if uploadErr != nil {
 				return fmt.Errorf(
 					"AASENV-UPLDSUPPL-UPLOAD failed to upload supplementary '%s' for submodel '%s' at path '%s': %w",
@@ -500,7 +502,9 @@ func (s *uploadAPIService) uploadSupplementaryFiles(
 		}
 
 		if !matched {
-			log.Printf("[WARN] AASENV-UPLDSUPPL-NOMATCH no File element path matched supplementary '%s'", normalizePartURI(relationship.Supplementary.URI))
+			supplementaryURIForLog := sanitizeLogValue(normalizePartURI(relationship.Supplementary.URI))
+			// #nosec G706 -- value is sanitized to strip CR/LF control characters before logging.
+			log.Printf("[WARN] AASENV-UPLDSUPPL-NOMATCH no File element path matched supplementary %q", supplementaryURIForLog)
 		}
 	}
 
@@ -544,9 +548,7 @@ func (s *uploadAPIService) storeAASXThumbnail(ctx context.Context, packageReader
 		}
 
 		uploadErr := s.persistence.AASRepository.PutThumbnailByAASID(ctx, aas.ID(), thumbnailName, tempFile)
-		tempFileName := tempFile.Name()
-		_ = tempFile.Close()
-		_ = os.Remove(tempFileName)
+		closeAndRemoveTempFile(tempFile)
 		if uploadErr != nil {
 			return fmt.Errorf("AASENV-UPLDTHUMB-UPLOAD failed to store thumbnail for AAS '%s': %w", aas.ID(), uploadErr)
 		}
@@ -711,16 +713,31 @@ func createTempFileForUpload(fileName string, content []byte) (*os.File, error) 
 		return nil, err
 	}
 	if _, err = tempFile.Write(content); err != nil {
-		_ = tempFile.Close()
-		_ = os.Remove(tempFile.Name())
+		closeAndRemoveTempFile(tempFile)
 		return nil, err
 	}
 	if _, err = tempFile.Seek(0, 0); err != nil {
-		_ = tempFile.Close()
-		_ = os.Remove(tempFile.Name())
+		closeAndRemoveTempFile(tempFile)
 		return nil, err
 	}
 	return tempFile, nil
+}
+
+func closeAndRemoveTempFile(tempFile *os.File) {
+	if tempFile == nil {
+		return
+	}
+
+	tempFileName := tempFile.Name()
+	_ = tempFile.Close()
+	// #nosec G703 -- path comes from os.CreateTemp/commonmodel.ReadFormFileToTempFile and is not user-controlled traversal.
+	_ = os.Remove(tempFileName)
+}
+
+func sanitizeLogValue(value string) string {
+	sanitized := strings.ReplaceAll(value, "\r", "")
+	sanitized = strings.ReplaceAll(sanitized, "\n", "")
+	return sanitized
 }
 
 func newUploadErrorResponse(status int, step string, err error) (commonmodel.ImplResponse, error) {

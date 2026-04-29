@@ -57,8 +57,7 @@ func (a *uploadAPI) HandleUpload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer func() {
-		_ = file.Close()
-		_ = os.Remove(file.Name())
+		closeAndRemoveTempFile(file)
 	}()
 
 	result, err := a.service.HandleUpload(r.Context(), fileName, contentType, file)

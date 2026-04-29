@@ -129,8 +129,7 @@ func runAASXUploadAction(t *testing.T, step testenv.JSONSuiteStep) {
 	}
 
 	client := &http.Client{Timeout: 60 * time.Second}
-	resp, err := client.Do(req)
-	require.NoError(t, err)
+	resp := doHTTPIntegrationRequest(t, client, req)
 	defer func() { _ = resp.Body.Close() }()
 
 	responseBody, err := io.ReadAll(resp.Body)
@@ -176,8 +175,7 @@ func verifyStoredAttachments(t *testing.T, step testenv.JSONSuiteStep) {
 		req, err := http.NewRequest(http.MethodGet, attachmentURL, nil)
 		require.NoError(t, err)
 
-		resp, err := client.Do(req)
-		require.NoError(t, err)
+		resp := doHTTPIntegrationRequest(t, client, req)
 		func() {
 			defer func() { _ = resp.Body.Close() }()
 			body, readErr := io.ReadAll(resp.Body)
@@ -276,8 +274,7 @@ func verifyThumbnailEndpoints(t *testing.T, step testenv.JSONSuiteStep) {
 		req, err := http.NewRequest(http.MethodGet, thumbnailURL, nil)
 		require.NoError(t, err)
 
-		resp, err := client.Do(req)
-		require.NoError(t, err)
+		resp := doHTTPIntegrationRequest(t, client, req)
 		func() {
 			defer func() { _ = resp.Body.Close() }()
 			body, readErr := io.ReadAll(resp.Body)
@@ -317,8 +314,7 @@ func fetchAASIDs(t *testing.T, baseURL string) []string {
 	req, err := http.NewRequest(http.MethodGet, baseURL+"/shells", nil)
 	require.NoError(t, err)
 
-	resp, err := client.Do(req)
-	require.NoError(t, err)
+	resp := doHTTPIntegrationRequest(t, client, req)
 	defer func() { _ = resp.Body.Close() }()
 
 	body, err := io.ReadAll(resp.Body)
@@ -359,8 +355,7 @@ func verifyEndpointSnapshot(t *testing.T, step testenv.JSONSuiteStep) {
 	}
 
 	client := &http.Client{Timeout: 30 * time.Second}
-	resp, err := client.Do(req)
-	require.NoError(t, err)
+	resp := doHTTPIntegrationRequest(t, client, req)
 	defer func() { _ = resp.Body.Close() }()
 
 	body, err := io.ReadAll(resp.Body)
@@ -390,4 +385,12 @@ func normalizeJSONDocument(raw []byte) ([]byte, error) {
 		return nil, err
 	}
 	return json.Marshal(parsed)
+}
+
+func doHTTPIntegrationRequest(t *testing.T, client *http.Client, req *http.Request) *http.Response {
+	t.Helper()
+	// #nosec G704 -- integration tests call controlled test-suite endpoints, not user-provided URLs.
+	resp, err := client.Do(req)
+	require.NoError(t, err)
+	return resp
 }
