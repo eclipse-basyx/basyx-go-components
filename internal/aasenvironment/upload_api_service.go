@@ -175,11 +175,7 @@ func (s *uploadAPIService) processAASXPackage(ctx context.Context, _ string, _ s
 		return err
 	}
 
-	if err = s.uploadSupplementaryFiles(ctx, packageReader, specPart, environment); err != nil {
-		return err
-	}
-
-	return nil
+	return s.uploadSupplementaryFiles(packageReader, specPart, environment)
 }
 
 func (s *uploadAPIService) processEnvironment(ctx context.Context, _ string, _ string, environment aastypes.IEnvironment) error {
@@ -439,7 +435,6 @@ type aasxFileLocation struct {
 }
 
 func (s *uploadAPIService) uploadSupplementaryFiles(
-	ctx context.Context,
 	packageReader *aasx.PackageRead,
 	specPart *aasx.Part,
 	environment aastypes.IEnvironment,

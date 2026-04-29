@@ -370,10 +370,12 @@ func verifyEndpointSnapshot(t *testing.T, step testenv.JSONSuiteStep) {
 	normalizedActual, err := normalizeJSONDocument(body)
 	require.NoError(t, err)
 
+	// #nosec G304 -- expectedPath comes from controlled integration test suite data.
 	expectedRaw, err := os.ReadFile(expectedPath)
 	if err != nil {
-		require.NoError(t, os.MkdirAll(filepath.Dir(expectedPath), 0o755))
-		require.NoError(t, os.WriteFile(expectedPath, normalizedActual, 0o644))
+		require.NoError(t, os.MkdirAll(filepath.Dir(expectedPath), 0o750))
+		// #nosec G306 -- integration tests intentionally create readable snapshot fixtures.
+		require.NoError(t, os.WriteFile(expectedPath, normalizedActual, 0o600))
 		t.Fatalf("expected snapshot created at %s; rerun test to verify", expectedPath)
 	}
 
