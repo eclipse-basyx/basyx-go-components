@@ -6,7 +6,7 @@ server:
 
 postgres:
   host: localhost
-  port: 16432
+  port: 5432
   user: admin
   password: admin123
   dbname: basyxTestDB

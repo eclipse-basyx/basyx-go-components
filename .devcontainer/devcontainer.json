@@ -37,8 +37,7 @@
 		5000, // AAS Discovery Service
 		5001, // AAS Registry Service
 		5002, // Submodel Registry Service
-		5003, // AASX File Server Service
-		5004 // AAS Environment Service
+		5003 // AASX File Server Service
 	],
 	"portsAttributes": {
 		"5000": {
@@ -55,10 +54,6 @@
 		},
 		"5003": {
 			"label": "AASX File Server Service",
-			"onAutoForward": "notify"
-		},
-		"5004": {
-			"label": "AAS Environment Service",
 			"onAutoForward": "notify"
 		}
 	},
