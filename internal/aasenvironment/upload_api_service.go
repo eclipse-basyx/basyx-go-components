@@ -162,12 +162,16 @@ func (s *uploadAPIService) handleXMLUpload(ctx context.Context, fileName string,
 }
 
 func (s *uploadAPIService) processAASXPackage(ctx context.Context, _ string, _ string, packageReader *aasx.PackageRead) error {
-	specPart, environment, err := readEnvironmentFromAASXXMLSpec(packageReader)
+	specPart, environment, err := readEnvironmentFromAASXSpec(packageReader)
 	if err != nil {
 		return err
 	}
 
 	if err = s.processEnvironment(ctx, "", "", environment); err != nil {
+		return err
+	}
+
+	if err = s.storeAASXThumbnail(ctx, packageReader, environment); err != nil {
 		return err
 	}
 
@@ -207,7 +211,7 @@ func (s *uploadAPIService) processEnvironment(ctx context.Context, _ string, _ s
 	return nil
 }
 
-func readEnvironmentFromAASXXMLSpec(packageReader *aasx.PackageRead) (*aasx.Part, aastypes.IEnvironment, error) {
+func readEnvironmentFromAASXSpec(packageReader *aasx.PackageRead) (*aasx.Part, aastypes.IEnvironment, error) {
 	if packageReader == nil {
 		return nil, nil, common.NewErrBadRequest("AASENV-PARSEAASX-NILREADER package reader is required")
 	}
@@ -230,33 +234,75 @@ func readEnvironmentFromAASXXMLSpec(packageReader *aasx.PackageRead) (*aasx.Part
 	}
 	if specPart == nil {
 		for _, spec := range specs {
-			normalized := strings.ToLower(normalizePartURI(spec.URI))
-			if strings.Contains(strings.ToLower(spec.ContentType), "xml") || strings.HasSuffix(normalized, ".xml") {
+			if normalizePartURI(spec.URI) == "/aasx/json/content.json" {
 				specPart = spec
 				break
 			}
 		}
 	}
 	if specPart == nil {
-		return nil, nil, common.NewErrBadRequest("AASENV-PARSEAASX-NOXMLSPEC no XML AASX spec found, expected /aasx/xml/content.xml")
+		for _, spec := range specs {
+			normalized := strings.ToLower(normalizePartURI(spec.URI))
+			contentType := strings.ToLower(strings.TrimSpace(spec.ContentType))
+			if strings.Contains(contentType, "xml") || strings.HasSuffix(normalized, ".xml") {
+				specPart = spec
+				break
+			}
+			if strings.Contains(contentType, "json") || strings.HasSuffix(normalized, ".json") {
+				specPart = spec
+				break
+			}
+		}
+	}
+	if specPart == nil {
+		return nil, nil, common.NewErrBadRequest("AASENV-PARSEAASX-NOSUPPORTEDSPEC no supported AASX spec found, expected XML or JSON content spec")
 	}
 
 	specContent, err := specPart.ReadAllBytes()
 	if err != nil {
-		return nil, nil, fmt.Errorf("AASENV-PARSEAASX-READXMLSPEC failed to read XML spec content: %w", err)
+		return nil, nil, fmt.Errorf("AASENV-PARSEAASX-READSPEC failed to read AASX spec content: %w", err)
+	}
+
+	if isLikelyJSONSpec(specPart) {
+		environment, parseErr := parseAASJSONEnvironment(specContent)
+		if parseErr != nil {
+			return nil, nil, fmt.Errorf("AASENV-PARSEAASX-UNMARSHALJSON failed to parse JSON spec: %w", parseErr)
+		}
+		return specPart, environment, nil
 	}
 
 	instance, err := parseAASXMLInstance(specContent)
 	if err != nil {
 		return nil, nil, fmt.Errorf("AASENV-PARSEAASX-UNMARSHALXML failed to parse XML spec: %w", err)
 	}
-
 	environment, ok := instance.(aastypes.IEnvironment)
 	if !ok {
 		return nil, nil, common.NewErrBadRequest(fmt.Sprintf("AASENV-PARSEAASX-XMLNOTENV XML spec root is %T, expected AAS Environment", instance))
 	}
 
 	return specPart, environment, nil
+}
+
+func isLikelyJSONSpec(specPart *aasx.Part) bool {
+	if specPart == nil {
+		return false
+	}
+	normalized := strings.ToLower(normalizePartURI(specPart.URI))
+	contentType := strings.ToLower(strings.TrimSpace(specPart.ContentType))
+	return strings.HasSuffix(normalized, ".json") || strings.Contains(contentType, "json")
+}
+
+func parseAASJSONEnvironment(specContent []byte) (aastypes.IEnvironment, error) {
+	var jsonable any
+	if err := json.Unmarshal(specContent, &jsonable); err != nil {
+		return nil, err
+	}
+
+	environment, err := aasjsonization.EnvironmentFromJsonable(jsonable)
+	if err != nil {
+		return nil, err
+	}
+	return environment, nil
 }
 
 func parseAASXMLInstance(specContent []byte) (aastypes.IClass, error) {
@@ -468,6 +514,54 @@ func (s *uploadAPIService) uploadSupplementaryFiles(
 	}
 
 	log.Printf("AASENV-UPLDSUPPL uploaded %d supplementary file attachment(s)", uploaded)
+	return nil
+}
+
+func (s *uploadAPIService) storeAASXThumbnail(ctx context.Context, packageReader *aasx.PackageRead, environment aastypes.IEnvironment) error {
+	if s == nil || s.persistence == nil || s.persistence.AASRepository == nil {
+		return common.NewErrBadRequest("AASENV-UPLDTHUMB-NILAASREPO AAS repository backend is required")
+	}
+	if packageReader == nil {
+		return common.NewErrBadRequest("AASENV-UPLDTHUMB-NILREADER package reader is required")
+	}
+
+	thumbnail, err := packageReader.Thumbnail()
+	if err != nil {
+		return fmt.Errorf("AASENV-UPLDTHUMB-READTHUMBNAIL failed to read AASX thumbnail: %w", err)
+	}
+	if thumbnail == nil {
+		return nil
+	}
+
+	thumbnailBytes, err := thumbnail.ReadAllBytes()
+	if err != nil {
+		return fmt.Errorf("AASENV-UPLDTHUMB-READBYTES failed to read AASX thumbnail bytes: %w", err)
+	}
+	if len(thumbnailBytes) == 0 {
+		return nil
+	}
+
+	thumbnailName := filepath.Base(normalizePartURI(thumbnail.URI))
+	if strings.TrimSpace(thumbnailName) == "" || thumbnailName == "." || thumbnailName == "/" {
+		thumbnailName = "thumbnail.bin"
+	}
+
+	for _, aas := range environment.AssetAdministrationShells() {
+		tempFile, tempErr := createTempFileForUpload(thumbnailName, thumbnailBytes)
+		if tempErr != nil {
+			return fmt.Errorf("AASENV-UPLDTHUMB-CREATETEMP failed to stage thumbnail for AAS '%s': %w", aas.ID(), tempErr)
+		}
+
+		uploadErr := s.persistence.AASRepository.PutThumbnailByAASID(ctx, aas.ID(), thumbnailName, tempFile)
+		tempFileName := tempFile.Name()
+		_ = tempFile.Close()
+		_ = os.Remove(tempFileName)
+		if uploadErr != nil {
+			return fmt.Errorf("AASENV-UPLDTHUMB-UPLOAD failed to store thumbnail for AAS '%s': %w", aas.ID(), uploadErr)
+		}
+	}
+
+	log.Printf("AASENV-UPLDTHUMB stored thumbnail for %d AAS object(s)", len(environment.AssetAdministrationShells()))
 	return nil
 }
 

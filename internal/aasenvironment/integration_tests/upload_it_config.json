@@ -27,7 +27,13 @@
     "expectedStatus": 200
   },
   {
-    "context": "005 - List Submodels after upload",
+    "context": "005 - Verify AAS thumbnails",
+    "action": "VERIFY_AASX_THUMBNAIL",
+    "endpoint": "http://127.0.0.1:6004",
+    "expectedStatus": 200
+  },
+  {
+    "context": "006 - List Submodels after upload",
     "method": "GET",
     "endpoint": "http://127.0.0.1:6004/submodels",
     "expectedStatus": 200

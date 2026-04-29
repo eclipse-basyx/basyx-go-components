@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"database/sql"
 	"encoding/base64"
+	"encoding/json"
 	"io"
 	"mime/multipart"
 	"net/http"
@@ -21,6 +22,7 @@ import (
 
 const actionUploadAASXMultipart = "UPLOAD_AASX_MULTIPART"
 const actionVerifyAASXAttachments = "VERIFY_AASX_ATTACHMENTS"
+const actionVerifyAASXThumbnail = "VERIFY_AASX_THUMBNAIL"
 const uploadIntegrationDSN = "host=127.0.0.1 port=6432 user=admin password=admin123 dbname=basyxTestDB sslmode=disable"
 
 type storedAttachment struct {
@@ -39,6 +41,9 @@ func TestUploadAASXIntegration(t *testing.T) {
 			},
 			actionVerifyAASXAttachments: func(t *testing.T, _ *testenv.JSONSuiteRunner, step testenv.JSONSuiteStep, _ int) {
 				verifyStoredAttachments(t, step)
+			},
+			actionVerifyAASXThumbnail: func(t *testing.T, _ *testenv.JSONSuiteRunner, step testenv.JSONSuiteStep, _ int) {
+				verifyThumbnailEndpoints(t, step)
 			},
 		},
 	})
@@ -191,4 +196,61 @@ ORDER BY sm.submodel_identifier, sme.idshort_path
 	}
 	require.NoError(t, rows.Err())
 	return result
+}
+
+func verifyThumbnailEndpoints(t *testing.T, step testenv.JSONSuiteStep) {
+	baseURL := strings.TrimRight(strings.TrimSpace(step.Endpoint), "/")
+	require.NotEmpty(t, baseURL)
+
+	aasIDs := fetchAASIDs(t, baseURL)
+	require.NotEmpty(t, aasIDs, "no AAS IDs found after upload")
+
+	client := &http.Client{Timeout: 60 * time.Second}
+	for _, aasID := range aasIDs {
+		encodedID := base64.RawURLEncoding.EncodeToString([]byte(aasID))
+		thumbnailURL := baseURL + "/shells/" + encodedID + "/asset-information/thumbnail"
+
+		req, err := http.NewRequest(http.MethodGet, thumbnailURL, nil)
+		require.NoError(t, err)
+
+		resp, err := client.Do(req)
+		require.NoError(t, err)
+		func() {
+			defer func() { _ = resp.Body.Close() }()
+			body, readErr := io.ReadAll(resp.Body)
+			require.NoError(t, readErr)
+			require.Equalf(t, http.StatusOK, resp.StatusCode, "thumbnail endpoint failed for AAS '%s': %s", aasID, string(body))
+			require.NotEmptyf(t, body, "thumbnail endpoint returned empty content for AAS '%s'", aasID)
+		}()
+	}
+}
+
+func fetchAASIDs(t *testing.T, baseURL string) []string {
+	t.Helper()
+	client := &http.Client{Timeout: 30 * time.Second}
+	req, err := http.NewRequest(http.MethodGet, baseURL+"/shells", nil)
+	require.NoError(t, err)
+
+	resp, err := client.Do(req)
+	require.NoError(t, err)
+	defer func() { _ = resp.Body.Close() }()
+
+	body, err := io.ReadAll(resp.Body)
+	require.NoError(t, err)
+	require.Equalf(t, http.StatusOK, resp.StatusCode, "listing AAS shells failed: %s", string(body))
+
+	var parsed struct {
+		Result []struct {
+			ID string `json:"id"`
+		} `json:"result"`
+	}
+	require.NoError(t, json.Unmarshal(body, &parsed))
+
+	ids := make([]string, 0, len(parsed.Result))
+	for _, item := range parsed.Result {
+		if strings.TrimSpace(item.ID) != "" {
+			ids = append(ids, item.ID)
+		}
+	}
+	return ids
 }
