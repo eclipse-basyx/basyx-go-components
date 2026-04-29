@@ -225,38 +225,25 @@ func readEnvironmentFromAASXSpec(packageReader *aasx.PackageRead) (*aasx.Part, a
 		return nil, nil, common.NewErrBadRequest("AASENV-PARSEAASX-NOSPECS no AASX spec parts found")
 	}
 
-	var specPart *aasx.Part
+	supportedSpecs := make([]*aasx.Part, 0, len(specs))
 	for _, spec := range specs {
-		if normalizePartURI(spec.URI) == "/aasx/xml/content.xml" {
-			specPart = spec
-			break
+		if isLikelyJSONSpec(spec) || isLikelyXMLSpec(spec) {
+			supportedSpecs = append(supportedSpecs, spec)
 		}
 	}
-	if specPart == nil {
-		for _, spec := range specs {
-			if normalizePartURI(spec.URI) == "/aasx/json/content.json" {
-				specPart = spec
-				break
-			}
-		}
-	}
-	if specPart == nil {
-		for _, spec := range specs {
-			normalized := strings.ToLower(normalizePartURI(spec.URI))
-			contentType := strings.ToLower(strings.TrimSpace(spec.ContentType))
-			if strings.Contains(contentType, "xml") || strings.HasSuffix(normalized, ".xml") {
-				specPart = spec
-				break
-			}
-			if strings.Contains(contentType, "json") || strings.HasSuffix(normalized, ".json") {
-				specPart = spec
-				break
-			}
-		}
-	}
-	if specPart == nil {
+
+	if len(supportedSpecs) == 0 {
 		return nil, nil, common.NewErrBadRequest("AASENV-PARSEAASX-NOSUPPORTEDSPEC no supported AASX spec found, expected XML or JSON content spec")
 	}
+	if len(supportedSpecs) > 1 {
+		uris := make([]string, 0, len(supportedSpecs))
+		for _, spec := range supportedSpecs {
+			uris = append(uris, normalizePartURI(spec.URI))
+		}
+		return nil, nil, common.NewErrBadRequest("AASENV-PARSEAASX-MULTISPEC multiple supported AASX specs found: " + strings.Join(uris, ", "))
+	}
+
+	specPart := supportedSpecs[0]
 
 	specContent, err := specPart.ReadAllBytes()
 	if err != nil {
@@ -290,6 +277,15 @@ func isLikelyJSONSpec(specPart *aasx.Part) bool {
 	normalized := strings.ToLower(normalizePartURI(specPart.URI))
 	contentType := strings.ToLower(strings.TrimSpace(specPart.ContentType))
 	return strings.HasSuffix(normalized, ".json") || strings.Contains(contentType, "json")
+}
+
+func isLikelyXMLSpec(specPart *aasx.Part) bool {
+	if specPart == nil {
+		return false
+	}
+	normalized := strings.ToLower(normalizePartURI(specPart.URI))
+	contentType := strings.ToLower(strings.TrimSpace(specPart.ContentType))
+	return strings.HasSuffix(normalized, ".xml") || strings.Contains(contentType, "xml")
 }
 
 func parseAASJSONEnvironment(specContent []byte) (aastypes.IEnvironment, error) {
