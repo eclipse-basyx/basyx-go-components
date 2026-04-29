@@ -6,19 +6,19 @@
     "expectedStatus": 200
   },
   {
-    "context": "002 - Upload AASX file",
+    "context": "002 - Upload ProductionPlan AASX file",
     "action": "UPLOAD_AASX_MULTIPART",
     "method": "POST",
     "endpoint": "http://127.0.0.1:6004/upload",
-    "data": "testdata/IESEDriveMotorDM3000.aasx",
+    "data": "testdata/ProductionPlanSFKL.aasx",
     "expectedStatus": 200
   },
   {
-    "context": "003 - List AAS after upload",
+    "context": "003 - List AAS after ProductionPlan upload",
     "action": "VERIFY_ENDPOINT_SNAPSHOT",
     "method": "GET",
     "endpoint": "http://127.0.0.1:6004/shells",
-    "data": "expected/iese_shells.json",
+    "data": "expected/productionplan_shells.json",
     "expectedStatus": 200
   },
   {
@@ -26,7 +26,7 @@
     "action": "VERIFY_AASX_ATTACHMENTS",
     "endpoint": "http://127.0.0.1:6004",
     "headers": {
-      "X-Attachments-Expectation": "required"
+      "X-Attachments-Expectation": "absent"
     },
     "expectedStatus": 200
   },
@@ -35,24 +35,24 @@
     "action": "VERIFY_AASX_THUMBNAIL",
     "endpoint": "http://127.0.0.1:6004",
     "headers": {
-      "X-Thumbnail-Expectation": "required"
+      "X-Thumbnail-Expectation": "absent"
     },
     "expectedStatus": 200
   },
   {
-    "context": "006 - List Submodels after upload",
+    "context": "006 - List Submodels after ProductionPlan upload",
     "action": "VERIFY_ENDPOINT_SNAPSHOT",
     "method": "GET",
     "endpoint": "http://127.0.0.1:6004/submodels",
-    "data": "expected/iese_submodels.json",
+    "data": "expected/productionplan_submodels.json",
     "expectedStatus": 200
   },
   {
-    "context": "007 - List ConceptDescriptions after upload",
+    "context": "007 - List ConceptDescriptions after ProductionPlan upload",
     "action": "VERIFY_ENDPOINT_SNAPSHOT",
     "method": "GET",
     "endpoint": "http://127.0.0.1:6004/concept-descriptions",
-    "data": "expected/iese_conceptdescriptions.json",
+    "data": "expected/productionplan_conceptdescriptions.json",
     "expectedStatus": 200
   }
 ]

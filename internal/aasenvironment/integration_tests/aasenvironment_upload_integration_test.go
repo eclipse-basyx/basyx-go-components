@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"io"
 	"mime/multipart"
 	"net/http"
@@ -23,7 +24,11 @@ import (
 const actionUploadAASXMultipart = "UPLOAD_AASX_MULTIPART"
 const actionVerifyAASXAttachments = "VERIFY_AASX_ATTACHMENTS"
 const actionVerifyAASXThumbnail = "VERIFY_AASX_THUMBNAIL"
+const actionVerifyEndpointSnapshot = "VERIFY_ENDPOINT_SNAPSHOT"
 const uploadIntegrationDSN = "host=127.0.0.1 port=6432 user=admin password=admin123 dbname=basyxTestDB sslmode=disable"
+const expectationRequired = "required"
+const expectationAbsent = "absent"
+const expectationOptional = "optional"
 
 type storedAttachment struct {
 	SubmodelIdentifier string
@@ -33,8 +38,18 @@ type storedAttachment struct {
 }
 
 func TestUploadAASXIntegration(t *testing.T) {
+	resetDatabaseForUploadIT(t)
+	runUploadJSONSuite(t, "upload_it_config.json")
+}
+
+func TestUploadAASXIntegrationProductionPlan(t *testing.T) {
+	resetDatabaseForUploadIT(t)
+	runUploadJSONSuite(t, "upload_productionplan_it_config.json")
+}
+
+func runUploadJSONSuite(t *testing.T, configPath string) {
 	testenv.RunJSONSuite(t, testenv.JSONSuiteOptions{
-		ConfigPath: "upload_it_config.json",
+		ConfigPath: configPath,
 		ActionHandlers: map[string]testenv.JSONStepAction{
 			actionUploadAASXMultipart: func(t *testing.T, _ *testenv.JSONSuiteRunner, step testenv.JSONSuiteStep, _ int) {
 				runAASXUploadAction(t, step)
@@ -45,8 +60,41 @@ func TestUploadAASXIntegration(t *testing.T) {
 			actionVerifyAASXThumbnail: func(t *testing.T, _ *testenv.JSONSuiteRunner, step testenv.JSONSuiteStep, _ int) {
 				verifyThumbnailEndpoints(t, step)
 			},
+			actionVerifyEndpointSnapshot: func(t *testing.T, _ *testenv.JSONSuiteRunner, step testenv.JSONSuiteStep, _ int) {
+				verifyEndpointSnapshot(t, step)
+			},
 		},
 	})
+}
+
+func resetDatabaseForUploadIT(t *testing.T) {
+	t.Helper()
+
+	db, err := sql.Open("postgres", uploadIntegrationDSN)
+	require.NoError(t, err)
+	defer func() { _ = db.Close() }()
+
+	rows, err := db.Query("SELECT tablename FROM pg_tables WHERE schemaname = 'public'")
+	require.NoError(t, err)
+	defer func() { _ = rows.Close() }()
+
+	tables := make([]string, 0, 64)
+	for rows.Next() {
+		var table string
+		require.NoError(t, rows.Scan(&table))
+		tables = append(tables, table)
+	}
+	require.NoError(t, rows.Err())
+
+	for _, table := range tables {
+		truncate := fmt.Sprintf("TRUNCATE TABLE %s RESTART IDENTITY CASCADE", quoteIdentifierUploadIT(table))
+		_, execErr := db.Exec(truncate)
+		require.NoErrorf(t, execErr, "failed to truncate table %s", table)
+	}
+}
+
+func quoteIdentifierUploadIT(identifier string) string {
+	return `"` + strings.ReplaceAll(identifier, `"`, `""`) + `"`
 }
 
 func runAASXUploadAction(t *testing.T, step testenv.JSONSuiteStep) {
@@ -97,7 +145,21 @@ func runAASXUploadAction(t *testing.T, step testenv.JSONSuiteStep) {
 
 func verifyStoredAttachments(t *testing.T, step testenv.JSONSuiteStep) {
 	attachments := readStoredAttachmentsFromDB(t)
-	require.NotEmpty(t, attachments, "no internal AASX file attachments found in DB after upload")
+	attachmentExpectation := readExpectationMode(step.Headers, "X-Attachments-Expectation", expectationRequired)
+	switch attachmentExpectation {
+	case expectationRequired:
+		require.NotEmpty(t, attachments, "no internal AASX file attachments found in DB after upload")
+	case expectationAbsent:
+		require.Empty(t, attachments, "attachments are not expected for this AASX, but file attachments exist in DB")
+		return
+	case expectationOptional:
+		if len(attachments) == 0 {
+			t.Log("no internal AASX file attachments found in DB after upload; accepted because expectation is optional")
+			return
+		}
+	default:
+		t.Fatalf("unsupported attachments expectation %q", attachmentExpectation)
+	}
 
 	baseURL := strings.TrimRight(strings.TrimSpace(step.Endpoint), "/")
 	require.NotEmpty(t, baseURL)
@@ -204,6 +266,7 @@ func verifyThumbnailEndpoints(t *testing.T, step testenv.JSONSuiteStep) {
 
 	aasIDs := fetchAASIDs(t, baseURL)
 	require.NotEmpty(t, aasIDs, "no AAS IDs found after upload")
+	thumbnailExpectation := readExpectationMode(step.Headers, "X-Thumbnail-Expectation", expectationRequired)
 
 	client := &http.Client{Timeout: 60 * time.Second}
 	for _, aasID := range aasIDs {
@@ -219,10 +282,33 @@ func verifyThumbnailEndpoints(t *testing.T, step testenv.JSONSuiteStep) {
 			defer func() { _ = resp.Body.Close() }()
 			body, readErr := io.ReadAll(resp.Body)
 			require.NoError(t, readErr)
-			require.Equalf(t, http.StatusOK, resp.StatusCode, "thumbnail endpoint failed for AAS '%s': %s", aasID, string(body))
-			require.NotEmptyf(t, body, "thumbnail endpoint returned empty content for AAS '%s'", aasID)
+			switch thumbnailExpectation {
+			case expectationRequired:
+				require.Equalf(t, http.StatusOK, resp.StatusCode, "thumbnail endpoint failed for AAS '%s': %s", aasID, string(body))
+				require.NotEmptyf(t, body, "thumbnail endpoint returned empty content for AAS '%s'", aasID)
+			case expectationAbsent:
+				require.Equalf(t, http.StatusNotFound, resp.StatusCode, "thumbnail must be absent for AAS '%s': %s", aasID, string(body))
+			case expectationOptional:
+				if resp.StatusCode == http.StatusNotFound {
+					return
+				}
+				require.Equalf(t, http.StatusOK, resp.StatusCode, "thumbnail endpoint failed for AAS '%s': %s", aasID, string(body))
+				require.NotEmptyf(t, body, "thumbnail endpoint returned empty content for AAS '%s'", aasID)
+			default:
+				t.Fatalf("unsupported thumbnail expectation %q", thumbnailExpectation)
+			}
 		}()
 	}
+}
+
+func readExpectationMode(headers map[string]string, key string, defaultValue string) string {
+	value := defaultValue
+	if headers != nil {
+		if headerValue, ok := headers[key]; ok && strings.TrimSpace(headerValue) != "" {
+			value = headerValue
+		}
+	}
+	return strings.ToLower(strings.TrimSpace(value))
 }
 
 func fetchAASIDs(t *testing.T, baseURL string) []string {
@@ -253,4 +339,53 @@ func fetchAASIDs(t *testing.T, baseURL string) []string {
 		}
 	}
 	return ids
+}
+
+func verifyEndpointSnapshot(t *testing.T, step testenv.JSONSuiteStep) {
+	t.Helper()
+
+	expectedPath := strings.TrimSpace(step.Data)
+	require.NotEmpty(t, expectedPath, "expected snapshot path is required in step.data")
+
+	method := strings.ToUpper(strings.TrimSpace(step.Method))
+	if method == "" {
+		method = http.MethodGet
+	}
+
+	req, err := http.NewRequest(method, strings.TrimSpace(step.Endpoint), nil)
+	require.NoError(t, err)
+	for key, value := range step.Headers {
+		req.Header.Set(key, value)
+	}
+
+	client := &http.Client{Timeout: 30 * time.Second}
+	resp, err := client.Do(req)
+	require.NoError(t, err)
+	defer func() { _ = resp.Body.Close() }()
+
+	body, err := io.ReadAll(resp.Body)
+	require.NoError(t, err)
+	require.Equalf(t, http.StatusOK, resp.StatusCode, "snapshot endpoint failed: %s", string(body))
+
+	normalizedActual, err := normalizeJSONDocument(body)
+	require.NoError(t, err)
+
+	expectedRaw, err := os.ReadFile(expectedPath)
+	if err != nil {
+		require.NoError(t, os.MkdirAll(filepath.Dir(expectedPath), 0o755))
+		require.NoError(t, os.WriteFile(expectedPath, normalizedActual, 0o644))
+		t.Fatalf("expected snapshot created at %s; rerun test to verify", expectedPath)
+	}
+
+	normalizedExpected, err := normalizeJSONDocument(expectedRaw)
+	require.NoError(t, err)
+	require.Equal(t, string(normalizedExpected), string(normalizedActual), "snapshot mismatch for %s", step.Endpoint)
+}
+
+func normalizeJSONDocument(raw []byte) ([]byte, error) {
+	var parsed any
+	if err := json.Unmarshal(raw, &parsed); err != nil {
+		return nil, err
+	}
+	return json.Marshal(parsed)
 }
