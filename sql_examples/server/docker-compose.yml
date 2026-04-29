@@ -7,13 +7,6 @@ services:
       POSTGRES_PASSWORD: admin123
       POSTGRES_DB: basyxTestDB
     ports:
-      - "5432:5432"
+      - "16432:5432"
     command: ["postgres", "-c", "listen_addresses=*"]
     
-  adminer:
-    image: adminer:5
-    container_name: adminer
-    ports:
-      - "8080:8080"
-    depends_on:
-      - db

@@ -1068,6 +1068,32 @@ components:
           schema:
             $ref: '#/components/schemas/Result'
 paths:
+  /upload:
+    post:
+      tags:
+        - Upload API
+      summary: Upload a file
+      description: Uploads a file. Consumes multipart/form-data. Requires and forwards the MIME type provided in the request for the uploaded file part.
+      operationId: UploadFile
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+      responses:
+        '200':
+          description: File uploaded successfully
+        '400':
+          description: Bad request
+        '415':
+          description: Unsupported Media Type
+        '500':
+          description: Internal server error
   /description:
     get:
       tags:
