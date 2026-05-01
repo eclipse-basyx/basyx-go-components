@@ -1790,10 +1790,18 @@ func (c *SubmodelRepositoryAPIAPIController) GetFileByPathSubmodelRepo(w http.Re
 
 // PutFileByPathSubmodelRepo - Uploads file content to an existing submodel element at a specified path within submodel elements hierarchy
 func (c *SubmodelRepositoryAPIAPIController) PutFileByPathSubmodelRepo(w http.ResponseWriter, r *http.Request) {
+	r.Body = http.MaxBytesReader(w, r.Body, uploadMaxSizeFromRequestContext(r))
+
 	if err := r.ParseMultipartForm(32 << 20); err != nil {
 		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
 		return
 	}
+	defer func() {
+		if r.MultipartForm != nil {
+			_ = r.MultipartForm.RemoveAll()
+		}
+	}()
+
 	submodelIdentifierParam := chi.URLParam(r, "submodelIdentifier")
 	if submodelIdentifierParam == "" {
 		c.errorHandler(w, r, &RequiredError{"submodelIdentifier"}, nil)
@@ -1816,6 +1824,14 @@ func (c *SubmodelRepositoryAPIAPIController) PutFileByPathSubmodelRepo(w http.Re
 
 		fileParam = param
 	}
+	defer func() {
+		if fileParam != nil {
+			tempFilePath := fileParam.Name()
+			_ = fileParam.Close()
+			// #nosec G703 -- path comes from server-generated temporary file.
+			_ = os.Remove(tempFilePath)
+		}
+	}()
 
 	result, err := c.service.PutFileByPathSubmodelRepo(r.Context(), submodelIdentifierParam, idShortPathParam, fileNameParam, fileParam)
 	// If an error occurred, encode the error with the status code
@@ -1825,6 +1841,20 @@ func (c *SubmodelRepositoryAPIAPIController) PutFileByPathSubmodelRepo(w http.Re
 	}
 	// If no error, encode the body and the result code
 	_ = EncodeJSONResponse(result.Body, &result.Code, w)
+}
+
+func uploadMaxSizeFromRequestContext(r *http.Request) int64 {
+	maxBytes := int64(128 << 20)
+	if r == nil {
+		return maxBytes
+	}
+
+	cfg, ok := common.ConfigFromContext(r.Context())
+	if ok && cfg != nil && cfg.General.UploadMaxSizeBytes > 0 {
+		return cfg.General.UploadMaxSizeBytes
+	}
+
+	return maxBytes
 }
 
 // DeleteFileByPathSubmodelRepo - Deletes file content of an existing submodel element at a specified path within submodel elements hierarchy

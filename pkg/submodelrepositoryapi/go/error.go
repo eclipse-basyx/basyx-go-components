@@ -58,6 +58,12 @@ type ErrorHandler func(w http.ResponseWriter, r *http.Request, err error, result
 func DefaultErrorHandler(w http.ResponseWriter, _ *http.Request, err error, result *model.ImplResponse) {
 	var parsingErr *ParsingError
 	if ok := errors.As(err, &parsingErr); ok {
+		var maxBytesErr *http.MaxBytesError
+		if errors.As(parsingErr.Err, &maxBytesErr) {
+			_ = EncodeJSONResponse("request body too large", func(i int) *int { return &i }(http.StatusRequestEntityTooLarge), w)
+			return
+		}
+
 		// Handle parsing errors
 		_ = EncodeJSONResponse(err.Error(), func(i int) *int { return &i }(http.StatusBadRequest), w)
 		return
