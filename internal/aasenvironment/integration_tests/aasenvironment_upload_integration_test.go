@@ -9,6 +9,7 @@ import (
 	"io"
 	"mime/multipart"
 	"net/http"
+	"net/textproto"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -22,6 +23,7 @@ import (
 )
 
 const actionUploadAASXMultipart = "UPLOAD_AASX_MULTIPART"
+const actionUploadMultipart = "UPLOAD_MULTIPART"
 const actionVerifyAASXAttachments = "VERIFY_AASX_ATTACHMENTS"
 const actionVerifyAASXThumbnail = "VERIFY_AASX_THUMBNAIL"
 const actionVerifyEndpointSnapshot = "VERIFY_ENDPOINT_SNAPSHOT"
@@ -29,6 +31,10 @@ const uploadIntegrationDSN = "host=127.0.0.1 port=6432 user=admin password=admin
 const expectationRequired = "required"
 const expectationAbsent = "absent"
 const expectationOptional = "optional"
+const uploadHeaderPartContentType = "X-Upload-Part-ContentType"
+const uploadHeaderPartFileName = "X-Upload-Part-FileName"
+const uploadHeaderPartOmitFileName = "X-Upload-Part-OmitFileName"
+const uploadHeaderRequestFileName = "X-Upload-FileName"
 
 type storedAttachment struct {
 	SubmodelIdentifier string
@@ -47,12 +53,20 @@ func TestUploadAASXIntegrationProductionPlan(t *testing.T) {
 	runUploadJSONSuite(t, "upload_productionplan_it_config.json")
 }
 
+func TestUploadJSONAndXMLIntegration(t *testing.T) {
+	resetDatabaseForUploadIT(t)
+	runUploadJSONSuite(t, "upload_json_xml_config.json")
+}
+
 func runUploadJSONSuite(t *testing.T, configPath string) {
 	testenv.RunJSONSuite(t, testenv.JSONSuiteOptions{
 		ConfigPath: configPath,
 		ActionHandlers: map[string]testenv.JSONStepAction{
 			actionUploadAASXMultipart: func(t *testing.T, _ *testenv.JSONSuiteRunner, step testenv.JSONSuiteStep, _ int) {
-				runAASXUploadAction(t, step)
+				runMultipartUploadAction(t, step)
+			},
+			actionUploadMultipart: func(t *testing.T, _ *testenv.JSONSuiteRunner, step testenv.JSONSuiteStep, _ int) {
+				runMultipartUploadAction(t, step)
 			},
 			actionVerifyAASXAttachments: func(t *testing.T, _ *testenv.JSONSuiteRunner, step testenv.JSONSuiteStep, _ int) {
 				verifyStoredAttachments(t, step)
@@ -97,7 +111,7 @@ func quoteIdentifierUploadIT(identifier string) string {
 	return `"` + strings.ReplaceAll(identifier, `"`, `""`) + `"`
 }
 
-func runAASXUploadAction(t *testing.T, step testenv.JSONSuiteStep) {
+func runMultipartUploadAction(t *testing.T, step testenv.JSONSuiteStep) {
 	file, err := os.Open(step.Data)
 	require.NoError(t, err)
 	defer func() { _ = file.Close() }()
@@ -105,11 +119,52 @@ func runAASXUploadAction(t *testing.T, step testenv.JSONSuiteStep) {
 	payload := &bytes.Buffer{}
 	writer := multipart.NewWriter(payload)
 
-	filePart, err := writer.CreateFormFile("file", filepath.Base(step.Data))
+	partFileName := filepath.Base(step.Data)
+	if step.Headers != nil {
+		if value, ok := step.Headers[uploadHeaderPartFileName]; ok && strings.TrimSpace(value) != "" {
+			partFileName = strings.TrimSpace(value)
+		}
+	}
+
+	partContentType := ""
+	if step.Headers != nil {
+		if value, ok := step.Headers[uploadHeaderPartContentType]; ok {
+			partContentType = strings.TrimSpace(value)
+		}
+	}
+
+	omitPartFileName := false
+	if step.Headers != nil {
+		if value, ok := step.Headers[uploadHeaderPartOmitFileName]; ok {
+			omitPartFileName = strings.EqualFold(strings.TrimSpace(value), "true")
+		}
+	}
+
+	var filePart io.Writer
+	if partContentType == "" && !omitPartFileName {
+		filePart, err = writer.CreateFormFile("file", partFileName)
+	} else {
+		partHeader := textproto.MIMEHeader{}
+		if omitPartFileName {
+			partHeader.Set("Content-Disposition", fmt.Sprintf("form-data; name=%q", "file"))
+		} else {
+			partHeader.Set("Content-Disposition", fmt.Sprintf("form-data; name=%q; filename=%q", "file", partFileName))
+		}
+		if partContentType != "" {
+			partHeader.Set("Content-Type", partContentType)
+		}
+		filePart, err = writer.CreatePart(partHeader)
+	}
 	require.NoError(t, err)
 
 	_, err = io.Copy(filePart, file)
 	require.NoError(t, err)
+
+	if step.Headers != nil {
+		if value, ok := step.Headers[uploadHeaderRequestFileName]; ok && strings.TrimSpace(value) != "" {
+			require.NoError(t, writer.WriteField("fileName", strings.TrimSpace(value)))
+		}
+	}
 
 	if err = writer.Close(); err != nil {
 		require.NoError(t, err)
@@ -125,6 +180,9 @@ func runAASXUploadAction(t *testing.T, step testenv.JSONSuiteStep) {
 	require.NoError(t, err)
 	req.Header.Set("Content-Type", writer.FormDataContentType())
 	for key, value := range step.Headers {
+		if strings.HasPrefix(key, "X-Upload-") {
+			continue
+		}
 		req.Header.Set(key, value)
 	}
 

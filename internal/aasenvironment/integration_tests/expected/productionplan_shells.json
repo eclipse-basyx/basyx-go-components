@@ -1,1 +1,64 @@
-{"paging_metadata":{},"result":[{"assetInformation":{"assetKind":"Instance","globalAssetId":"https://example.com/ids/2621_1514_5900_6188"},"description":[{"language":"en","text":"AAS containing production plan submodels from the SFKL"}],"displayName":[{"language":"en","text":"Production Plan"}],"id":"https://example.com/ids/aas/4942_3506_1656_4214","idShort":"ProductionPlan","modelType":"AssetAdministrationShell","submodels":[{"keys":[{"type":"Submodel","value":"https://template.smartfactory.de/sm/ProductionPlan"}],"type":"ModelReference"},{"keys":[{"type":"Submodel","value":"https://smartfactory.de/submodels/2c71a0b1-5db9-4ad7-95e3-e96ac052c062"}],"type":"ModelReference"},{"keys":[{"type":"Submodel","value":"https://smartfactory.de/submodels/68aa4ba1-72f1-4c24-88f6-4c99ad4d8a5a"}],"type":"ModelReference"},{"keys":[{"type":"Submodel","value":"https://smartfactory.de/submodels/d03b821b-161f-4e20-83f9-2ad8e8fc8792"}],"type":"ModelReference"}]}]}
+{
+  "paging_metadata": {},
+  "result": [
+    {
+      "assetInformation": {
+        "assetKind": "Instance",
+        "globalAssetId": "https://example.com/ids/2621_1514_5900_6188"
+      },
+      "description": [
+        {
+          "language": "en",
+          "text": "AAS containing production plan submodels from the SFKL"
+        }
+      ],
+      "displayName": [
+        {
+          "language": "en",
+          "text": "Production Plan"
+        }
+      ],
+      "id": "https://example.com/ids/aas/4942_3506_1656_4214",
+      "idShort": "ProductionPlan",
+      "modelType": "AssetAdministrationShell",
+      "submodels": [
+        {
+          "keys": [
+            {
+              "type": "Submodel",
+              "value": "https://template.smartfactory.de/sm/ProductionPlan"
+            }
+          ],
+          "type": "ModelReference"
+        },
+        {
+          "keys": [
+            {
+              "type": "Submodel",
+              "value": "https://smartfactory.de/submodels/2c71a0b1-5db9-4ad7-95e3-e96ac052c062"
+            }
+          ],
+          "type": "ModelReference"
+        },
+        {
+          "keys": [
+            {
+              "type": "Submodel",
+              "value": "https://smartfactory.de/submodels/68aa4ba1-72f1-4c24-88f6-4c99ad4d8a5a"
+            }
+          ],
+          "type": "ModelReference"
+        },
+        {
+          "keys": [
+            {
+              "type": "Submodel",
+              "value": "https://smartfactory.de/submodels/d03b821b-161f-4e20-83f9-2ad8e8fc8792"
+            }
+          ],
+          "type": "ModelReference"
+        }
+      ]
+    }
+  ]
+}

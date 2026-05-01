@@ -3,6 +3,8 @@ package aasenvironment
 import (
 	"context"
 	"errors"
+	"fmt"
+	"mime/multipart"
 	"net/http"
 	"os"
 	"strings"
@@ -13,9 +15,15 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
+const defaultUploadMaxSizeBytes int64 = 128 << 20
+
 // RegisterUploadAPI registers the upload endpoint to the router
-func RegisterUploadAPI(r chi.Router, service UploadService) {
-	api := &uploadAPI{service: service}
+func RegisterUploadAPI(r chi.Router, service UploadService, maxUploadSizeBytes int64) {
+	if maxUploadSizeBytes <= 0 {
+		maxUploadSizeBytes = defaultUploadMaxSizeBytes
+	}
+
+	api := &uploadAPI{service: service, maxUploadSizeBytes: maxUploadSizeBytes}
 	r.Post("/upload", api.HandleUpload)
 }
 
@@ -25,33 +33,49 @@ type UploadService interface {
 }
 
 type uploadAPI struct {
-	service UploadService
+	service            UploadService
+	maxUploadSizeBytes int64
 }
 
 func (a *uploadAPI) HandleUpload(w http.ResponseWriter, r *http.Request) {
+	r.Body = http.MaxBytesReader(w, r.Body, a.maxUploadSizeBytes)
+
 	if err := r.ParseMultipartForm(32 << 20); err != nil {
+		var maxBytesError *http.MaxBytesError
+		if errors.As(err, &maxBytesError) {
+			writeUploadError(
+				w,
+				http.StatusRequestEntityTooLarge,
+				fmt.Errorf("request body exceeds upload limit of %d bytes", a.maxUploadSizeBytes),
+				"AASENV-UPLOAD-MAXSIZEEXCEEDED",
+			)
+			return
+		}
+
 		writeUploadError(w, http.StatusBadRequest, err, "AASENV-UPLOAD-PARSEMULTIPART")
 		return
 	}
+	defer func() {
+		if r.MultipartForm != nil {
+			_ = r.MultipartForm.RemoveAll()
+		}
+	}()
 
-	_, fileHeader, err := r.FormFile("file")
+	fileHeader, err := readMultipartFileHeader(r, "file")
 	if err != nil {
 		writeUploadError(w, http.StatusBadRequest, err, "AASENV-UPLOAD-READFILEHEADER")
 		return
 	}
 
 	contentType := strings.TrimSpace(fileHeader.Header.Get("Content-Type"))
-	if contentType == "" {
-		writeUploadError(w, http.StatusUnsupportedMediaType, errors.New("missing content type for multipart file part"), "AASENV-UPLOAD-MISSINGCONTENTTYPE")
-		return
-	}
 
 	fileName := strings.TrimSpace(r.FormValue("fileName"))
 	if fileName == "" {
 		fileName = fileHeader.Filename
 	}
+	fileName = sanitizeUploadFileName(fileName)
 
-	file, err := commonmodel.ReadFormFileToTempFile(r, "file")
+	file, err := commonmodel.ReadFileHeaderToTempFile(fileHeader)
 	if err != nil {
 		writeUploadError(w, http.StatusBadRequest, err, "AASENV-UPLOAD-READFILE")
 		return
@@ -76,4 +100,36 @@ func writeUploadError(w http.ResponseWriter, status int, err error, info string)
 	if encErr := commonmodel.EncodeJSONResponse(resp.Body, &resp.Code, w); encErr != nil {
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 	}
+}
+
+func readMultipartFileHeader(r *http.Request, key string) (*multipart.FileHeader, error) {
+	if r.MultipartForm == nil || r.MultipartForm.File == nil {
+		return nil, errors.New("multipart form is missing")
+	}
+
+	fileHeaders, ok := r.MultipartForm.File[key]
+	if !ok || len(fileHeaders) == 0 || fileHeaders[0] == nil {
+		return nil, fmt.Errorf("multipart file field %q is required", key)
+	}
+
+	return fileHeaders[0], nil
+}
+
+func sanitizeUploadFileName(fileName string) string {
+	baseName := strings.TrimSpace(fileName)
+	if baseName == "" {
+		return ""
+	}
+
+	baseName = strings.ReplaceAll(baseName, "\\", "/")
+	if lastSlash := strings.LastIndex(baseName, "/"); lastSlash >= 0 {
+		baseName = baseName[lastSlash+1:]
+	}
+
+	baseName = strings.TrimSpace(baseName)
+	if baseName == "" || baseName == "." || baseName == "/" {
+		return ""
+	}
+
+	return baseName
 }
