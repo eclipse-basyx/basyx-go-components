@@ -79,14 +79,17 @@ POSTGRES_MAXIDLECONNECTIONS=500
 POSTGRES_CONNMAXLIFETIMEMINUTES=5
 ```
 
-For `aasenvironmentservice`, uploads are additionally bounded by:
+For `aasenvironmentservice`, `aasrepositoryservice`, and `submodelrepositoryservice`, uploads are additionally bounded by:
 
 ```yaml
 general:
     uploadMaxSizeBytes: 134217728
 ```
 
-This value limits the maximum accepted request body size for `POST /upload`.
+This value limits the maximum accepted request body size for upload endpoints:
+- `POST /upload`
+- `PUT /shells/{aasIdentifier}/thumbnail`
+- `PUT /submodels/{submodelIdentifier}/submodel-elements/{idShortPath}/attachment`
 
 ## 5. Code Style & Conventions
 
