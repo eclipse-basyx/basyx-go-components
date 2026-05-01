@@ -1,0 +1,58 @@
+[
+  {
+    "context": "001 - Health Check",
+    "method": "GET",
+    "endpoint": "http://127.0.0.1:6004/health",
+    "expectedStatus": 200
+  },
+  {
+    "context": "002 - Upload AASX file",
+    "action": "UPLOAD_AASX_MULTIPART",
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:6004/upload",
+    "data": "testdata/IESEDriveMotorDM3000.aasx",
+    "expectedStatus": 200
+  },
+  {
+    "context": "003 - List AAS after upload",
+    "action": "VERIFY_ENDPOINT_SNAPSHOT",
+    "method": "GET",
+    "endpoint": "http://127.0.0.1:6004/shells",
+    "data": "expected/iese_shells.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "004 - Verify uploaded file attachments",
+    "action": "VERIFY_AASX_ATTACHMENTS",
+    "endpoint": "http://127.0.0.1:6004",
+    "headers": {
+      "X-Attachments-Expectation": "required"
+    },
+    "expectedStatus": 200
+  },
+  {
+    "context": "005 - Verify AAS thumbnails",
+    "action": "VERIFY_AASX_THUMBNAIL",
+    "endpoint": "http://127.0.0.1:6004",
+    "headers": {
+      "X-Thumbnail-Expectation": "required"
+    },
+    "expectedStatus": 200
+  },
+  {
+    "context": "006 - List Submodels after upload",
+    "action": "VERIFY_ENDPOINT_SNAPSHOT",
+    "method": "GET",
+    "endpoint": "http://127.0.0.1:6004/submodels",
+    "data": "expected/iese_submodels.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "007 - List ConceptDescriptions after upload",
+    "action": "VERIFY_ENDPOINT_SNAPSHOT",
+    "method": "GET",
+    "endpoint": "http://127.0.0.1:6004/concept-descriptions",
+    "data": "expected/iese_conceptdescriptions.json",
+    "expectedStatus": 200
+  }
+]

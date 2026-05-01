@@ -7,6 +7,7 @@ require github.com/go-chi/chi/v5 v5.2.5
 require (
 	github.com/DATA-DOG/go-sqlmock v1.5.2
 	github.com/aas-core-works/aas-core3.1-golang v1.0.0-rc1
+	github.com/aas-core-works/aas-package3-golang v1.0.0-rc1
 	github.com/coreos/go-oidc v2.5.0+incompatible
 	github.com/doug-martin/goqu/v9 v9.19.0
 	github.com/go-chi/cors v1.2.2

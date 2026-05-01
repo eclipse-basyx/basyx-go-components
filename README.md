@@ -79,6 +79,18 @@ POSTGRES_MAXIDLECONNECTIONS=500
 POSTGRES_CONNMAXLIFETIMEMINUTES=5
 ```
 
+For `aasenvironmentservice`, `aasrepositoryservice`, and `submodelrepositoryservice`, uploads are additionally bounded by:
+
+```yaml
+general:
+    uploadMaxSizeBytes: 134217728
+```
+
+This value limits the maximum accepted request body size for upload endpoints:
+- `POST /upload`
+- `PUT /shells/{aasIdentifier}/thumbnail`
+- `PUT /submodels/{submodelIdentifier}/submodel-elements/{idShortPath}/attachment`
+
 ## 5. Code Style & Conventions
 
 - Use Go modules (`go.mod`) for dependency management
@@ -132,6 +144,8 @@ See [structure.md](docu/developer/structure.md) and related files for details on
 - OpenAPI specs are in `cmd/<service>/openapi.yaml` (generated copies in `pkg/*/api/openapi.yaml`)
 - Use generated API clients in `pkg/`
 - Example endpoint: `/submodels/{id}/submodel-elements/{idShort}/attachment`
+- AAS environment import endpoint: `/upload` (multipart/form-data with file part `file`)
+- Supported upload media types: `application/aasx+xml`, `application/aasx+json`, `application/asset-administration-shell+xml`, `application/asset-administration-shell+json`, `application/json`, `application/xml`, `text/xml`
 - See [structure_cmd.md](docu/developer/structure_cmd.md) for details
 
 ## 9. Contribution Guidelines

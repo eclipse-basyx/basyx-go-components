@@ -3,6 +3,8 @@ github.com/DATA-DOG/go-sqlmock v1.5.2 h1:OcvFkGmslmlZibjAjaHm3L//6LiuBgolP7Oputl
 github.com/DATA-DOG/go-sqlmock v1.5.2/go.mod h1:88MAG/4G7SMwSE3CeA0ZKzrT5CiOU3OJ+JlNzwDqpNU=
 github.com/aas-core-works/aas-core3.1-golang v1.0.0-rc1 h1:53liY22USVfiZuLQoSQAlAKYkrMiV0g+aIw9hzH3EmA=
 github.com/aas-core-works/aas-core3.1-golang v1.0.0-rc1/go.mod h1:/VkiKzedgGfMirWOqStE6QhRdzJgJBqW+4belc1/qZ8=
+github.com/aas-core-works/aas-package3-golang v1.0.0-rc1 h1:GAlg0rFtHHmyoV6PF7RSUClLCz6rs0POxK5KySC1h9A=
+github.com/aas-core-works/aas-package3-golang v1.0.0-rc1/go.mod h1:uDObjS4hNhBujH9L59QIAacokk7uAl9X0BbmNCkPtDs=
 github.com/coreos/go-oidc v2.5.0+incompatible h1:6W0vGJR3Tu0r0PwfmjOrRZSlfxeEln8dsejt3ZWIvwo=
 github.com/coreos/go-oidc v2.5.0+incompatible/go.mod h1:CgnwVTmzoESiwO9qyAFEMiHoZ1nMCKZlZ9V6mm3/LKc=
 github.com/davecgh/go-spew v1.1.0/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=

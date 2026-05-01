@@ -1,0 +1,88 @@
+[
+  {
+    "context": "001 - Health Check",
+    "method": "GET",
+    "endpoint": "http://127.0.0.1:6004/health",
+    "expectedStatus": 200
+  },
+  {
+    "context": "002 - Upload JSON environment by content type",
+    "action": "UPLOAD_MULTIPART",
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:6004/upload",
+    "data": "testdata/environment_minimal.json",
+    "headers": {
+      "X-Upload-Part-ContentType": "application/json"
+    },
+    "expectedStatus": 200
+  },
+  {
+    "context": "003 - Upload XML environment by content type",
+    "action": "UPLOAD_MULTIPART",
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:6004/upload",
+    "data": "testdata/environment_minimal.xml",
+    "headers": {
+      "X-Upload-Part-ContentType": "application/xml"
+    },
+    "expectedStatus": 200
+  },
+  {
+    "context": "004 - MIME wins over misleading extension",
+    "action": "UPLOAD_MULTIPART",
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:6004/upload",
+    "data": "testdata/environment_minimal.json",
+    "headers": {
+      "X-Upload-Part-ContentType": "application/json",
+      "X-Upload-Part-FileName": "misleading.xml",
+      "X-Upload-FileName": "misleading.xml"
+    },
+    "expectedStatus": 200
+  },
+  {
+    "context": "005 - Reject unsupported media type",
+    "action": "UPLOAD_MULTIPART",
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:6004/upload",
+    "data": "testdata/environment_minimal.json",
+    "headers": {
+      "X-Upload-Part-ContentType": "text/plain"
+    },
+    "expectedStatus": 415
+  },
+  {
+    "context": "006 - Reject malformed JSON body",
+    "action": "UPLOAD_MULTIPART",
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:6004/upload",
+    "data": "testdata/environment_malformed.json",
+    "headers": {
+      "X-Upload-Part-ContentType": "application/json"
+    },
+    "expectedStatus": 400
+  },
+  {
+    "context": "007 - Reject malformed XML body",
+    "action": "UPLOAD_MULTIPART",
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:6004/upload",
+    "data": "testdata/environment_malformed.xml",
+    "headers": {
+      "X-Upload-Part-ContentType": "application/xml"
+    },
+    "expectedStatus": 400
+  },
+  {
+    "context": "008 - Infer JSON without MIME and filename",
+    "action": "UPLOAD_MULTIPART",
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:6004/upload",
+    "data": "testdata/environment_minimal.json",
+    "headers": {
+      "X-Upload-Part-ContentType": "application/octet-stream",
+      "X-Upload-Part-FileName": "payload"
+    },
+    "expectedStatus": 200
+  }
+]

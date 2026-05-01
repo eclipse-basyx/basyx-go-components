@@ -1068,6 +1068,112 @@ components:
           schema:
             $ref: '#/components/schemas/Result'
 paths:
+  /upload:
+    post:
+      tags:
+        - Upload API
+      summary: Upload a file
+      description: |-
+        Uploads an AAS Environment payload from multipart/form-data.
+
+        Supported media types for the multipart `file` part:
+        - `application/aasx+xml`
+        - `application/aasx+json`
+        - `application/asset-administration-shell+xml`
+        - `application/asset-administration-shell+json`
+        - `application/json`
+        - `application/xml`
+        - `text/xml`
+
+        The optional `fileName` form field can be provided when the file part has no specific
+        content type. If format inference from request metadata and payload is not possible,
+        the request is rejected with `415 Unsupported Media Type`.
+
+        Duplicate content behavior is replace-on-upload: if an uploaded AAS, Submodel,
+        or ConceptDescription identifier already exists, the existing entry is overwritten.
+
+        Upload processing is intentionally non-transactional. Partial success can occur if
+        some resources are persisted before a later processing step fails.
+      operationId: UploadFile
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+                fileName:
+                  type: string
+                  description: Optional logical file name used for format fallback and response metadata.
+                  example: environment.json
+              required:
+                - file
+            encoding:
+              file:
+                contentType: application/aasx+xml, application/aasx+json, application/asset-administration-shell+xml, application/asset-administration-shell+json, application/json, application/xml, text/xml
+      responses:
+        '200':
+          description: File uploaded successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+              example:
+                message: JSON file parsed successfully
+                fileName: environment.json
+                contentType: application/json
+                format: json
+                assetAdministrationShellCount: 1
+                submodelCount: 2
+                conceptDescriptionCount: 3
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Result'
+              example:
+                messages:
+                  - code: AASENV-HANDLEUPLOAD-PARSEJSON
+                    messageType: Error
+                    text: invalid character '}' looking for beginning of object key string
+        '413':
+          description: Request entity too large
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Result'
+              example:
+                messages:
+                  - code: AASENV-UPLOAD-MAXSIZEEXCEEDED
+                    messageType: Error
+                    text: request body exceeds upload limit of 134217728 bytes
+        '415':
+          description: Unsupported Media Type
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Result'
+              example:
+                messages:
+                  - code: AASENV-HANDLEUPLOAD-UNSUPPORTEDFORMAT
+                    messageType: Error
+                    text: unsupported content type "text/plain", supported: application/aasx+xml, application/aasx+json, application/asset-administration-shell+xml, application/asset-administration-shell+json, application/json, application/xml, text/xml
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Result'
+              example:
+                messages:
+                  - code: AASENV-HANDLEUPLOAD-PROCESSAASX
+                    messageType: Error
+                    text: failed to persist uploaded environment
   /description:
     get:
       tags:

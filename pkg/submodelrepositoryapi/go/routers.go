@@ -196,10 +196,13 @@ func EncodeJSONResponse(i interface{}, status *int, w http.ResponseWriter) error
 //   - *os.File: A pointer to the temporary file
 //   - error: An error if reading or writing fails
 func ReadFormFileToTempFile(r *http.Request, key string) (*os.File, error) {
-	_, fileHeader, err := r.FormFile(key)
+	formFile, fileHeader, err := r.FormFile(key)
 	if err != nil {
 		return nil, err
 	}
+	defer func() {
+		_ = formFile.Close()
+	}()
 
 	return readFileHeaderToTempFile(fileHeader)
 }

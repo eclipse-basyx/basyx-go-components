@@ -198,11 +198,19 @@ func EncodeJSONResponse(i interface{}, status *int, w http.ResponseWriter) error
 
 // ReadFormFileToTempFile reads file data from a request form and writes it to a temporary file
 func ReadFormFileToTempFile(r *http.Request, key string) (*os.File, error) {
-	_, fileHeader, err := r.FormFile(key)
+	formFile, fileHeader, err := r.FormFile(key)
 	if err != nil {
 		return nil, err
 	}
+	defer func() {
+		_ = formFile.Close()
+	}()
 
+	return readFileHeaderToTempFile(fileHeader)
+}
+
+// ReadFileHeaderToTempFile reads multipart.FileHeader and writes it to a temporary file.
+func ReadFileHeaderToTempFile(fileHeader *multipart.FileHeader) (*os.File, error) {
 	return readFileHeaderToTempFile(fileHeader)
 }
 
@@ -237,9 +245,14 @@ func readFileHeaderToTempFile(fileHeader *multipart.FileHeader) (*os.File, error
 		_ = formFile.Close()
 	}()
 
+	safeFileName := filepath.Base(strings.TrimSpace(fileHeader.Filename))
+	if safeFileName == "" || safeFileName == "." || safeFileName == "/" {
+		safeFileName = "upload.bin"
+	}
+
 	// Use .* as suffix, because the asterisk is a placeholder for the random value,
 	// and the period allows consumers of this file to remove the suffix to obtain the original file name
-	file, err := os.CreateTemp("", fileHeader.Filename+".*")
+	file, err := os.CreateTemp("", safeFileName+".*")
 	if err != nil {
 		return nil, err
 	}
