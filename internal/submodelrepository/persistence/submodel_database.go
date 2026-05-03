@@ -46,6 +46,7 @@ import (
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
+	submodelpath "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/path"
 	submodelelements "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/submodelElements"
 	persistenceutils "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/utils"
 	"golang.org/x/sync/errgroup"
@@ -836,84 +837,22 @@ func (s *SubmodelDatabase) AddSubmodelElementWithPath(ctx context.Context, submo
 	return tx.Commit()
 }
 
-type putPathSegment struct {
-	value   string
-	isIndex bool
-}
-
-func parsePutIDShortPathSegments(idShortPath string) ([]putPathSegment, error) {
-	if idShortPath == "" {
-		return nil, common.NewErrBadRequest("SMREPO-PUTSME-BADREQUEST Invalid idShortPath")
-	}
-
-	segments := make([]putPathSegment, 0, 4)
-	current := strings.Builder{}
-
-	flushCurrent := func() {
-		if current.Len() == 0 {
-			return
+func parsePutIDShortPathSegments(idShortPath string) ([]submodelpath.Segment, error) {
+	segments, err := submodelpath.ParseIDShortPathSegments(idShortPath)
+	if err != nil {
+		if errors.Is(err, submodelpath.ErrEmptyPath) {
+			return nil, common.NewErrBadRequest("SMREPO-PUTSME-BADREQUEST Invalid idShortPath")
 		}
-		segments = append(segments, putPathSegment{value: current.String()})
-		current.Reset()
-	}
-
-	for i := 0; i < len(idShortPath); i++ {
-		switch idShortPath[i] {
-		case '.':
-			flushCurrent()
-		case '[':
-			flushCurrent()
-			endIndex := strings.IndexByte(idShortPath[i+1:], ']')
-			if endIndex < 0 {
-				return nil, common.NewErrBadRequest("SMREPO-PUTSME-BADREQUEST Invalid idShortPath syntax")
-			}
-
-			start := i + 1
-			end := start + endIndex
-			indexValue := idShortPath[start:end]
-			if indexValue == "" {
-				return nil, common.NewErrBadRequest("SMREPO-PUTSME-BADREQUEST Empty list index in idShortPath")
-			}
-
-			segments = append(segments, putPathSegment{value: indexValue, isIndex: true})
-			i = end
-		default:
-			if err := current.WriteByte(idShortPath[i]); err != nil {
-				return nil, common.NewErrBadRequest("SMREPO-PUTSME-BADREQUEST Invalid idShortPath syntax")
-			}
+		if errors.Is(err, submodelpath.ErrEmptyListIndex) {
+			return nil, common.NewErrBadRequest("SMREPO-PUTSME-BADREQUEST Empty list index in idShortPath")
 		}
-	}
-
-	flushCurrent()
-
-	if len(segments) == 0 {
 		return nil, common.NewErrBadRequest("SMREPO-PUTSME-BADREQUEST Invalid idShortPath syntax")
 	}
-
 	return segments, nil
 }
 
-func buildPutIDShortPathFromSegments(segments []putPathSegment) string {
-	if len(segments) == 0 {
-		return ""
-	}
-
-	var builder strings.Builder
-	for i, segment := range segments {
-		if segment.isIndex {
-			builder.WriteString("[")
-			builder.WriteString(segment.value)
-			builder.WriteString("]")
-			continue
-		}
-
-		if i > 0 {
-			builder.WriteString(".")
-		}
-		builder.WriteString(segment.value)
-	}
-
-	return builder.String()
+func buildPutIDShortPathFromSegments(segments []submodelpath.Segment) string {
+	return submodelpath.BuildIDShortPathFromSegments(segments)
 }
 
 func resolvePutCreateTargetPathParts(idShortPath string) (string, string, error) {
@@ -923,11 +862,11 @@ func resolvePutCreateTargetPathParts(idShortPath string) (string, string, error)
 	}
 
 	lastSegment := segments[len(segments)-1]
-	if lastSegment.isIndex {
+	if lastSegment.IsIndex {
 		return "", "", common.NewErrBadRequest("SMREPO-PUTSME-BADREQUEST Creating by list index path is not supported")
 	}
 
-	targetIDShort := strings.TrimSpace(lastSegment.value)
+	targetIDShort := strings.TrimSpace(lastSegment.Value)
 	if targetIDShort == "" {
 		return "", "", common.NewErrBadRequest("SMREPO-PUTSME-BADREQUEST Empty idShort segment in path")
 	}

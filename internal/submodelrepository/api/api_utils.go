@@ -26,17 +26,13 @@
 package api
 
 import (
-	"strings"
+	"errors"
 
 	"github.com/aas-core-works/aas-core3.1-golang/jsonization"
 	"github.com/aas-core-works/aas-core3.1-golang/types"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
+	submodelpath "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/path"
 )
-
-type modelReferencePathSegment struct {
-	value   string
-	isIndex bool
-}
 
 func buildModelReference(submodelID string, keyTypes []string, keyValues []string) (types.IReference, error) {
 	if submodelID == "" || len(keyTypes) == 0 || len(keyValues) == 0 || len(keyTypes) != len(keyValues) {
@@ -68,57 +64,19 @@ func buildModelReference(submodelID string, keyTypes []string, keyValues []strin
 	return jsonization.ReferenceFromJsonable(jsonableReference)
 }
 
-func parseModelReferencePathSegments(idShortPath string) ([]modelReferencePathSegment, error) {
-	if idShortPath == "" {
+func parseModelReferencePathSegments(idShortPath string) ([]submodelpath.Segment, error) {
+	segments, err := submodelpath.ParseIDShortPathSegments(idShortPath)
+	if err == nil {
+		return segments, nil
+	}
+
+	if errors.Is(err, submodelpath.ErrEmptyPath) {
 		return nil, common.NewErrBadRequest("SMREPO-BUILDREF-INVALIDPARAMS Invalid reference parameters")
 	}
-
-	segments := make([]modelReferencePathSegment, 0, 4)
-	current := strings.Builder{}
-
-	flushCurrent := func() {
-		if current.Len() == 0 {
-			return
-		}
-		segments = append(segments, modelReferencePathSegment{value: current.String()})
-		current.Reset()
+	if errors.Is(err, submodelpath.ErrEmptyListIndex) {
+		return nil, common.NewErrBadRequest("SMREPO-BUILDREF-INVALIDPATH Empty list index in idShort path")
 	}
-
-	for i := 0; i < len(idShortPath); i++ {
-		switch idShortPath[i] {
-		case '.':
-			flushCurrent()
-		case '[':
-			flushCurrent()
-			endIndex := strings.IndexByte(idShortPath[i+1:], ']')
-			if endIndex < 0 {
-				return nil, common.NewErrBadRequest("SMREPO-BUILDREF-INVALIDPATH Invalid idShort path syntax")
-			}
-
-			start := i + 1
-			end := start + endIndex
-			indexValue := idShortPath[start:end]
-			if indexValue == "" {
-				return nil, common.NewErrBadRequest("SMREPO-BUILDREF-INVALIDPATH Empty list index in idShort path")
-			}
-
-			segments = append(segments, modelReferencePathSegment{value: indexValue, isIndex: true})
-			i = end
-		default:
-			err := current.WriteByte(idShortPath[i])
-			if err != nil {
-				return nil, common.NewErrBadRequest("SMREPO-BUILDREF-INVALIDPATH Invalid idShort path syntax")
-			}
-		}
-	}
-
-	flushCurrent()
-
-	if len(segments) == 0 {
-		return nil, common.NewErrBadRequest("SMREPO-BUILDREF-INVALIDPATH Invalid idShort path syntax")
-	}
-
-	return segments, nil
+	return nil, common.NewErrBadRequest("SMREPO-BUILDREF-INVALIDPATH Invalid idShort path syntax")
 }
 
 func resolveModelReferencePathKeys(
@@ -142,18 +100,18 @@ func resolveModelReferencePathKeys(
 	for i, segment := range segments {
 		isLast := i == len(segments)-1
 
-		if segment.isIndex {
+		if segment.IsIndex {
 			keyTypes = append(keyTypes, "SubmodelElementList")
-			keyValues = append(keyValues, segment.value)
+			keyValues = append(keyValues, segment.Value)
 
-			currentPath += "[" + segment.value + "]"
+			currentPath += "[" + segment.Value + "]"
 			continue
 		}
 
 		if currentPath == "" {
-			currentPath = segment.value
+			currentPath = segment.Value
 		} else {
-			currentPath += "." + segment.value
+			currentPath += "." + segment.Value
 		}
 
 		keyType := finalModelType
@@ -169,7 +127,7 @@ func resolveModelReferencePathKeys(
 		}
 
 		keyTypes = append(keyTypes, keyType)
-		keyValues = append(keyValues, segment.value)
+		keyValues = append(keyValues, segment.Value)
 	}
 
 	return keyTypes, keyValues, nil

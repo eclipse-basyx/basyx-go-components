@@ -19,6 +19,7 @@ import (
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
+	submodelpath "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/path"
 	persistenceutils "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/utils"
 )
 
@@ -581,7 +582,7 @@ func buildSubmodelElementReference(submodelID string, modelType types.ModelType,
 		isLast := i == len(pathSegments)-1
 
 		switch {
-		case segment.isIndex:
+		case segment.IsIndex:
 			key.SetType(types.KeyTypesSubmodelElementList)
 		case isLast:
 			key.SetType(modelTypeKeyType)
@@ -589,7 +590,7 @@ func buildSubmodelElementReference(submodelID string, modelType types.ModelType,
 			key.SetType(types.KeyTypesSubmodelElementCollection)
 		}
 
-		key.SetValue(segment.value)
+		key.SetValue(segment.Value)
 		keys = append(keys, &key)
 	}
 
@@ -600,63 +601,14 @@ func buildSubmodelElementReference(submodelID string, modelType types.ModelType,
 	return &reference, nil
 }
 
-type referencePathSegment struct {
-	value   string
-	isIndex bool
-}
-
-func parseReferencePathSegments(idShortPath string) ([]referencePathSegment, error) {
-	segments := make([]referencePathSegment, 0, 4)
-	current := strings.Builder{}
-
-	flushCurrent := func() {
-		if current.Len() == 0 {
-			return
+func parseReferencePathSegments(idShortPath string) ([]submodelpath.Segment, error) {
+	segments, err := submodelpath.ParseIDShortPathSegments(idShortPath)
+	if err != nil {
+		if errors.Is(err, submodelpath.ErrEmptyListIndex) {
+			return nil, common.NewErrBadRequest("SMREPO-BUILDSMEREF-INVALIDPATH Empty list index in idShort path")
 		}
-		segments = append(segments, referencePathSegment{value: current.String()})
-		current.Reset()
-	}
-
-	for i := 0; i < len(idShortPath); i++ {
-		switch idShortPath[i] {
-		case '.':
-			flushCurrent()
-		case '[':
-			flushCurrent()
-			endIndex := strings.IndexByte(idShortPath[i+1:], ']')
-			if endIndex < 0 {
-				return nil, common.NewErrBadRequest("SMREPO-BUILDSMEREF-INVALIDPATH Invalid idShort path syntax")
-			}
-
-			start := i + 1
-			end := start + endIndex
-			indexValue := idShortPath[start:end]
-			if indexValue == "" {
-				return nil, common.NewErrBadRequest("SMREPO-BUILDSMEREF-INVALIDPATH Empty list index in idShort path")
-			}
-
-			segments = append(segments, referencePathSegment{value: indexValue, isIndex: true})
-			i = end
-		default:
-			err := current.WriteByte(idShortPath[i])
-			if err != nil {
-				return nil, common.NewErrBadRequest("SMREPO-BUILDSMEREF-INVALIDPATH Invalid idShort path syntax")
-			}
-		}
-	}
-
-	flushCurrent()
-
-	if len(segments) == 0 {
 		return nil, common.NewErrBadRequest("SMREPO-BUILDSMEREF-INVALIDPATH Invalid idShort path syntax")
 	}
-
-	for _, segment := range segments {
-		if !segment.isIndex && segment.value == "" {
-			return nil, common.NewErrBadRequest("SMREPO-BUILDSMEREF-INVALIDPATH Invalid idShort segment in path")
-		}
-	}
-
 	return segments, nil
 }
 
