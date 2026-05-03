@@ -35,6 +35,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/aas-core-works/aas-core3.1-golang/jsonization"
@@ -643,6 +644,32 @@ func getSMEModelTypeByPathInTx(tx *sql.Tx, submodelID string, idShortOrPath stri
 	return &modelType, nil
 }
 
+func submodelElementPathExistsInTx(tx *sql.Tx, submodelDatabaseID int, idShortPath string) (bool, error) {
+	dialect := goqu.Dialect("postgres")
+	query, args, err := dialect.From("submodel_element").
+		Select(goqu.C("id")).
+		Where(
+			goqu.C("submodel_id").Eq(submodelDatabaseID),
+			goqu.C("idshort_path").Eq(idShortPath),
+		).
+		Limit(1).
+		ToSQL()
+	if err != nil {
+		return false, err
+	}
+
+	var elementID int64
+	err = tx.QueryRow(query, args...).Scan(&elementID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return false, nil
+		}
+		return false, err
+	}
+
+	return true, nil
+}
+
 func (s *SubmodelDatabase) updateSubmodelElementInTransaction(tx *sql.Tx, submodelID string, idShortOrPath string, submodelElement types.ISubmodelElement, isPut bool) error {
 	modelType, err := getSMEModelTypeByPathInTx(tx, submodelID, idShortOrPath)
 	if err != nil {
@@ -724,23 +751,7 @@ func (s *SubmodelDatabase) AddSubmodelElement(ctx context.Context, submodelID st
 	return tx.Commit()
 }
 
-// AddSubmodelElementWithPath adds a submodel element under an existing container path
-// while preserving ABAC visibility checks from ctx.
-func (s *SubmodelDatabase) AddSubmodelElementWithPath(ctx context.Context, submodelID string, parentPath string, submodelElement types.ISubmodelElement) error {
-	tx, cleanup, err := common.StartTransaction(s.db)
-	if err != nil {
-		return err
-	}
-	defer cleanup(&err)
-
-	submodelDatabaseID, err := persistenceutils.GetSubmodelDatabaseID(tx, submodelID)
-	if err != nil {
-		if err == sql.ErrNoRows {
-			return common.NewErrNotFound("SMREPO-ADDSMEBYPATH-SMNOTFOUND Submodel with ID '" + submodelID + "' not found")
-		}
-		return err
-	}
-
+func (s *SubmodelDatabase) addSubmodelElementWithPathInTransaction(ctx context.Context, tx *sql.Tx, submodelID string, submodelDatabaseID int, parentPath string, submodelElement types.ISubmodelElement) error {
 	baseCrudHandler, err := submodelelements.NewPostgreSQLSMECrudHandler(s.db)
 	if err != nil {
 		return err
@@ -793,12 +804,248 @@ func (s *SubmodelDatabase) AddSubmodelElementWithPath(ctx context.Context, submo
 			StartPosition: nextPosition,
 		},
 	)
+	if err != nil {
+		return err
+	}
 
+	return nil
+}
+
+// AddSubmodelElementWithPath adds a submodel element under an existing container path
+// while preserving ABAC visibility checks from ctx.
+func (s *SubmodelDatabase) AddSubmodelElementWithPath(ctx context.Context, submodelID string, parentPath string, submodelElement types.ISubmodelElement) error {
+	tx, cleanup, err := common.StartTransaction(s.db)
+	if err != nil {
+		return err
+	}
+	defer cleanup(&err)
+
+	submodelDatabaseID, err := persistenceutils.GetSubmodelDatabaseID(tx, submodelID)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return common.NewErrNotFound("SMREPO-ADDSMEBYPATH-SMNOTFOUND Submodel with ID '" + submodelID + "' not found")
+		}
+		return err
+	}
+
+	err = s.addSubmodelElementWithPathInTransaction(ctx, tx, submodelID, submodelDatabaseID, parentPath, submodelElement)
 	if err != nil {
 		return err
 	}
 
 	return tx.Commit()
+}
+
+type putPathSegment struct {
+	value   string
+	isIndex bool
+}
+
+func parsePutIDShortPathSegments(idShortPath string) ([]putPathSegment, error) {
+	if idShortPath == "" {
+		return nil, common.NewErrBadRequest("SMREPO-PUTSME-BADREQUEST Invalid idShortPath")
+	}
+
+	segments := make([]putPathSegment, 0, 4)
+	current := strings.Builder{}
+
+	flushCurrent := func() {
+		if current.Len() == 0 {
+			return
+		}
+		segments = append(segments, putPathSegment{value: current.String()})
+		current.Reset()
+	}
+
+	for i := 0; i < len(idShortPath); i++ {
+		switch idShortPath[i] {
+		case '.':
+			flushCurrent()
+		case '[':
+			flushCurrent()
+			endIndex := strings.IndexByte(idShortPath[i+1:], ']')
+			if endIndex < 0 {
+				return nil, common.NewErrBadRequest("SMREPO-PUTSME-BADREQUEST Invalid idShortPath syntax")
+			}
+
+			start := i + 1
+			end := start + endIndex
+			indexValue := idShortPath[start:end]
+			if indexValue == "" {
+				return nil, common.NewErrBadRequest("SMREPO-PUTSME-BADREQUEST Empty list index in idShortPath")
+			}
+
+			segments = append(segments, putPathSegment{value: indexValue, isIndex: true})
+			i = end
+		default:
+			if err := current.WriteByte(idShortPath[i]); err != nil {
+				return nil, common.NewErrBadRequest("SMREPO-PUTSME-BADREQUEST Invalid idShortPath syntax")
+			}
+		}
+	}
+
+	flushCurrent()
+
+	if len(segments) == 0 {
+		return nil, common.NewErrBadRequest("SMREPO-PUTSME-BADREQUEST Invalid idShortPath syntax")
+	}
+
+	return segments, nil
+}
+
+func buildPutIDShortPathFromSegments(segments []putPathSegment) string {
+	if len(segments) == 0 {
+		return ""
+	}
+
+	var builder strings.Builder
+	for i, segment := range segments {
+		if segment.isIndex {
+			builder.WriteString("[")
+			builder.WriteString(segment.value)
+			builder.WriteString("]")
+			continue
+		}
+
+		if i > 0 {
+			builder.WriteString(".")
+		}
+		builder.WriteString(segment.value)
+	}
+
+	return builder.String()
+}
+
+func resolvePutCreateTargetPathParts(idShortPath string) (string, string, error) {
+	segments, parseErr := parsePutIDShortPathSegments(idShortPath)
+	if parseErr != nil {
+		return "", "", parseErr
+	}
+
+	lastSegment := segments[len(segments)-1]
+	if lastSegment.isIndex {
+		return "", "", common.NewErrBadRequest("SMREPO-PUTSME-BADREQUEST Creating by list index path is not supported")
+	}
+
+	targetIDShort := strings.TrimSpace(lastSegment.value)
+	if targetIDShort == "" {
+		return "", "", common.NewErrBadRequest("SMREPO-PUTSME-BADREQUEST Empty idShort segment in path")
+	}
+
+	if len(segments) == 1 {
+		return "", targetIDShort, nil
+	}
+
+	parentPath := buildPutIDShortPathFromSegments(segments[:len(segments)-1])
+	if parentPath == "" {
+		return "", "", common.NewErrBadRequest("SMREPO-PUTSME-BADREQUEST Invalid parent path")
+	}
+
+	return parentPath, targetIDShort, nil
+}
+
+// PutSubmodelElement creates or replaces a submodel element at the requested path in a single transaction.
+// It returns true when an existing element was updated and false when a new one was created.
+func (s *SubmodelDatabase) PutSubmodelElement(
+	ctx context.Context,
+	submodelID string,
+	idShortPath string,
+	submodelElement types.ISubmodelElement,
+) (isUpdate bool, err error) {
+	tx, cleanup, err := common.StartTransaction(s.db)
+	if err != nil {
+		return false, err
+	}
+	defer cleanup(&err)
+
+	submodelDatabaseID, err := persistenceutils.GetSubmodelDatabaseID(tx, submodelID)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return false, common.NewErrNotFound("SMREPO-PUTSME-SMNOTFOUND Submodel with ID '" + submodelID + "' not found")
+		}
+		return false, err
+	}
+
+	elementExists := false
+	shouldEnforce, enforceErr := shouldEnforceFormula(ctx, "SMREPO-PUTSME-SHOULDENFORCE")
+	if enforceErr != nil {
+		return false, enforceErr
+	}
+
+	if shouldEnforce {
+		exists, _, visErr := s.checkSubmodelElementVisibilityInTx(ctx, tx, submodelID, idShortPath)
+		if visErr != nil {
+			return false, visErr
+		}
+		elementExists = exists
+		ctx = auth.SelectPutFormulaByExistence(ctx, elementExists)
+		if elementExists {
+			_, visible, visErr := s.checkSubmodelElementVisibilityInTx(ctx, tx, submodelID, idShortPath)
+			if visErr != nil {
+				return false, visErr
+			}
+			if !visible {
+				return false, common.NewErrDenied("SMREPO-PUTSME-ABACDENIED Existing submodel element is not accessible under ABAC constraints")
+			}
+		}
+	} else {
+		elementExists, err = submodelElementPathExistsInTx(tx, submodelDatabaseID, idShortPath)
+		if err != nil {
+			return false, err
+		}
+	}
+
+	if elementExists {
+		if err = s.updateSubmodelElementInTransaction(tx, submodelID, idShortPath, submodelElement, true); err != nil {
+			return false, err
+		}
+	} else {
+		parentPath, targetIDShort, resolveErr := resolvePutCreateTargetPathParts(idShortPath)
+		if resolveErr != nil {
+			return false, resolveErr
+		}
+
+		if submodelElement == nil {
+			return false, common.NewErrBadRequest("SMREPO-PUTSME-BADREQUEST Missing submodel element payload")
+		}
+
+		if submodelElement.IDShort() != nil {
+			payloadIDShort := strings.TrimSpace(*submodelElement.IDShort())
+			if payloadIDShort != "" && payloadIDShort != targetIDShort {
+				return false, common.NewErrBadRequest("SMREPO-PUTSME-BADREQUEST Payload idShort must match path idShort when creating")
+			}
+		}
+		submodelElement.SetIDShort(&targetIDShort)
+
+		if parentPath == "" {
+			if _, err = s.addTopLevelSubmodelElementInTransaction(tx, submodelID, submodelElement); err != nil {
+				return false, err
+			}
+		} else {
+			if err = s.addSubmodelElementWithPathInTransaction(ctx, tx, submodelID, submodelDatabaseID, parentPath, submodelElement); err != nil {
+				return false, err
+			}
+		}
+	}
+
+	if shouldEnforce {
+		exists, visible, visErr := s.checkSubmodelElementVisibilityInTx(ctx, tx, submodelID, idShortPath)
+		if visErr != nil {
+			return false, visErr
+		}
+		if !exists {
+			return false, common.NewInternalServerError("SMREPO-PUTSME-ABACCHECKMISSING Written submodel element not found before commit")
+		}
+		if !visible {
+			return false, common.NewErrDenied("SMREPO-PUTSME-ABACDENIED Written submodel element is not accessible under ABAC constraints")
+		}
+	}
+
+	if err = tx.Commit(); err != nil {
+		return false, err
+	}
+
+	return elementExists, nil
 }
 
 func isSiblingIDShortCollision(tx *sql.Tx, submodelDatabaseID int, parentElementID *int, submodelElement types.ISubmodelElement) bool {

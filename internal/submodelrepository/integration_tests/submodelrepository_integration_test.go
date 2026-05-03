@@ -990,6 +990,61 @@ func TestUploadAttachmentToNonFileSubmodelElementReturnsMethodNotAllowed(t *test
 	assert.Equal(t, http.StatusMethodNotAllowed, statusCode, "Expected 405 Method Not Allowed when uploading attachment to non-File SME")
 }
 
+func TestPutSubmodelElementByPathCreatesWhenMissing(t *testing.T) {
+	baseURL := "http://localhost:6004"
+	submodelID := fmt.Sprintf("urn:basyx:integration:put-create-sme-%d", time.Now().UnixNano())
+	submodelIDEncoded := common.EncodeString(submodelID)
+	targetPath := "SMC"
+
+	statusCode, body, err := requestJSON(http.MethodPost, fmt.Sprintf("%s/submodels", baseURL), map[string]any{
+		"id":        submodelID,
+		"idShort":   "PutCreateSubmodel",
+		"kind":      "Instance",
+		"modelType": "Submodel",
+	})
+	require.NoError(t, err)
+	require.Equal(t, http.StatusCreated, statusCode, "response=%s", string(body))
+
+	t.Cleanup(func() {
+		deleteStatusCode, deleteBody, deleteErr := requestJSON(http.MethodDelete, fmt.Sprintf("%s/submodels/%s", baseURL, submodelIDEncoded), nil)
+		if deleteErr != nil {
+			t.Logf("cleanup delete failed for submodel %s: %v", submodelID, deleteErr)
+			return
+		}
+		if deleteStatusCode != http.StatusNoContent && deleteStatusCode != http.StatusNotFound {
+			t.Logf("cleanup delete unexpected status %d for submodel %s (response=%s)", deleteStatusCode, submodelID, string(deleteBody))
+		}
+	})
+
+	putEndpoint := fmt.Sprintf("%s/submodels/%s/submodel-elements/%s", baseURL, submodelIDEncoded, targetPath)
+	putPayload := map[string]any{
+		"modelType": "SubmodelElementCollection",
+		"idShort":   targetPath,
+	}
+
+	statusCode, body, err = requestJSON(http.MethodPut, putEndpoint, putPayload)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusCreated, statusCode, "response=%s", string(body))
+
+	var createdElement map[string]any
+	require.NoError(t, json.Unmarshal(body, &createdElement), "response=%s", string(body))
+	assert.Equal(t, "SubmodelElementCollection", createdElement["modelType"])
+	assert.Equal(t, targetPath, createdElement["idShort"])
+
+	statusCode, body, err = requestJSON(http.MethodGet, putEndpoint, nil)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusOK, statusCode, "response=%s", string(body))
+
+	var fetchedElement map[string]any
+	require.NoError(t, json.Unmarshal(body, &fetchedElement), "response=%s", string(body))
+	assert.Equal(t, "SubmodelElementCollection", fetchedElement["modelType"])
+	assert.Equal(t, targetPath, fetchedElement["idShort"])
+
+	statusCode, body, err = requestJSON(http.MethodPut, putEndpoint, putPayload)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusNoContent, statusCode, "response=%s", string(body))
+}
+
 // TestMain handles setup and teardown
 func TestMain(m *testing.M) {
 	if os.Getenv("BASYX_EXTERNAL_COMPOSE") == "1" {
