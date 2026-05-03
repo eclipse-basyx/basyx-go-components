@@ -897,6 +897,86 @@ func TestPathNotationEndpoints(t *testing.T) {
 		assert.Contains(t, response.Result, "MainCollection.NestedList[0]")
 	})
 
+	t.Run("GetAllSubmodelsPathHonorsSemanticIDFilter", func(t *testing.T) {
+		semanticMatch := fmt.Sprintf("urn:basyx:semantic:path-match-%d", time.Now().UnixNano())
+		semanticOther := fmt.Sprintf("urn:basyx:semantic:path-other-%d", time.Now().UnixNano())
+
+		matchingSubmodelID := fmt.Sprintf("urn:basyx:integration:path-filter-match-%d", time.Now().UnixNano())
+		matchingSubmodelIDEncoded := common.EncodeString(matchingSubmodelID)
+		statusCode, body, err := requestJSON(http.MethodPost, fmt.Sprintf("%s/submodels", baseURL), map[string]any{
+			"id":        matchingSubmodelID,
+			"idShort":   "PathFilterMatch",
+			"kind":      "Instance",
+			"modelType": "Submodel",
+			"semanticId": map[string]any{
+				"type": "ExternalReference",
+				"keys": []map[string]any{
+					{
+						"type":  "GlobalReference",
+						"value": semanticMatch,
+					},
+				},
+			},
+			"submodelElements": []map[string]any{
+				{
+					"idShort":   "FilteredPathMatch",
+					"modelType": "Property",
+					"valueType": "xs:string",
+					"value":     "match",
+				},
+			},
+		})
+		require.NoError(t, err)
+		require.Equal(t, http.StatusCreated, statusCode, "response=%s", string(body))
+
+		otherSubmodelID := fmt.Sprintf("urn:basyx:integration:path-filter-other-%d", time.Now().UnixNano())
+		otherSubmodelIDEncoded := common.EncodeString(otherSubmodelID)
+		statusCode, body, err = requestJSON(http.MethodPost, fmt.Sprintf("%s/submodels", baseURL), map[string]any{
+			"id":        otherSubmodelID,
+			"idShort":   "PathFilterOther",
+			"kind":      "Instance",
+			"modelType": "Submodel",
+			"semanticId": map[string]any{
+				"type": "ExternalReference",
+				"keys": []map[string]any{
+					{
+						"type":  "GlobalReference",
+						"value": semanticOther,
+					},
+				},
+			},
+			"submodelElements": []map[string]any{
+				{
+					"idShort":   "FilteredPathOther",
+					"modelType": "Property",
+					"valueType": "xs:string",
+					"value":     "other",
+				},
+			},
+		})
+		require.NoError(t, err)
+		require.Equal(t, http.StatusCreated, statusCode, "response=%s", string(body))
+
+		t.Cleanup(func() {
+			_, _, _ = requestJSON(http.MethodDelete, fmt.Sprintf("%s/submodels/%s", baseURL, matchingSubmodelIDEncoded), nil)
+			_, _, _ = requestJSON(http.MethodDelete, fmt.Sprintf("%s/submodels/%s", baseURL, otherSubmodelIDEncoded), nil)
+		})
+
+		encodedSemanticMatch := common.EncodeString(semanticMatch)
+		statusCode, body, err = requestJSON(http.MethodGet, fmt.Sprintf("%s/submodels/$path?level=deep&limit=500&semanticId=%s", baseURL, encodedSemanticMatch), nil)
+		require.NoError(t, err)
+		require.Equal(t, http.StatusOK, statusCode, "response=%s", string(body))
+
+		var response struct {
+			PagingMetadata map[string]any `json:"paging_metadata"`
+			Result         []string       `json:"result"`
+		}
+		require.NoError(t, json.Unmarshal(body, &response), "response=%s", string(body))
+
+		assert.Contains(t, response.Result, "FilteredPathMatch")
+		assert.NotContains(t, response.Result, "FilteredPathOther")
+	})
+
 	t.Run("GetAllSubmodelElementsPathDeepReturnsHierarchy", func(t *testing.T) {
 		statusCode, body, err := requestJSON(http.MethodGet, fmt.Sprintf("%s/submodels/%s/submodel-elements/$path?level=deep&limit=500", baseURL, submodelIDEncoded), nil)
 		require.NoError(t, err)

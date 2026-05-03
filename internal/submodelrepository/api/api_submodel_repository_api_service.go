@@ -1398,7 +1398,7 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelsReference(ctx context.C
 //nolint:revive
 func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelsPath(
 	ctx context.Context,
-	_ /*semanticID*/ string,
+	semanticID string,
 	idShort string,
 	limit int32,
 	cursor string,
@@ -1419,18 +1419,39 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelsPath(
 		return newAPIErrorResponse(errors.New("invalid level parameter"), http.StatusBadRequest, operation, "InvalidLevelParameter"), nil
 	}
 
-	sms, nextCursor, err := s.submodelBackend.GetSubmodels(ctx, limit, decodedCursor, idShort)
-	if err != nil {
-		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "GetSubmodels"), err
+	decodedSemanticID := ""
+	if semanticID != "" {
+		var decodeErr error
+		decodedSemanticID, decodeErr = common.DecodeString(semanticID)
+		if decodeErr != nil {
+			return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "BadSemanticID"), nil
+		}
 	}
 
-	pathsPerSubmodel := make([][]string, len(sms))
+	references, nextCursor, err := s.submodelBackend.GetSubmodelReferences(ctx, limit, decodedCursor, idShort, decodedSemanticID)
+	if err != nil {
+		if common.IsErrBadRequest(err) {
+			return newAPIErrorResponse(err, http.StatusBadRequest, operation, "BadRequest"), nil
+		}
+		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "GetSubmodelReferences"), err
+	}
+
+	submodelIdentifiers := make([]string, 0, len(references))
+	for _, reference := range references {
+		submodelIdentifier, extractErr := extractSubmodelIdentifierFromReference(reference)
+		if extractErr != nil {
+			return newAPIErrorResponse(extractErr, http.StatusInternalServerError, operation, "ExtractSubmodelIdentifier"), extractErr
+		}
+		submodelIdentifiers = append(submodelIdentifiers, submodelIdentifier)
+	}
+
+	pathsPerSubmodel := make([][]string, len(submodelIdentifiers))
 	eg, _ := errgroup.WithContext(ctx)
 	eg.SetLimit(8)
 
-	for idx := range sms {
+	for idx := range submodelIdentifiers {
 		submodelIndex := idx
-		submodelID := sms[idx].ID()
+		submodelID := submodelIdentifiers[idx]
 
 		eg.Go(func() error {
 			paths, pathsErr := s.submodelBackend.GetSubmodelElementPaths(ctx, submodelID, level)
@@ -1449,7 +1470,7 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelsPath(
 		return newAPIErrorResponse(waitErr, http.StatusInternalServerError, operation, "GetSubmodelElementPaths"), waitErr
 	}
 
-	resultPaths := make([]string, 0, len(sms)*4)
+	resultPaths := make([]string, 0, len(submodelIdentifiers)*4)
 	for _, paths := range pathsPerSubmodel {
 		resultPaths = append(resultPaths, paths...)
 	}

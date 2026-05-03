@@ -26,7 +26,9 @@
 package api
 
 import (
+	"encoding/json"
 	"errors"
+	"strings"
 
 	"github.com/aas-core-works/aas-core3.1-golang/jsonization"
 	"github.com/aas-core-works/aas-core3.1-golang/types"
@@ -135,4 +137,66 @@ func resolveModelReferencePathKeys(
 
 func isLevelValid(level string) bool {
 	return level == "core" || level == "" || level == "deep"
+}
+
+func extractSubmodelIdentifierFromReference(reference types.IReference) (string, error) {
+	if reference == nil {
+		return "", common.NewInternalServerError("SMREPO-EXTRACTSMID-NILREFERENCE Submodel reference is nil")
+	}
+
+	keys := reference.Keys()
+	if len(keys) == 0 {
+		return "", common.NewInternalServerError("SMREPO-EXTRACTSMID-EMPTYKEYS Submodel reference contains no keys")
+	}
+
+	firstKey := keys[0]
+	if firstKey == nil {
+		return "", common.NewInternalServerError("SMREPO-EXTRACTSMID-NILKEY First reference key is nil")
+	}
+
+	if firstKey.Type() != types.KeyTypesSubmodel {
+		return "", common.NewInternalServerError("SMREPO-EXTRACTSMID-BADKEYTYPE First reference key is not of type Submodel")
+	}
+
+	submodelIdentifier := firstKey.Value()
+	if submodelIdentifier == "" {
+		return "", common.NewInternalServerError("SMREPO-EXTRACTSMID-EMPTYVALUE Submodel reference key value is empty")
+	}
+
+	return submodelIdentifier, nil
+}
+
+type allSubmodelsPathCursorState struct {
+	SubmodelCursor string `json:"submodelCursor,omitempty"`
+	PathCursor     string `json:"pathCursor,omitempty"`
+}
+
+func decodeAllSubmodelsPathCursorState(cursor string) allSubmodelsPathCursorState {
+	if strings.TrimSpace(cursor) == "" {
+		return allSubmodelsPathCursorState{}
+	}
+
+	var state allSubmodelsPathCursorState
+	if unmarshalErr := json.Unmarshal([]byte(cursor), &state); unmarshalErr == nil {
+		if state.SubmodelCursor != "" || state.PathCursor != "" {
+			return state
+		}
+	}
+
+	return allSubmodelsPathCursorState{SubmodelCursor: cursor}
+}
+
+func encodeAllSubmodelsPathCursorState(state allSubmodelsPathCursorState) (string, error) {
+	if state.SubmodelCursor == "" && state.PathCursor == "" {
+		return "", nil
+	}
+	if state.PathCursor == "" {
+		return state.SubmodelCursor, nil
+	}
+
+	payload, marshalErr := json.Marshal(state)
+	if marshalErr != nil {
+		return "", common.NewInternalServerError("SMREPO-ENCPATHCURSOR-MARSHAL " + marshalErr.Error())
+	}
+	return string(payload), nil
 }
