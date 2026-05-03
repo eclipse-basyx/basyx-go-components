@@ -1405,6 +1405,10 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelsPath(
 	level string,
 ) (gen.ImplResponse, error) {
 	const operation = "GetAllSubmodelsPath"
+	if limit < 0 {
+		limitErr := common.NewErrBadRequest("SMREPO-GETALLSMPATH-BADLIMIT limit must be >= 0")
+		return newAPIErrorResponse(limitErr, http.StatusBadRequest, operation, "BadRequest"), nil
+	}
 
 	decodedCursor := ""
 	if cursor != "" {
@@ -1428,61 +1432,116 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelsPath(
 		}
 	}
 
-	references, nextCursor, err := s.submodelBackend.GetSubmodelReferences(ctx, limit, decodedCursor, idShort, decodedSemanticID)
-	if err != nil {
-		if common.IsErrBadRequest(err) {
-			return newAPIErrorResponse(err, http.StatusBadRequest, operation, "BadRequest"), nil
-		}
-		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "GetSubmodelReferences"), err
+	cursorState := decodeAllSubmodelsPathCursorState(decodedCursor)
+	if cursorState.PathCursor != "" && cursorState.SubmodelCursor == "" {
+		badCursorErr := common.NewErrBadRequest("SMREPO-GETALLSMPATH-BADCURSOR path cursor requires submodel cursor")
+		return newAPIErrorResponse(badCursorErr, http.StatusBadRequest, operation, "BadCursor"), nil
 	}
 
-	submodelIdentifiers := make([]string, 0, len(references))
-	for _, reference := range references {
-		submodelIdentifier, extractErr := extractSubmodelIdentifierFromReference(reference)
-		if extractErr != nil {
-			return newAPIErrorResponse(extractErr, http.StatusInternalServerError, operation, "ExtractSubmodelIdentifier"), extractErr
-		}
-		submodelIdentifiers = append(submodelIdentifiers, submodelIdentifier)
+	effectiveLimit := int(limit)
+	if effectiveLimit == 0 {
+		effectiveLimit = 100
 	}
 
-	pathsPerSubmodel := make([][]string, len(submodelIdentifiers))
-	eg, _ := errgroup.WithContext(ctx)
-	eg.SetLimit(8)
+	resultPaths := make([]string, 0, effectiveLimit)
+	submodelCursor := cursorState.SubmodelCursor
+	pathCursor := cursorState.PathCursor
+	referencePageLimit := int32(effectiveLimit)
 
-	for idx := range submodelIdentifiers {
-		submodelIndex := idx
-		submodelID := submodelIdentifiers[idx]
-
-		eg.Go(func() error {
-			paths, pathsErr := s.submodelBackend.GetSubmodelElementPaths(ctx, submodelID, level)
-			if pathsErr != nil {
-				return pathsErr
+	for len(resultPaths) < effectiveLimit {
+		references, nextSubmodelCursor, err := s.submodelBackend.GetSubmodelReferences(ctx, referencePageLimit, submodelCursor, idShort, decodedSemanticID)
+		if err != nil {
+			if common.IsErrBadRequest(err) {
+				return newAPIErrorResponse(err, http.StatusBadRequest, operation, "BadRequest"), nil
 			}
-			pathsPerSubmodel[submodelIndex] = paths
-			return nil
-		})
-	}
-
-	if waitErr := eg.Wait(); waitErr != nil {
-		if common.IsErrNotFound(waitErr) || errors.Is(waitErr, sql.ErrNoRows) {
-			return newAPIErrorResponse(waitErr, http.StatusNotFound, operation, "SubmodelNotFound"), nil
+			return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "GetSubmodelReferences"), err
 		}
-		return newAPIErrorResponse(waitErr, http.StatusInternalServerError, operation, "GetSubmodelElementPaths"), waitErr
-	}
 
-	resultPaths := make([]string, 0, len(submodelIdentifiers)*4)
-	for _, paths := range pathsPerSubmodel {
-		resultPaths = append(resultPaths, paths...)
-	}
+		if len(references) == 0 {
+			res := gen.GetPathItemsResult{
+				PagingMetadata: gen.PagedResultPagingMetadata{
+					Cursor: "",
+				},
+				Result: resultPaths,
+			}
+			return gen.Response(http.StatusOK, res), nil
+		}
 
-	encodedNextCursor := ""
-	if nextCursor != "" {
-		encodedNextCursor = common.EncodeString(nextCursor)
+		submodelIdentifiers := make([]string, 0, len(references))
+		for _, reference := range references {
+			submodelIdentifier, extractErr := extractSubmodelIdentifierFromReference(reference)
+			if extractErr != nil {
+				return newAPIErrorResponse(extractErr, http.StatusInternalServerError, operation, "ExtractSubmodelIdentifier"), extractErr
+			}
+			submodelIdentifiers = append(submodelIdentifiers, submodelIdentifier)
+		}
+
+		for submodelIndex, submodelIdentifier := range submodelIdentifiers {
+			remaining := effectiveLimit - len(resultPaths)
+
+			currentPathCursor := ""
+			if submodelIndex == 0 && pathCursor != "" && submodelIdentifier == submodelCursor {
+				currentPathCursor = pathCursor
+			}
+
+			paths, nextPathCursor, pathErr := s.submodelBackend.GetSubmodelElementPathPage(
+				ctx,
+				submodelIdentifier,
+				&remaining,
+				currentPathCursor,
+				level,
+			)
+			if pathErr != nil {
+				if common.IsErrNotFound(pathErr) || errors.Is(pathErr, sql.ErrNoRows) {
+					return newAPIErrorResponse(pathErr, http.StatusNotFound, operation, "SubmodelNotFound"), nil
+				}
+				if common.IsErrBadRequest(pathErr) {
+					return newAPIErrorResponse(pathErr, http.StatusBadRequest, operation, "BadRequest"), nil
+				}
+				return newAPIErrorResponse(pathErr, http.StatusInternalServerError, operation, "GetSubmodelElementPathPage"), pathErr
+			}
+
+			resultPaths = append(resultPaths, paths...)
+
+			if len(resultPaths) == effectiveLimit {
+				nextState := allSubmodelsPathCursorState{}
+				switch {
+				case nextPathCursor != "":
+					nextState.SubmodelCursor = submodelIdentifier
+					nextState.PathCursor = nextPathCursor
+				case submodelIndex+1 < len(submodelIdentifiers):
+					nextState.SubmodelCursor = submodelIdentifiers[submodelIndex+1]
+				default:
+					nextState.SubmodelCursor = nextSubmodelCursor
+				}
+
+				encodedCursorState, encodeCursorErr := encodeAllSubmodelsPathCursorState(nextState)
+				if encodeCursorErr != nil {
+					return newAPIErrorResponse(encodeCursorErr, http.StatusInternalServerError, operation, "EncodeCursor"), encodeCursorErr
+				}
+
+				res := gen.GetPathItemsResult{
+					PagingMetadata: gen.PagedResultPagingMetadata{
+						Cursor: common.EncodeString(encodedCursorState),
+					},
+					Result: resultPaths,
+				}
+
+				return gen.Response(http.StatusOK, res), nil
+			}
+		}
+
+		if nextSubmodelCursor == "" {
+			break
+		}
+
+		submodelCursor = nextSubmodelCursor
+		pathCursor = ""
 	}
 
 	res := gen.GetPathItemsResult{
 		PagingMetadata: gen.PagedResultPagingMetadata{
-			Cursor: encodedNextCursor,
+			Cursor: "",
 		},
 		Result: resultPaths,
 	}

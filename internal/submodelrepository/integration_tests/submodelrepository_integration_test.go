@@ -977,6 +977,132 @@ func TestPathNotationEndpoints(t *testing.T) {
 		assert.NotContains(t, response.Result, "FilteredPathOther")
 	})
 
+	t.Run("GetAllSubmodelsPathPaginatesByPathItems", func(t *testing.T) {
+		semanticPage := fmt.Sprintf("urn:basyx:semantic:path-page-%d", time.Now().UnixNano())
+		encodedSemanticPage := common.EncodeString(semanticPage)
+
+		createPathPageSubmodel := func(idSuffix string, topPath string) string {
+			submodelID := fmt.Sprintf("urn:basyx:integration:path-page-%s-%d", idSuffix, time.Now().UnixNano())
+			encodedSubmodelID := common.EncodeString(submodelID)
+
+			statusCode, body, err := requestJSON(http.MethodPost, fmt.Sprintf("%s/submodels", baseURL), map[string]any{
+				"id":        submodelID,
+				"idShort":   "PathPage" + idSuffix,
+				"kind":      "Instance",
+				"modelType": "Submodel",
+				"semanticId": map[string]any{
+					"type": "ExternalReference",
+					"keys": []map[string]any{
+						{
+							"type":  "GlobalReference",
+							"value": semanticPage,
+						},
+					},
+				},
+				"submodelElements": []map[string]any{
+					{
+						"idShort":   topPath,
+						"modelType": "SubmodelElementCollection",
+						"value": []map[string]any{
+							{
+								"idShort":   "NestedProperty",
+								"modelType": "Property",
+								"valueType": "xs:string",
+								"value":     "nested-value",
+							},
+							{
+								"idShort":              "NestedList",
+								"modelType":            "SubmodelElementList",
+								"typeValueListElement": "SubmodelElement",
+								"value": []map[string]any{
+									{
+										"idShort":   "ListProp1",
+										"modelType": "Property",
+										"valueType": "xs:string",
+										"value":     "list-value-1",
+									},
+									{
+										"idShort":   "ListProp2",
+										"modelType": "Property",
+										"valueType": "xs:string",
+										"value":     "list-value-2",
+									},
+								},
+							},
+						},
+					},
+				},
+			})
+			require.NoError(t, err)
+			require.Equal(t, http.StatusCreated, statusCode, "response=%s", string(body))
+
+			return encodedSubmodelID
+		}
+
+		firstSubmodelID := createPathPageSubmodel("A", "CollectionA")
+		secondSubmodelID := createPathPageSubmodel("B", "CollectionB")
+
+		t.Cleanup(func() {
+			_, _, _ = requestJSON(http.MethodDelete, fmt.Sprintf("%s/submodels/%s", baseURL, firstSubmodelID), nil)
+			_, _, _ = requestJSON(http.MethodDelete, fmt.Sprintf("%s/submodels/%s", baseURL, secondSubmodelID), nil)
+		})
+
+		collectedPaths := make([]string, 0)
+		seenPaths := map[string]struct{}{}
+		pageCursor := ""
+		pageCount := 0
+
+		for {
+			requestURL := fmt.Sprintf("%s/submodels/$path?level=deep&limit=2&semanticId=%s", baseURL, encodedSemanticPage)
+			if pageCursor != "" {
+				requestURL += "&cursor=" + pageCursor
+			}
+
+			statusCode, body, err := requestJSON(http.MethodGet, requestURL, nil)
+			require.NoError(t, err)
+			require.Equal(t, http.StatusOK, statusCode, "response=%s", string(body))
+
+			var pageResponse struct {
+				PagingMetadata struct {
+					Cursor string `json:"cursor"`
+				} `json:"paging_metadata"`
+				Result []string `json:"result"`
+			}
+			require.NoError(t, json.Unmarshal(body, &pageResponse), "response=%s", string(body))
+			assert.LessOrEqual(t, len(pageResponse.Result), 2)
+
+			for _, pathItem := range pageResponse.Result {
+				_, alreadySeen := seenPaths[pathItem]
+				assert.False(t, alreadySeen, "duplicate path item across paged responses: %s", pathItem)
+				seenPaths[pathItem] = struct{}{}
+				collectedPaths = append(collectedPaths, pathItem)
+			}
+
+			pageCount++
+			require.Less(t, pageCount, 25, "pagination did not terminate")
+
+			if pageResponse.PagingMetadata.Cursor == "" {
+				break
+			}
+			pageCursor = pageResponse.PagingMetadata.Cursor
+		}
+
+		statusCode, body, err := requestJSON(http.MethodGet, fmt.Sprintf("%s/submodels/$path?level=deep&limit=500&semanticId=%s", baseURL, encodedSemanticPage), nil)
+		require.NoError(t, err)
+		require.Equal(t, http.StatusOK, statusCode, "response=%s", string(body))
+
+		var fullResponse struct {
+			PagingMetadata struct {
+				Cursor string `json:"cursor"`
+			} `json:"paging_metadata"`
+			Result []string `json:"result"`
+		}
+		require.NoError(t, json.Unmarshal(body, &fullResponse), "response=%s", string(body))
+
+		assert.Greater(t, len(fullResponse.Result), 2)
+		assert.ElementsMatch(t, fullResponse.Result, collectedPaths)
+	})
+
 	t.Run("GetAllSubmodelElementsPathDeepReturnsHierarchy", func(t *testing.T) {
 		statusCode, body, err := requestJSON(http.MethodGet, fmt.Sprintf("%s/submodels/%s/submodel-elements/$path?level=deep&limit=500", baseURL, submodelIDEncoded), nil)
 		require.NoError(t, err)
