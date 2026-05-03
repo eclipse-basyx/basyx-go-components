@@ -83,6 +83,12 @@ func ParseIDShortPathSegments(idShortPath string) ([]Segment, error) {
 
 			segments = append(segments, Segment{Value: indexValue, IsIndex: true})
 			i = end
+			if i+1 < len(idShortPath) {
+				next := idShortPath[i+1]
+				if next != '.' && next != '[' {
+					return nil, ErrInvalidSyntax
+				}
+			}
 		default:
 			if err := current.WriteByte(idShortPath[i]); err != nil {
 				return nil, ErrInvalidSyntax

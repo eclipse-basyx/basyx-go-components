@@ -69,6 +69,11 @@ func TestParseIDShortPathSegmentsErrors(t *testing.T) {
 	if !errors.Is(err, ErrInvalidSyntax) {
 		t.Fatalf("expected ErrInvalidSyntax, got %v", err)
 	}
+
+	_, err = ParseIDShortPathSegments("Collection[0]Child")
+	if !errors.Is(err, ErrInvalidSyntax) {
+		t.Fatalf("expected ErrInvalidSyntax for missing separator after list index, got %v", err)
+	}
 }
 
 func TestBuildIDShortPathFromSegments(t *testing.T) {
