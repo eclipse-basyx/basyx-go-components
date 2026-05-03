@@ -1144,6 +1144,10 @@ func TestUploadAttachmentToNonFileSubmodelElementReturnsMethodNotAllowed(t *test
 	statusCode, err = uploadFileAttachment(attachmentEndpoint, "testFiles/marcus.gif", "should-fail.gif")
 	require.NoError(t, err)
 	assert.Equal(t, http.StatusMethodNotAllowed, statusCode, "Expected 405 Method Not Allowed when uploading attachment to non-File SME")
+
+	_, _, statusCode, err = downloadFileAttachment(attachmentEndpoint)
+	require.NoError(t, err)
+	assert.Equal(t, http.StatusMethodNotAllowed, statusCode, "Expected 405 Method Not Allowed when downloading attachment from non-File SME")
 }
 
 func TestPutSubmodelElementByPathCreatesWhenMissing(t *testing.T) {

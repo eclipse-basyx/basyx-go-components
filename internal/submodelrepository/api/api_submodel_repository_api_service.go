@@ -2622,8 +2622,8 @@ func (s *SubmodelRepositoryAPIAPIService) GetFileByPathSubmodelRepo(ctx context.
 
 	fileValue, ok := fileSme.(*types.File)
 	if !ok {
-		notFileErr := common.NewErrBadRequest("SMREPO-GETFILEBYPATH-NOTFILE Submodel element is not of type File")
-		return newAPIErrorResponse(notFileErr, http.StatusBadRequest, operation, "ElementNotAFile"), nil
+		notFileErr := common.NewErrMethodNotAllowed("SMREPO-GETFILEBYPATH-NOTFILE Submodel element is not of type File")
+		return newAPIErrorResponse(notFileErr, http.StatusMethodNotAllowed, operation, "MethodNotAllowed"), nil
 	}
 
 	fileURL := fileValue.Value()
