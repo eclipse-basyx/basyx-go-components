@@ -899,6 +899,11 @@ func (c *SubmodelRepositoryAPIAPIController) PatchSubmodelByIDMetadata(w http.Re
 		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
 		return
 	}
+	rawMetadataPayload, ok := jsonable.(map[string]any)
+	if !ok {
+		c.errorHandler(w, r, &ParsingError{Err: errors.New("metadata payload must be an object")}, nil)
+		return
+	}
 	if err := model.AssertSubmodelMetadataRequired(submodelMetadataParam); err != nil {
 		c.errorHandler(w, r, err, nil)
 		return
@@ -907,7 +912,8 @@ func (c *SubmodelRepositoryAPIAPIController) PatchSubmodelByIDMetadata(w http.Re
 		c.errorHandler(w, r, err, nil)
 		return
 	}
-	result, err := c.service.PatchSubmodelByIDMetadata(r.Context(), submodelIdentifierParam, submodelMetadataParam)
+	ctxWithRawPatch := common.WithSubmodelMetadataPatch(r.Context(), rawMetadataPayload)
+	result, err := c.service.PatchSubmodelByIDMetadata(ctxWithRawPatch, submodelIdentifierParam, submodelMetadataParam)
 	// If an error occurred, encode the error with the status code
 	if err != nil {
 		c.errorHandler(w, r, err, &result)
@@ -1686,7 +1692,14 @@ func (c *SubmodelRepositoryAPIAPIController) PatchSubmodelElementByPathMetadataS
 		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
 		return
 	}
-	result, err := c.service.PatchSubmodelElementByPathMetadataSubmodelRepo(r.Context(), submodelIdentifierParam, idShortPathParam, submodelElementMetadataParam)
+	rawMetadataPayload, ok := jsonable.(map[string]any)
+	if !ok {
+		c.errorHandler(w, r, &ParsingError{Err: errors.New("metadata payload must be an object")}, nil)
+		return
+	}
+
+	ctxWithRawPatch := common.WithSubmodelElementMetadataPatch(r.Context(), rawMetadataPayload)
+	result, err := c.service.PatchSubmodelElementByPathMetadataSubmodelRepo(ctxWithRawPatch, submodelIdentifierParam, idShortPathParam, submodelElementMetadataParam)
 	// If an error occurred, encode the error with the status code
 	if err != nil {
 		c.errorHandler(w, r, err, &result)

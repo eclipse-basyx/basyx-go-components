@@ -73,6 +73,9 @@ func isEmptyReference(ref types.IReference) bool {
 	if ref == nil {
 		return true
 	}
+	if referencePtr, ok := ref.(*types.Reference); ok {
+		return reflect.DeepEqual(*referencePtr, types.Reference{})
+	}
 	return reflect.DeepEqual(ref, types.Reference{})
 }
 

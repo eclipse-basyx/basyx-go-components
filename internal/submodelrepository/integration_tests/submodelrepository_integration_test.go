@@ -575,6 +575,63 @@ func TestContractSubmodelRepository(t *testing.T) {
 		require.Len(t, descriptionList, 1, "description should include patched language entry")
 	})
 
+	t.Run("PatchSubmodelByIDMetadataAllowsNullFieldRemoval", func(t *testing.T) {
+		submodelID := fmt.Sprintf("https://example.com/ids/sm/contract-patch-metadata-null-%d", time.Now().UnixNano())
+		submodelIDShort := fmt.Sprintf("contractPatchMetadataNull%d", time.Now().UnixNano())
+		encodedSubmodelID := createSubmodel(t, submodelID, submodelIDShort)
+
+		statusCode, body, err := requestJSON(http.MethodPatch, fmt.Sprintf("%s/submodels/%s/$metadata", baseURL, encodedSubmodelID), map[string]any{
+			"id":        submodelID,
+			"modelType": "Submodel",
+			"description": []map[string]any{
+				{
+					"language": "en",
+					"text":     "temporary description to be removed",
+				},
+			},
+			"displayName": []map[string]any{
+				{
+					"language": "en",
+					"text":     "temporary display name to be removed",
+				},
+			},
+			"semanticId": map[string]any{
+				"type": "ExternalReference",
+				"keys": []map[string]any{
+					{
+						"type":  "GlobalReference",
+						"value": "urn:basyx:semantic:temporary",
+					},
+				},
+			},
+		})
+		require.NoError(t, err)
+		require.Equal(t, http.StatusNoContent, statusCode, "response=%s", string(body))
+
+		statusCode, body, err = requestJSON(http.MethodPatch, fmt.Sprintf("%s/submodels/%s/$metadata", baseURL, encodedSubmodelID), map[string]any{
+			"id":          submodelID,
+			"modelType":   "Submodel",
+			"description": nil,
+			"displayName": nil,
+			"semanticId":  nil,
+		})
+		require.NoError(t, err)
+		require.Equal(t, http.StatusNoContent, statusCode, "response=%s", string(body))
+
+		statusCode, body, err = requestJSON(http.MethodGet, fmt.Sprintf("%s/submodels/%s/$metadata", baseURL, encodedSubmodelID), nil)
+		require.NoError(t, err)
+		require.Equal(t, http.StatusOK, statusCode, "response=%s", string(body))
+
+		var metadata map[string]any
+		require.NoError(t, json.Unmarshal(body, &metadata), "response=%s", string(body))
+		_, hasDescription := metadata["description"]
+		_, hasDisplayName := metadata["displayName"]
+		_, hasSemanticID := metadata["semanticId"]
+		assert.False(t, hasDescription, "description should be removed when patched with null")
+		assert.False(t, hasDisplayName, "displayName should be removed when patched with null")
+		assert.False(t, hasSemanticID, "semanticId should be removed when patched with null")
+	})
+
 	t.Run("PostSubmodelElementReturnsCreatedPayload", func(t *testing.T) {
 		submodelID := fmt.Sprintf("https://example.com/ids/sm/contract-post-element-%d", time.Now().UnixNano())
 		submodelIDShort := fmt.Sprintf("contractPostElement%d", time.Now().UnixNano())
@@ -780,6 +837,63 @@ func TestContractSubmodelRepository(t *testing.T) {
 		descriptionList, ok := descriptionRaw.([]any)
 		require.True(t, ok, "description must be an array")
 		require.Len(t, descriptionList, 2, "description should include both patched language entries")
+	})
+
+	t.Run("PatchSubmodelElementByPathMetadataAllowsNullFieldRemoval", func(t *testing.T) {
+		submodelID := fmt.Sprintf("https://example.com/ids/sm/contract-patch-sme-metadata-null-%d", time.Now().UnixNano())
+		submodelIDShort := fmt.Sprintf("contractPatchSMEMetadataNull%d", time.Now().UnixNano())
+		encodedSubmodelID := createSubmodel(t, submodelID, submodelIDShort)
+
+		statusCode, body, err := requestJSON(http.MethodPost, fmt.Sprintf("%s/submodels/%s/submodel-elements", baseURL, encodedSubmodelID), map[string]any{
+			"idShort":   "MetadataProperty",
+			"modelType": "Property",
+			"valueType": "xs:string",
+			"value":     "original-value",
+		})
+		require.NoError(t, err)
+		require.Equal(t, http.StatusCreated, statusCode, "response=%s", string(body))
+
+		statusCode, body, err = requestJSON(http.MethodPatch, fmt.Sprintf("%s/submodels/%s/submodel-elements/MetadataProperty/$metadata", baseURL, encodedSubmodelID), map[string]any{
+			"idShort":   "MetadataProperty",
+			"modelType": "Property",
+			"description": []map[string]any{
+				{
+					"language": "en",
+					"text":     "temporary SME description to be removed",
+				},
+			},
+			"semanticId": map[string]any{
+				"type": "ExternalReference",
+				"keys": []map[string]any{
+					{
+						"type":  "GlobalReference",
+						"value": "urn:basyx:semantic:sme-temporary",
+					},
+				},
+			},
+		})
+		require.NoError(t, err)
+		require.Equal(t, http.StatusNoContent, statusCode, "response=%s", string(body))
+
+		statusCode, body, err = requestJSON(http.MethodPatch, fmt.Sprintf("%s/submodels/%s/submodel-elements/MetadataProperty/$metadata", baseURL, encodedSubmodelID), map[string]any{
+			"idShort":     "MetadataProperty",
+			"modelType":   "Property",
+			"description": nil,
+			"semanticId":  nil,
+		})
+		require.NoError(t, err)
+		require.Equal(t, http.StatusNoContent, statusCode, "response=%s", string(body))
+
+		statusCode, body, err = requestJSON(http.MethodGet, fmt.Sprintf("%s/submodels/%s/submodel-elements/MetadataProperty/$metadata", baseURL, encodedSubmodelID), nil)
+		require.NoError(t, err)
+		require.Equal(t, http.StatusOK, statusCode, "response=%s", string(body))
+
+		var metadata map[string]any
+		require.NoError(t, json.Unmarshal(body, &metadata), "response=%s", string(body))
+		_, hasDescription := metadata["description"]
+		_, hasSemanticID := metadata["semanticId"]
+		assert.False(t, hasDescription, "description should be removed when patched with null")
+		assert.False(t, hasSemanticID, "semanticId should be removed when patched with null")
 	})
 }
 

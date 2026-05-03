@@ -103,6 +103,37 @@ func submodelValueToAnyMap(value gen.SubmodelValue) map[string]any {
 	return result
 }
 
+func applyNullMetadataClearsToSubmodelElement(element types.ISubmodelElement, rawPatch map[string]any) {
+	if element == nil {
+		return
+	}
+
+	for field, value := range rawPatch {
+		if value != nil {
+			continue
+		}
+
+		switch field {
+		case "description":
+			element.SetDescription([]types.ILangStringTextType{})
+		case "displayName":
+			element.SetDisplayName([]types.ILangStringNameType{})
+		case "embeddedDataSpecifications":
+			element.SetEmbeddedDataSpecifications([]types.IEmbeddedDataSpecification{})
+		case "supplementalSemanticIds":
+			element.SetSupplementalSemanticIDs([]types.IReference{})
+		case "qualifiers":
+			element.SetQualifiers([]types.IQualifier{})
+		case "extensions":
+			element.SetExtensions([]types.IExtension{})
+		case "semanticId":
+			element.SetSemanticID(&types.Reference{})
+		case "category":
+			element.SetCategory(nil)
+		}
+	}
+}
+
 func buildLimitPtr(limit int32) *int {
 	if limit <= 0 {
 		return nil
@@ -1723,6 +1754,9 @@ func (s *SubmodelRepositoryAPIAPIService) PatchSubmodelByIDMetadata(ctx context.
 	if patchJSONErr != nil {
 		return newAPIErrorResponse(patchJSONErr, http.StatusBadRequest, operation, "InvalidSubmodelMetadata"), nil
 	}
+	if rawPatchJSON, hasRawPatch := common.GetSubmodelMetadataPatch(ctx); hasRawPatch {
+		patchJSON = rawPatchJSON
+	}
 	if patchJSON["modelType"] != "Submodel" {
 		return newAPIErrorResponse(errors.New("modelType for Submodel metadata must be 'Submodel'"), http.StatusBadRequest, operation, "InvalidSubmodelMetadata"), nil
 	}
@@ -2483,6 +2517,9 @@ func (s *SubmodelRepositoryAPIAPIService) PatchSubmodelElementByPathMetadataSubm
 	if patchJSONErr != nil {
 		return newAPIErrorResponse(patchJSONErr, http.StatusBadRequest, operation, "InvalidSubmodelElementMetadata"), nil
 	}
+	if rawPatchJSON, hasRawPatch := common.GetSubmodelElementMetadataPatch(ctx); hasRawPatch {
+		patchJSON = rawPatchJSON
+	}
 
 	if existingModelType, ok := existingJSON["modelType"].(string); ok {
 		if patchModelType, ok := patchJSON["modelType"].(string); ok && patchModelType != existingModelType {
@@ -2495,6 +2532,9 @@ func (s *SubmodelRepositoryAPIAPIService) PatchSubmodelElementByPathMetadataSubm
 	mergedElement, mergedErr := jsonization.SubmodelElementFromJsonable(mergedJSON)
 	if mergedErr != nil {
 		return newAPIErrorResponse(mergedErr, http.StatusBadRequest, operation, "InvalidPatchedSubmodelElement"), nil
+	}
+	if rawPatchJSON, hasRawPatch := common.GetSubmodelElementMetadataPatch(ctx); hasRawPatch {
+		applyNullMetadataClearsToSubmodelElement(mergedElement, rawPatchJSON)
 	}
 
 	if err := s.submodelBackend.UpdateSubmodelElement(ctx, decodedSubmodelIdentifier, idShortPath, mergedElement, false); err != nil {

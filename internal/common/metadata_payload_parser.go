@@ -26,12 +26,20 @@
 package common
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/aas-core-works/aas-core3.1-golang/jsonization"
 	"github.com/aas-core-works/aas-core3.1-golang/stringification"
 	"github.com/aas-core-works/aas-core3.1-golang/types"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
+)
+
+type metadataPatchContextKey string
+
+const (
+	submodelMetadataPatchContextKey        metadataPatchContextKey = "submodelMetadataPatch"
+	submodelElementMetadataPatchContextKey metadataPatchContextKey = "submodelElementMetadataPatch"
 )
 
 func parseStringField(raw any, field string) (string, error) {
@@ -220,6 +228,48 @@ func parseMetadataPayload(raw any) (map[string]any, error) {
 	return payload, nil
 }
 
+func cloneAnyMap(input map[string]any) map[string]any {
+	cloned := make(map[string]any, len(input))
+	for key, value := range input {
+		cloned[key] = value
+	}
+	return cloned
+}
+
+// WithSubmodelMetadataPatch stores raw metadata PATCH payload in the context.
+func WithSubmodelMetadataPatch(ctx context.Context, payload map[string]any) context.Context {
+	return context.WithValue(ctx, submodelMetadataPatchContextKey, cloneAnyMap(payload))
+}
+
+// GetSubmodelMetadataPatch reads raw metadata PATCH payload from the context.
+func GetSubmodelMetadataPatch(ctx context.Context) (map[string]any, bool) {
+	if ctx == nil {
+		return nil, false
+	}
+	payload, ok := ctx.Value(submodelMetadataPatchContextKey).(map[string]any)
+	if !ok {
+		return nil, false
+	}
+	return cloneAnyMap(payload), true
+}
+
+// WithSubmodelElementMetadataPatch stores raw submodel-element metadata PATCH payload in the context.
+func WithSubmodelElementMetadataPatch(ctx context.Context, payload map[string]any) context.Context {
+	return context.WithValue(ctx, submodelElementMetadataPatchContextKey, cloneAnyMap(payload))
+}
+
+// GetSubmodelElementMetadataPatch reads raw submodel-element metadata PATCH payload from the context.
+func GetSubmodelElementMetadataPatch(ctx context.Context) (map[string]any, bool) {
+	if ctx == nil {
+		return nil, false
+	}
+	payload, ok := ctx.Value(submodelElementMetadataPatchContextKey).(map[string]any)
+	if !ok {
+		return nil, false
+	}
+	return cloneAnyMap(payload), true
+}
+
 // ParseSubmodelMetadataPayload parses metadata PATCH payloads into SubmodelMetadata.
 func ParseSubmodelMetadataPayload(raw any) (model.SubmodelMetadata, error) {
 	payload, err := parseMetadataPayload(raw)
@@ -229,6 +279,17 @@ func ParseSubmodelMetadataPayload(raw any) (model.SubmodelMetadata, error) {
 
 	metadata := model.SubmodelMetadata{}
 	for field, value := range payload {
+		if value == nil {
+			switch field {
+			case "extensions", "category", "idShort", "displayName", "description", "administration", "embeddedDataSpecifications", "qualifiers", "semanticId", "supplementalSemanticIds", "kind":
+				continue
+			case "modelType", "id":
+				return model.SubmodelMetadata{}, fmt.Errorf("SMREPO-PARSESMMETA-INVALIDFIELD invalid metadata field '%s': %s must not be null", field, field)
+			default:
+				return model.SubmodelMetadata{}, fmt.Errorf("SMREPO-PARSESMMETA-UNKNOWNFIELD unknown metadata field '%s'", field)
+			}
+		}
+
 		switch field {
 		case "extensions":
 			metadata.Extensions, err = parseExtensions(value, field)
@@ -281,6 +342,17 @@ func ParseSubmodelElementMetadataPayload(raw any) (model.SubmodelElementMetadata
 
 	metadata := model.SubmodelElementMetadata{}
 	for field, value := range payload {
+		if value == nil {
+			switch field {
+			case "extensions", "category", "idShort", "displayName", "description", "embeddedDataSpecifications", "semanticId", "supplementalSemanticIds", "qualifiers", "kind":
+				continue
+			case "modelType":
+				return model.SubmodelElementMetadata{}, fmt.Errorf("SMREPO-PARSESMEMETA-INVALIDFIELD invalid metadata field '%s': %s must not be null", field, field)
+			default:
+				return model.SubmodelElementMetadata{}, fmt.Errorf("SMREPO-PARSESMEMETA-UNKNOWNFIELD unknown metadata field '%s'", field)
+			}
+		}
+
 		switch field {
 		case "extensions":
 			metadata.Extensions, err = parseExtensions(value, field)
