@@ -74,6 +74,16 @@ func TestParseIDShortPathSegmentsErrors(t *testing.T) {
 	if !errors.Is(err, ErrInvalidSyntax) {
 		t.Fatalf("expected ErrInvalidSyntax for missing separator after list index, got %v", err)
 	}
+
+	_, err = ParseIDShortPathSegments("A..B")
+	if !errors.Is(err, ErrInvalidSyntax) {
+		t.Fatalf("expected ErrInvalidSyntax for consecutive separators, got %v", err)
+	}
+
+	_, err = ParseIDShortPathSegments("A.")
+	if !errors.Is(err, ErrInvalidSyntax) {
+		t.Fatalf("expected ErrInvalidSyntax for trailing separator, got %v", err)
+	}
 }
 
 func TestBuildIDShortPathFromSegments(t *testing.T) {

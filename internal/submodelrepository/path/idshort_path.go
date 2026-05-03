@@ -51,6 +51,9 @@ func ParseIDShortPathSegments(idShortPath string) ([]Segment, error) {
 	if idShortPath == "" {
 		return nil, ErrEmptyPath
 	}
+	if strings.HasSuffix(idShortPath, ".") {
+		return nil, ErrInvalidSyntax
+	}
 
 	segments := make([]Segment, 0, 4)
 	current := strings.Builder{}
@@ -66,6 +69,19 @@ func ParseIDShortPathSegments(idShortPath string) ([]Segment, error) {
 	for i := 0; i < len(idShortPath); i++ {
 		switch idShortPath[i] {
 		case '.':
+			if current.Len() == 0 {
+				if i == 0 || idShortPath[i-1] != ']' {
+					return nil, ErrInvalidSyntax
+				}
+				if i+1 >= len(idShortPath) {
+					return nil, ErrInvalidSyntax
+				}
+				next := idShortPath[i+1]
+				if next == '.' || next == '[' || next == ']' {
+					return nil, ErrInvalidSyntax
+				}
+				continue
+			}
 			flushCurrent()
 		case '[':
 			flushCurrent()
