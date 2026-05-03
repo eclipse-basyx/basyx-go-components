@@ -16,6 +16,7 @@ import (
 	persistencepostgresql "github.com/eclipse-basyx/basyx-go-components/internal/aasrepository/persistence"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
+	submodelrepositorydb "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence"
 	openapi "github.com/eclipse-basyx/basyx-go-components/pkg/aasrepositoryapi/go"
 )
 
@@ -64,9 +65,23 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 		log.Printf("❌ DB connect failed: %v", err)
 		return err
 	}
+
+	submodelDatabase, err := submodelrepositorydb.NewSubmodelDatabase(
+		dsn,
+		cfg.Postgres.MaxOpenConnections,
+		cfg.Postgres.MaxIdleConnections,
+		cfg.Postgres.ConnMaxLifetimeMinutes,
+		databaseSchema,
+		nil,
+		cfg.Server.StrictVerification,
+	)
+	if err != nil {
+		log.Printf("❌ Submodel DB connect failed: %v", err)
+		return err
+	}
 	log.Println("✅ Postgres connection established")
 
-	aasSvc := api.NewAssetAdministrationShellRepositoryAPIAPIService(*aasDatabase)
+	aasSvc := api.NewAssetAdministrationShellRepositoryAPIAPIService(*aasDatabase, submodelDatabase)
 	aasCtrl := openapi.NewAssetAdministrationShellRepositoryAPIAPIController(aasSvc, "", cfg.Server.StrictVerification)
 
 	descSvc := openapi.NewDescriptionAPIAPIService()
