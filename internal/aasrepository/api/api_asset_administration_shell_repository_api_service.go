@@ -633,6 +633,13 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) PutSubmodelByIdAasRepo
 
 	createReferenceErr := s.assetAdministrationShellBackend.CreateSubmodelReferenceInAssetAdministrationShell(ctx, decodedAASIdentifier, submodelReference)
 	if createReferenceErr != nil && !common.IsErrConflict(createReferenceErr) {
+		if !isUpdate {
+			rollbackErr := s.submodelBackend.DeleteSubmodel(ctx, decodedSubmodelIdentifier)
+			if rollbackErr != nil {
+				createReferenceErr = common.NewInternalServerError("AASREPO-PUTSMBYID-ROLLBACKFAILED reference creation failed and rollback failed: refErr=" + createReferenceErr.Error() + " rollbackErr=" + rollbackErr.Error())
+			}
+		}
+
 		if common.IsErrDenied(createReferenceErr) {
 			return newAPIErrorResponse(createReferenceErr, http.StatusForbidden, operation, "Forbidden"), nil
 		}
@@ -731,6 +738,14 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) DeleteSubmodelByIdAasR
 
 	deleteSubmodelErr := s.submodelBackend.DeleteSubmodel(ctx, decodedSubmodelIdentifier)
 	if deleteSubmodelErr != nil {
+		restoreReferenceErr := s.assetAdministrationShellBackend.CreateSubmodelReferenceInAssetAdministrationShell(ctx, decodedAASIdentifier, types.NewReference(
+			types.ReferenceTypesModelReference,
+			[]types.IKey{types.NewKey(types.KeyTypesSubmodel, decodedSubmodelIdentifier)},
+		))
+		if restoreReferenceErr != nil && !common.IsErrConflict(restoreReferenceErr) {
+			deleteSubmodelErr = common.NewInternalServerError("AASREPO-DELSMBYID-RESTOREREF failed to delete submodel and failed to restore submodel reference: " + restoreReferenceErr.Error())
+		}
+
 		if common.IsErrDenied(deleteSubmodelErr) {
 			return newAPIErrorResponse(deleteSubmodelErr, http.StatusForbidden, operation, "Forbidden"), nil
 		}
@@ -740,7 +755,7 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) DeleteSubmodelByIdAasR
 		if common.IsErrBadRequest(deleteSubmodelErr) {
 			return newAPIErrorResponse(deleteSubmodelErr, http.StatusBadRequest, operation, "BadRequest"), nil
 		}
-		return newAPIErrorResponse(deleteSubmodelErr, http.StatusInternalServerError, operation, "DeleteSubmodel"), nil
+		return newAPIErrorResponse(deleteSubmodelErr, http.StatusInternalServerError, operation, "DeleteSubmodel"), deleteSubmodelErr
 	}
 
 	return gen.Response(http.StatusNoContent, nil), nil

@@ -433,6 +433,52 @@ func TestPutSubmodelByIdAasRepositoryReturnsCreatedSubmodelAnd201(t *testing.T) 
 	assert.Equal(t, endpoint, headers.Get("Location"), "Expected Location header to point to created submodel resource")
 }
 
+func TestPutSubmodelByIdAasRepositoryReturnsNoContentOnUpdate(t *testing.T) {
+	baseURL := "http://localhost:6004"
+	aasID := fmt.Sprintf("https://example.com/ids/aas/put-submodel-update-%d", time.Now().UnixNano())
+	aasIdentifier := base64.RawURLEncoding.EncodeToString([]byte(aasID))
+
+	statusCode, err := createAASForThumbnailTest(baseURL, aasID)
+	require.NoError(t, err, "AAS creation failed")
+	require.Equal(t, http.StatusCreated, statusCode, "Expected 201 Created for AAS creation")
+
+	submodelID := fmt.Sprintf("https://example.com/ids/sm/put-submodel-update-%d", time.Now().UnixNano())
+	submodelIdentifier := base64.RawURLEncoding.EncodeToString([]byte(submodelID))
+	endpoint := fmt.Sprintf("%s/shells/%s/submodels/%s", baseURL, aasIdentifier, submodelIdentifier)
+
+	initialBody := fmt.Sprintf(
+		`{"id":"%s","idShort":"PutUpdateSubmodel","modelType":"Submodel","kind":"Instance","submodelElements":[{"idShort":"prop1","modelType":"Property","valueType":"xs:string","value":"before"}]}`,
+		submodelID,
+	)
+
+	_, initialStatusCode, _, initialErr := putJSONResponse(endpoint, initialBody)
+	require.NoError(t, initialErr, "Initial PUT submodel request failed")
+	require.Equal(t, http.StatusCreated, initialStatusCode, "Expected 201 Created for initial PUT")
+
+	updatedBody := fmt.Sprintf(
+		`{"id":"%s","idShort":"PutUpdateSubmodel","modelType":"Submodel","kind":"Instance","submodelElements":[{"idShort":"prop1","modelType":"Property","valueType":"xs:string","value":"after"}]}`,
+		submodelID,
+	)
+
+	updatePayload, updateStatusCode, updateHeaders, updateErr := putJSONResponse(endpoint, updatedBody)
+	require.NoError(t, updateErr, "Update PUT submodel request failed")
+	require.Equal(t, http.StatusNoContent, updateStatusCode, "Expected 204 No Content for update PUT")
+	assert.Nil(t, updatePayload, "Expected empty response body for update PUT")
+	assert.Empty(t, updateHeaders.Get("Location"), "Expected no Location header for update PUT")
+
+	getPayload, getStatusCode, getErr := getJSONResponse(endpoint)
+	require.NoError(t, getErr, "GET submodel after update failed")
+	require.Equal(t, http.StatusOK, getStatusCode, "Expected 200 OK for GET after update PUT")
+
+	submodelElements, ok := getPayload["submodelElements"].([]any)
+	require.True(t, ok, "Expected submodelElements in GET response")
+	require.NotEmpty(t, submodelElements, "Expected submodelElements to contain updated property")
+
+	firstElement, ok := submodelElements[0].(map[string]any)
+	require.True(t, ok, "Expected first submodel element as object")
+	assert.Equal(t, "after", firstElement["value"], "Expected updated property value to be persisted")
+}
+
 func TestGetSubmodelByIdAasRepositoryReturnsSubmodel(t *testing.T) {
 	baseURL := "http://localhost:6004"
 	aasID := fmt.Sprintf("https://example.com/ids/aas/get-submodel-%d", time.Now().UnixNano())
