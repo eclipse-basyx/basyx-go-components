@@ -34,7 +34,7 @@ import (
 	cdropenapi "github.com/eclipse-basyx/basyx-go-components/pkg/conceptdescriptionrepositoryapi/go"
 	discoveryopenapi "github.com/eclipse-basyx/basyx-go-components/pkg/discoveryapi"
 	smregistryopenapi "github.com/eclipse-basyx/basyx-go-components/pkg/smregistry"
-	submodelrepositoryopenapi "github.com/eclipse-basyx/basyx-go-components/pkg/submodelrepositoryapi/go"
+	submodelrepositoryopenapi "github.com/eclipse-basyx/basyx-go-components/pkg/submodelrepositoryapi"
 	"github.com/go-chi/chi/v5"
 )
 

@@ -483,6 +483,155 @@ func TestContractSubmodelRepository(t *testing.T) {
 		assert.NotEmpty(t, metadata, "metadata response should not be empty")
 	})
 
+	t.Run("PatchSubmodelByIDMetadataAcceptsStringModelTypeAndUpdatesDescription", func(t *testing.T) {
+		submodelID := fmt.Sprintf("https://example.com/ids/sm/contract-patch-metadata-%d", time.Now().UnixNano())
+		submodelIDShort := fmt.Sprintf("contractPatchMetadata%d", time.Now().UnixNano())
+		encodedSubmodelID := createSubmodel(t, submodelID, submodelIDShort)
+
+		patchPayload := map[string]any{
+			"id":        submodelID,
+			"modelType": "Submodel",
+			"description": []map[string]any{
+				{
+					"language": "en",
+					"text":     "patched english description",
+				},
+				{
+					"language": "de",
+					"text":     "gepatchte beschreibung",
+				},
+			},
+		}
+
+		statusCode, body, err := requestJSON(http.MethodPatch, fmt.Sprintf("%s/submodels/%s/$metadata", baseURL, encodedSubmodelID), patchPayload)
+		require.NoError(t, err)
+		require.Equal(t, http.StatusNoContent, statusCode, "response=%s", string(body))
+
+		statusCode, body, err = requestJSON(http.MethodGet, fmt.Sprintf("%s/submodels/%s/$metadata", baseURL, encodedSubmodelID), nil)
+		require.NoError(t, err)
+		require.Equal(t, http.StatusOK, statusCode, "response=%s", string(body))
+
+		var metadata map[string]any
+		require.NoError(t, json.Unmarshal(body, &metadata), "response=%s", string(body))
+
+		descriptionRaw, hasDescription := metadata["description"]
+		require.True(t, hasDescription, "metadata must contain description after patch")
+		descriptionList, ok := descriptionRaw.([]any)
+		require.True(t, ok, "description must be an array")
+		require.Len(t, descriptionList, 2, "description should include both patched language entries")
+	})
+
+	t.Run("PatchSubmodelByIDMetadataWorksWhenSubmodelContainsElements", func(t *testing.T) {
+		submodelID := fmt.Sprintf("https://example.com/ids/sm/contract-patch-metadata-elements-%d", time.Now().UnixNano())
+		submodelIDShort := fmt.Sprintf("contractPatchMetadataElements%d", time.Now().UnixNano())
+
+		statusCode, body, err := requestJSON(http.MethodPost, fmt.Sprintf("%s/submodels", baseURL), map[string]any{
+			"id":        submodelID,
+			"idShort":   submodelIDShort,
+			"kind":      "Instance",
+			"modelType": "Submodel",
+			"submodelElements": []map[string]any{
+				{
+					"idShort":   "ExistingProperty",
+					"modelType": "Property",
+					"valueType": "xs:string",
+					"value":     "existing-value",
+				},
+			},
+		})
+		require.NoError(t, err)
+		require.Equal(t, http.StatusCreated, statusCode, "response=%s", string(body))
+
+		encodedSubmodelID := common.EncodeString(submodelID)
+		t.Cleanup(func() {
+			_, _, _ = requestJSON(http.MethodDelete, fmt.Sprintf("%s/submodels/%s", baseURL, encodedSubmodelID), nil)
+		})
+
+		patchPayload := map[string]any{
+			"id":        submodelID,
+			"modelType": "Submodel",
+			"description": []map[string]any{
+				{
+					"language": "en",
+					"text":     "patched description with existing submodel elements",
+				},
+			},
+		}
+
+		statusCode, body, err = requestJSON(http.MethodPatch, fmt.Sprintf("%s/submodels/%s/$metadata", baseURL, encodedSubmodelID), patchPayload)
+		require.NoError(t, err)
+		require.Equal(t, http.StatusNoContent, statusCode, "response=%s", string(body))
+
+		statusCode, body, err = requestJSON(http.MethodGet, fmt.Sprintf("%s/submodels/%s/$metadata", baseURL, encodedSubmodelID), nil)
+		require.NoError(t, err)
+		require.Equal(t, http.StatusOK, statusCode, "response=%s", string(body))
+
+		var metadata map[string]any
+		require.NoError(t, json.Unmarshal(body, &metadata), "response=%s", string(body))
+		descriptionRaw, hasDescription := metadata["description"]
+		require.True(t, hasDescription, "metadata must contain description after patch")
+		descriptionList, ok := descriptionRaw.([]any)
+		require.True(t, ok, "description must be an array")
+		require.Len(t, descriptionList, 1, "description should include patched language entry")
+	})
+
+	t.Run("PatchSubmodelByIDMetadataAllowsNullFieldRemoval", func(t *testing.T) {
+		submodelID := fmt.Sprintf("https://example.com/ids/sm/contract-patch-metadata-null-%d", time.Now().UnixNano())
+		submodelIDShort := fmt.Sprintf("contractPatchMetadataNull%d", time.Now().UnixNano())
+		encodedSubmodelID := createSubmodel(t, submodelID, submodelIDShort)
+
+		statusCode, body, err := requestJSON(http.MethodPatch, fmt.Sprintf("%s/submodels/%s/$metadata", baseURL, encodedSubmodelID), map[string]any{
+			"id":        submodelID,
+			"modelType": "Submodel",
+			"description": []map[string]any{
+				{
+					"language": "en",
+					"text":     "temporary description to be removed",
+				},
+			},
+			"displayName": []map[string]any{
+				{
+					"language": "en",
+					"text":     "temporary display name to be removed",
+				},
+			},
+			"semanticId": map[string]any{
+				"type": "ExternalReference",
+				"keys": []map[string]any{
+					{
+						"type":  "GlobalReference",
+						"value": "urn:basyx:semantic:temporary",
+					},
+				},
+			},
+		})
+		require.NoError(t, err)
+		require.Equal(t, http.StatusNoContent, statusCode, "response=%s", string(body))
+
+		statusCode, body, err = requestJSON(http.MethodPatch, fmt.Sprintf("%s/submodels/%s/$metadata", baseURL, encodedSubmodelID), map[string]any{
+			"id":          submodelID,
+			"modelType":   "Submodel",
+			"description": nil,
+			"displayName": nil,
+			"semanticId":  nil,
+		})
+		require.NoError(t, err)
+		require.Equal(t, http.StatusNoContent, statusCode, "response=%s", string(body))
+
+		statusCode, body, err = requestJSON(http.MethodGet, fmt.Sprintf("%s/submodels/%s/$metadata", baseURL, encodedSubmodelID), nil)
+		require.NoError(t, err)
+		require.Equal(t, http.StatusOK, statusCode, "response=%s", string(body))
+
+		var metadata map[string]any
+		require.NoError(t, json.Unmarshal(body, &metadata), "response=%s", string(body))
+		_, hasDescription := metadata["description"]
+		_, hasDisplayName := metadata["displayName"]
+		_, hasSemanticID := metadata["semanticId"]
+		assert.False(t, hasDescription, "description should be removed when patched with null")
+		assert.False(t, hasDisplayName, "displayName should be removed when patched with null")
+		assert.False(t, hasSemanticID, "semanticId should be removed when patched with null")
+	})
+
 	t.Run("PostSubmodelElementReturnsCreatedPayload", func(t *testing.T) {
 		submodelID := fmt.Sprintf("https://example.com/ids/sm/contract-post-element-%d", time.Now().UnixNano())
 		submodelIDShort := fmt.Sprintf("contractPostElement%d", time.Now().UnixNano())
@@ -642,6 +791,110 @@ func TestContractSubmodelRepository(t *testing.T) {
 		_, hasNestedValue := nestedPropertyMetadata["value"]
 		assert.False(t, hasNestedValue, "nested property metadata should not include value payload")
 	})
+
+	t.Run("PatchSubmodelElementByPathMetadataAcceptsStringModelTypeAndUpdatesDescription", func(t *testing.T) {
+		submodelID := fmt.Sprintf("https://example.com/ids/sm/contract-patch-sme-metadata-%d", time.Now().UnixNano())
+		submodelIDShort := fmt.Sprintf("contractPatchSMEMetadata%d", time.Now().UnixNano())
+		encodedSubmodelID := createSubmodel(t, submodelID, submodelIDShort)
+
+		statusCode, body, err := requestJSON(http.MethodPost, fmt.Sprintf("%s/submodels/%s/submodel-elements", baseURL, encodedSubmodelID), map[string]any{
+			"idShort":   "MetadataProperty",
+			"modelType": "Property",
+			"valueType": "xs:string",
+			"value":     "original-value",
+		})
+		require.NoError(t, err)
+		require.Equal(t, http.StatusCreated, statusCode, "response=%s", string(body))
+
+		patchPayload := map[string]any{
+			"idShort":   "MetadataProperty",
+			"modelType": "Property",
+			"description": []map[string]any{
+				{
+					"language": "en",
+					"text":     "patched metadata description",
+				},
+				{
+					"language": "de",
+					"text":     "gepatchte metadatenbeschreibung",
+				},
+			},
+		}
+
+		statusCode, body, err = requestJSON(http.MethodPatch, fmt.Sprintf("%s/submodels/%s/submodel-elements/MetadataProperty/$metadata", baseURL, encodedSubmodelID), patchPayload)
+		require.NoError(t, err)
+		require.Equal(t, http.StatusNoContent, statusCode, "response=%s", string(body))
+
+		statusCode, body, err = requestJSON(http.MethodGet, fmt.Sprintf("%s/submodels/%s/submodel-elements/MetadataProperty/$metadata", baseURL, encodedSubmodelID), nil)
+		require.NoError(t, err)
+		require.Equal(t, http.StatusOK, statusCode, "response=%s", string(body))
+
+		var metadata map[string]any
+		require.NoError(t, json.Unmarshal(body, &metadata), "response=%s", string(body))
+
+		descriptionRaw, hasDescription := metadata["description"]
+		require.True(t, hasDescription, "metadata must contain description after patch")
+		descriptionList, ok := descriptionRaw.([]any)
+		require.True(t, ok, "description must be an array")
+		require.Len(t, descriptionList, 2, "description should include both patched language entries")
+	})
+
+	t.Run("PatchSubmodelElementByPathMetadataAllowsNullFieldRemoval", func(t *testing.T) {
+		submodelID := fmt.Sprintf("https://example.com/ids/sm/contract-patch-sme-metadata-null-%d", time.Now().UnixNano())
+		submodelIDShort := fmt.Sprintf("contractPatchSMEMetadataNull%d", time.Now().UnixNano())
+		encodedSubmodelID := createSubmodel(t, submodelID, submodelIDShort)
+
+		statusCode, body, err := requestJSON(http.MethodPost, fmt.Sprintf("%s/submodels/%s/submodel-elements", baseURL, encodedSubmodelID), map[string]any{
+			"idShort":   "MetadataProperty",
+			"modelType": "Property",
+			"valueType": "xs:string",
+			"value":     "original-value",
+		})
+		require.NoError(t, err)
+		require.Equal(t, http.StatusCreated, statusCode, "response=%s", string(body))
+
+		statusCode, body, err = requestJSON(http.MethodPatch, fmt.Sprintf("%s/submodels/%s/submodel-elements/MetadataProperty/$metadata", baseURL, encodedSubmodelID), map[string]any{
+			"idShort":   "MetadataProperty",
+			"modelType": "Property",
+			"description": []map[string]any{
+				{
+					"language": "en",
+					"text":     "temporary SME description to be removed",
+				},
+			},
+			"semanticId": map[string]any{
+				"type": "ExternalReference",
+				"keys": []map[string]any{
+					{
+						"type":  "GlobalReference",
+						"value": "urn:basyx:semantic:sme-temporary",
+					},
+				},
+			},
+		})
+		require.NoError(t, err)
+		require.Equal(t, http.StatusNoContent, statusCode, "response=%s", string(body))
+
+		statusCode, body, err = requestJSON(http.MethodPatch, fmt.Sprintf("%s/submodels/%s/submodel-elements/MetadataProperty/$metadata", baseURL, encodedSubmodelID), map[string]any{
+			"idShort":     "MetadataProperty",
+			"modelType":   "Property",
+			"description": nil,
+			"semanticId":  nil,
+		})
+		require.NoError(t, err)
+		require.Equal(t, http.StatusNoContent, statusCode, "response=%s", string(body))
+
+		statusCode, body, err = requestJSON(http.MethodGet, fmt.Sprintf("%s/submodels/%s/submodel-elements/MetadataProperty/$metadata", baseURL, encodedSubmodelID), nil)
+		require.NoError(t, err)
+		require.Equal(t, http.StatusOK, statusCode, "response=%s", string(body))
+
+		var metadata map[string]any
+		require.NoError(t, json.Unmarshal(body, &metadata), "response=%s", string(body))
+		_, hasDescription := metadata["description"]
+		_, hasSemanticID := metadata["semanticId"]
+		assert.False(t, hasDescription, "description should be removed when patched with null")
+		assert.False(t, hasSemanticID, "semanticId should be removed when patched with null")
+	})
 }
 
 func TestPathNotationEndpoints(t *testing.T) {
@@ -739,6 +992,229 @@ func TestPathNotationEndpoints(t *testing.T) {
 		assert.Contains(t, paths, "MainCollection")
 		assert.NotContains(t, paths, "MainCollection.NestedProperty")
 		assert.NotContains(t, paths, "MainCollection.NestedList[0]")
+	})
+
+	t.Run("GetAllSubmodelsPathReturnsPathItems", func(t *testing.T) {
+		statusCode, body, err := requestJSON(http.MethodGet, fmt.Sprintf("%s/submodels/$path?level=deep&limit=500", baseURL), nil)
+		require.NoError(t, err)
+		require.Equal(t, http.StatusOK, statusCode, "response=%s", string(body))
+
+		var response struct {
+			PagingMetadata map[string]any `json:"paging_metadata"`
+			Result         []string       `json:"result"`
+		}
+		require.NoError(t, json.Unmarshal(body, &response), "response=%s", string(body))
+
+		assert.Contains(t, response.Result, "TopProperty")
+		assert.Contains(t, response.Result, "MainCollection")
+		assert.Contains(t, response.Result, "MainCollection.NestedProperty")
+		assert.Contains(t, response.Result, "MainCollection.NestedList[0]")
+	})
+
+	t.Run("GetAllSubmodelsPathHonorsSemanticIDFilter", func(t *testing.T) {
+		semanticMatch := fmt.Sprintf("urn:basyx:semantic:path-match-%d", time.Now().UnixNano())
+		semanticOther := fmt.Sprintf("urn:basyx:semantic:path-other-%d", time.Now().UnixNano())
+
+		matchingSubmodelID := fmt.Sprintf("urn:basyx:integration:path-filter-match-%d", time.Now().UnixNano())
+		matchingSubmodelIDEncoded := common.EncodeString(matchingSubmodelID)
+		statusCode, body, err := requestJSON(http.MethodPost, fmt.Sprintf("%s/submodels", baseURL), map[string]any{
+			"id":        matchingSubmodelID,
+			"idShort":   "PathFilterMatch",
+			"kind":      "Instance",
+			"modelType": "Submodel",
+			"semanticId": map[string]any{
+				"type": "ExternalReference",
+				"keys": []map[string]any{
+					{
+						"type":  "GlobalReference",
+						"value": semanticMatch,
+					},
+				},
+			},
+			"submodelElements": []map[string]any{
+				{
+					"idShort":   "FilteredPathMatch",
+					"modelType": "Property",
+					"valueType": "xs:string",
+					"value":     "match",
+				},
+			},
+		})
+		require.NoError(t, err)
+		require.Equal(t, http.StatusCreated, statusCode, "response=%s", string(body))
+
+		otherSubmodelID := fmt.Sprintf("urn:basyx:integration:path-filter-other-%d", time.Now().UnixNano())
+		otherSubmodelIDEncoded := common.EncodeString(otherSubmodelID)
+		statusCode, body, err = requestJSON(http.MethodPost, fmt.Sprintf("%s/submodels", baseURL), map[string]any{
+			"id":        otherSubmodelID,
+			"idShort":   "PathFilterOther",
+			"kind":      "Instance",
+			"modelType": "Submodel",
+			"semanticId": map[string]any{
+				"type": "ExternalReference",
+				"keys": []map[string]any{
+					{
+						"type":  "GlobalReference",
+						"value": semanticOther,
+					},
+				},
+			},
+			"submodelElements": []map[string]any{
+				{
+					"idShort":   "FilteredPathOther",
+					"modelType": "Property",
+					"valueType": "xs:string",
+					"value":     "other",
+				},
+			},
+		})
+		require.NoError(t, err)
+		require.Equal(t, http.StatusCreated, statusCode, "response=%s", string(body))
+
+		t.Cleanup(func() {
+			_, _, _ = requestJSON(http.MethodDelete, fmt.Sprintf("%s/submodels/%s", baseURL, matchingSubmodelIDEncoded), nil)
+			_, _, _ = requestJSON(http.MethodDelete, fmt.Sprintf("%s/submodels/%s", baseURL, otherSubmodelIDEncoded), nil)
+		})
+
+		encodedSemanticMatch := common.EncodeString(semanticMatch)
+		statusCode, body, err = requestJSON(http.MethodGet, fmt.Sprintf("%s/submodels/$path?level=deep&limit=500&semanticId=%s", baseURL, encodedSemanticMatch), nil)
+		require.NoError(t, err)
+		require.Equal(t, http.StatusOK, statusCode, "response=%s", string(body))
+
+		var response struct {
+			PagingMetadata map[string]any `json:"paging_metadata"`
+			Result         []string       `json:"result"`
+		}
+		require.NoError(t, json.Unmarshal(body, &response), "response=%s", string(body))
+
+		assert.Contains(t, response.Result, "FilteredPathMatch")
+		assert.NotContains(t, response.Result, "FilteredPathOther")
+	})
+
+	t.Run("GetAllSubmodelsPathPaginatesByPathItems", func(t *testing.T) {
+		semanticPage := fmt.Sprintf("urn:basyx:semantic:path-page-%d", time.Now().UnixNano())
+		encodedSemanticPage := common.EncodeString(semanticPage)
+
+		createPathPageSubmodel := func(idSuffix string, topPath string) string {
+			submodelID := fmt.Sprintf("urn:basyx:integration:path-page-%s-%d", idSuffix, time.Now().UnixNano())
+			encodedSubmodelID := common.EncodeString(submodelID)
+
+			statusCode, body, err := requestJSON(http.MethodPost, fmt.Sprintf("%s/submodels", baseURL), map[string]any{
+				"id":        submodelID,
+				"idShort":   "PathPage" + idSuffix,
+				"kind":      "Instance",
+				"modelType": "Submodel",
+				"semanticId": map[string]any{
+					"type": "ExternalReference",
+					"keys": []map[string]any{
+						{
+							"type":  "GlobalReference",
+							"value": semanticPage,
+						},
+					},
+				},
+				"submodelElements": []map[string]any{
+					{
+						"idShort":   topPath,
+						"modelType": "SubmodelElementCollection",
+						"value": []map[string]any{
+							{
+								"idShort":   "NestedProperty",
+								"modelType": "Property",
+								"valueType": "xs:string",
+								"value":     "nested-value",
+							},
+							{
+								"idShort":              "NestedList",
+								"modelType":            "SubmodelElementList",
+								"typeValueListElement": "SubmodelElement",
+								"value": []map[string]any{
+									{
+										"idShort":   "ListProp1",
+										"modelType": "Property",
+										"valueType": "xs:string",
+										"value":     "list-value-1",
+									},
+									{
+										"idShort":   "ListProp2",
+										"modelType": "Property",
+										"valueType": "xs:string",
+										"value":     "list-value-2",
+									},
+								},
+							},
+						},
+					},
+				},
+			})
+			require.NoError(t, err)
+			require.Equal(t, http.StatusCreated, statusCode, "response=%s", string(body))
+
+			return encodedSubmodelID
+		}
+
+		firstSubmodelID := createPathPageSubmodel("A", "CollectionA")
+		secondSubmodelID := createPathPageSubmodel("B", "CollectionB")
+
+		t.Cleanup(func() {
+			_, _, _ = requestJSON(http.MethodDelete, fmt.Sprintf("%s/submodels/%s", baseURL, firstSubmodelID), nil)
+			_, _, _ = requestJSON(http.MethodDelete, fmt.Sprintf("%s/submodels/%s", baseURL, secondSubmodelID), nil)
+		})
+
+		collectedPaths := make([]string, 0)
+		seenPaths := map[string]struct{}{}
+		pageCursor := ""
+		pageCount := 0
+
+		for {
+			requestURL := fmt.Sprintf("%s/submodels/$path?level=deep&limit=2&semanticId=%s", baseURL, encodedSemanticPage)
+			if pageCursor != "" {
+				requestURL += "&cursor=" + pageCursor
+			}
+
+			statusCode, body, err := requestJSON(http.MethodGet, requestURL, nil)
+			require.NoError(t, err)
+			require.Equal(t, http.StatusOK, statusCode, "response=%s", string(body))
+
+			var pageResponse struct {
+				PagingMetadata struct {
+					Cursor string `json:"cursor"`
+				} `json:"paging_metadata"`
+				Result []string `json:"result"`
+			}
+			require.NoError(t, json.Unmarshal(body, &pageResponse), "response=%s", string(body))
+			assert.LessOrEqual(t, len(pageResponse.Result), 2)
+
+			for _, pathItem := range pageResponse.Result {
+				_, alreadySeen := seenPaths[pathItem]
+				assert.False(t, alreadySeen, "duplicate path item across paged responses: %s", pathItem)
+				seenPaths[pathItem] = struct{}{}
+				collectedPaths = append(collectedPaths, pathItem)
+			}
+
+			pageCount++
+			require.Less(t, pageCount, 25, "pagination did not terminate")
+
+			if pageResponse.PagingMetadata.Cursor == "" {
+				break
+			}
+			pageCursor = pageResponse.PagingMetadata.Cursor
+		}
+
+		statusCode, body, err := requestJSON(http.MethodGet, fmt.Sprintf("%s/submodels/$path?level=deep&limit=500&semanticId=%s", baseURL, encodedSemanticPage), nil)
+		require.NoError(t, err)
+		require.Equal(t, http.StatusOK, statusCode, "response=%s", string(body))
+
+		var fullResponse struct {
+			PagingMetadata struct {
+				Cursor string `json:"cursor"`
+			} `json:"paging_metadata"`
+			Result []string `json:"result"`
+		}
+		require.NoError(t, json.Unmarshal(body, &fullResponse), "response=%s", string(body))
+
+		assert.Greater(t, len(fullResponse.Result), 2)
+		assert.ElementsMatch(t, fullResponse.Result, collectedPaths)
 	})
 
 	t.Run("GetAllSubmodelElementsPathDeepReturnsHierarchy", func(t *testing.T) {
@@ -988,6 +1464,65 @@ func TestUploadAttachmentToNonFileSubmodelElementReturnsMethodNotAllowed(t *test
 	statusCode, err = uploadFileAttachment(attachmentEndpoint, "testFiles/marcus.gif", "should-fail.gif")
 	require.NoError(t, err)
 	assert.Equal(t, http.StatusMethodNotAllowed, statusCode, "Expected 405 Method Not Allowed when uploading attachment to non-File SME")
+
+	_, _, statusCode, err = downloadFileAttachment(attachmentEndpoint)
+	require.NoError(t, err)
+	assert.Equal(t, http.StatusMethodNotAllowed, statusCode, "Expected 405 Method Not Allowed when downloading attachment from non-File SME")
+}
+
+func TestPutSubmodelElementByPathCreatesWhenMissing(t *testing.T) {
+	baseURL := "http://localhost:6004"
+	submodelID := fmt.Sprintf("urn:basyx:integration:put-create-sme-%d", time.Now().UnixNano())
+	submodelIDEncoded := common.EncodeString(submodelID)
+	targetPath := "SMC"
+
+	statusCode, body, err := requestJSON(http.MethodPost, fmt.Sprintf("%s/submodels", baseURL), map[string]any{
+		"id":        submodelID,
+		"idShort":   "PutCreateSubmodel",
+		"kind":      "Instance",
+		"modelType": "Submodel",
+	})
+	require.NoError(t, err)
+	require.Equal(t, http.StatusCreated, statusCode, "response=%s", string(body))
+
+	t.Cleanup(func() {
+		deleteStatusCode, deleteBody, deleteErr := requestJSON(http.MethodDelete, fmt.Sprintf("%s/submodels/%s", baseURL, submodelIDEncoded), nil)
+		if deleteErr != nil {
+			t.Logf("cleanup delete failed for submodel %s: %v", submodelID, deleteErr)
+			return
+		}
+		if deleteStatusCode != http.StatusNoContent && deleteStatusCode != http.StatusNotFound {
+			t.Logf("cleanup delete unexpected status %d for submodel %s (response=%s)", deleteStatusCode, submodelID, string(deleteBody))
+		}
+	})
+
+	putEndpoint := fmt.Sprintf("%s/submodels/%s/submodel-elements/%s", baseURL, submodelIDEncoded, targetPath)
+	putPayload := map[string]any{
+		"modelType": "SubmodelElementCollection",
+		"idShort":   targetPath,
+	}
+
+	statusCode, body, err = requestJSON(http.MethodPut, putEndpoint, putPayload)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusCreated, statusCode, "response=%s", string(body))
+
+	var createdElement map[string]any
+	require.NoError(t, json.Unmarshal(body, &createdElement), "response=%s", string(body))
+	assert.Equal(t, "SubmodelElementCollection", createdElement["modelType"])
+	assert.Equal(t, targetPath, createdElement["idShort"])
+
+	statusCode, body, err = requestJSON(http.MethodGet, putEndpoint, nil)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusOK, statusCode, "response=%s", string(body))
+
+	var fetchedElement map[string]any
+	require.NoError(t, json.Unmarshal(body, &fetchedElement), "response=%s", string(body))
+	assert.Equal(t, "SubmodelElementCollection", fetchedElement["modelType"])
+	assert.Equal(t, targetPath, fetchedElement["idShort"])
+
+	statusCode, body, err = requestJSON(http.MethodPut, putEndpoint, putPayload)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusNoContent, statusCode, "response=%s", string(body))
 }
 
 // TestMain handles setup and teardown

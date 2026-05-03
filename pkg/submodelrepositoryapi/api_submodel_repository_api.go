@@ -94,6 +94,11 @@ func (c *SubmodelRepositoryAPIAPIController) Routes() Routes {
 			c.contextPath + "/submodels/$reference",
 			c.GetAllSubmodelsReference,
 		},
+		"GetAllSubmodelsPath": Route{
+			strings.ToUpper("Get"),
+			c.contextPath + "/submodels/$path",
+			c.GetAllSubmodelsPath,
+		},
 		"GetSubmodelById": Route{
 			strings.ToUpper("Get"),
 			c.contextPath + "/submodels/{submodelIdentifier}",
@@ -577,6 +582,68 @@ func (c *SubmodelRepositoryAPIAPIController) GetAllSubmodelsReference(w http.Res
 	_ = EncodeJSONResponse(result.Body, &result.Code, w)
 }
 
+// GetAllSubmodelsPath - Returns all Submodels in the Path notation
+func (c *SubmodelRepositoryAPIAPIController) GetAllSubmodelsPath(w http.ResponseWriter, r *http.Request) {
+	query, err := parseQuery(r.URL.RawQuery)
+	if err != nil {
+		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
+		return
+	}
+	var semanticIDParam string
+	if query.Has("semanticId") {
+		param := query.Get("semanticId")
+
+		semanticIDParam = param
+	}
+
+	var idShortParam string
+	if query.Has("idShort") {
+		param := query.Get("idShort")
+
+		idShortParam = param
+	}
+
+	var limitParam int32
+	if query.Has("limit") {
+		param, err := parseNumericParameter[int32](
+			query.Get("limit"),
+			WithParse[int32](parseInt32),
+			WithMinimum[int32](1),
+		)
+		if err != nil {
+			c.errorHandler(w, r, &ParsingError{Param: "limit", Err: err}, nil)
+			return
+		}
+
+		limitParam = param
+	}
+
+	var cursorParam string
+	if query.Has("cursor") {
+		param := query.Get("cursor")
+
+		cursorParam = param
+	}
+
+	var levelParam string
+	if query.Has("level") {
+		param := query.Get("level")
+
+		levelParam = param
+	} else {
+		param := "deep"
+		levelParam = param
+	}
+	result, err := c.service.GetAllSubmodelsPath(r.Context(), semanticIDParam, idShortParam, limitParam, cursorParam, levelParam)
+	// If an error occurred, encode the error with the status code
+	if err != nil {
+		c.errorHandler(w, r, err, &result)
+		return
+	}
+	// If no error, encode the body and the result code
+	_ = EncodeJSONResponse(result.Body, &result.Code, w)
+}
+
 // GetSubmodelByID - Returns a specific Submodel
 func (c *SubmodelRepositoryAPIAPIController) GetSubmodelByID(w http.ResponseWriter, r *http.Request) {
 	query, err := parseQuery(r.URL.RawQuery)
@@ -818,11 +885,23 @@ func (c *SubmodelRepositoryAPIAPIController) PatchSubmodelByIDMetadata(w http.Re
 		c.errorHandler(w, r, &RequiredError{"submodelIdentifier"}, nil)
 		return
 	}
-	var submodelMetadataParam model.SubmodelMetadata
+
+	var jsonable any
 	d := json.NewDecoder(r.Body)
 	d.DisallowUnknownFields()
-	if err := d.Decode(&submodelMetadataParam); err != nil {
+	if err := d.Decode(&jsonable); err != nil {
 		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
+		return
+	}
+
+	submodelMetadataParam, err := common.ParseSubmodelMetadataPayload(jsonable)
+	if err != nil {
+		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
+		return
+	}
+	rawMetadataPayload, ok := jsonable.(map[string]any)
+	if !ok {
+		c.errorHandler(w, r, &ParsingError{Err: errors.New("metadata payload must be an object")}, nil)
 		return
 	}
 	if err := model.AssertSubmodelMetadataRequired(submodelMetadataParam); err != nil {
@@ -833,7 +912,8 @@ func (c *SubmodelRepositoryAPIAPIController) PatchSubmodelByIDMetadata(w http.Re
 		c.errorHandler(w, r, err, nil)
 		return
 	}
-	result, err := c.service.PatchSubmodelByIDMetadata(r.Context(), submodelIdentifierParam, submodelMetadataParam)
+	ctxWithRawPatch := common.WithSubmodelMetadataPatch(r.Context(), rawMetadataPayload)
+	result, err := c.service.PatchSubmodelByIDMetadata(ctxWithRawPatch, submodelIdentifierParam, submodelMetadataParam)
 	// If an error occurred, encode the error with the status code
 	if err != nil {
 		c.errorHandler(w, r, err, &result)
@@ -1599,14 +1679,27 @@ func (c *SubmodelRepositoryAPIAPIController) PatchSubmodelElementByPathMetadataS
 		c.errorHandler(w, r, &RequiredError{"idShortPath"}, nil)
 		return
 	}
-	var submodelElementMetadataParam model.SubmodelElementMetadata
+	var jsonable any
 	d := json.NewDecoder(r.Body)
 	d.DisallowUnknownFields()
-	if err := d.Decode(&submodelElementMetadataParam); err != nil {
+	if err := d.Decode(&jsonable); err != nil {
 		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
 		return
 	}
-	result, err := c.service.PatchSubmodelElementByPathMetadataSubmodelRepo(r.Context(), submodelIdentifierParam, idShortPathParam, submodelElementMetadataParam)
+
+	submodelElementMetadataParam, err := common.ParseSubmodelElementMetadataPayload(jsonable)
+	if err != nil {
+		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
+		return
+	}
+	rawMetadataPayload, ok := jsonable.(map[string]any)
+	if !ok {
+		c.errorHandler(w, r, &ParsingError{Err: errors.New("metadata payload must be an object")}, nil)
+		return
+	}
+
+	ctxWithRawPatch := common.WithSubmodelElementMetadataPatch(r.Context(), rawMetadataPayload)
+	result, err := c.service.PatchSubmodelElementByPathMetadataSubmodelRepo(ctxWithRawPatch, submodelIdentifierParam, idShortPathParam, submodelElementMetadataParam)
 	// If an error occurred, encode the error with the status code
 	if err != nil {
 		c.errorHandler(w, r, err, &result)
