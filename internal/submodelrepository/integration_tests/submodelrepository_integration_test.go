@@ -741,6 +741,23 @@ func TestPathNotationEndpoints(t *testing.T) {
 		assert.NotContains(t, paths, "MainCollection.NestedList[0]")
 	})
 
+	t.Run("GetAllSubmodelsPathReturnsPathItems", func(t *testing.T) {
+		statusCode, body, err := requestJSON(http.MethodGet, fmt.Sprintf("%s/submodels/$path?level=deep&limit=500", baseURL), nil)
+		require.NoError(t, err)
+		require.Equal(t, http.StatusOK, statusCode, "response=%s", string(body))
+
+		var response struct {
+			PagingMetadata map[string]any `json:"paging_metadata"`
+			Result         []string       `json:"result"`
+		}
+		require.NoError(t, json.Unmarshal(body, &response), "response=%s", string(body))
+
+		assert.Contains(t, response.Result, "TopProperty")
+		assert.Contains(t, response.Result, "MainCollection")
+		assert.Contains(t, response.Result, "MainCollection.NestedProperty")
+		assert.Contains(t, response.Result, "MainCollection.NestedList[0]")
+	})
+
 	t.Run("GetAllSubmodelElementsPathDeepReturnsHierarchy", func(t *testing.T) {
 		statusCode, body, err := requestJSON(http.MethodGet, fmt.Sprintf("%s/submodels/%s/submodel-elements/$path?level=deep&limit=500", baseURL, submodelIDEncoded), nil)
 		require.NoError(t, err)

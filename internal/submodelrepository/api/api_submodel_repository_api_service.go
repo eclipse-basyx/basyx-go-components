@@ -1186,6 +1186,82 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelsReference(ctx context.C
 	return gen.Response(http.StatusOK, res), nil
 }
 
+// GetAllSubmodelsPath - Returns all Submodels in the Path notation
+//
+//nolint:revive
+func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelsPath(
+	ctx context.Context,
+	_ /*semanticID*/ string,
+	idShort string,
+	limit int32,
+	cursor string,
+	level string,
+) (gen.ImplResponse, error) {
+	const operation = "GetAllSubmodelsPath"
+
+	decodedCursor := ""
+	if cursor != "" {
+		decodedCursorBytes, decodeErr := common.DecodeString(cursor)
+		if decodeErr != nil {
+			return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "BadCursor"), nil
+		}
+		decodedCursor = string(decodedCursorBytes)
+	}
+
+	if !isLevelValid(level) {
+		return newAPIErrorResponse(errors.New("invalid level parameter"), http.StatusBadRequest, operation, "InvalidLevelParameter"), nil
+	}
+
+	sms, nextCursor, err := s.submodelBackend.GetSubmodels(ctx, limit, decodedCursor, idShort)
+	if err != nil {
+		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "GetSubmodels"), err
+	}
+
+	pathsPerSubmodel := make([][]string, len(sms))
+	eg, _ := errgroup.WithContext(ctx)
+	eg.SetLimit(8)
+
+	for idx := range sms {
+		submodelIndex := idx
+		submodelID := sms[idx].ID()
+
+		eg.Go(func() error {
+			paths, pathsErr := s.submodelBackend.GetSubmodelElementPaths(ctx, submodelID, level)
+			if pathsErr != nil {
+				return pathsErr
+			}
+			pathsPerSubmodel[submodelIndex] = paths
+			return nil
+		})
+	}
+
+	if waitErr := eg.Wait(); waitErr != nil {
+		if common.IsErrNotFound(waitErr) || errors.Is(waitErr, sql.ErrNoRows) {
+			return newAPIErrorResponse(waitErr, http.StatusNotFound, operation, "SubmodelNotFound"), nil
+		}
+		return newAPIErrorResponse(waitErr, http.StatusInternalServerError, operation, "GetSubmodelElementPaths"), waitErr
+	}
+
+	resultPaths := make([]string, 0, len(sms)*4)
+	for _, paths := range pathsPerSubmodel {
+		resultPaths = append(resultPaths, paths...)
+	}
+
+	encodedNextCursor := ""
+	if nextCursor != "" {
+		encodedNextCursor = common.EncodeString(nextCursor)
+	}
+
+	res := gen.GetPathItemsResult{
+		PagingMetadata: gen.PagedResultPagingMetadata{
+			Cursor: encodedNextCursor,
+		},
+		Result: resultPaths,
+	}
+
+	return gen.Response(http.StatusOK, res), nil
+}
+
 // PutSubmodelByID - Updates an existing Submodel
 //
 //nolint:revive
