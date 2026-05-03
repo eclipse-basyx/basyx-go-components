@@ -135,7 +135,7 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 		persistence,
 	)
 	customAASRepository := aasenvironment.NewCustomAASRepositoryService(
-		aasrepositoryapi.NewAssetAdministrationShellRepositoryAPIAPIService(*aasRepositoryPersistence, submodelRepositoryPersistence),
+		aasrepositoryapi.NewAssetAdministrationShellRepositoryAPIAPIService(aasRepositoryPersistence, submodelRepositoryPersistence),
 		persistence,
 	)
 	customSMRepository := aasenvironment.NewCustomSubmodelRepositoryService(

@@ -81,7 +81,7 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 	}
 	log.Println("✅ Postgres connection established")
 
-	aasSvc := api.NewAssetAdministrationShellRepositoryAPIAPIService(*aasDatabase, submodelDatabase)
+	aasSvc := api.NewAssetAdministrationShellRepositoryAPIAPIService(aasDatabase, submodelDatabase)
 	aasCtrl := openapi.NewAssetAdministrationShellRepositoryAPIAPIController(aasSvc, "", cfg.Server.StrictVerification)
 
 	descSvc := openapi.NewDescriptionAPIAPIService()
