@@ -483,6 +483,98 @@ func TestContractSubmodelRepository(t *testing.T) {
 		assert.NotEmpty(t, metadata, "metadata response should not be empty")
 	})
 
+	t.Run("PatchSubmodelByIDMetadataAcceptsStringModelTypeAndUpdatesDescription", func(t *testing.T) {
+		submodelID := fmt.Sprintf("https://example.com/ids/sm/contract-patch-metadata-%d", time.Now().UnixNano())
+		submodelIDShort := fmt.Sprintf("contractPatchMetadata%d", time.Now().UnixNano())
+		encodedSubmodelID := createSubmodel(t, submodelID, submodelIDShort)
+
+		patchPayload := map[string]any{
+			"id":        submodelID,
+			"modelType": "Submodel",
+			"description": []map[string]any{
+				{
+					"language": "en",
+					"text":     "patched english description",
+				},
+				{
+					"language": "de",
+					"text":     "gepatchte beschreibung",
+				},
+			},
+		}
+
+		statusCode, body, err := requestJSON(http.MethodPatch, fmt.Sprintf("%s/submodels/%s/$metadata", baseURL, encodedSubmodelID), patchPayload)
+		require.NoError(t, err)
+		require.Equal(t, http.StatusNoContent, statusCode, "response=%s", string(body))
+
+		statusCode, body, err = requestJSON(http.MethodGet, fmt.Sprintf("%s/submodels/%s/$metadata", baseURL, encodedSubmodelID), nil)
+		require.NoError(t, err)
+		require.Equal(t, http.StatusOK, statusCode, "response=%s", string(body))
+
+		var metadata map[string]any
+		require.NoError(t, json.Unmarshal(body, &metadata), "response=%s", string(body))
+
+		descriptionRaw, hasDescription := metadata["description"]
+		require.True(t, hasDescription, "metadata must contain description after patch")
+		descriptionList, ok := descriptionRaw.([]any)
+		require.True(t, ok, "description must be an array")
+		require.Len(t, descriptionList, 2, "description should include both patched language entries")
+	})
+
+	t.Run("PatchSubmodelByIDMetadataWorksWhenSubmodelContainsElements", func(t *testing.T) {
+		submodelID := fmt.Sprintf("https://example.com/ids/sm/contract-patch-metadata-elements-%d", time.Now().UnixNano())
+		submodelIDShort := fmt.Sprintf("contractPatchMetadataElements%d", time.Now().UnixNano())
+
+		statusCode, body, err := requestJSON(http.MethodPost, fmt.Sprintf("%s/submodels", baseURL), map[string]any{
+			"id":        submodelID,
+			"idShort":   submodelIDShort,
+			"kind":      "Instance",
+			"modelType": "Submodel",
+			"submodelElements": []map[string]any{
+				{
+					"idShort":   "ExistingProperty",
+					"modelType": "Property",
+					"valueType": "xs:string",
+					"value":     "existing-value",
+				},
+			},
+		})
+		require.NoError(t, err)
+		require.Equal(t, http.StatusCreated, statusCode, "response=%s", string(body))
+
+		encodedSubmodelID := common.EncodeString(submodelID)
+		t.Cleanup(func() {
+			_, _, _ = requestJSON(http.MethodDelete, fmt.Sprintf("%s/submodels/%s", baseURL, encodedSubmodelID), nil)
+		})
+
+		patchPayload := map[string]any{
+			"id":        submodelID,
+			"modelType": "Submodel",
+			"description": []map[string]any{
+				{
+					"language": "en",
+					"text":     "patched description with existing submodel elements",
+				},
+			},
+		}
+
+		statusCode, body, err = requestJSON(http.MethodPatch, fmt.Sprintf("%s/submodels/%s/$metadata", baseURL, encodedSubmodelID), patchPayload)
+		require.NoError(t, err)
+		require.Equal(t, http.StatusNoContent, statusCode, "response=%s", string(body))
+
+		statusCode, body, err = requestJSON(http.MethodGet, fmt.Sprintf("%s/submodels/%s/$metadata", baseURL, encodedSubmodelID), nil)
+		require.NoError(t, err)
+		require.Equal(t, http.StatusOK, statusCode, "response=%s", string(body))
+
+		var metadata map[string]any
+		require.NoError(t, json.Unmarshal(body, &metadata), "response=%s", string(body))
+		descriptionRaw, hasDescription := metadata["description"]
+		require.True(t, hasDescription, "metadata must contain description after patch")
+		descriptionList, ok := descriptionRaw.([]any)
+		require.True(t, ok, "description must be an array")
+		require.Len(t, descriptionList, 1, "description should include patched language entry")
+	})
+
 	t.Run("PostSubmodelElementReturnsCreatedPayload", func(t *testing.T) {
 		submodelID := fmt.Sprintf("https://example.com/ids/sm/contract-post-element-%d", time.Now().UnixNano())
 		submodelIDShort := fmt.Sprintf("contractPostElement%d", time.Now().UnixNano())
@@ -641,6 +733,53 @@ func TestContractSubmodelRepository(t *testing.T) {
 		assert.Equal(t, "xs:string", nestedPropertyMetadata["valueType"])
 		_, hasNestedValue := nestedPropertyMetadata["value"]
 		assert.False(t, hasNestedValue, "nested property metadata should not include value payload")
+	})
+
+	t.Run("PatchSubmodelElementByPathMetadataAcceptsStringModelTypeAndUpdatesDescription", func(t *testing.T) {
+		submodelID := fmt.Sprintf("https://example.com/ids/sm/contract-patch-sme-metadata-%d", time.Now().UnixNano())
+		submodelIDShort := fmt.Sprintf("contractPatchSMEMetadata%d", time.Now().UnixNano())
+		encodedSubmodelID := createSubmodel(t, submodelID, submodelIDShort)
+
+		statusCode, body, err := requestJSON(http.MethodPost, fmt.Sprintf("%s/submodels/%s/submodel-elements", baseURL, encodedSubmodelID), map[string]any{
+			"idShort":   "MetadataProperty",
+			"modelType": "Property",
+			"valueType": "xs:string",
+			"value":     "original-value",
+		})
+		require.NoError(t, err)
+		require.Equal(t, http.StatusCreated, statusCode, "response=%s", string(body))
+
+		patchPayload := map[string]any{
+			"idShort":   "MetadataProperty",
+			"modelType": "Property",
+			"description": []map[string]any{
+				{
+					"language": "en",
+					"text":     "patched metadata description",
+				},
+				{
+					"language": "de",
+					"text":     "gepatchte metadatenbeschreibung",
+				},
+			},
+		}
+
+		statusCode, body, err = requestJSON(http.MethodPatch, fmt.Sprintf("%s/submodels/%s/submodel-elements/MetadataProperty/$metadata", baseURL, encodedSubmodelID), patchPayload)
+		require.NoError(t, err)
+		require.Equal(t, http.StatusNoContent, statusCode, "response=%s", string(body))
+
+		statusCode, body, err = requestJSON(http.MethodGet, fmt.Sprintf("%s/submodels/%s/submodel-elements/MetadataProperty/$metadata", baseURL, encodedSubmodelID), nil)
+		require.NoError(t, err)
+		require.Equal(t, http.StatusOK, statusCode, "response=%s", string(body))
+
+		var metadata map[string]any
+		require.NoError(t, json.Unmarshal(body, &metadata), "response=%s", string(body))
+
+		descriptionRaw, hasDescription := metadata["description"]
+		require.True(t, hasDescription, "metadata must contain description after patch")
+		descriptionList, ok := descriptionRaw.([]any)
+		require.True(t, ok, "description must be an array")
+		require.Len(t, descriptionList, 2, "description should include both patched language entries")
 	})
 }
 

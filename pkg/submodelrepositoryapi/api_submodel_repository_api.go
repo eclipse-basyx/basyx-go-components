@@ -885,10 +885,17 @@ func (c *SubmodelRepositoryAPIAPIController) PatchSubmodelByIDMetadata(w http.Re
 		c.errorHandler(w, r, &RequiredError{"submodelIdentifier"}, nil)
 		return
 	}
-	var submodelMetadataParam model.SubmodelMetadata
+
+	var jsonable any
 	d := json.NewDecoder(r.Body)
 	d.DisallowUnknownFields()
-	if err := d.Decode(&submodelMetadataParam); err != nil {
+	if err := d.Decode(&jsonable); err != nil {
+		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
+		return
+	}
+
+	submodelMetadataParam, err := common.ParseSubmodelMetadataPayload(jsonable)
+	if err != nil {
 		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
 		return
 	}
@@ -1666,10 +1673,16 @@ func (c *SubmodelRepositoryAPIAPIController) PatchSubmodelElementByPathMetadataS
 		c.errorHandler(w, r, &RequiredError{"idShortPath"}, nil)
 		return
 	}
-	var submodelElementMetadataParam model.SubmodelElementMetadata
+	var jsonable any
 	d := json.NewDecoder(r.Body)
 	d.DisallowUnknownFields()
-	if err := d.Decode(&submodelElementMetadataParam); err != nil {
+	if err := d.Decode(&jsonable); err != nil {
+		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
+		return
+	}
+
+	submodelElementMetadataParam, err := common.ParseSubmodelElementMetadataPayload(jsonable)
+	if err != nil {
 		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
 		return
 	}
