@@ -108,16 +108,16 @@ func BuildIDShortPathFromSegments(segments []Segment) string {
 	var builder strings.Builder
 	for i, segment := range segments {
 		if segment.IsIndex {
-			builder.WriteString("[")
-			builder.WriteString(segment.Value)
-			builder.WriteString("]")
+			_, _ = builder.WriteString("[")
+			_, _ = builder.WriteString(segment.Value)
+			_, _ = builder.WriteString("]")
 			continue
 		}
 
 		if i > 0 {
-			builder.WriteString(".")
+			_, _ = builder.WriteString(".")
 		}
-		builder.WriteString(segment.Value)
+		_, _ = builder.WriteString(segment.Value)
 	}
 
 	return builder.String()
