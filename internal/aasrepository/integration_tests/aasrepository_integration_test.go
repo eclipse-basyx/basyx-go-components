@@ -237,6 +237,69 @@ func getJSONResponse(endpoint string) (map[string]any, int, error) {
 	return payload, resp.StatusCode, nil
 }
 
+func putJSONResponse(endpoint string, body string) (map[string]any, int, http.Header, error) {
+	req, err := http.NewRequest(http.MethodPut, endpoint, strings.NewReader(body))
+	if err != nil {
+		return nil, 0, nil, fmt.Errorf("failed to create request: %v", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, 0, nil, fmt.Errorf("failed to send request: %v", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	responseBody, readErr := io.ReadAll(resp.Body)
+	if readErr != nil {
+		return nil, resp.StatusCode, resp.Header.Clone(), fmt.Errorf("failed to read response body: %v", readErr)
+	}
+
+	if strings.TrimSpace(string(responseBody)) == "" {
+		return nil, resp.StatusCode, resp.Header.Clone(), nil
+	}
+
+	var payload map[string]any
+	if unmarshalErr := json.Unmarshal(responseBody, &payload); unmarshalErr != nil {
+		return nil, resp.StatusCode, resp.Header.Clone(), fmt.Errorf("failed to unmarshal response body: %v", unmarshalErr)
+	}
+
+	return payload, resp.StatusCode, resp.Header.Clone(), nil
+}
+
+func deleteResponseStatus(endpoint string) (int, error) {
+	req, err := http.NewRequest(http.MethodDelete, endpoint, nil)
+	if err != nil {
+		return 0, fmt.Errorf("failed to create request: %v", err)
+	}
+
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return 0, fmt.Errorf("failed to send request: %v", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	return resp.StatusCode, nil
+}
+
+func getResponseStatus(endpoint string) (int, error) {
+	req, err := http.NewRequest(http.MethodGet, endpoint, nil)
+	if err != nil {
+		return 0, fmt.Errorf("failed to create request: %v", err)
+	}
+
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return 0, fmt.Errorf("failed to send request: %v", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	return resp.StatusCode, nil
+}
+
 func getThumbnailWithoutFollowingRedirect(endpoint string) (int, string, error) {
 	req, err := http.NewRequest(http.MethodGet, endpoint, nil)
 	if err != nil {
@@ -340,6 +403,146 @@ func TestIntegration(t *testing.T) {
 			return fmt.Sprintf("Step_(%s)_%d_%s_%s", context, stepNumber, step.Method, step.Endpoint)
 		},
 	})
+}
+
+func TestPutSubmodelByIdAasRepositoryReturnsCreatedSubmodelAnd201(t *testing.T) {
+	baseURL := "http://localhost:6004"
+	aasID := fmt.Sprintf("https://example.com/ids/aas/put-submodel-create-%d", time.Now().UnixNano())
+	aasIdentifier := base64.RawURLEncoding.EncodeToString([]byte(aasID))
+
+	statusCode, err := createAASForThumbnailTest(baseURL, aasID)
+	require.NoError(t, err, "AAS creation failed")
+	require.Equal(t, http.StatusCreated, statusCode, "Expected 201 Created for AAS creation")
+
+	submodelID := fmt.Sprintf("https://example.com/ids/sm/put-submodel-create-%d", time.Now().UnixNano())
+	submodelIdentifier := base64.RawURLEncoding.EncodeToString([]byte(submodelID))
+	endpoint := fmt.Sprintf("%s/shells/%s/submodels/%s", baseURL, aasIdentifier, submodelIdentifier)
+
+	body := fmt.Sprintf(
+		`{"id":"%s","idShort":"PutCreateSubmodel","modelType":"Submodel","kind":"Instance","submodelElements":[{"idShort":"prop1","modelType":"Property","valueType":"xs:string","value":"hello"}]}`,
+		submodelID,
+	)
+
+	payload, putStatusCode, headers, putErr := putJSONResponse(endpoint, body)
+	require.NoError(t, putErr, "PUT submodel request failed")
+	require.Equal(t, http.StatusCreated, putStatusCode, "Expected 201 Created when creating new submodel via AAS endpoint")
+	require.NotNil(t, payload, "Expected response payload for created submodel")
+	assert.Equal(t, submodelID, payload["id"], "Expected response body to contain created submodel id")
+	assert.Equal(t, "PutCreateSubmodel", payload["idShort"], "Expected response body to contain created submodel idShort")
+	assert.Equal(t, "Submodel", payload["modelType"], "Expected response body to contain created submodel modelType")
+	assert.Equal(t, endpoint, headers.Get("Location"), "Expected Location header to point to created submodel resource")
+}
+
+func TestPutSubmodelByIdAasRepositoryReturnsNoContentOnUpdate(t *testing.T) {
+	baseURL := "http://localhost:6004"
+	aasID := fmt.Sprintf("https://example.com/ids/aas/put-submodel-update-%d", time.Now().UnixNano())
+	aasIdentifier := base64.RawURLEncoding.EncodeToString([]byte(aasID))
+
+	statusCode, err := createAASForThumbnailTest(baseURL, aasID)
+	require.NoError(t, err, "AAS creation failed")
+	require.Equal(t, http.StatusCreated, statusCode, "Expected 201 Created for AAS creation")
+
+	submodelID := fmt.Sprintf("https://example.com/ids/sm/put-submodel-update-%d", time.Now().UnixNano())
+	submodelIdentifier := base64.RawURLEncoding.EncodeToString([]byte(submodelID))
+	endpoint := fmt.Sprintf("%s/shells/%s/submodels/%s", baseURL, aasIdentifier, submodelIdentifier)
+
+	initialBody := fmt.Sprintf(
+		`{"id":"%s","idShort":"PutUpdateSubmodel","modelType":"Submodel","kind":"Instance","submodelElements":[{"idShort":"prop1","modelType":"Property","valueType":"xs:string","value":"before"}]}`,
+		submodelID,
+	)
+
+	_, initialStatusCode, _, initialErr := putJSONResponse(endpoint, initialBody)
+	require.NoError(t, initialErr, "Initial PUT submodel request failed")
+	require.Equal(t, http.StatusCreated, initialStatusCode, "Expected 201 Created for initial PUT")
+
+	updatedBody := fmt.Sprintf(
+		`{"id":"%s","idShort":"PutUpdateSubmodel","modelType":"Submodel","kind":"Instance","submodelElements":[{"idShort":"prop1","modelType":"Property","valueType":"xs:string","value":"after"}]}`,
+		submodelID,
+	)
+
+	updatePayload, updateStatusCode, updateHeaders, updateErr := putJSONResponse(endpoint, updatedBody)
+	require.NoError(t, updateErr, "Update PUT submodel request failed")
+	require.Equal(t, http.StatusNoContent, updateStatusCode, "Expected 204 No Content for update PUT")
+	assert.Nil(t, updatePayload, "Expected empty response body for update PUT")
+	assert.Empty(t, updateHeaders.Get("Location"), "Expected no Location header for update PUT")
+
+	getPayload, getStatusCode, getErr := getJSONResponse(endpoint)
+	require.NoError(t, getErr, "GET submodel after update failed")
+	require.Equal(t, http.StatusOK, getStatusCode, "Expected 200 OK for GET after update PUT")
+
+	submodelElements, ok := getPayload["submodelElements"].([]any)
+	require.True(t, ok, "Expected submodelElements in GET response")
+	require.NotEmpty(t, submodelElements, "Expected submodelElements to contain updated property")
+
+	firstElement, ok := submodelElements[0].(map[string]any)
+	require.True(t, ok, "Expected first submodel element as object")
+	assert.Equal(t, "after", firstElement["value"], "Expected updated property value to be persisted")
+}
+
+func TestGetSubmodelByIdAasRepositoryReturnsSubmodel(t *testing.T) {
+	baseURL := "http://localhost:6004"
+	aasID := fmt.Sprintf("https://example.com/ids/aas/get-submodel-%d", time.Now().UnixNano())
+	aasIdentifier := base64.RawURLEncoding.EncodeToString([]byte(aasID))
+
+	statusCode, err := createAASForThumbnailTest(baseURL, aasID)
+	require.NoError(t, err, "AAS creation failed")
+	require.Equal(t, http.StatusCreated, statusCode, "Expected 201 Created for AAS creation")
+
+	submodelID := fmt.Sprintf("https://example.com/ids/sm/get-submodel-%d", time.Now().UnixNano())
+	submodelIdentifier := base64.RawURLEncoding.EncodeToString([]byte(submodelID))
+	endpoint := fmt.Sprintf("%s/shells/%s/submodels/%s", baseURL, aasIdentifier, submodelIdentifier)
+
+	body := fmt.Sprintf(
+		`{"id":"%s","idShort":"GetSubmodelViaAAS","modelType":"Submodel","kind":"Instance","submodelElements":[{"idShort":"prop1","modelType":"Property","valueType":"xs:string","value":"hello"}]}`,
+		submodelID,
+	)
+	_, putStatusCode, _, putErr := putJSONResponse(endpoint, body)
+	require.NoError(t, putErr, "PUT submodel request failed")
+	require.Equal(t, http.StatusCreated, putStatusCode, "Expected 201 Created when creating submodel via AAS endpoint")
+
+	payload, getStatusCode, getErr := getJSONResponse(endpoint + "?level=core")
+	require.NoError(t, getErr, "GET submodel request failed")
+	require.Equal(t, http.StatusOK, getStatusCode, "Expected 200 OK for GET submodel via AAS endpoint")
+	assert.Equal(t, submodelID, payload["id"], "Expected submodel id in GET response")
+	assert.Equal(t, "GetSubmodelViaAAS", payload["idShort"], "Expected submodel idShort in GET response")
+	assert.Equal(t, "Submodel", payload["modelType"], "Expected submodel modelType in GET response")
+}
+
+func TestDeleteSubmodelByIdAasRepositoryDeletesSubmodelAndReference(t *testing.T) {
+	baseURL := "http://localhost:6004"
+	aasID := fmt.Sprintf("https://example.com/ids/aas/delete-submodel-%d", time.Now().UnixNano())
+	aasIdentifier := base64.RawURLEncoding.EncodeToString([]byte(aasID))
+
+	statusCode, err := createAASForThumbnailTest(baseURL, aasID)
+	require.NoError(t, err, "AAS creation failed")
+	require.Equal(t, http.StatusCreated, statusCode, "Expected 201 Created for AAS creation")
+
+	submodelID := fmt.Sprintf("https://example.com/ids/sm/delete-submodel-%d", time.Now().UnixNano())
+	submodelIdentifier := base64.RawURLEncoding.EncodeToString([]byte(submodelID))
+	endpoint := fmt.Sprintf("%s/shells/%s/submodels/%s", baseURL, aasIdentifier, submodelIdentifier)
+
+	body := fmt.Sprintf(
+		`{"id":"%s","idShort":"DeleteSubmodelViaAAS","modelType":"Submodel","kind":"Instance","submodelElements":[{"idShort":"prop1","modelType":"Property","valueType":"xs:string","value":"hello"}]}`,
+		submodelID,
+	)
+	_, putStatusCode, _, putErr := putJSONResponse(endpoint, body)
+	require.NoError(t, putErr, "PUT submodel request failed")
+	require.Equal(t, http.StatusCreated, putStatusCode, "Expected 201 Created when creating submodel via AAS endpoint")
+
+	deleteStatusCode, deleteErr := deleteResponseStatus(endpoint)
+	require.NoError(t, deleteErr, "DELETE submodel request failed")
+	require.Equal(t, http.StatusNoContent, deleteStatusCode, "Expected 204 No Content for DELETE submodel via AAS endpoint")
+
+	referencesPayload, referencesStatusCode, referencesErr := getJSONResponse(fmt.Sprintf("%s/shells/%s/submodel-refs", baseURL, aasIdentifier))
+	require.NoError(t, referencesErr, "GET submodel references failed")
+	require.Equal(t, http.StatusOK, referencesStatusCode, "Expected 200 OK for GET submodel references")
+	result, ok := referencesPayload["result"].([]any)
+	require.True(t, ok, "Expected result array in submodel references response")
+	assert.Len(t, result, 0, "Expected no submodel references after deletion")
+
+	getDeletedStatusCode, getDeletedErr := getResponseStatus(endpoint)
+	require.NoError(t, getDeletedErr, "GET deleted submodel request failed")
+	require.Equal(t, http.StatusNotFound, getDeletedStatusCode, "Expected 404 Not Found for deleted submodel")
 }
 
 func TestThumbnailAttachmentOperations(t *testing.T) {
