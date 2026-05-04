@@ -479,6 +479,20 @@ func (s *AssetAdministrationShellDatabase) createSubmodelReferenceInAssetAdminis
 		return common.NewInternalServerError("AASREPO-CHECKSMREFINAAS-GETAASDBID " + err.Error())
 	}
 
+	keys := submodelRef.Keys()
+	if len(keys) > 0 {
+		submodelIdentifier := keys[0].Value()
+		if submodelIdentifier != "" {
+			checkErr := s.checkIfSubmodelReferenceExistsInAssetAdministrationShellInTransaction(tx, aasIdentifier, submodelIdentifier)
+			if checkErr == nil {
+				return common.NewErrConflict("AASREPO-NEWSMREFINAAS-CONFLICT Submodel reference to Submodel with ID '" + submodelIdentifier + "' already exists in Asset Administration Shell with ID '" + aasIdentifier + "'")
+			}
+			if !common.IsErrNotFound(checkErr) {
+				return checkErr
+			}
+		}
+	}
+
 	dialect := goqu.Dialect("postgres")
 
 	nextPosition, nextPositionErr := s.getNextSubmodelReferencePositionInTransaction(tx, aasDBID)

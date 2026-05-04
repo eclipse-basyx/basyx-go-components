@@ -294,6 +294,23 @@ func putJSONResponse(endpoint string, body string) (map[string]any, int, http.He
 	return payload, resp.StatusCode, resp.Header.Clone(), nil
 }
 
+func postResponseStatus(endpoint string, body string) (int, error) {
+	req, err := http.NewRequest(http.MethodPost, endpoint, strings.NewReader(body))
+	if err != nil {
+		return 0, fmt.Errorf("failed to create request: %v", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return 0, fmt.Errorf("failed to send request: %v", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	return resp.StatusCode, nil
+}
+
 func deleteResponseStatus(endpoint string) (int, error) {
 	req, err := http.NewRequest(http.MethodDelete, endpoint, nil)
 	if err != nil {
@@ -614,6 +631,28 @@ func TestGetSubmodelByIdAasRepositoryReturnsSubmodel(t *testing.T) {
 	assert.Equal(t, submodelID, payload["id"], "Expected submodel id in GET response")
 	assert.Equal(t, "GetSubmodelViaAAS", payload["idShort"], "Expected submodel idShort in GET response")
 	assert.Equal(t, "Submodel", payload["modelType"], "Expected submodel modelType in GET response")
+}
+
+func TestPostSubmodelReferenceAasRepositoryReturnsConflictOnDuplicate(t *testing.T) {
+	baseURL := "http://localhost:6004"
+	aasID := fmt.Sprintf("https://example.com/ids/aas/submodel-ref-duplicate-%d", time.Now().UnixNano())
+	aasIdentifier := base64.RawURLEncoding.EncodeToString([]byte(aasID))
+
+	statusCode, err := createAASForThumbnailTest(baseURL, aasID)
+	require.NoError(t, err, "AAS creation failed")
+	require.Equal(t, http.StatusCreated, statusCode, "Expected 201 Created for AAS creation")
+
+	submodelID := fmt.Sprintf("https://example.com/ids/sm/submodel-ref-duplicate-%d", time.Now().UnixNano())
+	endpoint := fmt.Sprintf("%s/shells/%s/submodel-refs", baseURL, aasIdentifier)
+	requestBody := fmt.Sprintf(`{"type":"ModelReference","keys":[{"type":"Submodel","value":"%s"}]}`, submodelID)
+
+	firstStatusCode, firstErr := postResponseStatus(endpoint, requestBody)
+	require.NoError(t, firstErr, "First POST submodel reference request failed")
+	require.Equal(t, http.StatusCreated, firstStatusCode, "Expected 201 Created for first POST submodel reference")
+
+	secondStatusCode, secondErr := postResponseStatus(endpoint, requestBody)
+	require.NoError(t, secondErr, "Second POST submodel reference request failed")
+	require.Equal(t, http.StatusConflict, secondStatusCode, "Expected 409 Conflict when posting duplicate submodel reference")
 }
 
 func TestSubmodelSuperPathEndpointsAasRepository(t *testing.T) {
