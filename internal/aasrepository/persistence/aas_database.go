@@ -404,9 +404,17 @@ func (s *AssetAdministrationShellDatabase) createSubmodelReferenceInAssetAdminis
 			"AASREPO-NEWSMREFINAAS-STARTTX",
 			"AASREPO-NEWSMREFINAAS-COMMIT",
 			func(tx *sql.Tx) error {
-				return s.createSubmodelReferenceInAssetAdministrationShellWithTransaction(ctx, tx, aasIdentifier, submodelRef)
+				return s.createSubmodelReferenceInAssetAdministrationShellWithinTransaction(ctx, tx, aasIdentifier, submodelRef)
 			},
 		)
+	}
+
+	return s.createSubmodelReferenceInAssetAdministrationShellWithinTransaction(ctx, tx, aasIdentifier, submodelRef)
+}
+
+func (s *AssetAdministrationShellDatabase) createSubmodelReferenceInAssetAdministrationShellWithinTransaction(ctx context.Context, tx *sql.Tx, aasIdentifier string, submodelRef types.IReference) error {
+	if tx == nil {
+		return common.NewErrBadRequest("AASREPO-NEWSMREFINAAS-NILTX transaction must not be nil")
 	}
 
 	shouldEnforce, enforceErr := shouldEnforceFormula(ctx, "AASREPO-NEWSMREFINAAS-SHOULDENFORCE")
@@ -426,8 +434,7 @@ func (s *AssetAdministrationShellDatabase) createSubmodelReferenceInAssetAdminis
 		}
 	}
 
-	err = s.createSubmodelReferenceInAssetAdministrationShellInTransaction(tx, aasIdentifier, submodelRef)
-	if err != nil {
+	if err := s.createSubmodelReferenceInAssetAdministrationShellInTransaction(tx, aasIdentifier, submodelRef); err != nil {
 		return err
 	}
 

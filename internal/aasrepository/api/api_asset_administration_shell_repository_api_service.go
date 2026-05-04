@@ -610,6 +610,7 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) PutSubmodelByIdAasRepo
 	}
 
 	var isUpdate bool
+	var referenceCreateAASNotFound bool
 	submodelReference := types.NewReference(
 		types.ReferenceTypesModelReference,
 		[]types.IKey{types.NewKey(types.KeyTypesSubmodel, decodedSubmodelIdentifier)},
@@ -627,6 +628,7 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) PutSubmodelByIdAasRepo
 
 			createReferenceErr := s.assetAdministrationShellBackend.CreateSubmodelReferenceInAssetAdministrationShellInTransaction(ctx, tx, decodedAASIdentifier, submodelReference)
 			if createReferenceErr != nil && !common.IsErrConflict(createReferenceErr) {
+				referenceCreateAASNotFound = isCreateSubmodelReferenceAASNotFoundErr(createReferenceErr)
 				return createReferenceErr
 			}
 			return nil
@@ -643,6 +645,9 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) PutSubmodelByIdAasRepo
 			return newAPIErrorResponse(txErr, http.StatusConflict, operation, "Conflict"), nil
 		}
 		if common.IsErrNotFound(txErr) {
+			if referenceCreateAASNotFound {
+				return newAPIErrorResponse(txErr, http.StatusNotFound, operation, "AssetAdministrationShellNotFound"), nil
+			}
 			return newAPIErrorResponse(txErr, http.StatusNotFound, operation, "SubmodelNotFound"), nil
 		}
 		return newAPIErrorResponse(txErr, http.StatusInternalServerError, operation, "PutSubmodel"), txErr
@@ -742,6 +747,17 @@ func deleteSubmodelElementsIfEmpty(jsonSubmodel map[string]any) {
 	if ok && len(elementArray) == 0 {
 		delete(jsonSubmodel, "submodelElements")
 	}
+}
+
+func validateNonNegativeLimit(limit int32, errorCode string) error {
+	if limit < 0 {
+		return common.NewErrBadRequest(errorCode + " limit must be >= 0")
+	}
+	return nil
+}
+
+func isCreateSubmodelReferenceAASNotFoundErr(err error) bool {
+	return common.IsErrNotFound(err) && strings.Contains(err.Error(), "AASREPO-NEWSMREFINAAS-AASNOTFOUND")
 }
 
 func buildLimitPtr(limit int32) *int {
@@ -1002,6 +1018,9 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) GetAllSubmodelElements
 	if !isLevelValid(level) {
 		return newAPIErrorResponse(errors.New("invalid level parameter"), http.StatusBadRequest, operation, "InvalidLevelParameter"), nil
 	}
+	if limitErr := validateNonNegativeLimit(limit, "AASREPO-GETALLSMES-BADLIMIT"); limitErr != nil {
+		return newAPIErrorResponse(limitErr, http.StatusBadRequest, operation, "BadRequest"), nil
+	}
 
 	decodedAASIdentifier, decodedSubmodelIdentifier, response, ok := decodeAASAndSubmodelIdentifiers(aasIdentifier, submodelIdentifier, operation)
 	if !ok {
@@ -1131,6 +1150,9 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) GetAllSubmodelElements
 	if response, err, ok := s.ensureSubmodelBackend(operation); !ok {
 		return response, err
 	}
+	if limitErr := validateNonNegativeLimit(limit, "AASREPO-GETALLSMESVAL-BADLIMIT"); limitErr != nil {
+		return newAPIErrorResponse(limitErr, http.StatusBadRequest, operation, "BadRequest"), nil
+	}
 
 	decodedAASIdentifier, decodedSubmodelIdentifier, response, ok := decodeAASAndSubmodelIdentifiers(aasIdentifier, submodelIdentifier, operation)
 	if !ok {
@@ -1202,6 +1224,9 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) GetAllSubmodelElements
 	if response, err, ok := s.ensureSubmodelBackend(operation); !ok {
 		return response, err
 	}
+	if limitErr := validateNonNegativeLimit(limit, "AASREPO-GETALLSMESREF-BADLIMIT"); limitErr != nil {
+		return newAPIErrorResponse(limitErr, http.StatusBadRequest, operation, "BadRequest"), nil
+	}
 
 	decodedAASIdentifier, decodedSubmodelIdentifier, response, ok := decodeAASAndSubmodelIdentifiers(aasIdentifier, submodelIdentifier, operation)
 	if !ok {
@@ -1256,6 +1281,9 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) GetAllSubmodelElements
 
 	if !isLevelValid(level) {
 		return newAPIErrorResponse(errors.New("invalid level parameter"), http.StatusBadRequest, operation, "InvalidLevelParameter"), nil
+	}
+	if limitErr := validateNonNegativeLimit(limit, "AASREPO-GETALLSMESPATH-BADLIMIT"); limitErr != nil {
+		return newAPIErrorResponse(limitErr, http.StatusBadRequest, operation, "BadRequest"), nil
 	}
 
 	decodedAASIdentifier, decodedSubmodelIdentifier, response, ok := decodeAASAndSubmodelIdentifiers(aasIdentifier, submodelIdentifier, operation)
