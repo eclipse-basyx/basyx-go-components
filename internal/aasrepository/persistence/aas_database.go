@@ -384,15 +384,12 @@ func mapCreateAASInsertError(err error) error {
 	return nil
 }
 
-// CreateSubmodelReferenceInAssetAdministrationShell adds a submodel reference with ABAC checks.
 func (s *AssetAdministrationShellDatabase) CreateSubmodelReferenceInAssetAdministrationShell(ctx context.Context, aasIdentifier string, submodelRef types.IReference) error {
-	tx, cleanup, err := common.StartTransaction(s.db)
-	if err != nil {
+	if err := s.verifyReference(submodelRef, "AASREPO-NEWSMREFINAAS-VERIFY"); err != nil {
 		return err
 	}
-	defer cleanup(&err)
 
-	err = s.CreateSubmodelReferenceInAssetAdministrationShellInTransaction(ctx, tx, aasIdentifier, submodelRef)
+	tx, cleanup, err := common.StartTransaction(s.db)
 	if err != nil {
 		return err
 	}
@@ -415,7 +412,8 @@ func (s *AssetAdministrationShellDatabase) CreateSubmodelReferenceInAssetAdminis
 		}
 	}
 
-	if err := s.createSubmodelReferenceInAssetAdministrationShellInTransaction(tx, aasIdentifier, submodelRef); err != nil {
+	err = s.CreateSubmodelReferenceInAssetAdministrationShellInTransaction(tx, aasIdentifier, submodelRef)
+	if err != nil {
 		return err
 	}
 
@@ -432,6 +430,10 @@ func (s *AssetAdministrationShellDatabase) CreateSubmodelReferenceInAssetAdminis
 		}
 	}
 
+	err = tx.Commit()
+	if err != nil {
+		return common.NewInternalServerError("AASREPO-NEWSMREFINAAS-COMMIT " + err.Error())
+	}
 	return nil
 }
 
@@ -451,7 +453,7 @@ func (s *AssetAdministrationShellDatabase) getNextSubmodelReferencePositionInTra
 }
 
 // createSubmodelReferenceInAssetAdministrationShellInTransaction adds a submodel reference within an existing transaction.
-func (s *AssetAdministrationShellDatabase) createSubmodelReferenceInAssetAdministrationShellInTransaction(tx *sql.Tx, aasIdentifier string, submodelRef types.IReference) error {
+func (s *AssetAdministrationShellDatabase) CreateSubmodelReferenceInAssetAdministrationShellInTransaction(tx *sql.Tx, aasIdentifier string, submodelRef types.IReference) error {
 	// check if aas exists
 	aasDBID, err := persistenceutils.GetAssetAdministrationShellDatabaseID(tx, aasIdentifier)
 	if err != nil {

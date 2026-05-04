@@ -514,7 +514,7 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) GetSubmodelByIdAasRepo
 		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "CheckIfSubmodelReferenceExistsInAssetAdministrationShell"), err
 	}
 
-	submodel, err := s.submodelBackend.GetSubmodelByIDWithContext(ctx, decodedSubmodelIdentifier, level)
+	submodel, err := s.submodelBackend.GetSubmodelByID(ctx, decodedSubmodelIdentifier, level, false)
 	if err != nil {
 		if common.IsErrDenied(err) {
 			return newAPIErrorResponse(err, http.StatusForbidden, operation, "Forbidden"), nil
@@ -595,14 +595,14 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) PutSubmodelByIdAasRepo
 				return existsErr
 			}
 
-			createErr := s.assetAdministrationShellBackend.CreateSubmodelReferenceInAssetAdministrationShellInTransaction(ctx, tx, decodedAASIdentifier, reference)
+			createErr := s.assetAdministrationShellBackend.CreateSubmodelReferenceInAssetAdministrationShellInTransaction(tx, decodedAASIdentifier, reference)
 			if createErr != nil {
 				return createErr
 			}
 			referenceCreated = true
 		}
 
-		isUpdate, putErr := s.submodelBackend.PutSubmodelInTransactionWithContext(ctx, tx, decodedSubmodelIdentifier, submodel)
+		isUpdate, putErr := s.submodelBackend.PutSubmodelInTransaction(ctx, tx, decodedSubmodelIdentifier, submodel)
 		if putErr != nil {
 			return putErr
 		}
@@ -669,7 +669,7 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) DeleteSubmodelByIdAasR
 			}
 		}
 
-		return s.submodelBackend.DeleteSubmodelInTransactionWithContext(ctx, tx, decodedSubmodelIdentifier)
+		return s.submodelBackend.DeleteSubmodelInTransaction(ctx, tx, decodedSubmodelIdentifier)
 	})
 	if err != nil {
 		if common.IsErrDenied(err) {
@@ -738,7 +738,7 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) PatchSubmodelAasReposi
 
 	_, patchIncludesSubmodelElements := patchJSON["submodelElements"]
 
-	existingSubmodels, _, getErr := s.submodelBackend.GetSubmodelsWithContext(ctx, 1, "", decodedSubmodelIdentifier)
+	existingSubmodels, _, getErr := s.submodelBackend.GetSubmodels(ctx, 1, "", decodedSubmodelIdentifier)
 	if getErr != nil {
 		if common.IsErrNotFound(getErr) || errors.Is(getErr, sql.ErrNoRows) {
 			return newAPIErrorResponse(getErr, http.StatusNotFound, operation, "SubmodelNotFound"), nil
@@ -774,9 +774,9 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) PatchSubmodelAasReposi
 
 	err := error(nil)
 	if patchIncludesSubmodelElements {
-		err = s.submodelBackend.PatchSubmodel(decodedSubmodelIdentifier, mergedSubmodel)
+		err = s.submodelBackend.PatchSubmodel(ctx, decodedSubmodelIdentifier, mergedSubmodel)
 	} else {
-		err = s.submodelBackend.PatchSubmodelMetadata(decodedSubmodelIdentifier, mergedSubmodel)
+		err = s.submodelBackend.PatchSubmodelMetadata(ctx, decodedSubmodelIdentifier, mergedSubmodel)
 	}
 	if err != nil {
 		if common.IsErrDenied(err) {

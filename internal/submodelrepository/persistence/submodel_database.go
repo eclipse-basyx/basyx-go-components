@@ -1282,6 +1282,33 @@ func (s *SubmodelDatabase) PutSubmodel(ctx context.Context, submodelID string, s
 	}
 	defer cleanup(&err)
 
+	isUpdate, err := s.PutSubmodelInTransaction(ctx, tx, submodelID, submodel)
+	if err != nil {
+		return false, err
+	}
+
+	err = tx.Commit()
+	if err != nil {
+		return false, common.NewInternalServerError("SMREPO-PUTSM-COMMIT " + err.Error())
+	}
+
+	return isUpdate, nil
+}
+
+// PutSubmodelInTransaction creates or replaces a submodel using an existing transaction.
+func (s *SubmodelDatabase) PutSubmodelInTransaction(ctx context.Context, tx *sql.Tx, submodelID string, submodel types.ISubmodel) (bool, error) {
+	if tx == nil {
+		return false, common.NewErrBadRequest("SMREPO-PUTSMINTX-NILTX transaction must not be nil")
+	}
+
+	if submodelID != submodel.ID() {
+		return false, common.NewErrBadRequest("SMREPO-PUTSM-IDMISMATCH Submodel ID in path and body do not match")
+	}
+
+	if err := s.verifySubmodel(submodel, "SMREPO-PUTSM-VERIFY"); err != nil {
+		return false, err
+	}
+
 	shouldEnforce, enforceErr := shouldEnforceFormula(ctx, "SMREPO-PUTSM-SHOULDENFORCE")
 	if enforceErr != nil {
 		return false, enforceErr
@@ -1322,52 +1349,6 @@ func (s *SubmodelDatabase) PutSubmodel(ctx context.Context, submodelID string, s
 	return isUpdate, nil
 }
 
-// PutSubmodelInTransactionWithContext creates or replaces a submodel in an existing transaction.
-func (s *SubmodelDatabase) PutSubmodelInTransactionWithContext(ctx context.Context, tx *sql.Tx, submodelID string, submodel types.ISubmodel) (bool, error) {
-	if tx == nil {
-		return false, common.NewErrBadRequest("SMREPO-PUTSMINTX-NILTX transaction must not be nil")
-	}
-
-	if submodelID != submodel.ID() {
-		return false, common.NewErrBadRequest("SMREPO-PUTSM-IDMISMATCH Submodel ID in path and body do not match")
-	}
-
-	if err := s.verifySubmodel(submodel, "SMREPO-PUTSM-VERIFY"); err != nil {
-		return false, err
-	}
-
-	return s.putSubmodelInTransactionWithContext(ctx, tx, submodelID, submodel)
-}
-
-// PutSubmodelWithContext creates or replaces a submodel and checks ABAC access on old/new state before commit when ABAC is enabled.
-func (s *SubmodelDatabase) PutSubmodelWithContext(ctx context.Context, submodelID string, submodel types.ISubmodel) (bool, error) {
-	if submodelID != submodel.ID() {
-		return false, common.NewErrBadRequest("SMREPO-PUTSM-IDMISMATCH Submodel ID in path and body do not match")
-	}
-
-	if err := s.verifySubmodel(submodel, "SMREPO-PUTSM-VERIFY"); err != nil {
-		return false, err
-	}
-
-	tx, cleanup, err := common.StartTransaction(s.db)
-	if err != nil {
-		return false, common.NewInternalServerError("SMREPO-PUTSM-STARTTX " + err.Error())
-	}
-	defer cleanup(&err)
-
-	isUpdate, err := s.putSubmodelInTransactionWithContext(ctx, tx, submodelID, submodel)
-	if err != nil {
-		return false, err
-	}
-
-	err = tx.Commit()
-	if err != nil {
-		return false, common.NewInternalServerError("SMREPO-PUTSM-COMMIT " + err.Error())
-	}
-
-	return isUpdate, nil
-}
-
 // DeleteSubmodel deletes a submodel and checks ABAC access on the existing submodel before delete when ABAC is enabled.
 func (s *SubmodelDatabase) DeleteSubmodel(ctx context.Context, submodelID string) (err error) {
 	tx, cleanup, err := common.StartTransaction(s.db)
@@ -1375,6 +1356,22 @@ func (s *SubmodelDatabase) DeleteSubmodel(ctx context.Context, submodelID string
 		return common.NewInternalServerError("SMREPO-DELSM-STARTTX " + err.Error())
 	}
 	defer cleanup(&err)
+
+	err = s.DeleteSubmodelInTransaction(ctx, tx, submodelID)
+	if err != nil {
+		return err
+	}
+
+	err = tx.Commit()
+	if err != nil {
+		return common.NewInternalServerError("SMREPO-DELSM-COMMIT " + err.Error())
+	}
+
+	return nil
+}
+
+// DeleteSubmodel deletes a submodel and checks ABAC access on the existing submodel before delete when ABAC is enabled using an existing transaction.
+func (s *SubmodelDatabase) DeleteSubmodelInTransaction(ctx context.Context, tx *sql.Tx, submodelID string) error {
 
 	shouldEnforce, enforceErr := shouldEnforceFormula(ctx, "SMREPO-DELSM-SHOULDENFORCE")
 	if enforceErr != nil {
@@ -1409,36 +1406,6 @@ func (s *SubmodelDatabase) DeleteSubmodel(ctx context.Context, submodelID string
 	err = deleteSubmodelByDatabaseID(tx, int64(submodelDatabaseID))
 	if err != nil {
 		return err
-	}
-
-	return nil
-}
-
-// DeleteSubmodelInTransactionWithContext deletes a submodel in an existing transaction.
-func (s *SubmodelDatabase) DeleteSubmodelInTransactionWithContext(ctx context.Context, tx *sql.Tx, submodelID string) error {
-	if tx == nil {
-		return common.NewErrBadRequest("SMREPO-DELSMINTX-NILTX transaction must not be nil")
-	}
-
-	return s.deleteSubmodelInTransactionWithContext(ctx, tx, submodelID)
-}
-
-// DeleteSubmodelWithContext deletes a submodel and checks ABAC access on the existing submodel before delete when ABAC is enabled.
-func (s *SubmodelDatabase) DeleteSubmodelWithContext(ctx context.Context, submodelID string) (err error) {
-	tx, cleanup, err := common.StartTransaction(s.db)
-	if err != nil {
-		return common.NewInternalServerError("SMREPO-DELSM-STARTTX " + err.Error())
-	}
-	defer cleanup(&err)
-
-	err = s.deleteSubmodelInTransactionWithContext(ctx, tx, submodelID)
-	if err != nil {
-		return err
-	}
-
-	err = tx.Commit()
-	if err != nil {
-		return common.NewInternalServerError("SMREPO-DELSM-COMMIT " + err.Error())
 	}
 
 	return nil
