@@ -13,12 +13,37 @@
         "expectedStatus": 200
     },
     {
-        "context": "Post Submodel",
+        "context": "Get All Submodels (Trailing Slash)",
+        "method": "GET",
+        "endpoint": "http://localhost:6004/submodels/",
+        "expectedStatus": 200
+    },
+    {
+        "context": "Replace Submodel (Trailing Slash)",
+        "method": "PUT",
+        "endpoint": "http://localhost:6004/submodels/",
+        "expectedStatus": 405
+    },
+    {
+        "context": "Delete Submodel (Trailing Slash)",
+        "method": "DELETE",
+        "endpoint": "http://localhost:6004/submodels/",
+        "expectedStatus": 405
+    },
+    {
+        "context": "Post Submodel (Trailing Slash)",
         "method": "POST",
-        "endpoint": "http://localhost:6004/submodels",
+        "endpoint": "http://localhost:6004/submodels/",
         "data": "bodies/post/postSubmodel.json",
         "shouldMatch": "bodies/post/postSubmodel.json",
         "expectedStatus": 201
+    },
+    {
+        "context": "Get All Submodels (Nonexistent Cursor)",
+        "method": "GET",
+        "endpoint": "http://localhost:6004/submodels?cursor=ZG9lcy1ub3QtZXhpc3Q",
+        "shouldMatch": "expected/empty_paged_result.json",
+        "expectedStatus": 200
     },
     {
         "context": "Create Top Level Property",
@@ -42,6 +67,13 @@
         "expectedStatus": 200
     },
     {
+        "context": "Get All Submodels Reference (Nonexistent Cursor)",
+        "method": "GET",
+        "endpoint": "http://localhost:6004/submodels/$reference?cursor=ZG9lcy1ub3QtZXhpc3Q",
+        "shouldMatch": "expected/empty_paged_result.json",
+        "expectedStatus": 200
+    },
+    {
         "context": "Get All Submodel Elements Reference",
         "method": "GET",
         "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/$reference",
@@ -49,10 +81,24 @@
         "expectedStatus": 200
     },
     {
+        "context": "Get All Submodel Elements Reference (Nonexistent Cursor)",
+        "method": "GET",
+        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/$reference?cursor=ZG9lcy1ub3QtZXhpc3Q",
+        "shouldMatch": "expected/empty_paged_result.json",
+        "expectedStatus": 200
+    },
+    {
         "context": "Pagination valid",
         "method": "GET",
         "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements",
         "shouldMatch": "expected/expectedGetAllSMEWithPagination.json",
+        "expectedStatus": 200
+    },
+    {
+        "context": "Pagination nonexistent cursor",
+        "method": "GET",
+        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements?cursor=ZG9lcy1ub3QtZXhpc3Q",
+        "shouldMatch": "expected/empty_paged_result.json",
         "expectedStatus": 200
     },
     {

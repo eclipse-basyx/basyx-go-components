@@ -90,7 +90,7 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 	base := common.NormalizeBasePath(cfg.Server.ContextPath)
 
 	apiRouter := chi.NewRouter()
-	common.AddDefaultRouterErrorHandlers(apiRouter, "AASRepositoryService")
+	common.ConfigureAPIRouter(apiRouter, "AASRepositoryService")
 
 	if err := auth.SetupSecurity(ctx, cfg, apiRouter); err != nil {
 		return err

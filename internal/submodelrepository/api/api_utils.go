@@ -26,17 +26,15 @@
 package api
 
 import (
+	"encoding/json"
+	"errors"
 	"strings"
 
-	"github.com/FriedJannik/aas-go-sdk/jsonization"
-	"github.com/FriedJannik/aas-go-sdk/types"
+	"github.com/aas-core-works/aas-core3.1-golang/jsonization"
+	"github.com/aas-core-works/aas-core3.1-golang/types"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
+	submodelpath "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/path"
 )
-
-type modelReferencePathSegment struct {
-	value   string
-	isIndex bool
-}
 
 func buildModelReference(submodelID string, keyTypes []string, keyValues []string) (types.IReference, error) {
 	if submodelID == "" || len(keyTypes) == 0 || len(keyValues) == 0 || len(keyTypes) != len(keyValues) {
@@ -68,57 +66,19 @@ func buildModelReference(submodelID string, keyTypes []string, keyValues []strin
 	return jsonization.ReferenceFromJsonable(jsonableReference)
 }
 
-func parseModelReferencePathSegments(idShortPath string) ([]modelReferencePathSegment, error) {
-	if idShortPath == "" {
+func parseModelReferencePathSegments(idShortPath string) ([]submodelpath.Segment, error) {
+	segments, err := submodelpath.ParseIDShortPathSegments(idShortPath)
+	if err == nil {
+		return segments, nil
+	}
+
+	if errors.Is(err, submodelpath.ErrEmptyPath) {
 		return nil, common.NewErrBadRequest("SMREPO-BUILDREF-INVALIDPARAMS Invalid reference parameters")
 	}
-
-	segments := make([]modelReferencePathSegment, 0, 4)
-	current := strings.Builder{}
-
-	flushCurrent := func() {
-		if current.Len() == 0 {
-			return
-		}
-		segments = append(segments, modelReferencePathSegment{value: current.String()})
-		current.Reset()
+	if errors.Is(err, submodelpath.ErrEmptyListIndex) {
+		return nil, common.NewErrBadRequest("SMREPO-BUILDREF-INVALIDPATH Empty list index in idShort path")
 	}
-
-	for i := 0; i < len(idShortPath); i++ {
-		switch idShortPath[i] {
-		case '.':
-			flushCurrent()
-		case '[':
-			flushCurrent()
-			endIndex := strings.IndexByte(idShortPath[i+1:], ']')
-			if endIndex < 0 {
-				return nil, common.NewErrBadRequest("SMREPO-BUILDREF-INVALIDPATH Invalid idShort path syntax")
-			}
-
-			start := i + 1
-			end := start + endIndex
-			indexValue := idShortPath[start:end]
-			if indexValue == "" {
-				return nil, common.NewErrBadRequest("SMREPO-BUILDREF-INVALIDPATH Empty list index in idShort path")
-			}
-
-			segments = append(segments, modelReferencePathSegment{value: indexValue, isIndex: true})
-			i = end
-		default:
-			err := current.WriteByte(idShortPath[i])
-			if err != nil {
-				return nil, common.NewErrBadRequest("SMREPO-BUILDREF-INVALIDPATH Invalid idShort path syntax")
-			}
-		}
-	}
-
-	flushCurrent()
-
-	if len(segments) == 0 {
-		return nil, common.NewErrBadRequest("SMREPO-BUILDREF-INVALIDPATH Invalid idShort path syntax")
-	}
-
-	return segments, nil
+	return nil, common.NewErrBadRequest("SMREPO-BUILDREF-INVALIDPATH Invalid idShort path syntax")
 }
 
 func resolveModelReferencePathKeys(
@@ -142,18 +102,18 @@ func resolveModelReferencePathKeys(
 	for i, segment := range segments {
 		isLast := i == len(segments)-1
 
-		if segment.isIndex {
+		if segment.IsIndex {
 			keyTypes = append(keyTypes, "SubmodelElementList")
-			keyValues = append(keyValues, segment.value)
+			keyValues = append(keyValues, segment.Value)
 
-			currentPath += "[" + segment.value + "]"
+			currentPath += "[" + segment.Value + "]"
 			continue
 		}
 
 		if currentPath == "" {
-			currentPath = segment.value
+			currentPath = segment.Value
 		} else {
-			currentPath += "." + segment.value
+			currentPath += "." + segment.Value
 		}
 
 		keyType := finalModelType
@@ -169,7 +129,7 @@ func resolveModelReferencePathKeys(
 		}
 
 		keyTypes = append(keyTypes, keyType)
-		keyValues = append(keyValues, segment.value)
+		keyValues = append(keyValues, segment.Value)
 	}
 
 	return keyTypes, keyValues, nil
@@ -177,4 +137,66 @@ func resolveModelReferencePathKeys(
 
 func isLevelValid(level string) bool {
 	return level == "core" || level == "" || level == "deep"
+}
+
+func extractSubmodelIdentifierFromReference(reference types.IReference) (string, error) {
+	if reference == nil {
+		return "", common.NewInternalServerError("SMREPO-EXTRACTSMID-NILREFERENCE Submodel reference is nil")
+	}
+
+	keys := reference.Keys()
+	if len(keys) == 0 {
+		return "", common.NewInternalServerError("SMREPO-EXTRACTSMID-EMPTYKEYS Submodel reference contains no keys")
+	}
+
+	firstKey := keys[0]
+	if firstKey == nil {
+		return "", common.NewInternalServerError("SMREPO-EXTRACTSMID-NILKEY First reference key is nil")
+	}
+
+	if firstKey.Type() != types.KeyTypesSubmodel {
+		return "", common.NewInternalServerError("SMREPO-EXTRACTSMID-BADKEYTYPE First reference key is not of type Submodel")
+	}
+
+	submodelIdentifier := firstKey.Value()
+	if submodelIdentifier == "" {
+		return "", common.NewInternalServerError("SMREPO-EXTRACTSMID-EMPTYVALUE Submodel reference key value is empty")
+	}
+
+	return submodelIdentifier, nil
+}
+
+type allSubmodelsPathCursorState struct {
+	SubmodelCursor string `json:"submodelCursor,omitempty"`
+	PathCursor     string `json:"pathCursor,omitempty"`
+}
+
+func decodeAllSubmodelsPathCursorState(cursor string) allSubmodelsPathCursorState {
+	if strings.TrimSpace(cursor) == "" {
+		return allSubmodelsPathCursorState{}
+	}
+
+	var state allSubmodelsPathCursorState
+	if unmarshalErr := json.Unmarshal([]byte(cursor), &state); unmarshalErr == nil {
+		if state.SubmodelCursor != "" || state.PathCursor != "" {
+			return state
+		}
+	}
+
+	return allSubmodelsPathCursorState{SubmodelCursor: cursor}
+}
+
+func encodeAllSubmodelsPathCursorState(state allSubmodelsPathCursorState) (string, error) {
+	if state.SubmodelCursor == "" && state.PathCursor == "" {
+		return "", nil
+	}
+	if state.PathCursor == "" {
+		return state.SubmodelCursor, nil
+	}
+
+	payload, marshalErr := json.Marshal(state)
+	if marshalErr != nil {
+		return "", common.NewInternalServerError("SMREPO-ENCPATHCURSOR-MARSHAL " + marshalErr.Error())
+	}
+	return string(payload), nil
 }

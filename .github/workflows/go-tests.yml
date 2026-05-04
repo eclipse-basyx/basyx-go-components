@@ -266,6 +266,48 @@ jobs:
         run: |
           cd internal/digitaltwinregistry/integration_tests
           go test -v
+
+  aas-environment-integration-tests:
+    name: AAS Environment Integration Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v6
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Get dependencies
+        run: go mod download
+
+      - name: Run aas environment integration tests
+        run: |
+          cd internal/aasenvironment/integration_tests
+          go test -v .
+
+  digital-twin-registry-tractusx-integration-tests:
+    name: Digital Twin Registry Tractus-X Integration Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v6
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Get dependencies
+        run: go mod download
+
+      - name: Run digital twin registry Tractus-X integration tests
+        run: |
+          cd internal/digitaltwinregistry/tractus-x-integrationtests
+          go test -v
           
   concept-description-repository-integration-tests:
     name: Concept Description Repository Integration Tests
@@ -330,8 +372,8 @@ jobs:
           cd internal/smregistry/integration_tests
           go test -v
 
-  registry-of-infrastructures-integration-tests:
-    name: Registry of Infrastructures Integration Tests
+  company-lookup-integration-tests:
+    name: Company Lookup Integration Tests
     runs-on: ubuntu-latest
     steps:
       - name: Check out code
@@ -345,9 +387,9 @@ jobs:
       - name: Get dependencies
         run: go mod download
 
-      - name: Run registry of infrastructures integration tests
+      - name: Run company lookup integration tests
         run: |
-          cd internal/registryofinfrastructuresservice/integration_tests
+          cd internal/companylookupservice/integration_tests
           go test -v
 
   submodel-registry-security-tests:

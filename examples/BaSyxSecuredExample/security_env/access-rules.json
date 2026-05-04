@@ -1,44 +1,58 @@
 {
   "AllAccessPermissionRules": {
     "DEFATTRIBUTES": [
-      { "name": "anonym_attr", "attributes": [ { "GLOBAL": "ANONYMOUS" } ] },
-      { "name": "role_attr", "attributes": [ { "CLAIM": "role" } ] },
-      { "name": "member_attr", "attributes": [ { "CLAIM": "role" }, { "CLAIM": "clear" } ] }
+      { "name": "anonymous_attr", "attributes": [{ "GLOBAL": "ANONYMOUS" }] },
+      { "name": "role_attr", "attributes": [{ "CLAIM": "role" }] }
     ],
-
     "DEFOBJECTS": [
-      { "name": "description", "objects": [ { "ROUTE": "/description" }, { "ROUTE": "/api/v3/description" } ] },
-      { "name": "all_assetlinks", "objects": [ { "ROUTE": "/lookup/shells" }, { "ROUTE": "/lookup/shells/*" }] },
-      { "name": "all_shell_descriptors", "objects": [ {"DESCRIPTOR": "$aasdesc(\"*\")"}] }
-    ],
-
-    "DEFACLS": [
-      { "name": "read_anonymous", "acl": { "USEATTRIBUTES": "anonym_attr", "RIGHTS": ["READ"], "ACCESS": "ALLOW" } },
-      { "name": "read_role", "acl": { "USEATTRIBUTES": "role_attr", "RIGHTS": ["READ"], "ACCESS": "ALLOW" } },
-      { "name": "read_member", "acl": { "USEATTRIBUTES": "member_attr", "RIGHTS": ["READ"], "ACCESS": "ALLOW" } },
-      { "name": "write_admin", "acl": { "USEATTRIBUTES": "member_attr", "RIGHTS": ["ALL"], "ACCESS": "ALLOW" } }
-    ],
-
-    "DEFFORMULAS": [
-      { "name": "always_true", "formula": { "$boolean": true } },
-      { "name": "role_is_admin", "formula": { "$eq": [ { "$attribute": { "CLAIM": "role" } }, { "$strVal": "admin" } ] } }
-    ],
-
-    "rules": [
-      { "USEACL": "read_anonymous", "USEOBJECTS": ["description"], "USEFORMULA": "always_true" },
-      { "USEACL": "write_admin", "USEOBJECTS": ["all_shell_descriptors", "all_assetlinks"], "USEFORMULA": "role_is_admin" },
-      { "USEACL": "read_role", "USEOBJECTS": ["all_shell_descriptors", "all_assetlinks"], "FORMULA": 
-
-            {"$eq": [ { "$attribute": { "CLAIM": "role" } }, { "$strVal": "viewer" } ] },
-
-        "FILTER": {
-          "FRAGMENT": "$aasdesc#specificAssetIds[].externalSubjectId",
-          "CONDITION": 
-           {
-            "$boolean": false
-          }
-        }
+      {
+        "name": "public_description",
+        "objects": [{ "ROUTE": "/description" }]
+      },
+      {
+        "name": "public_product_info",
+        "objects": [
+          { "IDENTIFIABLE": "$aas(\"urn:fraunhofer:iese:dte:aas:drivemotor-dm3000:001\")" },
+          { "DESCRIPTOR": "$aasdesc(\"urn:fraunhofer:iese:dte:aas:drivemotor-dm3000:001\")" },
+          { "IDENTIFIABLE": "$sm(\"urn:fraunhofer:iese:dte:sm:nameplate:drivemotor-dm3000:001\")" },
+          { "DESCRIPTOR": "$smdesc(\"urn:fraunhofer:iese:dte:sm:nameplate:drivemotor-dm3000:001\")" },
+          { "IDENTIFIABLE": "$sm(\"urn:fraunhofer:iese:dte:sm:carbonfootprint:drivemotor-dm3000:001\")" },
+          { "DESCRIPTOR": "$smdesc(\"urn:fraunhofer:iese:dte:sm:carbonfootprint:drivemotor-dm3000:001\")" }
+        ]
+      },
+      {
+        "name": "all_api",
+        "objects": [
+          { "ROUTE": "/health" },
+          { "ROUTE": "/shell-descriptors" },
+          { "ROUTE": "/shell-descriptors/*" },
+          { "ROUTE": "/submodel-descriptors" },
+          { "ROUTE": "/submodel-descriptors/*" },
+          { "ROUTE": "/lookup/shells" },
+          { "ROUTE": "/lookup/shells/*" },
+          { "ROUTE": "/lookup/shellsByAssetLink" },
+          { "ROUTE": "/shells" },
+          { "ROUTE": "/shells/*" },
+          { "ROUTE": "/submodels" },
+          { "ROUTE": "/submodels/*" },
+          { "ROUTE": "/concept-descriptions" },
+          { "ROUTE": "/concept-descriptions/*" }
+        ]
       }
+    ],
+    "DEFACLS": [
+      { "name": "anonymous_read", "acl": { "USEATTRIBUTES": "anonymous_attr", "RIGHTS": ["READ"], "ACCESS": "ALLOW" } },
+      { "name": "viewer_read", "acl": { "USEATTRIBUTES": "role_attr", "RIGHTS": ["READ"], "ACCESS": "ALLOW" } },
+      { "name": "admin_full", "acl": { "USEATTRIBUTES": "role_attr", "RIGHTS": ["ALL"], "ACCESS": "ALLOW" } }
+    ],
+    "DEFFORMULAS": [
+      { "name": "is_admin", "formula": { "$eq": [{ "$attribute": { "CLAIM": "role" } }, { "$strVal": "admin" }] } },
+      { "name": "is_viewer", "formula": { "$eq": [{ "$attribute": { "CLAIM": "role" } }, { "$strVal": "viewer" }] } }
+    ],
+    "rules": [
+      { "USEACL": "anonymous_read", "USEOBJECTS": ["public_description", "public_product_info"], "FORMULA": { "$boolean": true } },
+      { "USEACL": "viewer_read", "USEOBJECTS": ["all_api"], "USEFORMULA": "is_viewer" },
+      { "USEACL": "admin_full", "USEOBJECTS": ["all_api"], "USEFORMULA": "is_admin" }
     ]
   }
 }

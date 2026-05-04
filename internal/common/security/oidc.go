@@ -57,7 +57,7 @@ type issuerVerifier struct {
 
 // OIDCSettings configures OIDC token verification.
 //
-// Providers: issuer/audience pairs (and scopes) allowed by this service.
+// Providers: issuers with optional audience checks (and scopes) allowed by this service.
 // AllowAnonymous: if true, requests without a Bearer token are treated as
 //
 //	anonymous instead of being rejected.
@@ -66,7 +66,8 @@ type OIDCSettings struct {
 	AllowAnonymous bool
 }
 
-// OIDCProviderSettings configures a single issuer/audience pair and scopes.
+// OIDCProviderSettings configures a single issuer and scopes, with optional
+// audience verification.
 type OIDCProviderSettings struct {
 	Issuer   string
 	Audience string
@@ -84,9 +85,6 @@ func NewOIDC(ctx context.Context, s OIDCSettings) (*OIDC, error) {
 		if issuer == "" {
 			return nil, fmt.Errorf("issuer must not be empty")
 		}
-		if audience == "" {
-			return nil, fmt.Errorf("audience must not be empty")
-		}
 		if _, ok := verifiers[issuer]; ok {
 			return nil, fmt.Errorf("duplicate issuer configured: %s", issuer)
 		}
@@ -96,7 +94,8 @@ func NewOIDC(ctx context.Context, s OIDCSettings) (*OIDC, error) {
 			return nil, fmt.Errorf("create OIDC provider: %w", err)
 		}
 
-		v := provider.Verifier(&oidc.Config{ClientID: audience})
+		verifierCfg := oidcVerifierConfig(audience)
+		v := provider.Verifier(verifierCfg)
 		if v == nil {
 			return nil, fmt.Errorf("failed to construct OIDC verifier")
 		}
@@ -106,10 +105,21 @@ func NewOIDC(ctx context.Context, s OIDCSettings) (*OIDC, error) {
 			verifier: v,
 			scopes:   p.Scopes,
 		}
-		log.Printf("✅ OIDC verifier created. Issuer=%s Audience=%s", issuer, audience)
+		if verifierCfg.SkipClientIDCheck {
+			log.Printf("✅ OIDC verifier created. Issuer=%s Audience=<skipped>", issuer)
+			continue
+		}
+		log.Printf("✅ OIDC verifier created. Issuer=%s Audience=%s", issuer, verifierCfg.ClientID)
 	}
 
 	return &OIDC{verifiers: verifiers, settings: s}, nil
+}
+
+func oidcVerifierConfig(audience string) *oidc.Config {
+	if strings.TrimSpace(audience) == "" {
+		return &oidc.Config{SkipClientIDCheck: true}
+	}
+	return &oidc.Config{ClientID: strings.TrimSpace(audience)}
 }
 
 type ctxKey string

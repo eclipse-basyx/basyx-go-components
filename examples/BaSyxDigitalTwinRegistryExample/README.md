@@ -1,150 +1,491 @@
 # BaSyx Digital Twin Registry Example
 
-> Status: **Work in progress** – not all filters and access rules from the reference implementation are implemented yet.
+## What This DTR Is And What Makes It Special
 
-This example shows how to run a BaSyx-based Digital Twin Registry that mirrors the concepts and behavior of the Tractus-X Digital Twin Registry as described in the Cross-Cutting Concepts document:
+This example runs a BaSyx Digital Twin Registry (DTR) with ABAC-based access control that follows the Tractus-X cross-cutting concept style.
 
-- Tractus-X DTR Cross-Cutting Concepts: https://github.com/eclipse-tractusx/sldt-digital-twin-registry/blob/main/docs/architecture/6-crosscutting-concepts.md
+What is special in this setup:
+- Access decisions are not only endpoint-based, they are also data-fragment-based. A caller can receive only parts of a shell descriptor depending on claims.
+- The `Edc-Bpn` HTTP header is injected as a claim and used in ABAC formulas (`bpn_or_public`, `bpn_or_public_with_header`, `bpn_match`) to filter data visibility.
+- `specificAssetIds[].externalSubjectId.keys[].value` drives tenant-specific visibility. `PUBLIC_READABLE` data is visible across tenants.
+- `PUT /shell-descriptors/{aasIdentifier}` has create-or-update semantics and authorization depends on whether the descriptor already exists.
 
-The goal of this example is to provide a local, docker-compose-based setup that closely follows that document while still being easy to experiment with and adapt.
-
-## What is implemented
-
-- Digital Twin Registry service running on `http://localhost:5004` with base path `/api/v3` (can be configured).
-- PostgreSQL database for persistence, started automatically via docker-compose.
-- ABAC-based access rules and trust list wiring (model and trust list loaded from `security_env`).
-- Keycloak identity provider running on `http://localhost:8080` for configuring realms, clients, and users.
-
-**Important:** This is an **in-progress** implementation:
-- Not all filters and access rules from the Tractus-X Cross-Cutting Concepts are implemented yet.
-- `externalSubjectId` handling is currently simplified (see below) and will be aligned with the reference document in a later iteration.
+Reference concept:
+- https://github.com/eclipse-tractusx/sldt-digital-twin-registry/blob/main/docs/architecture/6-crosscutting-concepts.md
 
 ## Prerequisites
 
 - Docker
-- Docker Compose (v2 or compatible)
+- Docker Compose
+- curl
+- jq
 
-Run all commands from the directory of this example:
-
+Run commands from:
 - `examples/BaSyxDigitalTwinRegistryExample`
 
-## How to start the example
-
-From this example directory, start all services via:
+Start services:
 
 ```bash
 docker compose up -d
 ```
 
-This will start:
-- PostgreSQL database (port `5432`).
-- Digital Twin Registry (port `5004`).
-- Keycloak (port `8080`).
+Services:
+- DTR API: `http://localhost:5004/api/v3`
+- Swagger: `http://localhost:5004/api/v3/swagger`
+- Keycloak: `http://localhost:8080`
 
-To stop and remove containers:
+Stop services:
 
 ```bash
 docker compose down
 ```
 
-## Services and endpoints
+## Test-Aligned Actor Setup
 
-### Digital Twin Registry API
+The walkthrough below is aligned with the DTR JSON integration suite under `internal/digitaltwinregistry/integration_tests`.
 
-- Base URL: `http://localhost:5004/api/v3`
-- OpenAPI / Swagger UI: `http://localhost:5004/api/v3/swagger`
+Set base URL:
 
-The main endpoints relevant for this example are:
+```bash
+export DTR_BASE="http://localhost:5004/api/v3"
+```
 
-- `POST /shell-descriptors`
-  - Use this to create (register) shell descriptors in the registry.
-  - In this example, **no access token is required** by default.
-  - In a real setup, a claim check in the access rules would enforce appropriate tokens.
-  - Optionally, you can send the BPN of the caller in the HTTP header `Edc-Bpn`. This value is injected as a claim into the access rules engine and can be used there (for example, to match against `externalSubjectId`).
+Get an admin access token (password grant, client `basyx-ui`, user `admin`, password `pwd`):
 
-- `GET /shell-descriptors`
-  - List shell descriptors from the registry.
-  - Shells are filtered based on `externalSubjectId` according to the configured access rules.
-  - Currently, `externalSubjectId` values are **still exposed in the response** for this endpoint; this is an in-progress behavior and will later be aligned with the Cross-Cutting Concepts document.
-  - As with `POST /shell-descriptors`, you can optionally send the BPN of the caller in the HTTP header `Edc-Bpn`, which is injected as a claim into the access rules engine and used to filter visible shells.
+```bash
+export KC_TOKEN_ENDPOINT="http://localhost:8080/realms/basyx/protocol/openid-connect/token"
+export ADMIN_TOKEN=$(curl -s -X POST "$KC_TOKEN_ENDPOINT" \
+  -H "Content-Type: application/x-www-form-urlencoded" \
+  -d "grant_type=password" \
+  -d "client_id=basyx-ui" \
+  -d "username=admin" \
+  -d "password=pwd" | jq -r .access_token)
+```
 
-- `GET /lookup/shellsByAssetLink`
-  - Lookup shell descriptors by asset link.
-  - Queries can include `externalSubjectId`. In this example, such IDs are **queried** but **not exposed in responses** (see below).
-  - Optionally, you can send the BPN of the caller in the HTTP header `Edc-Bpn`. This value is injected as a claim into the access rules engine and is used to filter which data is returned.
+Header profiles used in the examples:
 
-- `GET /lookup/shells/{id}`
-  - Lookup a specific shell descriptor by its ID.
-  - As with the previous endpoint, `externalSubjectId` information is currently filtered out from responses.
-  - Optionally, you can send the BPN of the caller in the HTTP header `Edc-Bpn`. This value is injected as a claim into the access rules engine and is used to filter which data is returned.
+```bash
+export HDR_BPN1="Edc-Bpn: BPN_COMPANY_001"
+export HDR_BPN2="Edc-Bpn: BPN_COMPANY_002"
+export HDR_BPN_UNKNOWN="Edc-Bpn: BPNL00000000015G"
+```
 
-#### `externalSubjectId` behavior (temporary)
+Important:
+- The header examples above are for local testing/integration tests only.
+- In a secured environment, end users must not be able to set or override `Edc-Bpn` directly.
+- `Edc-Bpn` controls data visibility and must come from trusted identity/network infrastructure.
 
-Currently, this example:
-- Supports queries involving `externalSubjectId`.
-- For most endpoints, **filters out `externalSubjectId` values from responses**.
-- For `GET /shell-descriptors`, `externalSubjectId` is currently still exposed in the response so that the filtering behavior can be inspected; this will be aligned with the reference behavior in a later iteration.
+## Payloads (Copy-Paste)
 
-The injected `Edc-Bpn` claim from the HTTP header is used in the access rules to filter data based on the `externalSubjectId`:
-- Data whose `externalSubjectId` matches the caller’s BPN (from `Edc-Bpn`) can be made visible.
-- Data that is marked as publicly readable can also be made visible.
-- Other data is filtered out according to the configured access rules.
+Create `shell-descriptor.json`:
 
-This is an intentional, temporary simplification. The long-term goal is to align the behavior exactly with the Tractus-X Cross-Cutting Concepts specification (see link above), where `externalSubjectId` is treated similarly to other fields, subject to fine-grained access rules rather than complete filtering.
+```json
+{
+  "idShort": "idShortExample",
+  "id": "e1eba3d7-91f0-4dac-a730-eaa1d35e035c-2",
+  "description": [
+    {
+      "language": "en",
+      "text": "Example of human readable description of digital twin."
+    }
+  ],
+  "specificAssetIds": [
+    {
+      "name": "partInstanceId",
+      "value": "24975539203421"
+    },
+    {
+      "name": "customerPartId",
+      "value": "231982",
+      "externalSubjectId": {
+        "type": "ExternalReference",
+        "keys": [
+          {
+            "type": "GlobalReference",
+            "value": "BPN_COMPANY_001"
+          }
+        ]
+      }
+    },
+    {
+      "name": "manufacturerId",
+      "value": "123829238",
+      "externalSubjectId": {
+        "type": "ExternalReference",
+        "keys": [
+          {
+            "type": "GlobalReference",
+            "value": "BPN_COMPANY_001"
+          },
+          {
+            "type": "GlobalReference",
+            "value": "BPN_COMPANY_002"
+          }
+        ]
+      }
+    },
+    {
+      "name": "manufacturerPartId",
+      "value": "231982",
+      "externalSubjectId": {
+        "type": "ExternalReference",
+        "keys": [
+          {
+            "type": "GlobalReference",
+            "value": "PUBLIC_READABLE"
+          }
+        ]
+      }
+    }
+  ],
+  "submodelDescriptors": [
+    {
+      "endpoints": [
+        {
+          "interface": "SUBMODEL-3.0",
+          "protocolInformation": {
+            "href": "https://edc.data.plane/mypath/submodel",
+            "endpointProtocol": "HTTP",
+            "endpointProtocolVersion": [
+              "1.1"
+            ],
+            "subprotocol": "DSP",
+            "subprotocolBody": "body with information required by subprotocol",
+            "subprotocolBodyEncoding": "plain",
+            "securityAttributes": [
+              {
+                "type": "NONE",
+                "key": "NONE",
+                "value": "NONE"
+              }
+            ]
+          }
+        }
+      ],
+      "idShort": "idShortExample",
+      "id": "cd47615b-daf3-4036-8670-d2f89349d388-2",
+      "semanticId": {
+        "type": "ExternalReference",
+        "keys": [
+          {
+            "type": "Submodel",
+            "value": "urn:bamm:io.catenax.serial_part_typization:1.1.0#SerialPartTypization"
+          }
+        ]
+      },
+      "description": [
+        {
+          "language": "de",
+          "text": "Beispiel einer lesbaren Beschreibung des Submodels."
+        },
+        {
+          "language": "en",
+          "text": "Example of human readable description of submodel"
+        }
+      ]
+    }
+  ]
+}
+```
 
-## Security and access rules
+Create `assetlink-num1.json`:
 
-Security for the Digital Twin Registry is configured via ABAC access rules and trust lists:
+```json
+[
+  {
+    "name": "partInstanceId",
+    "value": "24975539203421"
+  }
+]
+```
 
-- Access rules model path: `/security_env/access-rules.json`
-- Trust list path: `/security_env/trustlist.json`
+Create `assetlink-num2.json`:
 
-These files are mounted into the `digitaltwinregistry` container via the `security_env` directory in this example. You can adjust them to:
-- Enforce token-based access.
-- Add claim checks for specific operations (for example, requiring certain claims for `POST /shell-descriptors`).
-- Refine which data is visible to which subjects.
+```json
+[
+  {
+    "name": "customerPartId",
+    "value": "231982"
+  }
+]
+```
 
-In this example configuration:
-- The `POST /shell-descriptors` endpoint is usable without a token.
-- You can extend or tighten access rules by editing the JSON models in `security_env` and restarting the containers.
+Create `assetlink-num3.json`:
 
-## Keycloak configuration
+```json
+[
+  {
+    "name": "manufacturerId",
+    "value": "123829238"
+  }
+]
+```
 
-Keycloak is available at:
+Create `assetlink-num4.json`:
 
-- `http://localhost:8080`
+```json
+[
+  {
+    "name": "manufacturerPartId",
+    "value": "231982"
+  }
+]
+```
 
-From there you can:
-- Configure realms, clients, and users.
-- Adapt the identity setup to your organization.
+## Cross-Cutting Usage Walkthrough
 
-The concrete Keycloak configuration (realm import, admin credentials, etc.) is defined in:
+Use this encoded shell id in path calls:
 
-- This example directory: see `keycloak/` and the `keycloak` service section in `docker-compose.yml`.
+```bash
+export AAS_ID_B64="ZTFlYmEzZDctOTFmMC00ZGFjLWE3MzAtZWFhMWQzNWUwMzVjLTI"
+```
 
-## Configuration via docker-compose
+1. Create without token and without `Edc-Bpn`.
 
-The core behavior of this example is configured via environment variables in:
+```bash
+curl -i -X POST "$DTR_BASE/shell-descriptors" \
+  -H "Content-Type: application/json" \
+  --data-binary @shell-descriptor.json
+```
 
-- `examples/BaSyxDigitalTwinRegistryExample/docker-compose.yml`
+Expected result:
+- HTTP `403`.
+- Why: write requires create rights formula (`add_digital_twin`) from token claims.
 
-Notable options include:
-- `SERVER_PORT` and `SERVER_CONTEXTPATH` for the registry’s HTTP port and base path.
-- PostgreSQL connection parameters (`POSTGRES_*`).
-- ABAC and trust list paths (`ABAC_MODELPATH`, `OIDC_TRUSTLISTPATH`).
-- Flags such as `ABAC_ENABLED`, `GENERAL_ENABLEIMPLICITCASTS`, `GENERAL_ENABLEDESCRIPTORDEBUG`.
+2. Create without token but with non-matching BPN header.
 
-You can adapt these settings to your environment, then restart the stack with `docker compose up -d`.
+```bash
+curl -i -X POST "$DTR_BASE/shell-descriptors" \
+  -H "Content-Type: application/json" \
+  -H "$HDR_BPN_UNKNOWN" \
+  --data-binary @shell-descriptor.json
+```
 
-## Relation to Tractus-X DTR
+Expected result:
+- HTTP `403`.
+- Why: `Edc-Bpn` only influences data filtering rules, not missing create permission claims.
 
-This example is designed to **mirror the implementation** of the Tractus-X Digital Twin Registry’s cross-cutting concepts:
+3. Create with admin token.
 
-- Reference document: https://github.com/eclipse-tractusx/sldt-digital-twin-registry/blob/main/docs/architecture/6-crosscutting-concepts.md
+```bash
+curl -i -X POST "$DTR_BASE/shell-descriptors" \
+  -H "Authorization: Bearer $ADMIN_TOKEN" \
+  -H "Content-Type: application/json" \
+  --data-binary @shell-descriptor.json
+```
 
-When you experiment with this example, you can read that document side by side with this README to understand how:
-- Access rules are modeled and enforced.
-- Fields like `externalSubjectId` are meant to be handled.
-- Security and trust configuration are intended to work in a production-grade setup.
+Expected result:
+- HTTP `201`.
+- Body contains created descriptor.
+- Why: token provides the required create claim.
 
-Because this repository is still evolving, this example **does not yet cover all filters and access rules** described in the document, but it is structured to match that architecture and can be extended to reach full parity over time.
+4. Read descriptor by id without token/header.
+
+```bash
+curl -s -X GET "$DTR_BASE/shell-descriptors/$AAS_ID_B64" | jq
+```
+
+Expected result:
+- HTTP `200`.
+- `specificAssetIds` is not present.
+- `id` and `submodelDescriptors` are present.
+- Why: route-level read (`bpn_or_public`) still allows access because the descriptor contains `PUBLIC_READABLE`, but fragment filtering for `specificAssetIds` uses `bpn_or_public_with_header`, which requires a non-`<nil>` `Edc-Bpn` header.
+
+5. Read descriptor by id with non-matching BPN header (`BPNL00000000015G`).
+
+```bash
+curl -s -X GET "$DTR_BASE/shell-descriptors/$AAS_ID_B64" \
+  -H "$HDR_BPN_UNKNOWN" | jq
+```
+
+Expected result:
+- HTTP `200`.
+- Visible `specificAssetIds`: only `manufacturerPartId` (`PUBLIC_READABLE`).
+- Why: header is present but does not match tenant-specific keys, so only public fragment passes.
+
+6. Read descriptor by id as tenant `BPN_COMPANY_001`.
+
+```bash
+curl -s -X GET "$DTR_BASE/shell-descriptors/$AAS_ID_B64" \
+  -H "$HDR_BPN1" | jq
+```
+
+Expected result:
+- HTTP `200`.
+- Visible `specificAssetIds`: `customerPartId`, `manufacturerId` (with BPN1 key), and `manufacturerPartId`.
+- Why: BPN1 matches tenant-protected entries plus `PUBLIC_READABLE`.
+
+7. Read descriptor by id as tenant `BPN_COMPANY_002`.
+
+```bash
+curl -s -X GET "$DTR_BASE/shell-descriptors/$AAS_ID_B64" \
+  -H "$HDR_BPN2" | jq
+```
+
+Expected result:
+- HTTP `200`.
+- Visible `specificAssetIds`: `manufacturerId` (with BPN2 key) and `manufacturerPartId`.
+- Why: BPN2 can only see matching fragments and public fragments.
+
+8. Read descriptor by id with admin token.
+
+```bash
+curl -s -X GET "$DTR_BASE/shell-descriptors/$AAS_ID_B64" \
+  -H "Authorization: Bearer $ADMIN_TOKEN" | jq
+```
+
+Expected result:
+- HTTP `200`.
+- Full descriptor is visible.
+- Why: token-based read formula grants full read for this user in the integration-test-aligned setup.
+
+9. Lookup by asset link with no token and no header (`customerPartId`).
+
+```bash
+curl -s -X POST "$DTR_BASE/lookup/shellsByAssetLink" \
+  -H "Content-Type: application/json" \
+  --data-binary @assetlink-num2.json | jq
+```
+
+Expected result:
+- HTTP `200`.
+- Empty result:
+
+```json
+{
+  "paging_metadata": {}
+}
+```
+
+- Why: query value is not `PUBLIC_READABLE` and no matching `Edc-Bpn` claim is present.
+
+Public lookup still works without header when the queried asset link itself is `PUBLIC_READABLE` (`manufacturerPartId`):
+
+```bash
+curl -s -X POST "$DTR_BASE/lookup/shellsByAssetLink" \
+  -H "Content-Type: application/json" \
+  --data-binary @assetlink-num4.json | jq
+```
+
+Expected result:
+- HTTP `200`.
+- Shell id is returned.
+- Why: the asset-link rule uses `bpn_or_public` (no header-required guard), so `PUBLIC_READABLE` link values remain discoverable.
+
+10. Lookup by asset link as BPN1 (`customerPartId`).
+
+```bash
+curl -s -X POST "$DTR_BASE/lookup/shellsByAssetLink" \
+  -H "Content-Type: application/json" \
+  -H "$HDR_BPN1" \
+  --data-binary @assetlink-num2.json | jq
+```
+
+Expected result:
+- HTTP `200`.
+- Shell id returned:
+
+```json
+{
+  "paging_metadata": {},
+  "result": [
+    "e1eba3d7-91f0-4dac-a730-eaa1d35e035c-2"
+  ]
+}
+```
+
+- Why: `customerPartId` carries `externalSubjectId = BPN_COMPANY_001`, which matches header claim.
+
+11. Lookup by asset link as BPN2 (`customerPartId`).
+
+```bash
+curl -s -X POST "$DTR_BASE/lookup/shellsByAssetLink" \
+  -H "Content-Type: application/json" \
+  -H "$HDR_BPN2" \
+  --data-binary @assetlink-num2.json | jq
+```
+
+Expected result:
+- HTTP `200`.
+- Empty result.
+- Why: `customerPartId` is protected for BPN1, not BPN2.
+
+12. Direct shell lookup endpoint with and without token.
+
+```bash
+curl -i -X GET "$DTR_BASE/lookup/shells/$AAS_ID_B64"
+```
+
+Expected result:
+- HTTP `403`.
+- Why: this route requires token-based read access in the integration suite.
+
+```bash
+curl -i -X GET "$DTR_BASE/lookup/shells/$AAS_ID_B64" \
+  -H "Authorization: Bearer $ADMIN_TOKEN" \
+  -H "$HDR_BPN_UNKNOWN"
+```
+
+Expected result:
+- HTTP `200`.
+- Why: token grants route-level read permission.
+
+## Precise PUT Behavior (`/shell-descriptors/{aasIdentifier}`)
+
+Important: endpoint is plural `shell-descriptors`.
+
+The DTR routes `PUT` authorization by descriptor existence:
+- If descriptor does not exist: `PUT` is treated as create.
+- If descriptor exists: `PUT` is treated as update.
+
+Expected status matrix:
+
+| Permission profile | Descriptor missing | Descriptor exists |
+|---|---:|---:|
+| create + update | `201 Created` | `204 No Content` |
+| create only | `201 Created` | `403 Forbidden` |
+| update only | `403 Forbidden` | `204 No Content` |
+| neither | `403 Forbidden` | `403 Forbidden` |
+
+Why this happens:
+- For missing descriptor, backend uses insert path and applies create formula.
+- For existing descriptor, backend uses replace path and applies update formula.
+
+Example `PUT` call:
+
+```bash
+curl -i -X PUT "$DTR_BASE/shell-descriptors/$AAS_ID_B64" \
+  -H "Authorization: Bearer $ADMIN_TOKEN" \
+  -H "Content-Type: application/json" \
+  --data-binary @shell-descriptor.json
+```
+
+Expected result in normal sequence after creation:
+- HTTP `204`.
+
+## Production Security Hardening (`Edc-Bpn`)
+
+To avoid header spoofing in real deployments:
+
+1. Put the BPN value into the access token as claim `Edc-Bpn` (from trusted IdP/proxy mapping, not from client input).
+2. Disable request-header-to-claim injection in DTR:
+
+```bash
+GENERAL_ENABLECUSTOMMIDDLEWAREHEADERINJECTION=false
+```
+
+3. Ensure your API gateway/ingress strips incoming `Edc-Bpn` from external client requests.
+
+Why:
+- ABAC formulas evaluate `CLAIM: "Edc-Bpn"` for tenant filtering.
+- If untrusted callers can set `Edc-Bpn`, they can influence which fragments become visible.
+- With token claim mapping plus disabled header injection, visibility is bound to signed token claims.
+
+## Security Files Used By This Example
+
+- Access rules: `examples/BaSyxDigitalTwinRegistryExample/security_env/access-rules.json`
+- Trust list: `examples/BaSyxDigitalTwinRegistryExample/security_env/trustlist.json`
+- In trust list entries, `audience` is optional. If omitted, OIDC audience (`aud`) validation is skipped for that issuer.
+
+If you want different outcomes, change formulas and role claims there, then restart the stack.
+

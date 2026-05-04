@@ -64,7 +64,7 @@ func pagedResponse[T any](results T, nextCursor string) model.ImplResponse {
 	}
 
 	res := struct {
-		PagingMetadata model.PagedResultPagingMetadata `json:"pagingMetadata"`
+		PagingMetadata model.PagedResultPagingMetadata `json:"paging_metadata"`
 		Result         T                               `json:"result"`
 	}{
 		PagingMetadata: pm,

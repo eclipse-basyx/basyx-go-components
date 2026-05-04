@@ -1,0 +1,49 @@
+{
+    "data": {
+        "description": [
+            {
+                "language": "en",
+                "text": "An example company."
+            }
+        ],
+        "displayName": [
+            {
+                "language": "en",
+                "text": "Example Company"
+            }
+        ],
+        "administration": {
+            "version": "1",
+            "revision": "0",
+            "creator": {
+                "type": "ExternalReference",
+                "keys": [
+                    {
+                        "type": "GlobalReference",
+                        "value": "https://examplecompany.de"
+                    }
+                ]
+            }
+        },
+        "endpoints": [
+            {
+                "protocolInformation": {
+                    "href": "https://demo.digital-twin.host/aas-discovery",
+                    "endpointProtocol": "HTTPS"
+                },
+                "interface": "AAS-DISCOVERY-3.0"
+            }
+        ],
+        "idShort": "exampleCompany1",
+        "name": "ExCom1",
+        "domain": "ex.com.1.de",
+        "nameOptions": [
+            "Example Company 1",
+            "EC1",
+            "Com Example 1"
+        ],
+        "assetIdRegexPatterns": [
+            "^https://i\\.excom1\\.de/assetId/"
+        ]
+    }
+}

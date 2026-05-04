@@ -1,0 +1,150 @@
+{
+  "AllAccessPermissionRules": {
+    "DEFATTRIBUTES": [
+      { "name": "anonym_attr", "attributes": [ { "GLOBAL": "ANONYMOUS" } ] },
+      { "name": "role_attr", "attributes": [ { "CLAIM": "role" } ] },
+      { "name": "member_attr", "attributes": [ { "CLAIM": "role" }, { "CLAIM": "clear" } ] }
+    ],
+
+    "DEFOBJECTS": [
+      { "name": "description", "objects": [ { "ROUTE": "/description" } ] },
+      { "name": "assetlinks", "objects": [ { "ROUTE": "/lookup/shells" }, { "ROUTE": "/lookup/shellsByAssetLink" } ] },
+      { "name": "shells", "objects": [ { "ROUTE": "/lookup/shells/*" } ] },
+      { "name": "all_shell_descriptors", "objects": [ { "DESCRIPTOR": "$aasdesc(\"*\")" } ] }
+    ],
+
+    "DEFACLS": [
+      { "name": "read_anonymous", "acl": { "USEATTRIBUTES": "anonym_attr", "RIGHTS": ["READ"], "ACCESS": "ALLOW" } },
+      { "name": "data_provider_read", "acl": { "USEATTRIBUTES": "anonym_attr", "RIGHTS": ["READ"], "ACCESS": "ALLOW" } },
+      { "name": "data_provider_create", "acl": { "USEATTRIBUTES": "anonym_attr", "RIGHTS": ["CREATE"], "ACCESS": "ALLOW" } },
+      { "name": "data_provider_update", "acl": { "USEATTRIBUTES": "anonym_attr", "RIGHTS": ["UPDATE"], "ACCESS": "ALLOW" } },
+      { "name": "data_provider_delete", "acl": { "USEATTRIBUTES": "anonym_attr", "RIGHTS": ["DELETE"], "ACCESS": "ALLOW" } }
+    ],
+
+    "DEFFORMULAS": [
+      { "name": "always_true", "formula": { "$boolean": true } },
+      { "name": "always_false", "formula": { "$boolean": false } },
+      { "name": "data_provider_read_formula", "formula":
+        { "$contains": [ { "$attribute": { "CLAIM": "role" } }, { "$strVal": "view_digital_twin"} ] }
+      },
+      { "name": "data_provider_create_formula", "formula":
+        { "$contains": [ { "$attribute": { "CLAIM": "role" } }, { "$strVal": "add_digital_twin"} ] }
+      },
+      { "name": "data_provider_update_formula", "formula":
+        { "$contains": [ { "$attribute": { "CLAIM": "role" } }, { "$strVal": "update_digital_twin"} ] }
+      },
+      { "name": "data_provider_delete_formula", "formula":
+        { "$contains": [ { "$attribute": { "CLAIM": "role" } }, { "$strVal": "delete_digital_twin"} ] }
+      },
+      { "name": "enforce_publicreadable_write_rule", "formula":
+        {
+          "$or": 
+          [
+            {
+              "$match": 
+              [
+                {
+                  "$eq": [
+                    { "$field": "$aasdesc#specificAssetIds[].name" },
+                    { "$strVal": "assetLifecyclePhase" }
+                  ]
+                },
+                {
+                  "$eq": [
+                    { "$field": "$aasdesc#specificAssetIds[].externalSubjectId.keys[].value" },
+                    { "$strVal": "PUBLIC_READABLE" }
+                  ]
+                }
+              ]
+            },
+            {
+              "$match": 
+              [
+                {
+                  "$eq": [
+                    { "$field": "$aasdesc#specificAssetIds[].name" },
+                    { "$strVal": "manufacturerPartId" }
+                  ]
+                },
+                {
+                  "$eq": [
+                    { "$field": "$aasdesc#specificAssetIds[].externalSubjectId.keys[].value" },
+                    { "$strVal": "PUBLIC_READABLE" }
+                  ]
+                }
+              ]
+            },
+            {
+              "$ne": [
+                { "$field": "$aasdesc#specificAssetIds[].externalSubjectId.keys[].value" },
+                { "$strVal": "PUBLIC_READABLE" }
+              ]
+            }
+          ]
+        }
+      },
+      { "name": "bpn_or_public", "formula":
+       { "$or": [
+          { "$eq": [ { "$attribute": { "CLAIM": "Edc-Bpn" } }, { "$field": "$aasdesc#specificAssetIds[].externalSubjectId.keys[].value" } ] },
+          { "$eq": [ { "$strVal": "PUBLIC_READABLE" }, { "$field": "$aasdesc#specificAssetIds[].externalSubjectId.keys[].value" } ] } 
+        ]
+       }
+      },
+      { "name": "bpn_match", 
+        "formula":
+          { "$eq": [ { "$attribute": { "CLAIM": "Edc-Bpn" } }, { "$field": "$aasdesc#specificAssetIds[].externalSubjectId.keys[].value" } ] }
+      }
+      
+    ],
+
+    "rules": [
+      { "USEACL": "data_provider_read", "USEOBJECTS": ["all_shell_descriptors", "assetlinks", "shells"], "USEFORMULA": "data_provider_read_formula" },
+      { "USEACL": "data_provider_create", "USEOBJECTS": ["all_shell_descriptors", "assetlinks", "shells"], "USEFORMULA": "data_provider_create_formula" },
+      { "USEACL": "data_provider_update", "USEOBJECTS": ["all_shell_descriptors", "assetlinks", "shells"], "USEFORMULA": "data_provider_update_formula" },
+      { "USEACL": "data_provider_delete", "USEOBJECTS": ["all_shell_descriptors", "assetlinks", "shells"], "USEFORMULA": "data_provider_delete_formula" },
+      { "USEACL": "read_anonymous", "USEOBJECTS": ["all_shell_descriptors"], "USEFORMULA": "bpn_or_public", 
+        "FILTERLIST": 
+        [
+          {
+            "FRAGMENT": "$aasdesc#administration",
+            "USEFORMULA": "bpn_match"
+          },
+          {
+            "FRAGMENT": "$aasdesc#displayName",
+            "USEFORMULA": "bpn_match"
+          },
+          {
+            "FRAGMENT": "$aasdesc#description",
+            "USEFORMULA": "bpn_match"
+          },
+          {
+            "FRAGMENT": "$aasdesc#assetKind",
+            "USEFORMULA": "bpn_match"
+          },
+          {
+            "FRAGMENT": "$aasdesc#assetType",
+            "USEFORMULA": "bpn_match"
+          },
+          {
+            "FRAGMENT": "$aasdesc#globalAssetId",
+            "USEFORMULA": "bpn_match"
+          },
+          {
+            "FRAGMENT": "$aasdesc#idShort",
+            "USEFORMULA": "bpn_match"
+          },
+          {
+            "FRAGMENT": "$aasdesc#specificAssetIds[]",
+            "USEFORMULA": "bpn_or_public",
+            "MATCH": true
+          },
+          {
+            "FRAGMENT": "$aasdesc#specificAssetIds[].externalSubjectId.keys[]",
+            "USEFORMULA": "bpn_match"
+          }
+        ] 
+      },
+      { "USEACL": "read_anonymous", "USEOBJECTS": ["assetlinks"], "USEFORMULA": "bpn_or_public"}
+    ]
+  }
+}

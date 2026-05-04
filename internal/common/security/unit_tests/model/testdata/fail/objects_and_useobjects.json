@@ -1,0 +1,20 @@
+{
+  "AllAccessPermissionRules": {
+    "rules": [
+      {
+        "USEACL": "form",
+        "OBJECTS": [
+          {
+            "ROUTE": "/*"
+          }
+        ],
+        "USEOBJECTS": [
+          "all"
+        ],
+        "FORMULA": {
+          "$boolean": true
+        }
+      }
+    ]
+  }
+}

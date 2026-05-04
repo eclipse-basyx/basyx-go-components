@@ -31,11 +31,13 @@ import (
 	"database/sql"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 
-	"github.com/FriedJannik/aas-go-sdk/types"
+	"github.com/aas-core-works/aas-core3.1-golang/types"
 	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
@@ -365,23 +367,6 @@ func (p PostgreSQLFileHandler) UploadFileAttachment(submodelID string, idShortPa
 		_ = reopenedFile.Close()
 	}()
 
-	// Detect content type from file content
-	contentTypeBuffer := make([]byte, 512)
-	n, err := reopenedFile.Read(contentTypeBuffer)
-	if err != nil && err != io.EOF {
-		return fmt.Errorf("failed to read file for content type detection: %w", err)
-	}
-	detectedContentType := "application/octet-stream" // Default
-	if n > 0 {
-		detectedContentType = http.DetectContentType(contentTypeBuffer[:n])
-	}
-
-	// Seek back to the beginning of the file
-	_, err = reopenedFile.Seek(0, 0)
-	if err != nil {
-		return fmt.Errorf("failed to seek file: %w", err)
-	}
-
 	// Start a transaction for atomic operation
 	tx, err := p.db.Begin()
 	if err != nil {
@@ -401,22 +386,55 @@ func (p PostgreSQLFileHandler) UploadFileAttachment(submodelID string, idShortPa
 		return fmt.Errorf("failed to get submodel database ID: %w", err)
 	}
 
-	// Get the submodel element ID
+	// Get the submodel element metadata
 	var submodelElementID int64
+	var existingContentType sql.NullString
+	var existingFileName sql.NullString
 	query, args, err := dialect.From("submodel_element").
-		Select("id").
+		InnerJoin(
+			goqu.T("file_element"),
+			goqu.On(goqu.I("submodel_element.id").Eq(goqu.I("file_element.id"))),
+		).
+		Select("submodel_element.id", "file_element.content_type", "file_element.file_name").
 		Where(goqu.C("submodel_id").Eq(submodelDatabaseID), goqu.C("idshort_path").Eq(idShortPath)).
 		ToSQL()
 	if err != nil {
 		return fmt.Errorf("failed to build query: %w", err)
 	}
 
-	err = tx.QueryRow(query, args...).Scan(&submodelElementID)
+	err = tx.QueryRow(query, args...).Scan(&submodelElementID, &existingContentType, &existingFileName)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return common.NewErrNotFound("submodel element not found")
 		}
 		return fmt.Errorf("failed to get submodel element ID: %w", err)
+	}
+
+	// Detect content type from file content
+	contentTypeBuffer := make([]byte, 512)
+	n, err := reopenedFile.Read(contentTypeBuffer)
+	if err != nil && err != io.EOF {
+		return fmt.Errorf("failed to read file for content type detection: %w", err)
+	}
+	detectedContentType := "application/octet-stream"
+	if n > 0 {
+		detectedContentType = http.DetectContentType(contentTypeBuffer[:n])
+	}
+
+	resolvedFileName := strings.TrimSpace(fileName)
+	if resolvedFileName == "" && existingFileName.Valid {
+		resolvedFileName = existingFileName.String
+	}
+
+	resolvedContentType, mismatchDetectedVsDeclared := common.ResolveUploadedContentType(detectedContentType, existingContentType.String, resolvedFileName)
+	if mismatchDetectedVsDeclared {
+		log.Printf("[WARN] SMREPO-UPLOADATTACHMENT-RESOLVEMIME detected content type differs from declared content type; using detected content type")
+	}
+
+	// Seek back to the beginning of the file
+	_, err = reopenedFile.Seek(0, 0)
+	if err != nil {
+		return fmt.Errorf("failed to seek file: %w", err)
 	}
 
 	// Check for existing file_data and delete old Large Object if it exists
@@ -514,8 +532,8 @@ func (p PostgreSQLFileHandler) UploadFileAttachment(submodelID string, idShortPa
 	updateFileElementQuery, updateFileElementArgs, err := dialect.Update("file_element").
 		Set(goqu.Record{
 			"value":        fmt.Sprintf("%d", newOID),
-			"file_name":    fileName,
-			"content_type": detectedContentType,
+			"file_name":    resolvedFileName,
+			"content_type": resolvedContentType,
 		}).
 		Where(goqu.C("id").Eq(submodelElementID)).
 		ToSQL()

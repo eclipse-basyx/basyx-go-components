@@ -39,6 +39,7 @@ import (
 	registryapiinternal "github.com/eclipse-basyx/basyx-go-components/internal/aasregistry/api"
 	registrydb "github.com/eclipse-basyx/basyx-go-components/internal/aasregistry/persistence"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
+	commonmodel "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 	"github.com/eclipse-basyx/basyx-go-components/internal/digitaltwinregistry"
 	discoveryapiinternal "github.com/eclipse-basyx/basyx-go-components/internal/discoveryservice/api"
@@ -59,6 +60,8 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 	if err != nil {
 		return err
 	}
+	commonmodel.SetStrictVerificationEnabled(cfg.Server.StrictVerification)
+	commonmodel.SetSupportsSingularSupplementalSemanticId(cfg.General.SupportsSingularSupplementalSemanticId)
 
 	// Digital Twin Registry always enables discovery integration.
 	cfg.General.DiscoveryIntegration = true
@@ -115,11 +118,14 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 	}
 	log.Println("✅ Postgres connection established")
 
+	discoveryBaseSvc := discoveryapiinternal.NewAssetAdministrationShellBasicDiscoveryAPIAPIService(*discoveryDatabase)
 	registrySvc := digitaltwinregistry.NewCustomRegistryService(
 		registryapiinternal.NewAssetAdministrationShellRegistryAPIAPIService(*registryDatabase),
+		discoveryBaseSvc,
 	)
 	discoverySvc := digitaltwinregistry.NewCustomDiscoveryService(
-		discoveryapiinternal.NewAssetAdministrationShellBasicDiscoveryAPIAPIService(*discoveryDatabase),
+		discoveryBaseSvc,
+		registryDatabase,
 	)
 
 	registryCtrl := registryapi.NewAssetAdministrationShellRegistryAPIAPIController(registrySvc, cfg.Server.ContextPath)
@@ -128,16 +134,25 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 	descriptionCtrl := openapi.NewDescriptionAPIAPIController(descriptionSvc)
 
 	apiRouter := chi.NewRouter()
-	common.AddDefaultRouterErrorHandlers(apiRouter, "DigitalTwinRegistryService")
-	if err := auth.SetupSecurityWithClaimsMiddleware(ctx, cfg, apiRouter, auth.EdcBpnHeaderMiddleware); err != nil {
+	common.ConfigureAPIRouter(apiRouter, "DigitalTwinRegistryService")
+	var claimsMiddleware []func(http.Handler) http.Handler
+	if cfg.General.EnableCustomMiddlewareHeaderInjection {
+		claimsMiddleware = append(claimsMiddleware, auth.EdcBpnHeaderMiddleware)
+	}
+
+	if err := auth.SetupSecurityWithClaimsMiddleware(ctx, cfg, apiRouter, claimsMiddleware...); err != nil {
 		return err
 	}
 
 	for _, rt := range registryCtrl.Routes() {
+		if rt.Method == "GET" && rt.Pattern == "/shell-descriptors" {
+			apiRouter.With(digitaltwinregistry.CreatedAfterMiddleware).Method(rt.Method, rt.Pattern, rt.HandlerFunc)
+			continue
+		}
 		apiRouter.Method(rt.Method, rt.Pattern, rt.HandlerFunc)
 	}
 	for _, rt := range discoveryCtrl.Routes() {
-		if rt.Method == "POST" && rt.Pattern == "/lookup/shellsByAssetLink" {
+		if (rt.Method == "POST" && rt.Pattern == "/lookup/shellsByAssetLink") || (rt.Method == "GET" && rt.Pattern == "/lookup/shells") {
 			apiRouter.With(digitaltwinregistry.CreatedAfterMiddleware).Method(rt.Method, rt.Pattern, rt.HandlerFunc)
 			continue
 		}

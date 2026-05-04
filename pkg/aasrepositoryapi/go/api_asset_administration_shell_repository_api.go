@@ -15,10 +15,12 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"os"
 	"strconv"
 	"strings"
 
-	aasjsonization "github.com/FriedJannik/aas-go-sdk/jsonization"
+	aasjsonization "github.com/aas-core-works/aas-core3.1-golang/jsonization"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/go-chi/chi/v5"
 )
 
@@ -576,10 +578,17 @@ func (c *AssetAdministrationShellRepositoryAPIAPIController) GetThumbnailAasRepo
 
 // PutThumbnailAasRepository -
 func (c *AssetAdministrationShellRepositoryAPIAPIController) PutThumbnailAasRepository(w http.ResponseWriter, r *http.Request) {
+	r.Body = http.MaxBytesReader(w, r.Body, uploadMaxSizeFromRequestContext(r))
+
 	if err := r.ParseMultipartForm(32 << 20); err != nil {
 		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
 		return
 	}
+	defer func() {
+		if r.MultipartForm != nil {
+			_ = r.MultipartForm.RemoveAll()
+		}
+	}()
 
 	aasIdentifierParam := chi.URLParam(r, "aasIdentifier")
 	if aasIdentifierParam == "" {
@@ -593,6 +602,14 @@ func (c *AssetAdministrationShellRepositoryAPIAPIController) PutThumbnailAasRepo
 		c.errorHandler(w, r, &ParsingError{Param: "file", Err: fileErr}, nil)
 		return
 	}
+	defer func() {
+		if fileParam != nil {
+			tempFilePath := fileParam.Name()
+			_ = fileParam.Close()
+			// #nosec G703 -- path comes from server-generated temporary file.
+			_ = os.Remove(tempFilePath)
+		}
+	}()
 
 	result, err := c.service.PutThumbnailAasRepository(r.Context(), aasIdentifierParam, fileNameParam, fileParam)
 	if err != nil {
@@ -601,6 +618,20 @@ func (c *AssetAdministrationShellRepositoryAPIAPIController) PutThumbnailAasRepo
 	}
 
 	_ = EncodeJSONResponse(result.Body, &result.Code, w)
+}
+
+func uploadMaxSizeFromRequestContext(r *http.Request) int64 {
+	maxBytes := int64(128 << 20)
+	if r == nil {
+		return maxBytes
+	}
+
+	cfg, ok := common.ConfigFromContext(r.Context())
+	if ok && cfg != nil && cfg.General.UploadMaxSizeBytes > 0 {
+		return cfg.General.UploadMaxSizeBytes
+	}
+
+	return maxBytes
 }
 
 // DeleteThumbnailAasRepository -

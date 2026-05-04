@@ -1,0 +1,211 @@
+name: Examples Smoke Tests
+
+on:
+  pull_request:
+    paths:
+      - 'examples/**'
+      - 'cmd/**'
+      - 'internal/**'
+      - 'basyxschema.sql'
+      - 'go.mod'
+      - 'go.sum'
+      - '.github/workflows/examples-smoke.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'examples/**'
+      - 'cmd/**'
+      - 'internal/**'
+      - 'basyxschema.sql'
+      - 'go.mod'
+      - 'go.sum'
+      - '.github/workflows/examples-smoke.yml'
+  workflow_dispatch:
+
+jobs:
+  examples-smoke:
+    name: ${{ matrix.target_name }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target_name: Minimal + Secured Examples
+            compose_files: |
+              examples/BaSyxMinimalExample/docker-compose.yml
+              examples/BaSyxSecuredExample/docker-compose.yml
+            image_builds: |
+              eclipsebasyx/aasregistry-go:SNAPSHOT|./cmd/aasregistryservice/Dockerfile
+              eclipsebasyx/submodelregistry-go:SNAPSHOT|./cmd/submodelregistryservice/Dockerfile
+              eclipsebasyx/aasdiscovery-go:SNAPSHOT|./cmd/discoveryservice/Dockerfile
+              eclipsebasyx/aasrepository-go:SNAPSHOT|./cmd/aasrepositoryservice/Dockerfile
+              eclipsebasyx/submodelrepository-go:SNAPSHOT|./cmd/submodelrepositoryservice/Dockerfile
+              eclipsebasyx/conceptdescriptionrepository-go:SNAPSHOT|./cmd/conceptdescriptionrepositoryservice/Dockerfile
+          - target_name: Delegated Operations Example
+            compose_files: |
+              examples/BaSyxDelegatedOperationsExample/docker-compose.yml
+            image_builds: |
+              eclipsebasyx/aasrepository-go:SNAPSHOT|./cmd/aasrepositoryservice/Dockerfile
+              eclipsebasyx/submodelrepository-go:SNAPSHOT|./cmd/submodelrepositoryservice/Dockerfile
+          - target_name: Submodel Repository Example
+            compose_files: |
+              examples/BaSyxSubmodelRepositoryExample/docker-compose.yml
+            image_builds: |
+              eclipsebasyx/submodelrepository-go:SNAPSHOT|./cmd/submodelrepositoryservice/Dockerfile
+          - target_name: Digital Twin Registry Example
+            compose_files: |
+              examples/BaSyxDigitalTwinRegistryExample/docker-compose.yml
+            image_builds: |
+              eclipsebasyx/digitaltwinregistry-go:SNAPSHOT|./cmd/digitaltwinregistryservice/Dockerfile
+          - target_name: Company Lookup Example
+            compose_files: |
+              examples/BaSyxCompanyLookup/docker-compose.yml
+            image_builds: |
+              eclipsebasyx/companylookup-go:SNAPSHOT|./cmd/companylookupservice/Dockerfile
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Ensure Docker Compose plugin is available
+        run: docker compose version
+
+      - name: Build local Go service images needed for this target
+        run: |
+          set -euo pipefail
+
+          while IFS='|' read -r image_tag dockerfile_path; do
+            if [ -z "${image_tag}" ] || [ -z "${dockerfile_path}" ]; then
+              continue
+            fi
+            echo "Building ${image_tag} from ${dockerfile_path}"
+            docker build -t "${image_tag}" -f "${dockerfile_path}" .
+          done <<< "${{ matrix.image_builds }}"
+
+      - name: Start target examples and verify startup state
+        run: |
+          set -euo pipefail
+
+          check_compose_stack() {
+            local compose_file="$1"
+            local timeout_seconds=240
+            local interval_seconds=5
+            local elapsed=0
+
+            while [ "$elapsed" -lt "$timeout_seconds" ]; do
+              mapfile -t ids < <(docker compose -f "$compose_file" ps -q)
+
+              if [ "${#ids[@]}" -eq 0 ]; then
+                echo "No containers started yet for $compose_file"
+                sleep "$interval_seconds"
+                elapsed=$((elapsed + interval_seconds))
+                continue
+              fi
+
+              local running_count=0
+              local all_ready=true
+
+              for id in "${ids[@]}"; do
+                local name status exit_code health
+                name=$(docker inspect -f '{{.Name}}' "$id" | sed 's#^/##')
+                status=$(docker inspect -f '{{.State.Status}}' "$id")
+                exit_code=$(docker inspect -f '{{.State.ExitCode}}' "$id")
+                health=$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' "$id")
+
+                if [ "$status" = "dead" ] || [ "$status" = "removing" ]; then
+                  echo "Container $name in invalid state: $status"
+                  return 1
+                fi
+
+                if [ "$status" = "exited" ] && [ "$exit_code" -ne 0 ]; then
+                  echo "Container $name exited with non-zero code: $exit_code"
+                  return 1
+                fi
+
+                if [ "$health" = "unhealthy" ]; then
+                  echo "Container $name became unhealthy"
+                  return 1
+                fi
+
+                if [ "$status" = "running" ]; then
+                  running_count=$((running_count + 1))
+                  if [ "$health" = "starting" ]; then
+                    all_ready=false
+                  fi
+                elif [ "$status" = "created" ] || [ "$status" = "restarting" ]; then
+                  all_ready=false
+                elif [ "$status" = "exited" ]; then
+                  :
+                else
+                  all_ready=false
+                fi
+              done
+
+              if [ "$running_count" -gt 0 ] && [ "$all_ready" = true ]; then
+                return 0
+              fi
+
+              sleep "$interval_seconds"
+              elapsed=$((elapsed + interval_seconds))
+            done
+
+            echo "Timeout while waiting for stack readiness: $compose_file"
+            return 1
+          }
+
+          cleanup_stack() {
+            local compose_file="$1"
+            docker compose -f "$compose_file" down -v --remove-orphans || true
+          }
+
+          while IFS= read -r compose_file; do
+            if [ -z "$compose_file" ]; then
+              continue
+            fi
+
+            echo "===> Starting $compose_file"
+
+            non_basyx_services=$(python3 -c "import json, subprocess, sys; cfg = subprocess.check_output(['docker', 'compose', '-f', sys.argv[1], 'config', '--format', 'json'], text=True); services = json.loads(cfg).get('services', {}); print('\\n'.join([name for name, svc in services.items() if str(svc.get('image', '')) and not (str(svc.get('image', '')).startswith('eclipsebasyx/') and '-go:' in str(svc.get('image', '')))]))" "$compose_file")
+
+            if [ -n "$non_basyx_services" ]; then
+              echo "Pulling non-BaSyx services for $compose_file:"
+              echo "$non_basyx_services"
+              # Pull infra/base images (e.g., postgres, keycloak), but keep locally built BaSyx SNAPSHOTs.
+              if ! docker compose -f "$compose_file" pull $non_basyx_services; then
+                echo "Failed to pull non-BaSyx services: $compose_file"
+                docker compose -f "$compose_file" ps || true
+                docker compose -f "$compose_file" logs --no-color || true
+                cleanup_stack "$compose_file"
+                exit 1
+              fi
+            fi
+
+            if ! docker compose -f "$compose_file" up -d --remove-orphans --pull never; then
+              echo "Failed to start compose stack: $compose_file"
+              docker compose -f "$compose_file" ps || true
+              docker compose -f "$compose_file" logs --no-color || true
+              cleanup_stack "$compose_file"
+              exit 1
+            fi
+
+            if ! check_compose_stack "$compose_file"; then
+              echo "Stack readiness check failed: $compose_file"
+              docker compose -f "$compose_file" ps || true
+              docker compose -f "$compose_file" logs --no-color || true
+              cleanup_stack "$compose_file"
+              exit 1
+            fi
+
+            sleep 3
+
+            if ! check_compose_stack "$compose_file"; then
+              echo "Stack became unstable during smoke hold: $compose_file"
+              docker compose -f "$compose_file" ps || true
+              docker compose -f "$compose_file" logs --no-color || true
+              cleanup_stack "$compose_file"
+              exit 1
+            fi
+
+            docker compose -f "$compose_file" ps
+            cleanup_stack "$compose_file"
+          done <<< "${{ matrix.compose_files }}"

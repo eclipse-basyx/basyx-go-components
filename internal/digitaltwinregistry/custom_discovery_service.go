@@ -29,22 +29,43 @@ package digitaltwinregistry
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
+	"log"
+	"net/http"
+	"strings"
 	"time"
 
+	"github.com/aas-core-works/aas-core3.1-golang/jsonization"
+	"github.com/aas-core-works/aas-core3.1-golang/types"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 	discoveryapiinternal "github.com/eclipse-basyx/basyx-go-components/internal/discoveryservice/api"
 )
 
+const customDiscoveryComponentName = "DTRDISC"
+
+type aasExistenceChecker interface {
+	ExistsAASByID(ctx context.Context, aasID string) (bool, error)
+}
+
 // CustomDiscoveryService wraps the default discovery service to allow custom logic.
 type CustomDiscoveryService struct {
 	*discoveryapiinternal.AssetAdministrationShellBasicDiscoveryAPIAPIService
+	aasChecker aasExistenceChecker
 }
 
 // NewCustomDiscoveryService constructs a custom discovery service wrapper.
-func NewCustomDiscoveryService(base *discoveryapiinternal.AssetAdministrationShellBasicDiscoveryAPIAPIService) *CustomDiscoveryService {
-	return &CustomDiscoveryService{AssetAdministrationShellBasicDiscoveryAPIAPIService: base}
+func NewCustomDiscoveryService(
+	base *discoveryapiinternal.AssetAdministrationShellBasicDiscoveryAPIAPIService,
+	checker aasExistenceChecker,
+) *CustomDiscoveryService {
+	return &CustomDiscoveryService{
+		AssetAdministrationShellBasicDiscoveryAPIAPIService: base,
+		aasChecker: baseCheckerOrFallback(checker),
+	}
 }
 
 // SearchAllAssetAdministrationShellIdsByAssetLink Custom logic for /lookup/shellsbyAssetLink
@@ -54,22 +75,212 @@ func (s *CustomDiscoveryService) SearchAllAssetAdministrationShellIdsByAssetLink
 	cursor string,
 	assetLink []model.AssetLink,
 ) (model.ImplResponse, error) {
-	createdAfter, _ := CreatedAfterFromContext(ctx)
-	if createdAfter != nil {
-		query := buildEdcBpnClaimEqualsHeaderExpression(createdAfter)
-		ctx = auth.MergeQueryFilter(ctx, query)
+	if len(assetLink) == 0 {
+		return model.Response(http.StatusOK, map[string]any{
+			"paging_metadata": model.PagedResultPagingMetadata{},
+		}), nil
 	}
 
-	return s.AssetAdministrationShellBasicDiscoveryAPIAPIService.SearchAllAssetAdministrationShellIdsByAssetLink(ctx, limit, cursor, assetLink)
+	shouldEnforceFormula, enforceErr := auth.ShouldEnforceFormula(ctx)
+	if enforceErr != nil {
+		log.Printf("🧭 [%s] Error SearchAllAssetAdministrationShellIdsByAssetLink: should-enforce-formula failed: %v", customDiscoveryComponentName, enforceErr)
+		return common.NewErrorResponse(
+			enforceErr,
+			http.StatusInternalServerError,
+			customDiscoveryComponentName,
+			"SearchAllAssetAdministrationShellIdsByAssetLink",
+			"ShouldEnforceFormula",
+		), enforceErr
+	}
+
+	if shouldEnforceFormula {
+		assetLinkQuery := buildAssetLinkQuery(ctx, assetLink)
+		ctx = auth.MergeQueryFilter(ctx, assetLinkQuery)
+	}
+
+	createdAfter, _ := CreatedAfterFromContext(ctx)
+	if createdAfter != nil {
+		createdAfterQuery := buildEdcBpnClaimEqualsHeaderExpression(createdAfter, "$bd#createdAt")
+		ctx = auth.MergeQueryFilter(ctx, createdAfterQuery)
+	}
+
+	res, err := s.AssetAdministrationShellBasicDiscoveryAPIAPIService.SearchAllAssetAdministrationShellIdsByAssetLink(ctx, limit, cursor, assetLink)
+	if err != nil {
+		return res, err
+	}
+
+	return omitEmptySearchResultForDTR(res), nil
 }
 
-// GetAllAssetLinksByID Custom logic for /lookup/shells/{aasIdentifier}
+// GetAllAssetAdministrationShellIdsByAssetLink Custom logic for /lookup/shells
+func (s *CustomDiscoveryService) GetAllAssetAdministrationShellIdsByAssetLink(
+	ctx context.Context,
+	assetIds []string,
+	limit int32,
+	cursor string,
+) (model.ImplResponse, error) {
+	links := make([]model.AssetLink, 0, len(assetIds))
+	for idx, enc := range assetIds {
+		if strings.TrimSpace(enc) == "" {
+			continue
+		}
+
+		dec, err := common.DecodeString(enc)
+		if err != nil {
+			log.Printf("🧭 [%s] Error GetAllAssetAdministrationShellIdsByAssetLink: decode assetIds[%d]=%q failed: %v", customDiscoveryComponentName, idx, enc, err)
+			return common.NewErrorResponse(
+				err,
+				http.StatusBadRequest,
+				customDiscoveryComponentName,
+				"GetAllAssetAdministrationShellIdsByAssetLink",
+				"BadRequest-DecodeAssetIds",
+			), nil
+		}
+
+		var al model.AssetLink
+		if err := json.Unmarshal([]byte(dec), &al); err != nil {
+			log.Printf("🧭 [%s] Error GetAllAssetAdministrationShellIdsByAssetLink: unmarshal assetIds[%d] decoded=%q failed: %v", customDiscoveryComponentName, idx, dec, err)
+			return common.NewErrorResponse(
+				err,
+				http.StatusBadRequest,
+				customDiscoveryComponentName,
+				"GetAllAssetAdministrationShellIdsByAssetLink",
+				"BadRequest-UnmarshalAssetIds",
+			), nil
+		}
+
+		links = append(links, al)
+	}
+
+	if len(links) == 0 {
+		return model.Response(http.StatusOK, map[string]any{
+			"paging_metadata": model.PagedResultPagingMetadata{},
+		}), nil
+	}
+
+	return s.SearchAllAssetAdministrationShellIdsByAssetLink(ctx, limit, cursor, links)
+}
+
+func omitEmptySearchResultForDTR(res model.ImplResponse) model.ImplResponse {
+	if res.Code != http.StatusOK {
+		return res
+	}
+
+	switch body := res.Body.(type) {
+	case model.GetAllAssetAdministrationShellIdsByAssetLink200Response:
+		if len(body.Result) != 0 {
+			return res
+		}
+		return model.Response(http.StatusOK, map[string]any{
+			"paging_metadata": body.PagingMetadata,
+		})
+	case *model.GetAllAssetAdministrationShellIdsByAssetLink200Response:
+		if body == nil || len(body.Result) != 0 {
+			return res
+		}
+		return model.Response(http.StatusOK, map[string]any{
+			"paging_metadata": body.PagingMetadata,
+		})
+	default:
+		return res
+	}
+}
+
+func baseCheckerOrFallback(checker aasExistenceChecker) aasExistenceChecker {
+	if checker != nil {
+		return checker
+	}
+	return noopAASChecker{}
+}
+
+type noopAASChecker struct{}
+
+func (noopAASChecker) ExistsAASByID(_ context.Context, _ string) (bool, error) {
+	return true, nil
+}
+
+// PostAllAssetLinksByID Custom logic for /lookup/shells/{aasIdentifier}
+// in DTR: update/merge instead of replace semantics.
+func (s *CustomDiscoveryService) PostAllAssetLinksByID(
+	ctx context.Context,
+	aasIdentifier string,
+	specificAssetID []types.ISpecificAssetID,
+) (model.ImplResponse, error) {
+	decoded, decodeErr := common.DecodeString(aasIdentifier)
+	if decodeErr != nil {
+		log.Printf("🧭 [%s] Error PostAllAssetLinksById: decode aasIdentifier=%q failed: %v", customDiscoveryComponentName, aasIdentifier, decodeErr)
+		return common.NewErrorResponse(
+			decodeErr,
+			http.StatusBadRequest,
+			customDiscoveryComponentName,
+			"PostAllAssetLinksById",
+			"BadRequest-Decode",
+		), nil
+	}
+
+	aasID := string(decoded)
+	exists, existsErr := s.aasChecker.ExistsAASByID(ctx, aasID)
+	if existsErr != nil {
+		log.Printf("🧭 [%s] Error PostAllAssetLinksById: existence check failed (aasId=%q): %v", customDiscoveryComponentName, aasID, existsErr)
+		return common.NewErrorResponse(
+			existsErr,
+			http.StatusInternalServerError,
+			customDiscoveryComponentName,
+			"PostAllAssetLinksById",
+			"AAS-ExistenceCheck",
+		), existsErr
+	}
+	if !exists {
+		notFoundErr := common.NewErrNotFound(fmt.Sprintf("Shell for identifier %s not found", aasID))
+		return common.NewErrorResponse(
+			notFoundErr,
+			http.StatusNotFound,
+			customDiscoveryComponentName,
+			"PostAllAssetLinksById",
+			"NotFound",
+		), nil
+	}
+
+	persistResp, persistErr := s.AddAllAssetLinksByID(ctx, aasIdentifier, specificAssetID)
+	if persistErr != nil {
+		return persistResp, persistErr
+	}
+	if persistResp.Code < http.StatusOK || persistResp.Code >= http.StatusMultipleChoices {
+		return persistResp, nil
+	}
+
+	jsonableIncoming, convErr := specificAssetIDsToJSONable(specificAssetID)
+	if convErr != nil {
+		log.Printf("🧭 [%s] Error PostAllAssetLinksById: convert incoming links failed (aasId=%q): %v", customDiscoveryComponentName, aasID, convErr)
+		return common.NewErrorResponse(
+			convErr,
+			http.StatusInternalServerError,
+			customDiscoveryComponentName,
+			"PostAllAssetLinksById",
+			"JsonConversion",
+		), convErr
+	}
+	return model.Response(http.StatusCreated, jsonableIncoming), nil
+}
+
+func specificAssetIDsToJSONable(specificAssetIDs []types.ISpecificAssetID) ([]map[string]any, error) {
+	out := make([]map[string]any, 0, len(specificAssetIDs))
+	for _, link := range specificAssetIDs {
+		jsonableLink, err := jsonization.ToJsonable(link)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, jsonableLink)
+	}
+	return out, nil
+}
+
 // buildEdcBpnClaimEqualsHeaderExpression creates a logical expression that checks
 // whether the Edc-Bpn claim equals the provided header value.
-func buildEdcBpnClaimEqualsHeaderExpression(t *time.Time) grammar.Query {
+func buildEdcBpnClaimEqualsHeaderExpression(t *time.Time, pattern string) grammar.Query {
 	dt := grammar.DateTimeLiteralPattern(t.UTC())
 
-	timePattern := grammar.ModelStringPattern("$bd#createdAt")
+	timePattern := grammar.ModelStringPattern(pattern)
 	timeLe := grammar.LogicalExpression{
 		Le: grammar.ComparisonItems{
 			{DateTimeVal: &dt},
@@ -79,5 +290,95 @@ func buildEdcBpnClaimEqualsHeaderExpression(t *time.Time) grammar.Query {
 
 	return grammar.Query{
 		Condition: &timeLe,
+	}
+}
+
+// buildAssetLinkQuery creates the discovery lookup filter for asset links.
+//
+// Behavior:
+//   - Returns an empty query when no asset links are provided.
+//   - Returns an empty query when ABAC READ access is already unrestricted.
+//   - Otherwise builds an AND of per-link conditions.
+//
+// Per link, the condition is an OR:
+//   - exact link match + Edc-Bpn authorization (when Edc-Bpn claim exists), or
+//   - exact link match + PUBLIC_READABLE authorization.
+func buildAssetLinkQuery(ctx context.Context, assetLink []model.AssetLink) grammar.Query {
+	if len(assetLink) == 0 {
+		return grammar.Query{}
+	}
+
+	if auth.HasUnrestrictedFormulaForRight(ctx, grammar.RightsEnumREAD) {
+		return grammar.Query{}
+	}
+
+	assetLinkFieldPattern := grammar.ModelStringPattern("$aasdesc#specificAssetIds[].externalSubjectId.keys[].value")
+	assetLinkFieldValue := grammar.ModelStringPattern("$aasdesc#specificAssetIds[].value")
+	assetLinkFieldName := grammar.ModelStringPattern("$aasdesc#specificAssetIds[].name")
+	publicReadable := grammar.StandardString("PUBLIC_READABLE")
+
+	claims := auth.ClaimsFromContext(ctx)
+	edcBpnClaim, hasEdcBpnClaim := claims.GetString("Edc-Bpn")
+	hasEdcBpnClaim = hasEdcBpnClaim && strings.TrimSpace(edcBpnClaim) != ""
+	edcBpn := grammar.StandardString(edcBpnClaim)
+
+	assetLinkLe := grammar.LogicalExpression{And: []grammar.LogicalExpression{}}
+	for _, link := range assetLink {
+		assetLinkValue := grammar.StandardString(link.Value)
+		assetLinkName := grammar.StandardString(link.Name)
+
+		assetLinkLeInner := grammar.LogicalExpression{Or: []grammar.LogicalExpression{}}
+		if hasEdcBpnClaim {
+			assetLinkLeInner.Or = append(assetLinkLeInner.Or, grammar.LogicalExpression{
+				Match: []grammar.MatchExpression{
+					{
+						Eq: grammar.ComparisonItems{
+							{Field: &assetLinkFieldValue},
+							{StrVal: &assetLinkValue},
+						},
+					},
+					{
+						Eq: grammar.ComparisonItems{
+							{Field: &assetLinkFieldName},
+							{StrVal: &assetLinkName},
+						},
+					},
+					{
+						Eq: grammar.ComparisonItems{
+							{StrVal: &edcBpn},
+							{Field: &assetLinkFieldPattern},
+						},
+					},
+				},
+			})
+		}
+
+		assetLinkLeInner.Or = append(assetLinkLeInner.Or, grammar.LogicalExpression{
+			Match: []grammar.MatchExpression{
+				{
+					Eq: grammar.ComparisonItems{
+						{Field: &assetLinkFieldValue},
+						{StrVal: &assetLinkValue},
+					},
+				},
+				{
+					Eq: grammar.ComparisonItems{
+						{Field: &assetLinkFieldName},
+						{StrVal: &assetLinkName},
+					},
+				},
+				{
+					Eq: grammar.ComparisonItems{
+						{StrVal: &publicReadable},
+						{Field: &assetLinkFieldPattern},
+					},
+				},
+			},
+		})
+		assetLinkLe.And = append(assetLinkLe.And, assetLinkLeInner)
+	}
+
+	return grammar.Query{
+		Condition: &assetLinkLe,
 	}
 }

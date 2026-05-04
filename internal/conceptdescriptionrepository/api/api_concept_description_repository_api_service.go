@@ -41,8 +41,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/FriedJannik/aas-go-sdk/jsonization"
-	"github.com/FriedJannik/aas-go-sdk/types"
+	"github.com/aas-core-works/aas-core3.1-golang/jsonization"
+	"github.com/aas-core-works/aas-core3.1-golang/types"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	"github.com/eclipse-basyx/basyx-go-components/internal/conceptdescriptionrepository/persistence"
@@ -115,7 +115,7 @@ func (s *ConceptDescriptionRepositoryAPIAPIService) GetAllConceptDescriptions(ct
 		}
 	}
 
-	var jsonable []map[string]any
+	jsonable := make([]map[string]any, 0, len(cds))
 	for _, cd := range cds {
 		jsonObj, err := jsonization.ToJsonable(cd)
 		if err != nil {
@@ -186,7 +186,7 @@ func (s *ConceptDescriptionRepositoryAPIAPIService) PutConceptDescriptionById(ct
 	if err != nil {
 		return common.NewErrorResponse(err, http.StatusBadRequest, componentName, "PutConceptDescriptionById", "URLDecode"), nil
 	}
-	err = s.d.PutConceptDescription(ctx, string(decodedIdentifier), conceptDescription)
+	isUpdate, err := s.d.PutConceptDescription(ctx, string(decodedIdentifier), conceptDescription)
 	if err != nil {
 		switch {
 		case common.IsErrBadRequest(err):
@@ -198,12 +198,16 @@ func (s *ConceptDescriptionRepositoryAPIAPIService) PutConceptDescriptionById(ct
 		}
 	}
 
+	if isUpdate {
+		return model.Response(http.StatusNoContent, nil), nil
+	}
+
 	jsonable, toJsonErr := jsonization.ToJsonable(conceptDescription)
 	if toJsonErr != nil {
 		return common.NewErrorResponse(toJsonErr, http.StatusInternalServerError, componentName, "PutConceptDescriptionById", "ToJsonable"), toJsonErr
 	}
 
-	return model.Response(http.StatusOK, jsonable), nil
+	return model.Response(http.StatusCreated, jsonable), nil
 }
 
 // DeleteConceptDescriptionById - Deletes a Concept Description
@@ -219,6 +223,8 @@ func (s *ConceptDescriptionRepositoryAPIAPIService) DeleteConceptDescriptionById
 			return common.NewErrorResponse(err, http.StatusBadRequest, componentName, "DeleteConceptDescriptionById", "BadRequest"), nil
 		case common.IsErrDenied(err):
 			return common.NewErrorResponse(err, http.StatusForbidden, componentName, "DeleteConceptDescriptionById", "Denied"), nil
+		case common.IsErrNotFound(err):
+			return common.NewErrorResponse(err, http.StatusNotFound, componentName, "DeleteConceptDescriptionById", "NotFound"), nil
 		default:
 			return common.NewErrorResponse(err, http.StatusInternalServerError, componentName, "DeleteConceptDescriptionById", "Unhandled"), err
 		}

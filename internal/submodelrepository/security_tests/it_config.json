@@ -334,5 +334,43 @@
     "method": "DELETE",
     "endpoint": "http://localhost:6004/submodels/TWFyY3VzVGhpc0lzQU9ubHlSZWxhdGlvbnNoaXBFbGVtZW50U3VibW9kZWw/submodel-elements/DemoRelationshipElement",
     "expectedStatus": 204
+  },
+  {
+    "context": "POST file submodel - admin",
+    "token": { "user": "admin", "password": "pwd" },
+    "method": "POST",
+    "endpoint": "http://localhost:6004/submodels",
+    "data": "../integration_tests/bodies/post/postSubmodelWithFile.json",
+    "expectedStatus": 201
+  },
+  {
+    "context": "PUT file attachment - userx denied on create (UPDATE only)",
+    "action": "UPLOAD_ATTACHMENT_MULTIPART",
+    "token": { "user": "userx", "password": "pwd" },
+    "method": "PUT",
+    "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9Pbmx5RmlsZVN1Ym1vZGVsX1Rlc3Q/submodel-elements/DemoFile/attachment",
+    "data": "../integration_tests/testFiles/marcus.gif",
+    "headers": { "X-Upload-FileName": "userx-create-attempt.gif" },
+    "expectedStatus": 403
+  },
+  {
+    "context": "PUT file attachment - admin allowed on create",
+    "action": "UPLOAD_ATTACHMENT_MULTIPART",
+    "token": { "user": "admin", "password": "pwd" },
+    "method": "PUT",
+    "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9Pbmx5RmlsZVN1Ym1vZGVsX1Rlc3Q/submodel-elements/DemoFile/attachment",
+    "data": "../integration_tests/testFiles/marcus.gif",
+    "headers": { "X-Upload-FileName": "admin-create.gif" },
+    "expectedStatus": 204
+  },
+  {
+    "context": "PUT file attachment - userx allowed on update",
+    "action": "UPLOAD_ATTACHMENT_MULTIPART",
+    "token": { "user": "userx", "password": "pwd" },
+    "method": "PUT",
+    "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9Pbmx5RmlsZVN1Ym1vZGVsX1Rlc3Q/submodel-elements/DemoFile/attachment",
+    "data": "../integration_tests/testFiles/marcus.gif",
+    "headers": { "X-Upload-FileName": "userx-update.gif" },
+    "expectedStatus": 204
   }
 ]

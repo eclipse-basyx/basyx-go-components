@@ -27,23 +27,41 @@
 package persistence
 
 import (
+	"context"
 	"crypto/rand"
 	"crypto/rsa"
 	"errors"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 
 	sqlmock "github.com/DATA-DOG/go-sqlmock"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/stretchr/testify/require"
 	jose "gopkg.in/go-jose/go-jose.v2"
 )
+
+func contextWithABACDisabled(t *testing.T) context.Context {
+	t.Helper()
+
+	cfg := &common.Config{}
+	var cfgCtx context.Context
+	handler := common.ConfigMiddleware(cfg)(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+		cfgCtx = r.Context()
+	}))
+	handler.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/", nil))
+
+	require.NotNil(t, cfgCtx)
+	return cfgCtx
+}
 
 func TestGetSignedSubmodelWithoutPrivateKeyReturnsError(t *testing.T) {
 	t.Parallel()
 
 	sut := &SubmodelDatabase{}
 
-	jws, err := sut.GetSignedSubmodel("sm", false)
+	jws, err := sut.GetSignedSubmodel(contextWithABACDisabled(t), "sm", false)
 	require.Error(t, err)
 	require.Empty(t, jws)
 	require.Contains(t, err.Error(), "private key not loaded")
@@ -66,7 +84,7 @@ func TestGetSignedSubmodelPropagatesSubmodelLookupError(t *testing.T) {
 	sut := &SubmodelDatabase{db: db, privateKey: privateKey}
 	mock.ExpectQuery(`SELECT .*`).WillReturnError(errors.New("lookup failed"))
 
-	jws, err := sut.GetSignedSubmodel("sm", false)
+	jws, err := sut.GetSignedSubmodel(contextWithABACDisabled(t), "sm", false)
 	require.Error(t, err)
 	require.Empty(t, jws)
 	require.Contains(t, err.Error(), "lookup failed")
@@ -90,7 +108,7 @@ func TestGetSignedSubmodelSignsFullRepresentation(t *testing.T) {
 	sut := &SubmodelDatabase{db: db, privateKey: privateKey}
 	setupSignedSubmodelHappyPathExpectations(mock, "sm-signed")
 
-	jwsCompact, err := sut.GetSignedSubmodel("sm-signed", false)
+	jwsCompact, err := sut.GetSignedSubmodel(contextWithABACDisabled(t), "sm-signed", false)
 	require.NoError(t, err)
 	require.NotEmpty(t, jwsCompact)
 	require.Equal(t, 2, strings.Count(jwsCompact, "."))
@@ -123,7 +141,7 @@ func TestGetSignedSubmodelSignsValueOnlyRepresentation(t *testing.T) {
 	sut := &SubmodelDatabase{db: db, privateKey: privateKey}
 	setupSignedSubmodelHappyPathExpectations(mock, "sm-value-only")
 
-	jwsCompact, err := sut.GetSignedSubmodel("sm-value-only", true)
+	jwsCompact, err := sut.GetSignedSubmodel(contextWithABACDisabled(t), "sm-value-only", true)
 	require.NoError(t, err)
 	require.NotEmpty(t, jwsCompact)
 	require.Equal(t, 2, strings.Count(jwsCompact, "."))

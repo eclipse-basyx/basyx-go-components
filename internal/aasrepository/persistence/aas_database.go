@@ -36,10 +36,10 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/FriedJannik/aas-go-sdk/jsonization"
-	"github.com/FriedJannik/aas-go-sdk/stringification"
-	"github.com/FriedJannik/aas-go-sdk/types"
-	"github.com/FriedJannik/aas-go-sdk/verification"
+	"github.com/aas-core-works/aas-core3.1-golang/jsonization"
+	"github.com/aas-core-works/aas-core3.1-golang/stringification"
+	"github.com/aas-core-works/aas-core3.1-golang/types"
+	"github.com/aas-core-works/aas-core3.1-golang/verification"
 	"github.com/doug-martin/goqu/v9"
 	persistenceutils "github.com/eclipse-basyx/basyx-go-components/internal/aasrepository/persistence/utils"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
@@ -75,6 +75,15 @@ func NewAssetAdministrationShellDatabase(dsn string, maxOpenConnections int, max
 	}
 	if connMaxLifetimeMinutes > 0 {
 		db.SetConnMaxLifetime(time.Duration(connMaxLifetimeMinutes) * time.Minute)
+	}
+
+	return NewAssetAdministrationShellDatabaseFromDB(db, strictVerification)
+}
+
+// NewAssetAdministrationShellDatabaseFromDB creates a new repository backend from an existing DB pool.
+func NewAssetAdministrationShellDatabaseFromDB(db *sql.DB, strictVerification bool) (*AssetAdministrationShellDatabase, error) {
+	if db == nil {
+		return nil, common.NewErrBadRequest("AASREPO-NEWFROMDB-NILDB database handle must not be nil")
 	}
 
 	return &AssetAdministrationShellDatabase{
@@ -167,6 +176,14 @@ func buildAASCollector() (*grammar.ResolvedFieldPathCollector, error) {
 	return collector, nil
 }
 
+func shouldEnforceFormula(ctx context.Context, step string) (bool, error) {
+	shouldEnforce, err := auth.ShouldEnforceFormula(ctx)
+	if err != nil {
+		return false, common.NewInternalServerError(step + " " + err.Error())
+	}
+	return shouldEnforce, nil
+}
+
 func (s *AssetAdministrationShellDatabase) checkAASVisibilityInTx(ctx context.Context, tx *sql.Tx, aasIdentifier string) (bool, bool, error) {
 	_, err := persistenceutils.GetAssetAdministrationShellDatabaseID(tx, aasIdentifier)
 	if err != nil {
@@ -176,7 +193,11 @@ func (s *AssetAdministrationShellDatabase) checkAASVisibilityInTx(ctx context.Co
 		return false, false, common.NewInternalServerError("AASREPO-ABACCHKAAS-GETAASDBID " + err.Error())
 	}
 
-	if !auth.ShouldEnforceABACWriteCheck(ctx) {
+	shouldEnforce, enforceErr := shouldEnforceFormula(ctx, "AASREPO-ABACCHKAAS-SHOULDENFORCE")
+	if enforceErr != nil {
+		return false, false, enforceErr
+	}
+	if !shouldEnforce {
 		return true, true, nil
 	}
 
@@ -227,7 +248,11 @@ func (s *AssetAdministrationShellDatabase) CreateAssetAdministrationShell(ctx co
 		return err
 	}
 
-	if auth.ShouldEnforceABACWriteCheck(ctx) {
+	shouldEnforce, enforceErr := shouldEnforceFormula(ctx, "AASREPO-NEWAAS-SHOULDENFORCE")
+	if enforceErr != nil {
+		return enforceErr
+	}
+	if shouldEnforce {
 		exists, visible, visErr := s.checkAASVisibilityInTx(ctx, tx, aas.ID())
 		if visErr != nil {
 			return visErr
@@ -371,25 +396,13 @@ func (s *AssetAdministrationShellDatabase) CreateSubmodelReferenceInAssetAdminis
 	if err != nil {
 		return err
 	}
+	defer cleanup(&err)
 
-	err = tx.Commit()
-	if err != nil {
-		return common.NewInternalServerError("AASREPO-NEWSMREFINAAS-COMMIT " + err.Error())
+	shouldEnforce, enforceErr := shouldEnforceFormula(ctx, "AASREPO-NEWSMREFINAAS-SHOULDENFORCE")
+	if enforceErr != nil {
+		return enforceErr
 	}
-	return nil
-}
-
-// CreateSubmodelReferenceInAssetAdministrationShellInTransaction adds a submodel reference in an existing transaction.
-func (s *AssetAdministrationShellDatabase) CreateSubmodelReferenceInAssetAdministrationShellInTransaction(ctx context.Context, tx *sql.Tx, aasIdentifier string, submodelRef types.IReference) error {
-	if tx == nil {
-		return common.NewErrBadRequest("AASREPO-NEWSMREFINAASINTX-NILTX transaction must not be nil")
-	}
-
-	if err := s.verifyReference(submodelRef, "AASREPO-NEWSMREFINAAS-VERIFY"); err != nil {
-		return err
-	}
-
-	if auth.ShouldEnforceABACWriteCheck(ctx) {
+	if shouldEnforce {
 		exists, visible, visErr := s.checkAASVisibilityInTx(ctx, tx, aasIdentifier)
 		if visErr != nil {
 			return visErr
@@ -406,7 +419,7 @@ func (s *AssetAdministrationShellDatabase) CreateSubmodelReferenceInAssetAdminis
 		return err
 	}
 
-	if auth.ShouldEnforceABACWriteCheck(ctx) {
+	if shouldEnforce {
 		exists, visible, visErr := s.checkAASVisibilityInTx(ctx, tx, aasIdentifier)
 		if visErr != nil {
 			return visErr
@@ -553,7 +566,16 @@ func (s *AssetAdministrationShellDatabase) GetAssetAdministrationShells(ctx cont
 	dialect := goqu.Dialect("postgres")
 
 	if limit < 0 {
-		return nil, "", common.NewErrBadRequest("AASREPO-GETAASLIST-BADLIMIT Limit " + string(limit) + " too small")
+		return nil, "", common.NewErrBadRequest("AASREPO-GETAASLIST-BADLIMIT Limit " + strconv.FormatInt(int64(limit), 10) + " too small")
+	}
+	if cursor != "" {
+		cursorExists, cursorErr := s.assetAdministrationShellCursorExists(ctx, &dialect, cursor)
+		if cursorErr != nil {
+			return nil, "", cursorErr
+		}
+		if !cursorExists {
+			return []map[string]any{}, "", nil
+		}
 	}
 
 	selectDS, err := buildGetAssetAdministrationShellsDataset(&dialect, limit, cursor, idShort, assetIDs)
@@ -566,9 +588,15 @@ func (s *AssetAdministrationShellDatabase) GetAssetAdministrationShells(ctx cont
 		return nil, "", collectorErr
 	}
 
-	selectDS, addFormulaErr := auth.AddFormulaQueryFromContext(ctx, selectDS, collector)
-	if addFormulaErr != nil {
-		return nil, "", common.NewInternalServerError("AASREPO-GETAASLIST-ABACFORMULA " + addFormulaErr.Error())
+	shouldEnforce, enforceErr := shouldEnforceFormula(ctx, "AASREPO-GETAASLIST-SHOULDENFORCE")
+	if enforceErr != nil {
+		return nil, "", enforceErr
+	}
+	if shouldEnforce {
+		selectDS, err = auth.AddFormulaQueryFromContext(ctx, selectDS, collector)
+		if err != nil {
+			return nil, "", common.NewInternalServerError("AASREPO-GETAASLIST-ABACFORMULA " + err.Error())
+		}
 	}
 
 	sqlQuery, args, toSQLErr := selectDS.ToSQL()
@@ -621,6 +649,22 @@ func (s *AssetAdministrationShellDatabase) GetAssetAdministrationShells(ctx cont
 	return result, nextCursor, nil
 }
 
+func (s *AssetAdministrationShellDatabase) assetAdministrationShellCursorExists(ctx context.Context, dialect *goqu.DialectWrapper, cursor string) (bool, error) {
+	query, args, buildErr := dialect.From("aas").Select(goqu.V(1)).Where(goqu.I("aas_id").Eq(cursor)).Limit(1).ToSQL()
+	if buildErr != nil {
+		return false, common.NewInternalServerError("AASREPO-CHECKAASCURSOR-BUILDSQL " + buildErr.Error())
+	}
+
+	var one int
+	if queryErr := s.db.QueryRowContext(ctx, query, args...).Scan(&one); queryErr != nil {
+		if errors.Is(queryErr, sql.ErrNoRows) {
+			return false, nil
+		}
+		return false, common.NewInternalServerError("AASREPO-CHECKAASCURSOR-EXECSQL " + queryErr.Error())
+	}
+	return true, nil
+}
+
 // GetAssetAdministrationShellByID returns the JSON-like representation of an AAS by identifier.
 func (s *AssetAdministrationShellDatabase) GetAssetAdministrationShellByID(ctx context.Context, aasIdentifier string) (map[string]any, error) {
 	dialect := goqu.Dialect("postgres")
@@ -631,9 +675,16 @@ func (s *AssetAdministrationShellDatabase) GetAssetAdministrationShellByID(ctx c
 		return nil, collectorErr
 	}
 
-	selectDS, addFormulaErr := auth.AddFormulaQueryFromContext(ctx, selectDS, collector)
-	if addFormulaErr != nil {
-		return nil, common.NewInternalServerError("AASREPO-GETAASBYID-ABACFORMULA " + addFormulaErr.Error())
+	shouldEnforce, enforceErr := shouldEnforceFormula(ctx, "AASREPO-GETAASBYID-SHOULDENFORCE")
+	if enforceErr != nil {
+		return nil, enforceErr
+	}
+	if shouldEnforce {
+		var err error
+		selectDS, err = auth.AddFormulaQueryFromContext(ctx, selectDS, collector)
+		if err != nil {
+			return nil, common.NewInternalServerError("AASREPO-GETAASBYID-ABACFORMULA " + err.Error())
+		}
 	}
 
 	sqlQuery, args, toSQLErr := selectDS.ToSQL()
@@ -682,8 +733,15 @@ func (s *AssetAdministrationShellDatabase) PutAssetAdministrationShellByID(ctx c
 		}
 		isUpdate = false
 	}
+	shouldEnforce, enforceErr := shouldEnforceFormula(ctx, "AASREPO-PUTAAS-SHOULDENFORCE")
+	if enforceErr != nil {
+		return false, enforceErr
+	}
+	if shouldEnforce {
+		ctx = auth.SelectPutFormulaByExistence(ctx, isUpdate)
+	}
 
-	if auth.ShouldEnforceABACWriteCheck(ctx) && isUpdate {
+	if shouldEnforce && isUpdate {
 		exists, visible, visErr := s.checkAASVisibilityInTx(ctx, tx, aasIdentifier)
 		if visErr != nil {
 			return false, visErr
@@ -711,7 +769,7 @@ func (s *AssetAdministrationShellDatabase) PutAssetAdministrationShellByID(ctx c
 		return false, err
 	}
 
-	if auth.ShouldEnforceABACWriteCheck(ctx) {
+	if shouldEnforce {
 		exists, visible, visErr := s.checkAASVisibilityInTx(ctx, tx, aasIdentifier)
 		if visErr != nil {
 			return false, visErr
@@ -740,7 +798,11 @@ func (s *AssetAdministrationShellDatabase) DeleteAssetAdministrationShellByID(ct
 	}
 	defer cleanup(&err)
 
-	if auth.ShouldEnforceABACWriteCheck(ctx) {
+	shouldEnforce, enforceErr := shouldEnforceFormula(ctx, "AASREPO-DELAAS-SHOULDENFORCE")
+	if enforceErr != nil {
+		return enforceErr
+	}
+	if shouldEnforce {
 		exists, visible, visErr := s.checkAASVisibilityInTx(ctx, tx, aasIdentifier)
 		if visErr != nil {
 			return visErr
@@ -837,7 +899,11 @@ func (s *AssetAdministrationShellDatabase) PutAssetInformationByAASID(ctx contex
 	}
 	defer cleanup(&err)
 
-	if auth.ShouldEnforceABACWriteCheck(ctx) {
+	shouldEnforce, enforceErr := shouldEnforceFormula(ctx, "AASREPO-PUTASSETINFO-SHOULDENFORCE")
+	if enforceErr != nil {
+		return enforceErr
+	}
+	if shouldEnforce {
 		exists, visible, visErr := s.checkAASVisibilityInTx(ctx, tx, aasIdentifier)
 		if visErr != nil {
 			return visErr
@@ -925,7 +991,7 @@ func (s *AssetAdministrationShellDatabase) PutAssetInformationByAASID(ctx contex
 		}
 	}
 
-	if auth.ShouldEnforceABACWriteCheck(ctx) {
+	if shouldEnforce {
 		exists, visible, visErr := s.checkAASVisibilityInTx(ctx, tx, aasIdentifier)
 		if visErr != nil {
 			return visErr
@@ -968,7 +1034,43 @@ func (s *AssetAdministrationShellDatabase) PutThumbnailByAASID(ctx context.Conte
 	}
 	defer cleanup(&err)
 
-	if auth.ShouldEnforceABACWriteCheck(ctx) {
+	shouldEnforce, enforceErr := shouldEnforceFormula(ctx, "AASREPO-PUTTHUMBNAIL-SHOULDENFORCE")
+	if enforceErr != nil {
+		return enforceErr
+	}
+	if shouldEnforce {
+		aasDBID, dbIDErr := persistenceutils.GetAssetAdministrationShellDatabaseID(tx, aasIdentifier)
+		if dbIDErr != nil {
+			if dbIDErr == sql.ErrNoRows {
+				return common.NewErrNotFound("AASREPO-PUTTHUMBNAIL-AASNOTFOUND Asset Administration Shell with ID '" + aasIdentifier + "' not found")
+			}
+			return common.NewInternalServerError("AASREPO-PUTTHUMBNAIL-GETAASDBID " + dbIDErr.Error())
+		}
+
+		dialect := goqu.Dialect("postgres")
+		fileQuery, fileArgs, fileBuildErr := dialect.
+			From("thumbnail_file_data").
+			Select("file_oid").
+			Where(
+				goqu.C("id").Eq(aasDBID),
+				goqu.C("file_oid").IsNotNull(),
+			).
+			Limit(1).
+			ToSQL()
+		if fileBuildErr != nil {
+			return common.NewInternalServerError("AASREPO-PUTTHUMBNAIL-BUILDEXISTSQL " + fileBuildErr.Error())
+		}
+
+		thumbnailExists := true
+		var fileOID int64
+		if scanErr := tx.QueryRow(fileQuery, fileArgs...).Scan(&fileOID); scanErr != nil {
+			if scanErr != sql.ErrNoRows {
+				return common.NewInternalServerError("AASREPO-PUTTHUMBNAIL-EXECEXISTSQL " + scanErr.Error())
+			}
+			thumbnailExists = false
+		}
+
+		ctx = auth.SelectPutFormulaByExistence(ctx, thumbnailExists)
 		exists, visible, visErr := s.checkAASVisibilityInTx(ctx, tx, aasIdentifier)
 		if visErr != nil {
 			return visErr
@@ -1006,7 +1108,11 @@ func (s *AssetAdministrationShellDatabase) DeleteThumbnailByAASID(ctx context.Co
 	}
 	defer cleanup(&err)
 
-	if auth.ShouldEnforceABACWriteCheck(ctx) {
+	shouldEnforce, enforceErr := shouldEnforceFormula(ctx, "AASREPO-DELTHUMBNAIL-SHOULDENFORCE")
+	if enforceErr != nil {
+		return enforceErr
+	}
+	if shouldEnforce {
 		exists, visible, visErr := s.checkAASVisibilityInTx(ctx, tx, aasIdentifier)
 		if visErr != nil {
 			return visErr
@@ -1045,7 +1151,7 @@ func (s *AssetAdministrationShellDatabase) GetAllSubmodelReferencesByAASID(ctx c
 	defer cleanup(&err)
 
 	if limit < 0 {
-		return nil, "", common.NewErrBadRequest("AASREPO-GETSMREFS-BADLIMIT Limit " + string(limit) + " too small")
+		return nil, "", common.NewErrBadRequest("AASREPO-GETSMREFS-BADLIMIT Limit " + strconv.FormatInt(int64(limit), 10) + " too small")
 	}
 
 	cursorID := int64(0)
@@ -1065,9 +1171,15 @@ func (s *AssetAdministrationShellDatabase) GetAllSubmodelReferencesByAASID(ctx c
 		return nil, "", collectorErr
 	}
 
-	selectDS, addFormulaErr := auth.AddFormulaQueryFromContext(ctx, selectDS, collector)
-	if addFormulaErr != nil {
-		return nil, "", common.NewInternalServerError("AASREPO-GETSMREFS-ABACFORMULA " + addFormulaErr.Error())
+	shouldEnforce, enforceErr := shouldEnforceFormula(ctx, "AASREPO-GETSMREFS-SHOULDENFORCE")
+	if enforceErr != nil {
+		return nil, "", enforceErr
+	}
+	if shouldEnforce {
+		selectDS, err = auth.AddFormulaQueryFromContext(ctx, selectDS, collector)
+		if err != nil {
+			return nil, "", common.NewInternalServerError("AASREPO-GETSMREFS-ABACFORMULA " + err.Error())
+		}
 	}
 
 	aasDBIDSQL, aasDBIDArgs, aasDBIDBuildErr := selectDS.ToSQL()
@@ -1081,6 +1193,15 @@ func (s *AssetAdministrationShellDatabase) GetAllSubmodelReferencesByAASID(ctx c
 			return nil, "", common.NewErrNotFound("AASREPO-GETSMREFS-AASNOTFOUND Asset Administration Shell with ID '" + aasIdentifier + "' not found")
 		}
 		return nil, "", common.NewInternalServerError("AASREPO-GETSMREFS-EXECAASSQL " + queryErr.Error())
+	}
+	if cursorID > 0 {
+		cursorExists, cursorErr := submodelReferenceCursorExists(ctx, tx, &dialect, aasDBID, cursorID)
+		if cursorErr != nil {
+			return nil, "", cursorErr
+		}
+		if !cursorExists {
+			return []types.IReference{}, "", nil
+		}
 	}
 
 	sqlQuery, args, buildErr := buildGetAllSubmodelReferencesByAASIDQuery(&dialect, aasDBID, limit, cursorID)
@@ -1136,6 +1257,30 @@ func (s *AssetAdministrationShellDatabase) GetAllSubmodelReferencesByAASID(ctx c
 	return references, nextCursor, nil
 }
 
+func submodelReferenceCursorExists(ctx context.Context, tx *sql.Tx, dialect *goqu.DialectWrapper, aasDBID int64, cursorID int64) (bool, error) {
+	query, args, buildErr := dialect.
+		From(goqu.T("aas_submodel_reference").As("r")).
+		Select(goqu.V(1)).
+		Where(
+			goqu.I("r.id").Eq(cursorID),
+			goqu.I("r.aas_id").Eq(aasDBID),
+		).
+		Limit(1).
+		ToSQL()
+	if buildErr != nil {
+		return false, common.NewInternalServerError("AASREPO-CHECKSMREFCURSOR-BUILDSQL " + buildErr.Error())
+	}
+
+	var one int
+	if queryErr := tx.QueryRowContext(ctx, query, args...).Scan(&one); queryErr != nil {
+		if errors.Is(queryErr, sql.ErrNoRows) {
+			return false, nil
+		}
+		return false, common.NewInternalServerError("AASREPO-CHECKSMREFCURSOR-EXECSQL " + queryErr.Error())
+	}
+	return true, nil
+}
+
 // DeleteSubmodelReferenceInAssetAdministrationShell removes a submodel reference and checks ABAC visibility.
 func (s *AssetAdministrationShellDatabase) DeleteSubmodelReferenceInAssetAdministrationShell(ctx context.Context, aasIdentifier string, submodelIdentifier string) error {
 	tx, cleanup, err := common.StartTransaction(s.db)
@@ -1144,7 +1289,11 @@ func (s *AssetAdministrationShellDatabase) DeleteSubmodelReferenceInAssetAdminis
 	}
 	defer cleanup(&err)
 
-	if auth.ShouldEnforceABACWriteCheck(ctx) {
+	shouldEnforce, enforceErr := shouldEnforceFormula(ctx, "AASREPO-DELSMREF-SHOULDENFORCE")
+	if enforceErr != nil {
+		return enforceErr
+	}
+	if shouldEnforce {
 		exists, visible, visErr := s.checkAASVisibilityInTx(ctx, tx, aasIdentifier)
 		if visErr != nil {
 			return visErr

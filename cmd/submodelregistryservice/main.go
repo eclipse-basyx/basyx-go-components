@@ -37,6 +37,7 @@ import (
 	"os"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
+	commonmodel "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 	smregistryapi "github.com/eclipse-basyx/basyx-go-components/internal/smregistry/api"
 	smregistrypostgresql "github.com/eclipse-basyx/basyx-go-components/internal/smregistry/persistence"
@@ -55,6 +56,8 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 	if err != nil {
 		return err
 	}
+	commonmodel.SetStrictVerificationEnabled(cfg.Server.StrictVerification)
+	commonmodel.SetSupportsSingularSupplementalSemanticId(cfg.General.SupportsSingularSupplementalSemanticId)
 
 	r := chi.NewRouter()
 
@@ -105,7 +108,7 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 	// luk
 	// === Protected API Subrouter ===
 	apiRouter := chi.NewRouter()
-	common.AddDefaultRouterErrorHandlers(apiRouter, "SubmodelRegistryService")
+	common.ConfigureAPIRouter(apiRouter, "SubmodelRegistryService")
 
 	// Apply OIDC + ABAC once for all registry endpoints
 	if err := auth.SetupSecurity(ctx, cfg, apiRouter); err != nil {

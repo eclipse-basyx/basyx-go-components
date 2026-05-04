@@ -1,32 +1,41 @@
- {
-    "AllAccessPermissionRules": {
+{
+  "AllAccessPermissionRules": {
     "rules": [
-        {
+      {
         "ACL": {
-            "ACCESS": "ALLOW",
-            "RIGHTS": [
+          "ACCESS": "ALLOW",
+          "ATTRIBUTES": [
+            {
+              "Kind": "GLOBAL",
+              "Value": "ANONYMOUS"
+            }
+          ],
+          "RIGHTS": [
             "READ",
             "UPDATE"
-            ]
+          ]
         },
         "FORMULA": {
-            "$and": [
+          "$and": [
             {
-                "$boolean": true
+              "$boolean": true
             },
             {
-                "$eq": [
+              "$eq": [
                 {
-                    "$numVal": 1
+                  "$numVal": 1
                 },
                 {
-                    "$numVal": 1
+                  "$numVal": 1
                 }
-                ]
+              ]
             }
-            ]
-        }
-        }
+          ]
+        },
+        "OBJECTS": [
+          {}
+        ]
+      }
     ]
-    }
+  }
 }

@@ -1,5 +1,11 @@
 {
   "ACCESS": "ALLOW",
+  "ATTRIBUTES": [
+    {
+      "Kind": "GLOBAL",
+      "Value": "ANONYMOUS"
+    }
+  ],
   "RIGHTS": [
     "READ"
   ]

@@ -1,0 +1,95 @@
+{
+    "paging_metadata": {},
+    "data": [
+        {
+            "administration": {
+                "creator": {
+                    "keys": [
+                        {
+                            "type": "GlobalReference",
+                            "value": "https://examplecompany.de"
+                        }
+                    ],
+                    "type": "ExternalReference"
+                },
+                "revision": "0",
+                "version": "1"
+            },
+            "description": [
+                {
+                    "language": "en",
+                    "text": "An example company."
+                }
+            ],
+            "displayName": [
+                {
+                    "language": "en",
+                    "text": "Example Company"
+                }
+            ],
+            "domain": "ex.com.2.de",
+            "endpoints": [
+                {
+                    "interface": "AAS-REGISTRY-3.0",
+                    "protocolInformation": {
+                        "href": "https://example.com/aas-registry",
+                        "endpointProtocol": "HTTPS"
+                    }
+                }
+            ],
+            "idShort": "exampleCompany2",
+            "name": "ExCom2",
+            "nameOptions": [
+                "Example Company 2",
+                "EC2",
+                "Com Example 2",
+                "ExCompany"
+            ]
+        },
+        {
+            "administration": {
+                "creator": {
+                    "keys": [
+                        {
+                            "type": "GlobalReference",
+                            "value": "https://examplecompany.de"
+                        }
+                    ],
+                    "type": "ExternalReference"
+                },
+                "revision": "0",
+                "version": "1"
+            },
+            "description": [
+                {
+                    "language": "en",
+                    "text": "An example company."
+                }
+            ],
+            "displayName": [
+                {
+                    "language": "en",
+                    "text": "Example Company"
+                }
+            ],
+            "domain": "ex.com.3.de",
+            "endpoints": [
+                {
+                    "interface": "AAS-DISCOVERY-3.0",
+                    "protocolInformation": {
+                        "href": "https://example.com/aas-discovery",
+                        "endpointProtocol": "HTTPS"
+                    }
+                }
+            ],
+            "idShort": "exampleCompany3",
+            "name": "ExCom3",
+            "nameOptions": [
+                "Example Company 3",
+                "EC3",
+                "Com Example 3",
+                "ExCompany"
+            ]
+        }
+    ]
+}

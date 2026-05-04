@@ -35,10 +35,11 @@ package persistencepostgresql
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"time"
 
-	"github.com/FriedJannik/aas-go-sdk/types"
+	"github.com/aas-core-works/aas-core3.1-golang/types"
 	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/descriptors"
@@ -93,6 +94,14 @@ func NewPostgreSQLDiscoveryBackend(
 		db.SetConnMaxLifetime(time.Duration(connMaxLifetimeMinutes) * time.Minute)
 	}
 
+	return NewPostgreSQLDiscoveryBackendFromDB(db)
+}
+
+// NewPostgreSQLDiscoveryBackendFromDB creates a new backend instance from an existing DB pool.
+func NewPostgreSQLDiscoveryBackendFromDB(db *sql.DB) (*PostgreSQLDiscoveryDatabase, error) {
+	if db == nil {
+		return nil, common.NewErrBadRequest("DISC-NEWFROMDB-NILDB database handle must not be nil")
+	}
 	return &PostgreSQLDiscoveryDatabase{db: db}, nil
 }
 
@@ -118,7 +127,6 @@ func (p *PostgreSQLDiscoveryDatabase) GetAllAssetLinks(ctx context.Context, aasI
 		case common.IsErrNotFound(err):
 			return nil, err
 		default:
-			_, _ = fmt.Println(err)
 			return nil, common.NewInternalServerError("Failed to query specific asset IDs. See console for information.")
 		}
 	}
@@ -149,7 +157,6 @@ func (p *PostgreSQLDiscoveryDatabase) DeleteAllAssetLinks(ctx context.Context, a
 	}
 	result, err := p.db.ExecContext(ctx, sqlStr, args...)
 	if err != nil {
-		_, _ = fmt.Println(err)
 		return common.NewInternalServerError("Failed to delete AAS identifier. See console for information.")
 	}
 	if rows, _ := result.RowsAffected(); rows == 0 {
@@ -179,7 +186,14 @@ func (p *PostgreSQLDiscoveryDatabase) DeleteAllAssetLinks(ctx context.Context, a
 // The use of COPY FROM makes this method highly efficient even for large numbers of asset links.
 func (p *PostgreSQLDiscoveryDatabase) CreateAllAssetLinks(ctx context.Context, aasID string, specificAssetIDs []types.ISpecificAssetID) error {
 	if err := descriptors.ReplaceSpecificAssetIDsByAASIdentifier(ctx, p.db, aasID, specificAssetIDs); err != nil {
-		_, _ = fmt.Println(err)
+		return common.NewInternalServerError("Failed to store specific asset IDs. See console for information.")
+	}
+	return nil
+}
+
+// AddAllAssetLinks appends missing asset links for an existing aas identifier.
+func (p *PostgreSQLDiscoveryDatabase) AddAllAssetLinks(ctx context.Context, aasID string, specificAssetIDs []types.ISpecificAssetID) error {
+	if err := descriptors.AddSpecificAssetIDsByAASIdentifier(ctx, p.db, aasID, specificAssetIDs); err != nil {
 		return common.NewInternalServerError("Failed to store specific asset IDs. See console for information.")
 	}
 	return nil
@@ -227,6 +241,15 @@ func (p *PostgreSQLDiscoveryDatabase) SearchAASIDsByAssetLinks(
 	if peekLimit < 0 {
 		return nil, "", common.NewErrBadRequest("Limit has to be higher than 0")
 	}
+	if cursor != "" {
+		cursorExists, cursorErr := p.discoveryCursorExists(ctx, cursor)
+		if cursorErr != nil {
+			return nil, "", cursorErr
+		}
+		if !cursorExists {
+			return []string{}, "", nil
+		}
+	}
 
 	d := goqu.Dialect("postgres")
 	ai := goqu.T("aas_identifier")
@@ -259,6 +282,7 @@ func (p *PostgreSQLDiscoveryDatabase) SearchAASIDsByAssetLinks(
 		_, _ = fmt.Println("SearchAASIDsByAssetLinks: collector error:", err)
 		return nil, "", common.NewInternalServerError("Failed to build query filters. See server logs for details.")
 	}
+
 	ds, err = auth.AddFormulaQueryFromContext(ctx, ds, collector)
 	if err != nil {
 		_, _ = fmt.Println("SearchAASIDsByAssetLinks: filter error:", err)
@@ -306,4 +330,26 @@ func (p *PostgreSQLDiscoveryDatabase) SearchAASIDsByAssetLinks(
 	}
 
 	return buf, "", nil
+}
+
+func (p *PostgreSQLDiscoveryDatabase) discoveryCursorExists(ctx context.Context, cursor string) (bool, error) {
+	d := goqu.Dialect("postgres")
+	query, args, buildErr := d.
+		From(goqu.T("aas_identifier").As("ai")).
+		Select(goqu.V(1)).
+		Where(goqu.I("ai.aasid").Eq(cursor)).
+		Limit(1).
+		ToSQL()
+	if buildErr != nil {
+		return false, common.NewInternalServerError("DISCOVERY-CHECKCURSOR-BUILDSQL " + buildErr.Error())
+	}
+
+	var one int
+	if queryErr := p.db.QueryRowContext(ctx, query, args...).Scan(&one); queryErr != nil {
+		if errors.Is(queryErr, sql.ErrNoRows) {
+			return false, nil
+		}
+		return false, common.NewInternalServerError("DISCOVERY-CHECKCURSOR-EXECSQL " + queryErr.Error())
+	}
+	return true, nil
 }

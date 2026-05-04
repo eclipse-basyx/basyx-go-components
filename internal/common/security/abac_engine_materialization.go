@@ -181,11 +181,11 @@ func materializeRule(index definitionIndex, r grammar.AccessPermissionRule) (mat
 		return mr, fmt.Errorf("ACL is required")
 	}
 
-	// Attributes: inline + referenced
-	if mr.acl.ATTRIBUTES != nil {
+	// Attributes: exactly one of inline or referenced.
+	switch {
+	case mr.acl.ATTRIBUTES != nil:
 		mr.attrs = append(mr.attrs, mr.acl.ATTRIBUTES...)
-	}
-	if mr.acl.USEATTRIBUTES != nil {
+	case mr.acl.USEATTRIBUTES != nil:
 		name := strings.TrimSpace(*mr.acl.USEATTRIBUTES)
 		attrs, ok := index.attrs[name]
 		if !ok {
@@ -194,11 +194,11 @@ func materializeRule(index definitionIndex, r grammar.AccessPermissionRule) (mat
 		mr.attrs = append(mr.attrs, attrs...)
 	}
 
-	// Objects: inline + referenced (with recursive resolution)
-	if len(r.OBJECTS) > 0 {
+	// Objects: exactly one of inline or referenced.
+	switch {
+	case len(r.OBJECTS) > 0:
 		mr.objs = append(mr.objs, r.OBJECTS...)
-	}
-	if len(r.USEOBJECTS) > 0 {
+	case len(r.USEOBJECTS) > 0:
 		resolved, err := resolveObjects(index, r.USEOBJECTS, map[string]bool{})
 		if err != nil {
 			return mr, err

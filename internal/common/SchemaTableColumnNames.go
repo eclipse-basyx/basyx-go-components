@@ -56,7 +56,9 @@ const (
 	TblLangStringNameType             = "lang_string_name_type"
 	TblReference                      = "reference"
 	TblReferenceKey                   = "reference_key"
-	TblInfrastructureDescriptor       = "infrastructure_descriptor"
+	TblCompanyDescriptor              = "company_descriptor"
+	TblCompanyDescriptorNameOption    = "company_descriptor_name_option"
+	TblCompanyDescriptorAssetIDRegex  = "company_descriptor_asset_id_regex"
 )
 
 // Common table aliases used across descriptor queries. Keeping them here avoids
@@ -70,8 +72,8 @@ const (
 	AliasSubmodelDescriptorEndpoint               = "submodel_descriptor_endpoint"
 	AliasSubmodelDescriptorSemanticIDReference    = "aasdesc_submodel_descriptor_semantic_id_reference"
 	AliasSubmodelDescriptorSemanticIDReferenceKey = "aasdesc_submodel_descriptor_semantic_id_reference_key"
-	AliasInfrastructureDescriptor                 = TblInfrastructureDescriptor
-	AliasInfrastructureDescriptorEndpoint         = "infrastructure_descriptor_endpoint"
+	AliasCompanyDescriptor                        = TblCompanyDescriptor
+	AliasCompanyDescriptorEndpoint                = "company_descriptor_endpoint"
 )
 
 // Columns holds the column names used by descriptor queries. Centralizing the
@@ -94,7 +96,7 @@ const (
 	ColAssetType                 = "asset_type"
 	ColGlobalAssetID             = "global_asset_id"
 	ColIDShort                   = "id_short"
-	ColCreatedAt                 = "created_at"
+	ColCreatedAt                 = "db_created_at"
 	ColAASID                     = "id"
 	ColInfDescID                 = "id"
 	ColHref                      = "href"
@@ -118,7 +120,10 @@ const (
 	ColSpecificAssetID   = "specific_asset_id"
 	ColReferenceID       = "reference_id"
 
-	ColCompany = "company"
+	ColCompanyName   = "company_name"
+	ColCompanyDomain = "company_domain"
+	ColNameOption    = "name_option"
+	ColRegexPattern  = "regex_pattern"
 
 	// Generic/common column names used in descriptor queries
 	ColType            = "type"
@@ -129,10 +134,12 @@ const (
 // Goqu table helpers (convenience for Returning/Col) to avoid repetitively
 // constructing the table builders in call sites.
 var (
-	TDescriptor               = goqu.T(TblDescriptor)
-	TAASDescriptor            = goqu.T(TblAASDescriptor)
-	TAASDescriptorEndpoint    = goqu.T(TblAASDescriptorEndpoint)
-	TSpecificAssetID          = goqu.T(TblSpecificAssetID)
-	TDescriptorPayload        = goqu.T(TblDescriptorPayload)
-	TInfrastructureDescriptor = goqu.T(TblInfrastructureDescriptor)
+	TDescriptor                    = goqu.T(TblDescriptor)
+	TAASDescriptor                 = goqu.T(TblAASDescriptor)
+	TAASDescriptorEndpoint         = goqu.T(TblAASDescriptorEndpoint)
+	TSpecificAssetID               = goqu.T(TblSpecificAssetID)
+	TDescriptorPayload             = goqu.T(TblDescriptorPayload)
+	TCompanyDescriptor             = goqu.T(TblCompanyDescriptor)
+	TCompanyDescriptorNameOption   = goqu.T(TblCompanyDescriptorNameOption)
+	TCompanyDescriptorAssetIDRegex = goqu.T(TblCompanyDescriptorAssetIDRegex)
 )
