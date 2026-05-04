@@ -55,6 +55,11 @@ type AssetAdministrationShellDatabase struct {
 	strictVerification bool
 }
 
+// ExecuteInTransaction runs fn in a database transaction bound to this backend.
+func (s *AssetAdministrationShellDatabase) ExecuteInTransaction(startErrorCode string, commitErrorCode string, fn func(tx *sql.Tx) error) error {
+	return common.ExecuteInTransaction(s.db, startErrorCode, commitErrorCode, fn)
+}
+
 // NewAssetAdministrationShellDatabase creates a new instance of AssetAdministrationShellDatabase with the provided database connection.
 func NewAssetAdministrationShellDatabase(dsn string, maxOpenConnections int, maxIdleConnections int, connMaxLifetimeMinutes int, databaseSchema string, strictVerification bool) (*AssetAdministrationShellDatabase, error) {
 	db, err := common.InitializeDatabase(dsn, databaseSchema)
@@ -377,15 +382,32 @@ func mapCreateAASInsertError(err error) error {
 
 // CreateSubmodelReferenceInAssetAdministrationShell adds a submodel reference with ABAC checks.
 func (s *AssetAdministrationShellDatabase) CreateSubmodelReferenceInAssetAdministrationShell(ctx context.Context, aasIdentifier string, submodelRef types.IReference) error {
+	return s.createSubmodelReferenceInAssetAdministrationShellWithTransaction(ctx, nil, aasIdentifier, submodelRef)
+}
+
+// CreateSubmodelReferenceInAssetAdministrationShellInTransaction adds a submodel reference within an existing transaction.
+func (s *AssetAdministrationShellDatabase) CreateSubmodelReferenceInAssetAdministrationShellInTransaction(ctx context.Context, tx *sql.Tx, aasIdentifier string, submodelRef types.IReference) error {
+	if tx == nil {
+		return common.NewErrBadRequest("AASREPO-NEWSMREFINAAS-NILTX transaction must not be nil")
+	}
+
+	return s.createSubmodelReferenceInAssetAdministrationShellWithTransaction(ctx, tx, aasIdentifier, submodelRef)
+}
+
+func (s *AssetAdministrationShellDatabase) createSubmodelReferenceInAssetAdministrationShellWithTransaction(ctx context.Context, tx *sql.Tx, aasIdentifier string, submodelRef types.IReference) (err error) {
 	if err := s.verifyReference(submodelRef, "AASREPO-NEWSMREFINAAS-VERIFY"); err != nil {
 		return err
 	}
 
-	tx, cleanup, err := common.StartTransaction(s.db)
-	if err != nil {
-		return err
+	if tx == nil {
+		return s.ExecuteInTransaction(
+			"AASREPO-NEWSMREFINAAS-STARTTX",
+			"AASREPO-NEWSMREFINAAS-COMMIT",
+			func(tx *sql.Tx) error {
+				return s.createSubmodelReferenceInAssetAdministrationShellWithTransaction(ctx, tx, aasIdentifier, submodelRef)
+			},
+		)
 	}
-	defer cleanup(&err)
 
 	shouldEnforce, enforceErr := shouldEnforceFormula(ctx, "AASREPO-NEWSMREFINAAS-SHOULDENFORCE")
 	if enforceErr != nil {
@@ -420,11 +442,6 @@ func (s *AssetAdministrationShellDatabase) CreateSubmodelReferenceInAssetAdminis
 		if !visible {
 			return common.NewErrDenied("AASREPO-NEWSMREFINAAS-ABACDENIED written AAS is not accessible under ABAC constraints")
 		}
-	}
-
-	err = tx.Commit()
-	if err != nil {
-		return common.NewInternalServerError("AASREPO-NEWSMREFINAAS-COMMIT " + err.Error())
 	}
 	return nil
 }
@@ -496,23 +513,21 @@ func (s *AssetAdministrationShellDatabase) createSubmodelReferenceInAssetAdminis
 
 // CheckIfSubmodelReferenceExistsInAssetAdministrationShell checks whether a submodel reference exists in the specified AAS.
 func (s *AssetAdministrationShellDatabase) CheckIfSubmodelReferenceExistsInAssetAdministrationShell(aasIdentifier string, submodelIdentifier string) error {
-	tx, cleanup, err := common.StartTransaction(s.db)
-	if err != nil {
-		return common.NewInternalServerError("AASREPO-CHECKSMREFINAAS-STARTTX " + err.Error())
-	}
-	defer cleanup(&err)
+	return s.ExecuteInTransaction(
+		"AASREPO-CHECKSMREFINAAS-STARTTX",
+		"AASREPO-CHECKSMREFINAAS-COMMIT",
+		func(tx *sql.Tx) error {
+			return s.checkIfSubmodelReferenceExistsInAssetAdministrationShellInTransaction(tx, aasIdentifier, submodelIdentifier)
+		},
+	)
+}
 
-	err = s.checkIfSubmodelReferenceExistsInAssetAdministrationShellInTransaction(tx, aasIdentifier, submodelIdentifier)
-	if err != nil {
-		return err
+// CheckIfSubmodelReferenceExistsInAssetAdministrationShellInTransaction checks for a submodel reference within an existing transaction.
+func (s *AssetAdministrationShellDatabase) CheckIfSubmodelReferenceExistsInAssetAdministrationShellInTransaction(tx *sql.Tx, aasIdentifier string, submodelIdentifier string) error {
+	if tx == nil {
+		return common.NewErrBadRequest("AASREPO-CHECKSMREFINAAS-NILTX transaction must not be nil")
 	}
-
-	err = tx.Commit()
-	if err != nil {
-		return common.NewInternalServerError("AASREPO-CHECKSMREFINAAS-COMMIT " + err.Error())
-	}
-
-	return nil
+	return s.checkIfSubmodelReferenceExistsInAssetAdministrationShellInTransaction(tx, aasIdentifier, submodelIdentifier)
 }
 
 // checkIfSubmodelReferenceExistsInAssetAdministrationShellInTransaction performs the existence check within an existing transaction.
@@ -1262,11 +1277,28 @@ func submodelReferenceCursorExists(ctx context.Context, tx *sql.Tx, dialect *goq
 
 // DeleteSubmodelReferenceInAssetAdministrationShell removes a submodel reference and checks ABAC visibility.
 func (s *AssetAdministrationShellDatabase) DeleteSubmodelReferenceInAssetAdministrationShell(ctx context.Context, aasIdentifier string, submodelIdentifier string) error {
-	tx, cleanup, err := common.StartTransaction(s.db)
-	if err != nil {
-		return common.NewInternalServerError("AASREPO-DELSMREF-STARTTX " + err.Error())
+	return s.deleteSubmodelReferenceInAssetAdministrationShellWithTransaction(ctx, nil, aasIdentifier, submodelIdentifier)
+}
+
+// DeleteSubmodelReferenceInAssetAdministrationShellInTransaction removes a submodel reference within an existing transaction.
+func (s *AssetAdministrationShellDatabase) DeleteSubmodelReferenceInAssetAdministrationShellInTransaction(ctx context.Context, tx *sql.Tx, aasIdentifier string, submodelIdentifier string) error {
+	if tx == nil {
+		return common.NewErrBadRequest("AASREPO-DELSMREF-NILTX transaction must not be nil")
 	}
-	defer cleanup(&err)
+
+	return s.deleteSubmodelReferenceInAssetAdministrationShellWithTransaction(ctx, tx, aasIdentifier, submodelIdentifier)
+}
+
+func (s *AssetAdministrationShellDatabase) deleteSubmodelReferenceInAssetAdministrationShellWithTransaction(ctx context.Context, tx *sql.Tx, aasIdentifier string, submodelIdentifier string) error {
+	if tx == nil {
+		return s.ExecuteInTransaction(
+			"AASREPO-DELSMREF-STARTTX",
+			"AASREPO-DELSMREF-COMMIT",
+			func(tx *sql.Tx) error {
+				return s.deleteSubmodelReferenceInAssetAdministrationShellWithTransaction(ctx, tx, aasIdentifier, submodelIdentifier)
+			},
+		)
+	}
 
 	shouldEnforce, enforceErr := shouldEnforceFormula(ctx, "AASREPO-DELSMREF-SHOULDENFORCE")
 	if enforceErr != nil {
@@ -1285,14 +1317,8 @@ func (s *AssetAdministrationShellDatabase) DeleteSubmodelReferenceInAssetAdminis
 		}
 	}
 
-	err = s.deleteSubmodelReferenceInAssetAdministrationShellInTransaction(tx, aasIdentifier, submodelIdentifier)
-	if err != nil {
+	if err := s.deleteSubmodelReferenceInAssetAdministrationShellInTransaction(tx, aasIdentifier, submodelIdentifier); err != nil {
 		return err
-	}
-
-	err = tx.Commit()
-	if err != nil {
-		return common.NewInternalServerError("AASREPO-DELSMREF-COMMIT " + err.Error())
 	}
 
 	return nil

@@ -1282,6 +1282,36 @@ func (s *SubmodelDatabase) PutSubmodel(ctx context.Context, submodelID string, s
 	}
 	defer cleanup(&err)
 
+	isUpdate, err := s.putSubmodelInTransaction(ctx, tx, submodelID, submodel)
+	if err != nil {
+		return false, err
+	}
+
+	err = tx.Commit()
+	if err != nil {
+		return false, common.NewInternalServerError("SMREPO-PUTSM-COMMIT " + err.Error())
+	}
+
+	return isUpdate, nil
+}
+
+// PutSubmodelInTransaction creates or replaces a submodel within an existing transaction.
+func (s *SubmodelDatabase) PutSubmodelInTransaction(ctx context.Context, tx *sql.Tx, submodelID string, submodel types.ISubmodel) (bool, error) {
+	if tx == nil {
+		return false, common.NewErrBadRequest("SMREPO-PUTSM-NILTX transaction must not be nil")
+	}
+	if submodelID != submodel.ID() {
+		return false, common.NewErrBadRequest("SMREPO-PUTSM-IDMISMATCH Submodel ID in path and body do not match")
+	}
+
+	if err := s.verifySubmodel(submodel, "SMREPO-PUTSM-VERIFY"); err != nil {
+		return false, err
+	}
+
+	return s.putSubmodelInTransaction(ctx, tx, submodelID, submodel)
+}
+
+func (s *SubmodelDatabase) putSubmodelInTransaction(ctx context.Context, tx *sql.Tx, submodelID string, submodel types.ISubmodel) (bool, error) {
 	shouldEnforce, enforceErr := shouldEnforceFormula(ctx, "SMREPO-PUTSM-SHOULDENFORCE")
 	if enforceErr != nil {
 		return false, enforceErr
@@ -1319,11 +1349,6 @@ func (s *SubmodelDatabase) PutSubmodel(ctx context.Context, submodelID string, s
 		}
 	}
 
-	err = tx.Commit()
-	if err != nil {
-		return false, common.NewInternalServerError("SMREPO-PUTSM-COMMIT " + err.Error())
-	}
-
 	return isUpdate, nil
 }
 
@@ -1335,6 +1360,29 @@ func (s *SubmodelDatabase) DeleteSubmodel(ctx context.Context, submodelID string
 	}
 	defer cleanup(&err)
 
+	err = s.deleteSubmodelInTransaction(ctx, tx, submodelID)
+	if err != nil {
+		return err
+	}
+
+	err = tx.Commit()
+	if err != nil {
+		return common.NewInternalServerError("SMREPO-DELSM-COMMIT " + err.Error())
+	}
+
+	return nil
+}
+
+// DeleteSubmodelInTransaction deletes a submodel within an existing transaction.
+func (s *SubmodelDatabase) DeleteSubmodelInTransaction(ctx context.Context, tx *sql.Tx, submodelID string) error {
+	if tx == nil {
+		return common.NewErrBadRequest("SMREPO-DELSM-NILTX transaction must not be nil")
+	}
+
+	return s.deleteSubmodelInTransaction(ctx, tx, submodelID)
+}
+
+func (s *SubmodelDatabase) deleteSubmodelInTransaction(ctx context.Context, tx *sql.Tx, submodelID string) error {
 	shouldEnforce, enforceErr := shouldEnforceFormula(ctx, "SMREPO-DELSM-SHOULDENFORCE")
 	if enforceErr != nil {
 		return enforceErr
@@ -1368,11 +1416,6 @@ func (s *SubmodelDatabase) DeleteSubmodel(ctx context.Context, submodelID string
 	err = deleteSubmodelByDatabaseID(tx, int64(submodelDatabaseID))
 	if err != nil {
 		return err
-	}
-
-	err = tx.Commit()
-	if err != nil {
-		return common.NewInternalServerError("SMREPO-DELSM-COMMIT " + err.Error())
 	}
 
 	return nil

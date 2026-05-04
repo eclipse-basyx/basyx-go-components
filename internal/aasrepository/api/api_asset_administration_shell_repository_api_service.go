@@ -609,47 +609,43 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) PutSubmodelByIdAasRepo
 		return newAPIErrorResponse(aasLookupErr, http.StatusInternalServerError, operation, "GetAssetAdministrationShellByID"), aasLookupErr
 	}
 
-	isUpdate, putErr := s.submodelBackend.PutSubmodel(ctx, decodedSubmodelIdentifier, submodel)
-	if putErr != nil {
-		if common.IsErrDenied(putErr) {
-			return newAPIErrorResponse(putErr, http.StatusForbidden, operation, "Forbidden"), nil
-		}
-		if common.IsErrBadRequest(putErr) {
-			return newAPIErrorResponse(putErr, http.StatusBadRequest, operation, "BadRequest"), nil
-		}
-		if common.IsErrConflict(putErr) {
-			return newAPIErrorResponse(putErr, http.StatusConflict, operation, "Conflict"), nil
-		}
-		if common.IsErrNotFound(putErr) {
-			return newAPIErrorResponse(putErr, http.StatusNotFound, operation, "SubmodelNotFound"), nil
-		}
-		return newAPIErrorResponse(putErr, http.StatusInternalServerError, operation, "PutSubmodel"), putErr
-	}
-
+	var isUpdate bool
 	submodelReference := types.NewReference(
 		types.ReferenceTypesModelReference,
 		[]types.IKey{types.NewKey(types.KeyTypesSubmodel, decodedSubmodelIdentifier)},
 	)
 
-	createReferenceErr := s.assetAdministrationShellBackend.CreateSubmodelReferenceInAssetAdministrationShell(ctx, decodedAASIdentifier, submodelReference)
-	if createReferenceErr != nil && !common.IsErrConflict(createReferenceErr) {
-		if !isUpdate {
-			rollbackErr := s.submodelBackend.DeleteSubmodel(ctx, decodedSubmodelIdentifier)
-			if rollbackErr != nil {
-				createReferenceErr = common.NewInternalServerError("AASREPO-PUTSMBYID-ROLLBACKFAILED reference creation failed and rollback failed: refErr=" + createReferenceErr.Error() + " rollbackErr=" + rollbackErr.Error())
+	txErr := s.assetAdministrationShellBackend.ExecuteInTransaction(
+		"AASREPO-PUTSMBYID-STARTTX",
+		"AASREPO-PUTSMBYID-COMMIT",
+		func(tx *sql.Tx) error {
+			updated, putErr := s.submodelBackend.PutSubmodelInTransaction(ctx, tx, decodedSubmodelIdentifier, submodel)
+			if putErr != nil {
+				return putErr
 			}
-		}
+			isUpdate = updated
 
-		if common.IsErrDenied(createReferenceErr) {
-			return newAPIErrorResponse(createReferenceErr, http.StatusForbidden, operation, "Forbidden"), nil
+			createReferenceErr := s.assetAdministrationShellBackend.CreateSubmodelReferenceInAssetAdministrationShellInTransaction(ctx, tx, decodedAASIdentifier, submodelReference)
+			if createReferenceErr != nil && !common.IsErrConflict(createReferenceErr) {
+				return createReferenceErr
+			}
+			return nil
+		},
+	)
+	if txErr != nil {
+		if common.IsErrDenied(txErr) {
+			return newAPIErrorResponse(txErr, http.StatusForbidden, operation, "Forbidden"), nil
 		}
-		if common.IsErrNotFound(createReferenceErr) {
-			return newAPIErrorResponse(createReferenceErr, http.StatusNotFound, operation, "AssetAdministrationShellNotFound"), nil
+		if common.IsErrBadRequest(txErr) {
+			return newAPIErrorResponse(txErr, http.StatusBadRequest, operation, "BadRequest"), nil
 		}
-		if common.IsErrBadRequest(createReferenceErr) {
-			return newAPIErrorResponse(createReferenceErr, http.StatusBadRequest, operation, "BadRequest"), nil
+		if common.IsErrConflict(txErr) {
+			return newAPIErrorResponse(txErr, http.StatusConflict, operation, "Conflict"), nil
 		}
-		return newAPIErrorResponse(createReferenceErr, http.StatusInternalServerError, operation, "CreateSubmodelReferenceInAssetAdministrationShell"), createReferenceErr
+		if common.IsErrNotFound(txErr) {
+			return newAPIErrorResponse(txErr, http.StatusNotFound, operation, "SubmodelNotFound"), nil
+		}
+		return newAPIErrorResponse(txErr, http.StatusInternalServerError, operation, "PutSubmodel"), txErr
 	}
 
 	if isUpdate {
@@ -697,65 +693,32 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) DeleteSubmodelByIdAasR
 		return newAPIErrorResponse(aasLookupErr, http.StatusInternalServerError, operation, "GetAssetAdministrationShellByID"), aasLookupErr
 	}
 
-	referenceCheckErr := s.assetAdministrationShellBackend.CheckIfSubmodelReferenceExistsInAssetAdministrationShell(decodedAASIdentifier, decodedSubmodelIdentifier)
-	if referenceCheckErr != nil {
-		if common.IsErrNotFound(referenceCheckErr) {
-			return newAPIErrorResponse(referenceCheckErr, http.StatusNotFound, operation, "SubmodelNotFound"), nil
-		}
-		if common.IsErrBadRequest(referenceCheckErr) {
-			return newAPIErrorResponse(referenceCheckErr, http.StatusBadRequest, operation, "BadRequest"), nil
-		}
-		return newAPIErrorResponse(referenceCheckErr, http.StatusInternalServerError, operation, "CheckIfSubmodelReferenceExistsInAssetAdministrationShell"), referenceCheckErr
-	}
+	deleteErr := s.assetAdministrationShellBackend.ExecuteInTransaction(
+		"AASREPO-DELSMBYID-STARTTX",
+		"AASREPO-DELSMBYID-COMMIT",
+		func(tx *sql.Tx) error {
+			if err := s.assetAdministrationShellBackend.CheckIfSubmodelReferenceExistsInAssetAdministrationShellInTransaction(tx, decodedAASIdentifier, decodedSubmodelIdentifier); err != nil {
+				return err
+			}
 
-	_, getErr := s.submodelBackend.GetSubmodelByID(ctx, decodedSubmodelIdentifier, "core", false)
-	if getErr != nil {
-		if common.IsErrDenied(getErr) {
-			return newAPIErrorResponse(getErr, http.StatusForbidden, operation, "Forbidden"), nil
-		}
-		if common.IsErrNotFound(getErr) || errors.Is(getErr, sql.ErrNoRows) {
-			return newAPIErrorResponse(getErr, http.StatusNotFound, operation, "SubmodelNotFound"), nil
-		}
-		if common.IsErrBadRequest(getErr) {
-			return newAPIErrorResponse(getErr, http.StatusBadRequest, operation, "BadRequest"), nil
-		}
-		return newAPIErrorResponse(getErr, http.StatusInternalServerError, operation, "GetSubmodelByID"), getErr
-	}
+			if err := s.assetAdministrationShellBackend.DeleteSubmodelReferenceInAssetAdministrationShellInTransaction(ctx, tx, decodedAASIdentifier, decodedSubmodelIdentifier); err != nil {
+				return err
+			}
 
-	deleteReferenceErr := s.assetAdministrationShellBackend.DeleteSubmodelReferenceInAssetAdministrationShell(ctx, decodedAASIdentifier, decodedSubmodelIdentifier)
-	if deleteReferenceErr != nil {
-		if common.IsErrDenied(deleteReferenceErr) {
-			return newAPIErrorResponse(deleteReferenceErr, http.StatusForbidden, operation, "Forbidden"), nil
+			return s.submodelBackend.DeleteSubmodelInTransaction(ctx, tx, decodedSubmodelIdentifier)
+		},
+	)
+	if deleteErr != nil {
+		if common.IsErrDenied(deleteErr) {
+			return newAPIErrorResponse(deleteErr, http.StatusForbidden, operation, "Forbidden"), nil
 		}
-		if common.IsErrNotFound(deleteReferenceErr) {
-			return newAPIErrorResponse(deleteReferenceErr, http.StatusNotFound, operation, "SubmodelNotFound"), nil
+		if common.IsErrNotFound(deleteErr) || errors.Is(deleteErr, sql.ErrNoRows) {
+			return newAPIErrorResponse(deleteErr, http.StatusNotFound, operation, "SubmodelNotFound"), nil
 		}
-		if common.IsErrBadRequest(deleteReferenceErr) {
-			return newAPIErrorResponse(deleteReferenceErr, http.StatusBadRequest, operation, "BadRequest"), nil
+		if common.IsErrBadRequest(deleteErr) {
+			return newAPIErrorResponse(deleteErr, http.StatusBadRequest, operation, "BadRequest"), nil
 		}
-		return newAPIErrorResponse(deleteReferenceErr, http.StatusInternalServerError, operation, "DeleteSubmodelReferenceInAssetAdministrationShell"), deleteReferenceErr
-	}
-
-	deleteSubmodelErr := s.submodelBackend.DeleteSubmodel(ctx, decodedSubmodelIdentifier)
-	if deleteSubmodelErr != nil {
-		restoreReferenceErr := s.assetAdministrationShellBackend.CreateSubmodelReferenceInAssetAdministrationShell(ctx, decodedAASIdentifier, types.NewReference(
-			types.ReferenceTypesModelReference,
-			[]types.IKey{types.NewKey(types.KeyTypesSubmodel, decodedSubmodelIdentifier)},
-		))
-		if restoreReferenceErr != nil && !common.IsErrConflict(restoreReferenceErr) {
-			deleteSubmodelErr = common.NewInternalServerError("AASREPO-DELSMBYID-RESTOREREF failed to delete submodel and failed to restore submodel reference: " + restoreReferenceErr.Error())
-		}
-
-		if common.IsErrDenied(deleteSubmodelErr) {
-			return newAPIErrorResponse(deleteSubmodelErr, http.StatusForbidden, operation, "Forbidden"), nil
-		}
-		if common.IsErrNotFound(deleteSubmodelErr) || errors.Is(deleteSubmodelErr, sql.ErrNoRows) {
-			return newAPIErrorResponse(deleteSubmodelErr, http.StatusNotFound, operation, "SubmodelNotFound"), nil
-		}
-		if common.IsErrBadRequest(deleteSubmodelErr) {
-			return newAPIErrorResponse(deleteSubmodelErr, http.StatusBadRequest, operation, "BadRequest"), nil
-		}
-		return newAPIErrorResponse(deleteSubmodelErr, http.StatusInternalServerError, operation, "DeleteSubmodel"), deleteSubmodelErr
+		return newAPIErrorResponse(deleteErr, http.StatusInternalServerError, operation, "DeleteSubmodel"), deleteErr
 	}
 
 	return gen.Response(http.StatusNoContent, nil), nil
