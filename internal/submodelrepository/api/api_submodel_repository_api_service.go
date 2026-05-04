@@ -1477,7 +1477,10 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelsPath(
 	resultPaths := make([]string, 0, effectiveLimit)
 	submodelCursor := cursorState.SubmodelCursor
 	pathCursor := cursorState.PathCursor
-	referencePageLimit := int32(effectiveLimit)
+	referencePageLimit := limit
+	if referencePageLimit == 0 {
+		referencePageLimit = 100
+	}
 
 	for len(resultPaths) < effectiveLimit {
 		references, nextSubmodelCursor, err := s.submodelBackend.GetSubmodelReferences(ctx, referencePageLimit, submodelCursor, idShort, decodedSemanticID)

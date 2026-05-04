@@ -888,6 +888,33 @@ func (c *AssetAdministrationShellRepositoryAPIAPIController) GetSubmodelByIdRefe
 // GetSubmodelByIdPathAasRepository - Returns the elements of this submodel in path notation.
 // nolint:revive
 func (c *AssetAdministrationShellRepositoryAPIAPIController) GetSubmodelByIdPathAasRepository(w http.ResponseWriter, r *http.Request) {
+	aasIdentifierParam := chi.URLParam(r, "aasIdentifier")
+	if aasIdentifierParam == "" {
+		c.errorHandler(w, r, &RequiredError{"aasIdentifier"}, nil)
+		return
+	}
+
+	submodelIdentifierParam := chi.URLParam(r, "submodelIdentifier")
+	if submodelIdentifierParam == "" {
+		c.errorHandler(w, r, &RequiredError{"submodelIdentifier"}, nil)
+		return
+	}
+
+	query := r.URL.Query()
+	levelParam := query.Get("level")
+
+	result, err := c.service.GetSubmodelByIdPathAasRepository(
+		r.Context(),
+		aasIdentifierParam,
+		submodelIdentifierParam,
+		levelParam,
+	)
+	if err != nil {
+		c.errorHandler(w, r, err, &result)
+		return
+	}
+
+	_ = EncodeJSONResponse(result.Body, &result.Code, w)
 }
 
 // GetAllSubmodelElementsAasRepository - Returns all submodel elements including their hierarchy
@@ -918,6 +945,49 @@ func (c *AssetAdministrationShellRepositoryAPIAPIController) GetAllSubmodelEleme
 // GetAllSubmodelElementsPathAasRepository - Returns all submodel elements including their hierarchy
 // nolint:revive
 func (c *AssetAdministrationShellRepositoryAPIAPIController) GetAllSubmodelElementsPathAasRepository(w http.ResponseWriter, r *http.Request) {
+	aasIdentifierParam := chi.URLParam(r, "aasIdentifier")
+	if aasIdentifierParam == "" {
+		c.errorHandler(w, r, &RequiredError{"aasIdentifier"}, nil)
+		return
+	}
+
+	submodelIdentifierParam := chi.URLParam(r, "submodelIdentifier")
+	if submodelIdentifierParam == "" {
+		c.errorHandler(w, r, &RequiredError{"submodelIdentifier"}, nil)
+		return
+	}
+
+	query := r.URL.Query()
+
+	limitParam := int32(0)
+	if limitParamString := query.Get("limit"); limitParamString != "" {
+		limitParam64, err := strconv.ParseInt(limitParamString, 10, 32)
+		if err != nil {
+			c.errorHandler(w, r, &ParsingError{Err: err}, nil)
+			return
+		}
+		limitParam = int32(limitParam64)
+	}
+
+	cursorParam := query.Get("cursor")
+	levelParam := query.Get("level")
+	extentParam := query.Get("extent")
+
+	result, err := c.service.GetAllSubmodelElementsPathAasRepository(
+		r.Context(),
+		aasIdentifierParam,
+		submodelIdentifierParam,
+		limitParam,
+		cursorParam,
+		levelParam,
+		extentParam,
+	)
+	if err != nil {
+		c.errorHandler(w, r, err, &result)
+		return
+	}
+
+	_ = EncodeJSONResponse(result.Body, &result.Code, w)
 }
 
 // GetSubmodelElementByPathAasRepository - Returns a specific submodel element from the Submodel at a specified path
@@ -973,6 +1043,40 @@ func (c *AssetAdministrationShellRepositoryAPIAPIController) GetSubmodelElementB
 // GetSubmodelElementByPathPathAasRepository - Returns a specific submodel element from the Submodel at a specified path in the Path notation
 // nolint:revive
 func (c *AssetAdministrationShellRepositoryAPIAPIController) GetSubmodelElementByPathPathAasRepository(w http.ResponseWriter, r *http.Request) {
+	aasIdentifierParam := chi.URLParam(r, "aasIdentifier")
+	if aasIdentifierParam == "" {
+		c.errorHandler(w, r, &RequiredError{"aasIdentifier"}, nil)
+		return
+	}
+
+	submodelIdentifierParam := chi.URLParam(r, "submodelIdentifier")
+	if submodelIdentifierParam == "" {
+		c.errorHandler(w, r, &RequiredError{"submodelIdentifier"}, nil)
+		return
+	}
+
+	idShortPathParam := chi.URLParam(r, "idShortPath")
+	if idShortPathParam == "" {
+		c.errorHandler(w, r, &RequiredError{"idShortPath"}, nil)
+		return
+	}
+
+	query := r.URL.Query()
+	levelParam := query.Get("level")
+
+	result, err := c.service.GetSubmodelElementByPathPathAasRepository(
+		r.Context(),
+		aasIdentifierParam,
+		submodelIdentifierParam,
+		idShortPathParam,
+		levelParam,
+	)
+	if err != nil {
+		c.errorHandler(w, r, err, &result)
+		return
+	}
+
+	_ = EncodeJSONResponse(result.Body, &result.Code, w)
 }
 
 // GetFileByPathAasRepository - Downloads file content from a specific submodel element from the Submodel at a specified path

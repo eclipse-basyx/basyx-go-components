@@ -237,6 +237,32 @@ func getJSONResponse(endpoint string) (map[string]any, int, error) {
 	return payload, resp.StatusCode, nil
 }
 
+func getJSONArrayResponse(endpoint string) ([]string, int, error) {
+	req, err := http.NewRequest(http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, 0, fmt.Errorf("failed to create request: %v", err)
+	}
+
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, 0, fmt.Errorf("failed to send request: %v", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, resp.StatusCode, fmt.Errorf("failed to read response: %v", err)
+	}
+
+	var payload []string
+	if err = json.Unmarshal(body, &payload); err != nil {
+		return nil, resp.StatusCode, fmt.Errorf("failed to unmarshal response: %v", err)
+	}
+
+	return payload, resp.StatusCode, nil
+}
+
 func putJSONResponse(endpoint string, body string) (map[string]any, int, http.Header, error) {
 	req, err := http.NewRequest(http.MethodPut, endpoint, strings.NewReader(body))
 	if err != nil {
@@ -588,6 +614,60 @@ func TestGetSubmodelByIdAasRepositoryReturnsSubmodel(t *testing.T) {
 	assert.Equal(t, submodelID, payload["id"], "Expected submodel id in GET response")
 	assert.Equal(t, "GetSubmodelViaAAS", payload["idShort"], "Expected submodel idShort in GET response")
 	assert.Equal(t, "Submodel", payload["modelType"], "Expected submodel modelType in GET response")
+}
+
+func TestSubmodelSuperPathEndpointsAasRepository(t *testing.T) {
+	baseURL := "http://localhost:6004"
+	aasID := fmt.Sprintf("https://example.com/ids/aas/superpath-%d", time.Now().UnixNano())
+	aasIdentifier := base64.RawURLEncoding.EncodeToString([]byte(aasID))
+
+	statusCode, err := createAASForThumbnailTest(baseURL, aasID)
+	require.NoError(t, err, "AAS creation failed")
+	require.Equal(t, http.StatusCreated, statusCode, "Expected 201 Created for AAS creation")
+
+	submodelID := fmt.Sprintf("https://example.com/ids/sm/superpath-%d", time.Now().UnixNano())
+	submodelIdentifier := base64.RawURLEncoding.EncodeToString([]byte(submodelID))
+
+	submodelEndpoint := fmt.Sprintf("%s/shells/%s/submodels/%s", baseURL, aasIdentifier, submodelIdentifier)
+	body := fmt.Sprintf(
+		`{"id":"%s","idShort":"SuperpathSubmodel","modelType":"Submodel","kind":"Instance","submodelElements":[{"idShort":"TopProperty","modelType":"Property","valueType":"xs:string","value":"hello"},{"idShort":"MainCollection","modelType":"SubmodelElementCollection","value":[{"idShort":"NestedProperty","modelType":"Property","valueType":"xs:string","value":"nested"}]}]}`,
+		submodelID,
+	)
+
+	_, putStatusCode, _, putErr := putJSONResponse(submodelEndpoint, body)
+	require.NoError(t, putErr, "PUT submodel request failed")
+	require.Equal(t, http.StatusCreated, putStatusCode, "Expected 201 Created for PUT submodel")
+
+	t.Run("GetSubmodelByIdPathDeepReturnsNestedPaths", func(t *testing.T) {
+		paths, pathStatusCode, pathErr := getJSONArrayResponse(fmt.Sprintf("%s/$path?level=deep", submodelEndpoint))
+		require.NoError(t, pathErr, "GET submodel $path request failed")
+		require.Equal(t, http.StatusOK, pathStatusCode, "Expected 200 OK for GET submodel $path")
+
+		assert.Contains(t, paths, "TopProperty")
+		assert.Contains(t, paths, "MainCollection")
+		assert.Contains(t, paths, "MainCollection.NestedProperty")
+	})
+
+	t.Run("GetSubmodelElementByPathPathCoreReturnsRequestedPath", func(t *testing.T) {
+		paths, pathStatusCode, pathErr := getJSONArrayResponse(fmt.Sprintf("%s/submodel-elements/MainCollection/$path?level=core", submodelEndpoint))
+		require.NoError(t, pathErr, "GET submodel element $path request failed")
+		require.Equal(t, http.StatusOK, pathStatusCode, "Expected 200 OK for GET submodel element $path")
+
+		assert.Equal(t, []string{"MainCollection"}, paths)
+	})
+
+	t.Run("GetSubmodelByIdPathReturnsNotFoundIfSubmodelNotReferencedInAAS", func(t *testing.T) {
+		otherAASID := fmt.Sprintf("https://example.com/ids/aas/superpath-other-%d", time.Now().UnixNano())
+		otherAASIdentifier := base64.RawURLEncoding.EncodeToString([]byte(otherAASID))
+
+		createStatus, createErr := createAASForThumbnailTest(baseURL, otherAASID)
+		require.NoError(t, createErr, "Second AAS creation failed")
+		require.Equal(t, http.StatusCreated, createStatus, "Expected 201 Created for second AAS creation")
+
+		getStatusCode, getErr := getResponseStatus(fmt.Sprintf("%s/shells/%s/submodels/%s/$path?level=deep", baseURL, otherAASIdentifier, submodelIdentifier))
+		require.NoError(t, getErr, "GET submodel $path with unlinked AAS request failed")
+		require.Equal(t, http.StatusNotFound, getStatusCode, "Expected 404 for submodel not referenced in selected AAS")
+	})
 }
 
 func TestDeleteSubmodelByIdAasRepositoryDeletesSubmodelAndReference(t *testing.T) {

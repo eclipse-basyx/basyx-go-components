@@ -13,6 +13,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -35,6 +36,8 @@ const uploadHeaderPartContentType = "X-Upload-Part-ContentType"
 const uploadHeaderPartFileName = "X-Upload-Part-FileName"
 const uploadHeaderPartOmitFileName = "X-Upload-Part-OmitFileName"
 const uploadHeaderRequestFileName = "X-Upload-FileName"
+
+var numericValuePattern = regexp.MustCompile(`^\d+$`)
 
 type storedAttachment struct {
 	SubmodelIdentifier string
@@ -442,7 +445,35 @@ func normalizeJSONDocument(raw []byte) ([]byte, error) {
 	if err := json.Unmarshal(raw, &parsed); err != nil {
 		return nil, err
 	}
+
+	normalizeVolatileSnapshotFields(parsed)
+
 	return json.Marshal(parsed)
+}
+
+func normalizeVolatileSnapshotFields(node any) {
+	switch typed := node.(type) {
+	case map[string]any:
+		if modelType, ok := typed["modelType"].(string); ok && modelType == "File" {
+			if value, ok := typed["value"].(string); ok && numericValuePattern.MatchString(value) {
+				typed["value"] = "<dynamic-file-reference>"
+			}
+		}
+
+		if defaultThumbnail, ok := typed["defaultThumbnail"].(map[string]any); ok {
+			if path, ok := defaultThumbnail["path"].(string); ok && numericValuePattern.MatchString(path) {
+				defaultThumbnail["path"] = "<dynamic-thumbnail-reference>"
+			}
+		}
+
+		for _, value := range typed {
+			normalizeVolatileSnapshotFields(value)
+		}
+	case []any:
+		for _, item := range typed {
+			normalizeVolatileSnapshotFields(item)
+		}
+	}
 }
 
 func doHTTPIntegrationRequest(t *testing.T, client *http.Client, req *http.Request) *http.Response {
