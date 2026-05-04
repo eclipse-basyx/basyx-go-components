@@ -232,40 +232,36 @@ func (s *AssetAdministrationShellDatabase) CreateAssetAdministrationShell(ctx co
 		return err
 	}
 
-	tx, cleanup, err := common.StartTransaction(s.db)
-	if err != nil {
-		return common.NewInternalServerError("AASREPO-NEWAAS-STARTTX " + err.Error())
-	}
-	defer cleanup(&err)
+	return common.ExecuteInTransaction(
+		s.db,
+		"AASREPO-NEWAAS-STARTTX",
+		"AASREPO-NEWAAS-CREATE-COMMIT",
+		func(tx *sql.Tx) error {
+			err := s.createAssetAdministrationShellInTransaction(tx, aas)
+			if err != nil {
+				return err
+			}
 
-	err = s.createAssetAdministrationShellInTransaction(tx, aas)
-	if err != nil {
-		return err
-	}
+			shouldEnforce, enforceErr := shouldEnforceFormula(ctx, "AASREPO-NEWAAS-SHOULDENFORCE")
+			if enforceErr != nil {
+				return enforceErr
+			}
+			if shouldEnforce {
+				exists, visible, visErr := s.checkAASVisibilityInTx(ctx, tx, aas.ID())
+				if visErr != nil {
+					return visErr
+				}
+				if !exists {
+					return common.NewInternalServerError("AASREPO-NEWAAS-ABACCHECKMISSING created AAS not found before commit")
+				}
+				if !visible {
+					return common.NewErrDenied("AASREPO-NEWAAS-ABACDENIED created AAS is not accessible under ABAC constraints")
+				}
+			}
 
-	shouldEnforce, enforceErr := shouldEnforceFormula(ctx, "AASREPO-NEWAAS-SHOULDENFORCE")
-	if enforceErr != nil {
-		return enforceErr
-	}
-	if shouldEnforce {
-		exists, visible, visErr := s.checkAASVisibilityInTx(ctx, tx, aas.ID())
-		if visErr != nil {
-			return visErr
-		}
-		if !exists {
-			return common.NewInternalServerError("AASREPO-NEWAAS-ABACCHECKMISSING created AAS not found before commit")
-		}
-		if !visible {
-			return common.NewErrDenied("AASREPO-NEWAAS-ABACDENIED created AAS is not accessible under ABAC constraints")
-		}
-	}
-
-	err = tx.Commit()
-	if err != nil {
-		return common.NewInternalServerError("AASREPO-NEWAAS-CREATE-COMMIT " + err.Error())
-	}
-
-	return nil
+			return nil
+		},
+	)
 }
 
 // createAssetAdministrationShellInTransaction creates an AAS and all dependent records within an existing transaction.
@@ -698,78 +694,80 @@ func (s *AssetAdministrationShellDatabase) PutAssetAdministrationShellByID(ctx c
 		return false, err
 	}
 
-	tx, cleanup, err := common.StartTransaction(s.db)
-	if err != nil {
-		return false, common.NewInternalServerError("AASREPO-PUTAAS-STARTTX " + err.Error())
-	}
-	defer cleanup(&err)
+	isUpdate := false
+	err := common.ExecuteInTransaction(
+		s.db,
+		"AASREPO-PUTAAS-STARTTX",
+		"AASREPO-PUTAAS-COMMIT",
+		func(tx *sql.Tx) error {
+			dialect := goqu.Dialect("postgres")
+			selectSQL, selectArgs, buildErr := buildGetAssetAdministrationShellDBIDByIdentifierQuery(&dialect, aasIdentifier)
+			if buildErr != nil {
+				return common.NewInternalServerError("AASREPO-PUTAAS-BUILDSELECT " + buildErr.Error())
+			}
 
-	dialect := goqu.Dialect("postgres")
-	selectSQL, selectArgs, buildErr := buildGetAssetAdministrationShellDBIDByIdentifierQuery(&dialect, aasIdentifier)
-	if buildErr != nil {
-		return false, common.NewInternalServerError("AASREPO-PUTAAS-BUILDSELECT " + buildErr.Error())
-	}
+			var existingID int64
+			isUpdate = true
+			if scanErr := tx.QueryRow(selectSQL, selectArgs...).Scan(&existingID); scanErr != nil {
+				if scanErr != sql.ErrNoRows {
+					return common.NewInternalServerError("AASREPO-PUTAAS-EXECSELECT " + scanErr.Error())
+				}
+				isUpdate = false
+			}
+			shouldEnforce, enforceErr := shouldEnforceFormula(ctx, "AASREPO-PUTAAS-SHOULDENFORCE")
+			if enforceErr != nil {
+				return enforceErr
+			}
+			if shouldEnforce {
+				ctx = auth.SelectPutFormulaByExistence(ctx, isUpdate)
+			}
 
-	var existingID int64
-	isUpdate := true
-	if scanErr := tx.QueryRow(selectSQL, selectArgs...).Scan(&existingID); scanErr != nil {
-		if scanErr != sql.ErrNoRows {
-			return false, common.NewInternalServerError("AASREPO-PUTAAS-EXECSELECT " + scanErr.Error())
-		}
-		isUpdate = false
-	}
-	shouldEnforce, enforceErr := shouldEnforceFormula(ctx, "AASREPO-PUTAAS-SHOULDENFORCE")
-	if enforceErr != nil {
-		return false, enforceErr
-	}
-	if shouldEnforce {
-		ctx = auth.SelectPutFormulaByExistence(ctx, isUpdate)
-	}
+			if shouldEnforce && isUpdate {
+				exists, visible, visErr := s.checkAASVisibilityInTx(ctx, tx, aasIdentifier)
+				if visErr != nil {
+					return visErr
+				}
+				if !exists {
+					return common.NewErrNotFound("AASREPO-PUTAAS-AASNOTFOUND Asset Administration Shell with ID '" + aasIdentifier + "' not found")
+				}
+				if !visible {
+					return common.NewErrDenied("AASREPO-PUTAAS-ABACDENIED existing AAS is not accessible under ABAC constraints")
+				}
+			}
 
-	if shouldEnforce && isUpdate {
-		exists, visible, visErr := s.checkAASVisibilityInTx(ctx, tx, aasIdentifier)
-		if visErr != nil {
-			return false, visErr
-		}
-		if !exists {
-			return false, common.NewErrNotFound("AASREPO-PUTAAS-AASNOTFOUND Asset Administration Shell with ID '" + aasIdentifier + "' not found")
-		}
-		if !visible {
-			return false, common.NewErrDenied("AASREPO-PUTAAS-ABACDENIED existing AAS is not accessible under ABAC constraints")
-		}
-	}
+			if isUpdate {
+				deleteSQL, deleteArgs, deleteBuildErr := buildDeleteAssetAdministrationShellByDBIDQuery(&dialect, existingID)
+				if deleteBuildErr != nil {
+					return common.NewInternalServerError("AASREPO-PUTAAS-BUILDDELETE " + deleteBuildErr.Error())
+				}
+				if _, deleteErr := tx.Exec(deleteSQL, deleteArgs...); deleteErr != nil {
+					return common.NewInternalServerError("AASREPO-PUTAAS-EXECDELETE " + deleteErr.Error())
+				}
+			}
 
-	if isUpdate {
-		deleteSQL, deleteArgs, deleteBuildErr := buildDeleteAssetAdministrationShellByDBIDQuery(&dialect, existingID)
-		if deleteBuildErr != nil {
-			return false, common.NewInternalServerError("AASREPO-PUTAAS-BUILDDELETE " + deleteBuildErr.Error())
-		}
-		if _, deleteErr := tx.Exec(deleteSQL, deleteArgs...); deleteErr != nil {
-			return false, common.NewInternalServerError("AASREPO-PUTAAS-EXECDELETE " + deleteErr.Error())
-		}
-	}
+			err := s.createAssetAdministrationShellInTransaction(tx, aas)
+			if err != nil {
+				return err
+			}
 
-	err = s.createAssetAdministrationShellInTransaction(tx, aas)
+			if shouldEnforce {
+				exists, visible, visErr := s.checkAASVisibilityInTx(ctx, tx, aasIdentifier)
+				if visErr != nil {
+					return visErr
+				}
+				if !exists {
+					return common.NewInternalServerError("AASREPO-PUTAAS-ABACCHECKMISSING written AAS not found before commit")
+				}
+				if !visible {
+					return common.NewErrDenied("AASREPO-PUTAAS-ABACDENIED written AAS is not accessible under ABAC constraints")
+				}
+			}
+
+			return nil
+		},
+	)
 	if err != nil {
 		return false, err
-	}
-
-	if shouldEnforce {
-		exists, visible, visErr := s.checkAASVisibilityInTx(ctx, tx, aasIdentifier)
-		if visErr != nil {
-			return false, visErr
-		}
-		if !exists {
-			return false, common.NewInternalServerError("AASREPO-PUTAAS-ABACCHECKMISSING written AAS not found before commit")
-		}
-		if !visible {
-			return false, common.NewErrDenied("AASREPO-PUTAAS-ABACDENIED written AAS is not accessible under ABAC constraints")
-		}
-	}
-
-	err = tx.Commit()
-	if err != nil {
-		return false, common.NewInternalServerError("AASREPO-PUTAAS-COMMIT " + err.Error())
 	}
 
 	return isUpdate, nil
@@ -777,55 +775,51 @@ func (s *AssetAdministrationShellDatabase) PutAssetAdministrationShellByID(ctx c
 
 // DeleteAssetAdministrationShellByID removes an AAS and checks ABAC visibility before deletion.
 func (s *AssetAdministrationShellDatabase) DeleteAssetAdministrationShellByID(ctx context.Context, aasIdentifier string) error {
-	tx, cleanup, err := common.StartTransaction(s.db)
-	if err != nil {
-		return common.NewInternalServerError("AASREPO-DELAAS-STARTTX " + err.Error())
-	}
-	defer cleanup(&err)
+	return common.ExecuteInTransaction(
+		s.db,
+		"AASREPO-DELAAS-STARTTX",
+		"AASREPO-DELAAS-COMMIT",
+		func(tx *sql.Tx) error {
+			shouldEnforce, enforceErr := shouldEnforceFormula(ctx, "AASREPO-DELAAS-SHOULDENFORCE")
+			if enforceErr != nil {
+				return enforceErr
+			}
+			if shouldEnforce {
+				exists, visible, visErr := s.checkAASVisibilityInTx(ctx, tx, aasIdentifier)
+				if visErr != nil {
+					return visErr
+				}
+				if !exists {
+					return common.NewErrNotFound("AASREPO-DELAAS-AASNOTFOUND Asset Administration Shell with ID '" + aasIdentifier + "' not found")
+				}
+				if !visible {
+					return common.NewErrDenied("AASREPO-DELAAS-ABACDENIED deleting this AAS is not allowed")
+				}
+			}
 
-	shouldEnforce, enforceErr := shouldEnforceFormula(ctx, "AASREPO-DELAAS-SHOULDENFORCE")
-	if enforceErr != nil {
-		return enforceErr
-	}
-	if shouldEnforce {
-		exists, visible, visErr := s.checkAASVisibilityInTx(ctx, tx, aasIdentifier)
-		if visErr != nil {
-			return visErr
-		}
-		if !exists {
-			return common.NewErrNotFound("AASREPO-DELAAS-AASNOTFOUND Asset Administration Shell with ID '" + aasIdentifier + "' not found")
-		}
-		if !visible {
-			return common.NewErrDenied("AASREPO-DELAAS-ABACDENIED deleting this AAS is not allowed")
-		}
-	}
+			dialect := goqu.Dialect("postgres")
+			sqlQuery, args, buildErr := buildDeleteAssetAdministrationShellByIdentifierQuery(&dialect, aasIdentifier)
+			if buildErr != nil {
+				return common.NewInternalServerError("AASREPO-DELAAS-BUILDSQL " + buildErr.Error())
+			}
 
-	dialect := goqu.Dialect("postgres")
-	sqlQuery, args, buildErr := buildDeleteAssetAdministrationShellByIdentifierQuery(&dialect, aasIdentifier)
-	if buildErr != nil {
-		return common.NewInternalServerError("AASREPO-DELAAS-BUILDSQL " + buildErr.Error())
-	}
+			result, execErr := tx.Exec(sqlQuery, args...)
+			if execErr != nil {
+				return common.NewInternalServerError("AASREPO-DELAAS-EXECSQL " + execErr.Error())
+			}
 
-	result, execErr := tx.Exec(sqlQuery, args...)
-	if execErr != nil {
-		return common.NewInternalServerError("AASREPO-DELAAS-EXECSQL " + execErr.Error())
-	}
+			rowsAffected, rowsErr := result.RowsAffected()
+			if rowsErr != nil {
+				return common.NewInternalServerError("AASREPO-DELAAS-GETROWCOUNT " + rowsErr.Error())
+			}
 
-	rowsAffected, rowsErr := result.RowsAffected()
-	if rowsErr != nil {
-		return common.NewInternalServerError("AASREPO-DELAAS-GETROWCOUNT " + rowsErr.Error())
-	}
+			if rowsAffected == 0 {
+				return common.NewErrNotFound("AASREPO-DELAAS-AASNOTFOUND Asset Administration Shell with ID '" + aasIdentifier + "' not found")
+			}
 
-	if rowsAffected == 0 {
-		return common.NewErrNotFound("AASREPO-DELAAS-AASNOTFOUND Asset Administration Shell with ID '" + aasIdentifier + "' not found")
-	}
-
-	err = tx.Commit()
-	if err != nil {
-		return common.NewInternalServerError("AASREPO-DELAAS-COMMIT " + err.Error())
-	}
-
-	return nil
+			return nil
+		},
+	)
 }
 
 // GetAssetAdministrationShellReferences returns paginated model references while preserving ABAC filters from ctx.
