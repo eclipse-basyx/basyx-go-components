@@ -13,6 +13,8 @@ package openapi
 
 import (
 	"encoding/json"
+	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"os"
@@ -20,7 +22,9 @@ import (
 	"strings"
 
 	aasjsonization "github.com/aas-core-works/aas-core3.1-golang/jsonization"
+	aasverification "github.com/aas-core-works/aas-core3.1-golang/verification"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	"github.com/go-chi/chi/v5"
 )
 
@@ -858,31 +862,228 @@ func (c *AssetAdministrationShellRepositoryAPIAPIController) DeleteSubmodelByIdA
 // PatchSubmodelAasRepository - Updates the Submodel
 // nolint:revive
 func (c *AssetAdministrationShellRepositoryAPIAPIController) PatchSubmodelAasRepository(w http.ResponseWriter, r *http.Request) {
+	query, err := parseQuery(r.URL.RawQuery)
+	if err != nil {
+		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
+		return
+	}
+	aasIdentifierParam := chi.URLParam(r, "aasIdentifier")
+	if aasIdentifierParam == "" {
+		c.errorHandler(w, r, &RequiredError{"aasIdentifier"}, nil)
+		return
+	}
+	submodelIdentifierParam := chi.URLParam(r, "submodelIdentifier")
+	if submodelIdentifierParam == "" {
+		c.errorHandler(w, r, &RequiredError{"submodelIdentifier"}, nil)
+		return
+	}
+
+	bodyBytes, err := io.ReadAll(r.Body)
+	if err != nil {
+		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
+		return
+	}
+	var jsonable interface{}
+	if err := json.Unmarshal(bodyBytes, &jsonable); err != nil {
+		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
+		return
+	}
+	submodelParam, err := aasjsonization.SubmodelFromJsonable(jsonable)
+	if err != nil {
+		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
+		return
+	}
+
+	levelParam := ""
+	if query.Has("level") {
+		levelParam = query.Get("level")
+	} else {
+		levelParam = "core"
+	}
+
+	result, err := c.service.PatchSubmodelAasRepository(r.Context(), aasIdentifierParam, submodelIdentifierParam, submodelParam, levelParam)
+	if err != nil {
+		c.errorHandler(w, r, err, &result)
+		return
+	}
+	_ = EncodeJSONResponse(result.Body, &result.Code, w)
 }
 
 // GetSubmodelByIdMetadataAasRepository - Returns the Submodel's metadata elements
 // nolint:revive
 func (c *AssetAdministrationShellRepositoryAPIAPIController) GetSubmodelByIdMetadataAasRepository(w http.ResponseWriter, r *http.Request) {
+	aasIdentifierParam := chi.URLParam(r, "aasIdentifier")
+	if aasIdentifierParam == "" {
+		c.errorHandler(w, r, &RequiredError{"aasIdentifier"}, nil)
+		return
+	}
+	submodelIdentifierParam := chi.URLParam(r, "submodelIdentifier")
+	if submodelIdentifierParam == "" {
+		c.errorHandler(w, r, &RequiredError{"submodelIdentifier"}, nil)
+		return
+	}
+
+	result, err := c.service.GetSubmodelByIdMetadataAasRepository(r.Context(), aasIdentifierParam, submodelIdentifierParam)
+	if err != nil {
+		c.errorHandler(w, r, err, &result)
+		return
+	}
+	_ = EncodeJSONResponse(result.Body, &result.Code, w)
 }
 
 // PatchSubmodelByIdMetadataAasRepository - Updates the metadata attributes of the Submodel
 // nolint:revive
 func (c *AssetAdministrationShellRepositoryAPIAPIController) PatchSubmodelByIdMetadataAasRepository(w http.ResponseWriter, r *http.Request) {
+	aasIdentifierParam := chi.URLParam(r, "aasIdentifier")
+	if aasIdentifierParam == "" {
+		c.errorHandler(w, r, &RequiredError{"aasIdentifier"}, nil)
+		return
+	}
+	submodelIdentifierParam := chi.URLParam(r, "submodelIdentifier")
+	if submodelIdentifierParam == "" {
+		c.errorHandler(w, r, &RequiredError{"submodelIdentifier"}, nil)
+		return
+	}
+
+	var jsonable any
+	d := json.NewDecoder(r.Body)
+	d.DisallowUnknownFields()
+	if err := d.Decode(&jsonable); err != nil {
+		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
+		return
+	}
+
+	submodelMetadataParam, err := common.ParseSubmodelMetadataPayload(jsonable)
+	if err != nil {
+		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
+		return
+	}
+	rawMetadataPayload, ok := jsonable.(map[string]any)
+	if !ok {
+		c.errorHandler(w, r, &ParsingError{Err: errors.New("metadata payload must be an object")}, nil)
+		return
+	}
+	if err := model.AssertSubmodelMetadataRequired(submodelMetadataParam); err != nil {
+		c.errorHandler(w, r, err, nil)
+		return
+	}
+	if err := model.AssertSubmodelMetadataConstraints(submodelMetadataParam); err != nil {
+		c.errorHandler(w, r, err, nil)
+		return
+	}
+
+	ctxWithRawPatch := common.WithSubmodelMetadataPatch(r.Context(), rawMetadataPayload)
+	result, err := c.service.PatchSubmodelByIdMetadataAasRepository(ctxWithRawPatch, aasIdentifierParam, submodelIdentifierParam, submodelMetadataParam)
+	if err != nil {
+		c.errorHandler(w, r, err, &result)
+		return
+	}
+	_ = EncodeJSONResponse(result.Body, &result.Code, w)
 }
 
 // GetSubmodelByIdValueOnlyAasRepository - Returns the Submodel's ValueOnly representation
 // nolint:revive
 func (c *AssetAdministrationShellRepositoryAPIAPIController) GetSubmodelByIdValueOnlyAasRepository(w http.ResponseWriter, r *http.Request) {
+	query, err := parseQuery(r.URL.RawQuery)
+	if err != nil {
+		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
+		return
+	}
+	aasIdentifierParam := chi.URLParam(r, "aasIdentifier")
+	if aasIdentifierParam == "" {
+		c.errorHandler(w, r, &RequiredError{"aasIdentifier"}, nil)
+		return
+	}
+	submodelIdentifierParam := chi.URLParam(r, "submodelIdentifier")
+	if submodelIdentifierParam == "" {
+		c.errorHandler(w, r, &RequiredError{"submodelIdentifier"}, nil)
+		return
+	}
+
+	levelParam := ""
+	if query.Has("level") {
+		levelParam = query.Get("level")
+	} else {
+		levelParam = "deep"
+	}
+
+	extentParam := ""
+	if query.Has("extent") {
+		extentParam = query.Get("extent")
+	} else {
+		extentParam = "withoutBlobValue"
+	}
+
+	result, err := c.service.GetSubmodelByIdValueOnlyAasRepository(r.Context(), aasIdentifierParam, submodelIdentifierParam, levelParam, extentParam)
+	if err != nil {
+		c.errorHandler(w, r, err, &result)
+		return
+	}
+	_ = EncodeJSONResponse(result.Body, &result.Code, w)
 }
 
 // PatchSubmodelByIdValueOnlyAasRepository - Updates the values of the Submodel
 // nolint:revive
 func (c *AssetAdministrationShellRepositoryAPIAPIController) PatchSubmodelByIdValueOnlyAasRepository(w http.ResponseWriter, r *http.Request) {
+	query, err := parseQuery(r.URL.RawQuery)
+	if err != nil {
+		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
+		return
+	}
+	aasIdentifierParam := chi.URLParam(r, "aasIdentifier")
+	if aasIdentifierParam == "" {
+		c.errorHandler(w, r, &RequiredError{"aasIdentifier"}, nil)
+		return
+	}
+	submodelIdentifierParam := chi.URLParam(r, "submodelIdentifier")
+	if submodelIdentifierParam == "" {
+		c.errorHandler(w, r, &RequiredError{"submodelIdentifier"}, nil)
+		return
+	}
+
+	var bodyParam map[string]any
+	d := json.NewDecoder(r.Body)
+	d.DisallowUnknownFields()
+	if err := d.Decode(&bodyParam); err != nil {
+		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
+		return
+	}
+
+	levelParam := ""
+	if query.Has("level") {
+		levelParam = query.Get("level")
+	} else {
+		levelParam = "core"
+	}
+
+	result, err := c.service.PatchSubmodelByIdValueOnlyAasRepository(r.Context(), aasIdentifierParam, submodelIdentifierParam, bodyParam, levelParam)
+	if err != nil {
+		c.errorHandler(w, r, err, &result)
+		return
+	}
+	_ = EncodeJSONResponse(result.Body, &result.Code, w)
 }
 
 // GetSubmodelByIdReferenceAasRepository - Returns the Submodel as a Reference
 // nolint:revive
 func (c *AssetAdministrationShellRepositoryAPIAPIController) GetSubmodelByIdReferenceAasRepository(w http.ResponseWriter, r *http.Request) {
+	aasIdentifierParam := chi.URLParam(r, "aasIdentifier")
+	if aasIdentifierParam == "" {
+		c.errorHandler(w, r, &RequiredError{"aasIdentifier"}, nil)
+		return
+	}
+	submodelIdentifierParam := chi.URLParam(r, "submodelIdentifier")
+	if submodelIdentifierParam == "" {
+		c.errorHandler(w, r, &RequiredError{"submodelIdentifier"}, nil)
+		return
+	}
+
+	result, err := c.service.GetSubmodelByIdReferenceAasRepository(r.Context(), aasIdentifierParam, submodelIdentifierParam)
+	if err != nil {
+		c.errorHandler(w, r, err, &result)
+		return
+	}
+	_ = EncodeJSONResponse(result.Body, &result.Code, w)
 }
 
 // GetSubmodelByIdPathAasRepository - Returns the elements of this submodel in path notation.
@@ -920,26 +1121,305 @@ func (c *AssetAdministrationShellRepositoryAPIAPIController) GetSubmodelByIdPath
 // GetAllSubmodelElementsAasRepository - Returns all submodel elements including their hierarchy
 // nolint:revive
 func (c *AssetAdministrationShellRepositoryAPIAPIController) GetAllSubmodelElementsAasRepository(w http.ResponseWriter, r *http.Request) {
+	query, err := parseQuery(r.URL.RawQuery)
+	if err != nil {
+		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
+		return
+	}
+
+	aasIdentifierParam := chi.URLParam(r, "aasIdentifier")
+	if aasIdentifierParam == "" {
+		c.errorHandler(w, r, &RequiredError{"aasIdentifier"}, nil)
+		return
+	}
+
+	submodelIdentifierParam := chi.URLParam(r, "submodelIdentifier")
+	if submodelIdentifierParam == "" {
+		c.errorHandler(w, r, &RequiredError{"submodelIdentifier"}, nil)
+		return
+	}
+
+	var limitParam int32
+	if query.Has("limit") {
+		param, err := parseNumericParameter[int32](
+			query.Get("limit"),
+			WithParse[int32](parseInt32),
+			WithMinimum[int32](1),
+		)
+		if err != nil {
+			c.errorHandler(w, r, &ParsingError{Param: "limit", Err: err}, nil)
+			return
+		}
+
+		limitParam = param
+	}
+
+	cursorParam := ""
+	if query.Has("cursor") {
+		cursorParam = query.Get("cursor")
+	}
+
+	levelParam := "deep"
+	if query.Has("level") {
+		levelParam = query.Get("level")
+	}
+
+	extentParam := "withoutBlobValue"
+	if query.Has("extent") {
+		extentParam = query.Get("extent")
+	}
+
+	result, err := c.service.GetAllSubmodelElementsAasRepository(
+		r.Context(),
+		aasIdentifierParam,
+		submodelIdentifierParam,
+		limitParam,
+		cursorParam,
+		levelParam,
+		extentParam,
+	)
+	if err != nil {
+		c.errorHandler(w, r, err, &result)
+		return
+	}
+
+	_ = EncodeJSONResponse(result.Body, &result.Code, w)
 }
 
 // PostSubmodelElementAasRepository - Creates a new submodel element
 // nolint:revive
 func (c *AssetAdministrationShellRepositoryAPIAPIController) PostSubmodelElementAasRepository(w http.ResponseWriter, r *http.Request) {
+	aasIdentifierParam := chi.URLParam(r, "aasIdentifier")
+	if aasIdentifierParam == "" {
+		c.errorHandler(w, r, &RequiredError{"aasIdentifier"}, nil)
+		return
+	}
+
+	submodelIdentifierParam := chi.URLParam(r, "submodelIdentifier")
+	if submodelIdentifierParam == "" {
+		c.errorHandler(w, r, &RequiredError{"submodelIdentifier"}, nil)
+		return
+	}
+
+	bodyBytes, err := io.ReadAll(r.Body)
+	if err != nil {
+		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
+		return
+	}
+
+	var jsonable interface{}
+	if err := json.Unmarshal(bodyBytes, &jsonable); err != nil {
+		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
+		return
+	}
+
+	submodelElementParam, err := aasjsonization.SubmodelElementFromJsonable(jsonable)
+	if err != nil {
+		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
+		return
+	}
+
+	if c.strictVerification {
+		var validationErrors []string
+		aasverification.Verify(submodelElementParam, func(verErr *aasverification.VerificationError) bool {
+			validationErrors = append(validationErrors, verErr.Error())
+			return false
+		})
+
+		if len(validationErrors) > 0 {
+			err := fmt.Errorf("validation failed: %s", strings.Join(validationErrors, "; "))
+			c.errorHandler(w, r, &ParsingError{Err: err}, nil)
+			return
+		}
+	}
+
+	result, err := c.service.PostSubmodelElementAasRepository(r.Context(), aasIdentifierParam, submodelIdentifierParam, submodelElementParam)
+	if err != nil {
+		c.errorHandler(w, r, err, &result)
+		return
+	}
+
+	_ = EncodeJSONResponse(result.Body, &result.Code, w)
 }
 
 // GetAllSubmodelElementsMetadataAasRepository - Returns all submodel elements including their hierarchy
 // nolint:revive
 func (c *AssetAdministrationShellRepositoryAPIAPIController) GetAllSubmodelElementsMetadataAasRepository(w http.ResponseWriter, r *http.Request) {
+	query, err := parseQuery(r.URL.RawQuery)
+	if err != nil {
+		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
+		return
+	}
+
+	aasIdentifierParam := chi.URLParam(r, "aasIdentifier")
+	if aasIdentifierParam == "" {
+		c.errorHandler(w, r, &RequiredError{"aasIdentifier"}, nil)
+		return
+	}
+
+	submodelIdentifierParam := chi.URLParam(r, "submodelIdentifier")
+	if submodelIdentifierParam == "" {
+		c.errorHandler(w, r, &RequiredError{"submodelIdentifier"}, nil)
+		return
+	}
+
+	var limitParam int32
+	if query.Has("limit") {
+		param, err := parseNumericParameter[int32](
+			query.Get("limit"),
+			WithParse[int32](parseInt32),
+			WithMinimum[int32](1),
+		)
+		if err != nil {
+			c.errorHandler(w, r, &ParsingError{Param: "limit", Err: err}, nil)
+			return
+		}
+
+		limitParam = param
+	}
+
+	cursorParam := ""
+	if query.Has("cursor") {
+		cursorParam = query.Get("cursor")
+	}
+
+	result, err := c.service.GetAllSubmodelElementsMetadataAasRepository(
+		r.Context(),
+		aasIdentifierParam,
+		submodelIdentifierParam,
+		limitParam,
+		cursorParam,
+	)
+	if err != nil {
+		c.errorHandler(w, r, err, &result)
+		return
+	}
+
+	_ = EncodeJSONResponse(result.Body, &result.Code, w)
 }
 
 // GetAllSubmodelElementsValueOnlyAasRepository - Returns all submodel elements including their hierarchy in the ValueOnly representation
 // nolint:revive
 func (c *AssetAdministrationShellRepositoryAPIAPIController) GetAllSubmodelElementsValueOnlyAasRepository(w http.ResponseWriter, r *http.Request) {
+	query, err := parseQuery(r.URL.RawQuery)
+	if err != nil {
+		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
+		return
+	}
+
+	aasIdentifierParam := chi.URLParam(r, "aasIdentifier")
+	if aasIdentifierParam == "" {
+		c.errorHandler(w, r, &RequiredError{"aasIdentifier"}, nil)
+		return
+	}
+
+	submodelIdentifierParam := chi.URLParam(r, "submodelIdentifier")
+	if submodelIdentifierParam == "" {
+		c.errorHandler(w, r, &RequiredError{"submodelIdentifier"}, nil)
+		return
+	}
+
+	var limitParam int32
+	if query.Has("limit") {
+		param, err := parseNumericParameter[int32](
+			query.Get("limit"),
+			WithParse[int32](parseInt32),
+			WithMinimum[int32](1),
+		)
+		if err != nil {
+			c.errorHandler(w, r, &ParsingError{Param: "limit", Err: err}, nil)
+			return
+		}
+
+		limitParam = param
+	}
+
+	cursorParam := ""
+	if query.Has("cursor") {
+		cursorParam = query.Get("cursor")
+	}
+
+	levelParam := "deep"
+	if query.Has("level") {
+		levelParam = query.Get("level")
+	}
+
+	result, err := c.service.GetAllSubmodelElementsValueOnlyAasRepository(
+		r.Context(),
+		aasIdentifierParam,
+		submodelIdentifierParam,
+		limitParam,
+		cursorParam,
+		levelParam,
+	)
+	if err != nil {
+		c.errorHandler(w, r, err, &result)
+		return
+	}
+
+	_ = EncodeJSONResponse(result.Body, &result.Code, w)
 }
 
 // GetAllSubmodelElementsReferenceAasRepository - Returns all submodel elements as a list of References
 // nolint:revive
 func (c *AssetAdministrationShellRepositoryAPIAPIController) GetAllSubmodelElementsReferenceAasRepository(w http.ResponseWriter, r *http.Request) {
+	query, err := parseQuery(r.URL.RawQuery)
+	if err != nil {
+		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
+		return
+	}
+
+	aasIdentifierParam := chi.URLParam(r, "aasIdentifier")
+	if aasIdentifierParam == "" {
+		c.errorHandler(w, r, &RequiredError{"aasIdentifier"}, nil)
+		return
+	}
+
+	submodelIdentifierParam := chi.URLParam(r, "submodelIdentifier")
+	if submodelIdentifierParam == "" {
+		c.errorHandler(w, r, &RequiredError{"submodelIdentifier"}, nil)
+		return
+	}
+
+	var limitParam int32
+	if query.Has("limit") {
+		param, err := parseNumericParameter[int32](
+			query.Get("limit"),
+			WithParse[int32](parseInt32),
+			WithMinimum[int32](1),
+		)
+		if err != nil {
+			c.errorHandler(w, r, &ParsingError{Param: "limit", Err: err}, nil)
+			return
+		}
+
+		limitParam = param
+	}
+
+	cursorParam := ""
+	if query.Has("cursor") {
+		cursorParam = query.Get("cursor")
+	}
+
+	levelParam := "core"
+	if query.Has("level") {
+		levelParam = query.Get("level")
+	}
+
+	result, err := c.service.GetAllSubmodelElementsReferenceAasRepository(
+		r.Context(),
+		aasIdentifierParam,
+		submodelIdentifierParam,
+		limitParam,
+		cursorParam,
+		levelParam,
+	)
+	if err != nil {
+		c.errorHandler(w, r, err, &result)
+		return
+	}
+
+	_ = EncodeJSONResponse(result.Body, &result.Code, w)
 }
 
 // GetAllSubmodelElementsPathAasRepository - Returns all submodel elements including their hierarchy
@@ -993,51 +1473,533 @@ func (c *AssetAdministrationShellRepositoryAPIAPIController) GetAllSubmodelEleme
 // GetSubmodelElementByPathAasRepository - Returns a specific submodel element from the Submodel at a specified path
 // nolint:revive
 func (c *AssetAdministrationShellRepositoryAPIAPIController) GetSubmodelElementByPathAasRepository(w http.ResponseWriter, r *http.Request) {
+	query, err := parseQuery(r.URL.RawQuery)
+	if err != nil {
+		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
+		return
+	}
+
+	aasIdentifierParam := chi.URLParam(r, "aasIdentifier")
+	if aasIdentifierParam == "" {
+		c.errorHandler(w, r, &RequiredError{"aasIdentifier"}, nil)
+		return
+	}
+
+	submodelIdentifierParam := chi.URLParam(r, "submodelIdentifier")
+	if submodelIdentifierParam == "" {
+		c.errorHandler(w, r, &RequiredError{"submodelIdentifier"}, nil)
+		return
+	}
+
+	idShortPathParam := chi.URLParam(r, "idShortPath")
+	if idShortPathParam == "" {
+		c.errorHandler(w, r, &RequiredError{"idShortPath"}, nil)
+		return
+	}
+
+	levelParam := "deep"
+	if query.Has("level") {
+		levelParam = query.Get("level")
+	}
+
+	extentParam := "withoutBlobValue"
+	if query.Has("extent") {
+		extentParam = query.Get("extent")
+	}
+
+	result, err := c.service.GetSubmodelElementByPathAasRepository(
+		r.Context(),
+		aasIdentifierParam,
+		submodelIdentifierParam,
+		idShortPathParam,
+		levelParam,
+		extentParam,
+	)
+	if err != nil {
+		c.errorHandler(w, r, err, &result)
+		return
+	}
+
+	_ = EncodeJSONResponse(result.Body, &result.Code, w)
 }
 
 // PutSubmodelElementByPathAasRepository - Creates or updates an existing submodel element at a specified path within submodel elements hierarchy
 // nolint:revive
 func (c *AssetAdministrationShellRepositoryAPIAPIController) PutSubmodelElementByPathAasRepository(w http.ResponseWriter, r *http.Request) {
+	aasIdentifierParam := chi.URLParam(r, "aasIdentifier")
+	if aasIdentifierParam == "" {
+		c.errorHandler(w, r, &RequiredError{"aasIdentifier"}, nil)
+		return
+	}
+
+	submodelIdentifierParam := chi.URLParam(r, "submodelIdentifier")
+	if submodelIdentifierParam == "" {
+		c.errorHandler(w, r, &RequiredError{"submodelIdentifier"}, nil)
+		return
+	}
+
+	idShortPathParam := chi.URLParam(r, "idShortPath")
+	if idShortPathParam == "" {
+		c.errorHandler(w, r, &RequiredError{"idShortPath"}, nil)
+		return
+	}
+
+	bodyBytes, err := io.ReadAll(r.Body)
+	if err != nil {
+		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
+		return
+	}
+
+	var jsonable interface{}
+	if err := json.Unmarshal(bodyBytes, &jsonable); err != nil {
+		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
+		return
+	}
+
+	submodelElementParam, err := aasjsonization.SubmodelElementFromJsonable(jsonable)
+	if err != nil {
+		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
+		return
+	}
+
+	if c.strictVerification {
+		var validationErrors []string
+		aasverification.Verify(submodelElementParam, func(verErr *aasverification.VerificationError) bool {
+			validationErrors = append(validationErrors, verErr.Error())
+			return false
+		})
+
+		if len(validationErrors) > 0 {
+			err := fmt.Errorf("validation failed: %s", strings.Join(validationErrors, "; "))
+			c.errorHandler(w, r, &ParsingError{Err: err}, nil)
+			return
+		}
+	}
+
+	result, err := c.service.PutSubmodelElementByPathAasRepository(r.Context(), aasIdentifierParam, submodelIdentifierParam, idShortPathParam, submodelElementParam)
+	if err != nil {
+		c.errorHandler(w, r, err, &result)
+		return
+	}
+
+	_ = EncodeJSONResponse(result.Body, &result.Code, w)
 }
 
 // PostSubmodelElementByPathAasRepository - Creates a new submodel element at a specified path within submodel elements hierarchy
 // nolint:revive
 func (c *AssetAdministrationShellRepositoryAPIAPIController) PostSubmodelElementByPathAasRepository(w http.ResponseWriter, r *http.Request) {
+	aasIdentifierParam := chi.URLParam(r, "aasIdentifier")
+	if aasIdentifierParam == "" {
+		c.errorHandler(w, r, &RequiredError{"aasIdentifier"}, nil)
+		return
+	}
+
+	submodelIdentifierParam := chi.URLParam(r, "submodelIdentifier")
+	if submodelIdentifierParam == "" {
+		c.errorHandler(w, r, &RequiredError{"submodelIdentifier"}, nil)
+		return
+	}
+
+	idShortPathParam := chi.URLParam(r, "idShortPath")
+	if idShortPathParam == "" {
+		c.errorHandler(w, r, &RequiredError{"idShortPath"}, nil)
+		return
+	}
+
+	bodyBytes, err := io.ReadAll(r.Body)
+	if err != nil {
+		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
+		return
+	}
+
+	var jsonable interface{}
+	if err := json.Unmarshal(bodyBytes, &jsonable); err != nil {
+		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
+		return
+	}
+
+	submodelElementParam, err := aasjsonization.SubmodelElementFromJsonable(jsonable)
+	if err != nil {
+		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
+		return
+	}
+
+	if c.strictVerification {
+		var validationErrors []string
+		aasverification.Verify(submodelElementParam, func(verErr *aasverification.VerificationError) bool {
+			validationErrors = append(validationErrors, verErr.Error())
+			return false
+		})
+
+		if len(validationErrors) > 0 {
+			err := fmt.Errorf("validation failed: %s", strings.Join(validationErrors, "; "))
+			c.errorHandler(w, r, &ParsingError{Err: err}, nil)
+			return
+		}
+	}
+
+	result, err := c.service.PostSubmodelElementByPathAasRepository(r.Context(), aasIdentifierParam, submodelIdentifierParam, idShortPathParam, submodelElementParam)
+	if err != nil {
+		c.errorHandler(w, r, err, &result)
+		return
+	}
+
+	_ = EncodeJSONResponse(result.Body, &result.Code, w)
 }
 
 // DeleteSubmodelElementByPathAasRepository - Deletes a submodel element at a specified path within the submodel elements hierarchy
 // nolint:revive
 func (c *AssetAdministrationShellRepositoryAPIAPIController) DeleteSubmodelElementByPathAasRepository(w http.ResponseWriter, r *http.Request) {
+	aasIdentifierParam := chi.URLParam(r, "aasIdentifier")
+	if aasIdentifierParam == "" {
+		c.errorHandler(w, r, &RequiredError{"aasIdentifier"}, nil)
+		return
+	}
+
+	submodelIdentifierParam := chi.URLParam(r, "submodelIdentifier")
+	if submodelIdentifierParam == "" {
+		c.errorHandler(w, r, &RequiredError{"submodelIdentifier"}, nil)
+		return
+	}
+
+	idShortPathParam := chi.URLParam(r, "idShortPath")
+	if idShortPathParam == "" {
+		c.errorHandler(w, r, &RequiredError{"idShortPath"}, nil)
+		return
+	}
+
+	result, err := c.service.DeleteSubmodelElementByPathAasRepository(r.Context(), aasIdentifierParam, submodelIdentifierParam, idShortPathParam)
+	if err != nil {
+		c.errorHandler(w, r, err, &result)
+		return
+	}
+
+	_ = EncodeJSONResponse(result.Body, &result.Code, w)
 }
 
 // PatchSubmodelElementValueByPathAasRepository - Updates an existing submodel element value at a specified path within submodel elements hierarchy
 // nolint:revive
 func (c *AssetAdministrationShellRepositoryAPIAPIController) PatchSubmodelElementValueByPathAasRepository(w http.ResponseWriter, r *http.Request) {
+	query, err := parseQuery(r.URL.RawQuery)
+	if err != nil {
+		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
+		return
+	}
+
+	aasIdentifierParam := chi.URLParam(r, "aasIdentifier")
+	if aasIdentifierParam == "" {
+		c.errorHandler(w, r, &RequiredError{"aasIdentifier"}, nil)
+		return
+	}
+
+	submodelIdentifierParam := chi.URLParam(r, "submodelIdentifier")
+	if submodelIdentifierParam == "" {
+		c.errorHandler(w, r, &RequiredError{"submodelIdentifier"}, nil)
+		return
+	}
+
+	idShortPathParam := chi.URLParam(r, "idShortPath")
+	if idShortPathParam == "" {
+		c.errorHandler(w, r, &RequiredError{"idShortPath"}, nil)
+		return
+	}
+
+	bodyBytes, err := io.ReadAll(r.Body)
+	if err != nil {
+		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
+		return
+	}
+
+	var jsonable interface{}
+	if err := json.Unmarshal(bodyBytes, &jsonable); err != nil {
+		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
+		return
+	}
+
+	submodelElementParam, err := aasjsonization.SubmodelElementFromJsonable(jsonable)
+	if err != nil {
+		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
+		return
+	}
+
+	if c.strictVerification {
+		var validationErrors []string
+		aasverification.Verify(submodelElementParam, func(verErr *aasverification.VerificationError) bool {
+			validationErrors = append(validationErrors, verErr.Error())
+			return false
+		})
+
+		if len(validationErrors) > 0 {
+			err := fmt.Errorf("validation failed: %s", strings.Join(validationErrors, "; "))
+			c.errorHandler(w, r, &ParsingError{Err: err}, nil)
+			return
+		}
+	}
+
+	levelParam := "core"
+	if query.Has("level") {
+		levelParam = query.Get("level")
+	}
+
+	result, err := c.service.PatchSubmodelElementValueByPathAasRepository(
+		r.Context(),
+		aasIdentifierParam,
+		submodelIdentifierParam,
+		idShortPathParam,
+		submodelElementParam,
+		levelParam,
+	)
+	if err != nil {
+		c.errorHandler(w, r, err, &result)
+		return
+	}
+
+	_ = EncodeJSONResponse(result.Body, &result.Code, w)
 }
 
 // GetSubmodelElementByPathMetadataAasRepository - Returns the metadata attributes if a specific submodel element from the Submodel at a specified path
 // nolint:revive
 func (c *AssetAdministrationShellRepositoryAPIAPIController) GetSubmodelElementByPathMetadataAasRepository(w http.ResponseWriter, r *http.Request) {
+	aasIdentifierParam := chi.URLParam(r, "aasIdentifier")
+	if aasIdentifierParam == "" {
+		c.errorHandler(w, r, &RequiredError{"aasIdentifier"}, nil)
+		return
+	}
+
+	submodelIdentifierParam := chi.URLParam(r, "submodelIdentifier")
+	if submodelIdentifierParam == "" {
+		c.errorHandler(w, r, &RequiredError{"submodelIdentifier"}, nil)
+		return
+	}
+
+	idShortPathParam := chi.URLParam(r, "idShortPath")
+	if idShortPathParam == "" {
+		c.errorHandler(w, r, &RequiredError{"idShortPath"}, nil)
+		return
+	}
+
+	result, err := c.service.GetSubmodelElementByPathMetadataAasRepository(r.Context(), aasIdentifierParam, submodelIdentifierParam, idShortPathParam)
+	if err != nil {
+		c.errorHandler(w, r, err, &result)
+		return
+	}
+
+	_ = EncodeJSONResponse(result.Body, &result.Code, w)
 }
 
 // PatchSubmodelElementValueByPathMetadata - Updates the metadata attributes of an existing submodel element value at a specified path within submodel elements hierarchy
 // nolint:revive
 func (c *AssetAdministrationShellRepositoryAPIAPIController) PatchSubmodelElementValueByPathMetadata(w http.ResponseWriter, r *http.Request) {
+	aasIdentifierParam := chi.URLParam(r, "aasIdentifier")
+	if aasIdentifierParam == "" {
+		c.errorHandler(w, r, &RequiredError{"aasIdentifier"}, nil)
+		return
+	}
+
+	submodelIdentifierParam := chi.URLParam(r, "submodelIdentifier")
+	if submodelIdentifierParam == "" {
+		c.errorHandler(w, r, &RequiredError{"submodelIdentifier"}, nil)
+		return
+	}
+
+	idShortPathParam := chi.URLParam(r, "idShortPath")
+	if idShortPathParam == "" {
+		c.errorHandler(w, r, &RequiredError{"idShortPath"}, nil)
+		return
+	}
+
+	var jsonable any
+	d := json.NewDecoder(r.Body)
+	d.DisallowUnknownFields()
+	if err := d.Decode(&jsonable); err != nil {
+		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
+		return
+	}
+
+	submodelElementMetadataParam, err := common.ParseSubmodelElementMetadataPayload(jsonable)
+	if err != nil {
+		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
+		return
+	}
+	rawMetadataPayload, ok := jsonable.(map[string]any)
+	if !ok {
+		c.errorHandler(w, r, &ParsingError{Err: errors.New("metadata payload must be an object")}, nil)
+		return
+	}
+
+	ctxWithRawPatch := common.WithSubmodelElementMetadataPatch(r.Context(), rawMetadataPayload)
+	result, err := c.service.PatchSubmodelElementValueByPathMetadata(
+		ctxWithRawPatch,
+		aasIdentifierParam,
+		submodelIdentifierParam,
+		idShortPathParam,
+		submodelElementMetadataParam,
+	)
+	if err != nil {
+		c.errorHandler(w, r, err, &result)
+		return
+	}
+
+	_ = EncodeJSONResponse(result.Body, &result.Code, w)
 }
 
 // GetSubmodelElementByPathValueOnlyAasRepository - Returns a specific submodel element from the Submodel at a specified path in the ValueOnly representation
 // nolint:revive
 func (c *AssetAdministrationShellRepositoryAPIAPIController) GetSubmodelElementByPathValueOnlyAasRepository(w http.ResponseWriter, r *http.Request) {
+	query, err := parseQuery(r.URL.RawQuery)
+	if err != nil {
+		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
+		return
+	}
+
+	aasIdentifierParam := chi.URLParam(r, "aasIdentifier")
+	if aasIdentifierParam == "" {
+		c.errorHandler(w, r, &RequiredError{"aasIdentifier"}, nil)
+		return
+	}
+
+	submodelIdentifierParam := chi.URLParam(r, "submodelIdentifier")
+	if submodelIdentifierParam == "" {
+		c.errorHandler(w, r, &RequiredError{"submodelIdentifier"}, nil)
+		return
+	}
+
+	idShortPathParam := chi.URLParam(r, "idShortPath")
+	if idShortPathParam == "" {
+		c.errorHandler(w, r, &RequiredError{"idShortPath"}, nil)
+		return
+	}
+
+	levelParam := "deep"
+	if query.Has("level") {
+		levelParam = query.Get("level")
+	}
+
+	extentParam := "withoutBlobValue"
+	if query.Has("extent") {
+		extentParam = query.Get("extent")
+	}
+
+	result, err := c.service.GetSubmodelElementByPathValueOnlyAasRepository(
+		r.Context(),
+		aasIdentifierParam,
+		submodelIdentifierParam,
+		idShortPathParam,
+		levelParam,
+		extentParam,
+	)
+	if err != nil {
+		c.errorHandler(w, r, err, &result)
+		return
+	}
+
+	_ = EncodeJSONResponse(result.Body, &result.Code, w)
 }
 
 // PatchSubmodelElementValueByPathValueOnly - Updates the value of an existing submodel element value at a specified path within submodel elements hierarchy
 // nolint:revive
 func (c *AssetAdministrationShellRepositoryAPIAPIController) PatchSubmodelElementValueByPathValueOnly(w http.ResponseWriter, r *http.Request) {
+	query, err := parseQuery(r.URL.RawQuery)
+	if err != nil {
+		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
+		return
+	}
+
+	aasIdentifierParam := chi.URLParam(r, "aasIdentifier")
+	if aasIdentifierParam == "" {
+		c.errorHandler(w, r, &RequiredError{"aasIdentifier"}, nil)
+		return
+	}
+
+	submodelIdentifierParam := chi.URLParam(r, "submodelIdentifier")
+	if submodelIdentifierParam == "" {
+		c.errorHandler(w, r, &RequiredError{"submodelIdentifier"}, nil)
+		return
+	}
+
+	idShortPathParam := chi.URLParam(r, "idShortPath")
+	if idShortPathParam == "" {
+		c.errorHandler(w, r, &RequiredError{"idShortPath"}, nil)
+		return
+	}
+
+	bodyBytes, err := io.ReadAll(r.Body)
+	if err != nil {
+		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
+		return
+	}
+	submodelElementValueParam, err := model.UnmarshalSubmodelElementValue(bodyBytes)
+	if err != nil {
+		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
+		return
+	}
+
+	levelParam := "core"
+	if query.Has("level") {
+		levelParam = query.Get("level")
+	}
+
+	result, err := c.service.PatchSubmodelElementValueByPathValueOnly(
+		r.Context(),
+		aasIdentifierParam,
+		submodelIdentifierParam,
+		idShortPathParam,
+		submodelElementValueParam,
+		levelParam,
+	)
+	if err != nil {
+		c.errorHandler(w, r, err, &result)
+		return
+	}
+
+	_ = EncodeJSONResponse(result.Body, &result.Code, w)
 }
 
 // GetSubmodelElementByPathReferenceAasRepository - Returns the Reference of a specific submodel element from the Submodel at a specified path
 // nolint:revive
 func (c *AssetAdministrationShellRepositoryAPIAPIController) GetSubmodelElementByPathReferenceAasRepository(w http.ResponseWriter, r *http.Request) {
+	query, err := parseQuery(r.URL.RawQuery)
+	if err != nil {
+		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
+		return
+	}
+
+	aasIdentifierParam := chi.URLParam(r, "aasIdentifier")
+	if aasIdentifierParam == "" {
+		c.errorHandler(w, r, &RequiredError{"aasIdentifier"}, nil)
+		return
+	}
+
+	submodelIdentifierParam := chi.URLParam(r, "submodelIdentifier")
+	if submodelIdentifierParam == "" {
+		c.errorHandler(w, r, &RequiredError{"submodelIdentifier"}, nil)
+		return
+	}
+
+	idShortPathParam := chi.URLParam(r, "idShortPath")
+	if idShortPathParam == "" {
+		c.errorHandler(w, r, &RequiredError{"idShortPath"}, nil)
+		return
+	}
+
+	levelParam := "core"
+	if query.Has("level") {
+		levelParam = query.Get("level")
+	}
+
+	result, err := c.service.GetSubmodelElementByPathReferenceAasRepository(
+		r.Context(),
+		aasIdentifierParam,
+		submodelIdentifierParam,
+		idShortPathParam,
+		levelParam,
+	)
+	if err != nil {
+		c.errorHandler(w, r, err, &result)
+		return
+	}
+
+	_ = EncodeJSONResponse(result.Body, &result.Code, w)
 }
 
 // GetSubmodelElementByPathPathAasRepository - Returns a specific submodel element from the Submodel at a specified path in the Path notation
@@ -1082,49 +2044,449 @@ func (c *AssetAdministrationShellRepositoryAPIAPIController) GetSubmodelElementB
 // GetFileByPathAasRepository - Downloads file content from a specific submodel element from the Submodel at a specified path
 // nolint:revive
 func (c *AssetAdministrationShellRepositoryAPIAPIController) GetFileByPathAasRepository(w http.ResponseWriter, r *http.Request) {
+	aasIdentifierParam := chi.URLParam(r, "aasIdentifier")
+	if aasIdentifierParam == "" {
+		c.errorHandler(w, r, &RequiredError{"aasIdentifier"}, nil)
+		return
+	}
+
+	submodelIdentifierParam := chi.URLParam(r, "submodelIdentifier")
+	if submodelIdentifierParam == "" {
+		c.errorHandler(w, r, &RequiredError{"submodelIdentifier"}, nil)
+		return
+	}
+
+	idShortPathParam := chi.URLParam(r, "idShortPath")
+	if idShortPathParam == "" {
+		c.errorHandler(w, r, &RequiredError{"idShortPath"}, nil)
+		return
+	}
+
+	result, err := c.service.GetFileByPathAasRepository(r.Context(), aasIdentifierParam, submodelIdentifierParam, idShortPathParam)
+	if err != nil {
+		c.errorHandler(w, r, err, &result)
+		return
+	}
+
+	_ = EncodeJSONResponse(result.Body, &result.Code, w)
 }
 
 // PutFileByPathAasRepository - Uploads file content to an existing submodel element at a specified path within submodel elements hierarchy
 // nolint:revive
 func (c *AssetAdministrationShellRepositoryAPIAPIController) PutFileByPathAasRepository(w http.ResponseWriter, r *http.Request) {
+	r.Body = http.MaxBytesReader(w, r.Body, uploadMaxSizeFromRequestContext(r))
+
+	if err := r.ParseMultipartForm(32 << 20); err != nil {
+		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
+		return
+	}
+	defer func() {
+		if r.MultipartForm != nil {
+			_ = r.MultipartForm.RemoveAll()
+		}
+	}()
+
+	aasIdentifierParam := chi.URLParam(r, "aasIdentifier")
+	if aasIdentifierParam == "" {
+		c.errorHandler(w, r, &RequiredError{"aasIdentifier"}, nil)
+		return
+	}
+
+	submodelIdentifierParam := chi.URLParam(r, "submodelIdentifier")
+	if submodelIdentifierParam == "" {
+		c.errorHandler(w, r, &RequiredError{"submodelIdentifier"}, nil)
+		return
+	}
+
+	idShortPathParam := chi.URLParam(r, "idShortPath")
+	if idShortPathParam == "" {
+		c.errorHandler(w, r, &RequiredError{"idShortPath"}, nil)
+		return
+	}
+
+	fileNameParam := r.FormValue("fileName")
+	var fileParam *os.File
+	{
+		param, err := ReadFormFileToTempFile(r, "file")
+		if err != nil {
+			c.errorHandler(w, r, &ParsingError{Param: "file", Err: err}, nil)
+			return
+		}
+		fileParam = param
+	}
+	defer func() {
+		if fileParam != nil {
+			tempFilePath := fileParam.Name()
+			_ = fileParam.Close()
+			// #nosec G703 -- path comes from server-generated temporary file.
+			_ = os.Remove(tempFilePath)
+		}
+	}()
+
+	result, err := c.service.PutFileByPathAasRepository(
+		r.Context(),
+		aasIdentifierParam,
+		submodelIdentifierParam,
+		idShortPathParam,
+		fileNameParam,
+		fileParam,
+	)
+	if err != nil {
+		c.errorHandler(w, r, err, &result)
+		return
+	}
+
+	_ = EncodeJSONResponse(result.Body, &result.Code, w)
 }
 
 // DeleteFileByPathAasRepository - Deletes file content of an existing submodel element at a specified path within submodel elements hierarchy
 // nolint:revive
 func (c *AssetAdministrationShellRepositoryAPIAPIController) DeleteFileByPathAasRepository(w http.ResponseWriter, r *http.Request) {
+	aasIdentifierParam := chi.URLParam(r, "aasIdentifier")
+	if aasIdentifierParam == "" {
+		c.errorHandler(w, r, &RequiredError{"aasIdentifier"}, nil)
+		return
+	}
+
+	submodelIdentifierParam := chi.URLParam(r, "submodelIdentifier")
+	if submodelIdentifierParam == "" {
+		c.errorHandler(w, r, &RequiredError{"submodelIdentifier"}, nil)
+		return
+	}
+
+	idShortPathParam := chi.URLParam(r, "idShortPath")
+	if idShortPathParam == "" {
+		c.errorHandler(w, r, &RequiredError{"idShortPath"}, nil)
+		return
+	}
+
+	result, err := c.service.DeleteFileByPathAasRepository(r.Context(), aasIdentifierParam, submodelIdentifierParam, idShortPathParam)
+	if err != nil {
+		c.errorHandler(w, r, err, &result)
+		return
+	}
+
+	_ = EncodeJSONResponse(result.Body, &result.Code, w)
 }
 
 // InvokeOperationAasRepository - Synchronously invokes an Operation at a specified path
 // nolint:revive
 func (c *AssetAdministrationShellRepositoryAPIAPIController) InvokeOperationAasRepository(w http.ResponseWriter, r *http.Request) {
+	aasIdentifierParam := chi.URLParam(r, "aasIdentifier")
+	if aasIdentifierParam == "" {
+		c.errorHandler(w, r, &RequiredError{"aasIdentifier"}, nil)
+		return
+	}
+
+	submodelIdentifierParam := chi.URLParam(r, "submodelIdentifier")
+	if submodelIdentifierParam == "" {
+		c.errorHandler(w, r, &RequiredError{"submodelIdentifier"}, nil)
+		return
+	}
+
+	idShortPathParam := chi.URLParam(r, "idShortPath")
+	if idShortPathParam == "" {
+		c.errorHandler(w, r, &RequiredError{"idShortPath"}, nil)
+		return
+	}
+
+	var operationRequestParam model.OperationRequest
+	d := json.NewDecoder(r.Body)
+	d.DisallowUnknownFields()
+	if err := d.Decode(&operationRequestParam); err != nil {
+		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
+		return
+	}
+
+	requestContext := common.WithAuthorizationHeader(r.Context(), r.Header.Get("Authorization"))
+	result, err := c.service.InvokeOperationAasRepository(
+		requestContext,
+		aasIdentifierParam,
+		submodelIdentifierParam,
+		idShortPathParam,
+		operationRequestParam,
+	)
+	if err != nil {
+		c.errorHandler(w, r, err, &result)
+		return
+	}
+
+	_ = EncodeJSONResponse(result.Body, &result.Code, w)
 }
 
 // InvokeOperationValueOnlyAasRepository - Synchronously invokes an Operation at a specified path
 // nolint:revive
 func (c *AssetAdministrationShellRepositoryAPIAPIController) InvokeOperationValueOnlyAasRepository(w http.ResponseWriter, r *http.Request) {
+	aasIdentifierParam := chi.URLParam(r, "aasIdentifier")
+	if aasIdentifierParam == "" {
+		c.errorHandler(w, r, &RequiredError{"aasIdentifier"}, nil)
+		return
+	}
+
+	submodelIdentifierParam := chi.URLParam(r, "submodelIdentifier")
+	if submodelIdentifierParam == "" {
+		c.errorHandler(w, r, &RequiredError{"submodelIdentifier"}, nil)
+		return
+	}
+
+	idShortPathParam := chi.URLParam(r, "idShortPath")
+	if idShortPathParam == "" {
+		c.errorHandler(w, r, &RequiredError{"idShortPath"}, nil)
+		return
+	}
+
+	var operationRequestValueOnlyParam model.OperationRequestValueOnly
+	d := json.NewDecoder(r.Body)
+	d.DisallowUnknownFields()
+	if err := d.Decode(&operationRequestValueOnlyParam); err != nil {
+		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
+		return
+	}
+	if err := model.AssertOperationRequestValueOnlyRequired(operationRequestValueOnlyParam); err != nil {
+		c.errorHandler(w, r, err, nil)
+		return
+	}
+	if err := model.AssertOperationRequestValueOnlyConstraints(operationRequestValueOnlyParam); err != nil {
+		c.errorHandler(w, r, err, nil)
+		return
+	}
+
+	requestContext := common.WithAuthorizationHeader(r.Context(), r.Header.Get("Authorization"))
+	result, err := c.service.InvokeOperationValueOnlyAasRepository(
+		requestContext,
+		aasIdentifierParam,
+		submodelIdentifierParam,
+		idShortPathParam,
+		operationRequestValueOnlyParam,
+	)
+	if err != nil {
+		c.errorHandler(w, r, err, &result)
+		return
+	}
+
+	_ = EncodeJSONResponse(result.Body, &result.Code, w)
 }
 
 // InvokeOperationAsyncAasRepository - Asynchronously invokes an Operation at a specified path
 // nolint:revive
 func (c *AssetAdministrationShellRepositoryAPIAPIController) InvokeOperationAsyncAasRepository(w http.ResponseWriter, r *http.Request) {
+	aasIdentifierParam := chi.URLParam(r, "aasIdentifier")
+	if aasIdentifierParam == "" {
+		c.errorHandler(w, r, &RequiredError{"aasIdentifier"}, nil)
+		return
+	}
+
+	submodelIdentifierParam := chi.URLParam(r, "submodelIdentifier")
+	if submodelIdentifierParam == "" {
+		c.errorHandler(w, r, &RequiredError{"submodelIdentifier"}, nil)
+		return
+	}
+
+	idShortPathParam := chi.URLParam(r, "idShortPath")
+	if idShortPathParam == "" {
+		c.errorHandler(w, r, &RequiredError{"idShortPath"}, nil)
+		return
+	}
+
+	var operationRequestParam model.OperationRequest
+	d := json.NewDecoder(r.Body)
+	d.DisallowUnknownFields()
+	if err := d.Decode(&operationRequestParam); err != nil {
+		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
+		return
+	}
+
+	requestContext := common.WithAuthorizationHeader(r.Context(), r.Header.Get("Authorization"))
+	result, err := c.service.InvokeOperationAsyncAasRepository(
+		requestContext,
+		aasIdentifierParam,
+		submodelIdentifierParam,
+		idShortPathParam,
+		operationRequestParam,
+	)
+	if err != nil {
+		c.errorHandler(w, r, err, &result)
+		return
+	}
+
+	_ = EncodeJSONResponse(result.Body, &result.Code, w)
 }
 
 // InvokeOperationAsyncValueOnlyAasRepository - Asynchronously invokes an Operation at a specified path
 // nolint:revive
 func (c *AssetAdministrationShellRepositoryAPIAPIController) InvokeOperationAsyncValueOnlyAasRepository(w http.ResponseWriter, r *http.Request) {
+	aasIdentifierParam := chi.URLParam(r, "aasIdentifier")
+	if aasIdentifierParam == "" {
+		c.errorHandler(w, r, &RequiredError{"aasIdentifier"}, nil)
+		return
+	}
+
+	submodelIdentifierParam := chi.URLParam(r, "submodelIdentifier")
+	if submodelIdentifierParam == "" {
+		c.errorHandler(w, r, &RequiredError{"submodelIdentifier"}, nil)
+		return
+	}
+
+	idShortPathParam := chi.URLParam(r, "idShortPath")
+	if idShortPathParam == "" {
+		c.errorHandler(w, r, &RequiredError{"idShortPath"}, nil)
+		return
+	}
+
+	var operationRequestValueOnlyParam model.OperationRequestValueOnly
+	d := json.NewDecoder(r.Body)
+	d.DisallowUnknownFields()
+	if err := d.Decode(&operationRequestValueOnlyParam); err != nil {
+		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
+		return
+	}
+	if err := model.AssertOperationRequestValueOnlyRequired(operationRequestValueOnlyParam); err != nil {
+		c.errorHandler(w, r, err, nil)
+		return
+	}
+	if err := model.AssertOperationRequestValueOnlyConstraints(operationRequestValueOnlyParam); err != nil {
+		c.errorHandler(w, r, err, nil)
+		return
+	}
+
+	requestContext := common.WithAuthorizationHeader(r.Context(), r.Header.Get("Authorization"))
+	result, err := c.service.InvokeOperationAsyncValueOnlyAasRepository(
+		requestContext,
+		aasIdentifierParam,
+		submodelIdentifierParam,
+		idShortPathParam,
+		operationRequestValueOnlyParam,
+	)
+	if err != nil {
+		c.errorHandler(w, r, err, &result)
+		return
+	}
+
+	_ = EncodeJSONResponse(result.Body, &result.Code, w)
 }
 
 // GetOperationAsyncStatusAasRepository - Returns the Operation status of an asynchronous invoked Operation
 // nolint:revive
 func (c *AssetAdministrationShellRepositoryAPIAPIController) GetOperationAsyncStatusAasRepository(w http.ResponseWriter, r *http.Request) {
+	aasIdentifierParam := chi.URLParam(r, "aasIdentifier")
+	if aasIdentifierParam == "" {
+		c.errorHandler(w, r, &RequiredError{"aasIdentifier"}, nil)
+		return
+	}
+
+	submodelIdentifierParam := chi.URLParam(r, "submodelIdentifier")
+	if submodelIdentifierParam == "" {
+		c.errorHandler(w, r, &RequiredError{"submodelIdentifier"}, nil)
+		return
+	}
+
+	idShortPathParam := chi.URLParam(r, "idShortPath")
+	if idShortPathParam == "" {
+		c.errorHandler(w, r, &RequiredError{"idShortPath"}, nil)
+		return
+	}
+
+	handleIDParam := chi.URLParam(r, "handleId")
+	if handleIDParam == "" {
+		c.errorHandler(w, r, &RequiredError{"handleId"}, nil)
+		return
+	}
+
+	result, err := c.service.GetOperationAsyncStatusAasRepository(
+		r.Context(),
+		aasIdentifierParam,
+		submodelIdentifierParam,
+		idShortPathParam,
+		handleIDParam,
+	)
+	if err != nil {
+		c.errorHandler(w, r, err, &result)
+		return
+	}
+
+	_ = EncodeJSONResponse(result.Body, &result.Code, w)
 }
 
 // GetOperationAsyncResultAasRepository - Returns the Operation result of an asynchronous invoked Operation
 // nolint:revive
 func (c *AssetAdministrationShellRepositoryAPIAPIController) GetOperationAsyncResultAasRepository(w http.ResponseWriter, r *http.Request) {
+	aasIdentifierParam := chi.URLParam(r, "aasIdentifier")
+	if aasIdentifierParam == "" {
+		c.errorHandler(w, r, &RequiredError{"aasIdentifier"}, nil)
+		return
+	}
+
+	submodelIdentifierParam := chi.URLParam(r, "submodelIdentifier")
+	if submodelIdentifierParam == "" {
+		c.errorHandler(w, r, &RequiredError{"submodelIdentifier"}, nil)
+		return
+	}
+
+	idShortPathParam := chi.URLParam(r, "idShortPath")
+	if idShortPathParam == "" {
+		c.errorHandler(w, r, &RequiredError{"idShortPath"}, nil)
+		return
+	}
+
+	handleIDParam := chi.URLParam(r, "handleId")
+	if handleIDParam == "" {
+		c.errorHandler(w, r, &RequiredError{"handleId"}, nil)
+		return
+	}
+
+	result, err := c.service.GetOperationAsyncResultAasRepository(
+		r.Context(),
+		aasIdentifierParam,
+		submodelIdentifierParam,
+		idShortPathParam,
+		handleIDParam,
+	)
+	if err != nil {
+		c.errorHandler(w, r, err, &result)
+		return
+	}
+
+	_ = EncodeJSONResponse(result.Body, &result.Code, w)
 }
 
 // GetOperationAsyncResultValueOnlyAasRepository - Returns the ValueOnly notation of the Operation result of an asynchronous invoked Operation
 // nolint:revive
 func (c *AssetAdministrationShellRepositoryAPIAPIController) GetOperationAsyncResultValueOnlyAasRepository(w http.ResponseWriter, r *http.Request) {
+	aasIdentifierParam := chi.URLParam(r, "aasIdentifier")
+	if aasIdentifierParam == "" {
+		c.errorHandler(w, r, &RequiredError{"aasIdentifier"}, nil)
+		return
+	}
+
+	submodelIdentifierParam := chi.URLParam(r, "submodelIdentifier")
+	if submodelIdentifierParam == "" {
+		c.errorHandler(w, r, &RequiredError{"submodelIdentifier"}, nil)
+		return
+	}
+
+	idShortPathParam := chi.URLParam(r, "idShortPath")
+	if idShortPathParam == "" {
+		c.errorHandler(w, r, &RequiredError{"idShortPath"}, nil)
+		return
+	}
+
+	handleIDParam := chi.URLParam(r, "handleId")
+	if handleIDParam == "" {
+		c.errorHandler(w, r, &RequiredError{"handleId"}, nil)
+		return
+	}
+
+	result, err := c.service.GetOperationAsyncResultValueOnlyAasRepository(
+		r.Context(),
+		aasIdentifierParam,
+		submodelIdentifierParam,
+		idShortPathParam,
+		handleIDParam,
+	)
+	if err != nil {
+		c.errorHandler(w, r, err, &result)
+		return
+	}
+
+	_ = EncodeJSONResponse(result.Body, &result.Code, w)
 }
