@@ -865,10 +865,16 @@ func uploadProcessingStatus(err error) int {
 	switch {
 	case common.IsErrBadRequest(err):
 		return http.StatusBadRequest
+	case common.IsErrMethodNotAllowed(err):
+		return http.StatusMethodNotAllowed
 	case common.IsErrNotFound(err):
 		return http.StatusNotFound
 	case common.IsErrDenied(err):
 		return http.StatusForbidden
+	case common.IsErrConflict(err):
+		return http.StatusConflict
+	case common.IsInternalServerError(err):
+		return http.StatusInternalServerError
 	default:
 		return http.StatusInternalServerError
 	}
