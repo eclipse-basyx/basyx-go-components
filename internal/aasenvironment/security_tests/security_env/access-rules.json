@@ -18,8 +18,7 @@
       {
         "name": "superpath_routes",
         "objects": [
-          { "ROUTE": "/shells/*/submodels/*" },
-          { "ROUTE": "/shells/*/submodels/*/**" }
+          { "ROUTE": "/shells/*/submodels/*" }
         ]
       }
     ],
