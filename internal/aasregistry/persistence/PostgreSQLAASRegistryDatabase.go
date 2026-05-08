@@ -128,6 +128,45 @@ func (p *PostgreSQLAASRegistryDatabase) ReplaceAdministrationShellDescriptor(
 	return descriptors.ReplaceAdministrationShellDescriptor(ctx, p.db, aasd)
 }
 
+// UpsertAdministrationShellDescriptorInTransaction replaces an existing AAS
+// descriptor or inserts it when missing in the provided transaction.
+func (p *PostgreSQLAASRegistryDatabase) UpsertAdministrationShellDescriptorInTransaction(
+	ctx context.Context,
+	tx *sql.Tx,
+	aasd model.AssetAdministrationShellDescriptor,
+) error {
+	if tx == nil {
+		return common.NewErrBadRequest("AASREG-UPSERTAASDESC-NILTX transaction must not be nil")
+	}
+
+	_, err := descriptors.GetAssetAdministrationShellDescriptorByIDTx(ctx, tx, aasd.Id)
+	if err != nil {
+		if !common.IsErrNotFound(err) {
+			return err
+		}
+		return descriptors.InsertAdministrationShellDescriptorTx(ctx, tx, aasd)
+	}
+
+	if err = descriptors.DeleteAssetAdministrationShellDescriptorByIDTx(ctx, tx, aasd.Id); err != nil {
+		return err
+	}
+	return descriptors.InsertAdministrationShellDescriptorTx(ctx, tx, aasd)
+}
+
+// DeleteAssetAdministrationShellDescriptorByIDInTransaction deletes an AAS
+// descriptor by id in the provided transaction.
+func (p *PostgreSQLAASRegistryDatabase) DeleteAssetAdministrationShellDescriptorByIDInTransaction(
+	ctx context.Context,
+	tx *sql.Tx,
+	aasIdentifier string,
+) error {
+	if tx == nil {
+		return common.NewErrBadRequest("AASREG-DELAASDESC-NILTX transaction must not be nil")
+	}
+
+	return descriptors.DeleteAssetAdministrationShellDescriptorByIDTx(ctx, tx, aasIdentifier)
+}
+
 // ListAssetAdministrationShellDescriptors lists AAS descriptors with optional
 // pagination and asset filtering, returning a next-page cursor when present.
 func (p *PostgreSQLAASRegistryDatabase) ListAssetAdministrationShellDescriptors(

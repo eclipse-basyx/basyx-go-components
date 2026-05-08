@@ -26,4 +26,6 @@ general:
   enableDescriptorDebug: false
   discoveryIntegration: false
   supportsSingularSupplementalSemanticId: false
+  aasRegistrySyncEnabled: false
+  submodelRegistrySyncEnabled: false
   uploadMaxSizeBytes: 134217728

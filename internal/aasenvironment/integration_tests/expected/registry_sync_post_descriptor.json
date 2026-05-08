@@ -1,0 +1,15 @@
+{
+  "idShort": "registrySyncPostShell",
+  "id": "urn:example:aas:registry-sync-post",
+  "assetKind": "Instance",
+  "globalAssetId": "urn:example:asset:registry-sync-post",
+  "endpoints": [
+    {
+      "interface": "AAS-3.0",
+      "protocolInformation": {
+        "href": "http://127.0.0.1:6004/shells/dXJuOmV4YW1wbGU6YWFzOnJlZ2lzdHJ5LXN5bmMtcG9zdA",
+        "endpointProtocol": "http"
+      }
+    }
+  ]
+}

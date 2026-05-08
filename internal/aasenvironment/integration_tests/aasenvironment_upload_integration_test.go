@@ -61,6 +61,11 @@ func TestUploadJSONAndXMLIntegration(t *testing.T) {
 	runUploadJSONSuite(t, "upload_json_xml_config.json")
 }
 
+func TestRegistrySyncIntegration(t *testing.T) {
+	resetDatabaseForUploadIT(t)
+	runUploadJSONSuite(t, "registry_sync_it_config.json")
+}
+
 func runUploadJSONSuite(t *testing.T, configPath string) {
 	testenv.RunJSONSuite(t, testenv.JSONSuiteOptions{
 		ConfigPath: configPath,

@@ -1,0 +1,15 @@
+{
+  "assetAdministrationShells": [
+    {
+      "idShort": "registrySyncUploadShell",
+      "id": "urn:example:aas:registry-sync-upload",
+      "assetInformation": {
+        "assetKind": "Instance",
+        "globalAssetId": "urn:example:asset:registry-sync-upload"
+      },
+      "modelType": "AssetAdministrationShell"
+    }
+  ],
+  "submodels": [],
+  "conceptDescriptions": []
+}

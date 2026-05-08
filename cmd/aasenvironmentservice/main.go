@@ -49,6 +49,14 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 	if err != nil {
 		return err
 	}
+	registrySyncConfig, err := aasenvironment.NewRegistrySyncConfig(
+		cfg.General.AASRegistrySyncEnabled,
+		cfg.General.SubmodelRegistrySyncEnabled,
+		os.Getenv("EXTERNALURL"),
+	)
+	if err != nil {
+		return err
+	}
 	commonmodel.SetStrictVerificationEnabled(cfg.Server.StrictVerification)
 	commonmodel.SetSupportsSingularSupplementalSemanticId(cfg.General.SupportsSingularSupplementalSemanticId)
 
@@ -137,10 +145,12 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 	customAASRepository := aasenvironment.NewCustomAASRepositoryService(
 		aasrepositoryapi.NewAssetAdministrationShellRepositoryAPIAPIService(aasRepositoryPersistence, submodelRepositoryPersistence),
 		persistence,
+		registrySyncConfig,
 	)
 	customSMRepository := aasenvironment.NewCustomSubmodelRepositoryService(
 		submodelrepositoryapi.NewSubmodelRepositoryAPIAPIService(*submodelRepositoryPersistence),
 		persistence,
+		registrySyncConfig,
 	)
 	customCDRepository := aasenvironment.NewCustomConceptDescriptionRepositoryService(
 		cdrapi.NewConceptDescriptionRepositoryAPIAPIService(cdrPersistence),
@@ -192,7 +202,7 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 	r.Mount(base, apiRouter)
 
 	// Register /upload endpoint
-	uploadService := aasenvironment.NewUploadAPIService(persistence)
+	uploadService := aasenvironment.NewUploadAPIService(persistence, customAASRepository, customSMRepository)
 	aasenvironment.RegisterUploadAPI(apiRouter, uploadService, cfg.General.UploadMaxSizeBytes)
 
 	addr := fmt.Sprintf("0.0.0.0:%d", cfg.Server.Port)

@@ -1,0 +1,55 @@
+[
+  {
+    "context": "001 - Health Check",
+    "method": "GET",
+    "endpoint": "http://127.0.0.1:6004/health",
+    "expectedStatus": 200
+  },
+  {
+    "context": "002 - List empty AAS descriptors",
+    "method": "GET",
+    "endpoint": "http://127.0.0.1:6004/shell-descriptors",
+    "shouldMatch": "expected/registry_sync_empty_paged_result.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "003 - Create AAS via /shells",
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:6004/shells",
+    "data": "testdata/registry_sync_post_shell.json",
+    "shouldMatch": "testdata/registry_sync_post_shell.json",
+    "expectedStatus": 201
+  },
+  {
+    "context": "004 - Verify descriptor for posted shell",
+    "method": "GET",
+    "endpoint": "http://127.0.0.1:6004/shell-descriptors/dXJuOmV4YW1wbGU6YWFzOnJlZ2lzdHJ5LXN5bmMtcG9zdA",
+    "shouldMatch": "expected/registry_sync_post_descriptor.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "005 - Upload JSON environment via /upload",
+    "action": "UPLOAD_MULTIPART",
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:6004/upload",
+    "data": "testdata/registry_sync_upload_environment.json",
+    "headers": {
+      "X-Upload-Part-ContentType": "application/json"
+    },
+    "expectedStatus": 200
+  },
+  {
+    "context": "006 - Verify uploaded shell exists",
+    "method": "GET",
+    "endpoint": "http://127.0.0.1:6004/shells/dXJuOmV4YW1wbGU6YWFzOnJlZ2lzdHJ5LXN5bmMtdXBsb2Fk",
+    "shouldMatch": "expected/registry_sync_uploaded_shell.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "007 - Verify descriptor for uploaded shell",
+    "method": "GET",
+    "endpoint": "http://127.0.0.1:6004/shell-descriptors/dXJuOmV4YW1wbGU6YWFzOnJlZ2lzdHJ5LXN5bmMtdXBsb2Fk",
+    "shouldMatch": "expected/registry_sync_uploaded_descriptor.json",
+    "expectedStatus": 200
+  }
+]

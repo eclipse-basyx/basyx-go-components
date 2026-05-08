@@ -68,6 +68,8 @@ var DefaultConfig = struct {
 	GeneralDiscoveryIntegration bool
 	GeneralSupportsSingularSSID bool
 	GeneralEnableCustomHeaderMW bool
+	GeneralAASRegistrySync      bool
+	GeneralSubmodelRegistrySync bool
 }{
 	ServerPort:                  5004,
 	ServerContextPath:           "",
@@ -91,6 +93,8 @@ var DefaultConfig = struct {
 	GeneralDiscoveryIntegration: false,
 	GeneralSupportsSingularSSID: false,
 	GeneralEnableCustomHeaderMW: false,
+	GeneralAASRegistrySync:      false,
+	GeneralSubmodelRegistrySync: false,
 }
 
 // PrintSplash displays the BaSyx Go API ASCII art logo to the console.
@@ -203,6 +207,8 @@ type GeneralConfig struct {
 	DiscoveryIntegration                   bool  `mapstructure:"discoveryIntegration" yaml:"discoveryIntegration" json:"discoveryIntegration"`                                                       // Enable integration with discovery aas_identifier linking
 	EnableCustomMiddlewareHeaderInjection  bool  `mapstructure:"enableCustomMiddlewareHeaderInjection" yaml:"enableCustomMiddlewareHeaderInjection" json:"enableCustomMiddlewareHeaderInjection"`    // Enable custom security middleware header injections
 	SupportsSingularSupplementalSemanticId bool  `mapstructure:"supportsSingularSupplementalSemanticId" yaml:"supportsSingularSupplementalSemanticId" json:"supportsSingularSupplementalSemanticId"` // Use singular supplementalSemanticId for SubmodelDescriptor I/O
+	AASRegistrySyncEnabled                 bool  `mapstructure:"aasRegistrySyncEnabled" yaml:"aasRegistrySyncEnabled" json:"aasRegistrySyncEnabled"`                                                 // Enable AAS repository -> registry descriptor synchronization
+	SubmodelRegistrySyncEnabled            bool  `mapstructure:"submodelRegistrySyncEnabled" yaml:"submodelRegistrySyncEnabled" json:"submodelRegistrySyncEnabled"`                                  // Enable Submodel repository -> registry descriptor synchronization
 	UploadMaxSizeBytes                     int64 `mapstructure:"uploadMaxSizeBytes" yaml:"uploadMaxSizeBytes" json:"uploadMaxSizeBytes"`                                                             // Maximum allowed upload payload size in bytes
 }
 
@@ -337,6 +343,8 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("general.discoveryIntegration", false)
 	v.SetDefault("general.enableCustomMiddlewareHeaderInjection", false)
 	v.SetDefault("general.supportsSingularSupplementalSemanticId", false)
+	v.SetDefault("general.aasRegistrySyncEnabled", false)
+	v.SetDefault("general.submodelRegistrySyncEnabled", false)
 	v.SetDefault("general.uploadMaxSizeBytes", int64(128<<20))
 
 }

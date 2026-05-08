@@ -1,0 +1,9 @@
+{
+  "idShort": "registrySyncPostShell",
+  "id": "urn:example:aas:registry-sync-post",
+  "assetInformation": {
+    "assetKind": "Instance",
+    "globalAssetId": "urn:example:asset:registry-sync-post"
+  },
+  "modelType": "AssetAdministrationShell"
+}

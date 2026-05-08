@@ -264,6 +264,12 @@ func DeleteAssetAdministrationShellDescriptorByID(ctx context.Context, db *sql.D
 	return tx.Commit()
 }
 
+// DeleteAssetAdministrationShellDescriptorByIDTx deletes a descriptor by AAS id
+// using the provided transaction.
+func DeleteAssetAdministrationShellDescriptorByIDTx(ctx context.Context, tx *sql.Tx, aasIdentifier string) error {
+	return deleteAssetAdministrationShellDescriptorByIDTx(ctx, tx, aasIdentifier)
+}
+
 // DeleteAssetAdministrationShellDescriptorByIDTx deletes using the provided
 // transaction. It resolves the internal descriptor id and removes the base
 // descriptor row plus descriptor rows of linked submodel descriptors.

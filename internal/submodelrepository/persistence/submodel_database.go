@@ -274,7 +274,29 @@ func (s *SubmodelDatabase) CreateSubmodel(ctx context.Context, submodel types.IS
 	}
 	defer cu(&err)
 
-	err = s.createSubmodelInTransaction(tx, submodel)
+	if err = s.CreateSubmodelInTransaction(ctx, tx, submodel); err != nil {
+		return err
+	}
+
+	err = tx.Commit()
+	if err != nil {
+		return common.NewInternalServerError("SMREPO-NEWSM-CREATE-COMMIT " + err.Error())
+	}
+
+	return nil
+}
+
+// CreateSubmodelInTransaction creates a new submodel inside an existing transaction.
+func (s *SubmodelDatabase) CreateSubmodelInTransaction(ctx context.Context, tx *sql.Tx, submodel types.ISubmodel) error {
+	if tx == nil {
+		return common.NewErrBadRequest("SMREPO-NEWSM-NILTX transaction must not be nil")
+	}
+
+	if err := s.verifySubmodel(submodel, "SMREPO-NEWSM-VERIFY"); err != nil {
+		return err
+	}
+
+	err := s.createSubmodelInTransaction(tx, submodel)
 	if err != nil {
 		return err
 	}
@@ -295,12 +317,6 @@ func (s *SubmodelDatabase) CreateSubmodel(ctx context.Context, submodel types.IS
 			return common.NewErrDenied("SMREPO-NEWSM-ABACDENIED Created submodel is not accessible under ABAC constraints")
 		}
 	}
-
-	err = tx.Commit()
-	if err != nil {
-		return common.NewInternalServerError("SMREPO-NEWSM-CREATE-COMMIT " + err.Error())
-	}
-
 	return nil
 }
 
@@ -1224,8 +1240,7 @@ func (s *SubmodelDatabase) PatchSubmodel(_ context.Context, submodelID string, s
 	}
 	defer cleanup(&err)
 
-	_, err = s.replaceSubmodelInTransaction(tx, submodelID, submodel, true)
-	if err != nil {
+	if err = s.PatchSubmodelInTransaction(submodelID, tx, submodel); err != nil {
 		return err
 	}
 
@@ -1234,6 +1249,26 @@ func (s *SubmodelDatabase) PatchSubmodel(_ context.Context, submodelID string, s
 		return common.NewInternalServerError("SMREPO-PATCHSM-COMMIT " + err.Error())
 	}
 
+	return nil
+}
+
+// PatchSubmodelInTransaction replaces an existing submodel in an existing transaction.
+func (s *SubmodelDatabase) PatchSubmodelInTransaction(submodelID string, tx *sql.Tx, submodel types.ISubmodel) error {
+	if tx == nil {
+		return common.NewErrBadRequest("SMREPO-PATCHSM-NILTX transaction must not be nil")
+	}
+	if submodelID != submodel.ID() {
+		return common.NewErrBadRequest("SMREPO-PATCHSM-IDMISMATCH Submodel ID in path and body do not match")
+	}
+
+	if err := s.verifySubmodel(submodel, "SMREPO-PATCHSM-VERIFY"); err != nil {
+		return err
+	}
+
+	_, err := s.replaceSubmodelInTransaction(tx, submodelID, submodel, true)
+	if err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -1254,7 +1289,7 @@ func (s *SubmodelDatabase) PatchSubmodelMetadata(_ context.Context, submodelID s
 	}
 	defer cleanup(&err)
 
-	if err = s.patchSubmodelMetadataInTransaction(tx, submodelID, submodel); err != nil {
+	if err = s.PatchSubmodelMetadataInTransaction(submodelID, tx, submodel); err != nil {
 		return err
 	}
 
@@ -1264,6 +1299,22 @@ func (s *SubmodelDatabase) PatchSubmodelMetadata(_ context.Context, submodelID s
 	}
 
 	return nil
+}
+
+// PatchSubmodelMetadataInTransaction updates submodel metadata in an existing transaction.
+func (s *SubmodelDatabase) PatchSubmodelMetadataInTransaction(submodelID string, tx *sql.Tx, submodel types.ISubmodel) error {
+	if tx == nil {
+		return common.NewErrBadRequest("SMREPO-PATCHSMMETA-NILTX transaction must not be nil")
+	}
+	if submodelID != submodel.ID() {
+		return common.NewErrBadRequest("SMREPO-PATCHSMMETA-IDMISMATCH Submodel ID in path and body do not match")
+	}
+
+	if err := s.verifySubmodel(submodel, "SMREPO-PATCHSMMETA-VERIFY"); err != nil {
+		return err
+	}
+
+	return s.patchSubmodelMetadataInTransaction(tx, submodelID, submodel)
 }
 
 // PutSubmodel creates or replaces a submodel and checks ABAC access on old/new state before commit when ABAC is enabled.
