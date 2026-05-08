@@ -745,7 +745,7 @@ func (s *AssetAdministrationShellDatabase) PutAssetAdministrationShellByID(ctx c
 		"AASREPO-PUTAAS-COMMIT",
 		func(tx *sql.Tx) error {
 			var txErr error
-			isUpdate, txErr = s.PutAssetAdministrationShellByIDInTransaction(ctx, tx, aasIdentifier, aas)
+			isUpdate, txErr = s.putAssetAdministrationShellByIDInTransactionValidated(ctx, tx, aasIdentifier, aas)
 			return txErr
 		},
 	)
@@ -768,6 +768,10 @@ func (s *AssetAdministrationShellDatabase) PutAssetAdministrationShellByIDInTran
 		return false, err
 	}
 
+	return s.putAssetAdministrationShellByIDInTransactionValidated(ctx, tx, aasIdentifier, aas)
+}
+
+func (s *AssetAdministrationShellDatabase) putAssetAdministrationShellByIDInTransactionValidated(ctx context.Context, tx *sql.Tx, aasIdentifier string, aas types.IAssetAdministrationShell) (bool, error) {
 	dialect := goqu.Dialect("postgres")
 	selectSQL, selectArgs, buildErr := buildGetAssetAdministrationShellDBIDByIdentifierQuery(&dialect, aasIdentifier)
 	if buildErr != nil {

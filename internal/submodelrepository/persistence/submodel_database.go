@@ -274,7 +274,7 @@ func (s *SubmodelDatabase) CreateSubmodel(ctx context.Context, submodel types.IS
 	}
 	defer cu(&err)
 
-	if err = s.CreateSubmodelInTransaction(ctx, tx, submodel); err != nil {
+	if err = s.createSubmodelInTransactionValidated(ctx, tx, submodel); err != nil {
 		return err
 	}
 
@@ -296,6 +296,10 @@ func (s *SubmodelDatabase) CreateSubmodelInTransaction(ctx context.Context, tx *
 		return err
 	}
 
+	return s.createSubmodelInTransactionValidated(ctx, tx, submodel)
+}
+
+func (s *SubmodelDatabase) createSubmodelInTransactionValidated(ctx context.Context, tx *sql.Tx, submodel types.ISubmodel) error {
 	err := s.createSubmodelInTransaction(tx, submodel)
 	if err != nil {
 		return err
@@ -1240,7 +1244,7 @@ func (s *SubmodelDatabase) PatchSubmodel(_ context.Context, submodelID string, s
 	}
 	defer cleanup(&err)
 
-	if err = s.PatchSubmodelInTransaction(submodelID, tx, submodel); err != nil {
+	if err = s.patchSubmodelInTransactionValidated(submodelID, tx, submodel); err != nil {
 		return err
 	}
 
@@ -1265,6 +1269,10 @@ func (s *SubmodelDatabase) PatchSubmodelInTransaction(submodelID string, tx *sql
 		return err
 	}
 
+	return s.patchSubmodelInTransactionValidated(submodelID, tx, submodel)
+}
+
+func (s *SubmodelDatabase) patchSubmodelInTransactionValidated(submodelID string, tx *sql.Tx, submodel types.ISubmodel) error {
 	_, err := s.replaceSubmodelInTransaction(tx, submodelID, submodel, true)
 	if err != nil {
 		return err
@@ -1289,7 +1297,7 @@ func (s *SubmodelDatabase) PatchSubmodelMetadata(_ context.Context, submodelID s
 	}
 	defer cleanup(&err)
 
-	if err = s.PatchSubmodelMetadataInTransaction(submodelID, tx, submodel); err != nil {
+	if err = s.patchSubmodelMetadataInTransactionValidated(submodelID, tx, submodel); err != nil {
 		return err
 	}
 
@@ -1314,6 +1322,10 @@ func (s *SubmodelDatabase) PatchSubmodelMetadataInTransaction(submodelID string,
 		return err
 	}
 
+	return s.patchSubmodelMetadataInTransactionValidated(submodelID, tx, submodel)
+}
+
+func (s *SubmodelDatabase) patchSubmodelMetadataInTransactionValidated(submodelID string, tx *sql.Tx, submodel types.ISubmodel) error {
 	return s.patchSubmodelMetadataInTransaction(tx, submodelID, submodel)
 }
 

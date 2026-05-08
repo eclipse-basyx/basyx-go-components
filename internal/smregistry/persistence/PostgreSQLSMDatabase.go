@@ -114,8 +114,7 @@ func (p *PostgreSQLSMDatabase) UpsertSubmodelDescriptorInTransaction(
 		return common.NewErrBadRequest("SMREG-UPSERTSMDESC-NILTX transaction must not be nil")
 	}
 
-	_, err := descriptors.GetSubmodelDescriptorByID(ctx, tx, submodel.Id)
-	if err != nil {
+	if err := descriptors.DeleteSubmodelDescriptorByIDTx(ctx, tx, submodel.Id); err != nil {
 		if !common.IsErrNotFound(err) {
 			return err
 		}
@@ -123,11 +122,7 @@ func (p *PostgreSQLSMDatabase) UpsertSubmodelDescriptorInTransaction(
 		return insertErr
 	}
 
-	if err = descriptors.DeleteSubmodelDescriptorByIDTx(ctx, tx, submodel.Id); err != nil {
-		return err
-	}
-
-	_, err = descriptors.InsertSubmodelDescriptorTx(ctx, tx, submodel)
+	_, err := descriptors.InsertSubmodelDescriptorTx(ctx, tx, submodel)
 	return err
 }
 
