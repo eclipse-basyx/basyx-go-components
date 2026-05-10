@@ -1,4 +1,5 @@
 [![Go Report Card](https://goreportcard.com/badge/github.com/eclipse-basyx/basyx-go-components)](https://goreportcard.com/report/github.com/eclipse-basyx/basyx-go-components)
+![Docker Pulls](https://img.shields.io/endpoint?url=https%3A%2F%2Fdocker-stats.basyx.org%2Fgo.json)
 
 <div align="center">
   <img src="docu/assets/Logo_Go_light.svg" alt="BaSyx Go Logo" width="400"/>
