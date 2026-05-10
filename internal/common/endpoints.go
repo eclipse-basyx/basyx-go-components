@@ -28,6 +28,7 @@ package common
 
 import (
 	"encoding/json"
+	"log"
 	"net/http"
 	"strings"
 
@@ -66,13 +67,7 @@ type HealthProbe func() (bool, string)
 //	  "status": "UP"
 //	}
 func AddHealthEndpoint(r *chi.Mux, config *Config) {
-	r.Get(config.Server.ContextPath+"/health", func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		_, err := w.Write([]byte("{\"status\":\"UP\"}"))
-		if err != nil {
-			http.Error(w, "Failed to write response", http.StatusInternalServerError)
-		}
-	})
+	AddHealthEndpointWithProbe(r, config, nil)
 }
 
 // AddHealthEndpointWithProbe registers a health endpoint with optional readiness probing.
@@ -95,9 +90,16 @@ func AddHealthEndpointWithProbe(r *chi.Mux, config *Config, probe HealthProbe) {
 }
 
 func writeHealthResponse(w http.ResponseWriter, statusCode int, body map[string]string) {
+	responsePayload, err := json.Marshal(body)
+	if err != nil {
+		log.Printf("COMMON-WRITEHEALTH-MARSHAL response marshal failed: %v", err)
+		http.Error(w, "Failed to write response", http.StatusInternalServerError)
+		return
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(statusCode)
-	if err := json.NewEncoder(w).Encode(body); err != nil {
-		http.Error(w, "Failed to write response", http.StatusInternalServerError)
+	if _, err = w.Write(responsePayload); err != nil {
+		log.Printf("COMMON-WRITEHEALTH-WRITE response write failed: %v", err)
 	}
 }

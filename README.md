@@ -96,9 +96,9 @@ For `aasenvironmentservice`, startup preconfiguration can import AAS files autom
 
 ```yaml
 general:
-        aasPreconfigPaths:
-            - ./examples/BaSyxMinimalExample/aas
-            - ./myDevice.aasx
+    aasPreconfigPaths:
+        - ./examples/BaSyxMinimalExample/aas
+        - ./myDevice.aasx
 ```
 
 Or via environment variable:
