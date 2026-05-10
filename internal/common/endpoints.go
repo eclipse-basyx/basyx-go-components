@@ -27,10 +27,15 @@
 package common
 
 import (
+	"encoding/json"
 	"net/http"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 )
+
+// HealthProbe reports if the service is healthy and optionally returns detail text.
+type HealthProbe func() (bool, string)
 
 // AddHealthEndpoint registers a health check endpoint on the provided router.
 //
@@ -68,4 +73,31 @@ func AddHealthEndpoint(r *chi.Mux, config *Config) {
 			http.Error(w, "Failed to write response", http.StatusInternalServerError)
 		}
 	})
+}
+
+// AddHealthEndpointWithProbe registers a health endpoint with optional readiness probing.
+func AddHealthEndpointWithProbe(r *chi.Mux, config *Config, probe HealthProbe) {
+	r.Get(config.Server.ContextPath+"/health", func(w http.ResponseWriter, _ *http.Request) {
+		if probe != nil {
+			healthy, details := probe()
+			if !healthy {
+				response := map[string]string{"status": "DOWN"}
+				if strings.TrimSpace(details) != "" {
+					response["details"] = details
+				}
+				writeHealthResponse(w, http.StatusServiceUnavailable, response)
+				return
+			}
+		}
+
+		writeHealthResponse(w, http.StatusOK, map[string]string{"status": "UP"})
+	})
+}
+
+func writeHealthResponse(w http.ResponseWriter, statusCode int, body map[string]string) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(statusCode)
+	if err := json.NewEncoder(w).Encode(body); err != nil {
+		http.Error(w, "Failed to write response", http.StatusInternalServerError)
+	}
 }

@@ -92,6 +92,23 @@ This value limits the maximum accepted request body size for upload endpoints:
 - `PUT /shells/{aasIdentifier}/thumbnail`
 - `PUT /submodels/{submodelIdentifier}/submodel-elements/{idShortPath}/attachment`
 
+For `aasenvironmentservice`, startup preconfiguration can import AAS files automatically:
+
+```yaml
+general:
+        aasPreconfigPaths:
+            - ./examples/BaSyxMinimalExample/aas
+            - ./myDevice.aasx
+```
+
+Or via environment variable:
+
+```env
+GENERAL_AAS_PRECONFIG_PATHS=./examples/BaSyxMinimalExample/aas,./myDevice.aasx
+```
+
+Each configured source can be a file or directory. Directories are scanned recursively for `.aasx`, `.json`, and `.xml` files.
+
 ## 5. Code Style & Conventions
 
 - Use Go modules (`go.mod`) for dependency management
