@@ -377,9 +377,7 @@ CREATE TABLE IF NOT EXISTS descriptor (
 
 CREATE TABLE IF NOT EXISTS aas_identifier (
   id          BIGSERIAL PRIMARY KEY,
-  aasId       VARCHAR(2048) UNIQUE NOT NULL,
-  db_created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  db_updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  aasId       VARCHAR(2048) UNIQUE NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS specific_asset_id (
@@ -764,7 +762,6 @@ CREATE INDEX IF NOT EXISTS ix_operation_variable_operation_id ON operation_varia
 CREATE INDEX IF NOT EXISTS ix_operation_variable_value_sme ON operation_variable(value_sme);
 
 CREATE UNIQUE INDEX IF NOT EXISTS ix_aas_identifier_aasid ON aas_identifier(aasId);
-CREATE INDEX IF NOT EXISTS ix_aas_identifier_db_created_at ON aas_identifier(db_created_at);
 
 CREATE INDEX IF NOT EXISTS ix_specasset_descriptor_id_name ON specific_asset_id(descriptor_id, name);
 CREATE INDEX IF NOT EXISTS ix_specasset_descriptor_id_position ON specific_asset_id(descriptor_id, position);

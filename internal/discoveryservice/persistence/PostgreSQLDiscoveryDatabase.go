@@ -253,9 +253,14 @@ func (p *PostgreSQLDiscoveryDatabase) SearchAASIDsByAssetLinks(
 
 	d := goqu.Dialect("postgres")
 	ai := goqu.T("aas_identifier")
+	ad := goqu.T(common.TblAASDescriptor)
 	sai := goqu.T("specific_asset_id").As("sai")
 
 	ds := d.From(ai).
+		LeftJoin(
+			ad,
+			goqu.On(ad.Col(common.ColAASID).Eq(ai.Col("aasid"))),
+		).
 		Select(ai.Col("aasid")).
 		Where(
 			goqu.Or(
