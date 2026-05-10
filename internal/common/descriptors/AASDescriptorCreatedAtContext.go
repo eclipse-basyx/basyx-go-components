@@ -29,6 +29,7 @@ package descriptors
 import "context"
 
 type includeAASDescriptorCreatedAtKey struct{}
+type allowAASDescriptorCreatedAtOverrideKey struct{}
 
 // WithIncludeAASDescriptorCreatedAt marks a request so persistence includes
 // db_created_at for AAS descriptor read operations.
@@ -38,5 +39,16 @@ func WithIncludeAASDescriptorCreatedAt(ctx context.Context) context.Context {
 
 func includeAASDescriptorCreatedAtFromContext(ctx context.Context) bool {
 	v, _ := ctx.Value(includeAASDescriptorCreatedAtKey{}).(bool)
+	return v
+}
+
+// WithAllowAASDescriptorCreatedAtOverride marks a request so persistence may
+// write a provided createdAt value for AAS descriptor create/replace operations.
+func WithAllowAASDescriptorCreatedAtOverride(ctx context.Context) context.Context {
+	return context.WithValue(ctx, allowAASDescriptorCreatedAtOverrideKey{}, true)
+}
+
+func allowAASDescriptorCreatedAtOverrideFromContext(ctx context.Context) bool {
+	v, _ := ctx.Value(allowAASDescriptorCreatedAtOverrideKey{}).(bool)
 	return v
 }
