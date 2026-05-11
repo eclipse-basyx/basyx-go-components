@@ -377,7 +377,9 @@ CREATE TABLE IF NOT EXISTS descriptor (
 
 CREATE TABLE IF NOT EXISTS aas_identifier (
   id          BIGSERIAL PRIMARY KEY,
-  aasId       VARCHAR(2048) UNIQUE NOT NULL
+  aasId       VARCHAR(2048) UNIQUE NOT NULL,
+  db_created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  db_updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 CREATE TABLE IF NOT EXISTS specific_asset_id (
@@ -418,6 +420,7 @@ CREATE TABLE IF NOT EXISTS aas_descriptor_endpoint (
 
 CREATE TABLE IF NOT EXISTS aas_descriptor (
   descriptor_id BIGINT PRIMARY KEY REFERENCES descriptor(id) ON DELETE CASCADE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   db_created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   asset_kind int,
   asset_type VARCHAR(2048),
@@ -483,6 +486,19 @@ CREATE TABLE IF NOT EXISTS concept_description (
   db_created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   db_updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+-- ------------------------------------------
+-- Schema compatibility upgrades
+-- ------------------------------------------
+
+ALTER TABLE IF EXISTS aas_descriptor
+  ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
+
+ALTER TABLE IF EXISTS aas_identifier
+  ADD COLUMN IF NOT EXISTS db_created_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
+
+ALTER TABLE IF EXISTS aas_identifier
+  ADD COLUMN IF NOT EXISTS db_updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
 
 /*
  Auto-generated file. Do not edit manually.
@@ -784,6 +800,7 @@ CREATE INDEX IF NOT EXISTS ix_aas_endpoint_descriptor_position ON aas_descriptor
 CREATE INDEX IF NOT EXISTS ix_aas_endpoint_position ON aas_descriptor_endpoint(position);
 
 CREATE INDEX IF NOT EXISTS ix_aasd_db_created_at ON aas_descriptor(db_created_at);
+CREATE INDEX IF NOT EXISTS ix_aasd_created_at ON aas_descriptor(created_at);
 CREATE INDEX IF NOT EXISTS ix_aasd_id_short ON aas_descriptor(id_short);
 CREATE INDEX IF NOT EXISTS ix_aasd_global_asset_id ON aas_descriptor(global_asset_id);
 CREATE INDEX IF NOT EXISTS ix_aasd_id_trgm ON aas_descriptor USING GIN (id gin_trgm_ops);

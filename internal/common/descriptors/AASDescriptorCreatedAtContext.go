@@ -32,7 +32,7 @@ type includeAASDescriptorCreatedAtKey struct{}
 type allowAASDescriptorCreatedAtOverrideKey struct{}
 
 // WithIncludeAASDescriptorCreatedAt marks a request so persistence includes
-// db_created_at for AAS descriptor read operations.
+// created_at for AAS descriptor read operations.
 func WithIncludeAASDescriptorCreatedAt(ctx context.Context) context.Context {
 	return context.WithValue(ctx, includeAASDescriptorCreatedAtKey{}, true)
 }
