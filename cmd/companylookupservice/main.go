@@ -9,7 +9,6 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"strconv"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/companylookupservice/api"
@@ -46,8 +45,9 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 	log.Printf("🗄️  Connecting to Postgres with DSN: postgres://%s:****@%s:%d/%s?sslmode=disable",
 		cfg.Postgres.User, cfg.Postgres.Host, cfg.Postgres.Port, cfg.Postgres.DBName)
 
+	dsn := common.BuildPostgresDSN(cfg.Postgres)
 	companyLookupDatabase, err := companylookuppostgresql.NewPostgreSQLCompanyLookupBackend(
-		"postgres://"+cfg.Postgres.User+":"+cfg.Postgres.Password+"@"+cfg.Postgres.Host+":"+strconv.Itoa(cfg.Postgres.Port)+"/"+cfg.Postgres.DBName+"?sslmode=disable",
+		dsn,
 		//nolint:gosec // configured value is bounded by deployment configuration
 		int32(cfg.Postgres.MaxOpenConnections),
 		cfg.Postgres.MaxIdleConnections,

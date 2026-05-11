@@ -253,9 +253,13 @@ func (p *PostgreSQLDiscoveryDatabase) SearchAASIDsByAssetLinks(
 
 	d := goqu.Dialect("postgres")
 	ai := goqu.T("aas_identifier")
-	sai := goqu.T("specific_asset_id").As("sai")
+	ad := goqu.T(common.TblAASDescriptor)
 
 	ds := d.From(ai).
+		LeftJoin(
+			ad,
+			goqu.On(ad.Col(common.ColAASID).Eq(ai.Col("aasid"))),
+		).
 		Select(ai.Col("aasid")).
 		Where(
 			goqu.Or(
@@ -264,13 +268,19 @@ func (p *PostgreSQLDiscoveryDatabase) SearchAASIDsByAssetLinks(
 			),
 		)
 
-	for _, link := range links {
-		sub := d.From(sai).
-			Select(goqu.V(1)).
-			Where(sai.Col("aasref").Eq(ai.Col("id"))).
-			Where(sai.Col("name").Eq(link.Name)).
-			Where(sai.Col("value").Eq(link.Value))
-		ds = ds.Where(goqu.L("EXISTS ?", sub))
+	uniqueLinks := uniqueAssetLinks(links)
+	if len(uniqueLinks) > 0 {
+		sai := goqu.T(common.TblSpecificAssetID).As("sai")
+		for _, link := range uniqueLinks {
+			existsSub := d.From(sai).
+				Select(goqu.V(1)).
+				Where(goqu.And(
+					goqu.I("sai.aasref").Eq(ai.Col(common.ColID)),
+					goqu.I("sai.name").Eq(link.Name),
+					goqu.I("sai.value").Eq(link.Value),
+				))
+			ds = ds.Where(goqu.L("EXISTS ?", existsSub))
+		}
 	}
 
 	ds = ds.
@@ -330,6 +340,20 @@ func (p *PostgreSQLDiscoveryDatabase) SearchAASIDsByAssetLinks(
 	}
 
 	return buf, "", nil
+}
+
+func uniqueAssetLinks(links []model.AssetLink) []model.AssetLink {
+	seen := make(map[string]struct{}, len(links))
+	out := make([]model.AssetLink, 0, len(links))
+	for _, link := range links {
+		key := link.Name + "\x1f" + link.Value
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+		out = append(out, link)
+	}
+	return out
 }
 
 func (p *PostgreSQLDiscoveryDatabase) discoveryCursorExists(ctx context.Context, cursor string) (bool, error) {
