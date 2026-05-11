@@ -10,7 +10,6 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"strconv"
 
 	"github.com/go-chi/chi/v5"
 
@@ -65,7 +64,8 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 		}
 	}
 
-	smDatabase, err := persistencepostgresql.NewSubmodelDatabase("postgres://"+config.Postgres.User+":"+config.Postgres.Password+"@"+config.Postgres.Host+":"+strconv.Itoa(config.Postgres.Port)+"/"+config.Postgres.DBName+"?sslmode=disable", config.Postgres.MaxOpenConnections, config.Postgres.MaxIdleConnections, config.Postgres.ConnMaxLifetimeMinutes, databaseSchema, privateKey, config.Server.StrictVerification)
+	dsn := common.BuildPostgresDSN(config.Postgres)
+	smDatabase, err := persistencepostgresql.NewSubmodelDatabase(dsn, config.Postgres.MaxOpenConnections, config.Postgres.MaxIdleConnections, config.Postgres.ConnMaxLifetimeMinutes, databaseSchema, privateKey, config.Server.StrictVerification)
 	if err != nil {
 		return err
 	}
