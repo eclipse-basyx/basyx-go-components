@@ -85,9 +85,23 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) GetAllAssetAdministrat
 		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "GetAssetAdministrationShells"), err
 	}
 
+	jsonAASList := make([]map[string]any, 0, len(aasList))
+	for _, aas := range aasList {
+		if aas == nil {
+			err = common.NewInternalServerError("AASREPO-GETAASLIST-NILAAS loaded AAS is nil")
+			return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "GetAssetAdministrationShells"), err
+		}
+
+		jsonAAS, jsonErr := jsonization.ToJsonable(aas)
+		if jsonErr != nil {
+			return newAPIErrorResponse(jsonErr, http.StatusInternalServerError, operation, "ToJsonable"), jsonErr
+		}
+		jsonAASList = append(jsonAASList, jsonAAS)
+	}
+
 	return gen.Response(http.StatusOK, gen.GetAssetAdministrationShellsResult{
 		PagingMetadata: gen.PagedResultPagingMetadata{Cursor: common.EncodeString(nextCursor)},
-		Result:         aasList,
+		Result:         jsonAASList,
 	}), nil
 }
 
@@ -163,12 +177,22 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) GetAssetAdministration
 		return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "MalformedAssetAdministrationShellIdentifier"), nil
 	}
 
-	aasMap, err := s.assetAdministrationShellBackend.GetAssetAdministrationShellByID(ctx, decodedIdentifier)
+	aas, err := s.assetAdministrationShellBackend.GetAssetAdministrationShellByID(ctx, decodedIdentifier)
 	if err != nil {
 		if common.IsErrNotFound(err) {
 			return newAPIErrorResponse(err, http.StatusNotFound, operation, "AssetAdministrationShellNotFound"), nil
 		}
 		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "GetAssetAdministrationShellByID"), err
+	}
+
+	if aas == nil {
+		err = common.NewInternalServerError("AASREPO-GETAASBYID-NILAAS loaded AAS is nil")
+		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "GetAssetAdministrationShellByID"), err
+	}
+
+	aasMap, jsonErr := jsonization.ToJsonable(aas)
+	if jsonErr != nil {
+		return newAPIErrorResponse(jsonErr, http.StatusInternalServerError, operation, "ToJsonable"), jsonErr
 	}
 
 	return gen.Response(http.StatusOK, aasMap), nil
