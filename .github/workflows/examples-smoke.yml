@@ -35,6 +35,7 @@ jobs:
               examples/BaSyxMinimalExample/docker-compose.yml
               examples/BaSyxSecuredExample/docker-compose.yml
             image_builds: |
+              eclipsebasyx/aasenvironment-go:SNAPSHOT|./cmd/aasenvironmentservice/Dockerfile
               eclipsebasyx/aasregistry-go:SNAPSHOT|./cmd/aasregistryservice/Dockerfile
               eclipsebasyx/submodelregistry-go:SNAPSHOT|./cmd/submodelregistryservice/Dockerfile
               eclipsebasyx/aasdiscovery-go:SNAPSHOT|./cmd/discoveryservice/Dockerfile
