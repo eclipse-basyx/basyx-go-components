@@ -70,6 +70,7 @@ func TestNormalizePostgresDSN(t *testing.T) {
 		},
 		{
 			name: "keeps already encoded credentials",
+			//nolint:gosec // Test fixture uses placeholder credentials in DSN format.
 			in:   "postgres://user:p%40ss@localhost:5432/mydb?sslmode=disable",
 			want: "postgres://user:p%40ss@localhost:5432/mydb?sslmode=disable",
 		},
