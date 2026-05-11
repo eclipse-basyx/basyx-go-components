@@ -683,6 +683,31 @@ CREATE TABLE IF NOT EXISTS submodel_descriptor_supplemental_semantic_id_referenc
 );
 
 -- ------------------------------------------
+-- AASX File Server
+-- ------------------------------------------
+
+CREATE TABLE IF NOT EXISTS aasx_package (
+  id BIGSERIAL PRIMARY KEY,
+  package_id TEXT NOT NULL UNIQUE,
+  file_oid OID NOT NULL,
+  file_name TEXT NOT NULL,
+  content_type TEXT NOT NULL DEFAULT 'application/asset-administration-shell-package',
+  db_created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  db_updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS aasx_package_aas_id (
+  id BIGSERIAL PRIMARY KEY,
+  package_db_id BIGINT NOT NULL REFERENCES aasx_package(id) ON DELETE CASCADE,
+  aas_id TEXT NOT NULL,
+  position INTEGER NOT NULL,
+  UNIQUE(package_db_id, position),
+  UNIQUE(package_db_id, aas_id),
+  db_created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  db_updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- ------------------------------------------
 -- Timestamp triggers
 -- ------------------------------------------
 
@@ -861,3 +886,8 @@ CREATE INDEX IF NOT EXISTS ix_specasset_supp_semantic_refkey_refid ON specific_a
 CREATE INDEX IF NOT EXISTS ix_specasset_supp_semantic_refkey_refval ON specific_asset_id_supplemental_semantic_id_reference_key(reference_id, value);
 CREATE INDEX IF NOT EXISTS ix_specasset_supp_semantic_refkey_type_val ON specific_asset_id_supplemental_semantic_id_reference_key(type, value);
 CREATE INDEX IF NOT EXISTS ix_specasset_supp_semantic_refkey_val_trgm ON specific_asset_id_supplemental_semantic_id_reference_key USING GIN (value gin_trgm_ops);
+
+CREATE INDEX IF NOT EXISTS ix_aasx_package_package_id ON aasx_package(package_id);
+CREATE INDEX IF NOT EXISTS ix_aasx_package_db_created_at ON aasx_package(db_created_at);
+CREATE INDEX IF NOT EXISTS ix_aasx_package_aas_id_aas ON aasx_package_aas_id(aas_id);
+CREATE INDEX IF NOT EXISTS ix_aasx_package_aas_id_package ON aasx_package_aas_id(package_db_id);

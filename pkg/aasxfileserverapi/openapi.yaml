@@ -1,0 +1,536 @@
+openapi: 3.0.3
+info:
+  description: The File Server Service Specification as part of the AAS Part 2 specification.
+  title: DotAAS Part 2 | HTTP/REST | AASX File Server Service Specification
+  version: V3.2.0_SSP-001
+servers:
+- url: https://admin-shell.io/api/v3
+- url: https://example.com/
+paths:
+  /packages:
+    get:
+      operationId: GetAllAASXPackageIds
+      parameters:
+      - description: The Asset Administration Shell unique id (UTF8-BASE64-URL-encoded)
+        explode: true
+        in: query
+        name: aasId
+        required: false
+        schema:
+          type: string
+        style: form
+      - explode: true
+        in: query
+        name: limit
+        required: false
+        schema:
+          default: 100
+          format: int32
+          maximum: 500
+          minimum: 1
+          type: integer
+        style: form
+      - explode: true
+        in: query
+        name: cursor
+        required: false
+        schema:
+          type: string
+        style: form
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GetPackageDescriptionsResult'
+          description: Requested package list
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Result'
+          description: Bad request
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Result'
+          description: Unauthorized
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Result'
+          description: Forbidden
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Result'
+          description: Internal server error
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Result'
+          description: Default error handling
+      summary: Returns a list of available AASX packages at the server
+      tags:
+      - AASX File Server API
+    post:
+      operationId: PostAASXPackage
+      requestBody:
+        content:
+          multipart/form-data:
+            encoding:
+              file:
+                contentType: application/asset-administration-shell-package
+                style: form
+            schema:
+              $ref: '#/components/schemas/PostAASXPackage_request'
+        description: AASX package
+        required: true
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PackageDescription'
+          description: AASX package stored successfully
+          headers:
+            Location:
+              description: URL of the newly created resource
+              explode: false
+              schema:
+                type: string
+              style: simple
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Result'
+          description: Bad request
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Result'
+          description: Unauthorized
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Result'
+          description: Forbidden
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Result'
+          description: Conflict
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Result'
+          description: Internal server error
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Result'
+          description: Default error handling
+      summary: Stores the AASX package at the server
+      tags:
+      - AASX File Server API
+  /packages/{packageId}:
+    delete:
+      operationId: DeleteAASXByPackageId
+      parameters:
+      - description: The package Id (UTF8-BASE64-URL-encoded)
+        explode: false
+        in: path
+        name: packageId
+        required: true
+        schema:
+          type: string
+        style: simple
+      responses:
+        "204":
+          description: Deleted successfully
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Result'
+          description: Bad request
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Result'
+          description: Unauthorized
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Result'
+          description: Forbidden
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Result'
+          description: Not Found
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Result'
+          description: Internal server error
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Result'
+          description: Default error handling
+      summary: Deletes a specific AASX package from the server
+      tags:
+      - AASX File Server API
+    get:
+      operationId: GetAASXByPackageId
+      parameters:
+      - description: The package Id (UTF8-BASE64-URL-encoded)
+        explode: false
+        in: path
+        name: packageId
+        required: true
+        schema:
+          type: string
+        style: simple
+      responses:
+        "200":
+          content:
+            application/asset-administration-shell-package:
+              schema:
+                format: binary
+                type: string
+          description: Requested AASX package
+          headers:
+            X-FileName:
+              description: Filename of the package
+              explode: false
+              schema:
+                type: string
+              style: simple
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Result'
+          description: Bad request
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Result'
+          description: Unauthorized
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Result'
+          description: Forbidden
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Result'
+          description: Not Found
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Result'
+          description: Internal server error
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Result'
+          description: Default error handling
+      summary: Returns a specific AASX package from the server
+      tags:
+      - AASX File Server API
+    put:
+      operationId: PutAASXByPackageId
+      parameters:
+      - description: The package Id (UTF8-BASE64-URL-encoded)
+        explode: false
+        in: path
+        name: packageId
+        required: true
+        schema:
+          type: string
+        style: simple
+      requestBody:
+        content:
+          multipart/form-data:
+            encoding:
+              file:
+                contentType: application/asset-administration-shell-package
+                style: form
+            schema:
+              $ref: '#/components/schemas/PostAASXPackage_request'
+        description: AASX package
+        required: true
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PackageDescription'
+          description: AASX package stored successfully
+          headers:
+            Location:
+              description: URL of the newly created resource
+              explode: false
+              schema:
+                type: string
+              style: simple
+        "204":
+          description: AASX package updated successfully
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Result'
+          description: Bad request
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Result'
+          description: Unauthorized
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Result'
+          description: Forbidden
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Result'
+          description: Internal server error
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Result'
+          description: Default error handling
+      summary: Creates or updates the AASX package at the server
+      tags:
+      - AASX File Server API
+  /description:
+    get:
+      operationId: GetSelfDescription
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceDescription'
+          description: Requested Description
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Result'
+          description: Bad request
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Result'
+          description: Forbidden
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Result'
+          description: Not Found
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Result'
+          description: Internal server error
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Result'
+          description: Default error handling
+      summary: Returns the self-describing information of a network resource
+      tags:
+      - Description API
+components:
+  parameters:
+    Limit:
+      explode: true
+      in: query
+      name: limit
+      required: false
+      schema:
+        default: 100
+        format: int32
+        maximum: 500
+        minimum: 1
+        type: integer
+      style: form
+    Cursor:
+      explode: true
+      in: query
+      name: cursor
+      required: false
+      schema:
+        type: string
+      style: form
+  responses:
+    bad-request:
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Result'
+      description: Bad request
+    unauthorized:
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Result'
+      description: Unauthorized
+    forbidden:
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Result'
+      description: Forbidden
+    conflict:
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Result'
+      description: Conflict
+    not-found:
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Result'
+      description: Not Found
+    internal-server-error:
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Result'
+      description: Internal server error
+    default:
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Result'
+      description: Default error handling
+  schemas:
+    Result:
+      additionalProperties: true
+      example:
+        messages:
+        - key: ""
+        - key: ""
+      properties:
+        messages:
+          items:
+            additionalProperties: true
+            type: object
+          type: array
+      type: object
+    PagedResultPagingMetadata:
+      example:
+        cursor: cursor
+      properties:
+        cursor:
+          type: string
+      type: object
+    PackageDescription:
+      example:
+        fileName: fileName
+        aasIds:
+        - aasIds
+        - aasIds
+        packageId: packageId
+        contentType: contentType
+      properties:
+        packageId:
+          type: string
+        aasIds:
+          items:
+            type: string
+          type: array
+        fileName:
+          type: string
+        contentType:
+          type: string
+      required:
+      - packageId
+      type: object
+    GetPackageDescriptionsResult:
+      example:
+        result:
+        - fileName: fileName
+          aasIds:
+          - aasIds
+          - aasIds
+          packageId: packageId
+          contentType: contentType
+        - fileName: fileName
+          aasIds:
+          - aasIds
+          - aasIds
+          packageId: packageId
+          contentType: contentType
+        pagingMetadata:
+          cursor: cursor
+      properties:
+        pagingMetadata:
+          $ref: '#/components/schemas/PagedResultPagingMetadata'
+        result:
+          items:
+            $ref: '#/components/schemas/PackageDescription'
+          type: array
+      type: object
+    ServiceDescription:
+      example:
+        profiles:
+        - profiles
+        - profiles
+      properties:
+        profiles:
+          items:
+            type: string
+          type: array
+      type: object
+    PostAASXPackage_request:
+      properties:
+        aasIds:
+          items:
+            type: string
+          type: array
+        file:
+          format: binary
+          type: string
+        fileName:
+          type: string
+      required:
+      - file
+      type: object

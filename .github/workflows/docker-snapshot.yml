@@ -59,6 +59,8 @@ jobs:
             image: eclipsebasyx/conceptdescriptionrepository-go
           - name: aasrepositoryservice
             image: eclipsebasyx/aasrepository-go
+          - name: aasxfileserverservice
+            image: eclipsebasyx/aasxfileserver-go
     
     steps:
       - name: Checkout code
