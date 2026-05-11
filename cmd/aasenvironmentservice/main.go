@@ -232,6 +232,7 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 	preconfigurationCtx := common.ContextWithConfig(ctx, cfg)
 	preconfigurationSummary := aasenvironment.RunAASPreconfiguration(preconfigurationCtx, uploadService, cfg.General.AASPreconfigPaths)
 	preconfigurationCompleted.Store(true)
+	//nolint:gosec // summary fields are internal integer counters and cannot carry log-control characters.
 	log.Printf(
 		"AASENV-SRV-PRECONFIGDONE configured=%d resolved=%d imported=%d failed=%d skipped=%d",
 		preconfigurationSummary.ConfiguredSourceCount,
