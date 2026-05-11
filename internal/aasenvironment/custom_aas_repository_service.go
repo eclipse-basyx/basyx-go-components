@@ -43,7 +43,7 @@ func (s *CustomAASRepositoryService) ExecuteInTransaction(fn func(tx *sql.Tx) er
 // PostAssetAdministrationShell creates a new AAS and synchronizes descriptor writes in the same transaction.
 func (s *CustomAASRepositoryService) PostAssetAdministrationShell(ctx context.Context, aas types.IAssetAdministrationShell) (commonmodel.ImplResponse, error) {
 	const operation = "PostAssetAdministrationShell"
-	if !s.syncConfig.AASRegistrySyncEnabled {
+	if !s.syncConfig.AASRegistryIntegration {
 		return s.AssetAdministrationShellRepositoryAPIAPIService.PostAssetAdministrationShell(ctx, aas)
 	}
 
@@ -82,7 +82,7 @@ func (s *CustomAASRepositoryService) PostAssetAdministrationShell(ctx context.Co
 // PutAssetAdministrationShellById upserts an AAS and synchronizes descriptor writes in the same transaction.
 func (s *CustomAASRepositoryService) PutAssetAdministrationShellById(ctx context.Context, aasIdentifier string, assetAdministrationShell types.IAssetAdministrationShell) (commonmodel.ImplResponse, error) {
 	const operation = "PutAssetAdministrationShellById"
-	if !s.syncConfig.AASRegistrySyncEnabled {
+	if !s.syncConfig.AASRegistryIntegration {
 		return s.AssetAdministrationShellRepositoryAPIAPIService.PutAssetAdministrationShellById(ctx, aasIdentifier, assetAdministrationShell)
 	}
 
@@ -132,7 +132,7 @@ func (s *CustomAASRepositoryService) PutAssetAdministrationShellById(ctx context
 // DeleteAssetAdministrationShellById deletes an AAS and synchronizes descriptor deletion in the same transaction.
 func (s *CustomAASRepositoryService) DeleteAssetAdministrationShellById(ctx context.Context, aasIdentifier string) (commonmodel.ImplResponse, error) {
 	const operation = "DeleteAssetAdministrationShellById"
-	if !s.syncConfig.AASRegistrySyncEnabled {
+	if !s.syncConfig.AASRegistryIntegration {
 		return s.AssetAdministrationShellRepositoryAPIAPIService.DeleteAssetAdministrationShellById(ctx, aasIdentifier)
 	}
 

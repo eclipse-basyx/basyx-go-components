@@ -14,31 +14,31 @@ const externalURLKey = "EXTERNALURL"
 
 // RegistrySyncConfig controls repository-to-registry synchronization behavior and endpoint generation.
 type RegistrySyncConfig struct {
-	AASRegistrySyncEnabled      bool
-	SubmodelRegistrySyncEnabled bool
+	AASRegistryIntegration      bool
+	SubmodelRegistryIntegration bool
 	ExternalBaseURLs            []string
 }
 
 // NewRegistrySyncConfig validates sync-related settings and normalizes configured external base URLs.
 func NewRegistrySyncConfig(
-	aasRegistrySyncEnabled bool,
-	submodelRegistrySyncEnabled bool,
+	aasRegistryIntegration bool,
+	submodelRegistryIntegration bool,
 	rawExternalURL string,
 ) (RegistrySyncConfig, error) {
 	config := RegistrySyncConfig{
-		AASRegistrySyncEnabled:      aasRegistrySyncEnabled,
-		SubmodelRegistrySyncEnabled: submodelRegistrySyncEnabled,
+		AASRegistryIntegration:      aasRegistryIntegration,
+		SubmodelRegistryIntegration: submodelRegistryIntegration,
 	}
 
 	parsedExternalURLs, err := parseExternalBaseURLs(rawExternalURL)
 	if err != nil {
-		if aasRegistrySyncEnabled || submodelRegistrySyncEnabled {
+		if aasRegistryIntegration || submodelRegistryIntegration {
 			return RegistrySyncConfig{}, err
 		}
 	}
 	config.ExternalBaseURLs = parsedExternalURLs
 
-	if (aasRegistrySyncEnabled || submodelRegistrySyncEnabled) && len(config.ExternalBaseURLs) == 0 {
+	if (aasRegistryIntegration || submodelRegistryIntegration) && len(config.ExternalBaseURLs) == 0 {
 		return RegistrySyncConfig{}, common.NewErrBadRequest(
 			"AASENV-REGSYNCCFG-MISSINGEXTERNALURL " + externalURLKey + " must be set when registry synchronization is enabled",
 		)

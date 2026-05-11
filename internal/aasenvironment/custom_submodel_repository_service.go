@@ -44,7 +44,7 @@ func (s *CustomSubmodelRepositoryService) ExecuteInTransaction(fn func(tx *sql.T
 // PostSubmodel creates a new submodel and synchronizes descriptor writes in the same transaction.
 func (s *CustomSubmodelRepositoryService) PostSubmodel(ctx context.Context, submodel types.ISubmodel) (commonmodel.ImplResponse, error) {
 	const operation = "PostSubmodel"
-	if !s.syncConfig.SubmodelRegistrySyncEnabled {
+	if !s.syncConfig.SubmodelRegistryIntegration {
 		return s.SubmodelRepositoryAPIAPIService.PostSubmodel(ctx, submodel)
 	}
 
@@ -82,7 +82,7 @@ func (s *CustomSubmodelRepositoryService) PostSubmodel(ctx context.Context, subm
 // PutSubmodelByID upserts a submodel and synchronizes descriptor writes in the same transaction.
 func (s *CustomSubmodelRepositoryService) PutSubmodelByID(ctx context.Context, submodelIdentifier string, submodel types.ISubmodel) (commonmodel.ImplResponse, error) {
 	const operation = "PutSubmodelByID"
-	if !s.syncConfig.SubmodelRegistrySyncEnabled {
+	if !s.syncConfig.SubmodelRegistryIntegration {
 		return s.SubmodelRepositoryAPIAPIService.PutSubmodelByID(ctx, submodelIdentifier, submodel)
 	}
 
@@ -138,7 +138,7 @@ func (s *CustomSubmodelRepositoryService) PutSubmodelByID(ctx context.Context, s
 // DeleteSubmodelByID deletes a submodel and synchronizes descriptor deletion in the same transaction.
 func (s *CustomSubmodelRepositoryService) DeleteSubmodelByID(ctx context.Context, id string) (commonmodel.ImplResponse, error) {
 	const operation = "DeleteSubmodelByID"
-	if !s.syncConfig.SubmodelRegistrySyncEnabled {
+	if !s.syncConfig.SubmodelRegistryIntegration {
 		return s.SubmodelRepositoryAPIAPIService.DeleteSubmodelByID(ctx, id)
 	}
 
@@ -173,7 +173,7 @@ func (s *CustomSubmodelRepositoryService) DeleteSubmodelByID(ctx context.Context
 func (s *CustomSubmodelRepositoryService) PatchSubmodelByID(ctx context.Context, submodelIdentifier string, submodel types.ISubmodel, level string) (commonmodel.ImplResponse, error) {
 	_ = level
 	const operation = "PatchSubmodelByID"
-	if !s.syncConfig.SubmodelRegistrySyncEnabled {
+	if !s.syncConfig.SubmodelRegistryIntegration {
 		return s.SubmodelRepositoryAPIAPIService.PatchSubmodelByID(ctx, submodelIdentifier, submodel, level)
 	}
 
