@@ -27,3 +27,4 @@ general:
   discoveryIntegration: false
   supportsSingularSupplementalSemanticId: false
   uploadMaxSizeBytes: 134217728
+  aasPreconfigPaths: []

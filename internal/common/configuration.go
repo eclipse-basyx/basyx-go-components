@@ -68,6 +68,7 @@ var DefaultConfig = struct {
 	GeneralDiscoveryIntegration bool
 	GeneralSupportsSingularSSID bool
 	GeneralEnableCustomHeaderMW bool
+	GeneralAASPreconfigPaths    []string
 }{
 	ServerPort:                  5004,
 	ServerContextPath:           "",
@@ -91,6 +92,7 @@ var DefaultConfig = struct {
 	GeneralDiscoveryIntegration: false,
 	GeneralSupportsSingularSSID: false,
 	GeneralEnableCustomHeaderMW: false,
+	GeneralAASPreconfigPaths:    []string{},
 }
 
 // PrintSplash displays the BaSyx Go API ASCII art logo to the console.
@@ -198,12 +200,13 @@ type CorsConfig struct {
 
 // GeneralConfig contains non-domain-specific configuration.
 type GeneralConfig struct {
-	EnableImplicitCasts                    bool  `mapstructure:"enableImplicitCasts" yaml:"enableImplicitCasts" json:"enableImplicitCasts"`                                                          // Enable implicit casts during backend simplification
-	EnableDescriptorDebug                  bool  `mapstructure:"enableDescriptorDebug" yaml:"enableDescriptorDebug" json:"enableDescriptorDebug"`                                                    // Enable descriptor query debug output
-	DiscoveryIntegration                   bool  `mapstructure:"discoveryIntegration" yaml:"discoveryIntegration" json:"discoveryIntegration"`                                                       // Enable integration with discovery aas_identifier linking
-	EnableCustomMiddlewareHeaderInjection  bool  `mapstructure:"enableCustomMiddlewareHeaderInjection" yaml:"enableCustomMiddlewareHeaderInjection" json:"enableCustomMiddlewareHeaderInjection"`    // Enable custom security middleware header injections
-	SupportsSingularSupplementalSemanticId bool  `mapstructure:"supportsSingularSupplementalSemanticId" yaml:"supportsSingularSupplementalSemanticId" json:"supportsSingularSupplementalSemanticId"` // Use singular supplementalSemanticId for SubmodelDescriptor I/O
-	UploadMaxSizeBytes                     int64 `mapstructure:"uploadMaxSizeBytes" yaml:"uploadMaxSizeBytes" json:"uploadMaxSizeBytes"`                                                             // Maximum allowed upload payload size in bytes
+	EnableImplicitCasts                    bool     `mapstructure:"enableImplicitCasts" yaml:"enableImplicitCasts" json:"enableImplicitCasts"`                                                          // Enable implicit casts during backend simplification
+	EnableDescriptorDebug                  bool     `mapstructure:"enableDescriptorDebug" yaml:"enableDescriptorDebug" json:"enableDescriptorDebug"`                                                    // Enable descriptor query debug output
+	DiscoveryIntegration                   bool     `mapstructure:"discoveryIntegration" yaml:"discoveryIntegration" json:"discoveryIntegration"`                                                       // Enable integration with discovery aas_identifier linking
+	EnableCustomMiddlewareHeaderInjection  bool     `mapstructure:"enableCustomMiddlewareHeaderInjection" yaml:"enableCustomMiddlewareHeaderInjection" json:"enableCustomMiddlewareHeaderInjection"`    // Enable custom security middleware header injections
+	SupportsSingularSupplementalSemanticId bool     `mapstructure:"supportsSingularSupplementalSemanticId" yaml:"supportsSingularSupplementalSemanticId" json:"supportsSingularSupplementalSemanticId"` // Use singular supplementalSemanticId for SubmodelDescriptor I/O
+	UploadMaxSizeBytes                     int64    `mapstructure:"uploadMaxSizeBytes" yaml:"uploadMaxSizeBytes" json:"uploadMaxSizeBytes"`                                                             // Maximum allowed upload payload size in bytes
+	AASPreconfigPaths                      []string `mapstructure:"aasPreconfigPaths" yaml:"aasPreconfigPaths" json:"aasPreconfigPaths"`                                                                // Files/directories loaded at startup for AAS preconfiguration
 }
 
 // OIDCProviderConfig contains OpenID Connect authentication provider settings.
@@ -273,9 +276,50 @@ func LoadConfig(configPath string) (*Config, error) {
 		return nil, fmt.Errorf("unmarshal config: %w", err)
 	}
 
+	applyAASPreconfigPathOverrides(cfg)
+
 	log.Println("✅ Configuration loaded successfully")
 	PrintConfiguration(cfg)
 	return cfg, nil
+}
+
+func applyAASPreconfigPathOverrides(cfg *Config) {
+	if cfg == nil {
+		return
+	}
+
+	if envRawPaths, exists := os.LookupEnv("GENERAL_AAS_PRECONFIG_PATHS"); exists {
+		cfg.General.AASPreconfigPaths = parseAASPreconfigPathList(envRawPaths)
+		return
+	}
+
+	cfg.General.AASPreconfigPaths = normalizeAASPreconfigPaths(cfg.General.AASPreconfigPaths)
+}
+
+func parseAASPreconfigPathList(rawPaths string) []string {
+	if strings.TrimSpace(rawPaths) == "" {
+		return []string{}
+	}
+
+	parts := strings.Split(rawPaths, ",")
+	return normalizeAASPreconfigPaths(parts)
+}
+
+func normalizeAASPreconfigPaths(rawPaths []string) []string {
+	if len(rawPaths) == 0 {
+		return []string{}
+	}
+
+	normalized := make([]string, 0, len(rawPaths))
+	for _, rawPath := range rawPaths {
+		path := strings.TrimSpace(rawPath)
+		if path == "" {
+			continue
+		}
+		normalized = append(normalized, path)
+	}
+
+	return normalized
 }
 
 // setDefaults configures sensible default values for all configuration options.
@@ -338,6 +382,7 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("general.enableCustomMiddlewareHeaderInjection", false)
 	v.SetDefault("general.supportsSingularSupplementalSemanticId", false)
 	v.SetDefault("general.uploadMaxSizeBytes", int64(128<<20))
+	v.SetDefault("general.aasPreconfigPaths", []string{})
 
 }
 
