@@ -96,7 +96,7 @@ var DefaultConfig = struct {
 	GeneralEnableCustomHeaderMW:        false,
 	GeneralAASRegistryIntegration:      false,
 	GeneralSubmodelRegistryIntegration: false,
-	GeneralAASPreconfigPaths:    []string{},
+	GeneralAASPreconfigPaths:           []string{},
 }
 
 // PrintSplash displays the BaSyx Go API ASCII art logo to the console.
@@ -204,14 +204,14 @@ type CorsConfig struct {
 
 // GeneralConfig contains non-domain-specific configuration.
 type GeneralConfig struct {
-	EnableImplicitCasts                    bool  `mapstructure:"enableImplicitCasts" yaml:"enableImplicitCasts" json:"enableImplicitCasts"`                                                          // Enable implicit casts during backend simplification
-	EnableDescriptorDebug                  bool  `mapstructure:"enableDescriptorDebug" yaml:"enableDescriptorDebug" json:"enableDescriptorDebug"`                                                    // Enable descriptor query debug output
-	DiscoveryIntegration                   bool  `mapstructure:"discoveryIntegration" yaml:"discoveryIntegration" json:"discoveryIntegration"`                                                       // Enable integration with discovery aas_identifier linking
-	EnableCustomMiddlewareHeaderInjection  bool  `mapstructure:"enableCustomMiddlewareHeaderInjection" yaml:"enableCustomMiddlewareHeaderInjection" json:"enableCustomMiddlewareHeaderInjection"`    // Enable custom security middleware header injections
-	SupportsSingularSupplementalSemanticId bool  `mapstructure:"supportsSingularSupplementalSemanticId" yaml:"supportsSingularSupplementalSemanticId" json:"supportsSingularSupplementalSemanticId"` // Use singular supplementalSemanticId for SubmodelDescriptor I/O
-	AASRegistryIntegration                 bool  `mapstructure:"aasRegistryIntegration" yaml:"aasRegistryIntegration" json:"aasRegistryIntegration"`                                                 // Enable AAS repository -> registry descriptor synchronization
-	SubmodelRegistryIntegration            bool  `mapstructure:"submodelRegistryIntegration" yaml:"submodelRegistryIntegration" json:"submodelRegistryIntegration"`                                  // Enable Submodel repository -> registry descriptor synchronization
-	UploadMaxSizeBytes                     int64 `mapstructure:"uploadMaxSizeBytes" yaml:"uploadMaxSizeBytes" json:"uploadMaxSizeBytes"`                                                             // Maximum allowed upload payload size in bytes
+	EnableImplicitCasts                    bool     `mapstructure:"enableImplicitCasts" yaml:"enableImplicitCasts" json:"enableImplicitCasts"`                                                          // Enable implicit casts during backend simplification
+	EnableDescriptorDebug                  bool     `mapstructure:"enableDescriptorDebug" yaml:"enableDescriptorDebug" json:"enableDescriptorDebug"`                                                    // Enable descriptor query debug output
+	DiscoveryIntegration                   bool     `mapstructure:"discoveryIntegration" yaml:"discoveryIntegration" json:"discoveryIntegration"`                                                       // Enable integration with discovery aas_identifier linking
+	EnableCustomMiddlewareHeaderInjection  bool     `mapstructure:"enableCustomMiddlewareHeaderInjection" yaml:"enableCustomMiddlewareHeaderInjection" json:"enableCustomMiddlewareHeaderInjection"`    // Enable custom security middleware header injections
+	SupportsSingularSupplementalSemanticId bool     `mapstructure:"supportsSingularSupplementalSemanticId" yaml:"supportsSingularSupplementalSemanticId" json:"supportsSingularSupplementalSemanticId"` // Use singular supplementalSemanticId for SubmodelDescriptor I/O
+	AASRegistryIntegration                 bool     `mapstructure:"aasRegistryIntegration" yaml:"aasRegistryIntegration" json:"aasRegistryIntegration"`                                                 // Enable AAS repository -> registry descriptor synchronization
+	SubmodelRegistryIntegration            bool     `mapstructure:"submodelRegistryIntegration" yaml:"submodelRegistryIntegration" json:"submodelRegistryIntegration"`                                  // Enable Submodel repository -> registry descriptor synchronization
+	UploadMaxSizeBytes                     int64    `mapstructure:"uploadMaxSizeBytes" yaml:"uploadMaxSizeBytes" json:"uploadMaxSizeBytes"`                                                             // Maximum allowed upload payload size in bytes
 	AASPreconfigPaths                      []string `mapstructure:"aasPreconfigPaths" yaml:"aasPreconfigPaths" json:"aasPreconfigPaths"`                                                                // Files/directories loaded at startup for AAS preconfiguration
 }
 
