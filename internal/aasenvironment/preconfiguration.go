@@ -56,7 +56,17 @@ type PreconfigurationSummary struct {
 	SkippedFileCount      int
 }
 
-// RunAASPreconfiguration imports configured files/folders into the AAS environment.
+// RunAASPreconfiguration resolves configured files and folders and imports
+// them into the AAS environment.
+//
+// Parameters:
+//   - ctx: Optional context used for cancellation.
+//   - uploadService: Service used to upload/import resolved files.
+//   - configuredSources: List of file or directory paths to import.
+//
+// Returns:
+//   - PreconfigurationSummary containing import statistics such as resolved,
+//     imported, skipped, and failed files.
 func RunAASPreconfiguration(ctx context.Context, uploadService UploadService, configuredSources []string) PreconfigurationSummary {
 	summary := PreconfigurationSummary{
 		ConfiguredSourceCount: len(configuredSources),
