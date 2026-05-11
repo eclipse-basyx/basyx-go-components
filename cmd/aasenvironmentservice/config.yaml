@@ -29,3 +29,4 @@ general:
   aasRegistryIntegration: false
   submodelRegistryIntegration: false
   uploadMaxSizeBytes: 134217728
+  aasPreconfigPaths: []

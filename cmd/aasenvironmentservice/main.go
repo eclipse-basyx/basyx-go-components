@@ -10,6 +10,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"sync/atomic"
 	"time"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/aasenvironment"
@@ -66,7 +67,14 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 	r := chi.NewRouter()
 	r.Use(common.ConfigMiddleware(cfg))
 	common.AddCors(r, cfg)
-	common.AddHealthEndpoint(r, cfg)
+
+	preconfigurationCompleted := atomic.Bool{}
+	common.AddHealthEndpointWithProbe(r, cfg, func() (bool, string) {
+		if preconfigurationCompleted.Load() {
+			return true, ""
+		}
+		return false, "AAS preconfiguration in progress"
+	})
 
 	if err = common.AddSwaggerUIFromFS(r, openapiSpec, "openapi.yaml", "AAS Environment Service API", "/swagger", "/api-docs/openapi.yaml", cfg); err != nil {
 		log.Printf("Warning: failed to load OpenAPI spec for Swagger UI: %v", err)
@@ -220,6 +228,18 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 			log.Printf("Server error: %v", serveErr)
 		}
 	}()
+
+	preconfigurationCtx := common.ContextWithConfig(ctx, cfg)
+	preconfigurationSummary := aasenvironment.RunAASPreconfiguration(preconfigurationCtx, uploadService, cfg.General.AASPreconfigPaths)
+	preconfigurationCompleted.Store(true)
+	log.Printf(
+		"AASENV-SRV-PRECONFIGDONE configured=%d resolved=%d imported=%d failed=%d skipped=%d",
+		preconfigurationSummary.ConfiguredSourceCount,
+		preconfigurationSummary.ResolvedFileCount,
+		preconfigurationSummary.ImportedFileCount,
+		preconfigurationSummary.FailedFileCount,
+		preconfigurationSummary.SkippedFileCount,
+	)
 
 	<-ctx.Done()
 	log.Println("Shutting down server...")

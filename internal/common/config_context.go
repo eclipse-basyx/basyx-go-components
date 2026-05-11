@@ -26,3 +26,11 @@ func ConfigFromContext(ctx context.Context) (*Config, bool) {
 	cfg, ok := ctx.Value(configKey{}).(*Config)
 	return cfg, ok
 }
+
+// ContextWithConfig returns a context containing the process-wide *Config.
+func ContextWithConfig(ctx context.Context, cfg *Config) context.Context {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	return context.WithValue(ctx, configKey{}, cfg)
+}

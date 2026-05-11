@@ -1,4 +1,5 @@
 [![Go Report Card](https://goreportcard.com/badge/github.com/eclipse-basyx/basyx-go-components)](https://goreportcard.com/report/github.com/eclipse-basyx/basyx-go-components)
+![Docker Pulls](https://img.shields.io/endpoint?url=https%3A%2F%2Fdocker-stats.basyx.org%2Fgo.json)
 
 <div align="center">
   <img src="docu/assets/Logo_Go_light.svg" alt="BaSyx Go Logo" width="400"/>
@@ -90,6 +91,23 @@ This value limits the maximum accepted request body size for upload endpoints:
 - `POST /upload`
 - `PUT /shells/{aasIdentifier}/thumbnail`
 - `PUT /submodels/{submodelIdentifier}/submodel-elements/{idShortPath}/attachment`
+
+For `aasenvironmentservice`, startup preconfiguration can import AAS files automatically:
+
+```yaml
+general:
+    aasPreconfigPaths:
+        - ./examples/BaSyxMinimalExample/aas
+        - ./myDevice.aasx
+```
+
+Or via environment variable:
+
+```env
+GENERAL_AAS_PRECONFIG_PATHS=./examples/BaSyxMinimalExample/aas,./myDevice.aasx
+```
+
+Each configured source can be a file or directory. Directories are scanned recursively for `.aasx`, `.json`, and `.xml` files.
 
 ## 5. Code Style & Conventions
 

@@ -27,10 +27,16 @@
 package common
 
 import (
+	"encoding/json"
+	"log"
 	"net/http"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 )
+
+// HealthProbe reports if the service is healthy and optionally returns detail text.
+type HealthProbe func() (bool, string)
 
 // AddHealthEndpoint registers a health check endpoint on the provided router.
 //
@@ -61,11 +67,39 @@ import (
 //	  "status": "UP"
 //	}
 func AddHealthEndpoint(r *chi.Mux, config *Config) {
+	AddHealthEndpointWithProbe(r, config, nil)
+}
+
+// AddHealthEndpointWithProbe registers a health endpoint with optional readiness probing.
+func AddHealthEndpointWithProbe(r *chi.Mux, config *Config, probe HealthProbe) {
 	r.Get(config.Server.ContextPath+"/health", func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		_, err := w.Write([]byte("{\"status\":\"UP\"}"))
-		if err != nil {
-			http.Error(w, "Failed to write response", http.StatusInternalServerError)
+		if probe != nil {
+			healthy, details := probe()
+			if !healthy {
+				response := map[string]string{"status": "DOWN"}
+				if strings.TrimSpace(details) != "" {
+					response["details"] = details
+				}
+				writeHealthResponse(w, http.StatusServiceUnavailable, response)
+				return
+			}
 		}
+
+		writeHealthResponse(w, http.StatusOK, map[string]string{"status": "UP"})
 	})
+}
+
+func writeHealthResponse(w http.ResponseWriter, statusCode int, body map[string]string) {
+	responsePayload, err := json.Marshal(body)
+	if err != nil {
+		log.Printf("COMMON-WRITEHEALTH-MARSHAL response marshal failed: %v", err)
+		http.Error(w, "Failed to write response", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(statusCode)
+	if _, err = w.Write(responsePayload); err != nil {
+		log.Printf("COMMON-WRITEHEALTH-WRITE response write failed: %v", err)
+	}
 }
