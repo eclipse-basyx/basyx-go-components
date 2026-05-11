@@ -23,17 +23,17 @@ func BuildPostgresDSN(cfg PostgresConfig) string {
 func NormalizePostgresDSN(dsn string) string {
 	trimmed := strings.TrimSpace(dsn)
 	if trimmed == "" {
-		return dsn
+		return trimmed
 	}
 
 	lower := strings.ToLower(trimmed)
 	if !strings.HasPrefix(lower, "postgres://") && !strings.HasPrefix(lower, "postgresql://") {
-		return dsn
+		return trimmed
 	}
 
 	parsed, err := url.Parse(trimmed)
 	if err != nil || parsed.User == nil {
-		return dsn
+		return trimmed
 	}
 
 	username := parsed.User.Username()
