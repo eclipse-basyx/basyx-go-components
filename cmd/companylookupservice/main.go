@@ -40,6 +40,7 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 
 	// --- Health Endpoint (public) ---
 	common.AddHealthEndpoint(r, cfg)
+	common.AddVerificationEndpoint(r, cfg)
 
 	// Add Swagger UI
 	if err := common.AddSwaggerUIFromFS(r, openapiSpec, "openapi.yaml", "Company Lookup Service API", "/swagger", "/api-docs/openapi.yaml", cfg); err != nil {

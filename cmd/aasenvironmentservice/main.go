@@ -61,6 +61,7 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 	r := chi.NewRouter()
 	r.Use(common.ConfigMiddleware(cfg))
 	common.AddCors(r, cfg)
+	common.AddVerificationEndpoint(r, cfg)
 
 	preconfigurationCompleted := atomic.Bool{}
 	common.AddHealthEndpointWithProbe(r, cfg, func() (bool, string) {

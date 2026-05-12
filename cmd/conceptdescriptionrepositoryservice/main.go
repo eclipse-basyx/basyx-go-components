@@ -67,11 +67,9 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 	// Make configuration available in request contexts.
 	r.Use(common.ConfigMiddleware(config))
 
-	// Enable CORS
 	common.AddCors(r, config)
-
-	// Add health endpoint
 	common.AddHealthEndpoint(r, config)
+	common.AddVerificationEndpoint(r, config)
 
 	// Add Swagger UI
 	if err := common.AddSwaggerUIFromFS(r, openapiSpec, "openapi.yaml", "Concept Description Repository API", "/swagger", "/api-docs/openapi.yaml", config); err != nil {

@@ -68,6 +68,7 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 
 	common.AddCors(r, cfg)
 	common.AddHealthEndpoint(r, cfg)
+	common.AddVerificationEndpoint(r, cfg)
 
 	// Add Swagger UI
 	if err := common.AddSwaggerUIFromFS(r, openapiSpec, "openapi.yaml", "Submodel Registry Service API", "/swagger", "/api-docs/openapi.yaml", cfg); err != nil {

@@ -26,9 +26,14 @@
 package common
 
 import (
+	"bytes"
 	"encoding/json"
+	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/go-chi/chi/v5"
@@ -86,5 +91,123 @@ func TestAddHealthEndpointWithProbe_ReturnsServiceUnavailableOnProbeFailure(t *t
 	}
 	if body["details"] != "AAS preconfiguration in progress" {
 		t.Fatalf("expected details field %q, got %q", "AAS preconfiguration in progress", body["details"])
+	}
+}
+
+func TestVerifyPayload_RawJSON(t *testing.T) {
+	req := httptest.NewRequest(http.MethodPost, "/verify", strings.NewReader(`{"assetAdministrationShells":[],"submodels":[],"conceptDescriptions":[]}`))
+	req.Header.Set("Content-Type", "application/json")
+
+	result, err := VerifyPayload(req)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+
+	if format, ok := result["format"].(string); !ok || format != "json" {
+		t.Fatalf("expected format json, got %#v", result["format"])
+	}
+	if _, ok := result["valid"].(bool); !ok {
+		t.Fatalf("expected valid boolean field, got %#v", result["valid"])
+	}
+	if _, ok := result["messages"].([]string); !ok {
+		t.Fatalf("expected messages []string field, got %#v", result["messages"])
+	}
+}
+
+func TestVerifyPayload_RawXML(t *testing.T) {
+	req := httptest.NewRequest(http.MethodPost, "/verify", strings.NewReader("<environment xmlns=\"https://admin-shell.io/aas/3/1\"><assetAdministrationShells /><submodels /><conceptDescriptions /></environment>"))
+	req.Header.Set("Content-Type", "application/xml")
+
+	result, err := VerifyPayload(req)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+
+	if format, ok := result["format"].(string); !ok || format != "xml" {
+		t.Fatalf("expected format xml, got %#v", result["format"])
+	}
+}
+
+func TestVerifyPayload_MultipartJSON(t *testing.T) {
+	body := &bytes.Buffer{}
+	writer := multipart.NewWriter(body)
+	part, err := writer.CreateFormFile("file", "environment.json")
+	if err != nil {
+		t.Fatalf("create form file failed: %v", err)
+	}
+	_, err = part.Write([]byte(`{"assetAdministrationShells":[],"submodels":[],"conceptDescriptions":[]}`))
+	if err != nil {
+		t.Fatalf("write form payload failed: %v", err)
+	}
+	if err = writer.Close(); err != nil {
+		t.Fatalf("close writer failed: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/verify", body)
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+
+	result, verifyErr := VerifyPayload(req)
+	if verifyErr != nil {
+		t.Fatalf("expected no error, got %v", verifyErr)
+	}
+	if format, ok := result["format"].(string); !ok || format != "json" {
+		t.Fatalf("expected format json, got %#v", result["format"])
+	}
+}
+
+func TestVerifyPayload_RawAASX(t *testing.T) {
+	aasxPath := filepath.Join("..", "aasenvironment", "integration_tests", "testdata", "IESEDriveMotorDM3000.aasx")
+	aasxBytes, err := os.ReadFile(aasxPath)
+	if err != nil {
+		t.Fatalf("failed to read aasx fixture %s: %v", aasxPath, err)
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/verify", bytes.NewReader(aasxBytes))
+	req.Header.Set("Content-Type", "application/aasx+xml")
+
+	result, verifyErr := VerifyPayload(req)
+	if verifyErr != nil {
+		t.Fatalf("expected no error, got %v", verifyErr)
+	}
+
+	if format, ok := result["format"].(string); !ok || format != "aasx" {
+		t.Fatalf("expected format aasx, got %#v", result["format"])
+	}
+}
+
+func TestVerifyPayload_UnsupportedContentType(t *testing.T) {
+	req := httptest.NewRequest(http.MethodPost, "/verify", strings.NewReader("plain text"))
+	req.Header.Set("Content-Type", "text/plain")
+
+	_, err := VerifyPayload(req)
+	if err == nil {
+		t.Fatal("expected error for unsupported content type")
+	}
+}
+
+func TestAddVerificationEndpoint_RawJSON(t *testing.T) {
+	router := chi.NewRouter()
+	cfg := &Config{Server: ServerConfig{ContextPath: "/api"}}
+	AddVerificationEndpoint(router, cfg)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/verify", strings.NewReader(`{"assetAdministrationShells":[],"submodels":[],"conceptDescriptions":[]}`))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d body=%s", http.StatusOK, rec.Code, rec.Body.String())
+	}
+	if contentType := rec.Header().Get("Content-Type"); contentType != "application/json" {
+		t.Fatalf("expected content type %q, got %q", "application/json", contentType)
+	}
+
+	var body map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+		t.Fatalf("failed to decode response body: %v", err)
+	}
+	if format, ok := body["format"].(string); !ok || format != "json" {
+		t.Fatalf("expected format json, got %#v", body["format"])
 	}
 }
