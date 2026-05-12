@@ -75,13 +75,7 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 		}
 	}
 
-	dsn := fmt.Sprintf("postgres://%s:%s@%s:%d/%s?sslmode=disable",
-		config.Postgres.User,
-		config.Postgres.Password,
-		config.Postgres.Host,
-		config.Postgres.Port,
-		config.Postgres.DBName,
-	)
+	dsn := common.BuildPostgresDSN(config.Postgres)
 	sharedDB, err := common.InitializeDatabase(dsn, databaseSchema)
 	if err != nil {
 		return err

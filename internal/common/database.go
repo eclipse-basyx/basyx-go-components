@@ -37,7 +37,8 @@ import (
 //	}
 //	defer db.Close()
 func InitializeDatabase(dsn string, schemaFilePath string) (*sql.DB, error) {
-	db, err := sql.Open("postgres", dsn)
+	encodedDSN := NormalizePostgresDSN(dsn)
+	db, err := sql.Open("postgres", encodedDSN)
 	if err != nil {
 		return nil, err
 	}

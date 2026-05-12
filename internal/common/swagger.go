@@ -9,6 +9,7 @@ import (
 	"io/fs"
 	"log"
 	"net/http"
+	"path"
 	"regexp"
 	"strings"
 
@@ -53,6 +54,9 @@ const SwaggerUIHTML = `<!DOCTYPE html>
 </body>
 </html>`
 
+//go:embed swagger_part2_schemas/V3.1.1/openapi.yaml swagger_part2_schemas/V3.2.0/openapi.yaml
+var part2SchemasFS embed.FS
+
 // SwaggerUIConfig holds configuration for Swagger UI endpoint setup
 type SwaggerUIConfig struct {
 	Title       string         // Title shown in browser tab
@@ -70,6 +74,41 @@ type ContactConfig struct {
 	Name  string // Contact name
 	Email string // Contact email
 	URL   string // Contact URL
+}
+
+var openAPIVersionRegex = regexp.MustCompile(`(?m)^\s*version:\s*V([0-9]+\.[0-9]+\.[0-9]+)`)
+
+func detectPart2SchemaVersion(specContent []byte) string {
+	matches := openAPIVersionRegex.FindSubmatch(specContent)
+	if len(matches) < 2 {
+		return "V3.1.1"
+	}
+	return "V" + string(matches[1])
+}
+
+func localizePart2SchemaReferences(specContent []byte, specPath string) []byte {
+	version := detectPart2SchemaVersion(specContent)
+	localSchemaURL := path.Clean(path.Dir(specPath) + "/part2-schemas/" + version + "/openapi.yaml")
+
+	rewritten := specContent
+	remotePrefixes := []string{
+		"https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.1.1",
+		"https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.2.0",
+	}
+	for _, prefix := range remotePrefixes {
+		rewritten = []byte(strings.ReplaceAll(string(rewritten), prefix, localSchemaURL))
+	}
+
+	relativePrefixes := []string{
+		"../Part2-API-Schemas/openapi.yaml",
+		"../Part2-API-Schemas/V3.1.1/openapi.yaml",
+		"../Part2-API-Schemas/V3.2.0/openapi.yaml",
+	}
+	for _, prefix := range relativePrefixes {
+		rewritten = []byte(strings.ReplaceAll(string(rewritten), prefix, localSchemaURL))
+	}
+
+	return rewritten
 }
 
 // injectServerURL modifies the OpenAPI spec to use the configured server URL
@@ -162,10 +201,33 @@ func AddSwaggerUI(r *chi.Mux, cfg SwaggerUIConfig) {
 		specContent = injectContact(specContent, cfg.Contact)
 	}
 
+	// Repoint Part2 schema references to local, bundled schema snapshots so Swagger works offline.
+	specContent = localizePart2SchemaReferences(specContent, cfg.SpecPath)
+
 	// Serve the OpenAPI spec
 	r.Get(cfg.SpecPath, func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/yaml")
 		_, _ = w.Write(specContent)
+	})
+
+	part2SchemaPath := path.Clean(path.Dir(cfg.SpecPath) + "/part2-schemas/{version}/openapi.yaml")
+	r.Get(part2SchemaPath, func(w http.ResponseWriter, req *http.Request) {
+		version := chi.URLParam(req, "version")
+		if version == "" {
+			http.NotFound(w, req)
+			return
+		}
+
+		schemaPath := path.Clean("swagger_part2_schemas/" + version + "/openapi.yaml")
+		schemaContent, err := fs.ReadFile(part2SchemasFS, schemaPath)
+		if err != nil {
+			http.NotFound(w, req)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/yaml")
+		// #nosec G705 -- schemaContent is loaded from trusted embedded files only.
+		_, _ = w.Write(schemaContent)
 	})
 
 	// Serve Swagger UI
