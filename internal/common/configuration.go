@@ -70,6 +70,7 @@ var DefaultConfig = struct {
 	GeneralEnableCustomHeaderMW        bool
 	GeneralAASRegistryIntegration      bool
 	GeneralSubmodelRegistryIntegration bool
+	GeneralExternalURL                 string
 	GeneralAASPreconfigPaths           []string
 }{
 	ServerPort:                         5004,
@@ -96,6 +97,7 @@ var DefaultConfig = struct {
 	GeneralEnableCustomHeaderMW:        false,
 	GeneralAASRegistryIntegration:      false,
 	GeneralSubmodelRegistryIntegration: false,
+	GeneralExternalURL:                 "",
 	GeneralAASPreconfigPaths:           []string{},
 }
 
@@ -211,6 +213,7 @@ type GeneralConfig struct {
 	SupportsSingularSupplementalSemanticId bool     `mapstructure:"supportsSingularSupplementalSemanticId" yaml:"supportsSingularSupplementalSemanticId" json:"supportsSingularSupplementalSemanticId"` // Use singular supplementalSemanticId for SubmodelDescriptor I/O
 	AASRegistryIntegration                 bool     `mapstructure:"aasRegistryIntegration" yaml:"aasRegistryIntegration" json:"aasRegistryIntegration"`                                                 // Enable AAS repository -> registry descriptor synchronization
 	SubmodelRegistryIntegration            bool     `mapstructure:"submodelRegistryIntegration" yaml:"submodelRegistryIntegration" json:"submodelRegistryIntegration"`                                  // Enable Submodel repository -> registry descriptor synchronization
+	ExternalURL                            string   `mapstructure:"externalUrl" yaml:"externalUrl" json:"externalUrl"`                                                                                  // Public base URL(s) used for registry synchronization endpoint generation
 	UploadMaxSizeBytes                     int64    `mapstructure:"uploadMaxSizeBytes" yaml:"uploadMaxSizeBytes" json:"uploadMaxSizeBytes"`                                                             // Maximum allowed upload payload size in bytes
 	AASPreconfigPaths                      []string `mapstructure:"aasPreconfigPaths" yaml:"aasPreconfigPaths" json:"aasPreconfigPaths"`                                                                // Files/directories loaded at startup for AAS preconfiguration
 }
@@ -389,6 +392,7 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("general.supportsSingularSupplementalSemanticId", false)
 	v.SetDefault("general.aasRegistryIntegration", false)
 	v.SetDefault("general.submodelRegistryIntegration", false)
+	v.SetDefault("general.externalUrl", "")
 	v.SetDefault("general.uploadMaxSizeBytes", int64(128<<20))
 	v.SetDefault("general.aasPreconfigPaths", []string{})
 

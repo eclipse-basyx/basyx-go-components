@@ -28,5 +28,6 @@ general:
   supportsSingularSupplementalSemanticId: false
   aasRegistryIntegration: false
   submodelRegistryIntegration: false
+  externalUrl: ""
   uploadMaxSizeBytes: 134217728
   aasPreconfigPaths: []

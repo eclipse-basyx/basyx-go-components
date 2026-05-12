@@ -38,7 +38,7 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 	registrySyncConfig, err := aasenvironment.NewRegistrySyncConfig(
 		config.General.AASRegistryIntegration,
 		config.General.SubmodelRegistryIntegration,
-		os.Getenv("EXTERNALURL"),
+		config.General.ExternalURL,
 	)
 	if err != nil {
 		return err

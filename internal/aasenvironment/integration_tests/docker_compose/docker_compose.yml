@@ -32,7 +32,7 @@ services:
       - SERVER_STRICTVERIFICATION=false
       - ABAC_ENABLED=false
       - GENERAL_AASREGISTRYINTEGRATION=true
-      - EXTERNALURL=http://127.0.0.1:6004
+      - GENERAL_EXTERNALURL=http://127.0.0.1:6004
       - JWS_PRIVATEKEYPATH=/app/rsa-key.pem
     volumes:
       - ../../../submodelrepository/integration_tests/docker_compose/rsa-key.pem:/app/rsa-key.pem:ro

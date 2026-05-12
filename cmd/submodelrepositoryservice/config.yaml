@@ -26,6 +26,7 @@ abac:
 general:
   aasRegistryIntegration: false
   submodelRegistryIntegration: false
+  externalUrl: ""
   uploadMaxSizeBytes: 134217728
 
 # jws:

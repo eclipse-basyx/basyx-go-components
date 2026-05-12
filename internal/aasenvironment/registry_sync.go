@@ -10,7 +10,7 @@ import (
 	commonmodel "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 )
 
-const externalURLKey = "EXTERNALURL"
+const externalURLKey = "general.externalUrl"
 
 // RegistrySyncConfig controls repository-to-registry synchronization behavior and endpoint generation.
 type RegistrySyncConfig struct {
