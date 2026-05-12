@@ -15,6 +15,8 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/aasenvironment"
+	aasregistrydb "github.com/eclipse-basyx/basyx-go-components/internal/aasregistry/persistence"
+	aasrepositorydb "github.com/eclipse-basyx/basyx-go-components/internal/aasrepository/persistence"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/jws"
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
@@ -33,6 +35,9 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 	// Load configuration
 	config, err := common.LoadConfig(configPath)
 	if err != nil {
+		return err
+	}
+	if err = aasenvironment.ValidateStandaloneSubmodelRepositoryRegistrySyncConfig(config); err != nil {
 		return err
 	}
 	registrySyncConfig, err := aasenvironment.NewRegistrySyncConfig(
@@ -98,16 +103,27 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 	if err != nil {
 		return err
 	}
+	aasRepositoryPersistence, err := aasrepositorydb.NewAssetAdministrationShellDatabaseFromDB(sharedDB, config.Server.StrictVerification)
+	if err != nil {
+		return err
+	}
+	aasRegistryPersistence, err := aasregistrydb.NewPostgreSQLAASRegistryDatabaseFromDB(sharedDB, config.Server.CacheEnabled)
+	if err != nil {
+		return err
+	}
 
 	persistence := &aasenvironment.Persistence{
 		DB:                 sharedDB,
+		AASRegistry:        aasRegistryPersistence,
+		AASRepository:      aasRepositoryPersistence,
 		SubmodelRegistry:   smRegistryPersistence,
 		SubmodelRepository: smDatabase,
 	}
-	smSvc := aasenvironment.NewCustomSubmodelRepositoryService(
+	smSvc := aasenvironment.NewCustomSubmodelRepositoryServiceWithAASDescriptorEmbeddingSync(
 		api.NewSubmodelRepositoryAPIAPIService(*smDatabase),
 		persistence,
 		registrySyncConfig,
+		config.General.SubmodelRegistryIntegration,
 	)
 	smCtrl := openapi.NewSubmodelRepositoryAPIAPIController(smSvc, "", config.Server.StrictVerification)
 	serializationSvc := api.NewSerializationAPIAPIService()

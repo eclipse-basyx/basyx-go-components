@@ -19,6 +19,32 @@ type RegistrySyncConfig struct {
 	ExternalBaseURLs            []string
 }
 
+// ValidateStandaloneAASRepositoryRegistrySyncConfig validates standalone AAS repository toggle usage.
+func ValidateStandaloneAASRepositoryRegistrySyncConfig(cfg *common.Config) error {
+	if cfg == nil {
+		return common.NewErrBadRequest("AASENV-REGSYNCCFG-NILCFG configuration must not be nil")
+	}
+
+	if cfg.General.SubmodelRegistryIntegration {
+		return common.NewErrBadRequest("AASENV-REGSYNCCFG-AASREPO-INVALIDTOGGLE unsupported standalone toggle: general.submodelRegistryIntegration=true")
+	}
+
+	return nil
+}
+
+// ValidateStandaloneSubmodelRepositoryRegistrySyncConfig validates standalone submodel repository toggle usage.
+func ValidateStandaloneSubmodelRepositoryRegistrySyncConfig(cfg *common.Config) error {
+	if cfg == nil {
+		return common.NewErrBadRequest("AASENV-REGSYNCCFG-NILCFG configuration must not be nil")
+	}
+
+	if cfg.General.AASRegistryIntegration {
+		return common.NewErrBadRequest("AASENV-REGSYNCCFG-SMREPO-INVALIDTOGGLE unsupported standalone toggle: general.aasRegistryIntegration=true")
+	}
+
+	return nil
+}
+
 // NewRegistrySyncConfig validates sync-related settings and normalizes configured external base URLs.
 func NewRegistrySyncConfig(
 	aasRegistryIntegration bool,
@@ -119,7 +145,15 @@ func (c RegistrySyncConfig) buildEmbeddedSubmodelDescriptors(references []types.
 	seen := make(map[string]struct{}, len(references))
 	result := make([]commonmodel.SubmodelDescriptor, 0, len(references))
 	for _, reference := range references {
+		if reference == nil {
+			continue
+		}
+
 		for _, key := range reference.Keys() {
+			if key == nil {
+				continue
+			}
+
 			if key.Type() != types.KeyTypesSubmodel {
 				continue
 			}

@@ -343,6 +343,27 @@ func getResponseStatus(endpoint string) (int, error) {
 	return resp.StatusCode, nil
 }
 
+func assertServiceNeverHealthy(t *testing.T, endpoint string, observationWindow time.Duration) {
+	t.Helper()
+
+	client := &http.Client{Timeout: 2 * time.Second}
+	deadline := time.Now().Add(observationWindow)
+
+	for time.Now().Before(deadline) {
+		resp, err := client.Get(endpoint)
+		if err == nil {
+			if resp.Body != nil {
+				_ = resp.Body.Close()
+			}
+			if resp.StatusCode == http.StatusOK {
+				t.Fatalf("service unexpectedly became healthy at %s", endpoint)
+			}
+		}
+
+		time.Sleep(300 * time.Millisecond)
+	}
+}
+
 func getThumbnailWithoutFollowingRedirect(endpoint string) (int, string, error) {
 	req, err := http.NewRequest(http.MethodGet, endpoint, nil)
 	if err != nil {
@@ -983,6 +1004,14 @@ func TestThumbnailUploadUsesDeclaredContentTypeFallback(t *testing.T) {
 	thumbnailContentType, ok := thumbnail["contentType"].(string)
 	require.True(t, ok, "thumbnail.contentType should be a string")
 	assert.Equal(t, "image/tiff", thumbnailContentType, "AAS payload should expose fallback-resolved thumbnail contentType")
+}
+
+func TestStandaloneStartupRejectsUnsupportedSubmodelRegistryToggle(t *testing.T) {
+	if os.Getenv("BASYX_EXTERNAL_COMPOSE") == "1" {
+		t.Skip("requires bundled integration docker compose setup")
+	}
+
+	assertServiceNeverHealthy(t, "http://localhost:6006/health", 20*time.Second)
 }
 
 // TestMain handles setup and teardown

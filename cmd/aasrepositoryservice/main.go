@@ -34,6 +34,9 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 	if err != nil {
 		return err
 	}
+	if err = aasenvironment.ValidateStandaloneAASRepositoryRegistrySyncConfig(cfg); err != nil {
+		return err
+	}
 	registrySyncConfig, err := aasenvironment.NewRegistrySyncConfig(
 		cfg.General.AASRegistryIntegration,
 		cfg.General.SubmodelRegistryIntegration,

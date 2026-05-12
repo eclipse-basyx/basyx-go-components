@@ -17,8 +17,9 @@ import (
 // CustomSubmodelRepositoryService is a pass-through stub for future combined logic.
 type CustomSubmodelRepositoryService struct {
 	*submodelrepositoryapi.SubmodelRepositoryAPIAPIService
-	persistence *Persistence
-	syncConfig  RegistrySyncConfig
+	persistence                      *Persistence
+	syncConfig                       RegistrySyncConfig
+	enableAASDescriptorEmbeddingSync bool
 }
 
 // NewCustomSubmodelRepositoryService creates a new pass-through submodel repository decorator.
@@ -27,10 +28,26 @@ func NewCustomSubmodelRepositoryService(
 	persistence *Persistence,
 	syncConfig RegistrySyncConfig,
 ) *CustomSubmodelRepositoryService {
+	return NewCustomSubmodelRepositoryServiceWithAASDescriptorEmbeddingSync(
+		base,
+		persistence,
+		syncConfig,
+		syncConfig.AASRegistryIntegration,
+	)
+}
+
+// NewCustomSubmodelRepositoryServiceWithAASDescriptorEmbeddingSync creates a submodel repository decorator with explicit AAS descriptor embedding sync behavior.
+func NewCustomSubmodelRepositoryServiceWithAASDescriptorEmbeddingSync(
+	base *submodelrepositoryapi.SubmodelRepositoryAPIAPIService,
+	persistence *Persistence,
+	syncConfig RegistrySyncConfig,
+	enableAASDescriptorEmbeddingSync bool,
+) *CustomSubmodelRepositoryService {
 	return &CustomSubmodelRepositoryService{
-		SubmodelRepositoryAPIAPIService: base,
-		persistence:                     persistence,
-		syncConfig:                      syncConfig,
+		SubmodelRepositoryAPIAPIService:  base,
+		persistence:                      persistence,
+		syncConfig:                       syncConfig,
+		enableAASDescriptorEmbeddingSync: enableAASDescriptorEmbeddingSync,
 	}
 }
 
@@ -74,7 +91,7 @@ func (s *CustomSubmodelRepositoryService) PostSubmodel(ctx context.Context, subm
 		if common.IsErrBadRequest(err) {
 			return newSubmodelRepoErrorResponse(err, http.StatusBadRequest, operation, "InvalidSubmodelData"), nil
 		}
-		return newSubmodelRepoErrorResponse(err, http.StatusInternalServerError, operation, "CreateSubmodel"), err
+		return newSubmodelRepoErrorResponse(err, http.StatusInternalServerError, operation, "CreateSubmodel"), nil
 	}
 
 	submodelJSON, jsonErr := jsonization.ToJsonable(submodel)
@@ -130,7 +147,7 @@ func (s *CustomSubmodelRepositoryService) PutSubmodelByID(ctx context.Context, s
 		if common.IsErrNotFound(err) {
 			return newSubmodelRepoErrorResponse(err, http.StatusNotFound, operation, "SubmodelNotFound"), nil
 		}
-		return newSubmodelRepoErrorResponse(err, http.StatusInternalServerError, operation, "InternalServerError"), err
+		return newSubmodelRepoErrorResponse(err, http.StatusInternalServerError, operation, "InternalServerError"), nil
 	}
 
 	if isUpdate {
@@ -176,7 +193,7 @@ func (s *CustomSubmodelRepositoryService) DeleteSubmodelByID(ctx context.Context
 		if common.IsErrBadRequest(err) {
 			return newSubmodelRepoErrorResponse(err, http.StatusBadRequest, operation, "BadRequest"), nil
 		}
-		return newSubmodelRepoErrorResponse(err, http.StatusInternalServerError, operation, "InternalServerError"), err
+		return newSubmodelRepoErrorResponse(err, http.StatusInternalServerError, operation, "InternalServerError"), nil
 	}
 
 	return commonmodel.Response(http.StatusNoContent, nil), nil
@@ -212,7 +229,7 @@ func (s *CustomSubmodelRepositoryService) PatchSubmodelByID(ctx context.Context,
 		if common.IsErrNotFound(getErr) || errors.Is(getErr, sql.ErrNoRows) {
 			return newSubmodelRepoErrorResponse(getErr, http.StatusNotFound, operation, "SubmodelNotFound"), nil
 		}
-		return newSubmodelRepoErrorResponse(getErr, http.StatusInternalServerError, operation, "GetSubmodelByID"), getErr
+		return newSubmodelRepoErrorResponse(getErr, http.StatusInternalServerError, operation, "GetSubmodelByID"), nil
 	}
 	if len(existingSubmodels) == 0 {
 		return newSubmodelRepoErrorResponse(common.NewErrNotFound(decodedIdentifier), http.StatusNotFound, operation, "SubmodelNotFound"), nil
@@ -221,12 +238,12 @@ func (s *CustomSubmodelRepositoryService) PatchSubmodelByID(ctx context.Context,
 	existingSubmodel := existingSubmodels[0]
 	if existingSubmodel == nil {
 		nilErr := common.NewInternalServerError("SMREPO-PATCHSM-EXISTINGNIL Existing submodel is nil")
-		return newSubmodelRepoErrorResponse(nilErr, http.StatusInternalServerError, operation, "GetSubmodelByID"), nilErr
+		return newSubmodelRepoErrorResponse(nilErr, http.StatusInternalServerError, operation, "GetSubmodelByID"), nil
 	}
 
 	existingJSON, existingJSONErr := jsonization.ToJsonable(existingSubmodel)
 	if existingJSONErr != nil {
-		return newSubmodelRepoErrorResponse(existingJSONErr, http.StatusInternalServerError, operation, "ToJsonableCurrentSubmodel"), existingJSONErr
+		return newSubmodelRepoErrorResponse(existingJSONErr, http.StatusInternalServerError, operation, "ToJsonableCurrentSubmodel"), nil
 	}
 	patchJSON["id"] = decodedIdentifier
 
@@ -264,7 +281,7 @@ func (s *CustomSubmodelRepositoryService) PatchSubmodelByID(ctx context.Context,
 		if common.IsErrNotFound(err) {
 			return newSubmodelRepoErrorResponse(err, http.StatusNotFound, operation, "SubmodelNotFound"), nil
 		}
-		return newSubmodelRepoErrorResponse(err, http.StatusInternalServerError, operation, "InternalServerError"), err
+		return newSubmodelRepoErrorResponse(err, http.StatusInternalServerError, operation, "InternalServerError"), nil
 	}
 
 	return commonmodel.Response(http.StatusNoContent, nil), nil
@@ -303,7 +320,7 @@ func (s *CustomSubmodelRepositoryService) PatchSubmodelByIDMetadata(ctx context.
 		if common.IsErrNotFound(getErr) || errors.Is(getErr, sql.ErrNoRows) {
 			return newSubmodelRepoErrorResponse(getErr, http.StatusNotFound, operation, "SubmodelNotFound"), nil
 		}
-		return newSubmodelRepoErrorResponse(getErr, http.StatusInternalServerError, operation, "GetSubmodelByID"), getErr
+		return newSubmodelRepoErrorResponse(getErr, http.StatusInternalServerError, operation, "GetSubmodelByID"), nil
 	}
 	if len(existingSubmodels) == 0 {
 		return newSubmodelRepoErrorResponse(common.NewErrNotFound(decodedIdentifier), http.StatusNotFound, operation, "SubmodelNotFound"), nil
@@ -312,12 +329,12 @@ func (s *CustomSubmodelRepositoryService) PatchSubmodelByIDMetadata(ctx context.
 	existingSubmodel := existingSubmodels[0]
 	if existingSubmodel == nil {
 		nilErr := common.NewInternalServerError("SMREPO-PATCHSMMETA-EXISTINGNIL Existing submodel is nil")
-		return newSubmodelRepoErrorResponse(nilErr, http.StatusInternalServerError, operation, "GetSubmodelByID"), nilErr
+		return newSubmodelRepoErrorResponse(nilErr, http.StatusInternalServerError, operation, "GetSubmodelByID"), nil
 	}
 
 	existingJSON, existingJSONErr := jsonization.ToJsonable(existingSubmodel)
 	if existingJSONErr != nil {
-		return newSubmodelRepoErrorResponse(existingJSONErr, http.StatusInternalServerError, operation, "ToJsonableCurrentSubmodel"), existingJSONErr
+		return newSubmodelRepoErrorResponse(existingJSONErr, http.StatusInternalServerError, operation, "ToJsonableCurrentSubmodel"), nil
 	}
 
 	mergedJSON := mergeSubmodelJSON(existingJSON, patchJSON)
@@ -352,7 +369,7 @@ func (s *CustomSubmodelRepositoryService) PatchSubmodelByIDMetadata(ctx context.
 		if common.IsErrDenied(err) {
 			return newSubmodelRepoErrorResponse(err, http.StatusForbidden, operation, "Denied"), nil
 		}
-		return newSubmodelRepoErrorResponse(err, http.StatusInternalServerError, operation, "PatchSubmodelMetadata"), err
+		return newSubmodelRepoErrorResponse(err, http.StatusInternalServerError, operation, "PatchSubmodelMetadata"), nil
 	}
 
 	return commonmodel.Response(http.StatusNoContent, nil), nil
@@ -409,8 +426,17 @@ func (s *CustomSubmodelRepositoryService) syncReferencingAASDescriptorsInTransac
 	referencingAASIDs []string,
 	remove bool,
 ) error {
-	if !s.syncConfig.AASRegistryIntegration {
+	if !s.enableAASDescriptorEmbeddingSync {
 		return nil
+	}
+	if s.persistence == nil {
+		return common.NewInternalServerError("AASENV-SMREPO-SYNCAAS-NILPERSISTENCE persistence bundle must not be nil")
+	}
+	if s.persistence.AASRepository == nil {
+		return common.NewInternalServerError("AASENV-SMREPO-SYNCAAS-NILAASREPO AAS repository backend must not be nil")
+	}
+	if s.persistence.AASRegistry == nil {
+		return common.NewInternalServerError("AASENV-SMREPO-SYNCAAS-NILAASREGISTRY AAS registry backend must not be nil")
 	}
 
 	if len(referencingAASIDs) == 0 {

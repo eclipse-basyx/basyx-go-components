@@ -1,11 +1,18 @@
 package aasenvironment
 
 import (
+	"context"
+	"database/sql"
 	"testing"
 
 	"github.com/aas-core-works/aas-core3.1-golang/jsonization"
 	"github.com/aas-core-works/aas-core3.1-golang/types"
+	aasregistrydb "github.com/eclipse-basyx/basyx-go-components/internal/aasregistry/persistence"
+	aasrepositorydb "github.com/eclipse-basyx/basyx-go-components/internal/aasrepository/persistence"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
+	commonmodel "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
+	smregistrydb "github.com/eclipse-basyx/basyx-go-components/internal/smregistry/persistence"
+	submodelrepositorydb "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence"
 	"github.com/stretchr/testify/require"
 )
 
@@ -166,4 +173,128 @@ func TestBuildSubmodelDescriptorDerivesFromIdentifiable(t *testing.T) {
 		descriptor.Endpoints[0].ProtocolInformation.Href,
 	)
 	require.Equal(t, "http", descriptor.Endpoints[0].ProtocolInformation.EndpointProtocol)
+}
+
+func TestBuildEmbeddedSubmodelDescriptorsSkipsNilReferencesAndKeys(t *testing.T) {
+	config := RegistrySyncConfig{ExternalBaseURLs: []string{"https://public.example/api/v3"}}
+
+	references := []types.IReference{
+		nil,
+		types.NewReference(
+			types.ReferenceTypesModelReference,
+			[]types.IKey{
+				nil,
+				types.NewKey(types.KeyTypesAssetAdministrationShell, "urn:example:aas:ignored"),
+				types.NewKey(types.KeyTypesSubmodel, " "),
+				types.NewKey(types.KeyTypesSubmodel, "urn:example:sm:nil-guard"),
+			},
+		),
+	}
+
+	descriptors := config.buildEmbeddedSubmodelDescriptors(references)
+	require.Len(t, descriptors, 1)
+	require.Equal(t, "urn:example:sm:nil-guard", descriptors[0].Id)
+	require.Len(t, descriptors[0].Endpoints, 1)
+	require.Equal(
+		t,
+		"https://public.example/api/v3/submodels/"+common.EncodeString("urn:example:sm:nil-guard"),
+		descriptors[0].Endpoints[0].ProtocolInformation.Href,
+	)
+}
+
+func TestValidateStandaloneAASRepositoryRegistrySyncConfig(t *testing.T) {
+	err := ValidateStandaloneAASRepositoryRegistrySyncConfig(nil)
+	require.Error(t, err)
+	require.True(t, common.IsErrBadRequest(err))
+
+	cfg := &common.Config{}
+	err = ValidateStandaloneAASRepositoryRegistrySyncConfig(cfg)
+	require.NoError(t, err)
+
+	cfg.General.SubmodelRegistryIntegration = true
+	err = ValidateStandaloneAASRepositoryRegistrySyncConfig(cfg)
+	require.Error(t, err)
+	require.True(t, common.IsErrBadRequest(err))
+	require.Contains(t, err.Error(), "general.submodelRegistryIntegration")
+}
+
+func TestValidateStandaloneSubmodelRepositoryRegistrySyncConfig(t *testing.T) {
+	err := ValidateStandaloneSubmodelRepositoryRegistrySyncConfig(nil)
+	require.Error(t, err)
+	require.True(t, common.IsErrBadRequest(err))
+
+	cfg := &common.Config{}
+	err = ValidateStandaloneSubmodelRepositoryRegistrySyncConfig(cfg)
+	require.NoError(t, err)
+
+	cfg.General.AASRegistryIntegration = true
+	err = ValidateStandaloneSubmodelRepositoryRegistrySyncConfig(cfg)
+	require.Error(t, err)
+	require.True(t, common.IsErrBadRequest(err))
+	require.Contains(t, err.Error(), "general.aasRegistryIntegration")
+}
+
+func TestCustomAASRepositoryServiceValidateSyncDependencies(t *testing.T) {
+	var nilService *CustomAASRepositoryService
+	err := nilService.validateSyncDependencies(false, false, false)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "AASENV-AASREPO-CHECKDEPS-NILSERVICE")
+
+	service := &CustomAASRepositoryService{}
+	err = service.validateSyncDependencies(false, false, false)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "AASENV-AASREPO-CHECKDEPS-NILPERSISTENCE")
+
+	service.persistence = &Persistence{}
+	err = service.validateSyncDependencies(false, false, false)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "AASENV-AASREPO-CHECKDEPS-NILAASREPO")
+
+	db := &sql.DB{}
+	aasRepository, repoErr := aasrepositorydb.NewAssetAdministrationShellDatabaseFromDB(db, false)
+	require.NoError(t, repoErr)
+	aasRegistry, aasRegistryErr := aasregistrydb.NewPostgreSQLAASRegistryDatabaseFromDB(db, false)
+	require.NoError(t, aasRegistryErr)
+	submodelRepository, submodelRepoErr := submodelrepositorydb.NewSubmodelDatabaseFromDB(db, nil, false)
+	require.NoError(t, submodelRepoErr)
+	submodelRegistry, submodelRegistryErr := smregistrydb.NewPostgreSQLSMBackendFromDB(db)
+	require.NoError(t, submodelRegistryErr)
+
+	service.persistence = &Persistence{
+		AASRepository:      aasRepository,
+		AASRegistry:        aasRegistry,
+		SubmodelRepository: submodelRepository,
+		SubmodelRegistry:   submodelRegistry,
+	}
+
+	err = service.validateSyncDependencies(true, true, true)
+	require.NoError(t, err)
+}
+
+func TestCustomSubmodelRepositoryServiceSyncReferencingAASDescriptorsGuardsMissingDependencies(t *testing.T) {
+	service := &CustomSubmodelRepositoryService{enableAASDescriptorEmbeddingSync: true}
+	err := service.syncReferencingAASDescriptorsInTransaction(
+		context.Background(),
+		nil,
+		commonmodel.SubmodelDescriptor{Id: "urn:example:submodel:guard"},
+		nil,
+		false,
+	)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "AASENV-SMREPO-SYNCAAS-NILPERSISTENCE")
+
+	db := &sql.DB{}
+	aasRepository, repoErr := aasrepositorydb.NewAssetAdministrationShellDatabaseFromDB(db, false)
+	require.NoError(t, repoErr)
+
+	service.persistence = &Persistence{AASRepository: aasRepository}
+	err = service.syncReferencingAASDescriptorsInTransaction(
+		context.Background(),
+		nil,
+		commonmodel.SubmodelDescriptor{Id: "urn:example:submodel:guard"},
+		nil,
+		false,
+	)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "AASENV-SMREPO-SYNCAAS-NILAASREGISTRY")
 }
