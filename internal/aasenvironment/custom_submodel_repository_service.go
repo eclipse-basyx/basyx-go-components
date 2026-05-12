@@ -58,7 +58,11 @@ func (s *CustomSubmodelRepositoryService) PostSubmodel(ctx context.Context, subm
 		if descriptorErr != nil {
 			return descriptorErr
 		}
-		return s.persistence.SubmodelRegistry.UpsertSubmodelDescriptorInTransaction(ctx, tx, descriptor)
+		if upsertErr := s.persistence.SubmodelRegistry.UpsertSubmodelDescriptorInTransaction(ctx, tx, descriptor); upsertErr != nil {
+			return upsertErr
+		}
+
+		return s.syncReferencingAASDescriptorsInTransaction(ctx, tx, descriptor, nil, false)
 	})
 	if err != nil {
 		if common.IsErrDenied(err) {
@@ -107,7 +111,11 @@ func (s *CustomSubmodelRepositoryService) PutSubmodelByID(ctx context.Context, s
 		if descriptorErr != nil {
 			return descriptorErr
 		}
-		return s.persistence.SubmodelRegistry.UpsertSubmodelDescriptorInTransaction(ctx, tx, descriptor)
+		if upsertErr := s.persistence.SubmodelRegistry.UpsertSubmodelDescriptorInTransaction(ctx, tx, descriptor); upsertErr != nil {
+			return upsertErr
+		}
+
+		return s.syncReferencingAASDescriptorsInTransaction(ctx, tx, descriptor, nil, false)
 	})
 	if err != nil {
 		if common.IsErrDenied(err) {
@@ -152,7 +160,11 @@ func (s *CustomSubmodelRepositoryService) DeleteSubmodelByID(ctx context.Context
 		if deleteErr := s.persistence.SubmodelRepository.DeleteSubmodelInTransaction(ctx, tx, decodedSubmodelIdentifier); deleteErr != nil {
 			return deleteErr
 		}
-		return s.persistence.SubmodelRegistry.DeleteSubmodelDescriptorByIDInTransaction(ctx, tx, decodedSubmodelIdentifier)
+		if deleteDescriptorErr := s.persistence.SubmodelRegistry.DeleteSubmodelDescriptorByIDInTransaction(ctx, tx, decodedSubmodelIdentifier); deleteDescriptorErr != nil {
+			return deleteDescriptorErr
+		}
+
+		return s.syncReferencingAASDescriptorsInTransaction(ctx, tx, commonmodel.SubmodelDescriptor{Id: decodedSubmodelIdentifier}, nil, true)
 	})
 	if err != nil {
 		if common.IsErrDenied(err) {
@@ -239,7 +251,11 @@ func (s *CustomSubmodelRepositoryService) PatchSubmodelByID(ctx context.Context,
 		if descriptorErr != nil {
 			return descriptorErr
 		}
-		return s.persistence.SubmodelRegistry.UpsertSubmodelDescriptorInTransaction(ctx, tx, descriptor)
+		if upsertErr := s.persistence.SubmodelRegistry.UpsertSubmodelDescriptorInTransaction(ctx, tx, descriptor); upsertErr != nil {
+			return upsertErr
+		}
+
+		return s.syncReferencingAASDescriptorsInTransaction(ctx, tx, descriptor, nil, false)
 	})
 	if err != nil {
 		if common.IsErrBadRequest(err) {
@@ -320,7 +336,11 @@ func (s *CustomSubmodelRepositoryService) PatchSubmodelByIDMetadata(ctx context.
 		if descriptorErr != nil {
 			return descriptorErr
 		}
-		return s.persistence.SubmodelRegistry.UpsertSubmodelDescriptorInTransaction(ctx, tx, descriptor)
+		if upsertErr := s.persistence.SubmodelRegistry.UpsertSubmodelDescriptorInTransaction(ctx, tx, descriptor); upsertErr != nil {
+			return upsertErr
+		}
+
+		return s.syncReferencingAASDescriptorsInTransaction(ctx, tx, descriptor, nil, false)
 	})
 	if err != nil {
 		if common.IsErrBadRequest(err) {
@@ -380,4 +400,50 @@ func mergeSubmodelJSON(base map[string]any, patch map[string]any) map[string]any
 	}
 
 	return merged
+}
+
+func (s *CustomSubmodelRepositoryService) syncReferencingAASDescriptorsInTransaction(
+	ctx context.Context,
+	tx *sql.Tx,
+	submodelDescriptor commonmodel.SubmodelDescriptor,
+	referencingAASIDs []string,
+	remove bool,
+) error {
+	if !s.syncConfig.AASRegistryIntegration {
+		return nil
+	}
+
+	if len(referencingAASIDs) == 0 {
+		aasIDs, aasLookupErr := s.persistence.AASRepository.ListAASIdentifiersBySubmodelID(ctx, submodelDescriptor.Id)
+		if aasLookupErr != nil {
+			return aasLookupErr
+		}
+		referencingAASIDs = aasIDs
+	}
+
+	for _, aasID := range referencingAASIDs {
+		aasDescriptor, getDescriptorErr := s.persistence.AASRegistry.GetAssetAdministrationShellDescriptorByID(ctx, aasID)
+		if getDescriptorErr != nil {
+			if common.IsErrNotFound(getDescriptorErr) {
+				continue
+			}
+			return getDescriptorErr
+		}
+
+		if remove {
+			aasDescriptor.SubmodelDescriptors = removeEmbeddedSubmodelDescriptor(aasDescriptor.SubmodelDescriptors, submodelDescriptor.Id)
+		} else {
+			aasDescriptor.SubmodelDescriptors = addOrUpdateEmbeddedSubmodelDescriptor(aasDescriptor.SubmodelDescriptors, submodelDescriptor)
+		}
+
+		if len(aasDescriptor.Endpoints) == 0 {
+			aasDescriptor.Endpoints = s.syncConfig.buildAASDescriptorEndpoints(aasID)
+		}
+
+		if upsertErr := s.persistence.AASRegistry.UpsertAdministrationShellDescriptorInTransaction(ctx, tx, aasDescriptor); upsertErr != nil {
+			return upsertErr
+		}
+	}
+
+	return nil
 }

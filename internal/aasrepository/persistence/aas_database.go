@@ -1409,6 +1409,35 @@ func (s *AssetAdministrationShellDatabase) GetAllSubmodelReferencesByAASID(ctx c
 	return references, nextCursor, nil
 }
 
+// ListAASIdentifiersBySubmodelID returns all AAS identifiers that reference the given submodel ID.
+func (s *AssetAdministrationShellDatabase) ListAASIdentifiersBySubmodelID(ctx context.Context, submodelIdentifier string) ([]string, error) {
+	dialect := goqu.Dialect("postgres")
+	sqlQuery, args, buildErr := buildListAASIdentifiersBySubmodelIdentifierQuery(&dialect, submodelIdentifier)
+	if buildErr != nil {
+		return nil, common.NewInternalServerError("AASREPO-LISTAASBYSM-BUILDSQL " + buildErr.Error())
+	}
+
+	rows, queryErr := s.db.QueryContext(ctx, sqlQuery, args...)
+	if queryErr != nil {
+		return nil, common.NewInternalServerError("AASREPO-LISTAASBYSM-EXECSQL " + queryErr.Error())
+	}
+	defer func() { _ = rows.Close() }()
+
+	aasIDs := make([]string, 0, 16)
+	for rows.Next() {
+		var aasID string
+		if scanErr := rows.Scan(&aasID); scanErr != nil {
+			return nil, common.NewInternalServerError("AASREPO-LISTAASBYSM-SCANROW " + scanErr.Error())
+		}
+		aasIDs = append(aasIDs, aasID)
+	}
+	if rowsErr := rows.Err(); rowsErr != nil {
+		return nil, common.NewInternalServerError("AASREPO-LISTAASBYSM-ITERROWS " + rowsErr.Error())
+	}
+
+	return aasIDs, nil
+}
+
 func submodelReferenceCursorExists(ctx context.Context, tx *sql.Tx, dialect *goqu.DialectWrapper, aasDBID int64, cursorID int64) (bool, error) {
 	query, args, buildErr := dialect.
 		From(goqu.T("aas_submodel_reference").As("r")).

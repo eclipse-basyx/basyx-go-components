@@ -67,6 +67,17 @@ func TestBuildAASDescriptorDerivesFromIdentifiable(t *testing.T) {
 		"id":        "urn:example:aas:derived",
 		"idShort":   "DerivedAAS",
 		"modelType": "AssetAdministrationShell",
+		"submodels": []any{
+			map[string]any{
+				"type": "ModelReference",
+				"keys": []any{
+					map[string]any{
+						"type":  "Submodel",
+						"value": "urn:example:sm:derived-embedded",
+					},
+				},
+			},
+		},
 		"administration": map[string]any{
 			"version":  "1",
 			"revision": "2",
@@ -98,6 +109,14 @@ func TestBuildAASDescriptorDerivesFromIdentifiable(t *testing.T) {
 	require.Len(t, descriptor.SpecificAssetIds, 1)
 	require.Equal(t, "serialNumber", descriptor.SpecificAssetIds[0].Name())
 	require.Equal(t, "SN-001", descriptor.SpecificAssetIds[0].Value())
+	require.Len(t, descriptor.SubmodelDescriptors, 1)
+	require.Equal(t, "urn:example:sm:derived-embedded", descriptor.SubmodelDescriptors[0].Id)
+	require.Len(t, descriptor.SubmodelDescriptors[0].Endpoints, 1)
+	require.Equal(
+		t,
+		"https://public.example/api/v3/submodels/"+common.EncodeString("urn:example:sm:derived-embedded"),
+		descriptor.SubmodelDescriptors[0].Endpoints[0].ProtocolInformation.Href,
+	)
 	require.Len(t, descriptor.Endpoints, 1)
 	require.Equal(
 		t,

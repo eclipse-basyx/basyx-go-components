@@ -29,6 +29,7 @@ const actionVerifyAASXAttachments = "VERIFY_AASX_ATTACHMENTS"
 const actionVerifyAASXThumbnail = "VERIFY_AASX_THUMBNAIL"
 const actionVerifyEndpointSnapshot = "VERIFY_ENDPOINT_SNAPSHOT"
 const uploadIntegrationDSN = "host=127.0.0.1 port=6432 user=admin password=admin123 dbname=basyxTestDB sslmode=disable"
+const uploadSyncDisabledIntegrationDSN = "host=127.0.0.1 port=6433 user=admin password=admin123 dbname=basyxTestDBSyncOff sslmode=disable"
 const expectationRequired = "required"
 const expectationAbsent = "absent"
 const expectationOptional = "optional"
@@ -47,23 +48,29 @@ type storedAttachment struct {
 }
 
 func TestUploadAASXIntegration(t *testing.T) {
-	resetDatabaseForUploadIT(t)
+	resetDatabaseForUploadIT(t, uploadIntegrationDSN)
 	runUploadJSONSuite(t, "upload_it_config.json")
 }
 
 func TestUploadAASXIntegrationProductionPlan(t *testing.T) {
-	resetDatabaseForUploadIT(t)
+	resetDatabaseForUploadIT(t, uploadIntegrationDSN)
 	runUploadJSONSuite(t, "upload_productionplan_it_config.json")
 }
 
 func TestUploadJSONAndXMLIntegration(t *testing.T) {
-	resetDatabaseForUploadIT(t)
+	resetDatabaseForUploadIT(t, uploadIntegrationDSN)
 	runUploadJSONSuite(t, "upload_json_xml_config.json")
 }
 
 func TestRegistrySyncIntegration(t *testing.T) {
-	resetDatabaseForUploadIT(t)
+	resetDatabaseForUploadIT(t, uploadIntegrationDSN)
 	runUploadJSONSuite(t, "registry_sync_it_config.json")
+}
+
+func TestRegistrySyncDisabledIntegration(t *testing.T) {
+	resetDatabaseForUploadIT(t, uploadSyncDisabledIntegrationDSN)
+	waitForIntegrationHealth(t, "http://127.0.0.1:6005/health", 2*time.Minute)
+	runUploadJSONSuite(t, "registry_sync_disabled_it_config.json")
 }
 
 func runUploadJSONSuite(t *testing.T, configPath string) {
@@ -89,10 +96,29 @@ func runUploadJSONSuite(t *testing.T, configPath string) {
 	})
 }
 
-func resetDatabaseForUploadIT(t *testing.T) {
+func waitForIntegrationHealth(t *testing.T, endpoint string, timeout time.Duration) {
 	t.Helper()
 
-	db, err := sql.Open("postgres", uploadIntegrationDSN)
+	deadline := time.Now().Add(timeout)
+	client := &http.Client{Timeout: 3 * time.Second}
+	for time.Now().Before(deadline) {
+		resp, err := client.Get(endpoint)
+		if err == nil {
+			_ = resp.Body.Close()
+			if resp.StatusCode == http.StatusOK {
+				return
+			}
+		}
+		time.Sleep(500 * time.Millisecond)
+	}
+
+	t.Fatalf("integration endpoint not healthy within timeout: %s", endpoint)
+}
+
+func resetDatabaseForUploadIT(t *testing.T, dsn string) {
+	t.Helper()
+
+	db, err := sql.Open("postgres", dsn)
 	require.NoError(t, err)
 	defer func() { _ = db.Close() }()
 

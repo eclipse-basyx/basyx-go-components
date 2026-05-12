@@ -73,7 +73,7 @@ func (c RegistrySyncConfig) buildAASDescriptor(aas types.IAssetAdministrationShe
 		IdShort:             readOptionalString(aas.IDShort()),
 		Id:                  aas.ID(),
 		SpecificAssetIds:    assetInformation.SpecificAssetIDs(),
-		SubmodelDescriptors: []commonmodel.SubmodelDescriptor{},
+		SubmodelDescriptors: c.buildEmbeddedSubmodelDescriptors(aas.Submodels()),
 	}
 
 	return descriptor, nil
@@ -109,6 +109,38 @@ func (c RegistrySyncConfig) buildAASDescriptorEndpoints(aasID string) []commonmo
 func (c RegistrySyncConfig) buildSubmodelDescriptorEndpoints(submodelID string) []commonmodel.Endpoint {
 	encodedID := common.EncodeString(submodelID)
 	return c.buildEndpoints("/submodels/" + encodedID)
+}
+
+func (c RegistrySyncConfig) buildEmbeddedSubmodelDescriptors(references []types.IReference) []commonmodel.SubmodelDescriptor {
+	if len(references) == 0 {
+		return []commonmodel.SubmodelDescriptor{}
+	}
+
+	seen := make(map[string]struct{}, len(references))
+	result := make([]commonmodel.SubmodelDescriptor, 0, len(references))
+	for _, reference := range references {
+		for _, key := range reference.Keys() {
+			if key.Type() != types.KeyTypesSubmodel {
+				continue
+			}
+
+			submodelID := strings.TrimSpace(key.Value())
+			if submodelID == "" {
+				continue
+			}
+			if _, alreadyAdded := seen[submodelID]; alreadyAdded {
+				continue
+			}
+
+			seen[submodelID] = struct{}{}
+			result = append(result, commonmodel.SubmodelDescriptor{
+				Id:        submodelID,
+				Endpoints: c.buildSubmodelDescriptorEndpoints(submodelID),
+			})
+		}
+	}
+
+	return result
 }
 
 func (c RegistrySyncConfig) buildEndpoints(resourcePath string) []commonmodel.Endpoint {
