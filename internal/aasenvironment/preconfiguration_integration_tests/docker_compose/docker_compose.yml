@@ -29,7 +29,7 @@ services:
       - POSTGRES_MAXOPENCONNECTIONS=500
       - POSTGRES_MAXIDLECONNECTIONS=500
       - POSTGRES_CONNMAXLIFETIMEMINUTES=5
-      - SERVER_STRICTVERIFICATION=false
+      - SERVER_STRICTVERIFICATION=off
       - ABAC_ENABLED=false
       - JWS_PRIVATEKEYPATH=/app/rsa-key.pem
       - GENERAL_AAS_PRECONFIG_PATHS=/app/preconfiguration/IESEDriveMotorDM3000.aasx,/app/preconfiguration/ProductionPlanSFKL.aasx,/app/preconfiguration/environment_minimal.json,/app/preconfiguration/environment_malformed.json,/app/preconfiguration/missing.aasx
