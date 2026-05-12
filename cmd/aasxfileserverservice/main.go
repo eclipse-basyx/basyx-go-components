@@ -39,7 +39,9 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 
 	common.AddHealthEndpoint(r, cfg)
 
-	common.AddVerificationEndpoint(r, cfg)
+	if cfg.Server.VerificationEndpointAvailable {
+		common.AddVerificationEndpoint(r, cfg)
+	}
 
 	if err := common.AddSwaggerUIFromFS(r, openapiSpec, "openapi.yaml", "AASX File Server API", "/swagger", "/api-docs/openapi.yaml", cfg); err != nil {
 		log.Printf("Warning: failed to load OpenAPI spec for Swagger UI: %v", err)

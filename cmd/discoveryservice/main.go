@@ -67,7 +67,9 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 	r.Use(common.ConfigMiddleware(cfg))
 
 	common.AddCors(r, cfg)
-	common.AddVerificationEndpoint(r, cfg)
+	if cfg.Server.VerificationEndpointAvailable {
+		common.AddVerificationEndpoint(r, cfg)
+	}
 
 	// --- Health Endpoint (public) ---
 	common.AddHealthEndpoint(r, cfg)

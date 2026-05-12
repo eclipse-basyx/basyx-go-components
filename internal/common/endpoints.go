@@ -154,19 +154,20 @@ func VerifyPayload(r *http.Request) (map[string]interface{}, error) {
 		return nil, fmt.Errorf("COMMON-VERIFYPAYLOAD-DETECTFORMAT %w", err)
 	}
 
-	environment, err := parseVerificationEnvironment(format, payload)
+	target, err := parseVerificationTarget(format, payload)
 	if err != nil {
 		return nil, fmt.Errorf("COMMON-VERIFYPAYLOAD-PARSE %w", err)
 	}
 
-	messages := collectVerificationMessages(environment)
+	messages := collectVerificationMessages(target)
+	aasCount, submodelCount, conceptDescriptionCount := verificationCounts(target)
 
 	return map[string]interface{}{
 		"valid":                         len(messages) == 0,
 		"format":                        format,
-		"assetAdministrationShellCount": len(environment.AssetAdministrationShells()),
-		"submodelCount":                 len(environment.Submodels()),
-		"conceptDescriptionCount":       len(environment.ConceptDescriptions()),
+		"assetAdministrationShellCount": aasCount,
+		"submodelCount":                 submodelCount,
+		"conceptDescriptionCount":       conceptDescriptionCount,
 		"messages":                      messages,
 	}, nil
 
@@ -292,12 +293,12 @@ func normalizeVerificationContentType(contentType string) string {
 	return normalized
 }
 
-func parseVerificationEnvironment(format string, payload []byte) (aastypes.IEnvironment, error) {
+func parseVerificationTarget(format string, payload []byte) (aastypes.IClass, error) {
 	switch format {
 	case "json":
-		return parseVerificationJSONEnvironment(payload)
+		return parseVerificationJSONTarget(payload)
 	case "xml":
-		return parseVerificationXMLEnvironment(payload)
+		return parseVerificationXMLTarget(payload)
 	case "aasx":
 		return parseVerificationAASXEnvironment(payload)
 	default:
@@ -305,29 +306,57 @@ func parseVerificationEnvironment(format string, payload []byte) (aastypes.IEnvi
 	}
 }
 
-func parseVerificationJSONEnvironment(payload []byte) (aastypes.IEnvironment, error) {
+func parseVerificationJSONTarget(payload []byte) (aastypes.IClass, error) {
 	var jsonable any
 	if err := json.Unmarshal(payload, &jsonable); err != nil {
 		return nil, err
 	}
 
 	environment, err := aasjsonization.EnvironmentFromJsonable(jsonable)
-	if err != nil {
-		return nil, err
+	if err == nil {
+		return environment, nil
 	}
 
-	return environment, nil
+	aas, aasErr := aasjsonization.AssetAdministrationShellFromJsonable(jsonable)
+	if aasErr == nil {
+		return aas, nil
+	}
+
+	submodel, submodelErr := aasjsonization.SubmodelFromJsonable(jsonable)
+	if submodelErr == nil {
+		return submodel, nil
+	}
+
+	conceptDescription, cdErr := aasjsonization.ConceptDescriptionFromJsonable(jsonable)
+	if cdErr == nil {
+		return conceptDescription, nil
+	}
+
+	submodelElement, smeErr := aasjsonization.SubmodelElementFromJsonable(jsonable)
+	if smeErr == nil {
+		return submodelElement, nil
+	}
+
+	return nil, fmt.Errorf("payload is neither Environment nor supported single element (AAS/Submodel/ConceptDescription/SubmodelElement)")
 }
 
-func parseVerificationXMLEnvironment(payload []byte) (aastypes.IEnvironment, error) {
+func parseVerificationXMLTarget(payload []byte) (aastypes.IClass, error) {
 	instance, err := parseVerificationXMLInstance(payload)
 	if err != nil {
 		return nil, err
 	}
+	return instance, nil
+}
 
-	environment, ok := instance.(aastypes.IEnvironment)
+func parseVerificationXMLEnvironment(payload []byte) (aastypes.IEnvironment, error) {
+	target, err := parseVerificationXMLTarget(payload)
+	if err != nil {
+		return nil, err
+	}
+
+	environment, ok := target.(aastypes.IEnvironment)
 	if !ok {
-		return nil, fmt.Errorf("XML root is %T, expected AAS Environment", instance)
+		return nil, fmt.Errorf("XML root is %T, expected AAS Environment", target)
 	}
 
 	return environment, nil
@@ -496,15 +525,23 @@ func parseVerificationAASXEnvironment(payload []byte) (aastypes.IEnvironment, er
 	}
 	specContentType := strings.ToLower(strings.TrimSpace(supportedSpecs[0].ContentType))
 	if strings.HasSuffix(uri, ".json") || strings.Contains(specContentType, "json") {
-		return parseVerificationJSONEnvironment(specContent)
+		target, parseErr := parseVerificationJSONTarget(specContent)
+		if parseErr != nil {
+			return nil, parseErr
+		}
+		environment, ok := target.(aastypes.IEnvironment)
+		if !ok {
+			return nil, fmt.Errorf("AASX spec JSON root is %T, expected AAS Environment", target)
+		}
+		return environment, nil
 	}
 
 	return parseVerificationXMLEnvironment(specContent)
 }
 
-func collectVerificationMessages(environment aastypes.IEnvironment) []string {
+func collectVerificationMessages(target aastypes.IClass) []string {
 	messages := make([]string, 0)
-	verification.Verify(environment, func(verErr *verification.VerificationError) bool {
+	verification.Verify(target, func(verErr *verification.VerificationError) bool {
 		if verErr != nil {
 			messages = append(messages, verErr.Error())
 		}
@@ -512,4 +549,19 @@ func collectVerificationMessages(environment aastypes.IEnvironment) []string {
 	})
 	return messages
 
+}
+
+func verificationCounts(target aastypes.IClass) (int, int, int) {
+	switch value := target.(type) {
+	case aastypes.IEnvironment:
+		return len(value.AssetAdministrationShells()), len(value.Submodels()), len(value.ConceptDescriptions())
+	case aastypes.IAssetAdministrationShell:
+		return 1, 0, 0
+	case aastypes.ISubmodel:
+		return 0, 1, 0
+	case aastypes.IConceptDescription:
+		return 0, 0, 1
+	default:
+		return 0, 0, 0
+	}
 }

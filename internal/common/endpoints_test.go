@@ -185,6 +185,100 @@ func TestVerifyPayload_UnsupportedContentType(t *testing.T) {
 	}
 }
 
+func TestVerifyPayload_SingleAASJSON(t *testing.T) {
+	payload := `{
+  "idShort": "DelegatedOperationsAAS",
+  "id": "https://example.com/ids/aas/delegated-operations-example",
+  "assetInformation": {
+    "assetKind": "Instance",
+    "globalAssetId": "https://example.com/assets/delegated-operations-demo"
+  },
+  "submodels": [
+    {
+      "type": "ModelReference",
+      "keys": [
+        {
+          "type": "Submodel",
+          "value": "https://example.com/ids/sm/delegated-operations"
+        }
+      ]
+    }
+  ],
+  "modelType": "AssetAdministrationShell"
+}`
+
+	req := httptest.NewRequest(http.MethodPost, "/verify", strings.NewReader(payload))
+	req.Header.Set("Content-Type", "application/json")
+
+	result, err := VerifyPayload(req)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if count, ok := result["assetAdministrationShellCount"].(int); !ok || count != 1 {
+		t.Fatalf("expected assetAdministrationShellCount=1, got %#v", result["assetAdministrationShellCount"])
+	}
+}
+
+func TestVerifyPayload_SingleSubmodelJSON(t *testing.T) {
+	payload := `{
+  "modelType": "Submodel",
+  "id": "https://example.com/ids/sm/delegated-operations",
+  "idShort": "DelegatedOperationsSubmodel",
+  "kind": "Instance",
+  "submodelElements": []
+}`
+
+	req := httptest.NewRequest(http.MethodPost, "/verify", strings.NewReader(payload))
+	req.Header.Set("Content-Type", "application/json")
+
+	result, err := VerifyPayload(req)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if count, ok := result["submodelCount"].(int); !ok || count != 1 {
+		t.Fatalf("expected submodelCount=1, got %#v", result["submodelCount"])
+	}
+}
+
+func TestVerifyPayload_SingleConceptDescriptionJSON(t *testing.T) {
+	payload := `{
+  "id": "urn:example:cd:editor:post-allowed",
+  "idShort": "EditorAllowed",
+  "modelType": "ConceptDescription"
+}`
+
+	req := httptest.NewRequest(http.MethodPost, "/verify", strings.NewReader(payload))
+	req.Header.Set("Content-Type", "application/json")
+
+	result, err := VerifyPayload(req)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if count, ok := result["conceptDescriptionCount"].(int); !ok || count != 1 {
+		t.Fatalf("expected conceptDescriptionCount=1, got %#v", result["conceptDescriptionCount"])
+	}
+}
+
+func TestVerifyPayload_SingleSubmodelElementJSON(t *testing.T) {
+	payload := `{
+  "modelType": "Property",
+  "idShort": "numberA",
+  "valueType": "xs:int",
+  "value": "0"
+}`
+
+	req := httptest.NewRequest(http.MethodPost, "/verify", strings.NewReader(payload))
+	req.Header.Set("Content-Type", "application/json")
+
+	result, err := VerifyPayload(req)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if format, ok := result["format"].(string); !ok || format != "json" {
+		t.Fatalf("expected format json, got %#v", result["format"])
+	}
+}
+
 func TestAddVerificationEndpoint_RawJSON(t *testing.T) {
 	router := chi.NewRouter()
 	cfg := &Config{Server: ServerConfig{ContextPath: "/api"}}

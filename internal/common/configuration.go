@@ -47,53 +47,55 @@ import (
 // DefaultConfig holds all default values for configuration options.
 // THESE VALUES ARE NOT USED! THEY VALIDATE IF CONFIGURATION IS DEFAULT IN THE PRINT STATEMENT
 var DefaultConfig = struct {
-	ServerPort                  int
-	ServerContextPath           string
-	ServerCacheEnabled          bool
-	ServerStrictVerification    string
-	PgPort                      int
-	PgDBName                    string
-	PgMaxOpen                   int
-	PgMaxIdle                   int
-	PgConnLifetime              int
-	AllowedOrigins              []string
-	AllowedMethods              []string
-	AllowedHeaders              []string
-	AllowCredentials            bool
-	OIDCTrustlistPath           string
-	OIDCJWKSURL                 string
-	ABACEnabled                 bool
-	ABACModelPath               string
-	GeneralImplicitCasts        bool
-	GeneralDescriptorDebug      bool
-	GeneralDiscoveryIntegration bool
-	GeneralSupportsSingularSSID bool
-	GeneralEnableCustomHeaderMW bool
-	GeneralAASPreconfigPaths    []string
+	ServerPort                          int
+	ServerContextPath                   string
+	ServerCacheEnabled                  bool
+	ServerStrictVerification            string
+	ServerVerificationEndpointAvailable bool
+	PgPort                              int
+	PgDBName                            string
+	PgMaxOpen                           int
+	PgMaxIdle                           int
+	PgConnLifetime                      int
+	AllowedOrigins                      []string
+	AllowedMethods                      []string
+	AllowedHeaders                      []string
+	AllowCredentials                    bool
+	OIDCTrustlistPath                   string
+	OIDCJWKSURL                         string
+	ABACEnabled                         bool
+	ABACModelPath                       string
+	GeneralImplicitCasts                bool
+	GeneralDescriptorDebug              bool
+	GeneralDiscoveryIntegration         bool
+	GeneralSupportsSingularSSID         bool
+	GeneralEnableCustomHeaderMW         bool
+	GeneralAASPreconfigPaths            []string
 }{
-	ServerPort:                  5004,
-	ServerContextPath:           "",
-	ServerCacheEnabled:          false,
-	ServerStrictVerification:    "strict",
-	PgPort:                      5432,
-	PgDBName:                    "basyxTestDB",
-	PgMaxOpen:                   50,
-	PgMaxIdle:                   50,
-	PgConnLifetime:              5,
-	AllowedOrigins:              []string{},
-	AllowedMethods:              []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
-	AllowedHeaders:              []string{},
-	AllowCredentials:            false,
-	OIDCTrustlistPath:           "config/trustlist.json",
-	OIDCJWKSURL:                 "",
-	ABACEnabled:                 false,
-	ABACModelPath:               "config/access_rules/access-rules.json",
-	GeneralImplicitCasts:        true,
-	GeneralDescriptorDebug:      false,
-	GeneralDiscoveryIntegration: false,
-	GeneralSupportsSingularSSID: false,
-	GeneralEnableCustomHeaderMW: false,
-	GeneralAASPreconfigPaths:    []string{},
+	ServerPort:                          5004,
+	ServerContextPath:                   "",
+	ServerCacheEnabled:                  false,
+	ServerStrictVerification:            "strict",
+	ServerVerificationEndpointAvailable: true,
+	PgPort:                              5432,
+	PgDBName:                            "basyxTestDB",
+	PgMaxOpen:                           50,
+	PgMaxIdle:                           50,
+	PgConnLifetime:                      5,
+	AllowedOrigins:                      []string{},
+	AllowedMethods:                      []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
+	AllowedHeaders:                      []string{},
+	AllowCredentials:                    false,
+	OIDCTrustlistPath:                   "config/trustlist.json",
+	OIDCJWKSURL:                         "",
+	ABACEnabled:                         false,
+	ABACModelPath:                       "config/access_rules/access-rules.json",
+	GeneralImplicitCasts:                true,
+	GeneralDescriptorDebug:              false,
+	GeneralDiscoveryIntegration:         false,
+	GeneralSupportsSingularSSID:         false,
+	GeneralEnableCustomHeaderMW:         false,
+	GeneralAASPreconfigPaths:            []string{},
 }
 
 // PrintSplash displays the BaSyx Go API ASCII art logo to the console.
@@ -171,11 +173,12 @@ type SwaggerConfig struct {
 
 // ServerConfig contains HTTP server configuration parameters.
 type ServerConfig struct {
-	Host               string `mapstructure:"host" yaml:"host"`                             // HTTP server host (default: 0.0.0.0)
-	Port               int    `mapstructure:"port" yaml:"port"`                             // HTTP server port (default: 5004)
-	ContextPath        string `mapstructure:"contextPath" yaml:"contextPath"`               // Base path for all endpoints
-	CacheEnabled       bool   `mapstructure:"cacheEnabled" yaml:"cacheEnabled"`             // Enable/disable response caching
-	StrictVerification string `mapstructure:"strictVerification" yaml:"strictVerification"` // Verification mode: off|permissive|strict (default: strict)
+	Host                          string `mapstructure:"host" yaml:"host"`                                                   // HTTP server host (default: 0.0.0.0)
+	Port                          int    `mapstructure:"port" yaml:"port"`                                                   // HTTP server port (default: 5004)
+	ContextPath                   string `mapstructure:"contextPath" yaml:"contextPath"`                                     // Base path for all endpoints
+	CacheEnabled                  bool   `mapstructure:"cacheEnabled" yaml:"cacheEnabled"`                                   // Enable/disable response caching
+	StrictVerification            string `mapstructure:"strictVerification" yaml:"strictVerification"`                       // Verification mode: off|permissive|strict (default: strict)
+	VerificationEndpointAvailable bool   `mapstructure:"verificationEndpointAvailable" yaml:"verificationEndpointAvailable"` // Enable/disable verification endpoint
 }
 
 // PostgresConfig contains PostgreSQL database connection parameters.
@@ -349,7 +352,8 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("server.port", 5004)
 	v.SetDefault("server.contextPath", "")
 	v.SetDefault("server.cacheEnabled", false)
-	v.SetDefault("server.strictVerification", "strict")
+	v.SetDefault("server.strictVerification", "permissive")
+	v.SetDefault("server.verificationEndpointAvailable", true)
 
 	// PostgreSQL defaults
 	v.SetDefault("postgres.host", "db")
@@ -439,6 +443,7 @@ func PrintConfiguration(cfg *Config) {
 	add("Context Path", cfg.Server.ContextPath, DefaultConfig.ServerContextPath)
 	add("Cache Enabled", cfg.Server.CacheEnabled, DefaultConfig.ServerCacheEnabled)
 	add("Verification Mode", cfg.Server.StrictVerification, DefaultConfig.ServerStrictVerification)
+	add("Verification Endpoint Available", cfg.Server.VerificationEndpointAvailable, DefaultConfig.ServerVerificationEndpointAvailable)
 
 	lines = append(lines, divider)
 

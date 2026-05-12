@@ -3,6 +3,7 @@ server:
   contextPath: ""
   host: 0.0.0.0
   strictVerification: permissive  # Values: off|permissive|strict
+  verificationEndpointAvailable: true
 
 postgres:
   host: localhost

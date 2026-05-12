@@ -29,11 +29,11 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 	log.Default().Println("Loading Submodel Repository Service...")
 	log.Default().Println("Config Path:", configPath)
 	// Load configuration
-	config, err := common.LoadConfig(configPath)
+	cfg, err := common.LoadConfig(configPath)
 	if err != nil {
 		return err
 	}
-	if err := commonmodel.SetVerificationMode(config.Server.StrictVerification); err != nil {
+	if err := commonmodel.SetVerificationMode(cfg.Server.StrictVerification); err != nil {
 		return err
 	}
 
@@ -41,14 +41,16 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 	r := chi.NewRouter()
 
 	// Make configuration available in request contexts.
-	r.Use(common.ConfigMiddleware(config))
+	r.Use(common.ConfigMiddleware(cfg))
 
-	common.AddCors(r, config)
-	common.AddHealthEndpoint(r, config)
-	common.AddVerificationEndpoint(r, config)
+	common.AddCors(r, cfg)
+	common.AddHealthEndpoint(r, cfg)
+	if cfg.Server.VerificationEndpointAvailable {
+		common.AddVerificationEndpoint(r, cfg)
+	}
 
 	// Add Swagger UI
-	if err := common.AddSwaggerUIFromFS(r, openapiSpec, "openapi.yaml", "Submodel Repository API", "/swagger", "/api-docs/openapi.yaml", config); err != nil {
+	if err := common.AddSwaggerUIFromFS(r, openapiSpec, "openapi.yaml", "Submodel Repository API", "/swagger", "/api-docs/openapi.yaml", cfg); err != nil {
 		log.Printf("Warning: failed to load OpenAPI spec for Swagger UI: %v", err)
 	}
 
@@ -57,8 +59,8 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 
 	// Load JWS private key if configured
 	var privateKey *rsa.PrivateKey
-	if config.JWS.PrivateKeyPath != "" {
-		privateKey, err = jws.LoadPrivateKey(config.JWS.PrivateKeyPath)
+	if cfg.JWS.PrivateKeyPath != "" {
+		privateKey, err = jws.LoadPrivateKey(cfg.JWS.PrivateKeyPath)
 		if err != nil {
 			log.Printf("Warning: failed to load JWS private key: %v - /$signed Endpoints will be unavailable", err)
 		} else {
@@ -66,28 +68,28 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 		}
 	}
 
-	dsn := common.BuildPostgresDSN(config.Postgres)
-	smDatabase, err := persistencepostgresql.NewSubmodelDatabase(dsn, config.Postgres.MaxOpenConnections, config.Postgres.MaxIdleConnections, config.Postgres.ConnMaxLifetimeMinutes, databaseSchema, privateKey, config.Server.StrictVerification)
+	dsn := common.BuildPostgresDSN(cfg.Postgres)
+	smDatabase, err := persistencepostgresql.NewSubmodelDatabase(dsn, cfg.Postgres.MaxOpenConnections, cfg.Postgres.MaxIdleConnections, cfg.Postgres.ConnMaxLifetimeMinutes, databaseSchema, privateKey, cfg.Server.StrictVerification)
 	if err != nil {
 		return err
 	}
 
 	smSvc := api.NewSubmodelRepositoryAPIAPIService(*smDatabase)
-	smCtrl := openapi.NewSubmodelRepositoryAPIAPIController(smSvc, "", config.Server.StrictVerification)
+	smCtrl := openapi.NewSubmodelRepositoryAPIAPIController(smSvc, "", cfg.Server.StrictVerification)
 	serializationSvc := api.NewSerializationAPIAPIService()
 	serializationCtrl := openapi.NewSerializationAPIAPIController(serializationSvc, "")
 
 	// ==== Description Service ====
 	descSvc := api.NewDescriptionAPIAPIService()
 	descCtrl := openapi.NewDescriptionAPIAPIController(descSvc)
-	base := common.NormalizeBasePath(config.Server.ContextPath)
+	base := common.NormalizeBasePath(cfg.Server.ContextPath)
 
 	// === Protected API Subrouter ===
 	apiRouter := chi.NewRouter()
 	common.ConfigureAPIRouter(apiRouter, "SubmodelRepositoryService")
 
 	// Apply OIDC + ABAC once for all repository endpoints
-	if err := auth.SetupSecurity(ctx, config, apiRouter); err != nil {
+	if err := auth.SetupSecurity(ctx, cfg, apiRouter); err != nil {
 		return err
 	}
 
@@ -105,8 +107,8 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 	r.Mount(base, apiRouter)
 
 	// Start the server
-	addr := "0.0.0.0:" + fmt.Sprintf("%d", config.Server.Port)
-	log.Printf("▶️  Submodel Repository listening on %s (contextPath=%q)\n", addr, config.Server.ContextPath)
+	addr := "0.0.0.0:" + fmt.Sprintf("%d", cfg.Server.Port)
+	log.Printf("▶️  Submodel Repository listening on %s (contextPath=%q)\n", addr, cfg.Server.ContextPath)
 	// Start server in a goroutine
 	go func() {
 		//nolint:gosec // implementing this fix would cause errors.
