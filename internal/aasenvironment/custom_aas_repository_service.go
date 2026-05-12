@@ -160,6 +160,69 @@ func (s *CustomAASRepositoryService) DeleteAssetAdministrationShellById(ctx cont
 	return commonmodel.Response(http.StatusNoContent, nil), nil
 }
 
+// PutAssetInformationAasRepository updates AAS asset information and synchronizes descriptor writes in the same transaction.
+func (s *CustomAASRepositoryService) PutAssetInformationAasRepository(ctx context.Context, aasIdentifier string, assetInformation types.IAssetInformation) (commonmodel.ImplResponse, error) {
+	const operation = "PutAssetInformationAasRepository"
+	if !s.syncConfig.AASRegistryIntegration {
+		return s.AssetAdministrationShellRepositoryAPIAPIService.PutAssetInformationAasRepository(ctx, aasIdentifier, assetInformation)
+	}
+
+	decodedIdentifier, decodeErr := common.DecodeString(aasIdentifier)
+	if decodeErr != nil {
+		return newAASRepoErrorResponse(decodeErr, http.StatusBadRequest, operation, "MalformedAssetAdministrationShellIdentifier"), nil
+	}
+
+	existingAASJSON, getErr := s.persistence.AASRepository.GetAssetAdministrationShellByID(ctx, decodedIdentifier)
+	if getErr != nil {
+		if common.IsErrNotFound(getErr) {
+			return newAASRepoErrorResponse(getErr, http.StatusNotFound, operation, "AssetAdministrationShellNotFound"), nil
+		}
+		return newAASRepoErrorResponse(getErr, http.StatusInternalServerError, operation, "GetAssetAdministrationShellByID"), getErr
+	}
+
+	descriptor, descriptorGetErr := s.persistence.AASRegistry.GetAssetAdministrationShellDescriptorByID(ctx, decodedIdentifier)
+	if descriptorGetErr != nil && !common.IsErrNotFound(descriptorGetErr) {
+		return newAASRepoErrorResponse(descriptorGetErr, http.StatusInternalServerError, operation, "GetAssetAdministrationShellDescriptorByID"), descriptorGetErr
+	}
+	if common.IsErrNotFound(descriptorGetErr) {
+		descriptor = commonmodel.AssetAdministrationShellDescriptor{
+			Id:        decodedIdentifier,
+			Endpoints: s.syncConfig.buildAASDescriptorEndpoints(decodedIdentifier),
+		}
+		if idShort, ok := existingAASJSON["idShort"].(string); ok {
+			descriptor.IdShort = idShort
+		}
+	}
+	descriptor.AssetKind = assetKindPointer(assetInformation.AssetKind())
+	descriptor.AssetType = readOptionalString(assetInformation.AssetType())
+	descriptor.GlobalAssetId = readOptionalString(assetInformation.GlobalAssetID())
+	descriptor.SpecificAssetIds = assetInformation.SpecificAssetIDs()
+	if len(descriptor.Endpoints) == 0 {
+		descriptor.Endpoints = s.syncConfig.buildAASDescriptorEndpoints(decodedIdentifier)
+	}
+
+	err := s.ExecuteInTransaction(func(tx *sql.Tx) error {
+		if err := s.persistence.AASRepository.PutAssetInformationByAASIDInTransaction(ctx, tx, decodedIdentifier, assetInformation); err != nil {
+			return err
+		}
+		return s.persistence.AASRegistry.UpsertAdministrationShellDescriptorInTransaction(ctx, tx, descriptor)
+	})
+	if err != nil {
+		if common.IsErrDenied(err) {
+			return newAASRepoErrorResponse(err, http.StatusForbidden, operation, "Forbidden"), nil
+		}
+		if common.IsErrNotFound(err) {
+			return newAASRepoErrorResponse(err, http.StatusNotFound, operation, "AssetAdministrationShellNotFound"), nil
+		}
+		if common.IsErrBadRequest(err) {
+			return newAASRepoErrorResponse(err, http.StatusBadRequest, operation, "BadRequest"), nil
+		}
+		return newAASRepoErrorResponse(err, http.StatusInternalServerError, operation, "PutAssetInformationByAASID"), err
+	}
+
+	return commonmodel.Response(http.StatusNoContent, nil), nil
+}
+
 func newAASRepoErrorResponse(err error, status int, operation string, info string) commonmodel.ImplResponse {
 	return common.NewErrorResponse(err, status, "AASREPO", operation, info)
 }

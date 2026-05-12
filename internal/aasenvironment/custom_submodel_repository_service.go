@@ -3,6 +3,7 @@ package aasenvironment
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"net/http"
 
@@ -121,7 +122,7 @@ func (s *CustomSubmodelRepositoryService) PutSubmodelByID(ctx context.Context, s
 		if common.IsErrNotFound(err) {
 			return newSubmodelRepoErrorResponse(err, http.StatusNotFound, operation, "SubmodelNotFound"), nil
 		}
-		return newSubmodelRepoErrorResponse(err, http.StatusInternalServerError, operation, "InternalServerError"), nil
+		return newSubmodelRepoErrorResponse(err, http.StatusInternalServerError, operation, "InternalServerError"), err
 	}
 
 	if isUpdate {
@@ -163,7 +164,7 @@ func (s *CustomSubmodelRepositoryService) DeleteSubmodelByID(ctx context.Context
 		if common.IsErrBadRequest(err) {
 			return newSubmodelRepoErrorResponse(err, http.StatusBadRequest, operation, "BadRequest"), nil
 		}
-		return newSubmodelRepoErrorResponse(err, http.StatusInternalServerError, operation, "InternalServerError"), nil
+		return newSubmodelRepoErrorResponse(err, http.StatusInternalServerError, operation, "InternalServerError"), err
 	}
 
 	return commonmodel.Response(http.StatusNoContent, nil), nil
@@ -247,10 +248,108 @@ func (s *CustomSubmodelRepositoryService) PatchSubmodelByID(ctx context.Context,
 		if common.IsErrNotFound(err) {
 			return newSubmodelRepoErrorResponse(err, http.StatusNotFound, operation, "SubmodelNotFound"), nil
 		}
-		return newSubmodelRepoErrorResponse(err, http.StatusInternalServerError, operation, "InternalServerError"), nil
+		return newSubmodelRepoErrorResponse(err, http.StatusInternalServerError, operation, "InternalServerError"), err
 	}
 
 	return commonmodel.Response(http.StatusNoContent, nil), nil
+}
+
+// PatchSubmodelByIDMetadata updates submodel metadata and synchronizes descriptor writes in the same transaction.
+func (s *CustomSubmodelRepositoryService) PatchSubmodelByIDMetadata(ctx context.Context, submodelIdentifier string, submodelMetadata commonmodel.SubmodelMetadata) (commonmodel.ImplResponse, error) {
+	const operation = "PatchSubmodelByIDMetadata"
+	if !s.syncConfig.SubmodelRegistryIntegration {
+		return s.SubmodelRepositoryAPIAPIService.PatchSubmodelByIDMetadata(ctx, submodelIdentifier, submodelMetadata)
+	}
+
+	decodedIdentifier, decodeErr := common.DecodeString(submodelIdentifier)
+	if decodeErr != nil {
+		return newSubmodelRepoErrorResponse(decodeErr, http.StatusBadRequest, operation, "MalformedSubmodelIdentifier"), nil
+	}
+
+	if submodelMetadata.ID != "" && decodedIdentifier != submodelMetadata.ID {
+		return newSubmodelRepoErrorResponse(errors.New("submodel ID in path and body do not match"), http.StatusBadRequest, operation, "IdMismatch"), nil
+	}
+
+	patchJSON, patchJSONErr := submodelMetadataToPatchJSON(submodelMetadata)
+	if patchJSONErr != nil {
+		return newSubmodelRepoErrorResponse(patchJSONErr, http.StatusBadRequest, operation, "InvalidSubmodelMetadata"), nil
+	}
+	if rawPatchJSON, hasRawPatch := common.GetSubmodelMetadataPatch(ctx); hasRawPatch {
+		patchJSON = rawPatchJSON
+	}
+	if patchJSON["modelType"] != "Submodel" {
+		return newSubmodelRepoErrorResponse(errors.New("modelType for Submodel metadata must be 'Submodel'"), http.StatusBadRequest, operation, "InvalidSubmodelMetadata"), nil
+	}
+	patchJSON["id"] = decodedIdentifier
+
+	existingSubmodels, _, getErr := s.persistence.SubmodelRepository.GetSubmodels(ctx, 1, "", decodedIdentifier)
+	if getErr != nil {
+		if common.IsErrNotFound(getErr) || errors.Is(getErr, sql.ErrNoRows) {
+			return newSubmodelRepoErrorResponse(getErr, http.StatusNotFound, operation, "SubmodelNotFound"), nil
+		}
+		return newSubmodelRepoErrorResponse(getErr, http.StatusInternalServerError, operation, "GetSubmodelByID"), getErr
+	}
+	if len(existingSubmodels) == 0 {
+		return newSubmodelRepoErrorResponse(common.NewErrNotFound(decodedIdentifier), http.StatusNotFound, operation, "SubmodelNotFound"), nil
+	}
+
+	existingSubmodel := existingSubmodels[0]
+	if existingSubmodel == nil {
+		nilErr := common.NewInternalServerError("SMREPO-PATCHSMMETA-EXISTINGNIL Existing submodel is nil")
+		return newSubmodelRepoErrorResponse(nilErr, http.StatusInternalServerError, operation, "GetSubmodelByID"), nilErr
+	}
+
+	existingJSON, existingJSONErr := jsonization.ToJsonable(existingSubmodel)
+	if existingJSONErr != nil {
+		return newSubmodelRepoErrorResponse(existingJSONErr, http.StatusInternalServerError, operation, "ToJsonableCurrentSubmodel"), existingJSONErr
+	}
+
+	mergedJSON := mergeSubmodelJSON(existingJSON, patchJSON)
+	delete(mergedJSON, "submodelElements")
+	mergedSubmodel, mergedErr := jsonization.SubmodelFromJsonable(mergedJSON)
+	if mergedErr != nil {
+		return newSubmodelRepoErrorResponse(mergedErr, http.StatusBadRequest, operation, "InvalidPatchedSubmodel"), nil
+	}
+
+	err := s.ExecuteInTransaction(func(tx *sql.Tx) error {
+		if patchErr := s.persistence.SubmodelRepository.PatchSubmodelMetadataInTransaction(decodedIdentifier, tx, mergedSubmodel); patchErr != nil {
+			return patchErr
+		}
+
+		descriptor, descriptorErr := s.syncConfig.buildSubmodelDescriptor(mergedSubmodel)
+		if descriptorErr != nil {
+			return descriptorErr
+		}
+		return s.persistence.SubmodelRegistry.UpsertSubmodelDescriptorInTransaction(ctx, tx, descriptor)
+	})
+	if err != nil {
+		if common.IsErrBadRequest(err) {
+			return newSubmodelRepoErrorResponse(err, http.StatusBadRequest, operation, "BadRequest"), nil
+		}
+		if common.IsErrNotFound(err) {
+			return newSubmodelRepoErrorResponse(err, http.StatusNotFound, operation, "SubmodelNotFound"), nil
+		}
+		if common.IsErrDenied(err) {
+			return newSubmodelRepoErrorResponse(err, http.StatusForbidden, operation, "Denied"), nil
+		}
+		return newSubmodelRepoErrorResponse(err, http.StatusInternalServerError, operation, "PatchSubmodelMetadata"), err
+	}
+
+	return commonmodel.Response(http.StatusNoContent, nil), nil
+}
+
+func submodelMetadataToPatchJSON(metadata commonmodel.SubmodelMetadata) (map[string]any, error) {
+	rawJSON, marshalErr := json.Marshal(metadata)
+	if marshalErr != nil {
+		return nil, marshalErr
+	}
+
+	result := map[string]any{}
+	if unmarshalErr := json.Unmarshal(rawJSON, &result); unmarshalErr != nil {
+		return nil, unmarshalErr
+	}
+
+	return result, nil
 }
 
 func newSubmodelRepoErrorResponse(err error, status int, operation string, info string) commonmodel.ImplResponse {

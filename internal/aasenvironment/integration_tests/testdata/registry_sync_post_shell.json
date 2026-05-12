@@ -1,9 +1,23 @@
 {
+  "administration": {
+    "version": "1",
+    "revision": "0"
+  },
   "idShort": "registrySyncPostShell",
   "id": "urn:example:aas:registry-sync-post",
   "assetInformation": {
     "assetKind": "Instance",
-    "globalAssetId": "urn:example:asset:registry-sync-post"
+    "globalAssetId": "urn:example:asset:registry-sync-post",
+    "specificAssetIds": [
+      {
+        "name": "manufacturerPartId",
+        "value": "mp-registry-sync-post"
+      },
+      {
+        "name": "serialNumber",
+        "value": "sn-registry-sync-post-001"
+      }
+    ]
   },
   "modelType": "AssetAdministrationShell"
 }

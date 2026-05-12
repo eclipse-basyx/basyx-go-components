@@ -171,6 +171,12 @@ func normalizeExternalBaseURL(rawURL string) (string, error) {
 			"AASENV-REGSYNCCFG-BADEXTERNALURL " + externalURLKey + " entries must include scheme and host",
 		)
 	}
+	scheme := strings.ToLower(strings.TrimSpace(parsed.Scheme))
+	if scheme != "http" && scheme != "https" {
+		return "", common.NewErrBadRequest(
+			"AASENV-REGSYNCCFG-BADEXTERNALURL " + externalURLKey + " entries must use http or https scheme",
+		)
+	}
 	if parsed.RawQuery != "" || parsed.Fragment != "" {
 		return "", common.NewErrBadRequest(
 			"AASENV-REGSYNCCFG-BADEXTERNALURL " + externalURLKey + " entries must not contain query parameters or fragments",

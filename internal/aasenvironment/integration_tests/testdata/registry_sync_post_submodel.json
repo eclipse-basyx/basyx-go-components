@@ -1,0 +1,20 @@
+{
+  "administration": {
+    "version": "1",
+    "revision": "0"
+  },
+  "idShort": "registrySyncPostSubmodel",
+  "id": "urn:example:sm:registry-sync-post",
+  "kind": "Instance",
+  "semanticId": {
+    "type": "ModelReference",
+    "keys": [
+      {
+        "type": "Submodel",
+        "value": "urn:example:semantic:registry-sync-post"
+      }
+    ]
+  },
+  "submodelElements": [],
+  "modelType": "Submodel"
+}

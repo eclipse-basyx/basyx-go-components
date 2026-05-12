@@ -28,7 +28,83 @@
     "expectedStatus": 200
   },
   {
-    "context": "005 - Upload JSON environment via /upload",
+    "context": "005 - Verify discovery links for posted shell",
+    "method": "GET",
+    "endpoint": "http://127.0.0.1:6004/lookup/shells/dXJuOmV4YW1wbGU6YWFzOnJlZ2lzdHJ5LXN5bmMtcG9zdA",
+    "shouldMatch": "expected/registry_sync_post_lookup_links.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "006 - Update asset information via /shells/{id}/asset-information",
+    "method": "PUT",
+    "endpoint": "http://127.0.0.1:6004/shells/dXJuOmV4YW1wbGU6YWFzOnJlZ2lzdHJ5LXN5bmMtcG9zdA/asset-information",
+    "data": "testdata/registry_sync_put_asset_information.json",
+    "expectedStatus": 204
+  },
+  {
+    "context": "007 - Verify descriptor after asset information update",
+    "method": "GET",
+    "endpoint": "http://127.0.0.1:6004/shell-descriptors/dXJuOmV4YW1wbGU6YWFzOnJlZ2lzdHJ5LXN5bmMtcG9zdA",
+    "shouldMatch": "expected/registry_sync_put_descriptor_asset_information.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "008 - Create submodel via /submodels",
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:6004/submodels",
+    "data": "testdata/registry_sync_post_submodel.json",
+    "shouldMatch": "testdata/registry_sync_post_submodel.json",
+    "expectedStatus": 201
+  },
+  {
+    "context": "009 - Verify descriptor for posted submodel",
+    "method": "GET",
+    "endpoint": "http://127.0.0.1:6004/submodel-descriptors/dXJuOmV4YW1wbGU6c206cmVnaXN0cnktc3luYy1wb3N0",
+    "shouldMatch": "expected/registry_sync_post_submodel_descriptor.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "010 - Patch submodel metadata via /submodels/{id}/$metadata",
+    "method": "PATCH",
+    "endpoint": "http://127.0.0.1:6004/submodels/dXJuOmV4YW1wbGU6c206cmVnaXN0cnktc3luYy1wb3N0/$metadata",
+    "data": "testdata/registry_sync_patch_submodel_metadata.json",
+    "expectedStatus": 204
+  },
+  {
+    "context": "011 - Verify descriptor after metadata patch",
+    "method": "GET",
+    "endpoint": "http://127.0.0.1:6004/submodel-descriptors/dXJuOmV4YW1wbGU6c206cmVnaXN0cnktc3luYy1wb3N0",
+    "shouldMatch": "expected/registry_sync_patch_submodel_descriptor.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "012 - Update submodel via /submodels/{id}",
+    "method": "PUT",
+    "endpoint": "http://127.0.0.1:6004/submodels/dXJuOmV4YW1wbGU6c206cmVnaXN0cnktc3luYy1wb3N0",
+    "data": "testdata/registry_sync_put_submodel.json",
+    "expectedStatus": 204
+  },
+  {
+    "context": "013 - Verify descriptor for updated submodel",
+    "method": "GET",
+    "endpoint": "http://127.0.0.1:6004/submodel-descriptors/dXJuOmV4YW1wbGU6c206cmVnaXN0cnktc3luYy1wb3N0",
+    "shouldMatch": "expected/registry_sync_put_submodel_descriptor.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "014 - Delete submodel via /submodels/{id}",
+    "method": "DELETE",
+    "endpoint": "http://127.0.0.1:6004/submodels/dXJuOmV4YW1wbGU6c206cmVnaXN0cnktc3luYy1wb3N0",
+    "expectedStatus": 204
+  },
+  {
+    "context": "015 - Verify descriptor removed for deleted submodel",
+    "method": "GET",
+    "endpoint": "http://127.0.0.1:6004/submodel-descriptors/dXJuOmV4YW1wbGU6c206cmVnaXN0cnktc3luYy1wb3N0",
+    "expectedStatus": 404
+  },
+  {
+    "context": "016 - Upload JSON environment via /upload",
     "action": "UPLOAD_MULTIPART",
     "method": "POST",
     "endpoint": "http://127.0.0.1:6004/upload",
@@ -39,14 +115,14 @@
     "expectedStatus": 200
   },
   {
-    "context": "006 - Verify uploaded shell exists",
+    "context": "017 - Verify uploaded shell exists",
     "method": "GET",
     "endpoint": "http://127.0.0.1:6004/shells/dXJuOmV4YW1wbGU6YWFzOnJlZ2lzdHJ5LXN5bmMtdXBsb2Fk",
     "shouldMatch": "expected/registry_sync_uploaded_shell.json",
     "expectedStatus": 200
   },
   {
-    "context": "007 - Verify descriptor for uploaded shell",
+    "context": "018 - Verify descriptor for uploaded shell",
     "method": "GET",
     "endpoint": "http://127.0.0.1:6004/shell-descriptors/dXJuOmV4YW1wbGU6YWFzOnJlZ2lzdHJ5LXN5bmMtdXBsb2Fk",
     "shouldMatch": "expected/registry_sync_uploaded_descriptor.json",
