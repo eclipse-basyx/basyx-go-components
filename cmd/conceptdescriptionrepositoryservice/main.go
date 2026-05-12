@@ -34,7 +34,6 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"strconv"
 
 	"github.com/go-chi/chi/v5"
 
@@ -82,8 +81,9 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 	// Instantiate generated services & controllers
 	// ==== Concept Description Repository Service ====
 
+	dsn := common.BuildPostgresDSN(config.Postgres)
 	cdDatabase, err := persistence.NewConceptDescriptionBackend(
-		"postgres://"+config.Postgres.User+":"+config.Postgres.Password+"@"+config.Postgres.Host+":"+strconv.Itoa(config.Postgres.Port)+"/"+config.Postgres.DBName+"?sslmode=disable",
+		dsn,
 		//nolint:gosec // configured value is bounded by deployment configuration
 		int32(config.Postgres.MaxOpenConnections),
 		config.Postgres.MaxIdleConnections,
@@ -105,6 +105,7 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 
 	// === Protected API Subrouter ===
 	apiRouter := chi.NewRouter()
+	common.ConfigureAPIRouter(apiRouter, "ConceptDescriptionRepositoryService")
 
 	// Apply OIDC + ABAC once for all repository endpoints
 	if err := auth.SetupSecurity(ctx, config, apiRouter); err != nil {

@@ -492,11 +492,26 @@ func normalizeJSON(input []byte) (string, error) {
 	if err := json.Unmarshal(input, &parsed); err != nil {
 		return "", err
 	}
+	stripDynamicCreatedAt(parsed)
 	normalized, err := json.Marshal(parsed)
 	if err != nil {
 		return "", err
 	}
 	return string(normalized), nil
+}
+
+func stripDynamicCreatedAt(value any) {
+	switch casted := value.(type) {
+	case map[string]any:
+		delete(casted, "createdAt")
+		for _, nested := range casted {
+			stripDynamicCreatedAt(nested)
+		}
+	case []any:
+		for _, nested := range casted {
+			stripDynamicCreatedAt(nested)
+		}
+	}
 }
 
 func (r *JSONSuiteRunner) writeRequestLog(stepNumber int, req *http.Request, bodyBytes []byte) {

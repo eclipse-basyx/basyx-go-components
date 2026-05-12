@@ -35,6 +35,7 @@ package persistencepostgresql
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"time"
 
@@ -240,12 +241,25 @@ func (p *PostgreSQLDiscoveryDatabase) SearchAASIDsByAssetLinks(
 	if peekLimit < 0 {
 		return nil, "", common.NewErrBadRequest("Limit has to be higher than 0")
 	}
+	if cursor != "" {
+		cursorExists, cursorErr := p.discoveryCursorExists(ctx, cursor)
+		if cursorErr != nil {
+			return nil, "", cursorErr
+		}
+		if !cursorExists {
+			return []string{}, "", nil
+		}
+	}
 
 	d := goqu.Dialect("postgres")
 	ai := goqu.T("aas_identifier")
-	sai := goqu.T("specific_asset_id").As("sai")
+	ad := goqu.T(common.TblAASDescriptor)
 
 	ds := d.From(ai).
+		LeftJoin(
+			ad,
+			goqu.On(ad.Col(common.ColAASID).Eq(ai.Col("aasid"))),
+		).
 		Select(ai.Col("aasid")).
 		Where(
 			goqu.Or(
@@ -254,13 +268,19 @@ func (p *PostgreSQLDiscoveryDatabase) SearchAASIDsByAssetLinks(
 			),
 		)
 
-	for _, link := range links {
-		sub := d.From(sai).
-			Select(goqu.V(1)).
-			Where(sai.Col("aasref").Eq(ai.Col("id"))).
-			Where(sai.Col("name").Eq(link.Name)).
-			Where(sai.Col("value").Eq(link.Value))
-		ds = ds.Where(goqu.L("EXISTS ?", sub))
+	uniqueLinks := uniqueAssetLinks(links)
+	if len(uniqueLinks) > 0 {
+		sai := goqu.T(common.TblSpecificAssetID).As("sai")
+		for _, link := range uniqueLinks {
+			existsSub := d.From(sai).
+				Select(goqu.V(1)).
+				Where(goqu.And(
+					goqu.I("sai.aasref").Eq(ai.Col(common.ColID)),
+					goqu.I("sai.name").Eq(link.Name),
+					goqu.I("sai.value").Eq(link.Value),
+				))
+			ds = ds.Where(goqu.L("EXISTS ?", existsSub))
+		}
 	}
 
 	ds = ds.
@@ -272,17 +292,11 @@ func (p *PostgreSQLDiscoveryDatabase) SearchAASIDsByAssetLinks(
 		_, _ = fmt.Println("SearchAASIDsByAssetLinks: collector error:", err)
 		return nil, "", common.NewInternalServerError("Failed to build query filters. See server logs for details.")
 	}
-	shouldEnforceFormula, enforceErr := auth.ShouldEnforceFormula(ctx)
-	if enforceErr != nil {
-		_, _ = fmt.Println("SearchAASIDsByAssetLinks: should enforce error:", enforceErr)
+
+	ds, err = auth.AddFormulaQueryFromContext(ctx, ds, collector)
+	if err != nil {
+		_, _ = fmt.Println("SearchAASIDsByAssetLinks: filter error:", err)
 		return nil, "", common.NewInternalServerError("Failed to build query filters. See server logs for details.")
-	}
-	if shouldEnforceFormula {
-		ds, err = auth.AddFormulaQueryFromContext(ctx, ds, collector)
-		if err != nil {
-			_, _ = fmt.Println("SearchAASIDsByAssetLinks: filter error:", err)
-			return nil, "", common.NewInternalServerError("Failed to build query filters. See server logs for details.")
-		}
 	}
 
 	sqlStr, args, err := ds.ToSQL()
@@ -326,4 +340,40 @@ func (p *PostgreSQLDiscoveryDatabase) SearchAASIDsByAssetLinks(
 	}
 
 	return buf, "", nil
+}
+
+func uniqueAssetLinks(links []model.AssetLink) []model.AssetLink {
+	seen := make(map[string]struct{}, len(links))
+	out := make([]model.AssetLink, 0, len(links))
+	for _, link := range links {
+		key := link.Name + "\x1f" + link.Value
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+		out = append(out, link)
+	}
+	return out
+}
+
+func (p *PostgreSQLDiscoveryDatabase) discoveryCursorExists(ctx context.Context, cursor string) (bool, error) {
+	d := goqu.Dialect("postgres")
+	query, args, buildErr := d.
+		From(goqu.T("aas_identifier").As("ai")).
+		Select(goqu.V(1)).
+		Where(goqu.I("ai.aasid").Eq(cursor)).
+		Limit(1).
+		ToSQL()
+	if buildErr != nil {
+		return false, common.NewInternalServerError("DISCOVERY-CHECKCURSOR-BUILDSQL " + buildErr.Error())
+	}
+
+	var one int
+	if queryErr := p.db.QueryRowContext(ctx, query, args...).Scan(&one); queryErr != nil {
+		if errors.Is(queryErr, sql.ErrNoRows) {
+			return false, nil
+		}
+		return false, common.NewInternalServerError("DISCOVERY-CHECKCURSOR-EXECSQL " + queryErr.Error())
+	}
+	return true, nil
 }

@@ -552,6 +552,7 @@ type AssetAdministrationShellDescriptorRow struct {
 	GlobalAssetID             sql.NullString
 	IDShort                   sql.NullString
 	IDStr                     string
+	CreatedAt                 sql.NullTime
 	AdministrativeInfoPayload json.RawMessage
 	DisplayNamePayload        json.RawMessage
 	DescriptionPayload        json.RawMessage

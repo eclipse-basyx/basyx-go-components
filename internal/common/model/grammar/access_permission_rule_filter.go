@@ -81,6 +81,12 @@ type AccessPermissionRuleFILTER struct {
 	// FRAGMENT corresponds to the JSON schema field "FRAGMENT".
 	FRAGMENT *FragmentStringPattern `json:"FRAGMENT,omitempty" yaml:"FRAGMENT,omitempty" mapstructure:"FRAGMENT,omitempty"`
 
+	// MATCH corresponds to the JSON schema field "MATCH".
+	//
+	// Optional flag controlling row-local matching behavior for fragment filters.
+	// Default is false when omitted.
+	MATCH *bool `json:"MATCH,omitempty" yaml:"MATCH,omitempty" mapstructure:"MATCH,omitempty"`
+
 	// USEFORMULA corresponds to the JSON schema field "USEFORMULA".
 	USEFORMULA *string `json:"USEFORMULA,omitempty" yaml:"USEFORMULA,omitempty" mapstructure:"USEFORMULA,omitempty"`
 }

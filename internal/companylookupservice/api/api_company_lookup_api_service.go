@@ -145,10 +145,10 @@ func (s *CompanyLookupAPIService) GetAllCompanyDescriptors(ctx context.Context, 
 
 	res := struct {
 		PagingMetadata model.PagedResultPagingMetadata `json:"paging_metadata"`
-		Data           []map[string]any                `json:"data"`
+		Result         []map[string]any                `json:"result"`
 	}{
 		PagingMetadata: pm,
-		Data:           jsonable,
+		Result:         jsonable,
 	}
 
 	return model.Response(http.StatusOK, res), nil
@@ -185,7 +185,7 @@ func (s *CompanyLookupAPIService) PostCompanyDescriptor(ctx context.Context, com
 		}
 	}
 
-	j, toJsonErr := result.ToJsonable()
+	jsonable, toJsonErr := result.ToJsonable()
 	if toJsonErr != nil {
 		log.Printf("📍 [%s] Error in PostCompanyDescriptor: ToJsonable failed (companyDomain=%q): %v", componentName, result.Domain, toJsonErr)
 		return common.NewErrorResponse(
@@ -193,7 +193,7 @@ func (s *CompanyLookupAPIService) PostCompanyDescriptor(ctx context.Context, com
 		), toJsonErr
 	}
 
-	return model.Response(http.StatusCreated, map[string]any{"data": j}), nil
+	return model.Response(http.StatusCreated, jsonable), nil
 }
 
 // GetCompanyDescriptorById returns a specific company descriptor.
@@ -242,7 +242,7 @@ func (s *CompanyLookupAPIService) GetCompanyDescriptorById(ctx context.Context, 
 		), toJsonErr
 	}
 
-	return model.Response(http.StatusOK, map[string]any{"data": jsonable}), nil
+	return model.Response(http.StatusOK, jsonable), nil
 }
 
 // PutCompanyDescriptorById updates an existing company descriptor.
@@ -315,7 +315,7 @@ func (s *CompanyLookupAPIService) PutCompanyDescriptorById(ctx context.Context, 
 		), toJsonErr
 	}
 
-	return model.Response(http.StatusOK, map[string]any{"data": jsonable}), nil
+	return model.Response(http.StatusOK, jsonable), nil
 }
 
 // DeleteCompanyDescriptorById deletes a company descriptor.

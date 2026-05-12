@@ -1,0 +1,29 @@
+[
+  {
+    "context": "POST upload new AASX - update-only user denied",
+    "action": "UPLOAD_MULTIPART",
+    "token": { "user": "userx", "password": "pwd" },
+    "method": "POST",
+    "endpoint": "http://localhost:6004/upload",
+    "data": "../integration_tests/testdata/IESEDriveMotorDM3000.aasx",
+    "expectedStatus": 403
+  },
+  {
+    "context": "POST upload new AASX - create-only user allowed",
+    "action": "UPLOAD_MULTIPART",
+    "token": { "user": "usera", "password": "pwd" },
+    "method": "POST",
+    "endpoint": "http://localhost:6004/upload",
+    "data": "../integration_tests/testdata/IESEDriveMotorDM3000.aasx",
+    "expectedStatus": 200
+  },
+  {
+    "context": "POST upload existing AASX - create-only user denied",
+    "action": "UPLOAD_MULTIPART",
+    "token": { "user": "usera", "password": "pwd" },
+    "method": "POST",
+    "endpoint": "http://localhost:6004/upload",
+    "data": "../integration_tests/testdata/IESEDriveMotorDM3000.aasx",
+    "expectedStatus": 403
+  }
+]

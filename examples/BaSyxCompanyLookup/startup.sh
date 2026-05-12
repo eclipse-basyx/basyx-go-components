@@ -30,89 +30,87 @@ echo "Adding Fraunhofer IESE..."
 curl --location --request POST 'http://localhost:5080/companies' \
 --header 'Content-Type: application/json' \
 --data '{
-    "data": {
-        "description": [
-            {
-                "language": "en",
-                "text": "The Fraunhofer Institute for Experimental Software Engineering IESE in Kaiserslautern is a research institute specializing in efficient software and systems engineering."
-            }
-        ],
-        "displayName": [
-            {
-                "language": "en",
-                "text": "Fraunhofer Institute for Experimental Software Engineering IESE"
-            }
-        ],
-        "administration": {
-            "version": "1",
-            "revision": "0",
-            "creator": {
-                "type": "ExternalReference",
-                "keys": [
-                    {
-                        "type": "GlobalReference",
-                        "value": "https://iese.fraunhofer.de"
-                    }
-                ]
-            }
+    "description": [
+        {
+            "language": "en",
+            "text": "The Fraunhofer Institute for Experimental Software Engineering IESE in Kaiserslautern is a research institute specializing in efficient software and systems engineering."
+        }
+    ],
+    "displayName": [
+        {
+            "language": "en",
+            "text": "Fraunhofer Institute for Experimental Software Engineering IESE"
+        }
+    ],
+    "administration": {
+        "version": "1",
+        "revision": "0",
+        "creator": {
+            "type": "ExternalReference",
+            "keys": [
+                {
+                    "type": "GlobalReference",
+                    "value": "https://iese.fraunhofer.de"
+                }
+            ]
+        }
+    },
+    "endpoints": [
+        {
+            "protocolInformation": {
+                "href": "https://demo.digital-twin.host/aas-registry",
+                "endpointProtocol": "HTTPS"
+            },
+            "interface": "AAS-REGISTRY-3.0"
         },
-        "endpoints": [
-            {
-                "protocolInformation": {
-                    "href": "https://demo.digital-twin.host/aas-registry",
-                    "endpointProtocol": "HTTPS"
-                },
-                "interface": "AAS-REGISTRY-3.0"
+        {
+            "protocolInformation": {
+                "href": "https://demo.digital-twin.host/aas-discovery",
+                "endpointProtocol": "HTTPS"
             },
-            {
-                "protocolInformation": {
-                    "href": "https://demo.digital-twin.host/aas-discovery",
-                    "endpointProtocol": "HTTPS"
-                },
-                "interface": "AAS-DISCOVERY-3.0"
+            "interface": "AAS-DISCOVERY-3.0"
+        },
+        {
+            "protocolInformation": {
+                "href": "https://demo.digital-twin.host/aas-repository",
+                "endpointProtocol": "HTTPS"
             },
-            {
-                "protocolInformation": {
-                    "href": "https://demo.digital-twin.host/aas-repository",
-                    "endpointProtocol": "HTTPS"
-                },
-                "interface": "AAS-REPOSITORY-3.0"
+            "interface": "AAS-REPOSITORY-3.0"
+        },
+        {
+            "protocolInformation": {
+                "href": "https://demo.digital-twin.host/submodel-registry",
+                "endpointProtocol": "HTTPS"
             },
-            {
-                "protocolInformation": {
-                    "href": "https://demo.digital-twin.host/submodel-registry",
-                    "endpointProtocol": "HTTPS"
-                },
-                "interface": "SUBMODEL-REGISTRY-3.0"
+            "interface": "SUBMODEL-REGISTRY-3.0"
+        },
+        {
+            "protocolInformation": {
+                "href": "https://demo.digital-twin.host/submodel-repository",
+                "endpointProtocol": "HTTPS"
             },
-            {
-                "protocolInformation": {
-                    "href": "https://demo.digital-twin.host/submodel-repository",
-                    "endpointProtocol": "HTTPS"
-                },
-                "interface": "SUBMODEL-REPOSITORY-3.0"
+            "interface": "SUBMODEL-REPOSITORY-3.0"
+        },
+        {
+            "protocolInformation": {
+                "href": "https://demo.digital-twin.host/aasx-file",
+                "endpointProtocol": "HTTPS"
             },
-            {
-                "protocolInformation": {
-                    "href": "https://demo.digital-twin.host/aasx-file",
-                    "endpointProtocol": "HTTPS"
-                },
-                "interface": "AASX-FILE-3.0"
-            }
-        ],
-        "idShort": "fraunhoferIese",
-        "name": "Fraunhofer IESE",
-        "domain": "iese.fraunhofer.de",
-        "nameOptions": [
-            "Fraunhofer-Institut für Experimentelles Software-Engineering",
-            "IESE",
-            "IESE Fraunhofer"
-        ],
-        "assetIdRegexPatterns": [
-            "^https://i\\.iese.fraunhofer\\.de/assetId/",
-            "^https://i\\.fraun-iese\\.de/assetId/"
-        ]
-    }
+            "interface": "AASX-FILE-3.0"
+        }
+    ],
+    "idShort": "fraunhoferIese",
+    "name": "Fraunhofer IESE",
+    "domain": "iese.fraunhofer.de",
+    "nameOptions": [
+        "Fraunhofer-Institut für Experimentelles Software-Engineering",
+        "IESE",
+        "IESE Fraunhofer"
+    ],
+    "assetIdRegexPatterns": [
+        "^https://i\\.iese\\.fraunhofer\\.de/assetId/",
+        "^https://i\\.fraun-iese\\.de/assetId/"
+    ]
 }'
 
 echo ""
@@ -120,53 +118,51 @@ echo "Adding Example Company..."
 curl --location --request POST 'http://localhost:5080/companies' \
 --header 'Content-Type: application/json' \
 --data '{
-    "data": {
-        "description": [
-            {
-                "language": "en",
-                "text": "An example company."
-            }
-        ],
-        "displayName": [
-            {
-                "language": "en",
-                "text": "Example Company"
-            }
-        ],
-        "administration": {
-            "version": "1",
-            "revision": "0",
-            "creator": {
-                "type": "ExternalReference",
-                "keys": [
-                    {
-                        "type": "GlobalReference",
-                        "value": "https://examplecompany.de"
-                    }
-                ]
-            }
-        },
-        "endpoints": [
-            {
-                "protocolInformation": {
-                    "href": "https://demo.digital-twin.host/aas-discovery",
-                    "endpointProtocol": "HTTPS"
-                },
-                "interface": "AAS-DISCOVERY-3.0"
-            }
-        ],
-        "idShort": "exampleCompany1",
-        "name": "ExCom1",
-        "domain": "ex.com.1.de",
-        "nameOptions": [
-            "Example Company 1",
-            "EC1",
-            "Com Example 1"
-        ],
-        "assetIdRegexPatterns": [
-            "^https://i\\.excom1\\.de/assetId/"
-        ]
-    }
+    "description": [
+        {
+            "language": "en",
+            "text": "An example company."
+        }
+    ],
+    "displayName": [
+        {
+            "language": "en",
+            "text": "Example Company"
+        }
+    ],
+    "administration": {
+        "version": "1",
+        "revision": "0",
+        "creator": {
+            "type": "ExternalReference",
+            "keys": [
+                {
+                    "type": "GlobalReference",
+                    "value": "https://examplecompany.de"
+                }
+            ]
+        }
+    },
+    "endpoints": [
+        {
+            "protocolInformation": {
+                "href": "https://demo.digital-twin.host/aas-discovery",
+                "endpointProtocol": "HTTPS"
+            },
+            "interface": "AAS-DISCOVERY-3.0"
+        }
+    ],
+    "idShort": "exampleCompany1",
+    "name": "ExCom1",
+    "domain": "ex.com.1.de",
+    "nameOptions": [
+        "Example Company 1",
+        "EC1",
+        "Com Example 1"
+    ],
+    "assetIdRegexPatterns": [
+        "^https://i\\.excom1\\.de/assetId/"
+    ]
 }'
 
 echo ""

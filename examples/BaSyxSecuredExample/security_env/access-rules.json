@@ -1,47 +1,58 @@
 {
   "AllAccessPermissionRules": {
     "DEFATTRIBUTES": [
-      { "name": "anonymous_attr", "attributes": [ { "GLOBAL": "ANONYMOUS" } ] },
-      { "name": "username_attr", "attributes": [ { "CLAIM": "role" } ] }
+      { "name": "anonymous_attr", "attributes": [{ "GLOBAL": "ANONYMOUS" }] },
+      { "name": "role_attr", "attributes": [{ "CLAIM": "role" }] }
     ],
     "DEFOBJECTS": [
-      { "name": "public_description", "objects": [ { "ROUTE": "/description" }] },
-      { "name": "public_aas", "objects": [ 
-        { "IDENTIFIABLE": "$aas(\"https://htw-berlin.de/ids/aas/demoaasv3\")" },
-        { "IDENTIFIABLE": "$sm(\"https://htw-berlin.de/ids/sm/demosubmodelv3\")" }, 
-        { "DESCRIPTOR": "$aasdesc(\"https://htw-berlin.de/ids/aas/demoaasv3\")" } , 
-        { "DESCRIPTOR": "$smdesc(\"https://htw-berlin.de/ids/sm/demosubmodelv3\")" }
-      ] },
-      { "name": "all_api", "objects": [
-        { "ROUTE": "/health" },
-        { "ROUTE": "/shell-descriptors" },
-        { "ROUTE": "/shell-descriptors/*" },
-        { "ROUTE": "/submodel-descriptors" },
-        { "ROUTE": "/submodel-descriptors/*" },
-        { "ROUTE": "/lookup/shells" },
-        { "ROUTE": "/lookup/shells/*" },
-        { "ROUTE": "/lookup/shellsByAssetLink" },
-        { "ROUTE": "/shells" },
-        { "ROUTE": "/shells/*" },
-        { "ROUTE": "/submodels" },
-        { "ROUTE": "/submodels/*" },
-        { "ROUTE": "/concept-descriptions" },
-        { "ROUTE": "/concept-descriptions/*" }
-      ] }
+      {
+        "name": "public_description",
+        "objects": [{ "ROUTE": "/description" }]
+      },
+      {
+        "name": "public_product_info",
+        "objects": [
+          { "IDENTIFIABLE": "$aas(\"urn:fraunhofer:iese:dte:aas:drivemotor-dm3000:001\")" },
+          { "DESCRIPTOR": "$aasdesc(\"urn:fraunhofer:iese:dte:aas:drivemotor-dm3000:001\")" },
+          { "IDENTIFIABLE": "$sm(\"urn:fraunhofer:iese:dte:sm:nameplate:drivemotor-dm3000:001\")" },
+          { "DESCRIPTOR": "$smdesc(\"urn:fraunhofer:iese:dte:sm:nameplate:drivemotor-dm3000:001\")" },
+          { "IDENTIFIABLE": "$sm(\"urn:fraunhofer:iese:dte:sm:carbonfootprint:drivemotor-dm3000:001\")" },
+          { "DESCRIPTOR": "$smdesc(\"urn:fraunhofer:iese:dte:sm:carbonfootprint:drivemotor-dm3000:001\")" }
+        ]
+      },
+      {
+        "name": "all_api",
+        "objects": [
+          { "ROUTE": "/health" },
+          { "ROUTE": "/shell-descriptors" },
+          { "ROUTE": "/shell-descriptors/*" },
+          { "ROUTE": "/submodel-descriptors" },
+          { "ROUTE": "/submodel-descriptors/*" },
+          { "ROUTE": "/lookup/shells" },
+          { "ROUTE": "/lookup/shells/*" },
+          { "ROUTE": "/lookup/shellsByAssetLink" },
+          { "ROUTE": "/shells" },
+          { "ROUTE": "/shells/*" },
+          { "ROUTE": "/submodels" },
+          { "ROUTE": "/submodels/*" },
+          { "ROUTE": "/concept-descriptions" },
+          { "ROUTE": "/concept-descriptions/*" }
+        ]
+      }
     ],
     "DEFACLS": [
       { "name": "anonymous_read", "acl": { "USEATTRIBUTES": "anonymous_attr", "RIGHTS": ["READ"], "ACCESS": "ALLOW" } },
-      { "name": "user", "acl": { "USEATTRIBUTES": "username_attr", "RIGHTS": ["READ"], "ACCESS": "ALLOW" } },
-      { "name": "admin", "acl": { "USEATTRIBUTES": "username_attr", "RIGHTS": ["ALL"], "ACCESS": "ALLOW" } }
+      { "name": "viewer_read", "acl": { "USEATTRIBUTES": "role_attr", "RIGHTS": ["READ"], "ACCESS": "ALLOW" } },
+      { "name": "admin_full", "acl": { "USEATTRIBUTES": "role_attr", "RIGHTS": ["ALL"], "ACCESS": "ALLOW" } }
     ],
     "DEFFORMULAS": [
-      { "name": "is_admin", "formula": { "$eq": [ { "$attribute": { "CLAIM": "role" } }, { "$strVal": "admin" } ] } },
-      { "name": "is_user", "formula": { "$eq": [ { "$attribute": { "CLAIM": "role" } }, { "$strVal": "viewer" } ] } }
+      { "name": "is_admin", "formula": { "$eq": [{ "$attribute": { "CLAIM": "role" } }, { "$strVal": "admin" }] } },
+      { "name": "is_viewer", "formula": { "$eq": [{ "$attribute": { "CLAIM": "role" } }, { "$strVal": "viewer" }] } }
     ],
     "rules": [
-      { "USEACL": "anonymous_read", "USEOBJECTS": ["public_description", "public_aas"], "FORMULA": {"$boolean": true} },
-      { "USEACL": "user", "USEOBJECTS": ["all_api"], "USEFORMULA": "is_user" },
-      { "USEACL": "admin", "USEOBJECTS": ["all_api"], "USEFORMULA": "is_admin" }
+      { "USEACL": "anonymous_read", "USEOBJECTS": ["public_description", "public_product_info"], "FORMULA": { "$boolean": true } },
+      { "USEACL": "viewer_read", "USEOBJECTS": ["all_api"], "USEFORMULA": "is_viewer" },
+      { "USEACL": "admin_full", "USEOBJECTS": ["all_api"], "USEFORMULA": "is_admin" }
     ]
   }
 }

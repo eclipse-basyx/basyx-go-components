@@ -1,0 +1,99 @@
+/*
+ * DotAAS Part 2 | HTTP/REST | Submodel Repository Service Specification
+ *
+ * The entire Submodel Repository Service Specification as part of the [Specification of the Asset Administration Shell: Part 2](http://industrialdigitaltwin.org/en/content-hub).   Publisher: Industrial Digital Twin Association (IDTA) 2023
+ *
+ * API version: V3.0.3_SSP-001
+ * Contact: info@idtwin.org
+ */
+
+package openapi
+
+import (
+	"net/http"
+	"strings"
+)
+
+// SerializationAPIAPIController binds http requests to an api service and writes the service results to the http response
+type SerializationAPIAPIController struct {
+	service      SerializationAPIAPIServicer
+	errorHandler ErrorHandler
+	contextPath  string
+}
+
+// SerializationAPIAPIOption for how the controller is set up.
+type SerializationAPIAPIOption func(*SerializationAPIAPIController)
+
+// WithSerializationAPIAPIErrorHandler inject ErrorHandler into controller
+func WithSerializationAPIAPIErrorHandler(h ErrorHandler) SerializationAPIAPIOption {
+	return func(c *SerializationAPIAPIController) {
+		c.errorHandler = h
+	}
+}
+
+// NewSerializationAPIAPIController creates a default api controller
+func NewSerializationAPIAPIController(s SerializationAPIAPIServicer, contextPath string, opts ...SerializationAPIAPIOption) *SerializationAPIAPIController {
+	controller := &SerializationAPIAPIController{
+		service:      s,
+		errorHandler: DefaultErrorHandler,
+		contextPath:  contextPath,
+	}
+
+	for _, opt := range opts {
+		opt(controller)
+	}
+
+	return controller
+}
+
+// Routes returns all the api routes for the SerializationAPIAPIController
+func (c *SerializationAPIAPIController) Routes() Routes {
+	return Routes{
+		"GenerateSerializationByIDs": Route{
+			strings.ToUpper("Get"),
+			c.contextPath + "/serialization",
+			c.GenerateSerializationByIDs,
+		},
+	}
+}
+
+// GenerateSerializationByIDs - Returns an appropriate serialization based on the specified format (see SerializationFormat)
+func (c *SerializationAPIAPIController) GenerateSerializationByIDs(w http.ResponseWriter, r *http.Request) {
+	query, err := parseQuery(r.URL.RawQuery)
+	if err != nil {
+		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
+		return
+	}
+	var aasIDsParam []string
+	if query.Has("aasIds") {
+		aasIDsParam = strings.Split(query.Get("aasIds"), ",")
+	}
+	var submodelIDsParam []string
+	if query.Has("submodelIds") {
+		submodelIDsParam = strings.Split(query.Get("submodelIds"), ",")
+	}
+	var includeConceptDescriptionsParam bool
+	if query.Has("includeConceptDescriptions") {
+		param, err := parseBoolParameter(
+			query.Get("includeConceptDescriptions"),
+			WithParse[bool](parseBool),
+		)
+		if err != nil {
+			c.errorHandler(w, r, &ParsingError{Param: "includeConceptDescriptions", Err: err}, nil)
+			return
+		}
+
+		includeConceptDescriptionsParam = param
+	} else {
+		var param = true
+		includeConceptDescriptionsParam = param
+	}
+	result, err := c.service.GenerateSerializationByIDs(r.Context(), aasIDsParam, submodelIDsParam, includeConceptDescriptionsParam)
+	// If an error occurred, encode the error with the status code
+	if err != nil {
+		c.errorHandler(w, r, err, &result)
+		return
+	}
+	// If no error, encode the body and the result code
+	_ = EncodeJSONResponse(result.Body, &result.Code, w)
+}

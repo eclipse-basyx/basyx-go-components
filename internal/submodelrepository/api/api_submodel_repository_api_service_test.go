@@ -14,7 +14,7 @@ import (
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	persistencepostgresql "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence"
-	openapi "github.com/eclipse-basyx/basyx-go-components/pkg/submodelrepositoryapi/go"
+	openapi "github.com/eclipse-basyx/basyx-go-components/pkg/submodelrepositoryapi"
 	"github.com/stretchr/testify/require"
 )
 
@@ -97,6 +97,17 @@ func TestGetSubmodelElementByPathSubmodelRepoRejectsInvalidLevel(t *testing.T) {
 	encodedSubmodelID := base64.RawStdEncoding.EncodeToString([]byte("sm-1"))
 
 	response, err := sut.GetSubmodelElementByPathSubmodelRepo(contextWithABACDisabled(t), encodedSubmodelID, "a.b", "invalid-level", "")
+	require.NoError(t, err)
+	require.Equal(t, 400, response.Code)
+}
+
+func TestGetSubmodelByIDPathRejectsInvalidLevel(t *testing.T) {
+	t.Parallel()
+
+	sut := NewSubmodelRepositoryAPIAPIService(persistencepostgresql.SubmodelDatabase{})
+	encodedSubmodelID := common.EncodeString("sm-1")
+
+	response, err := sut.GetSubmodelByIDPath(contextWithABACDisabled(t), encodedSubmodelID, "invalid-level")
 	require.NoError(t, err)
 	require.Equal(t, 400, response.Code)
 }

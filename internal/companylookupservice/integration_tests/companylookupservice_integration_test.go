@@ -48,13 +48,13 @@ func deleteAllCompanyDescriptors(t *testing.T, runner *testenv.JSONSuiteRunner, 
 	require.NoError(t, err)
 
 	var list struct {
-		Data []struct {
+		Result []struct {
 			Domain string `json:"domain"`
-		} `json:"data"`
+		} `json:"result"`
 	}
 	require.NoError(t, json.Unmarshal([]byte(response.Body), &list))
 
-	for _, item := range list.Data {
+	for _, item := range list.Result {
 		enc := base64.RawURLEncoding.EncodeToString([]byte(item.Domain))
 		_, err := runner.RunStep(testenv.JSONSuiteStep{
 			Method:         http.MethodDelete,

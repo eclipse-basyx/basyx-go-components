@@ -2,6 +2,7 @@ services:
   company-lookup:
     container_name: company-lookup
     image: eclipsebasyx/companylookup-go:SNAPSHOT
+    pull_policy: always
     ports:
       - 5080:5080
     environment:

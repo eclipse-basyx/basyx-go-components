@@ -82,13 +82,7 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 	base := common.NormalizeBasePath(cfg.Server.ContextPath)
 
 	// === Database ===
-	dsn := fmt.Sprintf("postgres://%s:%s@%s:%d/%s?sslmode=disable",
-		cfg.Postgres.User,
-		cfg.Postgres.Password,
-		cfg.Postgres.Host,
-		cfg.Postgres.Port,
-		cfg.Postgres.DBName,
-	)
+	dsn := common.BuildPostgresDSN(cfg.Postgres)
 	log.Printf("🗄️  Connecting to Postgres with DSN: postgres://%s:****@%s:%d/%s?sslmode=disable",
 		cfg.Postgres.User, cfg.Postgres.Host, cfg.Postgres.Port, cfg.Postgres.DBName)
 
@@ -136,16 +130,25 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 	descriptionCtrl := openapi.NewDescriptionAPIAPIController(descriptionSvc)
 
 	apiRouter := chi.NewRouter()
-	common.AddDefaultRouterErrorHandlers(apiRouter, "DigitalTwinRegistryService")
-	if err := auth.SetupSecurityWithClaimsMiddleware(ctx, cfg, apiRouter, auth.EdcBpnHeaderMiddleware); err != nil {
+	common.ConfigureAPIRouter(apiRouter, "DigitalTwinRegistryService")
+	var claimsMiddleware []func(http.Handler) http.Handler
+	if cfg.General.EnableCustomMiddlewareHeaderInjection {
+		claimsMiddleware = append(claimsMiddleware, auth.EdcBpnHeaderMiddleware)
+	}
+
+	if err := auth.SetupSecurityWithClaimsMiddleware(ctx, cfg, apiRouter, claimsMiddleware...); err != nil {
 		return err
 	}
 
 	for _, rt := range registryCtrl.Routes() {
+		if rt.Method == "GET" && rt.Pattern == "/shell-descriptors" {
+			apiRouter.With(digitaltwinregistry.CreatedAfterMiddleware).Method(rt.Method, rt.Pattern, rt.HandlerFunc)
+			continue
+		}
 		apiRouter.Method(rt.Method, rt.Pattern, rt.HandlerFunc)
 	}
 	for _, rt := range discoveryCtrl.Routes() {
-		if rt.Method == "POST" && rt.Pattern == "/lookup/shellsByAssetLink" {
+		if (rt.Method == "POST" && rt.Pattern == "/lookup/shellsByAssetLink") || (rt.Method == "GET" && rt.Pattern == "/lookup/shells") {
 			apiRouter.With(digitaltwinregistry.CreatedAfterMiddleware).Method(rt.Method, rt.Pattern, rt.HandlerFunc)
 			continue
 		}

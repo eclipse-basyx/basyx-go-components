@@ -29,13 +29,12 @@ package digitaltwinregistry
 import (
 	"context"
 	"net/http"
-	"strings"
 
-	"github.com/aas-core-works/aas-core3.1-golang/types"
 	registryapiinternal "github.com/eclipse-basyx/basyx-go-components/internal/aasregistry/api"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/descriptors"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
+	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 	discoveryapiinternal "github.com/eclipse-basyx/basyx-go-components/internal/discoveryservice/api"
 )
 
@@ -58,12 +57,48 @@ func NewCustomRegistryService(
 	}
 }
 
-// PostAssetAdministrationShellDescriptor executes default POST behavior and
-// appends a discovery asset link from globalAssetId when present.
+// GetAllAssetAdministrationShellDescriptors - Returns all Asset Administration Shell Descriptors
+func (s *CustomRegistryService) GetAllAssetAdministrationShellDescriptors(
+	ctx context.Context,
+	limit int32,
+	cursor string,
+	assetKind model.AssetKind,
+	assetType string,
+) (model.ImplResponse, error) {
+	createdAfter, _ := CreatedAfterFromContext(ctx)
+	if createdAfter != nil {
+		query := buildEdcBpnClaimEqualsHeaderExpression(createdAfter, "$aasdesc#createdAt")
+		ctx = auth.MergeQueryFilter(ctx, query)
+	}
+	ctx = descriptors.WithIncludeAASDescriptorCreatedAt(ctx)
+
+	return s.AssetAdministrationShellRegistryAPIAPIService.GetAllAssetAdministrationShellDescriptors(
+		ctx,
+		limit,
+		cursor,
+		assetKind,
+		assetType,
+	)
+}
+
+// GetAssetAdministrationShellDescriptorById - Returns a specific Asset Administration Shell Descriptor
+// nolint:revive // defined by standard
+func (s *CustomRegistryService) GetAssetAdministrationShellDescriptorById(
+	ctx context.Context,
+	aasIdentifier string,
+) (model.ImplResponse, error) {
+	ctx = descriptors.WithIncludeAASDescriptorCreatedAt(ctx)
+	return s.AssetAdministrationShellRegistryAPIAPIService.GetAssetAdministrationShellDescriptorById(ctx, aasIdentifier)
+}
+
+// PostAssetAdministrationShellDescriptor executes default POST behavior.
 func (s *CustomRegistryService) PostAssetAdministrationShellDescriptor(
 	ctx context.Context,
 	assetAdministrationShellDescriptor model.AssetAdministrationShellDescriptor,
 ) (model.ImplResponse, error) {
+	ctx = descriptors.WithAllowAASDescriptorCreatedAtOverride(ctx)
+	ctx = descriptors.WithIncludeAASDescriptorCreatedAt(ctx)
+
 	baseResp, baseErr := s.AssetAdministrationShellRegistryAPIAPIService.PostAssetAdministrationShellDescriptor(
 		ctx,
 		assetAdministrationShellDescriptor,
@@ -72,25 +107,18 @@ func (s *CustomRegistryService) PostAssetAdministrationShellDescriptor(
 		return baseResp, baseErr
 	}
 
-	if errResp, err := s.appendGlobalAssetLink(
-		ctx,
-		assetAdministrationShellDescriptor.Id,
-		assetAdministrationShellDescriptor.GlobalAssetId,
-		"PostAssetAdministrationShellDescriptor",
-	); errResp != nil || err != nil {
-		return mapAppendGlobalAssetLinkResult(errResp, err, "PostAssetAdministrationShellDescriptor")
-	}
-
 	return baseResp, nil
 }
 
-// PutAssetAdministrationShellDescriptorById executes default PUT behavior and
-// appends a discovery asset link from globalAssetId when present.
+// PutAssetAdministrationShellDescriptorById executes default PUT behavior.
 func (s *CustomRegistryService) PutAssetAdministrationShellDescriptorById(
 	ctx context.Context,
 	aasIdentifier string,
 	assetAdministrationShellDescriptor model.AssetAdministrationShellDescriptor,
 ) (model.ImplResponse, error) {
+	ctx = descriptors.WithAllowAASDescriptorCreatedAtOverride(ctx)
+	ctx = descriptors.WithIncludeAASDescriptorCreatedAt(ctx)
+
 	decodedAASID, decodeErr := common.DecodeString(aasIdentifier)
 	if decodeErr != nil {
 		resp := common.NewErrorResponse(
@@ -112,15 +140,6 @@ func (s *CustomRegistryService) PutAssetAdministrationShellDescriptorById(
 	)
 	if baseErr != nil || !is2xx(baseResp.Code) {
 		return baseResp, baseErr
-	}
-
-	if errResp, err := s.appendGlobalAssetLink(
-		ctx,
-		decodedAASID,
-		assetAdministrationShellDescriptor.GlobalAssetId,
-		"PutAssetAdministrationShellDescriptorById",
-	); errResp != nil || err != nil {
-		return mapAppendGlobalAssetLinkResult(errResp, err, "PutAssetAdministrationShellDescriptorById")
 	}
 
 	return baseResp, nil
@@ -163,68 +182,6 @@ func (s *CustomRegistryService) PutSubmodelDescriptorByIdThroughSuperpath(
 	)
 }
 
-func (s *CustomRegistryService) appendGlobalAssetLink(
-	ctx context.Context,
-	aasID string,
-	globalAssetID string,
-	method string,
-) (*model.ImplResponse, error) {
-	if s.discovery == nil {
-		return nil, nil
-	}
-	if strings.TrimSpace(globalAssetID) == "" || strings.TrimSpace(aasID) == "" {
-		return nil, nil
-	}
-
-	aasIdentifier := common.EncodeString(aasID)
-	links := []types.ISpecificAssetID{
-		types.NewSpecificAssetID("globalAssetId", globalAssetID),
-	}
-
-	discoveryOnlyCtx := descriptors.WithDiscoveryOnlySpecificAssetIDs(ctx)
-	addResp, addErr := s.discovery.AddAllAssetLinksByID(discoveryOnlyCtx, aasIdentifier, links)
-	if addErr != nil {
-		resp := common.NewErrorResponse(
-			addErr,
-			http.StatusInternalServerError,
-			customRegistryComponentName,
-			method,
-			"AddGlobalAssetLink",
-		)
-		return &resp, addErr
-	}
-	if !is2xx(addResp.Code) {
-		resp := common.NewErrorResponse(
-			common.NewInternalServerError("failed to add globalAssetId discovery link"),
-			http.StatusInternalServerError,
-			customRegistryComponentName,
-			method,
-			"AddGlobalAssetLink-Non2xx",
-		)
-		return &resp, nil
-	}
-	return nil, nil
-}
-
 func is2xx(code int) bool {
 	return code >= http.StatusOK && code < http.StatusMultipleChoices
-}
-
-func mapAppendGlobalAssetLinkResult(
-	errResp *model.ImplResponse,
-	err error,
-	method string,
-) (model.ImplResponse, error) {
-	if errResp != nil {
-		return *errResp, err
-	}
-
-	resp := common.NewErrorResponse(
-		common.NewInternalServerError("failed to append globalAssetId discovery link"),
-		http.StatusInternalServerError,
-		customRegistryComponentName,
-		method,
-		"AddGlobalAssetLink-NilResponse",
-	)
-	return resp, err
 }

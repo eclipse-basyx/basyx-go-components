@@ -10,7 +10,6 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"strconv"
 
 	"github.com/go-chi/chi/v5"
 
@@ -20,7 +19,7 @@ import (
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 	"github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/api"
 	persistencepostgresql "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence"
-	openapi "github.com/eclipse-basyx/basyx-go-components/pkg/submodelrepositoryapi/go"
+	openapi "github.com/eclipse-basyx/basyx-go-components/pkg/submodelrepositoryapi"
 )
 
 //go:embed openapi.yaml
@@ -69,13 +68,16 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 		}
 	}
 
-	smDatabase, err := persistencepostgresql.NewSubmodelDatabase("postgres://"+config.Postgres.User+":"+config.Postgres.Password+"@"+config.Postgres.Host+":"+strconv.Itoa(config.Postgres.Port)+"/"+config.Postgres.DBName+"?sslmode=disable", config.Postgres.MaxOpenConnections, config.Postgres.MaxIdleConnections, config.Postgres.ConnMaxLifetimeMinutes, databaseSchema, privateKey, config.Server.StrictVerification)
+	dsn := common.BuildPostgresDSN(config.Postgres)
+	smDatabase, err := persistencepostgresql.NewSubmodelDatabase(dsn, config.Postgres.MaxOpenConnections, config.Postgres.MaxIdleConnections, config.Postgres.ConnMaxLifetimeMinutes, databaseSchema, privateKey, config.Server.StrictVerification)
 	if err != nil {
 		return err
 	}
 
 	smSvc := api.NewSubmodelRepositoryAPIAPIService(*smDatabase)
 	smCtrl := openapi.NewSubmodelRepositoryAPIAPIController(smSvc, "", config.Server.StrictVerification)
+	serializationSvc := api.NewSerializationAPIAPIService()
+	serializationCtrl := openapi.NewSerializationAPIAPIController(serializationSvc, "")
 
 	// ==== Description Service ====
 	descSvc := api.NewDescriptionAPIAPIService()
@@ -84,7 +86,7 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 
 	// === Protected API Subrouter ===
 	apiRouter := chi.NewRouter()
-	common.AddDefaultRouterErrorHandlers(apiRouter, "SubmodelRepositoryService")
+	common.ConfigureAPIRouter(apiRouter, "SubmodelRepositoryService")
 
 	// Apply OIDC + ABAC once for all repository endpoints
 	if err := auth.SetupSecurity(ctx, config, apiRouter); err != nil {
@@ -92,6 +94,9 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 	}
 
 	for _, rt := range smCtrl.Routes() {
+		apiRouter.Method(rt.Method, rt.Pattern, rt.HandlerFunc)
+	}
+	for _, rt := range serializationCtrl.Routes() {
 		apiRouter.Method(rt.Method, rt.Pattern, rt.HandlerFunc)
 	}
 	for _, rt := range descCtrl.Routes() {

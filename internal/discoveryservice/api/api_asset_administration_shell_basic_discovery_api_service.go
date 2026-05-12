@@ -102,6 +102,11 @@ func (s *AssetAdministrationShellBasicDiscoveryAPIAPIService) SearchAllAssetAdmi
 	ids, nextCursor, err := s.discoveryBackend.SearchAASIDsByAssetLinks(ctx, assetLink, limit, internalCursor)
 	if err != nil {
 		log.Printf("🧭 [%s] Error SearchAllAssetAdministrationShellIdsByAssetLink: backend search failed (limit=%d cursor=%q links=%d): %v", componentName, limit, internalCursor, len(assetLink), err)
+		if common.IsErrBadRequest(err) {
+			return common.NewErrorResponse(
+				err, http.StatusBadRequest, componentName, "SearchAllAssetAdministrationShellIdsByAssetLink", "BadRequest",
+			), nil
+		}
 		return common.NewErrorResponse(
 			err, http.StatusInternalServerError, componentName, "SearchAllAssetAdministrationShellIdsByAssetLink", "InternalServerError",
 		), err

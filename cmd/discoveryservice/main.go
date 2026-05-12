@@ -77,13 +77,7 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 	}
 
 	// === Database ===
-	dsn := fmt.Sprintf("postgres://%s:%s@%s:%d/%s?sslmode=disable",
-		cfg.Postgres.User,
-		cfg.Postgres.Password,
-		cfg.Postgres.Host,
-		cfg.Postgres.Port,
-		cfg.Postgres.DBName,
-	)
+	dsn := common.BuildPostgresDSN(cfg.Postgres)
 
 	log.Printf("🗄️  Connecting to Postgres with DSN: postgres://%s:****@%s:%d/%s?sslmode=disable",
 		cfg.Postgres.User, cfg.Postgres.Host, cfg.Postgres.Port, cfg.Postgres.DBName)
@@ -113,7 +107,7 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 
 	// === Protected API Subrouter ===
 	apiRouter := chi.NewRouter()
-	common.AddDefaultRouterErrorHandlers(apiRouter, "DiscoveryService")
+	common.ConfigureAPIRouter(apiRouter, "DiscoveryService")
 
 	// Apply OIDC + ABAC once for all discovery endpoints
 	if err := auth.SetupSecurity(ctx, cfg, apiRouter); err != nil {

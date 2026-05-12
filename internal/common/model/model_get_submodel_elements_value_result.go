@@ -39,7 +39,7 @@ type GetSubmodelElementsValueResult struct {
 	PagingMetadata PagedResultPagingMetadata `json:"paging_metadata"`
 
 	// Since patternProperties and propertyNames are not supported by OpenApi yet, the ValueOnly serialization for this elements works with the key-attribute as the JSON-property name and the value-attribute as the corresponding value.
-	Result []SubmodelElementValue `json:"result,omitempty"`
+	Result []SubmodelElementValue `json:"result"`
 }
 
 // AssertGetSubmodelElementsValueResultRequired checks if the required fields are not zero-ed

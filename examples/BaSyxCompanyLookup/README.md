@@ -34,52 +34,50 @@ Create a new Company Descriptor:
 curl --location --request POST 'http://localhost:5080/companies' \
 --header 'Content-Type: application/json' \
 --data '{
-    "data": {
-        "description": [
-            {
-                "language": "en",
-                "text": "Example company service provider"
-            }
-        ],
-        "displayName": [
-            {
-                "language": "en",
-                "text": "Example Company"
-            }
-        ],
-        "administration": {
-            "version": "1",
-            "revision": "0",
-            "creator": {
-                "type": "ExternalReference",
-                "keys": [
-                    {
-                        "type": "GlobalReference",
-                        "value": "https://example.com"
-                    }
-                ]
-            }
-        },
-        "endpoints": [
-            {
-                "protocolInformation": {
-                    "href": "https://example.com/aas-registry",
-                    "endpointProtocol": "HTTPS"
-                },
-                "interface": "AAS-REGISTRY-3.0"
-            }
-        ],
-        "idShort": "exampleCompany",
-        "name": "Example Company",
-        "domain": "example.com",
-        "nameOptions": [
-            "Example Company Inc",
-            "ExampleCo"
-        ],
-        "assetIdRegexPatterns": [
-            "^https://i\\.example\\.com/assetId/"
-        ]
-    }
+    "description": [
+        {
+            "language": "en",
+            "text": "Example company service provider"
+        }
+    ],
+    "displayName": [
+        {
+            "language": "en",
+            "text": "Example Company"
+        }
+    ],
+    "administration": {
+        "version": "1",
+        "revision": "0",
+        "creator": {
+            "type": "ExternalReference",
+            "keys": [
+                {
+                    "type": "GlobalReference",
+                    "value": "https://example.com"
+                }
+            ]
+        }
+    },
+    "endpoints": [
+        {
+            "protocolInformation": {
+                "href": "https://example.com/aas-registry",
+                "endpointProtocol": "HTTPS"
+            },
+            "interface": "AAS-REGISTRY-3.0"
+        }
+    ],
+    "idShort": "exampleCompany",
+    "name": "Example Company",
+    "domain": "example.com",
+    "nameOptions": [
+        "Example Company Inc",
+        "ExampleCo"
+    ],
+    "assetIdRegexPatterns": [
+        "^https://i\\.example\\.com/assetId/"
+    ]
 }'
 ```
 

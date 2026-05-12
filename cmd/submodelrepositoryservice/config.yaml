@@ -23,6 +23,9 @@ abac:
   enabled: false
   modelPath: "config/access_rules/access-rules.json"
 
+general:
+  uploadMaxSizeBytes: 134217728
+
 # jws:
 #   privateKeyPath: "./rsa-key.pem"
 

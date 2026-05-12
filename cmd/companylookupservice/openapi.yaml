@@ -44,25 +44,25 @@ paths:
       summary: Creates a new Company Descriptor
       operationId: PostCompanyDescriptor
       requestBody:
-        description: Company Descriptor envelope object
+        description: Company Descriptor object
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/CompanyDescriptorEnvelope'
+              $ref: '#/components/schemas/CompanyDescriptor'
             examples:
               companyDescriptor:
-                $ref: '#/components/examples/CompanyDescriptorSingleEnvelope'
+                $ref: '#/components/examples/CompanyDescriptorSingle'
       responses:
         '201':
           description: Company Descriptor created successfully
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CompanyDescriptorEnvelope'
+                $ref: '#/components/schemas/CompanyDescriptor'
               examples:
                 companyDescriptor:
-                  $ref: '#/components/examples/CompanyDescriptorSingleEnvelope'
+                  $ref: '#/components/examples/CompanyDescriptorSingle'
         '400':
           $ref: '#/components/responses/BadRequest'
         '409':
@@ -85,10 +85,10 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CompanyDescriptorEnvelope'
+                $ref: '#/components/schemas/CompanyDescriptor'
               examples:
                 companyDescriptor:
-                  $ref: '#/components/examples/CompanyDescriptorSingleEnvelope'
+                  $ref: '#/components/examples/CompanyDescriptorSingle'
         '400':
           $ref: '#/components/responses/BadRequest'
         '404':
@@ -103,25 +103,25 @@ paths:
       summary: Updates an existing Company Descriptor
       operationId: PutCompanyDescriptorById
       requestBody:
-        description: Company Descriptor envelope object
+        description: Company Descriptor object
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/CompanyDescriptorEnvelope'
+              $ref: '#/components/schemas/CompanyDescriptor'
             examples:
                 companyDescriptor:
-                  $ref: '#/components/examples/CompanyDescriptorSingleEnvelope'
+                  $ref: '#/components/examples/CompanyDescriptorSingle'
       responses:
         '200':
           description: Company Descriptor updated successfully
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CompanyDescriptorEnvelope'
+                $ref: '#/components/schemas/CompanyDescriptor'
               examples:
                 companyDescriptor:
-                  $ref: '#/components/examples/CompanyDescriptorSingleEnvelope'
+                  $ref: '#/components/examples/CompanyDescriptorSingle'
         '400':
           $ref: '#/components/responses/BadRequest'
         '404':
@@ -277,11 +277,11 @@ components:
       properties:
         paging_metadata:
           $ref: "#/components/schemas/PagingMetadata"
-        data:
+        result:
           type: array
           items:
             $ref: "#/components/schemas/CompanyDescriptor"
-      required: [paging_metadata, data]
+      required: [paging_metadata, result]
 
     PagingMetadata:
       type: object
@@ -324,14 +324,6 @@ components:
           items:
             $ref: "#/components/schemas/Endpoint"
       required: [domain, endpoints]
-
-    CompanyDescriptorEnvelope:
-      type: object
-      additionalProperties: false
-      properties:
-        data:
-          $ref: "#/components/schemas/CompanyDescriptor"
-      required: [data]
 
     LangStringTextType:
       type: object
@@ -435,7 +427,7 @@ components:
       value:
         paging_metadata:
           cursor: "ZXhhbXBsZS5jb21wYW55Mi5jb20"
-        data:
+        result:
           - administration:
               creator:
                 keys:
@@ -493,37 +485,6 @@ components:
                 href: "https://example.com/aas-registry"
                 endpointProtocol: "HTTPS"
         idShort: "exampleCompany"
-
-    CompanyDescriptorSingleEnvelope:
-      value:
-        data:
-          administration:
-            creator:
-              keys:
-                - type: "GlobalReference"
-                  value: "https://example.com"
-              type: "ExternalReference"
-            revision: "0"
-            version: "1"
-          name: "ExampleCompany"
-          domain: "example.com"
-          nameOptions:
-            - "Example Company Inc"
-            - "ExampleCo"
-          assetIdRegexPatterns:
-            - "^https://i\\.example\\.com/"
-          description:
-            - language: "en"
-              text: "Example AAS Registry"
-          displayName:
-            - language: "en"
-              text: "AAS Registry 1"
-          endpoints:
-            - interface: "AAS-REGISTRY-3.0"
-              protocolInformation:
-                  href: "https://example.com/aas-registry"
-                  endpointProtocol: "HTTPS"
-          idShort: "exampleCompany"
 
     DescriptionResponse:
       value:

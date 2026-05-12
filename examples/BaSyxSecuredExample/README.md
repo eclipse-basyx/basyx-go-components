@@ -38,54 +38,54 @@ Backends start only after:
   - Username: `admin`
   - Password: `admin`
 - AAS UI test users:
-  - `admin` / `pwd`: read + write access (can upload AASX files)
-  - `usera` / `pwd`: read-only access to Demo AAS and the second AAS
-  - not logged in (anonymous): can read Demo AAS only
+  - `admin` / `pwd`: full read + write access (can upload AASX files)
+  - `usera` / `pwd`: read-only access to all submodels
+  - not logged in (anonymous): can read Nameplate and CarbonFootprint only (DPP data)
 
 ## Test Scenario
 
-You can try out this **extremly simplified** test scenario to get a feeling for the security features of basyx.
-Use this AASX file for upload tests:
+Use the provided AASX file for this walkthrough:
 
-- [`aas/ExampleV3.aasx`](aas/ExampleV3.aasx)
+- [`aas/IESEDriveMotorDM3000.aasx`](aas/IESEDriveMotorDM3000.aasx)
 
-Only [`aas/ExampleV3.aasx`](aas/ExampleV3.aasx) is supported in this example scenario, because the predefined access-rule objects and expected IDs in this walkthrough are aligned to the content of that file.
+The access rules in this example are aligned to the IDs contained in that file.
 
 ### 1) Admin Login + Upload (Required Setup)
 
 1. Open UI at [http://localhost:3000](http://localhost:3000)
-2. Log in as `admin` (see credentials in the section above)
-3. Upload [`aas/ExampleV3.aasx`](aas/ExampleV3.aasx)
+2. Log in as `admin` (see credentials above)
+3. Upload [`aas/IESEDriveMotorDM3000.aasx`](aas/IESEDriveMotorDM3000.aasx)
 
 Expected behavior:
 
-- Upload succeeds for `admin`
-- Demo AAS and the second AAS are visible in UI
+- Upload succeeds
+- AAS **IESEDriveMotorDM3000** is visible with all 5 submodels:
+  Nameplate, TechnicalData, HandoverDocumentation, ContactInformations, CarbonFootprint
 
 ### 2) Read-Only User Check (`usera`)
 
-Login in UI with:
+Log in as:
 
 - User: `usera`
 - Password: `pwd`
 
 Expected behavior:
 
-- `usera` can read both AAS entries (Demo AAS + second AAS)
-- Create/update/delete operations are denied (write not allowed)
+- `usera` can read the AAS and all 5 submodels
+- Create/update/delete operations are denied
 
-### 3) Logout Check (Expected: Demo AAS only)
+### 3) Logout Check (Expected: Limited Visibility)
 
 1. Log out
 
 Expected behavior:
 
-- Demo AAS remains visible for anonymous users
-- The second AAS is hidden for anonymous users
+- Anonymous users can see the AAS shell and read **Nameplate** and **CarbonFootprint** (public Digital Product Passport data)
+- **TechnicalData**, **ContactInformations**, and **HandoverDocumentation** are not visible (require authentication)
 
 ### 4) Anonymous Upload Attempt (Expected: Fail)
 
-1. Without logging in, try to upload [`aas/ExampleV3.aasx`](aas/ExampleV3.aasx)
+1. Without logging in, try to upload the AASX file
 
 Expected behavior:
 
@@ -102,26 +102,25 @@ Rule model reference (ACLs, formulas, object groups, and rule wiring):
 
 - [IDTA-01004 Access Rule Model (v3.0.2)](https://industrialdigitaltwin.io/aas-specifications/IDTA-01004/v3.0.2/access-rule-model.html)
 
-This file defines three access types:
+This file defines three access levels:
 
-1. Anonymous (not logged in)
+1. **Anonymous** (not logged in)
 
-- Rule uses ACL `anonymous_read` with `READ` rights
-- It is limited to objects `public_description` and `public_aas`
-- `public_aas` points to the Demo AAS identifier, so anonymous users can only see Demo AAS
+   - ACL `anonymous_read` with `READ` rights
+   - Object group `public_product_info` grants access to the AAS shell, Nameplate, and CarbonFootprint (Digital Product Passport)
+   - Other submodels (TechnicalData, ContactInformations, HandoverDocumentation) require authentication
 
-2. Viewer user (`usera`)
+2. **Viewer** (`usera`, role = `viewer`)
 
-- Rule uses ACL `user` with `READ` rights
-- Formula `is_user` checks `role = viewer`
-- Objects `all_api` allow read access to all API resources, so `usera` can read both AAS entries
-- No write rights are granted
+   - ACL `viewer_read` with `READ` rights
+   - Formula `is_viewer` checks `role = viewer`
+   - Object group `all_api` grants read access to all API resources and submodels
 
-3. Admin user (`admin`)
+3. **Admin** (`admin`, role = `admin`)
 
-- Rule uses ACL `admin` with `ALL` rights
-- Formula `is_admin` checks `role = admin`
-- Objects `all_api` allow full API access, including upload/write operations
+   - ACL `admin_full` with `ALL` rights
+   - Formula `is_admin` checks `role = admin`
+   - Object group `all_api` grants full CRUD access
 
 To change who can see or edit what, update [`security_env/access-rules.json`](security_env/access-rules.json) (ACLs, formulas, and object groups).
 

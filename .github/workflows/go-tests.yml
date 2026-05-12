@@ -288,6 +288,27 @@ jobs:
           cd internal/aasenvironment/integration_tests
           go test -v .
 
+  aas-environment-security-tests:
+    name: AAS Environment Security Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v6
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Get dependencies
+        run: go mod download
+
+      - name: Run aas environment security tests
+        run: |
+          cd internal/aasenvironment/security_tests
+          go test -v .
+
   digital-twin-registry-tractusx-integration-tests:
     name: Digital Twin Registry Tractus-X Integration Tests
     runs-on: ubuntu-latest
@@ -474,3 +495,44 @@ jobs:
         run: |
           cd internal/aasrepository/security_tests
           go test -v .
+
+  aasx-file-server-integration-tests:
+    name: AASX File Server Integration Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v6
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Get dependencies
+        run: go mod download
+
+      - name: Run aasx file server integration tests
+        run: |
+          cd internal/aasxfileserver/integration_tests
+          go test -v .
+
+  aasx-file-server-unit-tests:
+    name: AASX File Server Unit Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v6
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Get dependencies
+        run: go mod download
+
+      - name: Run aasx file server unit tests
+        run: |
+          go test -v ./internal/aasxfileserver/...

@@ -9,6 +9,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 
@@ -17,6 +18,7 @@ import (
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	commonmodel "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
+	submodelrepositorydb "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence"
 	openapi "github.com/eclipse-basyx/basyx-go-components/pkg/aasrepositoryapi/go"
 )
 
@@ -46,31 +48,39 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 		log.Printf("Warning: failed to load OpenAPI spec for Swagger UI: %v", err)
 	}
 
-	dsn := fmt.Sprintf("postgres://%s:%s@%s:%d/%s?sslmode=disable",
-		cfg.Postgres.User,
-		cfg.Postgres.Password,
-		cfg.Postgres.Host,
-		cfg.Postgres.Port,
-		cfg.Postgres.DBName,
-	)
+	dsn := common.BuildPostgresDSN(cfg.Postgres)
 	log.Printf("🗄️  Connecting to Postgres with DSN: postgres://%s:****@%s:%d/%s?sslmode=disable",
 		cfg.Postgres.User, cfg.Postgres.Host, cfg.Postgres.Port, cfg.Postgres.DBName)
 
-	aasDatabase, err := persistencepostgresql.NewAssetAdministrationShellDatabase(
-		dsn,
-		cfg.Postgres.MaxOpenConnections,
-		cfg.Postgres.MaxIdleConnections,
-		cfg.Postgres.ConnMaxLifetimeMinutes,
-		databaseSchema,
-		cfg.Server.StrictVerification,
-	)
+	sharedDB, err := common.InitializeDatabase(dsn, databaseSchema)
 	if err != nil {
 		log.Printf("❌ DB connect failed: %v", err)
 		return err
 	}
+	if cfg.Postgres.MaxOpenConnections > 0 {
+		sharedDB.SetMaxOpenConns(cfg.Postgres.MaxOpenConnections)
+	}
+	if cfg.Postgres.MaxIdleConnections > 0 {
+		sharedDB.SetMaxIdleConns(cfg.Postgres.MaxIdleConnections)
+	}
+	if cfg.Postgres.ConnMaxLifetimeMinutes > 0 {
+		sharedDB.SetConnMaxLifetime(time.Duration(cfg.Postgres.ConnMaxLifetimeMinutes) * time.Minute)
+	}
+
+	aasDatabase, err := persistencepostgresql.NewAssetAdministrationShellDatabaseFromDB(sharedDB, cfg.Server.StrictVerification)
+	if err != nil {
+		log.Printf("❌ AAS DB init failed: %v", err)
+		return err
+	}
+
+	submodelDatabase, err := submodelrepositorydb.NewSubmodelDatabaseFromDB(sharedDB, nil, cfg.Server.StrictVerification)
+	if err != nil {
+		log.Printf("❌ Submodel DB connect failed: %v", err)
+		return err
+	}
 	log.Println("✅ Postgres connection established")
 
-	aasSvc := api.NewAssetAdministrationShellRepositoryAPIAPIService(*aasDatabase)
+	aasSvc := api.NewAssetAdministrationShellRepositoryAPIAPIService(aasDatabase, submodelDatabase)
 	aasCtrl := openapi.NewAssetAdministrationShellRepositoryAPIAPIController(aasSvc, "", cfg.Server.StrictVerification)
 
 	descSvc := openapi.NewDescriptionAPIAPIService()
@@ -79,7 +89,7 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 	base := common.NormalizeBasePath(cfg.Server.ContextPath)
 
 	apiRouter := chi.NewRouter()
-	common.AddDefaultRouterErrorHandlers(apiRouter, "AASRepositoryService")
+	common.ConfigureAPIRouter(apiRouter, "AASRepositoryService")
 
 	if err := auth.SetupSecurity(ctx, cfg, apiRouter); err != nil {
 		return err

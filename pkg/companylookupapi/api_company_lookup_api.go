@@ -4,7 +4,6 @@ package companylookupapi
 
 import (
 	"encoding/json"
-	"errors"
 	"log"
 	"net/http"
 	"strings"
@@ -17,24 +16,6 @@ import (
 const (
 	componentName = "ComLookup"
 )
-
-type companyDescriptorEnvelope struct {
-	Data *model.CompanyDescriptor `json:"data"`
-}
-
-func decodeCompanyDescriptorEnvelope(r *http.Request) (model.CompanyDescriptor, error) {
-	var envelope companyDescriptorEnvelope
-	d := json.NewDecoder(r.Body)
-	d.DisallowUnknownFields()
-	if err := d.Decode(&envelope); err != nil {
-		return model.CompanyDescriptor{}, err
-	}
-	if envelope.Data == nil {
-		return model.CompanyDescriptor{}, errors.New("missing required field: data")
-	}
-
-	return *envelope.Data, nil
-}
 
 // CompanyLookupAPIAPIController binds HTTP requests to an API service and writes the service results to the HTTP response.
 type CompanyLookupAPIAPIController struct {
@@ -157,7 +138,10 @@ func (c *CompanyLookupAPIAPIController) GetAllCompanyDescriptors(w http.Response
 
 // PostCompanyDescriptor creates a new company descriptor.
 func (c *CompanyLookupAPIAPIController) PostCompanyDescriptor(w http.ResponseWriter, r *http.Request) {
-	companyDescriptorParam, err := decodeCompanyDescriptorEnvelope(r)
+	var companyDescriptorParam model.CompanyDescriptor
+	d := json.NewDecoder(r.Body)
+	d.DisallowUnknownFields()
+	err := d.Decode(&companyDescriptorParam)
 	if err != nil {
 		log.Printf("📍 [%s] Error in PostCompanyDescriptor: decode body: %v", componentName, err)
 		result := common.NewErrorResponse(
@@ -257,7 +241,10 @@ func (c *CompanyLookupAPIAPIController) PutCompanyDescriptorById(w http.Response
 		_ = EncodeJSONResponse(result.Body, &result.Code, w)
 		return
 	}
-	companyDescriptorParam, err := decodeCompanyDescriptorEnvelope(r)
+	var companyDescriptorParam model.CompanyDescriptor
+	d := json.NewDecoder(r.Body)
+	d.DisallowUnknownFields()
+	err := d.Decode(&companyDescriptorParam)
 	if err != nil {
 		log.Printf("📍 [%s] Error in PutCompanyDescriptorById: decode body: %v", componentName, err)
 		result := common.NewErrorResponse(

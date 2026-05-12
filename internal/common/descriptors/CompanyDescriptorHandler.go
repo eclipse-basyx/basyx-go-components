@@ -481,6 +481,15 @@ func ListCompanyDescriptors(
 	if limit <= 0 {
 		limit = 100
 	}
+	if cursor != "" {
+		cursorExists, cursorErr := ExistsCompanyDescriptorByID(ctx, db, cursor)
+		if cursorErr != nil {
+			return nil, "", common.NewInternalServerError("COMPANY-LIST-CURSORCHECK " + cursorErr.Error())
+		}
+		if !cursorExists {
+			return []model.CompanyDescriptor{}, "", nil
+		}
+	}
 	peekLimit := int(limit) + 1
 
 	d := goqu.Dialect(common.Dialect)

@@ -38,7 +38,7 @@ package model
 type GetSubmodelsResult struct {
 	PagingMetadata PagedResultPagingMetadata `json:"paging_metadata"`
 
-	Result []map[string]any `json:"result,omitempty"`
+	Result []map[string]any `json:"result"`
 }
 
 // AssertGetSubmodelsResultRequired checks if the required fields are not zero-ed

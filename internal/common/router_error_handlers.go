@@ -9,7 +9,15 @@ import (
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/chi/v5/middleware"
 )
+
+// ConfigureAPIRouter applies common API router behavior.
+// It normalizes trailing slashes without redirects and registers standardized 404/405 handlers.
+func ConfigureAPIRouter(r *chi.Mux, component string) {
+	r.Use(middleware.StripSlashes)
+	AddDefaultRouterErrorHandlers(r, component)
+}
 
 // AddDefaultRouterErrorHandlers attaches standardized 404/405 responses to the router.
 // The component name is used in correlation code generation.

@@ -18,6 +18,7 @@ services:
   digitaltwinregistry:
     container_name: digitaltwinregistry
     image: eclipsebasyx/digitaltwinregistry-go:SNAPSHOT
+    pull_policy: always
     environment:
       - SERVER_PORT=5004
       - SERVER_CONTEXTPATH=/api/v3
@@ -32,6 +33,7 @@ services:
       - ABAC_ENABLED=true
       - GENERAL_ENABLEIMPLICITCASTS=false
       - GENERAL_ENABLEDESCRIPTORDEBUG=false
+      - GENERAL_ENABLECUSTOMMIDDLEWAREHEADERINJECTION=true
       - ABAC_MODELPATH=/security_env/access-rules.json
       - OIDC_TRUSTLISTPATH=/security_env/trustlist.json
     ports:
