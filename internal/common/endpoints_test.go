@@ -157,6 +157,7 @@ func TestVerifyPayload_MultipartJSON(t *testing.T) {
 
 func TestVerifyPayload_RawAASX(t *testing.T) {
 	aasxPath := filepath.Join("..", "aasenvironment", "integration_tests", "testdata", "IESEDriveMotorDM3000.aasx")
+	// #nosec G304 -- path is a static test fixture under repository-controlled testdata.
 	aasxBytes, err := os.ReadFile(aasxPath)
 	if err != nil {
 		t.Fatalf("failed to read aasx fixture %s: %v", aasxPath, err)
