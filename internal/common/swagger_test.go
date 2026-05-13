@@ -64,6 +64,9 @@ func TestAddSwaggerUIServesLocalPart2Schemas(t *testing.T) {
 	if !strings.Contains(specRecorder.Body.String(), "/api-docs/part2-schemas/V3.1.1/openapi.yaml#") {
 		t.Fatal("expected spec to contain localized part2 schema path")
 	}
+	if !strings.Contains(specRecorder.Body.String(), "\n  /verify:\n") {
+		t.Fatal("expected spec to contain injected /verify endpoint")
+	}
 
 	schemaReq := httptest.NewRequest(http.MethodGet, "/api-docs/part2-schemas/V3.1.1/openapi.yaml", nil)
 	schemaRecorder := httptest.NewRecorder()
@@ -73,6 +76,14 @@ func TestAddSwaggerUIServesLocalPart2Schemas(t *testing.T) {
 	}
 	if !strings.Contains(schemaRecorder.Body.String(), "openapi: 3.0.3") {
 		t.Fatal("expected schema response to contain OpenAPI content")
+	}
+}
+
+func TestInjectVerifyEndpoint_DoesNotDuplicateExistingPath(t *testing.T) {
+	spec := []byte("openapi: 3.0.3\npaths:\n  /verify:\n    post:\n      summary: Existing\n")
+	injected := injectVerifyEndpoint(spec)
+	if string(injected) != string(spec) {
+		t.Fatal("expected existing /verify path to remain unchanged")
 	}
 }
 

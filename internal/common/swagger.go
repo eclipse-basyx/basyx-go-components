@@ -77,6 +77,8 @@ type ContactConfig struct {
 }
 
 var openAPIVersionRegex = regexp.MustCompile(`(?m)^\s*version:\s*V([0-9]+\.[0-9]+\.[0-9]+)`)
+var verifyPathRegex = regexp.MustCompile(`(?m)^\s*/verify:\s*$`)
+var pathsSectionRegex = regexp.MustCompile(`(?m)^paths:\s*(?:\r?\n)`)
 
 func detectPart2SchemaVersion(specContent []byte) string {
 	matches := openAPIVersionRegex.FindSubmatch(specContent)
@@ -109,6 +111,86 @@ func localizePart2SchemaReferences(specContent []byte, specPath string) []byte {
 	}
 
 	return rewritten
+}
+
+func injectVerifyEndpoint(specContent []byte) []byte {
+	if verifyPathRegex.Match(specContent) {
+		return specContent
+	}
+
+	verifyPath := "" +
+		"  /verify:\n" +
+		"    post:\n" +
+		"      tags:\n" +
+		"        - Verification API\n" +
+		"      summary: Verifies AAS payload against the AAS meta model\n" +
+		"      operationId: VerifyPayload\n" +
+		"      requestBody:\n" +
+		"        required: true\n" +
+		"        content:\n" +
+		"          application/json:\n" +
+		"            schema:\n" +
+		"              oneOf:\n" +
+		"                - type: object\n" +
+		"                - type: array\n" +
+		"          application/xml:\n" +
+		"            schema:\n" +
+		"              type: string\n" +
+		"          multipart/form-data:\n" +
+		"            schema:\n" +
+		"              type: object\n" +
+		"              required:\n" +
+		"                - file\n" +
+		"              properties:\n" +
+		"                file:\n" +
+		"                  type: string\n" +
+		"                  format: binary\n" +
+		"      responses:\n" +
+		"        '200':\n" +
+		"          description: Verification result\n" +
+		"          content:\n" +
+		"            application/json:\n" +
+		"              schema:\n" +
+		"                type: object\n" +
+		"                properties:\n" +
+		"                  valid:\n" +
+		"                    type: boolean\n" +
+		"                  format:\n" +
+		"                    type: string\n" +
+		"                  assetAdministrationShellCount:\n" +
+		"                    type: integer\n" +
+		"                  submodelCount:\n" +
+		"                    type: integer\n" +
+		"                  conceptDescriptionCount:\n" +
+		"                    type: integer\n" +
+		"                  messages:\n" +
+		"                    type: array\n" +
+		"                    items:\n" +
+		"                      type: string\n" +
+		"        '400':\n" +
+		"          description: Invalid payload or unsupported format\n" +
+		"        '413':\n" +
+		"          description: Payload exceeds configured size limit\n" +
+		"        '500':\n" +
+		"          description: Internal server error while generating response\n"
+
+	pathLoc := pathsSectionRegex.FindIndex(specContent)
+	if pathLoc != nil {
+		injected := make([]byte, 0, len(specContent)+len(verifyPath))
+		injected = append(injected, specContent[:pathLoc[1]]...)
+		injected = append(injected, verifyPath...)
+		injected = append(injected, specContent[pathLoc[1]:]...)
+		return injected
+	}
+
+	appended := make([]byte, 0, len(specContent)+len(verifyPath)+8)
+	appended = append(appended, specContent...)
+	if len(specContent) > 0 && specContent[len(specContent)-1] != '\n' {
+		appended = append(appended, '\n')
+	}
+	appended = append(appended, []byte("paths:\n")...)
+	appended = append(appended, verifyPath...)
+	return appended
 }
 
 // injectServerURL modifies the OpenAPI spec to use the configured server URL
@@ -203,6 +285,7 @@ func AddSwaggerUI(r *chi.Mux, cfg SwaggerUIConfig) {
 
 	// Repoint Part2 schema references to local, bundled schema snapshots so Swagger works offline.
 	specContent = localizePart2SchemaReferences(specContent, cfg.SpecPath)
+	specContent = injectVerifyEndpoint(specContent)
 
 	// Serve the OpenAPI spec
 	r.Get(cfg.SpecPath, func(w http.ResponseWriter, _ *http.Request) {
