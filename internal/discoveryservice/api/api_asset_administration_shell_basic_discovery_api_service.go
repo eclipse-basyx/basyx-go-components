@@ -14,6 +14,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 	"strings"
@@ -190,6 +191,13 @@ func (s *AssetAdministrationShellBasicDiscoveryAPIAPIService) PostAllAssetLinksB
 		), nil
 	}
 
+	if err := validateSpecificAssetIDsRequired("POSTASSETLINKS", specificAssetID); err != nil {
+		log.Printf("🧭 [%s] Error PostAllAssetLinksById: invalid specific asset IDs: %v", componentName, err)
+		return common.NewErrorResponse(
+			err, http.StatusBadRequest, componentName, "PostAllAssetLinksById", "specificAssetId",
+		), nil
+	}
+
 	err := s.discoveryBackend.CreateAllAssetLinks(ctx, string(decodeDiscoveryIdentifier), specificAssetID)
 	if err != nil {
 		switch {
@@ -242,6 +250,13 @@ func (s *AssetAdministrationShellBasicDiscoveryAPIAPIService) AddAllAssetLinksBy
 		), nil
 	}
 
+	if err := validateSpecificAssetIDsRequired("ADDASSETLINKS", specificAssetID); err != nil {
+		log.Printf("🧭­ [%s] Error AddAllAssetLinksById: invalid specific asset IDs: %v", componentName, err)
+		return common.NewErrorResponse(
+			err, http.StatusBadRequest, componentName, "AddAllAssetLinksById", "specificAssetId",
+		), nil
+	}
+
 	err := s.discoveryBackend.AddAllAssetLinks(ctx, string(decodeDiscoveryIdentifier), specificAssetID)
 	if err != nil {
 		switch {
@@ -271,6 +286,22 @@ func (s *AssetAdministrationShellBasicDiscoveryAPIAPIService) AddAllAssetLinksBy
 	}
 
 	return model.Response(http.StatusCreated, jsonableLinks), nil
+}
+
+func validateSpecificAssetIDsRequired(action string, specificAssetIDs []types.ISpecificAssetID) error {
+	for idx, specificAssetID := range specificAssetIDs {
+		if specificAssetID == nil {
+			return common.NewErrBadRequest(fmt.Sprintf("DISC-%s-NILSPECIFICASSETID specificAssetID[%d] must not be nil", action, idx))
+		}
+		if strings.TrimSpace(specificAssetID.Name()) == "" {
+			return common.NewErrBadRequest(fmt.Sprintf("DISC-%s-EMPTYNAME specificAssetID[%d].name must not be empty", action, idx))
+		}
+		if strings.TrimSpace(specificAssetID.Value()) == "" {
+			return common.NewErrBadRequest(fmt.Sprintf("DISC-%s-EMPTYVALUE specificAssetID[%d].value must not be empty", action, idx))
+		}
+	}
+
+	return nil
 }
 
 // DeleteAllAssetLinksByID - Deletes specified specific asset identifiers linked to an Asset Administration Shell:

@@ -30,6 +30,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"encoding/xml"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -120,8 +121,19 @@ func writeHealthResponse(w http.ResponseWriter, statusCode int, body map[string]
 // AddVerificationEndpoint registers the POST /verify Endpoint that accepts a JSON, XML or AASX payload and verifies it against the AAS meta model regardless of the service and verification mode.
 func AddVerificationEndpoint(r *chi.Mux, config *Config) {
 	r.Post(config.Server.ContextPath+"/verify", func(w http.ResponseWriter, r *http.Request) {
+		maxPayloadBytes := verificationMaxPayloadBytes(config)
+		r.Body = http.MaxBytesReader(w, r.Body, maxPayloadBytes)
+		r = r.WithContext(ContextWithConfig(r.Context(), config))
+
 		verificationResult, err := VerifyPayload(r)
 		if err != nil {
+			var maxBytesError *http.MaxBytesError
+			if errors.As(err, &maxBytesError) {
+				log.Printf("COMMON-VERIFY-PAYLOAD-MAXSIZE exceeded max payload size of %d bytes: %v", maxPayloadBytes, err)
+				http.Error(w, fmt.Sprintf("Payload exceeds max size of %d bytes", maxPayloadBytes), http.StatusRequestEntityTooLarge)
+				return
+			}
+
 			log.Printf("COMMON-VERIFY-PAYLOAD failed to verify payload: %v", err)
 			http.Error(w, "Failed to verify payload: "+err.Error(), http.StatusBadRequest)
 			return
@@ -140,6 +152,14 @@ func AddVerificationEndpoint(r *chi.Mux, config *Config) {
 			log.Printf("COMMON-VERIFY-PAYLOAD-WRITE response write failed: %v", err)
 		}
 	})
+}
+
+func verificationMaxPayloadBytes(config *Config) int64 {
+	if config != nil && config.General.UploadMaxSizeBytes > 0 {
+		return config.General.UploadMaxSizeBytes
+	}
+
+	return verifyMaxPayloadBytes
 }
 
 // VerifyPayload verifies the request payload and returns a structured result. It supports JSON, XML, and AASX formats.
@@ -192,12 +212,13 @@ func readVerificationPayload(r *http.Request) ([]byte, string, string, error) {
 			_ = file.Close()
 		}()
 
-		payload, err := io.ReadAll(io.LimitReader(file, verifyMaxPayloadBytes+1))
+		maxPayloadBytes := verificationMaxPayloadBytesFromRequest(r)
+		payload, err := io.ReadAll(io.LimitReader(file, maxPayloadBytes+1))
 		if err != nil {
 			return nil, "", "", fmt.Errorf("failed to read multipart file payload: %w", err)
 		}
-		if int64(len(payload)) > verifyMaxPayloadBytes {
-			return nil, "", "", fmt.Errorf("payload exceeds max size of %d bytes", verifyMaxPayloadBytes)
+		if int64(len(payload)) > maxPayloadBytes {
+			return nil, "", "", fmt.Errorf("payload exceeds max size of %d bytes", maxPayloadBytes)
 		}
 		if len(bytes.TrimSpace(payload)) == 0 {
 			return nil, "", "", fmt.Errorf("payload is empty")
@@ -218,18 +239,32 @@ func readVerificationPayload(r *http.Request) ([]byte, string, string, error) {
 		_ = r.Body.Close()
 	}()
 
-	payload, err := io.ReadAll(io.LimitReader(r.Body, verifyMaxPayloadBytes+1))
+	maxPayloadBytes := verificationMaxPayloadBytesFromRequest(r)
+	payload, err := io.ReadAll(io.LimitReader(r.Body, maxPayloadBytes+1))
 	if err != nil {
 		return nil, "", "", fmt.Errorf("failed to read request body: %w", err)
 	}
-	if int64(len(payload)) > verifyMaxPayloadBytes {
-		return nil, "", "", fmt.Errorf("payload exceeds max size of %d bytes", verifyMaxPayloadBytes)
+	if int64(len(payload)) > maxPayloadBytes {
+		return nil, "", "", fmt.Errorf("payload exceeds max size of %d bytes", maxPayloadBytes)
 	}
 	if len(bytes.TrimSpace(payload)) == 0 {
 		return nil, "", "", fmt.Errorf("payload is empty")
 	}
 
 	return payload, "", headerContentType, nil
+}
+
+func verificationMaxPayloadBytesFromRequest(r *http.Request) int64 {
+	if r == nil {
+		return verifyMaxPayloadBytes
+	}
+
+	config, ok := ConfigFromContext(r.Context())
+	if !ok {
+		return verifyMaxPayloadBytes
+	}
+
+	return verificationMaxPayloadBytes(config)
 }
 
 func detectVerificationFormat(fileName string, contentType string, payload []byte) (string, error) {
@@ -545,7 +580,7 @@ func collectVerificationMessages(target aastypes.IClass) []string {
 		if verErr != nil {
 			messages = append(messages, verErr.Error())
 		}
-		return true
+		return false
 	})
 	return messages
 

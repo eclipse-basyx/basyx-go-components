@@ -46,3 +46,5 @@ debug.test.*
 .idea
 .gocache/
 logs/
+
+.kilo/

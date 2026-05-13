@@ -2,14 +2,14 @@ server:
   port: 5004
   contextPath: ""
   host: 0.0.0.0
-  strictVerification: permissive  # Values: off|permissive|strict
+  strictVerification: permissive  # Values: off|permissive|strict (default: permissive)
   verificationEndpointAvailable: true
 
 postgres:
   host: localhost
   port: 5432
   user: postgres
-  password: snoopy2002
+  password: postgres
   # dbname: basyxGoBenchmarkTest
   dbname: basyx
   maxOpenConnections: 500

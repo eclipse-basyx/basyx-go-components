@@ -2,7 +2,7 @@ server:
   port: 5004
   contextPath: ""
   host: 0.0.0.0
-  strictVerification: permissive  # Values: off|permissive|strict
+  strictVerification: permissive  # Values: off|permissive|strict (default: permissive)
   verificationEndpointAvailable: true
 
 postgres:

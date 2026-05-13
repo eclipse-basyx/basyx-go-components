@@ -44,8 +44,10 @@ import (
 	"github.com/spf13/viper"
 )
 
+const defaultServerStrictVerification = string(commonmodel.VerificationModePermissive)
+
 // DefaultConfig holds all default values for configuration options.
-// THESE VALUES ARE NOT USED! THEY VALIDATE IF CONFIGURATION IS DEFAULT IN THE PRINT STATEMENT
+// These values are also used to mark default values in the printed configuration.
 var DefaultConfig = struct {
 	ServerPort                          int
 	ServerContextPath                   string
@@ -75,7 +77,7 @@ var DefaultConfig = struct {
 	ServerPort:                          5004,
 	ServerContextPath:                   "",
 	ServerCacheEnabled:                  false,
-	ServerStrictVerification:            "strict",
+	ServerStrictVerification:            defaultServerStrictVerification,
 	ServerVerificationEndpointAvailable: true,
 	PgPort:                              5432,
 	PgDBName:                            "basyxTestDB",
@@ -177,7 +179,7 @@ type ServerConfig struct {
 	Port                          int    `mapstructure:"port" yaml:"port"`                                                   // HTTP server port (default: 5004)
 	ContextPath                   string `mapstructure:"contextPath" yaml:"contextPath"`                                     // Base path for all endpoints
 	CacheEnabled                  bool   `mapstructure:"cacheEnabled" yaml:"cacheEnabled"`                                   // Enable/disable response caching
-	StrictVerification            string `mapstructure:"strictVerification" yaml:"strictVerification"`                       // Verification mode: off|permissive|strict (default: strict)
+	StrictVerification            string `mapstructure:"strictVerification" yaml:"strictVerification"`                       // Verification mode: off|permissive|strict (default: permissive)
 	VerificationEndpointAvailable bool   `mapstructure:"verificationEndpointAvailable" yaml:"verificationEndpointAvailable"` // Enable/disable verification endpoint
 }
 
@@ -352,7 +354,7 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("server.port", 5004)
 	v.SetDefault("server.contextPath", "")
 	v.SetDefault("server.cacheEnabled", false)
-	v.SetDefault("server.strictVerification", "permissive")
+	v.SetDefault("server.strictVerification", DefaultConfig.ServerStrictVerification)
 	v.SetDefault("server.verificationEndpointAvailable", true)
 
 	// PostgreSQL defaults

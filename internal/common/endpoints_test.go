@@ -280,6 +280,94 @@ func TestVerifyPayload_SingleSubmodelElementJSON(t *testing.T) {
 	}
 }
 
+func invalidPropertyWithMultipleVerificationIssuesPayload() string {
+	return `{
+  "modelType": "Property",
+  "idShort": "1",
+  "extensions": [],
+  "description": [],
+  "displayName": [],
+  "supplementalSemanticIds": [],
+  "qualifiers": [],
+  "embeddedDataSpecifications": [],
+  "valueType": "xs:int",
+  "value": "not-an-int"
+}`
+}
+
+func assertVerificationMessagesInOrder(t *testing.T, messages []string) {
+	t.Helper()
+	expectedMessages := []string{
+		"Extensions must be either not set or have at least one item.",
+		"Description must be either not set or have at least one item.",
+		"Display name must be either not set or have at least one item.",
+		"Supplemental semantic IDs must be either not set or have at least one item.",
+		"Constraint AASd-118",
+		"Qualifiers must be either not set or have at least one item.",
+		"Embedded data specifications must be either not set or have at least one item.",
+		"Value must be consistent with the value type.",
+		"IDShort: ID-short of Referables shall only feature letters, digits, hyphen",
+	}
+
+	if len(messages) != len(expectedMessages) {
+		t.Fatalf("expected %d verification messages, got %d: %#v", len(expectedMessages), len(messages), messages)
+	}
+
+	for i, expectedMessage := range expectedMessages {
+		if !strings.Contains(messages[i], expectedMessage) {
+			t.Fatalf("expected message %d to contain %q, got %q", i, expectedMessage, messages[i])
+		}
+	}
+}
+
+func TestVerifyPayload_ReturnsAllVerificationMessages(t *testing.T) {
+	req := httptest.NewRequest(http.MethodPost, "/verify", strings.NewReader(invalidPropertyWithMultipleVerificationIssuesPayload()))
+	req.Header.Set("Content-Type", "application/json")
+
+	result, err := VerifyPayload(req)
+	if err != nil {
+		t.Fatalf("expected no parse error, got %v", err)
+	}
+
+	if valid, ok := result["valid"].(bool); !ok || valid {
+		t.Fatalf("expected valid=false, got %#v", result["valid"])
+	}
+
+	messages, ok := result["messages"].([]string)
+	if !ok {
+		t.Fatalf("expected messages []string field, got %#v", result["messages"])
+	}
+	assertVerificationMessagesInOrder(t, messages)
+}
+
+func TestAddVerificationEndpoint_ReturnsAllVerificationMessages(t *testing.T) {
+	router := chi.NewRouter()
+	cfg := &Config{Server: ServerConfig{ContextPath: "/api"}}
+	AddVerificationEndpoint(router, cfg)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/verify", strings.NewReader(invalidPropertyWithMultipleVerificationIssuesPayload()))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d body=%s", http.StatusOK, rec.Code, rec.Body.String())
+	}
+
+	var body struct {
+		Valid    bool     `json:"valid"`
+		Messages []string `json:"messages"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+		t.Fatalf("failed to decode response body: %v", err)
+	}
+	if body.Valid {
+		t.Fatal("expected valid=false")
+	}
+	assertVerificationMessagesInOrder(t, body.Messages)
+}
+
 func TestAddVerificationEndpoint_RawJSON(t *testing.T) {
 	router := chi.NewRouter()
 	cfg := &Config{Server: ServerConfig{ContextPath: "/api"}}
@@ -304,5 +392,56 @@ func TestAddVerificationEndpoint_RawJSON(t *testing.T) {
 	}
 	if format, ok := body["format"].(string); !ok || format != "json" {
 		t.Fatalf("expected format json, got %#v", body["format"])
+	}
+}
+
+func TestAddVerificationEndpoint_RejectsRawPayloadOverConfiguredLimit(t *testing.T) {
+	router := chi.NewRouter()
+	cfg := &Config{
+		Server:  ServerConfig{ContextPath: "/api"},
+		General: GeneralConfig{UploadMaxSizeBytes: 8},
+	}
+	AddVerificationEndpoint(router, cfg)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/verify", strings.NewReader(`{"assetAdministrationShells":[]}`))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusRequestEntityTooLarge {
+		t.Fatalf("expected status %d, got %d body=%s", http.StatusRequestEntityTooLarge, rec.Code, rec.Body.String())
+	}
+}
+
+func TestAddVerificationEndpoint_RejectsMultipartPayloadOverConfiguredLimit(t *testing.T) {
+	router := chi.NewRouter()
+	cfg := &Config{
+		Server:  ServerConfig{ContextPath: "/api"},
+		General: GeneralConfig{UploadMaxSizeBytes: 64},
+	}
+	AddVerificationEndpoint(router, cfg)
+
+	var body bytes.Buffer
+	writer := multipart.NewWriter(&body)
+	fileWriter, err := writer.CreateFormFile("file", "environment.json")
+	if err != nil {
+		t.Fatalf("failed to create multipart file: %v", err)
+	}
+	if _, err = fileWriter.Write([]byte(`{"assetAdministrationShells":[],"submodels":[],"conceptDescriptions":[]}`)); err != nil {
+		t.Fatalf("failed to write multipart file: %v", err)
+	}
+	if err = writer.Close(); err != nil {
+		t.Fatalf("failed to close multipart writer: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/api/verify", &body)
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+	rec := httptest.NewRecorder()
+
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusRequestEntityTooLarge {
+		t.Fatalf("expected status %d, got %d body=%s", http.StatusRequestEntityTooLarge, rec.Code, rec.Body.String())
 	}
 }
