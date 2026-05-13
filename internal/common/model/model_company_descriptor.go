@@ -182,6 +182,30 @@ func AssertCompanyDescriptorConstraints(obj CompanyDescriptor) error {
 	if strings.TrimSpace(obj.Domain) != "" && !IsStrictCompanyDomain(obj.Domain) {
 		return fmt.Errorf("domain %q is not a syntactically valid domain", obj.Domain)
 	}
+	for i, description := range obj.Description {
+		if strings.TrimSpace(description.Language()) == "" {
+			return fmt.Errorf("COMDESC-CONSTRAINTS-EMPTYDESCRIPTIONLANG description[%d].language must not be empty", i)
+		}
+		if strings.TrimSpace(description.Text()) == "" {
+			return fmt.Errorf("COMDESC-CONSTRAINTS-EMPTYDESCRIPTIONTEXT description[%d].text must not be empty", i)
+		}
+	}
+	for i, displayName := range obj.DisplayName {
+		if strings.TrimSpace(displayName.Language()) == "" {
+			return fmt.Errorf("COMDESC-CONSTRAINTS-EMPTYDISPLAYNAMELANG displayName[%d].language must not be empty", i)
+		}
+		if strings.TrimSpace(displayName.Text()) == "" {
+			return fmt.Errorf("COMDESC-CONSTRAINTS-EMPTYDISPLAYNAMETEXT displayName[%d].text must not be empty", i)
+		}
+	}
+	if obj.Administration != nil {
+		if err := assertReferenceKeysNotEmpty(obj.Administration.Creator(), "administration.creator"); err != nil {
+			return err
+		}
+		if err := assertReferenceKeyValuesNotEmpty(obj.Administration.Creator(), "administration.creator"); err != nil {
+			return err
+		}
+	}
 
 	for _, el := range obj.Endpoints {
 		if err := AssertEndpointConstraints(el); err != nil {
