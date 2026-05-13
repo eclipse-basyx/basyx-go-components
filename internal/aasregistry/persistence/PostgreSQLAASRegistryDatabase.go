@@ -118,7 +118,7 @@ func (p *PostgreSQLAASRegistryDatabase) GetAssetAdministrationShellDescriptorByI
 	aasIdentifier string,
 ) (model.AssetAdministrationShellDescriptor, error) {
 	if tx == nil {
-		return model.AssetAdministrationShellDescriptor{}, common.NewErrBadRequest("AASREG-GETAASDESC-NILTX transaction must not be nil")
+		return model.AssetAdministrationShellDescriptor{}, common.NewInternalServerError("AASREG-GETAASDESC-NILTX transaction must not be nil")
 	}
 
 	return descriptors.GetAssetAdministrationShellDescriptorByIDTx(ctx, tx, aasIdentifier)
@@ -150,7 +150,7 @@ func (p *PostgreSQLAASRegistryDatabase) UpsertAdministrationShellDescriptorInTra
 	aasd model.AssetAdministrationShellDescriptor,
 ) error {
 	if tx == nil {
-		return common.NewErrBadRequest("AASREG-UPSERTAASDESC-NILTX transaction must not be nil")
+		return common.NewInternalServerError("AASREG-UPSERTAASDESC-NILTX transaction must not be nil")
 	}
 
 	_, err := descriptors.GetAssetAdministrationShellDescriptorByIDTx(ctx, tx, aasd.Id)
@@ -175,7 +175,7 @@ func (p *PostgreSQLAASRegistryDatabase) DeleteAssetAdministrationShellDescriptor
 	aasIdentifier string,
 ) error {
 	if tx == nil {
-		return common.NewErrBadRequest("AASREG-DELAASDESC-NILTX transaction must not be nil")
+		return common.NewInternalServerError("AASREG-DELAASDESC-NILTX transaction must not be nil")
 	}
 
 	return descriptors.DeleteAssetAdministrationShellDescriptorByIDTx(ctx, tx, aasIdentifier)

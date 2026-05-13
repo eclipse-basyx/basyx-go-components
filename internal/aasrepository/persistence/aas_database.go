@@ -396,7 +396,7 @@ func (s *AssetAdministrationShellDatabase) CreateSubmodelReferenceInAssetAdminis
 // CreateSubmodelReferenceInAssetAdministrationShellInTransaction adds a submodel reference within an existing transaction.
 func (s *AssetAdministrationShellDatabase) CreateSubmodelReferenceInAssetAdministrationShellInTransaction(ctx context.Context, tx *sql.Tx, aasIdentifier string, submodelRef types.IReference) error {
 	if tx == nil {
-		return common.NewErrBadRequest("AASREPO-NEWSMREFINAAS-NILTX transaction must not be nil")
+		return common.NewInternalServerError("AASREPO-NEWSMREFINAAS-NILTX transaction must not be nil")
 	}
 
 	return s.createSubmodelReferenceInAssetAdministrationShellWithTransaction(ctx, tx, aasIdentifier, submodelRef)
@@ -422,7 +422,7 @@ func (s *AssetAdministrationShellDatabase) createSubmodelReferenceInAssetAdminis
 
 func (s *AssetAdministrationShellDatabase) createSubmodelReferenceInAssetAdministrationShellWithinTransaction(ctx context.Context, tx *sql.Tx, aasIdentifier string, submodelRef types.IReference) error {
 	if tx == nil {
-		return common.NewErrBadRequest("AASREPO-NEWSMREFINAAS-NILTX transaction must not be nil")
+		return common.NewInternalServerError("AASREPO-NEWSMREFINAAS-NILTX transaction must not be nil")
 	}
 
 	shouldEnforce, enforceErr := shouldEnforceFormula(ctx, "AASREPO-NEWSMREFINAAS-SHOULDENFORCE")
@@ -554,7 +554,7 @@ func (s *AssetAdministrationShellDatabase) CheckIfSubmodelReferenceExistsInAsset
 // CheckIfSubmodelReferenceExistsInAssetAdministrationShellInTransaction checks for a submodel reference within an existing transaction.
 func (s *AssetAdministrationShellDatabase) CheckIfSubmodelReferenceExistsInAssetAdministrationShellInTransaction(tx *sql.Tx, aasIdentifier string, submodelIdentifier string) error {
 	if tx == nil {
-		return common.NewErrBadRequest("AASREPO-CHECKSMREFINAAS-NILTX transaction must not be nil")
+		return common.NewInternalServerError("AASREPO-CHECKSMREFINAAS-NILTX transaction must not be nil")
 	}
 	return s.checkIfSubmodelReferenceExistsInAssetAdministrationShellInTransaction(tx, aasIdentifier, submodelIdentifier)
 }
@@ -759,7 +759,7 @@ func (s *AssetAdministrationShellDatabase) PutAssetAdministrationShellByID(ctx c
 // PutAssetAdministrationShellByIDInTransaction upserts an AAS using an existing transaction.
 func (s *AssetAdministrationShellDatabase) PutAssetAdministrationShellByIDInTransaction(ctx context.Context, tx *sql.Tx, aasIdentifier string, aas types.IAssetAdministrationShell) (bool, error) {
 	if tx == nil {
-		return false, common.NewErrBadRequest("AASREPO-PUTAAS-NILTX transaction must not be nil")
+		return false, common.NewInternalServerError("AASREPO-PUTAAS-NILTX transaction must not be nil")
 	}
 	if aasIdentifier != aas.ID() {
 		return false, common.NewErrBadRequest("AASREPO-PUTAAS-IDMISMATCH Asset Administration Shell ID in path and body do not match")
@@ -853,7 +853,7 @@ func (s *AssetAdministrationShellDatabase) DeleteAssetAdministrationShellByID(ct
 // DeleteAssetAdministrationShellByIDInTransaction removes an AAS using an existing transaction.
 func (s *AssetAdministrationShellDatabase) DeleteAssetAdministrationShellByIDInTransaction(ctx context.Context, tx *sql.Tx, aasIdentifier string) error {
 	if tx == nil {
-		return common.NewErrBadRequest("AASREPO-DELAAS-NILTX transaction must not be nil")
+		return common.NewInternalServerError("AASREPO-DELAAS-NILTX transaction must not be nil")
 	}
 
 	shouldEnforce, enforceErr := shouldEnforceFormula(ctx, "AASREPO-DELAAS-SHOULDENFORCE")
@@ -968,7 +968,7 @@ func (s *AssetAdministrationShellDatabase) PutAssetInformationByAASIDInTransacti
 	assetInformation types.IAssetInformation,
 ) error {
 	if tx == nil {
-		return common.NewErrBadRequest("AASREPO-PUTASSETINFO-NILTX transaction must not be nil")
+		return common.NewInternalServerError("AASREPO-PUTASSETINFO-NILTX transaction must not be nil")
 	}
 
 	if err := s.verifyAssetInformation(assetInformation, "AASREPO-PUTASSETINFORMATION-VERIFY"); err != nil {
@@ -1441,7 +1441,7 @@ func (s *AssetAdministrationShellDatabase) ListAASIdentifiersBySubmodelID(ctx co
 // ListAASIdentifiersBySubmodelIDInTransaction returns all AAS identifiers that reference the given submodel ID using the provided transaction.
 func (s *AssetAdministrationShellDatabase) ListAASIdentifiersBySubmodelIDInTransaction(ctx context.Context, tx *sql.Tx, submodelIdentifier string) ([]string, error) {
 	if tx == nil {
-		return nil, common.NewErrBadRequest("AASREPO-LISTAASBYSM-NILTX transaction must not be nil")
+		return nil, common.NewInternalServerError("AASREPO-LISTAASBYSM-NILTX transaction must not be nil")
 	}
 
 	dialect := goqu.Dialect("postgres")
@@ -1503,7 +1503,7 @@ func (s *AssetAdministrationShellDatabase) DeleteSubmodelReferenceInAssetAdminis
 // DeleteSubmodelReferenceInAssetAdministrationShellInTransaction removes a submodel reference within an existing transaction.
 func (s *AssetAdministrationShellDatabase) DeleteSubmodelReferenceInAssetAdministrationShellInTransaction(ctx context.Context, tx *sql.Tx, aasIdentifier string, submodelIdentifier string) error {
 	if tx == nil {
-		return common.NewErrBadRequest("AASREPO-DELSMREF-NILTX transaction must not be nil")
+		return common.NewInternalServerError("AASREPO-DELSMREF-NILTX transaction must not be nil")
 	}
 
 	return s.deleteSubmodelReferenceInAssetAdministrationShellWithTransaction(ctx, tx, aasIdentifier, submodelIdentifier)

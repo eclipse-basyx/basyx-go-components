@@ -289,7 +289,7 @@ func (s *SubmodelDatabase) CreateSubmodel(ctx context.Context, submodel types.IS
 // CreateSubmodelInTransaction creates a new submodel inside an existing transaction.
 func (s *SubmodelDatabase) CreateSubmodelInTransaction(ctx context.Context, tx *sql.Tx, submodel types.ISubmodel) error {
 	if tx == nil {
-		return common.NewErrBadRequest("SMREPO-NEWSM-NILTX transaction must not be nil")
+		return common.NewInternalServerError("SMREPO-NEWSM-NILTX transaction must not be nil")
 	}
 
 	if err := s.verifySubmodel(submodel, "SMREPO-NEWSM-VERIFY"); err != nil {
@@ -1259,7 +1259,7 @@ func (s *SubmodelDatabase) PatchSubmodel(_ context.Context, submodelID string, s
 // PatchSubmodelInTransaction replaces an existing submodel in an existing transaction.
 func (s *SubmodelDatabase) PatchSubmodelInTransaction(submodelID string, tx *sql.Tx, submodel types.ISubmodel) error {
 	if tx == nil {
-		return common.NewErrBadRequest("SMREPO-PATCHSM-NILTX transaction must not be nil")
+		return common.NewInternalServerError("SMREPO-PATCHSM-NILTX transaction must not be nil")
 	}
 	if submodelID != submodel.ID() {
 		return common.NewErrBadRequest("SMREPO-PATCHSM-IDMISMATCH Submodel ID in path and body do not match")
@@ -1312,7 +1312,7 @@ func (s *SubmodelDatabase) PatchSubmodelMetadata(_ context.Context, submodelID s
 // PatchSubmodelMetadataInTransaction updates submodel metadata in an existing transaction.
 func (s *SubmodelDatabase) PatchSubmodelMetadataInTransaction(submodelID string, tx *sql.Tx, submodel types.ISubmodel) error {
 	if tx == nil {
-		return common.NewErrBadRequest("SMREPO-PATCHSMMETA-NILTX transaction must not be nil")
+		return common.NewInternalServerError("SMREPO-PATCHSMMETA-NILTX transaction must not be nil")
 	}
 	if submodelID != submodel.ID() {
 		return common.NewErrBadRequest("SMREPO-PATCHSMMETA-IDMISMATCH Submodel ID in path and body do not match")
@@ -1361,7 +1361,7 @@ func (s *SubmodelDatabase) PutSubmodel(ctx context.Context, submodelID string, s
 // PutSubmodelInTransaction creates or replaces a submodel within an existing transaction.
 func (s *SubmodelDatabase) PutSubmodelInTransaction(ctx context.Context, tx *sql.Tx, submodelID string, submodel types.ISubmodel) (bool, error) {
 	if tx == nil {
-		return false, common.NewErrBadRequest("SMREPO-PUTSM-NILTX transaction must not be nil")
+		return false, common.NewInternalServerError("SMREPO-PUTSM-NILTX transaction must not be nil")
 	}
 	if submodelID != submodel.ID() {
 		return false, common.NewErrBadRequest("SMREPO-PUTSM-IDMISMATCH Submodel ID in path and body do not match")
@@ -1439,7 +1439,7 @@ func (s *SubmodelDatabase) DeleteSubmodel(ctx context.Context, submodelID string
 // DeleteSubmodelInTransaction deletes a submodel within an existing transaction.
 func (s *SubmodelDatabase) DeleteSubmodelInTransaction(ctx context.Context, tx *sql.Tx, submodelID string) error {
 	if tx == nil {
-		return common.NewErrBadRequest("SMREPO-DELSM-NILTX transaction must not be nil")
+		return common.NewInternalServerError("SMREPO-DELSM-NILTX transaction must not be nil")
 	}
 
 	return s.deleteSubmodelInTransaction(ctx, tx, submodelID)

@@ -803,7 +803,7 @@ func (s *CustomAASRepositoryService) ensureAASDescriptorForSubmodelSyncInTransac
 		return commonmodel.AssetAdministrationShellDescriptor{}, false, dependencyErr
 	}
 	if tx == nil {
-		return commonmodel.AssetAdministrationShellDescriptor{}, false, common.NewErrBadRequest("AASENV-AASREPO-ENSUREAASDESC-NILTX transaction must not be nil")
+		return commonmodel.AssetAdministrationShellDescriptor{}, false, common.NewInternalServerError("AASENV-AASREPO-ENSUREAASDESC-NILTX transaction must not be nil")
 	}
 
 	descriptor, getDescriptorErr := s.persistence.AASRegistry.GetAssetAdministrationShellDescriptorByIDInTransaction(ctx, tx, aasID)
