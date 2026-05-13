@@ -1,0 +1,16 @@
+{
+  "idShort": "registrySyncPostSubmodelUpdated",
+  "id": "urn:example:sm:registry-sync-post",
+  "kind": "Instance",
+  "semanticId": {
+    "type": "ModelReference",
+    "keys": [
+      {
+        "type": "Submodel",
+        "value": "urn:example:semantic:registry-sync-post"
+      }
+    ]
+  },
+  "submodelElements": [],
+  "modelType": "Submodel"
+}

@@ -10,12 +10,17 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/eclipse-basyx/basyx-go-components/internal/aasenvironment"
+	aasregistrydb "github.com/eclipse-basyx/basyx-go-components/internal/aasregistry/persistence"
+	aasrepositorydb "github.com/eclipse-basyx/basyx-go-components/internal/aasrepository/persistence"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/jws"
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
+	smregistrydb "github.com/eclipse-basyx/basyx-go-components/internal/smregistry/persistence"
 	"github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/api"
 	persistencepostgresql "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence"
 	openapi "github.com/eclipse-basyx/basyx-go-components/pkg/submodelrepositoryapi"
@@ -29,6 +34,17 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 	log.Default().Println("Config Path:", configPath)
 	// Load configuration
 	config, err := common.LoadConfig(configPath)
+	if err != nil {
+		return err
+	}
+	if err = aasenvironment.ValidateStandaloneSubmodelRepositoryRegistrySyncConfig(config); err != nil {
+		return err
+	}
+	registrySyncConfig, err := aasenvironment.NewRegistrySyncConfig(
+		config.General.AASRegistryIntegration,
+		config.General.SubmodelRegistryIntegration,
+		config.General.ExternalURL,
+	)
 	if err != nil {
 		return err
 	}
@@ -65,12 +81,51 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 	}
 
 	dsn := common.BuildPostgresDSN(config.Postgres)
-	smDatabase, err := persistencepostgresql.NewSubmodelDatabase(dsn, config.Postgres.MaxOpenConnections, config.Postgres.MaxIdleConnections, config.Postgres.ConnMaxLifetimeMinutes, databaseSchema, privateKey, config.Server.StrictVerification)
+	sharedDB, err := common.InitializeDatabase(dsn, databaseSchema)
+	if err != nil {
+		return err
+	}
+	if config.Postgres.MaxOpenConnections > 0 {
+		sharedDB.SetMaxOpenConns(config.Postgres.MaxOpenConnections)
+	}
+	if config.Postgres.MaxIdleConnections > 0 {
+		sharedDB.SetMaxIdleConns(config.Postgres.MaxIdleConnections)
+	}
+	if config.Postgres.ConnMaxLifetimeMinutes > 0 {
+		sharedDB.SetConnMaxLifetime(time.Duration(config.Postgres.ConnMaxLifetimeMinutes) * time.Minute)
+	}
+
+	smDatabase, err := persistencepostgresql.NewSubmodelDatabaseFromDB(sharedDB, privateKey, config.Server.StrictVerification)
+	if err != nil {
+		return err
+	}
+	smRegistryPersistence, err := smregistrydb.NewPostgreSQLSMBackendFromDB(sharedDB)
+	if err != nil {
+		return err
+	}
+	aasRepositoryPersistence, err := aasrepositorydb.NewAssetAdministrationShellDatabaseFromDB(sharedDB, config.Server.StrictVerification)
+	if err != nil {
+		return err
+	}
+	aasRegistryPersistence, err := aasregistrydb.NewPostgreSQLAASRegistryDatabaseFromDB(sharedDB, config.Server.CacheEnabled)
 	if err != nil {
 		return err
 	}
 
-	smSvc := api.NewSubmodelRepositoryAPIAPIService(*smDatabase)
+	persistence := &aasenvironment.Persistence{
+		DB:                 sharedDB,
+		AASRegistry:        aasRegistryPersistence,
+		AASRepository:      aasRepositoryPersistence,
+		SubmodelRegistry:   smRegistryPersistence,
+		SubmodelRepository: smDatabase,
+	}
+	enableReferencingAASDescriptorEmbeddingSync := registrySyncConfig.SubmodelRegistryIntegration
+	smSvc := aasenvironment.NewCustomSubmodelRepositoryServiceWithAASDescriptorEmbeddingSync(
+		api.NewSubmodelRepositoryAPIAPIService(*smDatabase),
+		persistence,
+		registrySyncConfig,
+		enableReferencingAASDescriptorEmbeddingSync,
+	)
 	smCtrl := openapi.NewSubmodelRepositoryAPIAPIController(smSvc, "", config.Server.StrictVerification)
 	serializationSvc := api.NewSerializationAPIAPIService()
 	serializationCtrl := openapi.NewSerializationAPIAPIController(serializationSvc, "")

@@ -46,53 +46,59 @@ import (
 // DefaultConfig holds all default values for configuration options.
 // THESE VALUES ARE NOT USED! THEY VALIDATE IF CONFIGURATION IS DEFAULT IN THE PRINT STATEMENT
 var DefaultConfig = struct {
-	ServerPort                  int
-	ServerContextPath           string
-	ServerCacheEnabled          bool
-	ServerStrictVerification    bool
-	PgPort                      int
-	PgDBName                    string
-	PgMaxOpen                   int
-	PgMaxIdle                   int
-	PgConnLifetime              int
-	AllowedOrigins              []string
-	AllowedMethods              []string
-	AllowedHeaders              []string
-	AllowCredentials            bool
-	OIDCTrustlistPath           string
-	OIDCJWKSURL                 string
-	ABACEnabled                 bool
-	ABACModelPath               string
-	GeneralImplicitCasts        bool
-	GeneralDescriptorDebug      bool
-	GeneralDiscoveryIntegration bool
-	GeneralSupportsSingularSSID bool
-	GeneralEnableCustomHeaderMW bool
-	GeneralAASPreconfigPaths    []string
+	ServerPort                         int
+	ServerContextPath                  string
+	ServerCacheEnabled                 bool
+	ServerStrictVerification           bool
+	PgPort                             int
+	PgDBName                           string
+	PgMaxOpen                          int
+	PgMaxIdle                          int
+	PgConnLifetime                     int
+	AllowedOrigins                     []string
+	AllowedMethods                     []string
+	AllowedHeaders                     []string
+	AllowCredentials                   bool
+	OIDCTrustlistPath                  string
+	OIDCJWKSURL                        string
+	ABACEnabled                        bool
+	ABACModelPath                      string
+	GeneralImplicitCasts               bool
+	GeneralDescriptorDebug             bool
+	GeneralDiscoveryIntegration        bool
+	GeneralSupportsSingularSSID        bool
+	GeneralEnableCustomHeaderMW        bool
+	GeneralAASRegistryIntegration      bool
+	GeneralSubmodelRegistryIntegration bool
+	GeneralExternalURL                 string
+	GeneralAASPreconfigPaths           []string
 }{
-	ServerPort:                  5004,
-	ServerContextPath:           "",
-	ServerCacheEnabled:          false,
-	ServerStrictVerification:    true,
-	PgPort:                      5432,
-	PgDBName:                    "basyxTestDB",
-	PgMaxOpen:                   50,
-	PgMaxIdle:                   50,
-	PgConnLifetime:              5,
-	AllowedOrigins:              []string{},
-	AllowedMethods:              []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
-	AllowedHeaders:              []string{},
-	AllowCredentials:            false,
-	OIDCTrustlistPath:           "config/trustlist.json",
-	OIDCJWKSURL:                 "",
-	ABACEnabled:                 false,
-	ABACModelPath:               "config/access_rules/access-rules.json",
-	GeneralImplicitCasts:        true,
-	GeneralDescriptorDebug:      false,
-	GeneralDiscoveryIntegration: false,
-	GeneralSupportsSingularSSID: false,
-	GeneralEnableCustomHeaderMW: false,
-	GeneralAASPreconfigPaths:    []string{},
+	ServerPort:                         5004,
+	ServerContextPath:                  "",
+	ServerCacheEnabled:                 false,
+	ServerStrictVerification:           true,
+	PgPort:                             5432,
+	PgDBName:                           "basyxTestDB",
+	PgMaxOpen:                          50,
+	PgMaxIdle:                          50,
+	PgConnLifetime:                     5,
+	AllowedOrigins:                     []string{},
+	AllowedMethods:                     []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
+	AllowedHeaders:                     []string{},
+	AllowCredentials:                   false,
+	OIDCTrustlistPath:                  "config/trustlist.json",
+	OIDCJWKSURL:                        "",
+	ABACEnabled:                        false,
+	ABACModelPath:                      "config/access_rules/access-rules.json",
+	GeneralImplicitCasts:               true,
+	GeneralDescriptorDebug:             false,
+	GeneralDiscoveryIntegration:        false,
+	GeneralSupportsSingularSSID:        false,
+	GeneralEnableCustomHeaderMW:        false,
+	GeneralAASRegistryIntegration:      false,
+	GeneralSubmodelRegistryIntegration: false,
+	GeneralExternalURL:                 "",
+	GeneralAASPreconfigPaths:           []string{},
 }
 
 // PrintSplash displays the BaSyx Go API ASCII art logo to the console.
@@ -205,6 +211,9 @@ type GeneralConfig struct {
 	DiscoveryIntegration                   bool     `mapstructure:"discoveryIntegration" yaml:"discoveryIntegration" json:"discoveryIntegration"`                                                       // Enable integration with discovery aas_identifier linking
 	EnableCustomMiddlewareHeaderInjection  bool     `mapstructure:"enableCustomMiddlewareHeaderInjection" yaml:"enableCustomMiddlewareHeaderInjection" json:"enableCustomMiddlewareHeaderInjection"`    // Enable custom security middleware header injections
 	SupportsSingularSupplementalSemanticId bool     `mapstructure:"supportsSingularSupplementalSemanticId" yaml:"supportsSingularSupplementalSemanticId" json:"supportsSingularSupplementalSemanticId"` // Use singular supplementalSemanticId for SubmodelDescriptor I/O
+	AASRegistryIntegration                 bool     `mapstructure:"aasRegistryIntegration" yaml:"aasRegistryIntegration" json:"aasRegistryIntegration"`                                                 // Enable AAS repository -> registry descriptor synchronization
+	SubmodelRegistryIntegration            bool     `mapstructure:"submodelRegistryIntegration" yaml:"submodelRegistryIntegration" json:"submodelRegistryIntegration"`                                  // Enable Submodel repository -> registry descriptor synchronization
+	ExternalURL                            string   `mapstructure:"externalUrl" yaml:"externalUrl" json:"externalUrl"`                                                                                  // Public base URL(s) used for registry synchronization endpoint generation
 	UploadMaxSizeBytes                     int64    `mapstructure:"uploadMaxSizeBytes" yaml:"uploadMaxSizeBytes" json:"uploadMaxSizeBytes"`                                                             // Maximum allowed upload payload size in bytes
 	AASPreconfigPaths                      []string `mapstructure:"aasPreconfigPaths" yaml:"aasPreconfigPaths" json:"aasPreconfigPaths"`                                                                // Files/directories loaded at startup for AAS preconfiguration
 }
@@ -381,6 +390,9 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("general.discoveryIntegration", false)
 	v.SetDefault("general.enableCustomMiddlewareHeaderInjection", false)
 	v.SetDefault("general.supportsSingularSupplementalSemanticId", false)
+	v.SetDefault("general.aasRegistryIntegration", false)
+	v.SetDefault("general.submodelRegistryIntegration", false)
+	v.SetDefault("general.externalUrl", "")
 	v.SetDefault("general.uploadMaxSizeBytes", int64(128<<20))
 	v.SetDefault("general.aasPreconfigPaths", []string{})
 

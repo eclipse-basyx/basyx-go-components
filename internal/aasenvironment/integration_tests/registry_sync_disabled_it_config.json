@@ -1,0 +1,75 @@
+[
+  {
+    "context": "001 - Health Check (sync disabled)",
+    "method": "GET",
+    "endpoint": "http://127.0.0.1:6005/health",
+    "expectedStatus": 200
+  },
+  {
+    "context": "002 - List empty AAS descriptors (sync disabled)",
+    "method": "GET",
+    "endpoint": "http://127.0.0.1:6005/shell-descriptors",
+    "shouldMatch": "expected/registry_sync_empty_paged_result.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "003 - Create AAS via /shells (sync disabled)",
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:6005/shells",
+    "data": "testdata/registry_sync_post_shell.json",
+    "shouldMatch": "testdata/registry_sync_post_shell.json",
+    "expectedStatus": 201
+  },
+  {
+    "context": "004 - Verify AAS descriptor is not created when sync is disabled",
+    "method": "GET",
+    "endpoint": "http://127.0.0.1:6005/shell-descriptors/dXJuOmV4YW1wbGU6YWFzOnJlZ2lzdHJ5LXN5bmMtcG9zdA",
+    "expectedStatus": 404
+  },
+  {
+    "context": "005 - Create submodel via /submodels (sync disabled)",
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:6005/submodels",
+    "data": "testdata/registry_sync_post_submodel.json",
+    "shouldMatch": "testdata/registry_sync_post_submodel.json",
+    "expectedStatus": 201
+  },
+  {
+    "context": "006 - Verify submodel descriptor is not created when sync is disabled",
+    "method": "GET",
+    "endpoint": "http://127.0.0.1:6005/submodel-descriptors/dXJuOmV4YW1wbGU6c206cmVnaXN0cnktc3luYy1wb3N0",
+    "expectedStatus": 404
+  },
+  {
+    "context": "007 - Verify posted /submodels entry is not reachable via superpath without reference (sync disabled)",
+    "method": "GET",
+    "endpoint": "http://127.0.0.1:6005/shells/dXJuOmV4YW1wbGU6YWFzOnJlZ2lzdHJ5LXN5bmMtcG9zdA/submodels/dXJuOmV4YW1wbGU6c206cmVnaXN0cnktc3luYy1wb3N0",
+    "expectedStatus": 404
+  },
+  {
+    "context": "008 - Create submodel via AAS superpath (sync disabled)",
+    "method": "PUT",
+    "endpoint": "http://127.0.0.1:6005/shells/dXJuOmV4YW1wbGU6YWFzOnJlZ2lzdHJ5LXN5bmMtcG9zdA/submodels/dXJuOmV4YW1wbGU6c206cmVnaXN0cnktc3luYy1zdXBlcnBhdGg",
+    "data": "testdata/registry_sync_put_superpath_submodel.json",
+    "expectedStatus": 201
+  },
+  {
+    "context": "009 - Verify superpath-created submodel is reachable via /submodels/{id} (sync disabled)",
+    "method": "GET",
+    "endpoint": "http://127.0.0.1:6005/submodels/dXJuOmV4YW1wbGU6c206cmVnaXN0cnktc3luYy1zdXBlcnBhdGg",
+    "shouldMatch": "expected/registry_sync_get_superpath_submodel.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "010 - Verify AAS descriptor still not created after superpath update when sync is disabled",
+    "method": "GET",
+    "endpoint": "http://127.0.0.1:6005/shell-descriptors/dXJuOmV4YW1wbGU6YWFzOnJlZ2lzdHJ5LXN5bmMtcG9zdA",
+    "expectedStatus": 404
+  },
+  {
+    "context": "011 - Verify submodel descriptor still not created after superpath update when sync is disabled",
+    "method": "GET",
+    "endpoint": "http://127.0.0.1:6005/submodel-descriptors/dXJuOmV4YW1wbGU6c206cmVnaXN0cnktc3luYy1zdXBlcnBhdGg",
+    "expectedStatus": 404
+  }
+]

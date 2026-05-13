@@ -28,6 +28,8 @@ package main
 
 import (
 	"bytes"
+	"context"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -40,7 +42,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/aas-core-works/aas-core3.1-golang/types"
+	aasregistrydb "github.com/eclipse-basyx/basyx-go-components/internal/aasregistry/persistence"
+	aasrepositorydb "github.com/eclipse-basyx/basyx-go-components/internal/aasrepository/persistence"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
+	commonmodel "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/testenv"
 	_ "github.com/lib/pq" // PostgreSQL Treiber
 
@@ -59,6 +65,8 @@ var (
 	xsdGYearMonthPattern = regexp.MustCompile(`^-?\d{4,}-(0[1-9]|1[0-2])` + xsdTimezonePattern + `$`)
 	xsdGMonthDayPattern  = regexp.MustCompile(`^--(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])` + xsdTimezonePattern + `$`)
 )
+
+const submodelRepositoryIntegrationTestDSN = "postgres://admin:admin123@127.0.0.1:6432/basyxTestDB?sslmode=disable"
 
 // uploadFileAttachment uploads a file to the attachment endpoint
 func uploadFileAttachment(endpoint string, filePath string, fileName string) (int, error) {
@@ -197,6 +205,58 @@ func requestJSON(method string, endpoint string, payload any) (int, []byte, erro
 	}
 
 	return resp.StatusCode, respBody, nil
+}
+
+func waitForServiceHealthy(t *testing.T, endpoint string, timeout time.Duration) {
+	t.Helper()
+
+	deadline := time.Now().Add(timeout)
+	client := &http.Client{Timeout: 2 * time.Second}
+	for time.Now().Before(deadline) {
+		resp, err := client.Get(endpoint)
+		if err == nil {
+			if resp.Body != nil {
+				_ = resp.Body.Close()
+			}
+			if resp.StatusCode == http.StatusOK {
+				return
+			}
+		}
+
+		time.Sleep(300 * time.Millisecond)
+	}
+
+	t.Fatalf("service did not become healthy within timeout: %s", endpoint)
+}
+
+func assertServiceNeverHealthy(t *testing.T, endpoint string, observationWindow time.Duration) {
+	t.Helper()
+
+	client := &http.Client{Timeout: 2 * time.Second}
+	deadline := time.Now().Add(observationWindow)
+	for time.Now().Before(deadline) {
+		resp, err := client.Get(endpoint)
+		if err == nil {
+			if resp.Body != nil {
+				_ = resp.Body.Close()
+			}
+			if resp.StatusCode == http.StatusOK {
+				t.Fatalf("service unexpectedly became healthy at %s", endpoint)
+			}
+		}
+
+		time.Sleep(300 * time.Millisecond)
+	}
+}
+
+func hasEmbeddedSubmodelDescriptor(descriptors []commonmodel.SubmodelDescriptor, submodelID string) bool {
+	for _, descriptor := range descriptors {
+		if descriptor.Id == submodelID {
+			return true
+		}
+	}
+
+	return false
 }
 
 func getPropertyValueByIDShort(t *testing.T, submodel map[string]any, idShort string) string {
@@ -1523,6 +1583,103 @@ func TestPutSubmodelElementByPathCreatesWhenMissing(t *testing.T) {
 	statusCode, body, err = requestJSON(http.MethodPut, putEndpoint, putPayload)
 	require.NoError(t, err)
 	require.Equal(t, http.StatusNoContent, statusCode, "response=%s", string(body))
+}
+
+func TestStandaloneStartupRejectsUnsupportedAASRegistryToggle(t *testing.T) {
+	if os.Getenv("BASYX_EXTERNAL_COMPOSE") == "1" {
+		t.Skip("requires bundled integration docker compose setup")
+	}
+
+	assertServiceNeverHealthy(t, "http://localhost:6007/health", 20*time.Second)
+}
+
+func TestStandaloneSubmodelRepositorySyncUpdatesReferencingAASDescriptor(t *testing.T) {
+	if os.Getenv("BASYX_EXTERNAL_COMPOSE") == "1" {
+		t.Skip("requires bundled integration docker compose setup")
+	}
+
+	companionAASBaseURL := "http://localhost:6006"
+	submodelSyncBaseURL := "http://localhost:6008"
+
+	waitForServiceHealthy(t, companionAASBaseURL+"/health", 2*time.Minute)
+	waitForServiceHealthy(t, submodelSyncBaseURL+"/health", 2*time.Minute)
+
+	aasID := fmt.Sprintf("urn:basyx:integration:standalone-sync-aas-%d", time.Now().UnixNano())
+	encodedAASID := common.EncodeString(aasID)
+	submodelID := fmt.Sprintf("urn:basyx:integration:standalone-sync-submodel-%d", time.Now().UnixNano())
+	encodedSubmodelID := common.EncodeString(submodelID)
+
+	postAASPayload := map[string]any{
+		"id":        aasID,
+		"idShort":   "StandaloneSyncAAS",
+		"modelType": "AssetAdministrationShell",
+		"assetInformation": map[string]any{
+			"assetKind": "Instance",
+		},
+	}
+
+	statusCode, body, err := requestJSON(http.MethodPost, companionAASBaseURL+"/shells", postAASPayload)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusCreated, statusCode, "response=%s", string(body))
+
+	t.Cleanup(func() {
+		deleteStatusCode, deleteBody, deleteErr := requestJSON(http.MethodDelete, companionAASBaseURL+"/shells/"+encodedAASID, nil)
+		if deleteErr != nil {
+			t.Logf("cleanup delete aas failed: %v", deleteErr)
+			return
+		}
+		if deleteStatusCode != http.StatusNoContent && deleteStatusCode != http.StatusNotFound {
+			t.Logf("cleanup delete aas unexpected status=%d response=%s", deleteStatusCode, string(deleteBody))
+		}
+
+		deleteStatusCode, deleteBody, deleteErr = requestJSON(http.MethodDelete, submodelSyncBaseURL+"/submodels/"+encodedSubmodelID, nil)
+		if deleteErr != nil {
+			t.Logf("cleanup delete submodel failed: %v", deleteErr)
+			return
+		}
+		if deleteStatusCode != http.StatusNoContent && deleteStatusCode != http.StatusNotFound {
+			t.Logf("cleanup delete submodel unexpected status=%d response=%s", deleteStatusCode, string(deleteBody))
+		}
+	})
+
+	db, err := sql.Open("postgres", submodelRepositoryIntegrationTestDSN)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = db.Close() })
+
+	aasRepositoryPersistence, err := aasrepositorydb.NewAssetAdministrationShellDatabaseFromDB(db, false)
+	require.NoError(t, err)
+	aasRegistryPersistence, err := aasregistrydb.NewPostgreSQLAASRegistryDatabaseFromDB(db, false)
+	require.NoError(t, err)
+
+	reference := types.NewReference(
+		types.ReferenceTypesModelReference,
+		[]types.IKey{types.NewKey(types.KeyTypesSubmodel, submodelID)},
+	)
+	ctxWithConfig := common.ContextWithConfig(context.Background(), &common.Config{})
+
+	err = common.ExecuteInTransaction(db, "SMREPO-IT-STARTTX", "SMREPO-IT-COMMITTX", func(tx *sql.Tx) error {
+		return aasRepositoryPersistence.CreateSubmodelReferenceInAssetAdministrationShellInTransaction(ctxWithConfig, tx, aasID, reference)
+	})
+	require.NoError(t, err)
+
+	descriptorBeforeSync, err := aasRegistryPersistence.GetAssetAdministrationShellDescriptorByID(context.Background(), aasID)
+	require.NoError(t, err)
+	require.False(t, hasEmbeddedSubmodelDescriptor(descriptorBeforeSync.SubmodelDescriptors, submodelID))
+
+	postSubmodelPayload := map[string]any{
+		"id":        submodelID,
+		"idShort":   "StandaloneSyncSubmodel",
+		"kind":      "Instance",
+		"modelType": "Submodel",
+	}
+
+	statusCode, body, err = requestJSON(http.MethodPost, submodelSyncBaseURL+"/submodels", postSubmodelPayload)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusCreated, statusCode, "response=%s", string(body))
+
+	descriptorAfterSync, err := aasRegistryPersistence.GetAssetAdministrationShellDescriptorByID(context.Background(), aasID)
+	require.NoError(t, err)
+	require.True(t, hasEmbeddedSubmodelDescriptor(descriptorAfterSync.SubmodelDescriptors, submodelID))
 }
 
 // TestMain handles setup and teardown

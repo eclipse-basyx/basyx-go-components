@@ -50,6 +50,14 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 	if err != nil {
 		return err
 	}
+	registrySyncConfig, err := aasenvironment.NewRegistrySyncConfig(
+		cfg.General.AASRegistryIntegration,
+		cfg.General.SubmodelRegistryIntegration,
+		cfg.General.ExternalURL,
+	)
+	if err != nil {
+		return err
+	}
 	commonmodel.SetStrictVerificationEnabled(cfg.Server.StrictVerification)
 	commonmodel.SetSupportsSingularSupplementalSemanticId(cfg.General.SupportsSingularSupplementalSemanticId)
 
@@ -139,10 +147,12 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 	customAASRepository := aasenvironment.NewCustomAASRepositoryService(
 		aasrepositoryapi.NewAssetAdministrationShellRepositoryAPIAPIService(aasRepositoryPersistence, submodelRepositoryPersistence),
 		persistence,
+		registrySyncConfig,
 	)
 	customSMRepository := aasenvironment.NewCustomSubmodelRepositoryService(
 		submodelrepositoryapi.NewSubmodelRepositoryAPIAPIService(*submodelRepositoryPersistence),
 		persistence,
+		registrySyncConfig,
 	)
 	customCDRepository := aasenvironment.NewCustomConceptDescriptionRepositoryService(
 		cdrapi.NewConceptDescriptionRepositoryAPIAPIService(cdrPersistence),
@@ -194,7 +204,7 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 	r.Mount(base, apiRouter)
 
 	// Register /upload endpoint
-	uploadService := aasenvironment.NewUploadAPIService(persistence)
+	uploadService := aasenvironment.NewUploadAPIService(persistence, customAASRepository, customSMRepository)
 	aasenvironment.RegisterUploadAPI(apiRouter, uploadService, cfg.General.UploadMaxSizeBytes)
 
 	addr := fmt.Sprintf("0.0.0.0:%d", cfg.Server.Port)
@@ -216,6 +226,7 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 	preconfigurationCtx := common.ContextWithConfig(ctx, cfg)
 	preconfigurationSummary := aasenvironment.RunAASPreconfiguration(preconfigurationCtx, uploadService, cfg.General.AASPreconfigPaths)
 	preconfigurationCompleted.Store(true)
+	//nolint:gosec // summary fields are internal integer counters and cannot carry log-control characters.
 	log.Printf(
 		"AASENV-SRV-PRECONFIGDONE configured=%d resolved=%d imported=%d failed=%d skipped=%d",
 		preconfigurationSummary.ConfiguredSourceCount,
