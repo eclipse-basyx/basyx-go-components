@@ -1646,7 +1646,7 @@ func TestStandaloneSubmodelRepositorySyncUpdatesReferencingAASDescriptor(t *test
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = db.Close() })
 
-	aasRepositoryPersistence, err := aasrepositorydb.NewAssetAdministrationShellDatabaseFromDB(db, false)
+	aasRepositoryPersistence, err := aasrepositorydb.NewAssetAdministrationShellDatabaseFromDB(db, string(commonmodel.VerificationModeOff))
 	require.NoError(t, err)
 	aasRegistryPersistence, err := aasregistrydb.NewPostgreSQLAASRegistryDatabaseFromDB(db, false)
 	require.NoError(t, err)

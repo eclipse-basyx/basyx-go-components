@@ -251,11 +251,11 @@ func TestCustomAASRepositoryServiceValidateSyncDependencies(t *testing.T) {
 	require.Contains(t, err.Error(), "AASENV-AASREPO-CHECKDEPS-NILAASREPO")
 
 	db := &sql.DB{}
-	aasRepository, repoErr := aasrepositorydb.NewAssetAdministrationShellDatabaseFromDB(db, false)
+	aasRepository, repoErr := aasrepositorydb.NewAssetAdministrationShellDatabaseFromDB(db, string(commonmodel.VerificationModeOff))
 	require.NoError(t, repoErr)
 	aasRegistry, aasRegistryErr := aasregistrydb.NewPostgreSQLAASRegistryDatabaseFromDB(db, false)
 	require.NoError(t, aasRegistryErr)
-	submodelRepository, submodelRepoErr := submodelrepositorydb.NewSubmodelDatabaseFromDB(db, nil, false)
+	submodelRepository, submodelRepoErr := submodelrepositorydb.NewSubmodelDatabaseFromDB(db, nil, string(commonmodel.VerificationModeOff))
 	require.NoError(t, submodelRepoErr)
 	submodelRegistry, submodelRegistryErr := smregistrydb.NewPostgreSQLSMBackendFromDB(db)
 	require.NoError(t, submodelRegistryErr)
@@ -288,11 +288,11 @@ func TestCustomSubmodelRepositoryServiceValidateSyncDependencies(t *testing.T) {
 	require.Contains(t, err.Error(), "AASENV-SMREPO-CHECKDEPS-NILSMREPO")
 
 	db := &sql.DB{}
-	aasRepository, aasRepoErr := aasrepositorydb.NewAssetAdministrationShellDatabaseFromDB(db, false)
+	aasRepository, aasRepoErr := aasrepositorydb.NewAssetAdministrationShellDatabaseFromDB(db, string(commonmodel.VerificationModeOff))
 	require.NoError(t, aasRepoErr)
 	aasRegistry, aasRegistryErr := aasregistrydb.NewPostgreSQLAASRegistryDatabaseFromDB(db, false)
 	require.NoError(t, aasRegistryErr)
-	submodelRepository, submodelRepoErr := submodelrepositorydb.NewSubmodelDatabaseFromDB(db, nil, false)
+	submodelRepository, submodelRepoErr := submodelrepositorydb.NewSubmodelDatabaseFromDB(db, nil, string(commonmodel.VerificationModeOff))
 	require.NoError(t, submodelRepoErr)
 	submodelRegistry, submodelRegistryErr := smregistrydb.NewPostgreSQLSMBackendFromDB(db)
 	require.NoError(t, submodelRegistryErr)
@@ -342,7 +342,7 @@ func TestCustomSubmodelRepositoryServiceSyncReferencingAASDescriptorsGuardsMissi
 	require.Contains(t, err.Error(), "AASENV-SMREPO-SYNCAAS-NILPERSISTENCE")
 
 	db := &sql.DB{}
-	aasRepository, repoErr := aasrepositorydb.NewAssetAdministrationShellDatabaseFromDB(db, false)
+	aasRepository, repoErr := aasrepositorydb.NewAssetAdministrationShellDatabaseFromDB(db, string(commonmodel.VerificationModeOff))
 	require.NoError(t, repoErr)
 
 	service.persistence = &Persistence{AASRepository: aasRepository}
