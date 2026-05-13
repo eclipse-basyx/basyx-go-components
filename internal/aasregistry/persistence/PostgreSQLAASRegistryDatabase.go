@@ -110,6 +110,20 @@ func (p *PostgreSQLAASRegistryDatabase) GetAssetAdministrationShellDescriptorByI
 	return descriptors.GetAssetAdministrationShellDescriptorByID(ctx, p.db, aasIdentifier)
 }
 
+// GetAssetAdministrationShellDescriptorByIDInTransaction returns the AAS descriptor
+// identified by the given AAS ID using the provided transaction.
+func (p *PostgreSQLAASRegistryDatabase) GetAssetAdministrationShellDescriptorByIDInTransaction(
+	ctx context.Context,
+	tx *sql.Tx,
+	aasIdentifier string,
+) (model.AssetAdministrationShellDescriptor, error) {
+	if tx == nil {
+		return model.AssetAdministrationShellDescriptor{}, common.NewErrBadRequest("AASREG-GETAASDESC-NILTX transaction must not be nil")
+	}
+
+	return descriptors.GetAssetAdministrationShellDescriptorByIDTx(ctx, tx, aasIdentifier)
+}
+
 // DeleteAssetAdministrationShellDescriptorByID deletes the AAS descriptor
 // identified by the given AAS ID.
 func (p *PostgreSQLAASRegistryDatabase) DeleteAssetAdministrationShellDescriptorByID(

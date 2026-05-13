@@ -216,32 +216,22 @@ func (s *CustomAASRepositoryService) PutAssetInformationAasRepository(ctx contex
 		}
 		return newAASRepoErrorResponse(getErr, http.StatusInternalServerError, operation, "GetAssetAdministrationShellByID"), nil
 	}
-
-	descriptor, descriptorGetErr := s.persistence.AASRegistry.GetAssetAdministrationShellDescriptorByID(ctx, decodedIdentifier)
-	if descriptorGetErr != nil && !common.IsErrNotFound(descriptorGetErr) {
-		return newAASRepoErrorResponse(descriptorGetErr, http.StatusInternalServerError, operation, "GetAssetAdministrationShellDescriptorByID"), nil
-	}
-	if common.IsErrNotFound(descriptorGetErr) {
-		descriptor = commonmodel.AssetAdministrationShellDescriptor{
-			Id:        decodedIdentifier,
-			Endpoints: s.syncConfig.buildAASDescriptorEndpoints(decodedIdentifier),
-		}
-		if idShort, ok := existingAASJSON["idShort"].(string); ok {
-			descriptor.IdShort = idShort
-		}
-	}
-	descriptor.AssetKind = assetKindPointer(assetInformation.AssetKind())
-	descriptor.AssetType = readOptionalString(assetInformation.AssetType())
-	descriptor.GlobalAssetId = readOptionalString(assetInformation.GlobalAssetID())
-	descriptor.SpecificAssetIds = assetInformation.SpecificAssetIDs()
-	if len(descriptor.Endpoints) == 0 {
-		descriptor.Endpoints = s.syncConfig.buildAASDescriptorEndpoints(decodedIdentifier)
-	}
+	idShort, _ := existingAASJSON["idShort"].(string)
 
 	err := s.ExecuteInTransaction(func(tx *sql.Tx) error {
 		if err := s.persistence.AASRepository.PutAssetInformationByAASIDInTransaction(ctx, tx, decodedIdentifier, assetInformation); err != nil {
 			return err
 		}
+
+		descriptor, _, descriptorErr := s.ensureAASDescriptorForSubmodelSyncInTransaction(ctx, tx, decodedIdentifier, idShort)
+		if descriptorErr != nil {
+			return descriptorErr
+		}
+		descriptor.AssetKind = assetKindPointer(assetInformation.AssetKind())
+		descriptor.AssetType = readOptionalString(assetInformation.AssetType())
+		descriptor.GlobalAssetId = readOptionalString(assetInformation.GlobalAssetID())
+		descriptor.SpecificAssetIds = assetInformation.SpecificAssetIDs()
+
 		return s.persistence.AASRegistry.UpsertAdministrationShellDescriptorInTransaction(ctx, tx, descriptor)
 	})
 	if err != nil {
@@ -280,17 +270,17 @@ func (s *CustomAASRepositoryService) PostSubmodelReferenceAasRepository(ctx cont
 		return newAASRepoErrorResponse(descriptorErr, http.StatusInternalServerError, operation, "BuildSubmodelDescriptor"), nil
 	}
 
-	aasDescriptor, hasAASDescriptor, getDescriptorErr := s.ensureAASDescriptorForSubmodelSync(ctx, decodedAASIdentifier)
-	if getDescriptorErr != nil && !common.IsErrNotFound(getDescriptorErr) {
-		return newAASRepoErrorResponse(getDescriptorErr, http.StatusInternalServerError, operation, "GetAssetAdministrationShellDescriptorByID"), nil
-	}
-
 	err := s.ExecuteInTransaction(func(tx *sql.Tx) error {
 		if createErr := s.persistence.AASRepository.CreateSubmodelReferenceInAssetAdministrationShellInTransaction(ctx, tx, decodedAASIdentifier, reference); createErr != nil {
 			return createErr
 		}
 
-		if hasAASDescriptor && hasSubmodelReference {
+		if hasSubmodelReference {
+			aasDescriptor, _, descriptorErr := s.ensureAASDescriptorForSubmodelSyncInTransaction(ctx, tx, decodedAASIdentifier, "")
+			if descriptorErr != nil {
+				return descriptorErr
+			}
+
 			aasDescriptor.SubmodelDescriptors = addOrUpdateEmbeddedSubmodelDescriptor(aasDescriptor.SubmodelDescriptors, embeddedDescriptor)
 			return s.persistence.AASRegistry.UpsertAdministrationShellDescriptorInTransaction(ctx, tx, aasDescriptor)
 		}
@@ -341,22 +331,18 @@ func (s *CustomAASRepositoryService) DeleteSubmodelReferenceAasRepository(ctx co
 		return newAASRepoErrorResponse(decodeSubmodelErr, http.StatusBadRequest, operation, "MalformedSubmodelIdentifier"), nil
 	}
 
-	aasDescriptor, hasAASDescriptor, getDescriptorErr := s.ensureAASDescriptorForSubmodelSync(ctx, decodedAASIdentifier)
-	if getDescriptorErr != nil && !common.IsErrNotFound(getDescriptorErr) {
-		return newAASRepoErrorResponse(getDescriptorErr, http.StatusInternalServerError, operation, "GetAssetAdministrationShellDescriptorByID"), nil
-	}
-
 	err := s.ExecuteInTransaction(func(tx *sql.Tx) error {
 		if deleteErr := s.persistence.AASRepository.DeleteSubmodelReferenceInAssetAdministrationShellInTransaction(ctx, tx, decodedAASIdentifier, decodedSubmodelIdentifier); deleteErr != nil {
 			return deleteErr
 		}
 
-		if hasAASDescriptor {
-			aasDescriptor.SubmodelDescriptors = removeEmbeddedSubmodelDescriptor(aasDescriptor.SubmodelDescriptors, decodedSubmodelIdentifier)
-			return s.persistence.AASRegistry.UpsertAdministrationShellDescriptorInTransaction(ctx, tx, aasDescriptor)
+		aasDescriptor, _, descriptorErr := s.ensureAASDescriptorForSubmodelSyncInTransaction(ctx, tx, decodedAASIdentifier, "")
+		if descriptorErr != nil {
+			return descriptorErr
 		}
 
-		return nil
+		aasDescriptor.SubmodelDescriptors = removeEmbeddedSubmodelDescriptor(aasDescriptor.SubmodelDescriptors, decodedSubmodelIdentifier)
+		return s.persistence.AASRegistry.UpsertAdministrationShellDescriptorInTransaction(ctx, tx, aasDescriptor)
 	})
 	if err != nil {
 		if common.IsErrDenied(err) {
@@ -416,14 +402,6 @@ func (s *CustomAASRepositoryService) PutSubmodelByIdAasRepository(ctx context.Co
 		return newAASRepoErrorResponse(descriptorErr, http.StatusInternalServerError, operation, "BuildSubmodelDescriptor"), nil
 	}
 
-	aasDescriptor, hasAASDescriptor, getDescriptorErr := s.ensureAASDescriptorForSubmodelSync(ctx, decodedAASIdentifier)
-	if getDescriptorErr != nil && !common.IsErrNotFound(getDescriptorErr) {
-		return newAASRepoErrorResponse(getDescriptorErr, http.StatusInternalServerError, operation, "GetAssetAdministrationShellDescriptorByID"), nil
-	}
-	if hasAASDescriptor {
-		aasDescriptor.SubmodelDescriptors = addOrUpdateEmbeddedSubmodelDescriptor(aasDescriptor.SubmodelDescriptors, submodelDescriptor)
-	}
-
 	isUpdate := false
 	err := s.ExecuteInTransaction(func(tx *sql.Tx) error {
 		updated, putErr := s.persistence.SubmodelRepository.PutSubmodelInTransaction(ctx, tx, decodedSubmodelIdentifier, submodel)
@@ -447,7 +425,13 @@ func (s *CustomAASRepositoryService) PutSubmodelByIdAasRepository(ctx context.Co
 			}
 		}
 
-		if s.syncConfig.AASRegistryIntegration && hasAASDescriptor {
+		if s.syncConfig.AASRegistryIntegration {
+			aasDescriptor, _, descriptorErr := s.ensureAASDescriptorForSubmodelSyncInTransaction(ctx, tx, decodedAASIdentifier, "")
+			if descriptorErr != nil {
+				return descriptorErr
+			}
+
+			aasDescriptor.SubmodelDescriptors = addOrUpdateEmbeddedSubmodelDescriptor(aasDescriptor.SubmodelDescriptors, submodelDescriptor)
 			return s.persistence.AASRegistry.UpsertAdministrationShellDescriptorInTransaction(ctx, tx, aasDescriptor)
 		}
 
@@ -514,14 +498,6 @@ func (s *CustomAASRepositoryService) DeleteSubmodelByIdAasRepository(ctx context
 		return newAASRepoErrorResponse(aasLookupErr, http.StatusInternalServerError, operation, "GetAssetAdministrationShellByID"), nil
 	}
 
-	aasDescriptor, hasAASDescriptor, getDescriptorErr := s.ensureAASDescriptorForSubmodelSync(ctx, decodedAASIdentifier)
-	if getDescriptorErr != nil && !common.IsErrNotFound(getDescriptorErr) {
-		return newAASRepoErrorResponse(getDescriptorErr, http.StatusInternalServerError, operation, "GetAssetAdministrationShellDescriptorByID"), nil
-	}
-	if hasAASDescriptor {
-		aasDescriptor.SubmodelDescriptors = removeEmbeddedSubmodelDescriptor(aasDescriptor.SubmodelDescriptors, decodedSubmodelIdentifier)
-	}
-
 	err := s.ExecuteInTransaction(func(tx *sql.Tx) error {
 		if checkErr := s.persistence.AASRepository.CheckIfSubmodelReferenceExistsInAssetAdministrationShellInTransaction(tx, decodedAASIdentifier, decodedSubmodelIdentifier); checkErr != nil {
 			return checkErr
@@ -541,7 +517,13 @@ func (s *CustomAASRepositoryService) DeleteSubmodelByIdAasRepository(ctx context
 			}
 		}
 
-		if s.syncConfig.AASRegistryIntegration && hasAASDescriptor {
+		if s.syncConfig.AASRegistryIntegration {
+			aasDescriptor, _, descriptorErr := s.ensureAASDescriptorForSubmodelSyncInTransaction(ctx, tx, decodedAASIdentifier, "")
+			if descriptorErr != nil {
+				return descriptorErr
+			}
+
+			aasDescriptor.SubmodelDescriptors = removeEmbeddedSubmodelDescriptor(aasDescriptor.SubmodelDescriptors, decodedSubmodelIdentifier)
 			return s.persistence.AASRegistry.UpsertAdministrationShellDescriptorInTransaction(ctx, tx, aasDescriptor)
 		}
 
@@ -565,6 +547,7 @@ func (s *CustomAASRepositoryService) DeleteSubmodelByIdAasRepository(ctx context
 
 // PatchSubmodelAasRepository updates a submodel through the superpath and synchronizes descriptors.
 func (s *CustomAASRepositoryService) PatchSubmodelAasRepository(ctx context.Context, aasIdentifier string, submodelIdentifier string, submodel types.ISubmodel, level string) (commonmodel.ImplResponse, error) {
+	_ = level
 	const operation = "PatchSubmodelAasRepository"
 	if !s.syncConfig.AASRegistryIntegration && !s.syncConfig.SubmodelRegistryIntegration {
 		return s.AssetAdministrationShellRepositoryAPIAPIService.PatchSubmodelAasRepository(ctx, aasIdentifier, submodelIdentifier, submodel, level)
@@ -573,34 +556,48 @@ func (s *CustomAASRepositoryService) PatchSubmodelAasRepository(ctx context.Cont
 		return newAASRepoErrorResponse(dependencyErr, http.StatusInternalServerError, operation, "ValidateDependencies"), nil
 	}
 
-	response, patchErr := s.AssetAdministrationShellRepositoryAPIAPIService.PatchSubmodelAasRepository(ctx, aasIdentifier, submodelIdentifier, submodel, level)
-	if patchErr != nil {
-		return response, patchErr
-	}
-	if response.Code != http.StatusNoContent {
+	decodedAASIdentifier, decodedSubmodelIdentifier, response, ok := s.decodeAndEnsureAASSubmodelReference(ctx, operation, aasIdentifier, submodelIdentifier)
+	if !ok {
 		return response, nil
 	}
-
-	decodedAASIdentifier, decodeAASErr := common.DecodeString(aasIdentifier)
-	if decodeAASErr != nil {
-		return newAASRepoErrorResponse(decodeAASErr, http.StatusBadRequest, operation, "MalformedAssetAdministrationShellIdentifier"), nil
+	if submodel == nil {
+		err := errors.New("submodel payload is required")
+		return newAASRepoErrorResponse(err, http.StatusBadRequest, operation, "MissingSubmodelPayload"), nil
 	}
-	decodedSubmodelIdentifier, decodeSubmodelErr := common.DecodeString(submodelIdentifier)
-	if decodeSubmodelErr != nil {
-		return newAASRepoErrorResponse(decodeSubmodelErr, http.StatusBadRequest, operation, "MalformedSubmodelIdentifier"), nil
+	if submodel.ID() != "" && decodedSubmodelIdentifier != submodel.ID() {
+		err := errors.New("submodel ID in path and body do not match")
+		return newAASRepoErrorResponse(err, http.StatusBadRequest, operation, "IdMismatch"), nil
 	}
 
-	if syncErr := s.syncUpdatedSubmodelDescriptors(ctx, decodedAASIdentifier, decodedSubmodelIdentifier); syncErr != nil {
-		if common.IsErrNotFound(syncErr) {
-			return newAASRepoErrorResponse(syncErr, http.StatusNotFound, operation, "SubmodelNotFound"), nil
+	patchJSON, patchJSONErr := jsonization.ToJsonable(submodel)
+	if patchJSONErr != nil {
+		return newAASRepoErrorResponse(patchJSONErr, http.StatusBadRequest, operation, "InvalidSubmodelData"), nil
+	}
+	_, patchIncludesSubmodelElements := patchJSON["submodelElements"]
+
+	mergedSubmodel, mergeResponse, mergeOk := s.buildMergedPatchedSubmodel(ctx, operation, decodedSubmodelIdentifier, patchJSON, false)
+	if !mergeOk {
+		return mergeResponse, nil
+	}
+
+	err := s.patchSubmodelAndSyncDescriptorsInTransaction(ctx, decodedAASIdentifier, decodedSubmodelIdentifier, mergedSubmodel, patchIncludesSubmodelElements)
+	if err != nil {
+		if common.IsErrDenied(err) {
+			return newAASRepoErrorResponse(err, http.StatusForbidden, operation, "Forbidden"), nil
 		}
-		if common.IsErrBadRequest(syncErr) {
-			return newAASRepoErrorResponse(syncErr, http.StatusBadRequest, operation, "BadRequest"), nil
+		if common.IsErrNotFound(err) || errors.Is(err, sql.ErrNoRows) {
+			return newAASRepoErrorResponse(err, http.StatusNotFound, operation, "SubmodelNotFound"), nil
 		}
-		return newAASRepoErrorResponse(syncErr, http.StatusInternalServerError, operation, "SyncDescriptor"), nil
+		if common.IsErrBadRequest(err) {
+			return newAASRepoErrorResponse(err, http.StatusBadRequest, operation, "BadRequest"), nil
+		}
+		if common.IsErrConflict(err) {
+			return newAASRepoErrorResponse(err, http.StatusConflict, operation, "Conflict"), nil
+		}
+		return newAASRepoErrorResponse(err, http.StatusInternalServerError, operation, "PatchSubmodel"), nil
 	}
 
-	return response, nil
+	return commonmodel.Response(http.StatusNoContent, nil), nil
 }
 
 // PatchSubmodelByIdMetadataAasRepository updates submodel metadata through the superpath and synchronizes descriptors.
@@ -613,70 +610,162 @@ func (s *CustomAASRepositoryService) PatchSubmodelByIdMetadataAasRepository(ctx 
 		return newAASRepoErrorResponse(dependencyErr, http.StatusInternalServerError, operation, "ValidateDependencies"), nil
 	}
 
-	response, patchErr := s.AssetAdministrationShellRepositoryAPIAPIService.PatchSubmodelByIdMetadataAasRepository(ctx, aasIdentifier, submodelIdentifier, submodelMetadata)
-	if patchErr != nil {
-		return response, patchErr
-	}
-	if response.Code != http.StatusNoContent {
+	decodedAASIdentifier, decodedSubmodelIdentifier, response, ok := s.decodeAndEnsureAASSubmodelReference(ctx, operation, aasIdentifier, submodelIdentifier)
+	if !ok {
 		return response, nil
 	}
-
-	decodedAASIdentifier, decodeAASErr := common.DecodeString(aasIdentifier)
-	if decodeAASErr != nil {
-		return newAASRepoErrorResponse(decodeAASErr, http.StatusBadRequest, operation, "MalformedAssetAdministrationShellIdentifier"), nil
-	}
-	decodedSubmodelIdentifier, decodeSubmodelErr := common.DecodeString(submodelIdentifier)
-	if decodeSubmodelErr != nil {
-		return newAASRepoErrorResponse(decodeSubmodelErr, http.StatusBadRequest, operation, "MalformedSubmodelIdentifier"), nil
+	if submodelMetadata.ID != "" && decodedSubmodelIdentifier != submodelMetadata.ID {
+		err := errors.New("submodel ID in path and body do not match")
+		return newAASRepoErrorResponse(err, http.StatusBadRequest, operation, "IdMismatch"), nil
 	}
 
-	if syncErr := s.syncUpdatedSubmodelDescriptors(ctx, decodedAASIdentifier, decodedSubmodelIdentifier); syncErr != nil {
-		if common.IsErrNotFound(syncErr) {
-			return newAASRepoErrorResponse(syncErr, http.StatusNotFound, operation, "SubmodelNotFound"), nil
+	patchJSON, patchJSONErr := submodelMetadataToPatchJSON(submodelMetadata)
+	if patchJSONErr != nil {
+		return newAASRepoErrorResponse(patchJSONErr, http.StatusBadRequest, operation, "InvalidSubmodelMetadata"), nil
+	}
+	if rawPatchJSON, hasRawPatch := common.GetSubmodelMetadataPatch(ctx); hasRawPatch {
+		patchJSON = rawPatchJSON
+	}
+	if patchJSON["modelType"] != "Submodel" {
+		err := errors.New("modelType for Submodel metadata must be 'Submodel'")
+		return newAASRepoErrorResponse(err, http.StatusBadRequest, operation, "InvalidSubmodelMetadata"), nil
+	}
+	patchJSON["id"] = decodedSubmodelIdentifier
+
+	mergedSubmodel, mergeResponse, mergeOk := s.buildMergedPatchedSubmodel(ctx, operation, decodedSubmodelIdentifier, patchJSON, true)
+	if !mergeOk {
+		return mergeResponse, nil
+	}
+
+	err := s.patchSubmodelAndSyncDescriptorsInTransaction(ctx, decodedAASIdentifier, decodedSubmodelIdentifier, mergedSubmodel, false)
+	if err != nil {
+		if common.IsErrDenied(err) {
+			return newAASRepoErrorResponse(err, http.StatusForbidden, operation, "Forbidden"), nil
 		}
-		if common.IsErrBadRequest(syncErr) {
-			return newAASRepoErrorResponse(syncErr, http.StatusBadRequest, operation, "BadRequest"), nil
+		if common.IsErrNotFound(err) || errors.Is(err, sql.ErrNoRows) {
+			return newAASRepoErrorResponse(err, http.StatusNotFound, operation, "SubmodelNotFound"), nil
 		}
-		return newAASRepoErrorResponse(syncErr, http.StatusInternalServerError, operation, "SyncDescriptor"), nil
+		if common.IsErrBadRequest(err) {
+			return newAASRepoErrorResponse(err, http.StatusBadRequest, operation, "BadRequest"), nil
+		}
+		if common.IsErrConflict(err) {
+			return newAASRepoErrorResponse(err, http.StatusConflict, operation, "Conflict"), nil
+		}
+		return newAASRepoErrorResponse(err, http.StatusInternalServerError, operation, "PatchSubmodelMetadata"), nil
 	}
 
-	return response, nil
+	return commonmodel.Response(http.StatusNoContent, nil), nil
 }
 
-func (s *CustomAASRepositoryService) syncUpdatedSubmodelDescriptors(ctx context.Context, aasID string, submodelID string) error {
-	if dependencyErr := s.validateSyncDependencies(s.syncConfig.AASRegistryIntegration, true, s.syncConfig.SubmodelRegistryIntegration); dependencyErr != nil {
-		return dependencyErr
+func (s *CustomAASRepositoryService) decodeAndEnsureAASSubmodelReference(ctx context.Context, operation string, aasIdentifier string, submodelIdentifier string) (string, string, commonmodel.ImplResponse, bool) {
+	decodedAASIdentifier, decodeAASErr := common.DecodeString(aasIdentifier)
+	if decodeAASErr != nil {
+		return "", "", newAASRepoErrorResponse(decodeAASErr, http.StatusBadRequest, operation, "MalformedAssetAdministrationShellIdentifier"), false
 	}
 
-	submodel, getSubmodelErr := s.persistence.SubmodelRepository.GetSubmodelByID(ctx, submodelID, "core", true)
-	if getSubmodelErr != nil {
-		return getSubmodelErr
+	decodedSubmodelIdentifier, decodeSubmodelErr := common.DecodeString(submodelIdentifier)
+	if decodeSubmodelErr != nil {
+		return "", "", newAASRepoErrorResponse(decodeSubmodelErr, http.StatusBadRequest, operation, "MalformedSubmodelIdentifier"), false
 	}
 
+	if _, aasLookupErr := s.persistence.AASRepository.GetAssetAdministrationShellByID(ctx, decodedAASIdentifier); aasLookupErr != nil {
+		if common.IsErrDenied(aasLookupErr) {
+			return "", "", newAASRepoErrorResponse(aasLookupErr, http.StatusForbidden, operation, "Forbidden"), false
+		}
+		if common.IsErrNotFound(aasLookupErr) {
+			return "", "", newAASRepoErrorResponse(aasLookupErr, http.StatusNotFound, operation, "AssetAdministrationShellNotFound"), false
+		}
+		if common.IsErrBadRequest(aasLookupErr) {
+			return "", "", newAASRepoErrorResponse(aasLookupErr, http.StatusBadRequest, operation, "BadRequest"), false
+		}
+		return "", "", newAASRepoErrorResponse(aasLookupErr, http.StatusInternalServerError, operation, "GetAssetAdministrationShellByID"), false
+	}
+
+	if referenceCheckErr := s.persistence.AASRepository.CheckIfSubmodelReferenceExistsInAssetAdministrationShell(decodedAASIdentifier, decodedSubmodelIdentifier); referenceCheckErr != nil {
+		if common.IsErrNotFound(referenceCheckErr) {
+			return "", "", newAASRepoErrorResponse(referenceCheckErr, http.StatusNotFound, operation, "SubmodelNotFound"), false
+		}
+		if common.IsErrBadRequest(referenceCheckErr) {
+			return "", "", newAASRepoErrorResponse(referenceCheckErr, http.StatusBadRequest, operation, "BadRequest"), false
+		}
+		return "", "", newAASRepoErrorResponse(referenceCheckErr, http.StatusInternalServerError, operation, "CheckIfSubmodelReferenceExistsInAssetAdministrationShell"), false
+	}
+
+	return decodedAASIdentifier, decodedSubmodelIdentifier, commonmodel.ImplResponse{}, true
+}
+
+func (s *CustomAASRepositoryService) buildMergedPatchedSubmodel(ctx context.Context, operation string, submodelID string, patchJSON map[string]any, metadataOnly bool) (types.ISubmodel, commonmodel.ImplResponse, bool) {
+	existingSubmodels, _, getErr := s.persistence.SubmodelRepository.GetSubmodels(ctx, 1, "", submodelID)
+	if getErr != nil {
+		if common.IsErrNotFound(getErr) || errors.Is(getErr, sql.ErrNoRows) {
+			return nil, newAASRepoErrorResponse(getErr, http.StatusNotFound, operation, "SubmodelNotFound"), false
+		}
+		return nil, newAASRepoErrorResponse(getErr, http.StatusInternalServerError, operation, "GetSubmodelByID"), false
+	}
+	if len(existingSubmodels) == 0 {
+		notFoundErr := common.NewErrNotFound(submodelID)
+		return nil, newAASRepoErrorResponse(notFoundErr, http.StatusNotFound, operation, "SubmodelNotFound"), false
+	}
+
+	existingSubmodel := existingSubmodels[0]
+	if existingSubmodel == nil {
+		nilErr := common.NewInternalServerError("AASENV-AASREPO-BUILDPATCHEDSM-EXISTINGNIL Existing submodel is nil")
+		return nil, newAASRepoErrorResponse(nilErr, http.StatusInternalServerError, operation, "GetSubmodelByID"), false
+	}
+
+	existingJSON, existingJSONErr := jsonization.ToJsonable(existingSubmodel)
+	if existingJSONErr != nil {
+		return nil, newAASRepoErrorResponse(existingJSONErr, http.StatusInternalServerError, operation, "ToJsonableCurrentSubmodel"), false
+	}
+
+	patchJSON["id"] = submodelID
+	mergedJSON := mergeSubmodelJSON(existingJSON, patchJSON)
+	if metadataOnly {
+		delete(mergedJSON, "submodelElements")
+	}
+
+	mergedSubmodel, mergedErr := jsonization.SubmodelFromJsonable(mergedJSON)
+	if mergedErr != nil {
+		return nil, newAASRepoErrorResponse(mergedErr, http.StatusBadRequest, operation, "InvalidPatchedSubmodel"), false
+	}
+
+	return mergedSubmodel, commonmodel.ImplResponse{}, true
+}
+
+func (s *CustomAASRepositoryService) patchSubmodelAndSyncDescriptorsInTransaction(ctx context.Context, aasID string, submodelID string, submodel types.ISubmodel, patchIncludesSubmodelElements bool) error {
 	submodelDescriptor, descriptorErr := s.syncConfig.buildSubmodelDescriptor(submodel)
 	if descriptorErr != nil {
 		return descriptorErr
 	}
 
-	aasDescriptor, hasAASDescriptor, getDescriptorErr := s.ensureAASDescriptorForSubmodelSync(ctx, aasID)
-	if getDescriptorErr != nil {
-		if common.IsErrNotFound(getDescriptorErr) {
-			return nil
-		}
-		return getDescriptorErr
-	}
-	if hasAASDescriptor {
-		aasDescriptor.SubmodelDescriptors = addOrUpdateEmbeddedSubmodelDescriptor(aasDescriptor.SubmodelDescriptors, submodelDescriptor)
-	}
-
 	return s.ExecuteInTransaction(func(tx *sql.Tx) error {
+		if checkErr := s.persistence.AASRepository.CheckIfSubmodelReferenceExistsInAssetAdministrationShellInTransaction(tx, aasID, submodelID); checkErr != nil {
+			return checkErr
+		}
+
+		if patchIncludesSubmodelElements {
+			if patchErr := s.persistence.SubmodelRepository.PatchSubmodelInTransaction(submodelID, tx, submodel); patchErr != nil {
+				return patchErr
+			}
+		} else {
+			if patchErr := s.persistence.SubmodelRepository.PatchSubmodelMetadataInTransaction(submodelID, tx, submodel); patchErr != nil {
+				return patchErr
+			}
+		}
+
 		if s.syncConfig.SubmodelRegistryIntegration {
 			if upsertErr := s.persistence.SubmodelRegistry.UpsertSubmodelDescriptorInTransaction(ctx, tx, submodelDescriptor); upsertErr != nil {
 				return upsertErr
 			}
 		}
 
-		if s.syncConfig.AASRegistryIntegration && hasAASDescriptor {
+		if s.syncConfig.AASRegistryIntegration {
+			aasDescriptor, _, getDescriptorErr := s.ensureAASDescriptorForSubmodelSyncInTransaction(ctx, tx, aasID, "")
+			if getDescriptorErr != nil {
+				return getDescriptorErr
+			}
+
+			aasDescriptor.SubmodelDescriptors = addOrUpdateEmbeddedSubmodelDescriptor(aasDescriptor.SubmodelDescriptors, submodelDescriptor)
 			return s.persistence.AASRegistry.UpsertAdministrationShellDescriptorInTransaction(ctx, tx, aasDescriptor)
 		}
 
@@ -709,12 +798,15 @@ func (s *CustomAASRepositoryService) buildSubmodelDescriptorForReference(ctx con
 	}, true, nil
 }
 
-func (s *CustomAASRepositoryService) ensureAASDescriptorForSubmodelSync(ctx context.Context, aasID string) (commonmodel.AssetAdministrationShellDescriptor, bool, error) {
+func (s *CustomAASRepositoryService) ensureAASDescriptorForSubmodelSyncInTransaction(ctx context.Context, tx *sql.Tx, aasID string, fallbackIDShort string) (commonmodel.AssetAdministrationShellDescriptor, bool, error) {
 	if dependencyErr := s.validateSyncDependencies(true, false, false); dependencyErr != nil {
 		return commonmodel.AssetAdministrationShellDescriptor{}, false, dependencyErr
 	}
+	if tx == nil {
+		return commonmodel.AssetAdministrationShellDescriptor{}, false, common.NewErrBadRequest("AASENV-AASREPO-ENSUREAASDESC-NILTX transaction must not be nil")
+	}
 
-	descriptor, getDescriptorErr := s.persistence.AASRegistry.GetAssetAdministrationShellDescriptorByID(ctx, aasID)
+	descriptor, getDescriptorErr := s.persistence.AASRegistry.GetAssetAdministrationShellDescriptorByIDInTransaction(ctx, tx, aasID)
 	if getDescriptorErr == nil {
 		if len(descriptor.Endpoints) == 0 {
 			descriptor.Endpoints = s.syncConfig.buildAASDescriptorEndpoints(aasID)
@@ -725,17 +817,12 @@ func (s *CustomAASRepositoryService) ensureAASDescriptorForSubmodelSync(ctx cont
 		return commonmodel.AssetAdministrationShellDescriptor{}, false, getDescriptorErr
 	}
 
-	existingAASJSON, getAASErr := s.persistence.AASRepository.GetAssetAdministrationShellByID(ctx, aasID)
-	if getAASErr != nil {
-		return commonmodel.AssetAdministrationShellDescriptor{}, false, getAASErr
-	}
-
 	descriptor = commonmodel.AssetAdministrationShellDescriptor{
 		Id:        aasID,
 		Endpoints: s.syncConfig.buildAASDescriptorEndpoints(aasID),
 	}
-	if idShort, ok := existingAASJSON["idShort"].(string); ok {
-		descriptor.IdShort = idShort
+	if fallbackIDShort != "" {
+		descriptor.IdShort = fallbackIDShort
 	}
 
 	return descriptor, true, nil

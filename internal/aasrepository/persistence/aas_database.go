@@ -233,10 +233,6 @@ func (s *AssetAdministrationShellDatabase) checkAASVisibilityInTx(ctx context.Co
 
 // CreateAssetAdministrationShell persists a new AAS and performs an ABAC re-check before commit when enabled.
 func (s *AssetAdministrationShellDatabase) CreateAssetAdministrationShell(ctx context.Context, aas types.IAssetAdministrationShell) error {
-	if err := s.verifyAssetAdministrationShell(aas, "AASREPO-NEWAAS-VERIFY"); err != nil {
-		return err
-	}
-
 	return common.ExecuteInTransaction(
 		s.db,
 		"AASREPO-NEWAAS-STARTTX",
@@ -250,7 +246,11 @@ func (s *AssetAdministrationShellDatabase) CreateAssetAdministrationShell(ctx co
 // CreateAssetAdministrationShellInTransaction persists a new AAS within an existing transaction.
 func (s *AssetAdministrationShellDatabase) CreateAssetAdministrationShellInTransaction(ctx context.Context, tx *sql.Tx, aas types.IAssetAdministrationShell) error {
 	if tx == nil {
-		return common.NewErrBadRequest("AASREPO-NEWAAS-NILTX transaction must not be nil")
+		return common.NewInternalServerError("AASREPO-NEWAAS-NILTX transaction must not be nil")
+	}
+
+	if err := s.verifyAssetAdministrationShell(aas, "AASREPO-NEWAAS-VERIFY"); err != nil {
+		return err
 	}
 
 	if err := s.createAssetAdministrationShellInTransaction(tx, aas); err != nil {
@@ -1418,6 +1418,39 @@ func (s *AssetAdministrationShellDatabase) ListAASIdentifiersBySubmodelID(ctx co
 	}
 
 	rows, queryErr := s.db.QueryContext(ctx, sqlQuery, args...)
+	if queryErr != nil {
+		return nil, common.NewInternalServerError("AASREPO-LISTAASBYSM-EXECSQL " + queryErr.Error())
+	}
+	defer func() { _ = rows.Close() }()
+
+	aasIDs := make([]string, 0, 16)
+	for rows.Next() {
+		var aasID string
+		if scanErr := rows.Scan(&aasID); scanErr != nil {
+			return nil, common.NewInternalServerError("AASREPO-LISTAASBYSM-SCANROW " + scanErr.Error())
+		}
+		aasIDs = append(aasIDs, aasID)
+	}
+	if rowsErr := rows.Err(); rowsErr != nil {
+		return nil, common.NewInternalServerError("AASREPO-LISTAASBYSM-ITERROWS " + rowsErr.Error())
+	}
+
+	return aasIDs, nil
+}
+
+// ListAASIdentifiersBySubmodelIDInTransaction returns all AAS identifiers that reference the given submodel ID using the provided transaction.
+func (s *AssetAdministrationShellDatabase) ListAASIdentifiersBySubmodelIDInTransaction(ctx context.Context, tx *sql.Tx, submodelIdentifier string) ([]string, error) {
+	if tx == nil {
+		return nil, common.NewErrBadRequest("AASREPO-LISTAASBYSM-NILTX transaction must not be nil")
+	}
+
+	dialect := goqu.Dialect("postgres")
+	sqlQuery, args, buildErr := buildListAASIdentifiersBySubmodelIdentifierQuery(&dialect, submodelIdentifier)
+	if buildErr != nil {
+		return nil, common.NewInternalServerError("AASREPO-LISTAASBYSM-BUILDSQL " + buildErr.Error())
+	}
+
+	rows, queryErr := tx.QueryContext(ctx, sqlQuery, args...)
 	if queryErr != nil {
 		return nil, common.NewInternalServerError("AASREPO-LISTAASBYSM-EXECSQL " + queryErr.Error())
 	}

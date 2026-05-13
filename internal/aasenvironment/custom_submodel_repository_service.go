@@ -440,7 +440,7 @@ func (s *CustomSubmodelRepositoryService) syncReferencingAASDescriptorsInTransac
 	}
 
 	if len(referencingAASIDs) == 0 {
-		aasIDs, aasLookupErr := s.persistence.AASRepository.ListAASIdentifiersBySubmodelID(ctx, submodelDescriptor.Id)
+		aasIDs, aasLookupErr := s.persistence.AASRepository.ListAASIdentifiersBySubmodelIDInTransaction(ctx, tx, submodelDescriptor.Id)
 		if aasLookupErr != nil {
 			return aasLookupErr
 		}
@@ -448,7 +448,7 @@ func (s *CustomSubmodelRepositoryService) syncReferencingAASDescriptorsInTransac
 	}
 
 	for _, aasID := range referencingAASIDs {
-		aasDescriptor, getDescriptorErr := s.persistence.AASRegistry.GetAssetAdministrationShellDescriptorByID(ctx, aasID)
+		aasDescriptor, getDescriptorErr := s.persistence.AASRegistry.GetAssetAdministrationShellDescriptorByIDInTransaction(ctx, tx, aasID)
 		if getDescriptorErr != nil {
 			if common.IsErrNotFound(getDescriptorErr) {
 				continue
