@@ -13,6 +13,8 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/eclipse-basyx/basyx-go-components/internal/aasenvironment"
+	aasregistrydb "github.com/eclipse-basyx/basyx-go-components/internal/aasregistry/persistence"
 	"github.com/eclipse-basyx/basyx-go-components/internal/aasrepository/api"
 	persistencepostgresql "github.com/eclipse-basyx/basyx-go-components/internal/aasrepository/persistence"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
@@ -33,7 +35,20 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 	if err != nil {
 		return err
 	}
+
 	if err := commonmodel.SetVerificationMode(cfg.Server.StrictVerification); err != nil {
+		return err
+	}
+
+	if err = aasenvironment.ValidateStandaloneAASRepositoryRegistrySyncConfig(cfg); err != nil {
+		return err
+	}
+	registrySyncConfig, err := aasenvironment.NewRegistrySyncConfig(
+		cfg.General.AASRegistryIntegration,
+		cfg.General.SubmodelRegistryIntegration,
+		cfg.General.ExternalURL,
+	)
+	if err != nil {
 		return err
 	}
 
@@ -77,6 +92,12 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 		return err
 	}
 
+	aasRegistryPersistence, err := aasregistrydb.NewPostgreSQLAASRegistryDatabaseFromDB(sharedDB, cfg.Server.CacheEnabled)
+	if err != nil {
+		log.Printf("AAS Registry DB init failed: %v", err)
+		return err
+	}
+
 	submodelDatabase, err := submodelrepositorydb.NewSubmodelDatabaseFromDB(sharedDB, nil, cfg.Server.StrictVerification)
 	if err != nil {
 		log.Printf("❌ Submodel DB connect failed: %v", err)
@@ -84,7 +105,17 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 	}
 	log.Println("✅ Postgres connection established")
 
-	aasSvc := api.NewAssetAdministrationShellRepositoryAPIAPIService(aasDatabase, submodelDatabase)
+	persistence := &aasenvironment.Persistence{
+		DB:                 sharedDB,
+		AASRegistry:        aasRegistryPersistence,
+		AASRepository:      aasDatabase,
+		SubmodelRepository: submodelDatabase,
+	}
+	aasSvc := aasenvironment.NewCustomAASRepositoryService(
+		api.NewAssetAdministrationShellRepositoryAPIAPIService(aasDatabase, submodelDatabase),
+		persistence,
+		registrySyncConfig,
+	)
 	aasCtrl := openapi.NewAssetAdministrationShellRepositoryAPIAPIController(aasSvc, "", cfg.Server.StrictVerification)
 
 	descSvc := openapi.NewDescriptionAPIAPIService()

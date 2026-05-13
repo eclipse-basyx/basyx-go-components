@@ -71,3 +71,9 @@ docker compose down -v
 - The DB schema is initialized by `db-schema-init` and not by the application containers.
 - The AAS UI endpoint mapping is configured via `basyx-infra.yml`.
 - Startup preconfiguration is enabled with `GENERAL_AAS_PRECONFIG_PATHS=/app/preconfiguration`; files in `aas/` are imported automatically.
+- Discovery integration and repository-to-registry integration are enabled in this example:
+  - `GENERAL_DISCOVERYINTEGRATION=true`
+  - `GENERAL_AASREGISTRYINTEGRATION=true`
+  - `GENERAL_SUBMODELREGISTRYINTEGRATION=true`
+- Descriptor endpoints are derived from `GENERAL_EXTERNALURL`; for this compose setup it must match the externally reachable backend URL (`http://localhost:8082`).
+- The UI integration hints in `basyx-infra.yml` are aligned with this behavior (`hasDiscoveryIntegration: true`, `hasRegistryIntegration: true`).

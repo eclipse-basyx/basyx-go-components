@@ -26,7 +26,17 @@ import (
 )
 
 type uploadAPIService struct {
-	persistence *Persistence
+	persistence               *Persistence
+	aasRepositoryService      aasRepositoryUploadWriter
+	submodelRepositoryService submodelRepositoryUploadWriter
+}
+
+type aasRepositoryUploadWriter interface {
+	PutAssetAdministrationShellById(ctx context.Context, aasIdentifier string, assetAdministrationShell aastypes.IAssetAdministrationShell) (commonmodel.ImplResponse, error)
+}
+
+type submodelRepositoryUploadWriter interface {
+	PutSubmodelByID(ctx context.Context, submodelIdentifier string, submodel aastypes.ISubmodel) (commonmodel.ImplResponse, error)
 }
 
 const (
@@ -36,8 +46,16 @@ const (
 )
 
 // NewUploadAPIService creates a new UploadAPIService
-func NewUploadAPIService(persistence *Persistence) UploadService {
-	return &uploadAPIService{persistence: persistence}
+func NewUploadAPIService(
+	persistence *Persistence,
+	aasRepositoryService aasRepositoryUploadWriter,
+	submodelRepositoryService submodelRepositoryUploadWriter,
+) UploadService {
+	return &uploadAPIService{
+		persistence:               persistence,
+		aasRepositoryService:      aasRepositoryService,
+		submodelRepositoryService: submodelRepositoryService,
+	}
 }
 
 func (s *uploadAPIService) HandleUpload(ctx context.Context, fileName string, contentType string, file *os.File) (commonmodel.ImplResponse, error) {
@@ -221,12 +239,36 @@ func (s *uploadAPIService) processEnvironment(ctx context.Context, _ string, _ s
 	}
 
 	for _, submodel := range environment.Submodels() {
+		if s.submodelRepositoryService != nil {
+			encodedSubmodelID := common.EncodeString(submodel.ID())
+			putResp, putErr := s.submodelRepositoryService.PutSubmodelByID(ctx, encodedSubmodelID, submodel)
+			if putErr != nil {
+				return fmt.Errorf("AASENV-PROCESSENV-PUTSM failed to store submodel '%s': %w", submodel.ID(), putErr)
+			}
+			if putResp.Code < http.StatusOK || putResp.Code >= http.StatusMultipleChoices {
+				return fmt.Errorf("AASENV-PROCESSENV-PUTSM failed to store submodel '%s': repository returned HTTP %d", submodel.ID(), putResp.Code)
+			}
+			continue
+		}
+
 		if _, err := s.persistence.SubmodelRepository.PutSubmodel(ctx, submodel.ID(), submodel); err != nil {
 			return fmt.Errorf("AASENV-PROCESSENV-PUTSM failed to store submodel '%s': %w", submodel.ID(), err)
 		}
 	}
 
 	for _, aas := range environment.AssetAdministrationShells() {
+		if s.aasRepositoryService != nil {
+			encodedAASID := common.EncodeString(aas.ID())
+			putResp, putErr := s.aasRepositoryService.PutAssetAdministrationShellById(ctx, encodedAASID, aas)
+			if putErr != nil {
+				return fmt.Errorf("AASENV-PROCESSENV-PUTAAS failed to store AAS '%s': %w", aas.ID(), putErr)
+			}
+			if putResp.Code < http.StatusOK || putResp.Code >= http.StatusMultipleChoices {
+				return fmt.Errorf("AASENV-PROCESSENV-PUTAAS failed to store AAS '%s': repository returned HTTP %d", aas.ID(), putResp.Code)
+			}
+			continue
+		}
+
 		if _, err := s.persistence.AASRepository.PutAssetAdministrationShellByID(ctx, aas.ID(), aas); err != nil {
 			return fmt.Errorf("AASENV-PROCESSENV-PUTAAS failed to store AAS '%s': %w", aas.ID(), err)
 		}
