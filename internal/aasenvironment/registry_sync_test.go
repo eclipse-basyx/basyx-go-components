@@ -271,8 +271,66 @@ func TestCustomAASRepositoryServiceValidateSyncDependencies(t *testing.T) {
 	require.NoError(t, err)
 }
 
+func TestCustomSubmodelRepositoryServiceValidateSyncDependencies(t *testing.T) {
+	var nilService *CustomSubmodelRepositoryService
+	err := nilService.validateSyncDependencies(false, false)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "AASENV-SMREPO-CHECKDEPS-NILSERVICE")
+
+	service := &CustomSubmodelRepositoryService{}
+	err = service.validateSyncDependencies(false, false)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "AASENV-SMREPO-CHECKDEPS-NILPERSISTENCE")
+
+	service.persistence = &Persistence{}
+	err = service.validateSyncDependencies(false, false)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "AASENV-SMREPO-CHECKDEPS-NILSMREPO")
+
+	db := &sql.DB{}
+	aasRepository, aasRepoErr := aasrepositorydb.NewAssetAdministrationShellDatabaseFromDB(db, false)
+	require.NoError(t, aasRepoErr)
+	aasRegistry, aasRegistryErr := aasregistrydb.NewPostgreSQLAASRegistryDatabaseFromDB(db, false)
+	require.NoError(t, aasRegistryErr)
+	submodelRepository, submodelRepoErr := submodelrepositorydb.NewSubmodelDatabaseFromDB(db, nil, false)
+	require.NoError(t, submodelRepoErr)
+	submodelRegistry, submodelRegistryErr := smregistrydb.NewPostgreSQLSMBackendFromDB(db)
+	require.NoError(t, submodelRegistryErr)
+
+	service.persistence = &Persistence{SubmodelRepository: submodelRepository}
+	err = service.validateSyncDependencies(false, false)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "AASENV-SMREPO-CHECKDEPS-NILSMREGISTRY")
+
+	service.persistence = &Persistence{
+		SubmodelRepository: submodelRepository,
+		SubmodelRegistry:   submodelRegistry,
+	}
+	err = service.validateSyncDependencies(true, true)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "AASENV-SMREPO-CHECKDEPS-NILAASREPO")
+
+	service.persistence = &Persistence{
+		AASRepository:      aasRepository,
+		SubmodelRepository: submodelRepository,
+		SubmodelRegistry:   submodelRegistry,
+	}
+	err = service.validateSyncDependencies(true, true)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "AASENV-SMREPO-CHECKDEPS-NILAASREGISTRY")
+
+	service.persistence = &Persistence{
+		AASRepository:      aasRepository,
+		AASRegistry:        aasRegistry,
+		SubmodelRepository: submodelRepository,
+		SubmodelRegistry:   submodelRegistry,
+	}
+	err = service.validateSyncDependencies(true, true)
+	require.NoError(t, err)
+}
+
 func TestCustomSubmodelRepositoryServiceSyncReferencingAASDescriptorsGuardsMissingDependencies(t *testing.T) {
-	service := &CustomSubmodelRepositoryService{enableAASDescriptorEmbeddingSync: true}
+	service := &CustomSubmodelRepositoryService{enableReferencingAASDescriptorEmbeddingSync: true}
 	err := service.syncReferencingAASDescriptorsInTransaction(
 		context.Background(),
 		nil,

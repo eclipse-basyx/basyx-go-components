@@ -119,11 +119,12 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 		SubmodelRegistry:   smRegistryPersistence,
 		SubmodelRepository: smDatabase,
 	}
+	enableReferencingAASDescriptorEmbeddingSync := registrySyncConfig.SubmodelRegistryIntegration
 	smSvc := aasenvironment.NewCustomSubmodelRepositoryServiceWithAASDescriptorEmbeddingSync(
 		api.NewSubmodelRepositoryAPIAPIService(*smDatabase),
 		persistence,
 		registrySyncConfig,
-		config.General.SubmodelRegistryIntegration,
+		enableReferencingAASDescriptorEmbeddingSync,
 	)
 	smCtrl := openapi.NewSubmodelRepositoryAPIAPIController(smSvc, "", config.Server.StrictVerification)
 	serializationSvc := api.NewSerializationAPIAPIService()

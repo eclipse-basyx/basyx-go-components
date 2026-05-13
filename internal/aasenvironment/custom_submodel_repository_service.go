@@ -17,9 +17,9 @@ import (
 // CustomSubmodelRepositoryService is a pass-through stub for future combined logic.
 type CustomSubmodelRepositoryService struct {
 	*submodelrepositoryapi.SubmodelRepositoryAPIAPIService
-	persistence                      *Persistence
-	syncConfig                       RegistrySyncConfig
-	enableAASDescriptorEmbeddingSync bool
+	persistence                                 *Persistence
+	syncConfig                                  RegistrySyncConfig
+	enableReferencingAASDescriptorEmbeddingSync bool
 }
 
 // NewCustomSubmodelRepositoryService creates a new pass-through submodel repository decorator.
@@ -41,13 +41,13 @@ func NewCustomSubmodelRepositoryServiceWithAASDescriptorEmbeddingSync(
 	base *submodelrepositoryapi.SubmodelRepositoryAPIAPIService,
 	persistence *Persistence,
 	syncConfig RegistrySyncConfig,
-	enableAASDescriptorEmbeddingSync bool,
+	enableReferencingAASDescriptorEmbeddingSync bool,
 ) *CustomSubmodelRepositoryService {
 	return &CustomSubmodelRepositoryService{
-		SubmodelRepositoryAPIAPIService:  base,
-		persistence:                      persistence,
-		syncConfig:                       syncConfig,
-		enableAASDescriptorEmbeddingSync: enableAASDescriptorEmbeddingSync,
+		SubmodelRepositoryAPIAPIService: base,
+		persistence:                     persistence,
+		syncConfig:                      syncConfig,
+		enableReferencingAASDescriptorEmbeddingSync: enableReferencingAASDescriptorEmbeddingSync,
 	}
 }
 
@@ -59,11 +59,37 @@ func (s *CustomSubmodelRepositoryService) ExecuteInTransaction(fn func(tx *sql.T
 	return s.persistence.ExecuteInTransaction("AASENV-SMREPO-STARTTX", "AASENV-SMREPO-COMMITTX", fn)
 }
 
+func (s *CustomSubmodelRepositoryService) validateSyncDependencies(requireAASRepository bool, requireAASRegistry bool) error {
+	if s == nil {
+		return common.NewInternalServerError("AASENV-SMREPO-CHECKDEPS-NILSERVICE service must not be nil")
+	}
+	if s.persistence == nil {
+		return common.NewInternalServerError("AASENV-SMREPO-CHECKDEPS-NILPERSISTENCE persistence bundle must not be nil")
+	}
+	if s.persistence.SubmodelRepository == nil {
+		return common.NewInternalServerError("AASENV-SMREPO-CHECKDEPS-NILSMREPO Submodel repository backend must not be nil")
+	}
+	if s.persistence.SubmodelRegistry == nil {
+		return common.NewInternalServerError("AASENV-SMREPO-CHECKDEPS-NILSMREGISTRY Submodel registry backend must not be nil")
+	}
+	if requireAASRepository && s.persistence.AASRepository == nil {
+		return common.NewInternalServerError("AASENV-SMREPO-CHECKDEPS-NILAASREPO AAS repository backend must not be nil")
+	}
+	if requireAASRegistry && s.persistence.AASRegistry == nil {
+		return common.NewInternalServerError("AASENV-SMREPO-CHECKDEPS-NILAASREGISTRY AAS registry backend must not be nil")
+	}
+
+	return nil
+}
+
 // PostSubmodel creates a new submodel and synchronizes descriptor writes in the same transaction.
 func (s *CustomSubmodelRepositoryService) PostSubmodel(ctx context.Context, submodel types.ISubmodel) (commonmodel.ImplResponse, error) {
 	const operation = "PostSubmodel"
 	if !s.syncConfig.SubmodelRegistryIntegration {
 		return s.SubmodelRepositoryAPIAPIService.PostSubmodel(ctx, submodel)
+	}
+	if dependencyErr := s.validateSyncDependencies(s.enableReferencingAASDescriptorEmbeddingSync, s.enableReferencingAASDescriptorEmbeddingSync); dependencyErr != nil {
+		return newSubmodelRepoErrorResponse(dependencyErr, http.StatusInternalServerError, operation, "ValidateDependencies"), nil
 	}
 
 	err := s.ExecuteInTransaction(func(tx *sql.Tx) error {
@@ -106,6 +132,9 @@ func (s *CustomSubmodelRepositoryService) PutSubmodelByID(ctx context.Context, s
 	const operation = "PutSubmodelByID"
 	if !s.syncConfig.SubmodelRegistryIntegration {
 		return s.SubmodelRepositoryAPIAPIService.PutSubmodelByID(ctx, submodelIdentifier, submodel)
+	}
+	if dependencyErr := s.validateSyncDependencies(s.enableReferencingAASDescriptorEmbeddingSync, s.enableReferencingAASDescriptorEmbeddingSync); dependencyErr != nil {
+		return newSubmodelRepoErrorResponse(dependencyErr, http.StatusInternalServerError, operation, "ValidateDependencies"), nil
 	}
 
 	decodedIdentifier, decodeErr := common.DecodeString(submodelIdentifier)
@@ -167,6 +196,9 @@ func (s *CustomSubmodelRepositoryService) DeleteSubmodelByID(ctx context.Context
 	if !s.syncConfig.SubmodelRegistryIntegration {
 		return s.SubmodelRepositoryAPIAPIService.DeleteSubmodelByID(ctx, id)
 	}
+	if dependencyErr := s.validateSyncDependencies(s.enableReferencingAASDescriptorEmbeddingSync, s.enableReferencingAASDescriptorEmbeddingSync); dependencyErr != nil {
+		return newSubmodelRepoErrorResponse(dependencyErr, http.StatusInternalServerError, operation, "ValidateDependencies"), nil
+	}
 
 	decodedSubmodelIdentifier, decodeErr := common.DecodeString(id)
 	if decodeErr != nil {
@@ -205,6 +237,9 @@ func (s *CustomSubmodelRepositoryService) PatchSubmodelByID(ctx context.Context,
 	const operation = "PatchSubmodelByID"
 	if !s.syncConfig.SubmodelRegistryIntegration {
 		return s.SubmodelRepositoryAPIAPIService.PatchSubmodelByID(ctx, submodelIdentifier, submodel, level)
+	}
+	if dependencyErr := s.validateSyncDependencies(s.enableReferencingAASDescriptorEmbeddingSync, s.enableReferencingAASDescriptorEmbeddingSync); dependencyErr != nil {
+		return newSubmodelRepoErrorResponse(dependencyErr, http.StatusInternalServerError, operation, "ValidateDependencies"), nil
 	}
 
 	decodedIdentifier, decodeErr := common.DecodeString(submodelIdentifier)
@@ -292,6 +327,9 @@ func (s *CustomSubmodelRepositoryService) PatchSubmodelByIDMetadata(ctx context.
 	const operation = "PatchSubmodelByIDMetadata"
 	if !s.syncConfig.SubmodelRegistryIntegration {
 		return s.SubmodelRepositoryAPIAPIService.PatchSubmodelByIDMetadata(ctx, submodelIdentifier, submodelMetadata)
+	}
+	if dependencyErr := s.validateSyncDependencies(s.enableReferencingAASDescriptorEmbeddingSync, s.enableReferencingAASDescriptorEmbeddingSync); dependencyErr != nil {
+		return newSubmodelRepoErrorResponse(dependencyErr, http.StatusInternalServerError, operation, "ValidateDependencies"), nil
 	}
 
 	decodedIdentifier, decodeErr := common.DecodeString(submodelIdentifier)
@@ -426,7 +464,7 @@ func (s *CustomSubmodelRepositoryService) syncReferencingAASDescriptorsInTransac
 	referencingAASIDs []string,
 	remove bool,
 ) error {
-	if !s.enableAASDescriptorEmbeddingSync {
+	if !s.enableReferencingAASDescriptorEmbeddingSync {
 		return nil
 	}
 	if s.persistence == nil {
