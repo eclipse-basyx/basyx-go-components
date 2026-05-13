@@ -82,6 +82,14 @@ func AssertSubmodelDescriptorConstraints(obj SubmodelDescriptor) error {
 			return err
 		}
 	}
+	if err := assertReferenceKeysNotEmpty(obj.SemanticId, "semanticId"); err != nil {
+		return err
+	}
+	for _, reference := range obj.SupplementalSemanticId {
+		if err := assertReferenceKeysNotEmpty(reference, "supplementalSemanticIds"); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 

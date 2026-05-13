@@ -165,6 +165,21 @@ func TestSubmodelDescriptorUnmarshalFailsSemanticVerificationWhenStrictEnabled(t
 	}
 }
 
+func TestAssertSubmodelDescriptorConstraints_RejectsEmptySemanticIDReferenceKeys(t *testing.T) {
+	descriptor := SubmodelDescriptor{
+		Id:         "submodel-id",
+		SemanticId: types.NewReference(types.ReferenceTypesModelReference, []types.IKey{}),
+	}
+
+	err := AssertSubmodelDescriptorConstraints(descriptor)
+	if err == nil {
+		t.Fatal("expected constraint validation error for empty semanticId keys")
+	}
+	if !strings.Contains(err.Error(), "semanticId.keys must not be empty") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
 func mustReference(t *testing.T) types.IReference {
 	t.Helper()
 	ref, err := jsonization.ReferenceFromJsonable(map[string]any{

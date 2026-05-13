@@ -119,6 +119,9 @@ func AssertAssetAdministrationShellDescriptorConstraints(obj AssetAdministration
 			return err
 		}
 	}
+	if err := assertSpecificAssetIDReferencesHaveKeys(obj.SpecificAssetIds); err != nil {
+		return err
+	}
 	for _, el := range obj.SubmodelDescriptors {
 		if err := AssertSubmodelDescriptorConstraints(el); err != nil {
 			return err
