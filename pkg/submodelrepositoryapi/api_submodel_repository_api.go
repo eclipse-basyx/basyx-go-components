@@ -51,7 +51,7 @@ func NewSubmodelRepositoryAPIAPIController(s SubmodelRepositoryAPIAPIServicer, c
 		service:          s,
 		errorHandler:     DefaultErrorHandler,
 		contextPath:      contextPath,
-		verificationMode: model.NormalizeVerificationMode(model.VerificationMode(strictVerification)),
+		verificationMode: parseControllerVerificationMode(strictVerification),
 	}
 
 	for _, opt := range opts {
@@ -59,6 +59,14 @@ func NewSubmodelRepositoryAPIAPIController(s SubmodelRepositoryAPIAPIServicer, c
 	}
 
 	return controller
+}
+
+func parseControllerVerificationMode(strictVerification string) model.VerificationMode {
+	verificationMode, err := model.ParseVerificationMode(strictVerification)
+	if err == nil {
+		return verificationMode
+	}
+	return model.NormalizeVerificationMode(model.VerificationMode(strictVerification))
 }
 
 // Routes returns all the api routes for the SubmodelRepositoryAPIAPIController
