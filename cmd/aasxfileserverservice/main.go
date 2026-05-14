@@ -16,6 +16,7 @@ import (
 	aasxapi "github.com/eclipse-basyx/basyx-go-components/internal/aasxfileserver/api"
 	aasxpersistence "github.com/eclipse-basyx/basyx-go-components/internal/aasxfileserver/persistence"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
+	commonmodel "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 	openapi "github.com/eclipse-basyx/basyx-go-components/pkg/aasxfileserverapi/go"
 )
@@ -29,6 +30,9 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 
 	cfg, err := common.LoadConfig(configPath)
 	if err != nil {
+		return err
+	}
+	if err := commonmodel.SetVerificationMode(cfg.Server.StrictVerification); err != nil {
 		return err
 	}
 
