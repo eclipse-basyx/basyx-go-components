@@ -79,6 +79,30 @@ func TestAddSwaggerUIServesLocalPart2Schemas(t *testing.T) {
 	}
 }
 
+func TestAddSwaggerUIDoesNotInjectVerifyEndpointWhenDisabled(t *testing.T) {
+	r := chi.NewRouter()
+	includeVerifyEndpoint := false
+	AddSwaggerUI(r, SwaggerUIConfig{
+		Title:                 "test",
+		SpecURL:               "/api-docs/openapi.yaml",
+		UIPath:                "/swagger",
+		SpecPath:              "/api-docs/openapi.yaml",
+		SpecContent:           []byte("openapi: 3.0.3\npaths:\n  /x:\n    get:\n      responses:\n        '200':\n          description: ok\n"),
+		BasePath:              "/",
+		IncludeVerifyEndpoint: &includeVerifyEndpoint,
+	})
+
+	specReq := httptest.NewRequest(http.MethodGet, "/api-docs/openapi.yaml", nil)
+	specRecorder := httptest.NewRecorder()
+	r.ServeHTTP(specRecorder, specReq)
+	if specRecorder.Code != http.StatusOK {
+		t.Fatalf("expected spec status 200, got %d", specRecorder.Code)
+	}
+	if strings.Contains(specRecorder.Body.String(), "\n  /verify:\n") {
+		t.Fatal("expected spec to not contain injected /verify endpoint when disabled")
+	}
+}
+
 func TestInjectVerifyEndpoint_DoesNotDuplicateExistingPath(t *testing.T) {
 	spec := []byte("openapi: 3.0.3\npaths:\n  /verify:\n    post:\n      summary: Existing\n")
 	injected := injectVerifyEndpoint(spec)

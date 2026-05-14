@@ -59,14 +59,15 @@ var part2SchemasFS embed.FS
 
 // SwaggerUIConfig holds configuration for Swagger UI endpoint setup
 type SwaggerUIConfig struct {
-	Title       string         // Title shown in browser tab
-	SpecURL     string         // URL to the OpenAPI spec (e.g., "/api-docs/openapi.yaml")
-	UIPath      string         // Path where Swagger UI will be served (e.g., "/swagger")
-	SpecPath    string         // Path where spec will be served (e.g., "/api-docs/openapi.yaml")
-	SpecContent []byte         // The OpenAPI spec content
-	ServerURL   string         // Server URL to use in OpenAPI spec (e.g., "http://localhost:5004/api")
-	BasePath    string         // Base path for redirect to Swagger UI (e.g., "/" or "/api")
-	Contact     *ContactConfig // Contact information to inject into OpenAPI spec
+	Title                 string         // Title shown in browser tab
+	SpecURL               string         // URL to the OpenAPI spec (e.g., "/api-docs/openapi.yaml")
+	UIPath                string         // Path where Swagger UI will be served (e.g., "/swagger")
+	SpecPath              string         // Path where spec will be served (e.g., "/api-docs/openapi.yaml")
+	SpecContent           []byte         // The OpenAPI spec content
+	ServerURL             string         // Server URL to use in OpenAPI spec (e.g., "http://localhost:5004/api")
+	BasePath              string         // Base path for redirect to Swagger UI (e.g., "/" or "/api")
+	Contact               *ContactConfig // Contact information to inject into OpenAPI spec
+	IncludeVerifyEndpoint *bool          // nil/default=true, false disables /verify injection in OpenAPI spec
 }
 
 // ContactConfig holds contact information for OpenAPI spec
@@ -285,7 +286,14 @@ func AddSwaggerUI(r *chi.Mux, cfg SwaggerUIConfig) {
 
 	// Repoint Part2 schema references to local, bundled schema snapshots so Swagger works offline.
 	specContent = localizePart2SchemaReferences(specContent, cfg.SpecPath)
-	specContent = injectVerifyEndpoint(specContent)
+
+	includeVerifyEndpoint := true
+	if cfg.IncludeVerifyEndpoint != nil {
+		includeVerifyEndpoint = *cfg.IncludeVerifyEndpoint
+	}
+	if includeVerifyEndpoint {
+		specContent = injectVerifyEndpoint(specContent)
+	}
 
 	// Serve the OpenAPI spec
 	r.Get(cfg.SpecPath, func(w http.ResponseWriter, _ *http.Request) {
@@ -393,6 +401,7 @@ func AddSwaggerUIFromFS(r *chi.Mux, specFS embed.FS, specFile string, title stri
 
 	// Build contact config if provided
 	var contact *ContactConfig
+	var includeVerifyEndpoint *bool
 	if serverConfig != nil && (serverConfig.Swagger.ContactName != "" || serverConfig.Swagger.ContactEmail != "" || serverConfig.Swagger.ContactURL != "") {
 		contact = &ContactConfig{
 			Name:  serverConfig.Swagger.ContactName,
@@ -400,16 +409,20 @@ func AddSwaggerUIFromFS(r *chi.Mux, specFS embed.FS, specFile string, title stri
 			URL:   serverConfig.Swagger.ContactURL,
 		}
 	}
+	if serverConfig != nil {
+		includeVerifyEndpoint = &serverConfig.Server.VerificationEndpointAvailable
+	}
 
 	AddSwaggerUI(r, SwaggerUIConfig{
-		Title:       title,
-		SpecURL:     fullSpecPath,
-		UIPath:      fullUIPath,
-		SpecPath:    fullSpecPath,
-		SpecContent: content,
-		ServerURL:   serverURL,
-		BasePath:    basePath,
-		Contact:     contact,
+		Title:                 title,
+		SpecURL:               fullSpecPath,
+		UIPath:                fullUIPath,
+		SpecPath:              fullSpecPath,
+		SpecContent:           content,
+		ServerURL:             serverURL,
+		BasePath:              basePath,
+		Contact:               contact,
+		IncludeVerifyEndpoint: includeVerifyEndpoint,
 	})
 
 	return nil
