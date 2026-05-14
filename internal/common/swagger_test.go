@@ -111,6 +111,19 @@ func TestInjectVerifyEndpoint_DoesNotDuplicateExistingPath(t *testing.T) {
 	}
 }
 
+func TestInjectVerifyEndpoint_ReflectsSupportedVerifyRequestFormats(t *testing.T) {
+	injected := string(injectVerifyEndpoint([]byte("openapi: 3.0.3\npaths:\n")))
+	if strings.Contains(injected, "- type: array") {
+		t.Fatal("expected injected /verify requestBody to not allow top-level JSON arrays")
+	}
+	if !strings.Contains(injected, "application/aasx+xml:") {
+		t.Fatal("expected injected /verify requestBody to document application/aasx+xml")
+	}
+	if !strings.Contains(injected, "application/aasx+json:") {
+		t.Fatal("expected injected /verify requestBody to document application/aasx+json")
+	}
+}
+
 func TestInjectServerURL_PreservesServerBasePathFromSpec(t *testing.T) {
 	spec := []byte("openapi: 3.0.3\nservers:\n- url: 'https://admin-shell.io/api/v3'\npaths:\n  /packages:\n    get:\n      responses:\n        '200':\n          description: ok\n")
 	injected := injectServerURL(spec, "http://localhost:5004")

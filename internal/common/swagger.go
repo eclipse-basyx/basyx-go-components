@@ -131,12 +131,18 @@ func injectVerifyEndpoint(specContent []byte) []byte {
 		"        content:\n" +
 		"          application/json:\n" +
 		"            schema:\n" +
-		"              oneOf:\n" +
-		"                - type: object\n" +
-		"                - type: array\n" +
+		"              type: object\n" +
 		"          application/xml:\n" +
 		"            schema:\n" +
 		"              type: string\n" +
+		"          application/aasx+xml:\n" +
+		"            schema:\n" +
+		"              type: string\n" +
+		"              format: binary\n" +
+		"          application/aasx+json:\n" +
+		"            schema:\n" +
+		"              type: string\n" +
+		"              format: binary\n" +
 		"          multipart/form-data:\n" +
 		"            schema:\n" +
 		"              type: object\n" +
