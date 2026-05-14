@@ -140,12 +140,17 @@ func injectVerifyEndpoint(specContent []byte) []byte {
 		"          multipart/form-data:\n" +
 		"            schema:\n" +
 		"              type: object\n" +
-		"              required:\n" +
-		"                - file\n" +
+		"              oneOf:\n" +
+		"                - required:\n" +
+		"                    - file\n" +
+		"                - required:\n" +
+		"                    - payload\n" +
 		"              properties:\n" +
 		"                file:\n" +
 		"                  type: string\n" +
 		"                  format: binary\n" +
+		"                payload:\n" +
+		"                  type: string\n" +
 		"      responses:\n" +
 		"        '200':\n" +
 		"          description: Verification result\n" +

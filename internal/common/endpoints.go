@@ -48,6 +48,8 @@ import (
 )
 
 const verifyMaxPayloadBytes = 128 << 20
+const verifyMultipartFileField = "file"
+const verifyMultipartPayloadField = "payload"
 
 // HealthProbe reports if the service is healthy and optionally returns detail text.
 type HealthProbe func() (bool, string)
@@ -204,32 +206,47 @@ func readVerificationPayload(r *http.Request) ([]byte, string, string, error) {
 			return nil, "", "", fmt.Errorf("failed to parse multipart form: %w", err)
 		}
 
-		file, fileHeader, err := r.FormFile("file")
-		if err != nil {
-			return nil, "", "", fmt.Errorf("failed to read multipart file field 'file': %w", err)
+		file, fileHeader, fileErr := r.FormFile(verifyMultipartFileField)
+		if fileErr == nil {
+			defer func() {
+				_ = file.Close()
+			}()
+
+			maxPayloadBytes := verificationMaxPayloadBytesFromRequest(r)
+			payload, err := io.ReadAll(io.LimitReader(file, maxPayloadBytes+1))
+			if err != nil {
+				return nil, "", "", fmt.Errorf("failed to read multipart file payload: %w", err)
+			}
+			if int64(len(payload)) > maxPayloadBytes {
+				return nil, "", "", fmt.Errorf("payload exceeds max size of %d bytes", maxPayloadBytes)
+			}
+			if len(bytes.TrimSpace(payload)) == 0 {
+				return nil, "", "", fmt.Errorf("payload is empty")
+			}
+
+			fileContentType := strings.TrimSpace(fileHeader.Header.Get("Content-Type"))
+			if fileContentType == "" {
+				fileContentType = headerContentType
+			}
+
+			return payload, fileHeader.Filename, fileContentType, nil
 		}
-		defer func() {
-			_ = file.Close()
-		}()
 
 		maxPayloadBytes := verificationMaxPayloadBytesFromRequest(r)
-		payload, err := io.ReadAll(io.LimitReader(file, maxPayloadBytes+1))
-		if err != nil {
-			return nil, "", "", fmt.Errorf("failed to read multipart file payload: %w", err)
-		}
+		payloadText := r.FormValue(verifyMultipartPayloadField)
+		payload := []byte(payloadText)
 		if int64(len(payload)) > maxPayloadBytes {
 			return nil, "", "", fmt.Errorf("payload exceeds max size of %d bytes", maxPayloadBytes)
 		}
 		if len(bytes.TrimSpace(payload)) == 0 {
-			return nil, "", "", fmt.Errorf("payload is empty")
+			return nil, "", "", fmt.Errorf(
+				"failed to read multipart field '%s' and multipart text field '%s' is empty",
+				verifyMultipartFileField,
+				verifyMultipartPayloadField,
+			)
 		}
 
-		fileContentType := strings.TrimSpace(fileHeader.Header.Get("Content-Type"))
-		if fileContentType == "" {
-			fileContentType = headerContentType
-		}
-
-		return payload, fileHeader.Filename, fileContentType, nil
+		return payload, "", "", nil
 	}
 
 	if r.Body == nil {

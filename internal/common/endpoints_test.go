@@ -155,6 +155,28 @@ func TestVerifyPayload_MultipartJSON(t *testing.T) {
 	}
 }
 
+func TestVerifyPayload_MultipartPayloadFieldJSON(t *testing.T) {
+	body := &bytes.Buffer{}
+	writer := multipart.NewWriter(body)
+	if err := writer.WriteField("payload", `{"assetAdministrationShells":[],"submodels":[],"conceptDescriptions":[]}`); err != nil {
+		t.Fatalf("write payload field failed: %v", err)
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatalf("close writer failed: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/verify", body)
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+
+	result, verifyErr := VerifyPayload(req)
+	if verifyErr != nil {
+		t.Fatalf("expected no error, got %v", verifyErr)
+	}
+	if format, ok := result["format"].(string); !ok || format != "json" {
+		t.Fatalf("expected format json, got %#v", result["format"])
+	}
+}
+
 func TestVerifyPayload_RawAASX(t *testing.T) {
 	aasxPath := filepath.Join("..", "aasenvironment", "integration_tests", "testdata", "IESEDriveMotorDM3000.aasx")
 	// #nosec G304 -- path is a static test fixture under repository-controlled testdata.
