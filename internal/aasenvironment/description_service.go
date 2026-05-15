@@ -24,6 +24,7 @@ func (s *DescriptionService) GetDescription(_ context.Context) (model.ImplRespon
 
 func mergedProfiles() []string {
 	profiles := []string{
+		"https://basyx.org/aas/API/3/1/AssetAdministrationShellEnvironment/SSP-001",
 		"https://admin-shell.io/aas/API/3/1/AssetAdministrationShellRegistryServiceSpecification/SSP-001",
 		"https://admin-shell.io/aas/API/3/1/AssetAdministrationShellRegistryServiceSpecification/SSP-004",
 		"https://basyx.org/aas/API/3/1/AssetAdministrationShellRegistryServiceSpecification/SSP-001",
@@ -33,9 +34,9 @@ func mergedProfiles() []string {
 		"https://basyx.org/aas/API/3/1/AssetAdministrationShellRepositoryServiceSpecification/SSP-001",
 		"https://admin-shell.io/aas/API/3/1/SubmodelRepositoryServiceSpecification/SSP-001",
 		"https://admin-shell.io/aas/API/3/1/SubmodelRepositoryServiceSpecification/SSP-005",
-		"https://basyx.org/aas/go-server/API/SubmodelRepositoryService/1.0",
+		"https://basyx.org/aas/API/3/1/SubmodelRepositoryService/1.0",
 		"https://admin-shell.io/aas/API/3/1/ConceptDescriptionRepositoryServiceSpecification/SSP-001",
-		"https://basyx.org/aas/go-server/API/ConceptDescriptionRepositoryService/1.0",
+		"https://basyx.org/aas/API/3/1/ConceptDescriptionRepositoryService/1.0",
 		"https://admin-shell.io/aas/API/3/1/DiscoveryServiceSpecification/SSP-001",
 		"https://basyx.org/aas/API/3/1/DiscoveryServiceSpecification/SSP-001",
 	}

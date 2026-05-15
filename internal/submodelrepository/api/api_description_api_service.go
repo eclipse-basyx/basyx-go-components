@@ -49,7 +49,7 @@ func (s *DescriptionAPIAPIService) GetSelfDescription(_ context.Context) (model.
 		Profiles: []string{
 			"https://admin-shell.io/aas/API/3/1/SubmodelRepositoryServiceSpecification/SSP-001",
 			"https://admin-shell.io/aas/API/3/1/SubmodelRepositoryServiceSpecification/SSP-005",
-			"https://basyx.org/aas/go-server/API/SubmodelRepositoryService/1.0",
+			"https://basyx.org/aas/API/3/1/SubmodelRepositoryService/1.0",
 		},
 	}
 
