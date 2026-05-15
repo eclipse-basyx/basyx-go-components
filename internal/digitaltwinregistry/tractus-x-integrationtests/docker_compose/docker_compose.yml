@@ -23,7 +23,7 @@ services:
     environment:
       - SERVER_PORT=5004
       - SERVER_CONTEXTPATH=/api/v3
-      - SERVER_STRICTVERIFICATION=false
+      - SERVER_STRICTVERIFICATION=off
       - POSTGRES_HOST=db
       - POSTGRES_PORT=5432
       - POSTGRES_USER=admin

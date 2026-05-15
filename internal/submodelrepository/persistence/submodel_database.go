@@ -57,13 +57,13 @@ import (
 
 // SubmodelDatabase is the implementation of the SubmodelRepositoryDatabase interface using PostgreSQL as the underlying database.
 type SubmodelDatabase struct {
-	db                 *sql.DB
-	privateKey         *rsa.PrivateKey
-	strictVerification bool
+	db               *sql.DB
+	privateKey       *rsa.PrivateKey
+	verificationMode gen.VerificationMode
 }
 
 // NewSubmodelDatabase creates a new instance of SubmodelDatabase with the provided database connection.
-func NewSubmodelDatabase(dsn string, maxOpenConnections int, maxIdleConnections int, connMaxLifetimeMinutes int, databaseSchema string, privateKey *rsa.PrivateKey, strictVerification bool) (*SubmodelDatabase, error) {
+func NewSubmodelDatabase(dsn string, maxOpenConnections int, maxIdleConnections int, connMaxLifetimeMinutes int, databaseSchema string, privateKey *rsa.PrivateKey, strictVerification string) (*SubmodelDatabase, error) {
 	db, err := common.InitializeDatabase(dsn, databaseSchema)
 	if err != nil {
 		return nil, err
@@ -83,15 +83,20 @@ func NewSubmodelDatabase(dsn string, maxOpenConnections int, maxIdleConnections 
 }
 
 // NewSubmodelDatabaseFromDB creates a new repository backend from an existing DB pool.
-func NewSubmodelDatabaseFromDB(db *sql.DB, privateKey *rsa.PrivateKey, strictVerification bool) (*SubmodelDatabase, error) {
+func NewSubmodelDatabaseFromDB(db *sql.DB, privateKey *rsa.PrivateKey, strictVerification string) (*SubmodelDatabase, error) {
 	if db == nil {
 		return nil, common.NewErrBadRequest("SMREPO-NEWFROMDB-NILDB database handle must not be nil")
 	}
 
+	verificationMode, err := gen.ParseVerificationMode(strictVerification)
+	if err != nil {
+		return nil, common.NewErrBadRequest("SMREPO-NEWFROMDB-INVALIDMODE " + err.Error())
+	}
+
 	return &SubmodelDatabase{
-		db:                 db,
-		privateKey:         privateKey,
-		strictVerification: strictVerification,
+		db:               db,
+		privateKey:       privateKey,
+		verificationMode: verificationMode,
 	}, nil
 }
 
@@ -425,27 +430,16 @@ func mapCreateSubmodelInsertError(err error) error {
 }
 
 func (s *SubmodelDatabase) verifySubmodel(submodel types.ISubmodel, errorPrefix string) error {
-	if !s.strictVerification {
-		return nil
-	}
-
-	verificationErrors := make([]verification.VerificationError, 0)
-
-	verification.VerifySubmodel(submodel, func(ve *verification.VerificationError) bool {
-		verificationErrors = append(verificationErrors, *ve)
-		return false
-	})
-
-	if len(verificationErrors) == 0 {
-		return nil
-	}
-
-	stringOfAllErrors := ""
-	for _, err := range verificationErrors {
-		stringOfAllErrors += fmt.Sprintf("%s ", err.Error())
-	}
-
-	return common.NewErrBadRequest(errorPrefix + " " + stringOfAllErrors)
+	return gen.ValidateWithMode(
+		s.verificationMode,
+		errorPrefix,
+		func(collector func(*verification.VerificationError) bool) {
+			verification.VerifySubmodel(submodel, collector)
+		},
+		func(message string) error {
+			return common.NewErrBadRequest(errorPrefix + " " + message)
+		},
+	)
 }
 
 func shouldEnforceFormula(ctx context.Context, step string) (bool, error) {

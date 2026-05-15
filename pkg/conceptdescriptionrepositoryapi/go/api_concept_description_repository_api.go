@@ -29,7 +29,7 @@ type ConceptDescriptionRepositoryAPIAPIController struct {
 	service            ConceptDescriptionRepositoryAPIAPIServicer
 	errorHandler       model.ErrorHandler
 	contextPath        string
-	strictVerification bool
+	strictVerification string
 }
 
 // ConceptDescriptionRepositoryAPIAPIOption for how the controller is set up.
@@ -43,7 +43,7 @@ func WithConceptDescriptionRepositoryAPIAPIErrorHandler(h model.ErrorHandler) Co
 }
 
 // NewConceptDescriptionRepositoryAPIAPIController creates a default api controller
-func NewConceptDescriptionRepositoryAPIAPIController(s ConceptDescriptionRepositoryAPIAPIServicer, contextPath string, strictVerification bool) *ConceptDescriptionRepositoryAPIAPIController {
+func NewConceptDescriptionRepositoryAPIAPIController(s ConceptDescriptionRepositoryAPIAPIServicer, contextPath string, strictVerification string) *ConceptDescriptionRepositoryAPIAPIController {
 	controller := &ConceptDescriptionRepositoryAPIAPIController{
 		service:            s,
 		errorHandler:       model.DefaultErrorHandler,

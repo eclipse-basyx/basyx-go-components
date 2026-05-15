@@ -50,6 +50,11 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 	if err != nil {
 		return err
 	}
+
+	if err := commonmodel.SetVerificationMode(cfg.Server.StrictVerification); err != nil {
+		return err
+	}
+
 	registrySyncConfig, err := aasenvironment.NewRegistrySyncConfig(
 		cfg.General.AASRegistryIntegration,
 		cfg.General.SubmodelRegistryIntegration,
@@ -58,7 +63,6 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 	if err != nil {
 		return err
 	}
-	commonmodel.SetStrictVerificationEnabled(cfg.Server.StrictVerification)
 	commonmodel.SetSupportsSingularSupplementalSemanticId(cfg.General.SupportsSingularSupplementalSemanticId)
 
 	// AAS Environment Service always enables discovery integration.
@@ -67,6 +71,9 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 	r := chi.NewRouter()
 	r.Use(common.ConfigMiddleware(cfg))
 	common.AddCors(r, cfg)
+	if cfg.Server.VerificationEndpointAvailable {
+		common.AddVerificationEndpoint(r, cfg)
+	}
 
 	preconfigurationCompleted := atomic.Bool{}
 	common.AddHealthEndpointWithProbe(r, cfg, func() (bool, string) {

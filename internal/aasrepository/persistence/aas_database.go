@@ -31,7 +31,6 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"os"
 	"strconv"
 	"time"
@@ -44,6 +43,7 @@ import (
 	persistenceutils "github.com/eclipse-basyx/basyx-go-components/internal/aasrepository/persistence/utils"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/descriptors"
+	commonmodel "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 	"github.com/lib/pq"
@@ -51,8 +51,8 @@ import (
 
 // AssetAdministrationShellDatabase is the implementation of the AssetAdministrationShellRepositoryDatabase interface using PostgreSQL as the underlying database.
 type AssetAdministrationShellDatabase struct {
-	db                 *sql.DB
-	strictVerification bool
+	db               *sql.DB
+	verificationMode commonmodel.VerificationMode
 }
 
 // ExecuteInTransaction runs fn in a database transaction bound to this backend.
@@ -61,7 +61,7 @@ func (s *AssetAdministrationShellDatabase) ExecuteInTransaction(startErrorCode s
 }
 
 // NewAssetAdministrationShellDatabase creates a new instance of AssetAdministrationShellDatabase with the provided database connection.
-func NewAssetAdministrationShellDatabase(dsn string, maxOpenConnections int, maxIdleConnections int, connMaxLifetimeMinutes int, databaseSchema string, strictVerification bool) (*AssetAdministrationShellDatabase, error) {
+func NewAssetAdministrationShellDatabase(dsn string, maxOpenConnections int, maxIdleConnections int, connMaxLifetimeMinutes int, databaseSchema string, strictVerification string) (*AssetAdministrationShellDatabase, error) {
 	db, err := common.InitializeDatabase(dsn, databaseSchema)
 	if err != nil {
 		return nil, err
@@ -81,90 +81,62 @@ func NewAssetAdministrationShellDatabase(dsn string, maxOpenConnections int, max
 }
 
 // NewAssetAdministrationShellDatabaseFromDB creates a new repository backend from an existing DB pool.
-func NewAssetAdministrationShellDatabaseFromDB(db *sql.DB, strictVerification bool) (*AssetAdministrationShellDatabase, error) {
+func NewAssetAdministrationShellDatabaseFromDB(db *sql.DB, strictVerification string) (*AssetAdministrationShellDatabase, error) {
 	if db == nil {
 		return nil, common.NewErrBadRequest("AASREPO-NEWFROMDB-NILDB database handle must not be nil")
 	}
 
+	verificationMode, err := commonmodel.ParseVerificationMode(strictVerification)
+	if err != nil {
+		return nil, common.NewErrBadRequest("AASREPO-NEWFROMDB-INVALIDMODE " + err.Error())
+	}
+
 	return &AssetAdministrationShellDatabase{
-		db:                 db,
-		strictVerification: strictVerification,
+		db:               db,
+		verificationMode: verificationMode,
 	}, nil
 }
 
 // verifyAssetAdministrationShell validates an AAS when strict verification is enabled.
 func (s *AssetAdministrationShellDatabase) verifyAssetAdministrationShell(aas types.IAssetAdministrationShell, errorPrefix string) error {
-	if !s.strictVerification {
-		return nil
-	}
-
-	verificationErrors := make([]verification.VerificationError, 0)
-
-	verification.VerifyAssetAdministrationShell(aas, func(ve *verification.VerificationError) bool {
-		verificationErrors = append(verificationErrors, *ve)
-		return false
-	})
-
-	if len(verificationErrors) == 0 {
-		return nil
-	}
-
-	stringOfAllErrors := ""
-	for _, err := range verificationErrors {
-		stringOfAllErrors += fmt.Sprintf("%s ", err.Error())
-	}
-
-	return common.NewErrBadRequest(errorPrefix + " " + stringOfAllErrors)
+	return commonmodel.ValidateWithMode(
+		s.verificationMode,
+		errorPrefix,
+		func(collector func(*verification.VerificationError) bool) {
+			verification.VerifyAssetAdministrationShell(aas, collector)
+		},
+		func(message string) error {
+			return common.NewErrBadRequest(errorPrefix + " " + message)
+		},
+	)
 }
 
 // verifyAssetInformation validates an AssetInformation when strict verification is enabled.
 func (s *AssetAdministrationShellDatabase) verifyAssetInformation(asset_information types.IAssetInformation, errorPrefix string) error {
-	if !s.strictVerification {
-		return nil
-	}
-
-	verificationErrors := make([]verification.VerificationError, 0)
-
-	verification.VerifyAssetInformation(asset_information, func(ve *verification.VerificationError) bool {
-		verificationErrors = append(verificationErrors, *ve)
-		return false
-	})
-
-	if len(verificationErrors) == 0 {
-		return nil
-	}
-
-	stringOfAllErrors := ""
-	for _, err := range verificationErrors {
-		stringOfAllErrors += fmt.Sprintf("%s ", err.Error())
-	}
-
-	return common.NewErrBadRequest(errorPrefix + " " + stringOfAllErrors)
+	return commonmodel.ValidateWithMode(
+		s.verificationMode,
+		errorPrefix,
+		func(collector func(*verification.VerificationError) bool) {
+			verification.VerifyAssetInformation(asset_information, collector)
+		},
+		func(message string) error {
+			return common.NewErrBadRequest(errorPrefix + " " + message)
+		},
+	)
 }
 
 // verifyReference validates a Reference when strict verification is enabled.
 func (s *AssetAdministrationShellDatabase) verifyReference(reference types.IReference, errorPrefix string) error {
-	if !s.strictVerification {
-		return nil
-	}
-
-	verificationErrors := make([]verification.VerificationError, 0)
-
-	verification.VerifyReference(reference, func(ve *verification.VerificationError) bool {
-		verificationErrors = append(verificationErrors, *ve)
-		return false
-	})
-
-	if len(verificationErrors) == 0 {
-		return nil
-	}
-
-	stringOfAllErrors := ""
-	for _, err := range verificationErrors {
-		stringOfAllErrors += fmt.Sprintf("%s ", err.Error())
-	}
-
-	return common.NewErrBadRequest(errorPrefix + " " + stringOfAllErrors)
+	return commonmodel.ValidateWithMode(
+		s.verificationMode,
+		errorPrefix,
+		func(collector func(*verification.VerificationError) bool) {
+			verification.VerifyReference(reference, collector)
+		},
+		func(message string) error {
+			return common.NewErrBadRequest(errorPrefix + " " + message)
+		},
+	)
 }
 
 func buildAASCollector() (*grammar.ResolvedFieldPathCollector, error) {

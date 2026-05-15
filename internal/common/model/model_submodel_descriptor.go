@@ -82,6 +82,14 @@ func AssertSubmodelDescriptorConstraints(obj SubmodelDescriptor) error {
 			return err
 		}
 	}
+	if err := assertReferenceKeysNotEmpty(obj.SemanticId, "semanticId"); err != nil {
+		return err
+	}
+	for _, reference := range obj.SupplementalSemanticId {
+		if err := assertReferenceKeysNotEmpty(reference, "supplementalSemanticIds"); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
@@ -337,82 +345,103 @@ func (obj *SubmodelDescriptor) UnmarshalJSON(data []byte) error {
 		obj.Id = id
 	}
 
-	if !isStrictVerificationEnabled() {
+	mode := GetVerificationMode()
+
+	if mode == VerificationModeOff {
 		return nil
 	}
 
-	// Verify Description
-	var validationErrors []string
 	for _, el := range obj.Description {
-		verification.Verify(el, func(verErr *verification.VerificationError) bool {
-			validationErrors = append(validationErrors, verErr.Error())
-			return false // Continue collecting all errors
-		})
-
-		if len(validationErrors) > 0 {
-			return errors.New("AssetAdministrationShellDescriptor: Description verification failed: " + validationErrors[0])
+		description := el
+		if err := ValidateWithMode(
+			mode,
+			"SubmodelDescriptor.Description",
+			func(collector func(*verification.VerificationError) bool) {
+				verification.Verify(description, collector)
+			},
+			func(message string) error {
+				return errors.New("AssetAdministrationShellDescriptor: Description verification failed: " + message)
+			},
+		); err != nil {
+			return err
 		}
 	}
 
-	// Verify DisplayName
-	validationErrors = []string{}
 	for _, el := range obj.DisplayName {
-		verification.Verify(el, func(verErr *verification.VerificationError) bool {
-			validationErrors = append(validationErrors, verErr.Error())
-			return false // Continue collecting all errors
-		})
-
-		if len(validationErrors) > 0 {
-			return errors.New("AssetAdministrationShellDescriptor: DisplayName verification failed: " + validationErrors[0])
+		displayName := el
+		if err := ValidateWithMode(
+			mode,
+			"SubmodelDescriptor.DisplayName",
+			func(collector func(*verification.VerificationError) bool) {
+				verification.Verify(displayName, collector)
+			},
+			func(message string) error {
+				return errors.New("AssetAdministrationShellDescriptor: DisplayName verification failed: " + message)
+			},
+		); err != nil {
+			return err
 		}
 	}
 
-	// Verify Extensions
-	validationErrors = []string{}
 	for _, el := range obj.Extensions {
-		verification.Verify(&el, func(verErr *verification.VerificationError) bool {
-			validationErrors = append(validationErrors, verErr.Error())
-			return false // Continue collecting all errors
-		})
-
-		if len(validationErrors) > 0 {
-			return errors.New("AssetAdministrationShellDescriptor: Extensions verification failed: " + validationErrors[0])
+		extension := el
+		if err := ValidateWithMode(
+			mode,
+			"SubmodelDescriptor.Extensions",
+			func(collector func(*verification.VerificationError) bool) {
+				verification.Verify(&extension, collector)
+			},
+			func(message string) error {
+				return errors.New("AssetAdministrationShellDescriptor: Extensions verification failed: " + message)
+			},
+		); err != nil {
+			return err
 		}
 	}
 
-	// Semantic ID
-	validationErrors = []string{}
 	if obj.SemanticId != nil {
-		verification.Verify(obj.SemanticId, func(verErr *verification.VerificationError) bool {
-			validationErrors = append(validationErrors, verErr.Error())
-			return false // Continue collecting all errors
-		})
-		if len(validationErrors) > 0 {
-			return errors.New("SubmodelDescriptor: SemanticId verification failed: " + validationErrors[0])
+		if err := ValidateWithMode(
+			mode,
+			"SubmodelDescriptor.SemanticId",
+			func(collector func(*verification.VerificationError) bool) {
+				verification.Verify(obj.SemanticId, collector)
+			},
+			func(message string) error {
+				return errors.New("SubmodelDescriptor: SemanticId verification failed: " + message)
+			},
+		); err != nil {
+			return err
 		}
 	}
 
-	// Supplemental Semantic IDs
-	validationErrors = []string{}
 	for _, el := range obj.SupplementalSemanticId {
-		verification.Verify(el, func(verErr *verification.VerificationError) bool {
-			validationErrors = append(validationErrors, verErr.Error())
-			return false // Continue collecting all errors
-		})
-	}
-	if len(validationErrors) > 0 {
-		return errors.New("SubmodelDescriptor: SupplementalSemanticIds verification failed: " + validationErrors[0])
+		supplementalSemanticID := el
+		if err := ValidateWithMode(
+			mode,
+			"SubmodelDescriptor.SupplementalSemanticIds",
+			func(collector func(*verification.VerificationError) bool) {
+				verification.Verify(supplementalSemanticID, collector)
+			},
+			func(message string) error {
+				return errors.New("SubmodelDescriptor: SupplementalSemanticIds verification failed: " + message)
+			},
+		); err != nil {
+			return err
+		}
 	}
 
-	// Administration
-	validationErrors = []string{}
 	if obj.Administration != nil {
-		verification.Verify(obj.Administration, func(verErr *verification.VerificationError) bool {
-			validationErrors = append(validationErrors, verErr.Error())
-			return false // Continue collecting all errors
-		})
-		if len(validationErrors) > 0 {
-			return errors.New("SubmodelDescriptor: Administration verification failed: " + validationErrors[0])
+		if err := ValidateWithMode(
+			mode,
+			"SubmodelDescriptor.Administration",
+			func(collector func(*verification.VerificationError) bool) {
+				verification.Verify(obj.Administration, collector)
+			},
+			func(message string) error {
+				return errors.New("SubmodelDescriptor: Administration verification failed: " + message)
+			},
+		); err != nil {
+			return err
 		}
 	}
 

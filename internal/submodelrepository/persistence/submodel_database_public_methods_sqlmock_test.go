@@ -45,7 +45,7 @@ import (
 func TestNewSubmodelDatabaseInvalidDSNReturnsError(t *testing.T) {
 	t.Parallel()
 
-	sut, err := NewSubmodelDatabase("bad dsn", 0, 0, 0, "", nil, false)
+	sut, err := NewSubmodelDatabase("bad dsn", 0, 0, 0, "", nil, "off")
 	require.Error(t, err)
 	require.Nil(t, sut)
 }

@@ -56,7 +56,9 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 	if err != nil {
 		return err
 	}
-	commonmodel.SetStrictVerificationEnabled(cfg.Server.StrictVerification)
+	if err := commonmodel.SetVerificationMode(cfg.Server.StrictVerification); err != nil {
+		return err
+	}
 	commonmodel.SetSupportsSingularSupplementalSemanticId(cfg.General.SupportsSingularSupplementalSemanticId)
 
 	r := chi.NewRouter()
@@ -66,6 +68,9 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 
 	common.AddCors(r, cfg)
 	common.AddHealthEndpoint(r, cfg)
+	if cfg.Server.VerificationEndpointAvailable {
+		common.AddVerificationEndpoint(r, cfg)
+	}
 
 	// Add Swagger UI
 	if err := common.AddSwaggerUIFromFS(r, openapiSpec, "openapi.yaml", "Submodel Registry Service API", "/swagger", "/api-docs/openapi.yaml", cfg); err != nil {

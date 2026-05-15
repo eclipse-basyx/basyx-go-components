@@ -31,7 +31,7 @@ services:
       - POSTGRES_CONNMAXLIFETIMEMINUTES=5
       - ABAC_ENABLED=false
       - JWS_PRIVATEKEYPATH=/app/rsa-key.pem
-      - SERVER_STRICTVERIFICATION=false
+      - SERVER_STRICTVERIFICATION=off
     volumes:
       - ./rsa-key.pem:/app/rsa-key.pem:ro
     ports:
@@ -58,7 +58,7 @@ services:
       - POSTGRES_CONNMAXLIFETIMEMINUTES=5
       - ABAC_ENABLED=false
       - JWS_PRIVATEKEYPATH=/app/rsa-key.pem
-      - SERVER_STRICTVERIFICATION=false
+      - SERVER_STRICTVERIFICATION=off
       - GENERAL_SUBMODELREGISTRYINTEGRATION=true
       - GENERAL_EXTERNALURL=http://127.0.0.1:6008
     volumes:
@@ -86,7 +86,7 @@ services:
       - POSTGRES_MAXOPENCONNECTIONS=500
       - POSTGRES_MAXIDLECONNECTIONS=500
       - POSTGRES_CONNMAXLIFETIMEMINUTES=5
-      - SERVER_STRICTVERIFICATION=false
+      - SERVER_STRICTVERIFICATION=off
       - GENERAL_AASREGISTRYINTEGRATION=true
       - GENERAL_EXTERNALURL=http://127.0.0.1:6006
     ports:
@@ -112,7 +112,7 @@ services:
       - POSTGRES_CONNMAXLIFETIMEMINUTES=5
       - ABAC_ENABLED=false
       - JWS_PRIVATEKEYPATH=/app/rsa-key.pem
-      - SERVER_STRICTVERIFICATION=false
+      - SERVER_STRICTVERIFICATION=off
       - GENERAL_AASREGISTRYINTEGRATION=true
     volumes:
       - ./rsa-key.pem:/app/rsa-key.pem:ro

@@ -2,7 +2,8 @@ server:
   port: 5004
   contextPath: ""
   host: 0.0.0.0
-  strictVerification: true
+  strictVerification: permissive  # Values: off|permissive|strict (default: permissive)
+  verificationEndpointAvailable: true
 
 postgres:
   host: localhost
@@ -16,7 +17,6 @@ postgres:
 
 oidc:
   trustlistPath: "config/trustlist.json"
-
 
 abac:
   enabled: false

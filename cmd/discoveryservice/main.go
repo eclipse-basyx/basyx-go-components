@@ -37,6 +37,7 @@ import (
 	"os"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
+	commonmodel "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 	"github.com/eclipse-basyx/basyx-go-components/internal/discoveryservice/api"
 	persistencepostgresql "github.com/eclipse-basyx/basyx-go-components/internal/discoveryservice/persistence"
@@ -55,6 +56,9 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 	if err != nil {
 		return err
 	}
+	if err := commonmodel.SetVerificationMode(cfg.Server.StrictVerification); err != nil {
+		return err
+	}
 
 	// === Main Router ===
 	r := chi.NewRouter()
@@ -63,6 +67,9 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 	r.Use(common.ConfigMiddleware(cfg))
 
 	common.AddCors(r, cfg)
+	if cfg.Server.VerificationEndpointAvailable {
+		common.AddVerificationEndpoint(r, cfg)
+	}
 
 	// --- Health Endpoint (public) ---
 	common.AddHealthEndpoint(r, cfg)

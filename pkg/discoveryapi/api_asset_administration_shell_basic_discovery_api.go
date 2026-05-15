@@ -327,22 +327,28 @@ func (c *AssetAdministrationShellBasicDiscoveryAPIAPIController) PostAllAssetLin
 		interfaceSpecificAssetIds = append(interfaceSpecificAssetIds, saID)
 	}
 
+	verificationMode := model.GetVerificationMode()
 	for _, el := range interfaceSpecificAssetIds {
-		hasError := false
-		verification.Verify(el, func(err *verification.VerificationError) bool {
-			log.Printf("🧭 [%s] Error in PostAllAssetLinksById: invalid specific asset id element: %+v err=%v", componentName, el, err)
+		specificAssetID := el
+		if err := model.ValidateWithMode(
+			verificationMode,
+			"DISC-POSTASSETLINKS-VERIFY",
+			func(collector func(*verification.VerificationError) bool) {
+				verification.Verify(specificAssetID, collector)
+			},
+			func(message string) error {
+				return common.NewErrBadRequest("Invalid specific asset id element: " + message)
+			},
+		); err != nil {
+			log.Printf("🧭 [%s] Error in PostAllAssetLinksById: invalid specific asset id element: %+v err=%v", componentName, specificAssetID, err)
 			result := common.NewErrorResponse(
-				common.NewErrBadRequest("Invalid specific asset id element"),
+				err,
 				http.StatusBadRequest,
 				componentName,
 				"PostAllAssetLinksById",
 				"specificAssetId",
 			)
 			EncodeJSONResponse(result.Body, &result.Code, w)
-			hasError = true
-			return true
-		})
-		if hasError {
 			return
 		}
 	}
