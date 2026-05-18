@@ -109,6 +109,8 @@ GENERAL_AAS_PRECONFIG_PATHS=./examples/BaSyxMinimalExample/aas,./myDevice.aasx
 
 Each configured source can be a file or directory. Directories are scanned recursively for `.aasx`, `.json`, and `.xml` files.
 
+Upload and startup preconfiguration use the AAS 3.1 parsing stack. For backward compatibility, XML payloads with lower or equal AAS v3 namespace versions (for example `https://admin-shell.io/aas/3/0`) are adapted to the current namespace before parsing, and a warning is logged.
+
 ## 5. Code Style & Conventions
 
 - Use Go modules (`go.mod`) for dependency management

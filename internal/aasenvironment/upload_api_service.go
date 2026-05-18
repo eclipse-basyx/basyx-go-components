@@ -15,6 +15,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	aasjsonization "github.com/aas-core-works/aas-core3.1-golang/jsonization"
@@ -43,6 +44,8 @@ const (
 	uploadComponent             = "AASENV"
 	uploadOperation             = "HandleUpload"
 	supportedUploadContentTypes = "application/aasx+xml, application/aasx+json, application/asset-administration-shell+xml, application/asset-administration-shell+json, application/json, application/xml, text/xml"
+	currentAASNamespace         = "https://admin-shell.io/aas/3/1"
+	aasNamespacePrefix          = "https://admin-shell.io/aas/"
 )
 
 // NewUploadAPIService creates a new UploadAPIService
@@ -319,14 +322,18 @@ func readEnvironmentFromAASXSpec(packageReader *aasx.PackageRead) (*aasx.Part, a
 	if isLikelyJSONSpec(specPart) {
 		environment, parseErr := parseAASJSONEnvironment(specContent)
 		if parseErr != nil {
-			return nil, nil, fmt.Errorf("AASENV-PARSEAASX-UNMARSHALJSON failed to parse JSON spec: %w", parseErr)
+			return nil, nil, common.NewErrBadRequest(
+				fmt.Sprintf("AASENV-PARSEAASX-UNMARSHALJSON failed to parse JSON spec: %v", parseErr),
+			)
 		}
 		return specPart, environment, nil
 	}
 
 	instance, err := parseAASXMLInstance(specContent)
 	if err != nil {
-		return nil, nil, fmt.Errorf("AASENV-PARSEAASX-UNMARSHALXML failed to parse XML spec: %w", err)
+		return nil, nil, common.NewErrBadRequest(
+			fmt.Sprintf("AASENV-PARSEAASX-UNMARSHALXML failed to parse XML spec: %v", err),
+		)
 	}
 	environment, ok := instance.(aastypes.IEnvironment)
 	if !ok {
@@ -374,29 +381,194 @@ func parseAASXMLInstance(specContent []byte) (aastypes.IClass, error) {
 	}
 
 	normalized := normalizeXMLSpecContent(specContent)
-	if len(normalized) == 0 || bytes.Equal(normalized, specContent) {
-		return nil, err
+	if len(normalized) == 0 {
+		normalized = specContent
 	}
 
+	retryFailures := make([]string, 0, 4)
 	retried, retryErr := aasxmlization.Unmarshal(xml.NewDecoder(bytes.NewReader(normalized)))
 	if retryErr == nil {
 		return retried, nil
 	}
+	retryFailures = append(retryFailures, fmt.Sprintf("retry after normalization failed: %v", retryErr))
 
-	sanitized, sanitizeErr := sanitizeXMLRootAttributes(normalized)
+	contentToSanitize := normalized
+	adaptedContent, _, namespaceAdapted, adaptationErr := adaptLegacyAASNamespace(normalized)
+	if adaptationErr != nil {
+		retryFailures = append(retryFailures, fmt.Sprintf("namespace adaptation failed: %v", adaptationErr))
+	} else if namespaceAdapted {
+		log.Printf(
+			"[WARN] AASENV-PARSEAASX-NAMESPACEADAPTED adapted legacy AAS namespace to '%s' for backward compatibility",
+			sanitizeLogValue(currentAASNamespace),
+		)
+		adaptedRetried, adaptedRetryErr := aasxmlization.Unmarshal(xml.NewDecoder(bytes.NewReader(adaptedContent)))
+		if adaptedRetryErr == nil {
+			return adaptedRetried, nil
+		}
+		retryFailures = append(retryFailures, fmt.Sprintf("retry after namespace adaptation failed: %v", adaptedRetryErr))
+		contentToSanitize = adaptedContent
+	}
+
+	sanitized, sanitizeErr := sanitizeXMLRootAttributes(contentToSanitize)
 	if sanitizeErr == nil && len(sanitized) > 0 {
 		sanitizedRetried, sanitizedRetryErr := aasxmlization.Unmarshal(xml.NewDecoder(bytes.NewReader(sanitized)))
 		if sanitizedRetryErr == nil {
 			return sanitizedRetried, nil
 		}
-		return nil, fmt.Errorf("%w (retry after normalization failed: %v; retry after root attribute sanitization failed: %v)", err, retryErr, sanitizedRetryErr)
+		retryFailures = append(retryFailures, fmt.Sprintf("retry after root attribute sanitization failed: %v", sanitizedRetryErr))
+		return nil, fmt.Errorf("%w (%s)", err, strings.Join(retryFailures, "; "))
 	}
 
 	if sanitizeErr != nil {
-		return nil, fmt.Errorf("%w (retry after normalization failed: %v; root attribute sanitization failed: %v)", err, retryErr, sanitizeErr)
+		retryFailures = append(retryFailures, fmt.Sprintf("root attribute sanitization failed: %v", sanitizeErr))
+		return nil, fmt.Errorf("%w (%s)", err, strings.Join(retryFailures, "; "))
 	}
 
-	return nil, fmt.Errorf("%w (retry after normalization failed: %v)", err, retryErr)
+	return nil, fmt.Errorf("%w (%s)", err, strings.Join(retryFailures, "; "))
+}
+
+func adaptLegacyAASNamespace(content []byte) ([]byte, string, bool, error) {
+	decoder := xml.NewDecoder(bytes.NewReader(content))
+	var output bytes.Buffer
+	encoder := xml.NewEncoder(&output)
+
+	rootProcessed := false
+	adaptedNamespace := ""
+	namespaceAdapted := false
+
+	for {
+		token, err := decoder.Token()
+		if err != nil {
+			if errors.Is(err, io.EOF) {
+				break
+			}
+			return nil, "", false, err
+		}
+
+		startElement, isStart := token.(xml.StartElement)
+		if isStart {
+			if !rootProcessed {
+				adaptedNamespace, namespaceAdapted = rewriteRootAASNamespace(&startElement)
+				rootProcessed = true
+			}
+
+			if namespaceAdapted {
+				startElement = rewriteStartElementNamespace(startElement, adaptedNamespace)
+			}
+			token = startElement
+		}
+
+		if endElement, isEnd := token.(xml.EndElement); isEnd && namespaceAdapted {
+			if strings.TrimSpace(endElement.Name.Space) == adaptedNamespace {
+				endElement.Name.Space = currentAASNamespace
+				token = endElement
+			}
+		}
+
+		if err := encoder.EncodeToken(token); err != nil {
+			return nil, "", false, err
+		}
+	}
+
+	if err := encoder.Flush(); err != nil {
+		return nil, "", false, err
+	}
+
+	return output.Bytes(), adaptedNamespace, namespaceAdapted, nil
+}
+
+func rewriteStartElementNamespace(start xml.StartElement, sourceNamespace string) xml.StartElement {
+	if strings.TrimSpace(start.Name.Space) == sourceNamespace {
+		start.Name.Space = currentAASNamespace
+	}
+
+	for i, attribute := range start.Attr {
+		if isNamespaceAttribute(attribute) && strings.TrimSpace(attribute.Value) == sourceNamespace {
+			start.Attr[i].Value = currentAASNamespace
+		}
+	}
+
+	return start
+}
+
+func rewriteRootAASNamespace(start *xml.StartElement) (string, bool) {
+	if start == nil {
+		return "", false
+	}
+
+	namespace := strings.TrimSpace(start.Name.Space)
+	if namespace == "" {
+		namespace = findDefaultNamespace(*start)
+	}
+
+	if !isBackwardCompatibleAASNamespace(namespace) {
+		return "", false
+	}
+
+	start.Name.Space = currentAASNamespace
+	for i, attribute := range start.Attr {
+		if isNamespaceAttribute(attribute) && strings.TrimSpace(attribute.Value) == namespace {
+			start.Attr[i].Value = currentAASNamespace
+		}
+	}
+
+	return namespace, true
+}
+
+func findDefaultNamespace(start xml.StartElement) string {
+	for _, attribute := range start.Attr {
+		if attribute.Name.Space == "" && attribute.Name.Local == "xmlns" {
+			return strings.TrimSpace(attribute.Value)
+		}
+	}
+	return ""
+}
+
+func isNamespaceAttribute(attribute xml.Attr) bool {
+	return attribute.Name.Space == "xmlns" || (attribute.Name.Space == "" && attribute.Name.Local == "xmlns")
+}
+
+func isBackwardCompatibleAASNamespace(namespace string) bool {
+	namespace = strings.TrimSpace(namespace)
+	if namespace == "" {
+		return false
+	}
+
+	currentMajor, currentMinor, currentOk := parseAASNamespaceVersion(currentAASNamespace)
+	candidateMajor, candidateMinor, candidateOk := parseAASNamespaceVersion(namespace)
+	if !currentOk || !candidateOk {
+		return false
+	}
+	if candidateMajor != currentMajor {
+		return false
+	}
+
+	return candidateMinor <= currentMinor
+}
+
+func parseAASNamespaceVersion(namespace string) (int, int, bool) {
+	trimmedNamespace := strings.TrimSpace(namespace)
+	if !strings.HasPrefix(trimmedNamespace, aasNamespacePrefix) {
+		return 0, 0, false
+	}
+
+	versionPath := strings.TrimPrefix(trimmedNamespace, aasNamespacePrefix)
+	versionPath = strings.TrimSuffix(versionPath, "/")
+	parts := strings.Split(versionPath, "/")
+	if len(parts) != 2 {
+		return 0, 0, false
+	}
+
+	major, majorErr := strconv.Atoi(parts[0])
+	if majorErr != nil {
+		return 0, 0, false
+	}
+	minor, minorErr := strconv.Atoi(parts[1])
+	if minorErr != nil {
+		return 0, 0, false
+	}
+
+	return major, minor, true
 }
 
 func sanitizeXMLRootAttributes(content []byte) ([]byte, error) {
