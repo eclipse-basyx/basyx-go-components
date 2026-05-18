@@ -31,7 +31,7 @@ services:
       - ./basyx/rsa-key.pem:/app/rsa-key.pem:ro
       - ./aas:/app/preconfiguration:ro
     depends_on:
-      db-schema-init:
+      basyx_configuration:
         condition: service_completed_successfully
       db:
         condition: service_healthy
@@ -49,24 +49,6 @@ services:
       - ENDPOINT_CONFIG_AVAILABLE=false
     restart: unless-stopped
 
-  db-schema-init:
-    image: postgres:18
-    container_name: db-schema-init
-    environment:
-      POSTGRES_HOST: db
-      POSTGRES_PORT: 5432
-      POSTGRES_USER: admin
-      POSTGRES_PASSWORD: admin123
-      POSTGRES_DB: basyxTestDB
-    command: ["sh", "/init/init-schema.sh"]
-    volumes:
-      - ../../basyxschema.sql:/schema/basyxschema.sql:ro
-      - ./db_init/init-schema.sh:/init/init-schema.sh:ro
-    depends_on:
-      db:
-        condition: service_healthy
-    restart: "no"
-
   # PostgreSQL database
   db:
     container_name: postgres_db
@@ -82,3 +64,21 @@ services:
       timeout: 5s
       retries: 5
     restart: unless-stopped
+
+  basyx_configuration:
+    container_name: basyx_configuration
+    build:
+      context: ../..
+      dockerfile: ./cmd/basyxconfigurationservice/Dockerfile
+    environment:
+      - POSTGRES_HOST=db
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=admin
+      - POSTGRES_PASSWORD=admin123
+      - POSTGRES_DBNAME=basyxTestDB
+      - POSTGRES_MAXOPENCONNECTIONS=500
+      - POSTGRES_MAXIDLECONNECTIONS=500
+      - POSTGRES_CONNMAXLIFETIMEMINUTES=5
+    depends_on:
+      db:
+        condition: service_healthy

@@ -60,9 +60,8 @@ func NewPostgreSQLAASRegistryDatabase(
 	maxIdleConns int,
 	connMaxLifetimeMinutes int,
 	cacheEnabled bool,
-	databaseSchema string,
 ) (*PostgreSQLAASRegistryDatabase, error) {
-	db, err := common.InitializeDatabase(dsn, databaseSchema)
+	db, err := common.NewDatabaseConnection(dsn)
 	if err != nil {
 		return nil, err
 	}
