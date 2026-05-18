@@ -95,6 +95,13 @@ func RunAASPreconfiguration(ctx context.Context, uploadService UploadService, co
 			}
 		}
 
+		log.Printf(
+			"%s-%s-IMPORTSTART importing preconfiguration file '%s'",
+			preconfigurationComponent,
+			preconfigurationOperation,
+			sanitizeLogValue(filePath),
+		)
+
 		if err := importPreconfigurationFile(ctx, uploadService, filePath, &summary); err != nil {
 			log.Printf("%s-%s-IMPORTFILE failed to import '%s': %v", preconfigurationComponent, preconfigurationOperation, sanitizeLogValue(filePath), err)
 		}

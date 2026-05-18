@@ -88,7 +88,7 @@ func TestReadEnvironmentFromAASXSpec_AdaptsLegacyNamespace(t *testing.T) {
 		_ = packageReader.Close()
 	}()
 
-	_, environment, parseErr := readEnvironmentFromAASXSpec(packageReader)
+	_, environment, parseErr := readEnvironmentFromAASXSpec(packageReader, filepath.Base(hartingPath))
 	if parseErr != nil {
 		t.Fatalf("expected legacy namespace to be adapted successfully, got error: %v", parseErr)
 	}
