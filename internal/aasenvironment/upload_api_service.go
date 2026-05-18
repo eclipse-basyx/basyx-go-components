@@ -210,8 +210,8 @@ func (s *uploadAPIService) handleXMLUpload(ctx context.Context, fileName string,
 	}), nil
 }
 
-func (s *uploadAPIService) processAASXPackage(ctx context.Context, _ string, _ string, packageReader *aasx.PackageRead) error {
-	specPart, environment, err := readEnvironmentFromAASXSpec(packageReader)
+func (s *uploadAPIService) processAASXPackage(ctx context.Context, fileName string, _ string, packageReader *aasx.PackageRead) error {
+	specPart, environment, err := readEnvironmentFromAASXSpec(packageReader, fileName)
 	if err != nil {
 		return err
 	}
@@ -280,7 +280,7 @@ func (s *uploadAPIService) processEnvironment(ctx context.Context, _ string, _ s
 	return nil
 }
 
-func readEnvironmentFromAASXSpec(packageReader *aasx.PackageRead) (*aasx.Part, aastypes.IEnvironment, error) {
+func readEnvironmentFromAASXSpec(packageReader *aasx.PackageRead, uploadSource string) (*aasx.Part, aastypes.IEnvironment, error) {
 	if packageReader == nil {
 		return nil, nil, common.NewErrBadRequest("AASENV-PARSEAASX-NILREADER package reader is required")
 	}
@@ -329,7 +329,7 @@ func readEnvironmentFromAASXSpec(packageReader *aasx.PackageRead) (*aasx.Part, a
 		return specPart, environment, nil
 	}
 
-	instance, err := parseAASXMLInstance(specContent)
+	instance, err := parseAASXMLInstance(specContent, buildAASXSpecSourceLabel(uploadSource, specPart))
 	if err != nil {
 		return nil, nil, common.NewErrBadRequest(
 			fmt.Sprintf("AASENV-PARSEAASX-UNMARSHALXML failed to parse XML spec: %v", err),
@@ -374,7 +374,7 @@ func parseAASJSONEnvironment(specContent []byte) (aastypes.IEnvironment, error) 
 	return environment, nil
 }
 
-func parseAASXMLInstance(specContent []byte) (aastypes.IClass, error) {
+func parseAASXMLInstance(specContent []byte, sourceLabel string) (aastypes.IClass, error) {
 	instance, err := aasxmlization.Unmarshal(xml.NewDecoder(bytes.NewReader(specContent)))
 	if err == nil {
 		return instance, nil
@@ -397,8 +397,14 @@ func parseAASXMLInstance(specContent []byte) (aastypes.IClass, error) {
 	if adaptationErr != nil {
 		retryFailures = append(retryFailures, fmt.Sprintf("namespace adaptation failed: %v", adaptationErr))
 	} else if namespaceAdapted {
+		sanitizedSourceLabel := sanitizeLogValue(strings.TrimSpace(sourceLabel))
+		if sanitizedSourceLabel == "" {
+			sanitizedSourceLabel = "unknown"
+		}
+		// #nosec G706 -- source label is sanitized to strip CR/LF before logging.
 		log.Printf(
-			"[WARN] AASENV-PARSEAASX-NAMESPACEADAPTED adapted legacy AAS namespace to '%s' for backward compatibility",
+			"[WARN] AASENV-PARSEAASX-NAMESPACEADAPTED source='%s' adapted legacy AAS namespace to '%s' for backward compatibility",
+			sanitizedSourceLabel,
 			sanitizeLogValue(currentAASNamespace),
 		)
 		adaptedRetried, adaptedRetryErr := aasxmlization.Unmarshal(xml.NewDecoder(bytes.NewReader(adaptedContent)))
@@ -425,6 +431,26 @@ func parseAASXMLInstance(specContent []byte) (aastypes.IClass, error) {
 	}
 
 	return nil, fmt.Errorf("%w (%s)", err, strings.Join(retryFailures, "; "))
+}
+
+func buildAASXSpecSourceLabel(uploadSource string, specPart *aasx.Part) string {
+	trimmedUploadSource := strings.TrimSpace(uploadSource)
+	specURI := ""
+	if specPart != nil {
+		specURI = normalizePartURI(specPart.URI)
+	}
+
+	if trimmedUploadSource == "" && specURI == "" {
+		return ""
+	}
+	if trimmedUploadSource == "" {
+		return specURI
+	}
+	if specURI == "" {
+		return trimmedUploadSource
+	}
+
+	return trimmedUploadSource + ":" + specURI
 }
 
 func adaptLegacyAASNamespace(content []byte) ([]byte, string, bool, error) {
