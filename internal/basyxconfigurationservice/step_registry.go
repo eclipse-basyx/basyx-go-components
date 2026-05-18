@@ -1,3 +1,4 @@
+// Package basyxconfigurationservice contains orchestration for configuration startup steps.
 package basyxconfigurationservice
 
 import (

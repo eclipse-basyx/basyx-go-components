@@ -1,3 +1,4 @@
+// Package main implements the BaSyx configuration service binary.
 package main
 
 import (
@@ -5,7 +6,7 @@ import (
 	"log"
 	"os"
 
-	basyxconfigurationservice "github.com/eclipse-basyx/basyx-go-components/internal/basyxconfigurationservice"
+	"github.com/eclipse-basyx/basyx-go-components/internal/basyxconfigurationservice"
 	"github.com/eclipse-basyx/basyx-go-components/internal/basyxconfigurationservice/steps"
 )
 
