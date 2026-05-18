@@ -34,6 +34,8 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+
+	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 )
 
 const (
@@ -135,17 +137,45 @@ func importPreconfigurationFile(
 	}
 	if response.Code >= http.StatusBadRequest {
 		summary.FailedFileCount++
-		return fmt.Errorf(
-			"AASENV-PRECONF-UPLOADFAILED upload handler returned status %d for file '%s'",
-			response.Code,
-			sanitizeLogValue(filepath.Base(cleanPath)),
-		)
+		return buildPreconfigurationUploadFailureError(response.Code, filepath.Base(cleanPath), response.Body)
 	}
 
 	summary.ImportedFileCount++
 	return nil
 }
 
+func buildPreconfigurationUploadFailureError(status int, fileName string, responseBody any) error {
+	sanitizedFileName := sanitizeLogValue(fileName)
+	errorDetail := sanitizeLogValue(extractPreconfigurationUploadErrorDetail(responseBody))
+	if errorDetail == "" {
+		return fmt.Errorf(
+			"AASENV-PRECONF-UPLOADFAILED upload handler returned status %d for file '%s'",
+			status,
+			sanitizedFileName,
+		)
+	}
+
+	return fmt.Errorf(
+		"AASENV-PRECONF-UPLOADFAILED upload handler returned status %d for file '%s': %s",
+		status,
+		sanitizedFileName,
+		errorDetail,
+	)
+}
+
+func extractPreconfigurationUploadErrorDetail(responseBody any) string {
+	switch body := responseBody.(type) {
+	case []common.ErrorHandler:
+		if len(body) == 0 {
+			return ""
+		}
+		return strings.TrimSpace(body[0].Text)
+	case common.ErrorHandler:
+		return strings.TrimSpace(body.Text)
+	default:
+		return ""
+	}
+}
 func resolvePreconfigurationFiles(configuredSources []string) ([]string, int, int) {
 	resolvedSet := make(map[string]struct{})
 	skippedCount := 0
