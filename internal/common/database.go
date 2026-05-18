@@ -3,12 +3,10 @@ package common
 
 import (
 	"database/sql"
-	"fmt"
-	"os"
 	"time"
 )
 
-// InitializeDatabase establishes a PostgreSQL database connection with optional schema initialization.
+// NewDatabaseConnection establishes a PostgreSQL database connection with optional schema initialization.
 //
 // This function creates a database connection pool with optimized settings for high-concurrency
 // applications. It supports automatic schema loading from SQL files for database initialization.
@@ -31,12 +29,12 @@ import (
 // Example:
 //
 //	dsn := "postgres://admin:password@localhost:5432/basyx_db?sslmode=disable"
-//	db, err := InitializeDatabase(dsn, "schema/basyx_schema.sql")
+//	db, err := NewDatabaseConnection(dsn, "schema/basyx_schema.sql")
 //	if err != nil {
 //	    log.Fatal("Database initialization failed:", err)
 //	}
 //	defer db.Close()
-func InitializeDatabase(dsn string, schemaFilePath string) (*sql.DB, error) {
+func NewDatabaseConnection(dsn string) (*sql.DB, error) {
 	encodedDSN := NormalizePostgresDSN(dsn)
 	db, err := sql.Open("postgres", encodedDSN)
 	if err != nil {
@@ -49,21 +47,7 @@ func InitializeDatabase(dsn string, schemaFilePath string) (*sql.DB, error) {
 	if err := db.Ping(); err != nil {
 		return nil, err
 	}
-	if schemaFilePath == "" {
-		_, _ = fmt.Println("No SQL Schema passed - skipping schema loading.")
-		return db, nil
-	}
-	queryString, fileError := os.ReadFile(schemaFilePath)
 
-	if fileError != nil {
-		return nil, fileError
-	}
-
-	_, dbError := db.Exec(string(queryString))
-
-	if dbError != nil {
-		return nil, dbError
-	}
 	return db, nil
 }
 

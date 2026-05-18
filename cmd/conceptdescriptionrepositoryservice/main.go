@@ -33,7 +33,6 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"os"
 
 	"github.com/go-chi/chi/v5"
 
@@ -48,11 +47,11 @@ import (
 //go:embed openapi.yaml
 var openapiSpec embed.FS
 
-func runServer(ctx context.Context, configPath string, databaseSchema string) error {
+func runServer(ctx context.Context, configPath string) error {
 	log.Default().Println("Loading Concept Description Repository Service...")
 	log.Default().Println("Config Path:", configPath)
 	// Load configuration
-	cfg, err := common.LoadConfig(configPath)
+	cfg, err := common.LoadConfig(configPath, common.NORMAL)
 	if err != nil {
 		return err
 	}
@@ -88,7 +87,6 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 		int32(cfg.Postgres.MaxOpenConnections),
 		cfg.Postgres.MaxIdleConnections,
 		cfg.Postgres.ConnMaxLifetimeMinutes,
-		databaseSchema,
 	)
 	if err != nil {
 		return err
@@ -142,20 +140,10 @@ func main() {
 	ctx := context.Background()
 	// load config path from flag
 	configPath := ""
-	databaseSchema := ""
 	flag.StringVar(&configPath, "config", "", "Path to config file")
-	flag.StringVar(&databaseSchema, "databaseSchema", "", "Path to Database Schema")
 	flag.Parse()
 
-	if databaseSchema != "" {
-		_, fileError := os.ReadFile(databaseSchema)
-		if fileError != nil {
-			_, _ = fmt.Println("The specified database schema path is invalid or the file was not found.")
-			os.Exit(1)
-		}
-	}
-
-	if err := runServer(ctx, configPath, databaseSchema); err != nil {
+	if err := runServer(ctx, configPath); err != nil {
 		log.Fatalf("Server error: %v", err)
 	}
 }
