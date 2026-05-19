@@ -32,6 +32,8 @@ const (
 	serializationThreeAasJsonDownloadFromXmlUploadPath      = "testdata_results/threeAASDuplicateFilesSerializationTest_downloaded_json_from_xml_aasx_upload.json"
 	serializationThreeAasJsonDownloadFromJsonUploadPath     = "testdata_results/threeAASDuplicateFilesSerializationTest_downloaded_json_from_json_aasx_upload.json"
 	serializationBaseURL                                    = "http://127.0.0.1:6004"
+
+	serializationIntegrationDSN = "host=127.0.0.1 port=6432 user=admin password=admin123 dbname=basyxTestDB sslmode=disable"
 )
 
 func TestSerializationDownloadAasXmlAfterThreeAasUpload(t *testing.T) {
@@ -74,7 +76,7 @@ func TestSerializationDownloadAasXmlAfterThreeAasUpload(t *testing.T) {
 
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
-			resetDatabaseForUploadIT(t)
+			resetDatabaseForUploadIT(t, serializationIntegrationDSN)
 			uploadFixture(t, testCase.uploadPath, testCase.uploadType)
 
 			payload := downloadAASXSerializationFullEnvironment(t, testCase.accept)
@@ -126,7 +128,7 @@ func TestSerializationDownloadAasxJsonAfterThreeAASUpload(t *testing.T) {
 
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
-			resetDatabaseForUploadIT(t)
+			resetDatabaseForUploadIT(t, serializationIntegrationDSN)
 			uploadFixture(t, testCase.uploadPath, testCase.uploadType)
 
 			payload := downloadAASXSerializationFullEnvironment(t, testCase.accept)
@@ -161,7 +163,7 @@ func TestSerializationDownloadXmlAfterThreeAasUpload(t *testing.T) {
 
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
-			resetDatabaseForUploadIT(t)
+			resetDatabaseForUploadIT(t, serializationIntegrationDSN)
 			uploadFixture(t, testCase.uploadPath, testCase.uploadType)
 
 			payload := downloadAASXSerializationFullEnvironment(t, "application/xml")
@@ -196,7 +198,7 @@ func TestSerializationDownloadJsonAfterThreeAasUpload(t *testing.T) {
 
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
-			resetDatabaseForUploadIT(t)
+			resetDatabaseForUploadIT(t, serializationIntegrationDSN)
 			uploadFixture(t, testCase.uploadPath, testCase.uploadType)
 
 			payload := downloadAASXSerializationFullEnvironment(t, "application/json")
