@@ -47,6 +47,11 @@ var mapMethodAndPatternToRightsData = []mapMethodAndPatternToRights{
 	{"DELETE", "/shell-descriptors/{aasIdentifier}", []grammar.RightsEnum{grammar.RightsEnumDELETE}},
 	{"GET", "/shell-descriptors", []grammar.RightsEnum{grammar.RightsEnumREAD}},
 	{"POST", "/shell-descriptors", []grammar.RightsEnum{grammar.RightsEnumCREATE}},
+	{"POST", "/bulk/shell-descriptors", []grammar.RightsEnum{grammar.RightsEnumCREATE}},
+	{"PUT", "/bulk/shell-descriptors", []grammar.RightsEnum{grammar.RightsEnumCREATE, grammar.RightsEnumUPDATE}},
+	{"DELETE", "/bulk/shell-descriptors", []grammar.RightsEnum{grammar.RightsEnumDELETE}},
+	{"GET", "/bulk/status/{handleId}", []grammar.RightsEnum{grammar.RightsEnumREAD}},
+	{"GET", "/bulk/result/{handleId}", []grammar.RightsEnum{grammar.RightsEnumREAD}},
 	{"GET", "/shell-descriptors/{aasIdentifier}/submodel-descriptors/{submodelIdentifier}", []grammar.RightsEnum{grammar.RightsEnumREAD}},
 	{"PUT", "/shell-descriptors/{aasIdentifier}/submodel-descriptors/{submodelIdentifier}", []grammar.RightsEnum{grammar.RightsEnumCREATE, grammar.RightsEnumUPDATE}},
 	{"DELETE", "/shell-descriptors/{aasIdentifier}/submodel-descriptors/{submodelIdentifier}", []grammar.RightsEnum{grammar.RightsEnumDELETE}},
@@ -61,6 +66,9 @@ var mapMethodAndPatternToRightsData = []mapMethodAndPatternToRights{
 	{"DELETE", "/submodel-descriptors/{submodelIdentifier}", []grammar.RightsEnum{grammar.RightsEnumDELETE}},
 	{"GET", "/submodel-descriptors", []grammar.RightsEnum{grammar.RightsEnumREAD}},
 	{"POST", "/submodel-descriptors", []grammar.RightsEnum{grammar.RightsEnumCREATE}},
+	{"POST", "/bulk/submodel-descriptors", []grammar.RightsEnum{grammar.RightsEnumCREATE}},
+	{"PUT", "/bulk/submodel-descriptors", []grammar.RightsEnum{grammar.RightsEnumCREATE, grammar.RightsEnumUPDATE}},
+	{"DELETE", "/bulk/submodel-descriptors", []grammar.RightsEnum{grammar.RightsEnumDELETE}},
 
 	// concept description repository
 	{"GET", "/concept-descriptions", []grammar.RightsEnum{grammar.RightsEnumREAD}},

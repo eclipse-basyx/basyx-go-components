@@ -26,9 +26,11 @@ func mergedProfiles() []string {
 	profiles := []string{
 		"https://basyx.org/aas/API/3/1/AssetAdministrationShellEnvironment/SSP-001",
 		"https://admin-shell.io/aas/API/3/1/AssetAdministrationShellRegistryServiceSpecification/SSP-001",
+		"https://admin-shell.io/aas/API/3/1/AssetAdministrationShellRegistryServiceSpecification/SSP-003",
 		"https://admin-shell.io/aas/API/3/1/AssetAdministrationShellRegistryServiceSpecification/SSP-004",
 		"https://basyx.org/aas/API/3/1/AssetAdministrationShellRegistryServiceSpecification/SSP-001",
 		"https://admin-shell.io/aas/API/3/1/SubmodelRegistryServiceSpecification/SSP-001",
+		"https://admin-shell.io/aas/API/3/1/SubmodelRegistryServiceSpecification/SSP-003",
 		"https://basyx.org/aas/API/3/1/SubmodelRegistryServiceSpecification/SSP-001",
 		"https://admin-shell.io/aas/API/3/1/AssetAdministrationShellRepositoryServiceSpecification/SSP-001",
 		"https://basyx.org/aas/API/3/1/AssetAdministrationShellRepositoryServiceSpecification/SSP-001",
