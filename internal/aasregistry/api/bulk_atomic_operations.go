@@ -213,8 +213,10 @@ func aasBulkCreateErrorStatusCode(err error) int {
 		return http.StatusBadRequest
 	case common.IsErrConflict(err):
 		return http.StatusConflict
-	case common.IsErrNotFound(err):
+	case common.IsErrDenied(err):
 		return http.StatusForbidden
+	case common.IsErrNotFound(err):
+		return http.StatusNotFound
 	default:
 		return http.StatusInternalServerError
 	}
@@ -226,8 +228,10 @@ func aasBulkPutErrorStatusCode(err error) int {
 		return http.StatusBadRequest
 	case common.IsErrConflict(err):
 		return http.StatusConflict
-	case common.IsErrNotFound(err):
+	case common.IsErrDenied(err):
 		return http.StatusForbidden
+	case common.IsErrNotFound(err):
+		return http.StatusNotFound
 	default:
 		return http.StatusInternalServerError
 	}
@@ -237,6 +241,8 @@ func aasBulkDeleteErrorStatusCode(err error) int {
 	switch {
 	case common.IsErrNotFound(err):
 		return http.StatusNotFound
+	case common.IsErrDenied(err):
+		return http.StatusForbidden
 	case common.IsErrBadRequest(err):
 		return http.StatusBadRequest
 	default:
