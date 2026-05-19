@@ -370,14 +370,11 @@ func mapScopedIdentifierValueToRoute(scope string, identifier grammar.Identifier
 				route: joinBasePath(basePath, mapping.route),
 				le:    extraFilter,
 			})
+			continue
 		}
 
-		mappedRoute := mapping.route
-		if strings.Contains(mapping.route, "%s") {
-			mappedRoute = fmt.Sprintf(mapping.route, encodedID)
-		}
 		routes = append(routes, RouteWithFilter{
-			route: joinBasePath(basePath, mappedRoute),
+			route: joinBasePath(basePath, fmt.Sprintf(mapping.route, encodedID)),
 		})
 	}
 
