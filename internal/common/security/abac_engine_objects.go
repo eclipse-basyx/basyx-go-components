@@ -85,6 +85,18 @@ var descriptorRouteMappings = []descriptorRouteMapping{
 		hasWildcard: true,
 	},
 	{
+		scope:       "$aasdesc",
+		route:       "/bulk/status/%s",
+		filterField: "$aasdesc#id",
+		hasWildcard: true,
+	},
+	{
+		scope:       "$aasdesc",
+		route:       "/bulk/result/%s",
+		filterField: "$aasdesc#id",
+		hasWildcard: true,
+	},
+	{
 		scope:       "$smdesc",
 		route:       "/submodel-descriptors",
 		filterField: "$smdesc#id",
@@ -99,6 +111,18 @@ var descriptorRouteMappings = []descriptorRouteMapping{
 	{
 		scope:       "$smdesc",
 		route:       "/submodel-descriptors/%s",
+		filterField: "$smdesc#id",
+		hasWildcard: true,
+	},
+	{
+		scope:       "$smdesc",
+		route:       "/bulk/status/%s",
+		filterField: "$smdesc#id",
+		hasWildcard: true,
+	},
+	{
+		scope:       "$smdesc",
+		route:       "/bulk/result/%s",
 		filterField: "$smdesc#id",
 		hasWildcard: true,
 	},
