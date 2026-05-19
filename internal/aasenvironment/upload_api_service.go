@@ -199,7 +199,7 @@ func (s *uploadAPIService) processAASXPackage(ctx context.Context, _ string, _ s
 		return err
 	}
 
-	if err = s.storeAASXThumbnail(ctx, packageReader, environment); err != nil {
+	if err = s.storeAASXThumbnail(ctx, packageReader, specPart, environment); err != nil {
 		return err
 	}
 
@@ -536,36 +536,47 @@ func (s *uploadAPIService) uploadSupplementaryFiles(
 	return nil
 }
 
-func (s *uploadAPIService) storeAASXThumbnail(ctx context.Context, packageReader *aasx.PackageRead, environment aastypes.IEnvironment) error {
+func (s *uploadAPIService) storeAASXThumbnail(ctx context.Context, packageReader *aasx.PackageRead, specPart *aasx.Part, environment aastypes.IEnvironment) error {
 	if s == nil || s.persistence == nil || s.persistence.AASRepository == nil {
 		return common.NewErrBadRequest("AASENV-UPLDTHUMB-NILAASREPO AAS repository backend is required")
 	}
 	if packageReader == nil {
 		return common.NewErrBadRequest("AASENV-UPLDTHUMB-NILREADER package reader is required")
 	}
-
-	thumbnail, err := packageReader.Thumbnail()
-	if err != nil {
-		return fmt.Errorf("AASENV-UPLDTHUMB-READTHUMBNAIL failed to read AASX thumbnail: %w", err)
-	}
-	if thumbnail == nil {
+	if environment == nil {
 		return nil
 	}
 
-	thumbnailBytes, err := thumbnail.ReadAllBytes()
+	thumbnailPartsByURI, packageThumbnail, err := resolveAASXThumbnailParts(packageReader, specPart)
 	if err != nil {
-		return fmt.Errorf("AASENV-UPLDTHUMB-READBYTES failed to read AASX thumbnail bytes: %w", err)
-	}
-	if len(thumbnailBytes) == 0 {
-		return nil
+		return err
 	}
 
-	thumbnailName := filepath.Base(normalizePartURI(thumbnail.URI))
-	if strings.TrimSpace(thumbnailName) == "" || thumbnailName == "." || thumbnailName == "/" {
-		thumbnailName = "thumbnail.bin"
+	specURI := (*url.URL)(nil)
+	if specPart != nil {
+		specURI = specPart.URI
 	}
 
+	uploaded := 0
 	for _, aas := range environment.AssetAdministrationShells() {
+		thumbnailPart, resolvedThumbnailURI := resolveAASXThumbnailPartForAAS(aas, packageReader, specURI, thumbnailPartsByURI, packageThumbnail)
+		if thumbnailPart == nil {
+			continue
+		}
+
+		thumbnailBytes, readErr := thumbnailPart.ReadAllBytes()
+		if readErr != nil {
+			return fmt.Errorf("AASENV-UPLDTHUMB-READBYTES failed to read thumbnail bytes for AAS '%s': %w", aas.ID(), readErr)
+		}
+		if len(thumbnailBytes) == 0 {
+			continue
+		}
+
+		thumbnailName := filepath.Base(resolvedThumbnailURI)
+		if strings.TrimSpace(thumbnailName) == "" || thumbnailName == "." || thumbnailName == "/" {
+			thumbnailName = "thumbnail.bin"
+		}
+
 		tempFile, tempErr := createTempFileForUpload(thumbnailName, thumbnailBytes)
 		if tempErr != nil {
 			return fmt.Errorf("AASENV-UPLDTHUMB-CREATETEMP failed to stage thumbnail for AAS '%s': %w", aas.ID(), tempErr)
@@ -576,10 +587,104 @@ func (s *uploadAPIService) storeAASXThumbnail(ctx context.Context, packageReader
 		if uploadErr != nil {
 			return fmt.Errorf("AASENV-UPLDTHUMB-UPLOAD failed to store thumbnail for AAS '%s': %w", aas.ID(), uploadErr)
 		}
+
+		uploaded++
 	}
 
-	log.Printf("AASENV-UPLDTHUMB stored thumbnail for %d AAS object(s)", len(environment.AssetAdministrationShells()))
+	log.Printf("AASENV-UPLDTHUMB stored thumbnail for %d AAS object(s)", uploaded)
 	return nil
+}
+
+func resolveAASXThumbnailParts(packageReader *aasx.PackageRead, specPart *aasx.Part) (map[string]*aasx.Part, *aasx.Part, error) {
+	supplementaries, err := packageReader.SupplementaryRelationships()
+	if err != nil {
+		return nil, nil, fmt.Errorf("AASENV-UPLDTHUMB-READRELATIONSHIPS failed to read AASX supplementary relationships: %w", err)
+	}
+
+	resolvedSpecURI := ""
+	if specPart != nil {
+		resolvedSpecURI = normalizePartURI(specPart.URI)
+	}
+
+	thumbnailPartsByURI := make(map[string]*aasx.Part)
+	for _, relationship := range supplementaries {
+		if relationship.Spec == nil || relationship.Supplementary == nil {
+			continue
+		}
+
+		if resolvedSpecURI != "" && normalizePartURI(relationship.Spec.URI) != resolvedSpecURI {
+			continue
+		}
+
+		supplementaryURI := normalizePartURI(relationship.Supplementary.URI)
+		if supplementaryURI == "" {
+			continue
+		}
+
+		if _, exists := thumbnailPartsByURI[supplementaryURI]; exists {
+			continue
+		}
+
+		thumbnailPartsByURI[supplementaryURI] = relationship.Supplementary
+	}
+
+	packageThumbnail, err := packageReader.Thumbnail()
+	if err != nil {
+		return nil, nil, fmt.Errorf("AASENV-UPLDTHUMB-READTHUMBNAIL failed to read AASX package thumbnail: %w", err)
+	}
+
+	return thumbnailPartsByURI, packageThumbnail, nil
+}
+
+func resolveAASXThumbnailPartForAAS(
+	aas aastypes.IAssetAdministrationShell,
+	packageReader *aasx.PackageRead,
+	specURI *url.URL,
+	thumbnailPartsByURI map[string]*aasx.Part,
+	packageThumbnail *aasx.Part,
+) (*aasx.Part, string) {
+	if aas == nil || aas.AssetInformation() == nil || aas.AssetInformation().DefaultThumbnail() == nil {
+		return nil, ""
+	}
+
+	thumbnailReference := strings.TrimSpace(aas.AssetInformation().DefaultThumbnail().Path())
+	if thumbnailReference == "" {
+		return nil, ""
+	}
+
+	normalizedReference := strings.ToLower(thumbnailReference)
+	if strings.HasPrefix(normalizedReference, "http://") || strings.HasPrefix(normalizedReference, "https://") {
+		return nil, ""
+	}
+
+	resolvedThumbnailURI := resolveReferenceAgainstSpec(thumbnailReference, specURI)
+	if resolvedThumbnailURI != "" {
+		if packageReader != nil {
+			resolvedThumbnailURL, parseErr := url.Parse(resolvedThumbnailURI)
+			if parseErr == nil {
+				if thumbnailPart, findErr := packageReader.FindPart(resolvedThumbnailURL); findErr == nil && thumbnailPart != nil {
+					return thumbnailPart, resolvedThumbnailURI
+				}
+			}
+		}
+
+		if thumbnailPart, exists := thumbnailPartsByURI[resolvedThumbnailURI]; exists {
+			return thumbnailPart, resolvedThumbnailURI
+		}
+		if packageThumbnail != nil && normalizePartURI(packageThumbnail.URI) == resolvedThumbnailURI {
+			return packageThumbnail, resolvedThumbnailURI
+		}
+	}
+
+	if packageThumbnail == nil || len(thumbnailPartsByURI) > 0 {
+		return nil, ""
+	}
+
+	packageThumbnailURI := normalizePartURI(packageThumbnail.URI)
+	if packageThumbnailURI == "" {
+		packageThumbnailURI = resolvedThumbnailURI
+	}
+	return packageThumbnail, packageThumbnailURI
 }
 
 func collectFileLocations(environment aastypes.IEnvironment) []aasxFileLocation {
