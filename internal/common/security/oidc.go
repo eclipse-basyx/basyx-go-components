@@ -234,7 +234,6 @@ func (o *OIDC) Middleware(next http.Handler) http.Handler {
 		c["LOCALNOW"] = currTime.In(time.Local).Format(time.RFC3339)
 		c["UTCNOW"] = currTime.UTC().Format(time.RFC3339)
 
-		log.Printf("✅ Token verified successfully")
 		r = r.WithContext(context.WithValue(r.Context(), claimsKey, c))
 		next.ServeHTTP(w, r)
 	})
