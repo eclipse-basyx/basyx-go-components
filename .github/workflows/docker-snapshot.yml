@@ -44,7 +44,6 @@ jobs:
     permissions:
       contents: read
       id-token: write
-      attestations: write
     strategy:
       matrix:
         service:
@@ -151,7 +150,47 @@ jobs:
           set -euo pipefail
           cosign sign --yes "${IMAGE_DIGEST_REF}"
 
-      - name: Verify signature and attestations
+      - name: Extract BuildKit provenance and SBOM predicates
+        env:
+          IMAGE_DIGEST_REF: ${{ matrix.service.image }}@${{ steps.build.outputs.digest }}
+        run: |
+          set -euo pipefail
+          mkdir -p predicates
+
+          if ! docker buildx imagetools inspect "${IMAGE_DIGEST_REF}" --format '{{ json (index .Provenance "linux/amd64").SLSA }}' > predicates/provenance.buildkit.json 2>/dev/null; then
+            docker buildx imagetools inspect "${IMAGE_DIGEST_REF}" --format '{{ json .Provenance.SLSA }}' > predicates/provenance.buildkit.json
+          fi
+
+          if ! docker buildx imagetools inspect "${IMAGE_DIGEST_REF}" --format '{{ json (index .SBOM "linux/amd64").SPDX }}' > predicates/sbom.buildkit.spdx.json 2>/dev/null; then
+            docker buildx imagetools inspect "${IMAGE_DIGEST_REF}" --format '{{ json .SBOM.SPDX }}' > predicates/sbom.buildkit.spdx.json
+          fi
+
+          jq -e 'type == "object" and length > 0' predicates/provenance.buildkit.json >/dev/null
+          jq -e 'type == "object" and length > 0' predicates/sbom.buildkit.spdx.json >/dev/null
+
+      - name: Verify BuildKit OCI attestation manifests exist
+        env:
+          IMAGE_DIGEST_REF: ${{ matrix.service.image }}@${{ steps.build.outputs.digest }}
+        run: |
+          set -euo pipefail
+          docker buildx imagetools inspect "${IMAGE_DIGEST_REF}" --raw > /tmp/image-index.json
+          jq -e '.manifests | map(select(.annotations["vnd.docker.reference.type"] == "attestation-manifest")) | length > 0' /tmp/image-index.json >/dev/null
+
+      - name: Create Cosign attestations from BuildKit predicates
+        env:
+          IMAGE_DIGEST_REF: ${{ matrix.service.image }}@${{ steps.build.outputs.digest }}
+        run: |
+          set -euo pipefail
+          cosign attest --yes \
+            --type slsaprovenance \
+            --predicate predicates/provenance.buildkit.json \
+            "${IMAGE_DIGEST_REF}"
+          cosign attest --yes \
+            --type https://spdx.dev/Document \
+            --predicate predicates/sbom.buildkit.spdx.json \
+            "${IMAGE_DIGEST_REF}"
+
+      - name: Verify signature and Cosign attestations
         env:
           IMAGE_DIGEST_REF: ${{ matrix.service.image }}@${{ steps.build.outputs.digest }}
           COSIGN_CERT_IDENTITY: https://github.com/eclipse-basyx/basyx-go-components/.github/workflows/docker-snapshot.yml@refs/heads/main
@@ -166,12 +205,13 @@ jobs:
             --certificate-identity "${COSIGN_CERT_IDENTITY}" \
             --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
             "${IMAGE_DIGEST_REF}" > /tmp/provenance.jsonl
+          test -s /tmp/provenance.jsonl
           cosign verify-attestation \
             --type "https://spdx.dev/Document" \
             --certificate-identity "${COSIGN_CERT_IDENTITY}" \
             --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
             "${IMAGE_DIGEST_REF}" > /tmp/sbom-attestation.jsonl
-          cosign download sbom "${IMAGE_DIGEST_REF}" > /tmp/oci-attached-sbom.spdx.json
+          test -s /tmp/sbom-attestation.jsonl
 
       - name: Export SPDX and CycloneDX SBOM files
         env:

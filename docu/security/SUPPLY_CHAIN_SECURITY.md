@@ -3,7 +3,8 @@
 This repository uses open standards to secure release and snapshot container artifacts:
 
 - Sigstore Cosign keyless signatures (OIDC, no long-lived signing key)
-- in-toto attestations for provenance and SBOM
+- BuildKit OCI in-toto attestations for provenance and SBOM
+- Cosign-signed in-toto attestations for provenance and SBOM
 - SPDX and CycloneDX SBOM export for release artifacts
 - OCI metadata labels for traceability
 - GitHub Actions OIDC and least-privilege workflow permissions
@@ -14,8 +15,9 @@ For each service image:
 
 - Multi-architecture OCI image (Docker Hub)
 - Cosign signature on immutable image digest
-- Provenance attestation (`slsaprovenance`)
-- SBOM attestation (SPDX predicate)
+- BuildKit provenance and SBOM attestations attached to OCI image metadata
+- Cosign-signed provenance attestation (`slsaprovenance`)
+- Cosign-signed SBOM attestation (SPDX predicate)
 - Additional release assets:
   - `*.spdx.json`
   - `*.cdx.json` (CycloneDX)
@@ -55,6 +57,8 @@ For snapshots, use the snapshot workflow identity.
 
 ## Verify Provenance Attestations
 
+The workflow creates explicit Cosign provenance attestations from BuildKit provenance data, then verifies those attestations with identity constraints.
+
 ```bash
 IMAGE="eclipsebasyx/aasregistry-go@sha256:<digest>"
 IDENTITY="https://github.com/eclipse-basyx/basyx-go-components/.github/workflows/docker-release.yml@refs/tags/v1.2.3"
@@ -68,6 +72,8 @@ cosign verify-attestation \
 
 ## Verify SBOM Attestations
 
+The workflow creates explicit Cosign SBOM attestations from BuildKit SBOM data, then verifies those attestations with identity constraints.
+
 ```bash
 IMAGE="eclipsebasyx/aasregistry-go@sha256:<digest>"
 IDENTITY="https://github.com/eclipse-basyx/basyx-go-components/.github/workflows/docker-release.yml@refs/tags/v1.2.3"
@@ -79,14 +85,14 @@ cosign verify-attestation \
   "$IMAGE"
 ```
 
-## Download OCI-Attached SBOM
+## Verify BuildKit OCI Attestation Presence
 
 ```bash
 IMAGE="eclipsebasyx/aasregistry-go@sha256:<digest>"
-cosign download sbom "$IMAGE" > sbom-from-oci.spdx.json
+docker buildx imagetools inspect "$IMAGE" --raw | jq '.manifests[] | select(.annotations["vnd.docker.reference.type"] == "attestation-manifest")'
 ```
 
-This command demonstrates OCI discoverability of SBOM data for published images.
+This verifies that BuildKit attestation manifests are attached to the OCI image index. You can inspect BuildKit provenance/SBOM content with `docker buildx imagetools inspect --format`.
 
 ## Retrieve Release SBOM Assets
 
@@ -104,7 +110,7 @@ Release workflow enforces semantic version parsing from the Git tag.
 - Stable releases receive `major.minor.patch`, `major.minor`, `major`, and `latest` tags.
 - Pre-releases keep only explicit pre-release tags.
 - Metadata labels include source repository, commit SHA, and version.
-- Provenance and signatures are anchored to the immutable digest.
+- BuildKit and Cosign attestations plus signatures are anchored to the immutable digest.
 
 ## Vulnerability Scanning
 
