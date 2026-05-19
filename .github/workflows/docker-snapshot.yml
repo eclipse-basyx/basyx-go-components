@@ -168,6 +168,25 @@ jobs:
           jq -e 'type == "object" and length > 0' predicates/provenance.buildkit.json >/dev/null
           jq -e 'type == "object" and length > 0' predicates/sbom.buildkit.spdx.json >/dev/null
 
+      - name: Detect provenance predicate type
+        run: |
+          set -euo pipefail
+          PROVENANCE_PREDICATE_TYPE=$(jq -r '
+            if has("buildDefinition") and has("runDetails") then "https://slsa.dev/provenance/v1"
+            elif has("builder") and has("buildType") then "https://slsa.dev/provenance/v0.2"
+            else ""
+            end
+          ' predicates/provenance.buildkit.json)
+
+          if [ -z "${PROVENANCE_PREDICATE_TYPE}" ]; then
+            echo "Unsupported BuildKit provenance predicate shape:" >&2
+            jq -r 'keys_unsorted | @json' predicates/provenance.buildkit.json >&2
+            exit 1
+          fi
+
+          echo "Detected provenance predicate type: ${PROVENANCE_PREDICATE_TYPE}"
+          echo "PROVENANCE_PREDICATE_TYPE=${PROVENANCE_PREDICATE_TYPE}" >> "$GITHUB_ENV"
+
       - name: Verify BuildKit OCI attestation manifests exist
         env:
           IMAGE_DIGEST_REF: ${{ matrix.service.image }}@${{ steps.build.outputs.digest }}
@@ -182,7 +201,7 @@ jobs:
         run: |
           set -euo pipefail
           cosign attest --yes \
-            --type slsaprovenance \
+            --type "${PROVENANCE_PREDICATE_TYPE}" \
             --predicate predicates/provenance.buildkit.json \
             "${IMAGE_DIGEST_REF}"
           cosign attest --yes \
@@ -201,7 +220,7 @@ jobs:
             --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
             "${IMAGE_DIGEST_REF}"
           cosign verify-attestation \
-            --type slsaprovenance \
+            --type "${PROVENANCE_PREDICATE_TYPE}" \
             --certificate-identity "${COSIGN_CERT_IDENTITY}" \
             --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
             "${IMAGE_DIGEST_REF}" > /tmp/provenance.jsonl

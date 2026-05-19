@@ -59,12 +59,15 @@ For snapshots, use the snapshot workflow identity.
 
 The workflow creates explicit Cosign provenance attestations from BuildKit provenance data, then verifies those attestations with identity constraints.
 
+Use the provenance predicate type that was detected from BuildKit output (commonly `https://slsa.dev/provenance/v1` or `https://slsa.dev/provenance/v0.2`).
+
 ```bash
 IMAGE="eclipsebasyx/aasregistry-go@sha256:<digest>"
 IDENTITY="https://github.com/eclipse-basyx/basyx-go-components/.github/workflows/docker-release.yml@refs/tags/v1.2.3"
+PROVENANCE_TYPE="https://slsa.dev/provenance/v1"
 
 cosign verify-attestation \
-  --type slsaprovenance \
+  --type "$PROVENANCE_TYPE" \
   --certificate-identity "$IDENTITY" \
   --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
   "$IMAGE"
