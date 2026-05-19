@@ -3,10 +3,11 @@ package steps
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 )
 
 const (
-	schemaFilePath       = "/app/3_1_full.sql"
+	schemaFilePath       = "/app/base.sql"
 	schemaAdvisoryLockID = int64(860424611912345001)
 )
 
@@ -27,10 +28,9 @@ func (su *SchemaUpload) Execute(stepIndex int) (int, error) {
 		return 1, fmt.Errorf("BASYXCFG-SCHEMA-NODB: database connection is not initialized")
 	}
 
-	schemaToLoad := schemaFilePath
-
-	if su.databaseSchemaPath != "" {
-		schemaToLoad = su.databaseSchemaPath
+	schemaToLoad, err := su.resolveSchemaPath()
+	if err != nil {
+		return 1, err
 	}
 
 	schemaSQL, err := os.ReadFile(schemaToLoad)
@@ -51,6 +51,28 @@ func (su *SchemaUpload) Execute(stepIndex int) (int, error) {
 
 	_, _ = fmt.Printf("[Step %d] Schema upload completed\n", stepIndex)
 	return 0, nil
+}
+
+func (su *SchemaUpload) resolveSchemaPath() (string, error) {
+	schemaToLoad := schemaFilePath
+	if su.databaseSchemaPath != "" {
+		schemaToLoad = su.databaseSchemaPath
+	}
+
+	info, err := os.Stat(schemaToLoad)
+	if err != nil {
+		return "", fmt.Errorf("BASYXCFG-SCHEMA-STAT: %w", err)
+	}
+	if info.IsDir() {
+		candidate := filepath.Join(schemaToLoad, "3_1_full.sql")
+		candidateInfo, candidateErr := os.Stat(candidate)
+		if candidateErr == nil && !candidateInfo.IsDir() {
+			return candidate, nil
+		}
+		return "", fmt.Errorf("BASYXCFG-SCHEMA-ISDIR: %s is a directory; provide a schema file path", schemaToLoad)
+	}
+
+	return schemaToLoad, nil
 }
 
 // GetDescription returns the step description for console output.

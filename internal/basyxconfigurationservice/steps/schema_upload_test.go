@@ -50,7 +50,7 @@ func TestSchemaUploadExecuteReturnsReadFileError(t *testing.T) {
 	if statusCode != 1 {
 		t.Fatalf("expected status code 1, got %d", statusCode)
 	}
-	if !strings.Contains(execErr.Error(), "BASYXCFG-SCHEMA-READFILE") {
+	if !strings.Contains(execErr.Error(), "BASYXCFG-SCHEMA-STAT") {
 		t.Fatalf("unexpected error: %v", execErr)
 	}
 }

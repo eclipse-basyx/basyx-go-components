@@ -106,11 +106,17 @@
             "request": "launch",
             "mode": "debug",
             "program": "${workspaceFolder}/cmd/basyxconfigurationservice/main.go",
+            "env": {
+                "BASYXCFG_PATCH_APPROVED_VERSIONS": "v1.0.1",
+                "BASYXCFG_PATCH_BACKUP_REFERENCE": "xyz.sql"
+            },
             "args": [
                 "-config",
                 "${workspaceFolder}/cmd/basyxconfigurationservice/config.yaml",
                 "-databaseSchema",
-                "${workspaceFolder}/database/3_1_full.sql"
+                "${workspaceFolder}/database/base.sql",
+                "-customPatchPath",
+                "${workspaceFolder}/database/patches/"
             ]
         }
     ]
