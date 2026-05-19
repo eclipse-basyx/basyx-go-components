@@ -7,7 +7,7 @@ import (
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 )
 
-// SerializationAPIAPIController binds http requests to an api service and writes the service results to the http response
+// AASEnvironmentSerializationAPIAPIController binds HTTP requests to an API service and writes results to the HTTP response.
 type AASEnvironmentSerializationAPIAPIController struct {
 	service      SerializationAPIAPIServicer
 	errorHandler ErrorHandler

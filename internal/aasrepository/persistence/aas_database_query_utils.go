@@ -325,16 +325,6 @@ func buildGetAssetAdministrationShellMapsByDBIDsQuery(dialect *goqu.DialectWrapp
 		ToSQL()
 }
 
-func buildGetSubmodelReferencePayloadsByAASIDQuery(dialect *goqu.DialectWrapper, aasDBID int64) (string, []any, error) {
-	return dialect.
-		From(goqu.T("aas_submodel_reference").As("r")).
-		InnerJoin(goqu.T("aas_submodel_reference_payload").As("rp"), goqu.On(goqu.I("rp.reference_id").Eq(goqu.I("r.id")))).
-		Select(goqu.I("rp.parent_reference_payload")).
-		Where(goqu.I("r.aas_id").Eq(aasDBID)).
-		Order(goqu.I("r.position").Asc(), goqu.I("r.id").Asc()).
-		ToSQL()
-}
-
 func buildGetSubmodelReferencePayloadsByAASIDsQuery(dialect *goqu.DialectWrapper, aasDBIDs []int64) (string, []any, error) {
 	return dialect.
 		From(goqu.T("aas_submodel_reference").As("r")).

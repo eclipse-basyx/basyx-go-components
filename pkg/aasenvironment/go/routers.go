@@ -18,8 +18,6 @@ import (
 	"net/url"
 	"os"
 	"strconv"
-	"strings"
-	"time"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	"github.com/go-chi/chi/v5"
@@ -264,29 +262,6 @@ func readFileHeaderToTempFile(fileHeader *multipart.FileHeader) (*os.File, error
 	return file, nil
 }
 
-// nolint:unused
-func parseTimes(param string) ([]time.Time, error) {
-	splits := strings.Split(param, ",")
-	times := make([]time.Time, 0, len(splits))
-	for _, v := range splits {
-		t, err := parseTime(v)
-		if err != nil {
-			return nil, err
-		}
-		times = append(times, t)
-	}
-	return times, nil
-}
-
-// parseTime will parses a string parameter into a time.Time using the RFC3339 format
-// nolint:unused
-func parseTime(param string) (time.Time, error) {
-	if param == "" {
-		return time.Time{}, nil
-	}
-	return time.Parse(time.RFC3339, param)
-}
-
 // Number is a constraint interface for numeric types.
 //
 // This interface restricts type parameters to numeric types (int32, int64, float32, float64)
@@ -304,50 +279,6 @@ type Number interface {
 //   - T: The parsed value of type T (constrained to Number, string, or bool)
 //   - error: An error if parsing fails
 type ParseString[T Number | string | bool] func(v string) (T, error)
-
-// parseFloat64 parses a string parameter to an float64.
-//
-//nolint:unused
-func parseFloat64(param string) (float64, error) {
-	if param == "" {
-		return 0, nil
-	}
-
-	return strconv.ParseFloat(param, 64)
-}
-
-// parseFloat32 parses a string parameter to an float32.
-//
-//nolint:unused
-func parseFloat32(param string) (float32, error) {
-	if param == "" {
-		return 0, nil
-	}
-
-	v, err := strconv.ParseFloat(param, 32)
-	return float32(v), err
-}
-
-// parseInt64 parses a string parameter to an int64.
-//
-//nolint:unused
-func parseInt64(param string) (int64, error) {
-	if param == "" {
-		return 0, nil
-	}
-
-	return strconv.ParseInt(param, 10, 64)
-}
-
-// parseInt32 parses a string parameter to an int32.
-func parseInt32(param string) (int32, error) {
-	if param == "" {
-		return 0, nil
-	}
-
-	val, err := strconv.ParseInt(param, 10, 32)
-	return int32(val), err
-}
 
 // parseBool parses a string parameter to an bool.
 func parseBool(param string) (bool, error) {
@@ -473,63 +404,10 @@ func WithMaximum[T Number](expected T) Constraint[T] {
 	}
 }
 
-// parseNumericParameter parses a numeric parameter to its respective type.
-func parseNumericParameter[T Number](param string, fn OpenAPIOperation[T], checks ...Constraint[T]) (T, error) {
-	v, ok, err := fn(param)
-	if err != nil {
-		return 0, err
-	}
-
-	if !ok {
-		for _, check := range checks {
-			if err := check(v); err != nil {
-				return 0, err
-			}
-		}
-	}
-
-	return v, nil
-}
-
 // parseBoolParameter parses a string parameter to a bool
 func parseBoolParameter(param string, fn OpenAPIOperation[bool]) (bool, error) {
 	v, _, err := fn(param)
 	return v, err
-}
-
-// parseNumericArrayParameter parses a string parameter containing array of values to its respective type.
-//
-//nolint:unused
-func parseNumericArrayParameter[T Number](param, delim string, required bool, fn OpenAPIOperation[T], checks ...Constraint[T]) ([]T, error) {
-	if param == "" {
-		if required {
-			return nil, errors.New(errMsgRequiredMissing)
-		}
-
-		return nil, nil
-	}
-
-	str := strings.Split(param, delim)
-	values := make([]T, len(str))
-
-	for i, s := range str {
-		v, ok, err := fn(s)
-		if err != nil {
-			return nil, err
-		}
-
-		if !ok {
-			for _, check := range checks {
-				if err := check(v); err != nil {
-					return nil, err
-				}
-			}
-		}
-
-		values[i] = v
-	}
-
-	return values, nil
 }
 
 // parseQuery parses query parameters and returns an error if any malformed value pairs are encountered.
