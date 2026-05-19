@@ -396,6 +396,15 @@ func buildProperty(smeRow model.SubmodelElementRow, refBuilderMap map[int64]*Ref
 	if err != nil {
 		return nil, err
 	}
+
+	var valuePresence struct {
+		Value *string `json:"value"`
+	}
+	err = json.Unmarshal(*smeRow.Value, &valuePresence)
+	if err != nil {
+		return nil, err
+	}
+
 	valueID, err := getSingleReference(&valueRow.ValueID, &valueRow.ValueIDReferred, refBuilderMap, refMutex)
 	if err != nil {
 		return nil, err
@@ -405,7 +414,7 @@ func buildProperty(smeRow model.SubmodelElementRow, refBuilderMap map[int64]*Ref
 	valueType := types.DataTypeDefXSD(valueRow.ValueType)
 
 	prop := types.NewProperty(valueType)
-	if valueRow.Value != "" {
+	if valuePresence.Value != nil {
 		prop.SetValue(&valueRow.Value)
 	}
 	if valueID != nil {

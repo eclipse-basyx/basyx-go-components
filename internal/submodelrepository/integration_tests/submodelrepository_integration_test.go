@@ -485,6 +485,60 @@ func TestTemporalXSDRoundTripFormatting(t *testing.T) {
 	})
 }
 
+func TestPropertyEmptyStringRoundTrip(t *testing.T) {
+	baseURL := "http://localhost:6004"
+	submodelID := fmt.Sprintf("urn:basyx:integration:property-empty-string-%d", time.Now().UnixNano())
+	submodelIDEncoded := common.EncodeString(submodelID)
+
+	t.Cleanup(func() {
+		statusCode, body, err := requestJSON(http.MethodDelete, fmt.Sprintf("%s/submodels/%s", baseURL, submodelIDEncoded), nil)
+		if err != nil {
+			t.Logf("cleanup delete failed for empty-string test submodel: %v", err)
+			return
+		}
+		if statusCode != http.StatusNoContent && statusCode != http.StatusNotFound {
+			t.Logf("cleanup delete returned unexpected status=%d body=%s", statusCode, string(body))
+		}
+	})
+
+	postPayload := map[string]any{
+		"id":        submodelID,
+		"idShort":   "RoundtripEmptyString",
+		"kind":      "Instance",
+		"modelType": "Submodel",
+		"submodelElements": []map[string]any{
+			{
+				"idShort":   "TheProperty",
+				"modelType": "Property",
+				"valueType": "xs:string",
+				"value":     "",
+			},
+		},
+	}
+
+	statusCode, body, err := requestJSON(http.MethodPost, fmt.Sprintf("%s/submodels", baseURL), postPayload)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusCreated, statusCode, "response=%s", string(body))
+
+	statusCode, body, err = requestJSON(http.MethodGet, fmt.Sprintf("%s/submodels/%s", baseURL, submodelIDEncoded), nil)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusOK, statusCode, "response=%s", string(body))
+
+	var submodel map[string]any
+	require.NoError(t, json.Unmarshal(body, &submodel))
+
+	rawElements, ok := submodel["submodelElements"].([]any)
+	require.True(t, ok, "submodelElements must be an array")
+	require.Len(t, rawElements, 1, "expected exactly one submodel element")
+
+	property, ok := rawElements[0].(map[string]any)
+	require.True(t, ok, "submodel element must be an object")
+
+	value, hasValue := property["value"]
+	require.True(t, hasValue, "property value key must be present when empty string was posted")
+	assert.Equal(t, "", value)
+}
+
 func TestContractSubmodelRepository(t *testing.T) {
 	baseURL := "http://localhost:6004"
 
