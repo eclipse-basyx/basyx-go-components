@@ -21,8 +21,9 @@ Welcome to the BaSyx Go project! This guide is designed to help new developers o
 8. [API Usage](#8-api-usage)
 9. [Contribution Guidelines](#9-contribution-guidelines)
 10. [Repository Automation](#10-repository-automation)
-11. [Troubleshooting & Error Reference](#11-troubleshooting--error-reference)
-12. [Glossary of Terms & Abbreviations](#12-glossary-of-terms--abbreviations)
+11. [Security & Supply Chain Verification](#11-security--supply-chain-verification)
+12. [Troubleshooting & Error Reference](#12-troubleshooting--error-reference)
+13. [Glossary of Terms & Abbreviations](#13-glossary-of-terms--abbreviations)
 
 ---
 
@@ -183,12 +184,20 @@ See [structure.md](docu/developer/structure.md) and related files for details on
 - Ensure your local environment matches CI versions (see [linter.md](docu/developer/linter.md))
 - Use provided tasks in VSCode or CLI for build/test/lint automation
 
-## 11. Troubleshooting & Error Reference
+## 11. Security & Supply Chain Verification
+
+- Security reporting policy: [Eclipse Foundation Security](https://www.eclipse.org/security/)
+- Supply-chain trust model, signing, attestations, and SBOM verification: [docu/security/SUPPLY_CHAIN_SECURITY.md](docu/security/SUPPLY_CHAIN_SECURITY.md)
+- Runtime security architecture (OIDC + ABAC): [docu/security/README.md](docu/security/README.md)
+
+Release and snapshot images are signed with Cosign keyless identity and include provenance and SBOM attestations. For full verification commands, see [docu/security/SUPPLY_CHAIN_SECURITY.md](docu/security/SUPPLY_CHAIN_SECURITY.md).
+
+## 12. Troubleshooting & Error Reference
 
 - See [docu/errors.md](docu/errors.md) for common error scenarios and solutions
 - For security and authorization, see [docu/security/REGISTRY_SECURITY.md](docu/security/REGISTRY_SECURITY.md)
 
-## 12. Glossary of Terms & Abbreviations
+## 13. Glossary of Terms & Abbreviations
 
 - **AAS**: Asset Administration Shell – digital representation of assets
 - **Submodel**: Modular part of an AAS
