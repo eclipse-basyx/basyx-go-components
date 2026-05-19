@@ -347,7 +347,7 @@ type SubmodelElementRow struct {
 type PropertyValueRow struct {
 	// Value is the actual value of the property stored as a string.
 	// The string representation must be interpreted according to the ValueType field.
-	Value string `json:"value"`
+	Value *string `json:"value"`
 
 	// ValueType specifies the XSD data type of the value.
 	// This determines how the Value string should be parsed and interpreted

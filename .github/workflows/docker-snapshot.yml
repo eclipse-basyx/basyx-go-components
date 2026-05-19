@@ -14,6 +14,12 @@ on:
       - 'basyxschema.sql'
       - '.github/workflows/docker-snapshot.yml'
 
+concurrency:
+  group: docker-snapshot-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions: {}
+
 jobs:
   guard:
     runs-on: ubuntu-latest
@@ -34,10 +40,10 @@ jobs:
     needs: guard
     if: ${{ needs.guard.outputs.should-run == 'true' }}
     runs-on: ubuntu-latest
+    timeout-minutes: 90
     permissions:
       contents: read
       id-token: write
-      attestations: write
     strategy:
       matrix:
         service:
@@ -64,18 +70,35 @@ jobs:
     
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
           fetch-depth: 0
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v4
+        uses: docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd # v4
 
       - name: Log in to Docker Hub
-        uses: docker/login-action@v4
+        uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121 # v4
         with:
           username: ${{ secrets.DOCKER_HUB_USER }}
           password: ${{ secrets.DOCKER_HUB_TOKEN }}
+
+      - name: Install Cosign
+        uses: sigstore/cosign-installer@faadad0cce49287aee09b3a48701e75088a2c6ad # v4.0.0
+        with:
+          cosign-release: v2.4.1
+
+      - name: Install Syft
+        run: |
+          set -euo pipefail
+          SYFT_VERSION=1.29.1
+          ARCHIVE="syft_${SYFT_VERSION}_linux_amd64.tar.gz"
+          curl -fsSLO "https://github.com/anchore/syft/releases/download/v${SYFT_VERSION}/${ARCHIVE}"
+          curl -fsSLO "https://github.com/anchore/syft/releases/download/v${SYFT_VERSION}/syft_${SYFT_VERSION}_checksums.txt"
+          grep " ${ARCHIVE}$" "syft_${SYFT_VERSION}_checksums.txt" | sha256sum -c -
+          tar -xzf "${ARCHIVE}" syft
+          sudo install -m 0755 syft /usr/local/bin/syft
+          syft version
 
       - name: Generate version metadata
         id: meta
@@ -91,7 +114,8 @@ jobs:
           echo "Building snapshot version: ${VERSION}"
 
       - name: Build and push Docker image
-        uses: docker/build-push-action@v7
+        id: build
+        uses: docker/build-push-action@bcafcacb16a39f128d818304e6c9c0c18556b85f # v7
         with:
           context: .
           file: ./cmd/${{ matrix.service.name }}/Dockerfile
@@ -107,6 +131,124 @@ jobs:
           platforms: linux/amd64,linux/arm64,linux/arm/v7
           provenance: mode=max
           sbom: true
+          labels: |
+            org.opencontainers.image.title=${{ matrix.service.name }}
+            org.opencontainers.image.description=Eclipse BaSyx ${{ matrix.service.name }}
+            org.opencontainers.image.version=${{ steps.meta.outputs.version }}
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.licenses=MIT
+            org.opencontainers.image.vendor=Eclipse BaSyx
+            org.opencontainers.image.url=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.documentation=${{ github.server_url }}/${{ github.repository }}/blob/${{ github.ref_name }}/README.md
+            org.opencontainers.image.created=${{ github.event.head_commit.timestamp }}
+
+      - name: Sign image digest (keyless)
+        env:
+          IMAGE_DIGEST_REF: ${{ matrix.service.image }}@${{ steps.build.outputs.digest }}
+        run: |
+          set -euo pipefail
+          cosign sign --yes "${IMAGE_DIGEST_REF}"
+
+      - name: Extract BuildKit provenance and SBOM predicates
+        env:
+          IMAGE_DIGEST_REF: ${{ matrix.service.image }}@${{ steps.build.outputs.digest }}
+        run: |
+          set -euo pipefail
+          mkdir -p predicates
+
+          if ! docker buildx imagetools inspect "${IMAGE_DIGEST_REF}" --format '{{ json (index .Provenance "linux/amd64").SLSA }}' > predicates/provenance.buildkit.json 2>/dev/null; then
+            docker buildx imagetools inspect "${IMAGE_DIGEST_REF}" --format '{{ json .Provenance.SLSA }}' > predicates/provenance.buildkit.json
+          fi
+
+          if ! docker buildx imagetools inspect "${IMAGE_DIGEST_REF}" --format '{{ json (index .SBOM "linux/amd64").SPDX }}' > predicates/sbom.buildkit.spdx.json 2>/dev/null; then
+            docker buildx imagetools inspect "${IMAGE_DIGEST_REF}" --format '{{ json .SBOM.SPDX }}' > predicates/sbom.buildkit.spdx.json
+          fi
+
+          jq -e 'type == "object" and length > 0' predicates/provenance.buildkit.json >/dev/null
+          jq -e 'type == "object" and length > 0' predicates/sbom.buildkit.spdx.json >/dev/null
+
+      - name: Detect provenance predicate type
+        run: |
+          set -euo pipefail
+          PROVENANCE_PREDICATE_TYPE=$(jq -r '
+            if has("buildDefinition") and has("runDetails") then "https://slsa.dev/provenance/v1"
+            elif has("builder") and has("buildType") then "https://slsa.dev/provenance/v0.2"
+            else ""
+            end
+          ' predicates/provenance.buildkit.json)
+
+          if [ -z "${PROVENANCE_PREDICATE_TYPE}" ]; then
+            echo "Unsupported BuildKit provenance predicate shape:" >&2
+            jq -r 'keys_unsorted | @json' predicates/provenance.buildkit.json >&2
+            exit 1
+          fi
+
+          echo "Detected provenance predicate type: ${PROVENANCE_PREDICATE_TYPE}"
+          echo "PROVENANCE_PREDICATE_TYPE=${PROVENANCE_PREDICATE_TYPE}" >> "$GITHUB_ENV"
+
+      - name: Verify BuildKit OCI attestation manifests exist
+        env:
+          IMAGE_DIGEST_REF: ${{ matrix.service.image }}@${{ steps.build.outputs.digest }}
+        run: |
+          set -euo pipefail
+          docker buildx imagetools inspect "${IMAGE_DIGEST_REF}" --raw > /tmp/image-index.json
+          jq -e '.manifests | map(select(.annotations["vnd.docker.reference.type"] == "attestation-manifest")) | length > 0' /tmp/image-index.json >/dev/null
+
+      - name: Create Cosign attestations from BuildKit predicates
+        env:
+          IMAGE_DIGEST_REF: ${{ matrix.service.image }}@${{ steps.build.outputs.digest }}
+        run: |
+          set -euo pipefail
+          cosign attest --yes \
+            --type "${PROVENANCE_PREDICATE_TYPE}" \
+            --predicate predicates/provenance.buildkit.json \
+            "${IMAGE_DIGEST_REF}"
+          cosign attest --yes \
+            --type https://spdx.dev/Document \
+            --predicate predicates/sbom.buildkit.spdx.json \
+            "${IMAGE_DIGEST_REF}"
+
+      - name: Verify signature and Cosign attestations
+        env:
+          IMAGE_DIGEST_REF: ${{ matrix.service.image }}@${{ steps.build.outputs.digest }}
+          COSIGN_CERT_IDENTITY: https://github.com/eclipse-basyx/basyx-go-components/.github/workflows/docker-snapshot.yml@refs/heads/main
+        run: |
+          set -euo pipefail
+          cosign verify \
+            --certificate-identity "${COSIGN_CERT_IDENTITY}" \
+            --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
+            "${IMAGE_DIGEST_REF}"
+          cosign verify-attestation \
+            --type "${PROVENANCE_PREDICATE_TYPE}" \
+            --certificate-identity "${COSIGN_CERT_IDENTITY}" \
+            --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
+            "${IMAGE_DIGEST_REF}" > /tmp/provenance.jsonl
+          test -s /tmp/provenance.jsonl
+          cosign verify-attestation \
+            --type "https://spdx.dev/Document" \
+            --certificate-identity "${COSIGN_CERT_IDENTITY}" \
+            --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
+            "${IMAGE_DIGEST_REF}" > /tmp/sbom-attestation.jsonl
+          test -s /tmp/sbom-attestation.jsonl
+
+      - name: Export SPDX and CycloneDX SBOM files
+        env:
+          IMAGE_DIGEST_REF: ${{ matrix.service.image }}@${{ steps.build.outputs.digest }}
+        run: |
+          set -euo pipefail
+          mkdir -p snapshot-sbom
+          syft "${IMAGE_DIGEST_REF}" -o "spdx-json=snapshot-sbom/${{ matrix.service.name }}-${{ steps.meta.outputs.version }}.spdx.json"
+          syft "${IMAGE_DIGEST_REF}" -o "cyclonedx-json=snapshot-sbom/${{ matrix.service.name }}-${{ steps.meta.outputs.version }}.cdx.json"
+
+      - name: Upload snapshot SBOM artifacts
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: snapshot-sbom-${{ matrix.service.name }}
+          path: snapshot-sbom/*
+          retention-days: 14
 
       - name: Image digest
-        run: echo "Built and pushed ${{ matrix.service.image }}:SNAPSHOT"
+        run: |
+          echo "Built and pushed ${{ matrix.service.image }}:SNAPSHOT"
+          echo "Digest: ${{ steps.build.outputs.digest }}"
