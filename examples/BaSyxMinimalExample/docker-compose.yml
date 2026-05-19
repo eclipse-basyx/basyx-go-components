@@ -1,137 +1,11 @@
 services:
-  aas-registry:
-    container_name: aas-registry
-    image: eclipsebasyx/aasregistry-go:SNAPSHOT
+  aas-environment:
+    container_name: aas-environment
+    image: eclipsebasyx/aasenvironment-go:SNAPSHOT
     pull_policy: always
-    command: ["/app/aasregistryservice"]
+    command: ["/app/aasenvironmentservice"]
     ports:
-      - 8082:5004
-    environment:
-      - SERVER_PORT=5004
-      - CORS_ALLOWEDORIGINS=*
-      - CORS_ALLOWEDHEADERS=*
-      - CORS_ALLOWEDCREDENTIALS=true
-      - CORS_ALLOWEDMETHODS=GET,POST,PUT,PATCH,DELETE,OPTIONS
-      - POSTGRES_HOST=db
-      - POSTGRES_PORT=5432
-      - POSTGRES_USER=admin
-      - POSTGRES_PASSWORD=admin123
-      - POSTGRES_DBNAME=basyxTestDB
-      - POSTGRES_MAXOPENCONNECTIONS=500
-      - POSTGRES_MAXIDLECONNECTIONS=500
-      - POSTGRES_CONNMAXLIFETIMEMINUTES=5
-      - ABAC_ENABLED=false
-    depends_on:
-      db-schema-init:
-        condition: service_completed_successfully
-      db:
-        condition: service_healthy
-    restart: unless-stopped
-  
-  sm-registry:
-    container_name: sm-registry
-    image: eclipsebasyx/submodelregistry-go:SNAPSHOT
-    pull_policy: always
-    command: ["/app/submodelregistryservice"]
-    environment:
-      - SERVER_PORT=5004
-      - CORS_ALLOWEDORIGINS=*
-      - CORS_ALLOWEDHEADERS=*
-      - CORS_ALLOWEDCREDENTIALS=true
-      - CORS_ALLOWEDMETHODS=GET,POST,PUT,PATCH,DELETE,OPTIONS
-      - POSTGRES_HOST=db
-      - POSTGRES_PORT=5432
-      - POSTGRES_USER=admin
-      - POSTGRES_PASSWORD=admin123
-      - POSTGRES_DBNAME=basyxTestDB
-      - POSTGRES_MAXOPENCONNECTIONS=500
-      - POSTGRES_MAXIDLECONNECTIONS=500
-      - POSTGRES_CONNMAXLIFETIMEMINUTES=5
-      - ABAC_ENABLED=false
-    ports:
-      - 8083:5004
-    depends_on:
-      db-schema-init:
-        condition: service_completed_successfully
-      db:
-        condition: service_healthy
-    restart: unless-stopped
-
-  aas-discovery:
-    container_name: aas-discovery
-    image: eclipsebasyx/aasdiscovery-go:SNAPSHOT
-    pull_policy: always
-    command: ["/app/discoveryservice"]
-    environment:
-      - SERVER_PORT=5004
-      - CORS_ALLOWEDORIGINS=*
-      - CORS_ALLOWEDHEADERS=*
-      - CORS_ALLOWEDCREDENTIALS=true
-      - CORS_ALLOWEDMETHODS=GET,POST,PUT,PATCH,DELETE,OPTIONS
-      - POSTGRES_HOST=db
-      - POSTGRES_PORT=5432
-      - POSTGRES_USER=admin
-      - POSTGRES_PASSWORD=admin123
-      - POSTGRES_DBNAME=basyxTestDB
-      - POSTGRES_MAXOPENCONNECTIONS=500
-      - POSTGRES_MAXIDLECONNECTIONS=500
-      - POSTGRES_CONNMAXLIFETIMEMINUTES=5
-      - ABAC_ENABLED=false
-    ports:
-      - "8084:5004"
-    depends_on:
-      db-schema-init:
-        condition: service_completed_successfully
-      db:
-        condition: service_healthy
-    restart: unless-stopped
-      
-  aas-ui:
-    container_name: aas-web-ui
-    image: eclipsebasyx/aas-gui:SNAPSHOT
-    pull_policy: always
-    ports:
-      - "3000:3000"
-    volumes:
-      - ./basyx-infra.yml:/basyx-infra.yml:ro
-    environment:
-      - ENDPOINT_CONFIG_AVAILABLE=false
-    restart: unless-stopped
-
-  aas_repository:
-    container_name: aas-repository
-    image: eclipsebasyx/aasrepository-go:SNAPSHOT
-    pull_policy: always
-    command: ["/app/aasrepositoryservice"]
-    environment:
-      - SERVER_PORT=5004
-      - CORS_ALLOWEDORIGINS=*
-      - CORS_ALLOWEDHEADERS=*
-      - CORS_ALLOWEDCREDENTIALS=true
-      - CORS_ALLOWEDMETHODS=GET,POST,PUT,PATCH,DELETE,OPTIONS
-      - POSTGRES_HOST=db
-      - POSTGRES_PORT=5432
-      - POSTGRES_USER=admin
-      - POSTGRES_PASSWORD=admin123
-      - POSTGRES_DBNAME=basyxTestDB
-      - POSTGRES_MAXOPENCONNECTIONS=500
-      - POSTGRES_MAXIDLECONNECTIONS=500
-      - POSTGRES_CONNMAXLIFETIMEMINUTES=5
-      - ABAC_ENABLED=false
-    ports:
-      - "8090:5004"
-    depends_on:
-      db-schema-init:
-        condition: service_completed_successfully
-      db:
-        condition: service_healthy
-    restart: unless-stopped
-
-  submodel_repository:
-    container_name: submodel-repository
-    image: eclipsebasyx/submodelrepository-go:SNAPSHOT      
-    pull_policy: always
-    command: ["/app/submodelrepositoryservice"]
+      - "8082:5004"
     environment:
       - SERVER_PORT=5004
       - CORS_ALLOWEDORIGINS=*
@@ -148,10 +22,14 @@ services:
       - POSTGRES_CONNMAXLIFETIMEMINUTES=5
       - JWS_PRIVATEKEYPATH=/app/rsa-key.pem
       - ABAC_ENABLED=false
+      - GENERAL_AASREGISTRYINTEGRATION=true
+      - GENERAL_SUBMODELREGISTRYINTEGRATION=true
+      - GENERAL_DISCOVERYINTEGRATION=true
+      - GENERAL_EXTERNALURL=http://localhost:8082
+      - GENERAL_AAS_PRECONFIG_PATHS=/app/preconfiguration
     volumes:
       - ./basyx/rsa-key.pem:/app/rsa-key.pem:ro
-    ports:
-      - "8091:5004"
+      - ./aas:/app/preconfiguration:ro
     depends_on:
       db-schema-init:
         condition: service_completed_successfully
@@ -159,33 +37,16 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
-  concept-description-repository:
-    container_name: concept-description-repository
-    image: eclipsebasyx/conceptdescriptionrepository-go:SNAPSHOT
+  aas-ui:
+    container_name: aas-web-ui
+    image: eclipsebasyx/aas-gui:SNAPSHOT
     pull_policy: always
-    command: ["/app/conceptdescriptionrepositoryservice"]
-    environment:
-      - SERVER_PORT=5004
-      - CORS_ALLOWEDORIGINS=*
-      - CORS_ALLOWEDHEADERS=*
-      - CORS_ALLOWEDCREDENTIALS=true
-      - CORS_ALLOWEDMETHODS=GET,POST,PUT,PATCH,DELETE,OPTIONS
-      - POSTGRES_HOST=db
-      - POSTGRES_PORT=5432
-      - POSTGRES_USER=admin
-      - POSTGRES_PASSWORD=admin123
-      - POSTGRES_DBNAME=basyxTestDB
-      - POSTGRES_MAXOPENCONNECTIONS=500
-      - POSTGRES_MAXIDLECONNECTIONS=500
-      - POSTGRES_CONNMAXLIFETIMEMINUTES=5
-      - ABAC_ENABLED=false
     ports:
-      - "8092:5004"
-    depends_on:
-      db-schema-init:
-        condition: service_completed_successfully
-      db:
-        condition: service_healthy
+      - "3000:3000"
+    volumes:
+      - ./basyx-infra.yml:/basyx-infra.yml:ro
+    environment:
+      - ENDPOINT_CONFIG_AVAILABLE=false
     restart: unless-stopped
 
   db-schema-init:

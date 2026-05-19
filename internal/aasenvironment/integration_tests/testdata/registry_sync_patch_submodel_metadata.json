@@ -1,0 +1,15 @@
+{
+  "id": "urn:example:sm:registry-sync-post",
+  "modelType": "Submodel",
+  "idShort": "registrySyncPostSubmodelMetadataPatched",
+  "administration": {
+    "version": "3",
+    "revision": "1"
+  },
+  "description": [
+    {
+      "language": "en",
+      "text": "metadata patched description"
+    }
+  ]
+}

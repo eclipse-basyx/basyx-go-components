@@ -9,9 +9,9 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"strconv"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
+	commonmodel "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	"github.com/eclipse-basyx/basyx-go-components/internal/companylookupservice/api"
 	companylookuppostgresql "github.com/eclipse-basyx/basyx-go-components/internal/companylookupservice/persistence"
 	"github.com/eclipse-basyx/basyx-go-components/pkg/companylookupapi"
@@ -29,6 +29,9 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 	if err != nil {
 		return err
 	}
+	if err := commonmodel.SetVerificationMode(cfg.Server.StrictVerification); err != nil {
+		return err
+	}
 
 	// === Main Router ===
 	r := chi.NewRouter()
@@ -37,6 +40,9 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 
 	// --- Health Endpoint (public) ---
 	common.AddHealthEndpoint(r, cfg)
+	if cfg.Server.VerificationEndpointAvailable {
+		common.AddVerificationEndpoint(r, cfg)
+	}
 
 	// Add Swagger UI
 	if err := common.AddSwaggerUIFromFS(r, openapiSpec, "openapi.yaml", "Company Lookup Service API", "/swagger", "/api-docs/openapi.yaml", cfg); err != nil {
@@ -46,8 +52,9 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 	log.Printf("🗄️  Connecting to Postgres with DSN: postgres://%s:****@%s:%d/%s?sslmode=disable",
 		cfg.Postgres.User, cfg.Postgres.Host, cfg.Postgres.Port, cfg.Postgres.DBName)
 
+	dsn := common.BuildPostgresDSN(cfg.Postgres)
 	companyLookupDatabase, err := companylookuppostgresql.NewPostgreSQLCompanyLookupBackend(
-		"postgres://"+cfg.Postgres.User+":"+cfg.Postgres.Password+"@"+cfg.Postgres.Host+":"+strconv.Itoa(cfg.Postgres.Port)+"/"+cfg.Postgres.DBName+"?sslmode=disable",
+		dsn,
 		//nolint:gosec // configured value is bounded by deployment configuration
 		int32(cfg.Postgres.MaxOpenConnections),
 		cfg.Postgres.MaxIdleConnections,

@@ -1,0 +1,57 @@
+{
+  "administration": {
+    "version": "1",
+    "revision": "0"
+  },
+  "idShort": "registrySyncPostShell",
+  "id": "urn:example:aas:registry-sync-post",
+  "assetKind": "Instance",
+  "globalAssetId": "urn:example:asset:registry-sync-post-updated",
+  "specificAssetIds": [
+    {
+      "name": "manufacturerPartId",
+      "value": "mp-registry-sync-post-updated"
+    },
+    {
+      "name": "serialNumber",
+      "value": "sn-registry-sync-post-002"
+    }
+  ],
+  "submodelDescriptors": [
+    {
+      "administration": {
+        "version": "1",
+        "revision": "0"
+      },
+      "idShort": "registrySyncSuperpathCreated",
+      "id": "urn:example:sm:registry-sync-superpath",
+      "semanticId": {
+        "type": "ModelReference",
+        "keys": [
+          {
+            "type": "Submodel",
+            "value": "urn:example:semantic:registry-sync-superpath"
+          }
+        ]
+      },
+      "endpoints": [
+        {
+          "interface": "AAS-3.0",
+          "protocolInformation": {
+            "href": "http://127.0.0.1:6004/submodels/dXJuOmV4YW1wbGU6c206cmVnaXN0cnktc3luYy1zdXBlcnBhdGg",
+            "endpointProtocol": "http"
+          }
+        }
+      ]
+    }
+  ],
+  "endpoints": [
+    {
+      "interface": "AAS-3.0",
+      "protocolInformation": {
+        "href": "http://127.0.0.1:6004/shells/dXJuOmV4YW1wbGU6YWFzOnJlZ2lzdHJ5LXN5bmMtcG9zdA",
+        "endpointProtocol": "http"
+      }
+    }
+  ]
+}

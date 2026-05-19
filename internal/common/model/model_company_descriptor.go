@@ -182,6 +182,30 @@ func AssertCompanyDescriptorConstraints(obj CompanyDescriptor) error {
 	if strings.TrimSpace(obj.Domain) != "" && !IsStrictCompanyDomain(obj.Domain) {
 		return fmt.Errorf("domain %q is not a syntactically valid domain", obj.Domain)
 	}
+	for i, description := range obj.Description {
+		if strings.TrimSpace(description.Language()) == "" {
+			return fmt.Errorf("COMDESC-CONSTRAINTS-EMPTYDESCRIPTIONLANG description[%d].language must not be empty", i)
+		}
+		if strings.TrimSpace(description.Text()) == "" {
+			return fmt.Errorf("COMDESC-CONSTRAINTS-EMPTYDESCRIPTIONTEXT description[%d].text must not be empty", i)
+		}
+	}
+	for i, displayName := range obj.DisplayName {
+		if strings.TrimSpace(displayName.Language()) == "" {
+			return fmt.Errorf("COMDESC-CONSTRAINTS-EMPTYDISPLAYNAMELANG displayName[%d].language must not be empty", i)
+		}
+		if strings.TrimSpace(displayName.Text()) == "" {
+			return fmt.Errorf("COMDESC-CONSTRAINTS-EMPTYDISPLAYNAMETEXT displayName[%d].text must not be empty", i)
+		}
+	}
+	if obj.Administration != nil {
+		if err := assertReferenceKeysNotEmpty(obj.Administration.Creator(), "administration.creator"); err != nil {
+			return err
+		}
+		if err := assertReferenceKeyValuesNotEmpty(obj.Administration.Creator(), "administration.creator"); err != nil {
+			return err
+		}
+	}
 
 	for _, el := range obj.Endpoints {
 		if err := AssertEndpointConstraints(el); err != nil {
@@ -399,41 +423,52 @@ func (obj *CompanyDescriptor) UnmarshalJSON(data []byte) error {
 		}
 	}
 
-	// Verify Description
-	var validationErrors []string
+	mode := GetVerificationMode()
+
 	for _, el := range obj.Description {
-		verification.Verify(el, func(verErr *verification.VerificationError) bool {
-			validationErrors = append(validationErrors, verErr.Error())
-			return false // Continue collecting all errors
-		})
-
-		if len(validationErrors) > 0 {
-			return errors.New("CompanyDescriptor: Description verification failed: " + validationErrors[0])
+		description := el
+		if err := ValidateWithMode(
+			mode,
+			"CompanyDescriptor.Description",
+			func(collector func(*verification.VerificationError) bool) {
+				verification.Verify(description, collector)
+			},
+			func(message string) error {
+				return errors.New("CompanyDescriptor: Description verification failed: " + message)
+			},
+		); err != nil {
+			return err
 		}
 	}
 
-	// Verify DisplayName
-	validationErrors = []string{}
 	for _, el := range obj.DisplayName {
-		verification.Verify(el, func(verErr *verification.VerificationError) bool {
-			validationErrors = append(validationErrors, verErr.Error())
-			return false // Continue collecting all errors
-		})
-
-		if len(validationErrors) > 0 {
-			return errors.New("CompanyDescriptor: DisplayName verification failed: " + validationErrors[0])
+		displayName := el
+		if err := ValidateWithMode(
+			mode,
+			"CompanyDescriptor.DisplayName",
+			func(collector func(*verification.VerificationError) bool) {
+				verification.Verify(displayName, collector)
+			},
+			func(message string) error {
+				return errors.New("CompanyDescriptor: DisplayName verification failed: " + message)
+			},
+		); err != nil {
+			return err
 		}
 	}
 
-	// Administration
-	validationErrors = []string{}
 	if obj.Administration != nil {
-		verification.Verify(obj.Administration, func(verErr *verification.VerificationError) bool {
-			validationErrors = append(validationErrors, verErr.Error())
-			return false // Continue collecting all errors
-		})
-		if len(validationErrors) > 0 {
-			return errors.New("CompanyDescriptor: Administration verification failed: " + validationErrors[0])
+		if err := ValidateWithMode(
+			mode,
+			"CompanyDescriptor.Administration",
+			func(collector func(*verification.VerificationError) bool) {
+				verification.Verify(obj.Administration, collector)
+			},
+			func(message string) error {
+				return errors.New("CompanyDescriptor: Administration verification failed: " + message)
+			},
+		); err != nil {
+			return err
 		}
 	}
 

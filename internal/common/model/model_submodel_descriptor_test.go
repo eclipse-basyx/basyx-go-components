@@ -9,8 +9,15 @@ import (
 	"github.com/aas-core-works/aas-core3.1-golang/types"
 )
 
+func setVerificationMode(t *testing.T, mode string) {
+	t.Helper()
+	if err := SetVerificationMode(mode); err != nil {
+		t.Fatalf("failed to set verification mode %q: %v", mode, err)
+	}
+}
+
 func TestSubmodelDescriptorUnmarshalRejectsSingularWhenDisabled(t *testing.T) {
-	SetStrictVerificationEnabled(false)
+	setVerificationMode(t, "off")
 	SetSupportsSingularSupplementalSemanticId(false)
 
 	payload := `{
@@ -30,7 +37,7 @@ func TestSubmodelDescriptorUnmarshalRejectsSingularWhenDisabled(t *testing.T) {
 }
 
 func TestSubmodelDescriptorUnmarshalAcceptsSingularWhenEnabled(t *testing.T) {
-	SetStrictVerificationEnabled(false)
+	setVerificationMode(t, "off")
 	SetSupportsSingularSupplementalSemanticId(true)
 	t.Cleanup(func() {
 		SetSupportsSingularSupplementalSemanticId(false)
@@ -53,7 +60,7 @@ func TestSubmodelDescriptorUnmarshalAcceptsSingularWhenEnabled(t *testing.T) {
 }
 
 func TestSubmodelDescriptorToJsonableUsesPluralWhenDisabled(t *testing.T) {
-	SetStrictVerificationEnabled(false)
+	setVerificationMode(t, "off")
 	SetSupportsSingularSupplementalSemanticId(false)
 
 	descriptor := SubmodelDescriptor{
@@ -74,7 +81,7 @@ func TestSubmodelDescriptorToJsonableUsesPluralWhenDisabled(t *testing.T) {
 }
 
 func TestSubmodelDescriptorToJsonableUsesSingularWhenEnabled(t *testing.T) {
-	SetStrictVerificationEnabled(false)
+	setVerificationMode(t, "off")
 	SetSupportsSingularSupplementalSemanticId(true)
 	t.Cleanup(func() {
 		SetSupportsSingularSupplementalSemanticId(false)
@@ -99,9 +106,9 @@ func TestSubmodelDescriptorToJsonableUsesSingularWhenEnabled(t *testing.T) {
 
 func TestSubmodelDescriptorUnmarshalSkipsSemanticVerificationWhenStrictDisabled(t *testing.T) {
 	SetSupportsSingularSupplementalSemanticId(false)
-	SetStrictVerificationEnabled(false)
+	setVerificationMode(t, "off")
 	t.Cleanup(func() {
-		SetStrictVerificationEnabled(false)
+		setVerificationMode(t, "off")
 	})
 
 	payload := `{
@@ -116,11 +123,30 @@ func TestSubmodelDescriptorUnmarshalSkipsSemanticVerificationWhenStrictDisabled(
 	}
 }
 
+func TestSubmodelDescriptorUnmarshalSkipsSemanticVerificationWhenPermissive(t *testing.T) {
+	SetSupportsSingularSupplementalSemanticId(false)
+	setVerificationMode(t, "permissive")
+	t.Cleanup(func() {
+		setVerificationMode(t, "off")
+	})
+
+	payload := `{
+		"endpoints":[{"interface":"IF","protocolInformation":{"href":"http://example.com"}}],
+		"id":"submodel-id",
+		"semanticId":{"type":"ExternalReference","keys":[{"type":"Submodel","value":"semanticIdExample"}]}
+	}`
+
+	var descriptor SubmodelDescriptor
+	if err := json.Unmarshal([]byte(payload), &descriptor); err != nil {
+		t.Fatalf("expected successful unmarshal with permissive verification, got: %v", err)
+	}
+}
+
 func TestSubmodelDescriptorUnmarshalFailsSemanticVerificationWhenStrictEnabled(t *testing.T) {
 	SetSupportsSingularSupplementalSemanticId(false)
-	SetStrictVerificationEnabled(true)
+	setVerificationMode(t, "strict")
 	t.Cleanup(func() {
-		SetStrictVerificationEnabled(false)
+		setVerificationMode(t, "off")
 	})
 
 	payload := `{
@@ -135,6 +161,21 @@ func TestSubmodelDescriptorUnmarshalFailsSemanticVerificationWhenStrictEnabled(t
 		t.Fatal("expected semanticId verification failure with strictVerification enabled")
 	}
 	if !strings.Contains(err.Error(), "SemanticId verification failed") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestAssertSubmodelDescriptorConstraints_RejectsEmptySemanticIDReferenceKeys(t *testing.T) {
+	descriptor := SubmodelDescriptor{
+		Id:         "submodel-id",
+		SemanticId: types.NewReference(types.ReferenceTypesModelReference, []types.IKey{}),
+	}
+
+	err := AssertSubmodelDescriptorConstraints(descriptor)
+	if err == nil {
+		t.Fatal("expected constraint validation error for empty semanticId keys")
+	}
+	if !strings.Contains(err.Error(), "semanticId.keys must not be empty") {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }

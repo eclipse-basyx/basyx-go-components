@@ -166,6 +166,17 @@ func InsertSubmodelDescriptorForAAS(
 	return result, tx.Commit()
 }
 
+// InsertSubmodelDescriptorForAASTx inserts a submodel descriptor for an AAS
+// using the provided transaction.
+func InsertSubmodelDescriptorForAASTx(
+	ctx context.Context,
+	tx *sql.Tx,
+	aasID string,
+	submodel model.SubmodelDescriptor,
+) (model.SubmodelDescriptor, error) {
+	return insertSubmodelDescriptorForAASTx(ctx, tx, aasID, submodel)
+}
+
 func insertSubmodelDescriptorForAASTx(
 	ctx context.Context,
 	tx *sql.Tx,
@@ -313,6 +324,17 @@ func DeleteSubmodelDescriptorForAASByID(
 		return err
 	}
 	return tx.Commit()
+}
+
+// DeleteSubmodelDescriptorForAASByIDTx deletes a submodel descriptor for an AAS
+// using the provided transaction.
+func DeleteSubmodelDescriptorForAASByIDTx(
+	ctx context.Context,
+	tx *sql.Tx,
+	aasID string,
+	submodelID string,
+) error {
+	return deleteSubmodelDescriptorForAASByIDTx(ctx, tx, aasID, submodelID)
 }
 
 // deleteSubmodelDescriptorForAASByIDTx deletes the submodel descriptor under the
@@ -470,6 +492,16 @@ func InsertSubmodelDescriptor(
 	return result, tx.Commit()
 }
 
+// InsertSubmodelDescriptorTx inserts a global submodel descriptor using the
+// provided transaction.
+func InsertSubmodelDescriptorTx(
+	ctx context.Context,
+	tx *sql.Tx,
+	submodel model.SubmodelDescriptor,
+) (model.SubmodelDescriptor, error) {
+	return insertSubmodelDescriptorTx(ctx, tx, submodel)
+}
+
 // ReplaceSubmodelDescriptor atomically replaces a SubmodelDescriptor (global,
 // non-AAS) by deleting the existing descriptor and inserting the new one.
 func ReplaceSubmodelDescriptor(
@@ -567,6 +599,16 @@ func DeleteSubmodelDescriptorByID(
 		return err
 	}
 	return tx.Commit()
+}
+
+// DeleteSubmodelDescriptorByIDTx deletes a global submodel descriptor by id
+// using the provided transaction.
+func DeleteSubmodelDescriptorByIDTx(
+	ctx context.Context,
+	tx *sql.Tx,
+	submodelID string,
+) error {
+	return deleteSubmodelDescriptorByIDTx(ctx, tx, submodelID)
 }
 
 // ExistsSubmodelByID performs a lightweight existence check for a submodel

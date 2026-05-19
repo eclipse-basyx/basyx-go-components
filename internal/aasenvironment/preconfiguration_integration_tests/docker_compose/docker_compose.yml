@@ -1,0 +1,94 @@
+services:
+  db_preconfig_it:
+    image: postgres:18
+    container_name: postgres_db_preconfig_it
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: admin123
+      POSTGRES_DB: basyxTestDB
+    command: ["postgres", "-c", "listen_addresses=*"]
+    ports:
+      - "6433:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U admin -d basyxTestDB"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  aas_environment_preconfig_it:
+    build:
+      context: ../../../..
+      dockerfile: ./cmd/aasenvironmentservice/Dockerfile
+    environment:
+      - SERVER_PORT=5004
+      - POSTGRES_HOST=db_preconfig_it
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=admin
+      - POSTGRES_PASSWORD=admin123
+      - POSTGRES_DBNAME=basyxTestDB
+      - POSTGRES_MAXOPENCONNECTIONS=500
+      - POSTGRES_MAXIDLECONNECTIONS=500
+      - POSTGRES_CONNMAXLIFETIMEMINUTES=5
+      - SERVER_STRICTVERIFICATION=off
+      - ABAC_ENABLED=false
+      - JWS_PRIVATEKEYPATH=/app/rsa-key.pem
+      - GENERAL_AAS_PRECONFIG_PATHS=/app/preconfiguration/IESEDriveMotorDM3000.aasx,/app/preconfiguration/ProductionPlanSFKL.aasx,/app/preconfiguration/environment_minimal.json,/app/preconfiguration/environment_malformed.json,/app/preconfiguration/missing.aasx
+    volumes:
+      - ../../integration_tests/testdata:/app/preconfiguration:ro
+      - ../../../submodelrepository/integration_tests/docker_compose/rsa-key.pem:/app/rsa-key.pem:ro
+    ports:
+      - "6014:5004"
+    extra_hosts:
+      - "localhost:host-gateway"
+    depends_on:
+      db_preconfig_it:
+        condition: service_healthy
+
+  health_observer_preconfig_it:
+    image: curlimages/curl:8.15.0
+    depends_on:
+      aas_environment_preconfig_it:
+        condition: service_started
+    volumes:
+      - ./observer:/observer
+    command:
+      - sh
+      - -c
+      - |
+        set -eu
+        health_url="http://aas_environment_preconfig_it:5004/health"
+        status_file="/observer/health_observer_status.txt"
+        deadline=$$(( $$(date +%s) + 300 ))
+        saw_503=0
+        saw_200=0
+
+        : > "$$status_file"
+
+        while [ "$$(date +%s)" -lt "$$deadline" ]; do
+          status_code="$$(curl -s -o /dev/null -w '%{http_code}' "$$health_url" || true)"
+          if [ "$$status_code" = "503" ] && [ "$$saw_503" -eq 0 ]; then
+            saw_503=1
+            echo "HEALTH_OBSERVER_SAW_503"
+            echo "HEALTH_OBSERVER_SAW_503" >> "$$status_file"
+          fi
+          if [ "$$status_code" = "200" ] && [ "$$saw_200" -eq 0 ]; then
+            saw_200=1
+            echo "HEALTH_OBSERVER_SAW_200"
+            echo "HEALTH_OBSERVER_SAW_200" >> "$$status_file"
+          fi
+          if [ "$$saw_503" -eq 1 ] && [ "$$saw_200" -eq 1 ]; then
+            echo "HEALTH_OBSERVER_DONE"
+            echo "HEALTH_OBSERVER_DONE" >> "$$status_file"
+            break
+          fi
+          sleep 0.1
+        done
+
+        if [ "$$saw_503" -eq 0 ]; then
+          echo "HEALTH_OBSERVER_MISSING_503"
+          echo "HEALTH_OBSERVER_MISSING_503" >> "$$status_file"
+        fi
+        if [ "$$saw_200" -eq 0 ]; then
+          echo "HEALTH_OBSERVER_MISSING_200"
+          echo "HEALTH_OBSERVER_MISSING_200" >> "$$status_file"
+        fi

@@ -103,6 +103,29 @@ func (p *PostgreSQLSMDatabase) ReplaceSubmodelDescriptor(
 	return descriptors.ReplaceSubmodelDescriptor(ctx, p.db, submodel)
 }
 
+// UpsertSubmodelDescriptorInTransaction replaces an existing global submodel
+// descriptor or inserts it when missing in the provided transaction.
+func (p *PostgreSQLSMDatabase) UpsertSubmodelDescriptorInTransaction(
+	ctx context.Context,
+	tx *sql.Tx,
+	submodel model.SubmodelDescriptor,
+) error {
+	if tx == nil {
+		return common.NewInternalServerError("SMREG-UPSERTSMDESC-NILTX transaction must not be nil")
+	}
+
+	if err := descriptors.DeleteSubmodelDescriptorByIDTx(ctx, tx, submodel.Id); err != nil {
+		if !common.IsErrNotFound(err) {
+			return err
+		}
+		_, insertErr := descriptors.InsertSubmodelDescriptorTx(ctx, tx, submodel)
+		return insertErr
+	}
+
+	_, err := descriptors.InsertSubmodelDescriptorTx(ctx, tx, submodel)
+	return err
+}
+
 // GetSubmodelDescriptorByID returns a global Submodel Descriptor by its id.
 func (p *PostgreSQLSMDatabase) GetSubmodelDescriptorByID(
 	ctx context.Context,
@@ -117,6 +140,19 @@ func (p *PostgreSQLSMDatabase) DeleteSubmodelDescriptorByID(
 	submodelID string,
 ) error {
 	return descriptors.DeleteSubmodelDescriptorByID(ctx, p.db, submodelID)
+}
+
+// DeleteSubmodelDescriptorByIDInTransaction deletes a global submodel
+// descriptor by id in the provided transaction.
+func (p *PostgreSQLSMDatabase) DeleteSubmodelDescriptorByIDInTransaction(
+	ctx context.Context,
+	tx *sql.Tx,
+	submodelID string,
+) error {
+	if tx == nil {
+		return common.NewInternalServerError("SMREG-DELSMDESC-NILTX transaction must not be nil")
+	}
+	return descriptors.DeleteSubmodelDescriptorByIDTx(ctx, tx, submodelID)
 }
 
 // ExistsSubmodelByID reports whether a global Submodel Descriptor exists by its id.

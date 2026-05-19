@@ -96,6 +96,9 @@ func (s *CustomRegistryService) PostAssetAdministrationShellDescriptor(
 	ctx context.Context,
 	assetAdministrationShellDescriptor model.AssetAdministrationShellDescriptor,
 ) (model.ImplResponse, error) {
+	ctx = descriptors.WithAllowAASDescriptorCreatedAtOverride(ctx)
+	ctx = descriptors.WithIncludeAASDescriptorCreatedAt(ctx)
+
 	baseResp, baseErr := s.AssetAdministrationShellRegistryAPIAPIService.PostAssetAdministrationShellDescriptor(
 		ctx,
 		assetAdministrationShellDescriptor,
@@ -113,6 +116,9 @@ func (s *CustomRegistryService) PutAssetAdministrationShellDescriptorById(
 	aasIdentifier string,
 	assetAdministrationShellDescriptor model.AssetAdministrationShellDescriptor,
 ) (model.ImplResponse, error) {
+	ctx = descriptors.WithAllowAASDescriptorCreatedAtOverride(ctx)
+	ctx = descriptors.WithIncludeAASDescriptorCreatedAt(ctx)
+
 	decodedAASID, decodeErr := common.DecodeString(aasIdentifier)
 	if decodeErr != nil {
 		resp := common.NewErrorResponse(

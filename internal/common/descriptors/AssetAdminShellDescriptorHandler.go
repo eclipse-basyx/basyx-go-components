@@ -156,14 +156,7 @@ func InsertAdministrationShellDescriptorTx(ctx context.Context, tx *sql.Tx, aasd
 
 	sqlStr, args, buildErr = d.
 		Insert(common.TblAASDescriptor).
-		Rows(goqu.Record{
-			common.ColDescriptorID:  descriptorID,
-			common.ColAssetKind:     aasd.AssetKind,
-			common.ColAssetType:     aasd.AssetType,
-			common.ColGlobalAssetID: aasd.GlobalAssetId,
-			common.ColIDShort:       aasd.IdShort,
-			common.ColAASID:         aasd.Id,
-		}).
+		Rows(buildAASDescriptorInsertRecord(ctx, descriptorID, aasd)).
 		ToSQL()
 	if buildErr != nil {
 		return buildErr
@@ -196,6 +189,27 @@ func InsertAdministrationShellDescriptorTx(ctx context.Context, tx *sql.Tx, aasd
 	}
 
 	return createSubModelDescriptors(tx, sql.NullInt64{Int64: descriptorID, Valid: true}, aasd.SubmodelDescriptors)
+}
+
+func buildAASDescriptorInsertRecord(
+	ctx context.Context,
+	descriptorID int64,
+	aasd model.AssetAdministrationShellDescriptor,
+) goqu.Record {
+	record := goqu.Record{
+		common.ColDescriptorID:  descriptorID,
+		common.ColAssetKind:     aasd.AssetKind,
+		common.ColAssetType:     aasd.AssetType,
+		common.ColGlobalAssetID: aasd.GlobalAssetId,
+		common.ColIDShort:       aasd.IdShort,
+		common.ColAASID:         aasd.Id,
+	}
+
+	if allowAASDescriptorCreatedAtOverrideFromContext(ctx) && aasd.CreatedAt != nil {
+		record[common.ColCreatedAt] = *aasd.CreatedAt
+	}
+
+	return record
 }
 
 // GetAssetAdministrationShellDescriptorByID returns a fully materialized
@@ -262,6 +276,12 @@ func DeleteAssetAdministrationShellDescriptorByID(ctx context.Context, db *sql.D
 	}
 
 	return tx.Commit()
+}
+
+// DeleteAssetAdministrationShellDescriptorByIDTx deletes a descriptor by AAS id
+// using the provided transaction.
+func DeleteAssetAdministrationShellDescriptorByIDTx(ctx context.Context, tx *sql.Tx, aasIdentifier string) error {
+	return deleteAssetAdministrationShellDescriptorByIDTx(ctx, tx, aasIdentifier)
 }
 
 // DeleteAssetAdministrationShellDescriptorByIDTx deletes using the provided

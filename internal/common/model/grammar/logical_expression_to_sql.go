@@ -1979,10 +1979,24 @@ func buildComparisonExpression(left interface{}, right interface{}, operation st
 // For types that can raise runtime errors (e.g. timestamptz, time, numeric, boolean), the cast is guarded
 // so non-castable inputs yield NULL instead of a PostgreSQL cast error.
 // This is critical for security rules: a failed cast should simply cause the predicate to not match.
+// safeCastTimestampWithTimezoneRegex guards timestamptz casts in SQL-safe mode.
+//
+// Why this exists:
+//   - API inputs are RFC3339 (e.g. 2025-05-18T14:18:00.748914Z).
+//   - PostgreSQL timestamptz::text commonly renders as
+//     "YYYY-MM-DD HH:MM:SS[.fraction]+HH[:MM]" (space instead of "T").
+//   - A previous "T"-only regex rejected valid PostgreSQL text forms, causing
+//     guarded casts to become NULL and time comparisons (e.g. createdAfter) to fail.
+//
+// Accepted format:
+// - ISO 8601 / RFC3339-compatible date-time with timezone
+// - Date-time separator can be either "T" (RFC3339) or space (PostgreSQL text output).
+const safeCastTimestampWithTimezoneRegex = `^[0-9]{4}-[0-9]{2}-[0-9]{2}(?:[ T][0-9]{2}:[0-9]{2}(?::[0-9]{2}(?:\.[0-9]+)?)?(?:Z|[+-][0-9]{2}(?::?[0-9]{2})?)?)?$`
+
 func safeCastSQLValue(sqlValue interface{}, targetType string) exp.Expression {
 	switch targetType {
 	case "timestamptz":
-		return goqu.L("CASE WHEN ?::text ~ ? THEN (?::timestamptz) END", sqlValue, `^[0-9]{4}-[0-9]{2}-[0-9]{2}T`, sqlValue)
+		return goqu.L("CASE WHEN ?::text ~ ? THEN (?::timestamptz) END", sqlValue, safeCastTimestampWithTimezoneRegex, sqlValue)
 	case "time":
 		return goqu.L("CASE WHEN ?::text ~ ? THEN (?::time) END", sqlValue, `^[0-9]{2}:[0-9]{2}(:[0-9]{2})?$`, sqlValue)
 	case "double precision":

@@ -13,9 +13,12 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/eclipse-basyx/basyx-go-components/internal/aasenvironment"
+	aasregistrydb "github.com/eclipse-basyx/basyx-go-components/internal/aasregistry/persistence"
 	"github.com/eclipse-basyx/basyx-go-components/internal/aasrepository/api"
 	persistencepostgresql "github.com/eclipse-basyx/basyx-go-components/internal/aasrepository/persistence"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
+	commonmodel "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 	submodelrepositorydb "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence"
 	openapi "github.com/eclipse-basyx/basyx-go-components/pkg/aasrepositoryapi/go"
@@ -33,6 +36,22 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 		return err
 	}
 
+	if err := commonmodel.SetVerificationMode(cfg.Server.StrictVerification); err != nil {
+		return err
+	}
+
+	if err = aasenvironment.ValidateStandaloneAASRepositoryRegistrySyncConfig(cfg); err != nil {
+		return err
+	}
+	registrySyncConfig, err := aasenvironment.NewRegistrySyncConfig(
+		cfg.General.AASRegistryIntegration,
+		cfg.General.SubmodelRegistryIntegration,
+		cfg.General.ExternalURL,
+	)
+	if err != nil {
+		return err
+	}
+
 	r := chi.NewRouter()
 	r.Use(common.ConfigMiddleware(cfg))
 
@@ -40,17 +59,15 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 
 	common.AddHealthEndpoint(r, cfg)
 
+	if cfg.Server.VerificationEndpointAvailable {
+		common.AddVerificationEndpoint(r, cfg)
+	}
+
 	if err := common.AddSwaggerUIFromFS(r, openapiSpec, "openapi.yaml", "Asset Administration Shell Repository API", "/swagger", "/api-docs/openapi.yaml", cfg); err != nil {
 		log.Printf("Warning: failed to load OpenAPI spec for Swagger UI: %v", err)
 	}
 
-	dsn := fmt.Sprintf("postgres://%s:%s@%s:%d/%s?sslmode=disable",
-		cfg.Postgres.User,
-		cfg.Postgres.Password,
-		cfg.Postgres.Host,
-		cfg.Postgres.Port,
-		cfg.Postgres.DBName,
-	)
+	dsn := common.BuildPostgresDSN(cfg.Postgres)
 	log.Printf("🗄️  Connecting to Postgres with DSN: postgres://%s:****@%s:%d/%s?sslmode=disable",
 		cfg.Postgres.User, cfg.Postgres.Host, cfg.Postgres.Port, cfg.Postgres.DBName)
 
@@ -75,6 +92,12 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 		return err
 	}
 
+	aasRegistryPersistence, err := aasregistrydb.NewPostgreSQLAASRegistryDatabaseFromDB(sharedDB, cfg.Server.CacheEnabled)
+	if err != nil {
+		log.Printf("AAS Registry DB init failed: %v", err)
+		return err
+	}
+
 	submodelDatabase, err := submodelrepositorydb.NewSubmodelDatabaseFromDB(sharedDB, nil, cfg.Server.StrictVerification)
 	if err != nil {
 		log.Printf("❌ Submodel DB connect failed: %v", err)
@@ -82,7 +105,17 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 	}
 	log.Println("✅ Postgres connection established")
 
-	aasSvc := api.NewAssetAdministrationShellRepositoryAPIAPIService(aasDatabase, submodelDatabase)
+	persistence := &aasenvironment.Persistence{
+		DB:                 sharedDB,
+		AASRegistry:        aasRegistryPersistence,
+		AASRepository:      aasDatabase,
+		SubmodelRepository: submodelDatabase,
+	}
+	aasSvc := aasenvironment.NewCustomAASRepositoryService(
+		api.NewAssetAdministrationShellRepositoryAPIAPIService(aasDatabase, submodelDatabase),
+		persistence,
+		registrySyncConfig,
+	)
 	aasCtrl := openapi.NewAssetAdministrationShellRepositoryAPIAPIController(aasSvc, "", cfg.Server.StrictVerification)
 
 	descSvc := openapi.NewDescriptionAPIAPIService()

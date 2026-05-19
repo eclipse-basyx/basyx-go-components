@@ -29,9 +29,32 @@ services:
       - POSTGRES_MAXOPENCONNECTIONS=500
       - POSTGRES_MAXIDLECONNECTIONS=500
       - POSTGRES_CONNMAXLIFETIMEMINUTES=5
-      - SERVER_STRICTVERIFICATION=false
+      - SERVER_STRICTVERIFICATION=off
     ports:
       - "6004:5004"
+    depends_on:
+      db_it:
+        condition: service_healthy
+
+  aas_repository_it_invalid_toggle:
+    build:
+      context: ../../../..
+      dockerfile: ./cmd/aasrepositoryservice/Dockerfile
+    environment:
+      - SERVER_PORT=5004
+      - POSTGRES_HOST=db_it
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=admin
+      - POSTGRES_PASSWORD=admin123
+      - POSTGRES_DBNAME=basyxTestDB
+      - POSTGRES_MAXOPENCONNECTIONS=500
+      - POSTGRES_MAXIDLECONNECTIONS=500
+      - POSTGRES_CONNMAXLIFETIMEMINUTES=5
+      - SERVER_STRICTVERIFICATION=false
+      - GENERAL_SUBMODELREGISTRYINTEGRATION=true
+    ports:
+      - "6006:5004"
+    command: ["/app/aasrepositoryservice", "-config", "/config/config.yaml"]
     depends_on:
       db_it:
         condition: service_healthy

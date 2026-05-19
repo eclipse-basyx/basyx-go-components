@@ -15,6 +15,22 @@ services:
       timeout: 5s
       retries: 5
 
+  db_it_sync_off:
+    image: postgres:18
+    container_name: postgres_db_it_sync_off
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: admin123
+      POSTGRES_DB: basyxTestDBSyncOff
+    command: ["postgres", "-c", "listen_addresses=*"]
+    ports:
+      - "6433:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U admin -d basyxTestDBSyncOff"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   aas_environment_it:
     build:
       context: ../../../..
@@ -29,8 +45,11 @@ services:
       - POSTGRES_MAXOPENCONNECTIONS=500
       - POSTGRES_MAXIDLECONNECTIONS=500
       - POSTGRES_CONNMAXLIFETIMEMINUTES=5
-      - SERVER_STRICTVERIFICATION=false
+      - SERVER_STRICTVERIFICATION=off
       - ABAC_ENABLED=false
+      - GENERAL_AASREGISTRYINTEGRATION=true
+      - GENERAL_SUBMODELREGISTRYINTEGRATION=true
+      - GENERAL_EXTERNALURL=http://127.0.0.1:6004
       - JWS_PRIVATEKEYPATH=/app/rsa-key.pem
     volumes:
       - ../../../submodelrepository/integration_tests/docker_compose/rsa-key.pem:/app/rsa-key.pem:ro
@@ -40,4 +59,34 @@ services:
       - "localhost:host-gateway"
     depends_on:
       db_it:
+        condition: service_healthy
+
+  aas_environment_it_sync_off:
+    build:
+      context: ../../../..
+      dockerfile: ./cmd/aasenvironmentservice/Dockerfile
+    environment:
+      - SERVER_PORT=5004
+      - POSTGRES_HOST=db_it_sync_off
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=admin
+      - POSTGRES_PASSWORD=admin123
+      - POSTGRES_DBNAME=basyxTestDBSyncOff
+      - POSTGRES_MAXOPENCONNECTIONS=500
+      - POSTGRES_MAXIDLECONNECTIONS=500
+      - POSTGRES_CONNMAXLIFETIMEMINUTES=5
+      - SERVER_STRICTVERIFICATION=off
+      - ABAC_ENABLED=false
+      - GENERAL_AASREGISTRYINTEGRATION=false
+      - GENERAL_SUBMODELREGISTRYINTEGRATION=false
+      - GENERAL_EXTERNALURL=
+      - JWS_PRIVATEKEYPATH=/app/rsa-key.pem
+    volumes:
+      - ../../../submodelrepository/integration_tests/docker_compose/rsa-key.pem:/app/rsa-key.pem:ro
+    ports:
+      - "6005:5004"
+    extra_hosts:
+      - "localhost:host-gateway"
+    depends_on:
+      db_it_sync_off:
         condition: service_healthy

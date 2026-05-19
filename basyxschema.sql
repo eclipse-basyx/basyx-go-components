@@ -420,6 +420,7 @@ CREATE TABLE IF NOT EXISTS aas_descriptor_endpoint (
 
 CREATE TABLE IF NOT EXISTS aas_descriptor (
   descriptor_id BIGINT PRIMARY KEY REFERENCES descriptor(id) ON DELETE CASCADE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   db_created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   asset_kind int,
   asset_type VARCHAR(2048),
@@ -485,6 +486,19 @@ CREATE TABLE IF NOT EXISTS concept_description (
   db_created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   db_updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+-- ------------------------------------------
+-- Schema compatibility upgrades
+-- ------------------------------------------
+
+ALTER TABLE IF EXISTS aas_descriptor
+  ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
+
+ALTER TABLE IF EXISTS aas_identifier
+  ADD COLUMN IF NOT EXISTS db_created_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
+
+ALTER TABLE IF EXISTS aas_identifier
+  ADD COLUMN IF NOT EXISTS db_updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
 
 /*
  Auto-generated file. Do not edit manually.
@@ -669,6 +683,31 @@ CREATE TABLE IF NOT EXISTS submodel_descriptor_supplemental_semantic_id_referenc
 );
 
 -- ------------------------------------------
+-- AASX File Server
+-- ------------------------------------------
+
+CREATE TABLE IF NOT EXISTS aasx_package (
+  id BIGSERIAL PRIMARY KEY,
+  package_id TEXT NOT NULL UNIQUE,
+  file_oid OID NOT NULL,
+  file_name TEXT NOT NULL,
+  content_type TEXT NOT NULL DEFAULT 'application/asset-administration-shell-package',
+  db_created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  db_updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS aasx_package_aas_id (
+  id BIGSERIAL PRIMARY KEY,
+  package_db_id BIGINT NOT NULL REFERENCES aasx_package(id) ON DELETE CASCADE,
+  aas_id TEXT NOT NULL,
+  position INTEGER NOT NULL,
+  UNIQUE(package_db_id, position),
+  UNIQUE(package_db_id, aas_id),
+  db_created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  db_updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- ------------------------------------------
 -- Timestamp triggers
 -- ------------------------------------------
 
@@ -764,7 +803,6 @@ CREATE INDEX IF NOT EXISTS ix_operation_variable_operation_id ON operation_varia
 CREATE INDEX IF NOT EXISTS ix_operation_variable_value_sme ON operation_variable(value_sme);
 
 CREATE UNIQUE INDEX IF NOT EXISTS ix_aas_identifier_aasid ON aas_identifier(aasId);
-CREATE INDEX IF NOT EXISTS ix_aas_identifier_db_created_at ON aas_identifier(db_created_at);
 
 CREATE INDEX IF NOT EXISTS ix_specasset_descriptor_id_name ON specific_asset_id(descriptor_id, name);
 CREATE INDEX IF NOT EXISTS ix_specasset_descriptor_id_position ON specific_asset_id(descriptor_id, position);
@@ -787,6 +825,7 @@ CREATE INDEX IF NOT EXISTS ix_aas_endpoint_descriptor_position ON aas_descriptor
 CREATE INDEX IF NOT EXISTS ix_aas_endpoint_position ON aas_descriptor_endpoint(position);
 
 CREATE INDEX IF NOT EXISTS ix_aasd_db_created_at ON aas_descriptor(db_created_at);
+CREATE INDEX IF NOT EXISTS ix_aasd_created_at ON aas_descriptor(created_at);
 CREATE INDEX IF NOT EXISTS ix_aasd_id_short ON aas_descriptor(id_short);
 CREATE INDEX IF NOT EXISTS ix_aasd_global_asset_id ON aas_descriptor(global_asset_id);
 CREATE INDEX IF NOT EXISTS ix_aasd_id_trgm ON aas_descriptor USING GIN (id gin_trgm_ops);
@@ -847,3 +886,8 @@ CREATE INDEX IF NOT EXISTS ix_specasset_supp_semantic_refkey_refid ON specific_a
 CREATE INDEX IF NOT EXISTS ix_specasset_supp_semantic_refkey_refval ON specific_asset_id_supplemental_semantic_id_reference_key(reference_id, value);
 CREATE INDEX IF NOT EXISTS ix_specasset_supp_semantic_refkey_type_val ON specific_asset_id_supplemental_semantic_id_reference_key(type, value);
 CREATE INDEX IF NOT EXISTS ix_specasset_supp_semantic_refkey_val_trgm ON specific_asset_id_supplemental_semantic_id_reference_key USING GIN (value gin_trgm_ops);
+
+CREATE INDEX IF NOT EXISTS ix_aasx_package_package_id ON aasx_package(package_id);
+CREATE INDEX IF NOT EXISTS ix_aasx_package_db_created_at ON aasx_package(db_created_at);
+CREATE INDEX IF NOT EXISTS ix_aasx_package_aas_id_aas ON aasx_package_aas_id(aas_id);
+CREATE INDEX IF NOT EXISTS ix_aasx_package_aas_id_package ON aasx_package_aas_id(package_db_id);

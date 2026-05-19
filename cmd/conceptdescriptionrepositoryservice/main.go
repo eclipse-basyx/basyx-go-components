@@ -34,11 +34,11 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"strconv"
 
 	"github.com/go-chi/chi/v5"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
+	commonmodel "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 	"github.com/eclipse-basyx/basyx-go-components/internal/conceptdescriptionrepository/api"
 	"github.com/eclipse-basyx/basyx-go-components/internal/conceptdescriptionrepository/persistence"
@@ -52,8 +52,11 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 	log.Default().Println("Loading Concept Description Repository Service...")
 	log.Default().Println("Config Path:", configPath)
 	// Load configuration
-	config, err := common.LoadConfig(configPath)
+	cfg, err := common.LoadConfig(configPath)
 	if err != nil {
+		return err
+	}
+	if err := commonmodel.SetVerificationMode(cfg.Server.StrictVerification); err != nil {
 		return err
 	}
 
@@ -62,28 +65,29 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 	common.AddDefaultRouterErrorHandlers(r, "ConceptDescriptionRepositoryService")
 
 	// Make configuration available in request contexts.
-	r.Use(common.ConfigMiddleware(config))
+	r.Use(common.ConfigMiddleware(cfg))
 
-	// Enable CORS
-	common.AddCors(r, config)
-
-	// Add health endpoint
-	common.AddHealthEndpoint(r, config)
+	common.AddCors(r, cfg)
+	common.AddHealthEndpoint(r, cfg)
+	if cfg.Server.VerificationEndpointAvailable {
+		common.AddVerificationEndpoint(r, cfg)
+	}
 
 	// Add Swagger UI
-	if err := common.AddSwaggerUIFromFS(r, openapiSpec, "openapi.yaml", "Concept Description Repository API", "/swagger", "/api-docs/openapi.yaml", config); err != nil {
+	if err := common.AddSwaggerUIFromFS(r, openapiSpec, "openapi.yaml", "Concept Description Repository API", "/swagger", "/api-docs/openapi.yaml", cfg); err != nil {
 		log.Printf("Warning: failed to load OpenAPI spec for Swagger UI: %v", err)
 	}
 
 	// Instantiate generated services & controllers
 	// ==== Concept Description Repository Service ====
 
+	dsn := common.BuildPostgresDSN(cfg.Postgres)
 	cdDatabase, err := persistence.NewConceptDescriptionBackend(
-		"postgres://"+config.Postgres.User+":"+config.Postgres.Password+"@"+config.Postgres.Host+":"+strconv.Itoa(config.Postgres.Port)+"/"+config.Postgres.DBName+"?sslmode=disable",
+		dsn,
 		//nolint:gosec // configured value is bounded by deployment configuration
-		int32(config.Postgres.MaxOpenConnections),
-		config.Postgres.MaxIdleConnections,
-		config.Postgres.ConnMaxLifetimeMinutes,
+		int32(cfg.Postgres.MaxOpenConnections),
+		cfg.Postgres.MaxIdleConnections,
+		cfg.Postgres.ConnMaxLifetimeMinutes,
 		databaseSchema,
 	)
 	if err != nil {
@@ -91,20 +95,20 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 	}
 
 	cdSvc := api.NewConceptDescriptionRepositoryAPIAPIService(cdDatabase)
-	cdCtrl := openapi.NewConceptDescriptionRepositoryAPIAPIController(cdSvc, "", config.Server.StrictVerification)
+	cdCtrl := openapi.NewConceptDescriptionRepositoryAPIAPIController(cdSvc, "", cfg.Server.StrictVerification)
 
 	// ==== Description Service ====
 	descSvc := api.NewDescriptionAPIAPIService()
 	descCtrl := openapi.NewDescriptionAPIAPIController(descSvc)
 
-	base := common.NormalizeBasePath(config.Server.ContextPath)
+	base := common.NormalizeBasePath(cfg.Server.ContextPath)
 
 	// === Protected API Subrouter ===
 	apiRouter := chi.NewRouter()
 	common.ConfigureAPIRouter(apiRouter, "ConceptDescriptionRepositoryService")
 
 	// Apply OIDC + ABAC once for all repository endpoints
-	if err := auth.SetupSecurity(ctx, config, apiRouter); err != nil {
+	if err := auth.SetupSecurity(ctx, cfg, apiRouter); err != nil {
 		return err
 	}
 
@@ -119,8 +123,8 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 	r.Mount(base, apiRouter)
 
 	// Start the server
-	addr := "0.0.0.0:" + fmt.Sprintf("%d", config.Server.Port)
-	log.Printf("▶️  Concept Description Repository listening on %s (contextPath=%q)\n", addr, config.Server.ContextPath)
+	addr := "0.0.0.0:" + fmt.Sprintf("%d", cfg.Server.Port)
+	log.Printf("▶️  Concept Description Repository listening on %s (contextPath=%q)\n", addr, cfg.Server.ContextPath)
 	// Start server in a goroutine
 	go func() {
 		//nolint:gosec // implementing this fix would cause errors.

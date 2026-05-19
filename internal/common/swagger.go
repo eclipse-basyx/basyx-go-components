@@ -9,6 +9,7 @@ import (
 	"io/fs"
 	"log"
 	"net/http"
+	"path"
 	"regexp"
 	"strings"
 
@@ -53,16 +54,20 @@ const SwaggerUIHTML = `<!DOCTYPE html>
 </body>
 </html>`
 
+//go:embed swagger_part2_schemas/V3.1.1/openapi.yaml swagger_part2_schemas/V3.2.0/openapi.yaml
+var part2SchemasFS embed.FS
+
 // SwaggerUIConfig holds configuration for Swagger UI endpoint setup
 type SwaggerUIConfig struct {
-	Title       string         // Title shown in browser tab
-	SpecURL     string         // URL to the OpenAPI spec (e.g., "/api-docs/openapi.yaml")
-	UIPath      string         // Path where Swagger UI will be served (e.g., "/swagger")
-	SpecPath    string         // Path where spec will be served (e.g., "/api-docs/openapi.yaml")
-	SpecContent []byte         // The OpenAPI spec content
-	ServerURL   string         // Server URL to use in OpenAPI spec (e.g., "http://localhost:5004/api")
-	BasePath    string         // Base path for redirect to Swagger UI (e.g., "/" or "/api")
-	Contact     *ContactConfig // Contact information to inject into OpenAPI spec
+	Title                 string         // Title shown in browser tab
+	SpecURL               string         // URL to the OpenAPI spec (e.g., "/api-docs/openapi.yaml")
+	UIPath                string         // Path where Swagger UI will be served (e.g., "/swagger")
+	SpecPath              string         // Path where spec will be served (e.g., "/api-docs/openapi.yaml")
+	SpecContent           []byte         // The OpenAPI spec content
+	ServerURL             string         // Server URL to use in OpenAPI spec (e.g., "http://localhost:5004/api")
+	BasePath              string         // Base path for redirect to Swagger UI (e.g., "/" or "/api")
+	Contact               *ContactConfig // Contact information to inject into OpenAPI spec
+	IncludeVerifyEndpoint *bool          // nil/default=true, false disables /verify injection in OpenAPI spec
 }
 
 // ContactConfig holds contact information for OpenAPI spec
@@ -70,6 +75,134 @@ type ContactConfig struct {
 	Name  string // Contact name
 	Email string // Contact email
 	URL   string // Contact URL
+}
+
+var openAPIVersionRegex = regexp.MustCompile(`(?m)^\s*version:\s*V([0-9]+\.[0-9]+\.[0-9]+)`)
+var verifyPathRegex = regexp.MustCompile(`(?m)^\s*/verify:\s*$`)
+var pathsSectionRegex = regexp.MustCompile(`(?m)^paths:\s*(?:\r?\n)`)
+
+func detectPart2SchemaVersion(specContent []byte) string {
+	matches := openAPIVersionRegex.FindSubmatch(specContent)
+	if len(matches) < 2 {
+		return "V3.1.1"
+	}
+	return "V" + string(matches[1])
+}
+
+func localizePart2SchemaReferences(specContent []byte, specPath string) []byte {
+	version := detectPart2SchemaVersion(specContent)
+	localSchemaURL := path.Clean(path.Dir(specPath) + "/part2-schemas/" + version + "/openapi.yaml")
+
+	rewritten := specContent
+	remotePrefixes := []string{
+		"https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.1.1",
+		"https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.2.0",
+	}
+	for _, prefix := range remotePrefixes {
+		rewritten = []byte(strings.ReplaceAll(string(rewritten), prefix, localSchemaURL))
+	}
+
+	relativePrefixes := []string{
+		"../Part2-API-Schemas/openapi.yaml",
+		"../Part2-API-Schemas/V3.1.1/openapi.yaml",
+		"../Part2-API-Schemas/V3.2.0/openapi.yaml",
+	}
+	for _, prefix := range relativePrefixes {
+		rewritten = []byte(strings.ReplaceAll(string(rewritten), prefix, localSchemaURL))
+	}
+
+	return rewritten
+}
+
+func injectVerifyEndpoint(specContent []byte) []byte {
+	if verifyPathRegex.Match(specContent) {
+		return specContent
+	}
+
+	verifyPath := "" +
+		"  /verify:\n" +
+		"    post:\n" +
+		"      tags:\n" +
+		"        - Verification API\n" +
+		"      summary: Verifies AAS payload against the AAS meta model\n" +
+		"      operationId: VerifyPayload\n" +
+		"      requestBody:\n" +
+		"        required: true\n" +
+		"        content:\n" +
+		"          application/json:\n" +
+		"            schema:\n" +
+		"              type: object\n" +
+		"          application/xml:\n" +
+		"            schema:\n" +
+		"              type: string\n" +
+		"          application/aasx+xml:\n" +
+		"            schema:\n" +
+		"              type: string\n" +
+		"              format: binary\n" +
+		"          application/aasx+json:\n" +
+		"            schema:\n" +
+		"              type: string\n" +
+		"              format: binary\n" +
+		"          multipart/form-data:\n" +
+		"            schema:\n" +
+		"              type: object\n" +
+		"              oneOf:\n" +
+		"                - required:\n" +
+		"                    - file\n" +
+		"                - required:\n" +
+		"                    - payload\n" +
+		"              properties:\n" +
+		"                file:\n" +
+		"                  type: string\n" +
+		"                  format: binary\n" +
+		"                payload:\n" +
+		"                  type: string\n" +
+		"      responses:\n" +
+		"        '200':\n" +
+		"          description: Verification result\n" +
+		"          content:\n" +
+		"            application/json:\n" +
+		"              schema:\n" +
+		"                type: object\n" +
+		"                properties:\n" +
+		"                  valid:\n" +
+		"                    type: boolean\n" +
+		"                  format:\n" +
+		"                    type: string\n" +
+		"                  assetAdministrationShellCount:\n" +
+		"                    type: integer\n" +
+		"                  submodelCount:\n" +
+		"                    type: integer\n" +
+		"                  conceptDescriptionCount:\n" +
+		"                    type: integer\n" +
+		"                  messages:\n" +
+		"                    type: array\n" +
+		"                    items:\n" +
+		"                      type: string\n" +
+		"        '400':\n" +
+		"          description: Invalid payload or unsupported format\n" +
+		"        '413':\n" +
+		"          description: Payload exceeds configured size limit\n" +
+		"        '500':\n" +
+		"          description: Internal server error while generating response\n"
+
+	pathLoc := pathsSectionRegex.FindIndex(specContent)
+	if pathLoc != nil {
+		injected := make([]byte, 0, len(specContent)+len(verifyPath))
+		injected = append(injected, specContent[:pathLoc[1]]...)
+		injected = append(injected, verifyPath...)
+		injected = append(injected, specContent[pathLoc[1]:]...)
+		return injected
+	}
+
+	appended := make([]byte, 0, len(specContent)+len(verifyPath)+8)
+	appended = append(appended, specContent...)
+	if len(specContent) > 0 && specContent[len(specContent)-1] != '\n' {
+		appended = append(appended, '\n')
+	}
+	appended = append(appended, []byte("paths:\n")...)
+	appended = append(appended, verifyPath...)
+	return appended
 }
 
 // injectServerURL modifies the OpenAPI spec to use the configured server URL
@@ -162,10 +295,41 @@ func AddSwaggerUI(r *chi.Mux, cfg SwaggerUIConfig) {
 		specContent = injectContact(specContent, cfg.Contact)
 	}
 
+	// Repoint Part2 schema references to local, bundled schema snapshots so Swagger works offline.
+	specContent = localizePart2SchemaReferences(specContent, cfg.SpecPath)
+
+	includeVerifyEndpoint := true
+	if cfg.IncludeVerifyEndpoint != nil {
+		includeVerifyEndpoint = *cfg.IncludeVerifyEndpoint
+	}
+	if includeVerifyEndpoint {
+		specContent = injectVerifyEndpoint(specContent)
+	}
+
 	// Serve the OpenAPI spec
 	r.Get(cfg.SpecPath, func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/yaml")
 		_, _ = w.Write(specContent)
+	})
+
+	part2SchemaPath := path.Clean(path.Dir(cfg.SpecPath) + "/part2-schemas/{version}/openapi.yaml")
+	r.Get(part2SchemaPath, func(w http.ResponseWriter, req *http.Request) {
+		version := chi.URLParam(req, "version")
+		if version == "" {
+			http.NotFound(w, req)
+			return
+		}
+
+		schemaPath := path.Clean("swagger_part2_schemas/" + version + "/openapi.yaml")
+		schemaContent, err := fs.ReadFile(part2SchemasFS, schemaPath)
+		if err != nil {
+			http.NotFound(w, req)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/yaml")
+		// #nosec G705 -- schemaContent is loaded from trusted embedded files only.
+		_, _ = w.Write(schemaContent)
 	})
 
 	// Serve Swagger UI
@@ -248,6 +412,7 @@ func AddSwaggerUIFromFS(r *chi.Mux, specFS embed.FS, specFile string, title stri
 
 	// Build contact config if provided
 	var contact *ContactConfig
+	var includeVerifyEndpoint *bool
 	if serverConfig != nil && (serverConfig.Swagger.ContactName != "" || serverConfig.Swagger.ContactEmail != "" || serverConfig.Swagger.ContactURL != "") {
 		contact = &ContactConfig{
 			Name:  serverConfig.Swagger.ContactName,
@@ -255,16 +420,20 @@ func AddSwaggerUIFromFS(r *chi.Mux, specFS embed.FS, specFile string, title stri
 			URL:   serverConfig.Swagger.ContactURL,
 		}
 	}
+	if serverConfig != nil {
+		includeVerifyEndpoint = &serverConfig.Server.VerificationEndpointAvailable
+	}
 
 	AddSwaggerUI(r, SwaggerUIConfig{
-		Title:       title,
-		SpecURL:     fullSpecPath,
-		UIPath:      fullUIPath,
-		SpecPath:    fullSpecPath,
-		SpecContent: content,
-		ServerURL:   serverURL,
-		BasePath:    basePath,
-		Contact:     contact,
+		Title:                 title,
+		SpecURL:               fullSpecPath,
+		UIPath:                fullUIPath,
+		SpecPath:              fullSpecPath,
+		SpecContent:           content,
+		ServerURL:             serverURL,
+		BasePath:              basePath,
+		Contact:               contact,
+		IncludeVerifyEndpoint: includeVerifyEndpoint,
 	})
 
 	return nil

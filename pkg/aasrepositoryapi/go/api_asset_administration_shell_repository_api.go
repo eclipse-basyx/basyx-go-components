@@ -22,6 +22,7 @@ import (
 	"strings"
 
 	aasjsonization "github.com/aas-core-works/aas-core3.1-golang/jsonization"
+	aastypes "github.com/aas-core-works/aas-core3.1-golang/types"
 	aasverification "github.com/aas-core-works/aas-core3.1-golang/verification"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
@@ -33,7 +34,7 @@ type AssetAdministrationShellRepositoryAPIAPIController struct {
 	service            AssetAdministrationShellRepositoryAPIAPIServicer
 	errorHandler       ErrorHandler
 	contextPath        string
-	strictVerification bool
+	strictVerification string
 }
 
 // AssetAdministrationShellRepositoryAPIAPIOption for how the controller is set up.
@@ -47,7 +48,7 @@ func WithAssetAdministrationShellRepositoryAPIAPIErrorHandler(h ErrorHandler) As
 }
 
 // NewAssetAdministrationShellRepositoryAPIAPIController creates a default api controller
-func NewAssetAdministrationShellRepositoryAPIAPIController(s AssetAdministrationShellRepositoryAPIAPIServicer, contextPath string, strictVerification bool, opts ...AssetAdministrationShellRepositoryAPIAPIOption) *AssetAdministrationShellRepositoryAPIAPIController {
+func NewAssetAdministrationShellRepositoryAPIAPIController(s AssetAdministrationShellRepositoryAPIAPIServicer, contextPath string, strictVerification string, opts ...AssetAdministrationShellRepositoryAPIAPIOption) *AssetAdministrationShellRepositoryAPIAPIController {
 	controller := &AssetAdministrationShellRepositoryAPIAPIController{
 		service:            s,
 		errorHandler:       DefaultErrorHandler,
@@ -1219,18 +1220,9 @@ func (c *AssetAdministrationShellRepositoryAPIAPIController) PostSubmodelElement
 		return
 	}
 
-	if c.strictVerification {
-		var validationErrors []string
-		aasverification.Verify(submodelElementParam, func(verErr *aasverification.VerificationError) bool {
-			validationErrors = append(validationErrors, verErr.Error())
-			return false
-		})
-
-		if len(validationErrors) > 0 {
-			err := fmt.Errorf("validation failed: %s", strings.Join(validationErrors, "; "))
-			c.errorHandler(w, r, &ParsingError{Err: err}, nil)
-			return
-		}
+	if err = c.validateSubmodelElementWithMode(submodelElementParam, "AASREPO-POSTSME-VERIFY"); err != nil {
+		c.errorHandler(w, r, err, nil)
+		return
 	}
 
 	result, err := c.service.PostSubmodelElementAasRepository(r.Context(), aasIdentifierParam, submodelIdentifierParam, submodelElementParam)
@@ -1562,18 +1554,9 @@ func (c *AssetAdministrationShellRepositoryAPIAPIController) PutSubmodelElementB
 		return
 	}
 
-	if c.strictVerification {
-		var validationErrors []string
-		aasverification.Verify(submodelElementParam, func(verErr *aasverification.VerificationError) bool {
-			validationErrors = append(validationErrors, verErr.Error())
-			return false
-		})
-
-		if len(validationErrors) > 0 {
-			err := fmt.Errorf("validation failed: %s", strings.Join(validationErrors, "; "))
-			c.errorHandler(w, r, &ParsingError{Err: err}, nil)
-			return
-		}
+	if err = c.validateSubmodelElementWithMode(submodelElementParam, "AASREPO-PUTSMEBYPATH-VERIFY"); err != nil {
+		c.errorHandler(w, r, err, nil)
+		return
 	}
 
 	result, err := c.service.PutSubmodelElementByPathAasRepository(r.Context(), aasIdentifierParam, submodelIdentifierParam, idShortPathParam, submodelElementParam)
@@ -1624,18 +1607,9 @@ func (c *AssetAdministrationShellRepositoryAPIAPIController) PostSubmodelElement
 		return
 	}
 
-	if c.strictVerification {
-		var validationErrors []string
-		aasverification.Verify(submodelElementParam, func(verErr *aasverification.VerificationError) bool {
-			validationErrors = append(validationErrors, verErr.Error())
-			return false
-		})
-
-		if len(validationErrors) > 0 {
-			err := fmt.Errorf("validation failed: %s", strings.Join(validationErrors, "; "))
-			c.errorHandler(w, r, &ParsingError{Err: err}, nil)
-			return
-		}
+	if err = c.validateSubmodelElementWithMode(submodelElementParam, "AASREPO-POSTSMEBYPATH-VERIFY"); err != nil {
+		c.errorHandler(w, r, err, nil)
+		return
 	}
 
 	result, err := c.service.PostSubmodelElementByPathAasRepository(r.Context(), aasIdentifierParam, submodelIdentifierParam, idShortPathParam, submodelElementParam)
@@ -1722,18 +1696,9 @@ func (c *AssetAdministrationShellRepositoryAPIAPIController) PatchSubmodelElemen
 		return
 	}
 
-	if c.strictVerification {
-		var validationErrors []string
-		aasverification.Verify(submodelElementParam, func(verErr *aasverification.VerificationError) bool {
-			validationErrors = append(validationErrors, verErr.Error())
-			return false
-		})
-
-		if len(validationErrors) > 0 {
-			err := fmt.Errorf("validation failed: %s", strings.Join(validationErrors, "; "))
-			c.errorHandler(w, r, &ParsingError{Err: err}, nil)
-			return
-		}
+	if err = c.validateSubmodelElementWithMode(submodelElementParam, "AASREPO-PATCHSMEVALUEBYPATH-VERIFY"); err != nil {
+		c.errorHandler(w, r, err, nil)
+		return
 	}
 
 	levelParam := "core"
@@ -1785,6 +1750,19 @@ func (c *AssetAdministrationShellRepositoryAPIAPIController) GetSubmodelElementB
 	}
 
 	_ = EncodeJSONResponse(result.Body, &result.Code, w)
+}
+
+func (c *AssetAdministrationShellRepositoryAPIAPIController) validateSubmodelElementWithMode(submodelElementParam aastypes.ISubmodelElement, warningContext string) error {
+	return model.ValidateWithMode(
+		model.VerificationMode(c.strictVerification),
+		warningContext,
+		func(collector func(*aasverification.VerificationError) bool) {
+			aasverification.Verify(submodelElementParam, collector)
+		},
+		func(message string) error {
+			return &ParsingError{Err: fmt.Errorf("validation failed: %s", message)}
+		},
+	)
 }
 
 // PatchSubmodelElementValueByPathMetadata - Updates the metadata attributes of an existing submodel element value at a specified path within submodel elements hierarchy

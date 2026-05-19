@@ -1,0 +1,15 @@
+{
+  "id": "urn:example:sm:registry-sync-superpath",
+  "modelType": "Submodel",
+  "idShort": "registrySyncSuperpathMetadataPatched",
+  "administration": {
+    "version": "2",
+    "revision": "4"
+  },
+  "description": [
+    {
+      "language": "en",
+      "text": "superpath metadata patched"
+    }
+  ]
+}

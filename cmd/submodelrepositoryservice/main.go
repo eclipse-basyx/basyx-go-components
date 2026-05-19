@@ -10,13 +10,18 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"strconv"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/eclipse-basyx/basyx-go-components/internal/aasenvironment"
+	aasregistrydb "github.com/eclipse-basyx/basyx-go-components/internal/aasregistry/persistence"
+	aasrepositorydb "github.com/eclipse-basyx/basyx-go-components/internal/aasrepository/persistence"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/jws"
+	commonmodel "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
+	smregistrydb "github.com/eclipse-basyx/basyx-go-components/internal/smregistry/persistence"
 	"github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/api"
 	persistencepostgresql "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence"
 	openapi "github.com/eclipse-basyx/basyx-go-components/pkg/submodelrepositoryapi"
@@ -29,7 +34,23 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 	log.Default().Println("Loading Submodel Repository Service...")
 	log.Default().Println("Config Path:", configPath)
 	// Load configuration
-	config, err := common.LoadConfig(configPath)
+	cfg, err := common.LoadConfig(configPath)
+	if err != nil {
+		return err
+	}
+
+	if err := commonmodel.SetVerificationMode(cfg.Server.StrictVerification); err != nil {
+		return err
+	}
+
+	if err = aasenvironment.ValidateStandaloneSubmodelRepositoryRegistrySyncConfig(cfg); err != nil {
+		return err
+	}
+	registrySyncConfig, err := aasenvironment.NewRegistrySyncConfig(
+		cfg.General.AASRegistryIntegration,
+		cfg.General.SubmodelRegistryIntegration,
+		cfg.General.ExternalURL,
+	)
 	if err != nil {
 		return err
 	}
@@ -38,16 +59,16 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 	r := chi.NewRouter()
 
 	// Make configuration available in request contexts.
-	r.Use(common.ConfigMiddleware(config))
+	r.Use(common.ConfigMiddleware(cfg))
 
-	// Enable CORS
-	common.AddCors(r, config)
-
-	// Add health endpoint
-	common.AddHealthEndpoint(r, config)
+	common.AddCors(r, cfg)
+	common.AddHealthEndpoint(r, cfg)
+	if cfg.Server.VerificationEndpointAvailable {
+		common.AddVerificationEndpoint(r, cfg)
+	}
 
 	// Add Swagger UI
-	if err := common.AddSwaggerUIFromFS(r, openapiSpec, "openapi.yaml", "Submodel Repository API", "/swagger", "/api-docs/openapi.yaml", config); err != nil {
+	if err := common.AddSwaggerUIFromFS(r, openapiSpec, "openapi.yaml", "Submodel Repository API", "/swagger", "/api-docs/openapi.yaml", cfg); err != nil {
 		log.Printf("Warning: failed to load OpenAPI spec for Swagger UI: %v", err)
 	}
 
@@ -56,8 +77,8 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 
 	// Load JWS private key if configured
 	var privateKey *rsa.PrivateKey
-	if config.JWS.PrivateKeyPath != "" {
-		privateKey, err = jws.LoadPrivateKey(config.JWS.PrivateKeyPath)
+	if cfg.JWS.PrivateKeyPath != "" {
+		privateKey, err = jws.LoadPrivateKey(cfg.JWS.PrivateKeyPath)
 		if err != nil {
 			log.Printf("Warning: failed to load JWS private key: %v - /$signed Endpoints will be unavailable", err)
 		} else {
@@ -65,27 +86,69 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 		}
 	}
 
-	smDatabase, err := persistencepostgresql.NewSubmodelDatabase("postgres://"+config.Postgres.User+":"+config.Postgres.Password+"@"+config.Postgres.Host+":"+strconv.Itoa(config.Postgres.Port)+"/"+config.Postgres.DBName+"?sslmode=disable", config.Postgres.MaxOpenConnections, config.Postgres.MaxIdleConnections, config.Postgres.ConnMaxLifetimeMinutes, databaseSchema, privateKey, config.Server.StrictVerification)
+	dsn := common.BuildPostgresDSN(cfg.Postgres)
+	sharedDB, err := common.InitializeDatabase(dsn, databaseSchema)
+	if err != nil {
+		return err
+	}
+	if cfg.Postgres.MaxOpenConnections > 0 {
+		sharedDB.SetMaxOpenConns(cfg.Postgres.MaxOpenConnections)
+	}
+	if cfg.Postgres.MaxIdleConnections > 0 {
+		sharedDB.SetMaxIdleConns(cfg.Postgres.MaxIdleConnections)
+	}
+	if cfg.Postgres.ConnMaxLifetimeMinutes > 0 {
+		sharedDB.SetConnMaxLifetime(time.Duration(cfg.Postgres.ConnMaxLifetimeMinutes) * time.Minute)
+	}
+
+	smDatabase, err := persistencepostgresql.NewSubmodelDatabaseFromDB(sharedDB, privateKey, cfg.Server.StrictVerification)
+	if err != nil {
+		return err
+	}
+	smRegistryPersistence, err := smregistrydb.NewPostgreSQLSMBackendFromDB(sharedDB)
+	if err != nil {
+		return err
+	}
+	aasRepositoryPersistence, err := aasrepositorydb.NewAssetAdministrationShellDatabaseFromDB(sharedDB, cfg.Server.StrictVerification)
+	if err != nil {
+		return err
+	}
+	aasRegistryPersistence, err := aasregistrydb.NewPostgreSQLAASRegistryDatabaseFromDB(sharedDB, cfg.Server.CacheEnabled)
+
 	if err != nil {
 		return err
 	}
 
-	smSvc := api.NewSubmodelRepositoryAPIAPIService(*smDatabase)
-	smCtrl := openapi.NewSubmodelRepositoryAPIAPIController(smSvc, "", config.Server.StrictVerification)
+	persistence := &aasenvironment.Persistence{
+		DB:                 sharedDB,
+		AASRegistry:        aasRegistryPersistence,
+		AASRepository:      aasRepositoryPersistence,
+		SubmodelRegistry:   smRegistryPersistence,
+		SubmodelRepository: smDatabase,
+	}
+	enableReferencingAASDescriptorEmbeddingSync := registrySyncConfig.SubmodelRegistryIntegration
+	smSvc := aasenvironment.NewCustomSubmodelRepositoryServiceWithAASDescriptorEmbeddingSync(
+		api.NewSubmodelRepositoryAPIAPIService(*smDatabase),
+		persistence,
+		registrySyncConfig,
+		enableReferencingAASDescriptorEmbeddingSync,
+	)
+	smCtrl := openapi.NewSubmodelRepositoryAPIAPIController(smSvc, "", cfg.Server.StrictVerification)
+
 	serializationSvc := api.NewSerializationAPIAPIService()
 	serializationCtrl := openapi.NewSerializationAPIAPIController(serializationSvc, "")
 
 	// ==== Description Service ====
 	descSvc := api.NewDescriptionAPIAPIService()
 	descCtrl := openapi.NewDescriptionAPIAPIController(descSvc)
-	base := common.NormalizeBasePath(config.Server.ContextPath)
+	base := common.NormalizeBasePath(cfg.Server.ContextPath)
 
 	// === Protected API Subrouter ===
 	apiRouter := chi.NewRouter()
 	common.ConfigureAPIRouter(apiRouter, "SubmodelRepositoryService")
 
 	// Apply OIDC + ABAC once for all repository endpoints
-	if err := auth.SetupSecurity(ctx, config, apiRouter); err != nil {
+	if err := auth.SetupSecurity(ctx, cfg, apiRouter); err != nil {
 		return err
 	}
 
@@ -103,8 +166,8 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 	r.Mount(base, apiRouter)
 
 	// Start the server
-	addr := "0.0.0.0:" + fmt.Sprintf("%d", config.Server.Port)
-	log.Printf("▶️  Submodel Repository listening on %s (contextPath=%q)\n", addr, config.Server.ContextPath)
+	addr := "0.0.0.0:" + fmt.Sprintf("%d", cfg.Server.Port)
+	log.Printf("▶️  Submodel Repository listening on %s (contextPath=%q)\n", addr, cfg.Server.ContextPath)
 	// Start server in a goroutine
 	go func() {
 		//nolint:gosec // implementing this fix would cause errors.

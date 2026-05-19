@@ -1,0 +1,19 @@
+{
+  "administration": {
+    "revision": "0",
+    "version": "1"
+  },
+  "id": "urn:example:sm:registry-sync-superpath",
+  "idShort": "registrySyncSuperpathCreated",
+  "kind": "Instance",
+  "modelType": "Submodel",
+  "semanticId": {
+    "keys": [
+      {
+        "type": "Submodel",
+        "value": "urn:example:semantic:registry-sync-superpath"
+      }
+    ],
+    "type": "ModelReference"
+  }
+}
