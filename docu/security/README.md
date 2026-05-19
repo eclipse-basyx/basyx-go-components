@@ -2,6 +2,12 @@
 
 This document describes how security is wired in the BaSyx Go components, including the architecture, request flow, and enforcement process. It reflects the current implementation in the codebase.
 
+## Scope note
+
+This document covers runtime API security (OIDC, claims handling, ABAC, and QueryFilter enforcement).
+
+For build and release supply-chain security (image signing, provenance attestations, SBOM attestations, SPDX/CycloneDX release assets, and verification commands), see [SUPPLY_CHAIN_SECURITY.md](SUPPLY_CHAIN_SECURITY.md).
+
 ## High-level architecture
 
 ```mermaid
