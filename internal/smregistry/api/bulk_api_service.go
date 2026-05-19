@@ -51,7 +51,7 @@ func (s *BulkService) StartCreate(ctx context.Context, descriptors []model.Submo
 		s.manager.Complete(handleID, s.descriptorService.ExecuteBulkCreateAtomic(asyncCtx, descriptors))
 	}()
 
-	return model.ResponseWithHeaders(http.StatusAccepted, map[string]any{"handleId": handleID}, map[string]string{
+	return model.ResponseWithHeaders(http.StatusAccepted, nil, map[string]string{
 		"Location": fmt.Sprintf("/bulk/status/%s", url.PathEscape(handleID)),
 	})
 }
@@ -68,7 +68,7 @@ func (s *BulkService) StartPut(ctx context.Context, descriptors []model.Submodel
 		s.manager.Complete(handleID, s.descriptorService.ExecuteBulkPutAtomic(asyncCtx, descriptors))
 	}()
 
-	return model.ResponseWithHeaders(http.StatusAccepted, map[string]any{"handleId": handleID}, map[string]string{
+	return model.ResponseWithHeaders(http.StatusAccepted, nil, map[string]string{
 		"Location": fmt.Sprintf("/bulk/status/%s", url.PathEscape(handleID)),
 	})
 }
@@ -85,7 +85,7 @@ func (s *BulkService) StartDelete(ctx context.Context, submodelIdentifiers []str
 		s.manager.Complete(handleID, s.descriptorService.ExecuteBulkDeleteAtomic(asyncCtx, submodelIdentifiers))
 	}()
 
-	return model.ResponseWithHeaders(http.StatusAccepted, map[string]any{"handleId": handleID}, map[string]string{
+	return model.ResponseWithHeaders(http.StatusAccepted, nil, map[string]string{
 		"Location": fmt.Sprintf("/bulk/status/%s", url.PathEscape(handleID)),
 	})
 }

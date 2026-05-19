@@ -66,9 +66,7 @@ func TestBulkServiceStatusIsOwnerScoped(t *testing.T) {
 
 	start := service.StartCreate(ownerCtx, []model.AssetAdministrationShellDescriptor{{Id: "id-1"}})
 	require.Equal(t, http.StatusAccepted, start.Code)
-
-	location := start.Body.(model.Redirect).Location
-	handleID := location[strings.LastIndex(location, "/")+1:]
+	handleID := extractAASHandleID(t, start)
 
 	require.Equal(t, http.StatusNotFound, service.GetStatus(otherCtx, handleID).Code)
 }
@@ -89,9 +87,7 @@ func TestBulkServiceCreateFailureResult(t *testing.T) {
 
 	start := service.StartCreate(context.Background(), []model.AssetAdministrationShellDescriptor{{Id: "id-1"}, {Id: "bad-id"}})
 	require.Equal(t, http.StatusAccepted, start.Code)
-
-	location := start.Body.(model.Redirect).Location
-	handleID := location[strings.LastIndex(location, "/")+1:]
+	handleID := extractAASHandleID(t, start)
 	awaitAASResultAvailability(t, service, handleID)
 
 	result := service.GetResult(context.Background(), handleID)
@@ -114,4 +110,14 @@ func awaitAASResultAvailability(t *testing.T, service *BulkService, handleID str
 		time.Sleep(10 * time.Millisecond)
 	}
 	t.Fatalf("AASR-BULK-TEST-TIMEOUT %s", handleID)
+}
+
+func extractAASHandleID(t *testing.T, response model.ImplResponse) string {
+	t.Helper()
+
+	redirect, ok := response.Body.(model.Redirect)
+	require.True(t, ok)
+	handleID := redirect.Location[strings.LastIndex(redirect.Location, "/")+1:]
+	require.NotEmpty(t, handleID)
+	return handleID
 }

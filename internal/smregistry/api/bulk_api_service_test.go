@@ -66,9 +66,7 @@ func TestBulkServiceResultIsOwnerScoped(t *testing.T) {
 
 	start := service.StartDelete(ownerCtx, []string{"urn:ok"})
 	require.Equal(t, http.StatusAccepted, start.Code)
-
-	location := start.Body.(model.Redirect).Location
-	handleID := location[strings.LastIndex(location, "/")+1:]
+	handleID := extractSMHandleID(t, start)
 
 	require.Equal(t, http.StatusNotFound, service.GetResult(otherCtx, handleID).Code)
 }
@@ -89,9 +87,7 @@ func TestBulkServiceDeleteFailureResult(t *testing.T) {
 
 	start := service.StartDelete(context.Background(), []string{"urn:ok", "urn:bad"})
 	require.Equal(t, http.StatusAccepted, start.Code)
-
-	location := start.Body.(model.Redirect).Location
-	handleID := location[strings.LastIndex(location, "/")+1:]
+	handleID := extractSMHandleID(t, start)
 	awaitSMResultAvailability(t, service, handleID)
 
 	result := service.GetResult(context.Background(), handleID)
@@ -114,4 +110,14 @@ func awaitSMResultAvailability(t *testing.T, service *BulkService, handleID stri
 		time.Sleep(10 * time.Millisecond)
 	}
 	t.Fatalf("SMR-BULK-TEST-TIMEOUT %s", handleID)
+}
+
+func extractSMHandleID(t *testing.T, response model.ImplResponse) string {
+	t.Helper()
+
+	redirect, ok := response.Body.(model.Redirect)
+	require.True(t, ok)
+	handleID := redirect.Location[strings.LastIndex(redirect.Location, "/")+1:]
+	require.NotEmpty(t, handleID)
+	return handleID
 }
