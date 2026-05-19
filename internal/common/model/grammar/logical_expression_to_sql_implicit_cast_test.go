@@ -29,6 +29,7 @@ package grammar
 import (
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestLogicalExpression_ToSQL_StrValUsesTextCast(t *testing.T) {
@@ -139,5 +140,36 @@ func TestLogicalExpression_SimplifyForBackendFilter_EnumTypeInvalidString_FallsB
 	}
 	if !argListContains(args, "VIEWER_KEY") {
 		t.Fatalf("expected args to contain %q, got %#v", "VIEWER_KEY", args)
+	}
+}
+
+func TestLogicalExpression_SimplifyForBackendFilter_CreatedAfterUsesTimestampRegexCompatibleWithPostgresText(t *testing.T) {
+	createdAfter := time.Date(2025, 5, 18, 14, 18, 0, 748914000, time.UTC)
+	createdAfterPattern := ModelStringPattern("$aasdesc#createdAt")
+	createdAfterVal := DateTimeLiteralPattern(createdAfter)
+	le := LogicalExpression{
+		Le: ComparisonItems{
+			{DateTimeVal: &createdAfterVal},
+			{Field: &createdAfterPattern},
+		},
+	}
+
+	simplified, decision := le.SimplifyForBackendFilterWithOptions(func(AttributeValue) any { return nil }, DefaultSimplifyOptions())
+	if decision != SimplifyUndecided {
+		t.Fatalf("expected undecided simplification result, got %v", decision)
+	}
+	if len(simplified.Le) != 2 {
+		t.Fatalf("expected 2 operands in simplified comparison, got %d", len(simplified.Le))
+	}
+	if simplified.Le[1].DateTimeCast == nil {
+		t.Fatalf("expected createdAt field to be wrapped in datetime cast, got %#v", simplified.Le[1])
+	}
+
+	sql, args := toPreparedSQLForDescriptor(t, simplified)
+	if !strings.Contains(sql, "::timestamptz") {
+		t.Fatalf("expected SQL to contain timestamptz cast, got: %s", sql)
+	}
+	if !argListContains(args, safeCastTimestampWithTimezoneRegex) {
+		t.Fatalf("expected args to contain timestamp regex %q, got %#v", safeCastTimestampWithTimezoneRegex, args)
 	}
 }
