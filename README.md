@@ -186,7 +186,7 @@ See [structure.md](docu/developer/structure.md) and related files for details on
 
 ## 11. Security & Supply Chain Verification
 
-- Security reporting policy: [Eclipse Foundation Security](https://www.eclipse.org/security/)
+- Security reporting policy: [Eclipse BaSyx SECURITY.md](https://github.com/eclipse-basyx/.github/blob/main/SECURITY.md)
 - Supply-chain trust model, signing, attestations, and SBOM verification: [docu/security/SUPPLY_CHAIN_SECURITY.md](docu/security/SUPPLY_CHAIN_SECURITY.md)
 - Runtime security architecture (OIDC + ABAC): [docu/security/README.md](docu/security/README.md)
 
