@@ -551,6 +551,40 @@ func TestIntegration(t *testing.T) {
 	})
 }
 
+func TestPostAssetAdministrationShellAcceptsNullSubmodels(t *testing.T) {
+	baseURL := "http://localhost:6004"
+	aasID := fmt.Sprintf("https://example.com/ids/aas/null-submodels-%d", time.Now().UnixNano())
+
+	requestBody := fmt.Sprintf(`{
+		"id":"%s",
+		"idShort":"NullSubmodelsShell",
+		"modelType":"AssetAdministrationShell",
+		"assetInformation":{"assetKind":"Instance"},
+		"submodels":null
+	}`, aasID)
+
+	statusCode, err := postResponseStatus(baseURL+"/shells", requestBody)
+	require.NoError(t, err, "POST AAS request failed")
+	require.Equal(t, http.StatusCreated, statusCode, "Expected 201 Created for AAS payload with submodels=null")
+
+	encodedAASIdentifier := base64.RawURLEncoding.EncodeToString([]byte(aasID))
+	t.Cleanup(func() {
+		deleteStatusCode, deleteErr := deleteResponseStatus(fmt.Sprintf("%s/shells/%s", baseURL, encodedAASIdentifier))
+		if deleteErr != nil {
+			t.Logf("cleanup delete failed for AAS %s: %v", aasID, deleteErr)
+			return
+		}
+		if deleteStatusCode != http.StatusNoContent && deleteStatusCode != http.StatusNotFound {
+			t.Logf("cleanup delete returned unexpected status=%d for AAS %s", deleteStatusCode, aasID)
+		}
+	})
+
+	payload, getStatusCode, getErr := getJSONResponse(fmt.Sprintf("%s/shells/%s", baseURL, encodedAASIdentifier))
+	require.NoError(t, getErr, "GET AAS request failed")
+	require.Equal(t, http.StatusOK, getStatusCode, "Expected 200 OK after creating AAS with submodels=null")
+	assert.Equal(t, aasID, payload["id"], "Expected created AAS id in GET response")
+}
+
 func TestPutSubmodelByIdAasRepositoryReturnsCreatedSubmodelAnd201(t *testing.T) {
 	baseURL := "http://localhost:6004"
 	aasID := fmt.Sprintf("https://example.com/ids/aas/put-submodel-create-%d", time.Now().UnixNano())

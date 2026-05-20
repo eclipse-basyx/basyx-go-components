@@ -369,6 +369,7 @@ func (c *AssetAdministrationShellRepositoryAPIAPIController) PostAssetAdministra
 		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
 		return
 	}
+	common.NormalizeAASPayloadOptionalArrays(jsonable)
 	aasParam, err := aasjsonization.AssetAdministrationShellFromJsonable(jsonable)
 	if err != nil {
 		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
@@ -458,6 +459,7 @@ func (c *AssetAdministrationShellRepositoryAPIAPIController) PutAssetAdministrat
 		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
 		return
 	}
+	common.NormalizeAASPayloadOptionalArrays(jsonable)
 	aasParam, err := aasjsonization.AssetAdministrationShellFromJsonable(jsonable)
 	if err != nil {
 		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
@@ -809,6 +811,7 @@ func (c *AssetAdministrationShellRepositoryAPIAPIController) PutSubmodelByIdAasR
 		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
 		return
 	}
+	common.NormalizeSubmodelPayloadOptionalArrays(jsonable)
 	submodelParam, err := aasjsonization.SubmodelFromJsonable(jsonable)
 	if err != nil {
 		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
@@ -889,6 +892,7 @@ func (c *AssetAdministrationShellRepositoryAPIAPIController) PatchSubmodelAasRep
 		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
 		return
 	}
+	common.NormalizeSubmodelPayloadOptionalArrays(jsonable)
 	submodelParam, err := aasjsonization.SubmodelFromJsonable(jsonable)
 	if err != nil {
 		c.errorHandler(w, r, &ParsingError{Err: err}, nil)

@@ -389,6 +389,7 @@ func (c *SubmodelRepositoryAPIAPIController) PostSubmodel(w http.ResponseWriter,
 		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
 		return
 	}
+	common.NormalizeSubmodelPayloadOptionalArrays(jsonable)
 	submodelParam, err := aasjsonization.SubmodelFromJsonable(jsonable)
 	if err != nil {
 		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
@@ -790,6 +791,7 @@ func (c *SubmodelRepositoryAPIAPIController) PutSubmodelByID(w http.ResponseWrit
 		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
 		return
 	}
+	common.NormalizeSubmodelPayloadOptionalArrays(jsonable)
 	submodelParam, err := aasjsonization.SubmodelFromJsonable(jsonable)
 	if err != nil {
 		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
@@ -845,6 +847,7 @@ func (c *SubmodelRepositoryAPIAPIController) PatchSubmodelByID(w http.ResponseWr
 		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
 		return
 	}
+	common.NormalizeSubmodelPayloadOptionalArrays(jsonable)
 	submodelParam, err := aasjsonization.SubmodelFromJsonable(jsonable)
 	if err != nil {
 		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
