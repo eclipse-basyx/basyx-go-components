@@ -127,16 +127,8 @@ func (s *BulkService) GetResult(ctx context.Context, handleID string) model.Impl
 		return model.Response(http.StatusNoContent, nil)
 	}
 
-	baseErr := common.NewErrorResponse(
-		errors.New("AASR-BULK-GETRESULT-FAILEDDESCRIPTORS at least one descriptor operation failed and the transaction was rolled back"),
-		http.StatusBadRequest,
-		componentName,
-		"GetBulkAsyncResult",
-		"DescriptorFailures",
-	)
-
 	return model.Response(http.StatusBadRequest, map[string]any{
-		"messages":        baseErr.Body,
+		"messages":        asyncbulk.ToMessages(record.Result.Failures),
 		"executionState":  "Completed",
 		"success":         false,
 		"processedCount":  record.Result.ProcessedCount,

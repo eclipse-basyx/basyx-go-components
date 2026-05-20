@@ -97,6 +97,10 @@ func TestBulkServiceDeleteFailureResult(t *testing.T) {
 	require.EqualValues(t, 2, body["processedCount"])
 	require.EqualValues(t, 0, body["successfulCount"])
 	require.EqualValues(t, 2, body["failedCount"])
+	messages, ok := body["messages"].([]model.Message)
+	require.True(t, ok)
+	require.Len(t, messages, 1)
+	require.Equal(t, "Error", messages[0].MessageType)
 }
 
 func awaitSMResultAvailability(t *testing.T, service *BulkService, handleID string) {

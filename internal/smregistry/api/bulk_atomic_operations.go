@@ -84,7 +84,7 @@ func (s *SubmodelRegistryAPIAPIService) executeAtomicSubmodelDescriptorBulk(
 				Message:    err.Error(),
 			}
 		}
-		return failedAtomicResult(len(descriptors), failure)
+		return failedAtomicResult(descriptorIDsFromSubmodelDescriptors(descriptors), failure)
 	}
 	return successfulAtomicResult(len(descriptors))
 }
@@ -129,7 +129,7 @@ func (s *SubmodelRegistryAPIAPIService) executeAtomicSubmodelIdentifierBulk(
 				Message:    err.Error(),
 			}
 		}
-		return failedAtomicResult(len(submodelIdentifiers), failure)
+		return failedAtomicResult(normalizeSubmodelIdentifiers(submodelIdentifiers), failure)
 	}
 	return successfulAtomicResult(len(submodelIdentifiers))
 }
@@ -197,14 +197,32 @@ func successfulAtomicResult(itemCount int) asyncbulk.OperationResult {
 	}
 }
 
-func failedAtomicResult(itemCount int, failure asyncbulk.ItemFailure) asyncbulk.OperationResult {
+func failedAtomicResult(itemIdentifiers []string, failure asyncbulk.ItemFailure) asyncbulk.OperationResult {
+	failures := asyncbulk.ExpandAtomicFailures(itemIdentifiers, failure)
+	itemCount := len(itemIdentifiers)
 	return asyncbulk.OperationResult{
 		Success:         false,
 		ProcessedCount:  itemCount,
 		SuccessfulCount: 0,
 		FailedCount:     itemCount,
-		Failures:        []asyncbulk.ItemFailure{failure},
+		Failures:        failures,
 	}
+}
+
+func descriptorIDsFromSubmodelDescriptors(descriptors []model.SubmodelDescriptor) []string {
+	ids := make([]string, 0, len(descriptors))
+	for _, descriptor := range descriptors {
+		ids = append(ids, strings.TrimSpace(descriptor.Id))
+	}
+	return ids
+}
+
+func normalizeSubmodelIdentifiers(rawIdentifiers []string) []string {
+	identifiers := make([]string, 0, len(rawIdentifiers))
+	for _, rawID := range rawIdentifiers {
+		identifiers = append(identifiers, strings.TrimSpace(rawID))
+	}
+	return identifiers
 }
 
 func smBulkCreateErrorStatusCode(err error) int {
