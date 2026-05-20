@@ -26,12 +26,12 @@ func main() {
 	}
 
 	execCtx := &steps.ExecutionContext{}
-	registry := basyxconfigurationservice.NewSchemaInitializer()
-	registry.Register(steps.NewDatabaseConnection(execCtx, configPath))
-	registry.Register(steps.NewSchemaUpload(execCtx, databaseSchema))
-	registry.Register(steps.NewSchemaPatch(execCtx, filepath.Join(patchBasePath, "101.sql"), "v1.0.1"))
+	schemInit := basyxconfigurationservice.NewSchemaInitializer()
+	schemInit.Register(steps.NewDatabaseConnection(execCtx, configPath))
+	schemInit.Register(steps.NewSchemaUpload(execCtx, databaseSchema))
+	schemInit.Register(steps.NewSchemaPatch(execCtx, filepath.Join(patchBasePath, "101.sql"), "v1.0.1"))
 
-	if err := registry.Execute(); err != nil {
+	if err := schemInit.Execute(); err != nil {
 		log.Printf("BASYXCFG-MAIN-EXECUTE: %v", err)
 		os.Exit(1)
 	}
