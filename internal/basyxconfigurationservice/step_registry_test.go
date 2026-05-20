@@ -20,7 +20,7 @@ func (m mockStep) GetDescription(_ int) string {
 }
 
 func TestStepRegistryExecuteRunsStepsInOrder(t *testing.T) {
-	registry := NewStepRegistry()
+	registry := NewSchemaInitializer()
 	seenIndices := make([]int, 0, 2)
 
 	registry.Register(mockStep{
@@ -51,7 +51,7 @@ func TestStepRegistryExecuteRunsStepsInOrder(t *testing.T) {
 }
 
 func TestStepRegistryExecuteReturnsWrappedError(t *testing.T) {
-	registry := NewStepRegistry()
+	registry := NewSchemaInitializer()
 	rootErr := errors.New("boom")
 
 	registry.Register(mockStep{

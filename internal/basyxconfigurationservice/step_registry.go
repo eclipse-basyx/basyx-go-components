@@ -5,41 +5,41 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/eclipse-basyx/basyx-go-components/internal/basyxconfigurationservice/steps"
+	sequences "github.com/eclipse-basyx/basyx-go-components/internal/basyxconfigurationservice/steps"
 )
 
-// StepRegistry stores and executes initialization steps in sequence.
-type StepRegistry struct {
-	initializationSteps []steps.Step
+// SchemaInitializer stores and executes initialization steps in sequence.
+type SchemaInitializer struct {
+	initializationSteps []sequences.Sequence
 }
 
-// NewStepRegistry creates an empty step registry.
-func NewStepRegistry() *StepRegistry {
-	return &StepRegistry{initializationSteps: make([]steps.Step, 0)}
+// NewSchemaInitializer creates an empty step registry.
+func NewSchemaInitializer() *SchemaInitializer {
+	return &SchemaInitializer{initializationSteps: make([]sequences.Sequence, 0)}
 }
 
 // Register appends a step to the execution pipeline.
-func (sr *StepRegistry) Register(step steps.Step) {
+func (sr *SchemaInitializer) Register(step sequences.Sequence) {
 	sr.initializationSteps = append(sr.initializationSteps, step)
 }
 
 // Execute runs all registered steps in order.
-func (sr *StepRegistry) Execute() error {
+func (sr *SchemaInitializer) Execute() error {
 	for idx, step := range sr.initializationSteps {
 		stepIndex := idx + 1
-		if err := sr.executeStep(step, stepIndex); err != nil {
+		if err := sr.executeSequence(step, stepIndex); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func (sr *StepRegistry) executeStep(step steps.Step, stepIndex int) error {
-	log.Println(step.GetDescription(stepIndex))
-	statusCode, err := step.Execute(stepIndex)
+func (sr *SchemaInitializer) executeSequence(step sequences.Sequence, sequenceIndex int) error {
+	log.Println(step.GetDescription(sequenceIndex))
+	statusCode, err := step.Execute(sequenceIndex)
 	if err != nil {
-		return fmt.Errorf("BASYXCFG-REGISTRY-EXECSTEP: step %d failed with status %d: %w", stepIndex, statusCode, err)
+		return fmt.Errorf("BASYXCFG-INIT-EXECSTEP: step %d failed with status %d: %w", sequenceIndex, statusCode, err)
 	}
-	log.Printf("[Step %d] completed with status %d\n", stepIndex, statusCode)
+	log.Printf("[Step %d] completed with status %d\n", sequenceIndex, statusCode)
 	return nil
 }

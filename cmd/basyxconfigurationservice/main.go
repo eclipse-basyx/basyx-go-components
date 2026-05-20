@@ -26,7 +26,7 @@ func main() {
 	}
 
 	execCtx := &steps.ExecutionContext{}
-	registry := basyxconfigurationservice.NewStepRegistry()
+	registry := basyxconfigurationservice.NewSchemaInitializer()
 	registry.Register(steps.NewDatabaseConnection(execCtx, configPath))
 	registry.Register(steps.NewSchemaUpload(execCtx, databaseSchema))
 	registry.Register(steps.NewSchemaPatch(execCtx, filepath.Join(patchBasePath, "101.sql"), "v1.0.1"))
