@@ -48,14 +48,6 @@ func (sp *SchemaPatch) Execute(stepIndex int) (int, error) {
 		return 0, nil
 	}
 
-	approved, err := sp.resolvePatchPolicy(stepIndex, currentVersion)
-	if err != nil {
-		return 1, err
-	}
-	if !approved {
-		return 1, fmt.Errorf("BASYXCFG-PATCH-REJECTED: patch %s was not authorized by user", sp.targetVersion)
-	}
-
 	patchSQL, err := os.ReadFile(sp.patchFilePath)
 	if err != nil {
 		return 1, fmt.Errorf("BASYXCFG-PATCH-READFILE: %w", err)
@@ -122,70 +114,6 @@ func (sp *SchemaPatch) getCurrentDBVersion() (string, error) {
 		return "", fmt.Errorf("BASYXCFG-PATCH-NOVERSIONROW: basyxsystem does not contain a version row")
 	}
 	return "", fmt.Errorf("BASYXCFG-PATCH-READVERSION: %w", err)
-}
-
-func (sp *SchemaPatch) resolvePatchPolicy(stepIndex int, currentVersion string) (bool, error) {
-	approvedVersions := strings.TrimSpace(os.Getenv("BASYXCFG_PATCH_APPROVED_VERSIONS"))
-	approvedUpToVersion := strings.TrimSpace(os.Getenv("BASYXCFG_PATCH_APPROVED_UP_TO_VERSION"))
-	backupReference := strings.TrimSpace(os.Getenv("BASYXCFG_PATCH_BACKUP_REFERENCE"))
-
-	_, _ = fmt.Printf(
-		"[Step %d] Patch policy: approvedVersions=%q approvedUpToVersion=%q backupReference=%q currentVersion=%s targetVersion=%s\n",
-		stepIndex,
-		approvedVersions,
-		approvedUpToVersion,
-		backupReference,
-		currentVersion,
-		sp.targetVersion,
-	)
-
-	if backupReference == "" {
-		return false, fmt.Errorf(
-			"BASYXCFG-PATCH-BACKUP-UNCONFIRMED: patch %s requires BASYXCFG_PATCH_BACKUP_REFERENCE to confirm a backup exists",
-			sp.targetVersion,
-		)
-	}
-
-	if !isTargetVersionApprovedUpTo(approvedVersions, approvedUpToVersion, sp.targetVersion) {
-		return false, fmt.Errorf(
-			"BASYXCFG-PATCH-NOT-APPROVED: patch %s is not approved by BASYXCFG_PATCH_APPROVED_VERSIONS/BASYXCFG_PATCH_APPROVED_UP_TO_VERSION",
-			sp.targetVersion,
-		)
-	}
-
-	_, _ = fmt.Printf("[Step %d] Backup confirmation accepted (reference=%s)\n", stepIndex, backupReference)
-	return true, nil
-}
-
-func isTargetVersionApproved(approvedVersions string, targetVersion string) bool {
-	targetNormalized := normalizeVersionToken(targetVersion)
-	for _, raw := range strings.Split(approvedVersions, ",") {
-		candidate := normalizeVersionToken(raw)
-		if candidate != "" && candidate == targetNormalized {
-			return true
-		}
-	}
-	return false
-}
-
-func isTargetVersionApprovedUpTo(approvedVersions string, approvedUpToVersion string, targetVersion string) bool {
-	if isTargetVersionApproved(approvedVersions, targetVersion) {
-		return true
-	}
-	if strings.TrimSpace(approvedUpToVersion) == "" {
-		return false
-	}
-	compareResult, err := compareSemanticVersions(targetVersion, approvedUpToVersion)
-	if err != nil {
-		return false
-	}
-	return compareResult <= 0
-}
-
-func normalizeVersionToken(version string) string {
-	trimmed := strings.TrimSpace(strings.ToLower(version))
-	trimmed = strings.TrimPrefix(trimmed, "v")
-	return trimmed
 }
 
 func compareSemanticVersions(current string, target string) (int, error) {

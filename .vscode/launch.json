@@ -105,11 +105,7 @@
             "type": "go",
             "request": "launch",
             "mode": "debug",
-            "program": "${workspaceFolder}/cmd/basyxconfigurationservice/main.go",
-            "env": {
-                "BASYXCFG_PATCH_APPROVED_VERSIONS": "v1.0.1",
-                "BASYXCFG_PATCH_BACKUP_REFERENCE": "xyz.sql"
-            },
+            "program": "${workspaceFolder}/cmd/basyxconfigurationservice/main.go",
             "args": [
                 "-config",
                 "${workspaceFolder}/cmd/basyxconfigurationservice/config.yaml",
