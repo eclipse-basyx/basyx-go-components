@@ -1235,9 +1235,9 @@ paths:
                 $ref: '#/components/schemas/Result'
               example:
                 messages:
-                  - code: AASENV-HANDLEUPLOAD-UNSUPPORTEDFORMAT
-                    messageType: Error
-                    text: unsupported content type "text/plain", supported: application/aasx+xml, application/aasx+json, application/asset-administration-shell+xml, application/asset-administration-shell+json, application/json, application/xml, text/xml
+                    - code: AASENV-HANDLEUPLOAD-UNSUPPORTEDFORMAT
+                      messageType: Error
+                      text: 'unsupported content type "text/plain", supported: application/aasx+xml, application/aasx+json, application/asset-administration-shell+xml, application/asset-administration-shell+json, application/json, application/xml, text/xml'
         '500':
           description: Internal server error
           content:
@@ -1573,6 +1573,40 @@ paths:
                       type: array
                       items:
                         $ref: https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.1.1#/components/schemas/AssetAdministrationShellDescriptor
+        default:
+          $ref: https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.1.1#/components/responses/default
+  /query/submodel-descriptors:
+    post:
+      tags:
+      - Submodel Registry API
+      summary: Returns all Submodel Descriptors that confirm to the input query
+      operationId: QuerySubmodelDescriptors
+      x-semanticIds:
+      - https://admin-shell.io/aas/API/QuerySubmodelDescriptors/3/1
+      parameters:
+      - $ref: https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.1.1#/components/parameters/Limit
+      - $ref: https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.1.1#/components/parameters/Cursor
+      requestBody:
+        content:
+          application/json:
+            schema:
+              # Note: It is a known problem that SwaggerHub cannot render the oneOf statement in the Query definition.
+              $ref: https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.1.1#/components/schemas/Query
+      responses:
+        '200':
+          description: Requested Submodel Descriptors
+          content:
+            application/json:
+              schema:
+                $ref: https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.1.1#/components/schemas/QueryResultSubmodelDescriptor
+        '400':
+          $ref: https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.1.1#/components/responses/bad-request
+        '401':
+          $ref: https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.1.1#/components/responses/unauthorized
+        '403':
+          $ref: https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.1.1#/components/responses/forbidden
+        '500':
+          $ref: https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.1.1#/components/responses/internal-server-error
         default:
           $ref: https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.1.1#/components/responses/default
   /lookup/shells:
@@ -5161,6 +5195,40 @@ paths:
           $ref: https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.1.1#/components/responses/internal-server-error
         default:
           $ref: https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.1.1#/components/responses/default
+  /query/shells:
+    post:
+      tags:
+      - Asset Administration Shell Repository API
+      summary: Returns all Asset Administration Shells that confirm to the input query
+      operationId: QueryAssetAdministrationShells
+      x-semanticIds:
+      - https://admin-shell.io/aas/API/QueryAssetAdministrationShells/3/1
+      parameters:
+      - $ref: https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.1.1#/components/parameters/Limit
+      - $ref: https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.1.1#/components/parameters/Cursor
+      requestBody:
+        content:
+          application/json:
+            schema:
+              # Note: It is a known problem that SwaggerHub cannot render the oneOf statement in the Query definition.
+              $ref: https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.1.1#/components/schemas/Query
+      responses:
+        '200':
+          description: Requested Asset Administration Shells
+          content:
+            application/json:
+              schema:
+                $ref: https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.1.1#/components/schemas/QueryResultAssetAdministrationShell
+        '400':
+          $ref: https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.1.1#/components/responses/bad-request
+        '401':
+          $ref: https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.1.1#/components/responses/unauthorized
+        '403':
+          $ref: https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.1.1#/components/responses/forbidden
+        '500':
+          $ref: https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.1.1#/components/responses/internal-server-error
+        default:
+          $ref: https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.1.1#/components/responses/default
   /query/submodels:
     post:
       tags:
@@ -5184,6 +5252,40 @@ paths:
             application/json:
               schema:
                 $ref: https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.1.1#/components/schemas/QueryResultSubmodel
+        '400':
+          $ref: https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.1.1#/components/responses/bad-request
+        '401':
+          $ref: https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.1.1#/components/responses/unauthorized
+        '403':
+          $ref: https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.1.1#/components/responses/forbidden
+        '500':
+          $ref: https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.1.1#/components/responses/internal-server-error
+        default:
+          $ref: https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.1.1#/components/responses/default
+  /query/concept-descriptions:
+    post:
+      tags:
+      - Concept Description Repository API
+      summary: Returns all Concept Descriptions that confirm to the input query
+      operationId: QueryConceptDescriptions
+      x-semanticIds:
+      - https://admin-shell.io/aas/API/QueryConceptDescriptions/3/1
+      parameters:
+      - $ref: https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.1.1#/components/parameters/Limit
+      - $ref: https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.1.1#/components/parameters/Cursor
+      requestBody:
+        content:
+          application/json:
+            schema:
+              # Note: It is a known problem that SwaggerHub cannot render the oneOf statement in the Query definition.
+              $ref: https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.1.1#/components/schemas/Query
+      responses:
+        '200':
+          description: Requested Concept Descriptions
+          content:
+            application/json:
+              schema:
+                $ref: https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.1.1#/components/schemas/QueryResultConceptDescription
         '400':
           $ref: https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.1.1#/components/responses/bad-request
         '401':

@@ -5,9 +5,9 @@ services:
     pull_policy: always
     command: ["/app/aasenvironmentservice"]
     ports:
-      - "8082:5004"
+      - "8082:8082"
     environment:
-      - SERVER_PORT=5004
+      - SERVER_PORT=8082
       - CORS_ALLOWEDORIGINS=*
       - CORS_ALLOWEDHEADERS=*
       - CORS_ALLOWEDCREDENTIALS=true
