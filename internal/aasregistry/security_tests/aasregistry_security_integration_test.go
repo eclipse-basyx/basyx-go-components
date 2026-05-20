@@ -49,6 +49,7 @@ func TestIntegration(t *testing.T) {
 }
 
 func TestMain(m *testing.M) {
+	_ = os.Setenv("COMPOSE_PROJECT_NAME", "aasregistry-security-tests")
 	os.Exit(testenv.RunComposeTestMain(m, testenv.ComposeTestMainOptions{
 		ComposeFile: "docker_compose/docker_compose.yml",
 		HealthURL:   "http://localhost:6004/health",

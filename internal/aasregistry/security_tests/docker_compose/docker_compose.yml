@@ -1,7 +1,6 @@
 services:
   db:
     image: postgres:18
-    container_name: postgres_db
     environment:
       POSTGRES_USER: admin
       POSTGRES_PASSWORD: admin123
@@ -16,7 +15,6 @@ services:
       retries: 5
 
   aas-registry-security:
-    container_name: aas-registry-security
     build:
       context: ../../../..
       dockerfile: ./cmd/aasregistryservice/Dockerfile
@@ -49,7 +47,6 @@ services:
 
   keycloak:
     image: keycloak/keycloak:26.0.6
-    container_name: keycloak
     environment:
       KC_DB: postgres
       KC_DB_URL: jdbc:postgresql://db:5432/basyxTestDB
@@ -75,7 +72,6 @@ services:
 
   keycloak-healthcheck:
     image: curlimages/curl:latest
-    container_name: keycloak-healthcheck
     command: >
       sh -c "
         echo 'Waiting for Keycloak to become ready...';
@@ -87,7 +83,6 @@ services:
       - keycloak
 
   basyx_configuration:
-    container_name: basyx_configuration
     build:
       context: ../../../..
       dockerfile: ./cmd/basyxconfigurationservice/Dockerfile
