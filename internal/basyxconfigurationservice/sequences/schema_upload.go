@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 const (
@@ -28,22 +29,32 @@ func (su *SchemaUpload) Execute(stepIndex int) (int, error) {
 		return 1, fmt.Errorf("BASYXCFG-SCHEMA-NODB: database connection is not initialized")
 	}
 
-	schemaToLoad, err := su.resolveSchemaPath()
-	if err != nil {
-		return 1, err
-	}
-
-	schemaSQL, err := os.ReadFile(schemaToLoad)
-	if err != nil {
-		return 1, fmt.Errorf("BASYXCFG-SCHEMA-READFILE: %w", err)
-	}
-
-	if _, err = su.ctx.DB.Exec("SELECT pg_advisory_lock($1)", schemaAdvisoryLockID); err != nil {
+	if _, err := su.ctx.DB.Exec("SELECT pg_advisory_lock($1)", schemaAdvisoryLockID); err != nil {
 		return 1, fmt.Errorf("BASYXCFG-SCHEMA-LOCK: %w", err)
 	}
 	defer func() {
 		_, _ = su.ctx.DB.Exec("SELECT pg_advisory_unlock($1)", schemaAdvisoryLockID)
 	}()
+
+	alreadyInitialized, err := su.isBaseSchemaInitialized()
+	if err != nil {
+		return 1, err
+	}
+	if alreadyInitialized {
+		_, _ = fmt.Printf("[Step %d] Base schema already initialized, skipping upload\n", stepIndex)
+		return 0, nil
+	}
+
+	schemaToLoad, err := su.resolveSchemaPath()
+	if err != nil {
+		return 1, err
+	}
+
+	// #nosec G304 -- schema path is validated via resolveSchemaPath before file access.
+	schemaSQL, err := os.ReadFile(schemaToLoad)
+	if err != nil {
+		return 1, fmt.Errorf("BASYXCFG-SCHEMA-READFILE: %w", err)
+	}
 
 	if _, err = su.ctx.DB.Exec(string(schemaSQL)); err != nil {
 		return 1, fmt.Errorf("BASYXCFG-SCHEMA-EXECUTE: %w", err)
@@ -73,6 +84,15 @@ func (su *SchemaUpload) resolveSchemaPath() (string, error) {
 	}
 
 	return schemaToLoad, nil
+}
+
+func (su *SchemaUpload) isBaseSchemaInitialized() (bool, error) {
+	var tableName string
+	err := su.ctx.DB.QueryRow(`SELECT COALESCE(to_regclass('public.basyxsystem')::text, '')`).Scan(&tableName)
+	if err != nil {
+		return false, fmt.Errorf("BASYXCFG-SCHEMA-CHECK: %w", err)
+	}
+	return strings.TrimSpace(tableName) != "", nil
 }
 
 // GetDescription returns the step description for console output.

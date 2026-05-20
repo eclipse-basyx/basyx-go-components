@@ -5,21 +5,21 @@ import (
 	"fmt"
 	"log"
 
-	sequences "github.com/eclipse-basyx/basyx-go-components/internal/basyxconfigurationservice/sequences"
+	"github.com/eclipse-basyx/basyx-go-components/internal/basyxconfigurationservice/sequences"
 )
 
 // SchemaInitializer stores and executes initialization steps in sequence.
 type SchemaInitializer struct {
-	initializationSteps []sequences.Sequence
+	initializationSteps []steps.Sequence
 }
 
 // NewSchemaInitializer creates an empty step registry.
 func NewSchemaInitializer() *SchemaInitializer {
-	return &SchemaInitializer{initializationSteps: make([]sequences.Sequence, 0)}
+	return &SchemaInitializer{initializationSteps: make([]steps.Sequence, 0)}
 }
 
 // Register appends a step to the execution pipeline.
-func (sr *SchemaInitializer) Register(step sequences.Sequence) {
+func (sr *SchemaInitializer) Register(step steps.Sequence) {
 	sr.initializationSteps = append(sr.initializationSteps, step)
 }
 
@@ -34,7 +34,7 @@ func (sr *SchemaInitializer) Execute() error {
 	return nil
 }
 
-func (sr *SchemaInitializer) executeSequence(step sequences.Sequence, sequenceIndex int) error {
+func (sr *SchemaInitializer) executeSequence(step steps.Sequence, sequenceIndex int) error {
 	log.Println(step.GetDescription(sequenceIndex))
 	statusCode, err := step.Execute(sequenceIndex)
 	if err != nil {

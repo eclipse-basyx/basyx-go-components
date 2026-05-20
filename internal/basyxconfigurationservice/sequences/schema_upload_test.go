@@ -32,7 +32,7 @@ func TestSchemaUploadExecuteReturnsNoDBError(t *testing.T) {
 }
 
 func TestSchemaUploadExecuteReturnsReadFileError(t *testing.T) {
-	db, _, err := sqlmock.New()
+	db, mock, err := sqlmock.New()
 	if err != nil {
 		t.Fatalf("sqlmock.New() failed: %v", err)
 	}
@@ -43,6 +43,17 @@ func TestSchemaUploadExecuteReturnsReadFileError(t *testing.T) {
 	ctx := &ExecutionContext{DB: db}
 	step := NewSchemaUpload(ctx, "/not/found/schema.sql")
 
+	mock.ExpectExec(regexp.QuoteMeta("SELECT pg_advisory_lock($1)")).
+		WithArgs(schemaAdvisoryLockID).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+
+	mock.ExpectQuery(regexp.QuoteMeta("SELECT COALESCE(to_regclass('public.basyxsystem')::text, '')")).
+		WillReturnRows(sqlmock.NewRows([]string{"coalesce"}).AddRow(""))
+
+	mock.ExpectExec(regexp.QuoteMeta("SELECT pg_advisory_unlock($1)")).
+		WithArgs(schemaAdvisoryLockID).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+
 	statusCode, execErr := step.Execute(1)
 	if execErr == nil {
 		t.Fatal("expected error, got nil")
@@ -52,6 +63,9 @@ func TestSchemaUploadExecuteReturnsReadFileError(t *testing.T) {
 	}
 	if !strings.Contains(execErr.Error(), "BASYXCFG-SCHEMA-STAT") {
 		t.Fatalf("unexpected error: %v", execErr)
+	}
+	if err = mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("unmet SQL expectations: %v", err)
 	}
 }
 
@@ -71,8 +85,50 @@ func TestSchemaUploadExecuteSuccess(t *testing.T) {
 		WithArgs(schemaAdvisoryLockID).
 		WillReturnResult(sqlmock.NewResult(0, 1))
 
+	mock.ExpectQuery(regexp.QuoteMeta("SELECT COALESCE(to_regclass('public.basyxsystem')::text, '')")).
+		WillReturnRows(sqlmock.NewRows([]string{"coalesce"}).AddRow(""))
+
 	mock.ExpectExec(regexp.QuoteMeta(schema)).
 		WillReturnResult(sqlmock.NewResult(0, 1))
+
+	mock.ExpectExec(regexp.QuoteMeta("SELECT pg_advisory_unlock($1)")).
+		WithArgs(schemaAdvisoryLockID).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+
+	ctx := &ExecutionContext{DB: db}
+	step := NewSchemaUpload(ctx, schemaPath)
+
+	statusCode, execErr := step.Execute(1)
+	if execErr != nil {
+		t.Fatalf("unexpected error: %v", execErr)
+	}
+	if statusCode != 0 {
+		t.Fatalf("expected status code 0, got %d", statusCode)
+	}
+
+	if err = mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("unmet SQL expectations: %v", err)
+	}
+}
+
+func TestSchemaUploadExecuteSkipsWhenBaseSchemaAlreadyInitialized(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("sqlmock.New() failed: %v", err)
+	}
+	defer func() {
+		_ = db.Close()
+	}()
+
+	// Schema path should not matter because upload is skipped before file read.
+	schemaPath := t.TempDir()
+
+	mock.ExpectExec(regexp.QuoteMeta("SELECT pg_advisory_lock($1)")).
+		WithArgs(schemaAdvisoryLockID).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+
+	mock.ExpectQuery(regexp.QuoteMeta("SELECT COALESCE(to_regclass('public.basyxsystem')::text, '')")).
+		WillReturnRows(sqlmock.NewRows([]string{"coalesce"}).AddRow("basyxsystem"))
 
 	mock.ExpectExec(regexp.QuoteMeta("SELECT pg_advisory_unlock($1)")).
 		WithArgs(schemaAdvisoryLockID).
