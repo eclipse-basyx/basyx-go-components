@@ -41,6 +41,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/testenv"
 	"github.com/stretchr/testify/require"
 )
 
@@ -111,6 +112,119 @@ func TestBulkAASOperationsAndDescription(t *testing.T) {
 
 		assertDTRShellStatus(t, "urn:example:dtr:bulk-conflict", http.StatusOK, headers)
 		assertDTRShellStatus(t, "urn:example:dtr:bulk-new", http.StatusNotFound, headers)
+	})
+}
+
+func TestBulkSecurityIntegrationJSONSuite(t *testing.T) {
+	testenv.RunJSONSuite(t, testenv.JSONSuiteOptions{
+		ConfigPath: "bulk_security_it_config.json",
+		ActionHandlers: map[string]testenv.JSONStepAction{
+			"BULK_SECURITY_RESET": func(t *testing.T, _ *testenv.JSONSuiteRunner, _ testenv.JSONSuiteStep, _ int) {
+				deleteAllDTRShellDescriptors(t, authHeadersForUser(t, "admin", "pwd"))
+			},
+			"BULK_SECURITY_PUT_CREATE_ONLY": func(t *testing.T, _ *testenv.JSONSuiteRunner, _ testenv.JSONSuiteStep, _ int) {
+				adminHeaders := authHeadersForUser(t, "admin", "pwd")
+				userXHeaders := authHeadersForUser(t, "userx", "pwd")
+				deleteAllDTRShellDescriptors(t, adminHeaders)
+
+				descriptorID := "urn:example:dtr:bulk-put-create-only"
+				createPayload := []any{newDTRBulkTestDescriptor(t, descriptorID, "bulkPutCreateOnlyV1", "urn:example:dtr:bulk-put-create-only-sm")}
+				handleID := startDTRBulkAndReadHandle(t, http.MethodPut, "/bulk/shell-descriptors", createPayload, userXHeaders)
+				_ = awaitDTRBulkStatus(t, handleID, userXHeaders)
+				assertDTRBulkResultStatus(t, handleID, http.StatusNoContent, userXHeaders)
+
+				created := getDTRShellDescriptor(t, descriptorID, adminHeaders)
+				require.Equal(t, "bulkPutCreateOnlyV1", created["idShort"])
+
+				updatePayload := []any{newDTRBulkTestDescriptor(t, descriptorID, "bulkPutCreateOnlyV2", "urn:example:dtr:bulk-put-create-only-sm")}
+				handleID = startDTRBulkAndReadHandle(t, http.MethodPut, "/bulk/shell-descriptors", updatePayload, userXHeaders)
+				_ = awaitDTRBulkStatus(t, handleID, userXHeaders)
+				failureBody := assertDTRBulkResultStatus(t, handleID, http.StatusBadRequest, userXHeaders)
+				assertAtomicBulkFailureBody(t, failureBody, 1)
+				assertBulkFailureContainsStatusCode(t, failureBody, http.StatusForbidden)
+
+				current := getDTRShellDescriptor(t, descriptorID, adminHeaders)
+				require.Equal(t, "bulkPutCreateOnlyV1", current["idShort"])
+			},
+			"BULK_SECURITY_PUT_UPDATE_ONLY": func(t *testing.T, _ *testenv.JSONSuiteRunner, _ testenv.JSONSuiteStep, _ int) {
+				adminHeaders := authHeadersForUser(t, "admin", "pwd")
+				userYHeaders := authHeadersForUser(t, "usery", "pwd")
+				deleteAllDTRShellDescriptors(t, adminHeaders)
+
+				existingID := "urn:example:dtr:bulk-put-update-only-existing"
+				existing := newDTRBulkTestDescriptor(t, existingID, "bulkPutUpdateOnlyV1", "urn:example:dtr:bulk-put-update-only-existing-sm")
+				createDTRShellDescriptor(t, existing, http.StatusCreated, adminHeaders)
+
+				updatePayload := []any{newDTRBulkTestDescriptor(t, existingID, "bulkPutUpdateOnlyV2", "urn:example:dtr:bulk-put-update-only-existing-sm")}
+				handleID := startDTRBulkAndReadHandle(t, http.MethodPut, "/bulk/shell-descriptors", updatePayload, userYHeaders)
+				_ = awaitDTRBulkStatus(t, handleID, userYHeaders)
+				assertDTRBulkResultStatus(t, handleID, http.StatusNoContent, userYHeaders)
+
+				updated := getDTRShellDescriptor(t, existingID, adminHeaders)
+				require.Equal(t, "bulkPutUpdateOnlyV2", updated["idShort"])
+
+				newID := "urn:example:dtr:bulk-put-update-only-new"
+				createPayload := []any{newDTRBulkTestDescriptor(t, newID, "bulkPutUpdateOnlyCreateDenied", "urn:example:dtr:bulk-put-update-only-new-sm")}
+				handleID = startDTRBulkAndReadHandle(t, http.MethodPut, "/bulk/shell-descriptors", createPayload, userYHeaders)
+				_ = awaitDTRBulkStatus(t, handleID, userYHeaders)
+				failureBody := assertDTRBulkResultStatus(t, handleID, http.StatusBadRequest, userYHeaders)
+				assertAtomicBulkFailureBody(t, failureBody, 1)
+				assertBulkFailureContainsStatusCode(t, failureBody, http.StatusForbidden)
+
+				assertDTRShellStatus(t, newID, http.StatusNotFound, adminHeaders)
+			},
+			"BULK_SECURITY_LAST_DESCRIPTOR_DENIED": func(t *testing.T, _ *testenv.JSONSuiteRunner, _ testenv.JSONSuiteStep, _ int) {
+				adminHeaders := authHeadersForUser(t, "admin", "pwd")
+				userXHeaders := authHeadersForUser(t, "userx", "pwd")
+				deleteAllDTRShellDescriptors(t, adminHeaders)
+
+				allowedID := "urn:example:dtr:bulk-access-allowed-first"
+				deniedLastID := "urn:example:dtr:bulk-no-access-last"
+				payload := []any{
+					newDTRBulkTestDescriptor(t, allowedID, "bulkAccessAllowedFirst", "urn:example:dtr:bulk-access-allowed-first-sm"),
+					newDTRBulkTestDescriptor(t, deniedLastID, "bulkAccessDeniedLast", "urn:example:dtr:bulk-no-access-last-sm"),
+				}
+				handleID := startDTRBulkAndReadHandle(t, http.MethodPost, "/bulk/shell-descriptors", payload, userXHeaders)
+				_ = awaitDTRBulkStatus(t, handleID, userXHeaders)
+				failureBody := assertDTRBulkResultStatus(t, handleID, http.StatusBadRequest, userXHeaders)
+				assertAtomicBulkFailureBody(t, failureBody, 2)
+				assertBulkFailureContainsStatusCode(t, failureBody, http.StatusForbidden)
+				assertBulkFailureContainsIndex(t, failureBody, 1)
+
+				assertDTRShellStatus(t, allowedID, http.StatusNotFound, adminHeaders)
+				assertDTRShellStatus(t, deniedLastID, http.StatusNotFound, adminHeaders)
+			},
+			"BULK_SECURITY_OWNER_ACCESS": func(t *testing.T, _ *testenv.JSONSuiteRunner, _ testenv.JSONSuiteStep, _ int) {
+				adminHeaders := authHeadersForUser(t, "admin", "pwd")
+				userXHeaders := authHeadersForUser(t, "userx", "pwd")
+				deleteAllDTRShellDescriptors(t, adminHeaders)
+				t.Cleanup(func() {
+					deleteAllDTRShellDescriptors(t, adminHeaders)
+				})
+
+				descriptorID := "urn:example:dtr:bulk-owner-check"
+				payload := []any{newDTRBulkTestDescriptor(t, descriptorID, "bulkOwnerCheck", "urn:example:dtr:bulk-owner-check-sm")}
+				handleID := startDTRBulkAndReadHandle(t, http.MethodPost, "/bulk/shell-descriptors", payload, userXHeaders)
+
+				statusURL := fmt.Sprintf("%s/bulk/status/%s", BaseURL, handleID)
+				ownerStatus, _, _ := doDTRRequest(t, dtrNoRedirectClient, http.MethodGet, statusURL, nil, userXHeaders)
+				require.True(t, ownerStatus == http.StatusOK || ownerStatus == http.StatusFound)
+
+				otherStatus, _, _ := doDTRRequest(t, dtrNoRedirectClient, http.MethodGet, statusURL, nil, adminHeaders)
+				require.Equal(t, http.StatusNotFound, otherStatus)
+
+				otherResultStatus, _, _ := doDTRRequest(t, dtrNoRedirectClient, http.MethodGet, fmt.Sprintf("%s/bulk/result/%s", BaseURL, handleID), nil, adminHeaders)
+				require.Equal(t, http.StatusNotFound, otherResultStatus)
+
+				_ = awaitDTRBulkStatus(t, handleID, userXHeaders)
+				assertDTRBulkResultStatus(t, handleID, http.StatusNoContent, userXHeaders)
+			},
+		},
+		TokenProvider: testenv.NewPasswordGrantTokenProvider(
+			dtrTokenURL,
+			dtrClientID,
+			10*time.Second,
+		),
 	})
 }
 
@@ -233,6 +347,44 @@ func assertAtomicBulkFailureBody(t *testing.T, body map[string]any, requestedCou
 	require.NotEmpty(t, details)
 }
 
+func assertBulkFailureContainsStatusCode(t *testing.T, body map[string]any, statusCode int) {
+	t.Helper()
+	details, ok := body["details"].([]any)
+	require.True(t, ok)
+	require.NotEmpty(t, details)
+
+	for _, item := range details {
+		detail, detailOK := item.(map[string]any)
+		require.True(t, detailOK)
+		got, codeOK := detail["statusCode"].(float64)
+		require.True(t, codeOK)
+		if int(got) == statusCode {
+			return
+		}
+	}
+
+	t.Fatalf("DTR-BULK-FAILURE-MISSING-STATUSCODE expected statusCode=%d", statusCode)
+}
+
+func assertBulkFailureContainsIndex(t *testing.T, body map[string]any, index int) {
+	t.Helper()
+	details, ok := body["details"].([]any)
+	require.True(t, ok)
+	require.NotEmpty(t, details)
+
+	for _, item := range details {
+		detail, detailOK := item.(map[string]any)
+		require.True(t, detailOK)
+		got, indexOK := detail["index"].(float64)
+		require.True(t, indexOK)
+		if int(got) == index {
+			return
+		}
+	}
+
+	t.Fatalf("DTR-BULK-FAILURE-MISSING-INDEX expected index=%d", index)
+}
+
 func loadDTRFixtureMap(t *testing.T, relativePath string) map[string]any {
 	t.Helper()
 	path := filepath.Clean(relativePath)
@@ -241,6 +393,33 @@ func loadDTRFixtureMap(t *testing.T, relativePath string) map[string]any {
 	var value map[string]any
 	require.NoError(t, json.Unmarshal(bytesPayload, &value))
 	return value
+}
+
+func newDTRBulkTestDescriptor(t *testing.T, id string, idShort string, submodelID string) map[string]any {
+	t.Helper()
+	descriptor := loadDTRFixtureMap(t, "postBody/aas_shell.json")
+	descriptor["id"] = id
+	descriptor["idShort"] = idShort
+	setNestedSubmodelID(descriptor, submodelID)
+	return descriptor
+}
+
+func authHeadersForUser(t *testing.T, user string, password string) map[string]string {
+	t.Helper()
+	token := fetchDTRToken(t, user, password)
+	return map[string]string{
+		"Authorization": "Bearer " + token,
+	}
+}
+
+func getDTRShellDescriptor(t *testing.T, identifier string, headers map[string]string) map[string]any {
+	t.Helper()
+	enc := base64.RawURLEncoding.EncodeToString([]byte(identifier))
+	status, body, _ := doDTRRequest(t, dtrNoRedirectClient, http.MethodGet, BaseURL+"/shell-descriptors/"+enc, nil, headers)
+	require.Equal(t, http.StatusOK, status)
+	var descriptor map[string]any
+	require.NoError(t, json.Unmarshal(body, &descriptor))
+	return descriptor
 }
 
 func deepCopyMap(input map[string]any) map[string]any {

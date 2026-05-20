@@ -1,0 +1,22 @@
+[
+  {
+    "context": "Bulk security - reset test data",
+    "action": "BULK_SECURITY_RESET"
+  },
+  {
+    "context": "Bulk security - PUT create-only user",
+    "action": "BULK_SECURITY_PUT_CREATE_ONLY"
+  },
+  {
+    "context": "Bulk security - PUT update-only user",
+    "action": "BULK_SECURITY_PUT_UPDATE_ONLY"
+  },
+  {
+    "context": "Bulk security - all but last descriptor denied",
+    "action": "BULK_SECURITY_LAST_DESCRIPTOR_DENIED"
+  },
+  {
+    "context": "Bulk security - handle owner access",
+    "action": "BULK_SECURITY_OWNER_ACCESS"
+  }
+]

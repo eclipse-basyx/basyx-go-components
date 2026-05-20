@@ -26,13 +26,36 @@
       { "name": "always_true", "formula": { "$boolean": true } },
       { "name": "always_false", "formula": { "$boolean": false } },
       { "name": "data_provider_read_formula", "formula":
-        { "$contains": [ { "$attribute": { "CLAIM": "role" } }, { "$strVal": "view_digital_twin"} ] }
+        { "$or": [
+            { "$contains": [ { "$attribute": { "CLAIM": "role" } }, { "$strVal": "view_digital_twin"} ] },
+            { "$eq": [ { "$attribute": { "CLAIM": "role" } }, { "$strVal": "editor"} ] }
+          ]
+        }
       },
       { "name": "data_provider_create_formula", "formula":
-        { "$contains": [ { "$attribute": { "CLAIM": "role" } }, { "$strVal": "add_digital_twin"} ] }
+        { "$eq": [ { "$attribute": { "CLAIM": "clear" } }, { "$strVal": "20"} ] }
       },
       { "name": "data_provider_update_formula", "formula":
-        { "$contains": [ { "$attribute": { "CLAIM": "role" } }, { "$strVal": "update_digital_twin"} ] }
+        { "$eq": [ { "$attribute": { "CLAIM": "clear" } }, { "$strVal": "20"} ] }
+      },
+      { "name": "userx_create_except_last_formula", "formula":
+        { "$and": [
+            { "$eq": [ { "$attribute": { "CLAIM": "role" } }, { "$strVal": "editor"} ] },
+            { "$or": [
+                { "$eq": [ { "$attribute": { "CLAIM": "clear" } }, { "$strVal": "<nil>"} ] },
+                { "$eq": [ { "$attribute": { "CLAIM": "clear" } }, { "$strVal": ""} ] }
+              ]
+            },
+            { "$ne": [ { "$field": "$aasdesc#id" }, { "$strVal": "urn:example:dtr:bulk-no-access-last"} ] }
+          ]
+        }
+      },
+      { "name": "usery_update_only_formula", "formula":
+        { "$and": [
+            { "$eq": [ { "$attribute": { "CLAIM": "role" } }, { "$strVal": "editor"} ] },
+            { "$eq": [ { "$attribute": { "CLAIM": "clear" } }, { "$strVal": "2"} ] }
+          ]
+        }
       },
       { "name": "data_provider_delete_formula", "formula":
         { "$contains": [ { "$attribute": { "CLAIM": "role" } }, { "$strVal": "delete_digital_twin"} ] }
@@ -112,6 +135,8 @@
       { "USEACL": "data_provider_read", "USEOBJECTS": ["all_shell_descriptors", "assetlinks", "shells", "bulk_operations"], "USEFORMULA": "data_provider_read_formula" },
       { "USEACL": "data_provider_create", "USEOBJECTS": ["all_shell_descriptors", "assetlinks", "shells"], "USEFORMULA": "data_provider_create_formula" },
       { "USEACL": "data_provider_update", "USEOBJECTS": ["all_shell_descriptors", "assetlinks", "shells"], "USEFORMULA": "data_provider_update_formula" },
+      { "USEACL": "data_provider_create", "USEOBJECTS": ["all_shell_descriptors", "assetlinks", "shells"], "USEFORMULA": "userx_create_except_last_formula" },
+      { "USEACL": "data_provider_update", "USEOBJECTS": ["all_shell_descriptors", "assetlinks", "shells"], "USEFORMULA": "usery_update_only_formula" },
       { "USEACL": "data_provider_delete", "USEOBJECTS": ["all_shell_descriptors", "assetlinks", "shells"], "USEFORMULA": "data_provider_delete_formula" },
       { "USEACL": "read_anonymous", "USEOBJECTS": ["all_shell_descriptors"], "USEFORMULA": "bpn_or_public", 
         "FILTERLIST": 
