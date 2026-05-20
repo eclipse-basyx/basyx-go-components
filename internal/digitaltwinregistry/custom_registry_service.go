@@ -32,7 +32,8 @@ import (
 
 	registryapiinternal "github.com/eclipse-basyx/basyx-go-components/internal/aasregistry/api"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
-	"github.com/eclipse-basyx/basyx-go-components/internal/common/descriptors"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/asyncbulk"
+	descriptorsutil "github.com/eclipse-basyx/basyx-go-components/internal/common/descriptors"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 	discoveryapiinternal "github.com/eclipse-basyx/basyx-go-components/internal/discoveryservice/api"
@@ -70,7 +71,7 @@ func (s *CustomRegistryService) GetAllAssetAdministrationShellDescriptors(
 		query := buildEdcBpnClaimEqualsHeaderExpression(createdAfter, "$aasdesc#createdAt")
 		ctx = auth.MergeQueryFilter(ctx, query)
 	}
-	ctx = descriptors.WithIncludeAASDescriptorCreatedAt(ctx)
+	ctx = descriptorsutil.WithIncludeAASDescriptorCreatedAt(ctx)
 
 	return s.AssetAdministrationShellRegistryAPIAPIService.GetAllAssetAdministrationShellDescriptors(
 		ctx,
@@ -87,7 +88,7 @@ func (s *CustomRegistryService) GetAssetAdministrationShellDescriptorById(
 	ctx context.Context,
 	aasIdentifier string,
 ) (model.ImplResponse, error) {
-	ctx = descriptors.WithIncludeAASDescriptorCreatedAt(ctx)
+	ctx = descriptorsutil.WithIncludeAASDescriptorCreatedAt(ctx)
 	return s.AssetAdministrationShellRegistryAPIAPIService.GetAssetAdministrationShellDescriptorById(ctx, aasIdentifier)
 }
 
@@ -96,8 +97,8 @@ func (s *CustomRegistryService) PostAssetAdministrationShellDescriptor(
 	ctx context.Context,
 	assetAdministrationShellDescriptor model.AssetAdministrationShellDescriptor,
 ) (model.ImplResponse, error) {
-	ctx = descriptors.WithAllowAASDescriptorCreatedAtOverride(ctx)
-	ctx = descriptors.WithIncludeAASDescriptorCreatedAt(ctx)
+	ctx = descriptorsutil.WithAllowAASDescriptorCreatedAtOverride(ctx)
+	ctx = descriptorsutil.WithIncludeAASDescriptorCreatedAt(ctx)
 
 	baseResp, baseErr := s.AssetAdministrationShellRegistryAPIAPIService.PostAssetAdministrationShellDescriptor(
 		ctx,
@@ -116,8 +117,8 @@ func (s *CustomRegistryService) PutAssetAdministrationShellDescriptorById(
 	aasIdentifier string,
 	assetAdministrationShellDescriptor model.AssetAdministrationShellDescriptor,
 ) (model.ImplResponse, error) {
-	ctx = descriptors.WithAllowAASDescriptorCreatedAtOverride(ctx)
-	ctx = descriptors.WithIncludeAASDescriptorCreatedAt(ctx)
+	ctx = descriptorsutil.WithAllowAASDescriptorCreatedAtOverride(ctx)
+	ctx = descriptorsutil.WithIncludeAASDescriptorCreatedAt(ctx)
 
 	decodedAASID, decodeErr := common.DecodeString(aasIdentifier)
 	if decodeErr != nil {
@@ -180,6 +181,26 @@ func (s *CustomRegistryService) PutSubmodelDescriptorByIdThroughSuperpath(
 		submodelIdentifier,
 		submodelDescriptor,
 	)
+}
+
+// ExecuteBulkCreateAtomic executes atomic bulk create with DTR-specific context flags.
+func (s *CustomRegistryService) ExecuteBulkCreateAtomic(
+	ctx context.Context,
+	descriptors []model.AssetAdministrationShellDescriptor,
+) asyncbulk.OperationResult {
+	ctx = descriptorsutil.WithAllowAASDescriptorCreatedAtOverride(ctx)
+	ctx = descriptorsutil.WithIncludeAASDescriptorCreatedAt(ctx)
+	return s.AssetAdministrationShellRegistryAPIAPIService.ExecuteBulkCreateAtomic(ctx, descriptors)
+}
+
+// ExecuteBulkPutAtomic executes atomic bulk put with DTR-specific context flags.
+func (s *CustomRegistryService) ExecuteBulkPutAtomic(
+	ctx context.Context,
+	descriptors []model.AssetAdministrationShellDescriptor,
+) asyncbulk.OperationResult {
+	ctx = descriptorsutil.WithAllowAASDescriptorCreatedAtOverride(ctx)
+	ctx = descriptorsutil.WithIncludeAASDescriptorCreatedAt(ctx)
+	return s.AssetAdministrationShellRegistryAPIAPIService.ExecuteBulkPutAtomic(ctx, descriptors)
 }
 
 func is2xx(code int) bool {

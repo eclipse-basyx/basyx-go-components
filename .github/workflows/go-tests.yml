@@ -79,7 +79,7 @@ jobs:
 
       - name: Run submodel repository unit tests
         run: |
-          go test -v ./internal/submodelrepository/persistence
+          go test -v ./internal/submodelrepository/persistence ./internal/submodelrepository/api
 
   discovery-service-integration-tests:
     name: Discovery Service Integration Tests

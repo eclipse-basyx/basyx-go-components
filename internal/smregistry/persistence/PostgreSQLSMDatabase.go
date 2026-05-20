@@ -78,6 +78,15 @@ func NewPostgreSQLSMBackendFromDB(db *sql.DB) (*PostgreSQLSMDatabase, error) {
 	return &PostgreSQLSMDatabase{db: db}, nil
 }
 
+// ExecuteInTransaction executes fn within a single database transaction.
+func (p *PostgreSQLSMDatabase) ExecuteInTransaction(
+	startErrorCode string,
+	commitErrorCode string,
+	fn func(tx *sql.Tx) error,
+) error {
+	return common.ExecuteInTransaction(p.db, startErrorCode, commitErrorCode, fn)
+}
+
 // ListSubmodelDescriptors lists global Submodel Descriptors (no AAS association).
 func (p *PostgreSQLSMDatabase) ListSubmodelDescriptors(
 	ctx context.Context,
@@ -93,6 +102,19 @@ func (p *PostgreSQLSMDatabase) InsertSubmodelDescriptor(
 	submodel model.SubmodelDescriptor,
 ) (model.SubmodelDescriptor, error) {
 	return descriptors.InsertSubmodelDescriptor(ctx, p.db, submodel)
+}
+
+// InsertSubmodelDescriptorInTransaction inserts a global submodel descriptor
+// in the provided transaction.
+func (p *PostgreSQLSMDatabase) InsertSubmodelDescriptorInTransaction(
+	ctx context.Context,
+	tx *sql.Tx,
+	submodel model.SubmodelDescriptor,
+) (model.SubmodelDescriptor, error) {
+	if tx == nil {
+		return model.SubmodelDescriptor{}, common.NewInternalServerError("SMREG-INSERTSMDESC-NILTX transaction must not be nil")
+	}
+	return descriptors.InsertSubmodelDescriptorTx(ctx, tx, submodel)
 }
 
 // ReplaceSubmodelDescriptor replaces a global Submodel Descriptor (no AAS association).
@@ -132,6 +154,19 @@ func (p *PostgreSQLSMDatabase) GetSubmodelDescriptorByID(
 	submodelID string,
 ) (model.SubmodelDescriptor, error) {
 	return descriptors.GetSubmodelDescriptorByID(ctx, p.db, submodelID)
+}
+
+// GetSubmodelDescriptorByIDInTransaction returns a global submodel descriptor
+// by id using the provided transaction.
+func (p *PostgreSQLSMDatabase) GetSubmodelDescriptorByIDInTransaction(
+	ctx context.Context,
+	tx *sql.Tx,
+	submodelID string,
+) (model.SubmodelDescriptor, error) {
+	if tx == nil {
+		return model.SubmodelDescriptor{}, common.NewInternalServerError("SMREG-GETSMDESC-NILTX transaction must not be nil")
+	}
+	return descriptors.GetSubmodelDescriptorByID(ctx, tx, submodelID)
 }
 
 // DeleteSubmodelDescriptorByID deletes a global Submodel Descriptor by its id.

@@ -39,6 +39,7 @@ import (
 	aasregistryapi "github.com/eclipse-basyx/basyx-go-components/internal/aasregistry/api"
 	aasregistrydatabase "github.com/eclipse-basyx/basyx-go-components/internal/aasregistry/persistence"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/asyncbulk"
 	commonmodel "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 	apis "github.com/eclipse-basyx/basyx-go-components/pkg/aasregistryapi"
@@ -99,6 +100,9 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 
 	smSvc := aasregistryapi.NewAssetAdministrationShellRegistryAPIAPIService(*smDatabase)
 	smCtrl := apis.NewAssetAdministrationShellRegistryAPIAPIController(smSvc, cfg.Server.ContextPath)
+	bulkManager := asyncbulk.NewManager("AASR-BULK", 0)
+	bulkSvc := aasregistryapi.NewBulkService(smSvc, bulkManager)
+	bulkHandler := aasregistryapi.NewBulkHTTPHandler(bulkSvc)
 
 	descSvc := aasregistryapi.NewDescriptionAPIAPIService()
 	descCtrl := apis.NewDescriptionAPIAPIController(descSvc)
@@ -123,6 +127,7 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 	for _, rt := range descCtrl.Routes() {
 		apiRouter.Method(rt.Method, rt.Pattern, rt.HandlerFunc)
 	}
+	bulkHandler.RegisterRoutes(apiRouter, true)
 
 	// Mount protected API under base path
 	r.Mount(base, apiRouter)

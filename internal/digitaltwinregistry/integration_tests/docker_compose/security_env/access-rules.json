@@ -10,6 +10,7 @@
       { "name": "description", "objects": [ { "ROUTE": "/description" } ] },
       { "name": "assetlinks", "objects": [ { "ROUTE": "/lookup/shells" }, { "ROUTE": "/lookup/shellsByAssetLink" } ] },
       { "name": "shells", "objects": [ { "ROUTE": "/lookup/shells/*" } ] },
+      { "name": "bulk_operations", "objects": [ { "ROUTE": "/bulk/status/*" }, { "ROUTE": "/bulk/result/*" } ] },
       { "name": "all_shell_descriptors", "objects": [ { "DESCRIPTOR": "$aasdesc(\"*\")" } ] }
     ],
 
@@ -108,7 +109,7 @@
     ],
 
     "rules": [
-      { "USEACL": "data_provider_read", "USEOBJECTS": ["all_shell_descriptors", "assetlinks", "shells"], "USEFORMULA": "data_provider_read_formula" },
+      { "USEACL": "data_provider_read", "USEOBJECTS": ["all_shell_descriptors", "assetlinks", "shells", "bulk_operations"], "USEFORMULA": "data_provider_read_formula" },
       { "USEACL": "data_provider_create", "USEOBJECTS": ["all_shell_descriptors", "assetlinks", "shells"], "USEFORMULA": "data_provider_create_formula" },
       { "USEACL": "data_provider_update", "USEOBJECTS": ["all_shell_descriptors", "assetlinks", "shells"], "USEFORMULA": "data_provider_update_formula" },
       { "USEACL": "data_provider_delete", "USEOBJECTS": ["all_shell_descriptors", "assetlinks", "shells"], "USEFORMULA": "data_provider_delete_formula" },

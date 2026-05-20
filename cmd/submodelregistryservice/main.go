@@ -37,6 +37,7 @@ import (
 	"os"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/asyncbulk"
 	commonmodel "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 	smregistryapi "github.com/eclipse-basyx/basyx-go-components/internal/smregistry/api"
@@ -99,6 +100,9 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 
 	smSvc := smregistryapi.NewSubmodelRegistryAPIAPIService(*smDatabase)
 	smCtrl := smregistryopenapi.NewSubmodelRegistryAPIAPIController(smSvc, cfg.Server.ContextPath)
+	bulkManager := asyncbulk.NewManager("SMR-BULK", 0)
+	bulkSvc := smregistryapi.NewBulkService(smSvc, bulkManager)
+	bulkHandler := smregistryapi.NewBulkHTTPHandler(bulkSvc)
 
 	descSvc := smregistryapi.NewDescriptionAPIAPIService()
 	descCtrl := smregistryopenapi.NewDescriptionAPIAPIController(descSvc)
@@ -123,6 +127,7 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 	for _, rt := range descCtrl.Routes() {
 		apiRouter.Method(rt.Method, rt.Pattern, rt.HandlerFunc)
 	}
+	bulkHandler.RegisterRoutes(apiRouter, true)
 
 	// Mount protected API under base path
 	r.Mount(base, apiRouter)

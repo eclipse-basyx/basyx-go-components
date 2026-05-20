@@ -22,34 +22,35 @@
 *
 * SPDX-License-Identifier: MIT
 ******************************************************************************/
-// Author: Martin Stemmer ( Fraunhofer IESE )
+// Author: Aaron Zielstorff ( Fraunhofer IESE )
 
-package auth
+package asyncbulk
 
 import (
-	"context"
-	"net/http"
-	"strings"
+	"testing"
+	"time"
+
+	"github.com/stretchr/testify/require"
 )
 
-// EdcBpnHeaderMiddleware injects the Edc-Bpn header value into JWT claims
-// when security is enabled. The claim key is "edc_bpn".
-func EdcBpnHeaderMiddleware(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		bpn := strings.TrimSpace(r.Header.Get("Edc-Bpn"))
-		if bpn == "" {
-			next.ServeHTTP(w, r)
-			return
-		}
+func TestStartCreatesOpaqueHandle(t *testing.T) {
+	manager := NewManager("ASYNC-TEST", time.Minute)
 
-		claims := FromContext(r)
-		if claims == nil {
-			next.ServeHTTP(w, r)
-			return
-		}
+	handleID, err := manager.Start("owner-a")
+	require.NoError(t, err)
+	require.Contains(t, handleID, "ASYNC-TEST-")
+	require.NotContains(t, handleID, "|")
+}
 
-		claims["Edc-Bpn"] = bpn
-		ctx := context.WithValue(r.Context(), ClaimsKey, claims)
-		next.ServeHTTP(w, r.WithContext(ctx))
-	})
+func TestGetForOwnerHidesForeignHandle(t *testing.T) {
+	manager := NewManager("ASYNC-TEST", time.Minute)
+
+	handleID, err := manager.Start("owner-a")
+	require.NoError(t, err)
+
+	_, found := manager.GetForOwner(handleID, "owner-b")
+	require.False(t, found)
+
+	_, found = manager.GetForOwner(handleID, "owner-a")
+	require.True(t, found)
 }
