@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"log"
 
-	sequences "github.com/eclipse-basyx/basyx-go-components/internal/basyxconfigurationservice/steps"
+	sequences "github.com/eclipse-basyx/basyx-go-components/internal/basyxconfigurationservice/sequences"
 )
 
 // SchemaInitializer stores and executes initialization steps in sequence.

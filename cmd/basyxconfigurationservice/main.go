@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/basyxconfigurationservice"
-	"github.com/eclipse-basyx/basyx-go-components/internal/basyxconfigurationservice/steps"
+	steps "github.com/eclipse-basyx/basyx-go-components/internal/basyxconfigurationservice/sequences"
 )
 
 func main() {
