@@ -52,6 +52,11 @@ func runServer(ctx context.Context, configPath string) error {
 		cfg.Postgres.User, cfg.Postgres.Host, cfg.Postgres.Port, cfg.Postgres.DBName)
 
 	dsn := common.BuildPostgresDSN(cfg.Postgres)
+
+	if err := common.ValidateDatabaseVersionByDSN(dsn, common.CURRENT_DATABASE_VERSION); err != nil {
+		return err
+	}
+
 	companyLookupDatabase, err := companylookuppostgresql.NewPostgreSQLCompanyLookupBackend(
 		dsn,
 		//nolint:gosec // configured value is bounded by deployment configuration

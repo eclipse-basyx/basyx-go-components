@@ -57,6 +57,10 @@ func runServer(ctx context.Context, configPath string) error {
 		cfg.Postgres.Port,
 		cfg.Postgres.DBName,
 	)
+	if err := common.ValidateDatabaseVersionByDSN(dsn, common.CURRENT_DATABASE_VERSION); err != nil {
+		return err
+	}
+
 	log.Printf("🗄️  Connecting to Postgres with DSN: postgres://%s:****@%s:%d/%s?sslmode=disable",
 		cfg.Postgres.User, cfg.Postgres.Host, cfg.Postgres.Port, cfg.Postgres.DBName)
 

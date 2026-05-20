@@ -81,6 +81,11 @@ func runServer(ctx context.Context, configPath string) error {
 	// ==== Concept Description Repository Service ====
 
 	dsn := common.BuildPostgresDSN(cfg.Postgres)
+
+	if err := common.ValidateDatabaseVersionByDSN(dsn, common.CURRENT_DATABASE_VERSION); err != nil {
+		return err
+	}
+
 	cdDatabase, err := persistence.NewConceptDescriptionBackend(
 		dsn,
 		//nolint:gosec // configured value is bounded by deployment configuration

@@ -88,6 +88,10 @@ func runServer(ctx context.Context, configPath string) error {
 
 	dsn := common.BuildPostgresDSN(cfg.Postgres)
 
+	if err := common.ValidateDatabaseVersionByDSN(dsn, common.CURRENT_DATABASE_VERSION); err != nil {
+		return err
+	}
+
 	sharedDB, err := common.NewDatabaseConnection(dsn)
 	if err != nil {
 		return err

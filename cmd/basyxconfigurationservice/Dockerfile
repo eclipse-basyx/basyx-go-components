@@ -34,7 +34,7 @@ WORKDIR /app
 
 # Copy runtime artifacts
 COPY --from=builder /app/basyxconfigurationservice /app/basyxconfigurationservice
-COPY --from=builder /app/database/3_1_full.sql /app/3_1_full.sql
+COPY --from=builder /app/database/ /app/
 COPY --from=builder /app/healthprobe /bin/healthprobe
 COPY --from=builder /app/healthprobe /bin/wget
 
