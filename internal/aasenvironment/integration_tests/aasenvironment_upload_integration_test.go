@@ -37,6 +37,8 @@ const uploadHeaderPartContentType = "X-Upload-Part-ContentType"
 const uploadHeaderPartFileName = "X-Upload-Part-FileName"
 const uploadHeaderPartOmitFileName = "X-Upload-Part-OmitFileName"
 const uploadHeaderRequestFileName = "X-Upload-FileName"
+const uploadHeaderExpectedErrorContains = "X-Upload-Expected-Error-Contains"
+const uploadHeaderExpectedErrorContainsSecondary = "X-Upload-Expected-Error-Contains-Secondary"
 
 var numericValuePattern = regexp.MustCompile(`^\d+$`)
 
@@ -55,6 +57,11 @@ func TestUploadAASXIntegration(t *testing.T) {
 func TestUploadAASXIntegrationProductionPlan(t *testing.T) {
 	resetDatabaseForUploadIT(t, uploadIntegrationDSN)
 	runUploadJSONSuite(t, "upload_productionplan_it_config.json")
+}
+
+func TestUploadAASXIntegrationSupportsLegacyHARTINGNamespace(t *testing.T) {
+	resetDatabaseForUploadIT(t, uploadIntegrationDSN)
+	runUploadJSONSuite(t, "upload_harting_it_config.json")
 }
 
 func TestUploadJSONAndXMLIntegration(t *testing.T) {
@@ -232,6 +239,32 @@ func runMultipartUploadAction(t *testing.T, step testenv.JSONSuiteStep) {
 		expectedStatus = http.StatusOK
 	}
 	require.Equalf(t, expectedStatus, resp.StatusCode, "AASX upload failed: %s", string(responseBody))
+
+	if step.Headers != nil {
+		if expectedErrorContains, ok := step.Headers[uploadHeaderExpectedErrorContains]; ok {
+			expectedErrorContains = strings.TrimSpace(expectedErrorContains)
+			if expectedErrorContains != "" {
+				require.Containsf(
+					t,
+					string(responseBody),
+					expectedErrorContains,
+					"AASX upload error body does not contain expected fragment",
+				)
+			}
+		}
+
+		if secondaryExpected, ok := step.Headers[uploadHeaderExpectedErrorContainsSecondary]; ok {
+			secondaryExpected = strings.TrimSpace(secondaryExpected)
+			if secondaryExpected != "" {
+				require.Containsf(
+					t,
+					string(responseBody),
+					secondaryExpected,
+					"AASX upload error body does not contain expected secondary fragment",
+				)
+			}
+		}
+	}
 }
 
 func verifyStoredAttachments(t *testing.T, step testenv.JSONSuiteStep) {

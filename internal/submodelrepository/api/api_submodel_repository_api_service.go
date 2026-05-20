@@ -28,13 +28,13 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/aas-core-works/aas-core3.1-golang/jsonization"
 	"github.com/aas-core-works/aas-core3.1-golang/stringification"
 	"github.com/aas-core-works/aas-core3.1-golang/types"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/asyncbulk"
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
@@ -48,6 +48,7 @@ import (
 // Include any external packages or services that will be required by this service.
 type SubmodelRepositoryAPIAPIService struct {
 	submodelBackend persistencepostgresql.SubmodelDatabase
+	asyncManager    *asyncbulk.Manager
 }
 
 const componentName = "SMREPO"
@@ -58,32 +59,18 @@ const (
 	defaultDelegationAsyncTTL         = 15 * time.Minute
 	delegationAsyncTTLKey             = "SMREPO_DELEGATION_ASYNC_TTL"
 	delegationTrustedHostsKey         = "SMREPO_DELEGATION_TRUSTED_HOSTS"
-	delegationAsyncCleanupInterval    = time.Minute
 )
 
-type delegatedOperationAsyncRecord struct {
-	SubmodelIdentifier string
-	IDShortPath        string
-	State              string
-	Result             any
-	ErrorStatus        int
-	ErrorBody          any
-	CreatedAt          time.Time
-	ExpiresAt          time.Time
-}
-
-var delegatedOperationAsyncState = struct {
-	sync.RWMutex
-	records       map[string]delegatedOperationAsyncRecord
-	lastCleanupAt time.Time
-}{
-	records: map[string]delegatedOperationAsyncRecord{},
-}
+const (
+	delegatedAsyncSubmodelIdentifierMetadataKey = "submodelIdentifier"
+	delegatedAsyncIDShortPathMetadataKey        = "idShortPath"
+)
 
 // NewSubmodelRepositoryAPIAPIService creates a default api service
 func NewSubmodelRepositoryAPIAPIService(databaseBackend persistencepostgresql.SubmodelDatabase) *SubmodelRepositoryAPIAPIService {
 	return &SubmodelRepositoryAPIAPIService{
 		submodelBackend: databaseBackend,
+		asyncManager:    asyncbulk.NewManager("SMREPO-ASYNC", parseDelegationAsyncTTL()),
 	}
 }
 
@@ -679,20 +666,6 @@ func shouldForwardAuthorizationHeader(parsedDelegationURL *url.URL) bool {
 	return isTrustedDelegationHost(parsedDelegationURL.Hostname())
 }
 
-func maybeCleanupDelegatedAsyncRecordsLocked(now time.Time) {
-	if !delegatedOperationAsyncState.lastCleanupAt.IsZero() && now.Sub(delegatedOperationAsyncState.lastCleanupAt) < delegationAsyncCleanupInterval {
-		return
-	}
-
-	for handleID, record := range delegatedOperationAsyncState.records {
-		if !record.ExpiresAt.IsZero() && now.After(record.ExpiresAt) {
-			delete(delegatedOperationAsyncState.records, handleID)
-		}
-	}
-
-	delegatedOperationAsyncState.lastCleanupAt = now
-}
-
 func doDelegatedOperationCall(ctx context.Context, delegationURL string, payload []types.IOperationVariable, timeout time.Duration) (int, any, error) {
 	parsedDelegationURL, parseErr := url.Parse(delegationURL)
 	if parseErr != nil {
@@ -769,53 +742,6 @@ func loadOperationElement(ctx context.Context, backend persistencepostgresql.Sub
 	}
 
 	return element, gen.ImplResponse{}, true
-}
-
-func persistDelegatedAsyncRecord(handleID string, record delegatedOperationAsyncRecord) {
-	delegatedOperationAsyncState.Lock()
-	now := time.Now().UTC()
-	maybeCleanupDelegatedAsyncRecordsLocked(now)
-
-	deferredRecord := record
-	deferredRecord.CreatedAt = now
-	deferredRecord.ExpiresAt = now.Add(parseDelegationAsyncTTL())
-	delegatedOperationAsyncState.records[handleID] = deferredRecord
-	delegatedOperationAsyncState.Unlock()
-}
-
-func getDelegatedAsyncRecord(handleID string) (delegatedOperationAsyncRecord, bool) {
-	delegatedOperationAsyncState.Lock()
-	now := time.Now().UTC()
-	maybeCleanupDelegatedAsyncRecordsLocked(now)
-
-	record, found := delegatedOperationAsyncState.records[handleID]
-	if found && !record.ExpiresAt.IsZero() && now.After(record.ExpiresAt) {
-		delete(delegatedOperationAsyncState.records, handleID)
-		delegatedOperationAsyncState.Unlock()
-		return delegatedOperationAsyncRecord{}, false
-	}
-
-	delegatedOperationAsyncState.Unlock()
-	return record, found
-}
-
-func updateDelegatedAsyncRecord(handleID string, updateFn func(record delegatedOperationAsyncRecord) delegatedOperationAsyncRecord) {
-	delegatedOperationAsyncState.Lock()
-	now := time.Now().UTC()
-	maybeCleanupDelegatedAsyncRecordsLocked(now)
-
-	record, found := delegatedOperationAsyncState.records[handleID]
-	if found && !record.ExpiresAt.IsZero() && now.After(record.ExpiresAt) {
-		delete(delegatedOperationAsyncState.records, handleID)
-		found = false
-	}
-	if found {
-		updatedRecord := updateFn(record)
-		updatedRecord.CreatedAt = record.CreatedAt
-		updatedRecord.ExpiresAt = record.ExpiresAt
-		delegatedOperationAsyncState.records[handleID] = updatedRecord
-	}
-	delegatedOperationAsyncState.Unlock()
 }
 
 type submodelElementMetadataPageResult struct {
@@ -2952,25 +2878,25 @@ func (s *SubmodelRepositoryAPIAPIService) InvokeOperationAsync(ctx context.Conte
 		return newAPIErrorResponse(timeoutErr, http.StatusBadRequest, operation, "InvalidClientTimeoutDuration"), nil
 	}
 
-	handleID := common.EncodeString(fmt.Sprintf("%s|%s|%d", decodedSubmodelIdentifier, idShortPath, time.Now().UnixNano()))
-	persistDelegatedAsyncRecord(handleID, delegatedOperationAsyncRecord{
-		SubmodelIdentifier: decodedSubmodelIdentifier,
-		IDShortPath:        idShortPath,
-		State:              "Running",
+	handleID, handleErr := s.asyncManager.Start(auth.OwnerKeyFromContext(ctx))
+	if handleErr != nil {
+		return newAPIErrorResponse(handleErr, http.StatusInternalServerError, operation, "CreateAsyncHandle"), nil
+	}
+	s.asyncManager.Update(handleID, func(record asyncbulk.Record) asyncbulk.Record {
+		record.Metadata = map[string]string{
+			delegatedAsyncSubmodelIdentifierMetadataKey: decodedSubmodelIdentifier,
+			delegatedAsyncIDShortPathMetadataKey:        idShortPath,
+		}
+		return record
 	})
 
-	authorizationHeader := common.AuthorizationHeaderFromContext(ctx)
-
 	go func() {
-		delegationCtx := context.Background()
-		if strings.TrimSpace(authorizationHeader) != "" {
-			delegationCtx = common.WithAuthorizationHeader(delegationCtx, authorizationHeader)
-		}
+		delegationCtx := context.WithoutCancel(ctx)
 
 		statusCode, delegatedBody, delegateErr := doDelegatedOperationCall(delegationCtx, delegationURL, buildDelegatedOperationInput(operationRequest), timeout)
 		if delegateErr != nil {
-			updateDelegatedAsyncRecord(handleID, func(record delegatedOperationAsyncRecord) delegatedOperationAsyncRecord {
-				record.State = "Failed"
+			s.asyncManager.Update(handleID, func(record asyncbulk.Record) asyncbulk.Record {
+				record.ExecutionState = "Failed"
 				record.ErrorStatus = http.StatusInternalServerError
 				record.ErrorBody = map[string]any{"message": delegateErr.Error()}
 				return record
@@ -2979,8 +2905,8 @@ func (s *SubmodelRepositoryAPIAPIService) InvokeOperationAsync(ctx context.Conte
 		}
 
 		if statusCode < http.StatusOK || statusCode >= http.StatusMultipleChoices {
-			updateDelegatedAsyncRecord(handleID, func(record delegatedOperationAsyncRecord) delegatedOperationAsyncRecord {
-				record.State = "Failed"
+			s.asyncManager.Update(handleID, func(record asyncbulk.Record) asyncbulk.Record {
+				record.ExecutionState = "Failed"
 				record.ErrorStatus = statusCode
 				record.ErrorBody = delegatedBody
 				return record
@@ -2993,9 +2919,9 @@ func (s *SubmodelRepositoryAPIAPIService) InvokeOperationAsync(ctx context.Conte
 			finalResult = resultPayload
 		}
 
-		updateDelegatedAsyncRecord(handleID, func(record delegatedOperationAsyncRecord) delegatedOperationAsyncRecord {
-			record.State = "Completed"
-			record.Result = finalResult
+		s.asyncManager.Update(handleID, func(record asyncbulk.Record) asyncbulk.Record {
+			record.ExecutionState = "Completed"
+			record.Payload = finalResult
 			record.ErrorStatus = 0
 			record.ErrorBody = nil
 			return record
@@ -3031,13 +2957,15 @@ func (s *SubmodelRepositoryAPIAPIService) GetOperationAsyncStatus(ctx context.Co
 		return response, nil
 	}
 
-	record, found := getDelegatedAsyncRecord(handleID)
-	if !found || record.SubmodelIdentifier != decodedSubmodelIdentifier || record.IDShortPath != idShortPath {
+	record, found := s.asyncManager.GetForOwner(handleID, auth.OwnerKeyFromContext(ctx))
+	if !found ||
+		record.Metadata[delegatedAsyncSubmodelIdentifierMetadataKey] != decodedSubmodelIdentifier ||
+		record.Metadata[delegatedAsyncIDShortPathMetadataKey] != idShortPath {
 		handleErr := common.NewErrNotFound(handleID)
 		return newAPIErrorResponse(handleErr, http.StatusNotFound, operation, "HandleNotFound"), nil
 	}
 
-	if record.State == "Running" {
+	if record.ExecutionState == "Running" {
 		return gen.Response(http.StatusOK, map[string]any{"executionState": "Running", "success": true}), nil
 	}
 
@@ -3063,25 +2991,27 @@ func (s *SubmodelRepositoryAPIAPIService) GetOperationAsyncResult(ctx context.Co
 		return response, nil
 	}
 
-	record, found := getDelegatedAsyncRecord(handleID)
-	if !found || record.SubmodelIdentifier != decodedSubmodelIdentifier || record.IDShortPath != idShortPath {
+	record, found := s.asyncManager.GetForOwner(handleID, auth.OwnerKeyFromContext(ctx))
+	if !found ||
+		record.Metadata[delegatedAsyncSubmodelIdentifierMetadataKey] != decodedSubmodelIdentifier ||
+		record.Metadata[delegatedAsyncIDShortPathMetadataKey] != idShortPath {
 		handleErr := common.NewErrNotFound(handleID)
 		return newAPIErrorResponse(handleErr, http.StatusNotFound, operation, "HandleNotFound"), nil
 	}
 
-	if record.State == "Running" {
+	if record.ExecutionState == "Running" {
 		notCompletedErr := errors.New("SMREPO-GETOPASYRES-RUNNING operation is still running")
 		return newAPIErrorResponse(notCompletedErr, http.StatusBadRequest, operation, "OperationStillRunning"), nil
 	}
 
-	if record.State == "Failed" {
+	if record.ExecutionState == "Failed" {
 		if record.ErrorStatus <= 0 {
 			return newAPIErrorResponse(errors.New("SMREPO-GETOPASYRES-FAILED delegated operation failed"), http.StatusInternalServerError, operation, "DelegatedOperationFailed"), nil
 		}
 		return gen.Response(record.ErrorStatus, record.ErrorBody), nil
 	}
 
-	return gen.Response(http.StatusOK, record.Result), nil
+	return gen.Response(http.StatusOK, record.Payload), nil
 }
 
 // GetOperationAsyncResultValueOnly - Returns the Operation result of an asynchronously invoked Operation

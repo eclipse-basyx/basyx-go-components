@@ -27,16 +27,20 @@ package aasenvironment
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
+	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	commonmodel "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 )
 
 type mockUploadService struct {
 	statusByFileName map[string]int
+	errorByFileName  map[string]string
 	calls            []string
 }
 
@@ -45,6 +49,20 @@ func (m *mockUploadService) HandleUpload(_ context.Context, fileName string, _ s
 	status := m.statusByFileName[fileName]
 	if status == 0 {
 		status = http.StatusOK
+	}
+	if status >= http.StatusBadRequest {
+		errorText := strings.TrimSpace(m.errorByFileName[fileName])
+		if errorText == "" {
+			errorText = fmt.Sprintf("upload failed for %s", fileName)
+		}
+		return commonmodel.ImplResponse{
+			Code: status,
+			Body: []common.ErrorHandler{{
+				MessageType: "Error",
+				Text:        errorText,
+				Code:        fmt.Sprintf("%d", status),
+			}},
+		}, nil
 	}
 	return commonmodel.ImplResponse{Code: status, Body: map[string]any{}}, nil
 }
@@ -106,6 +124,9 @@ func TestRunAASPreconfiguration_SkipsFailingImports(t *testing.T) {
 			"ok.json":  http.StatusOK,
 			"fail.xml": http.StatusBadRequest,
 		},
+		errorByFileName: map[string]string{
+			"fail.xml": "AASENV-HANDLEUPLOAD-PARSEXML xml parse failed",
+		},
 	}
 
 	summary := RunAASPreconfiguration(context.Background(), uploadService, []string{okFile, failFile, filepath.Join(tmpDir, "missing.aasx")})
@@ -124,5 +145,37 @@ func TestRunAASPreconfiguration_SkipsFailingImports(t *testing.T) {
 	}
 	if len(uploadService.calls) != 2 {
 		t.Fatalf("expected upload service to be called twice, got %d", len(uploadService.calls))
+	}
+}
+
+func TestImportPreconfigurationFile_IncludesUploadErrorDetails(t *testing.T) {
+	tmpDir := t.TempDir()
+	failFile := filepath.Join(tmpDir, "fail.xml")
+	if err := os.WriteFile(failFile, []byte("<environment/>"), 0o600); err != nil {
+		t.Fatalf("failed to write fail fixture: %v", err)
+	}
+
+	uploadService := &mockUploadService{
+		statusByFileName: map[string]int{
+			"fail.xml": http.StatusInternalServerError,
+		},
+		errorByFileName: map[string]string{
+			"fail.xml": "AASENV-PARSEAASX-UNMARSHALXML failed to parse XML spec",
+		},
+	}
+
+	summary := &PreconfigurationSummary{}
+	err := importPreconfigurationFile(context.Background(), uploadService, failFile, summary)
+	if err == nil {
+		t.Fatal("expected import error")
+	}
+	if !strings.Contains(err.Error(), "status 500") {
+		t.Fatalf("expected status code in error, got %q", err.Error())
+	}
+	if !strings.Contains(err.Error(), "AASENV-PARSEAASX-UNMARSHALXML") {
+		t.Fatalf("expected detailed upload error in message, got %q", err.Error())
+	}
+	if summary.FailedFileCount != 1 {
+		t.Fatalf("expected failed file count 1, got %d", summary.FailedFileCount)
 	}
 }

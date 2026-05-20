@@ -12,6 +12,7 @@ import (
 
 	"github.com/aas-core-works/aas-core3.1-golang/types"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/asyncbulk"
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	persistencepostgresql "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence"
 	openapi "github.com/eclipse-basyx/basyx-go-components/pkg/submodelrepositoryapi"
@@ -224,18 +225,17 @@ func TestParseDelegationAsyncTTLUsesDefaultOnInvalidValue(t *testing.T) {
 func TestGetOperationAsyncStatusReturnsRedirectWithLocation(t *testing.T) {
 	sut := NewSubmodelRepositoryAPIAPIService(persistencepostgresql.SubmodelDatabase{})
 
-	delegatedOperationAsyncState.Lock()
-	delegatedOperationAsyncState.records = map[string]delegatedOperationAsyncRecord{}
-	delegatedOperationAsyncState.lastCleanupAt = time.Time{}
-	delegatedOperationAsyncState.Unlock()
-
 	decodedSubmodelID := "sm-redirect"
 	encodedSubmodelID := base64.RawURLEncoding.EncodeToString([]byte(decodedSubmodelID))
-	handleID := "handle-redirect"
-	persistDelegatedAsyncRecord(handleID, delegatedOperationAsyncRecord{
-		SubmodelIdentifier: decodedSubmodelID,
-		IDShortPath:        "Ops.Add",
-		State:              "Completed",
+	handleID, err := sut.asyncManager.Start("anonymous")
+	require.NoError(t, err)
+	sut.asyncManager.Update(handleID, func(record asyncbulk.Record) asyncbulk.Record {
+		record.ExecutionState = "Completed"
+		record.Metadata = map[string]string{
+			delegatedAsyncSubmodelIdentifierMetadataKey: decodedSubmodelID,
+			delegatedAsyncIDShortPathMetadataKey:        "Ops.Add",
+		}
+		return record
 	})
 
 	response, err := sut.GetOperationAsyncStatus(contextWithABACDisabled(t), encodedSubmodelID, "Ops.Add", handleID)

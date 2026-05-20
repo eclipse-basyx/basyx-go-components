@@ -91,6 +91,15 @@ func NewPostgreSQLAASRegistryDatabaseFromDB(db *sql.DB, cacheEnabled bool) (*Pos
 	}, nil
 }
 
+// ExecuteInTransaction executes fn within a single database transaction.
+func (p *PostgreSQLAASRegistryDatabase) ExecuteInTransaction(
+	startErrorCode string,
+	commitErrorCode string,
+	fn func(tx *sql.Tx) error,
+) error {
+	return common.ExecuteInTransaction(p.db, startErrorCode, commitErrorCode, fn)
+}
+
 // InsertAdministrationShellDescriptor inserts the provided AAS descriptor
 // and all related nested entities into the database.
 func (p *PostgreSQLAASRegistryDatabase) InsertAdministrationShellDescriptor(
@@ -98,6 +107,19 @@ func (p *PostgreSQLAASRegistryDatabase) InsertAdministrationShellDescriptor(
 	aasd model.AssetAdministrationShellDescriptor,
 ) (model.AssetAdministrationShellDescriptor, error) {
 	return descriptors.InsertAssetAdministrationShellDescriptor(ctx, p.db, aasd)
+}
+
+// InsertAdministrationShellDescriptorInTransaction inserts the provided AAS
+// descriptor in the provided transaction.
+func (p *PostgreSQLAASRegistryDatabase) InsertAdministrationShellDescriptorInTransaction(
+	ctx context.Context,
+	tx *sql.Tx,
+	aasd model.AssetAdministrationShellDescriptor,
+) error {
+	if tx == nil {
+		return common.NewInternalServerError("AASREG-INSERTAASDESC-NILTX transaction must not be nil")
+	}
+	return descriptors.InsertAdministrationShellDescriptorTx(ctx, tx, aasd)
 }
 
 // GetAssetAdministrationShellDescriptorByID returns the AAS descriptor

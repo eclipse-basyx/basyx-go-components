@@ -71,6 +71,7 @@ func (s *DescriptionAPIAPIService) GetSelfDescription(ctx context.Context) (mode
 	return model.Response(200, model.ServiceDescription{
 		Profiles: []string{
 			"https://app.swaggerhub.com/apis/Plattform_i40/SubmodelRegistryServiceSpecification/V3.1.1_SSP-001",
+			"https://admin-shell.io/aas/API/3/1/SubmodelRegistryServiceSpecification/SSP-003",
 			"https://basyx.org/aas/API/3/1/SubmodelRegistryServiceSpecification/SSP-001",
 		},
 	}), nil

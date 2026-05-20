@@ -3,8 +3,11 @@ package aasenvironment
 import (
 	"fmt"
 	"net/http"
+	"os"
+	"path/filepath"
 	"testing"
 
+	aasx "github.com/aas-core-works/aas-package3-golang"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 )
 
@@ -59,5 +62,40 @@ func TestUploadProcessingStatus_PropagatesWrappedCommonErrors(t *testing.T) {
 				t.Fatalf("expected status %d, got %d for %v", tc.status, got, tc.err)
 			}
 		})
+	}
+}
+
+func TestReadEnvironmentFromAASXSpec_AdaptsLegacyNamespace(t *testing.T) {
+	hartingPath := filepath.Join("integration_tests", "testdata", "HARTING_AAS_09140009950.aasx")
+	if _, err := os.Stat(hartingPath); err != nil {
+		t.Fatalf("failed to access HARTING fixture: %v", err)
+	}
+
+	hartingFile, err := os.Open(hartingPath) // #nosec G304 -- test fixture path is static and controlled by repository sources.
+	if err != nil {
+		t.Fatalf("failed to open HARTING fixture: %v", err)
+	}
+	defer func() {
+		_ = hartingFile.Close()
+	}()
+
+	packaging := aasx.NewPackaging()
+	packageReader, err := packaging.OpenReadFromStream(hartingFile)
+	if err != nil {
+		t.Fatalf("failed to open AASX package: %v", err)
+	}
+	defer func() {
+		_ = packageReader.Close()
+	}()
+
+	_, environment, parseErr := readEnvironmentFromAASXSpec(packageReader, filepath.Base(hartingPath))
+	if parseErr != nil {
+		t.Fatalf("expected legacy namespace to be adapted successfully, got error: %v", parseErr)
+	}
+	if environment == nil {
+		t.Fatal("expected parsed environment, got nil")
+	}
+	if len(environment.AssetAdministrationShells()) == 0 {
+		t.Fatal("expected parsed environment to contain at least one AAS")
 	}
 }

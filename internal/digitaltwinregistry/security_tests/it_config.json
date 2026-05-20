@@ -1,0 +1,49 @@
+[
+  {
+    "context": "Cleanup descriptors",
+    "action": "DELETE_ALL_SHELL_DESCRIPTORS",
+    "token": { "user": "admin", "password": "pwd" }
+  },
+  {
+    "context": "POST shell descriptor with fixed createdAt",
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:8082/api/v3/shell-descriptors",
+    "data": "bodies/post/shell_descriptor_created_at.json",
+    "token": { "user": "admin", "password": "pwd" },
+    "expectedStatus": 201
+  },
+  {
+    "context": "GET shell descriptors createdAfter 2025 returns posted descriptor",
+    "method": "GET",
+    "endpoint": "http://127.0.0.1:8082/api/v3/shell-descriptors?createdAfter=2025-05-18T14:18:00.748914Z",
+    "token": { "user": "admin", "password": "pwd" },
+    "shouldMatch": "expected/shell-descriptors/created_after_2025_result.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "GET shell descriptors createdAfter 3036 returns empty result",
+    "method": "GET",
+    "endpoint": "http://127.0.0.1:8082/api/v3/shell-descriptors?createdAfter=3036-05-18T14:18:00.748914Z",
+    "token": { "user": "admin", "password": "pwd" },
+    "shouldMatch": "expected/shell-descriptors/created_after_3036_empty.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "POST lookup shellsByAssetLink with createdAfter 2025 returns posted descriptor id",
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:8082/api/v3/lookup/shellsByAssetLink?createdAfter=2025-05-18T14:18:00.748914Z",
+    "data": "bodies/post/lookup_shells_by_asset_link_part_instance.json",
+    "token": { "user": "admin", "password": "pwd" },
+    "shouldMatch": "expected/lookup/created_after_2025_public_id.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "POST lookup shellsByAssetLink with createdAfter 3036 returns empty",
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:8082/api/v3/lookup/shellsByAssetLink?createdAfter=3036-05-18T14:18:00.748914Z",
+    "data": "bodies/post/lookup_shells_by_asset_link_part_instance.json",
+    "token": { "user": "admin", "password": "pwd" },
+    "shouldMatch": "expected/lookup/created_after_3036_empty_id.json",
+    "expectedStatus": 200
+  }
+]

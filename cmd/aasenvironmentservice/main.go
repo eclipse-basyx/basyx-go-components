@@ -18,6 +18,7 @@ import (
 	aasrepositoryapi "github.com/eclipse-basyx/basyx-go-components/internal/aasrepository/api"
 	aasrepositorydb "github.com/eclipse-basyx/basyx-go-components/internal/aasrepository/persistence"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/asyncbulk"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/jws"
 	commonmodel "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
@@ -172,6 +173,11 @@ func runServer(ctx context.Context, configPath string) error {
 		discoveryapi.NewAssetAdministrationShellBasicDiscoveryAPIAPIService(*discoveryPersistence),
 		persistence,
 	)
+	sharedBulkManager := asyncbulk.NewManager("AASENV-BULK", 0)
+	aasBulkSvc := aasregistryapi.NewBulkService(customAASRegistry, sharedBulkManager)
+	smBulkSvc := smregistryapi.NewBulkService(customSMRegistry, sharedBulkManager)
+	aasBulkHandler := aasregistryapi.NewBulkHTTPHandler(aasBulkSvc)
+	smBulkHandler := smregistryapi.NewBulkHTTPHandler(smBulkSvc)
 
 	aasRegistryCtrl := aasregistryopenapi.NewAssetAdministrationShellRegistryAPIAPIController(customAASRegistry, cfg.Server.ContextPath)
 	smRegistryCtrl := smregistryopenapi.NewSubmodelRegistryAPIAPIController(customSMRegistry, cfg.Server.ContextPath)
@@ -210,6 +216,8 @@ func runServer(ctx context.Context, configPath string) error {
 	for _, rt := range descriptionCtrl.Routes() {
 		apiRouter.Method(rt.Method, rt.Pattern, rt.HandlerFunc)
 	}
+	aasBulkHandler.RegisterRoutes(apiRouter, true)
+	smBulkHandler.RegisterRoutes(apiRouter, false)
 
 	r.Mount(base, apiRouter)
 

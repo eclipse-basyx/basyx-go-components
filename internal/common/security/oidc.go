@@ -125,13 +125,13 @@ func oidcVerifierConfig(audience string) *oidc.Config {
 type ctxKey string
 
 const (
-	claimsKey   ctxKey = "jwtClaims"
-	issuedAtKey ctxKey = "tokenIssuedAt"
+	// ClaimsKey is the context key used to store JWT claims.
+	ClaimsKey ctxKey = "jwtClaims"
 )
 
 // FromContext retrieves Claims previously stored by the middleware.
 func FromContext(r *http.Request) Claims {
-	if v := r.Context().Value(claimsKey); v != nil {
+	if v := r.Context().Value(ClaimsKey); v != nil {
 		if c, ok := v.(Claims); ok {
 			return c
 		}
@@ -141,7 +141,7 @@ func FromContext(r *http.Request) Claims {
 
 // ClaimsFromContext retrieves Claims from a context.Context.
 func ClaimsFromContext(ctx context.Context) Claims {
-	if v := ctx.Value(claimsKey); v != nil {
+	if v := ctx.Value(ClaimsKey); v != nil {
 		if c, ok := v.(Claims); ok {
 			return c
 		}
@@ -163,7 +163,7 @@ func (o *OIDC) Middleware(next http.Handler) http.Handler {
 		if !strings.HasPrefix(authz, "Bearer ") {
 			if o.settings.AllowAnonymous {
 				anon := Claims{"sub": "anonymous", "scope": ""}
-				ctx := context.WithValue(r.Context(), claimsKey, anon)
+				ctx := context.WithValue(r.Context(), ClaimsKey, anon)
 				next.ServeHTTP(w, r.WithContext(ctx))
 				return
 			}
@@ -234,8 +234,7 @@ func (o *OIDC) Middleware(next http.Handler) http.Handler {
 		c["LOCALNOW"] = currTime.In(time.Local).Format(time.RFC3339)
 		c["UTCNOW"] = currTime.UTC().Format(time.RFC3339)
 
-		log.Printf("✅ Token verified successfully")
-		r = r.WithContext(context.WithValue(r.Context(), claimsKey, c))
+		r = r.WithContext(context.WithValue(r.Context(), ClaimsKey, c))
 		next.ServeHTTP(w, r)
 	})
 }

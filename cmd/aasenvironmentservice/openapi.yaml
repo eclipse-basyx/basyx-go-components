@@ -1160,9 +1160,9 @@ paths:
                 $ref: '#/components/schemas/Result'
               example:
                 messages:
-                  - code: AASENV-HANDLEUPLOAD-UNSUPPORTEDFORMAT
-                    messageType: Error
-                    text: unsupported content type "text/plain", supported: application/aasx+xml, application/aasx+json, application/asset-administration-shell+xml, application/asset-administration-shell+json, application/json, application/xml, text/xml
+                    - code: AASENV-HANDLEUPLOAD-UNSUPPORTEDFORMAT
+                      messageType: Error
+                      text: 'unsupported content type "text/plain", supported: application/aasx+xml, application/aasx+json, application/asset-administration-shell+xml, application/asset-administration-shell+json, application/json, application/xml, text/xml'
         '500':
           description: Internal server error
           content:
@@ -1500,6 +1500,239 @@ paths:
                         $ref: https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.1.1#/components/schemas/AssetAdministrationShellDescriptor
         default:
           $ref: https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.1.1#/components/responses/default
+  /query/submodel-descriptors:
+    post:
+      tags:
+      - Submodel Registry API
+      summary: Returns all Submodel Descriptors that confirm to the input query
+      operationId: QuerySubmodelDescriptors
+      x-semanticIds:
+      - https://admin-shell.io/aas/API/QuerySubmodelDescriptors/3/1
+      parameters:
+      - $ref: https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.1.1#/components/parameters/Limit
+      - $ref: https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.1.1#/components/parameters/Cursor
+      requestBody:
+        content:
+          application/json:
+            schema:
+              # Note: It is a known problem that SwaggerHub cannot render the oneOf statement in the Query definition.
+              $ref: https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.1.1#/components/schemas/Query
+      responses:
+        '200':
+          description: Requested Submodel Descriptors
+          content:
+            application/json:
+              schema:
+                $ref: https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.1.1#/components/schemas/QueryResultSubmodelDescriptor
+        '400':
+          $ref: https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.1.1#/components/responses/bad-request
+        '401':
+          $ref: https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.1.1#/components/responses/unauthorized
+        '403':
+          $ref: https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.1.1#/components/responses/forbidden
+        '500':
+          $ref: https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.1.1#/components/responses/internal-server-error
+        default:
+          $ref: https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.1.1#/components/responses/default
+
+  /bulk/shell-descriptors:
+    post:
+      tags:
+      - Async Bulk Asset Administration Shell Registry API
+      summary: Creates multiple new Asset Administration Shell Descriptors
+      operationId: CreateBulkAssetAdministrationShellDescriptors
+      x-semanticIds:
+      - https://admin-shell.io/aas/API/CreateBulkAssetAdministrationShellDescriptors/3/1
+      parameters:
+      - $ref: '#/components/parameters/EdcBpnHeader'
+      requestBody:
+        description: List of Asset Administration Shell Descriptor objects
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              minItems: 1
+              items:
+                $ref: https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.1.1#/components/schemas/AssetAdministrationShellDescriptor
+      responses:
+        '202':
+          $ref: https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.1.1#/components/responses/accepted
+        default:
+          $ref: https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.1.1#/components/responses/default
+    put:
+      tags:
+      - Async Bulk Asset Administration Shell Registry API
+      summary: Creates or updates multiple existing Asset Administration Shell Descriptors
+      operationId: PutBulkAssetAdministrationShellDescriptorsById
+      x-semanticIds:
+      - https://admin-shell.io/aas/API/PutBulkAssetAdministrationShellDescriptorsById/3/1
+      parameters:
+      - $ref: '#/components/parameters/EdcBpnHeader'
+      requestBody:
+        description: List of Asset Administration Shell Descriptor objects
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              minItems: 1
+              items:
+                $ref: https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.1.1#/components/schemas/AssetAdministrationShellDescriptor
+      responses:
+        '202':
+          $ref: https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.1.1#/components/responses/accepted
+        default:
+          $ref: https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.1.1#/components/responses/default
+    delete:
+      tags:
+      - Async Bulk Asset Administration Shell Registry API
+      summary: Deletes multiple Asset Administration Shell Descriptors
+      operationId: DeleteBulkAssetAdministrationShellDescriptorsById
+      x-semanticIds:
+      - https://admin-shell.io/aas/API/DeleteBulkAssetAdministrationShellDescriptorsById/3/1
+      parameters:
+      - $ref: '#/components/parameters/EdcBpnHeader'
+      requestBody:
+        description: List of Asset Administration Shell Identifiers
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              minItems: 1
+              items:
+                type: string
+      responses:
+        '202':
+          $ref: https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.1.1#/components/responses/accepted
+        default:
+          $ref: https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.1.1#/components/responses/default
+
+  /bulk/submodel-descriptors:
+    post:
+      tags:
+      - Async Bulk Submodel Registry API
+      summary: Creates multiple new Submodel Descriptors
+      operationId: CreateBulkSubmodelDescriptors
+      x-semanticIds:
+      - https://admin-shell.io/aas/API/CreateBulkSubmodelDescriptors/3/1
+      requestBody:
+        description: List of Submodel Descriptor objects
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              minItems: 1
+              items:
+                $ref: https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.1.1#/components/schemas/SubmodelDescriptor
+      responses:
+        '202':
+          $ref: https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.1.1#/components/responses/accepted
+        default:
+          $ref: https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.1.1#/components/responses/default
+    put:
+      tags:
+      - Async Bulk Submodel Registry API
+      summary: Creates or updates multiple existing Submodel Descriptors
+      operationId: PutBulkSubmodelDescriptorsById
+      x-semanticIds:
+      - https://admin-shell.io/aas/API/PutBulkSubmodelDescriptorsById/3/1
+      requestBody:
+        description: List of Submodel Descriptor objects
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              minItems: 1
+              items:
+                $ref: https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.1.1#/components/schemas/SubmodelDescriptor
+      responses:
+        '202':
+          $ref: https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.1.1#/components/responses/accepted
+        default:
+          $ref: https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.1.1#/components/responses/default
+    delete:
+      tags:
+      - Async Bulk Submodel Registry API
+      summary: Deletes multiple Submodel Descriptors
+      operationId: DeleteBulkSubmodelDescriptorsById
+      x-semanticIds:
+      - https://admin-shell.io/aas/API/DeleteBulkSubmodelDescriptorsById/3/1
+      requestBody:
+        description: List of Submodel Identifiers
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              minItems: 1
+              items:
+                type: string
+      responses:
+        '202':
+          $ref: https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.1.1#/components/responses/accepted
+        default:
+          $ref: https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.1.1#/components/responses/default
+
+  /bulk/status/{handleId}:
+    get:
+      tags:
+      - Async Bulk Status API
+      summary: Returns the status of an asynchronously invoked bulk operation
+      operationId: GetBulkAsyncStatus
+      x-semanticIds:
+      - https://admin-shell.io/aas/API/GetBulkAsyncStatus/3/1
+      parameters:
+      - name: handleId
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Bulk request is still running
+          content:
+            application/json:
+              schema:
+                $ref: https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.1.1#/components/schemas/BaseOperationResult
+        '302':
+          $ref: https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.1.1#/components/responses/found
+        default:
+          $ref: https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.1.1#/components/responses/default
+
+  /bulk/result/{handleId}:
+    get:
+      tags:
+      - Async Bulk Result API
+      summary: Returns the result object of an asynchronously invoked bulk operation
+      operationId: GetBulkAsyncResult
+      x-semanticIds:
+      - https://admin-shell.io/aas/API/GetBulkAsyncResult/3/1
+      parameters:
+      - name: handleId
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '204':
+          description: Bulk request completed successfully
+        '400':
+          description: >-
+            Bulk request completed with descriptor failures. Processing is strict atomic:
+            if one descriptor operation fails, the complete transaction is rolled back.
+            The response body contains processedCount, successfulCount, failedCount and details
+            about failing descriptor operations.
+          content:
+            application/json:
+              schema:
+                type: object
+        default:
+          $ref: https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.1.1#/components/responses/default
+
   /lookup/shells:
     get:
       deprecated: true
@@ -5086,6 +5319,40 @@ paths:
           $ref: https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.1.1#/components/responses/internal-server-error
         default:
           $ref: https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.1.1#/components/responses/default
+  /query/shells:
+    post:
+      tags:
+      - Asset Administration Shell Repository API
+      summary: Returns all Asset Administration Shells that confirm to the input query
+      operationId: QueryAssetAdministrationShells
+      x-semanticIds:
+      - https://admin-shell.io/aas/API/QueryAssetAdministrationShells/3/1
+      parameters:
+      - $ref: https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.1.1#/components/parameters/Limit
+      - $ref: https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.1.1#/components/parameters/Cursor
+      requestBody:
+        content:
+          application/json:
+            schema:
+              # Note: It is a known problem that SwaggerHub cannot render the oneOf statement in the Query definition.
+              $ref: https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.1.1#/components/schemas/Query
+      responses:
+        '200':
+          description: Requested Asset Administration Shells
+          content:
+            application/json:
+              schema:
+                $ref: https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.1.1#/components/schemas/QueryResultAssetAdministrationShell
+        '400':
+          $ref: https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.1.1#/components/responses/bad-request
+        '401':
+          $ref: https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.1.1#/components/responses/unauthorized
+        '403':
+          $ref: https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.1.1#/components/responses/forbidden
+        '500':
+          $ref: https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.1.1#/components/responses/internal-server-error
+        default:
+          $ref: https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.1.1#/components/responses/default
   /query/submodels:
     post:
       tags:
@@ -5109,6 +5376,40 @@ paths:
             application/json:
               schema:
                 $ref: https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.1.1#/components/schemas/QueryResultSubmodel
+        '400':
+          $ref: https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.1.1#/components/responses/bad-request
+        '401':
+          $ref: https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.1.1#/components/responses/unauthorized
+        '403':
+          $ref: https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.1.1#/components/responses/forbidden
+        '500':
+          $ref: https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.1.1#/components/responses/internal-server-error
+        default:
+          $ref: https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.1.1#/components/responses/default
+  /query/concept-descriptions:
+    post:
+      tags:
+      - Concept Description Repository API
+      summary: Returns all Concept Descriptions that confirm to the input query
+      operationId: QueryConceptDescriptions
+      x-semanticIds:
+      - https://admin-shell.io/aas/API/QueryConceptDescriptions/3/1
+      parameters:
+      - $ref: https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.1.1#/components/parameters/Limit
+      - $ref: https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.1.1#/components/parameters/Cursor
+      requestBody:
+        content:
+          application/json:
+            schema:
+              # Note: It is a known problem that SwaggerHub cannot render the oneOf statement in the Query definition.
+              $ref: https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.1.1#/components/schemas/Query
+      responses:
+        '200':
+          description: Requested Concept Descriptions
+          content:
+            application/json:
+              schema:
+                $ref: https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.1.1#/components/schemas/QueryResultConceptDescription
         '400':
           $ref: https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.1.1#/components/responses/bad-request
         '401':

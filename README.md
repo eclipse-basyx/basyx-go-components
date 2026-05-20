@@ -21,8 +21,9 @@ Welcome to the BaSyx Go project! This guide is designed to help new developers o
 8. [API Usage](#8-api-usage)
 9. [Contribution Guidelines](#9-contribution-guidelines)
 10. [Repository Automation](#10-repository-automation)
-11. [Troubleshooting & Error Reference](#11-troubleshooting--error-reference)
-12. [Glossary of Terms & Abbreviations](#12-glossary-of-terms--abbreviations)
+11. [Security & Supply Chain Verification](#11-security--supply-chain-verification)
+12. [Troubleshooting & Error Reference](#12-troubleshooting--error-reference)
+13. [Glossary of Terms & Abbreviations](#13-glossary-of-terms--abbreviations)
 
 ---
 
@@ -109,6 +110,8 @@ GENERAL_AAS_PRECONFIG_PATHS=./examples/BaSyxMinimalExample/aas,./myDevice.aasx
 
 Each configured source can be a file or directory. Directories are scanned recursively for `.aasx`, `.json`, and `.xml` files.
 
+Upload and startup preconfiguration use the AAS 3.1 parsing stack. For backward compatibility, XML payloads with lower or equal AAS v3 namespace versions (for example `https://admin-shell.io/aas/3/0`) are adapted to the current namespace before parsing, and a warning is logged.
+
 ## 5. Code Style & Conventions
 
 - Use Go modules (`go.mod`) for dependency management
@@ -181,12 +184,20 @@ See [structure.md](docu/developer/structure.md) and related files for details on
 - Ensure your local environment matches CI versions (see [linter.md](docu/developer/linter.md))
 - Use provided tasks in VSCode or CLI for build/test/lint automation
 
-## 11. Troubleshooting & Error Reference
+## 11. Security & Supply Chain Verification
+
+- Security reporting policy: [Eclipse BaSyx SECURITY.md](https://github.com/eclipse-basyx/.github/blob/main/SECURITY.md)
+- Supply-chain trust model, signing, attestations, and SBOM verification: [docu/security/SUPPLY_CHAIN_SECURITY.md](docu/security/SUPPLY_CHAIN_SECURITY.md)
+- Runtime security architecture (OIDC + ABAC): [docu/security/README.md](docu/security/README.md)
+
+Release and snapshot images are signed with Cosign keyless identity and include provenance and SBOM attestations. For full verification commands, see [docu/security/SUPPLY_CHAIN_SECURITY.md](docu/security/SUPPLY_CHAIN_SECURITY.md).
+
+## 12. Troubleshooting & Error Reference
 
 - See [docu/errors.md](docu/errors.md) for common error scenarios and solutions
 - For security and authorization, see [docu/security/REGISTRY_SECURITY.md](docu/security/REGISTRY_SECURITY.md)
 
-## 12. Glossary of Terms & Abbreviations
+## 13. Glossary of Terms & Abbreviations
 
 - **AAS**: Asset Administration Shell – digital representation of assets
 - **Submodel**: Modular part of an AAS
