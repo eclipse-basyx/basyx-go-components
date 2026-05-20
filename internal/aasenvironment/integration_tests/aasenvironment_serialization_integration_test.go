@@ -81,7 +81,7 @@ func TestSerializationDownloadAasXmlAfterThreeAasUpload(t *testing.T) {
 
 			payload := downloadAASXSerializationFullEnvironment(t, testCase.accept)
 			require.NotEmpty(t, payload)
-			require.NoError(t, os.WriteFile(testCase.outputPath, payload, 0o600))
+				writeSerializationOutput(t, testCase.outputPath, payload)
 
 			t.Logf("downloaded AASX XML serialization for Accept %q to %s", testCase.accept, testCase.outputPath)
 		})
@@ -133,7 +133,7 @@ func TestSerializationDownloadAasxJsonAfterThreeAASUpload(t *testing.T) {
 
 			payload := downloadAASXSerializationFullEnvironment(t, testCase.accept)
 			require.NotEmpty(t, payload)
-			require.NoError(t, os.WriteFile(testCase.outputPath, payload, 0o600))
+				writeSerializationOutput(t, testCase.outputPath, payload)
 
 			t.Logf("downloaded AASX JSON serialization for Accept %q to %s", testCase.accept, testCase.outputPath)
 		})
@@ -168,7 +168,7 @@ func TestSerializationDownloadXmlAfterThreeAasUpload(t *testing.T) {
 
 			payload := downloadAASXSerializationFullEnvironment(t, "application/xml")
 			require.NotEmpty(t, payload)
-			require.NoError(t, os.WriteFile(testCase.outputPath, payload, 0o600))
+				writeSerializationOutput(t, testCase.outputPath, payload)
 
 			t.Logf("downloaded XML serialization to %s", testCase.outputPath)
 		})
@@ -203,11 +203,18 @@ func TestSerializationDownloadJsonAfterThreeAasUpload(t *testing.T) {
 
 			payload := downloadAASXSerializationFullEnvironment(t, "application/json")
 			require.NotEmpty(t, payload)
-			require.NoError(t, os.WriteFile(testCase.outputPath, payload, 0o600))
+				writeSerializationOutput(t, testCase.outputPath, payload)
 
 			t.Logf("downloaded JSON serialization to %s", testCase.outputPath)
 		})
 	}
+}
+
+func writeSerializationOutput(t *testing.T, outputPath string, payload []byte) {
+	t.Helper()
+
+	require.NoError(t, os.MkdirAll(filepath.Dir(outputPath), 0o750))
+	require.NoError(t, os.WriteFile(outputPath, payload, 0o600))
 }
 
 func uploadFixture(t *testing.T, fixturePath string, partContentType string) {
