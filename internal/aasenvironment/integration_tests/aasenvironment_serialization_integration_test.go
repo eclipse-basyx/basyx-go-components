@@ -81,7 +81,7 @@ func TestSerializationDownloadAasXmlAfterThreeAasUpload(t *testing.T) {
 
 			payload := downloadAASXSerializationFullEnvironment(t, testCase.accept)
 			require.NotEmpty(t, payload)
-				writeSerializationOutput(t, testCase.outputPath, payload)
+			writeSerializationOutput(t, testCase.outputPath, payload)
 
 			t.Logf("downloaded AASX XML serialization for Accept %q to %s", testCase.accept, testCase.outputPath)
 		})
@@ -133,7 +133,7 @@ func TestSerializationDownloadAasxJsonAfterThreeAASUpload(t *testing.T) {
 
 			payload := downloadAASXSerializationFullEnvironment(t, testCase.accept)
 			require.NotEmpty(t, payload)
-				writeSerializationOutput(t, testCase.outputPath, payload)
+			writeSerializationOutput(t, testCase.outputPath, payload)
 
 			t.Logf("downloaded AASX JSON serialization for Accept %q to %s", testCase.accept, testCase.outputPath)
 		})
@@ -168,7 +168,7 @@ func TestSerializationDownloadXmlAfterThreeAasUpload(t *testing.T) {
 
 			payload := downloadAASXSerializationFullEnvironment(t, "application/xml")
 			require.NotEmpty(t, payload)
-				writeSerializationOutput(t, testCase.outputPath, payload)
+			writeSerializationOutput(t, testCase.outputPath, payload)
 
 			t.Logf("downloaded XML serialization to %s", testCase.outputPath)
 		})
@@ -203,7 +203,7 @@ func TestSerializationDownloadJsonAfterThreeAasUpload(t *testing.T) {
 
 			payload := downloadAASXSerializationFullEnvironment(t, "application/json")
 			require.NotEmpty(t, payload)
-				writeSerializationOutput(t, testCase.outputPath, payload)
+			writeSerializationOutput(t, testCase.outputPath, payload)
 
 			t.Logf("downloaded JSON serialization to %s", testCase.outputPath)
 		})
