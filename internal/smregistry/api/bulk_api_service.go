@@ -1,3 +1,29 @@
+/*******************************************************************************
+* Copyright (C) 2026 the Eclipse BaSyx Authors and Fraunhofer IESE
+*
+* Permission is hereby granted, free of charge, to any person obtaining
+* a copy of this software and associated documentation files (the
+* "Software"), to deal in the Software without restriction, including
+* without limitation the rights to use, copy, modify, merge, publish,
+* distribute, sublicense, and/or sell copies of the Software, and to
+* permit persons to whom the Software is furnished to do so, subject to
+* the following conditions:
+*
+* The above copyright notice and this permission notice shall be
+* included in all copies or substantial portions of the Software.
+*
+* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+* NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
+* LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+* OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
+* WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+*
+* SPDX-License-Identifier: MIT
+******************************************************************************/
+// Author: Aaron Zielstorff ( Fraunhofer IESE )
+
 package smregistryapi
 
 import (
@@ -10,6 +36,7 @@ import (
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/asyncbulk"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
+	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 )
 
 const (
@@ -41,7 +68,7 @@ func NewBulkService(descriptorService smBulkDescriptorService, manager *asyncbul
 
 // StartCreate starts an async bulk create operation.
 func (s *BulkService) StartCreate(ctx context.Context, descriptors []model.SubmodelDescriptor) model.ImplResponse {
-	handleID, handleErr := s.manager.Start(asyncbulk.OwnerKeyFromContext(ctx))
+	handleID, handleErr := s.manager.Start(auth.OwnerKeyFromContext(ctx))
 	if handleErr != nil {
 		return common.NewErrorResponse(handleErr, http.StatusInternalServerError, componentName, "CreateBulkSubmodelDescriptors", "CreateHandle")
 	}
@@ -58,7 +85,7 @@ func (s *BulkService) StartCreate(ctx context.Context, descriptors []model.Submo
 
 // StartPut starts an async bulk upsert operation.
 func (s *BulkService) StartPut(ctx context.Context, descriptors []model.SubmodelDescriptor) model.ImplResponse {
-	handleID, handleErr := s.manager.Start(asyncbulk.OwnerKeyFromContext(ctx))
+	handleID, handleErr := s.manager.Start(auth.OwnerKeyFromContext(ctx))
 	if handleErr != nil {
 		return common.NewErrorResponse(handleErr, http.StatusInternalServerError, componentName, "PutBulkSubmodelDescriptorsById", "CreateHandle")
 	}
@@ -75,7 +102,7 @@ func (s *BulkService) StartPut(ctx context.Context, descriptors []model.Submodel
 
 // StartDelete starts an async bulk delete operation.
 func (s *BulkService) StartDelete(ctx context.Context, submodelIdentifiers []string) model.ImplResponse {
-	handleID, handleErr := s.manager.Start(asyncbulk.OwnerKeyFromContext(ctx))
+	handleID, handleErr := s.manager.Start(auth.OwnerKeyFromContext(ctx))
 	if handleErr != nil {
 		return common.NewErrorResponse(handleErr, http.StatusInternalServerError, componentName, "DeleteBulkSubmodelDescriptorsById", "CreateHandle")
 	}
@@ -92,7 +119,7 @@ func (s *BulkService) StartDelete(ctx context.Context, submodelIdentifiers []str
 
 // GetStatus returns async bulk execution status by handle id.
 func (s *BulkService) GetStatus(ctx context.Context, handleID string) model.ImplResponse {
-	record, found := s.manager.GetForOwner(handleID, asyncbulk.OwnerKeyFromContext(ctx))
+	record, found := s.manager.GetForOwner(handleID, auth.OwnerKeyFromContext(ctx))
 	if !found {
 		return common.NewErrorResponse(common.NewErrNotFound(handleID), http.StatusNotFound, componentName, "GetBulkAsyncStatus", "HandleNotFound")
 	}
@@ -111,7 +138,7 @@ func (s *BulkService) GetStatus(ctx context.Context, handleID string) model.Impl
 
 // GetResult returns async bulk result by handle id.
 func (s *BulkService) GetResult(ctx context.Context, handleID string) model.ImplResponse {
-	record, found := s.manager.GetForOwner(handleID, asyncbulk.OwnerKeyFromContext(ctx))
+	record, found := s.manager.GetForOwner(handleID, auth.OwnerKeyFromContext(ctx))
 	if !found {
 		return common.NewErrorResponse(common.NewErrNotFound(handleID), http.StatusNotFound, componentName, "GetBulkAsyncResult", "HandleNotFound")
 	}

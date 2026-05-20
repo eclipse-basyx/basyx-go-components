@@ -37,11 +37,10 @@ import (
 )
 
 type scopedFilteredRouteMapping struct {
-	scope                 string
-	route                 string
-	filterField           string
-	hasWildcard           bool
-	identifierIndependent bool
+	scope       string
+	route       string
+	filterField string
+	hasWildcard bool
 }
 
 type descriptorRouteMapping = scopedFilteredRouteMapping
@@ -58,12 +57,6 @@ var descriptorRouteMappings = []descriptorRouteMapping{
 	{
 		scope:       "$aasdesc",
 		route:       "/shell-descriptors",
-		filterField: "$aasdesc#id",
-		hasWildcard: false,
-	},
-	{
-		scope:       "$aasdesc",
-		route:       "/bulk/shell-descriptors",
 		filterField: "$aasdesc#id",
 		hasWildcard: false,
 	},
@@ -86,26 +79,8 @@ var descriptorRouteMappings = []descriptorRouteMapping{
 		hasWildcard: true,
 	},
 	{
-		scope:                 "$aasdesc",
-		route:                 "/bulk/status/*",
-		hasWildcard:           false,
-		identifierIndependent: true,
-	},
-	{
-		scope:                 "$aasdesc",
-		route:                 "/bulk/result/*",
-		hasWildcard:           false,
-		identifierIndependent: true,
-	},
-	{
 		scope:       "$smdesc",
 		route:       "/submodel-descriptors",
-		filterField: "$smdesc#id",
-		hasWildcard: false,
-	},
-	{
-		scope:       "$smdesc",
-		route:       "/bulk/submodel-descriptors",
 		filterField: "$smdesc#id",
 		hasWildcard: false,
 	},
@@ -115,17 +90,18 @@ var descriptorRouteMappings = []descriptorRouteMapping{
 		filterField: "$smdesc#id",
 		hasWildcard: true,
 	},
+	// bulk api
 	{
-		scope:                 "$smdesc",
-		route:                 "/bulk/status/*",
-		hasWildcard:           false,
-		identifierIndependent: true,
+		scope:       "$aasdesc",
+		route:       "/bulk/shell-descriptors",
+		filterField: "$aasdesc#id",
+		hasWildcard: false,
 	},
 	{
-		scope:                 "$smdesc",
-		route:                 "/bulk/result/*",
-		hasWildcard:           false,
-		identifierIndependent: true,
+		scope:       "$smdesc",
+		route:       "/bulk/submodel-descriptors",
+		filterField: "$smdesc#id",
+		hasWildcard: false,
 	},
 }
 
@@ -351,10 +327,6 @@ func mapScopedIdentifierValueToRoute(scope string, identifier grammar.Identifier
 		if mapping.scope != scope {
 			continue
 		}
-		if mapping.identifierIndependent {
-			routes = append(routes, RouteWithFilter{route: joinBasePath(basePath, mapping.route)})
-			continue
-		}
 
 		if identifier.IsAll {
 			routes = append(routes, buildWildcardRoute(basePath, mapping))
@@ -370,7 +342,6 @@ func mapScopedIdentifierValueToRoute(scope string, identifier grammar.Identifier
 				route: joinBasePath(basePath, mapping.route),
 				le:    extraFilter,
 			})
-			continue
 		}
 
 		routes = append(routes, RouteWithFilter{
@@ -382,19 +353,12 @@ func mapScopedIdentifierValueToRoute(scope string, identifier grammar.Identifier
 }
 
 func buildWildcardRoute(basePath string, mapping scopedFilteredRouteMapping) RouteWithFilter {
-	if mapping.identifierIndependent {
-		return RouteWithFilter{route: joinBasePath(basePath, mapping.route)}
-	}
 	if !mapping.hasWildcard {
 		return RouteWithFilter{route: joinBasePath(basePath, mapping.route)}
 	}
 
-	mappedRoute := mapping.route
-	if strings.Contains(mapping.route, "%s") {
-		mappedRoute = fmt.Sprintf(mapping.route, "*")
-	}
 	return RouteWithFilter{
-		route: joinBasePath(basePath, mappedRoute),
+		route: joinBasePath(basePath, fmt.Sprintf(mapping.route, "*")),
 	}
 }
 

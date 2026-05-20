@@ -2878,7 +2878,7 @@ func (s *SubmodelRepositoryAPIAPIService) InvokeOperationAsync(ctx context.Conte
 		return newAPIErrorResponse(timeoutErr, http.StatusBadRequest, operation, "InvalidClientTimeoutDuration"), nil
 	}
 
-	handleID, handleErr := s.asyncManager.Start(asyncbulk.OwnerKeyFromContext(ctx))
+	handleID, handleErr := s.asyncManager.Start(auth.OwnerKeyFromContext(ctx))
 	if handleErr != nil {
 		return newAPIErrorResponse(handleErr, http.StatusInternalServerError, operation, "CreateAsyncHandle"), nil
 	}
@@ -2957,7 +2957,7 @@ func (s *SubmodelRepositoryAPIAPIService) GetOperationAsyncStatus(ctx context.Co
 		return response, nil
 	}
 
-	record, found := s.asyncManager.GetForOwner(handleID, asyncbulk.OwnerKeyFromContext(ctx))
+	record, found := s.asyncManager.GetForOwner(handleID, auth.OwnerKeyFromContext(ctx))
 	if !found ||
 		record.Metadata[delegatedAsyncSubmodelIdentifierMetadataKey] != decodedSubmodelIdentifier ||
 		record.Metadata[delegatedAsyncIDShortPathMetadataKey] != idShortPath {
@@ -2991,7 +2991,7 @@ func (s *SubmodelRepositoryAPIAPIService) GetOperationAsyncResult(ctx context.Co
 		return response, nil
 	}
 
-	record, found := s.asyncManager.GetForOwner(handleID, asyncbulk.OwnerKeyFromContext(ctx))
+	record, found := s.asyncManager.GetForOwner(handleID, auth.OwnerKeyFromContext(ctx))
 	if !found ||
 		record.Metadata[delegatedAsyncSubmodelIdentifierMetadataKey] != decodedSubmodelIdentifier ||
 		record.Metadata[delegatedAsyncIDShortPathMetadataKey] != idShortPath {

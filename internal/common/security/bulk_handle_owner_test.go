@@ -22,34 +22,22 @@
 *
 * SPDX-License-Identifier: MIT
 ******************************************************************************/
-// Author: Martin Stemmer ( Fraunhofer IESE )
+// Author: Aaron Zielstorff ( Fraunhofer IESE )
 
 package auth
 
 import (
-	"context"
-	"net/http"
-	"strings"
+	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
-// EdcBpnHeaderMiddleware injects the Edc-Bpn header value into JWT claims
-// when security is enabled. The claim key is "edc_bpn".
-func EdcBpnHeaderMiddleware(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		bpn := strings.TrimSpace(r.Header.Get("Edc-Bpn"))
-		if bpn == "" {
-			next.ServeHTTP(w, r)
-			return
-		}
-
-		claims := FromContext(r)
-		if claims == nil {
-			next.ServeHTTP(w, r)
-			return
-		}
-
-		claims["Edc-Bpn"] = bpn
-		ctx := context.WithValue(r.Context(), ClaimsKey, claims)
-		next.ServeHTTP(w, r.WithContext(ctx))
+func TestOwnerKeyFromClaimsBuildsStableKey(t *testing.T) {
+	key := OwnerKeyFromClaims(Claims{
+		"iss":     "issuer-a",
+		"sub":     "subject-a",
+		"Edc-Bpn": "BPNL000000000001",
 	})
+
+	require.Equal(t, "iss=issuer-a|sub=subject-a|Edc-Bpn=BPNL000000000001", key)
 }

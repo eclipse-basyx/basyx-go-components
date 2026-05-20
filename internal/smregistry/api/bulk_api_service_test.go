@@ -1,3 +1,29 @@
+/*******************************************************************************
+* Copyright (C) 2026 the Eclipse BaSyx Authors and Fraunhofer IESE
+*
+* Permission is hereby granted, free of charge, to any person obtaining
+* a copy of this software and associated documentation files (the
+* "Software"), to deal in the Software without restriction, including
+* without limitation the rights to use, copy, modify, merge, publish,
+* distribute, sublicense, and/or sell copies of the Software, and to
+* permit persons to whom the Software is furnished to do so, subject to
+* the following conditions:
+*
+* The above copyright notice and this permission notice shall be
+* included in all copies or substantial portions of the Software.
+*
+* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+* NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
+* LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+* OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
+* WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+*
+* SPDX-License-Identifier: MIT
+******************************************************************************/
+// Author: Aaron Zielstorff ( Fraunhofer IESE )
+
 package smregistryapi
 
 import (
@@ -61,8 +87,8 @@ func TestBulkServiceResultIsOwnerScoped(t *testing.T) {
 	manager := asyncbulk.NewManager("SMR-BULK-TEST", time.Minute)
 	service := NewBulkService(smBulkServiceStub{}, manager)
 
-	ownerCtx := auth.WithClaims(context.Background(), auth.Claims{"sub": "owner-a", "iss": "issuer-a"})
-	otherCtx := auth.WithClaims(context.Background(), auth.Claims{"sub": "owner-b", "iss": "issuer-a"})
+	ownerCtx := withClaims(context.Background(), auth.Claims{"sub": "owner-a", "iss": "issuer-a"})
+	otherCtx := withClaims(context.Background(), auth.Claims{"sub": "owner-b", "iss": "issuer-a"})
 
 	start := service.StartDelete(ownerCtx, []string{"urn:ok"})
 	require.Equal(t, http.StatusAccepted, start.Code)
@@ -124,4 +150,12 @@ func extractSMHandleID(t *testing.T, response model.ImplResponse) string {
 	handleID := redirect.Location[strings.LastIndex(redirect.Location, "/")+1:]
 	require.NotEmpty(t, handleID)
 	return handleID
+}
+
+func withClaims(ctx context.Context, claims auth.Claims) context.Context {
+	if ctx == nil {
+		ctx = context.TODO()
+	}
+
+	return context.WithValue(ctx, auth.ClaimsKey, claims)
 }
