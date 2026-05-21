@@ -263,7 +263,7 @@ const (
 //
 // Example:
 //
-//	config, err := LoadConfig("config/app.yaml")
+//	config, err := LoadConfig("config/app.yaml", NORMAL)
 //	if err != nil {
 //	    log.Fatal("Failed to load config:", err)
 //	}

@@ -10,7 +10,7 @@ services:
       - "6432:5432"
     command: ["postgres", "-c", "listen_addresses=*"]
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U admin -d basyxDelegationDB"]
+      test: ["CMD-SHELL", "pg_isready -U admin -d basyxTestDB"]
       interval: 10s
       timeout: 5s
       retries: 5

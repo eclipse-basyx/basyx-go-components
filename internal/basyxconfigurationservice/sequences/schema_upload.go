@@ -75,7 +75,7 @@ func (su *SchemaUpload) resolveSchemaPath() (string, error) {
 		return "", fmt.Errorf("BASYXCFG-SCHEMA-STAT: %w", err)
 	}
 	if info.IsDir() {
-		candidate := filepath.Join(schemaToLoad, "3_1_full.sql")
+		candidate := filepath.Join(schemaToLoad, "base.sql")
 		candidateInfo, candidateErr := os.Stat(candidate)
 		if candidateErr == nil && !candidateInfo.IsDir() {
 			return candidate, nil

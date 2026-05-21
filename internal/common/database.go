@@ -52,6 +52,7 @@ func NewDatabaseConnection(dsn string) (*sql.DB, error) {
 	db.SetMaxIdleConns(25)
 	db.SetConnMaxLifetime(time.Minute * 5)
 	if err := db.Ping(); err != nil {
+		_ = db.Close()
 		return nil, err
 	}
 

@@ -67,7 +67,7 @@ func TestStepRegistryExecuteReturnsWrappedError(t *testing.T) {
 	}
 
 	errMsg := err.Error()
-	if !strings.Contains(errMsg, "BASYXCFG-REGISTRY-EXECSTEP") {
+	if !strings.Contains(errMsg, "BASYXCFG-INIT-EXECSTEP") {
 		t.Fatalf("expected wrapped error code, got: %s", errMsg)
 	}
 	if !strings.Contains(errMsg, "status 17") {

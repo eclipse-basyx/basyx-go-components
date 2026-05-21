@@ -33,6 +33,13 @@ func (sp *SchemaPatch) Execute(stepIndex int) (int, error) {
 		return 1, fmt.Errorf("BASYXCFG-PATCH-NOVERSION: patch target version is empty")
 	}
 
+	if _, err := sp.ctx.DB.Exec("SELECT pg_advisory_lock($1)", schemaAdvisoryLockID); err != nil {
+		return 1, fmt.Errorf("BASYXCFG-PATCH-LOCK: %w", err)
+	}
+	defer func() {
+		_, _ = sp.ctx.DB.Exec("SELECT pg_advisory_unlock($1)", schemaAdvisoryLockID)
+	}()
+
 	currentVersion, err := sp.getCurrentDBVersion()
 	if err != nil {
 		return 1, err
@@ -52,13 +59,6 @@ func (sp *SchemaPatch) Execute(stepIndex int) (int, error) {
 	if err != nil {
 		return 1, fmt.Errorf("BASYXCFG-PATCH-READFILE: %w", err)
 	}
-
-	if _, err = sp.ctx.DB.Exec("SELECT pg_advisory_lock($1)", schemaAdvisoryLockID); err != nil {
-		return 1, fmt.Errorf("BASYXCFG-PATCH-LOCK: %w", err)
-	}
-	defer func() {
-		_, _ = sp.ctx.DB.Exec("SELECT pg_advisory_unlock($1)", schemaAdvisoryLockID)
-	}()
 
 	tx, err := sp.ctx.DB.Begin()
 	if err != nil {
