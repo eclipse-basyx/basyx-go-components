@@ -73,14 +73,14 @@ func NewAASEnvSerializationAPIAPIService(persistence *aasenvironment.Persistence
 	return &AASEnvironmentSerializationAPIAPIService{persistence: persistence}
 }
 
-// GenerateSerializationByIDs builds an environment from the requested AAS and
+// GenerateSerializationByIds builds an environment from the requested AAS and
 // submodel identifiers and returns it as a downloadable file.
 //
 // The method negotiates the response media type from the request context,
 // resolves thumbnail and supplementary package parts for AASX serializations,
 // and maps all domain errors to API responses with operation metadata.
-func (s *AASEnvironmentSerializationAPIAPIService) GenerateSerializationByIDs(ctx context.Context, aasIds []string, submodelIds []string, includeConceptDescriptions bool) (model.ImplResponse, error) {
-	const operation = "GenerateSerializationByIDs"
+func (s *AASEnvironmentSerializationAPIAPIService) GenerateSerializationByIds(ctx context.Context, aasIds []string, submodelIds []string, includeConceptDescriptions bool) (model.ImplResponse, error) {
+	const operation = "GenerateSerializationByIds"
 
 	environment, loadErr := s.loadEnvironment(ctx, aasIds, submodelIds, includeConceptDescriptions)
 	if loadErr != nil {

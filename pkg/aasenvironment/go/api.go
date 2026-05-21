@@ -19,7 +19,7 @@ type DescriptionAPIAPIRouter interface {
 // The SerializationAPIAPIRouter implementation should parse necessary information from the http request,
 // pass the data to a SerializationAPIAPIServicer to perform the required actions, then write the service results to the http response.
 type SerializationAPIAPIRouter interface {
-	GenerateSerializationByIDs(http.ResponseWriter, *http.Request)
+	GenerateSerializationByIds(http.ResponseWriter, *http.Request)
 }
 
 // DescriptionAPIAPIServicer defines the api actions for the DescriptionAPIAPI service
@@ -35,5 +35,5 @@ type DescriptionAPIAPIServicer interface {
 // while the service implementation can be ignored with the .openapi-generator-ignore file
 // and updated with the logic required for the API.
 type SerializationAPIAPIServicer interface {
-	GenerateSerializationByIDs(context.Context, []string, []string, bool) (model.ImplResponse, error)
+	GenerateSerializationByIds(context.Context, []string, []string, bool) (model.ImplResponse, error)
 }

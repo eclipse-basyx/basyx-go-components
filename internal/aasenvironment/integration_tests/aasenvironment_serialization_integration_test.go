@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -37,6 +38,8 @@ const (
 )
 
 func TestSerializationDownloadAasXmlAfterThreeAasUpload(t *testing.T) {
+	skipSerializationTestsInCI(t)
+
 	testCases := []struct {
 		name       string
 		uploadPath string
@@ -89,6 +92,8 @@ func TestSerializationDownloadAasXmlAfterThreeAasUpload(t *testing.T) {
 }
 
 func TestSerializationDownloadAasxJsonAfterThreeAASUpload(t *testing.T) {
+	skipSerializationTestsInCI(t)
+
 	testCases := []struct {
 		name       string
 		uploadPath string
@@ -141,6 +146,8 @@ func TestSerializationDownloadAasxJsonAfterThreeAASUpload(t *testing.T) {
 }
 
 func TestSerializationDownloadXmlAfterThreeAasUpload(t *testing.T) {
+	skipSerializationTestsInCI(t)
+
 	testCases := []struct {
 		name       string
 		uploadPath string
@@ -176,6 +183,8 @@ func TestSerializationDownloadXmlAfterThreeAasUpload(t *testing.T) {
 }
 
 func TestSerializationDownloadJsonAfterThreeAasUpload(t *testing.T) {
+	skipSerializationTestsInCI(t)
+
 	testCases := []struct {
 		name       string
 		uploadPath string
@@ -215,6 +224,23 @@ func writeSerializationOutput(t *testing.T, outputPath string, payload []byte) {
 
 	require.NoError(t, os.MkdirAll(filepath.Dir(outputPath), 0o750))
 	require.NoError(t, os.WriteFile(outputPath, payload, 0o600))
+}
+
+func skipSerializationTestsInCI(t *testing.T) {
+	t.Helper()
+
+	if isTruthyEnv("CI") || isTruthyEnv("GITHUB_ACTIONS") {
+		t.Skip("serialization download integration tests are local-only and skipped in CI")
+	}
+}
+
+func isTruthyEnv(name string) bool {
+	switch strings.ToLower(strings.TrimSpace(os.Getenv(name))) {
+	case "1", "true", "yes", "on":
+		return true
+	default:
+		return false
+	}
 }
 
 func uploadFixture(t *testing.T, fixturePath string, partContentType string) {

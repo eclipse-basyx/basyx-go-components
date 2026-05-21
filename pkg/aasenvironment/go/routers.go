@@ -22,7 +22,6 @@ import (
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
-	"github.com/go-chi/cors"
 )
 
 // Route defines the parameters for an API endpoint.
@@ -55,7 +54,7 @@ const errMsgMaxValueConstraint = "provided parameter is not respecting maximum v
 
 // NewRouter creates a new chi router for any number of API routers.
 //
-// This function initializes a chi router with logging middleware and CORS support,
+// This function initializes a chi router with logging middleware,
 // then registers all routes from the provided Router implementations.
 //
 // Parameters:
@@ -66,7 +65,6 @@ const errMsgMaxValueConstraint = "provided parameter is not respecting maximum v
 func NewRouter(routers ...Router) chi.Router {
 	router := chi.NewRouter()
 	router.Use(middleware.Logger)
-	router.Use(cors.Handler(cors.Options{}))
 	for _, api := range routers {
 		for _, route := range api.Routes() {
 			var handler http.Handler = route.HandlerFunc
@@ -194,10 +192,13 @@ func EncodeJSONResponse(i interface{}, status *int, w http.ResponseWriter) error
 //   - *os.File: A pointer to the temporary file
 //   - error: An error if reading or writing fails
 func ReadFormFileToTempFile(r *http.Request, key string) (*os.File, error) {
-	_, fileHeader, err := r.FormFile(key)
+	formFile, fileHeader, err := r.FormFile(key)
 	if err != nil {
 		return nil, err
 	}
+	defer func() {
+		_ = formFile.Close()
+	}()
 
 	return readFileHeaderToTempFile(fileHeader)
 }

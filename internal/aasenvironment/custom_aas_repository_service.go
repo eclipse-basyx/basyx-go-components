@@ -216,14 +216,14 @@ func (s *CustomAASRepositoryService) PutAssetInformationAasRepository(ctx contex
 		}
 		return newAASRepoErrorResponse(getErr, http.StatusInternalServerError, operation, "GetAssetAdministrationShellByID"), nil
 	}
-	idShort := existingAASJSON.IDShort()
+	idShort := readOptionalString(existingAASJSON.IDShort())
 
 	err := s.ExecuteInTransaction(func(tx *sql.Tx) error {
 		if err := s.persistence.AASRepository.PutAssetInformationByAASIDInTransaction(ctx, tx, decodedIdentifier, assetInformation); err != nil {
 			return err
 		}
 
-		descriptor, _, descriptorErr := s.ensureAASDescriptorForSubmodelSyncInTransaction(ctx, tx, decodedIdentifier, *idShort)
+		descriptor, _, descriptorErr := s.ensureAASDescriptorForSubmodelSyncInTransaction(ctx, tx, decodedIdentifier, idShort)
 		if descriptorErr != nil {
 			return descriptorErr
 		}

@@ -42,16 +42,16 @@ func NewSerializationAPIAPIController(s SerializationAPIAPIServicer, contextPath
 // Routes returns all the api routes for the SerializationAPIAPIController
 func (c *AASEnvironmentSerializationAPIAPIController) Routes() Routes {
 	return Routes{
-		"GenerateSerializationByIDs": Route{
+		"GenerateSerializationByIds": Route{
 			strings.ToUpper("Get"),
 			c.contextPath + "/serialization",
-			c.GenerateSerializationByIDs,
+			c.GenerateSerializationByIds,
 		},
 	}
 }
 
-// GenerateSerializationByIDs - Returns an appropriate serialization based on the specified format (see SerializationFormat)
-func (c *AASEnvironmentSerializationAPIAPIController) GenerateSerializationByIDs(w http.ResponseWriter, r *http.Request) {
+// GenerateSerializationByIds - Returns an appropriate serialization based on the specified format (see SerializationFormat)
+func (c *AASEnvironmentSerializationAPIAPIController) GenerateSerializationByIds(w http.ResponseWriter, r *http.Request) {
 	query, err := parseQuery(r.URL.RawQuery)
 	if err != nil {
 		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
@@ -76,7 +76,7 @@ func (c *AASEnvironmentSerializationAPIAPIController) GenerateSerializationByIDs
 		includeConceptDescriptionsParam = param
 	}
 	requestContext := common.WithAcceptHeader(r.Context(), r.Header.Get("Accept"))
-	result, err := c.service.GenerateSerializationByIDs(requestContext, aasIDsParam, submodelIDsParam, includeConceptDescriptionsParam)
+	result, err := c.service.GenerateSerializationByIds(requestContext, aasIDsParam, submodelIDsParam, includeConceptDescriptionsParam)
 	// If an error occurred, encode the error with the status code
 	if err != nil {
 		c.errorHandler(w, r, err, &result)
