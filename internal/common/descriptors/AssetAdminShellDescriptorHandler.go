@@ -56,6 +56,7 @@ import (
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
+	"github.com/lib/pq"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -87,12 +88,11 @@ func InsertAssetAdministrationShellDescriptor(ctx context.Context, db *sql.DB, a
 		_ = tx.Rollback()
 		return model.AssetAdministrationShellDescriptor{}, err
 	}
-	result, err := GetAssetAdministrationShellDescriptorByIDTx(ctx, tx, aasd.Id)
-	if err != nil {
+	if err = tx.Commit(); err != nil {
 		_ = tx.Rollback()
 		return model.AssetAdministrationShellDescriptor{}, err
 	}
-	return result, tx.Commit()
+	return aasd, nil
 }
 
 // InsertAdministrationShellDescriptorTx performs the same insert as
@@ -151,6 +151,9 @@ func InsertAdministrationShellDescriptorTx(ctx context.Context, tx *sql.Tx, aasd
 		return buildErr
 	}
 	if _, err = tx.Exec(sqlStr, args...); err != nil {
+		if mappedErr := mapInsertAssetAdministrationShellDescriptorError(err); mappedErr != nil {
+			return mappedErr
+		}
 		return err
 	}
 
@@ -162,6 +165,9 @@ func InsertAdministrationShellDescriptorTx(ctx context.Context, tx *sql.Tx, aasd
 		return buildErr
 	}
 	if _, err = tx.Exec(sqlStr, args...); err != nil {
+		if mappedErr := mapInsertAssetAdministrationShellDescriptorError(err); mappedErr != nil {
+			return mappedErr
+		}
 		return err
 	}
 
@@ -189,6 +195,23 @@ func InsertAdministrationShellDescriptorTx(ctx context.Context, tx *sql.Tx, aasd
 	}
 
 	return createSubModelDescriptors(tx, sql.NullInt64{Int64: descriptorID, Valid: true}, aasd.SubmodelDescriptors)
+}
+
+func mapInsertAssetAdministrationShellDescriptorError(err error) error {
+	if err == nil {
+		return nil
+	}
+
+	pqErr, ok := err.(*pq.Error)
+	if !ok {
+		return nil
+	}
+
+	if pqErr.Code == "23505" {
+		return common.NewErrConflict("AASDESC-INSERT-CONFLICT AAS Descriptor with given id already exists")
+	}
+
+	return nil
 }
 
 func buildAASDescriptorInsertRecord(
@@ -335,8 +358,7 @@ func deleteAssetAdministrationShellDescriptorByIDTx(ctx context.Context, tx *sql
 // ReplaceAdministrationShellDescriptor atomically replaces the descriptor with
 // the same AAS Id: if a descriptor exists it is deleted (base descriptor row),
 // then the provided descriptor is inserted. Related rows are recreated from the
-// input. The returned descriptor is the stored AssetAdministrationShellDescriptor
-// after replacement.
+// input. The returned descriptor is the replaced representation.
 func ReplaceAdministrationShellDescriptor(ctx context.Context, db *sql.DB, aasd model.AssetAdministrationShellDescriptor) (model.AssetAdministrationShellDescriptor, error) {
 	tx, err := db.BeginTx(ctx, nil)
 	if err != nil {
@@ -363,13 +385,11 @@ func ReplaceAdministrationShellDescriptor(ctx context.Context, db *sql.DB, aasd 
 		_ = tx.Rollback()
 		return model.AssetAdministrationShellDescriptor{}, err
 	}
-	// check if user is allowed to write the new descriptor
-	result, err := GetAssetAdministrationShellDescriptorByIDTx(ctx, tx, aasd.Id)
-	if err != nil {
+	if err = tx.Commit(); err != nil {
 		_ = tx.Rollback()
 		return model.AssetAdministrationShellDescriptor{}, err
 	}
-	return result, tx.Commit()
+	return aasd, nil
 }
 
 func buildListAssetAdministrationShellDescriptorsQuery(

@@ -104,24 +104,7 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) GetAllAssetAdministratio
 
 // PostAssetAdministrationShellDescriptor - Creates a new Asset Administration Shell Descriptor, i.e. registers an AAS
 func (s *AssetAdministrationShellRegistryAPIAPIService) PostAssetAdministrationShellDescriptor(ctx context.Context, assetAdministrationShellDescriptor model.AssetAdministrationShellDescriptor) (model.ImplResponse, error) {
-	// Existence check: AAS with same Id should not already exist (lightweight)
-	if strings.TrimSpace(assetAdministrationShellDescriptor.Id) != "" {
-		if exists, chkErr := s.aasRegistryBackend.ExistsAASByID(ctx, assetAdministrationShellDescriptor.Id); chkErr != nil {
-			log.Printf("🧩 [%s] Error in PostAssetAdministrationShellDescriptor: existence check failed (aasId=%q): %v", componentName, assetAdministrationShellDescriptor.Id, chkErr)
-			return common.NewErrorResponse(
-				chkErr, http.StatusInternalServerError, componentName, "PostAssetAdministrationShellDescriptor", "Unhandled-Precheck",
-			), chkErr
-		} else if exists {
-			// TODO: should return 403 if no access on existing shell. Currently user gets 409 even if he has no access rights.
-			e := common.NewErrConflict("AAS with given id already exists")
-			log.Printf("🧩 [%s] Error in PostAssetAdministrationShellDescriptor: conflict (aasId=%q): %v", componentName, assetAdministrationShellDescriptor.Id, e)
-			return common.NewErrorResponse(
-				e, http.StatusConflict, componentName, "PostAssetAdministrationShellDescriptor", "Conflict-Exists",
-			), nil
-		}
-	}
-
-	result, err := s.aasRegistryBackend.InsertAdministrationShellDescriptor(ctx, assetAdministrationShellDescriptor)
+	_, err := s.aasRegistryBackend.InsertAdministrationShellDescriptor(ctx, assetAdministrationShellDescriptor)
 	if err != nil {
 		switch {
 		case common.IsErrBadRequest(err):
@@ -131,9 +114,22 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) PostAssetAdministrationS
 			), nil
 		case common.IsErrConflict(err):
 			log.Printf("🧩 [%s] Error in InsertAdministrationShellDescriptor: conflict (aasId=%q): %v", componentName, assetAdministrationShellDescriptor.Id, err)
+			_, getErr := s.aasRegistryBackend.GetAssetAdministrationShellDescriptorByID(ctx, assetAdministrationShellDescriptor.Id)
+			if getErr == nil {
+				return common.NewErrorResponse(
+					err, http.StatusConflict, componentName, "InsertAdministrationShellDescriptor", "Conflict",
+				), nil
+			}
+			if common.IsErrNotFound(getErr) {
+				deniedErr := common.NewErrDenied("AAS Descriptor access not allowed")
+				return common.NewErrorResponse(
+					deniedErr, http.StatusForbidden, componentName, "InsertAdministrationShellDescriptor", "DENIED",
+				), nil
+			}
+			log.Printf("🧩 [%s] Error in InsertAdministrationShellDescriptor: conflict visibility check failed (aasId=%q): %v", componentName, assetAdministrationShellDescriptor.Id, getErr)
 			return common.NewErrorResponse(
-				err, http.StatusConflict, componentName, "InsertAdministrationShellDescriptor", "Conflict",
-			), nil
+				getErr, http.StatusInternalServerError, componentName, "InsertAdministrationShellDescriptor", "Conflict-VisibilityCheck",
+			), getErr
 		case common.IsErrNotFound(err):
 			deniedErr := common.NewErrDenied("AAS Descriptor access not allowed")
 			log.Printf("🧩 [%s] Error in InsertAdministrationShellDescriptor: not allowed (aasId=%q): %v", componentName, assetAdministrationShellDescriptor.Id, err)
@@ -148,9 +144,9 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) PostAssetAdministrationS
 		}
 	}
 
-	j, toJsonErr := result.ToJsonable()
+	j, toJsonErr := assetAdministrationShellDescriptor.ToJsonable()
 	if toJsonErr != nil {
-		log.Printf("🧩 [%s] Error in PostAssetAdministrationShellDescriptor: ToJsonable failed (aasId=%q): %v", componentName, result.Id, toJsonErr)
+		log.Printf("🧩 [%s] Error in PostAssetAdministrationShellDescriptor: ToJsonable failed (aasId=%q): %v", componentName, assetAdministrationShellDescriptor.Id, toJsonErr)
 		return common.NewErrorResponse(
 			toJsonErr, http.StatusInternalServerError, componentName, "PostAssetAdministrationShellDescriptor", "Unhandled-ToJsonable",
 		), toJsonErr
@@ -223,59 +219,17 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) PutAssetAdministrationSh
 		), enforceErr
 	}
 
-	if exists, chkErr := s.aasRegistryBackend.ExistsAASByID(ctx, assetAdministrationShellDescriptor.Id); chkErr != nil {
-		log.Printf("🧩 [%s] Error in PutAssetAdministrationShellDescriptorById: existence check failed (aasId=%q): %v", componentName, assetAdministrationShellDescriptor.Id, chkErr)
-		return common.NewErrorResponse(
-			chkErr, http.StatusInternalServerError, componentName, "PutAssetAdministrationShellDescriptorById", "Unhandled-Precheck",
-		), chkErr
-	} else if !exists {
-		if shouldEnforceFormula {
-			ctx = auth.SelectPutFormulaByExistence(ctx, false)
-		}
-
-		result, err := s.aasRegistryBackend.InsertAdministrationShellDescriptor(ctx, assetAdministrationShellDescriptor)
-		if err != nil {
-			switch {
-			case common.IsErrBadRequest(err):
-				log.Printf("🧩 [%s] Error in InsertAdministrationShellDescriptor: bad request (aasId=%q): %v", componentName, assetAdministrationShellDescriptor.Id, err)
-				return common.NewErrorResponse(
-					err, http.StatusBadRequest, componentName, "InsertAdministrationShellDescriptor", "BadRequest",
-				), nil
-			case common.IsErrConflict(err):
-				log.Printf("🧩 [%s] Error in InsertAdministrationShellDescriptor: conflict (aasId=%q): %v", componentName, assetAdministrationShellDescriptor.Id, err)
-				return common.NewErrorResponse(
-					err, http.StatusConflict, componentName, "InsertAdministrationShellDescriptor", "Conflict",
-				), nil
-			case common.IsErrNotFound(err):
-				deniedErr := common.NewErrDenied("AAS Descriptor access not allowed")
-				log.Printf("🧩 [%s] Error in InsertAdministrationShellDescriptor: not allowed (aasId=%q): %v", componentName, assetAdministrationShellDescriptor.Id, err)
-				return common.NewErrorResponse(
-					deniedErr, http.StatusForbidden, componentName, "InsertAdministrationShellDescriptor", "DENIED",
-				), nil
-			default:
-				log.Printf("🧩 [%s] Error in InsertAdministrationShellDescriptor: internal (aasId=%q): %v", componentName, assetAdministrationShellDescriptor.Id, err)
-				return common.NewErrorResponse(
-					err, http.StatusInternalServerError, componentName, "InsertAdministrationShellDescriptor", "Unhandled",
-				), err
-			}
-		}
-		j, toJsonErr := result.ToJsonable()
-		if toJsonErr != nil {
-			log.Printf("🧩 [%s] Error in PostAssetAdministrationShellDescriptor: ToJsonable failed (aasId=%q): %v", componentName, result.Id, toJsonErr)
-			return common.NewErrorResponse(
-				toJsonErr, http.StatusInternalServerError, componentName, "PostAssetAdministrationShellDescriptor", "Unhandled-ToJsonable",
-			), toJsonErr
-		}
-
-		return model.Response(http.StatusCreated, j), nil
-	}
-
+	updateCtx := ctx
 	if shouldEnforceFormula {
-		ctx = auth.SelectPutFormulaByExistence(ctx, true)
+		updateCtx = auth.SelectPutFormulaByExistence(updateCtx, true)
 	}
 
-	_, err = s.aasRegistryBackend.ReplaceAdministrationShellDescriptor(ctx, assetAdministrationShellDescriptor)
-	if err != nil {
+	_, err = s.aasRegistryBackend.ReplaceAdministrationShellDescriptor(updateCtx, assetAdministrationShellDescriptor)
+	if err == nil {
+		return model.Response(http.StatusNoContent, nil), nil
+	}
+
+	if !common.IsErrNotFound(err) {
 		switch {
 		case common.IsErrBadRequest(err):
 			log.Printf("🧩 [%s] Error in PutAssetAdministrationShellDescriptorById: bad request (aasId=%q): %v", componentName, decodedAAS, err)
@@ -287,22 +241,63 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) PutAssetAdministrationSh
 			return common.NewErrorResponse(
 				err, http.StatusConflict, componentName, "PutAssetAdministrationShellDescriptorById", "Conflict",
 			), nil
-		case common.IsErrNotFound(err):
-			deniedErr := common.NewErrDenied("AAS Descriptor access not allowed")
-			log.Printf("🧩 [%s] Error in PutAssetAdministrationShellDescriptorById: not allowed (aasId=%q): %v", componentName, assetAdministrationShellDescriptor.Id, err)
-			return common.NewErrorResponse(
-				deniedErr, http.StatusForbidden, componentName, "PutAssetAdministrationShellDescriptorById", "DENIED",
-			), nil
 		default:
 			log.Printf("🧩 [%s] Error in PutAssetAdministrationShellDescriptorById: internal (aasId=%q): %v", componentName, decodedAAS, err)
 			return common.NewErrorResponse(
 				err, http.StatusInternalServerError, componentName, "PutAssetAdministrationShellDescriptorById", "Unhandled-Replace",
 			), err
 		}
-
 	}
 
-	return model.Response(http.StatusNoContent, nil), nil
+	createCtx := ctx
+	if shouldEnforceFormula {
+		createCtx = auth.SelectPutFormulaByExistence(createCtx, false)
+	}
+	_, err = s.aasRegistryBackend.InsertAdministrationShellDescriptor(createCtx, assetAdministrationShellDescriptor)
+	if err != nil {
+		switch {
+		case common.IsErrBadRequest(err):
+			log.Printf("🧩 [%s] Error in InsertAdministrationShellDescriptor: bad request (aasId=%q): %v", componentName, assetAdministrationShellDescriptor.Id, err)
+			return common.NewErrorResponse(
+				err, http.StatusBadRequest, componentName, "InsertAdministrationShellDescriptor", "BadRequest",
+			), nil
+		case common.IsErrConflict(err):
+			_, retryErr := s.aasRegistryBackend.ReplaceAdministrationShellDescriptor(updateCtx, assetAdministrationShellDescriptor)
+			if retryErr == nil {
+				return model.Response(http.StatusNoContent, nil), nil
+			}
+			if common.IsErrNotFound(retryErr) {
+				deniedErr := common.NewErrDenied("AAS Descriptor access not allowed")
+				return common.NewErrorResponse(
+					deniedErr, http.StatusForbidden, componentName, "PutAssetAdministrationShellDescriptorById", "DENIED",
+				), nil
+			}
+			log.Printf("🧩 [%s] Error in PutAssetAdministrationShellDescriptorById: conflict fallback replace failed (aasId=%q): %v", componentName, assetAdministrationShellDescriptor.Id, retryErr)
+			return common.NewErrorResponse(
+				retryErr, http.StatusInternalServerError, componentName, "PutAssetAdministrationShellDescriptorById", "Unhandled-ReplaceAfterConflict",
+			), retryErr
+		case common.IsErrNotFound(err):
+			deniedErr := common.NewErrDenied("AAS Descriptor access not allowed")
+			log.Printf("🧩 [%s] Error in InsertAdministrationShellDescriptor: not allowed (aasId=%q): %v", componentName, assetAdministrationShellDescriptor.Id, err)
+			return common.NewErrorResponse(
+				deniedErr, http.StatusForbidden, componentName, "InsertAdministrationShellDescriptor", "DENIED",
+			), nil
+		default:
+			log.Printf("🧩 [%s] Error in InsertAdministrationShellDescriptor: internal (aasId=%q): %v", componentName, assetAdministrationShellDescriptor.Id, err)
+			return common.NewErrorResponse(
+				err, http.StatusInternalServerError, componentName, "InsertAdministrationShellDescriptor", "Unhandled",
+			), err
+		}
+	}
+	j, toJsonErr := assetAdministrationShellDescriptor.ToJsonable()
+	if toJsonErr != nil {
+		log.Printf("🧩 [%s] Error in PutAssetAdministrationShellDescriptorById: ToJsonable failed (aasId=%q): %v", componentName, assetAdministrationShellDescriptor.Id, toJsonErr)
+		return common.NewErrorResponse(
+			toJsonErr, http.StatusInternalServerError, componentName, "PutAssetAdministrationShellDescriptorById", "Unhandled-ToJsonable",
+		), toJsonErr
+	}
+
+	return model.Response(http.StatusCreated, j), nil
 
 }
 

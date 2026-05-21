@@ -79,7 +79,8 @@ func (s *AssetAdministrationShellBasicDiscoveryAPIAPIService) SearchAllAssetAdmi
 	cursor string,
 	assetLink []model.AssetLink,
 ) (model.ImplResponse, error) {
-	if len(assetLink) == 0 {
+	assetLinksAlreadyConstrained := AssetLinksAlreadyConstrainedFromContext(ctx)
+	if len(assetLink) == 0 && !assetLinksAlreadyConstrained {
 		empty := model.GetAllAssetAdministrationShellIdsByAssetLink200Response{
 			PagingMetadata: model.PagedResultPagingMetadata{},
 			Result:         []string{},
@@ -100,7 +101,12 @@ func (s *AssetAdministrationShellBasicDiscoveryAPIAPIService) SearchAllAssetAdmi
 		internalCursor = dec
 	}
 
-	ids, nextCursor, err := s.discoveryBackend.SearchAASIDsByAssetLinks(ctx, assetLink, limit, internalCursor)
+	lookupLinks := assetLink
+	if assetLinksAlreadyConstrained {
+		lookupLinks = nil
+	}
+
+	ids, nextCursor, err := s.discoveryBackend.SearchAASIDsByAssetLinks(ctx, lookupLinks, limit, internalCursor)
 	if err != nil {
 		log.Printf("🧭 [%s] Error SearchAllAssetAdministrationShellIdsByAssetLink: backend search failed (limit=%d cursor=%q links=%d): %v", componentName, limit, internalCursor, len(assetLink), err)
 		if common.IsErrBadRequest(err) {
