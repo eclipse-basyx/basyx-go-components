@@ -421,7 +421,7 @@ func buildListAssetAdministrationShellDescriptorsQuery(
 	payloadAdminAlwaysFalse := maskRuntime.FragmentAlwaysFalse(payloadAdminFragment)
 	payloadDisplayNameAlwaysFalse := maskRuntime.FragmentAlwaysFalse(payloadDisplayNameFragment)
 	payloadDescriptionAlwaysFalse := maskRuntime.FragmentAlwaysFalse(payloadDescriptionFragment)
-	needsPayloadJoin := !(payloadAdminAlwaysFalse && payloadDisplayNameAlwaysFalse && payloadDescriptionAlwaysFalse)
+	needsPayloadJoin := !payloadAdminAlwaysFalse || !payloadDisplayNameAlwaysFalse || !payloadDescriptionAlwaysFalse
 
 	var adminPayloadSelectExpression interface{} = goqu.L("?::text", common.TDescriptorPayload.Col(common.ColAdministrativeInfoPayload)).As("raw_admin_payload")
 	if payloadAdminAlwaysFalse {
