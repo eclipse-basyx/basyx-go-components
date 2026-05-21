@@ -83,6 +83,8 @@ func ValidateDatabaseVersion(db *sql.DB, expectedVersion string) error {
 		if errors.Is(err, sql.ErrNoRows) {
 			return fmt.Errorf("DB-CHECKVER-NOVERSIONROW basyxsystem has no version row")
 		}
+		_, _ = fmt.Println("[ERROR] It seems that the BaSyx Configuration Service is missing or was not started before. Please see the wiki (User Documentation) on how to integrate it into your setup")
+		_, _ = fmt.Println("[ERROR] If the BaSyx Configuration Service was started before - check the database connection of the service and make sure it exited successfully")
 		return fmt.Errorf("DB-CHECKVER-READFAIL failed to read database version: %w", err)
 	}
 
