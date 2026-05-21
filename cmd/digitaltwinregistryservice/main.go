@@ -39,6 +39,7 @@ import (
 	registryapiinternal "github.com/eclipse-basyx/basyx-go-components/internal/aasregistry/api"
 	registrydb "github.com/eclipse-basyx/basyx-go-components/internal/aasregistry/persistence"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/asyncbulk"
 	commonmodel "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 	"github.com/eclipse-basyx/basyx-go-components/internal/digitaltwinregistry"
@@ -128,6 +129,9 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 	)
 
 	registryCtrl := registryapi.NewAssetAdministrationShellRegistryAPIAPIController(registrySvc, cfg.Server.ContextPath)
+	bulkManager := asyncbulk.NewManager("DTR-BULK", 0)
+	bulkSvc := registryapiinternal.NewBulkService(registrySvc, bulkManager)
+	bulkHandler := registryapiinternal.NewBulkHTTPHandler(bulkSvc)
 	discoveryCtrl := openapi.NewAssetAdministrationShellBasicDiscoveryAPIAPIController(discoverySvc)
 	descriptionSvc := digitaltwinregistry.NewDescriptionService()
 	descriptionCtrl := openapi.NewDescriptionAPIAPIController(descriptionSvc)
@@ -160,6 +164,7 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 	for _, rt := range descriptionCtrl.Routes() {
 		apiRouter.Method(rt.Method, rt.Pattern, rt.HandlerFunc)
 	}
+	bulkHandler.RegisterRoutes(apiRouter, true)
 
 	r.Mount(base, apiRouter)
 

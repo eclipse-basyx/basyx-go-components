@@ -33,7 +33,8 @@ import (
 )
 
 const (
-	profile = "https://basyx.org/aas/API/3/1/AssetAdministrationShellRegistryServiceSpecification/SSP-001"
+	profileSSP001 = "https://basyx.org/aas/API/3/1/AssetAdministrationShellRegistryServiceSpecification/SSP-001"
+	profileSSP003 = "https://admin-shell.io/aas/API/3/1/AssetAdministrationShellRegistryServiceSpecification/SSP-003"
 )
 
 // DescriptionService provides the combined service description for the Digital Twin Registry.
@@ -48,6 +49,9 @@ func NewDescriptionService() *DescriptionService {
 func (s *DescriptionService) GetDescription(ctx context.Context) (model.ImplResponse, error) {
 	_ = ctx
 	return model.Response(200, model.ServiceDescription{
-		Profiles: []string{profile},
+		Profiles: []string{
+			profileSSP001,
+			profileSSP003,
+		},
 	}), nil
 }

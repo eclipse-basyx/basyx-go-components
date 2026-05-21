@@ -26,7 +26,7 @@ func TestABACMiddleware_UnknownRouteReturnsNotFound(t *testing.T) {
 	})
 
 	req := httptest.NewRequest(http.MethodGet, "/does-not-exist", nil)
-	ctx := context.WithValue(req.Context(), claimsKey, Claims{"sub": "tester", "scope": ""})
+	ctx := context.WithValue(req.Context(), ClaimsKey, Claims{"sub": "tester", "scope": ""})
 	req = req.WithContext(ctx)
 	rec := httptest.NewRecorder()
 
@@ -53,7 +53,7 @@ func TestABACMiddleware_MethodNotAllowedReturnsMethodNotAllowed(t *testing.T) {
 	})
 
 	req := httptest.NewRequest(http.MethodPost, "/description", nil)
-	ctx := context.WithValue(req.Context(), claimsKey, Claims{"sub": "tester", "scope": ""})
+	ctx := context.WithValue(req.Context(), ClaimsKey, Claims{"sub": "tester", "scope": ""})
 	req = req.WithContext(ctx)
 	rec := httptest.NewRecorder()
 
@@ -80,7 +80,7 @@ func TestABACMiddleware_KnownMappedRouteWithoutMatchingRuleReturnsForbidden(t *t
 	})
 
 	req := httptest.NewRequest(http.MethodGet, "/description", nil)
-	ctx := context.WithValue(req.Context(), claimsKey, Claims{"sub": "tester", "scope": ""})
+	ctx := context.WithValue(req.Context(), ClaimsKey, Claims{"sub": "tester", "scope": ""})
 	req = req.WithContext(ctx)
 	rec := httptest.NewRecorder()
 

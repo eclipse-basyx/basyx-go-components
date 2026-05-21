@@ -22,34 +22,44 @@
 *
 * SPDX-License-Identifier: MIT
 ******************************************************************************/
-// Author: Martin Stemmer ( Fraunhofer IESE )
+// Author: Aaron Zielstorff ( Fraunhofer IESE )
 
-package auth
+package smregistryapi
 
 import (
-	"context"
+	"encoding/json"
 	"net/http"
-	"strings"
+	"net/http/httptest"
+	"testing"
+	"time"
+
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/asyncbulk"
+	"github.com/go-chi/chi/v5"
+	"github.com/stretchr/testify/require"
 )
 
-// EdcBpnHeaderMiddleware injects the Edc-Bpn header value into JWT claims
-// when security is enabled. The claim key is "edc_bpn".
-func EdcBpnHeaderMiddleware(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		bpn := strings.TrimSpace(r.Header.Get("Edc-Bpn"))
-		if bpn == "" {
-			next.ServeHTTP(w, r)
-			return
-		}
+func TestGetBulkAsyncStatus_MapsRetryAfterToHeader(t *testing.T) {
+	manager := asyncbulk.NewManager("SMR-BULK-TEST", time.Minute)
+	service := NewBulkService(smBulkServiceStub{}, manager)
+	handler := NewBulkHTTPHandler(service)
 
-		claims := FromContext(r)
-		if claims == nil {
-			next.ServeHTTP(w, r)
-			return
-		}
+	router := chi.NewRouter()
+	handler.RegisterRoutes(router, true)
 
-		claims["Edc-Bpn"] = bpn
-		ctx := context.WithValue(r.Context(), ClaimsKey, claims)
-		next.ServeHTTP(w, r.WithContext(ctx))
-	})
+	handleID, err := manager.Start("anonymous")
+	require.NoError(t, err)
+
+	req := httptest.NewRequest(http.MethodGet, "/bulk/status/"+handleID, nil)
+	rr := httptest.NewRecorder()
+	router.ServeHTTP(rr, req)
+
+	require.Equal(t, http.StatusOK, rr.Code)
+	require.Equal(t, "2", rr.Header().Get("Retry-After"))
+
+	var payload map[string]any
+	require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &payload))
+	require.Equal(t, "Running", payload["executionState"])
+	require.Equal(t, true, payload["success"])
+	_, hasRetryAfter := payload["retryAfter"]
+	require.False(t, hasRetryAfter, "retryAfter must be present in header, not in response body")
 }
