@@ -323,11 +323,6 @@ func (c *AssetAdministrationShellRegistryAPIAPIController) PostAssetAdministrati
 		c.errorHandler(w, r, err, &result)
 		return
 	}
-	if result.Code == http.StatusCreated && strings.TrimSpace(assetAdministrationShellDescriptorParam.Id) != "" {
-		if location := c.buildShellDescriptorLocation(r, assetAdministrationShellDescriptorParam.Id); location != "" {
-			w.Header().Set("Location", location)
-		}
-	}
 	_ = EncodeJSONResponse(result.Body, &result.Code, w)
 }
 
