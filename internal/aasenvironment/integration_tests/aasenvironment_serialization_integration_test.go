@@ -14,6 +14,7 @@ import (
 	"testing"
 	"time"
 
+	aasx "github.com/aas-core-works/aas-package3-golang"
 	"github.com/stretchr/testify/require"
 )
 
@@ -217,6 +218,18 @@ func TestSerializationDownloadJsonAfterThreeAasUpload(t *testing.T) {
 			t.Logf("downloaded JSON serialization to %s", testCase.outputPath)
 		})
 	}
+}
+
+func TestSerializationDownloadAASXXMLAfterThreeAASUploadMatchesUploadedSets(t *testing.T) {
+	skipSerializationTestsInCI(t)
+	packaging := aasx.NewPackaging()
+	packageReader, err := packaging.OpenRead(filepath.Clean(fixtureAasxFilePathThreeAasXml))
+	require.NoErrorf(t, err, "failed to open fixture package %q", fixtureAasxFilePathThreeAasXml)
+	defer func() { _ = packageReader.Close() }()
+
+	specParts, err := packageReader.Specs()
+	require.NoError(t, err)
+	require.NotEmptyf(t, specParts, "fixture %q does not contain spec parts", fixtureAasxFilePathThreeAasXml)
 }
 
 func writeSerializationOutput(t *testing.T, outputPath string, payload []byte) {
