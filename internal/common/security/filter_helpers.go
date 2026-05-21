@@ -128,6 +128,7 @@ type SharedFragmentMaskRuntime struct {
 	fragments         []grammar.FragmentStringPattern
 	projections       []interface{}
 	aliasesByFragment map[grammar.FragmentStringPattern]string
+	alwaysFalseByFrag map[grammar.FragmentStringPattern]struct{}
 }
 
 // BuildSharedFragmentMaskRuntime creates shared boolean mask flag projections
@@ -142,6 +143,7 @@ func BuildSharedFragmentMaskRuntime(
 		fragments:         make([]grammar.FragmentStringPattern, 0, len(columns)),
 		projections:       make([]interface{}, 0, len(columns)),
 		aliasesByFragment: make(map[grammar.FragmentStringPattern]string, len(columns)),
+		alwaysFalseByFrag: make(map[grammar.FragmentStringPattern]struct{}, len(columns)),
 	}
 	signatureToAlias := make(map[string]string, len(columns))
 	usedAliases := make(map[string]struct{}, len(columns))
@@ -151,6 +153,10 @@ func BuildSharedFragmentMaskRuntime(
 		if _, ok := seenFragments[c.Fragment]; !ok {
 			runtime.fragments = append(runtime.fragments, c.Fragment)
 			seenFragments[c.Fragment] = struct{}{}
+		}
+		if fragmentMaskAlwaysFalse(ctx, c.Fragment) {
+			runtime.alwaysFalseByFrag[c.Fragment] = struct{}{}
+			continue
 		}
 		signature, err := buildFragmentMaskSignature(ctx, c.Fragment)
 		if err != nil {
@@ -176,6 +182,16 @@ func BuildSharedFragmentMaskRuntime(
 		usedAliases[c.FlagAlias] = struct{}{}
 	}
 	return runtime, nil
+}
+
+// FragmentAlwaysFalse returns true when the fragment mask resolves to a
+// constant false expression for the current context.
+func (r *SharedFragmentMaskRuntime) FragmentAlwaysFalse(fragment grammar.FragmentStringPattern) bool {
+	if r == nil {
+		return false
+	}
+	_, ok := r.alwaysFalseByFrag[fragment]
+	return ok
 }
 
 // Projections returns the inner SELECT projections for shared boolean flags.
@@ -216,6 +232,9 @@ func (r *SharedFragmentMaskRuntime) MaskedInnerAliasExpr(
 	fragment grammar.FragmentStringPattern,
 	rawAlias string,
 ) (exp.Expression, error) {
+	if r.FragmentAlwaysFalse(fragment) {
+		return goqu.L("NULL"), nil
+	}
 	flagAlias, err := r.FlagAlias(fragment)
 	if err != nil {
 		return nil, err
@@ -293,6 +312,9 @@ func buildFragmentMaskConditionWithOptions(
 	if len(filters) == 0 {
 		return nil, false, nil
 	}
+	if fragmentFiltersAlwaysFalse(filters) {
+		return goqu.L("FALSE"), true, nil
+	}
 
 	wcs := make([]exp.Expression, 0, len(filters))
 	for _, filter := range filters {
@@ -315,6 +337,71 @@ func buildFragmentMaskConditionWithOptions(
 		return wcs[0], true, nil
 	}
 	return goqu.And(wcs...), true, nil
+}
+
+func fragmentMaskAlwaysFalse(ctx context.Context, fragment grammar.FragmentStringPattern) bool {
+	p := GetQueryFilter(ctx)
+	if p == nil {
+		return false
+	}
+	filters := p.FilterExpressionEntriesFor(fragment)
+	return fragmentFiltersAlwaysFalse(filters)
+}
+
+func fragmentFiltersAlwaysFalse(filters []FragmentExpression) bool {
+	for _, filter := range filters {
+		known, value := logicalExpressionConstantBoolean(filter.Expression)
+		if known && !value {
+			return true
+		}
+	}
+	return false
+}
+
+func logicalExpressionConstantBoolean(le grammar.LogicalExpression) (bool, bool) {
+	if le.Boolean != nil {
+		return true, *le.Boolean
+	}
+	if le.Not != nil {
+		known, value := logicalExpressionConstantBoolean(*le.Not)
+		if known {
+			return true, !value
+		}
+		return false, false
+	}
+	if len(le.And) > 0 {
+		allKnownTrue := true
+		for _, child := range le.And {
+			known, value := logicalExpressionConstantBoolean(child)
+			if known && !value {
+				return true, false
+			}
+			if !known {
+				allKnownTrue = false
+			}
+		}
+		if allKnownTrue {
+			return true, true
+		}
+		return false, false
+	}
+	if len(le.Or) > 0 {
+		allKnown := true
+		for _, child := range le.Or {
+			known, value := logicalExpressionConstantBoolean(child)
+			if known && value {
+				return true, true
+			}
+			if !known {
+				allKnown = false
+			}
+		}
+		if allKnown {
+			return true, false
+		}
+		return false, false
+	}
+	return false, false
 }
 
 func fragmentEndsWithArraySegment(fragment grammar.FragmentStringPattern) bool {
@@ -371,6 +458,11 @@ func GetColumnSelectStatement(ctx context.Context, columns []FilterColumnSpec, c
 	result := []exp.Expression{}
 	for _, column := range columns {
 		if column.Fragment != nil {
+			if fragmentMaskAlwaysFalse(ctx, *column.Fragment) {
+				ok = true
+				result = append(result, goqu.L("NULL"))
+				continue
+			}
 			maskCondition, hasMask, err := buildFragmentMaskCondition(ctx, *column.Fragment, collector)
 			if err != nil {
 				return nil, err

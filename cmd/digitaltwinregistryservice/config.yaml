@@ -23,7 +23,7 @@ abac:
   modelPath: "config/access_rules/access-rules.json"
 
 general:
-  enableImplicitCasts: true
+  enableImplicitCasts: false
   enableDescriptorDebug: false
   enableCustomMiddlewareHeaderInjection: false
   supportsSingularSupplementalSemanticId: true
