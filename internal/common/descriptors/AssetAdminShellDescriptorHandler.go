@@ -414,27 +414,6 @@ func buildListAssetAdministrationShellDescriptorsQuery(
 	if err != nil {
 		return nil, err
 	}
-	payloadAdminFragment := grammar.FragmentStringPattern("$aasdesc#administration")
-	payloadDisplayNameFragment := grammar.FragmentStringPattern("$aasdesc#displayName")
-	payloadDescriptionFragment := grammar.FragmentStringPattern("$aasdesc#description")
-
-	payloadAdminAlwaysFalse := maskRuntime.FragmentAlwaysFalse(payloadAdminFragment)
-	payloadDisplayNameAlwaysFalse := maskRuntime.FragmentAlwaysFalse(payloadDisplayNameFragment)
-	payloadDescriptionAlwaysFalse := maskRuntime.FragmentAlwaysFalse(payloadDescriptionFragment)
-	needsPayloadJoin := !payloadAdminAlwaysFalse || !payloadDisplayNameAlwaysFalse || !payloadDescriptionAlwaysFalse
-
-	var adminPayloadSelectExpression interface{} = goqu.L("?::text", common.TDescriptorPayload.Col(common.ColAdministrativeInfoPayload)).As("raw_admin_payload")
-	if payloadAdminAlwaysFalse {
-		adminPayloadSelectExpression = goqu.L("NULL").As("raw_admin_payload")
-	}
-	var displayNamePayloadSelectExpression interface{} = goqu.L("?::text", common.TDescriptorPayload.Col(common.ColDisplayNamePayload)).As("raw_displayname_payload")
-	if payloadDisplayNameAlwaysFalse {
-		displayNamePayloadSelectExpression = goqu.L("NULL").As("raw_displayname_payload")
-	}
-	var descriptionPayloadSelectExpression interface{} = goqu.L("?::text", common.TDescriptorPayload.Col(common.ColDescriptionPayload)).As("raw_description_payload")
-	if payloadDescriptionAlwaysFalse {
-		descriptionPayloadSelectExpression = goqu.L("NULL").As("raw_description_payload")
-	}
 
 	innerSelectExpressions := []interface{}{
 		common.TAASDescriptor.Col(common.ColDescriptorID).As("c0"),
@@ -443,9 +422,9 @@ func buildListAssetAdministrationShellDescriptorsQuery(
 		common.TAASDescriptor.Col(common.ColGlobalAssetID).As("c3"),
 		common.TAASDescriptor.Col(common.ColIDShort).As("c4"),
 		common.TAASDescriptor.Col(common.ColAASID).As("c5"),
-		adminPayloadSelectExpression,
-		displayNamePayloadSelectExpression,
-		descriptionPayloadSelectExpression,
+		goqu.L("?::text", common.TDescriptorPayload.Col(common.ColAdministrativeInfoPayload)).As("raw_admin_payload"),
+		goqu.L("?::text", common.TDescriptorPayload.Col(common.ColDisplayNamePayload)).As("raw_displayname_payload"),
+		goqu.L("?::text", common.TDescriptorPayload.Col(common.ColDescriptionPayload)).As("raw_description_payload"),
 		common.TAASDescriptor.Col(common.ColAASID).As("sort_aas_id"),
 	}
 	if includeCreatedAt {
@@ -462,14 +441,12 @@ func buildListAssetAdministrationShellDescriptorsQuery(
 		InnerJoin(
 			common.TAASDescriptor,
 			goqu.On(common.TAASDescriptor.Col(common.ColDescriptorID).Eq(common.TDescriptor.Col(common.ColID))),
-		)
-	if needsPayloadJoin {
-		dataDS = dataDS.LeftJoin(
+		).
+		LeftJoin(
 			common.TDescriptorPayload,
 			goqu.On(common.TDescriptorPayload.Col(common.ColDescriptorID).Eq(common.TDescriptor.Col(common.ColID))),
-		)
-	}
-	dataDS = dataDS.Select(append(innerSelectExpressions, maskRuntime.Projections()...)...)
+		).
+		Select(append(innerSelectExpressions, maskRuntime.Projections()...)...)
 
 	outerSelectExpressions := []interface{}{
 		goqu.I(dataAlias + ".c0"),

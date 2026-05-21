@@ -75,16 +75,6 @@ func (s *CustomDiscoveryService) SearchAllAssetAdministrationShellIdsByAssetLink
 	cursor string,
 	assetLink []model.AssetLink,
 ) (model.ImplResponse, error) {
-	if common.DebugEnabled(ctx) {
-		log.Printf(
-			"🧭 [%s-DBG] SearchAllAssetAdministrationShellIdsByAssetLink start limit=%d cursor=%q assetLinks=%d",
-			customDiscoveryComponentName,
-			limit,
-			cursor,
-			len(assetLink),
-		)
-	}
-
 	if len(assetLink) == 0 {
 		return model.Response(http.StatusOK, map[string]any{
 			"paging_metadata": model.PagedResultPagingMetadata{},
@@ -113,13 +103,6 @@ func (s *CustomDiscoveryService) SearchAllAssetAdministrationShellIdsByAssetLink
 
 	createdAfter, _ := CreatedAfterFromContext(ctx)
 	if createdAfter != nil {
-		if common.DebugEnabled(ctx) {
-			log.Printf(
-				"🧭 [%s-DBG] applying createdAfter=%s to query filter",
-				customDiscoveryComponentName,
-				createdAfter.UTC().Format(time.RFC3339Nano),
-			)
-		}
 		createdAfterQuery := buildEdcBpnClaimEqualsHeaderExpression(createdAfter, "$bd#createdAt")
 		ctx = auth.MergeQueryFilter(ctx, createdAfterQuery)
 	}
@@ -127,10 +110,6 @@ func (s *CustomDiscoveryService) SearchAllAssetAdministrationShellIdsByAssetLink
 	res, err := s.AssetAdministrationShellBasicDiscoveryAPIAPIService.SearchAllAssetAdministrationShellIdsByAssetLink(ctx, limit, cursor, assetLink)
 	if err != nil {
 		return res, err
-	}
-
-	if common.DebugEnabled(ctx) {
-		log.Printf("🧭 [%s-DBG] SearchAllAssetAdministrationShellIdsByAssetLink completed status=%d", customDiscoveryComponentName, res.Code)
 	}
 
 	return omitEmptySearchResultForDTR(res), nil

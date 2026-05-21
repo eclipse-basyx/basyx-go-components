@@ -37,7 +37,6 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"log"
 	"time"
 
 	"github.com/aas-core-works/aas-core3.1-golang/types"
@@ -234,9 +233,8 @@ func (p *PostgreSQLDiscoveryDatabase) SearchAASIDsByAssetLinks(
 	limit int32,
 	cursor string,
 ) ([]string, string, error) {
-	start := time.Now()
 	if limit <= 0 {
-		limit = 100000000
+		limit = 100000
 	}
 
 	peekLimit := int(limit) + 1
@@ -302,20 +300,12 @@ func (p *PostgreSQLDiscoveryDatabase) SearchAASIDsByAssetLinks(
 	}
 
 	sqlStr, args, err := ds.ToSQL()
+	if common.DebugEnabled(ctx) {
+		_, _ = fmt.Println(sqlStr)
+	}
 	if err != nil {
 		_, _ = fmt.Println("SearchAASIDsByAssetLinks: sql build error:", err)
 		return nil, "", common.NewInternalServerError("Failed to query AAS IDs. See server logs for details.")
-	}
-	if common.DebugEnabled(ctx) {
-		log.Printf(
-			"🧭 [DISC-DBG] SearchAASIDsByAssetLinks SQL built in=%s limit=%d cursor=%q links=%d sql=%q args=%v",
-			time.Since(start),
-			limit,
-			cursor,
-			len(uniqueLinks),
-			sqlStr,
-			args,
-		)
 	}
 
 	rows, err := p.db.QueryContext(ctx, sqlStr, args...)
@@ -346,24 +336,7 @@ func (p *PostgreSQLDiscoveryDatabase) SearchAASIDsByAssetLinks(
 	if len(buf) > int(limit) {
 		result := buf[:limit]
 		nextCursor := buf[limit]
-		if common.DebugEnabled(ctx) {
-			log.Printf(
-				"🧭 [DISC-DBG] SearchAASIDsByAssetLinks done in=%s resultCount=%d nextCursor=%q",
-				time.Since(start),
-				len(result),
-				nextCursor,
-			)
-		}
 		return result, nextCursor, nil
-	}
-
-	if common.DebugEnabled(ctx) {
-		log.Printf(
-			"🧭 [DISC-DBG] SearchAASIDsByAssetLinks done in=%s resultCount=%d nextCursor=%q",
-			time.Since(start),
-			len(buf),
-			"",
-		)
 	}
 
 	return buf, "", nil
