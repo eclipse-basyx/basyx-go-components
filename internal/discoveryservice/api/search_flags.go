@@ -1,3 +1,4 @@
+// Package api contains discovery service API handlers and helpers.
 package api
 
 import "context"
