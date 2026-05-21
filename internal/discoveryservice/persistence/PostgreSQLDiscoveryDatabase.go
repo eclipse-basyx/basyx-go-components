@@ -236,7 +236,7 @@ func (p *PostgreSQLDiscoveryDatabase) SearchAASIDsByAssetLinks(
 ) ([]string, string, error) {
 	start := time.Now()
 	if limit <= 0 {
-		limit = 100000
+		limit = 100000000
 	}
 
 	peekLimit := int(limit) + 1
