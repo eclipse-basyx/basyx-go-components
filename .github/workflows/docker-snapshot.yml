@@ -9,9 +9,9 @@ on:
       - 'internal/healthprobe/**'
       - 'internal/**'
       - 'pkg/**'
+      - 'database/**'
       - 'go.mod'
       - 'go.sum'
-      - 'basyxschema.sql'
       - '.github/workflows/docker-snapshot.yml'
 
 concurrency:
@@ -67,6 +67,8 @@ jobs:
             image: eclipsebasyx/aasrepository-go
           - name: aasxfileserverservice
             image: eclipsebasyx/aasxfileserver-go
+          - name: basyxconfigurationservice
+            image: eclipsebasyx/basyxconfigurationservice-go
     
     steps:
       - name: Checkout code
