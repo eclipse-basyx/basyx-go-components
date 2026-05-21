@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -222,6 +223,14 @@ func TestSerializationDownloadJsonAfterThreeAasUpload(t *testing.T) {
 
 func TestSerializationDownloadAASXXMLAfterThreeAASUploadMatchesUploadedSets(t *testing.T) {
 	skipSerializationTestsInCI(t)
+	resetDatabaseForUploadIT(t, serializationIntegrationDSN)
+	uploadFixture(t, fixtureAasxFilePathThreeAasXml, "application/aasx+xml")
+
+	downloadPayload := downloadAASXSerializationFullEnvironment(t, "application/aasx+xml")
+	require.NotEmpty(t, downloadPayload)
+	downloadedSpecParts := readAASXSpecPartsFromPayload(t, downloadPayload)
+	require.NotEmpty(t, downloadedSpecParts)
+
 	packaging := aasx.NewPackaging()
 	packageReader, err := packaging.OpenRead(filepath.Clean(fixtureAasxFilePathThreeAasXml))
 	require.NoErrorf(t, err, "failed to open fixture package %q", fixtureAasxFilePathThreeAasXml)
@@ -230,6 +239,103 @@ func TestSerializationDownloadAASXXMLAfterThreeAASUploadMatchesUploadedSets(t *t
 	specParts, err := packageReader.Specs()
 	require.NoError(t, err)
 	require.NotEmptyf(t, specParts, "fixture %q does not contain spec parts", fixtureAasxFilePathThreeAasXml)
+
+	require.Equal(t, aasxSpecSignatures(specParts), aasxSpecSignatures(downloadedSpecParts), "downloaded AASX spec set differs from uploaded fixture")
+}
+
+func TestSerializationDownloadAASXXMLWithoutUploadContainsSpecParts(t *testing.T) {
+	skipSerializationTestsInCI(t)
+	resetDatabaseForUploadIT(t, serializationIntegrationDSN)
+
+	postJSONFixture(t, serializationBaseURL+"/shells", "testdata/registry_sync_post_shell.json", http.StatusCreated)
+	postJSONFixture(t, serializationBaseURL+"/submodels", "testdata/registry_sync_post_submodel.json", http.StatusCreated)
+
+	payload := downloadAASXSerializationFullEnvironment(t, "application/aasx+xml")
+	require.NotEmpty(t, payload)
+
+	specParts := readAASXSpecPartsFromPayload(t, payload)
+	require.NotEmpty(t, specParts, "serialization payload without upload must contain at least one AASX spec part")
+}
+
+func TestSerializationAASXAcceptVariantsContainSpecParts(t *testing.T) {
+	skipSerializationTestsInCI(t)
+	resetDatabaseForUploadIT(t, serializationIntegrationDSN)
+	uploadFixture(t, fixtureAasxFilePathThreeAasXml, "application/aasx+xml")
+
+	testCases := []struct {
+		name   string
+		accept string
+	}{
+		{name: "AASXXML", accept: "application/aasx+xml"},
+		{name: "AASXXMLAlt", accept: "application/asset-administration-shell+xml"},
+		{name: "AASXJSON", accept: "application/aasx+json"},
+		{name: "AASXJSONAlt", accept: "application/asset-administration-shell+json"},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			payload := downloadAASXSerializationFullEnvironment(t, testCase.accept)
+			require.NotEmpty(t, payload)
+
+			specParts := readAASXSpecPartsFromPayload(t, payload)
+			require.NotEmptyf(t, specParts, "serialization payload for Accept %q has no AASX spec parts", testCase.accept)
+		})
+	}
+}
+
+func readAASXSpecPartsFromPayload(t *testing.T, payload []byte) []*aasx.Part {
+	t.Helper()
+
+	tempPath := filepath.Join(t.TempDir(), "serialization_result.aasx")
+	require.NoError(t, os.WriteFile(tempPath, payload, 0o600))
+
+	packaging := aasx.NewPackaging()
+	packageReader, err := packaging.OpenRead(tempPath)
+	require.NoErrorf(t, err, "failed to open serialization payload as AASX package from %q", tempPath)
+	defer func() { _ = packageReader.Close() }()
+
+	specParts, err := packageReader.Specs()
+	require.NoError(t, err)
+
+	return specParts
+}
+
+func aasxSpecSignatures(specParts []*aasx.Part) []string {
+	signatures := make([]string, 0, len(specParts))
+	for _, specPart := range specParts {
+		if specPart == nil {
+			continue
+		}
+
+		uri := ""
+		if specPart.URI != nil {
+			uri = strings.TrimSpace(specPart.URI.String())
+		}
+
+		signatures = append(signatures, strings.ToLower(uri)+"|"+strings.ToLower(strings.TrimSpace(specPart.ContentType)))
+	}
+
+	sort.Strings(signatures)
+	return signatures
+}
+
+func postJSONFixture(t *testing.T, endpoint string, fixturePath string, expectedStatus int) {
+	t.Helper()
+
+	body, err := os.ReadFile(filepath.Clean(fixturePath))
+	require.NoErrorf(t, err, "failed to read fixture %q", fixturePath)
+
+	req, err := http.NewRequest(http.MethodPost, endpoint, bytes.NewReader(body))
+	require.NoError(t, err)
+	req.Header.Set("Content-Type", "application/json")
+
+	client := &http.Client{Timeout: 60 * time.Second}
+	resp := doHTTPIntegrationRequest(t, client, req)
+	defer func() { _ = resp.Body.Close() }()
+
+	respBody, err := io.ReadAll(resp.Body)
+	require.NoError(t, err)
+	require.Equalf(t, expectedStatus, resp.StatusCode, "request to %q with fixture %q failed: %s", endpoint, fixturePath, string(respBody))
 }
 
 func writeSerializationOutput(t *testing.T, outputPath string, payload []byte) {
