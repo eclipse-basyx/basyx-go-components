@@ -28,6 +28,7 @@ func main() {
 	execCtx := &steps.ExecutionContext{}
 	schemInit := basyxconfigurationservice.NewSchemaInitializer()
 	schemInit.Register(steps.NewDatabaseConnection(execCtx, configPath))
+	schemInit.Register(steps.NewSystemTable(execCtx))
 	schemInit.Register(steps.NewSchemaUpload(execCtx, databaseSchema))
 	schemInit.Register(steps.NewSchemaPatch(execCtx, filepath.Join(patchBasePath, "101.sql"), "v1.0.1"))
 

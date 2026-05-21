@@ -25,3 +25,12 @@ ALTER TABLE IF EXISTS aas_identifier
 
 ALTER TABLE IF EXISTS aas_identifier
   ADD COLUMN IF NOT EXISTS db_updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
+
+UPDATE basyxsystem
+SET database_version = 'v1.0.1'
+WHERE identifier = (
+  SELECT identifier
+  FROM basyxsystem
+  ORDER BY identifier ASC
+  LIMIT 1
+);

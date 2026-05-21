@@ -878,19 +878,3 @@ CREATE INDEX IF NOT EXISTS ix_aasx_package_package_id ON aasx_package(package_id
 CREATE INDEX IF NOT EXISTS ix_aasx_package_db_created_at ON aasx_package(db_created_at);
 CREATE INDEX IF NOT EXISTS ix_aasx_package_aas_id_aas ON aasx_package_aas_id(aas_id);
 CREATE INDEX IF NOT EXISTS ix_aasx_package_aas_id_package ON aasx_package_aas_id(package_db_id);
-
--------------------
--- System Tables --
--------------------
-
-CREATE TABLE IF NOT EXISTS basyxSystem(
-  IDENTIFIER BIGSERIAL PRIMARY KEY,
-  DATABASE_VERSION VARCHAR NOT NULL DEFAULT 'v1.0.0'
-);
-
-DO $$
-BEGIN
-  IF NOT EXISTS (SELECT 1 FROM basyxSystem) THEN
-    INSERT INTO basyxSystem DEFAULT VALUES;
-  END IF;
-END $$;

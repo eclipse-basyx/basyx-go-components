@@ -9,6 +9,13 @@ import (
 	"strings"
 )
 
+const currentDatabaseVersionQuery = `
+		SELECT database_version
+		FROM basyxsystem
+		ORDER BY identifier ASC
+		LIMIT 1
+	`
+
 // SchemaPatch applies a versioned SQL patch when the database version is older than the patch version.
 type SchemaPatch struct {
 	ctx           *ExecutionContext
@@ -70,20 +77,6 @@ func (sp *SchemaPatch) Execute(stepIndex int) (int, error) {
 		return 1, fmt.Errorf("BASYXCFG-PATCH-EXECUTE: %w", err)
 	}
 
-	if _, err = tx.Exec(`
-		UPDATE basyxsystem
-		SET database_version = $1
-		WHERE identifier = (
-			SELECT identifier
-			FROM basyxsystem
-			ORDER BY identifier ASC
-			LIMIT 1
-		)
-	`, sp.targetVersion); err != nil {
-		_ = tx.Rollback()
-		return 1, fmt.Errorf("BASYXCFG-PATCH-UPDATEVERSION: %w", err)
-	}
-
 	if err = tx.Commit(); err != nil {
 		return 1, fmt.Errorf("BASYXCFG-PATCH-COMMIT: %w", err)
 	}
@@ -98,12 +91,7 @@ func (sp *SchemaPatch) GetDescription(stepIndex int) string {
 }
 
 func (sp *SchemaPatch) getCurrentDBVersion() (string, error) {
-	row := sp.ctx.DB.QueryRow(`
-		SELECT database_version
-		FROM basyxsystem
-		ORDER BY identifier ASC
-		LIMIT 1
-	`)
+	row := sp.ctx.DB.QueryRow(currentDatabaseVersionQuery)
 
 	var version string
 	err := row.Scan(&version)

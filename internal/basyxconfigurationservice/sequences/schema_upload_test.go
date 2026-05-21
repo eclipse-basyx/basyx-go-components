@@ -47,8 +47,8 @@ func TestSchemaUploadExecuteReturnsReadFileError(t *testing.T) {
 		WithArgs(schemaAdvisoryLockID).
 		WillReturnResult(sqlmock.NewResult(0, 1))
 
-	mock.ExpectQuery(regexp.QuoteMeta("SELECT COALESCE(to_regclass('public.basyxsystem')::text, '')")).
-		WillReturnRows(sqlmock.NewRows([]string{"coalesce"}).AddRow(""))
+	mock.ExpectQuery(regexp.QuoteMeta(baseSchemaCheckQuery)).
+		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(0))
 
 	mock.ExpectExec(regexp.QuoteMeta("SELECT pg_advisory_unlock($1)")).
 		WithArgs(schemaAdvisoryLockID).
@@ -85,8 +85,8 @@ func TestSchemaUploadExecuteSuccess(t *testing.T) {
 		WithArgs(schemaAdvisoryLockID).
 		WillReturnResult(sqlmock.NewResult(0, 1))
 
-	mock.ExpectQuery(regexp.QuoteMeta("SELECT COALESCE(to_regclass('public.basyxsystem')::text, '')")).
-		WillReturnRows(sqlmock.NewRows([]string{"coalesce"}).AddRow(""))
+	mock.ExpectQuery(regexp.QuoteMeta(baseSchemaCheckQuery)).
+		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(0))
 
 	mock.ExpectExec(regexp.QuoteMeta(schema)).
 		WillReturnResult(sqlmock.NewResult(0, 1))
@@ -127,8 +127,8 @@ func TestSchemaUploadExecuteSkipsWhenBaseSchemaAlreadyInitialized(t *testing.T) 
 		WithArgs(schemaAdvisoryLockID).
 		WillReturnResult(sqlmock.NewResult(0, 1))
 
-	mock.ExpectQuery(regexp.QuoteMeta("SELECT COALESCE(to_regclass('public.basyxsystem')::text, '')")).
-		WillReturnRows(sqlmock.NewRows([]string{"coalesce"}).AddRow("basyxsystem"))
+	mock.ExpectQuery(regexp.QuoteMeta(baseSchemaCheckQuery)).
+		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(baseSchemaTableCount))
 
 	mock.ExpectExec(regexp.QuoteMeta("SELECT pg_advisory_unlock($1)")).
 		WithArgs(schemaAdvisoryLockID).

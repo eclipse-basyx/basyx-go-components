@@ -4,12 +4,22 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 )
 
 const (
 	schemaFilePath       = "/app/base.sql"
 	schemaAdvisoryLockID = int64(860424611912345001)
+	baseSchemaTableCount = 4
+	baseSchemaCheckQuery = `
+		SELECT COUNT(*)
+		FROM (VALUES
+			('submodel'),
+			('aas_descriptor'),
+			('concept_description'),
+			('aasx_package')
+		) AS expected(table_name)
+		WHERE to_regclass('public.' || expected.table_name) IS NOT NULL
+	`
 )
 
 // SchemaUpload uploads the SQL schema to the configured PostgreSQL database.
@@ -87,12 +97,12 @@ func (su *SchemaUpload) resolveSchemaPath() (string, error) {
 }
 
 func (su *SchemaUpload) isBaseSchemaInitialized() (bool, error) {
-	var tableName string
-	err := su.ctx.DB.QueryRow(`SELECT COALESCE(to_regclass('public.basyxsystem')::text, '')`).Scan(&tableName)
+	var existingTableCount int
+	err := su.ctx.DB.QueryRow(baseSchemaCheckQuery).Scan(&existingTableCount)
 	if err != nil {
 		return false, fmt.Errorf("BASYXCFG-SCHEMA-CHECK: %w", err)
 	}
-	return strings.TrimSpace(tableName) != "", nil
+	return existingTableCount == baseSchemaTableCount, nil
 }
 
 // GetDescription returns the step description for console output.
