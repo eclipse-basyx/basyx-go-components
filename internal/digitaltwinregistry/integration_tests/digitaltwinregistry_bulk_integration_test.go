@@ -123,8 +123,7 @@ func TestBulkAASOperationsAndDescription(t *testing.T) {
 		createDTRShellDescriptor(t, desc, http.StatusCreated, headers)
 
 		adminBPNHeaders := map[string]string{
-			"Authorization": "Bearer " + token,
-			"Edc-Bpn":       "BPN_COMPANY_001",
+			"Edc-Bpn": "BPN_COMPANY_001",
 		}
 
 		nonMatching := loadDTRFixtureArray(t, "postBody/num1AssetLink.json")
