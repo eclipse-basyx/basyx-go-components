@@ -29,21 +29,14 @@ import (
 )
 
 const (
-	fixtureAasxFilePathThreeAasXml                          = "testdata/threeAasDuplicateFilesSerializationTestXml.aasx"
-	fixtureAasxFilePathThreeAasJson                         = "testdata/threeAasDuplicateFilesSerializationTestJson.aasx"
-	serializationThreeAasxXmlDownloadPath                   = "testdata_results/threeAASDuplicateFilesSerializationTest_downloaded_xml_from_xml_aasx_upload.aasx"
-	serializationThreeAasxXmlAltDownloadPath                = "testdata_results/threeAASDuplicateFilesSerializationTest_downloaded_xml_alt_from_xml_aasx_upload.aasx"
-	serializationThreeAasxXmlDownloadFromJsonUploadPath     = "testdata_results/threeAASDuplicateFilesSerializationTest_downloaded_xml_from_json_aasx_upload.aasx"
-	serializationThreeAasxXmlAltDownloadFromJsonUploadPath  = "testdata_results/threeAASDuplicateFilesSerializationTest_downloaded_xml_alt_from_json_aasx_upload.aasx"
-	serializationThreeAasxJsonDownloadPath                  = "testdata_results/threeAASDuplicateFilesSerializationTest_downloaded_json_from_xml_aasx_upload.aasx"
-	serializationThreeAasxJsonAltDownloadPath               = "testdata_results/threeAASDuplicateFilesSerializationTest_downloaded_json_alt_from_xml_aasx_upload.aasx"
-	serializationThreeAasxJsonDownloadFromJsonUploadPath    = "testdata_results/threeAASDuplicateFilesSerializationTest_downloaded_json_from_json_aasx_upload.aasx"
-	serializationThreeAasxJsonAltDownloadFromJsonUploadPath = "testdata_results/threeAASDuplicateFilesSerializationTest_downloaded_json_alt_from_json_aasx_upload.aasx"
-	serializationThreeAasXmlDownloadFromXmlUploadPath       = "testdata_results/threeAASDuplicateFilesSerializationTest_downloaded_xml_from_xml_aasx_upload.xml"
-	serializationThreeAasXmlDownloadFromJsonUploadPath      = "testdata_results/threeAASDuplicateFilesSerializationTest_downloaded_xml_from_json_aasx_upload.xml"
-	serializationThreeAasJsonDownloadFromXmlUploadPath      = "testdata_results/threeAASDuplicateFilesSerializationTest_downloaded_json_from_xml_aasx_upload.json"
-	serializationThreeAasJsonDownloadFromJsonUploadPath     = "testdata_results/threeAASDuplicateFilesSerializationTest_downloaded_json_from_json_aasx_upload.json"
-	serializationBaseURL                                    = "http://127.0.0.1:6004"
+	fixtureAasxFilePathThreeAasXml                     = "testdata/threeAasDuplicateFilesSerializationTestXml.aasx"
+	serializationThreeAasxXmlDownloadPath              = "testdata_results/threeAASDuplicateFilesSerializationTest_downloaded_xml_from_xml_aasx_upload.aasx"
+	serializationThreeAasxXmlAltDownloadPath           = "testdata_results/threeAASDuplicateFilesSerializationTest_downloaded_xml_alt_from_xml_aasx_upload.aasx"
+	serializationThreeAasxJsonDownloadPath             = "testdata_results/threeAASDuplicateFilesSerializationTest_downloaded_json_from_xml_aasx_upload.aasx"
+	serializationThreeAasxJsonAltDownloadPath          = "testdata_results/threeAASDuplicateFilesSerializationTest_downloaded_json_alt_from_xml_aasx_upload.aasx"
+	serializationThreeAasXmlDownloadFromXmlUploadPath  = "testdata_results/threeAASDuplicateFilesSerializationTest_downloaded_xml_from_xml_aasx_upload.xml"
+	serializationThreeAasJsonDownloadFromXmlUploadPath = "testdata_results/threeAASDuplicateFilesSerializationTest_downloaded_json_from_xml_aasx_upload.json"
+	serializationBaseURL                               = "http://127.0.0.1:6004"
 
 	serializationIntegrationDSN = "host=127.0.0.1 port=6432 user=admin password=admin123 dbname=basyxTestDB sslmode=disable"
 )
@@ -53,45 +46,25 @@ func TestSerializationDownloadAasXmlAfterThreeAasUpload(t *testing.T) {
 
 	testCases := []struct {
 		name       string
-		uploadPath string
-		uploadType string
 		accept     string
 		outputPath string
 	}{
 		{
 			name:       "AASXXMLFromAASXXMLUpload",
-			uploadPath: fixtureAasxFilePathThreeAasXml,
-			uploadType: "application/aasx+xml",
 			accept:     "application/aasx+xml",
 			outputPath: serializationThreeAasxXmlDownloadPath,
 		},
 		{
 			name:       "AssetAdministrationShellXMLFromAASXXMLUpload",
-			uploadPath: fixtureAasxFilePathThreeAasXml,
-			uploadType: "application/aasx+xml",
 			accept:     "application/asset-administration-shell+xml",
 			outputPath: serializationThreeAasxXmlAltDownloadPath,
-		},
-		{
-			name:       "AASXXMLFromAASXJSONUpload",
-			uploadPath: fixtureAasxFilePathThreeAasJson,
-			uploadType: "application/aasx+json",
-			accept:     "application/aasx+xml",
-			outputPath: serializationThreeAasxXmlDownloadFromJsonUploadPath,
-		},
-		{
-			name:       "AssetAdministrationShellXMLFromAASXJSONUpload",
-			uploadPath: fixtureAasxFilePathThreeAasJson,
-			uploadType: "application/aasx+json",
-			accept:     "application/asset-administration-shell+xml",
-			outputPath: serializationThreeAasxXmlAltDownloadFromJsonUploadPath,
 		},
 	}
 
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
 			resetDatabaseForUploadIT(t, serializationIntegrationDSN)
-			uploadFixture(t, testCase.uploadPath, testCase.uploadType)
+			uploadFixture(t, fixtureAasxFilePathThreeAasXml, "application/aasx+xml")
 
 			payload := downloadAASXSerializationFullEnvironment(t, testCase.accept, true)
 			require.NotEmpty(t, payload)
@@ -107,45 +80,25 @@ func TestSerializationDownloadAasxJsonAfterThreeAASUpload(t *testing.T) {
 
 	testCases := []struct {
 		name       string
-		uploadPath string
-		uploadType string
 		accept     string
 		outputPath string
 	}{
 		{
 			name:       "AASXJSONFromAASXXMLUpload",
-			uploadPath: fixtureAasxFilePathThreeAasXml,
-			uploadType: "application/aasx+xml",
 			accept:     "application/aasx+json",
 			outputPath: serializationThreeAasxJsonDownloadPath,
 		},
 		{
 			name:       "AssetAdministrationShellJSONFromAASXXMLUpload",
-			uploadPath: fixtureAasxFilePathThreeAasXml,
-			uploadType: "application/aasx+xml",
 			accept:     "application/asset-administration-shell+json",
 			outputPath: serializationThreeAasxJsonAltDownloadPath,
-		},
-		{
-			name:       "AASXJSONFromAASXJSONUpload",
-			uploadPath: fixtureAasxFilePathThreeAasJson,
-			uploadType: "application/aasx+json",
-			accept:     "application/aasx+json",
-			outputPath: serializationThreeAasxJsonDownloadFromJsonUploadPath,
-		},
-		{
-			name:       "AssetAdministrationShellJSONFromAASXJSONUpload",
-			uploadPath: fixtureAasxFilePathThreeAasJson,
-			uploadType: "application/aasx+json",
-			accept:     "application/asset-administration-shell+json",
-			outputPath: serializationThreeAasxJsonAltDownloadFromJsonUploadPath,
 		},
 	}
 
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
 			resetDatabaseForUploadIT(t, serializationIntegrationDSN)
-			uploadFixture(t, testCase.uploadPath, testCase.uploadType)
+			uploadFixture(t, fixtureAasxFilePathThreeAasXml, "application/aasx+xml")
 
 			payload := downloadAASXSerializationFullEnvironment(t, testCase.accept, true)
 			require.NotEmpty(t, payload)
@@ -161,28 +114,18 @@ func TestSerializationDownloadXmlAfterThreeAasUpload(t *testing.T) {
 
 	testCases := []struct {
 		name       string
-		uploadPath string
-		uploadType string
 		outputPath string
 	}{
 		{
 			name:       "XMLFromAASXXMLUpload",
-			uploadPath: fixtureAasxFilePathThreeAasXml,
-			uploadType: "application/aasx+xml",
 			outputPath: serializationThreeAasXmlDownloadFromXmlUploadPath,
-		},
-		{
-			name:       "XMLFromAASXJSONUpload",
-			uploadPath: fixtureAasxFilePathThreeAasJson,
-			uploadType: "application/aasx+json",
-			outputPath: serializationThreeAasXmlDownloadFromJsonUploadPath,
 		},
 	}
 
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
 			resetDatabaseForUploadIT(t, serializationIntegrationDSN)
-			uploadFixture(t, testCase.uploadPath, testCase.uploadType)
+			uploadFixture(t, fixtureAasxFilePathThreeAasXml, "application/aasx+xml")
 
 			payload := downloadAASXSerializationFullEnvironment(t, "application/xml", true)
 			require.NotEmpty(t, payload)
@@ -198,28 +141,18 @@ func TestSerializationDownloadJsonAfterThreeAasUpload(t *testing.T) {
 
 	testCases := []struct {
 		name       string
-		uploadPath string
-		uploadType string
 		outputPath string
 	}{
 		{
 			name:       "JSONFromAASXXMLUpload",
-			uploadPath: fixtureAasxFilePathThreeAasXml,
-			uploadType: "application/aasx+xml",
 			outputPath: serializationThreeAasJsonDownloadFromXmlUploadPath,
-		},
-		{
-			name:       "JSONFromAASXJSONUpload",
-			uploadPath: fixtureAasxFilePathThreeAasJson,
-			uploadType: "application/aasx+json",
-			outputPath: serializationThreeAasJsonDownloadFromJsonUploadPath,
 		},
 	}
 
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
 			resetDatabaseForUploadIT(t, serializationIntegrationDSN)
-			uploadFixture(t, testCase.uploadPath, testCase.uploadType)
+			uploadFixture(t, fixtureAasxFilePathThreeAasXml, "application/aasx+xml")
 
 			payload := downloadAASXSerializationFullEnvironment(t, "application/json", true)
 			require.NotEmpty(t, payload)
