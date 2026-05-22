@@ -549,12 +549,14 @@ func (s *SerializationAPIService) resolveSerializationSupplementaryParts(
 
 	for _, fileLocation := range fileLocations {
 		if IsExternalAASXReference(fileLocation.FileValue) {
+			// #nosec G706 -- values are escaped by sanitizeLogValue to prevent control-character log injection.
 			log.Printf("[WARN] AASENV-SERIALIZESUPPL-SKIPEXTERNAL skipping external file reference for submodel '%s' at path '%s'", sanitizeLogValue(fileLocation.SubmodelID), sanitizeLogValue(fileLocation.IDShortPath))
 			continue
 		}
 
 		resolvedReference := ResolveAASXReferenceAgainstSpec(fileLocation.FileValue, specURI)
 		if resolvedReference == "" {
+			// #nosec G706 -- values are escaped by sanitizeLogValue to prevent control-character log injection.
 			log.Printf("[WARN] AASENV-SERIALIZESUPPL-SKIPUNRESOLVED skipping unresolved file reference for submodel '%s' at path '%s'", sanitizeLogValue(fileLocation.SubmodelID), sanitizeLogValue(fileLocation.IDShortPath))
 			continue
 		}
@@ -562,6 +564,7 @@ func (s *SerializationAPIService) resolveSerializationSupplementaryParts(
 		attachmentContent, attachmentContentType, attachmentFileName, downloadAttachmentErr := s.persistence.SubmodelRepository.DownloadFileAttachment(fileLocation.SubmodelID, fileLocation.IDShortPath)
 		if downloadAttachmentErr != nil {
 			if common.IsErrNotFound(downloadAttachmentErr) {
+				// #nosec G706 -- values are escaped by sanitizeLogValue to prevent control-character log injection.
 				log.Printf("[WARN] AASENV-SERIALIZESUPPL-SKIPMISSING attachment not found for submodel '%s' at path '%s'", sanitizeLogValue(fileLocation.SubmodelID), sanitizeLogValue(fileLocation.IDShortPath))
 				continue
 			}
@@ -569,6 +572,7 @@ func (s *SerializationAPIService) resolveSerializationSupplementaryParts(
 		}
 
 		if len(attachmentContent) == 0 {
+			// #nosec G706 -- values are escaped by sanitizeLogValue to prevent control-character log injection.
 			log.Printf("[WARN] AASENV-SERIALIZESUPPL-SKIPEMPTY empty attachment for submodel '%s' at path '%s'", sanitizeLogValue(fileLocation.SubmodelID), sanitizeLogValue(fileLocation.IDShortPath))
 			continue
 		}
@@ -590,6 +594,7 @@ func (s *SerializationAPIService) resolveSerializationSupplementaryParts(
 		)
 		resolvedReference = ResolveAASXSerializationSupplementaryPath(resolvedReference, specURI, serializationAASXSupplementaryRoot)
 		if resolvedReference == "" {
+			// #nosec G706 -- values are escaped by sanitizeLogValue to prevent control-character log injection.
 			log.Printf("[WARN] AASENV-SERIALIZESUPPL-SKIPINVALIDTARGET skipping unresolved supplementary target for submodel '%s' at path '%s'", sanitizeLogValue(fileLocation.SubmodelID), sanitizeLogValue(fileLocation.IDShortPath))
 			continue
 		}
@@ -874,6 +879,7 @@ func (s *SerializationAPIService) resolveSerializationThumbnailParts(
 
 		resolvedThumbnailURI := NormalizeAASXPartURI(thumbnailPart.URI)
 		if resolvedThumbnailURI == "" {
+			// #nosec G706 -- values are escaped by sanitizeLogValue to prevent control-character log injection.
 			log.Printf("[WARN] AASENV-SERIALIZETHUMB-SKIPINVALIDURI skipping invalid thumbnail URI for AAS '%s'", sanitizeLogValue(aasID))
 			continue
 		}
