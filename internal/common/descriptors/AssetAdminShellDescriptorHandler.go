@@ -87,12 +87,31 @@ func InsertAssetAdministrationShellDescriptor(ctx context.Context, db *sql.DB, a
 		_ = tx.Rollback()
 		return model.AssetAdministrationShellDescriptor{}, err
 	}
+	if canSkipPostInsertReadback(ctx) {
+		return aasd, tx.Commit()
+	}
 	result, err := GetAssetAdministrationShellDescriptorByIDTx(ctx, tx, aasd.Id)
 	if err != nil {
 		_ = tx.Rollback()
 		return model.AssetAdministrationShellDescriptor{}, err
 	}
 	return result, tx.Commit()
+}
+
+// canSkipPostInsertReadback returns true for contexts where no post-insert
+// descriptor re-read is needed for ABAC enforcement or field filtering.
+func canSkipPostInsertReadback(ctx context.Context) bool {
+	queryFilter := auth.GetQueryFilter(ctx)
+	if queryFilter == nil {
+		return true
+	}
+	if len(queryFilter.Filters) > 0 {
+		return false
+	}
+	if queryFilter.Formula == nil {
+		return true
+	}
+	return auth.HasUnrestrictedFormulaForRight(ctx, grammar.RightsEnumCREATE)
 }
 
 // InsertAdministrationShellDescriptorTx performs the same insert as
