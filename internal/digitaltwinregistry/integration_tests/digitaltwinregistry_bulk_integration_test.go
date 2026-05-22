@@ -112,6 +112,29 @@ func TestBulkAASOperationsAndDescription(t *testing.T) {
 		assertDTRShellStatus(t, "urn:example:dtr:bulk-conflict", http.StatusOK, headers)
 		assertDTRShellStatus(t, "urn:example:dtr:bulk-new", http.StatusNotFound, headers)
 	})
+
+	t.Run("LookupByAssetLinkRemainsConstrainedWithABAC", func(t *testing.T) {
+		deleteAllDTRShellDescriptors(t, headers)
+
+		desc := loadDTRFixtureMap(t, "postBody/aas_shell.json")
+		desc["id"] = "urn:example:dtr:lookup-constrained"
+		desc["idShort"] = "dtrLookupConstrained"
+		setNestedSubmodelID(desc, "urn:example:dtr:lookup-constrained-sm")
+		createDTRShellDescriptor(t, desc, http.StatusCreated, headers)
+
+		adminBPNHeaders := map[string]string{
+			"Authorization": "Bearer " + token,
+			"Edc-Bpn":       "BPN_COMPANY_001",
+		}
+
+		nonMatching := loadDTRFixtureArray(t, "postBody/num1AssetLink.json")
+		nonMatchingBody := lookupShellsByAssetLink(t, nonMatching, adminBPNHeaders)
+		assertLookupResultIDs(t, nonMatchingBody)
+
+		matching := loadDTRFixtureArray(t, "postBody/num2AssetLink.json")
+		matchingBody := lookupShellsByAssetLink(t, matching, adminBPNHeaders)
+		assertLookupResultIDs(t, matchingBody, "urn:example:dtr:lookup-constrained")
+	})
 }
 
 func fetchDTRToken(t *testing.T, user, password string) string {
@@ -243,6 +266,16 @@ func loadDTRFixtureMap(t *testing.T, relativePath string) map[string]any {
 	return value
 }
 
+func loadDTRFixtureArray(t *testing.T, relativePath string) []any {
+	t.Helper()
+	path := filepath.Clean(relativePath)
+	bytesPayload, err := os.ReadFile(path)
+	require.NoError(t, err)
+	var value []any
+	require.NoError(t, json.Unmarshal(bytesPayload, &value))
+	return value
+}
+
 func deepCopyMap(input map[string]any) map[string]any {
 	raw, _ := json.Marshal(input)
 	var copied map[string]any
@@ -260,6 +293,34 @@ func setNestedSubmodelID(descriptor map[string]any, submodelID string) {
 		return
 	}
 	first["id"] = submodelID
+}
+
+func lookupShellsByAssetLink(t *testing.T, payload []any, headers map[string]string) map[string]any {
+	t.Helper()
+	status, body, _ := doDTRRequest(t, dtrNoRedirectClient, http.MethodPost, BaseURL+"/lookup/shellsByAssetLink", payload, headers)
+	require.Equal(t, http.StatusOK, status)
+	var parsed map[string]any
+	require.NoError(t, json.Unmarshal(body, &parsed))
+	return parsed
+}
+
+func assertLookupResultIDs(t *testing.T, body map[string]any, expectedIDs ...string) {
+	t.Helper()
+	resultRaw, hasResult := body["result"]
+	if len(expectedIDs) == 0 {
+		require.False(t, hasResult)
+		return
+	}
+
+	require.True(t, hasResult)
+	result, ok := resultRaw.([]any)
+	require.True(t, ok)
+	require.Len(t, result, len(expectedIDs))
+	for idx, expectedID := range expectedIDs {
+		actualID, ok := result[idx].(string)
+		require.True(t, ok)
+		require.Equal(t, expectedID, actualID)
+	}
 }
 
 func doDTRRequest(t *testing.T, client *http.Client, method string, endpoint string, payload any, headers map[string]string) (int, []byte, http.Header) {
