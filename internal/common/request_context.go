@@ -8,7 +8,7 @@ type acceptHeaderContextKey struct{}
 // WithAuthorizationHeader stores the inbound Authorization header in context.
 func WithAuthorizationHeader(ctx context.Context, authorizationHeader string) context.Context {
 	if ctx == nil {
-		panic("common.WithAuthorizationHeader: ctx must not be nil")
+		ctx = context.Background()
 	}
 
 	return context.WithValue(ctx, authorizationHeaderContextKey{}, authorizationHeader)
@@ -30,10 +30,6 @@ func AuthorizationHeaderFromContext(ctx context.Context) string {
 
 // WithAcceptHeader stores the inbound Accept header in context.
 func WithAcceptHeader(ctx context.Context, acceptHeader string) context.Context {
-	if ctx == nil {
-		panic("common.WithAcceptHeader: ctx must not be nil")
-	}
-
 	return context.WithValue(ctx, acceptHeaderContextKey{}, acceptHeader)
 }
 
