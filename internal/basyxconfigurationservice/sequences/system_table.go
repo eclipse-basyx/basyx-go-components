@@ -25,7 +25,14 @@
 
 package sequences
 
-import "fmt"
+import (
+	"database/sql"
+	"errors"
+	"fmt"
+
+	"github.com/doug-martin/goqu/v9"
+	_ "github.com/doug-martin/goqu/v9/dialect/postgres"
+)
 
 const (
 	initialSchemaVersion = "v1.0.0"
@@ -33,6 +40,7 @@ const (
 	schemaStateDirty     = "dirty"
 )
 
+// Not supported by goqu
 const createSystemTableQuery = `
 		CREATE TABLE IF NOT EXISTS basyxsystem (
 			identifier BIGSERIAL PRIMARY KEY,
@@ -41,15 +49,10 @@ const createSystemTableQuery = `
 		)
 	`
 
+// Not supported by goqu
 const ensureSystemTableStateColumnQuery = `
 		ALTER TABLE basyxsystem
 		ADD COLUMN IF NOT EXISTS state VARCHAR NOT NULL DEFAULT 'clean'
-	`
-
-const seedSystemTableQuery = `
-		INSERT INTO basyxsystem (schema_version, state)
-		SELECT $1, $2
-		WHERE NOT EXISTS (SELECT 1 FROM basyxsystem)
 	`
 
 // SystemTable ensures the schema-version table exists before schema upload and patches run.
@@ -83,7 +86,7 @@ func (st *SystemTable) Execute(stepIndex int) (int, error) {
 		return 1, fmt.Errorf("BASYXCFG-SYSTEM-ENSURESTATE: %w", err)
 	}
 
-	if _, err := st.ctx.DB.Exec(seedSystemTableQuery, initialSchemaVersion, schemaStateClean); err != nil {
+	if err := seedSystemTableIfMissing(st.ctx.DB); err != nil {
 		return 1, fmt.Errorf("BASYXCFG-SYSTEM-SEEDVERSION: %w", err)
 	}
 
@@ -94,4 +97,41 @@ func (st *SystemTable) Execute(stepIndex int) (int, error) {
 // GetDescription returns the step description for console output.
 func (st *SystemTable) GetDescription(stepIndex int) string {
 	return fmt.Sprintf("[Step %d] Initializing system table", stepIndex)
+}
+
+func seedSystemTableIfMissing(db *sql.DB) error {
+
+	existsQuery, _, err := goqu.Dialect("postgres").
+		From(goqu.T("basyxsystem")).
+		Select(goqu.C("identifier")).
+		Limit(1).
+		ToSQL()
+	if err != nil {
+		return fmt.Errorf("BASYXCFG-SYSTEM-BUILDSEEDCHECK: %w", err)
+	}
+
+	var identifier int64
+	err = db.QueryRow(existsQuery).Scan(&identifier)
+	if err == nil {
+		return nil
+	}
+	if !errors.Is(err, sql.ErrNoRows) {
+		return fmt.Errorf("BASYXCFG-SYSTEM-CHECKSEED: %w", err)
+	}
+
+	insertSQL, args, err := goqu.Dialect("postgres").
+		Insert(goqu.T("basyxsystem")).
+		Rows(goqu.Record{
+			"schema_version": initialSchemaVersion,
+			"state":          schemaStateClean,
+		}).
+		Prepared(true).
+		ToSQL()
+	if err != nil {
+		return fmt.Errorf("BASYXCFG-SYSTEM-BUILDSEEDINSERT: %w", err)
+	}
+	if _, err = db.Exec(insertSQL, args...); err != nil {
+		return fmt.Errorf("BASYXCFG-SYSTEM-INSERTSEED: %w", err)
+	}
+	return nil
 }

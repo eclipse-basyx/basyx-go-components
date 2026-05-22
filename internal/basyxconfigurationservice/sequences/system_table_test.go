@@ -73,7 +73,9 @@ func TestSystemTableExecuteSuccess(t *testing.T) {
 		WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectExec(regexp.QuoteMeta(ensureSystemTableStateColumnQuery)).
 		WillReturnResult(sqlmock.NewResult(0, 1))
-	mock.ExpectExec(regexp.QuoteMeta(seedSystemTableQuery)).
+	mock.ExpectQuery(regexp.QuoteMeta(`SELECT "identifier" FROM "basyxsystem" LIMIT 1`)).
+		WillReturnRows(sqlmock.NewRows([]string{"identifier"}))
+	mock.ExpectExec(regexp.QuoteMeta(`INSERT INTO "basyxsystem" ("schema_version", "state") VALUES ($1, $2)`)).
 		WithArgs(initialSchemaVersion, schemaStateClean).
 		WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectExec(regexp.QuoteMeta("SELECT pg_advisory_unlock($1)")).

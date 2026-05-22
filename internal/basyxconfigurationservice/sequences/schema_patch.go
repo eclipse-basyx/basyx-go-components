@@ -141,7 +141,7 @@ func (sp *SchemaPatch) getCurrentSchemaVersion() (string, error) {
 		return strings.TrimSpace(version), nil
 	}
 	if errors.Is(err, sql.ErrNoRows) {
-		if _, seedErr := sp.ctx.DB.Exec(seedSystemTableQuery, initialSchemaVersion, schemaStateClean); seedErr != nil {
+		if seedErr := seedSystemTableIfMissing(sp.ctx.DB); seedErr != nil {
 			return "", fmt.Errorf("BASYXCFG-PATCH-SEEDVERSION: %w", seedErr)
 		}
 		return initialSchemaVersion, nil

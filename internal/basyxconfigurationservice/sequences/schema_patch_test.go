@@ -91,7 +91,9 @@ func TestSchemaPatchSeedsVersionRowWhenMissing(t *testing.T) {
 		WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectQuery(regexp.QuoteMeta(`SELECT "schema_version" FROM "basyxsystem" ORDER BY "identifier" ASC LIMIT 1`)).
 		WillReturnRows(sqlmock.NewRows([]string{"schema_version"}))
-	mock.ExpectExec(regexp.QuoteMeta(seedSystemTableQuery)).
+	mock.ExpectQuery(regexp.QuoteMeta(`SELECT "identifier" FROM "basyxsystem" LIMIT 1`)).
+		WillReturnRows(sqlmock.NewRows([]string{"identifier"}))
+	mock.ExpectExec(regexp.QuoteMeta(`INSERT INTO "basyxsystem" ("schema_version", "state") VALUES ($1, $2)`)).
 		WithArgs(initialSchemaVersion, schemaStateClean).
 		WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectBegin()
