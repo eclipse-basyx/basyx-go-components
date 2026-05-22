@@ -63,8 +63,8 @@ type SubmodelDatabase struct {
 }
 
 // NewSubmodelDatabase creates a new instance of SubmodelDatabase with the provided database connection.
-func NewSubmodelDatabase(dsn string, maxOpenConnections int, maxIdleConnections int, connMaxLifetimeMinutes int, databaseSchema string, privateKey *rsa.PrivateKey, strictVerification string) (*SubmodelDatabase, error) {
-	db, err := common.InitializeDatabase(dsn, databaseSchema)
+func NewSubmodelDatabase(dsn string, maxOpenConnections int, maxIdleConnections int, connMaxLifetimeMinutes int, privateKey *rsa.PrivateKey, strictVerification string) (*SubmodelDatabase, error) {
+	db, err := common.NewDatabaseConnection(dsn)
 	if err != nil {
 		return nil, err
 	}

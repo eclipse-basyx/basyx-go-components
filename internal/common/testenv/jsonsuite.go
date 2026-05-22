@@ -226,12 +226,14 @@ func NewCheckDBIsEmptyAction(options CheckDBIsEmptyOptions) JSONStepAction {
 	}
 
 	excluded := make(map[string]struct{}, len(options.ExcludedTables))
+	// System metadata table is expected to contain one version row after schema initialization.
+	excluded["basyxsystem"] = struct{}{}
 	for _, table := range options.ExcludedTables {
 		trimmed := strings.TrimSpace(table)
 		if trimmed == "" {
 			continue
 		}
-		excluded[trimmed] = struct{}{}
+		excluded[strings.ToLower(trimmed)] = struct{}{}
 	}
 
 	return func(t *testing.T, _ *JSONSuiteRunner, _ JSONSuiteStep, _ int) {
@@ -591,7 +593,7 @@ func listNonEmptyTables(driver string, dsn string, schema string, excluded map[s
 			return nil, fmt.Errorf("TESTENV-CHECKDB-SCANTABLE: %w", scanErr)
 		}
 
-		if _, skip := excluded[table]; skip {
+		if _, skip := excluded[strings.ToLower(strings.TrimSpace(table))]; skip {
 			continue
 		}
 

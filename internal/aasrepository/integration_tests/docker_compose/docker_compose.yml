@@ -33,6 +33,8 @@ services:
     ports:
       - "6004:5004"
     depends_on:
+      basyx_configuration:
+        condition: service_completed_successfully
       db_it:
         condition: service_healthy
 
@@ -55,6 +57,26 @@ services:
     ports:
       - "6006:5004"
     command: ["/app/aasrepositoryservice", "-config", "/config/config.yaml"]
+    depends_on:
+      basyx_configuration:
+        condition: service_completed_successfully
+      db_it:
+        condition: service_healthy
+
+  basyx_configuration:
+    container_name: basyx_configuration
+    build:
+      context: ../../../..
+      dockerfile: ./cmd/basyxconfigurationservice/Dockerfile
+    environment:
+      - POSTGRES_HOST=db_it
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=admin
+      - POSTGRES_PASSWORD=admin123
+      - POSTGRES_DBNAME=basyxTestDB
+      - POSTGRES_MAXOPENCONNECTIONS=500
+      - POSTGRES_MAXIDLECONNECTIONS=500
+      - POSTGRES_CONNMAXLIFETIMEMINUTES=5
     depends_on:
       db_it:
         condition: service_healthy

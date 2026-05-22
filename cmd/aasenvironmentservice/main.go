@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"os"
 	"sync/atomic"
 	"time"
 
@@ -43,11 +42,11 @@ import (
 //go:embed openapi.yaml
 var openapiSpec embed.FS
 
-func runServer(ctx context.Context, configPath string, databaseSchema string) error {
+func runServer(ctx context.Context, configPath string) error {
 	log.Default().Println("Loading AAS Environment Service...")
 	log.Default().Println("Config Path:", configPath)
 
-	cfg, err := common.LoadConfig(configPath)
+	cfg, err := common.LoadConfig(configPath, common.NORMAL)
 	if err != nil {
 		return err
 	}
@@ -90,7 +89,11 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 
 	dsn := common.BuildPostgresDSN(cfg.Postgres)
 
-	sharedDB, err := common.InitializeDatabase(dsn, databaseSchema)
+	if err := common.ValidateSchemaVersionByDSN(dsn, common.CURRENT_DATABASE_VERSION); err != nil {
+		return err
+	}
+
+	sharedDB, err := common.NewDatabaseConnection(dsn)
 	if err != nil {
 		return err
 	}
@@ -264,20 +267,11 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 func main() {
 	ctx := context.TODO()
 	configPath := ""
-	databaseSchema := ""
 
 	flag.StringVar(&configPath, "config", "", "Path to config file")
-	flag.StringVar(&databaseSchema, "databaseSchema", "", "Path to Database Schema SQL file (overrides default)")
 	flag.Parse()
 
-	if databaseSchema != "" {
-		if _, fileError := os.ReadFile(databaseSchema); fileError != nil {
-			_, _ = fmt.Println("The specified database schema path is invalid or the file was not found.")
-			os.Exit(1)
-		}
-	}
-
-	if err := runServer(ctx, configPath, databaseSchema); err != nil {
+	if err := runServer(ctx, configPath); err != nil {
 		log.Fatalf("Server error: %v", err)
 	}
 }

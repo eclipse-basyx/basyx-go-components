@@ -5,6 +5,7 @@ on:
     paths:
       - 'cmd/**'
       - 'internal/**'
+      - 'database/**'
       - 'go.mod'
       - 'go.sum'
       - '.github/workflows/container-vuln-scan.yml'
@@ -16,6 +17,7 @@ on:
     paths:
       - 'cmd/**'
       - 'internal/**'
+      - 'database/**'
       - 'go.mod'
       - 'go.sum'
       - '.github/workflows/container-vuln-scan.yml'

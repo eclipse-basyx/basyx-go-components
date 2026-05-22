@@ -57,6 +57,8 @@ jobs:
             image: eclipsebasyx/aasrepository-go
           - name: aasxfileserverservice
             image: eclipsebasyx/aasxfileserver-go
+          - name: basyxconfigurationservice
+            image: eclipsebasyx/basyxconfigurationservice-go
     
     steps:
       - name: Checkout code

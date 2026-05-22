@@ -24,7 +24,7 @@ WORKDIR /app
 
 COPY --from=builder /app/aasenvironmentservice /app/aasenvironmentservice
 COPY --from=builder /app/cmd/aasenvironmentservice/config.yaml /config/config.yaml
-COPY --from=builder /app/basyxschema.sql /app/basyxschema.sql
+
 COPY --from=builder /app/healthprobe /bin/healthprobe
 COPY --from=builder /app/healthprobe /bin/wget
 
@@ -32,7 +32,7 @@ ENV SERVER_PORT=5004
 
 EXPOSE ${SERVER_PORT}
 
-CMD ["/app/aasenvironmentservice", "-config", "/config/config.yaml", "-databaseSchema", "/app/basyxschema.sql"]
+CMD ["/app/aasenvironmentservice", "-config", "/config/config.yaml"]
 
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD ["/bin/healthprobe"]

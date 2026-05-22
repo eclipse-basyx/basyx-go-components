@@ -78,9 +78,8 @@ func NewPostgreSQLDiscoveryBackend(
 	maxOpenConns int32,
 	maxIdleConns int,
 	connMaxLifetimeMinutes int,
-	databaseSchema string,
 ) (*PostgreSQLDiscoveryDatabase, error) {
-	db, err := common.InitializeDatabase(dsn, databaseSchema)
+	db, err := common.NewDatabaseConnection(dsn)
 	if err != nil {
 		return nil, err
 	}

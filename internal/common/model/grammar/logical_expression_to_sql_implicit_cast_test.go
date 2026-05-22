@@ -45,7 +45,7 @@ func TestLogicalExpression_ToSQL_StrValUsesTextCast(t *testing.T) {
 	if strings.Contains(sql, "::text") {
 		t.Fatalf("did not expect implicit ::text cast in SQL, got: %s", sql)
 	}
-	if !strings.Contains(sql, "= ?") {
+	if !strings.Contains(normalizePreparedPlaceholders(sql), "= ?") {
 		t.Fatalf("expected SQL to contain '= ?', got: %s", sql)
 	}
 	if !argListContains(args, "123") {

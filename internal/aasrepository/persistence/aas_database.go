@@ -61,8 +61,8 @@ func (s *AssetAdministrationShellDatabase) ExecuteInTransaction(startErrorCode s
 }
 
 // NewAssetAdministrationShellDatabase creates a new instance of AssetAdministrationShellDatabase with the provided database connection.
-func NewAssetAdministrationShellDatabase(dsn string, maxOpenConnections int, maxIdleConnections int, connMaxLifetimeMinutes int, databaseSchema string, strictVerification string) (*AssetAdministrationShellDatabase, error) {
-	db, err := common.InitializeDatabase(dsn, databaseSchema)
+func NewAssetAdministrationShellDatabase(dsn string, maxOpenConnections int, maxIdleConnections int, connMaxLifetimeMinutes int, strictVerification string) (*AssetAdministrationShellDatabase, error) {
+	db, err := common.NewDatabaseConnection(dsn)
 	if err != nil {
 		return nil, err
 	}

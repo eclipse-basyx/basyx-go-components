@@ -3,40 +3,47 @@ package common
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
-	"os"
+	"strings"
 	"time"
+
+	"github.com/doug-martin/goqu/v9"
+	_ "github.com/doug-martin/goqu/v9/dialect/postgres"
 )
 
-// InitializeDatabase establishes a PostgreSQL database connection with optional schema initialization.
+const (
+	CURRENT_DATABASE_VERSION = "v1.0.1"
+	cleanSchemaState         = "clean"
+)
+
+// NewDatabaseConnection establishes a PostgreSQL database connection.
 //
 // This function creates a database connection pool with optimized settings for high-concurrency
-// applications. It supports automatic schema loading from SQL files for database initialization.
+// applications. Database schema initialization is handled by the BaSyx configuration service.
 //
 // Connection pool settings:
-//   - MaxOpenConns: 500 (maximum concurrent connections)
-//   - MaxIdleConns: 500 (maximum idle connections in pool)
+//   - MaxOpenConns: 50 (maximum concurrent connections)
+//   - MaxIdleConns: 25 (maximum idle connections in pool)
 //   - ConnMaxLifetime: 5 minutes (connection recycling interval)
 //
 // Parameters:
 //   - dsn: PostgreSQL Data Source Name (connection string)
 //     Format: "postgres://user:password@host:port/dbname?sslmode=disable"
-//   - schemaFilePath: Path to SQL schema file for initialization.
-//     If empty, schema loading is skipped.
 //
 // Returns:
 //   - *sql.DB: Configured database connection pool
-//   - error: Error if connection fails or schema loading fails
+//   - error: Error if connection fails
 //
 // Example:
 //
 //	dsn := "postgres://admin:password@localhost:5432/basyx_db?sslmode=disable"
-//	db, err := InitializeDatabase(dsn, "schema/basyx_schema.sql")
+//	db, err := NewDatabaseConnection(dsn)
 //	if err != nil {
-//	    log.Fatal("Database initialization failed:", err)
+//	    log.Fatal("Database connection failed:", err)
 //	}
 //	defer db.Close()
-func InitializeDatabase(dsn string, schemaFilePath string) (*sql.DB, error) {
+func NewDatabaseConnection(dsn string) (*sql.DB, error) {
 	encodedDSN := NormalizePostgresDSN(dsn)
 	db, err := sql.Open("postgres", encodedDSN)
 	if err != nil {
@@ -47,24 +54,76 @@ func InitializeDatabase(dsn string, schemaFilePath string) (*sql.DB, error) {
 	db.SetMaxIdleConns(25)
 	db.SetConnMaxLifetime(time.Minute * 5)
 	if err := db.Ping(); err != nil {
+		_ = db.Close()
 		return nil, err
 	}
-	if schemaFilePath == "" {
-		_, _ = fmt.Println("No SQL Schema passed - skipping schema loading.")
-		return db, nil
-	}
-	queryString, fileError := os.ReadFile(schemaFilePath)
 
-	if fileError != nil {
-		return nil, fileError
-	}
-
-	_, dbError := db.Exec(string(queryString))
-
-	if dbError != nil {
-		return nil, dbError
-	}
 	return db, nil
+}
+
+// ValidateSchemaVersion checks whether basyxsystem is clean and matches the expected schema version.
+// Returns an error if the state/version is missing, unreadable, dirty, or does not match.
+func ValidateSchemaVersion(db *sql.DB, expectedVersion string) error {
+	if db == nil {
+		return fmt.Errorf("DB-CHECKVER-NILDB database handle is nil")
+	}
+	trimmedExpected := strings.TrimSpace(expectedVersion)
+	if trimmedExpected == "" {
+		return fmt.Errorf("DB-CHECKVER-NOEXPECTED expected version is empty")
+	}
+
+	query, _, err := goqu.Dialect("postgres").
+		From(goqu.T("basyxsystem")).
+		Select(goqu.C("schema_version"), goqu.C("state")).
+		Order(goqu.C("identifier").Asc()).
+		Limit(1).
+		ToSQL()
+	if err != nil {
+		return fmt.Errorf("DB-CHECKVER-BUILDQUERY failed to build version query: %w", err)
+	}
+
+	var actualVersion string
+	var schemaState string
+	err = db.QueryRow(query).Scan(&actualVersion, &schemaState)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return fmt.Errorf("DB-CHECKVER-NOVERSIONROW basyxsystem has no version row")
+		}
+		_, _ = fmt.Println("[ERROR] It seems that the BaSyx Configuration Service is missing or was not started before. Please see the wiki (User Documentation) on how to integrate it into your setup")
+		_, _ = fmt.Println("[ERROR] If the BaSyx Configuration Service was started before - check the database connection of the service and make sure it exited successfully")
+		return fmt.Errorf("DB-CHECKVER-READFAIL failed to read schema version: %w", err)
+	}
+
+	if strings.TrimSpace(schemaState) != cleanSchemaState {
+		return fmt.Errorf(
+			"DB-CHECKVER-DIRTYSTATE expected schema state %q but found %q",
+			cleanSchemaState,
+			strings.TrimSpace(schemaState),
+		)
+	}
+
+	if strings.TrimSpace(actualVersion) != trimmedExpected {
+		return fmt.Errorf(
+			"DB-CHECKVER-MISMATCH expected schema version %q but found %q",
+			trimmedExpected,
+			strings.TrimSpace(actualVersion),
+		)
+	}
+
+	return nil
+}
+
+// ValidateSchemaVersionByDSN opens a temporary database connection and validates the schema version.
+func ValidateSchemaVersionByDSN(dsn string, expectedVersion string) error {
+	db, err := NewDatabaseConnection(dsn)
+	if err != nil {
+		return fmt.Errorf("DB-CHECKVER-CONNECTFAIL failed to connect while validating version: %w", err)
+	}
+	defer func() {
+		_ = db.Close()
+	}()
+
+	return ValidateSchemaVersion(db, expectedVersion)
 }
 
 func StartTransaction(db *sql.DB) (*sql.Tx, func(*error), error) {
