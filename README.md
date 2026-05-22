@@ -5,15 +5,15 @@
   <img src="docu/assets/Logo_Go_light.svg" alt="BaSyx Go Logo" width="400"/>
 </div>
 
-
 # BaSyx Go Components
 
 Welcome to the BaSyx Go project! This guide is designed to help new developers onboard quickly, understand the architecture, and contribute effectively.
 
-
->We also provide a wiki at https://wiki.basyx.org with a extensive user and developer documentation.
+> [!NOTE]
+> We also provide a wiki at https://wiki.basyx.org with a extensive user and developer documentation.
 
 ## Table of Contents
+
 - [BaSyx Go Components](#basyx-go-components)
   - [Table of Contents](#table-of-contents)
   - [1. Project Overview](#1-project-overview)
@@ -52,11 +52,13 @@ The project is composed of microservices for AAS and Submodel registries, AAS an
 ## 3. Setup & Installation
 
 ### Prerequisites
+
 - Go >= 1.20
 - Docker & Docker Compose
 - PostgreSQL (for local development)
 
 ### Steps
+
 1. Clone the repository:
      ```sh
      git clone https://github.com/eclipse-basyx/basyx-go-components.git
@@ -99,7 +101,9 @@ maxOpenConnections: 500
 maxIdleConnections: 500
 connMaxLifetimeMinutes: 5
 ```
+
 Or via `.env`:
+
 ```env
 POSTGRES_MAXOPENCONNECTIONS=500
 POSTGRES_MAXIDLECONNECTIONS=500
@@ -114,6 +118,7 @@ general:
 ```
 
 This value limits the maximum accepted request body size for upload endpoints:
+
 - `POST /upload`
 - `PUT /shells/{aasIdentifier}/thumbnail`
 - `PUT /submodels/{submodelIdentifier}/submodel-elements/{idShortPath}/attachment`
@@ -163,6 +168,7 @@ See [structure.md](docu/developer/structure.md) and related files for details on
 ## 7. Common Workflows
 
 ### Build & Run
+
 - Build and run services:
     ```sh
     go run ./cmd/<service>/main.go -config ./cmd/<service>/config.yaml
@@ -170,6 +176,7 @@ See [structure.md](docu/developer/structure.md) and related files for details on
 - Use VSCode launch scripts in `.vscode/launch.json` for debugging
 
 ### Test
+
 - Run all tests:
     ```sh
     go test -v ./internal/...
@@ -180,6 +187,7 @@ See [structure.md](docu/developer/structure.md) and related files for details on
     ```
 
 ### Lint
+
 - Run linter:
     ```sh
     ./lint.sh
@@ -242,16 +250,19 @@ See [basyx-database-wiki](docu/basyx-database-wiki/) and [sql_examples](sql_exam
 ## Frequently Asked Questions
 
 **Q: How do I add a new component?**
+
 - Add main.go in `cmd/<COMPONENT_NAME>/main.go` 
 - Implement the logic in `internal/<COMPONENT_NAME>/`
 - Save and use OpenAPI specs in `cmd/<COMPONENT_NAME>/openapi.yaml`
 - Add tests in `internal/<COMPONENT_NAME>/integration_tests/`
 
 **Q: How do I handle file attachments?**
+
 - Use the File SME logic in `internal/submodelrepository/persistence/Submodel/submodelElements/FileHandler.go`
 - See integration tests for upload/download examples
 
 **Q: Where do I find API documentation?**
+
 - OpenAPI YAML files in `cmd/*/openapi.yaml` (generated copies in `pkg/*/api/openapi.yaml`)
 - GoDoc for package-level documentation
 
