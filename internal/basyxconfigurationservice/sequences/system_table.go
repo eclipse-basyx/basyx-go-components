@@ -100,7 +100,6 @@ func (st *SystemTable) GetDescription(stepIndex int) string {
 }
 
 func seedSystemTableIfMissing(db *sql.DB) error {
-
 	existsQuery, _, err := goqu.Dialect("postgres").
 		From(goqu.T("basyxsystem")).
 		Select(goqu.C("identifier")).
