@@ -252,5 +252,5 @@ jobs:
 
       - name: Image digest
         run: |
-          echo "Built and pushed mutable tag ${{ matrix.service.image }}:SNAPSHOT"
+          echo "Built and pushed ${{ matrix.service.image }}:SNAPSHOT"
           echo "Digest: ${{ steps.build.outputs.digest }}"
