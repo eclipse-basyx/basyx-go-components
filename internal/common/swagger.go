@@ -9,6 +9,7 @@ import (
 	"io/fs"
 	"log"
 	"net/http"
+	"net/url"
 	"path"
 	"regexp"
 	"strings"
@@ -80,6 +81,7 @@ type ContactConfig struct {
 var openAPIVersionRegex = regexp.MustCompile(`(?m)^\s*version:\s*V([0-9]+\.[0-9]+\.[0-9]+)`)
 var verifyPathRegex = regexp.MustCompile(`(?m)^\s*/verify:\s*$`)
 var pathsSectionRegex = regexp.MustCompile(`(?m)^paths:\s*(?:\r?\n)`)
+var firstServerURLRegex = regexp.MustCompile(`(?m)^\s*-\s*url:\s*['"]?([^'"\s]+)['"]?`)
 
 func detectPart2SchemaVersion(specContent []byte) string {
 	matches := openAPIVersionRegex.FindSubmatch(specContent)
@@ -211,7 +213,7 @@ func injectServerURL(specContent []byte, serverURL string) []byte {
 		return specContent
 	}
 
-	newServers := fmt.Sprintf("servers:\n- url: '%s'\n  description: Auto-configured server\n", serverURL)
+	newServers := fmt.Sprintf("servers:\n- url: '%s'\n  description: Auto-configured server\n", serverURLWithSpecBasePath(specContent, serverURL))
 
 	// Replace existing servers section - match from "servers:" to the next top-level key (paths:, etc.)
 	// The servers section ends when we hit a line starting with a non-space character that isn't part of the array
@@ -235,6 +237,26 @@ func injectServerURL(specContent []byte, serverURL string) []byte {
 
 	// Last resort: prepend servers section
 	return append([]byte(newServers), specContent...)
+}
+
+func serverURLWithSpecBasePath(specContent []byte, serverURL string) string {
+	configuredURL, err := url.Parse(serverURL)
+	if err != nil || configuredURL.Path != "" && configuredURL.Path != "/" {
+		return serverURL
+	}
+
+	matches := firstServerURLRegex.FindSubmatch(specContent)
+	if len(matches) < 2 {
+		return serverURL
+	}
+
+	specURL, err := url.Parse(string(matches[1]))
+	if err != nil || specURL.Path == "" || specURL.Path == "/" {
+		return serverURL
+	}
+
+	configuredURL.Path = specURL.Path
+	return configuredURL.String()
 }
 
 // injectContact modifies the OpenAPI spec to use the configured contact information
