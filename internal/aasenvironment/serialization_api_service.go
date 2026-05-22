@@ -50,7 +50,6 @@ import (
 	aasx "github.com/aas-core-works/aas-package3-golang"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
-	openapi "github.com/eclipse-basyx/basyx-go-components/pkg/aasenvironment/go"
 )
 
 const (
@@ -83,27 +82,35 @@ type serializationThumbnailPart struct {
 	Content     []byte
 }
 
-// AASEnvironmentSerializationAPIAPIService implements SerializationAPIAPIServicer.
-type AASEnvironmentSerializationAPIAPIService struct {
+// SerializationFileDownload defines a binary payload response for serialization downloads.
+type SerializationFileDownload struct {
+	Content     []byte
+	ContentType string
+	Filename    string
+}
+
+// SerializationAPIService implements SerializationAPIAPIServicer.
+type SerializationAPIService struct {
 	persistence *Persistence
 }
 
-// NewAASEnvSerializationAPIAPIService creates a serialization service bound to
+// NewSerializationAPIService creates a serialization service bound to
 // the provided persistence layer.
 //
-// The service delegates all data retrieval to repository backends and only
-// coordinates loading, negotiation, and payload serialization.
-func NewAASEnvSerializationAPIAPIService(persistence *Persistence) *AASEnvironmentSerializationAPIAPIService {
-	return &AASEnvironmentSerializationAPIAPIService{persistence: persistence}
+// The service coordinates environment loading, media-type negotiation, and
+// output packaging, while delegating repository access to persistence backends.
+func NewSerializationAPIService(persistence *Persistence) *SerializationAPIService {
+	return &SerializationAPIService{persistence: persistence}
 }
 
 // GenerateSerializationByIds builds an environment from the requested AAS and
 // submodel identifiers and returns it as a downloadable file.
 //
-// The method negotiates the response media type from the request context,
-// resolves thumbnail and supplementary package parts for AASX serializations,
-// and maps all domain errors to API responses with operation metadata.
-func (s *AASEnvironmentSerializationAPIAPIService) GenerateSerializationByIds(ctx context.Context, aasIds []string, submodelIds []string, includeConceptDescriptions bool) (model.ImplResponse, error) {
+// GenerateSerializationByIds negotiates the response media type from the
+// request context, resolves thumbnail and supplementary package parts for AASX
+// serializations, and maps domain errors to API responses with operation
+// metadata.
+func (s *SerializationAPIService) GenerateSerializationByIds(ctx context.Context, aasIds []string, submodelIds []string, includeConceptDescriptions bool) (model.ImplResponse, error) {
 	const operation = "GenerateSerializationByIds"
 
 	environment, loadErr := s.loadEnvironment(ctx, aasIds, submodelIds, includeConceptDescriptions)
@@ -131,7 +138,7 @@ func (s *AASEnvironmentSerializationAPIAPIService) GenerateSerializationByIds(ct
 		return errorResponseForOperation(serializeErr, operation, "SerializeEnvironment"), nil
 	}
 
-	return model.Response(http.StatusOK, openapi.FileDownload{
+	return model.Response(http.StatusOK, SerializationFileDownload{
 		Content:     content,
 		ContentType: serializationContentType,
 		Filename:    fileName,
@@ -144,7 +151,7 @@ func (s *AASEnvironmentSerializationAPIAPIService) GenerateSerializationByIds(ct
 // It decodes externally encoded identifiers, loads AAS, submodels, and
 // optionally concept descriptions, and returns an environment object suitable
 // for downstream serialization.
-func (s *AASEnvironmentSerializationAPIAPIService) loadEnvironment(ctx context.Context, aasIDs []string, submodelIDs []string, includeConceptDescriptions bool) (aastypes.IEnvironment, error) {
+func (s *SerializationAPIService) loadEnvironment(ctx context.Context, aasIDs []string, submodelIDs []string, includeConceptDescriptions bool) (aastypes.IEnvironment, error) {
 	if s == nil || s.persistence == nil {
 		return nil, common.NewInternalServerError("AASENV-LOADENV-NILSERVICE service must not be nil")
 	}
@@ -187,7 +194,7 @@ func (s *AASEnvironmentSerializationAPIAPIService) loadEnvironment(ctx context.C
 //
 // Pagination uses a fixed page size and continues until the backend cursor is
 // empty.
-func (s *AASEnvironmentSerializationAPIAPIService) loadAssetAdministrationShells(ctx context.Context, ids []string) ([]aastypes.IAssetAdministrationShell, error) {
+func (s *SerializationAPIService) loadAssetAdministrationShells(ctx context.Context, ids []string) ([]aastypes.IAssetAdministrationShell, error) {
 	if len(ids) > 0 {
 		result := make([]aastypes.IAssetAdministrationShell, 0, len(ids))
 		for _, id := range ids {
@@ -223,7 +230,7 @@ func (s *AASEnvironmentSerializationAPIAPIService) loadAssetAdministrationShells
 //
 // Both explicit and paginated loads populate deep submodel element trees to
 // ensure complete serialization content.
-func (s *AASEnvironmentSerializationAPIAPIService) loadSubmodels(ctx context.Context, ids []string) ([]aastypes.ISubmodel, error) {
+func (s *SerializationAPIService) loadSubmodels(ctx context.Context, ids []string) ([]aastypes.ISubmodel, error) {
 	if len(ids) > 0 {
 		result := make([]aastypes.ISubmodel, 0, len(ids))
 		for _, id := range ids {
@@ -278,7 +285,7 @@ func (s *AASEnvironmentSerializationAPIAPIService) loadSubmodels(ctx context.Con
 // The function returns nil without querying repositories when
 // includeConceptDescriptions is false, and otherwise pages through all concept
 // descriptions.
-func (s *AASEnvironmentSerializationAPIAPIService) loadConceptDescriptions(ctx context.Context, includeConceptDescriptions bool) ([]aastypes.IConceptDescription, error) {
+func (s *SerializationAPIService) loadConceptDescriptions(ctx context.Context, includeConceptDescriptions bool) ([]aastypes.IConceptDescription, error) {
 	if !includeConceptDescriptions {
 		return nil, nil
 	}
@@ -302,7 +309,7 @@ func (s *AASEnvironmentSerializationAPIAPIService) loadConceptDescriptions(ctx c
 }
 
 // serializeEnvironment transforms the in-memory environment to the negotiated
-// output format and returns payload bytes together with a suggested filename.
+// output format and returns payload bytes with a suggested filename.
 //
 // JSON and XML are emitted directly. AASX variants are delegated to AASX
 // packaging helpers that can embed thumbnails and supplementary parts.
@@ -507,10 +514,10 @@ func serializeEnvironmentToAASXPackage(
 // for AASX serialization requests.
 //
 // It resolves internal file references from AAS file elements, downloads
-// attachments from the submodel repository, rewrites file element paths to the
+// attachments from the submodel repository, rewrites file element values to
 // packaged targets, and skips unresolved, external, empty, missing, or
 // duplicate entries.
-func (s *AASEnvironmentSerializationAPIAPIService) resolveSerializationSupplementaryParts(
+func (s *SerializationAPIService) resolveSerializationSupplementaryParts(
 	ctx context.Context,
 	environment aastypes.IEnvironment,
 	serializationContentType string,
@@ -826,7 +833,7 @@ func decodeIdentifiers(ids []string, codePrefix string) ([]string, error) {
 // error. For AASX requests it resolves all non-empty thumbnails for requested
 // or serialized AAS entries, rewrites each AAS defaultThumbnail reference to a
 // deterministic packaged target path, and returns all package parts.
-func (s *AASEnvironmentSerializationAPIAPIService) resolveSerializationThumbnailParts(
+func (s *SerializationAPIService) resolveSerializationThumbnailParts(
 	ctx context.Context,
 	requestedAASIDs []string,
 	environment aastypes.IEnvironment,
@@ -947,7 +954,7 @@ func deduplicateTrimmedIdentifiers(values []string) []string {
 //
 // Not found and empty-content cases are treated as "not available" without an
 // error.
-func (s *AASEnvironmentSerializationAPIAPIService) loadSerializationThumbnailByAASID(ctx context.Context, aasID string) ([]byte, string, string, bool, error) {
+func (s *SerializationAPIService) loadSerializationThumbnailByAASID(ctx context.Context, aasID string) ([]byte, string, string, bool, error) {
 	thumbnailContent, thumbnailContentType, thumbnailFileName, _, thumbnailErr := s.persistence.AASRepository.GetThumbnailByAASID(ctx, aasID)
 	if thumbnailErr != nil {
 		if common.IsErrNotFound(thumbnailErr) {

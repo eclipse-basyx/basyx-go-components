@@ -56,7 +56,6 @@ import (
 	smregistrydb "github.com/eclipse-basyx/basyx-go-components/internal/smregistry/persistence"
 	submodelrepositoryapi "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/api"
 	submodelrepositorydb "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence"
-	aasenvironmentopenapi "github.com/eclipse-basyx/basyx-go-components/pkg/aasenvironment/go"
 	aasregistryopenapi "github.com/eclipse-basyx/basyx-go-components/pkg/aasregistryapi"
 	aasrepositoryopenapi "github.com/eclipse-basyx/basyx-go-components/pkg/aasrepositoryapi/go"
 	cdropenapi "github.com/eclipse-basyx/basyx-go-components/pkg/conceptdescriptionrepositoryapi/go"
@@ -196,7 +195,7 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 		discoveryapi.NewAssetAdministrationShellBasicDiscoveryAPIAPIService(*discoveryPersistence),
 		persistence,
 	)
-	serializationService := aasenvironment.NewAASEnvSerializationAPIAPIService(persistence)
+	serializationService := aasenvironment.NewSerializationAPIService(persistence)
 	sharedBulkManager := asyncbulk.NewManager("AASENV-BULK", 0)
 	aasBulkSvc := aasregistryapi.NewBulkService(customAASRegistry, sharedBulkManager)
 	smBulkSvc := smregistryapi.NewBulkService(customSMRegistry, sharedBulkManager)
@@ -210,7 +209,6 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 	cdrCtrl := cdropenapi.NewConceptDescriptionRepositoryAPIAPIController(customCDRepository, "", cfg.Server.StrictVerification)
 	discoveryCtrl := discoveryopenapi.NewAssetAdministrationShellBasicDiscoveryAPIAPIController(customDiscovery)
 	descriptionCtrl := discoveryopenapi.NewDescriptionAPIAPIController(aasenvironment.NewDescriptionService())
-	serializationCtrl := aasenvironmentopenapi.NewSerializationAPIAPIController(serializationService, "")
 
 	base := common.NormalizeBasePath(cfg.Server.ContextPath)
 	apiRouter := chi.NewRouter()
@@ -241,9 +239,6 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 	for _, rt := range descriptionCtrl.Routes() {
 		apiRouter.Method(rt.Method, rt.Pattern, rt.HandlerFunc)
 	}
-	for _, rt := range serializationCtrl.Routes() {
-		apiRouter.Method(rt.Method, rt.Pattern, rt.HandlerFunc)
-	}
 	aasBulkHandler.RegisterRoutes(apiRouter, true)
 	smBulkHandler.RegisterRoutes(apiRouter, false)
 
@@ -252,6 +247,7 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 	// Register /upload endpoint
 	uploadService := aasenvironment.NewUploadAPIService(persistence, customAASRepository, customSMRepository)
 	aasenvironment.RegisterUploadAPI(apiRouter, uploadService, cfg.General.UploadMaxSizeBytes)
+	aasenvironment.RegisterSerializationAPI(apiRouter, serializationService)
 
 	addr := fmt.Sprintf("0.0.0.0:%d", cfg.Server.Port)
 	log.Printf("AAS Environment Service listening on %s (contextPath=%q)\n", addr, cfg.Server.ContextPath)
