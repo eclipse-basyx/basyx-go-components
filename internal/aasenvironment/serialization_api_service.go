@@ -1,5 +1,30 @@
-// Package api provides the AAS environment serialization API service.
-package api
+/*******************************************************************************
+* Copyright (C) 2026 the Eclipse BaSyx Authors and Fraunhofer IESE
+*
+* Permission is hereby granted, free of charge, to any person obtaining
+* a copy of this software and associated documentation files (the
+* "Software"), to deal in the Software without restriction, including
+* without limitation the rights to use, copy, modify, merge, publish,
+* distribute, sublicense, and/or sell copies of the Software, and to
+* permit persons to whom the Software is furnished to do so, subject to
+* the following conditions:
+*
+* The above copyright notice and this permission notice shall be
+* included in all copies or substantial portions of the Software.
+*
+* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+* NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
+* LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+* OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
+* WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+*
+* SPDX-License-Identifier: MIT
+******************************************************************************/
+
+// Package aasenvironment provides the AAS environment serialization API service.
+package aasenvironment
 
 import (
 	"bytes"
@@ -23,7 +48,6 @@ import (
 	aastypes "github.com/aas-core-works/aas-core3.1-golang/types"
 	aasxmlization "github.com/aas-core-works/aas-core3.1-golang/xmlization"
 	aasx "github.com/aas-core-works/aas-package3-golang"
-	"github.com/eclipse-basyx/basyx-go-components/internal/aasenvironment"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	openapi "github.com/eclipse-basyx/basyx-go-components/pkg/aasenvironment/go"
@@ -61,7 +85,7 @@ type serializationThumbnailPart struct {
 
 // AASEnvironmentSerializationAPIAPIService implements SerializationAPIAPIServicer.
 type AASEnvironmentSerializationAPIAPIService struct {
-	persistence *aasenvironment.Persistence
+	persistence *Persistence
 }
 
 // NewAASEnvSerializationAPIAPIService creates a serialization service bound to
@@ -69,7 +93,7 @@ type AASEnvironmentSerializationAPIAPIService struct {
 //
 // The service delegates all data retrieval to repository backends and only
 // coordinates loading, negotiation, and payload serialization.
-func NewAASEnvSerializationAPIAPIService(persistence *aasenvironment.Persistence) *AASEnvironmentSerializationAPIAPIService {
+func NewAASEnvSerializationAPIAPIService(persistence *Persistence) *AASEnvironmentSerializationAPIAPIService {
 	return &AASEnvironmentSerializationAPIAPIService{persistence: persistence}
 }
 
@@ -512,17 +536,17 @@ func (s *AASEnvironmentSerializationAPIAPIService) resolveSerializationSupplemen
 		return nil, common.NewInternalServerError("AASENV-SERIALIZESUPPL-PARSESPECURI " + parseSpecURIErr.Error())
 	}
 
-	fileLocations := aasenvironment.CollectAASXFileElementLocations(environment)
+	fileLocations := CollectAASXFileElementLocations(environment)
 	supplementaryParts := make([]serializationSupplementaryPart, 0, len(fileLocations))
 	seenSupplementaries := make(map[string]struct{}, len(fileLocations))
 
 	for _, fileLocation := range fileLocations {
-		if aasenvironment.IsExternalAASXReference(fileLocation.FileValue) {
+		if IsExternalAASXReference(fileLocation.FileValue) {
 			log.Printf("[WARN] AASENV-SERIALIZESUPPL-SKIPEXTERNAL skipping external file reference for submodel '%s' at path '%s'", fileLocation.SubmodelID, fileLocation.IDShortPath)
 			continue
 		}
 
-		resolvedReference := aasenvironment.ResolveAASXReferenceAgainstSpec(fileLocation.FileValue, specURI)
+		resolvedReference := ResolveAASXReferenceAgainstSpec(fileLocation.FileValue, specURI)
 		if resolvedReference == "" {
 			log.Printf("[WARN] AASENV-SERIALIZESUPPL-SKIPUNRESOLVED skipping unresolved file reference for submodel '%s' at path '%s'", fileLocation.SubmodelID, fileLocation.IDShortPath)
 			continue
@@ -557,7 +581,7 @@ func (s *AASEnvironmentSerializationAPIAPIService) resolveSerializationSupplemen
 			fileLocation.SubmodelID,
 			fileLocation.IDShortPath,
 		)
-		resolvedReference = aasenvironment.ResolveAASXSerializationSupplementaryPath(resolvedReference, specURI, serializationAASXSupplementaryRoot)
+		resolvedReference = ResolveAASXSerializationSupplementaryPath(resolvedReference, specURI, serializationAASXSupplementaryRoot)
 		if resolvedReference == "" {
 			log.Printf("[WARN] AASENV-SERIALIZESUPPL-SKIPINVALIDTARGET skipping unresolved supplementary target for submodel '%s' at path '%s'", fileLocation.SubmodelID, fileLocation.IDShortPath)
 			continue
@@ -632,7 +656,7 @@ func ensureSupplementaryReferenceFileExtension(reference, attachmentFileName, co
 		return trimmedReference
 	}
 
-	normalizedPath := aasenvironment.NormalizeAASXPartURI(parsedReference)
+	normalizedPath := NormalizeAASXPartURI(parsedReference)
 	exportFileName := supplementaryExportFileName(normalizedPath, attachmentFileName, contentType, submodelID, idShortPath)
 	if exportFileName == "" {
 		return normalizedPath
@@ -841,7 +865,7 @@ func (s *AASEnvironmentSerializationAPIAPIService) resolveSerializationThumbnail
 			return nil, common.NewInternalServerError("AASENV-SERIALIZETHUMB-BUILDPART " + buildPartErr.Error())
 		}
 
-		resolvedThumbnailURI := aasenvironment.NormalizeAASXPartURI(thumbnailPart.URI)
+		resolvedThumbnailURI := NormalizeAASXPartURI(thumbnailPart.URI)
 		if resolvedThumbnailURI == "" {
 			log.Printf("[WARN] AASENV-SERIALIZETHUMB-SKIPINVALIDURI skipping invalid thumbnail URI for AAS '%s'", aasID)
 			continue

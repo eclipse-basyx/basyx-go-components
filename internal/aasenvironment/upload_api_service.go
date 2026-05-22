@@ -397,7 +397,7 @@ func parseAASXMLInstance(specContent []byte, sourceLabel string) (aastypes.IClas
 	if adaptationErr != nil {
 		retryFailures = append(retryFailures, fmt.Sprintf("namespace adaptation failed: %v", adaptationErr))
 	} else if namespaceAdapted {
-		sanitizedSourceLabel := sanitizeLogValue(strings.TrimSpace(sourceLabel))
+		sanitizedSourceLabel := sanitizeUploadLogValue(strings.TrimSpace(sourceLabel))
 		if sanitizedSourceLabel == "" {
 			sanitizedSourceLabel = "unknown"
 		}
@@ -405,7 +405,7 @@ func parseAASXMLInstance(specContent []byte, sourceLabel string) (aastypes.IClas
 		log.Printf(
 			"[WARN] AASENV-PARSEAASX-NAMESPACEADAPTED source='%s' adapted legacy AAS namespace to '%s' for backward compatibility",
 			sanitizedSourceLabel,
-			sanitizeLogValue(currentAASNamespace),
+			sanitizeUploadLogValue(currentAASNamespace),
 		)
 		adaptedRetried, adaptedRetryErr := aasxmlization.Unmarshal(xml.NewDecoder(bytes.NewReader(adaptedContent)))
 		if adaptedRetryErr == nil {
@@ -766,7 +766,7 @@ func (s *uploadAPIService) uploadSupplementaryFiles(
 		}
 
 		if !matched {
-			supplementaryURIForLog := sanitizeLogValue(normalizePartURI(relationship.Supplementary.URI))
+			supplementaryURIForLog := sanitizeUploadLogValue(normalizePartURI(relationship.Supplementary.URI))
 			// #nosec G706 -- value is sanitized to strip CR/LF control characters before logging.
 			log.Printf("[WARN] AASENV-UPLDSUPPL-NOMATCH no File element path matched supplementary %q", supplementaryURIForLog)
 		}
@@ -1109,7 +1109,7 @@ func closeAndRemoveTempFile(tempFile *os.File) {
 	_ = os.Remove(tempFileName)
 }
 
-func sanitizeLogValue(value string) string {
+func sanitizeUploadLogValue(value string) string {
 	sanitized := strings.ReplaceAll(value, "\r", "")
 	sanitized = strings.ReplaceAll(sanitized, "\n", "")
 	return sanitized
