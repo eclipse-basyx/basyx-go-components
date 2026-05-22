@@ -1,18 +1,43 @@
-package steps
+/*******************************************************************************
+* Copyright (C) 2026 the Eclipse BaSyx Authors and Fraunhofer IESE
+*
+* Permission is hereby granted, free of charge, to any person obtaining
+* a copy of this software and associated documentation files (the
+* "Software"), to deal in the Software without restriction, including
+* without limitation the rights to use, copy, modify, merge, publish,
+* distribute, sublicense, and/or sell copies of the Software, and to
+* permit persons to whom the Software is furnished to do so, subject to
+* the following conditions:
+*
+* The above copyright notice and this permission notice shall be
+* included in all copies or substantial portions of the Software.
+*
+* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+* NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
+* LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+* OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
+* WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+*
+* SPDX-License-Identifier: MIT
+******************************************************************************/
+
+package sequences
 
 import "fmt"
 
-const initialDatabaseVersion = "v1.0.0"
+const initialSchemaVersion = "v1.0.0"
 
 const createSystemTableQuery = `
 		CREATE TABLE IF NOT EXISTS basyxsystem (
 			identifier BIGSERIAL PRIMARY KEY,
-			database_version VARCHAR NOT NULL DEFAULT 'v1.0.0'
+			schema_version VARCHAR NOT NULL DEFAULT 'v1.0.0'
 		)
 	`
 
 const seedSystemTableQuery = `
-		INSERT INTO basyxsystem (database_version)
+		INSERT INTO basyxsystem (schema_version)
 		SELECT $1
 		WHERE NOT EXISTS (SELECT 1 FROM basyxsystem)
 	`
@@ -44,7 +69,7 @@ func (st *SystemTable) Execute(stepIndex int) (int, error) {
 		return 1, fmt.Errorf("BASYXCFG-SYSTEM-CREATETABLE: %w", err)
 	}
 
-	if _, err := st.ctx.DB.Exec(seedSystemTableQuery, initialDatabaseVersion); err != nil {
+	if _, err := st.ctx.DB.Exec(seedSystemTableQuery, initialSchemaVersion); err != nil {
 		return 1, fmt.Errorf("BASYXCFG-SYSTEM-SEEDVERSION: %w", err)
 	}
 

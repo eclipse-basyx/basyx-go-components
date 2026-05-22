@@ -33,6 +33,11 @@ jobs:
       IMAGE_NAME: aasregistry-go
       CONFIG_IMAGE_NAME: basyxconfigurationservice-go
       SERVICE_PORT: 8080
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: admin123
+      POSTGRES_DB: basyxTestDB
+      POSTGRES_HOST: postgres-smoke
+      POSTGRES_PORT: 5432
 
     steps:
       - name: Checkout code
@@ -72,13 +77,13 @@ jobs:
           podman network create basyx-smoke
 
           podman run -d --name postgres-smoke --network basyx-smoke \
-            -e POSTGRES_USER=admin \
-            -e POSTGRES_PASSWORD=admin123 \
-            -e POSTGRES_DB=basyxTestDB \
+            -e POSTGRES_USER=${POSTGRES_USER} \
+            -e POSTGRES_PASSWORD=${POSTGRES_PASSWORD} \
+            -e POSTGRES_DB=${POSTGRES_DB} \
             postgres:18
 
           for i in $(seq 1 30); do
-            if podman exec postgres-smoke pg_isready -U admin -d basyxTestDB >/dev/null 2>&1; then
+            if podman exec postgres-smoke pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB} >/dev/null 2>&1; then
               echo "Postgres is ready"
               break
             fi
@@ -91,11 +96,11 @@ jobs:
           done
 
           podman run --name config-smoke --network basyx-smoke \
-            -e POSTGRES_HOST=postgres-smoke \
-            -e POSTGRES_PORT=5432 \
-            -e POSTGRES_USER=admin \
-            -e POSTGRES_PASSWORD=admin123 \
-            -e POSTGRES_DBNAME=basyxTestDB \
+            -e POSTGRES_HOST=${POSTGRES_HOST} \
+            -e POSTGRES_PORT=${POSTGRES_PORT} \
+            -e POSTGRES_USER=${POSTGRES_USER} \
+            -e POSTGRES_PASSWORD=${POSTGRES_PASSWORD} \
+            -e POSTGRES_DBNAME=${POSTGRES_DB} \
             -e POSTGRES_MAXOPENCONNECTIONS=50 \
             -e POSTGRES_MAXIDLECONNECTIONS=50 \
             -e POSTGRES_CONNMAXLIFETIMEMINUTES=5 \
@@ -114,11 +119,11 @@ jobs:
             -e CORS_ALLOWEDHEADERS='*' \
             -e CORS_ALLOWEDCREDENTIALS=true \
             -e CORS_ALLOWEDMETHODS='GET,POST,PUT,PATCH,DELETE,OPTIONS' \
-            -e POSTGRES_HOST=postgres-smoke \
-            -e POSTGRES_PORT=5432 \
-            -e POSTGRES_USER=admin \
-            -e POSTGRES_PASSWORD=admin123 \
-            -e POSTGRES_DBNAME=basyxTestDB \
+            -e POSTGRES_HOST=${POSTGRES_HOST} \
+            -e POSTGRES_PORT=${POSTGRES_PORT} \
+            -e POSTGRES_USER=${POSTGRES_USER} \
+            -e POSTGRES_PASSWORD=${POSTGRES_PASSWORD} \
+            -e POSTGRES_DBNAME=${POSTGRES_DB} \
             -e POSTGRES_MAXOPENCONNECTIONS=50 \
             -e POSTGRES_MAXIDLECONNECTIONS=50 \
             -e POSTGRES_CONNMAXLIFETIMEMINUTES=5 \

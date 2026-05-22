@@ -1,4 +1,29 @@
-package steps
+/*******************************************************************************
+* Copyright (C) 2026 the Eclipse BaSyx Authors and Fraunhofer IESE
+*
+* Permission is hereby granted, free of charge, to any person obtaining
+* a copy of this software and associated documentation files (the
+* "Software"), to deal in the Software without restriction, including
+* without limitation the rights to use, copy, modify, merge, publish,
+* distribute, sublicense, and/or sell copies of the Software, and to
+* permit persons to whom the Software is furnished to do so, subject to
+* the following conditions:
+*
+* The above copyright notice and this permission notice shall be
+* included in all copies or substantial portions of the Software.
+*
+* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+* NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
+* LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+* OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
+* WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+*
+* SPDX-License-Identifier: MIT
+******************************************************************************/
+
+package sequences
 
 import (
 	"fmt"
@@ -9,17 +34,6 @@ import (
 const (
 	schemaFilePath       = "/app/base.sql"
 	schemaAdvisoryLockID = int64(860424611912345001)
-	baseSchemaTableCount = 4
-	baseSchemaCheckQuery = `
-		SELECT COUNT(*)
-		FROM (VALUES
-			('submodel'),
-			('aas_descriptor'),
-			('concept_description'),
-			('aasx_package')
-		) AS expected(table_name)
-		WHERE to_regclass('public.' || expected.table_name) IS NOT NULL
-	`
 )
 
 // SchemaUpload uploads the SQL schema to the configured PostgreSQL database.
@@ -45,15 +59,6 @@ func (su *SchemaUpload) Execute(stepIndex int) (int, error) {
 	defer func() {
 		_, _ = su.ctx.DB.Exec("SELECT pg_advisory_unlock($1)", schemaAdvisoryLockID)
 	}()
-
-	alreadyInitialized, err := su.isBaseSchemaInitialized()
-	if err != nil {
-		return 1, err
-	}
-	if alreadyInitialized {
-		_, _ = fmt.Printf("[Step %d] Base schema already initialized, skipping upload\n", stepIndex)
-		return 0, nil
-	}
 
 	schemaToLoad, err := su.resolveSchemaPath()
 	if err != nil {
@@ -94,15 +99,6 @@ func (su *SchemaUpload) resolveSchemaPath() (string, error) {
 	}
 
 	return schemaToLoad, nil
-}
-
-func (su *SchemaUpload) isBaseSchemaInitialized() (bool, error) {
-	var existingTableCount int
-	err := su.ctx.DB.QueryRow(baseSchemaCheckQuery).Scan(&existingTableCount)
-	if err != nil {
-		return false, fmt.Errorf("BASYXCFG-SCHEMA-CHECK: %w", err)
-	}
-	return existingTableCount == baseSchemaTableCount, nil
 }
 
 // GetDescription returns the step description for console output.

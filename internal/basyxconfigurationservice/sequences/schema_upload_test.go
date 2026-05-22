@@ -1,4 +1,29 @@
-package steps
+/*******************************************************************************
+* Copyright (C) 2026 the Eclipse BaSyx Authors and Fraunhofer IESE
+*
+* Permission is hereby granted, free of charge, to any person obtaining
+* a copy of this software and associated documentation files (the
+* "Software"), to deal in the Software without restriction, including
+* without limitation the rights to use, copy, modify, merge, publish,
+* distribute, sublicense, and/or sell copies of the Software, and to
+* permit persons to whom the Software is furnished to do so, subject to
+* the following conditions:
+*
+* The above copyright notice and this permission notice shall be
+* included in all copies or substantial portions of the Software.
+*
+* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+* NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
+* LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+* OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
+* WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+*
+* SPDX-License-Identifier: MIT
+******************************************************************************/
+
+package sequences
 
 import (
 	"os"
@@ -47,9 +72,6 @@ func TestSchemaUploadExecuteReturnsReadFileError(t *testing.T) {
 		WithArgs(schemaAdvisoryLockID).
 		WillReturnResult(sqlmock.NewResult(0, 1))
 
-	mock.ExpectQuery(regexp.QuoteMeta(baseSchemaCheckQuery)).
-		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(0))
-
 	mock.ExpectExec(regexp.QuoteMeta("SELECT pg_advisory_unlock($1)")).
 		WithArgs(schemaAdvisoryLockID).
 		WillReturnResult(sqlmock.NewResult(0, 1))
@@ -85,9 +107,6 @@ func TestSchemaUploadExecuteSuccess(t *testing.T) {
 		WithArgs(schemaAdvisoryLockID).
 		WillReturnResult(sqlmock.NewResult(0, 1))
 
-	mock.ExpectQuery(regexp.QuoteMeta(baseSchemaCheckQuery)).
-		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(0))
-
 	mock.ExpectExec(regexp.QuoteMeta(schema)).
 		WillReturnResult(sqlmock.NewResult(0, 1))
 
@@ -111,7 +130,7 @@ func TestSchemaUploadExecuteSuccess(t *testing.T) {
 	}
 }
 
-func TestSchemaUploadExecuteSkipsWhenBaseSchemaAlreadyInitialized(t *testing.T) {
+func TestSchemaUploadExecuteLoadsBaseSchemaFromDirectory(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	if err != nil {
 		t.Fatalf("sqlmock.New() failed: %v", err)
@@ -120,22 +139,25 @@ func TestSchemaUploadExecuteSkipsWhenBaseSchemaAlreadyInitialized(t *testing.T) 
 		_ = db.Close()
 	}()
 
-	// Schema path should not matter because upload is skipped before file read.
-	schemaPath := t.TempDir()
+	schemaDir := t.TempDir()
+	schemaSQL := "CREATE TABLE IF NOT EXISTS loaded_from_directory (id INT PRIMARY KEY);"
+	if err := os.WriteFile(schemaDir+"/base.sql", []byte(schemaSQL), 0o600); err != nil {
+		t.Fatalf("write base schema: %v", err)
+	}
 
 	mock.ExpectExec(regexp.QuoteMeta("SELECT pg_advisory_lock($1)")).
 		WithArgs(schemaAdvisoryLockID).
 		WillReturnResult(sqlmock.NewResult(0, 1))
 
-	mock.ExpectQuery(regexp.QuoteMeta(baseSchemaCheckQuery)).
-		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(baseSchemaTableCount))
+	mock.ExpectExec(regexp.QuoteMeta(schemaSQL)).
+		WillReturnResult(sqlmock.NewResult(0, 1))
 
 	mock.ExpectExec(regexp.QuoteMeta("SELECT pg_advisory_unlock($1)")).
 		WithArgs(schemaAdvisoryLockID).
 		WillReturnResult(sqlmock.NewResult(0, 1))
 
 	ctx := &ExecutionContext{DB: db}
-	step := NewSchemaUpload(ctx, schemaPath)
+	step := NewSchemaUpload(ctx, schemaDir)
 
 	statusCode, execErr := step.Execute(1)
 	if execErr != nil {

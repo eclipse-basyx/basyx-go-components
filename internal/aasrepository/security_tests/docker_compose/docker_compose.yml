@@ -37,8 +37,8 @@ services:
     ports:
       - "6004:5004"
     depends_on:
-      db:
-        condition: service_healthy
+      basyx_configuration:
+        condition: service_completed_successfully
       keycloak-healthcheck:
         condition: service_completed_successfully
     volumes:

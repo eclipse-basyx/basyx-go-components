@@ -87,7 +87,7 @@ func runServer(ctx context.Context, configPath string) error {
 	// === Database ===
 	dsn := common.BuildPostgresDSN(cfg.Postgres)
 
-	if err := common.ValidateDatabaseVersionByDSN(dsn, common.CURRENT_DATABASE_VERSION); err != nil {
+	if err := common.ValidateSchemaVersionByDSN(dsn, common.CURRENT_DATABASE_VERSION); err != nil {
 		return err
 	}
 

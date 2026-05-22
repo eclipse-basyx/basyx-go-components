@@ -6,7 +6,7 @@ import (
 	sqlmock "github.com/DATA-DOG/go-sqlmock"
 )
 
-func TestValidateDatabaseVersion(t *testing.T) {
+func TestValidateSchemaVersion(t *testing.T) {
 	t.Run("matches expected version", func(t *testing.T) {
 		db, mock, err := sqlmock.New()
 		if err != nil {
@@ -16,10 +16,10 @@ func TestValidateDatabaseVersion(t *testing.T) {
 			_ = db.Close()
 		}()
 
-		mock.ExpectQuery("SELECT database_version").
-			WillReturnRows(sqlmock.NewRows([]string{"database_version"}).AddRow("v1.0.1"))
+		mock.ExpectQuery(`SELECT "schema_version" FROM "basyxsystem"`).
+			WillReturnRows(sqlmock.NewRows([]string{"schema_version"}).AddRow(CURRENT_DATABASE_VERSION))
 
-		if err = ValidateDatabaseVersion(db, "v1.0.1"); err != nil {
+		if err = ValidateSchemaVersion(db, CURRENT_DATABASE_VERSION); err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
 		if err = mock.ExpectationsWereMet(); err != nil {
@@ -36,10 +36,10 @@ func TestValidateDatabaseVersion(t *testing.T) {
 			_ = db.Close()
 		}()
 
-		mock.ExpectQuery("SELECT database_version").
-			WillReturnRows(sqlmock.NewRows([]string{"database_version"}).AddRow("v1.0.0"))
+		mock.ExpectQuery(`SELECT "schema_version" FROM "basyxsystem"`).
+			WillReturnRows(sqlmock.NewRows([]string{"schema_version"}).AddRow("v1.0.0"))
 
-		err = ValidateDatabaseVersion(db, "v1.0.1")
+		err = ValidateSchemaVersion(db, CURRENT_DATABASE_VERSION)
 		if err == nil {
 			t.Fatal("expected error, got nil")
 		}
@@ -58,10 +58,10 @@ func TestValidateDatabaseVersion(t *testing.T) {
 			_ = db.Close()
 		}()
 
-		mock.ExpectQuery("SELECT database_version").
-			WillReturnRows(sqlmock.NewRows([]string{"database_version"}))
+		mock.ExpectQuery(`SELECT "schema_version" FROM "basyxsystem"`).
+			WillReturnRows(sqlmock.NewRows([]string{"schema_version"}))
 
-		err = ValidateDatabaseVersion(db, "v1.0.1")
+		err = ValidateSchemaVersion(db, CURRENT_DATABASE_VERSION)
 		if err == nil {
 			t.Fatal("expected error, got nil")
 		}

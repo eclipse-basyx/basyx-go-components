@@ -1,4 +1,29 @@
-package steps
+/*******************************************************************************
+* Copyright (C) 2026 the Eclipse BaSyx Authors and Fraunhofer IESE
+*
+* Permission is hereby granted, free of charge, to any person obtaining
+* a copy of this software and associated documentation files (the
+* "Software"), to deal in the Software without restriction, including
+* without limitation the rights to use, copy, modify, merge, publish,
+* distribute, sublicense, and/or sell copies of the Software, and to
+* permit persons to whom the Software is furnished to do so, subject to
+* the following conditions:
+*
+* The above copyright notice and this permission notice shall be
+* included in all copies or substantial portions of the Software.
+*
+* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+* NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
+* LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+* OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
+* WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+*
+* SPDX-License-Identifier: MIT
+******************************************************************************/
+
+package sequences
 
 import (
 	"database/sql"
@@ -7,16 +32,12 @@ import (
 	"os"
 	"strconv"
 	"strings"
+
+	"github.com/doug-martin/goqu/v9"
+	_ "github.com/doug-martin/goqu/v9/dialect/postgres"
 )
 
-const currentDatabaseVersionQuery = `
-		SELECT database_version
-		FROM basyxsystem
-		ORDER BY identifier ASC
-		LIMIT 1
-	`
-
-// SchemaPatch applies a versioned SQL patch when the database version is older than the patch version.
+// SchemaPatch applies a versioned SQL patch when the schema version is older than the patch version.
 type SchemaPatch struct {
 	ctx           *ExecutionContext
 	patchFilePath string
@@ -28,7 +49,7 @@ func NewSchemaPatch(ctx *ExecutionContext, patchFilePath string, targetVersion s
 	return &SchemaPatch{ctx: ctx, patchFilePath: patchFilePath, targetVersion: targetVersion}
 }
 
-// Execute runs a schema patch if required by the current database version.
+// Execute runs a schema patch if required by the current schema version.
 func (sp *SchemaPatch) Execute(stepIndex int) (int, error) {
 	if sp.ctx == nil || sp.ctx.DB == nil {
 		return 1, fmt.Errorf("BASYXCFG-PATCH-NODB: database connection is not initialized")
@@ -47,7 +68,7 @@ func (sp *SchemaPatch) Execute(stepIndex int) (int, error) {
 		_, _ = sp.ctx.DB.Exec("SELECT pg_advisory_unlock($1)", schemaAdvisoryLockID)
 	}()
 
-	currentVersion, err := sp.getCurrentDBVersion()
+	currentVersion, err := sp.getCurrentSchemaVersion()
 	if err != nil {
 		return 1, err
 	}
@@ -77,6 +98,20 @@ func (sp *SchemaPatch) Execute(stepIndex int) (int, error) {
 		return 1, fmt.Errorf("BASYXCFG-PATCH-EXECUTE: %w", err)
 	}
 
+	updateSQL, args, err := goqu.Dialect("postgres").
+		Update(goqu.T("basyxsystem")).
+		Set(goqu.Record{"schema_version": sp.targetVersion}).
+		Prepared(true).
+		ToSQL()
+	if err != nil {
+		_ = tx.Rollback()
+		return 1, fmt.Errorf("BASYXCFG-PATCH-BUILDUPDATE: %w", err)
+	}
+	if _, err = tx.Exec(updateSQL, args...); err != nil {
+		_ = tx.Rollback()
+		return 1, fmt.Errorf("BASYXCFG-PATCH-UPDATEVERSION: %w", err)
+	}
+
 	if err = tx.Commit(); err != nil {
 		return 1, fmt.Errorf("BASYXCFG-PATCH-COMMIT: %w", err)
 	}
@@ -90,16 +125,27 @@ func (sp *SchemaPatch) GetDescription(stepIndex int) string {
 	return fmt.Sprintf("[Step %d] Applying schema patch %s (%s)", stepIndex, sp.targetVersion, sp.patchFilePath)
 }
 
-func (sp *SchemaPatch) getCurrentDBVersion() (string, error) {
-	row := sp.ctx.DB.QueryRow(currentDatabaseVersionQuery)
+func (sp *SchemaPatch) getCurrentSchemaVersion() (string, error) {
+	query, _, err := goqu.Dialect("postgres").
+		From(goqu.T("basyxsystem")).
+		Select(goqu.C("schema_version")).
+		Order(goqu.C("identifier").Asc()).
+		Limit(1).
+		ToSQL()
+	if err != nil {
+		return "", fmt.Errorf("BASYXCFG-PATCH-BUILDVERSIONQUERY: %w", err)
+	}
 
 	var version string
-	err := row.Scan(&version)
+	err = sp.ctx.DB.QueryRow(query).Scan(&version)
 	if err == nil {
 		return strings.TrimSpace(version), nil
 	}
 	if errors.Is(err, sql.ErrNoRows) {
-		return "", fmt.Errorf("BASYXCFG-PATCH-NOVERSIONROW: basyxsystem does not contain a version row")
+		if _, seedErr := sp.ctx.DB.Exec(seedSystemTableQuery, initialSchemaVersion); seedErr != nil {
+			return "", fmt.Errorf("BASYXCFG-PATCH-SEEDVERSION: %w", seedErr)
+		}
+		return initialSchemaVersion, nil
 	}
 	return "", fmt.Errorf("BASYXCFG-PATCH-READVERSION: %w", err)
 }

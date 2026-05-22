@@ -1,4 +1,29 @@
-// Package basyxconfigurationservice contains orchestration for configuration startup steps.
+/*******************************************************************************
+* Copyright (C) 2026 the Eclipse BaSyx Authors and Fraunhofer IESE
+*
+* Permission is hereby granted, free of charge, to any person obtaining
+* a copy of this software and associated documentation files (the
+* "Software"), to deal in the Software without restriction, including
+* without limitation the rights to use, copy, modify, merge, publish,
+* distribute, sublicense, and/or sell copies of the Software, and to
+* permit persons to whom the Software is furnished to do so, subject to
+* the following conditions:
+*
+* The above copyright notice and this permission notice shall be
+* included in all copies or substantial portions of the Software.
+*
+* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+* NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
+* LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+* OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
+* WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+*
+* SPDX-License-Identifier: MIT
+******************************************************************************/
+
+// Package basyxconfigurationservice contains orchestration for configuration startup sequences.
 package basyxconfigurationservice
 
 import (
@@ -10,16 +35,16 @@ import (
 
 // SchemaInitializer stores and executes initialization steps in sequence.
 type SchemaInitializer struct {
-	initializationSteps []steps.Sequence
+	initializationSteps []sequences.Sequence
 }
 
 // NewSchemaInitializer creates an empty step registry.
 func NewSchemaInitializer() *SchemaInitializer {
-	return &SchemaInitializer{initializationSteps: make([]steps.Sequence, 0)}
+	return &SchemaInitializer{initializationSteps: make([]sequences.Sequence, 0)}
 }
 
 // Register appends a step to the execution pipeline.
-func (sr *SchemaInitializer) Register(step steps.Sequence) {
+func (sr *SchemaInitializer) Register(step sequences.Sequence) {
 	sr.initializationSteps = append(sr.initializationSteps, step)
 }
 
@@ -34,7 +59,7 @@ func (sr *SchemaInitializer) Execute() error {
 	return nil
 }
 
-func (sr *SchemaInitializer) executeSequence(step steps.Sequence, sequenceIndex int) error {
+func (sr *SchemaInitializer) executeSequence(step sequences.Sequence, sequenceIndex int) error {
 	log.Println(step.GetDescription(sequenceIndex))
 	statusCode, err := step.Execute(sequenceIndex)
 	if err != nil {

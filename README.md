@@ -54,7 +54,8 @@ The project is composed of microservices for AAS and Submodel registries, AAS an
      ```
 3. Start services (example):
      ```sh
-     go run ./cmd/submodelrepositoryservice/main.go -config ./cmd/submodelrepositoryservice/config.yaml -databaseSchema ./basyxschema.sql
+     go run ./cmd/basyxconfigurationservice/main.go -config ./cmd/basyxconfigurationservice/config.yaml -databaseSchema ./database/base.sql -customPatchPath ./database/patches
+     go run ./cmd/submodelrepositoryservice/main.go -config ./cmd/submodelrepositoryservice/config.yaml
      ```
 4. Run integration tests:
      ```sh
@@ -66,6 +67,10 @@ The project is composed of microservices for AAS and Submodel registries, AAS an
      ```
 
 ## 4. Environment Variables & Configuration
+
+### Database Initialization
+
+DB-backed BaSyx services expect the shared PostgreSQL schema to be initialized before startup. Run `basyxconfigurationservice` once against the target database before starting repository, registry, discovery, or environment services. The configuration service loads `database/base.sql`, applies versioned patches from `database/patches`, and records the schema version in `basyxsystem`. Runtime services validate that version during startup and fail fast if the configuration service has not completed successfully.
 
 Configuration is managed via YAML files in `cmd/<service>/config.yaml` and environment variables. Key variables include database connection settings (see [docu/errors.md](docu/errors.md) for troubleshooting):
 

@@ -124,7 +124,7 @@ jobs:
           pull: true
           push: true
           tags: |
-            ${{ matrix.service.image }}:SNAPSHOT
+            ${{ matrix.service.image }}:${{ steps.meta.outputs.version }}
             ${{ matrix.service.image }}:${{ steps.meta.outputs.short_sha }}
           build-args: |
             VERSION=${{ steps.meta.outputs.version }}
@@ -252,5 +252,5 @@ jobs:
 
       - name: Image digest
         run: |
-          echo "Built and pushed ${{ matrix.service.image }}:SNAPSHOT"
+          echo "Built and pushed ${{ matrix.service.image }}:${{ steps.meta.outputs.version }}"
           echo "Digest: ${{ steps.build.outputs.digest }}"
