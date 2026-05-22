@@ -33,8 +33,6 @@ services:
     depends_on:
       basyx_configuration:
         condition: service_completed_successfully
-      db:
-        condition: service_healthy
     restart: unless-stopped
 
   aas-ui:

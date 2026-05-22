@@ -72,6 +72,10 @@ The project is composed of microservices for AAS and Submodel registries, AAS an
 
 DB-backed BaSyx services expect the shared PostgreSQL schema to be initialized before startup. Run `basyxconfigurationservice` once against the target database before starting repository, registry, discovery, or environment services. The configuration service loads `database/base.sql`, applies versioned patches from `database/patches`, and records the schema version in `basyxsystem`. Runtime services validate that version during startup and fail fast if the configuration service has not completed successfully.
 
+The `basyxconfigurationservice` image should use the same BaSyx version or build revision as the DB-backed runtime components in the same setup. This is especially important when using mutable image tags. The `latest` tag tracks the newest release, and the `SNAPSHOT` tag tracks the current main-branch snapshot; both tags may point to different image digests over time. For reproducible deployments, pin a concrete version tag, commit/SNAPSHOT tag, or image digest instead.
+
+If a setup uses mutable tags and pulls images on every start or restart, include `basyxconfigurationservice` in the deployment and run it before the DB-backed components. Otherwise a freshly pulled runtime component may expect a newer schema version than the database currently contains, causing startup validation to fail.
+
 Configuration is managed via YAML files in `cmd/<service>/config.yaml` and environment variables. Key variables include database connection settings (see [docu/errors.md](docu/errors.md) for troubleshooting):
 
 ```yaml

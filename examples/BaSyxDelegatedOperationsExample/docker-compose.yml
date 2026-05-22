@@ -40,8 +40,6 @@ services:
     depends_on:
       basyx_configuration:
         condition: service_completed_successfully
-      db:
-        condition: service_healthy
     restart: unless-stopped
 
   submodel_repository:
@@ -73,8 +71,6 @@ services:
     depends_on:
       basyx_configuration:
         condition: service_completed_successfully
-      db:
-        condition: service_healthy
     restart: unless-stopped
 
   delegated-operation-service:
