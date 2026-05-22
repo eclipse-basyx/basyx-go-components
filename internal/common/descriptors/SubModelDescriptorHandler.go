@@ -59,7 +59,7 @@ import (
 //   - ctx: request context used for cancellation/deadlines
 //   - db:  open SQL database handle
 //   - aasID: AAS Id string owning the submodels
-//   - limit: maximum number of items to return (<=0 uses a large default)
+//   - limit: maximum number of items to return (<=0 uses default page size 100)
 //   - cursor: optional Submodel Id to start from (inclusive)
 //
 // Returns the page of submodel descriptors and an optional next cursor when
@@ -72,7 +72,7 @@ func ListSubmodelDescriptorsForAAS(
 	cursor string,
 ) ([]model.SubmodelDescriptor, string, error) {
 	if limit <= 0 {
-		limit = 10000000
+		limit = 100
 	}
 
 	d := goqu.Dialect(common.Dialect)
@@ -428,7 +428,7 @@ func ListSubmodelDescriptors(
 	cursor string,
 ) ([]model.SubmodelDescriptor, string, error) {
 	if limit <= 0 {
-		limit = 10000000
+		limit = 100
 	}
 	if cursor != "" {
 		cursorExists, cursorErr := existsSubmodelByID(ctx, db, cursor)

@@ -87,12 +87,31 @@ func InsertAssetAdministrationShellDescriptor(ctx context.Context, db *sql.DB, a
 		_ = tx.Rollback()
 		return model.AssetAdministrationShellDescriptor{}, err
 	}
+	if canSkipPostInsertReadback(ctx) {
+		return aasd, tx.Commit()
+	}
 	result, err := GetAssetAdministrationShellDescriptorByIDTx(ctx, tx, aasd.Id)
 	if err != nil {
 		_ = tx.Rollback()
 		return model.AssetAdministrationShellDescriptor{}, err
 	}
 	return result, tx.Commit()
+}
+
+// canSkipPostInsertReadback returns true for contexts where no post-insert
+// descriptor re-read is needed for ABAC enforcement or field filtering.
+func canSkipPostInsertReadback(ctx context.Context) bool {
+	queryFilter := auth.GetQueryFilter(ctx)
+	if queryFilter == nil {
+		return true
+	}
+	if len(queryFilter.Filters) > 0 {
+		return false
+	}
+	if queryFilter.Formula == nil {
+		return true
+	}
+	return auth.HasUnrestrictedFormulaForRight(ctx, grammar.RightsEnumCREATE)
 }
 
 // InsertAdministrationShellDescriptorTx performs the same insert as
@@ -535,7 +554,7 @@ func buildListAASDescriptorPageQuery(
 //
 // It returns the page of fully assembled descriptors and, when more results are
 // available, a next cursor value (the Id immediately after the page). When
-// limit <= 0, a conservative large default is applied.
+// limit <= 0, a default page size of 100 is applied.
 //
 //nolint:revive // Its only 31 instead of 30 - 1 is okay
 func ListAssetAdministrationShellDescriptors(
@@ -567,7 +586,7 @@ func listAssetAdministrationShellDescriptors(
 	allowParallel bool,
 ) ([]model.AssetAdministrationShellDescriptor, string, error) {
 	if limit <= 0 {
-		limit = 1000000
+		limit = 100
 	}
 	if cursor != "" {
 		cursorExists, cursorErr := existsAASByID(ctx, db, cursor)
