@@ -79,6 +79,7 @@ func (p *AASXFileServerDatabase) ListPackages(ctx context.Context, limit int32, 
 		)
 	}
 
+	// #nosec G115 -- limit is normalized to a positive int32 value above.
 	ds = ds.Limit(uint(limit + 1))
 
 	sqlQuery, args, err := ds.ToSQL()

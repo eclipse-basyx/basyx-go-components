@@ -313,8 +313,7 @@ func invalidPropertyWithMultipleVerificationIssuesPayload() string {
   "qualifiers": [],
   "embeddedDataSpecifications": [],
   "valueType": "xs:int",
-  "value": "not-an-int"
-}`
+  "value": "not-an-int"}`
 }
 
 func assertVerificationMessagesInOrder(t *testing.T, messages []string) {

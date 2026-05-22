@@ -82,12 +82,26 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) GetAllAssetAdministrat
 		if common.IsErrBadRequest(err) {
 			return newAPIErrorResponse(err, http.StatusBadRequest, operation, "BadRequest"), nil
 		}
-		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "GetAssetAdministrationShells"), err
+		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "GetAssetAdministrationShells"), nil
+	}
+
+	jsonAASList := make([]map[string]any, 0, len(aasList))
+	for _, aas := range aasList {
+		if aas == nil {
+			err = common.NewInternalServerError("AASREPO-GETAASLIST-NILAAS loaded AAS is nil")
+			return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "GetAssetAdministrationShells"), nil
+		}
+
+		jsonAAS, jsonErr := jsonization.ToJsonable(aas)
+		if jsonErr != nil {
+			return newAPIErrorResponse(jsonErr, http.StatusInternalServerError, operation, "ToJsonable"), nil
+		}
+		jsonAASList = append(jsonAASList, jsonAAS)
 	}
 
 	return gen.Response(http.StatusOK, gen.GetAssetAdministrationShellsResult{
 		PagingMetadata: gen.PagedResultPagingMetadata{Cursor: common.EncodeString(nextCursor)},
-		Result:         aasList,
+		Result:         jsonAASList,
 	}), nil
 }
 
@@ -109,7 +123,7 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) PostAssetAdministratio
 			return newAPIErrorResponse(err, http.StatusBadRequest, operation, "InvalidAssetAdministrationShellData"), nil
 		}
 
-		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "CreateAssetAdministrationShell"), err
+		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "CreateAssetAdministrationShell"), nil
 	}
 
 	aasJsonable, err := jsonization.ToJsonable(aas)
@@ -135,14 +149,14 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) GetAllAssetAdministrat
 		if common.IsErrBadRequest(err) {
 			return newAPIErrorResponse(err, http.StatusBadRequest, operation, "BadRequest"), nil
 		}
-		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "GetAssetAdministrationShellReferences"), err
+		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "GetAssetAdministrationShellReferences"), nil
 	}
 
 	jsonReferences := make([]map[string]any, 0, len(references))
 	for _, reference := range references {
 		jsonReference, jsonErr := jsonization.ToJsonable(reference)
 		if jsonErr != nil {
-			return newAPIErrorResponse(jsonErr, http.StatusInternalServerError, operation, "ToJsonable"), jsonErr
+			return newAPIErrorResponse(jsonErr, http.StatusInternalServerError, operation, "ToJsonable"), nil
 		}
 		jsonReferences = append(jsonReferences, jsonReference)
 	}
@@ -163,12 +177,22 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) GetAssetAdministration
 		return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "MalformedAssetAdministrationShellIdentifier"), nil
 	}
 
-	aasMap, err := s.assetAdministrationShellBackend.GetAssetAdministrationShellByID(ctx, decodedIdentifier)
+	aas, err := s.assetAdministrationShellBackend.GetAssetAdministrationShellByID(ctx, decodedIdentifier)
 	if err != nil {
 		if common.IsErrNotFound(err) {
 			return newAPIErrorResponse(err, http.StatusNotFound, operation, "AssetAdministrationShellNotFound"), nil
 		}
-		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "GetAssetAdministrationShellByID"), err
+		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "GetAssetAdministrationShellByID"), nil
+	}
+
+	if aas == nil {
+		err = common.NewInternalServerError("AASREPO-GETAASBYID-NILAAS loaded AAS is nil")
+		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "GetAssetAdministrationShellByID"), nil
+	}
+
+	aasMap, jsonErr := jsonization.ToJsonable(aas)
+	if jsonErr != nil {
+		return newAPIErrorResponse(jsonErr, http.StatusInternalServerError, operation, "ToJsonable"), nil
 	}
 
 	return gen.Response(http.StatusOK, aasMap), nil
@@ -195,7 +219,7 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) PutAssetAdministration
 		if common.IsErrConflict(putErr) {
 			return newAPIErrorResponse(putErr, http.StatusConflict, operation, "Conflict"), nil
 		}
-		return newAPIErrorResponse(putErr, http.StatusInternalServerError, operation, "PutAssetAdministrationShellByID"), putErr
+		return newAPIErrorResponse(putErr, http.StatusInternalServerError, operation, "PutAssetAdministrationShellByID"), nil
 	}
 
 	if isUpdate {
@@ -228,7 +252,7 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) DeleteAssetAdministrat
 		if common.IsErrNotFound(err) {
 			return newAPIErrorResponse(err, http.StatusNotFound, operation, "AssetAdministrationShellNotFound"), nil
 		}
-		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "DeleteAssetAdministrationShellByID"), err
+		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "DeleteAssetAdministrationShellByID"), nil
 	}
 
 	return gen.Response(http.StatusNoContent, nil), nil
@@ -249,12 +273,12 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) GetAssetAdministration
 		if common.IsErrNotFound(err) {
 			return newAPIErrorResponse(err, http.StatusNotFound, operation, "AssetAdministrationShellNotFound"), nil
 		}
-		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "GetAssetAdministrationShellReferenceByID"), err
+		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "GetAssetAdministrationShellReferenceByID"), nil
 	}
 
 	jsonReference, jsonErr := jsonization.ToJsonable(reference)
 	if jsonErr != nil {
-		return newAPIErrorResponse(jsonErr, http.StatusInternalServerError, operation, "ToJsonable"), jsonErr
+		return newAPIErrorResponse(jsonErr, http.StatusInternalServerError, operation, "ToJsonable"), nil
 	}
 
 	return gen.Response(http.StatusOK, jsonReference), nil
@@ -275,7 +299,7 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) GetAssetInformationAas
 		if common.IsErrNotFound(err) {
 			return newAPIErrorResponse(err, http.StatusNotFound, operation, "AssetAdministrationShellNotFound"), nil
 		}
-		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "GetAssetInformationByAASID"), err
+		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "GetAssetInformationByAASID"), nil
 	}
 
 	return gen.Response(http.StatusOK, assetInformation), nil
@@ -302,7 +326,7 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) PutAssetInformationAas
 		if common.IsErrBadRequest(err) {
 			return newAPIErrorResponse(err, http.StatusBadRequest, operation, "BadRequest"), nil
 		}
-		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "PutAssetInformationByAASID"), err
+		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "PutAssetInformationByAASID"), nil
 	}
 
 	return gen.Response(http.StatusNoContent, nil), nil
@@ -326,7 +350,7 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) GetThumbnailAasReposit
 		if common.IsErrBadRequest(err) {
 			return newAPIErrorResponse(err, http.StatusBadRequest, operation, "BadRequest"), nil
 		}
-		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "GetThumbnailByAASID"), err
+		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "GetThumbnailByAASID"), nil
 	}
 
 	if strings.HasPrefix(thumbnailPath, "http://") || strings.HasPrefix(thumbnailPath, "https://") {
@@ -370,7 +394,7 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) PutThumbnailAasReposit
 		if common.IsErrBadRequest(err) {
 			return newAPIErrorResponse(err, http.StatusBadRequest, operation, "BadRequest"), nil
 		}
-		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "PutThumbnailByAASID"), err
+		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "PutThumbnailByAASID"), nil
 	}
 
 	return gen.Response(http.StatusNoContent, nil), nil
@@ -397,7 +421,7 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) DeleteThumbnailAasRepo
 		if common.IsErrBadRequest(err) {
 			return newAPIErrorResponse(err, http.StatusBadRequest, operation, "BadRequest"), nil
 		}
-		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "DeleteThumbnailByAASID"), err
+		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "DeleteThumbnailByAASID"), nil
 	}
 
 	return gen.Response(http.StatusNoContent, nil), nil
@@ -426,14 +450,14 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) GetAllSubmodelReferenc
 		if common.IsErrBadRequest(err) {
 			return newAPIErrorResponse(err, http.StatusBadRequest, operation, "BadRequest"), nil
 		}
-		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "GetAllSubmodelReferencesByAASID"), err
+		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "GetAllSubmodelReferencesByAASID"), nil
 	}
 
 	jsonReferences := make([]map[string]any, 0, len(references))
 	for _, reference := range references {
 		jsonReference, jsonErr := jsonization.ToJsonable(reference)
 		if jsonErr != nil {
-			return newAPIErrorResponse(jsonErr, http.StatusInternalServerError, operation, "ToJsonable"), jsonErr
+			return newAPIErrorResponse(jsonErr, http.StatusInternalServerError, operation, "ToJsonable"), nil
 		}
 		jsonReferences = append(jsonReferences, jsonReference)
 	}
@@ -466,7 +490,7 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) PostSubmodelReferenceA
 		if common.IsErrBadRequest(err) {
 			return newAPIErrorResponse(err, http.StatusBadRequest, operation, "BadRequest"), nil
 		}
-		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "CreateSubmodelReferenceInAssetAdministrationShell"), err
+		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "CreateSubmodelReferenceInAssetAdministrationShell"), nil
 	}
 
 	referenceJsonable, err := jsonization.ToJsonable(reference)
@@ -503,7 +527,7 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) DeleteSubmodelReferenc
 		if common.IsErrBadRequest(err) {
 			return newAPIErrorResponse(err, http.StatusBadRequest, operation, "BadRequest"), nil
 		}
-		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "DeleteSubmodelReferenceInAssetAdministrationShell"), err
+		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "DeleteSubmodelReferenceInAssetAdministrationShell"), nil
 	}
 
 	return gen.Response(http.StatusNoContent, nil), nil
@@ -534,7 +558,7 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) PutSubmodelByIdAasRepo
 
 	if s.submodelBackend == nil {
 		err := common.NewInternalServerError("AASREPO-PUTSMBYID-NOSMBACKEND submodel backend is not configured")
-		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "InternalServerError"), err
+		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "InternalServerError"), nil
 	}
 
 	decodedAASIdentifier, decodeAASErr := common.DecodeString(aasIdentifier)
@@ -562,7 +586,7 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) PutSubmodelByIdAasRepo
 		if common.IsErrBadRequest(aasLookupErr) {
 			return newAPIErrorResponse(aasLookupErr, http.StatusBadRequest, operation, "BadRequest"), nil
 		}
-		return newAPIErrorResponse(aasLookupErr, http.StatusInternalServerError, operation, "GetAssetAdministrationShellByID"), aasLookupErr
+		return newAPIErrorResponse(aasLookupErr, http.StatusInternalServerError, operation, "GetAssetAdministrationShellByID"), nil
 	}
 
 	var isUpdate bool
@@ -606,7 +630,7 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) PutSubmodelByIdAasRepo
 			}
 			return newAPIErrorResponse(txErr, http.StatusNotFound, operation, "SubmodelNotFound"), nil
 		}
-		return newAPIErrorResponse(txErr, http.StatusInternalServerError, operation, "PutSubmodel"), txErr
+		return newAPIErrorResponse(txErr, http.StatusInternalServerError, operation, "PutSubmodel"), nil
 	}
 
 	if isUpdate {
@@ -627,7 +651,7 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) DeleteSubmodelByIdAasR
 
 	if s.submodelBackend == nil {
 		err := common.NewInternalServerError("AASREPO-DELSMBYID-NOSMBACKEND submodel backend is not configured")
-		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "InternalServerError"), err
+		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "InternalServerError"), nil
 	}
 
 	decodedAASIdentifier, decodeAASErr := common.DecodeString(aasIdentifier)
@@ -651,7 +675,7 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) DeleteSubmodelByIdAasR
 		if common.IsErrBadRequest(aasLookupErr) {
 			return newAPIErrorResponse(aasLookupErr, http.StatusBadRequest, operation, "BadRequest"), nil
 		}
-		return newAPIErrorResponse(aasLookupErr, http.StatusInternalServerError, operation, "GetAssetAdministrationShellByID"), aasLookupErr
+		return newAPIErrorResponse(aasLookupErr, http.StatusInternalServerError, operation, "GetAssetAdministrationShellByID"), nil
 	}
 
 	deleteErr := s.assetAdministrationShellBackend.ExecuteInTransaction(
@@ -679,7 +703,7 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) DeleteSubmodelByIdAasR
 		if common.IsErrBadRequest(deleteErr) {
 			return newAPIErrorResponse(deleteErr, http.StatusBadRequest, operation, "BadRequest"), nil
 		}
-		return newAPIErrorResponse(deleteErr, http.StatusInternalServerError, operation, "DeleteSubmodel"), deleteErr
+		return newAPIErrorResponse(deleteErr, http.StatusInternalServerError, operation, "DeleteSubmodel"), nil
 	}
 
 	return gen.Response(http.StatusNoContent, nil), nil
@@ -735,7 +759,7 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) ensureSubmodelBackend(
 	}
 
 	err := common.NewInternalServerError("AASREPO-NOSMBACKEND submodel backend is not configured")
-	return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "InternalServerError"), err, false
+	return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "InternalServerError"), nil, false
 }
 
 func decodeAASAndSubmodelIdentifiers(aasIdentifier string, submodelIdentifier string, operation string) (string, string, gen.ImplResponse, bool) {
@@ -764,7 +788,7 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) ensureAASSubmodelRefer
 		if common.IsErrBadRequest(aasLookupErr) {
 			return newAPIErrorResponse(aasLookupErr, http.StatusBadRequest, operation, "BadRequest"), nil, false
 		}
-		return newAPIErrorResponse(aasLookupErr, http.StatusInternalServerError, operation, "GetAssetAdministrationShellByID"), aasLookupErr, false
+		return newAPIErrorResponse(aasLookupErr, http.StatusInternalServerError, operation, "GetAssetAdministrationShellByID"), nil, false
 	}
 
 	referenceCheckErr := s.assetAdministrationShellBackend.CheckIfSubmodelReferenceExistsInAssetAdministrationShell(decodedAASIdentifier, decodedSubmodelIdentifier)
@@ -775,7 +799,7 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) ensureAASSubmodelRefer
 		if common.IsErrBadRequest(referenceCheckErr) {
 			return newAPIErrorResponse(referenceCheckErr, http.StatusBadRequest, operation, "BadRequest"), nil, false
 		}
-		return newAPIErrorResponse(referenceCheckErr, http.StatusInternalServerError, operation, "CheckIfSubmodelReferenceExistsInAssetAdministrationShell"), referenceCheckErr, false
+		return newAPIErrorResponse(referenceCheckErr, http.StatusInternalServerError, operation, "CheckIfSubmodelReferenceExistsInAssetAdministrationShell"), nil, false
 	}
 
 	return gen.ImplResponse{}, nil, true

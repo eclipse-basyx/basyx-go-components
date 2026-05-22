@@ -27,25 +27,47 @@ package api
 
 import (
 	"context"
-	"errors"
 	"net/http"
+	"net/http/httptest"
+	"testing"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
-	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
+	"github.com/stretchr/testify/require"
 )
 
-const errGenerateSerializationByIdsNotImplemented = "SMREPO-GENSERIALIZATIONBYIDS-NOTIMPLEMENTED"
+func contextWithABACDisabled(t *testing.T) context.Context {
+	t.Helper()
 
-// SerializationAPIAPIService is a service that implements the logic for the SerializationAPIAPIServicer.
-type SerializationAPIAPIService struct{}
+	cfg := &common.Config{}
+	var cfgCtx context.Context
+	handler := common.ConfigMiddleware(cfg)(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+		cfgCtx = r.Context()
+	}))
+	handler.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/", nil))
 
-// NewSerializationAPIAPIService creates a default api service.
-func NewSerializationAPIAPIService() *SerializationAPIAPIService {
-	return &SerializationAPIAPIService{}
+	require.NotNil(t, cfgCtx)
+	return cfgCtx
 }
 
-// GenerateSerializationByIds returns the requested serialization for the given identifiers.
-func (s *SerializationAPIAPIService) GenerateSerializationByIds(_ context.Context, _ []string, _ []string, _ bool) (model.ImplResponse, error) {
-	err := errors.New(errGenerateSerializationByIdsNotImplemented)
-	return common.NewErrorResponse(err, http.StatusNotImplemented, "SubmodelRepository", "GenerateSerializationByIds", ""), nil
+func TestGetAllConceptDescriptionsRejectsInvalidCursorWithStandardErrorBody(t *testing.T) {
+	t.Parallel()
+
+	invalidCursor := "%"
+	_, expectedDecodeErr := common.DecodeString(invalidCursor)
+	require.Error(t, expectedDecodeErr)
+
+	sut := NewConceptDescriptionRepositoryAPIAPIService(nil)
+	response, err := sut.GetAllConceptDescriptions(contextWithABACDisabled(t), "", "", "", 1, invalidCursor)
+
+	require.NoError(t, err)
+	require.Equal(t, http.StatusBadRequest, response.Code)
+
+	handlers, ok := response.Body.([]common.ErrorHandler)
+	require.True(t, ok)
+	require.Len(t, handlers, 1)
+	require.Equal(t, "Error", handlers[0].MessageType)
+	require.Equal(t, expectedDecodeErr.Error(), handlers[0].Text)
+	require.Equal(t, "400", handlers[0].Code)
+	require.Equal(t, "CDREPO-400-GetAllConceptDescriptions-BadRequest-BadCursor", handlers[0].CorrelationID)
+	require.NotEmpty(t, handlers[0].Timestamp)
 }

@@ -1,3 +1,28 @@
+/*******************************************************************************
+* Copyright (C) 2026 the Eclipse BaSyx Authors and Fraunhofer IESE
+*
+* Permission is hereby granted, free of charge, to any person obtaining
+* a copy of this software and associated documentation files (the
+* "Software"), to deal in the Software without restriction, including
+* without limitation the rights to use, copy, modify, merge, publish,
+* distribute, sublicense, and/or sell copies of the Software, and to
+* permit persons to whom the Software is furnished to do so, subject to
+* the following conditions:
+*
+* The above copyright notice and this permission notice shall be
+* included in all copies or substantial portions of the Software.
+*
+* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+* NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
+* LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+* OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
+* WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+*
+* SPDX-License-Identifier: MIT
+******************************************************************************/
+
 package api
 
 import (
@@ -8,17 +33,21 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestGenerateSerializationByIDsReturnsNotImplemented(t *testing.T) {
+func TestGenerateSerializationByIdsReturnsNotImplemented(t *testing.T) {
 	t.Parallel()
 
 	sut := NewSerializationAPIAPIService()
-	response, err := sut.GenerateSerializationByIDs(contextWithABACDisabled(t), []string{"aas-1"}, []string{"sm-1"}, true)
+	response, err := sut.GenerateSerializationByIds(contextWithABACDisabled(t), []string{"aas-1"}, []string{"sm-1"}, true)
 
 	require.NoError(t, err)
 	require.Equal(t, http.StatusNotImplemented, response.Code)
-	require.IsType(t, []common.ErrorHandler{}, response.Body)
 
-	messages := response.Body.([]common.ErrorHandler)
-	require.Len(t, messages, 1)
-	require.Equal(t, errGenerateSerializationByIDsNotImplemented, messages[0].Text)
+	handlers, ok := response.Body.([]common.ErrorHandler)
+	require.True(t, ok)
+	require.Len(t, handlers, 1)
+	require.Equal(t, "Error", handlers[0].MessageType)
+	require.Equal(t, errGenerateSerializationByIdsNotImplemented, handlers[0].Text)
+	require.Equal(t, "501", handlers[0].Code)
+	require.Equal(t, "SubmodelRepository-501-GenerateSerializationByIds-NotImplemented-", handlers[0].CorrelationID)
+	require.NotEmpty(t, handlers[0].Timestamp)
 }

@@ -111,7 +111,7 @@ func (s *ConceptDescriptionRepositoryAPIAPIService) GetAllConceptDescriptions(ct
 		case common.IsErrDenied(err):
 			return common.NewErrorResponse(err, http.StatusForbidden, componentName, "GetAllConceptDescriptions", "Denied"), nil
 		default:
-			return common.NewErrorResponse(err, http.StatusInternalServerError, componentName, "GetAllConceptDescriptions", "Unhandled"), err
+			return common.NewErrorResponse(err, http.StatusInternalServerError, componentName, "GetAllConceptDescriptions", "Unhandled"), nil
 		}
 	}
 
@@ -119,7 +119,7 @@ func (s *ConceptDescriptionRepositoryAPIAPIService) GetAllConceptDescriptions(ct
 	for _, cd := range cds {
 		jsonObj, err := jsonization.ToJsonable(cd)
 		if err != nil {
-			return common.NewErrorResponse(err, http.StatusInternalServerError, componentName, "GetAllConceptDescriptions", "ToJsonable"), err
+			return common.NewErrorResponse(err, http.StatusInternalServerError, componentName, "GetAllConceptDescriptions", "ToJsonable"), nil
 		}
 		jsonable = append(jsonable, jsonObj)
 	}
@@ -139,13 +139,13 @@ func (s *ConceptDescriptionRepositoryAPIAPIService) PostConceptDescription(ctx c
 		case common.IsErrDenied(err):
 			return common.NewErrorResponse(err, http.StatusForbidden, componentName, "PostConceptDescription", "Denied"), nil
 		default:
-			return common.NewErrorResponse(err, http.StatusInternalServerError, componentName, "PostConceptDescription", "Unhandled"), err
+			return common.NewErrorResponse(err, http.StatusInternalServerError, componentName, "PostConceptDescription", "Unhandled"), nil
 		}
 	}
 
 	jsonable, toJsonErr := jsonization.ToJsonable(conceptDescription)
 	if toJsonErr != nil {
-		return common.NewErrorResponse(toJsonErr, http.StatusInternalServerError, componentName, "PostConceptDescription", "ToJsonable"), toJsonErr
+		return common.NewErrorResponse(toJsonErr, http.StatusInternalServerError, componentName, "PostConceptDescription", "ToJsonable"), nil
 	}
 
 	return model.Response(http.StatusCreated, jsonable), nil
@@ -167,14 +167,14 @@ func (s *ConceptDescriptionRepositoryAPIAPIService) GetConceptDescriptionById(ct
 		case common.IsErrNotFound(err):
 			return common.NewErrorResponse(err, http.StatusNotFound, componentName, "GetConceptDescriptionById", "NotFound"), nil
 		default:
-			return common.NewErrorResponse(err, http.StatusInternalServerError, componentName, "GetConceptDescriptionById", "Unhandled"), err
+			return common.NewErrorResponse(err, http.StatusInternalServerError, componentName, "GetConceptDescriptionById", "Unhandled"), nil
 		}
 	}
 
 	var jsonable map[string]any
 	jsonable, err = jsonization.ToJsonable(cd)
 	if err != nil {
-		return common.NewErrorResponse(err, http.StatusInternalServerError, componentName, "GetConceptDescriptionById", "ToJsonable"), err
+		return common.NewErrorResponse(err, http.StatusInternalServerError, componentName, "GetConceptDescriptionById", "ToJsonable"), nil
 	}
 
 	return model.Response(http.StatusOK, jsonable), nil
@@ -194,7 +194,7 @@ func (s *ConceptDescriptionRepositoryAPIAPIService) PutConceptDescriptionById(ct
 		case common.IsErrDenied(err):
 			return common.NewErrorResponse(err, http.StatusForbidden, componentName, "PutConceptDescriptionById", "Denied"), nil
 		default:
-			return common.NewErrorResponse(err, http.StatusInternalServerError, componentName, "PutConceptDescriptionById", "Unhandled"), err
+			return common.NewErrorResponse(err, http.StatusInternalServerError, componentName, "PutConceptDescriptionById", "Unhandled"), nil
 		}
 	}
 
@@ -204,7 +204,7 @@ func (s *ConceptDescriptionRepositoryAPIAPIService) PutConceptDescriptionById(ct
 
 	jsonable, toJsonErr := jsonization.ToJsonable(conceptDescription)
 	if toJsonErr != nil {
-		return common.NewErrorResponse(toJsonErr, http.StatusInternalServerError, componentName, "PutConceptDescriptionById", "ToJsonable"), toJsonErr
+		return common.NewErrorResponse(toJsonErr, http.StatusInternalServerError, componentName, "PutConceptDescriptionById", "ToJsonable"), nil
 	}
 
 	return model.Response(http.StatusCreated, jsonable), nil
@@ -226,7 +226,7 @@ func (s *ConceptDescriptionRepositoryAPIAPIService) DeleteConceptDescriptionById
 		case common.IsErrNotFound(err):
 			return common.NewErrorResponse(err, http.StatusNotFound, componentName, "DeleteConceptDescriptionById", "NotFound"), nil
 		default:
-			return common.NewErrorResponse(err, http.StatusInternalServerError, componentName, "DeleteConceptDescriptionById", "Unhandled"), err
+			return common.NewErrorResponse(err, http.StatusInternalServerError, componentName, "DeleteConceptDescriptionById", "Unhandled"), nil
 		}
 	}
 

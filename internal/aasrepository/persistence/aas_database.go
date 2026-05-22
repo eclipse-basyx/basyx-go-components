@@ -558,8 +558,8 @@ func (s *AssetAdministrationShellDatabase) checkIfSubmodelReferenceExistsInAsset
 	return nil
 }
 
-// GetAssetAdministrationShells returns a paginated list of AAS representations and the next cursor.
-func (s *AssetAdministrationShellDatabase) GetAssetAdministrationShells(ctx context.Context, limit int32, cursor string, idShort string, assetIDs []string) ([]map[string]any, string, error) {
+// GetAssetAdministrationShells returns a paginated list of AAS objects and the next cursor.
+func (s *AssetAdministrationShellDatabase) GetAssetAdministrationShells(ctx context.Context, limit int32, cursor string, idShort string, assetIDs []string) ([]types.IAssetAdministrationShell, string, error) {
 	dialect := goqu.Dialect("postgres")
 
 	if limit < 0 {
@@ -571,7 +571,7 @@ func (s *AssetAdministrationShellDatabase) GetAssetAdministrationShells(ctx cont
 			return nil, "", cursorErr
 		}
 		if !cursorExists {
-			return []map[string]any{}, "", nil
+			return []types.IAssetAdministrationShell{}, "", nil
 		}
 	}
 
@@ -635,7 +635,7 @@ func (s *AssetAdministrationShellDatabase) GetAssetAdministrationShells(ctx cont
 		}
 	}
 
-	result := make([]map[string]any, 0, len(aasIDs))
+	result := make([]types.IAssetAdministrationShell, 0, len(aasIDs))
 	if len(aasIDs) > 0 {
 		result, err = s.getAssetAdministrationShellMapsByDBIDs(ctx, aasIDs)
 		if err != nil {
@@ -662,8 +662,8 @@ func (s *AssetAdministrationShellDatabase) assetAdministrationShellCursorExists(
 	return true, nil
 }
 
-// GetAssetAdministrationShellByID returns the JSON-like representation of an AAS by identifier.
-func (s *AssetAdministrationShellDatabase) GetAssetAdministrationShellByID(ctx context.Context, aasIdentifier string) (map[string]any, error) {
+// GetAssetAdministrationShellByID returns an AAS by identifier.
+func (s *AssetAdministrationShellDatabase) GetAssetAdministrationShellByID(ctx context.Context, aasIdentifier string) (types.IAssetAdministrationShell, error) {
 	dialect := goqu.Dialect("postgres")
 	selectDS := buildGetAssetAdministrationShellDBIDByIdentifierDataset(&dialect, aasIdentifier)
 
@@ -870,14 +870,18 @@ func (s *AssetAdministrationShellDatabase) DeleteAssetAdministrationShellByIDInT
 
 // GetAssetAdministrationShellReferences returns paginated model references while preserving ABAC filters from ctx.
 func (s *AssetAdministrationShellDatabase) GetAssetAdministrationShellReferences(ctx context.Context, limit int32, cursor string, idShort string, assetIDs []string) ([]types.IReference, string, error) {
-	aasMaps, nextCursor, err := s.GetAssetAdministrationShells(ctx, limit, cursor, idShort, assetIDs)
+	aasList, nextCursor, err := s.GetAssetAdministrationShells(ctx, limit, cursor, idShort, assetIDs)
 	if err != nil {
 		return nil, "", err
 	}
 
-	references := make([]types.IReference, 0, len(aasMaps))
-	for _, aasMap := range aasMaps {
-		aasID, _ := aasMap["id"].(string)
+	references := make([]types.IReference, 0, len(aasList))
+	for _, aas := range aasList {
+		if aas == nil {
+			return nil, "", common.NewInternalServerError("AASREPO-GETAASREFS-NILAAS loaded AAS is nil")
+		}
+
+		aasID := aas.ID()
 		key := types.NewKey(types.KeyTypesAssetAdministrationShell, aasID)
 		references = append(references, types.NewReference(types.ReferenceTypesModelReference, []types.IKey{key}))
 	}
@@ -898,17 +902,26 @@ func (s *AssetAdministrationShellDatabase) GetAssetAdministrationShellReferenceB
 
 // GetAssetInformationByAASID returns the assetInformation section while preserving ABAC filters from ctx.
 func (s *AssetAdministrationShellDatabase) GetAssetInformationByAASID(ctx context.Context, aasIdentifier string) (map[string]any, error) {
-	aasMap, err := s.GetAssetAdministrationShellByID(ctx, aasIdentifier)
+	aas, err := s.GetAssetAdministrationShellByID(ctx, aasIdentifier)
 	if err != nil {
 		return nil, err
 	}
 
-	assetInformation, ok := aasMap["assetInformation"].(map[string]any)
-	if !ok {
+	if aas == nil {
+		return nil, common.NewInternalServerError("AASREPO-GETASSETINFO-NILAAS loaded AAS is nil")
+	}
+
+	assetInformation := aas.AssetInformation()
+	if assetInformation == nil {
 		return nil, common.NewErrNotFound("AASREPO-GETASSETINFO-NOTFOUND Asset Information for Asset Administration Shell with ID '" + aasIdentifier + "' not found")
 	}
 
-	return assetInformation, nil
+	jsonAssetInformation, jsonErr := jsonization.ToJsonable(assetInformation)
+	if jsonErr != nil {
+		return nil, common.NewInternalServerError("AASREPO-GETASSETINFO-TOJSONABLE " + jsonErr.Error())
+	}
+
+	return jsonAssetInformation, nil
 }
 
 // PutAssetInformationByAASID updates the assetInformation section and applies ABAC write checks.
@@ -1548,45 +1561,49 @@ func (s *AssetAdministrationShellDatabase) deleteSubmodelReferenceInAssetAdminis
 	return nil
 }
 
+type coreAssetAdministrationShellRow struct {
+	aasID                 string
+	idShort               sql.NullString
+	category              sql.NullString
+	displayNamePayload    []byte
+	descriptionPayload    []byte
+	administrationPayload []byte
+	edsPayload            []byte
+	extensionsPayload     []byte
+	derivedFromPayload    []byte
+	assetKind             sql.NullInt64
+	globalAssetID         sql.NullString
+	assetType             sql.NullString
+	thumbnailPath         sql.NullString
+	thumbnailContentType  sql.NullString
+}
+
 // nolint:revive // cyclomatic complexity of 32
-// getAssetAdministrationShellMapByDBID loads an AAS and maps it to the API JSON representation.
-func (s *AssetAdministrationShellDatabase) getAssetAdministrationShellMapByDBID(ctx context.Context, aasDBID int64) (map[string]any, error) {
+// getAssetAdministrationShellMapByDBID loads an AAS and maps it to a typed model.
+func (s *AssetAdministrationShellDatabase) getAssetAdministrationShellMapByDBID(ctx context.Context, aasDBID int64) (types.IAssetAdministrationShell, error) {
 	dialect := goqu.Dialect("postgres")
 	querySQL, queryArgs, buildErr := buildGetAssetAdministrationShellMapByDBIDQuery(&dialect, aasDBID)
 	if buildErr != nil {
 		return nil, common.NewInternalServerError("AASREPO-MAPAAS-BUILDSQL " + buildErr.Error())
 	}
 
-	var aasID string
-	var idShort sql.NullString
-	var category sql.NullString
-	var displayNamePayload []byte
-	var descriptionPayload []byte
-	var administrationPayload []byte
-	var edsPayload []byte
-	var extensionsPayload []byte
-	var derivedFromPayload []byte
-	var assetKind sql.NullInt64
-	var globalAssetID sql.NullString
-	var assetType sql.NullString
-	var thumbnailPath sql.NullString
-	var thumbnailContentType sql.NullString
+	var row coreAssetAdministrationShellRow
 
 	if queryErr := s.db.QueryRow(querySQL, queryArgs...).Scan(
-		&aasID,
-		&idShort,
-		&category,
-		&displayNamePayload,
-		&descriptionPayload,
-		&administrationPayload,
-		&edsPayload,
-		&extensionsPayload,
-		&derivedFromPayload,
-		&assetKind,
-		&globalAssetID,
-		&assetType,
-		&thumbnailPath,
-		&thumbnailContentType,
+		&row.aasID,
+		&row.idShort,
+		&row.category,
+		&row.displayNamePayload,
+		&row.descriptionPayload,
+		&row.administrationPayload,
+		&row.edsPayload,
+		&row.extensionsPayload,
+		&row.derivedFromPayload,
+		&row.assetKind,
+		&row.globalAssetID,
+		&row.assetType,
+		&row.thumbnailPath,
+		&row.thumbnailContentType,
 	); queryErr != nil {
 		if queryErr == sql.ErrNoRows {
 			return nil, common.NewErrNotFound("AASREPO-MAPAAS-AASNOTFOUND Asset Administration Shell not found")
@@ -1594,135 +1611,29 @@ func (s *AssetAdministrationShellDatabase) getAssetAdministrationShellMapByDBID(
 		return nil, common.NewInternalServerError("AASREPO-MAPAAS-EXECSQL " + queryErr.Error())
 	}
 
-	result := map[string]any{
-		"id":        aasID,
-		"modelType": "AssetAdministrationShell",
-	}
-	if idShort.Valid && idShort.String != "" {
-		result["idShort"] = idShort.String
-	}
-	if category.Valid && category.String != "" {
-		result["category"] = category.String
-	}
-
-	if assignErr := assignJSONPayload(result, "displayName", displayNamePayload); assignErr != nil {
-		return nil, assignErr
-	}
-	if assignErr := assignJSONPayload(result, "description", descriptionPayload); assignErr != nil {
-		return nil, assignErr
-	}
-	if assignErr := assignJSONPayload(result, "administration", administrationPayload); assignErr != nil {
-		return nil, assignErr
-	}
-	if assignErr := assignJSONPayload(result, "embeddedDataSpecifications", edsPayload); assignErr != nil {
-		return nil, assignErr
-	}
-	if assignErr := assignJSONPayload(result, "extensions", extensionsPayload); assignErr != nil {
-		return nil, assignErr
-	}
-	if assignErr := assignJSONPayload(result, "derivedFrom", derivedFromPayload); assignErr != nil {
-		return nil, assignErr
-	}
-
-	assetInfo := map[string]any{}
-	if assetKind.Valid {
-		assetKindString, ok := stringification.AssetKindToString(types.AssetKind(assetKind.Int64))
-		if ok {
-			assetInfo["assetKind"] = assetKindString
-		}
-	}
-	if globalAssetID.Valid && globalAssetID.String != "" {
-		assetInfo["globalAssetId"] = globalAssetID.String
-	}
-	if assetType.Valid && assetType.String != "" {
-		assetInfo["assetType"] = assetType.String
-	}
-	if thumbnailMap := buildThumbnailMap(thumbnailPath, thumbnailContentType); len(thumbnailMap) > 0 {
-		assetInfo["defaultThumbnail"] = thumbnailMap
-	}
-
 	specificAssetIDs, specificErr := s.readSpecificAssetIDsByAssetInformationID(ctx, aasDBID)
 	if specificErr != nil {
 		return nil, common.NewInternalServerError("AASREPO-MAPAAS-READSPECIFICASSETIDS " + specificErr.Error())
 	}
-	if len(specificAssetIDs) > 0 {
-		jsonSpecific := make([]map[string]any, 0, len(specificAssetIDs))
-		for _, specificAssetID := range specificAssetIDs {
-			jsonableSpecific, jsonErr := jsonization.ToJsonable(specificAssetID)
-			if jsonErr != nil {
-				return nil, common.NewInternalServerError("AASREPO-MAPAAS-JSONIZESPECIFICASSETID " + jsonErr.Error())
-			}
-			jsonSpecific = append(jsonSpecific, jsonableSpecific)
-		}
-		assetInfo["specificAssetIds"] = jsonSpecific
+
+	submodelsByAASID, submodelErr := s.readSubmodelReferencePayloadsByAASDBIDs(ctx, []int64{aasDBID})
+	if submodelErr != nil {
+		return nil, submodelErr
 	}
 
-	if len(assetInfo) > 0 {
-		result["assetInformation"] = assetInfo
-	}
-
-	submodelSQL, submodelArgs, submodelBuildErr := buildGetSubmodelReferencePayloadsByAASIDQuery(&dialect, aasDBID)
-	if submodelBuildErr != nil {
-		return nil, common.NewInternalServerError("AASREPO-MAPAAS-BUILDSMREFSQL " + submodelBuildErr.Error())
-	}
-
-	rows, submodelQueryErr := s.db.Query(submodelSQL, submodelArgs...)
-	if submodelQueryErr != nil {
-		return nil, common.NewInternalServerError("AASREPO-MAPAAS-EXECSMREFSQL " + submodelQueryErr.Error())
-	}
-	defer func() {
-		_ = rows.Close()
-	}()
-
-	submodels := make([]map[string]any, 0)
-	for rows.Next() {
-		var payload []byte
-		if scanErr := rows.Scan(&payload); scanErr != nil {
-			return nil, common.NewInternalServerError("AASREPO-MAPAAS-SCANSMREFROW " + scanErr.Error())
-		}
-		var submodelReference map[string]any
-		if unmarshalErr := json.Unmarshal(payload, &submodelReference); unmarshalErr != nil {
-			return nil, common.NewInternalServerError("AASREPO-MAPAAS-UNMARSHALSMREF " + unmarshalErr.Error())
-		}
-		submodels = append(submodels, submodelReference)
-	}
-	if rowsErr := rows.Err(); rowsErr != nil {
-		return nil, common.NewInternalServerError("AASREPO-MAPAAS-ITERSMREFROWS " + rowsErr.Error())
-	}
-	if len(submodels) > 0 {
-		result["submodels"] = submodels
-	}
-
-	return result, nil
+	return buildAssetAdministrationShellFromCoreRow(row, submodelsByAASID[aasDBID], specificAssetIDs, "AASREPO-MAPAAS")
 }
 
 // nolint:revive // cyclomatic complexity of 32
-func (s *AssetAdministrationShellDatabase) getAssetAdministrationShellMapsByDBIDs(ctx context.Context, aasDBIDs []int64) ([]map[string]any, error) {
+func (s *AssetAdministrationShellDatabase) getAssetAdministrationShellMapsByDBIDs(ctx context.Context, aasDBIDs []int64) ([]types.IAssetAdministrationShell, error) {
 	if len(aasDBIDs) == 0 {
-		return []map[string]any{}, nil
+		return []types.IAssetAdministrationShell{}, nil
 	}
 
 	dialect := goqu.Dialect("postgres")
 	querySQL, queryArgs, buildErr := buildGetAssetAdministrationShellMapsByDBIDsQuery(&dialect, aasDBIDs)
 	if buildErr != nil {
 		return nil, common.NewInternalServerError("AASREPO-MAPAASBATCH-BUILDSQL " + buildErr.Error())
-	}
-
-	type coreAssetAdministrationShellRow struct {
-		aasID                 string
-		idShort               sql.NullString
-		category              sql.NullString
-		displayNamePayload    []byte
-		descriptionPayload    []byte
-		administrationPayload []byte
-		edsPayload            []byte
-		extensionsPayload     []byte
-		derivedFromPayload    []byte
-		assetKind             sql.NullInt64
-		globalAssetID         sql.NullString
-		assetType             sql.NullString
-		thumbnailPath         sql.NullString
-		thumbnailContentType  sql.NullString
 	}
 
 	rows, queryErr := s.db.QueryContext(ctx, querySQL, queryArgs...)
@@ -1772,91 +1683,30 @@ func (s *AssetAdministrationShellDatabase) getAssetAdministrationShellMapsByDBID
 		return nil, common.NewInternalServerError("AASREPO-MAPAASBATCH-READSPECIFICASSETIDS " + specificErr.Error())
 	}
 
-	result := make([]map[string]any, 0, len(aasDBIDs))
+	result := make([]types.IAssetAdministrationShell, 0, len(aasDBIDs))
 	for _, aasDBID := range aasDBIDs {
 		row, ok := coreRows[aasDBID]
 		if !ok {
 			continue
 		}
 
-		aasMap := map[string]any{
-			"id":        row.aasID,
-			"modelType": "AssetAdministrationShell",
+		aas, mapErr := buildAssetAdministrationShellFromCoreRow(
+			row,
+			submodelsByAASID[aasDBID],
+			specificAssetIDsByAASID[aasDBID],
+			"AASREPO-MAPAASBATCH",
+		)
+		if mapErr != nil {
+			return nil, mapErr
 		}
-
-		if row.idShort.Valid && row.idShort.String != "" {
-			aasMap["idShort"] = row.idShort.String
-		}
-		if row.category.Valid && row.category.String != "" {
-			aasMap["category"] = row.category.String
-		}
-
-		if assignErr := assignJSONPayload(aasMap, "displayName", row.displayNamePayload); assignErr != nil {
-			return nil, assignErr
-		}
-		if assignErr := assignJSONPayload(aasMap, "description", row.descriptionPayload); assignErr != nil {
-			return nil, assignErr
-		}
-		if assignErr := assignJSONPayload(aasMap, "administration", row.administrationPayload); assignErr != nil {
-			return nil, assignErr
-		}
-		if assignErr := assignJSONPayload(aasMap, "embeddedDataSpecifications", row.edsPayload); assignErr != nil {
-			return nil, assignErr
-		}
-		if assignErr := assignJSONPayload(aasMap, "extensions", row.extensionsPayload); assignErr != nil {
-			return nil, assignErr
-		}
-		if assignErr := assignJSONPayload(aasMap, "derivedFrom", row.derivedFromPayload); assignErr != nil {
-			return nil, assignErr
-		}
-
-		assetInfo := map[string]any{}
-		if row.assetKind.Valid {
-			assetKindString, ok := stringification.AssetKindToString(types.AssetKind(row.assetKind.Int64))
-			if ok {
-				assetInfo["assetKind"] = assetKindString
-			}
-		}
-		if row.globalAssetID.Valid && row.globalAssetID.String != "" {
-			assetInfo["globalAssetId"] = row.globalAssetID.String
-		}
-		if row.assetType.Valid && row.assetType.String != "" {
-			assetInfo["assetType"] = row.assetType.String
-		}
-		if thumbnailMap := buildThumbnailMap(row.thumbnailPath, row.thumbnailContentType); len(thumbnailMap) > 0 {
-			assetInfo["defaultThumbnail"] = thumbnailMap
-		}
-
-		specificAssetIDs := specificAssetIDsByAASID[aasDBID]
-		if len(specificAssetIDs) > 0 {
-			jsonSpecific := make([]map[string]any, 0, len(specificAssetIDs))
-			for _, specificAssetID := range specificAssetIDs {
-				jsonableSpecific, jsonErr := jsonization.ToJsonable(specificAssetID)
-				if jsonErr != nil {
-					return nil, common.NewInternalServerError("AASREPO-MAPAASBATCH-JSONIZESPECIFICASSETID " + jsonErr.Error())
-				}
-				jsonSpecific = append(jsonSpecific, jsonableSpecific)
-			}
-			assetInfo["specificAssetIds"] = jsonSpecific
-		}
-
-		if len(assetInfo) > 0 {
-			aasMap["assetInformation"] = assetInfo
-		}
-
-		submodels := submodelsByAASID[aasDBID]
-		if len(submodels) > 0 {
-			aasMap["submodels"] = submodels
-		}
-
-		result = append(result, aasMap)
+		result = append(result, aas)
 	}
 
 	return result, nil
 }
 
-func (s *AssetAdministrationShellDatabase) readSubmodelReferencePayloadsByAASDBIDs(ctx context.Context, aasDBIDs []int64) (map[int64][]map[string]any, error) {
-	out := make(map[int64][]map[string]any, len(aasDBIDs))
+func (s *AssetAdministrationShellDatabase) readSubmodelReferencePayloadsByAASDBIDs(ctx context.Context, aasDBIDs []int64) (map[int64][]types.IReference, error) {
+	out := make(map[int64][]types.IReference, len(aasDBIDs))
 	if len(aasDBIDs) == 0 {
 		return out, nil
 	}
@@ -1882,12 +1732,15 @@ func (s *AssetAdministrationShellDatabase) readSubmodelReferencePayloadsByAASDBI
 			return nil, common.NewInternalServerError("AASREPO-READSMREFBATCH-SCANROW " + scanErr.Error())
 		}
 
-		var submodelReference map[string]any
-		if unmarshalErr := json.Unmarshal(payload, &submodelReference); unmarshalErr != nil {
-			return nil, common.NewInternalServerError("AASREPO-READSMREFBATCH-UNMARSHAL " + unmarshalErr.Error())
+		reference, parseErr := parseReferencePayload(payload, "AASREPO-READSMREFBATCH-PARSEREFERENCE")
+		if parseErr != nil {
+			return nil, parseErr
+		}
+		if reference == nil {
+			continue
 		}
 
-		out[aasDBID] = append(out[aasDBID], submodelReference)
+		out[aasDBID] = append(out[aasDBID], reference)
 	}
 	if rowsErr := rows.Err(); rowsErr != nil {
 		return nil, common.NewInternalServerError("AASREPO-READSMREFBATCH-ITERROWS " + rowsErr.Error())
@@ -1896,32 +1749,257 @@ func (s *AssetAdministrationShellDatabase) readSubmodelReferencePayloadsByAASDBI
 	return out, nil
 }
 
-// assignJSONPayload unmarshals a JSON payload and assigns it to the target map key when present.
-func assignJSONPayload(target map[string]any, key string, payload []byte) error {
-	if len(payload) == 0 {
-		return nil
+func buildAssetAdministrationShellFromCoreRow(row coreAssetAdministrationShellRow, submodels []types.IReference, specificAssetIDs []types.ISpecificAssetID, errorPrefix string) (types.IAssetAdministrationShell, error) {
+	aas := types.NewAssetAdministrationShell(row.aasID, buildAssetInformationFromCoreRow(row, specificAssetIDs))
+
+	if row.idShort.Valid && row.idShort.String != "" {
+		idShort := row.idShort.String
+		aas.SetIDShort(&idShort)
+	}
+	if row.category.Valid && row.category.String != "" {
+		category := row.category.String
+		aas.SetCategory(&category)
 	}
 
-	var jsonValue any
-	if err := json.Unmarshal(payload, &jsonValue); err != nil {
-		return common.NewInternalServerError("AASREPO-MAPAAS-UNMARSHALPAYLOAD " + err.Error())
+	displayName, displayErr := parseLangStringNameTypesPayload(row.displayNamePayload, errorPrefix+"-PARSEDISPLAYNAME")
+	if displayErr != nil {
+		return nil, displayErr
+	}
+	if len(displayName) > 0 {
+		aas.SetDisplayName(displayName)
 	}
 
-	target[key] = jsonValue
-	return nil
+	description, descriptionErr := parseLangStringTextTypesPayload(row.descriptionPayload, errorPrefix+"-PARSEDESCRIPTION")
+	if descriptionErr != nil {
+		return nil, descriptionErr
+	}
+	if len(description) > 0 {
+		aas.SetDescription(description)
+	}
+
+	administration, administrationErr := parseAdministrativeInformationPayload(row.administrationPayload, errorPrefix+"-PARSEADMINISTRATION")
+	if administrationErr != nil {
+		return nil, administrationErr
+	}
+	if administration != nil {
+		aas.SetAdministration(administration)
+	}
+
+	embeddedDataSpecifications, edsErr := parseEmbeddedDataSpecificationsPayload(row.edsPayload, errorPrefix+"-PARSEEDS")
+	if edsErr != nil {
+		return nil, edsErr
+	}
+	if len(embeddedDataSpecifications) > 0 {
+		aas.SetEmbeddedDataSpecifications(embeddedDataSpecifications)
+	}
+
+	extensions, extensionsErr := parseExtensionsPayload(row.extensionsPayload, errorPrefix+"-PARSEEXTENSIONS")
+	if extensionsErr != nil {
+		return nil, extensionsErr
+	}
+	if len(extensions) > 0 {
+		aas.SetExtensions(extensions)
+	}
+
+	derivedFrom, derivedFromErr := parseReferencePayload(row.derivedFromPayload, errorPrefix+"-PARSEDERIVEDFROM")
+	if derivedFromErr != nil {
+		return nil, derivedFromErr
+	}
+	if derivedFrom != nil {
+		aas.SetDerivedFrom(derivedFrom)
+	}
+
+	if len(submodels) > 0 {
+		aas.SetSubmodels(submodels)
+	}
+
+	return aas, nil
 }
 
-func buildThumbnailMap(path sql.NullString, contentType sql.NullString) map[string]any {
+func buildAssetInformationFromCoreRow(row coreAssetAdministrationShellRow, specificAssetIDs []types.ISpecificAssetID) types.IAssetInformation {
+	assetInformation := types.NewAssetInformation(resolveAssetKind(row.assetKind))
+
+	if row.globalAssetID.Valid && row.globalAssetID.String != "" {
+		globalAssetID := row.globalAssetID.String
+		assetInformation.SetGlobalAssetID(&globalAssetID)
+	}
+	if row.assetType.Valid && row.assetType.String != "" {
+		assetType := row.assetType.String
+		assetInformation.SetAssetType(&assetType)
+	}
+	if thumbnail := buildThumbnailResource(row.thumbnailPath, row.thumbnailContentType); thumbnail != nil {
+		assetInformation.SetDefaultThumbnail(thumbnail)
+	}
+	if len(specificAssetIDs) > 0 {
+		assetInformation.SetSpecificAssetIDs(specificAssetIDs)
+	}
+
+	return assetInformation
+}
+
+func resolveAssetKind(assetKind sql.NullInt64) types.AssetKind {
+	if !assetKind.Valid {
+		return types.AssetKindType
+	}
+
+	parsed := types.AssetKind(assetKind.Int64)
+	if _, ok := stringification.AssetKindToString(parsed); !ok {
+		return types.AssetKindType
+	}
+
+	return parsed
+}
+
+func buildThumbnailResource(path sql.NullString, contentType sql.NullString) types.IResource {
 	if !path.Valid || path.String == "" {
 		return nil
 	}
 
-	thumbnail := map[string]any{"path": path.String}
+	thumbnail := types.NewResource(path.String)
 	if contentType.Valid && contentType.String != "" {
-		thumbnail["contentType"] = contentType.String
+		contentTypeValue := contentType.String
+		thumbnail.SetContentType(&contentTypeValue)
 	}
 
 	return thumbnail
+}
+
+func parseJSONPayloadAsArrayOfMaps(payload []byte) ([]map[string]any, error) {
+	if len(payload) == 0 {
+		return nil, nil
+	}
+
+	var values []map[string]any
+	if err := json.Unmarshal(payload, &values); err != nil {
+		return nil, err
+	}
+	if len(values) == 0 {
+		return nil, nil
+	}
+
+	return values, nil
+}
+
+func parseJSONPayloadAsMap(payload []byte) (map[string]any, error) {
+	if len(payload) == 0 {
+		return nil, nil
+	}
+
+	var value map[string]any
+	if err := json.Unmarshal(payload, &value); err != nil {
+		return nil, err
+	}
+	if len(value) == 0 {
+		return nil, nil
+	}
+
+	return value, nil
+}
+
+func parseLangStringTextTypesPayload(payload []byte, errorPrefix string) ([]types.ILangStringTextType, error) {
+	jsonable, err := parseJSONPayloadAsArrayOfMaps(payload)
+	if err != nil {
+		return nil, common.NewInternalServerError(errorPrefix + " " + err.Error())
+	}
+
+	values := make([]types.ILangStringTextType, 0, len(jsonable))
+	for _, item := range jsonable {
+		parsed, parseErr := jsonization.LangStringTextTypeFromJsonable(item)
+		if parseErr != nil {
+			return nil, common.NewInternalServerError(errorPrefix + " " + parseErr.Error())
+		}
+		values = append(values, parsed)
+	}
+
+	return values, nil
+}
+
+func parseLangStringNameTypesPayload(payload []byte, errorPrefix string) ([]types.ILangStringNameType, error) {
+	jsonable, err := parseJSONPayloadAsArrayOfMaps(payload)
+	if err != nil {
+		return nil, common.NewInternalServerError(errorPrefix + " " + err.Error())
+	}
+
+	values := make([]types.ILangStringNameType, 0, len(jsonable))
+	for _, item := range jsonable {
+		parsed, parseErr := jsonization.LangStringNameTypeFromJsonable(item)
+		if parseErr != nil {
+			return nil, common.NewInternalServerError(errorPrefix + " " + parseErr.Error())
+		}
+		values = append(values, parsed)
+	}
+
+	return values, nil
+}
+
+func parseAdministrativeInformationPayload(payload []byte, errorPrefix string) (types.IAdministrativeInformation, error) {
+	jsonable, err := parseJSONPayloadAsMap(payload)
+	if err != nil {
+		return nil, common.NewInternalServerError(errorPrefix + " " + err.Error())
+	}
+	if jsonable == nil {
+		return nil, nil
+	}
+
+	parsed, parseErr := jsonization.AdministrativeInformationFromJsonable(jsonable)
+	if parseErr != nil {
+		return nil, common.NewInternalServerError(errorPrefix + " " + parseErr.Error())
+	}
+
+	return parsed, nil
+}
+
+func parseEmbeddedDataSpecificationsPayload(payload []byte, errorPrefix string) ([]types.IEmbeddedDataSpecification, error) {
+	jsonable, err := parseJSONPayloadAsArrayOfMaps(payload)
+	if err != nil {
+		return nil, common.NewInternalServerError(errorPrefix + " " + err.Error())
+	}
+
+	values := make([]types.IEmbeddedDataSpecification, 0, len(jsonable))
+	for _, item := range jsonable {
+		parsed, parseErr := jsonization.EmbeddedDataSpecificationFromJsonable(item)
+		if parseErr != nil {
+			return nil, common.NewInternalServerError(errorPrefix + " " + parseErr.Error())
+		}
+		values = append(values, parsed)
+	}
+
+	return values, nil
+}
+
+func parseExtensionsPayload(payload []byte, errorPrefix string) ([]types.IExtension, error) {
+	jsonable, err := parseJSONPayloadAsArrayOfMaps(payload)
+	if err != nil {
+		return nil, common.NewInternalServerError(errorPrefix + " " + err.Error())
+	}
+
+	values := make([]types.IExtension, 0, len(jsonable))
+	for _, item := range jsonable {
+		parsed, parseErr := jsonization.ExtensionFromJsonable(item)
+		if parseErr != nil {
+			return nil, common.NewInternalServerError(errorPrefix + " " + parseErr.Error())
+		}
+		values = append(values, parsed)
+	}
+
+	return values, nil
+}
+
+func parseReferencePayload(payload []byte, errorPrefix string) (types.IReference, error) {
+	jsonable, err := parseJSONPayloadAsMap(payload)
+	if err != nil {
+		return nil, common.NewInternalServerError(errorPrefix + " " + err.Error())
+	}
+	if jsonable == nil {
+		return nil, nil
+	}
+
+	parsed, parseErr := jsonization.ReferenceFromJsonable(jsonable)
+	if parseErr != nil {
+		return nil, common.NewInternalServerError(errorPrefix + " " + parseErr.Error())
+	}
+
+	return parsed, nil
 }
 
 // parseSpecificAssetIDSemanticIDPayload parses an optional SpecificAssetID
