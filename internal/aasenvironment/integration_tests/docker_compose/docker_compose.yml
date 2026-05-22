@@ -60,8 +60,6 @@ services:
     depends_on:
       basyx_configuration:
         condition: service_completed_successfully
-      db_it:
-        condition: service_healthy
 
   aas_environment_it_sync_off:
     build:
