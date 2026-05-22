@@ -937,25 +937,6 @@ func isXMLSpecPart(specPart *aasx.Part) bool {
 	return strings.HasSuffix(uri, ".xml") || strings.Contains(contentType, "xml")
 }
 
-func aasxSpecSignatures(specParts []*aasx.Part) []string {
-	signatures := make([]string, 0, len(specParts))
-	for _, specPart := range specParts {
-		if specPart == nil {
-			continue
-		}
-
-		uri := ""
-		if specPart.URI != nil {
-			uri = strings.TrimSpace(specPart.URI.String())
-		}
-
-		signatures = append(signatures, strings.ToLower(uri)+"|"+strings.ToLower(strings.TrimSpace(specPart.ContentType)))
-	}
-
-	sort.Strings(signatures)
-	return signatures
-}
-
 func postJSONFixture(t *testing.T, endpoint string, fixturePath string, expectedStatus int) {
 	t.Helper()
 
