@@ -14,6 +14,7 @@ import (
 
 const (
 	CURRENT_DATABASE_VERSION = "v1.0.1"
+	cleanSchemaState         = "clean"
 )
 
 // NewDatabaseConnection establishes a PostgreSQL database connection.
@@ -60,8 +61,8 @@ func NewDatabaseConnection(dsn string) (*sql.DB, error) {
 	return db, nil
 }
 
-// ValidateSchemaVersion checks whether the schema version in basyxsystem matches the expected service version.
-// Returns an error if the version is missing, unreadable, or does not match.
+// ValidateSchemaVersion checks whether basyxsystem is clean and matches the expected schema version.
+// Returns an error if the state/version is missing, unreadable, dirty, or does not match.
 func ValidateSchemaVersion(db *sql.DB, expectedVersion string) error {
 	if db == nil {
 		return fmt.Errorf("DB-CHECKVER-NILDB database handle is nil")
@@ -73,7 +74,7 @@ func ValidateSchemaVersion(db *sql.DB, expectedVersion string) error {
 
 	query, _, err := goqu.Dialect("postgres").
 		From(goqu.T("basyxsystem")).
-		Select(goqu.C("schema_version")).
+		Select(goqu.C("schema_version"), goqu.C("state")).
 		Order(goqu.C("identifier").Asc()).
 		Limit(1).
 		ToSQL()
@@ -82,7 +83,8 @@ func ValidateSchemaVersion(db *sql.DB, expectedVersion string) error {
 	}
 
 	var actualVersion string
-	err = db.QueryRow(query).Scan(&actualVersion)
+	var schemaState string
+	err = db.QueryRow(query).Scan(&actualVersion, &schemaState)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return fmt.Errorf("DB-CHECKVER-NOVERSIONROW basyxsystem has no version row")
@@ -90,6 +92,14 @@ func ValidateSchemaVersion(db *sql.DB, expectedVersion string) error {
 		_, _ = fmt.Println("[ERROR] It seems that the BaSyx Configuration Service is missing or was not started before. Please see the wiki (User Documentation) on how to integrate it into your setup")
 		_, _ = fmt.Println("[ERROR] If the BaSyx Configuration Service was started before - check the database connection of the service and make sure it exited successfully")
 		return fmt.Errorf("DB-CHECKVER-READFAIL failed to read schema version: %w", err)
+	}
+
+	if strings.TrimSpace(schemaState) != cleanSchemaState {
+		return fmt.Errorf(
+			"DB-CHECKVER-DIRTYSTATE expected schema state %q but found %q",
+			cleanSchemaState,
+			strings.TrimSpace(schemaState),
+		)
 	}
 
 	if strings.TrimSpace(actualVersion) != trimmedExpected {

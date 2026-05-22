@@ -95,25 +95,24 @@ func (sp *SchemaPatch) Execute(stepIndex int) (int, error) {
 
 	if _, err = tx.Exec(string(patchSQL)); err != nil {
 		_ = tx.Rollback()
-		return 1, fmt.Errorf("BASYXCFG-PATCH-EXECUTE: %w", err)
+		return sp.failPatchDirty("BASYXCFG-PATCH-EXECUTE", err)
 	}
 
-	updateSQL, args, err := goqu.Dialect("postgres").
-		Update(goqu.T("basyxsystem")).
-		Set(goqu.Record{"schema_version": sp.targetVersion}).
-		Prepared(true).
-		ToSQL()
+	updateSQL, args, err := buildSystemTableUpdate(goqu.Record{
+		"schema_version": sp.targetVersion,
+		"state":          schemaStateClean,
+	})
 	if err != nil {
 		_ = tx.Rollback()
-		return 1, fmt.Errorf("BASYXCFG-PATCH-BUILDUPDATE: %w", err)
+		return sp.failPatchDirty("BASYXCFG-PATCH-BUILDUPDATE", err)
 	}
 	if _, err = tx.Exec(updateSQL, args...); err != nil {
 		_ = tx.Rollback()
-		return 1, fmt.Errorf("BASYXCFG-PATCH-UPDATEVERSION: %w", err)
+		return sp.failPatchDirty("BASYXCFG-PATCH-UPDATEVERSION", err)
 	}
 
 	if err = tx.Commit(); err != nil {
-		return 1, fmt.Errorf("BASYXCFG-PATCH-COMMIT: %w", err)
+		return sp.failPatchDirty("BASYXCFG-PATCH-COMMIT", err)
 	}
 
 	_, _ = fmt.Printf("[Step %d] Patch %s applied successfully\n", stepIndex, sp.targetVersion)
@@ -142,12 +141,38 @@ func (sp *SchemaPatch) getCurrentSchemaVersion() (string, error) {
 		return strings.TrimSpace(version), nil
 	}
 	if errors.Is(err, sql.ErrNoRows) {
-		if _, seedErr := sp.ctx.DB.Exec(seedSystemTableQuery, initialSchemaVersion); seedErr != nil {
+		if _, seedErr := sp.ctx.DB.Exec(seedSystemTableQuery, initialSchemaVersion, schemaStateClean); seedErr != nil {
 			return "", fmt.Errorf("BASYXCFG-PATCH-SEEDVERSION: %w", seedErr)
 		}
 		return initialSchemaVersion, nil
 	}
 	return "", fmt.Errorf("BASYXCFG-PATCH-READVERSION: %w", err)
+}
+
+func (sp *SchemaPatch) failPatchDirty(errorCode string, cause error) (int, error) {
+	if dirtyErr := sp.updateSchemaState(schemaStateDirty); dirtyErr != nil {
+		return 1, fmt.Errorf("%s: %w; BASYXCFG-PATCH-MARKDIRTY: %v", errorCode, cause, dirtyErr)
+	}
+	return 1, fmt.Errorf("%s: %w", errorCode, cause)
+}
+
+func (sp *SchemaPatch) updateSchemaState(state string) error {
+	updateSQL, args, err := buildSystemTableUpdate(goqu.Record{"state": state})
+	if err != nil {
+		return fmt.Errorf("BASYXCFG-PATCH-BUILDSTATEUPDATE: %w", err)
+	}
+	if _, err = sp.ctx.DB.Exec(updateSQL, args...); err != nil {
+		return fmt.Errorf("BASYXCFG-PATCH-UPDATESTATE: %w", err)
+	}
+	return nil
+}
+
+func buildSystemTableUpdate(record goqu.Record) (string, []interface{}, error) {
+	return goqu.Dialect("postgres").
+		Update(goqu.T("basyxsystem")).
+		Set(record).
+		Prepared(true).
+		ToSQL()
 }
 
 func compareSemanticVersions(current string, target string) (int, error) {

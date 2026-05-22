@@ -26,6 +26,7 @@
 package sequences
 
 import (
+	"errors"
 	"regexp"
 	"testing"
 
@@ -52,8 +53,8 @@ func TestSchemaPatchExecuteAppliesPatchAndUpdatesVersion(t *testing.T) {
 	mock.ExpectBegin()
 	mock.ExpectExec(regexp.QuoteMeta(patchSQL)).
 		WillReturnResult(sqlmock.NewResult(0, 1))
-	mock.ExpectExec(regexp.QuoteMeta(`UPDATE "basyxsystem" SET "schema_version"=$1`)).
-		WithArgs("v1.0.1").
+	mock.ExpectExec(regexp.QuoteMeta(`UPDATE "basyxsystem" SET "schema_version"=$1,"state"=$2`)).
+		WithArgs("v1.0.1", schemaStateClean).
 		WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectCommit()
 	mock.ExpectExec(regexp.QuoteMeta("SELECT pg_advisory_unlock($1)")).
@@ -91,13 +92,13 @@ func TestSchemaPatchSeedsVersionRowWhenMissing(t *testing.T) {
 	mock.ExpectQuery(regexp.QuoteMeta(`SELECT "schema_version" FROM "basyxsystem" ORDER BY "identifier" ASC LIMIT 1`)).
 		WillReturnRows(sqlmock.NewRows([]string{"schema_version"}))
 	mock.ExpectExec(regexp.QuoteMeta(seedSystemTableQuery)).
-		WithArgs(initialSchemaVersion).
+		WithArgs(initialSchemaVersion, schemaStateClean).
 		WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectBegin()
 	mock.ExpectExec(regexp.QuoteMeta(patchSQL)).
 		WillReturnResult(sqlmock.NewResult(0, 1))
-	mock.ExpectExec(regexp.QuoteMeta(`UPDATE "basyxsystem" SET "schema_version"=$1`)).
-		WithArgs("v1.0.1").
+	mock.ExpectExec(regexp.QuoteMeta(`UPDATE "basyxsystem" SET "schema_version"=$1,"state"=$2`)).
+		WithArgs("v1.0.1", schemaStateClean).
 		WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectCommit()
 	mock.ExpectExec(regexp.QuoteMeta("SELECT pg_advisory_unlock($1)")).
@@ -111,6 +112,47 @@ func TestSchemaPatchSeedsVersionRowWhenMissing(t *testing.T) {
 	}
 	if statusCode != 0 {
 		t.Fatalf("expected status code 0, got %d", statusCode)
+	}
+	if err = mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("unmet SQL expectations: %v", err)
+	}
+}
+
+func TestSchemaPatchMarksDatabaseDirtyWhenPatchExecutionFails(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("sqlmock.New() failed: %v", err)
+	}
+	defer func() {
+		_ = db.Close()
+	}()
+
+	patchSQL := "ALTER TABLE IF EXISTS aas_identifier ADD COLUMN test_column TEXT;"
+	patchPath := writeTempSchema(t, patchSQL)
+
+	mock.ExpectExec(regexp.QuoteMeta("SELECT pg_advisory_lock($1)")).
+		WithArgs(schemaAdvisoryLockID).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectQuery(regexp.QuoteMeta(`SELECT "schema_version" FROM "basyxsystem" ORDER BY "identifier" ASC LIMIT 1`)).
+		WillReturnRows(sqlmock.NewRows([]string{"schema_version"}).AddRow("v1.0.0"))
+	mock.ExpectBegin()
+	mock.ExpectExec(regexp.QuoteMeta(patchSQL)).
+		WillReturnError(errors.New("patch failed"))
+	mock.ExpectRollback()
+	mock.ExpectExec(regexp.QuoteMeta(`UPDATE "basyxsystem" SET "state"=$1`)).
+		WithArgs(schemaStateDirty).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectExec(regexp.QuoteMeta("SELECT pg_advisory_unlock($1)")).
+		WithArgs(schemaAdvisoryLockID).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+
+	step := NewSchemaPatch(&ExecutionContext{DB: db}, patchPath, "v1.0.1")
+	statusCode, execErr := step.Execute(3)
+	if execErr == nil {
+		t.Fatal("expected error, got nil")
+	}
+	if statusCode != 1 {
+		t.Fatalf("expected status code 1, got %d", statusCode)
 	}
 	if err = mock.ExpectationsWereMet(); err != nil {
 		t.Fatalf("unmet SQL expectations: %v", err)

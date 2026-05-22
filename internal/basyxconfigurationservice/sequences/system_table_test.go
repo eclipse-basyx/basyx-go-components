@@ -71,8 +71,10 @@ func TestSystemTableExecuteSuccess(t *testing.T) {
 		WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectExec(regexp.QuoteMeta(createSystemTableQuery)).
 		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectExec(regexp.QuoteMeta(ensureSystemTableStateColumnQuery)).
+		WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectExec(regexp.QuoteMeta(seedSystemTableQuery)).
-		WithArgs(initialSchemaVersion).
+		WithArgs(initialSchemaVersion, schemaStateClean).
 		WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectExec(regexp.QuoteMeta("SELECT pg_advisory_unlock($1)")).
 		WithArgs(schemaAdvisoryLockID).

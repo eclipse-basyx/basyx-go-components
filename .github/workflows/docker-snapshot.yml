@@ -125,7 +125,6 @@ jobs:
           push: true
           tags: |
             ${{ matrix.service.image }}:SNAPSHOT
-            ${{ matrix.service.image }}:${{ steps.meta.outputs.version }}
             ${{ matrix.service.image }}:${{ steps.meta.outputs.short_sha }}
           build-args: |
             VERSION=${{ steps.meta.outputs.version }}
@@ -254,5 +253,4 @@ jobs:
       - name: Image digest
         run: |
           echo "Built and pushed mutable tag ${{ matrix.service.image }}:SNAPSHOT"
-          echo "Built and pushed immutable tags ${{ matrix.service.image }}:${{ steps.meta.outputs.version }} and ${{ matrix.service.image }}:${{ steps.meta.outputs.short_sha }}"
           echo "Digest: ${{ steps.build.outputs.digest }}"

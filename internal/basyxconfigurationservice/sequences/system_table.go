@@ -27,18 +27,28 @@ package sequences
 
 import "fmt"
 
-const initialSchemaVersion = "v1.0.0"
+const (
+	initialSchemaVersion = "v1.0.0"
+	schemaStateClean     = "clean"
+	schemaStateDirty     = "dirty"
+)
 
 const createSystemTableQuery = `
 		CREATE TABLE IF NOT EXISTS basyxsystem (
 			identifier BIGSERIAL PRIMARY KEY,
-			schema_version VARCHAR NOT NULL DEFAULT 'v1.0.0'
+			schema_version VARCHAR NOT NULL DEFAULT 'v1.0.0',
+			state VARCHAR NOT NULL DEFAULT 'clean'
 		)
 	`
 
+const ensureSystemTableStateColumnQuery = `
+		ALTER TABLE basyxsystem
+		ADD COLUMN IF NOT EXISTS state VARCHAR NOT NULL DEFAULT 'clean'
+	`
+
 const seedSystemTableQuery = `
-		INSERT INTO basyxsystem (schema_version)
-		SELECT $1
+		INSERT INTO basyxsystem (schema_version, state)
+		SELECT $1, $2
 		WHERE NOT EXISTS (SELECT 1 FROM basyxsystem)
 	`
 
@@ -69,7 +79,11 @@ func (st *SystemTable) Execute(stepIndex int) (int, error) {
 		return 1, fmt.Errorf("BASYXCFG-SYSTEM-CREATETABLE: %w", err)
 	}
 
-	if _, err := st.ctx.DB.Exec(seedSystemTableQuery, initialSchemaVersion); err != nil {
+	if _, err := st.ctx.DB.Exec(ensureSystemTableStateColumnQuery); err != nil {
+		return 1, fmt.Errorf("BASYXCFG-SYSTEM-ENSURESTATE: %w", err)
+	}
+
+	if _, err := st.ctx.DB.Exec(seedSystemTableQuery, initialSchemaVersion, schemaStateClean); err != nil {
 		return 1, fmt.Errorf("BASYXCFG-SYSTEM-SEEDVERSION: %w", err)
 	}
 

@@ -106,7 +106,6 @@
             "request": "launch",
             "mode": "debug",
             "program": "${workspaceFolder}/cmd/basyxconfigurationservice/main.go",
-
             "args": [
                 "-config",
                 "${workspaceFolder}/cmd/basyxconfigurationservice/config.yaml",
