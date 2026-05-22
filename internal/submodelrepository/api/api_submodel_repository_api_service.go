@@ -897,7 +897,7 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodels(
 
 	sms, nextCursor, err := s.submodelBackend.GetSubmodels(ctx, limit, decodedCursor, idShort)
 	if err != nil {
-		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "GetSubmodels"), err
+		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "GetSubmodels"), nil
 	}
 
 	eg, _ := errgroup.WithContext(ctx)
@@ -921,7 +921,7 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodels(
 		if common.IsErrNotFound(waitErr) || errors.Is(waitErr, sql.ErrNoRows) {
 			return newAPIErrorResponse(waitErr, http.StatusNotFound, operation, "SubmodelNotFound"), nil
 		}
-		return newAPIErrorResponse(waitErr, http.StatusInternalServerError, operation, "GetSubmodelElements"), waitErr
+		return newAPIErrorResponse(waitErr, http.StatusInternalServerError, operation, "GetSubmodelElements"), nil
 	}
 
 	converted := make([]map[string]any, 0, len(sms))
@@ -929,7 +929,7 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodels(
 	for _, sm := range sms {
 		jsonSubmodel, err := jsonization.ToJsonable(sm)
 		if err != nil {
-			return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "ToJsonable"), err
+			return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "ToJsonable"), nil
 		}
 		converted = append(converted, jsonSubmodel)
 	}
@@ -987,12 +987,12 @@ func (s *SubmodelRepositoryAPIAPIService) GetSubmodelByID(
 			return newAPIErrorResponse(err, http.StatusNotFound, operation, "SubmodelNotFound"), nil
 		}
 		_, _ = fmt.Printf("[DEBUG] GetSubmodelByID: Error getting submodel '%s': %v\n", string(decodedSubmodelIdentifier), err)
-		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "GetSubmodelByID"), err
+		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "GetSubmodelByID"), nil
 	}
 	jsonSubmodel, err := jsonization.ToJsonable(sm)
 	if err != nil {
 		_, _ = fmt.Printf("[DEBUG] GetSubmodelByID: Error converting submodel '%s' to JSON: %v\n", string(decodedSubmodelIdentifier), err)
-		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "ToJsonable"), err
+		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "ToJsonable"), nil
 	}
 	deleteSubmodelElementsIfEmpty(jsonSubmodel)
 	return gen.Response(200, jsonSubmodel), nil
@@ -1020,7 +1020,7 @@ func (s *SubmodelRepositoryAPIAPIService) GetSignedSubmodelByID(
 		if err.Error() == "JWS signing not configured: private key not loaded" {
 			return newAPIErrorResponse(err, http.StatusNotFound, operation, "SigningNotConfigured"), nil
 		}
-		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "GetSignedSubmodel"), err
+		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "GetSignedSubmodel"), nil
 	}
 
 	return gen.Response(http.StatusOK, jwsString), nil
@@ -1048,7 +1048,7 @@ func (s *SubmodelRepositoryAPIAPIService) GetSignedSubmodelByIDValueOnly(
 		if err.Error() == "JWS signing not configured: private key not loaded" {
 			return newAPIErrorResponse(err, http.StatusNotFound, operation, "SigningNotConfigured"), nil
 		}
-		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "GetSignedSubmodel"), err
+		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "GetSignedSubmodel"), nil
 	}
 
 	return gen.Response(http.StatusOK, jwsString), nil
@@ -1124,7 +1124,7 @@ func (s *SubmodelRepositoryAPIAPIService) PostSubmodel(
 
 		_, _ = fmt.Println("Error creating submodel: " + err.Error())
 
-		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "CreateSubmodel"), err
+		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "CreateSubmodel"), nil
 	}
 
 	submodelJsonable, err := jsonization.ToJsonable(submodel)
@@ -1167,7 +1167,7 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelsMetadata(
 
 	submodels, nextCursor, err := s.submodelBackend.GetSubmodels(ctx, limit, decodedCursor, "")
 	if err != nil {
-		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "GetSubmodels"), err
+		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "GetSubmodels"), nil
 	}
 
 	idShortFilter := strings.ToLower(strings.TrimSpace(idShort))
@@ -1210,7 +1210,7 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelsMetadata(
 
 		jsonSubmodel, convertErr := jsonization.ToJsonable(sm)
 		if convertErr != nil {
-			return newAPIErrorResponse(convertErr, http.StatusInternalServerError, operation, "ToJsonable"), convertErr
+			return newAPIErrorResponse(convertErr, http.StatusInternalServerError, operation, "ToJsonable"), nil
 		}
 		delete(jsonSubmodel, "submodelElements")
 		converted = append(converted, jsonSubmodel)
@@ -1252,7 +1252,7 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelsValueOnly(ctx context.C
 
 	sms, nextCursor, err := s.submodelBackend.GetSubmodels(ctx, limit, decodedCursor, idShort)
 	if err != nil {
-		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "GetSubmodels"), err
+		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "GetSubmodels"), nil
 	}
 
 	valueOnlyResults := make([]map[string]any, len(sms))
@@ -1286,7 +1286,7 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelsValueOnly(ctx context.C
 		if common.IsErrNotFound(waitErr) || errors.Is(waitErr, sql.ErrNoRows) {
 			return newAPIErrorResponse(waitErr, http.StatusNotFound, operation, "SubmodelNotFound"), nil
 		}
-		return newAPIErrorResponse(waitErr, http.StatusInternalServerError, operation, "GetSubmodelElements"), waitErr
+		return newAPIErrorResponse(waitErr, http.StatusInternalServerError, operation, "GetSubmodelElements"), nil
 	}
 
 	encodedNextCursor := ""
@@ -1330,14 +1330,14 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelsReference(ctx context.C
 		if common.IsErrBadRequest(err) {
 			return newAPIErrorResponse(err, http.StatusBadRequest, operation, "BadRequest"), nil
 		}
-		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "GetSubmodelReferences"), err
+		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "GetSubmodelReferences"), nil
 	}
 
 	jsonReferences := make([]map[string]any, 0, len(references))
 	for _, ref := range references {
 		jsonRef, err := jsonization.ToJsonable(ref)
 		if err != nil {
-			return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "ToJsonable"), err
+			return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "ToJsonable"), nil
 		}
 		jsonReferences = append(jsonReferences, jsonRef)
 	}
@@ -1414,7 +1414,7 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelsPath(
 			if common.IsErrBadRequest(err) {
 				return newAPIErrorResponse(err, http.StatusBadRequest, operation, "BadRequest"), nil
 			}
-			return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "GetSubmodelReferences"), err
+			return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "GetSubmodelReferences"), nil
 		}
 
 		if len(references) == 0 {
@@ -1431,7 +1431,7 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelsPath(
 		for _, reference := range references {
 			submodelIdentifier, extractErr := extractSubmodelIdentifierFromReference(reference)
 			if extractErr != nil {
-				return newAPIErrorResponse(extractErr, http.StatusInternalServerError, operation, "ExtractSubmodelIdentifier"), extractErr
+				return newAPIErrorResponse(extractErr, http.StatusInternalServerError, operation, "ExtractSubmodelIdentifier"), nil
 			}
 			submodelIdentifiers = append(submodelIdentifiers, submodelIdentifier)
 		}
@@ -1458,7 +1458,7 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelsPath(
 				if common.IsErrBadRequest(pathErr) {
 					return newAPIErrorResponse(pathErr, http.StatusBadRequest, operation, "BadRequest"), nil
 				}
-				return newAPIErrorResponse(pathErr, http.StatusInternalServerError, operation, "GetSubmodelElementPathPage"), pathErr
+				return newAPIErrorResponse(pathErr, http.StatusInternalServerError, operation, "GetSubmodelElementPathPage"), nil
 			}
 
 			resultPaths = append(resultPaths, paths...)
@@ -1477,7 +1477,7 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelsPath(
 
 				encodedCursorState, encodeCursorErr := encodeAllSubmodelsPathCursorState(nextState)
 				if encodeCursorErr != nil {
-					return newAPIErrorResponse(encodeCursorErr, http.StatusInternalServerError, operation, "EncodeCursor"), encodeCursorErr
+					return newAPIErrorResponse(encodeCursorErr, http.StatusInternalServerError, operation, "EncodeCursor"), nil
 				}
 
 				res := gen.GetPathItemsResult{
@@ -1587,7 +1587,7 @@ func (s *SubmodelRepositoryAPIAPIService) PatchSubmodelByID(ctx context.Context,
 			return newAPIErrorResponse(getErr, http.StatusNotFound, operation, "SubmodelNotFound"), nil
 		}
 
-		return newAPIErrorResponse(getErr, http.StatusInternalServerError, operation, "GetSubmodelByID"), getErr
+		return newAPIErrorResponse(getErr, http.StatusInternalServerError, operation, "GetSubmodelByID"), nil
 	}
 
 	if len(existingSubmodels) == 0 {
@@ -1597,12 +1597,12 @@ func (s *SubmodelRepositoryAPIAPIService) PatchSubmodelByID(ctx context.Context,
 	existingSubmodel := existingSubmodels[0]
 	if existingSubmodel == nil {
 		nilErr := common.NewInternalServerError("SMREPO-PATCHSM-EXISTINGNIL Existing submodel is nil")
-		return newAPIErrorResponse(nilErr, http.StatusInternalServerError, operation, "GetSubmodelByID"), nilErr
+		return newAPIErrorResponse(nilErr, http.StatusInternalServerError, operation, "GetSubmodelByID"), nil
 	}
 
 	existingJSON, existingJSONErr := jsonization.ToJsonable(existingSubmodel)
 	if existingJSONErr != nil {
-		return newAPIErrorResponse(existingJSONErr, http.StatusInternalServerError, operation, "ToJsonableCurrentSubmodel"), existingJSONErr
+		return newAPIErrorResponse(existingJSONErr, http.StatusInternalServerError, operation, "ToJsonableCurrentSubmodel"), nil
 	}
 
 	patchJSON["id"] = decodedIdentifier
@@ -1651,12 +1651,12 @@ func (s *SubmodelRepositoryAPIAPIService) GetSubmodelByIDMetadata(ctx context.Co
 			return newAPIErrorResponse(err, http.StatusNotFound, operation, "SubmodelNotFound"), nil
 		}
 
-		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "GetSubmodelByID"), err
+		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "GetSubmodelByID"), nil
 	}
 
 	jsonSubmodel, err := jsonization.ToJsonable(sm)
 	if err != nil {
-		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "ToJsonable"), err
+		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "ToJsonable"), nil
 	}
 
 	delete(jsonSubmodel, "submodelElements")
@@ -1696,12 +1696,12 @@ func (s *SubmodelRepositoryAPIAPIService) PatchSubmodelByIDMetadata(ctx context.
 		if common.IsErrNotFound(getErr) || errors.Is(getErr, sql.ErrNoRows) {
 			return newAPIErrorResponse(getErr, http.StatusNotFound, operation, "SubmodelNotFound"), nil
 		}
-		return newAPIErrorResponse(getErr, http.StatusInternalServerError, operation, "GetSubmodelByID"), getErr
+		return newAPIErrorResponse(getErr, http.StatusInternalServerError, operation, "GetSubmodelByID"), nil
 	}
 
 	existingJSON, existingJSONErr := jsonization.ToJsonable(existingSubmodel)
 	if existingJSONErr != nil {
-		return newAPIErrorResponse(existingJSONErr, http.StatusInternalServerError, operation, "ToJsonableCurrentSubmodel"), existingJSONErr
+		return newAPIErrorResponse(existingJSONErr, http.StatusInternalServerError, operation, "ToJsonableCurrentSubmodel"), nil
 	}
 
 	mergedJSON := mergeJSONObjects(existingJSON, patchJSON)
@@ -1721,7 +1721,7 @@ func (s *SubmodelRepositoryAPIAPIService) PatchSubmodelByIDMetadata(ctx context.
 		if common.IsErrDenied(err) {
 			return newAPIErrorResponse(err, http.StatusForbidden, operation, "Denied"), nil
 		}
-		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "PatchSubmodelMetadata"), err
+		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "PatchSubmodelMetadata"), nil
 	}
 
 	return gen.Response(http.StatusNoContent, nil), nil
@@ -1748,12 +1748,12 @@ func (s *SubmodelRepositoryAPIAPIService) GetSubmodelByIDValueOnly(ctx context.C
 		if errors.Is(err, sql.ErrNoRows) || common.IsErrNotFound(err) {
 			return newAPIErrorResponse(err, http.StatusNotFound, operation, "SubmodelNotFound"), nil
 		}
-		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "GetSubmodelByID"), err
+		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "GetSubmodelByID"), nil
 	}
 
 	valueOnly, convErr := gen.SubmodelToValueOnly(sm)
 	if convErr != nil {
-		return newAPIErrorResponse(convErr, http.StatusInternalServerError, operation, "SubmodelToValueOnly"), convErr
+		return newAPIErrorResponse(convErr, http.StatusInternalServerError, operation, "SubmodelToValueOnly"), nil
 	}
 
 	return gen.Response(http.StatusOK, valueOnly), nil
@@ -1804,12 +1804,12 @@ func (s *SubmodelRepositoryAPIAPIService) GetSubmodelByIDReference(ctx context.C
 		if common.IsErrBadRequest(err) {
 			return newAPIErrorResponse(err, http.StatusBadRequest, operation, "BadRequest"), nil
 		}
-		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "GetSubmodelReference"), err
+		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "GetSubmodelReference"), nil
 	}
 
 	jsonableRef, convErr := jsonization.ToJsonable(reference)
 	if convErr != nil {
-		return newAPIErrorResponse(convErr, http.StatusInternalServerError, operation, "ToJsonable"), convErr
+		return newAPIErrorResponse(convErr, http.StatusInternalServerError, operation, "ToJsonable"), nil
 	}
 
 	return gen.Response(http.StatusOK, jsonableRef), nil
@@ -1838,7 +1838,7 @@ func (s *SubmodelRepositoryAPIAPIService) GetSubmodelByIDPath(ctx context.Contex
 		if common.IsErrBadRequest(err) {
 			return newAPIErrorResponse(err, http.StatusBadRequest, operation, "BadRequest"), nil
 		}
-		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "GetSubmodelElementPaths"), err
+		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "GetSubmodelElementPaths"), nil
 	}
 
 	return gen.Response(http.StatusOK, paths), nil
@@ -1893,14 +1893,14 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelElements(ctx context.Con
 		if common.IsErrBadRequest(err) {
 			return newAPIErrorResponse(err, http.StatusBadRequest, operation, "BadRequest"), nil
 		}
-		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "GetSubmodelElements"), err
+		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "GetSubmodelElements"), nil
 	}
 
 	converted := make([]map[string]any, 0, len(elements))
 	for _, element := range elements {
 		jsonSubmodelElement, convErr := jsonization.ToJsonable(element)
 		if convErr != nil {
-			return newAPIErrorResponse(convErr, http.StatusInternalServerError, operation, "ToJsonable"), convErr
+			return newAPIErrorResponse(convErr, http.StatusInternalServerError, operation, "ToJsonable"), nil
 		}
 		converted = append(converted, jsonSubmodelElement)
 	}
@@ -1950,12 +1950,12 @@ func (s *SubmodelRepositoryAPIAPIService) PostSubmodelElementSubmodelRepo(ctx co
 		if common.IsErrBadRequest(err) {
 			return newAPIErrorResponse(err, http.StatusBadRequest, operation, "BadRequest"), nil
 		}
-		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "AddSubmodelElement"), err
+		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "AddSubmodelElement"), nil
 	}
 
 	jsonSubmodelElement, jsonErr := jsonization.ToJsonable(submodelElement)
 	if jsonErr != nil {
-		return newAPIErrorResponse(jsonErr, http.StatusInternalServerError, operation, "ToJsonable"), jsonErr
+		return newAPIErrorResponse(jsonErr, http.StatusInternalServerError, operation, "ToJsonable"), nil
 	}
 
 	return gen.Response(http.StatusCreated, jsonSubmodelElement), nil
@@ -1986,14 +1986,14 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelElementsMetadataSubmodel
 		if common.IsErrBadRequest(err) {
 			return newAPIErrorResponse(err, http.StatusBadRequest, operation, "BadRequest"), nil
 		}
-		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "GetSubmodelElements"), err
+		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "GetSubmodelElements"), nil
 	}
 
 	metadataResult := make([]map[string]any, 0, len(elements))
 	for _, element := range elements {
 		metadata, conversionErr := toSubmodelElementMetadata(element)
 		if conversionErr != nil {
-			return newAPIErrorResponse(conversionErr, http.StatusInternalServerError, operation, "ToSubmodelElementMetadata"), conversionErr
+			return newAPIErrorResponse(conversionErr, http.StatusInternalServerError, operation, "ToSubmodelElementMetadata"), nil
 		}
 		metadataResult = append(metadataResult, metadata)
 	}
@@ -2042,14 +2042,14 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelElementsValueOnlySubmode
 		if common.IsErrBadRequest(err) {
 			return newAPIErrorResponse(err, http.StatusBadRequest, operation, "BadRequest"), nil
 		}
-		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "GetSubmodelElements"), err
+		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "GetSubmodelElements"), nil
 	}
 
 	valueOnlyResults := make([]gen.SubmodelElementValue, 0, len(elements))
 	for _, element := range elements {
 		valueOnly, convErr := gen.SubmodelElementToValueOnly(element)
 		if convErr != nil {
-			return newAPIErrorResponse(convErr, http.StatusInternalServerError, operation, "SubmodelElementToValueOnly"), convErr
+			return newAPIErrorResponse(convErr, http.StatusInternalServerError, operation, "SubmodelElementToValueOnly"), nil
 		}
 		if valueOnly == nil {
 			continue
@@ -2104,14 +2104,14 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelElementsReferenceSubmode
 		if common.IsErrBadRequest(err) {
 			return newAPIErrorResponse(err, http.StatusBadRequest, operation, "BadRequest"), nil
 		}
-		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "GetSubmodelElementReferences"), err
+		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "GetSubmodelElementReferences"), nil
 	}
 
 	jsonableArray := make([]map[string]any, 0, len(references))
 	for _, ref := range references {
 		jsonRef, convErr := jsonization.ToJsonable(ref)
 		if convErr != nil {
-			return newAPIErrorResponse(convErr, http.StatusInternalServerError, operation, "ToJsonable"), convErr
+			return newAPIErrorResponse(convErr, http.StatusInternalServerError, operation, "ToJsonable"), nil
 		}
 		jsonableArray = append(jsonableArray, jsonRef)
 	}
@@ -2152,7 +2152,7 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelElementsPathSubmodelRepo
 		if common.IsErrBadRequest(err) {
 			return newAPIErrorResponse(err, http.StatusBadRequest, operation, "BadRequest"), nil
 		}
-		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "GetSubmodelElementPathPage"), err
+		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "GetSubmodelElementPathPage"), nil
 	}
 
 	res := gen.GetPathItemsResult{
@@ -2187,12 +2187,12 @@ func (s *SubmodelRepositoryAPIAPIService) GetSubmodelElementByPathSubmodelRepo(c
 		if common.IsErrBadRequest(err) {
 			return newAPIErrorResponse(err, http.StatusBadRequest, operation, "BadRequest"), nil
 		}
-		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "GetSubmodelElement"), err
+		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "GetSubmodelElement"), nil
 	}
 
 	converted, convErr := jsonization.ToJsonable(element)
 	if convErr != nil {
-		return newAPIErrorResponse(convErr, http.StatusInternalServerError, operation, "ToJsonable"), convErr
+		return newAPIErrorResponse(convErr, http.StatusInternalServerError, operation, "ToJsonable"), nil
 	}
 
 	return gen.Response(http.StatusOK, converted), nil
@@ -2233,7 +2233,7 @@ func (s *SubmodelRepositoryAPIAPIService) PutSubmodelElementByPathSubmodelRepo(c
 		if common.IsErrConflict(err) {
 			return newAPIErrorResponse(err, http.StatusConflict, operation, "Conflict"), nil
 		}
-		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "PutSubmodelElement"), err
+		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "PutSubmodelElement"), nil
 	}
 
 	if isUpdate {
@@ -2242,7 +2242,7 @@ func (s *SubmodelRepositoryAPIAPIService) PutSubmodelElementByPathSubmodelRepo(c
 
 	parsedElement, parseErr := jsonization.ToJsonable(submodelElement)
 	if parseErr != nil {
-		return newAPIErrorResponse(parseErr, http.StatusInternalServerError, operation, "ToJsonable"), parseErr
+		return newAPIErrorResponse(parseErr, http.StatusInternalServerError, operation, "ToJsonable"), nil
 	}
 
 	return gen.Response(http.StatusCreated, parsedElement), nil
@@ -2279,12 +2279,12 @@ func (s *SubmodelRepositoryAPIAPIService) PostSubmodelElementByPathSubmodelRepo(
 		if common.IsErrBadRequest(err) {
 			return newAPIErrorResponse(err, http.StatusBadRequest, operation, "BadRequest"), nil
 		}
-		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "AddSubmodelElementWithPath"), err
+		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "AddSubmodelElementWithPath"), nil
 	}
 
 	parsedElement, parseErr := jsonization.ToJsonable(submodelElement)
 	if parseErr != nil {
-		return newAPIErrorResponse(parseErr, http.StatusInternalServerError, operation, "ToJsonable"), parseErr
+		return newAPIErrorResponse(parseErr, http.StatusInternalServerError, operation, "ToJsonable"), nil
 	}
 
 	return gen.Response(http.StatusCreated, parsedElement), nil
@@ -2320,7 +2320,7 @@ func (s *SubmodelRepositoryAPIAPIService) DeleteSubmodelElementByPathSubmodelRep
 		if common.IsErrBadRequest(err) {
 			return newAPIErrorResponse(err, http.StatusBadRequest, operation, "BadRequest"), nil
 		}
-		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "DeleteSubmodelElementByPath"), err
+		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "DeleteSubmodelElementByPath"), nil
 	}
 
 	return gen.Response(http.StatusNoContent, nil), nil
@@ -2347,12 +2347,12 @@ func (s *SubmodelRepositoryAPIAPIService) PatchSubmodelElementByPathSubmodelRepo
 			return newAPIErrorResponse(getErr, http.StatusNotFound, operation, "SubmodelElementNotFound"), nil
 		}
 
-		return newAPIErrorResponse(getErr, http.StatusInternalServerError, operation, "GetSubmodelElement"), getErr
+		return newAPIErrorResponse(getErr, http.StatusInternalServerError, operation, "GetSubmodelElement"), nil
 	}
 
 	existingJSON, existingJSONErr := jsonization.ToJsonable(existingElement)
 	if existingJSONErr != nil {
-		return newAPIErrorResponse(existingJSONErr, http.StatusInternalServerError, operation, "ToJsonableCurrentSubmodelElement"), existingJSONErr
+		return newAPIErrorResponse(existingJSONErr, http.StatusInternalServerError, operation, "ToJsonableCurrentSubmodelElement"), nil
 	}
 
 	patchJSON, patchJSONErr := jsonization.ToJsonable(submodelElement)
@@ -2382,7 +2382,7 @@ func (s *SubmodelRepositoryAPIAPIService) PatchSubmodelElementByPathSubmodelRepo
 			return newAPIErrorResponse(err, http.StatusConflict, operation, "Conflict"), nil
 		}
 
-		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "UpdateSubmodelElement"), err
+		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "UpdateSubmodelElement"), nil
 	}
 
 	return gen.Response(http.StatusNoContent, nil), nil
@@ -2407,12 +2407,12 @@ func (s *SubmodelRepositoryAPIAPIService) GetSubmodelElementByPathMetadataSubmod
 		if common.IsErrBadRequest(err) {
 			return newAPIErrorResponse(err, http.StatusBadRequest, operation, "BadRequest"), nil
 		}
-		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "GetSubmodelElement"), err
+		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "GetSubmodelElement"), nil
 	}
 
 	metadata, conversionErr := toSubmodelElementMetadata(element)
 	if conversionErr != nil {
-		return newAPIErrorResponse(conversionErr, http.StatusInternalServerError, operation, "ToSubmodelElementMetadata"), conversionErr
+		return newAPIErrorResponse(conversionErr, http.StatusInternalServerError, operation, "ToSubmodelElementMetadata"), nil
 	}
 
 	return gen.Response(http.StatusOK, metadata), nil
@@ -2434,12 +2434,12 @@ func (s *SubmodelRepositoryAPIAPIService) PatchSubmodelElementByPathMetadataSubm
 		if errors.Is(getErr, sql.ErrNoRows) || common.IsErrNotFound(getErr) {
 			return newAPIErrorResponse(getErr, http.StatusNotFound, operation, "SubmodelElementNotFound"), nil
 		}
-		return newAPIErrorResponse(getErr, http.StatusInternalServerError, operation, "GetSubmodelElement"), getErr
+		return newAPIErrorResponse(getErr, http.StatusInternalServerError, operation, "GetSubmodelElement"), nil
 	}
 
 	existingJSON, existingJSONErr := jsonization.ToJsonable(existingElement)
 	if existingJSONErr != nil {
-		return newAPIErrorResponse(existingJSONErr, http.StatusInternalServerError, operation, "ToJsonableCurrentSubmodelElement"), existingJSONErr
+		return newAPIErrorResponse(existingJSONErr, http.StatusInternalServerError, operation, "ToJsonableCurrentSubmodelElement"), nil
 	}
 
 	patchJSON, patchJSONErr := submodelElementMetadataToJSONPatch(submodelElementMetadata)
@@ -2476,7 +2476,7 @@ func (s *SubmodelRepositoryAPIAPIService) PatchSubmodelElementByPathMetadataSubm
 		if common.IsErrConflict(err) {
 			return newAPIErrorResponse(err, http.StatusConflict, operation, "Conflict"), nil
 		}
-		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "UpdateSubmodelElement"), err
+		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "UpdateSubmodelElement"), nil
 	}
 
 	return gen.Response(http.StatusNoContent, nil), nil
@@ -2502,12 +2502,12 @@ func (s *SubmodelRepositoryAPIAPIService) GetSubmodelElementByPathValueOnlySubmo
 		if common.IsErrBadRequest(err) {
 			return newAPIErrorResponse(err, http.StatusBadRequest, operation, "BadRequest"), nil
 		}
-		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "GetSubmodelElement"), err
+		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "GetSubmodelElement"), nil
 	}
 
 	valueOnly, convErr := gen.SubmodelElementToValueOnly(element)
 	if convErr != nil {
-		return newAPIErrorResponse(convErr, http.StatusInternalServerError, operation, "SubmodelElementToValueOnly"), convErr
+		return newAPIErrorResponse(convErr, http.StatusInternalServerError, operation, "SubmodelElementToValueOnly"), nil
 	}
 
 	if valueOnly == nil {
@@ -2563,13 +2563,13 @@ func (s *SubmodelRepositoryAPIAPIService) GetSubmodelElementByPathReferenceSubmo
 		if common.IsErrBadRequest(err) {
 			return newAPIErrorResponse(err, http.StatusBadRequest, operation, "BadRequest"), nil
 		}
-		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "GetSubmodelElement"), err
+		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "GetSubmodelElement"), nil
 	}
 
 	modelTypeLiteral := getModelTypeLiteral(element)
 	if modelTypeLiteral == "" {
 		internalErr := common.NewInternalServerError("SMREPO-GETSMEREF-MODELTYPE Empty modelType for submodel element")
-		return newAPIErrorResponse(internalErr, http.StatusInternalServerError, operation, "EmptyModelType"), internalErr
+		return newAPIErrorResponse(internalErr, http.StatusInternalServerError, operation, "EmptyModelType"), nil
 	}
 
 	keyTypes, keyValues, keyResolutionErr := resolveModelReferencePathKeys(
@@ -2599,19 +2599,19 @@ func (s *SubmodelRepositoryAPIAPIService) GetSubmodelElementByPathReferenceSubmo
 		if common.IsErrNotFound(keyResolutionErr) {
 			return newAPIErrorResponse(keyResolutionErr, http.StatusNotFound, operation, "SubmodelElementNotFound"), nil
 		}
-		return newAPIErrorResponse(keyResolutionErr, http.StatusInternalServerError, operation, "ResolveReferenceKeys"), keyResolutionErr
+		return newAPIErrorResponse(keyResolutionErr, http.StatusInternalServerError, operation, "ResolveReferenceKeys"), nil
 	}
 
 	reference, referenceErr := buildModelReference(decodedSubmodelIdentifier, keyTypes, keyValues)
 	if referenceErr != nil {
-		return newAPIErrorResponse(referenceErr, http.StatusInternalServerError, operation, "BuildModelReference"), referenceErr
+		return newAPIErrorResponse(referenceErr, http.StatusInternalServerError, operation, "BuildModelReference"), nil
 	}
 
 	var jsonableRef map[string]any
 	if reference != nil {
 		jsonableRef, err = jsonization.ToJsonable(reference)
 		if err != nil {
-			return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "ToJsonable"), err
+			return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "ToJsonable"), nil
 		}
 	}
 
@@ -2641,7 +2641,7 @@ func (s *SubmodelRepositoryAPIAPIService) GetSubmodelElementByPathPathSubmodelRe
 		if common.IsErrBadRequest(err) {
 			return newAPIErrorResponse(err, http.StatusBadRequest, operation, "BadRequest"), nil
 		}
-		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "GetSubmodelElementPathsByPath"), err
+		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "GetSubmodelElementPathsByPath"), nil
 	}
 
 	return gen.Response(http.StatusOK, paths), nil
@@ -2666,7 +2666,7 @@ func (s *SubmodelRepositoryAPIAPIService) GetFileByPathSubmodelRepo(ctx context.
 		if common.IsErrBadRequest(err) {
 			return newAPIErrorResponse(err, http.StatusBadRequest, operation, "BadRequest"), nil
 		}
-		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "GetSubmodelElement"), err
+		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "GetSubmodelElement"), nil
 	}
 
 	fileValue, ok := fileSme.(*types.File)
@@ -2690,7 +2690,7 @@ func (s *SubmodelRepositoryAPIAPIService) GetFileByPathSubmodelRepo(ctx context.
 		if common.IsErrNotFound(err) || errors.Is(err, sql.ErrNoRows) {
 			return newAPIErrorResponse(err, http.StatusNotFound, operation, "FileNotFound"), nil
 		}
-		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "DownloadFileAttachment"), err
+		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "DownloadFileAttachment"), nil
 	}
 
 	return gen.Response(http.StatusOK, openapi.FileDownload{
@@ -2712,7 +2712,7 @@ func (s *SubmodelRepositoryAPIAPIService) PutFileByPathSubmodelRepo(ctx context.
 	}
 	shouldEnforceExtraSecurityCheck, err := auth.ShouldEnforceFormula(ctx)
 	if err != nil {
-		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "ShouldEnforceFormula"), err
+		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "ShouldEnforceFormula"), nil
 	}
 
 	hasAttachment, err := s.submodelBackend.FileAttachmentExists(decodedSubmodelIdentifier, idShortPath)
@@ -2726,7 +2726,7 @@ func (s *SubmodelRepositoryAPIAPIService) PutFileByPathSubmodelRepo(ctx context.
 		if common.IsErrBadRequest(err) {
 			return newAPIErrorResponse(err, http.StatusBadRequest, operation, "BadRequest"), nil
 		}
-		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "ShouldEnforceFormula"), err
+		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "ShouldEnforceFormula"), nil
 	}
 
 	if shouldEnforceExtraSecurityCheck {
@@ -2741,7 +2741,7 @@ func (s *SubmodelRepositoryAPIAPIService) PutFileByPathSubmodelRepo(ctx context.
 			if common.IsErrBadRequest(err) {
 				return newAPIErrorResponse(err, http.StatusBadRequest, operation, "BadRequest"), nil
 			}
-			return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "ShouldEnforceFormula"), err
+			return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "ShouldEnforceFormula"), nil
 		}
 	}
 
@@ -2753,7 +2753,7 @@ func (s *SubmodelRepositoryAPIAPIService) PutFileByPathSubmodelRepo(ctx context.
 		if common.IsErrBadRequest(err) {
 			return newAPIErrorResponse(err, http.StatusBadRequest, operation, "BadRequest"), nil
 		}
-		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "UploadFileAttachment"), err
+		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "UploadFileAttachment"), nil
 	}
 
 	return gen.Response(http.StatusNoContent, nil), nil
@@ -2779,7 +2779,7 @@ func (s *SubmodelRepositoryAPIAPIService) DeleteFileByPathSubmodelRepo(ctx conte
 		if common.IsErrBadRequest(err) {
 			return newAPIErrorResponse(err, http.StatusBadRequest, operation, "BadRequest"), nil
 		}
-		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "DeleteFileAttachment"), err
+		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "DeleteFileAttachment"), nil
 	}
 
 	return gen.Response(http.StatusOK, nil), nil
