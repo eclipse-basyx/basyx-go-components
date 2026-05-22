@@ -1,0 +1,811 @@
+{
+  "idShort": "CarbonFootprint",
+  "displayName": [
+    {
+      "language": "de",
+      "text": "CO2-Fu\u00DFabdruck"
+    },
+    {
+      "language": "en",
+      "text": "Carbon Footprint"
+    }
+  ],
+  "description": [
+    {
+      "language": "de",
+      "text": "CO2-Bilanz des DriveMotor DM-3000"
+    },
+    {
+      "language": "en",
+      "text": "Carbon footprint of the DriveMotor DM-3000"
+    }
+  ],
+  "administration": {
+    "version": "1",
+    "revision": "0"
+  },
+  "id": "urn:fraunhofer:iese:dte:sm:carbonfootprint:drivemotor-dm3000:001",
+  "kind": "Instance",
+  "semanticId": {
+    "type": "ExternalReference",
+    "keys": [
+      {
+        "type": "GlobalReference",
+        "value": "https://admin-shell.io/idta/CarbonFootprint/CarbonFootprint/1/0"
+      }
+    ]
+  },
+  "submodelElements": [
+    {
+      "idShort": "ProductCarbonFootprints",
+      "semanticId": {
+        "type": "ExternalReference",
+        "keys": [
+          {
+            "type": "GlobalReference",
+            "value": "https://admin-shell.io/idta/CarbonFootprint/ProductCarbonFootprints/1/0"
+          }
+        ]
+      },
+      "orderRelevant": true,
+      "semanticIdListElement": {
+        "type": "ExternalReference",
+        "keys": [
+          {
+            "type": "GlobalReference",
+            "value": "https://admin-shell.io/idta/CarbonFootprint/ProductCarbonFootprint/1/0"
+          }
+        ]
+      },
+      "typeValueListElement": "SubmodelElementCollection",
+      "value": [
+        {
+          "semanticId": {
+            "type": "ExternalReference",
+            "keys": [
+              {
+                "type": "GlobalReference",
+                "value": "https://admin-shell.io/idta/CarbonFootprint/ProductCarbonFootprint/1/0"
+              }
+            ]
+          },
+          "value": [
+            {
+              "idShort": "PcfCalculationMethods",
+              "semanticId": {
+                "type": "ExternalReference",
+                "keys": [
+                  {
+                    "type": "GlobalReference",
+                    "value": "0173-1#02-ABG854#003"
+                  }
+                ]
+              },
+              "orderRelevant": true,
+              "typeValueListElement": "Property",
+              "valueTypeListElement": "xs:string",
+              "value": [
+                {
+                  "semanticId": {
+                    "type": "ExternalReference",
+                    "keys": [
+                      {
+                        "type": "GlobalReference",
+                        "value": "0173-1#02-ABG854#003"
+                      }
+                    ]
+                  },
+                  "valueType": "xs:string",
+                  "value": "ISO 14067",
+                  "modelType": "Property"
+                }
+              ],
+              "modelType": "SubmodelElementList"
+            },
+            {
+              "category": "PARAMETER",
+              "idShort": "PcfCO2eq",
+              "semanticId": {
+                "type": "ExternalReference",
+                "keys": [
+                  {
+                    "type": "GlobalReference",
+                    "value": "0173-1#02-ABG855#003"
+                  }
+                ]
+              },
+              "valueType": "xs:decimal",
+              "value": "180.0",
+              "modelType": "Property"
+            },
+            {
+              "category": "PARAMETER",
+              "idShort": "ReferenceImpactUnitForCalculation",
+              "semanticId": {
+                "type": "ExternalReference",
+                "keys": [
+                  {
+                    "type": "GlobalReference",
+                    "value": "0173-1#02-ABG856#003"
+                  }
+                ]
+              },
+              "valueType": "xs:string",
+              "value": "piece",
+              "modelType": "Property"
+            },
+            {
+              "category": "PARAMETER",
+              "idShort": "QuantityOfMeasureForCalculation",
+              "semanticId": {
+                "type": "ExternalReference",
+                "keys": [
+                  {
+                    "type": "GlobalReference",
+                    "value": "0173-1#02-ABG857#003"
+                  }
+                ]
+              },
+              "valueType": "xs:double",
+              "value": "1.0",
+              "modelType": "Property"
+            },
+            {
+              "idShort": "LifeCyclePhases",
+              "semanticId": {
+                "type": "ExternalReference",
+                "keys": [
+                  {
+                    "type": "GlobalReference",
+                    "value": "0173-1#02-ABG858#003"
+                  }
+                ]
+              },
+              "orderRelevant": true,
+              "typeValueListElement": "Property",
+              "valueTypeListElement": "xs:string",
+              "value": [
+                {
+                  "semanticId": {
+                    "type": "ExternalReference",
+                    "keys": [
+                      {
+                        "type": "GlobalReference",
+                        "value": "0173-1#02-ABG858#003"
+                      }
+                    ]
+                  },
+                  "valueType": "xs:string",
+                  "value": "A1",
+                  "modelType": "Property"
+                }
+              ],
+              "modelType": "SubmodelElementList"
+            },
+            {
+              "idShort": "GoodsHandoverAddress",
+              "semanticId": {
+                "type": "ExternalReference",
+                "keys": [
+                  {
+                    "type": "GlobalReference",
+                    "value": "https://admin-shell.io/zvei/nameplate/1/0/ContactInformations/AddressInformation"
+                  }
+                ]
+              },
+              "value": [
+                {
+                  "idShort": "Street",
+                  "semanticId": {
+                    "type": "ExternalReference",
+                    "keys": [
+                      {
+                        "type": "GlobalReference",
+                        "value": "0173-1#02-AAO128#002"
+                      }
+                    ]
+                  },
+                  "value": [
+                    {
+                      "language": "de",
+                      "text": "Fraunhofer-Platz 1"
+                    },
+                    {
+                      "language": "en",
+                      "text": "Fraunhofer-Platz 1"
+                    }
+                  ],
+                  "modelType": "MultiLanguageProperty"
+                },
+                {
+                  "idShort": "Zipcode",
+                  "semanticId": {
+                    "type": "ExternalReference",
+                    "keys": [
+                      {
+                        "type": "GlobalReference",
+                        "value": "0173-1#02-AAO129#002"
+                      }
+                    ]
+                  },
+                  "value": [
+                    {
+                      "language": "de",
+                      "text": "67663"
+                    },
+                    {
+                      "language": "en",
+                      "text": "67663"
+                    }
+                  ],
+                  "modelType": "MultiLanguageProperty"
+                },
+                {
+                  "idShort": "CityTown",
+                  "semanticId": {
+                    "type": "ExternalReference",
+                    "keys": [
+                      {
+                        "type": "GlobalReference",
+                        "value": "0173-1#02-AAO132#002"
+                      }
+                    ]
+                  },
+                  "value": [
+                    {
+                      "language": "de",
+                      "text": "Kaiserslautern"
+                    },
+                    {
+                      "language": "en",
+                      "text": "Kaiserslautern"
+                    }
+                  ],
+                  "modelType": "MultiLanguageProperty"
+                },
+                {
+                  "idShort": "NationalCode",
+                  "semanticId": {
+                    "type": "ExternalReference",
+                    "keys": [
+                      {
+                        "type": "GlobalReference",
+                        "value": "0173-1#02-AAO134#002"
+                      }
+                    ]
+                  },
+                  "value": [
+                    {
+                      "language": "de",
+                      "text": "DE"
+                    },
+                    {
+                      "language": "en",
+                      "text": "DE"
+                    }
+                  ],
+                  "modelType": "MultiLanguageProperty"
+                },
+                {
+                  "idShort": "CountryCode",
+                  "semanticId": {
+                    "type": "ExternalReference",
+                    "keys": [
+                      {
+                        "type": "GlobalReference",
+                        "value": "0173-1#02-AAO259#007"
+                      }
+                    ]
+                  },
+                  "valueType": "xs:string",
+                  "value": "DE",
+                  "modelType": "Property"
+                }
+              ],
+              "modelType": "SubmodelElementCollection"
+            }
+          ],
+          "modelType": "SubmodelElementCollection"
+        },
+        {
+          "semanticId": {
+            "type": "ExternalReference",
+            "keys": [
+              {
+                "type": "GlobalReference",
+                "value": "https://admin-shell.io/idta/CarbonFootprint/ProductCarbonFootprint/1/0"
+              }
+            ]
+          },
+          "value": [
+            {
+              "idShort": "PcfCalculationMethods",
+              "semanticId": {
+                "type": "ExternalReference",
+                "keys": [
+                  {
+                    "type": "GlobalReference",
+                    "value": "0173-1#02-ABG854#003"
+                  }
+                ]
+              },
+              "orderRelevant": true,
+              "typeValueListElement": "Property",
+              "valueTypeListElement": "xs:string",
+              "value": [
+                {
+                  "semanticId": {
+                    "type": "ExternalReference",
+                    "keys": [
+                      {
+                        "type": "GlobalReference",
+                        "value": "0173-1#02-ABG854#003"
+                      }
+                    ]
+                  },
+                  "valueType": "xs:string",
+                  "value": "ISO 14067",
+                  "modelType": "Property"
+                }
+              ],
+              "modelType": "SubmodelElementList"
+            },
+            {
+              "category": "PARAMETER",
+              "idShort": "PcfCO2eq",
+              "semanticId": {
+                "type": "ExternalReference",
+                "keys": [
+                  {
+                    "type": "GlobalReference",
+                    "value": "0173-1#02-ABG855#003"
+                  }
+                ]
+              },
+              "valueType": "xs:decimal",
+              "value": "25.0",
+              "modelType": "Property"
+            },
+            {
+              "category": "PARAMETER",
+              "idShort": "ReferenceImpactUnitForCalculation",
+              "semanticId": {
+                "type": "ExternalReference",
+                "keys": [
+                  {
+                    "type": "GlobalReference",
+                    "value": "0173-1#02-ABG856#003"
+                  }
+                ]
+              },
+              "valueType": "xs:string",
+              "value": "piece",
+              "modelType": "Property"
+            },
+            {
+              "category": "PARAMETER",
+              "idShort": "QuantityOfMeasureForCalculation",
+              "semanticId": {
+                "type": "ExternalReference",
+                "keys": [
+                  {
+                    "type": "GlobalReference",
+                    "value": "0173-1#02-ABG857#003"
+                  }
+                ]
+              },
+              "valueType": "xs:double",
+              "value": "1.0",
+              "modelType": "Property"
+            },
+            {
+              "idShort": "LifeCyclePhases",
+              "semanticId": {
+                "type": "ExternalReference",
+                "keys": [
+                  {
+                    "type": "GlobalReference",
+                    "value": "0173-1#02-ABG858#003"
+                  }
+                ]
+              },
+              "orderRelevant": true,
+              "typeValueListElement": "Property",
+              "valueTypeListElement": "xs:string",
+              "value": [
+                {
+                  "semanticId": {
+                    "type": "ExternalReference",
+                    "keys": [
+                      {
+                        "type": "GlobalReference",
+                        "value": "0173-1#02-ABG858#003"
+                      }
+                    ]
+                  },
+                  "valueType": "xs:string",
+                  "value": "A2",
+                  "modelType": "Property"
+                }
+              ],
+              "modelType": "SubmodelElementList"
+            },
+            {
+              "idShort": "GoodsHandoverAddress",
+              "semanticId": {
+                "type": "ExternalReference",
+                "keys": [
+                  {
+                    "type": "GlobalReference",
+                    "value": "https://admin-shell.io/zvei/nameplate/1/0/ContactInformations/AddressInformation"
+                  }
+                ]
+              },
+              "value": [
+                {
+                  "idShort": "Street",
+                  "semanticId": {
+                    "type": "ExternalReference",
+                    "keys": [
+                      {
+                        "type": "GlobalReference",
+                        "value": "0173-1#02-AAO128#002"
+                      }
+                    ]
+                  },
+                  "value": [
+                    {
+                      "language": "de",
+                      "text": "Fraunhofer-Platz 1"
+                    },
+                    {
+                      "language": "en",
+                      "text": "Fraunhofer-Platz 1"
+                    }
+                  ],
+                  "modelType": "MultiLanguageProperty"
+                },
+                {
+                  "idShort": "Zipcode",
+                  "semanticId": {
+                    "type": "ExternalReference",
+                    "keys": [
+                      {
+                        "type": "GlobalReference",
+                        "value": "0173-1#02-AAO129#002"
+                      }
+                    ]
+                  },
+                  "value": [
+                    {
+                      "language": "de",
+                      "text": "67663"
+                    },
+                    {
+                      "language": "en",
+                      "text": "67663"
+                    }
+                  ],
+                  "modelType": "MultiLanguageProperty"
+                },
+                {
+                  "idShort": "CityTown",
+                  "semanticId": {
+                    "type": "ExternalReference",
+                    "keys": [
+                      {
+                        "type": "GlobalReference",
+                        "value": "0173-1#02-AAO132#002"
+                      }
+                    ]
+                  },
+                  "value": [
+                    {
+                      "language": "de",
+                      "text": "Kaiserslautern"
+                    },
+                    {
+                      "language": "en",
+                      "text": "Kaiserslautern"
+                    }
+                  ],
+                  "modelType": "MultiLanguageProperty"
+                },
+                {
+                  "idShort": "NationalCode",
+                  "semanticId": {
+                    "type": "ExternalReference",
+                    "keys": [
+                      {
+                        "type": "GlobalReference",
+                        "value": "0173-1#02-AAO134#002"
+                      }
+                    ]
+                  },
+                  "value": [
+                    {
+                      "language": "de",
+                      "text": "DE"
+                    },
+                    {
+                      "language": "en",
+                      "text": "DE"
+                    }
+                  ],
+                  "modelType": "MultiLanguageProperty"
+                },
+                {
+                  "idShort": "CountryCode",
+                  "semanticId": {
+                    "type": "ExternalReference",
+                    "keys": [
+                      {
+                        "type": "GlobalReference",
+                        "value": "0173-1#02-AAO259#007"
+                      }
+                    ]
+                  },
+                  "valueType": "xs:string",
+                  "value": "DE",
+                  "modelType": "Property"
+                }
+              ],
+              "modelType": "SubmodelElementCollection"
+            }
+          ],
+          "modelType": "SubmodelElementCollection"
+        },
+        {
+          "semanticId": {
+            "type": "ExternalReference",
+            "keys": [
+              {
+                "type": "GlobalReference",
+                "value": "https://admin-shell.io/idta/CarbonFootprint/ProductCarbonFootprint/1/0"
+              }
+            ]
+          },
+          "value": [
+            {
+              "idShort": "PcfCalculationMethods",
+              "semanticId": {
+                "type": "ExternalReference",
+                "keys": [
+                  {
+                    "type": "GlobalReference",
+                    "value": "0173-1#02-ABG854#003"
+                  }
+                ]
+              },
+              "orderRelevant": true,
+              "typeValueListElement": "Property",
+              "valueTypeListElement": "xs:string",
+              "value": [
+                {
+                  "semanticId": {
+                    "type": "ExternalReference",
+                    "keys": [
+                      {
+                        "type": "GlobalReference",
+                        "value": "0173-1#02-ABG854#003"
+                      }
+                    ]
+                  },
+                  "valueType": "xs:string",
+                  "value": "ISO 14067",
+                  "modelType": "Property"
+                }
+              ],
+              "modelType": "SubmodelElementList"
+            },
+            {
+              "category": "PARAMETER",
+              "idShort": "PcfCO2eq",
+              "semanticId": {
+                "type": "ExternalReference",
+                "keys": [
+                  {
+                    "type": "GlobalReference",
+                    "value": "0173-1#02-ABG855#003"
+                  }
+                ]
+              },
+              "valueType": "xs:decimal",
+              "value": "80.0",
+              "modelType": "Property"
+            },
+            {
+              "category": "PARAMETER",
+              "idShort": "ReferenceImpactUnitForCalculation",
+              "semanticId": {
+                "type": "ExternalReference",
+                "keys": [
+                  {
+                    "type": "GlobalReference",
+                    "value": "0173-1#02-ABG856#003"
+                  }
+                ]
+              },
+              "valueType": "xs:string",
+              "value": "piece",
+              "modelType": "Property"
+            },
+            {
+              "category": "PARAMETER",
+              "idShort": "QuantityOfMeasureForCalculation",
+              "semanticId": {
+                "type": "ExternalReference",
+                "keys": [
+                  {
+                    "type": "GlobalReference",
+                    "value": "0173-1#02-ABG857#003"
+                  }
+                ]
+              },
+              "valueType": "xs:double",
+              "value": "1.0",
+              "modelType": "Property"
+            },
+            {
+              "idShort": "LifeCyclePhases",
+              "semanticId": {
+                "type": "ExternalReference",
+                "keys": [
+                  {
+                    "type": "GlobalReference",
+                    "value": "0173-1#02-ABG858#003"
+                  }
+                ]
+              },
+              "orderRelevant": true,
+              "typeValueListElement": "Property",
+              "valueTypeListElement": "xs:string",
+              "value": [
+                {
+                  "semanticId": {
+                    "type": "ExternalReference",
+                    "keys": [
+                      {
+                        "type": "GlobalReference",
+                        "value": "0173-1#02-ABG858#003"
+                      }
+                    ]
+                  },
+                  "valueType": "xs:string",
+                  "value": "A3",
+                  "modelType": "Property"
+                }
+              ],
+              "modelType": "SubmodelElementList"
+            },
+            {
+              "idShort": "GoodsHandoverAddress",
+              "semanticId": {
+                "type": "ExternalReference",
+                "keys": [
+                  {
+                    "type": "GlobalReference",
+                    "value": "https://admin-shell.io/zvei/nameplate/1/0/ContactInformations/AddressInformation"
+                  }
+                ]
+              },
+              "value": [
+                {
+                  "idShort": "Street",
+                  "semanticId": {
+                    "type": "ExternalReference",
+                    "keys": [
+                      {
+                        "type": "GlobalReference",
+                        "value": "0173-1#02-AAO128#002"
+                      }
+                    ]
+                  },
+                  "value": [
+                    {
+                      "language": "de",
+                      "text": "Fraunhofer-Platz 1"
+                    },
+                    {
+                      "language": "en",
+                      "text": "Fraunhofer-Platz 1"
+                    }
+                  ],
+                  "modelType": "MultiLanguageProperty"
+                },
+                {
+                  "idShort": "Zipcode",
+                  "semanticId": {
+                    "type": "ExternalReference",
+                    "keys": [
+                      {
+                        "type": "GlobalReference",
+                        "value": "0173-1#02-AAO129#002"
+                      }
+                    ]
+                  },
+                  "value": [
+                    {
+                      "language": "de",
+                      "text": "67663"
+                    },
+                    {
+                      "language": "en",
+                      "text": "67663"
+                    }
+                  ],
+                  "modelType": "MultiLanguageProperty"
+                },
+                {
+                  "idShort": "CityTown",
+                  "semanticId": {
+                    "type": "ExternalReference",
+                    "keys": [
+                      {
+                        "type": "GlobalReference",
+                        "value": "0173-1#02-AAO132#002"
+                      }
+                    ]
+                  },
+                  "value": [
+                    {
+                      "language": "de",
+                      "text": "Kaiserslautern"
+                    },
+                    {
+                      "language": "en",
+                      "text": "Kaiserslautern"
+                    }
+                  ],
+                  "modelType": "MultiLanguageProperty"
+                },
+                {
+                  "idShort": "NationalCode",
+                  "semanticId": {
+                    "type": "ExternalReference",
+                    "keys": [
+                      {
+                        "type": "GlobalReference",
+                        "value": "0173-1#02-AAO134#002"
+                      }
+                    ]
+                  },
+                  "value": [
+                    {
+                      "language": "de",
+                      "text": "DE"
+                    },
+                    {
+                      "language": "en",
+                      "text": "DE"
+                    }
+                  ],
+                  "modelType": "MultiLanguageProperty"
+                },
+                {
+                  "idShort": "CountryCode",
+                  "semanticId": {
+                    "type": "ExternalReference",
+                    "keys": [
+                      {
+                        "type": "GlobalReference",
+                        "value": "0173-1#02-AAO259#007"
+                      }
+                    ]
+                  },
+                  "valueType": "xs:string",
+                  "value": "DE",
+                  "modelType": "Property"
+                }
+              ],
+              "modelType": "SubmodelElementCollection"
+            }
+          ],
+          "modelType": "SubmodelElementCollection"
+        }
+      ],
+      "modelType": "SubmodelElementList"
+    }
+  ],
+  "modelType": "Submodel"
+}

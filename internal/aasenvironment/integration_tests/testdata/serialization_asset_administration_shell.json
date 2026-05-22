@@ -1,0 +1,85 @@
+{
+  "idShort": "IESEDriveMotorDM3000",
+  "displayName": [
+    {
+      "language": "de",
+      "text": "Servomotor DM-3000 (Fraunhofer IESE)"
+    },
+    {
+      "language": "en",
+      "text": "Servo Motor DM-3000 (Fraunhofer IESE)"
+    }
+  ],
+  "description": [
+    {
+      "language": "de",
+      "text": "Verwaltungsschale eines industriellen Servomotors DM-3000, hergestellt von Fraunhofer IESE als Demonstrator f\u00FCr das Digital Twin Engineering."
+    },
+    {
+      "language": "en",
+      "text": "Asset Administration Shell of an industrial servo motor DM-3000, manufactured by Fraunhofer IESE as a demonstrator for Digital Twin Engineering."
+    }
+  ],
+  "administration": {
+    "version": "1",
+    "revision": "0"
+  },
+  "id": "urn:fraunhofer:iese:dte:aas:drivemotor-dm3000:001",
+  "assetInformation": {
+    "assetKind": "Instance",
+    "globalAssetId": "urn:fraunhofer:iese:dte:asset:drivemotor-dm3000:serial-0042",
+    "assetType": "https://fraunhofer.de/iese/dte/products/DriveMotorDM3000",
+    "defaultThumbnail": {
+      "path": "/e7df9130.png",
+      "contentType": "image/png"
+    }
+  },
+  "submodels": [
+    {
+      "type": "ModelReference",
+      "keys": [
+        {
+          "type": "Submodel",
+          "value": "urn:fraunhofer:iese:dte:sm:nameplate:drivemotor-dm3000:001"
+        }
+      ]
+    },
+    {
+      "type": "ModelReference",
+      "keys": [
+        {
+          "type": "Submodel",
+          "value": "urn:fraunhofer:iese:dte:sm:technicaldata:drivemotor-dm3000:001"
+        }
+      ]
+    },
+    {
+      "type": "ModelReference",
+      "keys": [
+        {
+          "type": "Submodel",
+          "value": "urn:fraunhofer:iese:dte:sm:handoverdoc:drivemotor-dm3000:001"
+        }
+      ]
+    },
+    {
+      "type": "ModelReference",
+      "keys": [
+        {
+          "type": "Submodel",
+          "value": "urn:fraunhofer:iese:dte:sm:contact:drivemotor-dm3000:001"
+        }
+      ]
+    },
+    {
+      "type": "ModelReference",
+      "keys": [
+        {
+          "type": "Submodel",
+          "value": "urn:fraunhofer:iese:dte:sm:carbonfootprint:drivemotor-dm3000:001"
+        }
+      ]
+    }
+  ],
+  "modelType": "AssetAdministrationShell"
+}
