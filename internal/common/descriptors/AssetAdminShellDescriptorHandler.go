@@ -535,7 +535,7 @@ func buildListAASDescriptorPageQuery(
 //
 // It returns the page of fully assembled descriptors and, when more results are
 // available, a next cursor value (the Id immediately after the page). When
-// limit <= 0, a conservative large default is applied.
+// limit <= 0, a default page size of 100 is applied.
 //
 //nolint:revive // Its only 31 instead of 30 - 1 is okay
 func ListAssetAdministrationShellDescriptors(
@@ -567,7 +567,7 @@ func listAssetAdministrationShellDescriptors(
 	allowParallel bool,
 ) ([]model.AssetAdministrationShellDescriptor, string, error) {
 	if limit <= 0 {
-		limit = 1000000
+		limit = 100
 	}
 	if cursor != "" {
 		cursorExists, cursorErr := existsAASByID(ctx, db, cursor)

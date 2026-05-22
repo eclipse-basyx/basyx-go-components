@@ -467,7 +467,7 @@ func ReplaceCompanyDescriptor(ctx context.Context, db *sql.DB, companyDescriptor
 //
 // It returns the page of fully assembled descriptors and, when more results are
 // available, a next cursor value (the Id immediately after the page). When
-// limit <= 0, a conservative large default is applied.
+// limit <= 0, a default page size of 100 is applied.
 //
 // nolint:revive // complexity is 31 which is +1 above the allowed threshold of 30
 func ListCompanyDescriptors(
