@@ -500,14 +500,6 @@ ALTER TABLE IF EXISTS aas_identifier
 ALTER TABLE IF EXISTS aas_identifier
   ADD COLUMN IF NOT EXISTS db_updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
 
--- Drop redundant indexes superseded by covering composite indexes.
--- Keeping these dropped improves write throughput for descriptor-heavy POST paths.
-DROP INDEX IF EXISTS ix_specasset_descriptor_id;
-DROP INDEX IF EXISTS ix_specasset_name;
-DROP INDEX IF EXISTS ix_aas_endpoint_descriptor_id;
-DROP INDEX IF EXISTS ix_smd_aas_descriptor_id;
-DROP INDEX IF EXISTS ix_aasd_asset_kind;
-
 /*
  Auto-generated file. Do not edit manually.
  Naming pattern: <context>_reference and <context>_reference_key.
@@ -818,9 +810,12 @@ CREATE INDEX IF NOT EXISTS ix_specasset_aasref ON specific_asset_id(aasRef);
 CREATE INDEX IF NOT EXISTS ix_specasset_name_value_aasref ON specific_asset_id(name, value, aasRef);
 CREATE INDEX IF NOT EXISTS ix_specasset_aas ON specific_asset_id(asset_information_id);
 CREATE INDEX IF NOT EXISTS ix_specasset_name_value_aas ON specific_asset_id(name, value, asset_information_id);
+CREATE INDEX IF NOT EXISTS ix_specasset_descriptor_id ON specific_asset_id(descriptor_id);
+CREATE INDEX IF NOT EXISTS ix_specasset_name ON specific_asset_id(name);
 CREATE INDEX IF NOT EXISTS ix_specasset_name_value ON specific_asset_id(name, value);
 CREATE INDEX IF NOT EXISTS ix_specasset_value_trgm ON specific_asset_id USING GIN (value gin_trgm_ops);
 
+CREATE INDEX IF NOT EXISTS ix_aas_endpoint_descriptor_id ON aas_descriptor_endpoint(descriptor_id);
 CREATE INDEX IF NOT EXISTS ix_aas_endpoint_interface ON aas_descriptor_endpoint(interface);
 CREATE INDEX IF NOT EXISTS ix_aas_endpoint_protocols ON aas_descriptor_endpoint(endpoint_protocol, sub_protocol);
 CREATE INDEX IF NOT EXISTS ix_aas_endpoint_href ON aas_descriptor_endpoint(href);
@@ -835,9 +830,11 @@ CREATE INDEX IF NOT EXISTS ix_aasd_id_short ON aas_descriptor(id_short);
 CREATE INDEX IF NOT EXISTS ix_aasd_global_asset_id ON aas_descriptor(global_asset_id);
 CREATE INDEX IF NOT EXISTS ix_aasd_id_trgm ON aas_descriptor USING GIN (id gin_trgm_ops);
 CREATE INDEX IF NOT EXISTS ix_aasd_global_asset_id_trgm ON aas_descriptor USING GIN (global_asset_id gin_trgm_ops);
+CREATE INDEX IF NOT EXISTS ix_aasd_asset_kind ON aas_descriptor(asset_kind);
 CREATE INDEX IF NOT EXISTS ix_aasd_asset_type ON aas_descriptor(asset_type);
 CREATE INDEX IF NOT EXISTS ix_aasd_asset_kind_type ON aas_descriptor(asset_kind, asset_type);
 
+CREATE INDEX IF NOT EXISTS ix_smd_aas_descriptor_id ON submodel_descriptor(aas_descriptor_id);
 CREATE INDEX IF NOT EXISTS ix_smd_db_created_at ON submodel_descriptor(db_created_at);
 CREATE INDEX IF NOT EXISTS ix_smd_id_short ON submodel_descriptor(id_short);
 CREATE INDEX IF NOT EXISTS ix_smd_id_trgm ON submodel_descriptor USING GIN (id gin_trgm_ops);
