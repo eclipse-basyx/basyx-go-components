@@ -10,9 +10,8 @@
 
 Welcome to the BaSyx Go project! This guide is designed to help new developers onboard quickly, understand the architecture, and contribute effectively.
 
-```{hint}
-We also provide a wiki at https://wiki.basyx.org with a extensive user and developer documentation.
-```
+
+>We also provide a wiki at https://wiki.basyx.org with a extensive user and developer documentation.
 
 ## Table of Contents
 - [BaSyx Go Components](#basyx-go-components)
