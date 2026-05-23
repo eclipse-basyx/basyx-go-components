@@ -1,0 +1,168 @@
+name: Database Immutability Guard
+
+on:
+  pull_request:
+    paths:
+      - 'database/**'
+      - '.github/workflows/database-immutability-guard.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'database/**'
+      - '.github/workflows/database-immutability-guard.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  guard-database-files:
+    name: Enforce database file and patch rules
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          fetch-depth: 0
+
+      - name: Verify database file immutability and patch consistency
+        env:
+          BEFORE_SHA: ${{ github.event.before }}
+        run: |
+          set -euo pipefail
+
+          event_name="${GITHUB_EVENT_NAME}"
+          protection_ref=""
+          diff_range=""
+
+          if [ "${event_name}" = "pull_request" ]; then
+            if [ -z "${GITHUB_BASE_REF}" ]; then
+              echo "::error::Missing GITHUB_BASE_REF for pull_request event."
+              exit 1
+            fi
+
+            git fetch --no-tags --prune --depth=1 origin "${GITHUB_BASE_REF}"
+            protection_ref="origin/${GITHUB_BASE_REF}"
+            diff_range="${protection_ref}...${GITHUB_SHA}"
+          elif [ "${event_name}" = "push" ]; then
+            if [ -z "${BEFORE_SHA}" ] || [ "${BEFORE_SHA}" = "0000000000000000000000000000000000000000" ]; then
+              echo "Initial push or missing before SHA. Skipping check."
+              exit 0
+            fi
+
+            protection_ref="${BEFORE_SHA}"
+            diff_range="${BEFORE_SHA}...${GITHUB_SHA}"
+          else
+            echo "::error::Unsupported event: ${event_name}"
+            exit 1
+          fi
+
+          mapfile -t changed_entries < <(git diff --name-status --no-renames --diff-filter=ADM "${diff_range}" -- database/)
+
+          if [ "${#changed_entries[@]}" -eq 0 ]; then
+            echo "No database/ changes detected."
+            exit 0
+          fi
+
+          violations=()
+
+          for entry in "${changed_entries[@]}"; do
+            status="${entry%%$'\t'*}"
+            path="${entry#*$'\t'}"
+
+            if [ "${status}" = "A" ]; then
+              if git cat-file -e "${protection_ref}:${path}" 2>/dev/null; then
+                violations+=("${status} ${path} (already exists in ${protection_ref})")
+              else
+                echo "Allowed new database file: ${path}"
+              fi
+              continue
+            fi
+
+            if git cat-file -e "${protection_ref}:${path}" 2>/dev/null; then
+              violations+=("${status} ${path}")
+            else
+              violations+=("${status} ${path} (not found in ${protection_ref}; refusing change)")
+            fi
+          done
+
+          if [ "${#violations[@]}" -gt 0 ]; then
+            echo "::error::Detected forbidden edits in database/. Existing files are immutable; only new files may be added."
+            printf ' - %s\n' "${violations[@]}"
+            exit 1
+          fi
+
+          mapfile -t added_patch_files < <(
+            printf '%s\n' "${changed_entries[@]}" | awk -F $'\t' '$1 == "A" && $2 ~ /^database\/patches\/[^\/]+\.sql$/ { print $2 }'
+          )
+
+          if [ "${#added_patch_files[@]}" -gt 1 ]; then
+            echo "::error::Only one new patch file is allowed per pull request or push."
+            printf ' - %s\n' "${added_patch_files[@]}"
+            exit 1
+          fi
+
+          if [ "${#added_patch_files[@]}" -eq 1 ]; then
+            patch_path="${added_patch_files[0]}"
+            patch_file="${patch_path#database/patches/}"
+
+            if [[ ! "${patch_file}" =~ ^[0-9]+_[0-9]+_[0-9]+\.sql$ ]]; then
+              echo "::error::Patch filename must follow the x_y_z.sql format (for example: 1_0_2.sql). Found: ${patch_file}"
+              exit 1
+            fi
+
+            expected_version="v${patch_file%.sql}"
+            expected_version="${expected_version//_/.}"
+
+            main_go_path="cmd/basyxconfigurationservice/main.go"
+            common_db_go_path="internal/common/database.go"
+
+            if git diff --quiet "${diff_range}" -- "${main_go_path}"; then
+              echo "::error::${main_go_path} must be updated when adding a new patch file."
+              exit 1
+            fi
+
+            if ! grep -Fq "filepath.Join(patchBasePath, \"${patch_file}\")" "${main_go_path}"; then
+              echo "::error::${main_go_path} must register the new patch file ${patch_file}."
+              exit 1
+            fi
+
+            if git diff --quiet "${diff_range}" -- "${common_db_go_path}"; then
+              echo "::error::${common_db_go_path} must be updated when adding a new patch file."
+              exit 1
+            fi
+
+            current_version="$(grep -E 'CURRENT_DATABASE_VERSION[[:space:]]*=' "${common_db_go_path}" | head -n1 | sed -E 's/.*"([^"]+)".*/\1/')"
+            if [ -z "${current_version}" ]; then
+              echo "::error::Could not read CURRENT_DATABASE_VERSION from ${common_db_go_path}."
+              exit 1
+            fi
+
+            if [ "${current_version}" != "${expected_version}" ]; then
+              echo "::error::Version mismatch: new patch ${patch_file} expects ${expected_version}, but CURRENT_DATABASE_VERSION is ${current_version}."
+              exit 1
+            fi
+
+            mapfile -t patch_versions < <(
+              grep -Eio "schema_version[[:space:]]*=[[:space:]]*'v[0-9]+\.[0-9]+\.[0-9]+'" "${patch_path}" |
+                sed -E "s/.*'(v[0-9]+\.[0-9]+\.[0-9]+)'.*/\1/" |
+                sort -u
+            )
+
+            if [ "${#patch_versions[@]}" -ne 1 ]; then
+              echo "::error::${patch_path} must set exactly one target schema_version in the form vX.Y.Z."
+              exit 1
+            fi
+
+            if [ "${patch_versions[0]}" != "${expected_version}" ]; then
+              echo "::error::Patch file version mismatch: ${patch_path} sets ${patch_versions[0]}, expected ${expected_version}."
+              exit 1
+            fi
+
+            if ! grep -Eiq "state[[:space:]]*=[[:space:]]*'clean'" "${patch_path}"; then
+              echo "::error::${patch_path} must set basyxsystem.state to 'clean'."
+              exit 1
+            fi
+          fi
+
+          echo "Database immutability and patch consistency checks passed."
