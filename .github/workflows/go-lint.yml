@@ -78,7 +78,7 @@ jobs:
           cache: true
 
       - name: golangci-lint
-        uses: golangci/golangci-lint-action@1e7e51e771db61008b38414a730f564565cf7c20
+        uses: golangci/golangci-lint-action@82606bf257cbaff209d206a39f5134f0cfbfd2ee
         with:
           # Use v2.10.1 version to support Go 1.25 https://golangci-lint.run/docs/welcome/install/ -> It’s highly recommended installing a specific version of golangci-lint available on the releases page.
           version: v2.10.1
