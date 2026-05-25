@@ -1117,12 +1117,22 @@ paths:
                 description: AASX package
                 type: string
                 format: binary
+            application/asset-administration-shell-package+xml:
+              schema:
+                description: AASX package
+                type: string
+                format: binary
             application/aasx+json:
               schema:
                 description: AASX package
                 type: string
                 format: binary
             application/asset-administration-shell+json:
+              schema:
+                description: AASX package
+                type: string
+                format: binary
+            application/asset-administration-shell-package+json:
               schema:
                 description: AASX package
                 type: string

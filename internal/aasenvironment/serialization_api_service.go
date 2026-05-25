@@ -59,8 +59,10 @@ const (
 	serializationContentTypeXML         = "application/xml"
 	serializationContentTypeAASXXML     = "application/aasx+xml"
 	serializationContentTypeAASXXMLAlt  = "application/asset-administration-shell+xml"
+	serializationContentTypeAASXXMLPkg  = "application/asset-administration-shell-package+xml"
 	serializationContentTypeAASXJSON    = "application/aasx+json"
 	serializationContentTypeAASXJSONAlt = "application/asset-administration-shell+json"
+	serializationContentTypeAASXJSONPkg = "application/asset-administration-shell-package+json"
 	serializationAASXXMLSpecURI         = "/aasx/xml/content.xml"
 	serializationAASXJSONSpecURI        = "/aasx/json/content.json"
 	serializationAASXSupplementaryRoot  = "/aasx/files"
@@ -348,8 +350,10 @@ func serializeEnvironment(
 
 	case serializationContentTypeAASXXML,
 		serializationContentTypeAASXXMLAlt,
+		serializationContentTypeAASXXMLPkg,
 		serializationContentTypeAASXJSON,
-		serializationContentTypeAASXJSONAlt:
+		serializationContentTypeAASXJSONAlt,
+		serializationContentTypeAASXJSONPkg:
 		payload, aasxErr := serializeEnvironmentToAASX(environment, serializationContentType, thumbnailParts, supplementaryParts)
 		if aasxErr != nil {
 			return nil, "", aasxErr
@@ -373,9 +377,9 @@ func serializeEnvironmentToAASX(
 	supplementaryParts []serializationSupplementaryPart,
 ) ([]byte, error) {
 	switch requestedContentType {
-	case serializationContentTypeAASXXML, serializationContentTypeAASXXMLAlt:
+	case serializationContentTypeAASXXML, serializationContentTypeAASXXMLAlt, serializationContentTypeAASXXMLPkg:
 		return serializeEnvironmentToAASXXML(environment, thumbnailParts, supplementaryParts)
-	case serializationContentTypeAASXJSON, serializationContentTypeAASXJSONAlt:
+	case serializationContentTypeAASXJSON, serializationContentTypeAASXJSONAlt, serializationContentTypeAASXJSONPkg:
 		return serializeEnvironmentToAASXJSON(environment, thumbnailParts, supplementaryParts)
 	}
 
@@ -632,9 +636,9 @@ func (s *SerializationAPIService) resolveSerializationSupplementaryParts(
 // for the negotiated serialization content type.
 func resolveAASXSpecURIByContentType(contentType string) (string, error) {
 	switch contentType {
-	case serializationContentTypeAASXXML, serializationContentTypeAASXXMLAlt:
+	case serializationContentTypeAASXXML, serializationContentTypeAASXXMLAlt, serializationContentTypeAASXXMLPkg:
 		return serializationAASXXMLSpecURI, nil
-	case serializationContentTypeAASXJSON, serializationContentTypeAASXJSONAlt:
+	case serializationContentTypeAASXJSON, serializationContentTypeAASXJSONAlt, serializationContentTypeAASXJSONPkg:
 		return serializationAASXJSONSpecURI, nil
 	default:
 		return "", common.NewInternalServerError("AASENV-RESOLVEAASXSPECURI-UNSUPPORTEDCT unsupported AASX serialization content type")
@@ -1107,7 +1111,9 @@ func isAASXSerializationContentType(contentType string) bool {
 	case serializationContentTypeAASXXML,
 		serializationContentTypeAASXXMLAlt,
 		serializationContentTypeAASXJSON,
-		serializationContentTypeAASXJSONAlt:
+		serializationContentTypeAASXJSONAlt,
+		serializationContentTypeAASXXMLPkg,
+		serializationContentTypeAASXJSONPkg:
 		return true
 	default:
 		return false
@@ -1125,11 +1131,18 @@ func parseMediaType(contentType string) (string, error) {
 	}
 
 	parsedContentType, _, parseErr := mime.ParseMediaType(trimmed)
-	if parseErr != nil {
+	if parseErr == nil {
+		return strings.ToLower(strings.TrimSpace(parsedContentType)), nil
+	}
+
+	// Accept headers from clients occasionally contain a trailing semicolon or
+	// non-critical parameter formatting issues. Fall back to the media-type token.
+	fallbackContentType := strings.TrimSpace(strings.SplitN(trimmed, ";", 2)[0])
+	if fallbackContentType == "" {
 		return "", common.NewErrBadRequest("AASENV-PARSEMEDIATYPE-INVALID " + parseErr.Error())
 	}
 
-	return strings.ToLower(strings.TrimSpace(parsedContentType)), nil
+	return strings.ToLower(fallbackContentType), nil
 }
 
 // negotiateSerializationContentType resolves the effective serialization media
@@ -1156,8 +1169,10 @@ func negotiateSerializationContentType(acceptHeader string) (string, error) {
 			serializationContentTypeXML,
 			serializationContentTypeAASXXML,
 			serializationContentTypeAASXXMLAlt,
+			serializationContentTypeAASXXMLPkg,
 			serializationContentTypeAASXJSON,
-			serializationContentTypeAASXJSONAlt:
+			serializationContentTypeAASXJSONAlt,
+			serializationContentTypeAASXJSONPkg:
 			return mediaType, nil
 		}
 	}
