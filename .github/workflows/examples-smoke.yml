@@ -45,12 +45,14 @@ jobs:
               eclipsebasyx/aasrepository-go:SNAPSHOT|./cmd/aasrepositoryservice/Dockerfile
               eclipsebasyx/submodelrepository-go:SNAPSHOT|./cmd/submodelrepositoryservice/Dockerfile
               eclipsebasyx/conceptdescriptionrepository-go:SNAPSHOT|./cmd/conceptdescriptionrepositoryservice/Dockerfile
+              eclipsebasyx/basyxconfigurationservice-go:SNAPSHOT|./cmd/basyxconfigurationservice/Dockerfile
           - target_name: Delegated Operations Example
             compose_files: |
               examples/BaSyxDelegatedOperationsExample/docker-compose.yml
             image_builds: |
               eclipsebasyx/aasrepository-go:SNAPSHOT|./cmd/aasrepositoryservice/Dockerfile
               eclipsebasyx/submodelrepository-go:SNAPSHOT|./cmd/submodelrepositoryservice/Dockerfile
+              eclipsebasyx/basyxconfigurationservice-go:SNAPSHOT|./cmd/basyxconfigurationservice/Dockerfile
           - target_name: Submodel Repository Example
             compose_files: |
               examples/BaSyxSubmodelRepositoryExample/docker-compose.yml
@@ -61,11 +63,13 @@ jobs:
               examples/BaSyxDigitalTwinRegistryExample/docker-compose.yml
             image_builds: |
               eclipsebasyx/digitaltwinregistry-go:SNAPSHOT|./cmd/digitaltwinregistryservice/Dockerfile
+              eclipsebasyx/basyxconfigurationservice-go:SNAPSHOT|./cmd/basyxconfigurationservice/Dockerfile
           - target_name: Company Lookup Example
             compose_files: |
               examples/BaSyxCompanyLookup/docker-compose.yml
             image_builds: |
               eclipsebasyx/companylookup-go:SNAPSHOT|./cmd/companylookupservice/Dockerfile
+              eclipsebasyx/basyxconfigurationservice-go:SNAPSHOT|./cmd/basyxconfigurationservice/Dockerfile
 
     steps:
       - name: Checkout code
