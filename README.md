@@ -251,7 +251,7 @@ See [basyx-database-wiki](docu/basyx-database-wiki/) and [sql_examples](sql_exam
 
 **Q: How do I add a new component?**
 
-- Add main.go in `cmd/<COMPONENT_NAME>/main.go` 
+- Add main.go in `cmd/<COMPONENT_NAME>/main.go`
 - Implement the logic in `internal/<COMPONENT_NAME>/`
 - Save and use OpenAPI specs in `cmd/<COMPONENT_NAME>/openapi.yaml`
 - Add tests in `internal/<COMPONENT_NAME>/integration_tests/`
