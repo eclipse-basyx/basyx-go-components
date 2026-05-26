@@ -25,14 +25,17 @@
 
 package common
 
+// NormalizePayloadNullFields removes null-valued fields recursively from JSON-like payloads.
 func NormalizePayloadNullFields(payload any) {
 	_ = normalizePayloadNullFields(payload)
 }
 
+// NormalizeAASPayloadOptionalArrays normalizes AAS payloads by removing null-valued fields.
 func NormalizeAASPayloadOptionalArrays(payload any) {
 	NormalizePayloadNullFields(payload)
 }
 
+// NormalizeSubmodelPayloadOptionalArrays normalizes submodel payloads by removing null-valued fields.
 func NormalizeSubmodelPayloadOptionalArrays(payload any) {
 	NormalizePayloadNullFields(payload)
 }
