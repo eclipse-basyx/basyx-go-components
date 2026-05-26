@@ -27,12 +27,9 @@ func encodeIdentifierForPath(identifier string) string {
 }
 
 func parseForwardedHeaderValue(forwarded string, key string) string {
-	parts := strings.Split(forwarded, ",")
-	if len(parts) == 0 {
-		return ""
-	}
+	firstEntry, _, _ := strings.Cut(forwarded, ",")
 
-	for _, token := range strings.Split(parts[0], ";") {
+	for _, token := range strings.Split(firstEntry, ";") {
 		pair := strings.SplitN(strings.TrimSpace(token), "=", 2)
 		if len(pair) != 2 {
 			continue
@@ -50,12 +47,9 @@ func firstForwardedValue(value string) string {
 		return ""
 	}
 
-	parts := strings.Split(value, ",")
-	if len(parts) == 0 {
-		return ""
-	}
+	first, _, _ := strings.Cut(value, ",")
 
-	return strings.TrimSpace(parts[0])
+	return strings.TrimSpace(first)
 }
 
 func requestScheme(r *http.Request) string {
