@@ -1,0 +1,142 @@
+name: Vulnerability Scan
+
+on:
+  pull_request:
+    paths:
+      - 'cmd/**'
+      - 'internal/**'
+      - 'database/**'
+      - 'go.mod'
+      - 'go.sum'
+      - '.github/workflows/vuln-scan.yml'
+      - '.github/workflows/docker-release.yml'
+      - '.github/workflows/docker-snapshot.yml'
+  push:
+    branches:
+      - main
+    paths:
+      - 'cmd/**'
+      - 'internal/**'
+      - 'database/**'
+      - 'go.mod'
+      - 'go.sum'
+      - '.github/workflows/vuln-scan.yml'
+      - '.github/workflows/docker-release.yml'
+      - '.github/workflows/docker-snapshot.yml'
+  schedule:
+    - cron: '0 4 * * 1'
+
+concurrency:
+  group: vuln-scan-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  trivy-repo-fs-report:
+    name: Trivy repository filesystem scan (non-blocking)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+
+      - name: Run Trivy repository filesystem scan
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          format: sarif
+          output: trivy-repo-results.sarif
+          vuln-type: os,library
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: '0'
+
+      - name: Upload SARIF report
+        if: always() && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+        uses: github/codeql-action/upload-sarif@7211b7c8077ea37d8641b6271f6a365a22a5fbfa
+        with:
+          sarif_file: trivy-repo-results.sarif
+          category: trivy-repo-fs
+
+      - name: Upload scan artifact
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: trivy-repo-sarif
+          path: trivy-repo-results.sarif
+          retention-days: 30
+
+  trivy-image-report:
+    name: Trivy image scan (${{ matrix.service.name }}) (non-blocking)
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    if: github.event_name != 'pull_request'
+    strategy:
+      fail-fast: false
+      matrix:
+        service:
+          - name: aasenvironmentservice
+          - name: aasregistryservice
+          - name: discoveryservice
+          - name: digitaltwinregistryservice
+          - name: companylookupservice
+          - name: submodelrepositoryservice
+          - name: submodelregistryservice
+          - name: conceptdescriptionrepositoryservice
+          - name: aasrepositoryservice
+          - name: aasxfileserverservice
+          - name: basyxconfigurationservice
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5 # v4
+        with:
+          buildkitd-config-inline: |
+            [registry."docker.io"]
+              mirrors = ["mirror.gcr.io"]
+
+      - name: Build local image for scanning
+        uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf # v7
+        with:
+          context: .
+          file: ./cmd/${{ matrix.service.name }}/Dockerfile
+          pull: true
+          push: false
+          load: true
+          tags: local/${{ matrix.service.name }}:scan
+          platforms: linux/amd64
+
+      - name: Run Trivy image scan
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          scan-type: image
+          image-ref: local/${{ matrix.service.name }}:scan
+          format: sarif
+          output: trivy-image-${{ matrix.service.name }}.sarif
+          vuln-type: os,library
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: '0'
+
+      - name: Upload SARIF report
+        if: always() && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+        uses: github/codeql-action/upload-sarif@7211b7c8077ea37d8641b6271f6a365a22a5fbfa
+        with:
+          sarif_file: trivy-image-${{ matrix.service.name }}.sarif
+          category: trivy-image-${{ matrix.service.name }}
+
+      - name: Upload scan artifact
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: trivy-image-sarif-${{ matrix.service.name }}
+          path: trivy-image-${{ matrix.service.name }}.sarif
+          retention-days: 30

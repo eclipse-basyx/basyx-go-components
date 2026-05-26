@@ -35,6 +35,7 @@ jobs:
       contents: read
       id-token: write
     strategy:
+      max-parallel: 3
       matrix:
         service:
           - name: aasenvironmentservice
@@ -68,6 +69,10 @@ jobs:
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5 # v4
+        with:
+          buildkitd-config-inline: |
+            [registry."docker.io"]
+              mirrors = ["mirror.gcr.io"]
 
       - name: Log in to Docker Hub
         uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee # v4
@@ -80,14 +85,28 @@ jobs:
         with:
           cosign-release: v2.4.1
 
-      - name: Install Syft
+      - name: Install Syft (verified)
         run: |
           set -euo pipefail
           SYFT_VERSION=1.29.1
+          BASE_URL="https://github.com/anchore/syft/releases/download/v${SYFT_VERSION}"
           ARCHIVE="syft_${SYFT_VERSION}_linux_amd64.tar.gz"
-          curl -fsSLO "https://github.com/anchore/syft/releases/download/v${SYFT_VERSION}/${ARCHIVE}"
-          curl -fsSLO "https://github.com/anchore/syft/releases/download/v${SYFT_VERSION}/syft_${SYFT_VERSION}_checksums.txt"
-          grep " ${ARCHIVE}$" "syft_${SYFT_VERSION}_checksums.txt" | sha256sum -c -
+          CHECKSUMS="syft_${SYFT_VERSION}_checksums.txt"
+          CERT="${CHECKSUMS}.pem"
+          SIG="${CHECKSUMS}.sig"
+
+          curl -fsSLO "${BASE_URL}/${ARCHIVE}"
+          curl -fsSLO "${BASE_URL}/${CHECKSUMS}"
+          curl -fsSLO "${BASE_URL}/${CERT}"
+          curl -fsSLO "${BASE_URL}/${SIG}"
+
+          cosign verify-blob "${CHECKSUMS}" \
+            --certificate "${CERT}" \
+            --signature "${SIG}" \
+            --certificate-identity-regexp '^https://github.com/anchore/syft/\.github/workflows/.+$' \
+            --certificate-oidc-issuer "https://token.actions.githubusercontent.com"
+
+          grep " ${ARCHIVE}$" "${CHECKSUMS}" | sha256sum -c -
           tar -xzf "${ARCHIVE}" syft
           sudo install -m 0755 syft /usr/local/bin/syft
           syft version
@@ -142,8 +161,12 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           build-args: |
             VERSION=${{ steps.meta.outputs.version }}
-          cache-from: type=registry,ref=${{ matrix.service.image }}:buildcache
-          cache-to: type=registry,ref=${{ matrix.service.image }}:buildcache,mode=max
+          cache-from: |
+            type=gha,scope=${{ github.workflow }}-${{ matrix.service.name }}
+            type=registry,ref=${{ matrix.service.image }}:buildcache
+          cache-to: |
+            type=gha,scope=${{ github.workflow }}-${{ matrix.service.name }},mode=max
+            type=registry,ref=${{ matrix.service.image }}:buildcache,mode=max
           platforms: linux/amd64,linux/arm64,linux/arm/v7
           provenance: mode=max
           sbom: true
