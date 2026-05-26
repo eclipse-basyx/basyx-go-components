@@ -438,25 +438,33 @@ func (c *AssetAdministrationShellRegistryAPIAPIController) buildBaseLocation(r *
 	return requestScheme(r) + "://" + host + basePath
 }
 
-func (c *AssetAdministrationShellRegistryAPIAPIController) buildAASDescriptorLocation(r *http.Request, aasIdentifier string) string {
+func (c *AssetAdministrationShellRegistryAPIAPIController) buildAASDescriptorLocationFromEncodedIdentifier(r *http.Request, encodedAASIdentifier string) string {
 	baseLocation := c.buildBaseLocation(r)
 	if baseLocation == "" {
 		return ""
 	}
 
-	escapedAASIdentifier := url.PathEscape(aasIdentifier)
+	escapedAASIdentifier := url.PathEscape(encodedAASIdentifier)
 
 	return baseLocation + "/shell-descriptors/" + escapedAASIdentifier
 }
 
-func (c *AssetAdministrationShellRegistryAPIAPIController) buildSubmodelDescriptorLocation(r *http.Request, aasIdentifier string, submodelIdentifier string) string {
+func (c *AssetAdministrationShellRegistryAPIAPIController) buildAASDescriptorLocationFromRawId(r *http.Request, rawAASID string) string {
+	return c.buildAASDescriptorLocationFromEncodedIdentifier(r, encodeIdentifierForPath(rawAASID))
+}
+
+func (c *AssetAdministrationShellRegistryAPIAPIController) buildSubmodelDescriptorLocationFromEncodedIdentifier(r *http.Request, encodedAASIdentifier string, encodedSubmodelIdentifier string) string {
 	baseLocation := c.buildBaseLocation(r)
 	if baseLocation == "" {
 		return ""
 	}
 
-	escapedAASIdentifier := url.PathEscape(aasIdentifier)
-	escapedSubmodelIdentifier := url.PathEscape(submodelIdentifier)
+	escapedAASIdentifier := url.PathEscape(encodedAASIdentifier)
+	escapedSubmodelIdentifier := url.PathEscape(encodedSubmodelIdentifier)
 
 	return baseLocation + "/shell-descriptors/" + escapedAASIdentifier + "/submodel-descriptors/" + escapedSubmodelIdentifier
+}
+
+func (c *AssetAdministrationShellRegistryAPIAPIController) buildSubmodelDescriptorLocationFromRawId(r *http.Request, encodedAASIdentifier string, rawSubmodelID string) string {
+	return c.buildSubmodelDescriptorLocationFromEncodedIdentifier(r, encodedAASIdentifier, encodeIdentifierForPath(rawSubmodelID))
 }

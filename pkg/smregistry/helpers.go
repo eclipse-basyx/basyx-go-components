@@ -368,13 +368,17 @@ func (c *SubmodelRegistryAPIAPIController) buildBaseLocation(r *http.Request) st
 	return requestScheme(r) + "://" + host + basePath
 }
 
-func (c *SubmodelRegistryAPIAPIController) buildSubmodelDescriptorLocation(r *http.Request, submodelIdentifier string) string {
+func (c *SubmodelRegistryAPIAPIController) buildSubmodelDescriptorLocationFromEncodedIdentifier(r *http.Request, encodedSubmodelIdentifier string) string {
 	baseLocation := c.buildBaseLocation(r)
 	if baseLocation == "" {
 		return ""
 	}
 
-	escapedSubmodelIdentifier := url.PathEscape(submodelIdentifier)
+	escapedSubmodelIdentifier := url.PathEscape(encodedSubmodelIdentifier)
 
 	return baseLocation + "/submodel-descriptors/" + escapedSubmodelIdentifier
+}
+
+func (c *SubmodelRegistryAPIAPIController) buildSubmodelDescriptorLocationFromRawId(r *http.Request, rawSubmodelID string) string {
+	return c.buildSubmodelDescriptorLocationFromEncodedIdentifier(r, encodeIdentifierForPath(rawSubmodelID))
 }

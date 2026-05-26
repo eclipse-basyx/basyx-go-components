@@ -97,14 +97,18 @@ func requestHost(r *http.Request) string {
 	return r.Host
 }
 
-func (c *AssetAdministrationShellRepositoryAPIAPIController) buildShellLocation(r *http.Request, shellID string) string {
+func (c *AssetAdministrationShellRepositoryAPIAPIController) buildShellLocationFromEncodedIdentifier(r *http.Request, encodedShellID string) string {
 	baseLocation := c.buildBaseLocation(r)
 	if baseLocation == "" {
 		return ""
 	}
-	escapedShellID := url.PathEscape(shellID)
+	escapedShellID := url.PathEscape(encodedShellID)
 
 	return baseLocation + "/shells/" + escapedShellID
+}
+
+func (c *AssetAdministrationShellRepositoryAPIAPIController) buildShellLocationFromRawId(r *http.Request, rawShellID string) string {
+	return c.buildShellLocationFromEncodedIdentifier(r, encodeIdentifierForPath(rawShellID))
 }
 
 func (c *AssetAdministrationShellRepositoryAPIAPIController) buildSubmodelReferencesLocation(r *http.Request, shellID string) string {
@@ -117,27 +121,35 @@ func (c *AssetAdministrationShellRepositoryAPIAPIController) buildSubmodelRefere
 	return baseLocation + "/shells/" + escapedShellID + "/submodel-refs"
 }
 
-func (c *AssetAdministrationShellRepositoryAPIAPIController) buildSubmodelLocation(r *http.Request, shellID string, submodelID string) string {
+func (c *AssetAdministrationShellRepositoryAPIAPIController) buildSubmodelLocationFromEncodedIdentifier(r *http.Request, encodedShellID string, encodedSubmodelID string) string {
 	baseLocation := c.buildBaseLocation(r)
 	if baseLocation == "" {
 		return ""
 	}
-	escapedShellID := url.PathEscape(shellID)
-	escapedSubmodelID := url.PathEscape(submodelID)
+	escapedShellID := url.PathEscape(encodedShellID)
+	escapedSubmodelID := url.PathEscape(encodedSubmodelID)
 
 	return baseLocation + "/shells/" + escapedShellID + "/submodels/" + escapedSubmodelID
 }
 
-func (c *AssetAdministrationShellRepositoryAPIAPIController) buildSubmodelElementLocation(r *http.Request, shellID string, submodelID string, idShortPath string) string {
+func (c *AssetAdministrationShellRepositoryAPIAPIController) buildSubmodelLocationFromRawId(r *http.Request, encodedShellID string, rawSubmodelID string) string {
+	return c.buildSubmodelLocationFromEncodedIdentifier(r, encodedShellID, encodeIdentifierForPath(rawSubmodelID))
+}
+
+func (c *AssetAdministrationShellRepositoryAPIAPIController) buildSubmodelElementLocationFromEncodedIdentifier(r *http.Request, encodedShellID string, encodedSubmodelID string, idShortPath string) string {
 	baseLocation := c.buildBaseLocation(r)
 	if baseLocation == "" {
 		return ""
 	}
-	escapedShellID := url.PathEscape(shellID)
-	escapedSubmodelID := url.PathEscape(submodelID)
+	escapedShellID := url.PathEscape(encodedShellID)
+	escapedSubmodelID := url.PathEscape(encodedSubmodelID)
 	escapedIDShortPath := url.PathEscape(idShortPath)
 
 	return baseLocation + "/shells/" + escapedShellID + "/submodels/" + escapedSubmodelID + "/submodel-elements/" + escapedIDShortPath
+}
+
+func (c *AssetAdministrationShellRepositoryAPIAPIController) buildSubmodelElementLocationFromRawId(r *http.Request, encodedShellID string, rawSubmodelID string, idShortPath string) string {
+	return c.buildSubmodelElementLocationFromEncodedIdentifier(r, encodedShellID, encodeIdentifierForPath(rawSubmodelID), idShortPath)
 }
 
 func joinIDShortPath(parentPath string, childIDShort string) string {

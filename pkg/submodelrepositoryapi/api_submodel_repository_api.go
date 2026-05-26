@@ -404,8 +404,7 @@ func (c *SubmodelRepositoryAPIAPIController) PostSubmodel(w http.ResponseWriter,
 	if result.Code == http.StatusCreated {
 		submodelID := submodelParam.ID()
 		if submodelID != "" {
-			encodedSubmodelID := encodeIdentifierForPath(submodelID)
-			location := c.buildSubmodelLocation(r, encodedSubmodelID)
+			location := c.buildSubmodelLocationFromRawId(r, submodelID)
 			if location != "" {
 				w.Header().Set("Location", location)
 			}
@@ -814,7 +813,7 @@ func (c *SubmodelRepositoryAPIAPIController) PutSubmodelByID(w http.ResponseWrit
 	}
 
 	if result.Code == http.StatusCreated {
-		location := c.buildSubmodelLocation(r, submodelIdentifierParam)
+		location := c.buildSubmodelLocationFromEncodedIdentifier(r, submodelIdentifierParam)
 		if location != "" {
 			w.Header().Set("Location", location)
 		}
@@ -1188,7 +1187,7 @@ func (c *SubmodelRepositoryAPIAPIController) PostSubmodelElementSubmodelRepo(w h
 
 	if result.Code == http.StatusCreated {
 		if idShort := submodelElementParam.IDShort(); idShort != nil && *idShort != "" {
-			location := c.buildSubmodelElementLocation(r, submodelIdentifierParam, *idShort)
+			location := c.buildSubmodelElementLocationFromEncodedIdentifier(r, submodelIdentifierParam, *idShort)
 			if location != "" {
 				w.Header().Set("Location", location)
 			}
@@ -1524,7 +1523,7 @@ func (c *SubmodelRepositoryAPIAPIController) PutSubmodelElementByPathSubmodelRep
 	}
 
 	if result.Code == http.StatusCreated {
-		location := c.buildSubmodelElementLocation(r, submodelIdentifierParam, idShortPathParam)
+		location := c.buildSubmodelElementLocationFromEncodedIdentifier(r, submodelIdentifierParam, idShortPathParam)
 		if location != "" {
 			w.Header().Set("Location", location)
 		}
@@ -1590,7 +1589,7 @@ func (c *SubmodelRepositoryAPIAPIController) PostSubmodelElementByPathSubmodelRe
 	if result.Code == http.StatusCreated {
 		if idShort := submodelElementParam.IDShort(); idShort != nil && *idShort != "" {
 			childPath := joinIDShortPath(idShortPathParam, *idShort)
-			location := c.buildSubmodelElementLocation(r, submodelIdentifierParam, childPath)
+			location := c.buildSubmodelElementLocationFromEncodedIdentifier(r, submodelIdentifierParam, childPath)
 			if location != "" {
 				w.Header().Set("Location", location)
 			}

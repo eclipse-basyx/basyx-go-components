@@ -384,8 +384,7 @@ func (c *AssetAdministrationShellRepositoryAPIAPIController) PostAssetAdministra
 	if result.Code == http.StatusCreated {
 		shellID := aasParam.ID()
 		if shellID != "" {
-			encodedShellID := encodeIdentifierForPath(shellID)
-			location := c.buildShellLocation(r, encodedShellID)
+			location := c.buildShellLocationFromRawId(r, shellID)
 			if location != "" {
 				w.Header().Set("Location", location)
 			}
@@ -471,7 +470,7 @@ func (c *AssetAdministrationShellRepositoryAPIAPIController) PutAssetAdministrat
 	}
 
 	if result.Code == http.StatusCreated {
-		location := c.buildShellLocation(r, aasIdentifierParam)
+		location := c.buildShellLocationFromEncodedIdentifier(r, aasIdentifierParam)
 		if location != "" {
 			w.Header().Set("Location", location)
 		}
@@ -827,7 +826,7 @@ func (c *AssetAdministrationShellRepositoryAPIAPIController) PutSubmodelByIdAasR
 	}
 
 	if result.Code == http.StatusCreated {
-		location := c.buildSubmodelLocation(r, aasIdentifierParam, submodelIdentifierParam)
+		location := c.buildSubmodelLocationFromEncodedIdentifier(r, aasIdentifierParam, submodelIdentifierParam)
 		if location != "" {
 			w.Header().Set("Location", location)
 		}
@@ -1233,7 +1232,7 @@ func (c *AssetAdministrationShellRepositoryAPIAPIController) PostSubmodelElement
 
 	if result.Code == http.StatusCreated {
 		if idShort := submodelElementParam.IDShort(); idShort != nil && *idShort != "" {
-			location := c.buildSubmodelElementLocation(r, aasIdentifierParam, submodelIdentifierParam, *idShort)
+			location := c.buildSubmodelElementLocationFromEncodedIdentifier(r, aasIdentifierParam, submodelIdentifierParam, *idShort)
 			if location != "" {
 				w.Header().Set("Location", location)
 			}
@@ -1575,7 +1574,7 @@ func (c *AssetAdministrationShellRepositoryAPIAPIController) PutSubmodelElementB
 	}
 
 	if result.Code == http.StatusCreated {
-		location := c.buildSubmodelElementLocation(r, aasIdentifierParam, submodelIdentifierParam, idShortPathParam)
+		location := c.buildSubmodelElementLocationFromEncodedIdentifier(r, aasIdentifierParam, submodelIdentifierParam, idShortPathParam)
 		if location != "" {
 			w.Header().Set("Location", location)
 		}
@@ -1637,7 +1636,7 @@ func (c *AssetAdministrationShellRepositoryAPIAPIController) PostSubmodelElement
 	if result.Code == http.StatusCreated {
 		if idShort := submodelElementParam.IDShort(); idShort != nil && *idShort != "" {
 			childPath := joinIDShortPath(idShortPathParam, *idShort)
-			location := c.buildSubmodelElementLocation(r, aasIdentifierParam, submodelIdentifierParam, childPath)
+			location := c.buildSubmodelElementLocationFromEncodedIdentifier(r, aasIdentifierParam, submodelIdentifierParam, childPath)
 			if location != "" {
 				w.Header().Set("Location", location)
 			}

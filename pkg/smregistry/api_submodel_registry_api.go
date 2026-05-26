@@ -235,8 +235,7 @@ func (c *SubmodelRegistryAPIAPIController) PostSubmodelDescriptor(w http.Respons
 		return
 	}
 	if result.Code == http.StatusCreated {
-		encodedSubmodelIdentifier := encodeIdentifierForPath(submodelDescriptorParam.Id)
-		location := c.buildSubmodelDescriptorLocation(r, encodedSubmodelIdentifier)
+		location := c.buildSubmodelDescriptorLocationFromRawId(r, submodelDescriptorParam.Id)
 		if location != "" {
 			w.Header().Set("Location", location)
 		}
@@ -333,7 +332,7 @@ func (c *SubmodelRegistryAPIAPIController) PutSubmodelDescriptorById(w http.Resp
 		return
 	}
 	if result.Code == http.StatusCreated {
-		location := c.buildSubmodelDescriptorLocation(r, submodelIdentifierParam)
+		location := c.buildSubmodelDescriptorLocationFromEncodedIdentifier(r, submodelIdentifierParam)
 		if location != "" {
 			w.Header().Set("Location", location)
 		}

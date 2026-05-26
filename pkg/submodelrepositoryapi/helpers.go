@@ -110,26 +110,34 @@ func (c *SubmodelRepositoryAPIAPIController) buildBaseLocation(r *http.Request) 
 	return requestScheme(r) + "://" + host + basePath
 }
 
-// buildSubmodelLocation builds the absolute location URL for a submodel resource.
-func (c *SubmodelRepositoryAPIAPIController) buildSubmodelLocation(r *http.Request, submodelIdentifier string) string {
+// buildSubmodelLocationFromEncodedIdentifier builds the absolute location URL for a submodel resource
+// when the identifier already follows the encoded path contract.
+func (c *SubmodelRepositoryAPIAPIController) buildSubmodelLocationFromEncodedIdentifier(r *http.Request, encodedSubmodelIdentifier string) string {
 	baseLocation := c.buildBaseLocation(r)
 	if baseLocation == "" {
 		return ""
 	}
 
-	escapedSubmodelID := url.PathEscape(submodelIdentifier)
+	escapedSubmodelID := url.PathEscape(encodedSubmodelIdentifier)
 
 	return baseLocation + "/submodels/" + escapedSubmodelID
 }
 
-// buildSubmodelElementLocation builds the absolute location URL for a submodel element resource.
-func (c *SubmodelRepositoryAPIAPIController) buildSubmodelElementLocation(r *http.Request, submodelIdentifier string, idShortPath string) string {
+// buildSubmodelLocationFromRawId builds the absolute location URL for a submodel resource
+// from a raw identifier by applying base64url path encoding once.
+func (c *SubmodelRepositoryAPIAPIController) buildSubmodelLocationFromRawId(r *http.Request, rawSubmodelID string) string {
+	return c.buildSubmodelLocationFromEncodedIdentifier(r, encodeIdentifierForPath(rawSubmodelID))
+}
+
+// buildSubmodelElementLocationFromEncodedIdentifier builds the absolute location URL for a submodel element resource
+// when the submodel identifier already follows the encoded path contract.
+func (c *SubmodelRepositoryAPIAPIController) buildSubmodelElementLocationFromEncodedIdentifier(r *http.Request, encodedSubmodelIdentifier string, idShortPath string) string {
 	baseLocation := c.buildBaseLocation(r)
 	if baseLocation == "" {
 		return ""
 	}
 
-	escapedSubmodelID := url.PathEscape(submodelIdentifier)
+	escapedSubmodelID := url.PathEscape(encodedSubmodelIdentifier)
 	escapedIDShortPath := url.PathEscape(idShortPath)
 
 	return baseLocation + "/submodels/" + escapedSubmodelID + "/submodel-elements/" + escapedIDShortPath

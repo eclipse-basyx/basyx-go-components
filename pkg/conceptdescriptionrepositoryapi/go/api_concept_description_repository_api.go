@@ -164,8 +164,7 @@ func (c *ConceptDescriptionRepositoryAPIAPIController) PostConceptDescription(w 
 
 	if result.Code == http.StatusCreated {
 		conceptDescriptionIdentifier := conceptDescriptionIdentifierFromBody(result.Body)
-		encodedConceptDescriptionIdentifier := encodeIdentifierForPath(conceptDescriptionIdentifier)
-		location := c.buildConceptDescriptionLocation(r, encodedConceptDescriptionIdentifier)
+		location := c.buildConceptDescriptionLocationFromRawId(r, conceptDescriptionIdentifier)
 		if location != "" {
 			w.Header().Set("Location", location)
 		}
@@ -223,7 +222,7 @@ func (c *ConceptDescriptionRepositoryAPIAPIController) PutConceptDescriptionById
 	}
 
 	if result.Code == http.StatusCreated {
-		location := c.buildConceptDescriptionLocation(r, cdIdentifierParam)
+		location := c.buildConceptDescriptionLocationFromEncodedIdentifier(r, cdIdentifierParam)
 		if location != "" {
 			w.Header().Set("Location", location)
 		}

@@ -97,15 +97,19 @@ func (c *ConceptDescriptionRepositoryAPIAPIController) buildBaseLocation(r *http
 	return requestScheme(r) + "://" + host + basePath
 }
 
-func (c *ConceptDescriptionRepositoryAPIAPIController) buildConceptDescriptionLocation(r *http.Request, conceptDescriptionIdentifier string) string {
+func (c *ConceptDescriptionRepositoryAPIAPIController) buildConceptDescriptionLocationFromEncodedIdentifier(r *http.Request, encodedConceptDescriptionIdentifier string) string {
 	baseLocation := c.buildBaseLocation(r)
 	if baseLocation == "" {
 		return ""
 	}
 
-	escapedConceptDescriptionIdentifier := url.PathEscape(conceptDescriptionIdentifier)
+	escapedConceptDescriptionIdentifier := url.PathEscape(encodedConceptDescriptionIdentifier)
 
 	return baseLocation + "/concept-descriptions/" + escapedConceptDescriptionIdentifier
+}
+
+func (c *ConceptDescriptionRepositoryAPIAPIController) buildConceptDescriptionLocationFromRawId(r *http.Request, rawConceptDescriptionID string) string {
+	return c.buildConceptDescriptionLocationFromEncodedIdentifier(r, encodeIdentifierForPath(rawConceptDescriptionID))
 }
 
 func conceptDescriptionIdentifierFromBody(body interface{}) string {

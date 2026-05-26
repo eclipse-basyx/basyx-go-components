@@ -325,8 +325,7 @@ func (c *AssetAdministrationShellRegistryAPIAPIController) PostAssetAdministrati
 	}
 
 	if result.Code == http.StatusCreated {
-		encodedAASIdentifier := encodeIdentifierForPath(assetAdministrationShellDescriptorParam.Id)
-		location := c.buildAASDescriptorLocation(r, encodedAASIdentifier)
+		location := c.buildAASDescriptorLocationFromRawId(r, assetAdministrationShellDescriptorParam.Id)
 		if location != "" {
 			w.Header().Set("Location", location)
 		}
@@ -420,7 +419,7 @@ func (c *AssetAdministrationShellRegistryAPIAPIController) PutAssetAdministratio
 	}
 
 	if result.Code == http.StatusCreated {
-		location := c.buildAASDescriptorLocation(r, aasIdentifierParam)
+		location := c.buildAASDescriptorLocationFromEncodedIdentifier(r, aasIdentifierParam)
 		if location != "" {
 			w.Header().Set("Location", location)
 		}
@@ -573,8 +572,7 @@ func (c *AssetAdministrationShellRegistryAPIAPIController) PostSubmodelDescripto
 	}
 
 	if result.Code == http.StatusCreated {
-		encodedSubmodelIdentifier := encodeIdentifierForPath(submodelDescriptorParam.Id)
-		location := c.buildSubmodelDescriptorLocation(r, aasIdentifierParam, encodedSubmodelIdentifier)
+		location := c.buildSubmodelDescriptorLocationFromRawId(r, aasIdentifierParam, submodelDescriptorParam.Id)
 		if location != "" {
 			w.Header().Set("Location", location)
 		}
@@ -694,7 +692,7 @@ func (c *AssetAdministrationShellRegistryAPIAPIController) PutSubmodelDescriptor
 	}
 
 	if result.Code == http.StatusCreated {
-		location := c.buildSubmodelDescriptorLocation(r, aasIdentifierParam, submodelIdentifierParam)
+		location := c.buildSubmodelDescriptorLocationFromEncodedIdentifier(r, aasIdentifierParam, submodelIdentifierParam)
 		if location != "" {
 			w.Header().Set("Location", location)
 		}
