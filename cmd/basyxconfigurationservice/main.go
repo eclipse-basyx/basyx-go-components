@@ -56,7 +56,8 @@ func main() {
 	schemInit.Register(sequences.NewDatabaseConnection(execCtx, configPath))
 	schemInit.Register(sequences.NewSystemTable(execCtx))
 	schemInit.Register(sequences.NewSchemaUpload(execCtx, databaseSchema))
-	schemInit.Register(sequences.NewSchemaPatch(execCtx, filepath.Join(patchBasePath, "1_0_1.sql"), common.CURRENT_DATABASE_VERSION))
+	schemInit.Register(sequences.NewSchemaPatch(execCtx, filepath.Join(patchBasePath, "1_0_1.sql"), "v1.0.1"))
+	schemInit.Register(sequences.NewSchemaPatch(execCtx, filepath.Join(patchBasePath, "1_0_2.sql"), common.CURRENT_DATABASE_VERSION))
 
 	if err := schemInit.Execute(); err != nil {
 		log.Printf("BASYXCFG-MAIN-EXECUTE: %v", err)
