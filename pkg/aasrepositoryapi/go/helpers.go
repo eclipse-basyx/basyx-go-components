@@ -127,3 +127,26 @@ func (c *AssetAdministrationShellRepositoryAPIAPIController) buildSubmodelLocati
 
 	return baseLocation + "/shells/" + escapedShellID + "/submodels/" + escapedSubmodelID
 }
+
+func (c *AssetAdministrationShellRepositoryAPIAPIController) buildSubmodelElementLocation(r *http.Request, shellID string, submodelID string, idShortPath string) string {
+	baseLocation := c.buildBaseLocation(r)
+	if baseLocation == "" {
+		return ""
+	}
+	escapedShellID := url.PathEscape(shellID)
+	escapedSubmodelID := url.PathEscape(submodelID)
+	escapedIDShortPath := url.PathEscape(idShortPath)
+
+	return baseLocation + "/shells/" + escapedShellID + "/submodels/" + escapedSubmodelID + "/submodel-elements/" + escapedIDShortPath
+}
+
+func joinIDShortPath(parentPath string, childIDShort string) string {
+	if parentPath == "" {
+		return childIDShort
+	}
+	if childIDShort == "" {
+		return parentPath
+	}
+
+	return parentPath + "." + childIDShort
+}
