@@ -161,6 +161,15 @@ func (c *ConceptDescriptionRepositoryAPIAPIController) PostConceptDescription(w 
 		c.errorHandler(w, r, err, &result)
 		return
 	}
+
+	if result.Code == http.StatusCreated {
+		conceptDescriptionIdentifier := conceptDescriptionIdentifierFromBody(result.Body)
+		encodedConceptDescriptionIdentifier := encodeIdentifierForPath(conceptDescriptionIdentifier)
+		location := c.buildConceptDescriptionLocation(r, encodedConceptDescriptionIdentifier)
+		if location != "" {
+			w.Header().Set("Location", location)
+		}
+	}
 	// If no error, encode the body and the result code
 	_ = model.EncodeJSONResponse(result.Body, &result.Code, w)
 }
@@ -211,6 +220,13 @@ func (c *ConceptDescriptionRepositoryAPIAPIController) PutConceptDescriptionById
 	if err != nil {
 		c.errorHandler(w, r, err, &result)
 		return
+	}
+
+	if result.Code == http.StatusCreated {
+		location := c.buildConceptDescriptionLocation(r, cdIdentifierParam)
+		if location != "" {
+			w.Header().Set("Location", location)
+		}
 	}
 	// If no error, encode the body and the result code
 	_ = model.EncodeJSONResponse(result.Body, &result.Code, w)

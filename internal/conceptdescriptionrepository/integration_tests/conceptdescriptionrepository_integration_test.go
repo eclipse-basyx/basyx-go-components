@@ -23,18 +23,16 @@
 * SPDX-License-Identifier: MIT
 ******************************************************************************/
 
-//nolint:all
 package main
 
 import (
 	"bytes"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
-	"mime/multipart"
 	"net/http"
 	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -43,91 +41,24 @@ import (
 	_ "github.com/lib/pq" // PostgreSQL Treiber
 )
 
-// uploadFileAttachment uploads a file to the attachment endpoint
-func uploadFileAttachment(endpoint string, filePath string, fileName string) (int, error) {
-	file, err := os.Open(filePath)
-	if err != nil {
-		return 0, fmt.Errorf("failed to open file: %v", err)
-	}
-	defer func() { _ = file.Close() }()
-
-	body := &bytes.Buffer{}
-	writer := multipart.NewWriter(body)
-
-	// Add the file field
-	part, err := writer.CreateFormFile("file", filepath.Base(filePath))
-	if err != nil {
-		return 0, fmt.Errorf("failed to create form file: %v", err)
-	}
-	_, err = io.Copy(part, file)
-	if err != nil {
-		return 0, fmt.Errorf("failed to copy file: %v", err)
-	}
-
-	// Add the fileName field if provided
-	if fileName != "" {
-		if err := writer.WriteField("fileName", fileName); err != nil {
-			return 0, fmt.Errorf("failed to write fileName field: %v", err)
-		}
-	}
-
-	err = writer.Close()
-	if err != nil {
-		return 0, fmt.Errorf("failed to close writer: %v", err)
-	}
-
-	req, err := http.NewRequest("PUT", endpoint, body)
-	if err != nil {
-		return 0, fmt.Errorf("failed to create request: %v", err)
-	}
-	req.Header.Set("Content-Type", writer.FormDataContentType())
-
-	client := &http.Client{Timeout: 10 * time.Second}
-	resp, err := client.Do(req)
-	if err != nil {
-		return 0, fmt.Errorf("failed to send request: %v", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	return resp.StatusCode, nil
-}
-
-// downloadFileAttachment downloads a file from the attachment endpoint and returns content and content-type
-func downloadFileAttachment(endpoint string) ([]byte, string, int, error) {
-	req, err := http.NewRequest("GET", endpoint, nil)
-	if err != nil {
-		return nil, "", 0, fmt.Errorf("failed to create request: %v", err)
-	}
-
-	client := &http.Client{Timeout: 10 * time.Second}
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, "", 0, fmt.Errorf("failed to send request: %v", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	content, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, "", resp.StatusCode, fmt.Errorf("failed to read response: %v", err)
-	}
-
-	contentType := resp.Header.Get("Content-Type")
-	return content, contentType, resp.StatusCode, nil
-}
-
 func requestJSON(method string, endpoint string, payload any) (int, []byte, error) {
+	status, body, _, err := requestJSONWithHeaders(method, endpoint, payload)
+	return status, body, err
+}
+
+func requestJSONWithHeaders(method string, endpoint string, payload any) (int, []byte, http.Header, error) {
 	var body io.Reader
 	if payload != nil {
 		jsonBody, err := json.Marshal(payload)
 		if err != nil {
-			return 0, nil, fmt.Errorf("failed to marshal payload: %v", err)
+			return 0, nil, nil, fmt.Errorf("failed to marshal payload: %v", err)
 		}
 		body = bytes.NewBuffer(jsonBody)
 	}
 
 	req, err := http.NewRequest(method, endpoint, body)
 	if err != nil {
-		return 0, nil, fmt.Errorf("failed to create request: %v", err)
+		return 0, nil, nil, fmt.Errorf("failed to create request: %v", err)
 	}
 
 	if payload != nil {
@@ -137,16 +68,92 @@ func requestJSON(method string, endpoint string, payload any) (int, []byte, erro
 	client := &http.Client{Timeout: 10 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
-		return 0, nil, fmt.Errorf("failed to send request: %v", err)
+		return 0, nil, nil, fmt.Errorf("failed to send request: %v", err)
 	}
 	defer func() { _ = resp.Body.Close() }()
 
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return resp.StatusCode, nil, fmt.Errorf("failed to read response body: %v", err)
+		return resp.StatusCode, nil, resp.Header.Clone(), fmt.Errorf("failed to read response body: %v", err)
 	}
 
-	return resp.StatusCode, respBody, nil
+	return resp.StatusCode, respBody, resp.Header.Clone(), nil
+}
+
+func cleanupConceptDescription(t *testing.T, endpoint string, conceptDescriptionID string) {
+	t.Helper()
+
+	encodedIdentifier := base64.RawURLEncoding.EncodeToString([]byte(conceptDescriptionID))
+	statusCode, responseBody, err := requestJSON(http.MethodDelete, endpoint+"/"+encodedIdentifier, nil)
+	if err != nil {
+		t.Fatalf("failed to cleanup concept description: %v", err)
+	}
+	if statusCode != http.StatusNoContent && statusCode != http.StatusNotFound {
+		t.Fatalf("unexpected cleanup status %d with body: %s", statusCode, string(responseBody))
+	}
+}
+
+func TestLocationHeadersForCreateEndpointsConceptDescriptionRepository(t *testing.T) {
+	baseURL := "http://127.0.0.1:6004"
+	endpoint := baseURL + "/concept-descriptions"
+
+	t.Run("PostConceptDescriptionSetsLocation", func(t *testing.T) {
+		conceptDescriptionID := fmt.Sprintf("https://example.com/ids/cd/location-post-%d", time.Now().UnixNano())
+		t.Cleanup(func() { cleanupConceptDescription(t, endpoint, conceptDescriptionID) })
+
+		statusCode, responseBody, headers, err := requestJSONWithHeaders(http.MethodPost, endpoint, map[string]any{
+			"id":        conceptDescriptionID,
+			"modelType": "ConceptDescription",
+		})
+		if err != nil {
+			t.Fatalf("failed to create concept description: %v", err)
+		}
+		if statusCode != http.StatusCreated {
+			t.Fatalf("expected 201 on create, got %d with body: %s", statusCode, string(responseBody))
+		}
+
+		expectedIdentifier := base64.RawURLEncoding.EncodeToString([]byte(conceptDescriptionID))
+		expectedLocation := endpoint + "/" + expectedIdentifier
+		if headers.Get("Location") != expectedLocation {
+			t.Fatalf("expected Location %s, got %s", expectedLocation, headers.Get("Location"))
+		}
+	})
+
+	t.Run("PutConceptDescriptionByIdSetsLocationOnlyOnCreate", func(t *testing.T) {
+		conceptDescriptionID := fmt.Sprintf("https://example.com/ids/cd/location-put-%d", time.Now().UnixNano())
+		t.Cleanup(func() { cleanupConceptDescription(t, endpoint, conceptDescriptionID) })
+
+		encodedIdentifier := base64.RawURLEncoding.EncodeToString([]byte(conceptDescriptionID))
+		putEndpoint := endpoint + "/" + encodedIdentifier
+
+		createStatusCode, createResponseBody, createHeaders, createErr := requestJSONWithHeaders(http.MethodPut, putEndpoint, map[string]any{
+			"id":        conceptDescriptionID,
+			"modelType": "ConceptDescription",
+		})
+		if createErr != nil {
+			t.Fatalf("failed to create concept description through put: %v", createErr)
+		}
+		if createStatusCode != http.StatusCreated {
+			t.Fatalf("expected 201 on put-create, got %d with body: %s", createStatusCode, string(createResponseBody))
+		}
+		if createHeaders.Get("Location") != putEndpoint {
+			t.Fatalf("expected Location %s, got %s", putEndpoint, createHeaders.Get("Location"))
+		}
+
+		updateStatusCode, updateResponseBody, updateHeaders, updateErr := requestJSONWithHeaders(http.MethodPut, putEndpoint, map[string]any{
+			"id":        conceptDescriptionID,
+			"modelType": "ConceptDescription",
+		})
+		if updateErr != nil {
+			t.Fatalf("failed to update concept description through put: %v", updateErr)
+		}
+		if updateStatusCode != http.StatusNoContent {
+			t.Fatalf("expected 204 on put-update, got %d with body: %s", updateStatusCode, string(updateResponseBody))
+		}
+		if updateHeaders.Get("Location") != "" {
+			t.Fatalf("expected empty Location on update, got %s", updateHeaders.Get("Location"))
+		}
+	})
 }
 
 // IntegrationTest runs the integration tests based on the config file
