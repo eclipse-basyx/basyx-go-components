@@ -60,7 +60,7 @@ jobs:
             image: eclipsebasyx/aasxfileserver-go
           - name: basyxconfigurationservice
             image: eclipsebasyx/basyxconfigurationservice-go
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
@@ -117,21 +117,21 @@ jobs:
           # Remove 'v' prefix from tag if present
           VERSION=${GITHUB_REF_NAME#v}
           echo "version=${VERSION}" >> $GITHUB_OUTPUT
-          
+
           # Parse semantic version (e.g., 1.2.3)
           if [[ $VERSION =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)(-.*)?$ ]]; then
             MAJOR="${BASH_REMATCH[1]}"
             MINOR="${BASH_REMATCH[2]}"
             PATCH="${BASH_REMATCH[3]}"
             PRERELEASE="${BASH_REMATCH[4]}"
-            
+
             echo "major=${MAJOR}" >> $GITHUB_OUTPUT
             echo "minor=${MINOR}" >> $GITHUB_OUTPUT
             echo "patch=${PATCH}" >> $GITHUB_OUTPUT
-            
+
             # Build tag list
             TAGS="${{ matrix.service.image }}:${VERSION}"
-            
+
             # Only add major/minor/latest tags for non-prerelease versions
             if [ -z "$PRERELEASE" ]; then
               TAGS="${TAGS},${{ matrix.service.image }}:${MAJOR}.${MINOR}.${PATCH}"
@@ -141,7 +141,7 @@ jobs:
             else
               echo "Prerelease detected: ${PRERELEASE}"
             fi
-            
+
             echo "tags=${TAGS}" >> $GITHUB_OUTPUT
             echo "Building release version: ${VERSION}"
             echo "Docker tags: ${TAGS}"
