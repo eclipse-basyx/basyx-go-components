@@ -19,3 +19,5 @@
 
 CREATE INDEX IF NOT EXISTS ix_submodel_descriptor_semantic_id_refpayload_refid
   ON submodel_descriptor_semantic_id_reference_payload(reference_id);
+CREATE INDEX IF NOT EXISTS ix_specasset_external_subject_id_refpayload_refid
+  ON specific_asset_id_external_subject_id_reference_payload(reference_id);
