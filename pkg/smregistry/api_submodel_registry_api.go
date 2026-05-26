@@ -234,6 +234,13 @@ func (c *SubmodelRegistryAPIAPIController) PostSubmodelDescriptor(w http.Respons
 		c.errorHandler(w, r, err, &result)
 		return
 	}
+	if result.Code == http.StatusCreated {
+		encodedSubmodelIdentifier := encodeIdentifierForPath(submodelDescriptorParam.Id)
+		location := c.buildSubmodelDescriptorLocation(r, encodedSubmodelIdentifier)
+		if location != "" {
+			w.Header().Set("Location", location)
+		}
+	}
 	// If no error, encode the body and the result code
 	_ = EncodeJSONResponse(result.Body, &result.Code, w)
 }
@@ -324,6 +331,12 @@ func (c *SubmodelRegistryAPIAPIController) PutSubmodelDescriptorById(w http.Resp
 		log.Printf("🧩 [%s] Error in PutSubmodelDescriptorById: service failure (submodelIdentifier=%q bodyId=%q): %v", componentName, submodelIdentifierParam, submodelDescriptorParam.Id, err)
 		c.errorHandler(w, r, err, &result)
 		return
+	}
+	if result.Code == http.StatusCreated {
+		location := c.buildSubmodelDescriptorLocation(r, submodelIdentifierParam)
+		if location != "" {
+			w.Header().Set("Location", location)
+		}
 	}
 	// If no error, encode the body and the result code
 	_ = EncodeJSONResponse(result.Body, &result.Code, w)

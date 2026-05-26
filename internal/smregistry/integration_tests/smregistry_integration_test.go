@@ -67,6 +67,68 @@ func deleteAllSubmodelDescriptors(t *testing.T, runner *testenv.JSONSuiteRunner,
 	}
 }
 
+func cleanupSubmodelDescriptorHTTP(t *testing.T, submodelID string) {
+	t.Helper()
+
+	encodedSubmodelIdentifier := base64.RawURLEncoding.EncodeToString([]byte(submodelID))
+	endpoint := smRegistryBaseURL + "/submodel-descriptors/" + encodedSubmodelIdentifier
+
+	statusCode, _, _ := doRequest(t, smNoRedirectClient, http.MethodDelete, endpoint, nil)
+	require.Contains(t, []int{http.StatusNoContent, http.StatusNotFound}, statusCode)
+}
+
+func buildSubmodelDescriptorPayload(submodelID string, tag string) map[string]any {
+	return map[string]any{
+		"id": submodelID,
+		"endpoints": []any{
+			map[string]any{
+				"interface": "AAS-3.0",
+				"protocolInformation": map[string]any{
+					"href":             "https://example.com/submodels/" + base64.RawURLEncoding.EncodeToString([]byte(submodelID)),
+					"endpointProtocol": "https",
+				},
+			},
+		},
+		"extensions": []any{
+			map[string]any{
+				"name":      "tag",
+				"valueType": "xs:string",
+				"value":     tag,
+			},
+		},
+	}
+}
+
+func TestLocationHeadersForCreateEndpointsSubmodelRegistry(t *testing.T) {
+	t.Run("PostSubmodelDescriptorSetsLocation", func(t *testing.T) {
+		submodelID := fmt.Sprintf("urn:example:sm:location-post-%d", time.Now().UnixNano())
+		t.Cleanup(func() { cleanupSubmodelDescriptorHTTP(t, submodelID) })
+
+		endpoint := smRegistryBaseURL + "/submodel-descriptors"
+		expectedIdentifier := base64.RawURLEncoding.EncodeToString([]byte(submodelID))
+
+		statusCode, _, headers := doRequest(t, smNoRedirectClient, http.MethodPost, endpoint, buildSubmodelDescriptorPayload(submodelID, "v1"))
+		require.Equal(t, http.StatusCreated, statusCode)
+		require.Equal(t, endpoint+"/"+expectedIdentifier, headers.Get("Location"))
+	})
+
+	t.Run("PutSubmodelDescriptorByIdSetsLocationOnlyOnCreate", func(t *testing.T) {
+		submodelID := fmt.Sprintf("urn:example:sm:location-put-%d", time.Now().UnixNano())
+		t.Cleanup(func() { cleanupSubmodelDescriptorHTTP(t, submodelID) })
+
+		submodelIdentifier := base64.RawURLEncoding.EncodeToString([]byte(submodelID))
+		endpoint := smRegistryBaseURL + "/submodel-descriptors/" + submodelIdentifier
+
+		createStatusCode, _, createHeaders := doRequest(t, smNoRedirectClient, http.MethodPut, endpoint, buildSubmodelDescriptorPayload(submodelID, "before"))
+		require.Equal(t, http.StatusCreated, createStatusCode)
+		require.Equal(t, endpoint, createHeaders.Get("Location"))
+
+		updateStatusCode, _, updateHeaders := doRequest(t, smNoRedirectClient, http.MethodPut, endpoint, buildSubmodelDescriptorPayload(submodelID, "after"))
+		require.Equal(t, http.StatusNoContent, updateStatusCode)
+		require.Empty(t, updateHeaders.Get("Location"))
+	})
+}
+
 func TestIntegration(t *testing.T) {
 	testenv.RunJSONSuite(t, testenv.JSONSuiteOptions{
 		ShouldCompareResponse: testenv.CompareMethods(http.MethodGet),
