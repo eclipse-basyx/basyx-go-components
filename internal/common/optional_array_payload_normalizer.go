@@ -26,28 +26,30 @@
 package common
 
 // NormalizePayloadNullFields removes null-valued fields recursively from JSON-like payloads.
-func NormalizePayloadNullFields(payload any) {
+// It returns the normalized payload so callers can reassign non-map roots such as []any.
+// For map[string]any roots, the input map is also updated in place for backward compatibility.
+func NormalizePayloadNullFields(payload any) any {
 	normalizedPayload := normalizePayloadNullFieldsIterative(payload)
 	rootMap, rootIsMap := payload.(map[string]any)
 	normalizedMap, normalizedIsMap := normalizedPayload.(map[string]any)
-	if !rootIsMap || !normalizedIsMap {
-		return
+	if rootIsMap && normalizedIsMap {
+		clear(rootMap)
+		for key, value := range normalizedMap {
+			rootMap[key] = value
+		}
 	}
 
-	clear(rootMap)
-	for key, value := range normalizedMap {
-		rootMap[key] = value
-	}
+	return normalizedPayload
 }
 
 // NormalizeAASPayloadOptionalArrays normalizes AAS payloads by removing null-valued fields.
-func NormalizeAASPayloadOptionalArrays(payload any) {
-	NormalizePayloadNullFields(payload)
+func NormalizeAASPayloadOptionalArrays(payload any) any {
+	return NormalizePayloadNullFields(payload)
 }
 
 // NormalizeSubmodelPayloadOptionalArrays normalizes submodel payloads by removing null-valued fields.
-func NormalizeSubmodelPayloadOptionalArrays(payload any) {
-	NormalizePayloadNullFields(payload)
+func NormalizeSubmodelPayloadOptionalArrays(payload any) any {
+	return NormalizePayloadNullFields(payload)
 }
 
 type normalizerFrameKind uint8
