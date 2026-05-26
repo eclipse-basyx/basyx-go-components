@@ -351,13 +351,22 @@ func requestHost(r *http.Request) string {
 	return r.Host
 }
 
+func normalizeContextPathForBaseLocation(contextPath string) string {
+	trimmed := strings.TrimSpace(contextPath)
+	if trimmed == "" || trimmed == "/" {
+		return ""
+	}
+
+	return "/" + strings.Trim(trimmed, "/")
+}
+
 func (c *SubmodelRegistryAPIAPIController) buildBaseLocation(r *http.Request) string {
 	host := requestHost(r)
 	if host == "" {
 		return ""
 	}
 
-	basePath := strings.TrimSuffix(c.contextPath, "/")
+	basePath := normalizeContextPathForBaseLocation(c.contextPath)
 
 	return requestScheme(r) + "://" + host + basePath
 }

@@ -26,13 +26,22 @@ func encodeIdentifierForPath(identifier string) string {
 	return base64.RawURLEncoding.EncodeToString([]byte(identifier))
 }
 
+func normalizeContextPathForBaseLocation(contextPath string) string {
+	trimmed := strings.TrimSpace(contextPath)
+	if trimmed == "" || trimmed == "/" {
+		return ""
+	}
+
+	return "/" + strings.Trim(trimmed, "/")
+}
+
 func (c *AssetAdministrationShellRepositoryAPIAPIController) buildBaseLocation(r *http.Request) string {
 	host := requestHost(r)
 	if host == "" {
 		return ""
 	}
 
-	basePath := strings.TrimSuffix(c.contextPath, "/")
+	basePath := normalizeContextPathForBaseLocation(c.contextPath)
 
 	return requestScheme(r) + "://" + host + basePath
 }

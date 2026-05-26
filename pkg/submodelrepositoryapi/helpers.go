@@ -92,6 +92,15 @@ func requestHost(r *http.Request) string {
 	return r.Host
 }
 
+func normalizeContextPathForBaseLocation(contextPath string) string {
+	trimmed := strings.TrimSpace(contextPath)
+	if trimmed == "" || trimmed == "/" {
+		return ""
+	}
+
+	return "/" + strings.Trim(trimmed, "/")
+}
+
 // buildBaseLocation builds an absolute base URL from scheme, host, and configured context path.
 func (c *SubmodelRepositoryAPIAPIController) buildBaseLocation(r *http.Request) string {
 	host := requestHost(r)
@@ -99,7 +108,7 @@ func (c *SubmodelRepositoryAPIAPIController) buildBaseLocation(r *http.Request) 
 		return ""
 	}
 
-	basePath := strings.TrimSuffix(c.contextPath, "/")
+	basePath := normalizeContextPathForBaseLocation(c.contextPath)
 
 	return requestScheme(r) + "://" + host + basePath
 }
