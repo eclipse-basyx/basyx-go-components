@@ -27,7 +27,17 @@ package common
 
 // NormalizePayloadNullFields removes null-valued fields recursively from JSON-like payloads.
 func NormalizePayloadNullFields(payload any) {
-	_ = normalizePayloadNullFields(payload)
+	normalizedPayload := normalizePayloadNullFieldsIterative(payload)
+	rootMap, rootIsMap := payload.(map[string]any)
+	normalizedMap, normalizedIsMap := normalizedPayload.(map[string]any)
+	if !rootIsMap || !normalizedIsMap {
+		return
+	}
+
+	clear(rootMap)
+	for key, value := range normalizedMap {
+		rootMap[key] = value
+	}
 }
 
 // NormalizeAASPayloadOptionalArrays normalizes AAS payloads by removing null-valued fields.
@@ -40,27 +50,112 @@ func NormalizeSubmodelPayloadOptionalArrays(payload any) {
 	NormalizePayloadNullFields(payload)
 }
 
-func normalizePayloadNullFields(payload any) any {
-	switch typed := payload.(type) {
-	case map[string]any:
-		for key, value := range typed {
-			if value == nil {
-				delete(typed, key)
-				continue
+type normalizerFrameKind uint8
+
+const (
+	normalizerFrameKindRoot normalizerFrameKind = iota
+	normalizerFrameKindMap
+	normalizerFrameKindSlice
+)
+
+type normalizerFrame struct {
+	stage             uint8
+	value             any
+	result            any
+	kind              normalizerFrameKind
+	parent            *normalizerFrame
+	parentMapKey      string
+	parentSliceIndex  int
+	mapKeys           []string
+	mapChildResults   map[string]any
+	sliceChildResults []any
+}
+
+func normalizePayloadNullFieldsIterative(payload any) any {
+	rootFrame := &normalizerFrame{
+		value: payload,
+		kind:  normalizerFrameKindRoot,
+	}
+	stack := []*normalizerFrame{rootFrame}
+
+	for len(stack) > 0 {
+		activeFrame := stack[len(stack)-1]
+		switch activeFrame.stage {
+		case 0:
+			switch typedValue := activeFrame.value.(type) {
+			case map[string]any:
+				activeFrame.stage = 1
+				activeFrame.mapChildResults = make(map[string]any, len(typedValue))
+				activeFrame.mapKeys = make([]string, 0, len(typedValue))
+
+				for key, value := range typedValue {
+					activeFrame.mapKeys = append(activeFrame.mapKeys, key)
+					childFrame := &normalizerFrame{
+						value:        value,
+						kind:         normalizerFrameKindMap,
+						parent:       activeFrame,
+						parentMapKey: key,
+					}
+					stack = append(stack, childFrame)
+				}
+			case []any:
+				activeFrame.stage = 1
+				activeFrame.sliceChildResults = make([]any, len(typedValue))
+
+				for index, value := range typedValue {
+					childFrame := &normalizerFrame{
+						value:            value,
+						kind:             normalizerFrameKindSlice,
+						parent:           activeFrame,
+						parentSliceIndex: index,
+					}
+					stack = append(stack, childFrame)
+				}
+			default:
+				activeFrame.result = typedValue
+				stack = stack[:len(stack)-1]
+				propagateNormalizationResultToParent(activeFrame)
 			}
-			typed[key] = normalizePayloadNullFields(value)
-		}
-		return typed
-	case []any:
-		normalized := make([]any, 0, len(typed))
-		for _, item := range typed {
-			if item == nil {
-				continue
+		default:
+			switch activeFrame.value.(type) {
+			case map[string]any:
+				normalizedMap := make(map[string]any, len(activeFrame.mapChildResults))
+				for _, key := range activeFrame.mapKeys {
+					normalizedChildValue := activeFrame.mapChildResults[key]
+					if normalizedChildValue == nil {
+						continue
+					}
+					normalizedMap[key] = normalizedChildValue
+				}
+				activeFrame.result = normalizedMap
+			case []any:
+				normalizedSlice := make([]any, 0, len(activeFrame.sliceChildResults))
+				for _, normalizedChildValue := range activeFrame.sliceChildResults {
+					if normalizedChildValue == nil {
+						continue
+					}
+					normalizedSlice = append(normalizedSlice, normalizedChildValue)
+				}
+				activeFrame.result = normalizedSlice
 			}
-			normalized = append(normalized, normalizePayloadNullFields(item))
+
+			stack = stack[:len(stack)-1]
+			propagateNormalizationResultToParent(activeFrame)
 		}
-		return normalized
-	default:
-		return payload
+	}
+
+	return rootFrame.result
+}
+
+func propagateNormalizationResultToParent(frame *normalizerFrame) {
+	if frame == nil || frame.parent == nil {
+		return
+	}
+
+	switch frame.kind {
+	case normalizerFrameKindMap:
+		frame.parent.mapChildResults[frame.parentMapKey] = frame.result
+	case normalizerFrameKindSlice:
+		frame.parent.sliceChildResults[frame.parentSliceIndex] = frame.result
 	}
 }
