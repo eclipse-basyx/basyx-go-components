@@ -74,3 +74,47 @@ func TestNormalizeSubmodelPayloadOptionalArraysIgnoresNonObjectPayload(t *testin
 
 	assert.Len(t, payload, 1)
 }
+
+func TestNormalizeSubmodelPayloadOptionalArraysRemovesNestedNullFields(t *testing.T) {
+	payload := map[string]any{
+		"id": "https://example.com/sm/2",
+		"submodelElements": []any{
+			map[string]any{
+				"idShort": "collection",
+				"value": []any{
+					map[string]any{
+						"idShort": "nested",
+						"value":   nil,
+					},
+					nil,
+				},
+				"semanticId": nil,
+			},
+		},
+	}
+
+	NormalizeSubmodelPayloadOptionalArrays(payload)
+
+	rawElements, hasElements := payload["submodelElements"]
+	assert.True(t, hasElements)
+
+	elements, ok := rawElements.([]any)
+	assert.True(t, ok)
+	assert.Len(t, elements, 1)
+
+	firstElement, ok := elements[0].(map[string]any)
+	assert.True(t, ok)
+	_, hasSemanticID := firstElement["semanticId"]
+	assert.False(t, hasSemanticID)
+
+	nestedRaw, hasNested := firstElement["value"]
+	assert.True(t, hasNested)
+	nested, ok := nestedRaw.([]any)
+	assert.True(t, ok)
+	assert.Len(t, nested, 1)
+
+	nestedElement, ok := nested[0].(map[string]any)
+	assert.True(t, ok)
+	_, hasValue := nestedElement["value"]
+	assert.False(t, hasValue)
+}

@@ -25,21 +25,39 @@
 
 package common
 
+func NormalizePayloadNullFields(payload any) {
+	_ = normalizePayloadNullFields(payload)
+}
+
 func NormalizeAASPayloadOptionalArrays(payload any) {
-	normalizeTopLevelOptionalArrayNull(payload, "submodels")
+	NormalizePayloadNullFields(payload)
 }
 
 func NormalizeSubmodelPayloadOptionalArrays(payload any) {
-	normalizeTopLevelOptionalArrayNull(payload, "submodelElements")
+	NormalizePayloadNullFields(payload)
 }
 
-func normalizeTopLevelOptionalArrayNull(payload any, field string) {
-	jsonObject, ok := payload.(map[string]any)
-	if !ok {
-		return
-	}
-
-	if rawFieldValue, exists := jsonObject[field]; exists && rawFieldValue == nil {
-		delete(jsonObject, field)
+func normalizePayloadNullFields(payload any) any {
+	switch typed := payload.(type) {
+	case map[string]any:
+		for key, value := range typed {
+			if value == nil {
+				delete(typed, key)
+				continue
+			}
+			typed[key] = normalizePayloadNullFields(value)
+		}
+		return typed
+	case []any:
+		normalized := make([]any, 0, len(typed))
+		for _, item := range typed {
+			if item == nil {
+				continue
+			}
+			normalized = append(normalized, normalizePayloadNullFields(item))
+		}
+		return normalized
+	default:
+		return payload
 	}
 }
