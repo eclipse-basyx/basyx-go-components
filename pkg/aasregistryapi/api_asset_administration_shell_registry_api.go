@@ -323,6 +323,14 @@ func (c *AssetAdministrationShellRegistryAPIAPIController) PostAssetAdministrati
 		c.errorHandler(w, r, err, &result)
 		return
 	}
+
+	if result.Code == http.StatusCreated {
+		encodedAASIdentifier := encodeIdentifierForPath(assetAdministrationShellDescriptorParam.Id)
+		location := c.buildAASDescriptorLocation(r, encodedAASIdentifier)
+		if location != "" {
+			w.Header().Set("Location", location)
+		}
+	}
 	_ = EncodeJSONResponse(result.Body, &result.Code, w)
 }
 
@@ -409,6 +417,13 @@ func (c *AssetAdministrationShellRegistryAPIAPIController) PutAssetAdministratio
 		log.Printf("🧩 [%s] Error in PutAssetAdministrationShellDescriptorById: service failure (aasIdentifier=%q bodyId=%q): %v", componentName, aasIdentifierParam, assetAdministrationShellDescriptorParam.Id, err)
 		c.errorHandler(w, r, err, &result)
 		return
+	}
+
+	if result.Code == http.StatusCreated {
+		location := c.buildAASDescriptorLocation(r, aasIdentifierParam)
+		if location != "" {
+			w.Header().Set("Location", location)
+		}
 	}
 	_ = EncodeJSONResponse(result.Body, &result.Code, w)
 }
@@ -556,6 +571,14 @@ func (c *AssetAdministrationShellRegistryAPIAPIController) PostSubmodelDescripto
 		c.errorHandler(w, r, err, &result)
 		return
 	}
+
+	if result.Code == http.StatusCreated {
+		encodedSubmodelIdentifier := encodeIdentifierForPath(submodelDescriptorParam.Id)
+		location := c.buildSubmodelDescriptorLocation(r, aasIdentifierParam, encodedSubmodelIdentifier)
+		if location != "" {
+			w.Header().Set("Location", location)
+		}
+	}
 	_ = EncodeJSONResponse(result.Body, &result.Code, w)
 }
 
@@ -668,6 +691,13 @@ func (c *AssetAdministrationShellRegistryAPIAPIController) PutSubmodelDescriptor
 		log.Printf("🧩 [%s] Error in PutSubmodelDescriptorByIdThroughSuperpath: service failure (aasIdentifier=%q submodelIdentifier=%q bodyId=%q): %v", componentName, aasIdentifierParam, submodelIdentifierParam, submodelDescriptorParam.Id, err)
 		c.errorHandler(w, r, err, &result)
 		return
+	}
+
+	if result.Code == http.StatusCreated {
+		location := c.buildSubmodelDescriptorLocation(r, aasIdentifierParam, submodelIdentifierParam)
+		if location != "" {
+			w.Header().Set("Location", location)
+		}
 	}
 	_ = EncodeJSONResponse(result.Body, &result.Code, w)
 }

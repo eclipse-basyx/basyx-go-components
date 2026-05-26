@@ -31,10 +31,12 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/testenv"
 	_ "github.com/lib/pq" // PostgreSQL Treiber
@@ -65,6 +67,193 @@ func deleteAllAASDescriptors(t *testing.T, runner *testenv.JSONSuiteRunner, step
 		}, stepNumber)
 		require.NoError(t, err)
 	}
+}
+
+func postJSONResponse(endpoint string, body string) (map[string]any, int, http.Header, error) {
+	req, err := http.NewRequest(http.MethodPost, endpoint, strings.NewReader(body))
+	if err != nil {
+		return nil, 0, nil, fmt.Errorf("failed to create request: %v", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, 0, nil, fmt.Errorf("failed to send request: %v", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	responseBody, readErr := io.ReadAll(resp.Body)
+	if readErr != nil {
+		return nil, resp.StatusCode, resp.Header.Clone(), fmt.Errorf("failed to read response body: %v", readErr)
+	}
+
+	if strings.TrimSpace(string(responseBody)) == "" {
+		return nil, resp.StatusCode, resp.Header.Clone(), nil
+	}
+
+	var payload map[string]any
+	if unmarshalErr := json.Unmarshal(responseBody, &payload); unmarshalErr != nil {
+		return nil, resp.StatusCode, resp.Header.Clone(), fmt.Errorf("failed to unmarshal response body: %v", unmarshalErr)
+	}
+
+	return payload, resp.StatusCode, resp.Header.Clone(), nil
+}
+
+func putJSONResponse(endpoint string, body string) (map[string]any, int, http.Header, error) {
+	req, err := http.NewRequest(http.MethodPut, endpoint, strings.NewReader(body))
+	if err != nil {
+		return nil, 0, nil, fmt.Errorf("failed to create request: %v", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, 0, nil, fmt.Errorf("failed to send request: %v", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	responseBody, readErr := io.ReadAll(resp.Body)
+	if readErr != nil {
+		return nil, resp.StatusCode, resp.Header.Clone(), fmt.Errorf("failed to read response body: %v", readErr)
+	}
+
+	if strings.TrimSpace(string(responseBody)) == "" {
+		return nil, resp.StatusCode, resp.Header.Clone(), nil
+	}
+
+	var payload map[string]any
+	if unmarshalErr := json.Unmarshal(responseBody, &payload); unmarshalErr != nil {
+		return nil, resp.StatusCode, resp.Header.Clone(), fmt.Errorf("failed to unmarshal response body: %v", unmarshalErr)
+	}
+
+	return payload, resp.StatusCode, resp.Header.Clone(), nil
+}
+
+func cleanupAASDescriptor(t *testing.T, baseURL string, aasID string) {
+	t.Helper()
+
+	aasIdentifier := base64.RawURLEncoding.EncodeToString([]byte(aasID))
+	endpoint := fmt.Sprintf("%s/shell-descriptors/%s", baseURL, aasIdentifier)
+
+	req, err := http.NewRequest(http.MethodDelete, endpoint, nil)
+	if err != nil {
+		t.Fatalf("failed to create cleanup request: %v", err)
+	}
+
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Fatalf("failed to execute cleanup request: %v", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusNoContent && resp.StatusCode != http.StatusNotFound {
+		cleanupBody, readErr := io.ReadAll(resp.Body)
+		if readErr != nil {
+			t.Fatalf("cleanup failed with status %d and unreadable body: %v", resp.StatusCode, readErr)
+		}
+
+		t.Fatalf("cleanup failed with status %d: %s", resp.StatusCode, string(cleanupBody))
+	}
+}
+
+func buildAASDescriptorPayload(aasID string) string {
+	return fmt.Sprintf(
+		`{"id":"%s","assetKind":"Type","assetType":"integration-test","endpoints":[{"interface":"AAS-3.0","protocolInformation":{"href":"https://example.com/aas/%s","endpointProtocol":"https"}}]}`,
+		aasID,
+		base64.RawURLEncoding.EncodeToString([]byte(aasID)),
+	)
+}
+
+func buildSubmodelDescriptorPayload(submodelID string, tag string) string {
+	return fmt.Sprintf(
+		`{"id":"%s","endpoints":[{"interface":"AAS-3.0","protocolInformation":{"href":"https://example.com/submodels/%s","endpointProtocol":"https"}}],"extensions":[{"name":"tag","valueType":"xs:string","value":"%s"}]}`,
+		submodelID,
+		base64.RawURLEncoding.EncodeToString([]byte(submodelID)),
+		tag,
+	)
+}
+
+func TestLocationHeadersForCreateEndpointsAASRegistry(t *testing.T) {
+	baseURL := "http://127.0.0.1:6004"
+
+	t.Run("PostAssetAdministrationShellDescriptorSetsLocation", func(t *testing.T) {
+		aasID := fmt.Sprintf("https://example.com/ids/aas/location-post-%d", time.Now().UnixNano())
+		t.Cleanup(func() { cleanupAASDescriptor(t, baseURL, aasID) })
+
+		aasIdentifier := base64.RawURLEncoding.EncodeToString([]byte(aasID))
+		endpoint := baseURL + "/shell-descriptors"
+
+		_, statusCode, headers, err := postJSONResponse(endpoint, buildAASDescriptorPayload(aasID))
+		require.NoError(t, err, "POST AAS descriptor request failed")
+		require.Equal(t, http.StatusCreated, statusCode, "Expected 201 Created for POST AAS descriptor")
+		require.Equal(t, endpoint+"/"+aasIdentifier, headers.Get("Location"), "Expected Location header to point to created AAS descriptor")
+	})
+
+	t.Run("PutAssetAdministrationShellDescriptorByIdSetsLocationOnlyOnCreate", func(t *testing.T) {
+		aasID := fmt.Sprintf("https://example.com/ids/aas/location-put-%d", time.Now().UnixNano())
+		t.Cleanup(func() { cleanupAASDescriptor(t, baseURL, aasID) })
+
+		aasIdentifier := base64.RawURLEncoding.EncodeToString([]byte(aasID))
+		endpoint := fmt.Sprintf("%s/shell-descriptors/%s", baseURL, aasIdentifier)
+
+		_, createStatusCode, createHeaders, createErr := putJSONResponse(endpoint, buildAASDescriptorPayload(aasID))
+		require.NoError(t, createErr, "Initial PUT AAS descriptor request failed")
+		require.Equal(t, http.StatusCreated, createStatusCode, "Expected 201 Created for initial PUT AAS descriptor")
+		require.Equal(t, endpoint, createHeaders.Get("Location"), "Expected Location header for create PUT AAS descriptor")
+
+		_, updateStatusCode, updateHeaders, updateErr := putJSONResponse(endpoint, buildAASDescriptorPayload(aasID))
+		require.NoError(t, updateErr, "Update PUT AAS descriptor request failed")
+		require.Equal(t, http.StatusNoContent, updateStatusCode, "Expected 204 No Content for update PUT AAS descriptor")
+		require.Empty(t, updateHeaders.Get("Location"), "Expected no Location header for update PUT AAS descriptor")
+	})
+
+	t.Run("PostSubmodelDescriptorThroughSuperpathSetsLocation", func(t *testing.T) {
+		aasID := fmt.Sprintf("https://example.com/ids/aas/location-submodel-parent-%d", time.Now().UnixNano())
+		t.Cleanup(func() { cleanupAASDescriptor(t, baseURL, aasID) })
+
+		aasIdentifier := base64.RawURLEncoding.EncodeToString([]byte(aasID))
+
+		_, aasStatusCode, _, aasErr := postJSONResponse(baseURL+"/shell-descriptors", buildAASDescriptorPayload(aasID))
+		require.NoError(t, aasErr, "POST parent AAS descriptor request failed")
+		require.Equal(t, http.StatusCreated, aasStatusCode, "Expected 201 Created for parent AAS descriptor")
+
+		submodelID := fmt.Sprintf("urn:example:sm:location-post-%d", time.Now().UnixNano())
+		submodelIdentifier := base64.RawURLEncoding.EncodeToString([]byte(submodelID))
+		endpoint := fmt.Sprintf("%s/shell-descriptors/%s/submodel-descriptors", baseURL, aasIdentifier)
+
+		_, statusCode, headers, err := postJSONResponse(endpoint, buildSubmodelDescriptorPayload(submodelID, "v1"))
+		require.NoError(t, err, "POST submodel descriptor request failed")
+		require.Equal(t, http.StatusCreated, statusCode, "Expected 201 Created for POST submodel descriptor")
+		require.Equal(t, endpoint+"/"+submodelIdentifier, headers.Get("Location"), "Expected Location header to point to created submodel descriptor")
+	})
+
+	t.Run("PutSubmodelDescriptorByIdThroughSuperpathSetsLocationOnlyOnCreate", func(t *testing.T) {
+		aasID := fmt.Sprintf("https://example.com/ids/aas/location-submodel-put-parent-%d", time.Now().UnixNano())
+		t.Cleanup(func() { cleanupAASDescriptor(t, baseURL, aasID) })
+
+		aasIdentifier := base64.RawURLEncoding.EncodeToString([]byte(aasID))
+
+		_, aasStatusCode, _, aasErr := postJSONResponse(baseURL+"/shell-descriptors", buildAASDescriptorPayload(aasID))
+		require.NoError(t, aasErr, "POST parent AAS descriptor request failed")
+		require.Equal(t, http.StatusCreated, aasStatusCode, "Expected 201 Created for parent AAS descriptor")
+
+		submodelID := fmt.Sprintf("urn:example:sm:location-put-%d", time.Now().UnixNano())
+		submodelIdentifier := base64.RawURLEncoding.EncodeToString([]byte(submodelID))
+		endpoint := fmt.Sprintf("%s/shell-descriptors/%s/submodel-descriptors/%s", baseURL, aasIdentifier, submodelIdentifier)
+
+		_, createStatusCode, createHeaders, createErr := putJSONResponse(endpoint, buildSubmodelDescriptorPayload(submodelID, "before"))
+		require.NoError(t, createErr, "Initial PUT submodel descriptor request failed")
+		require.Equal(t, http.StatusCreated, createStatusCode, "Expected 201 Created for initial PUT submodel descriptor")
+		require.Equal(t, endpoint, createHeaders.Get("Location"), "Expected Location header for create PUT submodel descriptor")
+
+		_, updateStatusCode, updateHeaders, updateErr := putJSONResponse(endpoint, buildSubmodelDescriptorPayload(submodelID, "after"))
+		require.NoError(t, updateErr, "Update PUT submodel descriptor request failed")
+		require.Equal(t, http.StatusNoContent, updateStatusCode, "Expected 204 No Content for update PUT submodel descriptor")
+		require.Empty(t, updateHeaders.Get("Location"), "Expected no Location header for update PUT submodel descriptor")
+	})
 }
 
 func TestIntegration(t *testing.T) {
