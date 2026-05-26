@@ -400,6 +400,17 @@ func (c *SubmodelRepositoryAPIAPIController) PostSubmodel(w http.ResponseWriter,
 		c.errorHandler(w, r, err, &result)
 		return
 	}
+
+	if result.Code == http.StatusCreated {
+		submodelID := submodelParam.ID()
+		if submodelID != "" {
+			encodedSubmodelID := encodeIdentifierForPath(submodelID)
+			location := c.buildSubmodelLocation(r, encodedSubmodelID)
+			if location != "" {
+				w.Header().Set("Location", location)
+			}
+		}
+	}
 	// If no error, encode the body and the result code
 	_ = EncodeJSONResponse(result.Body, &result.Code, w)
 }
@@ -801,6 +812,13 @@ func (c *SubmodelRepositoryAPIAPIController) PutSubmodelByID(w http.ResponseWrit
 		c.errorHandler(w, r, err, &result)
 		return
 	}
+
+	if result.Code == http.StatusCreated {
+		location := c.buildSubmodelLocation(r, submodelIdentifierParam)
+		if location != "" {
+			w.Header().Set("Location", location)
+		}
+	}
 	// If no error, encode the body and the result code
 	_ = EncodeJSONResponse(result.Body, &result.Code, w)
 }
@@ -1167,6 +1185,15 @@ func (c *SubmodelRepositoryAPIAPIController) PostSubmodelElementSubmodelRepo(w h
 		c.errorHandler(w, r, err, &result)
 		return
 	}
+
+	if result.Code == http.StatusCreated {
+		if idShort := submodelElementParam.IDShort(); idShort != nil && *idShort != "" {
+			location := c.buildSubmodelElementLocation(r, submodelIdentifierParam, *idShort)
+			if location != "" {
+				w.Header().Set("Location", location)
+			}
+		}
+	}
 	// If no error, encode the body and the result code
 	_ = EncodeJSONResponse(result.Body, &result.Code, w)
 }
@@ -1495,6 +1522,13 @@ func (c *SubmodelRepositoryAPIAPIController) PutSubmodelElementByPathSubmodelRep
 		c.errorHandler(w, r, err, &result)
 		return
 	}
+
+	if result.Code == http.StatusCreated {
+		location := c.buildSubmodelElementLocation(r, submodelIdentifierParam, idShortPathParam)
+		if location != "" {
+			w.Header().Set("Location", location)
+		}
+	}
 	// If no error, encode the body and the result code
 	_ = EncodeJSONResponse(result.Body, &result.Code, w)
 }
@@ -1551,6 +1585,16 @@ func (c *SubmodelRepositoryAPIAPIController) PostSubmodelElementByPathSubmodelRe
 	if err != nil {
 		c.errorHandler(w, r, err, &result)
 		return
+	}
+
+	if result.Code == http.StatusCreated {
+		if idShort := submodelElementParam.IDShort(); idShort != nil && *idShort != "" {
+			childPath := joinIDShortPath(idShortPathParam, *idShort)
+			location := c.buildSubmodelElementLocation(r, submodelIdentifierParam, childPath)
+			if location != "" {
+				w.Header().Set("Location", location)
+			}
+		}
 	}
 	// If no error, encode the body and the result code
 	_ = EncodeJSONResponse(result.Body, &result.Code, w)
