@@ -16,7 +16,7 @@ type serializationServiceStub struct {
 	err      error
 }
 
-func (s serializationServiceStub) GenerateSerializationByIDs(_ context.Context, _ []string, _ []string, _ bool) (model.ImplResponse, error) {
+func (s serializationServiceStub) GenerateSerializationByIds(_ context.Context, _ []string, _ []string, _ bool) (model.ImplResponse, error) {
 	return s.response, s.err
 }
 
@@ -26,10 +26,10 @@ func TestSerializationRoutesIncludeContextPath(t *testing.T) {
 	ctrl := NewSerializationAPIAPIController(serializationServiceStub{}, "/api/v3")
 	routes := ctrl.Routes()
 
-	require.Equal(t, "/api/v3/serialization", routes["GenerateSerializationByIDs"].Pattern)
+	require.Equal(t, "/api/v3/serialization", routes["GenerateSerializationByIds"].Pattern)
 }
 
-func TestGenerateSerializationByIDsReturnsNotImplemented(t *testing.T) {
+func TestGenerateSerializationByIdsReturnsNotImplemented(t *testing.T) {
 	t.Parallel()
 
 	ctrl := NewSerializationAPIAPIController(serializationServiceStub{
@@ -40,7 +40,7 @@ func TestGenerateSerializationByIDsReturnsNotImplemented(t *testing.T) {
 	rr := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/serialization", nil)
 
-	ctrl.GenerateSerializationByIDs(rr, req)
+	ctrl.GenerateSerializationByIds(rr, req)
 
 	require.Equal(t, http.StatusNotImplemented, rr.Code)
 }

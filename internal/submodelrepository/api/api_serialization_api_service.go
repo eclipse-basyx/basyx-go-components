@@ -34,7 +34,7 @@ import (
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 )
 
-const errGenerateSerializationByIDsNotImplemented = "SMREPO-GENSERIALIZATIONBYIDS-NOTIMPLEMENTED"
+const errGenerateSerializationByIdsNotImplemented = "SMREPO-GENSERIALIZATIONBYIDS-NOTIMPLEMENTED"
 
 // SerializationAPIAPIService is a service that implements the logic for the SerializationAPIAPIServicer.
 type SerializationAPIAPIService struct{}
@@ -44,8 +44,8 @@ func NewSerializationAPIAPIService() *SerializationAPIAPIService {
 	return &SerializationAPIAPIService{}
 }
 
-// GenerateSerializationByIDs returns the requested serialization for the given identifiers.
-func (s *SerializationAPIAPIService) GenerateSerializationByIDs(_ context.Context, _ []string, _ []string, _ bool) (model.ImplResponse, error) {
-	err := errors.New(errGenerateSerializationByIDsNotImplemented)
-	return common.NewErrorResponse(err, http.StatusNotImplemented, "SubmodelRepository", "GenerateSerializationByIDs", ""), nil
+// GenerateSerializationByIds returns the requested serialization for the given identifiers.
+func (s *SerializationAPIAPIService) GenerateSerializationByIds(_ context.Context, _ []string, _ []string, _ bool) (model.ImplResponse, error) {
+	err := errors.New(errGenerateSerializationByIdsNotImplemented)
+	return common.NewErrorResponse(err, http.StatusNotImplemented, "SubmodelRepository", "GenerateSerializationByIds", ""), nil
 }

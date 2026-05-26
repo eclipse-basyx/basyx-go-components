@@ -236,6 +236,13 @@ type ABACConfig struct {
 	ModelPath string `mapstructure:"modelPath" json:"modelPath"` // Path to access control model
 }
 
+type ConfigMode int
+
+const (
+	QUIET ConfigMode = iota
+	NORMAL
+)
+
 // LoadConfig loads the configuration from YAML files and environment variables.
 //
 // The function supports multiple configuration sources with the following precedence:
@@ -248,6 +255,7 @@ type ABACConfig struct {
 // Parameters:
 //   - configPath: Path to the YAML configuration file. If empty, only environment
 //     variables and defaults will be used.
+//   - configMode: QUIET = No Output, NORMAL = Normal Logging
 //
 // Returns:
 //   - *Config: Loaded configuration structure
@@ -255,25 +263,31 @@ type ABACConfig struct {
 //
 // Example:
 //
-//	config, err := LoadConfig("config/app.yaml")
+//	config, err := LoadConfig("config/app.yaml", NORMAL)
 //	if err != nil {
 //	    log.Fatal("Failed to load config:", err)
 //	}
-func LoadConfig(configPath string) (*Config, error) {
-	PrintSplash()
+func LoadConfig(configPath string, configMode ConfigMode) (*Config, error) {
+	if configMode == NORMAL {
+		PrintSplash()
+	}
 	v := viper.New()
 
 	// Set default values
 	setDefaults(v)
 
 	if configPath != "" {
-		log.Printf("📁 Loading config from file: %s", configPath)
+		if configMode == NORMAL {
+			log.Printf("📁 Loading config from file: %s", configPath)
+		}
 		v.SetConfigFile(configPath)
 		if err := v.ReadInConfig(); err != nil {
 			return nil, fmt.Errorf("read config: %w", err)
 		}
 	} else {
-		log.Println("📁 No config file provided — loading from environment variables only")
+		if configMode == NORMAL {
+			log.Println("📁 No config file provided — loading from environment variables only")
+		}
 	}
 
 	// Override config with environment variables
@@ -291,9 +305,10 @@ func LoadConfig(configPath string) (*Config, error) {
 	}
 	cfg.Server.StrictVerification = string(verificationMode)
 	applyAASPreconfigPathOverrides(cfg)
-
-	log.Println("✅ Configuration loaded successfully")
-	PrintConfiguration(cfg)
+	if configMode == NORMAL {
+		log.Println("✅ Configuration loaded successfully")
+		PrintConfiguration(cfg)
+	}
 	return cfg, nil
 }
 

@@ -487,19 +487,6 @@ CREATE TABLE IF NOT EXISTS concept_description (
   db_updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- ------------------------------------------
--- Schema compatibility upgrades
--- ------------------------------------------
-
-ALTER TABLE IF EXISTS aas_descriptor
-  ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
-
-ALTER TABLE IF EXISTS aas_identifier
-  ADD COLUMN IF NOT EXISTS db_created_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
-
-ALTER TABLE IF EXISTS aas_identifier
-  ADD COLUMN IF NOT EXISTS db_updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
-
 /*
  Auto-generated file. Do not edit manually.
  Naming pattern: <context>_reference and <context>_reference_key.

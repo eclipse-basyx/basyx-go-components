@@ -78,9 +78,8 @@ func NewPostgreSQLDiscoveryBackend(
 	maxOpenConns int32,
 	maxIdleConns int,
 	connMaxLifetimeMinutes int,
-	databaseSchema string,
 ) (*PostgreSQLDiscoveryDatabase, error) {
-	db, err := common.InitializeDatabase(dsn, databaseSchema)
+	db, err := common.NewDatabaseConnection(dsn)
 	if err != nil {
 		return nil, err
 	}
@@ -234,7 +233,7 @@ func (p *PostgreSQLDiscoveryDatabase) SearchAASIDsByAssetLinks(
 	cursor string,
 ) ([]string, string, error) {
 	if limit <= 0 {
-		limit = 100000
+		limit = 100
 	}
 
 	peekLimit := int(limit) + 1

@@ -1,0 +1,68 @@
+{
+  "idShort": "ProductClassId",
+  "displayName": [
+    {
+      "language": "de",
+      "text": "Produktklassen ID"
+    },
+    {
+      "language": "en",
+      "text": "Product Class Id"
+    }
+  ],
+  "description": [
+    {
+      "language": "en",
+      "text": "Class of the associated product or industrial equipment in the classification system. According to the notation of the system."
+    }
+  ],
+  "id": "0173-1#02-ABG776#003",
+  "embeddedDataSpecifications": [
+    {
+      "dataSpecification": {
+        "type": "ExternalReference",
+        "keys": [
+          {
+            "type": "GlobalReference",
+            "value": "http://admin-shell.io/DataSpecificationTemplates/DataSpecificationIEC61360/3/0"
+          }
+        ]
+      },
+      "dataSpecificationContent": {
+        "preferredName": [
+          {
+            "language": "en",
+            "text": "Product class ID"
+          },
+          {
+            "language": "de",
+            "text": "Produktklassen ID"
+          }
+        ],
+        "shortName": [
+          {
+            "language": "en",
+            "text": "ClassID"
+          },
+          {
+            "language": "de",
+            "text": "KlassenID"
+          }
+        ],
+        "dataType": "STRING",
+        "definition": [
+          {
+            "language": "en",
+            "text": "Class of the associated product or industrial equipment in the classification system. According to the notation of the system (IRDI)"
+          },
+          {
+            "language": "de",
+            "text": "Klasse des zugeh\u00F6rigen Produkts oder der zugeh\u00F6rigen Industrieausr\u00FCstung im Klassifikationssystem. Entsprechend der Notation des Systems (IRDI)"
+          }
+        ],
+        "modelType": "DataSpecificationIec61360"
+      }
+    }
+  ],
+  "modelType": "ConceptDescription"
+}

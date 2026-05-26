@@ -1,0 +1,9 @@
+postgres:
+  host: localhost
+  port: 5432
+  user: postgres
+  password: change-me
+  dbname: basyxConfigService
+  maxOpenConnections: 50
+  maxIdleConnections: 25
+  connMaxLifetimeMinutes: 5

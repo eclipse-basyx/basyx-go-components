@@ -60,7 +60,7 @@ func (s *AASXFileServerAPIAPIService) GetAllAASXPackageIds(ctx context.Context, 
 		if common.IsErrBadRequest(err) {
 			return newAPIErrorResponse(err, http.StatusBadRequest, operation, "BadRequest"), nil
 		}
-		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "ListPackages"), err
+		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "ListPackages"), nil
 	}
 
 	result := make([]openapi.PackageDescription, 0, len(records))
@@ -96,7 +96,7 @@ func (s *AASXFileServerAPIAPIService) PostAASXPackage(ctx context.Context, file 
 		if common.IsErrBadRequest(err) {
 			return newAPIErrorResponse(err, http.StatusBadRequest, operation, "BadRequest"), nil
 		}
-		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "CreatePackage"), err
+		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "CreatePackage"), nil
 	}
 
 	return openapi.Response(http.StatusCreated, toPackageDescription(*record)), nil
@@ -119,7 +119,7 @@ func (s *AASXFileServerAPIAPIService) GetAASXByPackageId(ctx context.Context, pa
 		if common.IsErrBadRequest(err) {
 			return newAPIErrorResponse(err, http.StatusBadRequest, operation, "BadRequest"), nil
 		}
-		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "GetPackageByID"), err
+		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "GetPackageByID"), nil
 	}
 
 	return openapi.Response(http.StatusOK, openapi.FileDownload{
@@ -153,7 +153,7 @@ func (s *AASXFileServerAPIAPIService) PutAASXByPackageId(ctx context.Context, pa
 		if common.IsErrBadRequest(err) {
 			return newAPIErrorResponse(err, http.StatusBadRequest, operation, "BadRequest"), nil
 		}
-		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "PutPackage"), err
+		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "PutPackage"), nil
 	}
 
 	if updated {
@@ -180,7 +180,7 @@ func (s *AASXFileServerAPIAPIService) DeleteAASXByPackageId(ctx context.Context,
 		if common.IsErrBadRequest(err) {
 			return newAPIErrorResponse(err, http.StatusBadRequest, operation, "BadRequest"), nil
 		}
-		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "DeletePackage"), err
+		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "DeletePackage"), nil
 	}
 
 	return openapi.Response(http.StatusNoContent, nil), nil

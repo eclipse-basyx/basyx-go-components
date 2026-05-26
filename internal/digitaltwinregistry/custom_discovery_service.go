@@ -95,7 +95,10 @@ func (s *CustomDiscoveryService) SearchAllAssetAdministrationShellIdsByAssetLink
 
 	if shouldEnforceFormula {
 		assetLinkQuery := buildAssetLinkQuery(ctx, assetLink)
-		ctx = auth.MergeQueryFilter(ctx, assetLinkQuery)
+		if assetLinkQuery.Condition != nil || len(assetLinkQuery.FilterConditions) > 0 {
+			ctx = auth.MergeQueryFilter(ctx, assetLinkQuery)
+			ctx = discoveryapiinternal.WithAssetLinksAlreadyConstrained(ctx)
+		}
 	}
 
 	createdAfter, _ := CreatedAfterFromContext(ctx)

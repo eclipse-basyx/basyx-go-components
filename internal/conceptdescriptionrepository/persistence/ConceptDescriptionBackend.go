@@ -66,8 +66,8 @@ type ConceptDescriptionBackend struct {
 // Returns:
 // - A pointer to a ConceptDescriptionBackend instance if the connection is successful.
 // - An error if the connection fails or if there is an issue with the database configuration.
-func NewConceptDescriptionBackend(dsn string, maxOpenConnections int32, maxIdleConnections int, connMaxLifetimeMinutes int, databaseSchema string) (*ConceptDescriptionBackend, error) {
-	db, err := common.InitializeDatabase(dsn, databaseSchema)
+func NewConceptDescriptionBackend(dsn string, maxOpenConnections int32, maxIdleConnections int, connMaxLifetimeMinutes int) (*ConceptDescriptionBackend, error) {
+	db, err := common.NewDatabaseConnection(dsn)
 	if err != nil {
 		return nil, err
 	}

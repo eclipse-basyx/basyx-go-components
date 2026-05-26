@@ -49,9 +49,8 @@ func NewPostgreSQLSMBackend(
 	maxIdleConns int,
 	connMaxLifetimeMinutes int,
 	_ bool,
-	databaseSchema string,
 ) (*PostgreSQLSMDatabase, error) {
-	db, err := common.InitializeDatabase(dsn, databaseSchema)
+	db, err := common.NewDatabaseConnection(dsn)
 	if err != nil {
 		return nil, err
 	}

@@ -197,12 +197,13 @@ func TestLogicalExpression_ToSQL_ComplexCases(t *testing.T) {
 
 			sql, args := toPreparedSQLForDescriptor(t, le)
 			fmt.Println(sql, args)
+			normalizedSQL := normalizePreparedPlaceholders(sql)
 
-			if tt.noExists && strings.Contains(sql, "EXISTS") {
+			if tt.noExists && strings.Contains(normalizedSQL, "EXISTS") {
 				t.Fatalf("did not expect EXISTS, got: %s", sql)
 			}
 			for _, want := range tt.wantSQL {
-				if !strings.Contains(sql, want) {
+				if !strings.Contains(normalizedSQL, want) {
 					t.Fatalf("expected SQL to contain %q, got: %s", want, sql)
 				}
 			}

@@ -70,8 +70,8 @@ type PostgreSQLCompanyLookupDatabase struct {
 //
 // The function reads and executes the schema file from the current working directory's
 // resources/sql subdirectory to set up the required database tables.
-func NewPostgreSQLCompanyLookupBackend(dsn string, _ int32 /* maxOpenConns */, _ /* maxIdleConns */ int, _ /* connMaxLifetimeMinutes */ int, cacheEnabled bool, databaseSchema string) (*PostgreSQLCompanyLookupDatabase, error) {
-	db, err := common.InitializeDatabase(dsn, databaseSchema)
+func NewPostgreSQLCompanyLookupBackend(dsn string, _ int32 /* maxOpenConns */, _ /* maxIdleConns */ int, _ /* connMaxLifetimeMinutes */ int, cacheEnabled bool) (*PostgreSQLCompanyLookupDatabase, error) {
+	db, err := common.NewDatabaseConnection(dsn)
 	if err != nil {
 		return nil, err
 	}

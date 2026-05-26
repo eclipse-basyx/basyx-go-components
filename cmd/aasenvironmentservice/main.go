@@ -1,3 +1,28 @@
+/*******************************************************************************
+* Copyright (C) 2026 the Eclipse BaSyx Authors and Fraunhofer IESE
+*
+* Permission is hereby granted, free of charge, to any person obtaining
+* a copy of this software and associated documentation files (the
+* "Software"), to deal in the Software without restriction, including
+* without limitation the rights to use, copy, modify, merge, publish,
+* distribute, sublicense, and/or sell copies of the Software, and to
+* permit persons to whom the Software is furnished to do so, subject to
+* the following conditions:
+*
+* The above copyright notice and this permission notice shall be
+* included in all copies or substantial portions of the Software.
+*
+* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+* NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
+* LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+* OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
+* WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+*
+* SPDX-License-Identifier: MIT
+******************************************************************************/
+
 // Package main starts the AAS Environment Service HTTP server.
 package main
 
@@ -9,7 +34,6 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"os"
 	"sync/atomic"
 	"time"
 
@@ -43,11 +67,11 @@ import (
 //go:embed openapi.yaml
 var openapiSpec embed.FS
 
-func runServer(ctx context.Context, configPath string, databaseSchema string) error {
+func runServer(ctx context.Context, configPath string) error {
 	log.Default().Println("Loading AAS Environment Service...")
 	log.Default().Println("Config Path:", configPath)
 
-	cfg, err := common.LoadConfig(configPath)
+	cfg, err := common.LoadConfig(configPath, common.NORMAL)
 	if err != nil {
 		return err
 	}
@@ -90,7 +114,11 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 
 	dsn := common.BuildPostgresDSN(cfg.Postgres)
 
-	sharedDB, err := common.InitializeDatabase(dsn, databaseSchema)
+	if err := common.ValidateSchemaVersionByDSN(dsn, common.CURRENT_DATABASE_VERSION); err != nil {
+		return err
+	}
+
+	sharedDB, err := common.NewDatabaseConnection(dsn)
 	if err != nil {
 		return err
 	}
@@ -170,6 +198,7 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 		discoveryapi.NewAssetAdministrationShellBasicDiscoveryAPIAPIService(*discoveryPersistence),
 		persistence,
 	)
+	serializationService := aasenvironment.NewSerializationAPIService(persistence)
 	sharedBulkManager := asyncbulk.NewManager("AASENV-BULK", 0)
 	aasBulkSvc := aasregistryapi.NewBulkService(customAASRegistry, sharedBulkManager)
 	smBulkSvc := smregistryapi.NewBulkService(customSMRegistry, sharedBulkManager)
@@ -221,6 +250,7 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 	// Register /upload endpoint
 	uploadService := aasenvironment.NewUploadAPIService(persistence, customAASRepository, customSMRepository)
 	aasenvironment.RegisterUploadAPI(apiRouter, uploadService, cfg.General.UploadMaxSizeBytes)
+	aasenvironment.RegisterSerializationAPI(apiRouter, serializationService)
 
 	addr := fmt.Sprintf("0.0.0.0:%d", cfg.Server.Port)
 	log.Printf("AAS Environment Service listening on %s (contextPath=%q)\n", addr, cfg.Server.ContextPath)
@@ -264,20 +294,11 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 func main() {
 	ctx := context.TODO()
 	configPath := ""
-	databaseSchema := ""
 
 	flag.StringVar(&configPath, "config", "", "Path to config file")
-	flag.StringVar(&databaseSchema, "databaseSchema", "", "Path to Database Schema SQL file (overrides default)")
 	flag.Parse()
 
-	if databaseSchema != "" {
-		if _, fileError := os.ReadFile(databaseSchema); fileError != nil {
-			_, _ = fmt.Println("The specified database schema path is invalid or the file was not found.")
-			os.Exit(1)
-		}
-	}
-
-	if err := runServer(ctx, configPath, databaseSchema); err != nil {
+	if err := runServer(ctx, configPath); err != nil {
 		log.Fatalf("Server error: %v", err)
 	}
 }

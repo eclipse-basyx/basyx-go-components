@@ -60,7 +60,7 @@ func TestServerStrictVerificationDefaultIsPermissive(t *testing.T) {
 	withUnsetEnv(t, "SERVER_STRICTVERIFICATION")
 	captureLogOutput(t)
 
-	cfg, err := LoadConfig("")
+	cfg, err := LoadConfig("", NORMAL)
 	if err != nil {
 		t.Fatalf("unexpected config load error: %v", err)
 	}
@@ -123,7 +123,7 @@ func TestLoadConfigWithoutStrictVerificationUsesPermissiveDefault(t *testing.T) 
 	captureLogOutput(t)
 	path := writeTempConfig(t, "server:\n  port: 5004\n")
 
-	cfg, err := LoadConfig(path)
+	cfg, err := LoadConfig(path, NORMAL)
 	if err != nil {
 		t.Fatalf("unexpected config load error: %v", err)
 	}
@@ -137,7 +137,7 @@ func TestLoadConfigRejectsBooleanStrictVerification(t *testing.T) {
 	captureLogOutput(t)
 	path := writeTempConfig(t, "server:\n  strictVerification: true\n")
 
-	_, err := LoadConfig(path)
+	_, err := LoadConfig(path, NORMAL)
 	if err == nil {
 		t.Fatal("expected invalid strictVerification mode error")
 	}
@@ -151,7 +151,7 @@ func TestLoadConfigAcceptsPermissiveStrictVerification(t *testing.T) {
 	captureLogOutput(t)
 	path := writeTempConfig(t, "server:\n  strictVerification: permissive\n")
 
-	cfg, err := LoadConfig(path)
+	cfg, err := LoadConfig(path, NORMAL)
 	if err != nil {
 		t.Fatalf("unexpected config load error: %v", err)
 	}
