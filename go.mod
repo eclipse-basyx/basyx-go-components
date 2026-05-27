@@ -7,7 +7,7 @@ require github.com/go-chi/chi/v5 v5.3.0
 require (
 	github.com/DATA-DOG/go-sqlmock v1.5.2
 	github.com/aas-core-works/aas-core3.1-golang v1.0.0-rc1
-	github.com/aas-core-works/aas-package3-golang v1.0.0-rc1
+	github.com/aas-core-works/aas-package3-golang v1.0.0
 	github.com/coreos/go-oidc v2.5.0+incompatible
 	github.com/doug-martin/goqu/v9 v9.19.0
 	github.com/go-chi/cors v1.2.2
@@ -30,7 +30,7 @@ require (
 	github.com/pelletier/go-toml/v2 v2.3.1 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/pquerna/cachecontrol v0.2.0 // indirect
-	github.com/rogpeppe/go-internal v1.9.0 // indirect
+	github.com/rogpeppe/go-internal v1.14.1 // indirect
 	github.com/sagikazarmark/locafero v0.12.0 // indirect
 	github.com/spf13/afero v1.15.0 // indirect
 	github.com/spf13/cast v1.10.0 // indirect
