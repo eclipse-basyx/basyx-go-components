@@ -16,6 +16,8 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+
+	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 )
 
 func encodeIdentifierForPath(identifier string) string {
@@ -36,6 +38,10 @@ func normalizeContextPathForBaseLocation(contextPath string) string {
 }
 
 func (c *AssetAdministrationShellRepositoryAPIAPIController) buildBaseLocation(r *http.Request) string {
+	if externalBaseURL := common.ExternalBaseURLFromContext(r.Context()); externalBaseURL != "" {
+		return externalBaseURL
+	}
+
 	host := requestHost(r)
 	if host == "" {
 		return ""

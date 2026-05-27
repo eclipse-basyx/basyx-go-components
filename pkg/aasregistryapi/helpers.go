@@ -25,6 +25,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 )
 
@@ -431,6 +432,10 @@ func normalizeContextPathForBaseLocation(contextPath string) string {
 }
 
 func (c *AssetAdministrationShellRegistryAPIAPIController) buildBaseLocation(r *http.Request) string {
+	if externalBaseURL := common.ExternalBaseURLFromContext(r.Context()); externalBaseURL != "" {
+		return externalBaseURL
+	}
+
 	host := requestHost(r)
 	if host == "" {
 		return ""

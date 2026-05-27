@@ -15,6 +15,8 @@ import (
 	"net/url"
 	"reflect"
 	"strings"
+
+	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 )
 
 // Response return a ImplResponse struct filled
@@ -103,6 +105,10 @@ func normalizeContextPathForBaseLocation(contextPath string) string {
 
 // buildBaseLocation builds an absolute base URL from scheme, host, and configured context path.
 func (c *SubmodelRepositoryAPIAPIController) buildBaseLocation(r *http.Request) string {
+	if externalBaseURL := common.ExternalBaseURLFromContext(r.Context()); externalBaseURL != "" {
+		return externalBaseURL
+	}
+
 	host := requestHost(r)
 	if host == "" {
 		return ""
