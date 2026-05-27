@@ -214,6 +214,7 @@ func parseSemanticVersion(raw string) ([3]int, error) {
 		if value < 0 {
 			return [3]int{}, fmt.Errorf("negative version component %d", value)
 		}
+		// #nosec G602 -- len(parts) is 3 and parsed has also length 3
 		parsed[idx] = value
 	}
 
