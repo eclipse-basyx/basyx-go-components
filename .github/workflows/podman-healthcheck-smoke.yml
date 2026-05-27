@@ -4,8 +4,9 @@ on:
   pull_request:
     paths:
       - 'cmd/**'
+      - 'database/**'
+      - 'internal/basyxconfigurationservice/**'
       - 'internal/healthprobe/**'
-      - 'basyxschema.sql'
       - 'go.mod'
       - 'go.sum'
       - '.github/workflows/podman-healthcheck-smoke.yml'
@@ -13,11 +14,15 @@ on:
     branches: [main]
     paths:
       - 'cmd/**'
+      - 'database/**'
+      - 'internal/basyxconfigurationservice/**'
       - 'internal/healthprobe/**'
-      - 'basyxschema.sql'
       - 'go.mod'
       - 'go.sum'
       - '.github/workflows/podman-healthcheck-smoke.yml'
+
+permissions:
+  contents: read
 
 jobs:
   podman-smoke:
@@ -26,11 +31,17 @@ jobs:
     env:
       SERVICE_NAME: aasregistryservice
       IMAGE_NAME: aasregistry-go
+      CONFIG_IMAGE_NAME: basyxconfigurationservice-go
       SERVICE_PORT: 8080
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: admin123
+      POSTGRES_DB: basyxTestDB
+      POSTGRES_HOST: postgres-smoke
+      POSTGRES_PORT: 5432
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
 
       - name: Ensure Podman is available
         run: |
@@ -47,13 +58,18 @@ jobs:
             -t ${IMAGE_NAME}:podman-smoke \
             -f ./cmd/${SERVICE_NAME}/Dockerfile \
             .
+          podman build \
+            --format docker \
+            -t ${CONFIG_IMAGE_NAME}:podman-smoke \
+            -f ./cmd/basyxconfigurationservice/Dockerfile \
+            .
 
       - name: Run DB + service and verify healthchecks
         run: |
           set -euo pipefail
 
           cleanup() {
-            podman rm -f service-smoke postgres-smoke >/dev/null 2>&1 || true
+            podman rm -f service-smoke config-smoke postgres-smoke >/dev/null 2>&1 || true
             podman network rm basyx-smoke >/dev/null 2>&1 || true
           }
           trap cleanup EXIT
@@ -61,13 +77,13 @@ jobs:
           podman network create basyx-smoke
 
           podman run -d --name postgres-smoke --network basyx-smoke \
-            -e POSTGRES_USER=admin \
-            -e POSTGRES_PASSWORD=admin123 \
-            -e POSTGRES_DB=basyxTestDB \
+            -e POSTGRES_USER=${POSTGRES_USER} \
+            -e POSTGRES_PASSWORD=${POSTGRES_PASSWORD} \
+            -e POSTGRES_DB=${POSTGRES_DB} \
             postgres:18
 
           for i in $(seq 1 30); do
-            if podman exec postgres-smoke pg_isready -U admin -d basyxTestDB >/dev/null 2>&1; then
+            if podman exec postgres-smoke pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB} >/dev/null 2>&1; then
               echo "Postgres is ready"
               break
             fi
@@ -79,17 +95,35 @@ jobs:
             sleep 2
           done
 
+          podman run --name config-smoke --network basyx-smoke \
+            -e POSTGRES_HOST=${POSTGRES_HOST} \
+            -e POSTGRES_PORT=${POSTGRES_PORT} \
+            -e POSTGRES_USER=${POSTGRES_USER} \
+            -e POSTGRES_PASSWORD=${POSTGRES_PASSWORD} \
+            -e POSTGRES_DBNAME=${POSTGRES_DB} \
+            -e POSTGRES_MAXOPENCONNECTIONS=50 \
+            -e POSTGRES_MAXIDLECONNECTIONS=50 \
+            -e POSTGRES_CONNMAXLIFETIMEMINUTES=5 \
+            ${CONFIG_IMAGE_NAME}:podman-smoke
+
+          config_exit_code="$(podman inspect config-smoke --format '{{.State.ExitCode}}')"
+          if [ "${config_exit_code}" != "0" ]; then
+            echo "Configuration service failed with exit code ${config_exit_code}"
+            podman logs config-smoke || true
+            exit 1
+          fi
+
           podman run -d --name service-smoke --network basyx-smoke \
             -e SERVER_PORT=${SERVICE_PORT} \
             -e CORS_ALLOWEDORIGINS='*' \
             -e CORS_ALLOWEDHEADERS='*' \
             -e CORS_ALLOWEDCREDENTIALS=true \
             -e CORS_ALLOWEDMETHODS='GET,POST,PUT,PATCH,DELETE,OPTIONS' \
-            -e POSTGRES_HOST=postgres-smoke \
-            -e POSTGRES_PORT=5432 \
-            -e POSTGRES_USER=admin \
-            -e POSTGRES_PASSWORD=admin123 \
-            -e POSTGRES_DBNAME=basyxTestDB \
+            -e POSTGRES_HOST=${POSTGRES_HOST} \
+            -e POSTGRES_PORT=${POSTGRES_PORT} \
+            -e POSTGRES_USER=${POSTGRES_USER} \
+            -e POSTGRES_PASSWORD=${POSTGRES_PASSWORD} \
+            -e POSTGRES_DBNAME=${POSTGRES_DB} \
             -e POSTGRES_MAXOPENCONNECTIONS=50 \
             -e POSTGRES_MAXIDLECONNECTIONS=50 \
             -e POSTGRES_CONNMAXLIFETIMEMINUTES=5 \

@@ -29,8 +29,8 @@ import (
 	"fmt"
 	"strconv"
 
-	"github.com/FriedJannik/aas-go-sdk/jsonization"
-	"github.com/FriedJannik/aas-go-sdk/types"
+	"github.com/aas-core-works/aas-core3.1-golang/jsonization"
+	"github.com/aas-core-works/aas-core3.1-golang/types"
 	"github.com/doug-martin/goqu/v9"
 	jsoniter "github.com/json-iterator/go"
 )
@@ -257,6 +257,17 @@ func buildFindSubmodelReferenceIDByAASIDAndSubmodelIdentifierQuery(dialect *goqu
 		ToSQL()
 }
 
+func buildListAASIdentifiersBySubmodelIdentifierQuery(dialect *goqu.DialectWrapper, submodelIdentifier string) (string, []any, error) {
+	return dialect.
+		From(goqu.T("aas_submodel_reference").As("r")).
+		InnerJoin(goqu.T("aas_submodel_reference_key").As("k"), goqu.On(goqu.I("k.reference_id").Eq(goqu.I("r.id")))).
+		InnerJoin(goqu.T("aas").As("a"), goqu.On(goqu.I("a.id").Eq(goqu.I("r.aas_id")))).
+		SelectDistinct(goqu.I("a.aas_id")).
+		Where(goqu.I("k.value").Eq(submodelIdentifier)).
+		Order(goqu.I("a.aas_id").Asc()).
+		ToSQL()
+}
+
 func buildDeleteSubmodelReferenceByIDQuery(dialect *goqu.DialectWrapper, submodelReferenceDBID int64) (string, []any, error) {
 	return dialect.Delete("aas_submodel_reference").Where(goqu.I("id").Eq(submodelReferenceDBID)).ToSQL()
 }
@@ -311,16 +322,6 @@ func buildGetAssetAdministrationShellMapsByDBIDsQuery(dialect *goqu.DialectWrapp
 			goqu.I("tfe.content_type"),
 		).
 		Where(goqu.I("a.id").In(aasDBIDs)).
-		ToSQL()
-}
-
-func buildGetSubmodelReferencePayloadsByAASIDQuery(dialect *goqu.DialectWrapper, aasDBID int64) (string, []any, error) {
-	return dialect.
-		From(goqu.T("aas_submodel_reference").As("r")).
-		InnerJoin(goqu.T("aas_submodel_reference_payload").As("rp"), goqu.On(goqu.I("rp.reference_id").Eq(goqu.I("r.id")))).
-		Select(goqu.I("rp.parent_reference_payload")).
-		Where(goqu.I("r.aas_id").Eq(aasDBID)).
-		Order(goqu.I("r.position").Asc(), goqu.I("r.id").Asc()).
 		ToSQL()
 }
 

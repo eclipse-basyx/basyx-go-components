@@ -59,7 +59,7 @@ import (
 //   - ctx: request context used for cancellation/deadlines
 //   - db:  open SQL database handle
 //   - aasID: AAS Id string owning the submodels
-//   - limit: maximum number of items to return (<=0 uses a large default)
+//   - limit: maximum number of items to return (<=0 uses default page size 100)
 //   - cursor: optional Submodel Id to start from (inclusive)
 //
 // Returns the page of submodel descriptors and an optional next cursor when
@@ -72,7 +72,7 @@ func ListSubmodelDescriptorsForAAS(
 	cursor string,
 ) ([]model.SubmodelDescriptor, string, error) {
 	if limit <= 0 {
-		limit = 10000000
+		limit = 100
 	}
 
 	d := goqu.Dialect(common.Dialect)
@@ -116,6 +116,9 @@ func ListSubmodelDescriptorsForAAS(
 			} else {
 				hi = mid
 			}
+		}
+		if lo == len(list) || list[lo].Id != cursor {
+			return []model.SubmodelDescriptor{}, "", nil
 		}
 		list = list[lo:]
 	}
@@ -161,6 +164,17 @@ func InsertSubmodelDescriptorForAAS(
 		return model.SubmodelDescriptor{}, err
 	}
 	return result, tx.Commit()
+}
+
+// InsertSubmodelDescriptorForAASTx inserts a submodel descriptor for an AAS
+// using the provided transaction.
+func InsertSubmodelDescriptorForAASTx(
+	ctx context.Context,
+	tx *sql.Tx,
+	aasID string,
+	submodel model.SubmodelDescriptor,
+) (model.SubmodelDescriptor, error) {
+	return insertSubmodelDescriptorForAASTx(ctx, tx, aasID, submodel)
 }
 
 func insertSubmodelDescriptorForAASTx(
@@ -312,6 +326,17 @@ func DeleteSubmodelDescriptorForAASByID(
 	return tx.Commit()
 }
 
+// DeleteSubmodelDescriptorForAASByIDTx deletes a submodel descriptor for an AAS
+// using the provided transaction.
+func DeleteSubmodelDescriptorForAASByIDTx(
+	ctx context.Context,
+	tx *sql.Tx,
+	aasID string,
+	submodelID string,
+) error {
+	return deleteSubmodelDescriptorForAASByIDTx(ctx, tx, aasID, submodelID)
+}
+
 // deleteSubmodelDescriptorForAASByIDTx deletes the submodel descriptor under the
 // given AAS within an existing transaction. The function locates the base
 // descriptor id by joining the AAS and submodel tables and then deletes the row
@@ -403,7 +428,16 @@ func ListSubmodelDescriptors(
 	cursor string,
 ) ([]model.SubmodelDescriptor, string, error) {
 	if limit <= 0 {
-		limit = 10000000
+		limit = 100
+	}
+	if cursor != "" {
+		cursorExists, cursorErr := existsSubmodelByID(ctx, db, cursor)
+		if cursorErr != nil {
+			return nil, "", common.NewInternalServerError("SMREG-LISTSMDS-CURSORCHECK " + cursorErr.Error())
+		}
+		if !cursorExists {
+			return []model.SubmodelDescriptor{}, "", nil
+		}
 	}
 
 	rows, nextCursor, err := listSubmodelDescriptorIDsWithoutAAS(ctx, db, limit, cursor)
@@ -456,6 +490,16 @@ func InsertSubmodelDescriptor(
 		return model.SubmodelDescriptor{}, err
 	}
 	return result, tx.Commit()
+}
+
+// InsertSubmodelDescriptorTx inserts a global submodel descriptor using the
+// provided transaction.
+func InsertSubmodelDescriptorTx(
+	ctx context.Context,
+	tx *sql.Tx,
+	submodel model.SubmodelDescriptor,
+) (model.SubmodelDescriptor, error) {
+	return insertSubmodelDescriptorTx(ctx, tx, submodel)
 }
 
 // ReplaceSubmodelDescriptor atomically replaces a SubmodelDescriptor (global,
@@ -557,9 +601,23 @@ func DeleteSubmodelDescriptorByID(
 	return tx.Commit()
 }
 
+// DeleteSubmodelDescriptorByIDTx deletes a global submodel descriptor by id
+// using the provided transaction.
+func DeleteSubmodelDescriptorByIDTx(
+	ctx context.Context,
+	tx *sql.Tx,
+	submodelID string,
+) error {
+	return deleteSubmodelDescriptorByIDTx(ctx, tx, submodelID)
+}
+
 // ExistsSubmodelByID performs a lightweight existence check for a submodel
 // descriptor without an AAS association.
 func ExistsSubmodelByID(ctx context.Context, db *sql.DB, submodelID string) (bool, error) {
+	return existsSubmodelByID(ctx, db, submodelID)
+}
+
+func existsSubmodelByID(ctx context.Context, db DBQueryer, submodelID string) (bool, error) {
 	d := goqu.Dialect(common.Dialect)
 	smd := goqu.T(common.TblSubmodelDescriptor).As("smd")
 

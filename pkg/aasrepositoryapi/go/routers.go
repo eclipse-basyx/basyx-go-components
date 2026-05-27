@@ -152,10 +152,11 @@ func EncodeJSONResponse(i interface{}, status *int, w http.ResponseWriter) error
 
 // ReadFormFileToTempFile reads file data from a request form and writes it to a temporary file
 func ReadFormFileToTempFile(r *http.Request, key string) (*os.File, error) {
-	_, fileHeader, err := r.FormFile(key)
+	formFile, fileHeader, err := r.FormFile(key)
 	if err != nil {
 		return nil, err
 	}
+	defer formFile.Close()
 
 	return readFileHeaderToTempFile(fileHeader)
 }

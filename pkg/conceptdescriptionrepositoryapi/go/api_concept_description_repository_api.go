@@ -19,7 +19,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/FriedJannik/aas-go-sdk/jsonization"
+	"github.com/aas-core-works/aas-core3.1-golang/jsonization"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	"github.com/go-chi/chi/v5"
 )
@@ -29,7 +30,7 @@ type ConceptDescriptionRepositoryAPIAPIController struct {
 	service            ConceptDescriptionRepositoryAPIAPIServicer
 	errorHandler       model.ErrorHandler
 	contextPath        string
-	strictVerification bool
+	strictVerification string
 }
 
 // ConceptDescriptionRepositoryAPIAPIOption for how the controller is set up.
@@ -43,7 +44,7 @@ func WithConceptDescriptionRepositoryAPIAPIErrorHandler(h model.ErrorHandler) Co
 }
 
 // NewConceptDescriptionRepositoryAPIAPIController creates a default api controller
-func NewConceptDescriptionRepositoryAPIAPIController(s ConceptDescriptionRepositoryAPIAPIServicer, contextPath string, strictVerification bool) *ConceptDescriptionRepositoryAPIAPIController {
+func NewConceptDescriptionRepositoryAPIAPIController(s ConceptDescriptionRepositoryAPIAPIServicer, contextPath string, strictVerification string) *ConceptDescriptionRepositoryAPIAPIController {
 	controller := &ConceptDescriptionRepositoryAPIAPIController{
 		service:            s,
 		errorHandler:       model.DefaultErrorHandler,
@@ -149,6 +150,7 @@ func (c *ConceptDescriptionRepositoryAPIAPIController) PostConceptDescription(w 
 		c.errorHandler(w, r, &model.ParsingError{Err: err}, nil)
 		return
 	}
+	common.NormalizePayloadNullFields(jsonable)
 	conceptDescriptionParam, err := jsonization.ConceptDescriptionFromJsonable(jsonable)
 	if err != nil {
 		c.errorHandler(w, r, &model.ParsingError{Err: err}, nil)
@@ -200,6 +202,7 @@ func (c *ConceptDescriptionRepositoryAPIAPIController) PutConceptDescriptionById
 		c.errorHandler(w, r, &model.ParsingError{Err: err}, nil)
 		return
 	}
+	common.NormalizePayloadNullFields(jsonable)
 	conceptDescriptionParam, err := jsonization.ConceptDescriptionFromJsonable(jsonable)
 	if err != nil {
 		c.errorHandler(w, r, &model.ParsingError{Err: err}, nil)

@@ -158,6 +158,12 @@ var fieldIdentifierProcessingCases = []fidTestCase{
 		WantScalar: &expectedScalar{Column: "aas_descriptor.asset_kind", Bindings: []expectedBinding{}},
 	},
 	{
+		Name:       "bd_createdAt_scalar",
+		Kind:       "scalar",
+		Input:      `$bd#createdAt`,
+		WantScalar: &expectedScalar{Column: "aas_descriptor.created_at", Bindings: []expectedBinding{}},
+	},
+	{
 		Name:       "aasdesc_specificAssetIds_name_wildcard",
 		Kind:       "scalar",
 		Input:      `$aasdesc#specificAssetIds[].name`,

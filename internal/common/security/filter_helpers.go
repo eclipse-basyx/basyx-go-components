@@ -35,6 +35,7 @@ import (
 
 	"github.com/doug-martin/goqu/v9"
 	"github.com/doug-martin/goqu/v9/exp"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/builder"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
 )
 
@@ -48,7 +49,7 @@ func AddFilterQueryFromContext(
 	fragment grammar.FragmentStringPattern,
 	collector *grammar.ResolvedFieldPathCollector,
 ) (*goqu.SelectDataset, error) {
-	maskCondition, hasMask, err := buildFragmentMaskCondition(ctx, fragment, collector)
+	maskCondition, hasMask, err := buildFragmentMaskConditionWithOptions(ctx, fragment, collector, true)
 	if err != nil {
 		return nil, err
 	}
@@ -274,6 +275,15 @@ func buildFragmentMaskCondition(
 	fragment grammar.FragmentStringPattern,
 	collector *grammar.ResolvedFieldPathCollector,
 ) (exp.Expression, bool, error) {
+	return buildFragmentMaskConditionWithOptions(ctx, fragment, collector, false)
+}
+
+func buildFragmentMaskConditionWithOptions(
+	ctx context.Context,
+	fragment grammar.FragmentStringPattern,
+	collector *grammar.ResolvedFieldPathCollector,
+	inlineArrayEndedFragments bool,
+) (exp.Expression, bool, error) {
 	p := GetQueryFilter(ctx)
 	if p == nil {
 		return nil, false, nil
@@ -286,8 +296,14 @@ func buildFragmentMaskCondition(
 
 	wcs := make([]exp.Expression, 0, len(filters))
 	for _, filter := range filters {
+		evalCollector := collector
+		if inlineArrayEndedFragments && filter.Match && fragmentEndsWithArraySegment(filter.Fragment) {
+			// Array-ended fragments must be evaluated against the current row context
+			// instead of descriptor-wide EXISTS correlation.
+			evalCollector = nil
+		}
 		wc, _, err := filter.Expression.EvaluateToExpressionWithNegatedFragments(
-			collector,
+			evalCollector,
 			[]grammar.FragmentStringPattern{grammar.FragmentStringPattern(filter.Fragment)},
 		)
 		if err != nil {
@@ -299,6 +315,15 @@ func buildFragmentMaskCondition(
 		return wcs[0], true, nil
 	}
 	return goqu.And(wcs...), true, nil
+}
+
+func fragmentEndsWithArraySegment(fragment grammar.FragmentStringPattern) bool {
+	tokens := builder.TokenizeField(string(fragment))
+	if len(tokens) == 0 {
+		return false
+	}
+	_, isArray := tokens[len(tokens)-1].(builder.ArrayToken)
+	return isArray
 }
 
 func buildFragmentMaskSignature(ctx context.Context, fragment grammar.FragmentStringPattern) (string, error) {

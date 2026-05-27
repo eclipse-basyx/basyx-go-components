@@ -15,7 +15,7 @@ import (
 	"context"
 	"net/http"
 
-	"github.com/FriedJannik/aas-go-sdk/types"
+	"github.com/aas-core-works/aas-core3.1-golang/types"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 )
 

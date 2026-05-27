@@ -29,7 +29,7 @@ import (
 	"database/sql"
 	"strconv"
 
-	"github.com/FriedJannik/aas-go-sdk/types"
+	"github.com/aas-core-works/aas-core3.1-golang/types"
 )
 
 // TypedValue represents a value categorized by its XS datatype for database storage.
@@ -56,9 +56,9 @@ type TypedValue struct {
 //   - TypedValue: A struct with the value placed in the appropriate field based on type
 func MapValueByType(valueType types.DataTypeDefXSD, value *string) TypedValue {
 	tv := TypedValue{}
-	valid := value != nil && *value != ""
+	valid := value != nil && (*value != "" || IsTextType(valueType))
 	actualValue := ""
-	if valid {
+	if value != nil {
 		actualValue = *value
 	}
 	switch {

@@ -2,6 +2,12 @@
 
 This document describes how security is wired in the BaSyx Go components, including the architecture, request flow, and enforcement process. It reflects the current implementation in the codebase.
 
+## Scope note
+
+This document covers runtime API security (OIDC, claims handling, ABAC, and QueryFilter enforcement).
+
+For build and release supply-chain security (image signing, provenance attestations, SBOM attestations, SPDX/CycloneDX release assets, and verification commands), see [SUPPLY_CHAIN_SECURITY.md](SUPPLY_CHAIN_SECURITY.md).
+
 ## High-level architecture
 
 ```mermaid
@@ -10,7 +16,7 @@ flowchart LR
 
   subgraph Service[BaSyx Service]
     Router[Chi router]
-    OIDC[OIDC middleware\nverify issuer/audience + scopes]
+    OIDC[OIDC middleware\nverify issuer + optional audience + scopes]
     ClaimsMW[Optional claims middleware]
     ABAC[ABAC middleware\naccess model + QueryFilter]
     Ctrl[Controllers]
@@ -53,7 +59,7 @@ sequenceDiagram
       O-->>C: 401 Unauthorized
     end
   else Bearer present
-    O->>O: verify issuer + audience
+    O->>O: verify issuer + optional audience
     O->>O: check required scopes
     alt verification failed
       O-->>C: 401 Unauthorized
@@ -113,14 +119,15 @@ sequenceDiagram
 
 - Security is only active when ABAC is enabled in config. If `abac.enabled` is false, no OIDC or ABAC middleware is applied.
   - Example config: [cmd/aasregistryservice/config.yaml](cmd/aasregistryservice/config.yaml)
-- OIDC uses the trustlist file to allow issuers and audiences.
+- OIDC uses the trustlist file to allow issuers and optional audiences.
   - Example trustlist: [cmd/aasregistryservice/config/trustlist.json](cmd/aasregistryservice/config/trustlist.json)
 - Access rules are loaded from the access model JSON.
   - Example rules: [cmd/aasregistryservice/config/access_rules/access-rules.json](cmd/aasregistryservice/config/access_rules/access-rules.json)
 
 ## OIDC authentication
 
-- OIDC provider verification uses issuer + audience from the trustlist.
+- OIDC provider verification uses issuer + optional audience from the trustlist.
+- If `audience` is omitted (or empty) for a provider, the token audience (`aud`) check is skipped for that provider.
 - Required scopes are listed per provider in the trustlist and checked against the `scope` claim.
 - If the token is valid, claims are injected into the request context.
 - The middleware adds time claims `CLIENTNOW`, `LOCALNOW`, and `UTCNOW` to support time-based ABAC formulas.
@@ -249,11 +256,31 @@ Relevant code:
 ## Access model structure (high level)
 
 Access rules define:
-- DEFATTRIBUTES: reusable attribute sets (CLAIM or GLOBAL).
+- DEFATTRIBUTES: reusable attribute sets (CLAIM, GLOBAL, or REFERENCE).
 - DEFOBJECTS: reusable route or descriptor object sets.
 - DEFACLS: reusable rights and attribute bindings.
 - DEFFORMULAS: reusable boolean expressions.
 - rules: ordered rules that combine ACLs, objects, and formulas.
+
+Validation invariants enforced by the current implementation:
+- Rule-level one-of:
+  - exactly one of `ACL` or `USEACL`
+  - exactly one of `FORMULA` or `USEFORMULA`
+  - exactly one of `OBJECTS` or `USEOBJECTS`
+- ACL one-of:
+  - exactly one of `ATTRIBUTES` or `USEATTRIBUTES`
+- Filter validation:
+  - `FILTER` (single) and `FILTERLIST` (multiple) are both supported
+  - each filter entry must define `FRAGMENT`
+  - each filter entry must define exactly one of `CONDITION` or `USEFORMULA`
+  - optional `MATCH` boolean defaults to `false`; when `true` on array-ended fragments, filter evaluation is row-local
+- Reference resolution:
+  - `USEACL`, `USEATTRIBUTES`, `USEFORMULA`, and `USEOBJECTS` are resolved during model materialization at startup
+  - unknown references fail fast (`... not found`)
+  - `USEOBJECTS` also rejects empty references and circular references
+- Parsing strictness:
+  - unknown JSON fields are rejected (`DisallowUnknownFields`)
+  - object identifiers in `OBJECTS` use the strict `ObjectItem` grammar (ROUTE / IDENTIFIABLE / REFERABLE / FRAGMENT / DESCRIPTOR forms)
 
 Example file:
 - [cmd/aasregistryservice/config/access_rules/access-rules.json](cmd/aasregistryservice/config/access_rules/access-rules.json)
@@ -269,7 +296,7 @@ Example file:
 ## Operational checklist
 
 - Enable ABAC in config and set the access model path.
-- Configure the trustlist with issuer, audience, and scopes.
+- Configure the trustlist with issuer, optional audience, and scopes.
 - Confirm route-to-rights mapping covers all endpoints used by the service.
 - Validate the access rules against the intended claims and objects.
 - Restart the service after updating rules (no hot reload).

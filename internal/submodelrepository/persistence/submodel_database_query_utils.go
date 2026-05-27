@@ -29,9 +29,9 @@ package persistence
 import (
 	"strconv"
 
-	"github.com/FriedJannik/aas-go-sdk/jsonization"
-	"github.com/FriedJannik/aas-go-sdk/stringification"
-	"github.com/FriedJannik/aas-go-sdk/types"
+	"github.com/aas-core-works/aas-core3.1-golang/jsonization"
+	"github.com/aas-core-works/aas-core3.1-golang/stringification"
+	"github.com/aas-core-works/aas-core3.1-golang/types"
 	"github.com/doug-martin/goqu/v9"
 	"github.com/doug-martin/goqu/v9/exp"
 	jsoniter "github.com/json-iterator/go"

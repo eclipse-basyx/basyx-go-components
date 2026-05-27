@@ -1,0 +1,16 @@
+[
+	{
+		"context": "GET serialization - viewer-only user allowed",
+		"token": { "user": "usera", "password": "pwd" },
+		"method": "GET",
+		"endpoint": "http://localhost:6004/serialization",
+		"expectedStatus": 200
+	},
+	{
+		"context": "GET serialization - editor-only user denied",
+		"token": { "user": "userx", "password": "pwd" },
+		"method": "GET",
+		"endpoint": "http://localhost:6004/serialization",
+		"expectedStatus": 403
+	}
+]

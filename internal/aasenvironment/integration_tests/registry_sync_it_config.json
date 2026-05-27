@@ -1,0 +1,240 @@
+[
+  {
+    "context": "001 - Health Check",
+    "method": "GET",
+    "endpoint": "http://127.0.0.1:6004/health",
+    "expectedStatus": 200
+  },
+  {
+    "context": "002 - List empty AAS descriptors",
+    "method": "GET",
+    "endpoint": "http://127.0.0.1:6004/shell-descriptors",
+    "shouldMatch": "expected/registry_sync_empty_paged_result.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "003 - Create AAS via /shells",
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:6004/shells",
+    "data": "testdata/registry_sync_post_shell.json",
+    "shouldMatch": "testdata/registry_sync_post_shell.json",
+    "expectedStatus": 201
+  },
+  {
+    "context": "004 - Verify descriptor for posted shell",
+    "method": "GET",
+    "endpoint": "http://127.0.0.1:6004/shell-descriptors/dXJuOmV4YW1wbGU6YWFzOnJlZ2lzdHJ5LXN5bmMtcG9zdA",
+    "shouldMatch": "expected/registry_sync_post_descriptor.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "005 - Verify discovery links for posted shell",
+    "method": "GET",
+    "endpoint": "http://127.0.0.1:6004/lookup/shells/dXJuOmV4YW1wbGU6YWFzOnJlZ2lzdHJ5LXN5bmMtcG9zdA",
+    "shouldMatch": "expected/registry_sync_post_lookup_links.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "006 - Update asset information via /shells/{id}/asset-information",
+    "method": "PUT",
+    "endpoint": "http://127.0.0.1:6004/shells/dXJuOmV4YW1wbGU6YWFzOnJlZ2lzdHJ5LXN5bmMtcG9zdA/asset-information",
+    "data": "testdata/registry_sync_put_asset_information.json",
+    "expectedStatus": 204
+  },
+  {
+    "context": "007 - Verify descriptor after asset information update",
+    "method": "GET",
+    "endpoint": "http://127.0.0.1:6004/shell-descriptors/dXJuOmV4YW1wbGU6YWFzOnJlZ2lzdHJ5LXN5bmMtcG9zdA",
+    "shouldMatch": "expected/registry_sync_put_descriptor_asset_information.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "008 - Create submodel via /submodels",
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:6004/submodels",
+    "data": "testdata/registry_sync_post_submodel.json",
+    "shouldMatch": "testdata/registry_sync_post_submodel.json",
+    "expectedStatus": 201
+  },
+  {
+    "context": "009 - Verify descriptor for posted submodel",
+    "method": "GET",
+    "endpoint": "http://127.0.0.1:6004/submodel-descriptors/dXJuOmV4YW1wbGU6c206cmVnaXN0cnktc3luYy1wb3N0",
+    "shouldMatch": "expected/registry_sync_post_submodel_descriptor.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "009.1 - Verify posted /submodels entry is not reachable via superpath without reference",
+    "method": "GET",
+    "endpoint": "http://127.0.0.1:6004/shells/dXJuOmV4YW1wbGU6YWFzOnJlZ2lzdHJ5LXN5bmMtcG9zdA/submodels/dXJuOmV4YW1wbGU6c206cmVnaXN0cnktc3luYy1wb3N0",
+    "expectedStatus": 404
+  },
+  {
+    "context": "010 - Patch submodel metadata via /submodels/{id}/$metadata",
+    "method": "PATCH",
+    "endpoint": "http://127.0.0.1:6004/submodels/dXJuOmV4YW1wbGU6c206cmVnaXN0cnktc3luYy1wb3N0/$metadata",
+    "data": "testdata/registry_sync_patch_submodel_metadata.json",
+    "expectedStatus": 204
+  },
+  {
+    "context": "011 - Verify descriptor after metadata patch",
+    "method": "GET",
+    "endpoint": "http://127.0.0.1:6004/submodel-descriptors/dXJuOmV4YW1wbGU6c206cmVnaXN0cnktc3luYy1wb3N0",
+    "shouldMatch": "expected/registry_sync_patch_submodel_descriptor.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "012 - Update submodel via /submodels/{id}",
+    "method": "PUT",
+    "endpoint": "http://127.0.0.1:6004/submodels/dXJuOmV4YW1wbGU6c206cmVnaXN0cnktc3luYy1wb3N0",
+    "data": "testdata/registry_sync_put_submodel.json",
+    "expectedStatus": 204
+  },
+  {
+    "context": "013 - Verify descriptor for updated submodel",
+    "method": "GET",
+    "endpoint": "http://127.0.0.1:6004/submodel-descriptors/dXJuOmV4YW1wbGU6c206cmVnaXN0cnktc3luYy1wb3N0",
+    "shouldMatch": "expected/registry_sync_put_submodel_descriptor.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "014 - Delete submodel via /submodels/{id}",
+    "method": "DELETE",
+    "endpoint": "http://127.0.0.1:6004/submodels/dXJuOmV4YW1wbGU6c206cmVnaXN0cnktc3luYy1wb3N0",
+    "expectedStatus": 204
+  },
+  {
+    "context": "015 - Verify descriptor removed for deleted submodel",
+    "method": "GET",
+    "endpoint": "http://127.0.0.1:6004/submodel-descriptors/dXJuOmV4YW1wbGU6c206cmVnaXN0cnktc3luYy1wb3N0",
+    "expectedStatus": 404
+  },
+  {
+    "context": "016 - Create submodel via AAS superpath",
+    "method": "PUT",
+    "endpoint": "http://127.0.0.1:6004/shells/dXJuOmV4YW1wbGU6YWFzOnJlZ2lzdHJ5LXN5bmMtcG9zdA/submodels/dXJuOmV4YW1wbGU6c206cmVnaXN0cnktc3luYy1zdXBlcnBhdGg",
+    "data": "testdata/registry_sync_put_superpath_submodel.json",
+    "expectedStatus": 201
+  },
+  {
+    "context": "017 - Verify AAS descriptor after superpath submodel create",
+    "method": "GET",
+    "endpoint": "http://127.0.0.1:6004/shell-descriptors/dXJuOmV4YW1wbGU6YWFzOnJlZ2lzdHJ5LXN5bmMtcG9zdA",
+    "shouldMatch": "expected/registry_sync_aas_descriptor_after_superpath_put.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "017.1 - Verify superpath-created submodel is reachable via /submodels/{id}",
+    "method": "GET",
+    "endpoint": "http://127.0.0.1:6004/submodels/dXJuOmV4YW1wbGU6c206cmVnaXN0cnktc3luYy1zdXBlcnBhdGg",
+    "shouldMatch": "expected/registry_sync_get_superpath_submodel.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "018 - Patch submodel via AAS superpath",
+    "method": "PATCH",
+    "endpoint": "http://127.0.0.1:6004/shells/dXJuOmV4YW1wbGU6YWFzOnJlZ2lzdHJ5LXN5bmMtcG9zdA/submodels/dXJuOmV4YW1wbGU6c206cmVnaXN0cnktc3luYy1zdXBlcnBhdGg",
+    "data": "testdata/registry_sync_patch_superpath_submodel.json",
+    "expectedStatus": 204
+  },
+  {
+    "context": "019 - Verify AAS descriptor after superpath submodel patch",
+    "method": "GET",
+    "endpoint": "http://127.0.0.1:6004/shell-descriptors/dXJuOmV4YW1wbGU6YWFzOnJlZ2lzdHJ5LXN5bmMtcG9zdA",
+    "shouldMatch": "expected/registry_sync_aas_descriptor_after_superpath_patch.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "020 - Patch superpath submodel metadata",
+    "method": "PATCH",
+    "endpoint": "http://127.0.0.1:6004/shells/dXJuOmV4YW1wbGU6YWFzOnJlZ2lzdHJ5LXN5bmMtcG9zdA/submodels/dXJuOmV4YW1wbGU6c206cmVnaXN0cnktc3luYy1zdXBlcnBhdGg/$metadata",
+    "data": "testdata/registry_sync_patch_superpath_submodel_metadata.json",
+    "expectedStatus": 204
+  },
+  {
+    "context": "021 - Verify AAS descriptor after superpath metadata patch",
+    "method": "GET",
+    "endpoint": "http://127.0.0.1:6004/shell-descriptors/dXJuOmV4YW1wbGU6YWFzOnJlZ2lzdHJ5LXN5bmMtcG9zdA",
+    "shouldMatch": "expected/registry_sync_aas_descriptor_after_superpath_metadata_patch.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "022 - Delete superpath submodel",
+    "method": "DELETE",
+    "endpoint": "http://127.0.0.1:6004/shells/dXJuOmV4YW1wbGU6YWFzOnJlZ2lzdHJ5LXN5bmMtcG9zdA/submodels/dXJuOmV4YW1wbGU6c206cmVnaXN0cnktc3luYy1zdXBlcnBhdGg",
+    "expectedStatus": 204
+  },
+  {
+    "context": "023 - Verify AAS descriptor after superpath submodel delete",
+    "method": "GET",
+    "endpoint": "http://127.0.0.1:6004/shell-descriptors/dXJuOmV4YW1wbGU6YWFzOnJlZ2lzdHJ5LXN5bmMtcG9zdA",
+    "shouldMatch": "expected/registry_sync_put_descriptor_asset_information.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "024 - Create submodel reference in AAS",
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:6004/shells/dXJuOmV4YW1wbGU6YWFzOnJlZ2lzdHJ5LXN5bmMtcG9zdA/submodel-refs",
+    "data": "testdata/registry_sync_post_submodel_ref_existing.json",
+    "expectedStatus": 201
+  },
+  {
+    "context": "025 - Verify AAS descriptor after submodel reference create",
+    "method": "GET",
+    "endpoint": "http://127.0.0.1:6004/shell-descriptors/dXJuOmV4YW1wbGU6YWFzOnJlZ2lzdHJ5LXN5bmMtcG9zdA",
+    "shouldMatch": "expected/registry_sync_aas_descriptor_after_submodel_ref_post.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "026 - Delete submodel reference in AAS",
+    "method": "DELETE",
+    "endpoint": "http://127.0.0.1:6004/shells/dXJuOmV4YW1wbGU6YWFzOnJlZ2lzdHJ5LXN5bmMtcG9zdA/submodel-refs/dXJuOmV4YW1wbGU6c206cmVnaXN0cnktc3luYy1wb3N0",
+    "expectedStatus": 204
+  },
+  {
+    "context": "027 - Verify AAS descriptor after submodel reference delete",
+    "method": "GET",
+    "endpoint": "http://127.0.0.1:6004/shell-descriptors/dXJuOmV4YW1wbGU6YWFzOnJlZ2lzdHJ5LXN5bmMtcG9zdA",
+    "shouldMatch": "expected/registry_sync_put_descriptor_asset_information.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "028 - Update AAS with submodel references via /shells/{id}",
+    "method": "PUT",
+    "endpoint": "http://127.0.0.1:6004/shells/dXJuOmV4YW1wbGU6YWFzOnJlZ2lzdHJ5LXN5bmMtcG9zdA",
+    "data": "testdata/registry_sync_put_shell_with_submodels.json",
+    "expectedStatus": 204
+  },
+  {
+    "context": "029 - Verify AAS descriptor after shell update with references",
+    "method": "GET",
+    "endpoint": "http://127.0.0.1:6004/shell-descriptors/dXJuOmV4YW1wbGU6YWFzOnJlZ2lzdHJ5LXN5bmMtcG9zdA",
+    "shouldMatch": "expected/registry_sync_aas_descriptor_after_put_shell_with_submodels.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "030 - Upload JSON environment via /upload",
+    "action": "UPLOAD_MULTIPART",
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:6004/upload",
+    "data": "testdata/registry_sync_upload_environment.json",
+    "headers": {
+      "X-Upload-Part-ContentType": "application/json"
+    },
+    "expectedStatus": 200
+  },
+  {
+    "context": "031 - Verify uploaded shell exists",
+    "method": "GET",
+    "endpoint": "http://127.0.0.1:6004/shells/dXJuOmV4YW1wbGU6YWFzOnJlZ2lzdHJ5LXN5bmMtdXBsb2Fk",
+    "shouldMatch": "expected/registry_sync_uploaded_shell.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "032 - Verify descriptor for uploaded shell",
+    "method": "GET",
+    "endpoint": "http://127.0.0.1:6004/shell-descriptors/dXJuOmV4YW1wbGU6YWFzOnJlZ2lzdHJ5LXN5bmMtdXBsb2Fk",
+    "shouldMatch": "expected/registry_sync_uploaded_descriptor.json",
+    "expectedStatus": 200
+  }
+]

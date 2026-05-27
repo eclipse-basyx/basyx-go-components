@@ -60,9 +60,8 @@ func NewPostgreSQLAASRegistryDatabase(
 	maxIdleConns int,
 	connMaxLifetimeMinutes int,
 	cacheEnabled bool,
-	databaseSchema string,
 ) (*PostgreSQLAASRegistryDatabase, error) {
-	db, err := common.InitializeDatabase(dsn, databaseSchema)
+	db, err := common.NewDatabaseConnection(dsn)
 	if err != nil {
 		return nil, err
 	}
@@ -77,10 +76,28 @@ func NewPostgreSQLAASRegistryDatabase(
 		db.SetConnMaxLifetime(time.Duration(connMaxLifetimeMinutes) * time.Minute)
 	}
 
+	return NewPostgreSQLAASRegistryDatabaseFromDB(db, cacheEnabled)
+}
+
+// NewPostgreSQLAASRegistryDatabaseFromDB creates a new backend instance from an existing DB pool.
+func NewPostgreSQLAASRegistryDatabaseFromDB(db *sql.DB, cacheEnabled bool) (*PostgreSQLAASRegistryDatabase, error) {
+	if db == nil {
+		return nil, common.NewErrBadRequest("AASREG-NEWFROMDB-NILDB database handle must not be nil")
+	}
+
 	return &PostgreSQLAASRegistryDatabase{
 		db:           db,
 		cacheEnabled: cacheEnabled,
 	}, nil
+}
+
+// ExecuteInTransaction executes fn within a single database transaction.
+func (p *PostgreSQLAASRegistryDatabase) ExecuteInTransaction(
+	startErrorCode string,
+	commitErrorCode string,
+	fn func(tx *sql.Tx) error,
+) error {
+	return common.ExecuteInTransaction(p.db, startErrorCode, commitErrorCode, fn)
 }
 
 // InsertAdministrationShellDescriptor inserts the provided AAS descriptor
@@ -92,6 +109,19 @@ func (p *PostgreSQLAASRegistryDatabase) InsertAdministrationShellDescriptor(
 	return descriptors.InsertAssetAdministrationShellDescriptor(ctx, p.db, aasd)
 }
 
+// InsertAdministrationShellDescriptorInTransaction inserts the provided AAS
+// descriptor in the provided transaction.
+func (p *PostgreSQLAASRegistryDatabase) InsertAdministrationShellDescriptorInTransaction(
+	ctx context.Context,
+	tx *sql.Tx,
+	aasd model.AssetAdministrationShellDescriptor,
+) error {
+	if tx == nil {
+		return common.NewInternalServerError("AASREG-INSERTAASDESC-NILTX transaction must not be nil")
+	}
+	return descriptors.InsertAdministrationShellDescriptorTx(ctx, tx, aasd)
+}
+
 // GetAssetAdministrationShellDescriptorByID returns the AAS descriptor
 // identified by the given AAS ID.
 func (p *PostgreSQLAASRegistryDatabase) GetAssetAdministrationShellDescriptorByID(
@@ -99,6 +129,20 @@ func (p *PostgreSQLAASRegistryDatabase) GetAssetAdministrationShellDescriptorByI
 	aasIdentifier string,
 ) (model.AssetAdministrationShellDescriptor, error) {
 	return descriptors.GetAssetAdministrationShellDescriptorByID(ctx, p.db, aasIdentifier)
+}
+
+// GetAssetAdministrationShellDescriptorByIDInTransaction returns the AAS descriptor
+// identified by the given AAS ID using the provided transaction.
+func (p *PostgreSQLAASRegistryDatabase) GetAssetAdministrationShellDescriptorByIDInTransaction(
+	ctx context.Context,
+	tx *sql.Tx,
+	aasIdentifier string,
+) (model.AssetAdministrationShellDescriptor, error) {
+	if tx == nil {
+		return model.AssetAdministrationShellDescriptor{}, common.NewInternalServerError("AASREG-GETAASDESC-NILTX transaction must not be nil")
+	}
+
+	return descriptors.GetAssetAdministrationShellDescriptorByIDTx(ctx, tx, aasIdentifier)
 }
 
 // DeleteAssetAdministrationShellDescriptorByID deletes the AAS descriptor
@@ -117,6 +161,45 @@ func (p *PostgreSQLAASRegistryDatabase) ReplaceAdministrationShellDescriptor(
 	aasd model.AssetAdministrationShellDescriptor,
 ) (model.AssetAdministrationShellDescriptor, error) {
 	return descriptors.ReplaceAdministrationShellDescriptor(ctx, p.db, aasd)
+}
+
+// UpsertAdministrationShellDescriptorInTransaction replaces an existing AAS
+// descriptor or inserts it when missing in the provided transaction.
+func (p *PostgreSQLAASRegistryDatabase) UpsertAdministrationShellDescriptorInTransaction(
+	ctx context.Context,
+	tx *sql.Tx,
+	aasd model.AssetAdministrationShellDescriptor,
+) error {
+	if tx == nil {
+		return common.NewInternalServerError("AASREG-UPSERTAASDESC-NILTX transaction must not be nil")
+	}
+
+	_, err := descriptors.GetAssetAdministrationShellDescriptorByIDTx(ctx, tx, aasd.Id)
+	if err != nil {
+		if !common.IsErrNotFound(err) {
+			return err
+		}
+		return descriptors.InsertAdministrationShellDescriptorTx(ctx, tx, aasd)
+	}
+
+	if err = descriptors.DeleteAssetAdministrationShellDescriptorByIDTx(ctx, tx, aasd.Id); err != nil {
+		return err
+	}
+	return descriptors.InsertAdministrationShellDescriptorTx(ctx, tx, aasd)
+}
+
+// DeleteAssetAdministrationShellDescriptorByIDInTransaction deletes an AAS
+// descriptor by id in the provided transaction.
+func (p *PostgreSQLAASRegistryDatabase) DeleteAssetAdministrationShellDescriptorByIDInTransaction(
+	ctx context.Context,
+	tx *sql.Tx,
+	aasIdentifier string,
+) error {
+	if tx == nil {
+		return common.NewInternalServerError("AASREG-DELAASDESC-NILTX transaction must not be nil")
+	}
+
+	return descriptors.DeleteAssetAdministrationShellDescriptorByIDTx(ctx, tx, aasIdentifier)
 }
 
 // ListAssetAdministrationShellDescriptors lists AAS descriptors with optional

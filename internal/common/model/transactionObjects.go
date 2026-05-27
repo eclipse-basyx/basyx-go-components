@@ -347,7 +347,7 @@ type SubmodelElementRow struct {
 type PropertyValueRow struct {
 	// Value is the actual value of the property stored as a string.
 	// The string representation must be interpreted according to the ValueType field.
-	Value string `json:"value"`
+	Value *string `json:"value"`
 
 	// ValueType specifies the XSD data type of the value.
 	// This determines how the Value string should be parsed and interpreted
@@ -552,6 +552,7 @@ type AssetAdministrationShellDescriptorRow struct {
 	GlobalAssetID             sql.NullString
 	IDShort                   sql.NullString
 	IDStr                     string
+	CreatedAt                 sql.NullTime
 	AdministrativeInfoPayload json.RawMessage
 	DisplayNamePayload        json.RawMessage
 	DescriptionPayload        json.RawMessage
@@ -573,16 +574,17 @@ type SubmodelDescriptorRow struct {
 	DisplayNamePayload        json.RawMessage
 }
 
-// InfrastructureDescriptorRow represents a single SQL result row for a
-// Infrastructure descriptor. It carries nullable string/integer columns
+// CompanyDescriptorRow represents a single SQL result row for a
+// Company descriptor. It carries nullable string/integer columns
 // from the database and foreign-key references to related records
 // such as registry administrative information, display names, and
 // descriptions.
-type InfrastructureDescriptorRow struct {
+type CompanyDescriptorRow struct {
 	DescID                    int64
 	GlobalAssetID             sql.NullString
 	IDShort                   sql.NullString
-	Company                   sql.NullString
+	Name                      sql.NullString
+	Domain                    sql.NullString
 	IDStr                     string
 	AdministrativeInfoPayload json.RawMessage
 	DisplayNamePayload        json.RawMessage

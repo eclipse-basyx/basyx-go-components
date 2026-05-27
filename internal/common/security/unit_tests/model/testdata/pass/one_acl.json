@@ -3,6 +3,11 @@
     "rules": [
       {
         "USEACL": "form",
+        "OBJECTS": [
+          {
+            "ROUTE": "/*"
+          }
+        ],
         "FORMULA": {
           "$and": [
             {"$boolean": true},

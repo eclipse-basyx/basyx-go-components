@@ -1,0 +1,14 @@
+[
+  {
+    "name": "manufacturerPartId",
+    "value": "mp-registry-sync-post"
+  },
+  {
+    "name": "serialNumber",
+    "value": "sn-registry-sync-post-001"
+  },
+  {
+    "name": "globalAssetId",
+    "value": "urn:example:asset:registry-sync-post"
+  }
+]

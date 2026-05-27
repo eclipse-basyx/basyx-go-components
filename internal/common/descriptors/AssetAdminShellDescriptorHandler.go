@@ -49,8 +49,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/FriedJannik/aas-go-sdk/stringification"
-	"github.com/FriedJannik/aas-go-sdk/types"
+	"github.com/aas-core-works/aas-core3.1-golang/stringification"
+	"github.com/aas-core-works/aas-core3.1-golang/types"
 	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
@@ -87,12 +87,31 @@ func InsertAssetAdministrationShellDescriptor(ctx context.Context, db *sql.DB, a
 		_ = tx.Rollback()
 		return model.AssetAdministrationShellDescriptor{}, err
 	}
+	if canSkipPostInsertReadback(ctx) {
+		return aasd, tx.Commit()
+	}
 	result, err := GetAssetAdministrationShellDescriptorByIDTx(ctx, tx, aasd.Id)
 	if err != nil {
 		_ = tx.Rollback()
 		return model.AssetAdministrationShellDescriptor{}, err
 	}
 	return result, tx.Commit()
+}
+
+// canSkipPostInsertReadback returns true for contexts where no post-insert
+// descriptor re-read is needed for ABAC enforcement or field filtering.
+func canSkipPostInsertReadback(ctx context.Context) bool {
+	queryFilter := auth.GetQueryFilter(ctx)
+	if queryFilter == nil {
+		return true
+	}
+	if len(queryFilter.Filters) > 0 {
+		return false
+	}
+	if queryFilter.Formula == nil {
+		return true
+	}
+	return auth.HasUnrestrictedFormulaForRight(ctx, grammar.RightsEnumCREATE)
 }
 
 // InsertAdministrationShellDescriptorTx performs the same insert as
@@ -156,14 +175,7 @@ func InsertAdministrationShellDescriptorTx(ctx context.Context, tx *sql.Tx, aasd
 
 	sqlStr, args, buildErr = d.
 		Insert(common.TblAASDescriptor).
-		Rows(goqu.Record{
-			common.ColDescriptorID:  descriptorID,
-			common.ColAssetKind:     aasd.AssetKind,
-			common.ColAssetType:     aasd.AssetType,
-			common.ColGlobalAssetID: aasd.GlobalAssetId,
-			common.ColIDShort:       aasd.IdShort,
-			common.ColAASID:         aasd.Id,
-		}).
+		Rows(buildAASDescriptorInsertRecord(ctx, descriptorID, aasd)).
 		ToSQL()
 	if buildErr != nil {
 		return buildErr
@@ -185,11 +197,38 @@ func InsertAdministrationShellDescriptorTx(ctx context.Context, tx *sql.Tx, aasd
 		aasRef = sql.NullInt64{Int64: ref, Valid: true}
 	}
 
-	if err = common.CreateSpecificAssetIDDescriptor(tx, descriptorID, aasRef, aasd.SpecificAssetIds); err != nil {
+	specificAssetIds := aasd.SpecificAssetIds
+	// Add globalAssetId as a specific asset ID when DiscoveryIntegration is enabled and GlobalAssetId is set.
+	if cfg, ok := common.ConfigFromContext(ctx); ok && cfg.General.DiscoveryIntegration && aasd.GlobalAssetId != "" {
+		specificAssetIds = append(specificAssetIds, types.NewSpecificAssetID(globalAssetIDSpecificAssetIDName, aasd.GlobalAssetId))
+	}
+
+	if err = common.CreateSpecificAssetIDDescriptor(tx, descriptorID, aasRef, specificAssetIds); err != nil {
 		return err
 	}
 
 	return createSubModelDescriptors(tx, sql.NullInt64{Int64: descriptorID, Valid: true}, aasd.SubmodelDescriptors)
+}
+
+func buildAASDescriptorInsertRecord(
+	ctx context.Context,
+	descriptorID int64,
+	aasd model.AssetAdministrationShellDescriptor,
+) goqu.Record {
+	record := goqu.Record{
+		common.ColDescriptorID:  descriptorID,
+		common.ColAssetKind:     aasd.AssetKind,
+		common.ColAssetType:     aasd.AssetType,
+		common.ColGlobalAssetID: aasd.GlobalAssetId,
+		common.ColIDShort:       aasd.IdShort,
+		common.ColAASID:         aasd.Id,
+	}
+
+	if allowAASDescriptorCreatedAtOverrideFromContext(ctx) && aasd.CreatedAt != nil {
+		record[common.ColCreatedAt] = *aasd.CreatedAt
+	}
+
+	return record
 }
 
 // GetAssetAdministrationShellDescriptorByID returns a fully materialized
@@ -256,6 +295,12 @@ func DeleteAssetAdministrationShellDescriptorByID(ctx context.Context, db *sql.D
 	}
 
 	return tx.Commit()
+}
+
+// DeleteAssetAdministrationShellDescriptorByIDTx deletes a descriptor by AAS id
+// using the provided transaction.
+func DeleteAssetAdministrationShellDescriptorByIDTx(ctx context.Context, tx *sql.Tx, aasIdentifier string) error {
+	return deleteAssetAdministrationShellDescriptorByIDTx(ctx, tx, aasIdentifier)
 }
 
 // DeleteAssetAdministrationShellDescriptorByIDTx deletes using the provided
@@ -367,6 +412,7 @@ func buildListAssetAdministrationShellDescriptorsQuery(
 		pageAlias = "aas_page"
 		dataAlias = "aas_list_data"
 	)
+	includeCreatedAt := includeAASDescriptorCreatedAtFromContext(ctx)
 	maskedColumns := []auth.MaskedInnerColumnSpec{
 		{Fragment: "$aasdesc#assetKind", FlagAlias: "flag_assetkind", RawAlias: "c1"},
 		{Fragment: "$aasdesc#assetType", FlagAlias: "flag_assettype", RawAlias: "c2"},
@@ -376,6 +422,9 @@ func buildListAssetAdministrationShellDescriptorsQuery(
 		{Fragment: "$aasdesc#displayName", FlagAlias: "flag_displayname", RawAlias: "raw_displayname_payload"},
 		{Fragment: "$aasdesc#description", FlagAlias: "flag_description", RawAlias: "raw_description_payload"},
 	}
+	if includeCreatedAt {
+		maskedColumns = append(maskedColumns, auth.MaskedInnerColumnSpec{Fragment: "$aasdesc#createdAt", FlagAlias: "flag_createdat", RawAlias: "c6"})
+	}
 	maskRuntime, err := auth.BuildSharedFragmentMaskRuntime(ctx, collector, maskedColumns)
 	if err != nil {
 		return nil, err
@@ -383,6 +432,24 @@ func buildListAssetAdministrationShellDescriptorsQuery(
 	maskedExpressions, err := maskRuntime.MaskedInnerAliasExprs(dataAlias, maskedColumns)
 	if err != nil {
 		return nil, err
+	}
+
+	innerSelectExpressions := []interface{}{
+		common.TAASDescriptor.Col(common.ColDescriptorID).As("c0"),
+		common.TAASDescriptor.Col(common.ColAssetKind).As("c1"),
+		common.TAASDescriptor.Col(common.ColAssetType).As("c2"),
+		common.TAASDescriptor.Col(common.ColGlobalAssetID).As("c3"),
+		common.TAASDescriptor.Col(common.ColIDShort).As("c4"),
+		common.TAASDescriptor.Col(common.ColAASID).As("c5"),
+		goqu.L("?::text", common.TDescriptorPayload.Col(common.ColAdministrativeInfoPayload)).As("raw_admin_payload"),
+		goqu.L("?::text", common.TDescriptorPayload.Col(common.ColDisplayNamePayload)).As("raw_displayname_payload"),
+		goqu.L("?::text", common.TDescriptorPayload.Col(common.ColDescriptionPayload)).As("raw_description_payload"),
+		common.TAASDescriptor.Col(common.ColAASID).As("sort_aas_id"),
+	}
+	if includeCreatedAt {
+		innerSelectExpressions = append(innerSelectExpressions, common.TAASDescriptor.Col(common.ColCreatedAt).As("c6"))
+	} else {
+		innerSelectExpressions = append(innerSelectExpressions, goqu.L("NULL").As("c6"))
 	}
 
 	dataDS := d.From(pageDS.As(pageAlias)).
@@ -398,31 +465,26 @@ func buildListAssetAdministrationShellDescriptorsQuery(
 			common.TDescriptorPayload,
 			goqu.On(common.TDescriptorPayload.Col(common.ColDescriptorID).Eq(common.TDescriptor.Col(common.ColID))),
 		).
-		Select(append([]interface{}{
-			common.TAASDescriptor.Col(common.ColDescriptorID).As("c0"),
-			common.TAASDescriptor.Col(common.ColAssetKind).As("c1"),
-			common.TAASDescriptor.Col(common.ColAssetType).As("c2"),
-			common.TAASDescriptor.Col(common.ColGlobalAssetID).As("c3"),
-			common.TAASDescriptor.Col(common.ColIDShort).As("c4"),
-			common.TAASDescriptor.Col(common.ColAASID).As("c5"),
-			goqu.L("?::text", common.TDescriptorPayload.Col(common.ColAdministrativeInfoPayload)).As("raw_admin_payload"),
-			goqu.L("?::text", common.TDescriptorPayload.Col(common.ColDisplayNamePayload)).As("raw_displayname_payload"),
-			goqu.L("?::text", common.TDescriptorPayload.Col(common.ColDescriptionPayload)).As("raw_description_payload"),
-			common.TAASDescriptor.Col(common.ColAASID).As("sort_aas_id"),
-		}, maskRuntime.Projections()...)...)
+		Select(append(innerSelectExpressions, maskRuntime.Projections()...)...)
+
+	outerSelectExpressions := []interface{}{
+		goqu.I(dataAlias + ".c0"),
+		maskedExpressions[0],
+		maskedExpressions[1],
+		maskedExpressions[2],
+		maskedExpressions[3],
+		goqu.I(dataAlias + ".c5"),
+	}
+	if includeCreatedAt {
+		outerSelectExpressions = append(outerSelectExpressions, maskedExpressions[7])
+		outerSelectExpressions = append(outerSelectExpressions, maskedExpressions[4], maskedExpressions[5], maskedExpressions[6])
+	} else {
+		outerSelectExpressions = append(outerSelectExpressions, goqu.I(dataAlias+".c6"))
+		outerSelectExpressions = append(outerSelectExpressions, maskedExpressions[4], maskedExpressions[5], maskedExpressions[6])
+	}
 
 	ds := d.From(dataDS.As(dataAlias)).
-		Select(
-			goqu.I(dataAlias+".c0"),
-			maskedExpressions[0],
-			maskedExpressions[1],
-			maskedExpressions[2],
-			maskedExpressions[3],
-			goqu.I(dataAlias+".c5"),
-			maskedExpressions[4],
-			maskedExpressions[5],
-			maskedExpressions[6],
-		).
+		Select(outerSelectExpressions...).
 		Order(goqu.I(dataAlias + ".sort_aas_id").Asc())
 
 	return ds, nil
@@ -492,7 +554,7 @@ func buildListAASDescriptorPageQuery(
 //
 // It returns the page of fully assembled descriptors and, when more results are
 // available, a next cursor value (the Id immediately after the page). When
-// limit <= 0, a conservative large default is applied.
+// limit <= 0, a default page size of 100 is applied.
 //
 //nolint:revive // Its only 31 instead of 30 - 1 is okay
 func ListAssetAdministrationShellDescriptors(
@@ -523,8 +585,19 @@ func listAssetAdministrationShellDescriptors(
 	identifiable string,
 	allowParallel bool,
 ) ([]model.AssetAdministrationShellDescriptor, string, error) {
+	db = withDescriptorDebugQueryer(ctx, db)
+
 	if limit <= 0 {
-		limit = 1000000
+		limit = 100
+	}
+	if cursor != "" {
+		cursorExists, cursorErr := existsAASByID(ctx, db, cursor)
+		if cursorErr != nil {
+			return nil, "", common.NewInternalServerError("AASREG-LISTAAS-CURSORCHECK " + cursorErr.Error())
+		}
+		if !cursorExists {
+			return []model.AssetAdministrationShellDescriptor{}, "", nil
+		}
 	}
 	peekLimit := limit + 1
 	ds, err := buildListAssetAdministrationShellDescriptorsQuery(ctx, peekLimit, cursor, assetKind, assetType, identifiable)
@@ -561,6 +634,7 @@ func listAssetAdministrationShellDescriptors(
 			&r.GlobalAssetID,
 			&r.IDShort,
 			&r.IDStr,
+			&r.CreatedAt,
 			&adminPayloadText,
 			&displayNamePayloadText,
 			&descriptionPayloadText,
@@ -677,6 +751,7 @@ func listAssetAdministrationShellDescriptors(
 			GlobalAssetId:       r.GlobalAssetID.String,
 			IdShort:             r.IDShort.String,
 			Id:                  r.IDStr,
+			CreatedAt:           nullTimeToPtr(r.CreatedAt),
 			Administration:      adminInfo,
 			DisplayName:         displayName,
 			Description:         description,
@@ -690,9 +765,21 @@ func listAssetAdministrationShellDescriptors(
 	return out, nextCursor, nil
 }
 
+func nullTimeToPtr(nt sql.NullTime) *time.Time {
+	if !nt.Valid {
+		return nil
+	}
+	t := nt.Time
+	return &t
+}
+
 // ExistsAASByID performs a lightweight existence check for an AAS by its Id
 // string. It returns true when a descriptor exists, false when it does not.
 func ExistsAASByID(ctx context.Context, db *sql.DB, aasID string) (bool, error) {
+	return existsAASByID(ctx, db, aasID)
+}
+
+func existsAASByID(ctx context.Context, db DBQueryer, aasID string) (bool, error) {
 	d := goqu.Dialect(common.Dialect)
 	aas := goqu.T(common.TblAASDescriptor).As("aas")
 

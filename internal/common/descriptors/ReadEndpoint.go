@@ -128,15 +128,15 @@ func ReadEndpointsByDescriptorIDs(
 			submodelDescriptorEndpointAlias,
 			goqu.On(submodelDescriptorEndpointAlias.Col(common.ColDescriptorID).Eq(submodelDescriptorAlias.Col(common.ColDescriptorID))),
 		)
-	case "infrastructure":
-		joinOn = infrastructureDescriptorEndpointAlias
+	case "company":
+		joinOn = companyDescriptorEndpointAlias
 		ds = ds.InnerJoin(
-			common.TInfrastructureDescriptor,
-			goqu.On(common.TInfrastructureDescriptor.Col(common.ColDescriptorID).Eq(common.TDescriptor.Col(common.ColID))),
+			common.TCompanyDescriptor,
+			goqu.On(common.TCompanyDescriptor.Col(common.ColDescriptorID).Eq(common.TDescriptor.Col(common.ColID))),
 		)
 		ds = ds.LeftJoin(
-			infrastructureDescriptorEndpointAlias,
-			goqu.On(infrastructureDescriptorEndpointAlias.Col(common.ColDescriptorID).Eq(infrastructureDescriptorAlias.Col(common.ColDescriptorID))),
+			companyDescriptorEndpointAlias,
+			goqu.On(companyDescriptorEndpointAlias.Col(common.ColDescriptorID).Eq(companyDescriptorAlias.Col(common.ColDescriptorID))),
 		)
 	}
 

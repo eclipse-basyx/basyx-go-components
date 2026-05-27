@@ -33,8 +33,8 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/FriedJannik/aas-go-sdk/jsonization"
-	"github.com/FriedJannik/aas-go-sdk/types"
+	"github.com/aas-core-works/aas-core3.1-golang/jsonization"
+	"github.com/aas-core-works/aas-core3.1-golang/types"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	jsoniter "github.com/json-iterator/go"
@@ -396,6 +396,7 @@ func buildProperty(smeRow model.SubmodelElementRow, refBuilderMap map[int64]*Ref
 	if err != nil {
 		return nil, err
 	}
+
 	valueID, err := getSingleReference(&valueRow.ValueID, &valueRow.ValueIDReferred, refBuilderMap, refMutex)
 	if err != nil {
 		return nil, err
@@ -405,8 +406,8 @@ func buildProperty(smeRow model.SubmodelElementRow, refBuilderMap map[int64]*Ref
 	valueType := types.DataTypeDefXSD(valueRow.ValueType)
 
 	prop := types.NewProperty(valueType)
-	if valueRow.Value != "" {
-		prop.SetValue(&valueRow.Value)
+	if valueRow.Value != nil {
+		prop.SetValue(valueRow.Value)
 	}
 	if valueID != nil {
 		prop.SetValueID(valueID)

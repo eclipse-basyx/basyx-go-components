@@ -14,12 +14,13 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 	"strings"
 
-	"github.com/FriedJannik/aas-go-sdk/jsonization"
-	"github.com/FriedJannik/aas-go-sdk/types"
+	"github.com/aas-core-works/aas-core3.1-golang/jsonization"
+	"github.com/aas-core-works/aas-core3.1-golang/types"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	persistencepostgresql "github.com/eclipse-basyx/basyx-go-components/internal/discoveryservice/persistence"
@@ -78,7 +79,8 @@ func (s *AssetAdministrationShellBasicDiscoveryAPIAPIService) SearchAllAssetAdmi
 	cursor string,
 	assetLink []model.AssetLink,
 ) (model.ImplResponse, error) {
-	if len(assetLink) == 0 {
+	assetLinksAlreadyConstrained := AssetLinksAlreadyConstrainedFromContext(ctx)
+	if len(assetLink) == 0 && !assetLinksAlreadyConstrained {
 		empty := model.GetAllAssetAdministrationShellIdsByAssetLink200Response{
 			PagingMetadata: model.PagedResultPagingMetadata{},
 			Result:         []string{},
@@ -99,9 +101,19 @@ func (s *AssetAdministrationShellBasicDiscoveryAPIAPIService) SearchAllAssetAdmi
 		internalCursor = dec
 	}
 
-	ids, nextCursor, err := s.discoveryBackend.SearchAASIDsByAssetLinks(ctx, assetLink, limit, internalCursor)
+	lookupLinks := assetLink
+	if assetLinksAlreadyConstrained {
+		lookupLinks = nil
+	}
+
+	ids, nextCursor, err := s.discoveryBackend.SearchAASIDsByAssetLinks(ctx, lookupLinks, limit, internalCursor)
 	if err != nil {
 		log.Printf("🧭 [%s] Error SearchAllAssetAdministrationShellIdsByAssetLink: backend search failed (limit=%d cursor=%q links=%d): %v", componentName, limit, internalCursor, len(assetLink), err)
+		if common.IsErrBadRequest(err) {
+			return common.NewErrorResponse(
+				err, http.StatusBadRequest, componentName, "SearchAllAssetAdministrationShellIdsByAssetLink", "BadRequest",
+			), nil
+		}
 		return common.NewErrorResponse(
 			err, http.StatusInternalServerError, componentName, "SearchAllAssetAdministrationShellIdsByAssetLink", "InternalServerError",
 		), err
@@ -185,6 +197,13 @@ func (s *AssetAdministrationShellBasicDiscoveryAPIAPIService) PostAllAssetLinksB
 		), nil
 	}
 
+	if err := validateSpecificAssetIDsRequired("POSTASSETLINKS", specificAssetID); err != nil {
+		log.Printf("🧭 [%s] Error PostAllAssetLinksById: invalid specific asset IDs: %v", componentName, err)
+		return common.NewErrorResponse(
+			err, http.StatusBadRequest, componentName, "PostAllAssetLinksById", "specificAssetId",
+		), nil
+	}
+
 	err := s.discoveryBackend.CreateAllAssetLinks(ctx, string(decodeDiscoveryIdentifier), specificAssetID)
 	if err != nil {
 		switch {
@@ -231,9 +250,16 @@ func (s *AssetAdministrationShellBasicDiscoveryAPIAPIService) AddAllAssetLinksBy
 ) (model.ImplResponse, error) {
 	decodeDiscoveryIdentifier, decodeError := common.DecodeString(aasIdentifier)
 	if decodeError != nil {
-		log.Printf("🧭­ [%s] Error AddAllAssetLinksById: decode aasIdentifier=%q failed: %v", componentName, aasIdentifier, decodeError)
+		log.Printf("🧭 [%s] Error AddAllAssetLinksById: decode aasIdentifier=%q failed: %v", componentName, aasIdentifier, decodeError)
 		return common.NewErrorResponse(
 			decodeError, http.StatusBadRequest, componentName, "AddAllAssetLinksById", "BadRequest-Decode",
+		), nil
+	}
+
+	if err := validateSpecificAssetIDsRequired("ADDASSETLINKS", specificAssetID); err != nil {
+		log.Printf("🧭 [%s] Error AddAllAssetLinksById: invalid specific asset IDs: %v", componentName, err)
+		return common.NewErrorResponse(
+			err, http.StatusBadRequest, componentName, "AddAllAssetLinksById", "specificAssetId",
 		), nil
 	}
 
@@ -241,12 +267,12 @@ func (s *AssetAdministrationShellBasicDiscoveryAPIAPIService) AddAllAssetLinksBy
 	if err != nil {
 		switch {
 		case common.IsErrBadRequest(err):
-			log.Printf("🧭­ [%s] Error AddAllAssetLinksById: bad request (aasId=%q): %v", componentName, string(decodeDiscoveryIdentifier), err)
+			log.Printf("🧭 [%s] Error AddAllAssetLinksById: bad request (aasId=%q): %v", componentName, string(decodeDiscoveryIdentifier), err)
 			return common.NewErrorResponse(
 				err, http.StatusBadRequest, componentName, "AddAllAssetLinksById", "BadRequest",
 			), nil
 		default:
-			log.Printf("🧭­ [%s] Error AddAllAssetLinksById: internal (aasId=%q): %v", componentName, string(decodeDiscoveryIdentifier), err)
+			log.Printf("🧭 [%s] Error AddAllAssetLinksById: internal (aasId=%q): %v", componentName, string(decodeDiscoveryIdentifier), err)
 			return common.NewErrorResponse(
 				err, http.StatusInternalServerError, componentName, "AddAllAssetLinksById", "Unhandled",
 			), err
@@ -257,7 +283,7 @@ func (s *AssetAdministrationShellBasicDiscoveryAPIAPIService) AddAllAssetLinksBy
 	for _, link := range specificAssetID {
 		jsonableLink, err := jsonization.ToJsonable(link)
 		if err != nil {
-			log.Printf("🧭­ [%s] Error AddAllAssetLinksById: failed to convert link to jsonable (aasId=%q): %v", componentName, string(decodeDiscoveryIdentifier), err)
+			log.Printf("🧭 [%s] Error AddAllAssetLinksById: failed to convert link to jsonable (aasId=%q): %v", componentName, string(decodeDiscoveryIdentifier), err)
 			return common.NewErrorResponse(
 				err, http.StatusInternalServerError, componentName, "AddAllAssetLinksById", "JsonConversion",
 			), err
@@ -266,6 +292,22 @@ func (s *AssetAdministrationShellBasicDiscoveryAPIAPIService) AddAllAssetLinksBy
 	}
 
 	return model.Response(http.StatusCreated, jsonableLinks), nil
+}
+
+func validateSpecificAssetIDsRequired(action string, specificAssetIDs []types.ISpecificAssetID) error {
+	for idx, specificAssetID := range specificAssetIDs {
+		if specificAssetID == nil {
+			return common.NewErrBadRequest(fmt.Sprintf("DISC-%s-NILSPECIFICASSETID specificAssetID[%d] must not be nil", action, idx))
+		}
+		if strings.TrimSpace(specificAssetID.Name()) == "" {
+			return common.NewErrBadRequest(fmt.Sprintf("DISC-%s-EMPTYNAME specificAssetID[%d].name must not be empty", action, idx))
+		}
+		if strings.TrimSpace(specificAssetID.Value()) == "" {
+			return common.NewErrBadRequest(fmt.Sprintf("DISC-%s-EMPTYVALUE specificAssetID[%d].value must not be empty", action, idx))
+		}
+	}
+
+	return nil
 }
 
 // DeleteAllAssetLinksByID - Deletes specified specific asset identifiers linked to an Asset Administration Shell:

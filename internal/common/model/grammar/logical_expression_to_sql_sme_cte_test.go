@@ -28,11 +28,14 @@ package grammar
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
 	"testing"
 
 	"github.com/doug-martin/goqu/v9"
 )
+
+var preparedPlaceholderRegex = regexp.MustCompile(`\$\d+`)
 
 func buildSMESQL(t *testing.T, expr LogicalExpression) (string, []interface{}) {
 	t.Helper()
@@ -82,6 +85,18 @@ func argsContainInt(args []interface{}, want int) bool {
 	return false
 }
 
+func normalizePreparedPlaceholders(sql string) string {
+	return preparedPlaceholderRegex.ReplaceAllString(sql, "?")
+}
+
+func assertContainsPreparedEquality(t *testing.T, sql string, column string) {
+	t.Helper()
+	normalizedSQL := normalizePreparedPlaceholders(sql)
+	if !strings.Contains(normalizedSQL, column+" = ?") {
+		t.Fatalf("expected prepared equality for %s, got: %s", column, sql)
+	}
+}
+
 func TestLogicalExpression_SME_WithCollector_BuildsCTE(t *testing.T) {
 	expr := LogicalExpression{
 		Eq: ComparisonItems{
@@ -93,9 +108,7 @@ func TestLogicalExpression_SME_WithCollector_BuildsCTE(t *testing.T) {
 	sql, args := buildSMESQL(t, expr)
 	t.Logf("SQL: %s", sql)
 
-	if !strings.Contains(sql, "\"submodel_element\".\"idshort_path\" = ?") {
-		t.Fatalf("expected idshort_path binding in EXISTS SQL, got: %s", sql)
-	}
+	assertContainsPreparedEquality(t, sql, `"submodel_element"."idshort_path"`)
 	if !strings.Contains(sql, "property_element") {
 		t.Fatalf("expected property_element in SQL, got: %s", sql)
 	}
@@ -128,9 +141,7 @@ func TestLogicalExpression_SME_WithCollector_MultiConditions(t *testing.T) {
 	sql, args := buildSMESQL(t, expr)
 	t.Logf("SQL: %s", sql)
 
-	if !strings.Contains(sql, "\"submodel_element\".\"idshort_path\" = ?") {
-		t.Fatalf("expected idshort_path binding in EXISTS SQL, got: %s", sql)
-	}
+	assertContainsPreparedEquality(t, sql, `"submodel_element"."idshort_path"`)
 	if !strings.Contains(sql, "CASE WHEN property_element.value_bool IS NOT NULL") {
 		t.Fatalf("expected CASE-based valueType expression in EXISTS SQL, got: %s", sql)
 	}
@@ -243,9 +254,7 @@ func TestLogicalExpression_SME_SemanticID(t *testing.T) {
 	if !strings.Contains(argsText, "urn:sm") {
 		t.Fatalf("expected args to contain %q, got: %v", "urn:sm", args)
 	}
-	if !strings.Contains(sql, "\"position\" = ?") {
-		t.Fatalf("expected SQL to contain position placeholder, got: %s", sql)
-	}
+	assertContainsPreparedEquality(t, sql, `"position"`)
 	if !argsContainInt(args, 0) {
 		t.Fatalf("expected args to include position 0, got: %v", args)
 	}
@@ -289,9 +298,7 @@ func TestLogicalExpression_SME_MultipleIdShortPaths(t *testing.T) {
 	}
 
 	sql, args := buildSMESQL(t, expr)
-	if !strings.Contains(sql, "\"submodel_element\".\"idshort_path\" = ?") {
-		t.Fatalf("expected idshort_path binding in EXISTS SQL, got: %s", sql)
-	}
+	assertContainsPreparedEquality(t, sql, `"submodel_element"."idshort_path"`)
 	argsText := argsString(args)
 	if !strings.Contains(argsText, "motor.speed") {
 		t.Fatalf("expected args to contain %q, got: %v", "motor.speed", args)

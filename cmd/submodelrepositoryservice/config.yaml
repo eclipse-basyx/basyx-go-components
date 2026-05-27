@@ -2,7 +2,8 @@ server:
   port: 5004
   contextPath: ""
   host: 0.0.0.0
-  strictVerification: true  # Set to false to disable strict AAS metamodel verification
+  strictVerification: permissive  # Values: off|permissive|strict (default: permissive)
+  verificationEndpointAvailable: true
 
 postgres:
   host: localhost
@@ -18,10 +19,15 @@ postgres:
 oidc:
   trustlistPath: "config/trustlist.json"
 
-
 abac:
   enabled: false
   modelPath: "config/access_rules/access-rules.json"
+
+general:
+  aasRegistryIntegration: false
+  submodelRegistryIntegration: false
+  externalUrl: ""
+  uploadMaxSizeBytes: 134217728
 
 # jws:
 #   privateKeyPath: "./rsa-key.pem"

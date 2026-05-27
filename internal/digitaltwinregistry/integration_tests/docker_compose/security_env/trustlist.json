@@ -1,2 +1,6 @@
 [
+  {
+    "issuer": "http://localhost:8080/realms/basyx",
+    "scopes": ["email", "profile"]
+  }
 ]

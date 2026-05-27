@@ -9,9 +9,18 @@
             "program": "${workspaceFolder}/cmd/digitaltwinregistryservice/main.go",
             "args": [
                 "-config",
-                "${workspaceFolder}/cmd/digitaltwinregistryservice/config.yaml",
-                "-databaseSchema",
-                "${workspaceFolder}/basyxschema.sql"
+                "${workspaceFolder}/cmd/digitaltwinregistryservice/config.yaml"
+            ]
+        },
+        {
+            "name": "Launch AAS Environment Service",
+            "type": "go",
+            "request": "launch",
+            "mode": "debug",
+            "program": "${workspaceFolder}/cmd/aasenvironmentservice/main.go",
+            "args": [
+                "-config",
+                "${workspaceFolder}/cmd/aasenvironmentservice/config.yaml"
             ]
         },
         {
@@ -22,22 +31,18 @@
             "program": "${workspaceFolder}/cmd/discoveryservice/main.go",
             "args": [
                 "-config",
-                "${workspaceFolder}/cmd/discoveryservice/config.yaml",
-                "-databaseSchema",
-                "${workspaceFolder}/basyxschema.sql"
+                "${workspaceFolder}/cmd/discoveryservice/config.yaml"
             ]
         },
         {
-            "name": "Launch RegistryOfInfrastructures Service",
+            "name": "Launch Company Lookup Service",
             "type": "go",
             "request": "launch",
             "mode": "debug",
-            "program": "${workspaceFolder}/cmd/registryofinfrastructuresservice/main.go",
+            "program": "${workspaceFolder}/cmd/companylookupservice/main.go",
             "args": [
                 "-config",
-                "${workspaceFolder}/cmd/registryofinfrastructuresservice/config.yaml",
-                "-databaseSchema",
-                "${workspaceFolder}/basyxschema.sql"
+                "${workspaceFolder}/cmd/companylookupservice/config.yaml"
             ]
         },
         {
@@ -48,9 +53,7 @@
             "program": "${workspaceFolder}/cmd/submodelrepositoryservice/main.go",
             "args": [
                 "-config",
-                "${workspaceFolder}/cmd/submodelrepositoryservice/config.yaml",
-                "-databaseSchema",
-                "${workspaceFolder}/basyxschema.sql"
+                "${workspaceFolder}/cmd/submodelrepositoryservice/config.yaml"
             ]
         },
         {
@@ -61,9 +64,7 @@
             "program": "${workspaceFolder}/cmd/aasregistryservice/main.go",
             "args": [
                 "-config",
-                "${workspaceFolder}/cmd/aasregistryservice/config.yaml",
-                "-databaseSchema",
-                "${workspaceFolder}/basyxschema.sql"
+                "${workspaceFolder}/cmd/aasregistryservice/config.yaml"
             ]
         },
         {
@@ -74,9 +75,7 @@
             "program": "${workspaceFolder}/cmd/submodelregistryservice/main.go",
             "args": [
                 "-config",
-                "${workspaceFolder}/cmd/submodelregistryservice/config.yaml",
-                "-databaseSchema",
-                "${workspaceFolder}/basyxschema.sql"
+                "${workspaceFolder}/cmd/submodelregistryservice/config.yaml"
             ]
         },
         {
@@ -87,9 +86,7 @@
             "program": "${workspaceFolder}/cmd/aasrepositoryservice/main.go",
             "args": [
                 "-config",
-                "${workspaceFolder}/cmd/aasrepositoryservice/config.yaml",
-                "-databaseSchema",
-                "${workspaceFolder}/basyxschema.sql"
+                "${workspaceFolder}/cmd/aasrepositoryservice/config.yaml"
             ]
         },
         {
@@ -100,9 +97,22 @@
             "program": "${workspaceFolder}/cmd/conceptdescriptionrepositoryservice/main.go",
             "args": [
                 "-config",
-                "${workspaceFolder}/cmd/conceptdescriptionrepositoryservice/config.yaml",
+                "${workspaceFolder}/cmd/conceptdescriptionrepositoryservice/config.yaml"
+            ]
+        },
+        {
+            "name": "Launch BaSyx Configuration Service",
+            "type": "go",
+            "request": "launch",
+            "mode": "debug",
+            "program": "${workspaceFolder}/cmd/basyxconfigurationservice/main.go",
+            "args": [
+                "-config",
+                "${workspaceFolder}/cmd/basyxconfigurationservice/config.yaml",
                 "-databaseSchema",
-                "${workspaceFolder}/basyxschema.sql"
+                "${workspaceFolder}/database/base.sql",
+                "-customPatchPath",
+                "${workspaceFolder}/database/patches/"
             ]
         }
     ]

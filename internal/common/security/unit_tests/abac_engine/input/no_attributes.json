@@ -4,6 +4,11 @@
       {
         "ACL": {
           "ACCESS": "ALLOW",
+          "ATTRIBUTES": [
+            {
+              "CLAIM": "missing-claim"
+            }
+          ],
           "RIGHTS": [
             "READ",
             "UPDATE"

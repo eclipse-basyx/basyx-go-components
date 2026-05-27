@@ -33,13 +33,14 @@ import (
 	"net/http"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/testenv"
 	"github.com/stretchr/testify/require"
 )
 
 const (
-	BaseURL         = "http://127.0.0.1:5004"
+	BaseURL         = "http://127.0.0.1:6004"
 	ComposeFilePath = "./docker_compose/docker_compose.yml"
 )
 
@@ -98,5 +99,10 @@ func TestIntegration(t *testing.T) {
 				deleteAllDescriptors(t, runner, stepNumber, step.Headers)
 			},
 		},
+		TokenProvider: testenv.NewPasswordGrantTokenProvider(
+			"http://localhost:8080/realms/basyx/protocol/openid-connect/token",
+			"basyx-ui",
+			10*time.Second,
+		),
 	})
 }

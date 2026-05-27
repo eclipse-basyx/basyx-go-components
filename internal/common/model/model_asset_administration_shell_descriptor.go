@@ -29,11 +29,12 @@ package model
 
 import (
 	"errors"
+	"time"
 
-	"github.com/FriedJannik/aas-go-sdk/jsonization"
-	"github.com/FriedJannik/aas-go-sdk/stringification"
-	"github.com/FriedJannik/aas-go-sdk/types"
-	"github.com/FriedJannik/aas-go-sdk/verification"
+	"github.com/aas-core-works/aas-core3.1-golang/jsonization"
+	"github.com/aas-core-works/aas-core3.1-golang/stringification"
+	"github.com/aas-core-works/aas-core3.1-golang/types"
+	"github.com/aas-core-works/aas-core3.1-golang/verification"
 	jsoniter "github.com/json-iterator/go"
 )
 
@@ -61,6 +62,8 @@ type AssetAdministrationShellDescriptor struct {
 	SpecificAssetIds []types.ISpecificAssetID `json:"specificAssetIds,omitempty"`
 
 	SubmodelDescriptors []SubmodelDescriptor `json:"submodelDescriptors,omitempty"`
+
+	CreatedAt *time.Time `json:"createdAt,omitempty"`
 }
 
 // AssertAssetAdministrationShellDescriptorRequired checks if the required fields are not zero-ed
@@ -116,6 +119,9 @@ func AssertAssetAdministrationShellDescriptorConstraints(obj AssetAdministration
 			return err
 		}
 	}
+	if err := assertSpecificAssetIDReferencesHaveKeys(obj.SpecificAssetIds); err != nil {
+		return err
+	}
 	for _, el := range obj.SubmodelDescriptors {
 		if err := AssertSubmodelDescriptorConstraints(el); err != nil {
 			return err
@@ -147,6 +153,7 @@ func (obj *AssetAdministrationShellDescriptor) UnmarshalJSON(data []byte) error 
 		"id":                  true,
 		"specificAssetIds":    true,
 		"submodelDescriptors": true,
+		"createdAt":           true,
 	}
 	for key := range jsonable {
 		if !allowedFields[key] {
@@ -255,16 +262,22 @@ func (obj *AssetAdministrationShellDescriptor) UnmarshalJSON(data []byte) error 
 		}
 	}
 
+	mode := GetVerificationMode()
+
 	//Extensions
 	for _, ext := range obj.Extensions {
-		validationErrors := []string{}
-		verification.Verify(&ext, func(verErr *verification.VerificationError) bool {
-			validationErrors = append(validationErrors, verErr.Error())
-			return false // Continue collecting all errors
-		})
-
-		if len(validationErrors) > 0 {
-			return errors.New("AssetAdministrationShellDescriptor: Extensions verification failed: " + validationErrors[0])
+		extension := ext
+		if err := ValidateWithMode(
+			mode,
+			"AssetAdministrationShellDescriptor.Extensions",
+			func(collector func(*verification.VerificationError) bool) {
+				verification.Verify(&extension, collector)
+			},
+			func(message string) error {
+				return errors.New("AssetAdministrationShellDescriptor: Extensions verification failed: " + message)
+			},
+		); err != nil {
+			return err
 		}
 	}
 
@@ -308,72 +321,94 @@ func (obj *AssetAdministrationShellDescriptor) UnmarshalJSON(data []byte) error 
 	if id, ok := jsonable["id"].(string); ok {
 		obj.Id = id
 	}
+	if createdAt, ok := jsonable["createdAt"].(string); ok {
+		parsedCreatedAt, err := time.Parse(time.RFC3339Nano, createdAt)
+		if err != nil {
+			return errors.New("AssetAdministrationShellDescriptor: createdAt is not a valid RFC3339 datetime")
+		}
+		obj.CreatedAt = &parsedCreatedAt
+	}
 
-	if !isStrictVerificationEnabled() {
+	if mode == VerificationModeOff {
 		return nil
 	}
 
-	// Verify Description
-	var validationErrors []string
 	for _, el := range obj.Description {
-		verification.Verify(el, func(verErr *verification.VerificationError) bool {
-			validationErrors = append(validationErrors, verErr.Error())
-			return false // Continue collecting all errors
-		})
-
-		if len(validationErrors) > 0 {
-			return errors.New("AssetAdministrationShellDescriptor: Description verification failed: " + validationErrors[0])
+		description := el
+		if err := ValidateWithMode(
+			mode,
+			"AssetAdministrationShellDescriptor.Description",
+			func(collector func(*verification.VerificationError) bool) {
+				verification.Verify(description, collector)
+			},
+			func(message string) error {
+				return errors.New("AssetAdministrationShellDescriptor: Description verification failed: " + message)
+			},
+		); err != nil {
+			return err
 		}
 	}
 
-	// Verify DisplayName
-	validationErrors = []string{}
 	for _, el := range obj.DisplayName {
-		verification.Verify(el, func(verErr *verification.VerificationError) bool {
-			validationErrors = append(validationErrors, verErr.Error())
-			return false // Continue collecting all errors
-		})
-
-		if len(validationErrors) > 0 {
-			return errors.New("AssetAdministrationShellDescriptor: DisplayName verification failed: " + validationErrors[0])
+		displayName := el
+		if err := ValidateWithMode(
+			mode,
+			"AssetAdministrationShellDescriptor.DisplayName",
+			func(collector func(*verification.VerificationError) bool) {
+				verification.Verify(displayName, collector)
+			},
+			func(message string) error {
+				return errors.New("AssetAdministrationShellDescriptor: DisplayName verification failed: " + message)
+			},
+		); err != nil {
+			return err
 		}
 	}
 
-	// Verify Extensions
-	validationErrors = []string{}
 	for _, el := range obj.Extensions {
-		verification.Verify(&el, func(verErr *verification.VerificationError) bool {
-			validationErrors = append(validationErrors, verErr.Error())
-			return false // Continue collecting all errors
-		})
-
-		if len(validationErrors) > 0 {
-			return errors.New("AssetAdministrationShellDescriptor: Extensions verification failed: " + validationErrors[0])
+		extension := el
+		if err := ValidateWithMode(
+			mode,
+			"AssetAdministrationShellDescriptor.Extensions",
+			func(collector func(*verification.VerificationError) bool) {
+				verification.Verify(&extension, collector)
+			},
+			func(message string) error {
+				return errors.New("AssetAdministrationShellDescriptor: Extensions verification failed: " + message)
+			},
+		); err != nil {
+			return err
 		}
 	}
 
-	// Verify SpecificAssetIds
-	validationErrors = []string{}
 	for _, el := range obj.SpecificAssetIds {
-		verification.Verify(el, func(verErr *verification.VerificationError) bool {
-			validationErrors = append(validationErrors, verErr.Error())
-			return false // Continue collecting all errors
-		})
-
-		if len(validationErrors) > 0 {
-			return errors.New("AssetAdministrationShellDescriptor: SpecificAssetIds verification failed: " + validationErrors[0])
+		specificAssetID := el
+		if err := ValidateWithMode(
+			mode,
+			"AssetAdministrationShellDescriptor.SpecificAssetIds",
+			func(collector func(*verification.VerificationError) bool) {
+				verification.Verify(specificAssetID, collector)
+			},
+			func(message string) error {
+				return errors.New("AssetAdministrationShellDescriptor: SpecificAssetIds verification failed: " + message)
+			},
+		); err != nil {
+			return err
 		}
 	}
 
-	// Administration
-	validationErrors = []string{}
 	if obj.Administration != nil {
-		verification.Verify(obj.Administration, func(verErr *verification.VerificationError) bool {
-			validationErrors = append(validationErrors, verErr.Error())
-			return false // Continue collecting all errors
-		})
-		if len(validationErrors) > 0 {
-			return errors.New("AssetAdministrationShellDescriptor: Administration verification failed: " + validationErrors[0])
+		if err := ValidateWithMode(
+			mode,
+			"AssetAdministrationShellDescriptor.Administration",
+			func(collector func(*verification.VerificationError) bool) {
+				verification.Verify(obj.Administration, collector)
+			},
+			func(message string) error {
+				return errors.New("AssetAdministrationShellDescriptor: Administration verification failed: " + message)
+			},
+		); err != nil {
+			return err
 		}
 	}
 
@@ -491,6 +526,9 @@ func (obj AssetAdministrationShellDescriptor) ToJsonable() (map[string]any, erro
 	}
 	if len(submodelDescriptors) > 0 {
 		ret["submodelDescriptors"] = submodelDescriptors
+	}
+	if obj.CreatedAt != nil {
+		ret["createdAt"] = obj.CreatedAt.Format(time.RFC3339Nano)
 	}
 	return ret, nil
 }

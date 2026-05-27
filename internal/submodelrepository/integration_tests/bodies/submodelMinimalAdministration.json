@@ -5,6 +5,5 @@
     "kind": "Instance",
     "administration": {
         "version": "1"
-    },
-    "submodelElements":[]
+    }
 }

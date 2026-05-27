@@ -34,11 +34,11 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"os"
 
 	aasregistryapi "github.com/eclipse-basyx/basyx-go-components/internal/aasregistry/api"
 	aasregistrydatabase "github.com/eclipse-basyx/basyx-go-components/internal/aasregistry/persistence"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/asyncbulk"
 	commonmodel "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 	apis "github.com/eclipse-basyx/basyx-go-components/pkg/aasregistryapi"
@@ -48,15 +48,17 @@ import (
 //go:embed openapi.yaml
 var openapiSpec embed.FS
 
-func runServer(ctx context.Context, configPath string, databaseSchema string) error {
+func runServer(ctx context.Context, configPath string) error {
 	log.Default().Println("Loading AAS Registry Service...")
 	log.Default().Println("Config Path:", configPath)
 
-	cfg, err := common.LoadConfig(configPath)
+	cfg, err := common.LoadConfig(configPath, common.NORMAL)
 	if err != nil {
 		return err
 	}
-	commonmodel.SetStrictVerificationEnabled(cfg.Server.StrictVerification)
+	if err := commonmodel.SetVerificationMode(cfg.Server.StrictVerification); err != nil {
+		return err
+	}
 	commonmodel.SetSupportsSingularSupplementalSemanticId(cfg.General.SupportsSingularSupplementalSemanticId)
 
 	r := chi.NewRouter()
@@ -66,19 +68,21 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 
 	common.AddCors(r, cfg)
 	common.AddHealthEndpoint(r, cfg)
+	if cfg.Server.VerificationEndpointAvailable {
+		common.AddVerificationEndpoint(r, cfg)
+	}
 
 	// Add Swagger UI
 	if err := common.AddSwaggerUIFromFS(r, openapiSpec, "openapi.yaml", "AAS Registry Service API", "/swagger", "/api-docs/openapi.yaml", cfg); err != nil {
 		log.Printf("Warning: failed to load OpenAPI spec for Swagger UI: %v", err)
 	}
 
-	dsn := fmt.Sprintf("postgres://%s:%s@%s:%d/%s?sslmode=disable",
-		cfg.Postgres.User,
-		cfg.Postgres.Password,
-		cfg.Postgres.Host,
-		cfg.Postgres.Port,
-		cfg.Postgres.DBName,
-	)
+	dsn := common.BuildPostgresDSN(cfg.Postgres)
+
+	if err := common.ValidateSchemaVersionByDSN(dsn, common.CURRENT_DATABASE_VERSION); err != nil {
+		return err
+	}
+
 	log.Printf("🗄️  Connecting to Postgres with DSN: postgres://%s:****@%s:%d/%s?sslmode=disable",
 		cfg.Postgres.User, cfg.Postgres.Host, cfg.Postgres.Port, cfg.Postgres.DBName)
 
@@ -89,7 +93,6 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 		cfg.Postgres.MaxIdleConnections,
 		cfg.Postgres.ConnMaxLifetimeMinutes,
 		cfg.Server.CacheEnabled,
-		databaseSchema,
 	)
 
 	if err != nil {
@@ -100,6 +103,9 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 
 	smSvc := aasregistryapi.NewAssetAdministrationShellRegistryAPIAPIService(*smDatabase)
 	smCtrl := apis.NewAssetAdministrationShellRegistryAPIAPIController(smSvc, cfg.Server.ContextPath)
+	bulkManager := asyncbulk.NewManager("AASR-BULK", 0)
+	bulkSvc := aasregistryapi.NewBulkService(smSvc, bulkManager)
+	bulkHandler := aasregistryapi.NewBulkHTTPHandler(bulkSvc)
 
 	descSvc := aasregistryapi.NewDescriptionAPIAPIService()
 	descCtrl := apis.NewDescriptionAPIAPIController(descSvc)
@@ -108,7 +114,7 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 
 	// === Protected API Subrouter ===
 	apiRouter := chi.NewRouter()
-	common.AddDefaultRouterErrorHandlers(apiRouter, "AASRegistryService")
+	common.ConfigureAPIRouter(apiRouter, "AASRegistryService")
 
 	// Apply OIDC + ABAC once for all registry endpoints
 	if err := auth.SetupSecurity(ctx, cfg, apiRouter); err != nil {
@@ -124,6 +130,7 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 	for _, rt := range descCtrl.Routes() {
 		apiRouter.Method(rt.Method, rt.Pattern, rt.HandlerFunc)
 	}
+	bulkHandler.RegisterRoutes(apiRouter, true)
 
 	// Mount protected API under base path
 	r.Mount(base, apiRouter)
@@ -148,19 +155,10 @@ func main() {
 	ctx := context.Background()
 
 	configPath := ""
-	databaseSchema := ""
 	flag.StringVar(&configPath, "config", "", "Path to config file")
-	flag.StringVar(&databaseSchema, "databaseSchema", "", "Path to Database Schema SQL file (overrides default)")
 	flag.Parse()
 
-	if databaseSchema != "" {
-		if _, fileError := os.ReadFile(databaseSchema); fileError != nil {
-			_, _ = fmt.Println("The specified database schema path is invalid or the file was not found.")
-			os.Exit(1)
-		}
-	}
-
-	if err := runServer(ctx, configPath, databaseSchema); err != nil {
+	if err := runServer(ctx, configPath); err != nil {
 		log.Fatalf("Server error: %v", err)
 	}
 }

@@ -1,4 +1,9 @@
 {
   "ACCESS": "ALLOW",
+  "ATTRIBUTES": [
+    {
+      "GLOBAL": "ANONYMOUS"
+    }
+  ],
   "RIGHTS": ["READ"]
 }

@@ -38,57 +38,66 @@ import (
 	"reflect"
 	"strings"
 
+	commonmodel "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/cors"
 	"github.com/spf13/viper"
 )
 
+const defaultServerStrictVerification = string(commonmodel.VerificationModePermissive)
+
 // DefaultConfig holds all default values for configuration options.
-// THESE VALUES ARE NOT USED! THEY VALIDATE IF CONFIGURATION IS DEFAULT IN THE PRINT STATEMENT
+// These values are also used to mark default values in the printed configuration.
 var DefaultConfig = struct {
-	ServerPort                  int
-	ServerContextPath           string
-	ServerCacheEnabled          bool
-	ServerStrictVerification    bool
-	PgPort                      int
-	PgDBName                    string
-	PgMaxOpen                   int
-	PgMaxIdle                   int
-	PgConnLifetime              int
-	AllowedOrigins              []string
-	AllowedMethods              []string
-	AllowedHeaders              []string
-	AllowCredentials            bool
-	OIDCTrustlistPath           string
-	OIDCJWKSURL                 string
-	ABACEnabled                 bool
-	ABACModelPath               string
-	GeneralImplicitCasts        bool
-	GeneralDescriptorDebug      bool
-	GeneralDiscoveryIntegration bool
-	GeneralSupportsSingularSSID bool
+	ServerPort                          int
+	ServerContextPath                   string
+	ServerCacheEnabled                  bool
+	ServerStrictVerification            string
+	ServerVerificationEndpointAvailable bool
+	PgPort                              int
+	PgDBName                            string
+	PgMaxOpen                           int
+	PgMaxIdle                           int
+	PgConnLifetime                      int
+	AllowedOrigins                      []string
+	AllowedMethods                      []string
+	AllowedHeaders                      []string
+	AllowCredentials                    bool
+	OIDCTrustlistPath                   string
+	OIDCJWKSURL                         string
+	ABACEnabled                         bool
+	ABACModelPath                       string
+	GeneralImplicitCasts                bool
+	GeneralDescriptorDebug              bool
+	GeneralDiscoveryIntegration         bool
+	GeneralSupportsSingularSSID         bool
+	GeneralEnableCustomHeaderMW         bool
+	GeneralAASPreconfigPaths            []string
 }{
-	ServerPort:                  5004,
-	ServerContextPath:           "",
-	ServerCacheEnabled:          false,
-	ServerStrictVerification:    true,
-	PgPort:                      5432,
-	PgDBName:                    "basyxTestDB",
-	PgMaxOpen:                   50,
-	PgMaxIdle:                   50,
-	PgConnLifetime:              5,
-	AllowedOrigins:              []string{},
-	AllowedMethods:              []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
-	AllowedHeaders:              []string{},
-	AllowCredentials:            false,
-	OIDCTrustlistPath:           "config/trustlist.json",
-	OIDCJWKSURL:                 "",
-	ABACEnabled:                 false,
-	ABACModelPath:               "config/access_rules/access-rules.json",
-	GeneralImplicitCasts:        true,
-	GeneralDescriptorDebug:      false,
-	GeneralDiscoveryIntegration: false,
-	GeneralSupportsSingularSSID: false,
+	ServerPort:                          5004,
+	ServerContextPath:                   "",
+	ServerCacheEnabled:                  false,
+	ServerStrictVerification:            defaultServerStrictVerification,
+	ServerVerificationEndpointAvailable: true,
+	PgPort:                              5432,
+	PgDBName:                            "basyxTestDB",
+	PgMaxOpen:                           50,
+	PgMaxIdle:                           50,
+	PgConnLifetime:                      5,
+	AllowedOrigins:                      []string{},
+	AllowedMethods:                      []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
+	AllowedHeaders:                      []string{},
+	AllowCredentials:                    false,
+	OIDCTrustlistPath:                   "config/trustlist.json",
+	OIDCJWKSURL:                         "",
+	ABACEnabled:                         false,
+	ABACModelPath:                       "config/access_rules/access-rules.json",
+	GeneralImplicitCasts:                true,
+	GeneralDescriptorDebug:              false,
+	GeneralDiscoveryIntegration:         false,
+	GeneralSupportsSingularSSID:         false,
+	GeneralEnableCustomHeaderMW:         false,
+	GeneralAASPreconfigPaths:            []string{},
 }
 
 // PrintSplash displays the BaSyx Go API ASCII art logo to the console.
@@ -166,11 +175,12 @@ type SwaggerConfig struct {
 
 // ServerConfig contains HTTP server configuration parameters.
 type ServerConfig struct {
-	Host               string `mapstructure:"host" yaml:"host"`                             // HTTP server host (default: 0.0.0.0)
-	Port               int    `mapstructure:"port" yaml:"port"`                             // HTTP server port (default: 5004)
-	ContextPath        string `mapstructure:"contextPath" yaml:"contextPath"`               // Base path for all endpoints
-	CacheEnabled       bool   `mapstructure:"cacheEnabled" yaml:"cacheEnabled"`             // Enable/disable response caching
-	StrictVerification bool   `mapstructure:"strictVerification" yaml:"strictVerification"` // Enable/disable strict AAS metamodel verification (default: true)
+	Host                          string `mapstructure:"host" yaml:"host"`                                                   // HTTP server host (default: 0.0.0.0)
+	Port                          int    `mapstructure:"port" yaml:"port"`                                                   // HTTP server port (default: 5004)
+	ContextPath                   string `mapstructure:"contextPath" yaml:"contextPath"`                                     // Base path for all endpoints
+	CacheEnabled                  bool   `mapstructure:"cacheEnabled" yaml:"cacheEnabled"`                                   // Enable/disable response caching
+	StrictVerification            string `mapstructure:"strictVerification" yaml:"strictVerification"`                       // Verification mode: off|permissive|strict (default: permissive)
+	VerificationEndpointAvailable bool   `mapstructure:"verificationEndpointAvailable" yaml:"verificationEndpointAvailable"` // Enable/disable verification endpoint
 }
 
 // PostgresConfig contains PostgreSQL database connection parameters.
@@ -196,16 +206,22 @@ type CorsConfig struct {
 
 // GeneralConfig contains non-domain-specific configuration.
 type GeneralConfig struct {
-	EnableImplicitCasts                    bool `mapstructure:"enableImplicitCasts" yaml:"enableImplicitCasts" json:"enableImplicitCasts"`                                                          // Enable implicit casts during backend simplification
-	EnableDescriptorDebug                  bool `mapstructure:"enableDescriptorDebug" yaml:"enableDescriptorDebug" json:"enableDescriptorDebug"`                                                    // Enable descriptor query debug output
-	DiscoveryIntegration                   bool `mapstructure:"discoveryIntegration" yaml:"discoveryIntegration" json:"discoveryIntegration"`                                                       // Enable integration with discovery aas_identifier linking
-	SupportsSingularSupplementalSemanticId bool `mapstructure:"supportsSingularSupplementalSemanticId" yaml:"supportsSingularSupplementalSemanticId" json:"supportsSingularSupplementalSemanticId"` // Use singular supplementalSemanticId for SubmodelDescriptor I/O
+	EnableImplicitCasts                    bool     `mapstructure:"enableImplicitCasts" yaml:"enableImplicitCasts" json:"enableImplicitCasts"`                                                          // Enable implicit casts during backend simplification
+	EnableDescriptorDebug                  bool     `mapstructure:"enableDescriptorDebug" yaml:"enableDescriptorDebug" json:"enableDescriptorDebug"`                                                    // Enable descriptor query debug output
+	DiscoveryIntegration                   bool     `mapstructure:"discoveryIntegration" yaml:"discoveryIntegration" json:"discoveryIntegration"`                                                       // Enable integration with discovery aas_identifier linking
+	EnableCustomMiddlewareHeaderInjection  bool     `mapstructure:"enableCustomMiddlewareHeaderInjection" yaml:"enableCustomMiddlewareHeaderInjection" json:"enableCustomMiddlewareHeaderInjection"`    // Enable custom security middleware header injections
+	SupportsSingularSupplementalSemanticId bool     `mapstructure:"supportsSingularSupplementalSemanticId" yaml:"supportsSingularSupplementalSemanticId" json:"supportsSingularSupplementalSemanticId"` // Use singular supplementalSemanticId for SubmodelDescriptor I/O
+	AASRegistryIntegration                 bool     `mapstructure:"aasRegistryIntegration" yaml:"aasRegistryIntegration" json:"aasRegistryIntegration"`                                                 // Enable AAS repository -> registry descriptor synchronization
+	SubmodelRegistryIntegration            bool     `mapstructure:"submodelRegistryIntegration" yaml:"submodelRegistryIntegration" json:"submodelRegistryIntegration"`                                  // Enable Submodel repository -> registry descriptor synchronization
+	ExternalURL                            string   `mapstructure:"externalUrl" yaml:"externalUrl" json:"externalUrl"`                                                                                  // Public base URL(s) used for registry synchronization endpoint generation
+	UploadMaxSizeBytes                     int64    `mapstructure:"uploadMaxSizeBytes" yaml:"uploadMaxSizeBytes" json:"uploadMaxSizeBytes"`                                                             // Maximum allowed upload payload size in bytes
+	AASPreconfigPaths                      []string `mapstructure:"aasPreconfigPaths" yaml:"aasPreconfigPaths" json:"aasPreconfigPaths"`                                                                // Files/directories loaded at startup for AAS preconfiguration
 }
 
 // OIDCProviderConfig contains OpenID Connect authentication provider settings.
 type OIDCProviderConfig struct {
 	Issuer   string   `mapstructure:"issuer" yaml:"issuer" json:"issuer"`       // OIDC issuer URL
-	Audience string   `mapstructure:"audience" yaml:"audience" json:"audience"` // Expected token audience
+	Audience string   `mapstructure:"audience" yaml:"audience" json:"audience"` // Optional token audience (skip audience validation if empty)
 	Scopes   []string `mapstructure:"scopes" yaml:"scopes" json:"scopes"`       // Required scopes
 }
 
@@ -220,6 +236,13 @@ type ABACConfig struct {
 	ModelPath string `mapstructure:"modelPath" json:"modelPath"` // Path to access control model
 }
 
+type ConfigMode int
+
+const (
+	QUIET ConfigMode = iota
+	NORMAL
+)
+
 // LoadConfig loads the configuration from YAML files and environment variables.
 //
 // The function supports multiple configuration sources with the following precedence:
@@ -232,6 +255,7 @@ type ABACConfig struct {
 // Parameters:
 //   - configPath: Path to the YAML configuration file. If empty, only environment
 //     variables and defaults will be used.
+//   - configMode: QUIET = No Output, NORMAL = Normal Logging
 //
 // Returns:
 //   - *Config: Loaded configuration structure
@@ -239,25 +263,31 @@ type ABACConfig struct {
 //
 // Example:
 //
-//	config, err := LoadConfig("config/app.yaml")
+//	config, err := LoadConfig("config/app.yaml", NORMAL)
 //	if err != nil {
 //	    log.Fatal("Failed to load config:", err)
 //	}
-func LoadConfig(configPath string) (*Config, error) {
-	PrintSplash()
+func LoadConfig(configPath string, configMode ConfigMode) (*Config, error) {
+	if configMode == NORMAL {
+		PrintSplash()
+	}
 	v := viper.New()
 
 	// Set default values
 	setDefaults(v)
 
 	if configPath != "" {
-		log.Printf("📁 Loading config from file: %s", configPath)
+		if configMode == NORMAL {
+			log.Printf("📁 Loading config from file: %s", configPath)
+		}
 		v.SetConfigFile(configPath)
 		if err := v.ReadInConfig(); err != nil {
 			return nil, fmt.Errorf("read config: %w", err)
 		}
 	} else {
-		log.Println("📁 No config file provided — loading from environment variables only")
+		if configMode == NORMAL {
+			log.Println("📁 No config file provided — loading from environment variables only")
+		}
 	}
 
 	// Override config with environment variables
@@ -269,9 +299,56 @@ func LoadConfig(configPath string) (*Config, error) {
 		return nil, fmt.Errorf("unmarshal config: %w", err)
 	}
 
-	log.Println("✅ Configuration loaded successfully")
-	PrintConfiguration(cfg)
+	verificationMode, err := commonmodel.ParseVerificationMode(cfg.Server.StrictVerification)
+	if err != nil {
+		return nil, fmt.Errorf("invalid server.strictVerification: %w", err)
+	}
+	cfg.Server.StrictVerification = string(verificationMode)
+	applyAASPreconfigPathOverrides(cfg)
+	if configMode == NORMAL {
+		log.Println("✅ Configuration loaded successfully")
+		PrintConfiguration(cfg)
+	}
 	return cfg, nil
+}
+
+func applyAASPreconfigPathOverrides(cfg *Config) {
+	if cfg == nil {
+		return
+	}
+
+	if envRawPaths, exists := os.LookupEnv("GENERAL_AAS_PRECONFIG_PATHS"); exists {
+		cfg.General.AASPreconfigPaths = parseAASPreconfigPathList(envRawPaths)
+		return
+	}
+
+	cfg.General.AASPreconfigPaths = normalizeAASPreconfigPaths(cfg.General.AASPreconfigPaths)
+}
+
+func parseAASPreconfigPathList(rawPaths string) []string {
+	if strings.TrimSpace(rawPaths) == "" {
+		return []string{}
+	}
+
+	parts := strings.Split(rawPaths, ",")
+	return normalizeAASPreconfigPaths(parts)
+}
+
+func normalizeAASPreconfigPaths(rawPaths []string) []string {
+	if len(rawPaths) == 0 {
+		return []string{}
+	}
+
+	normalized := make([]string, 0, len(rawPaths))
+	for _, rawPath := range rawPaths {
+		path := strings.TrimSpace(rawPath)
+		if path == "" {
+			continue
+		}
+		normalized = append(normalized, path)
+	}
+
+	return normalized
 }
 
 // setDefaults configures sensible default values for all configuration options.
@@ -295,7 +372,8 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("server.port", 5004)
 	v.SetDefault("server.contextPath", "")
 	v.SetDefault("server.cacheEnabled", false)
-	v.SetDefault("server.strictVerification", true)
+	v.SetDefault("server.strictVerification", DefaultConfig.ServerStrictVerification)
+	v.SetDefault("server.verificationEndpointAvailable", true)
 
 	// PostgreSQL defaults
 	v.SetDefault("postgres.host", "db")
@@ -331,7 +409,13 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("general.enableImplicitCasts", true)
 	v.SetDefault("general.enableDescriptorDebug", false)
 	v.SetDefault("general.discoveryIntegration", false)
+	v.SetDefault("general.enableCustomMiddlewareHeaderInjection", false)
 	v.SetDefault("general.supportsSingularSupplementalSemanticId", false)
+	v.SetDefault("general.aasRegistryIntegration", false)
+	v.SetDefault("general.submodelRegistryIntegration", false)
+	v.SetDefault("general.externalUrl", "")
+	v.SetDefault("general.uploadMaxSizeBytes", int64(128<<20))
+	v.SetDefault("general.aasPreconfigPaths", []string{})
 
 }
 
@@ -381,7 +465,8 @@ func PrintConfiguration(cfg *Config) {
 	add("Port", cfg.Server.Port, DefaultConfig.ServerPort)
 	add("Context Path", cfg.Server.ContextPath, DefaultConfig.ServerContextPath)
 	add("Cache Enabled", cfg.Server.CacheEnabled, DefaultConfig.ServerCacheEnabled)
-	add("Strict Verification", cfg.Server.StrictVerification, DefaultConfig.ServerStrictVerification)
+	add("Verification Mode", cfg.Server.StrictVerification, DefaultConfig.ServerStrictVerification)
+	add("Verification Endpoint Available", cfg.Server.VerificationEndpointAvailable, DefaultConfig.ServerVerificationEndpointAvailable)
 
 	lines = append(lines, divider)
 

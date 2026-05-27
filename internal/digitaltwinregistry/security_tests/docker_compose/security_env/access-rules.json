@@ -1,0 +1,152 @@
+{
+  "AllAccessPermissionRules": {
+    "DEFATTRIBUTES": [
+      {
+        "name": "anonymous",
+        "attributes": [
+          {
+            "GLOBAL": "ANONYMOUS"
+          }
+        ]
+      },
+      {
+        "name": "sub_claim",
+        "attributes": [
+          {
+            "CLAIM": "preferred_username"
+          }
+        ]
+      }
+    ],
+    "DEFOBJECTS": [
+      {
+        "name": "description_api",
+        "objects": [
+          {
+            "ROUTE": "/description"
+          }
+        ]
+      },
+      {
+        "name": "aas_registry_api",
+        "objects": [
+          {
+            "ROUTE": "/shell-descriptors"
+          },
+          {
+            "ROUTE": "/shell-descriptors/*"
+          },
+          {
+            "ROUTE": "/query/shell-descriptors"
+          }
+        ]
+      },
+      {
+        "name": "discovery_api",
+        "objects": [
+          {
+            "ROUTE": "/lookup/shells"
+          },
+          {
+            "ROUTE": "/lookup/shells/*"
+          },
+          {
+            "ROUTE": "/lookup/shellsByAssetLink"
+          }
+        ]
+      }
+    ],
+    "DEFACLS": [
+      {
+        "name": "anonymous_access",
+        "acl": {
+          "USEATTRIBUTES": "anonymous",
+          "RIGHTS": [
+            "READ"
+          ],
+          "ACCESS": "ALLOW"
+        }
+      },
+      {
+        "name": "full_access",
+        "acl": {
+          "USEATTRIBUTES": "sub_claim",
+          "RIGHTS": [
+            "ALL"
+          ],
+          "ACCESS": "ALLOW"
+        }
+      }
+    ],
+    "DEFFORMULAS": [
+      {
+        "name": "always_true",
+        "formula": {
+          "$boolean": true
+        }
+      },
+      {
+        "name": "match_client_and_bpn",
+        "formula": {
+          "$and": [
+            {
+              "$eq": [
+                {
+                  "$attribute": {
+                    "CLAIM": "preferred_username"
+                  }
+                },
+                {
+                  "$strVal": "admin"
+                }
+              ]
+            },
+            {
+              "$or": [
+                {
+                  "$eq": [
+                    {
+                      "$attribute": {
+                        "CLAIM": "Edc-Bpn"
+                      }
+                    },
+                    {
+                      "$field": "$aasdesc#specificAssetIds[].externalSubjectId.keys[].value"
+                    }
+                  ]
+                },
+                {
+                  "$eq": [
+                    {
+                      "$strVal": "PUBLIC_READABLE"
+                    },
+                    {
+                      "$field": "$aasdesc#specificAssetIds[].externalSubjectId.keys[].value"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      }
+    ],
+    "rules": [
+      {
+        "USEACL": "anonymous_access",
+        "USEOBJECTS": [
+          "description_api"
+        ],
+        "USEFORMULA": "always_true"
+      },
+      {
+        "USEACL": "full_access",
+        "USEOBJECTS": [
+          "aas_registry_api",
+          "discovery_api"
+        ],
+        "USEFORMULA": "match_client_and_bpn"
+      }
+    ]
+  }
+}

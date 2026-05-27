@@ -104,6 +104,22 @@ func NewInternalServerError(message string) error {
 	return errors.New("500 Internal Server Error: " + message)
 }
 
+// NewErrMethodNotAllowed creates a standardized "405 Method Not Allowed" error.
+//
+// Parameters:
+//   - message: Description of the method that is not allowed
+//
+// Returns:
+//   - error: An error with message format "405 Method Not Allowed: <message>"
+//
+// Example:
+//
+//	err := NewErrMethodNotAllowed("POST method not allowed on this endpoint")
+//	// Returns error: "405 Method Not Allowed: POST method not allowed on this endpoint"
+func NewErrMethodNotAllowed(message string) error {
+	return errors.New("405 Method Not Allowed: " + message)
+}
+
 // NewErrConflict creates a standardized "409 Conflict" error.
 //
 // Parameters:
@@ -146,7 +162,7 @@ func NewErrDenied(message string) error {
 //	    // Handle not found case
 //	}
 func IsErrNotFound(err error) bool {
-	return err != nil && strings.HasPrefix(err.Error(), "404 Not Found: ")
+	return hasErrorPrefix(err, "404 Not Found: ")
 }
 
 // IsErrBadRequest checks if the given error is a "400 Bad Request" error.
@@ -164,7 +180,7 @@ func IsErrNotFound(err error) bool {
 //	    // Handle bad request case
 //	}
 func IsErrBadRequest(err error) bool {
-	return err != nil && strings.HasPrefix(err.Error(), "400 Bad Request: ")
+	return hasErrorPrefix(err, "400 Bad Request: ")
 }
 
 // IsInternalServerError checks if the given error is a "500 Internal Server Error" error.
@@ -182,7 +198,7 @@ func IsErrBadRequest(err error) bool {
 //	    // Handle internal server error case
 //	}
 func IsInternalServerError(err error) bool {
-	return err != nil && strings.HasPrefix(err.Error(), "500 Internal Server Error: ")
+	return hasErrorPrefix(err, "500 Internal Server Error: ")
 }
 
 // IsErrConflict checks if the given error is a "409 Conflict" error.
@@ -200,7 +216,7 @@ func IsInternalServerError(err error) bool {
 //	    // Handle conflict case
 //	}
 func IsErrConflict(err error) bool {
-	return err != nil && strings.HasPrefix(err.Error(), "409 Conflict: ")
+	return hasErrorPrefix(err, "409 Conflict: ")
 }
 
 // IsErrDenied checks if the given error is a "403 Denied" error.
@@ -211,7 +227,27 @@ func IsErrConflict(err error) bool {
 // Returns:
 //   - bool: true if the error is a 403 Denied error, false otherwise
 func IsErrDenied(err error) bool {
-	return err != nil && strings.HasPrefix(err.Error(), "403 Denied: ")
+	return hasErrorPrefix(err, "403 Denied: ")
+}
+
+// IsErrMethodNotAllowed checks if the given error is a "405 Method Not Allowed" error.
+//
+// Parameters:
+//   - err: The error to check
+//
+// Returns:
+//   - bool: true if the error is a 405 Method Not Allowed error, false otherwise
+func IsErrMethodNotAllowed(err error) bool {
+	return hasErrorPrefix(err, "405 Method Not Allowed: ")
+}
+
+func hasErrorPrefix(err error, prefix string) bool {
+	for current := err; current != nil; current = errors.Unwrap(current) {
+		if strings.HasPrefix(current.Error(), prefix) {
+			return true
+		}
+	}
+	return false
 }
 
 // NewErrorResponse creates a standardized HTTP error response with structured error information.

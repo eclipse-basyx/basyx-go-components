@@ -44,13 +44,13 @@ package grammar
 //     Examples: READ, WRITE, DELETE, EXECUTE
 //     Specifies which operations are controlled by this ACL.
 //
-//   - ATTRIBUTES/USEATTRIBUTES: Optional attribute constraints (inline or by reference)
+//   - ATTRIBUTES/USEATTRIBUTES: Attribute constraints (inline or by reference)
 //     Can reference user claims, global attributes, or AAS element properties to
 //     add conditional logic to the access decision.
 //
 // Attribute Handling:
-// ACLs can either define attributes inline (ATTRIBUTES) or reference a previously
-// defined attribute collection by name (USEATTRIBUTES). These attributes provide
+// ACLs define attributes inline (ATTRIBUTES) or reference a previously
+// defined attribute collection by name (USEATTRIBUTES), but not both. These attributes provide
 // context for access decisions, such as user roles, timestamps, or resource properties.
 //
 // Example JSON (with inline attributes):

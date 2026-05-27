@@ -32,13 +32,15 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/FriedJannik/aas-go-sdk/types"
+	"github.com/aas-core-works/aas-core3.1-golang/types"
 	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 	"github.com/lib/pq"
 )
+
+const globalAssetIDSpecificAssetIDName = "globalAssetId"
 
 type rowData struct {
 	descID               int64
@@ -102,6 +104,7 @@ func ReadSpecificAssetIDsByDescriptorIDs(
 
 	d := goqu.Dialect(common.Dialect)
 	externalSubjectReferenceAlias := goqu.T("specific_asset_id_external_subject_id_reference").As(common.AliasExternalSubjectReference)
+	externalSubjectReferenceKeyAlias := goqu.T("specific_asset_id_external_subject_id_reference_key").As(common.AliasExternalSubjectReferenceKey)
 	specificAssetIDPayloadAlias := goqu.T(common.TblSpecificAssetIDPayload).As("specific_asset_id_payload")
 
 	arr := pq.Array(descriptorIDs)
@@ -139,9 +142,13 @@ func ReadSpecificAssetIDsByDescriptorIDs(
 			goqu.On(externalSubjectReferenceAlias.Col(common.ColID).Eq(specificAssetIDAlias.Col(common.ColID))),
 		).
 		LeftJoin(
+			externalSubjectReferenceKeyAlias,
+			goqu.On(externalSubjectReferenceKeyAlias.Col(common.ColReferenceID).Eq(externalSubjectReferenceAlias.Col(common.ColID))),
+		).
+		LeftJoin(
 			specificAssetIDPayloadAlias,
 			goqu.On(specificAssetIDPayloadAlias.Col(common.ColSpecificAssetID).Eq(specificAssetIDAlias.Col(common.ColID))),
-		).Select(append([]interface{}{
+		).Distinct().Select(append([]interface{}{
 		common.TSpecificAssetID.Col(common.ColDescriptorID).As("c0"),
 		common.TSpecificAssetID.Col(common.ColID).As("c1"),
 		common.TSpecificAssetID.Col(common.ColName).As("c2"),
@@ -150,7 +157,10 @@ func ReadSpecificAssetIDsByDescriptorIDs(
 		goqu.I(common.AliasExternalSubjectReference + "." + common.ColID).As("c5"),
 		common.TSpecificAssetID.Col(common.ColPosition).As("sort_specific_asset_position"),
 	}, maskRuntime.Projections()...)...).
-		Where(goqu.L(fmt.Sprintf("%s.%s = ANY(?::bigint[])", common.AliasSpecificAssetID, common.ColDescriptorID), arr))
+		Where(
+			goqu.L(fmt.Sprintf("%s.%s = ANY(?::bigint[])", common.AliasSpecificAssetID, common.ColDescriptorID), arr),
+			common.TSpecificAssetID.Col(common.ColName).Neq(globalAssetIDSpecificAssetIDName),
+		)
 
 	inner = inner.
 		Order(

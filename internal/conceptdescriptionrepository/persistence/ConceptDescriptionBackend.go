@@ -38,8 +38,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/FriedJannik/aas-go-sdk/jsonization"
-	"github.com/FriedJannik/aas-go-sdk/types"
+	"github.com/aas-core-works/aas-core3.1-golang/jsonization"
+	"github.com/aas-core-works/aas-core3.1-golang/types"
 	"github.com/doug-martin/goqu/v9"
 	_ "github.com/doug-martin/goqu/v9/dialect/postgres" // Postgres Driver for Goqu
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
@@ -66,8 +66,8 @@ type ConceptDescriptionBackend struct {
 // Returns:
 // - A pointer to a ConceptDescriptionBackend instance if the connection is successful.
 // - An error if the connection fails or if there is an issue with the database configuration.
-func NewConceptDescriptionBackend(dsn string, maxOpenConnections int32, maxIdleConnections int, connMaxLifetimeMinutes int, databaseSchema string) (*ConceptDescriptionBackend, error) {
-	db, err := common.InitializeDatabase(dsn, databaseSchema)
+func NewConceptDescriptionBackend(dsn string, maxOpenConnections int32, maxIdleConnections int, connMaxLifetimeMinutes int) (*ConceptDescriptionBackend, error) {
+	db, err := common.NewDatabaseConnection(dsn)
 	if err != nil {
 		return nil, err
 	}
@@ -79,6 +79,15 @@ func NewConceptDescriptionBackend(dsn string, maxOpenConnections int32, maxIdleC
 	}
 	if connMaxLifetimeMinutes > 0 {
 		db.SetConnMaxLifetime(time.Duration(connMaxLifetimeMinutes) * time.Minute)
+	}
+
+	return NewConceptDescriptionBackendFromDB(db)
+}
+
+// NewConceptDescriptionBackendFromDB creates a new backend instance from an existing DB pool.
+func NewConceptDescriptionBackendFromDB(db *sql.DB) (*ConceptDescriptionBackend, error) {
+	if db == nil {
+		return nil, common.NewErrBadRequest("CDREPO-NEWFROMDB-NILDB database handle must not be nil")
 	}
 
 	healthy, err := testDBConnection(db)
@@ -136,17 +145,23 @@ func (b *ConceptDescriptionBackend) createConceptDescriptionInTx(ctx context.Con
 	return nil
 }
 
-func (b *ConceptDescriptionBackend) deleteConceptDescriptionInTx(ctx context.Context, tx *sql.Tx, id string) error {
+func (b *ConceptDescriptionBackend) deleteConceptDescriptionInTx(ctx context.Context, tx *sql.Tx, id string) (bool, error) {
 	delQuery, args, err := goqu.Delete("concept_description").Where(goqu.Ex{"id": id}).ToSQL()
 	if err != nil {
-		return common.NewInternalServerError("CDREPO-DELCD-BUILDSQL " + err.Error())
+		return false, common.NewInternalServerError("CDREPO-DELCD-BUILDSQL " + err.Error())
 	}
 
-	if _, err = tx.ExecContext(ctx, delQuery, args...); err != nil {
-		return common.NewInternalServerError("CDREPO-DELCD-EXECSQL " + err.Error())
+	result, execErr := tx.ExecContext(ctx, delQuery, args...)
+	if execErr != nil {
+		return false, common.NewInternalServerError("CDREPO-DELCD-EXECSQL " + execErr.Error())
 	}
 
-	return nil
+	rowsAffected, rowsErr := result.RowsAffected()
+	if rowsErr != nil {
+		return false, common.NewInternalServerError("CDREPO-DELCD-ROWCOUNT " + rowsErr.Error())
+	}
+
+	return rowsAffected > 0, nil
 }
 
 func conceptDescriptionExistsInTx(ctx context.Context, tx *sql.Tx, id string) (bool, error) {
@@ -302,7 +317,15 @@ func (b *ConceptDescriptionBackend) GetConceptDescriptions(ctx context.Context, 
 	}
 
 	if cursor != nil && strings.TrimSpace(*cursor) != "" {
-		query = query.Where(goqu.C("id").Gte(strings.TrimSpace(*cursor)))
+		trimmedCursor := strings.TrimSpace(*cursor)
+		cursorExists, cursorErr := b.conceptDescriptionCursorExists(ctx, trimmedCursor)
+		if cursorErr != nil {
+			return nil, "", cursorErr
+		}
+		if !cursorExists {
+			return []types.IConceptDescription{}, "", nil
+		}
+		query = query.Where(goqu.C("id").Gte(trimmedCursor))
 	}
 
 	collector, collectorErr := grammar.NewResolvedFieldPathCollectorForRoot(grammar.CollectorRootCD)
@@ -341,7 +364,7 @@ func (b *ConceptDescriptionBackend) GetConceptDescriptions(ctx context.Context, 
 
 	for rows.Next() {
 		var identifier string
-		var idShortValue string
+		var idShortValue sql.NullString
 		var data string
 		if scanErr := rows.Scan(&identifier, &idShortValue, &data); scanErr != nil {
 			return nil, "", fmt.Errorf("CDREPO-GCDS-SCANROW failed to scan row: %w", scanErr)
@@ -371,6 +394,27 @@ func (b *ConceptDescriptionBackend) GetConceptDescriptions(ctx context.Context, 
 	}
 
 	return conceptDescriptions, nextCursor, nil
+}
+
+func (b *ConceptDescriptionBackend) conceptDescriptionCursorExists(ctx context.Context, cursor string) (bool, error) {
+	query, args, buildErr := goqu.
+		From("concept_description").
+		Select(goqu.V(1)).
+		Where(goqu.C("id").Eq(cursor)).
+		Limit(1).
+		ToSQL()
+	if buildErr != nil {
+		return false, common.NewInternalServerError("CDREPO-CHECKCURSOR-BUILDSQL " + buildErr.Error())
+	}
+
+	var one int
+	if queryErr := b.db.QueryRowContext(ctx, query, args...).Scan(&one); queryErr != nil {
+		if errors.Is(queryErr, sql.ErrNoRows) {
+			return false, nil
+		}
+		return false, common.NewInternalServerError("CDREPO-CHECKCURSOR-EXECSQL " + queryErr.Error())
+	}
+	return true, nil
 }
 
 // GetConceptDescriptionByID retrieves a concept description by its identifier.
@@ -424,64 +468,65 @@ func (b *ConceptDescriptionBackend) GetConceptDescriptionByID(ctx context.Contex
 	return cd, nil
 }
 
-// PutConceptDescription updates or replaces the concept description with the given identifier.
-func (b *ConceptDescriptionBackend) PutConceptDescription(ctx context.Context, id string, cd types.IConceptDescription) (err error) {
+// PutConceptDescription creates or replaces the concept description with the given identifier and reports whether an existing row was replaced.
+func (b *ConceptDescriptionBackend) PutConceptDescription(ctx context.Context, id string, cd types.IConceptDescription) (bool, error) {
 	tx, cleanup, err := common.StartTransaction(b.db)
 	if err != nil {
-		return common.NewInternalServerError("CDREPO-PUTCD-STARTTX " + err.Error())
+		return false, common.NewInternalServerError("CDREPO-PUTCD-STARTTX " + err.Error())
 	}
 	defer cleanup(&err)
 
 	existingExists, existsErr := conceptDescriptionExistsInTx(ctx, tx, id)
 	if existsErr != nil {
-		return existsErr
+		return false, existsErr
 	}
 
 	shouldEnforceFormula, enforceErr := auth.ShouldEnforceFormula(ctx)
 	if enforceErr != nil {
-		return common.NewInternalServerError("CDREPO-PUTCD-SHOULDENFORCE " + enforceErr.Error())
+		return false, common.NewInternalServerError("CDREPO-PUTCD-SHOULDENFORCE " + enforceErr.Error())
 	}
 	if shouldEnforceFormula {
 		ctx = auth.SelectPutFormulaByExistence(ctx, existingExists)
 		if existingExists {
 			_, visible, visErr := b.checkConceptDescriptionVisibilityInTx(ctx, tx, id)
 			if visErr != nil {
-				return visErr
+				return false, visErr
 			}
 			if !visible {
-				return common.NewErrDenied("CDREPO-PUTCD-ABACDENIED existing concept description is not accessible under ABAC constraints")
+				return false, common.NewErrDenied("CDREPO-PUTCD-ABACDENIED existing concept description is not accessible under ABAC constraints")
 			}
 		}
 	}
 
+	isUpdate := false
 	if existingExists {
-		if err = b.deleteConceptDescriptionInTx(ctx, tx, id); err != nil {
-			return err
+		if isUpdate, err = b.deleteConceptDescriptionInTx(ctx, tx, id); err != nil {
+			return false, err
 		}
 	}
 
 	if err = b.createConceptDescriptionInTx(ctx, tx, cd); err != nil {
-		return err
+		return false, err
 	}
 
 	if shouldEnforceFormula {
 		exists, visible, visErr := b.checkConceptDescriptionVisibilityInTx(ctx, tx, cd.ID())
 		if visErr != nil {
-			return visErr
+			return false, visErr
 		}
 		if !exists {
-			return common.NewInternalServerError("CDREPO-PUTCD-ABACCHECKMISSING written concept description not found before commit")
+			return false, common.NewInternalServerError("CDREPO-PUTCD-ABACCHECKMISSING written concept description not found before commit")
 		}
 		if !visible {
-			return common.NewErrDenied("CDREPO-PUTCD-ABACDENIED written concept description is not accessible under ABAC constraints")
+			return false, common.NewErrDenied("CDREPO-PUTCD-ABACDENIED written concept description is not accessible under ABAC constraints")
 		}
 	}
 
 	if err = tx.Commit(); err != nil {
-		return common.NewInternalServerError("CDREPO-PUTCD-COMMIT " + err.Error())
+		return false, common.NewInternalServerError("CDREPO-PUTCD-COMMIT " + err.Error())
 	}
 
-	return nil
+	return isUpdate, nil
 }
 
 // DeleteConceptDescription removes a concept description by its identifier.
@@ -506,8 +551,12 @@ func (b *ConceptDescriptionBackend) DeleteConceptDescription(ctx context.Context
 		}
 	}
 
-	if err = b.deleteConceptDescriptionInTx(ctx, tx, id); err != nil {
+	deleted, err := b.deleteConceptDescriptionInTx(ctx, tx, id)
+	if err != nil {
 		return err
+	}
+	if !deleted {
+		return common.NewErrNotFound("CDREPO-DELCD-NOTFOUND Concept description with the given ID does not exist")
 	}
 
 	if err = tx.Commit(); err != nil {

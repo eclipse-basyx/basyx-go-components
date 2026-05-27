@@ -37,11 +37,15 @@ import (
 )
 
 const composeFilePath = "./docker_compose/docker_compose.yml"
-const discoveryBaseURL = "http://127.0.0.1:5004"
+const discoveryBaseURL = "http://127.0.0.1:6004"
 const actionShellsByAssetLinkMissingBody = "CHECK_SHELLSBYASSETLINK_MISSING_BODY"
 const actionLookupShellsNilBody = "CHECK_LOOKUPSHELLS_NIL_BODY"
 
 func TestMain(m *testing.M) {
+	if os.Getenv("BASYX_EXTERNAL_COMPOSE") == "1" {
+		os.Exit(m.Run())
+	}
+
 	os.Exit(testenv.RunComposeTestMain(m, testenv.ComposeTestMainOptions{
 		ComposeFile:   composeFilePath,
 		HealthURL:     discoveryBaseURL + "/health",

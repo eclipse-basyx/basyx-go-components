@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/doug-martin/goqu/v9"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
 )
 
@@ -74,4 +75,101 @@ func containsIntArg(args []interface{}, want int) bool {
 		}
 	}
 	return false
+}
+
+func TestAddFilterQueryFromContext_ArrayEndedFragment_UsesInlinePredicate(t *testing.T) {
+	expr := mustParseLogicalExpression(t, `{"$or":[{"$eq":[{"$strVal":"BPN_A"},{"$field":"$aasdesc#specificAssetIds[].externalSubjectId.keys[].value"}]},{"$eq":[{"$strVal":"PUBLIC_READABLE"},{"$field":"$aasdesc#specificAssetIds[].externalSubjectId.keys[].value"}]}]}`)
+	match := true
+
+	qf := &QueryFilter{
+		Filters: FragmentFilters{
+			"$aasdesc#specificAssetIds[]": expr,
+		},
+		FilterMatch: FragmentMatchModes{
+			"$aasdesc#specificAssetIds[]": match,
+		},
+	}
+	ctx := context.WithValue(context.Background(), filterKey, qf)
+
+	collector, err := grammar.NewResolvedFieldPathCollectorForRoot(grammar.CollectorRootAASDesc)
+	if err != nil {
+		t.Fatalf("NewResolvedFieldPathCollectorForRoot returned error: %v", err)
+	}
+
+	d := goqu.Dialect("postgres")
+	ds := d.From(goqu.T(common.TblDescriptor).As("descriptor")).
+		InnerJoin(
+			goqu.T(common.TblAASDescriptor).As("aas_descriptor"),
+			goqu.On(goqu.I("aas_descriptor.descriptor_id").Eq(goqu.I("descriptor.id"))),
+		).
+		LeftJoin(
+			goqu.T(common.TblSpecificAssetID).As(common.AliasSpecificAssetID),
+			goqu.On(goqu.I("specific_asset_id.descriptor_id").Eq(goqu.I("descriptor.id"))),
+		).
+		LeftJoin(
+			goqu.T("specific_asset_id_external_subject_id_reference").As(common.AliasExternalSubjectReference),
+			goqu.On(goqu.I("external_subject_reference.id").Eq(goqu.I("specific_asset_id.id"))),
+		).
+		LeftJoin(
+			goqu.T("specific_asset_id_external_subject_id_reference_key").As(common.AliasExternalSubjectReferenceKey),
+			goqu.On(goqu.I("external_subject_reference_key.reference_id").Eq(goqu.I("external_subject_reference.id"))),
+		).
+		Select(goqu.V(1)).
+		Prepared(true)
+
+	filteredDS, err := AddFilterQueryFromContext(ctx, ds, "$aasdesc#specificAssetIds[]", collector)
+	if err != nil {
+		t.Fatalf("AddFilterQueryFromContext returned error: %v", err)
+	}
+
+	sqlStr, _, err := filteredDS.ToSQL()
+	if err != nil {
+		t.Fatalf("ToSQL returned error: %v", err)
+	}
+
+	if strings.Contains(sqlStr, "EXISTS (") {
+		t.Fatalf("did not expect EXISTS for array-ended fragment filter, got SQL: %s", sqlStr)
+	}
+	if !strings.Contains(sqlStr, `"external_subject_reference_key"."value"`) {
+		t.Fatalf("expected inline predicate on external_subject_reference_key.value, got SQL: %s", sqlStr)
+	}
+}
+
+func TestAddFilterQueryFromContext_ArrayEndedFragment_DefaultBehavior_UsesExists(t *testing.T) {
+	expr := mustParseLogicalExpression(t, `{"$or":[{"$eq":[{"$strVal":"BPN_A"},{"$field":"$aasdesc#specificAssetIds[].externalSubjectId.keys[].value"}]},{"$eq":[{"$strVal":"PUBLIC_READABLE"},{"$field":"$aasdesc#specificAssetIds[].externalSubjectId.keys[].value"}]}]}`)
+
+	qf := &QueryFilter{
+		Filters: FragmentFilters{
+			"$aasdesc#specificAssetIds[]": expr,
+		},
+	}
+	ctx := context.WithValue(context.Background(), filterKey, qf)
+
+	collector, err := grammar.NewResolvedFieldPathCollectorForRoot(grammar.CollectorRootAASDesc)
+	if err != nil {
+		t.Fatalf("NewResolvedFieldPathCollectorForRoot returned error: %v", err)
+	}
+
+	d := goqu.Dialect("postgres")
+	ds := d.From(goqu.T(common.TblDescriptor).As("descriptor")).
+		InnerJoin(
+			goqu.T(common.TblAASDescriptor).As("aas_descriptor"),
+			goqu.On(goqu.I("aas_descriptor.descriptor_id").Eq(goqu.I("descriptor.id"))),
+		).
+		Select(goqu.V(1)).
+		Prepared(true)
+
+	filteredDS, err := AddFilterQueryFromContext(ctx, ds, "$aasdesc#specificAssetIds[]", collector)
+	if err != nil {
+		t.Fatalf("AddFilterQueryFromContext returned error: %v", err)
+	}
+
+	sqlStr, _, err := filteredDS.ToSQL()
+	if err != nil {
+		t.Fatalf("ToSQL returned error: %v", err)
+	}
+
+	if !strings.Contains(sqlStr, "EXISTS (") {
+		t.Fatalf("expected EXISTS for default fragment behavior, got SQL: %s", sqlStr)
+	}
 }

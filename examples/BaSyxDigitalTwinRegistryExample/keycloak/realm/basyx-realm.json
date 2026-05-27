@@ -413,7 +413,7 @@
     "emailVerified" : false,
     "attributes" : {
       "clear" : [ "20" ],
-      "role" : [ "admin" ]
+      "role" : [ "view_digital_twin, add_digital_twin, update_digital_twin, delete_digital_twin" ]
     },
     "createdTimestamp" : 1763553349664,
     "enabled" : true,

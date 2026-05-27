@@ -4,8 +4,18 @@
       {
         "ACL": {
           "ACCESS": "ALLOW",
+          "ATTRIBUTES": [
+            {
+              "GLOBAL": "ANONYMOUS"
+            }
+          ],
           "RIGHTS": ["READ","UPDATE"]
         },
+        "OBJECTS": [
+          {
+            "ROUTE": "/*"
+          }
+        ],
         "FORMULA": {
           "$and": [
             {"$boolean": true},

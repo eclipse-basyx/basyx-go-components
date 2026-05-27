@@ -32,10 +32,10 @@ import (
 )
 
 var (
-	specificAssetIDAlias                  = goqu.T(common.TblSpecificAssetID).As(common.AliasSpecificAssetID)
-	aasDescriptorEndpointAlias            = goqu.T(common.TblAASDescriptorEndpoint).As(common.AliasAASDescriptorEndpoint)
-	submodelDescriptorAlias               = goqu.T(common.TblSubmodelDescriptor).As(common.AliasSubmodelDescriptor)
-	submodelDescriptorEndpointAlias       = goqu.T(common.TblAASDescriptorEndpoint).As(common.AliasSubmodelDescriptorEndpoint)
-	infrastructureDescriptorAlias         = goqu.T(common.TblInfrastructureDescriptor).As(common.AliasInfrastructureDescriptor)
-	infrastructureDescriptorEndpointAlias = goqu.T(common.TblAASDescriptorEndpoint).As(common.AliasInfrastructureDescriptorEndpoint)
+	specificAssetIDAlias            = goqu.T(common.TblSpecificAssetID).As(common.AliasSpecificAssetID)
+	aasDescriptorEndpointAlias      = goqu.T(common.TblAASDescriptorEndpoint).As(common.AliasAASDescriptorEndpoint)
+	submodelDescriptorAlias         = goqu.T(common.TblSubmodelDescriptor).As(common.AliasSubmodelDescriptor)
+	submodelDescriptorEndpointAlias = goqu.T(common.TblAASDescriptorEndpoint).As(common.AliasSubmodelDescriptorEndpoint)
+	companyDescriptorAlias          = goqu.T(common.TblCompanyDescriptor).As(common.AliasCompanyDescriptor)
+	companyDescriptorEndpointAlias  = goqu.T(common.TblAASDescriptorEndpoint).As(common.AliasCompanyDescriptorEndpoint)
 )

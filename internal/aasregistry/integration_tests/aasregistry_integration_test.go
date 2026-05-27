@@ -33,6 +33,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/testenv"
@@ -67,21 +68,38 @@ func deleteAllAASDescriptors(t *testing.T, runner *testenv.JSONSuiteRunner, step
 }
 
 func TestIntegration(t *testing.T) {
+	isExternalCompose := os.Getenv("BASYX_EXTERNAL_COMPOSE") == "1"
+	checkDBOptions := testenv.CheckDBIsEmptyOptions{
+		Driver: "postgres",
+		DSN:    "host=127.0.0.1 port=6432 user=admin password=admin123 dbname=basyxTestDB sslmode=disable",
+	}
+	if isExternalCompose {
+		checkDBOptions.ExcludedTables = []string{"aas_identifier"}
+	}
+
 	testenv.RunJSONSuite(t, testenv.JSONSuiteOptions{
 		ShouldCompareResponse: testenv.CompareMethods(http.MethodGet),
+		ShouldSkipStep: func(step testenv.JSONSuiteStep) bool {
+			if !isExternalCompose {
+				return false
+			}
+
+			return strings.Contains(step.Context, "Empty Keys in Reference")
+		},
 		ActionHandlers: map[string]testenv.JSONStepAction{
 			"DELETE_ALL_AAS_DESCRIPTORS": func(t *testing.T, runner *testenv.JSONSuiteRunner, _ testenv.JSONSuiteStep, stepNumber int) {
 				deleteAllAASDescriptors(t, runner, stepNumber)
 			},
-			testenv.ActionCheckDBIsEmpty: testenv.NewCheckDBIsEmptyAction(testenv.CheckDBIsEmptyOptions{
-				Driver: "postgres",
-				DSN:    "host=127.0.0.1 port=6432 user=admin password=admin123 dbname=basyxTestDB sslmode=disable",
-			}),
+			testenv.ActionCheckDBIsEmpty: testenv.NewCheckDBIsEmptyAction(checkDBOptions),
 		},
 	})
 }
 
 func TestMain(m *testing.M) {
+	if os.Getenv("BASYX_EXTERNAL_COMPOSE") == "1" {
+		os.Exit(m.Run())
+	}
+
 	os.Exit(testenv.RunComposeTestMain(m, testenv.ComposeTestMainOptions{
 		ComposeFile: "docker_compose/docker_compose.yml",
 		HealthURL:   "http://localhost:6004/health",

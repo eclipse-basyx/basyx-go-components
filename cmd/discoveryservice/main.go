@@ -34,9 +34,9 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"os"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
+	commonmodel "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 	"github.com/eclipse-basyx/basyx-go-components/internal/discoveryservice/api"
 	persistencepostgresql "github.com/eclipse-basyx/basyx-go-components/internal/discoveryservice/persistence"
@@ -47,12 +47,15 @@ import (
 //go:embed openapi.yaml
 var openapiSpec embed.FS
 
-func runServer(ctx context.Context, configPath string, databaseSchema string) error {
+func runServer(ctx context.Context, configPath string) error {
 	log.Default().Println("Loading Discovery Service...")
 	log.Default().Println("Config Path:", configPath)
 
-	cfg, err := common.LoadConfig(configPath)
+	cfg, err := common.LoadConfig(configPath, common.NORMAL)
 	if err != nil {
+		return err
+	}
+	if err := commonmodel.SetVerificationMode(cfg.Server.StrictVerification); err != nil {
 		return err
 	}
 
@@ -63,6 +66,9 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 	r.Use(common.ConfigMiddleware(cfg))
 
 	common.AddCors(r, cfg)
+	if cfg.Server.VerificationEndpointAvailable {
+		common.AddVerificationEndpoint(r, cfg)
+	}
 
 	// --- Health Endpoint (public) ---
 	common.AddHealthEndpoint(r, cfg)
@@ -73,13 +79,11 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 	}
 
 	// === Database ===
-	dsn := fmt.Sprintf("postgres://%s:%s@%s:%d/%s?sslmode=disable",
-		cfg.Postgres.User,
-		cfg.Postgres.Password,
-		cfg.Postgres.Host,
-		cfg.Postgres.Port,
-		cfg.Postgres.DBName,
-	)
+	dsn := common.BuildPostgresDSN(cfg.Postgres)
+
+	if err := common.ValidateSchemaVersionByDSN(dsn, common.CURRENT_DATABASE_VERSION); err != nil {
+		return err
+	}
 
 	log.Printf("🗄️  Connecting to Postgres with DSN: postgres://%s:****@%s:%d/%s?sslmode=disable",
 		cfg.Postgres.User, cfg.Postgres.Host, cfg.Postgres.Port, cfg.Postgres.DBName)
@@ -90,7 +94,6 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 		int32(cfg.Postgres.MaxOpenConnections),
 		cfg.Postgres.MaxIdleConnections,
 		cfg.Postgres.ConnMaxLifetimeMinutes,
-		databaseSchema,
 	)
 	if err != nil {
 		log.Printf("❌ DB connect failed: %v", err)
@@ -109,7 +112,7 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 
 	// === Protected API Subrouter ===
 	apiRouter := chi.NewRouter()
-	common.AddDefaultRouterErrorHandlers(apiRouter, "DiscoveryService")
+	common.ConfigureAPIRouter(apiRouter, "DiscoveryService")
 
 	// Apply OIDC + ABAC once for all discovery endpoints
 	if err := auth.SetupSecurity(ctx, cfg, apiRouter); err != nil {
@@ -149,19 +152,10 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 func main() {
 	ctx := context.Background()
 	configPath := ""
-	databaseSchema := ""
 	flag.StringVar(&configPath, "config", "", "Path to config file")
-	flag.StringVar(&databaseSchema, "databaseSchema", "", "Path to Database Schema SQL file (overrides default)")
 	flag.Parse()
 
-	if databaseSchema != "" {
-		if _, fileError := os.ReadFile(databaseSchema); fileError != nil {
-			_, _ = fmt.Println("The specified database schema path is invalid or the file was not found.")
-			os.Exit(1)
-		}
-	}
-
-	if err := runServer(ctx, configPath, databaseSchema); err != nil {
+	if err := runServer(ctx, configPath); err != nil {
 		log.Fatalf("Server error: %v", err)
 	}
 }

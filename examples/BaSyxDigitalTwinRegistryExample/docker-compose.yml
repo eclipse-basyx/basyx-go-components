@@ -6,8 +6,6 @@ services:
       POSTGRES_USER: admin
       POSTGRES_PASSWORD: admin123
       POSTGRES_DB: basyxTestDB
-    ports:
-      - "5432:5432"
     command: ["postgres", "-c", "listen_addresses=*"]
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U admin -d basyxTestDB"]
@@ -18,6 +16,7 @@ services:
   digitaltwinregistry:
     container_name: digitaltwinregistry
     image: eclipsebasyx/digitaltwinregistry-go:SNAPSHOT
+    pull_policy: always
     environment:
       - SERVER_PORT=5004
       - SERVER_CONTEXTPATH=/api/v3
@@ -32,13 +31,14 @@ services:
       - ABAC_ENABLED=true
       - GENERAL_ENABLEIMPLICITCASTS=false
       - GENERAL_ENABLEDESCRIPTORDEBUG=false
+      - GENERAL_ENABLECUSTOMMIDDLEWAREHEADERINJECTION=true
       - ABAC_MODELPATH=/security_env/access-rules.json
       - OIDC_TRUSTLISTPATH=/security_env/trustlist.json
     ports:
       - "5004:5004"
     depends_on:
-      db:
-        condition: service_healthy
+      basyx_configuration:
+        condition: service_completed_successfully
       keycloak-healthcheck:
         condition: service_completed_successfully
     volumes:
@@ -84,3 +84,19 @@ services:
         echo 'Keycloak is ready!'"
     depends_on:
       - keycloak
+
+  basyx_configuration:
+    container_name: basyx_configuration
+    image: eclipsebasyx/basyxconfigurationservice-go:SNAPSHOT
+    environment:
+      - POSTGRES_HOST=db
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=admin
+      - POSTGRES_PASSWORD=admin123
+      - POSTGRES_DBNAME=basyxTestDB
+      - POSTGRES_MAXOPENCONNECTIONS=500
+      - POSTGRES_MAXIDLECONNECTIONS=500
+      - POSTGRES_CONNMAXLIFETIMEMINUTES=5
+    depends_on:
+      db:
+        condition: service_healthy

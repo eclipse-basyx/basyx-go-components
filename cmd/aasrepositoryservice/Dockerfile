@@ -1,5 +1,5 @@
 # Stage 1: Build the application
-FROM golang:1.25-alpine AS builder
+FROM golang:1.25.9-alpine AS builder
 
 # Version argument for build-time injection
 ARG VERSION=dev
@@ -35,7 +35,7 @@ WORKDIR /app
 # Copy runtime artifacts
 COPY --from=builder /app/aasrepositoryservice /app/aasrepositoryservice
 COPY --from=builder /app/cmd/aasrepositoryservice/config.yaml /config/config.yaml
-COPY --from=builder /app/basyxschema.sql /app/basyxschema.sql
+
 COPY --from=builder /app/healthprobe /bin/healthprobe
 COPY --from=builder /app/healthprobe /bin/wget
 
@@ -47,7 +47,7 @@ EXPOSE ${SERVER_PORT}
 
 # Command to run the application
 # Use environment variables or mount a custom config file to /config/config.yaml
-CMD ["/app/aasrepositoryservice", "-config", "/config/config.yaml", "-databaseSchema", "/app/basyxschema.sql"]
+CMD ["/app/aasrepositoryservice", "-config", "/config/config.yaml"]
 
 # Health check runs via healthprobe
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \

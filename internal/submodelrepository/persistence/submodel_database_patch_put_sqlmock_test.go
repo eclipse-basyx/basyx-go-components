@@ -31,7 +31,7 @@ import (
 	"testing"
 
 	sqlmock "github.com/DATA-DOG/go-sqlmock"
-	"github.com/FriedJannik/aas-go-sdk/types"
+	"github.com/aas-core-works/aas-core3.1-golang/types"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/stretchr/testify/require"
 )

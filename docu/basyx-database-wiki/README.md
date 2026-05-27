@@ -30,7 +30,7 @@ graph TB
     subgraph REGISTRY["<b style='color: black;'>REGISTRY LAYER</b>"]
         AASD["AAS<br/>Descriptor"]
         SMD["Submodel<br/>Descriptor"]
-        ROI["Registry of<br/>Infrastructures"]
+        ROI["Company<br/>Lookup"]
     end
     
     subgraph REPOSITORY["<b style='color: black'>REPOSITORY LAYER</b>"]

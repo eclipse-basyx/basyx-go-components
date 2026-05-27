@@ -1,0 +1,34 @@
+server:
+  port: 5004
+  contextPath: ""
+  host: 0.0.0.0
+  strictVerification: permissive  # Values: off|permissive|strict (default: permissive)
+  verificationEndpointAvailable: true
+
+postgres:
+  host: localhost
+  port: 5432
+  user: admin
+  password: admin123
+  dbname: basyxTestDB
+  maxOpenConnections: 500
+  maxIdleConnections: 500
+  connMaxLifetimeMinutes: 5
+
+oidc:
+  trustlistPath: "config/trustlist.json"
+
+abac:
+  enabled: false
+  modelPath: "config/access_rules/access-rules.json"
+
+general:
+  enableImplicitCasts: true
+  enableDescriptorDebug: false
+  discoveryIntegration: false
+  supportsSingularSupplementalSemanticId: false
+  aasRegistryIntegration: false
+  submodelRegistryIntegration: false
+  externalUrl: ""
+  uploadMaxSizeBytes: 134217728
+  aasPreconfigPaths: []

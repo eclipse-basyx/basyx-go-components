@@ -34,11 +34,12 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"os"
+	"time"
 
 	registryapiinternal "github.com/eclipse-basyx/basyx-go-components/internal/aasregistry/api"
 	registrydb "github.com/eclipse-basyx/basyx-go-components/internal/aasregistry/persistence"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/asyncbulk"
 	commonmodel "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 	"github.com/eclipse-basyx/basyx-go-components/internal/digitaltwinregistry"
@@ -52,15 +53,17 @@ import (
 //go:embed openapi.yaml
 var openapiSpec embed.FS
 
-func runServer(ctx context.Context, configPath string, databaseSchema string) error {
+func runServer(ctx context.Context, configPath string) error {
 	log.Default().Println("Loading Digital Twin Registry Service...")
 	log.Default().Println("Config Path:", configPath)
 
-	cfg, err := common.LoadConfig(configPath)
+	cfg, err := common.LoadConfig(configPath, common.NORMAL)
 	if err != nil {
 		return err
 	}
-	commonmodel.SetStrictVerificationEnabled(cfg.Server.StrictVerification)
+	if err := commonmodel.SetVerificationMode(cfg.Server.StrictVerification); err != nil {
+		return err
+	}
 	commonmodel.SetSupportsSingularSupplementalSemanticId(cfg.General.SupportsSingularSupplementalSemanticId)
 
 	// Digital Twin Registry always enables discovery integration.
@@ -71,6 +74,9 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 	r.Use(common.ConfigMiddleware(cfg))
 	common.AddCors(r, cfg)
 	common.AddHealthEndpoint(r, cfg)
+	if cfg.Server.VerificationEndpointAvailable {
+		common.AddVerificationEndpoint(r, cfg)
+	}
 
 	// Add Swagger UI
 	if err := common.AddSwaggerUIFromFS(r, openapiSpec, "openapi.yaml", "Digital Twin Registry API", "/swagger", "/api-docs/openapi.yaml", cfg); err != nil {
@@ -80,38 +86,37 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 	base := common.NormalizeBasePath(cfg.Server.ContextPath)
 
 	// === Database ===
-	dsn := fmt.Sprintf("postgres://%s:%s@%s:%d/%s?sslmode=disable",
-		cfg.Postgres.User,
-		cfg.Postgres.Password,
-		cfg.Postgres.Host,
-		cfg.Postgres.Port,
-		cfg.Postgres.DBName,
-	)
+	dsn := common.BuildPostgresDSN(cfg.Postgres)
+
+	if err := common.ValidateSchemaVersionByDSN(dsn, common.CURRENT_DATABASE_VERSION); err != nil {
+		return err
+	}
+
 	log.Printf("🗄️  Connecting to Postgres with DSN: postgres://%s:****@%s:%d/%s?sslmode=disable",
 		cfg.Postgres.User, cfg.Postgres.Host, cfg.Postgres.Port, cfg.Postgres.DBName)
 
-	registryDatabase, err := registrydb.NewPostgreSQLAASRegistryDatabase(
-		dsn,
-		//nolint:gosec // configured value is bounded by deployment configuration
-		int32(cfg.Postgres.MaxOpenConnections),
-		cfg.Postgres.MaxIdleConnections,
-		cfg.Postgres.ConnMaxLifetimeMinutes,
-		cfg.Server.CacheEnabled,
-		databaseSchema,
-	)
+	sharedDB, err := common.NewDatabaseConnection(dsn)
+	if err != nil {
+		log.Printf("Shared DB connect failed: %v", err)
+		return err
+	}
+	if cfg.Postgres.MaxOpenConnections > 0 {
+		sharedDB.SetMaxOpenConns(cfg.Postgres.MaxOpenConnections)
+	}
+	if cfg.Postgres.MaxIdleConnections > 0 {
+		sharedDB.SetMaxIdleConns(cfg.Postgres.MaxIdleConnections)
+	}
+	if cfg.Postgres.ConnMaxLifetimeMinutes > 0 {
+		sharedDB.SetConnMaxLifetime(time.Duration(cfg.Postgres.ConnMaxLifetimeMinutes) * time.Minute)
+	}
+
+	registryDatabase, err := registrydb.NewPostgreSQLAASRegistryDatabaseFromDB(sharedDB, cfg.Server.CacheEnabled)
 	if err != nil {
 		log.Printf("❌ Registry DB connect failed: %v", err)
 		return err
 	}
 
-	discoveryDatabase, err := discoverydb.NewPostgreSQLDiscoveryBackend(
-		dsn,
-		//nolint:gosec // configured value is bounded by deployment configuration
-		int32(cfg.Postgres.MaxOpenConnections),
-		cfg.Postgres.MaxIdleConnections,
-		cfg.Postgres.ConnMaxLifetimeMinutes,
-		databaseSchema,
-	)
+	discoveryDatabase, err := discoverydb.NewPostgreSQLDiscoveryBackendFromDB(sharedDB)
 	if err != nil {
 		log.Printf("❌ Discovery DB connect failed: %v", err)
 		return err
@@ -129,21 +134,33 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 	)
 
 	registryCtrl := registryapi.NewAssetAdministrationShellRegistryAPIAPIController(registrySvc, cfg.Server.ContextPath)
+	bulkManager := asyncbulk.NewManager("DTR-BULK", 0)
+	bulkSvc := registryapiinternal.NewBulkService(registrySvc, bulkManager)
+	bulkHandler := registryapiinternal.NewBulkHTTPHandler(bulkSvc)
 	discoveryCtrl := openapi.NewAssetAdministrationShellBasicDiscoveryAPIAPIController(discoverySvc)
 	descriptionSvc := digitaltwinregistry.NewDescriptionService()
 	descriptionCtrl := openapi.NewDescriptionAPIAPIController(descriptionSvc)
 
 	apiRouter := chi.NewRouter()
-	common.AddDefaultRouterErrorHandlers(apiRouter, "DigitalTwinRegistryService")
-	if err := auth.SetupSecurityWithClaimsMiddleware(ctx, cfg, apiRouter, auth.EdcBpnHeaderMiddleware); err != nil {
+	common.ConfigureAPIRouter(apiRouter, "DigitalTwinRegistryService")
+	var claimsMiddleware []func(http.Handler) http.Handler
+	if cfg.General.EnableCustomMiddlewareHeaderInjection {
+		claimsMiddleware = append(claimsMiddleware, auth.EdcBpnHeaderMiddleware)
+	}
+
+	if err := auth.SetupSecurityWithClaimsMiddleware(ctx, cfg, apiRouter, claimsMiddleware...); err != nil {
 		return err
 	}
 
 	for _, rt := range registryCtrl.Routes() {
+		if rt.Method == "GET" && rt.Pattern == "/shell-descriptors" {
+			apiRouter.With(digitaltwinregistry.CreatedAfterMiddleware).Method(rt.Method, rt.Pattern, rt.HandlerFunc)
+			continue
+		}
 		apiRouter.Method(rt.Method, rt.Pattern, rt.HandlerFunc)
 	}
 	for _, rt := range discoveryCtrl.Routes() {
-		if rt.Method == "POST" && rt.Pattern == "/lookup/shellsByAssetLink" {
+		if (rt.Method == "POST" && rt.Pattern == "/lookup/shellsByAssetLink") || (rt.Method == "GET" && rt.Pattern == "/lookup/shells") {
 			apiRouter.With(digitaltwinregistry.CreatedAfterMiddleware).Method(rt.Method, rt.Pattern, rt.HandlerFunc)
 			continue
 		}
@@ -152,6 +169,7 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 	for _, rt := range descriptionCtrl.Routes() {
 		apiRouter.Method(rt.Method, rt.Pattern, rt.HandlerFunc)
 	}
+	bulkHandler.RegisterRoutes(apiRouter, true)
 
 	r.Mount(base, apiRouter)
 
@@ -173,19 +191,10 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 func main() {
 	ctx := context.Background()
 	configPath := ""
-	databaseSchema := ""
 	flag.StringVar(&configPath, "config", "", "Path to config file")
-	flag.StringVar(&databaseSchema, "databaseSchema", "", "Path to Database Schema SQL file (overrides default)")
 	flag.Parse()
 
-	if databaseSchema != "" {
-		if _, fileError := os.ReadFile(databaseSchema); fileError != nil {
-			_, _ = fmt.Println("The specified database schema path is invalid or the file was not found.")
-			os.Exit(1)
-		}
-	}
-
-	if err := runServer(ctx, configPath, databaseSchema); err != nil {
+	if err := runServer(ctx, configPath); err != nil {
 		log.Fatalf("Server error: %v", err)
 	}
 }

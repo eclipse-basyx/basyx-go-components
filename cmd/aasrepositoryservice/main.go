@@ -8,25 +8,45 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"os"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/eclipse-basyx/basyx-go-components/internal/aasenvironment"
+	aasregistrydb "github.com/eclipse-basyx/basyx-go-components/internal/aasregistry/persistence"
 	"github.com/eclipse-basyx/basyx-go-components/internal/aasrepository/api"
 	persistencepostgresql "github.com/eclipse-basyx/basyx-go-components/internal/aasrepository/persistence"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
+	commonmodel "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
+	submodelrepositorydb "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence"
 	openapi "github.com/eclipse-basyx/basyx-go-components/pkg/aasrepositoryapi/go"
 )
 
 //go:embed openapi.yaml
 var openapiSpec embed.FS
 
-func runServer(ctx context.Context, configPath string, databaseSchema string) error {
+func runServer(ctx context.Context, configPath string) error {
 	log.Default().Println("Loading Asset Administration Shell Repository Service...")
 	log.Default().Println("Config Path:", configPath)
 
-	cfg, err := common.LoadConfig(configPath)
+	cfg, err := common.LoadConfig(configPath, common.NORMAL)
+	if err != nil {
+		return err
+	}
+
+	if err := commonmodel.SetVerificationMode(cfg.Server.StrictVerification); err != nil {
+		return err
+	}
+
+	if err = aasenvironment.ValidateStandaloneAASRepositoryRegistrySyncConfig(cfg); err != nil {
+		return err
+	}
+	registrySyncConfig, err := aasenvironment.NewRegistrySyncConfig(
+		cfg.General.AASRegistryIntegration,
+		cfg.General.SubmodelRegistryIntegration,
+		cfg.General.ExternalURL,
+	)
 	if err != nil {
 		return err
 	}
@@ -38,35 +58,68 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 
 	common.AddHealthEndpoint(r, cfg)
 
+	if cfg.Server.VerificationEndpointAvailable {
+		common.AddVerificationEndpoint(r, cfg)
+	}
+
 	if err := common.AddSwaggerUIFromFS(r, openapiSpec, "openapi.yaml", "Asset Administration Shell Repository API", "/swagger", "/api-docs/openapi.yaml", cfg); err != nil {
 		log.Printf("Warning: failed to load OpenAPI spec for Swagger UI: %v", err)
 	}
 
-	dsn := fmt.Sprintf("postgres://%s:%s@%s:%d/%s?sslmode=disable",
-		cfg.Postgres.User,
-		cfg.Postgres.Password,
-		cfg.Postgres.Host,
-		cfg.Postgres.Port,
-		cfg.Postgres.DBName,
-	)
+	dsn := common.BuildPostgresDSN(cfg.Postgres)
+
+	if err := common.ValidateSchemaVersionByDSN(dsn, common.CURRENT_DATABASE_VERSION); err != nil {
+		return err
+	}
+
 	log.Printf("🗄️  Connecting to Postgres with DSN: postgres://%s:****@%s:%d/%s?sslmode=disable",
 		cfg.Postgres.User, cfg.Postgres.Host, cfg.Postgres.Port, cfg.Postgres.DBName)
 
-	aasDatabase, err := persistencepostgresql.NewAssetAdministrationShellDatabase(
-		dsn,
-		cfg.Postgres.MaxOpenConnections,
-		cfg.Postgres.MaxIdleConnections,
-		cfg.Postgres.ConnMaxLifetimeMinutes,
-		databaseSchema,
-		cfg.Server.StrictVerification,
-	)
+	sharedDB, err := common.NewDatabaseConnection(dsn)
 	if err != nil {
 		log.Printf("❌ DB connect failed: %v", err)
 		return err
 	}
+	if cfg.Postgres.MaxOpenConnections > 0 {
+		sharedDB.SetMaxOpenConns(cfg.Postgres.MaxOpenConnections)
+	}
+	if cfg.Postgres.MaxIdleConnections > 0 {
+		sharedDB.SetMaxIdleConns(cfg.Postgres.MaxIdleConnections)
+	}
+	if cfg.Postgres.ConnMaxLifetimeMinutes > 0 {
+		sharedDB.SetConnMaxLifetime(time.Duration(cfg.Postgres.ConnMaxLifetimeMinutes) * time.Minute)
+	}
+
+	aasDatabase, err := persistencepostgresql.NewAssetAdministrationShellDatabaseFromDB(sharedDB, cfg.Server.StrictVerification)
+	if err != nil {
+		log.Printf("❌ AAS DB init failed: %v", err)
+		return err
+	}
+
+	aasRegistryPersistence, err := aasregistrydb.NewPostgreSQLAASRegistryDatabaseFromDB(sharedDB, cfg.Server.CacheEnabled)
+	if err != nil {
+		log.Printf("AAS Registry DB init failed: %v", err)
+		return err
+	}
+
+	submodelDatabase, err := submodelrepositorydb.NewSubmodelDatabaseFromDB(sharedDB, nil, cfg.Server.StrictVerification)
+	if err != nil {
+		log.Printf("❌ Submodel DB connect failed: %v", err)
+		return err
+	}
 	log.Println("✅ Postgres connection established")
 
-	aasSvc := api.NewAssetAdministrationShellRepositoryAPIAPIService(*aasDatabase)
+	persistence := &aasenvironment.Persistence{
+		DB:                 sharedDB,
+		AASRegistry:        aasRegistryPersistence,
+		AASRepository:      aasDatabase,
+		SubmodelRepository: submodelDatabase,
+	}
+	aasSvc := aasenvironment.NewCustomAASRepositoryService(
+		api.NewAssetAdministrationShellRepositoryAPIAPIService(aasDatabase, submodelDatabase),
+		persistence,
+		registrySyncConfig,
+	)
 	aasCtrl := openapi.NewAssetAdministrationShellRepositoryAPIAPIController(aasSvc, "", cfg.Server.StrictVerification)
 
 	descSvc := openapi.NewDescriptionAPIAPIService()
@@ -75,7 +128,7 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 	base := common.NormalizeBasePath(cfg.Server.ContextPath)
 
 	apiRouter := chi.NewRouter()
-	common.AddDefaultRouterErrorHandlers(apiRouter, "AASRepositoryService")
+	common.ConfigureAPIRouter(apiRouter, "AASRepositoryService")
 
 	if err := auth.SetupSecurity(ctx, cfg, apiRouter); err != nil {
 		return err
@@ -110,20 +163,10 @@ func main() {
 	ctx := context.Background()
 	// load config path from flag
 	configPath := ""
-	databaseSchema := ""
 	flag.StringVar(&configPath, "config", "", "Path to config file")
-	flag.StringVar(&databaseSchema, "databaseSchema", "", "Path to Database Schema SQL file (overrides default)")
 	flag.Parse()
 
-	if databaseSchema != "" {
-		_, fileError := os.ReadFile(databaseSchema)
-		if fileError != nil {
-			_, _ = fmt.Println("The specified database schema path is invalid or the file was not found.")
-			os.Exit(1)
-		}
-	}
-
-	if err := runServer(ctx, configPath, databaseSchema); err != nil {
+	if err := runServer(ctx, configPath); err != nil {
 		log.Fatalf("Server error: %v", err)
 	}
 }

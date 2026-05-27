@@ -32,7 +32,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/FriedJannik/aas-go-sdk/types"
+	"github.com/aas-core-works/aas-core3.1-golang/types"
 	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
@@ -101,6 +101,7 @@ func ReadSpecificAssetIDsByAASRef(
 
 	d := goqu.Dialect(common.Dialect)
 	tAASIdentifier := goqu.T(common.TblAASIdentifier)
+	tAASDescriptor := goqu.T(common.TblAASDescriptor)
 	externalSubjectReferenceAlias := goqu.T("specific_asset_id_external_subject_id_reference").As(common.AliasExternalSubjectReference)
 	specificAssetIDPayloadAlias := goqu.T(common.TblSpecificAssetIDPayload).As("specific_asset_id_payload")
 	collector, err := grammar.NewResolvedFieldPathCollectorForRoot(grammar.CollectorRootBD)
@@ -116,6 +117,10 @@ func ReadSpecificAssetIDsByAASRef(
 		InnerJoin(
 			tAASIdentifier,
 			goqu.On(common.TSpecificAssetID.Col(common.ColAASRef).Eq(tAASIdentifier.Col(common.ColID))),
+		).
+		LeftJoin(
+			tAASDescriptor,
+			goqu.On(tAASDescriptor.Col(common.ColAASID).Eq(tAASIdentifier.Col("aasid"))),
 		).
 		LeftJoin(
 			externalSubjectReferenceAlias,

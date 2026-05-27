@@ -1,5 +1,5 @@
 # Stage 1: Build the application
-FROM golang:1.25-alpine AS builder
+FROM golang:1.25.9-alpine AS builder
 
 # Version argument for build-time injection
 ARG VERSION=dev
@@ -30,7 +30,7 @@ WORKDIR /app
 # Copy runtime artifacts
 COPY --from=builder /app/discoveryservice /app/discoveryservice
 COPY --from=builder /app/cmd/discoveryservice/config.yaml /config/config.yaml
-COPY --from=builder /app/basyxschema.sql /app/basyxschema.sql
+
 COPY --from=builder /app/healthprobe /bin/healthprobe
 COPY --from=builder /app/healthprobe /bin/wget
 
@@ -40,7 +40,7 @@ ENV SERVER_PORT=5004
 EXPOSE ${SERVER_PORT}
 
 # Start service with config
-CMD ["/app/discoveryservice", "-config", "/config/config.yaml", "-databaseSchema", "/app/basyxschema.sql"]
+CMD ["/app/discoveryservice", "-config", "/config/config.yaml"]
 
 # Health check runs via healthprobe
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \

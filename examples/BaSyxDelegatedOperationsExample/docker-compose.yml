@@ -2,6 +2,7 @@ services:
   aas-ui:
     container_name: delegated-operations-aas-web-ui
     image: eclipsebasyx/aas-gui:SNAPSHOT
+    pull_policy: always
     ports:
       - "3000:3000"
     environment:
@@ -17,6 +18,8 @@ services:
   aas_repository:
     container_name: delegated-operations-aas-repository
     image: eclipsebasyx/aasrepository-go:SNAPSHOT
+    pull_policy: always
+    command: ["/app/aasrepositoryservice"]
     environment:
       - SERVER_PORT=5004
       - CORS_ALLOWEDORIGINS=*
@@ -35,8 +38,8 @@ services:
     ports:
       - "8090:5004"
     depends_on:
-      db:
-        condition: service_healthy
+      basyx_configuration:
+        condition: service_completed_successfully
     restart: unless-stopped
 
   submodel_repository:
@@ -44,6 +47,7 @@ services:
     build:
       context: ../..
       dockerfile: ./cmd/submodelrepositoryservice/Dockerfile
+    command: ["/app/submodelrepositoryservice"]
     environment:
       - SERVER_PORT=5004
       - CORS_ALLOWEDORIGINS=*
@@ -65,8 +69,8 @@ services:
     ports:
       - "8091:5004"
     depends_on:
-      db:
-        condition: service_healthy
+      basyx_configuration:
+        condition: service_completed_successfully
     restart: unless-stopped
 
   delegated-operation-service:
@@ -107,3 +111,19 @@ services:
       timeout: 5s
       retries: 5
     restart: unless-stopped
+
+  basyx_configuration:
+    container_name: basyx_configuration
+    image: eclipsebasyx/basyxconfigurationservice-go:SNAPSHOT
+    environment:
+      - POSTGRES_HOST=db
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=admin
+      - POSTGRES_PASSWORD=admin123
+      - POSTGRES_DBNAME=basyxDelegationDB
+      - POSTGRES_MAXOPENCONNECTIONS=500
+      - POSTGRES_MAXIDLECONNECTIONS=500
+      - POSTGRES_CONNMAXLIFETIMEMINUTES=5
+    depends_on:
+      db:
+        condition: service_healthy

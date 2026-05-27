@@ -90,6 +90,19 @@ var descriptorRouteMappings = []descriptorRouteMapping{
 		filterField: "$smdesc#id",
 		hasWildcard: true,
 	},
+	// bulk api
+	{
+		scope:       "$aasdesc",
+		route:       "/bulk/shell-descriptors",
+		filterField: "$aasdesc#id",
+		hasWildcard: false,
+	},
+	{
+		scope:       "$smdesc",
+		route:       "/bulk/submodel-descriptors",
+		filterField: "$smdesc#id",
+		hasWildcard: false,
+	},
 }
 
 var identifiableRouteMappings = []identifiableRouteMapping{
