@@ -67,7 +67,7 @@ func requestJSONWithHeaders(method string, endpoint string, payload any) (int, [
 	}
 
 	client := &http.Client{Timeout: 10 * time.Second}
-	// #nosec G107 -- integration tests intentionally issue HTTP requests against local test service endpoints.
+	// #nosec G704 -- integration tests intentionally issue HTTP requests against local test service endpoints.
 	resp, err := client.Do(req)
 	if err != nil {
 		return 0, nil, nil, fmt.Errorf("failed to send request: %v", err)
