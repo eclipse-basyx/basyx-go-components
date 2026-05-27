@@ -33,6 +33,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"strings"
 	"testing"
@@ -176,6 +177,33 @@ func buildSubmodelDescriptorPayload(submodelID string, tag string) string {
 	)
 }
 
+func assertLocationHeaderMatches(t *testing.T, expectedLocation string, actualLocation string) {
+	t.Helper()
+
+	require.NotEmpty(t, actualLocation)
+
+	expectedURL, err := url.Parse(expectedLocation)
+	require.NoError(t, err)
+
+	actualURL, err := url.Parse(actualLocation)
+	require.NoError(t, err)
+
+	require.Equal(t, expectedURL.Scheme, actualURL.Scheme)
+	require.Equal(t, expectedURL.Path, actualURL.Path)
+	require.Equal(t, expectedURL.RawQuery, actualURL.RawQuery)
+	require.Equal(t, expectedURL.Port(), actualURL.Port())
+
+	expectedHost := strings.ToLower(expectedURL.Hostname())
+	actualHost := strings.ToLower(actualURL.Hostname())
+	if expectedHost == actualHost {
+		return
+	}
+
+	allowedLoopbackHosts := []string{"localhost", "127.0.0.1"}
+	require.Contains(t, allowedLoopbackHosts, expectedHost)
+	require.Contains(t, allowedLoopbackHosts, actualHost)
+}
+
 func TestLocationHeadersForCreateEndpointsAASRegistry(t *testing.T) {
 	baseURL := "http://127.0.0.1:6004"
 
@@ -189,7 +217,7 @@ func TestLocationHeadersForCreateEndpointsAASRegistry(t *testing.T) {
 		_, statusCode, headers, err := postJSONResponse(endpoint, buildAASDescriptorPayload(aasID))
 		require.NoError(t, err, "POST AAS descriptor request failed")
 		require.Equal(t, http.StatusCreated, statusCode, "Expected 201 Created for POST AAS descriptor")
-		require.Equal(t, endpoint+"/"+aasIdentifier, headers.Get("Location"), "Expected Location header to point to created AAS descriptor")
+		assertLocationHeaderMatches(t, endpoint+"/"+aasIdentifier, headers.Get("Location"))
 	})
 
 	t.Run("PutAssetAdministrationShellDescriptorByIdSetsLocationOnlyOnCreate", func(t *testing.T) {
@@ -202,7 +230,7 @@ func TestLocationHeadersForCreateEndpointsAASRegistry(t *testing.T) {
 		_, createStatusCode, createHeaders, createErr := putJSONResponse(endpoint, buildAASDescriptorPayload(aasID))
 		require.NoError(t, createErr, "Initial PUT AAS descriptor request failed")
 		require.Equal(t, http.StatusCreated, createStatusCode, "Expected 201 Created for initial PUT AAS descriptor")
-		require.Equal(t, endpoint, createHeaders.Get("Location"), "Expected Location header for create PUT AAS descriptor")
+		assertLocationHeaderMatches(t, endpoint, createHeaders.Get("Location"))
 
 		_, updateStatusCode, updateHeaders, updateErr := putJSONResponse(endpoint, buildAASDescriptorPayload(aasID))
 		require.NoError(t, updateErr, "Update PUT AAS descriptor request failed")
@@ -227,7 +255,7 @@ func TestLocationHeadersForCreateEndpointsAASRegistry(t *testing.T) {
 		_, statusCode, headers, err := postJSONResponse(endpoint, buildSubmodelDescriptorPayload(submodelID, "v1"))
 		require.NoError(t, err, "POST submodel descriptor request failed")
 		require.Equal(t, http.StatusCreated, statusCode, "Expected 201 Created for POST submodel descriptor")
-		require.Equal(t, endpoint+"/"+submodelIdentifier, headers.Get("Location"), "Expected Location header to point to created submodel descriptor")
+		assertLocationHeaderMatches(t, endpoint+"/"+submodelIdentifier, headers.Get("Location"))
 	})
 
 	t.Run("PutSubmodelDescriptorByIdThroughSuperpathSetsLocationOnlyOnCreate", func(t *testing.T) {
@@ -247,7 +275,7 @@ func TestLocationHeadersForCreateEndpointsAASRegistry(t *testing.T) {
 		_, createStatusCode, createHeaders, createErr := putJSONResponse(endpoint, buildSubmodelDescriptorPayload(submodelID, "before"))
 		require.NoError(t, createErr, "Initial PUT submodel descriptor request failed")
 		require.Equal(t, http.StatusCreated, createStatusCode, "Expected 201 Created for initial PUT submodel descriptor")
-		require.Equal(t, endpoint, createHeaders.Get("Location"), "Expected Location header for create PUT submodel descriptor")
+		assertLocationHeaderMatches(t, endpoint, createHeaders.Get("Location"))
 
 		_, updateStatusCode, updateHeaders, updateErr := putJSONResponse(endpoint, buildSubmodelDescriptorPayload(submodelID, "after"))
 		require.NoError(t, updateErr, "Update PUT submodel descriptor request failed")

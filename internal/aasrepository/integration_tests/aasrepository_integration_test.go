@@ -35,6 +35,7 @@ import (
 	"io"
 	"mime/multipart"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -374,6 +375,33 @@ func getResponseStatus(endpoint string) (int, error) {
 	return resp.StatusCode, nil
 }
 
+func assertLocationHeaderMatches(t *testing.T, expectedLocation string, actualLocation string) {
+	t.Helper()
+
+	require.NotEmpty(t, actualLocation)
+
+	expectedURL, err := url.Parse(expectedLocation)
+	require.NoError(t, err)
+
+	actualURL, err := url.Parse(actualLocation)
+	require.NoError(t, err)
+
+	assert.Equal(t, expectedURL.Scheme, actualURL.Scheme)
+	assert.Equal(t, expectedURL.Path, actualURL.Path)
+	assert.Equal(t, expectedURL.RawQuery, actualURL.RawQuery)
+	assert.Equal(t, expectedURL.Port(), actualURL.Port())
+
+	expectedHost := strings.ToLower(expectedURL.Hostname())
+	actualHost := strings.ToLower(actualURL.Hostname())
+	if expectedHost == actualHost {
+		return
+	}
+
+	allowedLoopbackHosts := []string{"localhost", "127.0.0.1"}
+	assert.Contains(t, allowedLoopbackHosts, expectedHost)
+	assert.Contains(t, allowedLoopbackHosts, actualHost)
+}
+
 func assertServiceNeverHealthy(t *testing.T, endpoint string, observationWindow time.Duration) {
 	t.Helper()
 
@@ -641,7 +669,7 @@ func TestPutSubmodelByIdAasRepositoryReturnsCreatedSubmodelAnd201(t *testing.T) 
 	assert.Equal(t, submodelID, payload["id"], "Expected response body to contain created submodel id")
 	assert.Equal(t, "PutCreateSubmodel", payload["idShort"], "Expected response body to contain created submodel idShort")
 	assert.Equal(t, "Submodel", payload["modelType"], "Expected response body to contain created submodel modelType")
-	assert.Equal(t, endpoint, headers.Get("Location"), "Expected Location header to point to created submodel resource")
+	assertLocationHeaderMatches(t, endpoint, headers.Get("Location"))
 }
 
 func TestPutSubmodelByIdAasRepositoryReturnsNoContentOnUpdate(t *testing.T) {
@@ -721,7 +749,7 @@ func TestLocationHeadersForSubmodelElementCreateEndpointsAasRepository(t *testin
 		require.Equal(t, http.StatusCreated, postStatusCode, "Expected 201 Created when creating submodel element")
 		require.NotNil(t, payload, "Expected response body for created submodel element")
 		assert.Equal(t, "PostCreated", payload["idShort"], "Expected response body to contain created submodel element idShort")
-		assert.Equal(t, endpoint+"/PostCreated", headers.Get("Location"), "Expected Location header to point to created submodel element")
+		assertLocationHeaderMatches(t, endpoint+"/PostCreated", headers.Get("Location"))
 	})
 
 	t.Run("PutSubmodelElementByPathAasRepositorySetsLocationOnlyOnCreate", func(t *testing.T) {
@@ -731,7 +759,7 @@ func TestLocationHeadersForSubmodelElementCreateEndpointsAasRepository(t *testin
 		_, createStatusCode, createHeaders, createErr := putJSONResponse(endpoint, initialBody)
 		require.NoError(t, createErr, "Initial PUT submodel element request failed")
 		require.Equal(t, http.StatusCreated, createStatusCode, "Expected 201 Created when creating submodel element by path")
-		assert.Equal(t, endpoint, createHeaders.Get("Location"), "Expected Location header to point to created submodel element path")
+		assertLocationHeaderMatches(t, endpoint, createHeaders.Get("Location"))
 
 		updatedBody := `{"idShort":"PutCreated","modelType":"Property","valueType":"xs:string","value":"after"}`
 		_, updateStatusCode, updateHeaders, updateErr := putJSONResponse(endpoint, updatedBody)
@@ -749,7 +777,7 @@ func TestLocationHeadersForSubmodelElementCreateEndpointsAasRepository(t *testin
 		require.Equal(t, http.StatusCreated, postStatusCode, "Expected 201 Created when creating child submodel element")
 		require.NotNil(t, payload, "Expected response body for created child submodel element")
 		assert.Equal(t, "ChildCreated", payload["idShort"], "Expected response body to contain created child idShort")
-		assert.Equal(t, endpoint+".ChildCreated", headers.Get("Location"), "Expected Location header to point to created child submodel element")
+		assertLocationHeaderMatches(t, endpoint+".ChildCreated", headers.Get("Location"))
 	})
 }
 

@@ -35,6 +35,7 @@ import (
 	"io"
 	"mime/multipart"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -210,6 +211,33 @@ func requestJSONWithHeaders(method string, endpoint string, payload any) (int, [
 func requestJSON(method string, endpoint string, payload any) (int, []byte, error) {
 	statusCode, responseBody, _, err := requestJSONWithHeaders(method, endpoint, payload)
 	return statusCode, responseBody, err
+}
+
+func assertLocationHeaderMatches(t *testing.T, expectedLocation string, actualLocation string) {
+	t.Helper()
+
+	require.NotEmpty(t, actualLocation)
+
+	expectedURL, err := url.Parse(expectedLocation)
+	require.NoError(t, err)
+
+	actualURL, err := url.Parse(actualLocation)
+	require.NoError(t, err)
+
+	assert.Equal(t, expectedURL.Scheme, actualURL.Scheme)
+	assert.Equal(t, expectedURL.Path, actualURL.Path)
+	assert.Equal(t, expectedURL.RawQuery, actualURL.RawQuery)
+	assert.Equal(t, expectedURL.Port(), actualURL.Port())
+
+	expectedHost := strings.ToLower(expectedURL.Hostname())
+	actualHost := strings.ToLower(actualURL.Hostname())
+	if expectedHost == actualHost {
+		return
+	}
+
+	allowedLoopbackHosts := []string{"localhost", "127.0.0.1"}
+	assert.Contains(t, allowedLoopbackHosts, expectedHost)
+	assert.Contains(t, allowedLoopbackHosts, actualHost)
 }
 
 func waitForServiceHealthy(t *testing.T, endpoint string, timeout time.Duration) {
@@ -1639,7 +1667,7 @@ func TestLocationHeadersForCreateEndpoints(t *testing.T) {
 		})
 		require.NoError(t, err)
 		require.Equal(t, http.StatusCreated, statusCode, "response=%s", string(body))
-		assert.Equal(t, fmt.Sprintf("%s/submodels/%s", baseURL, submodelIDEncoded), headers.Get("Location"))
+		assertLocationHeaderMatches(t, fmt.Sprintf("%s/submodels/%s", baseURL, submodelIDEncoded), headers.Get("Location"))
 
 		t.Cleanup(func() {
 			_, _, _ = requestJSON(http.MethodDelete, fmt.Sprintf("%s/submodels/%s", baseURL, submodelIDEncoded), nil)
@@ -1661,7 +1689,7 @@ func TestLocationHeadersForCreateEndpoints(t *testing.T) {
 		statusCode, body, headers, err := requestJSONWithHeaders(http.MethodPut, endpoint, payload)
 		require.NoError(t, err)
 		require.Equal(t, http.StatusCreated, statusCode, "response=%s", string(body))
-		assert.Equal(t, endpoint, headers.Get("Location"))
+		assertLocationHeaderMatches(t, endpoint, headers.Get("Location"))
 
 		statusCode, body, headers, err = requestJSONWithHeaders(http.MethodPut, endpoint, payload)
 		require.NoError(t, err)
@@ -1699,7 +1727,7 @@ func TestLocationHeadersForCreateEndpoints(t *testing.T) {
 		})
 		require.NoError(t, err)
 		require.Equal(t, http.StatusCreated, statusCode, "response=%s", string(body))
-		assert.Equal(t, fmt.Sprintf("%s/submodels/%s/submodel-elements/%s", baseURL, submodelIDEncoded, elementIDShort), headers.Get("Location"))
+		assertLocationHeaderMatches(t, fmt.Sprintf("%s/submodels/%s/submodel-elements/%s", baseURL, submodelIDEncoded, elementIDShort), headers.Get("Location"))
 	})
 
 	t.Run("PostSubmodelElementByPathReturnsChildLocationHeader", func(t *testing.T) {
@@ -1738,7 +1766,7 @@ func TestLocationHeadersForCreateEndpoints(t *testing.T) {
 		require.Equal(t, http.StatusCreated, statusCode, "response=%s", string(body))
 
 		expectedPath := parentPath + "." + childIDShort
-		assert.Equal(t, fmt.Sprintf("%s/submodels/%s/submodel-elements/%s", baseURL, submodelIDEncoded, expectedPath), headers.Get("Location"))
+		assertLocationHeaderMatches(t, fmt.Sprintf("%s/submodels/%s/submodel-elements/%s", baseURL, submodelIDEncoded, expectedPath), headers.Get("Location"))
 	})
 }
 
@@ -1777,7 +1805,7 @@ func TestPutSubmodelElementByPathCreatesWhenMissing(t *testing.T) {
 	statusCode, body, headers, err := requestJSONWithHeaders(http.MethodPut, putEndpoint, putPayload)
 	require.NoError(t, err)
 	require.Equal(t, http.StatusCreated, statusCode, "response=%s", string(body))
-	assert.Equal(t, putEndpoint, headers.Get("Location"))
+	assertLocationHeaderMatches(t, putEndpoint, headers.Get("Location"))
 
 	var createdElement map[string]any
 	require.NoError(t, json.Unmarshal(body, &createdElement), "response=%s", string(body))

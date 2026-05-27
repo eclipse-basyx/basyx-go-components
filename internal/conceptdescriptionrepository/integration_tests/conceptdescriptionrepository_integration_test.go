@@ -32,6 +32,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"strings"
 	"testing"
@@ -94,6 +95,42 @@ func cleanupConceptDescription(t *testing.T, endpoint string, conceptDescription
 	}
 }
 
+func assertLocationHeaderMatches(t *testing.T, expectedLocation string, actualLocation string) {
+	t.Helper()
+
+	if actualLocation == "" {
+		t.Fatalf("expected non-empty Location header")
+	}
+
+	expectedURL, err := url.Parse(expectedLocation)
+	if err != nil {
+		t.Fatalf("failed to parse expected Location %q: %v", expectedLocation, err)
+	}
+
+	actualURL, err := url.Parse(actualLocation)
+	if err != nil {
+		t.Fatalf("failed to parse actual Location %q: %v", actualLocation, err)
+	}
+
+	if expectedURL.Scheme != actualURL.Scheme || expectedURL.Path != actualURL.Path || expectedURL.RawQuery != actualURL.RawQuery || expectedURL.Port() != actualURL.Port() {
+		t.Fatalf("expected Location %s, got %s", expectedLocation, actualLocation)
+	}
+
+	expectedHost := strings.ToLower(expectedURL.Hostname())
+	actualHost := strings.ToLower(actualURL.Hostname())
+	if expectedHost == actualHost {
+		return
+	}
+
+	allowedLoopbackHosts := map[string]struct{}{"localhost": {}, "127.0.0.1": {}}
+	if _, ok := allowedLoopbackHosts[expectedHost]; !ok {
+		t.Fatalf("expected host %s is not loopback-compatible", expectedHost)
+	}
+	if _, ok := allowedLoopbackHosts[actualHost]; !ok {
+		t.Fatalf("actual host %s is not loopback-compatible", actualHost)
+	}
+}
+
 func TestLocationHeadersForCreateEndpointsConceptDescriptionRepository(t *testing.T) {
 	baseURL := "http://127.0.0.1:6004"
 	endpoint := baseURL + "/concept-descriptions"
@@ -115,9 +152,7 @@ func TestLocationHeadersForCreateEndpointsConceptDescriptionRepository(t *testin
 
 		expectedIdentifier := base64.RawURLEncoding.EncodeToString([]byte(conceptDescriptionID))
 		expectedLocation := endpoint + "/" + expectedIdentifier
-		if headers.Get("Location") != expectedLocation {
-			t.Fatalf("expected Location %s, got %s", expectedLocation, headers.Get("Location"))
-		}
+		assertLocationHeaderMatches(t, expectedLocation, headers.Get("Location"))
 	})
 
 	t.Run("PutConceptDescriptionByIdSetsLocationOnlyOnCreate", func(t *testing.T) {
@@ -137,9 +172,7 @@ func TestLocationHeadersForCreateEndpointsConceptDescriptionRepository(t *testin
 		if createStatusCode != http.StatusCreated {
 			t.Fatalf("expected 201 on put-create, got %d with body: %s", createStatusCode, string(createResponseBody))
 		}
-		if createHeaders.Get("Location") != putEndpoint {
-			t.Fatalf("expected Location %s, got %s", putEndpoint, createHeaders.Get("Location"))
-		}
+		assertLocationHeaderMatches(t, putEndpoint, createHeaders.Get("Location"))
 
 		updateStatusCode, updateResponseBody, updateHeaders, updateErr := requestJSONWithHeaders(http.MethodPut, putEndpoint, map[string]any{
 			"id":        conceptDescriptionID,

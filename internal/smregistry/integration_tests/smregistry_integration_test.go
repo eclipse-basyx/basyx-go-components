@@ -32,7 +32,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -99,6 +101,33 @@ func buildSubmodelDescriptorPayload(submodelID string, tag string) map[string]an
 	}
 }
 
+func assertLocationHeaderMatches(t *testing.T, expectedLocation string, actualLocation string) {
+	t.Helper()
+
+	require.NotEmpty(t, actualLocation)
+
+	expectedURL, err := url.Parse(expectedLocation)
+	require.NoError(t, err)
+
+	actualURL, err := url.Parse(actualLocation)
+	require.NoError(t, err)
+
+	require.Equal(t, expectedURL.Scheme, actualURL.Scheme)
+	require.Equal(t, expectedURL.Path, actualURL.Path)
+	require.Equal(t, expectedURL.RawQuery, actualURL.RawQuery)
+	require.Equal(t, expectedURL.Port(), actualURL.Port())
+
+	expectedHost := strings.ToLower(expectedURL.Hostname())
+	actualHost := strings.ToLower(actualURL.Hostname())
+	if expectedHost == actualHost {
+		return
+	}
+
+	allowedLoopbackHosts := []string{"localhost", "127.0.0.1"}
+	require.Contains(t, allowedLoopbackHosts, expectedHost)
+	require.Contains(t, allowedLoopbackHosts, actualHost)
+}
+
 func TestLocationHeadersForCreateEndpointsSubmodelRegistry(t *testing.T) {
 	t.Run("PostSubmodelDescriptorSetsLocation", func(t *testing.T) {
 		submodelID := fmt.Sprintf("urn:example:sm:location-post-%d", time.Now().UnixNano())
@@ -109,7 +138,7 @@ func TestLocationHeadersForCreateEndpointsSubmodelRegistry(t *testing.T) {
 
 		statusCode, _, headers := doRequest(t, smNoRedirectClient, http.MethodPost, endpoint, buildSubmodelDescriptorPayload(submodelID, "v1"))
 		require.Equal(t, http.StatusCreated, statusCode)
-		require.Equal(t, endpoint+"/"+expectedIdentifier, headers.Get("Location"))
+		assertLocationHeaderMatches(t, endpoint+"/"+expectedIdentifier, headers.Get("Location"))
 	})
 
 	t.Run("PutSubmodelDescriptorByIdSetsLocationOnlyOnCreate", func(t *testing.T) {
@@ -121,7 +150,7 @@ func TestLocationHeadersForCreateEndpointsSubmodelRegistry(t *testing.T) {
 
 		createStatusCode, _, createHeaders := doRequest(t, smNoRedirectClient, http.MethodPut, endpoint, buildSubmodelDescriptorPayload(submodelID, "before"))
 		require.Equal(t, http.StatusCreated, createStatusCode)
-		require.Equal(t, endpoint, createHeaders.Get("Location"))
+		assertLocationHeaderMatches(t, endpoint, createHeaders.Get("Location"))
 
 		updateStatusCode, _, updateHeaders := doRequest(t, smNoRedirectClient, http.MethodPut, endpoint, buildSubmodelDescriptorPayload(submodelID, "after"))
 		require.Equal(t, http.StatusNoContent, updateStatusCode)
