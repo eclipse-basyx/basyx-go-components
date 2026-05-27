@@ -585,6 +585,8 @@ func listAssetAdministrationShellDescriptors(
 	identifiable string,
 	allowParallel bool,
 ) ([]model.AssetAdministrationShellDescriptor, string, error) {
+	db = withDescriptorDebugQueryer(ctx, db)
+
 	if limit <= 0 {
 		limit = 100
 	}

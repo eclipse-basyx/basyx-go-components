@@ -34,6 +34,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"time"
 
 	registryapiinternal "github.com/eclipse-basyx/basyx-go-components/internal/aasregistry/api"
 	registrydb "github.com/eclipse-basyx/basyx-go-components/internal/aasregistry/persistence"
@@ -94,26 +95,28 @@ func runServer(ctx context.Context, configPath string) error {
 	log.Printf("🗄️  Connecting to Postgres with DSN: postgres://%s:****@%s:%d/%s?sslmode=disable",
 		cfg.Postgres.User, cfg.Postgres.Host, cfg.Postgres.Port, cfg.Postgres.DBName)
 
-	registryDatabase, err := registrydb.NewPostgreSQLAASRegistryDatabase(
-		dsn,
-		//nolint:gosec // configured value is bounded by deployment configuration
-		int32(cfg.Postgres.MaxOpenConnections),
-		cfg.Postgres.MaxIdleConnections,
-		cfg.Postgres.ConnMaxLifetimeMinutes,
-		cfg.Server.CacheEnabled,
-	)
+	sharedDB, err := common.NewDatabaseConnection(dsn)
+	if err != nil {
+		log.Printf("Shared DB connect failed: %v", err)
+		return err
+	}
+	if cfg.Postgres.MaxOpenConnections > 0 {
+		sharedDB.SetMaxOpenConns(cfg.Postgres.MaxOpenConnections)
+	}
+	if cfg.Postgres.MaxIdleConnections > 0 {
+		sharedDB.SetMaxIdleConns(cfg.Postgres.MaxIdleConnections)
+	}
+	if cfg.Postgres.ConnMaxLifetimeMinutes > 0 {
+		sharedDB.SetConnMaxLifetime(time.Duration(cfg.Postgres.ConnMaxLifetimeMinutes) * time.Minute)
+	}
+
+	registryDatabase, err := registrydb.NewPostgreSQLAASRegistryDatabaseFromDB(sharedDB, cfg.Server.CacheEnabled)
 	if err != nil {
 		log.Printf("❌ Registry DB connect failed: %v", err)
 		return err
 	}
 
-	discoveryDatabase, err := discoverydb.NewPostgreSQLDiscoveryBackend(
-		dsn,
-		//nolint:gosec // configured value is bounded by deployment configuration
-		int32(cfg.Postgres.MaxOpenConnections),
-		cfg.Postgres.MaxIdleConnections,
-		cfg.Postgres.ConnMaxLifetimeMinutes,
-	)
+	discoveryDatabase, err := discoverydb.NewPostgreSQLDiscoveryBackendFromDB(sharedDB)
 	if err != nil {
 		log.Printf("❌ Discovery DB connect failed: %v", err)
 		return err

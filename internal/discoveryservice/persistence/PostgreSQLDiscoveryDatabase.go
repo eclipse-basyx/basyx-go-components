@@ -299,7 +299,8 @@ func (p *PostgreSQLDiscoveryDatabase) SearchAASIDsByAssetLinks(
 	}
 
 	sqlStr, args, err := ds.ToSQL()
-	if common.DebugEnabled(ctx) {
+	debugEnabled := common.DebugEnabled(ctx)
+	if debugEnabled {
 		_, _ = fmt.Println(sqlStr)
 	}
 	if err != nil {
@@ -307,7 +308,14 @@ func (p *PostgreSQLDiscoveryDatabase) SearchAASIDsByAssetLinks(
 		return nil, "", common.NewInternalServerError("Failed to query AAS IDs. See server logs for details.")
 	}
 
-	rows, err := p.db.QueryContext(ctx, sqlStr, args...)
+	var rows *sql.Rows
+	if debugEnabled {
+		start := time.Now()
+		rows, err = p.db.QueryContext(ctx, sqlStr, args...)
+		_, _ = fmt.Printf("SearchAASIDsByAssetLinks query took %s\n", time.Since(start))
+	} else {
+		rows, err = p.db.QueryContext(ctx, sqlStr, args...)
+	}
 	if err != nil {
 		_, _ = fmt.Println("SearchAASIDsByAssetLinks: query error:", err)
 		return nil, "", common.NewInternalServerError("Failed to query AAS IDs. See server logs for details.")
