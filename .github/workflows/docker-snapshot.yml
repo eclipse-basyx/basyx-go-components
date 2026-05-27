@@ -1,7 +1,10 @@
 name: Docker Snapshot Build
 
 on:
-  push:
+  workflow_dispatch:
+  pull_request:
+    types:
+      - closed
     branches:
       - main
     paths:
@@ -39,7 +42,17 @@ jobs:
 
   build-and-push:
     needs: guard
-    if: ${{ needs.guard.outputs.should-run == 'true' }}
+    if: >
+      ${{
+        needs.guard.outputs.should-run == 'true' &&
+        (
+          github.event_name == 'workflow_dispatch' ||
+          (
+            github.event.pull_request.merged == true &&
+            contains(github.event.pull_request.labels.*.name, 'docker-snapshot')
+          )
+        )
+      }}
     runs-on: ubuntu-latest
     timeout-minutes: 90
     permissions:
