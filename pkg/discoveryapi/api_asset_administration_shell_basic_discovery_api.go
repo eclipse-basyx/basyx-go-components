@@ -293,10 +293,10 @@ func (c *AssetAdministrationShellBasicDiscoveryAPIAPIController) PostAllAssetLin
 		return
 	}
 
-	var specificAssetIdParamAbs []map[string]interface{}
+	var specificAssetIDPayload any
 	d := json.NewDecoder(r.Body)
-	if err := d.Decode(&specificAssetIdParamAbs); err != nil {
-		log.Printf("%+v", specificAssetIdParamAbs)
+	if err := d.Decode(&specificAssetIDPayload); err != nil {
+		log.Printf("%+v", specificAssetIDPayload)
 		log.Printf("🧭 [%s] Error in PostAllAssetLinksById: decode request body failed: %v", componentName, err)
 		result := common.NewErrorResponse(
 			common.NewErrBadRequest("Incorrect RequestBody - 02"),
@@ -309,8 +309,38 @@ func (c *AssetAdministrationShellBasicDiscoveryAPIAPIController) PostAllAssetLin
 		return
 	}
 
+	common.NormalizePayloadNullFields(specificAssetIDPayload)
+
+	specificAssetIDItems, ok := specificAssetIDPayload.([]any)
+	if !ok {
+		log.Printf("🧭 [%s] Error in PostAllAssetLinksById: payload is not an array", componentName)
+		result := common.NewErrorResponse(
+			common.NewErrBadRequest("Incorrect RequestBody - 02"),
+			http.StatusBadRequest,
+			componentName,
+			"PostAllAssetLinksById",
+			"RequestBody",
+		)
+		EncodeJSONResponse(result.Body, &result.Code, w)
+		return
+	}
+
 	var interfaceSpecificAssetIds []types.ISpecificAssetID
-	for _, item := range specificAssetIdParamAbs {
+	for _, rawItem := range specificAssetIDItems {
+		item, ok := rawItem.(map[string]any)
+		if !ok {
+			log.Printf("🧭 [%s] Error in PostAllAssetLinksById: specific asset id entry is not an object", componentName)
+			result := common.NewErrorResponse(
+				common.NewErrBadRequest("Invalid specific asset id element"),
+				http.StatusBadRequest,
+				componentName,
+				"PostAllAssetLinksById",
+				"specificAssetId",
+			)
+			EncodeJSONResponse(result.Body, &result.Code, w)
+			return
+		}
+
 		saID, err := jsonization.SpecificAssetIDFromJsonable(item)
 		if err != nil {
 			log.Printf("🧭 [%s] Error in PostAllAssetLinksById: failed to parse specific asset id: %v", componentName, err)

@@ -2,7 +2,7 @@
 -- Project        : Eclipse BaSyx
 -- Organization   : Fraunhofer IESE
 -- File Type      : SQL Patch Script
--- Patch Version  : 1.0.1
+-- Patch Version  : 1.0.2
 -- Metamodel Ver. : 3.1
 -- ----------------------------------------------------------------------------
 -- Description:
@@ -17,17 +17,13 @@
 -- Author: Stemmer
 -- ------------------------------------------
 
-ALTER TABLE IF EXISTS aas_descriptor
-  ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
-
-ALTER TABLE IF EXISTS aas_identifier
-  ADD COLUMN IF NOT EXISTS db_created_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
-
-ALTER TABLE IF EXISTS aas_identifier
-  ADD COLUMN IF NOT EXISTS db_updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
+CREATE INDEX IF NOT EXISTS ix_submodel_descriptor_semantic_id_refpayload_refid
+  ON submodel_descriptor_semantic_id_reference_payload(reference_id);
+CREATE INDEX IF NOT EXISTS ix_specasset_external_subject_id_refpayload_refid
+  ON specific_asset_id_external_subject_id_reference_payload(reference_id);
 
 UPDATE basyxsystem
-SET schema_version = 'v1.0.1',
+SET schema_version = 'v1.0.2',
     state = 'clean'
 WHERE identifier = (
   SELECT identifier

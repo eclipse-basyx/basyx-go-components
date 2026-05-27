@@ -20,6 +20,7 @@ import (
 	"strings"
 
 	"github.com/aas-core-works/aas-core3.1-golang/jsonization"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	"github.com/go-chi/chi/v5"
 )
@@ -149,6 +150,7 @@ func (c *ConceptDescriptionRepositoryAPIAPIController) PostConceptDescription(w 
 		c.errorHandler(w, r, &model.ParsingError{Err: err}, nil)
 		return
 	}
+	common.NormalizePayloadNullFields(jsonable)
 	conceptDescriptionParam, err := jsonization.ConceptDescriptionFromJsonable(jsonable)
 	if err != nil {
 		c.errorHandler(w, r, &model.ParsingError{Err: err}, nil)
@@ -208,6 +210,7 @@ func (c *ConceptDescriptionRepositoryAPIAPIController) PutConceptDescriptionById
 		c.errorHandler(w, r, &model.ParsingError{Err: err}, nil)
 		return
 	}
+	common.NormalizePayloadNullFields(jsonable)
 	conceptDescriptionParam, err := jsonization.ConceptDescriptionFromJsonable(jsonable)
 	if err != nil {
 		c.errorHandler(w, r, &model.ParsingError{Err: err}, nil)

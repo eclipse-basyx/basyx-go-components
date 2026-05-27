@@ -389,6 +389,7 @@ func (c *SubmodelRepositoryAPIAPIController) PostSubmodel(w http.ResponseWriter,
 		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
 		return
 	}
+	common.NormalizePayloadNullFields(jsonable)
 	submodelParam, err := aasjsonization.SubmodelFromJsonable(jsonable)
 	if err != nil {
 		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
@@ -862,6 +863,7 @@ func (c *SubmodelRepositoryAPIAPIController) PatchSubmodelByID(w http.ResponseWr
 		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
 		return
 	}
+	common.NormalizePayloadNullFields(jsonable)
 	submodelParam, err := aasjsonization.SubmodelFromJsonable(jsonable)
 	if err != nil {
 		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
@@ -1159,6 +1161,7 @@ func (c *SubmodelRepositoryAPIAPIController) PostSubmodelElementSubmodelRepo(w h
 	}
 
 	// Use SDK's jsonization to deserialize into proper SDK type
+	common.NormalizePayloadNullFields(jsonable)
 	submodelElementParam, err := aasjsonization.SubmodelElementFromJsonable(jsonable)
 	if err != nil {
 		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
@@ -1487,6 +1490,7 @@ func (c *SubmodelRepositoryAPIAPIController) PutSubmodelElementByPathSubmodelRep
 	}
 
 	// Use SDK's jsonization to deserialize into proper SDK type
+	common.NormalizePayloadNullFields(jsonable)
 	submodelElementParam, err := aasjsonization.SubmodelElementFromJsonable(jsonable)
 	if err != nil {
 		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
@@ -1560,6 +1564,7 @@ func (c *SubmodelRepositoryAPIAPIController) PostSubmodelElementByPathSubmodelRe
 	}
 
 	// Use SDK's jsonization to deserialize into proper SDK type
+	common.NormalizePayloadNullFields(jsonable)
 	submodelElementParam, err := aasjsonization.SubmodelElementFromJsonable(jsonable)
 	if err != nil {
 		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
@@ -1654,6 +1659,7 @@ func (c *SubmodelRepositoryAPIAPIController) PatchSubmodelElementByPathSubmodelR
 	}
 
 	// Use SDK's jsonization to deserialize into proper SDK type
+	common.NormalizePayloadNullFields(jsonable)
 	submodelElementParam, err := aasjsonization.SubmodelElementFromJsonable(jsonable)
 	if err != nil {
 		c.errorHandler(w, r, &ParsingError{Err: err}, nil)

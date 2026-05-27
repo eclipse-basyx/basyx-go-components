@@ -602,6 +602,41 @@ func TestContractSubmodelRepository(t *testing.T) {
 		assert.NotEmpty(t, metadata, "metadata response should not be empty")
 	})
 
+	t.Run("PostSubmodelAcceptsNullSubmodelElements", func(t *testing.T) {
+		submodelID := fmt.Sprintf("https://example.com/ids/sm/contract-null-elements-%d", time.Now().UnixNano())
+		submodelIDShort := fmt.Sprintf("contractNullElements%d", time.Now().UnixNano())
+
+		statusCode, body, err := requestJSON(http.MethodPost, fmt.Sprintf("%s/submodels", baseURL), map[string]any{
+			"id":               submodelID,
+			"idShort":          submodelIDShort,
+			"kind":             "Instance",
+			"modelType":        "Submodel",
+			"submodelElements": nil,
+		})
+		require.NoError(t, err)
+		require.Equal(t, http.StatusCreated, statusCode, "response=%s", string(body))
+
+		encodedSubmodelID := common.EncodeString(submodelID)
+		t.Cleanup(func() {
+			_, _, _ = requestJSON(http.MethodDelete, fmt.Sprintf("%s/submodels/%s", baseURL, encodedSubmodelID), nil)
+		})
+
+		statusCode, body, err = requestJSON(http.MethodGet, fmt.Sprintf("%s/submodels/%s", baseURL, encodedSubmodelID), nil)
+		require.NoError(t, err)
+		require.Equal(t, http.StatusOK, statusCode, "response=%s", string(body))
+
+		var submodel map[string]any
+		require.NoError(t, json.Unmarshal(body, &submodel), "response=%s", string(body))
+
+		rawElements, hasElements := submodel["submodelElements"]
+		if !hasElements {
+			return
+		}
+
+		_, ok := rawElements.([]any)
+		require.True(t, ok, "submodelElements should be a JSON array when present")
+	})
+
 	t.Run("PatchSubmodelByIDMetadataAcceptsStringModelTypeAndUpdatesDescription", func(t *testing.T) {
 		submodelID := fmt.Sprintf("https://example.com/ids/sm/contract-patch-metadata-%d", time.Now().UnixNano())
 		submodelIDShort := fmt.Sprintf("contractPatchMetadata%d", time.Now().UnixNano())

@@ -50,6 +50,25 @@ Set base URL:
 export DTR_BASE="http://localhost:5004/api/v3"
 ```
 
+## Temporary Best Practice: Batch `/lookup/shellsByAssetLink`
+
+For scalable lookup behavior, call `/lookup/shellsByAssetLink` in batches and set `limit` between `100` and `500`.
+
+Current temporary recommendation:
+- Start with `limit=100`.
+- Increase up to `500` only if your workload and latency profile require it.
+- Prefer lower limits in this range when scaling to larger request volumes.
+
+Example call:
+
+```bash
+curl -s -X POST "$DTR_BASE/lookup/shellsByAssetLink?limit=100" \
+  -H "Content-Type: application/json" \
+  --data-binary @assetlink-num2.json | jq
+```
+
+If pagination metadata includes a cursor, repeat the request with the returned cursor until no further cursor is returned.
+
 Get an admin access token (password grant, client `basyx-ui`, user `admin`, password `pwd`):
 
 ```bash
