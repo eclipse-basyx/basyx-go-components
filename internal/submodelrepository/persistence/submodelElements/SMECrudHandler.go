@@ -277,9 +277,6 @@ func (p *PostgreSQLSMECrudHandler) Update(submodelID string, idShortOrPath strin
 		}
 		payloadUpdateRecord["displayname_payload"] = goqu.L("?::jsonb", displayNameJSONString)
 	}
-	if isPut {
-		payloadUpdateRecord["administrative_information_payload"] = goqu.L("?::jsonb", "[]")
-	}
 	if isPut || submodelElement.EmbeddedDataSpecifications() != nil {
 		edsJSONString, serErr := serializeIClassSliceToJSON(toIClassSlice(submodelElement.EmbeddedDataSpecifications()), "SMREPO-SME-UPDATE-EDSJSONIZATION")
 		if serErr != nil {

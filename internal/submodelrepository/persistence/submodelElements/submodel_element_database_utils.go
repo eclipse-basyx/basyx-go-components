@@ -323,7 +323,7 @@ func insertPayloadAndSemanticReferences(tx *sql.Tx, dialect goqu.DialectWrapper,
 			tx,
 			dialect,
 			"submodel_element_payload",
-			[]string{"submodel_element_id", "description_payload", "displayname_payload", "administrative_information_payload", "embedded_data_specification_payload", "supplemental_semantic_ids_payload", "extensions_payload", "qualifiers_payload"},
+			[]string{"submodel_element_id", "description_payload", "displayname_payload", "embedded_data_specification_payload", "supplemental_semantic_ids_payload", "extensions_payload", "qualifiers_payload"},
 			payloadRows,
 			"SMREPO-INSSME-INSPAYLOAD",
 		); payloadInsertErr != nil {
@@ -766,8 +766,6 @@ func buildSubmodelElementPayloadRecord(submodelElementID int64, element types.IS
 		return nil, err
 	}
 
-	administrativeInformationPayload := "[]"
-
 	embeddedDataSpecificationPayload, err := serializeIClassSliceToJSON(toIClassSlice(element.EmbeddedDataSpecifications()), "SMREPO-SMEBATCH-PAYLOAD-EDS")
 	if err != nil {
 		return nil, err
@@ -792,7 +790,6 @@ func buildSubmodelElementPayloadRecord(submodelElementID int64, element types.IS
 		"submodel_element_id":                 submodelElementID,
 		"description_payload":                 descriptionPayload,
 		"displayname_payload":                 displayNamePayload,
-		"administrative_information_payload":  administrativeInformationPayload,
 		"embedded_data_specification_payload": embeddedDataSpecificationPayload,
 		"supplemental_semantic_ids_payload":   supplementalSemanticIDsPayload,
 		"extensions_payload":                  extensionsPayload,

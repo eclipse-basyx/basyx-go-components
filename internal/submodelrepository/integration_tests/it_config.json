@@ -835,7 +835,7 @@
         "endpoint": "http://localhost:6004/submodels/TWFyY3VzVGhpc0lzQU9ubHlPcGVyYXRpb25TdWJtb2RlbA/submodel-elements/DemoOperation",
         "data": "bodies/put/putOperation.json",
         "expectedStatus": 204
-    },    
+    },
     {
         "context": "PUT Operation - Verify updated Element",
         "method": "GET",
@@ -849,7 +849,7 @@
         "endpoint": "http://localhost:6004/submodels/TWFyY3VzVGhpc0lzQU9ubHlSZWZlcmVuY2VFbGVtZW50U3VibW9kZWw/submodel-elements/DemoReferenceElement",
         "data": "bodies/put/putReferenceElement.json",
         "expectedStatus": 204
-    },    
+    },
     {
         "context": "GET ReferenceElement - Verify updated Element",
         "method": "GET",
@@ -891,7 +891,7 @@
         "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/ExampleSubmodelElementCollection",
         "data": "bodies/put/putCollection.json",
         "expectedStatus": 204
-    },    
+    },
     {
         "context": "PUT SubmodelElementCollection - Verify Update",
         "method": "GET",
@@ -2059,13 +2059,13 @@
         "method": "GET",
         "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/$signed",
         "shouldMatch": "expected/expectedSignedSubmodel.json",
-        "expectedStatus": 200   
+        "expectedStatus": 200
     },
     {
         "context": "GET Signed Submodel Value Only",
         "method": "GET",
         "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/$value/$signed",
-        "expectedStatus": 200   
+        "expectedStatus": 200
     },
     {
         "context": "POST QL Demo Submodels - A",
