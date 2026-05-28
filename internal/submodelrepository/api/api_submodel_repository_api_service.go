@@ -35,6 +35,7 @@ import (
 	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/asyncbulk"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/history"
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
@@ -80,6 +81,20 @@ func newAPIErrorResponse(err error, status int, operation string, info string) g
 	}
 
 	return common.NewErrorResponse(err, status, componentName, operation, info)
+}
+
+func (s *SubmodelRepositoryAPIAPIService) recordCurrentSubmodelVersion(ctx context.Context, submodelIdentifier string, operation string) (gen.ImplResponse, bool) {
+	if err := s.submodelBackend.RecordCurrentSubmodelVersion(ctx, submodelIdentifier, history.ChangeUpdated); err != nil {
+		if common.IsErrDenied(err) {
+			return newAPIErrorResponse(err, http.StatusForbidden, operation, "Denied"), false
+		}
+		if common.IsErrNotFound(err) || errors.Is(err, sql.ErrNoRows) {
+			return newAPIErrorResponse(err, http.StatusNotFound, operation, "SubmodelNotFound"), false
+		}
+		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "RecordSubmodelHistory"), false
+	}
+
+	return gen.ImplResponse{}, true
 }
 
 func submodelValueToAnyMap(value gen.SubmodelValue) map[string]any {
@@ -998,6 +1013,108 @@ func (s *SubmodelRepositoryAPIAPIService) GetSubmodelByID(
 	return gen.Response(200, jsonSubmodel), nil
 }
 
+// GetAllSubmodelRecentChanges returns changed Submodels.
+func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelRecentChanges(
+	ctx context.Context,
+	semanticID string,
+	createdFrom time.Time,
+	updatedFrom time.Time,
+	limit int32,
+	cursor string,
+) (gen.ImplResponse, error) {
+	const operation = "GetAllSubmodelRecentChanges"
+
+	decodedCursor, decodeErr := common.DecodeString(cursor)
+	if decodeErr != nil {
+		return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "BadCursor"), nil
+	}
+
+	rows, nextCursor, err := s.submodelBackend.GetSubmodelRecentChanges(ctx, limit, decodedCursor, createdFrom, updatedFrom)
+	if err != nil {
+		if common.IsErrBadRequest(err) {
+			return newAPIErrorResponse(err, http.StatusBadRequest, operation, "BadRequest"), nil
+		}
+		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "GetRecentChanges"), nil
+	}
+
+	changes := make([]gen.SubmodelRecentChange, 0, len(rows))
+	for _, row := range rows {
+		submodel, fromJSONErr := jsonization.SubmodelFromJsonable(row.Snapshot)
+		if fromJSONErr != nil {
+			return newAPIErrorResponse(fromJSONErr, http.StatusInternalServerError, operation, "FromJsonable"), nil
+		}
+		if !matchesSubmodelSemanticID(submodel, semanticID) {
+			continue
+		}
+		changes = append(changes, gen.SubmodelRecentChange{
+			RecentChange: gen.RecentChange{
+				Type:      row.ChangeType,
+				CreatedAt: row.CreatedAt,
+				UpdatedAt: row.UpdatedAt,
+			},
+			Id:                      submodel.ID(),
+			SemanticId:              submodel.SemanticID(),
+			SupplementalSemanticIds: submodel.SupplementalSemanticIDs(),
+		})
+	}
+
+	return gen.Response(http.StatusOK, gen.GetAllSubmodelRecentChangesResult{
+		PagingMetadata: gen.PagedResultPagingMetadata{Cursor: common.EncodeString(nextCursor)},
+		Result:         changes,
+	}), nil
+}
+
+// GetSubmodelByIdAndDate returns the Submodel version valid at the requested date.
+func (s *SubmodelRepositoryAPIAPIService) GetSubmodelByIdAndDate(
+	ctx context.Context,
+	id string,
+	level string,
+	_ string,
+	date time.Time,
+) (gen.ImplResponse, error) {
+	const operation = "GetSubmodelByIdAndDate"
+
+	decodedSubmodelIdentifier, decodeErr := common.DecodeString(id)
+	if decodeErr != nil {
+		return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "MalformedSubmodelIdentifier"), nil
+	}
+	if !isLevelValid(level) {
+		return newAPIErrorResponse(errors.New("invalid level parameter"), http.StatusBadRequest, operation, "InvalidLevelParameter"), nil
+	}
+
+	sm, err := s.submodelBackend.GetSubmodelByIDAndDate(ctx, decodedSubmodelIdentifier, date)
+	if err != nil {
+		if common.IsErrNotFound(err) || errors.Is(err, sql.ErrNoRows) {
+			return newAPIErrorResponse(err, http.StatusNotFound, operation, "SubmodelNotFound"), nil
+		}
+		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "GetSubmodelByIDAndDate"), nil
+	}
+
+	jsonSubmodel, err := jsonization.ToJsonable(sm)
+	if err != nil {
+		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "ToJsonable"), nil
+	}
+	deleteSubmodelElementsIfEmpty(jsonSubmodel)
+	return gen.Response(http.StatusOK, jsonSubmodel), nil
+}
+
+func matchesSubmodelSemanticID(submodel types.ISubmodel, semanticID string) bool {
+	semanticID = strings.TrimSpace(semanticID)
+	if semanticID == "" {
+		return true
+	}
+	semanticReference := submodel.SemanticID()
+	if semanticReference == nil {
+		return false
+	}
+	for _, key := range semanticReference.Keys() {
+		if key != nil && key.Value() == semanticID {
+			return true
+		}
+	}
+	return false
+}
+
 // GetSignedSubmodelByID retrieves a signed submodel (JWS compact serialization) by its base64-encoded identifier.
 func (s *SubmodelRepositoryAPIAPIService) GetSignedSubmodelByID(
 	ctx context.Context,
@@ -1631,6 +1748,10 @@ func (s *SubmodelRepositoryAPIAPIService) PatchSubmodelByID(ctx context.Context,
 		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "InternalServerError"), nil
 	}
 
+	if response, ok := s.recordCurrentSubmodelVersion(ctx, decodedIdentifier, operation); !ok {
+		return response, nil
+	}
+
 	return gen.Response(http.StatusNoContent, nil), nil
 }
 
@@ -1724,6 +1845,10 @@ func (s *SubmodelRepositoryAPIAPIService) PatchSubmodelByIDMetadata(ctx context.
 		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "PatchSubmodelMetadata"), nil
 	}
 
+	if response, ok := s.recordCurrentSubmodelVersion(ctx, decodedIdentifier, operation); !ok {
+		return response, nil
+	}
+
 	return gen.Response(http.StatusNoContent, nil), nil
 }
 
@@ -1781,6 +1906,9 @@ func (s *SubmodelRepositoryAPIAPIService) PatchSubmodelByIDValueOnly(ctx context
 		}
 		_, _ = fmt.Println(err)
 		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "InternalServerError"), nil
+	}
+	if response, ok := s.recordCurrentSubmodelVersion(ctx, decodedIdentifier, operation); !ok {
+		return response, nil
 	}
 	return gen.Response(http.StatusNoContent, nil), nil
 }
@@ -1951,6 +2079,10 @@ func (s *SubmodelRepositoryAPIAPIService) PostSubmodelElementSubmodelRepo(ctx co
 			return newAPIErrorResponse(err, http.StatusBadRequest, operation, "BadRequest"), nil
 		}
 		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "AddSubmodelElement"), nil
+	}
+
+	if response, ok := s.recordCurrentSubmodelVersion(ctx, decodedSubmodelIdentifier, operation); !ok {
+		return response, nil
 	}
 
 	jsonSubmodelElement, jsonErr := jsonization.ToJsonable(submodelElement)
@@ -2236,6 +2368,10 @@ func (s *SubmodelRepositoryAPIAPIService) PutSubmodelElementByPathSubmodelRepo(c
 		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "PutSubmodelElement"), nil
 	}
 
+	if response, ok := s.recordCurrentSubmodelVersion(ctx, decodedSubmodelIdentifier, operation); !ok {
+		return response, nil
+	}
+
 	if isUpdate {
 		return gen.Response(http.StatusNoContent, nil), nil
 	}
@@ -2282,6 +2418,10 @@ func (s *SubmodelRepositoryAPIAPIService) PostSubmodelElementByPathSubmodelRepo(
 		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "AddSubmodelElementWithPath"), nil
 	}
 
+	if response, ok := s.recordCurrentSubmodelVersion(ctx, decodedSubmodelIdentifier, operation); !ok {
+		return response, nil
+	}
+
 	parsedElement, parseErr := jsonization.ToJsonable(submodelElement)
 	if parseErr != nil {
 		return newAPIErrorResponse(parseErr, http.StatusInternalServerError, operation, "ToJsonable"), nil
@@ -2321,6 +2461,10 @@ func (s *SubmodelRepositoryAPIAPIService) DeleteSubmodelElementByPathSubmodelRep
 			return newAPIErrorResponse(err, http.StatusBadRequest, operation, "BadRequest"), nil
 		}
 		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "DeleteSubmodelElementByPath"), nil
+	}
+
+	if response, ok := s.recordCurrentSubmodelVersion(ctx, decodedSubmodelIdentifier, operation); !ok {
+		return response, nil
 	}
 
 	return gen.Response(http.StatusNoContent, nil), nil
@@ -2383,6 +2527,10 @@ func (s *SubmodelRepositoryAPIAPIService) PatchSubmodelElementByPathSubmodelRepo
 		}
 
 		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "UpdateSubmodelElement"), nil
+	}
+
+	if response, ok := s.recordCurrentSubmodelVersion(ctx, decodedSubmodelIdentifier, operation); !ok {
+		return response, nil
 	}
 
 	return gen.Response(http.StatusNoContent, nil), nil
@@ -2479,6 +2627,10 @@ func (s *SubmodelRepositoryAPIAPIService) PatchSubmodelElementByPathMetadataSubm
 		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "UpdateSubmodelElement"), nil
 	}
 
+	if response, ok := s.recordCurrentSubmodelVersion(ctx, decodedSubmodelIdentifier, operation); !ok {
+		return response, nil
+	}
+
 	return gen.Response(http.StatusNoContent, nil), nil
 }
 
@@ -2539,6 +2691,10 @@ func (s *SubmodelRepositoryAPIAPIService) PatchSubmodelElementByPathValueOnlySub
 			return newAPIErrorResponse(err, http.StatusNotFound, operation, "SubmodelElementNotFound"), nil
 		}
 		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "UpdateSubmodelElementValueOnly"), nil
+	}
+
+	if response, ok := s.recordCurrentSubmodelVersion(ctx, decodedIdentifier, operation); !ok {
+		return response, nil
 	}
 
 	return gen.Response(http.StatusNoContent, nil), nil
@@ -2756,6 +2912,10 @@ func (s *SubmodelRepositoryAPIAPIService) PutFileByPathSubmodelRepo(ctx context.
 		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "UploadFileAttachment"), nil
 	}
 
+	if response, ok := s.recordCurrentSubmodelVersion(ctx, decodedSubmodelIdentifier, operation); !ok {
+		return response, nil
+	}
+
 	return gen.Response(http.StatusNoContent, nil), nil
 }
 
@@ -2763,7 +2923,6 @@ func (s *SubmodelRepositoryAPIAPIService) PutFileByPathSubmodelRepo(ctx context.
 //
 //nolint:revive
 func (s *SubmodelRepositoryAPIAPIService) DeleteFileByPathSubmodelRepo(ctx context.Context, submodelIdentifier string, idShortPath string) (gen.ImplResponse, error) {
-	_ = ctx
 	const operation = "DeleteFileByPathSubmodelRepo"
 
 	decodedSubmodelIdentifier, decodeErr := common.DecodeString(submodelIdentifier)
@@ -2780,6 +2939,10 @@ func (s *SubmodelRepositoryAPIAPIService) DeleteFileByPathSubmodelRepo(ctx conte
 			return newAPIErrorResponse(err, http.StatusBadRequest, operation, "BadRequest"), nil
 		}
 		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "DeleteFileAttachment"), nil
+	}
+
+	if response, ok := s.recordCurrentSubmodelVersion(ctx, decodedSubmodelIdentifier, operation); !ok {
+		return response, nil
 	}
 
 	return gen.Response(http.StatusOK, nil), nil

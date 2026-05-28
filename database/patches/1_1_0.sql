@@ -129,6 +129,71 @@ CREATE INDEX IF NOT EXISTS ix_descriptor_payload_admin_updated_at ON descriptor_
 CREATE INDEX IF NOT EXISTS ix_cd_admin_created_at ON concept_description(administration_created_at);
 CREATE INDEX IF NOT EXISTS ix_cd_admin_updated_at ON concept_description(administration_updated_at);
 
+-- ------------------------------------------
+-- V3.2 version history / recent changes
+-- ------------------------------------------
+
+CREATE TABLE IF NOT EXISTS aas_history (
+  history_id BIGSERIAL PRIMARY KEY,
+  identifier TEXT NOT NULL,
+  change_type TEXT NOT NULL,
+  snapshot JSONB NOT NULL,
+  deleted BOOLEAN NOT NULL DEFAULT FALSE,
+  valid_from TIMESTAMPTZ NOT NULL,
+  valid_to TIMESTAMPTZ,
+  operation_time TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  administration_created_at_text TEXT,
+  administration_updated_at_text TEXT
+);
+
+CREATE TABLE IF NOT EXISTS submodel_history (
+  history_id BIGSERIAL PRIMARY KEY,
+  identifier TEXT NOT NULL,
+  change_type TEXT NOT NULL,
+  snapshot JSONB NOT NULL,
+  deleted BOOLEAN NOT NULL DEFAULT FALSE,
+  valid_from TIMESTAMPTZ NOT NULL,
+  valid_to TIMESTAMPTZ,
+  operation_time TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  administration_created_at_text TEXT,
+  administration_updated_at_text TEXT
+);
+
+CREATE TABLE IF NOT EXISTS concept_description_history (
+  history_id BIGSERIAL PRIMARY KEY,
+  identifier TEXT NOT NULL,
+  change_type TEXT NOT NULL,
+  snapshot JSONB NOT NULL,
+  deleted BOOLEAN NOT NULL DEFAULT FALSE,
+  valid_from TIMESTAMPTZ NOT NULL,
+  valid_to TIMESTAMPTZ,
+  operation_time TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  administration_created_at_text TEXT,
+  administration_updated_at_text TEXT
+);
+
+CREATE TABLE IF NOT EXISTS descriptor_history (
+  history_id BIGSERIAL PRIMARY KEY,
+  identifier TEXT NOT NULL,
+  change_type TEXT NOT NULL,
+  snapshot JSONB NOT NULL,
+  deleted BOOLEAN NOT NULL DEFAULT FALSE,
+  valid_from TIMESTAMPTZ NOT NULL,
+  valid_to TIMESTAMPTZ,
+  operation_time TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  administration_created_at_text TEXT,
+  administration_updated_at_text TEXT
+);
+
+CREATE INDEX IF NOT EXISTS ix_aas_history_identifier_validity ON aas_history(identifier, valid_from DESC, valid_to);
+CREATE INDEX IF NOT EXISTS ix_aas_history_recent ON aas_history(history_id, operation_time);
+CREATE INDEX IF NOT EXISTS ix_submodel_history_identifier_validity ON submodel_history(identifier, valid_from DESC, valid_to);
+CREATE INDEX IF NOT EXISTS ix_submodel_history_recent ON submodel_history(history_id, operation_time);
+CREATE INDEX IF NOT EXISTS ix_cd_history_identifier_validity ON concept_description_history(identifier, valid_from DESC, valid_to);
+CREATE INDEX IF NOT EXISTS ix_cd_history_recent ON concept_description_history(history_id, operation_time);
+CREATE INDEX IF NOT EXISTS ix_descriptor_history_identifier_validity ON descriptor_history(identifier, valid_from DESC, valid_to);
+CREATE INDEX IF NOT EXISTS ix_descriptor_history_recent ON descriptor_history(history_id, operation_time);
+
 -- V3.2 inserts "Batch" at enum index 2 for asset kind. Existing persisted numeric enum values
 -- from V3.1.1 with index >= 2 must be shifted by +1 to preserve semantic value.
 UPDATE asset_information

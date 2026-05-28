@@ -14,6 +14,7 @@ package apis
 import (
 	"context"
 	"net/http"
+	"time"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
@@ -24,6 +25,7 @@ import (
 // pass the data to a AssetAdministrationShellRegistryAPIAPIServicer to perform the required actions, then write the service results to the http response.
 type AssetAdministrationShellRegistryAPIAPIRouter interface {
 	GetAllAssetAdministrationShellDescriptors(http.ResponseWriter, *http.Request)
+	GetAllAssetAdministrationShellDescriptorsRecentChanges(http.ResponseWriter, *http.Request)
 	PostAssetAdministrationShellDescriptor(http.ResponseWriter, *http.Request)
 	GetAssetAdministrationShellDescriptorById(http.ResponseWriter, *http.Request)
 	PutAssetAdministrationShellDescriptorById(http.ResponseWriter, *http.Request)
@@ -49,6 +51,7 @@ type DescriptionAPIAPIRouter interface {
 // and updated with the logic required for the API.
 type AssetAdministrationShellRegistryAPIAPIServicer interface {
 	GetAllAssetAdministrationShellDescriptors(context.Context, int32, string, model.AssetKind, string) (model.ImplResponse, error)
+	GetAllAssetAdministrationShellDescriptorsRecentChanges(context.Context, time.Time, time.Time, int32, string) (model.ImplResponse, error)
 	PostAssetAdministrationShellDescriptor(context.Context, model.AssetAdministrationShellDescriptor) (model.ImplResponse, error)
 	GetAssetAdministrationShellDescriptorById(context.Context, string) (model.ImplResponse, error)
 	PutAssetAdministrationShellDescriptorById(context.Context, string, model.AssetAdministrationShellDescriptor) (model.ImplResponse, error)

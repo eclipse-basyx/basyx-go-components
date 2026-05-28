@@ -43,6 +43,7 @@ import (
 	"github.com/doug-martin/goqu/v9"
 	_ "github.com/doug-martin/goqu/v9/dialect/postgres" // Postgres Driver for Goqu
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/history"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 	_ "github.com/lib/pq" // PostgreSQL Treiber
@@ -119,6 +120,22 @@ func conceptDescriptionToJSONString(cd types.IConceptDescription) (string, error
 	}
 
 	return string(bytes), nil
+}
+
+func conceptDescriptionToHistorySnapshot(cd types.IConceptDescription) (map[string]any, error) {
+	jsonable, err := jsonization.ToJsonable(cd)
+	if err != nil {
+		return nil, common.NewErrBadRequest("CDREPO-HISTORY-TOJSONABLE failed to convert concept description to jsonable")
+	}
+	return jsonable, nil
+}
+
+func (b *ConceptDescriptionBackend) appendConceptDescriptionHistoryTx(ctx context.Context, tx *sql.Tx, cd types.IConceptDescription, changeType string, deleted bool) error {
+	snapshot, err := conceptDescriptionToHistorySnapshot(cd)
+	if err != nil {
+		return err
+	}
+	return history.AppendVersionTx(ctx, tx, history.TableConcept, cd.ID(), changeType, snapshot, deleted)
 }
 
 func (b *ConceptDescriptionBackend) createConceptDescriptionInTx(ctx context.Context, tx *sql.Tx, cd types.IConceptDescription) error {
@@ -272,6 +289,10 @@ func (b *ConceptDescriptionBackend) CreateConceptDescription(ctx context.Context
 		}
 	}
 
+	if err = b.appendConceptDescriptionHistoryTx(ctx, tx, cd, history.ChangeCreated, false); err != nil {
+		return err
+	}
+
 	if err = tx.Commit(); err != nil {
 		return common.NewInternalServerError("CDREPO-CRTCD-COMMIT " + err.Error())
 	}
@@ -417,6 +438,11 @@ func (b *ConceptDescriptionBackend) conceptDescriptionCursorExists(ctx context.C
 	return true, nil
 }
 
+// GetConceptDescriptionRecentChanges returns Concept Description history rows for recent-change APIs.
+func (b *ConceptDescriptionBackend) GetConceptDescriptionRecentChanges(ctx context.Context, limit int32, cursor string, createdFrom time.Time, updatedFrom time.Time) ([]history.Row, string, error) {
+	return history.RecentRows(ctx, b.db, history.TableConcept, limit, cursor, createdFrom, updatedFrom)
+}
+
 // GetConceptDescriptionByID retrieves a concept description by its identifier.
 func (b *ConceptDescriptionBackend) GetConceptDescriptionByID(ctx context.Context, id string) (types.IConceptDescription, error) {
 	collector, collectorErr := grammar.NewResolvedFieldPathCollectorForRoot(grammar.CollectorRootCD)
@@ -522,6 +548,14 @@ func (b *ConceptDescriptionBackend) PutConceptDescription(ctx context.Context, i
 		}
 	}
 
+	changeType := history.ChangeCreated
+	if isUpdate {
+		changeType = history.ChangeUpdated
+	}
+	if err = b.appendConceptDescriptionHistoryTx(ctx, tx, cd, changeType, false); err != nil {
+		return false, err
+	}
+
 	if err = tx.Commit(); err != nil {
 		return false, common.NewInternalServerError("CDREPO-PUTCD-COMMIT " + err.Error())
 	}
@@ -557,6 +591,9 @@ func (b *ConceptDescriptionBackend) DeleteConceptDescription(ctx context.Context
 	}
 	if !deleted {
 		return common.NewErrNotFound("CDREPO-DELCD-NOTFOUND Concept description with the given ID does not exist")
+	}
+	if err = history.AppendVersionTx(ctx, tx, history.TableConcept, id, history.ChangeDeleted, map[string]any{"id": id}, true); err != nil {
+		return err
 	}
 
 	if err = tx.Commit(); err != nil {

@@ -18,6 +18,7 @@ import (
 	"log"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
@@ -75,6 +76,12 @@ func (c *AssetAdministrationShellRegistryAPIAPIController) Routes() Routes {
 			strings.ToUpper("Post"),
 			"/shell-descriptors",
 			c.PostAssetAdministrationShellDescriptor,
+		},
+		"GetAllAssetAdministrationShellDescriptorsRecentChanges": Route{
+			"GetAllAssetAdministrationShellDescriptorsRecentChanges",
+			strings.ToUpper("Get"),
+			"/shell-descriptors/$recent-changes",
+			c.GetAllAssetAdministrationShellDescriptorsRecentChanges,
 		},
 		"GetAssetAdministrationShellDescriptorById": Route{
 			"GetAssetAdministrationShellDescriptorById",
@@ -147,6 +154,12 @@ func (c *AssetAdministrationShellRegistryAPIAPIController) OrderedRoutes() []Rou
 			strings.ToUpper("Post"),
 			"/shell-descriptors",
 			c.PostAssetAdministrationShellDescriptor,
+		},
+		Route{
+			"GetAllAssetAdministrationShellDescriptorsRecentChanges",
+			strings.ToUpper("Get"),
+			"/shell-descriptors/$recent-changes",
+			c.GetAllAssetAdministrationShellDescriptorsRecentChanges,
 		},
 		Route{
 			"GetAssetAdministrationShellDescriptorById",
@@ -269,6 +282,76 @@ func (c *AssetAdministrationShellRegistryAPIAPIController) GetAllAssetAdministra
 	result, err := c.service.GetAllAssetAdministrationShellDescriptors(r.Context(), limitParam, cursorParam, assetKindParam, assetTypeParam)
 	if err != nil {
 		log.Printf("🧩 [%s] Error in GetAllAssetAdministrationShellDescriptors: service failure (limit=%d cursor=%q assetKind=%q assetType=%q): %v", componentName, limitParam, cursorParam, string(assetKindParam), assetTypeParam, err)
+		c.errorHandler(w, r, err, &result)
+		return
+	}
+	_ = EncodeJSONResponse(result.Body, &result.Code, w)
+}
+
+// GetAllAssetAdministrationShellDescriptorsRecentChanges - Returns all Asset Administration Shell Descriptors that have been changed recently
+func (c *AssetAdministrationShellRegistryAPIAPIController) GetAllAssetAdministrationShellDescriptorsRecentChanges(w http.ResponseWriter, r *http.Request) {
+	query, err := parseQuery(r.URL.RawQuery)
+	if err != nil {
+		result := common.NewErrorResponse(
+			err,
+			http.StatusBadRequest,
+			componentName,
+			"GetAllAssetAdministrationShellDescriptorsRecentChanges",
+			"query",
+		)
+		EncodeJSONResponse(result.Body, &result.Code, w)
+		return
+	}
+
+	var createdFromParam time.Time
+	if query.Has("createdFrom") {
+		createdFromParam, err = parseTime(query.Get("createdFrom"))
+		if err != nil {
+			result := common.NewErrorResponse(err, http.StatusBadRequest, componentName, "GetAllAssetAdministrationShellDescriptorsRecentChanges", "createdFrom")
+			EncodeJSONResponse(result.Body, &result.Code, w)
+			return
+		}
+	}
+
+	var updatedFromParam time.Time
+	if query.Has("updatedFrom") {
+		updatedFromParam, err = parseTime(query.Get("updatedFrom"))
+		if err != nil {
+			result := common.NewErrorResponse(err, http.StatusBadRequest, componentName, "GetAllAssetAdministrationShellDescriptorsRecentChanges", "updatedFrom")
+			EncodeJSONResponse(result.Body, &result.Code, w)
+			return
+		}
+	}
+
+	var limitParam int32
+	if query.Has("limit") {
+		param, err := parseNumericParameter[int32](
+			query.Get("limit"),
+			WithParse[int32](parseInt32),
+			WithMinimum[int32](1),
+		)
+		if err != nil {
+			result := common.NewErrorResponse(
+				err,
+				http.StatusBadRequest,
+				componentName,
+				"GetAllAssetAdministrationShellDescriptorsRecentChanges",
+				"limit",
+			)
+			EncodeJSONResponse(result.Body, &result.Code, w)
+			return
+		}
+		limitParam = param
+	}
+
+	result, err := c.service.GetAllAssetAdministrationShellDescriptorsRecentChanges(
+		r.Context(),
+		createdFromParam,
+		updatedFromParam,
+		limitParam,
+		query.Get("cursor"),
+	)
+	if err != nil {
 		c.errorHandler(w, r, err, &result)
 		return
 	}

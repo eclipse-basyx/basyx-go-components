@@ -3,6 +3,7 @@ package main
 
 import (
 	"context"
+	"crypto/rsa"
 	"embed"
 	"flag"
 	"fmt"
@@ -17,6 +18,7 @@ import (
 	"github.com/eclipse-basyx/basyx-go-components/internal/aasrepository/api"
 	persistencepostgresql "github.com/eclipse-basyx/basyx-go-components/internal/aasrepository/persistence"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/jws"
 	commonmodel "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 	submodelrepositorydb "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence"
@@ -66,6 +68,16 @@ func runServer(ctx context.Context, configPath string) error {
 		log.Printf("Warning: failed to load OpenAPI spec for Swagger UI: %v", err)
 	}
 
+	var privateKey *rsa.PrivateKey
+	if cfg.JWS.PrivateKeyPath != "" {
+		privateKey, err = jws.LoadPrivateKey(cfg.JWS.PrivateKeyPath)
+		if err != nil {
+			log.Printf("Warning: failed to load JWS private key: %v - /$signed Endpoints will be unavailable", err)
+		} else {
+			log.Println("JWS private key loaded successfully")
+		}
+	}
+
 	dsn := common.BuildPostgresDSN(cfg.Postgres)
 
 	if err := common.ValidateSchemaVersionByDSN(dsn, common.CURRENT_DATABASE_VERSION); err != nil {
@@ -95,6 +107,7 @@ func runServer(ctx context.Context, configPath string) error {
 		log.Printf("❌ AAS DB init failed: %v", err)
 		return err
 	}
+	aasDatabase.SetJWSPrivateKey(privateKey)
 
 	aasRegistryPersistence, err := aasregistrydb.NewPostgreSQLAASRegistryDatabaseFromDB(sharedDB, cfg.Server.CacheEnabled)
 	if err != nil {

@@ -41,6 +41,7 @@ import (
 	"log"
 	"net/http"
 	"strings"
+	"time"
 
 	persistence_postgresql "github.com/eclipse-basyx/basyx-go-components/internal/aasregistry/persistence"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
@@ -97,6 +98,36 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) GetAllAssetAdministratio
 			), toJsonErr
 		}
 		jsonable = append(jsonable, j)
+	}
+
+	return pagedResponse(jsonable, nextCursor), nil
+}
+
+// GetAllAssetAdministrationShellDescriptorsRecentChanges returns changed AAS descriptors.
+func (s *AssetAdministrationShellRegistryAPIAPIService) GetAllAssetAdministrationShellDescriptorsRecentChanges(ctx context.Context, createdFrom time.Time, updatedFrom time.Time, limit int32, cursor string) (model.ImplResponse, error) {
+	internalCursor, resp, err := decodeCursor(strings.TrimSpace(cursor), "GetAllAssetAdministrationShellDescriptorsRecentChanges")
+	if resp != nil || err != nil {
+		return *resp, err
+	}
+
+	rows, nextCursor, err := s.aasRegistryBackend.GetAssetAdministrationShellDescriptorRecentChanges(ctx, limit, internalCursor, createdFrom, updatedFrom)
+	if err != nil {
+		if common.IsErrBadRequest(err) {
+			return common.NewErrorResponse(
+				err, http.StatusBadRequest, componentName, "GetAllAssetAdministrationShellDescriptorsRecentChanges", "BadRequest",
+			), nil
+		}
+		return common.NewErrorResponse(
+			err, http.StatusInternalServerError, componentName, "GetAllAssetAdministrationShellDescriptorsRecentChanges", "InternalServerError",
+		), err
+	}
+
+	jsonable := make([]map[string]any, 0, len(rows))
+	for _, row := range rows {
+		if row.Deleted {
+			continue
+		}
+		jsonable = append(jsonable, row.Snapshot)
 	}
 
 	return pagedResponse(jsonable, nextCursor), nil

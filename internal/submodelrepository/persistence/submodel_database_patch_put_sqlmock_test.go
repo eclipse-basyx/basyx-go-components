@@ -139,6 +139,7 @@ func TestPutSubmodelCreatePathReturnsFalse(t *testing.T) {
 		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(300))
 	mock.ExpectExec(`INSERT INTO .*submodel_payload`).
 		WillReturnResult(sqlmock.NewResult(0, 1))
+	expectSubmodelHistoryAppend(mock)
 	mock.ExpectCommit()
 
 	isUpdate, err := sut.PutSubmodel(contextWithABACDisabled(t), "sm-new", submodel)
@@ -170,12 +171,20 @@ func TestPutSubmodelUpdatePathReturnsTrue(t *testing.T) {
 		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(401))
 	mock.ExpectExec(`INSERT INTO .*submodel_payload`).
 		WillReturnResult(sqlmock.NewResult(0, 1))
+	expectSubmodelHistoryAppend(mock)
 	mock.ExpectCommit()
 
 	isUpdate, err := sut.PutSubmodel(contextWithABACDisabled(t), "sm-existing", submodel)
 	require.NoError(t, err)
 	require.True(t, isUpdate)
 	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func expectSubmodelHistoryAppend(mock sqlmock.Sqlmock) {
+	mock.ExpectExec(`UPDATE "submodel_history"`).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectExec(`INSERT INTO "submodel_history"`).
+		WillReturnResult(sqlmock.NewResult(0, 1))
 }
 
 func TestPatchSubmodelElementByPathNotFoundReturnsNotFound(t *testing.T) {

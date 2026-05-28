@@ -15,6 +15,7 @@ import (
 	"context"
 	"net/http"
 	"os"
+	"time"
 
 	"github.com/FriedJannik/aas-go-sdk/types"
 	model "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
@@ -89,6 +90,9 @@ type AssetAdministrationShellRepositoryAPIAPIRouter interface {
 	GetOperationAsyncStatusAasRepository(http.ResponseWriter, *http.Request)
 	GetOperationAsyncResultAasRepository(http.ResponseWriter, *http.Request)
 	GetOperationAsyncResultValueOnlyAasRepository(http.ResponseWriter, *http.Request)
+	GetAllAssetAdministrationShellsRecentChanges(http.ResponseWriter, *http.Request)
+	GetAssetAdministrationShellByIdSigned(http.ResponseWriter, *http.Request)
+	GetAssetAdministrationShellVersionByIdAndDate(http.ResponseWriter, *http.Request)
 }
 
 // DescriptionAPIAPIRouter defines the required methods for binding the api requests to a responses for the DescriptionAPIAPI
@@ -162,6 +166,9 @@ type AssetAdministrationShellRepositoryAPIAPIServicer interface {
 	GetOperationAsyncStatusAasRepository(context.Context, string, string, string, string) (model.ImplResponse, error)
 	GetOperationAsyncResultAasRepository(context.Context, string, string, string, string) (model.ImplResponse, error)
 	GetOperationAsyncResultValueOnlyAasRepository(context.Context, string, string, string, string) (model.ImplResponse, error)
+	GetAllAssetAdministrationShellsRecentChanges(context.Context, []string, time.Time, time.Time, int32, string) (model.ImplResponse, error)
+	GetAssetAdministrationShellByIdSigned(context.Context, string) (model.ImplResponse, error)
+	GetAssetAdministrationShellVersionByIdAndDate(context.Context, string, time.Time) (model.ImplResponse, error)
 }
 
 // DescriptionAPIAPIServicer defines the api actions for the DescriptionAPIAPI service

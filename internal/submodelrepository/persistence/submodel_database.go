@@ -43,6 +43,7 @@ import (
 	"github.com/FriedJannik/aas-go-sdk/verification"
 	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/history"
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
@@ -257,6 +258,52 @@ func buildSubmodelModelReference(submodelIdentifier string) (types.IReference, e
 	return reference, nil
 }
 
+func submodelToHistorySnapshot(submodel types.ISubmodel) (map[string]any, error) {
+	jsonable, err := jsonization.ToJsonable(submodel)
+	if err != nil {
+		return nil, common.NewInternalServerError("SMREPO-HISTORY-TOJSONABLE " + err.Error())
+	}
+	return jsonable, nil
+}
+
+func (s *SubmodelDatabase) appendSubmodelHistoryTx(ctx context.Context, tx *sql.Tx, submodel types.ISubmodel, changeType string, deleted bool) error {
+	snapshot, err := submodelToHistorySnapshot(submodel)
+	if err != nil {
+		return err
+	}
+	return history.AppendVersionTx(ctx, tx, history.TableSubmodel, submodel.ID(), changeType, snapshot, deleted)
+}
+
+// GetSubmodelByIDAndDate returns the Submodel version valid at the requested instant.
+func (s *SubmodelDatabase) GetSubmodelByIDAndDate(ctx context.Context, submodelIdentifier string, at time.Time) (types.ISubmodel, error) {
+	snapshot, err := history.SnapshotByDate(ctx, s.db, history.TableSubmodel, submodelIdentifier, at)
+	if err != nil {
+		return nil, err
+	}
+	submodel, err := jsonization.SubmodelFromJsonable(snapshot)
+	if err != nil {
+		return nil, common.NewInternalServerError("SMREPO-HISTORY-FROMJSON " + err.Error())
+	}
+	return submodel, nil
+}
+
+// GetSubmodelRecentChanges returns Submodel history rows for recent-change APIs.
+func (s *SubmodelDatabase) GetSubmodelRecentChanges(ctx context.Context, limit int32, cursor string, createdFrom time.Time, updatedFrom time.Time) ([]history.Row, string, error) {
+	return history.RecentRows(ctx, s.db, history.TableSubmodel, limit, cursor, createdFrom, updatedFrom)
+}
+
+// RecordCurrentSubmodelVersion appends a full snapshot of the current Submodel state.
+func (s *SubmodelDatabase) RecordCurrentSubmodelVersion(ctx context.Context, submodelIdentifier string, changeType string) error {
+	submodel, err := s.GetSubmodelByID(ctx, submodelIdentifier, "deep", false)
+	if err != nil {
+		return err
+	}
+
+	return common.ExecuteInTransaction(s.db, "SMREPO-HISTORY-STARTTX", "SMREPO-HISTORY-COMMIT", func(tx *sql.Tx) error {
+		return s.appendSubmodelHistoryTx(ctx, tx, submodel, changeType, false)
+	})
+}
+
 // QuerySubmodels applies query conditions to the context and reuses the regular submodel listing logic.
 func (s *SubmodelDatabase) QuerySubmodels(ctx context.Context, limit int32, cursor string, queryWrapper *grammar.QueryWrapper, _ bool) ([]types.ISubmodel, string, error) {
 	if queryWrapper == nil || queryWrapper.Query.Condition == nil {
@@ -283,6 +330,10 @@ func (s *SubmodelDatabase) CreateSubmodel(ctx context.Context, submodel types.IS
 		return err
 	}
 
+	if err = s.appendSubmodelHistoryTx(ctx, tx, submodel, history.ChangeCreated, false); err != nil {
+		return err
+	}
+
 	err = tx.Commit()
 	if err != nil {
 		return common.NewInternalServerError("SMREPO-NEWSM-CREATE-COMMIT " + err.Error())
@@ -301,7 +352,10 @@ func (s *SubmodelDatabase) CreateSubmodelInTransaction(ctx context.Context, tx *
 		return err
 	}
 
-	return s.createSubmodelInTransactionValidated(ctx, tx, submodel)
+	if err := s.createSubmodelInTransactionValidated(ctx, tx, submodel); err != nil {
+		return err
+	}
+	return s.appendSubmodelHistoryTx(ctx, tx, submodel, history.ChangeCreated, false)
 }
 
 func (s *SubmodelDatabase) createSubmodelInTransactionValidated(ctx context.Context, tx *sql.Tx, submodel types.ISubmodel) error {
@@ -1406,6 +1460,14 @@ func (s *SubmodelDatabase) putSubmodelInTransaction(ctx context.Context, tx *sql
 		}
 	}
 
+	changeType := history.ChangeCreated
+	if isUpdate {
+		changeType = history.ChangeUpdated
+	}
+	if err := s.appendSubmodelHistoryTx(ctx, tx, submodel, changeType, false); err != nil {
+		return false, err
+	}
+
 	return isUpdate, nil
 }
 
@@ -1463,6 +1525,10 @@ func (s *SubmodelDatabase) deleteSubmodelInTransaction(ctx context.Context, tx *
 			return common.NewErrNotFound("SMREPO-DELSM-NOTFOUND Submodel with ID '" + submodelID + "' not found")
 		}
 		return common.NewInternalServerError("SMREPO-DELSM-GETSMDATABASEID " + err.Error())
+	}
+
+	if err := history.AppendVersionTx(ctx, tx, history.TableSubmodel, submodelID, history.ChangeDeleted, map[string]any{"id": submodelID}, true); err != nil {
+		return err
 	}
 
 	err = cleanupSubmodelLargeObjects(tx, int64(submodelDatabaseID))

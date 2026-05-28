@@ -28,6 +28,7 @@ package persistence
 
 import (
 	"context"
+	"crypto/rsa"
 	"database/sql"
 	"encoding/json"
 	"errors"
@@ -43,16 +44,24 @@ import (
 	persistenceutils "github.com/eclipse-basyx/basyx-go-components/internal/aasrepository/persistence/utils"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/descriptors"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/history"
 	commonmodel "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 	"github.com/lib/pq"
+	jose "gopkg.in/go-jose/go-jose.v2"
 )
 
 // AssetAdministrationShellDatabase is the implementation of the AssetAdministrationShellRepositoryDatabase interface using PostgreSQL as the underlying database.
 type AssetAdministrationShellDatabase struct {
 	db               *sql.DB
 	verificationMode commonmodel.VerificationMode
+	privateKey       *rsa.PrivateKey
+}
+
+// SetJWSPrivateKey configures the key used by signed AAS responses.
+func (s *AssetAdministrationShellDatabase) SetJWSPrivateKey(privateKey *rsa.PrivateKey) {
+	s.privateKey = privateKey
 }
 
 // ExecuteInTransaction runs fn in a database transaction bound to this backend.
@@ -137,6 +146,68 @@ func (s *AssetAdministrationShellDatabase) verifyReference(reference types.IRefe
 			return common.NewErrBadRequest(errorPrefix + " " + message)
 		},
 	)
+}
+
+func aasToHistorySnapshot(aas types.IAssetAdministrationShell) (map[string]any, error) {
+	jsonable, err := jsonization.ToJsonable(aas)
+	if err != nil {
+		return nil, common.NewInternalServerError("AASREPO-HISTORY-TOJSONABLE " + err.Error())
+	}
+	return jsonable, nil
+}
+
+func (s *AssetAdministrationShellDatabase) appendAASHistoryTx(ctx context.Context, tx *sql.Tx, aas types.IAssetAdministrationShell, changeType string, deleted bool) error {
+	snapshot, err := aasToHistorySnapshot(aas)
+	if err != nil {
+		return err
+	}
+	return history.AppendVersionTx(ctx, tx, history.TableAAS, aas.ID(), changeType, snapshot, deleted)
+}
+
+// GetSignedAssetAdministrationShell returns a compact JWS for the requested AAS.
+func (s *AssetAdministrationShellDatabase) GetSignedAssetAdministrationShell(ctx context.Context, aasID string) (string, error) {
+	if s.privateKey == nil {
+		return "", errors.New("JWS signing not configured: private key not loaded")
+	}
+	aas, err := s.GetAssetAdministrationShellByID(ctx, aasID)
+	if err != nil {
+		return "", err
+	}
+	jsonAAS, err := jsonization.ToJsonable(aas)
+	if err != nil {
+		return "", err
+	}
+	payload, err := json.Marshal(jsonAAS)
+	if err != nil {
+		return "", err
+	}
+	signer, err := jose.NewSigner(jose.SigningKey{Algorithm: jose.RS256, Key: s.privateKey}, nil)
+	if err != nil {
+		return "", err
+	}
+	jws, err := signer.Sign(payload)
+	if err != nil {
+		return "", err
+	}
+	return jws.CompactSerialize()
+}
+
+// GetAssetAdministrationShellByIDAndDate returns the AAS version valid at the requested instant.
+func (s *AssetAdministrationShellDatabase) GetAssetAdministrationShellByIDAndDate(ctx context.Context, aasIdentifier string, at time.Time) (types.IAssetAdministrationShell, error) {
+	snapshot, err := history.SnapshotByDate(ctx, s.db, history.TableAAS, aasIdentifier, at)
+	if err != nil {
+		return nil, err
+	}
+	aas, err := jsonization.AssetAdministrationShellFromJsonable(snapshot)
+	if err != nil {
+		return nil, common.NewInternalServerError("AASREPO-HISTORY-FROMJSON " + err.Error())
+	}
+	return aas, nil
+}
+
+// GetAssetAdministrationShellRecentChanges returns AAS history rows for recent-change APIs.
+func (s *AssetAdministrationShellDatabase) GetAssetAdministrationShellRecentChanges(ctx context.Context, limit int32, cursor string, createdFrom time.Time, updatedFrom time.Time) ([]history.Row, string, error) {
+	return history.RecentRows(ctx, s.db, history.TableAAS, limit, cursor, createdFrom, updatedFrom)
 }
 
 func buildAASCollector() (*grammar.ResolvedFieldPathCollector, error) {
@@ -246,7 +317,7 @@ func (s *AssetAdministrationShellDatabase) CreateAssetAdministrationShellInTrans
 		}
 	}
 
-	return nil
+	return s.appendAASHistoryTx(ctx, tx, aas, history.ChangeCreated, false)
 }
 
 // createAssetAdministrationShellInTransaction creates an AAS and all dependent records within an existing transaction.
@@ -807,6 +878,14 @@ func (s *AssetAdministrationShellDatabase) putAssetAdministrationShellByIDInTran
 		}
 	}
 
+	changeType := history.ChangeCreated
+	if isUpdate {
+		changeType = history.ChangeUpdated
+	}
+	if err := s.appendAASHistoryTx(ctx, tx, aas, changeType, false); err != nil {
+		return false, err
+	}
+
 	return isUpdate, nil
 }
 
@@ -865,7 +944,7 @@ func (s *AssetAdministrationShellDatabase) DeleteAssetAdministrationShellByIDInT
 		return common.NewErrNotFound("AASREPO-DELAAS-AASNOTFOUND Asset Administration Shell with ID '" + aasIdentifier + "' not found")
 	}
 
-	return nil
+	return history.AppendVersionTx(ctx, tx, history.TableAAS, aasIdentifier, history.ChangeDeleted, map[string]any{"id": aasIdentifier}, true)
 }
 
 // GetAssetAdministrationShellReferences returns paginated model references while preserving ABAC filters from ctx.

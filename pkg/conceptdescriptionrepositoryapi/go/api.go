@@ -14,6 +14,7 @@ package openapi
 import (
 	"context"
 	"net/http"
+	"time"
 
 	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
@@ -28,6 +29,7 @@ type ConceptDescriptionRepositoryAPIAPIRouter interface {
 	GetConceptDescriptionById(http.ResponseWriter, *http.Request)
 	PutConceptDescriptionById(http.ResponseWriter, *http.Request)
 	DeleteConceptDescriptionById(http.ResponseWriter, *http.Request)
+	GetAllConceptDescriptionRecentChanges(http.ResponseWriter, *http.Request)
 }
 
 // DescriptionAPIAPIRouter defines the required methods for binding the api requests to a responses for the DescriptionAPIAPI
@@ -54,6 +56,7 @@ type ConceptDescriptionRepositoryAPIAPIServicer interface {
 	GetConceptDescriptionById(context.Context, string) (model.ImplResponse, error)
 	PutConceptDescriptionById(context.Context, string, types.IConceptDescription) (model.ImplResponse, error)
 	DeleteConceptDescriptionById(context.Context, string) (model.ImplResponse, error)
+	GetAllConceptDescriptionRecentChanges(context.Context, time.Time, time.Time, int32, string) (model.ImplResponse, error)
 }
 
 // DescriptionAPIAPIServicer defines the api actions for the DescriptionAPIAPI service
