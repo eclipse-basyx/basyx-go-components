@@ -9,8 +9,8 @@ info:
   license:
     name: CC BY 4.0
     url: https://creativecommons.org/licenses/by/4.0/
-  version: V3.1.1_SSP-001
-  x-profile-identifier: https://admin-shell.io/aas/API/3/1/ConceptDescriptionRepositoryServiceSpecification/SSP-001
+  version: V3.2.0_SSP-001
+  x-profile-identifier: https://admin-shell.io/aas/API/3/2/ConceptDescriptionRepositoryServiceSpecification/SSP-001
 servers:
 - url: https://admin-shell.io/api/v3/
 - url: https://example.com/
@@ -75,10 +75,10 @@ paths:
         default:
           $ref: "#/components/responses/default"
       x-semanticIds:
-      - https://admin-shell.io/aas/API/GetAllConceptDescriptions/3/1
-      - https://admin-shell.io/aas/API/GetAllConceptDescriptionsByIdShort/3/1
-      - https://admin-shell.io/aas/API/GetAllConceptDescriptionsByIsCaseOf/3/1
-      - https://admin-shell.io/aas/API/GetAllConceptDescriptionsByDataSpecificationReference/3/1
+      - https://admin-shell.io/aas/API/GetAllConceptDescriptions/3/2
+      - https://admin-shell.io/aas/API/GetAllConceptDescriptionsByIdShort/3/2
+      - https://admin-shell.io/aas/API/GetAllConceptDescriptionsByIsCaseOf/3/2
+      - https://admin-shell.io/aas/API/GetAllConceptDescriptionsByDataSpecificationReference/3/2
     post:
       tags:
       - Concept Description Repository API
@@ -114,7 +114,7 @@ paths:
         default:
           $ref: "#/components/responses/default"
       x-semanticIds:
-      - https://admin-shell.io/aas/API/PostConceptDescription/3/1
+      - https://admin-shell.io/aas/API/PostConceptDescription/3/2
   /concept-descriptions/{cdIdentifier}:
     get:
       tags:
@@ -148,7 +148,7 @@ paths:
         default:
           $ref: "#/components/responses/default"
       x-semanticIds:
-      - https://admin-shell.io/aas/API/GetConceptDescriptionById/3/1
+      - https://admin-shell.io/aas/API/GetConceptDescriptionById/3/2
     put:
       tags:
       - Concept Description Repository API
@@ -193,7 +193,7 @@ paths:
         default:
           $ref: "#/components/responses/default"
       x-semanticIds:
-      - https://admin-shell.io/aas/API/PutConceptDescriptionById/3/1
+      - https://admin-shell.io/aas/API/PutConceptDescriptionById/3/2
     delete:
       tags:
       - Concept Description Repository API
@@ -222,7 +222,7 @@ paths:
         default:
           $ref: "#/components/responses/default"
       x-semanticIds:
-      - https://admin-shell.io/aas/API/DeleteConceptDescriptionById/3/1
+      - https://admin-shell.io/aas/API/DeleteConceptDescriptionById/3/2
   /query/concept-descriptions:
     post:
       tags:
@@ -230,23 +230,23 @@ paths:
       summary: Returns all Concept Descriptions that confirm to the input query
       operationId: QueryConceptDescriptions
       x-semanticIds:
-      - https://admin-shell.io/aas/API/QueryConceptDescriptions/3/1
+      - https://admin-shell.io/aas/API/QueryConceptDescriptions/3/2
       parameters:
-      - $ref: https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.1.1#/components/parameters/Limit
-      - $ref: https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.1.1#/components/parameters/Cursor
+      - $ref: https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.2.0#/components/parameters/Limit
+      - $ref: https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.2.0#/components/parameters/Cursor
       requestBody:
         content:
           application/json:
             schema:
               # Note: It is a known problem that SwaggerHub cannot render the oneOf statement in the Query definition.
-              $ref: https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.1.1#/components/schemas/Query
+              $ref: https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.2.0#/components/schemas/Query
       responses:
         "200":
           description: Requested Concept Descriptions
           content:
             application/json:
               schema:
-                $ref: https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.1.1#/components/schemas/QueryResultConceptDescription
+                $ref: https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.2.0#/components/schemas/QueryResultConceptDescription
         "400":
           $ref: "#/components/responses/bad-request"
         "403":
@@ -255,6 +255,38 @@ paths:
           $ref: "#/components/responses/internal-server-error"
         default:
           $ref: "#/components/responses/default"
+
+  /concept-descriptions/$recent-changes:
+    get:
+      tags:
+      - Concept Description Repository API
+      summary: Returns all Concept Descriptions that have been changed recently
+      operationId: GetAllConceptDescriptionRecentChanges
+      x-semanticIds:
+      - https://admin-shell.io/aas/API/GetAllConceptDescriptionRecentChanges/3/2
+      parameters:
+      - $ref: https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.2.0#/components/parameters/CreatedFrom
+      - $ref: https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.2.0#/components/parameters/UpdatedFrom
+      - $ref: https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.2.0#/components/parameters/Limit
+      - $ref: https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.2.0#/components/parameters/Cursor
+      responses:
+        "200":
+          description: Requested list of recently changed Concept Descriptions
+          content:
+            application/json:
+              schema:
+                $ref: https://api.swaggerhub.com/domains/Plattform_i40/Part1-MetaModel-Schemas/V3.2.0#/components/schemas/ConceptDescription
+        "400":
+          $ref: "#/components/responses/bad-request"
+        "401":
+          $ref: https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.2.0#/components/responses/unauthorized
+        "403":
+          $ref: "#/components/responses/forbidden"
+        "500":
+          $ref: "#/components/responses/internal-server-error"
+        default:
+          $ref: "#/components/responses/default"
+
   /serialization:
     get:
       tags:
@@ -315,7 +347,7 @@ paths:
         default:
           $ref: "#/components/responses/default"
       x-semanticIds:
-      - https://admin-shell.io/aas/API/GenerateSerializationByIds/3/1
+      - https://admin-shell.io/aas/API/GenerateSerializationByIds/3/2
   /description:
     get:
       tags:
@@ -332,7 +364,7 @@ paths:
         "403":
           $ref: "#/components/responses/forbidden"
       x-semanticIds:
-      - https://admin-shell.io/aas/API/GetSelfDescription/3/1
+      - https://admin-shell.io/aas/API/GetSelfDescription/3/2
 components:
   schemas:
     GetConceptDescriptionsResult:
@@ -1284,13 +1316,13 @@ components:
           type: array
           items:
             type: string
-            example: "[\"https://admin-shell.io/aas/API/3/1/AssetAdministrationShellServiceSpecification/SSP-001\",\"https://admin-shell.io/aas/API/3/1/AssetAdministrationShellServiceSpecification/SSP-001\",\"https://admin-shell.io/aas/API/3/1/AssetAdministrationShellServiceSpecification/SSP-002\",\"https://admin-shell.io/aas/API/3/1/AssetAdministrationShellServiceSpecification/SSP-002\",\"https://admin-shell.io/aas/API/3/1/SubmodelServiceSpecification/SSP-001\",\"https://admin-shell.io/aas/API/3/1/SubmodelServiceSpecification/SSP-001\",\"https://admin-shell.io/aas/API/3/1/SubmodelServiceSpecification/SSP-002\",\"https://admin-shell.io/aas/API/3/1/SubmodelServiceSpecification/SSP-002\",\"https://admin-shell.io/aas/API/3/1/SubmodelServiceSpecification/SSP-003\",\"https://admin-shell.io/aas/API/3/1/SubmodelServiceSpecification/SSP-003\",\"https://admin-shell.io/aas/API/3/1/AasxFileServerServiceSpecification/SSP-001\",\"https://admin-shell.io/aas/API/3/1/AasxFileServerServiceSpecification/SSP-001\",\"https://admin-shell.io/aas/API/3/1/AssetAdministrationShellRegistryServiceSpecification/SSP-001\",\"https://admin-shell.io/aas/API/3/1/AssetAdministrationShellRegistryServiceSpecification/SSP-001\",\"https://admin-shell.io/aas/API/3/1/AssetAdministrationShellRegistryServiceSpecification/SSP-002\",\"https://admin-shell.io/aas/API/3/1/AssetAdministrationShellRegistryServiceSpecification/SSP-002\",\"https://admin-shell.io/aas/API/3/1/AssetAdministrationShellRegistryServiceSpecification/SSP-003\",\"https://admin-shell.io/aas/API/3/1/AssetAdministrationShellRegistryServiceSpecification/SSP-004\",\"https://admin-shell.io/aas/API/3/1/AssetAdministrationShellRegistryServiceSpecification/SSP-005\",\"https://admin-shell.io/aas/API/3/1/SubmodelRegistryServiceSpecification/SSP-001\",\"https://admin-shell.io/aas/API/3/1/SubmodelRegistryServiceSpecification/SSP-001\",\"https://admin-shell.io/aas/API/3/1/SubmodelRegistryServiceSpecification/SSP-002\",\"https://admin-shell.io/aas/API/3/1/SubmodelRegistryServiceSpecification/SSP-002\",\"https://admin-shell.io/aas/API/3/1/SubmodelRegistryServiceSpecification/SSP-003\",\"https://admin-shell.io/aas/API/3/1/SubmodelRegistryServiceSpecification/SSP-004\",\"https://admin-shell.io/aas/API/3/1/DiscoveryServiceSpecification/SSP-001\",\"https://admin-shell.io/aas/API/3/1/DiscoveryServiceSpecification/SSP-001\",\"https://admin-shell.io/aas/API/3/1/DiscoveryServiceSpecification/SSP-002\",\"https://admin-shell.io/aas/API/3/1/AssetAdministrationShellRepositoryServiceSpecification/SSP-001\",\"https://admin-shell.io/aas/API/3/1/AssetAdministrationShellRepositoryServiceSpecification/SSP-001\",\"https://admin-shell.io/aas/API/3/1/AssetAdministrationShellRepositoryServiceSpecification/SSP-002\",\"https://admin-shell.io/aas/API/3/1/AssetAdministrationShellRepositoryServiceSpecification/SSP-002\",\"https://admin-shell.io/aas/API/3/1/AssetAdministrationShellRepositoryServiceSpecification/SSP-003\",\"https://admin-shell.io/aas/API/3/1/SubmodelRepositoryServiceSpecification/SSP-001\",\"https://admin-shell.io/aas/API/3/1/SubmodelRepositoryServiceSpecification/SSP-001\",\"https://admin-shell.io/aas/API/3/1/SubmodelRepositoryServiceSpecification/SSP-002\",\"https://admin-shell.io/aas/API/3/1/SubmodelRepositoryServiceSpecification/SSP-002\",\"https://admin-shell.io/aas/API/3/1/SubmodelRepositoryServiceSpecification/SSP-003\",\"https://admin-shell.io/aas/API/3/1/SubmodelRepositoryServiceSpecification/SSP-003\",\"https://admin-shell.io/aas/API/3/1/SubmodelRepositoryServiceSpecification/SSP-004\",\"https://admin-shell.io/aas/API/3/1/SubmodelRepositoryServiceSpecification/SSP-004\",\"https://admin-shell.io/aas/API/3/1/SubmodelRepositoryServiceSpecification/SSP-005\",\"https://admin-shell.io/aas/API/3/1/ConceptDescriptionRepositoryServiceSpecification/SSP-001\",\"https://admin-shell.io/aas/API/3/1/ConceptDescriptionRepositoryServiceSpecification/SSP-001\",\"https://admin-shell.io/aas/API/3/1/ConceptDescriptionRepositoryServiceSpecification/SSP-002\"]"
+            example: "[\"https://admin-shell.io/aas/API/3/2/AssetAdministrationShellServiceSpecification/SSP-001\",\"https://admin-shell.io/aas/API/3/2/AssetAdministrationShellServiceSpecification/SSP-001\",\"https://admin-shell.io/aas/API/3/2/AssetAdministrationShellServiceSpecification/SSP-002\",\"https://admin-shell.io/aas/API/3/2/AssetAdministrationShellServiceSpecification/SSP-002\",\"https://admin-shell.io/aas/API/3/2/SubmodelServiceSpecification/SSP-001\",\"https://admin-shell.io/aas/API/3/2/SubmodelServiceSpecification/SSP-001\",\"https://admin-shell.io/aas/API/3/2/SubmodelServiceSpecification/SSP-002\",\"https://admin-shell.io/aas/API/3/2/SubmodelServiceSpecification/SSP-002\",\"https://admin-shell.io/aas/API/3/2/SubmodelServiceSpecification/SSP-003\",\"https://admin-shell.io/aas/API/3/2/SubmodelServiceSpecification/SSP-003\",\"https://admin-shell.io/aas/API/3/2/AasxFileServerServiceSpecification/SSP-001\",\"https://admin-shell.io/aas/API/3/2/AasxFileServerServiceSpecification/SSP-001\",\"https://admin-shell.io/aas/API/3/2/AssetAdministrationShellRegistryServiceSpecification/SSP-001\",\"https://admin-shell.io/aas/API/3/2/AssetAdministrationShellRegistryServiceSpecification/SSP-001\",\"https://admin-shell.io/aas/API/3/2/AssetAdministrationShellRegistryServiceSpecification/SSP-002\",\"https://admin-shell.io/aas/API/3/2/AssetAdministrationShellRegistryServiceSpecification/SSP-002\",\"https://admin-shell.io/aas/API/3/2/AssetAdministrationShellRegistryServiceSpecification/SSP-003\",\"https://admin-shell.io/aas/API/3/2/AssetAdministrationShellRegistryServiceSpecification/SSP-004\",\"https://admin-shell.io/aas/API/3/2/AssetAdministrationShellRegistryServiceSpecification/SSP-005\",\"https://admin-shell.io/aas/API/3/2/SubmodelRegistryServiceSpecification/SSP-001\",\"https://admin-shell.io/aas/API/3/2/SubmodelRegistryServiceSpecification/SSP-001\",\"https://admin-shell.io/aas/API/3/2/SubmodelRegistryServiceSpecification/SSP-002\",\"https://admin-shell.io/aas/API/3/2/SubmodelRegistryServiceSpecification/SSP-002\",\"https://admin-shell.io/aas/API/3/2/SubmodelRegistryServiceSpecification/SSP-003\",\"https://admin-shell.io/aas/API/3/2/SubmodelRegistryServiceSpecification/SSP-004\",\"https://admin-shell.io/aas/API/3/2/DiscoveryServiceSpecification/SSP-001\",\"https://admin-shell.io/aas/API/3/2/DiscoveryServiceSpecification/SSP-001\",\"https://admin-shell.io/aas/API/3/2/DiscoveryServiceSpecification/SSP-002\",\"https://admin-shell.io/aas/API/3/2/AssetAdministrationShellRepositoryServiceSpecification/SSP-001\",\"https://admin-shell.io/aas/API/3/2/AssetAdministrationShellRepositoryServiceSpecification/SSP-001\",\"https://admin-shell.io/aas/API/3/2/AssetAdministrationShellRepositoryServiceSpecification/SSP-002\",\"https://admin-shell.io/aas/API/3/2/AssetAdministrationShellRepositoryServiceSpecification/SSP-002\",\"https://admin-shell.io/aas/API/3/2/AssetAdministrationShellRepositoryServiceSpecification/SSP-003\",\"https://admin-shell.io/aas/API/3/2/SubmodelRepositoryServiceSpecification/SSP-001\",\"https://admin-shell.io/aas/API/3/2/SubmodelRepositoryServiceSpecification/SSP-001\",\"https://admin-shell.io/aas/API/3/2/SubmodelRepositoryServiceSpecification/SSP-002\",\"https://admin-shell.io/aas/API/3/2/SubmodelRepositoryServiceSpecification/SSP-002\",\"https://admin-shell.io/aas/API/3/2/SubmodelRepositoryServiceSpecification/SSP-003\",\"https://admin-shell.io/aas/API/3/2/SubmodelRepositoryServiceSpecification/SSP-003\",\"https://admin-shell.io/aas/API/3/2/SubmodelRepositoryServiceSpecification/SSP-004\",\"https://admin-shell.io/aas/API/3/2/SubmodelRepositoryServiceSpecification/SSP-004\",\"https://admin-shell.io/aas/API/3/2/SubmodelRepositoryServiceSpecification/SSP-005\",\"https://admin-shell.io/aas/API/3/2/ConceptDescriptionRepositoryServiceSpecification/SSP-001\",\"https://admin-shell.io/aas/API/3/2/ConceptDescriptionRepositoryServiceSpecification/SSP-001\",\"https://admin-shell.io/aas/API/3/2/ConceptDescriptionRepositoryServiceSpecification/SSP-002\"]"
       description: "The Description object enables servers to present their capabilities to the clients, in particular which profiles they implement. At least one defined profile is required. Additional, proprietary attributes might be included. Nevertheless, the server must not expect that a regular client understands them."
       example: |-
         {
           "profiles": [
-            "https://admin-shell.io/aas/API/3/1/AssetAdministrationShellRegistryServiceSpecification/SSP-002",
-            "https://admin-shell.io/aas/API/3/1/SubmodelRegistryServiceSpecification/SSP-002"
+            "https://admin-shell.io/aas/API/3/2/AssetAdministrationShellRegistryServiceSpecification/SSP-002",
+            "https://admin-shell.io/aas/API/3/2/SubmodelRegistryServiceSpecification/SSP-002"
           ]
         }
     PagedResult_paging_metadata:
