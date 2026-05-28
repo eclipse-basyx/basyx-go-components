@@ -29,6 +29,7 @@ package main
 import (
 	"context"
 	"crypto/rsa"
+	"database/sql"
 	"embed"
 	"flag"
 	"fmt"
@@ -125,15 +126,9 @@ func runServer(ctx context.Context, configPath string) error {
 		return err
 	}
 
-	sharedDB, err := common.NewDatabaseConnection(dsn)
+	sharedDB, err := openSharedDatabase(ctx, cfg, dsn)
 	if err != nil {
 		return err
-	}
-	if cfg.Postgres.MaxOpenConnections > 0 {
-		sharedDB.SetMaxOpenConns(cfg.Postgres.MaxOpenConnections)
-	}
-	if cfg.Postgres.MaxIdleConnections > 0 {
-		sharedDB.SetMaxIdleConns(cfg.Postgres.MaxIdleConnections)
 	}
 
 	var privateKey *rsa.PrivateKey
@@ -297,6 +292,30 @@ func runServer(ctx context.Context, configPath string) error {
 		return fmt.Errorf("AASENV-SRV-SHUTDOWN %w", err)
 	}
 	return nil
+}
+
+func openSharedDatabase(ctx context.Context, cfg *common.Config, dsn string) (*sql.DB, error) {
+	db, err := common.NewDatabaseConnection(dsn)
+	if err != nil {
+		return nil, err
+	}
+	configurePostgresPool(db, cfg.Postgres)
+	if err = history.ApplyPostgresGuardConfig(ctx, db); err != nil {
+		return nil, err
+	}
+	return db, nil
+}
+
+func configurePostgresPool(db *sql.DB, cfg common.PostgresConfig) {
+	if cfg.MaxOpenConnections > 0 {
+		db.SetMaxOpenConns(cfg.MaxOpenConnections)
+	}
+	if cfg.MaxIdleConnections > 0 {
+		db.SetMaxIdleConns(cfg.MaxIdleConnections)
+	}
+	if cfg.ConnMaxLifetimeMinutes > 0 {
+		db.SetConnMaxLifetime(time.Duration(cfg.ConnMaxLifetimeMinutes) * time.Minute)
+	}
 }
 
 func main() {

@@ -111,6 +111,9 @@ func runServer(ctx context.Context, configPath string) error {
 	if cfg.Postgres.ConnMaxLifetimeMinutes > 0 {
 		sharedDB.SetConnMaxLifetime(time.Duration(cfg.Postgres.ConnMaxLifetimeMinutes) * time.Minute)
 	}
+	if err = history.ApplyPostgresGuardConfig(ctx, sharedDB); err != nil {
+		return err
+	}
 
 	smDatabase, err := persistencepostgresql.NewSubmodelDatabaseFromDB(sharedDB, privateKey, cfg.Server.StrictVerification)
 	if err != nil {

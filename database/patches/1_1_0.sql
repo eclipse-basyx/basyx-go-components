@@ -366,6 +366,98 @@ CREATE INDEX IF NOT EXISTS ix_descriptor_history_identifier_validity ON descript
 CREATE INDEX IF NOT EXISTS ix_descriptor_history_recent ON descriptor_history(history_id, operation_time);
 CREATE INDEX IF NOT EXISTS ix_descriptor_history_row_hash ON descriptor_history(row_hash);
 
+-- PostgreSQL mutation guards are installed by the schema patch but disabled by
+-- default. Services enable them at startup when history.immutability is
+-- postgres_guarded or external_anchor.
+CREATE TABLE IF NOT EXISTS history_guard_config (
+  id BOOLEAN PRIMARY KEY DEFAULT TRUE CHECK (id),
+  enabled BOOLEAN NOT NULL DEFAULT FALSE,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+INSERT INTO history_guard_config (id, enabled)
+VALUES (TRUE, FALSE)
+ON CONFLICT (id) DO NOTHING;
+
+CREATE OR REPLACE FUNCTION basyx_prevent_history_table_mutation()
+RETURNS TRIGGER AS $$
+DECLARE
+  guard_enabled BOOLEAN;
+BEGIN
+  SELECT enabled INTO guard_enabled
+  FROM history_guard_config
+  WHERE id = TRUE;
+
+  IF COALESCE(guard_enabled, FALSE) THEN
+    RAISE EXCEPTION 'history tables are append-only'
+      USING ERRCODE = '55000';
+  END IF;
+
+  IF TG_OP = 'UPDATE' THEN
+    RETURN NEW;
+  ELSIF TG_OP = 'DELETE' THEN
+    RETURN OLD;
+  END IF;
+  RETURN NULL;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS aas_history_prevent_update_delete ON aas_history;
+CREATE TRIGGER aas_history_prevent_update_delete
+  BEFORE UPDATE OR DELETE
+  ON aas_history
+  FOR EACH ROW
+  EXECUTE FUNCTION basyx_prevent_history_table_mutation();
+
+DROP TRIGGER IF EXISTS aas_history_prevent_truncate ON aas_history;
+CREATE TRIGGER aas_history_prevent_truncate
+  BEFORE TRUNCATE
+  ON aas_history
+  FOR EACH STATEMENT
+  EXECUTE FUNCTION basyx_prevent_history_table_mutation();
+
+DROP TRIGGER IF EXISTS submodel_history_prevent_update_delete ON submodel_history;
+CREATE TRIGGER submodel_history_prevent_update_delete
+  BEFORE UPDATE OR DELETE
+  ON submodel_history
+  FOR EACH ROW
+  EXECUTE FUNCTION basyx_prevent_history_table_mutation();
+
+DROP TRIGGER IF EXISTS submodel_history_prevent_truncate ON submodel_history;
+CREATE TRIGGER submodel_history_prevent_truncate
+  BEFORE TRUNCATE
+  ON submodel_history
+  FOR EACH STATEMENT
+  EXECUTE FUNCTION basyx_prevent_history_table_mutation();
+
+DROP TRIGGER IF EXISTS concept_description_history_prevent_update_delete ON concept_description_history;
+CREATE TRIGGER concept_description_history_prevent_update_delete
+  BEFORE UPDATE OR DELETE
+  ON concept_description_history
+  FOR EACH ROW
+  EXECUTE FUNCTION basyx_prevent_history_table_mutation();
+
+DROP TRIGGER IF EXISTS concept_description_history_prevent_truncate ON concept_description_history;
+CREATE TRIGGER concept_description_history_prevent_truncate
+  BEFORE TRUNCATE
+  ON concept_description_history
+  FOR EACH STATEMENT
+  EXECUTE FUNCTION basyx_prevent_history_table_mutation();
+
+DROP TRIGGER IF EXISTS descriptor_history_prevent_update_delete ON descriptor_history;
+CREATE TRIGGER descriptor_history_prevent_update_delete
+  BEFORE UPDATE OR DELETE
+  ON descriptor_history
+  FOR EACH ROW
+  EXECUTE FUNCTION basyx_prevent_history_table_mutation();
+
+DROP TRIGGER IF EXISTS descriptor_history_prevent_truncate ON descriptor_history;
+CREATE TRIGGER descriptor_history_prevent_truncate
+  BEFORE TRUNCATE
+  ON descriptor_history
+  FOR EACH STATEMENT
+  EXECUTE FUNCTION basyx_prevent_history_table_mutation();
+
 -- V3.2 inserts "Batch" at enum index 2 for asset kind. Existing persisted numeric enum values
 -- from V3.1.1 with index >= 2 must be shifted by +1 to preserve semantic value.
 UPDATE asset_information

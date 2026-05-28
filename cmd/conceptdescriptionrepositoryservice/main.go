@@ -33,6 +33,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 
@@ -93,13 +94,24 @@ func runServer(ctx context.Context, configPath string) error {
 		return err
 	}
 
-	cdDatabase, err := persistence.NewConceptDescriptionBackend(
-		dsn,
-		//nolint:gosec // configured value is bounded by deployment configuration
-		int32(cfg.Postgres.MaxOpenConnections),
-		cfg.Postgres.MaxIdleConnections,
-		cfg.Postgres.ConnMaxLifetimeMinutes,
-	)
+	sharedDB, err := common.NewDatabaseConnection(dsn)
+	if err != nil {
+		return err
+	}
+	if cfg.Postgres.MaxOpenConnections > 0 {
+		sharedDB.SetMaxOpenConns(cfg.Postgres.MaxOpenConnections)
+	}
+	if cfg.Postgres.MaxIdleConnections > 0 {
+		sharedDB.SetMaxIdleConns(cfg.Postgres.MaxIdleConnections)
+	}
+	if cfg.Postgres.ConnMaxLifetimeMinutes > 0 {
+		sharedDB.SetConnMaxLifetime(time.Duration(cfg.Postgres.ConnMaxLifetimeMinutes) * time.Minute)
+	}
+	if err = history.ApplyPostgresGuardConfig(ctx, sharedDB); err != nil {
+		return err
+	}
+
+	cdDatabase, err := persistence.NewConceptDescriptionBackendFromDB(sharedDB)
 	if err != nil {
 		return err
 	}

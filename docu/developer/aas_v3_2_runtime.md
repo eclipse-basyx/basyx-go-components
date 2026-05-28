@@ -89,7 +89,7 @@ ORDER BY valid_from DESC, history_id DESC
 
 If the latest matching event is marked as deleted, the history endpoint returns not found. This means a deleted entity can still be resolved for dates before deletion, but not after deletion.
 
-Each runtime-created row stores a deterministic SHA-256 hash of the canonical JSON snapshot (`content_hash`) and a per-identifier chain hash (`row_hash`) that includes the previous row hash. The current implementation prepares anchor metadata columns but does not yet publish anchors to an external transparency log or WORM store.
+Each runtime-created row stores a deterministic SHA-256 hash of the canonical JSON snapshot (`content_hash`) and a per-identifier chain hash (`row_hash`) that includes the previous row hash. The schema installs PostgreSQL guard triggers for history tables and keeps them disabled by default. Services enable the guard at startup when `history.immutability` is `postgres_guarded` or `external_anchor`, which blocks `UPDATE`, `DELETE`, and `TRUNCATE` with `history tables are append-only`. The current implementation prepares anchor metadata columns but does not yet publish anchors to an external transparency log or WORM store.
 
 ## Submodel Element Changes
 
@@ -166,6 +166,7 @@ Safeguards already implemented:
 - History lookup is indexed by identifier and validity range.
 - Recent-change pagination is cursor-based and reads one extra row for next-cursor detection.
 - Administrative timestamps are extracted into metadata columns for filtering instead of repeatedly querying deep JSON.
+- Guarded PostgreSQL mode blocks normal `UPDATE`, `DELETE`, and `TRUNCATE` operations on history tables when enabled.
 - Delete rows are tombstones, not full copies, for AAS and Submodel deletes.
 - The migration backfill inserts one baseline row per existing entity, not one row per child object.
 
@@ -177,6 +178,7 @@ Scalability risks that remain:
 - Full snapshots duplicate unchanged data across versions.
 - Large Submodels with frequent element updates can grow history very quickly.
 - JSONB snapshots are flexible but can be more expensive than narrow relational history for some queries.
+- PostgreSQL guards are not equivalent to WORM storage; privileged database operators can still alter or remove them.
 
 Recommended follow-up options:
 
@@ -214,7 +216,7 @@ The biggest implementation questions still worth reviewing are:
 
 - Is route-level read authorization enough for historical snapshots, or do we need per-snapshot ABAC redaction?
 - Do we need an operator-facing retention/compaction setting before enabling this in large deployments?
-- Should `postgres_guarded` mode install DB triggers that block history `UPDATE`, `DELETE`, and `TRUNCATE`, and how should integration-test database cleanup opt out?
+- Should guarded mode be disabled automatically for selected integration-test profiles, or should test cleanup keep using unguarded history settings?
 - Which external anchoring provider, if any, should be offered first?
 - Is the migration backfill baseline sufficient for upgraded installations, or do consumers expect full nested snapshots immediately after upgrade?
 - Should descriptor recent changes include delete tombstones in the public response, or is skipping deleted descriptors acceptable for the registry profile?

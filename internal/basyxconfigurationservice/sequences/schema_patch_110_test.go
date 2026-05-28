@@ -112,6 +112,14 @@ func TestSchemaPatch110ContainsMetamodel32SchemaChanges(t *testing.T) {
 		"content_hash TEXT",
 		"row_hash TEXT",
 		"CREATE INDEX IF NOT EXISTS ix_aas_history_row_hash",
+		"CREATE TABLE IF NOT EXISTS history_guard_config",
+		"CREATE OR REPLACE FUNCTION basyx_prevent_history_table_mutation()",
+		"history tables are append-only",
+		"CREATE TRIGGER aas_history_prevent_update_delete",
+		"CREATE TRIGGER aas_history_prevent_truncate",
+		"CREATE TRIGGER submodel_history_prevent_update_delete",
+		"CREATE TRIGGER concept_description_history_prevent_update_delete",
+		"CREATE TRIGGER descriptor_history_prevent_update_delete",
 		"UPDATE asset_information",
 		"UPDATE aas_descriptor",
 		"SET asset_kind = asset_kind + 1",
@@ -214,6 +222,7 @@ func TestSchemaPatch110MigratesAssetKindIndices(t *testing.T) {
 	assertHistoryBackfill(t, db, "submodel_history", "urn:test:submodel:existing", "")
 	assertHistoryBackfill(t, db, "descriptor_history", "urn:test:descriptor:existing", "Role")
 	assertHistoryBackfill(t, db, "concept_description_history", "urn:test:cd:existing", "")
+	assertPostgresHistoryGuard(t, db)
 }
 
 func readSchemaPatch110(t *testing.T) string {
@@ -277,6 +286,26 @@ func assertHistoryBackfill(t *testing.T, db *sql.DB, table string, identifier st
 	}
 	if expectedAssetKind != "" && !strings.Contains(snapshot, `"assetKind": "`+expectedAssetKind+`"`) {
 		t.Fatalf("expected %s snapshot to contain assetKind %s, got %s", table, expectedAssetKind, snapshot)
+	}
+}
+
+func assertPostgresHistoryGuard(t *testing.T, db *sql.DB) {
+	t.Helper()
+
+	execTestSQL(t, db, "UPDATE history_guard_config SET enabled = TRUE")
+	assertHistoryMutationBlocked(t, db, "UPDATE aas_history SET change_type = 'Updated' WHERE identifier = $1", "urn:test:aas:existing")
+	assertHistoryMutationBlocked(t, db, "DELETE FROM aas_history WHERE identifier = $1", "urn:test:aas:existing")
+	assertHistoryMutationBlocked(t, db, "TRUNCATE aas_history")
+	execTestSQL(t, db, "UPDATE history_guard_config SET enabled = FALSE")
+}
+
+func assertHistoryMutationBlocked(t *testing.T, db *sql.DB, statement string, args ...any) {
+	t.Helper()
+
+	if _, err := db.Exec(statement, args...); err == nil {
+		t.Fatalf("expected guarded history mutation to fail for %q", statement)
+	} else if !strings.Contains(err.Error(), "history tables are append-only") {
+		t.Fatalf("expected append-only guard error for %q, got %v", statement, err)
 	}
 }
 

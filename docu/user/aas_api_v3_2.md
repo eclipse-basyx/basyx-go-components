@@ -84,8 +84,15 @@ Mode semantics:
 Current implementation note:
 
 - Runtime history rows are append-only event rows in `api` and `audit` mode.
-- `postgres_guarded` and `external_anchor` are configuration and schema foundations. They do not yet install PostgreSQL mutation-blocking triggers or publish anchors to an external system.
+- `postgres_guarded` installs PostgreSQL triggers during schema migration and enables them at service startup. When enabled, `UPDATE`, `DELETE`, and `TRUNCATE` on history tables fail with `history tables are append-only`.
+- `external_anchor` currently enables the same PostgreSQL guard foundation and reserves anchor metadata columns. It does not yet publish anchors to an external system.
 - The implementation supports compliance-oriented deployments, but it does not by itself make a deployment legally compliant with any specific regulation.
+
+Guarded PostgreSQL mode protects against normal accidental or unauthorized mutations through the application database user. PostgreSQL superusers or operators with permissions to alter triggers/functions can still bypass or remove this protection. Stronger guarantees require external anchoring, WORM storage, or a transparency-log style system.
+
+The guard switch is database-wide. Configure all BaSyx services that share one database with the same history immutability mode so one service does not intentionally disable a guard expected by another service.
+
+See `examples/BaSyxHistoryAuditGuardedExample` for a Docker Compose setup with audit history and `postgres_guarded` enabled.
 
 Eventing placeholders:
 

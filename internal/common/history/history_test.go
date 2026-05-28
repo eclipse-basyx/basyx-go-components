@@ -152,3 +152,43 @@ func TestAppendVersionTxSkipsWritesWhenHistoryModeOff(t *testing.T) {
 	err := AppendVersionTx(context.Background(), nil, TableAAS, "aas-1", ChangeCreated, map[string]any{"id": "aas-1"}, false)
 	require.NoError(t, err)
 }
+
+func TestApplyPostgresGuardConfigEnablesGuardedMode(t *testing.T) {
+	t.Cleanup(func() {
+		Configure(Config{Mode: ModeAPI, Immutability: ImmutabilityNone, AuditIdentityMode: AuditIdentityMinimal})
+	})
+	Configure(Config{Mode: ModeAudit, Immutability: ImmutabilityPostgresGuarded, AuditIdentityMode: AuditIdentityMinimal})
+
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer func() {
+		_ = db.Close()
+	}()
+
+	mock.ExpectExec(`UPDATE "history_guard_config"`).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+
+	err = ApplyPostgresGuardConfig(context.Background(), db)
+	require.NoError(t, err)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestApplyPostgresGuardConfigDisablesGuardWhenHistoryIsOff(t *testing.T) {
+	t.Cleanup(func() {
+		Configure(Config{Mode: ModeAPI, Immutability: ImmutabilityNone, AuditIdentityMode: AuditIdentityMinimal})
+	})
+	Configure(Config{Mode: ModeOff, Immutability: ImmutabilityPostgresGuarded, AuditIdentityMode: AuditIdentityMinimal})
+
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer func() {
+		_ = db.Close()
+	}()
+
+	mock.ExpectExec(`UPDATE "history_guard_config"`).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+
+	err = ApplyPostgresGuardConfig(context.Background(), db)
+	require.NoError(t, err)
+	require.NoError(t, mock.ExpectationsWereMet())
+}

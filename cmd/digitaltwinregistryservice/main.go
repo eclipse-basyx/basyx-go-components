@@ -116,6 +116,9 @@ func runServer(ctx context.Context, configPath string) error {
 	if cfg.Postgres.ConnMaxLifetimeMinutes > 0 {
 		sharedDB.SetConnMaxLifetime(time.Duration(cfg.Postgres.ConnMaxLifetimeMinutes) * time.Minute)
 	}
+	if err = history.ApplyPostgresGuardConfig(ctx, sharedDB); err != nil {
+		return err
+	}
 
 	registryDatabase, err := registrydb.NewPostgreSQLAASRegistryDatabaseFromDB(sharedDB, cfg.Server.CacheEnabled)
 	if err != nil {

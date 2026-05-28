@@ -75,6 +75,8 @@ const (
 	TableConcept = "concept_description_history"
 	// TableDescriptor stores AAS descriptor history snapshots.
 	TableDescriptor = "descriptor_history"
+	// TableGuardConfig stores the runtime switch for PostgreSQL history guards.
+	TableGuardConfig = "history_guard_config"
 
 	// ChangeCreated marks a created entity version.
 	ChangeCreated = "Created"
@@ -160,8 +162,8 @@ func FromContext(ctx context.Context) AuditContext {
 	return audit
 }
 
-// HistoryWriter consumes change events for history storage.
-type HistoryWriter interface {
+// Writer consumes change events for history storage.
+type Writer interface {
 	Append(ctx context.Context, event ChangeEvent) error
 }
 
@@ -215,6 +217,48 @@ func ActiveConfig() Config {
 	configMu.RLock()
 	defer configMu.RUnlock()
 	return activeConfig
+}
+
+// ApplyPostgresGuardConfig enables or disables database-side history mutation guards.
+func ApplyPostgresGuardConfig(ctx context.Context, db *sql.DB) error {
+	if db == nil {
+		return common.NewInternalServerError("HISTORY-GUARD-NILDB database handle must not be nil")
+	}
+
+	enabled := postgresGuardEnabled(ActiveConfig())
+	updateSQL, updateArgs, err := goqu.Update(TableGuardConfig).
+		Set(goqu.Record{
+			"enabled":    enabled,
+			"updated_at": goqu.L("NOW()"),
+		}).
+		Where(goqu.C("id").Eq(true)).
+		ToSQL()
+	if err != nil {
+		return common.NewInternalServerError("HISTORY-GUARD-BUILDUPDATE " + err.Error())
+	}
+	result, err := db.ExecContext(ctx, updateSQL, updateArgs...)
+	if err != nil {
+		return common.NewInternalServerError("HISTORY-GUARD-EXECUPDATE " + err.Error())
+	}
+	affected, err := result.RowsAffected()
+	if err != nil || affected > 0 {
+		return nil
+	}
+
+	insertSQL, insertArgs, err := goqu.Insert(TableGuardConfig).
+		Rows(goqu.Record{
+			"id":         true,
+			"enabled":    enabled,
+			"updated_at": goqu.L("NOW()"),
+		}).
+		ToSQL()
+	if err != nil {
+		return common.NewInternalServerError("HISTORY-GUARD-BUILDINSERT " + err.Error())
+	}
+	if _, err = db.ExecContext(ctx, insertSQL, insertArgs...); err != nil {
+		return common.NewInternalServerError("HISTORY-GUARD-EXECINSERT " + err.Error())
+	}
+	return nil
 }
 
 // AppendVersionTx appends an immutable snapshot event for identifier.
@@ -309,6 +353,13 @@ func normalizeConfig(cfg Config) Config {
 		cfg.RetentionDays = 0
 	}
 	return cfg
+}
+
+func postgresGuardEnabled(cfg Config) bool {
+	if cfg.Mode == ModeOff {
+		return false
+	}
+	return cfg.Immutability == ImmutabilityPostgresGuarded || cfg.Immutability == ImmutabilityExternalAnchor
 }
 
 func normalizeHistoryMode(mode string) string {
