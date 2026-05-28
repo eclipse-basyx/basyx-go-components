@@ -16,6 +16,8 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+
+	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 )
 
 func encodeIdentifierForPath(identifier string) string {
@@ -26,85 +28,50 @@ func encodeIdentifierForPath(identifier string) string {
 	return base64.RawURLEncoding.EncodeToString([]byte(identifier))
 }
 
+func normalizeContextPathForBaseLocation(contextPath string) string {
+	trimmed := strings.TrimSpace(contextPath)
+	if trimmed == "" || trimmed == "/" {
+		return ""
+	}
+
+	return "/" + strings.Trim(trimmed, "/")
+}
+
 func (c *AssetAdministrationShellRepositoryAPIAPIController) buildBaseLocation(r *http.Request) string {
+	if externalBaseURL := common.ExternalBaseURLFromContext(r.Context()); externalBaseURL != "" {
+		return externalBaseURL
+	}
+
 	host := requestHost(r)
 	if host == "" {
 		return ""
 	}
 
-	basePath := strings.TrimSuffix(c.contextPath, "/")
+	basePath := normalizeContextPathForBaseLocation(c.contextPath)
 
 	return requestScheme(r) + "://" + host + basePath
 }
 
-func parseForwardedHeaderValue(forwarded string, key string) string {
-	parts := strings.Split(forwarded, ",")
-	if len(parts) == 0 {
-		return ""
-	}
-
-	for _, token := range strings.Split(parts[0], ";") {
-		pair := strings.SplitN(strings.TrimSpace(token), "=", 2)
-		if len(pair) != 2 {
-			continue
-		}
-		if strings.EqualFold(strings.TrimSpace(pair[0]), key) {
-			return strings.Trim(strings.TrimSpace(pair[1]), "\"")
-		}
-	}
-
-	return ""
-}
-
-func firstForwardedValue(value string) string {
-	if value == "" {
-		return ""
-	}
-
-	parts := strings.Split(value, ",")
-	if len(parts) == 0 {
-		return ""
-	}
-
-	return strings.TrimSpace(parts[0])
-}
-
 func requestScheme(r *http.Request) string {
-	if forwardedProto := parseForwardedHeaderValue(r.Header.Get("Forwarded"), "proto"); forwardedProto != "" {
-		return forwardedProto
-	}
-
-	if xForwardedProto := firstForwardedValue(r.Header.Get("X-Forwarded-Proto")); xForwardedProto != "" {
-		return xForwardedProto
-	}
-
-	if r.TLS != nil {
-		return "https"
-	}
-
-	return "http"
+	return common.RequestScheme(r)
 }
 
 func requestHost(r *http.Request) string {
-	if forwardedHost := parseForwardedHeaderValue(r.Header.Get("Forwarded"), "host"); forwardedHost != "" {
-		return forwardedHost
-	}
-
-	if xForwardedHost := firstForwardedValue(r.Header.Get("X-Forwarded-Host")); xForwardedHost != "" {
-		return xForwardedHost
-	}
-
-	return r.Host
+	return common.RequestHost(r)
 }
 
-func (c *AssetAdministrationShellRepositoryAPIAPIController) buildShellLocation(r *http.Request, shellID string) string {
+func (c *AssetAdministrationShellRepositoryAPIAPIController) buildShellLocationFromEncodedIdentifier(r *http.Request, encodedShellID string) string {
 	baseLocation := c.buildBaseLocation(r)
 	if baseLocation == "" {
 		return ""
 	}
-	escapedShellID := url.PathEscape(shellID)
+	escapedShellID := url.PathEscape(encodedShellID)
 
 	return baseLocation + "/shells/" + escapedShellID
+}
+
+func (c *AssetAdministrationShellRepositoryAPIAPIController) buildShellLocationFromRawId(r *http.Request, rawShellID string) string {
+	return c.buildShellLocationFromEncodedIdentifier(r, encodeIdentifierForPath(rawShellID))
 }
 
 func (c *AssetAdministrationShellRepositoryAPIAPIController) buildSubmodelReferencesLocation(r *http.Request, shellID string) string {
@@ -117,13 +84,44 @@ func (c *AssetAdministrationShellRepositoryAPIAPIController) buildSubmodelRefere
 	return baseLocation + "/shells/" + escapedShellID + "/submodel-refs"
 }
 
-func (c *AssetAdministrationShellRepositoryAPIAPIController) buildSubmodelLocation(r *http.Request, shellID string, submodelID string) string {
+func (c *AssetAdministrationShellRepositoryAPIAPIController) buildSubmodelLocationFromEncodedIdentifier(r *http.Request, encodedShellID string, encodedSubmodelID string) string {
 	baseLocation := c.buildBaseLocation(r)
 	if baseLocation == "" {
 		return ""
 	}
-	escapedShellID := url.PathEscape(shellID)
-	escapedSubmodelID := url.PathEscape(submodelID)
+	escapedShellID := url.PathEscape(encodedShellID)
+	escapedSubmodelID := url.PathEscape(encodedSubmodelID)
 
 	return baseLocation + "/shells/" + escapedShellID + "/submodels/" + escapedSubmodelID
+}
+
+func (c *AssetAdministrationShellRepositoryAPIAPIController) buildSubmodelLocationFromRawId(r *http.Request, encodedShellID string, rawSubmodelID string) string {
+	return c.buildSubmodelLocationFromEncodedIdentifier(r, encodedShellID, encodeIdentifierForPath(rawSubmodelID))
+}
+
+func (c *AssetAdministrationShellRepositoryAPIAPIController) buildSubmodelElementLocationFromEncodedIdentifier(r *http.Request, encodedShellID string, encodedSubmodelID string, idShortPath string) string {
+	baseLocation := c.buildBaseLocation(r)
+	if baseLocation == "" {
+		return ""
+	}
+	escapedShellID := url.PathEscape(encodedShellID)
+	escapedSubmodelID := url.PathEscape(encodedSubmodelID)
+	escapedIDShortPath := url.PathEscape(idShortPath)
+
+	return baseLocation + "/shells/" + escapedShellID + "/submodels/" + escapedSubmodelID + "/submodel-elements/" + escapedIDShortPath
+}
+
+func (c *AssetAdministrationShellRepositoryAPIAPIController) buildSubmodelElementLocationFromRawId(r *http.Request, encodedShellID string, rawSubmodelID string, idShortPath string) string {
+	return c.buildSubmodelElementLocationFromEncodedIdentifier(r, encodedShellID, encodeIdentifierForPath(rawSubmodelID), idShortPath)
+}
+
+func joinIDShortPath(parentPath string, childIDShort string) string {
+	if parentPath == "" {
+		return childIDShort
+	}
+	if childIDShort == "" {
+		return parentPath
+	}
+
+	return parentPath + "." + childIDShort
 }

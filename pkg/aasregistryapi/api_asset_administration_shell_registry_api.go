@@ -323,6 +323,13 @@ func (c *AssetAdministrationShellRegistryAPIAPIController) PostAssetAdministrati
 		c.errorHandler(w, r, err, &result)
 		return
 	}
+
+	if result.Code == http.StatusCreated {
+		location := c.buildAASDescriptorLocationFromRawId(r, assetAdministrationShellDescriptorParam.Id)
+		if location != "" {
+			w.Header().Set("Location", location)
+		}
+	}
 	_ = EncodeJSONResponse(result.Body, &result.Code, w)
 }
 
@@ -409,6 +416,13 @@ func (c *AssetAdministrationShellRegistryAPIAPIController) PutAssetAdministratio
 		log.Printf("🧩 [%s] Error in PutAssetAdministrationShellDescriptorById: service failure (aasIdentifier=%q bodyId=%q): %v", componentName, aasIdentifierParam, assetAdministrationShellDescriptorParam.Id, err)
 		c.errorHandler(w, r, err, &result)
 		return
+	}
+
+	if result.Code == http.StatusCreated {
+		location := c.buildAASDescriptorLocationFromEncodedIdentifier(r, aasIdentifierParam)
+		if location != "" {
+			w.Header().Set("Location", location)
+		}
 	}
 	_ = EncodeJSONResponse(result.Body, &result.Code, w)
 }
@@ -556,6 +570,13 @@ func (c *AssetAdministrationShellRegistryAPIAPIController) PostSubmodelDescripto
 		c.errorHandler(w, r, err, &result)
 		return
 	}
+
+	if result.Code == http.StatusCreated {
+		location := c.buildSubmodelDescriptorLocationFromRawId(r, aasIdentifierParam, submodelDescriptorParam.Id)
+		if location != "" {
+			w.Header().Set("Location", location)
+		}
+	}
 	_ = EncodeJSONResponse(result.Body, &result.Code, w)
 }
 
@@ -668,6 +689,13 @@ func (c *AssetAdministrationShellRegistryAPIAPIController) PutSubmodelDescriptor
 		log.Printf("🧩 [%s] Error in PutSubmodelDescriptorByIdThroughSuperpath: service failure (aasIdentifier=%q submodelIdentifier=%q bodyId=%q): %v", componentName, aasIdentifierParam, submodelIdentifierParam, submodelDescriptorParam.Id, err)
 		c.errorHandler(w, r, err, &result)
 		return
+	}
+
+	if result.Code == http.StatusCreated {
+		location := c.buildSubmodelDescriptorLocationFromEncodedIdentifier(r, aasIdentifierParam, submodelIdentifierParam)
+		if location != "" {
+			w.Header().Set("Location", location)
+		}
 	}
 	_ = EncodeJSONResponse(result.Body, &result.Code, w)
 }

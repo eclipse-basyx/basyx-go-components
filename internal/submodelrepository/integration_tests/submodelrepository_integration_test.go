@@ -35,6 +35,7 @@ import (
 	"io"
 	"mime/multipart"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -173,19 +174,19 @@ func getStatusWithoutRedirect(endpoint string) (int, error) {
 	return resp.StatusCode, nil
 }
 
-func requestJSON(method string, endpoint string, payload any) (int, []byte, error) {
+func requestJSONWithHeaders(method string, endpoint string, payload any) (int, []byte, http.Header, error) {
 	var body io.Reader
 	if payload != nil {
 		jsonBody, err := json.Marshal(payload)
 		if err != nil {
-			return 0, nil, fmt.Errorf("failed to marshal payload: %v", err)
+			return 0, nil, nil, fmt.Errorf("failed to marshal payload: %v", err)
 		}
 		body = bytes.NewBuffer(jsonBody)
 	}
 
 	req, err := http.NewRequest(method, endpoint, body)
 	if err != nil {
-		return 0, nil, fmt.Errorf("failed to create request: %v", err)
+		return 0, nil, nil, fmt.Errorf("failed to create request: %v", err)
 	}
 
 	if payload != nil {
@@ -195,16 +196,48 @@ func requestJSON(method string, endpoint string, payload any) (int, []byte, erro
 	client := &http.Client{Timeout: 10 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
-		return 0, nil, fmt.Errorf("failed to send request: %v", err)
+		return 0, nil, nil, fmt.Errorf("failed to send request: %v", err)
 	}
 	defer func() { _ = resp.Body.Close() }()
 
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return resp.StatusCode, nil, fmt.Errorf("failed to read response body: %v", err)
+		return resp.StatusCode, nil, resp.Header.Clone(), fmt.Errorf("failed to read response body: %v", err)
 	}
 
-	return resp.StatusCode, respBody, nil
+	return resp.StatusCode, respBody, resp.Header.Clone(), nil
+}
+
+func requestJSON(method string, endpoint string, payload any) (int, []byte, error) {
+	statusCode, responseBody, _, err := requestJSONWithHeaders(method, endpoint, payload)
+	return statusCode, responseBody, err
+}
+
+func assertLocationHeaderMatches(t *testing.T, expectedLocation string, actualLocation string) {
+	t.Helper()
+
+	require.NotEmpty(t, actualLocation)
+
+	expectedURL, err := url.Parse(expectedLocation)
+	require.NoError(t, err)
+
+	actualURL, err := url.Parse(actualLocation)
+	require.NoError(t, err)
+
+	assert.Equal(t, expectedURL.Scheme, actualURL.Scheme)
+	assert.Equal(t, expectedURL.Path, actualURL.Path)
+	assert.Equal(t, expectedURL.RawQuery, actualURL.RawQuery)
+	assert.Equal(t, expectedURL.Port(), actualURL.Port())
+
+	expectedHost := strings.ToLower(expectedURL.Hostname())
+	actualHost := strings.ToLower(actualURL.Hostname())
+	if expectedHost == actualHost {
+		return
+	}
+
+	allowedLoopbackHosts := []string{"localhost", "127.0.0.1"}
+	assert.Contains(t, allowedLoopbackHosts, expectedHost)
+	assert.Contains(t, allowedLoopbackHosts, actualHost)
 }
 
 func waitForServiceHealthy(t *testing.T, endpoint string, timeout time.Duration) {
@@ -1619,6 +1652,124 @@ func TestUploadAttachmentToNonFileSubmodelElementReturnsMethodNotAllowed(t *test
 	assert.Equal(t, http.StatusMethodNotAllowed, statusCode, "Expected 405 Method Not Allowed when downloading attachment from non-File SME")
 }
 
+func TestLocationHeadersForCreateEndpoints(t *testing.T) {
+	baseURL := "http://localhost:6004"
+
+	t.Run("PostSubmodelReturnsLocationHeader", func(t *testing.T) {
+		submodelID := fmt.Sprintf("urn:basyx:integration:post-location-submodel-%d", time.Now().UnixNano())
+		submodelIDEncoded := common.EncodeString(submodelID)
+
+		statusCode, body, headers, err := requestJSONWithHeaders(http.MethodPost, fmt.Sprintf("%s/submodels", baseURL), map[string]any{
+			"id":        submodelID,
+			"idShort":   "PostLocationSubmodel",
+			"kind":      "Instance",
+			"modelType": "Submodel",
+		})
+		require.NoError(t, err)
+		require.Equal(t, http.StatusCreated, statusCode, "response=%s", string(body))
+		assertLocationHeaderMatches(t, fmt.Sprintf("%s/submodels/%s", baseURL, submodelIDEncoded), headers.Get("Location"))
+
+		t.Cleanup(func() {
+			_, _, _ = requestJSON(http.MethodDelete, fmt.Sprintf("%s/submodels/%s", baseURL, submodelIDEncoded), nil)
+		})
+	})
+
+	t.Run("PutSubmodelCreateSetsLocationAndUpdateClearsIt", func(t *testing.T) {
+		submodelID := fmt.Sprintf("urn:basyx:integration:put-location-submodel-%d", time.Now().UnixNano())
+		submodelIDEncoded := common.EncodeString(submodelID)
+		endpoint := fmt.Sprintf("%s/submodels/%s", baseURL, submodelIDEncoded)
+
+		payload := map[string]any{
+			"id":        submodelID,
+			"idShort":   "PutLocationSubmodel",
+			"kind":      "Instance",
+			"modelType": "Submodel",
+		}
+
+		statusCode, body, headers, err := requestJSONWithHeaders(http.MethodPut, endpoint, payload)
+		require.NoError(t, err)
+		require.Equal(t, http.StatusCreated, statusCode, "response=%s", string(body))
+		assertLocationHeaderMatches(t, endpoint, headers.Get("Location"))
+
+		statusCode, body, headers, err = requestJSONWithHeaders(http.MethodPut, endpoint, payload)
+		require.NoError(t, err)
+		require.Equal(t, http.StatusNoContent, statusCode, "response=%s", string(body))
+		assert.Empty(t, headers.Get("Location"))
+
+		t.Cleanup(func() {
+			_, _, _ = requestJSON(http.MethodDelete, fmt.Sprintf("%s/submodels/%s", baseURL, submodelIDEncoded), nil)
+		})
+	})
+
+	t.Run("PostSubmodelElementReturnsLocationHeader", func(t *testing.T) {
+		submodelID := fmt.Sprintf("urn:basyx:integration:post-location-sme-%d", time.Now().UnixNano())
+		submodelIDEncoded := common.EncodeString(submodelID)
+
+		statusCode, body, err := requestJSON(http.MethodPost, fmt.Sprintf("%s/submodels", baseURL), map[string]any{
+			"id":        submodelID,
+			"idShort":   "PostLocationSMESubmodel",
+			"kind":      "Instance",
+			"modelType": "Submodel",
+		})
+		require.NoError(t, err)
+		require.Equal(t, http.StatusCreated, statusCode, "response=%s", string(body))
+
+		t.Cleanup(func() {
+			_, _, _ = requestJSON(http.MethodDelete, fmt.Sprintf("%s/submodels/%s", baseURL, submodelIDEncoded), nil)
+		})
+
+		elementIDShort := "LocationElement"
+		statusCode, body, headers, err := requestJSONWithHeaders(http.MethodPost, fmt.Sprintf("%s/submodels/%s/submodel-elements", baseURL, submodelIDEncoded), map[string]any{
+			"idShort":   elementIDShort,
+			"valueType": "xs:string",
+			"value":     "created",
+			"modelType": "Property",
+		})
+		require.NoError(t, err)
+		require.Equal(t, http.StatusCreated, statusCode, "response=%s", string(body))
+		assertLocationHeaderMatches(t, fmt.Sprintf("%s/submodels/%s/submodel-elements/%s", baseURL, submodelIDEncoded, elementIDShort), headers.Get("Location"))
+	})
+
+	t.Run("PostSubmodelElementByPathReturnsChildLocationHeader", func(t *testing.T) {
+		submodelID := fmt.Sprintf("urn:basyx:integration:post-location-sme-path-%d", time.Now().UnixNano())
+		submodelIDEncoded := common.EncodeString(submodelID)
+
+		statusCode, body, err := requestJSON(http.MethodPost, fmt.Sprintf("%s/submodels", baseURL), map[string]any{
+			"id":        submodelID,
+			"idShort":   "PostLocationSMEPathSubmodel",
+			"kind":      "Instance",
+			"modelType": "Submodel",
+		})
+		require.NoError(t, err)
+		require.Equal(t, http.StatusCreated, statusCode, "response=%s", string(body))
+
+		t.Cleanup(func() {
+			_, _, _ = requestJSON(http.MethodDelete, fmt.Sprintf("%s/submodels/%s", baseURL, submodelIDEncoded), nil)
+		})
+
+		parentPath := "RootCollection"
+		statusCode, body, err = requestJSON(http.MethodPut, fmt.Sprintf("%s/submodels/%s/submodel-elements/%s", baseURL, submodelIDEncoded, parentPath), map[string]any{
+			"modelType": "SubmodelElementCollection",
+			"idShort":   parentPath,
+		})
+		require.NoError(t, err)
+		require.Equal(t, http.StatusCreated, statusCode, "response=%s", string(body))
+
+		childIDShort := "LocationChild"
+		statusCode, body, headers, err := requestJSONWithHeaders(http.MethodPost, fmt.Sprintf("%s/submodels/%s/submodel-elements/%s", baseURL, submodelIDEncoded, parentPath), map[string]any{
+			"idShort":   childIDShort,
+			"valueType": "xs:string",
+			"value":     "nested",
+			"modelType": "Property",
+		})
+		require.NoError(t, err)
+		require.Equal(t, http.StatusCreated, statusCode, "response=%s", string(body))
+
+		expectedPath := parentPath + "." + childIDShort
+		assertLocationHeaderMatches(t, fmt.Sprintf("%s/submodels/%s/submodel-elements/%s", baseURL, submodelIDEncoded, expectedPath), headers.Get("Location"))
+	})
+}
+
 func TestPutSubmodelElementByPathCreatesWhenMissing(t *testing.T) {
 	baseURL := "http://localhost:6004"
 	submodelID := fmt.Sprintf("urn:basyx:integration:put-create-sme-%d", time.Now().UnixNano())
@@ -1651,9 +1802,10 @@ func TestPutSubmodelElementByPathCreatesWhenMissing(t *testing.T) {
 		"idShort":   targetPath,
 	}
 
-	statusCode, body, err = requestJSON(http.MethodPut, putEndpoint, putPayload)
+	statusCode, body, headers, err := requestJSONWithHeaders(http.MethodPut, putEndpoint, putPayload)
 	require.NoError(t, err)
 	require.Equal(t, http.StatusCreated, statusCode, "response=%s", string(body))
+	assertLocationHeaderMatches(t, putEndpoint, headers.Get("Location"))
 
 	var createdElement map[string]any
 	require.NoError(t, json.Unmarshal(body, &createdElement), "response=%s", string(body))
@@ -1669,9 +1821,10 @@ func TestPutSubmodelElementByPathCreatesWhenMissing(t *testing.T) {
 	assert.Equal(t, "SubmodelElementCollection", fetchedElement["modelType"])
 	assert.Equal(t, targetPath, fetchedElement["idShort"])
 
-	statusCode, body, err = requestJSON(http.MethodPut, putEndpoint, putPayload)
+	statusCode, body, headers, err = requestJSONWithHeaders(http.MethodPut, putEndpoint, putPayload)
 	require.NoError(t, err)
 	require.Equal(t, http.StatusNoContent, statusCode, "response=%s", string(body))
+	assert.Empty(t, headers.Get("Location"))
 }
 
 func TestStandaloneStartupRejectsUnsupportedAASRegistryToggle(t *testing.T) {
