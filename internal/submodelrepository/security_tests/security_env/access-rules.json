@@ -159,7 +159,7 @@
       { "name": "editor_create_allowed_sme", "formula": {
         "$and": [
           { "$eq": [ { "$attribute": { "CLAIM": "role" } }, { "$strVal": "editor" } ] },
-          { "$eq": [ { "$field": "$sme.SecurityAllowedProperty#idShort" }, { "$strVal": "SecurityAllowedProperty" } ] }
+          { "$eq": [ { "$field": "$sme#idShort" }, { "$strVal": "SecurityAllowedProperty" } ] }
         ]
       }},
       { "name": "editor_update_security_allowed_requires_old_and_new_value", "formula": {
