@@ -1,3 +1,29 @@
+/*******************************************************************************
+* Copyright (C) 2026 the Eclipse BaSyx Authors and Fraunhofer IESE
+*
+* Permission is hereby granted, free of charge, to any person obtaining
+* a copy of this software and associated documentation files (the
+* "Software"), to deal in the Software without restriction, including
+* without limitation the rights to use, copy, modify, merge, publish,
+* distribute, sublicense, and/or sell copies of the Software, and to
+* permit persons to whom the Software is furnished to do so, subject to
+* the following conditions:
+*
+* The above copyright notice and this permission notice shall be
+* included in all copies or substantial portions of the Software.
+*
+* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+* NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
+* LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+* OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
+* WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+*
+* SPDX-License-Identifier: MIT
+******************************************************************************/
+// Author: Christian Koort ( Fraunhofer IESE )
+
 package common
 
 import (
@@ -6,8 +32,13 @@ import (
 	"strings"
 )
 
-// ExternalBaseURLFromContext resolves the configured external base URL from request context.
-// Returns an empty string if no configuration is present or the configured URL is invalid.
+// ExternalBaseURLFromContext returns the normalized external base URL from the request context configuration.
+//
+// Parameters:
+//   - ctx: Context containing the configuration.
+//
+// Returns:
+//   - The normalized external base URL string, or an empty string if not configured or invalid.
 func ExternalBaseURLFromContext(ctx context.Context) string {
 	cfg, ok := ConfigFromContext(ctx)
 	if !ok || cfg == nil {
@@ -17,8 +48,13 @@ func ExternalBaseURLFromContext(ctx context.Context) string {
 	return NormalizePrimaryExternalBaseURL(cfg.General.ExternalURL)
 }
 
-// NormalizePrimaryExternalBaseURL parses and normalizes the first configured external base URL.
-// A non-empty result always has http/https scheme, host, and no query/fragment.
+// NormalizePrimaryExternalBaseURL parses and normalizes the first external base URL from a config string.
+//
+// Parameters:
+//   - rawExternalURL: Raw external URL string (may be comma-separated).
+//
+// Returns:
+//   - A normalized, validated external base URL string, or an empty string if invalid.
 func NormalizePrimaryExternalBaseURL(rawExternalURL string) string {
 	trimmed := strings.TrimSpace(rawExternalURL)
 	if trimmed == "" {

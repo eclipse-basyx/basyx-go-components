@@ -22,6 +22,7 @@
 *
 * SPDX-License-Identifier: MIT
 ******************************************************************************/
+// Author: Christian Koort ( Fraunhofer IESE )
 
 // Package companylookuppostgresql provides PostgreSQL-based persistence implementation
 // for the Eclipse BaSyx Company Lookup Service.

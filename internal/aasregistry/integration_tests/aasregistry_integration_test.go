@@ -22,7 +22,7 @@
 *
 * SPDX-License-Identifier: MIT
 ******************************************************************************/
-// Author: Martin Stemmer ( Fraunhofer IESE )
+// Author: Martin Stemmer ( Fraunhofer IESE ), Christian Koort ( Fraunhofer IESE )
 
 //nolint:all
 package main

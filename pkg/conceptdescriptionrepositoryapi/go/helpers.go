@@ -28,58 +28,12 @@ func encodeIdentifierForPath(identifier string) string {
 	return base64.RawURLEncoding.EncodeToString([]byte(identifier))
 }
 
-func parseForwardedHeaderValue(forwarded string, key string) string {
-	firstEntry, _, _ := strings.Cut(forwarded, ",")
-
-	for _, token := range strings.Split(firstEntry, ";") {
-		pair := strings.SplitN(strings.TrimSpace(token), "=", 2)
-		if len(pair) != 2 {
-			continue
-		}
-		if strings.EqualFold(strings.TrimSpace(pair[0]), key) {
-			return strings.Trim(strings.TrimSpace(pair[1]), "\"")
-		}
-	}
-
-	return ""
-}
-
-func firstForwardedValue(value string) string {
-	if value == "" {
-		return ""
-	}
-
-	first, _, _ := strings.Cut(value, ",")
-
-	return strings.TrimSpace(first)
-}
-
 func requestScheme(r *http.Request) string {
-	if forwardedProto := parseForwardedHeaderValue(r.Header.Get("Forwarded"), "proto"); forwardedProto != "" {
-		return forwardedProto
-	}
-
-	if xForwardedProto := firstForwardedValue(r.Header.Get("X-Forwarded-Proto")); xForwardedProto != "" {
-		return xForwardedProto
-	}
-
-	if r.TLS != nil {
-		return "https"
-	}
-
-	return "http"
+	return common.RequestScheme(r)
 }
 
 func requestHost(r *http.Request) string {
-	if forwardedHost := parseForwardedHeaderValue(r.Header.Get("Forwarded"), "host"); forwardedHost != "" {
-		return forwardedHost
-	}
-
-	if xForwardedHost := firstForwardedValue(r.Header.Get("X-Forwarded-Host")); xForwardedHost != "" {
-		return xForwardedHost
-	}
-
-	return r.Host
+	return common.RequestHost(r)
 }
 
 func normalizeContextPathForBaseLocation(contextPath string) string {
