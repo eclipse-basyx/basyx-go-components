@@ -50,6 +50,11 @@ func TestSchemaPatch110AppliesAfterVersion102(t *testing.T) {
 	}()
 
 	patchSQL := readSchemaPatch110(t)
+	if !strings.Contains(patchSQL, "UPDATE asset_information") ||
+		!strings.Contains(patchSQL, "SET asset_kind = asset_kind + 1") ||
+		!strings.Contains(patchSQL, "WHERE asset_kind >= 2") {
+		t.Fatalf("patch %s must migrate asset_kind indices by shifting values >= 2 by +1", schemaPatch110Path)
+	}
 
 	mock.ExpectExec(regexp.QuoteMeta("SELECT pg_advisory_lock($1)")).
 		WithArgs(schemaAdvisoryLockID).
@@ -100,6 +105,9 @@ func TestSchemaPatch110ContainsMetamodel32SchemaChanges(t *testing.T) {
 		"CREATE TRIGGER concept_description_sync_administration_timestamps",
 		"CREATE INDEX IF NOT EXISTS ix_submodel_payload_admin_created_at",
 		"CREATE INDEX IF NOT EXISTS ix_submodel_payload_admin_updated_at",
+		"UPDATE asset_information",
+		"SET asset_kind = asset_kind + 1",
+		"WHERE asset_kind >= 2",
 		"SET schema_version = 'v1.1.0'",
 	}
 
@@ -131,6 +139,9 @@ func TestSchemaPatch110ContainsMetamodel32SchemaChanges(t *testing.T) {
 func TestSchemaPatch110MigratesAssetKindIndices(t *testing.T) {
 	dsn := strings.TrimSpace(os.Getenv("BASYX_SCHEMA_PATCH_TEST_DSN"))
 	if dsn == "" {
+		if strings.EqualFold(os.Getenv("CI"), "true") || strings.EqualFold(os.Getenv("GITHUB_ACTIONS"), "true") {
+			t.Fatalf("BASYX_SCHEMA_PATCH_TEST_DSN must be set in CI to verify asset_kind migration behavior")
+		}
 		t.Skip("set BASYX_SCHEMA_PATCH_TEST_DSN to run the PostgreSQL schema migration test")
 	}
 
