@@ -11,6 +11,9 @@ info:
     url: https://creativecommons.org/licenses/by/4.0/
   version: V3.2.0_SSP-001
   x-profile-identifier: https://admin-shell.io/aas/API/3/2/ConceptDescriptionRepositoryServiceSpecification/SSP-001
+  x-profile-identifiers:
+  - https://admin-shell.io/aas/API/3/2/ConceptDescriptionRepositoryServiceSpecification/SSP-001
+  - https://admin-shell.io/aas/API/3/2/ConceptDescriptionRepositoryServiceSpecification/SSP-002
 servers:
 - url: https://admin-shell.io/api/v3/
 - url: https://example.com/

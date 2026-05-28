@@ -84,6 +84,22 @@ jobs:
   basyx-configuration-service-unit-tests:
     name: BaSyx Configuration Service Unit Tests
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        options: >-
+          --health-cmd "pg_isready -U postgres -d postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+        ports:
+          - 5432:5432
+    env:
+      BASYX_SCHEMA_PATCH_TEST_DSN: postgres://postgres:postgres@127.0.0.1:5432/postgres?sslmode=disable
     steps:
       - name: Check out code
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
