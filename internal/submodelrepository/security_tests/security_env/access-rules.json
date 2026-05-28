@@ -128,7 +128,7 @@
         "$and": [
           { "$eq": [ { "$attribute": { "CLAIM": "role" } }, { "$strVal": "editor" } ] },
           { "$ge": [ { "$numCast": { "$attribute": { "CLAIM": "clear" } } }, { "$numVal": 1 } ] },
-          { "$eq": [ { "$field": "$sme#valueType" }, { "$strVal": "xs:string" } ] }
+          { "$eq": [ { "$field": "$sme.ExampleSubmodelElementCollection.ExampleSubmodelElementListOrdered[0]#valueType" }, { "$strVal": "xs:string" } ] }
         ]
       }},
       { "name": "editor_member_any_sme_language_de", "formula": {
@@ -147,7 +147,7 @@
       { "name": "editor_any_property_language_de", "formula": {
         "$and": [
           { "$eq": [ { "$attribute": { "CLAIM": "role" } }, { "$strVal": "editor" } ] },
-          { "$eq": [ { "$field": "$sme#language" }, { "$strVal": "de" } ] }
+          { "$eq": [ { "$field": "$sme.ExampleSubmodelElementCollection.ExampleSubmodelElementListOrdered[0]#language" }, { "$strVal": "de" } ] }
         ]
       }},
       { "name": "editor_create_allowed_submodel", "formula": {
@@ -159,7 +159,7 @@
       { "name": "editor_create_allowed_sme", "formula": {
         "$and": [
           { "$eq": [ { "$attribute": { "CLAIM": "role" } }, { "$strVal": "editor" } ] },
-          { "$eq": [ { "$field": "$sme#idShort" }, { "$strVal": "SecurityAllowedProperty" } ] }
+          { "$eq": [ { "$field": "$sme.SecurityAllowedProperty#idShort" }, { "$strVal": "SecurityAllowedProperty" } ] }
         ]
       }},
       { "name": "editor_update_security_allowed_requires_old_and_new_value", "formula": {
