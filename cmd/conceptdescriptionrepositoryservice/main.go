@@ -37,6 +37,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/history"
 	commonmodel "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 	"github.com/eclipse-basyx/basyx-go-components/internal/conceptdescriptionrepository/api"
@@ -58,6 +59,12 @@ func runServer(ctx context.Context, configPath string) error {
 	if err := commonmodel.SetVerificationMode(cfg.Server.StrictVerification); err != nil {
 		return err
 	}
+	history.Configure(history.Config{
+		Mode:              cfg.History.Mode,
+		RetentionDays:     cfg.History.RetentionDays,
+		Immutability:      cfg.History.Immutability,
+		AuditIdentityMode: cfg.History.AuditIdentityMode,
+	})
 
 	// Create Chi router
 	r := chi.NewRouter()

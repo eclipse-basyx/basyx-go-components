@@ -143,7 +143,27 @@ CREATE TABLE IF NOT EXISTS aas_history (
   valid_to TIMESTAMPTZ,
   operation_time TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   administration_created_at_text TEXT,
-  administration_updated_at_text TEXT
+  administration_updated_at_text TEXT,
+  actor_subject TEXT,
+  actor_issuer TEXT,
+  client_id TEXT,
+  authorization_result TEXT,
+  policy_id TEXT,
+  matched_rule_id TEXT,
+  request_id TEXT,
+  correlation_id TEXT,
+  source_ip INET,
+  user_agent TEXT,
+  operation TEXT,
+  endpoint TEXT,
+  http_method TEXT,
+  previous_hash TEXT,
+  content_hash TEXT,
+  row_hash TEXT,
+  signature TEXT,
+  key_id TEXT,
+  anchor_id TEXT,
+  anchor_time TIMESTAMPTZ
 );
 
 CREATE TABLE IF NOT EXISTS submodel_history (
@@ -156,7 +176,27 @@ CREATE TABLE IF NOT EXISTS submodel_history (
   valid_to TIMESTAMPTZ,
   operation_time TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   administration_created_at_text TEXT,
-  administration_updated_at_text TEXT
+  administration_updated_at_text TEXT,
+  actor_subject TEXT,
+  actor_issuer TEXT,
+  client_id TEXT,
+  authorization_result TEXT,
+  policy_id TEXT,
+  matched_rule_id TEXT,
+  request_id TEXT,
+  correlation_id TEXT,
+  source_ip INET,
+  user_agent TEXT,
+  operation TEXT,
+  endpoint TEXT,
+  http_method TEXT,
+  previous_hash TEXT,
+  content_hash TEXT,
+  row_hash TEXT,
+  signature TEXT,
+  key_id TEXT,
+  anchor_id TEXT,
+  anchor_time TIMESTAMPTZ
 );
 
 CREATE TABLE IF NOT EXISTS concept_description_history (
@@ -169,7 +209,27 @@ CREATE TABLE IF NOT EXISTS concept_description_history (
   valid_to TIMESTAMPTZ,
   operation_time TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   administration_created_at_text TEXT,
-  administration_updated_at_text TEXT
+  administration_updated_at_text TEXT,
+  actor_subject TEXT,
+  actor_issuer TEXT,
+  client_id TEXT,
+  authorization_result TEXT,
+  policy_id TEXT,
+  matched_rule_id TEXT,
+  request_id TEXT,
+  correlation_id TEXT,
+  source_ip INET,
+  user_agent TEXT,
+  operation TEXT,
+  endpoint TEXT,
+  http_method TEXT,
+  previous_hash TEXT,
+  content_hash TEXT,
+  row_hash TEXT,
+  signature TEXT,
+  key_id TEXT,
+  anchor_id TEXT,
+  anchor_time TIMESTAMPTZ
 );
 
 CREATE TABLE IF NOT EXISTS descriptor_history (
@@ -182,17 +242,129 @@ CREATE TABLE IF NOT EXISTS descriptor_history (
   valid_to TIMESTAMPTZ,
   operation_time TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   administration_created_at_text TEXT,
-  administration_updated_at_text TEXT
+  administration_updated_at_text TEXT,
+  actor_subject TEXT,
+  actor_issuer TEXT,
+  client_id TEXT,
+  authorization_result TEXT,
+  policy_id TEXT,
+  matched_rule_id TEXT,
+  request_id TEXT,
+  correlation_id TEXT,
+  source_ip INET,
+  user_agent TEXT,
+  operation TEXT,
+  endpoint TEXT,
+  http_method TEXT,
+  previous_hash TEXT,
+  content_hash TEXT,
+  row_hash TEXT,
+  signature TEXT,
+  key_id TEXT,
+  anchor_id TEXT,
+  anchor_time TIMESTAMPTZ
 );
+
+ALTER TABLE IF EXISTS aas_history
+  ADD COLUMN IF NOT EXISTS actor_subject TEXT,
+  ADD COLUMN IF NOT EXISTS actor_issuer TEXT,
+  ADD COLUMN IF NOT EXISTS client_id TEXT,
+  ADD COLUMN IF NOT EXISTS authorization_result TEXT,
+  ADD COLUMN IF NOT EXISTS policy_id TEXT,
+  ADD COLUMN IF NOT EXISTS matched_rule_id TEXT,
+  ADD COLUMN IF NOT EXISTS request_id TEXT,
+  ADD COLUMN IF NOT EXISTS correlation_id TEXT,
+  ADD COLUMN IF NOT EXISTS source_ip INET,
+  ADD COLUMN IF NOT EXISTS user_agent TEXT,
+  ADD COLUMN IF NOT EXISTS operation TEXT,
+  ADD COLUMN IF NOT EXISTS endpoint TEXT,
+  ADD COLUMN IF NOT EXISTS http_method TEXT,
+  ADD COLUMN IF NOT EXISTS previous_hash TEXT,
+  ADD COLUMN IF NOT EXISTS content_hash TEXT,
+  ADD COLUMN IF NOT EXISTS row_hash TEXT,
+  ADD COLUMN IF NOT EXISTS signature TEXT,
+  ADD COLUMN IF NOT EXISTS key_id TEXT,
+  ADD COLUMN IF NOT EXISTS anchor_id TEXT,
+  ADD COLUMN IF NOT EXISTS anchor_time TIMESTAMPTZ;
+
+ALTER TABLE IF EXISTS submodel_history
+  ADD COLUMN IF NOT EXISTS actor_subject TEXT,
+  ADD COLUMN IF NOT EXISTS actor_issuer TEXT,
+  ADD COLUMN IF NOT EXISTS client_id TEXT,
+  ADD COLUMN IF NOT EXISTS authorization_result TEXT,
+  ADD COLUMN IF NOT EXISTS policy_id TEXT,
+  ADD COLUMN IF NOT EXISTS matched_rule_id TEXT,
+  ADD COLUMN IF NOT EXISTS request_id TEXT,
+  ADD COLUMN IF NOT EXISTS correlation_id TEXT,
+  ADD COLUMN IF NOT EXISTS source_ip INET,
+  ADD COLUMN IF NOT EXISTS user_agent TEXT,
+  ADD COLUMN IF NOT EXISTS operation TEXT,
+  ADD COLUMN IF NOT EXISTS endpoint TEXT,
+  ADD COLUMN IF NOT EXISTS http_method TEXT,
+  ADD COLUMN IF NOT EXISTS previous_hash TEXT,
+  ADD COLUMN IF NOT EXISTS content_hash TEXT,
+  ADD COLUMN IF NOT EXISTS row_hash TEXT,
+  ADD COLUMN IF NOT EXISTS signature TEXT,
+  ADD COLUMN IF NOT EXISTS key_id TEXT,
+  ADD COLUMN IF NOT EXISTS anchor_id TEXT,
+  ADD COLUMN IF NOT EXISTS anchor_time TIMESTAMPTZ;
+
+ALTER TABLE IF EXISTS concept_description_history
+  ADD COLUMN IF NOT EXISTS actor_subject TEXT,
+  ADD COLUMN IF NOT EXISTS actor_issuer TEXT,
+  ADD COLUMN IF NOT EXISTS client_id TEXT,
+  ADD COLUMN IF NOT EXISTS authorization_result TEXT,
+  ADD COLUMN IF NOT EXISTS policy_id TEXT,
+  ADD COLUMN IF NOT EXISTS matched_rule_id TEXT,
+  ADD COLUMN IF NOT EXISTS request_id TEXT,
+  ADD COLUMN IF NOT EXISTS correlation_id TEXT,
+  ADD COLUMN IF NOT EXISTS source_ip INET,
+  ADD COLUMN IF NOT EXISTS user_agent TEXT,
+  ADD COLUMN IF NOT EXISTS operation TEXT,
+  ADD COLUMN IF NOT EXISTS endpoint TEXT,
+  ADD COLUMN IF NOT EXISTS http_method TEXT,
+  ADD COLUMN IF NOT EXISTS previous_hash TEXT,
+  ADD COLUMN IF NOT EXISTS content_hash TEXT,
+  ADD COLUMN IF NOT EXISTS row_hash TEXT,
+  ADD COLUMN IF NOT EXISTS signature TEXT,
+  ADD COLUMN IF NOT EXISTS key_id TEXT,
+  ADD COLUMN IF NOT EXISTS anchor_id TEXT,
+  ADD COLUMN IF NOT EXISTS anchor_time TIMESTAMPTZ;
+
+ALTER TABLE IF EXISTS descriptor_history
+  ADD COLUMN IF NOT EXISTS actor_subject TEXT,
+  ADD COLUMN IF NOT EXISTS actor_issuer TEXT,
+  ADD COLUMN IF NOT EXISTS client_id TEXT,
+  ADD COLUMN IF NOT EXISTS authorization_result TEXT,
+  ADD COLUMN IF NOT EXISTS policy_id TEXT,
+  ADD COLUMN IF NOT EXISTS matched_rule_id TEXT,
+  ADD COLUMN IF NOT EXISTS request_id TEXT,
+  ADD COLUMN IF NOT EXISTS correlation_id TEXT,
+  ADD COLUMN IF NOT EXISTS source_ip INET,
+  ADD COLUMN IF NOT EXISTS user_agent TEXT,
+  ADD COLUMN IF NOT EXISTS operation TEXT,
+  ADD COLUMN IF NOT EXISTS endpoint TEXT,
+  ADD COLUMN IF NOT EXISTS http_method TEXT,
+  ADD COLUMN IF NOT EXISTS previous_hash TEXT,
+  ADD COLUMN IF NOT EXISTS content_hash TEXT,
+  ADD COLUMN IF NOT EXISTS row_hash TEXT,
+  ADD COLUMN IF NOT EXISTS signature TEXT,
+  ADD COLUMN IF NOT EXISTS key_id TEXT,
+  ADD COLUMN IF NOT EXISTS anchor_id TEXT,
+  ADD COLUMN IF NOT EXISTS anchor_time TIMESTAMPTZ;
 
 CREATE INDEX IF NOT EXISTS ix_aas_history_identifier_validity ON aas_history(identifier, valid_from DESC, valid_to);
 CREATE INDEX IF NOT EXISTS ix_aas_history_recent ON aas_history(history_id, operation_time);
+CREATE INDEX IF NOT EXISTS ix_aas_history_row_hash ON aas_history(row_hash);
 CREATE INDEX IF NOT EXISTS ix_submodel_history_identifier_validity ON submodel_history(identifier, valid_from DESC, valid_to);
 CREATE INDEX IF NOT EXISTS ix_submodel_history_recent ON submodel_history(history_id, operation_time);
+CREATE INDEX IF NOT EXISTS ix_submodel_history_row_hash ON submodel_history(row_hash);
 CREATE INDEX IF NOT EXISTS ix_cd_history_identifier_validity ON concept_description_history(identifier, valid_from DESC, valid_to);
 CREATE INDEX IF NOT EXISTS ix_cd_history_recent ON concept_description_history(history_id, operation_time);
+CREATE INDEX IF NOT EXISTS ix_cd_history_row_hash ON concept_description_history(row_hash);
 CREATE INDEX IF NOT EXISTS ix_descriptor_history_identifier_validity ON descriptor_history(identifier, valid_from DESC, valid_to);
 CREATE INDEX IF NOT EXISTS ix_descriptor_history_recent ON descriptor_history(history_id, operation_time);
+CREATE INDEX IF NOT EXISTS ix_descriptor_history_row_hash ON descriptor_history(row_hash);
 
 -- V3.2 inserts "Batch" at enum index 2 for asset kind. Existing persisted numeric enum values
 -- from V3.1.1 with index >= 2 must be shifted by +1 to preserve semantic value.

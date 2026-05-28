@@ -40,6 +40,7 @@ import (
 	registrydb "github.com/eclipse-basyx/basyx-go-components/internal/aasregistry/persistence"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/asyncbulk"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/history"
 	commonmodel "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 	"github.com/eclipse-basyx/basyx-go-components/internal/digitaltwinregistry"
@@ -64,6 +65,12 @@ func runServer(ctx context.Context, configPath string) error {
 	if err := commonmodel.SetVerificationMode(cfg.Server.StrictVerification); err != nil {
 		return err
 	}
+	history.Configure(history.Config{
+		Mode:              cfg.History.Mode,
+		RetentionDays:     cfg.History.RetentionDays,
+		Immutability:      cfg.History.Immutability,
+		AuditIdentityMode: cfg.History.AuditIdentityMode,
+	})
 	commonmodel.SetSupportsSingularSupplementalSemanticId(cfg.General.SupportsSingularSupplementalSemanticId)
 
 	// Digital Twin Registry always enables discovery integration.

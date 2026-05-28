@@ -154,16 +154,35 @@ type Config struct {
 	Postgres   PostgresConfig `mapstructure:"postgres" yaml:"postgres"` // PostgreSQL database settings
 	CorsConfig CorsConfig     `mapstructure:"cors" yaml:"cors"`         // CORS policy configuration
 
-	General GeneralConfig `mapstructure:"general" yaml:"general"` // General configuration
-	OIDC    OIDCConfig    `mapstructure:"oidc" yaml:"oidc"`       // OpenID Connect authentication
-	ABAC    ABACConfig    `mapstructure:"abac" yaml:"abac"`       // Attribute-Based Access Control
-	JWS     JWSConfig     `mapstructure:"jws" yaml:"jws"`         // JWS signing configuration
-	Swagger SwaggerConfig `mapstructure:"swagger" yaml:"swagger"` // Swagger UI configuration
+	General  GeneralConfig  `mapstructure:"general" yaml:"general"`   // General configuration
+	OIDC     OIDCConfig     `mapstructure:"oidc" yaml:"oidc"`         // OpenID Connect authentication
+	ABAC     ABACConfig     `mapstructure:"abac" yaml:"abac"`         // Attribute-Based Access Control
+	JWS      JWSConfig      `mapstructure:"jws" yaml:"jws"`           // JWS signing configuration
+	Swagger  SwaggerConfig  `mapstructure:"swagger" yaml:"swagger"`   // Swagger UI configuration
+	History  HistoryConfig  `mapstructure:"history" yaml:"history"`   // History/audit behavior
+	Eventing EventingConfig `mapstructure:"eventing" yaml:"eventing"` // Eventing placeholders
 }
 
 // JWSConfig contains JSON Web Signature configuration parameters.
 type JWSConfig struct {
 	PrivateKeyPath string `mapstructure:"privateKeyPath" yaml:"privateKeyPath"` // Path to the RSA private key for signing
+}
+
+// HistoryConfig contains history and audit configuration.
+type HistoryConfig struct {
+	Mode              string `mapstructure:"mode" yaml:"mode" json:"mode"`                                        // off|api|audit
+	RetentionDays     int    `mapstructure:"retentionDays" yaml:"retentionDays" json:"retentionDays"`             // 0 = keep forever
+	Immutability      string `mapstructure:"immutability" yaml:"immutability" json:"immutability"`                // none|postgres_guarded|external_anchor
+	AuditIdentityMode string `mapstructure:"auditIdentityMode" yaml:"auditIdentityMode" json:"auditIdentityMode"` // none|minimal|extended
+}
+
+// EventingConfig reserves future-compatible eventing configuration.
+type EventingConfig struct {
+	Enabled       bool     `mapstructure:"enabled" yaml:"enabled" json:"enabled"`
+	Format        string   `mapstructure:"format" yaml:"format" json:"format"`
+	Sinks         []string `mapstructure:"sinks" yaml:"sinks" json:"sinks"`
+	OutboxEnabled bool     `mapstructure:"outboxEnabled" yaml:"outboxEnabled" json:"outboxEnabled"`
+	TopicPrefix   string   `mapstructure:"topicPrefix" yaml:"topicPrefix" json:"topicPrefix"`
 }
 
 // SwaggerConfig contains Swagger UI configuration parameters.
@@ -305,11 +324,75 @@ func LoadConfig(configPath string, configMode ConfigMode) (*Config, error) {
 	}
 	cfg.Server.StrictVerification = string(verificationMode)
 	applyAASPreconfigPathOverrides(cfg)
+	applyHistoryEnvOverrides(cfg)
+	applyEventingEnvOverrides(cfg)
 	if configMode == NORMAL {
 		log.Println("✅ Configuration loaded successfully")
 		PrintConfiguration(cfg)
 	}
 	return cfg, nil
+}
+
+func applyHistoryEnvOverrides(cfg *Config) {
+	if cfg == nil {
+		return
+	}
+	if value, ok := lookupTrimmedEnv("BASYX_HISTORY_MODE"); ok {
+		cfg.History.Mode = value
+	}
+	if value, ok := lookupTrimmedEnv("BASYX_HISTORY_RETENTION_DAYS"); ok {
+		var retention int
+		if _, err := fmt.Sscanf(value, "%d", &retention); err == nil {
+			cfg.History.RetentionDays = retention
+		}
+	}
+	if value, ok := lookupTrimmedEnv("BASYX_HISTORY_IMMUTABILITY"); ok {
+		cfg.History.Immutability = value
+	}
+	if value, ok := lookupTrimmedEnv("BASYX_AUDIT_IDENTITY_MODE"); ok {
+		cfg.History.AuditIdentityMode = value
+	}
+}
+
+func applyEventingEnvOverrides(cfg *Config) {
+	if cfg == nil {
+		return
+	}
+	if value, ok := lookupTrimmedEnv("BASYX_EVENTING_ENABLED"); ok {
+		cfg.Eventing.Enabled = strings.EqualFold(value, "true")
+	}
+	if value, ok := lookupTrimmedEnv("BASYX_EVENTING_FORMAT"); ok {
+		cfg.Eventing.Format = value
+	}
+	if value, ok := lookupTrimmedEnv("BASYX_EVENTING_SINKS"); ok {
+		cfg.Eventing.Sinks = parseCommaSeparated(value)
+	}
+	if value, ok := lookupTrimmedEnv("BASYX_EVENTING_OUTBOX_ENABLED"); ok {
+		cfg.Eventing.OutboxEnabled = strings.EqualFold(value, "true")
+	}
+	if value, ok := lookupTrimmedEnv("BASYX_EVENTING_TOPIC_PREFIX"); ok {
+		cfg.Eventing.TopicPrefix = value
+	}
+}
+
+func lookupTrimmedEnv(key string) (string, bool) {
+	value, ok := os.LookupEnv(key)
+	if !ok {
+		return "", false
+	}
+	return strings.TrimSpace(value), true
+}
+
+func parseCommaSeparated(rawValue string) []string {
+	parts := strings.Split(rawValue, ",")
+	values := make([]string, 0, len(parts))
+	for _, part := range parts {
+		value := strings.TrimSpace(part)
+		if value != "" {
+			values = append(values, value)
+		}
+	}
+	return values
 }
 
 func applyAASPreconfigPathOverrides(cfg *Config) {
@@ -399,6 +482,19 @@ func setDefaults(v *viper.Viper) {
 
 	// JWS defaults
 	v.SetDefault("jws.privateKeyPath", "")
+
+	// History/audit defaults
+	v.SetDefault("history.mode", "api")
+	v.SetDefault("history.retentionDays", 0)
+	v.SetDefault("history.immutability", "none")
+	v.SetDefault("history.auditIdentityMode", "minimal")
+
+	// Eventing placeholders
+	v.SetDefault("eventing.enabled", false)
+	v.SetDefault("eventing.format", "cloudevents")
+	v.SetDefault("eventing.sinks", []string{})
+	v.SetDefault("eventing.outboxEnabled", false)
+	v.SetDefault("eventing.topicPrefix", "basyx")
 
 	// Swagger defaults
 	v.SetDefault("swagger.contactName", "Eclipse BaSyx")

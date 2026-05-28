@@ -159,3 +159,65 @@ func TestLoadConfigAcceptsPermissiveStrictVerification(t *testing.T) {
 		t.Fatalf("unexpected strictVerification mode: %q", cfg.Server.StrictVerification)
 	}
 }
+
+func TestLoadConfigAppliesHistoryAndEventingDefaults(t *testing.T) {
+	withUnsetEnv(t, "BASYX_HISTORY_MODE")
+	withUnsetEnv(t, "BASYX_HISTORY_RETENTION_DAYS")
+	withUnsetEnv(t, "BASYX_HISTORY_IMMUTABILITY")
+	withUnsetEnv(t, "BASYX_AUDIT_IDENTITY_MODE")
+	withUnsetEnv(t, "BASYX_EVENTING_ENABLED")
+	withUnsetEnv(t, "BASYX_EVENTING_FORMAT")
+	withUnsetEnv(t, "BASYX_EVENTING_SINKS")
+	withUnsetEnv(t, "BASYX_EVENTING_OUTBOX_ENABLED")
+	withUnsetEnv(t, "BASYX_EVENTING_TOPIC_PREFIX")
+	captureLogOutput(t)
+
+	cfg, err := LoadConfig("", NORMAL)
+	if err != nil {
+		t.Fatalf("unexpected config load error: %v", err)
+	}
+
+	if cfg.History.Mode != "api" {
+		t.Fatalf("expected default history mode api, got %q", cfg.History.Mode)
+	}
+	if cfg.History.RetentionDays != 0 {
+		t.Fatalf("expected default retention 0, got %d", cfg.History.RetentionDays)
+	}
+	if cfg.History.Immutability != "none" {
+		t.Fatalf("expected default immutability none, got %q", cfg.History.Immutability)
+	}
+	if cfg.History.AuditIdentityMode != "minimal" {
+		t.Fatalf("expected default audit identity mode minimal, got %q", cfg.History.AuditIdentityMode)
+	}
+	if cfg.Eventing.Enabled || cfg.Eventing.Format != "cloudevents" || cfg.Eventing.TopicPrefix != "basyx" {
+		t.Fatalf("unexpected eventing defaults: %+v", cfg.Eventing)
+	}
+}
+
+func TestLoadConfigAppliesBasyxHistoryAndEventingEnvOverrides(t *testing.T) {
+	t.Setenv("BASYX_HISTORY_MODE", "audit")
+	t.Setenv("BASYX_HISTORY_RETENTION_DAYS", "30")
+	t.Setenv("BASYX_HISTORY_IMMUTABILITY", "external_anchor")
+	t.Setenv("BASYX_AUDIT_IDENTITY_MODE", "extended")
+	t.Setenv("BASYX_EVENTING_ENABLED", "true")
+	t.Setenv("BASYX_EVENTING_FORMAT", "cloudevents")
+	t.Setenv("BASYX_EVENTING_SINKS", "mqtt,kafka")
+	t.Setenv("BASYX_EVENTING_OUTBOX_ENABLED", "true")
+	t.Setenv("BASYX_EVENTING_TOPIC_PREFIX", "custom")
+	captureLogOutput(t)
+
+	cfg, err := LoadConfig("", NORMAL)
+	if err != nil {
+		t.Fatalf("unexpected config load error: %v", err)
+	}
+
+	if cfg.History.Mode != "audit" || cfg.History.RetentionDays != 30 || cfg.History.Immutability != "external_anchor" || cfg.History.AuditIdentityMode != "extended" {
+		t.Fatalf("unexpected history env override result: %+v", cfg.History)
+	}
+	if !cfg.Eventing.Enabled || !cfg.Eventing.OutboxEnabled || cfg.Eventing.TopicPrefix != "custom" {
+		t.Fatalf("unexpected eventing env override result: %+v", cfg.Eventing)
+	}
+	if len(cfg.Eventing.Sinks) != 2 || cfg.Eventing.Sinks[0] != "mqtt" || cfg.Eventing.Sinks[1] != "kafka" {
+		t.Fatalf("unexpected eventing sinks: %+v", cfg.Eventing.Sinks)
+	}
+}

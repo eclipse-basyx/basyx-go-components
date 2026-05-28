@@ -64,6 +64,39 @@ Known v3.2 OpenAPI gaps in standalone services:
 - Standalone Submodel Repository `/serialization` is routed but returns `501 Not Implemented`.
 - AAS Environment `/serialization` and `/upload` are implemented and should be used when full environment import/export is needed.
 
+## History Configuration
+
+History behavior is controlled through lightweight, vendor-neutral configuration.
+
+Environment variables:
+
+- `BASYX_HISTORY_MODE`: `off`, `api`, or `audit`. Default is `api`.
+- `BASYX_HISTORY_RETENTION_DAYS`: number of days to retain history. `0` means keep forever. Default is `0`.
+- `BASYX_HISTORY_IMMUTABILITY`: `none`, `postgres_guarded`, or `external_anchor`. Default is `none`.
+- `BASYX_AUDIT_IDENTITY_MODE`: `none`, `minimal`, or `extended`. Default is `minimal`.
+
+Mode semantics:
+
+- `off`: history writes are skipped. History/recent-change reads will not receive new rows while this mode is active.
+- `api`: functional AAS v3.2 history and recent-change behavior for API consumers.
+- `audit`: append-only hash-chained history rows for compliance-oriented deployments.
+
+Current implementation note:
+
+- Runtime history rows are append-only event rows in `api` and `audit` mode.
+- `postgres_guarded` and `external_anchor` are configuration and schema foundations. They do not yet install PostgreSQL mutation-blocking triggers or publish anchors to an external system.
+- The implementation supports compliance-oriented deployments, but it does not by itself make a deployment legally compliant with any specific regulation.
+
+Eventing placeholders:
+
+- `BASYX_EVENTING_ENABLED`
+- `BASYX_EVENTING_FORMAT`, currently expected to be `cloudevents`
+- `BASYX_EVENTING_SINKS`
+- `BASYX_EVENTING_OUTBOX_ENABLED`
+- `BASYX_EVENTING_TOPIC_PREFIX`
+
+These settings reserve the configuration shape for future CloudEvents-compatible outbox/event publishing. MQTT and Kafka publishing are not implemented yet.
+
 ## Historical Reads
 
 Normal `GET` endpoints return the latest current version. Use `$history` when you need the entity that was valid at a specific point in time.
@@ -163,6 +196,7 @@ Growth is reduced by:
 - Storing delete events as tombstones where supported.
 - Using cursor pagination for recent-change feeds.
 - Backfilling one baseline row per existing entity during migration, not one row per nested child object.
+- Hashing canonical JSON snapshots instead of signing or anchoring every row by default.
 
 For large installations, plan retention and monitoring:
 

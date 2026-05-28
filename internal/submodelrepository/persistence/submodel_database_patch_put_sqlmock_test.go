@@ -181,8 +181,8 @@ func TestPutSubmodelUpdatePathReturnsTrue(t *testing.T) {
 }
 
 func expectSubmodelHistoryAppend(mock sqlmock.Sqlmock) {
-	mock.ExpectExec(`UPDATE "submodel_history"`).
-		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectQuery(`SELECT "row_hash" FROM "submodel_history"`).
+		WillReturnError(sql.ErrNoRows)
 	mock.ExpectExec(`INSERT INTO "submodel_history"`).
 		WillReturnResult(sqlmock.NewResult(0, 1))
 }

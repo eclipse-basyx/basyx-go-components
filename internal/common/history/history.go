@@ -27,12 +27,18 @@
 package history
 
 import (
+	"bytes"
 	"context"
+	"crypto/sha256"
 	"database/sql"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/doug-martin/goqu/v9"
@@ -40,6 +46,27 @@ import (
 )
 
 const (
+	// ModeOff disables history writes.
+	ModeOff = "off"
+	// ModeAPI enables functional API history.
+	ModeAPI = "api"
+	// ModeAudit enables audit-oriented append-only history.
+	ModeAudit = "audit"
+
+	// ImmutabilityNone leaves history under normal PostgreSQL permissions.
+	ImmutabilityNone = "none"
+	// ImmutabilityPostgresGuarded is reserved for DB-level history guards.
+	ImmutabilityPostgresGuarded = "postgres_guarded"
+	// ImmutabilityExternalAnchor is reserved for anchored hash chains.
+	ImmutabilityExternalAnchor = "external_anchor"
+
+	// AuditIdentityNone stores no identity metadata.
+	AuditIdentityNone = "none"
+	// AuditIdentityMinimal stores stable technical identity metadata.
+	AuditIdentityMinimal = "minimal"
+	// AuditIdentityExtended stores optional extended metadata.
+	AuditIdentityExtended = "extended"
+
 	// TableAAS stores Asset Administration Shell history snapshots.
 	TableAAS = "aas_history"
 	// TableSubmodel stores Submodel history snapshots.
@@ -57,6 +84,16 @@ const (
 	ChangeDeleted = "Deleted"
 )
 
+var (
+	configMu     sync.RWMutex
+	activeConfig = Config{
+		Mode:              ModeAPI,
+		RetentionDays:     0,
+		Immutability:      ImmutabilityNone,
+		AuditIdentityMode: AuditIdentityMinimal,
+	}
+)
+
 // Row is a normalized history entry loaded from one of the history tables.
 type Row struct {
 	HistoryID   int64
@@ -69,8 +106,122 @@ type Row struct {
 	OperationAt time.Time
 }
 
-// AppendVersionTx closes the current open version for identifier and appends a new snapshot version.
+// ChangeEvent is the internal event representation shared by history, audit,
+// anchoring, and future eventing sinks.
+type ChangeEvent struct {
+	EntityType    string
+	Identifier    string
+	ChangeType    string
+	Timestamp     time.Time
+	Snapshot      map[string]any
+	Deleted       bool
+	RequestID     string
+	CorrelationID string
+	ActorSubject  string
+	ActorIssuer   string
+	ClientID      string
+	Endpoint      string
+	HTTPMethod    string
+	ContentHash   string
+	PreviousHash  string
+	RowHash       string
+}
+
+// AuditContext carries vendor-neutral request and identity metadata.
+type AuditContext struct {
+	ActorSubject        string
+	ActorIssuer         string
+	ClientID            string
+	AuthorizationResult string
+	PolicyID            string
+	MatchedRuleID       string
+	RequestID           string
+	CorrelationID       string
+	SourceIP            string
+	UserAgent           string
+	Operation           string
+	Endpoint            string
+	HTTPMethod          string
+}
+
+type auditContextKey struct{}
+
+// ContextWithAudit stores audit metadata in a context.
+func ContextWithAudit(ctx context.Context, audit AuditContext) context.Context {
+	return context.WithValue(ctx, auditContextKey{}, audit)
+}
+
+// FromContext returns audit metadata stored in ctx.
+func FromContext(ctx context.Context) AuditContext {
+	if ctx == nil {
+		return AuditContext{}
+	}
+	audit, _ := ctx.Value(auditContextKey{}).(AuditContext)
+	return audit
+}
+
+// HistoryWriter consumes change events for history storage.
+type HistoryWriter interface {
+	Append(ctx context.Context, event ChangeEvent) error
+}
+
+// AnchorClient is the extension point for external hash anchoring.
+type AnchorClient interface {
+	Anchor(ctx context.Context, batch AnchorBatch) (*AnchorResult, error)
+}
+
+// EventPublisher is the extension point for future CloudEvents-compatible publishing.
+type EventPublisher interface {
+	Publish(ctx context.Context, event ChangeEvent) error
+}
+
+// AnchorBatch groups hash-chain rows for external anchoring.
+type AnchorBatch struct {
+	Source string
+	Rows   []ChangeEvent
+}
+
+// AnchorResult captures external anchor metadata.
+type AnchorResult struct {
+	AnchorID   string
+	AnchorTime time.Time
+}
+
+// NoopAnchorClient is the default anchor client.
+type NoopAnchorClient struct{}
+
+// Anchor intentionally performs no external write.
+func (NoopAnchorClient) Anchor(_ context.Context, _ AnchorBatch) (*AnchorResult, error) {
+	return nil, nil
+}
+
+// Config controls the lightweight history/audit behavior.
+type Config struct {
+	Mode              string
+	RetentionDays     int
+	Immutability      string
+	AuditIdentityMode string
+}
+
+// Configure replaces the process-local history configuration.
+func Configure(cfg Config) {
+	configMu.Lock()
+	defer configMu.Unlock()
+	activeConfig = normalizeConfig(cfg)
+}
+
+// ActiveConfig returns the normalized process-local history configuration.
+func ActiveConfig() Config {
+	configMu.RLock()
+	defer configMu.RUnlock()
+	return activeConfig
+}
+
+// AppendVersionTx appends an immutable snapshot event for identifier.
 func AppendVersionTx(ctx context.Context, tx *sql.Tx, table string, identifier string, changeType string, snapshot map[string]any, deleted bool) error {
+	if ActiveConfig().Mode == ModeOff {
+		return nil
+	}
 	if tx == nil {
 		return common.NewInternalServerError("HISTORY-APPEND-NILTX transaction must not be nil")
 	}
@@ -80,20 +231,39 @@ func AppendVersionTx(ctx context.Context, tx *sql.Tx, table string, identifier s
 	}
 
 	now := time.Now().UTC()
-	closeQuery, closeArgs, err := goqu.Update(table).
-		Set(goqu.Record{"valid_to": now}).
-		Where(goqu.C("identifier").Eq(identifier), goqu.C("valid_to").IsNull()).
-		ToSQL()
-	if err != nil {
-		return common.NewInternalServerError("HISTORY-APPEND-BUILDCLOSE " + err.Error())
-	}
-	if _, err = tx.ExecContext(ctx, closeQuery, closeArgs...); err != nil {
-		return common.NewInternalServerError("HISTORY-APPEND-EXECCLOSE " + err.Error())
-	}
-
 	snapshotJSON, err := json.Marshal(snapshot)
 	if err != nil {
 		return common.NewInternalServerError("HISTORY-APPEND-MARSHAL " + err.Error())
+	}
+	contentHash, err := CanonicalJSONHash(snapshot)
+	if err != nil {
+		return common.NewInternalServerError("HISTORY-APPEND-CONTENTHASH " + err.Error())
+	}
+	previousHash, err := latestRowHashTx(ctx, tx, table, identifier)
+	if err != nil {
+		return err
+	}
+	audit := FromContext(ctx)
+	event := ChangeEvent{
+		EntityType:    table,
+		Identifier:    identifier,
+		ChangeType:    changeType,
+		Timestamp:     now,
+		Snapshot:      snapshot,
+		Deleted:       deleted,
+		ContentHash:   contentHash,
+		PreviousHash:  previousHash,
+		RequestID:     audit.RequestID,
+		CorrelationID: audit.CorrelationID,
+		ActorSubject:  audit.ActorSubject,
+		ActorIssuer:   audit.ActorIssuer,
+		ClientID:      audit.ClientID,
+		Endpoint:      audit.Endpoint,
+		HTTPMethod:    audit.HTTPMethod,
+	}
+	rowHash, err := ComputeHistoryRowHash(event)
+	if err != nil {
+		return common.NewInternalServerError("HISTORY-APPEND-ROWHASH " + err.Error())
 	}
 	createdAt, updatedAt := administrationTimestamps(snapshot)
 	insertQuery, insertArgs, err := goqu.Insert(table).Rows(goqu.Record{
@@ -105,6 +275,22 @@ func AppendVersionTx(ctx context.Context, tx *sql.Tx, table string, identifier s
 		"operation_time":                 now,
 		"administration_created_at_text": createdAt,
 		"administration_updated_at_text": updatedAt,
+		"content_hash":                   contentHash,
+		"previous_hash":                  previousHash,
+		"row_hash":                       rowHash,
+		"actor_subject":                  audit.ActorSubject,
+		"actor_issuer":                   audit.ActorIssuer,
+		"client_id":                      audit.ClientID,
+		"authorization_result":           audit.AuthorizationResult,
+		"policy_id":                      audit.PolicyID,
+		"matched_rule_id":                audit.MatchedRuleID,
+		"request_id":                     audit.RequestID,
+		"correlation_id":                 audit.CorrelationID,
+		"source_ip":                      nullableINET(audit.SourceIP),
+		"user_agent":                     audit.UserAgent,
+		"operation":                      audit.Operation,
+		"endpoint":                       audit.Endpoint,
+		"http_method":                    audit.HTTPMethod,
 	}).ToSQL()
 	if err != nil {
 		return common.NewInternalServerError("HISTORY-APPEND-BUILDINSERT " + err.Error())
@@ -113,6 +299,55 @@ func AppendVersionTx(ctx context.Context, tx *sql.Tx, table string, identifier s
 		return common.NewInternalServerError("HISTORY-APPEND-EXECINSERT " + err.Error())
 	}
 	return nil
+}
+
+func normalizeConfig(cfg Config) Config {
+	cfg.Mode = normalizeHistoryMode(cfg.Mode)
+	cfg.Immutability = normalizeImmutability(cfg.Immutability)
+	cfg.AuditIdentityMode = normalizeAuditIdentityMode(cfg.AuditIdentityMode)
+	if cfg.RetentionDays < 0 {
+		cfg.RetentionDays = 0
+	}
+	return cfg
+}
+
+func normalizeHistoryMode(mode string) string {
+	switch strings.ToLower(strings.TrimSpace(mode)) {
+	case "", ModeAPI:
+		return ModeAPI
+	case ModeOff:
+		return ModeOff
+	case ModeAudit:
+		return ModeAudit
+	default:
+		return ModeAPI
+	}
+}
+
+func normalizeImmutability(mode string) string {
+	switch strings.ToLower(strings.TrimSpace(mode)) {
+	case "", ImmutabilityNone:
+		return ImmutabilityNone
+	case ImmutabilityPostgresGuarded:
+		return ImmutabilityPostgresGuarded
+	case ImmutabilityExternalAnchor:
+		return ImmutabilityExternalAnchor
+	default:
+		return ImmutabilityNone
+	}
+}
+
+func normalizeAuditIdentityMode(mode string) string {
+	switch strings.ToLower(strings.TrimSpace(mode)) {
+	case "", AuditIdentityMinimal:
+		return AuditIdentityMinimal
+	case AuditIdentityNone:
+		return AuditIdentityNone
+	case AuditIdentityExtended:
+		return AuditIdentityExtended
+	default:
+		return AuditIdentityMinimal
+	}
 }
 
 // SnapshotByDate returns the snapshot that was valid for identifier at the requested instant.
@@ -125,9 +360,8 @@ func SnapshotByDate(ctx context.Context, db *sql.DB, table string, identifier st
 		Where(
 			goqu.C("identifier").Eq(identifier),
 			goqu.C("valid_from").Lte(at.UTC()),
-			goqu.Or(goqu.C("valid_to").IsNull(), goqu.C("valid_to").Gt(at.UTC())),
 		).
-		Order(goqu.C("history_id").Desc()).
+		Order(goqu.C("valid_from").Desc(), goqu.C("history_id").Desc()).
 		Limit(1).
 		ToSQL()
 	if err != nil {
@@ -253,4 +487,149 @@ func administrationTimestamps(snapshot map[string]any) (string, string) {
 	created, _ := administration["createdAt"].(string)
 	updated, _ := administration["updatedAt"].(string)
 	return created, updated
+}
+
+func nullableINET(value string) any {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return nil
+	}
+	return goqu.L("?::inet", value)
+}
+
+func latestRowHashTx(ctx context.Context, tx *sql.Tx, table string, identifier string) (string, error) {
+	query, args, err := goqu.From(table).
+		Select(goqu.C("row_hash")).
+		Where(goqu.C("identifier").Eq(identifier)).
+		Order(goqu.C("history_id").Desc()).
+		Limit(1).
+		ToSQL()
+	if err != nil {
+		return "", common.NewInternalServerError("HISTORY-HASH-BUILDPREVIOUS " + err.Error())
+	}
+	var previousHash sql.NullString
+	if err = tx.QueryRowContext(ctx, query, args...).Scan(&previousHash); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return "", nil
+		}
+		return "", common.NewInternalServerError("HISTORY-HASH-READPREVIOUS " + err.Error())
+	}
+	return previousHash.String, nil
+}
+
+// CanonicalJSONHash returns a SHA-256 hash over deterministic JSON.
+func CanonicalJSONHash(value any) (string, error) {
+	canonical, err := CanonicalJSON(value)
+	if err != nil {
+		return "", err
+	}
+	sum := sha256.Sum256(canonical)
+	return hex.EncodeToString(sum[:]), nil
+}
+
+// ComputeHistoryRowHash returns the hash-chain row hash for a history event.
+func ComputeHistoryRowHash(event ChangeEvent) (string, error) {
+	return CanonicalJSONHash(map[string]any{
+		"entityType":    event.EntityType,
+		"identifier":    event.Identifier,
+		"changeType":    event.ChangeType,
+		"timestamp":     event.Timestamp.UTC().Format(time.RFC3339Nano),
+		"deleted":       event.Deleted,
+		"contentHash":   event.ContentHash,
+		"previousHash":  event.PreviousHash,
+		"requestId":     event.RequestID,
+		"correlationId": event.CorrelationID,
+		"actorSubject":  event.ActorSubject,
+		"actorIssuer":   event.ActorIssuer,
+		"clientId":      event.ClientID,
+		"endpoint":      event.Endpoint,
+		"httpMethod":    event.HTTPMethod,
+	})
+}
+
+// CanonicalJSON encodes JSON values with stable object-key ordering.
+func CanonicalJSON(value any) ([]byte, error) {
+	normalized, err := normalizeJSONValue(value)
+	if err != nil {
+		return nil, err
+	}
+	var out bytes.Buffer
+	if err = writeCanonicalJSON(&out, normalized); err != nil {
+		return nil, err
+	}
+	return out.Bytes(), nil
+}
+
+func normalizeJSONValue(value any) (any, error) {
+	switch typed := value.(type) {
+	case json.RawMessage:
+		var normalized any
+		if err := json.Unmarshal(typed, &normalized); err != nil {
+			return nil, err
+		}
+		return normalized, nil
+	case []byte:
+		var normalized any
+		if err := json.Unmarshal(typed, &normalized); err != nil {
+			return nil, err
+		}
+		return normalized, nil
+	default:
+		return value, nil
+	}
+}
+
+func writeCanonicalJSON(out *bytes.Buffer, value any) error {
+	switch typed := value.(type) {
+	case map[string]any:
+		return writeCanonicalObject(out, typed)
+	case []any:
+		return writeCanonicalArray(out, typed)
+	default:
+		encoded, err := json.Marshal(typed)
+		if err != nil {
+			return fmt.Errorf("marshal scalar: %w", err)
+		}
+		out.Write(encoded)
+		return nil
+	}
+}
+
+func writeCanonicalObject(out *bytes.Buffer, value map[string]any) error {
+	out.WriteByte('{')
+	keys := make([]string, 0, len(value))
+	for key := range value {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	for index, key := range keys {
+		if index > 0 {
+			out.WriteByte(',')
+		}
+		keyJSON, err := json.Marshal(key)
+		if err != nil {
+			return fmt.Errorf("marshal object key: %w", err)
+		}
+		out.Write(keyJSON)
+		out.WriteByte(':')
+		if err = writeCanonicalJSON(out, value[key]); err != nil {
+			return err
+		}
+	}
+	out.WriteByte('}')
+	return nil
+}
+
+func writeCanonicalArray(out *bytes.Buffer, value []any) error {
+	out.WriteByte('[')
+	for index, item := range value {
+		if index > 0 {
+			out.WriteByte(',')
+		}
+		if err := writeCanonicalJSON(out, item); err != nil {
+			return err
+		}
+	}
+	out.WriteByte(']')
+	return nil
 }

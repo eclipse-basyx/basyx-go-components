@@ -17,6 +17,7 @@ import (
 	aasregistrydb "github.com/eclipse-basyx/basyx-go-components/internal/aasregistry/persistence"
 	aasrepositorydb "github.com/eclipse-basyx/basyx-go-components/internal/aasrepository/persistence"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/history"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/jws"
 	commonmodel "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
@@ -41,6 +42,12 @@ func runServer(ctx context.Context, configPath string) error {
 	if err := commonmodel.SetVerificationMode(cfg.Server.StrictVerification); err != nil {
 		return err
 	}
+	history.Configure(history.Config{
+		Mode:              cfg.History.Mode,
+		RetentionDays:     cfg.History.RetentionDays,
+		Immutability:      cfg.History.Immutability,
+		AuditIdentityMode: cfg.History.AuditIdentityMode,
+	})
 
 	if err = aasenvironment.ValidateStandaloneSubmodelRepositoryRegistrySyncConfig(cfg); err != nil {
 		return err

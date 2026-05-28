@@ -1,3 +1,30 @@
+<!--
+/*******************************************************************************
+* Copyright (C) 2026 the Eclipse BaSyx Authors and Fraunhofer IESE
+*
+* Permission is hereby granted, free of charge, to any person obtaining
+* a copy of this software and associated documentation files (the
+* "Software"), to deal in the Software without restriction, including
+* without limitation the rights to use, copy, modify, merge, publish,
+* distribute, sublicense, and/or sell copies of the Software, and to
+* permit persons to whom the Software is furnished to do so, subject to
+* the following conditions:
+*
+* The above copyright notice and this permission notice shall be
+* included in all copies or substantial portions of the Software.
+*
+* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+* NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
+* LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+* OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
+* WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+*
+* SPDX-License-Identifier: MIT
+******************************************************************************/
+-->
+
 # AAS API v3.2 Runtime Notes
 
 This document describes the runtime behavior added for AAS API v3.2 support. It focuses on the implementation choices that are easy to miss when reading only the OpenAPI files.
@@ -45,19 +72,24 @@ Each history row stores:
 - `snapshot`
 - `deleted`
 - `valid_from`
-- `valid_to`
+- `valid_to`: retained for backwards compatibility, but no longer used for new runtime history resolution
 - `operation_time`
 - administrative timestamp text values for `createdFrom` and `updatedFrom` filters
+- audit metadata columns such as `actor_subject`, `request_id`, `endpoint`, and `http_method`
+- tamper-evidence columns: `previous_hash`, `content_hash`, and `row_hash`
 
-On every create, update, or delete, the current open history row for that identifier is closed by setting `valid_to`, and a new row is appended. This happens in the same database transaction as the current-table mutation where the persistence path supports transactions.
+On every create, update, or delete, a new immutable event row is appended. Existing history rows are not updated by the runtime. This happens in the same database transaction as the current-table mutation where the persistence path supports transactions.
 
 History lookup uses:
 
 ```text
-valid_from <= requested_date < valid_to
+latest event where valid_from <= requested_date
+ORDER BY valid_from DESC, history_id DESC
 ```
 
-If the matching row is marked as deleted, the history endpoint returns not found. This means a deleted entity can still be resolved for dates before deletion, but not after deletion.
+If the latest matching event is marked as deleted, the history endpoint returns not found. This means a deleted entity can still be resolved for dates before deletion, but not after deletion.
+
+Each runtime-created row stores a deterministic SHA-256 hash of the canonical JSON snapshot (`content_hash`) and a per-identifier chain hash (`row_hash`) that includes the previous row hash. The current implementation prepares anchor metadata columns but does not yet publish anchors to an external transparency log or WORM store.
 
 ## Submodel Element Changes
 
@@ -158,7 +190,7 @@ Recommended follow-up options:
 
 ### Date At Exact Update Boundary
 
-The old row is valid until `valid_to`. The new row is valid from its `valid_from`. The lookup uses an exclusive upper bound, so at the exact update timestamp the new row wins.
+Runtime history is event-only. At the exact update timestamp, lookup ordering by `valid_from DESC, history_id DESC` makes the newest event win.
 
 ### Delete And Historical Reads
 
@@ -182,6 +214,8 @@ The biggest implementation questions still worth reviewing are:
 
 - Is route-level read authorization enough for historical snapshots, or do we need per-snapshot ABAC redaction?
 - Do we need an operator-facing retention/compaction setting before enabling this in large deployments?
+- Should `postgres_guarded` mode install DB triggers that block history `UPDATE`, `DELETE`, and `TRUNCATE`, and how should integration-test database cleanup opt out?
+- Which external anchoring provider, if any, should be offered first?
 - Is the migration backfill baseline sufficient for upgraded installations, or do consumers expect full nested snapshots immediately after upgrade?
 - Should descriptor recent changes include delete tombstones in the public response, or is skipping deleted descriptors acceptable for the registry profile?
 - Do we want security tests for every new history/recent-change endpoint in addition to integration tests?
