@@ -61,8 +61,8 @@ func TestAASEnvironmentBulkOperationsAndDescription(t *testing.T) {
 		var payload map[string]any
 		require.NoError(t, json.Unmarshal(body, &payload))
 		profiles := toStringSliceAASEnv(t, payload["profiles"])
-		require.Contains(t, profiles, "https://admin-shell.io/aas/API/3/1/AssetAdministrationShellRegistryServiceSpecification/SSP-003")
-		require.Contains(t, profiles, "https://admin-shell.io/aas/API/3/1/SubmodelRegistryServiceSpecification/SSP-003")
+		require.Contains(t, profiles, "https://admin-shell.io/aas/API/3/2/AssetAdministrationShellRegistryServiceSpecification/SSP-003")
+		require.Contains(t, profiles, "https://admin-shell.io/aas/API/3/2/SubmodelRegistryServiceSpecification/SSP-003")
 	})
 
 	t.Run("AASBulkSuccessAndFailureRollback", func(t *testing.T) {

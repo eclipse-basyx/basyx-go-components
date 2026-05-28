@@ -44,7 +44,7 @@ const (
 	uploadComponent             = "AASENV"
 	uploadOperation             = "HandleUpload"
 	supportedUploadContentTypes = "application/aasx+xml, application/aasx+json, application/asset-administration-shell+xml, application/asset-administration-shell+json, application/json, application/xml, text/xml"
-	currentAASNamespace         = "https://admin-shell.io/aas/3/1"
+	currentAASNamespace         = "https://admin-shell.io/aas/3/2"
 	aasNamespacePrefix          = "https://admin-shell.io/aas/"
 )
 
@@ -180,8 +180,12 @@ func (s *uploadAPIService) handleXMLUpload(ctx context.Context, fileName string,
 		_ = fileReader.Close()
 	}()
 
-	decoder := xml.NewDecoder(fileReader)
-	instance, err := aasxmlization.Unmarshal(decoder)
+	specContent, err := io.ReadAll(fileReader)
+	if err != nil {
+		return newUploadErrorResponse(http.StatusBadRequest, "AASENV-HANDLEUPLOAD-READXML", err)
+	}
+
+	instance, err := parseAASXMLInstance(specContent, fileName)
 	if err != nil {
 		return newUploadErrorResponse(http.StatusBadRequest, "AASENV-HANDLEUPLOAD-PARSEXML", err)
 	}
