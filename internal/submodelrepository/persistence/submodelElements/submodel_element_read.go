@@ -453,7 +453,8 @@ func GetSubmodelElementsBySubmodelID(ctx context.Context, db *sql.DB, submodelID
 	for _, rootElement := range rootElements {
 		element, exists := forest[rootElement.id]
 		if !exists {
-			return nil, "", common.NewInternalServerError("SMREPO-GETSMES-BUILDFOREST-MISSINGROOT Missing root element for path '" + rootElement.path + "'")
+			// Root nodes can be intentionally filtered out by SME fragment filters.
+			continue
 		}
 		result = append(result, element)
 	}
@@ -786,12 +787,14 @@ type loadedSMERow struct {
 }
 
 type smeMaskFragmentGroups struct {
+	row      []grammar.FragmentStringPattern
 	idShort  []grammar.FragmentStringPattern
 	semantic []grammar.FragmentStringPattern
 	value    []grammar.FragmentStringPattern
 }
 
 func buildSMEMaskRuntime(ctx context.Context, collector *grammar.ResolvedFieldPathCollector) (*auth.SharedFragmentMaskRuntime, smeMaskFragmentGroups, error) {
+	rowFragments := map[grammar.FragmentStringPattern]struct{}{}
 	idShortFragments := map[grammar.FragmentStringPattern]struct{}{
 		"$sme#idShort": {},
 	}
@@ -806,7 +809,25 @@ func buildSMEMaskRuntime(ctx context.Context, collector *grammar.ResolvedFieldPa
 
 	qf := auth.GetQueryFilter(ctx)
 	if qf != nil {
+		type normalizedFilter struct {
+			from  grammar.FragmentStringPattern
+			to    grammar.FragmentStringPattern
+			expr  grammar.LogicalExpression
+			match bool
+		}
+		normalizedFilters := make([]normalizedFilter, 0)
 		for fragment := range qf.Filters {
+			if !strings.Contains(string(fragment), "#") {
+				normalizedFragment := normalizeSMERowFragment(fragment)
+				rowFragments[normalizedFragment] = struct{}{}
+				normalizedFilters = append(normalizedFilters, normalizedFilter{
+					from:  fragment,
+					to:    normalizedFragment,
+					expr:  qf.Filters[fragment],
+					match: qf.FilterMatch != nil && qf.FilterMatch[fragment],
+				})
+				continue
+			}
 			suffix := fragmentSuffix(fragment)
 			switch suffix {
 			case "idShort":
@@ -821,15 +842,35 @@ func buildSMEMaskRuntime(ctx context.Context, collector *grammar.ResolvedFieldPa
 				}
 			}
 		}
+		for _, normalized := range normalizedFilters {
+			delete(qf.Filters, normalized.from)
+			if _, exists := qf.Filters[normalized.to]; !exists {
+				qf.Filters[normalized.to] = normalized.expr
+			}
+			if qf.FilterMatch != nil {
+				delete(qf.FilterMatch, normalized.from)
+				if _, exists := qf.FilterMatch[normalized.to]; !exists {
+					qf.FilterMatch[normalized.to] = normalized.match
+				}
+			}
+		}
 	}
 
 	groups := smeMaskFragmentGroups{
+		row:      sortedFragments(rowFragments),
 		idShort:  sortedFragments(idShortFragments),
 		semantic: sortedFragments(semanticFragments),
 		value:    sortedFragments(valueFragments),
 	}
 
-	maskedColumns := make([]auth.MaskedInnerColumnSpec, 0, len(groups.idShort)+len(groups.semantic)+len(groups.value))
+	maskedColumns := make([]auth.MaskedInnerColumnSpec, 0, len(groups.row)+len(groups.idShort)+len(groups.semantic)+len(groups.value))
+	for i, fragment := range groups.row {
+		maskedColumns = append(maskedColumns, auth.MaskedInnerColumnSpec{
+			Fragment:  fragment,
+			FlagAlias: "flag_row_" + strconv.Itoa(i+1),
+			RawAlias:  "c_id_short",
+		})
+	}
 	for i, fragment := range groups.idShort {
 		maskedColumns = append(maskedColumns, auth.MaskedInnerColumnSpec{
 			Fragment:  fragment,
@@ -858,6 +899,14 @@ func buildSMEMaskRuntime(ctx context.Context, collector *grammar.ResolvedFieldPa
 	}
 
 	return runtime, groups, nil
+}
+
+func normalizeSMERowFragment(fragment grammar.FragmentStringPattern) grammar.FragmentStringPattern {
+	fragmentStr := string(fragment)
+	if strings.Contains(fragmentStr, "#") {
+		return fragment
+	}
+	return grammar.FragmentStringPattern(fragmentStr + "#idShort")
 }
 
 func fragmentSuffix(fragment grammar.FragmentStringPattern) string {
@@ -937,6 +986,10 @@ func readSubmodelElementRowsByPath(ctx context.Context, db *sql.DB, submodelData
 	if valueVisibleErr != nil {
 		return nil, common.NewInternalServerError("SMREPO-GETSMEBYPATH-VALUEMASK " + valueVisibleErr.Error())
 	}
+	rowVisibleExpr, rowVisibleErr := buildSharedMaskVisibilityExpr(dataAlias, maskRuntime, maskGroups.row)
+	if rowVisibleErr != nil {
+		return nil, common.NewInternalServerError("SMREPO-GETSMEBYPATH-ROWMASK " + rowVisibleErr.Error())
+	}
 
 	valueExpr := getSMEValueExpressionForRead(dialect)
 	innerQuery := dialect.
@@ -1001,6 +1054,7 @@ func readSubmodelElementRowsByPath(ctx context.Context, db *sql.DB, submodelData
 	}
 
 	query := dialect.From(innerQuery.As(dataAlias)).
+		Where(rowVisibleExpr).
 		Select(
 			goqu.I(dataAlias+".c_id"),
 			goqu.I(dataAlias+".c_parent_sme_id"),
@@ -1060,6 +1114,10 @@ func readSubmodelElementRowsByRootIDs(ctx context.Context, db *sql.DB, submodelD
 	valueVisibleExpr, valueVisibleErr := buildSharedMaskVisibilityExpr(dataAlias, maskRuntime, maskGroups.value)
 	if valueVisibleErr != nil {
 		return nil, common.NewInternalServerError("SMREPO-GETSMES-BATCHREAD-VALUEMASK " + valueVisibleErr.Error())
+	}
+	rowVisibleExpr, rowVisibleErr := buildSharedMaskVisibilityExpr(dataAlias, maskRuntime, maskGroups.row)
+	if rowVisibleErr != nil {
+		return nil, common.NewInternalServerError("SMREPO-GETSMES-BATCHREAD-ROWMASK " + rowVisibleErr.Error())
 	}
 
 	rootOrderExpr := goqu.Case().
@@ -1124,6 +1182,7 @@ func readSubmodelElementRowsByRootIDs(ctx context.Context, db *sql.DB, submodelD
 		)
 
 	query := dialect.From(innerQuery.As(dataAlias)).
+		Where(rowVisibleExpr).
 		Select(
 			goqu.I(dataAlias+".c_id"),
 			goqu.I(dataAlias+".c_parent_sme_id"),

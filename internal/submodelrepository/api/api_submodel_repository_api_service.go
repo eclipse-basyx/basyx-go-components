@@ -3068,7 +3068,7 @@ func (s *SubmodelRepositoryAPIAPIService) QuerySubmodels(
 		sm := sms[index]
 
 		eg.Go(func() error {
-			submodelElements, _, elementsErr := s.submodelBackend.GetSubmodelElements(ctx, sm.ID(), nil, "", false, "")
+			submodelElements, _, elementsErr := s.submodelBackend.GetSubmodelElements(querySelectionCtx, sm.ID(), nil, "", false, "")
 			if elementsErr != nil {
 				return elementsErr
 			}
