@@ -1454,6 +1454,78 @@ func TestIntegration(t *testing.T) {
 	})
 }
 
+func TestSophisticatedQueryEndpointSuite(t *testing.T) {
+	baseURL := "http://localhost:6004"
+
+	submodelBytes, err := os.ReadFile("bodies/post/query/sophisticatedQuerySubmodel.json")
+	require.NoError(t, err)
+
+	var submodel map[string]any
+	require.NoError(t, json.Unmarshal(submodelBytes, &submodel))
+
+	uniqueSubmodelID := fmt.Sprintf("http://acplt.org/Submodels/Assets/TestAsset/Identification/%d", time.Now().UnixNano())
+	uniqueSubmodelIDShort := fmt.Sprintf("Identification_%d", time.Now().UnixNano())
+	submodel["id"] = uniqueSubmodelID
+	submodel["idShort"] = uniqueSubmodelIDShort
+
+	statusCode, body, err := requestJSON(http.MethodPost, fmt.Sprintf("%s/submodels", baseURL), submodel)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusCreated, statusCode, "response=%s", string(body))
+
+	uniqueSubmodelIDEncoded := common.EncodeString(uniqueSubmodelID)
+	t.Cleanup(func() {
+		_, _, _ = requestJSON(http.MethodDelete, fmt.Sprintf("%s/submodels/%s", baseURL, uniqueSubmodelIDEncoded), nil)
+	})
+
+	caseBytes, err := os.ReadFile("bodies/query/sophisticatedQueryCases.json")
+	require.NoError(t, err)
+
+	var suiteCases []struct {
+		Name          string         `json:"name"`
+		ExpectedMatch bool           `json:"expectedMatch"`
+		Query         map[string]any `json:"query"`
+	}
+	require.NoError(t, json.Unmarshal(caseBytes, &suiteCases))
+	require.GreaterOrEqual(t, len(suiteCases), 50)
+
+	for _, queryCase := range suiteCases {
+		queryCase := queryCase
+		t.Run(queryCase.Name, func(t *testing.T) {
+			queryPayloadBytes, err := json.Marshal(queryCase.Query)
+			require.NoError(t, err)
+
+			queryPayloadBytes = bytes.ReplaceAll(
+				queryPayloadBytes,
+				[]byte("__RUNTIME_SUBMODEL_ID__"),
+				[]byte(uniqueSubmodelID),
+			)
+
+			var queryPayload map[string]any
+			require.NoError(t, json.Unmarshal(queryPayloadBytes, &queryPayload))
+
+			statusCode, body, err := requestJSON(http.MethodPost, fmt.Sprintf("%s/query/submodels", baseURL), queryPayload)
+			require.NoError(t, err)
+			require.Equal(t, http.StatusOK, statusCode, "response=%s", string(body))
+
+			var response struct {
+				Result []map[string]any `json:"result"`
+			}
+			require.NoError(t, json.Unmarshal(body, &response), "response=%s", string(body))
+
+			found := false
+			for _, result := range response.Result {
+				idValue, ok := result["id"].(string)
+				if ok && idValue == uniqueSubmodelID {
+					found = true
+					break
+				}
+			}
+
+			assert.Equal(t, queryCase.ExpectedMatch, found, "response=%s", string(body))
+		})
+	}
+}
+
 // TestFileAttachmentOperations tests file upload, download, and deletion for File SME
 func TestFileAttachmentOperations(t *testing.T) {
 	baseURL := "http://localhost:6004"

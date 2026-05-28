@@ -1,0 +1,1196 @@
+[
+    {
+        "query":  {
+                      "$condition":  {
+                                         "$contains":  [
+                                                           {
+                                                               "$field":  "$sm#id"
+                                                           },
+                                                           {
+                                                               "$strVal":  "TestAsset/Identification"
+                                                           }
+                                                       ]
+                                     }
+                  },
+        "name":  "sm_id_contains_base",
+        "expectedMatch":  true
+    },
+    {
+        "query":  {
+                      "$condition":  {
+                                         "$contains":  [
+                                                           {
+                                                               "$field":  "$sm#id"
+                                                           },
+                                                           {
+                                                               "$strVal":  "does-not-exist"
+                                                           }
+                                                       ]
+                                     }
+                  },
+        "name":  "sm_id_contains_negative",
+        "expectedMatch":  false
+    },
+    {
+        "query":  {
+                      "$condition":  {
+                                         "$eq":  [
+                                                     {
+                                                         "$field":  "$sm#id"
+                                                     },
+                                                     {
+                                                         "$strVal":  "__RUNTIME_SUBMODEL_ID__"
+                                                     }
+                                                 ]
+                                     }
+                  },
+        "name":  "sm_id_exact_runtime",
+        "expectedMatch":  true
+    },
+    {
+        "query":  {
+                      "$condition":  {
+                                         "$eq":  [
+                                                     {
+                                                         "$field":  "$sm#idShort"
+                                                     },
+                                                     {
+                                                         "$strVal":  "Identification"
+                                                     }
+                                                 ]
+                                     }
+                  },
+        "name":  "sm_idshort_eq",
+        "expectedMatch":  true
+    },
+    {
+        "query":  {
+                      "$condition":  {
+                                         "$ne":  [
+                                                     {
+                                                         "$field":  "$sm#idShort"
+                                                     },
+                                                     {
+                                                         "$strVal":  "Other"
+                                                     }
+                                                 ]
+                                     }
+                  },
+        "name":  "sm_idshort_ne",
+        "expectedMatch":  true
+    },
+    {
+        "query":  {
+                      "$condition":  {
+                                         "$starts-with":  [
+                                                              {
+                                                                  "$field":  "$sm#idShort"
+                                                              },
+                                                              {
+                                                                  "$strVal":  "Ident"
+                                                              }
+                                                          ]
+                                     }
+                  },
+        "name":  "sm_idshort_starts",
+        "expectedMatch":  true
+    },
+    {
+        "query":  {
+                      "$condition":  {
+                                         "$ends-with":  [
+                                                            {
+                                                                "$field":  "$sm#idShort"
+                                                            },
+                                                            {
+                                                                "$strVal":  "tion"
+                                                            }
+                                                        ]
+                                     }
+                  },
+        "name":  "sm_idshort_ends",
+        "expectedMatch":  true
+    },
+    {
+        "query":  {
+                      "$condition":  {
+                                         "$regex":  [
+                                                        {
+                                                            "$field":  "$sm#idShort"
+                                                        },
+                                                        {
+                                                            "$strVal":  "^Ident.*ion$"
+                                                        }
+                                                    ]
+                                     }
+                  },
+        "name":  "sm_idshort_regex_true",
+        "expectedMatch":  true
+    },
+    {
+        "query":  {
+                      "$condition":  {
+                                         "$eq":  [
+                                                     {
+                                                         "$field":  "$sm#semanticId.type"
+                                                     },
+                                                     {
+                                                         "$strVal":  "ExternalReference"
+                                                     }
+                                                 ]
+                                     }
+                  },
+        "name":  "sm_semantic_type_eq",
+        "expectedMatch":  true
+    },
+    {
+        "query":  {
+                      "$condition":  {
+                                         "$eq":  [
+                                                     {
+                                                         "$field":  "$sm#semanticId.keys[0].value"
+                                                     },
+                                                     {
+                                                         "$strVal":  "http://acplt.org/SubmodelTemplates/AssetIdentification"
+                                                     }
+                                                 ]
+                                     }
+                  },
+        "name":  "sm_semantic_key0_value_eq",
+        "expectedMatch":  true
+    },
+    {
+        "query":  {
+                      "$condition":  {
+                                         "$contains":  [
+                                                           {
+                                                               "$field":  "$sm#semanticId.keys[1].value"
+                                                           },
+                                                           {
+                                                               "$strVal":  "AssetIdentification"
+                                                           }
+                                                       ]
+                                     }
+                  },
+        "name":  "sm_semantic_key1_value_contains",
+        "expectedMatch":  true
+    },
+    {
+        "query":  {
+                      "$condition":  {
+                                         "$eq":  [
+                                                     {
+                                                         "$field":  "$sme#idShort"
+                                                     },
+                                                     {
+                                                         "$strVal":  "InstanceId"
+                                                     }
+                                                 ]
+                                     }
+                  },
+        "name":  "sme_idshort_instance_eq",
+        "expectedMatch":  true
+    },
+    {
+        "query":  {
+                      "$condition":  {
+                                         "$eq":  [
+                                                     {
+                                                         "$field":  "$sme#idShort"
+                                                     },
+                                                     {
+                                                         "$strVal":  "MissingElement"
+                                                     }
+                                                 ]
+                                     }
+                  },
+        "name":  "sme_idshort_instance_false",
+        "expectedMatch":  false
+    },
+    {
+        "query":  {
+                      "$condition":  {
+                                         "$eq":  [
+                                                     {
+                                                         "$field":  "$sme#value"
+                                                     },
+                                                     {
+                                                         "$strVal":  "978-8234-234-342"
+                                                     }
+                                                 ]
+                                     }
+                  },
+        "name":  "sme_value_serial_eq",
+        "expectedMatch":  true
+    },
+    {
+        "query":  {
+                      "$condition":  {
+                                         "$contains":  [
+                                                           {
+                                                               "$field":  "$sme#value"
+                                                           },
+                                                           {
+                                                               "$strVal":  "8234"
+                                                           }
+                                                       ]
+                                     }
+                  },
+        "name":  "sme_value_serial_contains",
+        "expectedMatch":  true
+    },
+    {
+        "query":  {
+                      "$condition":  {
+                                         "$starts-with":  [
+                                                              {
+                                                                  "$field":  "$sme#value"
+                                                              },
+                                                              {
+                                                                  "$strVal":  "978-"
+                                                              }
+                                                          ]
+                                     }
+                  },
+        "name":  "sme_value_serial_starts",
+        "expectedMatch":  true
+    },
+    {
+        "query":  {
+                      "$condition":  {
+                                         "$ends-with":  [
+                                                            {
+                                                                "$field":  "$sme#value"
+                                                            },
+                                                            {
+                                                                "$strVal":  "-342"
+                                                            }
+                                                        ]
+                                     }
+                  },
+        "name":  "sme_value_serial_ends",
+        "expectedMatch":  true
+    },
+    {
+        "query":  {
+                      "$condition":  {
+                                         "$regex":  [
+                                                        {
+                                                            "$field":  "$sme#value"
+                                                        },
+                                                        {
+                                                            "$strVal":  "^978-[0-9-]+$"
+                                                        }
+                                                    ]
+                                     }
+                  },
+        "name":  "sme_value_regex_numeric",
+        "expectedMatch":  true
+    },
+    {
+        "query":  {
+                      "$condition":  {
+                                         "$eq":  [
+                                                     {
+                                                         "$field":  "$sme#valueType"
+                                                     },
+                                                     {
+                                                         "$strVal":  "xs:string"
+                                                     }
+                                                 ]
+                                     }
+                  },
+        "name":  "sme_valuetype_string",
+        "expectedMatch":  true
+    },
+    {
+        "query":  {
+                      "$condition":  {
+                                         "$eq":  [
+                                                     {
+                                                         "$field":  "$sme.NewTestList.ListProperty2#valueType"
+                                                     },
+                                                     {
+                                                         "$strVal":  "xs:double"
+                                                     }
+                                                 ]
+                                     }
+                  },
+        "name":  "sme_valuetype_double",
+        "expectedMatch":  true
+    },
+    {
+        "query":  {
+                      "$condition":  {
+                                         "$contains":  [
+                                                           {
+                                                               "$field":  "$sme#semanticId.keys[].value"
+                                                           },
+                                                           {
+                                                               "$strVal":  "Serialnumber"
+                                                           }
+                                                       ]
+                                     }
+                  },
+        "name":  "sme_semantic_contains_serialnumber",
+        "expectedMatch":  true
+    },
+    {
+        "query":  {
+                      "$condition":  {
+                                         "$eq":  [
+                                                     {
+                                                         "$field":  "$sme.NewTestCollection#semanticId.keys[0].value"
+                                                     },
+                                                     {
+                                                         "$strVal":  "http://acplt.org/SubmodelElementCollections/NewTestCollection"
+                                                     }
+                                                 ]
+                                     }
+                  },
+        "name":  "sme_semantic_exact_collection",
+        "expectedMatch":  true
+    },
+    {
+        "query":  {
+                      "$condition":  {
+                                         "$eq":  [
+                                                     {
+                                                         "$field":  "$sme#language"
+                                                     },
+                                                     {
+                                                         "$strVal":  "en-us"
+                                                     }
+                                                 ]
+                                     }
+                  },
+        "name":  "sme_language_en",
+        "expectedMatch":  true
+    },
+    {
+        "query":  {
+                      "$condition":  {
+                                         "$eq":  [
+                                                     {
+                                                         "$field":  "$sme#language"
+                                                     },
+                                                     {
+                                                         "$strVal":  "fr"
+                                                     }
+                                                 ]
+                                     }
+                  },
+        "name":  "sme_language_fr_false",
+        "expectedMatch":  false
+    },
+    {
+        "query":  {
+                      "$condition":  {
+                                         "$eq":  [
+                                                     {
+                                                         "$field":  "$sme.NewTestCollection.CollectionProperty#value"
+                                                     },
+                                                     {
+                                                         "$strVal":  "collectionValue"
+                                                     }
+                                                 ]
+                                     }
+                  },
+        "name":  "nested_collection_property_value",
+        "expectedMatch":  true
+    },
+    {
+        "query":  {
+                      "$condition":  {
+                                         "$eq":  [
+                                                     {
+                                                         "$field":  "$sme.NewTestCollection.CollectionProperty2#value"
+                                                     },
+                                                     {
+                                                         "$strVal":  "collectionValue"
+                                                     }
+                                                 ]
+                                     }
+                  },
+        "name":  "nested_collection_property2_value",
+        "expectedMatch":  true
+    },
+    {
+        "query":  {
+                      "$condition":  {
+                                         "$eq":  [
+                                                     {
+                                                         "$field":  "$sme.NewTestCollection.CollectionProperty2#idShort"
+                                                     },
+                                                     {
+                                                         "$strVal":  "CollectionProperty2"
+                                                     }
+                                                 ]
+                                     }
+                  },
+        "name":  "nested_collection_idshort",
+        "expectedMatch":  true
+    },
+    {
+        "query":  {
+                      "$condition":  {
+                                         "$eq":  [
+                                                     {
+                                                         "$field":  "$sme.NewTestList.ListProperty1#value"
+                                                     },
+                                                     {
+                                                         "$strVal":  "listValue1"
+                                                     }
+                                                 ]
+                                     }
+                  },
+        "name":  "nested_list_item0_value",
+        "expectedMatch":  true
+    },
+    {
+        "query":  {
+                      "$condition":  {
+                                         "$eq":  [
+                                                     {
+                                                         "$field":  "$sme.NewTestList.ListProperty2#value"
+                                                     },
+                                                     {
+                                                         "$strVal":  "2"
+                                                     }
+                                                 ]
+                                     }
+                  },
+        "name":  "nested_list_item1_value",
+        "expectedMatch":  true
+    },
+    {
+        "query":  {
+                      "$condition":  {
+                                         "$contains":  [
+                                                           {
+                                                               "$field":  "$sme.NewTestList.ListProperty2#value"
+                                                           },
+                                                           {
+                                                               "$strVal":  "2"
+                                                           }
+                                                       ]
+                                     }
+                  },
+        "name":  "nested_list_item1_value_contains",
+        "expectedMatch":  true
+    },
+    {
+        "query":  {
+                      "$condition":  {
+                                         "$eq":  [
+                                                     {
+                                                         "$field":  "$sme.NewTestList.ListProperty1#value"
+                                                     },
+                                                     {
+                                                         "$strVal":  "x"
+                                                     }
+                                                 ]
+                                     }
+                  },
+        "name":  "nested_list_item0_wrong_value",
+        "expectedMatch":  false
+    },
+    {
+        "query":  {
+                      "$condition":  {
+                                         "$and":  [
+                                                      {
+                                                          "$contains":  [
+                                                                            {
+                                                                                "$field":  "$sm#id"
+                                                                            },
+                                                                            {
+                                                                                "$strVal":  "TestAsset"
+                                                                            }
+                                                                        ]
+                                                      },
+                                                      {
+                                                          "$eq":  [
+                                                                      {
+                                                                          "$field":  "$sme.InstanceId#value"
+                                                                      },
+                                                                      {
+                                                                          "$strVal":  "978-8234-234-342"
+                                                                      }
+                                                                  ]
+                                                      }
+                                                  ]
+                                     }
+                  },
+        "name":  "and_sm_and_sme",
+        "expectedMatch":  true
+    },
+    {
+        "query":  {
+                      "$condition":  {
+                                         "$and":  [
+                                                      {
+                                                          "$contains":  [
+                                                                            {
+                                                                                "$field":  "$sm#id"
+                                                                            },
+                                                                            {
+                                                                                "$strVal":  "TestAsset"
+                                                                            }
+                                                                        ]
+                                                      },
+                                                      {
+                                                          "$eq":  [
+                                                                      {
+                                                                          "$field":  "$sme.InstanceId#value"
+                                                                      },
+                                                                      {
+                                                                          "$strVal":  "wrong"
+                                                                      }
+                                                                  ]
+                                                      }
+                                                  ]
+                                     }
+                  },
+        "name":  "and_negative",
+        "expectedMatch":  false
+    },
+    {
+        "query":  {
+                      "$condition":  {
+                                         "$or":  [
+                                                     {
+                                                         "$eq":  [
+                                                                     {
+                                                                         "$field":  "$sm#idShort"
+                                                                     },
+                                                                     {
+                                                                         "$strVal":  "nope"
+                                                                     }
+                                                                 ]
+                                                     },
+                                                     {
+                                                         "$eq":  [
+                                                                     {
+                                                                         "$field":  "$sme.InstanceId#value"
+                                                                     },
+                                                                     {
+                                                                         "$strVal":  "978-8234-234-342"
+                                                                     }
+                                                                 ]
+                                                     }
+                                                 ]
+                                     }
+                  },
+        "name":  "or_one_true",
+        "expectedMatch":  true
+    },
+    {
+        "query":  {
+                      "$condition":  {
+                                         "$or":  [
+                                                     {
+                                                         "$eq":  [
+                                                                     {
+                                                                         "$field":  "$sm#idShort"
+                                                                     },
+                                                                     {
+                                                                         "$strVal":  "nope"
+                                                                     }
+                                                                 ]
+                                                     },
+                                                     {
+                                                         "$eq":  [
+                                                                     {
+                                                                         "$field":  "$sme.InstanceId#value"
+                                                                     },
+                                                                     {
+                                                                         "$strVal":  "also-nope"
+                                                                     }
+                                                                 ]
+                                                     }
+                                                 ]
+                                     }
+                  },
+        "name":  "or_all_false",
+        "expectedMatch":  false
+    },
+    {
+        "query":  {
+                      "$condition":  {
+                                         "$not":  {
+                                                      "$eq":  [
+                                                                  {
+                                                                      "$field":  "$sm#idShort"
+                                                                  },
+                                                                  {
+                                                                      "$strVal":  "Other"
+                                                                  }
+                                                              ]
+                                                  }
+                                     }
+                  },
+        "name":  "not_false_inner",
+        "expectedMatch":  true
+    },
+    {
+        "query":  {
+                      "$condition":  {
+                                         "$not":  {
+                                                      "$eq":  [
+                                                                  {
+                                                                      "$field":  "$sm#idShort"
+                                                                  },
+                                                                  {
+                                                                      "$strVal":  "Identification"
+                                                                  }
+                                                              ]
+                                                  }
+                                     }
+                  },
+        "name":  "not_true_inner",
+        "expectedMatch":  false
+    },
+    {
+        "query":  {
+                      "$condition":  {
+                                         "$and":  [
+                                                      {
+                                                          "$or":  [
+                                                                      {
+                                                                          "$eq":  [
+                                                                                      {
+                                                                                          "$field":  "$sm#idShort"
+                                                                                      },
+                                                                                      {
+                                                                                          "$strVal":  "Identification"
+                                                                                      }
+                                                                                  ]
+                                                                      },
+                                                                      {
+                                                                          "$eq":  [
+                                                                                      {
+                                                                                          "$field":  "$sm#idShort"
+                                                                                      },
+                                                                                      {
+                                                                                          "$strVal":  "X"
+                                                                                      }
+                                                                                  ]
+                                                                      }
+                                                                  ]
+                                                      },
+                                                      {
+                                                          "$contains":  [
+                                                                            {
+                                                                                "$field":  "$sme#value"
+                                                                            },
+                                                                            {
+                                                                                "$strVal":  "ACPLT"
+                                                                            }
+                                                                        ]
+                                                      }
+                                                  ]
+                                     }
+                  },
+        "name":  "complex_and_or_1",
+        "expectedMatch":  true
+    },
+    {
+        "query":  {
+                      "$condition":  {
+                                         "$and":  [
+                                                      {
+                                                          "$or":  [
+                                                                      {
+                                                                          "$eq":  [
+                                                                                      {
+                                                                                          "$field":  "$sm#idShort"
+                                                                                      },
+                                                                                      {
+                                                                                          "$strVal":  "X"
+                                                                                      }
+                                                                                  ]
+                                                                      },
+                                                                      {
+                                                                          "$eq":  [
+                                                                                      {
+                                                                                          "$field":  "$sm#idShort"
+                                                                                      },
+                                                                                      {
+                                                                                          "$strVal":  "Y"
+                                                                                      }
+                                                                                  ]
+                                                                      }
+                                                                  ]
+                                                      },
+                                                      {
+                                                          "$contains":  [
+                                                                            {
+                                                                                "$field":  "$sme#value"
+                                                                            },
+                                                                            {
+                                                                                "$strVal":  "ACPLT"
+                                                                            }
+                                                                        ]
+                                                      }
+                                                  ]
+                                     }
+                  },
+        "name":  "complex_and_or_2",
+        "expectedMatch":  false
+    },
+    {
+        "query":  {
+                      "$condition":  {
+                                         "$and":  [
+                                                      {
+                                                          "$contains":  [
+                                                                            {
+                                                                                "$field":  "$sm#id"
+                                                                            },
+                                                                            {
+                                                                                "$strVal":  "Identification"
+                                                                            }
+                                                                        ]
+                                                      },
+                                                      {
+                                                          "$not":  {
+                                                                       "$contains":  [
+                                                                                         {
+                                                                                             "$field":  "$sme#value"
+                                                                                         },
+                                                                                         {
+                                                                                             "$strVal":  "forbidden"
+                                                                                         }
+                                                                                     ]
+                                                                   }
+                                                      }
+                                                  ]
+                                     }
+                  },
+        "name":  "complex_with_not",
+        "expectedMatch":  true
+    },
+    {
+        "query":  {
+                      "$condition":  {
+                                         "$eq":  [
+                                                     {
+                                                         "$field":  "$sme#idShort"
+                                                     },
+                                                     {
+                                                         "$strVal":  "InstanceId"
+                                                     }
+                                                 ]
+                                     },
+                      "$filters":  [
+                                       {
+                                           "$fragment":  "$sme.InstanceId#value",
+                                           "$condition":  {
+                                                              "$contains":  [
+                                                                                {
+                                                                                    "$field":  "$sme.InstanceId#value"
+                                                                                },
+                                                                                {
+                                                                                    "$strVal":  "978"
+                                                                                }
+                                                                            ]
+                                                          }
+                                       }
+                                   ]
+                  },
+        "name":  "filter_fragment_instance_match",
+        "expectedMatch":  true
+    },
+    {
+        "query":  {
+                      "$condition":  {
+                                         "$eq":  [
+                                                     {
+                                                         "$field":  "$sme#idShort"
+                                                     },
+                                                     {
+                                                         "$strVal":  "InstanceId"
+                                                     }
+                                                 ]
+                                     },
+                      "$filters":  [
+                                       {
+                                           "$fragment":  "$sme.InstanceId#value",
+                                           "$condition":  {
+                                                              "$contains":  [
+                                                                                {
+                                                                                    "$field":  "$sme.InstanceId#value"
+                                                                                },
+                                                                                {
+                                                                                    "$strVal":  "BAD"
+                                                                                }
+                                                                            ]
+                                                          }
+                                       }
+                                   ]
+                  },
+        "name":  "filter_fragment_instance_no_match",
+        "expectedMatch":  false
+    },
+    {
+        "query":  {
+                      "$condition":  {
+                                         "$contains":  [
+                                                           {
+                                                               "$field":  "$sme#idShort"
+                                                           },
+                                                           {
+                                                               "$strVal":  "CollectionProperty"
+                                                           }
+                                                       ]
+                                     },
+                      "$filters":  [
+                                       {
+                                           "$fragment":  "$sme.NewTestCollection.CollectionProperty#value",
+                                           "$condition":  {
+                                                              "$eq":  [
+                                                                          {
+                                                                              "$field":  "$sme.NewTestCollection.CollectionProperty#value"
+                                                                          },
+                                                                          {
+                                                                              "$strVal":  "collectionValue"
+                                                                          }
+                                                                      ]
+                                                          }
+                                       }
+                                   ]
+                  },
+        "name":  "filter_fragment_collection_match",
+        "expectedMatch":  true
+    },
+    {
+        "query":  {
+                      "$condition":  {
+                                         "$contains":  [
+                                                           {
+                                                               "$field":  "$sme#idShort"
+                                                           },
+                                                           {
+                                                               "$strVal":  "ListProperty"
+                                                           }
+                                                       ]
+                                     },
+                      "$filters":  [
+                                       {
+                                           "$fragment":  "$sme.NewTestList.ListProperty2#valueType",
+                                           "$condition":  {
+                                                              "$eq":  [
+                                                                          {
+                                                                              "$field":  "$sme.NewTestList.ListProperty2#valueType"
+                                                                          },
+                                                                          {
+                                                                              "$strVal":  "xs:double"
+                                                                          }
+                                                                      ]
+                                                          }
+                                       }
+                                   ]
+                  },
+        "name":  "filter_fragment_list_match",
+        "expectedMatch":  true
+    },
+    {
+        "query":  {
+                      "$condition":  {
+                                         "$eq":  [
+                                                     {
+                                                         "$field":  "$sme#language"
+                                                     },
+                                                     {
+                                                         "$strVal":  "de"
+                                                     }
+                                                 ]
+                                     },
+                      "$filters":  [
+                                       {
+                                           "$fragment":  "$sme.ManufacturerName#language",
+                                           "$condition":  {
+                                                              "$eq":  [
+                                                                          {
+                                                                              "$field":  "$sme.ManufacturerName#language"
+                                                                          },
+                                                                          {
+                                                                              "$strVal":  "de"
+                                                                          }
+                                                                      ]
+                                                          }
+                                       }
+                                   ]
+                  },
+        "name":  "filter_fragment_language_match",
+        "expectedMatch":  true
+    },
+    {
+        "query":  {
+                      "$condition":  {
+                                         "$eq":  [
+                                                     {
+                                                         "$field":  "$sme#language"
+                                                     },
+                                                     {
+                                                         "$strVal":  "de"
+                                                     }
+                                                 ]
+                                     },
+                      "$filters":  [
+                                       {
+                                           "$fragment":  "$sme.ManufacturerName#language",
+                                           "$condition":  {
+                                                              "$eq":  [
+                                                                          {
+                                                                              "$field":  "$sme.ManufacturerName#language"
+                                                                          },
+                                                                          {
+                                                                              "$strVal":  "fr"
+                                                                          }
+                                                                      ]
+                                                          }
+                                       }
+                                   ]
+                  },
+        "name":  "filter_fragment_language_false",
+        "expectedMatch":  false
+    },
+    {
+        "query":  {
+                      "$condition":  {
+                                         "$and":  [
+                                                      {
+                                                          "$contains":  [
+                                                                            {
+                                                                                "$field":  "$sm#id"
+                                                                            },
+                                                                            {
+                                                                                "$strVal":  "acplt.org"
+                                                                            }
+                                                                        ]
+                                                      },
+                                                      {
+                                                          "$contains":  [
+                                                                            {
+                                                                                "$sTrVal":  "??"
+                                                                            },
+                                                                            {
+                                                                                "$strVal":  "??"
+                                                                            }
+                                                                        ]
+                                                      },
+                                                      {
+                                                          "$eq":  [
+                                                                      {
+                                                                          "$field":  "$sme.InstanceId#valueType"
+                                                                      },
+                                                                      {
+                                                                          "$strVal":  "xs:string"
+                                                                      }
+                                                                  ]
+                                                      }
+                                                  ]
+                                     }
+                  },
+        "name":  "triple_and",
+        "expectedMatch":  true
+    },
+    {
+        "query":  {
+                      "$condition":  {
+                                         "$and":  [
+                                                      {
+                                                          "$contains":  [
+                                                                            {
+                                                                                "$field":  "$sm#id"
+                                                                            },
+                                                                            {
+                                                                                "$strVal":  "acplt.org"
+                                                                            }
+                                                                        ]
+                                                      },
+                                                      {
+                                                          "$contains":  [
+                                                                            {
+                                                                                "$field":  "$sme.InstanceId#value"
+                                                                            },
+                                                                            {
+                                                                                "$strVal":  "978"
+                                                                            }
+                                                                        ]
+                                                      },
+                                                      {
+                                                          "$eq":  [
+                                                                      {
+                                                                          "$field":  "$sme.InstanceId#valueType"
+                                                                      },
+                                                                      {
+                                                                          "$strVal":  "xs:string"
+                                                                      }
+                                                                  ]
+                                                      }
+                                                  ]
+                                     }
+                  },
+        "name":  "triple_and",
+        "expectedMatch":  true
+    },
+    {
+        "query":  {
+                      "$condition":  {
+                                         "$not":  {
+                                                      "$or":  [
+                                                                  {
+                                                                      "$eq":  [
+                                                                                  {
+                                                                                      "$field":  "$sm#idShort"
+                                                                                  },
+                                                                                  {
+                                                                                      "$strVal":  "Identification"
+                                                                                  }
+                                                                              ]
+                                                                  },
+                                                                  {
+                                                                      "$eq":  [
+                                                                                  {
+                                                                                      "$field":  "$sme.InstanceId#value"
+                                                                                  },
+                                                                                  {
+                                                                                      "$strVal":  "Nope"
+                                                                                  }
+                                                                              ]
+                                                                  }
+                                                              ]
+                                                  }
+                                     }
+                  },
+        "name":  "nested_not_or_false",
+        "expectedMatch":  false
+    },
+    {
+        "query":  {
+                      "$condition":  {
+                                         "$contains":  [
+                                                           {
+                                                               "$field":  "$sme#semanticId.keys[].value"
+                                                           },
+                                                           {
+                                                               "$strVal":  "SubmodelElementLists/NewTestList"
+                                                           }
+                                                       ]
+                                     }
+                  },
+        "name":  "sme_wildcard_semantic_match",
+        "expectedMatch":  true
+    },
+    {
+        "query":  {
+                      "$condition":  {
+                                         "$contains":  [
+                                                           {
+                                                               "$field":  "$sme#semanticId.keys[].value"
+                                                           },
+                                                           {
+                                                               "$strVal":  "not-present-semantic"
+                                                           }
+                                                       ]
+                                     }
+                  },
+        "name":  "sme_wildcard_semantic_false",
+        "expectedMatch":  false
+    },
+    {
+        "query":  {
+                      "$condition":  {
+                                         "$and":  [
+                                                      {
+                                                          "$eq":  [
+                                                                      {
+                                                                          "$field":  "$sme.NewTestCollection.CollectionProperty#value"
+                                                                      },
+                                                                      {
+                                                                          "$strVal":  "collectionValue"
+                                                                      }
+                                                                  ]
+                                                      },
+                                                      {
+                                                          "$eq":  [
+                                                                      {
+                                                                          "$field":  "$sme.NewTestList.ListProperty1#value"
+                                                                      },
+                                                                      {
+                                                                          "$strVal":  "listValue1"
+                                                                      }
+                                                                  ]
+                                                      }
+                                                  ]
+                                     }
+                  },
+        "name":  "collection_and_list_combined",
+        "expectedMatch":  true
+    },
+    {
+        "query":  {
+                      "$condition":  {
+                                         "$and":  [
+                                                      {
+                                                          "$eq":  [
+                                                                      {
+                                                                          "$field":  "$sme.NewTestCollection.CollectionProperty#value"
+                                                                      },
+                                                                      {
+                                                                          "$strVal":  "collectionValue"
+                                                                      }
+                                                                  ]
+                                                      },
+                                                      {
+                                                          "$eq":  [
+                                                                      {
+                                                                          "$field":  "$sme.NewTestList.ListProperty1#value"
+                                                                      },
+                                                                      {
+                                                                          "$strVal":  "wrong"
+                                                                      }
+                                                                  ]
+                                                      }
+                                                  ]
+                                     }
+                  },
+        "name":  "collection_and_list_mismatch",
+        "expectedMatch":  false
+    },
+    {
+        "query":  {
+                      "$condition":  {
+                                         "$contains":  [
+                                                           {
+                                                               "$field":  "$sme.ManufacturerName#value"
+                                                           },
+                                                           {
+                                                               "$strVal":  "ACPLT"
+                                                           }
+                                                       ]
+                                     }
+                  },
+        "name":  "manufacturer_value_contains",
+        "expectedMatch":  true
+    },
+    {
+        "query":  {
+                      "$condition":  {
+                                         "$contains":  [
+                                                           {
+                                                               "$field":  "$sme#value"
+                                                           },
+                                                           {
+                                                               "$strVal":  "http://acplt.org/ValueId/ACPLT"
+                                                           }
+                                                       ]
+                                     }
+                  },
+        "name":  "manufacturer_valueid_contains",
+        "expectedMatch":  true
+    }
+]
