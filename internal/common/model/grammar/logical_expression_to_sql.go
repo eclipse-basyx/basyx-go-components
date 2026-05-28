@@ -1122,6 +1122,11 @@ func andBindingsForResolvedFieldPaths(resolved []ResolvedFieldPath, predicate ex
 				where = append(where, goqu.I(b.Alias).Eq(*b.Index.intValue))
 			}
 			if b.Index.stringValue != nil {
+				if b.Alias == "submodel_element.idshort_path" && strings.HasSuffix(*b.Index.stringValue, "[]") {
+					prefix := strings.TrimSuffix(*b.Index.stringValue, "[]")
+					where = append(where, goqu.I(b.Alias).Like(goqu.L("? || '[%'", prefix)))
+					continue
+				}
 				where = append(where, goqu.I(b.Alias).Eq(*b.Index.stringValue))
 			}
 		}
