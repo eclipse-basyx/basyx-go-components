@@ -235,7 +235,7 @@ func createMinimalVersion102Schema(t *testing.T, db *sql.DB) {
 		"CREATE TABLE aas_descriptor (descriptor_id BIGINT PRIMARY KEY, id VARCHAR(2048) UNIQUE NOT NULL, id_short VARCHAR(128), asset_kind INT, asset_type VARCHAR(2048), global_asset_id VARCHAR(2048), db_created_at TIMESTAMPTZ NOT NULL DEFAULT NOW())",
 		"CREATE TABLE descriptor_payload (descriptor_id BIGINT PRIMARY KEY, description_payload JSONB NOT NULL, displayname_payload JSONB NOT NULL, administrative_information_payload JSONB NOT NULL)",
 		"CREATE TABLE concept_description (id TEXT PRIMARY KEY, id_short TEXT, data JSONB, db_created_at TIMESTAMPTZ NOT NULL DEFAULT NOW())",
-		"CREATE TABLE asset_information (asset_information_id BIGINT PRIMARY KEY, asset_kind INT)",
+		"CREATE TABLE asset_information (asset_information_id BIGINT PRIMARY KEY, asset_kind INT, global_asset_id VARCHAR(2048), asset_type VARCHAR(2048), model_type INT NOT NULL DEFAULT 4, db_created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), db_updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW())",
 	}
 
 	for _, statement := range statements {
