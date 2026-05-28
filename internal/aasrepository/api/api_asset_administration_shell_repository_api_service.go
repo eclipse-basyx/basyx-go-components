@@ -224,6 +224,21 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) GetAllAssetAdministrat
 
 	changes := make([]gen.AssetAdministrationShellRecentChange, 0, len(rows))
 	for _, row := range rows {
+		if row.Deleted {
+			if len(assetIds) > 0 {
+				continue
+			}
+			changes = append(changes, gen.AssetAdministrationShellRecentChange{
+				RecentChange: gen.RecentChange{
+					Type:      row.ChangeType,
+					CreatedAt: row.CreatedAt,
+					UpdatedAt: row.UpdatedAt,
+				},
+				Id: row.Identifier,
+			})
+			continue
+		}
+
 		aas, fromJSONErr := jsonization.AssetAdministrationShellFromJsonable(row.Snapshot)
 		if fromJSONErr != nil {
 			return newAPIErrorResponse(fromJSONErr, http.StatusInternalServerError, operation, "FromJsonable"), nil

@@ -303,6 +303,21 @@ func (c *SubmodelRepositoryAPIAPIController) Routes() Routes {
 			c.contextPath + "/submodels/{submodelIdentifier}/$signed",
 			c.GetSignedSubmodelByID,
 		},
+		"PutSubmodelByIdSigned": Route{
+			strings.ToUpper("Put"),
+			c.contextPath + "/submodels/{submodelIdentifier}/$signed",
+			c.PutSubmodelByID,
+		},
+		"PatchSubmodelByIdSigned": Route{
+			strings.ToUpper("Patch"),
+			c.contextPath + "/submodels/{submodelIdentifier}/$signed",
+			c.PatchSubmodelByID,
+		},
+		"DeleteSubmodelByIdSigned": Route{
+			strings.ToUpper("Delete"),
+			c.contextPath + "/submodels/{submodelIdentifier}/$signed",
+			c.DeleteSubmodelByID,
+		},
 		"GetSignedSubmodelByIDValueOnly": Route{
 			strings.ToUpper("Get"),
 			c.contextPath + "/submodels/{submodelIdentifier}/$value/$signed",

@@ -200,6 +200,153 @@ UPDATE asset_information
 SET asset_kind = asset_kind + 1
 WHERE asset_kind >= 2;
 
+UPDATE aas_descriptor
+SET asset_kind = asset_kind + 1
+WHERE asset_kind >= 2;
+
+-- Backfill one open history version for already existing current records.
+-- Runtime writes keep these tables append-only after the upgrade.
+INSERT INTO aas_history (
+  identifier,
+  change_type,
+  snapshot,
+  deleted,
+  valid_from,
+  administration_created_at_text,
+  administration_updated_at_text
+)
+SELECT
+  a.aas_id,
+  'Created',
+  jsonb_strip_nulls(jsonb_build_object(
+    'id', a.aas_id,
+    'idShort', a.id_short,
+    'category', a.category,
+    'modelType', 'AssetAdministrationShell',
+    'administration', ap.administrative_information_payload,
+    'assetInformation', jsonb_strip_nulls(jsonb_build_object(
+      'assetKind', CASE ai.asset_kind
+        WHEN 0 THEN 'Type'
+        WHEN 1 THEN 'Instance'
+        WHEN 2 THEN 'Batch'
+        WHEN 3 THEN 'Role'
+        ELSE 'Instance'
+      END,
+      'globalAssetId', ai.global_asset_id,
+      'assetType', ai.asset_type
+    ))
+  )),
+  FALSE,
+  COALESCE(a.db_created_at, NOW()),
+  ap.administrative_information_payload ->> 'createdAt',
+  ap.administrative_information_payload ->> 'updatedAt'
+FROM aas a
+LEFT JOIN aas_payload ap ON ap.aas_id = a.id
+LEFT JOIN asset_information ai ON ai.asset_information_id = a.id
+WHERE NOT EXISTS (
+  SELECT 1 FROM aas_history ah WHERE ah.identifier = a.aas_id
+);
+
+INSERT INTO submodel_history (
+  identifier,
+  change_type,
+  snapshot,
+  deleted,
+  valid_from,
+  administration_created_at_text,
+  administration_updated_at_text
+)
+SELECT
+  s.submodel_identifier,
+  'Created',
+  jsonb_strip_nulls(jsonb_build_object(
+    'id', s.submodel_identifier,
+    'idShort', s.id_short,
+    'category', s.category,
+    'kind', CASE s.kind
+      WHEN 0 THEN 'Instance'
+      WHEN 1 THEN 'Template'
+      ELSE NULL
+    END,
+    'modelType', 'Submodel',
+    'administration', sp.administrative_information_payload
+  )),
+  FALSE,
+  COALESCE(s.db_created_at, NOW()),
+  sp.administrative_information_payload ->> 'createdAt',
+  sp.administrative_information_payload ->> 'updatedAt'
+FROM submodel s
+LEFT JOIN submodel_payload sp ON sp.submodel_id = s.id
+WHERE NOT EXISTS (
+  SELECT 1 FROM submodel_history sh WHERE sh.identifier = s.submodel_identifier
+);
+
+INSERT INTO concept_description_history (
+  identifier,
+  change_type,
+  snapshot,
+  deleted,
+  valid_from,
+  administration_created_at_text,
+  administration_updated_at_text
+)
+SELECT
+  cd.id,
+  'Created',
+  CASE
+    WHEN cd.data IS NOT NULL AND jsonb_typeof(cd.data) = 'object' THEN cd.data
+    ELSE jsonb_strip_nulls(jsonb_build_object(
+      'id', cd.id,
+      'idShort', cd.id_short,
+      'modelType', 'ConceptDescription'
+    ))
+  END,
+  FALSE,
+  COALESCE(cd.db_created_at, NOW()),
+  cd.data -> 'administration' ->> 'createdAt',
+  cd.data -> 'administration' ->> 'updatedAt'
+FROM concept_description cd
+WHERE NOT EXISTS (
+  SELECT 1 FROM concept_description_history cdh WHERE cdh.identifier = cd.id
+);
+
+INSERT INTO descriptor_history (
+  identifier,
+  change_type,
+  snapshot,
+  deleted,
+  valid_from,
+  administration_created_at_text,
+  administration_updated_at_text
+)
+SELECT
+  ad.id,
+  'Created',
+  jsonb_strip_nulls(jsonb_build_object(
+    'id', ad.id,
+    'idShort', ad.id_short,
+    'assetKind', CASE ad.asset_kind
+      WHEN 0 THEN 'Type'
+      WHEN 1 THEN 'Instance'
+      WHEN 2 THEN 'Batch'
+      WHEN 3 THEN 'Role'
+      ELSE NULL
+    END,
+    'assetType', ad.asset_type,
+    'globalAssetId', ad.global_asset_id,
+    'endpoints', '[]'::jsonb,
+    'administration', dp.administrative_information_payload
+  )),
+  FALSE,
+  COALESCE(ad.db_created_at, NOW()),
+  dp.administrative_information_payload ->> 'createdAt',
+  dp.administrative_information_payload ->> 'updatedAt'
+FROM aas_descriptor ad
+LEFT JOIN descriptor_payload dp ON dp.descriptor_id = ad.descriptor_id
+WHERE NOT EXISTS (
+  SELECT 1 FROM descriptor_history dh WHERE dh.identifier = ad.id
+);
+
 -- Mark the schema as upgraded only after all schema objects completed
 -- successfully.
 UPDATE basyxsystem

@@ -225,9 +225,16 @@ func NewCheckDBIsEmptyAction(options CheckDBIsEmptyOptions) JSONStepAction {
 		schema = "public"
 	}
 
-	excluded := make(map[string]struct{}, len(options.ExcludedTables))
-	// System metadata table is expected to contain one version row after schema initialization.
-	excluded["basyxsystem"] = struct{}{}
+	excluded := make(map[string]struct{}, len(options.ExcludedTables)+5)
+	for _, table := range []string{
+		"basyxsystem",
+		"aas_history",
+		"submodel_history",
+		"concept_description_history",
+		"descriptor_history",
+	} {
+		excluded[table] = struct{}{}
+	}
 	for _, table := range options.ExcludedTables {
 		trimmed := strings.TrimSpace(table)
 		if trimmed == "" {

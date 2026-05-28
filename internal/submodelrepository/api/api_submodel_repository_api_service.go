@@ -1039,6 +1039,21 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelRecentChanges(
 
 	changes := make([]gen.SubmodelRecentChange, 0, len(rows))
 	for _, row := range rows {
+		if row.Deleted {
+			if semanticID != "" {
+				continue
+			}
+			changes = append(changes, gen.SubmodelRecentChange{
+				RecentChange: gen.RecentChange{
+					Type:      row.ChangeType,
+					CreatedAt: row.CreatedAt,
+					UpdatedAt: row.UpdatedAt,
+				},
+				Id: row.Identifier,
+			})
+			continue
+		}
+
 		submodel, fromJSONErr := jsonization.SubmodelFromJsonable(row.Snapshot)
 		if fromJSONErr != nil {
 			return newAPIErrorResponse(fromJSONErr, http.StatusInternalServerError, operation, "FromJsonable"), nil
