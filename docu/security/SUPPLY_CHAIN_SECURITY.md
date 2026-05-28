@@ -121,7 +121,7 @@ Release workflow enforces semantic version parsing from the Git tag.
 The repository provides a report-only Trivy workflow for continuous visibility.
 
 - Repository filesystem scans (`scan-type: fs`) cover source and dependency manifests.
-- Container image scans (`scan-type: image`) build and scan each service image on `push` to `main` and on scheduled runs.
+- Container image scans (`scan-type: image`) build and scan each service image on scheduled runs.
 - Findings are uploaded as SARIF.
 - Current mode does not fail builds.
 - Maintainers can later switch to fail on threshold (for example `HIGH,CRITICAL`) once baseline noise is reduced.
