@@ -1,6 +1,8 @@
 name: Vulnerability Scan
 
 on:
+  release:
+    types: [published]
   pull_request:
     paths:
       - 'cmd/**'
@@ -11,20 +13,9 @@ on:
       - '.github/workflows/vuln-scan.yml'
       - '.github/workflows/docker-release.yml'
       - '.github/workflows/docker-snapshot.yml'
-  push:
-    branches:
-      - main
-    paths:
-      - 'cmd/**'
-      - 'internal/**'
-      - 'database/**'
-      - 'go.mod'
-      - 'go.sum'
-      - '.github/workflows/vuln-scan.yml'
-      - '.github/workflows/docker-release.yml'
-      - '.github/workflows/docker-snapshot.yml'
+  workflow_dispatch:
   schedule:
-    - cron: '0 4 * * 1'
+    - cron: '0 4 */2 * *'
 
 concurrency:
   group: vuln-scan-${{ github.ref }}
