@@ -21,9 +21,9 @@ import (
 	"strconv"
 	"strings"
 
-	aasjsonization "github.com/aas-core-works/aas-core3.1-golang/jsonization"
-	aastypes "github.com/aas-core-works/aas-core3.1-golang/types"
-	aasverification "github.com/aas-core-works/aas-core3.1-golang/verification"
+	aasjsonization "github.com/FriedJannik/aas-go-sdk/jsonization"
+	aastypes "github.com/FriedJannik/aas-go-sdk/types"
+	aasverification "github.com/FriedJannik/aas-go-sdk/verification"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	"github.com/go-chi/chi/v5"

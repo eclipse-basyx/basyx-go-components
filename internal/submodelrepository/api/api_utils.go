@@ -30,8 +30,8 @@ import (
 	"errors"
 	"strings"
 
-	"github.com/aas-core-works/aas-core3.1-golang/jsonization"
-	"github.com/aas-core-works/aas-core3.1-golang/types"
+	"github.com/FriedJannik/aas-go-sdk/jsonization"
+	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	submodelpath "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/path"
 )

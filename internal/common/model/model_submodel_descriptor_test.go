@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/aas-core-works/aas-core3.1-golang/jsonization"
-	"github.com/aas-core-works/aas-core3.1-golang/types"
+	"github.com/FriedJannik/aas-go-sdk/jsonization"
+	"github.com/FriedJannik/aas-go-sdk/types"
 )
 
 func setVerificationMode(t *testing.T, mode string) {

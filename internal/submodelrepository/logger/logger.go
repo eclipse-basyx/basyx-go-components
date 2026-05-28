@@ -30,8 +30,8 @@ import (
 	"log"
 	"os"
 
-	"github.com/aas-core-works/aas-core3.1-golang/stringification"
-	"github.com/aas-core-works/aas-core3.1-golang/types"
+	"github.com/FriedJannik/aas-go-sdk/stringification"
+	"github.com/FriedJannik/aas-go-sdk/types"
 )
 
 // Logger provides structured logging for the submodel repository.

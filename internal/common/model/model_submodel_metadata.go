@@ -34,7 +34,7 @@
 //nolint:all
 package model
 
-import "github.com/aas-core-works/aas-core3.1-golang/types"
+import "github.com/FriedJannik/aas-go-sdk/types"
 
 // SubmodelMetadata struct representing metadata of a Submodel.
 type SubmodelMetadata struct {

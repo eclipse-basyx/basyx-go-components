@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/aas-core-works/aas-core3.1-golang/types"
+	"github.com/FriedJannik/aas-go-sdk/types"
 )
 
 func TestAssertCompanyDescriptorConstraints_RejectsEmptyCreatorReferenceKeys(t *testing.T) {

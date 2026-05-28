@@ -12,7 +12,7 @@ package model
 import (
 	"encoding/json"
 
-	"github.com/aas-core-works/aas-core3.1-golang/types"
+	"github.com/FriedJannik/aas-go-sdk/types"
 )
 
 // SubmodelElementListValue represents the Value-Only serialization of a SubmodelElementList.

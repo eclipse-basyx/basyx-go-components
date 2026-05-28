@@ -5,7 +5,7 @@ import (
 	"log"
 	"strings"
 
-	"github.com/aas-core-works/aas-core3.1-golang/verification"
+	"github.com/FriedJannik/aas-go-sdk/verification"
 )
 
 // ValidateWithMode executes semantic verification based on the selected mode.

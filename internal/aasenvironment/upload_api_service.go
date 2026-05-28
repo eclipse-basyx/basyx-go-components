@@ -18,9 +18,9 @@ import (
 	"strconv"
 	"strings"
 
-	aasjsonization "github.com/aas-core-works/aas-core3.1-golang/jsonization"
-	aastypes "github.com/aas-core-works/aas-core3.1-golang/types"
-	aasxmlization "github.com/aas-core-works/aas-core3.1-golang/xmlization"
+	aasjsonization "github.com/FriedJannik/aas-go-sdk/jsonization"
+	aastypes "github.com/FriedJannik/aas-go-sdk/types"
+	aasxmlization "github.com/FriedJannik/aas-go-sdk/xmlization"
 	aasx "github.com/aas-core-works/aas-package3-golang"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	commonmodel "github.com/eclipse-basyx/basyx-go-components/internal/common/model"

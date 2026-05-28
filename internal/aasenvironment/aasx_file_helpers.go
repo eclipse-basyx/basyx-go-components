@@ -31,7 +31,7 @@ import (
 	"path"
 	"strings"
 
-	aastypes "github.com/aas-core-works/aas-core3.1-golang/types"
+	aastypes "github.com/FriedJannik/aas-go-sdk/types"
 )
 
 // AASXFileElementLocation represents a File element and its location in a submodel.

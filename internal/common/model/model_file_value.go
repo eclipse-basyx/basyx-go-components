@@ -37,7 +37,7 @@ package model
 import (
 	"encoding/json"
 
-	"github.com/aas-core-works/aas-core3.1-golang/types"
+	"github.com/FriedJannik/aas-go-sdk/types"
 )
 
 type FileValue struct {
