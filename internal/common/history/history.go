@@ -641,13 +641,14 @@ func writeCanonicalJSON(out *bytes.Buffer, value any) error {
 		if err != nil {
 			return fmt.Errorf("marshal scalar: %w", err)
 		}
-		out.Write(encoded)
-		return nil
+		return writeCanonicalBytes(out, encoded)
 	}
 }
 
 func writeCanonicalObject(out *bytes.Buffer, value map[string]any) error {
-	out.WriteByte('{')
+	if err := writeCanonicalByte(out, '{'); err != nil {
+		return err
+	}
 	keys := make([]string, 0, len(value))
 	for key := range value {
 		keys = append(keys, key)
@@ -655,32 +656,54 @@ func writeCanonicalObject(out *bytes.Buffer, value map[string]any) error {
 	sort.Strings(keys)
 	for index, key := range keys {
 		if index > 0 {
-			out.WriteByte(',')
+			if err := writeCanonicalByte(out, ','); err != nil {
+				return err
+			}
 		}
 		keyJSON, err := json.Marshal(key)
 		if err != nil {
 			return fmt.Errorf("marshal object key: %w", err)
 		}
-		out.Write(keyJSON)
-		out.WriteByte(':')
+		if err = writeCanonicalBytes(out, keyJSON); err != nil {
+			return err
+		}
+		if err = writeCanonicalByte(out, ':'); err != nil {
+			return err
+		}
 		if err = writeCanonicalJSON(out, value[key]); err != nil {
 			return err
 		}
 	}
-	out.WriteByte('}')
-	return nil
+	return writeCanonicalByte(out, '}')
 }
 
 func writeCanonicalArray(out *bytes.Buffer, value []any) error {
-	out.WriteByte('[')
+	if err := writeCanonicalByte(out, '['); err != nil {
+		return err
+	}
 	for index, item := range value {
 		if index > 0 {
-			out.WriteByte(',')
+			if err := writeCanonicalByte(out, ','); err != nil {
+				return err
+			}
 		}
 		if err := writeCanonicalJSON(out, item); err != nil {
 			return err
 		}
 	}
-	out.WriteByte(']')
+	return writeCanonicalByte(out, ']')
+}
+
+func writeCanonicalBytes(out *bytes.Buffer, value []byte) error {
+	if _, err := out.Write(value); err != nil {
+		return fmt.Errorf("write canonical json: %w", err)
+	}
+	return nil
+}
+
+func writeCanonicalByte(out *bytes.Buffer, value byte) error {
+	if err := out.WriteByte(value); err != nil {
+		return fmt.Errorf("write canonical json byte: %w", err)
+	}
 	return nil
 }
