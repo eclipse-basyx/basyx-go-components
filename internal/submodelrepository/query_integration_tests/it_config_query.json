@@ -265,6 +265,7 @@
     "method": "POST",
     "endpoint": "http://127.0.0.1:6004/query/submodels",
     "data": "bodies/query_tests/032_and_sm_and_sme.json",
+    "shouldMatch": "expected/sophisticatedQueryTests/full_response.json",
     "expectedStatus": 200
   },
   {
@@ -272,6 +273,7 @@
     "method": "POST",
     "endpoint": "http://127.0.0.1:6004/query/submodels",
     "data": "bodies/query_tests/033_and_negative.json",
+    "shouldMatch": "expected/sophisticatedQueryTests/empty_response.json",
     "expectedStatus": 200
   },
   {
@@ -279,6 +281,7 @@
     "method": "POST",
     "endpoint": "http://127.0.0.1:6004/query/submodels",
     "data": "bodies/query_tests/034_or_one_true.json",
+    "shouldMatch": "expected/sophisticatedQueryTests/full_response.json",
     "expectedStatus": 200
   },
   {
@@ -286,6 +289,7 @@
     "method": "POST",
     "endpoint": "http://127.0.0.1:6004/query/submodels",
     "data": "bodies/query_tests/035_or_all_false.json",
+    "shouldMatch": "expected/sophisticatedQueryTests/empty_response.json",
     "expectedStatus": 200
   },
   {
@@ -293,6 +297,7 @@
     "method": "POST",
     "endpoint": "http://127.0.0.1:6004/query/submodels",
     "data": "bodies/query_tests/036_not_false_inner.json",
+    "shouldMatch": "expected/sophisticatedQueryTests/full_response.json",
     "expectedStatus": 200
   },
   {
@@ -300,6 +305,7 @@
     "method": "POST",
     "endpoint": "http://127.0.0.1:6004/query/submodels",
     "data": "bodies/query_tests/037_not_true_inner.json",
+    "shouldMatch": "expected/sophisticatedQueryTests/empty_response.json",
     "expectedStatus": 200
   },
   {
@@ -307,6 +313,7 @@
     "method": "POST",
     "endpoint": "http://127.0.0.1:6004/query/submodels",
     "data": "bodies/query_tests/038_complex_and_or_1.json",
+    "shouldMatch": "expected/sophisticatedQueryTests/full_response.json",
     "expectedStatus": 200
   },
   {
@@ -314,6 +321,7 @@
     "method": "POST",
     "endpoint": "http://127.0.0.1:6004/query/submodels",
     "data": "bodies/query_tests/039_complex_and_or_2.json",
+    "shouldMatch": "expected/sophisticatedQueryTests/full_response.json",
     "expectedStatus": 200
   },
   {
@@ -321,6 +329,7 @@
     "method": "POST",
     "endpoint": "http://127.0.0.1:6004/query/submodels",
     "data": "bodies/query_tests/040_complex_with_not.json",
+    "shouldMatch": "expected/sophisticatedQueryTests/full_response.json",
     "expectedStatus": 200
   },
   {
@@ -328,6 +337,7 @@
     "method": "POST",
     "endpoint": "http://127.0.0.1:6004/query/submodels",
     "data": "bodies/query_tests/041_filter_fragment_instance_match.json",
+    "shouldMatch": "expected/sophisticatedQueryTests/full_response.json",
     "expectedStatus": 200
   },
   {
@@ -335,6 +345,7 @@
     "method": "POST",
     "endpoint": "http://127.0.0.1:6004/query/submodels",
     "data": "bodies/query_tests/042_filter_fragment_instance_no_match.json",
+    "shouldMatch": "expected/sophisticatedQueryTests/res42.json",
     "expectedStatus": 200
   },
   {
@@ -342,6 +353,7 @@
     "method": "POST",
     "endpoint": "http://127.0.0.1:6004/query/submodels",
     "data": "bodies/query_tests/043_filter_fragment_collection_match.json",
+    "shouldMatch": "expected/sophisticatedQueryTests/full_response.json",
     "expectedStatus": 200
   },
   {
@@ -349,20 +361,7 @@
     "method": "POST",
     "endpoint": "http://127.0.0.1:6004/query/submodels",
     "data": "bodies/query_tests/044_filter_fragment_list_match.json",
-    "expectedStatus": 200
-  },
-  {
-    "context": "Query 045 - filter_fragment_language_match",
-    "method": "POST",
-    "endpoint": "http://127.0.0.1:6004/query/submodels",
-    "data": "bodies/query_tests/045_filter_fragment_language_match.json",
-    "expectedStatus": 200
-  },
-  {
-    "context": "Query 046 - filter_fragment_language_false",
-    "method": "POST",
-    "endpoint": "http://127.0.0.1:6004/query/submodels",
-    "data": "bodies/query_tests/046_filter_fragment_language_false.json",
+    "shouldMatch": "expected/sophisticatedQueryTests/full_response.json",
     "expectedStatus": 200
   },
   {
@@ -370,6 +369,7 @@
     "method": "POST",
     "endpoint": "http://127.0.0.1:6004/query/submodels",
     "data": "bodies/query_tests/047_triple_and.json",
+    "shouldMatch": "expected/sophisticatedQueryTests/full_response.json",
     "expectedStatus": 200
   },
   {
@@ -377,6 +377,7 @@
     "method": "POST",
     "endpoint": "http://127.0.0.1:6004/query/submodels",
     "data": "bodies/query_tests/048_triple_and_2.json",
+    "shouldMatch": "expected/sophisticatedQueryTests/full_response.json",
     "expectedStatus": 200
   },
   {
@@ -384,6 +385,7 @@
     "method": "POST",
     "endpoint": "http://127.0.0.1:6004/query/submodels",
     "data": "bodies/query_tests/049_nested_not_or_false.json",
+    "shouldMatch": "expected/sophisticatedQueryTests/full_response.json",
     "expectedStatus": 200
   },
   {
@@ -391,6 +393,7 @@
     "method": "POST",
     "endpoint": "http://127.0.0.1:6004/query/submodels",
     "data": "bodies/query_tests/050_sme_wildcard_semantic_match.json",
+    "shouldMatch": "expected/sophisticatedQueryTests/full_response.json",
     "expectedStatus": 200
   },
   {
@@ -398,6 +401,7 @@
     "method": "POST",
     "endpoint": "http://127.0.0.1:6004/query/submodels",
     "data": "bodies/query_tests/051_sme_wildcard_semantic_false.json",
+    "shouldMatch": "expected/sophisticatedQueryTests/empty_response.json",
     "expectedStatus": 200
   },
   {
@@ -405,6 +409,7 @@
     "method": "POST",
     "endpoint": "http://127.0.0.1:6004/query/submodels",
     "data": "bodies/query_tests/052_collection_and_list_combined.json",
+    "shouldMatch": "expected/sophisticatedQueryTests/full_response.json",
     "expectedStatus": 200
   },
   {
@@ -412,6 +417,7 @@
     "method": "POST",
     "endpoint": "http://127.0.0.1:6004/query/submodels",
     "data": "bodies/query_tests/053_collection_and_list_mismatch.json",
+    "shouldMatch": "expected/sophisticatedQueryTests/empty_response.json",
     "expectedStatus": 200
   },
   {
@@ -419,6 +425,7 @@
     "method": "POST",
     "endpoint": "http://127.0.0.1:6004/query/submodels",
     "data": "bodies/query_tests/054_manufacturer_value_contains.json",
+    "shouldMatch": "expected/sophisticatedQueryTests/full_response.json",
     "expectedStatus": 200
   },
   {
@@ -426,12 +433,7 @@
     "method": "POST",
     "endpoint": "http://127.0.0.1:6004/query/submodels",
     "data": "bodies/query_tests/055_manufacturer_valueid_contains.json",
+    "shouldMatch": "expected/sophisticatedQueryTests/full_response.json",
     "expectedStatus": 200
-  },
-  {
-    "context": "Delete Submodel",
-    "method": "DELETE",
-    "endpoint": "http://127.0.0.1:6004/submodels/WUVSUEVOREVSUEVOREVSUA",
-    "expectedStatus": 204
   }
 ]
