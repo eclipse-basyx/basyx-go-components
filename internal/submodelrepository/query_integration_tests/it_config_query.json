@@ -365,6 +365,22 @@
     "expectedStatus": 200
   },
   {
+    "context": "Query 045 - filter_all_false",
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:6004/query/submodels",
+    "data": "bodies/query_tests/045_filter_all_false.json",
+    "shouldMatch": "expected/sophisticatedQueryTests/empty_sme_response.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "Query 046 - filter_different_sme",
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:6004/query/submodels",
+    "data": "bodies/query_tests/046_filter_different_sme.json",
+    "shouldMatch": "expected/sophisticatedQueryTests/res46.json",
+    "expectedStatus": 200
+  },
+  {
     "context": "Query 047 - triple_and",
     "method": "POST",
     "endpoint": "http://127.0.0.1:6004/query/submodels",
@@ -429,11 +445,36 @@
     "expectedStatus": 200
   },
   {
-    "context": "Query 055 - manufacturer_valueid_contains",
+    "context": "Query 055 - all false filter",
     "method": "POST",
     "endpoint": "http://127.0.0.1:6004/query/submodels",
-    "data": "bodies/query_tests/055_manufacturer_valueid_contains.json",
-    "shouldMatch": "expected/sophisticatedQueryTests/full_response.json",
+    "data": "bodies/query_tests/055.json",
+    "shouldMatch": "expected/sophisticatedQueryTests/empty_sme_response.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "Query 056",
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:6004/query/submodels",
+    "data": "bodies/query_tests/056.json",
+    "shouldMatch": "expected/sophisticatedQueryTests/res56.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "Query 057",
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:6004/query/submodels",
+    "data": "bodies/query_tests/057.json",
+    "shouldMatch": "expected/sophisticatedQueryTests/empty_sme_response.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "Query 058",
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:6004/query/submodels",
+    "data": "bodies/query_tests/058.json",
+    "shouldMatch": "expected/sophisticatedQueryTests/res58.json",
     "expectedStatus": 200
   }
+
 ]

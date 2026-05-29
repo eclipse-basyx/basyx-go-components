@@ -1,0 +1,22 @@
+{
+  "$condition": {"$boolean": true },
+  "$filters": [
+      {
+          "$fragment": "$sme.InstanceId",
+          "$condition": {"$boolean": false }
+      },
+      {
+          "$fragment": "$sme.ManufacturerName",
+          "$condition": {"$boolean": false }
+      },
+      {
+          "$fragment": "$sme.NewTestCollection",
+          "$condition": {"$boolean": false }
+      },
+      {
+          "$fragment": "$sme.NewTestList[]",
+          "$condition": { "$eq": [ {"$field": "$sme#idShort"}, {"$strVal": "InstanceId" } ] }
+
+      }
+  ]
+}

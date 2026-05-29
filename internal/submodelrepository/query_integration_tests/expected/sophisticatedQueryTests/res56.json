@@ -1,0 +1,97 @@
+{
+    "paging_metadata": {},
+    "result": [
+        {
+            "id": "YERPENDERPENDERP",
+            "idShort": "Identification",
+            "kind": "Instance",
+            "modelType": "Submodel",
+            "semanticId": {
+                "keys": [
+                    {
+                        "type": "Submodel",
+                        "value": "http://acplt.org/SubmodelTemplates/AssetIdentification"
+                    },
+                    {
+                        "type": "Submodel",
+                        "value": "http://acplt.org/SubmodelTemplates/AssetIdentification"
+                    }
+                ],
+                "type": "ExternalReference"
+            },
+            "submodelElements": [
+                {
+                    "category": "VARIABLE",
+                    "idShort": "InstanceId",
+                    "modelType": "Property",
+                    "semanticId": {
+                        "keys": [
+                            {
+                                "type": "GlobalReference",
+                                "value": "http://opcfoundation.org/UA/DI/1.1/DeviceType/Serialnumber"
+                            }
+                        ],
+                        "type": "ExternalReference"
+                    },
+                    "supplementalSemanticIds": [
+                        {
+                            "keys": [
+                                {
+                                    "type": "GlobalReference",
+                                    "value": "something_random_e14ad770"
+                                }
+                            ],
+                            "type": "ExternalReference"
+                        },
+                        {
+                            "keys": [
+                                {
+                                    "type": "GlobalReference",
+                                    "value": "something_random_bd061acd"
+                                }
+                            ],
+                            "type": "ExternalReference"
+                        }
+                    ],
+                    "value": "978-8234-234-342",
+                    "valueId": {
+                        "keys": [
+                            {
+                                "type": "GlobalReference",
+                                "value": "978-8234-234-342"
+                            }
+                        ],
+                        "type": "ExternalReference"
+                    },
+                    "valueType": "xs:string"
+                },
+                {
+                    "category": "PARAMETER",
+                    "description": [
+                        {
+                            "language": "en-us",
+                            "text": "New Test List"
+                        },
+                        {
+                            "language": "de",
+                            "text": "Neue Test Liste"
+                        }
+                    ],
+                    "idShort": "NewTestList",
+                    "modelType": "SubmodelElementList",
+                    "orderRelevant": true,
+                    "semanticId": {
+                        "keys": [
+                            {
+                                "type": "GlobalReference",
+                                "value": "http://acplt.org/SubmodelElementLists/NewTestList"
+                            }
+                        ],
+                        "type": "ExternalReference"
+                    },
+                    "typeValueListElement": "SubmodelElement"
+                }
+            ]
+        }
+    ]
+}

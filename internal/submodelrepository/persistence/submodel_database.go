@@ -1812,8 +1812,10 @@ func (s *SubmodelDatabase) getSubmodelsWithOptionalSemanticIDFilter(ctx context.
 
 		var submodel types.ISubmodel
 		submodel = types.NewSubmodel(identifier.String)
-		idShortValue := idShort.String
-		submodel.SetIDShort(&idShortValue)
+		if idShort.Valid {
+			idShortValue := idShort.String
+			submodel.SetIDShort(&idShortValue)
+		}
 		if category.Valid {
 			categoryValue := category.String
 			submodel.SetCategory(&categoryValue)
