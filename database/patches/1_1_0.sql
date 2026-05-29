@@ -135,6 +135,10 @@ UPDATE asset_information
 SET asset_kind = asset_kind + 1
 WHERE asset_kind >= 2;
 
+UPDATE aas_descriptor
+SET asset_kind = asset_kind + 1
+WHERE asset_kind >= 2;
+
 -- Mark the schema as upgraded only after all schema objects completed
 -- successfully.
 UPDATE basyxsystem
