@@ -1,0 +1,36 @@
+{
+  "$condition": {
+    "$and": [
+      {
+        "$contains": [
+          {
+            "$field": "$sm#id"
+          },
+          {
+            "$strVal": "acplt.org"
+          }
+        ]
+      },
+      {
+        "$contains": [
+          {
+            "$field": "$sme.InstanceId#value"
+          },
+          {
+            "$strVal": "978"
+          }
+        ]
+      },
+      {
+        "$eq": [
+          {
+            "$field": "$sme.InstanceId#valueType"
+          },
+          {
+            "$strVal": "xs:string"
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "$condition": {
+    "$ne": [
+      {
+        "$field": "$sm#idShort"
+      },
+      {
+        "$strVal": "Other"
+      }
+    ]
+  }
+}

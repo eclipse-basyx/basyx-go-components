@@ -1,0 +1,14 @@
+{
+  "$condition": {
+    "$not": {
+      "$eq": [
+        {
+          "$field": "$sm#idShort"
+        },
+        {
+          "$strVal": "Other"
+        }
+      ]
+    }
+  }
+}

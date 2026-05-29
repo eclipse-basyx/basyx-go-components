@@ -1,0 +1,28 @@
+{
+  "$condition": {
+    "$and": [
+      {
+        "$contains": [
+          {
+            "$field": "$sm#id"
+          },
+          {
+            "$strVal": "Identification"
+          }
+        ]
+      },
+      {
+        "$not": {
+          "$contains": [
+            {
+              "$field": "$sme#value"
+            },
+            {
+              "$strVal": "forbidden"
+            }
+          ]
+        }
+      }
+    ]
+  }
+}

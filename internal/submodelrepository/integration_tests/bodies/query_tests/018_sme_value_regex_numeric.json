@@ -1,0 +1,12 @@
+{
+  "$condition": {
+    "$regex": [
+      {
+        "$field": "$sme#value"
+      },
+      {
+        "$strVal": "^978-[0-9-]+$"
+      }
+    ]
+  }
+}

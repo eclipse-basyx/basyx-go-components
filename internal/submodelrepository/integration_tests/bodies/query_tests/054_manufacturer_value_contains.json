@@ -1,0 +1,12 @@
+{
+  "$condition": {
+    "$contains": [
+      {
+        "$field": "$sme.ManufacturerName#value"
+      },
+      {
+        "$strVal": "ACPLT"
+      }
+    ]
+  }
+}

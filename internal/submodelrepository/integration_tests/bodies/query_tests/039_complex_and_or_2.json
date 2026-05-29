@@ -1,0 +1,40 @@
+{
+  "$condition": {
+    "$and": [
+      {
+        "$or": [
+          {
+            "$eq": [
+              {
+                "$field": "$sm#idShort"
+              },
+              {
+                "$strVal": "X"
+              }
+            ]
+          },
+          {
+            "$eq": [
+              {
+                "$field": "$sm#idShort"
+              },
+              {
+                "$strVal": "Y"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "$contains": [
+          {
+            "$field": "$sme#value"
+          },
+          {
+            "$strVal": "ACPLT"
+          }
+        ]
+      }
+    ]
+  }
+}

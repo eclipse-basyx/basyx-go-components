@@ -1,0 +1,406 @@
+[
+  {
+    "context": "Health endpoint",
+    "method": "GET",
+    "endpoint": "http://127.0.0.1:6004/health",
+    "expectedStatus": 200
+  },
+  {
+    "context": "Create Submodel",
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:6004/submodels",
+    "data": "bodies/post/query/sophisticatedQuerySubmodel.json",
+    "expectedStatus": 201
+  },
+  {
+    "context": "Query 001 - sm_id_contains_base",
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:6004/query/submodels",
+    "data": "bodies/query_tests/001_sm_id_contains_base.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "Query 002 - sm_id_contains_negative",
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:6004/query/submodels",
+    "data": "bodies/query_tests/002_sm_id_contains_negative.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "Query 003 - sm_id_exact_runtime",
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:6004/query/submodels",
+    "data": "bodies/query_tests/003_sm_id_exact_runtime.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "Query 004 - sm_idshort_eq",
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:6004/query/submodels",
+    "data": "bodies/query_tests/004_sm_idshort_eq.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "Query 005 - sm_idshort_ne",
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:6004/query/submodels",
+    "data": "bodies/query_tests/005_sm_idshort_ne.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "Query 006 - sm_idshort_starts",
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:6004/query/submodels",
+    "data": "bodies/query_tests/006_sm_idshort_starts.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "Query 007 - sm_idshort_ends",
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:6004/query/submodels",
+    "data": "bodies/query_tests/007_sm_idshort_ends.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "Query 008 - sm_idshort_regex_true",
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:6004/query/submodels",
+    "data": "bodies/query_tests/008_sm_idshort_regex_true.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "Query 009 - sm_semantic_type_eq",
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:6004/query/submodels",
+    "data": "bodies/query_tests/009_sm_semantic_type_eq.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "Query 010 - sm_semantic_key0_value_eq",
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:6004/query/submodels",
+    "data": "bodies/query_tests/010_sm_semantic_key0_value_eq.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "Query 011 - sm_semantic_key1_value_contains",
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:6004/query/submodels",
+    "data": "bodies/query_tests/011_sm_semantic_key1_value_contains.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "Query 012 - sme_idshort_instance_eq",
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:6004/query/submodels",
+    "data": "bodies/query_tests/012_sme_idshort_instance_eq.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "Query 013 - sme_idshort_instance_false",
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:6004/query/submodels",
+    "data": "bodies/query_tests/013_sme_idshort_instance_false.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "Query 014 - sme_value_serial_eq",
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:6004/query/submodels",
+    "data": "bodies/query_tests/014_sme_value_serial_eq.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "Query 015 - sme_value_serial_contains",
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:6004/query/submodels",
+    "data": "bodies/query_tests/015_sme_value_serial_contains.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "Query 016 - sme_value_serial_starts",
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:6004/query/submodels",
+    "data": "bodies/query_tests/016_sme_value_serial_starts.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "Query 017 - sme_value_serial_ends",
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:6004/query/submodels",
+    "data": "bodies/query_tests/017_sme_value_serial_ends.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "Query 018 - sme_value_regex_numeric",
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:6004/query/submodels",
+    "data": "bodies/query_tests/018_sme_value_regex_numeric.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "Query 019 - sme_valuetype_string",
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:6004/query/submodels",
+    "data": "bodies/query_tests/019_sme_valuetype_string.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "Query 020 - sme_valuetype_double",
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:6004/query/submodels",
+    "data": "bodies/query_tests/020_sme_valuetype_double.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "Query 021 - sme_semantic_contains_serialnumber",
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:6004/query/submodels",
+    "data": "bodies/query_tests/021_sme_semantic_contains_serialnumber.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "Query 022 - sme_semantic_exact_collection",
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:6004/query/submodels",
+    "data": "bodies/query_tests/022_sme_semantic_exact_collection.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "Query 023 - sme_language_en",
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:6004/query/submodels",
+    "data": "bodies/query_tests/023_sme_language_en.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "Query 024 - sme_language_fr_false",
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:6004/query/submodels",
+    "data": "bodies/query_tests/024_sme_language_fr_false.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "Query 025 - nested_collection_property_value",
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:6004/query/submodels",
+    "data": "bodies/query_tests/025_nested_collection_property_value.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "Query 026 - nested_collection_property2_value",
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:6004/query/submodels",
+    "data": "bodies/query_tests/026_nested_collection_property2_value.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "Query 027 - nested_collection_idshort",
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:6004/query/submodels",
+    "data": "bodies/query_tests/027_nested_collection_idshort.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "Query 028 - nested_list_item0_value",
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:6004/query/submodels",
+    "data": "bodies/query_tests/028_nested_list_item0_value.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "Query 029 - nested_list_item1_value",
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:6004/query/submodels",
+    "data": "bodies/query_tests/029_nested_list_item1_value.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "Query 030 - nested_list_item1_value_contains",
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:6004/query/submodels",
+    "data": "bodies/query_tests/030_nested_list_item1_value_contains.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "Query 031 - nested_list_item0_wrong_value",
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:6004/query/submodels",
+    "data": "bodies/query_tests/031_nested_list_item0_wrong_value.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "Query 032 - and_sm_and_sme",
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:6004/query/submodels",
+    "data": "bodies/query_tests/032_and_sm_and_sme.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "Query 033 - and_negative",
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:6004/query/submodels",
+    "data": "bodies/query_tests/033_and_negative.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "Query 034 - or_one_true",
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:6004/query/submodels",
+    "data": "bodies/query_tests/034_or_one_true.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "Query 035 - or_all_false",
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:6004/query/submodels",
+    "data": "bodies/query_tests/035_or_all_false.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "Query 036 - not_false_inner",
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:6004/query/submodels",
+    "data": "bodies/query_tests/036_not_false_inner.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "Query 037 - not_true_inner",
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:6004/query/submodels",
+    "data": "bodies/query_tests/037_not_true_inner.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "Query 038 - complex_and_or_1",
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:6004/query/submodels",
+    "data": "bodies/query_tests/038_complex_and_or_1.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "Query 039 - complex_and_or_2",
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:6004/query/submodels",
+    "data": "bodies/query_tests/039_complex_and_or_2.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "Query 040 - complex_with_not",
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:6004/query/submodels",
+    "data": "bodies/query_tests/040_complex_with_not.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "Query 041 - filter_fragment_instance_match",
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:6004/query/submodels",
+    "data": "bodies/query_tests/041_filter_fragment_instance_match.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "Query 042 - filter_fragment_instance_no_match",
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:6004/query/submodels",
+    "data": "bodies/query_tests/042_filter_fragment_instance_no_match.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "Query 043 - filter_fragment_collection_match",
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:6004/query/submodels",
+    "data": "bodies/query_tests/043_filter_fragment_collection_match.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "Query 044 - filter_fragment_list_match",
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:6004/query/submodels",
+    "data": "bodies/query_tests/044_filter_fragment_list_match.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "Query 045 - filter_fragment_language_match",
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:6004/query/submodels",
+    "data": "bodies/query_tests/045_filter_fragment_language_match.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "Query 046 - filter_fragment_language_false",
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:6004/query/submodels",
+    "data": "bodies/query_tests/046_filter_fragment_language_false.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "Query 047 - triple_and",
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:6004/query/submodels",
+    "data": "bodies/query_tests/047_triple_and.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "Query 048 - triple_and_2",
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:6004/query/submodels",
+    "data": "bodies/query_tests/048_triple_and_2.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "Query 049 - nested_not_or_false",
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:6004/query/submodels",
+    "data": "bodies/query_tests/049_nested_not_or_false.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "Query 050 - sme_wildcard_semantic_match",
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:6004/query/submodels",
+    "data": "bodies/query_tests/050_sme_wildcard_semantic_match.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "Query 051 - sme_wildcard_semantic_false",
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:6004/query/submodels",
+    "data": "bodies/query_tests/051_sme_wildcard_semantic_false.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "Query 052 - collection_and_list_combined",
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:6004/query/submodels",
+    "data": "bodies/query_tests/052_collection_and_list_combined.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "Query 053 - collection_and_list_mismatch",
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:6004/query/submodels",
+    "data": "bodies/query_tests/053_collection_and_list_mismatch.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "Query 054 - manufacturer_value_contains",
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:6004/query/submodels",
+    "data": "bodies/query_tests/054_manufacturer_value_contains.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "Query 055 - manufacturer_valueid_contains",
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:6004/query/submodels",
+    "data": "bodies/query_tests/055_manufacturer_valueid_contains.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "Delete Submodel",
+    "method": "DELETE",
+    "endpoint": "http://127.0.0.1:6004/submodels/WUVSUEVOREVSUEVOREVSUA",
+    "expectedStatus": 204
+  }
+]

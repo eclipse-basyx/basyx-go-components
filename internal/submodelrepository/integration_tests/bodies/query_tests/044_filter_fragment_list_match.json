@@ -1,0 +1,27 @@
+{
+  "$condition": {
+    "$contains": [
+      {
+        "$field": "$sme#idShort"
+      },
+      {
+        "$strVal": "ListProperty"
+      }
+    ]
+  },
+  "$filters": [
+    {
+      "$fragment": "$sme.NewTestList.ListProperty2#valueType",
+      "$condition": {
+        "$eq": [
+          {
+            "$field": "$sme.NewTestList.ListProperty2#valueType"
+          },
+          {
+            "$strVal": "xs:double"
+          }
+        ]
+      }
+    }
+  ]
+}

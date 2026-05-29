@@ -1,0 +1,12 @@
+{
+  "$condition": {
+    "$contains": [
+      {
+        "$field": "$sme.NewTestList.ListProperty2#value"
+      },
+      {
+        "$strVal": "2"
+      }
+    ]
+  }
+}

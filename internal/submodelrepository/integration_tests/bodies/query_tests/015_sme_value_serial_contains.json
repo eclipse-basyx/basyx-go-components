@@ -1,0 +1,12 @@
+{
+  "$condition": {
+    "$contains": [
+      {
+        "$field": "$sme#value"
+      },
+      {
+        "$strVal": "8234"
+      }
+    ]
+  }
+}

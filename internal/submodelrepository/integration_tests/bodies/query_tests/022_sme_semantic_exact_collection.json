@@ -1,0 +1,12 @@
+{
+  "$condition": {
+    "$eq": [
+      {
+        "$field": "$sme.NewTestCollection#semanticId.keys[0].value"
+      },
+      {
+        "$strVal": "http://acplt.org/SubmodelElementCollections/NewTestCollection"
+      }
+    ]
+  }
+}
