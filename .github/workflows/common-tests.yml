@@ -7,6 +7,7 @@ on:
       - 'go.mod'
       - 'go.sum'
       - '.github/workflows/common-tests.yml'
+      - '**.sql'
   push:
     branches: [main]
     paths:
@@ -14,6 +15,7 @@ on:
       - 'go.mod'
       - 'go.sum'
       - '.github/workflows/common-tests.yml'
+      - '**.sql'
 
 permissions:
   contents: read
@@ -25,25 +27,25 @@ jobs:
     steps:
       - name: Check out code
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
-        
+
       - name: Set up Go
         uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c
         with:
           # Use the version in go.mod if present; otherwise pin a version
           go-version-file: go.mod
           cache: true
-          
+
       - name: Get dependencies
         run: go mod download
-        
+
       - name: Run common model grammar tests
         run: go test github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar -count=1 -v -cover
-        
+
       - name: Run common security model tests
         run: |
           cd internal/common/security/unit_tests/model
           go test -count=1 -v -cover
-      
+
       - name: Run common tokenizer tests
         run: go test -count=1 -v -cover -run 'TestTokenizeFieldPaths' ./internal/common/builder
 
@@ -51,7 +53,7 @@ jobs:
         run: |
           cd internal/common/security/unit_tests/abac_engine
           go test -count=1 -v -cover
-          
+
       - name: Run common security filter tests
         run: |
           cd internal/common/security/unit_tests/filter_abac_engine
