@@ -12,6 +12,7 @@
 package apis
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"io"
@@ -24,6 +25,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 )
 
@@ -356,4 +358,75 @@ func parseNumericArrayParameter[T Number](param, delim string, required bool, fn
 // parseQuery parses query parameters and returns an error if any malformed value pairs are encountered.
 func parseQuery(rawQuery string) (url.Values, error) {
 	return url.ParseQuery(rawQuery)
+}
+
+func encodeIdentifierForPath(identifier string) string {
+	if identifier == "" {
+		return ""
+	}
+
+	return base64.RawURLEncoding.EncodeToString([]byte(identifier))
+}
+
+func requestScheme(r *http.Request) string {
+	return common.RequestScheme(r)
+}
+
+func requestHost(r *http.Request) string {
+	return common.RequestHost(r)
+}
+
+func normalizeContextPathForBaseLocation(contextPath string) string {
+	trimmed := strings.TrimSpace(contextPath)
+	if trimmed == "" || trimmed == "/" {
+		return ""
+	}
+
+	return "/" + strings.Trim(trimmed, "/")
+}
+
+func (c *AssetAdministrationShellRegistryAPIAPIController) buildBaseLocation(r *http.Request) string {
+	if externalBaseURL := common.ExternalBaseURLFromContext(r.Context()); externalBaseURL != "" {
+		return externalBaseURL
+	}
+
+	host := requestHost(r)
+	if host == "" {
+		return ""
+	}
+
+	basePath := normalizeContextPathForBaseLocation(c.contextPath)
+
+	return requestScheme(r) + "://" + host + basePath
+}
+
+func (c *AssetAdministrationShellRegistryAPIAPIController) buildAASDescriptorLocationFromEncodedIdentifier(r *http.Request, encodedAASIdentifier string) string {
+	baseLocation := c.buildBaseLocation(r)
+	if baseLocation == "" {
+		return ""
+	}
+
+	escapedAASIdentifier := url.PathEscape(encodedAASIdentifier)
+
+	return baseLocation + "/shell-descriptors/" + escapedAASIdentifier
+}
+
+func (c *AssetAdministrationShellRegistryAPIAPIController) buildAASDescriptorLocationFromRawId(r *http.Request, rawAASID string) string {
+	return c.buildAASDescriptorLocationFromEncodedIdentifier(r, encodeIdentifierForPath(rawAASID))
+}
+
+func (c *AssetAdministrationShellRegistryAPIAPIController) buildSubmodelDescriptorLocationFromEncodedIdentifier(r *http.Request, encodedAASIdentifier string, encodedSubmodelIdentifier string) string {
+	baseLocation := c.buildBaseLocation(r)
+	if baseLocation == "" {
+		return ""
+	}
+
+	escapedAASIdentifier := url.PathEscape(encodedAASIdentifier)
+	escapedSubmodelIdentifier := url.PathEscape(encodedSubmodelIdentifier)
+
+	return baseLocation + "/shell-descriptors/" + escapedAASIdentifier + "/submodel-descriptors/" + escapedSubmodelIdentifier
+}
+
+func (c *AssetAdministrationShellRegistryAPIAPIController) buildSubmodelDescriptorLocationFromRawId(r *http.Request, encodedAASIdentifier string, rawSubmodelID string) string {
+	return c.buildSubmodelDescriptorLocationFromEncodedIdentifier(r, encodedAASIdentifier, encodeIdentifierForPath(rawSubmodelID))
 }

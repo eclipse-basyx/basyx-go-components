@@ -22,6 +22,7 @@
 *
 * SPDX-License-Identifier: MIT
 ******************************************************************************/
+// Author: Christian Koort ( Fraunhofer IESE )
 
 // Package api implements the HTTP-facing service logic for the
 // Company Lookup service.

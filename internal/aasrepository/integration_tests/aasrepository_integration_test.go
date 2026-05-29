@@ -22,6 +22,7 @@
 *
 * SPDX-License-Identifier: MIT
 ******************************************************************************/
+// Author: Christian Koort ( Fraunhofer IESE )
 
 //nolint:all
 package main
@@ -35,6 +36,7 @@ import (
 	"io"
 	"mime/multipart"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -294,6 +296,37 @@ func putJSONResponse(endpoint string, body string) (map[string]any, int, http.He
 	return payload, resp.StatusCode, resp.Header.Clone(), nil
 }
 
+func postJSONResponse(endpoint string, body string) (map[string]any, int, http.Header, error) {
+	req, err := http.NewRequest(http.MethodPost, endpoint, strings.NewReader(body))
+	if err != nil {
+		return nil, 0, nil, fmt.Errorf("failed to create request: %v", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, 0, nil, fmt.Errorf("failed to send request: %v", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	responseBody, readErr := io.ReadAll(resp.Body)
+	if readErr != nil {
+		return nil, resp.StatusCode, resp.Header.Clone(), fmt.Errorf("failed to read response body: %v", readErr)
+	}
+
+	if strings.TrimSpace(string(responseBody)) == "" {
+		return nil, resp.StatusCode, resp.Header.Clone(), nil
+	}
+
+	var payload map[string]any
+	if unmarshalErr := json.Unmarshal(responseBody, &payload); unmarshalErr != nil {
+		return nil, resp.StatusCode, resp.Header.Clone(), fmt.Errorf("failed to unmarshal response body: %v", unmarshalErr)
+	}
+
+	return payload, resp.StatusCode, resp.Header.Clone(), nil
+}
+
 func postResponseStatus(endpoint string, body string) (int, error) {
 	req, err := http.NewRequest(http.MethodPost, endpoint, strings.NewReader(body))
 	if err != nil {
@@ -341,6 +374,33 @@ func getResponseStatus(endpoint string) (int, error) {
 	defer func() { _ = resp.Body.Close() }()
 
 	return resp.StatusCode, nil
+}
+
+func assertLocationHeaderMatches(t *testing.T, expectedLocation string, actualLocation string) {
+	t.Helper()
+
+	require.NotEmpty(t, actualLocation)
+
+	expectedURL, err := url.Parse(expectedLocation)
+	require.NoError(t, err)
+
+	actualURL, err := url.Parse(actualLocation)
+	require.NoError(t, err)
+
+	assert.Equal(t, expectedURL.Scheme, actualURL.Scheme)
+	assert.Equal(t, expectedURL.Path, actualURL.Path)
+	assert.Equal(t, expectedURL.RawQuery, actualURL.RawQuery)
+	assert.Equal(t, expectedURL.Port(), actualURL.Port())
+
+	expectedHost := strings.ToLower(expectedURL.Hostname())
+	actualHost := strings.ToLower(actualURL.Hostname())
+	if expectedHost == actualHost {
+		return
+	}
+
+	allowedLoopbackHosts := []string{"localhost", "127.0.0.1"}
+	assert.Contains(t, allowedLoopbackHosts, expectedHost)
+	assert.Contains(t, allowedLoopbackHosts, actualHost)
 }
 
 func assertServiceNeverHealthy(t *testing.T, endpoint string, observationWindow time.Duration) {
@@ -610,7 +670,7 @@ func TestPutSubmodelByIdAasRepositoryReturnsCreatedSubmodelAnd201(t *testing.T) 
 	assert.Equal(t, submodelID, payload["id"], "Expected response body to contain created submodel id")
 	assert.Equal(t, "PutCreateSubmodel", payload["idShort"], "Expected response body to contain created submodel idShort")
 	assert.Equal(t, "Submodel", payload["modelType"], "Expected response body to contain created submodel modelType")
-	assert.Equal(t, endpoint, headers.Get("Location"), "Expected Location header to point to created submodel resource")
+	assertLocationHeaderMatches(t, endpoint, headers.Get("Location"))
 }
 
 func TestPutSubmodelByIdAasRepositoryReturnsNoContentOnUpdate(t *testing.T) {
@@ -657,6 +717,69 @@ func TestPutSubmodelByIdAasRepositoryReturnsNoContentOnUpdate(t *testing.T) {
 	firstElement, ok := submodelElements[0].(map[string]any)
 	require.True(t, ok, "Expected first submodel element as object")
 	assert.Equal(t, "after", firstElement["value"], "Expected updated property value to be persisted")
+}
+
+func TestLocationHeadersForSubmodelElementCreateEndpointsAasRepository(t *testing.T) {
+	baseURL := "http://localhost:6004"
+	aasID := fmt.Sprintf("https://example.com/ids/aas/location-headers-submodel-elements-%d", time.Now().UnixNano())
+	aasIdentifier := base64.RawURLEncoding.EncodeToString([]byte(aasID))
+
+	statusCode, err := createAASForThumbnailTest(baseURL, aasID)
+	require.NoError(t, err, "AAS creation failed")
+	require.Equal(t, http.StatusCreated, statusCode, "Expected 201 Created for AAS creation")
+
+	submodelID := fmt.Sprintf("https://example.com/ids/sm/location-headers-submodel-elements-%d", time.Now().UnixNano())
+	submodelIdentifier := base64.RawURLEncoding.EncodeToString([]byte(submodelID))
+	submodelEndpoint := fmt.Sprintf("%s/shells/%s/submodels/%s", baseURL, aasIdentifier, submodelIdentifier)
+
+	submodelBody := fmt.Sprintf(
+		`{"id":"%s","idShort":"LocationHeadersSM","modelType":"Submodel","kind":"Instance","submodelElements":[{"idShort":"MainCollection","modelType":"SubmodelElementCollection","value":[]}]}`,
+		submodelID,
+	)
+
+	_, putSubmodelStatusCode, _, putSubmodelErr := putJSONResponse(submodelEndpoint, submodelBody)
+	require.NoError(t, putSubmodelErr, "PUT submodel request failed")
+	require.Equal(t, http.StatusCreated, putSubmodelStatusCode, "Expected 201 Created when creating submodel")
+
+	t.Run("PostSubmodelElementAasRepositorySetsLocation", func(t *testing.T) {
+		endpoint := submodelEndpoint + "/submodel-elements"
+		body := `{"idShort":"PostCreated","modelType":"Property","valueType":"xs:string","value":"post-value"}`
+
+		payload, postStatusCode, headers, postErr := postJSONResponse(endpoint, body)
+		require.NoError(t, postErr, "POST submodel element request failed")
+		require.Equal(t, http.StatusCreated, postStatusCode, "Expected 201 Created when creating submodel element")
+		require.NotNil(t, payload, "Expected response body for created submodel element")
+		assert.Equal(t, "PostCreated", payload["idShort"], "Expected response body to contain created submodel element idShort")
+		assertLocationHeaderMatches(t, endpoint+"/PostCreated", headers.Get("Location"))
+	})
+
+	t.Run("PutSubmodelElementByPathAasRepositorySetsLocationOnlyOnCreate", func(t *testing.T) {
+		endpoint := submodelEndpoint + "/submodel-elements/PutCreated"
+		initialBody := `{"idShort":"PutCreated","modelType":"Property","valueType":"xs:string","value":"before"}`
+
+		_, createStatusCode, createHeaders, createErr := putJSONResponse(endpoint, initialBody)
+		require.NoError(t, createErr, "Initial PUT submodel element request failed")
+		require.Equal(t, http.StatusCreated, createStatusCode, "Expected 201 Created when creating submodel element by path")
+		assertLocationHeaderMatches(t, endpoint, createHeaders.Get("Location"))
+
+		updatedBody := `{"idShort":"PutCreated","modelType":"Property","valueType":"xs:string","value":"after"}`
+		_, updateStatusCode, updateHeaders, updateErr := putJSONResponse(endpoint, updatedBody)
+		require.NoError(t, updateErr, "Update PUT submodel element request failed")
+		require.Equal(t, http.StatusNoContent, updateStatusCode, "Expected 204 No Content when updating existing submodel element")
+		assert.Empty(t, updateHeaders.Get("Location"), "Expected no Location header for update PUT")
+	})
+
+	t.Run("PostSubmodelElementByPathAasRepositorySetsChildLocation", func(t *testing.T) {
+		endpoint := submodelEndpoint + "/submodel-elements/MainCollection"
+		body := `{"idShort":"ChildCreated","modelType":"Property","valueType":"xs:string","value":"child"}`
+
+		payload, postStatusCode, headers, postErr := postJSONResponse(endpoint, body)
+		require.NoError(t, postErr, "POST submodel element by path request failed")
+		require.Equal(t, http.StatusCreated, postStatusCode, "Expected 201 Created when creating child submodel element")
+		require.NotNil(t, payload, "Expected response body for created child submodel element")
+		assert.Equal(t, "ChildCreated", payload["idShort"], "Expected response body to contain created child idShort")
+		assertLocationHeaderMatches(t, endpoint+".ChildCreated", headers.Get("Location"))
+	})
 }
 
 func TestGetSubmodelByIdAasRepositoryReturnsSubmodel(t *testing.T) {

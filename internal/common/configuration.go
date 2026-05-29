@@ -72,6 +72,8 @@ var DefaultConfig = struct {
 	GeneralDiscoveryIntegration         bool
 	GeneralSupportsSingularSSID         bool
 	GeneralEnableCustomHeaderMW         bool
+	GeneralTrustProxyHeaders            bool
+	GeneralTrustedProxyCIDRs            []string
 	GeneralAASPreconfigPaths            []string
 }{
 	ServerPort:                          5004,
@@ -97,6 +99,8 @@ var DefaultConfig = struct {
 	GeneralDiscoveryIntegration:         false,
 	GeneralSupportsSingularSSID:         false,
 	GeneralEnableCustomHeaderMW:         false,
+	GeneralTrustProxyHeaders:            false,
+	GeneralTrustedProxyCIDRs:            []string{},
 	GeneralAASPreconfigPaths:            []string{},
 }
 
@@ -105,44 +109,44 @@ var DefaultConfig = struct {
 // visual branding and confirm the service is starting.
 func PrintSplash() {
 	log.Printf(`
-	                                                                                
-                                   ###########                                  
-                               ###################                              
-                           (##########################                          
-                        ##################################                      
-                    #########################################.                  
-                #################################################               
-            (########################################################           
-          #############################################################         
-          #############################################################         
-            #########################################################           
-                #################################################               
-                    ##########################################                  
-                  /((/((##################################/((/(                 
-              /(//((/(((((/###########################(((((((((((((             
-           (//((/((/(((((/((/((###################/((/(((((((/(((/((((          
-          ///((/(((((/((/((//(/((((###########(((((((((((((((((((((((((         
-           /((/((/((/((/((/((/(((((((((((((((((((((/((((((((/((((((/((          
-              ((/(((((//(/(((((((((((((((((((((((((((((((((((((((((             
-                  /((//((((((((((((((((((((((((((((((((((((((((.                
-                    (((((((((((((((((((((((((((((((((((((((((                   
-                (((((((((((((((((((((((((((((((((((((((((((((((((               
-            /((((((((((((((((((((((((((((((((((((((((((((((((((((((((           
-          /((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((         
-          (((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((         
-            (((((((((((((((((((((((((((((((((((((((((((((((((((((((((           
-                (((((((((((((((((((((((((((((((((((((((((((((((((.              
-                    ((((((((((((((((((((((((((((((((((((((((((                  
-                       (((((((((((((((((((((((((((((((((((                      
-                           (((((((((((((((((((((((((((                          
-                               (((((((((((((((((((                              
-                                   (((((((((((                                  
-		██████╗  █████╗ ███████╗██╗   ██╗██╗  ██╗     ██████╗  ██████╗ 
+
+                                   ###########
+                               ###################
+                           (##########################
+                        ##################################
+                    #########################################.
+                #################################################
+            (########################################################
+          #############################################################
+          #############################################################
+            #########################################################
+                #################################################
+                    ##########################################
+                  /((/((##################################/((/(
+              /(//((/(((((/###########################(((((((((((((
+           (//((/((/(((((/((/((###################/((/(((((((/(((/((((
+          ///((/(((((/((/((//(/((((###########(((((((((((((((((((((((((
+           /((/((/((/((/((/((/(((((((((((((((((((((/((((((((/((((((/((
+              ((/(((((//(/(((((((((((((((((((((((((((((((((((((((((
+                  /((//((((((((((((((((((((((((((((((((((((((((.
+                    (((((((((((((((((((((((((((((((((((((((((
+                (((((((((((((((((((((((((((((((((((((((((((((((((
+            /((((((((((((((((((((((((((((((((((((((((((((((((((((((((
+          /((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((
+          (((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((
+            (((((((((((((((((((((((((((((((((((((((((((((((((((((((((
+                (((((((((((((((((((((((((((((((((((((((((((((((((.
+                    ((((((((((((((((((((((((((((((((((((((((((
+                       (((((((((((((((((((((((((((((((((((
+                           (((((((((((((((((((((((((((
+                               (((((((((((((((((((
+                                   (((((((((((
+		██████╗  █████╗ ███████╗██╗   ██╗██╗  ██╗     ██████╗  ██████╗
 		██╔══██╗██╔══██╗██╔════╝╚██╗ ██╔╝╚██╗██╔╝    ██╔════╝ ██╔═══██╗
 		██████╔╝███████║███████╗ ╚████╔╝  ╚███╔╝     ██║  ███╗██║   ██║
 		██╔══██╗██╔══██║╚════██║  ╚██╔╝   ██╔██╗     ██║   ██║██║   ██║
 		██████╔╝██║  ██║███████║   ██║   ██╔╝ ██╗    ╚██████╔╝╚██████╔╝
-		╚═════╝ ╚═╝  ╚═╝╚══════╝   ╚═╝   ╚═╝  ╚═╝     ╚═════╝  ╚═════╝                                      
+		╚═════╝ ╚═╝  ╚═╝╚══════╝   ╚═╝   ╚═╝  ╚═╝     ╚═════╝  ╚═════╝
 	`)
 }
 
@@ -233,6 +237,8 @@ type GeneralConfig struct {
 	AASRegistryIntegration                 bool     `mapstructure:"aasRegistryIntegration" yaml:"aasRegistryIntegration" json:"aasRegistryIntegration"`                                                 // Enable AAS repository -> registry descriptor synchronization
 	SubmodelRegistryIntegration            bool     `mapstructure:"submodelRegistryIntegration" yaml:"submodelRegistryIntegration" json:"submodelRegistryIntegration"`                                  // Enable Submodel repository -> registry descriptor synchronization
 	ExternalURL                            string   `mapstructure:"externalUrl" yaml:"externalUrl" json:"externalUrl"`                                                                                  // Public base URL(s) used for registry synchronization endpoint generation
+	TrustProxyHeaders                      bool     `mapstructure:"trustProxyHeaders" yaml:"trustProxyHeaders" json:"trustProxyHeaders"`                                                                // Trust Forwarded/X-Forwarded-* headers when request source matches trustedProxyCIDRs
+	TrustedProxyCIDRs                      []string `mapstructure:"trustedProxyCIDRs" yaml:"trustedProxyCIDRs" json:"trustedProxyCIDRs"`                                                                // CIDR allowlist for proxy source addresses eligible to provide forwarded headers
 	UploadMaxSizeBytes                     int64    `mapstructure:"uploadMaxSizeBytes" yaml:"uploadMaxSizeBytes" json:"uploadMaxSizeBytes"`                                                             // Maximum allowed upload payload size in bytes
 	AASPreconfigPaths                      []string `mapstructure:"aasPreconfigPaths" yaml:"aasPreconfigPaths" json:"aasPreconfigPaths"`                                                                // Files/directories loaded at startup for AAS preconfiguration
 }
@@ -510,6 +516,8 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("general.aasRegistryIntegration", false)
 	v.SetDefault("general.submodelRegistryIntegration", false)
 	v.SetDefault("general.externalUrl", "")
+	v.SetDefault("general.trustProxyHeaders", DefaultConfig.GeneralTrustProxyHeaders)
+	v.SetDefault("general.trustedProxyCIDRs", DefaultConfig.GeneralTrustedProxyCIDRs)
 	v.SetDefault("general.uploadMaxSizeBytes", int64(128<<20))
 	v.SetDefault("general.aasPreconfigPaths", []string{})
 
