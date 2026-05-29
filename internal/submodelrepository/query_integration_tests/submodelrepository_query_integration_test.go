@@ -28,7 +28,6 @@
 package main
 
 import (
-	"net/http"
 	"os"
 	"testing"
 	"time"
@@ -39,8 +38,7 @@ import (
 
 func TestIntegrationQuerySuite(t *testing.T) {
 	testenv.RunJSONSuite(t, testenv.JSONSuiteOptions{
-		ConfigPath:            "it_config_query.json",
-		ShouldCompareResponse: testenv.CompareMethods(http.MethodGet),
+		ConfigPath: "it_config_query.json",
 		ShouldSkipStep: func(step testenv.JSONSuiteStep) bool {
 			return false
 		},
@@ -49,9 +47,10 @@ func TestIntegrationQuerySuite(t *testing.T) {
 
 func TestMain(m *testing.M) {
 	os.Exit(testenv.RunComposeTestMain(m, testenv.ComposeTestMainOptions{
-		ComposeFile:     "docker_compose/docker_compose.yml",
-		PreDownBeforeUp: true,
-		HealthURL:       "http://localhost:6004/health",
-		HealthTimeout:   150 * time.Second,
+		ComposeFile:        "docker_compose/docker_compose.yml",
+		PreDownBeforeUp:    true,
+		SkipDownAfterTests: true,
+		HealthURL:          "http://localhost:6004/health",
+		HealthTimeout:      150 * time.Second,
 	}))
 }

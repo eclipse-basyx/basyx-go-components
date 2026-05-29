@@ -1,0 +1,45 @@
+{
+    "paging_metadata": {},
+    "result": [
+        {
+            "id": "YERPENDERPENDERP",
+            "idShort": "Identification",
+            "kind": "Instance",
+            "modelType": "Submodel",
+            "semanticId": {
+                "keys": [
+                    {
+                        "type": "Submodel",
+                        "value": "http://acplt.org/SubmodelTemplates/AssetIdentification"
+                    },
+                    {
+                        "type": "Submodel",
+                        "value": "http://acplt.org/SubmodelTemplates/AssetIdentification"
+                    }
+                ],
+                "type": "ExternalReference"
+            },
+            "submodelElements": []
+        },
+        {
+            "id": "YERPENDERPENDERP2",
+            "idShort": "Identification",
+            "kind": "Instance",
+            "modelType": "Submodel",
+            "semanticId": {
+                "keys": [
+                    {
+                        "type": "Submodel",
+                        "value": "http://acplt.org/SubmodelTemplates/AssetIdentification"
+                    },
+                    {
+                        "type": "Submodel",
+                        "value": "http://acplt.org/SubmodelTemplates/AssetIdentification"
+                    }
+                ],
+                "type": "ExternalReference"
+            },
+            "submodelElements": []
+        }
+    ]
+}

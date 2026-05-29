@@ -1,0 +1,9 @@
+{
+  "$condition": {"$eq": [{ "$field": "$sme.NewTestList[0]#value"}, {"$strVal": "listValue1"} ] },
+  "$filters": [
+      {
+          "$fragment": "$sme",
+          "$condition": {"$eq": [{ "$field": "$sme.NewTestList[0]#value"}, {"$strVal": "listValue1_333"} ] }
+      }
+  ]
+}

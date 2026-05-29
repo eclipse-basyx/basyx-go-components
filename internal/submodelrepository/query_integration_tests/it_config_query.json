@@ -475,6 +475,28 @@
     "data": "bodies/query_tests/058.json",
     "shouldMatch": "expected/sophisticatedQueryTests/res58.json",
     "expectedStatus": 200
+  },
+  {
+    "context": "Create Submodel 2",
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:6004/submodels",
+    "data": "bodies/post/sub2.json",
+    "expectedStatus": 201
+  },
+  {
+    "context": "Query 101",
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:6004/query/submodels",
+    "data": "bodies/query_tests/101.json",
+    "shouldMatch": "expected/sophisticatedQueryTests/empty_sme_response_2.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "Query 102",
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:6004/query/submodels",
+    "data": "bodies/query_tests/102.json",
+    "shouldMatch": "expected/sophisticatedQueryTests/res102.json",
+    "expectedStatus": 200
   }
-
 ]
