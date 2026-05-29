@@ -37,7 +37,7 @@ info:
   license:
     name: CC BY 4.0
     url: https://creativecommons.org/licenses/by/4.0/
-  version: V3.2.0_SSP-001
+  version: V3.2.0_SSP
   x-profile-identifiers:
     - https://admin-shell.io/aas/API/3/2/AssetAdministrationShellRegistryServiceSpecification/SSP-001
     - https://admin-shell.io/aas/API/3/2/AssetAdministrationShellRegistryServiceSpecification/SSP-003
