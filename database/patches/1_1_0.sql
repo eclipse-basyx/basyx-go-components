@@ -129,6 +129,12 @@ CREATE INDEX IF NOT EXISTS ix_descriptor_payload_admin_updated_at ON descriptor_
 CREATE INDEX IF NOT EXISTS ix_cd_admin_created_at ON concept_description(administration_created_at);
 CREATE INDEX IF NOT EXISTS ix_cd_admin_updated_at ON concept_description(administration_updated_at);
 
+-- V3.2 inserts "Batch" at enum index 2 for asset kind. Existing persisted numeric enum values
+-- from V3.1.1 with index >= 2 must be shifted by +1 to preserve semantic value.
+UPDATE asset_information
+SET asset_kind = asset_kind + 1
+WHERE asset_kind >= 2;
+
 -- Mark the schema as upgraded only after all schema objects completed
 -- successfully.
 UPDATE basyxsystem
