@@ -2,7 +2,7 @@ openapi: 3.0.3
 info:
   description: The File Server Service Specification as part of the AAS Part 2 specification.
   title: DotAAS Part 2 | HTTP/REST | AASX File Server Service Specification
-  version: V3.2.0_SSP
+  version: V3.2.0
 servers:
 - url: https://admin-shell.io/api/v3
 - url: https://example.com/
