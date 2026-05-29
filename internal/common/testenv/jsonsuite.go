@@ -225,9 +225,22 @@ func NewCheckDBIsEmptyAction(options CheckDBIsEmptyOptions) JSONStepAction {
 		schema = "public"
 	}
 
-	excluded := make(map[string]struct{}, len(options.ExcludedTables)+5)
+	excluded := defaultCheckDBIsEmptyExcludedTables(options.ExcludedTables)
+
+	return func(t *testing.T, _ *JSONSuiteRunner, _ JSONSuiteStep, _ int) {
+		require.NotEmpty(t, strings.TrimSpace(options.DSN), "TESTENV-CHECKDB-MISSING-DSN")
+
+		nonEmpty, err := listNonEmptyTables(driver, options.DSN, schema, excluded)
+		require.NoError(t, err)
+		require.Emptyf(t, nonEmpty, "Expected all domain tables empty, but found rows in: %v", nonEmpty)
+	}
+}
+
+func defaultCheckDBIsEmptyExcludedTables(extraTables []string) map[string]struct{} {
+	excluded := make(map[string]struct{}, len(extraTables)+6)
 	for _, table := range []string{
 		"basyxsystem",
+		"history_guard_config",
 		"aas_history",
 		"submodel_history",
 		"concept_description_history",
@@ -235,21 +248,14 @@ func NewCheckDBIsEmptyAction(options CheckDBIsEmptyOptions) JSONStepAction {
 	} {
 		excluded[table] = struct{}{}
 	}
-	for _, table := range options.ExcludedTables {
+	for _, table := range extraTables {
 		trimmed := strings.TrimSpace(table)
 		if trimmed == "" {
 			continue
 		}
 		excluded[strings.ToLower(trimmed)] = struct{}{}
 	}
-
-	return func(t *testing.T, _ *JSONSuiteRunner, _ JSONSuiteStep, _ int) {
-		require.NotEmpty(t, strings.TrimSpace(options.DSN), "TESTENV-CHECKDB-MISSING-DSN")
-
-		nonEmpty, err := listNonEmptyTables(driver, options.DSN, schema, excluded)
-		require.NoError(t, err)
-		require.Emptyf(t, nonEmpty, "Expected all tables empty, but found rows in: %v", nonEmpty)
-	}
+	return excluded
 }
 
 func NewCheckSubmodelAbsentAction(options CheckSubmodelAbsentOptions) JSONStepAction {
