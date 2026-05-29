@@ -10,6 +10,7 @@ on:
       - 'go.mod'
       - 'go.sum'
       - '.github/workflows/examples-smoke.yml'
+      - '**.sql'
   push:
     branches: [main]
     paths:
@@ -20,6 +21,7 @@ on:
       - 'go.mod'
       - 'go.sum'
       - '.github/workflows/examples-smoke.yml'
+      - '**.sql'
   workflow_dispatch:
 
 permissions:

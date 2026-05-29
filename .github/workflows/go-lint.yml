@@ -8,6 +8,7 @@ on:
       - 'go.sum'
       - '.golangci.yml'
       - '.github/workflows/go-lint.yml'
+      - '**.sql'
   push:
     branches: [main]
     paths:
@@ -16,6 +17,7 @@ on:
       - 'go.sum'
       - '.golangci.yml'
       - '.github/workflows/go-lint.yml'
+      - '**.sql'
 
 permissions:
   contents: read

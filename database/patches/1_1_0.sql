@@ -18,22 +18,26 @@
 
 -- V3.2 adds AdministrativeInformation/createdAt and /updatedAt.
 -- The existing schema keeps AdministrativeInformation as JSONB payloads, so
--- nullable scalar columns are added beside those payloads for efficient
+-- nullable scalar columns are added to the owning parent tables for efficient
 -- filtering and version-date lookups while preserving the original JSON.
 -- SubmodelElement is not Identifiable and has no AdministrativeInformation;
 -- remove the obsolete payload column from older schema versions.
 ALTER TABLE IF EXISTS submodel_element_payload
   DROP COLUMN IF EXISTS administrative_information_payload;
 
-ALTER TABLE IF EXISTS aas_payload
+ALTER TABLE IF EXISTS aas
   ADD COLUMN IF NOT EXISTS administration_created_at TIMESTAMPTZ,
   ADD COLUMN IF NOT EXISTS administration_updated_at TIMESTAMPTZ;
 
-ALTER TABLE IF EXISTS submodel_payload
+ALTER TABLE IF EXISTS submodel
   ADD COLUMN IF NOT EXISTS administration_created_at TIMESTAMPTZ,
   ADD COLUMN IF NOT EXISTS administration_updated_at TIMESTAMPTZ;
 
-ALTER TABLE IF EXISTS descriptor_payload
+ALTER TABLE IF EXISTS aas_descriptor
+  ADD COLUMN IF NOT EXISTS administration_created_at TIMESTAMPTZ,
+  ADD COLUMN IF NOT EXISTS administration_updated_at TIMESTAMPTZ;
+
+ALTER TABLE IF EXISTS submodel_descriptor
   ADD COLUMN IF NOT EXISTS administration_created_at TIMESTAMPTZ,
   ADD COLUMN IF NOT EXISTS administration_updated_at TIMESTAMPTZ;
 
@@ -65,13 +69,42 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- Common trigger function for tables whose administrative information is stored
--- directly in administrative_information_payload.
-CREATE OR REPLACE FUNCTION sync_administrative_information_timestamps()
+-- Keep parent-table scalar columns synced from payload JSON.
+CREATE OR REPLACE FUNCTION sync_aas_administration_timestamps()
 RETURNS TRIGGER AS $$
 BEGIN
-  NEW.administration_created_at = basyx_jsonb_timestamptz(NEW.administrative_information_payload, 'createdAt');
-  NEW.administration_updated_at = basyx_jsonb_timestamptz(NEW.administrative_information_payload, 'updatedAt');
+  UPDATE aas
+  SET administration_created_at = basyx_jsonb_timestamptz(NEW.administrative_information_payload, 'createdAt'),
+      administration_updated_at = basyx_jsonb_timestamptz(NEW.administrative_information_payload, 'updatedAt')
+  WHERE id = NEW.aas_id;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE FUNCTION sync_submodel_administration_timestamps()
+RETURNS TRIGGER AS $$
+BEGIN
+  UPDATE submodel
+  SET administration_created_at = basyx_jsonb_timestamptz(NEW.administrative_information_payload, 'createdAt'),
+      administration_updated_at = basyx_jsonb_timestamptz(NEW.administrative_information_payload, 'updatedAt')
+  WHERE id = NEW.submodel_id;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE FUNCTION sync_descriptor_administration_timestamps()
+RETURNS TRIGGER AS $$
+BEGIN
+  UPDATE aas_descriptor
+  SET administration_created_at = basyx_jsonb_timestamptz(NEW.administrative_information_payload, 'createdAt'),
+      administration_updated_at = basyx_jsonb_timestamptz(NEW.administrative_information_payload, 'updatedAt')
+  WHERE descriptor_id = NEW.descriptor_id;
+
+  UPDATE submodel_descriptor
+  SET administration_created_at = basyx_jsonb_timestamptz(NEW.administrative_information_payload, 'createdAt'),
+      administration_updated_at = basyx_jsonb_timestamptz(NEW.administrative_information_payload, 'updatedAt')
+  WHERE descriptor_id = NEW.descriptor_id;
+
   RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
@@ -92,24 +125,24 @@ $$ LANGUAGE plpgsql;
 -- replacement on repeated deployments.
 DROP TRIGGER IF EXISTS aas_payload_sync_administration_timestamps ON aas_payload;
 CREATE TRIGGER aas_payload_sync_administration_timestamps
-  BEFORE INSERT OR UPDATE OF administrative_information_payload
+  AFTER INSERT OR UPDATE OF administrative_information_payload
   ON aas_payload
   FOR EACH ROW
-  EXECUTE FUNCTION sync_administrative_information_timestamps();
+  EXECUTE FUNCTION sync_aas_administration_timestamps();
 
 DROP TRIGGER IF EXISTS submodel_payload_sync_administration_timestamps ON submodel_payload;
 CREATE TRIGGER submodel_payload_sync_administration_timestamps
-  BEFORE INSERT OR UPDATE OF administrative_information_payload
+  AFTER INSERT OR UPDATE OF administrative_information_payload
   ON submodel_payload
   FOR EACH ROW
-  EXECUTE FUNCTION sync_administrative_information_timestamps();
+  EXECUTE FUNCTION sync_submodel_administration_timestamps();
 
 DROP TRIGGER IF EXISTS descriptor_payload_sync_administration_timestamps ON descriptor_payload;
 CREATE TRIGGER descriptor_payload_sync_administration_timestamps
-  BEFORE INSERT OR UPDATE OF administrative_information_payload
+  AFTER INSERT OR UPDATE OF administrative_information_payload
   ON descriptor_payload
   FOR EACH ROW
-  EXECUTE FUNCTION sync_administrative_information_timestamps();
+  EXECUTE FUNCTION sync_descriptor_administration_timestamps();
 
 DROP TRIGGER IF EXISTS concept_description_sync_administration_timestamps ON concept_description;
 CREATE TRIGGER concept_description_sync_administration_timestamps
@@ -120,12 +153,14 @@ CREATE TRIGGER concept_description_sync_administration_timestamps
 
 -- Index the extracted timestamps for V3.2 recent-change and version-date
 -- access patterns without querying deep JSONB expressions.
-CREATE INDEX IF NOT EXISTS ix_aas_payload_admin_created_at ON aas_payload(administration_created_at);
-CREATE INDEX IF NOT EXISTS ix_aas_payload_admin_updated_at ON aas_payload(administration_updated_at);
-CREATE INDEX IF NOT EXISTS ix_submodel_payload_admin_created_at ON submodel_payload(administration_created_at);
-CREATE INDEX IF NOT EXISTS ix_submodel_payload_admin_updated_at ON submodel_payload(administration_updated_at);
-CREATE INDEX IF NOT EXISTS ix_descriptor_payload_admin_created_at ON descriptor_payload(administration_created_at);
-CREATE INDEX IF NOT EXISTS ix_descriptor_payload_admin_updated_at ON descriptor_payload(administration_updated_at);
+CREATE INDEX IF NOT EXISTS ix_aas_admin_created_at ON aas(administration_created_at);
+CREATE INDEX IF NOT EXISTS ix_aas_admin_updated_at ON aas(administration_updated_at);
+CREATE INDEX IF NOT EXISTS ix_submodel_admin_created_at ON submodel(administration_created_at);
+CREATE INDEX IF NOT EXISTS ix_submodel_admin_updated_at ON submodel(administration_updated_at);
+CREATE INDEX IF NOT EXISTS ix_aas_descriptor_admin_created_at ON aas_descriptor(administration_created_at);
+CREATE INDEX IF NOT EXISTS ix_aas_descriptor_admin_updated_at ON aas_descriptor(administration_updated_at);
+CREATE INDEX IF NOT EXISTS ix_submodel_descriptor_admin_created_at ON submodel_descriptor(administration_created_at);
+CREATE INDEX IF NOT EXISTS ix_submodel_descriptor_admin_updated_at ON submodel_descriptor(administration_updated_at);
 CREATE INDEX IF NOT EXISTS ix_cd_admin_created_at ON concept_description(administration_created_at);
 CREATE INDEX IF NOT EXISTS ix_cd_admin_updated_at ON concept_description(administration_updated_at);
 
