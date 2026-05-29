@@ -44,7 +44,7 @@ const (
 	uploadComponent             = "AASENV"
 	uploadOperation             = "HandleUpload"
 	supportedUploadContentTypes = "application/aasx+xml, application/aasx+json, application/asset-administration-shell+xml, application/asset-administration-shell+json, application/json, application/xml, text/xml"
-	currentAASNamespace         = "https://admin-shell.io/aas/3/1"
+	currentAASNamespace         = "https://admin-shell.io/aas/3/2"
 	aasNamespacePrefix          = "https://admin-shell.io/aas/"
 )
 
