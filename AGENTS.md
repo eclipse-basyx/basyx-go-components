@@ -34,6 +34,7 @@
 - Ensure that any changes to the database schema are reflected in the basyxschema.sql file.
 - When modifying code, consider the impact on related modules and ensure that changes are consistent across the codebase.
 - Always run integration tests after making changes to ensure that the modifications do not break existing functionality. Important: Clean Testcache before running tests to avoid false positives/negatives.
+- When adding queryable columns to the schema, you must never add them to a *_payload table.
 
 ## Post-Task Steps:
 - Run linter and formatter on the modified files to ensure code quality and consistency.
@@ -41,7 +42,7 @@
 - Do a Self-Code Review to ensure that the changes meet the task requirements and adhere to coding standards. (CC, DRY)
 
 ## Run Integration Tests
-- go test -v ./internal/submodelrepository/integration_tests 
+- go test -v ./internal/submodelrepository/integration_tests
 - NEVER USE ADDITIONAL FLAGS (e.g. -run) UNLESS SPECIFICALLY REQUESTED IN THE TASK. ALL TESTS MUST BE RUN TO ENSURE CODE QUALITY AND INTEGRITY.
 
 ## Security relveant Notes:
