@@ -20,7 +20,7 @@ The important settings are:
 docker compose up -d
 ```
 
-The configuration service initializes the `v1.1.0` schema first. The AAS Environment Service then enables the history guard switch at startup.
+The configuration service initializes the `v1.1.1` schema first. The AAS Environment Service then enables the history guard switch at startup.
 
 ## What Guarded Mode Does
 
