@@ -180,8 +180,12 @@ func (s *uploadAPIService) handleXMLUpload(ctx context.Context, fileName string,
 		_ = fileReader.Close()
 	}()
 
-	decoder := xml.NewDecoder(fileReader)
-	instance, err := aasxmlization.Unmarshal(decoder)
+	specContent, err := io.ReadAll(fileReader)
+	if err != nil {
+		return newUploadErrorResponse(http.StatusInternalServerError, "AASENV-HANDLEUPLOAD-READXMLFILE", err)
+	}
+
+	instance, err := parseAASXMLInstance(specContent, fileName)
 	if err != nil {
 		return newUploadErrorResponse(http.StatusBadRequest, "AASENV-HANDLEUPLOAD-PARSEXML", err)
 	}
