@@ -99,3 +99,19 @@ func TestReadEnvironmentFromAASXSpec_AdaptsLegacyNamespace(t *testing.T) {
 		t.Fatal("expected parsed environment to contain at least one AAS")
 	}
 }
+
+func TestParseAASXMLInstance_AdaptsLegacyNamespace(t *testing.T) {
+	xmlPath := filepath.Join("integration_tests", "testdata", "environment_minimal.xml")
+	specContent, err := os.ReadFile(xmlPath) // #nosec G304 -- test fixture path is static and controlled by repository sources.
+	if err != nil {
+		t.Fatalf("failed to read XML fixture: %v", err)
+	}
+
+	instance, parseErr := parseAASXMLInstance(specContent, filepath.Base(xmlPath))
+	if parseErr != nil {
+		t.Fatalf("expected legacy XML namespace to be adapted successfully, got error: %v", parseErr)
+	}
+	if instance == nil {
+		t.Fatal("expected parsed XML instance, got nil")
+	}
+}

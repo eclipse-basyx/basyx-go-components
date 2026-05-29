@@ -32,8 +32,8 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/aas-core-works/aas-core3.1-golang/jsonization"
-	"github.com/aas-core-works/aas-core3.1-golang/types"
+	"github.com/FriedJannik/aas-go-sdk/jsonization"
+	"github.com/FriedJannik/aas-go-sdk/types"
 	aasrepositoryapi "github.com/eclipse-basyx/basyx-go-components/internal/aasrepository/api"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	commonmodel "github.com/eclipse-basyx/basyx-go-components/internal/common/model"

@@ -5,7 +5,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/aas-core-works/aas-core3.1-golang/types"
+	"github.com/FriedJannik/aas-go-sdk/types"
 )
 
 func assertReferenceKeysNotEmpty(reference types.IReference, path string) error {

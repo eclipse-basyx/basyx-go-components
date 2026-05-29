@@ -5,8 +5,8 @@ import (
 	"database/sql"
 	"testing"
 
-	"github.com/aas-core-works/aas-core3.1-golang/jsonization"
-	"github.com/aas-core-works/aas-core3.1-golang/types"
+	"github.com/FriedJannik/aas-go-sdk/jsonization"
+	"github.com/FriedJannik/aas-go-sdk/types"
 	aasregistrydb "github.com/eclipse-basyx/basyx-go-components/internal/aasregistry/persistence"
 	aasrepositorydb "github.com/eclipse-basyx/basyx-go-components/internal/aasrepository/persistence"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"

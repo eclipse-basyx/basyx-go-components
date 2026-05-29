@@ -22,6 +22,7 @@ const (
 	ASSETKIND_INSTANCE       AssetKind = "Instance"
 	ASSETKIND_NOT_APPLICABLE AssetKind = "NotApplicable"
 	ASSETKIND_TYPE           AssetKind = "Type"
+	ASSETKIND_BATCH          AssetKind = "Batch"
 	ASSETKIND_ROLE           AssetKind = "Role"
 )
 
@@ -30,6 +31,7 @@ var AllowedAssetKindEnumValues = []AssetKind{
 	"Instance",
 	"NotApplicable",
 	"Type",
+	"Batch",
 	"Role",
 }
 
@@ -38,6 +40,7 @@ var validAssetKindEnumValues = map[AssetKind]struct{}{
 	"Instance":      {},
 	"NotApplicable": {},
 	"Type":          {},
+	"Batch":         {},
 	"Role":          {},
 }
 

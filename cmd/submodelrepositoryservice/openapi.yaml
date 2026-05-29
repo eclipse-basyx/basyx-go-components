@@ -2,13 +2,13 @@ openapi: 3.0.3
 info:
   title: DotAAS Part 2 | HTTP/REST | Submodel Repository Service Specification
   description: >-
-    The entire Submodel Repository Service Specification as part of the [Specification of the Asset Administration Shell: Part 2](https://industrialdigitaltwin.org/en/content-hub/aasspecifications).  
-    
+    The entire Submodel Repository Service Specification as part of the [Specification of the Asset Administration Shell: Part 2](https://industrialdigitaltwin.org/en/content-hub/aasspecifications).
+
     Copyright: Industrial Digital Twin Association (IDTA) 2025
   contact:
     name: Industrial Digital Twin Association (IDTA)
     email: info@idtwin.org
-  license: 
+  license:
     name: CC BY 4.0
     url: https://creativecommons.org/licenses/by/4.0/
   version: V3.1.1_SSP-001
@@ -319,7 +319,7 @@ paths:
             type: string
             default: core
             enum:
-              #- deep 
+              #- deep
               - core # only 'core' is allowed for PATCH
       requestBody:
         description: Submodel object
@@ -410,7 +410,7 @@ paths:
             type: string
             default: core
             enum:
-              #- deep 
+              #- deep
               - core # only 'core' is allowed for PATCH
       requestBody:
         description: The metadata attributes of the Submodel object
@@ -482,7 +482,7 @@ paths:
             type: string
             default: core
             enum:
-              #- deep 
+              #- deep
               - core # only 'core' is allowed for PATCH
       requestBody:
         description: Submodel object in its ValueOnly representation
@@ -648,7 +648,7 @@ paths:
           $ref: 'https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.1.1#/components/responses/default'
   /submodels/{submodelIdentifier}/submodel-elements/$metadata:
     parameters:
-      - $ref: 'https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.1.1#/components/parameters/SubmodelIdentifier' 
+      - $ref: 'https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.1.1#/components/parameters/SubmodelIdentifier'
     get:
       tags:
         - Submodel Repository API
@@ -879,7 +879,7 @@ paths:
             default: deep
             enum:
               - deep # only 'deep' is allowed for PUT
-              #- core 
+              #- core
       requestBody:
         description: Requested submodel element
         content:
@@ -929,7 +929,7 @@ paths:
             type: string
             default: core
             enum:
-              #- deep 
+              #- deep
               - core # only 'core' is allowed for PATCH
       requestBody:
         description: SubmodelElement object
@@ -1085,7 +1085,7 @@ paths:
             type: string
             default: core
             enum:
-              #- deep 
+              #- deep
               - core # only 'core' is allowed for PATCH
       requestBody:
         description: The SubmodelElement in its ValueOnly representation
@@ -1595,7 +1595,7 @@ paths:
           $ref: 'https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.1.1#/components/responses/default'
   /query/submodels:
     post:
-      tags: 
+      tags:
        - Submodel Repository API
       summary: Returns all Submodels that confirm to the input query
       operationId: QuerySubmodels

@@ -36,7 +36,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/aas-core-works/aas-core3.1-golang/stringification"
+	"github.com/FriedJannik/aas-go-sdk/stringification"
 )
 
 // AttributeResolver resolves an AttributeValue to a concrete scalar value.

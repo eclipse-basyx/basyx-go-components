@@ -38,8 +38,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/aas-core-works/aas-core3.1-golang/jsonization"
-	"github.com/aas-core-works/aas-core3.1-golang/types"
+	"github.com/FriedJannik/aas-go-sdk/jsonization"
+	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	persistenceutils "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/utils"
@@ -276,9 +276,6 @@ func (p *PostgreSQLSMECrudHandler) Update(submodelID string, idShortOrPath strin
 			return serErr
 		}
 		payloadUpdateRecord["displayname_payload"] = goqu.L("?::jsonb", displayNameJSONString)
-	}
-	if isPut {
-		payloadUpdateRecord["administrative_information_payload"] = goqu.L("?::jsonb", "[]")
 	}
 	if isPut || submodelElement.EmbeddedDataSpecifications() != nil {
 		edsJSONString, serErr := serializeIClassSliceToJSON(toIClassSlice(submodelElement.EmbeddedDataSpecifications()), "SMREPO-SME-UPDATE-EDSJSONIZATION")
