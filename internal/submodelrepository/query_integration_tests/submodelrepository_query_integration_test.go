@@ -29,7 +29,9 @@ package main
 
 import (
 	"net/http"
+	"os"
 	"testing"
+	"time"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/testenv"
 	_ "github.com/lib/pq" // PostgreSQL Treiber
@@ -43,4 +45,13 @@ func TestIntegrationQuerySuite(t *testing.T) {
 			return false
 		},
 	})
+}
+
+func TestMain(m *testing.M) {
+	os.Exit(testenv.RunComposeTestMain(m, testenv.ComposeTestMainOptions{
+		ComposeFile:     "docker_compose/docker_compose.yml",
+		PreDownBeforeUp: true,
+		HealthURL:       "http://localhost:6004/health",
+		HealthTimeout:   150 * time.Second,
+	}))
 }
