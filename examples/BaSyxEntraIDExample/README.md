@@ -49,6 +49,35 @@ The included access model intentionally grants full API access to a signed-in
 user with the `access_as_user` delegated scope. Add Entra ID app roles and adapt
 the access rules before using the example as a production authorization model.
 
+## App-Only Tokens
+
+Application permissions are emitted in Entra ID's `roles` claim rather than the
+delegated `scp` claim. When one issuer must accept both delegated and app-only
+tokens, remove mandatory `scopes` from the trustlist and express the alternatives
+in ABAC. For an app registration that emits exactly one role per token, add a
+scalar mapping:
+
+```json
+{
+  "issuer": "https://login.microsoftonline.com/<tenant-id>/v2.0",
+  "audience": "<basyx-api-client-id>",
+  "claimMappings": [
+    { "target": "role", "mode": "scalar", "sources": ["/roles"] }
+  ]
+}
+```
+
+The mapped claim is available as `basyx.role` after JWT verification and can be
+checked with the existing Part 4 `$eq` operator:
+
+```json
+{ "$eq": [{ "$attribute": { "CLAIM": "basyx.role" } }, { "$strVal": "admin" }] }
+```
+
+Scalar mappings reject arrays with more than one item. Multi-value app-role
+authorization needs a policy design that does not rely on substring matching;
+the current grammar has no exact list-membership operator.
+
 The access-token version is selected by the API app registration, independently
 of the authorization endpoint version. Without `"requestedAccessTokenVersion":
 2`, Entra ID may issue a v1 token with an `https://sts.windows.net/.../` issuer,

@@ -28,6 +28,8 @@ package auth
 import (
 	"encoding/base64"
 	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 )
 
@@ -81,6 +83,38 @@ func TestHasAllScopes_AcceptsEntraDelegatedPermissionClaim(t *testing.T) {
 	claims := Claims{"scp": "access_as_user profile"}
 	if !hasAllScopes(claims, []string{"access_as_user"}) {
 		t.Fatalf("expected Entra scp claim to satisfy required scope")
+	}
+}
+
+func TestValidateCompactSignedJWT_RejectsOpaqueAndEncryptedTokens(t *testing.T) {
+	t.Parallel()
+
+	for _, raw := range []string{
+		"opaque-token",
+		"one.two",
+		"one.two.three.four.five",
+		".payload.signature",
+	} {
+		if err := validateCompactSignedJWT(raw); err == nil {
+			t.Fatalf("validateCompactSignedJWT(%q) expected error", raw)
+		}
+	}
+}
+
+func TestOIDCMiddleware_RejectsUnknownIssuer(t *testing.T) {
+	t.Parallel()
+
+	middleware := (&OIDC{verifiers: map[string]issuerVerifier{}}).Middleware(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+		t.Fatalf("next handler must not be called")
+	}))
+	request := httptest.NewRequest(http.MethodGet, "/", nil)
+	request.Header.Set("Authorization", "Bearer "+unsignedTokenWithClaims(t, Claims{"iss": "https://unknown.example"}))
+	response := httptest.NewRecorder()
+
+	middleware.ServeHTTP(response, request)
+
+	if response.Code != http.StatusUnauthorized {
+		t.Fatalf("status = %d, want %d", response.Code, http.StatusUnauthorized)
 	}
 }
 

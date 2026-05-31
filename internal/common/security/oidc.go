@@ -27,7 +27,6 @@
 package auth
 
 import (
-	"bytes"
 	"context"
 	"encoding/base64"
 	"encoding/json"
@@ -38,7 +37,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/coreos/go-oidc"
+	"github.com/coreos/go-oidc/v3/oidc"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	openapi "github.com/eclipse-basyx/basyx-go-components/pkg/discoveryapi"
 )
@@ -50,9 +49,11 @@ type OIDC struct {
 }
 
 type issuerVerifier struct {
-	issuer   string
-	verifier *oidc.IDTokenVerifier
-	scopes   []string
+	issuer        string
+	verifier      *accessTokenVerifier
+	scopes        []string
+	scopeClaims   []string
+	claimMappings []claimMapping
 }
 
 // OIDCSettings configures OIDC token verification.
@@ -69,9 +70,19 @@ type OIDCSettings struct {
 // OIDCProviderSettings configures a single issuer and scopes, with optional
 // audience verification.
 type OIDCProviderSettings struct {
-	Issuer   string
-	Audience string
-	Scopes   []string
+	Issuer        string
+	Audience      string
+	Scopes        []string
+	DiscoveryURL  string
+	ScopeClaims   []string
+	ClaimMappings []OIDCClaimMappingSettings
+}
+
+// OIDCClaimMappingSettings maps provider claims into the reserved basyx.* namespace.
+type OIDCClaimMappingSettings struct {
+	Target  string
+	Mode    string
+	Sources []string
 }
 
 // NewOIDC initializes an OIDC verifier from the given settings.
@@ -83,30 +94,41 @@ func NewOIDC(ctx context.Context, s OIDCSettings) (*OIDC, error) {
 		issuer := strings.TrimSpace(p.Issuer)
 		audience := strings.TrimSpace(p.Audience)
 		if issuer == "" {
-			return nil, fmt.Errorf("issuer must not be empty")
+			return nil, fmt.Errorf("COMMON-OIDC-VALIDATEISSUER issuer must not be empty")
 		}
 		if _, ok := verifiers[issuer]; ok {
-			return nil, fmt.Errorf("duplicate issuer configured: %s", issuer)
+			return nil, fmt.Errorf("COMMON-OIDC-VALIDATEISSUER duplicate issuer configured: %s", issuer)
 		}
 
-		provider, err := oidc.NewProvider(ctx, issuer)
+		scopeClaims, err := normalizeScopeClaimPointers(p.ScopeClaims)
 		if err != nil {
-			return nil, fmt.Errorf("create OIDC provider: %w", err)
+			return nil, err
+		}
+		claimMappings, err := normalizeClaimMappings(p.ClaimMappings)
+		if err != nil {
+			return nil, err
+		}
+
+		provider, err := newOIDCProvider(ctx, issuer, p.DiscoveryURL)
+		if err != nil {
+			return nil, err
 		}
 
 		verifierCfg := oidcVerifierConfig(audience)
-		v := provider.Verifier(verifierCfg)
+		v := provider.VerifierContext(ctx, verifierCfg)
 		if v == nil {
-			return nil, fmt.Errorf("failed to construct OIDC verifier")
+			return nil, fmt.Errorf("COMMON-OIDC-CREATEVERIFIER failed to construct OIDC verifier")
 		}
 
 		verifiers[issuer] = issuerVerifier{
-			issuer:   issuer,
-			verifier: v,
-			scopes:   p.Scopes,
+			issuer:        issuer,
+			verifier:      &accessTokenVerifier{verifier: v},
+			scopes:        p.Scopes,
+			scopeClaims:   scopeClaims,
+			claimMappings: claimMappings,
 		}
 		if verifierCfg.SkipClientIDCheck {
-			log.Printf("✅ OIDC verifier created. Issuer=%s Audience=<skipped>", issuer)
+			log.Printf("⚠️ OIDC verifier created without audience validation. Issuer=%s", issuer)
 			continue
 		}
 		log.Printf("✅ OIDC verifier created. Issuer=%s Audience=%s", issuer, verifierCfg.ClientID)
@@ -191,40 +213,22 @@ func (o *OIDC) Middleware(next http.Handler) http.Handler {
 			return
 		}
 
-		idToken, err := verifier.verifier.Verify(r.Context(), raw)
+		c, err := verifier.verifier.Verify(r.Context(), raw)
 		if err != nil {
 			log.Printf("❌ Token verification failed: %v", err)
 			respondOIDCError(w)
 			return
 		}
 
-		var rm json.RawMessage
-		if err := idToken.Claims(&rm); err != nil {
-			log.Printf("❌ Failed to fetch raw claims: %v", err)
+		if err := normalizeVerifiedClaims(c, verifier.scopeClaims, verifier.claimMappings); err != nil {
+			log.Printf("❌ Failed to normalize token claims: %v", err)
 			respondOIDCError(w)
 			return
 		}
 
-		dec := json.NewDecoder(bytes.NewReader(rm))
-		dec.UseNumber()
-
-		var c Claims
-		if err := dec.Decode(&c); err != nil {
-			log.Printf("❌ Failed to decode claims: %v", err)
-			respondOIDCError(w)
-			return
-		}
-
-		if typ, _ := c.GetString("typ"); typ != "" && !strings.EqualFold(typ, "Bearer") {
-			log.Printf("❌ unexpected token typ")
-			respondOIDCError(w)
-			return
-		}
-
-		// Enforce minimal scopes (kept as-is; extend if needed).
 		if !hasAllScopes(c, verifier.scopes) {
 			log.Printf("❌ missing required scopes: %v", verifier.scopes)
-			respondOIDCError(w)
+			respondOIDCStatus(w, http.StatusForbidden)
 			return
 		}
 
@@ -254,28 +258,14 @@ func (c Claims) MarshalJSON() ([]byte, error) {
 	return json.Marshal(map[string]any(c))
 }
 
-// hasAllScopes reports whether all required scopes are present in a
-// space-delimited OAuth scope claim.
-func hasAllScopes(c Claims, need []string) bool {
-	have := map[string]struct{}{}
-	for _, claimName := range []string{"scope", "scp"} {
-		s, _ := c.GetString(claimName)
-		for _, sc := range strings.Fields(s) {
-			have[sc] = struct{}{}
-		}
-	}
-	for _, n := range need {
-		if _, ok := have[n]; !ok {
-			return false
-		}
-	}
-	return true
-}
-
 // respondOIDCError writes a structured error response with the provided code
 // and message using the common BaSyx error format.
 func respondOIDCError(w http.ResponseWriter) {
-	resp := common.NewErrorResponse(errors.New("access denied"), http.StatusUnauthorized, "Middleware", "Rules", "Denied")
+	respondOIDCStatus(w, http.StatusUnauthorized)
+}
+
+func respondOIDCStatus(w http.ResponseWriter, status int) {
+	resp := common.NewErrorResponse(errors.New("access denied"), status, "Middleware", "Rules", "Denied")
 	err := openapi.EncodeJSONResponse(resp.Body, &resp.Code, w)
 	if err != nil {
 		log.Printf("❌ Failed to encode error response: %v", err)
@@ -284,22 +274,35 @@ func respondOIDCError(w http.ResponseWriter) {
 }
 
 func extractIssuer(rawToken string) (string, error) {
-	parts := strings.Split(rawToken, ".")
-	if len(parts) < 2 {
-		return "", fmt.Errorf("token has invalid format")
+	if err := validateCompactSignedJWT(rawToken); err != nil {
+		return "", err
 	}
+	parts := strings.Split(rawToken, ".")
 	payload, err := base64.RawURLEncoding.DecodeString(parts[1])
 	if err != nil {
-		return "", fmt.Errorf("decode token payload: %w", err)
+		return "", fmt.Errorf("COMMON-OIDC-DECODETOKENPAYLOAD decode token payload: %w", err)
 	}
 	var claims struct {
 		Issuer string `json:"iss"`
 	}
 	if err := json.Unmarshal(payload, &claims); err != nil {
-		return "", fmt.Errorf("parse token claims: %w", err)
+		return "", fmt.Errorf("COMMON-OIDC-PARSETOKENCLAIMS parse token claims: %w", err)
 	}
 	if strings.TrimSpace(claims.Issuer) == "" {
-		return "", fmt.Errorf("token missing issuer")
+		return "", fmt.Errorf("COMMON-OIDC-VALIDATEISSUER token missing issuer")
 	}
 	return claims.Issuer, nil
+}
+
+func validateCompactSignedJWT(rawToken string) error {
+	parts := strings.Split(rawToken, ".")
+	if len(parts) != 3 {
+		return fmt.Errorf("COMMON-OIDC-VALIDATETOKENFORMAT token must be a compact signed JWT")
+	}
+	for _, part := range parts {
+		if part == "" {
+			return fmt.Errorf("COMMON-OIDC-VALIDATETOKENFORMAT token must be a compact signed JWT")
+		}
+	}
+	return nil
 }
