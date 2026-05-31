@@ -230,6 +230,11 @@ func writeSecurityEnvironment(issuerURL string) (string, error) {
 		_ = os.RemoveAll(directory)
 		return "", err
 	}
+	//nolint:gosec // Generated test fixtures contain no secrets and must be readable by non-root Docker containers.
+	if err := os.Chmod(directory, 0o755); err != nil {
+		_ = os.RemoveAll(directory)
+		return "", err
+	}
 
 	files := map[string]any{
 		"scp-trustlist.json": []map[string]any{{
@@ -270,7 +275,8 @@ func writeSecurityFile(path string, content any) error {
 			return err
 		}
 	}
-	return os.WriteFile(path, data, 0o600)
+	//nolint:gosec // Generated test fixtures contain no secrets and must be readable by non-root Docker containers.
+	return os.WriteFile(path, data, 0o644)
 }
 
 const delegatedAccessRules = `{

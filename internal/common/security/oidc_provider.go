@@ -32,13 +32,28 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/coreos/go-oidc/v3/oidc"
 )
 
-const maxOIDCDiscoveryDocumentBytes = 1024 * 1024
+const (
+	maxOIDCDiscoveryDocumentBytes = 1024 * 1024
+	oidcHTTPTimeout               = 30 * time.Second
+)
+
+var oidcHTTPClient = &http.Client{Timeout: oidcHTTPTimeout}
+
+func oidcHTTPContext(ctx context.Context) context.Context {
+	return oidc.ClientContext(ctx, oidcHTTPClient)
+}
 
 func newOIDCProvider(ctx context.Context, issuer string, discoveryURL string) (*oidc.Provider, error) {
+	return newOIDCProviderWithClient(ctx, issuer, discoveryURL, oidcHTTPClient)
+}
+
+func newOIDCProviderWithClient(ctx context.Context, issuer string, discoveryURL string, client *http.Client) (*oidc.Provider, error) {
+	ctx = oidc.ClientContext(ctx, client)
 	discoveryURL = strings.TrimSpace(discoveryURL)
 	if discoveryURL == "" {
 		provider, err := oidc.NewProvider(ctx, issuer)
@@ -53,7 +68,7 @@ func newOIDCProvider(ctx context.Context, issuer string, discoveryURL string) (*
 		return nil, fmt.Errorf("COMMON-OIDC-CREATEDISCOVERYREQUEST create OIDC discovery request: %w", err)
 	}
 	//nolint:gosec // Discovery URL is supplied by the service administrator.
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("COMMON-OIDC-FETCHDISCOVERY fetch OIDC discovery metadata: %w", err)
 	}
@@ -63,9 +78,16 @@ func newOIDCProvider(ctx context.Context, issuer string, discoveryURL string) (*
 		return nil, fmt.Errorf("COMMON-OIDC-FETCHDISCOVERY fetch OIDC discovery metadata: status %d", resp.StatusCode)
 	}
 
+	document, err := io.ReadAll(io.LimitReader(resp.Body, maxOIDCDiscoveryDocumentBytes+1))
+	if err != nil {
+		return nil, fmt.Errorf("COMMON-OIDC-READDISCOVERY read OIDC discovery metadata: %w", err)
+	}
+	if len(document) > maxOIDCDiscoveryDocumentBytes {
+		return nil, fmt.Errorf("COMMON-OIDC-READDISCOVERY OIDC discovery metadata exceeds %d bytes", maxOIDCDiscoveryDocumentBytes)
+	}
+
 	var config oidc.ProviderConfig
-	decoder := json.NewDecoder(io.LimitReader(resp.Body, maxOIDCDiscoveryDocumentBytes))
-	if err := decoder.Decode(&config); err != nil {
+	if err := json.Unmarshal(document, &config); err != nil {
 		return nil, fmt.Errorf("COMMON-OIDC-PARSEDISCOVERY parse OIDC discovery metadata: %w", err)
 	}
 	if config.IssuerURL != issuer {

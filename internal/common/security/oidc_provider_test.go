@@ -30,7 +30,9 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
+	"time"
 )
 
 func TestNewOIDCProvider_CustomDiscoveryURL(t *testing.T) {
@@ -52,6 +54,33 @@ func TestNewOIDCProvider_CustomDiscoveryURL(t *testing.T) {
 
 	if _, err := newOIDCProvider(context.Background(), issuer, customDiscovery.URL+"/custom/openid-configuration"); err != nil {
 		t.Fatalf("newOIDCProvider() error = %v", err)
+	}
+}
+
+func TestNewOIDCProvider_CustomDiscoveryTimeout(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+		time.Sleep(100 * time.Millisecond)
+	}))
+	t.Cleanup(server.Close)
+
+	client := &http.Client{Timeout: 10 * time.Millisecond}
+	if _, err := newOIDCProviderWithClient(context.Background(), "https://issuer.example", server.URL, client); err == nil {
+		t.Fatalf("expected discovery timeout error")
+	}
+}
+
+func TestNewOIDCProvider_RejectsOversizedCustomDiscovery(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(strings.Repeat(" ", maxOIDCDiscoveryDocumentBytes+1)))
+	}))
+	t.Cleanup(server.Close)
+
+	if _, err := newOIDCProvider(context.Background(), "https://issuer.example", server.URL); err == nil {
+		t.Fatalf("expected oversized discovery metadata error")
 	}
 }
 

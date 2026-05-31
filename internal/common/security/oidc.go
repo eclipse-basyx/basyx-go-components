@@ -115,7 +115,7 @@ func NewOIDC(ctx context.Context, s OIDCSettings) (*OIDC, error) {
 		}
 
 		verifierCfg := oidcVerifierConfig(audience)
-		v := provider.VerifierContext(ctx, verifierCfg)
+		v := provider.VerifierContext(oidcHTTPContext(ctx), verifierCfg)
 		if v == nil {
 			return nil, fmt.Errorf("COMMON-OIDC-CREATEVERIFIER failed to construct OIDC verifier")
 		}

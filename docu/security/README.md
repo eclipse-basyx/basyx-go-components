@@ -133,6 +133,7 @@ sequenceDiagram
 - Required scopes are listed per provider in the trustlist. By default they are collected from `scope` and Entra ID's `scp` delegated-permission claim. Space-delimited strings and string arrays are accepted.
 - Verified scopes are exposed to ABAC as `basyx.scopes`. Raw verified claims remain unchanged.
 - Optional claim mappings expose provider-specific claims under the reserved `basyx.` namespace. Mapping sources are RFC 6901 JSON pointers.
+- Tokens that already contain a `basyx.*` claim are rejected after verification to prevent canonical-claim spoofing. The rejected claim name is logged by the service.
 - If the token is valid, claims are injected into the request context.
 - The middleware adds time claims `CLIENTNOW`, `LOCALNOW`, and `UTCNOW` to support time-based ABAC formulas.
 - AllowAnonymous is currently enabled by default in `SetupSecurityWithClaimsMiddleware`.
