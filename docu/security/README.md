@@ -128,7 +128,7 @@ sequenceDiagram
 
 - OIDC provider verification uses issuer + optional audience from the trustlist.
 - If `audience` is omitted (or empty) for a provider, the token audience (`aud`) check is skipped for that provider.
-- Required scopes are listed per provider in the trustlist and checked against the `scope` claim.
+- Required scopes are listed per provider in the trustlist and checked against the `scope` claim or Entra ID's `scp` delegated-permission claim.
 - If the token is valid, claims are injected into the request context.
 - The middleware adds time claims `CLIENTNOW`, `LOCALNOW`, and `UTCNOW` to support time-based ABAC formulas.
 - AllowAnonymous is currently enabled by default in `SetupSecurityWithClaimsMiddleware`.

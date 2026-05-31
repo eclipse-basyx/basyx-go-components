@@ -1,0 +1,7 @@
+[
+  {
+    "issuer": "https://login.microsoftonline.com/<tenant-id>/v2.0",
+    "audience": "<basyx-api-client-id>",
+    "scopes": ["access_as_user"]
+  }
+]

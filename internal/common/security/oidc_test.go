@@ -25,7 +25,11 @@
 
 package auth
 
-import "testing"
+import (
+	"encoding/base64"
+	"encoding/json"
+	"testing"
+)
 
 func TestOIDCVerifierConfig_UsesClientIDWhenAudienceProvided(t *testing.T) {
 	t.Parallel()
@@ -55,4 +59,37 @@ func TestOIDCVerifierConfig_SkipsClientIDCheckWhenAudienceMissing(t *testing.T) 
 	if cfg.ClientID != "" {
 		t.Fatalf("expected empty ClientID when audience is missing, got %q", cfg.ClientID)
 	}
+}
+
+func TestExtractIssuer_EntraV2AccessToken(t *testing.T) {
+	t.Parallel()
+
+	const want = "https://login.microsoftonline.com/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee/v2.0"
+
+	got, err := extractIssuer(unsignedTokenWithClaims(t, Claims{"iss": want}))
+	if err != nil {
+		t.Fatalf("extractIssuer() error = %v", err)
+	}
+	if got != want {
+		t.Fatalf("extractIssuer() = %q, want %q", got, want)
+	}
+}
+
+func TestHasAllScopes_AcceptsEntraDelegatedPermissionClaim(t *testing.T) {
+	t.Parallel()
+
+	claims := Claims{"scp": "access_as_user profile"}
+	if !hasAllScopes(claims, []string{"access_as_user"}) {
+		t.Fatalf("expected Entra scp claim to satisfy required scope")
+	}
+}
+
+func unsignedTokenWithClaims(t *testing.T, claims Claims) string {
+	t.Helper()
+
+	payload, err := json.Marshal(claims)
+	if err != nil {
+		t.Fatalf("json.Marshal() error = %v", err)
+	}
+	return "header." + base64.RawURLEncoding.EncodeToString(payload) + ".signature"
 }

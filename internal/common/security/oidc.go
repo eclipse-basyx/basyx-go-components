@@ -43,7 +43,7 @@ import (
 	openapi "github.com/eclipse-basyx/basyx-go-components/pkg/discoveryapi"
 )
 
-// OIDC wraps an ID token verifier and related settings.
+// OIDC wraps a token verifier and related settings.
 type OIDC struct {
 	verifiers map[string]issuerVerifier
 	settings  OIDCSettings
@@ -254,13 +254,15 @@ func (c Claims) MarshalJSON() ([]byte, error) {
 	return json.Marshal(map[string]any(c))
 }
 
-// hasAllScopes reports whether all required scopes are present in the
-// space-delimited "scope" claim.
+// hasAllScopes reports whether all required scopes are present in a
+// space-delimited OAuth scope claim.
 func hasAllScopes(c Claims, need []string) bool {
-	s, _ := c.GetString("scope")
 	have := map[string]struct{}{}
-	for _, sc := range strings.Fields(s) {
-		have[sc] = struct{}{}
+	for _, claimName := range []string{"scope", "scp"} {
+		s, _ := c.GetString(claimName)
+		for _, sc := range strings.Fields(s) {
+			have[sc] = struct{}{}
+		}
 	}
 	for _, n := range need {
 		if _, ok := have[n]; !ok {
