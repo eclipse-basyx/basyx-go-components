@@ -1,0 +1,226 @@
+services:
+  aas-environment:
+    container_name: basyx-ory-aas-environment
+    # image: eclipsebasyx/aasenvironment-go:SNAPSHOT
+    # pull_policy: always
+    build:
+      context: ../..
+      dockerfile: ./cmd/aasenvironmentservice/Dockerfile
+    command: ["/app/aasenvironmentservice"]
+    ports:
+      - "8081:5004"
+    environment:
+      - SERVER_PORT=5004
+      - CORS_ALLOWEDORIGINS=*
+      - CORS_ALLOWEDHEADERS=*
+      - CORS_ALLOWEDCREDENTIALS=true
+      - CORS_ALLOWEDMETHODS=GET,POST,PUT,PATCH,DELETE,OPTIONS
+      - POSTGRES_HOST=db
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=admin
+      - POSTGRES_PASSWORD=admin123
+      - POSTGRES_DBNAME=basyxTestDB
+      - POSTGRES_MAXOPENCONNECTIONS=500
+      - POSTGRES_MAXIDLECONNECTIONS=500
+      - POSTGRES_CONNMAXLIFETIMEMINUTES=5
+      - JWS_PRIVATEKEYPATH=/app/rsa-key.pem
+      - ABAC_ENABLED=true
+      - ABAC_MODELPATH=/security_env/access-rules.json
+      - OIDC_TRUSTLISTPATH=/security_env/trustlist.json
+      - GENERAL_AASREGISTRYINTEGRATION=true
+      - GENERAL_SUBMODELREGISTRYINTEGRATION=true
+      - GENERAL_DISCOVERYINTEGRATION=true
+      - GENERAL_EXTERNALURL=http://localhost:8081
+      - GENERAL_AAS_PRECONFIG_PATHS=/app/preconfiguration
+    extra_hosts:
+      - "hydra.localhost:host-gateway"
+    volumes:
+      - ./basyx/rsa-key.pem:/app/rsa-key.pem:ro
+      - ./aas:/app/preconfiguration:ro
+      - ./security_env:/security_env:ro
+    depends_on:
+      basyx_configuration:
+        condition: service_completed_successfully
+      ory-bootstrap:
+        condition: service_completed_successfully
+      hydra-proxy:
+        condition: service_started
+    restart: unless-stopped
+
+  aas-ui:
+    container_name: basyx-ory-aas-ui
+    image: eclipsebasyx/aas-gui:SNAPSHOT
+    pull_policy: always
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./basyx-infra.yml:/basyx-infra.yml:ro
+    environment:
+      - ENDPOINT_CONFIG_AVAILABLE=true
+    restart: unless-stopped
+
+  db:
+    container_name: basyx-ory-db
+    image: postgres:18
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: admin123
+      POSTGRES_DB: basyxTestDB
+    command: ["postgres", "-c", "listen_addresses=*"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U admin -d basyxTestDB"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  basyx_configuration:
+    container_name: basyx-ory-configuration
+    # image: eclipsebasyx/basyxconfigurationservice-go:SNAPSHOT
+    build:
+      context: ../..
+      dockerfile: ./cmd/basyxconfigurationservice/Dockerfile
+    environment:
+      - POSTGRES_HOST=db
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=admin
+      - POSTGRES_PASSWORD=admin123
+      - POSTGRES_DBNAME=basyxTestDB
+      - POSTGRES_MAXOPENCONNECTIONS=500
+      - POSTGRES_MAXIDLECONNECTIONS=500
+      - POSTGRES_CONNMAXLIFETIMEMINUTES=5
+    depends_on:
+      db:
+        condition: service_healthy
+
+  hydra-sqlite:
+    container_name: basyx-ory-hydra-sqlite
+    image: busybox:1.37.0
+    command: "chmod -R 777 /mnt/sqlite"
+    volumes:
+      - hydra-sqlite:/mnt/sqlite
+
+  hydra-migrate:
+    container_name: basyx-ory-hydra-migrate
+    image: oryd/hydra:v26.2.0
+    command: migrate -c /etc/config/hydra/hydra.yml sql up -e --yes
+    environment:
+      - DSN=sqlite:///mnt/sqlite/db.sqlite?_fk=true&mode=rwc
+    volumes:
+      - hydra-sqlite:/mnt/sqlite
+      - ./ory/hydra:/etc/config/hydra:ro
+    depends_on:
+      hydra-sqlite:
+        condition: service_completed_successfully
+
+  hydra:
+    container_name: basyx-ory-hydra
+    image: oryd/hydra:v26.2.0
+    command: serve -c /etc/config/hydra/hydra.yml all --dev
+    environment:
+      - DSN=sqlite:///mnt/sqlite/db.sqlite?_fk=true&mode=rwc
+    volumes:
+      - hydra-sqlite:/mnt/sqlite
+      - ./ory/hydra:/etc/config/hydra:ro
+    depends_on:
+      hydra-migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+  hydra-proxy:
+    container_name: basyx-ory-hydra-proxy
+    image: nginx:1.28.0-alpine
+    ports:
+      - "4444:4444"
+    volumes:
+      - ./ory/hydra-proxy/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - hydra
+    restart: unless-stopped
+
+  kratos-sqlite:
+    container_name: basyx-ory-kratos-sqlite
+    image: busybox:1.37.0
+    command: "chmod -R 777 /mnt/sqlite"
+    volumes:
+      - kratos-sqlite:/mnt/sqlite
+
+  kratos-migrate:
+    container_name: basyx-ory-kratos-migrate
+    image: oryd/kratos:v26.2.0
+    command: migrate sql -e --yes
+    environment:
+      - DSN=sqlite:///mnt/sqlite/db.sqlite?_fk=true&mode=rwc
+    volumes:
+      - kratos-sqlite:/mnt/sqlite
+      - ./ory/kratos:/etc/config/kratos:ro
+    depends_on:
+      kratos-sqlite:
+        condition: service_completed_successfully
+
+  kratos:
+    container_name: basyx-ory-kratos
+    image: oryd/kratos:v26.2.0
+    command: serve -c /etc/config/kratos/kratos.yml --dev
+    environment:
+      - DSN=sqlite:///mnt/sqlite/db.sqlite?_fk=true&mode=rwc
+    ports:
+      - "4433:4433"
+    volumes:
+      - kratos-sqlite:/mnt/sqlite
+      - ./ory/kratos:/etc/config/kratos:ro
+    depends_on:
+      kratos-migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+  kratos-ui:
+    container_name: basyx-ory-kratos-ui
+    image: oryd/kratos-selfservice-ui-node:v26.2.0
+    ports:
+      - "4455:3000"
+    environment:
+      - KRATOS_PUBLIC_URL=http://kratos:4433/
+      - KRATOS_BROWSER_URL=http://localhost:4433/
+      - HYDRA_ADMIN_URL=http://hydra:4445
+      - COOKIE_SECRET=ory-hydra-basyx-demo-cookie-secret
+      - CSRF_COOKIE_NAME=ory_csrf
+      - CSRF_COOKIE_SECRET=ory-hydra-basyx-demo-csrf-secret
+      - DANGEROUSLY_DISABLE_SECURE_CSRF_COOKIES=true
+    depends_on:
+      - hydra
+      - kratos
+    restart: unless-stopped
+
+  consent-bridge:
+    container_name: basyx-ory-consent-bridge
+    build:
+      context: ./consent-bridge
+    environment:
+      - HYDRA_ADMIN_URL=http://hydra:4445
+      - KRATOS_ADMIN_URL=http://kratos:4434
+      - SERVER_ADDRESS=:3001
+    ports:
+      - "3001:3001"
+    depends_on:
+      - hydra
+      - kratos
+    restart: unless-stopped
+
+  ory-bootstrap:
+    container_name: basyx-ory-bootstrap
+    image: curlimages/curl:8.17.0
+    entrypoint: ["/bin/sh"]
+    command: ["/bootstrap/bootstrap.sh"]
+    environment:
+      - HYDRA_ADMIN_URL=http://hydra:4445
+      - KRATOS_ADMIN_URL=http://kratos:4434
+    volumes:
+      - ./ory/bootstrap:/bootstrap:ro
+    depends_on:
+      - hydra
+      - kratos
+
+volumes:
+  hydra-sqlite:
+  kratos-sqlite:

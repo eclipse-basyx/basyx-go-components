@@ -1,0 +1,39 @@
+serve:
+  public:
+    cors:
+      enabled: true
+      allowed_origins:
+        - http://localhost:3000
+      allowed_methods:
+        - GET
+        - POST
+        - OPTIONS
+      allowed_headers:
+        - Authorization
+        - Content-Type
+      exposed_headers:
+        - Content-Type
+  cookies:
+    same_site_mode: Lax
+
+strategies:
+  access_token: jwt
+
+urls:
+  self:
+    issuer: http://hydra.localhost:4444
+  consent: http://localhost:3001/consent
+  login: http://localhost:4455/login
+  logout: http://localhost:4455/logout
+  error: http://localhost:3001/error
+
+secrets:
+  system:
+    - ory-hydra-basyx-demo-system-secret
+
+oidc:
+  subject_identifiers:
+    supported_types:
+      - public
+    pairwise:
+      salt: ory-hydra-basyx-demo-pairwise-salt
