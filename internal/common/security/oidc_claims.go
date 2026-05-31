@@ -343,7 +343,9 @@ func decodeJSONPointer(pointer string) ([]string, error) {
 		var token strings.Builder
 		for index := 0; index < len(rawToken); index++ {
 			if rawToken[index] != '~' {
-				token.WriteByte(rawToken[index])
+				if err := token.WriteByte(rawToken[index]); err != nil {
+					return nil, fmt.Errorf("failed to decode JSON pointer token: %w", err)
+				}
 				continue
 			}
 			if index+1 >= len(rawToken) {
@@ -352,9 +354,13 @@ func decodeJSONPointer(pointer string) ([]string, error) {
 			index++
 			switch rawToken[index] {
 			case '0':
-				token.WriteByte('~')
+				if err := token.WriteByte('~'); err != nil {
+					return nil, fmt.Errorf("failed to decode JSON pointer token: %w", err)
+				}
 			case '1':
-				token.WriteByte('/')
+				if err := token.WriteByte('/'); err != nil {
+					return nil, fmt.Errorf("failed to decode JSON pointer token: %w", err)
+				}
 			default:
 				return nil, fmt.Errorf("JSON pointer contains unsupported escape ~%c", rawToken[index])
 			}

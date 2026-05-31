@@ -114,19 +114,19 @@ var oidcIssuer *testIssuer
 func TestMain(m *testing.M) {
 	issuer, err := startTestIssuer()
 	if err != nil {
-		fmt.Printf("COMMON-OIDC-E2E-STARTISSUER failed to start OIDC issuer: %v\n", err)
+		_, _ = fmt.Fprintf(os.Stderr, "COMMON-OIDC-E2E-STARTISSUER failed to start OIDC issuer: %v\n", err)
 		os.Exit(1)
 	}
 	oidcIssuer = issuer
 
 	securityEnv, err := writeSecurityEnvironment(issuer.issuerURL)
 	if err != nil {
-		fmt.Printf("COMMON-OIDC-E2E-WRITESECURITYENV failed to write security environment: %v\n", err)
+		_, _ = fmt.Fprintf(os.Stderr, "COMMON-OIDC-E2E-WRITESECURITYENV failed to write security environment: %v\n", err)
 		issuer.close()
 		os.Exit(1)
 	}
 	if err := os.Setenv(securityEnvVar, securityEnv); err != nil {
-		fmt.Printf("COMMON-OIDC-E2E-SETSECURITYENV failed to set security environment: %v\n", err)
+		_, _ = fmt.Fprintf(os.Stderr, "COMMON-OIDC-E2E-SETSECURITYENV failed to set security environment: %v\n", err)
 		issuer.close()
 		_ = os.RemoveAll(securityEnv)
 		os.Exit(1)
