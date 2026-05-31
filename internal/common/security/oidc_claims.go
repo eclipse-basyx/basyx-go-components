@@ -343,7 +343,7 @@ func decodeJSONPointer(pointer string) ([]string, error) {
 		var token strings.Builder
 		for index := 0; index < len(rawToken); index++ {
 			if rawToken[index] != '~' {
-				token.WriteByte(rawToken[index])
+				_ = token.WriteByte(rawToken[index])
 				continue
 			}
 			if index+1 >= len(rawToken) {
@@ -352,9 +352,9 @@ func decodeJSONPointer(pointer string) ([]string, error) {
 			index++
 			switch rawToken[index] {
 			case '0':
-				token.WriteByte('~')
+				_ = token.WriteByte('~')
 			case '1':
-				token.WriteByte('/')
+				_ = token.WriteByte('/')
 			default:
 				return nil, fmt.Errorf("JSON pointer contains unsupported escape ~%c", rawToken[index])
 			}
