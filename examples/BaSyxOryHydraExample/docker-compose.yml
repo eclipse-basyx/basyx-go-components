@@ -1,11 +1,8 @@
 services:
   aas-environment:
     container_name: basyx-ory-aas-environment
-    # image: eclipsebasyx/aasenvironment-go:SNAPSHOT
-    # pull_policy: always
-    build:
-      context: ../..
-      dockerfile: ./cmd/aasenvironmentservice/Dockerfile
+    image: eclipsebasyx/aasenvironment-go:SNAPSHOT
+    pull_policy: always
     command: ["/app/aasenvironmentservice"]
     ports:
       - "8081:5004"
@@ -76,10 +73,8 @@ services:
 
   basyx_configuration:
     container_name: basyx-ory-configuration
-    # image: eclipsebasyx/basyxconfigurationservice-go:SNAPSHOT
-    build:
-      context: ../..
-      dockerfile: ./cmd/basyxconfigurationservice/Dockerfile
+    image: eclipsebasyx/basyxconfigurationservice-go:SNAPSHOT
+    pull_policy: always
     environment:
       - POSTGRES_HOST=db
       - POSTGRES_PORT=5432

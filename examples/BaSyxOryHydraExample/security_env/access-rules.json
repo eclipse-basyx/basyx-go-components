@@ -36,8 +36,13 @@
           { "ROUTE": "/submodels" },
           { "ROUTE": "/submodels/*" },
           { "ROUTE": "/concept-descriptions" },
-          { "ROUTE": "/concept-descriptions/*" }
+          { "ROUTE": "/concept-descriptions/*" },
+          { "ROUTE": "/serialization" }
         ]
+      },
+      {
+        "name": "admin_api",
+        "objects": [{ "ROUTE": "/upload" }]
       }
     ],
     "DEFACLS": [
@@ -52,7 +57,7 @@
     "rules": [
       { "USEACL": "anonymous_read", "USEOBJECTS": ["public_description", "public_product_info"], "FORMULA": { "$boolean": true } },
       { "USEACL": "viewer_read", "USEOBJECTS": ["all_api"], "USEFORMULA": "is_viewer" },
-      { "USEACL": "admin_full", "USEOBJECTS": ["all_api"], "USEFORMULA": "is_admin" }
+      { "USEACL": "admin_full", "USEOBJECTS": ["all_api", "admin_api"], "USEFORMULA": "is_admin" }
     ]
   }
 }
