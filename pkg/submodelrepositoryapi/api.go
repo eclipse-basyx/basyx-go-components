@@ -84,6 +84,7 @@ type SubmodelRepositoryAPIAPIRouter interface {
 	GetOperationAsyncStatus(http.ResponseWriter, *http.Request)
 	GetOperationAsyncResult(http.ResponseWriter, *http.Request)
 	GetOperationAsyncResultValueOnly(http.ResponseWriter, *http.Request)
+	GetSubmodelByIdAndDate(http.ResponseWriter, *http.Request)
 }
 
 // DescriptionAPIAPIServicer defines the api actions for the DescriptionAPIAPI service
