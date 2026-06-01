@@ -94,10 +94,27 @@ func TestAASRepositoryHistoryRecentChangesAndBatchAssetKind(t *testing.T) {
 	require.Equal(t, http.StatusOK, status)
 	require.Equal(t, "type-v2", current["assetInformation"].(map[string]any)["assetType"])
 
+	time.Sleep(30 * time.Millisecond)
+
+	childUpdateBody := `{"assetKind":"Batch","assetType":"type-v3-child"}`
+	_, status, _, err = putJSONResponse(baseURL+"/shells/"+encodedAASID+"/asset-information", childUpdateBody)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusNoContent, status)
+
+	current, status, err = getJSONResponse(baseURL + "/shells/" + encodedAASID)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusOK, status)
+	require.Equal(t, "type-v3-child", current["assetInformation"].(map[string]any)["assetType"])
+
 	historical, status, err := getJSONResponse(fmt.Sprintf("%s/shells/%s/$history?date=%s", baseURL, encodedAASID, v1Date.Format(time.RFC3339Nano)))
 	require.NoError(t, err)
 	require.Equal(t, http.StatusOK, status)
 	require.Equal(t, "type-v1", historical["assetInformation"].(map[string]any)["assetType"])
+
+	latestHistorical, status, err := getJSONResponse(fmt.Sprintf("%s/shells/%s/$history?date=%s", baseURL, encodedAASID, time.Now().UTC().Format(time.RFC3339Nano)))
+	require.NoError(t, err)
+	require.Equal(t, http.StatusOK, status)
+	require.Equal(t, "type-v3-child", latestHistorical["assetInformation"].(map[string]any)["assetType"])
 
 	recent, status, err := getJSONResponse(baseURL + "/shells/$recent-changes?limit=10")
 	require.NoError(t, err)

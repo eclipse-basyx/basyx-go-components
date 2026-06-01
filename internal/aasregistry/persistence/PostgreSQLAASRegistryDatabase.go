@@ -328,7 +328,26 @@ func (p *PostgreSQLAASRegistryDatabase) InsertSubmodelDescriptorForAAS(
 	aasID string,
 	submodel model.SubmodelDescriptor,
 ) (model.SubmodelDescriptor, error) {
-	return descriptors.InsertSubmodelDescriptorForAAS(ctx, p.db, aasID, submodel)
+	var result model.SubmodelDescriptor
+	err := common.ExecuteInTransaction(p.db, "AASREG-INSERTSMDESCFORAAS-STARTTX", "AASREG-INSERTSMDESCFORAAS-COMMIT", func(tx *sql.Tx) error {
+		stored, err := descriptors.InsertSubmodelDescriptorForAASTx(ctx, tx, aasID, submodel)
+		if err != nil {
+			return err
+		}
+		parent, err := descriptors.GetAssetAdministrationShellDescriptorByIDTx(ctx, tx, aasID)
+		if err != nil {
+			return err
+		}
+		if err := appendDescriptorHistoryTx(ctx, tx, parent, history.ChangeUpdated, false); err != nil {
+			return err
+		}
+		result = stored
+		return nil
+	})
+	if err != nil {
+		return model.SubmodelDescriptor{}, err
+	}
+	return result, nil
 }
 
 // ReplaceSubmodelDescriptorForAAS replaces a submodel descriptor for the given
@@ -338,7 +357,29 @@ func (p *PostgreSQLAASRegistryDatabase) ReplaceSubmodelDescriptorForAAS(
 	aasID string,
 	submodel model.SubmodelDescriptor,
 ) (model.SubmodelDescriptor, error) {
-	return descriptors.ReplaceSubmodelDescriptorForAAS(ctx, p.db, aasID, submodel)
+	var result model.SubmodelDescriptor
+	err := common.ExecuteInTransaction(p.db, "AASREG-REPLACESMDESCFORAAS-STARTTX", "AASREG-REPLACESMDESCFORAAS-COMMIT", func(tx *sql.Tx) error {
+		if err := descriptors.DeleteSubmodelDescriptorForAASByIDTx(ctx, tx, aasID, submodel.Id); err != nil {
+			return err
+		}
+		stored, err := descriptors.InsertSubmodelDescriptorForAASTx(ctx, tx, aasID, submodel)
+		if err != nil {
+			return err
+		}
+		parent, err := descriptors.GetAssetAdministrationShellDescriptorByIDTx(ctx, tx, aasID)
+		if err != nil {
+			return err
+		}
+		if err := appendDescriptorHistoryTx(ctx, tx, parent, history.ChangeUpdated, false); err != nil {
+			return err
+		}
+		result = stored
+		return nil
+	})
+	if err != nil {
+		return model.SubmodelDescriptor{}, err
+	}
+	return result, nil
 }
 
 // GetSubmodelDescriptorForAASByID returns the submodel descriptor identified
@@ -358,7 +399,19 @@ func (p *PostgreSQLAASRegistryDatabase) DeleteSubmodelDescriptorForAASByID(
 	aasID string,
 	submodelID string,
 ) error {
-	return descriptors.DeleteSubmodelDescriptorForAASByID(ctx, p.db, aasID, submodelID)
+	return common.ExecuteInTransaction(p.db, "AASREG-DELSMDESCFORAAS-STARTTX", "AASREG-DELSMDESCFORAAS-COMMIT", func(tx *sql.Tx) error {
+		if _, err := descriptors.GetSubmodelDescriptorForAASByID(ctx, tx, aasID, submodelID); err != nil {
+			return err
+		}
+		if err := descriptors.DeleteSubmodelDescriptorForAASByIDTx(ctx, tx, aasID, submodelID); err != nil {
+			return err
+		}
+		parent, err := descriptors.GetAssetAdministrationShellDescriptorByIDTx(ctx, tx, aasID)
+		if err != nil {
+			return err
+		}
+		return appendDescriptorHistoryTx(ctx, tx, parent, history.ChangeUpdated, false)
+	})
 }
 
 // ExistsAASByID reports whether an AAS with the given ID exists.

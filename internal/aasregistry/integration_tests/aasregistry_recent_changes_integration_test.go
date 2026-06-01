@@ -80,12 +80,29 @@ func TestAASRegistryRecentChangesAndBatchAssetKind(t *testing.T) {
 	status, body, _ = doAASRequest(t, aasNoRedirectClient, http.MethodPut, aasRegistryBaseURL+"/shell-descriptors/"+encodedDescriptorID, updatePayload)
 	require.Equal(t, http.StatusNoContent, status, "response=%s", string(body))
 
+	submodelID := fmt.Sprintf("urn:example:ids:sm-desc:history-child-%d", time.Now().UnixNano())
+	submodelPayload := map[string]any{
+		"id": submodelID,
+		"endpoints": []any{
+			map[string]any{
+				"interface": "AAS-3.0",
+				"protocolInformation": map[string]any{
+					"href":             "https://example.com/submodels/" + base64.RawURLEncoding.EncodeToString([]byte(submodelID)),
+					"endpointProtocol": "https",
+				},
+			},
+		},
+	}
+	status, body, _ = doAASRequest(t, aasNoRedirectClient, http.MethodPost, aasRegistryBaseURL+"/shell-descriptors/"+encodedDescriptorID+"/submodel-descriptors", submodelPayload)
+	require.Equal(t, http.StatusCreated, status, "response=%s", string(body))
+
 	recentURL := aasRegistryBaseURL + "/shell-descriptors/$recent-changes?limit=10&updatedFrom=" + url.QueryEscape(changedAfter)
 	status, body, _ = doAASRequest(t, aasNoRedirectClient, http.MethodGet, recentURL, nil)
 	require.Equal(t, http.StatusOK, status, "response=%s", string(body))
 	payload := decodeAASRegistryMap(t, body)
 	requireDescriptorWithAssetType(t, payload, descriptorID, "type-v1")
 	requireDescriptorWithAssetType(t, payload, descriptorID, "type-v2")
+	requireDescriptorWithSubmodel(t, payload, descriptorID, submodelID)
 }
 
 func decodeAASRegistryMap(t *testing.T, body []byte) map[string]any {
@@ -109,4 +126,27 @@ func requireDescriptorWithAssetType(t *testing.T, payload map[string]any, id str
 		}
 	}
 	t.Fatalf("expected descriptor id=%s assetType=%s in payload: %#v", id, assetType, payload)
+}
+
+func requireDescriptorWithSubmodel(t *testing.T, payload map[string]any, id string, submodelID string) {
+	t.Helper()
+	result, ok := payload["result"].([]any)
+	require.True(t, ok, "result must be an array")
+	for _, entry := range result {
+		item, ok := entry.(map[string]any)
+		if !ok || item["id"] != id {
+			continue
+		}
+		submodels, ok := item["submodelDescriptors"].([]any)
+		if !ok {
+			continue
+		}
+		for _, rawSubmodel := range submodels {
+			submodel, ok := rawSubmodel.(map[string]any)
+			if ok && submodel["id"] == submodelID {
+				return
+			}
+		}
+	}
+	t.Fatalf("expected descriptor id=%s with submodel id=%s in payload: %#v", id, submodelID, payload)
 }

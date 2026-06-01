@@ -73,6 +73,12 @@ func TestSubmodelRepositoryHistoryTracksSubmodelElementChangesAndRecentDeletes(t
 				"valueType": "xs:string",
 				"value":     "v1",
 			},
+			map[string]any{
+				"modelType":   "File",
+				"idShort":     "Attachment",
+				"contentType": "application/octet-stream",
+				"value":       "",
+			},
 		},
 	}
 
@@ -99,6 +105,42 @@ func TestSubmodelRepositoryHistoryTracksSubmodelElementChangesAndRecentDeletes(t
 	require.Equal(t, http.StatusOK, status, "response=%s", string(body))
 	historical := decodeMap(t, body)
 	require.Equal(t, "v1", getPropertyValueByIDShort(t, historical, "Temperature"))
+
+	status, body, err = requestJSON(http.MethodGet, fmt.Sprintf("%s/submodels/%s/$history?date=%s", baseURL, encodedSubmodelID, time.Now().UTC().Format(time.RFC3339Nano)), nil)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusOK, status, "response=%s", string(body))
+	require.Equal(t, "v2-from-sme", getPropertyValueByIDShort(t, decodeMap(t, body), "Temperature"))
+
+	status, body, err = requestJSON(http.MethodPatch, baseURL+"/submodels/"+encodedSubmodelID+"/submodel-elements/Temperature/$value", "v3-from-value-only")
+	require.NoError(t, err)
+	require.Equal(t, http.StatusNoContent, status, "response=%s", string(body))
+
+	status, body, err = requestJSON(http.MethodGet, fmt.Sprintf("%s/submodels/%s/$history?date=%s", baseURL, encodedSubmodelID, time.Now().UTC().Format(time.RFC3339Nano)), nil)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusOK, status, "response=%s", string(body))
+	require.Equal(t, "v3-from-value-only", getPropertyValueByIDShort(t, decodeMap(t, body), "Temperature"))
+
+	attachmentEndpoint := fmt.Sprintf("%s/submodels/%s/submodel-elements/Attachment/attachment", baseURL, encodedSubmodelID)
+	statusCode, uploadErr := uploadFileAttachment(attachmentEndpoint, "testFiles/marcus.gif", "marcus.gif")
+	require.NoError(t, uploadErr)
+	require.Equal(t, http.StatusNoContent, statusCode)
+
+	status, body, err = requestJSON(http.MethodGet, fmt.Sprintf("%s/submodels/%s/$history?date=%s", baseURL, encodedSubmodelID, time.Now().UTC().Format(time.RFC3339Nano)), nil)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusOK, status, "response=%s", string(body))
+	uploadedFile := getElementByIDShort(t, decodeMap(t, body), "Attachment")
+	require.NotEmpty(t, uploadedFile["value"])
+	require.Equal(t, "image/gif", uploadedFile["contentType"])
+
+	status, body, err = requestJSON(http.MethodDelete, attachmentEndpoint, nil)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusOK, status, "response=%s", string(body))
+
+	status, body, err = requestJSON(http.MethodGet, fmt.Sprintf("%s/submodels/%s/$history?date=%s", baseURL, encodedSubmodelID, time.Now().UTC().Format(time.RFC3339Nano)), nil)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusOK, status, "response=%s", string(body))
+	deletedFile := getElementByIDShort(t, decodeMap(t, body), "Attachment")
+	require.Empty(t, deletedFile["value"])
 
 	status, body, err = requestJSON(http.MethodGet, baseURL+"/submodels/$recent-changes?limit=10", nil)
 	require.NoError(t, err)
@@ -147,4 +189,18 @@ func requireRecentChangeForIDAndTypeSubmodel(t *testing.T, payload map[string]an
 		}
 	}
 	t.Fatalf("expected recent change id=%s type=%s in payload: %#v", id, changeType, payload)
+}
+
+func getElementByIDShort(t *testing.T, submodel map[string]any, idShort string) map[string]any {
+	t.Helper()
+	elements, ok := submodel["submodelElements"].([]any)
+	require.True(t, ok, "submodelElements must be an array")
+	for _, raw := range elements {
+		element, ok := raw.(map[string]any)
+		if ok && element["idShort"] == idShort {
+			return element
+		}
+	}
+	t.Fatalf("expected submodel element idShort=%s in payload: %#v", idShort, submodel)
+	return nil
 }

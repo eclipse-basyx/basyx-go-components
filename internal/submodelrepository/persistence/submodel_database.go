@@ -274,6 +274,123 @@ func (s *SubmodelDatabase) appendSubmodelHistoryTx(ctx context.Context, tx *sql.
 	return history.AppendVersionTx(ctx, tx, history.TableSubmodel, submodel.ID(), changeType, snapshot, deleted)
 }
 
+func (s *SubmodelDatabase) appendCurrentSubmodelHistoryTx(ctx context.Context, tx *sql.Tx, submodelIdentifier string, changeType string) error {
+	submodel, err := s.getSubmodelByIDInTransaction(ctx, tx, submodelIdentifier, "deep", false)
+	if err != nil {
+		return err
+	}
+	return s.appendSubmodelHistoryTx(ctx, tx, submodel, changeType, false)
+}
+
+func (s *SubmodelDatabase) getSubmodelByIDInTransaction(ctx context.Context, tx *sql.Tx, submodelIdentifier string, level string, metadataOnly bool) (types.ISubmodel, error) {
+	if tx == nil {
+		return nil, common.NewInternalServerError("SMREPO-GETSMBYIDTX-NILTX transaction must not be nil")
+	}
+
+	submodel, err := s.getSubmodelMetadataByIDInTransaction(ctx, tx, submodelIdentifier)
+	if err != nil {
+		return nil, err
+	}
+
+	if metadataOnly {
+		return submodel, nil
+	}
+
+	unlimited := -1
+	submodelElements, _, err := submodelelements.GetSubmodelElementsBySubmodelIDTx(ctx, tx, submodelIdentifier, &unlimited, "", level)
+	if err != nil {
+		return nil, err
+	}
+	submodel.SetSubmodelElements(submodelElements)
+	return submodel, nil
+}
+
+func (s *SubmodelDatabase) getSubmodelMetadataByIDInTransaction(ctx context.Context, tx *sql.Tx, submodelIdentifier string) (types.ISubmodel, error) {
+	dialect := goqu.Dialect("postgres")
+	limit := int32(1)
+	selectDS, err := selectSubmodelGoquQuery(&dialect, &submodelIdentifier, &limit, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	queryFilter := auth.GetQueryFilter(ctx)
+	if queryFilter != nil && queryFilter.Formula != nil {
+		collector, collectorErr := grammar.NewResolvedFieldPathCollectorForRoot(grammar.CollectorRootSM)
+		if collectorErr != nil {
+			return nil, common.NewInternalServerError("SMREPO-GETSMBYIDTX-BADCOLLECTOR " + collectorErr.Error())
+		}
+		selectDS, err = auth.AddFormulaQueryFromContext(ctx, selectDS, collector)
+		if err != nil {
+			return nil, common.NewInternalServerError("SMREPO-GETSMBYIDTX-ABACFORMULA " + err.Error())
+		}
+	}
+
+	query, args, err := selectDS.ToSQL()
+	if err != nil {
+		return nil, common.NewInternalServerError("SMREPO-GETSMBYIDTX-BUILDSQL " + err.Error())
+	}
+
+	rows, err := tx.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, common.NewInternalServerError("SMREPO-GETSMBYIDTX-EXECSQL " + err.Error())
+	}
+	defer func() {
+		_ = rows.Close()
+	}()
+
+	if !rows.Next() {
+		if rowsErr := rows.Err(); rowsErr != nil {
+			return nil, common.NewInternalServerError("SMREPO-GETSMBYIDTX-ROWS " + rowsErr.Error())
+		}
+		return nil, common.NewErrNotFound(submodelIdentifier)
+	}
+
+	submodel, scanErr := scanSubmodelMetadataRow(rows)
+	if scanErr != nil {
+		return nil, scanErr
+	}
+	return submodel, nil
+}
+
+func scanSubmodelMetadataRow(rows *sql.Rows) (types.ISubmodel, error) {
+	var identifier, idShort, category, descriptionJSON, displayNameJSON, administrationJSON, edsJSON, supplementalSemanticIDsJSON, extensionsJSON, qualifiersJSON, semanticIDJSON sql.NullString
+	var kind sql.NullInt64
+
+	if err := rows.Scan(&identifier, &idShort, &category, &kind, &descriptionJSON, &displayNameJSON, &administrationJSON, &edsJSON, &supplementalSemanticIDsJSON, &extensionsJSON, &qualifiersJSON, &semanticIDJSON); err != nil {
+		return nil, common.NewInternalServerError("SMREPO-GETSMBYIDTX-SCAN " + err.Error())
+	}
+
+	var submodel types.ISubmodel
+	submodel = types.NewSubmodel(identifier.String)
+	idShortValue := idShort.String
+	submodel.SetIDShort(&idShortValue)
+	if category.Valid {
+		categoryValue := category.String
+		submodel.SetCategory(&categoryValue)
+	}
+	if kind.Valid {
+		modellingKind := types.ModellingKind(kind.Int64)
+		submodel.SetKind(&modellingKind)
+	}
+
+	var err error
+	submodel, err = jsonPayloadToInstance(descriptionJSON, displayNameJSON, administrationJSON, edsJSON, supplementalSemanticIDsJSON, extensionsJSON, qualifiersJSON, submodel)
+	if err != nil {
+		return nil, err
+	}
+
+	if semanticIDJSON.Valid {
+		semanticID, parseSemanticErr := common.ParseReferenceJSON([]byte(semanticIDJSON.String))
+		if parseSemanticErr != nil {
+			return nil, parseSemanticErr
+		}
+		if semanticID != nil {
+			submodel.SetSemanticID(semanticID)
+		}
+	}
+	return submodel, nil
+}
+
 // GetSubmodelByIDAndDate returns the Submodel version valid at the requested instant.
 func (s *SubmodelDatabase) GetSubmodelByIDAndDate(ctx context.Context, submodelIdentifier string, at time.Time) (types.ISubmodel, error) {
 	snapshot, err := history.SnapshotByDate(ctx, s.db, history.TableSubmodel, submodelIdentifier, at)
@@ -294,13 +411,8 @@ func (s *SubmodelDatabase) GetSubmodelRecentChanges(ctx context.Context, limit i
 
 // RecordCurrentSubmodelVersion appends a full snapshot of the current Submodel state.
 func (s *SubmodelDatabase) RecordCurrentSubmodelVersion(ctx context.Context, submodelIdentifier string, changeType string) error {
-	submodel, err := s.GetSubmodelByID(ctx, submodelIdentifier, "deep", false)
-	if err != nil {
-		return err
-	}
-
 	return common.ExecuteInTransaction(s.db, "SMREPO-HISTORY-STARTTX", "SMREPO-HISTORY-COMMIT", func(tx *sql.Tx) error {
-		return s.appendSubmodelHistoryTx(ctx, tx, submodel, changeType, false)
+		return s.appendCurrentSubmodelHistoryTx(ctx, tx, submodelIdentifier, changeType)
 	})
 }
 
@@ -817,6 +929,10 @@ func (s *SubmodelDatabase) AddSubmodelElement(ctx context.Context, submodelID st
 		}
 	}
 
+	if err = s.appendCurrentSubmodelHistoryTx(ctx, tx, submodelID, history.ChangeUpdated); err != nil {
+		return err
+	}
+
 	return tx.Commit()
 }
 
@@ -899,6 +1015,10 @@ func (s *SubmodelDatabase) AddSubmodelElementWithPath(ctx context.Context, submo
 
 	err = s.addSubmodelElementWithPathInTransaction(ctx, tx, submodelID, submodelDatabaseID, parentPath, submodelElement)
 	if err != nil {
+		return err
+	}
+
+	if err = s.appendCurrentSubmodelHistoryTx(ctx, tx, submodelID, history.ChangeUpdated); err != nil {
 		return err
 	}
 
@@ -1048,6 +1168,10 @@ func (s *SubmodelDatabase) PutSubmodelElement(
 		}
 	}
 
+	if err = s.appendCurrentSubmodelHistoryTx(ctx, tx, submodelID, history.ChangeUpdated); err != nil {
+		return false, err
+	}
+
 	if err = tx.Commit(); err != nil {
 		return false, err
 	}
@@ -1119,6 +1243,10 @@ func (s *SubmodelDatabase) DeleteSubmodelElementByPath(ctx context.Context, subm
 		return err
 	}
 
+	if err = s.appendCurrentSubmodelHistoryTx(ctx, tx, submodelID, history.ChangeUpdated); err != nil {
+		return err
+	}
+
 	return tx.Commit()
 }
 
@@ -1167,12 +1295,23 @@ func (s *SubmodelDatabase) UpdateSubmodelElement(ctx context.Context, submodelID
 		}
 	}
 
+	if err = s.appendCurrentSubmodelHistoryTx(ctx, tx, submodelID, history.ChangeUpdated); err != nil {
+		return err
+	}
+
 	return tx.Commit()
 }
 
 // UpdateSubmodelElementValueOnly updates a submodel element using value-only representation
 // while preserving ABAC visibility checks from ctx.
-func (s *SubmodelDatabase) UpdateSubmodelElementValueOnly(_ context.Context, submodelID string, idShortOrPath string, valueOnly gen.SubmodelElementValue) error {
+func (s *SubmodelDatabase) UpdateSubmodelElementValueOnly(ctx context.Context, submodelID string, idShortOrPath string, valueOnly gen.SubmodelElementValue) error {
+	if err := s.updateSubmodelElementValueOnly(submodelID, idShortOrPath, valueOnly); err != nil {
+		return err
+	}
+	return s.RecordCurrentSubmodelVersion(ctx, submodelID, history.ChangeUpdated)
+}
+
+func (s *SubmodelDatabase) updateSubmodelElementValueOnly(submodelID string, idShortOrPath string, valueOnly gen.SubmodelElementValue) error {
 	modelType, err := submodelelements.GetModelTypeByIdShortPathAndSubmodelID(s.db, submodelID, idShortOrPath)
 	if err != nil {
 		return err
@@ -1194,12 +1333,12 @@ func (s *SubmodelDatabase) UpdateSubmodelElementValueOnly(_ context.Context, sub
 // while preserving ABAC visibility checks from ctx.
 func (s *SubmodelDatabase) UpdateSubmodelValueOnly(ctx context.Context, submodelID string, valueOnly gen.SubmodelValue) error {
 	for idShort, elementValue := range valueOnly {
-		if err := s.UpdateSubmodelElementValueOnly(ctx, submodelID, idShort, elementValue); err != nil {
+		if err := s.updateSubmodelElementValueOnly(submodelID, idShort, elementValue); err != nil {
 			return err
 		}
 	}
 
-	return nil
+	return s.RecordCurrentSubmodelVersion(ctx, submodelID, history.ChangeUpdated)
 }
 
 // FileAttachmentExists reports whether a File submodel element currently has
@@ -1255,6 +1394,21 @@ func (s *SubmodelDatabase) UploadFileAttachment(submodelID string, idShortPath s
 	return fileHandler.UploadFileAttachment(submodelID, idShortPath, file, fileName)
 }
 
+// UploadFileAttachmentWithHistory uploads attachment content and appends the current Submodel snapshot atomically.
+func (s *SubmodelDatabase) UploadFileAttachmentWithHistory(ctx context.Context, submodelID string, idShortPath string, file *os.File, fileName string) error {
+	fileHandler, err := submodelelements.NewPostgreSQLFileHandler(s.db)
+	if err != nil {
+		return err
+	}
+
+	return common.ExecuteInTransaction(s.db, "SMREPO-UPLOADFILEHIST-STARTTX", "SMREPO-UPLOADFILEHIST-COMMIT", func(tx *sql.Tx) error {
+		if err := fileHandler.UploadFileAttachmentTx(tx, submodelID, idShortPath, file, fileName); err != nil {
+			return err
+		}
+		return s.appendCurrentSubmodelHistoryTx(ctx, tx, submodelID, history.ChangeUpdated)
+	})
+}
+
 // DownloadFileAttachment downloads attachment content for a File submodel element.
 func (s *SubmodelDatabase) DownloadFileAttachment(submodelID string, idShortPath string) ([]byte, string, string, error) {
 	fileHandler, err := submodelelements.NewPostgreSQLFileHandler(s.db)
@@ -1275,9 +1429,24 @@ func (s *SubmodelDatabase) DeleteFileAttachment(submodelID string, idShortPath s
 	return fileHandler.DeleteFileAttachment(submodelID, idShortPath)
 }
 
+// DeleteFileAttachmentWithHistory deletes attachment content and appends the current Submodel snapshot atomically.
+func (s *SubmodelDatabase) DeleteFileAttachmentWithHistory(ctx context.Context, submodelID string, idShortPath string) error {
+	fileHandler, err := submodelelements.NewPostgreSQLFileHandler(s.db)
+	if err != nil {
+		return err
+	}
+
+	return common.ExecuteInTransaction(s.db, "SMREPO-DELETEFILEHIST-STARTTX", "SMREPO-DELETEFILEHIST-COMMIT", func(tx *sql.Tx) error {
+		if err := fileHandler.DeleteFileAttachmentTx(tx, submodelID, idShortPath); err != nil {
+			return err
+		}
+		return s.appendCurrentSubmodelHistoryTx(ctx, tx, submodelID, history.ChangeUpdated)
+	})
+}
+
 // PatchSubmodel updates an existing submodel in the database with the provided submodel data
 // while preserving ABAC visibility checks from ctx.
-func (s *SubmodelDatabase) PatchSubmodel(_ context.Context, submodelID string, submodel types.ISubmodel) error {
+func (s *SubmodelDatabase) PatchSubmodel(ctx context.Context, submodelID string, submodel types.ISubmodel) error {
 	if submodelID != submodel.ID() {
 		return common.NewErrBadRequest("SMREPO-PATCHSM-IDMISMATCH Submodel ID in path and body do not match")
 	}
@@ -1293,6 +1462,10 @@ func (s *SubmodelDatabase) PatchSubmodel(_ context.Context, submodelID string, s
 	defer cleanup(&err)
 
 	if err = s.patchSubmodelInTransactionValidated(submodelID, tx, submodel); err != nil {
+		return err
+	}
+
+	if err = s.appendCurrentSubmodelHistoryTx(ctx, tx, submodelID, history.ChangeUpdated); err != nil {
 		return err
 	}
 
@@ -1330,7 +1503,7 @@ func (s *SubmodelDatabase) patchSubmodelInTransactionValidated(submodelID string
 
 // PatchSubmodelMetadata updates a submodel without rewriting submodel elements
 // while preserving ABAC visibility checks from ctx.
-func (s *SubmodelDatabase) PatchSubmodelMetadata(_ context.Context, submodelID string, submodel types.ISubmodel) error {
+func (s *SubmodelDatabase) PatchSubmodelMetadata(ctx context.Context, submodelID string, submodel types.ISubmodel) error {
 	if submodelID != submodel.ID() {
 		return common.NewErrBadRequest("SMREPO-PATCHSMMETA-IDMISMATCH Submodel ID in path and body do not match")
 	}
@@ -1346,6 +1519,10 @@ func (s *SubmodelDatabase) PatchSubmodelMetadata(_ context.Context, submodelID s
 	defer cleanup(&err)
 
 	if err = s.patchSubmodelMetadataInTransactionValidated(submodelID, tx, submodel); err != nil {
+		return err
+	}
+
+	if err = s.appendCurrentSubmodelHistoryTx(ctx, tx, submodelID, history.ChangeUpdated); err != nil {
 		return err
 	}
 

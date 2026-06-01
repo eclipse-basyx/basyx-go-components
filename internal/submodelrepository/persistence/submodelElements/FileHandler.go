@@ -352,44 +352,94 @@ func (p PostgreSQLFileHandler) GetInsertQueryPart(_ *sql.Tx, id int, element typ
 //
 //nolint:revive // cyclomatic complexity is acceptable for this function as the SQL process is complex and requires multiple steps, refactoring would not improve readability
 func (p PostgreSQLFileHandler) UploadFileAttachment(submodelID string, idShortPath string, file *os.File, fileName string) error {
-	dialect := goqu.Dialect("postgres")
-
-	// Validate and clean the file path
-	filePath := filepath.Clean(file.Name())
-
-	// Reopen the file since it might be closed by the OpenAPI framework
-	// #nosec G703 -- path comes from server-created temporary file and is normalized with filepath.Clean
-	reopenedFile, err := os.Open(filePath)
+	tx, err := p.db.Begin()
 	if err != nil {
-		return fmt.Errorf("failed to reopen file: %w", err)
+		return fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	committed := false
+	defer func() {
+		if !committed {
+			_ = tx.Rollback()
+		}
+	}()
+
+	if err := p.UploadFileAttachmentTx(tx, submodelID, idShortPath, file, fileName); err != nil {
+		return err
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("failed to commit transaction: %w", err)
+	}
+	committed = true
+	return nil
+}
+
+// UploadFileAttachmentTx uploads attachment content using the provided transaction.
+func (p PostgreSQLFileHandler) UploadFileAttachmentTx(tx *sql.Tx, submodelID string, idShortPath string, file *os.File, fileName string) error {
+	dialect := goqu.Dialect("postgres")
+	reopenedFile, err := reopenUploadedFile(file)
+	if err != nil {
+		return err
 	}
 	defer func() {
 		_ = reopenedFile.Close()
 	}()
 
-	// Start a transaction for atomic operation
-	tx, err := p.db.Begin()
+	metadata, err := readFileElementUploadMetadata(tx, dialect, submodelID, idShortPath)
 	if err != nil {
-		return fmt.Errorf("failed to begin transaction: %w", err)
+		return err
 	}
-	defer func() {
-		if err != nil {
-			_ = tx.Rollback()
-		}
-	}()
 
+	resolvedFileName, resolvedContentType, err := resolveUploadFileMetadata(reopenedFile, fileName, metadata)
+	if err != nil {
+		return err
+	}
+
+	oldOID, err := readExistingFileOID(tx, dialect, metadata.elementID)
+	if err != nil {
+		return err
+	}
+
+	if oldOID.Valid {
+		if err := unlinkLargeObject(tx, oldOID.Int64); err != nil {
+			return err
+		}
+	}
+
+	newOID, err := createAndWriteLargeObject(tx, reopenedFile)
+	if err != nil {
+		return err
+	}
+	if err := upsertFileDataOID(tx, dialect, metadata.elementID, newOID, oldOID.Valid); err != nil {
+		return err
+	}
+	return updateFileElementAttachment(tx, dialect, metadata.elementID, newOID, resolvedFileName, resolvedContentType)
+}
+
+type fileElementUploadMetadata struct {
+	elementID           int64
+	existingContentType sql.NullString
+	existingFileName    sql.NullString
+}
+
+func reopenUploadedFile(file *os.File) (*os.File, error) {
+	filePath := filepath.Clean(file.Name())
+	// #nosec G703 -- path comes from server-created temporary file and is normalized with filepath.Clean
+	reopenedFile, err := os.Open(filePath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to reopen file: %w", err)
+	}
+	return reopenedFile, nil
+}
+
+func readFileElementUploadMetadata(tx *sql.Tx, dialect goqu.DialectWrapper, submodelID string, idShortPath string) (fileElementUploadMetadata, error) {
 	submodelDatabaseID, err := persistenceutils.GetSubmodelDatabaseID(tx, submodelID)
 	if err != nil {
 		if err == sql.ErrNoRows {
-			return common.NewErrNotFound("submodel not found")
+			return fileElementUploadMetadata{}, common.NewErrNotFound("submodel not found")
 		}
-		return fmt.Errorf("failed to get submodel database ID: %w", err)
+		return fileElementUploadMetadata{}, fmt.Errorf("failed to get submodel database ID: %w", err)
 	}
 
-	// Get the submodel element metadata
-	var submodelElementID int64
-	var existingContentType sql.NullString
-	var existingFileName sql.NullString
 	query, args, err := dialect.From("submodel_element").
 		InnerJoin(
 			goqu.T("file_element"),
@@ -399,88 +449,100 @@ func (p PostgreSQLFileHandler) UploadFileAttachment(submodelID string, idShortPa
 		Where(goqu.C("submodel_id").Eq(submodelDatabaseID), goqu.C("idshort_path").Eq(idShortPath)).
 		ToSQL()
 	if err != nil {
-		return fmt.Errorf("failed to build query: %w", err)
+		return fileElementUploadMetadata{}, fmt.Errorf("failed to build query: %w", err)
 	}
 
-	err = tx.QueryRow(query, args...).Scan(&submodelElementID, &existingContentType, &existingFileName)
+	var metadata fileElementUploadMetadata
+	err = tx.QueryRow(query, args...).Scan(&metadata.elementID, &metadata.existingContentType, &metadata.existingFileName)
 	if err != nil {
 		if err == sql.ErrNoRows {
-			return common.NewErrNotFound("submodel element not found")
+			return fileElementUploadMetadata{}, common.NewErrNotFound("submodel element not found")
 		}
-		return fmt.Errorf("failed to get submodel element ID: %w", err)
+		return fileElementUploadMetadata{}, fmt.Errorf("failed to get submodel element ID: %w", err)
 	}
+	return metadata, nil
+}
 
-	// Detect content type from file content
-	contentTypeBuffer := make([]byte, 512)
-	n, err := reopenedFile.Read(contentTypeBuffer)
-	if err != nil && err != io.EOF {
-		return fmt.Errorf("failed to read file for content type detection: %w", err)
-	}
-	detectedContentType := "application/octet-stream"
-	if n > 0 {
-		detectedContentType = http.DetectContentType(contentTypeBuffer[:n])
+func resolveUploadFileMetadata(file *os.File, fileName string, metadata fileElementUploadMetadata) (string, string, error) {
+	detectedContentType, err := detectContentType(file)
+	if err != nil {
+		return "", "", err
 	}
 
 	resolvedFileName := strings.TrimSpace(fileName)
-	if resolvedFileName == "" && existingFileName.Valid {
-		resolvedFileName = existingFileName.String
+	if resolvedFileName == "" && metadata.existingFileName.Valid {
+		resolvedFileName = metadata.existingFileName.String
 	}
 
-	resolvedContentType, mismatchDetectedVsDeclared := common.ResolveUploadedContentType(detectedContentType, existingContentType.String, resolvedFileName)
+	resolvedContentType, mismatchDetectedVsDeclared := common.ResolveUploadedContentType(detectedContentType, metadata.existingContentType.String, resolvedFileName)
 	if mismatchDetectedVsDeclared {
 		log.Printf("[WARN] SMREPO-UPLOADATTACHMENT-RESOLVEMIME detected content type differs from declared content type; using detected content type")
 	}
 
-	// Seek back to the beginning of the file
-	_, err = reopenedFile.Seek(0, 0)
-	if err != nil {
-		return fmt.Errorf("failed to seek file: %w", err)
+	if _, err = file.Seek(0, 0); err != nil {
+		return "", "", fmt.Errorf("failed to seek file: %w", err)
 	}
+	return resolvedFileName, resolvedContentType, nil
+}
 
-	// Check for existing file_data and delete old Large Object if it exists
-	var oldOID sql.NullInt64
+func detectContentType(file *os.File) (string, error) {
+	contentTypeBuffer := make([]byte, 512)
+	n, err := file.Read(contentTypeBuffer)
+	if err != nil && err != io.EOF {
+		return "", fmt.Errorf("failed to read file for content type detection: %w", err)
+	}
+	if n == 0 {
+		return "application/octet-stream", nil
+	}
+	return http.DetectContentType(contentTypeBuffer[:n]), nil
+}
+
+func readExistingFileOID(tx *sql.Tx, dialect goqu.DialectWrapper, elementID int64) (sql.NullInt64, error) {
 	fileDataQuery, fileDataArgs, err := dialect.From("file_data").
 		Select("file_oid").
-		Where(goqu.C("id").Eq(submodelElementID)).
+		Where(goqu.C("id").Eq(elementID)).
 		ToSQL()
 	if err != nil {
-		return fmt.Errorf("failed to build file_data query: %w", err)
+		return sql.NullInt64{}, fmt.Errorf("failed to build file_data query: %w", err)
 	}
 
+	var oldOID sql.NullInt64
 	err = tx.QueryRow(fileDataQuery, fileDataArgs...).Scan(&oldOID)
 	if err != nil && err != sql.ErrNoRows {
-		return fmt.Errorf("failed to check existing file data: %w", err)
+		return sql.NullInt64{}, fmt.Errorf("failed to check existing file data: %w", err)
 	}
+	return oldOID, nil
+}
 
-	// Delete old Large Object if it exists
-	if oldOID.Valid {
-		_, err = tx.Exec(`SELECT lo_unlink($1)`, oldOID.Int64)
-		if err != nil {
-			return fmt.Errorf("failed to delete old large object: %w", err)
-		}
+func unlinkLargeObject(tx *sql.Tx, oid int64) error {
+	if _, err := tx.Exec(`SELECT lo_unlink($1)`, oid); err != nil {
+		return fmt.Errorf("failed to delete old large object: %w", err)
 	}
+	return nil
+}
 
-	// Create a new Large Object
+func createAndWriteLargeObject(tx *sql.Tx, file *os.File) (int64, error) {
 	var newOID int64
-	err = tx.QueryRow(`SELECT lo_create(0)`).Scan(&newOID)
-	if err != nil {
-		return fmt.Errorf("failed to create large object: %w", err)
+	if err := tx.QueryRow(`SELECT lo_create(0)`).Scan(&newOID); err != nil {
+		return 0, fmt.Errorf("failed to create large object: %w", err)
 	}
 
-	// Open the Large Object for writing (0x00020000 = INV_WRITE mode)
 	var loFD int
-	err = tx.QueryRow(`SELECT lo_open($1, $2)`, newOID, 0x00020000).Scan(&loFD)
-	if err != nil {
-		return fmt.Errorf("failed to open large object: %w", err)
+	if err := tx.QueryRow(`SELECT lo_open($1, $2)`, newOID, 0x00020000).Scan(&loFD); err != nil {
+		return 0, fmt.Errorf("failed to open large object: %w", err)
 	}
+	if err := writeLargeObject(tx, file, loFD); err != nil {
+		return 0, err
+	}
+	return newOID, nil
+}
 
-	// Read file content and write to Large Object in chunks
-	buffer := make([]byte, 8192) // 8KB chunks
+func writeLargeObject(tx *sql.Tx, file *os.File, loFD int) error {
+	buffer := make([]byte, 8192)
 	for {
-		n, readErr := reopenedFile.Read(buffer)
+		n, readErr := file.Read(buffer)
 		if n > 0 {
-			_, err = tx.Exec(`SELECT lowrite($1, $2)`, loFD, buffer[:n])
-			if err != nil {
+			if _, err := tx.Exec(`SELECT lowrite($1, $2)`, loFD, buffer[:n]); err != nil {
 				_, _ = tx.Exec(`SELECT lo_close($1)`, loFD)
 				return fmt.Errorf("failed to write to large object: %w", err)
 			}
@@ -493,64 +555,54 @@ func (p PostgreSQLFileHandler) UploadFileAttachment(submodelID string, idShortPa
 			return fmt.Errorf("failed to read file: %w", readErr)
 		}
 	}
-
-	// Close the Large Object
-	_, err = tx.Exec(`SELECT lo_close($1)`, loFD)
-	if err != nil {
+	if _, err := tx.Exec(`SELECT lo_close($1)`, loFD); err != nil {
 		return fmt.Errorf("failed to close large object: %w", err)
 	}
+	return nil
+}
 
-	// Update or insert file_data entry with the new OID
-	if oldOID.Valid {
-		// Update existing entry using GoQu
+func upsertFileDataOID(tx *sql.Tx, dialect goqu.DialectWrapper, elementID int64, oid int64, exists bool) error {
+	if exists {
 		updateQuery, updateArgs, err := dialect.Update("file_data").
-			Set(goqu.Record{"file_oid": newOID}).
-			Where(goqu.C("id").Eq(submodelElementID)).
+			Set(goqu.Record{"file_oid": oid}).
+			Where(goqu.C("id").Eq(elementID)).
 			ToSQL()
 		if err != nil {
 			return fmt.Errorf("failed to build update query: %w", err)
 		}
-		_, err = tx.Exec(updateQuery, updateArgs...)
-		if err != nil {
+		if _, err = tx.Exec(updateQuery, updateArgs...); err != nil {
 			return fmt.Errorf("failed to update file_oid: %w", err)
 		}
-	} else {
-		// Insert new entry using GoQu
-		insertQuery, insertArgs, err := dialect.Insert("file_data").
-			Rows(goqu.Record{"id": submodelElementID, "file_oid": newOID}).
-			ToSQL()
-		if err != nil {
-			return fmt.Errorf("failed to build insert query: %w", err)
-		}
-		_, err = tx.Exec(insertQuery, insertArgs...)
-		if err != nil {
-			return fmt.Errorf("failed to insert file_oid: %w", err)
-		}
+		return nil
 	}
 
-	// Update file_element.value to reference the OID and content_type
+	insertQuery, insertArgs, err := dialect.Insert("file_data").
+		Rows(goqu.Record{"id": elementID, "file_oid": oid}).
+		ToSQL()
+	if err != nil {
+		return fmt.Errorf("failed to build insert query: %w", err)
+	}
+	if _, err = tx.Exec(insertQuery, insertArgs...); err != nil {
+		return fmt.Errorf("failed to insert file_oid: %w", err)
+	}
+	return nil
+}
+
+func updateFileElementAttachment(tx *sql.Tx, dialect goqu.DialectWrapper, elementID int64, oid int64, fileName string, contentType string) error {
 	updateFileElementQuery, updateFileElementArgs, err := dialect.Update("file_element").
 		Set(goqu.Record{
-			"value":        fmt.Sprintf("%d", newOID),
-			"file_name":    resolvedFileName,
-			"content_type": resolvedContentType,
+			"value":        fmt.Sprintf("%d", oid),
+			"file_name":    fileName,
+			"content_type": contentType,
 		}).
-		Where(goqu.C("id").Eq(submodelElementID)).
+		Where(goqu.C("id").Eq(elementID)).
 		ToSQL()
 	if err != nil {
 		return fmt.Errorf("failed to build file_element update query: %w", err)
 	}
-	_, err = tx.Exec(updateFileElementQuery, updateFileElementArgs...)
-	if err != nil {
+	if _, err = tx.Exec(updateFileElementQuery, updateFileElementArgs...); err != nil {
 		return fmt.Errorf("failed to update file_element value: %w", err)
 	}
-
-	// Commit the transaction
-	err = tx.Commit()
-	if err != nil {
-		return fmt.Errorf("failed to commit transaction: %w", err)
-	}
-
 	return nil
 }
 
@@ -678,19 +730,30 @@ func (p PostgreSQLFileHandler) DownloadFileAttachment(submodelID string, idShort
 // Returns:
 //   - error: Error if the deletion operation fails
 func (p PostgreSQLFileHandler) DeleteFileAttachment(submodelID string, idShortPath string) error {
-	dialect := goqu.Dialect("postgres")
-
 	tx, err := p.db.Begin()
 	if err != nil {
 		return fmt.Errorf("failed to begin transaction: %w", err)
 	}
+	committed := false
 	defer func() {
-		if err != nil {
+		if !committed {
 			_ = tx.Rollback()
-		} else {
-			_ = tx.Commit()
 		}
 	}()
+
+	if err := p.DeleteFileAttachmentTx(tx, submodelID, idShortPath); err != nil {
+		return err
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("failed to commit transaction: %w", err)
+	}
+	committed = true
+	return nil
+}
+
+// DeleteFileAttachmentTx deletes attachment content using the provided transaction.
+func (p PostgreSQLFileHandler) DeleteFileAttachmentTx(tx *sql.Tx, submodelID string, idShortPath string) error {
+	dialect := goqu.Dialect("postgres")
 
 	submodelDatabaseID, err := persistenceutils.GetSubmodelDatabaseID(tx, submodelID)
 	if err != nil {

@@ -96,6 +96,7 @@ func TestPatchSubmodelSuccessReplacesSubmodel(t *testing.T) {
 		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(200))
 	mock.ExpectExec(`INSERT INTO .*submodel_payload`).
 		WillReturnResult(sqlmock.NewResult(0, 1))
+	expectCurrentSubmodelSnapshotLoad(mock, "sm-1", "sm1")
 	mock.ExpectCommit()
 
 	err = sut.PatchSubmodel(contextWithABACDisabled(t), "sm-1", submodel)
@@ -187,6 +188,29 @@ func expectSubmodelHistoryAppend(mock sqlmock.Sqlmock) {
 		WillReturnResult(sqlmock.NewResult(0, 1))
 }
 
+func expectCurrentSubmodelSnapshotLoad(mock sqlmock.Sqlmock, submodelID string, idShort string) {
+	mock.ExpectQuery(`SELECT .*FROM "submodel".*submodel_payload.*`).
+		WillReturnRows(sqlmock.NewRows([]string{
+			"submodel_identifier",
+			"id_short",
+			"category",
+			"kind",
+			"description_payload",
+			"displayname_payload",
+			"administrative_information_payload",
+			"embedded_data_specification_payload",
+			"supplemental_semantic_ids_payload",
+			"extensions_payload",
+			"qualifiers_payload",
+			"semantic_id_payload",
+		}).AddRow(submodelID, idShort, nil, nil, "[]", "[]", "{}", "[]", "[]", "[]", "[]", "{}"))
+	mock.ExpectQuery(`SELECT .*FROM "submodel"`).
+		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(100))
+	mock.ExpectQuery(`SELECT .*FROM "submodel_element"`).
+		WillReturnRows(sqlmock.NewRows([]string{"id", "idshort_path"}))
+	expectSubmodelHistoryAppend(mock)
+}
+
 func TestPatchSubmodelElementByPathNotFoundReturnsNotFound(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
@@ -235,6 +259,7 @@ func TestPatchSubmodelElementByPathSuccess(t *testing.T) {
 		WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectExec(`INSERT INTO .*submodel_element_payload`).
 		WillReturnResult(sqlmock.NewResult(0, 1))
+	expectCurrentSubmodelSnapshotLoad(mock, "sm-1", "sm1")
 	mock.ExpectCommit()
 
 	err = sut.UpdateSubmodelElement(contextWithABACDisabled(t), "sm-1", "oldIdShort", patchElement, false)
