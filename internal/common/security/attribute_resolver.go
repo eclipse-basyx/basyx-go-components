@@ -67,7 +67,15 @@ func resolveAttributeValue(attr grammar.AttributeValue, claims Claims) any {
 		return nil
 	}
 	if c := m["CLAIM"]; c != "" {
-		return fmt.Sprint(normalizeClaimScalar(claims[c]))
+		val, exists := claims[c]
+		if !exists {
+			return nil
+		}
+		normalized := normalizeClaimScalar(val)
+		if normalized == nil {
+			return nil
+		}
+		return fmt.Sprint(normalized)
 	}
 	if g := m["GLOBAL"]; g != "" {
 		if val, ok := resolveGlobalToken(g, claims); ok {

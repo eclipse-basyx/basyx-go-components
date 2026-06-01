@@ -39,6 +39,11 @@ import (
 func TestIntegrationQuerySuite(t *testing.T) {
 	testenv.RunJSONSuite(t, testenv.JSONSuiteOptions{
 		ConfigPath: "it_config_query.json",
+		TokenProvider: testenv.NewPasswordGrantTokenProvider(
+			"http://localhost:8080/realms/basyx/protocol/openid-connect/token",
+			"basyx-ui",
+			10*time.Second,
+		),
 		ShouldSkipStep: func(step testenv.JSONSuiteStep) bool {
 			return false
 		},
@@ -47,10 +52,9 @@ func TestIntegrationQuerySuite(t *testing.T) {
 
 func TestMain(m *testing.M) {
 	os.Exit(testenv.RunComposeTestMain(m, testenv.ComposeTestMainOptions{
-		ComposeFile:        "docker_compose/docker_compose.yml",
-		PreDownBeforeUp:    true,
-		SkipDownAfterTests: true,
-		HealthURL:          "http://localhost:6004/health",
-		HealthTimeout:      150 * time.Second,
+		ComposeFile:     "docker_compose/docker_compose.yml",
+		PreDownBeforeUp: true,
+		HealthURL:       "http://localhost:6004/health",
+		HealthTimeout:   150 * time.Second,
 	}))
 }

@@ -31,6 +31,7 @@ import (
 	"encoding/json"
 )
 
+// WithQueryFilter stores the provided query filter in the context.
 func WithQueryFilter(ctx context.Context, queryFilter *QueryFilter) context.Context {
 	if queryFilter == nil {
 		return ctx
@@ -38,6 +39,7 @@ func WithQueryFilter(ctx context.Context, queryFilter *QueryFilter) context.Cont
 	return context.WithValue(ctx, filterKey, queryFilter)
 }
 
+// CloneQueryFilter returns a deep copy of the provided query filter.
 func CloneQueryFilter(queryFilter *QueryFilter) (*QueryFilter, error) {
 	if queryFilter == nil {
 		return nil, nil

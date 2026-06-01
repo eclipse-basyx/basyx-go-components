@@ -1,0 +1,9 @@
+{
+  "$condition": { "$boolean": true },
+  "$filters": [
+    {
+      "$fragment": "$sme#value",
+      "$condition": { "$boolean": false }
+    }
+  ]
+}
