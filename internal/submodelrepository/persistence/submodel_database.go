@@ -1335,18 +1335,27 @@ func (s *SubmodelDatabase) UpdateSubmodelElement(ctx context.Context, submodelID
 
 // UpdateSubmodelElementValueOnly updates a submodel element using value-only representation
 // while preserving ABAC visibility checks from ctx.
-func (s *SubmodelDatabase) UpdateSubmodelElementValueOnly(ctx context.Context, submodelID string, idShortOrPath string, valueOnly gen.SubmodelElementValue) error {
-	if err := s.updateSubmodelElementValueOnly(submodelID, idShortOrPath, valueOnly); err != nil {
+func (s *SubmodelDatabase) UpdateSubmodelElementValueOnly(ctx context.Context, submodelID string, idShortOrPath string, valueOnly gen.SubmodelElementValue) (err error) {
+	tx, cleanup, err := common.StartTransaction(s.db)
+	if err != nil {
 		return err
 	}
-	return s.recordChangedSubmodelElementHistory(ctx, submodelID, submodelElementRootMutation{
+	defer cleanup(&err)
+
+	if err = s.updateSubmodelElementValueOnly(tx, submodelID, idShortOrPath, valueOnly); err != nil {
+		return err
+	}
+	if err = s.appendChangedSubmodelElementHistoryTx(ctx, tx, submodelID, submodelElementRootMutation{
 		previousPath: idShortOrPath,
 		currentPath:  idShortOrPath,
-	})
+	}); err != nil {
+		return err
+	}
+	return tx.Commit()
 }
 
-func (s *SubmodelDatabase) updateSubmodelElementValueOnly(submodelID string, idShortOrPath string, valueOnly gen.SubmodelElementValue) error {
-	modelType, err := submodelelements.GetModelTypeByIdShortPathAndSubmodelID(s.db, submodelID, idShortOrPath)
+func (s *SubmodelDatabase) updateSubmodelElementValueOnly(tx *sql.Tx, submodelID string, idShortOrPath string, valueOnly gen.SubmodelElementValue) error {
+	modelType, err := submodelelements.GetModelTypeByIdShortPathAndSubmodelIDTx(tx, submodelID, idShortOrPath)
 	if err != nil {
 		return err
 	}
@@ -1360,15 +1369,21 @@ func (s *SubmodelDatabase) updateSubmodelElementValueOnly(submodelID string, idS
 		return err
 	}
 
-	return handler.UpdateValueOnly(submodelID, idShortOrPath, valueOnly)
+	return handler.UpdateValueOnly(submodelID, idShortOrPath, valueOnly, tx)
 }
 
 // UpdateSubmodelValueOnly updates all included top-level submodel elements using value-only representation
 // while preserving ABAC visibility checks from ctx.
-func (s *SubmodelDatabase) UpdateSubmodelValueOnly(ctx context.Context, submodelID string, valueOnly gen.SubmodelValue) error {
+func (s *SubmodelDatabase) UpdateSubmodelValueOnly(ctx context.Context, submodelID string, valueOnly gen.SubmodelValue) (err error) {
+	tx, cleanup, err := common.StartTransaction(s.db)
+	if err != nil {
+		return err
+	}
+	defer cleanup(&err)
+
 	mutations := make([]submodelElementRootMutation, 0, len(valueOnly))
 	for idShort, elementValue := range valueOnly {
-		if err := s.updateSubmodelElementValueOnly(submodelID, idShort, elementValue); err != nil {
+		if err = s.updateSubmodelElementValueOnly(tx, submodelID, idShort, elementValue); err != nil {
 			return err
 		}
 		mutations = append(mutations, submodelElementRootMutation{
@@ -1377,7 +1392,10 @@ func (s *SubmodelDatabase) UpdateSubmodelValueOnly(ctx context.Context, submodel
 		})
 	}
 
-	return s.recordChangedSubmodelElementHistory(ctx, submodelID, mutations...)
+	if err = s.appendChangedSubmodelElementHistoryTx(ctx, tx, submodelID, mutations...); err != nil {
+		return err
+	}
+	return tx.Commit()
 }
 
 // FileAttachmentExists reports whether a File submodel element currently has

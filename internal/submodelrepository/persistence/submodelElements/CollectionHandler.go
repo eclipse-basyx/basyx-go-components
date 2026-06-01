@@ -157,12 +157,12 @@ func (p PostgreSQLSubmodelElementCollectionHandler) Update(submodelID string, id
 //
 // Returns:
 //   - error: An error if the update operation fails
-func (p PostgreSQLSubmodelElementCollectionHandler) UpdateValueOnly(submodelID string, idShortOrPath string, valueOnly gen.SubmodelElementValue) error {
+func (p PostgreSQLSubmodelElementCollectionHandler) UpdateValueOnly(submodelID string, idShortOrPath string, valueOnly gen.SubmodelElementValue, tx *sql.Tx) error {
 	elems, err := buildElementsToProcessStackValueOnly(p.db, submodelID, idShortOrPath, valueOnly)
 	if err != nil {
 		return err
 	}
-	err = UpdateNestedElementsValueOnly(p.db, elems, idShortOrPath, submodelID)
+	err = UpdateNestedElementsValueOnly(p.db, elems, idShortOrPath, submodelID, tx)
 	if err != nil {
 		return err
 	}

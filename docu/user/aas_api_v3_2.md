@@ -66,23 +66,23 @@ Known v3.2 OpenAPI gaps in standalone services:
 
 ## History Configuration
 
-History behavior is controlled through lightweight, vendor-neutral configuration. Versioning is enabled by default because `history.mode` defaults to `api`. Set it explicitly to `off` if a deployment does not want history writes.
+History behavior is controlled through lightweight, vendor-neutral configuration. Versioning is opt-in: `history.mode` defaults to `off`.
 
 Environment variables:
 
-- `BASYX_HISTORY_MODE`: `off`, `api`, or `audit`. Default is `api`.
-- `BASYX_HISTORY_RETENTION_DAYS`: reserved retention setting. Default is `0`. Automatic cleanup is not implemented yet.
-- `BASYX_HISTORY_IMMUTABILITY`: `none`, `postgres_guarded`, or `external_anchor`. Default is `none`.
-- `BASYX_AUDIT_IDENTITY_MODE`: `none`, `minimal`, or `extended`. Default is `minimal`.
+- `BASYX_HISTORY_MODE`: `off`, `api`, or `audit`. Default is `off`.
+- `BASYX_HISTORY_RETENTION_DAYS`: must remain `0`. Automatic cleanup is not implemented yet.
+- `BASYX_HISTORY_IMMUTABILITY`: `none` or `postgres_guarded`. Default is `none`.
+- `BASYX_AUDIT_IDENTITY_MODE`: must remain `none`. Automatic identity enrichment is not implemented yet.
 
 Equivalent YAML:
 
 ```yaml
 history:
-  mode: api
+  mode: off
   retentionDays: 0
   immutability: none
-  auditIdentityMode: minimal
+  auditIdentityMode: none
 ```
 
 Mode semantics:
@@ -95,15 +95,13 @@ Current implementation status:
 
 - Runtime history rows are append-only, hash-chained event rows in `api` and `audit` mode.
 - Schema migration installs PostgreSQL guard triggers. `postgres_guarded` enables them at service startup. When enabled, `UPDATE`, `DELETE`, and `TRUNCATE` on history tables fail with `history tables are append-only`.
-- `external_anchor` currently enables the same PostgreSQL guard foundation and reserves anchor metadata columns. It does not yet publish anchors to an external system.
-- `retentionDays` is accepted as configuration, but the runtime does not delete or compact old history rows yet.
-- `auditIdentityMode` is accepted as configuration, but the runtime does not yet use it to enrich or suppress identity metadata automatically.
+- `external_anchor`, non-zero `retentionDays`, and identity enrichment modes currently fail fast during configuration loading. Their runtime implementations are planned for later work.
 - Audit metadata columns are present, but regular API middleware does not populate the audit context yet.
 - The implementation supports compliance-oriented deployments, but it does not by itself make a deployment legally compliant with any specific regulation.
 
 Guarded PostgreSQL mode protects against normal accidental or unauthorized mutations through the application database user. PostgreSQL superusers or operators with permissions to alter triggers/functions can still bypass or remove this protection. Stronger guarantees require external anchoring, WORM storage, or a transparency-log style system.
 
-The guard switch is database-wide. Configure all BaSyx services that share one database with the same history immutability mode so one service does not intentionally disable a guard expected by another service.
+The guard switch is database-wide. Configure all BaSyx services that share one database with the same history immutability mode. Runtime services may enable guarded mode, but normal service startup cannot disable an enabled database guard. A service configured as unguarded fails during startup when it encounters an already-enabled database guard. Disabling guarded mode is an explicit operator maintenance action.
 
 See `examples/BaSyxHistoryAuditGuardedExample` for a Docker Compose setup with audit history and `postgres_guarded` enabled.
 
@@ -147,7 +145,7 @@ Eventing placeholders:
 - `BASYX_EVENTING_OUTBOX_ENABLED`
 - `BASYX_EVENTING_TOPIC_PREFIX`
 
-These settings reserve the configuration shape for future CloudEvents-compatible outbox/event publishing. MQTT and Kafka publishing are not implemented yet.
+These settings reserve the configuration shape for future CloudEvents-compatible outbox/event publishing. MQTT and Kafka publishing are not implemented yet. Enabling eventing, configuring sinks, or enabling the outbox currently fails fast during configuration loading.
 
 ## Historical Reads
 
@@ -230,7 +228,7 @@ curl 'http://localhost:6004/submodels/$recent-changes?limit=50&updatedFrom=2026-
 
 Common query parameters:
 
-- `limit`: maximum number of changes to return.
+- `limit`: maximum number of changes to return. The default is `100`; the maximum accepted value is `1000`.
 - `cursor`: pagination cursor from the previous response.
 - `createdFrom`: lower bound for administrative creation timestamps.
 - `updatedFrom`: lower bound for administrative update timestamps.
@@ -274,7 +272,9 @@ The new history, recent-change, and signed endpoints are protected as read endpo
 
 Important operational note:
 
-- Historical snapshots are stored independently from the current normalized tables. If your deployment relies on very fine-grained field-level redaction, validate whether historical reads need additional policy review before exposing them broadly.
+- `$history` and `$recent-changes` are route-authorized resources in this release. They do not apply current-table ABAC filters or logical-expression redaction to stored snapshots.
+- Only assign access to these routes to principals that may read the complete historical snapshot or complete recent-change feed returned by the endpoint.
+- Identifier-aware authorization for these endpoints is planned as a separate follow-up. Fine-grained snapshot filtering is intentionally out of scope.
 
 ## Operational Considerations
 

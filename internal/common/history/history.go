@@ -84,15 +84,20 @@ const (
 	ChangeUpdated = "Updated"
 	// ChangeDeleted marks a deleted entity version.
 	ChangeDeleted = "Deleted"
+
+	// DefaultRecentChangesLimit is the page size used when no limit is provided.
+	DefaultRecentChangesLimit int32 = 100
+	// MaxRecentChangesLimit bounds snapshot loading for one recent-change request.
+	MaxRecentChangesLimit int32 = 1000
 )
 
 var (
 	configMu     sync.RWMutex
 	activeConfig = Config{
-		Mode:              ModeAPI,
+		Mode:              ModeOff,
 		RetentionDays:     0,
 		Immutability:      ImmutabilityNone,
-		AuditIdentityMode: AuditIdentityMinimal,
+		AuditIdentityMode: AuditIdentityNone,
 	}
 )
 
@@ -222,49 +227,35 @@ func ActiveConfig() Config {
 	return activeConfig
 }
 
-// ApplyPostgresGuardConfig enables or disables database-side history mutation guards.
+// ApplyPostgresGuardConfig enables database-side history mutation guards without
+// allowing ordinary service startup to downgrade an enabled database guard.
 func ApplyPostgresGuardConfig(ctx context.Context, db *sql.DB) error {
 	if db == nil {
 		return common.NewInternalServerError("HISTORY-GUARD-NILDB database handle must not be nil")
 	}
 
 	enabled := postgresGuardEnabled(ActiveConfig())
-	updateSQL, updateArgs, err := goqu.Update(TableGuardConfig).
-		Set(goqu.Record{
-			"enabled":    enabled,
-			"updated_at": goqu.L("NOW()"),
-		}).
-		Where(goqu.C("id").Eq(true)).
-		ToSQL()
-	if err != nil {
-		return common.NewInternalServerError("HISTORY-GUARD-BUILDUPDATE " + err.Error())
-	}
-	result, err := db.ExecContext(ctx, updateSQL, updateArgs...)
-	if err != nil {
-		return common.NewInternalServerError("HISTORY-GUARD-EXECUPDATE " + err.Error())
-	}
-	affected, err := result.RowsAffected()
-
-	if err != nil {
-		return common.NewInternalServerError("HISTORY-GUARD-ROWSAFFECTED " + err.Error())
-	}
-
-	if affected > 0 {
-		return nil
-	}
-
-	insertSQL, insertArgs, err := goqu.Insert(TableGuardConfig).
+	query, args, err := goqu.Insert(TableGuardConfig).
 		Rows(goqu.Record{
 			"id":         true,
 			"enabled":    enabled,
 			"updated_at": goqu.L("NOW()"),
 		}).
+		OnConflict(goqu.DoUpdate("id", goqu.Record{
+			"enabled":    goqu.L("history_guard_config.enabled OR EXCLUDED.enabled"),
+			"updated_at": goqu.L("NOW()"),
+		})).
+		Returning(goqu.C("enabled")).
 		ToSQL()
 	if err != nil {
-		return common.NewInternalServerError("HISTORY-GUARD-BUILDINSERT " + err.Error())
+		return common.NewInternalServerError("HISTORY-GUARD-BUILDUPSERT " + err.Error())
 	}
-	if _, err = db.ExecContext(ctx, insertSQL, insertArgs...); err != nil {
-		return common.NewInternalServerError("HISTORY-GUARD-EXECINSERT " + err.Error())
+	var databaseGuardEnabled bool
+	if err = db.QueryRowContext(ctx, query, args...).Scan(&databaseGuardEnabled); err != nil {
+		return common.NewInternalServerError("HISTORY-GUARD-EXECUPSERT " + err.Error())
+	}
+	if !enabled && databaseGuardEnabled {
+		return common.NewInternalServerError("HISTORY-GUARD-CONFLICT database history guard is enabled but this service is configured without postgres_guarded immutability")
 	}
 	return nil
 }
@@ -372,6 +363,8 @@ func appendVersionWithPreviousHashTx(ctx context.Context, tx *sql.Tx, table stri
 		"operation_time":                 now,
 		"administration_created_at_text": createdAt,
 		"administration_updated_at_text": updatedAt,
+		"administration_created_at":      nullableTimestamp(createdAt),
+		"administration_updated_at":      nullableTimestamp(updatedAt),
 		"content_hash":                   contentHash,
 		"previous_hash":                  previousHash,
 		"row_hash":                       rowHash,
@@ -471,10 +464,10 @@ func postgresGuardEnabled(cfg Config) bool {
 
 func normalizeHistoryMode(mode string) string {
 	switch strings.ToLower(strings.TrimSpace(mode)) {
-	case "", ModeAPI:
-		return ModeAPI
-	case ModeOff:
+	case "", ModeOff:
 		return ModeOff
+	case ModeAPI:
+		return ModeAPI
 	case ModeAudit:
 		return ModeAudit
 	default:
@@ -497,10 +490,10 @@ func normalizeImmutability(mode string) string {
 
 func normalizeAuditIdentityMode(mode string) string {
 	switch strings.ToLower(strings.TrimSpace(mode)) {
-	case "", AuditIdentityMinimal:
-		return AuditIdentityMinimal
-	case AuditIdentityNone:
+	case "", AuditIdentityNone:
 		return AuditIdentityNone
+	case AuditIdentityMinimal:
+		return AuditIdentityMinimal
 	case AuditIdentityExtended:
 		return AuditIdentityExtended
 	default:
@@ -549,7 +542,10 @@ func RecentRows(ctx context.Context, db *sql.DB, table string, limit int32, curs
 		return nil, "", common.NewErrBadRequest("HISTORY-RECENT-NILDB database handle must not be nil")
 	}
 	if limit <= 0 {
-		limit = 100
+		limit = DefaultRecentChangesLimit
+	}
+	if limit > MaxRecentChangesLimit {
+		return nil, "", common.NewErrBadRequest("HISTORY-RECENT-LIMIT limit must not exceed " + strconv.FormatInt(int64(MaxRecentChangesLimit), 10))
 	}
 	limitInt := int(limit)
 	cursorID, err := parseCursor(cursor)
@@ -576,13 +572,13 @@ func RecentRows(ctx context.Context, db *sql.DB, table string, limit int32, curs
 	if !createdFrom.IsZero() {
 		query = query.Where(goqu.Or(
 			goqu.C("operation_time").Gte(createdFrom.UTC()),
-			goqu.C("administration_created_at_text").Gte(createdFrom.Format(time.RFC3339Nano)),
+			goqu.C("administration_created_at").Gte(createdFrom.UTC()),
 		))
 	}
 	if !updatedFrom.IsZero() {
 		query = query.Where(goqu.Or(
 			goqu.C("operation_time").Gte(updatedFrom.UTC()),
-			goqu.C("administration_updated_at_text").Gte(updatedFrom.Format(time.RFC3339Nano)),
+			goqu.C("administration_updated_at").Gte(updatedFrom.UTC()),
 		))
 	}
 
@@ -609,7 +605,7 @@ func RecentRows(ctx context.Context, db *sql.DB, table string, limit int32, curs
 			return nil, "", common.NewInternalServerError("HISTORY-RECENT-SCAN " + err.Error())
 		}
 		if len(result) == limitInt {
-			nextCursor = strconv.FormatInt(row.HistoryID, 10)
+			nextCursor = strconv.FormatInt(result[len(result)-1].HistoryID, 10)
 			break
 		}
 		if err = json.Unmarshal([]byte(snapshotText), &row.Snapshot); err != nil {
@@ -653,6 +649,18 @@ func nullableINET(value string) any {
 		return nil
 	}
 	return goqu.L("?::inet", value)
+}
+
+func nullableTimestamp(value string) any {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return nil
+	}
+	parsed, err := time.Parse(time.RFC3339Nano, value)
+	if err != nil {
+		return nil
+	}
+	return parsed.UTC()
 }
 
 func latestRowHashTx(ctx context.Context, tx *sql.Tx, table string, identifier string) (string, error) {

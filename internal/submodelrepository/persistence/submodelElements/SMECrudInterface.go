@@ -45,7 +45,7 @@ type InsertQueryPart struct {
 // PostgreSQLSMECrudInterface defines the CRUD operations for Submodel Elements in a PostgreSQL database.
 type PostgreSQLSMECrudInterface interface {
 	Update(string, string, types.ISubmodelElement, *sql.Tx, bool) error
-	UpdateValueOnly(string, string, gen.SubmodelElementValue) error
+	UpdateValueOnly(string, string, gen.SubmodelElementValue, *sql.Tx) error
 	Delete(string) error
 	// GetInsertQueryPart returns the type-specific insert query part for batch insertion.
 	// Parameters:

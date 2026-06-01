@@ -106,12 +106,6 @@ func (s *SubmodelDatabase) appendMutatedSubmodelHistoryTx(ctx context.Context, t
 	return s.appendCurrentSubmodelHistoryTx(ctx, tx, submodelID, history.ChangeUpdated)
 }
 
-func (s *SubmodelDatabase) recordChangedSubmodelElementHistory(ctx context.Context, submodelID string, mutations ...submodelElementRootMutation) error {
-	return common.ExecuteInTransaction(s.db, "SMREPO-HISTORY-STARTTX", "SMREPO-HISTORY-COMMIT", func(tx *sql.Tx) error {
-		return s.appendChangedSubmodelElementHistoryTx(ctx, tx, submodelID, mutations...)
-	})
-}
-
 func loadSubmodelElementRootSnapshotTx(ctx context.Context, tx *sql.Tx, submodelID string, rootPath string) (map[string]any, error) {
 	rootElement, err := submodelelements.GetSubmodelElementByIDShortOrPathTx(ctx, tx, submodelID, rootPath, "deep")
 	if err != nil {

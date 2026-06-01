@@ -75,11 +75,11 @@ Each history row stores:
 - `valid_from`
 - `valid_to`: reserved for interval-style history, but not populated or used by the current runtime history resolution
 - `operation_time`
-- administrative timestamp text values for `createdFrom` and `updatedFrom` filters
+- administrative timestamp text values plus typed `TIMESTAMPTZ` columns for `createdFrom` and `updatedFrom` filters
 - audit metadata columns such as `actor_subject`, `request_id`, `endpoint`, and `http_method`
 - tamper-evidence columns: `previous_hash`, `content_hash`, and `row_hash`
 
-On every create, update, or delete, a new immutable event row is appended. Existing history rows are not updated by the runtime. Most persistence paths append in the same database transaction as the current-table mutation. Value-only SME updates currently write the normalized value first and append history immediately afterward in a dedicated transaction.
+On every create, update, or delete, a new immutable event row is appended. Existing history rows are not updated by the runtime. Persistence paths append in the same database transaction as the current-table mutation, including value-only SME updates.
 
 History lookup uses:
 
@@ -115,7 +115,7 @@ sequenceDiagram
     API->>Live: Commit transaction
 ```
 
-This reduces reads against the normalized backend for partial updates. It does not reduce history storage: every appended row remains a full identifiable snapshot. The value-only SME path uses the same snapshot derivation but does not currently provide one transaction across its normalized update and history append.
+This reduces reads against the normalized backend for partial updates. It does not reduce history storage: every appended row remains a full identifiable snapshot.
 
 ### Per-Identifiable Write Paths
 
@@ -201,7 +201,7 @@ Registry synchronization can append additional descriptor history entries when c
 
 ### Guarded PostgreSQL Mode
 
-Schema patch `1_1_1.sql` installs guard triggers on all four history tables. The triggers are disabled by default through the singleton `history_guard_config` row. Each history-aware DB-backed runtime service updates that switch at startup.
+Schema patch `1_1_1.sql` installs guard triggers on all four history tables. The triggers are disabled by default through the singleton `history_guard_config` row. Each history-aware DB-backed runtime service applies its expected guard state at startup.
 
 ```mermaid
 flowchart TD
@@ -212,32 +212,34 @@ flowchart TD
     Guard -->|true| Reject["Reject: history tables are append-only"]
 ```
 
-The guard is enabled when history is active and `history.immutability` is `postgres_guarded` or `external_anchor`. It blocks direct maintenance mutations as well as accidental application mutations. It is a database-wide switch, so services sharing one database must use consistent configuration. It is not equivalent to WORM storage: sufficiently privileged PostgreSQL operators can alter schema objects.
+The guard is enabled when history is active and `history.immutability` is `postgres_guarded`. It blocks direct maintenance mutations as well as accidental application mutations. Enabling is monotonic during normal service startup: a runtime service can enable the database-wide guard, but it cannot disable an enabled guard. A service configured as unguarded fails fast when it encounters an already-enabled database guard. Services sharing one database can start concurrently when their configuration is consistent. Disabling guarded mode requires an explicit operator maintenance action. The guard is not equivalent to WORM storage: sufficiently privileged PostgreSQL operators can alter schema objects.
 
 ### Configuration Status
 
 | Setting | Current runtime behavior |
 | --- | --- |
-| `history.mode: off` | Skip new snapshot writes. Existing rows remain readable. |
-| `history.mode: api` | Append history snapshots. This is the default. |
+| `history.mode: off` | Skip new snapshot writes. Existing rows remain readable. This is the default. |
+| `history.mode: api` | Append history snapshots. |
 | `history.mode: audit` | Append the same runtime snapshots as `api`; intended for audit-oriented deployments with explicit storage controls. |
-| `history.retentionDays` | Parsed and normalized, but no cleanup or compaction job consumes it yet. |
+| `history.retentionDays` | Must remain `0`. Non-zero values fail fast until cleanup or compaction is implemented. |
 | `history.immutability: none` | Keep PostgreSQL mutation guards disabled. |
 | `history.immutability: postgres_guarded` | Enable PostgreSQL mutation guards at service startup. |
-| `history.immutability: external_anchor` | Enable the same guards and reserve anchor metadata. No external anchor publisher is wired yet. |
-| `history.auditIdentityMode` | Parsed and normalized, but not yet used to enrich or suppress metadata automatically. |
+| `history.immutability: external_anchor` | Fail fast until an external anchoring worker is implemented. |
+| `history.auditIdentityMode` | Must remain `none`. Identity enrichment modes fail fast until middleware populates audit context. |
+| Active eventing, configured event sinks, or enabled outbox processing | Fail fast until outbox publishing is implemented. |
 
-`AuditContext` and the anchor interfaces are extension points. Current runtime middleware does not populate `AuditContext`, and no external anchor client is invoked by the append path yet.
+`AuditContext`, `ChangeEvent`, and the anchor interfaces remain extension points. Current runtime middleware does not populate `AuditContext`, and no external anchor client is invoked by the append path yet.
 
 ## Recent Changes
 
 Recent-change endpoints read the same history tables. They are ordered by increasing `history_id`, with cursor-based pagination.
+The default page size is `100`; requests above `1000` are rejected.
 
 ```mermaid
 flowchart LR
     Historical["GET .../{id}/$history?date=..."] --> Validity["identifier + valid_from index"]
     Validity --> Snapshot["Latest snapshot at or before date"]
-    Recent["GET .../$recent-changes?cursor=..."] --> Cursor["history_id cursor + operation_time index"]
+    Recent["GET .../$recent-changes?cursor=..."] --> Cursor["history_id cursor + typed timestamp indexes"]
     Cursor --> Page["Ordered page plus next cursor"]
 ```
 
@@ -287,14 +289,16 @@ Current behavior:
 - Normal current-entity reads still use their established ABAC filtering paths.
 - Recent-change delete tombstones only expose identifiers and change metadata for AAS and Submodel rows.
 
-Potential edge case:
+Intentional scope boundary for this release:
 
-- Historical snapshots are stored as JSON and are not re-querying the normalized current tables. If access rules become stricter after a historical snapshot was written, we need to ensure historical reads do not leak information that would be filtered from a current read. The current implementation relies on endpoint authorization and component-level access checks, but per-snapshot field redaction is not implemented.
+- Historical snapshots are stored as JSON and are not re-querying the normalized current tables.
+- `$history` and `$recent-changes` do not apply current-table ABAC formula filters or logical-expression redaction to snapshot JSON.
+- Route assignments for these endpoints must only be granted to principals allowed to read the complete resource returned by the endpoint.
 
 Recommended follow-up:
 
-- Add security integration tests for denied users reading `$history` and `$recent-changes`.
-- Decide whether historical snapshots should be redacted by the same field-level ABAC formulas as current reads, or whether history access is an all-or-nothing read right.
+- Add identifier-aware access rules for history and recent-change endpoints.
+- Keep fine-grained snapshot filtering out of the historical read contract unless a future specification requirement changes that decision.
 
 ## Scalability
 
@@ -307,7 +311,7 @@ Safeguards already implemented:
 - History lookup is indexed by identifier and validity range.
 - Latest-snapshot derivation is indexed by identifier and descending `history_id`.
 - Recent-change pagination is cursor-based and reads one extra row for next-cursor detection.
-- Administrative timestamps are extracted into metadata columns for filtering instead of repeatedly querying deep JSON.
+- Administrative timestamps are extracted into typed, indexed metadata columns for filtering instead of repeatedly querying deep JSON or comparing timestamp strings.
 - Partial AAS and descriptor changes derive the next snapshot from the previous history row.
 - SME changes reload only the affected top-level SME root subtree and splice it into the previous Submodel snapshot.
 - Transaction-level advisory locks serialize appends only for the same history table and identifier.
@@ -355,15 +359,14 @@ Migration does not create history rows for existing data. The first complete wri
 
 The AAS Environment delegates the component endpoints. Its behavior should stay aligned with the underlying repository and registry services. If a new v3.2 endpoint is added to a component, the environment OpenAPI and routing must be checked as well.
 
-## What To Watch Before Release
+## Planned Follow-Up Work
 
-The biggest implementation questions still worth reviewing are:
+The shared append points are intentionally kept independent of a specific event broker or immutability provider. Future additions should build on them without changing repository write APIs:
 
-- Is route-level read authorization enough for historical snapshots, or do we need per-snapshot ABAC redaction?
-- Do we need an implemented operator-facing retention/compaction process before enabling this in large deployments?
-- Should guarded mode be disabled automatically for selected integration-test profiles, or should test cleanup keep using unguarded history settings?
-- Which external anchoring provider, if any, should be offered first?
-- Do consumers need an explicit baseline backfill option for upgraded installations?
-- Which middleware should populate `AuditContext`, and how should `auditIdentityMode` control stored fields?
-- Should descriptor recent changes include delete tombstones in the public response, or is skipping deleted descriptors acceptable for the registry profile?
-- Do we want security tests for every new history/recent-change endpoint in addition to integration tests?
+- Add a transactional outbox table written in the same PostgreSQL transaction as each history row.
+- Publish CloudEvents from an asynchronous outbox worker with retry and idempotency.
+- Anchor row hashes in immudb from an asynchronous worker. Store append-only anchor receipts in a separate table instead of updating guarded history rows.
+- Add identifier-aware access rules for `$history` and `$recent-changes`.
+- Populate `AuditContext` through middleware before enabling `minimal` or `extended` identity modes.
+- Implement operator-controlled retention, partitioning, monitoring metrics, and guarded-mode maintenance procedures.
+- Decide whether upgraded installations need an explicit baseline backfill tool.

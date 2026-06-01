@@ -211,15 +211,7 @@ func ensureEntityStatementParentLinks(tx *sql.Tx, entityElementID int, rootSmeID
 //
 // Returns:
 //   - error: An error if the update operation fails
-func (p PostgreSQLEntityHandler) UpdateValueOnly(submodelID string, idShortOrPath string, valueOnly gen.SubmodelElementValue) error {
-	tx, err := p.db.Begin()
-	if err != nil {
-		return err
-	}
-	defer func() {
-		_ = tx.Rollback()
-	}()
-
+func (p PostgreSQLEntityHandler) UpdateValueOnly(submodelID string, idShortOrPath string, valueOnly gen.SubmodelElementValue, tx *sql.Tx) error {
 	entityValueOnly, ok := valueOnly.(gen.EntityValue)
 	if !ok {
 		return common.NewErrBadRequest("valueOnly is not of type EntityValue")
@@ -228,7 +220,7 @@ func (p PostgreSQLEntityHandler) UpdateValueOnly(submodelID string, idShortOrPat
 	if err != nil {
 		return err
 	}
-	err = UpdateNestedElementsValueOnly(p.db, elems, idShortOrPath, submodelID)
+	err = UpdateNestedElementsValueOnly(p.db, elems, idShortOrPath, submodelID, tx)
 	if err != nil {
 		return err
 	}
@@ -292,8 +284,7 @@ func (p PostgreSQLEntityHandler) UpdateValueOnly(submodelID string, idShortOrPat
 		return err
 	}
 
-	err = tx.Commit()
-	return err
+	return nil
 }
 
 // Delete removes an Entity submodel element from the database.

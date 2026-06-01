@@ -32,6 +32,7 @@ import (
 	"time"
 
 	sqlmock "github.com/DATA-DOG/go-sqlmock"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/stretchr/testify/require"
 )
 
@@ -198,7 +199,7 @@ func TestAppendVersionTxSkipsWritesWhenHistoryModeOff(t *testing.T) {
 
 func TestApplyPostgresGuardConfigEnablesGuardedMode(t *testing.T) {
 	t.Cleanup(func() {
-		Configure(Config{Mode: ModeAPI, Immutability: ImmutabilityNone, AuditIdentityMode: AuditIdentityMinimal})
+		Configure(Config{Mode: ModeOff, Immutability: ImmutabilityNone, AuditIdentityMode: AuditIdentityNone})
 	})
 	Configure(Config{Mode: ModeAudit, Immutability: ImmutabilityPostgresGuarded, AuditIdentityMode: AuditIdentityMinimal})
 
@@ -208,17 +209,17 @@ func TestApplyPostgresGuardConfigEnablesGuardedMode(t *testing.T) {
 		_ = db.Close()
 	}()
 
-	mock.ExpectExec(`UPDATE "history_guard_config"`).
-		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectQuery(`INSERT INTO "history_guard_config".*ON CONFLICT.*RETURNING "enabled"`).
+		WillReturnRows(sqlmock.NewRows([]string{"enabled"}).AddRow(true))
 
 	err = ApplyPostgresGuardConfig(context.Background(), db)
 	require.NoError(t, err)
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 
-func TestApplyPostgresGuardConfigDisablesGuardWhenHistoryIsOff(t *testing.T) {
+func TestApplyPostgresGuardConfigKeepsDisabledGuardDisabledWhenHistoryIsOff(t *testing.T) {
 	t.Cleanup(func() {
-		Configure(Config{Mode: ModeAPI, Immutability: ImmutabilityNone, AuditIdentityMode: AuditIdentityMinimal})
+		Configure(Config{Mode: ModeOff, Immutability: ImmutabilityNone, AuditIdentityMode: AuditIdentityNone})
 	})
 	Configure(Config{Mode: ModeOff, Immutability: ImmutabilityPostgresGuarded, AuditIdentityMode: AuditIdentityMinimal})
 
@@ -228,10 +229,73 @@ func TestApplyPostgresGuardConfigDisablesGuardWhenHistoryIsOff(t *testing.T) {
 		_ = db.Close()
 	}()
 
-	mock.ExpectExec(`UPDATE "history_guard_config"`).
-		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectQuery(`INSERT INTO "history_guard_config".*ON CONFLICT.*RETURNING "enabled"`).
+		WillReturnRows(sqlmock.NewRows([]string{"enabled"}).AddRow(false))
 
 	err = ApplyPostgresGuardConfig(context.Background(), db)
 	require.NoError(t, err)
 	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestApplyPostgresGuardConfigRejectsStartupDowngrade(t *testing.T) {
+	t.Cleanup(func() {
+		Configure(Config{Mode: ModeOff, Immutability: ImmutabilityNone, AuditIdentityMode: AuditIdentityNone})
+	})
+	Configure(Config{Mode: ModeAPI, Immutability: ImmutabilityNone, AuditIdentityMode: AuditIdentityNone})
+
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer func() {
+		_ = db.Close()
+	}()
+
+	mock.ExpectQuery(`INSERT INTO "history_guard_config".*ON CONFLICT.*RETURNING "enabled"`).
+		WillReturnRows(sqlmock.NewRows([]string{"enabled"}).AddRow(true))
+
+	err = ApplyPostgresGuardConfig(context.Background(), db)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "HISTORY-GUARD-CONFLICT")
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestRecentRowsReturnsLastIncludedRowAsNextCursor(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer func() {
+		_ = db.Close()
+	}()
+
+	operationTime := time.Date(2026, 5, 28, 12, 0, 0, 0, time.UTC)
+	mock.ExpectQuery(`SELECT .*FROM "aas_history".*ORDER BY "history_id" ASC LIMIT 2`).
+		WillReturnRows(sqlmock.NewRows([]string{
+			"history_id",
+			"identifier",
+			"change_type",
+			"snapshot",
+			"deleted",
+			"administration_created_at_text",
+			"administration_updated_at_text",
+			"operation_time",
+		}).
+			AddRow(int64(10), "aas-1", ChangeCreated, `{"id":"aas-1"}`, false, nil, nil, operationTime).
+			AddRow(int64(11), "aas-2", ChangeCreated, `{"id":"aas-2"}`, false, nil, nil, operationTime))
+
+	rows, cursor, err := RecentRows(context.Background(), db, TableAAS, 1, "", time.Time{}, time.Time{})
+	require.NoError(t, err)
+	require.Len(t, rows, 1)
+	require.Equal(t, int64(10), rows[0].HistoryID)
+	require.Equal(t, "10", cursor)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestRecentRowsRejectsLimitAboveMaximum(t *testing.T) {
+	db, _, err := sqlmock.New()
+	require.NoError(t, err)
+	defer func() {
+		_ = db.Close()
+	}()
+
+	_, _, err = RecentRows(context.Background(), db, TableAAS, MaxRecentChangesLimit+1, "", time.Time{}, time.Time{})
+	require.Error(t, err)
+	require.True(t, common.IsErrBadRequest(err))
 }

@@ -184,8 +184,8 @@ func (p PostgreSQLPropertyHandler) Update(submodelID string, idShortOrPath strin
 //
 // Returns:
 //   - error: An error if the update operation fails or if the valueOnly type is incorrect
-func (p PostgreSQLPropertyHandler) UpdateValueOnly(submodelID string, idShortOrPath string, valueOnly gen.SubmodelElementValue) error {
-	smDbID, err := persistenceutils.GetSubmodelDatabaseIDFromDB(p.db, submodelID)
+func (p PostgreSQLPropertyHandler) UpdateValueOnly(submodelID string, idShortOrPath string, valueOnly gen.SubmodelElementValue, tx *sql.Tx) error {
+	smDbID, err := persistenceutils.GetSubmodelDatabaseID(tx, submodelID)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return common.NewErrNotFound(fmt.Sprintf("Submodel with ID %s not found", submodelID))
@@ -204,7 +204,7 @@ func (p PostgreSQLPropertyHandler) UpdateValueOnly(submodelID string, idShortOrP
 		return err
 	}
 
-	row := p.db.QueryRow(goquQuery, args...)
+	row := tx.QueryRow(goquQuery, args...)
 	err = row.Scan(&elementID)
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -218,7 +218,7 @@ func (p PostgreSQLPropertyHandler) UpdateValueOnly(submodelID string, idShortOrP
 		return err
 	}
 	var valueType types.DataTypeDefXSD
-	row = p.db.QueryRow(goquQuery, args...)
+	row = tx.QueryRow(goquQuery, args...)
 	err = row.Scan(&valueType)
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -250,7 +250,7 @@ func (p PostgreSQLPropertyHandler) UpdateValueOnly(submodelID string, idShortOrP
 		return err
 	}
 
-	_, err = p.db.Exec(updateQuery, updateArgs...)
+	_, err = tx.Exec(updateQuery, updateArgs...)
 	if err != nil {
 		return err
 	}

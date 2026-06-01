@@ -17,7 +17,7 @@ The important settings are:
 - `BASYX_HISTORY_MODE=audit`
 - `BASYX_HISTORY_RETENTION_DAYS=0`
 - `BASYX_HISTORY_IMMUTABILITY=postgres_guarded`
-- `BASYX_AUDIT_IDENTITY_MODE=minimal`
+- `BASYX_AUDIT_IDENTITY_MODE=none`
 
 ## Start
 
@@ -50,13 +50,13 @@ docker compose exec db psql -U admin -d basyxTestDB -c "TRUNCATE aas_history"
 
 Normal API writes still append new history rows.
 
-The guard switch is database-wide. Configure every BaSyx runtime service sharing this database consistently. A service started with `BASYX_HISTORY_IMMUTABILITY=none` can disable the switch again.
+The guard switch is database-wide. Configure every BaSyx runtime service sharing this database consistently. Normal service startup can enable the guard but cannot disable it. A service configured with `BASYX_HISTORY_IMMUTABILITY=none` fails fast when the database guard is already enabled.
 
 ## Limitations
 
 This mode protects against accidental or unauthorized mutation through normal database access. PostgreSQL superusers or operators with enough permissions can still alter triggers, functions, or schema objects. Use external anchoring, WORM storage, or transparency-log infrastructure when stronger tamper-resistance is required.
 
-For local development or tests that truncate tables, use `BASYX_HISTORY_IMMUTABILITY=none` or stop the guarded service before cleanup.
+For local development or tests that truncate tables, use `BASYX_HISTORY_IMMUTABILITY=none` from the start. To disable an already-enabled guard for maintenance, stop the guarded services and explicitly update `history_guard_config` as a database operator before cleanup.
 
 ## Stop
 

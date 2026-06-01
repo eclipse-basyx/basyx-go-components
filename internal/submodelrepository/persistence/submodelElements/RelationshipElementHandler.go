@@ -163,21 +163,11 @@ func (p PostgreSQLRelationshipElementHandler) Update(submodelID string, idShortO
 //
 // Returns:
 //   - error: An error if the update operation fails
-func (p PostgreSQLRelationshipElementHandler) UpdateValueOnly(submodelID string, idShortOrPath string, valueOnly gen.SubmodelElementValue) error {
+func (p PostgreSQLRelationshipElementHandler) UpdateValueOnly(submodelID string, idShortOrPath string, valueOnly gen.SubmodelElementValue, tx *sql.Tx) error {
 	relElemVal, ok := valueOnly.(gen.RelationshipElementValue)
 	if !ok {
 		return common.NewErrBadRequest("valueOnly is not of type RelationshipElementValue")
 	}
-
-	tx, err := p.db.Begin()
-	if err != nil {
-		return err
-	}
-	defer func() {
-		if err != nil {
-			_ = tx.Rollback()
-		}
-	}()
 
 	dialect := goqu.Dialect("postgres")
 	json := jsoniter.ConfigCompatibleWithStandardLibrary
@@ -233,8 +223,7 @@ func (p PostgreSQLRelationshipElementHandler) UpdateValueOnly(submodelID string,
 	if err != nil {
 		return common.NewInternalServerError(fmt.Sprintf("failed to execute update for RelationshipElement: %s", err.Error()))
 	}
-	err = tx.Commit()
-	return err
+	return nil
 }
 
 // Delete removes a RelationshipElement identified by its idShort or path.

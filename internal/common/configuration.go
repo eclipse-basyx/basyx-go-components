@@ -342,6 +342,9 @@ func LoadConfig(configPath string, configMode ConfigMode) (*Config, error) {
 	applyAASPreconfigPathOverrides(cfg)
 	applyHistoryEnvOverrides(cfg)
 	applyEventingEnvOverrides(cfg)
+	if err = validateHistoryAndEventingConfig(cfg); err != nil {
+		return nil, err
+	}
 	if configMode == NORMAL {
 		log.Println("✅ Configuration loaded successfully")
 		PrintConfiguration(cfg)
@@ -389,6 +392,39 @@ func applyEventingEnvOverrides(cfg *Config) {
 	if value, ok := lookupTrimmedEnv("BASYX_EVENTING_TOPIC_PREFIX"); ok {
 		cfg.Eventing.TopicPrefix = value
 	}
+}
+
+func validateHistoryAndEventingConfig(cfg *Config) error {
+	if cfg == nil {
+		return fmt.Errorf("CONFIG-HISTORY-NIL configuration must not be nil")
+	}
+
+	switch strings.ToLower(strings.TrimSpace(cfg.History.Mode)) {
+	case "off", "api", "audit":
+	default:
+		return fmt.Errorf("CONFIG-HISTORY-MODE unsupported history.mode %q", cfg.History.Mode)
+	}
+	if cfg.History.RetentionDays != 0 {
+		return fmt.Errorf("CONFIG-HISTORY-RETENTION history.retentionDays is not implemented yet; use 0")
+	}
+	switch strings.ToLower(strings.TrimSpace(cfg.History.Immutability)) {
+	case "none", "postgres_guarded":
+	case "external_anchor":
+		return fmt.Errorf("CONFIG-HISTORY-ANCHOR history.immutability external_anchor is not implemented yet")
+	default:
+		return fmt.Errorf("CONFIG-HISTORY-IMMUTABILITY unsupported history.immutability %q", cfg.History.Immutability)
+	}
+	switch strings.ToLower(strings.TrimSpace(cfg.History.AuditIdentityMode)) {
+	case "none":
+	case "minimal", "extended":
+		return fmt.Errorf("CONFIG-HISTORY-AUDITIDENTITY history.auditIdentityMode %q is not implemented yet; use none", cfg.History.AuditIdentityMode)
+	default:
+		return fmt.Errorf("CONFIG-HISTORY-AUDITIDENTITY unsupported history.auditIdentityMode %q", cfg.History.AuditIdentityMode)
+	}
+	if cfg.Eventing.Enabled || cfg.Eventing.OutboxEnabled || len(cfg.Eventing.Sinks) > 0 {
+		return fmt.Errorf("CONFIG-EVENTING-NOTIMPLEMENTED eventing publishing and outbox processing are not implemented yet")
+	}
+	return nil
 }
 
 func lookupTrimmedEnv(key string) (string, bool) {
@@ -500,10 +536,10 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("jws.privateKeyPath", "")
 
 	// History/audit defaults
-	v.SetDefault("history.mode", "api")
+	v.SetDefault("history.mode", "off")
 	v.SetDefault("history.retentionDays", 0)
 	v.SetDefault("history.immutability", "none")
-	v.SetDefault("history.auditIdentityMode", "minimal")
+	v.SetDefault("history.auditIdentityMode", "none")
 
 	// Eventing placeholders
 	v.SetDefault("eventing.enabled", false)

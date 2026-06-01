@@ -202,19 +202,13 @@ func (p PostgreSQLFileHandler) Update(submodelID string, idShortOrPath string, s
 //
 // Returns:
 //   - error: An error if the update operation fails
-func (p PostgreSQLFileHandler) UpdateValueOnly(submodelID string, idShortOrPath string, valueOnly gen.SubmodelElementValue) error {
+func (p PostgreSQLFileHandler) UpdateValueOnly(submodelID string, idShortOrPath string, valueOnly gen.SubmodelElementValue, tx *sql.Tx) error {
 	fileValueOnly, ok := valueOnly.(gen.FileValue)
 	if !ok {
 		return common.NewErrBadRequest("valueOnly is not of type FileValue")
 	}
-	tx, err := p.db.Begin()
-	if err != nil {
-		return common.NewInternalServerError(fmt.Sprintf("failed to begin transaction: %s", err))
-	}
-
 	submodelDatabaseID, err := persistenceutils.GetSubmodelDatabaseID(tx, submodelID)
 	if err != nil {
-		_ = tx.Rollback()
 		if err == sql.ErrNoRows {
 			return common.NewErrNotFound("submodel not found")
 		}
@@ -295,8 +289,7 @@ func (p PostgreSQLFileHandler) UpdateValueOnly(submodelID string, idShortOrPath 
 		return common.NewInternalServerError(fmt.Sprintf("failed to execute update query: %s", err))
 	}
 
-	err = tx.Commit()
-	return err
+	return nil
 }
 
 // Delete removes a File submodel element from the database.

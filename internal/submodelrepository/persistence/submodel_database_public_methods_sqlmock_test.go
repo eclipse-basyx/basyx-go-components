@@ -497,7 +497,9 @@ func TestUpdateSubmodelElementValueOnlyModelTypeLookupFails(t *testing.T) {
 
 	sut := &SubmodelDatabase{db: db}
 
+	mock.ExpectBegin()
 	mock.ExpectQuery(`SELECT .*`).WillReturnError(errors.New("lookup failed"))
+	mock.ExpectRollback()
 
 	err = sut.UpdateSubmodelElementValueOnly(contextWithABACDisabled(t), "sm", "path", nil)
 	require.Error(t, err)
@@ -516,10 +518,46 @@ func TestUpdateSubmodelValueOnlyPropagatesElementError(t *testing.T) {
 	sut := &SubmodelDatabase{db: db}
 
 	valueOnly := gen.SubmodelValue{"x": nil}
+	mock.ExpectBegin()
 	mock.ExpectQuery(`SELECT .*`).WillReturnError(errors.New("lookup failed"))
+	mock.ExpectRollback()
 
 	err = sut.UpdateSubmodelValueOnly(contextWithABACDisabled(t), "sm", valueOnly)
 	require.Error(t, err)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestUpdateSubmodelElementValueOnlyRollsBackWhenHistoryAppendFails(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer func() {
+		_ = db.Close()
+	}()
+
+	sut := &SubmodelDatabase{db: db}
+
+	mock.ExpectBegin()
+	mock.ExpectQuery(`SELECT "id" FROM "submodel"`).
+		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(101))
+	mock.ExpectQuery(`SELECT "model_type" FROM "submodel_element"`).
+		WillReturnRows(sqlmock.NewRows([]string{"model_type"}).AddRow(types.ModelTypeProperty))
+	mock.ExpectQuery(`SELECT "id" FROM "submodel"`).
+		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(101))
+	mock.ExpectQuery(`SELECT "id" FROM "submodel_element"`).
+		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(202))
+	mock.ExpectQuery(`SELECT "value_type" FROM "property_element"`).
+		WillReturnRows(sqlmock.NewRows([]string{"value_type"}).AddRow(types.DataTypeDefXSDString))
+	mock.ExpectExec(`UPDATE "property_element"`).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectExec(`SELECT pg_advisory_xact_lock`).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectQuery(`SELECT snapshot::text, "deleted", "row_hash" FROM "submodel_history"`).
+		WillReturnError(errors.New("history read failed"))
+	mock.ExpectRollback()
+
+	err = sut.UpdateSubmodelElementValueOnly(contextWithABACDisabled(t), "sm", "property", gen.PropertyValue{Value: "updated"})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "HISTORY-MUTATE-READLATEST")
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 

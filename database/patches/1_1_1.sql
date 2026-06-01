@@ -27,6 +27,8 @@ CREATE TABLE IF NOT EXISTS aas_history (
   operation_time TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   administration_created_at_text TEXT,
   administration_updated_at_text TEXT,
+  administration_created_at TIMESTAMPTZ,
+  administration_updated_at TIMESTAMPTZ,
   actor_subject TEXT,
   actor_issuer TEXT,
   client_id TEXT,
@@ -60,6 +62,8 @@ CREATE TABLE IF NOT EXISTS submodel_history (
   operation_time TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   administration_created_at_text TEXT,
   administration_updated_at_text TEXT,
+  administration_created_at TIMESTAMPTZ,
+  administration_updated_at TIMESTAMPTZ,
   actor_subject TEXT,
   actor_issuer TEXT,
   client_id TEXT,
@@ -93,6 +97,8 @@ CREATE TABLE IF NOT EXISTS concept_description_history (
   operation_time TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   administration_created_at_text TEXT,
   administration_updated_at_text TEXT,
+  administration_created_at TIMESTAMPTZ,
+  administration_updated_at TIMESTAMPTZ,
   actor_subject TEXT,
   actor_issuer TEXT,
   client_id TEXT,
@@ -126,6 +132,8 @@ CREATE TABLE IF NOT EXISTS descriptor_history (
   operation_time TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   administration_created_at_text TEXT,
   administration_updated_at_text TEXT,
+  administration_created_at TIMESTAMPTZ,
+  administration_updated_at TIMESTAMPTZ,
   actor_subject TEXT,
   actor_issuer TEXT,
   client_id TEXT,
@@ -150,25 +158,33 @@ CREATE TABLE IF NOT EXISTS descriptor_history (
 
 CREATE INDEX IF NOT EXISTS ix_aas_history_identifier_validity ON aas_history(identifier, valid_from DESC, valid_to);
 CREATE INDEX IF NOT EXISTS ix_aas_history_identifier_latest ON aas_history(identifier, history_id DESC);
-CREATE INDEX IF NOT EXISTS ix_aas_history_recent ON aas_history(history_id, operation_time);
+CREATE INDEX IF NOT EXISTS ix_aas_history_recent ON aas_history(operation_time, history_id);
+CREATE INDEX IF NOT EXISTS ix_aas_history_administration_created ON aas_history(administration_created_at, history_id);
+CREATE INDEX IF NOT EXISTS ix_aas_history_administration_updated ON aas_history(administration_updated_at, history_id);
 CREATE INDEX IF NOT EXISTS ix_aas_history_row_hash ON aas_history(row_hash);
 CREATE INDEX IF NOT EXISTS ix_submodel_history_identifier_validity ON submodel_history(identifier, valid_from DESC, valid_to);
 CREATE INDEX IF NOT EXISTS ix_submodel_history_identifier_latest ON submodel_history(identifier, history_id DESC);
-CREATE INDEX IF NOT EXISTS ix_submodel_history_recent ON submodel_history(history_id, operation_time);
+CREATE INDEX IF NOT EXISTS ix_submodel_history_recent ON submodel_history(operation_time, history_id);
+CREATE INDEX IF NOT EXISTS ix_submodel_history_administration_created ON submodel_history(administration_created_at, history_id);
+CREATE INDEX IF NOT EXISTS ix_submodel_history_administration_updated ON submodel_history(administration_updated_at, history_id);
 CREATE INDEX IF NOT EXISTS ix_submodel_history_row_hash ON submodel_history(row_hash);
 CREATE INDEX IF NOT EXISTS ix_cd_history_identifier_validity ON concept_description_history(identifier, valid_from DESC, valid_to);
 CREATE INDEX IF NOT EXISTS ix_cd_history_identifier_latest ON concept_description_history(identifier, history_id DESC);
-CREATE INDEX IF NOT EXISTS ix_cd_history_recent ON concept_description_history(history_id, operation_time);
+CREATE INDEX IF NOT EXISTS ix_cd_history_recent ON concept_description_history(operation_time, history_id);
+CREATE INDEX IF NOT EXISTS ix_cd_history_administration_created ON concept_description_history(administration_created_at, history_id);
+CREATE INDEX IF NOT EXISTS ix_cd_history_administration_updated ON concept_description_history(administration_updated_at, history_id);
 CREATE INDEX IF NOT EXISTS ix_cd_history_row_hash ON concept_description_history(row_hash);
 CREATE INDEX IF NOT EXISTS ix_descriptor_history_identifier_validity ON descriptor_history(identifier, valid_from DESC, valid_to);
 CREATE INDEX IF NOT EXISTS ix_descriptor_history_identifier_latest ON descriptor_history(identifier, history_id DESC);
-CREATE INDEX IF NOT EXISTS ix_descriptor_history_recent ON descriptor_history(history_id, operation_time);
+CREATE INDEX IF NOT EXISTS ix_descriptor_history_recent ON descriptor_history(operation_time, history_id);
+CREATE INDEX IF NOT EXISTS ix_descriptor_history_administration_created ON descriptor_history(administration_created_at, history_id);
+CREATE INDEX IF NOT EXISTS ix_descriptor_history_administration_updated ON descriptor_history(administration_updated_at, history_id);
 CREATE INDEX IF NOT EXISTS ix_descriptor_history_row_hash ON descriptor_history(row_hash);
 
 
 -- PostgreSQL mutation guards are installed by the schema patch but disabled by
 -- default. Services enable them at startup when history.immutability is
--- postgres_guarded or external_anchor.
+-- postgres_guarded. Normal service startup never disables an enabled guard.
 CREATE TABLE IF NOT EXISTS history_guard_config (
   id BOOLEAN PRIMARY KEY DEFAULT TRUE CHECK (id),
   enabled BOOLEAN NOT NULL DEFAULT FALSE,

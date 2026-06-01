@@ -229,23 +229,11 @@ func buildUpdateBasicEventElementRecordObject(basicEvent *types.BasicEventElemen
 //
 // Returns:
 //   - error: An error if the update operation fails or if the valueOnly type is incorrect
-func (p PostgreSQLBasicEventElementHandler) UpdateValueOnly(submodelID string, idShortOrPath string, valueOnly gen.SubmodelElementValue) error {
+func (p PostgreSQLBasicEventElementHandler) UpdateValueOnly(submodelID string, idShortOrPath string, valueOnly gen.SubmodelElementValue, tx *sql.Tx) error {
 	basicEventValue, ok := valueOnly.(gen.BasicEventElementValue)
 	if !ok {
 		return common.NewErrBadRequest("valueOnly is not of type BasicEventElementValue")
 	}
-
-	// Begin transaction
-	tx, err := p.db.Begin()
-	if err != nil {
-		return err
-	}
-
-	defer func() {
-		if err != nil {
-			_ = tx.Rollback()
-		}
-	}()
 
 	dialect := goqu.Dialect("postgres")
 	smDbID, err := persistenceutils.GetSubmodelDatabaseID(tx, submodelID)
@@ -298,7 +286,7 @@ func (p PostgreSQLBasicEventElementHandler) UpdateValueOnly(submodelID string, i
 		return err
 	}
 
-	return tx.Commit()
+	return nil
 }
 
 // Delete removes a BasicEventElement identified by its idShort or path from the database.
