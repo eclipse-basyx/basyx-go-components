@@ -149,7 +149,7 @@ func (c *ConceptDescriptionRepositoryAPIAPIController) GetAllConceptDescriptionR
 	}
 	var createdFromParam time.Time
 	if query.Has("createdFrom") {
-		createdFromParam, err = time.Parse(time.RFC3339Nano, query.Get("createdFrom"))
+		createdFromParam, err = parseTime(query.Get("createdFrom"))
 		if err != nil {
 			c.errorHandler(w, r, &model.ParsingError{Param: "createdFrom", Err: err}, nil)
 			return
@@ -157,7 +157,7 @@ func (c *ConceptDescriptionRepositoryAPIAPIController) GetAllConceptDescriptionR
 	}
 	var updatedFromParam time.Time
 	if query.Has("updatedFrom") {
-		updatedFromParam, err = time.Parse(time.RFC3339Nano, query.Get("updatedFrom"))
+		updatedFromParam, err = parseTime(query.Get("updatedFrom"))
 		if err != nil {
 			c.errorHandler(w, r, &model.ParsingError{Param: "updatedFrom", Err: err}, nil)
 			return
@@ -327,4 +327,13 @@ func parseInt32(param string) (int32, error) {
 
 	val, err := strconv.ParseInt(param, 10, 32)
 	return int32(val), err
+}
+
+func parseTime(param string) (time.Time, error) {
+	trimmed := strings.TrimSpace(param)
+	if trimmed == "" {
+		return time.Time{}, nil
+	}
+
+	return time.Parse(time.RFC3339Nano, trimmed)
 }
