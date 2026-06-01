@@ -96,7 +96,7 @@ func TestPatchSubmodelSuccessReplacesSubmodel(t *testing.T) {
 		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(200))
 	mock.ExpectExec(`INSERT INTO .*submodel_payload`).
 		WillReturnResult(sqlmock.NewResult(0, 1))
-	expectCurrentSubmodelSnapshotLoad(mock, "sm-1", "sm1")
+	expectSubmodelHistoryAppend(mock)
 	mock.ExpectCommit()
 
 	err = sut.PatchSubmodel(contextWithABACDisabled(t), "sm-1", submodel)
@@ -182,10 +182,19 @@ func TestPutSubmodelUpdatePathReturnsTrue(t *testing.T) {
 }
 
 func expectSubmodelHistoryAppend(mock sqlmock.Sqlmock) {
+	mock.ExpectExec(`SELECT pg_advisory_xact_lock`).
+		WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectQuery(`SELECT "row_hash" FROM "submodel_history"`).
 		WillReturnError(sql.ErrNoRows)
 	mock.ExpectExec(`INSERT INTO "submodel_history"`).
 		WillReturnResult(sqlmock.NewResult(0, 1))
+}
+
+func expectMutatedSubmodelHistoryFallback(mock sqlmock.Sqlmock) {
+	mock.ExpectExec(`SELECT pg_advisory_xact_lock`).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectQuery(`SELECT snapshot::text, "deleted", "row_hash" FROM "submodel_history"`).
+		WillReturnError(sql.ErrNoRows)
 }
 
 func expectCurrentSubmodelSnapshotLoad(mock sqlmock.Sqlmock, submodelID string, idShort string) {
@@ -259,6 +268,7 @@ func TestPatchSubmodelElementByPathSuccess(t *testing.T) {
 		WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectExec(`INSERT INTO .*submodel_element_payload`).
 		WillReturnResult(sqlmock.NewResult(0, 1))
+	expectMutatedSubmodelHistoryFallback(mock)
 	expectCurrentSubmodelSnapshotLoad(mock, "sm-1", "sm1")
 	mock.ExpectCommit()
 

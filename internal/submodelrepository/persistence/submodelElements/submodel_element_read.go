@@ -52,6 +52,32 @@ func GetSubmodelElementByIDShortOrPath(ctx context.Context, db *sql.DB, submodel
 	return getSubmodelElementByIDShortOrPathWithSubmodelDBID(ctx, db, submodelID, int64(submodelDatabaseID), idShortOrPath, level)
 }
 
+// GetSubmodelElementByIDShortOrPathTx loads a submodel element by path from an existing transaction.
+func GetSubmodelElementByIDShortOrPathTx(ctx context.Context, tx *sql.Tx, submodelID string, idShortOrPath string, level string) (types.ISubmodelElement, error) {
+	if tx == nil {
+		return nil, common.NewInternalServerError("SMREPO-GETSMEBYPATHTX-NILTX transaction must not be nil")
+	}
+	if submodelID == "" {
+		return nil, common.NewErrBadRequest("SMREPO-GETSMEBYPATH-EMPTYSMID Submodel id must not be empty")
+	}
+	if idShortOrPath == "" {
+		return nil, common.NewErrBadRequest("SMREPO-GETSMEBYPATH-EMPTYPATH idShort or path must not be empty")
+	}
+	if level != "" && level != "core" && level != "deep" {
+		return nil, common.NewErrBadRequest("SMREPO-GETSMEBYPATH-BADLEVEL level must be one of '', 'core', or 'deep'")
+	}
+
+	submodelDatabaseID, submodelIDErr := persistenceutils.GetSubmodelDatabaseID(tx, submodelID)
+	if submodelIDErr != nil {
+		if errors.Is(submodelIDErr, sql.ErrNoRows) {
+			return nil, common.NewErrNotFound(submodelID)
+		}
+		return nil, common.NewInternalServerError("SMREPO-GETSMEBYPATHTX-GETSMDATABASEID " + submodelIDErr.Error())
+	}
+
+	return getSubmodelElementByIDShortOrPathWithSubmodelDBID(ctx, tx, submodelID, int64(submodelDatabaseID), idShortOrPath, level)
+}
+
 func getSubmodelElementByIDShortOrPathWithSubmodelDBID(ctx context.Context, db dbQueryer, submodelID string, submodelDatabaseID int64, idShortOrPath string, level string) (types.ISubmodelElement, error) {
 	if formulaCheckErr := ensureSubmodelElementPathMatchesFormula(ctx, db, submodelID, submodelDatabaseID, idShortOrPath); formulaCheckErr != nil {
 		return nil, formulaCheckErr

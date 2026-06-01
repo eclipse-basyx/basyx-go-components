@@ -205,6 +205,9 @@ type Config struct {
 	AuditIdentityMode string
 }
 
+// SnapshotMutator applies a scoped change to an existing history snapshot.
+type SnapshotMutator func(snapshot map[string]any) error
+
 // Configure replaces the process-local history configuration.
 func Configure(cfg Config) {
 	configMu.Lock()
@@ -271,14 +274,63 @@ func AppendVersionTx(ctx context.Context, tx *sql.Tx, table string, identifier s
 	if ActiveConfig().Mode == ModeOff {
 		return nil
 	}
+
+	identifier, err := validateAppendInputs(tx, identifier)
+	if err != nil {
+		return err
+	}
+	if err = lockIdentifierTx(ctx, tx, table, identifier); err != nil {
+		return err
+	}
+	previousHash, err := latestRowHashTx(ctx, tx, table, identifier)
+	if err != nil {
+		return err
+	}
+	return appendVersionWithPreviousHashTx(ctx, tx, table, identifier, changeType, snapshot, deleted, previousHash)
+}
+
+// AppendMutatedVersionTx derives and appends a version from the latest snapshot.
+func AppendMutatedVersionTx(ctx context.Context, tx *sql.Tx, table string, identifier string, changeType string, mutate SnapshotMutator) error {
+	if ActiveConfig().Mode == ModeOff {
+		return nil
+	}
+
+	identifier, err := validateAppendInputs(tx, identifier)
+	if err != nil {
+		return err
+	}
+	if mutate == nil {
+		return common.NewInternalServerError("HISTORY-MUTATE-NILMUTATOR snapshot mutator must not be nil")
+	}
+	if err = lockIdentifierTx(ctx, tx, table, identifier); err != nil {
+		return err
+	}
+
+	latest, err := latestVersionTx(ctx, tx, table, identifier)
+	if err != nil {
+		return err
+	}
+	if latest.deleted {
+		return common.NewErrNotFound("HISTORY-MUTATE-DELETED latest historical version is deleted")
+	}
+	if err = mutate(latest.snapshot); err != nil {
+		return err
+	}
+	return appendVersionWithPreviousHashTx(ctx, tx, table, identifier, changeType, latest.snapshot, false, latest.rowHash)
+}
+
+func validateAppendInputs(tx *sql.Tx, identifier string) (string, error) {
 	if tx == nil {
-		return common.NewInternalServerError("HISTORY-APPEND-NILTX transaction must not be nil")
+		return "", common.NewInternalServerError("HISTORY-APPEND-NILTX transaction must not be nil")
 	}
 	identifier = strings.TrimSpace(identifier)
 	if identifier == "" {
-		return common.NewErrBadRequest("HISTORY-APPEND-EMPTYID identifier must not be empty")
+		return "", common.NewErrBadRequest("HISTORY-APPEND-EMPTYID identifier must not be empty")
 	}
+	return identifier, nil
+}
 
+func appendVersionWithPreviousHashTx(ctx context.Context, tx *sql.Tx, table string, identifier string, changeType string, snapshot map[string]any, deleted bool, previousHash string) error {
 	now := time.Now().UTC()
 	snapshotJSON, err := json.Marshal(snapshot)
 	if err != nil {
@@ -287,10 +339,6 @@ func AppendVersionTx(ctx context.Context, tx *sql.Tx, table string, identifier s
 	contentHash, err := CanonicalJSONHash(snapshot)
 	if err != nil {
 		return common.NewInternalServerError("HISTORY-APPEND-CONTENTHASH " + err.Error())
-	}
-	previousHash, err := latestRowHashTx(ctx, tx, table, identifier)
-	if err != nil {
-		return err
 	}
 	audit := FromContext(ctx)
 	event := ChangeEvent{
@@ -348,6 +396,60 @@ func AppendVersionTx(ctx context.Context, tx *sql.Tx, table string, identifier s
 		return common.NewInternalServerError("HISTORY-APPEND-EXECINSERT " + err.Error())
 	}
 	return nil
+}
+
+func lockIdentifierTx(ctx context.Context, tx *sql.Tx, table string, identifier string) error {
+	query, args, err := buildLockIdentifierQuery(table, identifier)
+	if err != nil {
+		return common.NewInternalServerError("HISTORY-LOCK-BUILDSQL " + err.Error())
+	}
+	if _, err = tx.ExecContext(ctx, query, args...); err != nil {
+		return common.NewInternalServerError("HISTORY-LOCK-EXECSQL " + err.Error())
+	}
+	return nil
+}
+
+func buildLockIdentifierQuery(table string, identifier string) (string, []any, error) {
+	lockKey := table + ":" + identifier
+	return goqu.
+		Dialect("postgres").
+		Select(goqu.Func("pg_advisory_xact_lock", goqu.Func("hashtextextended", lockKey, 0))).
+		Prepared(true).
+		ToSQL()
+}
+
+type latestVersion struct {
+	snapshot map[string]any
+	deleted  bool
+	rowHash  string
+}
+
+func latestVersionTx(ctx context.Context, tx *sql.Tx, table string, identifier string) (latestVersion, error) {
+	query, args, err := goqu.From(table).
+		Select(goqu.L("snapshot::text"), goqu.C("deleted"), goqu.C("row_hash")).
+		Where(goqu.C("identifier").Eq(identifier)).
+		Order(goqu.C("history_id").Desc()).
+		Limit(1).
+		ToSQL()
+	if err != nil {
+		return latestVersion{}, common.NewInternalServerError("HISTORY-MUTATE-BUILDLATEST " + err.Error())
+	}
+
+	var snapshotText string
+	var deleted bool
+	var rowHash sql.NullString
+	if err = tx.QueryRowContext(ctx, query, args...).Scan(&snapshotText, &deleted, &rowHash); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return latestVersion{}, common.NewErrNotFound("HISTORY-MUTATE-NOTFOUND no historical version found")
+		}
+		return latestVersion{}, common.NewInternalServerError("HISTORY-MUTATE-READLATEST " + err.Error())
+	}
+
+	var snapshot map[string]any
+	if err = json.Unmarshal([]byte(snapshotText), &snapshot); err != nil {
+		return latestVersion{}, common.NewInternalServerError("HISTORY-MUTATE-UNMARSHAL " + err.Error())
+	}
+	return latestVersion{snapshot: snapshot, deleted: deleted, rowHash: rowHash.String}, nil
 }
 
 func normalizeConfig(cfg Config) Config {

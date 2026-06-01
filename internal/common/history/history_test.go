@@ -129,6 +129,8 @@ func TestAppendVersionTxInsertsWithoutUpdatingPreviousRows(t *testing.T) {
 	}()
 
 	mock.ExpectBegin()
+	mock.ExpectExec(`SELECT pg_advisory_xact_lock`).
+		WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectQuery(`SELECT "row_hash" FROM "aas_history"`).
 		WillReturnError(sql.ErrNoRows)
 	mock.ExpectExec(`INSERT INTO "aas_history"`).
@@ -138,6 +140,47 @@ func TestAppendVersionTxInsertsWithoutUpdatingPreviousRows(t *testing.T) {
 	tx, err := db.Begin()
 	require.NoError(t, err)
 	err = AppendVersionTx(context.Background(), tx, TableAAS, "aas-1", ChangeCreated, map[string]any{"id": "aas-1"}, false)
+	require.NoError(t, err)
+	require.NoError(t, tx.Commit())
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestBuildLockIdentifierQueryUsesPostgresPlaceholders(t *testing.T) {
+	query, args, err := buildLockIdentifierQuery(TableAAS, "aas-1")
+
+	require.NoError(t, err)
+	require.Equal(t, "SELECT pg_advisory_xact_lock(hashtextextended($1, $2))", query)
+	require.Equal(t, []any{"aas_history:aas-1", int64(0)}, args)
+}
+
+func TestAppendMutatedVersionTxUsesLatestSnapshotAndRowHash(t *testing.T) {
+	t.Cleanup(func() {
+		Configure(Config{Mode: ModeAPI, Immutability: ImmutabilityNone, AuditIdentityMode: AuditIdentityMinimal})
+	})
+	Configure(Config{Mode: ModeAPI, Immutability: ImmutabilityNone, AuditIdentityMode: AuditIdentityMinimal})
+
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer func() {
+		_ = db.Close()
+	}()
+
+	mock.ExpectBegin()
+	mock.ExpectExec(`SELECT pg_advisory_xact_lock`).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectQuery(`SELECT snapshot::text, "deleted", "row_hash" FROM "submodel_history"`).
+		WillReturnRows(sqlmock.NewRows([]string{"snapshot", "deleted", "row_hash"}).
+			AddRow(`{"id":"sm-1","submodelElements":[]}`, false, "previous"))
+	mock.ExpectExec(`INSERT INTO "submodel_history"`).
+		WillReturnResult(sqlmock.NewResult(1, 1))
+	mock.ExpectCommit()
+
+	tx, err := db.Begin()
+	require.NoError(t, err)
+	err = AppendMutatedVersionTx(context.Background(), tx, TableSubmodel, "sm-1", ChangeUpdated, func(snapshot map[string]any) error {
+		snapshot["idShort"] = "updated"
+		return nil
+	})
 	require.NoError(t, err)
 	require.NoError(t, tx.Commit())
 	require.NoError(t, mock.ExpectationsWereMet())

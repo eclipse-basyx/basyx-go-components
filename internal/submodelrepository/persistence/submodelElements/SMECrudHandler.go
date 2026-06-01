@@ -678,6 +678,11 @@ func resolveUpdatedPath(idShortOrPath string, submodelElement types.ISubmodelEle
 	return computeNewPath(idShortOrPath, newIDShort)
 }
 
+// ResolveUpdatedPath returns the persisted path after a submodel-element update.
+func ResolveUpdatedPath(idShortOrPath string, submodelElement types.ISubmodelElement, isPut bool) string {
+	return resolveUpdatedPath(idShortOrPath, submodelElement, isPut)
+}
+
 // updateChildPaths updates the idshort_path of child elements whose paths start with
 // the old prefix followed by the given separator ("." or "[").
 //

@@ -929,7 +929,14 @@ func (s *SubmodelDatabase) AddSubmodelElement(ctx context.Context, submodelID st
 		}
 	}
 
-	if err = s.appendCurrentSubmodelHistoryTx(ctx, tx, submodelID, history.ChangeUpdated); err != nil {
+	if insertedPath == "" {
+		err = s.appendCurrentSubmodelHistoryTx(ctx, tx, submodelID, history.ChangeUpdated)
+	} else {
+		err = s.appendChangedSubmodelElementHistoryTx(ctx, tx, submodelID, submodelElementRootMutation{
+			currentPath: insertedPath,
+		})
+	}
+	if err != nil {
 		return err
 	}
 
@@ -1018,7 +1025,10 @@ func (s *SubmodelDatabase) AddSubmodelElementWithPath(ctx context.Context, submo
 		return err
 	}
 
-	if err = s.appendCurrentSubmodelHistoryTx(ctx, tx, submodelID, history.ChangeUpdated); err != nil {
+	if err = s.appendChangedSubmodelElementHistoryTx(ctx, tx, submodelID, submodelElementRootMutation{
+		previousPath: parentPath,
+		currentPath:  parentPath,
+	}); err != nil {
 		return err
 	}
 
@@ -1094,6 +1104,7 @@ func (s *SubmodelDatabase) PutSubmodelElement(
 	}
 
 	elementExists := false
+	historyMutation := submodelElementRootMutation{}
 	shouldEnforce, enforceErr := shouldEnforceFormula(ctx, "SMREPO-PUTSME-SHOULDENFORCE")
 	if enforceErr != nil {
 		return false, enforceErr
@@ -1126,6 +1137,8 @@ func (s *SubmodelDatabase) PutSubmodelElement(
 		if err = s.updateSubmodelElementInTransaction(tx, submodelID, idShortPath, submodelElement, true); err != nil {
 			return false, err
 		}
+		historyMutation.previousPath = idShortPath
+		historyMutation.currentPath = submodelelements.ResolveUpdatedPath(idShortPath, submodelElement, true)
 	} else {
 		parentPath, targetIDShort, resolveErr := resolvePutCreateTargetPathParts(idShortPath)
 		if resolveErr != nil {
@@ -1148,10 +1161,13 @@ func (s *SubmodelDatabase) PutSubmodelElement(
 			if _, err = s.addTopLevelSubmodelElementInTransaction(tx, submodelID, submodelElement); err != nil {
 				return false, err
 			}
+			historyMutation.currentPath = idShortPath
 		} else {
 			if err = s.addSubmodelElementWithPathInTransaction(ctx, tx, submodelID, submodelDatabaseID, parentPath, submodelElement); err != nil {
 				return false, err
 			}
+			historyMutation.previousPath = parentPath
+			historyMutation.currentPath = parentPath
 		}
 	}
 
@@ -1168,7 +1184,7 @@ func (s *SubmodelDatabase) PutSubmodelElement(
 		}
 	}
 
-	if err = s.appendCurrentSubmodelHistoryTx(ctx, tx, submodelID, history.ChangeUpdated); err != nil {
+	if err = s.appendChangedSubmodelElementHistoryTx(ctx, tx, submodelID, historyMutation); err != nil {
 		return false, err
 	}
 
@@ -1238,12 +1254,24 @@ func (s *SubmodelDatabase) DeleteSubmodelElementByPath(ctx context.Context, subm
 		}
 	}
 
+	deletedRootPath, err := submodelElementRootPath(idShortPath)
+	if err != nil {
+		return err
+	}
+
 	err = submodelelements.DeleteSubmodelElementByPath(tx, submodelID, idShortPath)
 	if err != nil {
 		return err
 	}
 
-	if err = s.appendCurrentSubmodelHistoryTx(ctx, tx, submodelID, history.ChangeUpdated); err != nil {
+	currentRootPath := deletedRootPath
+	if deletedRootPath == idShortPath {
+		currentRootPath = ""
+	}
+	if err = s.appendChangedSubmodelElementHistoryTx(ctx, tx, submodelID, submodelElementRootMutation{
+		previousPath: deletedRootPath,
+		currentPath:  currentRootPath,
+	}); err != nil {
 		return err
 	}
 
@@ -1295,7 +1323,10 @@ func (s *SubmodelDatabase) UpdateSubmodelElement(ctx context.Context, submodelID
 		}
 	}
 
-	if err = s.appendCurrentSubmodelHistoryTx(ctx, tx, submodelID, history.ChangeUpdated); err != nil {
+	if err = s.appendChangedSubmodelElementHistoryTx(ctx, tx, submodelID, submodelElementRootMutation{
+		previousPath: idShortOrPath,
+		currentPath:  submodelelements.ResolveUpdatedPath(idShortOrPath, submodelElement, isPut),
+	}); err != nil {
 		return err
 	}
 
@@ -1308,7 +1339,10 @@ func (s *SubmodelDatabase) UpdateSubmodelElementValueOnly(ctx context.Context, s
 	if err := s.updateSubmodelElementValueOnly(submodelID, idShortOrPath, valueOnly); err != nil {
 		return err
 	}
-	return s.RecordCurrentSubmodelVersion(ctx, submodelID, history.ChangeUpdated)
+	return s.recordChangedSubmodelElementHistory(ctx, submodelID, submodelElementRootMutation{
+		previousPath: idShortOrPath,
+		currentPath:  idShortOrPath,
+	})
 }
 
 func (s *SubmodelDatabase) updateSubmodelElementValueOnly(submodelID string, idShortOrPath string, valueOnly gen.SubmodelElementValue) error {
@@ -1332,13 +1366,18 @@ func (s *SubmodelDatabase) updateSubmodelElementValueOnly(submodelID string, idS
 // UpdateSubmodelValueOnly updates all included top-level submodel elements using value-only representation
 // while preserving ABAC visibility checks from ctx.
 func (s *SubmodelDatabase) UpdateSubmodelValueOnly(ctx context.Context, submodelID string, valueOnly gen.SubmodelValue) error {
+	mutations := make([]submodelElementRootMutation, 0, len(valueOnly))
 	for idShort, elementValue := range valueOnly {
 		if err := s.updateSubmodelElementValueOnly(submodelID, idShort, elementValue); err != nil {
 			return err
 		}
+		mutations = append(mutations, submodelElementRootMutation{
+			previousPath: idShort,
+			currentPath:  idShort,
+		})
 	}
 
-	return s.RecordCurrentSubmodelVersion(ctx, submodelID, history.ChangeUpdated)
+	return s.recordChangedSubmodelElementHistory(ctx, submodelID, mutations...)
 }
 
 // FileAttachmentExists reports whether a File submodel element currently has
@@ -1405,7 +1444,10 @@ func (s *SubmodelDatabase) UploadFileAttachmentWithHistory(ctx context.Context, 
 		if err := fileHandler.UploadFileAttachmentTx(tx, submodelID, idShortPath, file, fileName); err != nil {
 			return err
 		}
-		return s.appendCurrentSubmodelHistoryTx(ctx, tx, submodelID, history.ChangeUpdated)
+		return s.appendChangedSubmodelElementHistoryTx(ctx, tx, submodelID, submodelElementRootMutation{
+			previousPath: idShortPath,
+			currentPath:  idShortPath,
+		})
 	})
 }
 
@@ -1440,7 +1482,10 @@ func (s *SubmodelDatabase) DeleteFileAttachmentWithHistory(ctx context.Context, 
 		if err := fileHandler.DeleteFileAttachmentTx(tx, submodelID, idShortPath); err != nil {
 			return err
 		}
-		return s.appendCurrentSubmodelHistoryTx(ctx, tx, submodelID, history.ChangeUpdated)
+		return s.appendChangedSubmodelElementHistoryTx(ctx, tx, submodelID, submodelElementRootMutation{
+			previousPath: idShortPath,
+			currentPath:  idShortPath,
+		})
 	})
 }
 
@@ -1465,7 +1510,7 @@ func (s *SubmodelDatabase) PatchSubmodel(ctx context.Context, submodelID string,
 		return err
 	}
 
-	if err = s.appendCurrentSubmodelHistoryTx(ctx, tx, submodelID, history.ChangeUpdated); err != nil {
+	if err = s.appendSubmodelHistoryTx(ctx, tx, submodel, history.ChangeUpdated, false); err != nil {
 		return err
 	}
 
@@ -1522,7 +1567,7 @@ func (s *SubmodelDatabase) PatchSubmodelMetadata(ctx context.Context, submodelID
 		return err
 	}
 
-	if err = s.appendCurrentSubmodelHistoryTx(ctx, tx, submodelID, history.ChangeUpdated); err != nil {
+	if err = s.appendSubmodelMetadataHistoryTx(ctx, tx, submodelID, submodel); err != nil {
 		return err
 	}
 

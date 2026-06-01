@@ -523,7 +523,7 @@ func (s *AssetAdministrationShellDatabase) createSubmodelReferenceInAssetAdminis
 			return common.NewErrDenied("AASREPO-NEWSMREFINAAS-ABACDENIED written AAS is not accessible under ABAC constraints")
 		}
 	}
-	return s.appendCurrentAASHistoryTx(ctx, tx, aasIdentifier, history.ChangeUpdated)
+	return s.appendAddedSubmodelReferenceHistoryTx(ctx, tx, aasIdentifier, submodelRef)
 }
 
 func (s *AssetAdministrationShellDatabase) getNextSubmodelReferencePositionInTransaction(tx *sql.Tx, aasDBID int64) (int, error) {
@@ -1092,7 +1092,7 @@ func (s *AssetAdministrationShellDatabase) PutAssetInformationByAASIDInTransacti
 		return err
 	}
 
-	return s.appendCurrentAASHistoryTx(ctx, tx, aasIdentifier, history.ChangeUpdated)
+	return s.appendAssetInformationHistoryTx(ctx, tx, aasIdentifier, assetInformation)
 }
 
 type currentAssetInformationState struct {
@@ -1334,7 +1334,7 @@ func (s *AssetAdministrationShellDatabase) PutThumbnailByAASID(ctx context.Conte
 		return uploadErr
 	}
 
-	if err = s.appendCurrentAASHistoryTx(ctx, tx, aasIdentifier, history.ChangeUpdated); err != nil {
+	if err = s.appendUploadedThumbnailHistoryTx(ctx, tx, aasIdentifier); err != nil {
 		return err
 	}
 
@@ -1380,7 +1380,7 @@ func (s *AssetAdministrationShellDatabase) DeleteThumbnailByAASID(ctx context.Co
 		return deleteErr
 	}
 
-	if err = s.appendCurrentAASHistoryTx(ctx, tx, aasIdentifier, history.ChangeUpdated); err != nil {
+	if err = s.appendDeletedThumbnailHistoryTx(ctx, tx, aasIdentifier); err != nil {
 		return err
 	}
 
@@ -1639,7 +1639,7 @@ func (s *AssetAdministrationShellDatabase) deleteSubmodelReferenceInAssetAdminis
 		return err
 	}
 
-	return s.appendCurrentAASHistoryTx(ctx, tx, aasIdentifier, history.ChangeUpdated)
+	return s.appendRemovedSubmodelReferenceHistoryTx(ctx, tx, aasIdentifier, submodelIdentifier)
 }
 
 // deleteSubmodelReferenceInAssetAdministrationShellInTransaction removes a submodel reference within an existing transaction.

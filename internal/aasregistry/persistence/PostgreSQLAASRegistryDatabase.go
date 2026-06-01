@@ -334,11 +334,7 @@ func (p *PostgreSQLAASRegistryDatabase) InsertSubmodelDescriptorForAAS(
 		if err != nil {
 			return err
 		}
-		parent, err := descriptors.GetAssetAdministrationShellDescriptorByIDTx(ctx, tx, aasID)
-		if err != nil {
-			return err
-		}
-		if err := appendDescriptorHistoryTx(ctx, tx, parent, history.ChangeUpdated, false); err != nil {
+		if err := p.appendAddedSubmodelDescriptorHistoryTx(ctx, tx, aasID, stored); err != nil {
 			return err
 		}
 		result = stored
@@ -366,11 +362,7 @@ func (p *PostgreSQLAASRegistryDatabase) ReplaceSubmodelDescriptorForAAS(
 		if err != nil {
 			return err
 		}
-		parent, err := descriptors.GetAssetAdministrationShellDescriptorByIDTx(ctx, tx, aasID)
-		if err != nil {
-			return err
-		}
-		if err := appendDescriptorHistoryTx(ctx, tx, parent, history.ChangeUpdated, false); err != nil {
+		if err := p.appendReplacedSubmodelDescriptorHistoryTx(ctx, tx, aasID, stored); err != nil {
 			return err
 		}
 		result = stored
@@ -406,11 +398,7 @@ func (p *PostgreSQLAASRegistryDatabase) DeleteSubmodelDescriptorForAASByID(
 		if err := descriptors.DeleteSubmodelDescriptorForAASByIDTx(ctx, tx, aasID, submodelID); err != nil {
 			return err
 		}
-		parent, err := descriptors.GetAssetAdministrationShellDescriptorByIDTx(ctx, tx, aasID)
-		if err != nil {
-			return err
-		}
-		return appendDescriptorHistoryTx(ctx, tx, parent, history.ChangeUpdated, false)
+		return p.appendRemovedSubmodelDescriptorHistoryTx(ctx, tx, aasID, submodelID)
 	})
 }
 
