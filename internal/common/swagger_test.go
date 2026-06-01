@@ -124,10 +124,10 @@ func TestInjectVerifyEndpoint_ReflectsSupportedVerifyRequestFormats(t *testing.T
 	}
 }
 
-func TestInjectServerURL_PreservesServerBasePathFromSpec(t *testing.T) {
+func TestInjectServerURL_DoesNotInheritServerBasePathFromSpec(t *testing.T) {
 	spec := []byte("openapi: 3.0.3\nservers:\n- url: 'https://admin-shell.io/api/v3'\npaths:\n  /packages:\n    get:\n      responses:\n        '200':\n          description: ok\n")
 	injected := injectServerURL(spec, "http://localhost:5004")
-	if !strings.Contains(string(injected), "- url: 'http://localhost:5004/api/v3'") {
-		t.Fatal("expected injected server URL to preserve /api/v3 base path")
+	if !strings.Contains(string(injected), "- url: 'http://localhost:5004'") {
+		t.Fatal("expected injected server URL to not inherit /api/v3 base path")
 	}
 }
