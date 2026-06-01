@@ -226,9 +226,19 @@ type GeneralConfig struct {
 
 // OIDCProviderConfig contains OpenID Connect authentication provider settings.
 type OIDCProviderConfig struct {
-	Issuer   string   `mapstructure:"issuer" yaml:"issuer" json:"issuer"`       // OIDC issuer URL
-	Audience string   `mapstructure:"audience" yaml:"audience" json:"audience"` // Optional token audience (skip audience validation if empty)
-	Scopes   []string `mapstructure:"scopes" yaml:"scopes" json:"scopes"`       // Required scopes
+	Issuer        string                   `mapstructure:"issuer" yaml:"issuer" json:"issuer"`                      // OIDC issuer URL
+	Audience      string                   `mapstructure:"audience" yaml:"audience" json:"audience"`                // Optional token audience (skip audience validation if empty)
+	Scopes        []string                 `mapstructure:"scopes" yaml:"scopes" json:"scopes"`                      // Required scopes
+	DiscoveryURL  string                   `mapstructure:"discoveryUrl" yaml:"discoveryUrl" json:"discoveryUrl"`    // Optional non-standard OIDC discovery URL
+	ScopeClaims   []string                 `mapstructure:"scopeClaims" yaml:"scopeClaims" json:"scopeClaims"`       // Optional JSON pointers to OAuth scope claims
+	ClaimMappings []OIDCClaimMappingConfig `mapstructure:"claimMappings" yaml:"claimMappings" json:"claimMappings"` // Optional canonical BaSyx claim mappings
+}
+
+// OIDCClaimMappingConfig maps provider claims into the reserved basyx.* namespace.
+type OIDCClaimMappingConfig struct {
+	Target  string   `mapstructure:"target" yaml:"target" json:"target"`
+	Mode    string   `mapstructure:"mode" yaml:"mode" json:"mode"`
+	Sources []string `mapstructure:"sources" yaml:"sources" json:"sources"`
 }
 
 // OIDCConfig contains OpenID Connect authentication provider settings.

@@ -112,9 +112,12 @@ func SetupSecurityWithClaimsMiddleware(
 	oidcProviders := make([]OIDCProviderSettings, 0, len(trustlist))
 	for _, p := range trustlist {
 		oidcProviders = append(oidcProviders, OIDCProviderSettings{
-			Issuer:   p.Issuer,
-			Audience: p.Audience,
-			Scopes:   p.Scopes,
+			Issuer:        p.Issuer,
+			Audience:      p.Audience,
+			Scopes:        p.Scopes,
+			DiscoveryURL:  p.DiscoveryURL,
+			ScopeClaims:   p.ScopeClaims,
+			ClaimMappings: toClaimMappingSettings(p.ClaimMappings),
 		})
 	}
 
@@ -159,4 +162,16 @@ func SetupSecurityWithClaimsMiddleware(
 	)
 
 	return nil
+}
+
+func toClaimMappingSettings(configs []common.OIDCClaimMappingConfig) []OIDCClaimMappingSettings {
+	settings := make([]OIDCClaimMappingSettings, 0, len(configs))
+	for _, config := range configs {
+		settings = append(settings, OIDCClaimMappingSettings{
+			Target:  config.Target,
+			Mode:    config.Mode,
+			Sources: config.Sources,
+		})
+	}
+	return settings
 }

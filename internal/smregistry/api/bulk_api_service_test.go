@@ -97,6 +97,28 @@ func TestBulkServiceResultIsOwnerScoped(t *testing.T) {
 	require.Equal(t, http.StatusNotFound, service.GetResult(otherCtx, handleID).Code)
 }
 
+func TestBulkServiceStatusIsOwnerScoped(t *testing.T) {
+	manager := asyncbulk.NewManager("SMR-BULK-TEST", time.Minute)
+	service := NewBulkService(smBulkServiceStub{}, manager)
+
+	ownerCtx := withClaims(context.Background(), auth.Claims{"sub": "owner-a", "iss": "issuer-a"})
+	otherCtx := withClaims(context.Background(), auth.Claims{"sub": "owner-b", "iss": "issuer-a"})
+
+	start := service.StartCreate(ownerCtx, []model.SubmodelDescriptor{{Id: "urn:ok"}})
+	require.Equal(t, http.StatusAccepted, start.Code)
+	handleID := extractSMHandleID(t, start)
+
+	require.Equal(t, http.StatusNotFound, service.GetStatus(otherCtx, handleID).Code)
+}
+
+func TestBulkServiceUnknownHandleReturnsNotFound(t *testing.T) {
+	manager := asyncbulk.NewManager("SMR-BULK-TEST", time.Minute)
+	service := NewBulkService(smBulkServiceStub{}, manager)
+
+	require.Equal(t, http.StatusNotFound, service.GetStatus(context.Background(), "SMR-BULK-TEST-unknown").Code)
+	require.Equal(t, http.StatusNotFound, service.GetResult(context.Background(), "SMR-BULK-TEST-unknown").Code)
+}
+
 func TestBulkServiceDeleteFailureResult(t *testing.T) {
 	manager := asyncbulk.NewManager("SMR-BULK-TEST", time.Minute)
 	service := NewBulkService(smBulkServiceStub{

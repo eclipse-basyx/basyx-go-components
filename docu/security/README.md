@@ -119,16 +119,21 @@ sequenceDiagram
 
 - Security is only active when ABAC is enabled in config. If `abac.enabled` is false, no OIDC or ABAC middleware is applied.
   - Example config: [cmd/aasregistryservice/config.yaml](cmd/aasregistryservice/config.yaml)
-- OIDC uses the trustlist file to allow issuers and optional audiences.
+- OIDC uses the trustlist file to allow configured issuers and audiences.
   - Example trustlist: [cmd/aasregistryservice/config/trustlist.json](cmd/aasregistryservice/config/trustlist.json)
 - Access rules are loaded from the access model JSON.
   - Example rules: [cmd/aasregistryservice/config/access_rules/access-rules.json](cmd/aasregistryservice/config/access_rules/access-rules.json)
 
 ## OIDC authentication
 
-- OIDC provider verification uses issuer + optional audience from the trustlist.
-- If `audience` is omitted (or empty) for a provider, the token audience (`aud`) check is skipped for that provider.
-- Required scopes are listed per provider in the trustlist and checked against the `scope` claim.
+- OIDC provider verification supports configured providers that issue compact signed JWT bearer access tokens. Opaque OAuth tokens, token introspection, DPoP, and mTLS-bound access tokens are not supported.
+- Issuer matching is exact. Tokens must pass signature, expiry, and configured audience checks before claims are exposed to ABAC.
+- `audience` remains optional for compatibility with existing deployments. Omitting it skips the token audience (`aud`) check and logs a startup security warning. Configure it for production deployments.
+- Standard OIDC discovery is loaded from `<issuer>/.well-known/openid-configuration`. Set `discoveryUrl` only when the provider exposes metadata at another URL; the metadata issuer must still match exactly and include `jwks_uri`.
+- Required scopes are listed per provider in the trustlist. By default they are collected from `scope` and Entra ID's `scp` delegated-permission claim. Space-delimited strings and string arrays are accepted.
+- Verified scopes are exposed to ABAC as `basyx.scopes`. Raw verified claims remain unchanged.
+- Optional claim mappings expose provider-specific claims under the reserved `basyx.` namespace. Mapping sources are RFC 6901 JSON pointers.
+- Tokens that already contain a `basyx.*` claim are rejected after verification to prevent canonical-claim spoofing. The rejected claim name is logged by the service.
 - If the token is valid, claims are injected into the request context.
 - The middleware adds time claims `CLIENTNOW`, `LOCALNOW`, and `UTCNOW` to support time-based ABAC formulas.
 - AllowAnonymous is currently enabled by default in `SetupSecurityWithClaimsMiddleware`.
@@ -136,6 +141,26 @@ sequenceDiagram
 Relevant code:
 - [internal/common/security/oidc.go](internal/common/security/oidc.go)
 - [internal/common/security/security.go](internal/common/security/security.go)
+
+Example trustlist entry:
+
+```json
+{
+  "issuer": "https://issuer.example",
+  "audience": "basyx-api",
+  "scopes": ["read"],
+  "discoveryUrl": "https://issuer.example/custom/openid-configuration",
+  "scopeClaims": ["/scope", "/scp"],
+  "claimMappings": [
+    { "target": "roles", "mode": "list", "sources": ["/roles", "/realm_access/roles"] },
+    { "target": "clear", "mode": "scalar", "sources": ["/extension_clearance"] }
+  ]
+}
+```
+
+`list` mappings merge and deduplicate scalar strings and string arrays from all configured sources. `scalar` mappings use the first present primitive source and accept an array only when it has exactly one item. Tokens with invalid mapped claim shapes are rejected with `401`.
+
+For mixed delegated and app-only tokens from one issuer, avoid mandatory trustlist `scopes` when app-only tokens do not carry delegated scopes. Express the alternatives in ABAC using existing Part 4 operators and mapped scalar claims. The current grammar has no exact list-membership operator, so do not use substring checks for multi-value role authorization.
 
 ## ABAC authorization
 
@@ -287,7 +312,7 @@ Example file:
 
 ## Testing and security environments
 
-- Security-focused tests use dedicated access rules and Keycloak configs under the service-specific security test folders.
+- Security-focused tests use dedicated access rules and identity-provider configs under the service-specific security test folders.
   - Example: [internal/aasregistry/security_tests](internal/aasregistry/security_tests)
   - Example: [internal/discoveryservice/security_tests](internal/discoveryservice/security_tests)
 - Tests that intentionally run without ABAC enforcement must provide explicit config context with ABAC disabled.
@@ -296,7 +321,7 @@ Example file:
 ## Operational checklist
 
 - Enable ABAC in config and set the access model path.
-- Configure the trustlist with issuer, optional audience, and scopes.
+- Configure the trustlist with issuer, audience, and required scopes. Treat an omitted audience as a legacy compatibility mode.
 - Confirm route-to-rights mapping covers all endpoints used by the service.
 - Validate the access rules against the intended claims and objects.
 - Restart the service after updating rules (no hot reload).

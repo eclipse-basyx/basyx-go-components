@@ -97,6 +97,28 @@ func TestBulkServiceStatusIsOwnerScoped(t *testing.T) {
 	require.Equal(t, http.StatusNotFound, service.GetStatus(otherCtx, handleID).Code)
 }
 
+func TestBulkServiceResultIsOwnerScoped(t *testing.T) {
+	manager := asyncbulk.NewManager("AASR-BULK-TEST", time.Minute)
+	service := NewBulkService(aasBulkServiceStub{}, manager)
+
+	ownerCtx := withClaims(context.Background(), auth.Claims{"sub": "owner-a", "iss": "issuer-a"})
+	otherCtx := withClaims(context.Background(), auth.Claims{"sub": "owner-b", "iss": "issuer-a"})
+
+	start := service.StartPut(ownerCtx, []model.AssetAdministrationShellDescriptor{{Id: "id-1"}})
+	require.Equal(t, http.StatusAccepted, start.Code)
+	handleID := extractAASHandleID(t, start)
+
+	require.Equal(t, http.StatusNotFound, service.GetResult(otherCtx, handleID).Code)
+}
+
+func TestBulkServiceUnknownHandleReturnsNotFound(t *testing.T) {
+	manager := asyncbulk.NewManager("AASR-BULK-TEST", time.Minute)
+	service := NewBulkService(aasBulkServiceStub{}, manager)
+
+	require.Equal(t, http.StatusNotFound, service.GetStatus(context.Background(), "AASR-BULK-TEST-unknown").Code)
+	require.Equal(t, http.StatusNotFound, service.GetResult(context.Background(), "AASR-BULK-TEST-unknown").Code)
+}
+
 func TestBulkServiceCreateFailureResult(t *testing.T) {
 	manager := asyncbulk.NewManager("AASR-BULK-TEST", time.Minute)
 	service := NewBulkService(aasBulkServiceStub{

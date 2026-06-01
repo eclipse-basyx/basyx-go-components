@@ -1,0 +1,27 @@
+infrastructures:
+  default: test
+
+  test:
+    name: Test Environment
+    components:
+      aasDiscovery:
+        baseUrl: "http://localhost:8081/lookup/shells"
+      aasRegistry:
+        baseUrl: "http://localhost:8081/shell-descriptors"
+      submodelRegistry:
+        baseUrl: "http://localhost:8081/submodel-descriptors"
+      aasRepository:
+        baseUrl: "http://localhost:8081/shells"
+        hasRegistryIntegration: true
+      submodelRepository:
+        baseUrl: "http://localhost:8081/submodels"
+        hasRegistryIntegration: true
+      conceptDescriptionRepository:
+        baseUrl: "http://localhost:8081/concept-descriptions"
+    security:
+      type: oauth2
+      config:
+        flow: auth_code
+        issuer: "https://login.microsoftonline.com/<tenant-id>/v2.0"
+        clientId: "<web-ui-client-id>"
+        scope: "openid api://<basyx-api-client-id>/access_as_user"

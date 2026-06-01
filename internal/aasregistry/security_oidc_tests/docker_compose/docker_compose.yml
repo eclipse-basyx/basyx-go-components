@@ -1,0 +1,88 @@
+services:
+  db:
+    image: postgres:18
+    container_name: postgres_oidc_test
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: admin123
+      POSTGRES_DB: basyxTestDB
+    command: ["postgres", "-c", "listen_addresses=*"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U admin -d basyxTestDB"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  basyx_configuration:
+    container_name: basyx_configuration_oidc_test
+    build:
+      context: ../../../..
+      dockerfile: ./cmd/basyxconfigurationservice/Dockerfile
+    environment:
+      - POSTGRES_HOST=db
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=admin
+      - POSTGRES_PASSWORD=admin123
+      - POSTGRES_DBNAME=basyxTestDB
+      - POSTGRES_MAXOPENCONNECTIONS=500
+      - POSTGRES_MAXIDLECONNECTIONS=500
+      - POSTGRES_CONNMAXLIFETIMEMINUTES=5
+    depends_on:
+      db:
+        condition: service_healthy
+
+  aas-registry-scp:
+    container_name: aas_registry_oidc_scp_test
+    build:
+      context: ../../../..
+      dockerfile: ./cmd/aasregistryservice/Dockerfile
+    environment:
+      - SERVER_PORT=5004
+      - POSTGRES_HOST=db
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=admin
+      - POSTGRES_PASSWORD=admin123
+      - POSTGRES_DBNAME=basyxTestDB
+      - POSTGRES_MAXOPENCONNECTIONS=500
+      - POSTGRES_MAXIDLECONNECTIONS=500
+      - POSTGRES_CONNMAXLIFETIMEMINUTES=5
+      - ABAC_ENABLED=true
+      - ABAC_MODELPATH=/security_env/scp-access-rules.json
+      - OIDC_TRUSTLISTPATH=/security_env/scp-trustlist.json
+    ports:
+      - "6104:5004"
+    depends_on:
+      basyx_configuration:
+        condition: service_completed_successfully
+    volumes:
+      - ${OIDC_TEST_SECURITY_ENV}:/security_env:ro
+    extra_hosts:
+      - "localhost:host-gateway"
+
+  aas-registry-roles:
+    container_name: aas_registry_oidc_roles_test
+    build:
+      context: ../../../..
+      dockerfile: ./cmd/aasregistryservice/Dockerfile
+    environment:
+      - SERVER_PORT=5004
+      - POSTGRES_HOST=db
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=admin
+      - POSTGRES_PASSWORD=admin123
+      - POSTGRES_DBNAME=basyxTestDB
+      - POSTGRES_MAXOPENCONNECTIONS=500
+      - POSTGRES_MAXIDLECONNECTIONS=500
+      - POSTGRES_CONNMAXLIFETIMEMINUTES=5
+      - ABAC_ENABLED=true
+      - ABAC_MODELPATH=/security_env/roles-access-rules.json
+      - OIDC_TRUSTLISTPATH=/security_env/roles-trustlist.json
+    ports:
+      - "6204:5004"
+    depends_on:
+      basyx_configuration:
+        condition: service_completed_successfully
+    volumes:
+      - ${OIDC_TEST_SECURITY_ENV}:/security_env:ro
+    extra_hosts:
+      - "localhost:host-gateway"

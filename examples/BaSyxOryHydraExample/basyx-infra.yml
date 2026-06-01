@@ -1,0 +1,28 @@
+infrastructures:
+  default: infra1
+
+  infra1:
+    name: Secured BaSyx with Ory Hydra
+    components:
+      aasDiscovery:
+        baseUrl: "http://localhost:8081/lookup/shells"
+      aasRegistry:
+        baseUrl: "http://localhost:8081/shell-descriptors"
+        hasDiscoveryIntegration: true
+      submodelRegistry:
+        baseUrl: "http://localhost:8081/submodel-descriptors"
+      aasRepository:
+        baseUrl: "http://localhost:8081/shells"
+        hasRegistryIntegration: true
+      submodelRepository:
+        baseUrl: "http://localhost:8081/submodels"
+        hasRegistryIntegration: true
+      conceptDescriptionRepository:
+        baseUrl: "http://localhost:8081/concept-descriptions"
+    security:
+      type: oauth2
+      config:
+        flow: auth_code
+        issuer: "http://hydra.localhost:4444"
+        clientId: "basyx-ui"
+        scope: "openid profile email"

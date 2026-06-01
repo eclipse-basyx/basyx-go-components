@@ -1,0 +1,10 @@
+[
+  {
+    "issuer": "http://hydra.localhost:4444",
+    "audience": "basyx-api",
+    "scopes": ["openid"],
+    "claimMappings": [
+      { "target": "role", "mode": "scalar", "sources": ["/ext/role"] }
+    ]
+  }
+]

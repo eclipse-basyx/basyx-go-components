@@ -34,5 +34,5 @@ type EvalInput struct {
 	Claims Claims
 }
 
-// Claims represents token claims extracted from a verified ID token.
+// Claims represents token claims extracted from a verified token.
 type Claims map[string]any
