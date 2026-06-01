@@ -78,6 +78,120 @@ func TestAccessTokenVerifier_RejectsExpiredToken(t *testing.T) {
 	}
 }
 
+func TestAccessTokenVerifier_ConstraintMatrix(t *testing.T) {
+	t.Parallel()
+
+	privateKey, issuer := newTestOIDCIssuer(t)
+	otherKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		t.Fatalf("rsa.GenerateKey() error = %v", err)
+	}
+	verifier := newTestAccessTokenVerifier(t, issuer, "basyx-api")
+
+	testCases := []struct {
+		name      string
+		claims    Claims
+		signing   any
+		algorithm string
+		wantError bool
+	}{
+		{
+			name: "accepts valid issuer signature expiry audience and algorithm",
+			claims: Claims{
+				"aud": "basyx-api",
+			},
+			signing:   privateKey,
+			algorithm: oidc.RS256,
+			wantError: false,
+		},
+		{
+			name: "rejects issuer mismatch",
+			claims: Claims{
+				"iss": "https://issuer.invalid",
+				"aud": "basyx-api",
+			},
+			signing:   privateKey,
+			algorithm: oidc.RS256,
+			wantError: true,
+		},
+		{
+			name: "rejects signature mismatch",
+			claims: Claims{
+				"aud": "basyx-api",
+			},
+			signing:   otherKey,
+			algorithm: oidc.RS256,
+			wantError: true,
+		},
+		{
+			name: "rejects expired token",
+			claims: Claims{
+				"aud": "basyx-api",
+				"exp": time.Now().Add(-time.Minute).Unix(),
+			},
+			signing:   privateKey,
+			algorithm: oidc.RS256,
+			wantError: true,
+		},
+		{
+			name: "rejects audience mismatch",
+			claims: Claims{
+				"aud": "other-api",
+			},
+			signing:   privateKey,
+			algorithm: oidc.RS256,
+			wantError: true,
+		},
+		{
+			name: "rejects unsupported algorithm",
+			claims: Claims{
+				"aud": "basyx-api",
+			},
+			signing:   []byte("01234567890123456789012345678901"),
+			algorithm: "HS256",
+			wantError: true,
+		},
+		{
+			name: "accepts Entra access token type indicator claims",
+			claims: Claims{
+				"aud":   "basyx-api",
+				"idtyp": "app",
+				"scp":   "access_as_user profile",
+				"ver":   "2.0",
+			},
+			signing:   privateKey,
+			algorithm: oidc.RS256,
+			wantError: false,
+		},
+		{
+			name: "accepts Hydra style access token indicator claim",
+			claims: Claims{
+				"aud":       "basyx-api",
+				"token_use": "access_token",
+			},
+			signing:   privateKey,
+			algorithm: oidc.RS256,
+			wantError: false,
+		},
+	}
+
+	for _, testCase := range testCases {
+		testCase := testCase
+		t.Run(testCase.name, func(t *testing.T) {
+			t.Parallel()
+
+			token := signTestAccessTokenWithAlgorithm(t, testCase.signing, testOIDCKeyID, testCase.algorithm, issuer, testCase.claims)
+			_, verifyErr := verifier.Verify(context.Background(), token)
+			if testCase.wantError && verifyErr == nil {
+				t.Fatalf("Verify() expected error, got nil")
+			}
+			if !testCase.wantError && verifyErr != nil {
+				t.Fatalf("Verify() unexpected error: %v", verifyErr)
+			}
+		})
+	}
+}
+
 func newTestOIDCIssuer(t *testing.T) (*rsa.PrivateKey, string) {
 	t.Helper()
 
@@ -112,6 +226,18 @@ func newTestAccessTokenVerifier(t *testing.T, issuer string, audience string) *a
 
 func signTestAccessToken(t *testing.T, privateKey *rsa.PrivateKey, issuer string, overrides Claims) string {
 	t.Helper()
+	return signTestAccessTokenWithAlgorithm(t, privateKey, testOIDCKeyID, oidc.RS256, issuer, overrides)
+}
+
+func signTestAccessTokenWithAlgorithm(
+	t *testing.T,
+	signingKey any,
+	keyID string,
+	algorithm string,
+	issuer string,
+	overrides Claims,
+) string {
+	t.Helper()
 
 	claims := Claims{
 		"iss": issuer,
@@ -125,5 +251,5 @@ func signTestAccessToken(t *testing.T, privateKey *rsa.PrivateKey, issuer string
 	if err != nil {
 		t.Fatalf("json.Marshal() error = %v", err)
 	}
-	return oidctest.SignIDToken(privateKey, testOIDCKeyID, oidc.RS256, string(rawClaims))
+	return oidctest.SignIDToken(signingKey, keyID, algorithm, string(rawClaims))
 }

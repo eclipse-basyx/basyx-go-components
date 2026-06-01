@@ -129,9 +129,9 @@ func NewOIDC(ctx context.Context, s OIDCSettings) (*OIDC, error) {
 		}
 		if verifierCfg.SkipClientIDCheck {
 			log.Printf("⚠️ OIDC verifier created without audience validation. Issuer=%s", issuer)
-			continue
+		} else {
+			log.Printf("✅ OIDC verifier created. Issuer=%s Audience=%s", issuer, verifierCfg.ClientID)
 		}
-		log.Printf("✅ OIDC verifier created. Issuer=%s Audience=%s", issuer, verifierCfg.ClientID)
 	}
 
 	return &OIDC{verifiers: verifiers, settings: s}, nil

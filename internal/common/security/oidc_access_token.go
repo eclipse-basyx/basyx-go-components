@@ -38,6 +38,13 @@ type accessTokenVerifier struct {
 	verifier *oidc.IDTokenVerifier
 }
 
+// Verify validates a compact signed JWT access token.
+//
+// The implementation intentionally uses go-oidc's IDTokenVerifier for cryptographic
+// and standard claim validation (issuer, signature/JWK, expiry and optional audience),
+// while provider-specific token type indicators (for example Entra's "idtyp" or
+// Hydra-specific custom claims) are treated as ordinary claims and can be enforced
+// through scope/mapping/policy layers.
 func (v *accessTokenVerifier) Verify(ctx context.Context, rawToken string) (Claims, error) {
 	if err := validateCompactSignedJWT(rawToken); err != nil {
 		return nil, err
