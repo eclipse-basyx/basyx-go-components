@@ -213,6 +213,12 @@ type Config struct {
 // SnapshotMutator applies a scoped change to an existing history snapshot.
 type SnapshotMutator func(snapshot map[string]any) error
 
+// RecentRowsFetcher loads one raw history page.
+type RecentRowsFetcher func(limit int32, cursor string) ([]Row, string, error)
+
+// RecentRowPredicate decides whether a history row belongs in a filtered response.
+type RecentRowPredicate func(row Row) (bool, error)
+
 // Configure replaces the process-local history configuration.
 func Configure(cfg Config) {
 	configMu.Lock()
@@ -541,11 +547,9 @@ func RecentRows(ctx context.Context, db *sql.DB, table string, limit int32, curs
 	if db == nil {
 		return nil, "", common.NewErrBadRequest("HISTORY-RECENT-NILDB database handle must not be nil")
 	}
-	if limit <= 0 {
-		limit = DefaultRecentChangesLimit
-	}
-	if limit > MaxRecentChangesLimit {
-		return nil, "", common.NewErrBadRequest("HISTORY-RECENT-LIMIT limit must not exceed " + strconv.FormatInt(int64(MaxRecentChangesLimit), 10))
+	limit, err := normalizeRecentChangesLimit(limit)
+	if err != nil {
+		return nil, "", err
 	}
 	limitInt := int(limit)
 	cursorID, err := parseCursor(cursor)
@@ -611,14 +615,77 @@ func RecentRows(ctx context.Context, db *sql.DB, table string, limit int32, curs
 		if err = json.Unmarshal([]byte(snapshotText), &row.Snapshot); err != nil {
 			return nil, "", common.NewInternalServerError("HISTORY-RECENT-UNMARSHAL " + err.Error())
 		}
-		row.CreatedAt = created.String
-		row.UpdatedAt = updated.String
+		row.CreatedAt = timestampOrOperationTime(created.String, row.OperationAt)
+		row.UpdatedAt = timestampOrOperationTime(updated.String, row.OperationAt)
 		result = append(result, row)
 	}
 	if err = rows.Err(); err != nil {
 		return nil, "", common.NewInternalServerError("HISTORY-RECENT-ROWS " + err.Error())
 	}
 	return result, nextCursor, nil
+}
+
+// FilterRecentRows fills a filtered page without exposing empty intermediary raw pages.
+func FilterRecentRows(limit int32, cursor string, fetch RecentRowsFetcher, include RecentRowPredicate) ([]Row, string, error) {
+	limit, err := normalizeRecentChangesLimit(limit)
+	if err != nil {
+		return nil, "", err
+	}
+	if fetch == nil {
+		return nil, "", common.NewErrBadRequest("HISTORY-FILTERRECENT-NILFETCH fetch function must not be nil")
+	}
+	if include == nil {
+		return nil, "", common.NewErrBadRequest("HISTORY-FILTERRECENT-NILPREDICATE predicate must not be nil")
+	}
+
+	result := make([]Row, 0, int(limit))
+	scanCursor := cursor
+	for {
+		rows, nextCursor, fetchErr := fetch(limit, scanCursor)
+		if fetchErr != nil {
+			return nil, "", fetchErr
+		}
+		for index, row := range rows {
+			included, includeErr := include(row)
+			if includeErr != nil {
+				return nil, "", includeErr
+			}
+			if !included {
+				continue
+			}
+			result = append(result, row)
+			if len(result) == int(limit) {
+				if index < len(rows)-1 || nextCursor != "" {
+					return result, strconv.FormatInt(row.HistoryID, 10), nil
+				}
+				return result, "", nil
+			}
+		}
+		if nextCursor == "" {
+			return result, "", nil
+		}
+		if nextCursor == scanCursor {
+			return nil, "", common.NewInternalServerError("HISTORY-FILTERRECENT-CURSOR raw history cursor did not advance")
+		}
+		scanCursor = nextCursor
+	}
+}
+
+func timestampOrOperationTime(timestamp string, operationTime time.Time) string {
+	if strings.TrimSpace(timestamp) != "" {
+		return timestamp
+	}
+	return operationTime.UTC().Format(time.RFC3339Nano)
+}
+
+func normalizeRecentChangesLimit(limit int32) (int32, error) {
+	if limit <= 0 {
+		return DefaultRecentChangesLimit, nil
+	}
+	if limit > MaxRecentChangesLimit {
+		return 0, common.NewErrBadRequest("HISTORY-RECENT-LIMIT limit must not exceed " + strconv.FormatInt(int64(MaxRecentChangesLimit), 10))
+	}
+	return limit, nil
 }
 
 func parseCursor(cursor string) (int64, error) {

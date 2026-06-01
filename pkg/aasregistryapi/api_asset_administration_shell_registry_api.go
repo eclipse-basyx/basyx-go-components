@@ -17,6 +17,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -258,21 +259,10 @@ func (c *AssetAdministrationShellRegistryAPIAPIController) GetAllAssetAdministra
 	if query.Has("cursor") {
 		cursorParam = query.Get("cursor")
 	}
-	var assetKindParam model.AssetKind
-	if query.Has("assetKind") {
-		assetKindParam = model.AssetKind(query.Get("assetKind"))
-		if err := model.AssertAssetKindConstraints(assetKindParam); err != nil {
-			log.Printf("🧩 [%s] Error in GetAllAssetAdministrationShellDescriptors: invalid assetKind=%q: %v", componentName, string(assetKindParam), err)
-			result := common.NewErrorResponse(
-				err,
-				http.StatusBadRequest,
-				componentName,
-				"GetAllAssetAdministrationShellDescriptors",
-				"InvalidAssetKind",
-			)
-			EncodeJSONResponse(result.Body, &result.Code, w)
-			return
-		}
+	assetKindParam, assetKindErrResponse := parseOptionalAssetKind(query, "GetAllAssetAdministrationShellDescriptors")
+	if assetKindErrResponse != nil {
+		EncodeJSONResponse(assetKindErrResponse.Body, &assetKindErrResponse.Code, w)
+		return
 	}
 	var assetTypeParam string
 	if query.Has("assetType") {
@@ -300,6 +290,11 @@ func (c *AssetAdministrationShellRegistryAPIAPIController) GetAllAssetAdministra
 			"query",
 		)
 		EncodeJSONResponse(result.Body, &result.Code, w)
+		return
+	}
+	assetKindParam, assetKindErrResponse := parseOptionalAssetKind(query, "GetAllAssetAdministrationShellDescriptorsRecentChanges")
+	if assetKindErrResponse != nil {
+		EncodeJSONResponse(assetKindErrResponse.Body, &assetKindErrResponse.Code, w)
 		return
 	}
 
@@ -346,6 +341,9 @@ func (c *AssetAdministrationShellRegistryAPIAPIController) GetAllAssetAdministra
 
 	result, err := c.service.GetAllAssetAdministrationShellDescriptorsRecentChanges(
 		r.Context(),
+		assetKindParam,
+		query.Get("assetType"),
+		query["assetIds"],
 		createdFromParam,
 		updatedFromParam,
 		limitParam,
@@ -356,6 +354,19 @@ func (c *AssetAdministrationShellRegistryAPIAPIController) GetAllAssetAdministra
 		return
 	}
 	_ = EncodeJSONResponse(result.Body, &result.Code, w)
+}
+
+func parseOptionalAssetKind(query url.Values, operation string) (model.AssetKind, *model.ImplResponse) {
+	if !query.Has("assetKind") {
+		return "", nil
+	}
+	assetKind := model.AssetKind(query.Get("assetKind"))
+	if err := model.AssertAssetKindConstraints(assetKind); err != nil {
+		log.Printf("🧩 [%s] Error in %s: invalid assetKind=%q: %v", componentName, operation, string(assetKind), err)
+		result := common.NewErrorResponse(err, http.StatusBadRequest, componentName, operation, "InvalidAssetKind")
+		return "", &result
+	}
+	return assetKind, nil
 }
 
 // PostAssetAdministrationShellDescriptor - Creates a new Asset Administration Shell Descriptor, i.e. registers an AAS

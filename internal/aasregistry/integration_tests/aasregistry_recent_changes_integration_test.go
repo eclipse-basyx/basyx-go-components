@@ -43,6 +43,9 @@ func TestAASRegistryRecentChangesAndBatchAssetKind(t *testing.T) {
 	const changedAfter = "2029-01-01T00:00:00Z"
 	descriptorID := fmt.Sprintf("https://example.com/ids/aasdesc/history-batch-%d", time.Now().UnixNano())
 	encodedDescriptorID := base64.RawURLEncoding.EncodeToString([]byte(descriptorID))
+	globalAssetID := "urn:example:asset:descriptor-history"
+	encodedAssetID := base64.RawURLEncoding.EncodeToString([]byte(fmt.Sprintf(`{"name":"globalAssetId","value":%q}`, globalAssetID)))
+	encodedAssetType := base64.RawURLEncoding.EncodeToString([]byte("type-v2"))
 	t.Cleanup(func() {
 		status, _, _ := doAASRequest(t, aasNoRedirectClient, http.MethodDelete, aasRegistryBaseURL+"/shell-descriptors/"+encodedDescriptorID, nil)
 		if status != http.StatusNoContent && status != http.StatusNotFound {
@@ -51,10 +54,11 @@ func TestAASRegistryRecentChangesAndBatchAssetKind(t *testing.T) {
 	})
 
 	createPayload := map[string]any{
-		"id":        descriptorID,
-		"idShort":   "BatchDescriptor",
-		"assetKind": "Batch",
-		"assetType": "type-v1",
+		"id":            descriptorID,
+		"idShort":       "BatchDescriptor",
+		"assetKind":     "Batch",
+		"assetType":     "type-v1",
+		"globalAssetId": globalAssetID,
 		"administration": map[string]any{
 			"createdAt": "2030-01-02T03:04:05Z",
 			"updatedAt": "2030-01-02T03:04:06Z",
@@ -68,10 +72,11 @@ func TestAASRegistryRecentChangesAndBatchAssetKind(t *testing.T) {
 	require.Equal(t, "Batch", created["assetKind"])
 
 	updatePayload := map[string]any{
-		"id":        descriptorID,
-		"idShort":   "BatchDescriptor",
-		"assetKind": "Batch",
-		"assetType": "type-v2",
+		"id":            descriptorID,
+		"idShort":       "BatchDescriptor",
+		"assetKind":     "Batch",
+		"assetType":     "type-v2",
+		"globalAssetId": globalAssetID,
 		"administration": map[string]any{
 			"createdAt": "2030-01-02T03:04:05Z",
 			"updatedAt": "2030-01-02T03:04:07Z",
@@ -103,6 +108,13 @@ func TestAASRegistryRecentChangesAndBatchAssetKind(t *testing.T) {
 	requireDescriptorWithAssetType(t, payload, descriptorID, "type-v1")
 	requireDescriptorWithAssetType(t, payload, descriptorID, "type-v2")
 	requireDescriptorWithSubmodel(t, payload, descriptorID, submodelID)
+
+	filteredURL := aasRegistryBaseURL + "/shell-descriptors/$recent-changes?limit=10&assetKind=Batch&assetType=" + encodedAssetType + "&assetIds=" + url.QueryEscape(encodedAssetID)
+	status, body, _ = doAASRequest(t, aasNoRedirectClient, http.MethodGet, filteredURL, nil)
+	require.Equal(t, http.StatusOK, status, "response=%s", string(body))
+	filtered := decodeAASRegistryMap(t, body)
+	requireDescriptorWithAssetType(t, filtered, descriptorID, "type-v2")
+	requireNoDescriptorWithAssetType(t, filtered, descriptorID, "type-v1")
 }
 
 func decodeAASRegistryMap(t *testing.T, body []byte) map[string]any {
@@ -149,4 +161,16 @@ func requireDescriptorWithSubmodel(t *testing.T, payload map[string]any, id stri
 		}
 	}
 	t.Fatalf("expected descriptor id=%s with submodel id=%s in payload: %#v", id, submodelID, payload)
+}
+
+func requireNoDescriptorWithAssetType(t *testing.T, payload map[string]any, id string, assetType string) {
+	t.Helper()
+	result, ok := payload["result"].([]any)
+	require.True(t, ok, "result must be an array")
+	for _, entry := range result {
+		item, ok := entry.(map[string]any)
+		if ok && item["id"] == id && item["assetType"] == assetType {
+			t.Fatalf("did not expect descriptor id=%s assetType=%s in payload: %#v", id, assetType, payload)
+		}
+	}
 }

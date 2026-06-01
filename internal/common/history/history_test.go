@@ -284,6 +284,8 @@ func TestRecentRowsReturnsLastIncludedRowAsNextCursor(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, rows, 1)
 	require.Equal(t, int64(10), rows[0].HistoryID)
+	require.Equal(t, operationTime.Format(time.RFC3339Nano), rows[0].CreatedAt)
+	require.Equal(t, operationTime.Format(time.RFC3339Nano), rows[0].UpdatedAt)
 	require.Equal(t, "10", cursor)
 	require.NoError(t, mock.ExpectationsWereMet())
 }
@@ -298,4 +300,38 @@ func TestRecentRowsRejectsLimitAboveMaximum(t *testing.T) {
 	_, _, err = RecentRows(context.Background(), db, TableAAS, MaxRecentChangesLimit+1, "", time.Time{}, time.Time{})
 	require.Error(t, err)
 	require.True(t, common.IsErrBadRequest(err))
+}
+
+func TestFilterRecentRowsScansUntilFilteredPageIsFull(t *testing.T) {
+	fetchCalls := 0
+	fetch := func(_ int32, cursor string) ([]Row, string, error) {
+		fetchCalls++
+		switch cursor {
+		case "":
+			return []Row{
+				{HistoryID: 1, Identifier: "skip"},
+				{HistoryID: 2, Identifier: "include"},
+			}, "2", nil
+		case "2":
+			return []Row{
+				{HistoryID: 3, Identifier: "include"},
+				{HistoryID: 4, Identifier: "skip"},
+			}, "4", nil
+		default:
+			t.Fatalf("unexpected cursor %q", cursor)
+			return nil, "", nil
+		}
+	}
+
+	rows, cursor, err := FilterRecentRows(2, "", fetch, func(row Row) (bool, error) {
+		return row.Identifier == "include", nil
+	})
+
+	require.NoError(t, err)
+	require.Equal(t, []Row{
+		{HistoryID: 2, Identifier: "include"},
+		{HistoryID: 3, Identifier: "include"},
+	}, rows)
+	require.Equal(t, "3", cursor)
+	require.Equal(t, 2, fetchCalls)
 }

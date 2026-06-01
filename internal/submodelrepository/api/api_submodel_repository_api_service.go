@@ -35,6 +35,7 @@ import (
 	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/asyncbulk"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/history"
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
@@ -1013,8 +1014,27 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelRecentChanges(
 	if decodeErr != nil {
 		return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "BadCursor"), nil
 	}
+	decodedSemanticID := ""
+	if semanticID != "" {
+		decodedSemanticID, decodeErr = common.DecodeString(semanticID)
+		if decodeErr != nil {
+			return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "BadSemanticID"), nil
+		}
+	}
 
-	rows, nextCursor, err := s.submodelBackend.GetSubmodelRecentChanges(ctx, limit, decodedCursor, createdFrom, updatedFrom)
+	fetch := func(pageLimit int32, pageCursor string) ([]history.Row, string, error) {
+		return s.submodelBackend.GetSubmodelRecentChanges(ctx, pageLimit, pageCursor, createdFrom, updatedFrom)
+	}
+	var rows []history.Row
+	var nextCursor string
+	var err error
+	if semanticID == "" {
+		rows, nextCursor, err = fetch(limit, decodedCursor)
+	} else {
+		rows, nextCursor, err = history.FilterRecentRows(limit, decodedCursor, fetch, func(row history.Row) (bool, error) {
+			return matchesSubmodelRecentRowSemanticID(row, decodedSemanticID)
+		})
+	}
 	if err != nil {
 		if common.IsErrBadRequest(err) {
 			return newAPIErrorResponse(err, http.StatusBadRequest, operation, "BadRequest"), nil
@@ -1025,9 +1045,6 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelRecentChanges(
 	changes := make([]gen.SubmodelRecentChange, 0, len(rows))
 	for _, row := range rows {
 		if row.Deleted {
-			if semanticID != "" {
-				continue
-			}
 			changes = append(changes, gen.SubmodelRecentChange{
 				RecentChange: gen.RecentChange{
 					Type:      row.ChangeType,
@@ -1042,9 +1059,6 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelRecentChanges(
 		submodel, fromJSONErr := jsonization.SubmodelFromJsonable(row.Snapshot)
 		if fromJSONErr != nil {
 			return newAPIErrorResponse(fromJSONErr, http.StatusInternalServerError, operation, "FromJsonable"), nil
-		}
-		if !matchesSubmodelSemanticID(submodel, semanticID) {
-			continue
 		}
 		changes = append(changes, gen.SubmodelRecentChange{
 			RecentChange: gen.RecentChange{
@@ -1062,6 +1076,17 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelRecentChanges(
 		PagingMetadata: gen.PagedResultPagingMetadata{Cursor: common.EncodeString(nextCursor)},
 		Result:         changes,
 	}), nil
+}
+
+func matchesSubmodelRecentRowSemanticID(row history.Row, semanticID string) (bool, error) {
+	if row.Deleted {
+		return false, nil
+	}
+	submodel, err := jsonization.SubmodelFromJsonable(row.Snapshot)
+	if err != nil {
+		return false, err
+	}
+	return matchesSubmodelSemanticID(submodel, semanticID), nil
 }
 
 // GetSubmodelByIdAndDate returns the Submodel version valid at the requested date.

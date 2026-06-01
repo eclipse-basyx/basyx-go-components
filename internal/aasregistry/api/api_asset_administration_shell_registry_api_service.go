@@ -37,6 +37,7 @@ package aasregistryapi
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"log"
 	"net/http"
@@ -45,6 +46,7 @@ import (
 
 	persistence_postgresql "github.com/eclipse-basyx/basyx-go-components/internal/aasregistry/persistence"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/history"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
@@ -74,7 +76,11 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) GetAllAssetAdministratio
 	if resp != nil || err != nil {
 		return *resp, err
 	}
-	aasds, nextCursor, err := s.aasRegistryBackend.ListAssetAdministrationShellDescriptors(ctx, limit, internalCursor, assetKind, assetType)
+	decodedAssetType, resp, err := decodeOptionalQueryParam(assetType, "assetType", "GetAllAssetAdministrationShellDescriptors", "BadAssetType")
+	if resp != nil || err != nil {
+		return *resp, err
+	}
+	aasds, nextCursor, err := s.aasRegistryBackend.ListAssetAdministrationShellDescriptors(ctx, limit, internalCursor, assetKind, decodedAssetType)
 	if err != nil {
 		log.Printf("🧩 [%s] Error in GetAllAssetAdministrationShellDescriptors: list failed (limit=%d cursor=%q assetKind=%q assetType=%q): %v", componentName, limit, internalCursor, string(assetKind), assetType, err)
 		switch {
@@ -104,13 +110,31 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) GetAllAssetAdministratio
 }
 
 // GetAllAssetAdministrationShellDescriptorsRecentChanges returns changed AAS descriptors.
-func (s *AssetAdministrationShellRegistryAPIAPIService) GetAllAssetAdministrationShellDescriptorsRecentChanges(ctx context.Context, createdFrom time.Time, updatedFrom time.Time, limit int32, cursor string) (model.ImplResponse, error) {
+func (s *AssetAdministrationShellRegistryAPIAPIService) GetAllAssetAdministrationShellDescriptorsRecentChanges(ctx context.Context, assetKind model.AssetKind, assetType string, assetIds []string, createdFrom time.Time, updatedFrom time.Time, limit int32, cursor string) (model.ImplResponse, error) {
 	internalCursor, resp, err := decodeCursor(strings.TrimSpace(cursor), "GetAllAssetAdministrationShellDescriptorsRecentChanges")
 	if resp != nil || err != nil {
 		return *resp, err
 	}
+	decodedAssetType, resp, err := decodeOptionalQueryParam(assetType, "assetType", "GetAllAssetAdministrationShellDescriptorsRecentChanges", "BadAssetType")
+	if resp != nil || err != nil {
+		return *resp, err
+	}
+	assetIDFilter, err := common.DecodeAssetIDFilter(assetIds)
+	if err != nil {
+		return common.NewErrorResponse(
+			err, http.StatusBadRequest, componentName, "GetAllAssetAdministrationShellDescriptorsRecentChanges", "BadAssetIds",
+		), nil
+	}
 
-	rows, nextCursor, err := s.aasRegistryBackend.GetAssetAdministrationShellDescriptorRecentChanges(ctx, limit, internalCursor, createdFrom, updatedFrom)
+	fetch := func(pageLimit int32, pageCursor string) ([]history.Row, string, error) {
+		return s.aasRegistryBackend.GetAssetAdministrationShellDescriptorRecentChanges(ctx, pageLimit, pageCursor, createdFrom, updatedFrom)
+	}
+	rows, nextCursor, err := history.FilterRecentRows(limit, internalCursor, fetch, func(row history.Row) (bool, error) {
+		if row.Deleted {
+			return false, nil
+		}
+		return matchesDescriptorFilters(row.Snapshot, assetKind, decodedAssetType, assetIDFilter)
+	})
 	if err != nil {
 		if common.IsErrBadRequest(err) {
 			return common.NewErrorResponse(
@@ -124,13 +148,32 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) GetAllAssetAdministratio
 
 	jsonable := make([]map[string]any, 0, len(rows))
 	for _, row := range rows {
-		if row.Deleted {
-			continue
-		}
 		jsonable = append(jsonable, row.Snapshot)
 	}
 
 	return pagedResponse(jsonable, nextCursor), nil
+}
+
+func matchesDescriptorFilters(snapshot map[string]any, assetKind model.AssetKind, assetType string, assetIDFilter common.AssetIDFilter) (bool, error) {
+	if assetKind != "" && snapshot["assetKind"] != string(assetKind) {
+		return false, nil
+	}
+	if assetType != "" && snapshot["assetType"] != assetType {
+		return false, nil
+	}
+	if assetIDFilter.IsEmpty() {
+		return true, nil
+	}
+
+	payload, err := json.Marshal(snapshot)
+	if err != nil {
+		return false, common.NewInternalServerError("AASR-RECENTCHANGES-MARSHALSNAPSHOT " + err.Error())
+	}
+	var descriptor model.AssetAdministrationShellDescriptor
+	if err = json.Unmarshal(payload, &descriptor); err != nil {
+		return false, common.NewInternalServerError("AASR-RECENTCHANGES-UNMARSHALSNAPSHOT " + err.Error())
+	}
+	return assetIDFilter.Matches(descriptor.GlobalAssetId, descriptor.SpecificAssetIds)
 }
 
 // PostAssetAdministrationShellDescriptor - Creates a new Asset Administration Shell Descriptor, i.e. registers an AAS

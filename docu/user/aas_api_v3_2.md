@@ -214,7 +214,14 @@ These routes delegate to the same Submodel behavior. An SME-only change appends 
 
 ## Recent Changes
 
-Recent-change endpoints return append-only change metadata with cursor-based pagination.
+Recent-change endpoints return append-only, cursor-paged results from the history tables. Their result shape depends on the component:
+
+| Component | Result fields |
+| --- | --- |
+| AAS Repository | `type`, `createdAt`, `updatedAt`, `id`, and optional `globalAssetId` and `specificAssetIds` |
+| Submodel Repository | `type`, `createdAt`, `updatedAt`, `id`, and optional `semanticId` and `supplementalSemanticIds` |
+| Concept Description Repository | `type`, `createdAt`, `updatedAt`, and `id` |
+| AAS Registry and DTR | Complete AAS descriptor snapshots |
 
 Example:
 
@@ -235,10 +242,11 @@ Common query parameters:
 
 Additional filters:
 
-- AAS recent changes support asset-id filtering according to the AAS Repository profile.
-- Submodel recent changes support semantic-id filtering according to the Submodel Repository profile.
+- AAS recent changes support `assetIds`. Each value is a base64url-encoded `SpecificAssetId`.
+- Submodel recent changes support `semanticId`. Its semantic-reference value is base64url encoded.
+- AAS descriptor recent changes support `assetKind`, base64url-encoded UTF-8 `assetType`, and base64url-encoded `assetIds`.
 
-Delete events are returned as tombstones where supported. Tombstones expose the identifier and change metadata, but not the deleted entity snapshot.
+For AAS, Submodels, and Concept Descriptions, deleted identifiables remain visible as tombstones with `id`, `type`, `createdAt`, and `updatedAt`. Optional resource metadata is absent from tombstones. Descriptor recent-change endpoints omit deleted descriptor rows because their response type requires complete descriptors.
 
 ## Signed Reads
 

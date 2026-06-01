@@ -97,24 +97,29 @@ func TestConceptDescriptionRepositoryRecentChanges(t *testing.T) {
 	if err = json.Unmarshal(body, &payload); err != nil {
 		t.Fatalf("failed to decode recent changes: %v", err)
 	}
-	requireConceptDescriptionIDShort(t, payload, conceptDescriptionID, "RecentConceptV1")
-	requireConceptDescriptionIDShort(t, payload, conceptDescriptionID, "RecentConceptV2")
+	requireConceptDescriptionRecentChanges(t, payload, conceptDescriptionID, 2)
 }
 
-func requireConceptDescriptionIDShort(t *testing.T, payload map[string]any, id string, idShort string) {
+func requireConceptDescriptionRecentChanges(t *testing.T, payload map[string]any, id string, minimumCount int) {
 	t.Helper()
 	result, ok := payload["result"].([]any)
 	if !ok {
 		t.Fatalf("expected result array, got %#v", payload["result"])
 	}
+	count := 0
 	for _, entry := range result {
 		item, ok := entry.(map[string]any)
 		if !ok {
 			continue
 		}
-		if item["id"] == id && item["idShort"] == idShort {
-			return
+		if item["id"] == id {
+			if len(item) != 4 || item["type"] == "" || item["createdAt"] == "" || item["updatedAt"] == "" {
+				t.Fatalf("expected concept description recent-change payload, got %#v", item)
+			}
+			count++
 		}
 	}
-	t.Fatalf("expected concept description id=%s idShort=%s in payload: %#v", id, idShort, payload)
+	if count < minimumCount {
+		t.Fatalf("expected at least %d concept description recent changes for id=%s in payload: %#v", minimumCount, id, payload)
+	}
 }

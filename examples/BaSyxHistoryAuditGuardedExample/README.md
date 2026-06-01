@@ -6,6 +6,7 @@ SPDX-License-Identifier: MIT
 # BaSyx History Audit Guarded Example
 
 This example shows how to start the AAS Environment Service with AAS v3.2 audit history and PostgreSQL mutation guards enabled.
+It also includes the BaSyx UI and preloads one AASX package at startup.
 
 For the complete feature description, see:
 
@@ -25,9 +26,22 @@ The important settings are:
 docker compose up -d
 ```
 
+This example is configured for local development:
+
+- `aas-environment` and `basyx_configuration` use local Docker `build` entries.
+- The published image lines are kept as comments so you can switch back quickly.
+
 The configuration service initializes the `v1.1.1` schema first. The AAS Environment Service then enables the history guard switch at startup.
 
 `BASYX_HISTORY_RETENTION_DAYS=0` is accepted as configuration, but automatic retention cleanup is not implemented yet. This example keeps every appended history row.
+
+## UI And Preconfigured Data
+
+- UI: [http://localhost:3000](http://localhost:3000)
+- Backend: [http://localhost:8082](http://localhost:8082)
+- Preconfiguration path: `./aas` mounted to `/app/preconfiguration`
+
+The file `aas/IESEDriveMotorDM3000.aasx` is imported automatically via `GENERAL_AAS_PRECONFIG_PATHS=/app/preconfiguration`.
 
 ## What Guarded Mode Does
 

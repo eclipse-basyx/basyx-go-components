@@ -50,6 +50,12 @@ type SubmodelRecentChange struct {
 	SupplementalSemanticIds []types.IReference `json:"supplementalSemanticIds,omitempty"`
 }
 
+// ConceptDescriptionRecentChange describes a changed Concept Description.
+type ConceptDescriptionRecentChange struct {
+	RecentChange
+	Id string `json:"id,omitempty"`
+}
+
 // GetAllAssetAdministrationShellsRecentChangesResult is the paged AAS recent-change response.
 type GetAllAssetAdministrationShellsRecentChangesResult struct {
 	PagingMetadata PagedResultPagingMetadata              `json:"paging_metadata"`
@@ -60,4 +66,10 @@ type GetAllAssetAdministrationShellsRecentChangesResult struct {
 type GetAllSubmodelRecentChangesResult struct {
 	PagingMetadata PagedResultPagingMetadata `json:"paging_metadata"`
 	Result         []SubmodelRecentChange    `json:"result"`
+}
+
+// GetAllConceptDescriptionRecentChangesResult is the paged Concept Description recent-change response.
+type GetAllConceptDescriptionRecentChangesResult struct {
+	PagingMetadata PagedResultPagingMetadata        `json:"paging_metadata"`
+	Result         []ConceptDescriptionRecentChange `json:"result"`
 }

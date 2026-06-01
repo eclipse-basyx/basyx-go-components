@@ -51,7 +51,7 @@ type DescriptionAPIAPIRouter interface {
 // and updated with the logic required for the API.
 type AssetAdministrationShellRegistryAPIAPIServicer interface {
 	GetAllAssetAdministrationShellDescriptors(context.Context, int32, string, model.AssetKind, string) (model.ImplResponse, error)
-	GetAllAssetAdministrationShellDescriptorsRecentChanges(context.Context, time.Time, time.Time, int32, string) (model.ImplResponse, error)
+	GetAllAssetAdministrationShellDescriptorsRecentChanges(context.Context, model.AssetKind, string, []string, time.Time, time.Time, int32, string) (model.ImplResponse, error)
 	PostAssetAdministrationShellDescriptor(context.Context, model.AssetAdministrationShellDescriptor) (model.ImplResponse, error)
 	GetAssetAdministrationShellDescriptorById(context.Context, string) (model.ImplResponse, error)
 	PutAssetAdministrationShellDescriptorById(context.Context, string, model.AssetAdministrationShellDescriptor) (model.ImplResponse, error)

@@ -118,6 +118,37 @@ paths:
           $ref: "#/components/responses/default"
       x-semanticIds:
       - https://admin-shell.io/aas/API/PostConceptDescription/3/2
+  /concept-descriptions/$recent-changes:
+    get:
+      tags:
+      - Concept Description Repository API
+      summary: Returns all Concept Descriptions that have been changed recently
+      operationId: GetAllConceptDescriptionRecentChanges
+      x-semanticIds:
+      - https://admin-shell.io/aas/API/GetAllConceptDescriptionRecentChanges/3/2
+      parameters:
+      - $ref: https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.2.0#/components/parameters/CreatedFrom
+      - $ref: https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.2.0#/components/parameters/UpdatedFrom
+      - $ref: https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.2.0#/components/parameters/Limit
+      - $ref: https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.2.0#/components/parameters/Cursor
+      responses:
+        "200":
+          description: Requested list of recently changed Concept Descriptions
+          content:
+            application/json:
+              schema:
+                $ref: https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.2.0#/components/schemas/GetAllConceptDescriptionRecentChangesResult
+        "400":
+          $ref: "#/components/responses/bad-request"
+        "401":
+          $ref: https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.2.0#/components/responses/unauthorized
+        "403":
+          $ref: "#/components/responses/forbidden"
+        "500":
+          $ref: "#/components/responses/internal-server-error"
+        default:
+          $ref: "#/components/responses/default"
+
   /concept-descriptions/{cdIdentifier}:
     get:
       tags:
@@ -252,37 +283,6 @@ paths:
                 $ref: https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.2.0#/components/schemas/QueryResultConceptDescription
         "400":
           $ref: "#/components/responses/bad-request"
-        "403":
-          $ref: "#/components/responses/forbidden"
-        "500":
-          $ref: "#/components/responses/internal-server-error"
-        default:
-          $ref: "#/components/responses/default"
-
-  /concept-descriptions/$recent-changes:
-    get:
-      tags:
-      - Concept Description Repository API
-      summary: Returns all Concept Descriptions that have been changed recently
-      operationId: GetAllConceptDescriptionRecentChanges
-      x-semanticIds:
-      - https://admin-shell.io/aas/API/GetAllConceptDescriptionRecentChanges/3/2
-      parameters:
-      - $ref: https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.2.0#/components/parameters/CreatedFrom
-      - $ref: https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.2.0#/components/parameters/UpdatedFrom
-      - $ref: https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.2.0#/components/parameters/Limit
-      - $ref: https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.2.0#/components/parameters/Cursor
-      responses:
-        "200":
-          description: Requested list of recently changed Concept Descriptions
-          content:
-            application/json:
-              schema:
-                $ref: https://api.swaggerhub.com/domains/Plattform_i40/Part1-MetaModel-Schemas/V3.2.0#/components/schemas/ConceptDescription
-        "400":
-          $ref: "#/components/responses/bad-request"
-        "401":
-          $ref: https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.2.0#/components/responses/unauthorized
         "403":
           $ref: "#/components/responses/forbidden"
         "500":

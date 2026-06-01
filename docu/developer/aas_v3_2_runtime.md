@@ -251,10 +251,20 @@ Current filters:
 - `updatedFrom`
 - AAS recent changes additionally apply asset-id filtering to non-deleted rows.
 - Submodel recent changes additionally apply semantic-id filtering to non-deleted rows.
+- Descriptor recent changes additionally apply `assetKind`, `assetType`, and asset-id filtering to non-deleted rows.
 
-Delete rows are tombstones. For AAS and Submodel recent changes they are returned with the identifier and change metadata, but without reconstructing the deleted object. This avoids parsing tombstone payloads as full metamodel instances and avoids leaking stale metadata into filtered reads.
+The published Part 2 OpenAPI schema is the source of truth for the response projection. The result shapes are intentionally component-specific:
 
-Concept Description recent changes return the stored snapshots directly, including `{id}` delete tombstones. Descriptor recent changes skip deleted descriptor rows in the public response.
+- AAS results contain the shared `type`, `createdAt`, and `updatedAt` fields plus `id`, `globalAssetId`, and `specificAssetIds`.
+- Submodel results contain the shared fields plus `id`, `semanticId`, and `supplementalSemanticIds`.
+- Concept Description results contain the shared fields plus `id`. This fills the missing shared-schema result type consistently with the other identifiable repositories.
+- Descriptor results contain complete AAS descriptor snapshots as required by the registry profile.
+
+For AAS and Submodel reads, resource-specific metadata is projected from the stored history snapshot, never from current normalized tables. Deleted AAS, Submodel, and Concept Description rows remain id-based tombstones with the shared change metadata. Descriptor recent changes skip deleted descriptor rows because there is no complete descriptor snapshot to return.
+
+The encoded query contract is applied consistently: `assetIds` contain base64url-encoded `SpecificAssetId` JSON objects, Submodel `semanticId` contains a base64url-encoded reference value, and descriptor `assetType` is base64url-encoded UTF-8. Filtered feeds continue scanning history pages until the requested result limit is filled or the feed ends, so post-snapshot filtering does not underfill pages incorrectly.
+
+When a payload does not carry administrative timestamps, the recent-change projection uses the history operation timestamp. This keeps `createdAt` and `updatedAt` populated without re-reading current tables.
 
 ## Migration Behavior
 
@@ -287,7 +297,7 @@ Current behavior:
 
 - Route-level authorization applies to history and recent-change endpoints.
 - Normal current-entity reads still use their established ABAC filtering paths.
-- Recent-change delete tombstones only expose identifiers and change metadata for AAS and Submodel rows.
+- Recent-change delete tombstones only expose identifiers and shared change metadata for AAS, Submodel, and Concept Description rows.
 
 Intentional scope boundary for this release:
 
@@ -316,7 +326,7 @@ Safeguards already implemented:
 - SME changes reload only the affected top-level SME root subtree and splice it into the previous Submodel snapshot.
 - Transaction-level advisory locks serialize appends only for the same history table and identifier.
 - Guarded PostgreSQL mode blocks normal `UPDATE`, `DELETE`, and `TRUNCATE` operations on history tables when enabled.
-- Delete rows are tombstones, not full copies, for AAS and Submodel deletes.
+- Delete rows are tombstones, not full copies, for AAS, Submodel, and Concept Description deletes.
 
 Scalability risks that remain:
 
@@ -349,7 +359,7 @@ Dates before deletion resolve to the previous snapshot. Dates after deletion ret
 
 ### Recent Changes After Delete
 
-AAS and Submodel delete rows are returned as tombstones. They include the identifier and change type. Filtered recent-change queries skip tombstones when the filter requires data that the tombstone no longer contains.
+AAS, Submodel, and Concept Description delete rows are returned as tombstones. They include the identifier and shared change metadata. Filtered recent-change queries skip tombstones when the filter requires data that the tombstone no longer contains.
 
 ### Existing Data After Migration
 

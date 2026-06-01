@@ -151,11 +151,18 @@ func (s *ConceptDescriptionRepositoryAPIAPIService) GetAllConceptDescriptionRece
 		}
 	}
 
-	jsonable := make([]map[string]any, 0, len(rows))
+	changes := make([]model.ConceptDescriptionRecentChange, 0, len(rows))
 	for _, row := range rows {
-		jsonable = append(jsonable, row.Snapshot)
+		changes = append(changes, model.ConceptDescriptionRecentChange{
+			RecentChange: model.RecentChange{
+				Type:      row.ChangeType,
+				CreatedAt: row.CreatedAt,
+				UpdatedAt: row.UpdatedAt,
+			},
+			Id: row.Identifier,
+		})
 	}
-	return pagedResponse(jsonable, nextCursor), nil
+	return pagedResponse(changes, nextCursor), nil
 }
 
 // PostConceptDescription - Creates a new Concept Description

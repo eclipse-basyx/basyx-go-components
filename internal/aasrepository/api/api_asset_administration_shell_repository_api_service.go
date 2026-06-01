@@ -26,6 +26,7 @@ import (
 	"github.com/FriedJannik/aas-go-sdk/types"
 	persistencepostgresql "github.com/eclipse-basyx/basyx-go-components/internal/aasrepository/persistence"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/history"
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	submodelapi "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/api"
 	submodelpersistence "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence"
@@ -213,8 +214,24 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) GetAllAssetAdministrat
 	if decodeErr != nil {
 		return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "BadCursor"), nil
 	}
+	assetIDFilter, decodeErr := common.DecodeAssetIDFilter(assetIds)
+	if decodeErr != nil {
+		return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "BadAssetIds"), nil
+	}
 
-	rows, nextCursor, err := s.assetAdministrationShellBackend.GetAssetAdministrationShellRecentChanges(ctx, limit, decodedCursor, createdFrom, updatedFrom)
+	fetch := func(pageLimit int32, pageCursor string) ([]history.Row, string, error) {
+		return s.assetAdministrationShellBackend.GetAssetAdministrationShellRecentChanges(ctx, pageLimit, pageCursor, createdFrom, updatedFrom)
+	}
+	var rows []history.Row
+	var nextCursor string
+	var err error
+	if assetIDFilter.IsEmpty() {
+		rows, nextCursor, err = fetch(limit, decodedCursor)
+	} else {
+		rows, nextCursor, err = history.FilterRecentRows(limit, decodedCursor, fetch, func(row history.Row) (bool, error) {
+			return matchesAASRecentRowAssetFilter(row, assetIDFilter)
+		})
+	}
 	if err != nil {
 		if common.IsErrBadRequest(err) {
 			return newAPIErrorResponse(err, http.StatusBadRequest, operation, "BadRequest"), nil
@@ -225,9 +242,6 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) GetAllAssetAdministrat
 	changes := make([]gen.AssetAdministrationShellRecentChange, 0, len(rows))
 	for _, row := range rows {
 		if row.Deleted {
-			if len(assetIds) > 0 {
-				continue
-			}
 			changes = append(changes, gen.AssetAdministrationShellRecentChange{
 				RecentChange: gen.RecentChange{
 					Type:      row.ChangeType,
@@ -242,9 +256,6 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) GetAllAssetAdministrat
 		aas, fromJSONErr := jsonization.AssetAdministrationShellFromJsonable(row.Snapshot)
 		if fromJSONErr != nil {
 			return newAPIErrorResponse(fromJSONErr, http.StatusInternalServerError, operation, "FromJsonable"), nil
-		}
-		if !matchesAASAssetFilter(aas, assetIds) {
-			continue
 		}
 		change := gen.AssetAdministrationShellRecentChange{
 			RecentChange: gen.RecentChange{
@@ -267,6 +278,17 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) GetAllAssetAdministrat
 		PagingMetadata: gen.PagedResultPagingMetadata{Cursor: common.EncodeString(nextCursor)},
 		Result:         changes,
 	}), nil
+}
+
+func matchesAASRecentRowAssetFilter(row history.Row, filter common.AssetIDFilter) (bool, error) {
+	if row.Deleted {
+		return false, nil
+	}
+	aas, err := jsonization.AssetAdministrationShellFromJsonable(row.Snapshot)
+	if err != nil {
+		return false, err
+	}
+	return matchesAASAssetFilter(aas, filter)
 }
 
 func (s *AssetAdministrationShellRepositoryAPIAPIService) GetAssetAdministrationShellByIdSigned(ctx context.Context, aasIdentifier string) (gen.ImplResponse, error) {
@@ -314,29 +336,16 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) GetAssetAdministration
 	return gen.Response(http.StatusOK, aasMap), nil
 }
 
-func matchesAASAssetFilter(aas types.IAssetAdministrationShell, assetIds []string) bool {
-	if len(assetIds) == 0 {
-		return true
-	}
+func matchesAASAssetFilter(aas types.IAssetAdministrationShell, filter common.AssetIDFilter) (bool, error) {
 	assetInformation := aas.AssetInformation()
 	if assetInformation == nil {
-		return false
+		return false, nil
 	}
-	for _, assetID := range assetIds {
-		assetID = strings.TrimSpace(assetID)
-		if assetID == "" {
-			continue
-		}
-		if globalAssetID := assetInformation.GlobalAssetID(); globalAssetID != nil && *globalAssetID == assetID {
-			return true
-		}
-		for _, specificAssetID := range assetInformation.SpecificAssetIDs() {
-			if specificAssetID != nil && specificAssetID.Value() == assetID {
-				return true
-			}
-		}
+	globalAssetID := ""
+	if value := assetInformation.GlobalAssetID(); value != nil {
+		globalAssetID = *value
 	}
-	return false
+	return filter.Matches(globalAssetID, assetInformation.SpecificAssetIDs())
 }
 
 // PutAssetAdministrationShellById - Creates or updates an existing Asset Administration Shell

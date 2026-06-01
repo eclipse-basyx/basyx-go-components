@@ -30,6 +30,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"net/http"
+	"net/url"
 	"testing"
 	"time"
 
@@ -40,6 +41,8 @@ func TestAASRepositoryHistoryRecentChangesAndBatchAssetKind(t *testing.T) {
 	baseURL := "http://localhost:6004"
 	aasID := fmt.Sprintf("https://example.com/ids/aas/history-batch-%d", time.Now().UnixNano())
 	encodedAASID := base64.RawURLEncoding.EncodeToString([]byte(aasID))
+	globalAssetID := "urn:example:asset:history-batch"
+	encodedAssetID := base64.RawURLEncoding.EncodeToString([]byte(fmt.Sprintf(`{"name":"globalAssetId","value":%q}`, globalAssetID)))
 
 	t.Cleanup(func() {
 		status, err := deleteResponseStatus(baseURL + "/shells/" + encodedAASID)
@@ -59,8 +62,8 @@ func TestAASRepositoryHistoryRecentChangesAndBatchAssetKind(t *testing.T) {
 		"idShort": "HistoryBatchAAS",
 		"modelType": "AssetAdministrationShell",
 		"administration": {"createdAt": %q, "updatedAt": %q},
-		"assetInformation": {"assetKind": "Batch", "assetType": "type-v1"}
-	}`, aasID, createdAt, updatedAtV1)
+		"assetInformation": {"assetKind": "Batch", "assetType": "type-v1", "globalAssetId": %q}
+	}`, aasID, createdAt, updatedAtV1, globalAssetID)
 
 	status, err := postResponseStatus(baseURL+"/shells", createBody)
 	require.NoError(t, err)
@@ -82,8 +85,8 @@ func TestAASRepositoryHistoryRecentChangesAndBatchAssetKind(t *testing.T) {
 		"idShort": "HistoryBatchAAS",
 		"modelType": "AssetAdministrationShell",
 		"administration": {"createdAt": %q, "updatedAt": %q},
-		"assetInformation": {"assetKind": "Batch", "assetType": "type-v2"}
-	}`, aasID, createdAt, updatedAtV2)
+		"assetInformation": {"assetKind": "Batch", "assetType": "type-v2", "globalAssetId": %q}
+	}`, aasID, createdAt, updatedAtV2, globalAssetID)
 
 	_, status, _, err = putJSONResponse(baseURL+"/shells/"+encodedAASID, updateBody)
 	require.NoError(t, err)
@@ -96,7 +99,7 @@ func TestAASRepositoryHistoryRecentChangesAndBatchAssetKind(t *testing.T) {
 
 	time.Sleep(30 * time.Millisecond)
 
-	childUpdateBody := `{"assetKind":"Batch","assetType":"type-v3-child"}`
+	childUpdateBody := fmt.Sprintf(`{"assetKind":"Batch","assetType":"type-v3-child","globalAssetId":%q}`, globalAssetID)
 	_, status, _, err = putJSONResponse(baseURL+"/shells/"+encodedAASID+"/asset-information", childUpdateBody)
 	require.NoError(t, err)
 	require.Equal(t, http.StatusNoContent, status)
@@ -119,8 +122,14 @@ func TestAASRepositoryHistoryRecentChangesAndBatchAssetKind(t *testing.T) {
 	recent, status, err := getJSONResponse(baseURL + "/shells/$recent-changes?limit=10")
 	require.NoError(t, err)
 	require.Equal(t, http.StatusOK, status)
-	requireRecentChangeForIDAndType(t, recent, aasID, "Created")
-	requireRecentChangeForIDAndType(t, recent, aasID, "Updated")
+	requireRecentChangesForID(t, recent, aasID, 3)
+	requireRecentChangeTypeForID(t, recent, aasID, "Created")
+	requireRecentChangeTypeForID(t, recent, aasID, "Updated")
+
+	recent, status, err = getJSONResponse(baseURL + "/shells/$recent-changes?limit=10&assetIds=" + url.QueryEscape(encodedAssetID))
+	require.NoError(t, err)
+	require.Equal(t, http.StatusOK, status)
+	requireRecentChangesForID(t, recent, aasID, 3)
 
 	status, err = deleteResponseStatus(baseURL + "/shells/" + encodedAASID)
 	require.NoError(t, err)
@@ -133,19 +142,42 @@ func TestAASRepositoryHistoryRecentChangesAndBatchAssetKind(t *testing.T) {
 	recent, status, err = getJSONResponse(baseURL + "/shells/$recent-changes?limit=10")
 	require.NoError(t, err)
 	require.Equal(t, http.StatusOK, status)
-	requireRecentChangeForIDAndType(t, recent, aasID, "Deleted")
+	requireRecentChangesForID(t, recent, aasID, 4)
+	requireRecentChangeTypeForID(t, recent, aasID, "Deleted")
 }
 
-func requireRecentChangeForIDAndType(t *testing.T, payload map[string]any, id string, changeType string) {
+func requireRecentChangesForID(t *testing.T, payload map[string]any, id string, minimumCount int) {
 	t.Helper()
 	result, ok := payload["result"].([]any)
 	require.True(t, ok, "recent changes result must be an array")
+	count := 0
+	sawGlobalAssetID := false
 	for _, entry := range result {
 		item, ok := entry.(map[string]any)
 		if !ok {
 			continue
 		}
-		if item["id"] == id && item["type"] == changeType {
+		if item["id"] == id {
+			require.NotEmpty(t, item["type"])
+			require.NotEmpty(t, item["createdAt"])
+			require.NotEmpty(t, item["updatedAt"])
+			if item["globalAssetId"] != nil {
+				sawGlobalAssetID = true
+			}
+			count++
+		}
+	}
+	require.GreaterOrEqual(t, count, minimumCount, "recent changes payload: %#v", payload)
+	require.True(t, sawGlobalAssetID, "expected AAS asset metadata in recent changes payload: %#v", payload)
+}
+
+func requireRecentChangeTypeForID(t *testing.T, payload map[string]any, id string, changeType string) {
+	t.Helper()
+	result, ok := payload["result"].([]any)
+	require.True(t, ok, "recent changes result must be an array")
+	for _, entry := range result {
+		item, ok := entry.(map[string]any)
+		if ok && item["id"] == id && item["type"] == changeType {
 			return
 		}
 	}

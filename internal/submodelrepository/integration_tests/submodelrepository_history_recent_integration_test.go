@@ -41,6 +41,7 @@ func TestSubmodelRepositoryHistoryTracksSubmodelElementChangesAndRecentDeletes(t
 	baseURL := "http://localhost:6004"
 	submodelID := fmt.Sprintf("urn:example:sm:history:%d", time.Now().UnixNano())
 	encodedSubmodelID := base64.RawURLEncoding.EncodeToString([]byte(submodelID))
+	encodedSemanticID := base64.RawURLEncoding.EncodeToString([]byte("urn:example:semantic:history"))
 
 	t.Cleanup(func() {
 		status, _, err := requestJSON(http.MethodDelete, baseURL+"/submodels/"+encodedSubmodelID, nil)
@@ -146,13 +147,14 @@ func TestSubmodelRepositoryHistoryTracksSubmodelElementChangesAndRecentDeletes(t
 	require.NoError(t, err)
 	require.Equal(t, http.StatusOK, status, "response=%s", string(body))
 	recent := decodeMap(t, body)
-	requireRecentChangeForIDAndTypeSubmodel(t, recent, submodelID, "Created")
-	requireRecentChangeForIDAndTypeSubmodel(t, recent, submodelID, "Updated")
+	requireRecentChangesForIDSubmodel(t, recent, submodelID, 5)
+	requireRecentChangeTypeForIDSubmodel(t, recent, submodelID, "Created")
+	requireRecentChangeTypeForIDSubmodel(t, recent, submodelID, "Updated")
 
-	status, body, err = requestJSON(http.MethodGet, baseURL+"/submodels/$recent-changes?semanticId=urn:example:semantic:history&limit=10", nil)
+	status, body, err = requestJSON(http.MethodGet, baseURL+"/submodels/$recent-changes?semanticId="+encodedSemanticID+"&limit=10", nil)
 	require.NoError(t, err)
 	require.Equal(t, http.StatusOK, status, "response=%s", string(body))
-	requireRecentChangeForIDAndTypeSubmodel(t, decodeMap(t, body), submodelID, "Updated")
+	requireRecentChangesForIDSubmodel(t, decodeMap(t, body), submodelID, 5)
 
 	status, body, err = requestJSON(http.MethodDelete, baseURL+"/submodels/"+encodedSubmodelID, nil)
 	require.NoError(t, err)
@@ -165,7 +167,9 @@ func TestSubmodelRepositoryHistoryTracksSubmodelElementChangesAndRecentDeletes(t
 	status, body, err = requestJSON(http.MethodGet, baseURL+"/submodels/$recent-changes?limit=10", nil)
 	require.NoError(t, err)
 	require.Equal(t, http.StatusOK, status, "response=%s", string(body))
-	requireRecentChangeForIDAndTypeSubmodel(t, decodeMap(t, body), submodelID, "Deleted")
+	recent = decodeMap(t, body)
+	requireRecentChangesForIDSubmodel(t, recent, submodelID, 6)
+	requireRecentChangeTypeForIDSubmodel(t, recent, submodelID, "Deleted")
 }
 
 func decodeMap(t *testing.T, body []byte) map[string]any {
@@ -175,16 +179,38 @@ func decodeMap(t *testing.T, body []byte) map[string]any {
 	return payload
 }
 
-func requireRecentChangeForIDAndTypeSubmodel(t *testing.T, payload map[string]any, id string, changeType string) {
+func requireRecentChangesForIDSubmodel(t *testing.T, payload map[string]any, id string, minimumCount int) {
 	t.Helper()
 	result, ok := payload["result"].([]any)
 	require.True(t, ok, "recent changes result must be an array")
+	count := 0
+	sawSemanticID := false
 	for _, entry := range result {
 		item, ok := entry.(map[string]any)
 		if !ok {
 			continue
 		}
-		if item["id"] == id && item["type"] == changeType {
+		if item["id"] == id {
+			require.NotEmpty(t, item["type"])
+			require.NotEmpty(t, item["createdAt"])
+			require.NotEmpty(t, item["updatedAt"])
+			if item["semanticId"] != nil {
+				sawSemanticID = true
+			}
+			count++
+		}
+	}
+	require.GreaterOrEqual(t, count, minimumCount, "recent changes payload: %#v", payload)
+	require.True(t, sawSemanticID, "expected Submodel semantic metadata in recent changes payload: %#v", payload)
+}
+
+func requireRecentChangeTypeForIDSubmodel(t *testing.T, payload map[string]any, id string, changeType string) {
+	t.Helper()
+	result, ok := payload["result"].([]any)
+	require.True(t, ok, "recent changes result must be an array")
+	for _, entry := range result {
+		item, ok := entry.(map[string]any)
+		if ok && item["id"] == id && item["type"] == changeType {
 			return
 		}
 	}

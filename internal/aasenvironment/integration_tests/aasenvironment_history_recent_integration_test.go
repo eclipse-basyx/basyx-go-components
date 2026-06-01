@@ -125,6 +125,8 @@ func requireAASEnvRecentChange(t *testing.T, payload map[string]any, id string, 
 			continue
 		}
 		if item["id"] == id && item["type"] == changeType {
+			require.NotEmpty(t, item["createdAt"])
+			require.NotEmpty(t, item["updatedAt"])
 			return
 		}
 	}
