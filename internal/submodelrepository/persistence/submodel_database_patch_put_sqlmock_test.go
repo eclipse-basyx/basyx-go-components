@@ -104,6 +104,80 @@ func TestPatchSubmodelSuccessReplacesSubmodel(t *testing.T) {
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 
+func TestPatchSubmodelInTransactionAppendsHistory(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer func() {
+		_ = db.Close()
+	}()
+
+	sut := &SubmodelDatabase{db: db}
+	submodel := types.NewSubmodel("sm-1")
+	idShort := "sm1"
+	submodel.SetIDShort(&idShort)
+
+	mock.ExpectBegin()
+	tx, err := db.Begin()
+	require.NoError(t, err)
+
+	mock.ExpectQuery(`SELECT .*FROM .*submodel`).
+		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(100))
+	mock.ExpectQuery(`SELECT .*file_oid.*FROM .*submodel_element.*file_data`).
+		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(int64(0)))
+	mock.ExpectExec(`DELETE FROM .*submodel`).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectQuery(`INSERT INTO .*submodel.*RETURNING`).
+		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(200))
+	mock.ExpectExec(`INSERT INTO .*submodel_payload`).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	expectSubmodelHistoryAppend(mock)
+	mock.ExpectRollback()
+
+	err = sut.PatchSubmodelInTransaction(contextWithABACDisabled(t), "sm-1", tx, submodel)
+	require.NoError(t, err)
+	require.NoError(t, tx.Rollback())
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestPatchSubmodelMetadataInTransactionAppendsHistory(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer func() {
+		_ = db.Close()
+	}()
+
+	sut := &SubmodelDatabase{db: db}
+	submodel := types.NewSubmodel("sm-1")
+	idShort := "sm1"
+	submodel.SetIDShort(&idShort)
+
+	mock.ExpectBegin()
+	tx, err := db.Begin()
+	require.NoError(t, err)
+
+	mock.ExpectQuery(`SELECT .*FROM .*submodel`).
+		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(100))
+	mock.ExpectExec(`UPDATE "submodel"`).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectExec(`INSERT INTO "submodel_payload"`).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectExec(`DELETE FROM "submodel_semantic_id_reference"`).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectExec(`SELECT pg_advisory_xact_lock`).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectQuery(`SELECT snapshot::text, "deleted", "row_hash" FROM "submodel_history"`).
+		WillReturnRows(sqlmock.NewRows([]string{"snapshot", "deleted", "row_hash"}).
+			AddRow(`{"id":"sm-1","submodelElements":[{"idShort":"existing","modelType":"Capability"}]}`, false, "row-hash"))
+	mock.ExpectExec(`INSERT INTO "submodel_history"`).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectRollback()
+
+	err = sut.PatchSubmodelMetadataInTransaction(contextWithABACDisabled(t), "sm-1", tx, submodel)
+	require.NoError(t, err)
+	require.NoError(t, tx.Rollback())
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
 func TestPutSubmodelIDMismatchReturnsBadRequest(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)

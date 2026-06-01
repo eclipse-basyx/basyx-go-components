@@ -290,11 +290,11 @@ func (s *CustomSubmodelRepositoryService) PatchSubmodelByID(ctx context.Context,
 
 	err := s.ExecuteInTransaction(func(tx *sql.Tx) error {
 		if patchIncludesSubmodelElements {
-			if patchErr := s.persistence.SubmodelRepository.PatchSubmodelInTransaction(decodedIdentifier, tx, mergedSubmodel); patchErr != nil {
+			if patchErr := s.persistence.SubmodelRepository.PatchSubmodelInTransaction(ctx, decodedIdentifier, tx, mergedSubmodel); patchErr != nil {
 				return patchErr
 			}
 		} else {
-			if patchErr := s.persistence.SubmodelRepository.PatchSubmodelMetadataInTransaction(decodedIdentifier, tx, mergedSubmodel); patchErr != nil {
+			if patchErr := s.persistence.SubmodelRepository.PatchSubmodelMetadataInTransaction(ctx, decodedIdentifier, tx, mergedSubmodel); patchErr != nil {
 				return patchErr
 			}
 		}
@@ -383,7 +383,7 @@ func (s *CustomSubmodelRepositoryService) PatchSubmodelByIDMetadata(ctx context.
 	}
 
 	err := s.ExecuteInTransaction(func(tx *sql.Tx) error {
-		if patchErr := s.persistence.SubmodelRepository.PatchSubmodelMetadataInTransaction(decodedIdentifier, tx, mergedSubmodel); patchErr != nil {
+		if patchErr := s.persistence.SubmodelRepository.PatchSubmodelMetadataInTransaction(ctx, decodedIdentifier, tx, mergedSubmodel); patchErr != nil {
 			return patchErr
 		}
 

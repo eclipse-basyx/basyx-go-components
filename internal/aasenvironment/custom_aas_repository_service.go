@@ -769,11 +769,11 @@ func (s *CustomAASRepositoryService) patchSubmodelAndSyncDescriptorsInTransactio
 		}
 
 		if patchIncludesSubmodelElements {
-			if patchErr := s.persistence.SubmodelRepository.PatchSubmodelInTransaction(submodelID, tx, submodel); patchErr != nil {
+			if patchErr := s.persistence.SubmodelRepository.PatchSubmodelInTransaction(ctx, submodelID, tx, submodel); patchErr != nil {
 				return patchErr
 			}
 		} else {
-			if patchErr := s.persistence.SubmodelRepository.PatchSubmodelMetadataInTransaction(submodelID, tx, submodel); patchErr != nil {
+			if patchErr := s.persistence.SubmodelRepository.PatchSubmodelMetadataInTransaction(ctx, submodelID, tx, submodel); patchErr != nil {
 				return patchErr
 			}
 		}

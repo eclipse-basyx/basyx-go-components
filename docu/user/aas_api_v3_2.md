@@ -66,26 +66,39 @@ Known v3.2 OpenAPI gaps in standalone services:
 
 ## History Configuration
 
-History behavior is controlled through lightweight, vendor-neutral configuration.
+History behavior is controlled through lightweight, vendor-neutral configuration. Versioning is enabled by default because `history.mode` defaults to `api`. Set it explicitly to `off` if a deployment does not want history writes.
 
 Environment variables:
 
 - `BASYX_HISTORY_MODE`: `off`, `api`, or `audit`. Default is `api`.
-- `BASYX_HISTORY_RETENTION_DAYS`: number of days to retain history. `0` means keep forever. Default is `0`.
+- `BASYX_HISTORY_RETENTION_DAYS`: reserved retention setting. Default is `0`. Automatic cleanup is not implemented yet.
 - `BASYX_HISTORY_IMMUTABILITY`: `none`, `postgres_guarded`, or `external_anchor`. Default is `none`.
 - `BASYX_AUDIT_IDENTITY_MODE`: `none`, `minimal`, or `extended`. Default is `minimal`.
 
+Equivalent YAML:
+
+```yaml
+history:
+  mode: api
+  retentionDays: 0
+  immutability: none
+  auditIdentityMode: minimal
+```
+
 Mode semantics:
 
-- `off`: history writes are skipped. History/recent-change reads will not receive new rows while this mode is active.
+- `off`: new history writes are skipped. Existing history rows remain readable.
 - `api`: functional AAS v3.2 history and recent-change behavior for API consumers.
-- `audit`: append-only hash-chained history rows for compliance-oriented deployments.
+- `audit`: the same runtime snapshot writes as `api`, intended for audit-oriented deployments where guarded storage is configured explicitly.
 
-Current implementation note:
+Current implementation status:
 
-- Runtime history rows are append-only event rows in `api` and `audit` mode.
-- `postgres_guarded` installs PostgreSQL triggers during schema migration and enables them at service startup. When enabled, `UPDATE`, `DELETE`, and `TRUNCATE` on history tables fail with `history tables are append-only`.
+- Runtime history rows are append-only, hash-chained event rows in `api` and `audit` mode.
+- Schema migration installs PostgreSQL guard triggers. `postgres_guarded` enables them at service startup. When enabled, `UPDATE`, `DELETE`, and `TRUNCATE` on history tables fail with `history tables are append-only`.
 - `external_anchor` currently enables the same PostgreSQL guard foundation and reserves anchor metadata columns. It does not yet publish anchors to an external system.
+- `retentionDays` is accepted as configuration, but the runtime does not delete or compact old history rows yet.
+- `auditIdentityMode` is accepted as configuration, but the runtime does not yet use it to enrich or suppress identity metadata automatically.
+- Audit metadata columns are present, but regular API middleware does not populate the audit context yet.
 - The implementation supports compliance-oriented deployments, but it does not by itself make a deployment legally compliant with any specific regulation.
 
 Guarded PostgreSQL mode protects against normal accidental or unauthorized mutations through the application database user. PostgreSQL superusers or operators with permissions to alter triggers/functions can still bypass or remove this protection. Stronger guarantees require external anchoring, WORM storage, or a transparency-log style system.
@@ -93,6 +106,38 @@ Guarded PostgreSQL mode protects against normal accidental or unauthorized mutat
 The guard switch is database-wide. Configure all BaSyx services that share one database with the same history immutability mode so one service does not intentionally disable a guard expected by another service.
 
 See `examples/BaSyxHistoryAuditGuardedExample` for a Docker Compose setup with audit history and `postgres_guarded` enabled.
+
+## What Activating Versioning Means
+
+When versioning is active, each supported identifiable create, update, or delete appends a new row to a dedicated history table. The row stores a complete identifiable snapshot, not only the changed field. A small nested change can therefore create a history row close to the size of the owning identifiable.
+
+```mermaid
+flowchart LR
+    Client["API write"] --> Current["Update current PostgreSQL tables"]
+    Current --> Mode{"history.mode"}
+    Mode -->|off| Done["No history append"]
+    Mode -->|api or audit| Snapshot["Build complete identifiable snapshot"]
+    Snapshot --> History["INSERT into *_history"]
+    History --> Read["$history and $recent-changes reads"]
+```
+
+The owning identifiable depends on the write:
+
+```mermaid
+flowchart TD
+    AAS["AAS write or nested AAS update"] --> AASSnapshot["AAS snapshot"]
+    SME["Submodel write, SME write, or attachment change"] --> SMSnapshot["Submodel snapshot"]
+    CD["Concept Description write"] --> CDSnapshot["Concept Description snapshot"]
+    Descriptor["AAS descriptor or nested Submodel descriptor write"] --> DescriptorSnapshot["AAS descriptor snapshot"]
+```
+
+This has operational consequences:
+
+- History consumes additional storage for every write and adds hashing plus one history-table insert to the write request.
+- Writes for the same identifiable are serialized briefly while the next hash-chain row is appended. Different identifiers can still proceed independently.
+- Partial updates usually derive the new snapshot from the previous history snapshot. This reduces reads from the normalized backend, but the stored history row is still a complete snapshot.
+- Schema migration does not backfill existing entities. Historical state from before activation is unavailable.
+- If an existing entity has no history row yet, its first partial update falls back to materializing the current complete identifiable once. Later partial updates can derive snapshots from history.
 
 Eventing placeholders:
 
@@ -129,6 +174,45 @@ Behavior:
 - If the requested date is exactly on an update boundary, the newer version is returned.
 
 Submodel element changes are tracked as part of the owning Submodel. If a Submodel Element is added, changed, deleted, or has an attachment update, the next Submodel history entry contains a full Submodel snapshot.
+
+## Submodel Element History FAQ
+
+Submodel Elements do not have independent history streams. They are part of their owning Submodel. An SME write therefore appends an `Updated` event for the Submodel, even when the SME itself was newly created or deleted.
+
+| SME operation | History effect |
+| --- | --- |
+| Create a top-level SME with `POST /submodels/{submodelIdentifier}/submodel-elements` | Append an `Updated` Submodel snapshot containing the new SME. |
+| Create a nested SME with `POST /submodels/{submodelIdentifier}/submodel-elements/{idShortPath}` | Append an `Updated` Submodel snapshot. The path identifies the existing parent below which the new SME is added. |
+| Create or replace an SME with `PUT /submodels/{submodelIdentifier}/submodel-elements/{idShortPath}` | Append an `Updated` Submodel snapshot. The path identifies the target SME. |
+| Patch an SME, its metadata, or its value | Append an `Updated` Submodel snapshot containing the changed SME state. |
+| Delete an SME with `DELETE /submodels/{submodelIdentifier}/submodel-elements/{idShortPath}` | Append an `Updated` Submodel snapshot without the deleted SME. Deleting a container also removes its nested children from the new snapshot. |
+| Upload or delete a file attachment | Append an `Updated` Submodel snapshot containing the changed File SME metadata. |
+
+**Why is an SME create or delete reported as `Updated`?**
+
+The event describes the owning identifiable. An SME is nested content of a Submodel, so creating, changing, or deleting an SME updates that Submodel.
+
+**What happens for nested `idShortPath` values?**
+
+For nested paths such as `Measurements.temperature`, history still stores the complete Submodel snapshot. Internally, the implementation refreshes the affected top-level SME subtree, `Measurements` in this example, and combines it with the previous Submodel snapshot. This avoids reading the entire current Submodel after every nested change.
+
+**What happens if the Submodel has no earlier snapshot?**
+
+The first partial mutation falls back to reading the complete current Submodel once. Later partial mutations can derive the new snapshot from history.
+
+**Does deleting an SME container create a separate history entry for every nested SME?**
+
+No. One SME request appends one `Updated` snapshot for the owning Submodel. The new snapshot no longer contains the deleted container or its descendants.
+
+**Do AAS superpath routes also create an AAS history entry?**
+
+The AAS Repository and AAS Environment also expose SME routes below the AAS superpath:
+
+```text
+/shells/{aasIdentifier}/submodels/{submodelIdentifier}/submodel-elements/...
+```
+
+These routes delegate to the same Submodel behavior. An SME-only change appends an `Updated` entry to `submodel_history`; it does not append an AAS history row because the AAS-to-Submodel reference did not change.
 
 ## Recent Changes
 
@@ -194,20 +278,22 @@ Important operational note:
 
 ## Operational Considerations
 
-History support increases database growth because each write creates a history row.
+History support increases database growth because each write creates a full identifiable snapshot row.
 
-Growth is reduced by:
+Runtime overhead is reduced by:
 
 - Keeping current tables separate from history tables.
 - Using indexed metadata for recent-change queries.
-- Storing delete events as tombstones where supported.
 - Using cursor pagination for recent-change feeds.
-- Backfilling one baseline row per existing entity during migration, not one row per nested child object.
+- Deriving partial-update snapshots from the latest history row when possible.
+- Reading only the affected top-level Submodel Element subtree for nested SME changes.
+- Storing compact delete tombstones where supported.
 - Hashing canonical JSON snapshots instead of signing or anchoring every row by default.
 
 For large installations, plan retention and monitoring:
 
 - Monitor history table row counts and table sizes.
-- Decide how long historical versions must be retained.
+- Decide how long historical versions must be retained and implement an operator-controlled cleanup process if needed.
 - Consider partitioning or compaction for high-write deployments.
 - Pay special attention to large Submodels with frequent Submodel Element changes.
+- Keep the PostgreSQL guard implications in mind: guarded mode intentionally blocks direct `UPDATE`, `DELETE`, and `TRUNCATE` maintenance on history tables until the guard is disabled.

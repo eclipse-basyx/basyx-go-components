@@ -200,6 +200,7 @@ See [structure.md](docu/developer/structure.md) and related files for details on
 - Example endpoint: `/submodels/{id}/submodel-elements/{idShort}/attachment`
 - AAS environment import endpoint: `/upload` (multipart/form-data with file part `file`)
 - Supported upload media types: `application/aasx+xml`, `application/aasx+json`, `application/asset-administration-shell+xml`, `application/asset-administration-shell+json`, `application/json`, `application/xml`, `text/xml`
+- AAS v3.2 history and recent changes: [user guide](docu/user/aas_api_v3_2.md) and [runtime notes](docu/developer/aas_v3_2_runtime.md)
 - See [structure_cmd.md](docu/developer/structure_cmd.md) for details
 
 ## 9. Contribution Guidelines

@@ -7,6 +7,11 @@ SPDX-License-Identifier: MIT
 
 This example shows how to start the AAS Environment Service with AAS v3.2 audit history and PostgreSQL mutation guards enabled.
 
+For the complete feature description, see:
+
+- [AAS API v3.2 user guide](../../docu/user/aas_api_v3_2.md)
+- [AAS API v3.2 runtime notes](../../docu/developer/aas_v3_2_runtime.md)
+
 The important settings are:
 
 - `BASYX_HISTORY_MODE=audit`
@@ -21,6 +26,8 @@ docker compose up -d
 ```
 
 The configuration service initializes the `v1.1.1` schema first. The AAS Environment Service then enables the history guard switch at startup.
+
+`BASYX_HISTORY_RETENTION_DAYS=0` is accepted as configuration, but automatic retention cleanup is not implemented yet. This example keeps every appended history row.
 
 ## What Guarded Mode Does
 
@@ -43,11 +50,11 @@ docker compose exec db psql -U admin -d basyxTestDB -c "TRUNCATE aas_history"
 
 Normal API writes still append new history rows.
 
+The guard switch is database-wide. Configure every BaSyx runtime service sharing this database consistently. A service started with `BASYX_HISTORY_IMMUTABILITY=none` can disable the switch again.
+
 ## Limitations
 
 This mode protects against accidental or unauthorized mutation through normal database access. PostgreSQL superusers or operators with enough permissions can still alter triggers, functions, or schema objects. Use external anchoring, WORM storage, or transparency-log infrastructure when stronger tamper-resistance is required.
-
-The guard switch is database-wide. If multiple BaSyx services share one database, configure them consistently with the same history immutability mode.
 
 For local development or tests that truncate tables, use `BASYX_HISTORY_IMMUTABILITY=none` or stop the guarded service before cleanup.
 

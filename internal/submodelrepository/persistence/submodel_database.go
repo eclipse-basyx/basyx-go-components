@@ -1522,8 +1522,8 @@ func (s *SubmodelDatabase) PatchSubmodel(ctx context.Context, submodelID string,
 	return nil
 }
 
-// PatchSubmodelInTransaction replaces an existing submodel in an existing transaction.
-func (s *SubmodelDatabase) PatchSubmodelInTransaction(submodelID string, tx *sql.Tx, submodel types.ISubmodel) error {
+// PatchSubmodelInTransaction replaces an existing submodel and appends history in an existing transaction.
+func (s *SubmodelDatabase) PatchSubmodelInTransaction(ctx context.Context, submodelID string, tx *sql.Tx, submodel types.ISubmodel) error {
 	if tx == nil {
 		return common.NewInternalServerError("SMREPO-PATCHSM-NILTX transaction must not be nil")
 	}
@@ -1535,7 +1535,10 @@ func (s *SubmodelDatabase) PatchSubmodelInTransaction(submodelID string, tx *sql
 		return err
 	}
 
-	return s.patchSubmodelInTransactionValidated(submodelID, tx, submodel)
+	if err := s.patchSubmodelInTransactionValidated(submodelID, tx, submodel); err != nil {
+		return err
+	}
+	return s.appendSubmodelHistoryTx(ctx, tx, submodel, history.ChangeUpdated, false)
 }
 
 func (s *SubmodelDatabase) patchSubmodelInTransactionValidated(submodelID string, tx *sql.Tx, submodel types.ISubmodel) error {
@@ -1579,8 +1582,8 @@ func (s *SubmodelDatabase) PatchSubmodelMetadata(ctx context.Context, submodelID
 	return nil
 }
 
-// PatchSubmodelMetadataInTransaction updates submodel metadata in an existing transaction.
-func (s *SubmodelDatabase) PatchSubmodelMetadataInTransaction(submodelID string, tx *sql.Tx, submodel types.ISubmodel) error {
+// PatchSubmodelMetadataInTransaction updates submodel metadata and appends history in an existing transaction.
+func (s *SubmodelDatabase) PatchSubmodelMetadataInTransaction(ctx context.Context, submodelID string, tx *sql.Tx, submodel types.ISubmodel) error {
 	if tx == nil {
 		return common.NewInternalServerError("SMREPO-PATCHSMMETA-NILTX transaction must not be nil")
 	}
@@ -1592,7 +1595,10 @@ func (s *SubmodelDatabase) PatchSubmodelMetadataInTransaction(submodelID string,
 		return err
 	}
 
-	return s.patchSubmodelMetadataInTransactionValidated(submodelID, tx, submodel)
+	if err := s.patchSubmodelMetadataInTransactionValidated(submodelID, tx, submodel); err != nil {
+		return err
+	}
+	return s.appendSubmodelMetadataHistoryTx(ctx, tx, submodelID, submodel)
 }
 
 func (s *SubmodelDatabase) patchSubmodelMetadataInTransactionValidated(submodelID string, tx *sql.Tx, submodel types.ISubmodel) error {
