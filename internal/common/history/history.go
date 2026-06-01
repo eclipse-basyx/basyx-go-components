@@ -241,7 +241,12 @@ func ApplyPostgresGuardConfig(ctx context.Context, db *sql.DB) error {
 		return common.NewInternalServerError("HISTORY-GUARD-EXECUPDATE " + err.Error())
 	}
 	affected, err := result.RowsAffected()
-	if err != nil || affected > 0 {
+
+	if err != nil {
+		return common.NewInternalServerError("HISTORY-GUARD-ROWSAFFECTED " + err.Error())
+	}
+
+	if affected > 0 {
 		return nil
 	}
 
