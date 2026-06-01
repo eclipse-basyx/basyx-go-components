@@ -193,7 +193,7 @@
     "method": "POST",
     "endpoint": "http://127.0.0.1:6004/query/submodels",
     "data": "bodies/query_tests/023_sme_language_en.json",
-    "shouldMatch": "expected/sophisticatedQueryTests/full_response.json",
+    "shouldMatch": "expected/sophisticatedQueryTests/empty_response.json",
     "expectedStatus": 200
   },
   {

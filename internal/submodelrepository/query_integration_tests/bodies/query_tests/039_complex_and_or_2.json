@@ -9,7 +9,7 @@
                 "$field": "$sm#idShort"
               },
               {
-                "$strVal": "X"
+                "$strVal": "Identification"
               }
             ]
           },

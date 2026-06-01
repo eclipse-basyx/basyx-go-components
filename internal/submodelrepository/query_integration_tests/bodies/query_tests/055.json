@@ -17,6 +17,10 @@
           "$fragment": "$sme.NewTestList[]",
           "$condition": {"$boolean": false }
 
+      },
+      {
+          "$fragment": "$sme.NewTestList",
+          "$condition": {"$boolean": false }
       }
   ]
 }

@@ -191,9 +191,17 @@ func HasUnrestrictedFormulaForRight(ctx context.Context, right grammar.RightsEnu
 // MergeQueryFilter combines an existing QueryFilter with a user query.
 // It guards nils and merges conditions and filter fragments using logical AND.
 func MergeQueryFilter(ctx context.Context, query grammar.Query) context.Context {
-	qf := GetQueryFilter(ctx)
-	if qf == nil {
-		qf = &QueryFilter{}
+	existing := GetQueryFilter(ctx)
+	qf := &QueryFilter{}
+	if existing != nil {
+		cloned, err := CloneQueryFilter(existing)
+		if err != nil {
+			log.Printf("SMREPO-MERGEQF-CLONEERR failed to clone query filter: %v", err)
+			return ctx
+		}
+		if cloned != nil {
+			qf = cloned
+		}
 	}
 
 	resolver := func(grammar.AttributeValue) any { return nil }
@@ -235,7 +243,7 @@ func MergeQueryFilter(ctx context.Context, query grammar.Query) context.Context 
 		}
 	}
 
-	return context.WithValue(ctx, filterKey, qf)
+	return WithQueryFilter(ctx, qf)
 }
 
 // SelectPutFormulaByExistence selects the active QueryFilter.Formula based on
@@ -246,7 +254,15 @@ func MergeQueryFilter(ctx context.Context, query grammar.Query) context.Context 
 // If the requested right-specific formula is unavailable, Formula is set to a
 // constant false expression.
 func SelectPutFormulaByExistence(ctx context.Context, dataExists bool) context.Context {
-	qf := GetQueryFilter(ctx)
+	existing := GetQueryFilter(ctx)
+	if existing == nil {
+		return ctx
+	}
+	qf, cloneErr := CloneQueryFilter(existing)
+	if cloneErr != nil {
+		log.Printf("SMREPO-SELECTPUTQF-CLONEERR failed to clone query filter: %v", cloneErr)
+		return ctx
+	}
 	if qf == nil {
 		return ctx
 	}
@@ -261,16 +277,16 @@ func SelectPutFormulaByExistence(ctx context.Context, dataExists bool) context.C
 		fallback := boolExpression(false)
 		qf.FormulasByRight[right] = fallback
 		qf.Formula = &fallback
-		return context.WithValue(ctx, filterKey, qf)
+		return WithQueryFilter(ctx, qf)
 	}
 
 	if selected, ok := qf.FormulasByRight[right]; ok {
 		qf.Formula = &selected
-		return context.WithValue(ctx, filterKey, qf)
+		return WithQueryFilter(ctx, qf)
 	}
 
 	fallback := boolExpression(false)
 	qf.FormulasByRight[right] = fallback
 	qf.Formula = &fallback
-	return context.WithValue(ctx, filterKey, qf)
+	return WithQueryFilter(ctx, qf)
 }

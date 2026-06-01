@@ -14,7 +14,7 @@
       {
         "$eq": [
           {
-            "$field": "$sme.NewTestList.ListProperty1#value"
+            "$field": "$sme.NewTestList[0]#value"
           },
           {
             "$strVal": "listValue1"

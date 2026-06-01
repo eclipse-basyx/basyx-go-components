@@ -5,7 +5,7 @@
         "$field": "$sm#id"
       },
       {
-        "$strVal": "TestAsset/Identification"
+        "$strVal": "YERP"
       }
     ]
   }

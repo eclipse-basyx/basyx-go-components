@@ -2,7 +2,7 @@
   "$condition": {
     "$contains": [
       {
-        "$field": "$sme.NewTestList.ListProperty2#value"
+        "$field": "$sme.NewTestList[1]#value"
       },
       {
         "$strVal": "2"

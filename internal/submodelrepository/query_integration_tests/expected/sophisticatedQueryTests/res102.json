@@ -1,228 +1,231 @@
 {
-    "paging_metadata": {},
-    "result": [
-        {
-            "id": "YERPENDERPENDERP",
-            "idShort": "Identification",
-            "kind": "Instance",
-            "modelType": "Submodel",
-            "semanticId": {
-                "keys": [
-                    {
-                        "type": "Submodel",
-                        "value": "http://acplt.org/SubmodelTemplates/AssetIdentification"
-                    },
-                    {
-                        "type": "Submodel",
-                        "value": "http://acplt.org/SubmodelTemplates/AssetIdentification"
-                    }
-                ],
-                "type": "ExternalReference"
-            },
-            "submodelElements": []
-        },
-        {
-            "id": "submodel-29cf5801-eabd-4e8b-8e6c-6fbf72c01037",
-            "idShort": "Identification",
-            "kind": "Instance",
-            "modelType": "Submodel",
-            "semanticId": {
-                "keys": [
-                    {
-                        "type": "Submodel",
-                        "value": "http://acplt.org/SubmodelTemplates/AssetIdentification_4"
-                    },
-                    {
-                        "type": "Submodel",
-                        "value": "http://acplt.org/SubmodelTemplates/AssetIdentification_7"
-                    }
-                ],
-                "type": "ExternalReference"
-            },
-            "submodelElements": [
-                {
-                    "category": "VARIABLE",
-                    "idShort": "InstanceId",
-                    "modelType": "Property",
-                    "semanticId": {
-                        "keys": [
-                            {
-                                "type": "GlobalReference",
-                                "value": "http://opcfoundation.org/UA/DI/1.1/DeviceType/Serialnumber_4"
-                            }
-                        ],
-                        "type": "ExternalReference"
-                    },
-                    "supplementalSemanticIds": [
-                        {
-                            "keys": [
-                                {
-                                    "type": "GlobalReference",
-                                    "value": "something_random_e14ad770_9"
-                                }
-                            ],
-                            "type": "ExternalReference"
-                        },
-                        {
-                            "keys": [
-                                {
-                                    "type": "GlobalReference",
-                                    "value": "something_random_bd061acd_7"
-                                }
-                            ],
-                            "type": "ExternalReference"
-                        }
-                    ],
-                    "value": "978-8234-234-342_6",
-                    "valueId": {
-                        "keys": [
-                            {
-                                "type": "GlobalReference",
-                                "value": "978-8234-234-342_6"
-                            }
-                        ],
-                        "type": "ExternalReference"
-                    },
-                    "valueType": "xs:string"
-                },
-                {
-                    "description": [
-                        {
-                            "language": "en-us",
-                            "text": "Legally valid designation of the natural or judicial person which is directly responsible for the design, production, packaging and labeling of a product in respect to its being brought into circulation."
-                        },
-                        {
-                            "language": "de",
-                            "text": "Bezeichnung fuer eine natuerliche oder juristische Person, die fuer die Auslegung, Herstellung und Verpackung sowie die Etikettierung eines Produkts im Hinblick auf das 'Inverkehrbringen' im eigenen Namen verantwortlich ist"
-                        }
-                    ],
-                    "displayName": [
-                        {
-                            "language": "en-us",
-                            "text": "Manufacturer Name"
-                        }
-                    ],
-                    "idShort": "ManufacturerName",
-                    "modelType": "Property",
-                    "qualifiers": [
-                        {
-                            "kind": "ConceptQualifier",
-                            "type": "http://acplt.org/Qualifier/ExampleQualifier",
-                            "value": "108",
-                            "valueType": "xs:int"
-                        },
-                        {
-                            "kind": "ConceptQualifier",
-                            "type": "http://acplt.org/Qualifier/ExampleQualifier2",
-                            "value": "58",
-                            "valueType": "xs:int"
-                        }
-                    ],
-                    "semanticId": {
-                        "keys": [
-                            {
-                                "type": "GlobalReference",
-                                "value": "0173-1#02-AAO677#002_8"
-                            }
-                        ],
-                        "type": "ExternalReference"
-                    },
-                    "value": "http://acplt.org/ValueId/ACPLT_5",
-                    "valueId": {
-                        "keys": [
-                            {
-                                "type": "GlobalReference",
-                                "value": "http://acplt.org/ValueId/ACPLT_3"
-                            }
-                        ],
-                        "type": "ExternalReference"
-                    },
-                    "valueType": "xs:string"
-                },
-                {
-                    "category": "PARAMETER",
-                    "description": [
-                        {
-                            "language": "en-us",
-                            "text": "New Test Collection"
-                        },
-                        {
-                            "language": "de",
-                            "text": "Neue Test Sammlung"
-                        }
-                    ],
-                    "idShort": "NewTestCollection",
-                    "modelType": "SubmodelElementCollection",
-                    "semanticId": {
-                        "keys": [
-                            {
-                                "type": "GlobalReference",
-                                "value": "http://acplt.org/SubmodelElementCollections/NewTestCollection_9"
-                            }
-                        ],
-                        "type": "ExternalReference"
-                    },
-                    "value": [
-                        {
-                            "category": "CONSTANT",
-                            "idShort": "CollectionProperty",
-                            "modelType": "Property",
-                            "value": "collectionValue_8",
-                            "valueType": "xs:string"
-                        },
-                        {
-                            "category": "CONSTANT",
-                            "idShort": "CollectionProperty2",
-                            "modelType": "Property",
-                            "value": "collectionValue_6",
-                            "valueType": "xs:string"
-                        }
-                    ]
-                },
-                {
-                    "category": "PARAMETER",
-                    "description": [
-                        {
-                            "language": "en-us",
-                            "text": "New Test List"
-                        },
-                        {
-                            "language": "de",
-                            "text": "Neue Test Liste"
-                        }
-                    ],
-                    "idShort": "NewTestList",
-                    "modelType": "SubmodelElementList",
-                    "orderRelevant": true,
-                    "semanticId": {
-                        "keys": [
-                            {
-                                "type": "GlobalReference",
-                                "value": "http://acplt.org/SubmodelElementLists/NewTestList_7"
-                            }
-                        ],
-                        "type": "ExternalReference"
-                    },
-                    "typeValueListElement": "SubmodelElement",
-                    "value": [
-                        {
-                            "category": "CONSTANT",
-                            "idShort": "ListProperty1",
-                            "modelType": "Property",
-                            "value": "listValue1_8",
-                            "valueType": "xs:string"
-                        },
-                        {
-                            "category": "CONSTANT",
-                            "idShort": "ListProperty2",
-                            "modelType": "Property",
-                            "value": "6",
-                            "valueType": "xs:double"
-                        }
-                    ]
-                }
-            ]
-        }
+    "paging_metadata":  {
 
-    ]
+                        },
+    "result":  [
+                   {
+                       "id":  "submodel-29cf5801-eabd-4e8b-8e6c-6fbf72c01037",
+                       "idShort":  "Identification",
+                       "kind":  "Instance",
+                       "modelType":  "Submodel",
+                       "semanticId":  {
+                                          "keys":  [
+                                                       {
+                                                           "type":  "Submodel",
+                                                           "value":  "http://acplt.org/SubmodelTemplates/AssetIdentification_4"
+                                                       },
+                                                       {
+                                                           "type":  "Submodel",
+                                                           "value":  "http://acplt.org/SubmodelTemplates/AssetIdentification_7"
+                                                       }
+                                                   ],
+                                          "type":  "ExternalReference"
+                                      },
+                       "submodelElements":  [
+                                                {
+                                                    "category":  "VARIABLE",
+                                                    "idShort":  "InstanceId",
+                                                    "modelType":  "Property",
+                                                    "semanticId":  {
+                                                                       "keys":  [
+                                                                                    {
+                                                                                        "type":  "GlobalReference",
+                                                                                        "value":  "http://opcfoundation.org/UA/DI/1.1/DeviceType/Serialnumber_4"
+                                                                                    }
+                                                                                ],
+                                                                       "type":  "ExternalReference"
+                                                                   },
+                                                    "supplementalSemanticIds":  [
+                                                                                    {
+                                                                                        "keys":  [
+                                                                                                     {
+                                                                                                         "type":  "GlobalReference",
+                                                                                                         "value":  "something_random_e14ad770_9"
+                                                                                                     }
+                                                                                                 ],
+                                                                                        "type":  "ExternalReference"
+                                                                                    },
+                                                                                    {
+                                                                                        "keys":  [
+                                                                                                     {
+                                                                                                         "type":  "GlobalReference",
+                                                                                                         "value":  "something_random_bd061acd_7"
+                                                                                                     }
+                                                                                                 ],
+                                                                                        "type":  "ExternalReference"
+                                                                                    }
+                                                                                ],
+                                                    "value":  "978-8234-234-342_6",
+                                                    "valueId":  {
+                                                                    "keys":  [
+                                                                                 {
+                                                                                     "type":  "GlobalReference",
+                                                                                     "value":  "978-8234-234-342_6"
+                                                                                 }
+                                                                             ],
+                                                                    "type":  "ExternalReference"
+                                                                },
+                                                    "valueType":  "xs:string"
+                                                },
+                                                {
+                                                    "description":  [
+                                                                        {
+                                                                            "language":  "en-us",
+                                                                            "text":  "Legally valid designation of the natural or judicial person which is directly responsible for the design, production, packaging and labeling of a product in respect to its being brought into circulation."
+                                                                        },
+                                                                        {
+                                                                            "language":  "de",
+                                                                            "text":  "Bezeichnung fuer eine natuerliche oder juristische Person, die fuer die Auslegung, Herstellung und Verpackung sowie die Etikettierung eines Produkts im Hinblick auf das \u0027Inverkehrbringen\u0027 im eigenen Namen verantwortlich ist"
+                                                                        }
+                                                                    ],
+                                                    "displayName":  [
+                                                                        {
+                                                                            "language":  "en-us",
+                                                                            "text":  "Manufacturer Name"
+                                                                        }
+                                                                    ],
+                                                    "idShort":  "ManufacturerName",
+                                                    "modelType":  "Property",
+                                                    "qualifiers":  [
+                                                                       {
+                                                                           "kind":  "ConceptQualifier",
+                                                                           "type":  "http://acplt.org/Qualifier/ExampleQualifier",
+                                                                           "value":  "108",
+                                                                           "valueType":  "xs:int"
+                                                                       },
+                                                                       {
+                                                                           "kind":  "ConceptQualifier",
+                                                                           "type":  "http://acplt.org/Qualifier/ExampleQualifier2",
+                                                                           "value":  "58",
+                                                                           "valueType":  "xs:int"
+                                                                       }
+                                                                   ],
+                                                    "semanticId":  {
+                                                                       "keys":  [
+                                                                                    {
+                                                                                        "type":  "GlobalReference",
+                                                                                        "value":  "0173-1#02-AAO677#002_8"
+                                                                                    }
+                                                                                ],
+                                                                       "type":  "ExternalReference"
+                                                                   },
+                                                    "value":  "http://acplt.org/ValueId/ACPLT_5",
+                                                    "valueId":  {
+                                                                    "keys":  [
+                                                                                 {
+                                                                                     "type":  "GlobalReference",
+                                                                                     "value":  "http://acplt.org/ValueId/ACPLT_3"
+                                                                                 }
+                                                                             ],
+                                                                    "type":  "ExternalReference"
+                                                                },
+                                                    "valueType":  "xs:string"
+                                                },
+                                                {
+                                                    "category":  "PARAMETER",
+                                                    "description":  [
+                                                                        {
+                                                                            "language":  "en-us",
+                                                                            "text":  "New Test Collection"
+                                                                        },
+                                                                        {
+                                                                            "language":  "de",
+                                                                            "text":  "Neue Test Sammlung"
+                                                                        }
+                                                                    ],
+                                                    "idShort":  "NewTestCollection",
+                                                    "modelType":  "SubmodelElementCollection",
+                                                    "semanticId":  {
+                                                                       "keys":  [
+                                                                                    {
+                                                                                        "type":  "GlobalReference",
+                                                                                        "value":  "http://acplt.org/SubmodelElementCollections/NewTestCollection_9"
+                                                                                    }
+                                                                                ],
+                                                                       "type":  "ExternalReference"
+                                                                   },
+                                                    "value":  [
+                                                                  {
+                                                                      "category":  "CONSTANT",
+                                                                      "idShort":  "CollectionProperty",
+                                                                      "modelType":  "Property",
+                                                                      "value":  "collectionValue_8",
+                                                                      "valueType":  "xs:string"
+                                                                  },
+                                                                  {
+                                                                      "category":  "CONSTANT",
+                                                                      "idShort":  "CollectionProperty2",
+                                                                      "modelType":  "Property",
+                                                                      "value":  "collectionValue_6",
+                                                                      "valueType":  "xs:string"
+                                                                  }
+                                                              ]
+                                                },
+                                                {
+                                                    "category":  "PARAMETER",
+                                                    "description":  [
+                                                                        {
+                                                                            "language":  "en-us",
+                                                                            "text":  "New Test List"
+                                                                        },
+                                                                        {
+                                                                            "language":  "de",
+                                                                            "text":  "Neue Test Liste"
+                                                                        }
+                                                                    ],
+                                                    "idShort":  "NewTestList",
+                                                    "modelType":  "SubmodelElementList",
+                                                    "orderRelevant":  true,
+                                                    "semanticId":  {
+                                                                       "keys":  [
+                                                                                    {
+                                                                                        "type":  "GlobalReference",
+                                                                                        "value":  "http://acplt.org/SubmodelElementLists/NewTestList_7"
+                                                                                    }
+                                                                                ],
+                                                                       "type":  "ExternalReference"
+                                                                   },
+                                                    "typeValueListElement":  "SubmodelElement",
+                                                    "value":  [
+                                                                  {
+                                                                      "category":  "CONSTANT",
+                                                                      "idShort":  "ListProperty1",
+                                                                      "modelType":  "Property",
+                                                                      "value":  "listValue1_8",
+                                                                      "valueType":  "xs:string"
+                                                                  },
+                                                                  {
+                                                                      "category":  "CONSTANT",
+                                                                      "idShort":  "ListProperty2",
+                                                                      "modelType":  "Property",
+                                                                      "value":  "6",
+                                                                      "valueType":  "xs:double"
+                                                                  }
+                                                              ]
+                                                }
+                                            ]
+                   },
+                   {
+                       "id":  "YERPENDERPENDERP",
+                       "idShort":  "Identification",
+                       "kind":  "Instance",
+                       "modelType":  "Submodel",
+                       "semanticId":  {
+                                          "keys":  [
+                                                       {
+                                                           "type":  "Submodel",
+                                                           "value":  "http://acplt.org/SubmodelTemplates/AssetIdentification"
+                                                       },
+                                                       {
+                                                           "type":  "Submodel",
+                                                           "value":  "http://acplt.org/SubmodelTemplates/AssetIdentification"
+                                                       }
+                                                   ],
+                                          "type":  "ExternalReference"
+                                      },
+                       "submodelElements":  [
+
+                                            ]
+                   }
+               ]
 }

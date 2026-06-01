@@ -807,8 +807,16 @@ func buildSMEMaskRuntime(ctx context.Context, collector *grammar.ResolvedFieldPa
 		"$sme#language":  {},
 	}
 
+	maskCtx := ctx
 	qf := auth.GetQueryFilter(ctx)
 	if qf != nil {
+		clonedQF, cloneErr := auth.CloneQueryFilter(qf)
+		if cloneErr != nil {
+			return nil, smeMaskFragmentGroups{}, cloneErr
+		}
+		if clonedQF == nil {
+			return nil, smeMaskFragmentGroups{}, errors.New("SMREPO-SMEMASK-NILQF cloned query filter is nil")
+		}
 		type normalizedFilter struct {
 			from  grammar.FragmentStringPattern
 			to    grammar.FragmentStringPattern
@@ -816,15 +824,15 @@ func buildSMEMaskRuntime(ctx context.Context, collector *grammar.ResolvedFieldPa
 			match bool
 		}
 		normalizedFilters := make([]normalizedFilter, 0)
-		for fragment := range qf.Filters {
+		for fragment := range clonedQF.Filters {
 			if !strings.Contains(string(fragment), "#") {
 				normalizedFragment := normalizeSMERowFragment(fragment)
 				rowFragments[normalizedFragment] = struct{}{}
 				normalizedFilters = append(normalizedFilters, normalizedFilter{
 					from:  fragment,
 					to:    normalizedFragment,
-					expr:  qf.Filters[fragment],
-					match: qf.FilterMatch != nil && qf.FilterMatch[fragment],
+					expr:  clonedQF.Filters[fragment],
+					match: clonedQF.FilterMatch != nil && clonedQF.FilterMatch[fragment],
 				})
 				continue
 			}
@@ -843,17 +851,18 @@ func buildSMEMaskRuntime(ctx context.Context, collector *grammar.ResolvedFieldPa
 			}
 		}
 		for _, normalized := range normalizedFilters {
-			delete(qf.Filters, normalized.from)
-			if _, exists := qf.Filters[normalized.to]; !exists {
-				qf.Filters[normalized.to] = normalized.expr
+			delete(clonedQF.Filters, normalized.from)
+			if _, exists := clonedQF.Filters[normalized.to]; !exists {
+				clonedQF.Filters[normalized.to] = normalized.expr
 			}
-			if qf.FilterMatch != nil {
-				delete(qf.FilterMatch, normalized.from)
-				if _, exists := qf.FilterMatch[normalized.to]; !exists {
-					qf.FilterMatch[normalized.to] = normalized.match
+			if clonedQF.FilterMatch != nil {
+				delete(clonedQF.FilterMatch, normalized.from)
+				if _, exists := clonedQF.FilterMatch[normalized.to]; !exists {
+					clonedQF.FilterMatch[normalized.to] = normalized.match
 				}
 			}
 		}
+		maskCtx = auth.WithQueryFilter(ctx, clonedQF)
 	}
 
 	groups := smeMaskFragmentGroups{
@@ -893,7 +902,7 @@ func buildSMEMaskRuntime(ctx context.Context, collector *grammar.ResolvedFieldPa
 		})
 	}
 
-	runtime, err := auth.BuildSharedFragmentMaskRuntime(ctx, collector, maskedColumns)
+	runtime, err := auth.BuildSharedFragmentMaskRuntime(maskCtx, collector, maskedColumns)
 	if err != nil {
 		return nil, smeMaskFragmentGroups{}, err
 	}
