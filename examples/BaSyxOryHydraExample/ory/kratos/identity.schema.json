@@ -1,0 +1,32 @@
+{
+  "$id": "https://schemas.basyx.org/examples/ory-hydra/identity.schema.json",
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "BaSyx Demo User",
+  "type": "object",
+  "properties": {
+    "traits": {
+      "type": "object",
+      "properties": {
+        "email": {
+          "type": "string",
+          "format": "email",
+          "title": "E-Mail",
+          "minLength": 3,
+          "ory.sh/kratos": {
+            "credentials": {
+              "password": {
+                "identifier": true
+              }
+            }
+          }
+        },
+        "role": {
+          "type": "string",
+          "enum": ["admin", "viewer"]
+        }
+      },
+      "required": ["email", "role"],
+      "additionalProperties": false
+    }
+  }
+}
