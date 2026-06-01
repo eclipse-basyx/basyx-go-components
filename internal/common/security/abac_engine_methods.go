@@ -127,6 +127,9 @@ var mapMethodAndPatternToRightsData = []mapMethodAndPatternToRights{
 	{"GET", "/submodels/{submodelIdentifier}/submodel-elements/{idShortPath}/operation-results/{handleId}", []grammar.RightsEnum{grammar.RightsEnumEXECUTE}},
 	{"GET", "/submodels/{submodelIdentifier}/submodel-elements/{idShortPath}/operation-results/{handleId}/$value", []grammar.RightsEnum{grammar.RightsEnumEXECUTE}},
 	{"GET", "/submodels/{submodelIdentifier}/$signed", []grammar.RightsEnum{grammar.RightsEnumREAD}},
+	{"PUT", "/submodels/{submodelIdentifier}/$signed", []grammar.RightsEnum{grammar.RightsEnumCREATE, grammar.RightsEnumUPDATE}},
+	{"PATCH", "/submodels/{submodelIdentifier}/$signed", []grammar.RightsEnum{grammar.RightsEnumUPDATE}},
+	{"DELETE", "/submodels/{submodelIdentifier}/$signed", []grammar.RightsEnum{grammar.RightsEnumDELETE}},
 	{"GET", "/submodels/{submodelIdentifier}/$value/$signed", []grammar.RightsEnum{grammar.RightsEnumREAD}},
 
 	// aas repository
