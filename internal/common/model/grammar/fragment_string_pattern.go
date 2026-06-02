@@ -49,14 +49,12 @@ const filterpattern = `^(?:\$aas#(?:idShort|assetInformation\.assetType|assetInf
 //   - $cd#       : Concept Description references
 //   - $aasdesc#  : AAS Descriptor references
 //   - $smdesc#   : Submodel Descriptor references
-//   - $bd#       : Basic Discovery references
 //
 // Examples:
 //   - "$aas#idShort"
 //   - "$sm#semanticId.keys[0]"
 //   - "$sme.property1#value"
 //   - "$aasdesc#endpoints[0].interface"
-//   - "$bd#specificAssetIds[]"
 type FragmentStringPattern string
 
 // UnmarshalJSON implements the json.Unmarshaler interface for FragmentStringPattern.
