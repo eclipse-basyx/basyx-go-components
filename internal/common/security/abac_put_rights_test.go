@@ -87,6 +87,42 @@ func TestSelectPutFormulaByExistence_DefaultsToFalseIfMapIsNil(t *testing.T) {
 	assertFormulaByRightBoolean(t, qf, grammar.RightsEnumCREATE, false)
 }
 
+func TestSelectPutFormulaByExistence_FailsClosedOnCloneError(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.WithValue(context.Background(), filterKey, &QueryFilter{
+		Formula: invalidCloneFormula(),
+	})
+	updateCtx := SelectPutFormulaByExistence(ctx, true)
+	qf := GetQueryFilter(updateCtx)
+	if qf == nil {
+		t.Fatalf("expected query filter in context")
+	}
+	assertBooleanFormulaPointer(t, qf.Formula, false)
+	assertFormulaByRightBoolean(t, qf, grammar.RightsEnumUPDATE, false)
+}
+
+func TestMergeQueryFilter_FailsClosedOnCloneError(t *testing.T) {
+	t.Parallel()
+
+	queryExpr := boolExpression(true)
+	ctx := context.WithValue(context.Background(), filterKey, &QueryFilter{
+		Formula: invalidCloneFormula(),
+	})
+	mergedCtx := MergeQueryFilter(ctx, grammar.Query{Condition: &queryExpr})
+	qf := GetQueryFilter(mergedCtx)
+	if qf == nil {
+		t.Fatalf("expected query filter in context")
+	}
+	assertBooleanFormulaPointer(t, qf.Formula, false)
+	assertFormulaByRightBoolean(t, qf, grammar.RightsEnumREAD, false)
+}
+
+func invalidCloneFormula() *grammar.LogicalExpression {
+	expr := grammar.LogicalExpression{And: []grammar.LogicalExpression{boolExpression(true)}}
+	return &expr
+}
+
 func mustParsePUTAccessModelWithSingleRight(t *testing.T, right grammar.RightsEnum) *AccessModel {
 	t.Helper()
 

@@ -1,0 +1,12 @@
+{
+  "$condition": {
+    "$eq": [
+      {
+        "$field": "$sm#semanticId.type"
+      },
+      {
+        "$strVal": "ExternalReference"
+      }
+    ]
+  }
+}

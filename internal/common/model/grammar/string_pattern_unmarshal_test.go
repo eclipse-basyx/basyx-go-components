@@ -75,8 +75,8 @@ func TestFragmentStringPattern_UnmarshalJSON_AcceptsAASAndSMEFragments(t *testin
 	t.Parallel()
 
 	cases := []string{
-		"$aas#assetInformation",
-		"$aas#submodels",
+		"$aas#assetInformation.assetType",
+		"$aas#submodels[0]",
 		"$aas#assetInformation.specificAssetIds[0]",
 		"$aas#assetInformation.specificAssetIds[0].externalSubjectId.keys[3]",
 		"$aasdesc#description",
@@ -109,7 +109,6 @@ func TestFragmentStringPattern_UnmarshalJSON_RejectsInvalid(t *testing.T) {
 		"not-a-pattern",
 		"$aas",
 		"$aas#",
-		"$sme",
 		"$sme#",
 		"$aasdesc#endpoints[].protocolinformation",
 	}

@@ -3066,9 +3066,9 @@ func (s *SubmodelRepositoryAPIAPIService) QuerySubmodels(
 
 	for index := range sms {
 		sm := sms[index]
-
 		eg.Go(func() error {
-			submodelElements, _, elementsErr := s.submodelBackend.GetSubmodelElements(ctx, sm.ID(), nil, "", false, "")
+			elementQueryCtx := auth.MergeQueryFilter(ctx, query)
+			submodelElements, _, elementsErr := s.submodelBackend.GetSubmodelElements(elementQueryCtx, sm.ID(), nil, "", false, "")
 			if elementsErr != nil {
 				return elementsErr
 			}

@@ -1680,6 +1680,7 @@ func (s *SubmodelDatabase) patchSubmodelMetadataInTransaction(tx *sql.Tx, submod
 	return nil
 }
 
+//nolint:revive // cyclomatic complexity is acceptable for this function due to query/filter orchestration in one flow
 func (s *SubmodelDatabase) getSubmodelsWithOptionalSemanticIDFilter(ctx context.Context, limit int32, cursor string, submodelIdentifier string, semanticID string) ([]types.ISubmodel, string, error) {
 	dialect := goqu.Dialect("postgres")
 
@@ -1709,8 +1710,26 @@ func (s *SubmodelDatabase) getSubmodelsWithOptionalSemanticIDFilter(ctx context.
 	if submodelIdentifier != "" {
 		submodelIdentifierFilter = &submodelIdentifier
 	}
+	collector, collectorErr := grammar.NewResolvedFieldPathCollectorForRoot(grammar.CollectorRootSM)
+	if collectorErr != nil {
+		return nil, "", common.NewInternalServerError("SMREPO-GETSMS-BADCOLLECTOR " + collectorErr.Error())
+	}
 
-	selectDS, err := selectSubmodelGoquQuery(&dialect, submodelIdentifierFilter, limitFilter, cursorFilter)
+	const dataAlias = "submodel_list_data"
+	maskedColumns := []auth.MaskedInnerColumnSpec{
+		{Fragment: "$sm#idShort", FlagAlias: "flag_idshort", RawAlias: "c1"},
+		{Fragment: "$sm#semanticId", FlagAlias: "flag_semanticid", RawAlias: "raw_semantic_id_payload"},
+	}
+	maskRuntime, maskRuntimeErr := auth.BuildSharedFragmentMaskRuntime(ctx, collector, maskedColumns)
+	if maskRuntimeErr != nil {
+		return nil, "", common.NewInternalServerError("SMREPO-GETSMS-MASKRUNTIME " + maskRuntimeErr.Error())
+	}
+	maskedExpressions, maskedExprErr := maskRuntime.MaskedInnerAliasExprs(dataAlias, maskedColumns)
+	if maskedExprErr != nil {
+		return nil, "", common.NewInternalServerError("SMREPO-GETSMS-MASKEXPR " + maskedExprErr.Error())
+	}
+
+	selectDS, err := selectSubmodelGoquQuery(&dialect, submodelIdentifierFilter, limitFilter, cursorFilter, maskRuntime.Projections())
 	if err != nil {
 		return nil, "", err
 	}
@@ -1735,7 +1754,24 @@ func (s *SubmodelDatabase) getSubmodelsWithOptionalSemanticIDFilter(ctx context.
 			return nil, "", common.NewInternalServerError("SMREPO-GETSMS-ABACFORMULA " + err.Error())
 		}
 	}
-	query, args, err := selectDS.ToSQL()
+	resultDS := dialect.From(selectDS.As(dataAlias)).
+		Select(
+			goqu.I(dataAlias+".c0"),
+			maskedExpressions[0],
+			goqu.I(dataAlias+".c2"),
+			goqu.I(dataAlias+".c3"),
+			goqu.I(dataAlias+".raw_description_payload"),
+			goqu.I(dataAlias+".raw_displayname_payload"),
+			goqu.I(dataAlias+".raw_administrative_information_payload"),
+			goqu.I(dataAlias+".raw_embedded_data_specification_payload"),
+			goqu.I(dataAlias+".raw_supplemental_semantic_ids_payload"),
+			goqu.I(dataAlias+".raw_extensions_payload"),
+			goqu.I(dataAlias+".raw_qualifiers_payload"),
+			maskedExpressions[1],
+		).
+		Order(goqu.I(dataAlias + ".sort_submodel_identifier").Asc())
+
+	query, args, err := resultDS.ToSQL()
 	if err != nil {
 		return nil, "", common.NewInternalServerError("SMREPO-GETSMS-BUILDSQL " + err.Error())
 	}
@@ -1776,8 +1812,10 @@ func (s *SubmodelDatabase) getSubmodelsWithOptionalSemanticIDFilter(ctx context.
 
 		var submodel types.ISubmodel
 		submodel = types.NewSubmodel(identifier.String)
-		idShortValue := idShort.String
-		submodel.SetIDShort(&idShortValue)
+		if idShort.Valid {
+			idShortValue := idShort.String
+			submodel.SetIDShort(&idShortValue)
+		}
 		if category.Valid {
 			categoryValue := category.String
 			submodel.SetCategory(&categoryValue)

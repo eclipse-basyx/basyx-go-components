@@ -1,0 +1,28 @@
+{
+  "$condition": {
+    "$not": {
+      "$or": [
+        {
+          "$eq": [
+            {
+              "$field": "$sm#idShort"
+            },
+            {
+              "$strVal": "Other"
+            }
+          ]
+        },
+        {
+          "$eq": [
+            {
+              "$field": "$sme.InstanceId#value"
+            },
+            {
+              "$strVal": "Nope"
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

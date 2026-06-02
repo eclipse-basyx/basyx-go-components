@@ -1,0 +1,12 @@
+{
+  "$condition": {
+    "$ends-with": [
+      {
+        "$field": "$sme#value"
+      },
+      {
+        "$strVal": "-342"
+      }
+    ]
+  }
+}

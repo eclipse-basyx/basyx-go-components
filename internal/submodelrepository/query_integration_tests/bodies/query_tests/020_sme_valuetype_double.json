@@ -1,0 +1,12 @@
+{
+  "$condition": {
+    "$eq": [
+      {
+        "$field": "$sme.NewTestList[1]#valueType"
+      },
+      {
+        "$strVal": "xs:double"
+      }
+    ]
+  }
+}

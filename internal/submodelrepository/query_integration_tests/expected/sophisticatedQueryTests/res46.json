@@ -1,0 +1,68 @@
+{
+    "paging_metadata": {},
+    "result": [
+        {
+            "id": "YERPENDERPENDERP",
+            "idShort": "Identification",
+            "kind": "Instance",
+            "modelType": "Submodel",
+            "semanticId": {
+                "keys": [
+                    {
+                        "type": "Submodel",
+                        "value": "http://acplt.org/SubmodelTemplates/AssetIdentification"
+                    },
+                    {
+                        "type": "Submodel",
+                        "value": "http://acplt.org/SubmodelTemplates/AssetIdentification"
+                    }
+                ],
+                "type": "ExternalReference"
+            },
+            "submodelElements": [
+                {
+                    "category": "PARAMETER",
+                    "description": [
+                        {
+                            "language": "en-us",
+                            "text": "New Test List"
+                        },
+                        {
+                            "language": "de",
+                            "text": "Neue Test Liste"
+                        }
+                    ],
+                    "idShort": "NewTestList",
+                    "modelType": "SubmodelElementList",
+                    "orderRelevant": true,
+                    "semanticId": {
+                        "keys": [
+                            {
+                                "type": "GlobalReference",
+                                "value": "http://acplt.org/SubmodelElementLists/NewTestList"
+                            }
+                        ],
+                        "type": "ExternalReference"
+                    },
+                    "typeValueListElement": "SubmodelElement",
+                    "value": [
+                        {
+                            "category": "CONSTANT",
+                            "idShort": "ListProperty1",
+                            "modelType": "Property",
+                            "value": "listValue1",
+                            "valueType": "xs:string"
+                        },
+                        {
+                            "category": "CONSTANT",
+                            "idShort": "ListProperty2",
+                            "modelType": "Property",
+                            "value": "2",
+                            "valueType": "xs:double"
+                        }
+                    ]
+                }
+            ]
+        }
+    ]
+}

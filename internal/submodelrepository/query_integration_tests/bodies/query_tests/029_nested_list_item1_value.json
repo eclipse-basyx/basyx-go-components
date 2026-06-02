@@ -1,0 +1,12 @@
+{
+  "$condition": {
+    "$eq": [
+      {
+        "$field": "$sme.NewTestList[1]#value"
+      },
+      {
+        "$strVal": "2"
+      }
+    ]
+  }
+}

@@ -53,8 +53,13 @@ func TestMapDescriptorValueToRoute_SpecificDescriptor_UsesHandleWildcardRoutes(t
 			}, "")
 
 			actualRoutes := extractMappedRoutes(routes)
-			require.Contains(t, actualRoutes, "/bulk/status/*")
-			require.Contains(t, actualRoutes, "/bulk/result/*")
+			if testCase.scope == "$aasdesc" {
+				require.Contains(t, actualRoutes, "/bulk/shell-descriptors")
+			} else {
+				require.Contains(t, actualRoutes, "/bulk/submodel-descriptors")
+			}
+			require.NotContains(t, actualRoutes, "/bulk/status/*")
+			require.NotContains(t, actualRoutes, "/bulk/result/*")
 			require.NotContains(t, actualRoutes, "/bulk/status/"+common.EncodeString(descriptorID))
 			require.NotContains(t, actualRoutes, "/bulk/result/"+common.EncodeString(descriptorID))
 		})
@@ -98,12 +103,10 @@ func TestMatchRouteObjectsObjItem_DescriptorSpecific_MatchesBulkHandleRoutes(t *
 			}
 
 			statusAccess := matchRouteObjectsObjItem(objs, testCase.statusPath, "")
-			require.True(t, statusAccess.access)
-			require.Nil(t, statusAccess.le)
+			require.False(t, statusAccess.access)
 
 			resultAccess := matchRouteObjectsObjItem(objs, testCase.resultPath, "")
-			require.True(t, resultAccess.access)
-			require.Nil(t, resultAccess.le)
+			require.False(t, resultAccess.access)
 
 			otherAccess := matchRouteObjectsObjItem(objs, testCase.otherRoutePath, "")
 			require.False(t, otherAccess.access)

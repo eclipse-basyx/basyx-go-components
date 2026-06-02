@@ -1,0 +1,51 @@
+{
+    "paging_metadata":  {
+
+                        },
+    "result":  [
+                   {
+                       "id":  "submodel-29cf5801-eabd-4e8b-8e6c-6fbf72c01037",
+                       "idShort":  "Identification",
+                       "kind":  "Instance",
+                       "modelType":  "Submodel",
+                       "semanticId":  {
+                                          "keys":  [
+                                                       {
+                                                           "type":  "Submodel",
+                                                           "value":  "http://acplt.org/SubmodelTemplates/AssetIdentification_4"
+                                                       },
+                                                       {
+                                                           "type":  "Submodel",
+                                                           "value":  "http://acplt.org/SubmodelTemplates/AssetIdentification_7"
+                                                       }
+                                                   ],
+                                          "type":  "ExternalReference"
+                                      },
+                       "submodelElements":  [
+
+                                            ]
+                   },
+                   {
+                       "id":  "YERPENDERPENDERP",
+                       "idShort":  "Identification",
+                       "kind":  "Instance",
+                       "modelType":  "Submodel",
+                       "semanticId":  {
+                                          "keys":  [
+                                                       {
+                                                           "type":  "Submodel",
+                                                           "value":  "http://acplt.org/SubmodelTemplates/AssetIdentification"
+                                                       },
+                                                       {
+                                                           "type":  "Submodel",
+                                                           "value":  "http://acplt.org/SubmodelTemplates/AssetIdentification"
+                                                       }
+                                                   ],
+                                          "type":  "ExternalReference"
+                                      },
+                       "submodelElements":  [
+
+                                            ]
+                   }
+               ]
+}
