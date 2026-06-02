@@ -197,7 +197,7 @@ func MergeQueryFilter(ctx context.Context, query grammar.Query) context.Context 
 		cloned, err := CloneQueryFilter(existing)
 		if err != nil {
 			log.Printf("SMREPO-MERGEQF-CLONEERR failed to clone query filter: %v", err)
-			return ctx
+			return WithQueryFilter(ctx, failClosedQueryFilter(grammar.RightsEnumREAD))
 		}
 		if cloned != nil {
 			qf = cloned
@@ -258,18 +258,18 @@ func SelectPutFormulaByExistence(ctx context.Context, dataExists bool) context.C
 	if existing == nil {
 		return ctx
 	}
-	qf, cloneErr := CloneQueryFilter(existing)
-	if cloneErr != nil {
-		log.Printf("SMREPO-SELECTPUTQF-CLONEERR failed to clone query filter: %v", cloneErr)
-		return ctx
-	}
-	if qf == nil {
-		return ctx
-	}
-
 	right := grammar.RightsEnumCREATE
 	if dataExists {
 		right = grammar.RightsEnumUPDATE
+	}
+
+	qf, cloneErr := CloneQueryFilter(existing)
+	if cloneErr != nil {
+		log.Printf("SMREPO-SELECTPUTQF-CLONEERR failed to clone query filter: %v", cloneErr)
+		return WithQueryFilter(ctx, failClosedQueryFilter(right))
+	}
+	if qf == nil {
+		return WithQueryFilter(ctx, failClosedQueryFilter(right))
 	}
 
 	if qf.FormulasByRight == nil {
@@ -289,4 +289,18 @@ func SelectPutFormulaByExistence(ctx context.Context, dataExists bool) context.C
 	qf.FormulasByRight[right] = fallback
 	qf.Formula = &fallback
 	return WithQueryFilter(ctx, qf)
+}
+
+func failClosedQueryFilter(rights ...grammar.RightsEnum) *QueryFilter {
+	fallback := boolExpression(false)
+	qf := &QueryFilter{Formula: &fallback}
+	if len(rights) == 0 {
+		return qf
+	}
+
+	qf.FormulasByRight = make(map[grammar.RightsEnum]grammar.LogicalExpression, len(rights))
+	for _, right := range rights {
+		qf.FormulasByRight[right] = fallback
+	}
+	return qf
 }
