@@ -48,9 +48,13 @@ The file `aas/IESEDriveMotorDM3000.aasx` is imported automatically via `GENERAL_
 When guarded mode is active, PostgreSQL triggers block normal mutations on these history tables:
 
 - `aas_history`
+- `aas_history_payload`
 - `submodel_history`
+- `submodel_history_payload`
 - `concept_description_history`
+- `concept_description_history_payload`
 - `descriptor_history`
+- `descriptor_history_payload`
 
 The blocked operations are `UPDATE`, `DELETE`, and `TRUNCATE`. PostgreSQL returns the error message `history tables are append-only`.
 

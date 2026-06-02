@@ -1060,6 +1060,14 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelRecentChanges(
 		if fromJSONErr != nil {
 			return newAPIErrorResponse(fromJSONErr, http.StatusInternalServerError, operation, "FromJsonable"), nil
 		}
+		semanticID, fromJSONErr := gen.JsonableReference(submodel.SemanticID())
+		if fromJSONErr != nil {
+			return newAPIErrorResponse(fromJSONErr, http.StatusInternalServerError, operation, "SemanticIdToJsonable"), nil
+		}
+		supplementalSemanticIDs, fromJSONErr := gen.JsonableReferences(submodel.SupplementalSemanticIDs())
+		if fromJSONErr != nil {
+			return newAPIErrorResponse(fromJSONErr, http.StatusInternalServerError, operation, "SupplementalSemanticIdsToJsonable"), nil
+		}
 		changes = append(changes, gen.SubmodelRecentChange{
 			RecentChange: gen.RecentChange{
 				Type:      row.ChangeType,
@@ -1067,8 +1075,8 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelRecentChanges(
 				UpdatedAt: row.UpdatedAt,
 			},
 			Id:                      submodel.ID(),
-			SemanticId:              submodel.SemanticID(),
-			SupplementalSemanticIds: submodel.SupplementalSemanticIDs(),
+			SemanticId:              semanticID,
+			SupplementalSemanticIds: supplementalSemanticIDs,
 		})
 	}
 

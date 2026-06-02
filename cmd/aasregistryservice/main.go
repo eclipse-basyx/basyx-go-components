@@ -138,16 +138,23 @@ func runServer(ctx context.Context, configPath string) error {
 	if err := auth.SetupSecurity(ctx, cfg, apiRouter); err != nil {
 		return err
 	}
+	versioningGuard := history.NewMutationCoverageGuard(apiRouter)
+	apiRouter.Use(versioningGuard.Middleware)
 
 	// Register all registry routes (protected)
-	for _, rt := range smCtrl.Routes() {
+	for operation, rt := range smCtrl.Routes() {
+		versioningGuard.ClassifyRoute(operation, rt.Method, rt.Pattern)
 		apiRouter.Method(rt.Method, rt.Pattern, rt.HandlerFunc)
 	}
 
 	// Register all description routes (protected)
-	for _, rt := range descCtrl.Routes() {
+	for operation, rt := range descCtrl.Routes() {
+		versioningGuard.ClassifyRoute(operation, rt.Method, rt.Pattern)
 		apiRouter.Method(rt.Method, rt.Pattern, rt.HandlerFunc)
 	}
+	versioningGuard.Cover(http.MethodPost, "/bulk/shell-descriptors")
+	versioningGuard.Cover(http.MethodPut, "/bulk/shell-descriptors")
+	versioningGuard.Cover(http.MethodDelete, "/bulk/shell-descriptors")
 	bulkHandler.RegisterRoutes(apiRouter, true)
 
 	// Mount protected API under base path

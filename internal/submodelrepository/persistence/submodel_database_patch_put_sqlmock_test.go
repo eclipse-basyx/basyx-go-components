@@ -165,10 +165,12 @@ func TestPatchSubmodelMetadataInTransactionAppendsHistory(t *testing.T) {
 		WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectExec(`SELECT pg_advisory_xact_lock`).
 		WillReturnResult(sqlmock.NewResult(0, 1))
-	mock.ExpectQuery(`SELECT snapshot::text, "deleted", "row_hash" FROM "submodel_history"`).
+	mock.ExpectQuery(`SELECT "payload"."snapshot"::text, "history"."deleted", "history"."row_hash" FROM "submodel_history" AS "history" INNER JOIN "submodel_history_payload" AS "payload"`).
 		WillReturnRows(sqlmock.NewRows([]string{"snapshot", "deleted", "row_hash"}).
 			AddRow(`{"id":"sm-1","submodelElements":[{"idShort":"existing","modelType":"Capability"}]}`, false, "row-hash"))
-	mock.ExpectExec(`INSERT INTO "submodel_history"`).
+	mock.ExpectQuery(`INSERT INTO "submodel_history".*RETURNING "history_id"`).
+		WillReturnRows(sqlmock.NewRows([]string{"history_id"}).AddRow(1))
+	mock.ExpectExec(`INSERT INTO "submodel_history_payload"`).
 		WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectRollback()
 
@@ -260,14 +262,16 @@ func expectSubmodelHistoryAppend(mock sqlmock.Sqlmock) {
 		WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectQuery(`SELECT "row_hash" FROM "submodel_history"`).
 		WillReturnError(sql.ErrNoRows)
-	mock.ExpectExec(`INSERT INTO "submodel_history"`).
+	mock.ExpectQuery(`INSERT INTO "submodel_history".*RETURNING "history_id"`).
+		WillReturnRows(sqlmock.NewRows([]string{"history_id"}).AddRow(1))
+	mock.ExpectExec(`INSERT INTO "submodel_history_payload"`).
 		WillReturnResult(sqlmock.NewResult(0, 1))
 }
 
 func expectMutatedSubmodelHistoryFallback(mock sqlmock.Sqlmock) {
 	mock.ExpectExec(`SELECT pg_advisory_xact_lock`).
 		WillReturnResult(sqlmock.NewResult(0, 1))
-	mock.ExpectQuery(`SELECT snapshot::text, "deleted", "row_hash" FROM "submodel_history"`).
+	mock.ExpectQuery(`SELECT "payload"."snapshot"::text, "history"."deleted", "history"."row_hash" FROM "submodel_history" AS "history" INNER JOIN "submodel_history_payload" AS "payload"`).
 		WillReturnError(sql.ErrNoRows)
 }
 

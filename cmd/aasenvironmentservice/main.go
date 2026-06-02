@@ -223,28 +223,43 @@ func runServer(ctx context.Context, configPath string) error {
 	if err = auth.SetupSecurity(ctx, cfg, apiRouter); err != nil {
 		return err
 	}
+	versioningGuard := history.NewMutationCoverageGuard(apiRouter)
+	apiRouter.Use(versioningGuard.Middleware)
 
-	for _, rt := range aasRegistryCtrl.Routes() {
+	for operation, rt := range aasRegistryCtrl.Routes() {
+		versioningGuard.ClassifyRoute(operation, rt.Method, rt.Pattern)
 		apiRouter.Method(rt.Method, rt.Pattern, rt.HandlerFunc)
 	}
-	for _, rt := range smRegistryCtrl.Routes() {
+	for operation, rt := range smRegistryCtrl.Routes() {
+		versioningGuard.ClassifyRoute(operation, rt.Method, rt.Pattern)
 		apiRouter.Method(rt.Method, rt.Pattern, rt.HandlerFunc)
 	}
-	for _, rt := range aasRepositoryCtrl.Routes() {
+	for operation, rt := range aasRepositoryCtrl.Routes() {
+		versioningGuard.ClassifyRoute(operation, rt.Method, rt.Pattern)
 		apiRouter.Method(rt.Method, rt.Pattern, rt.HandlerFunc)
 	}
-	for _, rt := range smRepositoryCtrl.Routes() {
+	for operation, rt := range smRepositoryCtrl.Routes() {
+		versioningGuard.ClassifyRoute(operation, rt.Method, rt.Pattern)
 		apiRouter.Method(rt.Method, rt.Pattern, rt.HandlerFunc)
 	}
-	for _, rt := range cdrCtrl.Routes() {
+	for operation, rt := range cdrCtrl.Routes() {
+		versioningGuard.ClassifyRoute(operation, rt.Method, rt.Pattern)
 		apiRouter.Method(rt.Method, rt.Pattern, rt.HandlerFunc)
 	}
-	for _, rt := range discoveryCtrl.Routes() {
+	for operation, rt := range discoveryCtrl.Routes() {
+		versioningGuard.ClassifyRoute(operation, rt.Method, rt.Pattern)
 		apiRouter.Method(rt.Method, rt.Pattern, rt.HandlerFunc)
 	}
-	for _, rt := range descriptionCtrl.Routes() {
+	for operation, rt := range descriptionCtrl.Routes() {
+		versioningGuard.ClassifyRoute(operation, rt.Method, rt.Pattern)
 		apiRouter.Method(rt.Method, rt.Pattern, rt.HandlerFunc)
 	}
+	versioningGuard.Cover(http.MethodPost, "/bulk/shell-descriptors")
+	versioningGuard.Cover(http.MethodPut, "/bulk/shell-descriptors")
+	versioningGuard.Cover(http.MethodDelete, "/bulk/shell-descriptors")
+	versioningGuard.Exempt(http.MethodPost, "/bulk/submodel-descriptors")
+	versioningGuard.Exempt(http.MethodPut, "/bulk/submodel-descriptors")
+	versioningGuard.Exempt(http.MethodDelete, "/bulk/submodel-descriptors")
 	aasBulkHandler.RegisterRoutes(apiRouter, true)
 	smBulkHandler.RegisterRoutes(apiRouter, false)
 
@@ -252,6 +267,7 @@ func runServer(ctx context.Context, configPath string) error {
 
 	// Register /upload endpoint
 	uploadService := aasenvironment.NewUploadAPIService(persistence, customAASRepository, customSMRepository)
+	versioningGuard.Cover(http.MethodPost, "/upload")
 	aasenvironment.RegisterUploadAPI(apiRouter, uploadService, cfg.General.UploadMaxSizeBytes)
 	aasenvironment.RegisterSerializationAPI(apiRouter, serializationService)
 

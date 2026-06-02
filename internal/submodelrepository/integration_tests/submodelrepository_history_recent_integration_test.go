@@ -41,7 +41,9 @@ func TestSubmodelRepositoryHistoryTracksSubmodelElementChangesAndRecentDeletes(t
 	baseURL := "http://localhost:6004"
 	submodelID := fmt.Sprintf("urn:example:sm:history:%d", time.Now().UnixNano())
 	encodedSubmodelID := base64.RawURLEncoding.EncodeToString([]byte(submodelID))
-	encodedSemanticID := base64.RawURLEncoding.EncodeToString([]byte("urn:example:semantic:history"))
+	semanticID := "urn:example:semantic:history"
+	supplementalSemanticID := "urn:example:semantic:history:supplemental"
+	encodedSemanticID := base64.RawURLEncoding.EncodeToString([]byte(semanticID))
 
 	t.Cleanup(func() {
 		status, _, err := requestJSON(http.MethodDelete, baseURL+"/submodels/"+encodedSubmodelID, nil)
@@ -65,8 +67,12 @@ func TestSubmodelRepositoryHistoryTracksSubmodelElementChangesAndRecentDeletes(t
 		},
 		"semanticId": map[string]any{
 			"type": "ModelReference",
-			"keys": []any{map[string]any{"type": "GlobalReference", "value": "urn:example:semantic:history"}},
+			"keys": []any{map[string]any{"type": "GlobalReference", "value": semanticID}},
 		},
+		"supplementalSemanticIds": []any{map[string]any{
+			"type": "ExternalReference",
+			"keys": []any{map[string]any{"type": "GlobalReference", "value": supplementalSemanticID}},
+		}},
 		"submodelElements": []any{
 			map[string]any{
 				"modelType": "Property",
@@ -148,6 +154,8 @@ func TestSubmodelRepositoryHistoryTracksSubmodelElementChangesAndRecentDeletes(t
 	require.Equal(t, http.StatusOK, status, "response=%s", string(body))
 	recent := decodeMap(t, body)
 	requireRecentChangesForIDSubmodel(t, recent, submodelID, 5)
+	requireRecentSubmodelReference(t, recent, submodelID, "semanticId", semanticID)
+	requireRecentSubmodelReference(t, recent, submodelID, "supplementalSemanticIds", supplementalSemanticID)
 	requireRecentChangeTypeForIDSubmodel(t, recent, submodelID, "Created")
 	requireRecentChangeTypeForIDSubmodel(t, recent, submodelID, "Updated")
 
@@ -215,6 +223,46 @@ func requireRecentChangeTypeForIDSubmodel(t *testing.T, payload map[string]any, 
 		}
 	}
 	t.Fatalf("expected recent change id=%s type=%s in payload: %#v", id, changeType, payload)
+}
+
+func requireRecentSubmodelReference(t *testing.T, payload map[string]any, id string, field string, value string) {
+	t.Helper()
+	result, ok := payload["result"].([]any)
+	require.True(t, ok, "recent changes result must be an array")
+	for _, entry := range result {
+		item, ok := entry.(map[string]any)
+		if !ok || item["id"] != id {
+			continue
+		}
+		if recentChangeReferenceFieldContainsValue(item[field], value) {
+			return
+		}
+	}
+	t.Fatalf("expected recent change id=%s field=%s containing reference value=%s in payload: %#v", id, field, value, payload)
+}
+
+func recentChangeReferenceFieldContainsValue(raw any, value string) bool {
+	references, ok := raw.([]any)
+	if !ok {
+		references = []any{raw}
+	}
+	for _, rawReference := range references {
+		reference, ok := rawReference.(map[string]any)
+		if !ok {
+			continue
+		}
+		keys, ok := reference["keys"].([]any)
+		if !ok {
+			continue
+		}
+		for _, rawKey := range keys {
+			key, ok := rawKey.(map[string]any)
+			if ok && key["value"] == value {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func getElementByIDShort(t *testing.T, submodel map[string]any, idShort string) map[string]any {

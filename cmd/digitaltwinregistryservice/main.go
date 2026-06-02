@@ -161,24 +161,32 @@ func runServer(ctx context.Context, configPath string) error {
 	if err := auth.SetupSecurityWithClaimsMiddleware(ctx, cfg, apiRouter, claimsMiddleware...); err != nil {
 		return err
 	}
+	versioningGuard := history.NewMutationCoverageGuard(apiRouter)
+	apiRouter.Use(versioningGuard.Middleware)
 
-	for _, rt := range registryCtrl.Routes() {
+	for operation, rt := range registryCtrl.Routes() {
+		versioningGuard.ClassifyRoute(operation, rt.Method, rt.Pattern)
 		if rt.Method == "GET" && rt.Pattern == "/shell-descriptors" {
 			apiRouter.With(digitaltwinregistry.CreatedAfterMiddleware).Method(rt.Method, rt.Pattern, rt.HandlerFunc)
 			continue
 		}
 		apiRouter.Method(rt.Method, rt.Pattern, rt.HandlerFunc)
 	}
-	for _, rt := range discoveryCtrl.Routes() {
+	for operation, rt := range discoveryCtrl.Routes() {
+		versioningGuard.ClassifyRoute(operation, rt.Method, rt.Pattern)
 		if (rt.Method == "POST" && rt.Pattern == "/lookup/shellsByAssetLink") || (rt.Method == "GET" && rt.Pattern == "/lookup/shells") {
 			apiRouter.With(digitaltwinregistry.CreatedAfterMiddleware).Method(rt.Method, rt.Pattern, rt.HandlerFunc)
 			continue
 		}
 		apiRouter.Method(rt.Method, rt.Pattern, rt.HandlerFunc)
 	}
-	for _, rt := range descriptionCtrl.Routes() {
+	for operation, rt := range descriptionCtrl.Routes() {
+		versioningGuard.ClassifyRoute(operation, rt.Method, rt.Pattern)
 		apiRouter.Method(rt.Method, rt.Pattern, rt.HandlerFunc)
 	}
+	versioningGuard.Cover(http.MethodPost, "/bulk/shell-descriptors")
+	versioningGuard.Cover(http.MethodPut, "/bulk/shell-descriptors")
+	versioningGuard.Cover(http.MethodDelete, "/bulk/shell-descriptors")
 	bulkHandler.RegisterRoutes(apiRouter, true)
 
 	r.Mount(base, apiRouter)

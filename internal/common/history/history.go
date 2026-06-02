@@ -99,6 +99,12 @@ var (
 		Immutability:      ImmutabilityNone,
 		AuditIdentityMode: AuditIdentityNone,
 	}
+	payloadTables = map[string]string{
+		TableAAS:        "aas_history_payload",
+		TableSubmodel:   "submodel_history_payload",
+		TableConcept:    "concept_description_history_payload",
+		TableDescriptor: "descriptor_history_payload",
+	}
 )
 
 // Row is a normalized history entry loaded from one of the history tables.
@@ -328,6 +334,10 @@ func validateAppendInputs(tx *sql.Tx, identifier string) (string, error) {
 }
 
 func appendVersionWithPreviousHashTx(ctx context.Context, tx *sql.Tx, table string, identifier string, changeType string, snapshot map[string]any, deleted bool, previousHash string) error {
+	payloadTable, err := historyPayloadTable(table)
+	if err != nil {
+		return err
+	}
 	now := time.Now().UTC()
 	snapshotJSON, err := json.Marshal(snapshot)
 	if err != nil {
@@ -363,7 +373,6 @@ func appendVersionWithPreviousHashTx(ctx context.Context, tx *sql.Tx, table stri
 	insertQuery, insertArgs, err := goqu.Insert(table).Rows(goqu.Record{
 		"identifier":                     identifier,
 		"change_type":                    changeType,
-		"snapshot":                       goqu.L("?::jsonb", string(snapshotJSON)),
 		"deleted":                        deleted,
 		"valid_from":                     now,
 		"operation_time":                 now,
@@ -387,12 +396,23 @@ func appendVersionWithPreviousHashTx(ctx context.Context, tx *sql.Tx, table stri
 		"operation":                      audit.Operation,
 		"endpoint":                       audit.Endpoint,
 		"http_method":                    audit.HTTPMethod,
-	}).ToSQL()
+	}).Returning(goqu.C("history_id")).ToSQL()
 	if err != nil {
 		return common.NewInternalServerError("HISTORY-APPEND-BUILDINSERT " + err.Error())
 	}
-	if _, err = tx.ExecContext(ctx, insertQuery, insertArgs...); err != nil {
+	var historyID int64
+	if err = tx.QueryRowContext(ctx, insertQuery, insertArgs...).Scan(&historyID); err != nil {
 		return common.NewInternalServerError("HISTORY-APPEND-EXECINSERT " + err.Error())
+	}
+	payloadQuery, payloadArgs, err := goqu.Insert(payloadTable).Rows(goqu.Record{
+		"history_id": historyID,
+		"snapshot":   goqu.L("?::jsonb", string(snapshotJSON)),
+	}).ToSQL()
+	if err != nil {
+		return common.NewInternalServerError("HISTORY-APPEND-BUILDPAYLOADINSERT " + err.Error())
+	}
+	if _, err = tx.ExecContext(ctx, payloadQuery, payloadArgs...); err != nil {
+		return common.NewInternalServerError("HISTORY-APPEND-EXECPAYLOADINSERT " + err.Error())
 	}
 	return nil
 }
@@ -424,10 +444,17 @@ type latestVersion struct {
 }
 
 func latestVersionTx(ctx context.Context, tx *sql.Tx, table string, identifier string) (latestVersion, error) {
-	query, args, err := goqu.From(table).
-		Select(goqu.L("snapshot::text"), goqu.C("deleted"), goqu.C("row_hash")).
-		Where(goqu.C("identifier").Eq(identifier)).
-		Order(goqu.C("history_id").Desc()).
+	payloadTable, err := historyPayloadTable(table)
+	if err != nil {
+		return latestVersion{}, err
+	}
+	historyAlias := goqu.T(table).As("history")
+	payloadAlias := goqu.T(payloadTable).As("payload")
+	query, args, err := goqu.From(historyAlias).
+		InnerJoin(payloadAlias, goqu.On(historyAlias.Col("history_id").Eq(payloadAlias.Col("history_id")))).
+		Select(goqu.L(`"payload"."snapshot"::text`), historyAlias.Col("deleted"), historyAlias.Col("row_hash")).
+		Where(historyAlias.Col("identifier").Eq(identifier)).
+		Order(historyAlias.Col("history_id").Desc()).
 		Limit(1).
 		ToSQL()
 	if err != nil {
@@ -512,13 +539,20 @@ func SnapshotByDate(ctx context.Context, db *sql.DB, table string, identifier st
 	if db == nil {
 		return nil, common.NewErrBadRequest("HISTORY-GET-NILDB database handle must not be nil")
 	}
-	query, args, err := goqu.From(table).
-		Select(goqu.L("snapshot::text"), goqu.C("deleted")).
+	payloadTable, err := historyPayloadTable(table)
+	if err != nil {
+		return nil, err
+	}
+	historyAlias := goqu.T(table).As("history")
+	payloadAlias := goqu.T(payloadTable).As("payload")
+	query, args, err := goqu.From(historyAlias).
+		InnerJoin(payloadAlias, goqu.On(historyAlias.Col("history_id").Eq(payloadAlias.Col("history_id")))).
+		Select(goqu.L(`"payload"."snapshot"::text`), historyAlias.Col("deleted")).
 		Where(
-			goqu.C("identifier").Eq(identifier),
-			goqu.C("valid_from").Lte(at.UTC()),
+			historyAlias.Col("identifier").Eq(identifier),
+			historyAlias.Col("valid_from").Lte(at.UTC()),
 		).
-		Order(goqu.C("valid_from").Desc(), goqu.C("history_id").Desc()).
+		Order(historyAlias.Col("valid_from").Desc(), historyAlias.Col("history_id").Desc()).
 		Limit(1).
 		ToSQL()
 	if err != nil {
@@ -556,33 +590,40 @@ func RecentRows(ctx context.Context, db *sql.DB, table string, limit int32, curs
 	if err != nil {
 		return nil, "", err
 	}
+	payloadTable, err := historyPayloadTable(table)
+	if err != nil {
+		return nil, "", err
+	}
 
-	query := goqu.From(table).
+	historyAlias := goqu.T(table).As("history")
+	payloadAlias := goqu.T(payloadTable).As("payload")
+	query := goqu.From(historyAlias).
+		InnerJoin(payloadAlias, goqu.On(historyAlias.Col("history_id").Eq(payloadAlias.Col("history_id")))).
 		Select(
-			goqu.C("history_id"),
-			goqu.C("identifier"),
-			goqu.C("change_type"),
-			goqu.L("snapshot::text"),
-			goqu.C("deleted"),
-			goqu.C("administration_created_at_text"),
-			goqu.C("administration_updated_at_text"),
-			goqu.C("operation_time"),
+			historyAlias.Col("history_id"),
+			historyAlias.Col("identifier"),
+			historyAlias.Col("change_type"),
+			goqu.L(`"payload"."snapshot"::text`),
+			historyAlias.Col("deleted"),
+			historyAlias.Col("administration_created_at_text"),
+			historyAlias.Col("administration_updated_at_text"),
+			historyAlias.Col("operation_time"),
 		).
-		Order(goqu.C("history_id").Asc()).
+		Order(historyAlias.Col("history_id").Asc()).
 		Limit(uint(limitInt + 1)) //nolint:gosec // limit is positive int32 and therefore safe on supported platforms.
 	if cursorID > 0 {
-		query = query.Where(goqu.C("history_id").Gt(cursorID))
+		query = query.Where(historyAlias.Col("history_id").Gt(cursorID))
 	}
 	if !createdFrom.IsZero() {
 		query = query.Where(goqu.Or(
-			goqu.C("operation_time").Gte(createdFrom.UTC()),
-			goqu.C("administration_created_at").Gte(createdFrom.UTC()),
+			historyAlias.Col("operation_time").Gte(createdFrom.UTC()),
+			historyAlias.Col("administration_created_at").Gte(createdFrom.UTC()),
 		))
 	}
 	if !updatedFrom.IsZero() {
 		query = query.Where(goqu.Or(
-			goqu.C("operation_time").Gte(updatedFrom.UTC()),
-			goqu.C("administration_updated_at").Gte(updatedFrom.UTC()),
+			historyAlias.Col("operation_time").Gte(updatedFrom.UTC()),
+			historyAlias.Col("administration_updated_at").Gte(updatedFrom.UTC()),
 		))
 	}
 
@@ -748,6 +789,14 @@ func latestRowHashTx(ctx context.Context, tx *sql.Tx, table string, identifier s
 		return "", common.NewInternalServerError("HISTORY-HASH-READPREVIOUS " + err.Error())
 	}
 	return previousHash.String, nil
+}
+
+func historyPayloadTable(table string) (string, error) {
+	payloadTable, ok := payloadTables[table]
+	if !ok {
+		return "", common.NewInternalServerError("HISTORY-PAYLOADTABLE-UNSUPPORTED unsupported history table '" + table + "'")
+	}
+	return payloadTable, nil
 }
 
 // CanonicalJSONHash returns a SHA-256 hash over deterministic JSON.

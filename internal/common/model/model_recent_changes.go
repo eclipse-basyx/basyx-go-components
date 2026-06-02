@@ -25,7 +25,10 @@
 
 package model
 
-import "github.com/FriedJannik/aas-go-sdk/types"
+import (
+	"github.com/FriedJannik/aas-go-sdk/jsonization"
+	"github.com/FriedJannik/aas-go-sdk/types"
+)
 
 // RecentChange contains shared metadata for v3.2 recent-change responses.
 type RecentChange struct {
@@ -37,17 +40,17 @@ type RecentChange struct {
 // AssetAdministrationShellRecentChange describes a changed Asset Administration Shell.
 type AssetAdministrationShellRecentChange struct {
 	RecentChange
-	Id               string                   `json:"id,omitempty"`
-	GlobalAssetId    string                   `json:"globalAssetId,omitempty"`
-	SpecificAssetIds []types.ISpecificAssetID `json:"specificAssetIds,omitempty"`
+	Id               string           `json:"id,omitempty"`
+	GlobalAssetId    string           `json:"globalAssetId,omitempty"`
+	SpecificAssetIds []map[string]any `json:"specificAssetIds,omitempty"`
 }
 
 // SubmodelRecentChange describes a changed Submodel.
 type SubmodelRecentChange struct {
 	RecentChange
-	Id                      string             `json:"id,omitempty"`
-	SemanticId              types.IReference   `json:"semanticId,omitempty"`
-	SupplementalSemanticIds []types.IReference `json:"supplementalSemanticIds,omitempty"`
+	Id                      string           `json:"id,omitempty"`
+	SemanticId              map[string]any   `json:"semanticId,omitempty"`
+	SupplementalSemanticIds []map[string]any `json:"supplementalSemanticIds,omitempty"`
 }
 
 // ConceptDescriptionRecentChange describes a changed Concept Description.
@@ -72,4 +75,38 @@ type GetAllSubmodelRecentChangesResult struct {
 type GetAllConceptDescriptionRecentChangesResult struct {
 	PagingMetadata PagedResultPagingMetadata        `json:"paging_metadata"`
 	Result         []ConceptDescriptionRecentChange `json:"result"`
+}
+
+// JsonableSpecificAssetIDs converts SDK interfaces into JSON-ready recent-change fields.
+func JsonableSpecificAssetIDs(assetIDs []types.ISpecificAssetID) ([]map[string]any, error) {
+	result := make([]map[string]any, 0, len(assetIDs))
+	for _, assetID := range assetIDs {
+		jsonable, err := jsonization.ToJsonable(assetID)
+		if err != nil {
+			return nil, err
+		}
+		result = append(result, jsonable)
+	}
+	return result, nil
+}
+
+// JsonableReference converts an SDK interface into a JSON-ready recent-change field.
+func JsonableReference(reference types.IReference) (map[string]any, error) {
+	if reference == nil {
+		return nil, nil
+	}
+	return jsonization.ToJsonable(reference)
+}
+
+// JsonableReferences converts SDK interfaces into JSON-ready recent-change fields.
+func JsonableReferences(references []types.IReference) ([]map[string]any, error) {
+	result := make([]map[string]any, 0, len(references))
+	for _, reference := range references {
+		jsonable, err := JsonableReference(reference)
+		if err != nil {
+			return nil, err
+		}
+		result = append(result, jsonable)
+	}
+	return result, nil
 }

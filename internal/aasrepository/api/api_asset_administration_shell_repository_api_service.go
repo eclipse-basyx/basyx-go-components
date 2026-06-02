@@ -269,7 +269,10 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) GetAllAssetAdministrat
 			if globalAssetID := assetInformation.GlobalAssetID(); globalAssetID != nil {
 				change.GlobalAssetId = *globalAssetID
 			}
-			change.SpecificAssetIds = assetInformation.SpecificAssetIDs()
+			change.SpecificAssetIds, fromJSONErr = gen.JsonableSpecificAssetIDs(assetInformation.SpecificAssetIDs())
+			if fromJSONErr != nil {
+				return newAPIErrorResponse(fromJSONErr, http.StatusInternalServerError, operation, "SpecificAssetIdsToJsonable"), nil
+			}
 		}
 		changes = append(changes, change)
 	}

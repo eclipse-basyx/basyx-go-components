@@ -156,12 +156,16 @@ func runServer(ctx context.Context, configPath string) error {
 	if err := auth.SetupSecurity(ctx, cfg, apiRouter); err != nil {
 		return err
 	}
+	versioningGuard := history.NewMutationCoverageGuard(apiRouter)
+	apiRouter.Use(versioningGuard.Middleware)
 
-	for _, rt := range aasCtrl.Routes() {
+	for operation, rt := range aasCtrl.Routes() {
+		versioningGuard.ClassifyRoute(operation, rt.Method, rt.Pattern)
 		apiRouter.Method(rt.Method, rt.Pattern, rt.HandlerFunc)
 	}
 
-	for _, rt := range descCtrl.Routes() {
+	for operation, rt := range descCtrl.Routes() {
+		versioningGuard.ClassifyRoute(operation, rt.Method, rt.Pattern)
 		apiRouter.Method(rt.Method, rt.Pattern, rt.HandlerFunc)
 	}
 

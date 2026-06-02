@@ -42,7 +42,7 @@ Implemented history, recent-change, and signing runtime areas from the v3.2 Open
 - AAS Registry and Digital Twin Registry: `/shell-descriptors/$recent-changes`.
 - AAS Environment: `/serialization`, `/upload`, `/shell-descriptors/$recent-changes`, `/shells/$recent-changes`, `/shells/{aasIdentifier}/$history`, `/shells/{aasIdentifier}/$signed`, `/submodels/$recent-changes`, `/submodels/{submodelIdentifier}/$history`, `/submodels/{submodelIdentifier}/$signed`, `/submodels/{submodelIdentifier}/$value/$signed`, `/concept-descriptions/$recent-changes`, and the composed asynchronous operation result/status endpoints.
 - Migration `1_1_0.sql`: adds v3.2 timestamp columns and the enum migration for `Batch`.
-- Migration `1_1_1.sql`: adds history tables, indexes, and PostgreSQL mutation guards.
+- Migration `1_1_1.sql`: adds history metadata and payload tables, indexes, and PostgreSQL mutation guards.
 
 The Submodel Registry does not have a recent-changes endpoint in the official v3.2 profile currently used here.
 
@@ -59,18 +59,24 @@ OpenAPI endpoints checked outside the history/recent/signing scope:
 
 ## History Model
 
-History is stored as append-only JSON snapshots in dedicated tables:
+History metadata is stored in dedicated append-only tables:
 
 - `aas_history`
 - `submodel_history`
 - `concept_description_history`
 - `descriptor_history`
 
-Each history row stores:
+The complete JSON snapshot is stored in a one-to-one payload table:
+
+- `aas_history_payload`
+- `submodel_history_payload`
+- `concept_description_history_payload`
+- `descriptor_history_payload`
+
+Each metadata row stores:
 
 - `identifier`
 - `change_type`: `Created`, `Updated`, or `Deleted`
-- `snapshot`
 - `deleted`
 - `valid_from`
 - `valid_to`: reserved for interval-style history, but not populated or used by the current runtime history resolution
@@ -79,7 +85,9 @@ Each history row stores:
 - audit metadata columns such as `actor_subject`, `request_id`, `endpoint`, and `http_method`
 - tamper-evidence columns: `previous_hash`, `content_hash`, and `row_hash`
 
-On every create, update, or delete, a new immutable event row is appended. Existing history rows are not updated by the runtime. Persistence paths append in the same database transaction as the current-table mutation, including value-only SME updates.
+On every create, update, or delete, a new immutable metadata row and its snapshot payload row are appended. Existing history rows are not updated by the runtime. Both rows are inserted in the same database transaction as the current-table mutation, including value-only SME updates.
+
+Keeping the large JSONB value outside the indexed metadata row narrows recent-change and latest-hash access paths. It does not reduce the total snapshot bytes stored: reads that return or derive snapshots join the one-to-one payload row.
 
 History lookup uses:
 
@@ -106,12 +114,15 @@ The shared implementation lives in `internal/common/history`.
 sequenceDiagram
     participant API as Persistence write path
     participant Live as Current normalized tables
-    participant History as *_history table
+    participant Metadata as *_history table
+    participant Payload as *_history_payload table
     API->>Live: Apply typical current-state mutation in transaction
-    API->>History: Advisory lock(table, identifier)
-    History-->>API: Latest snapshot and row_hash
+    API->>Metadata: Advisory lock(table, identifier)
+    Metadata-->>API: Latest row_hash
+    Payload-->>API: Latest snapshot when required
     API->>API: Apply scoped snapshot mutation
-    API->>History: INSERT complete snapshot with previous_hash
+    API->>Metadata: INSERT event metadata with previous_hash
+    API->>Payload: INSERT complete snapshot payload
     API->>Live: Commit transaction
 ```
 
@@ -201,13 +212,13 @@ Registry synchronization can append additional descriptor history entries when c
 
 ### Guarded PostgreSQL Mode
 
-Schema patch `1_1_1.sql` installs guard triggers on all four history tables. The triggers are disabled by default through the singleton `history_guard_config` row. Each history-aware DB-backed runtime service applies its expected guard state at startup.
+Schema patch `1_1_1.sql` installs guard triggers on all four history metadata tables and all four payload tables. The triggers are disabled by default through the singleton `history_guard_config` row. Each history-aware DB-backed runtime service applies its expected guard state at startup.
 
 ```mermaid
 flowchart TD
-    Insert["INSERT history row"] --> Allowed["Allowed"]
-    Mutate["UPDATE or DELETE history row"] --> Guard{"history_guard_config.enabled"}
-    Truncate["TRUNCATE history table"] --> Guard
+    Insert["INSERT metadata or payload row"] --> Allowed["Allowed"]
+    Mutate["UPDATE or DELETE metadata or payload row"] --> Guard{"history_guard_config.enabled"}
+    Truncate["TRUNCATE metadata or payload table"] --> Guard
     Guard -->|false| Allowed
     Guard -->|true| Reject["Reject: history tables are append-only"]
 ```
@@ -230,9 +241,19 @@ The guard is enabled when history is active and `history.immutability` is `postg
 
 `AuditContext`, `ChangeEvent`, and the anchor interfaces remain extension points. Current runtime middleware does not populate `AuditContext`, and no external anchor client is invoked by the append path yet.
 
+### Fail-Closed Mutation Coverage
+
+History-aware HTTP services install a shared mutation-coverage middleware. Every `POST`, `PUT`, `PATCH`, or `DELETE` request must match an explicitly classified route whenever history is active:
+
+- Versioned routes are allowed and carry a `MutationCoverage` context value with `Versioned: true`.
+- Deliberately non-versioned writes, such as query, invocation, discovery-link, and standalone Submodel Registry routes, are explicit exemptions with `Versioned: false`.
+- An unclassified mutation is rejected before its handler runs with `HISTORY-COVERAGE-UNCLASSIFIED`.
+
+Generated component routes are classified centrally by operation name during server startup. Hand-written routes such as `/bulk/shell-descriptors`, AAS Environment `/upload`, and `/bulk/submodel-descriptors` are classified where they are registered. This makes a forgotten trigger point fail closed instead of committing a current-state write without its required snapshot.
+
 ## Recent Changes
 
-Recent-change endpoints read the same history tables. They are ordered by increasing `history_id`, with cursor-based pagination.
+Recent-change endpoints read indexed metadata from the history tables and join the payload row for the returned page. They are ordered by increasing `history_id`, with cursor-based pagination.
 The default page size is `100`; requests above `1000` are rejected.
 
 ```mermaid
@@ -280,7 +301,7 @@ SET asset_kind = asset_kind + 1
 WHERE asset_kind >= 2;
 ```
 
-History storage is added by `1_1_1.sql`. The patch creates the tables, access-pattern indexes, guard switch, and mutation triggers. It does not backfill existing AAS, Submodels, Concept Descriptions, or descriptors.
+History storage is added by `1_1_1.sql`. The patch creates the metadata and payload tables, access-pattern indexes, guard switch, and mutation triggers. It does not backfill existing AAS, Submodels, Concept Descriptions, or descriptors.
 
 After upgrade:
 
@@ -312,12 +333,13 @@ Recommended follow-up:
 
 ## Scalability
 
-Yes, the database can grow much faster now. Every write creates at least one history row with a JSON snapshot. Submodel-element writes are especially growth-heavy because they snapshot the whole owning Submodel.
+Yes, the database can grow much faster now. Every versioned write creates at least one history metadata row and one JSON snapshot payload row. Submodel-element writes are especially growth-heavy because they snapshot the whole owning Submodel.
 
 Safeguards already implemented:
 
 - History is stored separately from current tables, so normal GET/list endpoints continue to read current tables.
 - Recent changes use indexed metadata instead of scanning current domain tables.
+- Complete JSONB snapshots live in one-to-one payload tables, keeping indexed event rows narrow.
 - History lookup is indexed by identifier and validity range.
 - Latest-snapshot derivation is indexed by identifier and descending `history_id`.
 - Recent-change pagination is cursor-based and reads one extra row for next-cursor detection.
@@ -326,6 +348,7 @@ Safeguards already implemented:
 - SME changes reload only the affected top-level SME root subtree and splice it into the previous Submodel snapshot.
 - Transaction-level advisory locks serialize appends only for the same history table and identifier.
 - Guarded PostgreSQL mode blocks normal `UPDATE`, `DELETE`, and `TRUNCATE` operations on history tables when enabled.
+- Active history mode rejects unclassified HTTP mutations before their handlers run.
 - Delete rows are tombstones, not full copies, for AAS, Submodel, and Concept Description deletes.
 
 Scalability risks that remain:

@@ -57,13 +57,20 @@ func TestAASRepositoryHistoryRecentChangesAndBatchAssetKind(t *testing.T) {
 
 	createdAt := "2026-01-02T03:04:05Z"
 	updatedAtV1 := "2026-01-02T03:04:06Z"
+	specificAssetIDName := "serialNumber"
+	specificAssetIDValue := "history-batch-serial"
 	createBody := fmt.Sprintf(`{
-		"id": %q,
-		"idShort": "HistoryBatchAAS",
-		"modelType": "AssetAdministrationShell",
-		"administration": {"createdAt": %q, "updatedAt": %q},
-		"assetInformation": {"assetKind": "Batch", "assetType": "type-v1", "globalAssetId": %q}
-	}`, aasID, createdAt, updatedAtV1, globalAssetID)
+			"id": %q,
+			"idShort": "HistoryBatchAAS",
+			"modelType": "AssetAdministrationShell",
+			"administration": {"createdAt": %q, "updatedAt": %q},
+			"assetInformation": {
+				"assetKind": "Batch",
+				"assetType": "type-v1",
+				"globalAssetId": %q,
+				"specificAssetIds": [{"name": %q, "value": %q}]
+			}
+		}`, aasID, createdAt, updatedAtV1, globalAssetID, specificAssetIDName, specificAssetIDValue)
 
 	status, err := postResponseStatus(baseURL+"/shells", createBody)
 	require.NoError(t, err)
@@ -85,8 +92,13 @@ func TestAASRepositoryHistoryRecentChangesAndBatchAssetKind(t *testing.T) {
 		"idShort": "HistoryBatchAAS",
 		"modelType": "AssetAdministrationShell",
 		"administration": {"createdAt": %q, "updatedAt": %q},
-		"assetInformation": {"assetKind": "Batch", "assetType": "type-v2", "globalAssetId": %q}
-	}`, aasID, createdAt, updatedAtV2, globalAssetID)
+			"assetInformation": {
+				"assetKind": "Batch",
+				"assetType": "type-v2",
+				"globalAssetId": %q,
+				"specificAssetIds": [{"name": %q, "value": %q}]
+			}
+		}`, aasID, createdAt, updatedAtV2, globalAssetID, specificAssetIDName, specificAssetIDValue)
 
 	_, status, _, err = putJSONResponse(baseURL+"/shells/"+encodedAASID, updateBody)
 	require.NoError(t, err)
@@ -123,6 +135,7 @@ func TestAASRepositoryHistoryRecentChangesAndBatchAssetKind(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, http.StatusOK, status)
 	requireRecentChangesForID(t, recent, aasID, 3)
+	requireRecentSpecificAssetID(t, recent, aasID, specificAssetIDName, specificAssetIDValue)
 	requireRecentChangeTypeForID(t, recent, aasID, "Created")
 	requireRecentChangeTypeForID(t, recent, aasID, "Updated")
 
@@ -182,4 +195,27 @@ func requireRecentChangeTypeForID(t *testing.T, payload map[string]any, id strin
 		}
 	}
 	t.Fatalf("expected recent change id=%s type=%s in payload: %#v", id, changeType, payload)
+}
+
+func requireRecentSpecificAssetID(t *testing.T, payload map[string]any, id string, name string, value string) {
+	t.Helper()
+	result, ok := payload["result"].([]any)
+	require.True(t, ok, "recent changes result must be an array")
+	for _, entry := range result {
+		item, ok := entry.(map[string]any)
+		if !ok || item["id"] != id {
+			continue
+		}
+		specificAssetIDs, ok := item["specificAssetIds"].([]any)
+		if !ok {
+			continue
+		}
+		for _, rawAssetID := range specificAssetIDs {
+			assetID, ok := rawAssetID.(map[string]any)
+			if ok && assetID["name"] == name && assetID["value"] == value {
+				return
+			}
+		}
+	}
+	t.Fatalf("expected recent change id=%s with specific asset id %s=%s in payload: %#v", id, name, value, payload)
 }

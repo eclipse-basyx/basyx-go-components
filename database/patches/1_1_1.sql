@@ -20,7 +20,6 @@ CREATE TABLE IF NOT EXISTS aas_history (
   history_id BIGSERIAL PRIMARY KEY,
   identifier TEXT NOT NULL,
   change_type TEXT NOT NULL,
-  snapshot JSONB NOT NULL,
   deleted BOOLEAN NOT NULL DEFAULT FALSE,
   valid_from TIMESTAMPTZ NOT NULL,
   valid_to TIMESTAMPTZ,
@@ -49,13 +48,17 @@ CREATE TABLE IF NOT EXISTS aas_history (
   key_id TEXT,
   anchor_id TEXT,
   anchor_time TIMESTAMPTZ
+);
+
+CREATE TABLE IF NOT EXISTS aas_history_payload (
+  history_id BIGINT PRIMARY KEY REFERENCES aas_history(history_id) ON DELETE CASCADE,
+  snapshot JSONB NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS submodel_history (
   history_id BIGSERIAL PRIMARY KEY,
   identifier TEXT NOT NULL,
   change_type TEXT NOT NULL,
-  snapshot JSONB NOT NULL,
   deleted BOOLEAN NOT NULL DEFAULT FALSE,
   valid_from TIMESTAMPTZ NOT NULL,
   valid_to TIMESTAMPTZ,
@@ -84,13 +87,17 @@ CREATE TABLE IF NOT EXISTS submodel_history (
   key_id TEXT,
   anchor_id TEXT,
   anchor_time TIMESTAMPTZ
+);
+
+CREATE TABLE IF NOT EXISTS submodel_history_payload (
+  history_id BIGINT PRIMARY KEY REFERENCES submodel_history(history_id) ON DELETE CASCADE,
+  snapshot JSONB NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS concept_description_history (
   history_id BIGSERIAL PRIMARY KEY,
   identifier TEXT NOT NULL,
   change_type TEXT NOT NULL,
-  snapshot JSONB NOT NULL,
   deleted BOOLEAN NOT NULL DEFAULT FALSE,
   valid_from TIMESTAMPTZ NOT NULL,
   valid_to TIMESTAMPTZ,
@@ -121,11 +128,15 @@ CREATE TABLE IF NOT EXISTS concept_description_history (
   anchor_time TIMESTAMPTZ
 );
 
+CREATE TABLE IF NOT EXISTS concept_description_history_payload (
+  history_id BIGINT PRIMARY KEY REFERENCES concept_description_history(history_id) ON DELETE CASCADE,
+  snapshot JSONB NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS descriptor_history (
   history_id BIGSERIAL PRIMARY KEY,
   identifier TEXT NOT NULL,
   change_type TEXT NOT NULL,
-  snapshot JSONB NOT NULL,
   deleted BOOLEAN NOT NULL DEFAULT FALSE,
   valid_from TIMESTAMPTZ NOT NULL,
   valid_to TIMESTAMPTZ,
@@ -154,6 +165,11 @@ CREATE TABLE IF NOT EXISTS descriptor_history (
   key_id TEXT,
   anchor_id TEXT,
   anchor_time TIMESTAMPTZ
+);
+
+CREATE TABLE IF NOT EXISTS descriptor_history_payload (
+  history_id BIGINT PRIMARY KEY REFERENCES descriptor_history(history_id) ON DELETE CASCADE,
+  snapshot JSONB NOT NULL
 );
 
 CREATE INDEX IF NOT EXISTS ix_aas_history_identifier_validity ON aas_history(identifier, valid_from DESC, valid_to);
@@ -232,6 +248,20 @@ CREATE TRIGGER aas_history_prevent_truncate
   FOR EACH STATEMENT
   EXECUTE FUNCTION basyx_prevent_history_table_mutation();
 
+DROP TRIGGER IF EXISTS aas_history_payload_prevent_update_delete ON aas_history_payload;
+CREATE TRIGGER aas_history_payload_prevent_update_delete
+  BEFORE UPDATE OR DELETE
+  ON aas_history_payload
+  FOR EACH ROW
+  EXECUTE FUNCTION basyx_prevent_history_table_mutation();
+
+DROP TRIGGER IF EXISTS aas_history_payload_prevent_truncate ON aas_history_payload;
+CREATE TRIGGER aas_history_payload_prevent_truncate
+  BEFORE TRUNCATE
+  ON aas_history_payload
+  FOR EACH STATEMENT
+  EXECUTE FUNCTION basyx_prevent_history_table_mutation();
+
 DROP TRIGGER IF EXISTS submodel_history_prevent_update_delete ON submodel_history;
 CREATE TRIGGER submodel_history_prevent_update_delete
   BEFORE UPDATE OR DELETE
@@ -243,6 +273,20 @@ DROP TRIGGER IF EXISTS submodel_history_prevent_truncate ON submodel_history;
 CREATE TRIGGER submodel_history_prevent_truncate
   BEFORE TRUNCATE
   ON submodel_history
+  FOR EACH STATEMENT
+  EXECUTE FUNCTION basyx_prevent_history_table_mutation();
+
+DROP TRIGGER IF EXISTS submodel_history_payload_prevent_update_delete ON submodel_history_payload;
+CREATE TRIGGER submodel_history_payload_prevent_update_delete
+  BEFORE UPDATE OR DELETE
+  ON submodel_history_payload
+  FOR EACH ROW
+  EXECUTE FUNCTION basyx_prevent_history_table_mutation();
+
+DROP TRIGGER IF EXISTS submodel_history_payload_prevent_truncate ON submodel_history_payload;
+CREATE TRIGGER submodel_history_payload_prevent_truncate
+  BEFORE TRUNCATE
+  ON submodel_history_payload
   FOR EACH STATEMENT
   EXECUTE FUNCTION basyx_prevent_history_table_mutation();
 
@@ -260,11 +304,39 @@ CREATE TRIGGER concept_description_history_prevent_truncate
   FOR EACH STATEMENT
   EXECUTE FUNCTION basyx_prevent_history_table_mutation();
 
+DROP TRIGGER IF EXISTS concept_description_history_payload_prevent_update_delete ON concept_description_history_payload;
+CREATE TRIGGER concept_description_history_payload_prevent_update_delete
+  BEFORE UPDATE OR DELETE
+  ON concept_description_history_payload
+  FOR EACH ROW
+  EXECUTE FUNCTION basyx_prevent_history_table_mutation();
+
+DROP TRIGGER IF EXISTS concept_description_history_payload_prevent_truncate ON concept_description_history_payload;
+CREATE TRIGGER concept_description_history_payload_prevent_truncate
+  BEFORE TRUNCATE
+  ON concept_description_history_payload
+  FOR EACH STATEMENT
+  EXECUTE FUNCTION basyx_prevent_history_table_mutation();
+
 DROP TRIGGER IF EXISTS descriptor_history_prevent_update_delete ON descriptor_history;
 CREATE TRIGGER descriptor_history_prevent_update_delete
   BEFORE UPDATE OR DELETE
   ON descriptor_history
   FOR EACH ROW
+  EXECUTE FUNCTION basyx_prevent_history_table_mutation();
+
+DROP TRIGGER IF EXISTS descriptor_history_payload_prevent_update_delete ON descriptor_history_payload;
+CREATE TRIGGER descriptor_history_payload_prevent_update_delete
+  BEFORE UPDATE OR DELETE
+  ON descriptor_history_payload
+  FOR EACH ROW
+  EXECUTE FUNCTION basyx_prevent_history_table_mutation();
+
+DROP TRIGGER IF EXISTS descriptor_history_payload_prevent_truncate ON descriptor_history_payload;
+CREATE TRIGGER descriptor_history_payload_prevent_truncate
+  BEFORE TRUNCATE
+  ON descriptor_history_payload
+  FOR EACH STATEMENT
   EXECUTE FUNCTION basyx_prevent_history_table_mutation();
 
 DROP TRIGGER IF EXISTS descriptor_history_prevent_truncate ON descriptor_history;

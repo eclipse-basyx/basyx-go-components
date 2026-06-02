@@ -551,7 +551,7 @@ func TestUpdateSubmodelElementValueOnlyRollsBackWhenHistoryAppendFails(t *testin
 		WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectExec(`SELECT pg_advisory_xact_lock`).
 		WillReturnResult(sqlmock.NewResult(0, 1))
-	mock.ExpectQuery(`SELECT snapshot::text, "deleted", "row_hash" FROM "submodel_history"`).
+	mock.ExpectQuery(`SELECT "payload"."snapshot"::text, "history"."deleted", "history"."row_hash" FROM "submodel_history" AS "history" INNER JOIN "submodel_history_payload" AS "payload"`).
 		WillReturnError(errors.New("history read failed"))
 	mock.ExpectRollback()
 

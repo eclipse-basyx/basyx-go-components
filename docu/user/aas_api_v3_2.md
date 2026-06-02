@@ -94,7 +94,7 @@ Mode semantics:
 Current implementation status:
 
 - Runtime history rows are append-only, hash-chained event rows in `api` and `audit` mode.
-- Schema migration installs PostgreSQL guard triggers. `postgres_guarded` enables them at service startup. When enabled, `UPDATE`, `DELETE`, and `TRUNCATE` on history tables fail with `history tables are append-only`.
+- Schema migration installs PostgreSQL guard triggers. `postgres_guarded` enables them at service startup. When enabled, `UPDATE`, `DELETE`, and `TRUNCATE` on history metadata and payload tables fail with `history tables are append-only`.
 - `external_anchor`, non-zero `retentionDays`, and identity enrichment modes currently fail fast during configuration loading. Their runtime implementations are planned for later work.
 - Audit metadata columns are present, but regular API middleware does not populate the audit context yet.
 - The implementation supports compliance-oriented deployments, but it does not by itself make a deployment legally compliant with any specific regulation.
@@ -115,7 +115,7 @@ flowchart LR
     Current --> Mode{"history.mode"}
     Mode -->|off| Done["No history append"]
     Mode -->|api or audit| Snapshot["Build complete identifiable snapshot"]
-    Snapshot --> History["INSERT into *_history"]
+    Snapshot --> History["INSERT metadata and *_history_payload rows"]
     History --> Read["$history and $recent-changes reads"]
 ```
 
@@ -131,11 +131,13 @@ flowchart TD
 
 This has operational consequences:
 
-- History consumes additional storage for every write and adds hashing plus one history-table insert to the write request.
+- History consumes additional storage for every write and adds hashing plus one metadata insert and one payload insert to the write request.
 - Writes for the same identifiable are serialized briefly while the next hash-chain row is appended. Different identifiers can still proceed independently.
 - Partial updates usually derive the new snapshot from the previous history snapshot. This reduces reads from the normalized backend, but the stored history row is still a complete snapshot.
+- Snapshot JSON is stored in a one-to-one payload table so indexed history metadata rows stay narrow.
 - Schema migration does not backfill existing entities. Historical state from before activation is unavailable.
 - If an existing entity has no history row yet, its first partial update falls back to materializing the current complete identifiable once. Later partial updates can derive snapshots from history.
+- While history is active, an unclassified write endpoint is rejected before its handler runs with `HISTORY-COVERAGE-UNCLASSIFIED`. This prevents a newly added endpoint from silently changing current state without appending its required version.
 
 Eventing placeholders:
 
@@ -292,6 +294,7 @@ Runtime overhead is reduced by:
 
 - Keeping current tables separate from history tables.
 - Using indexed metadata for recent-change queries.
+- Keeping complete JSONB snapshots in one-to-one payload tables outside indexed history metadata rows.
 - Using cursor pagination for recent-change feeds.
 - Deriving partial-update snapshots from the latest history row when possible.
 - Reading only the affected top-level Submodel Element subtree for nested SME changes.

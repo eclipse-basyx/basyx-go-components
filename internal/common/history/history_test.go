@@ -134,8 +134,10 @@ func TestAppendVersionTxInsertsWithoutUpdatingPreviousRows(t *testing.T) {
 		WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectQuery(`SELECT "row_hash" FROM "aas_history"`).
 		WillReturnError(sql.ErrNoRows)
-	mock.ExpectExec(`INSERT INTO "aas_history"`).
-		WillReturnResult(sqlmock.NewResult(1, 1))
+	mock.ExpectQuery(`INSERT INTO "aas_history".*RETURNING "history_id"`).
+		WillReturnRows(sqlmock.NewRows([]string{"history_id"}).AddRow(1))
+	mock.ExpectExec(`INSERT INTO "aas_history_payload"`).
+		WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectCommit()
 
 	tx, err := db.Begin()
@@ -169,10 +171,12 @@ func TestAppendMutatedVersionTxUsesLatestSnapshotAndRowHash(t *testing.T) {
 	mock.ExpectBegin()
 	mock.ExpectExec(`SELECT pg_advisory_xact_lock`).
 		WillReturnResult(sqlmock.NewResult(0, 1))
-	mock.ExpectQuery(`SELECT snapshot::text, "deleted", "row_hash" FROM "submodel_history"`).
+	mock.ExpectQuery(`SELECT "payload"."snapshot"::text, "history"."deleted", "history"."row_hash" FROM "submodel_history" AS "history" INNER JOIN "submodel_history_payload" AS "payload"`).
 		WillReturnRows(sqlmock.NewRows([]string{"snapshot", "deleted", "row_hash"}).
 			AddRow(`{"id":"sm-1","submodelElements":[]}`, false, "previous"))
-	mock.ExpectExec(`INSERT INTO "submodel_history"`).
+	mock.ExpectQuery(`INSERT INTO "submodel_history".*RETURNING "history_id"`).
+		WillReturnRows(sqlmock.NewRows([]string{"history_id"}).AddRow(1))
+	mock.ExpectExec(`INSERT INTO "submodel_history_payload"`).
 		WillReturnResult(sqlmock.NewResult(1, 1))
 	mock.ExpectCommit()
 
@@ -266,7 +270,7 @@ func TestRecentRowsReturnsLastIncludedRowAsNextCursor(t *testing.T) {
 	}()
 
 	operationTime := time.Date(2026, 5, 28, 12, 0, 0, 0, time.UTC)
-	mock.ExpectQuery(`SELECT .*FROM "aas_history".*ORDER BY "history_id" ASC LIMIT 2`).
+	mock.ExpectQuery(`SELECT .*FROM "aas_history" AS "history".*INNER JOIN "aas_history_payload" AS "payload".*ORDER BY "history"."history_id" ASC LIMIT 2`).
 		WillReturnRows(sqlmock.NewRows([]string{
 			"history_id",
 			"identifier",

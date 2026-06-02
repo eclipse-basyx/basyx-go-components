@@ -237,14 +237,18 @@ func NewCheckDBIsEmptyAction(options CheckDBIsEmptyOptions) JSONStepAction {
 }
 
 func defaultCheckDBIsEmptyExcludedTables(extraTables []string) map[string]struct{} {
-	excluded := make(map[string]struct{}, len(extraTables)+6)
+	excluded := make(map[string]struct{}, len(extraTables)+10)
 	for _, table := range []string{
 		"basyxsystem",
 		"history_guard_config",
 		"aas_history",
+		"aas_history_payload",
 		"submodel_history",
+		"submodel_history_payload",
 		"concept_description_history",
+		"concept_description_history_payload",
 		"descriptor_history",
+		"descriptor_history_payload",
 	} {
 		excluded[table] = struct{}{}
 	}
