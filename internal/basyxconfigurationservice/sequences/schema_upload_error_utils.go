@@ -34,6 +34,7 @@ import (
 
 func (su *SchemaUpload) applyRc01Compatibility(schemaToLoad string) error {
 	compatibilitySchemaPath := filepath.Join(filepath.Dir(schemaToLoad), rc01CompatibilitySchemaFileName)
+	//nolint:gosec // only set by config service, not set via user input/config files
 	compatibilitySQL, err := os.ReadFile(compatibilitySchemaPath)
 	if err != nil {
 		return fmt.Errorf("BASYXCFG-SCHEMA-RC01READFILE: %w", err)
@@ -45,5 +46,5 @@ func (su *SchemaUpload) applyRc01Compatibility(schemaToLoad string) error {
 }
 
 func isRc01UpgradeError(err error) bool {
-	return strings.HasSuffix(err.Error(), ERR_CASE_RC01_UPGRADE_FIELD_ERR)
+	return strings.HasSuffix(err.Error(), errCaseRc01UpgradeFieldErr)
 }
