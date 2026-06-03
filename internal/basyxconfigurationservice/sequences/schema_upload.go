@@ -32,10 +32,8 @@ import (
 )
 
 const (
-	schemaFilePath                  = "/app/base.sql"
-	rc01CompatibilitySchemaFileName = "rc1_compatibility.sql"
-	schemaAdvisoryLockID            = int64(860424611912345001)
-	errCaseRc01UpgradeFieldErr      = "pq: column \"db_created_at\" does not exist (42703)"
+	schemaFilePath       = "/app/base.sql"
+	schemaAdvisoryLockID = int64(860424611912345001)
 )
 
 // SchemaUpload uploads the SQL schema to the configured PostgreSQL database.

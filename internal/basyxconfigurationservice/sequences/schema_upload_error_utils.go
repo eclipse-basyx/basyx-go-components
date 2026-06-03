@@ -32,6 +32,11 @@ import (
 	"strings"
 )
 
+const (
+	errCaseRc01UpgradeFieldErr      = "pq: column \"db_created_at\" does not exist (42703)"
+	rc01CompatibilitySchemaFileName = "rc1_compatibility.sql"
+)
+
 func (su *SchemaUpload) applyRc01Compatibility(schemaToLoad string) error {
 	compatibilitySchemaPath := filepath.Join(filepath.Dir(schemaToLoad), rc01CompatibilitySchemaFileName)
 	//nolint:gosec // only set by config service, not set via user input/config files
