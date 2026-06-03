@@ -32,8 +32,10 @@ import (
 )
 
 const (
-	schemaFilePath       = "/app/base.sql"
-	schemaAdvisoryLockID = int64(860424611912345001)
+	schemaFilePath                  = "/app/base.sql"
+	rc01CompatibilitySchemaFileName = "rc1_compatibility.sql"
+	schemaAdvisoryLockID            = int64(860424611912345001)
+	ERR_CASE_RC01_UPGRADE_FIELD_ERR = "pq: column \"db_created_at\" does not exist (42703)"
 )
 
 // SchemaUpload uploads the SQL schema to the configured PostgreSQL database.
@@ -72,7 +74,13 @@ func (su *SchemaUpload) Execute(stepIndex int) (int, error) {
 	}
 
 	if _, err = su.ctx.DB.Exec(string(schemaSQL)); err != nil {
-		return 1, fmt.Errorf("BASYXCFG-SCHEMA-EXECUTE: %w", err)
+		if isRc01UpgradeError(err) {
+			if err = su.applyRc01Compatibility(schemaToLoad); err != nil {
+				return 1, err
+			}
+		}
+
+		return su.Execute(stepIndex)
 	}
 
 	_, _ = fmt.Printf("[Step %d] Schema upload completed\n", stepIndex)
