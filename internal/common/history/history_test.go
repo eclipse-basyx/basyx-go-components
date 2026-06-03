@@ -262,7 +262,7 @@ func TestApplyPostgresGuardConfigRejectsStartupDowngrade(t *testing.T) {
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 
-func TestRecentRowsReturnsLastIncludedRowAsNextCursor(t *testing.T) {
+func TestRecentRowsReturnsNewestRowsFirstAndCursorPaginatesOlderRows(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
 	defer func() {
@@ -270,7 +270,7 @@ func TestRecentRowsReturnsLastIncludedRowAsNextCursor(t *testing.T) {
 	}()
 
 	operationTime := time.Date(2026, 5, 28, 12, 0, 0, 0, time.UTC)
-	mock.ExpectQuery(`SELECT .*FROM "aas_history" AS "history".*INNER JOIN "aas_history_payload" AS "payload".*ORDER BY "history"."history_id" ASC LIMIT 2`).
+	mock.ExpectQuery(`SELECT .*FROM "aas_history" AS "history".*INNER JOIN "aas_history_payload" AS "payload".*ORDER BY "history"."history_id" DESC LIMIT 2`).
 		WillReturnRows(sqlmock.NewRows([]string{
 			"history_id",
 			"identifier",
@@ -281,16 +281,36 @@ func TestRecentRowsReturnsLastIncludedRowAsNextCursor(t *testing.T) {
 			"administration_updated_at_text",
 			"operation_time",
 		}).
-			AddRow(int64(10), "aas-1", ChangeCreated, `{"id":"aas-1"}`, false, nil, nil, operationTime).
+			AddRow(int64(12), "aas-3", ChangeUpdated, `{"id":"aas-3"}`, false, nil, nil, operationTime).
 			AddRow(int64(11), "aas-2", ChangeCreated, `{"id":"aas-2"}`, false, nil, nil, operationTime))
 
 	rows, cursor, err := RecentRows(context.Background(), db, TableAAS, 1, "", time.Time{}, time.Time{})
 	require.NoError(t, err)
 	require.Len(t, rows, 1)
-	require.Equal(t, int64(10), rows[0].HistoryID)
+	require.Equal(t, int64(12), rows[0].HistoryID)
 	require.Equal(t, operationTime.Format(time.RFC3339Nano), rows[0].CreatedAt)
 	require.Equal(t, operationTime.Format(time.RFC3339Nano), rows[0].UpdatedAt)
-	require.Equal(t, "10", cursor)
+	require.Equal(t, "12", cursor)
+
+	mock.ExpectQuery(`SELECT .*FROM "aas_history" AS "history".*INNER JOIN "aas_history_payload" AS "payload".*WHERE \("history"\."history_id" < 12\).*ORDER BY "history"."history_id" DESC LIMIT 2`).
+		WillReturnRows(sqlmock.NewRows([]string{
+			"history_id",
+			"identifier",
+			"change_type",
+			"snapshot",
+			"deleted",
+			"administration_created_at_text",
+			"administration_updated_at_text",
+			"operation_time",
+		}).
+			AddRow(int64(11), "aas-2", ChangeCreated, `{"id":"aas-2"}`, false, nil, nil, operationTime).
+			AddRow(int64(10), "aas-1", ChangeCreated, `{"id":"aas-1"}`, false, nil, nil, operationTime))
+
+	rows, cursor, err = RecentRows(context.Background(), db, TableAAS, 1, cursor, time.Time{}, time.Time{})
+	require.NoError(t, err)
+	require.Len(t, rows, 1)
+	require.Equal(t, int64(11), rows[0].HistoryID)
+	require.Equal(t, "11", cursor)
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 
@@ -313,14 +333,14 @@ func TestFilterRecentRowsScansUntilFilteredPageIsFull(t *testing.T) {
 		switch cursor {
 		case "":
 			return []Row{
-				{HistoryID: 1, Identifier: "skip"},
-				{HistoryID: 2, Identifier: "include"},
-			}, "2", nil
-		case "2":
-			return []Row{
-				{HistoryID: 3, Identifier: "include"},
 				{HistoryID: 4, Identifier: "skip"},
-			}, "4", nil
+				{HistoryID: 3, Identifier: "include"},
+			}, "3", nil
+		case "3":
+			return []Row{
+				{HistoryID: 2, Identifier: "include"},
+				{HistoryID: 1, Identifier: "skip"},
+			}, "2", nil
 		default:
 			t.Fatalf("unexpected cursor %q", cursor)
 			return nil, "", nil
@@ -333,9 +353,9 @@ func TestFilterRecentRowsScansUntilFilteredPageIsFull(t *testing.T) {
 
 	require.NoError(t, err)
 	require.Equal(t, []Row{
-		{HistoryID: 2, Identifier: "include"},
 		{HistoryID: 3, Identifier: "include"},
+		{HistoryID: 2, Identifier: "include"},
 	}, rows)
-	require.Equal(t, "3", cursor)
+	require.Equal(t, "2", cursor)
 	require.Equal(t, 2, fetchCalls)
 }

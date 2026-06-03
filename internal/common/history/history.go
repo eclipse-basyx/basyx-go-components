@@ -576,7 +576,7 @@ func SnapshotByDate(ctx context.Context, db *sql.DB, table string, identifier st
 	return snapshot, nil
 }
 
-// RecentRows returns history rows after cursor, ordered by history id with one look-ahead row for pagination.
+// RecentRows returns history rows before cursor, ordered from newest to oldest with one look-ahead row for pagination.
 func RecentRows(ctx context.Context, db *sql.DB, table string, limit int32, cursor string, createdFrom time.Time, updatedFrom time.Time) ([]Row, string, error) {
 	if db == nil {
 		return nil, "", common.NewErrBadRequest("HISTORY-RECENT-NILDB database handle must not be nil")
@@ -609,10 +609,10 @@ func RecentRows(ctx context.Context, db *sql.DB, table string, limit int32, curs
 			historyAlias.Col("administration_updated_at_text"),
 			historyAlias.Col("operation_time"),
 		).
-		Order(historyAlias.Col("history_id").Asc()).
+		Order(historyAlias.Col("history_id").Desc()).
 		Limit(uint(limitInt + 1)) //nolint:gosec // limit is positive int32 and therefore safe on supported platforms.
 	if cursorID > 0 {
-		query = query.Where(historyAlias.Col("history_id").Gt(cursorID))
+		query = query.Where(historyAlias.Col("history_id").Lt(cursorID))
 	}
 	if !createdFrom.IsZero() {
 		query = query.Where(goqu.Or(

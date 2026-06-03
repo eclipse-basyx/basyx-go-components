@@ -172,6 +172,18 @@ func TestSubmodelRepositoryHistoryTracksSubmodelElementChangesAndRecentDeletes(t
 	require.NoError(t, err)
 	require.Equal(t, http.StatusNotFound, status, "response=%s", string(body))
 
+	status, body, err = requestJSON(http.MethodGet, baseURL+"/submodels/$recent-changes?limit=1", nil)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusOK, status, "response=%s", string(body))
+	recentPage := decodeMap(t, body)
+	requireFirstRecentChangeForIDSubmodel(t, recentPage, submodelID, "Deleted")
+	nextCursor := requireRecentCursor(t, recentPage)
+
+	status, body, err = requestJSON(http.MethodGet, baseURL+"/submodels/$recent-changes?limit=1&cursor="+nextCursor, nil)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusOK, status, "response=%s", string(body))
+	requireFirstRecentChangeForIDSubmodel(t, decodeMap(t, body), submodelID, "Updated")
+
 	status, body, err = requestJSON(http.MethodGet, baseURL+"/submodels/$recent-changes?limit=10", nil)
 	require.NoError(t, err)
 	require.Equal(t, http.StatusOK, status, "response=%s", string(body))
@@ -223,6 +235,27 @@ func requireRecentChangeTypeForIDSubmodel(t *testing.T, payload map[string]any, 
 		}
 	}
 	t.Fatalf("expected recent change id=%s type=%s in payload: %#v", id, changeType, payload)
+}
+
+func requireFirstRecentChangeForIDSubmodel(t *testing.T, payload map[string]any, id string, changeType string) {
+	t.Helper()
+	result, ok := payload["result"].([]any)
+	require.True(t, ok, "recent changes result must be an array")
+	require.NotEmpty(t, result, "recent changes result must not be empty")
+	item, ok := result[0].(map[string]any)
+	require.True(t, ok, "first recent change must be an object")
+	require.Equal(t, id, item["id"], "recent changes must return newest matching change first: %#v", payload)
+	require.Equal(t, changeType, item["type"], "recent changes must return newest matching change first: %#v", payload)
+}
+
+func requireRecentCursor(t *testing.T, payload map[string]any) string {
+	t.Helper()
+	pagingMetadata, ok := payload["paging_metadata"].(map[string]any)
+	require.True(t, ok, "recent changes paging_metadata must be an object")
+	cursor, ok := pagingMetadata["cursor"].(string)
+	require.True(t, ok, "recent changes cursor must be a string")
+	require.NotEmpty(t, cursor, "recent changes cursor must not be empty when more pages exist")
+	return cursor
 }
 
 func requireRecentSubmodelReference(t *testing.T, payload map[string]any, id string, field string, value string) {

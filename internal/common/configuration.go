@@ -75,6 +75,15 @@ var DefaultConfig = struct {
 	GeneralTrustProxyHeaders            bool
 	GeneralTrustedProxyCIDRs            []string
 	GeneralAASPreconfigPaths            []string
+	HistoryConfigMode                   string
+	HistoryConfigRetentionDays          int
+	HistoryConfigImmutability           string
+	HistoryConfigAuditIdentityMode      string
+	EventingEnabled                     bool
+	EventingFormat                      string
+	EventingSinks                       []string
+	EventingOutboxEnabled               bool
+	EventingTopicPrefix                 string
 }{
 	ServerPort:                          5004,
 	ServerContextPath:                   "",
@@ -102,6 +111,15 @@ var DefaultConfig = struct {
 	GeneralTrustProxyHeaders:            false,
 	GeneralTrustedProxyCIDRs:            []string{},
 	GeneralAASPreconfigPaths:            []string{},
+	HistoryConfigMode:                   "off",
+	HistoryConfigRetentionDays:          0,
+	HistoryConfigImmutability:           "none",
+	HistoryConfigAuditIdentityMode:      "none",
+	EventingEnabled:                     false,
+	EventingFormat:                      "cloudevents",
+	EventingSinks:                       []string{},
+	EventingOutboxEnabled:               false,
+	EventingTopicPrefix:                 "basyx",
 }
 
 // PrintSplash displays the BaSyx Go API ASCII art logo to the console.
@@ -664,6 +682,23 @@ func PrintConfiguration(cfg *Config) {
 	} else {
 		lines = append(lines, "  Private Key Path: (not configured)")
 		lines = append(lines, "  Private Key Mounted: false")
+	}
+
+	// History
+	lines = append(lines, "🔹 History/Audit:")
+	add("Mode", cfg.History.Mode, DefaultConfig.HistoryConfigMode)
+	add("Retention Days", cfg.History.RetentionDays, DefaultConfig.HistoryConfigRetentionDays)
+	add("Immutability", cfg.History.Immutability, DefaultConfig.HistoryConfigImmutability)
+	add("Audit Identity Mode", cfg.History.AuditIdentityMode, DefaultConfig.HistoryConfigAuditIdentityMode)
+
+	// Eventing
+	lines = append(lines, "🔹 Eventing:")
+	add("Enabled", cfg.Eventing.Enabled, DefaultConfig.EventingEnabled)
+	if cfg.Eventing.Enabled {
+		add("Format", cfg.Eventing.Format, DefaultConfig.EventingFormat)
+		add("Sinks", cfg.Eventing.Sinks, DefaultConfig.EventingSinks)
+		add("Outbox Enabled", cfg.Eventing.OutboxEnabled, DefaultConfig.EventingOutboxEnabled)
+		add("Topic Prefix", cfg.Eventing.TopicPrefix, DefaultConfig.EventingTopicPrefix)
 	}
 
 	lines = append(lines, divider)

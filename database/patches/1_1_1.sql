@@ -172,25 +172,25 @@ CREATE TABLE IF NOT EXISTS descriptor_history_payload (
   snapshot JSONB NOT NULL
 );
 
-CREATE INDEX IF NOT EXISTS ix_aas_history_identifier_validity ON aas_history(identifier, valid_from DESC, valid_to);
+CREATE INDEX IF NOT EXISTS ix_aas_history_identifier_validity ON aas_history(identifier, valid_from DESC, history_id DESC, valid_to);
 CREATE INDEX IF NOT EXISTS ix_aas_history_identifier_latest ON aas_history(identifier, history_id DESC);
 CREATE INDEX IF NOT EXISTS ix_aas_history_recent ON aas_history(operation_time, history_id);
 CREATE INDEX IF NOT EXISTS ix_aas_history_administration_created ON aas_history(administration_created_at, history_id);
 CREATE INDEX IF NOT EXISTS ix_aas_history_administration_updated ON aas_history(administration_updated_at, history_id);
 CREATE INDEX IF NOT EXISTS ix_aas_history_row_hash ON aas_history(row_hash);
-CREATE INDEX IF NOT EXISTS ix_submodel_history_identifier_validity ON submodel_history(identifier, valid_from DESC, valid_to);
+CREATE INDEX IF NOT EXISTS ix_submodel_history_identifier_validity ON submodel_history(identifier, valid_from DESC, history_id DESC, valid_to);
 CREATE INDEX IF NOT EXISTS ix_submodel_history_identifier_latest ON submodel_history(identifier, history_id DESC);
 CREATE INDEX IF NOT EXISTS ix_submodel_history_recent ON submodel_history(operation_time, history_id);
 CREATE INDEX IF NOT EXISTS ix_submodel_history_administration_created ON submodel_history(administration_created_at, history_id);
 CREATE INDEX IF NOT EXISTS ix_submodel_history_administration_updated ON submodel_history(administration_updated_at, history_id);
 CREATE INDEX IF NOT EXISTS ix_submodel_history_row_hash ON submodel_history(row_hash);
-CREATE INDEX IF NOT EXISTS ix_cd_history_identifier_validity ON concept_description_history(identifier, valid_from DESC, valid_to);
+CREATE INDEX IF NOT EXISTS ix_cd_history_identifier_validity ON concept_description_history(identifier, valid_from DESC, history_id DESC, valid_to);
 CREATE INDEX IF NOT EXISTS ix_cd_history_identifier_latest ON concept_description_history(identifier, history_id DESC);
 CREATE INDEX IF NOT EXISTS ix_cd_history_recent ON concept_description_history(operation_time, history_id);
 CREATE INDEX IF NOT EXISTS ix_cd_history_administration_created ON concept_description_history(administration_created_at, history_id);
 CREATE INDEX IF NOT EXISTS ix_cd_history_administration_updated ON concept_description_history(administration_updated_at, history_id);
 CREATE INDEX IF NOT EXISTS ix_cd_history_row_hash ON concept_description_history(row_hash);
-CREATE INDEX IF NOT EXISTS ix_descriptor_history_identifier_validity ON descriptor_history(identifier, valid_from DESC, valid_to);
+CREATE INDEX IF NOT EXISTS ix_descriptor_history_identifier_validity ON descriptor_history(identifier, valid_from DESC, history_id DESC, valid_to);
 CREATE INDEX IF NOT EXISTS ix_descriptor_history_identifier_latest ON descriptor_history(identifier, history_id DESC);
 CREATE INDEX IF NOT EXISTS ix_descriptor_history_recent ON descriptor_history(operation_time, history_id);
 CREATE INDEX IF NOT EXISTS ix_descriptor_history_administration_created ON descriptor_history(administration_created_at, history_id);
