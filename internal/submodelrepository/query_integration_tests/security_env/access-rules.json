@@ -1,0 +1,164 @@
+{
+  "AllAccessPermissionRules": {
+    "DEFATTRIBUTES": [
+      {
+        "name": "role_attr",
+        "attributes": [{ "CLAIM": "role" }]
+      },
+      {
+        "name": "member_attr",
+        "attributes": [{ "CLAIM": "role" }, { "CLAIM": "clear" }]
+      }
+    ],
+    "DEFOBJECTS": [
+      {
+        "name": "submodels_routes",
+        "objects": [
+          { "ROUTE": "/submodels" },
+          { "ROUTE": "/submodels/*" },
+          { "ROUTE": "/submodels/*/submodel-elements" },
+          { "ROUTE": "/submodels/*/submodel-elements/*" }
+        ]
+      },
+      {
+        "name": "query_routes",
+        "objects": [
+          { "ROUTE": "/query/submodels" }
+        ]
+      }
+    ],
+    "DEFACLS": [
+      {
+        "name": "read_role",
+        "acl": {
+          "USEATTRIBUTES": "role_attr",
+          "RIGHTS": ["READ"],
+          "ACCESS": "ALLOW"
+        }
+      },
+      {
+        "name": "read_member",
+        "acl": {
+          "USEATTRIBUTES": "member_attr",
+          "RIGHTS": ["READ"],
+          "ACCESS": "ALLOW"
+        }
+      },
+      {
+        "name": "admin_all",
+        "acl": {
+          "USEATTRIBUTES": "role_attr",
+          "RIGHTS": ["ALL"],
+          "ACCESS": "ALLOW"
+        }
+      }
+    ],
+    "DEFFORMULAS": [
+      {
+        "name": "always_true",
+        "formula": { "$boolean": true }
+      },
+      {
+        "name": "is_admin",
+        "formula": {
+          "$eq": [
+            { "$attribute": { "CLAIM": "role" } },
+            { "$strVal": "admin" }
+          ]
+        }
+      },
+      {
+        "name": "is_userx",
+        "formula": { "$eq": [ { "$attribute": { "CLAIM": "role" } }, { "$strVal": "editor" } ] }
+      },
+      {
+        "name": "is_usera",
+        "formula": { "$eq": [ { "$attribute": { "CLAIM": "role" } }, { "$strVal": "viewer" } ] }
+      },
+      {
+        "name": "is_usery",
+        "formula": {
+          "$and": [
+            { "$eq": [ { "$attribute": { "CLAIM": "role" } }, { "$strVal": "editor" } ] },
+            { "$eq": [ { "$numCast": { "$attribute": { "CLAIM": "clear" } } }, { "$numVal": 2 } ] }
+          ]
+        }
+      }
+    ],
+    "rules": [
+      {
+        "USEACL": "read_role",
+        "OBJECTS": [{ "ROUTE": "/health" }, { "ROUTE": "/description" }],
+        "USEFORMULA": "always_true"
+      },
+      {
+        "USEACL": "admin_all",
+        "OBJECTS": [{ "ROUTE": "*" }],
+        "USEFORMULA": "is_admin"
+      },
+      {
+        "USEACL": "read_role",
+        "USEOBJECTS": ["submodels_routes", "query_routes"],
+        "USEFORMULA": "is_userx",
+        "FILTERLIST": [
+          {
+            "FRAGMENT": "$sm#semanticId",
+            "CONDITION": {
+              "$eq": [
+                { "$field": "$sm#semanticId.keys[].value" },
+                { "$strVal": "http://acplt.org/SubmodelTemplates/AssetIdentification_4" }
+              ]
+            }
+          },
+          {
+            "FRAGMENT": "$sme.NewTestCollection",
+            "CONDITION":
+                { "$boolean": false }
+          }
+        ]
+      },
+      {
+        "USEACL": "read_role",
+        "USEOBJECTS": ["submodels_routes", "query_routes"],
+        "USEFORMULA": "is_usera",
+        "FILTERLIST": [
+          {
+            "FRAGMENT": "$sm#semanticId",
+            "CONDITION": {
+              "$eq": [
+                { "$field": "$sm#semanticId.keys[].value" },
+                { "$strVal": "http://acplt.org/SubmodelTemplates/AssetIdentification" }
+              ]
+            }
+          },
+          {
+            "FRAGMENT": "$sme.NewTestList",
+            "CONDITION":
+                { "$boolean": false }
+          }
+        ]
+      },
+      {
+        "USEACL": "read_member",
+        "USEOBJECTS": ["submodels_routes", "query_routes"],
+        "USEFORMULA": "is_usery",
+        "FILTERLIST": [
+          {
+            "FRAGMENT": "$sm#semanticId",
+            "CONDITION": {
+              "$eq": [
+                { "$field": "$sm#semanticId.keys[].value" },
+                { "$strVal": "http://acplt.org/SubmodelTemplates/AssetIdentification_4" }
+              ]
+            }
+          },
+          {
+            "FRAGMENT": "$sme.ManufacturerName",
+            "CONDITION":
+                { "$boolean": false }
+          }
+        ]
+      }
+    ]
+  }
+}

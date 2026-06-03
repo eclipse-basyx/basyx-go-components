@@ -1,0 +1,26 @@
+{
+  "$condition": {
+    "$and": [
+      {
+        "$contains": [
+          {
+            "$field": "$sm#id"
+          },
+          {
+            "$strVal": "YERPENDERPENDERP"
+          }
+        ]
+      },
+      {
+        "$eq": [
+          {
+            "$field": "$sme.InstanceId#value"
+          },
+          {
+            "$strVal": "978-8234-234-342"
+          }
+        ]
+      }
+    ]
+  }
+}

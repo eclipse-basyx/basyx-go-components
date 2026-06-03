@@ -1,0 +1,26 @@
+{
+  "$condition": {
+    "$and": [
+      {
+        "$eq": [
+          {
+            "$field": "$sme.NewTestCollection.CollectionProperty#value"
+          },
+          {
+            "$strVal": "collectionValue"
+          }
+        ]
+      },
+      {
+        "$eq": [
+          {
+            "$field": "$sme.NewTestList.ListProperty1#value"
+          },
+          {
+            "$strVal": "wrong"
+          }
+        ]
+      }
+    ]
+  }
+}

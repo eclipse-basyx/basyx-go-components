@@ -1,0 +1,17 @@
+{
+  "$condition": {"$boolean": true },
+  "$filters": [
+      {
+          "$fragment": "$sme",
+          "$condition": {"$eq": [{ "$field": "$sme.NewTestList[0]#value"}, {"$strVal": "listValue1_8"} ] }
+      },
+      {
+          "$fragment": "$sm#semanticId",
+          "$condition": {"$eq": [{ "$field": "$sme#value"}, {"$strVal": "http://acplt.org/ValueId/ACPLT"} ] }
+      },
+      {
+          "$fragment": "$sme.NewTestList",
+          "$condition": {"$ne": [{ "$field": "$sm#idShort"}, {"$strVal": "Identification"} ] }
+      }
+  ]
+}

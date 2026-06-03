@@ -1,0 +1,27 @@
+{
+  "$condition": {
+    "$eq": [
+      {
+        "$field": "$sme#idShort"
+      },
+      {
+        "$strVal": "InstanceId"
+      }
+    ]
+  },
+  "$filters": [
+    {
+      "$fragment": "$sme.InstanceId#value",
+      "$condition": {
+        "$contains": [
+          {
+            "$field": "$sme.InstanceId#value"
+          },
+          {
+            "$strVal": "978"
+          }
+        ]
+      }
+    }
+  ]
+}

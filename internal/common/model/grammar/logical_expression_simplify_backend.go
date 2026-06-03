@@ -380,6 +380,10 @@ func reduceMatchCmp(me MatchExpression, resolve AttributeResolver, items []Value
 
 	left := replaceAttribute(items[0], resolve)
 	right := replaceAttribute(items[1], resolve)
+	if valueContainsAttribute(left) || valueContainsAttribute(right) {
+		b := false
+		return &MatchExpression{Boolean: &b}, SimplifyFalse
+	}
 	isStringOp := op == "$regex" || op == "$contains" || op == "$starts-with" || op == "$ends-with"
 	if !isStringOp {
 		left, right = convertEnumLiteralIfNeeded(left, right)
@@ -450,6 +454,10 @@ func reduceCmp(le LogicalExpression, resolve AttributeResolver, items []Value, o
 
 	left := replaceAttribute(items[0], resolve)
 	right := replaceAttribute(items[1], resolve)
+	if valueContainsAttribute(left) || valueContainsAttribute(right) {
+		b := false
+		return &LogicalExpression{Boolean: &b}, SimplifyFalse
+	}
 	isStringOp := op == "$regex" || op == "$contains" || op == "$starts-with" || op == "$ends-with"
 	if !isStringOp {
 		left, right = convertEnumLiteralIfNeeded(left, right)

@@ -64,3 +64,48 @@ func TestQueryWrapper_SMECondition_ToSQL(t *testing.T) {
 		t.Fatalf("expected args to contain %q, got %#v", "100", args)
 	}
 }
+
+func TestQueryWrapper_SMECondition_ListWildcardValueType_ToSQL(t *testing.T) {
+	jsonStr := `{
+		"Query": {
+			"$condition": {
+				"$eq": [
+					{"$field": "$sme.NewTestList[]#valueType"},
+					{"$strVal": "xs:string"}
+				]
+			}
+		}
+	}`
+
+	var wrapper QueryWrapper
+	if err := json.Unmarshal([]byte(jsonStr), &wrapper); err != nil {
+		t.Fatalf("Failed to unmarshal SME query: %v", err)
+	}
+	if wrapper.Query.Condition == nil {
+		t.Fatal("Expected Condition to be set")
+	}
+
+	whereExpr, _, err := wrapper.Query.Condition.EvaluateToExpression(nil)
+	if err != nil {
+		t.Fatalf("EvaluateToExpression returned error: %v", err)
+	}
+
+	d := goqu.Dialect("postgres")
+	ds := d.From(goqu.T("submodel_element").As("submodel_element")).
+		LeftJoin(goqu.T("property_element").As("property_element"), goqu.On(goqu.I("property_element.id").Eq(goqu.I("submodel_element.id")))).
+		Select(goqu.V(1)).
+		Where(whereExpr).
+		Prepared(true)
+
+	sql, args, err := ds.ToSQL()
+	if err != nil {
+		t.Fatalf("ToSQL returned error: %v", err)
+	}
+
+	if !strings.Contains(sql, `"submodel_element"."idshort_path" LIKE`) {
+		t.Fatalf("expected LIKE idshort_path constraint for [] wildcard, got: %s", sql)
+	}
+	if !argListContains(args, "NewTestList") {
+		t.Fatalf("expected args to contain %q prefix, got %#v", "NewTestList", args)
+	}
+}

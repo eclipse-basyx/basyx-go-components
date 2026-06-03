@@ -555,18 +555,18 @@ func joinPlanConfigForSME() JoinPlanConfig {
 		},
 		GroupKeyForBase: func(base string) (exp.IdentifierExpression, error) {
 			if base == "submodel_element" {
-				return goqu.I("submodel_element.id"), nil
+				return goqu.I("submodel_element.submodel_id"), nil
 			}
 			return nil, fmt.Errorf("unsupported SME base alias %q", base)
 		},
 		RootJoinKey: func() exp.IdentifierExpression {
-			return goqu.I("sme.id")
+			return goqu.I("sme.submodel_id")
 		},
 		RootJoinKeyAlias: func() string {
 			return "sme"
 		},
 		RootJoinKeyColumn: func() string {
-			return "id"
+			return "submodel_id"
 		},
 		Correlatable: func(alias string) bool {
 			return alias == "submodel_element"
@@ -1122,6 +1122,11 @@ func andBindingsForResolvedFieldPaths(resolved []ResolvedFieldPath, predicate ex
 				where = append(where, goqu.I(b.Alias).Eq(*b.Index.intValue))
 			}
 			if b.Index.stringValue != nil {
+				if b.Alias == "submodel_element.idshort_path" && strings.HasSuffix(*b.Index.stringValue, "[]") {
+					prefix := strings.TrimSuffix(*b.Index.stringValue, "[]")
+					where = append(where, goqu.I(b.Alias).Like(goqu.L("? || '[%'", prefix)))
+					continue
+				}
 				where = append(where, goqu.I(b.Alias).Eq(*b.Index.stringValue))
 			}
 		}

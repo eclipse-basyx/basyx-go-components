@@ -1,0 +1,12 @@
+{
+  "$condition": {
+    "$eq": [
+      {
+        "$field": "$sme.NewTestCollection.CollectionProperty#value"
+      },
+      {
+        "$strVal": "collectionValue"
+      }
+    ]
+  }
+}

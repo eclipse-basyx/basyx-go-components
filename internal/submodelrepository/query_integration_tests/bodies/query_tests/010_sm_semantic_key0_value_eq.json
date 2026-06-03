@@ -1,0 +1,12 @@
+{
+  "$condition": {
+    "$eq": [
+      {
+        "$field": "$sm#semanticId.keys[0].value"
+      },
+      {
+        "$strVal": "http://acplt.org/SubmodelTemplates/AssetIdentification"
+      }
+    ]
+  }
+}

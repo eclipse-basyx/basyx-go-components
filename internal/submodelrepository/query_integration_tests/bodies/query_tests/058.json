@@ -1,0 +1,17 @@
+{
+  "$condition": {"$boolean": true },
+  "$filters": [
+      {
+          "$fragment": "$sme#value",
+          "$condition": {"$boolean": false }
+      },
+      {
+          "$fragment": "$sme#idShort",
+          "$condition": {"$boolean": false }
+      },
+      {
+          "$fragment": "$sm#idShort",
+          "$condition": {"$boolean": false }
+      }
+  ]
+}

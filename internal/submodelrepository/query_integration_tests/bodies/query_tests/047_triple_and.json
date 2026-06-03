@@ -1,0 +1,36 @@
+{
+  "$condition": {
+    "$and": [
+      {
+        "$contains": [
+          {
+            "$field": "$sm#id"
+          },
+          {
+            "$strVal": "YERP"
+          }
+        ]
+      },
+      {
+        "$eq": [
+          {
+            "$field": "$sme.InstanceId#valueType"
+          },
+          {
+            "$strVal": "xs:string"
+          }
+        ]
+      },
+      {
+        "$eq": [
+          {
+            "$field": "$sme.InstanceId#valueType"
+          },
+          {
+            "$strVal": "xs:string"
+          }
+        ]
+      }
+    ]
+  }
+}

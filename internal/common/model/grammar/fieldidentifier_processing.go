@@ -36,6 +36,8 @@ import (
 )
 
 var smeIDShortPathArrayIndexPattern = regexp.MustCompile(`\[[^\]]*\]`)
+var smeIDShortPathTerminalIndexPattern = regexp.MustCompile(`(\[[0-9]+\])$`)
+var smeIDShortPathTerminalWildcardPattern = regexp.MustCompile(`(\[\])$`)
 
 // ArrayIndexBinding represents a concrete index access on an array-like
 // segment of a field path that has been normalized into SQL.
@@ -344,7 +346,19 @@ func smeIDShortPathFromField(fieldStr string) (string, bool) {
 	if !ok {
 		return "", false
 	}
+
+	terminalIndex := ""
+	if matches := smeIDShortPathTerminalIndexPattern.FindStringSubmatch(rawPath); len(matches) == 2 {
+		terminalIndex = matches[1]
+	}
+	terminalWildcard := smeIDShortPathTerminalWildcardPattern.MatchString(rawPath)
+
 	path := smeIDShortPathArrayIndexPattern.ReplaceAllString(rawPath, "")
+	if terminalIndex != "" {
+		path += terminalIndex
+	} else if terminalWildcard {
+		path += "[]"
+	}
 	if strings.TrimSpace(path) == "" {
 		return "", false
 	}

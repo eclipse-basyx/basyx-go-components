@@ -33,6 +33,8 @@ import (
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 )
 
+const filterpattern = `^(?:\$aas#(?:idShort|assetInformation\.assetType|assetInformation\.globalAssetId|assetInformation\.specificAssetIds\[[0-9]*\](?:\.externalSubjectId(?:\.keys\[[0-9]*\])?)?|submodels\[[0-9]*\](?:\.keys\[[0-9]*\])?)|\$sm#(?:semanticId(?:\.keys\[[0-9]*\])?|idShort|id)|\$sme(?:\.[A-Za-z](?:[A-Za-z0-9_-]*[A-Za-z0-9_])?(?:\[[0-9]*\])*(?:\.[A-Za-z](?:[A-Za-z0-9_-]*[A-Za-z0-9_])?(?:\[[0-9]*\])*)*)?(?:#(?:semanticId(?:\.keys\[[0-9]*\])?|idShort|value|valueType|language))?|\$cd#idShort|\$aasdesc#(?:idShort|description|displayName|extension|administration|assetKind|assetType|globalAssetId|specificAssetIds\[[0-9]*\](?:\.externalSubjectId(?:\.keys\[[0-9]*\])?)?|endpoints\[[0-9]*\]|submodelDescriptors\[[0-9]*\](?:\.(?:semanticId(?:\.keys\[[0-9]*\])?|idShort|endpoints\[[0-9]*\]))?)|\$smdesc#(?:semanticId(?:\.keys\[[0-9]*\])?|idShort|endpoints\[[0-9]*\]))$`
+
 // FragmentStringPattern represents a string pattern for model references in the AAS grammar.
 //
 // This type defines valid patterns for referencing elements within Asset Administration Shells,
@@ -47,14 +49,12 @@ import (
 //   - $cd#       : Concept Description references
 //   - $aasdesc#  : AAS Descriptor references
 //   - $smdesc#   : Submodel Descriptor references
-//   - $bd#       : Basic Discovery references
 //
 // Examples:
 //   - "$aas#idShort"
 //   - "$sm#semanticId.keys[0]"
 //   - "$sme.property1#value"
 //   - "$aasdesc#endpoints[0].interface"
-//   - "$bd#specificAssetIds[]"
 type FragmentStringPattern string
 
 // UnmarshalJSON implements the json.Unmarshaler interface for FragmentStringPattern.
@@ -76,8 +76,9 @@ func (j *FragmentStringPattern) UnmarshalJSON(value []byte) error {
 	if err := common.UnmarshalAndDisallowUnknownFields(value, &plain); err != nil {
 		return err
 	}
-	if matched, _ := regexp.MatchString(`^(?:\$aas#(?:idShort|assetInformation|assetInformation\.assetType|assetInformation\.globalAssetId|assetInformation\.specificAssetIds\[\d*\](?:\.externalSubjectId(?:\.keys\[\d*\])?)?|submodels|submodels\.keys\[\d*\])|(?:\$sm#(?:semanticId(?:\.keys\[\d*\])?|idShort|id))|(?:\$sme(?:\.(?:[a-zA-Z](?:[a-zA-Z0-9_-]*[a-zA-Z0-9_])?(?:\[\d*\])*)*)*#(?:semanticId(?:\.keys\[\d*\])?|idShort|value|valueType|language))|(?:\$cd#idShort)|(?:\$aasdesc#(?:idShort|assetKind|assetType|globalAssetId|description|displayName|administration|specificAssetIds\[\d*\](?:\.externalSubjectId(?:\.keys\[\d*\])?)?|endpoints\[\d*\]|submodelDescriptors\[\d*\]|submodelDescriptors\[\d*\]\.(?:semanticId(?:\.keys\[\d*\])?|idShort|endpoints\[\d*\])|createdAt))|(?:\$bd#(?:createdAt|specificAssetIds\[\d*\](?:\.externalSubjectId(?:\.keys\[\d*\])?)?))|(?:\$smdesc#(?:semanticId(?:\.keys\[\d*\])?|idShort|endpoints\[\d*\])))$`, string(plain)); !matched {
-		return fmt.Errorf("field %s pattern match: must match %s", "", `^(?:\$aas#(?:idShort|assetInformation|assetInformation\.assetType|assetInformation\.globalAssetId|assetInformation\.specificAssetIds\[\d*\](?:\.externalSubjectId(?:\.keys\[\d*\])?)?|submodels|submodels\.keys\[\d*\])|(?:\$sm#(?:semanticId(?:\.keys\[\d*\])?|idShort|id))|(?:\$sme(?:\.(?:[a-zA-Z](?:[a-zA-Z0-9_-]*[a-zA-Z0-9_])?(?:\[\d*\])*)*)*#(?:semanticId(?:\.keys\[\d*\])?|idShort|value|valueType|language))|(?:\$cd#idShort)|(?:\$aasdesc#(?:idShort|assetKind|assetType|globalAssetId|description|displayName|administration|specificAssetIds\[\d*\](?:\.externalSubjectId(?:\.keys\[\d*\])?)?|endpoints\[\d*\]|submodelDescriptors\[\d*\]|submodelDescriptors\[\d*\]\.(?:semanticId(?:\.keys\[\d*\])?|idShort|endpoints\[\d*\])|createdAt))|(?:\$bd#(?:createdAt|specificAssetIds\[\d*\](?:\.externalSubjectId(?:\.keys\[\d*\])?)?))|(?:\$smdesc#(?:semanticId(?:\.keys\[\d*\])?|idShort|endpoints\[\d*\])))$`)
+
+	if matched, _ := regexp.MatchString(filterpattern, string(plain)); !matched {
+		return fmt.Errorf("field %s pattern match: must match %s", "", filterpattern)
 	}
 	*j = FragmentStringPattern(plain)
 	return nil
