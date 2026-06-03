@@ -40,6 +40,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/FriedJannik/aas-go-sdk/jsonization"
 	"github.com/FriedJannik/aas-go-sdk/types"
@@ -125,6 +126,43 @@ func (s *ConceptDescriptionRepositoryAPIAPIService) GetAllConceptDescriptions(ct
 	}
 
 	return pagedResponse(jsonable, nextCursor), nil
+}
+
+// GetAllConceptDescriptionRecentChanges returns changed Concept Descriptions.
+func (s *ConceptDescriptionRepositoryAPIAPIService) GetAllConceptDescriptionRecentChanges(ctx context.Context, createdFrom time.Time, updatedFrom time.Time, limit int32, cursor string) (model.ImplResponse, error) {
+	decodedCursor := strings.TrimSpace(cursor)
+	if decodedCursor != "" {
+		var decodeErr error
+		decodedCursor, decodeErr = common.DecodeString(decodedCursor)
+		if decodeErr != nil {
+			return common.NewErrorResponse(decodeErr, http.StatusBadRequest, componentName, "GetAllConceptDescriptionRecentChanges", "BadCursor"), nil
+		}
+	}
+
+	rows, nextCursor, err := s.d.GetConceptDescriptionRecentChanges(ctx, limit, decodedCursor, createdFrom, updatedFrom)
+	if err != nil {
+		switch {
+		case common.IsErrBadRequest(err):
+			return common.NewErrorResponse(err, http.StatusBadRequest, componentName, "GetAllConceptDescriptionRecentChanges", "BadRequest"), nil
+		case common.IsErrDenied(err):
+			return common.NewErrorResponse(err, http.StatusForbidden, componentName, "GetAllConceptDescriptionRecentChanges", "Denied"), nil
+		default:
+			return common.NewErrorResponse(err, http.StatusInternalServerError, componentName, "GetAllConceptDescriptionRecentChanges", "Unhandled"), nil
+		}
+	}
+
+	changes := make([]model.ConceptDescriptionRecentChange, 0, len(rows))
+	for _, row := range rows {
+		changes = append(changes, model.ConceptDescriptionRecentChange{
+			RecentChange: model.RecentChange{
+				Type:      row.ChangeType,
+				CreatedAt: row.CreatedAt,
+				UpdatedAt: row.UpdatedAt,
+			},
+			Id: row.Identifier,
+		})
+	}
+	return pagedResponse(changes, nextCursor), nil
 }
 
 // PostConceptDescription - Creates a new Concept Description

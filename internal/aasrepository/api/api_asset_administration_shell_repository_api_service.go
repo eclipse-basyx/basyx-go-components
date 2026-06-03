@@ -20,11 +20,13 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/FriedJannik/aas-go-sdk/jsonization"
 	"github.com/FriedJannik/aas-go-sdk/types"
 	persistencepostgresql "github.com/eclipse-basyx/basyx-go-components/internal/aasrepository/persistence"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/history"
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	submodelapi "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/api"
 	submodelpersistence "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence"
@@ -196,6 +198,157 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) GetAssetAdministration
 	}
 
 	return gen.Response(http.StatusOK, aasMap), nil
+}
+
+func (s *AssetAdministrationShellRepositoryAPIAPIService) GetAllAssetAdministrationShellsRecentChanges(
+	ctx context.Context,
+	assetIds []string,
+	createdFrom time.Time,
+	updatedFrom time.Time,
+	limit int32,
+	cursor string,
+) (gen.ImplResponse, error) {
+	const operation = "GetAllAssetAdministrationShellsRecentChanges"
+
+	decodedCursor, decodeErr := common.DecodeString(cursor)
+	if decodeErr != nil {
+		return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "BadCursor"), nil
+	}
+	assetIDFilter, decodeErr := common.DecodeAssetIDFilter(assetIds)
+	if decodeErr != nil {
+		return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "BadAssetIds"), nil
+	}
+
+	fetch := func(pageLimit int32, pageCursor string) ([]history.Row, string, error) {
+		return s.assetAdministrationShellBackend.GetAssetAdministrationShellRecentChanges(ctx, pageLimit, pageCursor, createdFrom, updatedFrom)
+	}
+	var rows []history.Row
+	var nextCursor string
+	var err error
+	if assetIDFilter.IsEmpty() {
+		rows, nextCursor, err = fetch(limit, decodedCursor)
+	} else {
+		rows, nextCursor, err = history.FilterRecentRows(limit, decodedCursor, fetch, func(row history.Row) (bool, error) {
+			return matchesAASRecentRowAssetFilter(row, assetIDFilter)
+		})
+	}
+	if err != nil {
+		if common.IsErrBadRequest(err) {
+			return newAPIErrorResponse(err, http.StatusBadRequest, operation, "BadRequest"), nil
+		}
+		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "GetRecentChanges"), nil
+	}
+
+	changes := make([]gen.AssetAdministrationShellRecentChange, 0, len(rows))
+	for _, row := range rows {
+		if row.Deleted {
+			changes = append(changes, gen.AssetAdministrationShellRecentChange{
+				RecentChange: gen.RecentChange{
+					Type:      row.ChangeType,
+					CreatedAt: row.CreatedAt,
+					UpdatedAt: row.UpdatedAt,
+				},
+				Id: row.Identifier,
+			})
+			continue
+		}
+
+		aas, fromJSONErr := jsonization.AssetAdministrationShellFromJsonable(row.Snapshot)
+		if fromJSONErr != nil {
+			return newAPIErrorResponse(fromJSONErr, http.StatusInternalServerError, operation, "FromJsonable"), nil
+		}
+		change := gen.AssetAdministrationShellRecentChange{
+			RecentChange: gen.RecentChange{
+				Type:      row.ChangeType,
+				CreatedAt: row.CreatedAt,
+				UpdatedAt: row.UpdatedAt,
+			},
+			Id: aas.ID(),
+		}
+		if assetInformation := aas.AssetInformation(); assetInformation != nil {
+			if globalAssetID := assetInformation.GlobalAssetID(); globalAssetID != nil {
+				change.GlobalAssetId = *globalAssetID
+			}
+			change.SpecificAssetIds, fromJSONErr = gen.JsonableSpecificAssetIDs(assetInformation.SpecificAssetIDs())
+			if fromJSONErr != nil {
+				return newAPIErrorResponse(fromJSONErr, http.StatusInternalServerError, operation, "SpecificAssetIdsToJsonable"), nil
+			}
+		}
+		changes = append(changes, change)
+	}
+
+	return gen.Response(http.StatusOK, gen.GetAllAssetAdministrationShellsRecentChangesResult{
+		PagingMetadata: gen.PagedResultPagingMetadata{Cursor: common.EncodeString(nextCursor)},
+		Result:         changes,
+	}), nil
+}
+
+func matchesAASRecentRowAssetFilter(row history.Row, filter common.AssetIDFilter) (bool, error) {
+	if row.Deleted {
+		return false, nil
+	}
+	aas, err := jsonization.AssetAdministrationShellFromJsonable(row.Snapshot)
+	if err != nil {
+		return false, err
+	}
+	return matchesAASAssetFilter(aas, filter)
+}
+
+func (s *AssetAdministrationShellRepositoryAPIAPIService) GetAssetAdministrationShellByIdSigned(ctx context.Context, aasIdentifier string) (gen.ImplResponse, error) {
+	const operation = "GetAssetAdministrationShellByIdSigned"
+
+	decodedIdentifier, decodeErr := common.DecodeString(aasIdentifier)
+	if decodeErr != nil {
+		return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "MalformedAssetAdministrationShellIdentifier"), nil
+	}
+
+	jwsString, err := s.assetAdministrationShellBackend.GetSignedAssetAdministrationShell(ctx, decodedIdentifier)
+	if err != nil {
+		if common.IsErrNotFound(err) || errors.Is(err, sql.ErrNoRows) {
+			return newAPIErrorResponse(err, http.StatusNotFound, operation, "AssetAdministrationShellNotFound"), nil
+		}
+		if err.Error() == "JWS signing not configured: private key not loaded" {
+			return newAPIErrorResponse(err, http.StatusNotFound, operation, "SigningNotConfigured"), nil
+		}
+		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "GetSignedAssetAdministrationShell"), nil
+	}
+
+	return gen.Response(http.StatusOK, jwsString), nil
+}
+
+func (s *AssetAdministrationShellRepositoryAPIAPIService) GetAssetAdministrationShellVersionByIdAndDate(ctx context.Context, aasIdentifier string, date time.Time) (gen.ImplResponse, error) {
+	const operation = "GetAssetAdministrationShellVersionByIdAndDate"
+
+	decodedIdentifier, decodeErr := common.DecodeString(aasIdentifier)
+	if decodeErr != nil {
+		return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "MalformedAssetAdministrationShellIdentifier"), nil
+	}
+
+	aas, err := s.assetAdministrationShellBackend.GetAssetAdministrationShellByIDAndDate(ctx, decodedIdentifier, date)
+	if err != nil {
+		if common.IsErrNotFound(err) {
+			return newAPIErrorResponse(err, http.StatusNotFound, operation, "AssetAdministrationShellVersionNotFound"), nil
+		}
+		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "GetAssetAdministrationShellByIDAndDate"), nil
+	}
+
+	aasMap, jsonErr := jsonization.ToJsonable(aas)
+	if jsonErr != nil {
+		return newAPIErrorResponse(jsonErr, http.StatusInternalServerError, operation, "ToJsonable"), nil
+	}
+	return gen.Response(http.StatusOK, aasMap), nil
+}
+
+func matchesAASAssetFilter(aas types.IAssetAdministrationShell, filter common.AssetIDFilter) (bool, error) {
+	assetInformation := aas.AssetInformation()
+	if assetInformation == nil {
+		return false, nil
+	}
+	globalAssetID := ""
+	if value := assetInformation.GlobalAssetID(); value != nil {
+		globalAssetID = *value
+	}
+	return filter.Matches(globalAssetID, assetInformation.SpecificAssetIDs())
 }
 
 // PutAssetAdministrationShellById - Creates or updates an existing Asset Administration Shell

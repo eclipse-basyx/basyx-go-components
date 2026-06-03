@@ -1,0 +1,95 @@
+# Copyright (C) 2026 the Eclipse BaSyx Authors and Fraunhofer IESE
+# SPDX-License-Identifier: MIT
+
+services:
+  aas-environment:
+    container_name: aas-environment-history-guarded
+    # image: eclipsebasyx/aasenvironment-go:SNAPSHOT
+    # pull_policy: always
+    build:
+      context: ../..
+      dockerfile: ./cmd/aasenvironmentservice/Dockerfile
+    command: ["/app/aasenvironmentservice"]
+    ports:
+      - "8082:8082"
+    environment:
+      - SERVER_PORT=8082
+      - CORS_ALLOWEDORIGINS=*
+      - CORS_ALLOWEDHEADERS=*
+      - CORS_ALLOWEDCREDENTIALS=true
+      - CORS_ALLOWEDMETHODS=GET,POST,PUT,PATCH,DELETE,OPTIONS
+      - POSTGRES_HOST=db
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=admin
+      - POSTGRES_PASSWORD=admin123
+      - POSTGRES_DBNAME=basyxTestDB
+      - POSTGRES_MAXOPENCONNECTIONS=100
+      - POSTGRES_MAXIDLECONNECTIONS=50
+      - POSTGRES_CONNMAXLIFETIMEMINUTES=5
+      - BASYX_HISTORY_MODE=audit
+      - BASYX_HISTORY_RETENTION_DAYS=0
+      - BASYX_HISTORY_FULL_SNAPSHOT_INTERVAL=1
+      - BASYX_HISTORY_IMMUTABILITY=postgres_guarded
+      - BASYX_AUDIT_IDENTITY_MODE=none
+      - ABAC_ENABLED=false
+      - GENERAL_AASREGISTRYINTEGRATION=true
+      - GENERAL_SUBMODELREGISTRYINTEGRATION=true
+      - GENERAL_DISCOVERYINTEGRATION=true
+      - GENERAL_EXTERNALURL=http://localhost:8082
+      - GENERAL_AAS_PRECONFIG_PATHS=/app/preconfiguration
+    volumes:
+      - ./aas:/app/preconfiguration:ro
+    depends_on:
+      basyx_configuration:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+  aas-ui:
+    container_name: aas-web-ui-history-guarded
+    image: eclipsebasyx/aas-gui:SNAPSHOT
+    pull_policy: always
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./basyx-infra.yml:/basyx-infra.yml:ro
+    environment:
+      - ENDPOINT_CONFIG_AVAILABLE=false
+    depends_on:
+      aas-environment:
+        condition: service_started
+    restart: unless-stopped
+
+  db:
+    container_name: postgres_db_history_guarded
+    image: postgres:18
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: admin123
+      POSTGRES_DB: basyxTestDB
+    command: ["postgres", "-c", "listen_addresses=*"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U admin -d basyxTestDB"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  basyx_configuration:
+    container_name: basyx_configuration_history_guarded
+    # image: eclipsebasyx/basyxconfigurationservice-go:SNAPSHOT
+    # pull_policy: always
+    build:
+      context: ../..
+      dockerfile: ./cmd/basyxconfigurationservice/Dockerfile
+    environment:
+      - POSTGRES_HOST=db
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=admin
+      - POSTGRES_PASSWORD=admin123
+      - POSTGRES_DBNAME=basyxTestDB
+      - POSTGRES_MAXOPENCONNECTIONS=100
+      - POSTGRES_MAXIDLECONNECTIONS=50
+      - POSTGRES_CONNMAXLIFETIMEMINUTES=5
+    depends_on:
+      db:
+        condition: service_healthy

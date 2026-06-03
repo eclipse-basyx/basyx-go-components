@@ -109,7 +109,7 @@ func GetSMEHandlerByModelType(modelType types.ModelType, db *sql.DB) (PostgreSQL
 //
 // Returns:
 //   - error: Error if update fails
-func UpdateNestedElementsValueOnly(db *sql.DB, elems []ValueOnlyElementsToProcess, idShortOrPath string, submodelID string) error {
+func UpdateNestedElementsValueOnly(db *sql.DB, elems []ValueOnlyElementsToProcess, idShortOrPath string, submodelID string, tx *sql.Tx) error {
 	for _, elem := range elems {
 		if elem.IdShortPath == idShortOrPath {
 			continue // Skip the root element as it's already processed
@@ -117,7 +117,7 @@ func UpdateNestedElementsValueOnly(db *sql.DB, elems []ValueOnlyElementsToProces
 		modelType := elem.Element.GetModelType()
 		if modelType == types.ModelTypeFile {
 			// We have to check the database because File could be ambiguous between File and Blob
-			actual, err := GetModelTypeByIdShortPathAndSubmodelID(db, submodelID, elem.IdShortPath)
+			actual, err := GetModelTypeByIdShortPathAndSubmodelIDTx(tx, submodelID, elem.IdShortPath)
 			if err != nil {
 				return err
 			}
@@ -131,7 +131,7 @@ func UpdateNestedElementsValueOnly(db *sql.DB, elems []ValueOnlyElementsToProces
 		if err != nil {
 			return err
 		}
-		err = handler.UpdateValueOnly(submodelID, elem.IdShortPath, elem.Element)
+		err = handler.UpdateValueOnly(submodelID, elem.IdShortPath, elem.Element, tx)
 		if err != nil {
 			return err
 		}
@@ -207,6 +207,19 @@ func UpdateNestedElements(db *sql.DB, elems []SubmodelElementToProcess, idShortO
 // - string: Model type of the submodel element
 // - error: Error if retrieval fails or element is not found
 func GetModelTypeByIdShortPathAndSubmodelID(db *sql.DB, submodelID string, idShortOrPath string) (*types.ModelType, error) {
+	return getModelTypeByIdShortPathAndSubmodelID(db, submodelID, idShortOrPath)
+}
+
+// GetModelTypeByIdShortPathAndSubmodelIDTx retrieves the model type within an existing transaction.
+func GetModelTypeByIdShortPathAndSubmodelIDTx(tx *sql.Tx, submodelID string, idShortOrPath string) (*types.ModelType, error) {
+	return getModelTypeByIdShortPathAndSubmodelID(tx, submodelID, idShortOrPath)
+}
+
+type queryRower interface {
+	QueryRow(query string, args ...any) *sql.Row
+}
+
+func getModelTypeByIdShortPathAndSubmodelID(queryer queryRower, submodelID string, idShortOrPath string) (*types.ModelType, error) {
 	dialect := goqu.Dialect("postgres")
 	resolveQuery, resolveArgs, err := dialect.From("submodel").
 		Select("id").
@@ -217,7 +230,7 @@ func GetModelTypeByIdShortPathAndSubmodelID(db *sql.DB, submodelID string, idSho
 	}
 
 	var submodelDatabaseID int
-	err = db.QueryRow(resolveQuery, resolveArgs...).Scan(&submodelDatabaseID)
+	err = queryer.QueryRow(resolveQuery, resolveArgs...).Scan(&submodelDatabaseID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, common.NewErrNotFound("SMREPO-GETMODELTYPE-SMNOTFOUND Submodel with ID '" + submodelID + "' not found")
@@ -237,7 +250,7 @@ func GetModelTypeByIdShortPathAndSubmodelID(db *sql.DB, submodelID string, idSho
 	}
 
 	var modelType types.ModelType
-	err = db.QueryRow(query, args...).Scan(&modelType)
+	err = queryer.QueryRow(query, args...).Scan(&modelType)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, common.NewErrNotFound("SMREPO-GETMODELTYPE-NOTFOUND Submodel-Element ID-Short: " + idShortOrPath)

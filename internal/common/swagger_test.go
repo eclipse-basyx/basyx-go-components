@@ -10,7 +10,7 @@ import (
 )
 
 func TestDetectPart2SchemaVersion(t *testing.T) {
-	spec := []byte("openapi: 3.0.3\ninfo:\n  version: V3.2.0_SSP-001\n")
+	spec := []byte("openapi: 3.0.3\ninfo:\n  version: V3.2.0\n")
 	version := detectPart2SchemaVersion(spec)
 	if version != "V3.2.0" {
 		t.Fatalf("expected V3.2.0, got %s", version)
@@ -33,7 +33,7 @@ func TestLocalizePart2SchemaReferences_RewritesRemoteAndRelativeRefs(t *testing.
 		t.Fatal("expected local V3.1.1 part2 schema reference")
 	}
 
-	specRelative := []byte("openapi: 3.0.3\ninfo:\n  version: V3.2.0_SSP-001\npaths:\n  /x:\n    get:\n      responses:\n        '400':\n          $ref: '../Part2-API-Schemas/openapi.yaml#/components/responses/bad-request'\n")
+	specRelative := []byte("openapi: 3.0.3\ninfo:\n  version: V3.2.0\npaths:\n  /x:\n    get:\n      responses:\n        '400':\n          $ref: '../Part2-API-Schemas/openapi.yaml#/components/responses/bad-request'\n")
 	localizedRelative := localizePart2SchemaReferences(specRelative, "/api-docs/openapi.yaml")
 	localizedRelativeText := string(localizedRelative)
 	if strings.Contains(localizedRelativeText, "../Part2-API-Schemas/openapi.yaml") {
@@ -124,10 +124,10 @@ func TestInjectVerifyEndpoint_ReflectsSupportedVerifyRequestFormats(t *testing.T
 	}
 }
 
-func TestInjectServerURL_PreservesServerBasePathFromSpec(t *testing.T) {
+func TestInjectServerURL_DoesNotInheritServerBasePathFromSpec(t *testing.T) {
 	spec := []byte("openapi: 3.0.3\nservers:\n- url: 'https://admin-shell.io/api/v3'\npaths:\n  /packages:\n    get:\n      responses:\n        '200':\n          description: ok\n")
 	injected := injectServerURL(spec, "http://localhost:5004")
-	if !strings.Contains(string(injected), "- url: 'http://localhost:5004/api/v3'") {
-		t.Fatal("expected injected server URL to preserve /api/v3 base path")
+	if !strings.Contains(string(injected), "- url: 'http://localhost:5004'") {
+		t.Fatal("expected injected server URL to not inherit /api/v3 base path")
 	}
 }

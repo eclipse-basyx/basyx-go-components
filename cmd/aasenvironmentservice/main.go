@@ -29,6 +29,7 @@ package main
 import (
 	"context"
 	"crypto/rsa"
+	"database/sql"
 	"embed"
 	"flag"
 	"fmt"
@@ -44,6 +45,7 @@ import (
 	aasrepositorydb "github.com/eclipse-basyx/basyx-go-components/internal/aasrepository/persistence"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/asyncbulk"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/history"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/jws"
 	commonmodel "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
@@ -79,6 +81,13 @@ func runServer(ctx context.Context, configPath string) error {
 	if err := commonmodel.SetVerificationMode(cfg.Server.StrictVerification); err != nil {
 		return err
 	}
+	history.Configure(history.Config{
+		Mode:                 cfg.History.Mode,
+		RetentionDays:        cfg.History.RetentionDays,
+		FullSnapshotInterval: cfg.History.FullSnapshotInterval,
+		Immutability:         cfg.History.Immutability,
+		AuditIdentityMode:    cfg.History.AuditIdentityMode,
+	})
 
 	registrySyncConfig, err := aasenvironment.NewRegistrySyncConfig(
 		cfg.General.AASRegistryIntegration,
@@ -118,15 +127,9 @@ func runServer(ctx context.Context, configPath string) error {
 		return err
 	}
 
-	sharedDB, err := common.NewDatabaseConnection(dsn)
+	sharedDB, err := openSharedDatabase(ctx, cfg, dsn)
 	if err != nil {
 		return err
-	}
-	if cfg.Postgres.MaxOpenConnections > 0 {
-		sharedDB.SetMaxOpenConns(cfg.Postgres.MaxOpenConnections)
-	}
-	if cfg.Postgres.MaxIdleConnections > 0 {
-		sharedDB.SetMaxIdleConns(cfg.Postgres.MaxIdleConnections)
 	}
 
 	var privateKey *rsa.PrivateKey
@@ -149,6 +152,7 @@ func runServer(ctx context.Context, configPath string) error {
 	if err != nil {
 		return err
 	}
+	aasRepositoryPersistence.SetJWSPrivateKey(privateKey)
 	submodelRepositoryPersistence, err := submodelrepositorydb.NewSubmodelDatabaseFromDB(sharedDB, privateKey, cfg.Server.StrictVerification)
 	if err != nil {
 		return err
@@ -220,28 +224,43 @@ func runServer(ctx context.Context, configPath string) error {
 	if err = auth.SetupSecurity(ctx, cfg, apiRouter); err != nil {
 		return err
 	}
+	versioningGuard := history.NewMutationCoverageGuard(apiRouter)
+	apiRouter.Use(versioningGuard.Middleware)
 
-	for _, rt := range aasRegistryCtrl.Routes() {
+	for operation, rt := range aasRegistryCtrl.Routes() {
+		versioningGuard.ClassifyRoute(operation, rt.Method, rt.Pattern)
 		apiRouter.Method(rt.Method, rt.Pattern, rt.HandlerFunc)
 	}
-	for _, rt := range smRegistryCtrl.Routes() {
+	for operation, rt := range smRegistryCtrl.Routes() {
+		versioningGuard.ClassifyRoute(operation, rt.Method, rt.Pattern)
 		apiRouter.Method(rt.Method, rt.Pattern, rt.HandlerFunc)
 	}
-	for _, rt := range aasRepositoryCtrl.Routes() {
+	for operation, rt := range aasRepositoryCtrl.Routes() {
+		versioningGuard.ClassifyRoute(operation, rt.Method, rt.Pattern)
 		apiRouter.Method(rt.Method, rt.Pattern, rt.HandlerFunc)
 	}
-	for _, rt := range smRepositoryCtrl.Routes() {
+	for operation, rt := range smRepositoryCtrl.Routes() {
+		versioningGuard.ClassifyRoute(operation, rt.Method, rt.Pattern)
 		apiRouter.Method(rt.Method, rt.Pattern, rt.HandlerFunc)
 	}
-	for _, rt := range cdrCtrl.Routes() {
+	for operation, rt := range cdrCtrl.Routes() {
+		versioningGuard.ClassifyRoute(operation, rt.Method, rt.Pattern)
 		apiRouter.Method(rt.Method, rt.Pattern, rt.HandlerFunc)
 	}
-	for _, rt := range discoveryCtrl.Routes() {
+	for operation, rt := range discoveryCtrl.Routes() {
+		versioningGuard.ClassifyRoute(operation, rt.Method, rt.Pattern)
 		apiRouter.Method(rt.Method, rt.Pattern, rt.HandlerFunc)
 	}
-	for _, rt := range descriptionCtrl.Routes() {
+	for operation, rt := range descriptionCtrl.Routes() {
+		versioningGuard.ClassifyRoute(operation, rt.Method, rt.Pattern)
 		apiRouter.Method(rt.Method, rt.Pattern, rt.HandlerFunc)
 	}
+	versioningGuard.Cover(http.MethodPost, "/bulk/shell-descriptors")
+	versioningGuard.Cover(http.MethodPut, "/bulk/shell-descriptors")
+	versioningGuard.Cover(http.MethodDelete, "/bulk/shell-descriptors")
+	versioningGuard.Exempt(http.MethodPost, "/bulk/submodel-descriptors")
+	versioningGuard.Exempt(http.MethodPut, "/bulk/submodel-descriptors")
+	versioningGuard.Exempt(http.MethodDelete, "/bulk/submodel-descriptors")
 	aasBulkHandler.RegisterRoutes(apiRouter, true)
 	smBulkHandler.RegisterRoutes(apiRouter, false)
 
@@ -249,6 +268,7 @@ func runServer(ctx context.Context, configPath string) error {
 
 	// Register /upload endpoint
 	uploadService := aasenvironment.NewUploadAPIService(persistence, customAASRepository, customSMRepository)
+	versioningGuard.Cover(http.MethodPost, "/upload")
 	aasenvironment.RegisterUploadAPI(apiRouter, uploadService, cfg.General.UploadMaxSizeBytes)
 	aasenvironment.RegisterSerializationAPI(apiRouter, serializationService)
 
@@ -289,6 +309,30 @@ func runServer(ctx context.Context, configPath string) error {
 		return fmt.Errorf("AASENV-SRV-SHUTDOWN %w", err)
 	}
 	return nil
+}
+
+func openSharedDatabase(ctx context.Context, cfg *common.Config, dsn string) (*sql.DB, error) {
+	db, err := common.NewDatabaseConnection(dsn)
+	if err != nil {
+		return nil, err
+	}
+	configurePostgresPool(db, cfg.Postgres)
+	if err = history.ApplyPostgresGuardConfig(ctx, db); err != nil {
+		return nil, err
+	}
+	return db, nil
+}
+
+func configurePostgresPool(db *sql.DB, cfg common.PostgresConfig) {
+	if cfg.MaxOpenConnections > 0 {
+		db.SetMaxOpenConns(cfg.MaxOpenConnections)
+	}
+	if cfg.MaxIdleConnections > 0 {
+		db.SetMaxIdleConns(cfg.MaxIdleConnections)
+	}
+	if cfg.ConnMaxLifetimeMinutes > 0 {
+		db.SetConnMaxLifetime(time.Duration(cfg.ConnMaxLifetimeMinutes) * time.Minute)
+	}
 }
 
 func main() {

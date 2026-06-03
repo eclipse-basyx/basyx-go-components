@@ -225,24 +225,41 @@ func NewCheckDBIsEmptyAction(options CheckDBIsEmptyOptions) JSONStepAction {
 		schema = "public"
 	}
 
-	excluded := make(map[string]struct{}, len(options.ExcludedTables))
-	// System metadata table is expected to contain one version row after schema initialization.
-	excluded["basyxsystem"] = struct{}{}
-	for _, table := range options.ExcludedTables {
-		trimmed := strings.TrimSpace(table)
-		if trimmed == "" {
-			continue
-		}
-		excluded[strings.ToLower(trimmed)] = struct{}{}
-	}
+	excluded := defaultCheckDBIsEmptyExcludedTables(options.ExcludedTables)
 
 	return func(t *testing.T, _ *JSONSuiteRunner, _ JSONSuiteStep, _ int) {
 		require.NotEmpty(t, strings.TrimSpace(options.DSN), "TESTENV-CHECKDB-MISSING-DSN")
 
 		nonEmpty, err := listNonEmptyTables(driver, options.DSN, schema, excluded)
 		require.NoError(t, err)
-		require.Emptyf(t, nonEmpty, "Expected all tables empty, but found rows in: %v", nonEmpty)
+		require.Emptyf(t, nonEmpty, "Expected all domain tables empty, but found rows in: %v", nonEmpty)
 	}
+}
+
+func defaultCheckDBIsEmptyExcludedTables(extraTables []string) map[string]struct{} {
+	excluded := make(map[string]struct{}, len(extraTables)+10)
+	for _, table := range []string{
+		"basyxsystem",
+		"history_guard_config",
+		"aas_history",
+		"aas_history_payload",
+		"submodel_history",
+		"submodel_history_payload",
+		"concept_description_history",
+		"concept_description_history_payload",
+		"descriptor_history",
+		"descriptor_history_payload",
+	} {
+		excluded[table] = struct{}{}
+	}
+	for _, table := range extraTables {
+		trimmed := strings.TrimSpace(table)
+		if trimmed == "" {
+			continue
+		}
+		excluded[strings.ToLower(trimmed)] = struct{}{}
+	}
+	return excluded
 }
 
 func NewCheckSubmodelAbsentAction(options CheckSubmodelAbsentOptions) JSONStepAction {

@@ -194,18 +194,7 @@ func (p PostgreSQLAnnotatedRelationshipElementHandler) Update(submodelID string,
 //
 // Returns:
 //   - error: An error if the update operation fails
-func (p PostgreSQLAnnotatedRelationshipElementHandler) UpdateValueOnly(submodelID string, idShortOrPath string, valueOnly gen.SubmodelElementValue) error {
-	// Start transaction
-	tx, err := p.db.Begin()
-	if err != nil {
-		return err
-	}
-	defer func() {
-		if err != nil {
-			_ = tx.Rollback()
-		}
-	}()
-
+func (p PostgreSQLAnnotatedRelationshipElementHandler) UpdateValueOnly(submodelID string, idShortOrPath string, valueOnly gen.SubmodelElementValue, tx *sql.Tx) error {
 	elems, err := buildElementsToProcessStackValueOnly(p.db, submodelID, idShortOrPath, valueOnly)
 	if err != nil {
 		return err
@@ -275,13 +264,12 @@ func (p PostgreSQLAnnotatedRelationshipElementHandler) UpdateValueOnly(submodelI
 		}
 	}
 
-	err = UpdateNestedElementsValueOnly(p.db, elems, idShortOrPath, submodelID)
+	err = UpdateNestedElementsValueOnly(p.db, elems, idShortOrPath, submodelID, tx)
 	if err != nil {
 		return err
 	}
 
-	err = tx.Commit()
-	return err
+	return nil
 }
 
 // Delete removes an AnnotatedRelationshipElement identified by its idShort or path from the database.

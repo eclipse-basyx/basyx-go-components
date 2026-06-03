@@ -18,6 +18,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"time"
 
 	aasjsonization "github.com/FriedJannik/aas-go-sdk/jsonization"
 	aasverification "github.com/FriedJannik/aas-go-sdk/verification"
@@ -106,6 +107,11 @@ func (c *SubmodelRepositoryAPIAPIController) Routes() Routes {
 			strings.ToUpper("Get"),
 			c.contextPath + "/submodels/$path",
 			c.GetAllSubmodelsPath,
+		},
+		"GetAllSubmodelRecentChanges": Route{
+			strings.ToUpper("Get"),
+			c.contextPath + "/submodels/$recent-changes",
+			c.GetAllSubmodelRecentChanges,
 		},
 		"GetSubmodelById": Route{
 			strings.ToUpper("Get"),
@@ -297,10 +303,30 @@ func (c *SubmodelRepositoryAPIAPIController) Routes() Routes {
 			c.contextPath + "/submodels/{submodelIdentifier}/$signed",
 			c.GetSignedSubmodelByID,
 		},
+		"PutSubmodelByIdSigned": Route{
+			strings.ToUpper("Put"),
+			c.contextPath + "/submodels/{submodelIdentifier}/$signed",
+			c.PutSubmodelByID,
+		},
+		"PatchSubmodelByIdSigned": Route{
+			strings.ToUpper("Patch"),
+			c.contextPath + "/submodels/{submodelIdentifier}/$signed",
+			c.PatchSubmodelByID,
+		},
+		"DeleteSubmodelByIdSigned": Route{
+			strings.ToUpper("Delete"),
+			c.contextPath + "/submodels/{submodelIdentifier}/$signed",
+			c.DeleteSubmodelByID,
+		},
 		"GetSignedSubmodelByIDValueOnly": Route{
 			strings.ToUpper("Get"),
 			c.contextPath + "/submodels/{submodelIdentifier}/$value/$signed",
 			c.GetSignedSubmodelByIDValueOnly,
+		},
+		"GetSubmodelByIdAndDate": Route{
+			strings.ToUpper("Get"),
+			c.contextPath + "/submodels/{submodelIdentifier}/$history",
+			c.GetSubmodelByIdAndDate,
 		},
 	}
 }
@@ -780,6 +806,88 @@ func (c *SubmodelRepositoryAPIAPIController) GetSignedSubmodelByIDValueOnly(w ht
 		return
 	}
 	// If no error, encode the body and the result code
+	_ = EncodeJSONResponse(result.Body, &result.Code, w)
+}
+
+// GetAllSubmodelRecentChanges - Returns information about all Submodels that have been changed recently
+func (c *SubmodelRepositoryAPIAPIController) GetAllSubmodelRecentChanges(w http.ResponseWriter, r *http.Request) {
+	query, err := parseQuery(r.URL.RawQuery)
+	if err != nil {
+		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
+		return
+	}
+	var createdFromParam time.Time
+	if query.Has("createdFrom") {
+		createdFromParam, err = parseTime(query.Get("createdFrom"))
+		if err != nil {
+			c.errorHandler(w, r, &ParsingError{Param: "createdFrom", Err: err}, nil)
+			return
+		}
+	}
+	var updatedFromParam time.Time
+	if query.Has("updatedFrom") {
+		updatedFromParam, err = parseTime(query.Get("updatedFrom"))
+		if err != nil {
+			c.errorHandler(w, r, &ParsingError{Param: "updatedFrom", Err: err}, nil)
+			return
+		}
+	}
+	var limitParam int32
+	if query.Has("limit") {
+		limitParam, err = parseNumericParameter[int32](
+			query.Get("limit"),
+			WithParse[int32](parseInt32),
+			WithMinimum[int32](1),
+		)
+		if err != nil {
+			c.errorHandler(w, r, &ParsingError{Param: "limit", Err: err}, nil)
+			return
+		}
+	}
+
+	result, err := c.service.GetAllSubmodelRecentChanges(r.Context(), query.Get("semanticId"), createdFromParam, updatedFromParam, limitParam, query.Get("cursor"))
+	if err != nil {
+		c.errorHandler(w, r, err, &result)
+		return
+	}
+	_ = EncodeJSONResponse(result.Body, &result.Code, w)
+}
+
+// GetSubmodelByIdAndDate - Returns a specific Submodel valid at a specific point in time
+func (c *SubmodelRepositoryAPIAPIController) GetSubmodelByIdAndDate(w http.ResponseWriter, r *http.Request) {
+	query, err := parseQuery(r.URL.RawQuery)
+	if err != nil {
+		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
+		return
+	}
+	submodelIdentifierParam := chi.URLParam(r, "submodelIdentifier")
+	if submodelIdentifierParam == "" {
+		c.errorHandler(w, r, &RequiredError{"submodelIdentifier"}, nil)
+		return
+	}
+	if !query.Has("date") {
+		c.errorHandler(w, r, &RequiredError{"date"}, nil)
+		return
+	}
+	dateParam, err := parseTime(query.Get("date"))
+	if err != nil {
+		c.errorHandler(w, r, &ParsingError{Param: "date", Err: err}, nil)
+		return
+	}
+	levelParam := "deep"
+	if query.Has("level") {
+		levelParam = query.Get("level")
+	}
+	extentParam := "withoutBlobValue"
+	if query.Has("extent") {
+		extentParam = query.Get("extent")
+	}
+
+	result, err := c.service.GetSubmodelByIdAndDate(r.Context(), submodelIdentifierParam, levelParam, extentParam, dateParam)
+	if err != nil {
+		c.errorHandler(w, r, err, &result)
+		return
+	}
 	_ = EncodeJSONResponse(result.Body, &result.Code, w)
 }
 

@@ -184,7 +184,7 @@ func (p PostgreSQLReferenceElementHandler) Update(submodelID string, idShortOrPa
 //
 // Returns:
 //   - error: Any error encountered during type assertion, marshaling, or database operations
-func (p PostgreSQLReferenceElementHandler) UpdateValueOnly(submodelID string, idShortOrPath string, valueOnly gen.SubmodelElementValue) error {
+func (p PostgreSQLReferenceElementHandler) UpdateValueOnly(submodelID string, idShortOrPath string, valueOnly gen.SubmodelElementValue, tx *sql.Tx) error {
 	refElemVal, ok := valueOnly.(gen.ReferenceElementValue)
 	if !ok {
 		return common.NewErrBadRequest("valueOnly is not of type ReferenceElementValue")
@@ -195,7 +195,7 @@ func (p PostgreSQLReferenceElementHandler) UpdateValueOnly(submodelID string, id
 	if err != nil {
 		return err
 	}
-	smDbID, err := persistenceutils.GetSubmodelDatabaseIDFromDB(p.db, submodelID)
+	smDbID, err := persistenceutils.GetSubmodelDatabaseID(tx, submodelID)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return common.NewErrNotFound("submodel not found")
@@ -221,7 +221,7 @@ func (p PostgreSQLReferenceElementHandler) UpdateValueOnly(submodelID string, id
 		return err
 	}
 
-	_, err = p.db.Exec(query, args...)
+	_, err = tx.Exec(query, args...)
 	return err
 }
 
