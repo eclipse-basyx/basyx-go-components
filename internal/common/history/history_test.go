@@ -96,6 +96,16 @@ func TestAuditContextRoundTrip(t *testing.T) {
 	require.Equal(t, expected, actual)
 }
 
+func TestConfigureDefaultsFullSnapshotInterval(t *testing.T) {
+	t.Cleanup(func() {
+		Configure(Config{Mode: ModeOff, Immutability: ImmutabilityNone, AuditIdentityMode: AuditIdentityNone})
+	})
+
+	Configure(Config{Mode: ModeAPI, Immutability: ImmutabilityNone, AuditIdentityMode: AuditIdentityNone})
+
+	require.Equal(t, DefaultFullSnapshotInterval, ActiveConfig().FullSnapshotInterval)
+}
+
 func TestComputeHistoryRowHashIncludesAuditMetadata(t *testing.T) {
 	t.Parallel()
 
@@ -111,6 +121,29 @@ func TestComputeHistoryRowHashIncludesAuditMetadata(t *testing.T) {
 	require.NoError(t, err)
 
 	event.ActorSubject = "subject-b"
+	hashB, err := ComputeHistoryRowHash(event)
+	require.NoError(t, err)
+
+	require.NotEqual(t, hashA, hashB)
+}
+
+func TestComputeHistoryRowHashIncludesPayloadMetadata(t *testing.T) {
+	t.Parallel()
+
+	event := ChangeEvent{
+		EntityType:   TableAAS,
+		Identifier:   "aas-1",
+		ChangeType:   ChangeUpdated,
+		Timestamp:    time.Date(2026, 5, 28, 12, 0, 0, 0, time.UTC),
+		PayloadType:  PayloadTypeSnapshot,
+		ContentHash:  "content",
+		PayloadHash:  "payload-a",
+		PreviousHash: "previous",
+	}
+	hashA, err := ComputeHistoryRowHash(event)
+	require.NoError(t, err)
+
+	event.PayloadHash = "payload-b"
 	hashB, err := ComputeHistoryRowHash(event)
 	require.NoError(t, err)
 

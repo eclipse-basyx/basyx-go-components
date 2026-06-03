@@ -89,15 +89,22 @@ const (
 	DefaultRecentChangesLimit int32 = 100
 	// MaxRecentChangesLimit bounds snapshot loading for one recent-change request.
 	MaxRecentChangesLimit int32 = 1000
+	// DefaultFullSnapshotInterval stores every history row as a full snapshot.
+	DefaultFullSnapshotInterval = 1
+	// PayloadTypeSnapshot marks a directly readable stored snapshot payload.
+	PayloadTypeSnapshot = "snapshot"
+	// PayloadTypeDiff is reserved for future compact diff payload rows.
+	PayloadTypeDiff = "diff"
 )
 
 var (
 	configMu     sync.RWMutex
 	activeConfig = Config{
-		Mode:              ModeOff,
-		RetentionDays:     0,
-		Immutability:      ImmutabilityNone,
-		AuditIdentityMode: AuditIdentityNone,
+		Mode:                 ModeOff,
+		RetentionDays:        0,
+		FullSnapshotInterval: DefaultFullSnapshotInterval,
+		Immutability:         ImmutabilityNone,
+		AuditIdentityMode:    AuditIdentityNone,
 	}
 	payloadTables = map[string]string{
 		TableAAS:        "aas_history_payload",
@@ -135,7 +142,9 @@ type ChangeEvent struct {
 	ClientID      string
 	Endpoint      string
 	HTTPMethod    string
+	PayloadType   string
 	ContentHash   string
+	PayloadHash   string
 	PreviousHash  string
 	RowHash       string
 }
@@ -210,10 +219,11 @@ func (NoopAnchorClient) Anchor(_ context.Context, _ AnchorBatch) (*AnchorResult,
 
 // Config controls the lightweight history/audit behavior.
 type Config struct {
-	Mode              string
-	RetentionDays     int
-	Immutability      string
-	AuditIdentityMode string
+	Mode                 string
+	RetentionDays        int
+	FullSnapshotInterval int
+	Immutability         string
+	AuditIdentityMode    string
 }
 
 // SnapshotMutator applies a scoped change to an existing history snapshot.
@@ -347,6 +357,7 @@ func appendVersionWithPreviousHashTx(ctx context.Context, tx *sql.Tx, table stri
 	if err != nil {
 		return common.NewInternalServerError("HISTORY-APPEND-CONTENTHASH " + err.Error())
 	}
+	payloadHash := contentHash
 	audit := FromContext(ctx)
 	event := ChangeEvent{
 		EntityType:    table,
@@ -355,7 +366,9 @@ func appendVersionWithPreviousHashTx(ctx context.Context, tx *sql.Tx, table stri
 		Timestamp:     now,
 		Snapshot:      snapshot,
 		Deleted:       deleted,
+		PayloadType:   PayloadTypeSnapshot,
 		ContentHash:   contentHash,
+		PayloadHash:   payloadHash,
 		PreviousHash:  previousHash,
 		RequestID:     audit.RequestID,
 		CorrelationID: audit.CorrelationID,
@@ -380,7 +393,9 @@ func appendVersionWithPreviousHashTx(ctx context.Context, tx *sql.Tx, table stri
 		"administration_updated_at_text": updatedAt,
 		"administration_created_at":      nullableTimestamp(createdAt),
 		"administration_updated_at":      nullableTimestamp(updatedAt),
+		"payload_type":                   PayloadTypeSnapshot,
 		"content_hash":                   contentHash,
+		"payload_hash":                   payloadHash,
 		"previous_hash":                  previousHash,
 		"row_hash":                       rowHash,
 		"actor_subject":                  audit.ActorSubject,
@@ -484,6 +499,9 @@ func normalizeConfig(cfg Config) Config {
 	cfg.AuditIdentityMode = normalizeAuditIdentityMode(cfg.AuditIdentityMode)
 	if cfg.RetentionDays < 0 {
 		cfg.RetentionDays = 0
+	}
+	if cfg.FullSnapshotInterval < 1 {
+		cfg.FullSnapshotInterval = DefaultFullSnapshotInterval
 	}
 	return cfg
 }
@@ -817,7 +835,9 @@ func ComputeHistoryRowHash(event ChangeEvent) (string, error) {
 		"changeType":    event.ChangeType,
 		"timestamp":     event.Timestamp.UTC().Format(time.RFC3339Nano),
 		"deleted":       event.Deleted,
+		"payloadType":   event.PayloadType,
 		"contentHash":   event.ContentHash,
+		"payloadHash":   event.PayloadHash,
 		"previousHash":  event.PreviousHash,
 		"requestId":     event.RequestID,
 		"correlationId": event.CorrelationID,

@@ -72,6 +72,7 @@ Environment variables:
 
 - `BASYX_HISTORY_MODE`: `off`, `api`, or `audit`. Default is `off`.
 - `BASYX_HISTORY_RETENTION_DAYS`: must remain `0`. Automatic cleanup is not implemented yet.
+- `BASYX_HISTORY_FULL_SNAPSHOT_INTERVAL`: must remain `1`. This means every history row stores a complete snapshot. Larger intervals are reserved for later compact, diff-backed history storage.
 - `BASYX_HISTORY_IMMUTABILITY`: `none` or `postgres_guarded`. Default is `none`.
 - `BASYX_AUDIT_IDENTITY_MODE`: must remain `none`. Automatic identity enrichment is not implemented yet.
 
@@ -81,6 +82,7 @@ Equivalent YAML:
 history:
   mode: off
   retentionDays: 0
+  fullSnapshotInterval: 1
   immutability: none
   auditIdentityMode: none
 ```
@@ -95,7 +97,7 @@ Current implementation status:
 
 - Runtime history rows are append-only, hash-chained event rows in `api` and `audit` mode.
 - Schema migration installs PostgreSQL guard triggers. `postgres_guarded` enables them at service startup. When enabled, `UPDATE`, `DELETE`, and `TRUNCATE` on history metadata and payload tables fail with `history tables are append-only`.
-- `external_anchor`, non-zero `retentionDays`, and identity enrichment modes currently fail fast during configuration loading. Their runtime implementations are planned for later work.
+- `external_anchor`, non-zero `retentionDays`, `fullSnapshotInterval` values greater than `1`, and identity enrichment modes currently fail fast during configuration loading. Their runtime implementations are planned for later work.
 - Audit metadata columns are present, but regular API middleware does not populate the audit context yet.
 - The implementation supports compliance-oriented deployments, but it does not by itself make a deployment legally compliant with any specific regulation.
 
@@ -108,6 +110,8 @@ See `examples/BaSyxHistoryAuditGuardedExample` for a Docker Compose setup with a
 ## What Activating Versioning Means
 
 When versioning is active, each supported identifiable create, update, or delete appends a new row to a dedicated history table. The row stores a complete identifiable snapshot, not only the changed field. A small nested change can therefore create a history row close to the size of the owning identifiable.
+
+`history.fullSnapshotInterval` is already part of the configuration so later compact history storage can be added without changing the configuration contract. The only supported value in this PR is `1`, which is equivalent to "create a full snapshot for every version". Future diff-backed storage is expected to use values greater than `1` to keep one full checkpoint and then store compact diffs until the next checkpoint. Until that implementation exists, larger values fail fast instead of being silently ignored.
 
 ```mermaid
 flowchart LR
@@ -134,7 +138,7 @@ This has operational consequences:
 - History consumes additional storage for every write and adds hashing plus one metadata insert and one payload insert to the write request.
 - Writes for the same identifiable are serialized briefly while the next hash-chain row is appended. Different identifiers can still proceed independently.
 - Partial updates usually derive the new snapshot from the previous history snapshot. This reduces reads from the normalized backend, but the stored history row is still a complete snapshot.
-- Snapshot JSON is stored in a one-to-one payload table so indexed history metadata rows stay narrow.
+- Snapshot JSON is stored in a one-to-one payload table so indexed history metadata rows stay narrow. The schema already reserves payload metadata and a diff payload slot for later compact storage, but this PR only writes snapshot payloads.
 - Schema migration does not backfill existing entities. Historical state from before activation is unavailable.
 - If an existing entity has no history row yet, its first partial update falls back to materializing the current complete identifiable once. Later partial updates can derive snapshots from history.
 - While history is active, an unclassified write endpoint is rejected before its handler runs with `HISTORY-COVERAGE-UNCLASSIFIED`. This prevents a newly added endpoint from silently changing current state without appending its required version.
@@ -148,6 +152,12 @@ Eventing placeholders:
 - `BASYX_EVENTING_TOPIC_PREFIX`
 
 These settings reserve the configuration shape for future CloudEvents-compatible outbox/event publishing. MQTT and Kafka publishing are not implemented yet. Enabling eventing, configuring sinks, or enabling the outbox currently fails fast during configuration loading.
+
+Planned compact history storage:
+
+- Keep `fullSnapshotInterval: 1` as the current full-snapshot behavior.
+- Later allow values greater than `1` to store periodic full checkpoints plus diff rows between checkpoints.
+- Store and verify hashes for the reconstructed full snapshot, the compact payload, and the previous history row before exposing compact history as audit-oriented storage.
 
 ## Historical Reads
 

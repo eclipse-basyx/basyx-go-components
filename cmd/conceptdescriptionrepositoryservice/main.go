@@ -61,10 +61,11 @@ func runServer(ctx context.Context, configPath string) error {
 		return err
 	}
 	history.Configure(history.Config{
-		Mode:              cfg.History.Mode,
-		RetentionDays:     cfg.History.RetentionDays,
-		Immutability:      cfg.History.Immutability,
-		AuditIdentityMode: cfg.History.AuditIdentityMode,
+		Mode:                 cfg.History.Mode,
+		RetentionDays:        cfg.History.RetentionDays,
+		FullSnapshotInterval: cfg.History.FullSnapshotInterval,
+		Immutability:         cfg.History.Immutability,
+		AuditIdentityMode:    cfg.History.AuditIdentityMode,
 	})
 
 	// Create Chi router

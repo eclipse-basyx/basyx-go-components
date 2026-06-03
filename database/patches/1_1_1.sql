@@ -41,9 +41,11 @@ CREATE TABLE IF NOT EXISTS aas_history (
   operation TEXT,
   endpoint TEXT,
   http_method TEXT,
-  previous_hash TEXT,
-  content_hash TEXT,
-  row_hash TEXT,
+  payload_type TEXT NOT NULL DEFAULT 'snapshot' CHECK (payload_type IN ('snapshot', 'diff')),
+  previous_hash TEXT NOT NULL DEFAULT '',
+  content_hash TEXT NOT NULL,
+  payload_hash TEXT NOT NULL,
+  row_hash TEXT NOT NULL,
   signature TEXT,
   key_id TEXT,
   anchor_id TEXT,
@@ -52,7 +54,9 @@ CREATE TABLE IF NOT EXISTS aas_history (
 
 CREATE TABLE IF NOT EXISTS aas_history_payload (
   history_id BIGINT PRIMARY KEY REFERENCES aas_history(history_id) ON DELETE CASCADE,
-  snapshot JSONB NOT NULL
+  snapshot JSONB,
+  diff JSONB,
+  CHECK ((snapshot IS NOT NULL AND diff IS NULL) OR (snapshot IS NULL AND diff IS NOT NULL))
 );
 
 CREATE TABLE IF NOT EXISTS submodel_history (
@@ -80,9 +84,11 @@ CREATE TABLE IF NOT EXISTS submodel_history (
   operation TEXT,
   endpoint TEXT,
   http_method TEXT,
-  previous_hash TEXT,
-  content_hash TEXT,
-  row_hash TEXT,
+  payload_type TEXT NOT NULL DEFAULT 'snapshot' CHECK (payload_type IN ('snapshot', 'diff')),
+  previous_hash TEXT NOT NULL DEFAULT '',
+  content_hash TEXT NOT NULL,
+  payload_hash TEXT NOT NULL,
+  row_hash TEXT NOT NULL,
   signature TEXT,
   key_id TEXT,
   anchor_id TEXT,
@@ -91,7 +97,9 @@ CREATE TABLE IF NOT EXISTS submodel_history (
 
 CREATE TABLE IF NOT EXISTS submodel_history_payload (
   history_id BIGINT PRIMARY KEY REFERENCES submodel_history(history_id) ON DELETE CASCADE,
-  snapshot JSONB NOT NULL
+  snapshot JSONB,
+  diff JSONB,
+  CHECK ((snapshot IS NOT NULL AND diff IS NULL) OR (snapshot IS NULL AND diff IS NOT NULL))
 );
 
 CREATE TABLE IF NOT EXISTS concept_description_history (
@@ -119,9 +127,11 @@ CREATE TABLE IF NOT EXISTS concept_description_history (
   operation TEXT,
   endpoint TEXT,
   http_method TEXT,
-  previous_hash TEXT,
-  content_hash TEXT,
-  row_hash TEXT,
+  payload_type TEXT NOT NULL DEFAULT 'snapshot' CHECK (payload_type IN ('snapshot', 'diff')),
+  previous_hash TEXT NOT NULL DEFAULT '',
+  content_hash TEXT NOT NULL,
+  payload_hash TEXT NOT NULL,
+  row_hash TEXT NOT NULL,
   signature TEXT,
   key_id TEXT,
   anchor_id TEXT,
@@ -130,7 +140,9 @@ CREATE TABLE IF NOT EXISTS concept_description_history (
 
 CREATE TABLE IF NOT EXISTS concept_description_history_payload (
   history_id BIGINT PRIMARY KEY REFERENCES concept_description_history(history_id) ON DELETE CASCADE,
-  snapshot JSONB NOT NULL
+  snapshot JSONB,
+  diff JSONB,
+  CHECK ((snapshot IS NOT NULL AND diff IS NULL) OR (snapshot IS NULL AND diff IS NOT NULL))
 );
 
 CREATE TABLE IF NOT EXISTS descriptor_history (
@@ -158,9 +170,11 @@ CREATE TABLE IF NOT EXISTS descriptor_history (
   operation TEXT,
   endpoint TEXT,
   http_method TEXT,
-  previous_hash TEXT,
-  content_hash TEXT,
-  row_hash TEXT,
+  payload_type TEXT NOT NULL DEFAULT 'snapshot' CHECK (payload_type IN ('snapshot', 'diff')),
+  previous_hash TEXT NOT NULL DEFAULT '',
+  content_hash TEXT NOT NULL,
+  payload_hash TEXT NOT NULL,
+  row_hash TEXT NOT NULL,
   signature TEXT,
   key_id TEXT,
   anchor_id TEXT,
@@ -169,7 +183,9 @@ CREATE TABLE IF NOT EXISTS descriptor_history (
 
 CREATE TABLE IF NOT EXISTS descriptor_history_payload (
   history_id BIGINT PRIMARY KEY REFERENCES descriptor_history(history_id) ON DELETE CASCADE,
-  snapshot JSONB NOT NULL
+  snapshot JSONB,
+  diff JSONB,
+  CHECK ((snapshot IS NOT NULL AND diff IS NULL) OR (snapshot IS NULL AND diff IS NOT NULL))
 );
 
 CREATE INDEX IF NOT EXISTS ix_aas_history_identifier_validity ON aas_history(identifier, valid_from DESC, history_id DESC, valid_to);

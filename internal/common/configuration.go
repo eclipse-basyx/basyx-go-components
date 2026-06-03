@@ -77,6 +77,7 @@ var DefaultConfig = struct {
 	GeneralAASPreconfigPaths            []string
 	HistoryConfigMode                   string
 	HistoryConfigRetentionDays          int
+	HistoryConfigFullSnapshotInterval   int
 	HistoryConfigImmutability           string
 	HistoryConfigAuditIdentityMode      string
 	EventingEnabled                     bool
@@ -113,6 +114,7 @@ var DefaultConfig = struct {
 	GeneralAASPreconfigPaths:            []string{},
 	HistoryConfigMode:                   "off",
 	HistoryConfigRetentionDays:          0,
+	HistoryConfigFullSnapshotInterval:   1,
 	HistoryConfigImmutability:           "none",
 	HistoryConfigAuditIdentityMode:      "none",
 	EventingEnabled:                     false,
@@ -192,10 +194,11 @@ type JWSConfig struct {
 
 // HistoryConfig contains history and audit configuration.
 type HistoryConfig struct {
-	Mode              string `mapstructure:"mode" yaml:"mode" json:"mode"`                                        // off|api|audit
-	RetentionDays     int    `mapstructure:"retentionDays" yaml:"retentionDays" json:"retentionDays"`             // 0 = keep forever
-	Immutability      string `mapstructure:"immutability" yaml:"immutability" json:"immutability"`                // none|postgres_guarded|external_anchor
-	AuditIdentityMode string `mapstructure:"auditIdentityMode" yaml:"auditIdentityMode" json:"auditIdentityMode"` // none|minimal|extended
+	Mode                 string `mapstructure:"mode" yaml:"mode" json:"mode"`                                                 // off|api|audit
+	RetentionDays        int    `mapstructure:"retentionDays" yaml:"retentionDays" json:"retentionDays"`                      // 0 = keep forever
+	FullSnapshotInterval int    `mapstructure:"fullSnapshotInterval" yaml:"fullSnapshotInterval" json:"fullSnapshotInterval"` // 1 = every history row is a full snapshot
+	Immutability         string `mapstructure:"immutability" yaml:"immutability" json:"immutability"`                         // none|postgres_guarded|external_anchor
+	AuditIdentityMode    string `mapstructure:"auditIdentityMode" yaml:"auditIdentityMode" json:"auditIdentityMode"`          // none|minimal|extended
 }
 
 // EventingConfig reserves future-compatible eventing configuration.
@@ -383,6 +386,12 @@ func applyHistoryEnvOverrides(cfg *Config) {
 			cfg.History.RetentionDays = retention
 		}
 	}
+	if value, ok := lookupTrimmedEnv("BASYX_HISTORY_FULL_SNAPSHOT_INTERVAL"); ok {
+		var interval int
+		if _, err := fmt.Sscanf(value, "%d", &interval); err == nil {
+			cfg.History.FullSnapshotInterval = interval
+		}
+	}
 	if value, ok := lookupTrimmedEnv("BASYX_HISTORY_IMMUTABILITY"); ok {
 		cfg.History.Immutability = value
 	}
@@ -424,6 +433,12 @@ func validateHistoryAndEventingConfig(cfg *Config) error {
 	}
 	if cfg.History.RetentionDays != 0 {
 		return fmt.Errorf("CONFIG-HISTORY-RETENTION history.retentionDays is not implemented yet; use 0")
+	}
+	if cfg.History.FullSnapshotInterval < 1 {
+		return fmt.Errorf("CONFIG-HISTORY-SNAPSHOTINTERVAL history.fullSnapshotInterval must be at least 1")
+	}
+	if cfg.History.FullSnapshotInterval != 1 {
+		return fmt.Errorf("CONFIG-HISTORY-SNAPSHOTINTERVAL history.fullSnapshotInterval values greater than 1 are reserved for future diff-backed history storage; use 1")
 	}
 	switch strings.ToLower(strings.TrimSpace(cfg.History.Immutability)) {
 	case "none", "postgres_guarded":
@@ -556,6 +571,7 @@ func setDefaults(v *viper.Viper) {
 	// History/audit defaults
 	v.SetDefault("history.mode", "off")
 	v.SetDefault("history.retentionDays", 0)
+	v.SetDefault("history.fullSnapshotInterval", DefaultConfig.HistoryConfigFullSnapshotInterval)
 	v.SetDefault("history.immutability", "none")
 	v.SetDefault("history.auditIdentityMode", "none")
 
@@ -688,6 +704,7 @@ func PrintConfiguration(cfg *Config) {
 	lines = append(lines, "🔹 History/Audit:")
 	add("Mode", cfg.History.Mode, DefaultConfig.HistoryConfigMode)
 	add("Retention Days", cfg.History.RetentionDays, DefaultConfig.HistoryConfigRetentionDays)
+	add("Full Snapshot Interval", cfg.History.FullSnapshotInterval, DefaultConfig.HistoryConfigFullSnapshotInterval)
 	add("Immutability", cfg.History.Immutability, DefaultConfig.HistoryConfigImmutability)
 	add("Audit Identity Mode", cfg.History.AuditIdentityMode, DefaultConfig.HistoryConfigAuditIdentityMode)
 

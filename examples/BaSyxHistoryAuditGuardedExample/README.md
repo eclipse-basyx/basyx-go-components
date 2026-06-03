@@ -17,6 +17,7 @@ The important settings are:
 
 - `BASYX_HISTORY_MODE=audit`
 - `BASYX_HISTORY_RETENTION_DAYS=0`
+- `BASYX_HISTORY_FULL_SNAPSHOT_INTERVAL=1`
 - `BASYX_HISTORY_IMMUTABILITY=postgres_guarded`
 - `BASYX_AUDIT_IDENTITY_MODE=none`
 
@@ -33,7 +34,7 @@ This example is configured for local development:
 
 The configuration service initializes the `v1.1.1` schema first. The AAS Environment Service then enables the history guard switch at startup.
 
-`BASYX_HISTORY_RETENTION_DAYS=0` is accepted as configuration, but automatic retention cleanup is not implemented yet. This example keeps every appended history row.
+`BASYX_HISTORY_RETENTION_DAYS=0` is accepted as configuration, but automatic retention cleanup is not implemented yet. `BASYX_HISTORY_FULL_SNAPSHOT_INTERVAL=1` keeps the current behavior where every appended history row stores a complete snapshot.
 
 ## UI And Preconfigured Data
 

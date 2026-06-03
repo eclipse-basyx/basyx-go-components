@@ -83,11 +83,12 @@ Each metadata row stores:
 - `operation_time`
 - administrative timestamp text values plus typed `TIMESTAMPTZ` columns for `createdFrom` and `updatedFrom` filters
 - audit metadata columns such as `actor_subject`, `request_id`, `endpoint`, and `http_method`
+- payload metadata: `payload_type` and `payload_hash`
 - tamper-evidence columns: `previous_hash`, `content_hash`, and `row_hash`
 
 On every create, update, or delete, a new immutable metadata row and its snapshot payload row are appended. Existing history rows are not updated by the runtime. Both rows are inserted in the same database transaction as the current-table mutation, including value-only SME updates.
 
-Keeping the large JSONB value outside the indexed metadata row narrows recent-change and latest-hash access paths. It does not reduce the total snapshot bytes stored: reads that return or derive snapshots join the one-to-one payload row.
+Keeping the large JSONB value outside the indexed metadata row narrows recent-change and latest-hash access paths. It does not reduce the total snapshot bytes stored: reads that return or derive snapshots join the one-to-one payload row. The payload tables currently populate `snapshot`; the nullable `diff` column and `payload_type: diff` metadata value are reserved for the later compact history implementation.
 
 History lookup uses:
 
@@ -127,6 +128,8 @@ sequenceDiagram
 ```
 
 This reduces reads against the normalized backend for partial updates. It does not reduce history storage: every appended row remains a full identifiable snapshot.
+
+The configuration already contains `history.fullSnapshotInterval` to keep the future compact-storage contract stable. In this PR only `1` is accepted, which means every appended row is a directly readable snapshot payload. Values greater than `1` are reserved for the later diff-backed hybrid implementation and fail fast during configuration loading.
 
 ### Per-Identifiable Write Paths
 
@@ -233,6 +236,7 @@ The guard is enabled when history is active and `history.immutability` is `postg
 | `history.mode: api` | Append history snapshots. |
 | `history.mode: audit` | Append the same runtime snapshots as `api`; intended for audit-oriented deployments with explicit storage controls. |
 | `history.retentionDays` | Must remain `0`. Non-zero values fail fast until cleanup or compaction is implemented. |
+| `history.fullSnapshotInterval` | Must remain `1`. Larger values are reserved for diff-backed hybrid storage and fail fast for now. |
 | `history.immutability: none` | Keep PostgreSQL mutation guards disabled. |
 | `history.immutability: postgres_guarded` | Enable PostgreSQL mutation guards at service startup. |
 | `history.immutability: external_anchor` | Fail fast until an external anchoring worker is implemented. |
@@ -240,6 +244,20 @@ The guard is enabled when history is active and `history.immutability` is `postg
 | Active eventing, configured event sinks, or enabled outbox processing | Fail fast until outbox publishing is implemented. |
 
 `AuditContext`, `ChangeEvent`, and the anchor interfaces remain extension points. Current runtime middleware does not populate `AuditContext`, and no external anchor client is invoked by the append path yet.
+
+### Future Diff-Backed Storage TODO
+
+There is intentionally no separate `history.storageMode` setting in this PR. Full-snapshot history is represented by `history.fullSnapshotInterval: 1`; future compact storage can be introduced by accepting values greater than `1`. That keeps the user-facing configuration compatible while still allowing the runtime to store periodic checkpoints plus compact diff rows later.
+
+The schema already reserves `payload_type`, `payload_hash`, and a nullable `diff` payload column. Before enabling values greater than `1`, implement:
+
+- A deterministic JSON canonicalization and diff algorithm version stored with each compact row.
+- A reconstructed full-snapshot hash, compact-payload hash, previous-row hash, and row hash chain that are all verifiable after restore.
+- Restore logic that walks back to the nearest full checkpoint and applies diffs in order, with bounded worst-case work from the configured interval.
+- Integration tests for restore across create, update, delete, SME mutations, descriptor mutations, and deleted tombstones.
+- External anchor metadata that can later be sent to immudb or another append-only anchor without changing the history row identity.
+
+Until these pieces exist, accepting intervals greater than `1` would be misleading because the runtime still writes full snapshots.
 
 ### Fail-Closed Mutation Coverage
 
@@ -253,15 +271,15 @@ Generated component routes are classified centrally by operation name during ser
 
 ## Recent Changes
 
-Recent-change endpoints read indexed metadata from the history tables and join the payload row for the returned page. They are ordered by increasing `history_id`, with cursor-based pagination.
+Recent-change endpoints read indexed metadata from the history tables and join the payload row for the returned page. They are ordered by decreasing `history_id`, with cursor-based pagination from newest changes to older changes.
 The default page size is `100`; requests above `1000` are rejected.
 
 ```mermaid
 flowchart LR
     Historical["GET .../{id}/$history?date=..."] --> Validity["identifier + valid_from index"]
     Validity --> Snapshot["Latest snapshot at or before date"]
-    Recent["GET .../$recent-changes?cursor=..."] --> Cursor["history_id cursor + typed timestamp indexes"]
-    Cursor --> Page["Ordered page plus next cursor"]
+    Recent["GET .../$recent-changes?cursor=..."] --> Cursor["descending history_id cursor + typed timestamp indexes"]
+    Cursor --> Page["Newest-first page plus next cursor"]
 ```
 
 Current filters:

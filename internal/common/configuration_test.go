@@ -163,6 +163,7 @@ func TestLoadConfigAcceptsPermissiveStrictVerification(t *testing.T) {
 func TestLoadConfigAppliesHistoryAndEventingDefaults(t *testing.T) {
 	withUnsetEnv(t, "BASYX_HISTORY_MODE")
 	withUnsetEnv(t, "BASYX_HISTORY_RETENTION_DAYS")
+	withUnsetEnv(t, "BASYX_HISTORY_FULL_SNAPSHOT_INTERVAL")
 	withUnsetEnv(t, "BASYX_HISTORY_IMMUTABILITY")
 	withUnsetEnv(t, "BASYX_AUDIT_IDENTITY_MODE")
 	withUnsetEnv(t, "BASYX_EVENTING_ENABLED")
@@ -183,6 +184,9 @@ func TestLoadConfigAppliesHistoryAndEventingDefaults(t *testing.T) {
 	if cfg.History.RetentionDays != 0 {
 		t.Fatalf("expected default retention 0, got %d", cfg.History.RetentionDays)
 	}
+	if cfg.History.FullSnapshotInterval != 1 {
+		t.Fatalf("expected default full snapshot interval 1, got %d", cfg.History.FullSnapshotInterval)
+	}
 	if cfg.History.Immutability != "none" {
 		t.Fatalf("expected default immutability none, got %q", cfg.History.Immutability)
 	}
@@ -197,6 +201,7 @@ func TestLoadConfigAppliesHistoryAndEventingDefaults(t *testing.T) {
 func TestLoadConfigAppliesSupportedBasyxHistoryEnvOverrides(t *testing.T) {
 	t.Setenv("BASYX_HISTORY_MODE", "audit")
 	t.Setenv("BASYX_HISTORY_RETENTION_DAYS", "0")
+	t.Setenv("BASYX_HISTORY_FULL_SNAPSHOT_INTERVAL", "1")
 	t.Setenv("BASYX_HISTORY_IMMUTABILITY", "postgres_guarded")
 	t.Setenv("BASYX_AUDIT_IDENTITY_MODE", "none")
 	captureLogOutput(t)
@@ -206,7 +211,7 @@ func TestLoadConfigAppliesSupportedBasyxHistoryEnvOverrides(t *testing.T) {
 		t.Fatalf("unexpected config load error: %v", err)
 	}
 
-	if cfg.History.Mode != "audit" || cfg.History.RetentionDays != 0 || cfg.History.Immutability != "postgres_guarded" || cfg.History.AuditIdentityMode != "none" {
+	if cfg.History.Mode != "audit" || cfg.History.RetentionDays != 0 || cfg.History.FullSnapshotInterval != 1 || cfg.History.Immutability != "postgres_guarded" || cfg.History.AuditIdentityMode != "none" {
 		t.Fatalf("unexpected history env override result: %+v", cfg.History)
 	}
 }
@@ -218,19 +223,27 @@ func TestValidateHistoryAndEventingConfigRejectsUnsupportedFeatures(t *testing.T
 	}{
 		{
 			name:   "retention",
-			config: Config{History: HistoryConfig{Mode: "api", RetentionDays: 30, Immutability: "none", AuditIdentityMode: "none"}},
+			config: Config{History: HistoryConfig{Mode: "api", RetentionDays: 30, FullSnapshotInterval: 1, Immutability: "none", AuditIdentityMode: "none"}},
+		},
+		{
+			name:   "full snapshot interval zero",
+			config: Config{History: HistoryConfig{Mode: "api", FullSnapshotInterval: 0, Immutability: "none", AuditIdentityMode: "none"}},
+		},
+		{
+			name:   "future diff-backed full snapshot interval",
+			config: Config{History: HistoryConfig{Mode: "api", FullSnapshotInterval: 10, Immutability: "none", AuditIdentityMode: "none"}},
 		},
 		{
 			name:   "external anchor",
-			config: Config{History: HistoryConfig{Mode: "api", Immutability: "external_anchor", AuditIdentityMode: "none"}},
+			config: Config{History: HistoryConfig{Mode: "api", FullSnapshotInterval: 1, Immutability: "external_anchor", AuditIdentityMode: "none"}},
 		},
 		{
 			name:   "audit identity",
-			config: Config{History: HistoryConfig{Mode: "api", Immutability: "none", AuditIdentityMode: "minimal"}},
+			config: Config{History: HistoryConfig{Mode: "api", FullSnapshotInterval: 1, Immutability: "none", AuditIdentityMode: "minimal"}},
 		},
 		{
 			name:   "eventing",
-			config: Config{History: HistoryConfig{Mode: "off", Immutability: "none", AuditIdentityMode: "none"}, Eventing: EventingConfig{Enabled: true}},
+			config: Config{History: HistoryConfig{Mode: "off", FullSnapshotInterval: 1, Immutability: "none", AuditIdentityMode: "none"}, Eventing: EventingConfig{Enabled: true}},
 		},
 	}
 
