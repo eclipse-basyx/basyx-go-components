@@ -72,7 +72,13 @@ func (su *SchemaUpload) Execute(stepIndex int) (int, error) {
 	}
 
 	if _, err = su.ctx.DB.Exec(string(schemaSQL)); err != nil {
-		return 1, fmt.Errorf("BASYXCFG-SCHEMA-EXECUTE: %w", err)
+		if isRc01UpgradeError(err) {
+			if err = su.applyRc01Compatibility(schemaToLoad); err != nil {
+				return 1, err
+			}
+		}
+
+		return su.Execute(stepIndex)
 	}
 
 	_, _ = fmt.Printf("[Step %d] Schema upload completed\n", stepIndex)
