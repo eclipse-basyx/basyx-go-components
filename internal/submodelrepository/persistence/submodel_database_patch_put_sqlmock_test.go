@@ -168,7 +168,7 @@ func TestPatchSubmodelMetadataInTransactionAppendsHistory(t *testing.T) {
 		WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectExec(`SELECT pg_advisory_xact_lock`).
 		WillReturnResult(sqlmock.NewResult(0, 1))
-	expectExistingSubmodelHistorySnapshot(mock, "sm-1", `{"id":"sm-1","submodelElements":[{"idShort":"existing","modelType":"Capability"}]}`, false, "row-hash")
+	expectExistingSubmodelHistorySnapshot(mock, "sm-1", `{"id":"sm-1","submodelElements":[{"idShort":"existing","modelType":"Capability"}]}`, false)
 	mock.ExpectQuery(`INSERT INTO "submodel_history".*RETURNING "history_id"`).
 		WillReturnRows(sqlmock.NewRows([]string{"history_id"}).AddRow(1))
 	mock.ExpectExec(`INSERT INTO "submodel_history_payload"`).
@@ -274,10 +274,21 @@ func expectMissingSubmodelHistory(mock sqlmock.Sqlmock) {
 		WillReturnError(sql.ErrNoRows)
 }
 
-func expectExistingSubmodelHistorySnapshot(mock sqlmock.Sqlmock, identifier string, snapshotJSON string, deleted bool, rowHash string) {
+func expectExistingSubmodelHistorySnapshot(mock sqlmock.Sqlmock, identifier string, snapshotJSON string, deleted bool) {
 	historyID := int64(1)
 	operationTime := time.Date(2026, 5, 28, 12, 0, 0, 0, time.UTC)
 	hash := mustSubmodelHistoryHash(snapshotJSON)
+	rowHash := mustSubmodelHistoryRowHash(history.ChangeEvent{
+		EntityType:   history.TableSubmodel,
+		Identifier:   identifier,
+		ChangeType:   history.ChangeUpdated,
+		Timestamp:    operationTime,
+		Deleted:      deleted,
+		PayloadType:  history.PayloadTypeSnapshot,
+		ContentHash:  hash,
+		PayloadHash:  hash,
+		PreviousHash: "",
+	})
 	mock.ExpectQuery(`SELECT "history_id" FROM "submodel_history"`).
 		WillReturnRows(sqlmock.NewRows([]string{"history_id"}).AddRow(historyID))
 	mock.ExpectQuery(`SELECT "history_id" FROM "submodel_history".*"payload_type" = 'snapshot'`).
@@ -297,7 +308,21 @@ func expectExistingSubmodelHistorySnapshot(mock sqlmock.Sqlmock, identifier stri
 				operationTime,
 				hash,
 				hash,
+				nil,
 				rowHash,
+				nil,
+				nil,
+				nil,
+				nil,
+				nil,
+				nil,
+				nil,
+				nil,
+				nil,
+				nil,
+				nil,
+				nil,
+				nil,
 			))
 }
 
@@ -315,7 +340,21 @@ func submodelHistoryChainColumns() []string {
 		"operation_time",
 		"content_hash",
 		"payload_hash",
+		"previous_hash",
 		"row_hash",
+		"request_id",
+		"correlation_id",
+		"actor_subject",
+		"actor_issuer",
+		"client_id",
+		"authorization_result",
+		"policy_id",
+		"matched_rule_id",
+		"source_ip",
+		"user_agent",
+		"operation",
+		"endpoint",
+		"http_method",
 	}
 }
 
@@ -325,6 +364,14 @@ func mustSubmodelHistoryHash(snapshotJSON string) string {
 		panic(err)
 	}
 	hash, err := history.CanonicalJSONHash(snapshot)
+	if err != nil {
+		panic(err)
+	}
+	return hash
+}
+
+func mustSubmodelHistoryRowHash(event history.ChangeEvent) string {
+	hash, err := history.ComputeHistoryRowHash(event)
 	if err != nil {
 		panic(err)
 	}
