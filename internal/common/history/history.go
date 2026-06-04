@@ -35,6 +35,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"sort"
 	"strconv"
 	"strings"
@@ -42,6 +43,7 @@ import (
 	"time"
 
 	"github.com/doug-martin/goqu/v9"
+	"github.com/doug-martin/goqu/v9/exp"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 )
 
@@ -525,6 +527,28 @@ type storedHistoryRow struct {
 	RowHash     sql.NullString
 }
 
+type recentRestoreTarget struct {
+	Identifier string
+	HistoryID  int64
+}
+
+type recentRestoreKey struct {
+	Identifier string
+	HistoryID  int64
+}
+
+type restoreChainKey struct {
+	Identifier   string
+	CheckpointID int64
+}
+
+type restoreChainGroup struct {
+	key          restoreChainKey
+	maxHistoryID int64
+	targetIDs    map[int64]struct{}
+	rows         []storedHistoryRow
+}
+
 func latestVersionTx(ctx context.Context, tx *sql.Tx, table string, identifier string) (latestVersion, error) {
 	query, args, err := goqu.From(table).
 		Select(goqu.C("history_id")).
@@ -762,7 +786,6 @@ func RecentRows(ctx context.Context, db *sql.DB, table string, limit int32, curs
 
 	result := make([]Row, 0, limitInt)
 	nextCursor := ""
-	restoreCache := make(map[string]map[int64]latestVersion)
 	for rows.Next() {
 		var row Row
 		var created sql.NullString
@@ -774,17 +797,15 @@ func RecentRows(ctx context.Context, db *sql.DB, table string, limit int32, curs
 			nextCursor = strconv.FormatInt(result[len(result)-1].HistoryID, 10)
 			break
 		}
-		version, restoreErr := cachedRestoreVersionByHistoryID(ctx, db, table, row.Identifier, row.HistoryID, restoreCache)
-		if restoreErr != nil {
-			return nil, "", restoreErr
-		}
-		row.Snapshot = version.snapshot
 		row.CreatedAt = timestampOrOperationTime(created.String, row.OperationAt)
 		row.UpdatedAt = timestampOrOperationTime(updated.String, row.OperationAt)
 		result = append(result, row)
 	}
 	if err = rows.Err(); err != nil {
 		return nil, "", common.NewInternalServerError("HISTORY-RECENT-ROWS " + err.Error())
+	}
+	if err = restoreRecentRowSnapshots(ctx, db, table, result); err != nil {
+		return nil, "", err
 	}
 	return result, nextCursor, nil
 }
@@ -801,36 +822,62 @@ func restoreVersionByHistoryID(ctx context.Context, queryer historyQueryer, tabl
 	return version, nil
 }
 
-func cachedRestoreVersionByHistoryID(
-	ctx context.Context,
-	queryer historyQueryer,
-	table string,
-	identifier string,
-	historyID int64,
-	cache map[string]map[int64]latestVersion,
-) (latestVersion, error) {
-	if versions := cache[identifier]; versions != nil {
-		if version, ok := versions[historyID]; ok {
-			return version, nil
-		}
+func restoreRecentRowSnapshots(ctx context.Context, queryer historyQueryer, table string, rows []Row) error {
+	if len(rows) == 0 {
+		return nil
 	}
-	versions, err := restoreVersionsThroughHistoryID(ctx, queryer, table, identifier, historyID)
+	targets := recentRestoreTargets(rows)
+	versions, err := restoreRecentVersions(ctx, queryer, table, targets)
 	if err != nil {
-		return latestVersion{}, err
+		return err
 	}
-	identifierCache := cache[identifier]
-	if identifierCache == nil {
-		identifierCache = make(map[int64]latestVersion, len(versions))
-		cache[identifier] = identifierCache
+	for index := range rows {
+		key := recentRestoreKey{Identifier: rows[index].Identifier, HistoryID: rows[index].HistoryID}
+		version, ok := versions[key]
+		if !ok {
+			return common.NewInternalServerError("HISTORY-RECENT-MISSINGRESTORE restored history rows do not contain requested recent row")
+		}
+		rows[index].Snapshot = version.snapshot
 	}
-	for restoredHistoryID, version := range versions {
-		identifierCache[restoredHistoryID] = version
+	return nil
+}
+
+func recentRestoreTargets(rows []Row) []recentRestoreTarget {
+	targets := make([]recentRestoreTarget, 0, len(rows))
+	seen := make(map[recentRestoreKey]struct{}, len(rows))
+	for _, row := range rows {
+		key := recentRestoreKey{Identifier: row.Identifier, HistoryID: row.HistoryID}
+		if _, exists := seen[key]; exists {
+			continue
+		}
+		seen[key] = struct{}{}
+		targets = append(targets, recentRestoreTarget{Identifier: row.Identifier, HistoryID: row.HistoryID})
 	}
-	version, ok := identifierCache[historyID]
-	if !ok {
-		return latestVersion{}, common.NewInternalServerError("HISTORY-RESTORE-MISSINGTARGET restored chain does not contain requested history row")
+	return targets
+}
+
+func restoreRecentVersions(ctx context.Context, queryer historyQueryer, table string, targets []recentRestoreTarget) (map[recentRestoreKey]latestVersion, error) {
+	if len(targets) == 0 {
+		return map[recentRestoreKey]latestVersion{}, nil
 	}
-	return version, nil
+	payloadTable, err := historyPayloadTable(table)
+	if err != nil {
+		return nil, err
+	}
+	checkpoints, err := nearestSnapshotHistoryIDs(ctx, queryer, table, targets)
+	if err != nil {
+		return nil, err
+	}
+	groups, err := buildRestoreChainGroups(targets, checkpoints)
+	if err != nil {
+		return nil, err
+	}
+	chainRows, err := loadVersionChains(ctx, queryer, table, payloadTable, groups)
+	if err != nil {
+		return nil, err
+	}
+	assignVersionChainRows(groups, chainRows)
+	return restoreRecentVersionGroups(groups)
 }
 
 func restoreVersionsThroughHistoryID(ctx context.Context, queryer historyQueryer, table string, identifier string, historyID int64) (map[int64]latestVersion, error) {
@@ -847,6 +894,127 @@ func restoreVersionsThroughHistoryID(ctx context.Context, queryer historyQueryer
 		return nil, err
 	}
 	return restoreVersionChainRows(rows)
+}
+
+func nearestSnapshotHistoryIDs(ctx context.Context, queryer historyQueryer, table string, targets []recentRestoreTarget) (map[recentRestoreKey]int64, error) {
+	historyAlias := goqu.T(table).As("history")
+	targetAlias := goqu.T("targets").As("target")
+	query, args, err := goqu.From(historyAlias).
+		With("targets", recentRestoreTargetDataset(targets)).
+		Select(
+			targetAlias.Col("identifier"),
+			targetAlias.Col("history_id"),
+			goqu.MAX(historyAlias.Col("history_id")).As("checkpoint_id"),
+		).
+		InnerJoin(targetAlias, goqu.On(
+			historyAlias.Col("identifier").Eq(targetAlias.Col("identifier")),
+			historyAlias.Col("history_id").Lte(targetAlias.Col("history_id")),
+		)).
+		Where(historyAlias.Col("payload_type").Eq(PayloadTypeSnapshot)).
+		GroupBy(targetAlias.Col("identifier"), targetAlias.Col("history_id")).
+		ToSQL()
+	if err != nil {
+		return nil, common.NewInternalServerError("HISTORY-RESTORE-BUILDCHECKPOINTS " + err.Error())
+	}
+	sqlRows, err := queryer.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, common.NewInternalServerError("HISTORY-RESTORE-READCHECKPOINTS " + err.Error())
+	}
+	defer func() {
+		_ = sqlRows.Close()
+	}()
+
+	checkpoints := make(map[recentRestoreKey]int64, len(targets))
+	for sqlRows.Next() {
+		var identifier string
+		var historyID int64
+		var checkpointID int64
+		if err = sqlRows.Scan(&identifier, &historyID, &checkpointID); err != nil {
+			return nil, common.NewInternalServerError("HISTORY-RESTORE-SCANCHECKPOINTS " + err.Error())
+		}
+		checkpoints[recentRestoreKey{Identifier: identifier, HistoryID: historyID}] = checkpointID
+	}
+	if err = sqlRows.Err(); err != nil {
+		return nil, common.NewInternalServerError("HISTORY-RESTORE-CHECKPOINTROWS " + err.Error())
+	}
+
+	for _, target := range targets {
+		if _, exists := checkpoints[recentRestoreKey(target)]; !exists {
+			return nil, common.NewInternalServerError("HISTORY-RESTORE-NOCHECKPOINT no full snapshot checkpoint found")
+		}
+	}
+	return checkpoints, nil
+}
+
+func recentRestoreTargetDataset(targets []recentRestoreTarget) *goqu.SelectDataset {
+	targetRows := recentRestoreTargetRowDataset(targets[0])
+	for _, target := range targets[1:] {
+		targetRows = targetRows.UnionAll(recentRestoreTargetRowDataset(target))
+	}
+	return targetRows
+}
+
+func recentRestoreTargetRowDataset(target recentRestoreTarget) *goqu.SelectDataset {
+	return goqu.From().Select(
+		goqu.V(target.Identifier).As("identifier"),
+		goqu.V(target.HistoryID).As("history_id"),
+	)
+}
+
+func buildRestoreChainGroups(targets []recentRestoreTarget, checkpoints map[recentRestoreKey]int64) ([]*restoreChainGroup, error) {
+	groups := make([]*restoreChainGroup, 0, len(targets))
+	groupByKey := make(map[restoreChainKey]*restoreChainGroup, len(targets))
+	for _, target := range targets {
+		targetKey := recentRestoreKey(target)
+		checkpointID, ok := checkpoints[targetKey]
+		if !ok {
+			return nil, common.NewInternalServerError("HISTORY-RESTORE-MISSINGCHECKPOINT checkpoint lookup did not return requested target")
+		}
+		groupKey := restoreChainKey{Identifier: target.Identifier, CheckpointID: checkpointID}
+		group := groupByKey[groupKey]
+		if group == nil {
+			group = &restoreChainGroup{
+				key:          groupKey,
+				maxHistoryID: target.HistoryID,
+				targetIDs:    make(map[int64]struct{}),
+			}
+			groupByKey[groupKey] = group
+			groups = append(groups, group)
+		}
+		if target.HistoryID > group.maxHistoryID {
+			group.maxHistoryID = target.HistoryID
+		}
+		group.targetIDs[target.HistoryID] = struct{}{}
+	}
+	return groups, nil
+}
+
+func loadVersionChains(ctx context.Context, queryer historyQueryer, table string, payloadTable string, groups []*restoreChainGroup) ([]storedHistoryRow, error) {
+	conditions := make([]goqu.Expression, 0, len(groups))
+	historyAlias := goqu.T(table).As("history")
+	payloadAlias := goqu.T(payloadTable).As("payload")
+	for _, group := range groups {
+		conditions = append(conditions, goqu.And(
+			historyAlias.Col("identifier").Eq(group.key.Identifier),
+			historyAlias.Col("history_id").Gte(group.key.CheckpointID),
+			historyAlias.Col("history_id").Lte(group.maxHistoryID),
+		))
+	}
+	query, args, err := baseVersionChainQuery(historyAlias, payloadAlias).
+		Where(goqu.Or(conditions...)).
+		Order(historyAlias.Col("identifier").Asc(), historyAlias.Col("history_id").Asc()).
+		ToSQL()
+	if err != nil {
+		return nil, common.NewInternalServerError("HISTORY-RESTORE-BUILDCHAINS " + err.Error())
+	}
+	rows, err := queryer.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, common.NewInternalServerError("HISTORY-RESTORE-EXECCHAINS " + err.Error())
+	}
+	defer func() {
+		_ = rows.Close()
+	}()
+	return scanStoredHistoryRows(rows)
 }
 
 func nearestSnapshotHistoryID(ctx context.Context, queryer historyQueryer, table string, identifier string, historyID int64) (int64, error) {
@@ -884,23 +1052,7 @@ func loadVersionChain(
 ) ([]storedHistoryRow, error) {
 	historyAlias := goqu.T(table).As("history")
 	payloadAlias := goqu.T(payloadTable).As("payload")
-	query, args, err := goqu.From(historyAlias).
-		InnerJoin(payloadAlias, goqu.On(historyAlias.Col("history_id").Eq(payloadAlias.Col("history_id")))).
-		Select(
-			historyAlias.Col("history_id"),
-			historyAlias.Col("identifier"),
-			historyAlias.Col("change_type"),
-			historyAlias.Col("payload_type"),
-			goqu.L(`"payload"."snapshot"::text`),
-			goqu.L(`"payload"."diff"::text`),
-			historyAlias.Col("deleted"),
-			historyAlias.Col("administration_created_at_text"),
-			historyAlias.Col("administration_updated_at_text"),
-			historyAlias.Col("operation_time"),
-			historyAlias.Col("content_hash"),
-			historyAlias.Col("payload_hash"),
-			historyAlias.Col("row_hash"),
-		).
+	query, args, err := baseVersionChainQuery(historyAlias, payloadAlias).
 		Where(
 			historyAlias.Col("identifier").Eq(identifier),
 			historyAlias.Col("history_id").Gte(checkpointID),
@@ -918,11 +1070,34 @@ func loadVersionChain(
 	defer func() {
 		_ = sqlRows.Close()
 	}()
+	return scanStoredHistoryRows(sqlRows)
+}
 
+func baseVersionChainQuery(historyAlias exp.AliasedExpression, payloadAlias exp.AliasedExpression) *goqu.SelectDataset {
+	return goqu.From(historyAlias).
+		InnerJoin(payloadAlias, goqu.On(historyAlias.Col("history_id").Eq(payloadAlias.Col("history_id")))).
+		Select(
+			historyAlias.Col("history_id"),
+			historyAlias.Col("identifier"),
+			historyAlias.Col("change_type"),
+			historyAlias.Col("payload_type"),
+			goqu.L(`"payload"."snapshot"::text`),
+			goqu.L(`"payload"."diff"::text`),
+			historyAlias.Col("deleted"),
+			historyAlias.Col("administration_created_at_text"),
+			historyAlias.Col("administration_updated_at_text"),
+			historyAlias.Col("operation_time"),
+			historyAlias.Col("content_hash"),
+			historyAlias.Col("payload_hash"),
+			historyAlias.Col("row_hash"),
+		)
+}
+
+func scanStoredHistoryRows(sqlRows *sql.Rows) ([]storedHistoryRow, error) {
 	rows := make([]storedHistoryRow, 0)
 	for sqlRows.Next() {
 		var row storedHistoryRow
-		if err = sqlRows.Scan(
+		if err := sqlRows.Scan(
 			&row.HistoryID,
 			&row.Identifier,
 			&row.ChangeType,
@@ -941,13 +1116,46 @@ func loadVersionChain(
 		}
 		rows = append(rows, row)
 	}
-	if err = sqlRows.Err(); err != nil {
+	if err := sqlRows.Err(); err != nil {
 		return nil, common.NewInternalServerError("HISTORY-RESTORE-ROWS " + err.Error())
 	}
 	if len(rows) == 0 {
 		return nil, common.NewInternalServerError("HISTORY-RESTORE-EMPTYCHAIN no history rows found for restore")
 	}
 	return rows, nil
+}
+
+func assignVersionChainRows(groups []*restoreChainGroup, rows []storedHistoryRow) {
+	groupsByIdentifier := make(map[string][]*restoreChainGroup, len(groups))
+	for _, group := range groups {
+		groupsByIdentifier[group.key.Identifier] = append(groupsByIdentifier[group.key.Identifier], group)
+	}
+	for _, row := range rows {
+		for _, group := range groupsByIdentifier[row.Identifier] {
+			if row.HistoryID < group.key.CheckpointID || row.HistoryID > group.maxHistoryID {
+				continue
+			}
+			group.rows = append(group.rows, row)
+		}
+	}
+}
+
+func restoreRecentVersionGroups(groups []*restoreChainGroup) (map[recentRestoreKey]latestVersion, error) {
+	versionsByTarget := make(map[recentRestoreKey]latestVersion)
+	for _, group := range groups {
+		versions, err := restoreVersionChainRows(group.rows)
+		if err != nil {
+			return nil, err
+		}
+		for targetID := range group.targetIDs {
+			version, ok := versions[targetID]
+			if !ok {
+				return nil, common.NewInternalServerError("HISTORY-RESTORE-MISSINGTARGET restored chain does not contain requested history row")
+			}
+			versionsByTarget[recentRestoreKey{Identifier: group.key.Identifier, HistoryID: targetID}] = version
+		}
+	}
+	return versionsByTarget, nil
 }
 
 func restoreVersionChainRows(rows []storedHistoryRow) (map[int64]latestVersion, error) {
@@ -1223,7 +1431,17 @@ func decodeNormalizedJSON(raw []byte) (any, error) {
 func decodeJSONPreservingNumbers(raw []byte, target any) error {
 	decoder := json.NewDecoder(bytes.NewReader(raw))
 	decoder.UseNumber()
-	return decoder.Decode(target)
+	if err := decoder.Decode(target); err != nil {
+		return err
+	}
+	var trailing any
+	if err := decoder.Decode(&trailing); !errors.Is(err, io.EOF) {
+		if err == nil {
+			return fmt.Errorf("multiple JSON values in payload")
+		}
+		return err
+	}
+	return nil
 }
 
 func writeCanonicalJSON(out *bytes.Buffer, value any) error {
