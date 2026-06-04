@@ -1099,12 +1099,13 @@ func readSubmodelElementRowsByPath(ctx context.Context, db dbQueryer, submodelDa
 		}, maskRuntime.Projections()...)...)
 
 	if includeChildren {
+		escapedPath := escapeSQLLikePattern(idShortOrPath)
 		innerQuery = innerQuery.Where(
 			goqu.I("sme.submodel_id").Eq(submodelDatabaseID),
 			goqu.Or(
 				goqu.I("sme.idshort_path").Eq(idShortOrPath),
-				goqu.I("sme.idshort_path").Like(goqu.L("? || '.%'", idShortOrPath)),
-				goqu.I("sme.idshort_path").Like(goqu.L("? || '[%'", idShortOrPath)),
+				idShortPathLikeEscaped(goqu.I("sme.idshort_path"), escapedPath+".%"),
+				idShortPathLikeEscaped(goqu.I("sme.idshort_path"), escapedPath+"[%"),
 			),
 		)
 	} else {

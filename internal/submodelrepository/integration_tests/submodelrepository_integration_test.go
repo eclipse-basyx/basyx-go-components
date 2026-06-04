@@ -835,6 +835,151 @@ func TestContractSubmodelRepository(t *testing.T) {
 		assert.Equal(t, "Property", createdElement["modelType"], "created payload should contain modelType")
 	})
 
+	t.Run("DeleteSubmodelElementListEntryWithoutIDShortCompactsRemainingEntries", func(t *testing.T) {
+		submodelID := fmt.Sprintf("https://example.com/ids/sm/contract-delete-list-entry-%d", time.Now().UnixNano())
+		submodelIDShort := fmt.Sprintf("contractDeleteListEntry%d", time.Now().UnixNano())
+		encodedSubmodelID := createSubmodel(t, submodelID, submodelIDShort)
+
+		listEntries := make([]map[string]any, 0, 50)
+		for i := range 50 {
+			listEntries = append(listEntries, map[string]any{
+				"modelType": "Property",
+				"valueType": "xs:string",
+				"value":     fmt.Sprintf("list-entry-%02d", i),
+			})
+		}
+
+		statusCode, body, err := requestJSON(http.MethodPost, fmt.Sprintf("%s/submodels/%s/submodel-elements", baseURL, encodedSubmodelID), map[string]any{
+			"idShort":              "LargeUnnamedList",
+			"modelType":            "SubmodelElementList",
+			"typeValueListElement": "Property",
+			"valueTypeListElement": "xs:string",
+			"value":                listEntries,
+		})
+		require.NoError(t, err)
+		require.Equal(t, http.StatusCreated, statusCode, "response=%s", string(body))
+
+		for _, deleteIndex := range []int{17, 3, 42} {
+			deletePath := fmt.Sprintf("LargeUnnamedList[%d]", deleteIndex)
+			statusCode, body, err = requestJSON(http.MethodDelete, fmt.Sprintf("%s/submodels/%s/submodel-elements/%s", baseURL, encodedSubmodelID, deletePath), nil)
+			require.NoError(t, err)
+			require.Equal(t, http.StatusNoContent, statusCode, "deletePath=%s response=%s", deletePath, string(body))
+		}
+
+		statusCode, body, err = requestJSON(http.MethodGet, fmt.Sprintf("%s/submodels/%s/submodel-elements/LargeUnnamedList", baseURL, encodedSubmodelID), nil)
+		require.NoError(t, err)
+		require.Equal(t, http.StatusOK, statusCode, "response=%s", string(body))
+
+		var listElement map[string]any
+		require.NoError(t, json.Unmarshal(body, &listElement), "response=%s", string(body))
+		remainingEntries, ok := listElement["value"].([]any)
+		require.True(t, ok, "list value must be an array")
+		require.Len(t, remainingEntries, 47)
+	})
+
+	t.Run("DeleteSubmodelElementListEntryEscapesLikeWildcardPathsWhenCompacting", func(t *testing.T) {
+		submodelID := fmt.Sprintf("https://example.com/ids/sm/contract-delete-list-like-escape-%d", time.Now().UnixNano())
+		submodelIDShort := fmt.Sprintf("contractDeleteListLikeEscape%d", time.Now().UnixNano())
+		encodedSubmodelID := createSubmodel(t, submodelID, submodelIDShort)
+
+		statusCode, body, err := requestJSON(http.MethodPost, fmt.Sprintf("%s/submodels/%s/submodel-elements", baseURL, encodedSubmodelID), map[string]any{
+			"idShort":              "A_B",
+			"modelType":            "SubmodelElementList",
+			"typeValueListElement": "Property",
+			"valueTypeListElement": "xs:string",
+			"value": []map[string]any{
+				{
+					"modelType": "Property",
+					"valueType": "xs:string",
+					"value":     "deleted",
+				},
+				{
+					"modelType": "Property",
+					"valueType": "xs:string",
+					"value":     "moved",
+				},
+			},
+		})
+		require.NoError(t, err)
+		require.Equal(t, http.StatusCreated, statusCode, "response=%s", string(body))
+
+		statusCode, body, err = requestJSON(http.MethodPost, fmt.Sprintf("%s/submodels/%s/submodel-elements", baseURL, encodedSubmodelID), map[string]any{
+			"idShort":              "AxB",
+			"modelType":            "SubmodelElementList",
+			"typeValueListElement": "SubmodelElementCollection",
+			"value": []map[string]any{
+				{
+					"modelType": "SubmodelElementCollection",
+					"value": []map[string]any{
+						{
+							"idShort":   "Nested",
+							"modelType": "Property",
+							"valueType": "xs:string",
+							"value":     "other-0",
+						},
+					},
+				},
+				{
+					"modelType": "SubmodelElementCollection",
+					"value": []map[string]any{
+						{
+							"idShort":   "Nested",
+							"modelType": "Property",
+							"valueType": "xs:string",
+							"value":     "other-1",
+						},
+					},
+				},
+			},
+		})
+		require.NoError(t, err)
+		require.Equal(t, http.StatusCreated, statusCode, "response=%s", string(body))
+
+		statusCode, body, err = requestJSON(http.MethodGet, fmt.Sprintf("%s/submodels/%s/submodel-elements/AxB[1].Nested", baseURL, encodedSubmodelID), nil)
+		require.NoError(t, err)
+		require.Equal(t, http.StatusOK, statusCode, "response=%s", string(body))
+
+		statusCode, body, err = requestJSON(http.MethodDelete, fmt.Sprintf("%s/submodels/%s/submodel-elements/A_B[0]", baseURL, encodedSubmodelID), nil)
+		require.NoError(t, err)
+		require.Equal(t, http.StatusNoContent, statusCode, "response=%s", string(body))
+
+		statusCode, body, err = requestJSON(http.MethodGet, fmt.Sprintf("%s/submodels/%s/submodel-elements/A_B[0]", baseURL, encodedSubmodelID), nil)
+		require.NoError(t, err)
+		require.Equal(t, http.StatusOK, statusCode, "response=%s", string(body))
+
+		var movedProperty map[string]any
+		require.NoError(t, json.Unmarshal(body, &movedProperty), "response=%s", string(body))
+		assert.Equal(t, "moved", movedProperty["value"])
+
+		statusCode, body, err = requestJSON(http.MethodGet, fmt.Sprintf("%s/submodels/%s/submodel-elements/AxB[1].Nested", baseURL, encodedSubmodelID), nil)
+		require.NoError(t, err)
+		require.Equal(t, http.StatusOK, statusCode, "response=%s", string(body))
+
+		var unrelatedProperty map[string]any
+		require.NoError(t, json.Unmarshal(body, &unrelatedProperty), "response=%s", string(body))
+		assert.Equal(t, "other-1", unrelatedProperty["value"])
+	})
+
+	t.Run("PostAnnotatedRelationshipElementReturnsCreatedPayload", func(t *testing.T) {
+		submodelID := fmt.Sprintf("https://example.com/ids/sm/contract-post-annotated-relationship-%d", time.Now().UnixNano())
+		submodelIDShort := fmt.Sprintf("contractPostAnnotatedRelationship%d", time.Now().UnixNano())
+		encodedSubmodelID := createSubmodel(t, submodelID, submodelIDShort)
+
+		payload := map[string]any{
+			"idShort":   "CreatedAnnotatedRelationship",
+			"modelType": "AnnotatedRelationshipElement",
+		}
+
+		statusCode, body, err := requestJSON(http.MethodPost, fmt.Sprintf("%s/submodels/%s/submodel-elements", baseURL, encodedSubmodelID), payload)
+		require.NoError(t, err)
+		require.Equal(t, http.StatusCreated, statusCode, "response=%s", string(body))
+
+		var createdElement map[string]any
+		require.NoError(t, json.Unmarshal(body, &createdElement), "response=%s", string(body))
+		assert.Equal(t, "CreatedAnnotatedRelationship", createdElement["idShort"])
+		assert.Equal(t, "AnnotatedRelationshipElement", createdElement["modelType"])
+	})
+
 	t.Run("GetSubmodelByIDDoesNotExposeEmptySubmodelElementsArray", func(t *testing.T) {
 		submodelID := fmt.Sprintf("https://example.com/ids/sm/contract-empty-elements-%d", time.Now().UnixNano())
 		submodelIDShort := fmt.Sprintf("contractEmptyElements%d", time.Now().UnixNano())

@@ -42,3 +42,12 @@ func TestBuildSubmodelElementReferenceBuildsKeyChainForNestedDotPath(t *testing.
 	require.Equal(t, types.KeyTypesProperty, keys[2].Type())
 	require.Equal(t, "child", keys[2].Value())
 }
+
+func TestEscapeSQLLikePatternEscapesWildcardCharacters(t *testing.T) {
+	t.Parallel()
+
+	require.Equal(t, "A!_B", escapeSQLLikePattern("A_B"))
+	require.Equal(t, "A!%B", escapeSQLLikePattern("A%B"))
+	require.Equal(t, "A!!B", escapeSQLLikePattern("A!B"))
+	require.Equal(t, "A!!B!_C!%", escapeSQLLikePattern("A!B_C%"))
+}

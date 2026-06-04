@@ -1124,7 +1124,7 @@ func andBindingsForResolvedFieldPaths(resolved []ResolvedFieldPath, predicate ex
 			if b.Index.stringValue != nil {
 				if b.Alias == "submodel_element.idshort_path" && strings.HasSuffix(*b.Index.stringValue, "[]") {
 					prefix := strings.TrimSuffix(*b.Index.stringValue, "[]")
-					where = append(where, goqu.I(b.Alias).Like(goqu.L("? || '[%'", prefix)))
+					where = append(where, goqu.L("? LIKE ? ESCAPE '!'", goqu.I(b.Alias), escapeSQLLikePattern(prefix)+"[%"))
 					continue
 				}
 				where = append(where, goqu.I(b.Alias).Eq(*b.Index.stringValue))
@@ -1135,6 +1135,13 @@ func andBindingsForResolvedFieldPaths(resolved []ResolvedFieldPath, predicate ex
 		return goqu.L("1=1")
 	}
 	return goqu.And(where...)
+}
+
+func escapeSQLLikePattern(value string) string {
+	escaped := strings.ReplaceAll(value, "!", "!!")
+	escaped = strings.ReplaceAll(escaped, "%", "!%")
+	escaped = strings.ReplaceAll(escaped, "_", "!_")
+	return escaped
 }
 
 // wrapBindingsAsResolvedPath wraps bare array bindings into a minimal ResolvedFieldPath

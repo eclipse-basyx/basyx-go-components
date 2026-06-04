@@ -324,18 +324,18 @@ func (p PostgreSQLAnnotatedRelationshipElementHandler) GetInsertQueryPart(_ *sql
 	}, nil
 }
 
-func serializeReference(ref types.IReference, json jsoniter.API) (string, error) {
-	var firstRef string
-	if !isEmptyReference(ref) {
-		jsonable, err := jsonization.ToJsonable(ref)
-		if err != nil {
-			return "", common.NewErrBadRequest("SMREPO-SERREF-JSONABLE Failed to convert reference to jsonable: " + err.Error())
-		}
-		refBytes, err := json.Marshal(jsonable)
-		if err != nil {
-			return "", err
-		}
-		firstRef = string(refBytes)
+func serializeReference(ref types.IReference, json jsoniter.API) (any, error) {
+	if isEmptyReference(ref) {
+		return nil, nil
 	}
-	return firstRef, nil
+
+	jsonable, err := jsonization.ToJsonable(ref)
+	if err != nil {
+		return nil, common.NewErrBadRequest("SMREPO-SERREF-JSONABLE Failed to convert reference to jsonable: " + err.Error())
+	}
+	refBytes, err := json.Marshal(jsonable)
+	if err != nil {
+		return nil, err
+	}
+	return string(refBytes), nil
 }
