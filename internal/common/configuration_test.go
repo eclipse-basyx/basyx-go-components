@@ -201,7 +201,7 @@ func TestLoadConfigAppliesHistoryAndEventingDefaults(t *testing.T) {
 func TestLoadConfigAppliesSupportedBasyxHistoryEnvOverrides(t *testing.T) {
 	t.Setenv("BASYX_HISTORY_MODE", "audit")
 	t.Setenv("BASYX_HISTORY_RETENTION_DAYS", "0")
-	t.Setenv("BASYX_HISTORY_FULL_SNAPSHOT_INTERVAL", "1")
+	t.Setenv("BASYX_HISTORY_FULL_SNAPSHOT_INTERVAL", "3")
 	t.Setenv("BASYX_HISTORY_IMMUTABILITY", "postgres_guarded")
 	t.Setenv("BASYX_AUDIT_IDENTITY_MODE", "none")
 	captureLogOutput(t)
@@ -211,8 +211,16 @@ func TestLoadConfigAppliesSupportedBasyxHistoryEnvOverrides(t *testing.T) {
 		t.Fatalf("unexpected config load error: %v", err)
 	}
 
-	if cfg.History.Mode != "audit" || cfg.History.RetentionDays != 0 || cfg.History.FullSnapshotInterval != 1 || cfg.History.Immutability != "postgres_guarded" || cfg.History.AuditIdentityMode != "none" {
+	if cfg.History.Mode != "audit" || cfg.History.RetentionDays != 0 || cfg.History.FullSnapshotInterval != 3 || cfg.History.Immutability != "postgres_guarded" || cfg.History.AuditIdentityMode != "none" {
 		t.Fatalf("unexpected history env override result: %+v", cfg.History)
+	}
+}
+
+func TestValidateHistoryAndEventingConfigAcceptsDiffBackedSnapshotInterval(t *testing.T) {
+	cfg := Config{History: HistoryConfig{Mode: "api", FullSnapshotInterval: 10, Immutability: "none", AuditIdentityMode: "none"}}
+
+	if err := validateHistoryAndEventingConfig(&cfg); err != nil {
+		t.Fatalf("expected diff-backed full snapshot interval to be accepted, got %v", err)
 	}
 }
 
@@ -228,10 +236,6 @@ func TestValidateHistoryAndEventingConfigRejectsUnsupportedFeatures(t *testing.T
 		{
 			name:   "full snapshot interval zero",
 			config: Config{History: HistoryConfig{Mode: "api", FullSnapshotInterval: 0, Immutability: "none", AuditIdentityMode: "none"}},
-		},
-		{
-			name:   "future diff-backed full snapshot interval",
-			config: Config{History: HistoryConfig{Mode: "api", FullSnapshotInterval: 10, Immutability: "none", AuditIdentityMode: "none"}},
 		},
 		{
 			name:   "external anchor",

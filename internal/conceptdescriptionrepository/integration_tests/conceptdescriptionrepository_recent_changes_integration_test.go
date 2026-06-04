@@ -27,6 +27,7 @@
 package main
 
 import (
+	"database/sql"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -34,6 +35,8 @@ import (
 	"net/url"
 	"testing"
 	"time"
+
+	"github.com/doug-martin/goqu/v9"
 )
 
 func TestConceptDescriptionRepositoryRecentChanges(t *testing.T) {
@@ -83,6 +86,7 @@ func TestConceptDescriptionRepositoryRecentChanges(t *testing.T) {
 	if status != http.StatusNoContent {
 		t.Fatalf("expected 204, got %d body=%s", status, string(body))
 	}
+	requireConceptDescriptionHistoryPayloadTypes(t, conceptDescriptionID, []string{"snapshot", "diff"})
 
 	recentURL := baseURL + "/concept-descriptions/$recent-changes?limit=10&updatedFrom=" + url.QueryEscape(changedAfter)
 	status, body, err = requestJSON(http.MethodGet, recentURL, nil)
@@ -98,6 +102,50 @@ func TestConceptDescriptionRepositoryRecentChanges(t *testing.T) {
 		t.Fatalf("failed to decode recent changes: %v", err)
 	}
 	requireConceptDescriptionRecentChanges(t, payload, conceptDescriptionID, 2)
+}
+
+func requireConceptDescriptionHistoryPayloadTypes(t *testing.T, id string, expected []string) {
+	t.Helper()
+	db, err := sql.Open("postgres", "postgres://admin:admin123@127.0.0.1:6432/basyxTestDB?sslmode=disable")
+	if err != nil {
+		t.Fatalf("open database: %v", err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+
+	query, args, err := goqu.From("concept_description_history").
+		Select(goqu.C("payload_type")).
+		Where(goqu.C("identifier").Eq(id)).
+		Order(goqu.C("history_id").Asc()).
+		ToSQL()
+	if err != nil {
+		t.Fatalf("build history payload types query: %v", err)
+	}
+
+	rows, err := db.Query(query, args...)
+	if err != nil {
+		t.Fatalf("query history payload types: %v", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	actual := make([]string, 0, len(expected))
+	for rows.Next() {
+		var payloadType string
+		if err = rows.Scan(&payloadType); err != nil {
+			t.Fatalf("scan payload type: %v", err)
+		}
+		actual = append(actual, payloadType)
+	}
+	if err = rows.Err(); err != nil {
+		t.Fatalf("history payload rows: %v", err)
+	}
+	if len(actual) != len(expected) {
+		t.Fatalf("expected payload types %v, got %v", expected, actual)
+	}
+	for index := range expected {
+		if actual[index] != expected[index] {
+			t.Fatalf("expected payload types %v, got %v", expected, actual)
+		}
+	}
 }
 
 func requireConceptDescriptionRecentChanges(t *testing.T, payload map[string]any, id string, minimumCount int) {

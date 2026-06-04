@@ -27,6 +27,7 @@
 package main
 
 import (
+	"database/sql"
 	"encoding/base64"
 	"fmt"
 	"net/http"
@@ -34,6 +35,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/doug-martin/goqu/v9"
 	"github.com/stretchr/testify/require"
 )
 
@@ -130,6 +132,7 @@ func TestAASRepositoryHistoryRecentChangesAndBatchAssetKind(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, http.StatusOK, status)
 	require.Equal(t, "type-v3-child", latestHistorical["assetInformation"].(map[string]any)["assetType"])
+	requireAASHistoryPayloadTypes(t, aasID, []string{"snapshot", "diff", "diff"})
 
 	recent, status, err := getJSONResponse(baseURL + "/shells/$recent-changes?limit=10")
 	require.NoError(t, err)
@@ -147,6 +150,7 @@ func TestAASRepositoryHistoryRecentChangesAndBatchAssetKind(t *testing.T) {
 	status, err = deleteResponseStatus(baseURL + "/shells/" + encodedAASID)
 	require.NoError(t, err)
 	require.Equal(t, http.StatusNoContent, status)
+	requireAASHistoryPayloadTypes(t, aasID, []string{"snapshot", "diff", "diff", "snapshot"})
 
 	status, err = getResponseStatus(fmt.Sprintf("%s/shells/%s/$history?date=%s", baseURL, encodedAASID, time.Now().UTC().Format(time.RFC3339Nano)))
 	require.NoError(t, err)
@@ -157,6 +161,33 @@ func TestAASRepositoryHistoryRecentChangesAndBatchAssetKind(t *testing.T) {
 	require.Equal(t, http.StatusOK, status)
 	requireRecentChangesForID(t, recent, aasID, 4)
 	requireRecentChangeTypeForID(t, recent, aasID, "Deleted")
+}
+
+func requireAASHistoryPayloadTypes(t *testing.T, id string, expected []string) {
+	t.Helper()
+	db, err := sql.Open("postgres", integrationTestDSN)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = db.Close() })
+
+	query, args, err := goqu.From("aas_history").
+		Select(goqu.C("payload_type")).
+		Where(goqu.C("identifier").Eq(id)).
+		Order(goqu.C("history_id").Asc()).
+		ToSQL()
+	require.NoError(t, err)
+
+	rows, err := db.Query(query, args...)
+	require.NoError(t, err)
+	defer func() { _ = rows.Close() }()
+
+	actual := make([]string, 0, len(expected))
+	for rows.Next() {
+		var payloadType string
+		require.NoError(t, rows.Scan(&payloadType))
+		actual = append(actual, payloadType)
+	}
+	require.NoError(t, rows.Err())
+	require.Equal(t, expected, actual)
 }
 
 func requireRecentChangesForID(t *testing.T, payload map[string]any, id string, minimumCount int) {

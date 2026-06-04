@@ -27,6 +27,7 @@
 package main
 
 import (
+	"database/sql"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -35,6 +36,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/doug-martin/goqu/v9"
 	"github.com/stretchr/testify/require"
 )
 
@@ -100,6 +102,7 @@ func TestAASRegistryRecentChangesAndBatchAssetKind(t *testing.T) {
 	}
 	status, body, _ = doAASRequest(t, aasNoRedirectClient, http.MethodPost, aasRegistryBaseURL+"/shell-descriptors/"+encodedDescriptorID+"/submodel-descriptors", submodelPayload)
 	require.Equal(t, http.StatusCreated, status, "response=%s", string(body))
+	requireDescriptorHistoryPayloadTypes(t, descriptorID, []string{"snapshot", "diff", "diff"})
 
 	recentURL := aasRegistryBaseURL + "/shell-descriptors/$recent-changes?limit=10&updatedFrom=" + url.QueryEscape(changedAfter)
 	status, body, _ = doAASRequest(t, aasNoRedirectClient, http.MethodGet, recentURL, nil)
@@ -115,6 +118,33 @@ func TestAASRegistryRecentChangesAndBatchAssetKind(t *testing.T) {
 	filtered := decodeAASRegistryMap(t, body)
 	requireDescriptorWithAssetType(t, filtered, descriptorID, "type-v2")
 	requireNoDescriptorWithAssetType(t, filtered, descriptorID, "type-v1")
+}
+
+func requireDescriptorHistoryPayloadTypes(t *testing.T, id string, expected []string) {
+	t.Helper()
+	db, err := sql.Open("postgres", "postgres://admin:admin123@127.0.0.1:6432/basyxTestDB?sslmode=disable")
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = db.Close() })
+
+	query, args, err := goqu.From("descriptor_history").
+		Select(goqu.C("payload_type")).
+		Where(goqu.C("identifier").Eq(id)).
+		Order(goqu.C("history_id").Asc()).
+		ToSQL()
+	require.NoError(t, err)
+
+	rows, err := db.Query(query, args...)
+	require.NoError(t, err)
+	defer func() { _ = rows.Close() }()
+
+	actual := make([]string, 0, len(expected))
+	for rows.Next() {
+		var payloadType string
+		require.NoError(t, rows.Scan(&payloadType))
+		actual = append(actual, payloadType)
+	}
+	require.NoError(t, rows.Err())
+	require.Equal(t, expected, actual)
 }
 
 func decodeAASRegistryMap(t *testing.T, body []byte) map[string]any {

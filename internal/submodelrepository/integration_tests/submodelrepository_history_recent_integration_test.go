@@ -27,6 +27,7 @@
 package main
 
 import (
+	"database/sql"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -34,6 +35,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/doug-martin/goqu/v9"
 	"github.com/stretchr/testify/require"
 )
 
@@ -153,6 +155,7 @@ func TestSubmodelRepositoryHistoryTracksSubmodelElementChangesAndRecentDeletes(t
 	require.NoError(t, err)
 	require.Equal(t, http.StatusOK, status, "response=%s", string(body))
 	recent := decodeMap(t, body)
+	requireSubmodelHistoryPayloadTypes(t, submodelID, []string{"snapshot", "diff", "diff", "snapshot", "diff"})
 	requireRecentChangesForIDSubmodel(t, recent, submodelID, 5)
 	requireRecentSubmodelReference(t, recent, submodelID, "semanticId", semanticID)
 	requireRecentSubmodelReference(t, recent, submodelID, "supplementalSemanticIds", supplementalSemanticID)
@@ -167,6 +170,7 @@ func TestSubmodelRepositoryHistoryTracksSubmodelElementChangesAndRecentDeletes(t
 	status, body, err = requestJSON(http.MethodDelete, baseURL+"/submodels/"+encodedSubmodelID, nil)
 	require.NoError(t, err)
 	require.Equal(t, http.StatusNoContent, status, "response=%s", string(body))
+	requireSubmodelHistoryPayloadTypes(t, submodelID, []string{"snapshot", "diff", "diff", "snapshot", "diff", "diff"})
 
 	status, body, err = requestJSON(http.MethodGet, fmt.Sprintf("%s/submodels/%s/$history?date=%s", baseURL, encodedSubmodelID, time.Now().UTC().Format(time.RFC3339Nano)), nil)
 	require.NoError(t, err)
@@ -190,6 +194,33 @@ func TestSubmodelRepositoryHistoryTracksSubmodelElementChangesAndRecentDeletes(t
 	recent = decodeMap(t, body)
 	requireRecentChangesForIDSubmodel(t, recent, submodelID, 6)
 	requireRecentChangeTypeForIDSubmodel(t, recent, submodelID, "Deleted")
+}
+
+func requireSubmodelHistoryPayloadTypes(t *testing.T, id string, expected []string) {
+	t.Helper()
+	db, err := sql.Open("postgres", submodelRepositoryIntegrationTestDSN)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = db.Close() })
+
+	query, args, err := goqu.From("submodel_history").
+		Select(goqu.C("payload_type")).
+		Where(goqu.C("identifier").Eq(id)).
+		Order(goqu.C("history_id").Asc()).
+		ToSQL()
+	require.NoError(t, err)
+
+	rows, err := db.Query(query, args...)
+	require.NoError(t, err)
+	defer func() { _ = rows.Close() }()
+
+	actual := make([]string, 0, len(expected))
+	for rows.Next() {
+		var payloadType string
+		require.NoError(t, rows.Scan(&payloadType))
+		actual = append(actual, payloadType)
+	}
+	require.NoError(t, rows.Err())
+	require.Equal(t, expected, actual)
 }
 
 func decodeMap(t *testing.T, body []byte) map[string]any {

@@ -28,6 +28,8 @@ package history
 import (
 	"context"
 	"database/sql"
+	"database/sql/driver"
+	"encoding/json"
 	"testing"
 	"time"
 
@@ -165,7 +167,7 @@ func TestAppendVersionTxInsertsWithoutUpdatingPreviousRows(t *testing.T) {
 	mock.ExpectBegin()
 	mock.ExpectExec(`SELECT pg_advisory_xact_lock`).
 		WillReturnResult(sqlmock.NewResult(0, 1))
-	mock.ExpectQuery(`SELECT "row_hash" FROM "aas_history"`).
+	mock.ExpectQuery(`SELECT "history_id" FROM "aas_history"`).
 		WillReturnError(sql.ErrNoRows)
 	mock.ExpectQuery(`INSERT INTO "aas_history".*RETURNING "history_id"`).
 		WillReturnRows(sqlmock.NewRows([]string{"history_id"}).AddRow(1))
@@ -204,9 +206,8 @@ func TestAppendMutatedVersionTxUsesLatestSnapshotAndRowHash(t *testing.T) {
 	mock.ExpectBegin()
 	mock.ExpectExec(`SELECT pg_advisory_xact_lock`).
 		WillReturnResult(sqlmock.NewResult(0, 1))
-	mock.ExpectQuery(`SELECT "payload"."snapshot"::text, "history"."deleted", "history"."row_hash" FROM "submodel_history" AS "history" INNER JOIN "submodel_history_payload" AS "payload"`).
-		WillReturnRows(sqlmock.NewRows([]string{"snapshot", "deleted", "row_hash"}).
-			AddRow(`{"id":"sm-1","submodelElements":[]}`, false, "previous"))
+	latestSnapshot := map[string]any{"id": "sm-1", "submodelElements": []any{}}
+	expectLatestSnapshotRestore(mock, TableSubmodel, "submodel_history_payload", "sm-1", 7, latestSnapshot, false, "previous")
 	mock.ExpectQuery(`INSERT INTO "submodel_history".*RETURNING "history_id"`).
 		WillReturnRows(sqlmock.NewRows([]string{"history_id"}).AddRow(1))
 	mock.ExpectExec(`INSERT INTO "submodel_history_payload"`).
@@ -219,6 +220,120 @@ func TestAppendMutatedVersionTxUsesLatestSnapshotAndRowHash(t *testing.T) {
 		snapshot["idShort"] = "updated"
 		return nil
 	})
+	require.NoError(t, err)
+	require.NoError(t, tx.Commit())
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestAppendMutatedVersionTxStoresDiffFromOriginalSnapshot(t *testing.T) {
+	t.Cleanup(func() {
+		Configure(Config{Mode: ModeOff, Immutability: ImmutabilityNone, AuditIdentityMode: AuditIdentityNone})
+	})
+	Configure(Config{Mode: ModeAPI, FullSnapshotInterval: 3, Immutability: ImmutabilityNone, AuditIdentityMode: AuditIdentityNone})
+
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer func() {
+		_ = db.Close()
+	}()
+
+	latestSnapshot := map[string]any{"id": "sm-1", "idShort": "before"}
+
+	mock.ExpectBegin()
+	mock.ExpectExec(`SELECT pg_advisory_xact_lock`).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	expectLatestSnapshotRestore(mock, TableSubmodel, "submodel_history_payload", "sm-1", 7, latestSnapshot, false, "previous")
+	mock.ExpectQuery(`INSERT INTO "submodel_history".*RETURNING "history_id"`).
+		WillReturnRows(sqlmock.NewRows([]string{"history_id"}).AddRow(8))
+	mock.ExpectExec(`INSERT INTO "submodel_history_payload".*"diff".*/idShort.*after`).
+		WillReturnResult(sqlmock.NewResult(1, 1))
+	mock.ExpectCommit()
+
+	tx, err := db.Begin()
+	require.NoError(t, err)
+	err = AppendMutatedVersionTx(context.Background(), tx, TableSubmodel, "sm-1", ChangeUpdated, func(snapshot map[string]any) error {
+		snapshot["idShort"] = "after"
+		return nil
+	})
+	require.NoError(t, err)
+	require.NoError(t, tx.Commit())
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestAppendVersionTxStoresDiffWhenIntervalAllows(t *testing.T) {
+	t.Cleanup(func() {
+		Configure(Config{Mode: ModeOff, Immutability: ImmutabilityNone, AuditIdentityMode: AuditIdentityNone})
+	})
+	Configure(Config{Mode: ModeAPI, FullSnapshotInterval: 3, Immutability: ImmutabilityNone, AuditIdentityMode: AuditIdentityNone})
+
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer func() {
+		_ = db.Close()
+	}()
+
+	baseSnapshot := map[string]any{"id": "aas-1", "idShort": "before"}
+
+	mock.ExpectBegin()
+	mock.ExpectExec(`SELECT pg_advisory_xact_lock`).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	expectLatestSnapshotRestore(mock, TableAAS, "aas_history_payload", "aas-1", 1, baseSnapshot, false, "previous")
+	mock.ExpectQuery(`INSERT INTO "aas_history".*RETURNING "history_id"`).
+		WillReturnRows(sqlmock.NewRows([]string{"history_id"}).AddRow(2))
+	mock.ExpectExec(`INSERT INTO "aas_history_payload".*"diff"`).
+		WillReturnResult(sqlmock.NewResult(1, 1))
+	mock.ExpectCommit()
+
+	tx, err := db.Begin()
+	require.NoError(t, err)
+	err = AppendVersionTx(context.Background(), tx, TableAAS, "aas-1", ChangeUpdated, map[string]any{"id": "aas-1", "idShort": "after"}, false)
+	require.NoError(t, err)
+	require.NoError(t, tx.Commit())
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestAppendVersionTxStoresScheduledSnapshotAtIntervalBoundary(t *testing.T) {
+	t.Cleanup(func() {
+		Configure(Config{Mode: ModeOff, Immutability: ImmutabilityNone, AuditIdentityMode: AuditIdentityNone})
+	})
+	Configure(Config{Mode: ModeAPI, FullSnapshotInterval: 3, Immutability: ImmutabilityNone, AuditIdentityMode: AuditIdentityNone})
+
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer func() {
+		_ = db.Close()
+	}()
+
+	checkpoint := map[string]any{"id": "aas-1", "idShort": "v1"}
+	v2 := map[string]any{"id": "aas-1", "idShort": "v2"}
+	v3 := map[string]any{"id": "aas-1", "idShort": "v3"}
+	patch12, err := BuildJSONPatch(checkpoint, v2)
+	require.NoError(t, err)
+	patch23, err := BuildJSONPatch(v2, v3)
+	require.NoError(t, err)
+	operationTime := time.Date(2026, 5, 28, 12, 0, 0, 0, time.UTC)
+
+	mock.ExpectBegin()
+	mock.ExpectExec(`SELECT pg_advisory_xact_lock`).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectQuery(`SELECT "history_id" FROM "aas_history"`).
+		WillReturnRows(sqlmock.NewRows([]string{"history_id"}).AddRow(int64(3)))
+	mock.ExpectQuery(`SELECT "history_id" FROM "aas_history".*"payload_type" = 'snapshot'`).
+		WillReturnRows(sqlmock.NewRows([]string{"history_id"}).AddRow(int64(1)))
+	mock.ExpectQuery(`SELECT .*FROM "aas_history" AS "history" INNER JOIN "aas_history_payload" AS "payload"`).
+		WillReturnRows(sqlmock.NewRows(historyChainColumns()).
+			AddRow(historyChainRow(1, "aas-1", ChangeCreated, PayloadTypeSnapshot, checkpoint, nil, nil, false, operationTime, "row-1")...).
+			AddRow(historyChainRow(2, "aas-1", ChangeUpdated, PayloadTypeDiff, nil, patch12, v2, false, operationTime, "row-2")...).
+			AddRow(historyChainRow(3, "aas-1", ChangeUpdated, PayloadTypeDiff, nil, patch23, v3, false, operationTime, "row-3")...))
+	mock.ExpectQuery(`INSERT INTO "aas_history".*RETURNING "history_id"`).
+		WillReturnRows(sqlmock.NewRows([]string{"history_id"}).AddRow(4))
+	mock.ExpectExec(`INSERT INTO "aas_history_payload".*"snapshot"`).
+		WillReturnResult(sqlmock.NewResult(1, 1))
+	mock.ExpectCommit()
+
+	tx, err := db.Begin()
+	require.NoError(t, err)
+	err = AppendVersionTx(context.Background(), tx, TableAAS, "aas-1", ChangeUpdated, map[string]any{"id": "aas-1", "idShort": "v4"}, false)
 	require.NoError(t, err)
 	require.NoError(t, tx.Commit())
 	require.NoError(t, mock.ExpectationsWereMet())
@@ -303,19 +418,19 @@ func TestRecentRowsReturnsNewestRowsFirstAndCursorPaginatesOlderRows(t *testing.
 	}()
 
 	operationTime := time.Date(2026, 5, 28, 12, 0, 0, 0, time.UTC)
-	mock.ExpectQuery(`SELECT .*FROM "aas_history" AS "history".*INNER JOIN "aas_history_payload" AS "payload".*ORDER BY "history"."history_id" DESC LIMIT 2`).
+	mock.ExpectQuery(`SELECT .*FROM "aas_history" AS "history".*ORDER BY "history"."history_id" DESC LIMIT 2`).
 		WillReturnRows(sqlmock.NewRows([]string{
 			"history_id",
 			"identifier",
 			"change_type",
-			"snapshot",
 			"deleted",
 			"administration_created_at_text",
 			"administration_updated_at_text",
 			"operation_time",
 		}).
-			AddRow(int64(12), "aas-3", ChangeUpdated, `{"id":"aas-3"}`, false, nil, nil, operationTime).
-			AddRow(int64(11), "aas-2", ChangeCreated, `{"id":"aas-2"}`, false, nil, nil, operationTime))
+			AddRow(int64(12), "aas-3", ChangeUpdated, false, nil, nil, operationTime).
+			AddRow(int64(11), "aas-2", ChangeCreated, false, nil, nil, operationTime))
+	expectSnapshotRestore(mock, TableAAS, "aas_history_payload", "aas-3", 12, map[string]any{"id": "aas-3"}, false, operationTime, "row-12")
 
 	rows, cursor, err := RecentRows(context.Background(), db, TableAAS, 1, "", time.Time{}, time.Time{})
 	require.NoError(t, err)
@@ -325,25 +440,80 @@ func TestRecentRowsReturnsNewestRowsFirstAndCursorPaginatesOlderRows(t *testing.
 	require.Equal(t, operationTime.Format(time.RFC3339Nano), rows[0].UpdatedAt)
 	require.Equal(t, "12", cursor)
 
-	mock.ExpectQuery(`SELECT .*FROM "aas_history" AS "history".*INNER JOIN "aas_history_payload" AS "payload".*WHERE \("history"\."history_id" < 12\).*ORDER BY "history"."history_id" DESC LIMIT 2`).
+	mock.ExpectQuery(`SELECT .*FROM "aas_history" AS "history".*WHERE \("history"\."history_id" < 12\).*ORDER BY "history"."history_id" DESC LIMIT 2`).
 		WillReturnRows(sqlmock.NewRows([]string{
 			"history_id",
 			"identifier",
 			"change_type",
-			"snapshot",
 			"deleted",
 			"administration_created_at_text",
 			"administration_updated_at_text",
 			"operation_time",
 		}).
-			AddRow(int64(11), "aas-2", ChangeCreated, `{"id":"aas-2"}`, false, nil, nil, operationTime).
-			AddRow(int64(10), "aas-1", ChangeCreated, `{"id":"aas-1"}`, false, nil, nil, operationTime))
+			AddRow(int64(11), "aas-2", ChangeCreated, false, nil, nil, operationTime).
+			AddRow(int64(10), "aas-1", ChangeCreated, false, nil, nil, operationTime))
+	expectSnapshotRestore(mock, TableAAS, "aas_history_payload", "aas-2", 11, map[string]any{"id": "aas-2"}, false, operationTime, "row-11")
 
 	rows, cursor, err = RecentRows(context.Background(), db, TableAAS, 1, cursor, time.Time{}, time.Time{})
 	require.NoError(t, err)
 	require.Len(t, rows, 1)
 	require.Equal(t, int64(11), rows[0].HistoryID)
 	require.Equal(t, "11", cursor)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestSnapshotByDateRestoresDiffBackedVersion(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer func() {
+		_ = db.Close()
+	}()
+
+	operationTime := time.Date(2026, 5, 28, 12, 0, 0, 0, time.UTC)
+	checkpoint := map[string]any{"id": "aas-1", "idShort": "v1"}
+	target := map[string]any{"id": "aas-1", "idShort": "v2"}
+	patch, err := BuildJSONPatch(checkpoint, target)
+	require.NoError(t, err)
+
+	mock.ExpectQuery(`SELECT "history"."history_id" FROM "aas_history" AS "history".*ORDER BY "history"."valid_from" DESC, "history"."history_id" DESC LIMIT 1`).
+		WillReturnRows(sqlmock.NewRows([]string{"history_id"}).AddRow(int64(2)))
+	mock.ExpectQuery(`SELECT "history_id" FROM "aas_history".*"payload_type" = 'snapshot'`).
+		WillReturnRows(sqlmock.NewRows([]string{"history_id"}).AddRow(int64(1)))
+	mock.ExpectQuery(`SELECT .*FROM "aas_history" AS "history" INNER JOIN "aas_history_payload" AS "payload"`).
+		WillReturnRows(sqlmock.NewRows(historyChainColumns()).
+			AddRow(historyChainRow(1, "aas-1", ChangeCreated, PayloadTypeSnapshot, checkpoint, nil, nil, false, operationTime, "row-1")...).
+			AddRow(historyChainRow(2, "aas-1", ChangeUpdated, PayloadTypeDiff, nil, patch, target, false, operationTime, "row-2")...))
+
+	snapshot, err := SnapshotByDate(context.Background(), db, TableAAS, "aas-1", operationTime)
+	require.NoError(t, err)
+	require.Equal(t, target, snapshot)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestSnapshotByDateRejectsContentHashMismatch(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer func() {
+		_ = db.Close()
+	}()
+
+	operationTime := time.Date(2026, 5, 28, 12, 0, 0, 0, time.UTC)
+	snapshot := map[string]any{"id": "aas-1"}
+	snapshotJSON := mustJSONText(t, snapshot)
+	payloadHash, err := CanonicalJSONHash(snapshot)
+	require.NoError(t, err)
+
+	mock.ExpectQuery(`SELECT "history"."history_id" FROM "aas_history" AS "history".*ORDER BY "history"."valid_from" DESC, "history"."history_id" DESC LIMIT 1`).
+		WillReturnRows(sqlmock.NewRows([]string{"history_id"}).AddRow(int64(1)))
+	mock.ExpectQuery(`SELECT "history_id" FROM "aas_history".*"payload_type" = 'snapshot'`).
+		WillReturnRows(sqlmock.NewRows([]string{"history_id"}).AddRow(int64(1)))
+	mock.ExpectQuery(`SELECT .*FROM "aas_history" AS "history" INNER JOIN "aas_history_payload" AS "payload"`).
+		WillReturnRows(sqlmock.NewRows(historyChainColumns()).
+			AddRow(int64(1), "aas-1", ChangeCreated, PayloadTypeSnapshot, snapshotJSON, nil, false, nil, nil, operationTime, "wrong-content-hash", payloadHash, "row-1"))
+
+	_, err = SnapshotByDate(context.Background(), db, TableAAS, "aas-1", operationTime)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "HISTORY-RESTORE-CONTENTHASH")
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 
@@ -391,4 +561,104 @@ func TestFilterRecentRowsScansUntilFilteredPageIsFull(t *testing.T) {
 	}, rows)
 	require.Equal(t, "2", cursor)
 	require.Equal(t, 2, fetchCalls)
+}
+
+func expectLatestSnapshotRestore(mock sqlmock.Sqlmock, table string, payloadTable string, identifier string, historyID int64, snapshot map[string]any, deleted bool, rowHash string) {
+	mock.ExpectQuery(`SELECT "history_id" FROM "` + table + `"`).
+		WillReturnRows(sqlmock.NewRows([]string{"history_id"}).AddRow(historyID))
+	expectSnapshotRestore(mock, table, payloadTable, identifier, historyID, snapshot, deleted, time.Date(2026, 5, 28, 12, 0, 0, 0, time.UTC), rowHash)
+}
+
+func expectSnapshotRestore(mock sqlmock.Sqlmock, table string, payloadTable string, identifier string, historyID int64, snapshot map[string]any, deleted bool, operationTime time.Time, rowHash string) {
+	mock.ExpectQuery(`SELECT "history_id" FROM "` + table + `".*"payload_type" = 'snapshot'`).
+		WillReturnRows(sqlmock.NewRows([]string{"history_id"}).AddRow(historyID))
+	mock.ExpectQuery(`SELECT .*FROM "` + table + `" AS "history" INNER JOIN "` + payloadTable + `" AS "payload"`).
+		WillReturnRows(sqlmock.NewRows(historyChainColumns()).
+			AddRow(historyChainRow(historyID, identifier, ChangeUpdated, PayloadTypeSnapshot, snapshot, nil, nil, deleted, operationTime, rowHash)...))
+}
+
+func historyChainColumns() []string {
+	return []string{
+		"history_id",
+		"identifier",
+		"change_type",
+		"payload_type",
+		"snapshot",
+		"diff",
+		"deleted",
+		"administration_created_at_text",
+		"administration_updated_at_text",
+		"operation_time",
+		"content_hash",
+		"payload_hash",
+		"row_hash",
+	}
+}
+
+func historyChainRow(
+	historyID int64,
+	identifier string,
+	changeType string,
+	payloadType string,
+	snapshot map[string]any,
+	patch []map[string]any,
+	contentSnapshot map[string]any,
+	deleted bool,
+	operationTime time.Time,
+	rowHash string,
+) []driver.Value {
+	var snapshotText any
+	var diffText any
+	var payloadValue any
+	if payloadType == PayloadTypeSnapshot {
+		snapshotText = mustJSONTextForHelper(snapshot)
+		payloadValue = snapshot
+		contentSnapshot = snapshot
+	} else {
+		diffText = mustJSONTextForHelper(patch)
+		payloadValue = patch
+		if contentSnapshot == nil {
+			panic("diff history test row requires reconstructed content snapshot")
+		}
+	}
+	contentHash := mustHashForHelper(contentSnapshot)
+	payloadHash := mustHashForHelper(payloadValue)
+	return []driver.Value{
+		historyID,
+		identifier,
+		changeType,
+		payloadType,
+		snapshotText,
+		diffText,
+		deleted,
+		nil,
+		nil,
+		operationTime,
+		contentHash,
+		payloadHash,
+		rowHash,
+	}
+}
+
+func mustJSONText(t *testing.T, value any) string {
+	t.Helper()
+	raw, err := json.Marshal(value)
+	require.NoError(t, err)
+	return string(raw)
+}
+
+func mustJSONTextForHelper(value any) string {
+	raw, err := json.Marshal(value)
+	if err != nil {
+		panic(err)
+	}
+	return string(raw)
+}
+
+func mustHashForHelper(value any) string {
+	hash, err := CanonicalJSONHash(value)
+	if err != nil {
+		panic(err)
+	}
+	return hash
 }

@@ -437,9 +437,6 @@ func validateHistoryAndEventingConfig(cfg *Config) error {
 	if cfg.History.FullSnapshotInterval < 1 {
 		return fmt.Errorf("CONFIG-HISTORY-SNAPSHOTINTERVAL history.fullSnapshotInterval must be at least 1")
 	}
-	if cfg.History.FullSnapshotInterval != 1 {
-		return fmt.Errorf("CONFIG-HISTORY-SNAPSHOTINTERVAL history.fullSnapshotInterval values greater than 1 are reserved for future diff-backed history storage; use 1")
-	}
 	switch strings.ToLower(strings.TrimSpace(cfg.History.Immutability)) {
 	case "none", "postgres_guarded":
 	case "external_anchor":
