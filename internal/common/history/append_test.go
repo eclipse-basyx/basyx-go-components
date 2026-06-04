@@ -29,6 +29,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"strings"
 	"testing"
 	"time"
 
@@ -152,7 +153,8 @@ func TestAppendMutatedVersionTxStoresDiffFromOriginalSnapshot(t *testing.T) {
 		_ = db.Close()
 	}()
 
-	latestSnapshot := map[string]any{"id": "sm-1", "idShort": "before"}
+	largeUnchangedValue := strings.Repeat("unchanged-", 40)
+	latestSnapshot := map[string]any{"id": "sm-1", "idShort": "before", "description": largeUnchangedValue}
 
 	mock.ExpectBegin()
 	mock.ExpectExec(`SELECT pg_advisory_xact_lock`).
@@ -187,7 +189,8 @@ func TestAppendVersionTxStoresDiffWhenIntervalAllows(t *testing.T) {
 		_ = db.Close()
 	}()
 
-	baseSnapshot := map[string]any{"id": "aas-1", "idShort": "before"}
+	largeUnchangedValue := strings.Repeat("unchanged-", 40)
+	baseSnapshot := map[string]any{"id": "aas-1", "idShort": "before", "description": largeUnchangedValue}
 
 	mock.ExpectBegin()
 	mock.ExpectExec(`SELECT pg_advisory_xact_lock`).
@@ -201,10 +204,60 @@ func TestAppendVersionTxStoresDiffWhenIntervalAllows(t *testing.T) {
 
 	tx, err := db.Begin()
 	require.NoError(t, err)
-	err = AppendVersionTx(context.Background(), tx, TableAAS, "aas-1", ChangeUpdated, map[string]any{"id": "aas-1", "idShort": "after"}, false)
+	err = AppendVersionTx(context.Background(), tx, TableAAS, "aas-1", ChangeUpdated, map[string]any{"id": "aas-1", "idShort": "after", "description": largeUnchangedValue}, false)
 	require.NoError(t, err)
 	require.NoError(t, tx.Commit())
 	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestAppendVersionTxStoresSnapshotWhenDiffWouldBeLarger(t *testing.T) {
+	t.Cleanup(func() {
+		Configure(Config{Mode: ModeOff, Immutability: ImmutabilityNone, AuditIdentityMode: AuditIdentityNone})
+	})
+	Configure(Config{Mode: ModeAPI, FullSnapshotInterval: 3, Immutability: ImmutabilityNone, AuditIdentityMode: AuditIdentityNone})
+
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer func() {
+		_ = db.Close()
+	}()
+
+	baseSnapshot := map[string]any{"items": []any{"a", "b", "c", "d", "e", "f"}}
+	targetSnapshot := map[string]any{"items": []any{"f", "e", "d", "c", "b", "a"}}
+
+	mock.ExpectBegin()
+	mock.ExpectExec(`SELECT pg_advisory_xact_lock`).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	expectLatestSnapshotRestore(mock, TableAAS, "aas_history_payload", "aas-1", 1, baseSnapshot, false)
+	mock.ExpectQuery(`INSERT INTO "aas_history".*RETURNING "history_id"`).
+		WillReturnRows(sqlmock.NewRows([]string{"history_id"}).AddRow(2))
+	mock.ExpectExec(`INSERT INTO "aas_history_payload".*"snapshot"`).
+		WillReturnResult(sqlmock.NewResult(1, 1))
+	mock.ExpectCommit()
+
+	tx, err := db.Begin()
+	require.NoError(t, err)
+	err = AppendVersionTx(context.Background(), tx, TableAAS, "aas-1", ChangeUpdated, targetSnapshot, false)
+	require.NoError(t, err)
+	require.NoError(t, tx.Commit())
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestBuildHistoryPayloadFallsBackToSnapshotWhenDiffIsNotSmaller(t *testing.T) {
+	baseSnapshot := map[string]any{"items": []any{"a", "b", "c", "d", "e", "f"}}
+	targetSnapshot := map[string]any{"items": []any{"f", "e", "d", "c", "b", "a"}}
+	latest := &latestVersion{
+		snapshot:          baseSnapshot,
+		rowsSinceSnapshot: 1,
+	}
+
+	payload, err := buildHistoryPayload(targetSnapshot, latest, Config{FullSnapshotInterval: 3})
+	require.NoError(t, err)
+
+	require.Equal(t, PayloadTypeSnapshot, payload.payloadType)
+	expectedHash, err := CanonicalJSONHash(targetSnapshot)
+	require.NoError(t, err)
+	require.Equal(t, expectedHash, payload.hash)
 }
 
 func TestAppendVersionTxStoresScheduledSnapshotAtIntervalBoundary(t *testing.T) {

@@ -88,7 +88,7 @@ Each metadata row stores:
 
 On every create, update, or delete, a new immutable metadata row and one payload row are appended. Existing history rows are not updated by the runtime. Both rows are inserted in the same database transaction as the current-table mutation, including value-only SME updates.
 
-Keeping JSONB outside the indexed metadata row narrows recent-change and latest-hash access paths. With `history.fullSnapshotInterval: 1`, every payload row stores `snapshot`. With larger intervals, the runtime stores one `snapshot` checkpoint followed by up to `N-1` RFC 6902 `diff` payload rows.
+Keeping JSONB outside the indexed metadata row narrows recent-change and latest-hash access paths. With `history.fullSnapshotInterval: 1`, every payload row stores `snapshot`. With larger intervals, the runtime stores one `snapshot` checkpoint followed by up to `N-1` RFC 6902 `diff` payload rows, and it may checkpoint earlier when the diff JSON is not smaller than the full snapshot payload.
 
 History lookup uses:
 
@@ -105,8 +105,8 @@ Each runtime-created row stores a deterministic SHA-256 hash of the reconstructe
 
 The shared implementation lives in `internal/common/history`.
 
-- `AppendVersionTx` receives a complete snapshot supplied by the persistence layer and stores it as either a snapshot checkpoint or a diff payload according to `history.fullSnapshotInterval`.
-- `AppendMutatedVersionTx` loads the latest reconstructed snapshot for the identifier, applies a scoped mutation, and stores the resulting version with the same interval logic.
+- `AppendVersionTx` receives a complete snapshot supplied by the persistence layer and stores it as either a snapshot checkpoint or a diff payload according to `history.fullSnapshotInterval` and payload size.
+- `AppendMutatedVersionTx` loads the latest reconstructed snapshot for the identifier, applies a scoped mutation, and stores the resulting version with the same interval and payload-size logic.
 - Both functions acquire a transaction-level PostgreSQL advisory lock derived from `<history-table>:<identifier>`.
 - The lock serializes hash-chain appends for the same identifiable while allowing unrelated identifiers to proceed independently.
 - Both functions append with `INSERT`; they never modify an existing history row.
@@ -129,7 +129,7 @@ sequenceDiagram
 
 This reduces reads against the normalized backend for partial updates and bounds restore work to the configured interval.
 
-`history.fullSnapshotInterval: 1` preserves the full-snapshot behavior. Values greater than `1` produce a strict `snapshot, diff...diff` cadence with at most `N-1` diff rows after each full checkpoint.
+`history.fullSnapshotInterval: 1` preserves the full-snapshot behavior. Values greater than `1` allow at most `N-1` diff rows after each full checkpoint. A full snapshot can appear earlier when the diff payload would be equal to or larger than the snapshot payload.
 
 ### Per-Identifiable Write Paths
 
@@ -236,7 +236,7 @@ The guard is enabled when history is active and `history.immutability` is `postg
 | `history.mode: api` | Append history rows. |
 | `history.mode: audit` | Append the same runtime history rows as `api`; intended for audit-oriented deployments with explicit storage controls. |
 | `history.retentionDays` | Must remain `0`. Non-zero values fail fast until cleanup is implemented. |
-| `history.fullSnapshotInterval` | `1` stores all payloads as snapshots. Values greater than `1` store one full checkpoint plus up to `N-1` diff rows. |
+| `history.fullSnapshotInterval` | `1` stores all payloads as snapshots. Values greater than `1` store one full checkpoint plus up to `N-1` diff rows, with earlier checkpoints when the diff payload is not smaller than the snapshot payload. |
 | `history.immutability: none` | Keep PostgreSQL mutation guards disabled. |
 | `history.immutability: postgres_guarded` | Enable PostgreSQL mutation guards at service startup. |
 | `history.immutability: external_anchor` | Fail fast until an external anchoring worker is implemented. |

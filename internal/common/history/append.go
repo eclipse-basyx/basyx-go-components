@@ -275,7 +275,22 @@ func buildHistoryPayload(snapshot map[string]any, latest *latestVersion, cfg Con
 	if latest == nil || cfg.FullSnapshotInterval == DefaultFullSnapshotInterval || latest.rowsSinceSnapshot >= cfg.FullSnapshotInterval {
 		return buildSnapshotPayload(snapshot)
 	}
-	patch, err := BuildJSONPatch(latest.snapshot, snapshot)
+	diffPayload, err := buildDiffPayload(latest.snapshot, snapshot)
+	if err != nil {
+		return historyPayload{}, err
+	}
+	snapshotJSON, err := json.Marshal(snapshot)
+	if err != nil {
+		return historyPayload{}, common.NewInternalServerError("HISTORY-APPEND-MARSHALSNAPSHOT " + err.Error())
+	}
+	if len(diffPayload.json) >= len(snapshotJSON) {
+		return buildSnapshotPayloadWithJSON(snapshot, snapshotJSON)
+	}
+	return diffPayload, nil
+}
+
+func buildDiffPayload(base map[string]any, snapshot map[string]any) (historyPayload, error) {
+	patch, err := BuildJSONPatch(base, snapshot)
 	if err != nil {
 		return historyPayload{}, common.NewInternalServerError("HISTORY-APPEND-BUILDDIFF " + err.Error())
 	}
@@ -295,6 +310,10 @@ func buildSnapshotPayload(snapshot map[string]any) (historyPayload, error) {
 	if err != nil {
 		return historyPayload{}, common.NewInternalServerError("HISTORY-APPEND-MARSHALSNAPSHOT " + err.Error())
 	}
+	return buildSnapshotPayloadWithJSON(snapshot, payloadJSON)
+}
+
+func buildSnapshotPayloadWithJSON(snapshot map[string]any, payloadJSON []byte) (historyPayload, error) {
 	payloadHash, err := CanonicalJSONHash(snapshot)
 	if err != nil {
 		return historyPayload{}, common.NewInternalServerError("HISTORY-APPEND-SNAPSHOTHASH " + err.Error())

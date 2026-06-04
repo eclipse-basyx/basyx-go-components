@@ -72,7 +72,7 @@ Environment variables:
 
 - `BASYX_HISTORY_MODE`: `off`, `api`, or `audit`. Default is `off`.
 - `BASYX_HISTORY_RETENTION_DAYS`: must remain `0`. Automatic cleanup is not implemented yet.
-- `BASYX_HISTORY_FULL_SNAPSHOT_INTERVAL`: `1` stores every history row as a complete snapshot. Values greater than `1` store one full checkpoint followed by up to `N-1` RFC 6902 diff rows.
+- `BASYX_HISTORY_FULL_SNAPSHOT_INTERVAL`: `1` stores every history row as a complete snapshot. Values greater than `1` store one full checkpoint followed by up to `N-1` RFC 6902 diff rows, with earlier checkpoints when the diff payload is not smaller than the snapshot payload.
 - `BASYX_HISTORY_IMMUTABILITY`: `none` or `postgres_guarded`. Default is `none`.
 - `BASYX_AUDIT_IDENTITY_MODE`: must remain `none`. Automatic identity enrichment is not implemented yet.
 
@@ -109,9 +109,9 @@ See `examples/BaSyxHistoryAuditGuardedExample` for a Docker Compose setup with a
 
 ## What Activating Versioning Means
 
-When versioning is active, each supported identifiable create, update, or delete appends a new row to a dedicated history table. With `fullSnapshotInterval: 1`, every row stores a complete identifiable snapshot. With a larger interval, the first row in each span stores a full checkpoint and the following rows store RFC 6902 diffs against the previous reconstructed snapshot.
+When versioning is active, each supported identifiable create, update, or delete appends a new row to a dedicated history table. With `fullSnapshotInterval: 1`, every row stores a complete identifiable snapshot. With a larger interval, the runtime stores a full checkpoint followed by up to `N-1` RFC 6902 diffs against the previous reconstructed snapshot.
 
-For example, `history.fullSnapshotInterval: 3` stores `snapshot, diff, diff, snapshot, diff, diff...`. Historical reads and recent-change feeds rebuild the full snapshot at query time from the nearest checkpoint and verify the stored payload/content hashes before returning it.
+For example, `history.fullSnapshotInterval: 3` stores at most two diffs after a checkpoint: `snapshot, diff, diff, snapshot...`. The runtime may insert an earlier full snapshot when the diff JSON would not be smaller than the full snapshot payload. Historical reads and recent-change feeds rebuild the full snapshot at query time from the nearest checkpoint and verify the stored payload/content hashes before returning it.
 
 ```mermaid
 flowchart LR
