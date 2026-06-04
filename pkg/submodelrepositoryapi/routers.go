@@ -21,6 +21,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
@@ -282,10 +283,7 @@ func parseTimes(param string) ([]time.Time, error) {
 // parseTime will parses a string parameter into a time.Time using the RFC3339 format
 // nolint:unused
 func parseTime(param string) (time.Time, error) {
-	if param == "" {
-		return time.Time{}, nil
-	}
-	return time.Parse(time.RFC3339, param)
+	return common.ParseISO8601DateTime(param)
 }
 
 // Number is a constraint interface for numeric types.
