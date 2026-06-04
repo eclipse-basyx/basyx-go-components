@@ -1106,20 +1106,26 @@ func CanonicalJSON(value any) ([]byte, error) {
 func normalizeJSONValue(value any) (any, error) {
 	switch typed := value.(type) {
 	case json.RawMessage:
-		var normalized any
-		if err := json.Unmarshal(typed, &normalized); err != nil {
-			return nil, err
-		}
-		return normalized, nil
+		return decodeNormalizedJSON(typed)
 	case []byte:
-		var normalized any
-		if err := json.Unmarshal(typed, &normalized); err != nil {
+		return decodeNormalizedJSON(typed)
+	default:
+		encoded, err := json.Marshal(value)
+		if err != nil {
 			return nil, err
 		}
-		return normalized, nil
-	default:
-		return value, nil
+		return decodeNormalizedJSON(encoded)
 	}
+}
+
+func decodeNormalizedJSON(raw []byte) (any, error) {
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.UseNumber()
+	var normalized any
+	if err := decoder.Decode(&normalized); err != nil {
+		return nil, err
+	}
+	return normalized, nil
 }
 
 func writeCanonicalJSON(out *bytes.Buffer, value any) error {

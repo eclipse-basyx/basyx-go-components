@@ -58,6 +58,42 @@ func TestCanonicalJSONHashIsStableForObjectKeyOrder(t *testing.T) {
 	require.Equal(t, leftHash, rightHash)
 }
 
+func TestCanonicalJSONHashIsStableAcrossJSONRoundTripForTypedValues(t *testing.T) {
+	t.Parallel()
+
+	type typedInner struct {
+		Second string `json:"second"`
+		First  string `json:"first"`
+	}
+	type typedOuter struct {
+		Metadata typedInner   `json:"metadata"`
+		Items    []typedInner `json:"items"`
+	}
+
+	original := map[string]any{
+		"id": "aas-1",
+		"typed": typedOuter{
+			Metadata: typedInner{Second: "B", First: "A"},
+			Items:    []typedInner{{Second: "D", First: "C"}},
+		},
+	}
+
+	originalHash, err := CanonicalJSONHash(original)
+	require.NoError(t, err)
+
+	raw, err := json.Marshal(original)
+	require.NoError(t, err)
+
+	var restored map[string]any
+	err = json.Unmarshal(raw, &restored)
+	require.NoError(t, err)
+
+	restoredHash, err := CanonicalJSONHash(restored)
+	require.NoError(t, err)
+
+	require.Equal(t, originalHash, restoredHash)
+}
+
 func TestComputeHistoryRowHashIncludesPreviousHash(t *testing.T) {
 	t.Parallel()
 
