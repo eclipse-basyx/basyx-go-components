@@ -284,7 +284,8 @@ func ApplyPostgresGuardConfig(ctx context.Context, db *sql.DB) error {
 
 // AppendVersionTx appends an immutable snapshot event for identifier.
 func AppendVersionTx(ctx context.Context, tx *sql.Tx, table string, identifier string, changeType string, snapshot map[string]any, deleted bool) error {
-	if ActiveConfig().Mode == ModeOff {
+	cfg := ActiveConfig()
+	if cfg.Mode == ModeOff {
 		return nil
 	}
 
@@ -294,6 +295,13 @@ func AppendVersionTx(ctx context.Context, tx *sql.Tx, table string, identifier s
 	}
 	if err = lockIdentifierTx(ctx, tx, table, identifier); err != nil {
 		return err
+	}
+	if cfg.FullSnapshotInterval == DefaultFullSnapshotInterval {
+		previousHash, hashErr := latestRowHashTx(ctx, tx, table, identifier)
+		if hashErr != nil {
+			return hashErr
+		}
+		return appendSnapshotVersionWithPreviousHashTx(ctx, tx, table, identifier, changeType, snapshot, deleted, previousHash)
 	}
 	latest, err := latestVersionTx(ctx, tx, table, identifier)
 	if err != nil && !common.IsErrNotFound(err) {
@@ -354,6 +362,26 @@ func validateAppendInputs(tx *sql.Tx, identifier string) (string, error) {
 }
 
 func appendVersionWithLatestTx(ctx context.Context, tx *sql.Tx, table string, identifier string, changeType string, snapshot map[string]any, deleted bool, latest *latestVersion) error {
+	payload, err := buildHistoryPayload(snapshot, latest, ActiveConfig())
+	if err != nil {
+		return err
+	}
+	previousHash := ""
+	if latest != nil {
+		previousHash = latest.rowHash
+	}
+	return insertHistoryVersionTx(ctx, tx, table, identifier, changeType, snapshot, deleted, payload, previousHash)
+}
+
+func appendSnapshotVersionWithPreviousHashTx(ctx context.Context, tx *sql.Tx, table string, identifier string, changeType string, snapshot map[string]any, deleted bool, previousHash string) error {
+	payload, err := buildSnapshotPayload(snapshot)
+	if err != nil {
+		return err
+	}
+	return insertHistoryVersionTx(ctx, tx, table, identifier, changeType, snapshot, deleted, payload, previousHash)
+}
+
+func insertHistoryVersionTx(ctx context.Context, tx *sql.Tx, table string, identifier string, changeType string, snapshot map[string]any, deleted bool, payload historyPayload, previousHash string) error {
 	payloadTable, err := historyPayloadTable(table)
 	if err != nil {
 		return err
@@ -362,14 +390,6 @@ func appendVersionWithLatestTx(ctx context.Context, tx *sql.Tx, table string, id
 	contentHash, err := CanonicalJSONHash(snapshot)
 	if err != nil {
 		return common.NewInternalServerError("HISTORY-APPEND-CONTENTHASH " + err.Error())
-	}
-	payload, err := buildHistoryPayload(snapshot, latest, ActiveConfig())
-	if err != nil {
-		return err
-	}
-	previousHash := ""
-	if latest != nil {
-		previousHash = latest.rowHash
 	}
 	audit := FromContext(ctx)
 	event := ChangeEvent{
@@ -525,6 +545,26 @@ func latestVersionTx(ctx context.Context, tx *sql.Tx, table string, identifier s
 	}
 
 	return restoreVersionByHistoryID(ctx, tx, table, identifier, historyID)
+}
+
+func latestRowHashTx(ctx context.Context, tx *sql.Tx, table string, identifier string) (string, error) {
+	query, args, err := goqu.From(table).
+		Select(goqu.C("row_hash")).
+		Where(goqu.C("identifier").Eq(identifier)).
+		Order(goqu.C("history_id").Desc()).
+		Limit(1).
+		ToSQL()
+	if err != nil {
+		return "", common.NewInternalServerError("HISTORY-HASH-BUILDPREVIOUS " + err.Error())
+	}
+	var previousHash sql.NullString
+	if err = tx.QueryRowContext(ctx, query, args...).Scan(&previousHash); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return "", nil
+		}
+		return "", common.NewInternalServerError("HISTORY-HASH-READPREVIOUS " + err.Error())
+	}
+	return previousHash.String, nil
 }
 
 func buildHistoryPayload(snapshot map[string]any, latest *latestVersion, cfg Config) (historyPayload, error) {
@@ -722,6 +762,7 @@ func RecentRows(ctx context.Context, db *sql.DB, table string, limit int32, curs
 
 	result := make([]Row, 0, limitInt)
 	nextCursor := ""
+	restoreCache := make(map[string]map[int64]latestVersion)
 	for rows.Next() {
 		var row Row
 		var created sql.NullString
@@ -733,7 +774,7 @@ func RecentRows(ctx context.Context, db *sql.DB, table string, limit int32, curs
 			nextCursor = strconv.FormatInt(result[len(result)-1].HistoryID, 10)
 			break
 		}
-		version, restoreErr := restoreVersionByHistoryID(ctx, db, table, row.Identifier, row.HistoryID)
+		version, restoreErr := cachedRestoreVersionByHistoryID(ctx, db, table, row.Identifier, row.HistoryID, restoreCache)
 		if restoreErr != nil {
 			return nil, "", restoreErr
 		}
@@ -749,19 +790,63 @@ func RecentRows(ctx context.Context, db *sql.DB, table string, limit int32, curs
 }
 
 func restoreVersionByHistoryID(ctx context.Context, queryer historyQueryer, table string, identifier string, historyID int64) (latestVersion, error) {
-	payloadTable, err := historyPayloadTable(table)
+	versions, err := restoreVersionsThroughHistoryID(ctx, queryer, table, identifier, historyID)
 	if err != nil {
 		return latestVersion{}, err
+	}
+	version, ok := versions[historyID]
+	if !ok {
+		return latestVersion{}, common.NewInternalServerError("HISTORY-RESTORE-MISSINGTARGET restored chain does not contain requested history row")
+	}
+	return version, nil
+}
+
+func cachedRestoreVersionByHistoryID(
+	ctx context.Context,
+	queryer historyQueryer,
+	table string,
+	identifier string,
+	historyID int64,
+	cache map[string]map[int64]latestVersion,
+) (latestVersion, error) {
+	if versions := cache[identifier]; versions != nil {
+		if version, ok := versions[historyID]; ok {
+			return version, nil
+		}
+	}
+	versions, err := restoreVersionsThroughHistoryID(ctx, queryer, table, identifier, historyID)
+	if err != nil {
+		return latestVersion{}, err
+	}
+	identifierCache := cache[identifier]
+	if identifierCache == nil {
+		identifierCache = make(map[int64]latestVersion, len(versions))
+		cache[identifier] = identifierCache
+	}
+	for restoredHistoryID, version := range versions {
+		identifierCache[restoredHistoryID] = version
+	}
+	version, ok := identifierCache[historyID]
+	if !ok {
+		return latestVersion{}, common.NewInternalServerError("HISTORY-RESTORE-MISSINGTARGET restored chain does not contain requested history row")
+	}
+	return version, nil
+}
+
+func restoreVersionsThroughHistoryID(ctx context.Context, queryer historyQueryer, table string, identifier string, historyID int64) (map[int64]latestVersion, error) {
+	payloadTable, err := historyPayloadTable(table)
+	if err != nil {
+		return nil, err
 	}
 	checkpointID, err := nearestSnapshotHistoryID(ctx, queryer, table, identifier, historyID)
 	if err != nil {
-		return latestVersion{}, err
+		return nil, err
 	}
 	rows, err := loadVersionChain(ctx, queryer, table, payloadTable, identifier, checkpointID, historyID)
 	if err != nil {
-		return latestVersion{}, err
+		return nil, err
 	}
-	return restoreVersionChain(rows)
+	return restoreVersionChainRows(rows)
 }
 
 func nearestSnapshotHistoryID(ctx context.Context, queryer historyQueryer, table string, identifier string, historyID int64) (int64, error) {
@@ -865,38 +950,47 @@ func loadVersionChain(
 	return rows, nil
 }
 
-func restoreVersionChain(rows []storedHistoryRow) (latestVersion, error) {
+func restoreVersionChainRows(rows []storedHistoryRow) (map[int64]latestVersion, error) {
 	var snapshot map[string]any
-	for index, row := range rows {
+	rowsSinceSnapshot := 0
+	versions := make(map[int64]latestVersion, len(rows))
+	for _, row := range rows {
 		var err error
 		switch row.PayloadType {
 		case PayloadTypeSnapshot:
 			snapshot, err = restoreSnapshotPayload(row)
+			rowsSinceSnapshot = 1
 		case PayloadTypeDiff:
 			if snapshot == nil {
-				return latestVersion{}, common.NewInternalServerError("HISTORY-RESTORE-DIFFWITHOUTBASE diff row has no preceding snapshot")
+				return nil, common.NewInternalServerError("HISTORY-RESTORE-DIFFWITHOUTBASE diff row has no preceding snapshot")
 			}
 			snapshot, err = restoreDiffPayload(snapshot, row)
+			rowsSinceSnapshot++
 		default:
-			return latestVersion{}, common.NewInternalServerError("HISTORY-RESTORE-PAYLOADTYPE unsupported payload type '" + row.PayloadType + "'")
+			return nil, common.NewInternalServerError("HISTORY-RESTORE-PAYLOADTYPE unsupported payload type '" + row.PayloadType + "'")
 		}
 		if err != nil {
-			return latestVersion{}, err
+			return nil, err
 		}
 		if err = verifyCanonicalHash(snapshot, row.ContentHash, "HISTORY-RESTORE-CONTENTHASH"); err != nil {
-			return latestVersion{}, err
+			return nil, err
 		}
-		if index == len(rows)-1 {
-			return latestVersion{
-				historyID:         row.HistoryID,
-				snapshot:          snapshot,
-				deleted:           row.Deleted,
-				rowHash:           row.RowHash.String,
-				rowsSinceSnapshot: len(rows),
-			}, nil
+		versionSnapshot, cloneErr := cloneSnapshotMap(snapshot)
+		if cloneErr != nil {
+			return nil, cloneErr
+		}
+		versions[row.HistoryID] = latestVersion{
+			historyID:         row.HistoryID,
+			snapshot:          versionSnapshot,
+			deleted:           row.Deleted,
+			rowHash:           row.RowHash.String,
+			rowsSinceSnapshot: rowsSinceSnapshot,
 		}
 	}
-	return latestVersion{}, common.NewInternalServerError("HISTORY-RESTORE-NOLATEST no latest row found after restore")
+	if len(versions) == 0 {
+		return nil, common.NewInternalServerError("HISTORY-RESTORE-NOLATEST no latest row found after restore")
+	}
+	return versions, nil
 }
 
 func restoreSnapshotPayload(row storedHistoryRow) (map[string]any, error) {
@@ -904,7 +998,7 @@ func restoreSnapshotPayload(row storedHistoryRow) (map[string]any, error) {
 		return nil, common.NewInternalServerError("HISTORY-RESTORE-MISSINGSNAPSHOT snapshot payload is missing")
 	}
 	var snapshot map[string]any
-	if err := json.Unmarshal([]byte(row.Snapshot.String), &snapshot); err != nil {
+	if err := decodeJSONPreservingNumbers([]byte(row.Snapshot.String), &snapshot); err != nil {
 		return nil, common.NewInternalServerError("HISTORY-RESTORE-UNMARSHALSNAPSHOT " + err.Error())
 	}
 	if err := verifyCanonicalHash(snapshot, row.PayloadHash, "HISTORY-RESTORE-SNAPSHOTPAYLOADHASH"); err != nil {
@@ -918,7 +1012,7 @@ func restoreDiffPayload(base map[string]any, row storedHistoryRow) (map[string]a
 		return nil, common.NewInternalServerError("HISTORY-RESTORE-MISSINGDIFF diff payload is missing")
 	}
 	var patch []map[string]any
-	if err := json.Unmarshal([]byte(row.Diff.String), &patch); err != nil {
+	if err := decodeJSONPreservingNumbers([]byte(row.Diff.String), &patch); err != nil {
 		return nil, common.NewInternalServerError("HISTORY-RESTORE-UNMARSHALDIFF " + err.Error())
 	}
 	if err := verifyCanonicalHash(patch, row.PayloadHash, "HISTORY-RESTORE-DIFFPAYLOADHASH"); err != nil {
@@ -1119,13 +1213,17 @@ func normalizeJSONValue(value any) (any, error) {
 }
 
 func decodeNormalizedJSON(raw []byte) (any, error) {
-	decoder := json.NewDecoder(bytes.NewReader(raw))
-	decoder.UseNumber()
 	var normalized any
-	if err := decoder.Decode(&normalized); err != nil {
+	if err := decodeJSONPreservingNumbers(raw, &normalized); err != nil {
 		return nil, err
 	}
 	return normalized, nil
+}
+
+func decodeJSONPreservingNumbers(raw []byte, target any) error {
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.UseNumber()
+	return decoder.Decode(target)
 }
 
 func writeCanonicalJSON(out *bytes.Buffer, value any) error {

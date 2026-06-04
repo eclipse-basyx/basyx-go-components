@@ -404,8 +404,8 @@ func cloneJSONValue(value any) (any, error) {
 	if err != nil {
 		return nil, fmt.Errorf("marshal json value: %w", err)
 	}
-	var cloned any
-	if err = json.Unmarshal(raw, &cloned); err != nil {
+	cloned, err := decodeNormalizedJSON(raw)
+	if err != nil {
 		return nil, fmt.Errorf("unmarshal json value: %w", err)
 	}
 	return cloned, nil

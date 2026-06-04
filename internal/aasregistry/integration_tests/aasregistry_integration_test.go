@@ -44,6 +44,17 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+const defaultAASRegistryIntegrationTestDSN = "postgres://admin:admin123@127.0.0.1:6432/basyxTestDB?sslmode=disable"
+
+var aasRegistryIntegrationTestDSN = getAASRegistryIntegrationTestDSN()
+
+func getAASRegistryIntegrationTestDSN() string {
+	if dsn := os.Getenv("AASREGISTRY_INTEGRATION_TEST_DSN"); dsn != "" {
+		return dsn
+	}
+	return defaultAASRegistryIntegrationTestDSN
+}
+
 func deleteAllAASDescriptors(t *testing.T, runner *testenv.JSONSuiteRunner, stepNumber int) {
 	response, err := runner.RunStep(testenv.JSONSuiteStep{
 		Method:         http.MethodGet,
@@ -288,7 +299,7 @@ func TestIntegration(t *testing.T) {
 	isExternalCompose := os.Getenv("BASYX_EXTERNAL_COMPOSE") == "1"
 	checkDBOptions := testenv.CheckDBIsEmptyOptions{
 		Driver: "postgres",
-		DSN:    "host=127.0.0.1 port=6432 user=admin password=admin123 dbname=basyxTestDB sslmode=disable",
+		DSN:    aasRegistryIntegrationTestDSN,
 	}
 	if isExternalCompose {
 		checkDBOptions.ExcludedTables = []string{"aas_identifier"}

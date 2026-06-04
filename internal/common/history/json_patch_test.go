@@ -26,6 +26,7 @@
 package history
 
 import (
+	"encoding/json"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -97,6 +98,29 @@ func TestJSONPatchEmptyDiffRoundTrip(t *testing.T) {
 	actual, err := ApplyJSONPatch(base, patch)
 	require.NoError(t, err)
 	require.Equal(t, base, actual)
+}
+
+func TestJSONPatchPreservesLargeIntegerValues(t *testing.T) {
+	base := map[string]any{
+		"id":      "aas-1",
+		"counter": json.Number("9007199254740993"),
+	}
+	target := map[string]any{
+		"id":      "aas-1",
+		"counter": json.Number("9007199254740995"),
+	}
+
+	patch, err := BuildJSONPatch(base, target)
+	require.NoError(t, err)
+	require.Contains(t, patch, map[string]any{
+		"op":    jsonPatchOpReplace,
+		"path":  "/counter",
+		"value": json.Number("9007199254740995"),
+	})
+
+	actual, err := ApplyJSONPatch(base, patch)
+	require.NoError(t, err)
+	require.Equal(t, target, actual)
 }
 
 func TestJSONPatchRejectsInvalidPath(t *testing.T) {

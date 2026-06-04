@@ -122,7 +122,7 @@ func TestAASRegistryRecentChangesAndBatchAssetKind(t *testing.T) {
 
 func requireDescriptorHistoryPayloadTypes(t *testing.T, id string, expected []string) {
 	t.Helper()
-	db, err := sql.Open("postgres", "postgres://admin:admin123@127.0.0.1:6432/basyxTestDB?sslmode=disable")
+	db, err := sql.Open("postgres", aasRegistryIntegrationTestDSN)
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = db.Close() })
 

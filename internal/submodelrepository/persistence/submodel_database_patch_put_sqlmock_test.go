@@ -261,7 +261,8 @@ func TestPutSubmodelUpdatePathReturnsTrue(t *testing.T) {
 func expectSubmodelHistoryAppend(mock sqlmock.Sqlmock) {
 	mock.ExpectExec(`SELECT pg_advisory_xact_lock`).
 		WillReturnResult(sqlmock.NewResult(0, 1))
-	expectMissingSubmodelHistory(mock)
+	mock.ExpectQuery(`SELECT "row_hash" FROM "submodel_history"`).
+		WillReturnError(sql.ErrNoRows)
 	mock.ExpectQuery(`INSERT INTO "submodel_history".*RETURNING "history_id"`).
 		WillReturnRows(sqlmock.NewRows([]string{"history_id"}).AddRow(1))
 	mock.ExpectExec(`INSERT INTO "submodel_history_payload"`).

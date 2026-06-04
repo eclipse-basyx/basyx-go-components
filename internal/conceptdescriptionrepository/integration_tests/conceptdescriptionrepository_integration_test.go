@@ -42,6 +42,18 @@ import (
 	_ "github.com/lib/pq" // PostgreSQL Treiber
 )
 
+// #nosec G101 -- integration test DSN matches the local Docker Compose database credentials.
+const defaultConceptDescriptionRepositoryIntegrationTestDSN = "postgres://admin:admin123@127.0.0.1:6432/basyxTestDB?sslmode=disable"
+
+var conceptDescriptionRepositoryIntegrationTestDSN = getConceptDescriptionRepositoryIntegrationTestDSN()
+
+func getConceptDescriptionRepositoryIntegrationTestDSN() string {
+	if dsn := os.Getenv("CONCEPTDESCRIPTIONREPOSITORY_INTEGRATION_TEST_DSN"); dsn != "" {
+		return dsn
+	}
+	return defaultConceptDescriptionRepositoryIntegrationTestDSN
+}
+
 func requestJSON(method string, endpoint string, payload any) (int, []byte, error) {
 	status, body, _, err := requestJSONWithHeaders(method, endpoint, payload)
 	return status, body, err
