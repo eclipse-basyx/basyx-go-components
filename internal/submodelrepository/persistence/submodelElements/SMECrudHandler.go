@@ -689,7 +689,7 @@ func ResolveUpdatedPath(idShortOrPath string, submodelElement types.ISubmodelEle
 // It uses PostgreSQL's OVERLAY function to replace the old prefix portion with the new prefix,
 // ensuring only the exact prefix is replaced without affecting similar-prefix siblings.
 func updateChildPaths(tx *sql.Tx, dialect goqu.DialectWrapper, submodelDatabaseID int, oldPath string, newPath string, separator string) error {
-	likePattern := oldPath + separator + "%"
+	likePattern := escapeSQLLikePattern(oldPath) + separator + "%"
 	oldPrefixLen := len(oldPath)
 
 	// SET idshort_path = newPath || SUBSTRING(idshort_path FROM oldPrefixLen+1)
@@ -705,7 +705,7 @@ func updateChildPaths(tx *sql.Tx, dialect goqu.DialectWrapper, submodelDatabaseI
 		}).
 		Where(
 			goqu.C("submodel_id").Eq(submodelDatabaseID),
-			goqu.C("idshort_path").Like(likePattern),
+			idShortPathLikeEscaped(goqu.C("idshort_path"), likePattern),
 		).
 		ToSQL()
 	if err != nil {

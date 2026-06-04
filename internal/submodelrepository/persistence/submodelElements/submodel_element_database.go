@@ -319,13 +319,14 @@ func DeleteSubmodelElementByPath(tx *sql.Tx, submodelID string, idShortOrPath st
 }
 
 func deleteSubmodelElementTree(tx *sql.Tx, submodelDatabaseID int, idShortOrPath string) (int64, error) {
+	escapedPath := escapeSQLLikePattern(idShortOrPath)
 	del := goqu.Delete("submodel_element").Where(
 		goqu.And(
 			goqu.I("submodel_id").Eq(submodelDatabaseID),
 			goqu.Or(
 				goqu.I("idshort_path").Eq(idShortOrPath),
-				goqu.I("idshort_path").Like(idShortOrPath+".%"),
-				goqu.I("idshort_path").Like(idShortOrPath+"[%"),
+				idShortPathLikeEscaped(goqu.I("idshort_path"), escapedPath+".%"),
+				idShortPathLikeEscaped(goqu.I("idshort_path"), escapedPath+"[%"),
 			),
 		),
 	)
@@ -457,8 +458,20 @@ func moveListChildOneSlotLeft(tx *sql.Tx, submodelDatabaseID int, parentPath str
 	return updateListChildPosition(tx, submodelDatabaseID, child.id, newPosition)
 }
 
+func escapeSQLLikePattern(value string) string {
+	escaped := strings.ReplaceAll(value, "!", "!!")
+	escaped = strings.ReplaceAll(escaped, "%", "!%")
+	escaped = strings.ReplaceAll(escaped, "_", "!_")
+	return escaped
+}
+
+func idShortPathLikeEscaped(idShortPath goqu.Expression, pattern string) goqu.Expression {
+	return goqu.L("? LIKE ? ESCAPE '!'", idShortPath, pattern)
+}
+
 func updateListChildPath(tx *sql.Tx, submodelDatabaseID int, oldPath string, newPath string) error {
 	dialect := goqu.Dialect("postgres")
+	escapedOldPath := escapeSQLLikePattern(oldPath)
 	query, args, err := dialect.Update("submodel_element").
 		Set(goqu.Record{
 			"idshort_path": goqu.L("? || SUBSTRING(idshort_path FROM ?)", newPath, len(oldPath)+1),
@@ -467,8 +480,8 @@ func updateListChildPath(tx *sql.Tx, submodelDatabaseID int, oldPath string, new
 			goqu.C("submodel_id").Eq(submodelDatabaseID),
 			goqu.Or(
 				goqu.C("idshort_path").Eq(oldPath),
-				goqu.C("idshort_path").Like(oldPath+".%"),
-				goqu.C("idshort_path").Like(oldPath+"[%"),
+				idShortPathLikeEscaped(goqu.C("idshort_path"), escapedOldPath+".%"),
+				idShortPathLikeEscaped(goqu.C("idshort_path"), escapedOldPath+"[%"),
 			),
 		).
 		ToSQL()
@@ -529,14 +542,14 @@ func DeleteAllChildren(db *sql.DB, submodelId string, idShortPath string, tx *sq
 		return common.NewInternalServerError("SMREPO-DELALLCHILDREN-GETSMDATABASEID Failed to resolve Submodel database ID: " + err.Error())
 	}
 
-	// Delete All Elements that start with idShortPath + "." or with idShortPath + "["
+	escapedPath := escapeSQLLikePattern(idShortPath)
 
 	del := goqu.Delete("submodel_element").Where(
 		goqu.And(
 			goqu.I("submodel_id").Eq(submodelDatabaseID),
 			goqu.Or(
-				goqu.I("idshort_path").Like(idShortPath+".%"),
-				goqu.I("idshort_path").Like(idShortPath+"[%"),
+				idShortPathLikeEscaped(goqu.I("idshort_path"), escapedPath+".%"),
+				idShortPathLikeEscaped(goqu.I("idshort_path"), escapedPath+"[%"),
 			),
 		),
 	)
