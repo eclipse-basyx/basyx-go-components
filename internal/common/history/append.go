@@ -275,7 +275,7 @@ func buildHistoryPayload(snapshot map[string]any, latest *latestVersion, cfg Con
 	if latest == nil || cfg.FullSnapshotInterval == DefaultFullSnapshotInterval || latest.rowsSinceSnapshot >= cfg.FullSnapshotInterval {
 		return buildSnapshotPayload(snapshot)
 	}
-	diffPayload, err := buildDiffPayload(latest.snapshot, snapshot)
+	patch, diffJSON, err := buildDiffPayloadJSON(latest.snapshot, snapshot)
 	if err != nil {
 		return historyPayload{}, err
 	}
@@ -283,21 +283,25 @@ func buildHistoryPayload(snapshot map[string]any, latest *latestVersion, cfg Con
 	if err != nil {
 		return historyPayload{}, common.NewInternalServerError("HISTORY-APPEND-MARSHALSNAPSHOT " + err.Error())
 	}
-	if len(diffPayload.json) >= len(snapshotJSON) {
+	if len(diffJSON) >= len(snapshotJSON) {
 		return buildSnapshotPayloadWithJSON(snapshot, snapshotJSON)
 	}
-	return diffPayload, nil
+	return buildDiffPayloadWithJSON(patch, diffJSON)
 }
 
-func buildDiffPayload(base map[string]any, snapshot map[string]any) (historyPayload, error) {
+func buildDiffPayloadJSON(base map[string]any, snapshot map[string]any) ([]map[string]any, []byte, error) {
 	patch, err := BuildJSONPatch(base, snapshot)
 	if err != nil {
-		return historyPayload{}, common.NewInternalServerError("HISTORY-APPEND-BUILDDIFF " + err.Error())
+		return nil, nil, common.NewInternalServerError("HISTORY-APPEND-BUILDDIFF " + err.Error())
 	}
 	payloadJSON, err := json.Marshal(patch)
 	if err != nil {
-		return historyPayload{}, common.NewInternalServerError("HISTORY-APPEND-MARSHALDIFF " + err.Error())
+		return nil, nil, common.NewInternalServerError("HISTORY-APPEND-MARSHALDIFF " + err.Error())
 	}
+	return patch, payloadJSON, nil
+}
+
+func buildDiffPayloadWithJSON(patch []map[string]any, payloadJSON []byte) (historyPayload, error) {
 	payloadHash, err := CanonicalJSONHash(patch)
 	if err != nil {
 		return historyPayload{}, common.NewInternalServerError("HISTORY-APPEND-DIFFHASH " + err.Error())
@@ -356,7 +360,7 @@ func nullableTimestamp(value string) any {
 	if value == "" {
 		return nil
 	}
-	parsed, err := time.Parse(time.RFC3339Nano, value)
+	parsed, err := common.ParseISO8601DateTime(value)
 	if err != nil {
 		return nil
 	}

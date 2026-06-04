@@ -260,6 +260,26 @@ func TestBuildHistoryPayloadFallsBackToSnapshotWhenDiffIsNotSmaller(t *testing.T
 	require.Equal(t, expectedHash, payload.hash)
 }
 
+func TestBuildHistoryPayloadHashesSelectedDiffPayload(t *testing.T) {
+	largeUnchangedValue := strings.Repeat("unchanged-", 40)
+	baseSnapshot := map[string]any{"id": "aas-1", "idShort": "before", "description": largeUnchangedValue}
+	targetSnapshot := map[string]any{"id": "aas-1", "idShort": "after", "description": largeUnchangedValue}
+	latest := &latestVersion{
+		snapshot:          baseSnapshot,
+		rowsSinceSnapshot: 1,
+	}
+
+	payload, err := buildHistoryPayload(targetSnapshot, latest, Config{FullSnapshotInterval: 3})
+	require.NoError(t, err)
+
+	patch, err := BuildJSONPatch(baseSnapshot, targetSnapshot)
+	require.NoError(t, err)
+	expectedHash, err := CanonicalJSONHash(patch)
+	require.NoError(t, err)
+	require.Equal(t, PayloadTypeDiff, payload.payloadType)
+	require.Equal(t, expectedHash, payload.hash)
+}
+
 func TestAppendVersionTxStoresScheduledSnapshotAtIntervalBoundary(t *testing.T) {
 	t.Cleanup(func() {
 		Configure(Config{Mode: ModeOff, Immutability: ImmutabilityNone, AuditIdentityMode: AuditIdentityNone})
@@ -316,4 +336,14 @@ func TestAppendVersionTxSkipsWritesWhenHistoryModeOff(t *testing.T) {
 
 	err := AppendVersionTx(context.Background(), nil, TableAAS, "aas-1", ChangeCreated, map[string]any{"id": "aas-1"}, false)
 	require.NoError(t, err)
+}
+
+func TestNullableTimestampAcceptsSharedISO8601Formats(t *testing.T) {
+	offsetTimestamp, ok := nullableTimestamp("2026-05-28T14:30:00+0200").(time.Time)
+	require.True(t, ok)
+	require.Equal(t, time.Date(2026, 5, 28, 12, 30, 0, 0, time.UTC), offsetTimestamp)
+
+	utcTimestamp, ok := nullableTimestamp("2026-05-28T12:30:00.123456789 UTC").(time.Time)
+	require.True(t, ok)
+	require.Equal(t, time.Date(2026, 5, 28, 12, 30, 0, 123456789, time.UTC), utcTimestamp)
 }
