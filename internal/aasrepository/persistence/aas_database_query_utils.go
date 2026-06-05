@@ -295,14 +295,6 @@ func unmaskedCoreAssetAdministrationShellSelectExpressions(includeDatabaseID boo
 	)
 }
 
-func buildGetAssetAdministrationShellMapByDBIDQuery(dialect *goqu.DialectWrapper, aasDBID int64) (string, []any, error) {
-	return buildGetAssetAdministrationShellMapByDBIDQueryWithSelect(
-		dialect,
-		aasDBID,
-		unmaskedCoreAssetAdministrationShellSelectExpressions(false),
-	)
-}
-
 func buildGetAssetAdministrationShellMapByDBIDQueryWithSelect(dialect *goqu.DialectWrapper, aasDBID int64, selectExpressions []interface{}) (string, []any, error) {
 	return dialect.
 		From(goqu.T("aas").As("aas")).
@@ -314,14 +306,6 @@ func buildGetAssetAdministrationShellMapByDBIDQueryWithSelect(dialect *goqu.Dial
 		ToSQL()
 }
 
-func buildGetAssetAdministrationShellMapsByDBIDsQuery(dialect *goqu.DialectWrapper, aasDBIDs []int64) (string, []any, error) {
-	return buildGetAssetAdministrationShellMapsByDBIDsQueryWithSelect(
-		dialect,
-		aasDBIDs,
-		unmaskedCoreAssetAdministrationShellSelectExpressions(true),
-	)
-}
-
 func buildGetAssetAdministrationShellMapsByDBIDsQueryWithSelect(dialect *goqu.DialectWrapper, aasDBIDs []int64, selectExpressions []interface{}) (string, []any, error) {
 	return dialect.
 		From(goqu.T("aas").As("aas")).
@@ -331,10 +315,6 @@ func buildGetAssetAdministrationShellMapsByDBIDsQueryWithSelect(dialect *goqu.Di
 		Select(selectExpressions...).
 		Where(goqu.I("aas.id").In(aasDBIDs)).
 		ToSQL()
-}
-
-func buildGetSubmodelReferencePayloadsByAASIDsQuery(dialect *goqu.DialectWrapper, aasDBIDs []int64) (string, []any, error) {
-	return buildGetSubmodelReferencePayloadsByAASIDsDataset(dialect, aasDBIDs).ToSQL()
 }
 
 func buildGetSubmodelReferencePayloadsByAASIDsDataset(dialect *goqu.DialectWrapper, aasDBIDs []int64) *goqu.SelectDataset {
@@ -366,10 +346,6 @@ func buildGetSubmodelReferencePayloadsByAASIDsDataset(dialect *goqu.DialectWrapp
 		)
 }
 
-func buildReadSpecificAssetIDsByAssetInformationIDQuery(dialect *goqu.DialectWrapper, assetInformationID int64) (string, []any, error) {
-	return buildReadSpecificAssetIDsByAssetInformationIDDataset(dialect, assetInformationID).ToSQL()
-}
-
 func buildReadSpecificAssetIDsByAssetInformationIDDataset(dialect *goqu.DialectWrapper, assetInformationID int64) *goqu.SelectDataset {
 	return buildSpecificAssetIDReadDataset(dialect).
 		Select(
@@ -387,10 +363,6 @@ func buildReadSpecificAssetIDsByAssetInformationIDDataset(dialect *goqu.DialectW
 			goqu.I("sp.semantic_id_payload"),
 		).
 		Order(goqu.I("specific_asset_id.position").Asc(), goqu.I("specific_asset_id.id").Asc())
-}
-
-func buildReadSpecificAssetIDsByAssetInformationIDsQuery(dialect *goqu.DialectWrapper, assetInformationIDs []int64) (string, []any, error) {
-	return buildReadSpecificAssetIDsByAssetInformationIDsDataset(dialect, assetInformationIDs).ToSQL()
 }
 
 func buildReadSpecificAssetIDsByAssetInformationIDsDataset(dialect *goqu.DialectWrapper, assetInformationIDs []int64) *goqu.SelectDataset {

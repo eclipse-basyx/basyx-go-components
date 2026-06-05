@@ -15,6 +15,7 @@
       {
         "name": "all_cd_routes",
         "objects": [
+          { "ROUTE": "/query/concept-descriptions" },
           { "ROUTE": "/concept-descriptions" },
           { "ROUTE": "/concept-descriptions/*" }
         ]

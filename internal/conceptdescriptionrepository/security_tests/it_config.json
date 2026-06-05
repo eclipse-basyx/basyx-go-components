@@ -54,7 +54,7 @@
     "method": "POST",
     "endpoint": "http://localhost:6004/query/concept-descriptions",
     "data": "postBody/queryFilterViewerHidden.json",
-    "shouldMatch": "expected/expectedQueryHiddenAdmin.json",
+    "shouldMatch": "expected/expectedQueryIDShortFragmentHiddenAdmin.json",
     "expectedStatus": 200
   },
   {

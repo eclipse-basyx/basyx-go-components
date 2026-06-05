@@ -53,7 +53,7 @@
     "method": "POST",
     "endpoint": "http://localhost:6004/query/shells",
     "data": "bodies/query/queryFilterAssetTypeHidden.json",
-    "shouldMatch": "expected/expectedQueryShellsHiddenAdmin.json",
+    "shouldMatch": "expected/expectedQueryShellsAssetTypeFragmentHiddenAdmin.json",
     "expectedStatus": 200
   },
   {

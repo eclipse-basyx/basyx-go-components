@@ -7,7 +7,7 @@
     ],
     "DEFOBJECTS": [
       { "name": "description", "objects": [ { "ROUTE": "/description" } ] },
-      { "name": "all_shell_routes", "objects": [ { "ROUTE": "/shells" }, { "ROUTE": "/shells/$reference" }, { "ROUTE": "/shells/*" } ] },
+      { "name": "all_shell_routes", "objects": [ { "ROUTE": "/query/shells" }, { "ROUTE": "/shells" }, { "ROUTE": "/shells/$reference" }, { "ROUTE": "/shells/*" } ] },
       { "name": "all_shell_identifiable", "objects": [ { "IDENTIFIABLE": "$aas(\"*\")" } ] },
       { "name": "viewer_allowed_specific_identifiable", "objects": [ { "IDENTIFIABLE": "$aas(\"urn:example:aas:viewer:allowed\")" } ] }
     ],
