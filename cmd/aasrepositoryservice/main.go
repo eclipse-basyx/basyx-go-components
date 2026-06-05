@@ -48,6 +48,9 @@ func runServer(ctx context.Context, configPath string) error {
 		Immutability:         cfg.History.Immutability,
 		AuditIdentityMode:    cfg.History.AuditIdentityMode,
 	})
+	if err = history.ConfigureEvidence(ctx, cfg.History.Evidence); err != nil {
+		return err
+	}
 
 	if err = aasenvironment.ValidateStandaloneAASRepositoryRegistrySyncConfig(cfg); err != nil {
 		return err

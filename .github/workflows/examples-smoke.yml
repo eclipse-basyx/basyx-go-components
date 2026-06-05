@@ -72,6 +72,12 @@ jobs:
             image_builds: |
               eclipsebasyx/companylookup-go:SNAPSHOT|./cmd/companylookupservice/Dockerfile
               eclipsebasyx/basyxconfigurationservice-go:SNAPSHOT|./cmd/basyxconfigurationservice/Dockerfile
+          - target_name: History Audit Guarded Evidence Example
+            compose_files: |
+              examples/BaSyxHistoryAuditGuardedExample/docker-compose.yml
+            image_builds: |
+              eclipsebasyx/aasenvironment-go:SNAPSHOT|./cmd/aasenvironmentservice/Dockerfile
+              eclipsebasyx/basyxconfigurationservice-go:SNAPSHOT|./cmd/basyxconfigurationservice/Dockerfile
 
     steps:
       - name: Checkout code

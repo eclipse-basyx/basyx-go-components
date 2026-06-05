@@ -43,6 +43,8 @@ Implemented history, recent-change, and signing runtime areas from the v3.2 Open
 - AAS Environment: `/serialization`, `/upload`, `/shell-descriptors/$recent-changes`, `/shells/$recent-changes`, `/shells/{aasIdentifier}/$history`, `/shells/{aasIdentifier}/$signed`, `/submodels/$recent-changes`, `/submodels/{submodelIdentifier}/$history`, `/submodels/{submodelIdentifier}/$signed`, `/submodels/{submodelIdentifier}/$value/$signed`, `/concept-descriptions/$recent-changes`, and the composed asynchronous operation result/status endpoints.
 - Migration `1_1_0.sql`: adds v3.2 timestamp columns and the enum migration for `Batch`.
 - Migration `1_1_1.sql`: adds history metadata and payload tables, indexes, and PostgreSQL mutation guards.
+- Migration `1_1_2.sql`: adds snapshot-checkpoint indexes for diff-backed restore.
+- Migration `1_1_3.sql`: adds WORM evidence manifest and artifact receipt catalogs.
 
 The Submodel Registry does not have a recent-changes endpoint in the official v3.2 profile currently used here.
 
@@ -117,6 +119,7 @@ sequenceDiagram
     participant Live as Current normalized tables
     participant Metadata as *_history table
     participant Payload as *_history_payload table
+    participant Evidence as WORM EvidenceStore
     API->>Live: Apply typical current-state mutation in transaction
     API->>Metadata: Advisory lock(table, identifier)
     Metadata-->>API: Latest history row
@@ -124,6 +127,11 @@ sequenceDiagram
     API->>API: Apply scoped snapshot mutation
     API->>Metadata: INSERT event metadata with previous_hash
     API->>Payload: INSERT snapshot or RFC 6902 diff payload
+    opt history.evidence.enabled
+        API->>Evidence: PUT history-event artifact before commit
+        Evidence-->>API: Evidence receipt
+        API->>Metadata: INSERT evidence artifact receipt
+    end
     API->>Live: Commit transaction
 ```
 
@@ -228,6 +236,31 @@ flowchart TD
 
 The guard is enabled when history is active and `history.immutability` is `postgres_guarded`. It blocks direct maintenance mutations as well as accidental application mutations. Enabling is monotonic during normal service startup: a runtime service can enable the database-wide guard, but it cannot disable an enabled guard. A service configured as unguarded fails fast when it encounters an already-enabled database guard. Services sharing one database can start concurrently when their configuration is consistent. Disabling guarded mode requires an explicit operator maintenance action. The guard is not equivalent to WORM storage: sufficiently privileged PostgreSQL operators can alter schema objects.
 
+### WORM Evidence Manifests
+
+The default stronger-integrity architecture is:
+
+```text
+PostgreSQL history tables -> hash chain -> synchronous history-event artifact -> signed manifest -> S3-compatible WORM object storage
+```
+
+The HTTP APIs are unchanged. When `history.evidence.enabled` is active, `history.mode` must be `api` or `audit`. The history append path writes one WORM `history_event` artifact synchronously before the surrounding PostgreSQL transaction can commit. The artifact stores the same history payload selected for PostgreSQL: either a full snapshot or an RFC 6902 diff according to `history.fullSnapshotInterval`. If the WORM write fails, the history append returns an error and the caller rolls back the PostgreSQL transaction.
+
+The `cmd/historyevidenceverifier` tool can additionally publish signed range manifests, backfill per-row `history_event` artifacts for existing rows, and publish checkpoint artifacts using the shared `EvidenceStore` interface. The current implementation includes an S3-compatible `EvidenceStore`; MinIO can be used for local or CI-style object-lock testing, while production deployments should use an S3-compatible WORM service with versioning/object lock configured by operations.
+
+For a selected history range, evidence publication:
+
+- verifies PostgreSQL payload hashes and per-identifier row-hash chains first;
+- writes canonical `history_event` artifacts for every snapshot and diff row in the range;
+- writes full snapshot checkpoint artifacts for every `payload_type = snapshot` row in the range;
+- builds a canonical `HistoryManifest` containing first/last `history_id`, first/last `row_hash`, row count, ordered range digest, timestamp, signature metadata, and snapshot artifact references;
+- signs the canonical manifest as compact RS256 JWS when an evidence signing key is configured, otherwise stores canonical JSON with `signature_state = unsigned`;
+- writes object-store receipts to `history_evidence_manifests` and `history_evidence_artifacts`.
+
+Per-row `history_event` artifacts provide recovery evidence for every acknowledged write while evidence is enabled. With `history.fullSnapshotInterval: 5`, recovery from WORM replays up to four WORM-stored diff payloads after the latest WORM-stored snapshot event. Use `history.fullSnapshotInterval: 1` when each individual WORM event must be recoverable without replaying diffs. Automated PostgreSQL restore from WORM artifacts is not implemented in this ticket.
+
+Verification can compare PostgreSQL rows against the hash chain, verify every per-row `history_event` receipt and object hash, compare a stored manifest against the live range digest, and verify an object-store artifact hash. This detects missing, modified, reordered, or overwritten records when the expected receipts and object hashes are known.
+
 ### Configuration Status
 
 | Setting | Current runtime behavior |
@@ -239,11 +272,39 @@ The guard is enabled when history is active and `history.immutability` is `postg
 | `history.fullSnapshotInterval` | `1` stores all payloads as snapshots. Values greater than `1` store one full checkpoint plus up to `N-1` diff rows, with earlier checkpoints when the diff payload is not smaller than the snapshot payload. |
 | `history.immutability: none` | Keep PostgreSQL mutation guards disabled. |
 | `history.immutability: postgres_guarded` | Enable PostgreSQL mutation guards at service startup. |
-| `history.immutability: external_anchor` | Fail fast until an external anchoring worker is implemented. |
+| `history.immutability: external_anchor` | Reserved for a future `IntegrityAnchor` backend and still fails fast unless a real provider is implemented. |
+| `history.evidence.enabled` | Enables fail-closed WORM history-event artifact writes. It does not change HTTP response shapes, but mutating requests fail if the evidence artifact cannot be stored. |
+| `history.evidence.provider: s3` | Configures the S3-compatible `EvidenceStore`. Requires bucket, region, retention mode, and positive retention days. Endpoint override and path-style mode support MinIO-style tests. |
+| `history.evidence.writeTimeoutSeconds` | Bounds synchronous WORM writes while the PostgreSQL transaction is open. Default is `10`. |
+| `history.evidence.signing.privateKeyPath` | Optional RS256 manifest signing key. Falls back to `jws.privateKeyPath` when empty. |
+| `history.integrityAnchor.provider: none` | Default. Non-`none` providers such as immudb, Rekor, Trillian, or timestamping services are reserved for later work. |
 | `history.auditIdentityMode` | Must remain `none`. Identity enrichment modes fail fast until middleware populates audit context. |
 | Active eventing, configured event sinks, or enabled outbox processing | Fail fast until outbox publishing is implemented. |
 
-`AuditContext`, `ChangeEvent`, and the anchor interfaces remain extension points. Current runtime middleware does not populate `AuditContext`, and no external anchor client is invoked by the append path yet.
+`AuditContext`, `ChangeEvent`, `EvidenceStore`, and `IntegrityAnchor` remain extension points. Current runtime middleware does not populate `AuditContext`, and no external ledger anchor client is invoked by the append path yet.
+
+Example verifier/publisher usage:
+
+```sh
+go run ./cmd/historyevidenceverifier \
+  -config ./config.yaml \
+  -table submodel_history \
+  -identifier 'https://example.com/submodels/1' \
+  -from 1 \
+  -to 25 \
+  -write
+```
+
+```sh
+go run ./cmd/historyevidenceverifier \
+  -config ./config.yaml \
+  -table submodel_history \
+  -identifier 'https://example.com/submodels/1' \
+  -from 1 \
+  -to 25 \
+  -manifest-object-key 'history-evidence/history-manifests/submodel_history/https:%2F%2Fexample.com%2Fsubmodels%2F1/1-25-...json' \
+  -manifest-sha256 '<expected-sha256>'
+```
 
 ### Diff-Backed Storage
 

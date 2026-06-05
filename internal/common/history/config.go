@@ -26,8 +26,13 @@
 package history
 
 import (
+	"context"
+	"fmt"
 	"strings"
 	"sync"
+	"time"
+
+	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 )
 
 var (
@@ -38,8 +43,13 @@ var (
 		FullSnapshotInterval: DefaultFullSnapshotInterval,
 		Immutability:         ImmutabilityNone,
 		AuditIdentityMode:    AuditIdentityNone,
+		EvidenceProvider:     EvidenceProviderNone,
+		EvidenceWriteTimeout: DefaultEvidenceWriteTimeout,
 	}
 )
+
+// DefaultEvidenceWriteTimeout bounds synchronous evidence writes inside database transactions.
+const DefaultEvidenceWriteTimeout = 10 * time.Second
 
 // Config controls process-local history and audit behavior.
 //
@@ -53,6 +63,10 @@ type Config struct {
 	FullSnapshotInterval int
 	Immutability         string
 	AuditIdentityMode    string
+	EvidenceEnabled      bool
+	EvidenceProvider     string
+	EvidenceStore        EvidenceStore
+	EvidenceWriteTimeout time.Duration
 }
 
 // Configure replaces the process-local history configuration.
@@ -76,6 +90,56 @@ func Configure(cfg Config) {
 	configMu.Lock()
 	defer configMu.Unlock()
 	activeConfig = normalizeConfig(cfg)
+}
+
+// ConfigureEvidence creates and activates the configured WORM evidence store.
+//
+// The store is used synchronously by history append operations while the
+// PostgreSQL transaction is still open. A positive write timeout is therefore
+// required so object-store stalls cannot hold history advisory locks forever.
+//
+// Parameters:
+//   - ctx: Startup context used while initializing provider clients.
+//   - cfg: Common history evidence configuration loaded from YAML and environment.
+//
+// Returns:
+//   - error: Error when evidence is enabled with an unsupported provider,
+//     incomplete S3 settings, disabled history mode, or an invalid write timeout.
+func ConfigureEvidence(ctx context.Context, cfg common.HistoryEvidenceConfig) error {
+	provider := normalizeEvidenceProvider(cfg.Provider)
+	if !cfg.Enabled {
+		configureEvidenceStore(false, EvidenceProviderNone, nil, DefaultEvidenceWriteTimeout)
+		return nil
+	}
+	if provider == EvidenceProviderNone {
+		return fmt.Errorf("HISTORY-EVIDENCE-CONFIG-PROVIDER history.evidence.enabled requires an evidence provider")
+	}
+	if ActiveConfig().Mode == ModeOff {
+		return fmt.Errorf("HISTORY-EVIDENCE-CONFIG-MODE history.evidence.enabled requires history.mode api or audit")
+	}
+	if provider != EvidenceProviderS3 {
+		return fmt.Errorf("HISTORY-EVIDENCE-CONFIG-PROVIDER unsupported evidence provider %q", cfg.Provider)
+	}
+	writeTimeout := time.Duration(cfg.WriteTimeoutSec) * time.Second
+	if writeTimeout < time.Second {
+		return fmt.Errorf("HISTORY-EVIDENCE-CONFIG-TIMEOUT history.evidence.writeTimeoutSeconds must be at least 1")
+	}
+	store, err := NewS3EvidenceStore(ctx, S3EvidenceStoreConfig{
+		Bucket:          cfg.Bucket,
+		Prefix:          cfg.Prefix,
+		Region:          cfg.Region,
+		Endpoint:        cfg.Endpoint,
+		AccessKeyID:     cfg.AccessKeyID,
+		SecretAccessKey: cfg.SecretAccessKey,
+		UsePathStyle:    cfg.UsePathStyle,
+		RetentionMode:   cfg.RetentionMode,
+		RetentionDays:   cfg.RetentionDays,
+	})
+	if err != nil {
+		return fmt.Errorf("HISTORY-EVIDENCE-CONFIG-STORE %w", err)
+	}
+	configureEvidenceStore(true, provider, store, writeTimeout)
+	return nil
 }
 
 // ActiveConfig returns the normalized process-local history configuration.
@@ -102,13 +166,37 @@ func normalizeConfig(cfg Config) Config {
 	cfg.Mode = normalizeHistoryMode(cfg.Mode)
 	cfg.Immutability = normalizeImmutability(cfg.Immutability)
 	cfg.AuditIdentityMode = normalizeAuditIdentityMode(cfg.AuditIdentityMode)
+	cfg.EvidenceProvider = normalizeEvidenceProvider(cfg.EvidenceProvider)
 	if cfg.RetentionDays < 0 {
 		cfg.RetentionDays = 0
 	}
 	if cfg.FullSnapshotInterval < 1 {
 		cfg.FullSnapshotInterval = DefaultFullSnapshotInterval
 	}
+	if cfg.EvidenceWriteTimeout < time.Second {
+		cfg.EvidenceWriteTimeout = DefaultEvidenceWriteTimeout
+	}
+	if !cfg.EvidenceEnabled {
+		cfg.EvidenceProvider = EvidenceProviderNone
+		cfg.EvidenceStore = nil
+	}
 	return cfg
+}
+
+func configureEvidenceStore(enabled bool, provider string, store EvidenceStore, writeTimeout time.Duration) {
+	configMu.Lock()
+	defer configMu.Unlock()
+	activeConfig.EvidenceEnabled = enabled
+	activeConfig.EvidenceProvider = normalizeEvidenceProvider(provider)
+	activeConfig.EvidenceStore = store
+	if writeTimeout < time.Second {
+		writeTimeout = DefaultEvidenceWriteTimeout
+	}
+	activeConfig.EvidenceWriteTimeout = writeTimeout
+	if !enabled {
+		activeConfig.EvidenceProvider = EvidenceProviderNone
+		activeConfig.EvidenceStore = nil
+	}
 }
 
 func normalizeHistoryMode(mode string) string {
@@ -148,4 +236,12 @@ func normalizeAuditIdentityMode(mode string) string {
 	default:
 		return AuditIdentityMinimal
 	}
+}
+
+func normalizeEvidenceProvider(provider string) string {
+	normalized := strings.ToLower(strings.TrimSpace(provider))
+	if normalized == "" {
+		return EvidenceProviderNone
+	}
+	return normalized
 }
