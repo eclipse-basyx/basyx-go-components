@@ -148,6 +148,44 @@ func buildAASCollector() (*grammar.ResolvedFieldPathCollector, error) {
 	return collector, nil
 }
 
+func buildCoreAssetAdministrationShellSelectExpressions(
+	ctx context.Context,
+	collector *grammar.ResolvedFieldPathCollector,
+	includeDatabaseID bool,
+) ([]interface{}, error) {
+	columns := make([]auth.FilterColumnSpec, 0, len(unmaskedCoreAssetAdministrationShellSelectExpressions(includeDatabaseID)))
+	if includeDatabaseID {
+		columns = append(columns, auth.Column(goqu.I("aas.id")))
+	}
+	columns = append(columns,
+		auth.Column(goqu.I("aas.aas_id")),
+		auth.MaskedColumn(goqu.I("aas.id_short"), "$aas#idShort"),
+		auth.Column(goqu.I("aas.category")),
+		auth.Column(goqu.I("ap.displayname_payload")),
+		auth.Column(goqu.I("ap.description_payload")),
+		auth.Column(goqu.I("ap.administrative_information_payload")),
+		auth.Column(goqu.I("ap.embedded_data_specification_payload")),
+		auth.Column(goqu.I("ap.extensions_payload")),
+		auth.Column(goqu.I("ap.derived_from_payload")),
+		auth.Column(goqu.I("asset_information.asset_kind")),
+		auth.MaskedColumn(goqu.I("asset_information.global_asset_id"), "$aas#assetInformation.globalAssetId"),
+		auth.MaskedColumn(goqu.I("asset_information.asset_type"), "$aas#assetInformation.assetType"),
+		auth.Column(goqu.I("tfe.value")),
+		auth.Column(goqu.I("tfe.content_type")),
+	)
+
+	expressions, err := auth.GetColumnSelectStatement(ctx, columns, collector)
+	if err != nil {
+		return nil, err
+	}
+
+	selectExpressions := make([]interface{}, 0, len(expressions))
+	for _, expression := range expressions {
+		selectExpressions = append(selectExpressions, expression)
+	}
+	return selectExpressions, nil
+}
+
 func shouldEnforceFormula(ctx context.Context, step string) (bool, error) {
 	shouldEnforce, err := auth.ShouldEnforceFormula(ctx)
 	if err != nil {
@@ -595,7 +633,6 @@ func (s *AssetAdministrationShellDatabase) GetAssetAdministrationShells(ctx cont
 			return nil, "", common.NewInternalServerError("AASREPO-GETAASLIST-ABACFORMULA " + err.Error())
 		}
 	}
-
 	sqlQuery, args, toSQLErr := selectDS.ToSQL()
 	if toSQLErr != nil {
 		return nil, "", common.NewInternalServerError("AASREPO-GETAASLIST-BUILDSQL " + toSQLErr.Error())
@@ -1582,7 +1619,16 @@ type coreAssetAdministrationShellRow struct {
 // getAssetAdministrationShellMapByDBID loads an AAS and maps it to a typed model.
 func (s *AssetAdministrationShellDatabase) getAssetAdministrationShellMapByDBID(ctx context.Context, aasDBID int64) (types.IAssetAdministrationShell, error) {
 	dialect := goqu.Dialect("postgres")
-	querySQL, queryArgs, buildErr := buildGetAssetAdministrationShellMapByDBIDQuery(&dialect, aasDBID)
+	collector, collectorErr := buildAASCollector()
+	if collectorErr != nil {
+		return nil, collectorErr
+	}
+	selectExpressions, selectErr := buildCoreAssetAdministrationShellSelectExpressions(ctx, collector, false)
+	if selectErr != nil {
+		return nil, common.NewInternalServerError("AASREPO-MAPAAS-BUILDMASKS " + selectErr.Error())
+	}
+
+	querySQL, queryArgs, buildErr := buildGetAssetAdministrationShellMapByDBIDQueryWithSelect(&dialect, aasDBID, selectExpressions)
 	if buildErr != nil {
 		return nil, common.NewInternalServerError("AASREPO-MAPAAS-BUILDSQL " + buildErr.Error())
 	}
@@ -1631,7 +1677,16 @@ func (s *AssetAdministrationShellDatabase) getAssetAdministrationShellMapsByDBID
 	}
 
 	dialect := goqu.Dialect("postgres")
-	querySQL, queryArgs, buildErr := buildGetAssetAdministrationShellMapsByDBIDsQuery(&dialect, aasDBIDs)
+	collector, collectorErr := buildAASCollector()
+	if collectorErr != nil {
+		return nil, collectorErr
+	}
+	selectExpressions, selectErr := buildCoreAssetAdministrationShellSelectExpressions(ctx, collector, true)
+	if selectErr != nil {
+		return nil, common.NewInternalServerError("AASREPO-MAPAASBATCH-BUILDMASKS " + selectErr.Error())
+	}
+
+	querySQL, queryArgs, buildErr := buildGetAssetAdministrationShellMapsByDBIDsQueryWithSelect(&dialect, aasDBIDs, selectExpressions)
 	if buildErr != nil {
 		return nil, common.NewInternalServerError("AASREPO-MAPAASBATCH-BUILDSQL " + buildErr.Error())
 	}
@@ -1712,7 +1767,21 @@ func (s *AssetAdministrationShellDatabase) readSubmodelReferencePayloadsByAASDBI
 	}
 
 	dialect := goqu.Dialect("postgres")
-	submodelSQL, submodelArgs, submodelBuildErr := buildGetSubmodelReferencePayloadsByAASIDsQuery(&dialect, aasDBIDs)
+	submodelDS := buildGetSubmodelReferencePayloadsByAASIDsDataset(&dialect, aasDBIDs)
+	collector, collectorErr := buildAASCollector()
+	if collectorErr != nil {
+		return nil, collectorErr
+	}
+	submodelDS, filterErr := auth.AddFilterQueryFromContext(ctx, submodelDS, "$aas#submodels[]", collector)
+	if filterErr != nil {
+		return nil, common.NewInternalServerError("AASREPO-READSMREFBATCH-ABACFILTERS " + filterErr.Error())
+	}
+	submodelDS, filterErr = auth.AddFilterQueryFromContext(ctx, submodelDS, "$aas#submodels[].keys[]", collector)
+	if filterErr != nil {
+		return nil, common.NewInternalServerError("AASREPO-READSMREFBATCH-ABACKEYFILTERS " + filterErr.Error())
+	}
+
+	submodelSQL, submodelArgs, submodelBuildErr := submodelDS.ToSQL()
 	if submodelBuildErr != nil {
 		return nil, common.NewInternalServerError("AASREPO-READSMREFBATCH-BUILDSQL " + submodelBuildErr.Error())
 	}
@@ -2037,7 +2106,17 @@ func parseSpecificAssetIDSemanticIDPayload(payload []byte) (types.IReference, bo
 // readSpecificAssetIDsByAssetInformationID reads and enriches specificAssetIds for an assetInformation record.
 func (s *AssetAdministrationShellDatabase) readSpecificAssetIDsByAssetInformationID(ctx context.Context, assetInformationID int64) ([]types.ISpecificAssetID, error) {
 	dialect := goqu.Dialect("postgres")
-	querySQL, queryArgs, buildErr := buildReadSpecificAssetIDsByAssetInformationIDQuery(&dialect, assetInformationID)
+	queryDS := buildReadSpecificAssetIDsByAssetInformationIDDataset(&dialect, assetInformationID)
+	collector, collectorErr := buildAASCollector()
+	if collectorErr != nil {
+		return nil, collectorErr
+	}
+	queryDS, filterErr := auth.AddFilterQueryFromContext(ctx, queryDS, "$aas#assetInformation.specificAssetIds[]", collector)
+	if filterErr != nil {
+		return nil, common.NewInternalServerError("AASREPO-READSPECIFIC-ABACFILTERS " + filterErr.Error())
+	}
+
+	querySQL, queryArgs, buildErr := queryDS.ToSQL()
 	if buildErr != nil {
 		return nil, common.NewInternalServerError("AASREPO-READSPECIFIC-BUILDSQL " + buildErr.Error())
 	}
@@ -2113,7 +2192,17 @@ func (s *AssetAdministrationShellDatabase) readSpecificAssetIDsByAssetInformatio
 	}
 
 	dialect := goqu.Dialect("postgres")
-	querySQL, queryArgs, buildErr := buildReadSpecificAssetIDsByAssetInformationIDsQuery(&dialect, assetInformationIDs)
+	queryDS := buildReadSpecificAssetIDsByAssetInformationIDsDataset(&dialect, assetInformationIDs)
+	collector, collectorErr := buildAASCollector()
+	if collectorErr != nil {
+		return nil, collectorErr
+	}
+	queryDS, filterErr := auth.AddFilterQueryFromContext(ctx, queryDS, "$aas#assetInformation.specificAssetIds[]", collector)
+	if filterErr != nil {
+		return nil, common.NewInternalServerError("AASREPO-READSPECIFICBATCH-ABACFILTERS " + filterErr.Error())
+	}
+
+	querySQL, queryArgs, buildErr := queryDS.ToSQL()
 	if buildErr != nil {
 		return nil, common.NewInternalServerError("AASREPO-READSPECIFICBATCH-BUILDSQL " + buildErr.Error())
 	}

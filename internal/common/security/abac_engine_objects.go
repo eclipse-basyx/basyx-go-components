@@ -161,6 +161,12 @@ var identifiableRouteMappings = []identifiableRouteMapping{
 	// on $aas#id when a concrete IDENTIFIABLE is provided.
 	{
 		scope:       "$aas",
+		route:       "/query/shells",
+		filterField: "$aas#id",
+		hasWildcard: false,
+	},
+	{
+		scope:       "$aas",
 		route:       "/shells",
 		filterField: "$aas#id",
 		hasWildcard: false,
@@ -183,6 +189,12 @@ var identifiableRouteMappings = []identifiableRouteMapping{
 		route:       "/shells/%s/**",
 		filterField: "$aas#id",
 		hasWildcard: true,
+	},
+	{
+		scope:       "$cd",
+		route:       "/query/concept-descriptions",
+		filterField: "$cd#id",
+		hasWildcard: false,
 	},
 	{
 		scope:       "$cd",

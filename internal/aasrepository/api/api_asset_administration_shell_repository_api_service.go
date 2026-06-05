@@ -26,6 +26,8 @@ import (
 	persistencepostgresql "github.com/eclipse-basyx/basyx-go-components/internal/aasrepository/persistence"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
+	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 	submodelapi "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/api"
 	submodelpersistence "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence"
 	openapi "github.com/eclipse-basyx/basyx-go-components/pkg/aasrepositoryapi/go"
@@ -65,6 +67,44 @@ func newAPIErrorResponse(err error, status int, operation string, info string) g
 	}
 
 	return common.NewErrorResponse(err, status, componentName, operation, info)
+}
+
+// QueryAssetAdministrationShells - Returns all Asset Administration Shells that match the input query
+func (s *AssetAdministrationShellRepositoryAPIAPIService) QueryAssetAdministrationShells(ctx context.Context, limit int32, cursor string, query grammar.Query) (gen.ImplResponse, error) {
+	const operation = "QueryAssetAdministrationShells"
+
+	decodedCursor, decodeErr := common.DecodeString(cursor)
+	if decodeErr != nil {
+		return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "BadCursor"), nil
+	}
+
+	queryCtx := auth.MergeQueryFilter(ctx, query)
+	aasList, nextCursor, err := s.assetAdministrationShellBackend.GetAssetAdministrationShells(queryCtx, limit, decodedCursor, "", nil)
+	if err != nil {
+		if common.IsErrBadRequest(err) {
+			return newAPIErrorResponse(err, http.StatusBadRequest, operation, "BadRequest"), nil
+		}
+		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "GetAssetAdministrationShells"), err
+	}
+
+	jsonAASList := make([]map[string]any, 0, len(aasList))
+	for _, aas := range aasList {
+		if aas == nil {
+			err = common.NewInternalServerError("AASREPO-QUERYAAS-NILAAS loaded AAS is nil")
+			return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "GetAssetAdministrationShells"), err
+		}
+
+		jsonAAS, jsonErr := jsonization.ToJsonable(aas)
+		if jsonErr != nil {
+			return newAPIErrorResponse(jsonErr, http.StatusInternalServerError, operation, "ToJsonable"), jsonErr
+		}
+		jsonAASList = append(jsonAASList, jsonAAS)
+	}
+
+	return gen.Response(http.StatusOK, gen.GetAssetAdministrationShellsResult{
+		PagingMetadata: gen.PagedResultPagingMetadata{Cursor: common.EncodeString(nextCursor)},
+		Result:         jsonAASList,
+	}), nil
 }
 
 // GetAllAssetAdministrationShells - Returns all Asset Administration Shells

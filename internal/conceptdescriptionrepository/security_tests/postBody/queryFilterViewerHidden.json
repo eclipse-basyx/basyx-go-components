@@ -1,0 +1,16 @@
+{
+  "$condition": {
+    "$boolean": true
+  },
+  "$filters": [
+    {
+      "$fragment": "$cd#idShort",
+      "$condition": {
+        "$eq": [
+          { "$field": "$cd#idShort" },
+          { "$strVal": "ViewerHidden" }
+        ]
+      }
+    }
+  ]
+}

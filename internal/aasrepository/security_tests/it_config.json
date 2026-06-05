@@ -31,6 +31,66 @@
     "expectedStatus": 201
   },
   {
+    "context": "POST /query/shells - anonymous denied",
+    "token": null,
+    "method": "POST",
+    "endpoint": "http://localhost:6004/query/shells",
+    "data": "bodies/query/queryViewerVisible.json",
+    "expectedStatus": 403
+  },
+  {
+    "context": "POST /query/shells - admin query hidden asset type",
+    "token": { "user": "admin", "password": "pwd" },
+    "method": "POST",
+    "endpoint": "http://localhost:6004/query/shells",
+    "data": "bodies/query/queryAssetTypeHidden.json",
+    "shouldMatch": "expected/expectedQueryShellsHiddenAdmin.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "POST /query/shells - admin filter fragment hidden asset type",
+    "token": { "user": "admin", "password": "pwd" },
+    "method": "POST",
+    "endpoint": "http://localhost:6004/query/shells",
+    "data": "bodies/query/queryFilterAssetTypeHidden.json",
+    "shouldMatch": "expected/expectedQueryShellsHiddenAdmin.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "POST /query/shells - viewer query narrowed by ABAC",
+    "token": { "user": "usera", "password": "pwd" },
+    "method": "POST",
+    "endpoint": "http://localhost:6004/query/shells",
+    "data": "bodies/query/queryAssetTypeHidden.json",
+    "shouldMatch": "expected/expectedQueryShellsHiddenViewer.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "POST /query/shells - editor reduced to specific IDENTIFIABLE object",
+    "token": { "user": "userx", "password": "pwd" },
+    "method": "POST",
+    "endpoint": "http://localhost:6004/query/shells",
+    "data": "bodies/query/queryViewerVisible.json",
+    "shouldMatch": "expected/expectedShellsReducedEditorSpecificIdentifiable.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "POST /query/shells - empty query rejected",
+    "token": { "user": "admin", "password": "pwd" },
+    "method": "POST",
+    "endpoint": "http://localhost:6004/query/shells",
+    "data": "bodies/query/queryEmpty.json",
+    "expectedStatus": 400
+  },
+  {
+    "context": "POST /query/shells - malformed query rejected",
+    "token": { "user": "admin", "password": "pwd" },
+    "method": "POST",
+    "endpoint": "http://localhost:6004/query/shells",
+    "data": "bodies/query/queryMalformed.json",
+    "expectedStatus": 400
+  },
+  {
     "context": "GET /shells - admin full access",
     "token": { "user": "admin", "password": "pwd" },
     "method": "GET",

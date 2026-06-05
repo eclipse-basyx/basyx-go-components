@@ -17,12 +17,14 @@ import (
 
 	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
 )
 
 // ConceptDescriptionRepositoryAPIAPIRouter defines the required methods for binding the api requests to a responses for the ConceptDescriptionRepositoryAPIAPI
 // The ConceptDescriptionRepositoryAPIAPIRouter implementation should parse necessary information from the http request,
 // pass the data to a ConceptDescriptionRepositoryAPIAPIServicer to perform the required actions, then write the service results to the http response.
 type ConceptDescriptionRepositoryAPIAPIRouter interface {
+	QueryConceptDescriptions(http.ResponseWriter, *http.Request)
 	GetAllConceptDescriptions(http.ResponseWriter, *http.Request)
 	PostConceptDescription(http.ResponseWriter, *http.Request)
 	GetConceptDescriptionById(http.ResponseWriter, *http.Request)
@@ -49,6 +51,7 @@ type SerializationAPIAPIRouter interface {
 // while the service implementation can be ignored with the .openapi-generator-ignore file
 // and updated with the logic required for the API.
 type ConceptDescriptionRepositoryAPIAPIServicer interface {
+	QueryConceptDescriptions(context.Context, int32, string, grammar.Query) (model.ImplResponse, error)
 	GetAllConceptDescriptions(context.Context, string, string, string, int32, string) (model.ImplResponse, error)
 	PostConceptDescription(context.Context, types.IConceptDescription) (model.ImplResponse, error)
 	GetConceptDescriptionById(context.Context, string) (model.ImplResponse, error)

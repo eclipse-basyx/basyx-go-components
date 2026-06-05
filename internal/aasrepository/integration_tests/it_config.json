@@ -236,6 +236,29 @@
 		"action": "DELETE_ALL_AAS"
 	},
 	{
+		"context": "004.10.1 - POST /shells - create AAS for query fragment filter",
+		"method": "POST",
+		"endpoint": "http://127.0.0.1:6004/shells",
+		"data": "bodies/post/postAssetAdministrationShellMinimal.json",
+		"expectedResponseHeaders": {
+			"Location": "http://127.0.0.1:6004/shells/aHR0cHM6Ly9leGFtcGxlLmNvbS9pZHMvYWFzLzczMDFfMzE1MF85NDQyXzc4NDk"
+		},
+		"shouldMatch": "bodies/post/postAssetAdministrationShellMinimal.json",
+		"expectedStatus": 201
+	},
+	{
+		"context": "004.10.2 - POST /query/shells - false submodels fragment keeps AAS",
+		"method": "POST",
+		"endpoint": "http://127.0.0.1:6004/query/shells",
+		"data": "bodies/query/queryAASSubmodelsFragmentFalse.json",
+		"shouldMatch": "expected/expectedQueryShellsSubmodelsFragmentFalse.json",
+		"expectedStatus": 200
+	},
+	{
+		"context": "00A.4.1 - Cleanup: Delete All AAS - ACTION DELETE_ALL_AAS",
+		"action": "DELETE_ALL_AAS"
+	},
+	{
 		"context": "004.11 - POST /shells - create AAS",
 		"method": "POST",
 		"endpoint": "http://127.0.0.1:6004/shells",

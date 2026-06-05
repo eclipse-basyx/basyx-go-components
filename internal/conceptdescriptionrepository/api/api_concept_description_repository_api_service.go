@@ -45,6 +45,8 @@ import (
 	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
+	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 	"github.com/eclipse-basyx/basyx-go-components/internal/conceptdescriptionrepository/persistence"
 )
 
@@ -79,6 +81,55 @@ func NewConceptDescriptionRepositoryAPIAPIService(database *persistence.ConceptD
 	return &ConceptDescriptionRepositoryAPIAPIService{
 		d: database,
 	}
+}
+
+// QueryConceptDescriptions - Returns all Concept Descriptions that match the input query
+func (s *ConceptDescriptionRepositoryAPIAPIService) QueryConceptDescriptions(ctx context.Context, limit int32, cursor string, query grammar.Query) (model.ImplResponse, error) {
+	const operation = "QueryConceptDescriptions"
+
+	decodedCursor := strings.TrimSpace(cursor)
+	if decodedCursor != "" {
+		var decodeErr error
+		decodedCursor, decodeErr = common.DecodeString(decodedCursor)
+		if decodeErr != nil {
+			return common.NewErrorResponse(decodeErr, http.StatusBadRequest, componentName, operation, "BadCursor"), nil
+		}
+	}
+
+	if limit < 0 {
+		err := common.NewErrBadRequest("limit must be non-negative")
+		return common.NewErrorResponse(err, http.StatusBadRequest, componentName, operation, "BadLimit"), nil
+	}
+
+	uintLimit64, convErr := strconv.ParseUint(strconv.FormatInt(int64(limit), 10), 10, 64)
+	if convErr != nil {
+		err := common.NewErrBadRequest("invalid limit")
+		return common.NewErrorResponse(err, http.StatusBadRequest, componentName, operation, "BadLimit"), nil
+	}
+
+	queryCtx := auth.MergeQueryFilter(ctx, query)
+	cds, nextCursor, err := s.d.GetConceptDescriptions(queryCtx, nil, nil, nil, uint(uintLimit64), &decodedCursor)
+	if err != nil {
+		switch {
+		case common.IsErrBadRequest(err):
+			return common.NewErrorResponse(err, http.StatusBadRequest, componentName, operation, "BadRequest"), nil
+		case common.IsErrDenied(err):
+			return common.NewErrorResponse(err, http.StatusForbidden, componentName, operation, "Denied"), nil
+		default:
+			return common.NewErrorResponse(err, http.StatusInternalServerError, componentName, operation, "Unhandled"), err
+		}
+	}
+
+	jsonable := make([]map[string]any, 0, len(cds))
+	for _, cd := range cds {
+		jsonObj, err := jsonization.ToJsonable(cd)
+		if err != nil {
+			return common.NewErrorResponse(err, http.StatusInternalServerError, componentName, operation, "ToJsonable"), err
+		}
+		jsonable = append(jsonable, jsonObj)
+	}
+
+	return pagedResponse(jsonable, nextCursor), nil
 }
 
 // GetAllConceptDescriptions - Returns all Concept Descriptions

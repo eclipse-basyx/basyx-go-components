@@ -1,0 +1,13 @@
+{
+  "$condition": {
+    "$boolean": true
+  },
+  "$filters": [
+    {
+      "$fragment": "$aas#submodels[]",
+      "$condition": {
+        "$boolean": false
+      }
+    }
+  ]
+}

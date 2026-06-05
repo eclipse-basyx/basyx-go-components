@@ -1,0 +1,16 @@
+{
+  "$condition": {
+    "$boolean": true
+  },
+  "$filters": [
+    {
+      "$fragment": "$aas#assetInformation.assetType",
+      "$condition": {
+        "$eq": [
+          { "$field": "$aas#assetInformation.assetType" },
+          { "$strVal": "viewer-hidden" }
+        ]
+      }
+    }
+  ]
+}

@@ -13,6 +13,7 @@ package openapi
 
 import (
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/url"
@@ -22,6 +23,7 @@ import (
 	"github.com/FriedJannik/aas-go-sdk/jsonization"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
 	"github.com/go-chi/chi/v5"
 )
 
@@ -58,6 +60,7 @@ func NewConceptDescriptionRepositoryAPIAPIController(s ConceptDescriptionReposit
 // Routes returns all the api routes for the ConceptDescriptionRepositoryAPIAPIController
 func (c *ConceptDescriptionRepositoryAPIAPIController) Routes() model.Routes {
 	return model.Routes{
+		"QueryConceptDescriptions":     model.Route{Name: "QueryConceptDescriptions", Method: strings.ToUpper("Post"), Pattern: c.contextPath + "/query/concept-descriptions", HandlerFunc: c.QueryConceptDescriptions},
 		"GetAllConceptDescriptions":    model.Route{Name: "GetAllConceptDescriptions", Method: strings.ToUpper("Get"), Pattern: c.contextPath + "/concept-descriptions", HandlerFunc: c.GetAllConceptDescriptions},
 		"PostConceptDescription":       model.Route{Name: "PostConceptDescription", Method: strings.ToUpper("Post"), Pattern: c.contextPath + "/concept-descriptions", HandlerFunc: c.PostConceptDescription},
 		"GetConceptDescriptionById":    model.Route{Name: "GetConceptDescriptionById", Method: strings.ToUpper("Get"), Pattern: c.contextPath + "/concept-descriptions/{cdIdentifier}", HandlerFunc: c.GetConceptDescriptionById},
@@ -69,12 +72,83 @@ func (c *ConceptDescriptionRepositoryAPIAPIController) Routes() model.Routes {
 // OrderedRoutes returns all the api routes in a deterministic order for the ConceptDescriptionRepositoryAPIAPIController
 func (c *ConceptDescriptionRepositoryAPIAPIController) OrderedRoutes() []model.Route {
 	return []model.Route{
+		model.Route{Name: "QueryConceptDescriptions", Method: strings.ToUpper("Post"), Pattern: c.contextPath + "/query/concept-descriptions", HandlerFunc: c.QueryConceptDescriptions},
 		model.Route{Name: "GetAllConceptDescriptions", Method: strings.ToUpper("Get"), Pattern: c.contextPath + "/concept-descriptions", HandlerFunc: c.GetAllConceptDescriptions},
 		model.Route{Name: "PostConceptDescription", Method: strings.ToUpper("Post"), Pattern: c.contextPath + "/concept-descriptions", HandlerFunc: c.PostConceptDescription},
 		model.Route{Name: "GetConceptDescriptionById", Method: strings.ToUpper("Get"), Pattern: c.contextPath + "/concept-descriptions/{cdIdentifier}", HandlerFunc: c.GetConceptDescriptionById},
 		model.Route{Name: "PutConceptDescriptionById", Method: strings.ToUpper("Put"), Pattern: c.contextPath + "/concept-descriptions/{cdIdentifier}", HandlerFunc: c.PutConceptDescriptionById},
 		model.Route{Name: "DeleteConceptDescriptionById", Method: strings.ToUpper("Delete"), Pattern: c.contextPath + "/concept-descriptions/{cdIdentifier}", HandlerFunc: c.DeleteConceptDescriptionById},
 	}
+}
+
+// QueryConceptDescriptions - Returns all Concept Descriptions that match the input query
+func (c *ConceptDescriptionRepositoryAPIAPIController) QueryConceptDescriptions(w http.ResponseWriter, r *http.Request) {
+	query, err := parseQuery(r.URL.RawQuery)
+	if err != nil {
+		result := common.NewErrorResponse(err, http.StatusBadRequest, "CDREPO", "QueryConceptDescriptions", "query")
+		if encodeErr := model.EncodeJSONResponse(result.Body, &result.Code, w); encodeErr != nil {
+			c.errorHandler(w, r, encodeErr, nil)
+		}
+		return
+	}
+
+	var limitParam int32
+	if query.Has("limit") {
+		param, parseErr := parseNumericParameter[int32](
+			query.Get("limit"),
+			model.WithParse[int32](parseInt32),
+			model.WithMinimum[int32](1),
+		)
+		if parseErr != nil {
+			result := common.NewErrorResponse(parseErr, http.StatusBadRequest, "CDREPO", "QueryConceptDescriptions", "limit")
+			if encodeErr := model.EncodeJSONResponse(result.Body, &result.Code, w); encodeErr != nil {
+				c.errorHandler(w, r, encodeErr, nil)
+			}
+			return
+		}
+
+		limitParam = param
+	}
+
+	var cursorParam string
+	if query.Has("cursor") {
+		cursorParam = query.Get("cursor")
+	}
+
+	var queryParam grammar.Query
+	d := json.NewDecoder(r.Body)
+	d.DisallowUnknownFields()
+	if err := d.Decode(&queryParam); err != nil && !errors.Is(err, io.EOF) {
+		result := common.NewErrorResponse(err, http.StatusBadRequest, "CDREPO", "QueryConceptDescriptions", "RequestBody")
+		if encodeErr := model.EncodeJSONResponse(result.Body, &result.Code, w); encodeErr != nil {
+			c.errorHandler(w, r, encodeErr, nil)
+		}
+		return
+	}
+
+	if err := grammar.AssertQueryRequired(queryParam); err != nil {
+		result := common.NewErrorResponse(err, http.StatusBadRequest, "CDREPO", "QueryConceptDescriptions", "RequestBody")
+		if encodeErr := model.EncodeJSONResponse(result.Body, &result.Code, w); encodeErr != nil {
+			c.errorHandler(w, r, encodeErr, nil)
+		}
+		return
+	}
+
+	if err := grammar.AssertQueryConstraints(queryParam); err != nil {
+		result := common.NewErrorResponse(err, http.StatusBadRequest, "CDREPO", "QueryConceptDescriptions", "RequestBody")
+		if encodeErr := model.EncodeJSONResponse(result.Body, &result.Code, w); encodeErr != nil {
+			c.errorHandler(w, r, encodeErr, nil)
+		}
+		return
+	}
+
+	result, err := c.service.QueryConceptDescriptions(r.Context(), limitParam, cursorParam, queryParam)
+	if err != nil {
+		c.errorHandler(w, r, err, &result)
+		return
+	}
+
+	_ = model.EncodeJSONResponse(result.Body, &result.Code, w)
 }
 
 // GetAllConceptDescriptions - Returns all Concept Descriptions

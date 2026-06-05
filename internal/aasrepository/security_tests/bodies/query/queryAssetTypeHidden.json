@@ -1,0 +1,8 @@
+{
+  "$condition": {
+    "$eq": [
+      { "$field": "$aas#assetInformation.assetType" },
+      { "$strVal": "viewer-hidden" }
+    ]
+  }
+}

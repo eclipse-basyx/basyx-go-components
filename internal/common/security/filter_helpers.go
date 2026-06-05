@@ -92,6 +92,43 @@ func AddFilterQueriesFromContext(
 	return ds, nil
 }
 
+// AddAllFilterQueriesFromContext appends WHERE clauses for every fragment
+// filter stored in the context's QueryFilter.
+func AddAllFilterQueriesFromContext(
+	ctx context.Context,
+	ds *goqu.SelectDataset,
+	collector *grammar.ResolvedFieldPathCollector,
+) (*goqu.SelectDataset, error) {
+	return AddAllFilterQueriesFromContextExcept(ctx, ds, collector, nil)
+}
+
+// AddAllFilterQueriesFromContextExcept appends WHERE clauses for every
+// fragment filter except fragments matching one of the excluded patterns.
+func AddAllFilterQueriesFromContextExcept(
+	ctx context.Context,
+	ds *goqu.SelectDataset,
+	collector *grammar.ResolvedFieldPathCollector,
+	excluded []grammar.FragmentStringPattern,
+) (*goqu.SelectDataset, error) {
+	queryFilter := GetQueryFilter(ctx)
+	if queryFilter == nil || len(queryFilter.Filters) == 0 {
+		return ds, nil
+	}
+
+	fragments := make([]grammar.FragmentStringPattern, 0, len(queryFilter.Filters))
+	for fragment := range queryFilter.Filters {
+		if matchesAnyFragmentPattern(fragment, excluded) {
+			continue
+		}
+		fragments = append(fragments, fragment)
+	}
+	sort.Slice(fragments, func(i, j int) bool {
+		return fragments[i] < fragments[j]
+	})
+
+	return AddFilterQueriesFromContext(ctx, ds, fragments, collector)
+}
+
 // FilterColumnSpec describes a selectable expression with an optional fragment
 // used for ABAC masking/filtering.
 type FilterColumnSpec struct {
@@ -324,6 +361,34 @@ func fragmentEndsWithArraySegment(fragment grammar.FragmentStringPattern) bool {
 	}
 	_, isArray := tokens[len(tokens)-1].(builder.ArrayToken)
 	return isArray
+}
+
+func matchesAnyFragmentPattern(fragment grammar.FragmentStringPattern, patterns []grammar.FragmentStringPattern) bool {
+	for _, pattern := range patterns {
+		if fragmentPathMatches(fragment, pattern) {
+			return true
+		}
+	}
+	return false
+}
+
+func fragmentPathMatches(fragment grammar.FragmentStringPattern, pattern grammar.FragmentStringPattern) bool {
+	fragmentTokens := builder.TokenizeField(string(fragment))
+	patternTokens := builder.TokenizeField(string(pattern))
+	if len(fragmentTokens) != len(patternTokens) {
+		return false
+	}
+	for i := range fragmentTokens {
+		if fragmentTokens[i].GetName() != patternTokens[i].GetName() {
+			return false
+		}
+		_, fragmentIsArray := fragmentTokens[i].(builder.ArrayToken)
+		_, patternIsArray := patternTokens[i].(builder.ArrayToken)
+		if fragmentIsArray != patternIsArray {
+			return false
+		}
+	}
+	return true
 }
 
 func buildFragmentMaskSignature(ctx context.Context, fragment grammar.FragmentStringPattern) (string, error) {

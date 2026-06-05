@@ -26,6 +26,7 @@ import (
 	aasverification "github.com/FriedJannik/aas-go-sdk/verification"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
 	"github.com/go-chi/chi/v5"
 )
 
@@ -66,6 +67,11 @@ func NewAssetAdministrationShellRepositoryAPIAPIController(s AssetAdministration
 // Routes returns all the api routes for the AssetAdministrationShellRepositoryAPIAPIController
 func (c *AssetAdministrationShellRepositoryAPIAPIController) Routes() Routes {
 	return Routes{
+		"QueryAssetAdministrationShells": Route{
+			strings.ToUpper("Post"),
+			c.contextPath + "/query/shells",
+			c.QueryAssetAdministrationShells,
+		},
 		"GetAllAssetAdministrationShells": Route{
 			strings.ToUpper("Get"),
 			c.contextPath + "/shells",
@@ -327,6 +333,76 @@ func (c *AssetAdministrationShellRepositoryAPIAPIController) Routes() Routes {
 			c.GetOperationAsyncResultValueOnlyAasRepository,
 		},
 	}
+}
+
+// QueryAssetAdministrationShells - Returns all Asset Administration Shells that match the input query
+func (c *AssetAdministrationShellRepositoryAPIAPIController) QueryAssetAdministrationShells(w http.ResponseWriter, r *http.Request) {
+	query, err := parseQuery(r.URL.RawQuery)
+	if err != nil {
+		result := common.NewErrorResponse(err, http.StatusBadRequest, "AASREPO", "QueryAssetAdministrationShells", "query")
+		if encodeErr := EncodeJSONResponse(result.Body, &result.Code, w); encodeErr != nil {
+			c.errorHandler(w, r, encodeErr, nil)
+		}
+		return
+	}
+
+	var limitParam int32
+	if query.Has("limit") {
+		param, parseErr := parseNumericParameter[int32](
+			query.Get("limit"),
+			WithParse[int32](parseInt32),
+			WithMinimum[int32](1),
+		)
+		if parseErr != nil {
+			result := common.NewErrorResponse(parseErr, http.StatusBadRequest, "AASREPO", "QueryAssetAdministrationShells", "limit")
+			if encodeErr := EncodeJSONResponse(result.Body, &result.Code, w); encodeErr != nil {
+				c.errorHandler(w, r, encodeErr, nil)
+			}
+			return
+		}
+
+		limitParam = param
+	}
+
+	var cursorParam string
+	if query.Has("cursor") {
+		cursorParam = query.Get("cursor")
+	}
+
+	var queryParam grammar.Query
+	d := json.NewDecoder(r.Body)
+	d.DisallowUnknownFields()
+	if err := d.Decode(&queryParam); err != nil && !errors.Is(err, io.EOF) {
+		result := common.NewErrorResponse(err, http.StatusBadRequest, "AASREPO", "QueryAssetAdministrationShells", "RequestBody")
+		if encodeErr := EncodeJSONResponse(result.Body, &result.Code, w); encodeErr != nil {
+			c.errorHandler(w, r, encodeErr, nil)
+		}
+		return
+	}
+
+	if err := grammar.AssertQueryRequired(queryParam); err != nil {
+		result := common.NewErrorResponse(err, http.StatusBadRequest, "AASREPO", "QueryAssetAdministrationShells", "RequestBody")
+		if encodeErr := EncodeJSONResponse(result.Body, &result.Code, w); encodeErr != nil {
+			c.errorHandler(w, r, encodeErr, nil)
+		}
+		return
+	}
+
+	if err := grammar.AssertQueryConstraints(queryParam); err != nil {
+		result := common.NewErrorResponse(err, http.StatusBadRequest, "AASREPO", "QueryAssetAdministrationShells", "RequestBody")
+		if encodeErr := EncodeJSONResponse(result.Body, &result.Code, w); encodeErr != nil {
+			c.errorHandler(w, r, encodeErr, nil)
+		}
+		return
+	}
+
+	result, err := c.service.QueryAssetAdministrationShells(r.Context(), limitParam, cursorParam, queryParam)
+	if err != nil {
+		c.errorHandler(w, r, err, &result)
+		return
+	}
+
+	_ = EncodeJSONResponse(result.Body, &result.Code, w)
 }
 
 // GetAllAssetAdministrationShells - Returns all Asset Administration Shells
