@@ -115,7 +115,7 @@ func TestVerifyPayload_RawJSON(t *testing.T) {
 }
 
 func TestVerifyPayload_RawXML(t *testing.T) {
-	req := httptest.NewRequest(http.MethodPost, "/verify", strings.NewReader("<environment xmlns=\"https://admin-shell.io/aas/3/1\"><assetAdministrationShells /><submodels /><conceptDescriptions /></environment>"))
+	req := httptest.NewRequest(http.MethodPost, "/verify", strings.NewReader("<environment xmlns=\"https://admin-shell.io/aas/3/2\"><assetAdministrationShells /><submodels /><conceptDescriptions /></environment>"))
 	req.Header.Set("Content-Type", "application/xml")
 
 	result, err := VerifyPayload(req)
@@ -178,7 +178,7 @@ func TestVerifyPayload_MultipartPayloadFieldJSON(t *testing.T) {
 }
 
 func TestVerifyPayload_RawAASX(t *testing.T) {
-	aasxPath := filepath.Join("..", "aasenvironment", "integration_tests", "testdata", "IESEDriveMotorDM3000.aasx")
+	aasxPath := filepath.Join("..", "aasenvironment", "integration_tests", "testdata", "ProductionPlanSFKL.aasx")
 	// #nosec G304 -- path is a static test fixture under repository-controlled testdata.
 	aasxBytes, err := os.ReadFile(aasxPath)
 	if err != nil {
@@ -327,7 +327,7 @@ func assertVerificationMessagesInOrder(t *testing.T, messages []string) {
 		"Qualifiers must be either not set or have at least one item.",
 		"Embedded data specifications must be either not set or have at least one item.",
 		"Value must be consistent with the value type.",
-		"IDShort: ID-short of Referables shall only feature letters, digits, hyphen",
+		"IDShort: ID-short of Referables shall consist of at least two characters",
 	}
 
 	if len(messages) != len(expectedMessages) {
