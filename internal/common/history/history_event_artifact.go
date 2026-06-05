@@ -28,6 +28,7 @@ package history
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"net/url"
 	"path"
@@ -87,11 +88,15 @@ func LoadEventArtifactCandidates(ctx context.Context, db *sql.DB, table string, 
 	defer func() {
 		_ = rows.Close()
 	}()
-	return scanEventArtifactCandidates(rows, table)
+	return scanEventArtifactCandidates(ctx, db, rows, table)
 }
 
-func buildHistoryEventEvidenceArtifact(table string, historyID int64, event ChangeEvent, payload historyPayload, createdAt string, updatedAt string) (EvidenceArtifact, error) {
+func buildHistoryEventEvidenceArtifact(table string, historyID int64, event ChangeEvent, payload historyPayload, effectiveDiff []map[string]any, createdAt string, updatedAt string) (EvidenceArtifact, error) {
 	payloadValue, err := decodeHistoryEventPayload(payload)
+	if err != nil {
+		return EvidenceArtifact{}, err
+	}
+	effectiveDiffValue, err := canonicalEffectiveDiffValue(effectiveDiff)
 	if err != nil {
 		return EvidenceArtifact{}, err
 	}
@@ -113,12 +118,13 @@ func buildHistoryEventEvidenceArtifact(table string, historyID int64, event Chan
 			"created_at_text": createdAt,
 			"updated_at_text": updatedAt,
 		},
-		"payload_type":  payload.payloadType,
-		"payload":       payloadValue,
-		"content_hash":  event.ContentHash,
-		"payload_hash":  event.PayloadHash,
-		"previous_hash": event.PreviousHash,
-		"row_hash":      rowHash,
+		"payload_type":   payload.payloadType,
+		"payload":        payloadValue,
+		"effective_diff": effectiveDiffValue,
+		"content_hash":   event.ContentHash,
+		"payload_hash":   event.PayloadHash,
+		"previous_hash":  event.PreviousHash,
+		"row_hash":       rowHash,
 		"audit": map[string]any{
 			"request_id":           event.RequestID,
 			"correlation_id":       event.CorrelationID,
@@ -147,14 +153,14 @@ func buildHistoryEventEvidenceArtifact(table string, historyID int64, event Chan
 	}, nil
 }
 
-func publishHistoryEventEvidenceTx(ctx context.Context, tx *sql.Tx, cfg Config, table string, historyID int64, event ChangeEvent, payload historyPayload, createdAt string, updatedAt string) error {
+func publishHistoryEventEvidenceTx(ctx context.Context, tx *sql.Tx, cfg Config, table string, historyID int64, event ChangeEvent, payload historyPayload, effectiveDiff []map[string]any, createdAt string, updatedAt string) error {
 	if !cfg.EvidenceEnabled {
 		return nil
 	}
 	if cfg.EvidenceStore == nil {
 		return common.NewInternalServerError("HISTORY-EVIDENCE-APPEND-NILSTORE evidence store is not initialized")
 	}
-	artifact, err := buildHistoryEventEvidenceArtifact(table, historyID, event, payload, createdAt, updatedAt)
+	artifact, err := buildHistoryEventEvidenceArtifact(table, historyID, event, payload, effectiveDiff, createdAt, updatedAt)
 	if err != nil {
 		return err
 	}
@@ -187,6 +193,33 @@ func decodeHistoryEventPayload(payload historyPayload) (any, error) {
 		return nil, common.NewInternalServerError("HISTORY-EVIDENCE-EVENTARTIFACT-DECODE " + err.Error())
 	}
 	return payloadValue, nil
+}
+
+func canonicalEffectiveDiffValue(effectiveDiff []map[string]any) ([]map[string]any, error) {
+	if effectiveDiff == nil {
+		return []map[string]any{}, nil
+	}
+	cloned, err := cloneJSONValue(effectiveDiff)
+	if err != nil {
+		return nil, common.NewInternalServerError("HISTORY-EVIDENCE-EVENTARTIFACT-EFFECTIVEDIFF " + err.Error())
+	}
+	typed, ok := cloned.([]map[string]any)
+	if ok {
+		return typed, nil
+	}
+	asAny, ok := cloned.([]any)
+	if !ok {
+		return nil, common.NewInternalServerError("HISTORY-EVIDENCE-EVENTARTIFACT-EFFECTIVEDIFF effective diff must be an array")
+	}
+	typed = make([]map[string]any, 0, len(asAny))
+	for _, item := range asAny {
+		operation, ok := item.(map[string]any)
+		if !ok {
+			return nil, common.NewInternalServerError("HISTORY-EVIDENCE-EVENTARTIFACT-EFFECTIVEDIFF effective diff operation must be an object")
+		}
+		typed = append(typed, operation)
+	}
+	return typed, nil
 }
 
 func historyEventObjectKey(table string, identifier string, historyID int64, rowHash string) string {
@@ -222,37 +255,44 @@ func historyEventArtifactCandidateQuery(table string, payloadTable string, ident
 	return dataset.Order(historyAlias.Col("history_id").Asc()).ToSQL()
 }
 
-func scanEventArtifactCandidates(rows *sql.Rows, table string) ([]EventArtifactCandidate, error) {
+func scanEventArtifactCandidates(ctx context.Context, db *sql.DB, rows *sql.Rows, table string) ([]EventArtifactCandidate, error) {
 	storedRows, err := scanStoredHistoryRows(rows, table)
 	if err != nil {
 		return nil, err
 	}
 	candidates := make([]EventArtifactCandidate, 0, len(storedRows))
+	latestByIdentifier := make(map[string]map[string]any)
 	for _, row := range storedRows {
-		candidate, err := historyEventArtifactCandidateFromStoredRow(row)
+		candidate, currentSnapshot, err := historyEventArtifactCandidateFromStoredRow(ctx, db, row, latestByIdentifier[row.Identifier])
 		if err != nil {
 			return nil, err
 		}
+		latestByIdentifier[row.Identifier] = currentSnapshot
 		candidates = append(candidates, candidate)
 	}
 	return candidates, nil
 }
 
-func historyEventArtifactCandidateFromStoredRow(row storedHistoryRow) (EventArtifactCandidate, error) {
+func historyEventArtifactCandidateFromStoredRow(ctx context.Context, db *sql.DB, row storedHistoryRow, previousSnapshot map[string]any) (EventArtifactCandidate, map[string]any, error) {
 	payload, err := historyPayloadFromStoredRow(row)
 	if err != nil {
-		return EventArtifactCandidate{}, err
+		return EventArtifactCandidate{}, nil, err
+	}
+	effectiveDiff, currentSnapshot, err := effectiveDiffFromStoredRow(ctx, db, row, payload, previousSnapshot)
+	if err != nil {
+		return EventArtifactCandidate{}, nil, err
 	}
 	artifact, err := buildHistoryEventEvidenceArtifact(
 		row.EntityType,
 		row.HistoryID,
 		historyRowHashEvent(row),
 		payload,
+		effectiveDiff,
 		nullStringValue(row.CreatedAt),
 		nullStringValue(row.UpdatedAt),
 	)
 	if err != nil {
-		return EventArtifactCandidate{}, err
+		return EventArtifactCandidate{}, nil, err
 	}
 	return EventArtifactCandidate{
 		Artifact:     artifact,
@@ -261,7 +301,89 @@ func historyEventArtifactCandidateFromStoredRow(row storedHistoryRow) (EventArti
 		HistoryID:    row.HistoryID,
 		RowHash:      nullStringValue(row.RowHash),
 		ContentHash:  nullStringValue(row.ContentHash),
-	}, nil
+	}, currentSnapshot, nil
+}
+
+func effectiveDiffFromStoredRow(ctx context.Context, db *sql.DB, row storedHistoryRow, payload historyPayload, previousSnapshot map[string]any) ([]map[string]any, map[string]any, error) {
+	switch row.PayloadType {
+	case PayloadTypeSnapshot:
+		return effectiveDiffFromSnapshotRow(ctx, db, row, previousSnapshot)
+	case PayloadTypeDiff:
+		return effectiveDiffFromDiffRow(ctx, db, row, payload, previousSnapshot)
+	default:
+		return nil, nil, common.NewInternalServerError("HISTORY-EVIDENCE-EVENTARTIFACT-PAYLOADTYPE unsupported payload type '" + row.PayloadType + "'")
+	}
+}
+
+func effectiveDiffFromSnapshotRow(ctx context.Context, db *sql.DB, row storedHistoryRow, previousSnapshot map[string]any) ([]map[string]any, map[string]any, error) {
+	currentSnapshot, err := restoreSnapshotPayload(row)
+	if err != nil {
+		return nil, nil, err
+	}
+	if err = verifyCanonicalHash(currentSnapshot, row.ContentHash, "HISTORY-EVIDENCE-EVENTARTIFACT-CONTENTHASH"); err != nil {
+		return nil, nil, err
+	}
+	baseSnapshot := previousSnapshot
+	if baseSnapshot == nil && strings.TrimSpace(nullStringValue(row.PreviousHash)) != "" {
+		previousVersion, previousErr := previousVersionBeforeHistoryID(ctx, db, row.EntityType, row.Identifier, row.HistoryID)
+		if previousErr != nil {
+			return nil, nil, previousErr
+		}
+		baseSnapshot = previousVersion.snapshot
+	}
+	if baseSnapshot == nil {
+		baseSnapshot = map[string]any{}
+	}
+	effectiveDiff, err := BuildJSONPatch(baseSnapshot, currentSnapshot)
+	if err != nil {
+		return nil, nil, common.NewInternalServerError("HISTORY-EVIDENCE-EVENTARTIFACT-EFFECTIVEDIFF " + err.Error())
+	}
+	return effectiveDiff, currentSnapshot, nil
+}
+
+func effectiveDiffFromDiffRow(ctx context.Context, db *sql.DB, row storedHistoryRow, payload historyPayload, previousSnapshot map[string]any) ([]map[string]any, map[string]any, error) {
+	var effectiveDiff []map[string]any
+	if err := decodeJSONPreservingNumbers(payload.json, &effectiveDiff); err != nil {
+		return nil, nil, common.NewInternalServerError("HISTORY-EVIDENCE-EVENTARTIFACT-EFFECTIVEDIFFDECODE " + err.Error())
+	}
+	if previousSnapshot != nil {
+		currentSnapshot, err := restoreDiffPayload(previousSnapshot, row)
+		if err != nil {
+			return nil, nil, err
+		}
+		if err = verifyCanonicalHash(currentSnapshot, row.ContentHash, "HISTORY-EVIDENCE-EVENTARTIFACT-CONTENTHASH"); err != nil {
+			return nil, nil, err
+		}
+		return effectiveDiff, currentSnapshot, nil
+	}
+	currentVersion, err := restoreVersionByHistoryID(ctx, db, row.EntityType, row.Identifier, row.HistoryID)
+	if err != nil {
+		return nil, nil, err
+	}
+	return effectiveDiff, currentVersion.snapshot, nil
+}
+
+func previousVersionBeforeHistoryID(ctx context.Context, queryer historyQueryer, table string, identifier string, historyID int64) (latestVersion, error) {
+	query, args, err := goqu.From(table).
+		Select(goqu.C("history_id")).
+		Where(
+			goqu.C("identifier").Eq(identifier),
+			goqu.C("history_id").Lt(historyID),
+		).
+		Order(goqu.C("history_id").Desc()).
+		Limit(1).
+		ToSQL()
+	if err != nil {
+		return latestVersion{}, common.NewInternalServerError("HISTORY-EVIDENCE-EVENTARTIFACT-BUILDPREVIOUS " + err.Error())
+	}
+	var previousHistoryID int64
+	if err = queryer.QueryRowContext(ctx, query, args...).Scan(&previousHistoryID); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return latestVersion{}, common.NewInternalServerError("HISTORY-EVIDENCE-EVENTARTIFACT-MISSINGPREVIOUS previous hash exists but no previous row was found")
+		}
+		return latestVersion{}, common.NewInternalServerError("HISTORY-EVIDENCE-EVENTARTIFACT-READPREVIOUS " + err.Error())
+	}
+	return restoreVersionByHistoryID(ctx, queryer, table, identifier, previousHistoryID)
 }
 
 func historyPayloadFromStoredRow(row storedHistoryRow) (historyPayload, error) {

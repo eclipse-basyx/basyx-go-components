@@ -205,7 +205,14 @@ func TestStoreHistoryEventArtifactsBackfillsSnapshotAndDiffRows(t *testing.T) {
 	require.Len(t, store.artifacts, 2)
 	require.Equal(t, EvidenceArtifactHistoryEvent, store.artifacts[0].ArtifactType)
 	require.Equal(t, EvidenceArtifactHistoryEvent, store.artifacts[1].ArtifactType)
-	require.Contains(t, string(store.artifacts[1].Data), `"payload_type":"diff"`)
+	var diffArtifact map[string]any
+	require.NoError(t, decodeJSONPreservingNumbers(store.artifacts[1].Data, &diffArtifact))
+	require.Equal(t, PayloadTypeDiff, diffArtifact["payload_type"])
+	payloadDiff, ok := diffArtifact["payload"].([]any)
+	require.True(t, ok)
+	effectiveDiff, ok := diffArtifact["effective_diff"].([]any)
+	require.True(t, ok)
+	require.Equal(t, payloadDiff, effectiveDiff)
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 

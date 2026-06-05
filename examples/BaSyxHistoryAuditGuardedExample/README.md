@@ -42,7 +42,7 @@ This example is configured for local development:
 The configuration service initializes the current schema first. The AAS Environment Service then enables the history guard switch at startup. The MinIO init sidecar creates a versioned object-lock bucket for local evidence tests.
 
 `BASYX_HISTORY_RETENTION_DAYS=0` is accepted as configuration, but automatic retention cleanup is not implemented yet. `BASYX_HISTORY_FULL_SNAPSHOT_INTERVAL=5` stores periodic full checkpoints with RFC 6902 diff rows between them.
-When evidence is enabled, history mode must be `api` or `audit`. Each successful history append writes a WORM `history_event` artifact to MinIO before PostgreSQL commits. If MinIO is unavailable or rejects the object write, the API mutation fails and the PostgreSQL transaction rolls back.
+When evidence is enabled, history mode must be `api` or `audit`. Each successful history append writes a WORM `history_event` artifact to MinIO before PostgreSQL commits. The artifact stores the recovery payload plus `effective_diff`, which records the actual JSON Patch relative to the previous version for audit attribution. If MinIO is unavailable or rejects the object write, the API mutation fails and the PostgreSQL transaction rolls back.
 
 ## UI And Preconfigured Data
 
@@ -155,7 +155,7 @@ go run ./cmd/historyevidenceverifier \
   -manifest-sha256 '<sha256-from-write-output>'
 ```
 
-History-event artifacts provide recovery evidence for acknowledged writes while evidence is enabled. With `BASYX_HISTORY_FULL_SNAPSHOT_INTERVAL=5`, recovery from WORM starts from the latest WORM-stored snapshot event and replays up to four WORM-stored diff payloads. Use `BASYX_HISTORY_FULL_SNAPSHOT_INTERVAL=1` when every history row must be recoverable as a full WORM snapshot without diff replay. Automated PostgreSQL restore from WORM artifacts is not implemented in this example.
+History-event artifacts provide recovery evidence for acknowledged writes while evidence is enabled. With `BASYX_HISTORY_FULL_SNAPSHOT_INTERVAL=5`, recovery from WORM starts from the latest WORM-stored snapshot event and replays up to four WORM-stored diff payloads. Use `BASYX_HISTORY_FULL_SNAPSHOT_INTERVAL=1` when every history row must be recoverable as a full WORM snapshot without diff replay. For audit attribution, inspect `effective_diff`: a full snapshot event can be a recovery checkpoint, while `effective_diff` shows what the request actually changed. Automated PostgreSQL restore from WORM artifacts is not implemented in this example.
 
 ## Limitations
 
