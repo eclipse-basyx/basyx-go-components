@@ -34,7 +34,7 @@ This example is configured for local development:
 
 The configuration service initializes the `v1.1.1` schema first. The AAS Environment Service then enables the history guard switch at startup.
 
-`BASYX_HISTORY_RETENTION_DAYS=0` is accepted as configuration, but automatic retention cleanup is not implemented yet. `BASYX_HISTORY_FULL_SNAPSHOT_INTERVAL=1` keeps the current behavior where every appended history row stores a complete snapshot.
+`BASYX_HISTORY_RETENTION_DAYS=0` is accepted as configuration, but automatic retention cleanup is not implemented yet. `BASYX_HISTORY_FULL_SNAPSHOT_INTERVAL=1` keeps the full-snapshot behavior; values greater than `1` store periodic full checkpoints with RFC 6902 diff rows between them.
 
 ## UI And Preconfigured Data
 

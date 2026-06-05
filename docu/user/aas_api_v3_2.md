@@ -72,7 +72,7 @@ Environment variables:
 
 - `BASYX_HISTORY_MODE`: `off`, `api`, or `audit`. Default is `off`.
 - `BASYX_HISTORY_RETENTION_DAYS`: must remain `0`. Automatic cleanup is not implemented yet.
-- `BASYX_HISTORY_FULL_SNAPSHOT_INTERVAL`: must remain `1`. This means every history row stores a complete snapshot. Larger intervals are reserved for later compact, diff-backed history storage.
+- `BASYX_HISTORY_FULL_SNAPSHOT_INTERVAL`: `1` stores every history row as a complete snapshot. Values greater than `1` store one full checkpoint followed by up to `N-1` RFC 6902 diff rows, with earlier checkpoints when the diff payload is not smaller than the snapshot payload.
 - `BASYX_HISTORY_IMMUTABILITY`: `none` or `postgres_guarded`. Default is `none`.
 - `BASYX_AUDIT_IDENTITY_MODE`: must remain `none`. Automatic identity enrichment is not implemented yet.
 
@@ -97,7 +97,7 @@ Current implementation status:
 
 - Runtime history rows are append-only, hash-chained event rows in `api` and `audit` mode.
 - Schema migration installs PostgreSQL guard triggers. `postgres_guarded` enables them at service startup. When enabled, `UPDATE`, `DELETE`, and `TRUNCATE` on history metadata and payload tables fail with `history tables are append-only`.
-- `external_anchor`, non-zero `retentionDays`, `fullSnapshotInterval` values greater than `1`, and identity enrichment modes currently fail fast during configuration loading. Their runtime implementations are planned for later work.
+- `external_anchor`, non-zero `retentionDays`, and identity enrichment modes currently fail fast during configuration loading. Their runtime implementations are planned for later work.
 - Audit metadata columns are present, but regular API middleware does not populate the audit context yet.
 - The implementation supports compliance-oriented deployments, but it does not by itself make a deployment legally compliant with any specific regulation.
 
@@ -109,9 +109,9 @@ See `examples/BaSyxHistoryAuditGuardedExample` for a Docker Compose setup with a
 
 ## What Activating Versioning Means
 
-When versioning is active, each supported identifiable create, update, or delete appends a new row to a dedicated history table. The row stores a complete identifiable snapshot, not only the changed field. A small nested change can therefore create a history row close to the size of the owning identifiable.
+When versioning is active, each supported identifiable create, update, or delete appends a new row to a dedicated history table. With `fullSnapshotInterval: 1`, every row stores a complete identifiable snapshot. With a larger interval, the runtime stores a full checkpoint followed by up to `N-1` RFC 6902 diffs against the previous reconstructed snapshot.
 
-`history.fullSnapshotInterval` is already part of the configuration so later compact history storage can be added without changing the configuration contract. The only supported value in this PR is `1`, which is equivalent to "create a full snapshot for every version". Future diff-backed storage is expected to use values greater than `1` to keep one full checkpoint and then store compact diffs until the next checkpoint. Until that implementation exists, larger values fail fast instead of being silently ignored.
+For example, `history.fullSnapshotInterval: 3` stores at most two diffs after a checkpoint: `snapshot, diff, diff, snapshot...`. The runtime may insert an earlier full snapshot when the diff JSON would not be smaller than the full snapshot payload. Historical reads and recent-change feeds rebuild the full snapshot at query time from the nearest checkpoint and verify the stored payload/content hashes before returning it.
 
 ```mermaid
 flowchart LR
@@ -119,8 +119,8 @@ flowchart LR
     Current --> Mode{"history.mode"}
     Mode -->|off| Done["No history append"]
     Mode -->|api or audit| Snapshot["Build complete identifiable snapshot"]
-    Snapshot --> History["INSERT metadata and *_history_payload rows"]
-    History --> Read["$history and $recent-changes reads"]
+    Snapshot --> History["INSERT metadata and snapshot/diff payload row"]
+    History --> Read["$history and $recent-changes rebuild full snapshots"]
 ```
 
 The owning identifiable depends on the write:
@@ -137,8 +137,8 @@ This has operational consequences:
 
 - History consumes additional storage for every write and adds hashing plus one metadata insert and one payload insert to the write request.
 - Writes for the same identifiable are serialized briefly while the next hash-chain row is appended. Different identifiers can still proceed independently.
-- Partial updates usually derive the new snapshot from the previous history snapshot. This reduces reads from the normalized backend, but the stored history row is still a complete snapshot.
-- Snapshot JSON is stored in a one-to-one payload table so indexed history metadata rows stay narrow. The schema already reserves payload metadata and a diff payload slot for later compact storage, but this PR only writes snapshot payloads.
+- Partial updates usually derive the new snapshot from the previous reconstructed history snapshot. This reduces reads from the normalized backend.
+- Snapshot and diff JSON are stored in one-to-one payload tables so indexed history metadata rows stay narrow.
 - Schema migration does not backfill existing entities. Historical state from before activation is unavailable.
 - If an existing entity has no history row yet, its first partial update falls back to materializing the current complete identifiable once. Later partial updates can derive snapshots from history.
 - While history is active, an unclassified write endpoint is rejected before its handler runs with `HISTORY-COVERAGE-UNCLASSIFIED`. This prevents a newly added endpoint from silently changing current state without appending its required version.
@@ -153,11 +153,11 @@ Eventing placeholders:
 
 These settings reserve the configuration shape for future CloudEvents-compatible outbox/event publishing. MQTT and Kafka publishing are not implemented yet. Enabling eventing, configuring sinks, or enabling the outbox currently fails fast during configuration loading.
 
-Planned compact history storage:
+Compact history storage:
 
-- Keep `fullSnapshotInterval: 1` as the current full-snapshot behavior.
-- Later allow values greater than `1` to store periodic full checkpoints plus diff rows between checkpoints.
-- Store and verify hashes for the reconstructed full snapshot, the compact payload, and the previous history row before exposing compact history as audit-oriented storage.
+- Keep `fullSnapshotInterval: 1` for the full-snapshot behavior.
+- Use values greater than `1` to store periodic full checkpoints plus diff rows between checkpoints.
+- Each row stores a hash of the reconstructed full snapshot and a separate hash of the stored snapshot or diff payload.
 
 ## Historical Reads
 
@@ -183,7 +183,7 @@ Behavior:
 - A date after deletion returns not found.
 - If the requested date is exactly on an update boundary, the newer version is returned.
 
-Submodel element changes are tracked as part of the owning Submodel. If a Submodel Element is added, changed, deleted, or has an attachment update, the next Submodel history entry contains a full Submodel snapshot.
+Submodel element changes are tracked as part of the owning Submodel. If a Submodel Element is added, changed, deleted, or has an attachment update, the next Submodel history version reconstructs to a full Submodel snapshot even when the stored payload row is a diff.
 
 ## Submodel Element History FAQ
 
@@ -298,13 +298,13 @@ Important operational note:
 
 ## Operational Considerations
 
-History support increases database growth because each write creates a full identifiable snapshot row.
+History support increases database growth because each write creates a history row. Configure `history.fullSnapshotInterval` above `1` when storage growth from full snapshots is too high.
 
 Runtime overhead is reduced by:
 
 - Keeping current tables separate from history tables.
 - Using indexed metadata for recent-change queries.
-- Keeping complete JSONB snapshots in one-to-one payload tables outside indexed history metadata rows.
+- Keeping JSONB snapshot/diff payloads in one-to-one payload tables outside indexed history metadata rows.
 - Using cursor pagination for recent-change feeds.
 - Deriving partial-update snapshots from the latest history row when possible.
 - Reading only the affected top-level Submodel Element subtree for nested SME changes.

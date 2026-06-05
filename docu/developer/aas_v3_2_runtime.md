@@ -86,9 +86,9 @@ Each metadata row stores:
 - payload metadata: `payload_type` and `payload_hash`
 - tamper-evidence columns: `previous_hash`, `content_hash`, and `row_hash`
 
-On every create, update, or delete, a new immutable metadata row and its snapshot payload row are appended. Existing history rows are not updated by the runtime. Both rows are inserted in the same database transaction as the current-table mutation, including value-only SME updates.
+On every create, update, or delete, a new immutable metadata row and one payload row are appended. Existing history rows are not updated by the runtime. Both rows are inserted in the same database transaction as the current-table mutation, including value-only SME updates.
 
-Keeping the large JSONB value outside the indexed metadata row narrows recent-change and latest-hash access paths. It does not reduce the total snapshot bytes stored: reads that return or derive snapshots join the one-to-one payload row. The payload tables currently populate `snapshot`; the nullable `diff` column and `payload_type: diff` metadata value are reserved for the later compact history implementation.
+Keeping JSONB outside the indexed metadata row narrows recent-change and latest-hash access paths. With `history.fullSnapshotInterval: 1`, every payload row stores `snapshot`. With larger intervals, the runtime stores one `snapshot` checkpoint followed by up to `N-1` RFC 6902 `diff` payload rows, and it may checkpoint earlier when the diff JSON is not smaller than the full snapshot payload.
 
 History lookup uses:
 
@@ -99,14 +99,14 @@ ORDER BY valid_from DESC, history_id DESC
 
 If the latest matching event is marked as deleted, the history endpoint returns not found. This means a deleted entity can still be resolved for dates before deletion, but not after deletion.
 
-Each runtime-created row stores a deterministic SHA-256 hash of the canonical JSON snapshot (`content_hash`) and a per-identifier chain hash (`row_hash`) that includes the previous row hash and selected audit metadata.
+Each runtime-created row stores a deterministic SHA-256 hash of the reconstructed canonical JSON snapshot (`content_hash`), a separate hash of the stored snapshot or diff payload (`payload_hash`), and a per-identifier chain hash (`row_hash`) that includes the previous row hash and selected audit metadata.
 
 ### Shared Append Algorithm
 
 The shared implementation lives in `internal/common/history`.
 
-- `AppendVersionTx` appends a complete snapshot supplied by the persistence layer.
-- `AppendMutatedVersionTx` loads the latest snapshot for the identifier, applies a scoped mutation, and appends the resulting complete snapshot.
+- `AppendVersionTx` receives a complete snapshot supplied by the persistence layer and stores it as either a snapshot checkpoint or a diff payload according to `history.fullSnapshotInterval` and payload size.
+- `AppendMutatedVersionTx` loads the latest reconstructed snapshot for the identifier, applies a scoped mutation, and stores the resulting version with the same interval and payload-size logic.
 - Both functions acquire a transaction-level PostgreSQL advisory lock derived from `<history-table>:<identifier>`.
 - The lock serializes hash-chain appends for the same identifiable while allowing unrelated identifiers to proceed independently.
 - Both functions append with `INSERT`; they never modify an existing history row.
@@ -119,17 +119,17 @@ sequenceDiagram
     participant Payload as *_history_payload table
     API->>Live: Apply typical current-state mutation in transaction
     API->>Metadata: Advisory lock(table, identifier)
-    Metadata-->>API: Latest row_hash
-    Payload-->>API: Latest snapshot when required
+    Metadata-->>API: Latest history row
+    Payload-->>API: Restore nearest snapshot checkpoint plus diffs when required
     API->>API: Apply scoped snapshot mutation
     API->>Metadata: INSERT event metadata with previous_hash
-    API->>Payload: INSERT complete snapshot payload
+    API->>Payload: INSERT snapshot or RFC 6902 diff payload
     API->>Live: Commit transaction
 ```
 
-This reduces reads against the normalized backend for partial updates. It does not reduce history storage: every appended row remains a full identifiable snapshot.
+This reduces reads against the normalized backend for partial updates and bounds restore work to the configured interval.
 
-The configuration already contains `history.fullSnapshotInterval` to keep the future compact-storage contract stable. In this PR only `1` is accepted, which means every appended row is a directly readable snapshot payload. Values greater than `1` are reserved for the later diff-backed hybrid implementation and fail fast during configuration loading.
+`history.fullSnapshotInterval: 1` preserves the full-snapshot behavior. Values greater than `1` allow at most `N-1` diff rows after each full checkpoint. A full snapshot can appear earlier when the diff payload would be equal to or larger than the snapshot payload.
 
 ### Per-Identifiable Write Paths
 
@@ -233,10 +233,10 @@ The guard is enabled when history is active and `history.immutability` is `postg
 | Setting | Current runtime behavior |
 | --- | --- |
 | `history.mode: off` | Skip new snapshot writes. Existing rows remain readable. This is the default. |
-| `history.mode: api` | Append history snapshots. |
-| `history.mode: audit` | Append the same runtime snapshots as `api`; intended for audit-oriented deployments with explicit storage controls. |
-| `history.retentionDays` | Must remain `0`. Non-zero values fail fast until cleanup or compaction is implemented. |
-| `history.fullSnapshotInterval` | Must remain `1`. Larger values are reserved for diff-backed hybrid storage and fail fast for now. |
+| `history.mode: api` | Append history rows. |
+| `history.mode: audit` | Append the same runtime history rows as `api`; intended for audit-oriented deployments with explicit storage controls. |
+| `history.retentionDays` | Must remain `0`. Non-zero values fail fast until cleanup is implemented. |
+| `history.fullSnapshotInterval` | `1` stores all payloads as snapshots. Values greater than `1` store one full checkpoint plus up to `N-1` diff rows, with earlier checkpoints when the diff payload is not smaller than the snapshot payload. |
 | `history.immutability: none` | Keep PostgreSQL mutation guards disabled. |
 | `history.immutability: postgres_guarded` | Enable PostgreSQL mutation guards at service startup. |
 | `history.immutability: external_anchor` | Fail fast until an external anchoring worker is implemented. |
@@ -245,19 +245,17 @@ The guard is enabled when history is active and `history.immutability` is `postg
 
 `AuditContext`, `ChangeEvent`, and the anchor interfaces remain extension points. Current runtime middleware does not populate `AuditContext`, and no external anchor client is invoked by the append path yet.
 
-### Future Diff-Backed Storage TODO
+### Diff-Backed Storage
 
-There is intentionally no separate `history.storageMode` setting in this PR. Full-snapshot history is represented by `history.fullSnapshotInterval: 1`; future compact storage can be introduced by accepting values greater than `1`. That keeps the user-facing configuration compatible while still allowing the runtime to store periodic checkpoints plus compact diff rows later.
+There is intentionally no separate `history.storageMode` setting. Full-snapshot history is represented by `history.fullSnapshotInterval: 1`; compact storage is enabled by values greater than `1`.
 
-The schema already reserves `payload_type`, `payload_hash`, and a nullable `diff` payload column. Before enabling values greater than `1`, implement:
+Diff-backed rows use the existing `payload_type`, `payload_hash`, and nullable `diff` payload column:
 
-- A deterministic JSON canonicalization and diff algorithm version stored with each compact row.
-- A reconstructed full-snapshot hash, compact-payload hash, previous-row hash, and row hash chain that are all verifiable after restore.
-- Restore logic that walks back to the nearest full checkpoint and applies diffs in order, with bounded worst-case work from the configured interval.
-- Integration tests for restore across create, update, delete, SME mutations, descriptor mutations, and deleted tombstones.
-- External anchor metadata that can later be sent to immudb or another append-only anchor without changing the history row identity.
-
-Until these pieces exist, accepting intervals greater than `1` would be misleading because the runtime still writes full snapshots.
+- Diff payloads are deterministic RFC 6902 JSON Patch operation arrays.
+- `content_hash` is the reconstructed full-snapshot hash.
+- `payload_hash` is the stored snapshot or diff payload hash.
+- Restore walks back to the nearest full checkpoint and applies diffs in order, so worst-case work is bounded by the configured interval.
+- Existing snapshot-only history remains readable without backfill.
 
 ### Fail-Closed Mutation Coverage
 
@@ -271,13 +269,13 @@ Generated component routes are classified centrally by operation name during ser
 
 ## Recent Changes
 
-Recent-change endpoints read indexed metadata from the history tables and join the payload row for the returned page. They are ordered by decreasing `history_id`, with cursor-based pagination from newest changes to older changes.
+Recent-change endpoints read indexed metadata from the history tables, then restore the full snapshot for rows that are returned or need post-snapshot filtering. They are ordered by decreasing `history_id`, with cursor-based pagination from newest changes to older changes.
 The default page size is `100`; requests above `1000` are rejected.
 
 ```mermaid
 flowchart LR
     Historical["GET .../{id}/$history?date=..."] --> Validity["identifier + valid_from index"]
-    Validity --> Snapshot["Latest snapshot at or before date"]
+    Validity --> Snapshot["Latest version at or before date"]
     Recent["GET .../$recent-changes?cursor=..."] --> Cursor["descending history_id cursor + typed timestamp indexes"]
     Cursor --> Page["Newest-first page plus next cursor"]
 ```
@@ -299,7 +297,7 @@ The published Part 2 OpenAPI schema is the source of truth for the response proj
 - Concept Description results contain the shared fields plus `id`. This fills the missing shared-schema result type consistently with the other identifiable repositories.
 - Descriptor results contain complete AAS descriptor snapshots as required by the registry profile.
 
-For AAS and Submodel reads, resource-specific metadata is projected from the stored history snapshot, never from current normalized tables. Deleted AAS, Submodel, and Concept Description rows remain id-based tombstones with the shared change metadata. Descriptor recent changes skip deleted descriptor rows because there is no complete descriptor snapshot to return.
+For AAS and Submodel reads, resource-specific metadata is projected from the restored history snapshot, never from current normalized tables. Deleted AAS, Submodel, and Concept Description rows remain id-based tombstones with the shared change metadata. Descriptor recent changes skip deleted descriptor rows because there is no complete descriptor snapshot to return.
 
 The encoded query contract is applied consistently: `assetIds` contain base64url-encoded `SpecificAssetId` JSON objects, Submodel `semanticId` contains a base64url-encoded reference value, and descriptor `assetType` is base64url-encoded UTF-8. Filtered feeds continue scanning history pages until the requested result limit is filled or the feed ends, so post-snapshot filtering does not underfill pages incorrectly.
 
@@ -351,18 +349,18 @@ Recommended follow-up:
 
 ## Scalability
 
-Yes, the database can grow much faster now. Every versioned write creates at least one history metadata row and one JSON snapshot payload row. Submodel-element writes are especially growth-heavy because they snapshot the whole owning Submodel.
+Yes, the database can still grow quickly. Every versioned write creates at least one history metadata row and one JSON payload row. Configure `history.fullSnapshotInterval` above `1` to trade bounded restore work for lower payload storage.
 
 Safeguards already implemented:
 
 - History is stored separately from current tables, so normal GET/list endpoints continue to read current tables.
 - Recent changes use indexed metadata instead of scanning current domain tables.
-- Complete JSONB snapshots live in one-to-one payload tables, keeping indexed event rows narrow.
+- JSONB snapshot/diff payloads live in one-to-one payload tables, keeping indexed event rows narrow.
 - History lookup is indexed by identifier and validity range.
-- Latest-snapshot derivation is indexed by identifier and descending `history_id`.
+- Latest-version derivation is indexed by identifier and descending `history_id`.
 - Recent-change pagination is cursor-based and reads one extra row for next-cursor detection.
 - Administrative timestamps are extracted into typed, indexed metadata columns for filtering instead of repeatedly querying deep JSON or comparing timestamp strings.
-- Partial AAS and descriptor changes derive the next snapshot from the previous history row.
+- Partial AAS and descriptor changes derive the next snapshot from the previous reconstructed history row.
 - SME changes reload only the affected top-level SME root subtree and splice it into the previous Submodel snapshot.
 - Transaction-level advisory locks serialize appends only for the same history table and identifier.
 - Guarded PostgreSQL mode blocks normal `UPDATE`, `DELETE`, and `TRUNCATE` operations on history tables when enabled.
@@ -372,10 +370,9 @@ Safeguards already implemented:
 Scalability risks that remain:
 
 - There is no retention policy yet.
-- There is no compaction strategy for high-frequency updates.
 - There is no table partitioning for history tables yet.
-- Full snapshots duplicate unchanged data across versions.
-- Large Submodels with frequent element updates can grow history very quickly.
+- Very large replacements can still create large diff rows.
+- Large Submodels with frequent element updates still need careful interval and retention planning.
 - The first partial update for a pre-existing identifiable without history still requires a complete live-table materialization.
 - JSONB snapshots are flexible but can be more expensive than narrow relational history for some queries.
 - PostgreSQL guards are not equivalent to WORM storage; privileged database operators can still alter or remove them.

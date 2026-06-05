@@ -330,10 +330,5 @@ func parseInt32(param string) (int32, error) {
 }
 
 func parseTime(param string) (time.Time, error) {
-	trimmed := strings.TrimSpace(param)
-	if trimmed == "" {
-		return time.Time{}, nil
-	}
-
-	return time.Parse(time.RFC3339Nano, trimmed)
+	return common.ParseISO8601DateTime(param)
 }

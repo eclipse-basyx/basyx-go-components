@@ -38,6 +38,20 @@ func TestParseTime_TrimmedRFC3339NanoValueParses(t *testing.T) {
 	}
 }
 
+func TestParseTime_QueryDecodedPositiveTimezoneOffsetParses(t *testing.T) {
+	t.Parallel()
+
+	got, err := parseTime("2026-06-01T14:30:15 02:00")
+	if err != nil {
+		t.Fatalf("expected parse success, got error: %v", err)
+	}
+
+	want := time.Date(2026, time.June, 1, 12, 30, 15, 0, time.UTC)
+	if !got.UTC().Equal(want) {
+		t.Fatalf("expected %v, got %v", want, got.UTC())
+	}
+}
+
 func TestParseTime_InvalidValueFails(t *testing.T) {
 	t.Parallel()
 

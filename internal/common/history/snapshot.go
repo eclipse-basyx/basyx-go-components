@@ -28,9 +28,32 @@ package history
 import "github.com/eclipse-basyx/basyx-go-components/internal/common"
 
 // SnapshotArrayItemMatcher reports whether an array item is the mutation target.
+//
+// Matchers are used by scoped history mutations that update nested entity
+// references without reloading the full model through a generated API type.
 type SnapshotArrayItemMatcher func(item map[string]any) bool
 
-// AppendSnapshotArrayItem appends an item to an optional snapshot array.
+// AppendSnapshotArrayItem appends an item to an optional snapshot array field.
+//
+// Missing fields are treated as empty arrays. Existing fields must already be
+// JSON arrays, which protects snapshot reconstruction from silently converting
+// unexpected payload shapes.
+//
+// Parameters:
+//   - snapshot: Mutable full entity snapshot.
+//   - field: Name of the array field to append to.
+//   - item: JSON-compatible array item to append.
+//
+// Returns:
+//   - error: Error when snapshot is nil, field is empty, or the existing field
+//     is not an array.
+//
+// Example:
+//
+//	err := AppendSnapshotArrayItem(snapshot, "submodels", reference)
+//	if err != nil {
+//		return err
+//	}
 func AppendSnapshotArrayItem(snapshot map[string]any, field string, item any) error {
 	items, err := snapshotArrayItems(snapshot, field)
 	if err != nil {
@@ -40,7 +63,28 @@ func AppendSnapshotArrayItem(snapshot map[string]any, field string, item any) er
 	return nil
 }
 
-// ReplaceSnapshotArrayItem replaces the matching item in a snapshot array.
+// ReplaceSnapshotArrayItem replaces the matching item in a snapshot array field.
+//
+// Exactly one matching item is replaced: the first array element whose object
+// value makes matcher return true. The function returns an internal error when
+// the field is not an array, the matcher is nil, or no matching object exists.
+//
+// Parameters:
+//   - snapshot: Mutable full entity snapshot.
+//   - field: Name of the array field to update.
+//   - matcher: Predicate that identifies the array item to replace.
+//   - item: JSON-compatible replacement item.
+//
+// Returns:
+//   - error: Error when the matcher is nil, no matching object exists, or the
+//     field shape is invalid.
+//
+// Example:
+//
+//	err := ReplaceSnapshotArrayItem(snapshot, "submodelElements", matchesIDShort, updatedElement)
+//	if err != nil {
+//		return err
+//	}
 func ReplaceSnapshotArrayItem(snapshot map[string]any, field string, matcher SnapshotArrayItemMatcher, item any) error {
 	items, index, err := matchingSnapshotArrayItem(snapshot, field, matcher)
 	if err != nil {
@@ -51,7 +95,27 @@ func ReplaceSnapshotArrayItem(snapshot map[string]any, field string, matcher Sna
 	return nil
 }
 
-// RemoveSnapshotArrayItem removes the matching item from a snapshot array.
+// RemoveSnapshotArrayItem removes the matching item from a snapshot array field.
+//
+// When the removal leaves the array empty, the field is deleted to preserve the
+// repository convention that absent optional arrays and empty optional arrays are
+// not equivalent in stored snapshots.
+//
+// Parameters:
+//   - snapshot: Mutable full entity snapshot.
+//   - field: Name of the array field to update.
+//   - matcher: Predicate that identifies the array item to remove.
+//
+// Returns:
+//   - error: Error when the matcher is nil, no matching object exists, or the
+//     field shape is invalid.
+//
+// Example:
+//
+//	err := RemoveSnapshotArrayItem(snapshot, "submodelElements", matchesIDShort)
+//	if err != nil {
+//		return err
+//	}
 func RemoveSnapshotArrayItem(snapshot map[string]any, field string, matcher SnapshotArrayItemMatcher) error {
 	items, index, err := matchingSnapshotArrayItem(snapshot, field, matcher)
 	if err != nil {

@@ -559,15 +559,12 @@ func TestUpdateSubmodelElementValueOnlyRollsBackWhenHistoryAppendFails(t *testin
 		WillReturnRows(sqlmock.NewRows([]string{"value_type"}).AddRow(types.DataTypeDefXSDString))
 	mock.ExpectExec(`UPDATE "property_element"`).
 		WillReturnResult(sqlmock.NewResult(0, 1))
-	mock.ExpectExec(`SELECT pg_advisory_xact_lock`).
-		WillReturnResult(sqlmock.NewResult(0, 1))
-	mock.ExpectQuery(`SELECT "payload"."snapshot"::text, "history"."deleted", "history"."row_hash" FROM "submodel_history" AS "history" INNER JOIN "submodel_history_payload" AS "payload"`).
-		WillReturnError(errors.New("history read failed"))
+	expectSubmodelHistoryAppendWithReadFailure(mock, errors.New("history read failed"))
 	mock.ExpectRollback()
 
 	err = sut.UpdateSubmodelElementValueOnly(contextWithABACDisabled(t), "sm", "property", gen.PropertyValue{Value: "updated"})
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "HISTORY-MUTATE-READLATEST")
+	require.Contains(t, err.Error(), "HISTORY-MUTATE-READLATESTID")
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 

@@ -28,11 +28,14 @@ package persistence
 
 import (
 	"database/sql"
+	"encoding/json"
 	"testing"
+	"time"
 
 	sqlmock "github.com/DATA-DOG/go-sqlmock"
 	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/history"
 	"github.com/stretchr/testify/require"
 )
 
@@ -165,9 +168,7 @@ func TestPatchSubmodelMetadataInTransactionAppendsHistory(t *testing.T) {
 		WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectExec(`SELECT pg_advisory_xact_lock`).
 		WillReturnResult(sqlmock.NewResult(0, 1))
-	mock.ExpectQuery(`SELECT "payload"."snapshot"::text, "history"."deleted", "history"."row_hash" FROM "submodel_history" AS "history" INNER JOIN "submodel_history_payload" AS "payload"`).
-		WillReturnRows(sqlmock.NewRows([]string{"snapshot", "deleted", "row_hash"}).
-			AddRow(`{"id":"sm-1","submodelElements":[{"idShort":"existing","modelType":"Capability"}]}`, false, "row-hash"))
+	expectExistingSubmodelHistorySnapshot(mock, "sm-1", `{"id":"sm-1","submodelElements":[{"idShort":"existing","modelType":"Capability"}]}`, false)
 	mock.ExpectQuery(`INSERT INTO "submodel_history".*RETURNING "history_id"`).
 		WillReturnRows(sqlmock.NewRows([]string{"history_id"}).AddRow(1))
 	mock.ExpectExec(`INSERT INTO "submodel_history_payload"`).
@@ -268,11 +269,126 @@ func expectSubmodelHistoryAppend(mock sqlmock.Sqlmock) {
 		WillReturnResult(sqlmock.NewResult(0, 1))
 }
 
+func expectMissingSubmodelHistory(mock sqlmock.Sqlmock) {
+	mock.ExpectQuery(`SELECT "history_id" FROM "submodel_history"`).
+		WillReturnError(sql.ErrNoRows)
+}
+
+func expectExistingSubmodelHistorySnapshot(mock sqlmock.Sqlmock, identifier string, snapshotJSON string, deleted bool) {
+	historyID := int64(1)
+	operationTime := time.Date(2026, 5, 28, 12, 0, 0, 0, time.UTC)
+	hash := mustSubmodelHistoryHash(snapshotJSON)
+	rowHash := mustSubmodelHistoryRowHash(history.ChangeEvent{
+		EntityType:   history.TableSubmodel,
+		Identifier:   identifier,
+		ChangeType:   history.ChangeUpdated,
+		Timestamp:    operationTime,
+		Deleted:      deleted,
+		PayloadType:  history.PayloadTypeSnapshot,
+		ContentHash:  hash,
+		PayloadHash:  hash,
+		PreviousHash: "",
+	})
+	mock.ExpectQuery(`SELECT "history_id" FROM "submodel_history"`).
+		WillReturnRows(sqlmock.NewRows([]string{"history_id"}).AddRow(historyID))
+	mock.ExpectQuery(`SELECT "history_id" FROM "submodel_history".*"payload_type" = 'snapshot'`).
+		WillReturnRows(sqlmock.NewRows([]string{"history_id"}).AddRow(historyID))
+	mock.ExpectQuery(`SELECT .*FROM "submodel_history" AS "history" INNER JOIN "submodel_history_payload" AS "payload"`).
+		WillReturnRows(sqlmock.NewRows(submodelHistoryChainColumns()).
+			AddRow(
+				historyID,
+				identifier,
+				history.ChangeUpdated,
+				history.PayloadTypeSnapshot,
+				snapshotJSON,
+				nil,
+				deleted,
+				nil,
+				nil,
+				operationTime,
+				hash,
+				hash,
+				nil,
+				rowHash,
+				nil,
+				nil,
+				nil,
+				nil,
+				nil,
+				nil,
+				nil,
+				nil,
+				nil,
+				nil,
+				nil,
+				nil,
+				nil,
+			))
+}
+
+func submodelHistoryChainColumns() []string {
+	return []string{
+		"history_id",
+		"identifier",
+		"change_type",
+		"payload_type",
+		"snapshot",
+		"diff",
+		"deleted",
+		"administration_created_at_text",
+		"administration_updated_at_text",
+		"operation_time",
+		"content_hash",
+		"payload_hash",
+		"previous_hash",
+		"row_hash",
+		"request_id",
+		"correlation_id",
+		"actor_subject",
+		"actor_issuer",
+		"client_id",
+		"authorization_result",
+		"policy_id",
+		"matched_rule_id",
+		"source_ip",
+		"user_agent",
+		"operation",
+		"endpoint",
+		"http_method",
+	}
+}
+
+func mustSubmodelHistoryHash(snapshotJSON string) string {
+	var snapshot any
+	if err := json.Unmarshal([]byte(snapshotJSON), &snapshot); err != nil {
+		panic(err)
+	}
+	hash, err := history.CanonicalJSONHash(snapshot)
+	if err != nil {
+		panic(err)
+	}
+	return hash
+}
+
+func mustSubmodelHistoryRowHash(event history.ChangeEvent) string {
+	hash, err := history.ComputeHistoryRowHash(event)
+	if err != nil {
+		panic(err)
+	}
+	return hash
+}
+
+func expectSubmodelHistoryAppendWithReadFailure(mock sqlmock.Sqlmock, err error) {
+	mock.ExpectExec(`SELECT pg_advisory_xact_lock`).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectQuery(`SELECT "history_id" FROM "submodel_history"`).
+		WillReturnError(err)
+}
+
 func expectMutatedSubmodelHistoryFallback(mock sqlmock.Sqlmock) {
 	mock.ExpectExec(`SELECT pg_advisory_xact_lock`).
 		WillReturnResult(sqlmock.NewResult(0, 1))
-	mock.ExpectQuery(`SELECT "payload"."snapshot"::text, "history"."deleted", "history"."row_hash" FROM "submodel_history" AS "history" INNER JOIN "submodel_history_payload" AS "payload"`).
-		WillReturnError(sql.ErrNoRows)
+	expectMissingSubmodelHistory(mock)
 }
 
 func expectCurrentSubmodelSnapshotLoad(mock sqlmock.Sqlmock, submodelID string, idShort string) {

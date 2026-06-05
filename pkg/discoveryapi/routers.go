@@ -25,6 +25,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 )
 
 // A Route defines the parameters for an api endpoint
@@ -167,10 +169,7 @@ func parseTimes(param string) ([]time.Time, error) {
 
 // parseTime will parses a string parameter into a time.Time using the RFC3339 format
 func parseTime(param string) (time.Time, error) {
-	if param == "" {
-		return time.Time{}, nil
-	}
-	return time.Parse(time.RFC3339, param)
+	return common.ParseISO8601DateTime(param)
 }
 
 type Number interface {
