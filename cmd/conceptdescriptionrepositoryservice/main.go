@@ -33,10 +33,12 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/history"
 	commonmodel "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 	"github.com/eclipse-basyx/basyx-go-components/internal/conceptdescriptionrepository/api"
@@ -58,6 +60,13 @@ func runServer(ctx context.Context, configPath string) error {
 	if err := commonmodel.SetVerificationMode(cfg.Server.StrictVerification); err != nil {
 		return err
 	}
+	history.Configure(history.Config{
+		Mode:                 cfg.History.Mode,
+		RetentionDays:        cfg.History.RetentionDays,
+		FullSnapshotInterval: cfg.History.FullSnapshotInterval,
+		Immutability:         cfg.History.Immutability,
+		AuditIdentityMode:    cfg.History.AuditIdentityMode,
+	})
 
 	// Create Chi router
 	r := chi.NewRouter()
@@ -86,13 +95,24 @@ func runServer(ctx context.Context, configPath string) error {
 		return err
 	}
 
-	cdDatabase, err := persistence.NewConceptDescriptionBackend(
-		dsn,
-		//nolint:gosec // configured value is bounded by deployment configuration
-		int32(cfg.Postgres.MaxOpenConnections),
-		cfg.Postgres.MaxIdleConnections,
-		cfg.Postgres.ConnMaxLifetimeMinutes,
-	)
+	sharedDB, err := common.NewDatabaseConnection(dsn)
+	if err != nil {
+		return err
+	}
+	if cfg.Postgres.MaxOpenConnections > 0 {
+		sharedDB.SetMaxOpenConns(cfg.Postgres.MaxOpenConnections)
+	}
+	if cfg.Postgres.MaxIdleConnections > 0 {
+		sharedDB.SetMaxIdleConns(cfg.Postgres.MaxIdleConnections)
+	}
+	if cfg.Postgres.ConnMaxLifetimeMinutes > 0 {
+		sharedDB.SetConnMaxLifetime(time.Duration(cfg.Postgres.ConnMaxLifetimeMinutes) * time.Minute)
+	}
+	if err = history.ApplyPostgresGuardConfig(ctx, sharedDB); err != nil {
+		return err
+	}
+
+	cdDatabase, err := persistence.NewConceptDescriptionBackendFromDB(sharedDB)
 	if err != nil {
 		return err
 	}
@@ -114,11 +134,15 @@ func runServer(ctx context.Context, configPath string) error {
 	if err := auth.SetupSecurity(ctx, cfg, apiRouter); err != nil {
 		return err
 	}
+	versioningGuard := history.NewMutationCoverageGuard(apiRouter)
+	apiRouter.Use(versioningGuard.Middleware)
 
-	for _, rt := range cdCtrl.Routes() {
+	for operation, rt := range cdCtrl.Routes() {
+		versioningGuard.ClassifyRoute(operation, rt.Method, rt.Pattern)
 		apiRouter.Method(rt.Method, rt.Pattern, rt.HandlerFunc)
 	}
-	for _, rt := range descCtrl.Routes() {
+	for operation, rt := range descCtrl.Routes() {
+		versioningGuard.ClassifyRoute(operation, rt.Method, rt.Pattern)
 		apiRouter.Method(rt.Method, rt.Pattern, rt.HandlerFunc)
 	}
 

@@ -235,7 +235,7 @@
   {
     "context": "026 - List AAS Descriptors (Filter assetType=betachad) - GET /shell-descriptors?assetType=...",
     "method": "GET",
-    "endpoint": "http://127.0.0.1:6004/shell-descriptors?assetType=betachad",
+    "endpoint": "http://127.0.0.1:6004/shell-descriptors?assetType=YmV0YWNoYWQ",
     "shouldMatch": "expected/simple_ass_paged_result_filter_assetType.json",
     "expectedStatus": 200
   },

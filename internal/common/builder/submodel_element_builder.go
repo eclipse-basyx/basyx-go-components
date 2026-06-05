@@ -659,36 +659,22 @@ func buildAnnotatedRelationshipElement(smeRow model.SubmodelElementRow) (types.I
 		return nil, err
 	}
 
-	var firstJsonable, secondJsonable map[string]any
-	if valueRow.First == nil {
-		return nil, fmt.Errorf("first reference in RelationshipElement is nil")
-	}
-	firstJsonable, err = parseReferenceJsonable(valueRow.First)
+	firstSDK, err := buildOptionalReference(valueRow.First, "first")
 	if err != nil {
 		return nil, err
 	}
-	if valueRow.Second == nil {
-		return nil, fmt.Errorf("second reference in RelationshipElement is nil")
-	}
-	secondJsonable, err = parseReferenceJsonable(valueRow.Second)
+	secondSDK, err := buildOptionalReference(valueRow.Second, "second")
 	if err != nil {
 		return nil, err
-	}
-
-	firstSDK, err := jsonization.ReferenceFromJsonable(firstJsonable)
-	if err != nil {
-		_, _ = fmt.Printf("[DEBUG] buildAnnotatedRelationshipElement First: JSON: %v, Error: %v\n", firstJsonable, err)
-		return nil, fmt.Errorf("error converting first jsonable to Reference: %w", err)
-	}
-	secondSDK, err := jsonization.ReferenceFromJsonable(secondJsonable)
-	if err != nil {
-		_, _ = fmt.Printf("[DEBUG] buildAnnotatedRelationshipElement Second: JSON: %v, Error: %v\n", secondJsonable, err)
-		return nil, fmt.Errorf("error converting second jsonable to Reference: %w", err)
 	}
 
 	relElem := types.NewAnnotatedRelationshipElement()
-	relElem.SetFirst(firstSDK)
-	relElem.SetSecond(secondSDK)
+	if firstSDK != nil {
+		relElem.SetFirst(firstSDK)
+	}
+	if secondSDK != nil {
+		relElem.SetSecond(secondSDK)
+	}
 	return relElem, nil
 }
 
@@ -880,36 +866,22 @@ func buildRelationshipElement(smeRow model.SubmodelElementRow) (types.ISubmodelE
 		return nil, err
 	}
 
-	var firstJsonable, secondJsonable map[string]any
-	if valueRow.First == nil {
-		return nil, fmt.Errorf("first reference in RelationshipElement is nil")
-	}
-	firstJsonable, err = parseReferenceJsonable(valueRow.First)
+	firstSDK, err := buildOptionalReference(valueRow.First, "first")
 	if err != nil {
 		return nil, err
 	}
-	if valueRow.Second == nil {
-		return nil, fmt.Errorf("second reference in RelationshipElement is nil")
-	}
-	secondJsonable, err = parseReferenceJsonable(valueRow.Second)
+	secondSDK, err := buildOptionalReference(valueRow.Second, "second")
 	if err != nil {
 		return nil, err
-	}
-
-	firstSDK, err := jsonization.ReferenceFromJsonable(firstJsonable)
-	if err != nil {
-		_, _ = fmt.Printf("[DEBUG] buildRelationshipElement First: JSON: %v, Error: %v\n", firstJsonable, err)
-		return nil, fmt.Errorf("error converting first jsonable to Reference: %w", err)
-	}
-	secondSDK, err := jsonization.ReferenceFromJsonable(secondJsonable)
-	if err != nil {
-		_, _ = fmt.Printf("[DEBUG] buildRelationshipElement Second: JSON: %v, Error: %v\n", secondJsonable, err)
-		return nil, fmt.Errorf("error converting second jsonable to Reference: %w", err)
 	}
 
 	relElem := types.NewRelationshipElement()
-	relElem.SetFirst(firstSDK)
-	relElem.SetSecond(secondSDK)
+	if firstSDK != nil {
+		relElem.SetFirst(firstSDK)
+	}
+	if secondSDK != nil {
+		relElem.SetSecond(secondSDK)
+	}
 	return relElem, nil
 }
 
@@ -979,6 +951,23 @@ func parseReferenceJsonable(raw []byte) (map[string]any, error) {
 	}
 
 	return normalizeReferenceJsonable(arrayPayload[0]), nil
+}
+
+func buildOptionalReference(raw []byte, fieldName string) (types.IReference, error) {
+	jsonable, err := parseReferenceJsonable(raw)
+	if err != nil {
+		return nil, err
+	}
+	if len(jsonable) == 0 {
+		return nil, nil
+	}
+
+	ref, err := jsonization.ReferenceFromJsonable(jsonable)
+	if err != nil {
+		_, _ = fmt.Printf("[DEBUG] buildOptionalReference %s: JSON: %v, Error: %v\n", fieldName, jsonable, err)
+		return nil, fmt.Errorf("error converting %s jsonable to Reference: %w", fieldName, err)
+	}
+	return ref, nil
 }
 
 func normalizeReferenceJsonable(payload map[string]any) map[string]any {

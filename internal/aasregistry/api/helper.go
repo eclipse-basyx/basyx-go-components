@@ -55,6 +55,13 @@ func decodeCursor(raw, operation string) (string, *model.ImplResponse, error) {
 	return decodePathParam(raw, "cursor", operation, "BadCursor")
 }
 
+func decodeOptionalQueryParam(raw, paramName, operation, errorDetail string) (string, *model.ImplResponse, error) {
+	if raw == "" {
+		return "", nil, nil
+	}
+	return decodePathParam(raw, paramName, operation, errorDetail)
+}
+
 // pagedResponse builds the common paged envelope used across list endpoints.
 func pagedResponse[T any](results T, nextCursor string) model.ImplResponse {
 	pm := model.PagedResultPagingMetadata{}

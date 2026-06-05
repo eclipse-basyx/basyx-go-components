@@ -14,6 +14,7 @@ import (
 	"context"
 	"net/http"
 	"os"
+	"time"
 
 	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
@@ -45,6 +46,7 @@ type SubmodelRepositoryAPIAPIRouter interface {
 	GetAllSubmodelsValueOnly(http.ResponseWriter, *http.Request)
 	GetAllSubmodelsReference(http.ResponseWriter, *http.Request)
 	GetAllSubmodelsPath(http.ResponseWriter, *http.Request)
+	GetAllSubmodelRecentChanges(http.ResponseWriter, *http.Request)
 	GetSubmodelByID(http.ResponseWriter, *http.Request)
 	PutSubmodelByID(http.ResponseWriter, *http.Request)
 	DeleteSubmodelByID(http.ResponseWriter, *http.Request)
@@ -82,6 +84,7 @@ type SubmodelRepositoryAPIAPIRouter interface {
 	GetOperationAsyncStatus(http.ResponseWriter, *http.Request)
 	GetOperationAsyncResult(http.ResponseWriter, *http.Request)
 	GetOperationAsyncResultValueOnly(http.ResponseWriter, *http.Request)
+	GetSubmodelByIdAndDate(http.ResponseWriter, *http.Request)
 }
 
 // DescriptionAPIAPIServicer defines the api actions for the DescriptionAPIAPI service
@@ -115,6 +118,8 @@ type SubmodelRepositoryAPIAPIServicer interface {
 	GetSubmodelByID(context.Context, string, string, string) (model.ImplResponse, error)
 	GetSignedSubmodelByID(context.Context, string, string, string) (model.ImplResponse, error)
 	GetSignedSubmodelByIDValueOnly(context.Context, string, string, string) (model.ImplResponse, error)
+	GetSubmodelByIdAndDate(context.Context, string, string, string, time.Time) (model.ImplResponse, error)
+	GetAllSubmodelRecentChanges(context.Context, string, time.Time, time.Time, int32, string) (model.ImplResponse, error)
 	PutSubmodelByID(context.Context, string, types.ISubmodel) (model.ImplResponse, error)
 	DeleteSubmodelByID(context.Context, string) (model.ImplResponse, error)
 	PatchSubmodelByID(context.Context, string, types.ISubmodel, string) (model.ImplResponse, error)

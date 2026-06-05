@@ -70,7 +70,7 @@ func TestQueryWrapper_SMECondition_ListWildcardValueType_ToSQL(t *testing.T) {
 		"Query": {
 			"$condition": {
 				"$eq": [
-					{"$field": "$sme.NewTestList[]#valueType"},
+					{"$field": "$sme.New_TestList[]#valueType"},
 					{"$strVal": "xs:string"}
 				]
 			}
@@ -105,7 +105,10 @@ func TestQueryWrapper_SMECondition_ListWildcardValueType_ToSQL(t *testing.T) {
 	if !strings.Contains(sql, `"submodel_element"."idshort_path" LIKE`) {
 		t.Fatalf("expected LIKE idshort_path constraint for [] wildcard, got: %s", sql)
 	}
-	if !argListContains(args, "NewTestList") {
-		t.Fatalf("expected args to contain %q prefix, got %#v", "NewTestList", args)
+	if !strings.Contains(sql, `ESCAPE`) {
+		t.Fatalf("expected ESCAPE clause for [] wildcard idshort_path constraint, got: %s", sql)
+	}
+	if !argListContains(args, "New!_TestList[%") {
+		t.Fatalf("expected args to contain escaped prefix, got %#v", args)
 	}
 }

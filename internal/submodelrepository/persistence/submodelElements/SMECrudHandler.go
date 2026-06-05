@@ -678,13 +678,18 @@ func resolveUpdatedPath(idShortOrPath string, submodelElement types.ISubmodelEle
 	return computeNewPath(idShortOrPath, newIDShort)
 }
 
+// ResolveUpdatedPath returns the persisted path after a submodel-element update.
+func ResolveUpdatedPath(idShortOrPath string, submodelElement types.ISubmodelElement, isPut bool) string {
+	return resolveUpdatedPath(idShortOrPath, submodelElement, isPut)
+}
+
 // updateChildPaths updates the idshort_path of child elements whose paths start with
 // the old prefix followed by the given separator ("." or "[").
 //
 // It uses PostgreSQL's OVERLAY function to replace the old prefix portion with the new prefix,
 // ensuring only the exact prefix is replaced without affecting similar-prefix siblings.
 func updateChildPaths(tx *sql.Tx, dialect goqu.DialectWrapper, submodelDatabaseID int, oldPath string, newPath string, separator string) error {
-	likePattern := oldPath + separator + "%"
+	likePattern := escapeSQLLikePattern(oldPath) + separator + "%"
 	oldPrefixLen := len(oldPath)
 
 	// SET idshort_path = newPath || SUBSTRING(idshort_path FROM oldPrefixLen+1)
@@ -700,7 +705,7 @@ func updateChildPaths(tx *sql.Tx, dialect goqu.DialectWrapper, submodelDatabaseI
 		}).
 		Where(
 			goqu.C("submodel_id").Eq(submodelDatabaseID),
-			goqu.C("idshort_path").Like(likePattern),
+			idShortPathLikeEscaped(goqu.C("idshort_path"), likePattern),
 		).
 		ToSQL()
 	if err != nil {

@@ -159,3 +159,99 @@ func TestLoadConfigAcceptsPermissiveStrictVerification(t *testing.T) {
 		t.Fatalf("unexpected strictVerification mode: %q", cfg.Server.StrictVerification)
 	}
 }
+
+func TestLoadConfigAppliesHistoryAndEventingDefaults(t *testing.T) {
+	withUnsetEnv(t, "BASYX_HISTORY_MODE")
+	withUnsetEnv(t, "BASYX_HISTORY_RETENTION_DAYS")
+	withUnsetEnv(t, "BASYX_HISTORY_FULL_SNAPSHOT_INTERVAL")
+	withUnsetEnv(t, "BASYX_HISTORY_IMMUTABILITY")
+	withUnsetEnv(t, "BASYX_AUDIT_IDENTITY_MODE")
+	withUnsetEnv(t, "BASYX_EVENTING_ENABLED")
+	withUnsetEnv(t, "BASYX_EVENTING_FORMAT")
+	withUnsetEnv(t, "BASYX_EVENTING_SINKS")
+	withUnsetEnv(t, "BASYX_EVENTING_OUTBOX_ENABLED")
+	withUnsetEnv(t, "BASYX_EVENTING_TOPIC_PREFIX")
+	captureLogOutput(t)
+
+	cfg, err := LoadConfig("", NORMAL)
+	if err != nil {
+		t.Fatalf("unexpected config load error: %v", err)
+	}
+
+	if cfg.History.Mode != "off" {
+		t.Fatalf("expected default history mode off, got %q", cfg.History.Mode)
+	}
+	if cfg.History.RetentionDays != 0 {
+		t.Fatalf("expected default retention 0, got %d", cfg.History.RetentionDays)
+	}
+	if cfg.History.FullSnapshotInterval != 1 {
+		t.Fatalf("expected default full snapshot interval 1, got %d", cfg.History.FullSnapshotInterval)
+	}
+	if cfg.History.Immutability != "none" {
+		t.Fatalf("expected default immutability none, got %q", cfg.History.Immutability)
+	}
+	if cfg.History.AuditIdentityMode != "none" {
+		t.Fatalf("expected default audit identity mode none, got %q", cfg.History.AuditIdentityMode)
+	}
+	if cfg.Eventing.Enabled || cfg.Eventing.Format != "cloudevents" || cfg.Eventing.TopicPrefix != "basyx" {
+		t.Fatalf("unexpected eventing defaults: %+v", cfg.Eventing)
+	}
+}
+
+func TestLoadConfigAppliesSupportedBasyxHistoryEnvOverrides(t *testing.T) {
+	t.Setenv("BASYX_HISTORY_MODE", "audit")
+	t.Setenv("BASYX_HISTORY_RETENTION_DAYS", "0")
+	t.Setenv("BASYX_HISTORY_FULL_SNAPSHOT_INTERVAL", "1")
+	t.Setenv("BASYX_HISTORY_IMMUTABILITY", "postgres_guarded")
+	t.Setenv("BASYX_AUDIT_IDENTITY_MODE", "none")
+	captureLogOutput(t)
+
+	cfg, err := LoadConfig("", NORMAL)
+	if err != nil {
+		t.Fatalf("unexpected config load error: %v", err)
+	}
+
+	if cfg.History.Mode != "audit" || cfg.History.RetentionDays != 0 || cfg.History.FullSnapshotInterval != 1 || cfg.History.Immutability != "postgres_guarded" || cfg.History.AuditIdentityMode != "none" {
+		t.Fatalf("unexpected history env override result: %+v", cfg.History)
+	}
+}
+
+func TestValidateHistoryAndEventingConfigRejectsUnsupportedFeatures(t *testing.T) {
+	tests := []struct {
+		name   string
+		config Config
+	}{
+		{
+			name:   "retention",
+			config: Config{History: HistoryConfig{Mode: "api", RetentionDays: 30, FullSnapshotInterval: 1, Immutability: "none", AuditIdentityMode: "none"}},
+		},
+		{
+			name:   "full snapshot interval zero",
+			config: Config{History: HistoryConfig{Mode: "api", FullSnapshotInterval: 0, Immutability: "none", AuditIdentityMode: "none"}},
+		},
+		{
+			name:   "future diff-backed full snapshot interval",
+			config: Config{History: HistoryConfig{Mode: "api", FullSnapshotInterval: 10, Immutability: "none", AuditIdentityMode: "none"}},
+		},
+		{
+			name:   "external anchor",
+			config: Config{History: HistoryConfig{Mode: "api", FullSnapshotInterval: 1, Immutability: "external_anchor", AuditIdentityMode: "none"}},
+		},
+		{
+			name:   "audit identity",
+			config: Config{History: HistoryConfig{Mode: "api", FullSnapshotInterval: 1, Immutability: "none", AuditIdentityMode: "minimal"}},
+		},
+		{
+			name:   "eventing",
+			config: Config{History: HistoryConfig{Mode: "off", FullSnapshotInterval: 1, Immutability: "none", AuditIdentityMode: "none"}, Eventing: EventingConfig{Enabled: true}},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if err := validateHistoryAndEventingConfig(&test.config); err == nil {
+				t.Fatal("expected unsupported configuration error")
+			}
+		})
+	}
+}

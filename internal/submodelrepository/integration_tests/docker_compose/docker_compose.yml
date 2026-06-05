@@ -30,6 +30,7 @@ services:
       - POSTGRES_MAXIDLECONNECTIONS=500
       - POSTGRES_CONNMAXLIFETIMEMINUTES=5
       - ABAC_ENABLED=false
+      - BASYX_HISTORY_MODE=api
       - JWS_PRIVATEKEYPATH=/app/rsa-key.pem
       - SERVER_STRICTVERIFICATION=off
     volumes:

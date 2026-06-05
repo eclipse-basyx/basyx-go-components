@@ -207,7 +207,7 @@ func (p PostgreSQLMultiLanguagePropertyHandler) Update(submodelID string, idShor
 //
 // Returns:
 //   - error: An error if the update operation fails or if the valueOnly type is incorrect
-func (p PostgreSQLMultiLanguagePropertyHandler) UpdateValueOnly(submodelID string, idShortOrPath string, valueOnly gen.SubmodelElementValue) error {
+func (p PostgreSQLMultiLanguagePropertyHandler) UpdateValueOnly(submodelID string, idShortOrPath string, valueOnly gen.SubmodelElementValue, tx *sql.Tx) error {
 	mlp, ok := valueOnly.(gen.MultiLanguagePropertyValue)
 	if !ok {
 		ambiguous, isAmbiguous := valueOnly.(gen.AmbiguousSubmodelElementValue)
@@ -222,7 +222,7 @@ func (p PostgreSQLMultiLanguagePropertyHandler) UpdateValueOnly(submodelID strin
 	}
 
 	dialect := goqu.Dialect("postgres")
-	smDbID, err := persistenceutils.GetSubmodelDatabaseIDFromDB(p.db, submodelID)
+	smDbID, err := persistenceutils.GetSubmodelDatabaseID(tx, submodelID)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return common.NewErrNotFound("submodel not found")
@@ -246,7 +246,7 @@ func (p PostgreSQLMultiLanguagePropertyHandler) UpdateValueOnly(submodelID strin
 		return fmt.Errorf("failed to build delete query: %w", err)
 	}
 
-	_, err = p.db.Exec(deleteQuery, deleteArgs...)
+	_, err = tx.Exec(deleteQuery, deleteArgs...)
 	if err != nil {
 		return fmt.Errorf("failed to delete existing values: %w", err)
 	}
@@ -265,7 +265,7 @@ func (p PostgreSQLMultiLanguagePropertyHandler) UpdateValueOnly(submodelID strin
 				return fmt.Errorf("failed to build insert query: %w", err)
 			}
 
-			_, err = p.db.Exec(insertQuery, insertArgs...)
+			_, err = tx.Exec(insertQuery, insertArgs...)
 			if err != nil {
 				return fmt.Errorf("failed to insert value: %w", err)
 			}

@@ -75,6 +75,16 @@ var DefaultConfig = struct {
 	GeneralTrustProxyHeaders            bool
 	GeneralTrustedProxyCIDRs            []string
 	GeneralAASPreconfigPaths            []string
+	HistoryConfigMode                   string
+	HistoryConfigRetentionDays          int
+	HistoryConfigFullSnapshotInterval   int
+	HistoryConfigImmutability           string
+	HistoryConfigAuditIdentityMode      string
+	EventingEnabled                     bool
+	EventingFormat                      string
+	EventingSinks                       []string
+	EventingOutboxEnabled               bool
+	EventingTopicPrefix                 string
 }{
 	ServerPort:                          5004,
 	ServerContextPath:                   "",
@@ -102,6 +112,16 @@ var DefaultConfig = struct {
 	GeneralTrustProxyHeaders:            false,
 	GeneralTrustedProxyCIDRs:            []string{},
 	GeneralAASPreconfigPaths:            []string{},
+	HistoryConfigMode:                   "off",
+	HistoryConfigRetentionDays:          0,
+	HistoryConfigFullSnapshotInterval:   1,
+	HistoryConfigImmutability:           "none",
+	HistoryConfigAuditIdentityMode:      "none",
+	EventingEnabled:                     false,
+	EventingFormat:                      "cloudevents",
+	EventingSinks:                       []string{},
+	EventingOutboxEnabled:               false,
+	EventingTopicPrefix:                 "basyx",
 }
 
 // PrintSplash displays the BaSyx Go API ASCII art logo to the console.
@@ -158,16 +178,36 @@ type Config struct {
 	Postgres   PostgresConfig `mapstructure:"postgres" yaml:"postgres"` // PostgreSQL database settings
 	CorsConfig CorsConfig     `mapstructure:"cors" yaml:"cors"`         // CORS policy configuration
 
-	General GeneralConfig `mapstructure:"general" yaml:"general"` // General configuration
-	OIDC    OIDCConfig    `mapstructure:"oidc" yaml:"oidc"`       // OpenID Connect authentication
-	ABAC    ABACConfig    `mapstructure:"abac" yaml:"abac"`       // Attribute-Based Access Control
-	JWS     JWSConfig     `mapstructure:"jws" yaml:"jws"`         // JWS signing configuration
-	Swagger SwaggerConfig `mapstructure:"swagger" yaml:"swagger"` // Swagger UI configuration
+	General  GeneralConfig  `mapstructure:"general" yaml:"general"`   // General configuration
+	OIDC     OIDCConfig     `mapstructure:"oidc" yaml:"oidc"`         // OpenID Connect authentication
+	ABAC     ABACConfig     `mapstructure:"abac" yaml:"abac"`         // Attribute-Based Access Control
+	JWS      JWSConfig      `mapstructure:"jws" yaml:"jws"`           // JWS signing configuration
+	Swagger  SwaggerConfig  `mapstructure:"swagger" yaml:"swagger"`   // Swagger UI configuration
+	History  HistoryConfig  `mapstructure:"history" yaml:"history"`   // History/audit behavior
+	Eventing EventingConfig `mapstructure:"eventing" yaml:"eventing"` // Eventing placeholders
 }
 
 // JWSConfig contains JSON Web Signature configuration parameters.
 type JWSConfig struct {
 	PrivateKeyPath string `mapstructure:"privateKeyPath" yaml:"privateKeyPath"` // Path to the RSA private key for signing
+}
+
+// HistoryConfig contains history and audit configuration.
+type HistoryConfig struct {
+	Mode                 string `mapstructure:"mode" yaml:"mode" json:"mode"`                                                 // off|api|audit
+	RetentionDays        int    `mapstructure:"retentionDays" yaml:"retentionDays" json:"retentionDays"`                      // 0 = keep forever
+	FullSnapshotInterval int    `mapstructure:"fullSnapshotInterval" yaml:"fullSnapshotInterval" json:"fullSnapshotInterval"` // 1 = every history row is a full snapshot
+	Immutability         string `mapstructure:"immutability" yaml:"immutability" json:"immutability"`                         // none|postgres_guarded|external_anchor
+	AuditIdentityMode    string `mapstructure:"auditIdentityMode" yaml:"auditIdentityMode" json:"auditIdentityMode"`          // none|minimal|extended
+}
+
+// EventingConfig reserves future-compatible eventing configuration.
+type EventingConfig struct {
+	Enabled       bool     `mapstructure:"enabled" yaml:"enabled" json:"enabled"`
+	Format        string   `mapstructure:"format" yaml:"format" json:"format"`
+	Sinks         []string `mapstructure:"sinks" yaml:"sinks" json:"sinks"`
+	OutboxEnabled bool     `mapstructure:"outboxEnabled" yaml:"outboxEnabled" json:"outboxEnabled"`
+	TopicPrefix   string   `mapstructure:"topicPrefix" yaml:"topicPrefix" json:"topicPrefix"`
 }
 
 // SwaggerConfig contains Swagger UI configuration parameters.
@@ -321,11 +361,123 @@ func LoadConfig(configPath string, configMode ConfigMode) (*Config, error) {
 	}
 	cfg.Server.StrictVerification = string(verificationMode)
 	applyAASPreconfigPathOverrides(cfg)
+	applyHistoryEnvOverrides(cfg)
+	applyEventingEnvOverrides(cfg)
+	if err = validateHistoryAndEventingConfig(cfg); err != nil {
+		return nil, err
+	}
 	if configMode == NORMAL {
 		log.Println("✅ Configuration loaded successfully")
 		PrintConfiguration(cfg)
 	}
 	return cfg, nil
+}
+
+func applyHistoryEnvOverrides(cfg *Config) {
+	if cfg == nil {
+		return
+	}
+	if value, ok := lookupTrimmedEnv("BASYX_HISTORY_MODE"); ok {
+		cfg.History.Mode = value
+	}
+	if value, ok := lookupTrimmedEnv("BASYX_HISTORY_RETENTION_DAYS"); ok {
+		var retention int
+		if _, err := fmt.Sscanf(value, "%d", &retention); err == nil {
+			cfg.History.RetentionDays = retention
+		}
+	}
+	if value, ok := lookupTrimmedEnv("BASYX_HISTORY_FULL_SNAPSHOT_INTERVAL"); ok {
+		var interval int
+		if _, err := fmt.Sscanf(value, "%d", &interval); err == nil {
+			cfg.History.FullSnapshotInterval = interval
+		}
+	}
+	if value, ok := lookupTrimmedEnv("BASYX_HISTORY_IMMUTABILITY"); ok {
+		cfg.History.Immutability = value
+	}
+	if value, ok := lookupTrimmedEnv("BASYX_AUDIT_IDENTITY_MODE"); ok {
+		cfg.History.AuditIdentityMode = value
+	}
+}
+
+func applyEventingEnvOverrides(cfg *Config) {
+	if cfg == nil {
+		return
+	}
+	if value, ok := lookupTrimmedEnv("BASYX_EVENTING_ENABLED"); ok {
+		cfg.Eventing.Enabled = strings.EqualFold(value, "true")
+	}
+	if value, ok := lookupTrimmedEnv("BASYX_EVENTING_FORMAT"); ok {
+		cfg.Eventing.Format = value
+	}
+	if value, ok := lookupTrimmedEnv("BASYX_EVENTING_SINKS"); ok {
+		cfg.Eventing.Sinks = parseCommaSeparated(value)
+	}
+	if value, ok := lookupTrimmedEnv("BASYX_EVENTING_OUTBOX_ENABLED"); ok {
+		cfg.Eventing.OutboxEnabled = strings.EqualFold(value, "true")
+	}
+	if value, ok := lookupTrimmedEnv("BASYX_EVENTING_TOPIC_PREFIX"); ok {
+		cfg.Eventing.TopicPrefix = value
+	}
+}
+
+func validateHistoryAndEventingConfig(cfg *Config) error {
+	if cfg == nil {
+		return fmt.Errorf("CONFIG-HISTORY-NIL configuration must not be nil")
+	}
+
+	switch strings.ToLower(strings.TrimSpace(cfg.History.Mode)) {
+	case "off", "api", "audit":
+	default:
+		return fmt.Errorf("CONFIG-HISTORY-MODE unsupported history.mode %q", cfg.History.Mode)
+	}
+	if cfg.History.RetentionDays != 0 {
+		return fmt.Errorf("CONFIG-HISTORY-RETENTION history.retentionDays is not implemented yet; use 0")
+	}
+	if cfg.History.FullSnapshotInterval < 1 {
+		return fmt.Errorf("CONFIG-HISTORY-SNAPSHOTINTERVAL history.fullSnapshotInterval must be at least 1")
+	}
+	if cfg.History.FullSnapshotInterval != 1 {
+		return fmt.Errorf("CONFIG-HISTORY-SNAPSHOTINTERVAL history.fullSnapshotInterval values greater than 1 are reserved for future diff-backed history storage; use 1")
+	}
+	switch strings.ToLower(strings.TrimSpace(cfg.History.Immutability)) {
+	case "none", "postgres_guarded":
+	case "external_anchor":
+		return fmt.Errorf("CONFIG-HISTORY-ANCHOR history.immutability external_anchor is not implemented yet")
+	default:
+		return fmt.Errorf("CONFIG-HISTORY-IMMUTABILITY unsupported history.immutability %q", cfg.History.Immutability)
+	}
+	switch strings.ToLower(strings.TrimSpace(cfg.History.AuditIdentityMode)) {
+	case "none":
+	case "minimal", "extended":
+		return fmt.Errorf("CONFIG-HISTORY-AUDITIDENTITY history.auditIdentityMode %q is not implemented yet; use none", cfg.History.AuditIdentityMode)
+	default:
+		return fmt.Errorf("CONFIG-HISTORY-AUDITIDENTITY unsupported history.auditIdentityMode %q", cfg.History.AuditIdentityMode)
+	}
+	if cfg.Eventing.Enabled || cfg.Eventing.OutboxEnabled || len(cfg.Eventing.Sinks) > 0 {
+		return fmt.Errorf("CONFIG-EVENTING-NOTIMPLEMENTED eventing publishing and outbox processing are not implemented yet")
+	}
+	return nil
+}
+
+func lookupTrimmedEnv(key string) (string, bool) {
+	value, ok := os.LookupEnv(key)
+	if !ok {
+		return "", false
+	}
+	return strings.TrimSpace(value), true
+}
+
+func parseCommaSeparated(rawValue string) []string {
+	parts := strings.Split(rawValue, ",")
+	values := make([]string, 0, len(parts))
+	for _, part := range parts {
+		value := strings.TrimSpace(part)
+		if value != "" {
+			values = append(values, value)
+		}
+	}
+	return values
 }
 
 func applyAASPreconfigPathOverrides(cfg *Config) {
@@ -415,6 +567,20 @@ func setDefaults(v *viper.Viper) {
 
 	// JWS defaults
 	v.SetDefault("jws.privateKeyPath", "")
+
+	// History/audit defaults
+	v.SetDefault("history.mode", "off")
+	v.SetDefault("history.retentionDays", 0)
+	v.SetDefault("history.fullSnapshotInterval", DefaultConfig.HistoryConfigFullSnapshotInterval)
+	v.SetDefault("history.immutability", "none")
+	v.SetDefault("history.auditIdentityMode", "none")
+
+	// Eventing placeholders
+	v.SetDefault("eventing.enabled", false)
+	v.SetDefault("eventing.format", "cloudevents")
+	v.SetDefault("eventing.sinks", []string{})
+	v.SetDefault("eventing.outboxEnabled", false)
+	v.SetDefault("eventing.topicPrefix", "basyx")
 
 	// Swagger defaults
 	v.SetDefault("swagger.contactName", "Eclipse BaSyx")
@@ -532,6 +698,24 @@ func PrintConfiguration(cfg *Config) {
 	} else {
 		lines = append(lines, "  Private Key Path: (not configured)")
 		lines = append(lines, "  Private Key Mounted: false")
+	}
+
+	// History
+	lines = append(lines, "🔹 History/Audit:")
+	add("Mode", cfg.History.Mode, DefaultConfig.HistoryConfigMode)
+	add("Retention Days", cfg.History.RetentionDays, DefaultConfig.HistoryConfigRetentionDays)
+	add("Full Snapshot Interval", cfg.History.FullSnapshotInterval, DefaultConfig.HistoryConfigFullSnapshotInterval)
+	add("Immutability", cfg.History.Immutability, DefaultConfig.HistoryConfigImmutability)
+	add("Audit Identity Mode", cfg.History.AuditIdentityMode, DefaultConfig.HistoryConfigAuditIdentityMode)
+
+	// Eventing
+	lines = append(lines, "🔹 Eventing:")
+	add("Enabled", cfg.Eventing.Enabled, DefaultConfig.EventingEnabled)
+	if cfg.Eventing.Enabled {
+		add("Format", cfg.Eventing.Format, DefaultConfig.EventingFormat)
+		add("Sinks", cfg.Eventing.Sinks, DefaultConfig.EventingSinks)
+		add("Outbox Enabled", cfg.Eventing.OutboxEnabled, DefaultConfig.EventingOutboxEnabled)
+		add("Topic Prefix", cfg.Eventing.TopicPrefix, DefaultConfig.EventingTopicPrefix)
 	}
 
 	lines = append(lines, divider)

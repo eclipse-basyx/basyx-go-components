@@ -155,7 +155,7 @@ func (p PostgreSQLOperationHandler) Update(submodelID string, idShortOrPath stri
 //
 // Returns:
 //   - error: An error if the update operation fails
-func (p PostgreSQLOperationHandler) UpdateValueOnly(_ string, _ string, _ gen.SubmodelElementValue) error {
+func (p PostgreSQLOperationHandler) UpdateValueOnly(_ string, _ string, _ gen.SubmodelElementValue, _ *sql.Tx) error {
 	return nil
 }
 

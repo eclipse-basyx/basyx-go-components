@@ -39,6 +39,7 @@ import (
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/descriptors"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/history"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 )
 
@@ -100,13 +101,42 @@ func (p *PostgreSQLAASRegistryDatabase) ExecuteInTransaction(
 	return common.ExecuteInTransaction(p.db, startErrorCode, commitErrorCode, fn)
 }
 
+func appendDescriptorHistoryTx(ctx context.Context, tx *sql.Tx, descriptor model.AssetAdministrationShellDescriptor, changeType string, deleted bool) error {
+	snapshot, err := descriptor.ToJsonable()
+	if err != nil {
+		return common.NewInternalServerError("AASREG-HISTORY-TOJSONABLE " + err.Error())
+	}
+
+	return history.AppendVersionTx(ctx, tx, history.TableDescriptor, descriptor.Id, changeType, snapshot, deleted)
+}
+
 // InsertAdministrationShellDescriptor inserts the provided AAS descriptor
 // and all related nested entities into the database.
 func (p *PostgreSQLAASRegistryDatabase) InsertAdministrationShellDescriptor(
 	ctx context.Context,
 	aasd model.AssetAdministrationShellDescriptor,
 ) (model.AssetAdministrationShellDescriptor, error) {
-	return descriptors.InsertAssetAdministrationShellDescriptor(ctx, p.db, aasd)
+	var result model.AssetAdministrationShellDescriptor
+	err := common.ExecuteInTransaction(p.db, "AASREG-INSERTAASDESC-STARTTX", "AASREG-INSERTAASDESC-COMMIT", func(tx *sql.Tx) error {
+		if err := descriptors.InsertAdministrationShellDescriptorTx(ctx, tx, aasd); err != nil {
+			return err
+		}
+
+		stored, err := descriptors.GetAssetAdministrationShellDescriptorByIDTx(ctx, tx, aasd.Id)
+		if err != nil {
+			return err
+		}
+		if err := appendDescriptorHistoryTx(ctx, tx, stored, history.ChangeCreated, false); err != nil {
+			return err
+		}
+
+		result = stored
+		return nil
+	})
+	if err != nil {
+		return model.AssetAdministrationShellDescriptor{}, err
+	}
+	return result, nil
 }
 
 // InsertAdministrationShellDescriptorInTransaction inserts the provided AAS
@@ -119,7 +149,14 @@ func (p *PostgreSQLAASRegistryDatabase) InsertAdministrationShellDescriptorInTra
 	if tx == nil {
 		return common.NewInternalServerError("AASREG-INSERTAASDESC-NILTX transaction must not be nil")
 	}
-	return descriptors.InsertAdministrationShellDescriptorTx(ctx, tx, aasd)
+	if err := descriptors.InsertAdministrationShellDescriptorTx(ctx, tx, aasd); err != nil {
+		return err
+	}
+	stored, err := descriptors.GetAssetAdministrationShellDescriptorByIDTx(ctx, tx, aasd.Id)
+	if err != nil {
+		return err
+	}
+	return appendDescriptorHistoryTx(ctx, tx, stored, history.ChangeCreated, false)
 }
 
 // GetAssetAdministrationShellDescriptorByID returns the AAS descriptor
@@ -151,7 +188,16 @@ func (p *PostgreSQLAASRegistryDatabase) DeleteAssetAdministrationShellDescriptor
 	ctx context.Context,
 	aasIdentifier string,
 ) error {
-	return descriptors.DeleteAssetAdministrationShellDescriptorByID(ctx, p.db, aasIdentifier)
+	return common.ExecuteInTransaction(p.db, "AASREG-DELAASDESC-STARTTX", "AASREG-DELAASDESC-COMMIT", func(tx *sql.Tx) error {
+		existing, err := descriptors.GetAssetAdministrationShellDescriptorByIDTx(ctx, tx, aasIdentifier)
+		if err != nil {
+			return err
+		}
+		if err := descriptors.DeleteAssetAdministrationShellDescriptorByIDTx(ctx, tx, aasIdentifier); err != nil {
+			return err
+		}
+		return appendDescriptorHistoryTx(ctx, tx, existing, history.ChangeDeleted, true)
+	})
 }
 
 // ReplaceAdministrationShellDescriptor replaces an existing AAS descriptor
@@ -160,7 +206,31 @@ func (p *PostgreSQLAASRegistryDatabase) ReplaceAdministrationShellDescriptor(
 	ctx context.Context,
 	aasd model.AssetAdministrationShellDescriptor,
 ) (model.AssetAdministrationShellDescriptor, error) {
-	return descriptors.ReplaceAdministrationShellDescriptor(ctx, p.db, aasd)
+	var result model.AssetAdministrationShellDescriptor
+	err := common.ExecuteInTransaction(p.db, "AASREG-REPLACEAASDESC-STARTTX", "AASREG-REPLACEAASDESC-COMMIT", func(tx *sql.Tx) error {
+		if _, err := descriptors.GetAssetAdministrationShellDescriptorByIDTx(ctx, tx, aasd.Id); err != nil {
+			return err
+		}
+		if err := descriptors.DeleteAssetAdministrationShellDescriptorByIDTx(ctx, tx, aasd.Id); err != nil {
+			return err
+		}
+		if err := descriptors.InsertAdministrationShellDescriptorTx(ctx, tx, aasd); err != nil {
+			return err
+		}
+		stored, err := descriptors.GetAssetAdministrationShellDescriptorByIDTx(ctx, tx, aasd.Id)
+		if err != nil {
+			return err
+		}
+		if err := appendDescriptorHistoryTx(ctx, tx, stored, history.ChangeUpdated, false); err != nil {
+			return err
+		}
+		result = stored
+		return nil
+	})
+	if err != nil {
+		return model.AssetAdministrationShellDescriptor{}, err
+	}
+	return result, nil
 }
 
 // UpsertAdministrationShellDescriptorInTransaction replaces an existing AAS
@@ -179,13 +249,27 @@ func (p *PostgreSQLAASRegistryDatabase) UpsertAdministrationShellDescriptorInTra
 		if !common.IsErrNotFound(err) {
 			return err
 		}
-		return descriptors.InsertAdministrationShellDescriptorTx(ctx, tx, aasd)
+		if err := descriptors.InsertAdministrationShellDescriptorTx(ctx, tx, aasd); err != nil {
+			return err
+		}
+		stored, err := descriptors.GetAssetAdministrationShellDescriptorByIDTx(ctx, tx, aasd.Id)
+		if err != nil {
+			return err
+		}
+		return appendDescriptorHistoryTx(ctx, tx, stored, history.ChangeCreated, false)
 	}
 
 	if err = descriptors.DeleteAssetAdministrationShellDescriptorByIDTx(ctx, tx, aasd.Id); err != nil {
 		return err
 	}
-	return descriptors.InsertAdministrationShellDescriptorTx(ctx, tx, aasd)
+	if err = descriptors.InsertAdministrationShellDescriptorTx(ctx, tx, aasd); err != nil {
+		return err
+	}
+	stored, err := descriptors.GetAssetAdministrationShellDescriptorByIDTx(ctx, tx, aasd.Id)
+	if err != nil {
+		return err
+	}
+	return appendDescriptorHistoryTx(ctx, tx, stored, history.ChangeUpdated, false)
 }
 
 // DeleteAssetAdministrationShellDescriptorByIDInTransaction deletes an AAS
@@ -199,7 +283,19 @@ func (p *PostgreSQLAASRegistryDatabase) DeleteAssetAdministrationShellDescriptor
 		return common.NewInternalServerError("AASREG-DELAASDESC-NILTX transaction must not be nil")
 	}
 
-	return descriptors.DeleteAssetAdministrationShellDescriptorByIDTx(ctx, tx, aasIdentifier)
+	existing, err := descriptors.GetAssetAdministrationShellDescriptorByIDTx(ctx, tx, aasIdentifier)
+	if err != nil {
+		return err
+	}
+	if err := descriptors.DeleteAssetAdministrationShellDescriptorByIDTx(ctx, tx, aasIdentifier); err != nil {
+		return err
+	}
+	return appendDescriptorHistoryTx(ctx, tx, existing, history.ChangeDeleted, true)
+}
+
+// GetAssetAdministrationShellDescriptorRecentChanges returns descriptor history rows for recent-change APIs.
+func (p *PostgreSQLAASRegistryDatabase) GetAssetAdministrationShellDescriptorRecentChanges(ctx context.Context, limit int32, cursor string, createdFrom time.Time, updatedFrom time.Time) ([]history.Row, string, error) {
+	return history.RecentRows(ctx, p.db, history.TableDescriptor, limit, cursor, createdFrom, updatedFrom)
 }
 
 // ListAssetAdministrationShellDescriptors lists AAS descriptors with optional
@@ -232,7 +328,22 @@ func (p *PostgreSQLAASRegistryDatabase) InsertSubmodelDescriptorForAAS(
 	aasID string,
 	submodel model.SubmodelDescriptor,
 ) (model.SubmodelDescriptor, error) {
-	return descriptors.InsertSubmodelDescriptorForAAS(ctx, p.db, aasID, submodel)
+	var result model.SubmodelDescriptor
+	err := common.ExecuteInTransaction(p.db, "AASREG-INSERTSMDESCFORAAS-STARTTX", "AASREG-INSERTSMDESCFORAAS-COMMIT", func(tx *sql.Tx) error {
+		stored, err := descriptors.InsertSubmodelDescriptorForAASTx(ctx, tx, aasID, submodel)
+		if err != nil {
+			return err
+		}
+		if err := p.appendAddedSubmodelDescriptorHistoryTx(ctx, tx, aasID, stored); err != nil {
+			return err
+		}
+		result = stored
+		return nil
+	})
+	if err != nil {
+		return model.SubmodelDescriptor{}, err
+	}
+	return result, nil
 }
 
 // ReplaceSubmodelDescriptorForAAS replaces a submodel descriptor for the given
@@ -242,7 +353,25 @@ func (p *PostgreSQLAASRegistryDatabase) ReplaceSubmodelDescriptorForAAS(
 	aasID string,
 	submodel model.SubmodelDescriptor,
 ) (model.SubmodelDescriptor, error) {
-	return descriptors.ReplaceSubmodelDescriptorForAAS(ctx, p.db, aasID, submodel)
+	var result model.SubmodelDescriptor
+	err := common.ExecuteInTransaction(p.db, "AASREG-REPLACESMDESCFORAAS-STARTTX", "AASREG-REPLACESMDESCFORAAS-COMMIT", func(tx *sql.Tx) error {
+		if err := descriptors.DeleteSubmodelDescriptorForAASByIDTx(ctx, tx, aasID, submodel.Id); err != nil {
+			return err
+		}
+		stored, err := descriptors.InsertSubmodelDescriptorForAASTx(ctx, tx, aasID, submodel)
+		if err != nil {
+			return err
+		}
+		if err := p.appendReplacedSubmodelDescriptorHistoryTx(ctx, tx, aasID, stored); err != nil {
+			return err
+		}
+		result = stored
+		return nil
+	})
+	if err != nil {
+		return model.SubmodelDescriptor{}, err
+	}
+	return result, nil
 }
 
 // GetSubmodelDescriptorForAASByID returns the submodel descriptor identified
@@ -262,7 +391,15 @@ func (p *PostgreSQLAASRegistryDatabase) DeleteSubmodelDescriptorForAASByID(
 	aasID string,
 	submodelID string,
 ) error {
-	return descriptors.DeleteSubmodelDescriptorForAASByID(ctx, p.db, aasID, submodelID)
+	return common.ExecuteInTransaction(p.db, "AASREG-DELSMDESCFORAAS-STARTTX", "AASREG-DELSMDESCFORAAS-COMMIT", func(tx *sql.Tx) error {
+		if _, err := descriptors.GetSubmodelDescriptorForAASByID(ctx, tx, aasID, submodelID); err != nil {
+			return err
+		}
+		if err := descriptors.DeleteSubmodelDescriptorForAASByIDTx(ctx, tx, aasID, submodelID); err != nil {
+			return err
+		}
+		return p.appendRemovedSubmodelDescriptorHistoryTx(ctx, tx, aasID, submodelID)
+	})
 }
 
 // ExistsAASByID reports whether an AAS with the given ID exists.

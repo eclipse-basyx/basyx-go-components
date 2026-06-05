@@ -34,7 +34,6 @@ import (
 	"database/sql"
 	"fmt"
 
-	"github.com/FriedJannik/aas-go-sdk/jsonization"
 	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
@@ -163,21 +162,11 @@ func (p PostgreSQLRelationshipElementHandler) Update(submodelID string, idShortO
 //
 // Returns:
 //   - error: An error if the update operation fails
-func (p PostgreSQLRelationshipElementHandler) UpdateValueOnly(submodelID string, idShortOrPath string, valueOnly gen.SubmodelElementValue) error {
+func (p PostgreSQLRelationshipElementHandler) UpdateValueOnly(submodelID string, idShortOrPath string, valueOnly gen.SubmodelElementValue, tx *sql.Tx) error {
 	relElemVal, ok := valueOnly.(gen.RelationshipElementValue)
 	if !ok {
 		return common.NewErrBadRequest("valueOnly is not of type RelationshipElementValue")
 	}
-
-	tx, err := p.db.Begin()
-	if err != nil {
-		return err
-	}
-	defer func() {
-		if err != nil {
-			_ = tx.Rollback()
-		}
-	}()
 
 	dialect := goqu.Dialect("postgres")
 	json := jsoniter.ConfigCompatibleWithStandardLibrary
@@ -233,8 +222,7 @@ func (p PostgreSQLRelationshipElementHandler) UpdateValueOnly(submodelID string,
 	if err != nil {
 		return common.NewInternalServerError(fmt.Sprintf("failed to execute update for RelationshipElement: %s", err.Error()))
 	}
-	err = tx.Commit()
-	return err
+	return nil
 }
 
 // Delete removes a RelationshipElement identified by its idShort or path.
@@ -268,31 +256,16 @@ func (p PostgreSQLRelationshipElementHandler) GetInsertQueryPart(_ *sql.Tx, id i
 		return nil, common.NewErrBadRequest("submodelElement is not of type RelationshipElement")
 	}
 
-	var firstRef, secondRef string
 	var json = jsoniter.ConfigCompatibleWithStandardLibrary
 
-	if !isEmptyReference(relElem.First()) {
-		jsonable, err := jsonization.ToJsonable(relElem.First())
-		if err != nil {
-			return nil, common.NewErrBadRequest("SMREPO-GIQP-RELEL-FIRSTJSON Failed to convert first reference to jsonable: " + err.Error())
-		}
-		ref, err := json.Marshal(jsonable)
-		if err != nil {
-			return nil, err
-		}
-		firstRef = string(ref)
+	firstRef, err := serializeReference(relElem.First(), json)
+	if err != nil {
+		return nil, err
 	}
 
-	if !isEmptyReference(relElem.Second()) {
-		jsonable, err := jsonization.ToJsonable(relElem.Second())
-		if err != nil {
-			return nil, common.NewErrBadRequest("SMREPO-GIQP-RELEL-SECONDJSON Failed to convert second reference to jsonable: " + err.Error())
-		}
-		ref, err := json.Marshal(jsonable)
-		if err != nil {
-			return nil, err
-		}
-		secondRef = string(ref)
+	secondRef, err := serializeReference(relElem.Second(), json)
+	if err != nil {
+		return nil, err
 	}
 
 	return &InsertQueryPart{
@@ -312,17 +285,9 @@ func buildUpdateRelationshipElementRecordObject(isPut bool, relElem types.IRelat
 	// For PUT: always update (even if nil, which clears the field)
 	// For PATCH: only update if provided (not nil)
 	if isPut || relElem.First() != nil {
-		var firstRef string
-		if relElem.First() != nil && !isEmptyReference(relElem.First()) {
-			jsonable, err := jsonization.ToJsonable(relElem.First())
-			if err != nil {
-				return nil, common.NewErrBadRequest("SMREPO-BURERO-FIRSTJSONABLE Failed to convert first reference to jsonable: " + err.Error())
-			}
-			ref, err := json.Marshal(jsonable)
-			if err != nil {
-				return nil, err
-			}
-			firstRef = string(ref)
+		firstRef, err := serializeReference(relElem.First(), json)
+		if err != nil {
+			return nil, err
 		}
 		updateRecord["first"] = firstRef
 	}
@@ -331,17 +296,9 @@ func buildUpdateRelationshipElementRecordObject(isPut bool, relElem types.IRelat
 	// For PUT: always update (even if nil, which clears the field)
 	// For PATCH: only update if provided (not nil)
 	if isPut || relElem.Second() != nil {
-		var secondRef string
-		if relElem.Second() != nil && !isEmptyReference(relElem.Second()) {
-			jsonable, err := jsonization.ToJsonable(relElem.Second())
-			if err != nil {
-				return nil, common.NewErrBadRequest("SMREPO-BURERO-SECONDJSONABLE Failed to convert second reference to jsonable: " + err.Error())
-			}
-			ref, err := json.Marshal(jsonable)
-			if err != nil {
-				return nil, err
-			}
-			secondRef = string(ref)
+		secondRef, err := serializeReference(relElem.Second(), json)
+		if err != nil {
+			return nil, err
 		}
 		updateRecord["second"] = secondRef
 	}

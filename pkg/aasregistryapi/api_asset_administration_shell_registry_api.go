@@ -17,7 +17,9 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"net/url"
 	"strings"
+	"time"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
@@ -75,6 +77,12 @@ func (c *AssetAdministrationShellRegistryAPIAPIController) Routes() Routes {
 			strings.ToUpper("Post"),
 			"/shell-descriptors",
 			c.PostAssetAdministrationShellDescriptor,
+		},
+		"GetAllAssetAdministrationShellDescriptorsRecentChanges": Route{
+			"GetAllAssetAdministrationShellDescriptorsRecentChanges",
+			strings.ToUpper("Get"),
+			"/shell-descriptors/$recent-changes",
+			c.GetAllAssetAdministrationShellDescriptorsRecentChanges,
 		},
 		"GetAssetAdministrationShellDescriptorById": Route{
 			"GetAssetAdministrationShellDescriptorById",
@@ -147,6 +155,12 @@ func (c *AssetAdministrationShellRegistryAPIAPIController) OrderedRoutes() []Rou
 			strings.ToUpper("Post"),
 			"/shell-descriptors",
 			c.PostAssetAdministrationShellDescriptor,
+		},
+		Route{
+			"GetAllAssetAdministrationShellDescriptorsRecentChanges",
+			strings.ToUpper("Get"),
+			"/shell-descriptors/$recent-changes",
+			c.GetAllAssetAdministrationShellDescriptorsRecentChanges,
 		},
 		Route{
 			"GetAssetAdministrationShellDescriptorById",
@@ -245,21 +259,10 @@ func (c *AssetAdministrationShellRegistryAPIAPIController) GetAllAssetAdministra
 	if query.Has("cursor") {
 		cursorParam = query.Get("cursor")
 	}
-	var assetKindParam model.AssetKind
-	if query.Has("assetKind") {
-		assetKindParam = model.AssetKind(query.Get("assetKind"))
-		if err := model.AssertAssetKindConstraints(assetKindParam); err != nil {
-			log.Printf("🧩 [%s] Error in GetAllAssetAdministrationShellDescriptors: invalid assetKind=%q: %v", componentName, string(assetKindParam), err)
-			result := common.NewErrorResponse(
-				err,
-				http.StatusBadRequest,
-				componentName,
-				"GetAllAssetAdministrationShellDescriptors",
-				"InvalidAssetKind",
-			)
-			EncodeJSONResponse(result.Body, &result.Code, w)
-			return
-		}
+	assetKindParam, assetKindErrResponse := parseOptionalAssetKind(query, "GetAllAssetAdministrationShellDescriptors")
+	if assetKindErrResponse != nil {
+		EncodeJSONResponse(assetKindErrResponse.Body, &assetKindErrResponse.Code, w)
+		return
 	}
 	var assetTypeParam string
 	if query.Has("assetType") {
@@ -273,6 +276,97 @@ func (c *AssetAdministrationShellRegistryAPIAPIController) GetAllAssetAdministra
 		return
 	}
 	_ = EncodeJSONResponse(result.Body, &result.Code, w)
+}
+
+// GetAllAssetAdministrationShellDescriptorsRecentChanges - Returns all Asset Administration Shell Descriptors that have been changed recently
+func (c *AssetAdministrationShellRegistryAPIAPIController) GetAllAssetAdministrationShellDescriptorsRecentChanges(w http.ResponseWriter, r *http.Request) {
+	query, err := parseQuery(r.URL.RawQuery)
+	if err != nil {
+		result := common.NewErrorResponse(
+			err,
+			http.StatusBadRequest,
+			componentName,
+			"GetAllAssetAdministrationShellDescriptorsRecentChanges",
+			"query",
+		)
+		EncodeJSONResponse(result.Body, &result.Code, w)
+		return
+	}
+	assetKindParam, assetKindErrResponse := parseOptionalAssetKind(query, "GetAllAssetAdministrationShellDescriptorsRecentChanges")
+	if assetKindErrResponse != nil {
+		EncodeJSONResponse(assetKindErrResponse.Body, &assetKindErrResponse.Code, w)
+		return
+	}
+
+	var createdFromParam time.Time
+	if query.Has("createdFrom") {
+		createdFromParam, err = parseTime(query.Get("createdFrom"))
+		if err != nil {
+			result := common.NewErrorResponse(err, http.StatusBadRequest, componentName, "GetAllAssetAdministrationShellDescriptorsRecentChanges", "createdFrom")
+			EncodeJSONResponse(result.Body, &result.Code, w)
+			return
+		}
+	}
+
+	var updatedFromParam time.Time
+	if query.Has("updatedFrom") {
+		updatedFromParam, err = parseTime(query.Get("updatedFrom"))
+		if err != nil {
+			result := common.NewErrorResponse(err, http.StatusBadRequest, componentName, "GetAllAssetAdministrationShellDescriptorsRecentChanges", "updatedFrom")
+			EncodeJSONResponse(result.Body, &result.Code, w)
+			return
+		}
+	}
+
+	var limitParam int32
+	if query.Has("limit") {
+		param, err := parseNumericParameter[int32](
+			query.Get("limit"),
+			WithParse[int32](parseInt32),
+			WithMinimum[int32](1),
+		)
+		if err != nil {
+			result := common.NewErrorResponse(
+				err,
+				http.StatusBadRequest,
+				componentName,
+				"GetAllAssetAdministrationShellDescriptorsRecentChanges",
+				"limit",
+			)
+			EncodeJSONResponse(result.Body, &result.Code, w)
+			return
+		}
+		limitParam = param
+	}
+
+	result, err := c.service.GetAllAssetAdministrationShellDescriptorsRecentChanges(
+		r.Context(),
+		assetKindParam,
+		query.Get("assetType"),
+		query["assetIds"],
+		createdFromParam,
+		updatedFromParam,
+		limitParam,
+		query.Get("cursor"),
+	)
+	if err != nil {
+		c.errorHandler(w, r, err, &result)
+		return
+	}
+	_ = EncodeJSONResponse(result.Body, &result.Code, w)
+}
+
+func parseOptionalAssetKind(query url.Values, operation string) (model.AssetKind, *model.ImplResponse) {
+	if !query.Has("assetKind") {
+		return "", nil
+	}
+	assetKind := model.AssetKind(query.Get("assetKind"))
+	if err := model.AssertAssetKindConstraints(assetKind); err != nil {
+		log.Printf("🧩 [%s] Error in %s: invalid assetKind=%q: %v", componentName, operation, string(assetKind), err)
+		result := common.NewErrorResponse(err, http.StatusBadRequest, componentName, operation, "InvalidAssetKind")
+		return "", &result
+	}
+	return assetKind, nil
 }
 
 // PostAssetAdministrationShellDescriptor - Creates a new Asset Administration Shell Descriptor, i.e. registers an AAS

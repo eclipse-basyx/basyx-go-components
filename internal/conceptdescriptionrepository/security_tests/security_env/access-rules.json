@@ -42,6 +42,17 @@
         "formula": {
           "$and": [
             { "$eq": [ { "$attribute": { "CLAIM": "role" } }, { "$strVal": "viewer" } ] },
+            { "$not": { "$ge": [ { "$numCast": { "$attribute": { "CLAIM": "clear" } } }, { "$numVal": 1 } ] } },
+            { "$eq": [ { "$field": "$cd#idShort" }, { "$strVal": "ViewerAllowed" } ] }
+          ]
+        }
+      },
+      {
+        "name": "viewer_visible_cd_masked",
+        "formula": {
+          "$and": [
+            { "$eq": [ { "$attribute": { "CLAIM": "role" } }, { "$strVal": "viewer" } ] },
+            { "$ge": [ { "$numCast": { "$attribute": { "CLAIM": "clear" } } }, { "$numVal": 1 } ] },
             { "$eq": [ { "$field": "$cd#idShort" }, { "$strVal": "ViewerAllowed" } ] }
           ]
         }
@@ -69,6 +80,15 @@
       { "USEACL": "read_only_public", "USEOBJECTS": ["description"], "USEFORMULA": "always_true" },
       { "USEACL": "admin_all", "USEOBJECTS": ["all_cd_routes"], "USEFORMULA": "is_admin" },
       { "USEACL": "read_role", "USEOBJECTS": ["all_cd_identifiable"], "USEFORMULA": "viewer_visible_cd" },
+      {
+        "USEACL": "read_role",
+        "USEOBJECTS": ["all_cd_identifiable"],
+        "USEFORMULA": "viewer_visible_cd_masked",
+        "FILTER": {
+          "FRAGMENT": "$cd#idShort",
+          "CONDITION": { "$boolean": false }
+        }
+      },
       { "USEACL": "write_role", "USEOBJECTS": ["all_cd_routes"], "USEFORMULA": "editor_allowed_cd" }
     ]
   }

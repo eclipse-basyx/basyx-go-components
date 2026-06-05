@@ -35,6 +35,7 @@ import (
 	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/asyncbulk"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/history"
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
@@ -996,6 +997,155 @@ func (s *SubmodelRepositoryAPIAPIService) GetSubmodelByID(
 	}
 	deleteSubmodelElementsIfEmpty(jsonSubmodel)
 	return gen.Response(200, jsonSubmodel), nil
+}
+
+// GetAllSubmodelRecentChanges returns changed Submodels.
+func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelRecentChanges(
+	ctx context.Context,
+	semanticID string,
+	createdFrom time.Time,
+	updatedFrom time.Time,
+	limit int32,
+	cursor string,
+) (gen.ImplResponse, error) {
+	const operation = "GetAllSubmodelRecentChanges"
+
+	decodedCursor, decodeErr := common.DecodeString(cursor)
+	if decodeErr != nil {
+		return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "BadCursor"), nil
+	}
+	decodedSemanticID := ""
+	if semanticID != "" {
+		decodedSemanticID, decodeErr = common.DecodeString(semanticID)
+		if decodeErr != nil {
+			return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "BadSemanticID"), nil
+		}
+	}
+
+	fetch := func(pageLimit int32, pageCursor string) ([]history.Row, string, error) {
+		return s.submodelBackend.GetSubmodelRecentChanges(ctx, pageLimit, pageCursor, createdFrom, updatedFrom)
+	}
+	var rows []history.Row
+	var nextCursor string
+	var err error
+	if semanticID == "" {
+		rows, nextCursor, err = fetch(limit, decodedCursor)
+	} else {
+		rows, nextCursor, err = history.FilterRecentRows(limit, decodedCursor, fetch, func(row history.Row) (bool, error) {
+			return matchesSubmodelRecentRowSemanticID(row, decodedSemanticID)
+		})
+	}
+	if err != nil {
+		if common.IsErrBadRequest(err) {
+			return newAPIErrorResponse(err, http.StatusBadRequest, operation, "BadRequest"), nil
+		}
+		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "GetRecentChanges"), nil
+	}
+
+	changes := make([]gen.SubmodelRecentChange, 0, len(rows))
+	for _, row := range rows {
+		if row.Deleted {
+			changes = append(changes, gen.SubmodelRecentChange{
+				RecentChange: gen.RecentChange{
+					Type:      row.ChangeType,
+					CreatedAt: row.CreatedAt,
+					UpdatedAt: row.UpdatedAt,
+				},
+				Id: row.Identifier,
+			})
+			continue
+		}
+
+		submodel, fromJSONErr := jsonization.SubmodelFromJsonable(row.Snapshot)
+		if fromJSONErr != nil {
+			return newAPIErrorResponse(fromJSONErr, http.StatusInternalServerError, operation, "FromJsonable"), nil
+		}
+		semanticID, fromJSONErr := gen.JsonableReference(submodel.SemanticID())
+		if fromJSONErr != nil {
+			return newAPIErrorResponse(fromJSONErr, http.StatusInternalServerError, operation, "SemanticIdToJsonable"), nil
+		}
+		supplementalSemanticIDs, fromJSONErr := gen.JsonableReferences(submodel.SupplementalSemanticIDs())
+		if fromJSONErr != nil {
+			return newAPIErrorResponse(fromJSONErr, http.StatusInternalServerError, operation, "SupplementalSemanticIdsToJsonable"), nil
+		}
+		changes = append(changes, gen.SubmodelRecentChange{
+			RecentChange: gen.RecentChange{
+				Type:      row.ChangeType,
+				CreatedAt: row.CreatedAt,
+				UpdatedAt: row.UpdatedAt,
+			},
+			Id:                      submodel.ID(),
+			SemanticId:              semanticID,
+			SupplementalSemanticIds: supplementalSemanticIDs,
+		})
+	}
+
+	return gen.Response(http.StatusOK, gen.GetAllSubmodelRecentChangesResult{
+		PagingMetadata: gen.PagedResultPagingMetadata{Cursor: common.EncodeString(nextCursor)},
+		Result:         changes,
+	}), nil
+}
+
+func matchesSubmodelRecentRowSemanticID(row history.Row, semanticID string) (bool, error) {
+	if row.Deleted {
+		return false, nil
+	}
+	submodel, err := jsonization.SubmodelFromJsonable(row.Snapshot)
+	if err != nil {
+		return false, err
+	}
+	return matchesSubmodelSemanticID(submodel, semanticID), nil
+}
+
+// GetSubmodelByIdAndDate returns the Submodel version valid at the requested date.
+func (s *SubmodelRepositoryAPIAPIService) GetSubmodelByIdAndDate(
+	ctx context.Context,
+	id string,
+	level string,
+	_ string,
+	date time.Time,
+) (gen.ImplResponse, error) {
+	const operation = "GetSubmodelByIdAndDate"
+
+	decodedSubmodelIdentifier, decodeErr := common.DecodeString(id)
+	if decodeErr != nil {
+		return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "MalformedSubmodelIdentifier"), nil
+	}
+	if !isLevelValid(level) {
+		return newAPIErrorResponse(errors.New("invalid level parameter"), http.StatusBadRequest, operation, "InvalidLevelParameter"), nil
+	}
+
+	sm, err := s.submodelBackend.GetSubmodelByIDAndDate(ctx, decodedSubmodelIdentifier, date)
+	if err != nil {
+		if common.IsErrNotFound(err) || errors.Is(err, sql.ErrNoRows) {
+			return newAPIErrorResponse(err, http.StatusNotFound, operation, "SubmodelNotFound"), nil
+		}
+		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "GetSubmodelByIDAndDate"), nil
+	}
+
+	jsonSubmodel, err := jsonization.ToJsonable(sm)
+	if err != nil {
+		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "ToJsonable"), nil
+	}
+	deleteSubmodelElementsIfEmpty(jsonSubmodel)
+	return gen.Response(http.StatusOK, jsonSubmodel), nil
+}
+
+func matchesSubmodelSemanticID(submodel types.ISubmodel, semanticID string) bool {
+	semanticID = strings.TrimSpace(semanticID)
+	if semanticID == "" {
+		return true
+	}
+	semanticReference := submodel.SemanticID()
+	if semanticReference == nil {
+		return false
+	}
+	for _, key := range semanticReference.Keys() {
+		if key != nil && key.Value() == semanticID {
+			return true
+		}
+	}
+	return false
 }
 
 // GetSignedSubmodelByID retrieves a signed submodel (JWS compact serialization) by its base64-encoded identifier.
@@ -2745,7 +2895,7 @@ func (s *SubmodelRepositoryAPIAPIService) PutFileByPathSubmodelRepo(ctx context.
 		}
 	}
 
-	err = s.submodelBackend.UploadFileAttachment(decodedSubmodelIdentifier, idShortPath, file, fileName)
+	err = s.submodelBackend.UploadFileAttachmentWithHistory(ctx, decodedSubmodelIdentifier, idShortPath, file, fileName)
 	if err != nil {
 		if common.IsErrNotFound(err) || errors.Is(err, sql.ErrNoRows) {
 			return newAPIErrorResponse(err, http.StatusNotFound, operation, "SubmodelElementNotFound"), nil
@@ -2763,7 +2913,6 @@ func (s *SubmodelRepositoryAPIAPIService) PutFileByPathSubmodelRepo(ctx context.
 //
 //nolint:revive
 func (s *SubmodelRepositoryAPIAPIService) DeleteFileByPathSubmodelRepo(ctx context.Context, submodelIdentifier string, idShortPath string) (gen.ImplResponse, error) {
-	_ = ctx
 	const operation = "DeleteFileByPathSubmodelRepo"
 
 	decodedSubmodelIdentifier, decodeErr := common.DecodeString(submodelIdentifier)
@@ -2771,7 +2920,7 @@ func (s *SubmodelRepositoryAPIAPIService) DeleteFileByPathSubmodelRepo(ctx conte
 		return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "MalformedSubmodelIdentifier"), nil
 	}
 
-	err := s.submodelBackend.DeleteFileAttachment(decodedSubmodelIdentifier, idShortPath)
+	err := s.submodelBackend.DeleteFileAttachmentWithHistory(ctx, decodedSubmodelIdentifier, idShortPath)
 	if err != nil {
 		if common.IsErrNotFound(err) || errors.Is(err, sql.ErrNoRows) {
 			return newAPIErrorResponse(err, http.StatusNotFound, operation, "SubmodelElementNotFound"), nil

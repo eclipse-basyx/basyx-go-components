@@ -1,0 +1,9 @@
+{
+  "paging_metadata": {},
+  "result": [
+    {
+      "id": "urn:example:cd:viewer:allowed",
+      "modelType": "ConceptDescription"
+    }
+  ]
+}

@@ -28,6 +28,7 @@ package persistence
 
 import (
 	"context"
+	"crypto/rsa"
 	"database/sql"
 	"encoding/json"
 	"errors"
@@ -43,16 +44,30 @@ import (
 	persistenceutils "github.com/eclipse-basyx/basyx-go-components/internal/aasrepository/persistence/utils"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/descriptors"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/history"
 	commonmodel "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 	"github.com/lib/pq"
+	jose "gopkg.in/go-jose/go-jose.v2"
 )
 
 // AssetAdministrationShellDatabase is the implementation of the AssetAdministrationShellRepositoryDatabase interface using PostgreSQL as the underlying database.
 type AssetAdministrationShellDatabase struct {
 	db               *sql.DB
 	verificationMode commonmodel.VerificationMode
+	privateKey       *rsa.PrivateKey
+}
+
+type aasDBQueryer interface {
+	Query(query string, args ...any) (*sql.Rows, error)
+	QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error)
+	QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row
+}
+
+// SetJWSPrivateKey configures the key used by signed AAS responses.
+func (s *AssetAdministrationShellDatabase) SetJWSPrivateKey(privateKey *rsa.PrivateKey) {
+	s.privateKey = privateKey
 }
 
 // ExecuteInTransaction runs fn in a database transaction bound to this backend.
@@ -137,6 +152,84 @@ func (s *AssetAdministrationShellDatabase) verifyReference(reference types.IRefe
 			return common.NewErrBadRequest(errorPrefix + " " + message)
 		},
 	)
+}
+
+func aasToHistorySnapshot(aas types.IAssetAdministrationShell) (map[string]any, error) {
+	jsonable, err := jsonization.ToJsonable(aas)
+	if err != nil {
+		return nil, common.NewInternalServerError("AASREPO-HISTORY-TOJSONABLE " + err.Error())
+	}
+	return jsonable, nil
+}
+
+func (s *AssetAdministrationShellDatabase) appendAASHistoryTx(ctx context.Context, tx *sql.Tx, aas types.IAssetAdministrationShell, changeType string, deleted bool) error {
+	snapshot, err := aasToHistorySnapshot(aas)
+	if err != nil {
+		return err
+	}
+	return history.AppendVersionTx(ctx, tx, history.TableAAS, aas.ID(), changeType, snapshot, deleted)
+}
+
+func (s *AssetAdministrationShellDatabase) appendCurrentAASHistoryTx(ctx context.Context, tx *sql.Tx, aasIdentifier string, changeType string) error {
+	aasDBID, err := persistenceutils.GetAssetAdministrationShellDatabaseID(tx, aasIdentifier)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return common.NewErrNotFound("AASREPO-HISTORY-AASNOTFOUND Asset Administration Shell with ID '" + aasIdentifier + "' not found")
+		}
+		return common.NewInternalServerError("AASREPO-HISTORY-GETAASDBID " + err.Error())
+	}
+
+	aas, err := s.getAssetAdministrationShellMapByDBIDInTransaction(ctx, tx, aasDBID)
+	if err != nil {
+		return err
+	}
+	return s.appendAASHistoryTx(ctx, tx, aas, changeType, false)
+}
+
+// GetSignedAssetAdministrationShell returns a compact JWS for the requested AAS.
+func (s *AssetAdministrationShellDatabase) GetSignedAssetAdministrationShell(ctx context.Context, aasID string) (string, error) {
+	if s.privateKey == nil {
+		return "", errors.New("JWS signing not configured: private key not loaded")
+	}
+	aas, err := s.GetAssetAdministrationShellByID(ctx, aasID)
+	if err != nil {
+		return "", err
+	}
+	jsonAAS, err := jsonization.ToJsonable(aas)
+	if err != nil {
+		return "", err
+	}
+	payload, err := json.Marshal(jsonAAS)
+	if err != nil {
+		return "", err
+	}
+	signer, err := jose.NewSigner(jose.SigningKey{Algorithm: jose.RS256, Key: s.privateKey}, nil)
+	if err != nil {
+		return "", err
+	}
+	jws, err := signer.Sign(payload)
+	if err != nil {
+		return "", err
+	}
+	return jws.CompactSerialize()
+}
+
+// GetAssetAdministrationShellByIDAndDate returns the AAS version valid at the requested instant.
+func (s *AssetAdministrationShellDatabase) GetAssetAdministrationShellByIDAndDate(ctx context.Context, aasIdentifier string, at time.Time) (types.IAssetAdministrationShell, error) {
+	snapshot, err := history.SnapshotByDate(ctx, s.db, history.TableAAS, aasIdentifier, at)
+	if err != nil {
+		return nil, err
+	}
+	aas, err := jsonization.AssetAdministrationShellFromJsonable(snapshot)
+	if err != nil {
+		return nil, common.NewInternalServerError("AASREPO-HISTORY-FROMJSON " + err.Error())
+	}
+	return aas, nil
+}
+
+// GetAssetAdministrationShellRecentChanges returns AAS history rows for recent-change APIs.
+func (s *AssetAdministrationShellDatabase) GetAssetAdministrationShellRecentChanges(ctx context.Context, limit int32, cursor string, createdFrom time.Time, updatedFrom time.Time) ([]history.Row, string, error) {
+	return history.RecentRows(ctx, s.db, history.TableAAS, limit, cursor, createdFrom, updatedFrom)
 }
 
 func buildAASCollector() (*grammar.ResolvedFieldPathCollector, error) {
@@ -284,7 +377,7 @@ func (s *AssetAdministrationShellDatabase) CreateAssetAdministrationShellInTrans
 		}
 	}
 
-	return nil
+	return s.appendAASHistoryTx(ctx, tx, aas, history.ChangeCreated, false)
 }
 
 // createAssetAdministrationShellInTransaction creates an AAS and all dependent records within an existing transaction.
@@ -468,7 +561,7 @@ func (s *AssetAdministrationShellDatabase) createSubmodelReferenceInAssetAdminis
 			return common.NewErrDenied("AASREPO-NEWSMREFINAAS-ABACDENIED written AAS is not accessible under ABAC constraints")
 		}
 	}
-	return nil
+	return s.appendAddedSubmodelReferenceHistoryTx(ctx, tx, aasIdentifier, submodelRef)
 }
 
 func (s *AssetAdministrationShellDatabase) getNextSubmodelReferencePositionInTransaction(tx *sql.Tx, aasDBID int64) (int, error) {
@@ -844,6 +937,14 @@ func (s *AssetAdministrationShellDatabase) putAssetAdministrationShellByIDInTran
 		}
 	}
 
+	changeType := history.ChangeCreated
+	if isUpdate {
+		changeType = history.ChangeUpdated
+	}
+	if err := s.appendAASHistoryTx(ctx, tx, aas, changeType, false); err != nil {
+		return false, err
+	}
+
 	return isUpdate, nil
 }
 
@@ -902,7 +1003,7 @@ func (s *AssetAdministrationShellDatabase) DeleteAssetAdministrationShellByIDInT
 		return common.NewErrNotFound("AASREPO-DELAAS-AASNOTFOUND Asset Administration Shell with ID '" + aasIdentifier + "' not found")
 	}
 
-	return nil
+	return history.AppendVersionTx(ctx, tx, history.TableAAS, aasIdentifier, history.ChangeDeleted, map[string]any{"id": aasIdentifier}, true)
 }
 
 // GetAssetAdministrationShellReferences returns paginated model references while preserving ABAC filters from ctx.
@@ -1024,7 +1125,11 @@ func (s *AssetAdministrationShellDatabase) PutAssetInformationByAASIDInTransacti
 		return err
 	}
 
-	return s.ensureAASVisibleAfterAssetInformationUpdate(ctx, tx, aasIdentifier, shouldEnforce)
+	if err := s.ensureAASVisibleAfterAssetInformationUpdate(ctx, tx, aasIdentifier, shouldEnforce); err != nil {
+		return err
+	}
+
+	return s.appendAssetInformationHistoryTx(ctx, tx, aasIdentifier, assetInformation)
 }
 
 type currentAssetInformationState struct {
@@ -1266,6 +1371,10 @@ func (s *AssetAdministrationShellDatabase) PutThumbnailByAASID(ctx context.Conte
 		return uploadErr
 	}
 
+	if err = s.appendUploadedThumbnailHistoryTx(ctx, tx, aasIdentifier); err != nil {
+		return err
+	}
+
 	err = tx.Commit()
 	if err != nil {
 		return common.NewInternalServerError("AASREPO-PUTTHUMBNAIL-COMMIT " + err.Error())
@@ -1306,6 +1415,10 @@ func (s *AssetAdministrationShellDatabase) DeleteThumbnailByAASID(ctx context.Co
 
 	if deleteErr := thumbnailHandler.deleteThumbnailByAASIDInTransaction(tx, aasIdentifier); deleteErr != nil {
 		return deleteErr
+	}
+
+	if err = s.appendDeletedThumbnailHistoryTx(ctx, tx, aasIdentifier); err != nil {
+		return err
 	}
 
 	err = tx.Commit()
@@ -1559,7 +1672,11 @@ func (s *AssetAdministrationShellDatabase) deleteSubmodelReferenceInAssetAdminis
 		}
 	}
 
-	return s.deleteSubmodelReferenceInAssetAdministrationShellInTransaction(tx, aasIdentifier, submodelIdentifier)
+	if err := s.deleteSubmodelReferenceInAssetAdministrationShellInTransaction(tx, aasIdentifier, submodelIdentifier); err != nil {
+		return err
+	}
+
+	return s.appendRemovedSubmodelReferenceHistoryTx(ctx, tx, aasIdentifier, submodelIdentifier)
 }
 
 // deleteSubmodelReferenceInAssetAdministrationShellInTransaction removes a submodel reference within an existing transaction.
@@ -1618,6 +1735,17 @@ type coreAssetAdministrationShellRow struct {
 // nolint:revive // cyclomatic complexity of 32
 // getAssetAdministrationShellMapByDBID loads an AAS and maps it to a typed model.
 func (s *AssetAdministrationShellDatabase) getAssetAdministrationShellMapByDBID(ctx context.Context, aasDBID int64) (types.IAssetAdministrationShell, error) {
+	return s.getAssetAdministrationShellMapByDBIDWithQueryer(ctx, s.db, aasDBID)
+}
+
+func (s *AssetAdministrationShellDatabase) getAssetAdministrationShellMapByDBIDInTransaction(ctx context.Context, tx *sql.Tx, aasDBID int64) (types.IAssetAdministrationShell, error) {
+	if tx == nil {
+		return nil, common.NewInternalServerError("AASREPO-MAPAAS-NILTX transaction must not be nil")
+	}
+	return s.getAssetAdministrationShellMapByDBIDWithQueryer(ctx, tx, aasDBID)
+}
+
+func (s *AssetAdministrationShellDatabase) getAssetAdministrationShellMapByDBIDWithQueryer(ctx context.Context, db aasDBQueryer, aasDBID int64) (types.IAssetAdministrationShell, error) {
 	dialect := goqu.Dialect("postgres")
 	collector, collectorErr := buildAASCollector()
 	if collectorErr != nil {
@@ -1635,7 +1763,7 @@ func (s *AssetAdministrationShellDatabase) getAssetAdministrationShellMapByDBID(
 
 	var row coreAssetAdministrationShellRow
 
-	if queryErr := s.db.QueryRow(querySQL, queryArgs...).Scan(
+	if queryErr := db.QueryRowContext(ctx, querySQL, queryArgs...).Scan(
 		&row.aasID,
 		&row.idShort,
 		&row.category,
@@ -1657,12 +1785,12 @@ func (s *AssetAdministrationShellDatabase) getAssetAdministrationShellMapByDBID(
 		return nil, common.NewInternalServerError("AASREPO-MAPAAS-EXECSQL " + queryErr.Error())
 	}
 
-	specificAssetIDs, specificErr := s.readSpecificAssetIDsByAssetInformationID(ctx, aasDBID)
+	specificAssetIDs, specificErr := s.readSpecificAssetIDsByAssetInformationID(ctx, db, aasDBID)
 	if specificErr != nil {
 		return nil, common.NewInternalServerError("AASREPO-MAPAAS-READSPECIFICASSETIDS " + specificErr.Error())
 	}
 
-	submodelsByAASID, submodelErr := s.readSubmodelReferencePayloadsByAASDBIDs(ctx, []int64{aasDBID})
+	submodelsByAASID, submodelErr := s.readSubmodelReferencePayloadsByAASDBIDs(ctx, db, []int64{aasDBID})
 	if submodelErr != nil {
 		return nil, submodelErr
 	}
@@ -1728,12 +1856,12 @@ func (s *AssetAdministrationShellDatabase) getAssetAdministrationShellMapsByDBID
 		return nil, common.NewInternalServerError("AASREPO-MAPAASBATCH-ITERROWS " + rowsErr.Error())
 	}
 
-	submodelsByAASID, submodelErr := s.readSubmodelReferencePayloadsByAASDBIDs(ctx, aasDBIDs)
+	submodelsByAASID, submodelErr := s.readSubmodelReferencePayloadsByAASDBIDs(ctx, s.db, aasDBIDs)
 	if submodelErr != nil {
 		return nil, submodelErr
 	}
 
-	specificAssetIDsByAASID, specificErr := s.readSpecificAssetIDsByAssetInformationIDs(ctx, aasDBIDs)
+	specificAssetIDsByAASID, specificErr := s.readSpecificAssetIDsByAssetInformationIDs(ctx, s.db, aasDBIDs)
 	if specificErr != nil {
 		return nil, common.NewInternalServerError("AASREPO-MAPAASBATCH-READSPECIFICASSETIDS " + specificErr.Error())
 	}
@@ -1760,7 +1888,7 @@ func (s *AssetAdministrationShellDatabase) getAssetAdministrationShellMapsByDBID
 	return result, nil
 }
 
-func (s *AssetAdministrationShellDatabase) readSubmodelReferencePayloadsByAASDBIDs(ctx context.Context, aasDBIDs []int64) (map[int64][]types.IReference, error) {
+func (s *AssetAdministrationShellDatabase) readSubmodelReferencePayloadsByAASDBIDs(ctx context.Context, db aasDBQueryer, aasDBIDs []int64) (map[int64][]types.IReference, error) {
 	out := make(map[int64][]types.IReference, len(aasDBIDs))
 	if len(aasDBIDs) == 0 {
 		return out, nil
@@ -1786,7 +1914,7 @@ func (s *AssetAdministrationShellDatabase) readSubmodelReferencePayloadsByAASDBI
 		return nil, common.NewInternalServerError("AASREPO-READSMREFBATCH-BUILDSQL " + submodelBuildErr.Error())
 	}
 
-	rows, submodelQueryErr := s.db.QueryContext(ctx, submodelSQL, submodelArgs...)
+	rows, submodelQueryErr := db.QueryContext(ctx, submodelSQL, submodelArgs...)
 	if submodelQueryErr != nil {
 		return nil, common.NewInternalServerError("AASREPO-READSMREFBATCH-EXECSQL " + submodelQueryErr.Error())
 	}
@@ -2104,7 +2232,7 @@ func parseSpecificAssetIDSemanticIDPayload(payload []byte) (types.IReference, bo
 }
 
 // readSpecificAssetIDsByAssetInformationID reads and enriches specificAssetIds for an assetInformation record.
-func (s *AssetAdministrationShellDatabase) readSpecificAssetIDsByAssetInformationID(ctx context.Context, assetInformationID int64) ([]types.ISpecificAssetID, error) {
+func (s *AssetAdministrationShellDatabase) readSpecificAssetIDsByAssetInformationID(ctx context.Context, db aasDBQueryer, assetInformationID int64) ([]types.ISpecificAssetID, error) {
 	dialect := goqu.Dialect("postgres")
 	queryDS := buildReadSpecificAssetIDsByAssetInformationIDDataset(&dialect, assetInformationID)
 	collector, collectorErr := buildAASCollector()
@@ -2121,7 +2249,7 @@ func (s *AssetAdministrationShellDatabase) readSpecificAssetIDsByAssetInformatio
 		return nil, common.NewInternalServerError("AASREPO-READSPECIFIC-BUILDSQL " + buildErr.Error())
 	}
 
-	rows, queryErr := s.db.QueryContext(ctx, querySQL, queryArgs...)
+	rows, queryErr := db.QueryContext(ctx, querySQL, queryArgs...)
 	if queryErr != nil {
 		return nil, common.NewInternalServerError("AASREPO-READSPECIFIC-EXECSQL " + queryErr.Error())
 	}
@@ -2154,12 +2282,12 @@ func (s *AssetAdministrationShellDatabase) readSpecificAssetIDsByAssetInformatio
 		return []types.ISpecificAssetID{}, nil
 	}
 
-	externalSubjectByID, extErr := descriptors.ReadSpecificAssetExternalSubjectReferencesBySpecificAssetIDs(ctx, s.db, ids)
+	externalSubjectByID, extErr := descriptors.ReadSpecificAssetExternalSubjectReferencesBySpecificAssetIDs(ctx, db, ids)
 	if extErr != nil {
 		return nil, extErr
 	}
 
-	supplementalByID, suppErr := descriptors.ReadSpecificAssetSupplementalSemanticReferencesBySpecificAssetIDs(ctx, s.db, ids)
+	supplementalByID, suppErr := descriptors.ReadSpecificAssetSupplementalSemanticReferencesBySpecificAssetIDs(ctx, db, ids)
 	if suppErr != nil {
 		return nil, suppErr
 	}
@@ -2185,7 +2313,7 @@ func (s *AssetAdministrationShellDatabase) readSpecificAssetIDsByAssetInformatio
 }
 
 // readSpecificAssetIDsByAssetInformationIDs reads and enriches specificAssetIds in batch for multiple assetInformation records.
-func (s *AssetAdministrationShellDatabase) readSpecificAssetIDsByAssetInformationIDs(ctx context.Context, assetInformationIDs []int64) (map[int64][]types.ISpecificAssetID, error) {
+func (s *AssetAdministrationShellDatabase) readSpecificAssetIDsByAssetInformationIDs(ctx context.Context, db aasDBQueryer, assetInformationIDs []int64) (map[int64][]types.ISpecificAssetID, error) {
 	out := make(map[int64][]types.ISpecificAssetID, len(assetInformationIDs))
 	if len(assetInformationIDs) == 0 {
 		return out, nil
@@ -2207,7 +2335,7 @@ func (s *AssetAdministrationShellDatabase) readSpecificAssetIDsByAssetInformatio
 		return nil, common.NewInternalServerError("AASREPO-READSPECIFICBATCH-BUILDSQL " + buildErr.Error())
 	}
 
-	rows, queryErr := s.db.QueryContext(ctx, querySQL, queryArgs...)
+	rows, queryErr := db.QueryContext(ctx, querySQL, queryArgs...)
 	if queryErr != nil {
 		return nil, common.NewInternalServerError("AASREPO-READSPECIFICBATCH-EXECSQL " + queryErr.Error())
 	}
@@ -2241,12 +2369,12 @@ func (s *AssetAdministrationShellDatabase) readSpecificAssetIDsByAssetInformatio
 		return out, nil
 	}
 
-	externalSubjectByID, extErr := descriptors.ReadSpecificAssetExternalSubjectReferencesBySpecificAssetIDs(ctx, s.db, ids)
+	externalSubjectByID, extErr := descriptors.ReadSpecificAssetExternalSubjectReferencesBySpecificAssetIDs(ctx, db, ids)
 	if extErr != nil {
 		return nil, extErr
 	}
 
-	supplementalByID, suppErr := descriptors.ReadSpecificAssetSupplementalSemanticReferencesBySpecificAssetIDs(ctx, s.db, ids)
+	supplementalByID, suppErr := descriptors.ReadSpecificAssetSupplementalSemanticReferencesBySpecificAssetIDs(ctx, db, ids)
 	if suppErr != nil {
 		return nil, suppErr
 	}

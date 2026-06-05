@@ -50,6 +50,7 @@ func TestDeleteSubmodelSuccessCleansLargeObjectsAndDeletesSubmodel(t *testing.T)
 	mock.ExpectBegin()
 	mock.ExpectQuery(`SELECT .*FROM .*submodel`).
 		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(submodelDatabaseID))
+	expectSubmodelHistoryAppend(mock)
 	mock.ExpectQuery(`SELECT .*file_oid.*FROM .*submodel_element.*file_data`).
 		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(int64(1)))
 	mock.ExpectExec(`DELETE FROM .*submodel`).
@@ -95,6 +96,7 @@ func TestDeleteSubmodelDeleteFailsRollsBack(t *testing.T) {
 	mock.ExpectBegin()
 	mock.ExpectQuery(`SELECT .*FROM .*submodel`).
 		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(submodelDatabaseID))
+	expectSubmodelHistoryAppend(mock)
 	mock.ExpectQuery(`SELECT .*file_oid.*FROM .*submodel_element.*file_data`).
 		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(int64(0)))
 	mock.ExpectExec(`DELETE FROM .*submodel`).
@@ -122,6 +124,7 @@ func TestDeleteSubmodelCommitFailsReturnsInternalError(t *testing.T) {
 	mock.ExpectBegin()
 	mock.ExpectQuery(`SELECT .*FROM .*submodel`).
 		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(submodelDatabaseID))
+	expectSubmodelHistoryAppend(mock)
 	mock.ExpectQuery(`SELECT .*file_oid.*FROM .*submodel_element.*file_data`).
 		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(int64(0)))
 	mock.ExpectExec(`DELETE FROM .*submodel`).
@@ -149,6 +152,7 @@ func TestDeleteSubmodelOrphanCleanupFailsRollsBack(t *testing.T) {
 	mock.ExpectBegin()
 	mock.ExpectQuery(`SELECT .*FROM .*submodel`).
 		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(submodelDatabaseID))
+	expectSubmodelHistoryAppend(mock)
 	mock.ExpectQuery(`SELECT .*file_oid.*FROM .*submodel_element.*file_data`).
 		WillReturnError(errors.New("unlink failed"))
 	mock.ExpectRollback()

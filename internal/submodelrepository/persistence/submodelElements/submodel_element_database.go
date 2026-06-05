@@ -37,6 +37,7 @@ import (
 	"database/sql"
 	"errors"
 	"strconv"
+	"strings"
 
 	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/doug-martin/goqu/v9"
@@ -109,7 +110,7 @@ func GetSMEHandlerByModelType(modelType types.ModelType, db *sql.DB) (PostgreSQL
 //
 // Returns:
 //   - error: Error if update fails
-func UpdateNestedElementsValueOnly(db *sql.DB, elems []ValueOnlyElementsToProcess, idShortOrPath string, submodelID string) error {
+func UpdateNestedElementsValueOnly(db *sql.DB, elems []ValueOnlyElementsToProcess, idShortOrPath string, submodelID string, tx *sql.Tx) error {
 	for _, elem := range elems {
 		if elem.IdShortPath == idShortOrPath {
 			continue // Skip the root element as it's already processed
@@ -117,7 +118,7 @@ func UpdateNestedElementsValueOnly(db *sql.DB, elems []ValueOnlyElementsToProces
 		modelType := elem.Element.GetModelType()
 		if modelType == types.ModelTypeFile {
 			// We have to check the database because File could be ambiguous between File and Blob
-			actual, err := GetModelTypeByIdShortPathAndSubmodelID(db, submodelID, elem.IdShortPath)
+			actual, err := GetModelTypeByIdShortPathAndSubmodelIDTx(tx, submodelID, elem.IdShortPath)
 			if err != nil {
 				return err
 			}
@@ -131,7 +132,7 @@ func UpdateNestedElementsValueOnly(db *sql.DB, elems []ValueOnlyElementsToProces
 		if err != nil {
 			return err
 		}
-		err = handler.UpdateValueOnly(submodelID, elem.IdShortPath, elem.Element)
+		err = handler.UpdateValueOnly(submodelID, elem.IdShortPath, elem.Element, tx)
 		if err != nil {
 			return err
 		}
@@ -207,6 +208,19 @@ func UpdateNestedElements(db *sql.DB, elems []SubmodelElementToProcess, idShortO
 // - string: Model type of the submodel element
 // - error: Error if retrieval fails or element is not found
 func GetModelTypeByIdShortPathAndSubmodelID(db *sql.DB, submodelID string, idShortOrPath string) (*types.ModelType, error) {
+	return getModelTypeByIdShortPathAndSubmodelID(db, submodelID, idShortOrPath)
+}
+
+// GetModelTypeByIdShortPathAndSubmodelIDTx retrieves the model type within an existing transaction.
+func GetModelTypeByIdShortPathAndSubmodelIDTx(tx *sql.Tx, submodelID string, idShortOrPath string) (*types.ModelType, error) {
+	return getModelTypeByIdShortPathAndSubmodelID(tx, submodelID, idShortOrPath)
+}
+
+type queryRower interface {
+	QueryRow(query string, args ...any) *sql.Row
+}
+
+func getModelTypeByIdShortPathAndSubmodelID(queryer queryRower, submodelID string, idShortOrPath string) (*types.ModelType, error) {
 	dialect := goqu.Dialect("postgres")
 	resolveQuery, resolveArgs, err := dialect.From("submodel").
 		Select("id").
@@ -217,7 +231,7 @@ func GetModelTypeByIdShortPathAndSubmodelID(db *sql.DB, submodelID string, idSho
 	}
 
 	var submodelDatabaseID int
-	err = db.QueryRow(resolveQuery, resolveArgs...).Scan(&submodelDatabaseID)
+	err = queryer.QueryRow(resolveQuery, resolveArgs...).Scan(&submodelDatabaseID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, common.NewErrNotFound("SMREPO-GETMODELTYPE-SMNOTFOUND Submodel with ID '" + submodelID + "' not found")
@@ -237,7 +251,7 @@ func GetModelTypeByIdShortPathAndSubmodelID(db *sql.DB, submodelID string, idSho
 	}
 
 	var modelType types.ModelType
-	err = db.QueryRow(query, args...).Scan(&modelType)
+	err = queryer.QueryRow(query, args...).Scan(&modelType)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, common.NewErrNotFound("SMREPO-GETMODELTYPE-NOTFOUND Submodel-Element ID-Short: " + idShortOrPath)
@@ -285,101 +299,217 @@ func DeleteSubmodelElementByPath(tx *sql.Tx, submodelID string, idShortOrPath st
 		return common.NewInternalServerError("SMREPO-DELSMEBPATH-GETSMDATABASEID Failed to resolve Submodel database ID: " + err.Error())
 	}
 
+	affectedRows, err := deleteSubmodelElementTree(tx, submodelDatabaseID, idShortOrPath)
+	if err != nil {
+		return err
+	}
+	if affectedRows == 0 {
+		return common.NewErrNotFound("SMREPO-DELSMEBPATH-NOTFOUND Submodel-Element ID-Short: " + idShortOrPath)
+	}
+
+	if !isListElementPath(idShortOrPath) {
+		return nil
+	}
+
+	parentPath, deletedIndex, err := splitListElementPath(idShortOrPath)
+	if err != nil {
+		return err
+	}
+	return compactListAfterDelete(tx, submodelDatabaseID, parentPath, deletedIndex)
+}
+
+func deleteSubmodelElementTree(tx *sql.Tx, submodelDatabaseID int, idShortOrPath string) (int64, error) {
+	escapedPath := escapeSQLLikePattern(idShortOrPath)
 	del := goqu.Delete("submodel_element").Where(
 		goqu.And(
 			goqu.I("submodel_id").Eq(submodelDatabaseID),
 			goqu.Or(
 				goqu.I("idshort_path").Eq(idShortOrPath),
-				goqu.I("idshort_path").Like(idShortOrPath+".%"),
-				goqu.I("idshort_path").Like(idShortOrPath+"[%"),
+				idShortPathLikeEscaped(goqu.I("idshort_path"), escapedPath+".%"),
+				idShortPathLikeEscaped(goqu.I("idshort_path"), escapedPath+"[%"),
 			),
 		),
 	)
 	sqlQuery, args, err := del.ToSQL()
 	if err != nil {
-		return common.NewInternalServerError("SMREPO-DELSMEBPATH-TOSQL Failed to build delete query: " + err.Error())
+		return 0, common.NewInternalServerError("SMREPO-DELSMEBPATH-TOSQL Failed to build delete query: " + err.Error())
 	}
 	result, err := tx.Exec(sqlQuery, args...)
 	if err != nil {
-		return common.NewInternalServerError("SMREPO-DELSMEBPATH-EXEC Failed to execute delete query: " + err.Error())
+		return 0, common.NewInternalServerError("SMREPO-DELSMEBPATH-EXEC Failed to execute delete query: " + err.Error())
 	}
 	affectedRows, err := result.RowsAffected()
 	if err != nil {
-		return common.NewInternalServerError("SMREPO-DELSMEBPATH-ROWSAFFECTED Failed to get affected rows: " + err.Error())
+		return 0, common.NewInternalServerError("SMREPO-DELSMEBPATH-ROWSAFFECTED Failed to get affected rows: " + err.Error())
 	}
-	// if idShortPath ends with ] it is part of a SubmodelElementList and we need to update the indices of the remaining elements
-	if idShortOrPath[len(idShortOrPath)-1] == ']' {
-		// extract the parent path and the index of the deleted element
-		var parentPath string
-		var deletedIndex int
-		for i := len(idShortOrPath) - 1; i >= 0; i-- {
-			if idShortOrPath[i] == '[' {
-				parentPath = idShortOrPath[:i]
-				indexStr := idShortOrPath[i+1 : len(idShortOrPath)-1]
-				var err error
-				deletedIndex, err = strconv.Atoi(indexStr)
-				if err != nil {
-					return common.NewInternalServerError("SMREPO-DELSMEBPATH-PARSEINDEX Failed to parse index: " + err.Error())
-				}
-				break
-			}
-		}
+	return affectedRows, nil
+}
 
-		// get the id of the parent SubmodelElementList
-		dialect := goqu.Dialect("postgres")
-		selectQuery, selectArgs, err := dialect.From("submodel_element").
-			Select("id").
-			Where(goqu.And(
-				goqu.C("submodel_id").Eq(submodelDatabaseID),
-				goqu.C("idshort_path").Eq(parentPath),
-			)).
-			ToSQL()
-		if err != nil {
-			return common.NewInternalServerError("SMREPO-DELSMEBPATH-SELECTPARENT-TOSQL Failed to build select query: " + err.Error())
-		}
+func isListElementPath(idShortPath string) bool {
+	return strings.HasSuffix(idShortPath, "]")
+}
 
-		var parentID int
-		err = tx.QueryRow(selectQuery, selectArgs...).Scan(&parentID)
-		if err != nil {
-			if errors.Is(err, sql.ErrNoRows) {
-				return common.NewErrNotFound("SMREPO-DELSMEBPATH-SELECTPARENT-NOTFOUND Parent ID-Short: " + parentPath)
-			}
-			return common.NewInternalServerError("SMREPO-DELSMEBPATH-SELECTPARENT-EXEC Failed to execute select query: " + err.Error())
-		}
+func splitListElementPath(idShortPath string) (string, int, error) {
+	indexStart := strings.LastIndex(idShortPath, "[")
+	if indexStart < 0 {
+		return "", 0, common.NewInternalServerError("SMREPO-DELSMEBPATH-PARSEINDEX Missing list index in path: " + idShortPath)
+	}
 
-		// update the indices of the remaining elements in the SubmodelElementList
-		updateQuery, updateArgs, err := dialect.Update("submodel_element").
-			Set(goqu.Record{"position": goqu.L("position - 1")}).
-			Where(goqu.And(
-				goqu.C("parent_sme_id").Eq(parentID),
-				goqu.C("position").Gt(deletedIndex),
-			)).
-			ToSQL()
-		if err != nil {
-			return common.NewInternalServerError("SMREPO-DELSMEBPATH-UPDATEINDICES-TOSQL Failed to build update query: " + err.Error())
-		}
-		_, err = tx.Exec(updateQuery, updateArgs...)
-		if err != nil {
-			return common.NewInternalServerError("SMREPO-DELSMEBPATH-UPDATEINDICES-EXEC Failed to execute update query: " + err.Error())
-		}
-		// update their idshort_path as well
-		updatePathQuery, updatePathArgs, err := dialect.Update("submodel_element").
-			Set(goqu.Record{"idshort_path": goqu.L("regexp_replace(idshort_path, '\\[' || (position + 1) || '\\]', '[' || position || ']')")}).
-			Where(goqu.And(
-				goqu.C("parent_sme_id").Eq(parentID),
-				goqu.C("position").Gte(deletedIndex),
-			)).
-			ToSQL()
-		if err != nil {
-			return common.NewInternalServerError("SMREPO-DELSMEBPATH-UPDATEPATH-TOSQL Failed to build update path query: " + err.Error())
-		}
-		_, err = tx.Exec(updatePathQuery, updatePathArgs...)
-		if err != nil {
-			return common.NewInternalServerError("SMREPO-DELSMEBPATH-UPDATEPATH-EXEC Failed to execute update path query: " + err.Error())
+	deletedIndex, err := strconv.Atoi(idShortPath[indexStart+1 : len(idShortPath)-1])
+	if err != nil {
+		return "", 0, common.NewInternalServerError("SMREPO-DELSMEBPATH-PARSEINDEX Failed to parse index: " + err.Error())
+	}
+	return idShortPath[:indexStart], deletedIndex, nil
+}
+
+type listChildToCompact struct {
+	id          int
+	oldPath     string
+	oldPosition int
+}
+
+func compactListAfterDelete(tx *sql.Tx, submodelDatabaseID int, parentPath string, deletedIndex int) error {
+	parentID, err := getListParentID(tx, submodelDatabaseID, parentPath)
+	if err != nil {
+		return err
+	}
+
+	children, err := getListChildrenAfterDeletedIndex(tx, submodelDatabaseID, parentID, deletedIndex)
+	if err != nil {
+		return err
+	}
+
+	for _, child := range children {
+		if err = moveListChildOneSlotLeft(tx, submodelDatabaseID, parentPath, child); err != nil {
+			return err
 		}
 	}
-	if affectedRows == 0 {
-		return common.NewErrNotFound("SMREPO-DELSMEBPATH-NOTFOUND Submodel-Element ID-Short: " + idShortOrPath)
+	return nil
+}
+
+func getListParentID(tx *sql.Tx, submodelDatabaseID int, parentPath string) (int, error) {
+	dialect := goqu.Dialect("postgres")
+	selectQuery, selectArgs, err := dialect.From("submodel_element").
+		Select("id").
+		Where(
+			goqu.C("submodel_id").Eq(submodelDatabaseID),
+			goqu.C("idshort_path").Eq(parentPath),
+		).
+		ToSQL()
+	if err != nil {
+		return 0, common.NewInternalServerError("SMREPO-DELSMEBPATH-SELECTPARENT-TOSQL Failed to build select query: " + err.Error())
+	}
+
+	var parentID int
+	err = tx.QueryRow(selectQuery, selectArgs...).Scan(&parentID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return 0, common.NewErrNotFound("SMREPO-DELSMEBPATH-SELECTPARENT-NOTFOUND Parent ID-Short: " + parentPath)
+		}
+		return 0, common.NewInternalServerError("SMREPO-DELSMEBPATH-SELECTPARENT-EXEC Failed to execute select query: " + err.Error())
+	}
+	return parentID, nil
+}
+
+func getListChildrenAfterDeletedIndex(tx *sql.Tx, submodelDatabaseID int, parentID int, deletedIndex int) ([]listChildToCompact, error) {
+	dialect := goqu.Dialect("postgres")
+	query, args, err := dialect.From("submodel_element").
+		Select("id", "idshort_path", "position").
+		Where(
+			goqu.C("submodel_id").Eq(submodelDatabaseID),
+			goqu.C("parent_sme_id").Eq(parentID),
+			goqu.C("position").Gt(deletedIndex),
+		).
+		Order(goqu.C("position").Asc()).
+		ToSQL()
+	if err != nil {
+		return nil, common.NewInternalServerError("SMREPO-DELSMEBPATH-SELECTSIBLINGS-TOSQL Failed to build sibling query: " + err.Error())
+	}
+
+	rows, err := tx.Query(query, args...)
+	if err != nil {
+		return nil, common.NewInternalServerError("SMREPO-DELSMEBPATH-SELECTSIBLINGS-EXEC Failed to execute sibling query: " + err.Error())
+	}
+	defer func() {
+		_ = rows.Close()
+	}()
+
+	children := make([]listChildToCompact, 0)
+	for rows.Next() {
+		var child listChildToCompact
+		if err = rows.Scan(&child.id, &child.oldPath, &child.oldPosition); err != nil {
+			return nil, common.NewInternalServerError("SMREPO-DELSMEBPATH-SELECTSIBLINGS-SCAN Failed to scan sibling row: " + err.Error())
+		}
+		children = append(children, child)
+	}
+	if err = rows.Err(); err != nil {
+		return nil, common.NewInternalServerError("SMREPO-DELSMEBPATH-SELECTSIBLINGS-ROWS Failed to read sibling rows: " + err.Error())
+	}
+	return children, nil
+}
+
+func moveListChildOneSlotLeft(tx *sql.Tx, submodelDatabaseID int, parentPath string, child listChildToCompact) error {
+	newPosition := child.oldPosition - 1
+	newPath := parentPath + "[" + strconv.Itoa(newPosition) + "]"
+
+	if err := updateListChildPath(tx, submodelDatabaseID, child.oldPath, newPath); err != nil {
+		return err
+	}
+	return updateListChildPosition(tx, submodelDatabaseID, child.id, newPosition)
+}
+
+func escapeSQLLikePattern(value string) string {
+	escaped := strings.ReplaceAll(value, "!", "!!")
+	escaped = strings.ReplaceAll(escaped, "%", "!%")
+	escaped = strings.ReplaceAll(escaped, "_", "!_")
+	return escaped
+}
+
+func idShortPathLikeEscaped(idShortPath goqu.Expression, pattern string) goqu.Expression {
+	return goqu.L("? LIKE ? ESCAPE '!'", idShortPath, pattern)
+}
+
+func updateListChildPath(tx *sql.Tx, submodelDatabaseID int, oldPath string, newPath string) error {
+	dialect := goqu.Dialect("postgres")
+	escapedOldPath := escapeSQLLikePattern(oldPath)
+	query, args, err := dialect.Update("submodel_element").
+		Set(goqu.Record{
+			"idshort_path": goqu.L("? || SUBSTRING(idshort_path FROM ?)", newPath, len(oldPath)+1),
+		}).
+		Where(
+			goqu.C("submodel_id").Eq(submodelDatabaseID),
+			goqu.Or(
+				goqu.C("idshort_path").Eq(oldPath),
+				idShortPathLikeEscaped(goqu.C("idshort_path"), escapedOldPath+".%"),
+				idShortPathLikeEscaped(goqu.C("idshort_path"), escapedOldPath+"[%"),
+			),
+		).
+		ToSQL()
+	if err != nil {
+		return common.NewInternalServerError("SMREPO-DELSMEBPATH-UPDATEPATH-TOSQL Failed to build update path query: " + err.Error())
+	}
+
+	if _, err = tx.Exec(query, args...); err != nil {
+		return common.NewInternalServerError("SMREPO-DELSMEBPATH-UPDATEPATH-EXEC Failed to execute update path query: " + err.Error())
+	}
+	return nil
+}
+
+func updateListChildPosition(tx *sql.Tx, submodelDatabaseID int, childID int, newPosition int) error {
+	dialect := goqu.Dialect("postgres")
+	query, args, err := dialect.Update("submodel_element").
+		Set(goqu.Record{"position": newPosition}).
+		Where(
+			goqu.C("submodel_id").Eq(submodelDatabaseID),
+			goqu.C("id").Eq(childID),
+		).
+		ToSQL()
+	if err != nil {
+		return common.NewInternalServerError("SMREPO-DELSMEBPATH-UPDATEPOSITION-TOSQL Failed to build update position query: " + err.Error())
+	}
+
+	if _, err = tx.Exec(query, args...); err != nil {
+		return common.NewInternalServerError("SMREPO-DELSMEBPATH-UPDATEPOSITION-EXEC Failed to execute update position query: " + err.Error())
 	}
 	return nil
 }
@@ -412,14 +542,14 @@ func DeleteAllChildren(db *sql.DB, submodelId string, idShortPath string, tx *sq
 		return common.NewInternalServerError("SMREPO-DELALLCHILDREN-GETSMDATABASEID Failed to resolve Submodel database ID: " + err.Error())
 	}
 
-	// Delete All Elements that start with idShortPath + "." or with idShortPath + "["
+	escapedPath := escapeSQLLikePattern(idShortPath)
 
 	del := goqu.Delete("submodel_element").Where(
 		goqu.And(
 			goqu.I("submodel_id").Eq(submodelDatabaseID),
 			goqu.Or(
-				goqu.I("idshort_path").Like(idShortPath+".%"),
-				goqu.I("idshort_path").Like(idShortPath+"[%"),
+				idShortPathLikeEscaped(goqu.I("idshort_path"), escapedPath+".%"),
+				idShortPathLikeEscaped(goqu.I("idshort_path"), escapedPath+"[%"),
 			),
 		),
 	)

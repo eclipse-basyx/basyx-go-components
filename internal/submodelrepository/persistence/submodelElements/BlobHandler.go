@@ -148,7 +148,7 @@ func (p PostgreSQLBlobHandler) Update(submodelID string, idShortOrPath string, s
 //
 // Returns:
 //   - error: An error if the update operation fails or if the valueOnly type is incorrect
-func (p PostgreSQLBlobHandler) UpdateValueOnly(submodelID string, idShortOrPath string, valueOnly gen.SubmodelElementValue) error {
+func (p PostgreSQLBlobHandler) UpdateValueOnly(submodelID string, idShortOrPath string, valueOnly gen.SubmodelElementValue, tx *sql.Tx) error {
 	blobValueOnly, ok := valueOnly.(gen.BlobValue)
 	if !ok {
 		var fileValueOnly gen.FileValue
@@ -169,17 +169,6 @@ func (p PostgreSQLBlobHandler) UpdateValueOnly(submodelID string, idShortOrPath 
 	if len(blobValueOnly.Value) > 1<<30 {
 		return common.NewErrBadRequest("blob value exceeds maximum size of 1GB - for files larger than 1GB, you must use File submodel element instead - Postgres Limitation")
 	}
-
-	// Start transaction
-	tx, err := p.db.Begin()
-	if err != nil {
-		return err
-	}
-	defer func() {
-		if err != nil {
-			_ = tx.Rollback()
-		}
-	}()
 
 	// Update only the blob-specific fields in the database
 	dialect := goqu.Dialect("postgres")
@@ -223,8 +212,7 @@ func (p PostgreSQLBlobHandler) UpdateValueOnly(submodelID string, idShortOrPath 
 		return err
 	}
 
-	err = tx.Commit()
-	return err
+	return nil
 }
 
 // Delete removes a Blob element identified by its idShort or path from the database.

@@ -67,6 +67,15 @@
     "expectedStatus": 200
   },
   {
+    "context": "POST /query/concept-descriptions - viewer idShort masked by ABAC filter",
+    "token": { "user": "userb", "password": "pwd" },
+    "method": "POST",
+    "endpoint": "http://localhost:6004/query/concept-descriptions",
+    "data": "postBody/queryViewerAllowed.json",
+    "shouldMatch": "expected/expectedViewerListMaskedIDShort.json",
+    "expectedStatus": 200
+  },
+  {
     "context": "POST /query/concept-descriptions - viewer query narrowed by ABAC",
     "token": { "user": "usera", "password": "pwd" },
     "method": "POST",

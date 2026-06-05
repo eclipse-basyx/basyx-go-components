@@ -20,6 +20,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 
 	aasjsonization "github.com/FriedJannik/aas-go-sdk/jsonization"
 	aastypes "github.com/FriedJannik/aas-go-sdk/types"
@@ -331,6 +332,21 @@ func (c *AssetAdministrationShellRepositoryAPIAPIController) Routes() Routes {
 			strings.ToUpper("Get"),
 			c.contextPath + "/shells/{aasIdentifier}/submodels/{submodelIdentifier}/submodel-elements/{idShortPath}/operation-results/{handleId}/$value",
 			c.GetOperationAsyncResultValueOnlyAasRepository,
+		},
+		"GetAllAssetAdministrationShellsRecentChanges": Route{
+			strings.ToUpper("Get"),
+			c.contextPath + "/shells/$recent-changes",
+			c.GetAllAssetAdministrationShellsRecentChanges,
+		},
+		"GetAssetAdministrationShellByIdSigned": Route{
+			strings.ToUpper("Get"),
+			c.contextPath + "/shells/{aasIdentifier}/$signed",
+			c.GetAssetAdministrationShellByIdSigned,
+		},
+		"GetAssetAdministrationShellVersionByIdAndDate": Route{
+			strings.ToUpper("Get"),
+			c.contextPath + "/shells/{aasIdentifier}/$history",
+			c.GetAssetAdministrationShellVersionByIdAndDate,
 		},
 	}
 }
@@ -2572,6 +2588,110 @@ func (c *AssetAdministrationShellRepositoryAPIAPIController) GetOperationAsyncRe
 		idShortPathParam,
 		handleIDParam,
 	)
+	if err != nil {
+		c.errorHandler(w, r, err, &result)
+		return
+	}
+
+	_ = EncodeJSONResponse(result.Body, &result.Code, w)
+}
+
+// GetAllAssetAdministrationShellsRecentChanges - Returns information about all Asset Administration Shells that have been changed recently
+func (c *AssetAdministrationShellRepositoryAPIAPIController) GetAllAssetAdministrationShellsRecentChanges(w http.ResponseWriter, r *http.Request) {
+	query, err := parseQuery(r.URL.RawQuery)
+	if err != nil {
+		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
+		return
+	}
+	assetIdsParam := query["assetIds"]
+
+	var createdFromParam time.Time
+	if query.Has("createdFrom") {
+		createdFromParam, err = parseTime(query.Get("createdFrom"))
+		if err != nil {
+			c.errorHandler(w, r, &ParsingError{Param: "createdFrom", Err: err}, nil)
+			return
+		}
+	}
+
+	var updatedFromParam time.Time
+	if query.Has("updatedFrom") {
+		updatedFromParam, err = parseTime(query.Get("updatedFrom"))
+		if err != nil {
+			c.errorHandler(w, r, &ParsingError{Param: "updatedFrom", Err: err}, nil)
+			return
+		}
+	}
+
+	var limitParam int32
+	if query.Has("limit") {
+		limitParam, err = parseNumericParameter[int32](
+			query.Get("limit"),
+			WithParse[int32](parseInt32),
+			WithMinimum[int32](1),
+		)
+		if err != nil {
+			c.errorHandler(w, r, &ParsingError{Param: "limit", Err: err}, nil)
+			return
+		}
+	}
+
+	result, err := c.service.GetAllAssetAdministrationShellsRecentChanges(
+		r.Context(),
+		assetIdsParam,
+		createdFromParam,
+		updatedFromParam,
+		limitParam,
+		query.Get("cursor"),
+	)
+	if err != nil {
+		c.errorHandler(w, r, err, &result)
+		return
+	}
+
+	_ = EncodeJSONResponse(result.Body, &result.Code, w)
+}
+
+// GetAssetAdministrationShellByIdSigned - Returns a specific Asset Administration Shell as a JWS string
+func (c *AssetAdministrationShellRepositoryAPIAPIController) GetAssetAdministrationShellByIdSigned(w http.ResponseWriter, r *http.Request) {
+	aasIdentifierParam := chi.URLParam(r, "aasIdentifier")
+	if aasIdentifierParam == "" {
+		c.errorHandler(w, r, &RequiredError{"aasIdentifier"}, nil)
+		return
+	}
+
+	result, err := c.service.GetAssetAdministrationShellByIdSigned(r.Context(), aasIdentifierParam)
+	if err != nil {
+		c.errorHandler(w, r, err, &result)
+		return
+	}
+
+	_ = EncodeJSONResponse(result.Body, &result.Code, w)
+}
+
+// GetAssetAdministrationShellVersionByIdAndDate - Returns a specific Asset Administration Shell valid at a specific point in time
+func (c *AssetAdministrationShellRepositoryAPIAPIController) GetAssetAdministrationShellVersionByIdAndDate(w http.ResponseWriter, r *http.Request) {
+	query, err := parseQuery(r.URL.RawQuery)
+	if err != nil {
+		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
+		return
+	}
+	aasIdentifierParam := chi.URLParam(r, "aasIdentifier")
+	if aasIdentifierParam == "" {
+		c.errorHandler(w, r, &RequiredError{"aasIdentifier"}, nil)
+		return
+	}
+	if !query.Has("date") {
+		c.errorHandler(w, r, &RequiredError{"date"}, nil)
+		return
+	}
+	dateParam, err := parseTime(query.Get("date"))
+	if err != nil {
+		c.errorHandler(w, r, &ParsingError{Param: "date", Err: err}, nil)
+		return
+	}
+
+	result, err := c.service.GetAssetAdministrationShellVersionByIdAndDate(r.Context(), aasIdentifierParam, dateParam)
 	if err != nil {
 		c.errorHandler(w, r, err, &result)
 		return

@@ -19,6 +19,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/FriedJannik/aas-go-sdk/jsonization"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
@@ -60,12 +61,13 @@ func NewConceptDescriptionRepositoryAPIAPIController(s ConceptDescriptionReposit
 // Routes returns all the api routes for the ConceptDescriptionRepositoryAPIAPIController
 func (c *ConceptDescriptionRepositoryAPIAPIController) Routes() model.Routes {
 	return model.Routes{
-		"QueryConceptDescriptions":     model.Route{Name: "QueryConceptDescriptions", Method: strings.ToUpper("Post"), Pattern: c.contextPath + "/query/concept-descriptions", HandlerFunc: c.QueryConceptDescriptions},
-		"GetAllConceptDescriptions":    model.Route{Name: "GetAllConceptDescriptions", Method: strings.ToUpper("Get"), Pattern: c.contextPath + "/concept-descriptions", HandlerFunc: c.GetAllConceptDescriptions},
-		"PostConceptDescription":       model.Route{Name: "PostConceptDescription", Method: strings.ToUpper("Post"), Pattern: c.contextPath + "/concept-descriptions", HandlerFunc: c.PostConceptDescription},
-		"GetConceptDescriptionById":    model.Route{Name: "GetConceptDescriptionById", Method: strings.ToUpper("Get"), Pattern: c.contextPath + "/concept-descriptions/{cdIdentifier}", HandlerFunc: c.GetConceptDescriptionById},
-		"PutConceptDescriptionById":    model.Route{Name: "PutConceptDescriptionById", Method: strings.ToUpper("Put"), Pattern: c.contextPath + "/concept-descriptions/{cdIdentifier}", HandlerFunc: c.PutConceptDescriptionById},
-		"DeleteConceptDescriptionById": model.Route{Name: "DeleteConceptDescriptionById", Method: strings.ToUpper("Delete"), Pattern: c.contextPath + "/concept-descriptions/{cdIdentifier}", HandlerFunc: c.DeleteConceptDescriptionById},
+		"QueryConceptDescriptions":              model.Route{Name: "QueryConceptDescriptions", Method: strings.ToUpper("Post"), Pattern: c.contextPath + "/query/concept-descriptions", HandlerFunc: c.QueryConceptDescriptions},
+		"GetAllConceptDescriptions":             model.Route{Name: "GetAllConceptDescriptions", Method: strings.ToUpper("Get"), Pattern: c.contextPath + "/concept-descriptions", HandlerFunc: c.GetAllConceptDescriptions},
+		"PostConceptDescription":                model.Route{Name: "PostConceptDescription", Method: strings.ToUpper("Post"), Pattern: c.contextPath + "/concept-descriptions", HandlerFunc: c.PostConceptDescription},
+		"GetAllConceptDescriptionRecentChanges": model.Route{Name: "GetAllConceptDescriptionRecentChanges", Method: strings.ToUpper("Get"), Pattern: c.contextPath + "/concept-descriptions/$recent-changes", HandlerFunc: c.GetAllConceptDescriptionRecentChanges},
+		"GetConceptDescriptionById":             model.Route{Name: "GetConceptDescriptionById", Method: strings.ToUpper("Get"), Pattern: c.contextPath + "/concept-descriptions/{cdIdentifier}", HandlerFunc: c.GetConceptDescriptionById},
+		"PutConceptDescriptionById":             model.Route{Name: "PutConceptDescriptionById", Method: strings.ToUpper("Put"), Pattern: c.contextPath + "/concept-descriptions/{cdIdentifier}", HandlerFunc: c.PutConceptDescriptionById},
+		"DeleteConceptDescriptionById":          model.Route{Name: "DeleteConceptDescriptionById", Method: strings.ToUpper("Delete"), Pattern: c.contextPath + "/concept-descriptions/{cdIdentifier}", HandlerFunc: c.DeleteConceptDescriptionById},
 	}
 }
 
@@ -75,6 +77,7 @@ func (c *ConceptDescriptionRepositoryAPIAPIController) OrderedRoutes() []model.R
 		model.Route{Name: "QueryConceptDescriptions", Method: strings.ToUpper("Post"), Pattern: c.contextPath + "/query/concept-descriptions", HandlerFunc: c.QueryConceptDescriptions},
 		model.Route{Name: "GetAllConceptDescriptions", Method: strings.ToUpper("Get"), Pattern: c.contextPath + "/concept-descriptions", HandlerFunc: c.GetAllConceptDescriptions},
 		model.Route{Name: "PostConceptDescription", Method: strings.ToUpper("Post"), Pattern: c.contextPath + "/concept-descriptions", HandlerFunc: c.PostConceptDescription},
+		model.Route{Name: "GetAllConceptDescriptionRecentChanges", Method: strings.ToUpper("Get"), Pattern: c.contextPath + "/concept-descriptions/$recent-changes", HandlerFunc: c.GetAllConceptDescriptionRecentChanges},
 		model.Route{Name: "GetConceptDescriptionById", Method: strings.ToUpper("Get"), Pattern: c.contextPath + "/concept-descriptions/{cdIdentifier}", HandlerFunc: c.GetConceptDescriptionById},
 		model.Route{Name: "PutConceptDescriptionById", Method: strings.ToUpper("Put"), Pattern: c.contextPath + "/concept-descriptions/{cdIdentifier}", HandlerFunc: c.PutConceptDescriptionById},
 		model.Route{Name: "DeleteConceptDescriptionById", Method: strings.ToUpper("Delete"), Pattern: c.contextPath + "/concept-descriptions/{cdIdentifier}", HandlerFunc: c.DeleteConceptDescriptionById},
@@ -208,6 +211,50 @@ func (c *ConceptDescriptionRepositoryAPIAPIController) GetAllConceptDescriptions
 		return
 	}
 	// If no error, encode the body and the result code
+	_ = model.EncodeJSONResponse(result.Body, &result.Code, w)
+}
+
+// GetAllConceptDescriptionRecentChanges - Returns all Concept Descriptions that have been changed recently
+func (c *ConceptDescriptionRepositoryAPIAPIController) GetAllConceptDescriptionRecentChanges(w http.ResponseWriter, r *http.Request) {
+	query, err := parseQuery(r.URL.RawQuery)
+	if err != nil {
+		c.errorHandler(w, r, &model.ParsingError{Err: err}, nil)
+		return
+	}
+	var createdFromParam time.Time
+	if query.Has("createdFrom") {
+		createdFromParam, err = parseTime(query.Get("createdFrom"))
+		if err != nil {
+			c.errorHandler(w, r, &model.ParsingError{Param: "createdFrom", Err: err}, nil)
+			return
+		}
+	}
+	var updatedFromParam time.Time
+	if query.Has("updatedFrom") {
+		updatedFromParam, err = parseTime(query.Get("updatedFrom"))
+		if err != nil {
+			c.errorHandler(w, r, &model.ParsingError{Param: "updatedFrom", Err: err}, nil)
+			return
+		}
+	}
+	var limitParam int32
+	if query.Has("limit") {
+		limitParam, err = parseNumericParameter[int32](
+			query.Get("limit"),
+			model.WithParse[int32](parseInt32),
+			model.WithMinimum[int32](1),
+		)
+		if err != nil {
+			c.errorHandler(w, r, &model.ParsingError{Param: "limit", Err: err}, nil)
+			return
+		}
+	}
+
+	result, err := c.service.GetAllConceptDescriptionRecentChanges(r.Context(), createdFromParam, updatedFromParam, limitParam, query.Get("cursor"))
+	if err != nil {
+		c.errorHandler(w, r, err, &result)
+		return
+	}
 	_ = model.EncodeJSONResponse(result.Body, &result.Code, w)
 }
 
@@ -354,4 +401,13 @@ func parseInt32(param string) (int32, error) {
 
 	val, err := strconv.ParseInt(param, 10, 32)
 	return int32(val), err
+}
+
+func parseTime(param string) (time.Time, error) {
+	trimmed := strings.TrimSpace(param)
+	if trimmed == "" {
+		return time.Time{}, nil
+	}
+
+	return time.Parse(time.RFC3339Nano, trimmed)
 }

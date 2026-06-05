@@ -142,21 +142,11 @@ func (p PostgreSQLRangeHandler) Update(submodelID string, idShortOrPath string, 
 //
 // Returns:
 //   - error: An error if the update operation fails or if the valueOnly is not of type RangeValue
-func (p PostgreSQLRangeHandler) UpdateValueOnly(submodelID string, idShortOrPath string, valueOnly gen.SubmodelElementValue) error {
+func (p PostgreSQLRangeHandler) UpdateValueOnly(submodelID string, idShortOrPath string, valueOnly gen.SubmodelElementValue, tx *sql.Tx) error {
 	rangeValue, ok := valueOnly.(gen.RangeValue)
 	if !ok {
 		return common.NewErrBadRequest("valueOnly is not of type Range")
 	}
-
-	tx, err := p.db.Begin()
-	if err != nil {
-		return err
-	}
-	defer func() {
-		if err != nil {
-			_ = tx.Rollback()
-		}
-	}()
 
 	dialect := goqu.Dialect("postgres")
 	smDbID, err := persistenceutils.GetSubmodelDatabaseID(tx, submodelID)
@@ -184,7 +174,7 @@ func (p PostgreSQLRangeHandler) UpdateValueOnly(submodelID string, idShortOrPath
 	}
 
 	var valueType types.DataTypeDefXSD
-	err = p.db.QueryRow(selectQuery, selectArgs...).Scan(&valueType)
+	err = tx.QueryRow(selectQuery, selectArgs...).Scan(&valueType)
 	if err != nil {
 		return err
 	}
@@ -237,8 +227,7 @@ func (p PostgreSQLRangeHandler) UpdateValueOnly(submodelID string, idShortOrPath
 		return err
 	}
 
-	err = tx.Commit()
-	return err
+	return nil
 }
 
 // Delete removes a Range submodel element from the database.

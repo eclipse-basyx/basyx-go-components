@@ -244,6 +244,16 @@ components:
               type: array
               items:
                 $ref: "https://api.swaggerhub.com/domains/Plattform_i40/Part1-MetaModel-Schemas/V3.2.0#/components/schemas/SpecificAssetId"
+    ConceptDescriptionRecentChange:
+      allOf:
+        - $ref: '#/components/schemas/RecentChange'
+        - type: object
+          properties:
+            id:
+              type: string
+              minLength: 1
+              maxLength: 2048
+              pattern: ^([\\x09\\x0a\\x0d\\x20-\\ud7ff\\ue000-\\ufffd]|\\ud800[\\udc00-\\udfff]|[\\ud801-\\udbfe][\\udc00-\\udfff]|\\udbff[\\udc00-\\udfff])*$
     AssetLink:
       properties:
         name:
@@ -434,6 +444,15 @@ components:
               type: array
               items: 
                 $ref: "https://api.swaggerhub.com/domains/Plattform_i40/Part1-MetaModel-Schemas/V3.2.0#/components/schemas/ConceptDescription"
+    GetAllConceptDescriptionRecentChangesResult:
+      allOf:
+        - $ref: '#/components/schemas/PagedResult'
+        - type: object
+          properties:
+            result:
+              type: array
+              items:
+                $ref: "#/components/schemas/ConceptDescriptionRecentChange"
     GetPackageDescriptionsResult:
       allOf:
         - $ref: '#/components/schemas/PagedResult'
