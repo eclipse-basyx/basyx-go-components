@@ -290,7 +290,7 @@ func putJSONResponse(endpoint string, body string) (map[string]any, int, http.He
 
 	var payload map[string]any
 	if unmarshalErr := json.Unmarshal(responseBody, &payload); unmarshalErr != nil {
-		return nil, resp.StatusCode, resp.Header.Clone(), fmt.Errorf("failed to unmarshal response body: %v", unmarshalErr)
+		return nil, resp.StatusCode, resp.Header.Clone(), fmt.Errorf("failed to unmarshal response body with status %d: %v; body: %s", resp.StatusCode, unmarshalErr, string(responseBody))
 	}
 
 	return payload, resp.StatusCode, resp.Header.Clone(), nil
@@ -321,7 +321,7 @@ func postJSONResponse(endpoint string, body string) (map[string]any, int, http.H
 
 	var payload map[string]any
 	if unmarshalErr := json.Unmarshal(responseBody, &payload); unmarshalErr != nil {
-		return nil, resp.StatusCode, resp.Header.Clone(), fmt.Errorf("failed to unmarshal response body: %v", unmarshalErr)
+		return nil, resp.StatusCode, resp.Header.Clone(), fmt.Errorf("failed to unmarshal response body with status %d: %v; body: %s", resp.StatusCode, unmarshalErr, string(responseBody))
 	}
 
 	return payload, resp.StatusCode, resp.Header.Clone(), nil

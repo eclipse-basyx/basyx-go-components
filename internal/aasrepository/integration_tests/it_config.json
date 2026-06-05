@@ -479,7 +479,7 @@
 	{
 		"context": "009.7 - GET /shells/{aasIdentifier}/submodel-refs - filter by cursor",
 		"method": "GET",
-		"endpoint": "http://127.0.0.1:6004/shells/aHR0cHM6Ly9leGFtcGxlLmNvbS9pZHMvYWFzLzM0OTRfMjEyMF8zMDYyXzY1MzI/submodel-refs?cursor=NA",
+		"endpoint": "http://127.0.0.1:6004/shells/aHR0cHM6Ly9leGFtcGxlLmNvbS9pZHMvYWFzLzM0OTRfMjEyMF8zMDYyXzY1MzI/submodel-refs?cursor=NQ",
 		"shouldMatch": "expected/expectedAssetAdministrationShellSubmodelReferencesFilterCursor.json",
 		"expectedStatus": 200
 	},

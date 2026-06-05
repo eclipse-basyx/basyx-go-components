@@ -103,6 +103,8 @@ var exemptMutationOperations = map[string]struct{}{
 	"PostSubmodelDescriptor":                          {},
 	"PutSubmodelDescriptorById":                       {},
 	"QueryAssetAdministrationShellDescriptors":        {},
+	"QueryAssetAdministrationShells":                  {},
+	"QueryConceptDescriptions":                        {},
 	"QuerySubmodels":                                  {},
 	"SearchAllAssetAdministrationShellIdsByAssetLink": {},
 }

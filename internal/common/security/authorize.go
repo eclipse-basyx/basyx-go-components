@@ -142,10 +142,10 @@ func GetQueryFilter(ctx context.Context) *QueryFilter {
 	return nil
 }
 
-// ShouldEnforceFormula determines whether formula-based ABAC checks must run for
-// the current request context.
+// ShouldEnforceFormula determines whether formula-based query constraints must
+// run for the current request context.
 //
-// Returns false when ABAC is disabled or when no QueryFilter is available.
+// Returns false when no QueryFilter is available.
 // Returns an error when configuration is missing from context while ABAC
 // enforcement decision is required, or when an inconsistent QueryFilter is
 // detected (Formula is set but FormulasByRight is empty).
@@ -154,9 +154,6 @@ func ShouldEnforceFormula(ctx context.Context) (bool, error) {
 	if !ok {
 		// return true to be safe in case of misconfiguration, but also return an error to allow proper logging and debugging
 		return true, errors.New("configuration not found in context")
-	}
-	if !cfg.ABAC.Enabled {
-		return false, nil
 	}
 	queryFilter := GetQueryFilter(ctx)
 
@@ -167,6 +164,14 @@ func ShouldEnforceFormula(ctx context.Context) (bool, error) {
 
 	if queryFilter.Formula != nil && len(queryFilter.FormulasByRight) == 0 {
 		return true, errors.New("ABAC is enabled but QueryFilter has Formula but no FormulasByRight")
+	}
+
+	if len(queryFilter.FormulasByRight) > 0 {
+		return true, nil
+	}
+
+	if !cfg.ABAC.Enabled {
+		return false, nil
 	}
 
 	return len(queryFilter.FormulasByRight) > 0, nil
