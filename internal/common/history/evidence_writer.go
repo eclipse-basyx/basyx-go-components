@@ -195,10 +195,16 @@ func storeManifestArtifact(ctx context.Context, store EvidenceStore, manifest Hi
 	if err != nil {
 		return nil, HistoryManifest{}, fmt.Errorf("HISTORY-EVIDENCE-WRITE-PUTMANIFEST %w", err)
 	}
+	if receipt == nil {
+		return nil, HistoryManifest{}, fmt.Errorf("HISTORY-EVIDENCE-WRITE-NILMANIFESTRECEIPT evidence store returned nil receipt")
+	}
 	return receipt, finalManifest, nil
 }
 
 func recordEvidenceCatalog(ctx context.Context, db *sql.DB, manifest HistoryManifest, manifestReceipt *EvidenceReceipt, eventReceipts []EvidenceCatalogEventReceipt, snapshotReceipts []EvidenceCatalogSnapshotReceipt) (int64, error) {
+	if manifestReceipt == nil {
+		return 0, common.NewInternalServerError("HISTORY-EVIDENCE-WRITE-NILMANIFESTRECEIPT evidence store returned nil receipt")
+	}
 	tx, err := db.BeginTx(ctx, nil)
 	if err != nil {
 		return 0, common.NewInternalServerError("HISTORY-EVIDENCE-WRITE-BEGINTX " + err.Error())

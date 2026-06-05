@@ -157,6 +157,10 @@ func scanSnapshotArtifactCandidate(rows *sql.Rows, table string) (SnapshotArtifa
 	if !snapshotText.Valid {
 		return SnapshotArtifactCandidate{}, common.NewInternalServerError("HISTORY-EVIDENCE-SNAPSHOT-MISSING snapshot payload is missing")
 	}
+	rowHashValue := strings.TrimSpace(nullStringValue(rowHash))
+	if rowHashValue == "" {
+		return SnapshotArtifactCandidate{}, common.NewInternalServerError("HISTORY-EVIDENCE-SNAPSHOT-ROWHASH row hash is required")
+	}
 	var snapshot map[string]any
 	if err := decodeJSONPreservingNumbers([]byte(snapshotText.String), &snapshot); err != nil {
 		return SnapshotArtifactCandidate{}, common.NewInternalServerError("HISTORY-EVIDENCE-SNAPSHOT-DECODE " + err.Error())
@@ -172,7 +176,7 @@ func scanSnapshotArtifactCandidate(rows *sql.Rows, table string) (SnapshotArtifa
 		"history_table":    table,
 		"identifier":       identifier,
 		"history_id":       historyID,
-		"row_hash":         nullStringValue(rowHash),
+		"row_hash":         rowHashValue,
 		"content_hash":     nullStringValue(contentHash),
 		"payload_hash":     nullStringValue(payloadHash),
 		"snapshot":         snapshot,
@@ -183,14 +187,14 @@ func scanSnapshotArtifactCandidate(rows *sql.Rows, table string) (SnapshotArtifa
 	return SnapshotArtifactCandidate{
 		Artifact: EvidenceArtifact{
 			ArtifactType: EvidenceArtifactSnapshot,
-			ObjectKey:    snapshotObjectKey(table, identifier, historyID, nullStringValue(rowHash)),
+			ObjectKey:    snapshotObjectKey(table, identifier, historyID, rowHashValue),
 			ContentType:  manifestJSONContentType,
 			Data:         data,
-			Metadata:     snapshotMetadata(table, identifier, historyID, nullStringValue(rowHash)),
+			Metadata:     snapshotMetadata(table, identifier, historyID, rowHashValue),
 		},
 		HistoryID:   historyID,
 		Identifier:  identifier,
-		RowHash:     nullStringValue(rowHash),
+		RowHash:     rowHashValue,
 		ContentHash: nullStringValue(contentHash),
 	}, nil
 }

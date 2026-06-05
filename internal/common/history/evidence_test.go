@@ -26,6 +26,7 @@
 package history
 
 import (
+	"context"
 	"crypto/rand"
 	"crypto/rsa"
 	"strings"
@@ -98,6 +99,44 @@ func TestBuildManifestEvidenceArtifactSignsCanonicalManifest(t *testing.T) {
 	require.True(t, strings.HasPrefix(artifact.ObjectKey, "prefix/history-manifests/"))
 }
 
+func TestDecodeManifestArtifactTreatsJSONContentTypeAsJSONWhenPayloadContainsDots(t *testing.T) {
+	manifest, err := BuildHistoryManifest(HistoryManifestOptions{
+		HistoryTable: TableAAS,
+		Identifier:   "urn.example.component",
+		Rows: []ManifestRangeRow{
+			{HistoryID: 1, RowHash: strings.Repeat("a", 64)},
+		},
+		GeneratedAt: time.Date(2026, 6, 5, 12, 0, 0, 0, time.UTC),
+	})
+	require.NoError(t, err)
+	artifact, finalManifest, err := BuildManifestEvidenceArtifact(manifest, "", nil)
+	require.NoError(t, err)
+	require.Equal(t, manifestJSONContentType, artifact.ContentType)
+	require.Equal(t, 2, strings.Count(string(artifact.Data), "."))
+
+	decoded, signed, err := DecodeManifestArtifact(artifact.Data, manifestJSONContentType)
+
+	require.NoError(t, err)
+	require.False(t, signed)
+	require.Equal(t, finalManifest.Identifier, decoded.Identifier)
+	require.Equal(t, finalManifest.RangeDigest, decoded.RangeDigest)
+}
+
+func TestStoreManifestArtifactRejectsNilReceipt(t *testing.T) {
+	manifest, err := BuildHistoryManifest(HistoryManifestOptions{
+		HistoryTable: TableAAS,
+		Rows: []ManifestRangeRow{
+			{HistoryID: 1, RowHash: strings.Repeat("a", 64)},
+		},
+	})
+	require.NoError(t, err)
+
+	receipt, _, err := storeManifestArtifact(t.Context(), nilReceiptEvidenceStore{}, manifest, nil)
+
+	require.Nil(t, receipt)
+	require.ErrorContains(t, err, "HISTORY-EVIDENCE-WRITE-NILMANIFESTRECEIPT")
+}
+
 func TestS3EvidenceStoreReceiptAppliesPrefixAndRetention(t *testing.T) {
 	now := time.Date(2026, 6, 5, 12, 0, 0, 0, time.UTC)
 	store := &S3EvidenceStore{
@@ -167,6 +206,34 @@ func TestStoreHistoryEventArtifactsBackfillsSnapshotAndDiffRows(t *testing.T) {
 	require.Equal(t, EvidenceArtifactHistoryEvent, store.artifacts[0].ArtifactType)
 	require.Equal(t, EvidenceArtifactHistoryEvent, store.artifacts[1].ArtifactType)
 	require.Contains(t, string(store.artifacts[1].Data), `"payload_type":"diff"`)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestLoadSnapshotArtifactCandidatesRejectsEmptyRowHash(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer func() {
+		_ = db.Close()
+	}()
+
+	snapshot := map[string]any{"id": "aas-1"}
+	snapshotData, err := CanonicalJSON(snapshot)
+	require.NoError(t, err)
+	snapshotHash := SHA256Hex(snapshotData)
+	mock.ExpectQuery(`SELECT .*FROM "aas_history" AS "history" INNER JOIN "aas_history_payload" AS "payload".*"payload_type" = 'snapshot'`).
+		WillReturnRows(sqlmock.NewRows([]string{
+			"history_id",
+			"identifier",
+			"content_hash",
+			"payload_hash",
+			"row_hash",
+			"snapshot",
+		}).AddRow(int64(1), "aas-1", snapshotHash, snapshotHash, "", string(snapshotData)))
+
+	candidates, err := LoadSnapshotArtifactCandidates(t.Context(), db, TableAAS, "aas-1", 1, 1)
+
+	require.Nil(t, candidates)
+	require.ErrorContains(t, err, "HISTORY-EVIDENCE-SNAPSHOT-ROWHASH")
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 
@@ -263,4 +330,18 @@ func verificationFindingCodes(report *HistoryEvidenceVerificationReport) []strin
 		codes = append(codes, finding.Code)
 	}
 	return codes
+}
+
+type nilReceiptEvidenceStore struct{}
+
+func (nilReceiptEvidenceStore) PutArtifact(_ context.Context, _ EvidenceArtifact) (*EvidenceReceipt, error) {
+	return nil, nil
+}
+
+func (nilReceiptEvidenceStore) GetArtifact(_ context.Context, _ EvidenceReference) (*EvidenceObject, error) {
+	return nil, nil
+}
+
+func (nilReceiptEvidenceStore) VerifyArtifact(_ context.Context, _ EvidenceReference, _ string) (*EvidenceReceipt, error) {
+	return nil, nil
 }

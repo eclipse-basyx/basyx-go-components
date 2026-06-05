@@ -27,6 +27,7 @@ package history
 
 import (
 	"crypto/rsa"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"net/url"
@@ -197,8 +198,29 @@ func DecodeManifestArtifact(data []byte, contentType string) (HistoryManifest, b
 }
 
 func isJWSManifestArtifact(data []byte, contentType string) bool {
-	if strings.Contains(strings.ToLower(contentType), "jose") {
+	normalizedContentType := strings.ToLower(strings.TrimSpace(contentType))
+	if strings.Contains(normalizedContentType, "jose") {
 		return true
 	}
-	return strings.Count(strings.TrimSpace(string(data)), ".") == 2
+	if strings.Contains(normalizedContentType, "json") {
+		return false
+	}
+	return isCompactJWS(data)
+}
+
+func isCompactJWS(data []byte) bool {
+	parts := strings.Split(strings.TrimSpace(string(data)), ".")
+	if len(parts) != 3 || strings.TrimSpace(parts[1]) == "" || strings.TrimSpace(parts[2]) == "" {
+		return false
+	}
+	protectedHeader, err := base64.RawURLEncoding.DecodeString(parts[0])
+	if err != nil {
+		return false
+	}
+	var header map[string]any
+	if err = json.Unmarshal(protectedHeader, &header); err != nil {
+		return false
+	}
+	_, hasAlgorithm := header["alg"].(string)
+	return hasAlgorithm
 }
