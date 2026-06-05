@@ -37,7 +37,26 @@ import (
 	"time"
 )
 
-// CanonicalJSONHash returns a SHA-256 hash over deterministic JSON.
+// CanonicalJSONHash returns a SHA-256 hash over CanonicalJSON(value).
+//
+// Use this for payload and content hashes where semantically identical JSON
+// must produce the same digest regardless of object key order or Go map
+// iteration order.
+//
+// Parameters:
+//   - value: JSON-compatible value, raw JSON bytes, or json.RawMessage to hash.
+//
+// Returns:
+//   - string: Lowercase hexadecimal SHA-256 digest.
+//   - error: Error when value cannot be normalized or encoded as canonical JSON.
+//
+// Example:
+//
+//	hash, err := CanonicalJSONHash(map[string]any{"id": identifier})
+//	if err != nil {
+//		return err
+//	}
+//	event.ContentHash = hash
 func CanonicalJSONHash(value any) (string, error) {
 	canonical, err := CanonicalJSON(value)
 	if err != nil {
@@ -48,6 +67,26 @@ func CanonicalJSONHash(value any) (string, error) {
 }
 
 // ComputeHistoryRowHash returns the hash-chain row hash for a history event.
+//
+// The row hash covers the entity identity, change metadata, payload/content
+// hashes, previous row hash, and audit metadata. Persisted history rows use this
+// value to detect tampering and to link each row to the previous version of the
+// same entity.
+//
+// Parameters:
+//   - event: Normalized history event metadata and hash inputs.
+//
+// Returns:
+//   - string: Lowercase hexadecimal row hash.
+//   - error: Error when the event cannot be encoded as canonical JSON.
+//
+// Example:
+//
+//	rowHash, err := ComputeHistoryRowHash(event)
+//	if err != nil {
+//		return err
+//	}
+//	event.RowHash = rowHash
 func ComputeHistoryRowHash(event ChangeEvent) (string, error) {
 	return CanonicalJSONHash(map[string]any{
 		"hashContract":        historyRowHashContract,
@@ -102,6 +141,26 @@ func databaseTimestamp(value time.Time) time.Time {
 }
 
 // CanonicalJSON encodes JSON values with stable object-key ordering.
+//
+// The encoder normalizes raw JSON, byte slices, maps, slices, and scalar values
+// before writing JSON with sorted object keys. It preserves JSON number text so
+// hashes remain stable across database round trips for large integers and other
+// values that should not be coerced to float64.
+//
+// Parameters:
+//   - value: JSON-compatible value, raw JSON bytes, or json.RawMessage to encode.
+//
+// Returns:
+//   - []byte: Canonical JSON representation.
+//   - error: Error when value cannot be normalized or encoded.
+//
+// Example:
+//
+//	canonical, err := CanonicalJSON(snapshot)
+//	if err != nil {
+//		return nil, err
+//	}
+//	return canonical, nil
 func CanonicalJSON(value any) ([]byte, error) {
 	normalized, err := normalizeJSONValue(value)
 	if err != nil {

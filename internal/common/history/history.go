@@ -23,7 +23,13 @@
 * SPDX-License-Identifier: MIT
 ******************************************************************************/
 
-// Package history stores append-only snapshots for v3.2 history and recent-change endpoints.
+// Package history stores append-only entity versions for v3.2 history and recent-change endpoints.
+//
+// The package keeps metadata rows in service-specific history tables and JSON
+// payloads in companion payload tables. Payloads are full snapshots at configured
+// checkpoints and compact RFC 6902 diffs between checkpoints. Read paths restore
+// snapshots from the nearest checkpoint and verify payload, content, and row hash
+// metadata before returning reconstructed data.
 package history
 
 import (
@@ -110,7 +116,34 @@ func latestVersionTx(ctx context.Context, tx *sql.Tx, table string, identifier s
 	return restoreVersionByHistoryID(ctx, tx, table, identifier, historyID)
 }
 
-// SnapshotByDate returns the snapshot that was valid for identifier at the requested instant.
+// SnapshotByDate returns the non-deleted snapshot that was valid at the requested instant.
+//
+// table must be one of the history table constants from this package and
+// identifier must match the entity identifier stored in that table. The function
+// selects the newest version whose valid_from is not later than at, restores it
+// from its nearest full-snapshot checkpoint, and returns not found when no row is
+// valid at that instant or the selected row represents a deletion.
+//
+// Parameters:
+//   - ctx: Request context used for database reads.
+//   - db: Database handle that can read the history and payload tables.
+//   - table: History table name, for example TableAAS or TableConcept.
+//   - identifier: Stable entity identifier to restore.
+//   - at: Point in time for the historical lookup.
+//
+// Returns:
+//   - map[string]any: Reconstructed full entity snapshot valid at at.
+//   - error: Error when no matching non-deleted version exists, the history
+//     chain cannot be restored, hashes fail verification, or the database read
+//     fails.
+//
+// Example:
+//
+//	snapshot, err := SnapshotByDate(ctx, db, TableAAS, aasID, requestedAt)
+//	if err != nil {
+//		return nil, err
+//	}
+//	return snapshot, nil
 func SnapshotByDate(ctx context.Context, db *sql.DB, table string, identifier string, at time.Time) (map[string]any, error) {
 	if db == nil {
 		return nil, common.NewErrBadRequest("HISTORY-GET-NILDB database handle must not be nil")

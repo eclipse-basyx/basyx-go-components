@@ -27,7 +27,11 @@ package history
 
 import "context"
 
-// AuditContext carries vendor-neutral request and identity metadata.
+// AuditContext carries vendor-neutral request and identity metadata for history rows.
+//
+// The fields are intentionally strings so API layers can copy already-normalized
+// security and request metadata into history without coupling this package to a
+// specific authentication provider or HTTP framework.
 type AuditContext struct {
 	ActorSubject        string
 	ActorIssuer         string
@@ -46,12 +50,45 @@ type AuditContext struct {
 
 type auditContextKey struct{}
 
-// ContextWithAudit stores audit metadata in a context.
+// ContextWithAudit stores audit metadata in a context for later history writes.
+//
+// AppendVersionTx and AppendMutatedVersionTx read this metadata through
+// FromContext and persist it with the row hash, making audit metadata part of
+// the tamper-evident history chain.
+//
+// Parameters:
+//   - ctx: Base context to extend.
+//   - audit: Request and identity metadata to store.
+//
+// Returns:
+//   - context.Context: Context containing audit metadata.
+//
+// Example:
+//
+//	ctx = ContextWithAudit(ctx, AuditContext{
+//		RequestID:  requestID,
+//		HTTPMethod: http.MethodPut,
+//		Endpoint:   endpoint,
+//	})
 func ContextWithAudit(ctx context.Context, audit AuditContext) context.Context {
 	return context.WithValue(ctx, auditContextKey{}, audit)
 }
 
 // FromContext returns audit metadata stored in ctx.
+//
+// A nil context or a context without audit metadata returns the zero value, so
+// callers can use it unconditionally while building history rows.
+//
+// Parameters:
+//   - ctx: Context that may contain AuditContext metadata.
+//
+// Returns:
+//   - AuditContext: Stored metadata, or the zero value when absent.
+//
+// Example:
+//
+//	audit := FromContext(ctx)
+//	event.RequestID = audit.RequestID
 func FromContext(ctx context.Context) AuditContext {
 	if ctx == nil {
 		return AuditContext{}

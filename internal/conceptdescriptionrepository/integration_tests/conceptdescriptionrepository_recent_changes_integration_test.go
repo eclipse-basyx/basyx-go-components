@@ -55,15 +55,11 @@ func TestConceptDescriptionRepositoryRecentChanges(t *testing.T) {
 		}
 	})
 
-	status, body, err := requestJSON(http.MethodPost, baseURL+"/concept-descriptions", map[string]any{
-		"id":        conceptDescriptionID,
-		"idShort":   "RecentConceptV1",
-		"modelType": "ConceptDescription",
-		"administration": map[string]any{
-			"createdAt": "2030-01-02T03:04:05Z",
-			"updatedAt": "2030-01-02T03:04:06Z",
-		},
-	})
+	status, body, err := requestJSON(http.MethodPost, baseURL+"/concept-descriptions", conceptDescriptionRecentChangePayload(
+		conceptDescriptionID,
+		"RecentConceptV1",
+		"2030-01-02T03:04:06Z",
+	))
 	if err != nil {
 		t.Fatalf("failed to create concept description: %v", err)
 	}
@@ -71,22 +67,30 @@ func TestConceptDescriptionRepositoryRecentChanges(t *testing.T) {
 		t.Fatalf("expected 201, got %d body=%s", status, string(body))
 	}
 
-	status, body, err = requestJSON(http.MethodPut, baseURL+"/concept-descriptions/"+encodedID, map[string]any{
-		"id":        conceptDescriptionID,
-		"idShort":   "RecentConceptV2",
-		"modelType": "ConceptDescription",
-		"administration": map[string]any{
-			"createdAt": "2030-01-02T03:04:05Z",
-			"updatedAt": "2030-01-02T03:04:07Z",
-		},
-	})
-	if err != nil {
-		t.Fatalf("failed to update concept description: %v", err)
+	versions := []struct {
+		idShort   string
+		updatedAt string
+	}{
+		{idShort: "RecentConceptV2", updatedAt: "2030-01-02T03:04:07Z"},
+		{idShort: "RecentConceptV3", updatedAt: "2030-01-02T03:04:08Z"},
+		{idShort: "RecentConceptV4", updatedAt: "2030-01-02T03:04:09Z"},
+		{idShort: "RecentConceptV5", updatedAt: "2030-01-02T03:04:10Z"},
+		{idShort: "RecentConceptV6", updatedAt: "2030-01-02T03:04:11Z"},
 	}
-	if status != http.StatusNoContent {
-		t.Fatalf("expected 204, got %d body=%s", status, string(body))
+	for _, version := range versions {
+		status, body, err = requestJSON(http.MethodPut, baseURL+"/concept-descriptions/"+encodedID, conceptDescriptionRecentChangePayload(
+			conceptDescriptionID,
+			version.idShort,
+			version.updatedAt,
+		))
+		if err != nil {
+			t.Fatalf("failed to update concept description: %v", err)
+		}
+		if status != http.StatusNoContent {
+			t.Fatalf("expected 204, got %d body=%s", status, string(body))
+		}
 	}
-	requireConceptDescriptionHistoryPayloadTypes(t, conceptDescriptionID, []string{"snapshot", "diff"})
+	requireConceptDescriptionHistoryPayloadTypes(t, conceptDescriptionID, []string{"snapshot", "diff", "diff", "snapshot", "diff", "diff"})
 
 	recentURL := baseURL + "/concept-descriptions/$recent-changes?limit=10&updatedFrom=" + url.QueryEscape(changedAfter)
 	status, body, err = requestJSON(http.MethodGet, recentURL, nil)
@@ -101,7 +105,19 @@ func TestConceptDescriptionRepositoryRecentChanges(t *testing.T) {
 	if err = json.Unmarshal(body, &payload); err != nil {
 		t.Fatalf("failed to decode recent changes: %v", err)
 	}
-	requireConceptDescriptionRecentChanges(t, payload, conceptDescriptionID, 2)
+	requireConceptDescriptionRecentChanges(t, payload, conceptDescriptionID, 6)
+}
+
+func conceptDescriptionRecentChangePayload(id string, idShort string, updatedAt string) map[string]any {
+	return map[string]any{
+		"id":        id,
+		"idShort":   idShort,
+		"modelType": "ConceptDescription",
+		"administration": map[string]any{
+			"createdAt": "2030-01-02T03:04:05Z",
+			"updatedAt": updatedAt,
+		},
+	}
 }
 
 func requireConceptDescriptionHistoryPayloadTypes(t *testing.T, id string, expected []string) {

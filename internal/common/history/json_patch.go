@@ -43,6 +43,27 @@ const (
 )
 
 // BuildJSONPatch returns a deterministic RFC 6902 JSON Patch from one JSON value to another.
+//
+// Object keys are processed in sorted order and array changes are emitted in an
+// order that can be applied directly to the original value. The resulting patch
+// is intended for compact history payloads, not for preserving user-authored
+// patch document formatting.
+//
+// Parameters:
+//   - from: Original JSON-compatible value.
+//   - to: Target JSON-compatible value.
+//
+// Returns:
+//   - []map[string]any: Ordered RFC 6902 operation objects.
+//   - error: Error when values cannot be compared, cloned, or encoded.
+//
+// Example:
+//
+//	patch, err := BuildJSONPatch(previousSnapshot, currentSnapshot)
+//	if err != nil {
+//		return nil, err
+//	}
+//	return patch, nil
 func BuildJSONPatch(from any, to any) ([]map[string]any, error) {
 	operations := make([]map[string]any, 0)
 	if err := appendJSONPatchOperations(&operations, "", from, to); err != nil {
@@ -52,6 +73,28 @@ func BuildJSONPatch(from any, to any) ([]map[string]any, error) {
 }
 
 // ApplyJSONPatch applies an RFC 6902 JSON Patch to a snapshot and returns the reconstructed snapshot.
+//
+// The base snapshot is cloned before applying operations, so callers can safely
+// reuse their input map. The returned root must remain a JSON object because
+// history snapshots represent complete identifiable entities.
+//
+// Parameters:
+//   - base: Snapshot to clone and patch.
+//   - operations: RFC 6902 operation objects produced by BuildJSONPatch or read
+//     from a diff payload.
+//
+// Returns:
+//   - map[string]any: Reconstructed snapshot after all operations.
+//   - error: Error when operations are invalid or the reconstructed root is not
+//     a JSON object.
+//
+// Example:
+//
+//	restored, err := ApplyJSONPatch(checkpoint, patch)
+//	if err != nil {
+//		return nil, err
+//	}
+//	return restored, nil
 func ApplyJSONPatch(base map[string]any, operations []map[string]any) (map[string]any, error) {
 	clonedBase, err := cloneJSONValue(base)
 	if err != nil {

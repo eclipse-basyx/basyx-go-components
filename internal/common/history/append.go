@@ -37,7 +37,37 @@ import (
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 )
 
-// AppendVersionTx appends an immutable snapshot event for identifier.
+// AppendVersionTx appends a versioned history row for identifier inside tx.
+//
+// The supplied snapshot must already represent the complete entity state after
+// the mutation. Depending on ActiveConfig().FullSnapshotInterval and payload
+// size, the row stores either a full snapshot checkpoint or an RFC 6902 diff
+// against the latest reconstructed version. The function takes an advisory
+// transaction lock per history table and identifier so concurrent mutations of
+// the same entity keep a deterministic row-hash chain.
+//
+// Parameters:
+//   - ctx: Request context. Audit metadata stored with ContextWithAudit is
+//     persisted with the history row.
+//   - tx: Active SQL transaction used for locking and inserts.
+//   - table: History table name, for example TableAAS or TableSubmodel.
+//   - identifier: Stable entity identifier stored in the history table.
+//   - changeType: ChangeCreated, ChangeUpdated, or ChangeDeleted.
+//   - snapshot: Complete entity snapshot after the mutation.
+//   - deleted: True when the row represents a deletion tombstone.
+//
+// Returns:
+//   - error: nil when history is disabled or the row was appended; otherwise a
+//     coded BaSyx error describing validation, restore, hash, or database
+//     failures.
+//
+// Example:
+//
+//	snapshot := map[string]any{"id": aasID, "modelType": "AssetAdministrationShell"}
+//	err := AppendVersionTx(ctx, tx, TableAAS, aasID, ChangeUpdated, snapshot, false)
+//	if err != nil {
+//		return err
+//	}
 func AppendVersionTx(ctx context.Context, tx *sql.Tx, table string, identifier string, changeType string, snapshot map[string]any, deleted bool) error {
 	cfg := ActiveConfig()
 	if cfg.Mode == ModeOff {
@@ -68,7 +98,35 @@ func AppendVersionTx(ctx context.Context, tx *sql.Tx, table string, identifier s
 	return appendVersionWithLatestTx(ctx, tx, table, identifier, changeType, snapshot, deleted, &latest)
 }
 
-// AppendMutatedVersionTx derives and appends a version from the latest snapshot.
+// AppendMutatedVersionTx restores the latest snapshot, applies mutate, and appends the result.
+//
+// Use this helper for scoped updates where the caller has changed only a nested
+// portion of an entity and needs history to reconstruct the full snapshot first.
+// mutate receives a mutable copy of the latest non-deleted snapshot. The derived
+// version is stored with the same snapshot-or-diff rules as AppendVersionTx.
+//
+// Parameters:
+//   - ctx: Request context. Audit metadata stored with ContextWithAudit is
+//     persisted with the history row.
+//   - tx: Active SQL transaction used for locking, restoring, and appending.
+//   - table: History table name, for example TableAAS or TableSubmodel.
+//   - identifier: Stable entity identifier whose latest snapshot is restored.
+//   - changeType: ChangeCreated, ChangeUpdated, or ChangeDeleted.
+//   - mutate: Function that mutates the restored snapshot in place.
+//
+// Returns:
+//   - error: nil when history is disabled or the row was appended; otherwise a
+//     coded BaSyx error describing missing history, mutation, restore, hash, or
+//     database failures.
+//
+// Example:
+//
+//	err := AppendMutatedVersionTx(ctx, tx, TableSubmodel, submodelID, ChangeUpdated, func(snapshot map[string]any) error {
+//		return AppendSnapshotArrayItem(snapshot, "submodelElements", element)
+//	})
+//	if err != nil {
+//		return err
+//	}
 func AppendMutatedVersionTx(ctx context.Context, tx *sql.Tx, table string, identifier string, changeType string, mutate SnapshotMutator) error {
 	if ActiveConfig().Mode == ModeOff {
 		return nil

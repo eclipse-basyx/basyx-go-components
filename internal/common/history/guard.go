@@ -33,8 +33,27 @@ import (
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 )
 
-// ApplyPostgresGuardConfig enables database-side history mutation guards without
-// allowing ordinary service startup to downgrade an enabled database guard.
+// ApplyPostgresGuardConfig synchronizes database-side history mutation guards.
+//
+// A service configured for postgres_guarded or external_anchor immutability can
+// enable the shared database guard at startup. A service without guarded
+// immutability can keep an already-disabled guard disabled, but it cannot
+// downgrade a database where another service has enabled the guard.
+//
+// Parameters:
+//   - ctx: Startup context used for the guard configuration write.
+//   - db: Database handle connected to the shared BaSyx database.
+//
+// Returns:
+//   - error: Error when db is nil, the guard row cannot be written, or startup
+//     attempts to run an unguarded service against a guarded database.
+//
+// Example:
+//
+//	Configure(Config{Mode: ModeAudit, Immutability: ImmutabilityPostgresGuarded})
+//	if err := ApplyPostgresGuardConfig(ctx, db); err != nil {
+//		return err
+//	}
 func ApplyPostgresGuardConfig(ctx context.Context, db *sql.DB) error {
 	if db == nil {
 		return common.NewInternalServerError("HISTORY-GUARD-NILDB database handle must not be nil")

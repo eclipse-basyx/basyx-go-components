@@ -58,7 +58,40 @@ type restoreChainGroup struct {
 	rows         []storedHistoryRow
 }
 
-// RecentRows returns history rows before cursor, ordered from newest to oldest with one look-ahead row for pagination.
+// RecentRows returns recent history rows ordered from newest to oldest.
+//
+// The cursor is the history_id returned by a previous call and, when present,
+// limits the scan to older rows. createdFrom and updatedFrom match either the
+// operation timestamp or the corresponding administration timestamp so callers
+// can use recent-change API filters without losing rows that lack administration
+// metadata. Returned rows include restored snapshots and a next cursor when an
+// additional page is available.
+//
+// Parameters:
+//   - ctx: Request context used for database reads.
+//   - db: Database handle that can read the history and payload tables.
+//   - table: History table name, for example TableAAS or TableDescriptor.
+//   - limit: Maximum number of rows to return. Values less than one use
+//     DefaultRecentChangesLimit.
+//   - cursor: Optional history_id cursor from a previous response.
+//   - createdFrom: Optional lower bound for operation or administration-created
+//     timestamps.
+//   - updatedFrom: Optional lower bound for operation or administration-updated
+//     timestamps.
+//
+// Returns:
+//   - []Row: Restored rows ordered newest first.
+//   - string: Cursor for the next older page, or an empty string when exhausted.
+//   - error: Error when limits/cursors are invalid, snapshots cannot be restored,
+//     hashes fail verification, or database reads fail.
+//
+// Example:
+//
+//	rows, nextCursor, err := RecentRows(ctx, db, TableSubmodel, 100, cursor, createdFrom, updatedFrom)
+//	if err != nil {
+//		return nil, "", err
+//	}
+//	return rows, nextCursor, nil
 func RecentRows(ctx context.Context, db *sql.DB, table string, limit int32, cursor string, createdFrom time.Time, updatedFrom time.Time) ([]Row, string, error) {
 	if db == nil {
 		return nil, "", common.NewErrBadRequest("HISTORY-RECENT-NILDB database handle must not be nil")
@@ -351,7 +384,38 @@ func restoreRecentVersionGroups(groups []*restoreChainGroup) (map[recentRestoreK
 	return versionsByTarget, nil
 }
 
-// FilterRecentRows fills a filtered page without exposing empty intermediary raw pages.
+// FilterRecentRows applies a caller-specific predicate while preserving page size semantics.
+//
+// fetch must return raw history rows in newest-first order using the same cursor
+// contract as RecentRows. FilterRecentRows keeps fetching older raw pages until
+// it has collected limit included rows or the raw feed is exhausted, so API-level
+// filters such as asset or semantic ID filters do not expose empty intermediary
+// pages to clients.
+//
+// Parameters:
+//   - limit: Maximum number of included rows to return. Values less than one use
+//     DefaultRecentChangesLimit.
+//   - cursor: Optional raw history cursor from the client.
+//   - fetch: Callback that loads one unfiltered newest-first raw history page.
+//   - include: Predicate that decides whether a restored row belongs in the
+//     filtered response.
+//
+// Returns:
+//   - []Row: Included rows ordered newest first.
+//   - string: Cursor for the next older filtered page, or an empty string when
+//     exhausted.
+//   - error: Error from limit/cursor validation, fetch, include, or cursor
+//     progression checks.
+//
+// Example:
+//
+//	rows, nextCursor, err := FilterRecentRows(limit, cursor, fetch, func(row Row) (bool, error) {
+//		return row.Snapshot["semanticId"] != nil, nil
+//	})
+//	if err != nil {
+//		return nil, "", err
+//	}
+//	return rows, nextCursor, nil
 func FilterRecentRows(limit int32, cursor string, fetch RecentRowsFetcher, include RecentRowPredicate) ([]Row, string, error) {
 	limit, err := normalizeRecentChangesLimit(limit)
 	if err != nil {

@@ -41,7 +41,12 @@ var (
 	}
 )
 
-// Config controls the lightweight history/audit behavior.
+// Config controls process-local history and audit behavior.
+//
+// Services populate this from their common configuration during startup. Mode
+// decides whether history writes are skipped, stored for API history, or stored
+// for audit use. FullSnapshotInterval controls how many rows can be restored
+// from one checkpoint before a new full snapshot is forced.
 type Config struct {
 	Mode                 string
 	RetentionDays        int
@@ -51,6 +56,22 @@ type Config struct {
 }
 
 // Configure replaces the process-local history configuration.
+//
+// Values are normalized before they become active: empty or unknown modes fall
+// back to a supported mode, negative retention is disabled, and snapshot
+// intervals below one use DefaultFullSnapshotInterval.
+//
+// Parameters:
+//   - cfg: Desired history configuration for the current service process.
+//
+// Example:
+//
+//	Configure(Config{
+//		Mode:                 ModeAPI,
+//		FullSnapshotInterval: 3,
+//		Immutability:         ImmutabilityNone,
+//		AuditIdentityMode:    AuditIdentityNone,
+//	})
 func Configure(cfg Config) {
 	configMu.Lock()
 	defer configMu.Unlock()
@@ -58,6 +79,19 @@ func Configure(cfg Config) {
 }
 
 // ActiveConfig returns the normalized process-local history configuration.
+//
+// The returned value is a copy and can be read safely while other goroutines
+// call Configure during service initialization or tests.
+//
+// Returns:
+//   - Config: Current normalized process-local configuration.
+//
+// Example:
+//
+//	cfg := ActiveConfig()
+//	if cfg.Mode == ModeOff {
+//		return nil
+//	}
 func ActiveConfig() Config {
 	configMu.RLock()
 	defer configMu.RUnlock()

@@ -109,7 +109,11 @@ var exemptMutationOperations = map[string]struct{}{
 
 type mutationCoverageContextKey struct{}
 
-// MutationCoverage describes the classification applied to an HTTP mutation.
+// MutationCoverage describes the history classification applied to an HTTP mutation.
+//
+// Middleware stores this value on the request context after matching a mutation
+// route. Versioned identifies routes that must append history; exempt routes are
+// intentionally allowed to mutate without creating a history row.
 type MutationCoverage struct {
 	Method    string
 	Pattern   string
@@ -117,6 +121,11 @@ type MutationCoverage struct {
 }
 
 // MutationCoverageGuard rejects unclassified HTTP mutations while history is active.
+//
+// Generated API routers register route policies through ClassifyRoute, Cover,
+// and Exempt. At runtime, the guard lets reads pass through, allows covered or
+// exempt mutations, and fails matching mutation routes that have no explicit
+// versioning policy.
 type MutationCoverageGuard struct {
 	mu      sync.RWMutex
 	covered map[string][]string
@@ -124,7 +133,25 @@ type MutationCoverageGuard struct {
 	routes  chi.Routes
 }
 
-// NewMutationCoverageGuard creates an empty versioning route classifier.
+// NewMutationCoverageGuard creates an empty mutation route classifier.
+//
+// Passing a chi route tree lets Middleware distinguish real unclassified
+// mutations from requests that the downstream router will reject as not found or
+// method not allowed.
+//
+// Parameters:
+//   - routes: Optional chi route tree used to check whether a request matches a
+//     generated handler.
+//
+// Returns:
+//   - *MutationCoverageGuard: Guard ready for route classification and
+//     middleware installation.
+//
+// Example:
+//
+//	guard := NewMutationCoverageGuard(apiRouter)
+//	guard.Cover(http.MethodPut, "/shells/{aasId}")
+//	apiRouter.Use(guard.Middleware)
 func NewMutationCoverageGuard(routes ...chi.Routes) *MutationCoverageGuard {
 	guard := &MutationCoverageGuard{
 		covered: make(map[string][]string),
@@ -136,7 +163,21 @@ func NewMutationCoverageGuard(routes ...chi.Routes) *MutationCoverageGuard {
 	return guard
 }
 
-// ClassifyRoute registers the versioning policy for a generated API route.
+// ClassifyRoute registers the history policy for a generated API route.
+//
+// The operation name is matched against the generated operation allowlists in
+// this package. Mutation operations known to change persisted state are covered;
+// known operational or delegated mutations are exempt. Non-mutating methods are
+// ignored.
+//
+// Parameters:
+//   - operation: Generated OpenAPI operation name.
+//   - method: HTTP method for the route.
+//   - pattern: Route pattern registered with chi.
+//
+// Example:
+//
+//	guard.ClassifyRoute("PutAssetAdministrationShellById", http.MethodPut, "/shells/{aasId}")
 func (g *MutationCoverageGuard) ClassifyRoute(operation string, method string, pattern string) {
 	if !isMutationMethod(method) {
 		return
@@ -150,17 +191,54 @@ func (g *MutationCoverageGuard) ClassifyRoute(operation string, method string, p
 	}
 }
 
-// Cover marks a mutation route as snapshot-producing.
+// Cover marks a mutation route as history-producing.
+//
+// Covered routes are expected to append a history row somewhere in their
+// handling path when history is active.
+//
+// Parameters:
+//   - method: HTTP mutation method.
+//   - pattern: Route pattern to treat as versioned.
+//
+// Example:
+//
+//	guard.Cover(http.MethodPost, "/submodels")
 func (g *MutationCoverageGuard) Cover(method string, pattern string) {
 	g.addRoute(g.covered, method, pattern)
 }
 
-// Exempt marks a mutation route as deliberately not snapshot-producing.
+// Exempt marks a mutation route as deliberately not history-producing.
+//
+// Use exemptions for mutations whose persistence is handled by another service,
+// does not affect versioned AAS data, or is intentionally outside history scope.
+//
+// Parameters:
+//   - method: HTTP mutation method.
+//   - pattern: Route pattern to allow without a history row.
+//
+// Example:
+//
+//	guard.Exempt(http.MethodPost, "/query/submodels")
 func (g *MutationCoverageGuard) Exempt(method string, pattern string) {
 	g.addRoute(g.exempt, method, pattern)
 }
 
-// Middleware rejects mutation requests that have no explicit versioning policy.
+// Middleware rejects mutation requests that have no explicit history policy.
+//
+// When history is disabled, or when the request is not a mutation method, the
+// middleware is transparent. For covered and exempt mutations it records
+// MutationCoverage on the request context so downstream handlers and tests can
+// inspect the classification.
+//
+// Parameters:
+//   - next: Downstream HTTP handler.
+//
+// Returns:
+//   - http.Handler: Handler that enforces mutation coverage before delegating.
+//
+// Example:
+//
+//	apiRouter.Use(guard.Middleware)
 func (g *MutationCoverageGuard) Middleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if ActiveConfig().Mode == ModeOff || !isMutationMethod(r.Method) {
@@ -185,6 +263,23 @@ func (g *MutationCoverageGuard) Middleware(next http.Handler) http.Handler {
 }
 
 // MutationCoverageFromContext returns the route classification stored by Middleware.
+//
+// The boolean result is false when ctx is nil or the request did not pass through
+// a covered or exempt mutation route.
+//
+// Parameters:
+//   - ctx: Request context to inspect.
+//
+// Returns:
+//   - MutationCoverage: Stored route classification.
+//   - bool: True when coverage metadata was present.
+//
+// Example:
+//
+//	coverage, ok := MutationCoverageFromContext(ctx)
+//	if ok && coverage.Versioned {
+//		return AppendVersionTx(ctx, tx, TableSubmodel, id, ChangeUpdated, snapshot, false)
+//	}
 func MutationCoverageFromContext(ctx context.Context) (MutationCoverage, bool) {
 	if ctx == nil {
 		return MutationCoverage{}, false
