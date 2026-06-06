@@ -351,18 +351,24 @@ func verifyHistoryEventArtifacts(ctx context.Context, db *sql.DB, options Verify
 		report.addFinding(VerificationSeverityError, "HISTORY-EVIDENCE-VERIFY-EVENTRECEIPTS", err.Error(), "", 0)
 		return
 	}
-	receiptIndex := indexEventArtifactReceipts(receipts, report)
+	receiptIndex := indexEventArtifactReceipts(receipts)
 	for _, candidate := range candidates {
 		verifyEventArtifactCandidate(ctx, options, report, candidate, receiptIndex[eventArtifactKey(candidate.Identifier, candidate.HistoryID, candidate.RowHash)])
 	}
 }
 
-func verifyEventArtifactCandidate(ctx context.Context, options VerifyHistoryRangeOptions, report *HistoryEvidenceVerificationReport, candidate EventArtifactCandidate, receipt *eventArtifactReceiptRow) {
-	if receipt == nil {
+func verifyEventArtifactCandidate(ctx context.Context, options VerifyHistoryRangeOptions, report *HistoryEvidenceVerificationReport, candidate EventArtifactCandidate, receipts []*eventArtifactReceiptRow) {
+	if len(receipts) == 0 {
 		report.addFinding(VerificationSeverityError, "HISTORY-EVIDENCE-VERIFY-EVENTMISSING", "history_event artifact receipt is missing", candidate.Identifier, candidate.HistoryID)
 		return
 	}
 	expectedSHA := SHA256Hex(candidate.Artifact.Data)
+	for _, receipt := range receipts {
+		verifyEventArtifactReceipt(ctx, options, report, candidate, receipt, expectedSHA)
+	}
+}
+
+func verifyEventArtifactReceipt(ctx context.Context, options VerifyHistoryRangeOptions, report *HistoryEvidenceVerificationReport, candidate EventArtifactCandidate, receipt *eventArtifactReceiptRow, expectedSHA string) {
 	if !strings.EqualFold(receipt.Receipt.SHA256, expectedSHA) {
 		report.addFinding(VerificationSeverityError, "HISTORY-EVIDENCE-VERIFY-EVENTSHA", "history_event receipt SHA-256 does not match PostgreSQL row artifact", candidate.Identifier, candidate.HistoryID)
 	}
@@ -478,16 +484,12 @@ func scanEventArtifactReceiptRow(rows *sql.Rows) (eventArtifactReceiptRow, error
 	return row, nil
 }
 
-func indexEventArtifactReceipts(receipts []eventArtifactReceiptRow, report *HistoryEvidenceVerificationReport) map[string]*eventArtifactReceiptRow {
-	index := make(map[string]*eventArtifactReceiptRow, len(receipts))
+func indexEventArtifactReceipts(receipts []eventArtifactReceiptRow) map[string][]*eventArtifactReceiptRow {
+	index := make(map[string][]*eventArtifactReceiptRow, len(receipts))
 	for i := range receipts {
 		receipt := &receipts[i]
 		key := eventArtifactKey(receipt.Identifier, receipt.HistoryID, receipt.RowHash)
-		if existing := index[key]; existing != nil {
-			report.addFinding(VerificationSeverityError, "HISTORY-EVIDENCE-VERIFY-EVENTDUPLICATE", "multiple history_event receipts exist for one history row", receipt.Identifier, receipt.HistoryID)
-			continue
-		}
-		index[key] = receipt
+		index[key] = append(index[key], receipt)
 	}
 	return index
 }

@@ -137,6 +137,37 @@ func TestStoreManifestArtifactRejectsNilReceipt(t *testing.T) {
 	require.ErrorContains(t, err, "HISTORY-EVIDENCE-WRITE-NILMANIFESTRECEIPT")
 }
 
+func TestEvidenceEventArtifactCatalogRowLinksPublishedEventsToManifest(t *testing.T) {
+	receipt := EvidenceReceipt{
+		Reference: EvidenceReference{
+			Provider:  EvidenceProviderS3,
+			Bucket:    "history-evidence",
+			ObjectKey: "history-events/aas_history/aas-1/1-rowhash.json",
+			VersionID: "version-1",
+		},
+		SHA256:      strings.Repeat("a", 64),
+		SizeBytes:   42,
+		ContentType: manifestJSONContentType,
+		StoredAt:    time.Date(2026, 6, 5, 12, 0, 0, 0, time.UTC),
+	}
+	eventReceipt := EvidenceCatalogEventReceipt{
+		Candidate: EventArtifactCandidate{
+			HistoryTable: TableAAS,
+			Identifier:   "aas-1",
+			HistoryID:    1,
+			RowHash:      "rowhash",
+			ContentHash:  "contenthash",
+		},
+		Receipt: receipt,
+	}
+
+	row := evidenceEventArtifactCatalogRow(99, eventReceipt)
+
+	require.Equal(t, int64(99), row["manifest_id"])
+	require.Equal(t, EvidenceArtifactHistoryEvent, row["artifact_type"])
+	require.Equal(t, int64(1), row["history_id"])
+}
+
 func TestS3EvidenceStoreReceiptAppliesPrefixAndRetention(t *testing.T) {
 	now := time.Date(2026, 6, 5, 12, 0, 0, 0, time.UTC)
 	store := &S3EvidenceStore{

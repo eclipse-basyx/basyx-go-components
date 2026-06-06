@@ -40,7 +40,7 @@ services:
       - BASYX_HISTORY_EVIDENCE_ACCESS_KEY_ID=minioadmin
       - BASYX_HISTORY_EVIDENCE_SECRET_ACCESS_KEY=minioadmin
       - BASYX_HISTORY_EVIDENCE_PATH_STYLE=true
-      - BASYX_HISTORY_EVIDENCE_RETENTION_MODE=governance
+      - BASYX_HISTORY_EVIDENCE_RETENTION_MODE=compliance
       - BASYX_HISTORY_EVIDENCE_RETENTION_DAYS=7
       - BASYX_HISTORY_EVIDENCE_WRITE_TIMEOUT_SECONDS=10
       - BASYX_HISTORY_INTEGRITY_ANCHOR_PROVIDER=none
@@ -136,4 +136,4 @@ services:
         until mc alias set local http://minio:9000 minioadmin minioadmin; do sleep 2; done
         mc mb --ignore-existing --with-lock local/basyx-history-evidence
         mc version enable local/basyx-history-evidence
-        mc retention set --default governance 7d local/basyx-history-evidence
+        mc retention set --default compliance 7d local/basyx-history-evidence

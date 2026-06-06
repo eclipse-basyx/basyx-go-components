@@ -186,14 +186,13 @@ func insertEvidenceManifestCatalogRow(ctx context.Context, tx *sql.Tx, record Ev
 func insertEvidenceArtifactCatalogRows(ctx context.Context, tx *sql.Tx, manifestID int64, record EvidenceCatalogRecord) error {
 	rows := []goqu.Record{manifestArtifactCatalogRow(manifestID, record)}
 	for _, eventReceipt := range record.EventReceipts {
-		rows = append(rows, evidenceEventArtifactCatalogRow(eventReceipt))
+		rows = append(rows, evidenceEventArtifactCatalogRow(manifestID, eventReceipt))
 	}
 	for _, snapshotReceipt := range record.SnapshotReceipts {
 		rows = append(rows, snapshotArtifactCatalogRow(manifestID, record.Manifest, snapshotReceipt))
 	}
 	query, args, err := goqu.Insert(TableHistoryEvidenceArtifacts).
 		Rows(rows).
-		OnConflict(goqu.DoNothing()).
 		ToSQL()
 	if err != nil {
 		return common.NewInternalServerError("HISTORY-EVIDENCE-CATALOG-BUILDARTIFACTS " + err.Error())
@@ -224,9 +223,9 @@ func snapshotArtifactCatalogRow(manifestID int64, manifest HistoryManifest, snap
 	return row
 }
 
-func evidenceEventArtifactCatalogRow(eventReceipt EvidenceCatalogEventReceipt) goqu.Record {
+func evidenceEventArtifactCatalogRow(manifestID int64, eventReceipt EvidenceCatalogEventReceipt) goqu.Record {
 	candidate := eventReceipt.Candidate
-	return historyEventArtifactCatalogRow(EventEvidenceRecord{
+	row := historyEventArtifactCatalogRow(EventEvidenceRecord{
 		HistoryTable: candidate.HistoryTable,
 		Identifier:   candidate.Identifier,
 		HistoryID:    candidate.HistoryID,
@@ -234,6 +233,8 @@ func evidenceEventArtifactCatalogRow(eventReceipt EvidenceCatalogEventReceipt) g
 		ContentHash:  candidate.ContentHash,
 		Receipt:      eventReceipt.Receipt,
 	})
+	row["manifest_id"] = manifestID
+	return row
 }
 
 func historyEventArtifactCatalogRow(record EventEvidenceRecord) goqu.Record {

@@ -102,13 +102,24 @@ CREATE UNIQUE INDEX IF NOT EXISTS ux_history_evidence_manifest_range
     range_digest
   );
 
-CREATE UNIQUE INDEX IF NOT EXISTS ux_history_evidence_artifact_object
+CREATE UNIQUE INDEX IF NOT EXISTS ux_history_evidence_artifact_object_manifest
+  ON history_evidence_artifacts(
+    manifest_id,
+    provider,
+    COALESCE(bucket, ''),
+    object_key,
+    COALESCE(object_version_id, '')
+  )
+  WHERE manifest_id IS NOT NULL;
+
+CREATE UNIQUE INDEX IF NOT EXISTS ux_history_evidence_artifact_object_unlinked
   ON history_evidence_artifacts(
     provider,
     COALESCE(bucket, ''),
     object_key,
     COALESCE(object_version_id, '')
-  );
+  )
+  WHERE manifest_id IS NULL;
 
 CREATE INDEX IF NOT EXISTS ix_history_evidence_manifest_table_identifier
   ON history_evidence_manifests(history_table, identifier, last_history_id DESC);
@@ -119,14 +130,26 @@ CREATE INDEX IF NOT EXISTS ix_history_evidence_artifact_manifest
 CREATE INDEX IF NOT EXISTS ix_history_evidence_artifact_history_row
   ON history_evidence_artifacts(history_table, identifier, history_id);
 
-CREATE UNIQUE INDEX IF NOT EXISTS ux_history_evidence_artifact_history_event
+CREATE UNIQUE INDEX IF NOT EXISTS ux_history_evidence_artifact_history_event_manifest
+  ON history_evidence_artifacts(
+    manifest_id,
+    history_table,
+    COALESCE(identifier, ''),
+    history_id,
+    COALESCE(row_hash, '')
+  )
+  WHERE artifact_type = 'history_event'
+    AND manifest_id IS NOT NULL;
+
+CREATE UNIQUE INDEX IF NOT EXISTS ux_history_evidence_artifact_history_event_unlinked
   ON history_evidence_artifacts(
     history_table,
     COALESCE(identifier, ''),
     history_id,
     COALESCE(row_hash, '')
   )
-  WHERE artifact_type = 'history_event';
+  WHERE artifact_type = 'history_event'
+    AND manifest_id IS NULL;
 
 -- Mark the schema as upgraded only after all schema objects completed
 -- successfully.
