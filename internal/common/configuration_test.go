@@ -166,6 +166,12 @@ func TestLoadConfigAppliesHistoryAndEventingDefaults(t *testing.T) {
 	withUnsetEnv(t, "BASYX_HISTORY_FULL_SNAPSHOT_INTERVAL")
 	withUnsetEnv(t, "BASYX_HISTORY_IMMUTABILITY")
 	withUnsetEnv(t, "BASYX_AUDIT_IDENTITY_MODE")
+	withUnsetEnv(t, "BASYX_HISTORY_EVIDENCE_ENABLED")
+	withUnsetEnv(t, "BASYX_HISTORY_EVIDENCE_PROVIDER")
+	withUnsetEnv(t, "BASYX_HISTORY_EVIDENCE_BUCKET")
+	withUnsetEnv(t, "BASYX_HISTORY_EVIDENCE_REGION")
+	withUnsetEnv(t, "BASYX_HISTORY_EVIDENCE_WRITE_TIMEOUT_SECONDS")
+	withUnsetEnv(t, "BASYX_HISTORY_INTEGRITY_ANCHOR_PROVIDER")
 	withUnsetEnv(t, "BASYX_EVENTING_ENABLED")
 	withUnsetEnv(t, "BASYX_EVENTING_FORMAT")
 	withUnsetEnv(t, "BASYX_EVENTING_SINKS")
@@ -193,6 +199,9 @@ func TestLoadConfigAppliesHistoryAndEventingDefaults(t *testing.T) {
 	if cfg.History.AuditIdentityMode != "none" {
 		t.Fatalf("expected default audit identity mode none, got %q", cfg.History.AuditIdentityMode)
 	}
+	if cfg.History.Evidence.Enabled || cfg.History.Evidence.Provider != "none" || cfg.History.IntegrityAnchor.Provider != "none" {
+		t.Fatalf("unexpected history evidence defaults: %+v", cfg.History)
+	}
 	if cfg.Eventing.Enabled || cfg.Eventing.Format != "cloudevents" || cfg.Eventing.TopicPrefix != "basyx" {
 		t.Fatalf("unexpected eventing defaults: %+v", cfg.Eventing)
 	}
@@ -216,11 +225,70 @@ func TestLoadConfigAppliesSupportedBasyxHistoryEnvOverrides(t *testing.T) {
 	}
 }
 
+func TestLoadConfigAppliesHistoryEvidenceEnvOverrides(t *testing.T) {
+	t.Setenv("BASYX_HISTORY_MODE", "audit")
+	t.Setenv("BASYX_HISTORY_IMMUTABILITY", "postgres_guarded")
+	t.Setenv("BASYX_AUDIT_IDENTITY_MODE", "none")
+	t.Setenv("BASYX_HISTORY_EVIDENCE_ENABLED", "true")
+	t.Setenv("BASYX_HISTORY_EVIDENCE_PROVIDER", "s3")
+	t.Setenv("BASYX_HISTORY_EVIDENCE_BUCKET", "history-evidence")
+	t.Setenv("BASYX_HISTORY_EVIDENCE_PREFIX", "test-prefix")
+	t.Setenv("BASYX_HISTORY_EVIDENCE_REGION", "us-east-1")
+	t.Setenv("BASYX_HISTORY_EVIDENCE_ENDPOINT", "http://minio:9000")
+	t.Setenv("BASYX_HISTORY_EVIDENCE_ACCESS_KEY_ID", "minio")
+	t.Setenv("BASYX_HISTORY_EVIDENCE_SECRET_ACCESS_KEY", "minio123")
+	t.Setenv("BASYX_HISTORY_EVIDENCE_PATH_STYLE", "true")
+	t.Setenv("BASYX_HISTORY_EVIDENCE_RETENTION_MODE", "governance")
+	t.Setenv("BASYX_HISTORY_EVIDENCE_RETENTION_DAYS", "7")
+	t.Setenv("BASYX_HISTORY_EVIDENCE_WRITE_TIMEOUT_SECONDS", "12")
+	t.Setenv("BASYX_HISTORY_INTEGRITY_ANCHOR_PROVIDER", "none")
+	captureLogOutput(t)
+
+	cfg, err := LoadConfig("", NORMAL)
+	if err != nil {
+		t.Fatalf("unexpected config load error: %v", err)
+	}
+
+	if !cfg.History.Evidence.Enabled || cfg.History.Evidence.Provider != "s3" || cfg.History.Evidence.Bucket != "history-evidence" || cfg.History.Evidence.Prefix != "test-prefix" {
+		t.Fatalf("unexpected evidence env override result: %+v", cfg.History.Evidence)
+	}
+	if !cfg.History.Evidence.UsePathStyle || cfg.History.Evidence.RetentionMode != "governance" || cfg.History.Evidence.RetentionDays != 7 || cfg.History.Evidence.WriteTimeoutSec != 12 {
+		t.Fatalf("unexpected evidence retention/path-style result: %+v", cfg.History.Evidence)
+	}
+}
+
 func TestValidateHistoryAndEventingConfigAcceptsDiffBackedSnapshotInterval(t *testing.T) {
 	cfg := Config{History: HistoryConfig{Mode: "api", FullSnapshotInterval: 10, Immutability: "none", AuditIdentityMode: "none"}}
 
 	if err := validateHistoryAndEventingConfig(&cfg); err != nil {
 		t.Fatalf("expected diff-backed full snapshot interval to be accepted, got %v", err)
+	}
+}
+
+func TestValidateHistoryAndEventingConfigAcceptsCompleteS3EvidenceConfig(t *testing.T) {
+	cfg := Config{
+		JWS: JWSConfig{PrivateKeyPath: "fallback-key.pem"},
+		History: HistoryConfig{
+			Mode:                 "audit",
+			FullSnapshotInterval: 5,
+			Immutability:         "postgres_guarded",
+			AuditIdentityMode:    "none",
+			Evidence: HistoryEvidenceConfig{
+				Enabled:         true,
+				Provider:        "s3",
+				Bucket:          "history-evidence",
+				Region:          "us-east-1",
+				RetentionMode:   "governance",
+				RetentionDays:   1,
+				WriteTimeoutSec: 10,
+				Signing:         HistoryEvidenceSigningConfig{Required: true},
+			},
+			IntegrityAnchor: HistoryIntegrityAnchorConfig{Provider: "none"},
+		},
+	}
+
+	if err := validateHistoryAndEventingConfig(&cfg); err != nil {
+		t.Fatalf("expected complete S3 evidence config to be accepted, got %v", err)
 	}
 }
 
@@ -240,6 +308,56 @@ func TestValidateHistoryAndEventingConfigRejectsUnsupportedFeatures(t *testing.T
 		{
 			name:   "external anchor",
 			config: Config{History: HistoryConfig{Mode: "api", FullSnapshotInterval: 1, Immutability: "external_anchor", AuditIdentityMode: "none"}},
+		},
+		{
+			name: "incomplete evidence",
+			config: Config{History: HistoryConfig{
+				Mode:                 "api",
+				FullSnapshotInterval: 1,
+				Immutability:         "none",
+				AuditIdentityMode:    "none",
+				Evidence:             HistoryEvidenceConfig{Enabled: true, Provider: "s3", Region: "us-east-1"},
+			}},
+		},
+		{
+			name: "evidence with history off",
+			config: Config{History: HistoryConfig{
+				Mode:                 "off",
+				FullSnapshotInterval: 1,
+				Immutability:         "none",
+				AuditIdentityMode:    "none",
+				Evidence:             HistoryEvidenceConfig{Enabled: true, Provider: "s3", Bucket: "history-evidence", Region: "us-east-1"},
+			}},
+		},
+		{
+			name: "evidence without retention",
+			config: Config{History: HistoryConfig{
+				Mode:                 "api",
+				FullSnapshotInterval: 1,
+				Immutability:         "none",
+				AuditIdentityMode:    "none",
+				Evidence:             HistoryEvidenceConfig{Enabled: true, Provider: "s3", Bucket: "history-evidence", Region: "us-east-1", WriteTimeoutSec: 10},
+			}},
+		},
+		{
+			name: "evidence without write timeout",
+			config: Config{History: HistoryConfig{
+				Mode:                 "api",
+				FullSnapshotInterval: 1,
+				Immutability:         "none",
+				AuditIdentityMode:    "none",
+				Evidence:             HistoryEvidenceConfig{Enabled: true, Provider: "s3", Bucket: "history-evidence", Region: "us-east-1", RetentionMode: "governance", RetentionDays: 1},
+			}},
+		},
+		{
+			name: "reserved integrity anchor provider",
+			config: Config{History: HistoryConfig{
+				Mode:                 "api",
+				FullSnapshotInterval: 1,
+				Immutability:         "none",
+				AuditIdentityMode:    "none",
+				IntegrityAnchor:      HistoryIntegrityAnchorConfig{Provider: "immudb"},
+			}},
 		},
 		{
 			name:   "audit identity",

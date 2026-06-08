@@ -80,6 +80,21 @@ var DefaultConfig = struct {
 	HistoryConfigFullSnapshotInterval   int
 	HistoryConfigImmutability           string
 	HistoryConfigAuditIdentityMode      string
+	HistoryEvidenceEnabled              bool
+	HistoryEvidenceProvider             string
+	HistoryEvidenceBucket               string
+	HistoryEvidencePrefix               string
+	HistoryEvidenceRegion               string
+	HistoryEvidenceEndpoint             string
+	HistoryEvidenceAccessKeyID          string
+	HistoryEvidenceSecretAccessKey      string
+	HistoryEvidenceUsePathStyle         bool
+	HistoryEvidenceRetentionMode        string
+	HistoryEvidenceRetentionDays        int
+	HistoryEvidenceWriteTimeoutSeconds  int
+	HistoryEvidenceSigningPrivateKey    string
+	HistoryEvidenceSigningRequired      bool
+	HistoryIntegrityAnchorProvider      string
 	EventingEnabled                     bool
 	EventingFormat                      string
 	EventingSinks                       []string
@@ -117,6 +132,21 @@ var DefaultConfig = struct {
 	HistoryConfigFullSnapshotInterval:   1,
 	HistoryConfigImmutability:           "none",
 	HistoryConfigAuditIdentityMode:      "none",
+	HistoryEvidenceEnabled:              false,
+	HistoryEvidenceProvider:             "none",
+	HistoryEvidenceBucket:               "",
+	HistoryEvidencePrefix:               "basyx-history-evidence",
+	HistoryEvidenceRegion:               "us-east-1",
+	HistoryEvidenceEndpoint:             "",
+	HistoryEvidenceAccessKeyID:          "",
+	HistoryEvidenceSecretAccessKey:      "",
+	HistoryEvidenceUsePathStyle:         false,
+	HistoryEvidenceRetentionMode:        "",
+	HistoryEvidenceRetentionDays:        0,
+	HistoryEvidenceWriteTimeoutSeconds:  10,
+	HistoryEvidenceSigningPrivateKey:    "",
+	HistoryEvidenceSigningRequired:      false,
+	HistoryIntegrityAnchorProvider:      "none",
 	EventingEnabled:                     false,
 	EventingFormat:                      "cloudevents",
 	EventingSinks:                       []string{},
@@ -194,11 +224,41 @@ type JWSConfig struct {
 
 // HistoryConfig contains history and audit configuration.
 type HistoryConfig struct {
-	Mode                 string `mapstructure:"mode" yaml:"mode" json:"mode"`                                                 // off|api|audit
-	RetentionDays        int    `mapstructure:"retentionDays" yaml:"retentionDays" json:"retentionDays"`                      // 0 = keep forever
-	FullSnapshotInterval int    `mapstructure:"fullSnapshotInterval" yaml:"fullSnapshotInterval" json:"fullSnapshotInterval"` // 1 = every history row is a full snapshot
-	Immutability         string `mapstructure:"immutability" yaml:"immutability" json:"immutability"`                         // none|postgres_guarded|external_anchor
-	AuditIdentityMode    string `mapstructure:"auditIdentityMode" yaml:"auditIdentityMode" json:"auditIdentityMode"`          // none|minimal|extended
+	Mode                 string                       `mapstructure:"mode" yaml:"mode" json:"mode"`                                                 // off|api|audit
+	RetentionDays        int                          `mapstructure:"retentionDays" yaml:"retentionDays" json:"retentionDays"`                      // 0 = keep forever
+	FullSnapshotInterval int                          `mapstructure:"fullSnapshotInterval" yaml:"fullSnapshotInterval" json:"fullSnapshotInterval"` // 1 = every history row is a full snapshot
+	Immutability         string                       `mapstructure:"immutability" yaml:"immutability" json:"immutability"`                         // none|postgres_guarded|external_anchor
+	AuditIdentityMode    string                       `mapstructure:"auditIdentityMode" yaml:"auditIdentityMode" json:"auditIdentityMode"`          // none|minimal|extended
+	Evidence             HistoryEvidenceConfig        `mapstructure:"evidence" yaml:"evidence" json:"evidence"`
+	IntegrityAnchor      HistoryIntegrityAnchorConfig `mapstructure:"integrityAnchor" yaml:"integrityAnchor" json:"integrityAnchor"`
+}
+
+// HistoryEvidenceConfig configures WORM-compatible evidence artifact storage.
+type HistoryEvidenceConfig struct {
+	Enabled         bool                         `mapstructure:"enabled" yaml:"enabled" json:"enabled"`
+	Provider        string                       `mapstructure:"provider" yaml:"provider" json:"provider"` // none|s3
+	Bucket          string                       `mapstructure:"bucket" yaml:"bucket" json:"bucket"`
+	Prefix          string                       `mapstructure:"prefix" yaml:"prefix" json:"prefix"`
+	Region          string                       `mapstructure:"region" yaml:"region" json:"region"`
+	Endpoint        string                       `mapstructure:"endpoint" yaml:"endpoint" json:"endpoint"`
+	AccessKeyID     string                       `mapstructure:"accessKeyId" yaml:"accessKeyId" json:"accessKeyId"`
+	SecretAccessKey string                       `mapstructure:"secretAccessKey" yaml:"secretAccessKey" json:"secretAccessKey"`
+	UsePathStyle    bool                         `mapstructure:"pathStyle" yaml:"pathStyle" json:"pathStyle"`
+	RetentionMode   string                       `mapstructure:"retentionMode" yaml:"retentionMode" json:"retentionMode"` // governance|compliance
+	RetentionDays   int                          `mapstructure:"retentionDays" yaml:"retentionDays" json:"retentionDays"`
+	WriteTimeoutSec int                          `mapstructure:"writeTimeoutSeconds" yaml:"writeTimeoutSeconds" json:"writeTimeoutSeconds"`
+	Signing         HistoryEvidenceSigningConfig `mapstructure:"signing" yaml:"signing" json:"signing"`
+}
+
+// HistoryEvidenceSigningConfig configures optional manifest signing.
+type HistoryEvidenceSigningConfig struct {
+	PrivateKeyPath string `mapstructure:"privateKeyPath" yaml:"privateKeyPath" json:"privateKeyPath"`
+	Required       bool   `mapstructure:"required" yaml:"required" json:"required"`
+}
+
+// HistoryIntegrityAnchorConfig reserves future ledger/timestamping backends.
+type HistoryIntegrityAnchorConfig struct {
+	Provider string `mapstructure:"provider" yaml:"provider" json:"provider"` // none today; immudb/Rekor/Trillian later
 }
 
 // EventingConfig reserves future-compatible eventing configuration.
@@ -380,24 +440,57 @@ func applyHistoryEnvOverrides(cfg *Config) {
 	if value, ok := lookupTrimmedEnv("BASYX_HISTORY_MODE"); ok {
 		cfg.History.Mode = value
 	}
-	if value, ok := lookupTrimmedEnv("BASYX_HISTORY_RETENTION_DAYS"); ok {
-		var retention int
-		if _, err := fmt.Sscanf(value, "%d", &retention); err == nil {
-			cfg.History.RetentionDays = retention
-		}
-	}
-	if value, ok := lookupTrimmedEnv("BASYX_HISTORY_FULL_SNAPSHOT_INTERVAL"); ok {
-		var interval int
-		if _, err := fmt.Sscanf(value, "%d", &interval); err == nil {
-			cfg.History.FullSnapshotInterval = interval
-		}
-	}
+	applyIntEnv("BASYX_HISTORY_RETENTION_DAYS", func(value int) { cfg.History.RetentionDays = value })
+	applyIntEnv("BASYX_HISTORY_FULL_SNAPSHOT_INTERVAL", func(value int) { cfg.History.FullSnapshotInterval = value })
 	if value, ok := lookupTrimmedEnv("BASYX_HISTORY_IMMUTABILITY"); ok {
 		cfg.History.Immutability = value
 	}
 	if value, ok := lookupTrimmedEnv("BASYX_AUDIT_IDENTITY_MODE"); ok {
 		cfg.History.AuditIdentityMode = value
 	}
+	applyHistoryEvidenceEnvOverrides(cfg)
+	if value, ok := lookupTrimmedEnv("BASYX_HISTORY_INTEGRITY_ANCHOR_PROVIDER"); ok {
+		cfg.History.IntegrityAnchor.Provider = value
+	}
+}
+
+func applyHistoryEvidenceEnvOverrides(cfg *Config) {
+	applyBoolEnv("BASYX_HISTORY_EVIDENCE_ENABLED", func(value bool) { cfg.History.Evidence.Enabled = value })
+	if value, ok := lookupTrimmedEnv("BASYX_HISTORY_EVIDENCE_PROVIDER"); ok {
+		cfg.History.Evidence.Provider = value
+	}
+	if value, ok := lookupTrimmedEnv("BASYX_HISTORY_EVIDENCE_BUCKET"); ok {
+		cfg.History.Evidence.Bucket = value
+	}
+	if value, ok := lookupTrimmedEnv("BASYX_HISTORY_EVIDENCE_PREFIX"); ok {
+		cfg.History.Evidence.Prefix = value
+	}
+	if value, ok := lookupTrimmedEnv("BASYX_HISTORY_EVIDENCE_REGION"); ok {
+		cfg.History.Evidence.Region = value
+	}
+	if value, ok := lookupTrimmedEnv("BASYX_HISTORY_EVIDENCE_ENDPOINT"); ok {
+		cfg.History.Evidence.Endpoint = value
+	}
+	if value, ok := lookupTrimmedEnv("BASYX_HISTORY_EVIDENCE_ACCESS_KEY_ID"); ok {
+		cfg.History.Evidence.AccessKeyID = value
+	}
+	if value, ok := lookupTrimmedEnv("BASYX_HISTORY_EVIDENCE_SECRET_ACCESS_KEY"); ok {
+		cfg.History.Evidence.SecretAccessKey = value
+	}
+	if value, ok := lookupTrimmedEnv("BASYX_HISTORY_EVIDENCE_SECRET_KEY"); ok {
+		cfg.History.Evidence.SecretAccessKey = value
+	}
+	applyBoolEnv("BASYX_HISTORY_EVIDENCE_PATH_STYLE", func(value bool) { cfg.History.Evidence.UsePathStyle = value })
+	applyBoolEnv("BASYX_HISTORY_EVIDENCE_USE_PATH_STYLE", func(value bool) { cfg.History.Evidence.UsePathStyle = value })
+	if value, ok := lookupTrimmedEnv("BASYX_HISTORY_EVIDENCE_RETENTION_MODE"); ok {
+		cfg.History.Evidence.RetentionMode = value
+	}
+	applyIntEnv("BASYX_HISTORY_EVIDENCE_RETENTION_DAYS", func(value int) { cfg.History.Evidence.RetentionDays = value })
+	applyIntEnv("BASYX_HISTORY_EVIDENCE_WRITE_TIMEOUT_SECONDS", func(value int) { cfg.History.Evidence.WriteTimeoutSec = value })
+	if value, ok := lookupTrimmedEnv("BASYX_HISTORY_EVIDENCE_SIGNING_PRIVATE_KEY_PATH"); ok {
+		cfg.History.Evidence.Signing.PrivateKeyPath = value
+	}
+	applyBoolEnv("BASYX_HISTORY_EVIDENCE_SIGNING_REQUIRED", func(value bool) { cfg.History.Evidence.Signing.Required = value })
 }
 
 func applyEventingEnvOverrides(cfg *Config) {
@@ -426,6 +519,13 @@ func validateHistoryAndEventingConfig(cfg *Config) error {
 		return fmt.Errorf("CONFIG-HISTORY-NIL configuration must not be nil")
 	}
 
+	if err := validateHistoryConfig(cfg); err != nil {
+		return err
+	}
+	return validateEventingConfig(cfg.Eventing)
+}
+
+func validateHistoryConfig(cfg *Config) error {
 	switch strings.ToLower(strings.TrimSpace(cfg.History.Mode)) {
 	case "off", "api", "audit":
 	default:
@@ -440,7 +540,9 @@ func validateHistoryAndEventingConfig(cfg *Config) error {
 	switch strings.ToLower(strings.TrimSpace(cfg.History.Immutability)) {
 	case "none", "postgres_guarded":
 	case "external_anchor":
-		return fmt.Errorf("CONFIG-HISTORY-ANCHOR history.immutability external_anchor is not implemented yet")
+		if normalizeProvider(cfg.History.IntegrityAnchor.Provider) == "none" {
+			return fmt.Errorf("CONFIG-HISTORY-ANCHOR history.immutability external_anchor requires a configured history.integrityAnchor.provider")
+		}
 	default:
 		return fmt.Errorf("CONFIG-HISTORY-IMMUTABILITY unsupported history.immutability %q", cfg.History.Immutability)
 	}
@@ -451,10 +553,98 @@ func validateHistoryAndEventingConfig(cfg *Config) error {
 	default:
 		return fmt.Errorf("CONFIG-HISTORY-AUDITIDENTITY unsupported history.auditIdentityMode %q", cfg.History.AuditIdentityMode)
 	}
-	if cfg.Eventing.Enabled || cfg.Eventing.OutboxEnabled || len(cfg.Eventing.Sinks) > 0 {
+	if err := validateHistoryEvidenceConfig(cfg); err != nil {
+		return err
+	}
+	return validateIntegrityAnchorConfig(cfg.History.IntegrityAnchor)
+}
+
+func validateHistoryEvidenceConfig(cfg *Config) error {
+	evidence := cfg.History.Evidence
+	provider := normalizeProvider(evidence.Provider)
+	switch provider {
+	case "none", "s3":
+	default:
+		return fmt.Errorf("CONFIG-HISTORY-EVIDENCE-PROVIDER unsupported history.evidence.provider %q", evidence.Provider)
+	}
+	if !evidence.Enabled {
+		return nil
+	}
+	if strings.EqualFold(strings.TrimSpace(cfg.History.Mode), "off") {
+		return fmt.Errorf("CONFIG-HISTORY-EVIDENCE-MODE history.evidence.enabled requires history.mode api or audit")
+	}
+	if provider == "none" {
+		return fmt.Errorf("CONFIG-HISTORY-EVIDENCE-PROVIDER history.evidence.enabled requires history.evidence.provider")
+	}
+	if provider != "s3" {
+		return fmt.Errorf("CONFIG-HISTORY-EVIDENCE-PROVIDER history.evidence.provider %q is not implemented", evidence.Provider)
+	}
+	if strings.TrimSpace(evidence.Bucket) == "" {
+		return fmt.Errorf("CONFIG-HISTORY-EVIDENCE-BUCKET history.evidence.bucket is required for S3 evidence")
+	}
+	if strings.TrimSpace(evidence.Region) == "" {
+		return fmt.Errorf("CONFIG-HISTORY-EVIDENCE-REGION history.evidence.region is required for S3 evidence")
+	}
+	if (strings.TrimSpace(evidence.AccessKeyID) == "") != (strings.TrimSpace(evidence.SecretAccessKey) == "") {
+		return fmt.Errorf("CONFIG-HISTORY-EVIDENCE-CREDENTIALS history.evidence accessKeyId and secretAccessKey must be configured together")
+	}
+	if evidence.RetentionDays < 0 {
+		return fmt.Errorf("CONFIG-HISTORY-EVIDENCE-RETENTIONDAYS history.evidence.retentionDays must not be negative")
+	}
+	retentionMode := strings.ToLower(strings.TrimSpace(evidence.RetentionMode))
+	if retentionMode == "" {
+		return fmt.Errorf("CONFIG-HISTORY-EVIDENCE-RETENTIONMODE history.evidence.retentionMode is required when evidence is enabled")
+	}
+	switch retentionMode {
+	case "governance", "compliance":
+	default:
+		return fmt.Errorf("CONFIG-HISTORY-EVIDENCE-RETENTIONMODE unsupported history.evidence.retentionMode %q", evidence.RetentionMode)
+	}
+	if evidence.RetentionDays < 1 {
+		return fmt.Errorf("CONFIG-HISTORY-EVIDENCE-RETENTION history.evidence.retentionDays must be at least 1 when evidence is enabled")
+	}
+	if evidence.WriteTimeoutSec < 1 {
+		return fmt.Errorf("CONFIG-HISTORY-EVIDENCE-TIMEOUT history.evidence.writeTimeoutSeconds must be at least 1")
+	}
+	if evidence.Signing.Required && effectiveHistoryEvidenceSigningKeyPath(cfg) == "" {
+		return fmt.Errorf("CONFIG-HISTORY-EVIDENCE-SIGNING history.evidence.signing.required needs history.evidence.signing.privateKeyPath or jws.privateKeyPath")
+	}
+	return nil
+}
+
+func validateIntegrityAnchorConfig(cfg HistoryIntegrityAnchorConfig) error {
+	switch normalizeProvider(cfg.Provider) {
+	case "none":
+		return nil
+	default:
+		return fmt.Errorf("CONFIG-HISTORY-INTEGRITYANCHOR-NOTIMPLEMENTED history.integrityAnchor.provider %q is reserved for a future backend", cfg.Provider)
+	}
+}
+
+func validateEventingConfig(cfg EventingConfig) error {
+	if cfg.Enabled || cfg.OutboxEnabled || len(cfg.Sinks) > 0 {
 		return fmt.Errorf("CONFIG-EVENTING-NOTIMPLEMENTED eventing publishing and outbox processing are not implemented yet")
 	}
 	return nil
+}
+
+func normalizeProvider(provider string) string {
+	normalized := strings.ToLower(strings.TrimSpace(provider))
+	if normalized == "" {
+		return "none"
+	}
+	return normalized
+}
+
+func effectiveHistoryEvidenceSigningKeyPath(cfg *Config) string {
+	if cfg == nil {
+		return ""
+	}
+	keyPath := strings.TrimSpace(cfg.History.Evidence.Signing.PrivateKeyPath)
+	if keyPath != "" {
+		return keyPath
+	}
+	return strings.TrimSpace(cfg.JWS.PrivateKeyPath)
 }
 
 func lookupTrimmedEnv(key string) (string, bool) {
@@ -463,6 +653,25 @@ func lookupTrimmedEnv(key string) (string, bool) {
 		return "", false
 	}
 	return strings.TrimSpace(value), true
+}
+
+func applyBoolEnv(key string, assign func(bool)) {
+	value, ok := lookupTrimmedEnv(key)
+	if !ok {
+		return
+	}
+	assign(strings.EqualFold(value, "true"))
+}
+
+func applyIntEnv(key string, assign func(int)) {
+	value, ok := lookupTrimmedEnv(key)
+	if !ok {
+		return
+	}
+	var parsed int
+	if _, err := fmt.Sscanf(value, "%d", &parsed); err == nil {
+		assign(parsed)
+	}
 }
 
 func parseCommaSeparated(rawValue string) []string {
@@ -571,6 +780,21 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("history.fullSnapshotInterval", DefaultConfig.HistoryConfigFullSnapshotInterval)
 	v.SetDefault("history.immutability", "none")
 	v.SetDefault("history.auditIdentityMode", "none")
+	v.SetDefault("history.evidence.enabled", DefaultConfig.HistoryEvidenceEnabled)
+	v.SetDefault("history.evidence.provider", DefaultConfig.HistoryEvidenceProvider)
+	v.SetDefault("history.evidence.bucket", DefaultConfig.HistoryEvidenceBucket)
+	v.SetDefault("history.evidence.prefix", DefaultConfig.HistoryEvidencePrefix)
+	v.SetDefault("history.evidence.region", DefaultConfig.HistoryEvidenceRegion)
+	v.SetDefault("history.evidence.endpoint", DefaultConfig.HistoryEvidenceEndpoint)
+	v.SetDefault("history.evidence.accessKeyId", DefaultConfig.HistoryEvidenceAccessKeyID)
+	v.SetDefault("history.evidence.secretAccessKey", DefaultConfig.HistoryEvidenceSecretAccessKey)
+	v.SetDefault("history.evidence.pathStyle", DefaultConfig.HistoryEvidenceUsePathStyle)
+	v.SetDefault("history.evidence.retentionMode", DefaultConfig.HistoryEvidenceRetentionMode)
+	v.SetDefault("history.evidence.retentionDays", DefaultConfig.HistoryEvidenceRetentionDays)
+	v.SetDefault("history.evidence.writeTimeoutSeconds", DefaultConfig.HistoryEvidenceWriteTimeoutSeconds)
+	v.SetDefault("history.evidence.signing.privateKeyPath", DefaultConfig.HistoryEvidenceSigningPrivateKey)
+	v.SetDefault("history.evidence.signing.required", DefaultConfig.HistoryEvidenceSigningRequired)
+	v.SetDefault("history.integrityAnchor.provider", DefaultConfig.HistoryIntegrityAnchorProvider)
 
 	// Eventing placeholders
 	v.SetDefault("eventing.enabled", false)
@@ -704,6 +928,20 @@ func PrintConfiguration(cfg *Config) {
 	add("Full Snapshot Interval", cfg.History.FullSnapshotInterval, DefaultConfig.HistoryConfigFullSnapshotInterval)
 	add("Immutability", cfg.History.Immutability, DefaultConfig.HistoryConfigImmutability)
 	add("Audit Identity Mode", cfg.History.AuditIdentityMode, DefaultConfig.HistoryConfigAuditIdentityMode)
+	add("Evidence Enabled", cfg.History.Evidence.Enabled, DefaultConfig.HistoryEvidenceEnabled)
+	add("Evidence Provider", cfg.History.Evidence.Provider, DefaultConfig.HistoryEvidenceProvider)
+	if cfg.History.Evidence.Enabled {
+		add("Evidence Bucket", cfg.History.Evidence.Bucket, DefaultConfig.HistoryEvidenceBucket)
+		add("Evidence Prefix", cfg.History.Evidence.Prefix, DefaultConfig.HistoryEvidencePrefix)
+		add("Evidence Region", cfg.History.Evidence.Region, DefaultConfig.HistoryEvidenceRegion)
+		add("Evidence Endpoint", cfg.History.Evidence.Endpoint, DefaultConfig.HistoryEvidenceEndpoint)
+		add("Evidence Path Style", cfg.History.Evidence.UsePathStyle, DefaultConfig.HistoryEvidenceUsePathStyle)
+		add("Evidence Retention Mode", cfg.History.Evidence.RetentionMode, DefaultConfig.HistoryEvidenceRetentionMode)
+		add("Evidence Retention Days", cfg.History.Evidence.RetentionDays, DefaultConfig.HistoryEvidenceRetentionDays)
+		add("Evidence Write Timeout Seconds", cfg.History.Evidence.WriteTimeoutSec, DefaultConfig.HistoryEvidenceWriteTimeoutSeconds)
+		add("Evidence Signing Required", cfg.History.Evidence.Signing.Required, DefaultConfig.HistoryEvidenceSigningRequired)
+	}
+	add("Integrity Anchor Provider", cfg.History.IntegrityAnchor.Provider, DefaultConfig.HistoryIntegrityAnchorProvider)
 
 	// Eventing
 	lines = append(lines, "🔹 Eventing:")

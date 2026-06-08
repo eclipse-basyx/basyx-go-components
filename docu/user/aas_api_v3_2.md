@@ -75,6 +75,14 @@ Environment variables:
 - `BASYX_HISTORY_FULL_SNAPSHOT_INTERVAL`: `1` stores every history row as a complete snapshot. Values greater than `1` store one full checkpoint followed by up to `N-1` RFC 6902 diff rows, with earlier checkpoints when the diff payload is not smaller than the snapshot payload.
 - `BASYX_HISTORY_IMMUTABILITY`: `none` or `postgres_guarded`. Default is `none`.
 - `BASYX_AUDIT_IDENTITY_MODE`: must remain `none`. Automatic identity enrichment is not implemented yet.
+- `BASYX_HISTORY_EVIDENCE_ENABLED`: `true` enables fail-closed WORM history-event artifact writes. Requires `BASYX_HISTORY_MODE=api` or `audit`; mutating requests fail when the configured evidence artifact cannot be stored.
+- `BASYX_HISTORY_EVIDENCE_PROVIDER`: `s3` for the S3-compatible evidence backend.
+- `BASYX_HISTORY_EVIDENCE_BUCKET`, `BASYX_HISTORY_EVIDENCE_PREFIX`, `BASYX_HISTORY_EVIDENCE_REGION`, `BASYX_HISTORY_EVIDENCE_ENDPOINT`: object-store target settings. `endpoint` is useful for MinIO tests.
+- `BASYX_HISTORY_EVIDENCE_ACCESS_KEY_ID`, `BASYX_HISTORY_EVIDENCE_SECRET_ACCESS_KEY`, `BASYX_HISTORY_EVIDENCE_PATH_STYLE`: optional S3-compatible credentials and path-style addressing.
+- `BASYX_HISTORY_EVIDENCE_RETENTION_MODE`, `BASYX_HISTORY_EVIDENCE_RETENTION_DAYS`: required object-lock retention settings when evidence is enabled, such as `governance` plus a positive day count.
+- `BASYX_HISTORY_EVIDENCE_WRITE_TIMEOUT_SECONDS`: timeout for synchronous WORM writes while the PostgreSQL transaction is open. Default is `10`.
+- `BASYX_HISTORY_EVIDENCE_SIGNING_PRIVATE_KEY_PATH`: optional manifest signing key. When empty, evidence signing can use `jws.privateKeyPath`.
+- `BASYX_HISTORY_INTEGRITY_ANCHOR_PROVIDER`: must remain `none` in this release. Ledger/timestamping providers are reserved for later work.
 
 Equivalent YAML:
 
@@ -85,6 +93,24 @@ history:
   fullSnapshotInterval: 1
   immutability: none
   auditIdentityMode: none
+  evidence:
+    enabled: false
+    provider: none
+    bucket: ""
+    prefix: basyx-history-evidence
+    region: us-east-1
+    endpoint: ""
+    accessKeyId: ""
+    secretAccessKey: ""
+    pathStyle: false
+    retentionMode: ""
+    retentionDays: 0
+    writeTimeoutSeconds: 10
+    signing:
+      privateKeyPath: ""
+      required: false
+  integrityAnchor:
+    provider: none
 ```
 
 Mode semantics:
@@ -97,15 +123,44 @@ Current implementation status:
 
 - Runtime history rows are append-only, hash-chained event rows in `api` and `audit` mode.
 - Schema migration installs PostgreSQL guard triggers. `postgres_guarded` enables them at service startup. When enabled, `UPDATE`, `DELETE`, and `TRUNCATE` on history metadata and payload tables fail with `history tables are append-only`.
-- `external_anchor`, non-zero `retentionDays`, and identity enrichment modes currently fail fast during configuration loading. Their runtime implementations are planned for later work.
+- When WORM evidence is enabled, each acknowledged history append synchronously stores a `history_event` artifact in S3-compatible object storage. The artifact contains the same snapshot or diff payload that PostgreSQL stores plus an `effective_diff` that records what changed compared with the previous reconstructed version.
+- WORM evidence manifests, backfilled `history_event` artifacts, and additional snapshot checkpoint artifacts can be published to S3-compatible object storage with `cmd/historyevidenceverifier`.
+- `external_anchor`, non-zero `retentionDays`, non-`none` integrity anchor providers, and identity enrichment modes currently fail fast during configuration loading. Their runtime implementations are planned for later work.
 - Audit metadata columns are present, but regular API middleware does not populate the audit context yet.
 - The implementation supports compliance-oriented deployments, but it does not by itself make a deployment legally compliant with any specific regulation.
 
-Guarded PostgreSQL mode protects against normal accidental or unauthorized mutations through the application database user. PostgreSQL superusers or operators with permissions to alter triggers/functions can still bypass or remove this protection. Stronger guarantees require external anchoring, WORM storage, or a transparency-log style system.
+Guarded PostgreSQL mode protects against normal accidental or unauthorized mutations through the application database user. PostgreSQL superusers or operators with permissions to alter triggers/functions can still bypass or remove this protection. Stronger tamper evidence and recovery evidence are provided by storing per-row history-event artifacts and signed history manifests in S3-compatible WORM storage such as AWS S3 Object Lock. MinIO Object Lock is useful for tests and local examples, but production deployments should use an operated WORM-capable object store with versioning and retention policy controls.
+
+WORM history-event artifacts provide recoverability for acknowledged writes while evidence is enabled. With `fullSnapshotInterval: 5`, for example, recovery from WORM starts from the latest WORM-stored snapshot event and replays up to four WORM-stored diff payloads. Use `fullSnapshotInterval: 1` when every acknowledged history row must be recoverable as a full WORM snapshot without diff replay. Even when the stored payload is a full snapshot checkpoint, `effective_diff` records the actual JSON Patch relative to the previous version so audit analysis can distinguish recovery checkpoints from fields changed by the actor. Automated PostgreSQL restore from WORM artifacts is not implemented in this release.
 
 The guard switch is database-wide. Configure all BaSyx services that share one database with the same history immutability mode. Runtime services may enable guarded mode, but normal service startup cannot disable an enabled database guard. A service configured as unguarded fails during startup when it encounters an already-enabled database guard. Disabling guarded mode is an explicit operator maintenance action.
 
 See `examples/BaSyxHistoryAuditGuardedExample` for a Docker Compose setup with audit history and `postgres_guarded` enabled.
+
+Example evidence publication:
+
+```sh
+go run ./cmd/historyevidenceverifier \
+  -config ./config.yaml \
+  -table submodel_history \
+  -identifier 'https://example.com/submodels/1' \
+  -from 1 \
+  -to 25 \
+  -write
+```
+
+Example verification against a stored manifest object:
+
+```sh
+go run ./cmd/historyevidenceverifier \
+  -config ./config.yaml \
+  -table submodel_history \
+  -identifier 'https://example.com/submodels/1' \
+  -from 1 \
+  -to 25 \
+  -manifest-object-key '<object-key-from-receipt>' \
+  -manifest-sha256 '<expected-sha256>'
+```
 
 ## What Activating Versioning Means
 

@@ -32,9 +32,20 @@ import (
 	"encoding/pem"
 	"fmt"
 	"os"
+
+	jose "gopkg.in/go-jose/go-jose.v2"
 )
 
 // LoadPrivateKey reads and parses an RSA private key from a PEM file.
+//
+// PKCS#8 keys are tried first and PKCS#1 RSA keys are accepted as a fallback.
+//
+// Parameters:
+//   - path: Filesystem path to the PEM encoded private key.
+//
+// Returns:
+//   - *rsa.PrivateKey: Parsed RSA private key.
+//   - error: Error when the file cannot be read, decoded, or parsed as RSA.
 func LoadPrivateKey(path string) (*rsa.PrivateKey, error) {
 	//nolint:all // Ignore linter warnings for this function as it deals with cryptographic key loading.
 	keyData, err := os.ReadFile(path)
@@ -63,4 +74,33 @@ func LoadPrivateKey(path string) (*rsa.PrivateKey, error) {
 		return nil, fmt.Errorf("private key is not RSA")
 	}
 	return rsaKey, nil
+}
+
+// SignPayload returns a compact RS256 JWS over payload.
+//
+// Parameters:
+//   - privateKey: RSA private key used for RS256 signing.
+//   - payload: Canonical payload bytes to sign.
+//
+// Returns:
+//   - string: Compact serialized JWS.
+//   - error: Error when the key is nil, the signer cannot be created, or
+//     serialization fails.
+func SignPayload(privateKey *rsa.PrivateKey, payload []byte) (string, error) {
+	if privateKey == nil {
+		return "", fmt.Errorf("JWS-SIGN-NILKEY private key must not be nil")
+	}
+	signer, err := jose.NewSigner(jose.SigningKey{Algorithm: jose.RS256, Key: privateKey}, nil)
+	if err != nil {
+		return "", fmt.Errorf("JWS-SIGN-NEWSIGNER %w", err)
+	}
+	jws, err := signer.Sign(payload)
+	if err != nil {
+		return "", fmt.Errorf("JWS-SIGN-PAYLOAD %w", err)
+	}
+	signed, err := jws.CompactSerialize()
+	if err != nil {
+		return "", fmt.Errorf("JWS-SIGN-SERIALIZE %w", err)
+	}
+	return signed, nil
 }

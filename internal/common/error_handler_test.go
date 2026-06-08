@@ -1,7 +1,9 @@
 package common
 
 import (
+	"errors"
 	"fmt"
+	"net/http"
 	"testing"
 )
 
@@ -27,6 +29,11 @@ func TestErrorClassifiers_RecognizeWrappedErrors(t *testing.T) {
 			assert: IsInternalServerError,
 		},
 		{
+			name:   "service unavailable",
+			err:    fmt.Errorf("outer: %w", NewErrServiceUnavailable("x")),
+			assert: IsErrServiceUnavailable,
+		},
+		{
 			name:   "conflict",
 			err:    fmt.Errorf("outer: %w", NewErrConflict("x")),
 			assert: IsErrConflict,
@@ -50,5 +57,19 @@ func TestErrorClassifiers_RecognizeWrappedErrors(t *testing.T) {
 				t.Fatalf("expected classifier to match wrapped error: %v", tc.err)
 			}
 		})
+	}
+}
+
+func TestNewErrorResponsePreservesExplicitServiceUnavailable(t *testing.T) {
+	response := NewErrorResponse(
+		errors.New("503 Service Unavailable: object storage unavailable"),
+		http.StatusInternalServerError,
+		"SMREPO",
+		"PatchSubmodelElement",
+		"EvidenceStore",
+	)
+
+	if response.Code != http.StatusServiceUnavailable {
+		t.Fatalf("expected status %d, got %d", http.StatusServiceUnavailable, response.Code)
 	}
 }

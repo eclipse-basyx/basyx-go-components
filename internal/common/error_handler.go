@@ -104,6 +104,22 @@ func NewInternalServerError(message string) error {
 	return errors.New("500 Internal Server Error: " + message)
 }
 
+// NewErrServiceUnavailable creates a standardized "503 Service Unavailable" error.
+//
+// Parameters:
+//   - message: Description of the temporarily unavailable dependency or service.
+//
+// Returns:
+//   - error: An error with message format "503 Service Unavailable: <message>"
+//
+// Example:
+//
+//	err := NewErrServiceUnavailable("object store unavailable")
+//	// Returns error: "503 Service Unavailable: object store unavailable"
+func NewErrServiceUnavailable(message string) error {
+	return errors.New("503 Service Unavailable: " + message)
+}
+
 // NewErrMethodNotAllowed creates a standardized "405 Method Not Allowed" error.
 //
 // Parameters:
@@ -201,6 +217,17 @@ func IsInternalServerError(err error) bool {
 	return hasErrorPrefix(err, "500 Internal Server Error: ")
 }
 
+// IsErrServiceUnavailable checks if the given error is a "503 Service Unavailable" error.
+//
+// Parameters:
+//   - err: The error to check
+//
+// Returns:
+//   - bool: true if the error is a 503 Service Unavailable error, false otherwise
+func IsErrServiceUnavailable(err error) bool {
+	return hasErrorPrefix(err, "503 Service Unavailable: ")
+}
+
 // IsErrConflict checks if the given error is a "409 Conflict" error.
 //
 // Parameters:
@@ -276,6 +303,9 @@ func hasErrorPrefix(err error, prefix string) bool {
 //	response := NewErrorResponse(err, 404, "submodel", "GetSubmodel", "invalidID")
 //	// Creates response with correlation ID: "submodel-404-GetSubmodel-NotFound-invalidID"
 func NewErrorResponse(err error, errorCode int, component string, function string, info string) model.ImplResponse {
+	if IsErrServiceUnavailable(err) {
+		errorCode = http.StatusServiceUnavailable
+	}
 	codeStr := strconv.Itoa(errorCode)
 	statusText := strings.ReplaceAll(http.StatusText(errorCode), " ", "")
 	internalCode := fmt.Sprintf("%s-%s-%s-%s-%s", component, codeStr, function, statusText, info)

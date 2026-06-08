@@ -29,6 +29,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -96,6 +97,152 @@ func TestAppendVersionTxSnapshotIntervalOneUsesPreviousHashOnly(t *testing.T) {
 	err = AppendVersionTx(context.Background(), tx, TableAAS, "aas-1", ChangeUpdated, map[string]any{"id": "aas-1", "counter": json.Number("9007199254740993")}, false)
 	require.NoError(t, err)
 	require.NoError(t, tx.Commit())
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestAppendVersionTxWritesEvidenceArtifactBeforeCommitWhenEnabled(t *testing.T) {
+	store := &recordingEvidenceStore{}
+	t.Cleanup(func() {
+		Configure(Config{Mode: ModeOff, Immutability: ImmutabilityNone, AuditIdentityMode: AuditIdentityNone})
+	})
+	Configure(Config{
+		Mode:                 ModeAPI,
+		FullSnapshotInterval: 1,
+		Immutability:         ImmutabilityNone,
+		AuditIdentityMode:    AuditIdentityNone,
+		EvidenceEnabled:      true,
+		EvidenceProvider:     EvidenceProviderS3,
+		EvidenceStore:        store,
+	})
+
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer func() {
+		_ = db.Close()
+	}()
+
+	mock.ExpectBegin()
+	mock.ExpectExec(`SELECT pg_advisory_xact_lock`).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectQuery(`SELECT "history_id" FROM "aas_history"`).
+		WillReturnError(sql.ErrNoRows)
+	mock.ExpectQuery(`INSERT INTO "aas_history".*RETURNING "history_id"`).
+		WillReturnRows(sqlmock.NewRows([]string{"history_id"}).AddRow(1))
+	mock.ExpectExec(`INSERT INTO "aas_history_payload".*"snapshot"`).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectExec(`INSERT INTO "history_evidence_artifacts"`).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectCommit()
+
+	tx, err := db.Begin()
+	require.NoError(t, err)
+	err = AppendVersionTx(context.Background(), tx, TableAAS, "aas-1", ChangeCreated, map[string]any{"id": "aas-1"}, false)
+	require.NoError(t, err)
+	require.NoError(t, tx.Commit())
+
+	require.Len(t, store.artifacts, 1)
+	artifact := store.artifacts[0]
+	require.Equal(t, EvidenceArtifactHistoryEvent, artifact.ArtifactType)
+	require.Contains(t, artifact.ObjectKey, "history-events/aas_history/aas-1/1-")
+	var artifactPayload map[string]any
+	require.NoError(t, decodeJSONPreservingNumbers(artifact.Data, &artifactPayload))
+	require.Equal(t, PayloadTypeSnapshot, artifactPayload["payload_type"])
+	require.Equal(t, "aas-1", artifactPayload["identifier"])
+	payload, ok := artifactPayload["payload"].(map[string]any)
+	require.True(t, ok)
+	require.Equal(t, "aas-1", payload["id"])
+	effectiveDiff, ok := artifactPayload["effective_diff"].([]any)
+	require.True(t, ok)
+	require.Len(t, effectiveDiff, 1)
+	operation, ok := effectiveDiff[0].(map[string]any)
+	require.True(t, ok)
+	require.Equal(t, "add", operation["op"])
+	require.Equal(t, "/id", operation["path"])
+	require.Equal(t, "aas-1", operation["value"])
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestAppendVersionTxRollsBackWhenEvidenceStoreFails(t *testing.T) {
+	store := &recordingEvidenceStore{err: errors.New("object storage unavailable")}
+	t.Cleanup(func() {
+		Configure(Config{Mode: ModeOff, Immutability: ImmutabilityNone, AuditIdentityMode: AuditIdentityNone})
+	})
+	Configure(Config{
+		Mode:                 ModeAPI,
+		FullSnapshotInterval: 1,
+		Immutability:         ImmutabilityNone,
+		AuditIdentityMode:    AuditIdentityNone,
+		EvidenceEnabled:      true,
+		EvidenceProvider:     EvidenceProviderS3,
+		EvidenceStore:        store,
+	})
+
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer func() {
+		_ = db.Close()
+	}()
+
+	mock.ExpectBegin()
+	mock.ExpectExec(`SELECT pg_advisory_xact_lock`).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectQuery(`SELECT "history_id" FROM "aas_history"`).
+		WillReturnError(sql.ErrNoRows)
+	mock.ExpectQuery(`INSERT INTO "aas_history".*RETURNING "history_id"`).
+		WillReturnRows(sqlmock.NewRows([]string{"history_id"}).AddRow(1))
+	mock.ExpectExec(`INSERT INTO "aas_history_payload".*"snapshot"`).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectRollback()
+
+	tx, err := db.Begin()
+	require.NoError(t, err)
+	err = AppendVersionTx(context.Background(), tx, TableAAS, "aas-1", ChangeCreated, map[string]any{"id": "aas-1"}, false)
+	require.ErrorContains(t, err, "HISTORY-EVIDENCE-APPEND-PUTARTIFACT")
+	require.ErrorContains(t, err, "503 Service Unavailable")
+	require.NoError(t, tx.Rollback())
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestAppendVersionTxRollsBackWhenEvidenceReceiptCatalogFails(t *testing.T) {
+	store := &recordingEvidenceStore{}
+	t.Cleanup(func() {
+		Configure(Config{Mode: ModeOff, Immutability: ImmutabilityNone, AuditIdentityMode: AuditIdentityNone})
+	})
+	Configure(Config{
+		Mode:                 ModeAPI,
+		FullSnapshotInterval: 1,
+		Immutability:         ImmutabilityNone,
+		AuditIdentityMode:    AuditIdentityNone,
+		EvidenceEnabled:      true,
+		EvidenceProvider:     EvidenceProviderS3,
+		EvidenceStore:        store,
+	})
+
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer func() {
+		_ = db.Close()
+	}()
+
+	mock.ExpectBegin()
+	mock.ExpectExec(`SELECT pg_advisory_xact_lock`).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectQuery(`SELECT "history_id" FROM "aas_history"`).
+		WillReturnError(sql.ErrNoRows)
+	mock.ExpectQuery(`INSERT INTO "aas_history".*RETURNING "history_id"`).
+		WillReturnRows(sqlmock.NewRows([]string{"history_id"}).AddRow(1))
+	mock.ExpectExec(`INSERT INTO "aas_history_payload".*"snapshot"`).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectExec(`INSERT INTO "history_evidence_artifacts"`).
+		WillReturnError(errors.New("catalog insert failed"))
+	mock.ExpectRollback()
+
+	tx, err := db.Begin()
+	require.NoError(t, err)
+	err = AppendVersionTx(context.Background(), tx, TableAAS, "aas-1", ChangeCreated, map[string]any{"id": "aas-1"}, false)
+	require.ErrorContains(t, err, "HISTORY-EVIDENCE-EVENTCATALOG-INSERT")
+	require.NoError(t, tx.Rollback())
+	require.Len(t, store.artifacts, 1)
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 
@@ -207,6 +354,119 @@ func TestAppendVersionTxStoresDiffWhenIntervalAllows(t *testing.T) {
 	err = AppendVersionTx(context.Background(), tx, TableAAS, "aas-1", ChangeUpdated, map[string]any{"id": "aas-1", "idShort": "after", "description": largeUnchangedValue}, false)
 	require.NoError(t, err)
 	require.NoError(t, tx.Commit())
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestAppendVersionTxWritesDiffEvidenceArtifactWhenDiffPayloadIsSelected(t *testing.T) {
+	store := &recordingEvidenceStore{}
+	t.Cleanup(func() {
+		Configure(Config{Mode: ModeOff, Immutability: ImmutabilityNone, AuditIdentityMode: AuditIdentityNone})
+	})
+	Configure(Config{
+		Mode:                 ModeAPI,
+		FullSnapshotInterval: 3,
+		Immutability:         ImmutabilityNone,
+		AuditIdentityMode:    AuditIdentityNone,
+		EvidenceEnabled:      true,
+		EvidenceProvider:     EvidenceProviderS3,
+		EvidenceStore:        store,
+	})
+
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer func() {
+		_ = db.Close()
+	}()
+
+	largeUnchangedValue := strings.Repeat("unchanged-", 40)
+	baseSnapshot := map[string]any{"id": "aas-1", "idShort": "before", "description": largeUnchangedValue}
+
+	mock.ExpectBegin()
+	mock.ExpectExec(`SELECT pg_advisory_xact_lock`).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	expectLatestSnapshotRestore(mock, TableAAS, "aas_history_payload", "aas-1", 1, baseSnapshot, false)
+	mock.ExpectQuery(`INSERT INTO "aas_history".*RETURNING "history_id"`).
+		WillReturnRows(sqlmock.NewRows([]string{"history_id"}).AddRow(2))
+	mock.ExpectExec(`INSERT INTO "aas_history_payload".*"diff"`).
+		WillReturnResult(sqlmock.NewResult(1, 1))
+	mock.ExpectExec(`INSERT INTO "history_evidence_artifacts"`).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectCommit()
+
+	tx, err := db.Begin()
+	require.NoError(t, err)
+	err = AppendVersionTx(context.Background(), tx, TableAAS, "aas-1", ChangeUpdated, map[string]any{"id": "aas-1", "idShort": "after", "description": largeUnchangedValue}, false)
+	require.NoError(t, err)
+	require.NoError(t, tx.Commit())
+
+	require.Len(t, store.artifacts, 1)
+	var artifactPayload map[string]any
+	require.NoError(t, decodeJSONPreservingNumbers(store.artifacts[0].Data, &artifactPayload))
+	require.Equal(t, PayloadTypeDiff, artifactPayload["payload_type"])
+	diff, ok := artifactPayload["payload"].([]any)
+	require.True(t, ok)
+	require.NotEmpty(t, diff)
+	effectiveDiff, ok := artifactPayload["effective_diff"].([]any)
+	require.True(t, ok)
+	require.Equal(t, diff, effectiveDiff)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestAppendVersionTxSnapshotEvidenceIncludesEffectiveDiffOnlyForChangedFields(t *testing.T) {
+	store := &recordingEvidenceStore{}
+	t.Cleanup(func() {
+		Configure(Config{Mode: ModeOff, Immutability: ImmutabilityNone, AuditIdentityMode: AuditIdentityNone})
+	})
+	Configure(Config{
+		Mode:                 ModeAPI,
+		FullSnapshotInterval: DefaultFullSnapshotInterval,
+		Immutability:         ImmutabilityNone,
+		AuditIdentityMode:    AuditIdentityNone,
+		EvidenceEnabled:      true,
+		EvidenceProvider:     EvidenceProviderS3,
+		EvidenceStore:        store,
+	})
+
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer func() {
+		_ = db.Close()
+	}()
+
+	largeUnchangedValue := strings.Repeat("unchanged-", 40)
+	baseSnapshot := map[string]any{"id": "aas-1", "idShort": "before", "description": largeUnchangedValue}
+	targetSnapshot := map[string]any{"id": "aas-1", "idShort": "after", "description": largeUnchangedValue}
+
+	mock.ExpectBegin()
+	mock.ExpectExec(`SELECT pg_advisory_xact_lock`).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	expectLatestSnapshotRestore(mock, TableAAS, "aas_history_payload", "aas-1", 1, baseSnapshot, false)
+	mock.ExpectQuery(`INSERT INTO "aas_history".*RETURNING "history_id"`).
+		WillReturnRows(sqlmock.NewRows([]string{"history_id"}).AddRow(2))
+	mock.ExpectExec(`INSERT INTO "aas_history_payload".*"snapshot"`).
+		WillReturnResult(sqlmock.NewResult(1, 1))
+	mock.ExpectExec(`INSERT INTO "history_evidence_artifacts"`).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectCommit()
+
+	tx, err := db.Begin()
+	require.NoError(t, err)
+	err = AppendVersionTx(context.Background(), tx, TableAAS, "aas-1", ChangeUpdated, targetSnapshot, false)
+	require.NoError(t, err)
+	require.NoError(t, tx.Commit())
+
+	require.Len(t, store.artifacts, 1)
+	var artifactPayload map[string]any
+	require.NoError(t, decodeJSONPreservingNumbers(store.artifacts[0].Data, &artifactPayload))
+	require.Equal(t, PayloadTypeSnapshot, artifactPayload["payload_type"])
+	effectiveDiff, ok := artifactPayload["effective_diff"].([]any)
+	require.True(t, ok)
+	require.Len(t, effectiveDiff, 1)
+	operation, ok := effectiveDiff[0].(map[string]any)
+	require.True(t, ok)
+	require.Equal(t, "replace", operation["op"])
+	require.Equal(t, "/idShort", operation["path"])
+	require.Equal(t, "after", operation["value"])
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 
@@ -346,4 +606,37 @@ func TestNullableTimestampAcceptsSharedISO8601Formats(t *testing.T) {
 	utcTimestamp, ok := nullableTimestamp("2026-05-28T12:30:00.123456789 UTC").(time.Time)
 	require.True(t, ok)
 	require.Equal(t, time.Date(2026, 5, 28, 12, 30, 0, 123456789, time.UTC), utcTimestamp)
+}
+
+type recordingEvidenceStore struct {
+	err       error
+	artifacts []EvidenceArtifact
+}
+
+func (store *recordingEvidenceStore) PutArtifact(_ context.Context, artifact EvidenceArtifact) (*EvidenceReceipt, error) {
+	if store.err != nil {
+		return nil, store.err
+	}
+	store.artifacts = append(store.artifacts, artifact)
+	return &EvidenceReceipt{
+		Reference: EvidenceReference{
+			Provider:  EvidenceProviderS3,
+			Bucket:    "history-evidence",
+			ObjectKey: artifact.ObjectKey,
+			VersionID: "version-1",
+		},
+		SHA256:      SHA256Hex(artifact.Data),
+		SizeBytes:   int64(len(artifact.Data)),
+		ContentType: artifact.ContentType,
+		StoredAt:    time.Date(2026, 5, 28, 12, 0, 0, 0, time.UTC),
+		Metadata:    artifact.Metadata,
+	}, nil
+}
+
+func (store *recordingEvidenceStore) GetArtifact(_ context.Context, _ EvidenceReference) (*EvidenceObject, error) {
+	return nil, errors.New("not implemented")
+}
+
+func (store *recordingEvidenceStore) VerifyArtifact(_ context.Context, _ EvidenceReference, _ string) (*EvidenceReceipt, error) {
+	return nil, errors.New("not implemented")
 }

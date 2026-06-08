@@ -72,6 +72,9 @@ func runServer(ctx context.Context, configPath string) error {
 		Immutability:         cfg.History.Immutability,
 		AuditIdentityMode:    cfg.History.AuditIdentityMode,
 	})
+	if err = history.ConfigureEvidence(ctx, cfg.History.Evidence); err != nil {
+		return err
+	}
 	commonmodel.SetSupportsSingularSupplementalSemanticId(cfg.General.SupportsSingularSupplementalSemanticId)
 
 	// Digital Twin Registry always enables discovery integration.

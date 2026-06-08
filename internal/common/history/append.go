@@ -82,20 +82,30 @@ func AppendVersionTx(ctx context.Context, tx *sql.Tx, table string, identifier s
 		return err
 	}
 	if cfg.FullSnapshotInterval == DefaultFullSnapshotInterval {
+		if cfg.EvidenceEnabled {
+			latest, latestErr := latestVersionTx(ctx, tx, table, identifier)
+			if latestErr != nil && !common.IsErrNotFound(latestErr) {
+				return latestErr
+			}
+			if common.IsErrNotFound(latestErr) {
+				return appendVersionWithLatestTx(ctx, tx, table, identifier, changeType, snapshot, deleted, nil, cfg)
+			}
+			return appendVersionWithLatestTx(ctx, tx, table, identifier, changeType, snapshot, deleted, &latest, cfg)
+		}
 		previousHash, hashErr := latestRowHashTx(ctx, tx, table, identifier)
 		if hashErr != nil {
 			return hashErr
 		}
-		return appendSnapshotVersionWithPreviousHashTx(ctx, tx, table, identifier, changeType, snapshot, deleted, previousHash)
+		return appendSnapshotVersionWithPreviousHashTx(ctx, tx, table, identifier, changeType, snapshot, deleted, previousHash, cfg)
 	}
 	latest, err := latestVersionTx(ctx, tx, table, identifier)
 	if err != nil && !common.IsErrNotFound(err) {
 		return err
 	}
 	if common.IsErrNotFound(err) {
-		return appendVersionWithLatestTx(ctx, tx, table, identifier, changeType, snapshot, deleted, nil)
+		return appendVersionWithLatestTx(ctx, tx, table, identifier, changeType, snapshot, deleted, nil, cfg)
 	}
-	return appendVersionWithLatestTx(ctx, tx, table, identifier, changeType, snapshot, deleted, &latest)
+	return appendVersionWithLatestTx(ctx, tx, table, identifier, changeType, snapshot, deleted, &latest, cfg)
 }
 
 // AppendMutatedVersionTx restores the latest snapshot, applies mutate, and appends the result.
@@ -128,7 +138,8 @@ func AppendVersionTx(ctx context.Context, tx *sql.Tx, table string, identifier s
 //		return err
 //	}
 func AppendMutatedVersionTx(ctx context.Context, tx *sql.Tx, table string, identifier string, changeType string, mutate SnapshotMutator) error {
-	if ActiveConfig().Mode == ModeOff {
+	cfg := ActiveConfig()
+	if cfg.Mode == ModeOff {
 		return nil
 	}
 
@@ -160,7 +171,7 @@ func AppendMutatedVersionTx(ctx context.Context, tx *sql.Tx, table string, ident
 	}
 	previousVersion := latest
 	previousVersion.snapshot = previousSnapshot
-	return appendVersionWithLatestTx(ctx, tx, table, identifier, changeType, currentSnapshot, false, &previousVersion)
+	return appendVersionWithLatestTx(ctx, tx, table, identifier, changeType, currentSnapshot, false, &previousVersion, cfg)
 }
 
 func validateAppendInputs(tx *sql.Tx, identifier string) (string, error) {
@@ -174,8 +185,8 @@ func validateAppendInputs(tx *sql.Tx, identifier string) (string, error) {
 	return identifier, nil
 }
 
-func appendVersionWithLatestTx(ctx context.Context, tx *sql.Tx, table string, identifier string, changeType string, snapshot map[string]any, deleted bool, latest *latestVersion) error {
-	payload, err := buildHistoryPayload(snapshot, latest, ActiveConfig())
+func appendVersionWithLatestTx(ctx context.Context, tx *sql.Tx, table string, identifier string, changeType string, snapshot map[string]any, deleted bool, latest *latestVersion, cfg Config) error {
+	payload, err := buildHistoryPayload(snapshot, latest, cfg)
 	if err != nil {
 		return err
 	}
@@ -183,39 +194,74 @@ func appendVersionWithLatestTx(ctx context.Context, tx *sql.Tx, table string, id
 	if latest != nil {
 		previousHash = latest.rowHash
 	}
-	return insertHistoryVersionTx(ctx, tx, table, identifier, changeType, snapshot, deleted, payload, previousHash)
+	effectiveDiff, err := buildEffectiveDiff(snapshot, latest)
+	if err != nil {
+		return err
+	}
+	return insertHistoryVersionTx(ctx, tx, historyVersionInsert{
+		table:         table,
+		identifier:    identifier,
+		changeType:    changeType,
+		snapshot:      snapshot,
+		deleted:       deleted,
+		payload:       payload,
+		effectiveDiff: effectiveDiff,
+		previousHash:  previousHash,
+		cfg:           cfg,
+	})
 }
 
-func appendSnapshotVersionWithPreviousHashTx(ctx context.Context, tx *sql.Tx, table string, identifier string, changeType string, snapshot map[string]any, deleted bool, previousHash string) error {
+func appendSnapshotVersionWithPreviousHashTx(ctx context.Context, tx *sql.Tx, table string, identifier string, changeType string, snapshot map[string]any, deleted bool, previousHash string, cfg Config) error {
 	payload, err := buildSnapshotPayload(snapshot)
 	if err != nil {
 		return err
 	}
-	return insertHistoryVersionTx(ctx, tx, table, identifier, changeType, snapshot, deleted, payload, previousHash)
+	return insertHistoryVersionTx(ctx, tx, historyVersionInsert{
+		table:        table,
+		identifier:   identifier,
+		changeType:   changeType,
+		snapshot:     snapshot,
+		deleted:      deleted,
+		payload:      payload,
+		previousHash: previousHash,
+		cfg:          cfg,
+	})
 }
 
-func insertHistoryVersionTx(ctx context.Context, tx *sql.Tx, table string, identifier string, changeType string, snapshot map[string]any, deleted bool, payload historyPayload, previousHash string) error {
-	payloadTable, err := historyPayloadTable(table)
+type historyVersionInsert struct {
+	table         string
+	identifier    string
+	changeType    string
+	snapshot      map[string]any
+	deleted       bool
+	payload       historyPayload
+	effectiveDiff []map[string]any
+	previousHash  string
+	cfg           Config
+}
+
+func insertHistoryVersionTx(ctx context.Context, tx *sql.Tx, version historyVersionInsert) error {
+	payloadTable, err := historyPayloadTable(version.table)
 	if err != nil {
 		return err
 	}
 	now := databaseTimestamp(time.Now())
-	contentHash, err := CanonicalJSONHash(snapshot)
+	contentHash, err := CanonicalJSONHash(version.snapshot)
 	if err != nil {
 		return common.NewInternalServerError("HISTORY-APPEND-CONTENTHASH " + err.Error())
 	}
 	audit := FromContext(ctx)
 	event := ChangeEvent{
-		EntityType:          table,
-		Identifier:          identifier,
-		ChangeType:          changeType,
+		EntityType:          version.table,
+		Identifier:          version.identifier,
+		ChangeType:          version.changeType,
 		Timestamp:           now,
-		Snapshot:            snapshot,
-		Deleted:             deleted,
-		PayloadType:         payload.payloadType,
+		Snapshot:            version.snapshot,
+		Deleted:             version.deleted,
+		PayloadType:         version.payload.payloadType,
 		ContentHash:         contentHash,
-		PayloadHash:         payload.hash,
-		PreviousHash:        previousHash,
+		PayloadHash:         version.payload.hash,
+		PreviousHash:        version.previousHash,
 		RequestID:           audit.RequestID,
 		CorrelationID:       audit.CorrelationID,
 		ActorSubject:        audit.ActorSubject,
@@ -234,21 +280,22 @@ func insertHistoryVersionTx(ctx context.Context, tx *sql.Tx, table string, ident
 	if err != nil {
 		return common.NewInternalServerError("HISTORY-APPEND-ROWHASH " + err.Error())
 	}
-	createdAt, updatedAt := administrationTimestamps(snapshot)
-	insertQuery, insertArgs, err := goqu.Insert(table).Rows(goqu.Record{
-		"identifier":                     identifier,
-		"change_type":                    changeType,
-		"deleted":                        deleted,
+	event.RowHash = rowHash
+	createdAt, updatedAt := administrationTimestamps(version.snapshot)
+	insertQuery, insertArgs, err := goqu.Insert(version.table).Rows(goqu.Record{
+		"identifier":                     version.identifier,
+		"change_type":                    version.changeType,
+		"deleted":                        version.deleted,
 		"valid_from":                     now,
 		"operation_time":                 now,
 		"administration_created_at_text": createdAt,
 		"administration_updated_at_text": updatedAt,
 		"administration_created_at":      nullableTimestamp(createdAt),
 		"administration_updated_at":      nullableTimestamp(updatedAt),
-		"payload_type":                   payload.payloadType,
+		"payload_type":                   version.payload.payloadType,
 		"content_hash":                   contentHash,
-		"payload_hash":                   payload.hash,
-		"previous_hash":                  previousHash,
+		"payload_hash":                   version.payload.hash,
+		"previous_hash":                  version.previousHash,
 		"row_hash":                       rowHash,
 		"actor_subject":                  audit.ActorSubject,
 		"actor_issuer":                   audit.ActorIssuer,
@@ -274,10 +321,10 @@ func insertHistoryVersionTx(ctx context.Context, tx *sql.Tx, table string, ident
 	payloadRecord := goqu.Record{
 		"history_id": historyID,
 	}
-	if payload.payloadType == PayloadTypeSnapshot {
-		payloadRecord["snapshot"] = goqu.L("?::jsonb", string(payload.json))
+	if version.payload.payloadType == PayloadTypeSnapshot {
+		payloadRecord["snapshot"] = goqu.L("?::jsonb", string(version.payload.json))
 	} else {
-		payloadRecord["diff"] = goqu.L("?::jsonb", string(payload.json))
+		payloadRecord["diff"] = goqu.L("?::jsonb", string(version.payload.json))
 	}
 	payloadQuery, payloadArgs, err := goqu.Insert(payloadTable).Rows(payloadRecord).ToSQL()
 	if err != nil {
@@ -286,7 +333,7 @@ func insertHistoryVersionTx(ctx context.Context, tx *sql.Tx, table string, ident
 	if _, err = tx.ExecContext(ctx, payloadQuery, payloadArgs...); err != nil {
 		return common.NewInternalServerError("HISTORY-APPEND-EXECPAYLOADINSERT " + err.Error())
 	}
-	return nil
+	return publishHistoryEventEvidenceTx(ctx, tx, version.cfg, version.table, historyID, event, version.payload, version.effectiveDiff, createdAt, updatedAt)
 }
 
 func lockIdentifierTx(ctx context.Context, tx *sql.Tx, table string, identifier string) error {
@@ -365,6 +412,18 @@ func buildDiffPayloadWithJSON(patch []map[string]any, payloadJSON []byte) (histo
 		return historyPayload{}, common.NewInternalServerError("HISTORY-APPEND-DIFFHASH " + err.Error())
 	}
 	return historyPayload{payloadType: PayloadTypeDiff, json: payloadJSON, hash: payloadHash}, nil
+}
+
+func buildEffectiveDiff(snapshot map[string]any, latest *latestVersion) ([]map[string]any, error) {
+	base := map[string]any{}
+	if latest != nil {
+		base = latest.snapshot
+	}
+	patch, err := BuildJSONPatch(base, snapshot)
+	if err != nil {
+		return nil, common.NewInternalServerError("HISTORY-APPEND-EFFECTIVEDIFF " + err.Error())
+	}
+	return patch, nil
 }
 
 func buildSnapshotPayload(snapshot map[string]any) (historyPayload, error) {
