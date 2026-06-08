@@ -110,7 +110,7 @@ func LoadPublicKey(path string) (*rsa.PublicKey, error) {
 
 	rsaKey, pkcs1Err := x509.ParsePKCS1PublicKey(block.Bytes)
 	if pkcs1Err != nil {
-		return nil, fmt.Errorf("failed to parse public key: %w", err)
+		return nil, fmt.Errorf("failed to parse public key: %w", pkcs1Err)
 	}
 	return rsaKey, nil
 }
