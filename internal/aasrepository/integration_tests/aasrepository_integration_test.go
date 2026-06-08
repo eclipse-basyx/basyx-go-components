@@ -519,6 +519,19 @@ func sqlLiteral(input string) string {
 	return strings.ReplaceAll(input, "'", "''")
 }
 
+func loadBodyFixture(t *testing.T, path string, replacements map[string]string) string {
+	t.Helper()
+
+	body, err := os.ReadFile(filepath.Clean(path))
+	require.NoError(t, err, "failed to read body fixture")
+
+	result := string(body)
+	for placeholder, value := range replacements {
+		result = strings.ReplaceAll(result, placeholder, value)
+	}
+	return result
+}
+
 func installDeleteFailureTriggers(t *testing.T, db *sql.DB, aasDBID int64, submodelID string) {
 	t.Helper()
 
@@ -616,36 +629,9 @@ func TestQueryAssetAdministrationShellFalseFragmentFiltersKeepRootAAS(t *testing
 	aasID := fmt.Sprintf("https://example.com/ids/aas/query-fragments-%d", time.Now().UnixNano())
 	aasIdentifier := base64.RawURLEncoding.EncodeToString([]byte(aasID))
 
-	requestBody := fmt.Sprintf(`{
-		"id":"%s",
-		"idShort":"FragmentAAS",
-		"modelType":"AssetAdministrationShell",
-		"assetInformation":{
-			"assetKind":"Instance",
-			"globalAssetId":"fragment-global-asset",
-			"assetType":"fragment-asset-type",
-			"specificAssetIds":[
-				{
-					"name":"customerPartId",
-					"value":"cp-001",
-					"externalSubjectId":{
-						"type":"ExternalReference",
-						"keys":[
-							{"type":"GlobalReference","value":"VIEWER_KEY"}
-						]
-					}
-				}
-			]
-		},
-		"submodels":[
-			{
-				"type":"ModelReference",
-				"keys":[
-					{"type":"Submodel","value":"https://example.com/ids/sm/query-fragment"}
-				]
-			}
-		]
-	}`, aasID)
+	requestBody := loadBodyFixture(t, "bodies/post/postAssetAdministrationShellQueryFragments.json", map[string]string{
+		"{{AAS_ID}}": aasID,
+	})
 
 	statusCode, err := postResponseStatus(baseURL+"/shells", requestBody)
 	require.NoError(t, err, "AAS creation failed")

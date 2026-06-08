@@ -84,7 +84,19 @@ func NewConceptDescriptionRepositoryAPIAPIService(database *persistence.ConceptD
 	}
 }
 
-// QueryConceptDescriptions - Returns all Concept Descriptions that match the input query
+// QueryConceptDescriptions returns Concept Descriptions that match the provided
+// query expression and any ABAC query filter stored in ctx.
+//
+// The limit parameter bounds the number of returned Concept Descriptions. The
+// cursor parameter is optional, base64-url encoded, and decoded before it is
+// passed to the persistence layer. The query parameter contains the user
+// supplied condition and fragment filters for the /query/concept-descriptions
+// endpoint.
+//
+// The returned ImplResponse contains a paged result with JSON-serializable
+// Concept Description objects and an encoded cursor for the next page when more
+// results are available. Invalid limits, invalid cursors, denied access, or
+// unsupported query expressions are returned as HTTP error responses.
 func (s *ConceptDescriptionRepositoryAPIAPIService) QueryConceptDescriptions(ctx context.Context, limit int32, cursor string, query grammar.Query) (model.ImplResponse, error) {
 	const operation = "QueryConceptDescriptions"
 

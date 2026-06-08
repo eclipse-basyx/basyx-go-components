@@ -71,7 +71,18 @@ func newAPIErrorResponse(err error, status int, operation string, info string) g
 	return common.NewErrorResponse(err, status, componentName, operation, info)
 }
 
-// QueryAssetAdministrationShells - Returns all Asset Administration Shells that match the input query
+// QueryAssetAdministrationShells returns Asset Administration Shells that match
+// the provided query expression and any ABAC query filter stored in ctx.
+//
+// The limit parameter bounds the number of returned shells. The cursor
+// parameter is expected to be base64-url encoded and is decoded before it is
+// passed to the persistence layer. The query parameter contains the user
+// supplied condition and fragment filters for the /query/shells endpoint.
+//
+// The returned ImplResponse contains a paged result with JSON-serializable AAS
+// objects and an encoded cursor for the next page when more results are
+// available. Invalid cursors or unsupported query expressions are returned as
+// HTTP error responses with a nil Go error.
 func (s *AssetAdministrationShellRepositoryAPIAPIService) QueryAssetAdministrationShells(ctx context.Context, limit int32, cursor string, query grammar.Query) (gen.ImplResponse, error) {
 	const operation = "QueryAssetAdministrationShells"
 
