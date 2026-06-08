@@ -25,7 +25,21 @@
 
 package history
 
-import "context"
+import (
+	"context"
+	"crypto/rand"
+	"encoding/hex"
+	"fmt"
+	"strings"
+	"time"
+)
+
+const (
+	// AuthorizationResultSystemInternal marks history rows written by trusted internal service work.
+	AuthorizationResultSystemInternal = "SYSTEM_INTERNAL"
+	// AuditHTTPMethodSystem marks history rows that were not caused directly by an HTTP method.
+	AuditHTTPMethodSystem = "SYSTEM"
+)
 
 // AuditContext carries vendor-neutral request and identity metadata for history rows.
 //
@@ -46,6 +60,24 @@ type AuditContext struct {
 	Operation           string
 	Endpoint            string
 	HTTPMethod          string
+}
+
+// SystemAuditOptions configures synthetic audit metadata for trusted internal work.
+type SystemAuditOptions struct {
+	ActorSubject  string
+	ActorIssuer   string
+	ClientID      string
+	Operation     string
+	Endpoint      string
+	RequestID     string
+	CorrelationID string
+	SourceIP      string
+	UserAgent     string
+	PolicyID      string
+	MatchedRuleID string
+	HTTPMethod    string
+	IDPrefix      string
+	Authorization string
 }
 
 type auditContextKey struct{}
@@ -74,6 +106,97 @@ func ContextWithAudit(ctx context.Context, audit AuditContext) context.Context {
 	return context.WithValue(ctx, auditContextKey{}, audit)
 }
 
+// ContextWithSystemAudit stores synthetic audit metadata for non-HTTP service work.
+//
+// The helper is intended for startup jobs, scheduled jobs, and internal recovery
+// or synchronization work. It marks the authorization result as
+// SYSTEM_INTERNAL by default and generates missing request/correlation IDs so
+// background writes are still traceable without inventing a human identity.
+//
+// Parameters:
+//   - ctx: Base context to extend.
+//   - options: System actor and operation metadata.
+//
+// Returns:
+//   - context.Context: Context containing synthetic system audit metadata.
+func ContextWithSystemAudit(ctx context.Context, options SystemAuditOptions) context.Context {
+	requestID := strings.TrimSpace(options.RequestID)
+	if requestID == "" {
+		requestID = NewAuditID(options.IDPrefix)
+	}
+	correlationID := strings.TrimSpace(options.CorrelationID)
+	if correlationID == "" {
+		correlationID = requestID
+	}
+	authorization := strings.TrimSpace(options.Authorization)
+	if authorization == "" {
+		authorization = AuthorizationResultSystemInternal
+	}
+	httpMethod := strings.TrimSpace(options.HTTPMethod)
+	if httpMethod == "" {
+		httpMethod = AuditHTTPMethodSystem
+	}
+	return ContextWithAudit(ctx, AuditContext{
+		ActorSubject:        strings.TrimSpace(options.ActorSubject),
+		ActorIssuer:         strings.TrimSpace(options.ActorIssuer),
+		ClientID:            strings.TrimSpace(options.ClientID),
+		AuthorizationResult: authorization,
+		PolicyID:            strings.TrimSpace(options.PolicyID),
+		MatchedRuleID:       strings.TrimSpace(options.MatchedRuleID),
+		RequestID:           requestID,
+		CorrelationID:       correlationID,
+		SourceIP:            strings.TrimSpace(options.SourceIP),
+		UserAgent:           strings.TrimSpace(options.UserAgent),
+		Operation:           strings.TrimSpace(options.Operation),
+		Endpoint:            strings.TrimSpace(options.Endpoint),
+		HTTPMethod:          httpMethod,
+	})
+}
+
+// ContextWithAuditOperation overrides operation and endpoint in an existing audit context.
+//
+// This keeps the original actor, request ID, correlation ID, and authorization
+// metadata while attributing an internal side effect, such as registry
+// synchronization, to the internal operation that actually wrote the history row.
+//
+// Parameters:
+//   - ctx: Base context containing optional audit metadata.
+//   - operation: Replacement operation name.
+//   - endpoint: Replacement logical endpoint or internal source.
+//
+// Returns:
+//   - context.Context: Context containing the updated audit metadata.
+func ContextWithAuditOperation(ctx context.Context, operation string, endpoint string) context.Context {
+	audit := FromContext(ctx)
+	if strings.TrimSpace(operation) != "" {
+		audit.Operation = strings.TrimSpace(operation)
+	}
+	if strings.TrimSpace(endpoint) != "" {
+		audit.Endpoint = strings.TrimSpace(endpoint)
+	}
+	return ContextWithAudit(ctx, audit)
+}
+
+// NewAuditID returns a short random identifier suitable for audit correlation fields.
+//
+// The value is not a security token. It is generated from cryptographic random
+// bytes when available, with a time-based fallback so audit attribution can still
+// proceed if the host random source fails.
+//
+// Parameters:
+//   - prefix: Optional stable prefix, for example "aas-preconfiguration".
+//
+// Returns:
+//   - string: Prefix plus a random hexadecimal suffix.
+func NewAuditID(prefix string) string {
+	cleanPrefix := cleanAuditIDPrefix(prefix)
+	randomBytes := make([]byte, 16)
+	if _, err := rand.Read(randomBytes); err != nil {
+		return fmt.Sprintf("%s-%d", cleanPrefix, time.Now().UTC().UnixNano())
+	}
+	return cleanPrefix + "-" + hex.EncodeToString(randomBytes)
+}
+
 // FromContext returns audit metadata stored in ctx.
 //
 // A nil context or a context without audit metadata returns the zero value, so
@@ -95,4 +218,34 @@ func FromContext(ctx context.Context) AuditContext {
 	}
 	audit, _ := ctx.Value(auditContextKey{}).(AuditContext)
 	return audit
+}
+
+func cleanAuditIDPrefix(prefix string) string {
+	trimmed := strings.TrimSpace(prefix)
+	if trimmed == "" {
+		return "audit"
+	}
+	var builder strings.Builder
+	builder.Grow(len(trimmed))
+	lastWasSeparator := false
+	for _, char := range strings.ToLower(trimmed) {
+		if isAuditIDPrefixChar(char) {
+			builder.WriteRune(char)
+			lastWasSeparator = false
+			continue
+		}
+		if !lastWasSeparator {
+			builder.WriteByte('-')
+			lastWasSeparator = true
+		}
+	}
+	cleaned := strings.Trim(builder.String(), "-")
+	if cleaned == "" {
+		return "audit"
+	}
+	return cleaned
+}
+
+func isAuditIDPrefixChar(char rune) bool {
+	return char >= 'a' && char <= 'z' || char >= '0' && char <= '9' || char == '-' || char == '_'
 }

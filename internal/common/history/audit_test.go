@@ -56,6 +56,59 @@ func TestAuditContextRoundTrip(t *testing.T) {
 	require.Equal(t, expected, actual)
 }
 
+func TestContextWithSystemAuditGeneratesTraceIDs(t *testing.T) {
+	t.Parallel()
+
+	ctx := ContextWithSystemAudit(context.Background(), SystemAuditOptions{
+		ActorSubject: "system:aas-preconfiguration",
+		ActorIssuer:  "basyx:aasenvironmentservice",
+		ClientID:     "aasenvironmentservice",
+		Operation:    "AASPreconfiguration",
+		Endpoint:     "startup:aas-preconfiguration",
+		IDPrefix:     "aas-preconfiguration",
+	})
+
+	audit := FromContext(ctx)
+
+	require.Equal(t, "system:aas-preconfiguration", audit.ActorSubject)
+	require.Equal(t, "basyx:aasenvironmentservice", audit.ActorIssuer)
+	require.Equal(t, "aasenvironmentservice", audit.ClientID)
+	require.Equal(t, AuthorizationResultSystemInternal, audit.AuthorizationResult)
+	require.Equal(t, "AASPreconfiguration", audit.Operation)
+	require.Equal(t, "startup:aas-preconfiguration", audit.Endpoint)
+	require.Equal(t, AuditHTTPMethodSystem, audit.HTTPMethod)
+	require.NotEmpty(t, audit.RequestID)
+	require.Equal(t, audit.RequestID, audit.CorrelationID)
+}
+
+func TestContextWithAuditOperationPreservesRequestActorAndAuthorization(t *testing.T) {
+	t.Parallel()
+
+	ctx := ContextWithAudit(context.Background(), AuditContext{
+		RequestID:           "request-1",
+		CorrelationID:       "correlation-1",
+		ActorSubject:        "user-1",
+		ActorIssuer:         "issuer-1",
+		ClientID:            "client-1",
+		AuthorizationResult: "ALLOW",
+		HTTPMethod:          http.MethodPut,
+		Operation:           "PutAssetAdministrationShellById",
+		Endpoint:            "/shells/{aasIdentifier}",
+	})
+
+	audit := FromContext(ContextWithAuditOperation(ctx, "AASRegistrySync.UpsertDescriptor", "internal:aas-registry-sync"))
+
+	require.Equal(t, "request-1", audit.RequestID)
+	require.Equal(t, "correlation-1", audit.CorrelationID)
+	require.Equal(t, "user-1", audit.ActorSubject)
+	require.Equal(t, "issuer-1", audit.ActorIssuer)
+	require.Equal(t, "client-1", audit.ClientID)
+	require.Equal(t, "ALLOW", audit.AuthorizationResult)
+	require.Equal(t, http.MethodPut, audit.HTTPMethod)
+	require.Equal(t, "AASRegistrySync.UpsertDescriptor", audit.Operation)
+	require.Equal(t, "internal:aas-registry-sync", audit.Endpoint)
+}
+
 func TestAuditContextMiddlewarePopulatesAuthenticatedMinimalFields(t *testing.T) {
 	cfg := &common.Config{History: common.HistoryConfig{AuditIdentityMode: AuditIdentityMinimal}, ABAC: common.ABACConfig{Enabled: true}}
 	var captured AuditContext
