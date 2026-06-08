@@ -163,7 +163,7 @@ func ShouldEnforceFormula(ctx context.Context) (bool, error) {
 	}
 
 	if queryFilter.Formula != nil && len(queryFilter.FormulasByRight) == 0 {
-		return true, errors.New("ABAC is enabled but QueryFilter has Formula but no FormulasByRight")
+		return true, errors.New("inconsistent QueryFilter: Formula is set but FormulasByRight is empty")
 	}
 
 	if len(queryFilter.FormulasByRight) > 0 {
