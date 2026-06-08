@@ -225,21 +225,20 @@ func cleanAuditIDPrefix(prefix string) string {
 	if trimmed == "" {
 		return "audit"
 	}
-	var builder strings.Builder
-	builder.Grow(len(trimmed))
+	cleanedChars := make([]rune, 0, len(trimmed))
 	lastWasSeparator := false
 	for _, char := range strings.ToLower(trimmed) {
 		if isAuditIDPrefixChar(char) {
-			builder.WriteRune(char)
+			cleanedChars = append(cleanedChars, char)
 			lastWasSeparator = false
 			continue
 		}
 		if !lastWasSeparator {
-			builder.WriteByte('-')
+			cleanedChars = append(cleanedChars, '-')
 			lastWasSeparator = true
 		}
 	}
-	cleaned := strings.Trim(builder.String(), "-")
+	cleaned := strings.Trim(string(cleanedChars), "-")
 	if cleaned == "" {
 		return "audit"
 	}
