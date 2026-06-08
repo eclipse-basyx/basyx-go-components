@@ -155,7 +155,44 @@ go run ./cmd/historyevidenceverifier \
   -manifest-sha256 '<sha256-from-write-output>'
 ```
 
-History-event artifacts provide recovery evidence for acknowledged writes while evidence is enabled. With `BASYX_HISTORY_FULL_SNAPSHOT_INTERVAL=5`, recovery from WORM starts from the latest WORM-stored snapshot event and replays up to four WORM-stored diff payloads. Use `BASYX_HISTORY_FULL_SNAPSHOT_INTERVAL=1` when every history row must be recoverable as a full WORM snapshot without diff replay. For audit attribution, inspect `effective_diff`: a full snapshot event can be a recovery checkpoint, while `effective_diff` shows what the request actually changed. Automated PostgreSQL restore from WORM artifacts is not implemented in this example.
+History-event artifacts provide recovery evidence for acknowledged writes while evidence is enabled. With `BASYX_HISTORY_FULL_SNAPSHOT_INTERVAL=5`, recovery from WORM starts from the latest WORM-stored snapshot event and replays up to four WORM-stored diff payloads. Use `BASYX_HISTORY_FULL_SNAPSHOT_INTERVAL=1` when every history row must be recoverable as a full WORM snapshot without diff replay. For audit attribution, inspect `effective_diff`: a full snapshot event can be a recovery checkpoint, while `effective_diff` shows what the request actually changed.
+
+Export a recovery catalog and recover verified JSON from WORM artifacts:
+
+```bash
+go run ./cmd/historyevidenceverifier \
+  -table submodel_history \
+  -identifier '<submodel-identifier>' \
+  -from 1 \
+  -to 5 \
+  -catalog-export \
+  -out ./recovery-catalog.json
+```
+
+```bash
+POSTGRES_HOST=localhost \
+POSTGRES_PORT=5432 \
+POSTGRES_USER=admin \
+POSTGRES_PASSWORD=admin123 \
+POSTGRES_DBNAME=basyxTestDB \
+BASYX_HISTORY_EVIDENCE_PROVIDER=s3 \
+BASYX_HISTORY_EVIDENCE_BUCKET=basyx-history-evidence \
+BASYX_HISTORY_EVIDENCE_REGION=us-east-1 \
+BASYX_HISTORY_EVIDENCE_ENDPOINT=http://localhost:9000 \
+BASYX_HISTORY_EVIDENCE_ACCESS_KEY_ID=minioadmin \
+BASYX_HISTORY_EVIDENCE_SECRET_ACCESS_KEY=minioadmin \
+BASYX_HISTORY_EVIDENCE_PATH_STYLE=true \
+go run ./cmd/historyevidenceverifier \
+  -table submodel_history \
+  -identifier '<submodel-identifier>' \
+  -from 1 \
+  -to 5 \
+  -recover \
+  -recovery-catalog ./recovery-catalog.json \
+  -out ./recovered-history.json
+```
+
+The recovery command exports verified JSON only. Restoring rows into PostgreSQL remains an operator-controlled disaster-recovery procedure.
 
 ## Limitations
 

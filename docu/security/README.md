@@ -8,6 +8,8 @@ This document covers runtime API security (OIDC, claims handling, ABAC, and Quer
 
 For build and release supply-chain security (image signing, provenance attestations, SBOM attestations, SPDX/CycloneDX release assets, and verification commands), see [SUPPLY_CHAIN_SECURITY.md](SUPPLY_CHAIN_SECURITY.md).
 
+For history evidence deployment guidance and NIS2-relevant operator responsibilities, see [NIS2_HISTORY_EVIDENCE.md](NIS2_HISTORY_EVIDENCE.md).
+
 ## High-level architecture
 
 ```mermaid

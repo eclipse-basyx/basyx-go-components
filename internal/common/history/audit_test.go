@@ -27,8 +27,14 @@ package history
 
 import (
 	"context"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"testing"
+	"time"
 
+	"github.com/eclipse-basyx/basyx-go-components/internal/common"
+	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 	"github.com/stretchr/testify/require"
 )
 
@@ -48,4 +54,134 @@ func TestAuditContextRoundTrip(t *testing.T) {
 	actual := FromContext(ContextWithAudit(context.Background(), expected))
 
 	require.Equal(t, expected, actual)
+}
+
+func TestAuditContextMiddlewarePopulatesAuthenticatedMinimalFields(t *testing.T) {
+	cfg := &common.Config{History: common.HistoryConfig{AuditIdentityMode: AuditIdentityMinimal}, ABAC: common.ABACConfig{Enabled: true}}
+	var captured AuditContext
+	handler := AuditContextMiddleware(cfg)(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+		captured = FromContext(r.Context())
+	}))
+	request := httptest.NewRequest(http.MethodPut, "/shells/aas-1", nil)
+	request.Header.Set("X-Request-ID", "request-1")
+	request.Header.Set("X-Correlation-ID", "correlation-1")
+	ctx := context.WithValue(request.Context(), auth.ClaimsKey, auth.Claims{
+		"sub":       "user-1",
+		"iss":       "https://issuer.example",
+		"client_id": "client-1",
+	})
+	ctx = auth.ContextWithAuthorizationDecision(ctx, auth.AuthorizationDecision{Result: string(auth.DecisionAllow)})
+	ctx = contextWithMutationCoverage(ctx, http.MethodPut, mutationRoute{pattern: "/shells/{aasIdentifier}", operation: "PutAssetAdministrationShellById"}, true)
+
+	handler.ServeHTTP(httptest.NewRecorder(), request.WithContext(ctx))
+
+	require.Equal(t, "request-1", captured.RequestID)
+	require.Equal(t, "correlation-1", captured.CorrelationID)
+	require.Equal(t, "user-1", captured.ActorSubject)
+	require.Equal(t, "https://issuer.example", captured.ActorIssuer)
+	require.Equal(t, "client-1", captured.ClientID)
+	require.Equal(t, string(auth.DecisionAllow), captured.AuthorizationResult)
+	require.Equal(t, "PutAssetAdministrationShellById", captured.Operation)
+	require.Equal(t, "/shells/{aasIdentifier}", captured.Endpoint)
+	require.Empty(t, captured.SourceIP)
+	require.Empty(t, captured.UserAgent)
+}
+
+func TestAuditContextMiddlewareDoesNotInventAnonymousPrincipal(t *testing.T) {
+	cfg := &common.Config{History: common.HistoryConfig{AuditIdentityMode: AuditIdentityMinimal}}
+	var captured AuditContext
+	handler := AuditContextMiddleware(cfg)(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+		captured = FromContext(r.Context())
+	}))
+	request := httptest.NewRequest(http.MethodPost, "/shells", nil)
+	ctx := context.WithValue(request.Context(), auth.ClaimsKey, auth.Claims{"sub": "anonymous"})
+
+	handler.ServeHTTP(httptest.NewRecorder(), request.WithContext(ctx))
+
+	require.Empty(t, captured.ActorSubject)
+	require.Equal(t, http.MethodPost, captured.HTTPMethod)
+}
+
+func TestAuditContextMiddlewareUsesTrustedProxySourceIPInExtendedMode(t *testing.T) {
+	cfg := &common.Config{
+		History: common.HistoryConfig{AuditIdentityMode: AuditIdentityExtended},
+		General: common.GeneralConfig{
+			TrustProxyHeaders: true,
+			TrustedProxyCIDRs: []string{"10.0.0.0/8"},
+		},
+	}
+	var captured AuditContext
+	handler := AuditContextMiddleware(cfg)(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+		captured = FromContext(r.Context())
+	}))
+	request := httptest.NewRequest(http.MethodPatch, "/submodels/sm-1", nil)
+	request.RemoteAddr = "10.1.2.3:12345"
+	request.Header.Set("X-Forwarded-For", "203.0.113.8")
+	request.Header.Set("User-Agent", "audit-test")
+	request = request.WithContext(common.ContextWithConfig(request.Context(), cfg))
+
+	handler.ServeHTTP(httptest.NewRecorder(), request)
+
+	require.Equal(t, "203.0.113.8", captured.SourceIP)
+	require.Equal(t, "audit-test", captured.UserAgent)
+}
+
+func TestHistoryEventArtifactContainsMatchingAuditMetadata(t *testing.T) {
+	audit := AuditContext{
+		RequestID:           "request-1",
+		CorrelationID:       "correlation-1",
+		ActorSubject:        "user-1",
+		ActorIssuer:         "https://issuer.example",
+		ClientID:            "client-1",
+		AuthorizationResult: "ALLOW",
+		PolicyID:            "policy-1",
+		MatchedRuleID:       "rule-1",
+		SourceIP:            "203.0.113.8",
+		UserAgent:           "audit-test",
+		Operation:           "PutAssetAdministrationShellById",
+		Endpoint:            "/shells/{aasIdentifier}",
+		HTTPMethod:          http.MethodPut,
+	}
+	snapshot := map[string]any{"id": "aas-1"}
+	payloadJSON, err := CanonicalJSON(snapshot)
+	require.NoError(t, err)
+	contentHash, err := CanonicalJSONHash(snapshot)
+	require.NoError(t, err)
+	event := ChangeEvent{
+		EntityType:          TableAAS,
+		Identifier:          "aas-1",
+		ChangeType:          ChangeUpdated,
+		Timestamp:           time.Date(2026, 6, 5, 12, 0, 0, 0, time.UTC),
+		PayloadType:         PayloadTypeSnapshot,
+		ContentHash:         contentHash,
+		PayloadHash:         contentHash,
+		RequestID:           audit.RequestID,
+		CorrelationID:       audit.CorrelationID,
+		ActorSubject:        audit.ActorSubject,
+		ActorIssuer:         audit.ActorIssuer,
+		ClientID:            audit.ClientID,
+		AuthorizationResult: audit.AuthorizationResult,
+		PolicyID:            audit.PolicyID,
+		MatchedRuleID:       audit.MatchedRuleID,
+		SourceIP:            audit.SourceIP,
+		UserAgent:           audit.UserAgent,
+		Operation:           audit.Operation,
+		Endpoint:            audit.Endpoint,
+		HTTPMethod:          audit.HTTPMethod,
+	}
+	rowHash, err := ComputeHistoryRowHash(event)
+	require.NoError(t, err)
+	event.RowHash = rowHash
+
+	artifact, err := buildHistoryEventEvidenceArtifact(TableAAS, 1, event, historyPayload{payloadType: PayloadTypeSnapshot, json: payloadJSON, hash: contentHash}, nil, "", "")
+	require.NoError(t, err)
+	var decoded struct {
+		Audit map[string]string `json:"audit"`
+	}
+	require.NoError(t, json.Unmarshal(artifact.Data, &decoded))
+
+	require.Equal(t, audit.RequestID, decoded.Audit["request_id"])
+	require.Equal(t, audit.ActorSubject, decoded.Audit["actor_subject"])
+	require.Equal(t, audit.AuthorizationResult, decoded.Audit["authorization_result"])
+	require.Equal(t, audit.Endpoint, decoded.Audit["endpoint"])
 }

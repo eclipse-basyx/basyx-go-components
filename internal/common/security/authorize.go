@@ -62,10 +62,18 @@ type Resource struct {
 const (
 	// filterKey stores query filter restrictions inside the request context.
 	filterKey ctxKey = "queryFilter"
+	// authorizationDecisionKey stores the ABAC decision made for the request.
+	authorizationDecisionKey ctxKey = "authorizationDecision"
 )
 
 // ResolveResource extracts a Resource from an HTTP request.
 type ResolveResource func(r *http.Request) (Resource, error)
+
+// AuthorizationDecision records the ABAC decision available to audit middleware.
+type AuthorizationDecision struct {
+	Result        string
+	MatchedRuleID string
+}
 
 // ABACMiddleware returns an HTTP middleware handler that enforces attribute-based
 // authorization based on the provided ABACSettings.
@@ -112,7 +120,9 @@ func ABACMiddleware(settings ABACSettings) func(http.Handler) http.Handler {
 					return
 				}
 
-				ctx := r.Context()
+				ctx := ContextWithAuthorizationDecision(r.Context(), AuthorizationDecision{
+					Result: string(DecisionAllow),
+				})
 				if qf != nil {
 					ctx = context.WithValue(ctx, filterKey, qf)
 				}
@@ -124,6 +134,20 @@ func ABACMiddleware(settings ABACSettings) func(http.Handler) http.Handler {
 			http.Error(w, "resource resolution failed", http.StatusForbidden)
 		})
 	}
+}
+
+// ContextWithAuthorizationDecision stores ABAC decision metadata in a context.
+func ContextWithAuthorizationDecision(ctx context.Context, decision AuthorizationDecision) context.Context {
+	return context.WithValue(ctx, authorizationDecisionKey, decision)
+}
+
+// AuthorizationDecisionFromContext returns ABAC decision metadata stored in ctx.
+func AuthorizationDecisionFromContext(ctx context.Context) (AuthorizationDecision, bool) {
+	if ctx == nil {
+		return AuthorizationDecision{}, false
+	}
+	decision, ok := ctx.Value(authorizationDecisionKey).(AuthorizationDecision)
+	return decision, ok
 }
 
 // GetQueryFilter extracts a *QueryFilter from the provided context.

@@ -93,6 +93,7 @@ var DefaultConfig = struct {
 	HistoryEvidenceRetentionDays        int
 	HistoryEvidenceWriteTimeoutSeconds  int
 	HistoryEvidenceSigningPrivateKey    string
+	HistoryEvidenceSigningPublicKey     string
 	HistoryEvidenceSigningRequired      bool
 	HistoryIntegrityAnchorProvider      string
 	EventingEnabled                     bool
@@ -145,6 +146,7 @@ var DefaultConfig = struct {
 	HistoryEvidenceRetentionDays:        0,
 	HistoryEvidenceWriteTimeoutSeconds:  10,
 	HistoryEvidenceSigningPrivateKey:    "",
+	HistoryEvidenceSigningPublicKey:     "",
 	HistoryEvidenceSigningRequired:      false,
 	HistoryIntegrityAnchorProvider:      "none",
 	EventingEnabled:                     false,
@@ -253,6 +255,7 @@ type HistoryEvidenceConfig struct {
 // HistoryEvidenceSigningConfig configures optional manifest signing.
 type HistoryEvidenceSigningConfig struct {
 	PrivateKeyPath string `mapstructure:"privateKeyPath" yaml:"privateKeyPath" json:"privateKeyPath"`
+	PublicKeyPath  string `mapstructure:"publicKeyPath" yaml:"publicKeyPath" json:"publicKeyPath"`
 	Required       bool   `mapstructure:"required" yaml:"required" json:"required"`
 }
 
@@ -490,6 +493,9 @@ func applyHistoryEvidenceEnvOverrides(cfg *Config) {
 	if value, ok := lookupTrimmedEnv("BASYX_HISTORY_EVIDENCE_SIGNING_PRIVATE_KEY_PATH"); ok {
 		cfg.History.Evidence.Signing.PrivateKeyPath = value
 	}
+	if value, ok := lookupTrimmedEnv("BASYX_HISTORY_EVIDENCE_SIGNING_PUBLIC_KEY_PATH"); ok {
+		cfg.History.Evidence.Signing.PublicKeyPath = value
+	}
 	applyBoolEnv("BASYX_HISTORY_EVIDENCE_SIGNING_REQUIRED", func(value bool) { cfg.History.Evidence.Signing.Required = value })
 }
 
@@ -549,7 +555,6 @@ func validateHistoryConfig(cfg *Config) error {
 	switch strings.ToLower(strings.TrimSpace(cfg.History.AuditIdentityMode)) {
 	case "none":
 	case "minimal", "extended":
-		return fmt.Errorf("CONFIG-HISTORY-AUDITIDENTITY history.auditIdentityMode %q is not implemented yet; use none", cfg.History.AuditIdentityMode)
 	default:
 		return fmt.Errorf("CONFIG-HISTORY-AUDITIDENTITY unsupported history.auditIdentityMode %q", cfg.History.AuditIdentityMode)
 	}
@@ -606,8 +611,8 @@ func validateHistoryEvidenceConfig(cfg *Config) error {
 	if evidence.WriteTimeoutSec < 1 {
 		return fmt.Errorf("CONFIG-HISTORY-EVIDENCE-TIMEOUT history.evidence.writeTimeoutSeconds must be at least 1")
 	}
-	if evidence.Signing.Required && effectiveHistoryEvidenceSigningKeyPath(cfg) == "" {
-		return fmt.Errorf("CONFIG-HISTORY-EVIDENCE-SIGNING history.evidence.signing.required needs history.evidence.signing.privateKeyPath or jws.privateKeyPath")
+	if evidence.Signing.Required && effectiveHistoryEvidenceSigningKeyPath(cfg) == "" && strings.TrimSpace(evidence.Signing.PublicKeyPath) == "" {
+		return fmt.Errorf("CONFIG-HISTORY-EVIDENCE-SIGNING history.evidence.signing.required needs history.evidence.signing.privateKeyPath, jws.privateKeyPath, or history.evidence.signing.publicKeyPath")
 	}
 	return nil
 }
@@ -793,6 +798,7 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("history.evidence.retentionDays", DefaultConfig.HistoryEvidenceRetentionDays)
 	v.SetDefault("history.evidence.writeTimeoutSeconds", DefaultConfig.HistoryEvidenceWriteTimeoutSeconds)
 	v.SetDefault("history.evidence.signing.privateKeyPath", DefaultConfig.HistoryEvidenceSigningPrivateKey)
+	v.SetDefault("history.evidence.signing.publicKeyPath", DefaultConfig.HistoryEvidenceSigningPublicKey)
 	v.SetDefault("history.evidence.signing.required", DefaultConfig.HistoryEvidenceSigningRequired)
 	v.SetDefault("history.integrityAnchor.provider", DefaultConfig.HistoryIntegrityAnchorProvider)
 
@@ -939,6 +945,7 @@ func PrintConfiguration(cfg *Config) {
 		add("Evidence Retention Mode", cfg.History.Evidence.RetentionMode, DefaultConfig.HistoryEvidenceRetentionMode)
 		add("Evidence Retention Days", cfg.History.Evidence.RetentionDays, DefaultConfig.HistoryEvidenceRetentionDays)
 		add("Evidence Write Timeout Seconds", cfg.History.Evidence.WriteTimeoutSec, DefaultConfig.HistoryEvidenceWriteTimeoutSeconds)
+		add("Evidence Signing Public Key Path", cfg.History.Evidence.Signing.PublicKeyPath, DefaultConfig.HistoryEvidenceSigningPublicKey)
 		add("Evidence Signing Required", cfg.History.Evidence.Signing.Required, DefaultConfig.HistoryEvidenceSigningRequired)
 	}
 	add("Integrity Anchor Provider", cfg.History.IntegrityAnchor.Provider, DefaultConfig.HistoryIntegrityAnchorProvider)

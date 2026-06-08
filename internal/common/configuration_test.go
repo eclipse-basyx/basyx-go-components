@@ -241,6 +241,7 @@ func TestLoadConfigAppliesHistoryEvidenceEnvOverrides(t *testing.T) {
 	t.Setenv("BASYX_HISTORY_EVIDENCE_RETENTION_MODE", "governance")
 	t.Setenv("BASYX_HISTORY_EVIDENCE_RETENTION_DAYS", "7")
 	t.Setenv("BASYX_HISTORY_EVIDENCE_WRITE_TIMEOUT_SECONDS", "12")
+	t.Setenv("BASYX_HISTORY_EVIDENCE_SIGNING_PUBLIC_KEY_PATH", "/keys/manifest-public.pem")
 	t.Setenv("BASYX_HISTORY_INTEGRITY_ANCHOR_PROVIDER", "none")
 	captureLogOutput(t)
 
@@ -255,10 +256,13 @@ func TestLoadConfigAppliesHistoryEvidenceEnvOverrides(t *testing.T) {
 	if !cfg.History.Evidence.UsePathStyle || cfg.History.Evidence.RetentionMode != "governance" || cfg.History.Evidence.RetentionDays != 7 || cfg.History.Evidence.WriteTimeoutSec != 12 {
 		t.Fatalf("unexpected evidence retention/path-style result: %+v", cfg.History.Evidence)
 	}
+	if cfg.History.Evidence.Signing.PublicKeyPath != "/keys/manifest-public.pem" {
+		t.Fatalf("unexpected evidence signing public key: %+v", cfg.History.Evidence.Signing)
+	}
 }
 
 func TestValidateHistoryAndEventingConfigAcceptsDiffBackedSnapshotInterval(t *testing.T) {
-	cfg := Config{History: HistoryConfig{Mode: "api", FullSnapshotInterval: 10, Immutability: "none", AuditIdentityMode: "none"}}
+	cfg := Config{History: HistoryConfig{Mode: "api", FullSnapshotInterval: 10, Immutability: "none", AuditIdentityMode: "extended"}}
 
 	if err := validateHistoryAndEventingConfig(&cfg); err != nil {
 		t.Fatalf("expected diff-backed full snapshot interval to be accepted, got %v", err)
@@ -358,10 +362,6 @@ func TestValidateHistoryAndEventingConfigRejectsUnsupportedFeatures(t *testing.T
 				AuditIdentityMode:    "none",
 				IntegrityAnchor:      HistoryIntegrityAnchorConfig{Provider: "immudb"},
 			}},
-		},
-		{
-			name:   "audit identity",
-			config: Config{History: HistoryConfig{Mode: "api", FullSnapshotInterval: 1, Immutability: "none", AuditIdentityMode: "minimal"}},
 		},
 		{
 			name:   "eventing",

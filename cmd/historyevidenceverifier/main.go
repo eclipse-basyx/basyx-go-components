@@ -42,16 +42,21 @@ import (
 )
 
 type cliOptions struct {
-	configPath        string
-	historyTable      string
-	identifier        string
-	firstHistoryID    int64
-	lastHistoryID     int64
-	writeEvidence     bool
-	manifestObjectKey string
-	manifestVersionID string
-	manifestSHA256    string
-	signerKeyID       string
+	configPath            string
+	historyTable          string
+	identifier            string
+	firstHistoryID        int64
+	lastHistoryID         int64
+	writeEvidence         bool
+	recover               bool
+	catalogExport         bool
+	recoveryCatalogPath   string
+	outputPath            string
+	manifestObjectKey     string
+	manifestVersionID     string
+	manifestSHA256        string
+	signerKeyID           string
+	requireSignedManifest bool
 }
 
 func main() {
@@ -74,10 +79,15 @@ func parseFlags() *cliOptions {
 	flag.Int64Var(&options.firstHistoryID, "from", 0, "First history_id in the range")
 	flag.Int64Var(&options.lastHistoryID, "to", 0, "Last history_id in the range")
 	flag.BoolVar(&options.writeEvidence, "write", false, "Write snapshot and manifest artifacts before verifying")
+	flag.BoolVar(&options.recover, "recover", false, "Recover/export verified history rows from WORM history_event artifacts")
+	flag.BoolVar(&options.catalogExport, "catalog-export", false, "Export a recovery catalog from PostgreSQL evidence receipts")
+	flag.StringVar(&options.recoveryCatalogPath, "recovery-catalog", "", "Recovery catalog JSON file to use instead of PostgreSQL receipt discovery")
+	flag.StringVar(&options.outputPath, "out", "", "Optional JSON output file")
 	flag.StringVar(&options.manifestObjectKey, "manifest-object-key", "", "Stored manifest object key to verify")
 	flag.StringVar(&options.manifestVersionID, "manifest-version-id", "", "Stored manifest object version ID")
 	flag.StringVar(&options.manifestSHA256, "manifest-sha256", "", "Expected SHA-256 for the stored manifest object")
 	flag.StringVar(&options.signerKeyID, "signer-key-id", "", "Optional manifest signer key id")
+	flag.BoolVar(&options.requireSignedManifest, "require-signed-manifest", false, "Reject unsigned manifests during verification")
 	return options
 }
 
@@ -89,6 +99,9 @@ func run(ctx context.Context, options cliOptions) error {
 	if err != nil {
 		return err
 	}
+	if options.recover && strings.TrimSpace(options.recoveryCatalogPath) != "" {
+		return recoverEvidence(ctx, cfg, nil, options)
+	}
 	db, err := openDatabase(cfg)
 	if err != nil {
 		return err
@@ -98,6 +111,12 @@ func run(ctx context.Context, options cliOptions) error {
 	}()
 	if options.writeEvidence {
 		return writeEvidence(ctx, cfg, db, options)
+	}
+	if options.catalogExport {
+		return exportRecoveryCatalog(ctx, db, options)
+	}
+	if options.recover {
+		return recoverEvidence(ctx, cfg, db, options)
 	}
 	return verifyEvidence(ctx, cfg, db, options)
 }
@@ -122,6 +141,18 @@ func validateCLIOptions(options cliOptions) error {
 	}
 	if strings.TrimSpace(options.manifestVersionID) != "" && !hasManifestObjectKey {
 		return fmt.Errorf("HISTORY-EVIDENCE-CLI-MANIFESTVERSION -manifest-object-key is required when -manifest-version-id is set")
+	}
+	modeCount := 0
+	for _, enabled := range []bool{options.writeEvidence, options.recover, options.catalogExport} {
+		if enabled {
+			modeCount++
+		}
+	}
+	if modeCount > 1 {
+		return fmt.Errorf("HISTORY-EVIDENCE-CLI-MODE choose only one of -write, -recover, or -catalog-export")
+	}
+	if strings.TrimSpace(options.recoveryCatalogPath) != "" && !options.recover {
+		return fmt.Errorf("HISTORY-EVIDENCE-CLI-RECOVERYCATALOG -recovery-catalog is only valid with -recover")
 	}
 	return nil
 }
@@ -156,6 +187,9 @@ func writeEvidence(ctx context.Context, cfg *common.Config, db *sql.DB, options 
 	if err != nil {
 		return err
 	}
+	if cfg.History.Evidence.Signing.Required && signer == nil {
+		return fmt.Errorf("HISTORY-EVIDENCE-CLI-SIGNINGREQUIRED history.evidence.signing.required needs a private signing key for -write")
+	}
 	result, err := history.WriteHistoryEvidence(ctx, history.WriteHistoryEvidenceOptions{
 		DB:             db,
 		Store:          store,
@@ -168,16 +202,22 @@ func writeEvidence(ctx context.Context, cfg *common.Config, db *sql.DB, options 
 	if err != nil {
 		return err
 	}
-	return printJSON(result)
+	return writeJSONOutput(result, options.outputPath)
 }
 
 func verifyEvidence(ctx context.Context, cfg *common.Config, db *sql.DB, options cliOptions) error {
 	verifyOptions := history.VerifyHistoryRangeOptions{
-		HistoryTable:   options.historyTable,
-		Identifier:     options.identifier,
-		FirstHistoryID: options.firstHistoryID,
-		LastHistoryID:  options.lastHistoryID,
+		HistoryTable:          options.historyTable,
+		Identifier:            options.identifier,
+		FirstHistoryID:        options.firstHistoryID,
+		LastHistoryID:         options.lastHistoryID,
+		RequireSignedManifest: cfg.History.Evidence.Signing.Required || options.requireSignedManifest,
 	}
+	verifier, err := newManifestVerifier(cfg)
+	if err != nil {
+		return err
+	}
+	verifyOptions.ManifestVerifier = verifier
 	store, err := optionalS3EvidenceStore(ctx, cfg)
 	if err != nil {
 		return err
@@ -201,11 +241,8 @@ func verifyEvidence(ctx context.Context, cfg *common.Config, db *sql.DB, options
 		if err != nil {
 			return err
 		}
-		manifest, _, err := history.DecodeManifestArtifact(object.Data, object.ContentType)
-		if err != nil {
-			return err
-		}
-		verifyOptions.Manifest = &manifest
+		verifyOptions.ManifestArtifactData = object.Data
+		verifyOptions.ManifestArtifactContentType = object.ContentType
 		verifyOptions.EvidenceStore = store
 		verifyOptions.ManifestArtifactRef = ref
 		verifyOptions.ManifestArtifactHash = strings.TrimSpace(options.manifestSHA256)
@@ -214,7 +251,68 @@ func verifyEvidence(ctx context.Context, cfg *common.Config, db *sql.DB, options
 	if err != nil {
 		return err
 	}
-	return printJSON(report)
+	if printErr := writeJSONOutput(report, options.outputPath); printErr != nil {
+		return printErr
+	}
+	if !report.Valid {
+		return fmt.Errorf("HISTORY-EVIDENCE-CLI-VERIFYFAILED verification report contains critical findings")
+	}
+	return nil
+}
+
+func exportRecoveryCatalog(ctx context.Context, db *sql.DB, options cliOptions) error {
+	catalog, err := history.LoadEvidenceRecoveryCatalog(ctx, db, history.EvidenceRecoveryCatalogOptions{
+		HistoryTable:   options.historyTable,
+		Identifier:     options.identifier,
+		FirstHistoryID: options.firstHistoryID,
+		LastHistoryID:  options.lastHistoryID,
+	})
+	if err != nil {
+		return err
+	}
+	return writeJSONOutput(catalog, options.outputPath)
+}
+
+func recoverEvidence(ctx context.Context, cfg *common.Config, db *sql.DB, options cliOptions) error {
+	store, err := newS3EvidenceStore(ctx, cfg)
+	if err != nil {
+		return err
+	}
+	catalog, err := recoveryCatalog(ctx, db, options)
+	if err != nil {
+		return err
+	}
+	report, err := history.RecoverHistoryFromEvidence(ctx, store, catalog)
+	if err != nil {
+		return err
+	}
+	if printErr := writeJSONOutput(report, options.outputPath); printErr != nil {
+		return printErr
+	}
+	if !report.Valid {
+		return fmt.Errorf("HISTORY-EVIDENCE-CLI-RECOVERYFAILED recovery report contains critical findings")
+	}
+	return nil
+}
+
+func recoveryCatalog(ctx context.Context, db *sql.DB, options cliOptions) (history.EvidenceRecoveryCatalog, error) {
+	if strings.TrimSpace(options.recoveryCatalogPath) == "" {
+		return history.LoadEvidenceRecoveryCatalog(ctx, db, history.EvidenceRecoveryCatalogOptions{
+			HistoryTable:   options.historyTable,
+			Identifier:     options.identifier,
+			FirstHistoryID: options.firstHistoryID,
+			LastHistoryID:  options.lastHistoryID,
+		})
+	}
+	data, err := os.ReadFile(strings.TrimSpace(options.recoveryCatalogPath))
+	if err != nil {
+		return history.EvidenceRecoveryCatalog{}, fmt.Errorf("HISTORY-EVIDENCE-CLI-READCATALOG %w", err)
+	}
+	var catalog history.EvidenceRecoveryCatalog
+	if err = json.Unmarshal(data, &catalog); err != nil {
+		return history.EvidenceRecoveryCatalog{}, fmt.Errorf("HISTORY-EVIDENCE-CLI-DECODECATALOG %w", err)
+	}
+	return catalog, nil
 }
 
 func newS3EvidenceStore(ctx context.Context, cfg *common.Config) (*history.S3EvidenceStore, error) {
@@ -255,11 +353,22 @@ func newManifestSigner(cfg *common.Config, keyID string) (*history.ManifestJWSSi
 	return history.NewManifestJWSSignerFromKeyFile(keyPath, keyID)
 }
 
-func printJSON(value any) error {
+func newManifestVerifier(cfg *common.Config) (*history.ManifestJWSVerifier, error) {
+	keyPath := strings.TrimSpace(cfg.History.Evidence.Signing.PublicKeyPath)
+	if keyPath == "" {
+		return nil, nil
+	}
+	return history.NewManifestJWSVerifierFromKeyFile(keyPath)
+}
+
+func writeJSONOutput(value any, outputPath string) error {
 	encoded, err := json.MarshalIndent(value, "", "  ")
 	if err != nil {
 		return fmt.Errorf("HISTORY-EVIDENCE-CLI-PRINTJSON %w", err)
 	}
-	_, err = fmt.Fprintln(os.Stdout, string(encoded))
-	return err
+	if strings.TrimSpace(outputPath) == "" {
+		_, err = fmt.Fprintln(os.Stdout, string(encoded))
+		return err
+	}
+	return os.WriteFile(strings.TrimSpace(outputPath), append(encoded, '\n'), 0o600)
 }

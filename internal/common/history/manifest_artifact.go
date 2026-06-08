@@ -50,6 +50,11 @@ type ManifestJWSSigner struct {
 	KeyID      string
 }
 
+// ManifestJWSVerifier verifies compact JWS manifest artifacts with a trusted RSA public key.
+type ManifestJWSVerifier struct {
+	PublicKey *rsa.PublicKey
+}
+
 // NewManifestJWSSignerFromKeyFile loads a JWS signer for evidence manifests.
 //
 // Parameters:
@@ -69,6 +74,26 @@ func NewManifestJWSSignerFromKeyFile(privateKeyPath string, keyID string) (*Mani
 		return nil, fmt.Errorf("HISTORY-MANIFESTSIGNER-LOADKEY %w", err)
 	}
 	return &ManifestJWSSigner{PrivateKey: privateKey, KeyID: strings.TrimSpace(keyID)}, nil
+}
+
+// NewManifestJWSVerifierFromKeyFile loads a verifier for signed evidence manifests.
+//
+// Parameters:
+//   - publicKeyPath: Path to a PEM encoded RSA public key.
+//
+// Returns:
+//   - *ManifestJWSVerifier: Verifier configured for RS256 compact JWS manifests.
+//   - error: Error when the key path is empty or the key cannot be loaded.
+func NewManifestJWSVerifierFromKeyFile(publicKeyPath string) (*ManifestJWSVerifier, error) {
+	publicKeyPath = strings.TrimSpace(publicKeyPath)
+	if publicKeyPath == "" {
+		return nil, fmt.Errorf("HISTORY-MANIFESTVERIFIER-EMPTYPATH public key path is required")
+	}
+	publicKey, err := commonjws.LoadPublicKey(publicKeyPath)
+	if err != nil {
+		return nil, fmt.Errorf("HISTORY-MANIFESTVERIFIER-LOADKEY %w", err)
+	}
+	return &ManifestJWSVerifier{PublicKey: publicKey}, nil
 }
 
 // BuildManifestEvidenceArtifact returns the signed or unsigned manifest object-store artifact.
@@ -195,6 +220,70 @@ func DecodeManifestArtifact(data []byte, contentType string) (HistoryManifest, b
 		return HistoryManifest{}, signed, err
 	}
 	return manifest, signed, nil
+}
+
+// DecodeAndVerifyManifestArtifact extracts and verifies a manifest artifact.
+//
+// Unsigned JSON artifacts are accepted only when requireSigned is false. Compact
+// JWS artifacts must verify against verifier before their payload is accepted as
+// signed evidence.
+//
+// Parameters:
+//   - data: Stored manifest artifact bytes.
+//   - contentType: Artifact content type returned by the evidence store.
+//   - verifier: Trusted public-key verifier for signed artifacts.
+//   - requireSigned: True when unsigned manifests must be rejected.
+//
+// Returns:
+//   - HistoryManifest: Decoded and structurally validated manifest.
+//   - bool: True when the artifact was encoded as compact JWS.
+//   - error: Error when the artifact is unsigned but signing is required, the
+//     JWS signature fails, or the manifest payload is invalid.
+func DecodeAndVerifyManifestArtifact(data []byte, contentType string, verifier *ManifestJWSVerifier, requireSigned bool) (HistoryManifest, bool, error) {
+	signed := isJWSManifestArtifact(data, contentType)
+	if !signed {
+		if requireSigned {
+			return HistoryManifest{}, false, fmt.Errorf("HISTORY-MANIFEST-VERIFY-UNSIGNED signed manifest is required")
+		}
+		manifest, _, err := DecodeManifestArtifact(data, contentType)
+		return manifest, false, err
+	}
+	payload, err := verifyManifestJWSPayload(data, verifier)
+	if err != nil {
+		return HistoryManifest{}, true, err
+	}
+	var manifest HistoryManifest
+	if err = json.Unmarshal(payload, &manifest); err != nil {
+		return HistoryManifest{}, true, fmt.Errorf("HISTORY-MANIFEST-VERIFY-JSON %w", err)
+	}
+	if err = validateManifest(manifest); err != nil {
+		return HistoryManifest{}, true, err
+	}
+	if manifest.SignatureState != SignatureStateSigned {
+		return HistoryManifest{}, true, fmt.Errorf("HISTORY-MANIFEST-VERIFY-SIGNATURESTATE signed artifact payload must declare signature_state signed")
+	}
+	return manifest, true, nil
+}
+
+func verifyManifestJWSPayload(data []byte, verifier *ManifestJWSVerifier) ([]byte, error) {
+	if verifier == nil || verifier.PublicKey == nil {
+		return nil, fmt.Errorf("HISTORY-MANIFEST-VERIFY-NOKEY signed manifest verification requires a public key")
+	}
+	jws, err := jose.ParseSigned(strings.TrimSpace(string(data)))
+	if err != nil {
+		return nil, fmt.Errorf("HISTORY-MANIFEST-VERIFY-PARSEJWS %w", err)
+	}
+	if len(jws.Signatures) != 1 {
+		return nil, fmt.Errorf("HISTORY-MANIFEST-VERIFY-SIGNATURECOUNT manifest JWS must contain exactly one signature")
+	}
+	if jws.Signatures[0].Protected.Algorithm != manifestSigningAlgRS256 {
+		return nil, fmt.Errorf("HISTORY-MANIFEST-VERIFY-ALG unsupported manifest JWS algorithm %q", jws.Signatures[0].Protected.Algorithm)
+	}
+	payload, err := jws.Verify(verifier.PublicKey)
+	if err != nil {
+		return nil, fmt.Errorf("HISTORY-MANIFEST-VERIFY-SIGNATURE %w", err)
+	}
+	return payload, nil
 }
 
 func isJWSManifestArtifact(data []byte, contentType string) bool {

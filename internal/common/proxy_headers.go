@@ -81,6 +81,26 @@ func RequestHost(r *http.Request) string {
 	return normalizeHostValue(r.Host)
 }
 
+// RequestSourceIP returns the client source IP accepted for audit metadata.
+//
+// Forwarded and X-Forwarded-For headers are honored only when the request comes
+// from a configured trusted proxy. Otherwise the direct remote address is used.
+func RequestSourceIP(r *http.Request) string {
+	if r == nil {
+		return ""
+	}
+	if shouldTrustForwardedHeaders(r) {
+		if forwardedFor := normalizedForwardedFor(r); forwardedFor != "" {
+			return forwardedFor
+		}
+	}
+	ip := parseRemoteAddrIP(r.RemoteAddr)
+	if ip == nil {
+		return ""
+	}
+	return ip.String()
+}
+
 func shouldTrustForwardedHeaders(r *http.Request) bool {
 	if r == nil {
 		return false
@@ -129,6 +149,24 @@ func parseRemoteAddrIP(remoteAddr string) net.IP {
 	}
 
 	return net.ParseIP(strings.Trim(trimmed, "[]"))
+}
+
+func normalizedForwardedFor(r *http.Request) string {
+	if forwardedFor := parseForwardedHeaderValue(r.Header.Get("Forwarded"), "for"); forwardedFor != "" {
+		return normalizeForwardedIP(forwardedFor)
+	}
+	if xForwardedFor := firstForwardedValue(r.Header.Get("X-Forwarded-For")); xForwardedFor != "" {
+		return normalizeForwardedIP(xForwardedFor)
+	}
+	return ""
+}
+
+func normalizeForwardedIP(rawIP string) string {
+	ip := parseRemoteAddrIP(rawIP)
+	if ip == nil {
+		return ""
+	}
+	return ip.String()
 }
 
 func normalizedForwardedProto(r *http.Request) string {

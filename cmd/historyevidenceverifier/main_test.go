@@ -41,3 +41,26 @@ func TestValidateCLIOptionsRejectsManifestObjectKeyWithoutHash(t *testing.T) {
 
 	require.ErrorContains(t, err, "HISTORY-EVIDENCE-CLI-MANIFESTHASH")
 }
+
+func TestValidateCLIOptionsRejectsMultipleModes(t *testing.T) {
+	err := validateCLIOptions(cliOptions{
+		historyTable:   "aas_history",
+		firstHistoryID: 1,
+		lastHistoryID:  10,
+		writeEvidence:  true,
+		recover:        true,
+	})
+
+	require.ErrorContains(t, err, "HISTORY-EVIDENCE-CLI-MODE")
+}
+
+func TestValidateCLIOptionsRejectsRecoveryCatalogWithoutRecover(t *testing.T) {
+	err := validateCLIOptions(cliOptions{
+		historyTable:        "aas_history",
+		firstHistoryID:      1,
+		lastHistoryID:       10,
+		recoveryCatalogPath: "catalog.json",
+	})
+
+	require.ErrorContains(t, err, "HISTORY-EVIDENCE-CLI-RECOVERYCATALOG")
+}

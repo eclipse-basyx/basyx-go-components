@@ -48,15 +48,19 @@ const (
 // verification should leave it false so missing or modified event artifacts are
 // reported.
 type VerifyHistoryRangeOptions struct {
-	HistoryTable         string
-	Identifier           string
-	FirstHistoryID       int64
-	LastHistoryID        int64
-	Manifest             *HistoryManifest
-	EvidenceStore        EvidenceStore
-	ManifestArtifactRef  EvidenceReference
-	ManifestArtifactHash string
-	SkipEventArtifacts   bool
+	HistoryTable                string
+	Identifier                  string
+	FirstHistoryID              int64
+	LastHistoryID               int64
+	Manifest                    *HistoryManifest
+	ManifestArtifactData        []byte
+	ManifestArtifactContentType string
+	ManifestVerifier            *ManifestJWSVerifier
+	RequireSignedManifest       bool
+	EvidenceStore               EvidenceStore
+	ManifestArtifactRef         EvidenceReference
+	ManifestArtifactHash        string
+	SkipEventArtifacts          bool
 }
 
 // HistoryEvidenceVerificationReport summarizes hash-chain, manifest, and artifact verification.
@@ -130,8 +134,9 @@ func VerifyHistoryRange(ctx context.Context, db *sql.DB, options VerifyHistoryRa
 		report.addFinding(VerificationSeverityError, "HISTORY-EVIDENCE-VERIFY-EMPTYRANGE", "no history rows exist in the requested range", "", 0)
 		return report, nil
 	}
+	manifest := verifyManifestEvidence(report, options)
 	verifyRangeDigest(report, rows)
-	verifyManifestRange(report, options.Manifest)
+	verifyManifestRange(report, manifest)
 	verifyChainsByIdentifier(ctx, db, report, options.HistoryTable, rows)
 	if !options.SkipEventArtifacts {
 		verifyHistoryEventArtifacts(ctx, db, options, report)
@@ -139,6 +144,38 @@ func VerifyHistoryRange(ctx context.Context, db *sql.DB, options VerifyHistoryRa
 	verifyManifestArtifact(ctx, options, report)
 	report.Valid = len(report.Findings) == 0
 	return report, nil
+}
+
+func verifyManifestEvidence(report *HistoryEvidenceVerificationReport, options VerifyHistoryRangeOptions) *HistoryManifest {
+	if len(options.ManifestArtifactData) > 0 {
+		manifest, _, err := DecodeAndVerifyManifestArtifact(
+			options.ManifestArtifactData,
+			options.ManifestArtifactContentType,
+			options.ManifestVerifier,
+			options.RequireSignedManifest,
+		)
+		if err != nil {
+			report.addFinding(VerificationSeverityError, "HISTORY-EVIDENCE-VERIFY-MANIFESTSIGNATURE", fmt.Sprintf("manifest signature verification failed: %v", err), "", 0)
+			return nil
+		}
+		return &manifest
+	}
+	if options.Manifest == nil {
+		if options.RequireSignedManifest {
+			report.addFinding(VerificationSeverityError, "HISTORY-EVIDENCE-VERIFY-MANIFESTMISSING", "signed manifest is required but no manifest was provided", "", 0)
+		}
+		return nil
+	}
+	if options.Manifest.SignatureState != SignatureStateSigned {
+		if options.RequireSignedManifest {
+			report.addFinding(VerificationSeverityError, "HISTORY-EVIDENCE-VERIFY-MANIFESTUNSIGNED", "unsigned manifest is not accepted when signing is required", "", 0)
+		}
+		return options.Manifest
+	}
+	if options.ManifestVerifier != nil || options.RequireSignedManifest {
+		report.addFinding(VerificationSeverityError, "HISTORY-EVIDENCE-VERIFY-MANIFESTSIGNATURE", "signed manifest verification requires raw manifest artifact bytes", "", 0)
+	}
+	return options.Manifest
 }
 
 // LoadManifestRangeRows returns ordered row-hash inputs for manifest generation.
@@ -368,10 +405,34 @@ func verifyEventArtifactCandidate(ctx context.Context, options VerifyHistoryRang
 		report.addFinding(VerificationSeverityError, "HISTORY-EVIDENCE-VERIFY-EVENTMISSING", "history_event artifact receipt is missing", candidate.Identifier, candidate.HistoryID)
 		return
 	}
+	if hasConflictingEventReceipts(receipts) {
+		report.addFinding(VerificationSeverityError, "HISTORY-EVIDENCE-VERIFY-EVENTDUPLICATE", "conflicting history_event artifact receipts exist for the same history row", candidate.Identifier, candidate.HistoryID)
+	}
 	expectedSHA := SHA256Hex(candidate.Artifact.Data)
 	for _, receipt := range receipts {
 		verifyEventArtifactReceipt(ctx, options, report, candidate, receipt, expectedSHA)
 	}
+}
+
+func hasConflictingEventReceipts(receipts []*eventArtifactReceiptRow) bool {
+	if len(receipts) < 2 {
+		return false
+	}
+	first := receipts[0].Receipt
+	firstRef := first.Reference
+	for _, receipt := range receipts[1:] {
+		current := receipt.Receipt
+		if !strings.EqualFold(first.SHA256, current.SHA256) {
+			return true
+		}
+		if firstRef.Provider != current.Reference.Provider ||
+			firstRef.Bucket != current.Reference.Bucket ||
+			firstRef.ObjectKey != current.Reference.ObjectKey ||
+			firstRef.VersionID != current.Reference.VersionID {
+			return true
+		}
+	}
+	return false
 }
 
 func verifyEventArtifactReceipt(ctx context.Context, options VerifyHistoryRangeOptions, report *HistoryEvidenceVerificationReport, candidate EventArtifactCandidate, receipt *eventArtifactReceiptRow, expectedSHA string) {
