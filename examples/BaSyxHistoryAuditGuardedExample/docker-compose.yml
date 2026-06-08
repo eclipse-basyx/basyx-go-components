@@ -30,7 +30,7 @@ services:
       - BASYX_HISTORY_RETENTION_DAYS=0
       - BASYX_HISTORY_FULL_SNAPSHOT_INTERVAL=5
       - BASYX_HISTORY_IMMUTABILITY=postgres_guarded
-      - BASYX_AUDIT_IDENTITY_MODE=none
+      - BASYX_AUDIT_IDENTITY_MODE=extended
       - BASYX_HISTORY_EVIDENCE_ENABLED=true
       - BASYX_HISTORY_EVIDENCE_PROVIDER=s3
       - BASYX_HISTORY_EVIDENCE_BUCKET=basyx-history-evidence
@@ -44,7 +44,9 @@ services:
       - BASYX_HISTORY_EVIDENCE_RETENTION_DAYS=7
       - BASYX_HISTORY_EVIDENCE_WRITE_TIMEOUT_SECONDS=10
       - BASYX_HISTORY_INTEGRITY_ANCHOR_PROVIDER=none
-      - ABAC_ENABLED=false
+      - ABAC_ENABLED=true
+      - ABAC_MODELPATH=/security_env/access-rules.json
+      - OIDC_TRUSTLISTPATH=/security_env/trustlist.json
       - GENERAL_AASREGISTRYINTEGRATION=true
       - GENERAL_SUBMODELREGISTRYINTEGRATION=true
       - GENERAL_DISCOVERYINTEGRATION=true
@@ -52,11 +54,16 @@ services:
       - GENERAL_AAS_PRECONFIG_PATHS=/app/preconfiguration
     volumes:
       - ./aas:/app/preconfiguration:ro
+      - ./security_env:/security_env:ro
     depends_on:
       basyx_configuration:
         condition: service_completed_successfully
       minio-init:
         condition: service_completed_successfully
+      keycloak-healthcheck:
+        condition: service_completed_successfully
+    extra_hosts:
+      - "keycloak.localhost:host-gateway"
     restart: unless-stopped
 
   aas-ui:
@@ -69,6 +76,8 @@ services:
       - ./basyx-infra.yml:/basyx-infra.yml:ro
     environment:
       - ENDPOINT_CONFIG_AVAILABLE=false
+    extra_hosts:
+      - "keycloak.localhost:host-gateway"
     depends_on:
       aas-environment:
         condition: service_started
@@ -110,6 +119,47 @@ services:
     depends_on:
       db:
         condition: service_healthy
+
+  keycloak:
+    container_name: keycloak_history_audit
+    image: keycloak/keycloak:26.0.6
+    environment:
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://db:5432/basyxTestDB
+      KC_DB_USERNAME: admin
+      KC_DB_PASSWORD: admin123
+      KC_HOSTNAME: keycloak.localhost
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: admin
+      KC_HTTP_ENABLED: "true"
+      KC_HTTPS_ENABLED: "false"
+      KC_HEALTH_ENABLED: "true"
+      KC_HOSTNAME_STRICT: "false"
+      KC_HOSTNAME_STRICT_BACKCHANNEL: "false"
+      KC_IMPORT: /opt/keycloak/data/import/
+      KC_HTTP_MANAGEMENT_ENABLED: "true"
+    command: ["start-dev", "--import-realm", "--health-enabled=true"]
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./keycloak/realm:/opt/keycloak/data/import:ro
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  keycloak-healthcheck:
+    container_name: keycloak_history_audit_healthcheck
+    image: curlimages/curl:latest
+    command: >
+      sh -c "
+        echo 'Waiting for Keycloak to become ready...';
+        until curl -sf http://keycloak:9000/health/ready; do
+          sleep 5;
+        done;
+        echo 'Keycloak is ready!'"
+    depends_on:
+      - keycloak
 
   minio:
     container_name: minio_history_evidence
