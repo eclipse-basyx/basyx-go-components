@@ -19,6 +19,7 @@ import (
 
 	"github.com/FriedJannik/aas-go-sdk/types"
 	model "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
 )
 
 type (
@@ -38,6 +39,7 @@ type (
 // The AssetAdministrationShellRepositoryAPIAPIRouter implementation should parse necessary information from the http request,
 // pass the data to a AssetAdministrationShellRepositoryAPIAPIServicer to perform the required actions, then write the service results to the http response.
 type AssetAdministrationShellRepositoryAPIAPIRouter interface {
+	QueryAssetAdministrationShells(http.ResponseWriter, *http.Request)
 	GetAllAssetAdministrationShells(http.ResponseWriter, *http.Request)
 	PostAssetAdministrationShell(http.ResponseWriter, *http.Request)
 	GetAllAssetAdministrationShellsReference(http.ResponseWriter, *http.Request)
@@ -114,6 +116,7 @@ type SerializationAPIAPIRouter interface {
 // while the service implementation can be ignored with the .openapi-generator-ignore file
 // and updated with the logic required for the API.
 type AssetAdministrationShellRepositoryAPIAPIServicer interface {
+	QueryAssetAdministrationShells(context.Context, int32, string, grammar.Query) (model.ImplResponse, error)
 	GetAllAssetAdministrationShells(context.Context, []string, string, int32, string) (model.ImplResponse, error)
 	PostAssetAdministrationShell(context.Context, AssetAdministrationShell) (model.ImplResponse, error)
 	GetAllAssetAdministrationShellsReference(context.Context, []string, string, int32, string) (model.ImplResponse, error)

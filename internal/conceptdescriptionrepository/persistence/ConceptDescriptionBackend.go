@@ -122,6 +122,35 @@ func conceptDescriptionToJSONString(cd types.IConceptDescription) (string, error
 	return string(bytes), nil
 }
 
+func buildConceptDescriptionSelectExpressions(ctx context.Context, collector *grammar.ResolvedFieldPathCollector, includeData bool) ([]interface{}, error) {
+	columns := []auth.FilterColumnSpec{
+		auth.Column(goqu.I("concept_description.id")),
+		auth.MaskedColumn(goqu.I("concept_description.id_short"), "$cd#idShort"),
+	}
+	if includeData {
+		columns = append(columns, auth.Column(goqu.I("concept_description.data")))
+	}
+
+	expressions, err := auth.GetColumnSelectStatement(ctx, columns, collector)
+	if err != nil {
+		return nil, err
+	}
+
+	selectExpressions := make([]interface{}, 0, len(expressions))
+	for _, expression := range expressions {
+		selectExpressions = append(selectExpressions, expression)
+	}
+	return selectExpressions, nil
+}
+
+func applyConceptDescriptionIDShortMask(jsonable map[string]any, idShort sql.NullString) {
+	if idShort.Valid && strings.TrimSpace(idShort.String) != "" {
+		jsonable["idShort"] = idShort.String
+		return
+	}
+	delete(jsonable, "idShort")
+}
+
 func conceptDescriptionToHistorySnapshot(cd types.IConceptDescription) (map[string]any, error) {
 	jsonable, err := jsonization.ToJsonable(cd)
 	if err != nil {
@@ -310,8 +339,18 @@ func (b *ConceptDescriptionBackend) GetConceptDescriptions(ctx context.Context, 
 	var conceptDescriptions []types.IConceptDescription
 	nextCursor := ""
 
+	collector, collectorErr := grammar.NewResolvedFieldPathCollectorForRoot(grammar.CollectorRootCD)
+	if collectorErr != nil {
+		return nil, "", common.NewInternalServerError("CDREPO-GCDS-BADCOLLECTOR " + collectorErr.Error())
+	}
+
+	selectExpressions, selectErr := buildConceptDescriptionSelectExpressions(ctx, collector, true)
+	if selectErr != nil {
+		return nil, "", common.NewInternalServerError("CDREPO-GCDS-BUILDMASKS " + selectErr.Error())
+	}
+
 	query := goqu.From("concept_description").
-		Select(goqu.C("id"), goqu.C("id_short"), goqu.C("data")).
+		Select(selectExpressions...).
 		Order(goqu.I("id").Asc()).
 		Limit(peekLimit)
 
@@ -347,11 +386,6 @@ func (b *ConceptDescriptionBackend) GetConceptDescriptions(ctx context.Context, 
 			return []types.IConceptDescription{}, "", nil
 		}
 		query = query.Where(goqu.C("id").Gte(trimmedCursor))
-	}
-
-	collector, collectorErr := grammar.NewResolvedFieldPathCollectorForRoot(grammar.CollectorRootCD)
-	if collectorErr != nil {
-		return nil, "", common.NewInternalServerError("CDREPO-GCDS-BADCOLLECTOR " + collectorErr.Error())
 	}
 
 	shouldEnforceFormula, enforceErr := auth.ShouldEnforceFormula(ctx)
@@ -400,6 +434,7 @@ func (b *ConceptDescriptionBackend) GetConceptDescriptions(ctx context.Context, 
 		if unmarshalErr := json.Unmarshal([]byte(data), &jsonable); unmarshalErr != nil {
 			return nil, "", fmt.Errorf("CDREPO-GCDS-UNMARSHAL failed to unmarshal JSON data: %w", unmarshalErr)
 		}
+		applyConceptDescriptionIDShortMask(jsonable, idShortValue)
 
 		cd, fromJSONErr := jsonization.ConceptDescriptionFromJsonable(jsonable)
 		if fromJSONErr != nil {
@@ -450,8 +485,13 @@ func (b *ConceptDescriptionBackend) GetConceptDescriptionByID(ctx context.Contex
 		return nil, common.NewInternalServerError("CDREPO-GCDBYID-BADCOLLECTOR " + collectorErr.Error())
 	}
 
+	selectExpressions, selectErr := buildConceptDescriptionSelectExpressions(ctx, collector, true)
+	if selectErr != nil {
+		return nil, common.NewInternalServerError("CDREPO-GCDBYID-BUILDMASKS " + selectErr.Error())
+	}
+
 	query := goqu.From("concept_description").
-		Select(goqu.C("data")).
+		Select(selectExpressions...).
 		Where(goqu.C("id").Eq(id)).
 		Limit(1)
 
@@ -472,8 +512,10 @@ func (b *ConceptDescriptionBackend) GetConceptDescriptionByID(ctx context.Contex
 		return nil, common.NewInternalServerError("CDREPO-GCDBYID-BUILDSQL " + err.Error())
 	}
 
+	var identifier string
+	var idShortValue sql.NullString
 	var data string
-	scanErr := b.db.QueryRowContext(ctx, sqlQuery, args...).Scan(&data)
+	scanErr := b.db.QueryRowContext(ctx, sqlQuery, args...).Scan(&identifier, &idShortValue, &data)
 	if scanErr != nil {
 		if errors.Is(scanErr, sql.ErrNoRows) {
 			return nil, common.NewErrNotFound("Concept description with the given ID does not exist")
@@ -485,6 +527,7 @@ func (b *ConceptDescriptionBackend) GetConceptDescriptionByID(ctx context.Contex
 	if err = json.Unmarshal([]byte(data), &jsonable); err != nil {
 		return nil, common.NewInternalServerError("CDREPO-GCDBYID-UNMARSHAL " + err.Error())
 	}
+	applyConceptDescriptionIDShortMask(jsonable, idShortValue)
 
 	cd, err := jsonization.ConceptDescriptionFromJsonable(jsonable)
 	if err != nil {

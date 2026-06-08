@@ -1,3 +1,3 @@
 module delegated-operation-service
 
-go 1.25.9
+go 1.26.4

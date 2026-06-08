@@ -80,20 +80,33 @@ func TestMutationCoverageGuardDoesNotMatchExtraLeadingPathSegments(t *testing.T)
 
 func TestMutationCoverageGuardAllowsExplicitExemption(t *testing.T) {
 	configureMutationCoverageTest(t, ModeAudit)
-	guard := NewMutationCoverageGuard()
-	guard.ClassifyRoute("QuerySubmodels", http.MethodPost, "/query/submodels")
+	tests := []struct {
+		operation string
+		path      string
+	}{
+		{operation: "QueryAssetAdministrationShells", path: "/query/shells"},
+		{operation: "QueryConceptDescriptions", path: "/query/concept-descriptions"},
+		{operation: "QuerySubmodels", path: "/query/submodels"},
+	}
 
-	handler := guard.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		coverage, ok := MutationCoverageFromContext(r.Context())
-		require.True(t, ok)
-		require.False(t, coverage.Versioned)
-		w.WriteHeader(http.StatusNoContent)
-	}))
+	for _, tt := range tests {
+		t.Run(tt.operation, func(t *testing.T) {
+			guard := NewMutationCoverageGuard()
+			guard.ClassifyRoute(tt.operation, http.MethodPost, tt.path)
 
-	recorder := httptest.NewRecorder()
-	handler.ServeHTTP(recorder, httptest.NewRequest(http.MethodPost, "/query/submodels", nil))
+			handler := guard.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				coverage, ok := MutationCoverageFromContext(r.Context())
+				require.True(t, ok)
+				require.False(t, coverage.Versioned)
+				w.WriteHeader(http.StatusNoContent)
+			}))
 
-	require.Equal(t, http.StatusNoContent, recorder.Code)
+			recorder := httptest.NewRecorder()
+			handler.ServeHTTP(recorder, httptest.NewRequest(http.MethodPost, tt.path, nil))
+
+			require.Equal(t, http.StatusNoContent, recorder.Code)
+		})
+	}
 }
 
 func TestMutationCoverageGuardRejectsUnclassifiedMutation(t *testing.T) {

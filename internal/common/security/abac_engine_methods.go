@@ -72,6 +72,7 @@ var mapMethodAndPatternToRightsData = []mapMethodAndPatternToRights{
 	{"DELETE", "/bulk/submodel-descriptors", []grammar.RightsEnum{grammar.RightsEnumDELETE}},
 
 	// concept description repository
+	{"POST", "/query/concept-descriptions", []grammar.RightsEnum{grammar.RightsEnumREAD}},
 	{"GET", "/concept-descriptions", []grammar.RightsEnum{grammar.RightsEnumREAD}},
 	{"POST", "/concept-descriptions", []grammar.RightsEnum{grammar.RightsEnumCREATE}},
 	{"GET", "/concept-descriptions/$recent-changes", []grammar.RightsEnum{grammar.RightsEnumREAD}},
@@ -133,6 +134,7 @@ var mapMethodAndPatternToRightsData = []mapMethodAndPatternToRights{
 	{"GET", "/submodels/{submodelIdentifier}/$value/$signed", []grammar.RightsEnum{grammar.RightsEnumREAD}},
 
 	// aas repository
+	{"POST", "/query/shells", []grammar.RightsEnum{grammar.RightsEnumREAD}},
 	{"GET", "/shells", []grammar.RightsEnum{grammar.RightsEnumREAD}},
 	{"POST", "/shells", []grammar.RightsEnum{grammar.RightsEnumCREATE}},
 	{"GET", "/shells/$reference", []grammar.RightsEnum{grammar.RightsEnumREAD}},

@@ -1,0 +1,36 @@
+{
+  "id": "{{AAS_ID}}",
+  "idShort": "FragmentAAS",
+  "modelType": "AssetAdministrationShell",
+  "assetInformation": {
+    "assetKind": "Instance",
+    "globalAssetId": "fragment-global-asset",
+    "assetType": "fragment-asset-type",
+    "specificAssetIds": [
+      {
+        "name": "customerPartId",
+        "value": "cp-001",
+        "externalSubjectId": {
+          "type": "ExternalReference",
+          "keys": [
+            {
+              "type": "GlobalReference",
+              "value": "VIEWER_KEY"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "submodels": [
+    {
+      "type": "ModelReference",
+      "keys": [
+        {
+          "type": "Submodel",
+          "value": "https://example.com/ids/sm/query-fragment"
+        }
+      ]
+    }
+  ]
+}

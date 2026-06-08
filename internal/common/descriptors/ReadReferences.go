@@ -118,6 +118,14 @@ func ReadSpecificAssetExternalSubjectReferencesBySpecificAssetIDs(
 			referenceKeyAlias: common.AliasExternalSubjectReferenceKey,
 			filterSpecs: []referenceFilterSpec{
 				{
+					fragment:  "$aas#assetInformation.specificAssetIds[].externalSubjectId",
+					collector: nil,
+				},
+				{
+					fragment:  "$aas#assetInformation.specificAssetIds[].externalSubjectId.keys[]",
+					collector: nil,
+				},
+				{
 					fragment:  "$aasdesc#specificAssetIds[].externalSubjectId.keys[]",
 					collector: nil,
 				},

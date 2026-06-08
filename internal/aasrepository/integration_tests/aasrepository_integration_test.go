@@ -290,7 +290,7 @@ func putJSONResponse(endpoint string, body string) (map[string]any, int, http.He
 
 	var payload map[string]any
 	if unmarshalErr := json.Unmarshal(responseBody, &payload); unmarshalErr != nil {
-		return nil, resp.StatusCode, resp.Header.Clone(), fmt.Errorf("failed to unmarshal response body: %v", unmarshalErr)
+		return nil, resp.StatusCode, resp.Header.Clone(), fmt.Errorf("failed to unmarshal response body with status %d: %v; body: %s", resp.StatusCode, unmarshalErr, string(responseBody))
 	}
 
 	return payload, resp.StatusCode, resp.Header.Clone(), nil
@@ -321,7 +321,7 @@ func postJSONResponse(endpoint string, body string) (map[string]any, int, http.H
 
 	var payload map[string]any
 	if unmarshalErr := json.Unmarshal(responseBody, &payload); unmarshalErr != nil {
-		return nil, resp.StatusCode, resp.Header.Clone(), fmt.Errorf("failed to unmarshal response body: %v", unmarshalErr)
+		return nil, resp.StatusCode, resp.Header.Clone(), fmt.Errorf("failed to unmarshal response body with status %d: %v; body: %s", resp.StatusCode, unmarshalErr, string(responseBody))
 	}
 
 	return payload, resp.StatusCode, resp.Header.Clone(), nil
@@ -519,6 +519,19 @@ func sqlLiteral(input string) string {
 	return strings.ReplaceAll(input, "'", "''")
 }
 
+func loadBodyFixture(t *testing.T, path string, replacements map[string]string) string {
+	t.Helper()
+
+	body, err := os.ReadFile(filepath.Clean(path))
+	require.NoError(t, err, "failed to read body fixture")
+
+	result := string(body)
+	for placeholder, value := range replacements {
+		result = strings.ReplaceAll(result, placeholder, value)
+	}
+	return result
+}
+
 func installDeleteFailureTriggers(t *testing.T, db *sql.DB, aasDBID int64, submodelID string) {
 	t.Helper()
 
@@ -609,6 +622,162 @@ func TestIntegration(t *testing.T) {
 			return fmt.Sprintf("Step_(%s)_%d_%s_%s", context, stepNumber, step.Method, step.Endpoint)
 		},
 	})
+}
+
+func TestQueryAssetAdministrationShellFalseFragmentFiltersKeepRootAAS(t *testing.T) {
+	baseURL := "http://localhost:6004"
+	aasID := fmt.Sprintf("https://example.com/ids/aas/query-fragments-%d", time.Now().UnixNano())
+	aasIdentifier := base64.RawURLEncoding.EncodeToString([]byte(aasID))
+
+	requestBody := loadBodyFixture(t, "bodies/post/postAssetAdministrationShellQueryFragments.json", map[string]string{
+		"{{AAS_ID}}": aasID,
+	})
+
+	statusCode, err := postResponseStatus(baseURL+"/shells", requestBody)
+	require.NoError(t, err, "AAS creation failed")
+	require.Equal(t, http.StatusCreated, statusCode, "Expected 201 Created for AAS creation")
+	t.Cleanup(func() {
+		_, _ = deleteResponseStatus(fmt.Sprintf("%s/shells/%s", baseURL, aasIdentifier))
+	})
+
+	tests := []struct {
+		name     string
+		fragment string
+		assert   func(t *testing.T, shell map[string]any)
+	}{
+		{
+			name:     "idShort",
+			fragment: "$aas#idShort",
+			assert: func(t *testing.T, shell map[string]any) {
+				_, ok := shell["idShort"]
+				assert.False(t, ok, "idShort should be filtered")
+			},
+		},
+		{
+			name:     "assetType",
+			fragment: "$aas#assetInformation.assetType",
+			assert: func(t *testing.T, shell map[string]any) {
+				assetInformation := requireAssetInformation(t, shell)
+				_, ok := assetInformation["assetType"]
+				assert.False(t, ok, "assetInformation.assetType should be filtered")
+			},
+		},
+		{
+			name:     "globalAssetId",
+			fragment: "$aas#assetInformation.globalAssetId",
+			assert: func(t *testing.T, shell map[string]any) {
+				assetInformation := requireAssetInformation(t, shell)
+				_, ok := assetInformation["globalAssetId"]
+				assert.False(t, ok, "assetInformation.globalAssetId should be filtered")
+			},
+		},
+		{
+			name:     "specificAssetIds",
+			fragment: "$aas#assetInformation.specificAssetIds[0]",
+			assert: func(t *testing.T, shell map[string]any) {
+				assetInformation := requireAssetInformation(t, shell)
+				_, ok := assetInformation["specificAssetIds"]
+				assert.False(t, ok, "assetInformation.specificAssetIds should be filtered")
+			},
+		},
+		{
+			name:     "specificAssetExternalSubjectId",
+			fragment: "$aas#assetInformation.specificAssetIds[0].externalSubjectId",
+			assert: func(t *testing.T, shell map[string]any) {
+				specificAssetID := requireFirstSpecificAssetID(t, shell)
+				_, ok := specificAssetID["externalSubjectId"]
+				assert.False(t, ok, "specificAssetIds[].externalSubjectId should be filtered")
+			},
+		},
+		{
+			name:     "specificAssetExternalSubjectIdKeys",
+			fragment: "$aas#assetInformation.specificAssetIds[0].externalSubjectId.keys[0]",
+			assert: func(t *testing.T, shell map[string]any) {
+				specificAssetID := requireFirstSpecificAssetID(t, shell)
+				_, ok := specificAssetID["externalSubjectId"]
+				assert.False(t, ok, "specificAssetIds[].externalSubjectId.keys[] should be filtered")
+			},
+		},
+		{
+			name:     "submodels",
+			fragment: "$aas#submodels[0]",
+			assert: func(t *testing.T, shell map[string]any) {
+				_, ok := shell["submodels"]
+				assert.False(t, ok, "submodels should be filtered")
+			},
+		},
+		{
+			name:     "submodelKeys",
+			fragment: "$aas#submodels[0].keys[0]",
+			assert: func(t *testing.T, shell map[string]any) {
+				_, ok := shell["submodels"]
+				assert.False(t, ok, "submodels[].keys[] should be filtered")
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			shell := querySingleAASWithFalseFragment(t, baseURL, aasID, tt.fragment)
+			assert.Equal(t, aasID, shell["id"], "root AAS should still be returned")
+			tt.assert(t, shell)
+		})
+	}
+}
+
+func querySingleAASWithFalseFragment(t *testing.T, baseURL string, aasID string, fragment string) map[string]any {
+	t.Helper()
+
+	query := map[string]any{
+		"$condition": map[string]any{
+			"$eq": []any{
+				map[string]any{"$field": "$aas#id"},
+				map[string]any{"$strVal": aasID},
+			},
+		},
+		"$filters": []any{
+			map[string]any{
+				"$fragment":  fragment,
+				"$condition": map[string]any{"$boolean": false},
+			},
+		},
+	}
+
+	body, err := json.Marshal(query)
+	require.NoError(t, err, "failed to build query body")
+
+	payload, statusCode, _, postErr := postJSONResponse(baseURL+"/query/shells", string(body))
+	require.NoError(t, postErr, "query request failed")
+	require.Equal(t, http.StatusOK, statusCode, "Expected 200 OK for query")
+
+	result, ok := payload["result"].([]any)
+	require.True(t, ok, "query result should be an array")
+	require.Len(t, result, 1, "query should return exactly the created AAS")
+
+	shell, ok := result[0].(map[string]any)
+	require.True(t, ok, "query result item should be an object")
+	return shell
+}
+
+func requireAssetInformation(t *testing.T, shell map[string]any) map[string]any {
+	t.Helper()
+
+	assetInformation, ok := shell["assetInformation"].(map[string]any)
+	require.True(t, ok, "assetInformation should be present")
+	return assetInformation
+}
+
+func requireFirstSpecificAssetID(t *testing.T, shell map[string]any) map[string]any {
+	t.Helper()
+
+	assetInformation := requireAssetInformation(t, shell)
+	specificAssetIDs, ok := assetInformation["specificAssetIds"].([]any)
+	require.True(t, ok, "specificAssetIds should be present")
+	require.Len(t, specificAssetIDs, 1, "expected exactly one specificAssetId")
+
+	specificAssetID, ok := specificAssetIDs[0].(map[string]any)
+	require.True(t, ok, "specificAssetId should be an object")
+	return specificAssetID
 }
 
 func TestPostAssetAdministrationShellAcceptsNullSubmodels(t *testing.T) {

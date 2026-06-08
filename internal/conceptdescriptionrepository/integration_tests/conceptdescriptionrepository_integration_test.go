@@ -225,6 +225,73 @@ func TestIntegration(t *testing.T) {
 	})
 }
 
+func TestQueryConceptDescriptionFalseIDShortFragmentKeepsConceptDescription(t *testing.T) {
+	baseURL := "http://localhost:6004"
+	endpoint := baseURL + "/concept-descriptions"
+	conceptDescriptionID := fmt.Sprintf("https://example.com/ids/cd/query-fragment-%d", time.Now().UnixNano())
+	t.Cleanup(func() { cleanupConceptDescription(t, endpoint, conceptDescriptionID) })
+
+	statusCode, responseBody, err := requestJSON(http.MethodPost, endpoint, map[string]any{
+		"id":        conceptDescriptionID,
+		"idShort":   "FragmentConcept",
+		"modelType": "ConceptDescription",
+	})
+	if err != nil {
+		t.Fatalf("failed to create concept description: %v", err)
+	}
+	if statusCode != http.StatusCreated {
+		t.Fatalf("expected 201 on create, got %d with body: %s", statusCode, string(responseBody))
+	}
+
+	queryBody := map[string]any{
+		"$condition": map[string]any{
+			"$eq": []any{
+				map[string]any{"$field": "$cd#id"},
+				map[string]any{"$strVal": conceptDescriptionID},
+			},
+		},
+		"$filters": []any{
+			map[string]any{
+				"$fragment":  "$cd#idShort",
+				"$condition": map[string]any{"$boolean": false},
+			},
+		},
+	}
+
+	statusCode, responseBody, err = requestJSON(http.MethodPost, baseURL+"/query/concept-descriptions", queryBody)
+	if err != nil {
+		t.Fatalf("failed to query concept descriptions: %v", err)
+	}
+	if statusCode != http.StatusOK {
+		t.Fatalf("expected 200 on query, got %d with body: %s", statusCode, string(responseBody))
+	}
+
+	var queryResponse map[string]any
+	if err = json.Unmarshal(responseBody, &queryResponse); err != nil {
+		t.Fatalf("failed to parse query response: %v", err)
+	}
+
+	resultRaw, ok := queryResponse["result"].([]any)
+	if !ok {
+		t.Fatalf("expected result array in query response, got: %T", queryResponse["result"])
+	}
+	if len(resultRaw) != 1 {
+		t.Fatalf("expected exactly one query result, got %d with body: %s", len(resultRaw), string(responseBody))
+	}
+
+	item, ok := resultRaw[0].(map[string]any)
+	if !ok {
+		t.Fatalf("expected query result item to be an object, got: %T", resultRaw[0])
+	}
+
+	if item["id"] != conceptDescriptionID {
+		t.Fatalf("expected root concept description %s to remain, got: %v", conceptDescriptionID, item["id"])
+	}
+	if _, ok = item["idShort"]; ok {
+		t.Fatalf("expected idShort fragment to be filtered, got body: %s", string(responseBody))
+	}
+}
+
 func TestContractGetAllConceptDescriptionsAllowsNullableIDShort(t *testing.T) {
 	baseURL := "http://localhost:6004"
 	conceptDescriptionID := fmt.Sprintf("https://example.com/ids/cd/contract-null-idshort-%d", time.Now().UnixNano())

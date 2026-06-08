@@ -32,6 +32,75 @@
     "expectedStatus": 201
   },
   {
+    "context": "POST /query/concept-descriptions - anonymous denied",
+    "token": null,
+    "method": "POST",
+    "endpoint": "http://localhost:6004/query/concept-descriptions",
+    "data": "postBody/queryViewerAllowed.json",
+    "expectedStatus": 403
+  },
+  {
+    "context": "POST /query/concept-descriptions - admin query hidden idShort",
+    "token": { "user": "admin", "password": "pwd" },
+    "method": "POST",
+    "endpoint": "http://localhost:6004/query/concept-descriptions",
+    "data": "postBody/queryViewerHidden.json",
+    "shouldMatch": "expected/expectedQueryHiddenAdmin.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "POST /query/concept-descriptions - admin filter fragment hidden idShort",
+    "token": { "user": "admin", "password": "pwd" },
+    "method": "POST",
+    "endpoint": "http://localhost:6004/query/concept-descriptions",
+    "data": "postBody/queryFilterViewerHidden.json",
+    "shouldMatch": "expected/expectedQueryIDShortFragmentHiddenAdmin.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "POST /query/concept-descriptions - viewer query allowed idShort",
+    "token": { "user": "usera", "password": "pwd" },
+    "method": "POST",
+    "endpoint": "http://localhost:6004/query/concept-descriptions",
+    "data": "postBody/queryViewerAllowed.json",
+    "shouldMatch": "expected/expectedViewerList.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "POST /query/concept-descriptions - viewer idShort masked by ABAC filter",
+    "token": { "user": "userb", "password": "pwd" },
+    "method": "POST",
+    "endpoint": "http://localhost:6004/query/concept-descriptions",
+    "data": "postBody/queryViewerAllowed.json",
+    "shouldMatch": "expected/expectedViewerListMaskedIDShort.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "POST /query/concept-descriptions - viewer query narrowed by ABAC",
+    "token": { "user": "usera", "password": "pwd" },
+    "method": "POST",
+    "endpoint": "http://localhost:6004/query/concept-descriptions",
+    "data": "postBody/queryViewerHidden.json",
+    "shouldMatch": "expected/expectedEmptyList.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "POST /query/concept-descriptions - empty query rejected",
+    "token": { "user": "admin", "password": "pwd" },
+    "method": "POST",
+    "endpoint": "http://localhost:6004/query/concept-descriptions",
+    "data": "postBody/queryEmpty.json",
+    "expectedStatus": 400
+  },
+  {
+    "context": "POST /query/concept-descriptions - malformed query rejected",
+    "token": { "user": "admin", "password": "pwd" },
+    "method": "POST",
+    "endpoint": "http://localhost:6004/query/concept-descriptions",
+    "data": "postBody/queryMalformed.json",
+    "expectedStatus": 400
+  },
+  {
     "context": "GET concept descriptions - viewer filtered",
     "token": { "user": "usera", "password": "pwd" },
     "method": "GET",

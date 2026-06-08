@@ -39,10 +39,14 @@ import (
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
 )
 
-// AddFilterQueryFromContext appends the WHERE clause for the given fragment
-// identifier if a QueryFilter is present in the context. When no filter is
-// available or the fragment is not defined, the original dataset is returned
-// unchanged.
+// AddFilterQueryFromContext appends the WHERE clause for one fragment filter
+// stored in ctx.
+//
+// The ds parameter is the SELECT dataset to constrain. The fragment parameter
+// identifies the fragment whose filter expression should be applied. The
+// collector parameter resolves grammar field paths to the SQL aliases used by
+// ds. If ctx contains no QueryFilter, or the QueryFilter has no matching
+// fragment entry, the original dataset is returned unchanged.
 func AddFilterQueryFromContext(
 	ctx context.Context,
 	ds *goqu.SelectDataset,
@@ -59,8 +63,12 @@ func AddFilterQueryFromContext(
 	return ds.Where(maskCondition), nil
 }
 
-// AddFilterQueriesFromContext appends WHERE clauses for multiple fragments
-// while skipping duplicate fragment entries and equivalent mask signatures.
+// AddFilterQueriesFromContext appends WHERE clauses for multiple fragment
+// filters stored in ctx.
+//
+// Duplicate fragment entries and equivalent mask signatures are skipped so the
+// resulting SQL does not repeat identical predicates. The returned dataset is
+// the original dataset with all applicable fragment predicates applied.
 func AddFilterQueriesFromContext(
 	ctx context.Context,
 	ds *goqu.SelectDataset,
@@ -92,20 +100,76 @@ func AddFilterQueriesFromContext(
 	return ds, nil
 }
 
-// FilterColumnSpec describes a selectable expression with an optional fragment
-// used for ABAC masking/filtering.
+// AddAllFilterQueriesFromContext appends WHERE clauses for every fragment
+// filter stored in ctx.
+//
+// The collector resolves grammar field paths to SQL aliases. When ctx has no
+// QueryFilter, or the QueryFilter has no filters, the original dataset is
+// returned unchanged.
+func AddAllFilterQueriesFromContext(
+	ctx context.Context,
+	ds *goqu.SelectDataset,
+	collector *grammar.ResolvedFieldPathCollector,
+) (*goqu.SelectDataset, error) {
+	return AddAllFilterQueriesFromContextExcept(ctx, ds, collector, nil)
+}
+
+// AddAllFilterQueriesFromContextExcept appends WHERE clauses for every
+// fragment filter stored in ctx except fragments matching excluded patterns.
+//
+// Excluded patterns are matched by fragment shape, including array segments, so
+// callers can omit a fragment family while still applying the remaining ABAC
+// filters. The returned dataset is sorted by fragment name before predicates
+// are applied to keep generated SQL deterministic.
+func AddAllFilterQueriesFromContextExcept(
+	ctx context.Context,
+	ds *goqu.SelectDataset,
+	collector *grammar.ResolvedFieldPathCollector,
+	excluded []grammar.FragmentStringPattern,
+) (*goqu.SelectDataset, error) {
+	queryFilter := GetQueryFilter(ctx)
+	if queryFilter == nil || len(queryFilter.Filters) == 0 {
+		return ds, nil
+	}
+
+	fragments := make([]grammar.FragmentStringPattern, 0, len(queryFilter.Filters))
+	for fragment := range queryFilter.Filters {
+		if matchesAnyFragmentPattern(fragment, excluded) {
+			continue
+		}
+		fragments = append(fragments, fragment)
+	}
+	sort.Slice(fragments, func(i, j int) bool {
+		return fragments[i] < fragments[j]
+	})
+
+	return AddFilterQueriesFromContext(ctx, ds, fragments, collector)
+}
+
+// FilterColumnSpec describes a selectable expression and its optional fragment
+// mask.
+//
+// Exp is the SQL expression to select. Fragment identifies the ABAC fragment
+// that controls whether Exp is exposed by GetColumnSelectStatement.
 type FilterColumnSpec struct {
 	Exp      exp.Expression
 	Fragment *grammar.FragmentStringPattern
 }
 
-// Column builds a plain selectable column spec without fragment masking.
+// Column builds a selectable column spec that is always exposed.
+//
+// The iexp parameter is returned as the column expression. Because no fragment
+// is attached, GetColumnSelectStatement never wraps it in a mask CASE
+// expression.
 func Column(iexp exp.Expression) FilterColumnSpec {
 	return FilterColumnSpec{Exp: iexp}
 }
 
-// MaskedColumn builds a selectable column spec that is controlled by the given
-// fragment's filter condition.
+// MaskedColumn builds a selectable column spec controlled by a fragment filter.
+//
+// The iexp parameter is the SQL expression to expose when the fragment filter
+// matches. The fragment parameter identifies the ABAC fragment whose condition
+// decides whether the value is selected or replaced with NULL.
 func MaskedColumn(iexp exp.Expression, fragment grammar.FragmentStringPattern) FilterColumnSpec {
 	f := fragment
 	return FilterColumnSpec{
@@ -115,24 +179,37 @@ func MaskedColumn(iexp exp.Expression, fragment grammar.FragmentStringPattern) F
 }
 
 // MaskedInnerColumnSpec describes one masked column in an inner/outer query
-// pattern: a fragment controls visibility of a raw inner-column alias.
+// pattern.
+//
+// Fragment identifies the ABAC fragment that controls visibility. FlagAlias is
+// the inner SELECT alias for the computed boolean mask. RawAlias is the inner
+// SELECT alias for the unmasked value that the outer query may expose.
 type MaskedInnerColumnSpec struct {
 	Fragment  grammar.FragmentStringPattern
 	FlagAlias string
 	RawAlias  string
 }
 
-// SharedFragmentMaskRuntime wraps a shared mask plan together with the source
-// specs and convenience helpers for reader query construction.
+// SharedFragmentMaskRuntime stores a reusable mask plan for an inner/outer
+// reader query.
+//
+// It keeps the fragment list, generated inner SELECT projections, and the
+// fragment-to-flag aliases needed to build outer CASE expressions without
+// recalculating equivalent predicates.
 type SharedFragmentMaskRuntime struct {
 	fragments         []grammar.FragmentStringPattern
 	projections       []interface{}
 	aliasesByFragment map[grammar.FragmentStringPattern]string
 }
 
-// BuildSharedFragmentMaskRuntime creates shared boolean mask flag projections
-// and returns a runtime helper that can apply fragment filters and build outer
-// CASE projections against an inner derived table.
+// BuildSharedFragmentMaskRuntime creates reusable boolean mask projections for
+// an inner/outer query.
+//
+// The ctx parameter supplies the QueryFilter, collector resolves grammar field
+// paths to SQL aliases, and columns describes each raw inner-column alias and
+// its controlling fragment. The returned runtime can append the matching WHERE
+// filters to the inner query and build outer CASE projections against the
+// derived table. Equivalent fragment masks share one flag projection.
 func BuildSharedFragmentMaskRuntime(
 	ctx context.Context,
 	collector *grammar.ResolvedFieldPathCollector,
@@ -178,7 +255,11 @@ func BuildSharedFragmentMaskRuntime(
 	return runtime, nil
 }
 
-// Projections returns the inner SELECT projections for shared boolean flags.
+// Projections returns the inner SELECT projections for shared boolean mask
+// flags.
+//
+// The returned slice can be appended to an inner SELECT list. A nil runtime
+// returns nil so callers can safely use optional masking.
 func (r *SharedFragmentMaskRuntime) Projections() []interface{} {
 	if r == nil {
 		return nil
@@ -186,7 +267,11 @@ func (r *SharedFragmentMaskRuntime) Projections() []interface{} {
 	return r.projections
 }
 
-// ApplyFilters appends fragment filters for the runtime's mask specs.
+// ApplyFilters appends WHERE predicates for the runtime's fragment masks.
+//
+// The ctx parameter supplies the QueryFilter and collector resolves grammar
+// field paths to SQL aliases. A nil runtime returns the original dataset
+// unchanged.
 func (r *SharedFragmentMaskRuntime) ApplyFilters(
 	ctx context.Context,
 	ds *goqu.SelectDataset,
@@ -198,7 +283,10 @@ func (r *SharedFragmentMaskRuntime) ApplyFilters(
 	return AddFilterQueriesFromContext(ctx, ds, r.fragments, collector)
 }
 
-// FlagAlias returns the projected flag alias for a fragment.
+// FlagAlias returns the projected boolean flag alias for a fragment.
+//
+// An error is returned when the runtime is nil or no flag was registered for
+// the requested fragment.
 func (r *SharedFragmentMaskRuntime) FlagAlias(fragment grammar.FragmentStringPattern) (string, error) {
 	if r == nil {
 		return "", fmt.Errorf("shared fragment mask runtime is nil")
@@ -210,7 +298,12 @@ func (r *SharedFragmentMaskRuntime) FlagAlias(fragment grammar.FragmentStringPat
 	return alias, nil
 }
 
-// MaskedInnerAliasExpr returns CASE WHEN <flag> THEN <inner alias> ELSE NULL.
+// MaskedInnerAliasExpr builds the outer projection for one masked inner alias.
+//
+// The dataAlias parameter is the alias of the inner derived table, fragment
+// identifies the controlling mask flag, and rawAlias is the unmasked inner
+// column alias. The returned expression has the form CASE WHEN flag THEN value
+// ELSE NULL.
 func (r *SharedFragmentMaskRuntime) MaskedInnerAliasExpr(
 	dataAlias string,
 	fragment grammar.FragmentStringPattern,
@@ -225,8 +318,12 @@ func (r *SharedFragmentMaskRuntime) MaskedInnerAliasExpr(
 		Else(nil), nil
 }
 
-// MaskedInnerAliasExprs builds CASE expressions for a set of masked inner
-// columns against the same derived-table alias, preserving order.
+// MaskedInnerAliasExprs builds outer CASE projections for multiple masked
+// inner aliases.
+//
+// The dataAlias parameter is the alias of the inner derived table. The returned
+// expressions preserve the order of columns and return an error if any column's
+// controlling fragment has no registered flag alias.
 func (r *SharedFragmentMaskRuntime) MaskedInnerAliasExprs(
 	dataAlias string,
 	columns []MaskedInnerColumnSpec,
@@ -326,6 +423,34 @@ func fragmentEndsWithArraySegment(fragment grammar.FragmentStringPattern) bool {
 	return isArray
 }
 
+func matchesAnyFragmentPattern(fragment grammar.FragmentStringPattern, patterns []grammar.FragmentStringPattern) bool {
+	for _, pattern := range patterns {
+		if fragmentPathMatches(fragment, pattern) {
+			return true
+		}
+	}
+	return false
+}
+
+func fragmentPathMatches(fragment grammar.FragmentStringPattern, pattern grammar.FragmentStringPattern) bool {
+	fragmentTokens := builder.TokenizeField(string(fragment))
+	patternTokens := builder.TokenizeField(string(pattern))
+	if len(fragmentTokens) != len(patternTokens) {
+		return false
+	}
+	for i := range fragmentTokens {
+		if fragmentTokens[i].GetName() != patternTokens[i].GetName() {
+			return false
+		}
+		_, fragmentIsArray := fragmentTokens[i].(builder.ArrayToken)
+		_, patternIsArray := patternTokens[i].(builder.ArrayToken)
+		if fragmentIsArray != patternIsArray {
+			return false
+		}
+	}
+	return true
+}
+
 func buildFragmentMaskSignature(ctx context.Context, fragment grammar.FragmentStringPattern) (string, error) {
 	p := GetQueryFilter(ctx)
 	if p == nil {
@@ -356,10 +481,15 @@ func buildFragmentMaskSignature(ctx context.Context, fragment grammar.FragmentSt
 	return strings.Join(parts, "&&"), nil
 }
 
-// GetColumnSelectStatement builds the list of SELECT expressions while honoring
-// fragment filters stored in the context. Filterable expressions are wrapped
-// in CASE projections so their values are only exposed when the other
-// fragment filters succeed; otherwise the raw expressions are returned.
+// GetColumnSelectStatement builds SELECT expressions while honoring fragment
+// filters stored in ctx.
+//
+// The columns parameter contains raw SELECT expressions and optional fragment
+// masks. The collector parameter resolves grammar field paths to SQL aliases.
+// When a column has an applicable fragment mask, the expression is wrapped in a
+// CASE projection that returns NULL unless the fragment filter matches. When no
+// QueryFilter or applicable masks exist, the raw column expressions are
+// returned unchanged.
 func GetColumnSelectStatement(ctx context.Context, columns []FilterColumnSpec, collector *grammar.ResolvedFieldPathCollector) ([]exp.Expression, error) {
 	defaultReturn := extractExpressions(columns)
 	p := GetQueryFilter(ctx)
@@ -390,10 +520,12 @@ func GetColumnSelectStatement(ctx context.Context, columns []FilterColumnSpec, c
 	return result, nil
 }
 
-// AddFormulaQueryFromContext appends the Formula-based WHERE clause found in
-// the context's QueryFilter to the provided dataset. When no filter formula is
-// present, the dataset is returned unchanged; errors from expression building
-// are propagated.
+// AddFormulaQueryFromContext appends the formula-based WHERE clause stored in
+// ctx to ds.
+//
+// The collector parameter resolves grammar field paths to SQL aliases. When ctx
+// has no QueryFilter or no formula, the original dataset is returned unchanged.
+// Errors from grammar expression evaluation are propagated to the caller.
 func AddFormulaQueryFromContext(ctx context.Context, ds *goqu.SelectDataset, collector *grammar.ResolvedFieldPathCollector) (*goqu.SelectDataset, error) {
 	p := GetQueryFilter(ctx)
 	if p != nil && p.Formula != nil {

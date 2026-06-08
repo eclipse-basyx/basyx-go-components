@@ -4,8 +4,10 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
+	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
 	api "github.com/go-chi/chi/v5"
 )
@@ -125,5 +127,44 @@ func TestHasUnrestrictedFormulaForRight_ReturnsFalseWhenMissingOrFalse(t *testin
 	}
 	if HasUnrestrictedFormulaForRight(context.Background(), grammar.RightsEnumREAD) {
 		t.Fatalf("expected nil query filter context to be restricted")
+	}
+}
+
+func TestShouldEnforceFormula_AppliesMergedQueryWhenABACDisabled(t *testing.T) {
+	t.Parallel()
+
+	ctx := common.ContextWithConfig(context.Background(), &common.Config{})
+	queryExpr := boolExpression(true)
+
+	mergedCtx := MergeQueryFilter(ctx, grammar.Query{Condition: &queryExpr})
+
+	shouldEnforce, err := ShouldEnforceFormula(mergedCtx)
+	if err != nil {
+		t.Fatalf("ShouldEnforceFormula returned error: %v", err)
+	}
+	if !shouldEnforce {
+		t.Fatalf("expected merged user query to be enforced when ABAC is disabled")
+	}
+}
+
+func TestShouldEnforceFormula_InconsistentQueryFilterErrorDoesNotMentionABACEnabled(t *testing.T) {
+	t.Parallel()
+
+	queryExpr := boolExpression(true)
+	ctx := common.ContextWithConfig(context.Background(), &common.Config{})
+	ctx = WithQueryFilter(ctx, &QueryFilter{Formula: &queryExpr})
+
+	shouldEnforce, err := ShouldEnforceFormula(ctx)
+	if err == nil {
+		t.Fatalf("expected inconsistent QueryFilter error")
+	}
+	if !shouldEnforce {
+		t.Fatalf("expected fail-closed enforcement decision")
+	}
+	if strings.Contains(err.Error(), "ABAC is enabled") {
+		t.Fatalf("error should describe QueryFilter state, got: %v", err)
+	}
+	if !strings.Contains(err.Error(), "Formula is set but FormulasByRight is empty") {
+		t.Fatalf("unexpected error: %v", err)
 	}
 }
