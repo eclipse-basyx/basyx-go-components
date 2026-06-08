@@ -1,5 +1,5 @@
 # Stage 1: Build the application
-FROM golang:1.26.3-alpine AS builder
+FROM golang:1.26.4-alpine AS builder
 
 # Version argument for build-time injection
 ARG VERSION=dev
