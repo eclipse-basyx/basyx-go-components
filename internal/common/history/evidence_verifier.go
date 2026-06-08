@@ -332,7 +332,13 @@ func verifyIdentifierChain(ctx context.Context, queryer historyQueryer, table st
 }
 
 func verifyManifestArtifact(ctx context.Context, options VerifyHistoryRangeOptions, report *HistoryEvidenceVerificationReport) {
-	if options.EvidenceStore == nil || strings.TrimSpace(options.ManifestArtifactRef.ObjectKey) == "" || strings.TrimSpace(options.ManifestArtifactHash) == "" {
+	hasObjectKey := strings.TrimSpace(options.ManifestArtifactRef.ObjectKey) != ""
+	hasHash := strings.TrimSpace(options.ManifestArtifactHash) != ""
+	if !hasObjectKey && !hasHash {
+		return
+	}
+	if options.EvidenceStore == nil || !hasObjectKey || !hasHash {
+		report.addFinding(VerificationSeverityError, "HISTORY-EVIDENCE-VERIFY-MANIFESTARTIFACTCONFIG", "manifest artifact verification requires evidence store, object key, and SHA-256", "", 0)
 		return
 	}
 	if _, err := options.EvidenceStore.VerifyArtifact(ctx, options.ManifestArtifactRef, options.ManifestArtifactHash); err != nil {
@@ -383,6 +389,20 @@ func verifyEventArtifactReceipt(ctx context.Context, options VerifyHistoryRangeO
 	}
 	if _, err := options.EvidenceStore.VerifyArtifact(ctx, receipt.Receipt.Reference, receipt.Receipt.SHA256); err != nil {
 		report.addFinding(VerificationSeverityError, "HISTORY-EVIDENCE-VERIFY-EVENTOBJECT", fmt.Sprintf("history_event artifact verification failed: %v", err), candidate.Identifier, candidate.HistoryID)
+	}
+	verifyEventArtifactRetentionState(ctx, options.EvidenceStore, report, candidate, receipt)
+}
+
+func verifyEventArtifactRetentionState(ctx context.Context, store EvidenceStore, report *HistoryEvidenceVerificationReport, candidate EventArtifactCandidate, receipt *eventArtifactReceiptRow) {
+	if receipt.Receipt.RetentionMode == "" || receipt.Receipt.RetainUntil == nil {
+		return
+	}
+	retentionVerifier, ok := store.(EvidenceRetentionVerifier)
+	if !ok {
+		return
+	}
+	if err := retentionVerifier.VerifyArtifactRetention(ctx, receipt.Receipt.Reference, receipt.Receipt); err != nil {
+		report.addFinding(VerificationSeverityError, "HISTORY-EVIDENCE-VERIFY-EVENTRETENTIONSTATE", fmt.Sprintf("history_event artifact retention verification failed: %v", err), candidate.Identifier, candidate.HistoryID)
 	}
 }
 

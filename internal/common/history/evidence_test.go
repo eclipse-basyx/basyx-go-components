@@ -29,11 +29,16 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/rsa"
+	"errors"
+	"io"
+	"net/http"
 	"strings"
 	"testing"
 	"time"
 
 	sqlmock "github.com/DATA-DOG/go-sqlmock"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/stretchr/testify/require"
 )
@@ -202,6 +207,72 @@ func TestS3EvidenceStorePutRequiresRetention(t *testing.T) {
 	require.ErrorContains(t, err, "HISTORY-EVIDENCE-S3-RETENTION")
 }
 
+func TestS3EvidenceStorePutRequiresVersionID(t *testing.T) {
+	client := s3.NewFromConfig(aws.Config{
+		Region:      "us-east-1",
+		Credentials: credentials.NewStaticCredentialsProvider("access", "secret", ""),
+		HTTPClient: httpClientFunc(func(*http.Request) (*http.Response, error) {
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Header:     make(http.Header),
+				Body:       io.NopCloser(strings.NewReader("")),
+			}, nil
+		}),
+	})
+	store := &S3EvidenceStore{
+		client: client,
+		cfg: S3EvidenceStoreConfig{
+			Bucket:        "evidence",
+			RetentionMode: "governance",
+			RetentionDays: 7,
+		},
+		now: func() time.Time { return time.Date(2026, 6, 5, 12, 0, 0, 0, time.UTC) },
+	}
+
+	receipt, err := store.PutArtifact(t.Context(), EvidenceArtifact{
+		ArtifactType: EvidenceArtifactHistoryEvent,
+		ObjectKey:    "events/one.json",
+		ContentType:  manifestJSONContentType,
+		Data:         []byte(`{}`),
+	})
+
+	require.Nil(t, receipt)
+	require.ErrorContains(t, err, "HISTORY-EVIDENCE-S3-VERSIONID")
+}
+
+func TestS3EvidenceStoreVerifiesRetentionState(t *testing.T) {
+	retainUntil := time.Date(2026, 6, 12, 12, 0, 0, 0, time.UTC)
+	client := s3.NewFromConfig(aws.Config{
+		Region:      "us-east-1",
+		Credentials: credentials.NewStaticCredentialsProvider("access", "secret", ""),
+		HTTPClient: httpClientFunc(func(request *http.Request) (*http.Response, error) {
+			body := `<LegalHold><Status>OFF</Status></LegalHold>`
+			if strings.Contains(request.URL.RawQuery, "retention") {
+				body = `<Retention><Mode>GOVERNANCE</Mode><RetainUntilDate>2026-06-12T12:00:00Z</RetainUntilDate></Retention>`
+			}
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Header:     make(http.Header),
+				Body:       io.NopCloser(strings.NewReader(body)),
+			}, nil
+		}),
+	})
+	store := &S3EvidenceStore{client: client, cfg: S3EvidenceStoreConfig{Bucket: "evidence"}}
+
+	err := store.VerifyArtifactRetention(t.Context(), EvidenceReference{
+		Provider:  EvidenceProviderS3,
+		Bucket:    "evidence",
+		ObjectKey: "history-events/aas_history/aas-1/1-row.json",
+		VersionID: "version-1",
+	}, EvidenceReceipt{
+		RetentionMode: "governance",
+		RetainUntil:   &retainUntil,
+		LegalHold:     false,
+	})
+
+	require.NoError(t, err)
+}
+
 func TestStoreHistoryEventArtifactsBackfillsSnapshotAndDiffRows(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
@@ -342,6 +413,55 @@ func TestVerifyManifestRangeReportsDigestMismatch(t *testing.T) {
 	require.Equal(t, "HISTORY-EVIDENCE-VERIFY-MANIFESTDIGEST", report.Findings[0].Code)
 }
 
+func TestVerifyManifestArtifactReportsPartialConfiguration(t *testing.T) {
+	report := &HistoryEvidenceVerificationReport{Valid: true}
+
+	verifyManifestArtifact(t.Context(), VerifyHistoryRangeOptions{
+		EvidenceStore:       nilReceiptEvidenceStore{},
+		ManifestArtifactRef: EvidenceReference{Provider: EvidenceProviderS3, Bucket: "evidence", ObjectKey: "history-evidence/manifests/aas_history/1-10.json"},
+	}, report)
+
+	require.False(t, report.Valid)
+	require.Contains(t, verificationFindingCodes(report), "HISTORY-EVIDENCE-VERIFY-MANIFESTARTIFACTCONFIG")
+}
+
+func TestVerifyEventArtifactReceiptChecksSourceRetentionState(t *testing.T) {
+	retainUntil := time.Date(2026, 6, 12, 12, 0, 0, 0, time.UTC)
+	candidate := EventArtifactCandidate{
+		Identifier:  "aas-1",
+		HistoryID:   1,
+		RowHash:     strings.Repeat("a", 64),
+		ContentHash: strings.Repeat("b", 64),
+		Artifact: EvidenceArtifact{
+			Data: []byte(`{"artifact_version":"basyx-history-event-v1"}`),
+		},
+	}
+	receipt := &eventArtifactReceiptRow{
+		Identifier:  candidate.Identifier,
+		HistoryID:   candidate.HistoryID,
+		RowHash:     candidate.RowHash,
+		ContentHash: candidate.ContentHash,
+		Receipt: EvidenceReceipt{
+			Reference: EvidenceReference{
+				Provider:  EvidenceProviderS3,
+				Bucket:    "evidence",
+				ObjectKey: "history-events/aas_history/aas-1/1-row.json",
+				VersionID: "version-1",
+			},
+			SHA256:        SHA256Hex(candidate.Artifact.Data),
+			RetentionMode: "governance",
+			RetainUntil:   &retainUntil,
+		},
+	}
+	report := &HistoryEvidenceVerificationReport{Valid: true}
+	store := &retentionCheckingEvidenceStore{retentionErr: errors.New("retention state mismatch")}
+
+	verifyEventArtifactReceipt(t.Context(), VerifyHistoryRangeOptions{EvidenceStore: store}, report, candidate, receipt, receipt.Receipt.SHA256)
+
+	require.False(t, report.Valid)
+	require.Contains(t, verificationFindingCodes(report), "HISTORY-EVIDENCE-VERIFY-EVENTRETENTIONSTATE")
+}
+
 func eventArtifactReceiptColumns() []string {
 	return []string{
 		"artifact_id",
@@ -382,4 +502,30 @@ func (nilReceiptEvidenceStore) GetArtifact(_ context.Context, _ EvidenceReferenc
 
 func (nilReceiptEvidenceStore) VerifyArtifact(_ context.Context, _ EvidenceReference, _ string) (*EvidenceReceipt, error) {
 	return nil, nil
+}
+
+type retentionCheckingEvidenceStore struct {
+	retentionErr error
+}
+
+func (store *retentionCheckingEvidenceStore) PutArtifact(_ context.Context, _ EvidenceArtifact) (*EvidenceReceipt, error) {
+	return nil, nil
+}
+
+func (store *retentionCheckingEvidenceStore) GetArtifact(_ context.Context, _ EvidenceReference) (*EvidenceObject, error) {
+	return nil, nil
+}
+
+func (store *retentionCheckingEvidenceStore) VerifyArtifact(_ context.Context, _ EvidenceReference, _ string) (*EvidenceReceipt, error) {
+	return &EvidenceReceipt{}, nil
+}
+
+func (store *retentionCheckingEvidenceStore) VerifyArtifactRetention(_ context.Context, _ EvidenceReference, _ EvidenceReceipt) error {
+	return store.retentionErr
+}
+
+type httpClientFunc func(*http.Request) (*http.Response, error)
+
+func (fn httpClientFunc) Do(request *http.Request) (*http.Response, error) {
+	return fn(request)
 }

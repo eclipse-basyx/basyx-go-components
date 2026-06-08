@@ -172,7 +172,7 @@ func publishHistoryEventEvidenceTx(ctx context.Context, tx *sql.Tx, cfg Config, 
 	defer cancel()
 	receipt, err := cfg.EvidenceStore.PutArtifact(writeCtx, artifact)
 	if err != nil {
-		return common.NewInternalServerError("HISTORY-EVIDENCE-APPEND-PUTARTIFACT " + err.Error())
+		return common.NewErrServiceUnavailable("HISTORY-EVIDENCE-APPEND-PUTARTIFACT " + err.Error())
 	}
 	if receipt == nil {
 		return common.NewInternalServerError("HISTORY-EVIDENCE-APPEND-NILRECEIPT evidence store returned nil receipt")

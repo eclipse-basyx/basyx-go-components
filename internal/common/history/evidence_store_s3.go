@@ -169,9 +169,14 @@ func (store *S3EvidenceStore) PutArtifact(ctx context.Context, artifact Evidence
 	if err != nil {
 		return nil, fmt.Errorf("HISTORY-EVIDENCE-S3-PUTOBJECT %w", err)
 	}
+	versionID := ""
 	if output.VersionId != nil {
-		receipt.Reference.VersionID = strings.TrimSpace(*output.VersionId)
+		versionID = strings.TrimSpace(*output.VersionId)
 	}
+	if versionID == "" {
+		return nil, fmt.Errorf("HISTORY-EVIDENCE-S3-VERSIONID object storage did not return a version ID; ensure bucket versioning and object lock are enabled")
+	}
+	receipt.Reference.VersionID = versionID
 	return receipt, nil
 }
 
@@ -251,6 +256,93 @@ func (store *S3EvidenceStore) VerifyArtifact(ctx context.Context, ref EvidenceRe
 		StoredAt:    store.now(),
 		Metadata:    object.Metadata,
 	}, nil
+}
+
+// VerifyArtifactRetention verifies S3 Object Lock retention and legal hold state.
+//
+// Parameters:
+//   - ctx: Request context for S3 Object Lock API calls.
+//   - ref: Versioned S3 object reference to verify.
+//   - expected: PostgreSQL receipt containing expected retention and legal hold.
+//
+// Returns:
+//   - error: Error when the object reference is incomplete, S3 cannot return
+//     retention/legal-hold state, or backend state differs from the receipt.
+func (store *S3EvidenceStore) VerifyArtifactRetention(ctx context.Context, ref EvidenceReference, expected EvidenceReceipt) error {
+	if store == nil || store.client == nil {
+		return fmt.Errorf("HISTORY-EVIDENCE-S3-NILSTORE evidence store is not initialized")
+	}
+	objectKey := strings.TrimSpace(ref.ObjectKey)
+	if objectKey == "" {
+		return fmt.Errorf("HISTORY-EVIDENCE-S3-EMPTYREF artifact object key is required")
+	}
+	versionID := strings.TrimSpace(ref.VersionID)
+	if versionID == "" {
+		return fmt.Errorf("HISTORY-EVIDENCE-S3-RETENTIONVERSION object version ID is required for retention verification")
+	}
+	retention, err := store.getObjectRetention(ctx, objectKey, versionID)
+	if err != nil {
+		return err
+	}
+	if err = compareS3Retention(retention, expected); err != nil {
+		return err
+	}
+	legalHold, err := store.getObjectLegalHold(ctx, objectKey, versionID)
+	if err != nil {
+		return err
+	}
+	if legalHold != expected.LegalHold {
+		return fmt.Errorf("HISTORY-EVIDENCE-S3-LEGALHOLDMISMATCH expected legal hold %t, got %t", expected.LegalHold, legalHold)
+	}
+	return nil
+}
+
+func (store *S3EvidenceStore) getObjectRetention(ctx context.Context, objectKey string, versionID string) (*types.ObjectLockRetention, error) {
+	output, err := store.client.GetObjectRetention(ctx, &s3.GetObjectRetentionInput{
+		Bucket:    aws.String(store.cfg.Bucket),
+		Key:       aws.String(objectKey),
+		VersionId: aws.String(versionID),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("HISTORY-EVIDENCE-S3-GETRETENTION %w", err)
+	}
+	if output.Retention == nil {
+		return nil, fmt.Errorf("HISTORY-EVIDENCE-S3-RETENTIONMISSING object retention is missing")
+	}
+	return output.Retention, nil
+}
+
+func compareS3Retention(actual *types.ObjectLockRetention, expected EvidenceReceipt) error {
+	expectedMode := strings.ToLower(strings.TrimSpace(expected.RetentionMode))
+	if expectedMode == "" || expected.RetainUntil == nil {
+		return fmt.Errorf("HISTORY-EVIDENCE-S3-RETENTIONEXPECTED expected retention metadata is missing")
+	}
+	actualMode := strings.ToLower(string(actual.Mode))
+	if actualMode != expectedMode {
+		return fmt.Errorf("HISTORY-EVIDENCE-S3-RETENTIONMODEMISMATCH expected retention mode %s, got %s", expectedMode, actualMode)
+	}
+	if actual.RetainUntilDate == nil {
+		return fmt.Errorf("HISTORY-EVIDENCE-S3-RETAINUNTILMISSING retain-until timestamp is missing")
+	}
+	if actual.RetainUntilDate.Before(expected.RetainUntil.Add(-time.Second)) {
+		return fmt.Errorf("HISTORY-EVIDENCE-S3-RETAINUNTILMISMATCH actual retain-until is earlier than expected")
+	}
+	return nil
+}
+
+func (store *S3EvidenceStore) getObjectLegalHold(ctx context.Context, objectKey string, versionID string) (bool, error) {
+	output, err := store.client.GetObjectLegalHold(ctx, &s3.GetObjectLegalHoldInput{
+		Bucket:    aws.String(store.cfg.Bucket),
+		Key:       aws.String(objectKey),
+		VersionId: aws.String(versionID),
+	})
+	if err != nil {
+		return false, fmt.Errorf("HISTORY-EVIDENCE-S3-GETLEGALHOLD %w", err)
+	}
+	if output.LegalHold == nil {
+		return false, fmt.Errorf("HISTORY-EVIDENCE-S3-LEGALHOLDMISSING object legal-hold state is missing")
+	}
+	return output.LegalHold.Status == types.ObjectLockLegalHoldStatusOn, nil
 }
 
 func (store *S3EvidenceStore) objectKey(rawKey string) string {

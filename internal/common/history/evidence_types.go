@@ -55,6 +55,15 @@ type EvidenceStore interface {
 	VerifyArtifact(ctx context.Context, ref EvidenceReference, expectedHash string) (*EvidenceReceipt, error)
 }
 
+// EvidenceRetentionVerifier verifies WORM retention state from the evidence backend.
+//
+// Implementations use provider-specific APIs to compare the stored object version
+// against the PostgreSQL receipt. The S3 implementation checks Object Lock
+// retention and legal hold state for the referenced version.
+type EvidenceRetentionVerifier interface {
+	VerifyArtifactRetention(ctx context.Context, ref EvidenceReference, expected EvidenceReceipt) error
+}
+
 // EvidenceArtifact is a byte artifact destined for WORM-compatible object storage.
 type EvidenceArtifact struct {
 	ArtifactType  string

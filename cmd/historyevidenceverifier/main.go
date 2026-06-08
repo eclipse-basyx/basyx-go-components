@@ -112,6 +112,17 @@ func validateCLIOptions(options cliOptions) error {
 	if options.lastHistoryID < options.firstHistoryID {
 		return fmt.Errorf("HISTORY-EVIDENCE-CLI-TO -to must be greater than or equal to -from")
 	}
+	hasManifestObjectKey := strings.TrimSpace(options.manifestObjectKey) != ""
+	hasManifestSHA256 := strings.TrimSpace(options.manifestSHA256) != ""
+	if hasManifestObjectKey && !hasManifestSHA256 {
+		return fmt.Errorf("HISTORY-EVIDENCE-CLI-MANIFESTHASH -manifest-sha256 is required when -manifest-object-key is set")
+	}
+	if hasManifestSHA256 && !hasManifestObjectKey {
+		return fmt.Errorf("HISTORY-EVIDENCE-CLI-MANIFESTOBJECT -manifest-object-key is required when -manifest-sha256 is set")
+	}
+	if strings.TrimSpace(options.manifestVersionID) != "" && !hasManifestObjectKey {
+		return fmt.Errorf("HISTORY-EVIDENCE-CLI-MANIFESTVERSION -manifest-object-key is required when -manifest-version-id is set")
+	}
 	return nil
 }
 

@@ -198,6 +198,7 @@ func TestAppendVersionTxRollsBackWhenEvidenceStoreFails(t *testing.T) {
 	require.NoError(t, err)
 	err = AppendVersionTx(context.Background(), tx, TableAAS, "aas-1", ChangeCreated, map[string]any{"id": "aas-1"}, false)
 	require.ErrorContains(t, err, "HISTORY-EVIDENCE-APPEND-PUTARTIFACT")
+	require.ErrorContains(t, err, "503 Service Unavailable")
 	require.NoError(t, tx.Rollback())
 	require.NoError(t, mock.ExpectationsWereMet())
 }
