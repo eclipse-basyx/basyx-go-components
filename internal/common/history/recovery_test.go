@@ -28,9 +28,11 @@ package history
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
+	sqlmock "github.com/DATA-DOG/go-sqlmock"
 	"github.com/stretchr/testify/require"
 )
 
@@ -109,6 +111,97 @@ func TestRecoverHistoryFromEvidenceRequiresCheckpointForDiffRange(t *testing.T) 
 	require.NoError(t, err)
 	require.False(t, report.Valid)
 	require.Contains(t, report.Findings[0].Message, "diff row has no preceding snapshot")
+}
+
+func TestRecoverHistoryFromEvidenceDetectsCatalogMissingTailReceipt(t *testing.T) {
+	store := newMemoryEvidenceStore()
+	v1 := map[string]any{"id": "aas-1", "value": "v1"}
+	v2 := map[string]any{"id": "aas-1", "value": "v2"}
+	row1 := recoveryTestEvent(t, 1, PayloadTypeSnapshot, "", v1, nil)
+	row2 := recoveryTestEvent(t, 2, PayloadTypeDiff, row1.RowHash, v2, v1)
+	store.put(row1.Artifact)
+	catalog := recoveryTestCatalog(row1)
+	catalog.FirstHistoryID = 2
+	catalog.LastHistoryID = 2
+	catalog.ExpectedRows = recoveryTestExpectedRows(row1, row2)
+
+	report, err := RecoverHistoryFromEvidence(t.Context(), store, catalog)
+
+	require.NoError(t, err)
+	require.False(t, report.Valid)
+	require.Contains(t, verificationFindingCodesFromRecovery(report), "HISTORY-RECOVERY-MISSINGRECEIPT")
+	require.Empty(t, report.RecoveredRows)
+}
+
+func TestRecoverHistoryFromEvidenceDetectsEmptyCatalog(t *testing.T) {
+	catalog := EvidenceRecoveryCatalog{
+		HistoryTable:   TableAAS,
+		Identifier:     "aas-1",
+		FirstHistoryID: 1,
+		LastHistoryID:  1,
+	}
+
+	report, err := RecoverHistoryFromEvidence(t.Context(), newMemoryEvidenceStore(), catalog)
+
+	require.NoError(t, err)
+	require.False(t, report.Valid)
+	require.Contains(t, verificationFindingCodesFromRecovery(report), "HISTORY-RECOVERY-EMPTYCATALOG")
+}
+
+func TestLoadEvidenceRecoveryCatalogRejectsEmptyRange(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer func() {
+		_ = db.Close()
+	}()
+	mock.ExpectQuery(`SELECT "history_id", "identifier", "row_hash" FROM "aas_history"`).
+		WillReturnRows(sqlmock.NewRows([]string{"history_id", "identifier", "row_hash"}))
+
+	_, err = LoadEvidenceRecoveryCatalog(t.Context(), db, EvidenceRecoveryCatalogOptions{
+		HistoryTable:   TableAAS,
+		Identifier:     "aas-1",
+		FirstHistoryID: 1,
+		LastHistoryID:  2,
+	})
+
+	require.ErrorContains(t, err, "HISTORY-RECOVERY-CATALOG-EMPTYRANGE")
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestLoadEvidenceRecoveryCatalogRejectsMissingTailReceipt(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer func() {
+		_ = db.Close()
+	}()
+	rowHash1 := strings.Repeat("a", 64)
+	rowHash2 := strings.Repeat("b", 64)
+	contentHash1 := strings.Repeat("c", 64)
+	contentHash2 := strings.Repeat("d", 64)
+	retainUntil := time.Date(2026, 6, 12, 12, 0, 0, 0, time.UTC)
+	mock.ExpectQuery(`SELECT "history_id", "identifier", "row_hash" FROM "aas_history"`).
+		WillReturnRows(sqlmock.NewRows([]string{"history_id", "identifier", "row_hash"}).
+			AddRow(1, "aas-1", rowHash1).
+			AddRow(2, "aas-1", rowHash2))
+	mock.ExpectQuery(`SELECT "history_id" FROM "aas_history".*"payload_type" = 'snapshot'`).
+		WillReturnRows(sqlmock.NewRows([]string{"history_id"}).AddRow(1))
+	mock.ExpectQuery(`SELECT "history_id", "identifier", "row_hash", "content_hash" FROM "aas_history"`).
+		WillReturnRows(sqlmock.NewRows([]string{"history_id", "identifier", "row_hash", "content_hash"}).
+			AddRow(1, "aas-1", rowHash1, contentHash1).
+			AddRow(2, "aas-1", rowHash2, contentHash2))
+	mock.ExpectQuery(`SELECT .*FROM "history_evidence_artifacts"`).
+		WillReturnRows(sqlmock.NewRows(eventArtifactReceiptColumns()).
+			AddRow(1, "aas-1", 1, rowHash1, contentHash1, EvidenceProviderS3, "bucket", "object-1", "version-1", strings.Repeat("e", 64), 1, "application/json", "compliance", retainUntil, false))
+
+	_, err = LoadEvidenceRecoveryCatalog(t.Context(), db, EvidenceRecoveryCatalogOptions{
+		HistoryTable:   TableAAS,
+		Identifier:     "aas-1",
+		FirstHistoryID: 1,
+		LastHistoryID:  2,
+	})
+
+	require.ErrorContains(t, err, "HISTORY-RECOVERY-CATALOG-MISSINGRECEIPT")
+	require.NoError(t, mock.ExpectationsWereMet())
 }
 
 type recoveryTestEventRow struct {
@@ -195,6 +288,7 @@ func recoveryTestCatalog(rows ...recoveryTestEventRow) EvidenceRecoveryCatalog {
 		FirstHistoryID: rows[0].HistoryID,
 		LastHistoryID:  rows[len(rows)-1].HistoryID,
 	}
+	catalog.ExpectedRows = recoveryTestExpectedRows(rows...)
 	for _, row := range rows {
 		catalog.EventArtifacts = append(catalog.EventArtifacts, EvidenceRecoveryArtifact{
 			Identifier:  row.Identifier,
@@ -205,6 +299,27 @@ func recoveryTestCatalog(rows ...recoveryTestEventRow) EvidenceRecoveryCatalog {
 		})
 	}
 	return catalog
+}
+
+func recoveryTestExpectedRows(rows ...recoveryTestEventRow) []EvidenceRecoveryRow {
+	expectedRows := make([]EvidenceRecoveryRow, 0, len(rows))
+	for _, row := range rows {
+		expectedRows = append(expectedRows, EvidenceRecoveryRow{
+			Identifier:  row.Identifier,
+			HistoryID:   row.HistoryID,
+			RowHash:     row.RowHash,
+			ContentHash: row.ContentHash,
+		})
+	}
+	return expectedRows
+}
+
+func verificationFindingCodesFromRecovery(report *HistoryRecoveryReport) []string {
+	codes := make([]string, 0, len(report.Findings))
+	for _, finding := range report.Findings {
+		codes = append(codes, finding.Code)
+	}
+	return codes
 }
 
 type memoryEvidenceStore struct {

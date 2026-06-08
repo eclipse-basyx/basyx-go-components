@@ -405,8 +405,12 @@ func verifyEventArtifactCandidate(ctx context.Context, options VerifyHistoryRang
 		report.addFinding(VerificationSeverityError, "HISTORY-EVIDENCE-VERIFY-EVENTMISSING", "history_event artifact receipt is missing", candidate.Identifier, candidate.HistoryID)
 		return
 	}
-	if hasConflictingEventReceipts(receipts) {
-		report.addFinding(VerificationSeverityError, "HISTORY-EVIDENCE-VERIFY-EVENTDUPLICATE", "conflicting history_event artifact receipts exist for the same history row", candidate.Identifier, candidate.HistoryID)
+	if len(receipts) > 1 {
+		message := "duplicate history_event artifact receipts exist for the same history row"
+		if hasConflictingEventReceipts(receipts) {
+			message = "conflicting history_event artifact receipts exist for the same history row"
+		}
+		report.addFinding(VerificationSeverityError, "HISTORY-EVIDENCE-VERIFY-EVENTDUPLICATE", message, candidate.Identifier, candidate.HistoryID)
 	}
 	expectedSHA := SHA256Hex(candidate.Artifact.Data)
 	for _, receipt := range receipts {

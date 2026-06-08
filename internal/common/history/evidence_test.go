@@ -546,6 +546,43 @@ func TestVerifyEventArtifactReceiptChecksSourceRetentionState(t *testing.T) {
 	require.Contains(t, verificationFindingCodes(report), "HISTORY-EVIDENCE-VERIFY-EVENTRETENTIONSTATE")
 }
 
+func TestVerifyEventArtifactCandidateReportsDuplicateReceipts(t *testing.T) {
+	retainUntil := time.Date(2026, 6, 12, 12, 0, 0, 0, time.UTC)
+	candidate := EventArtifactCandidate{
+		Identifier:  "aas-1",
+		HistoryID:   1,
+		RowHash:     strings.Repeat("a", 64),
+		ContentHash: strings.Repeat("b", 64),
+		Artifact: EvidenceArtifact{
+			Data: []byte(`{"artifact_version":"basyx-history-event-v1"}`),
+		},
+	}
+	receipt := &eventArtifactReceiptRow{
+		Identifier:  candidate.Identifier,
+		HistoryID:   candidate.HistoryID,
+		RowHash:     candidate.RowHash,
+		ContentHash: candidate.ContentHash,
+		Receipt: EvidenceReceipt{
+			Reference: EvidenceReference{
+				Provider:  EvidenceProviderS3,
+				Bucket:    "evidence",
+				ObjectKey: "history-events/aas_history/aas-1/1-row.json",
+				VersionID: "version-1",
+			},
+			SHA256:        SHA256Hex(candidate.Artifact.Data),
+			RetentionMode: "governance",
+			RetainUntil:   &retainUntil,
+		},
+	}
+	duplicate := *receipt
+	report := &HistoryEvidenceVerificationReport{Valid: true}
+
+	verifyEventArtifactCandidate(t.Context(), VerifyHistoryRangeOptions{}, report, candidate, []*eventArtifactReceiptRow{receipt, &duplicate})
+
+	require.False(t, report.Valid)
+	require.Contains(t, verificationFindingCodes(report), "HISTORY-EVIDENCE-VERIFY-EVENTDUPLICATE")
+}
+
 func eventArtifactReceiptColumns() []string {
 	return []string{
 		"artifact_id",

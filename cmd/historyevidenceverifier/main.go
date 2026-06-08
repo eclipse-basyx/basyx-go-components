@@ -122,26 +122,6 @@ func run(ctx context.Context, options cliOptions) error {
 }
 
 func validateCLIOptions(options cliOptions) error {
-	if strings.TrimSpace(options.historyTable) == "" {
-		return fmt.Errorf("HISTORY-EVIDENCE-CLI-TABLE -table is required")
-	}
-	if options.firstHistoryID < 1 {
-		return fmt.Errorf("HISTORY-EVIDENCE-CLI-FROM -from must be positive")
-	}
-	if options.lastHistoryID < options.firstHistoryID {
-		return fmt.Errorf("HISTORY-EVIDENCE-CLI-TO -to must be greater than or equal to -from")
-	}
-	hasManifestObjectKey := strings.TrimSpace(options.manifestObjectKey) != ""
-	hasManifestSHA256 := strings.TrimSpace(options.manifestSHA256) != ""
-	if hasManifestObjectKey && !hasManifestSHA256 {
-		return fmt.Errorf("HISTORY-EVIDENCE-CLI-MANIFESTHASH -manifest-sha256 is required when -manifest-object-key is set")
-	}
-	if hasManifestSHA256 && !hasManifestObjectKey {
-		return fmt.Errorf("HISTORY-EVIDENCE-CLI-MANIFESTOBJECT -manifest-object-key is required when -manifest-sha256 is set")
-	}
-	if strings.TrimSpace(options.manifestVersionID) != "" && !hasManifestObjectKey {
-		return fmt.Errorf("HISTORY-EVIDENCE-CLI-MANIFESTVERSION -manifest-object-key is required when -manifest-version-id is set")
-	}
 	modeCount := 0
 	for _, enabled := range []bool{options.writeEvidence, options.recover, options.catalogExport} {
 		if enabled {
@@ -153,6 +133,29 @@ func validateCLIOptions(options cliOptions) error {
 	}
 	if strings.TrimSpace(options.recoveryCatalogPath) != "" && !options.recover {
 		return fmt.Errorf("HISTORY-EVIDENCE-CLI-RECOVERYCATALOG -recovery-catalog is only valid with -recover")
+	}
+	catalogRecovery := options.recover && strings.TrimSpace(options.recoveryCatalogPath) != ""
+	if !catalogRecovery {
+		if strings.TrimSpace(options.historyTable) == "" {
+			return fmt.Errorf("HISTORY-EVIDENCE-CLI-TABLE -table is required")
+		}
+		if options.firstHistoryID < 1 {
+			return fmt.Errorf("HISTORY-EVIDENCE-CLI-FROM -from must be positive")
+		}
+		if options.lastHistoryID < options.firstHistoryID {
+			return fmt.Errorf("HISTORY-EVIDENCE-CLI-TO -to must be greater than or equal to -from")
+		}
+	}
+	hasManifestObjectKey := strings.TrimSpace(options.manifestObjectKey) != ""
+	hasManifestSHA256 := strings.TrimSpace(options.manifestSHA256) != ""
+	if hasManifestObjectKey && !hasManifestSHA256 {
+		return fmt.Errorf("HISTORY-EVIDENCE-CLI-MANIFESTHASH -manifest-sha256 is required when -manifest-object-key is set")
+	}
+	if hasManifestSHA256 && !hasManifestObjectKey {
+		return fmt.Errorf("HISTORY-EVIDENCE-CLI-MANIFESTOBJECT -manifest-object-key is required when -manifest-sha256 is set")
+	}
+	if strings.TrimSpace(options.manifestVersionID) != "" && !hasManifestObjectKey {
+		return fmt.Errorf("HISTORY-EVIDENCE-CLI-MANIFESTVERSION -manifest-object-key is required when -manifest-version-id is set")
 	}
 	return nil
 }
@@ -312,7 +315,26 @@ func recoveryCatalog(ctx context.Context, db *sql.DB, options cliOptions) (histo
 	if err = json.Unmarshal(data, &catalog); err != nil {
 		return history.EvidenceRecoveryCatalog{}, fmt.Errorf("HISTORY-EVIDENCE-CLI-DECODECATALOG %w", err)
 	}
+	if err = validateRecoveryCatalogSelection(catalog, options); err != nil {
+		return history.EvidenceRecoveryCatalog{}, err
+	}
 	return catalog, nil
+}
+
+func validateRecoveryCatalogSelection(catalog history.EvidenceRecoveryCatalog, options cliOptions) error {
+	if strings.TrimSpace(options.historyTable) != "" && strings.TrimSpace(options.historyTable) != catalog.HistoryTable {
+		return fmt.Errorf("HISTORY-EVIDENCE-CLI-CATALOGTABLE -table does not match recovery catalog")
+	}
+	if strings.TrimSpace(options.identifier) != "" && strings.TrimSpace(options.identifier) != strings.TrimSpace(catalog.Identifier) {
+		return fmt.Errorf("HISTORY-EVIDENCE-CLI-CATALOGIDENTIFIER -identifier does not match recovery catalog")
+	}
+	if options.firstHistoryID > 0 && options.firstHistoryID != catalog.FirstHistoryID {
+		return fmt.Errorf("HISTORY-EVIDENCE-CLI-CATALOGFROM -from does not match recovery catalog")
+	}
+	if options.lastHistoryID > 0 && options.lastHistoryID != catalog.LastHistoryID {
+		return fmt.Errorf("HISTORY-EVIDENCE-CLI-CATALOGTO -to does not match recovery catalog")
+	}
+	return nil
 }
 
 func newS3EvidenceStore(ctx context.Context, cfg *common.Config) (*history.S3EvidenceStore, error) {

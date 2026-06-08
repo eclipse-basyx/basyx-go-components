@@ -34,6 +34,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 )
 
@@ -55,7 +56,16 @@ type EvidenceRecoveryCatalog struct {
 	Identifier     string                     `json:"identifier,omitempty"`
 	FirstHistoryID int64                      `json:"first_history_id"`
 	LastHistoryID  int64                      `json:"last_history_id"`
+	ExpectedRows   []EvidenceRecoveryRow      `json:"expected_rows,omitempty"`
 	EventArtifacts []EvidenceRecoveryArtifact `json:"event_artifacts"`
+}
+
+// EvidenceRecoveryRow identifies one history row that must have WORM recovery evidence.
+type EvidenceRecoveryRow struct {
+	Identifier  string `json:"identifier,omitempty"`
+	HistoryID   int64  `json:"history_id"`
+	RowHash     string `json:"row_hash"`
+	ContentHash string `json:"content_hash,omitempty"`
 }
 
 // EvidenceRecoveryArtifact links one history row to its immutable history_event receipt.
@@ -174,6 +184,9 @@ func LoadEvidenceRecoveryCatalog(ctx context.Context, db *sql.DB, options Eviden
 	if err != nil {
 		return EvidenceRecoveryCatalog{}, err
 	}
+	if len(rows) == 0 {
+		return EvidenceRecoveryCatalog{}, common.NewErrBadRequest("HISTORY-RECOVERY-CATALOG-EMPTYRANGE no history rows exist in the requested range")
+	}
 	catalog := EvidenceRecoveryCatalog{
 		HistoryTable:   options.HistoryTable,
 		Identifier:     strings.TrimSpace(options.Identifier),
@@ -185,12 +198,21 @@ func LoadEvidenceRecoveryCatalog(ctx context.Context, db *sql.DB, options Eviden
 		if checkpointErr != nil {
 			return EvidenceRecoveryCatalog{}, checkpointErr
 		}
+		expectedRows, expectedErr := loadRecoveryExpectedRows(ctx, db, options.HistoryTable, identifier, checkpointID, historyRange.lastID)
+		if expectedErr != nil {
+			return EvidenceRecoveryCatalog{}, expectedErr
+		}
 		receipts, receiptErr := loadEventArtifactReceiptRows(ctx, db, options.HistoryTable, identifier, checkpointID, historyRange.lastID)
 		if receiptErr != nil {
 			return EvidenceRecoveryCatalog{}, receiptErr
 		}
+		if err = validateRecoveryReceiptsPresent(expectedRows, receipts); err != nil {
+			return EvidenceRecoveryCatalog{}, err
+		}
+		catalog.ExpectedRows = append(catalog.ExpectedRows, expectedRows...)
 		catalog.EventArtifacts = append(catalog.EventArtifacts, recoveryArtifactsFromReceipts(receipts)...)
 	}
+	sortRecoveryRows(catalog.ExpectedRows)
 	sortRecoveryArtifacts(catalog.EventArtifacts)
 	return catalog, nil
 }
@@ -229,6 +251,7 @@ func RecoverHistoryFromEvidence(ctx context.Context, store EvidenceStore, catalo
 		FirstHistoryID: catalog.FirstHistoryID,
 		LastHistoryID:  catalog.LastHistoryID,
 	}
+	validateRecoveryCatalogCompleteness(catalog, report)
 	rows, references := loadRecoveryRows(ctx, store, catalog, report)
 	for identifier, identifierRows := range groupStoredRowsByIdentifier(rows) {
 		if err := appendRecoveredRows(report, identifier, identifierRows, references); err != nil {
@@ -239,6 +262,82 @@ func RecoverHistoryFromEvidence(ctx context.Context, store EvidenceStore, catalo
 	report.RowCount = int64(len(report.RecoveredRows))
 	report.Valid = len(report.Findings) == 0
 	return report, nil
+}
+
+func loadRecoveryExpectedRows(ctx context.Context, queryer historyQueryer, table string, identifier string, firstHistoryID int64, lastHistoryID int64) ([]EvidenceRecoveryRow, error) {
+	if _, err := historyPayloadTable(table); err != nil {
+		return nil, err
+	}
+	dataset := goqu.From(table).
+		Select(goqu.C("history_id"), goqu.C("identifier"), goqu.C("row_hash"), goqu.C("content_hash")).
+		Where(
+			goqu.C("identifier").Eq(identifier),
+			goqu.C("history_id").Gte(firstHistoryID),
+			goqu.C("history_id").Lte(lastHistoryID),
+		).
+		Order(goqu.C("history_id").Asc())
+	query, args, err := dataset.ToSQL()
+	if err != nil {
+		return nil, common.NewInternalServerError("HISTORY-RECOVERY-BUILDEXPECTED " + err.Error())
+	}
+	rows, err := queryer.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, common.NewInternalServerError("HISTORY-RECOVERY-READEXPECTED " + err.Error())
+	}
+	defer func() {
+		_ = rows.Close()
+	}()
+	return scanRecoveryExpectedRows(rows)
+}
+
+func scanRecoveryExpectedRows(rows *sql.Rows) ([]EvidenceRecoveryRow, error) {
+	expectedRows := make([]EvidenceRecoveryRow, 0)
+	for rows.Next() {
+		var row EvidenceRecoveryRow
+		var rowHash sql.NullString
+		var contentHash sql.NullString
+		if err := rows.Scan(&row.HistoryID, &row.Identifier, &rowHash, &contentHash); err != nil {
+			return nil, common.NewInternalServerError("HISTORY-RECOVERY-SCANEXPECTED " + err.Error())
+		}
+		row.RowHash = strings.TrimSpace(nullStringValue(rowHash))
+		row.ContentHash = strings.TrimSpace(nullStringValue(contentHash))
+		expectedRows = append(expectedRows, row)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, common.NewInternalServerError("HISTORY-RECOVERY-EXPECTEDROWS " + err.Error())
+	}
+	return expectedRows, nil
+}
+
+func validateRecoveryReceiptsPresent(expectedRows []EvidenceRecoveryRow, receipts []eventArtifactReceiptRow) error {
+	index := make(map[string]int, len(receipts))
+	for _, receipt := range receipts {
+		index[eventArtifactKey(receipt.Identifier, receipt.HistoryID, receipt.RowHash)]++
+	}
+	for _, row := range expectedRows {
+		if index[eventArtifactKey(row.Identifier, row.HistoryID, row.RowHash)] == 0 {
+			return common.NewInternalServerError(fmt.Sprintf("HISTORY-RECOVERY-CATALOG-MISSINGRECEIPT history_event artifact receipt is missing for identifier %q history_id %d", row.Identifier, row.HistoryID))
+		}
+	}
+	return nil
+}
+
+func validateRecoveryCatalogCompleteness(catalog EvidenceRecoveryCatalog, report *HistoryRecoveryReport) {
+	if len(catalog.ExpectedRows) == 0 {
+		if len(catalog.EventArtifacts) == 0 {
+			report.addFinding(VerificationSeverityError, "HISTORY-RECOVERY-EMPTYCATALOG", "recovery catalog contains no expected rows or event artifacts", "", 0)
+		}
+		return
+	}
+	artifactIndex := make(map[string]int, len(catalog.EventArtifacts))
+	for _, artifact := range catalog.EventArtifacts {
+		artifactIndex[eventArtifactKey(artifact.Identifier, artifact.HistoryID, artifact.RowHash)]++
+	}
+	for _, row := range catalog.ExpectedRows {
+		if artifactIndex[eventArtifactKey(row.Identifier, row.HistoryID, row.RowHash)] == 0 {
+			report.addFinding(VerificationSeverityError, "HISTORY-RECOVERY-MISSINGRECEIPT", "recovery catalog is missing a history_event artifact receipt for an expected row", row.Identifier, row.HistoryID)
+		}
+	}
 }
 
 func recoveryArtifactsFromReceipts(receipts []eventArtifactReceiptRow) []EvidenceRecoveryArtifact {
@@ -503,6 +602,18 @@ func groupStoredRowsByIdentifier(rows []storedHistoryRow) map[string][]storedHis
 func sortStoredRows(rows []storedHistoryRow) {
 	sort.Slice(rows, func(left int, right int) bool {
 		return rows[left].HistoryID < rows[right].HistoryID
+	})
+}
+
+func sortRecoveryRows(rows []EvidenceRecoveryRow) {
+	sort.Slice(rows, func(left int, right int) bool {
+		if rows[left].Identifier != rows[right].Identifier {
+			return rows[left].Identifier < rows[right].Identifier
+		}
+		if rows[left].HistoryID != rows[right].HistoryID {
+			return rows[left].HistoryID < rows[right].HistoryID
+		}
+		return rows[left].RowHash < rows[right].RowHash
 	})
 }
 

@@ -28,6 +28,7 @@ package main
 import (
 	"testing"
 
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/history"
 	"github.com/stretchr/testify/require"
 )
 
@@ -63,4 +64,26 @@ func TestValidateCLIOptionsRejectsRecoveryCatalogWithoutRecover(t *testing.T) {
 	})
 
 	require.ErrorContains(t, err, "HISTORY-EVIDENCE-CLI-RECOVERYCATALOG")
+}
+
+func TestValidateCLIOptionsAllowsCatalogOnlyRecovery(t *testing.T) {
+	err := validateCLIOptions(cliOptions{
+		recover:             true,
+		recoveryCatalogPath: "catalog.json",
+	})
+
+	require.NoError(t, err)
+}
+
+func TestValidateRecoveryCatalogSelectionRejectsMismatchedFlags(t *testing.T) {
+	catalog := history.EvidenceRecoveryCatalog{
+		HistoryTable:   "submodel_history",
+		Identifier:     "sm-1",
+		FirstHistoryID: 1,
+		LastHistoryID:  5,
+	}
+
+	err := validateRecoveryCatalogSelection(catalog, cliOptions{historyTable: "aas_history"})
+
+	require.ErrorContains(t, err, "HISTORY-EVIDENCE-CLI-CATALOGTABLE")
 }
