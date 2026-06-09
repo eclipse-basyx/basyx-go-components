@@ -36,9 +36,9 @@ import (
 
 // AuditContextMiddleware enriches request contexts with history audit metadata.
 //
-// The middleware copies stable request, OIDC, ABAC, and route metadata that is
-// already available in the request. It does not generate identities, and it does
-// not store Authorization headers or bearer tokens.
+// The middleware copies the request, OIDC, ABAC, and route metadata selected by
+// history.auditIdentityMode from the current request. It does not generate
+// identities, and it does not store Authorization headers or bearer tokens.
 //
 // Parameters:
 //   - cfg: Process configuration that controls history.auditIdentityMode.

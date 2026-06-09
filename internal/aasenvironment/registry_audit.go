@@ -51,6 +51,30 @@ const (
 )
 
 // ContextWithAASPreconfigurationAudit stores synthetic audit metadata for startup AAS imports.
+//
+// Use this helper when the AAS Environment Service imports configured AASX,
+// JSON, or XML files during startup. Preconfiguration runs outside an HTTP
+// request and therefore has no authenticated caller, request headers, or ABAC
+// decision to copy. The returned context marks resulting history rows and WORM
+// evidence artifacts as trusted internal service work instead of leaving audit
+// attribution empty or inventing a human identity.
+//
+// The synthetic audit context uses the AAS preconfiguration system actor,
+// `SYSTEM_INTERNAL` authorization result, `SYSTEM` HTTP method, and a generated
+// request/correlation identifier. Registry synchronization that is triggered by
+// the same startup import keeps this attribution so descriptor side effects can
+// be traced back to the preconfiguration job.
+//
+// Do not use this helper for normal HTTP mutations. Request handling should keep
+// the audit context produced by history.AuditContextMiddleware so end-user OIDC,
+// request, and ABAC metadata remain attached to the history row.
+//
+// Parameters:
+//   - ctx: Base context for the startup preconfiguration import.
+//
+// Returns:
+//   - context.Context: Context containing synthetic AAS preconfiguration audit
+//     metadata.
 func ContextWithAASPreconfigurationAudit(ctx context.Context) context.Context {
 	correlationID := history.NewAuditID(aasPreconfigurationIDPrefix)
 	return history.ContextWithSystemAudit(ctx, history.SystemAuditOptions{
@@ -64,21 +88,21 @@ func ContextWithAASPreconfigurationAudit(ctx context.Context) context.Context {
 	})
 }
 
-func aasRegistrySyncContext(ctx context.Context, operation string) context.Context {
-	if hasAASPreconfigurationAudit(ctx) {
+func aasRegistryAddAuditMetadataIfNotAvailable(ctx context.Context, operation string) context.Context {
+	if contextHasAuditMetadata(ctx) {
 		return ctx
 	}
 	return history.ContextWithAuditOperation(ctx, operation, aasRegistrySyncEndpoint)
 }
 
-func submodelRegistrySyncContext(ctx context.Context, operation string) context.Context {
-	if hasAASPreconfigurationAudit(ctx) {
+func submodelRegistryAddAuditMetadataIfNotAvailable(ctx context.Context, operation string) context.Context {
+	if contextHasAuditMetadata(ctx) {
 		return ctx
 	}
 	return history.ContextWithAuditOperation(ctx, operation, submodelRegistrySyncEndpoint)
 }
 
-func hasAASPreconfigurationAudit(ctx context.Context) bool {
+func contextHasAuditMetadata(ctx context.Context) bool {
 	audit := history.FromContext(ctx)
 	return audit.ActorSubject == aasPreconfigurationActorSubject &&
 		audit.ActorIssuer == aasPreconfigurationActorIssuer &&

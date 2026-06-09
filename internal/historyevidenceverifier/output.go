@@ -23,21 +23,31 @@
 * SPDX-License-Identifier: MIT
 ******************************************************************************/
 
-// Package main wires the history evidence verifier CLI process.
-package main
+package historyevidenceverifier
 
 import (
-	"context"
+	"encoding/json"
+	"fmt"
+	"io"
 	"os"
-	"os/signal"
-	"syscall"
-
-	"github.com/eclipse-basyx/basyx-go-components/internal/historyevidenceverifier"
+	"strings"
 )
 
-func main() {
-	ctx, stop := signal.NotifyContext(context.TODO(), os.Interrupt, syscall.SIGTERM)
-	exitCode := historyevidenceverifier.Run(ctx, os.Args[1:], os.Stdout, os.Stderr)
-	stop()
-	os.Exit(exitCode)
+func writeJSONOutput(value any, outputPath string, stdout io.Writer) error {
+	encoded, err := json.MarshalIndent(value, "", "  ")
+	if err != nil {
+		return fmt.Errorf("HISTORY-EVIDENCE-CLI-PRINTJSON %w", err)
+	}
+	if strings.TrimSpace(outputPath) == "" {
+		_, err = fmt.Fprintln(stdout, string(encoded))
+		return err
+	}
+	return os.WriteFile(strings.TrimSpace(outputPath), append(encoded, '\n'), 0o600)
+}
+
+func fallbackWriter(writer io.Writer) io.Writer {
+	if writer == nil {
+		return io.Discard
+	}
+	return writer
 }

@@ -23,7 +23,7 @@
 * SPDX-License-Identifier: MIT
 ******************************************************************************/
 
-package main
+package historyevidenceverifier
 
 import (
 	"testing"

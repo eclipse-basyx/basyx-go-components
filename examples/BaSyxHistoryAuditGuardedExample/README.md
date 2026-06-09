@@ -43,8 +43,8 @@ This example is configured for local development:
 - The published image lines are kept as comments so you can switch back quickly.
 
 The configuration service initializes the current schema first. Keycloak imports the local `basyx` realm, the MinIO init sidecar creates a versioned object-lock bucket for local evidence tests, and the AAS Environment Service then enables the history guard switch at startup.
-The demo realm sets `sslRequired=none` because the local BaSyx containers and browser use HTTP. Do not carry that setting into a production Keycloak realm.
-The `keycloak-healthcheck` container is a one-shot readiness gate and exits after Keycloak is ready; the `keycloak` service itself should keep running.
+The demo `basyx` realm sets `sslRequired=none`, and the Keycloak startup command relaxes the local `master` realm the same way so the admin console works over HTTP at [http://keycloak.localhost:8080](http://keycloak.localhost:8080). Do not carry those settings into a production Keycloak realm.
+The `keycloak-healthcheck` container is a one-shot readiness gate and exits after Keycloak is ready and the local master realm reports `sslRequired=none`; the `keycloak` service itself should keep running.
 
 `BASYX_HISTORY_RETENTION_DAYS=0` is accepted as configuration, but automatic retention cleanup is not implemented yet. `BASYX_HISTORY_FULL_SNAPSHOT_INTERVAL=5` stores periodic full checkpoints with RFC 6902 diff rows between them.
 When evidence is enabled, history mode must be `api` or `audit`. Each successful history append writes a WORM `history_event` artifact to MinIO before PostgreSQL commits. The artifact stores the recovery payload plus `effective_diff`, which records the actual JSON Patch relative to the previous version for audit attribution. If MinIO is unavailable or rejects the object write, the API mutation fails and the PostgreSQL transaction rolls back.

@@ -138,7 +138,31 @@ services:
       KC_HOSTNAME_STRICT_BACKCHANNEL: "false"
       KC_IMPORT: /opt/keycloak/data/import/
       KC_HTTP_MANAGEMENT_ENABLED: "true"
-    command: ["start-dev", "--import-realm", "--health-enabled=true"]
+    entrypoint:
+      - /bin/sh
+      - -c
+    command:
+      - |
+          /opt/keycloak/bin/kc.sh start-dev --import-realm --health-enabled=true &
+          kc_pid=$$!
+          trap 'kill "$$kc_pid" 2>/dev/null || true; wait "$$kc_pid" 2>/dev/null || true' TERM INT
+          echo 'Waiting for Keycloak admin CLI...'
+          until /opt/keycloak/bin/kcadm.sh config credentials --server http://localhost:8080 --realm master --user "$${KEYCLOAK_ADMIN}" --password "$${KEYCLOAK_ADMIN_PASSWORD}"; do
+            if ! kill -0 "$$kc_pid" 2>/dev/null; then
+              echo 'Keycloak stopped before the admin CLI became ready.' >&2
+              wait "$$kc_pid" 2>/dev/null || true
+              exit 1
+            fi
+            sleep 2
+          done
+          if ! /opt/keycloak/bin/kcadm.sh update realms/master -s sslRequired=none; then
+            echo 'Failed to relax Keycloak master realm for local demo.' >&2
+            kill "$$kc_pid" 2>/dev/null || true
+            wait "$$kc_pid" 2>/dev/null || true
+            exit 1
+          fi
+          echo 'Keycloak master realm sslRequired=none for local demo.'
+          wait "$$kc_pid"
     ports:
       - "8080:8080"
     volumes:
@@ -151,13 +175,32 @@ services:
   keycloak-healthcheck:
     container_name: keycloak_history_audit_healthcheck
     image: curlimages/curl:latest
-    command: >
-      sh -c "
-        echo 'Waiting for Keycloak to become ready...';
-        until curl -sf http://keycloak:9000/health/ready; do
-          sleep 5;
-        done;
-        echo 'Keycloak is ready!'"
+    environment:
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: admin
+    entrypoint:
+      - /bin/sh
+      - -c
+    command:
+      - |
+          echo 'Waiting for Keycloak to become ready...'
+          until curl -sf http://keycloak:9000/health/ready; do
+            sleep 5
+          done
+          echo 'Waiting for Keycloak master realm HTTP mode...'
+          until token_response="$$(curl -sf -X POST 'http://keycloak:8080/realms/master/protocol/openid-connect/token' \
+            -H 'Content-Type: application/x-www-form-urlencoded' \
+            -d 'client_id=admin-cli' \
+            -d 'grant_type=password' \
+            -d "username=$${KEYCLOAK_ADMIN}" \
+            -d "password=$${KEYCLOAK_ADMIN_PASSWORD}")" \
+            && token="$$(echo "$$token_response" | sed -n 's/.*"access_token":"\([^"]*\)".*/\1/p')" \
+            && [ -n "$$token" ] \
+            && realm_response="$$(curl -sf -H "Authorization: Bearer $$token" 'http://keycloak:8080/admin/realms/master')" \
+            && echo "$$realm_response" | grep -q '"sslRequired":"none"'; do
+            sleep 2
+          done
+          echo 'Keycloak is ready!'
     depends_on:
       - keycloak
 

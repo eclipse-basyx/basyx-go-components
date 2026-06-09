@@ -61,7 +61,7 @@ func TestRegistrySyncContextOverridesHTTPAuditButKeepsPreconfigurationAudit(t *t
 		Endpoint:            "/shells/{aasIdentifier}",
 		HTTPMethod:          http.MethodPut,
 	}
-	registryAudit := history.FromContext(aasRegistrySyncContext(
+	registryAudit := history.FromContext(aasRegistryAddAuditMetadataIfNotAvailable(
 		history.ContextWithAudit(context.TODO(), httpAudit),
 		aasRegistrySyncUpsertOperation,
 	))
@@ -79,7 +79,7 @@ func TestRegistrySyncContextOverridesHTTPAuditButKeepsPreconfigurationAudit(t *t
 	require.Equal(t, history.AuthorizationResultSystemInternal, preconfigurationAudit.AuthorizationResult)
 	require.Equal(t, history.AuditHTTPMethodSystem, preconfigurationAudit.HTTPMethod)
 
-	preconfigurationRegistryAudit := history.FromContext(aasRegistrySyncContext(
+	preconfigurationRegistryAudit := history.FromContext(aasRegistryAddAuditMetadataIfNotAvailable(
 		preconfigurationCtx,
 		aasRegistrySyncUpsertOperation,
 	))

@@ -102,7 +102,7 @@ func (s *CustomSubmodelRepositoryService) PostSubmodel(ctx context.Context, subm
 			return descriptorErr
 		}
 		if upsertErr := s.persistence.SubmodelRegistry.UpsertSubmodelDescriptorInTransaction(
-			submodelRegistrySyncContext(ctx, submodelRegistrySyncUpsertOperation), tx, descriptor,
+			submodelRegistryAddAuditMetadataIfNotAvailable(ctx, submodelRegistrySyncUpsertOperation), tx, descriptor,
 		); upsertErr != nil {
 			return upsertErr
 		}
@@ -160,7 +160,7 @@ func (s *CustomSubmodelRepositoryService) PutSubmodelByID(ctx context.Context, s
 			return descriptorErr
 		}
 		if upsertErr := s.persistence.SubmodelRegistry.UpsertSubmodelDescriptorInTransaction(
-			submodelRegistrySyncContext(ctx, submodelRegistrySyncUpsertOperation), tx, descriptor,
+			submodelRegistryAddAuditMetadataIfNotAvailable(ctx, submodelRegistrySyncUpsertOperation), tx, descriptor,
 		); upsertErr != nil {
 			return upsertErr
 		}
@@ -214,7 +214,7 @@ func (s *CustomSubmodelRepositoryService) DeleteSubmodelByID(ctx context.Context
 			return deleteErr
 		}
 		if deleteDescriptorErr := s.persistence.SubmodelRegistry.DeleteSubmodelDescriptorByIDInTransaction(
-			submodelRegistrySyncContext(ctx, submodelRegistrySyncDeleteOperation), tx, decodedSubmodelIdentifier,
+			submodelRegistryAddAuditMetadataIfNotAvailable(ctx, submodelRegistrySyncDeleteOperation), tx, decodedSubmodelIdentifier,
 		); deleteDescriptorErr != nil {
 			return deleteDescriptorErr
 		}
@@ -310,7 +310,7 @@ func (s *CustomSubmodelRepositoryService) PatchSubmodelByID(ctx context.Context,
 			return descriptorErr
 		}
 		if upsertErr := s.persistence.SubmodelRegistry.UpsertSubmodelDescriptorInTransaction(
-			submodelRegistrySyncContext(ctx, submodelRegistrySyncUpsertOperation), tx, descriptor,
+			submodelRegistryAddAuditMetadataIfNotAvailable(ctx, submodelRegistrySyncUpsertOperation), tx, descriptor,
 		); upsertErr != nil {
 			return upsertErr
 		}
@@ -400,7 +400,7 @@ func (s *CustomSubmodelRepositoryService) PatchSubmodelByIDMetadata(ctx context.
 			return descriptorErr
 		}
 		if upsertErr := s.persistence.SubmodelRegistry.UpsertSubmodelDescriptorInTransaction(
-			submodelRegistrySyncContext(ctx, submodelRegistrySyncUpsertOperation), tx, descriptor,
+			submodelRegistryAddAuditMetadataIfNotAvailable(ctx, submodelRegistrySyncUpsertOperation), tx, descriptor,
 		); upsertErr != nil {
 			return upsertErr
 		}
@@ -519,7 +519,7 @@ func (s *CustomSubmodelRepositoryService) syncReferencingAASDescriptorsInTransac
 		}
 
 		if upsertErr := s.persistence.AASRegistry.UpsertAdministrationShellDescriptorInTransaction(
-			aasRegistrySyncContext(ctx, operation), tx, aasDescriptor,
+			aasRegistryAddAuditMetadataIfNotAvailable(ctx, operation), tx, aasDescriptor,
 		); upsertErr != nil {
 			return upsertErr
 		}
