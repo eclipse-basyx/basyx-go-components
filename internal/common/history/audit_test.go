@@ -30,6 +30,8 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -123,7 +125,10 @@ func TestAuditContextMiddlewarePopulatesAuthenticatedMinimalFields(t *testing.T)
 		"iss":       "https://issuer.example",
 		"client_id": "client-1",
 	})
-	ctx = auth.ContextWithAuthorizationDecision(ctx, auth.AuthorizationDecision{Result: string(auth.DecisionAllow)})
+	ctx = auth.ContextWithAuthorizationDecision(ctx, auth.AuthorizationDecision{
+		Result:        string(auth.DecisionAllow),
+		MatchedRuleID: "rule:1:abcdef0123456789",
+	})
 	ctx = contextWithMutationCoverage(ctx, http.MethodPut, mutationRoute{pattern: "/shells/{aasIdentifier}", operation: "PutAssetAdministrationShellById"}, true)
 
 	handler.ServeHTTP(httptest.NewRecorder(), request.WithContext(ctx))
@@ -136,8 +141,74 @@ func TestAuditContextMiddlewarePopulatesAuthenticatedMinimalFields(t *testing.T)
 	require.Equal(t, string(auth.DecisionAllow), captured.AuthorizationResult)
 	require.Equal(t, "PutAssetAdministrationShellById", captured.Operation)
 	require.Equal(t, "/shells/{aasIdentifier}", captured.Endpoint)
+	require.Empty(t, captured.MatchedRuleID)
 	require.Empty(t, captured.SourceIP)
 	require.Empty(t, captured.UserAgent)
+}
+
+func TestAuditContextMiddlewarePopulatesExtendedAuthorizationFields(t *testing.T) {
+	policyPath := filepath.Join(t.TempDir(), "access-rules.json")
+	require.NoError(t, os.WriteFile(policyPath, []byte(`{"AllAccessPermissionRules":{"rules":[]}}`), 0600))
+
+	cfg := &common.Config{
+		History: common.HistoryConfig{AuditIdentityMode: AuditIdentityExtended},
+		ABAC: common.ABACConfig{
+			Enabled:   true,
+			ModelPath: policyPath,
+		},
+	}
+	var captured AuditContext
+	handler := AuditContextMiddleware(cfg)(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+		captured = FromContext(r.Context())
+	}))
+	request := httptest.NewRequest(http.MethodPut, "/shells/aas-1", nil)
+	ctx := context.WithValue(request.Context(), auth.ClaimsKey, auth.Claims{
+		"sub":       "user-1",
+		"iss":       "https://issuer.example",
+		"client_id": "client-1",
+	})
+	ctx = auth.ContextWithAuthorizationDecision(ctx, auth.AuthorizationDecision{
+		Result:        string(auth.DecisionAllow),
+		MatchedRuleID: "rule:1:abcdef0123456789,rule:3:0123456789abcdef",
+	})
+
+	handler.ServeHTTP(httptest.NewRecorder(), request.WithContext(ctx))
+
+	require.Equal(t, string(auth.DecisionAllow), captured.AuthorizationResult)
+	require.NotEmpty(t, captured.PolicyID)
+	require.Equal(t, "rule:1:abcdef0123456789,rule:3:0123456789abcdef", captured.MatchedRuleID)
+}
+
+func TestAuditContextMiddlewareLeavesMatchedRuleIDEmptyWhenUnavailable(t *testing.T) {
+	cfg := &common.Config{History: common.HistoryConfig{AuditIdentityMode: AuditIdentityExtended}}
+	var captured AuditContext
+	handler := AuditContextMiddleware(cfg)(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+		captured = FromContext(r.Context())
+	}))
+	request := httptest.NewRequest(http.MethodPost, "/shells", nil)
+
+	handler.ServeHTTP(httptest.NewRecorder(), request)
+
+	require.Empty(t, captured.AuthorizationResult)
+	require.Empty(t, captured.MatchedRuleID)
+}
+
+func TestAuditContextMiddlewareNoneModeDoesNotStoreMatchedRuleID(t *testing.T) {
+	cfg := &common.Config{History: common.HistoryConfig{AuditIdentityMode: AuditIdentityNone}}
+	var captured AuditContext
+	handler := AuditContextMiddleware(cfg)(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+		captured = FromContext(r.Context())
+	}))
+	request := httptest.NewRequest(http.MethodPost, "/shells", nil)
+	ctx := auth.ContextWithAuthorizationDecision(request.Context(), auth.AuthorizationDecision{
+		Result:        string(auth.DecisionAllow),
+		MatchedRuleID: "rule:1:abcdef0123456789",
+	})
+
+	handler.ServeHTTP(httptest.NewRecorder(), request.WithContext(ctx))
+
+	require.Empty(t, captured.AuthorizationResult)
+	require.Empty(t, captured.MatchedRuleID)
 }
 
 func TestAuditContextMiddlewareDoesNotInventAnonymousPrincipal(t *testing.T) {
@@ -236,5 +307,6 @@ func TestHistoryEventArtifactContainsMatchingAuditMetadata(t *testing.T) {
 	require.Equal(t, audit.RequestID, decoded.Audit["request_id"])
 	require.Equal(t, audit.ActorSubject, decoded.Audit["actor_subject"])
 	require.Equal(t, audit.AuthorizationResult, decoded.Audit["authorization_result"])
+	require.Equal(t, audit.MatchedRuleID, decoded.Audit["matched_rule_id"])
 	require.Equal(t, audit.Endpoint, decoded.Audit["endpoint"])
 }

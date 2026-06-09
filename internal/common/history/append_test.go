@@ -102,6 +102,7 @@ func TestAppendVersionTxSnapshotIntervalOneUsesPreviousHashOnly(t *testing.T) {
 
 func TestAppendVersionTxWritesEvidenceArtifactBeforeCommitWhenEnabled(t *testing.T) {
 	store := &recordingEvidenceStore{}
+	matchedRuleID := "rule:1:abcdef0123456789,rule:3:0123456789abcdef"
 	t.Cleanup(func() {
 		Configure(Config{Mode: ModeOff, Immutability: ImmutabilityNone, AuditIdentityMode: AuditIdentityNone})
 	})
@@ -126,7 +127,7 @@ func TestAppendVersionTxWritesEvidenceArtifactBeforeCommitWhenEnabled(t *testing
 		WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectQuery(`SELECT "history_id" FROM "aas_history"`).
 		WillReturnError(sql.ErrNoRows)
-	mock.ExpectQuery(`INSERT INTO "aas_history".*RETURNING "history_id"`).
+	mock.ExpectQuery(`INSERT INTO "aas_history".*"matched_rule_id".*RETURNING "history_id"`).
 		WillReturnRows(sqlmock.NewRows([]string{"history_id"}).AddRow(1))
 	mock.ExpectExec(`INSERT INTO "aas_history_payload".*"snapshot"`).
 		WillReturnResult(sqlmock.NewResult(0, 1))
@@ -136,7 +137,12 @@ func TestAppendVersionTxWritesEvidenceArtifactBeforeCommitWhenEnabled(t *testing
 
 	tx, err := db.Begin()
 	require.NoError(t, err)
-	err = AppendVersionTx(context.Background(), tx, TableAAS, "aas-1", ChangeCreated, map[string]any{"id": "aas-1"}, false)
+	ctx := ContextWithAudit(context.Background(), AuditContext{
+		AuthorizationResult: "ALLOW",
+		PolicyID:            "policy-1",
+		MatchedRuleID:       matchedRuleID,
+	})
+	err = AppendVersionTx(ctx, tx, TableAAS, "aas-1", ChangeCreated, map[string]any{"id": "aas-1"}, false)
 	require.NoError(t, err)
 	require.NoError(t, tx.Commit())
 
@@ -159,6 +165,9 @@ func TestAppendVersionTxWritesEvidenceArtifactBeforeCommitWhenEnabled(t *testing
 	require.Equal(t, "add", operation["op"])
 	require.Equal(t, "/id", operation["path"])
 	require.Equal(t, "aas-1", operation["value"])
+	audit, ok := artifactPayload["audit"].(map[string]any)
+	require.True(t, ok)
+	require.Equal(t, matchedRuleID, audit["matched_rule_id"])
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 

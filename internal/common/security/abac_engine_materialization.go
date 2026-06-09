@@ -30,8 +30,11 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
 )
+
+const matchedRuleHashPrefixLength = 16
 
 // definitionIndex caches definitions for fast lookup during materialization.
 type definitionIndex struct {
@@ -56,10 +59,22 @@ func materializeRules(all grammar.AccessRuleModelSchemaJSONAllAccessPermissionRu
 		if err != nil {
 			return nil, fmt.Errorf("rule %d: %w", i+1, err)
 		}
+		mr.id, err = deterministicMatchedRuleID(i+1, r)
+		if err != nil {
+			return nil, fmt.Errorf("rule %d: id: %w", i+1, err)
+		}
 		rules = append(rules, mr)
 	}
 
 	return rules, nil
+}
+
+func deterministicMatchedRuleID(index int, rule grammar.AccessPermissionRule) (string, error) {
+	hash, err := common.CanonicalJSONHash(rule)
+	if err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("rule:%d:%s", index, hash[:matchedRuleHashPrefixLength]), nil
 }
 
 func buildDefinitionIndex(all grammar.AccessRuleModelSchemaJSONAllAccessPermissionRules) (definitionIndex, error) {

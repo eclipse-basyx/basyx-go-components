@@ -28,6 +28,7 @@ package auth
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/builder"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
@@ -46,6 +47,7 @@ type AccessModel struct {
 }
 
 type materializedRule struct {
+	id         string
 	acl        grammar.ACL
 	attrs      []grammar.AttributeItem
 	objs       []grammar.ObjectItem
@@ -122,6 +124,28 @@ const (
 	DecisionRouteNotFound DecisionCode = "ROUTE_NOT_FOUND"
 )
 
+// AuthorizationEvaluation records the detailed outcome of an ABAC evaluation.
+//
+// ABACMiddleware uses this richer result to pass allow metadata to audit
+// middleware while preserving the older AuthorizeWithFilter return contract for
+// callers that only need access and query-filter decisions.
+type AuthorizationEvaluation struct {
+	// Allowed is true when the request is permitted by at least one allow rule.
+	Allowed bool
+
+	// Reason describes the authorization result, including deny/pass-through cases.
+	Reason DecisionCode
+
+	// QueryFilter contains optional backend filter constraints for allowed requests.
+	QueryFilter *QueryFilter
+
+	// MatchedRuleID contains deterministic IDs for matched allow rules.
+	//
+	// Multiple IDs are comma-separated in configured rule order. The field is
+	// empty when no allow rule matched or rule metadata is unavailable.
+	MatchedRuleID string
+}
+
 // AuthorizeWithFilter evaluates the request against the model rules in order.
 // It returns whether access is allowed, a human-readable reason, and an optional
 // QueryFilter for controllers to enforce (e.g., tenant scoping, redactions).
@@ -129,23 +153,51 @@ const (
 //
 //nolint:revive // i will refactor this function at some point
 func (m *AccessModel) AuthorizeWithFilter(in EvalInput) (bool, DecisionCode, *QueryFilter) {
-	return m.AuthorizeWithFilterWithOptions(in, grammar.DefaultSimplifyOptions())
+	result := m.AuthorizeWithFilterWithOptions(in, grammar.DefaultSimplifyOptions())
+	return result.Allowed, result.Reason, result.QueryFilter
 }
 
-// AuthorizeWithFilterWithOptions behaves like AuthorizeWithFilter but allows callers
-// to control backend simplification behavior (e.g., implicit casts).
+// AuthorizeWithFilterWithOptions evaluates the request and returns audit-friendly metadata.
+//
+// The evaluation semantics are identical to AuthorizeWithFilter, but callers can
+// control backend simplification behavior, for example implicit casts. In
+// addition to the allow decision and optional query filter, the returned value
+// contains the deterministic matched rule identifiers used by history audit
+// enrichment.
+//
+// Parameters:
+//   - in: Request method, path, and claims used by the ABAC evaluator.
+//   - opts: Simplification options for backend filter generation.
+//
+// Returns:
+//   - AuthorizationEvaluation: Access decision, decision reason, optional query
+//     filter, and comma-separated matched allow rule IDs.
+//
+// Example:
+//
+//	opts := grammar.DefaultSimplifyOptions()
+//	opts.EnableImplicitCasts = true
+//	result := model.AuthorizeWithFilterWithOptions(input, opts)
+//	if result.Allowed {
+//		ctx = ContextWithAuthorizationDecision(ctx, AuthorizationDecision{
+//			Result:        string(DecisionAllow),
+//			MatchedRuleID: result.MatchedRuleID,
+//		})
+//	}
+//
 // nolint:revive // This function is the heart of ABAC and is complicated. Sorry cognitive-complexity!
-func (m *AccessModel) AuthorizeWithFilterWithOptions(in EvalInput, opts grammar.SimplifyOptions) (bool, DecisionCode, *QueryFilter) {
+func (m *AccessModel) AuthorizeWithFilterWithOptions(in EvalInput, opts grammar.SimplifyOptions) AuthorizationEvaluation {
 	rightAlternatives, mapped, routeFound := m.mapMethodAndPathToRights(in)
 	if !routeFound {
-		return false, DecisionRouteNotFound, nil
+		return AuthorizationEvaluation{Reason: DecisionRouteNotFound}
 	}
 	if !mapped {
-		return false, DecisionNoMatch, nil
+		return AuthorizationEvaluation{Reason: DecisionNoMatch}
 	}
 
 	var ruleExprs []QueryFilter
 	var allFragments []grammar.FragmentStringPattern
+	matchedRuleIDs := make([]string, 0, len(m.rules))
 	relevantRights := collectRelevantRights(rightAlternatives)
 	ruleExprsByRight := make(map[grammar.RightsEnum][]grammar.LogicalExpression, len(relevantRights))
 
@@ -189,7 +241,7 @@ func (m *AccessModel) AuthorizeWithFilterWithOptions(in EvalInput, opts grammar.
 		// Gate 4: formula → adapt for backend filtering
 		if combinedLE == nil {
 			// rule has no formula: should not happen -> deny access
-			return false, DecisionNoMatch, nil
+			return AuthorizationEvaluation{Reason: DecisionNoMatch}
 		}
 
 		resolver := func(attr grammar.AttributeValue) any {
@@ -198,6 +250,9 @@ func (m *AccessModel) AuthorizeWithFilterWithOptions(in EvalInput, opts grammar.
 		adapted, decision := combinedLE.SimplifyForBackendFilterWithOptions(resolver, opts)
 		if decision == grammar.SimplifyFalse {
 			continue
+		}
+		if r.id != "" {
+			matchedRuleIDs = append(matchedRuleIDs, r.id)
 		}
 		fragments := make(map[grammar.FragmentStringPattern]grammar.LogicalExpression)
 		fragmentMatch := make(map[grammar.FragmentStringPattern]bool)
@@ -246,7 +301,7 @@ func (m *AccessModel) AuthorizeWithFilterWithOptions(in EvalInput, opts grammar.
 	}
 
 	if len(ruleExprs) == 0 {
-		return false, DecisionNoMatch, nil
+		return AuthorizationEvaluation{Reason: DecisionNoMatch}
 	}
 
 	combined := grammar.LogicalExpression{Or: []grammar.LogicalExpression{}}
@@ -313,7 +368,7 @@ func (m *AccessModel) AuthorizeWithFilterWithOptions(in EvalInput, opts grammar.
 	hasFormula := true
 	switch decision {
 	case grammar.SimplifyFalse:
-		return false, DecisionNoMatch, nil
+		return AuthorizationEvaluation{Reason: DecisionNoMatch}
 	case grammar.SimplifyTrue:
 		hasFormula = false
 	}
@@ -336,7 +391,12 @@ func (m *AccessModel) AuthorizeWithFilterWithOptions(in EvalInput, opts grammar.
 		}
 	}
 
-	return true, DecisionAllow, qf
+	return AuthorizationEvaluation{
+		Allowed:       true,
+		Reason:        DecisionAllow,
+		QueryFilter:   qf,
+		MatchedRuleID: strings.Join(matchedRuleIDs, ","),
+	}
 }
 
 func rightsContainsAny(hay []grammar.RightsEnum, alternatives [][]grammar.RightsEnum) bool {

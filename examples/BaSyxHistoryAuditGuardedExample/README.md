@@ -131,7 +131,7 @@ docker compose exec db psql -U admin -d basyxTestDB -c \
     LIMIT 5"
 ```
 
-For the authenticated API mutation, expect `actor_subject` and `actor_issuer` from Keycloak, `client_id` from the OIDC client, `authorization_result=ALLOW`, the request/correlation headers from the `curl` command, and the route/method that produced the row. `matched_rule_id` is empty in this example until the ABAC evaluator exposes deterministic rule IDs.
+For the authenticated API mutation, expect `actor_subject` and `actor_issuer` from Keycloak, `client_id` from the OIDC client, `authorization_result=ALLOW`, the request/correlation headers from the `curl` command, and the route/method that produced the row. `matched_rule_id` contains deterministic ABAC rule identifiers such as `rule:2:<hash-prefix>`; when multiple allow rules match, the identifiers are stored comma-separated in configured rule order.
 
 ## What Guarded Mode Does
 

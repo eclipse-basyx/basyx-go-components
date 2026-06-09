@@ -98,18 +98,18 @@ func ABACMiddleware(settings ABACSettings) func(http.Handler) http.Handler {
 			if settings.Model != nil {
 				opts := grammar.DefaultSimplifyOptions()
 				opts.EnableImplicitCasts = settings.EnableImplicitCasts
-				ok, reason, qf := settings.Model.AuthorizeWithFilterWithOptions(EvalInput{
+				evaluation := settings.Model.AuthorizeWithFilterWithOptions(EvalInput{
 					Method: r.Method,
 					Path:   r.URL.Path,
 					Claims: claims,
 				}, opts)
-				if !ok {
-					if reason == DecisionRouteNotFound {
+				if !evaluation.Allowed {
+					if evaluation.Reason == DecisionRouteNotFound {
 						next.ServeHTTP(w, r)
 						return
 					}
 
-					log.Printf("❌ ABAC(model): %s", reason)
+					log.Printf("❌ ABAC(model): %s", evaluation.Reason)
 
 					resp := common.NewErrorResponse(errors.New("access denied"), http.StatusForbidden, "Middleware", "Rules", "Denied")
 					err := openapi.EncodeJSONResponse(resp.Body, &resp.Code, w)
@@ -121,10 +121,11 @@ func ABACMiddleware(settings ABACSettings) func(http.Handler) http.Handler {
 				}
 
 				ctx := ContextWithAuthorizationDecision(r.Context(), AuthorizationDecision{
-					Result: string(DecisionAllow),
+					Result:        string(DecisionAllow),
+					MatchedRuleID: evaluation.MatchedRuleID,
 				})
-				if qf != nil {
-					ctx = context.WithValue(ctx, filterKey, qf)
+				if evaluation.QueryFilter != nil {
+					ctx = context.WithValue(ctx, filterKey, evaluation.QueryFilter)
 				}
 
 				next.ServeHTTP(w, r.WithContext(ctx))
