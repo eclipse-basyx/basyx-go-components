@@ -378,9 +378,8 @@ The new history, recent-change, and signed endpoints are protected as read endpo
 
 Important operational note:
 
-- `$history` is route-authorized in this release. `$recent-changes` applies current identifiable ABAC filters before returning stored snapshots, but it does not apply logical-expression redaction to stored snapshot fields.
-- Only assign access to these routes to principals that may read the complete historical snapshot or complete recent-change feed returned by the endpoint.
-- Fine-grained snapshot field filtering is intentionally out of scope for history and recent-change responses.
+- `$history` is route-authorized in this release. It does not apply current-table ABAC filters or logical-expression redaction to stored snapshots. `$recent-changes` applies current identifiable ABAC filters.
+- Fine-grained snapshot field filtering is intentionally out of scope for history responses.
 
 ## Operational Considerations
 
