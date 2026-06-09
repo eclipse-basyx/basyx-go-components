@@ -560,8 +560,6 @@ func (s *SubmodelDatabase) UpdateSubmodelValueOnly(ctx context.Context, submodel
 	return tx.Commit()
 }
 
-// FileAttachmentExists reports whether a File submodel element currently has
-
 func isSiblingIDShortCollision(tx *sql.Tx, submodelDatabaseID int, parentElementID *int, submodelElement types.ISubmodelElement) bool {
 	idShortPtr := submodelElement.IDShort()
 	if idShortPtr == nil || *idShortPtr == "" {
