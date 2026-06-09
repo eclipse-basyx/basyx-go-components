@@ -1162,7 +1162,7 @@ func (s *SubmodelRepositoryAPIAPIService) GetSignedSubmodelByID(
 		return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "MalformedSubmodelIdentifier"), nil
 	}
 
-	jwsString, err := s.submodelBackend.GetSignedSubmodel(ctx, decodedSubmodelIdentifier, false)
+	jwsString, err := s.submodelBackend.GetSignedSubmodel(ctx, decodedSubmodelIdentifier)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) || common.IsErrNotFound(err) {
 			return newAPIErrorResponse(err, http.StatusNotFound, operation, "SubmodelNotFound"), nil
@@ -1190,7 +1190,7 @@ func (s *SubmodelRepositoryAPIAPIService) GetSignedSubmodelByIDValueOnly(
 		return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "MalformedSubmodelIdentifier"), nil
 	}
 
-	jwsString, err := s.submodelBackend.GetSignedSubmodel(ctx, decodedSubmodelIdentifier, true)
+	jwsString, err := s.submodelBackend.GetSignedSubmodelValueOnly(ctx, decodedSubmodelIdentifier)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) || common.IsErrNotFound(err) {
 			return newAPIErrorResponse(err, http.StatusNotFound, operation, "SubmodelNotFound"), nil

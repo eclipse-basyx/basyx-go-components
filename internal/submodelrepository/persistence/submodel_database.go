@@ -41,13 +41,13 @@ import (
 	"github.com/FriedJannik/aas-go-sdk/jsonization"
 	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/FriedJannik/aas-go-sdk/verification"
-	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/history"
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 	submodelpath "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/path"
+	submodelqueries "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/queries"
 	submodelelements "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/submodelElements"
 	persistenceutils "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/utils"
 	"golang.org/x/sync/errgroup"
@@ -101,9 +101,17 @@ func NewSubmodelDatabaseFromDB(db *sql.DB, privateKey *rsa.PrivateKey, strictVer
 	}, nil
 }
 
-// GetSignedSubmodel retrieves and signs a submodel (or its value-only representation)
+// GetSignedSubmodel retrieves and signs a submodel
 // while preserving ABAC visibility checks from ctx.
-func (s *SubmodelDatabase) GetSignedSubmodel(ctx context.Context, submodelID string, valueOnly bool) (string, error) {
+//
+// Parameters:
+//   - ctx: Context
+//   - submodelID: The Submodel ID to fetch
+//
+// Returns:
+//   - string: Signed Payload
+//   - error
+func (s *SubmodelDatabase) GetSignedSubmodel(ctx context.Context, submodelID string) (string, error) {
 	if s.privateKey == nil {
 		return "", errors.New("JWS signing not configured: private key not loaded")
 	}
@@ -114,24 +122,48 @@ func (s *SubmodelDatabase) GetSignedSubmodel(ctx context.Context, submodelID str
 	}
 
 	var payload []byte
-	if valueOnly {
-		valueOnlySubmodel, conversionErr := gen.SubmodelToValueOnly(submodel)
-		if conversionErr != nil {
-			return "", conversionErr
-		}
-		payload, err = json.Marshal(valueOnlySubmodel)
-		if err != nil {
-			return "", err
-		}
-	} else {
-		jsonSubmodel, convertErr := jsonization.ToJsonable(submodel)
-		if convertErr != nil {
-			return "", convertErr
-		}
-		payload, err = json.Marshal(jsonSubmodel)
-		if err != nil {
-			return "", err
-		}
+
+	payload, err = getNormalPayload(submodel)
+	if err != nil {
+		return "", err
+	}
+
+	signer, err := jose.NewSigner(jose.SigningKey{Algorithm: jose.RS256, Key: s.privateKey}, nil)
+	if err != nil {
+		return "", err
+	}
+
+	jws, err := signer.Sign(payload)
+	if err != nil {
+		return "", err
+	}
+
+	return jws.CompactSerialize()
+}
+
+// GetSignedSubmodelValueOnly returns and signs a submodel in its value-only representation
+// while preserving ABAC visibility checks from ctx.
+//
+// Parameters:
+//   - ctx: Context
+//   - submodelID: The Submodel ID to fetch
+//
+// Returns:
+//   - string: Signed Payload
+//   - error
+func (s *SubmodelDatabase) GetSignedSubmodelValueOnly(ctx context.Context, submodelID string) (string, error) {
+	if s.privateKey == nil {
+		return "", errors.New("JWS signing not configured: private key not loaded")
+	}
+
+	submodel, err := s.GetSubmodelByID(ctx, submodelID, "deep", false)
+	if err != nil {
+		return "", err
+	}
+
+	payload, err := getValueOnlyPayload(submodel)
+	if err != nil {
+		return "", err
 	}
 
 	signer, err := jose.NewSigner(jose.SigningKey{Algorithm: jose.RS256, Key: s.privateKey}, nil)
@@ -246,26 +278,6 @@ func (s *SubmodelDatabase) GetSubmodelReference(ctx context.Context, submodelIde
 	return buildSubmodelModelReference(submodels[0].ID())
 }
 
-func buildSubmodelModelReference(submodelIdentifier string) (types.IReference, error) {
-	if submodelIdentifier == "" {
-		return nil, common.NewErrBadRequest("SMREPO-BUILDSMREF-INVALIDIDENTIFIER submodel identifier is required")
-	}
-
-	key := types.NewKey(types.KeyTypesSubmodel, submodelIdentifier)
-
-	reference := types.NewReference(types.ReferenceTypesModelReference, []types.IKey{key})
-
-	return reference, nil
-}
-
-func submodelToHistorySnapshot(submodel types.ISubmodel) (map[string]any, error) {
-	jsonable, err := jsonization.ToJsonable(submodel)
-	if err != nil {
-		return nil, common.NewInternalServerError("SMREPO-HISTORY-TOJSONABLE " + err.Error())
-	}
-	return jsonable, nil
-}
-
 func (s *SubmodelDatabase) appendSubmodelHistoryTx(ctx context.Context, tx *sql.Tx, submodel types.ISubmodel, changeType string, deleted bool) error {
 	snapshot, err := submodelToHistorySnapshot(submodel)
 	if err != nil {
@@ -306,9 +318,8 @@ func (s *SubmodelDatabase) getSubmodelByIDInTransaction(ctx context.Context, tx 
 }
 
 func (s *SubmodelDatabase) getSubmodelMetadataByIDInTransaction(ctx context.Context, tx *sql.Tx, submodelIdentifier string) (types.ISubmodel, error) {
-	dialect := goqu.Dialect("postgres")
 	limit := int32(1)
-	selectDS, err := selectSubmodelGoquQuery(&dialect, &submodelIdentifier, &limit, nil, nil)
+	selectDS, err := submodelqueries.SelectSubmodelDataset(&submodelIdentifier, &limit, nil, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -348,45 +359,6 @@ func (s *SubmodelDatabase) getSubmodelMetadataByIDInTransaction(ctx context.Cont
 	submodel, scanErr := scanSubmodelMetadataRow(rows)
 	if scanErr != nil {
 		return nil, scanErr
-	}
-	return submodel, nil
-}
-
-func scanSubmodelMetadataRow(rows *sql.Rows) (types.ISubmodel, error) {
-	var identifier, idShort, category, descriptionJSON, displayNameJSON, administrationJSON, edsJSON, supplementalSemanticIDsJSON, extensionsJSON, qualifiersJSON, semanticIDJSON sql.NullString
-	var kind sql.NullInt64
-
-	if err := rows.Scan(&identifier, &idShort, &category, &kind, &descriptionJSON, &displayNameJSON, &administrationJSON, &edsJSON, &supplementalSemanticIDsJSON, &extensionsJSON, &qualifiersJSON, &semanticIDJSON); err != nil {
-		return nil, common.NewInternalServerError("SMREPO-GETSMBYIDTX-SCAN " + err.Error())
-	}
-
-	var submodel types.ISubmodel
-	submodel = types.NewSubmodel(identifier.String)
-	idShortValue := idShort.String
-	submodel.SetIDShort(&idShortValue)
-	if category.Valid {
-		categoryValue := category.String
-		submodel.SetCategory(&categoryValue)
-	}
-	if kind.Valid {
-		modellingKind := types.ModellingKind(kind.Int64)
-		submodel.SetKind(&modellingKind)
-	}
-
-	var err error
-	submodel, err = jsonPayloadToInstance(descriptionJSON, displayNameJSON, administrationJSON, edsJSON, supplementalSemanticIDsJSON, extensionsJSON, qualifiersJSON, submodel)
-	if err != nil {
-		return nil, err
-	}
-
-	if semanticIDJSON.Valid {
-		semanticID, parseSemanticErr := common.ParseReferenceJSON([]byte(semanticIDJSON.String))
-		if parseSemanticErr != nil {
-			return nil, parseSemanticErr
-		}
-		if semanticID != nil {
-			submodel.SetSemanticID(semanticID)
-		}
 	}
 	return submodel, nil
 }
@@ -496,9 +468,7 @@ func (s *SubmodelDatabase) createSubmodelInTransactionValidated(ctx context.Cont
 }
 
 func (s *SubmodelDatabase) createSubmodelInTransaction(tx *sql.Tx, submodel types.ISubmodel) error {
-	dialect := goqu.Dialect("postgres")
-
-	ids, args, err := buildSubmodelQuery(&dialect, submodel)
+	ids, args, err := submodelqueries.BuildInsertSubmodelSQL(submodel)
 	if err != nil {
 		return common.NewInternalServerError("SMREPO-NEWSM-CREATE-INSERTSQL " + err.Error())
 	}
@@ -516,8 +486,7 @@ func (s *SubmodelDatabase) createSubmodelInTransaction(tx *sql.Tx, submodel type
 		return common.NewInternalServerError("SMREPO-NEWSM-CREATE-JSON " + err.Error())
 	}
 
-	ids, args, err = buildSubmodelPayloadQuery(
-		&dialect,
+	ids, args, err = submodelqueries.BuildInsertSubmodelPayloadSQL(
 		submodelDBID,
 		jsonizedPayload.description,
 		jsonizedPayload.displayName,
@@ -537,7 +506,7 @@ func (s *SubmodelDatabase) createSubmodelInTransaction(tx *sql.Tx, submodel type
 
 	semanticID := submodel.SemanticID()
 	if semanticID != nil {
-		ids, args, err = buildSubmodelSemanticIDReferenceQuery(&dialect, submodelDBID, semanticID)
+		ids, args, err = submodelqueries.BuildInsertSubmodelSemanticIDReferenceSQL(submodelDBID, semanticID)
 		if err != nil {
 			return common.NewInternalServerError("SMREPO-NEWSM-CREATE-SEMIDREFSQL " + err.Error())
 		}
@@ -546,7 +515,7 @@ func (s *SubmodelDatabase) createSubmodelInTransaction(tx *sql.Tx, submodel type
 			return common.NewInternalServerError("SMREPO-NEWSM-CREATE-EXECSEMIDREFSQL " + err.Error())
 		}
 
-		ids, args, err = buildSubmodelSemanticIDReferenceKeysQuery(&dialect, submodelDBID, semanticID)
+		ids, args, err = submodelqueries.BuildInsertSubmodelSemanticIDReferenceKeysSQL(submodelDBID, semanticID)
 		if err != nil {
 			return common.NewInternalServerError("SMREPO-NEWSM-CREATE-SEMIDKEYSQL " + err.Error())
 		}
@@ -557,7 +526,7 @@ func (s *SubmodelDatabase) createSubmodelInTransaction(tx *sql.Tx, submodel type
 			}
 		}
 
-		ids, args, err = buildSubmodelSemanticIDReferencePayloadQuery(&dialect, submodelDBID, semanticID)
+		ids, args, err = submodelqueries.BuildInsertSubmodelSemanticIDReferencePayloadSQL(submodelDBID, semanticID)
 		if err != nil {
 			return common.NewInternalServerError("SMREPO-NEWSM-CREATE-SEMIDPAYLOADSQL " + err.Error())
 		}
@@ -577,24 +546,6 @@ func (s *SubmodelDatabase) createSubmodelInTransaction(tx *sql.Tx, submodel type
 	return nil
 }
 
-// mapCreateSubmodelInsertError maps database uniqueness violations to submodel conflict errors.
-func mapCreateSubmodelInsertError(err error) error {
-	if err == nil {
-		return nil
-	}
-
-	pqErr, ok := err.(*pq.Error)
-	if !ok {
-		return nil
-	}
-
-	if pqErr.Code == "23505" {
-		return common.NewErrConflict("SMREPO-NEWSM-CREATE-CONFLICT submodel identifier already exists")
-	}
-
-	return nil
-}
-
 func (s *SubmodelDatabase) verifySubmodel(submodel types.ISubmodel, errorPrefix string) error {
 	return gen.ValidateWithMode(
 		s.verificationMode,
@@ -606,14 +557,6 @@ func (s *SubmodelDatabase) verifySubmodel(submodel types.ISubmodel, errorPrefix 
 			return common.NewErrBadRequest(errorPrefix + " " + message)
 		},
 	)
-}
-
-func shouldEnforceFormula(ctx context.Context, step string) (bool, error) {
-	shouldEnforce, err := auth.ShouldEnforceFormula(ctx)
-	if err != nil {
-		return false, common.NewInternalServerError(step + " " + err.Error())
-	}
-	return shouldEnforce, nil
 }
 
 func (s *SubmodelDatabase) checkSubmodelVisibilityInTx(ctx context.Context, tx *sql.Tx, submodelID string) (bool, bool, error) {
@@ -633,12 +576,7 @@ func (s *SubmodelDatabase) checkSubmodelVisibilityInTx(ctx context.Context, tx *
 		return true, true, nil
 	}
 
-	dialect := goqu.Dialect("postgres")
-	query := dialect.
-		From("submodel").
-		Select(goqu.C("id")).
-		Where(goqu.C("submodel_identifier").Eq(submodelID)).
-		Limit(1)
+	query := submodelqueries.SelectVisibleSubmodelDataset(submodelID)
 
 	collector, collectorErr := grammar.NewResolvedFieldPathCollectorForRoot(grammar.CollectorRootSM)
 	if collectorErr != nil {
@@ -676,15 +614,7 @@ func (s *SubmodelDatabase) checkSubmodelElementVisibilityInTx(ctx context.Contex
 		return false, false, common.NewInternalServerError("SMREPO-ABACCHKSME-GETSMDATABASEID " + err.Error())
 	}
 
-	dialect := goqu.Dialect("postgres")
-	baseQuery := dialect.
-		From(goqu.T("submodel_element").As("sme")).
-		Select(goqu.I("sme.id")).
-		Where(
-			goqu.I("sme.submodel_id").Eq(submodelDatabaseID),
-			goqu.I("sme.idshort_path").Eq(idShortPath),
-		).
-		Limit(1)
+	baseQuery := submodelqueries.SelectSubmodelElementByPathDataset(submodelDatabaseID, idShortPath)
 
 	existsSQL, existsArgs, existsToSQLErr := baseQuery.ToSQL()
 	if existsToSQLErr != nil {
@@ -744,14 +674,7 @@ func (s *SubmodelDatabase) addTopLevelSubmodelElementInTransaction(tx *sql.Tx, s
 		return "", err
 	}
 
-	dialect := goqu.Dialect("postgres")
-	selectQuery, selectArgs, err := dialect.From("submodel_element").
-		Select(goqu.MAX("position")).
-		Where(
-			goqu.C("submodel_id").Eq(submodelDatabaseID),
-			goqu.C("parent_sme_id").IsNull(),
-		).
-		ToSQL()
+	selectQuery, selectArgs, err := submodelqueries.BuildTopLevelSubmodelElementMaxPositionSQL(submodelDatabaseID)
 	if err != nil {
 		return "", err
 	}
@@ -790,65 +713,6 @@ func (s *SubmodelDatabase) addTopLevelSubmodelElementInTransaction(tx *sql.Tx, s
 	}
 
 	return *idShort, nil
-}
-
-func getSMEModelTypeByPathInTx(tx *sql.Tx, submodelID string, idShortOrPath string) (*types.ModelType, error) {
-	submodelDatabaseID, err := persistenceutils.GetSubmodelDatabaseID(tx, submodelID)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return nil, common.NewErrNotFound("SMREPO-GETMODELTYPE-SMNOTFOUND Submodel with ID '" + submodelID + "' not found")
-		}
-		return nil, err
-	}
-
-	dialect := goqu.Dialect("postgres")
-	query, args, err := dialect.From("submodel_element").
-		Select("model_type").
-		Where(
-			goqu.C("submodel_id").Eq(submodelDatabaseID),
-			goqu.C("idshort_path").Eq(idShortOrPath),
-		).
-		ToSQL()
-	if err != nil {
-		return nil, err
-	}
-
-	var modelType types.ModelType
-	err = tx.QueryRow(query, args...).Scan(&modelType)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return nil, common.NewErrNotFound("SMREPO-GETMODELTYPE-NOTFOUND Submodel-Element ID-Short: " + idShortOrPath)
-		}
-		return nil, err
-	}
-
-	return &modelType, nil
-}
-
-func submodelElementPathExistsInTx(tx *sql.Tx, submodelDatabaseID int, idShortPath string) (bool, error) {
-	dialect := goqu.Dialect("postgres")
-	query, args, err := dialect.From("submodel_element").
-		Select(goqu.C("id")).
-		Where(
-			goqu.C("submodel_id").Eq(submodelDatabaseID),
-			goqu.C("idshort_path").Eq(idShortPath),
-		).
-		Limit(1).
-		ToSQL()
-	if err != nil {
-		return false, err
-	}
-
-	var elementID int64
-	err = tx.QueryRow(query, args...).Scan(&elementID)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return false, nil
-		}
-		return false, err
-	}
-
-	return true, nil
 }
 
 func (s *SubmodelDatabase) updateSubmodelElementInTransaction(tx *sql.Tx, submodelID string, idShortOrPath string, submodelElement types.ISubmodelElement, isPut bool) error {
@@ -1035,52 +899,6 @@ func (s *SubmodelDatabase) AddSubmodelElementWithPath(ctx context.Context, submo
 	return tx.Commit()
 }
 
-func parsePutIDShortPathSegments(idShortPath string) ([]submodelpath.Segment, error) {
-	segments, err := submodelpath.ParseIDShortPathSegments(idShortPath)
-	if err != nil {
-		if errors.Is(err, submodelpath.ErrEmptyPath) {
-			return nil, common.NewErrBadRequest("SMREPO-PUTSME-BADREQUEST Invalid idShortPath")
-		}
-		if errors.Is(err, submodelpath.ErrEmptyListIndex) {
-			return nil, common.NewErrBadRequest("SMREPO-PUTSME-BADREQUEST Empty list index in idShortPath")
-		}
-		return nil, common.NewErrBadRequest("SMREPO-PUTSME-BADREQUEST Invalid idShortPath syntax")
-	}
-	return segments, nil
-}
-
-func buildPutIDShortPathFromSegments(segments []submodelpath.Segment) string {
-	return submodelpath.BuildIDShortPathFromSegments(segments)
-}
-
-func resolvePutCreateTargetPathParts(idShortPath string) (string, string, error) {
-	segments, parseErr := parsePutIDShortPathSegments(idShortPath)
-	if parseErr != nil {
-		return "", "", parseErr
-	}
-
-	lastSegment := segments[len(segments)-1]
-	if lastSegment.IsIndex {
-		return "", "", common.NewErrBadRequest("SMREPO-PUTSME-BADREQUEST Creating by list index path is not supported")
-	}
-
-	targetIDShort := strings.TrimSpace(lastSegment.Value)
-	if targetIDShort == "" {
-		return "", "", common.NewErrBadRequest("SMREPO-PUTSME-BADREQUEST Empty idShort segment in path")
-	}
-
-	if len(segments) == 1 {
-		return "", targetIDShort, nil
-	}
-
-	parentPath := buildPutIDShortPathFromSegments(segments[:len(segments)-1])
-	if parentPath == "" {
-		return "", "", common.NewErrBadRequest("SMREPO-PUTSME-BADREQUEST Invalid parent path")
-	}
-
-	return parentPath, targetIDShort, nil
-}
-
 // PutSubmodelElement creates or replaces a submodel element at the requested path in a single transaction.
 // It returns true when an existing element was updated and false when a new one was created.
 func (s *SubmodelDatabase) PutSubmodelElement(
@@ -1193,40 +1011,6 @@ func (s *SubmodelDatabase) PutSubmodelElement(
 	}
 
 	return elementExists, nil
-}
-
-func isSiblingIDShortCollision(tx *sql.Tx, submodelDatabaseID int, parentElementID *int, submodelElement types.ISubmodelElement) bool {
-	idShortPtr := submodelElement.IDShort()
-	if idShortPtr == nil || *idShortPtr == "" {
-		return false
-	}
-
-	dialect := goqu.Dialect("postgres")
-	query := dialect.From("submodel_element").
-		Select(goqu.COUNT("*"))
-
-	whereExpressions := []goqu.Expression{
-		goqu.C("submodel_id").Eq(submodelDatabaseID),
-		goqu.C("id_short").Eq(*idShortPtr),
-	}
-
-	if parentElementID == nil {
-		whereExpressions = append(whereExpressions, goqu.C("parent_sme_id").IsNull())
-	} else {
-		whereExpressions = append(whereExpressions, goqu.C("parent_sme_id").Eq(*parentElementID))
-	}
-
-	sqlQuery, args, err := query.Where(whereExpressions...).ToSQL()
-	if err != nil {
-		return false
-	}
-
-	var count int
-	if err = tx.QueryRow(sqlQuery, args...).Scan(&count); err != nil {
-		return false
-	}
-
-	return count > 0
 }
 
 // DeleteSubmodelElementByPath deletes a submodel element and checks ABAC access on the current element when ABAC is enabled.
@@ -1401,26 +1185,7 @@ func (s *SubmodelDatabase) UpdateSubmodelValueOnly(ctx context.Context, submodel
 // FileAttachmentExists reports whether a File submodel element currently has
 // attachment data stored in file_data.file_oid.
 func (s *SubmodelDatabase) FileAttachmentExists(submodelID string, idShortPath string) (bool, error) {
-	dialect := goqu.Dialect(common.Dialect)
-	sm := goqu.T("submodel").As("sm")
-	sme := goqu.T("submodel_element").As("sme")
-	fe := goqu.T("file_element").As("fe")
-	fd := goqu.T("file_data").As("fd")
-
-	query, args, err := dialect.From(sm).
-		Join(sme, goqu.On(goqu.I("sme.submodel_id").Eq(goqu.I("sm.id")))).
-		LeftJoin(fe, goqu.On(goqu.I("fe.id").Eq(goqu.I("sme.id")))).
-		LeftJoin(fd, goqu.On(goqu.I("fd.id").Eq(goqu.I("sme.id")))).
-		Select(
-			goqu.I("fe.id").As("file_element_id"),
-			goqu.I("fd.file_oid").As("file_oid"),
-		).
-		Where(
-			goqu.I("sm.submodel_identifier").Eq(submodelID),
-			goqu.I("sme.idshort_path").Eq(idShortPath),
-		).
-		Limit(1).
-		ToSQL()
+	query, args, err := submodelqueries.BuildFileAttachmentExistsSQL(submodelID, idShortPath)
 	if err != nil {
 		return false, common.NewInternalServerError("SMREPO-FILEATTEXISTS-BUILDSQL " + err.Error())
 	}
@@ -1825,57 +1590,6 @@ func (s *SubmodelDatabase) replaceSubmodelInTransaction(tx *sql.Tx, submodelID s
 	return true, nil
 }
 
-func cleanupSubmodelLargeObjects(tx *sql.Tx, submodelDatabaseID int64) error {
-	dialect := goqu.Dialect("postgres")
-
-	unlinkSubquery := dialect.From(goqu.T("submodel_element").As("sme")).
-		Prepared(true).
-		Join(goqu.T("file_data").As("fd"), goqu.On(goqu.I("fd.id").Eq(goqu.I("sme.id")))).
-		Select(goqu.Func("lo_unlink", goqu.I("fd.file_oid")).As("unlink_result")).
-		Where(
-			goqu.I("sme.submodel_id").Eq(submodelDatabaseID),
-			goqu.I("fd.file_oid").IsNotNull(),
-		)
-
-	unlinkQuery, unlinkArgs, err := dialect.From(unlinkSubquery.As("unlink_results")).
-		Prepared(true).
-		Select(goqu.COUNT("*")).
-		ToSQL()
-	if err != nil {
-		return common.NewInternalServerError("SMREPO-DELSM-BUILDUNLINKQUERY " + err.Error())
-	}
-
-	var unlinkedCount int64
-	if err = tx.QueryRow(unlinkQuery, unlinkArgs...).Scan(&unlinkedCount); err != nil {
-		return common.NewInternalServerError("SMREPO-DELSM-UNLINKLO " + err.Error())
-	}
-
-	return nil
-}
-
-func deleteSubmodelByDatabaseID(tx *sql.Tx, submodelDatabaseID int64) error {
-	dialect := goqu.Dialect("postgres")
-	deleteSubmodelQuery, deleteSubmodelArgs, err := dialect.Delete("submodel").Where(goqu.I("id").Eq(submodelDatabaseID)).ToSQL()
-	if err != nil {
-		return common.NewInternalServerError("SMREPO-DELSM-BUILDDELETESM " + err.Error())
-	}
-
-	deleteResult, err := tx.Exec(deleteSubmodelQuery, deleteSubmodelArgs...)
-	if err != nil {
-		return common.NewInternalServerError("SMREPO-DELSM-DELETESM " + err.Error())
-	}
-
-	rowsAffected, err := deleteResult.RowsAffected()
-	if err != nil {
-		return common.NewInternalServerError("SMREPO-DELSM-ROWSAFFECTED " + err.Error())
-	}
-	if rowsAffected == 0 {
-		return common.NewErrNotFound("SMREPO-DELSM-NOTFOUND Submodel not found")
-	}
-
-	return nil
-}
-
 func (s *SubmodelDatabase) patchSubmodelMetadataInTransaction(tx *sql.Tx, submodelID string, submodel types.ISubmodel) error {
 	submodelDatabaseID, err := persistenceutils.GetSubmodelDatabaseID(tx, submodelID)
 	if err != nil {
@@ -1886,17 +1600,7 @@ func (s *SubmodelDatabase) patchSubmodelMetadataInTransaction(tx *sql.Tx, submod
 		return common.NewInternalServerError("SMREPO-PATCHSMMETA-GETSMDATABASEID " + err.Error())
 	}
 
-	dialect := goqu.Dialect("postgres")
-
-	updateSubmodelQuery, updateSubmodelArgs, err := dialect.
-		Update("submodel").
-		Set(goqu.Record{
-			"id_short": submodel.IDShort(),
-			"category": submodel.Category(),
-			"kind":     submodel.Kind(),
-		}).
-		Where(goqu.I("id").Eq(submodelDatabaseID)).
-		ToSQL()
+	updateSubmodelQuery, updateSubmodelArgs, err := submodelqueries.BuildUpdateSubmodelMetadataSQL(submodelDatabaseID, submodel)
 	if err != nil {
 		return common.NewInternalServerError("SMREPO-PATCHSMMETA-BUILDUPDATESM " + err.Error())
 	}
@@ -1910,31 +1614,16 @@ func (s *SubmodelDatabase) patchSubmodelMetadataInTransaction(tx *sql.Tx, submod
 		return common.NewInternalServerError("SMREPO-PATCHSMMETA-JSON " + err.Error())
 	}
 
-	upsertPayloadQuery, upsertPayloadArgs, err := dialect.
-		Insert("submodel_payload").
-		Rows(goqu.Record{
-			"submodel_id":                         submodelDatabaseID,
-			"description_payload":                 jsonizedPayload.description,
-			"displayname_payload":                 jsonizedPayload.displayName,
-			"administrative_information_payload":  jsonizedPayload.administrativeInformation,
-			"embedded_data_specification_payload": jsonizedPayload.embeddedDataSpecification,
-			"supplemental_semantic_ids_payload":   jsonizedPayload.supplementalSemanticIDs,
-			"extensions_payload":                  jsonizedPayload.extensions,
-			"qualifiers_payload":                  jsonizedPayload.qualifiers,
-		}).
-		OnConflict(goqu.DoUpdate(
-			"submodel_id",
-			goqu.Record{
-				"description_payload":                 jsonizedPayload.description,
-				"displayname_payload":                 jsonizedPayload.displayName,
-				"administrative_information_payload":  jsonizedPayload.administrativeInformation,
-				"embedded_data_specification_payload": jsonizedPayload.embeddedDataSpecification,
-				"supplemental_semantic_ids_payload":   jsonizedPayload.supplementalSemanticIDs,
-				"extensions_payload":                  jsonizedPayload.extensions,
-				"qualifiers_payload":                  jsonizedPayload.qualifiers,
-			},
-		)).
-		ToSQL()
+	upsertPayloadQuery, upsertPayloadArgs, err := submodelqueries.BuildUpsertSubmodelPayloadSQL(
+		submodelDatabaseID,
+		jsonizedPayload.description,
+		jsonizedPayload.displayName,
+		jsonizedPayload.administrativeInformation,
+		jsonizedPayload.embeddedDataSpecification,
+		jsonizedPayload.supplementalSemanticIDs,
+		jsonizedPayload.extensions,
+		jsonizedPayload.qualifiers,
+	)
 	if err != nil {
 		return common.NewInternalServerError("SMREPO-PATCHSMMETA-BUILDUPSERTPAYLOAD " + err.Error())
 	}
@@ -1943,10 +1632,7 @@ func (s *SubmodelDatabase) patchSubmodelMetadataInTransaction(tx *sql.Tx, submod
 		return common.NewInternalServerError("SMREPO-PATCHSMMETA-UPSERTPAYLOAD " + err.Error())
 	}
 
-	deleteSemanticIDQuery, deleteSemanticIDArgs, err := dialect.
-		Delete("submodel_semantic_id_reference").
-		Where(goqu.I("id").Eq(submodelDatabaseID)).
-		ToSQL()
+	deleteSemanticIDQuery, deleteSemanticIDArgs, err := submodelqueries.BuildDeleteSubmodelSemanticIDSQL(submodelDatabaseID)
 	if err != nil {
 		return common.NewInternalServerError("SMREPO-PATCHSMMETA-BUILDDELSEMID " + err.Error())
 	}
@@ -1960,7 +1646,7 @@ func (s *SubmodelDatabase) patchSubmodelMetadataInTransaction(tx *sql.Tx, submod
 		return nil
 	}
 
-	insertSemanticIDQuery, insertSemanticIDArgs, err := buildSubmodelSemanticIDReferenceQuery(&dialect, int64(submodelDatabaseID), semanticID)
+	insertSemanticIDQuery, insertSemanticIDArgs, err := submodelqueries.BuildInsertSubmodelSemanticIDReferenceSQL(int64(submodelDatabaseID), semanticID)
 	if err != nil {
 		return common.NewInternalServerError("SMREPO-PATCHSMMETA-BUILDSEMIDREF " + err.Error())
 	}
@@ -1969,7 +1655,7 @@ func (s *SubmodelDatabase) patchSubmodelMetadataInTransaction(tx *sql.Tx, submod
 		return common.NewInternalServerError("SMREPO-PATCHSMMETA-INSERTSEMIDREF " + err.Error())
 	}
 
-	insertSemanticKeysQuery, insertSemanticKeysArgs, err := buildSubmodelSemanticIDReferenceKeysQuery(&dialect, int64(submodelDatabaseID), semanticID)
+	insertSemanticKeysQuery, insertSemanticKeysArgs, err := submodelqueries.BuildInsertSubmodelSemanticIDReferenceKeysSQL(int64(submodelDatabaseID), semanticID)
 	if err != nil {
 		return common.NewInternalServerError("SMREPO-PATCHSMMETA-BUILDSEMIDKEYS " + err.Error())
 	}
@@ -1980,7 +1666,7 @@ func (s *SubmodelDatabase) patchSubmodelMetadataInTransaction(tx *sql.Tx, submod
 		}
 	}
 
-	insertSemanticPayloadQuery, insertSemanticPayloadArgs, err := buildSubmodelSemanticIDReferencePayloadQuery(&dialect, int64(submodelDatabaseID), semanticID)
+	insertSemanticPayloadQuery, insertSemanticPayloadArgs, err := submodelqueries.BuildInsertSubmodelSemanticIDReferencePayloadSQL(int64(submodelDatabaseID), semanticID)
 	if err != nil {
 		return common.NewInternalServerError("SMREPO-PATCHSMMETA-BUILDSEMIDPAYLOAD " + err.Error())
 	}
@@ -1994,8 +1680,6 @@ func (s *SubmodelDatabase) patchSubmodelMetadataInTransaction(tx *sql.Tx, submod
 
 //nolint:revive // cyclomatic complexity is acceptable for this function due to query/filter orchestration in one flow
 func (s *SubmodelDatabase) getSubmodelsWithOptionalSemanticIDFilter(ctx context.Context, limit int32, cursor string, submodelIdentifier string, semanticID string) ([]types.ISubmodel, string, error) {
-	dialect := goqu.Dialect("postgres")
-
 	var limitFilter *int32
 
 	if limit == 0 {
@@ -2008,7 +1692,7 @@ func (s *SubmodelDatabase) getSubmodelsWithOptionalSemanticIDFilter(ctx context.
 
 	var cursorFilter *string
 	if cursor != "" {
-		cursorExists, cursorErr := s.submodelCursorExists(ctx, &dialect, cursor)
+		cursorExists, cursorErr := s.submodelCursorExists(ctx, cursor)
 		if cursorErr != nil {
 			return nil, "", cursorErr
 		}
@@ -2041,18 +1725,11 @@ func (s *SubmodelDatabase) getSubmodelsWithOptionalSemanticIDFilter(ctx context.
 		return nil, "", common.NewInternalServerError("SMREPO-GETSMS-MASKEXPR " + maskedExprErr.Error())
 	}
 
-	selectDS, err := selectSubmodelGoquQuery(&dialect, submodelIdentifierFilter, limitFilter, cursorFilter, maskRuntime.Projections())
+	selectDS, err := submodelqueries.SelectSubmodelDataset(submodelIdentifierFilter, limitFilter, cursorFilter, maskRuntime.Projections())
 	if err != nil {
 		return nil, "", err
 	}
-	if semanticID != "" {
-		semanticIDFilterDS := dialect.
-			From(goqu.T("submodel_semantic_id_reference_key").As("ssrk_filter")).
-			Select(goqu.V(1)).
-			Where(goqu.I("ssrk_filter.reference_id").Eq(goqu.I("submodel.id"))).
-			Where(goqu.I("ssrk_filter.value").Eq(semanticID))
-		selectDS = selectDS.Where(goqu.Func("EXISTS", semanticIDFilterDS))
-	}
+	selectDS = submodelqueries.ApplySubmodelSemanticIDFilter(selectDS, semanticID)
 
 	queryFilter := auth.GetQueryFilter(ctx)
 	hasFormulaInContext := queryFilter != nil && queryFilter.Formula != nil
@@ -2066,24 +1743,7 @@ func (s *SubmodelDatabase) getSubmodelsWithOptionalSemanticIDFilter(ctx context.
 			return nil, "", common.NewInternalServerError("SMREPO-GETSMS-ABACFORMULA " + err.Error())
 		}
 	}
-	resultDS := dialect.From(selectDS.As(dataAlias)).
-		Select(
-			goqu.I(dataAlias+".c0"),
-			maskedExpressions[0],
-			goqu.I(dataAlias+".c2"),
-			goqu.I(dataAlias+".c3"),
-			goqu.I(dataAlias+".raw_description_payload"),
-			goqu.I(dataAlias+".raw_displayname_payload"),
-			goqu.I(dataAlias+".raw_administrative_information_payload"),
-			goqu.I(dataAlias+".raw_embedded_data_specification_payload"),
-			goqu.I(dataAlias+".raw_supplemental_semantic_ids_payload"),
-			goqu.I(dataAlias+".raw_extensions_payload"),
-			goqu.I(dataAlias+".raw_qualifiers_payload"),
-			maskedExpressions[1],
-		).
-		Order(goqu.I(dataAlias + ".sort_submodel_identifier").Asc())
-
-	query, args, err := resultDS.ToSQL()
+	query, args, err := submodelqueries.BuildSubmodelListSQL(selectDS, dataAlias, maskedExpressions)
 	if err != nil {
 		return nil, "", common.NewInternalServerError("SMREPO-GETSMS-BUILDSQL " + err.Error())
 	}
@@ -2162,13 +1822,8 @@ func (s *SubmodelDatabase) getSubmodelsWithOptionalSemanticIDFilter(ctx context.
 	return submodels, nextCursor, nil
 }
 
-func (s *SubmodelDatabase) submodelCursorExists(ctx context.Context, dialect *goqu.DialectWrapper, cursor string) (bool, error) {
-	query, args, buildErr := dialect.
-		From(goqu.T("submodel").As("sm")).
-		Select(goqu.V(1)).
-		Where(goqu.I("sm.submodel_identifier").Eq(cursor)).
-		Limit(1).
-		ToSQL()
+func (s *SubmodelDatabase) submodelCursorExists(ctx context.Context, cursor string) (bool, error) {
+	query, args, buildErr := submodelqueries.BuildSubmodelCursorExistsSQL(cursor)
 	if buildErr != nil {
 		return false, common.NewInternalServerError("SMREPO-CHECKSMCURSOR-BUILDSQL " + buildErr.Error())
 	}
@@ -2181,4 +1836,258 @@ func (s *SubmodelDatabase) submodelCursorExists(ctx context.Context, dialect *go
 		return false, common.NewInternalServerError("SMREPO-CHECKSMCURSOR-EXECSQL " + queryErr.Error())
 	}
 	return true, nil
+}
+
+func isSiblingIDShortCollision(tx *sql.Tx, submodelDatabaseID int, parentElementID *int, submodelElement types.ISubmodelElement) bool {
+	idShortPtr := submodelElement.IDShort()
+	if idShortPtr == nil || *idShortPtr == "" {
+		return false
+	}
+
+	sqlQuery, args, err := submodelqueries.BuildSiblingIDShortCollisionSQL(submodelDatabaseID, parentElementID, *idShortPtr)
+	if err != nil {
+		return false
+	}
+
+	var count int
+	if err = tx.QueryRow(sqlQuery, args...).Scan(&count); err != nil {
+		return false
+	}
+
+	return count > 0
+}
+
+// mapCreateSubmodelInsertError maps database uniqueness violations to submodel conflict errors.
+func mapCreateSubmodelInsertError(err error) error {
+	if err == nil {
+		return nil
+	}
+
+	pqErr, ok := err.(*pq.Error)
+	if !ok {
+		return nil
+	}
+
+	if pqErr.Code == "23505" {
+		return common.NewErrConflict("SMREPO-NEWSM-CREATE-CONFLICT submodel identifier already exists")
+	}
+
+	return nil
+}
+
+func shouldEnforceFormula(ctx context.Context, step string) (bool, error) {
+	shouldEnforce, err := auth.ShouldEnforceFormula(ctx)
+	if err != nil {
+		return false, common.NewInternalServerError(step + " " + err.Error())
+	}
+	return shouldEnforce, nil
+}
+
+func getSMEModelTypeByPathInTx(tx *sql.Tx, submodelID string, idShortOrPath string) (*types.ModelType, error) {
+	submodelDatabaseID, err := persistenceutils.GetSubmodelDatabaseID(tx, submodelID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, common.NewErrNotFound("SMREPO-GETMODELTYPE-SMNOTFOUND Submodel with ID '" + submodelID + "' not found")
+		}
+		return nil, err
+	}
+
+	query, args, err := submodelqueries.BuildSubmodelElementModelTypeByPathSQL(submodelDatabaseID, idShortOrPath)
+	if err != nil {
+		return nil, err
+	}
+
+	var modelType types.ModelType
+	err = tx.QueryRow(query, args...).Scan(&modelType)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, common.NewErrNotFound("SMREPO-GETMODELTYPE-NOTFOUND Submodel-Element ID-Short: " + idShortOrPath)
+		}
+		return nil, err
+	}
+
+	return &modelType, nil
+}
+
+func submodelElementPathExistsInTx(tx *sql.Tx, submodelDatabaseID int, idShortPath string) (bool, error) {
+	query, args, err := submodelqueries.BuildSubmodelElementPathExistsSQL(submodelDatabaseID, idShortPath)
+	if err != nil {
+		return false, err
+	}
+
+	var elementID int64
+	err = tx.QueryRow(query, args...).Scan(&elementID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return false, nil
+		}
+		return false, err
+	}
+
+	return true, nil
+}
+
+func parsePutIDShortPathSegments(idShortPath string) ([]submodelpath.Segment, error) {
+	segments, err := submodelpath.ParseIDShortPathSegments(idShortPath)
+	if err != nil {
+		if errors.Is(err, submodelpath.ErrEmptyPath) {
+			return nil, common.NewErrBadRequest("SMREPO-PUTSME-BADREQUEST Invalid idShortPath")
+		}
+		if errors.Is(err, submodelpath.ErrEmptyListIndex) {
+			return nil, common.NewErrBadRequest("SMREPO-PUTSME-BADREQUEST Empty list index in idShortPath")
+		}
+		return nil, common.NewErrBadRequest("SMREPO-PUTSME-BADREQUEST Invalid idShortPath syntax")
+	}
+	return segments, nil
+}
+
+func buildPutIDShortPathFromSegments(segments []submodelpath.Segment) string {
+	return submodelpath.BuildIDShortPathFromSegments(segments)
+}
+
+func resolvePutCreateTargetPathParts(idShortPath string) (string, string, error) {
+	segments, parseErr := parsePutIDShortPathSegments(idShortPath)
+	if parseErr != nil {
+		return "", "", parseErr
+	}
+
+	lastSegment := segments[len(segments)-1]
+	if lastSegment.IsIndex {
+		return "", "", common.NewErrBadRequest("SMREPO-PUTSME-BADREQUEST Creating by list index path is not supported")
+	}
+
+	targetIDShort := strings.TrimSpace(lastSegment.Value)
+	if targetIDShort == "" {
+		return "", "", common.NewErrBadRequest("SMREPO-PUTSME-BADREQUEST Empty idShort segment in path")
+	}
+
+	if len(segments) == 1 {
+		return "", targetIDShort, nil
+	}
+
+	parentPath := buildPutIDShortPathFromSegments(segments[:len(segments)-1])
+	if parentPath == "" {
+		return "", "", common.NewErrBadRequest("SMREPO-PUTSME-BADREQUEST Invalid parent path")
+	}
+
+	return parentPath, targetIDShort, nil
+}
+
+func cleanupSubmodelLargeObjects(tx *sql.Tx, submodelDatabaseID int64) error {
+	unlinkQuery, unlinkArgs, err := submodelqueries.BuildCleanupSubmodelLargeObjectsSQL(submodelDatabaseID)
+	if err != nil {
+		return common.NewInternalServerError("SMREPO-DELSM-BUILDUNLINKQUERY " + err.Error())
+	}
+
+	var unlinkedCount int64
+	if err = tx.QueryRow(unlinkQuery, unlinkArgs...).Scan(&unlinkedCount); err != nil {
+		return common.NewInternalServerError("SMREPO-DELSM-UNLINKLO " + err.Error())
+	}
+
+	return nil
+}
+
+func deleteSubmodelByDatabaseID(tx *sql.Tx, submodelDatabaseID int64) error {
+	deleteSubmodelQuery, deleteSubmodelArgs, err := submodelqueries.BuildDeleteSubmodelByDatabaseIDSQL(submodelDatabaseID)
+	if err != nil {
+		return common.NewInternalServerError("SMREPO-DELSM-BUILDDELETESM " + err.Error())
+	}
+
+	deleteResult, err := tx.Exec(deleteSubmodelQuery, deleteSubmodelArgs...)
+	if err != nil {
+		return common.NewInternalServerError("SMREPO-DELSM-DELETESM " + err.Error())
+	}
+
+	rowsAffected, err := deleteResult.RowsAffected()
+	if err != nil {
+		return common.NewInternalServerError("SMREPO-DELSM-ROWSAFFECTED " + err.Error())
+	}
+	if rowsAffected == 0 {
+		return common.NewErrNotFound("SMREPO-DELSM-NOTFOUND Submodel not found")
+	}
+
+	return nil
+}
+
+func getNormalPayload(submodel types.ISubmodel) ([]byte, error) {
+	jsonSubmodel, convertErr := jsonization.ToJsonable(submodel)
+	if convertErr != nil {
+		return nil, convertErr
+	}
+	payload, err := json.Marshal(jsonSubmodel)
+	if err != nil {
+		return nil, err
+	}
+	return payload, err
+}
+
+func getValueOnlyPayload(submodel types.ISubmodel) ([]byte, error) {
+	valueOnlySubmodel, conversionErr := gen.SubmodelToValueOnly(submodel)
+	if conversionErr != nil {
+		return nil, conversionErr
+	}
+	payload, err := json.Marshal(valueOnlySubmodel)
+	if err != nil {
+		return nil, err
+	}
+	return payload, err
+}
+
+func buildSubmodelModelReference(submodelIdentifier string) (types.IReference, error) {
+	if submodelIdentifier == "" {
+		return nil, common.NewErrBadRequest("SMREPO-BUILDSMREF-INVALIDIDENTIFIER submodel identifier is required")
+	}
+
+	key := types.NewKey(types.KeyTypesSubmodel, submodelIdentifier)
+
+	reference := types.NewReference(types.ReferenceTypesModelReference, []types.IKey{key})
+
+	return reference, nil
+}
+
+func submodelToHistorySnapshot(submodel types.ISubmodel) (map[string]any, error) {
+	jsonable, err := jsonization.ToJsonable(submodel)
+	if err != nil {
+		return nil, common.NewInternalServerError("SMREPO-HISTORY-TOJSONABLE " + err.Error())
+	}
+	return jsonable, nil
+}
+
+func scanSubmodelMetadataRow(rows *sql.Rows) (types.ISubmodel, error) {
+	var identifier, idShort, category, descriptionJSON, displayNameJSON, administrationJSON, edsJSON, supplementalSemanticIDsJSON, extensionsJSON, qualifiersJSON, semanticIDJSON sql.NullString
+	var kind sql.NullInt64
+
+	if err := rows.Scan(&identifier, &idShort, &category, &kind, &descriptionJSON, &displayNameJSON, &administrationJSON, &edsJSON, &supplementalSemanticIDsJSON, &extensionsJSON, &qualifiersJSON, &semanticIDJSON); err != nil {
+		return nil, common.NewInternalServerError("SMREPO-GETSMBYIDTX-SCAN " + err.Error())
+	}
+
+	var submodel types.ISubmodel
+	submodel = types.NewSubmodel(identifier.String)
+	idShortValue := idShort.String
+	submodel.SetIDShort(&idShortValue)
+	if category.Valid {
+		categoryValue := category.String
+		submodel.SetCategory(&categoryValue)
+	}
+	if kind.Valid {
+		modellingKind := types.ModellingKind(kind.Int64)
+		submodel.SetKind(&modellingKind)
+	}
+
+	var err error
+	submodel, err = jsonPayloadToInstance(descriptionJSON, displayNameJSON, administrationJSON, edsJSON, supplementalSemanticIDsJSON, extensionsJSON, qualifiersJSON, submodel)
+	if err != nil {
+		return nil, err
+	}
+
+	if semanticIDJSON.Valid {
+		semanticID, parseSemanticErr := common.ParseReferenceJSON([]byte(semanticIDJSON.String))
+		if parseSemanticErr != nil {
+			return nil, parseSemanticErr
+		}
+		if semanticID != nil {
+			submodel.SetSemanticID(semanticID)
+		}
+	}
+	return submodel, nil
 }
