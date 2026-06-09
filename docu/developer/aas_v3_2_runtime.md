@@ -282,7 +282,7 @@ Verification can compare PostgreSQL rows against the hash chain, verify every pe
 | `history.evidence.signing.publicKeyPath` | Optional RSA public key used to verify compact JWS manifest artifacts. |
 | `history.evidence.signing.required` | Requires signed manifests for verifier/recovery operations and requires a private key for `-write`. |
 | `history.integrityAnchor.provider: none` | Default. Non-`none` providers such as immudb, Rekor, Trillian, or timestamping services are reserved for later work. |
-| `history.auditIdentityMode` | `none` stores no request identity metadata. `minimal` stores request/correlation headers, authenticated OIDC subject/issuer/client id, ABAC allow metadata, operation, endpoint, and method. `extended` also stores trusted source IP, user agent, policy hash, and deterministic rule ids where available. |
+| `history.auditIdentityMode` | `none` stores no request identity metadata. `minimal` stores `X-Request-ID`/`X-Correlation-ID` when supplied by clients or trusted ingress, authenticated OIDC subject/issuer/client id, ABAC allow metadata, operation, endpoint, and method. `extended` also stores trusted source IP, user agent, policy hash, and deterministic rule ids where available. BaSyx does not generate HTTP request/correlation IDs in the audit middleware when those headers are missing. |
 | Active eventing, configured event sinks, or enabled outbox processing | Fail fast until outbox publishing is implemented. |
 
 `AuditContext`, `ChangeEvent`, `EvidenceStore`, and `IntegrityAnchor` remain extension points. Runtime middleware now populates `AuditContext` when configured; no external ledger anchor client is invoked by the append path yet.
