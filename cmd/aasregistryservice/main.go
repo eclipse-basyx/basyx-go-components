@@ -144,6 +144,7 @@ func runServer(ctx context.Context, configPath string) error {
 	}
 	versioningGuard := history.NewMutationCoverageGuard(apiRouter)
 	apiRouter.Use(versioningGuard.Middleware)
+	apiRouter.Use(history.AuditContextMiddleware(cfg))
 
 	// Register all registry routes (protected)
 	for operation, rt := range smCtrl.Routes() {

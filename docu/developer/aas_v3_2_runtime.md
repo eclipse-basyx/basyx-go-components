@@ -246,7 +246,7 @@ PostgreSQL history tables -> hash chain -> synchronous history-event artifact ->
 
 The HTTP APIs are unchanged. When `history.evidence.enabled` is active, `history.mode` must be `api` or `audit`. The history append path writes one WORM `history_event` artifact synchronously before the surrounding PostgreSQL transaction can commit. The artifact stores the same history payload selected for PostgreSQL: either a full snapshot or an RFC 6902 diff according to `history.fullSnapshotInterval`. It also stores `effective_diff`, an RFC 6902 JSON Patch from the previous reconstructed version to the current version. If the WORM write fails, the history append returns an error and the caller rolls back the PostgreSQL transaction.
 
-The `cmd/historyevidenceverifier` tool can additionally publish signed range manifests, backfill per-row `history_event` artifacts for existing rows, and publish checkpoint artifacts using the shared `EvidenceStore` interface. The current implementation includes an S3-compatible `EvidenceStore`; MinIO can be used for local or CI-style object-lock testing, while production deployments should use an S3-compatible WORM service with versioning/object lock configured by operations.
+The `cmd/historyevidenceverifier` tool can additionally publish signed range manifests, backfill per-row `history_event` artifacts for existing rows, publish checkpoint artifacts, export recovery catalogs, recover verified JSON from WORM history-event artifacts, and run cron-friendly drift checks using the shared `EvidenceStore` interface. The current implementation includes an S3-compatible `EvidenceStore`; MinIO can be used for local or CI-style object-lock testing, while production deployments should use an S3-compatible WORM service with versioning/object lock configured by operations.
 
 For a selected history range, evidence publication:
 
@@ -257,9 +257,11 @@ For a selected history range, evidence publication:
 - signs the canonical manifest as compact RS256 JWS when an evidence signing key is configured, otherwise stores canonical JSON with `signature_state = unsigned`;
 - writes object-store receipts to `history_evidence_manifests` and `history_evidence_artifacts`.
 
-Per-row `history_event` artifacts provide recovery evidence for every acknowledged write while evidence is enabled. With `history.fullSnapshotInterval: 5`, recovery from WORM replays up to four WORM-stored diff payloads after the latest WORM-stored snapshot event. Use `history.fullSnapshotInterval: 1` when each individual WORM event must be recoverable without replaying diffs. The `effective_diff` field is the attribution trail: for snapshot checkpoint rows it prevents a full recovery snapshot from being mistaken for the set of fields changed by the actor. Automated PostgreSQL restore from WORM artifacts is not implemented in this ticket.
+Signed manifests are verified with a configured RSA public key when `history.evidence.signing.publicKeyPath` or `BASYX_HISTORY_EVIDENCE_SIGNING_PUBLIC_KEY_PATH` is set. When signing is required, unsigned or unverifiable manifests are reported as critical findings.
 
-Verification can compare PostgreSQL rows against the hash chain, verify every per-row `history_event` receipt and object hash, compare a stored manifest against the live range digest, and verify an object-store artifact hash. This detects missing, modified, reordered, or overwritten records when the expected receipts and object hashes are known.
+Per-row `history_event` artifacts provide recovery evidence for every acknowledged write while evidence is enabled. With `history.fullSnapshotInterval: 5`, recovery from WORM replays up to four WORM-stored diff payloads after the latest WORM-stored snapshot event. Use `history.fullSnapshotInterval: 1` when each individual WORM event must be recoverable without replaying diffs. The `effective_diff` field is the attribution trail: for snapshot checkpoint rows it prevents a full recovery snapshot from being mistaken for the set of fields changed by the actor. Recovery exports verified JSON only; PostgreSQL restore is intentionally left as an operator-controlled procedure.
+
+Verification can compare PostgreSQL rows against the hash chain, verify every per-row `history_event` receipt and object hash, compare a stored manifest against the live range digest, verify compact JWS signatures, and verify object-store retention metadata where the provider supports it. The CLI emits JSON and exits non-zero on critical findings, so it is suitable for cron or Kubernetes CronJob drift detection.
 
 ### Configuration Status
 
@@ -277,11 +279,13 @@ Verification can compare PostgreSQL rows against the hash chain, verify every pe
 | `history.evidence.provider: s3` | Configures the S3-compatible `EvidenceStore`. Requires bucket, region, retention mode, and positive retention days. Endpoint override and path-style mode support MinIO-style tests. |
 | `history.evidence.writeTimeoutSeconds` | Bounds synchronous WORM writes while the PostgreSQL transaction is open. Default is `10`. |
 | `history.evidence.signing.privateKeyPath` | Optional RS256 manifest signing key. Falls back to `jws.privateKeyPath` when empty. |
+| `history.evidence.signing.publicKeyPath` | Optional RSA public key used to verify compact JWS manifest artifacts. |
+| `history.evidence.signing.required` | Requires signed manifests for verifier/recovery operations and requires a private key for `-write`. |
 | `history.integrityAnchor.provider: none` | Default. Non-`none` providers such as immudb, Rekor, Trillian, or timestamping services are reserved for later work. |
-| `history.auditIdentityMode` | Must remain `none`. Identity enrichment modes fail fast until middleware populates audit context. |
+| `history.auditIdentityMode` | `none` stores no request identity metadata. `minimal` stores `X-Request-ID`/`X-Correlation-ID` when supplied by clients or trusted ingress, authenticated OIDC subject/issuer/client id, ABAC allow metadata, operation, endpoint, and method. `extended` also stores trusted source IP, user agent, policy hash, and deterministic rule ids where available. BaSyx does not generate HTTP request/correlation IDs in the audit middleware when those headers are missing. |
 | Active eventing, configured event sinks, or enabled outbox processing | Fail fast until outbox publishing is implemented. |
 
-`AuditContext`, `ChangeEvent`, `EvidenceStore`, and `IntegrityAnchor` remain extension points. Current runtime middleware does not populate `AuditContext`, and no external ledger anchor client is invoked by the append path yet.
+`AuditContext`, `ChangeEvent`, `EvidenceStore`, and `IntegrityAnchor` remain extension points. Runtime middleware now populates `AuditContext` when configured; no external ledger anchor client is invoked by the append path yet.
 
 Example verifier/publisher usage:
 
@@ -303,7 +307,31 @@ go run ./cmd/historyevidenceverifier \
   -from 1 \
   -to 25 \
   -manifest-object-key 'history-evidence/history-manifests/submodel_history/https:%2F%2Fexample.com%2Fsubmodels%2F1/1-25-...json' \
-  -manifest-sha256 '<expected-sha256>'
+  -manifest-sha256 '<expected-sha256>' \
+  -require-signed-manifest
+```
+
+```sh
+go run ./cmd/historyevidenceverifier \
+  -config ./config.yaml \
+  -table submodel_history \
+  -identifier 'https://example.com/submodels/1' \
+  -from 1 \
+  -to 25 \
+  -catalog-export \
+  -out ./recovery-catalog.json
+```
+
+```sh
+go run ./cmd/historyevidenceverifier \
+  -config ./config.yaml \
+  -table submodel_history \
+  -identifier 'https://example.com/submodels/1' \
+  -from 1 \
+  -to 25 \
+  -recover \
+  -recovery-catalog ./recovery-catalog.json \
+  -out ./recovered-history.json
 ```
 
 ### Diff-Backed Storage

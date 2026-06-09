@@ -20,4 +20,8 @@ infrastructures:
       conceptDescriptionRepository:
         baseUrl: "http://localhost:8082/concept-descriptions"
     security:
-      type: none
+      type: oauth2
+      config:
+        flow: auth_code
+        issuer: "http://keycloak.localhost:8080/realms/basyx"
+        clientId: "basyx-ui"

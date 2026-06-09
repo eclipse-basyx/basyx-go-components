@@ -119,7 +119,13 @@ type mutationCoverageContextKey struct{}
 type MutationCoverage struct {
 	Method    string
 	Pattern   string
+	Operation string
 	Versioned bool
+}
+
+type mutationRoute struct {
+	pattern   string
+	operation string
 }
 
 // MutationCoverageGuard rejects unclassified HTTP mutations while history is active.
@@ -130,8 +136,8 @@ type MutationCoverage struct {
 // versioning policy.
 type MutationCoverageGuard struct {
 	mu      sync.RWMutex
-	covered map[string][]string
-	exempt  map[string][]string
+	covered map[string][]mutationRoute
+	exempt  map[string][]mutationRoute
 	routes  chi.Routes
 }
 
@@ -156,8 +162,8 @@ type MutationCoverageGuard struct {
 //	apiRouter.Use(guard.Middleware)
 func NewMutationCoverageGuard(routes ...chi.Routes) *MutationCoverageGuard {
 	guard := &MutationCoverageGuard{
-		covered: make(map[string][]string),
-		exempt:  make(map[string][]string),
+		covered: make(map[string][]mutationRoute),
+		exempt:  make(map[string][]mutationRoute),
 	}
 	if len(routes) > 0 {
 		guard.routes = routes[0]
@@ -185,11 +191,11 @@ func (g *MutationCoverageGuard) ClassifyRoute(operation string, method string, p
 		return
 	}
 	if _, ok := versionedMutationOperations[operation]; ok {
-		g.Cover(method, pattern)
+		g.cover(method, pattern, operation)
 		return
 	}
 	if _, ok := exemptMutationOperations[operation]; ok {
-		g.Exempt(method, pattern)
+		g.exemptRoute(method, pattern, operation)
 	}
 }
 
@@ -206,7 +212,7 @@ func (g *MutationCoverageGuard) ClassifyRoute(operation string, method string, p
 //
 //	guard.Cover(http.MethodPost, "/submodels")
 func (g *MutationCoverageGuard) Cover(method string, pattern string) {
-	g.addRoute(g.covered, method, pattern)
+	g.cover(method, pattern, "")
 }
 
 // Exempt marks a mutation route as deliberately not history-producing.
@@ -222,7 +228,15 @@ func (g *MutationCoverageGuard) Cover(method string, pattern string) {
 //
 //	guard.Exempt(http.MethodPost, "/query/submodels")
 func (g *MutationCoverageGuard) Exempt(method string, pattern string) {
-	g.addRoute(g.exempt, method, pattern)
+	g.exemptRoute(method, pattern, "")
+}
+
+func (g *MutationCoverageGuard) cover(method string, pattern string, operation string) {
+	g.addRoute(g.covered, method, pattern, operation)
+}
+
+func (g *MutationCoverageGuard) exemptRoute(method string, pattern string, operation string) {
+	g.addRoute(g.exempt, method, pattern, operation)
 }
 
 // Middleware rejects mutation requests that have no explicit history policy.
@@ -248,12 +262,12 @@ func (g *MutationCoverageGuard) Middleware(next http.Handler) http.Handler {
 			return
 		}
 		requestPath := requestMutationPath(r)
-		if pattern, ok := g.match(g.covered, r.Method, requestPath); ok {
-			next.ServeHTTP(w, r.WithContext(contextWithMutationCoverage(r.Context(), r.Method, pattern, true)))
+		if route, ok := g.match(g.covered, r.Method, requestPath); ok {
+			next.ServeHTTP(w, r.WithContext(contextWithMutationCoverage(r.Context(), r.Method, route, true)))
 			return
 		}
-		if pattern, ok := g.match(g.exempt, r.Method, requestPath); ok {
-			next.ServeHTTP(w, r.WithContext(contextWithMutationCoverage(r.Context(), r.Method, pattern, false)))
+		if route, ok := g.match(g.exempt, r.Method, requestPath); ok {
+			next.ServeHTTP(w, r.WithContext(contextWithMutationCoverage(r.Context(), r.Method, route, false)))
 			return
 		}
 		if !g.hasMatchingHandler(r.Method, requestPath) {
@@ -290,7 +304,7 @@ func MutationCoverageFromContext(ctx context.Context) (MutationCoverage, bool) {
 	return coverage, ok
 }
 
-func (g *MutationCoverageGuard) addRoute(routes map[string][]string, method string, pattern string) {
+func (g *MutationCoverageGuard) addRoute(routes map[string][]mutationRoute, method string, pattern string, operation string) {
 	method = strings.ToUpper(strings.TrimSpace(method))
 	pattern = normalizeMutationPath(pattern)
 	if !isMutationMethod(method) || pattern == "" {
@@ -299,22 +313,22 @@ func (g *MutationCoverageGuard) addRoute(routes map[string][]string, method stri
 	g.mu.Lock()
 	defer g.mu.Unlock()
 	for _, current := range routes[method] {
-		if current == pattern {
+		if current.pattern == pattern {
 			return
 		}
 	}
-	routes[method] = append(routes[method], pattern)
+	routes[method] = append(routes[method], mutationRoute{pattern: pattern, operation: strings.TrimSpace(operation)})
 }
 
-func (g *MutationCoverageGuard) match(routes map[string][]string, method string, path string) (string, bool) {
+func (g *MutationCoverageGuard) match(routes map[string][]mutationRoute, method string, path string) (mutationRoute, bool) {
 	g.mu.RLock()
 	defer g.mu.RUnlock()
-	for _, pattern := range routes[strings.ToUpper(strings.TrimSpace(method))] {
-		if mutationPathMatches(pattern, path) {
-			return pattern, true
+	for _, route := range routes[strings.ToUpper(strings.TrimSpace(method))] {
+		if mutationPathMatches(route.pattern, path) {
+			return route, true
 		}
 	}
-	return "", false
+	return mutationRoute{}, false
 }
 
 func (g *MutationCoverageGuard) hasMatchingHandler(method string, path string) bool {
@@ -324,10 +338,11 @@ func (g *MutationCoverageGuard) hasMatchingHandler(method string, path string) b
 	return g.routes.Match(chi.NewRouteContext(), method, path)
 }
 
-func contextWithMutationCoverage(ctx context.Context, method string, pattern string, versioned bool) context.Context {
+func contextWithMutationCoverage(ctx context.Context, method string, route mutationRoute, versioned bool) context.Context {
 	return context.WithValue(ctx, mutationCoverageContextKey{}, MutationCoverage{
 		Method:    strings.ToUpper(strings.TrimSpace(method)),
-		Pattern:   normalizeMutationPath(pattern),
+		Pattern:   normalizeMutationPath(route.pattern),
+		Operation: strings.TrimSpace(route.operation),
 		Versioned: versioned,
 	})
 }

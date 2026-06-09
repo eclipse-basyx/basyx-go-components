@@ -34,6 +34,7 @@ import (
 	"time"
 
 	sqlmock "github.com/DATA-DOG/go-sqlmock"
+	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/stretchr/testify/require"
 )
@@ -298,6 +299,18 @@ func TestSnapshotByDateRejectsRowHashMismatch(t *testing.T) {
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "HISTORY-RESTORE-ROWHASH")
 	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestBaseVersionChainQueryNormalizesSourceIPForRowHashVerification(t *testing.T) {
+	t.Parallel()
+
+	historyAlias := goqu.T(TableAAS).As("history")
+	payloadAlias := goqu.T("aas_history_payload").As("payload")
+
+	query, _, err := baseVersionChainQuery(historyAlias, payloadAlias).ToSQL()
+	require.NoError(t, err)
+	require.Contains(t, query, `host("history"."source_ip")`)
+	require.NotContains(t, query, `"history"."source_ip"::text`)
 }
 
 func TestSnapshotByDateRejectsBrokenRowHashChainLink(t *testing.T) {

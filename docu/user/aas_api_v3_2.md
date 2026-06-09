@@ -74,7 +74,7 @@ Environment variables:
 - `BASYX_HISTORY_RETENTION_DAYS`: must remain `0`. Automatic cleanup is not implemented yet.
 - `BASYX_HISTORY_FULL_SNAPSHOT_INTERVAL`: `1` stores every history row as a complete snapshot. Values greater than `1` store one full checkpoint followed by up to `N-1` RFC 6902 diff rows, with earlier checkpoints when the diff payload is not smaller than the snapshot payload.
 - `BASYX_HISTORY_IMMUTABILITY`: `none` or `postgres_guarded`. Default is `none`.
-- `BASYX_AUDIT_IDENTITY_MODE`: must remain `none`. Automatic identity enrichment is not implemented yet.
+- `BASYX_AUDIT_IDENTITY_MODE`: `none`, `minimal`, or `extended`. `minimal` stores request/correlation headers, authenticated OIDC subject/issuer/client id when available, ABAC allow metadata, operation, endpoint, and method. `extended` also stores trusted source IP, user agent, policy hash, and deterministic rule ids where available.
 - `BASYX_HISTORY_EVIDENCE_ENABLED`: `true` enables fail-closed WORM history-event artifact writes. Requires `BASYX_HISTORY_MODE=api` or `audit`; mutating requests fail when the configured evidence artifact cannot be stored.
 - `BASYX_HISTORY_EVIDENCE_PROVIDER`: `s3` for the S3-compatible evidence backend.
 - `BASYX_HISTORY_EVIDENCE_BUCKET`, `BASYX_HISTORY_EVIDENCE_PREFIX`, `BASYX_HISTORY_EVIDENCE_REGION`, `BASYX_HISTORY_EVIDENCE_ENDPOINT`: object-store target settings. `endpoint` is useful for MinIO tests.
@@ -82,6 +82,8 @@ Environment variables:
 - `BASYX_HISTORY_EVIDENCE_RETENTION_MODE`, `BASYX_HISTORY_EVIDENCE_RETENTION_DAYS`: required object-lock retention settings when evidence is enabled, such as `governance` plus a positive day count.
 - `BASYX_HISTORY_EVIDENCE_WRITE_TIMEOUT_SECONDS`: timeout for synchronous WORM writes while the PostgreSQL transaction is open. Default is `10`.
 - `BASYX_HISTORY_EVIDENCE_SIGNING_PRIVATE_KEY_PATH`: optional manifest signing key. When empty, evidence signing can use `jws.privateKeyPath`.
+- `BASYX_HISTORY_EVIDENCE_SIGNING_PUBLIC_KEY_PATH`: optional trusted RSA public key for signed manifest verification.
+- `BASYX_HISTORY_EVIDENCE_SIGNING_REQUIRED`: when `true`, verifier tooling rejects missing or unsigned manifests unless a signed manifest verifies with the configured public key.
 - `BASYX_HISTORY_INTEGRITY_ANCHOR_PROVIDER`: must remain `none` in this release. Ledger/timestamping providers are reserved for later work.
 
 Equivalent YAML:
@@ -108,6 +110,7 @@ history:
     writeTimeoutSeconds: 10
     signing:
       privateKeyPath: ""
+      publicKeyPath: ""
       required: false
   integrityAnchor:
     provider: none
@@ -124,14 +127,14 @@ Current implementation status:
 - Runtime history rows are append-only, hash-chained event rows in `api` and `audit` mode.
 - Schema migration installs PostgreSQL guard triggers. `postgres_guarded` enables them at service startup. When enabled, `UPDATE`, `DELETE`, and `TRUNCATE` on history metadata and payload tables fail with `history tables are append-only`.
 - When WORM evidence is enabled, each acknowledged history append synchronously stores a `history_event` artifact in S3-compatible object storage. The artifact contains the same snapshot or diff payload that PostgreSQL stores plus an `effective_diff` that records what changed compared with the previous reconstructed version.
-- WORM evidence manifests, backfilled `history_event` artifacts, and additional snapshot checkpoint artifacts can be published to S3-compatible object storage with `cmd/historyevidenceverifier`.
-- `external_anchor`, non-zero `retentionDays`, non-`none` integrity anchor providers, and identity enrichment modes currently fail fast during configuration loading. Their runtime implementations are planned for later work.
-- Audit metadata columns are present, but regular API middleware does not populate the audit context yet.
-- The implementation supports compliance-oriented deployments, but it does not by itself make a deployment legally compliant with any specific regulation.
+- WORM evidence manifests, backfilled `history_event` artifacts, additional snapshot checkpoint artifacts, recovery catalogs, and verified recovery exports can be produced with `cmd/historyevidenceverifier`.
+- `external_anchor`, non-zero `retentionDays`, and non-`none` integrity anchor providers currently fail fast during configuration loading. External anchoring remains future-compatible and optional.
+- Audit metadata is populated when `history.auditIdentityMode` is `minimal` or `extended` and request/OIDC/ABAC metadata is available. Clients, API gateways, or reverse proxies should set `X-Request-ID` and `X-Correlation-ID` for traceable HTTP history rows; BaSyx copies these headers when present and leaves the audit fields empty when they are missing. Anonymous/local requests remain valid with empty identity fields.
+- BaSyx provides technical controls that can support NIS2-aligned integrity, auditability, traceability, recovery, and tamper-detection requirements when deployed and operated correctly. Enabling the feature does not by itself make an operator NIS2 compliant.
 
 Guarded PostgreSQL mode protects against normal accidental or unauthorized mutations through the application database user. PostgreSQL superusers or operators with permissions to alter triggers/functions can still bypass or remove this protection. Stronger tamper evidence and recovery evidence are provided by storing per-row history-event artifacts and signed history manifests in S3-compatible WORM storage such as AWS S3 Object Lock. MinIO Object Lock is useful for tests and local examples, but production deployments should use an operated WORM-capable object store with versioning and retention policy controls.
 
-WORM history-event artifacts provide recoverability for acknowledged writes while evidence is enabled. With `fullSnapshotInterval: 5`, for example, recovery from WORM starts from the latest WORM-stored snapshot event and replays up to four WORM-stored diff payloads. Use `fullSnapshotInterval: 1` when every acknowledged history row must be recoverable as a full WORM snapshot without diff replay. Even when the stored payload is a full snapshot checkpoint, `effective_diff` records the actual JSON Patch relative to the previous version so audit analysis can distinguish recovery checkpoints from fields changed by the actor. Automated PostgreSQL restore from WORM artifacts is not implemented in this release.
+WORM history-event artifacts provide recoverability for acknowledged writes while evidence is enabled. With `fullSnapshotInterval: 5`, for example, recovery from WORM starts from the latest WORM-stored snapshot event and replays up to four WORM-stored diff payloads. Use `fullSnapshotInterval: 1` when every acknowledged history row must be recoverable as a full WORM snapshot without diff replay. Even when the stored payload is a full snapshot checkpoint, `effective_diff` records the actual JSON Patch relative to the previous version so audit analysis can distinguish recovery checkpoints from fields changed by the actor. The current recovery path exports verified JSON; PostgreSQL restore remains an operator-controlled action outside the tool.
 
 The guard switch is database-wide. Configure all BaSyx services that share one database with the same history immutability mode. Runtime services may enable guarded mode, but normal service startup cannot disable an enabled database guard. A service configured as unguarded fails during startup when it encounters an already-enabled database guard. Disabling guarded mode is an explicit operator maintenance action.
 
@@ -159,8 +162,36 @@ go run ./cmd/historyevidenceverifier \
   -from 1 \
   -to 25 \
   -manifest-object-key '<object-key-from-receipt>' \
-  -manifest-sha256 '<expected-sha256>'
+  -manifest-sha256 '<expected-sha256>' \
+  -require-signed-manifest
 ```
+
+Example recovery catalog export and verified WORM recovery:
+
+```sh
+go run ./cmd/historyevidenceverifier \
+  -config ./config.yaml \
+  -table submodel_history \
+  -identifier 'https://example.com/submodels/1' \
+  -from 1 \
+  -to 25 \
+  -catalog-export \
+  -out ./submodel-history-recovery-catalog.json
+```
+
+```sh
+go run ./cmd/historyevidenceverifier \
+  -config ./config.yaml \
+  -table submodel_history \
+  -identifier 'https://example.com/submodels/1' \
+  -from 1 \
+  -to 25 \
+  -recover \
+  -recovery-catalog ./submodel-history-recovery-catalog.json \
+  -out ./submodel-history-recovered.json
+```
+
+The verifier and recovery modes print machine-readable JSON and exit non-zero when critical findings are present, which makes them suitable for cron jobs, Kubernetes CronJobs, or alerting wrappers. See [NIS2 history evidence guidance](../security/NIS2_HISTORY_EVIDENCE.md) for deployment responsibilities.
 
 ## What Activating Versioning Means
 

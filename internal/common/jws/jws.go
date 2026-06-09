@@ -76,6 +76,45 @@ func LoadPrivateKey(path string) (*rsa.PrivateKey, error) {
 	return rsaKey, nil
 }
 
+// LoadPublicKey reads and parses an RSA public key from a PEM file.
+//
+// SubjectPublicKeyInfo and PKCS#1 RSA public keys are accepted so operators can
+// use the public half of the existing manifest signing key material.
+//
+// Parameters:
+//   - path: Filesystem path to the PEM encoded public key.
+//
+// Returns:
+//   - *rsa.PublicKey: Parsed RSA public key.
+//   - error: Error when the file cannot be read, decoded, or parsed as RSA.
+func LoadPublicKey(path string) (*rsa.PublicKey, error) {
+	// #nosec G304 -- the PEM path is an explicit operator configuration value.
+	keyData, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read public key file: %w", err)
+	}
+
+	block, _ := pem.Decode(keyData)
+	if block == nil {
+		return nil, fmt.Errorf("failed to decode PEM block")
+	}
+
+	key, err := x509.ParsePKIXPublicKey(block.Bytes)
+	if err == nil {
+		rsaKey, ok := key.(*rsa.PublicKey)
+		if !ok {
+			return nil, fmt.Errorf("public key is not RSA")
+		}
+		return rsaKey, nil
+	}
+
+	rsaKey, pkcs1Err := x509.ParsePKCS1PublicKey(block.Bytes)
+	if pkcs1Err != nil {
+		return nil, fmt.Errorf("failed to parse public key: %w", pkcs1Err)
+	}
+	return rsaKey, nil
+}
+
 // SignPayload returns a compact RS256 JWS over payload.
 //
 // Parameters:

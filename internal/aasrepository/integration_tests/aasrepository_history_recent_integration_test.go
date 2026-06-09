@@ -163,6 +163,50 @@ func TestAASRepositoryHistoryRecentChangesAndBatchAssetKind(t *testing.T) {
 	requireRecentChangeTypeForID(t, recent, aasID, "Deleted")
 }
 
+func TestAASRepositoryHistoryAllowsAddingIDShortAfterCreate(t *testing.T) {
+	baseURL := "http://localhost:6004"
+	aasID := fmt.Sprintf("https://example.com/ids/aas/history-add-idshort-%d", time.Now().UnixNano())
+	encodedAASID := base64.RawURLEncoding.EncodeToString([]byte(aasID))
+
+	t.Cleanup(func() {
+		status, err := deleteResponseStatus(baseURL + "/shells/" + encodedAASID)
+		if err != nil {
+			t.Logf("cleanup delete failed: %v", err)
+			return
+		}
+		if status != http.StatusNoContent && status != http.StatusNotFound {
+			t.Logf("cleanup delete returned unexpected status=%d", status)
+		}
+	})
+
+	createBody := fmt.Sprintf(`{
+		"id": %q,
+		"modelType": "AssetAdministrationShell",
+		"assetInformation": {"assetKind": "Instance"}
+	}`, aasID)
+
+	status, err := postResponseStatus(baseURL+"/shells", createBody)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusCreated, status)
+
+	updateBody := fmt.Sprintf(`{
+		"id": %q,
+		"idShort": "AddedLater",
+		"modelType": "AssetAdministrationShell",
+		"assetInformation": {"assetKind": "Instance"}
+	}`, aasID)
+
+	_, status, _, err = putJSONResponse(baseURL+"/shells/"+encodedAASID, updateBody)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusNoContent, status)
+
+	current, status, err := getJSONResponse(baseURL + "/shells/" + encodedAASID)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusOK, status)
+	require.Equal(t, "AddedLater", current["idShort"])
+	requireAASHistoryPayloadTypes(t, aasID, []string{"snapshot", "diff"})
+}
+
 func requireAASHistoryPayloadTypes(t *testing.T, id string, expected []string) {
 	t.Helper()
 	db, err := sql.Open("postgres", integrationTestDSN)

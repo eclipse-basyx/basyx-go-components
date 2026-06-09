@@ -29,9 +29,13 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/rsa"
+	"crypto/x509"
+	"encoding/base64"
+	"encoding/pem"
 	"errors"
 	"io"
 	"net/http"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -104,6 +108,61 @@ func TestBuildManifestEvidenceArtifactSignsCanonicalManifest(t *testing.T) {
 	require.True(t, strings.HasPrefix(artifact.ObjectKey, "prefix/history-manifests/"))
 }
 
+func TestDecodeAndVerifyManifestArtifactAcceptsValidSignature(t *testing.T) {
+	privateKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	require.NoError(t, err)
+	manifest := signedManifestTestManifest(t)
+	artifact, _, err := BuildManifestEvidenceArtifact(manifest, "", &ManifestJWSSigner{PrivateKey: privateKey, KeyID: "test-key"})
+	require.NoError(t, err)
+	verifier := manifestVerifierForKey(t, &privateKey.PublicKey)
+
+	decoded, signed, err := DecodeAndVerifyManifestArtifact(artifact.Data, artifact.ContentType, verifier, true)
+
+	require.NoError(t, err)
+	require.True(t, signed)
+	require.Equal(t, SignatureStateSigned, decoded.SignatureState)
+	require.Equal(t, manifest.RangeDigest, decoded.RangeDigest)
+}
+
+func TestDecodeAndVerifyManifestArtifactRejectsWrongKey(t *testing.T) {
+	privateKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	require.NoError(t, err)
+	wrongKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	require.NoError(t, err)
+	artifact, _, err := BuildManifestEvidenceArtifact(signedManifestTestManifest(t), "", &ManifestJWSSigner{PrivateKey: privateKey})
+	require.NoError(t, err)
+
+	_, _, err = DecodeAndVerifyManifestArtifact(artifact.Data, artifact.ContentType, manifestVerifierForKey(t, &wrongKey.PublicKey), true)
+
+	require.ErrorContains(t, err, "HISTORY-MANIFEST-VERIFY-SIGNATURE")
+}
+
+func TestDecodeAndVerifyManifestArtifactRejectsTamperedPayload(t *testing.T) {
+	privateKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	require.NoError(t, err)
+	artifact, _, err := BuildManifestEvidenceArtifact(signedManifestTestManifest(t), "", &ManifestJWSSigner{PrivateKey: privateKey})
+	require.NoError(t, err)
+	parts := strings.Split(string(artifact.Data), ".")
+	require.Len(t, parts, 3)
+	payload, err := base64.RawURLEncoding.DecodeString(parts[1])
+	require.NoError(t, err)
+	payload[0] ^= 1
+	parts[1] = base64.RawURLEncoding.EncodeToString(payload)
+
+	_, _, err = DecodeAndVerifyManifestArtifact([]byte(strings.Join(parts, ".")), artifact.ContentType, manifestVerifierForKey(t, &privateKey.PublicKey), true)
+
+	require.ErrorContains(t, err, "HISTORY-MANIFEST-VERIFY-SIGNATURE")
+}
+
+func TestDecodeAndVerifyManifestArtifactRejectsUnsignedWhenRequired(t *testing.T) {
+	artifact, _, err := BuildManifestEvidenceArtifact(signedManifestTestManifest(t), "", nil)
+	require.NoError(t, err)
+
+	_, _, err = DecodeAndVerifyManifestArtifact(artifact.Data, artifact.ContentType, nil, true)
+
+	require.ErrorContains(t, err, "HISTORY-MANIFEST-VERIFY-UNSIGNED")
+}
+
 func TestDecodeManifestArtifactTreatsJSONContentTypeAsJSONWhenPayloadContainsDots(t *testing.T) {
 	manifest, err := BuildHistoryManifest(HistoryManifestOptions{
 		HistoryTable: TableAAS,
@@ -125,6 +184,31 @@ func TestDecodeManifestArtifactTreatsJSONContentTypeAsJSONWhenPayloadContainsDot
 	require.False(t, signed)
 	require.Equal(t, finalManifest.Identifier, decoded.Identifier)
 	require.Equal(t, finalManifest.RangeDigest, decoded.RangeDigest)
+}
+
+func signedManifestTestManifest(t *testing.T) HistoryManifest {
+	t.Helper()
+	manifest, err := BuildHistoryManifest(HistoryManifestOptions{
+		HistoryTable: TableSubmodel,
+		Identifier:   "submodel-1",
+		Rows: []ManifestRangeRow{
+			{HistoryID: 10, RowHash: strings.Repeat("c", 64)},
+		},
+		GeneratedAt: time.Date(2026, 6, 5, 12, 0, 0, 0, time.UTC),
+	})
+	require.NoError(t, err)
+	return manifest
+}
+
+func manifestVerifierForKey(t *testing.T, publicKey *rsa.PublicKey) *ManifestJWSVerifier {
+	t.Helper()
+	encoded, err := x509.MarshalPKIXPublicKey(publicKey)
+	require.NoError(t, err)
+	path := t.TempDir() + "/manifest-public.pem"
+	require.NoError(t, os.WriteFile(path, pem.EncodeToMemory(&pem.Block{Type: "PUBLIC KEY", Bytes: encoded}), 0o600))
+	verifier, err := NewManifestJWSVerifierFromKeyFile(path)
+	require.NoError(t, err)
+	return verifier
 }
 
 func TestStoreManifestArtifactRejectsNilReceipt(t *testing.T) {
@@ -460,6 +544,43 @@ func TestVerifyEventArtifactReceiptChecksSourceRetentionState(t *testing.T) {
 
 	require.False(t, report.Valid)
 	require.Contains(t, verificationFindingCodes(report), "HISTORY-EVIDENCE-VERIFY-EVENTRETENTIONSTATE")
+}
+
+func TestVerifyEventArtifactCandidateReportsDuplicateReceipts(t *testing.T) {
+	retainUntil := time.Date(2026, 6, 12, 12, 0, 0, 0, time.UTC)
+	candidate := EventArtifactCandidate{
+		Identifier:  "aas-1",
+		HistoryID:   1,
+		RowHash:     strings.Repeat("a", 64),
+		ContentHash: strings.Repeat("b", 64),
+		Artifact: EvidenceArtifact{
+			Data: []byte(`{"artifact_version":"basyx-history-event-v1"}`),
+		},
+	}
+	receipt := &eventArtifactReceiptRow{
+		Identifier:  candidate.Identifier,
+		HistoryID:   candidate.HistoryID,
+		RowHash:     candidate.RowHash,
+		ContentHash: candidate.ContentHash,
+		Receipt: EvidenceReceipt{
+			Reference: EvidenceReference{
+				Provider:  EvidenceProviderS3,
+				Bucket:    "evidence",
+				ObjectKey: "history-events/aas_history/aas-1/1-row.json",
+				VersionID: "version-1",
+			},
+			SHA256:        SHA256Hex(candidate.Artifact.Data),
+			RetentionMode: "governance",
+			RetainUntil:   &retainUntil,
+		},
+	}
+	duplicate := *receipt
+	report := &HistoryEvidenceVerificationReport{Valid: true}
+
+	verifyEventArtifactCandidate(t.Context(), VerifyHistoryRangeOptions{}, report, candidate, []*eventArtifactReceiptRow{receipt, &duplicate})
+
+	require.False(t, report.Valid)
+	require.Contains(t, verificationFindingCodes(report), "HISTORY-EVIDENCE-VERIFY-EVENTDUPLICATE")
 }
 
 func eventArtifactReceiptColumns() []string {

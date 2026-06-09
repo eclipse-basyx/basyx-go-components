@@ -23,21 +23,32 @@
 * SPDX-License-Identifier: MIT
 ******************************************************************************/
 
-// Package main wires the history evidence verifier CLI process.
-package main
+package historyevidenceverifier
 
 import (
-	"context"
-	"os"
-	"os/signal"
-	"syscall"
+	"database/sql"
 
-	"github.com/eclipse-basyx/basyx-go-components/internal/historyevidenceverifier"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 )
 
-func main() {
-	ctx, stop := signal.NotifyContext(context.TODO(), os.Interrupt, syscall.SIGTERM)
-	exitCode := historyevidenceverifier.Run(ctx, os.Args[1:], os.Stdout, os.Stderr)
-	stop()
-	os.Exit(exitCode)
+func openDatabase(cfg *common.Config) (*sql.DB, error) {
+	dsn := common.BuildPostgresDSN(cfg.Postgres)
+	if err := common.ValidateSchemaVersionByDSN(dsn, common.CURRENT_DATABASE_VERSION); err != nil {
+		return nil, err
+	}
+	db, err := common.NewDatabaseConnection(dsn)
+	if err != nil {
+		return nil, err
+	}
+	if cfg.Postgres.MaxOpenConnections > 0 {
+		db.SetMaxOpenConns(cfg.Postgres.MaxOpenConnections)
+	}
+	if cfg.Postgres.MaxIdleConnections > 0 {
+		db.SetMaxIdleConns(cfg.Postgres.MaxIdleConnections)
+	}
+	return db, nil
+}
+
+func closeDatabase(db *sql.DB) {
+	_ = db.Close()
 }

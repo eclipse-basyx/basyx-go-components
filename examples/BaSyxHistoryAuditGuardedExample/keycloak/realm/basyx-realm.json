@@ -1,0 +1,110 @@
+{
+  "realm": "basyx",
+  "enabled": true,
+  "sslRequired": "none",
+  "accessTokenLifespan": 300,
+  "registrationAllowed": false,
+  "resetPasswordAllowed": false,
+  "loginWithEmailAllowed": true,
+  "duplicateEmailsAllowed": false,
+  "clients": [
+    {
+      "clientId": "basyx-ui",
+      "name": "BaSyx UI",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": true,
+      "serviceAccountsEnabled": false,
+      "redirectUris": ["http://localhost:3000/*"],
+      "webOrigins": ["http://localhost:3000"],
+      "attributes": {
+        "pkce.code.challenge.method": "S256",
+        "post.logout.redirect.uris": "http://localhost:3000/*"
+      },
+      "protocolMappers": [
+        {
+          "name": "Role Mapper",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-attribute-mapper",
+          "consentRequired": false,
+          "config": {
+            "user.attribute": "role",
+            "claim.name": "role",
+            "jsonType.label": "String",
+            "access.token.claim": "true",
+            "id.token.claim": "true",
+            "userinfo.token.claim": "true",
+            "introspection.token.claim": "true",
+            "multivalued": "false"
+          }
+        },
+        {
+          "name": "BaSyx History API Audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "included.client.audience": "basyx-history-api",
+            "access.token.claim": "true",
+            "id.token.claim": "false",
+            "userinfo.token.claim": "false",
+            "introspection.token.claim": "true"
+          }
+        }
+      ]
+    },
+    {
+      "clientId": "basyx-history-api",
+      "name": "BaSyx History Demo API",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "bearerOnly": true,
+      "publicClient": false,
+      "standardFlowEnabled": false,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false
+    }
+  ],
+  "users": [
+    {
+      "username": "admin",
+      "firstName": "Audit",
+      "lastName": "Admin",
+      "email": "admin@example.org",
+      "emailVerified": true,
+      "enabled": true,
+      "attributes": {
+        "role": ["admin"]
+      },
+      "credentials": [
+        {
+          "type": "password",
+          "value": "pwd",
+          "temporary": false
+        }
+      ]
+    },
+    {
+      "username": "usera",
+      "firstName": "Audit",
+      "lastName": "Viewer",
+      "email": "usera@example.org",
+      "emailVerified": true,
+      "enabled": true,
+      "attributes": {
+        "role": ["viewer"]
+      },
+      "credentials": [
+        {
+          "type": "password",
+          "value": "pwd",
+          "temporary": false
+        }
+      ]
+    }
+  ]
+}

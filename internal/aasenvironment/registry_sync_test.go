@@ -3,6 +3,7 @@ package aasenvironment
 import (
 	"context"
 	"database/sql"
+	"net/http"
 	"testing"
 
 	"github.com/FriedJannik/aas-go-sdk/jsonization"
@@ -10,6 +11,7 @@ import (
 	aasregistrydb "github.com/eclipse-basyx/basyx-go-components/internal/aasregistry/persistence"
 	aasrepositorydb "github.com/eclipse-basyx/basyx-go-components/internal/aasrepository/persistence"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/history"
 	commonmodel "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	smregistrydb "github.com/eclipse-basyx/basyx-go-components/internal/smregistry/persistence"
 	submodelrepositorydb "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence"
@@ -45,6 +47,43 @@ func TestNewRegistrySyncConfigRejectsUnsupportedScheme(t *testing.T) {
 	require.Error(t, err)
 	require.True(t, common.IsErrBadRequest(err))
 	require.Contains(t, err.Error(), "http or https")
+}
+
+func TestRegistrySyncContextOverridesHTTPAuditButKeepsPreconfigurationAudit(t *testing.T) {
+	httpAudit := history.AuditContext{
+		ActorSubject:        "user-1",
+		ActorIssuer:         "https://issuer.example/realms/basyx",
+		ClientID:            "basyx-ui",
+		AuthorizationResult: "ALLOW",
+		RequestID:           "req-1",
+		CorrelationID:       "corr-1",
+		Operation:           "PutAssetAdministrationShellById",
+		Endpoint:            "/shells/{aasIdentifier}",
+		HTTPMethod:          http.MethodPut,
+	}
+	registryAudit := history.FromContext(aasRegistryAddAuditMetadataIfNotAvailable(
+		history.ContextWithAudit(context.TODO(), httpAudit),
+		aasRegistrySyncUpsertOperation,
+	))
+	require.Equal(t, httpAudit.ActorSubject, registryAudit.ActorSubject)
+	require.Equal(t, httpAudit.RequestID, registryAudit.RequestID)
+	require.Equal(t, httpAudit.CorrelationID, registryAudit.CorrelationID)
+	require.Equal(t, httpAudit.HTTPMethod, registryAudit.HTTPMethod)
+	require.Equal(t, aasRegistrySyncUpsertOperation, registryAudit.Operation)
+	require.Equal(t, aasRegistrySyncEndpoint, registryAudit.Endpoint)
+
+	preconfigurationCtx := ContextWithAASPreconfigurationAudit(context.TODO())
+	preconfigurationAudit := history.FromContext(preconfigurationCtx)
+	require.NotEmpty(t, preconfigurationAudit.RequestID)
+	require.NotEmpty(t, preconfigurationAudit.CorrelationID)
+	require.Equal(t, history.AuthorizationResultSystemInternal, preconfigurationAudit.AuthorizationResult)
+	require.Equal(t, history.AuditHTTPMethodSystem, preconfigurationAudit.HTTPMethod)
+
+	preconfigurationRegistryAudit := history.FromContext(aasRegistryAddAuditMetadataIfNotAvailable(
+		preconfigurationCtx,
+		aasRegistrySyncUpsertOperation,
+	))
+	require.Equal(t, preconfigurationAudit, preconfigurationRegistryAudit)
 }
 
 func TestRegistrySyncConfigBuildsDeterministicEndpoints(t *testing.T) {

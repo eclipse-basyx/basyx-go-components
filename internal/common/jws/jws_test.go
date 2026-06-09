@@ -23,21 +23,27 @@
 * SPDX-License-Identifier: MIT
 ******************************************************************************/
 
-// Package main wires the history evidence verifier CLI process.
-package main
+package jws
 
 import (
-	"context"
+	"crypto/x509"
+	"encoding/pem"
 	"os"
-	"os/signal"
-	"syscall"
+	"path/filepath"
+	"testing"
 
-	"github.com/eclipse-basyx/basyx-go-components/internal/historyevidenceverifier"
+	"github.com/stretchr/testify/require"
 )
 
-func main() {
-	ctx, stop := signal.NotifyContext(context.TODO(), os.Interrupt, syscall.SIGTERM)
-	exitCode := historyevidenceverifier.Run(ctx, os.Args[1:], os.Stdout, os.Stderr)
-	stop()
-	os.Exit(exitCode)
+func TestLoadPublicKeyReportsPKCS1FallbackError(t *testing.T) {
+	invalidDER := []byte{0x30, 0x00}
+	_, pkcs1Err := x509.ParsePKCS1PublicKey(invalidDER)
+	require.Error(t, pkcs1Err)
+	keyPath := filepath.Join(t.TempDir(), "invalid-public.pem")
+	pemData := pem.EncodeToMemory(&pem.Block{Type: "PUBLIC KEY", Bytes: invalidDER})
+	require.NoError(t, os.WriteFile(keyPath, pemData, 0o600))
+
+	_, err := LoadPublicKey(keyPath)
+
+	require.ErrorContains(t, err, pkcs1Err.Error())
 }

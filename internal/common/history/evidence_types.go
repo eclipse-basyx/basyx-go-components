@@ -27,6 +27,7 @@ package history
 
 import (
 	"context"
+	"fmt"
 	"time"
 )
 
@@ -132,6 +133,41 @@ type IntegrityAnchorReceipt struct {
 
 // NoopIntegrityAnchor is the default anchor implementation when no ledger backend is configured.
 type NoopIntegrityAnchor struct{}
+
+// BuildIntegrityAnchorRequest creates the deterministic input for optional anchor backends.
+//
+// The request is anchor-ready but does not contact a ledger or timestamping
+// service. Providers can use the manifest range digest and object SHA-256 to
+// prove that a signed WORM manifest existed for the selected history range.
+//
+// Parameters:
+//   - manifest: Verified history range manifest.
+//   - manifestReceipt: Object-store receipt for the manifest artifact.
+//
+// Returns:
+//   - IntegrityAnchorRequest: Provider-neutral anchor request.
+//   - error: Error when the manifest is invalid or the manifest receipt hash is missing.
+func BuildIntegrityAnchorRequest(manifest HistoryManifest, manifestReceipt EvidenceReceipt) (IntegrityAnchorRequest, error) {
+	if err := validateManifest(manifest); err != nil {
+		return IntegrityAnchorRequest{}, err
+	}
+	if manifestReceipt.SHA256 == "" {
+		return IntegrityAnchorRequest{}, fmt.Errorf("HISTORY-ANCHOR-MANIFESTHASH manifest receipt SHA-256 is required")
+	}
+	return IntegrityAnchorRequest{
+		Provider:     IntegrityAnchorProviderNone,
+		HistoryTable: manifest.HistoryTable,
+		Identifier:   manifest.Identifier,
+		RangeDigest:  manifest.RangeDigest,
+		ManifestHash: manifestReceipt.SHA256,
+		ManifestRef:  manifestReceipt.Reference,
+		GeneratedAt:  manifest.GeneratedAt,
+		AdditionalData: map[string]string{
+			"manifest_version": manifest.ManifestVersion,
+			"signature_state":  manifest.SignatureState,
+		},
+	}, nil
+}
 
 // AnchorIntegrity intentionally performs no external write and returns no receipt.
 //

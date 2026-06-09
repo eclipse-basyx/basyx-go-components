@@ -110,7 +110,9 @@ func (s *CustomAASRepositoryService) PostAssetAdministrationShell(ctx context.Co
 			return descriptorErr
 		}
 
-		return s.persistence.AASRegistry.UpsertAdministrationShellDescriptorInTransaction(ctx, tx, descriptor)
+		return s.persistence.AASRegistry.UpsertAdministrationShellDescriptorInTransaction(
+			aasRegistryAddAuditMetadataIfNotAvailable(ctx, aasRegistrySyncUpsertOperation), tx, descriptor,
+		)
 	})
 	if err != nil {
 		if common.IsErrDenied(err) {
@@ -159,7 +161,9 @@ func (s *CustomAASRepositoryService) PutAssetAdministrationShellById(ctx context
 		if descriptorErr != nil {
 			return descriptorErr
 		}
-		return s.persistence.AASRegistry.UpsertAdministrationShellDescriptorInTransaction(ctx, tx, descriptor)
+		return s.persistence.AASRegistry.UpsertAdministrationShellDescriptorInTransaction(
+			aasRegistryAddAuditMetadataIfNotAvailable(ctx, aasRegistrySyncUpsertOperation), tx, descriptor,
+		)
 	})
 	if err != nil {
 		if common.IsErrDenied(err) {
@@ -204,7 +208,9 @@ func (s *CustomAASRepositoryService) DeleteAssetAdministrationShellById(ctx cont
 		if deleteErr := s.persistence.AASRepository.DeleteAssetAdministrationShellByIDInTransaction(ctx, tx, decodedIdentifier); deleteErr != nil {
 			return deleteErr
 		}
-		return s.persistence.AASRegistry.DeleteAssetAdministrationShellDescriptorByIDInTransaction(ctx, tx, decodedIdentifier)
+		return s.persistence.AASRegistry.DeleteAssetAdministrationShellDescriptorByIDInTransaction(
+			aasRegistryAddAuditMetadataIfNotAvailable(ctx, aasRegistrySyncDeleteOperation), tx, decodedIdentifier,
+		)
 	})
 	if err != nil {
 		if common.IsErrDenied(err) {
@@ -257,7 +263,9 @@ func (s *CustomAASRepositoryService) PutAssetInformationAasRepository(ctx contex
 		descriptor.GlobalAssetId = readOptionalString(assetInformation.GlobalAssetID())
 		descriptor.SpecificAssetIds = assetInformation.SpecificAssetIDs()
 
-		return s.persistence.AASRegistry.UpsertAdministrationShellDescriptorInTransaction(ctx, tx, descriptor)
+		return s.persistence.AASRegistry.UpsertAdministrationShellDescriptorInTransaction(
+			aasRegistryAddAuditMetadataIfNotAvailable(ctx, aasRegistrySyncUpsertOperation), tx, descriptor,
+		)
 	})
 	if err != nil {
 		if common.IsErrDenied(err) {
@@ -307,7 +315,9 @@ func (s *CustomAASRepositoryService) PostSubmodelReferenceAasRepository(ctx cont
 			}
 
 			aasDescriptor.SubmodelDescriptors = addOrUpdateEmbeddedSubmodelDescriptor(aasDescriptor.SubmodelDescriptors, embeddedDescriptor)
-			return s.persistence.AASRegistry.UpsertAdministrationShellDescriptorInTransaction(ctx, tx, aasDescriptor)
+			return s.persistence.AASRegistry.UpsertAdministrationShellDescriptorInTransaction(
+				aasRegistryAddAuditMetadataIfNotAvailable(ctx, aasRegistrySyncUpsertEmbeddedOperation), tx, aasDescriptor,
+			)
 		}
 
 		return nil
@@ -367,7 +377,9 @@ func (s *CustomAASRepositoryService) DeleteSubmodelReferenceAasRepository(ctx co
 		}
 
 		aasDescriptor.SubmodelDescriptors = removeEmbeddedSubmodelDescriptor(aasDescriptor.SubmodelDescriptors, decodedSubmodelIdentifier)
-		return s.persistence.AASRegistry.UpsertAdministrationShellDescriptorInTransaction(ctx, tx, aasDescriptor)
+		return s.persistence.AASRegistry.UpsertAdministrationShellDescriptorInTransaction(
+			aasRegistryAddAuditMetadataIfNotAvailable(ctx, aasRegistrySyncDeleteEmbeddedOperation), tx, aasDescriptor,
+		)
 	})
 	if err != nil {
 		if common.IsErrDenied(err) {
@@ -445,7 +457,9 @@ func (s *CustomAASRepositoryService) PutSubmodelByIdAasRepository(ctx context.Co
 		}
 
 		if s.syncConfig.SubmodelRegistryIntegration {
-			if upsertErr := s.persistence.SubmodelRegistry.UpsertSubmodelDescriptorInTransaction(ctx, tx, submodelDescriptor); upsertErr != nil {
+			if upsertErr := s.persistence.SubmodelRegistry.UpsertSubmodelDescriptorInTransaction(
+				submodelRegistryAddAuditMetadataIfNotAvailable(ctx, submodelRegistrySyncUpsertOperation), tx, submodelDescriptor,
+			); upsertErr != nil {
 				return upsertErr
 			}
 		}
@@ -457,7 +471,9 @@ func (s *CustomAASRepositoryService) PutSubmodelByIdAasRepository(ctx context.Co
 			}
 
 			aasDescriptor.SubmodelDescriptors = addOrUpdateEmbeddedSubmodelDescriptor(aasDescriptor.SubmodelDescriptors, submodelDescriptor)
-			return s.persistence.AASRegistry.UpsertAdministrationShellDescriptorInTransaction(ctx, tx, aasDescriptor)
+			return s.persistence.AASRegistry.UpsertAdministrationShellDescriptorInTransaction(
+				aasRegistryAddAuditMetadataIfNotAvailable(ctx, aasRegistrySyncUpsertEmbeddedOperation), tx, aasDescriptor,
+			)
 		}
 
 		return nil
@@ -537,7 +553,9 @@ func (s *CustomAASRepositoryService) DeleteSubmodelByIdAasRepository(ctx context
 		}
 
 		if s.syncConfig.SubmodelRegistryIntegration {
-			if deleteDescriptorErr := s.persistence.SubmodelRegistry.DeleteSubmodelDescriptorByIDInTransaction(ctx, tx, decodedSubmodelIdentifier); deleteDescriptorErr != nil && !common.IsErrNotFound(deleteDescriptorErr) {
+			if deleteDescriptorErr := s.persistence.SubmodelRegistry.DeleteSubmodelDescriptorByIDInTransaction(
+				submodelRegistryAddAuditMetadataIfNotAvailable(ctx, submodelRegistrySyncDeleteOperation), tx, decodedSubmodelIdentifier,
+			); deleteDescriptorErr != nil && !common.IsErrNotFound(deleteDescriptorErr) {
 				return deleteDescriptorErr
 			}
 		}
@@ -549,7 +567,9 @@ func (s *CustomAASRepositoryService) DeleteSubmodelByIdAasRepository(ctx context
 			}
 
 			aasDescriptor.SubmodelDescriptors = removeEmbeddedSubmodelDescriptor(aasDescriptor.SubmodelDescriptors, decodedSubmodelIdentifier)
-			return s.persistence.AASRegistry.UpsertAdministrationShellDescriptorInTransaction(ctx, tx, aasDescriptor)
+			return s.persistence.AASRegistry.UpsertAdministrationShellDescriptorInTransaction(
+				aasRegistryAddAuditMetadataIfNotAvailable(ctx, aasRegistrySyncDeleteEmbeddedOperation), tx, aasDescriptor,
+			)
 		}
 
 		return nil
@@ -779,7 +799,9 @@ func (s *CustomAASRepositoryService) patchSubmodelAndSyncDescriptorsInTransactio
 		}
 
 		if s.syncConfig.SubmodelRegistryIntegration {
-			if upsertErr := s.persistence.SubmodelRegistry.UpsertSubmodelDescriptorInTransaction(ctx, tx, submodelDescriptor); upsertErr != nil {
+			if upsertErr := s.persistence.SubmodelRegistry.UpsertSubmodelDescriptorInTransaction(
+				submodelRegistryAddAuditMetadataIfNotAvailable(ctx, submodelRegistrySyncUpsertOperation), tx, submodelDescriptor,
+			); upsertErr != nil {
 				return upsertErr
 			}
 		}
@@ -791,7 +813,9 @@ func (s *CustomAASRepositoryService) patchSubmodelAndSyncDescriptorsInTransactio
 			}
 
 			aasDescriptor.SubmodelDescriptors = addOrUpdateEmbeddedSubmodelDescriptor(aasDescriptor.SubmodelDescriptors, submodelDescriptor)
-			return s.persistence.AASRegistry.UpsertAdministrationShellDescriptorInTransaction(ctx, tx, aasDescriptor)
+			return s.persistence.AASRegistry.UpsertAdministrationShellDescriptorInTransaction(
+				aasRegistryAddAuditMetadataIfNotAvailable(ctx, aasRegistrySyncUpsertEmbeddedOperation), tx, aasDescriptor,
+			)
 		}
 
 		return nil

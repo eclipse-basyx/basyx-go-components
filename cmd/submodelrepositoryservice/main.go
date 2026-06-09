@@ -171,6 +171,7 @@ func runServer(ctx context.Context, configPath string) error {
 	}
 	versioningGuard := history.NewMutationCoverageGuard(apiRouter)
 	apiRouter.Use(versioningGuard.Middleware)
+	apiRouter.Use(history.AuditContextMiddleware(cfg))
 
 	for operation, rt := range smCtrl.Routes() {
 		versioningGuard.ClassifyRoute(operation, rt.Method, rt.Pattern)

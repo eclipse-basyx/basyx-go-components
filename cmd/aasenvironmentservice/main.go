@@ -229,6 +229,7 @@ func runServer(ctx context.Context, configPath string) error {
 	}
 	versioningGuard := history.NewMutationCoverageGuard(apiRouter)
 	apiRouter.Use(versioningGuard.Middleware)
+	apiRouter.Use(history.AuditContextMiddleware(cfg))
 
 	for operation, rt := range aasRegistryCtrl.Routes() {
 		versioningGuard.ClassifyRoute(operation, rt.Method, rt.Pattern)
@@ -291,7 +292,7 @@ func runServer(ctx context.Context, configPath string) error {
 		}
 	}()
 
-	preconfigurationCtx := common.ContextWithConfig(ctx, cfg)
+	preconfigurationCtx := aasenvironment.ContextWithAASPreconfigurationAudit(common.ContextWithConfig(ctx, cfg))
 	preconfigurationSummary := aasenvironment.RunAASPreconfiguration(preconfigurationCtx, uploadService, cfg.General.AASPreconfigPaths)
 	preconfigurationCompleted.Store(true)
 	//nolint:gosec // summary fields are internal integer counters and cannot carry log-control characters.

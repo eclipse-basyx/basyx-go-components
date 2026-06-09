@@ -47,7 +47,7 @@ const (
 
 	// AuditIdentityNone stores no identity metadata.
 	AuditIdentityNone = "none"
-	// AuditIdentityMinimal stores stable technical identity metadata.
+	// AuditIdentityMinimal stores request identity metadata without extended network details.
 	AuditIdentityMinimal = "minimal"
 	// AuditIdentityExtended stores optional extended metadata.
 	AuditIdentityExtended = "extended"

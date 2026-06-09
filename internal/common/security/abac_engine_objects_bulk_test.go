@@ -35,7 +35,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestMapDescriptorValueToRoute_SpecificDescriptor_UsesHandleWildcardRoutes(t *testing.T) {
+func TestMapDescriptorValueToRoute_SpecificDescriptor_DoesNotGrantBulkHandleRoutes(t *testing.T) {
 	testCases := []struct {
 		name  string
 		scope string
@@ -66,7 +66,7 @@ func TestMapDescriptorValueToRoute_SpecificDescriptor_UsesHandleWildcardRoutes(t
 	}
 }
 
-func TestMatchRouteObjectsObjItem_DescriptorSpecific_MatchesBulkHandleRoutes(t *testing.T) {
+func TestMatchRouteObjectsObjItem_DescriptorSpecific_DoesNotMatchBulkHandleRoutes(t *testing.T) {
 	testCases := []struct {
 		name           string
 		scope          string

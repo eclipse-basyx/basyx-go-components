@@ -62,10 +62,18 @@ type Resource struct {
 const (
 	// filterKey stores query filter restrictions inside the request context.
 	filterKey ctxKey = "queryFilter"
+	// authorizationDecisionKey stores the ABAC decision made for the request.
+	authorizationDecisionKey ctxKey = "authorizationDecision"
 )
 
 // ResolveResource extracts a Resource from an HTTP request.
 type ResolveResource func(r *http.Request) (Resource, error)
+
+// AuthorizationDecision records the ABAC decision available to audit middleware.
+type AuthorizationDecision struct {
+	Result        string
+	MatchedRuleID string
+}
 
 // ABACMiddleware returns an HTTP middleware handler that enforces attribute-based
 // authorization based on the provided ABACSettings.
@@ -112,7 +120,9 @@ func ABACMiddleware(settings ABACSettings) func(http.Handler) http.Handler {
 					return
 				}
 
-				ctx := r.Context()
+				ctx := ContextWithAuthorizationDecision(r.Context(), AuthorizationDecision{
+					Result: string(DecisionAllow),
+				})
 				if qf != nil {
 					ctx = context.WithValue(ctx, filterKey, qf)
 				}
@@ -124,6 +134,47 @@ func ABACMiddleware(settings ABACSettings) func(http.Handler) http.Handler {
 			http.Error(w, "resource resolution failed", http.StatusForbidden)
 		})
 	}
+}
+
+// ContextWithAuthorizationDecision stores an evaluated ABAC decision in ctx.
+//
+// The helper is used after authorization has already been evaluated, typically
+// by ABACMiddleware. Downstream middleware can then read the decision with
+// AuthorizationDecisionFromContext and copy the result or matched rule id into
+// audit metadata. The helper does not evaluate policies and does not grant
+// access by itself.
+//
+// Parameters:
+//   - ctx: Non-nil context to extend with decision metadata.
+//   - decision: Evaluated authorization result to make available downstream.
+//
+// Returns:
+//   - context.Context: Context containing the authorization decision.
+func ContextWithAuthorizationDecision(ctx context.Context, decision AuthorizationDecision) context.Context {
+	return context.WithValue(ctx, authorizationDecisionKey, decision)
+}
+
+// AuthorizationDecisionFromContext returns an evaluated ABAC decision from ctx.
+//
+// The boolean return value is false when ctx is nil or no decision was stored
+// with ContextWithAuthorizationDecision. Callers should treat that case as
+// "decision unavailable" and must not infer an allow or deny result from it.
+// History audit enrichment uses this helper to copy available authorization
+// metadata into audit rows without coupling history storage to the ABAC engine.
+//
+// Parameters:
+//   - ctx: Context that may contain an evaluated authorization decision.
+//
+// Returns:
+//   - AuthorizationDecision: Stored decision metadata, or the zero value when
+//     unavailable.
+//   - bool: True when decision metadata was present in ctx.
+func AuthorizationDecisionFromContext(ctx context.Context) (AuthorizationDecision, bool) {
+	if ctx == nil {
+		return AuthorizationDecision{}, false
+	}
+	decision, ok := ctx.Value(authorizationDecisionKey).(AuthorizationDecision)
+	return decision, ok
 }
 
 // GetQueryFilter extracts a *QueryFilter from the provided context.
