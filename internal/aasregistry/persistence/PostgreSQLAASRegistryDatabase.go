@@ -244,30 +244,17 @@ func (p *PostgreSQLAASRegistryDatabase) UpsertAdministrationShellDescriptorInTra
 		return common.NewInternalServerError("AASREG-UPSERTAASDESC-NILTX transaction must not be nil")
 	}
 
-	_, err := descriptors.GetAssetAdministrationShellDescriptorByIDTx(ctx, tx, aasd.Id)
+	created, err := descriptors.UpsertAdministrationShellDescriptorTx(ctx, tx, aasd)
 	if err != nil {
-		if !common.IsErrNotFound(err) {
-			return err
-		}
-		if err := descriptors.InsertAdministrationShellDescriptorTx(ctx, tx, aasd); err != nil {
-			return err
-		}
-		stored, err := descriptors.GetAssetAdministrationShellDescriptorByIDTx(ctx, tx, aasd.Id)
-		if err != nil {
-			return err
-		}
-		return appendDescriptorHistoryTx(ctx, tx, stored, history.ChangeCreated, false)
+		return err
 	}
 
-	if err = descriptors.DeleteAssetAdministrationShellDescriptorByIDTx(ctx, tx, aasd.Id); err != nil {
-		return err
-	}
-	if err = descriptors.InsertAdministrationShellDescriptorTx(ctx, tx, aasd); err != nil {
-		return err
-	}
 	stored, err := descriptors.GetAssetAdministrationShellDescriptorByIDTx(ctx, tx, aasd.Id)
 	if err != nil {
 		return err
+	}
+	if created {
+		return appendDescriptorHistoryTx(ctx, tx, stored, history.ChangeCreated, false)
 	}
 	return appendDescriptorHistoryTx(ctx, tx, stored, history.ChangeUpdated, false)
 }
