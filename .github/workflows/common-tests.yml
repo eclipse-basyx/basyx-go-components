@@ -44,6 +44,9 @@ jobs:
       - name: Run common history tests
         run: go test -count=1 -v -cover ./internal/common/history
 
+      - name: Run common security tests
+        run: go test -count=1 -v -cover ./internal/common/security
+
       - name: Run common model grammar tests
         run: go test github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar -count=1 -v -cover
 

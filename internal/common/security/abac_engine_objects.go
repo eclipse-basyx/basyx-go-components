@@ -266,21 +266,12 @@ type RouteWithFilter struct {
 }
 
 func mapDescriptorValueToRoute(descriptorValue grammar.DescriptorValue, basePath string) []RouteWithFilter {
-	routes := mapScopedIdentifierValueToRoute(
+	return mapScopedIdentifierValueToRoute(
 		descriptorValue.Scope,
 		descriptorValue.ID,
 		basePath,
 		descriptorRouteMappings,
 	)
-
-	if descriptorValue.Scope == "$aasdesc" || descriptorValue.Scope == "$smdesc" {
-		routes = append(routes,
-			RouteWithFilter{route: joinBasePath(basePath, "/bulk/status/*")},
-			RouteWithFilter{route: joinBasePath(basePath, "/bulk/result/*")},
-		)
-	}
-
-	return routes
 }
 
 func mapIdentifiableValueToRoute(identifiableValue grammar.IdentifiableValue, basePath string) []RouteWithFilter {
