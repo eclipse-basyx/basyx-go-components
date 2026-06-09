@@ -123,6 +123,24 @@
     "expectedStatus": 200
   },
   {
+    "context": "GET /shells/$recent-changes - viewer formula filtered",
+    "action": "ASSERT_RECENT_CHANGE_IDS",
+    "token": { "user": "usera", "password": "pwd" },
+    "method": "GET",
+    "endpoint": "http://localhost:6004/shells/$recent-changes?limit=20",
+    "shouldMatch": "expected/expectedRecentChangesViewerIDs.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "GET /shells/$recent-changes - editor reduced to specific IDENTIFIABLE object",
+    "action": "ASSERT_RECENT_CHANGE_IDS",
+    "token": { "user": "userx", "password": "pwd" },
+    "method": "GET",
+    "endpoint": "http://localhost:6004/shells/$recent-changes?limit=20",
+    "shouldMatch": "expected/expectedRecentChangesEditorSpecificIdentifiableIDs.json",
+    "expectedStatus": 200
+  },
+  {
     "context": "GET viewer-visible aas - viewer",
     "token": { "user": "usera", "password": "pwd" },
     "method": "GET",

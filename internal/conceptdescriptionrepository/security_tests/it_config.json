@@ -109,6 +109,15 @@
     "expectedStatus": 200
   },
   {
+    "context": "GET /concept-descriptions/$recent-changes - viewer filtered",
+    "action": "ASSERT_RECENT_CHANGE_IDS",
+    "token": { "user": "usera", "password": "pwd" },
+    "method": "GET",
+    "endpoint": "http://localhost:6004/concept-descriptions/$recent-changes?limit=20",
+    "shouldMatch": "expected/expectedRecentChangesViewerIDs.json",
+    "expectedStatus": 200
+  },
+  {
     "context": "GET viewer-visible concept description - viewer",
     "token": { "user": "usera", "password": "pwd" },
     "method": "GET",
