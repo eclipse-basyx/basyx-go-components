@@ -98,7 +98,7 @@ func ABACMiddleware(settings ABACSettings) func(http.Handler) http.Handler {
 			if settings.Model != nil {
 				opts := grammar.DefaultSimplifyOptions()
 				opts.EnableImplicitCasts = settings.EnableImplicitCasts
-				evaluation := settings.Model.AuthorizeWithFilterDetailedWithOptions(EvalInput{
+				evaluation := settings.Model.AuthorizeWithFilterWithOptions(EvalInput{
 					Method: r.Method,
 					Path:   r.URL.Path,
 					Claims: claims,

@@ -54,16 +54,16 @@ func TestDeterministicMatchedRuleIDHashChangesWhenRuleContentChanges(t *testing.
 	}
 }
 
-func TestAuthorizeWithFilterDetailedReturnsOrderedMatchedRuleIDs(t *testing.T) {
+func TestAuthorizeWithFilterWithOptionsReturnsOrderedMatchedRuleIDs(t *testing.T) {
 	t.Parallel()
 
 	model := mustParseAASRegistryAccessModel(t, matchedRuleModelJSON)
 
-	result := model.AuthorizeWithFilterDetailed(EvalInput{
+	result := model.AuthorizeWithFilterWithOptions(EvalInput{
 		Method: http.MethodGet,
 		Path:   "/shell-descriptors",
 		Claims: Claims{"sub": "anonymous"},
-	})
+	}, grammar.DefaultSimplifyOptions())
 
 	if !result.Allowed || result.Reason != DecisionAllow {
 		t.Fatalf("expected allow decision, got allowed=%v reason=%s", result.Allowed, result.Reason)

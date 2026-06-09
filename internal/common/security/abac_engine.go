@@ -153,42 +153,17 @@ type AuthorizationEvaluation struct {
 //
 //nolint:revive // i will refactor this function at some point
 func (m *AccessModel) AuthorizeWithFilter(in EvalInput) (bool, DecisionCode, *QueryFilter) {
-	return m.AuthorizeWithFilterWithOptions(in, grammar.DefaultSimplifyOptions())
-}
-
-// AuthorizeWithFilterWithOptions behaves like AuthorizeWithFilter but allows callers
-// to control backend simplification behavior (e.g., implicit casts).
-func (m *AccessModel) AuthorizeWithFilterWithOptions(in EvalInput, opts grammar.SimplifyOptions) (bool, DecisionCode, *QueryFilter) {
-	result := m.AuthorizeWithFilterDetailedWithOptions(in, opts)
+	result := m.AuthorizeWithFilterWithOptions(in, grammar.DefaultSimplifyOptions())
 	return result.Allowed, result.Reason, result.QueryFilter
 }
 
-// AuthorizeWithFilterDetailed evaluates the request and returns audit-friendly metadata.
+// AuthorizeWithFilterWithOptions evaluates the request and returns audit-friendly metadata.
 //
-// The evaluation semantics are identical to AuthorizeWithFilter. In addition to
-// the allow decision and optional query filter, the returned value contains the
-// deterministic matched rule identifiers used by history audit enrichment.
-//
-// Parameters:
-//   - in: Request method, path, and claims used by the ABAC evaluator.
-//
-// Returns:
-//   - AuthorizationEvaluation: Access decision, decision reason, optional query
-//     filter, and comma-separated matched allow rule IDs.
-//
-// Example:
-//
-//	result := model.AuthorizeWithFilterDetailed(input)
-//	if !result.Allowed {
-//		return result.Reason
-//	}
-//	audit.MatchedRuleID = result.MatchedRuleID
-func (m *AccessModel) AuthorizeWithFilterDetailed(in EvalInput) AuthorizationEvaluation {
-	return m.AuthorizeWithFilterDetailedWithOptions(in, grammar.DefaultSimplifyOptions())
-}
-
-// AuthorizeWithFilterDetailedWithOptions behaves like AuthorizeWithFilterWithOptions
-// and additionally returns the deterministic IDs of all matched allow rules.
+// The evaluation semantics are identical to AuthorizeWithFilter, but callers can
+// control backend simplification behavior, for example implicit casts. In
+// addition to the allow decision and optional query filter, the returned value
+// contains the deterministic matched rule identifiers used by history audit
+// enrichment.
 //
 // Parameters:
 //   - in: Request method, path, and claims used by the ABAC evaluator.
@@ -202,7 +177,7 @@ func (m *AccessModel) AuthorizeWithFilterDetailed(in EvalInput) AuthorizationEva
 //
 //	opts := grammar.DefaultSimplifyOptions()
 //	opts.EnableImplicitCasts = true
-//	result := model.AuthorizeWithFilterDetailedWithOptions(input, opts)
+//	result := model.AuthorizeWithFilterWithOptions(input, opts)
 //	if result.Allowed {
 //		ctx = ContextWithAuthorizationDecision(ctx, AuthorizationDecision{
 //			Result:        string(DecisionAllow),
@@ -211,7 +186,7 @@ func (m *AccessModel) AuthorizeWithFilterDetailed(in EvalInput) AuthorizationEva
 //	}
 //
 // nolint:revive // This function is the heart of ABAC and is complicated. Sorry cognitive-complexity!
-func (m *AccessModel) AuthorizeWithFilterDetailedWithOptions(in EvalInput, opts grammar.SimplifyOptions) AuthorizationEvaluation {
+func (m *AccessModel) AuthorizeWithFilterWithOptions(in EvalInput, opts grammar.SimplifyOptions) AuthorizationEvaluation {
 	rightAlternatives, mapped, routeFound := m.mapMethodAndPathToRights(in)
 	if !routeFound {
 		return AuthorizationEvaluation{Reason: DecisionRouteNotFound}
