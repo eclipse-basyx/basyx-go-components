@@ -26,15 +26,9 @@
 package history
 
 import (
-	"bytes"
-	"crypto/sha256"
-	"encoding/hex"
-	"encoding/json"
-	"errors"
-	"fmt"
-	"io"
-	"sort"
 	"time"
+
+	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 )
 
 // CanonicalJSONHash returns a SHA-256 hash over CanonicalJSON(value).
@@ -58,12 +52,7 @@ import (
 //	}
 //	event.ContentHash = hash
 func CanonicalJSONHash(value any) (string, error) {
-	canonical, err := CanonicalJSON(value)
-	if err != nil {
-		return "", err
-	}
-	sum := sha256.Sum256(canonical)
-	return hex.EncodeToString(sum[:]), nil
+	return common.CanonicalJSONHash(value)
 }
 
 // ComputeHistoryRowHash returns the hash-chain row hash for a history event.
@@ -162,30 +151,11 @@ func databaseTimestamp(value time.Time) time.Time {
 //	}
 //	return canonical, nil
 func CanonicalJSON(value any) ([]byte, error) {
-	normalized, err := normalizeJSONValue(value)
-	if err != nil {
-		return nil, err
-	}
-	var out bytes.Buffer
-	if err = writeCanonicalJSON(&out, normalized); err != nil {
-		return nil, err
-	}
-	return out.Bytes(), nil
+	return common.CanonicalJSON(value)
 }
 
-func normalizeJSONValue(value any) (any, error) {
-	switch typed := value.(type) {
-	case json.RawMessage:
-		return decodeNormalizedJSON(typed)
-	case []byte:
-		return decodeNormalizedJSON(typed)
-	default:
-		encoded, err := json.Marshal(value)
-		if err != nil {
-			return nil, err
-		}
-		return decodeNormalizedJSON(encoded)
-	}
+func decodeJSONPreservingNumbers(raw []byte, target any) error {
+	return common.DecodeJSONPreservingNumbers(raw, target)
 }
 
 func decodeNormalizedJSON(raw []byte) (any, error) {
@@ -194,98 +164,4 @@ func decodeNormalizedJSON(raw []byte) (any, error) {
 		return nil, err
 	}
 	return normalized, nil
-}
-
-func decodeJSONPreservingNumbers(raw []byte, target any) error {
-	decoder := json.NewDecoder(bytes.NewReader(raw))
-	decoder.UseNumber()
-	if err := decoder.Decode(target); err != nil {
-		return err
-	}
-	var trailing any
-	if err := decoder.Decode(&trailing); !errors.Is(err, io.EOF) {
-		if err == nil {
-			return fmt.Errorf("multiple JSON values in payload")
-		}
-		return err
-	}
-	return nil
-}
-
-func writeCanonicalJSON(out *bytes.Buffer, value any) error {
-	switch typed := value.(type) {
-	case map[string]any:
-		return writeCanonicalObject(out, typed)
-	case []any:
-		return writeCanonicalArray(out, typed)
-	default:
-		encoded, err := json.Marshal(typed)
-		if err != nil {
-			return fmt.Errorf("marshal scalar: %w", err)
-		}
-		return writeCanonicalBytes(out, encoded)
-	}
-}
-
-func writeCanonicalObject(out *bytes.Buffer, value map[string]any) error {
-	if err := writeCanonicalByte(out, '{'); err != nil {
-		return err
-	}
-	keys := make([]string, 0, len(value))
-	for key := range value {
-		keys = append(keys, key)
-	}
-	sort.Strings(keys)
-	for index, key := range keys {
-		if index > 0 {
-			if err := writeCanonicalByte(out, ','); err != nil {
-				return err
-			}
-		}
-		keyJSON, err := json.Marshal(key)
-		if err != nil {
-			return fmt.Errorf("marshal object key: %w", err)
-		}
-		if err = writeCanonicalBytes(out, keyJSON); err != nil {
-			return err
-		}
-		if err = writeCanonicalByte(out, ':'); err != nil {
-			return err
-		}
-		if err = writeCanonicalJSON(out, value[key]); err != nil {
-			return err
-		}
-	}
-	return writeCanonicalByte(out, '}')
-}
-
-func writeCanonicalArray(out *bytes.Buffer, value []any) error {
-	if err := writeCanonicalByte(out, '['); err != nil {
-		return err
-	}
-	for index, item := range value {
-		if index > 0 {
-			if err := writeCanonicalByte(out, ','); err != nil {
-				return err
-			}
-		}
-		if err := writeCanonicalJSON(out, item); err != nil {
-			return err
-		}
-	}
-	return writeCanonicalByte(out, ']')
-}
-
-func writeCanonicalBytes(out *bytes.Buffer, value []byte) error {
-	if _, err := out.Write(value); err != nil {
-		return fmt.Errorf("write canonical json: %w", err)
-	}
-	return nil
-}
-
-func writeCanonicalByte(out *bytes.Buffer, value byte) error {
-	if err := out.WriteByte(value); err != nil {
-		return fmt.Errorf("write canonical json byte: %w", err)
-	}
-	return nil
 }
