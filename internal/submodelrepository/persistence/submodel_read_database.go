@@ -322,12 +322,6 @@ func (s *SubmodelDatabase) getSubmodelsWithOptionalSemanticIDFilter(ctx context.
 
 	rows, err := s.db.Query(query, args...)
 	if err != nil {
-		if err == sql.ErrNoRows {
-			if submodelIdentifierFilter != nil {
-				return nil, "", common.NewErrNotFound(*submodelIdentifierFilter)
-			}
-			return nil, "", common.NewErrNotFound("submodel")
-		}
 		return nil, "", err
 	}
 	defer func() {
