@@ -289,7 +289,7 @@ func baseVersionChainQuery(historyAlias exp.AliasedExpression, payloadAlias exp.
 			historyAlias.Col("authorization_result"),
 			historyAlias.Col("policy_id"),
 			historyAlias.Col("matched_rule_id"),
-			goqu.L(`"history"."source_ip"::text`),
+			goqu.L(`host("history"."source_ip")`),
 			historyAlias.Col("user_agent"),
 			historyAlias.Col("operation"),
 			historyAlias.Col("endpoint"),

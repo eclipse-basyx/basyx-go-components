@@ -108,6 +108,37 @@ func TestAASEnvironmentDelegatesHistoryRecentChangesAndBatchAssetKind(t *testing
 	requireAASEnvDescriptor(t, decodeAASEnvMap(t, body), descriptorID, "descriptor-type-v1")
 }
 
+func TestAASEnvironmentHistoryAllowsAddingIDShortAfterCreate(t *testing.T) {
+	resetDatabase(t)
+
+	aasID := fmt.Sprintf("https://example.com/ids/aasenv/history-add-idshort-%d", time.Now().UnixNano())
+	encodedAASID := base64.RawURLEncoding.EncodeToString([]byte(aasID))
+
+	t.Cleanup(func() {
+		doAASEnvRequest(t, aasEnvNoRedirectClient, http.MethodDelete, aasEnvBaseURL+"/shells/"+encodedAASID, nil)
+		doAASEnvRequest(t, aasEnvNoRedirectClient, http.MethodDelete, aasEnvBaseURL+"/shell-descriptors/"+encodedAASID, nil)
+	})
+
+	aasPayload := map[string]any{
+		"id":        aasID,
+		"modelType": "AssetAdministrationShell",
+		"assetInformation": map[string]any{
+			"assetKind": "Instance",
+		},
+	}
+	status, body, _ := doAASEnvRequest(t, aasEnvNoRedirectClient, http.MethodPost, aasEnvBaseURL+"/shells", aasPayload)
+	require.Equal(t, http.StatusCreated, status, "response=%s", string(body))
+
+	aasPayload["idShort"] = "AddedLater"
+	status, body, _ = doAASEnvRequest(t, aasEnvNoRedirectClient, http.MethodPut, aasEnvBaseURL+"/shells/"+encodedAASID, aasPayload)
+	require.Equal(t, http.StatusNoContent, status, "response=%s", string(body))
+
+	status, body, _ = doAASEnvRequest(t, aasEnvNoRedirectClient, http.MethodGet, aasEnvBaseURL+"/shells/"+encodedAASID, nil)
+	require.Equal(t, http.StatusOK, status, "response=%s", string(body))
+	current := decodeAASEnvMap(t, body)
+	require.Equal(t, "AddedLater", current["idShort"])
+}
+
 func decodeAASEnvMap(t *testing.T, body []byte) map[string]any {
 	t.Helper()
 	var payload map[string]any
