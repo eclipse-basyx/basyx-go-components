@@ -228,6 +228,14 @@ func (s *SubmodelDatabase) GetSubmodelByIDAndDate(ctx context.Context, submodelI
 
 // GetSubmodelRecentChanges returns Submodel history rows for recent-change APIs.
 func (s *SubmodelDatabase) GetSubmodelRecentChanges(ctx context.Context, limit int32, cursor string, createdFrom time.Time, updatedFrom time.Time) ([]history.Row, string, error) {
+	shouldEnforce, enforceErr := shouldEnforceFormula(ctx, "SMREPO-RECENT-SHOULDENFORCE")
+	if enforceErr != nil {
+		return nil, "", enforceErr
+	}
+	if !shouldEnforce {
+		return history.RecentRows(ctx, s.db, history.TableSubmodel, limit, cursor, createdFrom, updatedFrom)
+	}
+
 	collector, err := grammar.NewResolvedFieldPathCollectorForRoot(grammar.CollectorRootSM)
 	if err != nil {
 		return nil, "", common.NewInternalServerError("SMREPO-RECENT-BADCOLLECTOR " + err.Error())

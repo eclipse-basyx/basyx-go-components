@@ -229,6 +229,14 @@ func (s *AssetAdministrationShellDatabase) GetAssetAdministrationShellByIDAndDat
 
 // GetAssetAdministrationShellRecentChanges returns AAS history rows for recent-change APIs.
 func (s *AssetAdministrationShellDatabase) GetAssetAdministrationShellRecentChanges(ctx context.Context, limit int32, cursor string, createdFrom time.Time, updatedFrom time.Time) ([]history.Row, string, error) {
+	shouldEnforce, enforceErr := shouldEnforceFormula(ctx, "AASREPO-RECENT-SHOULDENFORCE")
+	if enforceErr != nil {
+		return nil, "", enforceErr
+	}
+	if !shouldEnforce {
+		return history.RecentRows(ctx, s.db, history.TableAAS, limit, cursor, createdFrom, updatedFrom)
+	}
+
 	collector, err := buildAASCollector()
 	if err != nil {
 		return nil, "", err

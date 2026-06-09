@@ -43,6 +43,7 @@ import (
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/history"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
+	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 )
 
 // PostgreSQLAASRegistryDatabase is a PostgreSQL-backed implementation of the AAS
@@ -297,6 +298,14 @@ func (p *PostgreSQLAASRegistryDatabase) DeleteAssetAdministrationShellDescriptor
 
 // GetAssetAdministrationShellDescriptorRecentChanges returns descriptor history rows for recent-change APIs.
 func (p *PostgreSQLAASRegistryDatabase) GetAssetAdministrationShellDescriptorRecentChanges(ctx context.Context, limit int32, cursor string, createdFrom time.Time, updatedFrom time.Time) ([]history.Row, string, error) {
+	shouldEnforceFormula, enforceErr := auth.ShouldEnforceFormula(ctx)
+	if enforceErr != nil {
+		return nil, "", common.NewInternalServerError("AASREG-RECENT-SHOULDENFORCE " + enforceErr.Error())
+	}
+	if !shouldEnforceFormula {
+		return history.RecentRows(ctx, p.db, history.TableDescriptor, limit, cursor, createdFrom, updatedFrom)
+	}
+
 	collector, err := grammar.NewResolvedFieldPathCollectorForRoot(grammar.CollectorRootAASDesc)
 	if err != nil {
 		return nil, "", common.NewInternalServerError("AASREG-RECENT-BADCOLLECTOR " + err.Error())
