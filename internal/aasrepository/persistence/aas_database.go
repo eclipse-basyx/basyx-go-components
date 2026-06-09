@@ -229,7 +229,15 @@ func (s *AssetAdministrationShellDatabase) GetAssetAdministrationShellByIDAndDat
 
 // GetAssetAdministrationShellRecentChanges returns AAS history rows for recent-change APIs.
 func (s *AssetAdministrationShellDatabase) GetAssetAdministrationShellRecentChanges(ctx context.Context, limit int32, cursor string, createdFrom time.Time, updatedFrom time.Time) ([]history.Row, string, error) {
-	return history.RecentRows(ctx, s.db, history.TableAAS, limit, cursor, createdFrom, updatedFrom)
+	collector, err := buildAASCollector()
+	if err != nil {
+		return nil, "", err
+	}
+	visibilityDS := goqu.From(goqu.T("aas").As("aas")).
+		Select(goqu.V(1)).
+		Where(goqu.I("aas.aas_id").Eq(goqu.I("history.identifier")))
+
+	return history.RecentRowsForVisibleIdentifiables(ctx, s.db, history.TableAAS, limit, cursor, createdFrom, updatedFrom, visibilityDS, collector)
 }
 
 func buildAASCollector() (*grammar.ResolvedFieldPathCollector, error) {

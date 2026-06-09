@@ -35,6 +35,7 @@ import (
 
 	"github.com/FriedJannik/aas-go-sdk/jsonization"
 	"github.com/FriedJannik/aas-go-sdk/types"
+	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/history"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
@@ -227,7 +228,15 @@ func (s *SubmodelDatabase) GetSubmodelByIDAndDate(ctx context.Context, submodelI
 
 // GetSubmodelRecentChanges returns Submodel history rows for recent-change APIs.
 func (s *SubmodelDatabase) GetSubmodelRecentChanges(ctx context.Context, limit int32, cursor string, createdFrom time.Time, updatedFrom time.Time) ([]history.Row, string, error) {
-	return history.RecentRows(ctx, s.db, history.TableSubmodel, limit, cursor, createdFrom, updatedFrom)
+	collector, err := grammar.NewResolvedFieldPathCollectorForRoot(grammar.CollectorRootSM)
+	if err != nil {
+		return nil, "", common.NewInternalServerError("SMREPO-RECENT-BADCOLLECTOR " + err.Error())
+	}
+	visibilityDS := goqu.From("submodel").
+		Select(goqu.V(1)).
+		Where(goqu.I("submodel.submodel_identifier").Eq(goqu.I("history.identifier")))
+
+	return history.RecentRowsForVisibleIdentifiables(ctx, s.db, history.TableSubmodel, limit, cursor, createdFrom, updatedFrom, visibilityDS, collector)
 }
 
 // RecordCurrentSubmodelVersion appends a full snapshot of the current Submodel state.

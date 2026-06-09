@@ -475,7 +475,15 @@ func (b *ConceptDescriptionBackend) conceptDescriptionCursorExists(ctx context.C
 
 // GetConceptDescriptionRecentChanges returns Concept Description history rows for recent-change APIs.
 func (b *ConceptDescriptionBackend) GetConceptDescriptionRecentChanges(ctx context.Context, limit int32, cursor string, createdFrom time.Time, updatedFrom time.Time) ([]history.Row, string, error) {
-	return history.RecentRows(ctx, b.db, history.TableConcept, limit, cursor, createdFrom, updatedFrom)
+	collector, collectorErr := grammar.NewResolvedFieldPathCollectorForRoot(grammar.CollectorRootCD)
+	if collectorErr != nil {
+		return nil, "", common.NewInternalServerError("CDREPO-RECENT-BADCOLLECTOR " + collectorErr.Error())
+	}
+	visibilityDS := goqu.From("concept_description").
+		Select(goqu.V(1)).
+		Where(goqu.I("concept_description.id").Eq(goqu.I("history.identifier")))
+
+	return history.RecentRowsForVisibleIdentifiables(ctx, b.db, history.TableConcept, limit, cursor, createdFrom, updatedFrom, visibilityDS, collector)
 }
 
 // GetConceptDescriptionByID retrieves a concept description by its identifier.

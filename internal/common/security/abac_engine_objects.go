@@ -62,6 +62,12 @@ var descriptorRouteMappings = []descriptorRouteMapping{
 	},
 	{
 		scope:       "$aasdesc",
+		route:       "/shell-descriptors/$recent-changes",
+		filterField: "$aasdesc#id",
+		hasWildcard: false,
+	},
+	{
+		scope:       "$aasdesc",
 		route:       "/shell-descriptors/%s",
 		filterField: "$aasdesc#id",
 		hasWildcard: true,
@@ -144,6 +150,12 @@ var identifiableRouteMappings = []identifiableRouteMapping{
 		filterField: "$sm#id",
 		hasWildcard: false,
 	},
+	{
+		scope:       "$sm",
+		route:       "/submodels/$recent-changes",
+		filterField: "$sm#id",
+		hasWildcard: false,
+	},
 	// Covers all concrete submodel endpoints under /submodels/{submodelIdentifier}/...
 	{
 		scope:       "$sm",
@@ -177,6 +189,12 @@ var identifiableRouteMappings = []identifiableRouteMapping{
 		filterField: "$aas#id",
 		hasWildcard: false,
 	},
+	{
+		scope:       "$aas",
+		route:       "/shells/$recent-changes",
+		filterField: "$aas#id",
+		hasWildcard: false,
+	},
 	// Covers all concrete AAS endpoints under /shells/{aasIdentifier}/...
 	{
 		scope:       "$aas",
@@ -199,6 +217,12 @@ var identifiableRouteMappings = []identifiableRouteMapping{
 	{
 		scope:       "$cd",
 		route:       "/concept-descriptions",
+		filterField: "$cd#id",
+		hasWildcard: false,
+	},
+	{
+		scope:       "$cd",
+		route:       "/concept-descriptions/$recent-changes",
 		filterField: "$cd#id",
 		hasWildcard: false,
 	},

@@ -91,6 +91,35 @@ func TestRecentRowsReturnsNewestRowsFirstAndCursorPaginatesOlderRows(t *testing.
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 
+func TestRecentRowsForVisibleIdentifiablesAddsVisibilityFilter(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer func() {
+		_ = db.Close()
+	}()
+
+	visibilityDS := goqu.From("aas").
+		Select(goqu.V(1)).
+		Where(goqu.I("aas.aas_id").Eq(goqu.I("history.identifier")))
+
+	mock.ExpectQuery(`SELECT .*FROM "aas_history" AS "history".*EXISTS \(SELECT 1 FROM "aas" WHERE \("aas"\."aas_id" = "history"\."identifier"\)\).*ORDER BY "history"."history_id" DESC LIMIT 2`).
+		WillReturnRows(sqlmock.NewRows([]string{
+			"history_id",
+			"identifier",
+			"change_type",
+			"deleted",
+			"administration_created_at_text",
+			"administration_updated_at_text",
+			"operation_time",
+		}))
+
+	rows, cursor, err := RecentRowsForVisibleIdentifiables(context.Background(), db, TableAAS, 1, "", time.Time{}, time.Time{}, visibilityDS, nil)
+	require.NoError(t, err)
+	require.Empty(t, rows)
+	require.Empty(t, cursor)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
 func TestRecentRowsReusesRestoredChainForRowsInSameCheckpoint(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
