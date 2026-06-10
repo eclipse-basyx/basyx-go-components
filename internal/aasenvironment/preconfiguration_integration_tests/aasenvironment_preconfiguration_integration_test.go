@@ -45,8 +45,7 @@ const (
 )
 
 func TestMain(m *testing.M) {
-	_ = os.MkdirAll("./docker_compose/observer", 0o777)
-	_ = os.Chmod("./docker_compose/observer", 0o777)
+	_ = os.MkdirAll("./docker_compose/observer", 0o750)
 	_ = os.Remove(observerStatusFilePath)
 
 	os.Exit(testenv.RunComposeTestMain(m, testenv.ComposeTestMainOptions{
