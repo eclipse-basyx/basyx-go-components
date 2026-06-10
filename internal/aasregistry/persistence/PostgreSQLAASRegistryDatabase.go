@@ -37,10 +37,13 @@ import (
 	"database/sql"
 	"time"
 
+	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/descriptors"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/history"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
+	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 )
 
 // PostgreSQLAASRegistryDatabase is a PostgreSQL-backed implementation of the AAS
@@ -244,30 +247,17 @@ func (p *PostgreSQLAASRegistryDatabase) UpsertAdministrationShellDescriptorInTra
 		return common.NewInternalServerError("AASREG-UPSERTAASDESC-NILTX transaction must not be nil")
 	}
 
-	_, err := descriptors.GetAssetAdministrationShellDescriptorByIDTx(ctx, tx, aasd.Id)
+	created, err := descriptors.UpsertAdministrationShellDescriptorTx(ctx, tx, aasd)
 	if err != nil {
-		if !common.IsErrNotFound(err) {
-			return err
-		}
-		if err := descriptors.InsertAdministrationShellDescriptorTx(ctx, tx, aasd); err != nil {
-			return err
-		}
-		stored, err := descriptors.GetAssetAdministrationShellDescriptorByIDTx(ctx, tx, aasd.Id)
-		if err != nil {
-			return err
-		}
-		return appendDescriptorHistoryTx(ctx, tx, stored, history.ChangeCreated, false)
+		return err
 	}
 
-	if err = descriptors.DeleteAssetAdministrationShellDescriptorByIDTx(ctx, tx, aasd.Id); err != nil {
-		return err
-	}
-	if err = descriptors.InsertAdministrationShellDescriptorTx(ctx, tx, aasd); err != nil {
-		return err
-	}
 	stored, err := descriptors.GetAssetAdministrationShellDescriptorByIDTx(ctx, tx, aasd.Id)
 	if err != nil {
 		return err
+	}
+	if created {
+		return appendDescriptorHistoryTx(ctx, tx, stored, history.ChangeCreated, false)
 	}
 	return appendDescriptorHistoryTx(ctx, tx, stored, history.ChangeUpdated, false)
 }
@@ -295,7 +285,27 @@ func (p *PostgreSQLAASRegistryDatabase) DeleteAssetAdministrationShellDescriptor
 
 // GetAssetAdministrationShellDescriptorRecentChanges returns descriptor history rows for recent-change APIs.
 func (p *PostgreSQLAASRegistryDatabase) GetAssetAdministrationShellDescriptorRecentChanges(ctx context.Context, limit int32, cursor string, createdFrom time.Time, updatedFrom time.Time) ([]history.Row, string, error) {
-	return history.RecentRows(ctx, p.db, history.TableDescriptor, limit, cursor, createdFrom, updatedFrom)
+	shouldEnforceFormula, enforceErr := auth.ShouldEnforceFormula(ctx)
+	if enforceErr != nil {
+		return nil, "", common.NewInternalServerError("AASREG-RECENT-SHOULDENFORCE " + enforceErr.Error())
+	}
+	if !shouldEnforceFormula {
+		return history.RecentRows(ctx, p.db, history.TableDescriptor, limit, cursor, createdFrom, updatedFrom)
+	}
+
+	collector, err := grammar.NewResolvedFieldPathCollectorForRoot(grammar.CollectorRootAASDesc)
+	if err != nil {
+		return nil, "", common.NewInternalServerError("AASREG-RECENT-BADCOLLECTOR " + err.Error())
+	}
+	visibilityDS := goqu.From(common.TDescriptor).
+		InnerJoin(
+			common.TAASDescriptor,
+			goqu.On(common.TAASDescriptor.Col(common.ColDescriptorID).Eq(common.TDescriptor.Col(common.ColID))),
+		).
+		Select(goqu.V(1)).
+		Where(common.TAASDescriptor.Col(common.ColAASID).Eq(goqu.I("history.identifier")))
+
+	return history.RecentRowsForVisibleIdentifiables(ctx, p.db, history.TableDescriptor, limit, cursor, createdFrom, updatedFrom, visibilityDS, collector)
 }
 
 // ListAssetAdministrationShellDescriptors lists AAS descriptors with optional

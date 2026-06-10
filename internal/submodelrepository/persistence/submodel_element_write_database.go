@@ -68,7 +68,7 @@ func (s *SubmodelDatabase) addTopLevelSubmodelElementInTransaction(tx *sql.Tx, s
 		startPosition = int(maxPosition.Int64) + 1
 	}
 
-	if isSiblingIDShortCollision(tx, submodelDatabaseID, nil, submodelElement) {
+	if isIDShortDuplicate(tx, submodelDatabaseID, nil, submodelElement) {
 		return "", common.NewErrConflict("SMREPO-ADDSME-COLLISION Duplicate submodel element idShort")
 	}
 
@@ -158,16 +158,9 @@ func (s *SubmodelDatabase) AddSubmodelElement(ctx context.Context, submodelID st
 	if enforceErr != nil {
 		return enforceErr
 	}
-	if shouldEnforce && insertedPath != "" {
-		exists, visible, visErr := s.checkSubmodelElementVisibilityInTx(ctx, tx, submodelID, insertedPath)
-		if visErr != nil {
-			return visErr
-		}
-		if !exists {
-			return common.NewInternalServerError("SMREPO-ADDSME-ABACCHECKMISSING created submodel element not found before commit")
-		}
-		if !visible {
-			return common.NewErrDenied("SMREPO-ADDSME-ABACDENIED Created submodel element is not accessible under ABAC constraints")
+	if shouldCheckInsertedElementVisibility(shouldEnforce, insertedPath) {
+		if err = s.ensureCreatedSubmodelElementIsVisible(ctx, tx, submodelID, insertedPath); err != nil {
+			return err
 		}
 	}
 
@@ -221,7 +214,7 @@ func (s *SubmodelDatabase) addSubmodelElementWithPathInTransaction(ctx context.C
 		return err
 	}
 
-	if isSiblingIDShortCollision(tx, submodelDatabaseID, &parentElementID, submodelElement) {
+	if isIDShortDuplicate(tx, submodelDatabaseID, &parentElementID, submodelElement) {
 		return common.NewErrConflict("SMREPO-ADDSMEBYPATH-COLLISION Duplicate submodel element idShort")
 	}
 
@@ -299,84 +292,33 @@ func (s *SubmodelDatabase) PutSubmodelElement(
 		return false, err
 	}
 
-	elementExists := false
-	historyMutation := submodelElementRootMutation{}
+	var elementExists bool
+	var historyMutation submodelElementRootMutation
 	shouldEnforce, enforceErr := shouldEnforceFormula(ctx, "SMREPO-PUTSME-SHOULDENFORCE")
 	if enforceErr != nil {
 		return false, enforceErr
 	}
 
-	if shouldEnforce {
-		exists, _, visErr := s.checkSubmodelElementVisibilityInTx(ctx, tx, submodelID, idShortPath)
-		if visErr != nil {
-			return false, visErr
-		}
-		elementExists = exists
-		ctx = auth.SelectPutFormulaByExistence(ctx, elementExists)
-		if elementExists {
-			_, visible, visErr := s.checkSubmodelElementVisibilityInTx(ctx, tx, submodelID, idShortPath)
-			if visErr != nil {
-				return false, visErr
-			}
-			if !visible {
-				return false, common.NewErrDenied("SMREPO-PUTSME-ABACDENIED Existing submodel element is not accessible under ABAC constraints")
-			}
+	ctx, elementExists, err = s.determinePutSubmodelElementExistence(ctx, tx, submodelID, submodelDatabaseID, idShortPath, shouldEnforce)
+	if err != nil {
+		return false, err
+	}
+
+	if elementExists {
+		historyMutation, err = s.replaceSubmodelElementForPut(tx, submodelID, idShortPath, submodelElement)
+		if err != nil {
+			return false, err
 		}
 	} else {
-		elementExists, err = submodelElementPathExistsInTx(tx, submodelDatabaseID, idShortPath)
+		historyMutation, err = s.createSubmodelElementForPut(ctx, tx, submodelID, submodelDatabaseID, idShortPath, submodelElement)
 		if err != nil {
 			return false, err
 		}
 	}
 
-	if elementExists {
-		if err = s.updateSubmodelElementInTransaction(tx, submodelID, idShortPath, submodelElement, true); err != nil {
-			return false, err
-		}
-		historyMutation.previousPath = idShortPath
-		historyMutation.currentPath = submodelelements.ResolveUpdatedPath(idShortPath, submodelElement, true)
-	} else {
-		parentPath, targetIDShort, resolveErr := resolvePutCreateTargetPathParts(idShortPath)
-		if resolveErr != nil {
-			return false, resolveErr
-		}
-
-		if submodelElement == nil {
-			return false, common.NewErrBadRequest("SMREPO-PUTSME-BADREQUEST Missing submodel element payload")
-		}
-
-		if submodelElement.IDShort() != nil {
-			payloadIDShort := strings.TrimSpace(*submodelElement.IDShort())
-			if payloadIDShort != "" && payloadIDShort != targetIDShort {
-				return false, common.NewErrBadRequest("SMREPO-PUTSME-BADREQUEST Payload idShort must match path idShort when creating")
-			}
-		}
-		submodelElement.SetIDShort(&targetIDShort)
-
-		if parentPath == "" {
-			if _, err = s.addTopLevelSubmodelElementInTransaction(tx, submodelID, submodelElement); err != nil {
-				return false, err
-			}
-			historyMutation.currentPath = idShortPath
-		} else {
-			if err = s.addSubmodelElementWithPathInTransaction(ctx, tx, submodelID, submodelDatabaseID, parentPath, submodelElement); err != nil {
-				return false, err
-			}
-			historyMutation.previousPath = parentPath
-			historyMutation.currentPath = parentPath
-		}
-	}
-
 	if shouldEnforce {
-		exists, visible, visErr := s.checkSubmodelElementVisibilityInTx(ctx, tx, submodelID, idShortPath)
-		if visErr != nil {
-			return false, visErr
-		}
-		if !exists {
-			return false, common.NewInternalServerError("SMREPO-PUTSME-ABACCHECKMISSING Written submodel element not found before commit")
-		}
-		if !visible {
-			return false, common.NewErrDenied("SMREPO-PUTSME-ABACDENIED Written submodel element is not accessible under ABAC constraints")
+		if err = s.ensurePutSubmodelElementIsVisible(ctx, tx, submodelID, idShortPath); err != nil {
+			return false, err
 		}
 	}
 
@@ -389,6 +331,147 @@ func (s *SubmodelDatabase) PutSubmodelElement(
 	}
 
 	return elementExists, nil
+}
+
+func shouldCheckInsertedElementVisibility(shouldEnforce bool, insertedPath string) bool {
+	return shouldEnforce && insertedPath != ""
+}
+
+func (s *SubmodelDatabase) ensureCreatedSubmodelElementIsVisible(ctx context.Context, tx *sql.Tx, submodelID string, idShortPath string) error {
+	exists, visible, err := s.checkSubmodelElementVisibilityInTx(ctx, tx, submodelID, idShortPath)
+	if err != nil {
+		return err
+	}
+	if !exists {
+		return common.NewInternalServerError("SMREPO-ADDSME-ABACCHECKMISSING created submodel element not found before commit")
+	}
+	if !visible {
+		return common.NewErrDenied("SMREPO-ADDSME-ABACDENIED Created submodel element is not accessible under ABAC constraints")
+	}
+	return nil
+}
+
+func (s *SubmodelDatabase) determinePutSubmodelElementExistence(
+	ctx context.Context,
+	tx *sql.Tx,
+	submodelID string,
+	submodelDatabaseID int,
+	idShortPath string,
+	shouldEnforce bool,
+) (context.Context, bool, error) {
+	if !shouldEnforce {
+		elementExists, err := submodelElementPathExistsInTx(tx, submodelDatabaseID, idShortPath)
+		return ctx, elementExists, err
+	}
+
+	elementExists, err := s.putSubmodelElementExistsForCurrentAccess(ctx, tx, submodelID, idShortPath)
+	if err != nil {
+		return ctx, false, err
+	}
+	ctx = auth.SelectPutFormulaByExistence(ctx, elementExists)
+	if !elementExists {
+		return ctx, false, nil
+	}
+	return ctx, true, s.ensureExistingSubmodelElementCanBeReplaced(ctx, tx, submodelID, idShortPath)
+}
+
+func (s *SubmodelDatabase) putSubmodelElementExistsForCurrentAccess(ctx context.Context, tx *sql.Tx, submodelID string, idShortPath string) (bool, error) {
+	exists, _, err := s.checkSubmodelElementVisibilityInTx(ctx, tx, submodelID, idShortPath)
+	return exists, err
+}
+
+func (s *SubmodelDatabase) ensureExistingSubmodelElementCanBeReplaced(ctx context.Context, tx *sql.Tx, submodelID string, idShortPath string) error {
+	_, visible, err := s.checkSubmodelElementVisibilityInTx(ctx, tx, submodelID, idShortPath)
+	if err != nil {
+		return err
+	}
+	if !visible {
+		return common.NewErrDenied("SMREPO-PUTSME-ABACDENIED Existing submodel element is not accessible under ABAC constraints")
+	}
+	return nil
+}
+
+func (s *SubmodelDatabase) replaceSubmodelElementForPut(
+	tx *sql.Tx,
+	submodelID string,
+	idShortPath string,
+	submodelElement types.ISubmodelElement,
+) (submodelElementRootMutation, error) {
+	if err := s.updateSubmodelElementInTransaction(tx, submodelID, idShortPath, submodelElement, true); err != nil {
+		return submodelElementRootMutation{}, err
+	}
+
+	return submodelElementRootMutation{
+		previousPath: idShortPath,
+		currentPath:  submodelelements.ResolveUpdatedPath(idShortPath, submodelElement, true),
+	}, nil
+}
+
+func (s *SubmodelDatabase) createSubmodelElementForPut(
+	ctx context.Context,
+	tx *sql.Tx,
+	submodelID string,
+	submodelDatabaseID int,
+	idShortPath string,
+	submodelElement types.ISubmodelElement,
+) (submodelElementRootMutation, error) {
+	parentPath, targetIDShort, err := resolvePutCreateTargetPathParts(idShortPath)
+	if err != nil {
+		return submodelElementRootMutation{}, err
+	}
+	if err = ensurePayloadIDShortMatchesTargetPath(submodelElement, targetIDShort); err != nil {
+		return submodelElementRootMutation{}, err
+	}
+	submodelElement.SetIDShort(&targetIDShort)
+
+	if isTopLevelPutCreate(parentPath) {
+		if _, err = s.addTopLevelSubmodelElementInTransaction(tx, submodelID, submodelElement); err != nil {
+			return submodelElementRootMutation{}, err
+		}
+		return submodelElementRootMutation{currentPath: idShortPath}, nil
+	}
+
+	if err = s.addSubmodelElementWithPathInTransaction(ctx, tx, submodelID, submodelDatabaseID, parentPath, submodelElement); err != nil {
+		return submodelElementRootMutation{}, err
+	}
+	return submodelElementRootMutation{
+		previousPath: parentPath,
+		currentPath:  parentPath,
+	}, nil
+}
+
+func ensurePayloadIDShortMatchesTargetPath(submodelElement types.ISubmodelElement, targetIDShort string) error {
+	if submodelElement == nil {
+		return common.NewErrBadRequest("SMREPO-PUTSME-BADREQUEST Missing submodel element payload")
+	}
+
+	if submodelElement.IDShort() == nil {
+		return nil
+	}
+
+	payloadIDShort := strings.TrimSpace(*submodelElement.IDShort())
+	if payloadIDShort != "" && payloadIDShort != targetIDShort {
+		return common.NewErrBadRequest("SMREPO-PUTSME-BADREQUEST Payload idShort must match path idShort when creating")
+	}
+	return nil
+}
+
+func isTopLevelPutCreate(parentPath string) bool {
+	return parentPath == ""
+}
+
+func (s *SubmodelDatabase) ensurePutSubmodelElementIsVisible(ctx context.Context, tx *sql.Tx, submodelID string, idShortPath string) error {
+	exists, visible, err := s.checkSubmodelElementVisibilityInTx(ctx, tx, submodelID, idShortPath)
+	if err != nil {
+		return err
+	}
+	if !exists {
+		return common.NewInternalServerError("SMREPO-PUTSME-ABACCHECKMISSING Written submodel element not found before commit")
+	}
+	if !visible {
+		return common.NewErrDenied("SMREPO-PUTSME-ABACDENIED Written submodel element is not accessible under ABAC constraints")
+	}
+	return nil
 }
 
 // DeleteSubmodelElementByPath deletes a submodel element and checks ABAC access on the current element when ABAC is enabled.
@@ -404,15 +487,8 @@ func (s *SubmodelDatabase) DeleteSubmodelElementByPath(ctx context.Context, subm
 		return enforceErr
 	}
 	if shouldEnforce {
-		exists, visible, visErr := s.checkSubmodelElementVisibilityInTx(ctx, tx, submodelID, idShortPath)
-		if visErr != nil {
-			return visErr
-		}
-		if !exists {
-			return common.NewErrNotFound("SMREPO-DELSMEBPATH-NOTFOUND Submodel-Element ID-Short: " + idShortPath)
-		}
-		if !visible {
-			return common.NewErrDenied("SMREPO-DELSMEBPATH-ABACDENIED Deleting this submodel element is not allowed")
+		if err = s.ensureSubmodelElementCanBeDeleted(ctx, tx, submodelID, idShortPath); err != nil {
+			return err
 		}
 	}
 
@@ -440,6 +516,20 @@ func (s *SubmodelDatabase) DeleteSubmodelElementByPath(ctx context.Context, subm
 	return tx.Commit()
 }
 
+func (s *SubmodelDatabase) ensureSubmodelElementCanBeDeleted(ctx context.Context, tx *sql.Tx, submodelID string, idShortPath string) error {
+	exists, visible, err := s.checkSubmodelElementVisibilityInTx(ctx, tx, submodelID, idShortPath)
+	if err != nil {
+		return err
+	}
+	if !exists {
+		return common.NewErrNotFound("SMREPO-DELSMEBPATH-NOTFOUND Submodel-Element ID-Short: " + idShortPath)
+	}
+	if !visible {
+		return common.NewErrDenied("SMREPO-DELSMEBPATH-ABACDENIED Deleting this submodel element is not allowed")
+	}
+	return nil
+}
+
 // UpdateSubmodelElement updates a submodel element and checks ABAC access on old and new state when ABAC is enabled.
 func (s *SubmodelDatabase) UpdateSubmodelElement(ctx context.Context, submodelID string, idShortOrPath string, submodelElement types.ISubmodelElement, isPut bool) (err error) {
 	tx, cleanup, err := common.StartTransaction(s.db)
@@ -453,20 +543,9 @@ func (s *SubmodelDatabase) UpdateSubmodelElement(ctx context.Context, submodelID
 		return enforceErr
 	}
 	if shouldEnforce {
-		exists, _, visErr := s.checkSubmodelElementVisibilityInTx(ctx, tx, submodelID, idShortOrPath)
-		if visErr != nil {
-			return visErr
-		}
-		if !exists {
-			return common.NewErrNotFound("SMREPO-UPDSME-NOTFOUND Submodel-Element ID-Short: " + idShortOrPath)
-		}
-		ctx = auth.SelectPutFormulaByExistence(ctx, exists)
-		_, visible, visErr := s.checkSubmodelElementVisibilityInTx(ctx, tx, submodelID, idShortOrPath)
-		if visErr != nil {
-			return visErr
-		}
-		if !visible {
-			return common.NewErrDenied("SMREPO-UPDSME-ABACDENIED Existing submodel element is not accessible under ABAC constraints")
+		ctx, err = s.ensureSubmodelElementCanBeUpdated(ctx, tx, submodelID, idShortOrPath)
+		if err != nil {
+			return err
 		}
 	}
 
@@ -476,12 +555,8 @@ func (s *SubmodelDatabase) UpdateSubmodelElement(ctx context.Context, submodelID
 	}
 
 	if shouldEnforce {
-		exists, visible, visErr := s.checkSubmodelElementVisibilityInTx(ctx, tx, submodelID, idShortOrPath)
-		if visErr != nil {
-			return visErr
-		}
-		if !exists || !visible {
-			return common.NewErrDenied("SMREPO-UPDSME-ABACDENIED Updated submodel element is not accessible under ABAC constraints")
+		if err = s.ensureUpdatedSubmodelElementIsVisible(ctx, tx, submodelID, idShortOrPath); err != nil {
+			return err
 		}
 	}
 
@@ -493,6 +568,37 @@ func (s *SubmodelDatabase) UpdateSubmodelElement(ctx context.Context, submodelID
 	}
 
 	return tx.Commit()
+}
+
+func (s *SubmodelDatabase) ensureSubmodelElementCanBeUpdated(ctx context.Context, tx *sql.Tx, submodelID string, idShortOrPath string) (context.Context, error) {
+	exists, _, err := s.checkSubmodelElementVisibilityInTx(ctx, tx, submodelID, idShortOrPath)
+	if err != nil {
+		return ctx, err
+	}
+	if !exists {
+		return ctx, common.NewErrNotFound("SMREPO-UPDSME-NOTFOUND Submodel-Element ID-Short: " + idShortOrPath)
+	}
+
+	ctx = auth.SelectPutFormulaByExistence(ctx, exists)
+	_, visible, err := s.checkSubmodelElementVisibilityInTx(ctx, tx, submodelID, idShortOrPath)
+	if err != nil {
+		return ctx, err
+	}
+	if !visible {
+		return ctx, common.NewErrDenied("SMREPO-UPDSME-ABACDENIED Existing submodel element is not accessible under ABAC constraints")
+	}
+	return ctx, nil
+}
+
+func (s *SubmodelDatabase) ensureUpdatedSubmodelElementIsVisible(ctx context.Context, tx *sql.Tx, submodelID string, idShortOrPath string) error {
+	exists, visible, err := s.checkSubmodelElementVisibilityInTx(ctx, tx, submodelID, idShortOrPath)
+	if err != nil {
+		return err
+	}
+	if !exists || !visible {
+		return common.NewErrDenied("SMREPO-UPDSME-ABACDENIED Updated submodel element is not accessible under ABAC constraints")
+	}
+	return nil
 }
 
 // UpdateSubmodelElementValueOnly updates a submodel element using value-only representation
@@ -560,7 +666,7 @@ func (s *SubmodelDatabase) UpdateSubmodelValueOnly(ctx context.Context, submodel
 	return tx.Commit()
 }
 
-func isSiblingIDShortCollision(tx *sql.Tx, submodelDatabaseID int, parentElementID *int, submodelElement types.ISubmodelElement) bool {
+func isIDShortDuplicate(tx *sql.Tx, submodelDatabaseID int, parentElementID *int, submodelElement types.ISubmodelElement) bool {
 	idShortPtr := submodelElement.IDShort()
 	if idShortPtr == nil || *idShortPtr == "" {
 		return false

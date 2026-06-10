@@ -333,6 +333,15 @@
     "expectedStatus": 200
   },
   {
+    "context": "GET /shell-descriptors/$recent-changes - anonymous public filtered",
+    "action": "ASSERT_RECENT_CHANGE_IDS",
+    "token": null,
+    "method": "GET",
+    "endpoint": "http://localhost:6004/shell-descriptors/$recent-changes?limit=20",
+    "shouldMatch": "expected/expectedRecentChangesAnonymousDescriptorIDs.json",
+    "expectedStatus": 200
+  },
+  {
     "context": "GET ALL Descriptor - User A - ALLOWED",
     "token": { "user": "usera", "password": "pwd" },
     "method": "GET",
@@ -341,11 +350,29 @@
     "expectedStatus": 200
   },
   {
+    "context": "GET /shell-descriptors/$recent-changes - user A filtered",
+    "action": "ASSERT_RECENT_CHANGE_IDS",
+    "token": { "user": "usera", "password": "pwd" },
+    "method": "GET",
+    "endpoint": "http://localhost:6004/shell-descriptors/$recent-changes?limit=20",
+    "shouldMatch": "expected/expectedRecentChangesUserADescriptorIDs.json",
+    "expectedStatus": 200
+  },
+  {
     "context": "GET ALL Descriptor - User B - ALLOWED",
     "token": { "user": "userb", "password": "pwd" },
     "method": "GET",
     "endpoint": "http://localhost:6004/shell-descriptors",
     "shouldMatch": "expected/expectedShellUserB.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "GET /shell-descriptors/$recent-changes - user B filtered",
+    "action": "ASSERT_RECENT_CHANGE_IDS",
+    "token": { "user": "userb", "password": "pwd" },
+    "method": "GET",
+    "endpoint": "http://localhost:6004/shell-descriptors/$recent-changes?limit=20",
+    "shouldMatch": "expected/expectedRecentChangesUserBDescriptorIDs.json",
     "expectedStatus": 200
   },
   {
@@ -370,6 +397,15 @@
     "method": "GET",
     "endpoint": "http://localhost:6004/shell-descriptors",
     "shouldMatch": "expected/expectedShellAdmin.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "GET /shell-descriptors/$recent-changes - admin descriptor object filtered",
+    "action": "ASSERT_RECENT_CHANGE_IDS",
+    "token": { "user": "admin", "password": "pwd" },
+    "method": "GET",
+    "endpoint": "http://localhost:6004/shell-descriptors/$recent-changes?limit=20",
+    "shouldMatch": "expected/expectedRecentChangesAdminDescriptorIDs.json",
     "expectedStatus": 200
   },
   { "context": "POST Submodel A - ANON - DENIED", "token": null, "method": "POST", "endpoint": "http://localhost:6004/shell-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9Y/submodel-descriptors", "data": "postBody/simple_smd_a.json", "expectedStatus": 403 },

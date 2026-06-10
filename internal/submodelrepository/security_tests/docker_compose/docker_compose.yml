@@ -31,6 +31,7 @@ services:
       - POSTGRES_MAXIDLECONNECTIONS=500
       - POSTGRES_CONNMAXLIFETIMEMINUTES=5
       - SERVER_STRICTVERIFICATION=off
+      - BASYX_HISTORY_MODE=api
       - ABAC_ENABLED=true
       - ABAC_MODELPATH=/security_env/access-rules.json
       - OIDC_TRUSTLISTPATH=/security_env/trustlist.json

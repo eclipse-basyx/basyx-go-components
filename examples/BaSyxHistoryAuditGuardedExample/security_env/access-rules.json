@@ -19,19 +19,16 @@
           { "ROUTE": "/health" },
           { "ROUTE": "/serialization" },
           { "ROUTE": "/upload" },
-          { "ROUTE": "/shell-descriptors" },
-          { "ROUTE": "/shell-descriptors/*" },
-          { "ROUTE": "/submodel-descriptors" },
-          { "ROUTE": "/submodel-descriptors/*" },
           { "ROUTE": "/lookup/shells" },
           { "ROUTE": "/lookup/shells/*" },
           { "ROUTE": "/lookup/shellsByAssetLink" },
-          { "ROUTE": "/shells" },
-          { "ROUTE": "/shells/*" },
-          { "ROUTE": "/submodels" },
-          { "ROUTE": "/submodels/*" },
-          { "ROUTE": "/concept-descriptions" },
-          { "ROUTE": "/concept-descriptions/*" }
+          { "ROUTE": "/shells/*/$history" },
+          { "ROUTE": "/submodels/*/$history" },
+          { "DESCRIPTOR": "$aasdesc(\"*\")" },
+          { "DESCRIPTOR": "$smdesc(\"*\")" },
+          { "IDENTIFIABLE": "$aas(\"*\")" },
+          { "IDENTIFIABLE": "$sm(\"*\")" },
+          { "IDENTIFIABLE": "$cd(\"*\")" }
         ]
       },
       {

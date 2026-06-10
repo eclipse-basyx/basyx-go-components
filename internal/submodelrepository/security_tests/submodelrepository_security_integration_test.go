@@ -28,6 +28,7 @@ package main
 
 import (
 	"bytes"
+	"encoding/json"
 	"io"
 	"mime/multipart"
 	"net/http"
@@ -42,6 +43,7 @@ import (
 )
 
 const actionUploadAttachmentMultipart = "UPLOAD_ATTACHMENT_MULTIPART"
+const actionAssertRecentChangeIDs = "ASSERT_RECENT_CHANGE_IDS"
 
 func TestIntegration(t *testing.T) {
 	tokenProvider := testenv.NewPasswordGrantTokenProvider(
@@ -58,8 +60,50 @@ func TestIntegration(t *testing.T) {
 			actionUploadAttachmentMultipart: func(t *testing.T, _ *testenv.JSONSuiteRunner, step testenv.JSONSuiteStep, _ int) {
 				runAttachmentUploadAction(t, step, tokenProvider)
 			},
+			actionAssertRecentChangeIDs: assertRecentChangeIDsAction,
 		},
 	})
+}
+
+func assertRecentChangeIDsAction(t *testing.T, runner *testenv.JSONSuiteRunner, step testenv.JSONSuiteStep, stepNumber int) {
+	t.Helper()
+
+	response, err := runner.RunStep(step, stepNumber)
+	require.NoError(t, err)
+
+	expectedIDs := loadExpectedRecentChangeIDs(t, step.ShouldMatch)
+	actualIDs := extractRecentChangeIDs(t, response.Body)
+
+	require.ElementsMatch(t, expectedIDs, actualIDs)
+}
+
+func loadExpectedRecentChangeIDs(t *testing.T, path string) []string {
+	t.Helper()
+
+	require.NotEmpty(t, path)
+	data, err := os.ReadFile(path)
+	require.NoError(t, err)
+
+	var expectedIDs []string
+	require.NoError(t, json.Unmarshal(data, &expectedIDs))
+	return expectedIDs
+}
+
+func extractRecentChangeIDs(t *testing.T, responseBody string) []string {
+	t.Helper()
+
+	var payload struct {
+		Result []struct {
+			ID string `json:"id"`
+		} `json:"result"`
+	}
+	require.NoError(t, json.Unmarshal([]byte(responseBody), &payload))
+
+	ids := make([]string, 0, len(payload.Result))
+	for _, change := range payload.Result {
+		ids = append(ids, change.ID)
+	}
+	return ids
 }
 
 func runAttachmentUploadAction(t *testing.T, step testenv.JSONSuiteStep, tokenProvider testenv.JSONTokenProvider) {
