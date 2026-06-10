@@ -31,6 +31,7 @@ import (
 	"errors"
 	"log"
 	"net/http"
+	"strings"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
@@ -47,6 +48,9 @@ type ABACSettings struct {
 	EnableImplicitCasts bool
 	Model               *AccessModel
 	ModelProvider       AccessModelProvider
+	// DenyAsNotFoundPrefixes hides denied requests below sensitive route
+	// prefixes by returning 404 instead of 403.
+	DenyAsNotFoundPrefixes []string
 }
 
 // Resource represents the target object of an authorization request.
@@ -121,6 +125,10 @@ func ABACMiddleware(settings ABACSettings) func(http.Handler) http.Handler {
 						next.ServeHTTP(w, r)
 						return
 					}
+					if denyAsNotFound(settings, r.URL.Path) {
+						http.NotFound(w, r)
+						return
+					}
 
 					log.Printf("❌ ABAC(model): %s", evaluation.Reason)
 
@@ -149,6 +157,24 @@ func ABACMiddleware(settings ABACSettings) func(http.Handler) http.Handler {
 			http.Error(w, "resource resolution failed", http.StatusForbidden)
 		})
 	}
+}
+
+func denyAsNotFound(settings ABACSettings, requestPath string) bool {
+	for _, prefix := range settings.DenyAsNotFoundPrefixes {
+		if pathMatchesPrefix(requestPath, prefix) {
+			return true
+		}
+	}
+	return false
+}
+
+func pathMatchesPrefix(requestPath string, prefix string) bool {
+	cleanPath := "/" + strings.Trim(strings.TrimSpace(requestPath), "/")
+	cleanPrefix := "/" + strings.Trim(strings.TrimSpace(prefix), "/")
+	if cleanPrefix == "/" {
+		return false
+	}
+	return cleanPath == cleanPrefix || strings.HasPrefix(cleanPath, cleanPrefix+"/")
 }
 
 func activeAccessModel(settings ABACSettings) *AccessModel {

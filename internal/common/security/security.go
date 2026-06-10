@@ -43,10 +43,13 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"strings"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	api "github.com/go-chi/chi/v5"
 )
+
+const abacManagementDeniedAsNotFoundPath = "/security/abac"
 
 // SetupSecurity configures and applies security middleware to a Chi router
 // based on the provided configuration. It sets up OIDC authentication and
@@ -118,9 +121,10 @@ func SetupSecurityWithClaimsMiddleware(
 	}
 
 	abacSettings := ABACSettings{
-		Enabled:             cfg.ABAC.Enabled,
-		EnableImplicitCasts: cfg.General.EnableImplicitCasts,
-		Model:               model,
+		Enabled:                cfg.ABAC.Enabled,
+		EnableImplicitCasts:    cfg.General.EnableImplicitCasts,
+		Model:                  model,
+		DenyAsNotFoundPrefixes: abacDeniedAsNotFoundPrefixes(cfg.Server.ContextPath),
 	}
 
 	applySecurityMiddleware(r, oidc.Middleware, ABACMiddleware(abacSettings), claimsMiddleware...)
@@ -148,12 +152,24 @@ func SetupSecurityWithAccessModelProvider(
 		return err
 	}
 	abacSettings := ABACSettings{
-		Enabled:             cfg.ABAC.Enabled,
-		EnableImplicitCasts: cfg.General.EnableImplicitCasts,
-		ModelProvider:       provider,
+		Enabled:                cfg.ABAC.Enabled,
+		EnableImplicitCasts:    cfg.General.EnableImplicitCasts,
+		ModelProvider:          provider,
+		DenyAsNotFoundPrefixes: abacDeniedAsNotFoundPrefixes(cfg.Server.ContextPath),
 	}
 	applySecurityMiddleware(r, oidc.Middleware, ABACMiddleware(abacSettings), claimsMiddleware...)
 	return nil
+}
+
+func abacDeniedAsNotFoundPrefixes(contextPath string) []string {
+	contextPath = strings.Trim(strings.TrimSpace(contextPath), "/")
+	if contextPath == "" {
+		return []string{abacManagementDeniedAsNotFoundPath}
+	}
+	return []string{
+		abacManagementDeniedAsNotFoundPath,
+		"/" + contextPath + abacManagementDeniedAsNotFoundPath,
+	}
 }
 
 func setupOIDC(ctx context.Context, cfg *common.Config) (*OIDC, error) {

@@ -152,6 +152,8 @@ func TestABACPolicyManagementRuleLifecycleStories(t *testing.T) {
 	editorToken, err := tokenProvider.GetAccessToken(&testenv.TokenCredentials{User: "userx", Password: "pwd"})
 	require.NoError(t, err)
 
+	assertStatus(t, http.MethodGet, testBaseURL+"/security/abac/policy-versions", "", editorToken, http.StatusNotFound)
+
 	testSuffix := time.Now().UnixNano()
 
 	t.Run("grant and revoke submodel read access over policy activations", func(t *testing.T) {

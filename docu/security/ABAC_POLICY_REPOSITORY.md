@@ -63,6 +63,7 @@ The API supports:
 Only `staged` policy versions are editable. `active`, `superseded`, and `rejected` versions are immutable. Draft edits do not affect authorization until activation.
 
 Protect these endpoints with explicit admin ABAC rules, for example route objects covering `/security/abac` and `/security/abac/*` with an admin-only ACL/formula.
+Authenticated users who do not satisfy those admin rules receive `404 Not Found` for `/security/abac/**` instead of `403 Forbidden`, so policy version and rule identifiers are not exposed by probing.
 
 ## Policy Lifecycle
 
