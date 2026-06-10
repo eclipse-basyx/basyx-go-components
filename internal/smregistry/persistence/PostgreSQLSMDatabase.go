@@ -32,6 +32,7 @@ import (
 	"database/sql"
 	"time"
 
+	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/descriptors"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
@@ -135,6 +136,10 @@ func (p *PostgreSQLSMDatabase) UpsertSubmodelDescriptorInTransaction(
 		return common.NewInternalServerError("SMREG-UPSERTSMDESC-NILTX transaction must not be nil")
 	}
 
+	if err := lockSubmodelDescriptorUpsertTx(ctx, tx, submodel.Id); err != nil {
+		return err
+	}
+
 	if err := descriptors.DeleteSubmodelDescriptorByIDTx(ctx, tx, submodel.Id); err != nil {
 		if !common.IsErrNotFound(err) {
 			return err
@@ -145,6 +150,26 @@ func (p *PostgreSQLSMDatabase) UpsertSubmodelDescriptorInTransaction(
 
 	_, err := descriptors.InsertSubmodelDescriptorTx(ctx, tx, submodel)
 	return err
+}
+
+func lockSubmodelDescriptorUpsertTx(ctx context.Context, tx *sql.Tx, submodelID string) error {
+	sqlStr, args, err := buildSubmodelDescriptorUpsertLockSQL(submodelID)
+	if err != nil {
+		return common.NewInternalServerError("SMREG-LOCKSMDESCUPSERT-BUILDSQL " + err.Error())
+	}
+
+	if _, err = tx.ExecContext(ctx, sqlStr, args...); err != nil {
+		return common.NewInternalServerError("SMREG-LOCKSMDESCUPSERT-EXECSQL " + err.Error())
+	}
+	return nil
+}
+
+func buildSubmodelDescriptorUpsertLockSQL(submodelID string) (string, []any, error) {
+	return goqu.
+		Dialect(common.Dialect).
+		Select(goqu.Func("pg_advisory_xact_lock", goqu.Func("hashtextextended", "submodel_descriptor:"+submodelID, 0))).
+		Prepared(true).
+		ToSQL()
 }
 
 // GetSubmodelDescriptorByID returns a global Submodel Descriptor by its id.
