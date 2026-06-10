@@ -104,7 +104,7 @@ jobs:
 
       - name: Run submodel repository unit tests
         run: |
-          go test -v ./internal/submodelrepository/persistence ./internal/submodelrepository/api
+          go test -v ./internal/submodelrepository/persistence ./internal/submodelrepository/persistence/submodelElements ./internal/submodelrepository/path ./internal/submodelrepository/api
 
   basyx-configuration-service-unit-tests:
     name: BaSyx Configuration Service Unit Tests
@@ -146,6 +146,44 @@ jobs:
         run: |
           cd internal/discoveryservice/integration_tests
           go test -v
+
+  discovery-service-unit-tests:
+    name: Discovery Service Unit Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out code
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+
+      - name: Set up Go
+        uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Get dependencies
+        run: go mod download
+
+      - name: Run discovery service unit tests
+        run: go test -v ./internal/discoveryservice/api
+
+  aas-registry-unit-tests:
+    name: AAS Registry Unit Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out code
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+
+      - name: Set up Go
+        uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Get dependencies
+        run: go mod download
+
+      - name: Run aas registry unit tests
+        run: go test -v ./internal/aasregistry/api ./internal/aasregistry/persistence
 
   aas-registry-integration-tests:
     name: AAS Registry Integration Tests
@@ -357,6 +395,44 @@ jobs:
           cd internal/digitaltwinregistry/security_tests
           go test -v
 
+  digital-twin-registry-unit-tests:
+    name: Digital Twin Registry Unit Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out code
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+
+      - name: Set up Go
+        uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Get dependencies
+        run: go mod download
+
+      - name: Run digital twin registry unit tests
+        run: go test -v ./internal/digitaltwinregistry
+
+  aas-environment-unit-tests:
+    name: AAS Environment Unit Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out code
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+
+      - name: Set up Go
+        uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Get dependencies
+        run: go mod download
+
+      - name: Run aas environment unit tests
+        run: go test -v ./internal/aasenvironment
+
   aas-environment-integration-tests:
     name: AAS Environment Integration Tests
     runs-on: ubuntu-latest
@@ -376,6 +452,27 @@ jobs:
       - name: Run aas environment integration tests
         run: |
           cd internal/aasenvironment/integration_tests
+          go test -v .
+
+  aas-environment-preconfiguration-integration-tests:
+    name: AAS Environment Preconfiguration Integration Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out code
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+
+      - name: Set up Go
+        uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Get dependencies
+        run: go mod download
+
+      - name: Run aas environment preconfiguration integration tests
+        run: |
+          cd internal/aasenvironment/preconfiguration_integration_tests
           go test -v .
 
   aas-environment-security-tests:
@@ -441,6 +538,25 @@ jobs:
           cd internal/conceptdescriptionrepository/integration_tests
           go test -v .
 
+  concept-description-repository-unit-tests:
+    name: Concept Description Repository Unit Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out code
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+
+      - name: Set up Go
+        uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Get dependencies
+        run: go mod download
+
+      - name: Run concept description repository unit tests
+        run: go test -v ./internal/conceptdescriptionrepository/api
+
   concept-description-repository-security-tests:
     name: Concept Description Repository Security Tests
     runs-on: ubuntu-latest
@@ -482,6 +598,25 @@ jobs:
         run: |
           cd internal/smregistry/integration_tests
           go test -v
+
+  submodel-registry-unit-tests:
+    name: Submodel Registry Unit Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out code
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+
+      - name: Set up Go
+        uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Get dependencies
+        run: go mod download
+
+      - name: Run submodel registry unit tests
+        run: go test -v ./internal/smregistry/api ./internal/smregistry/persistence
 
   company-lookup-integration-tests:
     name: Company Lookup Integration Tests
@@ -646,3 +781,23 @@ jobs:
       - name: Run aasx file server unit tests
         run: |
           go test -v ./internal/aasxfileserver/...
+
+  generated-api-and-tool-unit-tests:
+    name: Generated API and Tool Unit Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out code
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+
+      - name: Set up Go
+        uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Get dependencies
+        run: go mod download
+
+      - name: Run generated API and tool unit tests
+        run: |
+          go test -v ./internal/healthprobe ./internal/historyevidenceverifier ./pkg/aasrepositoryapi/go ./pkg/conceptdescriptionrepositoryapi/go ./pkg/submodelrepositoryapi

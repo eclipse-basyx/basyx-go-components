@@ -41,8 +41,23 @@ jobs:
       - name: Run common root package tests
         run: go test -count=1 -v -cover ./internal/common
 
+      - name: Run common async bulk tests
+        run: go test -count=1 -v -cover ./internal/common/asyncbulk
+
+      - name: Run common builder tests
+        run: go test -count=1 -v -cover ./internal/common/builder
+
+      - name: Run common descriptor tests
+        run: go test -count=1 -v -cover ./internal/common/descriptors
+
       - name: Run common history tests
         run: go test -count=1 -v -cover ./internal/common/history
+
+      - name: Run common JWS tests
+        run: go test -count=1 -v -cover ./internal/common/jws
+
+      - name: Run common model tests
+        run: go test -count=1 -v -cover ./internal/common/model
 
       - name: Run common security tests
         run: go test -count=1 -v -cover ./internal/common/security
@@ -55,9 +70,6 @@ jobs:
           cd internal/common/security/unit_tests/model
           go test -count=1 -v -cover
 
-      - name: Run common tokenizer tests
-        run: go test -count=1 -v -cover -run 'TestTokenizeFieldPaths' ./internal/common/builder
-
       - name: Run common security abac engine tests
         run: |
           cd internal/common/security/unit_tests/abac_engine
@@ -67,3 +79,6 @@ jobs:
         run: |
           cd internal/common/security/unit_tests/filter_abac_engine
           go test -count=1 -v -cover
+
+      - name: Run common test environment tests
+        run: go test -count=1 -v -cover ./internal/common/testenv
