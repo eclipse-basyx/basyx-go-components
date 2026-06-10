@@ -93,22 +93,22 @@ func (r *Repository) ValidatePolicy(ctx context.Context, versionID int64) (Valid
 //
 // The database transaction validates the staged policy, writes required WORM
 // evidence, supersedes the previous active version, marks the selected version
-// active, and records policy events. The runtime cache is refreshed only after
-// the transaction commits, so failed activations keep the old policy in use.
+// active, and records policy events. After commit, the repository publishes the
+// already materialized active model from that transaction so activation does not
+// depend on a second database read.
 func (r *Repository) ActivatePolicy(ctx context.Context, versionID int64) (*PolicyVersion, error) {
 	actor := actorFromContext(ctx, "ActivatePolicy", managementBasePath)
 	var activated PolicyVersion
+	var activatedPolicy activePolicy
 	err := common.ExecuteInTransaction(r.db, "ABACPOLICY-ACTIVATE-BEGINTX", "ABACPOLICY-ACTIVATE-COMMIT", func(tx *sql.Tx) error {
 		var activateErr error
-		activated, activateErr = r.activateVersionTx(ctx, tx, versionID, actor)
+		activated, activatedPolicy, activateErr = r.activateVersionTx(ctx, tx, versionID, actor)
 		return activateErr
 	})
 	if err != nil {
 		return nil, err
 	}
-	if refreshErr := r.RefreshActiveModel(ctx); refreshErr != nil {
-		return nil, refreshErr
-	}
+	r.publishActivePolicy(activatedPolicy)
 	return &activated, nil
 }
 
@@ -165,25 +165,29 @@ func (r *Repository) RejectPolicy(ctx context.Context, versionID int64) (*Policy
 	return &rejected, nil
 }
 
-func (r *Repository) activateVersionTx(ctx context.Context, tx *sql.Tx, versionID int64, actor auditActor) (PolicyVersion, error) {
+func (r *Repository) activateVersionTx(ctx context.Context, tx *sql.Tx, versionID int64, actor auditActor) (PolicyVersion, activePolicy, error) {
 	version, err := r.loadPolicyVersion(ctx, tx, versionID)
 	if err != nil {
-		return PolicyVersion{}, err
+		return PolicyVersion{}, activePolicy{}, err
 	}
 	if version.Status != StatusStaged {
-		return PolicyVersion{}, common.NewErrConflict("ABACPOLICY-ACTIVATE-IMMUTABLE only staged policy versions can be activated")
+		return PolicyVersion{}, activePolicy{}, common.NewErrConflict("ABACPOLICY-ACTIVATE-IMMUTABLE only staged policy versions can be activated")
 	}
 	materialized, err := auth.MaterializeABACPolicy(version.ConfiguredPolicyJSON, r.apiRouter, r.basePath)
 	if err != nil {
-		return PolicyVersion{}, common.NewErrBadRequest("ABACPOLICY-ACTIVATE-MATERIALIZE " + err.Error())
+		return PolicyVersion{}, activePolicy{}, common.NewErrBadRequest("ABACPOLICY-ACTIVATE-MATERIALIZE " + err.Error())
 	}
 	version, err = r.replaceMaterializationTx(ctx, tx, versionID, materialized, actor)
 	if err != nil {
-		return PolicyVersion{}, err
+		return PolicyVersion{}, activePolicy{}, err
 	}
 	rules, err := r.loadPolicyRules(ctx, tx, versionID)
 	if err != nil {
-		return PolicyVersion{}, err
+		return PolicyVersion{}, activePolicy{}, err
+	}
+	model, err := r.accessModelFromPolicyRules(version.PolicyID, rules)
+	if err != nil {
+		return PolicyVersion{}, activePolicy{}, common.NewInternalServerError("ABACPOLICY-ACTIVATE-BUILDMODEL " + err.Error())
 	}
 	activatedAt := time.Now().UTC()
 	evidenceVersion := version
@@ -194,13 +198,13 @@ func (r *Repository) activateVersionTx(ctx context.Context, tx *sql.Tx, versionI
 	evidenceVersion.ActivatedByClientID = actor.ClientID
 	artifactRef, err := writeActivationEvidenceTx(ctx, tx, evidenceVersion, rules, actor)
 	if err != nil {
-		return PolicyVersion{}, err
+		return PolicyVersion{}, activePolicy{}, err
 	}
 	if err = r.supersedeActiveTx(ctx, tx, versionID, actor); err != nil {
-		return PolicyVersion{}, err
+		return PolicyVersion{}, activePolicy{}, err
 	}
 	if err = r.markActiveTx(ctx, tx, versionID, artifactRef, actor, activatedAt); err != nil {
-		return PolicyVersion{}, err
+		return PolicyVersion{}, activePolicy{}, err
 	}
 	if err = r.insertPolicyEventTx(ctx, tx, policyEvent{
 		VersionID:                    versionID,
@@ -218,9 +222,13 @@ func (r *Repository) activateVersionTx(ctx context.Context, tx *sql.Tx, versionI
 		},
 		Actor: actor,
 	}); err != nil {
-		return PolicyVersion{}, err
+		return PolicyVersion{}, activePolicy{}, err
 	}
-	return r.loadPolicyVersion(ctx, tx, versionID)
+	activeVersion, err := r.loadPolicyVersion(ctx, tx, versionID)
+	if err != nil {
+		return PolicyVersion{}, activePolicy{}, err
+	}
+	return activeVersion, activePolicy{version: activeVersion, rules: rules, model: model}, nil
 }
 
 func (r *Repository) supersedeActiveTx(ctx context.Context, tx *sql.Tx, activatingVersionID int64, actor auditActor) error {

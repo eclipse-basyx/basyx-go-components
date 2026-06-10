@@ -27,6 +27,7 @@ package abacpolicy
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -36,6 +37,7 @@ import (
 	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/history"
+	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 	"github.com/go-chi/chi/v5"
 )
 
@@ -62,6 +64,51 @@ func TestRefreshActiveModelFailsClosedWithoutActivePolicy(t *testing.T) {
 	}
 	if err = mock.ExpectationsWereMet(); err != nil {
 		t.Fatalf("unmet SQL expectations: %v", err)
+	}
+}
+
+func TestRefreshActiveModelClearsStaleCacheOnFailure(t *testing.T) {
+	t.Parallel()
+
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("sqlmock setup failed: %v", err)
+	}
+	defer func() {
+		_ = db.Close()
+	}()
+	repo, err := NewRepository(db, "test-service", chi.NewRouter(), "")
+	if err != nil {
+		t.Fatalf("repository setup failed: %v", err)
+	}
+	repo.publishActivePolicy(activePolicy{model: &auth.AccessModel{}})
+	mock.ExpectQuery(`SELECT (.+) FROM "abac_policy_versions"`).
+		WillReturnError(errors.New("database unavailable"))
+
+	err = repo.RefreshActiveModel(t.Context())
+	if err == nil {
+		t.Fatal("expected refresh error")
+	}
+	if repo.ActiveAccessModel() != nil {
+		t.Fatal("expected stale active model to be cleared")
+	}
+	if err = mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("unmet SQL expectations: %v", err)
+	}
+}
+
+func TestPublishActivePolicyAfterFailClosedClearRestoresCache(t *testing.T) {
+	t.Parallel()
+
+	repo := &Repository{}
+	repo.clearActiveModel()
+	if repo.ActiveAccessModel() != nil {
+		t.Fatal("expected cleared cache to read as nil")
+	}
+	model := &auth.AccessModel{}
+	repo.publishActivePolicy(activePolicy{model: model})
+	if repo.ActiveAccessModel() != model {
+		t.Fatal("expected published active model after cache clear")
 	}
 }
 

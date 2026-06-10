@@ -68,7 +68,8 @@ type policyEvent struct {
 // persists immutable policy versions and materialized rule rows for that scope,
 // and keeps the currently active policy compiled in memory for request-time
 // authorization. Draft operations update only staged versions; authorization
-// changes after ActivatePolicy commits and RefreshActiveModel succeeds.
+// changes are published from committed activations, while explicit reload
+// failures clear the cache so middleware fails closed.
 type Repository struct {
 	db           *sql.DB
 	serviceScope string
@@ -132,13 +133,29 @@ func (r *Repository) ActiveAccessModel() *auth.AccessModel {
 // The method rebuilds the in-memory AccessModel from durable rule rows and
 // atomically publishes it to request middleware. It returns a service-unavailable
 // error when no active policy exists so callers can fail closed during startup.
+// If the reload fails, any previously cached model is cleared before returning.
 func (r *Repository) RefreshActiveModel(ctx context.Context) error {
 	active, err := r.loadActivePolicy(ctx, r.db)
 	if err != nil {
+		r.clearActiveModel()
 		return err
 	}
-	r.activeModel.Store(active.model)
+	r.publishActivePolicy(active)
 	return nil
+}
+
+func (r *Repository) publishActivePolicy(active activePolicy) {
+	if r == nil {
+		return
+	}
+	r.activeModel.Store(active.model)
+}
+
+func (r *Repository) clearActiveModel() {
+	if r == nil {
+		return
+	}
+	r.activeModel.Store((*auth.AccessModel)(nil))
 }
 
 // HasActivePolicy reports whether this service scope has an active DB policy.
@@ -165,6 +182,7 @@ func (r *Repository) ImportStartupPolicy(ctx context.Context, raw []byte, source
 
 	actor := actorFromContext(ctx, "ABACPreconfiguration", "startup:abac-preconfiguration")
 	var activated PolicyVersion
+	var activatedPolicy activePolicy
 	err = common.ExecuteInTransaction(r.db, "ABACPOLICY-STARTUP-BEGINTX", "ABACPOLICY-STARTUP-COMMIT", func(tx *sql.Tx) error {
 		active, found, activeErr := r.loadActivePolicyVersion(ctx, tx)
 		if activeErr != nil {
@@ -172,6 +190,11 @@ func (r *Repository) ImportStartupPolicy(ctx context.Context, raw []byte, source
 		}
 		if found && sameStartupPolicy(active, materialized) {
 			activated = active
+			loadedActive, loadErr := r.loadActivePolicy(ctx, tx)
+			if loadErr != nil {
+				return loadErr
+			}
+			activatedPolicy = loadedActive
 			return r.insertPolicyEventTx(ctx, tx, policyEvent{
 				VersionID:                    active.VersionID,
 				PolicyID:                     active.PolicyID,
@@ -192,15 +215,13 @@ func (r *Repository) ImportStartupPolicy(ctx context.Context, raw []byte, source
 		if createErr != nil {
 			return createErr
 		}
-		activated, createErr = r.activateVersionTx(ctx, tx, version.VersionID, actor)
+		activated, activatedPolicy, createErr = r.activateVersionTx(ctx, tx, version.VersionID, actor)
 		return createErr
 	})
 	if err != nil {
 		return nil, err
 	}
-	if refreshErr := r.RefreshActiveModel(ctx); refreshErr != nil {
-		return nil, refreshErr
-	}
+	r.publishActivePolicy(activatedPolicy)
 	return &activated, nil
 }
 
@@ -346,11 +367,15 @@ func (r *Repository) loadActivePolicy(ctx context.Context, queryer dbQueryer) (a
 	if err != nil {
 		return activePolicy{}, err
 	}
-	model, err := auth.AccessModelFromMaterializedRules(version.PolicyID, materializedRulesFromPolicyRules(rules), r.apiRouter, r.basePath)
+	model, err := r.accessModelFromPolicyRules(version.PolicyID, rules)
 	if err != nil {
 		return activePolicy{}, common.NewInternalServerError("ABACPOLICY-ACTIVE-BUILDMODEL " + err.Error())
 	}
 	return activePolicy{version: version, rules: rules, model: model}, nil
+}
+
+func (r *Repository) accessModelFromPolicyRules(policyID string, rules []PolicyRule) (*auth.AccessModel, error) {
+	return auth.AccessModelFromMaterializedRules(policyID, materializedRulesFromPolicyRules(rules), r.apiRouter, r.basePath)
 }
 
 func (r *Repository) loadActivePolicyVersion(ctx context.Context, queryer dbQueryer) (PolicyVersion, bool, error) {

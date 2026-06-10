@@ -46,7 +46,7 @@ Startup imports run under a synthetic system audit context:
 - endpoint: `startup:abac-preconfiguration`
 - HTTP method: `SYSTEM`
 
-The importer validates the configured JSON, canonicalizes it, materializes referenced definitions, stores policy and rule rows, activates the version when required, and refreshes the evaluator cache only after activation commits.
+The importer validates the configured JSON, canonicalizes it, materializes referenced definitions, stores policy and rule rows, activates the version when required, and publishes the committed active model to the evaluator cache.
 
 ## Management API
 
@@ -82,7 +82,7 @@ stateDiagram-v2
 
 The evaluator only uses the `active` policy version. Rule edits on a `staged` version are persisted, validated, and audited, but they do not affect authorization until activation succeeds.
 
-Activation validates the staged version, writes required WORM evidence, supersedes the previous active version, marks the selected version active, and records policy events in one database transaction. The evaluator cache refreshes after that transaction commits. If evidence is required and cannot be written, activation fails and the old active policy remains in use.
+Activation validates the staged version, writes required WORM evidence, supersedes the previous active version, marks the selected version active, and records policy events in one database transaction. After commit, the evaluator cache is updated from the same materialized rule set used by that transaction, so activation does not depend on a second database read. If evidence is required and cannot be written, activation fails and the old active policy remains in use.
 
 ## API Interaction Examples
 
@@ -181,7 +181,7 @@ curl -sS -X POST \
   "${BASE_URL}/security/abac/policy-versions/${DRAFT_VERSION_ID}/activate"
 ```
 
-After activation, the selected version is `active`, the previous active version is `superseded`, and the in-memory evaluator cache is refreshed.
+After activation, the selected version is `active`, the previous active version is `superseded`, and the in-memory evaluator cache uses the newly committed materialized rule set.
 
 ### Clone Active Policy And Add One Rule
 
