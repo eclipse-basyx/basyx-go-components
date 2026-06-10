@@ -232,9 +232,9 @@ func insertAdministrationShellDescriptorDetailsTx(ctx context.Context, tx *sql.T
 // rolling back the supplied transaction `tx`.
 //
 // Parameters:
-//  - ctx: context for cancellation and query filtering.
-//  - tx: database transaction to use for the upsert (must be non-nil).
-//  - aasd: the AssetAdministrationShellDescriptor to insert or replace.
+//   - ctx: context for cancellation and query filtering.
+//   - tx: database transaction to use for the upsert (must be non-nil).
+//   - aasd: the AssetAdministrationShellDescriptor to insert or replace.
 //
 // Note: This function relies on advisory locks and FOR UPDATE row locking to
 // avoid race conditions; it must be invoked inside a transaction.
