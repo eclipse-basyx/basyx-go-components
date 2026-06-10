@@ -6,8 +6,7 @@
           "ACCESS": "ALLOW",
           "ATTRIBUTES": [
             {
-              "Kind": "GLOBAL",
-              "Value": "ANONYMOUS"
+              "GLOBAL": "ANONYMOUS"
             }
           ],
           "RIGHTS": [
@@ -33,7 +32,9 @@
           ]
         },
         "OBJECTS": [
-          {}
+          {
+            "ROUTE": "/*"
+          }
         ]
       }
     ]
