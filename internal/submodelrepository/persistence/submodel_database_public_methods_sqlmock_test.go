@@ -761,7 +761,7 @@ func TestQuerySubmodelsMissingConditionReturnsBadRequest(t *testing.T) {
 	require.Contains(t, err.Error(), "SMREPO-QUERYSMS-INVALIDQUERY")
 }
 
-func TestIsSiblingIDShortCollisionEmptyIDShortReturnsFalse(t *testing.T) {
+func TestIsIDShortDuplicateEmptyIDShortReturnsFalse(t *testing.T) {
 	t.Parallel()
 
 	element := types.NewProperty(types.DataTypeDefXSDString)
@@ -770,7 +770,7 @@ func TestIsSiblingIDShortCollisionEmptyIDShortReturnsFalse(t *testing.T) {
 	require.False(t, collision)
 }
 
-func TestIsSiblingIDShortCollisionTopLevelReturnsTrue(t *testing.T) {
+func TestIsIDShortDuplicateTopLevelReturnsTrue(t *testing.T) {
 	t.Parallel()
 
 	db, mock, err := sqlmock.New()
@@ -797,7 +797,7 @@ func TestIsSiblingIDShortCollisionTopLevelReturnsTrue(t *testing.T) {
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 
-func TestIsSiblingIDShortCollisionNestedReturnsFalse(t *testing.T) {
+func TestIsIDShortDuplicateNestedReturnsFalse(t *testing.T) {
 	t.Parallel()
 
 	db, mock, err := sqlmock.New()
