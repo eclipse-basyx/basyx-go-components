@@ -252,7 +252,7 @@ func UpsertAdministrationShellDescriptorTx(ctx context.Context, tx *sql.Tx, aasd
 		if err = replaceAdministrationShellDescriptorDetailsTx(ctx, tx, descriptorID, aasd); err != nil {
 			return false, err
 		}
-		return false, err
+		return false, nil
 	}
 
 	return true, InsertAdministrationShellDescriptorTx(ctx, tx, aasd)
