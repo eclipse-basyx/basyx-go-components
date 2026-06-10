@@ -1273,27 +1273,12 @@ func upsertDefaultThumbnailForAssetInformation(
 	assetInformation types.IAssetInformation,
 	errorPrefix string,
 ) error {
-	if assetInformation == nil || assetInformation.DefaultThumbnail() == nil {
+	thumbnail, thumbnailPath := defaultThumbnailWithPath(assetInformation)
+	if thumbnail == nil {
 		return nil
 	}
 
-	thumbnail := assetInformation.DefaultThumbnail()
-	thumbnailPath := strings.TrimSpace(thumbnail.Path())
-	if thumbnailPath == "" {
-		return nil
-	}
-
-	upsertSQL, upsertArgs, buildErr := dialect.Insert("thumbnail_file_element").
-		Rows(goqu.Record{
-			"id":           aasDBID,
-			"content_type": thumbnail.ContentType(),
-			"value":        thumbnailPath,
-		}).
-		OnConflict(goqu.DoUpdate("id", goqu.Record{
-			"content_type": thumbnail.ContentType(),
-			"value":        thumbnailPath,
-		})).
-		ToSQL()
+	upsertSQL, upsertArgs, buildErr := buildUpsertDefaultThumbnailQuery(dialect, aasDBID, thumbnail, thumbnailPath)
 	if buildErr != nil {
 		return common.NewInternalServerError(errorPrefix + "-BUILDTHUMBNAILSQL " + buildErr.Error())
 	}
@@ -1303,6 +1288,41 @@ func upsertDefaultThumbnailForAssetInformation(
 	}
 
 	return nil
+}
+
+func defaultThumbnailWithPath(assetInformation types.IAssetInformation) (types.IResource, string) {
+	if assetInformation == nil || assetInformation.DefaultThumbnail() == nil {
+		return nil, ""
+	}
+
+	thumbnail := assetInformation.DefaultThumbnail()
+	thumbnailPath := strings.TrimSpace(thumbnail.Path())
+	if thumbnailPath == "" {
+		return nil, ""
+	}
+
+	return thumbnail, thumbnailPath
+}
+
+func buildUpsertDefaultThumbnailQuery(
+	dialect *goqu.DialectWrapper,
+	aasDBID int64,
+	thumbnail types.IResource,
+	thumbnailPath string,
+) (string, []any, error) {
+	record := goqu.Record{
+		"id":           aasDBID,
+		"content_type": thumbnail.ContentType(),
+		"value":        thumbnailPath,
+	}
+
+	return dialect.Insert("thumbnail_file_element").
+		Rows(record).
+		OnConflict(goqu.DoUpdate("id", goqu.Record{
+			"content_type": thumbnail.ContentType(),
+			"value":        thumbnailPath,
+		})).
+		ToSQL()
 }
 
 func replaceSpecificAssetIDsForAssetInformation(
