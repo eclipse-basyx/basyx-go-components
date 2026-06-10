@@ -42,7 +42,7 @@ import (
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/asyncbulk"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/history"
 	commonmodel "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
-	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/security/abacpolicy"
 	apis "github.com/eclipse-basyx/basyx-go-components/pkg/aasregistryapi"
 	"github.com/go-chi/chi/v5"
 )
@@ -139,12 +139,15 @@ func runServer(ctx context.Context, configPath string) error {
 	common.ConfigureAPIRouter(apiRouter, "AASRegistryService")
 
 	// Apply OIDC + ABAC once for all registry endpoints
-	if err := auth.SetupSecurity(ctx, cfg, apiRouter); err != nil {
+	abacRepo, err := abacpolicy.SetupSecurityWithABACRepository(ctx, cfg, apiRouter, sharedDB, "aasregistryservice")
+	if err != nil {
 		return err
 	}
 	versioningGuard := history.NewMutationCoverageGuard(apiRouter)
 	apiRouter.Use(versioningGuard.Middleware)
 	apiRouter.Use(history.AuditContextMiddleware(cfg))
+	abacpolicy.ExemptManagementMutationRoutesIfEnabled(cfg, versioningGuard, "aasregistryservice")
+	abacpolicy.RegisterManagementRoutesIfEnabled(cfg, apiRouter, abacRepo, "aasregistryservice")
 
 	// Register all registry routes (protected)
 	for operation, rt := range smCtrl.Routes() {

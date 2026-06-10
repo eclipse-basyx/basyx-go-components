@@ -23,6 +23,13 @@
         "objects": [
           { "IDENTIFIABLE": "$aas(\"*\")" }
         ]
+      },
+      {
+        "name": "abac_policy_management",
+        "objects": [
+          { "ROUTE": "/security/abac" },
+          { "ROUTE": "/security/abac/*" }
+        ]
       }
     ],
     "DEFACLS": [
@@ -63,7 +70,7 @@
     ],
     "rules": [
       { "USEACL": "read_anonymous", "USEOBJECTS": ["description"], "USEFORMULA": "always_true" },
-      { "USEACL": "admin_all", "USEOBJECTS": ["all_shell_routes"], "USEFORMULA": "role_is_admin" },
+      { "USEACL": "admin_all", "USEOBJECTS": ["all_shell_routes", "abac_policy_management"], "USEFORMULA": "role_is_admin" },
       {
         "USEACL": "read_role",
         "USEOBJECTS": ["all_shell_identifiable"],

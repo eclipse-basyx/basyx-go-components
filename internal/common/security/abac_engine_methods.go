@@ -41,6 +41,24 @@ var mapMethodAndPatternToRightsData = []mapMethodAndPatternToRights{
 	// description endpoints
 	{"GET", "/description", []grammar.RightsEnum{grammar.RightsEnumREAD}},
 
+	// ABAC policy management
+	{"GET", "/security/abac/policy-versions", []grammar.RightsEnum{grammar.RightsEnumREAD}},
+	{"POST", "/security/abac/policy-versions", []grammar.RightsEnum{grammar.RightsEnumCREATE}},
+	{"GET", "/security/abac/policy-versions/{versionID}", []grammar.RightsEnum{grammar.RightsEnumREAD}},
+	{"POST", "/security/abac/policy-versions/{versionID}/clone", []grammar.RightsEnum{grammar.RightsEnumCREATE}},
+	{"POST", "/security/abac/policy-versions/{versionID}/validate", []grammar.RightsEnum{grammar.RightsEnumREAD}},
+	{"POST", "/security/abac/policy-versions/{versionID}/activate", []grammar.RightsEnum{grammar.RightsEnumUPDATE}},
+	{"POST", "/security/abac/policy-versions/{versionID}/reject", []grammar.RightsEnum{grammar.RightsEnumUPDATE}},
+	{"GET", "/security/abac/policy-versions/{versionID}/rules", []grammar.RightsEnum{grammar.RightsEnumREAD}},
+	{"POST", "/security/abac/policy-versions/{versionID}/rules", []grammar.RightsEnum{grammar.RightsEnumCREATE}},
+	{"GET", "/security/abac/policy-versions/{versionID}/rules/{ruleIndex}", []grammar.RightsEnum{grammar.RightsEnumREAD}},
+	{"PUT", "/security/abac/policy-versions/{versionID}/rules/{ruleIndex}", []grammar.RightsEnum{grammar.RightsEnumUPDATE}},
+	{"PATCH", "/security/abac/policy-versions/{versionID}/rules/{ruleIndex}", []grammar.RightsEnum{grammar.RightsEnumUPDATE}},
+	{"DELETE", "/security/abac/policy-versions/{versionID}/rules/{ruleIndex}", []grammar.RightsEnum{grammar.RightsEnumDELETE}},
+	{"POST", "/security/abac/policy-versions/{versionID}/rules/{ruleIndex}/duplicate", []grammar.RightsEnum{grammar.RightsEnumCREATE}},
+	{"POST", "/security/abac/policy-versions/{versionID}/rules/{ruleIndex}/move", []grammar.RightsEnum{grammar.RightsEnumUPDATE}},
+	{"PUT", "/security/abac/policy-versions/{versionID}/rules/{ruleIndex}/enabled", []grammar.RightsEnum{grammar.RightsEnumUPDATE}},
+
 	// aas registry
 	{"GET", "/shell-descriptors/{aasIdentifier}", []grammar.RightsEnum{grammar.RightsEnumREAD}},
 	{"PUT", "/shell-descriptors/{aasIdentifier}", []grammar.RightsEnum{grammar.RightsEnumCREATE, grammar.RightsEnumUPDATE}},

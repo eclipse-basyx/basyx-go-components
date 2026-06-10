@@ -9,7 +9,8 @@
     "DEFOBJECTS": [
       { "name": "description", "objects": [ { "ROUTE": "/description" } ] },
       { "name": "all_shell_descriptors", "objects": [ {"DESCRIPTOR": "$aasdesc(\"*\")"}] },
-      { "name": "submodel_descriptors", "objects": [ {"ROUTE": "/shell-descriptors/*/submodel-descriptors"}, {"ROUTE": "/shell-descriptors/*/submodel-descriptors/*"}] }
+      { "name": "submodel_descriptors", "objects": [ {"ROUTE": "/shell-descriptors/*/submodel-descriptors"}, {"ROUTE": "/shell-descriptors/*/submodel-descriptors/*"}] },
+      { "name": "abac_policy_management", "objects": [ { "ROUTE": "/security/abac" }, { "ROUTE": "/security/abac/*" } ] }
     ],
 
     "DEFACLS": [
@@ -66,7 +67,7 @@
 
     "rules": [
       { "USEACL": "read_anonymous", "USEOBJECTS": ["description"], "USEFORMULA": "always_true" },
-      { "USEACL": "all_admin", "USEOBJECTS": ["all_shell_descriptors"], "USEFORMULA": "role_is_admin" },
+      { "USEACL": "all_admin", "USEOBJECTS": ["all_shell_descriptors", "abac_policy_management"], "USEFORMULA": "role_is_admin" },
       { "USEACL": "user", "USEOBJECTS": ["all_shell_descriptors"], "USEFORMULA": "role_is_viewer_written_x",
         "FILTERLIST": [
           {
@@ -84,7 +85,7 @@
             }
           },
           {
-            "FRAGMENT": "$aasdesc#specificAssetIds[].name",
+            "FRAGMENT": "$aasdesc#specificAssetIds[]",
             "CONDITION": 
             {
               "$eq": [
@@ -101,7 +102,7 @@
       },
       { "USEACL": "user", "USEOBJECTS": ["all_shell_descriptors"], "USEFORMULA": "role_is_viewer_written_y",
         "FILTER": {
-          "FRAGMENT": "$aasdesc#specificAssetIds[].name",
+          "FRAGMENT": "$aasdesc#specificAssetIds[]",
           "CONDITION": 
            {
             "$eq": [

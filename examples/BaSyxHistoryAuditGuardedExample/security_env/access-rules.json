@@ -33,6 +33,13 @@
           { "ROUTE": "/concept-descriptions" },
           { "ROUTE": "/concept-descriptions/*" }
         ]
+      },
+      {
+        "name": "abac_policy_management",
+        "objects": [
+          { "ROUTE": "/security/abac" },
+          { "ROUTE": "/security/abac/*" }
+        ]
       }
     ],
     "DEFACLS": [
@@ -47,7 +54,7 @@
     "rules": [
       { "USEACL": "anonymous_read", "USEOBJECTS": ["public_description"], "FORMULA": { "$boolean": true } },
       { "USEACL": "viewer_read", "USEOBJECTS": ["all_history_demo_api"], "USEFORMULA": "is_viewer" },
-      { "USEACL": "admin_full", "USEOBJECTS": ["all_history_demo_api"], "USEFORMULA": "is_admin" }
+      { "USEACL": "admin_full", "USEOBJECTS": ["all_history_demo_api", "abac_policy_management"], "USEFORMULA": "is_admin" }
     ]
   }
 }

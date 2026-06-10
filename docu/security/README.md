@@ -8,6 +8,8 @@ This document covers runtime API security (OIDC, claims handling, ABAC, and Quer
 
 For build and release supply-chain security (image signing, provenance attestations, SBOM attestations, SPDX/CycloneDX release assets, and verification commands), see [SUPPLY_CHAIN_SECURITY.md](SUPPLY_CHAIN_SECURITY.md).
 
+For PostgreSQL-backed ABAC policy versions, management API behavior, and ABAC policy evidence, see [ABAC_POLICY_REPOSITORY.md](ABAC_POLICY_REPOSITORY.md).
+
 For history evidence deployment guidance and NIS2-relevant operator responsibilities, see [NIS2_HISTORY_EVIDENCE.md](NIS2_HISTORY_EVIDENCE.md).
 
 ## High-level architecture
@@ -27,12 +29,13 @@ flowchart LR
   end
 
   Rules[Access rules JSON\naccess-rules.json]
+  PolicyDB[(ABAC policy tables)]
   Trust[OIDC trustlist\ntrustlist.json]
   Config[Service config\nconfig.yaml]
 
   Client --> Router --> OIDC --> ClaimsMW --> ABAC --> Ctrl --> Persist --> DB
   Trust --> OIDC
-  Rules --> ABAC
+  Rules --> PolicyDB --> ABAC
   Config --> Router
   Config --> OIDC
   Config --> ABAC
@@ -123,8 +126,9 @@ sequenceDiagram
   - Example config: [cmd/aasregistryservice/config.yaml](cmd/aasregistryservice/config.yaml)
 - OIDC uses the trustlist file to allow configured issuers and audiences.
   - Example trustlist: [cmd/aasregistryservice/config/trustlist.json](cmd/aasregistryservice/config/trustlist.json)
-- Access rules are loaded from the access model JSON.
+- Access rules are imported from the configured access model JSON into the PostgreSQL-backed ABAC policy repository when `abac.policyFileImport` requires it. Runtime authorization uses the active materialized DB policy.
   - Example rules: [cmd/aasregistryservice/config/access_rules/access-rules.json](cmd/aasregistryservice/config/access_rules/access-rules.json)
+- The protected ABAC management API is available only when `abac.enabled` and `abac.managementApi.enabled` are both true. Digital Twin Registry deliberately never exposes this API. The OpenAPI/Swagger documentation follows the same condition.
 
 ## OIDC authentication
 
@@ -139,6 +143,10 @@ sequenceDiagram
 - If the token is valid, claims are injected into the request context.
 - The middleware adds time claims `CLIENTNOW`, `LOCALNOW`, and `UTCNOW` to support time-based ABAC formulas.
 - AllowAnonymous is currently enabled by default in `SetupSecurityWithClaimsMiddleware`.
+
+PostgreSQL-backed policy versions:
+- [docu/security/ABAC_POLICY_REPOSITORY.md](ABAC_POLICY_REPOSITORY.md)
+- [internal/common/security/abacpolicy](internal/common/security/abacpolicy)
 
 Relevant code:
 - [internal/common/security/oidc.go](internal/common/security/oidc.go)
@@ -326,4 +334,6 @@ Example file:
 - Configure the trustlist with issuer, audience, and required scopes. Treat an omitted audience as a legacy compatibility mode.
 - Confirm route-to-rights mapping covers all endpoints used by the service.
 - Validate the access rules against the intended claims and objects.
-- Restart the service after updating rules (no hot reload).
+- Choose `abac.policyFileImport` deliberately. Use `always` only when the file is the source of truth; use `if_missing` when the database-managed policy should survive restarts; use `never` when an active DB policy is mandatory.
+- Enable `abac.managementApi.enabled` only for services where runtime policy administration is required. Do not enable it for Digital Twin Registry; DTR uses the configured access-rule file as source of truth. Protect `/security/abac/**` with admin-only ABAC rules.
+- Restarting is no longer the only update path when the management API is enabled; staged rule edits still require explicit activation before they affect authorization.

@@ -27,11 +27,15 @@
 package auth
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"strings"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
+	api "github.com/go-chi/chi/v5"
+	jsoniter "github.com/json-iterator/go"
 )
 
 const matchedRuleHashPrefixLength = 16
@@ -42,6 +46,222 @@ type definitionIndex struct {
 	attrs    map[string][]grammar.AttributeItem
 	formulas map[string]grammar.LogicalExpression
 	objects  map[string]grammar.AccessRuleModelSchemaJSONAllAccessPermissionRulesDEFOBJECTSElem
+}
+
+// MaterializedABACPolicy contains a validated policy source and its compiled,
+// row-oriented rule representation.
+//
+// Repository-backed ABAC stores these canonical documents in PostgreSQL and can
+// later rebuild the in-memory AccessModel without depending on the original
+// file. PolicyID is the canonical configured policy SHA-256 digest; RawPolicyHash
+// is the byte hash alias used for legacy file-hash resolution.
+type MaterializedABACPolicy struct {
+	PolicyID               string
+	ConfiguredPolicyJSON   []byte
+	ConfiguredPolicyHash   string
+	RawPolicyHash          string
+	MaterializedPolicyJSON []byte
+	MaterializedPolicyHash string
+	Rules                  []MaterializedABACRule
+	Model                  *AccessModel
+}
+
+// MaterializedABACRule is one durable, ordered ABAC rule row.
+//
+// The configured rule JSON keeps the authoring shape from rules[], while the
+// materialized JSON stores the resolved ACL, object, formula, and filter data
+// used by the evaluator.
+type MaterializedABACRule struct {
+	RuleIndex            int
+	MatchedRuleID        string
+	ConfiguredRuleJSON   []byte
+	MaterializedRuleJSON []byte
+	ACLJSON              []byte
+	AttributesJSON       []byte
+	ObjectsJSON          []byte
+	FormulaJSON          []byte
+	FiltersJSON          []byte
+	Access               string
+	Rights               []string
+	ConfiguredRuleHash   string
+	MaterializedRuleHash string
+}
+
+type materializedRuleDocument struct {
+	RuleIndex     int                                  `json:"rule_index"`
+	MatchedRuleID string                               `json:"matched_rule_id"`
+	ACL           grammar.ACL                          `json:"acl"`
+	Attributes    []grammar.AttributeItem              `json:"attributes,omitempty"`
+	Objects       []grammar.ObjectItem                 `json:"objects,omitempty"`
+	Formula       *grammar.LogicalExpression           `json:"formula,omitempty"`
+	Filters       []grammar.AccessPermissionRuleFILTER `json:"filters,omitempty"`
+}
+
+type materializedPolicyDocument struct {
+	ConfiguredPolicyHash string                     `json:"configured_policy_hash"`
+	RuleCount            int                        `json:"rule_count"`
+	Rules                []materializedRuleDocument `json:"rules"`
+}
+
+// MaterializeABACPolicy validates raw policy JSON and returns canonical storage
+// documents plus a compiled AccessModel.
+func MaterializeABACPolicy(raw []byte, apiRouter *api.Mux, basePath string) (MaterializedABACPolicy, error) {
+	model, err := ParseAccessModel(raw, apiRouter, basePath)
+	if err != nil {
+		return MaterializedABACPolicy{}, err
+	}
+
+	configuredJSON, err := common.CanonicalJSON(raw)
+	if err != nil {
+		return MaterializedABACPolicy{}, fmt.Errorf("canonical configured policy: %w", err)
+	}
+	configuredHash := sha256Hex(configuredJSON)
+	model.WithPolicyID(configuredHash)
+
+	rules, docs, err := materializedRuleRows(model.gen.AllAccessPermissionRules.Rules, model.rules)
+	if err != nil {
+		return MaterializedABACPolicy{}, err
+	}
+
+	materializedJSON, err := common.CanonicalJSON(materializedPolicyDocument{
+		ConfiguredPolicyHash: configuredHash,
+		RuleCount:            len(docs),
+		Rules:                docs,
+	})
+	if err != nil {
+		return MaterializedABACPolicy{}, fmt.Errorf("canonical materialized policy: %w", err)
+	}
+
+	return MaterializedABACPolicy{
+		PolicyID:               configuredHash,
+		ConfiguredPolicyJSON:   configuredJSON,
+		ConfiguredPolicyHash:   configuredHash,
+		RawPolicyHash:          sha256Hex(raw),
+		MaterializedPolicyJSON: materializedJSON,
+		MaterializedPolicyHash: sha256Hex(materializedJSON),
+		Rules:                  rules,
+		Model:                  model,
+	}, nil
+}
+
+// AccessModelFromMaterializedRules rebuilds a compiled AccessModel from stored
+// materialized rule rows.
+func AccessModelFromMaterializedRules(policyID string, rules []MaterializedABACRule, apiRouter *api.Mux, basePath string) (*AccessModel, error) {
+	materialized := make([]materializedRule, 0, len(rules))
+	for _, row := range rules {
+		var doc materializedRuleDocument
+		var json = jsoniter.ConfigCompatibleWithStandardLibrary
+		if err := json.Unmarshal(row.MaterializedRuleJSON, &doc); err != nil {
+			return nil, fmt.Errorf("materialized rule %d: %w", row.RuleIndex, err)
+		}
+		materialized = append(materialized, materializedRule{
+			id:         doc.MatchedRuleID,
+			acl:        doc.ACL,
+			attrs:      doc.Attributes,
+			objs:       doc.Objects,
+			lexpr:      doc.Formula,
+			filterList: doc.Filters,
+		})
+	}
+	return &AccessModel{
+		apiRouter: apiRouter,
+		rules:     materialized,
+		basePath:  basePath,
+		policyID:  policyID,
+	}, nil
+}
+
+func materializedRuleRows(configured []grammar.AccessPermissionRule, rules []materializedRule) ([]MaterializedABACRule, []materializedRuleDocument, error) {
+	if len(configured) != len(rules) {
+		return nil, nil, fmt.Errorf("configured/materialized rule count mismatch")
+	}
+	rows := make([]MaterializedABACRule, 0, len(rules))
+	docs := make([]materializedRuleDocument, 0, len(rules))
+	for i, rule := range rules {
+		row, doc, err := materializedRuleRow(i+1, configured[i], rule)
+		if err != nil {
+			return nil, nil, err
+		}
+		rows = append(rows, row)
+		docs = append(docs, doc)
+	}
+	return rows, docs, nil
+}
+
+func materializedRuleRow(index int, configured grammar.AccessPermissionRule, rule materializedRule) (MaterializedABACRule, materializedRuleDocument, error) {
+	configuredJSON, err := common.CanonicalJSON(configured)
+	if err != nil {
+		return MaterializedABACRule{}, materializedRuleDocument{}, fmt.Errorf("rule %d configured json: %w", index, err)
+	}
+	configuredHash := sha256Hex(configuredJSON)
+	doc := materializedRuleDocument{
+		RuleIndex:     index,
+		MatchedRuleID: rule.id,
+		ACL:           rule.acl,
+		Attributes:    rule.attrs,
+		Objects:       rule.objs,
+		Formula:       rule.lexpr,
+		Filters:       rule.filterList,
+	}
+	materializedJSON, err := common.CanonicalJSON(doc)
+	if err != nil {
+		return MaterializedABACRule{}, materializedRuleDocument{}, fmt.Errorf("rule %d materialized json: %w", index, err)
+	}
+	aclJSON, err := canonicalSubdocument(rule.acl)
+	if err != nil {
+		return MaterializedABACRule{}, materializedRuleDocument{}, err
+	}
+	attrsJSON, err := canonicalSubdocument(rule.attrs)
+	if err != nil {
+		return MaterializedABACRule{}, materializedRuleDocument{}, err
+	}
+	objectsJSON, err := canonicalSubdocument(rule.objs)
+	if err != nil {
+		return MaterializedABACRule{}, materializedRuleDocument{}, err
+	}
+	formulaJSON, err := canonicalSubdocument(rule.lexpr)
+	if err != nil {
+		return MaterializedABACRule{}, materializedRuleDocument{}, err
+	}
+	filtersJSON, err := canonicalSubdocument(rule.filterList)
+	if err != nil {
+		return MaterializedABACRule{}, materializedRuleDocument{}, err
+	}
+	return MaterializedABACRule{
+		RuleIndex:            index,
+		MatchedRuleID:        rule.id,
+		ConfiguredRuleJSON:   configuredJSON,
+		MaterializedRuleJSON: materializedJSON,
+		ACLJSON:              aclJSON,
+		AttributesJSON:       attrsJSON,
+		ObjectsJSON:          objectsJSON,
+		FormulaJSON:          formulaJSON,
+		FiltersJSON:          filtersJSON,
+		Access:               string(rule.acl.ACCESS),
+		Rights:               rightsStrings(rule.acl.RIGHTS),
+		ConfiguredRuleHash:   configuredHash,
+		MaterializedRuleHash: sha256Hex(materializedJSON),
+	}, doc, nil
+}
+
+func canonicalSubdocument(value any) ([]byte, error) {
+	if value == nil {
+		return []byte("null"), nil
+	}
+	return common.CanonicalJSON(value)
+}
+
+func rightsStrings(rights []grammar.RightsEnum) []string {
+	values := make([]string, 0, len(rights))
+	for _, right := range rights {
+		values = append(values, string(right))
+	}
+	return values
+}
+
+func sha256Hex(data []byte) string {
+	sum := sha256.Sum256(data)
+	return hex.EncodeToString(sum[:])
 }
 
 // materializeRules resolves all references in the model up-front so

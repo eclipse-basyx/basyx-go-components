@@ -99,32 +99,7 @@ func SetupSecurityWithClaimsMiddleware(
 		return nil
 	}
 
-	trustlistData, err := os.ReadFile(cfg.OIDC.TrustlistPath)
-	if err != nil {
-		return fmt.Errorf("read OIDC trustlist: %w", err)
-	}
-
-	var trustlist []common.OIDCProviderConfig
-	if err := json.Unmarshal(trustlistData, &trustlist); err != nil {
-		return fmt.Errorf("parse OIDC trustlist: %w", err)
-	}
-
-	oidcProviders := make([]OIDCProviderSettings, 0, len(trustlist))
-	for _, p := range trustlist {
-		oidcProviders = append(oidcProviders, OIDCProviderSettings{
-			Issuer:        p.Issuer,
-			Audience:      p.Audience,
-			Scopes:        p.Scopes,
-			DiscoveryURL:  p.DiscoveryURL,
-			ScopeClaims:   p.ScopeClaims,
-			ClaimMappings: toClaimMappingSettings(p.ClaimMappings),
-		})
-	}
-
-	oidc, err := NewOIDC(ctx, OIDCSettings{
-		Providers:      oidcProviders,
-		AllowAnonymous: true,
-	})
+	oidc, err := setupOIDC(ctx, cfg)
 	if err != nil {
 		return err
 	}
@@ -148,20 +123,82 @@ func SetupSecurityWithClaimsMiddleware(
 		Model:               model,
 	}
 
-	// ✅ Apply middlewares to the router
-	if len(claimsMiddleware) > 0 {
-		chain := append([]func(http.Handler) http.Handler{oidc.Middleware}, claimsMiddleware...)
-		chain = append(chain, ABACMiddleware(abacSettings))
-		r.Use(chain...)
+	applySecurityMiddleware(r, oidc.Middleware, ABACMiddleware(abacSettings), claimsMiddleware...)
+	return nil
+}
+
+// SetupSecurityWithAccessModelProvider configures security with a dynamic ABAC
+// model provider.
+//
+// Repository-backed deployments call this after importing/loading the active
+// database policy. The provider is read for every request, allowing policy
+// activation to refresh the in-memory model without rebuilding the HTTP router.
+func SetupSecurityWithAccessModelProvider(
+	ctx context.Context,
+	cfg *common.Config,
+	r *api.Mux,
+	provider AccessModelProvider,
+	claimsMiddleware ...func(http.Handler) http.Handler,
+) error {
+	if !cfg.ABAC.Enabled {
 		return nil
 	}
-
-	r.Use(
-		oidc.Middleware,
-		ABACMiddleware(abacSettings),
-	)
-
+	oidc, err := setupOIDC(ctx, cfg)
+	if err != nil {
+		return err
+	}
+	abacSettings := ABACSettings{
+		Enabled:             cfg.ABAC.Enabled,
+		EnableImplicitCasts: cfg.General.EnableImplicitCasts,
+		ModelProvider:       provider,
+	}
+	applySecurityMiddleware(r, oidc.Middleware, ABACMiddleware(abacSettings), claimsMiddleware...)
 	return nil
+}
+
+func setupOIDC(ctx context.Context, cfg *common.Config) (*OIDC, error) {
+	trustlistData, err := os.ReadFile(cfg.OIDC.TrustlistPath)
+	if err != nil {
+		return nil, fmt.Errorf("read OIDC trustlist: %w", err)
+	}
+
+	var trustlist []common.OIDCProviderConfig
+	if err := json.Unmarshal(trustlistData, &trustlist); err != nil {
+		return nil, fmt.Errorf("parse OIDC trustlist: %w", err)
+	}
+
+	oidcProviders := make([]OIDCProviderSettings, 0, len(trustlist))
+	for _, p := range trustlist {
+		oidcProviders = append(oidcProviders, OIDCProviderSettings{
+			Issuer:        p.Issuer,
+			Audience:      p.Audience,
+			Scopes:        p.Scopes,
+			DiscoveryURL:  p.DiscoveryURL,
+			ScopeClaims:   p.ScopeClaims,
+			ClaimMappings: toClaimMappingSettings(p.ClaimMappings),
+		})
+	}
+
+	return NewOIDC(ctx, OIDCSettings{
+		Providers:      oidcProviders,
+		AllowAnonymous: true,
+	})
+}
+
+func applySecurityMiddleware(
+	r *api.Mux,
+	oidcMiddleware func(http.Handler) http.Handler,
+	abacMiddleware func(http.Handler) http.Handler,
+	claimsMiddleware ...func(http.Handler) http.Handler,
+) {
+	if len(claimsMiddleware) > 0 {
+		chain := append([]func(http.Handler) http.Handler{oidcMiddleware}, claimsMiddleware...)
+		chain = append(chain, abacMiddleware)
+		r.Use(chain...)
+		return
+	}
+
+	r.Use(oidcMiddleware, abacMiddleware)
 }
 
 func toClaimMappingSettings(configs []common.OIDCClaimMappingConfig) []OIDCClaimMappingSettings {

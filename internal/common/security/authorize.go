@@ -46,6 +46,7 @@ type ABACSettings struct {
 	Enabled             bool
 	EnableImplicitCasts bool
 	Model               *AccessModel
+	ModelProvider       AccessModelProvider
 }
 
 // Resource represents the target object of an authorization request.
@@ -72,7 +73,18 @@ type ResolveResource func(r *http.Request) (Resource, error)
 // AuthorizationDecision records the ABAC decision available to audit middleware.
 type AuthorizationDecision struct {
 	Result        string
+	PolicyID      string
 	MatchedRuleID string
+}
+
+// AccessModelProvider supplies the currently active compiled ABAC model.
+//
+// Implementations are expected to be concurrency-safe because the ABAC
+// middleware calls ActiveAccessModel for every protected request. Repository
+// backed deployments use this hook to atomically swap compiled policies only
+// after a policy activation transaction commits.
+type AccessModelProvider interface {
+	ActiveAccessModel() *AccessModel
 }
 
 // ABACMiddleware returns an HTTP middleware handler that enforces attribute-based
@@ -95,10 +107,11 @@ func ABACMiddleware(settings ABACSettings) func(http.Handler) http.Handler {
 				return
 			}
 
-			if settings.Model != nil {
+			model := activeAccessModel(settings)
+			if model != nil {
 				opts := grammar.DefaultSimplifyOptions()
 				opts.EnableImplicitCasts = settings.EnableImplicitCasts
-				evaluation := settings.Model.AuthorizeWithFilterWithOptions(EvalInput{
+				evaluation := model.AuthorizeWithFilterWithOptions(EvalInput{
 					Method: r.Method,
 					Path:   r.URL.Path,
 					Claims: claims,
@@ -122,6 +135,7 @@ func ABACMiddleware(settings ABACSettings) func(http.Handler) http.Handler {
 
 				ctx := ContextWithAuthorizationDecision(r.Context(), AuthorizationDecision{
 					Result:        string(DecisionAllow),
+					PolicyID:      evaluation.PolicyID,
 					MatchedRuleID: evaluation.MatchedRuleID,
 				})
 				if evaluation.QueryFilter != nil {
@@ -135,6 +149,13 @@ func ABACMiddleware(settings ABACSettings) func(http.Handler) http.Handler {
 			http.Error(w, "resource resolution failed", http.StatusForbidden)
 		})
 	}
+}
+
+func activeAccessModel(settings ABACSettings) *AccessModel {
+	if settings.ModelProvider != nil {
+		return settings.ModelProvider.ActiveAccessModel()
+	}
+	return settings.Model
 }
 
 // ContextWithAuthorizationDecision stores an evaluated ABAC decision in ctx.

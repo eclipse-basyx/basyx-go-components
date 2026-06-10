@@ -103,6 +103,73 @@ func TestAddSwaggerUIDoesNotInjectVerifyEndpointWhenDisabled(t *testing.T) {
 	}
 }
 
+func TestAddSwaggerUIInjectsABACManagementOnlyWhenEnabled(t *testing.T) {
+	spec := []byte("openapi: 3.0.3\npaths:\n  /x:\n    get:\n      responses:\n        '200':\n          description: ok\n")
+
+	disabledRouter := chi.NewRouter()
+	includeABACManagement := false
+	AddSwaggerUI(disabledRouter, SwaggerUIConfig{
+		Title:                 "test",
+		SpecURL:               "/api-docs/openapi.yaml",
+		UIPath:                "/swagger",
+		SpecPath:              "/api-docs/openapi.yaml",
+		SpecContent:           spec,
+		IncludeABACManagement: &includeABACManagement,
+	})
+	disabledRecorder := httptest.NewRecorder()
+	disabledRouter.ServeHTTP(disabledRecorder, httptest.NewRequest(http.MethodGet, "/api-docs/openapi.yaml", nil))
+	if strings.Contains(disabledRecorder.Body.String(), "/security/abac/policy-versions") {
+		t.Fatal("expected ABAC management paths to be hidden when disabled")
+	}
+
+	enabledRouter := chi.NewRouter()
+	includeABACManagement = true
+	AddSwaggerUI(enabledRouter, SwaggerUIConfig{
+		Title:                 "test",
+		SpecURL:               "/api-docs/openapi.yaml",
+		UIPath:                "/swagger",
+		SpecPath:              "/api-docs/openapi.yaml",
+		SpecContent:           spec,
+		IncludeABACManagement: &includeABACManagement,
+	})
+	enabledRecorder := httptest.NewRecorder()
+	enabledRouter.ServeHTTP(enabledRecorder, httptest.NewRequest(http.MethodGet, "/api-docs/openapi.yaml", nil))
+	if !strings.Contains(enabledRecorder.Body.String(), "/security/abac/policy-versions") {
+		t.Fatal("expected ABAC management paths to be injected when enabled")
+	}
+}
+
+func TestShouldIncludeABACManagementRequiresSecurityAndOptIn(t *testing.T) {
+	tests := []struct {
+		name string
+		cfg  *Config
+		want bool
+	}{
+		{name: "nil"},
+		{
+			name: "management enabled without abac",
+			cfg:  &Config{ABAC: ABACConfig{ManagementAPI: ABACManagementAPIConfig{Enabled: true}}},
+		},
+		{
+			name: "abac enabled without management",
+			cfg:  &Config{ABAC: ABACConfig{Enabled: true}},
+		},
+		{
+			name: "abac and management enabled",
+			cfg:  &Config{ABAC: ABACConfig{Enabled: true, ManagementAPI: ABACManagementAPIConfig{Enabled: true}}},
+			want: true,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if got := shouldIncludeABACManagement(test.cfg); got != test.want {
+				t.Fatalf("expected %t, got %t", test.want, got)
+			}
+		})
+	}
+}
+
 func TestInjectVerifyEndpoint_DoesNotDuplicateExistingPath(t *testing.T) {
 	spec := []byte("openapi: 3.0.3\npaths:\n  /verify:\n    post:\n      summary: Existing\n")
 	injected := injectVerifyEndpoint(spec)

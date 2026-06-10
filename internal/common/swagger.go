@@ -68,6 +68,7 @@ type SwaggerUIConfig struct {
 	BasePath              string         // Base path for redirect to Swagger UI (e.g., "/" or "/api")
 	Contact               *ContactConfig // Contact information to inject into OpenAPI spec
 	IncludeVerifyEndpoint *bool          // nil/default=true, false disables /verify injection in OpenAPI spec
+	IncludeABACManagement *bool          // nil/default=false, true injects ABAC management API paths
 }
 
 // ContactConfig holds contact information for OpenAPI spec
@@ -79,6 +80,7 @@ type ContactConfig struct {
 
 var openAPIVersionRegex = regexp.MustCompile(`(?m)^\s*version:\s*V([0-9]+\.[0-9]+\.[0-9]+)`)
 var verifyPathRegex = regexp.MustCompile(`(?m)^\s*/verify:\s*$`)
+var abacManagementPathRegex = regexp.MustCompile(`(?m)^\s*/security/abac/policy-versions:\s*$`)
 var pathsSectionRegex = regexp.MustCompile(`(?m)^paths:\s*(?:\r?\n)`)
 
 func detectPart2SchemaVersion(specContent []byte) string {
@@ -205,6 +207,333 @@ func injectVerifyEndpoint(specContent []byte) []byte {
 	return appended
 }
 
+const abacManagementPathsYAML = `  /security/abac/policy-versions:
+    get:
+      tags:
+        - ABAC Policy Management
+      summary: Lists ABAC policy versions
+      operationId: ListABACPolicyVersions
+      responses:
+        '200':
+          description: ABAC policy versions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+    post:
+      tags:
+        - ABAC Policy Management
+      summary: Imports a configured ABAC policy as a staged version
+      operationId: ImportABACPolicyVersion
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '201':
+          description: Imported ABAC policy version
+  /security/abac/policy-versions/{versionID}:
+    parameters:
+      - name: versionID
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int64
+    get:
+      tags:
+        - ABAC Policy Management
+      summary: Gets one ABAC policy version
+      operationId: GetABACPolicyVersion
+      responses:
+        '200':
+          description: ABAC policy version
+          content:
+            application/json:
+              schema:
+                type: object
+  /security/abac/policy-versions/{versionID}/clone:
+    parameters:
+      - name: versionID
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int64
+    post:
+      tags:
+        - ABAC Policy Management
+      summary: Clones a policy version to a staged editable version
+      operationId: CloneABACPolicyVersion
+      responses:
+        '201':
+          description: Cloned staged policy version
+  /security/abac/policy-versions/{versionID}/validate:
+    parameters:
+      - name: versionID
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int64
+    post:
+      tags:
+        - ABAC Policy Management
+      summary: Validates and materializes a staged ABAC policy version
+      operationId: ValidateABACPolicyVersion
+      responses:
+        '200':
+          description: Validation result
+          content:
+            application/json:
+              schema:
+                type: object
+  /security/abac/policy-versions/{versionID}/activate:
+    parameters:
+      - name: versionID
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int64
+    post:
+      tags:
+        - ABAC Policy Management
+      summary: Activates a staged ABAC policy version
+      operationId: ActivateABACPolicyVersion
+      responses:
+        '200':
+          description: Active ABAC policy version
+  /security/abac/policy-versions/{versionID}/reject:
+    parameters:
+      - name: versionID
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int64
+    post:
+      tags:
+        - ABAC Policy Management
+      summary: Rejects a staged ABAC policy version
+      operationId: RejectABACPolicyVersion
+      responses:
+        '200':
+          description: Rejected ABAC policy version
+  /security/abac/policy-versions/{versionID}/rules:
+    parameters:
+      - name: versionID
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int64
+    get:
+      tags:
+        - ABAC Policy Management
+      summary: Lists materialized rules for a policy version
+      operationId: ListABACPolicyRules
+      responses:
+        '200':
+          description: ABAC policy rules
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+    post:
+      tags:
+        - ABAC Policy Management
+      summary: Creates one rule in a staged ABAC policy version
+      operationId: CreateABACPolicyRule
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: Updated staged policy version
+  /security/abac/policy-versions/{versionID}/rules/{ruleIndex}:
+    parameters:
+      - name: versionID
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int64
+      - name: ruleIndex
+        in: path
+        required: true
+        schema:
+          type: integer
+          minimum: 1
+    get:
+      tags:
+        - ABAC Policy Management
+      summary: Gets one ABAC policy rule
+      operationId: GetABACPolicyRule
+      responses:
+        '200':
+          description: ABAC policy rule
+    put:
+      tags:
+        - ABAC Policy Management
+      summary: Replaces one rule in a staged ABAC policy version
+      operationId: ReplaceABACPolicyRule
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: Updated staged policy version
+    patch:
+      tags:
+        - ABAC Policy Management
+      summary: Merge-patches one rule in a staged ABAC policy version
+      operationId: PatchABACPolicyRule
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: Updated staged policy version
+    delete:
+      tags:
+        - ABAC Policy Management
+      summary: Deletes one rule from a staged ABAC policy version
+      operationId: DeleteABACPolicyRule
+      responses:
+        '200':
+          description: Updated staged policy version
+  /security/abac/policy-versions/{versionID}/rules/{ruleIndex}/duplicate:
+    parameters:
+      - name: versionID
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int64
+      - name: ruleIndex
+        in: path
+        required: true
+        schema:
+          type: integer
+          minimum: 1
+    post:
+      tags:
+        - ABAC Policy Management
+      summary: Duplicates one rule in a staged ABAC policy version
+      operationId: DuplicateABACPolicyRule
+      responses:
+        '200':
+          description: Updated staged policy version
+  /security/abac/policy-versions/{versionID}/rules/{ruleIndex}/move:
+    parameters:
+      - name: versionID
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int64
+      - name: ruleIndex
+        in: path
+        required: true
+        schema:
+          type: integer
+          minimum: 1
+    post:
+      tags:
+        - ABAC Policy Management
+      summary: Moves one rule within a staged ABAC policy version
+      operationId: MoveABACPolicyRule
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                position:
+                  type: integer
+                  minimum: 1
+      responses:
+        '200':
+          description: Updated staged policy version
+  /security/abac/policy-versions/{versionID}/rules/{ruleIndex}/enabled:
+    parameters:
+      - name: versionID
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int64
+      - name: ruleIndex
+        in: path
+        required: true
+        schema:
+          type: integer
+          minimum: 1
+    put:
+      tags:
+        - ABAC Policy Management
+      summary: Enables or disables one rule in a staged ABAC policy version
+      operationId: SetABACPolicyRuleEnabled
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - enabled
+              properties:
+                enabled:
+                  type: boolean
+      responses:
+        '200':
+          description: Updated staged policy version
+`
+
+func injectABACManagementAPI(specContent []byte) []byte {
+	if abacManagementPathRegex.Match(specContent) {
+		return specContent
+	}
+	return injectPathFragment(specContent, abacManagementPathsYAML)
+}
+
+func injectPathFragment(specContent []byte, fragment string) []byte {
+	pathLoc := pathsSectionRegex.FindIndex(specContent)
+	if pathLoc != nil {
+		injected := make([]byte, 0, len(specContent)+len(fragment))
+		injected = append(injected, specContent[:pathLoc[1]]...)
+		injected = append(injected, []byte(fragment)...)
+		injected = append(injected, specContent[pathLoc[1]:]...)
+		return injected
+	}
+
+	appended := make([]byte, 0, len(specContent)+len(fragment)+8)
+	appended = append(appended, specContent...)
+	if len(specContent) > 0 && specContent[len(specContent)-1] != '\n' {
+		appended = append(appended, '\n')
+	}
+	appended = append(appended, []byte("paths:\n")...)
+	appended = append(appended, []byte(fragment)...)
+	return appended
+}
+
 // injectServerURL modifies the OpenAPI spec to use the configured server URL
 func injectServerURL(specContent []byte, serverURL string) []byte {
 	if serverURL == "" {
@@ -304,6 +633,13 @@ func AddSwaggerUI(r *chi.Mux, cfg SwaggerUIConfig) {
 	}
 	if includeVerifyEndpoint {
 		specContent = injectVerifyEndpoint(specContent)
+	}
+	includeABACManagement := false
+	if cfg.IncludeABACManagement != nil {
+		includeABACManagement = *cfg.IncludeABACManagement
+	}
+	if includeABACManagement {
+		specContent = injectABACManagementAPI(specContent)
 	}
 
 	// Serve the OpenAPI spec
@@ -413,6 +749,7 @@ func AddSwaggerUIFromFS(r *chi.Mux, specFS embed.FS, specFile string, title stri
 	// Build contact config if provided
 	var contact *ContactConfig
 	var includeVerifyEndpoint *bool
+	var includeABACManagement *bool
 	if serverConfig != nil && (serverConfig.Swagger.ContactName != "" || serverConfig.Swagger.ContactEmail != "" || serverConfig.Swagger.ContactURL != "") {
 		contact = &ContactConfig{
 			Name:  serverConfig.Swagger.ContactName,
@@ -422,6 +759,8 @@ func AddSwaggerUIFromFS(r *chi.Mux, specFS embed.FS, specFile string, title stri
 	}
 	if serverConfig != nil {
 		includeVerifyEndpoint = &serverConfig.Server.VerificationEndpointAvailable
+		abacManagementEnabled := shouldIncludeABACManagement(serverConfig)
+		includeABACManagement = &abacManagementEnabled
 	}
 
 	AddSwaggerUI(r, SwaggerUIConfig{
@@ -434,7 +773,12 @@ func AddSwaggerUIFromFS(r *chi.Mux, specFS embed.FS, specFile string, title stri
 		BasePath:              basePath,
 		Contact:               contact,
 		IncludeVerifyEndpoint: includeVerifyEndpoint,
+		IncludeABACManagement: includeABACManagement,
 	})
 
 	return nil
+}
+
+func shouldIncludeABACManagement(serverConfig *Config) bool {
+	return serverConfig != nil && serverConfig.ABAC.Enabled && serverConfig.ABAC.ManagementAPI.Enabled
 }

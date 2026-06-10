@@ -29,6 +29,8 @@ The important settings are:
 - `BASYX_HISTORY_INTEGRITY_ANCHOR_PROVIDER=none`
 - `ABAC_ENABLED=true`
 - `ABAC_MODELPATH=/security_env/access-rules.json`
+- `ABAC_POLICY_FILE_IMPORT=if_missing`
+- `ABAC_MANAGEMENT_API_ENABLED=true`
 - `OIDC_TRUSTLISTPATH=/security_env/trustlist.json`
 
 ## Start
@@ -47,7 +49,9 @@ The demo `basyx` realm sets `sslRequired=none`, and the Keycloak startup command
 The `keycloak-healthcheck` container is a one-shot readiness gate and exits after Keycloak is ready and the local master realm reports `sslRequired=none`; the `keycloak` service itself should keep running.
 
 `BASYX_HISTORY_RETENTION_DAYS=0` is accepted as configuration, but automatic retention cleanup is not implemented yet. `BASYX_HISTORY_FULL_SNAPSHOT_INTERVAL=5` stores periodic full checkpoints with RFC 6902 diff rows between them.
-When evidence is enabled, history mode must be `api` or `audit`. Each successful history append writes a WORM `history_event` artifact to MinIO before PostgreSQL commits. The artifact stores the recovery payload plus `effective_diff`, which records the actual JSON Patch relative to the previous version for audit attribution. If MinIO is unavailable or rejects the object write, the API mutation fails and the PostgreSQL transaction rolls back.
+When evidence is enabled, history mode must be `api` or `audit`. Each successful history append writes a WORM `history_event` artifact to MinIO before PostgreSQL commits. The artifact stores the recovery payload plus `effective_diff`, which records the actual JSON Patch relative to the previous version for audit attribution. The startup ABAC access-rule import also writes an `abac_policy_version` artifact when the policy version is activated. If MinIO is unavailable or rejects a required object write, the API mutation or ABAC policy activation fails and the PostgreSQL transaction rolls back.
+
+`ABAC_POLICY_FILE_IMPORT=if_missing` imports `security_env/access-rules.json` only when no active database-backed policy exists for the AAS Environment Service scope. This keeps the first startup file import auditable and avoids replacing later database-managed policy versions on every restart. `ABAC_MANAGEMENT_API_ENABLED=true` opts this example into the protected `/security/abac/policy-versions` API and makes the same endpoints visible in Swagger UI.
 
 `BASYX_AUDIT_IDENTITY_MODE=extended` stores request/correlation IDs from `X-Request-ID` and `X-Correlation-ID` when clients or trusted ingress set them, authenticated OIDC subject and issuer, client id, ABAC allow metadata, operation, endpoint, method, trusted source IP, user agent, and a hash of the configured ABAC policy where available. BaSyx does not generate HTTP request/correlation IDs when those headers are missing. Startup preconfiguration rows are created outside an HTTP request, so they use a synthetic system audit context such as `system:aas-preconfiguration`, `basyx:aasenvironmentservice`, `aasenvironmentservice`, `SYSTEM_INTERNAL`, and `SYSTEM`. Perform an authenticated API mutation to see end-user OIDC and ABAC audit context.
 
@@ -176,6 +180,13 @@ Inspect the automatic WORM history-event receipts. These are written during the 
 ```bash
 docker compose exec db psql -U admin -d basyxTestDB -c \
   "SELECT artifact_type, history_table, identifier, history_id, object_key, sha256 FROM history_evidence_artifacts WHERE artifact_type = 'history_event' ORDER BY artifact_id"
+```
+
+Inspect the ABAC policy-version evidence receipt written during startup access-rule activation:
+
+```bash
+docker compose exec db psql -U admin -d basyxTestDB -c \
+  "SELECT artifact_type, history_table, identifier, history_id, object_key, sha256 FROM history_evidence_artifacts WHERE artifact_type = 'abac_policy_version' ORDER BY artifact_id"
 ```
 
 Publish a signed or unsigned manifest for a Submodel history range from the repository root. This verifies the PostgreSQL hash chain, writes range manifest/checkpoint artifacts, and records their receipts. Adjust `-identifier`, `-from`, and `-to` to values from the query above:

@@ -93,6 +93,32 @@ func TestABACMiddleware_KnownMappedRouteWithoutMatchingRuleReturnsForbidden(t *t
 	}
 }
 
+func TestABACMiddleware_ModelProviderNilFailsClosed(t *testing.T) {
+	handler := ABACMiddleware(ABACSettings{
+		Enabled:       true,
+		ModelProvider: emptyModelProvider{},
+	})(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	req := httptest.NewRequest(http.MethodGet, "/description", nil)
+	ctx := context.WithValue(req.Context(), ClaimsKey, Claims{"sub": "tester"})
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("expected fail-closed status %d, got %d", http.StatusForbidden, rec.Code)
+	}
+}
+
+type emptyModelProvider struct{}
+
+func (emptyModelProvider) ActiveAccessModel() *AccessModel {
+	return nil
+}
+
 func TestHasUnrestrictedFormulaForRight_ReturnsTrueForBooleanTrue(t *testing.T) {
 	t.Parallel()
 

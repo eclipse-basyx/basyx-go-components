@@ -43,6 +43,7 @@ import (
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/history"
 	commonmodel "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/security/abacpolicy"
 	"github.com/eclipse-basyx/basyx-go-components/internal/digitaltwinregistry"
 	discoveryapiinternal "github.com/eclipse-basyx/basyx-go-components/internal/discoveryservice/api"
 	discoverydb "github.com/eclipse-basyx/basyx-go-components/internal/discoveryservice/persistence"
@@ -61,6 +62,9 @@ func runServer(ctx context.Context, configPath string) error {
 	cfg, err := common.LoadConfig(configPath, common.NORMAL)
 	if err != nil {
 		return err
+	}
+	if !abacpolicy.ManagementAPIAllowed("digitaltwinregistryservice") {
+		cfg.ABAC.ManagementAPI.Enabled = false
 	}
 	if err := commonmodel.SetVerificationMode(cfg.Server.StrictVerification); err != nil {
 		return err
@@ -162,12 +166,15 @@ func runServer(ctx context.Context, configPath string) error {
 		claimsMiddleware = append(claimsMiddleware, auth.EdcBpnHeaderMiddleware)
 	}
 
-	if err := auth.SetupSecurityWithClaimsMiddleware(ctx, cfg, apiRouter, claimsMiddleware...); err != nil {
+	abacRepo, err := abacpolicy.SetupSecurityWithABACRepository(ctx, cfg, apiRouter, sharedDB, "digitaltwinregistryservice", claimsMiddleware...)
+	if err != nil {
 		return err
 	}
 	versioningGuard := history.NewMutationCoverageGuard(apiRouter)
 	apiRouter.Use(versioningGuard.Middleware)
 	apiRouter.Use(history.AuditContextMiddleware(cfg))
+	abacpolicy.ExemptManagementMutationRoutesIfEnabled(cfg, versioningGuard, "digitaltwinregistryservice")
+	abacpolicy.RegisterManagementRoutesIfEnabled(cfg, apiRouter, abacRepo, "digitaltwinregistryservice")
 
 	for operation, rt := range registryCtrl.Routes() {
 		versioningGuard.ClassifyRoute(operation, rt.Method, rt.Pattern)
