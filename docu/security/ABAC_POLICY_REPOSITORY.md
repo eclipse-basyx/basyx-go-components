@@ -81,7 +81,7 @@ stateDiagram-v2
 
 The evaluator only uses the `active` policy version. Rule edits on a `staged` version are persisted, validated, and audited, but they do not affect authorization until activation succeeds.
 
-Activation performs validation, required WORM evidence writing, previous-active supersession, active-version update, and evaluator cache refresh as one controlled operation. If evidence is required and cannot be written, activation fails and the old active policy remains in use.
+Activation validates the staged version, writes required WORM evidence, supersedes the previous active version, marks the selected version active, and records policy events in one database transaction. The evaluator cache refreshes after that transaction commits. If evidence is required and cannot be written, activation fails and the old active policy remains in use.
 
 ## API Interaction Examples
 
@@ -350,11 +350,17 @@ curl -sS -X POST \
 
 Rejected versions are preserved for auditability and cannot be edited or activated. Clone another active or superseded version when you need a new draft.
 
+## Policy Events
+
+Policy events in PostgreSQL record imports, staged edits, validations, validation failures, activations, supersessions, and rejections with actor, issuer, client id, operation, endpoint, request/correlation ids, source metadata, before/after configured hashes, and before/after materialized hashes. They do not duplicate the full policy document per edit.
+
+Validation failures include non-secret diagnostic details so operators can review why a draft was not activatable. Do not place bearer tokens, raw claims, request payload secrets, or user-specific runtime data in policy event details.
+
 ## Evidence
 
 When `history.evidence.enabled=true`, activation writes an `abac_policy_version` WORM artifact before the database transaction commits. The receipt is cataloged in `history_evidence_artifacts` with `history_table = abac_policy_versions`.
 
-The artifact contains the configured policy JSON, materialized policy JSON, ordered materialized rule rows, `policy_id`, `matched_rule_id` values, hashes, service scope, source metadata, and activation audit metadata.
+The artifact contains the configured policy JSON, materialized policy JSON, ordered materialized rule rows, `policy_id`, `matched_rule_id` values, hashes, service scope, source metadata, activation timestamp, and activation audit metadata.
 
 Normal history event artifacts continue to store only `policy_id` and `matched_rule_id`. Operators can resolve those identifiers through PostgreSQL or the ABAC policy evidence artifact.
 

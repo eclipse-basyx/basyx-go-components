@@ -57,7 +57,11 @@ const (
 	managementBasePath = "/security/abac/policy-versions"
 )
 
-// PolicyVersion is the durable metadata row for one ABAC policy version.
+// PolicyVersion describes one durable ABAC policy version.
+//
+// The configured and materialized JSON fields are canonical documents stored in
+// PostgreSQL. Active and superseded versions are immutable; staged versions are
+// the only versions that draft rule operations may change.
 type PolicyVersion struct {
 	VersionID              int64           `json:"version_id"`
 	ServiceScope           string          `json:"service_scope"`
@@ -86,7 +90,11 @@ type PolicyVersion struct {
 	ArtifactRef            json.RawMessage `json:"artifact_ref,omitempty"`
 }
 
-// PolicyRule is the durable metadata row for one materialized ABAC rule.
+// PolicyRule describes one ordered, materialized ABAC rule row.
+//
+// RuleIndex is the stable 1-based order used by the evaluator. MatchedRuleID is
+// deterministic for the configured rule content and is copied into mutation
+// history when this rule authorizes a request.
 type PolicyRule struct {
 	RuleID               int64           `json:"rule_id"`
 	VersionID            int64           `json:"version_id"`
@@ -111,30 +119,45 @@ type PolicyRule struct {
 	CreatedByClientID    string          `json:"created_by_client_id,omitempty"`
 }
 
-// PolicyImportRequest imports a configured ABAC policy JSON as a staged version.
+// PolicyImportRequest imports configured ABAC policy JSON through the API.
+//
+// Policy must contain the same access-rule model accepted by abac.modelPath.
+// Activate optionally promotes the newly created staged version after import.
 type PolicyImportRequest struct {
 	SourceRef string          `json:"source_ref,omitempty"`
 	Policy    json.RawMessage `json:"policy"`
 	Activate  bool            `json:"activate,omitempty"`
 }
 
-// RuleMutationRequest edits one configured draft rule.
+// RuleMutationRequest creates or replaces one configured draft rule.
+//
+// Position is optional and 1-based for create operations. Rule contains either
+// a configured access-rule object or, for API convenience, is filled from a
+// direct rule request body by the HTTP decoder.
 type RuleMutationRequest struct {
 	Position int             `json:"position,omitempty"`
 	Rule     json.RawMessage `json:"rule"`
 }
 
 // MoveRuleRequest changes the stable order of one staged rule.
+//
+// Position is a required 1-based target index inside the staged rule list.
 type MoveRuleRequest struct {
 	Position int `json:"position"`
 }
 
 // SetRuleEnabledRequest toggles one staged rule.
+//
+// Disabling maps to ACL.ACCESS=DISABLED and enabling maps to ACL.ACCESS=ALLOW.
 type SetRuleEnabledRequest struct {
 	Enabled bool `json:"enabled"`
 }
 
-// ValidationResult reports whether a policy can be materialized.
+// ValidationResult reports whether a staged policy can be materialized.
+//
+// Valid=false is returned for user-correctable policy errors and is still
+// audited. A non-nil Go error indicates an infrastructure or immutable-state
+// problem that prevented validation from completing normally.
 type ValidationResult struct {
 	Valid                  bool   `json:"valid"`
 	PolicyID               string `json:"policy_id,omitempty"`

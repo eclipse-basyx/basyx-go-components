@@ -134,6 +134,7 @@ CREATE TABLE IF NOT EXISTS abac_policy_events (
     after_policy_hash VARCHAR(64),
     before_materialized_policy_hash VARCHAR(64),
     after_materialized_policy_hash VARCHAR(64),
+    details_json JSONB,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
@@ -156,8 +157,8 @@ UPDATE basyxsystem
 SET schema_version = 'v1.1.4',
     state = 'clean'
 WHERE identifier = (
-  SELECT identifier
-  FROM basyxsystem
-  ORDER BY identifier ASC
-  LIMIT 1
+    SELECT identifier
+    FROM basyxsystem
+    ORDER BY identifier ASC
+    LIMIT 1
 );

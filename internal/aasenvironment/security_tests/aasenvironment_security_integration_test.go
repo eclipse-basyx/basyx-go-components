@@ -4,6 +4,8 @@ package main
 import (
 	"bytes"
 	"encoding/base64"
+	"encoding/json"
+	"fmt"
 	"io"
 	"mime/multipart"
 	"net/http"
@@ -19,10 +21,11 @@ import (
 
 const actionUploadMultipart = "UPLOAD_MULTIPART"
 const testBaseURL = "http://localhost:6004"
+const testKeycloakTokenURL = "http://localhost:18080/realms/basyx/protocol/openid-connect/token"
 
 func TestIntegration(t *testing.T) {
 	tokenProvider := testenv.NewPasswordGrantTokenProvider(
-		"http://localhost:8080/realms/basyx/protocol/openid-connect/token",
+		testKeycloakTokenURL,
 		"basyx-ui",
 		10*time.Second,
 	)
@@ -44,7 +47,7 @@ func TestIntegrationSerializationSecurity(t *testing.T) {
 		DefaultExpectedStatus: http.StatusOK,
 		ShouldCompareResponse: testenv.CompareMethods(http.MethodGet),
 		TokenProvider: testenv.NewPasswordGrantTokenProvider(
-			"http://localhost:8080/realms/basyx/protocol/openid-connect/token",
+			testKeycloakTokenURL,
 			"basyx-ui",
 			10*time.Second,
 		),
@@ -53,7 +56,7 @@ func TestIntegrationSerializationSecurity(t *testing.T) {
 
 func TestSuperpathEndpointsSecurity(t *testing.T) {
 	tokenProvider := testenv.NewPasswordGrantTokenProvider(
-		"http://localhost:8080/realms/basyx/protocol/openid-connect/token",
+		testKeycloakTokenURL,
 		"basyx-ui",
 		10*time.Second,
 	)
@@ -137,6 +140,50 @@ func TestSuperpathEndpointsSecurity(t *testing.T) {
 	}
 }
 
+func TestABACPolicyManagementActivationChangesSecuredSubmodelAccess(t *testing.T) {
+	tokenProvider := testenv.NewPasswordGrantTokenProvider(
+		testKeycloakTokenURL,
+		"basyx-ui",
+		10*time.Second,
+	)
+
+	adminToken, err := tokenProvider.GetAccessToken(&testenv.TokenCredentials{User: "admin", Password: "pwd"})
+	require.NoError(t, err)
+	editorToken, err := tokenProvider.GetAccessToken(&testenv.TokenCredentials{User: "userx", Password: "pwd"})
+	require.NoError(t, err)
+
+	aasID := "urn:test:aas:abac-policy-story"
+	submodelID := "urn:test:sm:abac-policy-story"
+	encodedSubmodelID := base64.RawURLEncoding.EncodeToString([]byte(submodelID))
+	submodelURL := testBaseURL + "/submodels/" + encodedSubmodelID
+
+	createAASBody := fmt.Sprintf(`{
+		"id":"%s",
+		"idShort":"ABACPolicyStoryAAS",
+		"modelType":"AssetAdministrationShell",
+		"assetInformation":{"assetKind":"Instance","globalAssetId":"urn:test:asset:abac-policy-story"}
+	}`, aasID)
+	createSubmodelBody := fmt.Sprintf(`{
+		"id":"%s",
+		"idShort":"ABACPolicyStorySubmodel",
+		"modelType":"Submodel",
+		"kind":"Instance",
+		"submodelElements":[]
+	}`, submodelID)
+
+	assertStatus(t, http.MethodPost, testBaseURL+"/shells", createAASBody, adminToken, http.StatusCreated)
+	assertStatus(t, http.MethodPost, testBaseURL+"/submodels", createSubmodelBody, adminToken, http.StatusCreated)
+	assertStatus(t, http.MethodGet, submodelURL, "", editorToken, http.StatusForbidden)
+
+	activeVersionID := activePolicyVersionID(t, adminToken)
+	draftVersionID := clonePolicyVersion(t, activeVersionID, adminToken)
+	createEditorSubmodelReadRule(t, draftVersionID, adminToken)
+	assertStatus(t, http.MethodGet, submodelURL, "", editorToken, http.StatusForbidden)
+	validatePolicyVersion(t, draftVersionID, adminToken)
+	activatePolicyVersion(t, draftVersionID, adminToken)
+	assertStatus(t, http.MethodGet, submodelURL, "", editorToken, http.StatusOK)
+}
+
 func runSuperpathRequest(t *testing.T, method string, path string, body string, contentType string, bearerToken string) (int, string) {
 	t.Helper()
 
@@ -167,6 +214,121 @@ func runSuperpathRequest(t *testing.T, method string, path string, body string, 
 	respBody, err := io.ReadAll(resp.Body)
 	require.NoError(t, err)
 
+	return resp.StatusCode, string(respBody)
+}
+
+func activePolicyVersionID(t *testing.T, bearerToken string) int64 {
+	t.Helper()
+
+	status, body := doAuthorizedRequest(t, http.MethodGet, testBaseURL+"/security/abac/policy-versions", "", bearerToken)
+	require.Equalf(t, http.StatusOK, status, "list policy versions failed: %s", body)
+	var versions []struct {
+		VersionID int64  `json:"version_id"`
+		Status    string `json:"status"`
+	}
+	require.NoError(t, json.Unmarshal([]byte(body), &versions))
+	for _, version := range versions {
+		if version.Status == "active" {
+			return version.VersionID
+		}
+	}
+	t.Fatalf("no active ABAC policy version found: %s", body)
+	return 0
+}
+
+func clonePolicyVersion(t *testing.T, versionID int64, bearerToken string) int64 {
+	t.Helper()
+
+	endpoint := fmt.Sprintf("%s/security/abac/policy-versions/%d/clone", testBaseURL, versionID)
+	status, body := doAuthorizedRequest(t, http.MethodPost, endpoint, "", bearerToken)
+	require.Equalf(t, http.StatusCreated, status, "clone policy failed: %s", body)
+	var version struct {
+		VersionID int64  `json:"version_id"`
+		Status    string `json:"status"`
+	}
+	require.NoError(t, json.Unmarshal([]byte(body), &version))
+	require.Equal(t, "staged", version.Status)
+	return version.VersionID
+}
+
+func createEditorSubmodelReadRule(t *testing.T, versionID int64, bearerToken string) {
+	t.Helper()
+
+	body := `{
+		"rule": {
+			"ACL": {
+				"ATTRIBUTES": [{ "CLAIM": "role" }],
+				"RIGHTS": ["READ"],
+				"ACCESS": "ALLOW"
+			},
+			"OBJECTS": [{ "ROUTE": "/submodels/*" }],
+			"FORMULA": {
+				"$eq": [
+					{ "$attribute": { "CLAIM": "role" } },
+					{ "$strVal": "editor" }
+				]
+			}
+		}
+	}`
+	endpoint := fmt.Sprintf("%s/security/abac/policy-versions/%d/rules", testBaseURL, versionID)
+	status, response := doAuthorizedRequest(t, http.MethodPost, endpoint, body, bearerToken)
+	require.Equalf(t, http.StatusOK, status, "create policy rule failed: %s", response)
+}
+
+func validatePolicyVersion(t *testing.T, versionID int64, bearerToken string) {
+	t.Helper()
+
+	endpoint := fmt.Sprintf("%s/security/abac/policy-versions/%d/validate", testBaseURL, versionID)
+	status, body := doAuthorizedRequest(t, http.MethodPost, endpoint, "", bearerToken)
+	require.Equalf(t, http.StatusOK, status, "validate policy failed: %s", body)
+	var result struct {
+		Valid bool `json:"valid"`
+	}
+	require.NoError(t, json.Unmarshal([]byte(body), &result))
+	require.Truef(t, result.Valid, "policy validation failed: %s", body)
+}
+
+func activatePolicyVersion(t *testing.T, versionID int64, bearerToken string) {
+	t.Helper()
+
+	endpoint := fmt.Sprintf("%s/security/abac/policy-versions/%d/activate", testBaseURL, versionID)
+	status, body := doAuthorizedRequest(t, http.MethodPost, endpoint, "", bearerToken)
+	require.Equalf(t, http.StatusOK, status, "activate policy failed: %s", body)
+	var version struct {
+		Status string `json:"status"`
+	}
+	require.NoError(t, json.Unmarshal([]byte(body), &version))
+	require.Equal(t, "active", version.Status)
+}
+
+func assertStatus(t *testing.T, method string, endpoint string, body string, bearerToken string, expectedStatus int) {
+	t.Helper()
+
+	status, response := doAuthorizedRequest(t, method, endpoint, body, bearerToken)
+	require.Equalf(t, expectedStatus, status, "%s %s returned unexpected status: %s", method, endpoint, response)
+}
+
+func doAuthorizedRequest(t *testing.T, method string, endpoint string, body string, bearerToken string) (int, string) {
+	t.Helper()
+
+	var reader io.Reader
+	if strings.TrimSpace(body) != "" {
+		reader = strings.NewReader(body)
+	}
+	req, err := http.NewRequest(method, endpoint, reader)
+	require.NoError(t, err)
+	req.Header.Set("Authorization", "Bearer "+bearerToken)
+	if reader != nil {
+		req.Header.Set("Content-Type", "application/json")
+	}
+
+	client := &http.Client{Timeout: 30 * time.Second}
+	resp, err := client.Do(req)
+	require.NoError(t, err)
+	defer func() { _ = resp.Body.Close() }()
+
+	respBody, err := io.ReadAll(resp.Body)
+	require.NoError(t, err)
 	return resp.StatusCode, string(respBody)
 }
 

@@ -35,7 +35,12 @@ import (
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 )
 
-// ValidatePolicy materializes a staged policy and persists its refreshed rule rows.
+// ValidatePolicy materializes a staged policy and persists refreshed rule rows.
+//
+// Validation never changes the active evaluator cache. A successful validation
+// updates the staged version's canonical policy hashes and materialized rule
+// rows. A failed validation records an audit event and returns Valid=false so
+// callers can show rule errors without activating the draft.
 func (r *Repository) ValidatePolicy(ctx context.Context, versionID int64) (ValidationResult, error) {
 	actor := actorFromContext(ctx, "ValidatePolicy", managementBasePath)
 	var result ValidationResult
@@ -50,7 +55,22 @@ func (r *Repository) ValidatePolicy(ctx context.Context, versionID int64) (Valid
 		materialized, materializeErr := auth.MaterializeABACPolicy(version.ConfiguredPolicyJSON, r.apiRouter, r.basePath)
 		if materializeErr != nil {
 			result = ValidationResult{Valid: false, Error: materializeErr.Error()}
-			return nil
+			return r.insertPolicyEventTx(ctx, tx, policyEvent{
+				VersionID:                    version.VersionID,
+				PolicyID:                     version.PolicyID,
+				Operation:                    "ValidatePolicyFailed",
+				SourceType:                   version.SourceType,
+				SourceRef:                    version.SourceRef,
+				BeforePolicyHash:             version.ConfiguredPolicyHash,
+				AfterPolicyHash:              version.ConfiguredPolicyHash,
+				BeforeMaterializedPolicyHash: version.MaterializedPolicyHash,
+				AfterMaterializedPolicyHash:  version.MaterializedPolicyHash,
+				Details: map[string]any{
+					"valid": false,
+					"error": materializeErr.Error(),
+				},
+				Actor: actor,
+			})
 		}
 		updated, replaceErr := r.replaceMaterializationTx(ctx, tx, versionID, materialized, actor)
 		if replaceErr != nil {
@@ -70,6 +90,11 @@ func (r *Repository) ValidatePolicy(ctx context.Context, versionID int64) (Valid
 }
 
 // ActivatePolicy atomically promotes one staged policy version to active.
+//
+// The database transaction validates the staged policy, writes required WORM
+// evidence, supersedes the previous active version, marks the selected version
+// active, and records policy events. The runtime cache is refreshed only after
+// the transaction commits, so failed activations keep the old policy in use.
 func (r *Repository) ActivatePolicy(ctx context.Context, versionID int64) (*PolicyVersion, error) {
 	actor := actorFromContext(ctx, "ActivatePolicy", managementBasePath)
 	var activated PolicyVersion
@@ -87,7 +112,11 @@ func (r *Repository) ActivatePolicy(ctx context.Context, versionID int64) (*Poli
 	return &activated, nil
 }
 
-// RejectPolicy marks a staged version as rejected without deleting its audit trail.
+// RejectPolicy marks a staged version as rejected without deleting it.
+//
+// Rejected versions remain inspectable for audit and change-control purposes.
+// Only staged versions can be rejected; active and superseded policy versions
+// stay immutable.
 func (r *Repository) RejectPolicy(ctx context.Context, versionID int64) (*PolicyVersion, error) {
 	actor := actorFromContext(ctx, "RejectPolicy", managementBasePath)
 	var rejected PolicyVersion
@@ -109,7 +138,21 @@ func (r *Repository) RejectPolicy(ctx context.Context, versionID int64) (*Policy
 		if _, execErr := tx.ExecContext(ctx, query, args...); execErr != nil {
 			return common.NewInternalServerError("ABACPOLICY-REJECT-UPDATE " + execErr.Error())
 		}
-		if eventErr := r.insertPolicyEventTx(ctx, tx, versionID, version.PolicyID, "RejectPolicy", version.SourceType, version.SourceRef, version.ConfiguredPolicyHash, version.MaterializedPolicyHash, actor); eventErr != nil {
+		if eventErr := r.insertPolicyEventTx(ctx, tx, policyEvent{
+			VersionID:                    versionID,
+			PolicyID:                     version.PolicyID,
+			Operation:                    "RejectPolicy",
+			SourceType:                   version.SourceType,
+			SourceRef:                    version.SourceRef,
+			BeforePolicyHash:             version.ConfiguredPolicyHash,
+			AfterPolicyHash:              version.ConfiguredPolicyHash,
+			BeforeMaterializedPolicyHash: version.MaterializedPolicyHash,
+			AfterMaterializedPolicyHash:  version.MaterializedPolicyHash,
+			Details: map[string]any{
+				"status": StatusRejected,
+			},
+			Actor: actor,
+		}); eventErr != nil {
 			return eventErr
 		}
 		var readErr error
@@ -142,23 +185,52 @@ func (r *Repository) activateVersionTx(ctx context.Context, tx *sql.Tx, versionI
 	if err != nil {
 		return PolicyVersion{}, err
 	}
-	artifactRef, err := writeActivationEvidenceTx(ctx, tx, version, rules, actor)
+	activatedAt := time.Now().UTC()
+	evidenceVersion := version
+	evidenceVersion.Status = StatusActive
+	evidenceVersion.ActivatedAt = &activatedAt
+	evidenceVersion.ActivatedBySubject = actor.Subject
+	evidenceVersion.ActivatedByIssuer = actor.Issuer
+	evidenceVersion.ActivatedByClientID = actor.ClientID
+	artifactRef, err := writeActivationEvidenceTx(ctx, tx, evidenceVersion, rules, actor)
 	if err != nil {
 		return PolicyVersion{}, err
 	}
 	if err = r.supersedeActiveTx(ctx, tx, versionID, actor); err != nil {
 		return PolicyVersion{}, err
 	}
-	if err = r.markActiveTx(ctx, tx, versionID, artifactRef, actor); err != nil {
+	if err = r.markActiveTx(ctx, tx, versionID, artifactRef, actor, activatedAt); err != nil {
 		return PolicyVersion{}, err
 	}
-	if err = r.insertPolicyEventTx(ctx, tx, versionID, version.PolicyID, "ActivatePolicy", version.SourceType, version.SourceRef, version.ConfiguredPolicyHash, version.MaterializedPolicyHash, actor); err != nil {
+	if err = r.insertPolicyEventTx(ctx, tx, policyEvent{
+		VersionID:                    versionID,
+		PolicyID:                     version.PolicyID,
+		Operation:                    "ActivatePolicy",
+		SourceType:                   version.SourceType,
+		SourceRef:                    version.SourceRef,
+		BeforePolicyHash:             version.ConfiguredPolicyHash,
+		AfterPolicyHash:              version.ConfiguredPolicyHash,
+		BeforeMaterializedPolicyHash: version.MaterializedPolicyHash,
+		AfterMaterializedPolicyHash:  version.MaterializedPolicyHash,
+		Details: map[string]any{
+			"activated_at": activatedAt.Format(time.RFC3339Nano),
+			"status":       StatusActive,
+		},
+		Actor: actor,
+	}); err != nil {
 		return PolicyVersion{}, err
 	}
 	return r.loadPolicyVersion(ctx, tx, versionID)
 }
 
 func (r *Repository) supersedeActiveTx(ctx context.Context, tx *sql.Tx, activatingVersionID int64, actor auditActor) error {
+	active, found, err := r.loadActivePolicyVersion(ctx, tx)
+	if err != nil {
+		return err
+	}
+	if !found || active.VersionID == activatingVersionID {
+		return nil
+	}
 	query, args, err := goqu.Update(tablePolicyVersions).
 		Set(goqu.Record{
 			"status":        StatusSuperseded,
@@ -167,8 +239,7 @@ func (r *Repository) supersedeActiveTx(ctx context.Context, tx *sql.Tx, activati
 		}).
 		Where(
 			goqu.C("service_scope").Eq(r.serviceScope),
-			goqu.C("status").Eq(StatusActive),
-			goqu.C("version_id").Neq(activatingVersionID),
+			goqu.C("version_id").Eq(active.VersionID),
 		).
 		ToSQL()
 	if err != nil {
@@ -177,11 +248,26 @@ func (r *Repository) supersedeActiveTx(ctx context.Context, tx *sql.Tx, activati
 	if _, err = tx.ExecContext(ctx, query, args...); err != nil {
 		return common.NewInternalServerError("ABACPOLICY-ACTIVATE-SUPERSEDE " + err.Error())
 	}
-	return r.insertPolicyEventTx(ctx, tx, activatingVersionID, "", "SupersedePreviousActivePolicy", SourceTypeAPI, "", "", "", actor)
+	return r.insertPolicyEventTx(ctx, tx, policyEvent{
+		VersionID:                    active.VersionID,
+		PolicyID:                     active.PolicyID,
+		Operation:                    "SupersedePolicyVersion",
+		SourceType:                   active.SourceType,
+		SourceRef:                    active.SourceRef,
+		BeforePolicyHash:             active.ConfiguredPolicyHash,
+		AfterPolicyHash:              active.ConfiguredPolicyHash,
+		BeforeMaterializedPolicyHash: active.MaterializedPolicyHash,
+		AfterMaterializedPolicyHash:  active.MaterializedPolicyHash,
+		Details: map[string]any{
+			"activating_version_id": activatingVersionID,
+			"status":                StatusSuperseded,
+		},
+		Actor: actor,
+	})
 }
 
-func (r *Repository) markActiveTx(ctx context.Context, tx *sql.Tx, versionID int64, artifactRef []byte, actor auditActor) error {
-	now := time.Now().UTC()
+func (r *Repository) markActiveTx(ctx context.Context, tx *sql.Tx, versionID int64, artifactRef []byte, actor auditActor, activatedAt time.Time) error {
+	now := activatedAt.UTC()
 	update := goqu.Record{
 		"status":                 StatusActive,
 		"activated_at":           now,

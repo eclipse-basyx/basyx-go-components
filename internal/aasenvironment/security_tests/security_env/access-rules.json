@@ -26,6 +26,22 @@
         "objects": [
           { "ROUTE": "/shells/*/submodels/*" }
         ]
+      },
+      {
+        "name": "aas_environment_admin_routes",
+        "objects": [
+          { "ROUTE": "/shells" },
+          { "ROUTE": "/shells/*" },
+          { "ROUTE": "/submodels" },
+          { "ROUTE": "/submodels/*" }
+        ]
+      },
+      {
+        "name": "abac_policy_management",
+        "objects": [
+          { "ROUTE": "/security/abac" },
+          { "ROUTE": "/security/abac/*" }
+        ]
       }
     ],
     "DEFACLS": [
@@ -110,6 +126,11 @@
       {
         "USEACL": "admin_all",
         "USEOBJECTS": ["superpath_routes"],
+        "USEFORMULA": "role_is_admin"
+      },
+      {
+        "USEACL": "admin_all",
+        "USEOBJECTS": ["aas_environment_admin_routes", "abac_policy_management"],
         "USEFORMULA": "role_is_admin"
       }
     ]

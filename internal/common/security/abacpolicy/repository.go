@@ -48,7 +48,27 @@ type dbQueryer interface {
 	QueryRowContext(context.Context, string, ...any) *sql.Row
 }
 
-// Repository persists ABAC policy versions and exposes the active compiled model.
+type policyEvent struct {
+	VersionID                    int64
+	PolicyID                     string
+	Operation                    string
+	SourceType                   string
+	SourceRef                    string
+	BeforePolicyHash             string
+	AfterPolicyHash              string
+	BeforeMaterializedPolicyHash string
+	AfterMaterializedPolicyHash  string
+	Details                      map[string]any
+	Actor                        auditActor
+}
+
+// Repository stores service-scoped ABAC policy versions in PostgreSQL.
+//
+// A repository owns one service scope, such as "aasenvironmentservice". It
+// persists immutable policy versions and materialized rule rows for that scope,
+// and keeps the currently active policy compiled in memory for request-time
+// authorization. Draft operations update only staged versions; authorization
+// changes after ActivatePolicy commits and RefreshActiveModel succeeds.
 type Repository struct {
 	db           *sql.DB
 	serviceScope string
@@ -58,6 +78,19 @@ type Repository struct {
 }
 
 // NewRepository creates a service-local PostgreSQL ABAC policy repository.
+//
+// Parameters:
+//   - db: PostgreSQL handle used for policy versions, rules, events, and
+//     evidence catalog rows.
+//   - serviceScope: Stable service identifier used to isolate active policies
+//     when multiple BaSyx services share one database.
+//   - apiRouter: Service router whose routes are used while materializing ABAC
+//     objects and route-to-rights mappings.
+//   - basePath: Optional server context path stripped before ABAC route matching.
+//
+// Returns:
+//   - *Repository: Repository with an empty runtime cache.
+//   - error: Bad request error when required dependencies are missing.
 func NewRepository(db *sql.DB, serviceScope string, apiRouter *chi.Mux, basePath string) (*Repository, error) {
 	if db == nil {
 		return nil, common.NewErrBadRequest("ABACPOLICY-NEW-NILDB database handle must not be nil")
@@ -77,7 +110,11 @@ func NewRepository(db *sql.DB, serviceScope string, apiRouter *chi.Mux, basePath
 	}, nil
 }
 
-// ActiveAccessModel returns the currently active compiled ABAC model.
+// ActiveAccessModel returns the compiled policy used by request middleware.
+//
+// The value is read from an atomic cache and is safe for concurrent requests.
+// Nil means the repository has not loaded an active policy; ABAC middleware
+// treats that as fail-closed.
 func (r *Repository) ActiveAccessModel() *auth.AccessModel {
 	if r == nil {
 		return nil
@@ -90,7 +127,11 @@ func (r *Repository) ActiveAccessModel() *auth.AccessModel {
 	return model
 }
 
-// RefreshActiveModel reloads the active materialized rules from PostgreSQL.
+// RefreshActiveModel reloads the active materialized policy from PostgreSQL.
+//
+// The method rebuilds the in-memory AccessModel from durable rule rows and
+// atomically publishes it to request middleware. It returns a service-unavailable
+// error when no active policy exists so callers can fail closed during startup.
 func (r *Repository) RefreshActiveModel(ctx context.Context) error {
 	active, err := r.loadActivePolicy(ctx, r.db)
 	if err != nil {
@@ -101,12 +142,21 @@ func (r *Repository) RefreshActiveModel(ctx context.Context) error {
 }
 
 // HasActivePolicy reports whether this service scope has an active DB policy.
+//
+// It is used by startup import mode "if_missing" to decide whether the
+// configured file should be imported or the existing database policy should be
+// loaded unchanged.
 func (r *Repository) HasActivePolicy(ctx context.Context) (bool, error) {
 	_, found, err := r.loadActivePolicyVersion(ctx, r.db)
 	return found, err
 }
 
 // ImportStartupPolicy imports and activates the configured startup policy file.
+//
+// The caller should pass a system audit context, because startup imports are
+// preconfiguration events rather than end-user HTTP requests. If the active
+// policy already matches the canonical configured hash or legacy raw file hash,
+// the existing version is reused and only a reuse event is recorded.
 func (r *Repository) ImportStartupPolicy(ctx context.Context, raw []byte, sourceRef string) (*PolicyVersion, error) {
 	materialized, err := auth.MaterializeABACPolicy(raw, r.apiRouter, r.basePath)
 	if err != nil {
@@ -122,7 +172,21 @@ func (r *Repository) ImportStartupPolicy(ctx context.Context, raw []byte, source
 		}
 		if found && sameStartupPolicy(active, materialized) {
 			activated = active
-			return r.insertPolicyEventTx(ctx, tx, active.VersionID, active.PolicyID, "StartupReuse", SourceTypeFile, sourceRef, active.ConfiguredPolicyHash, active.MaterializedPolicyHash, actor)
+			return r.insertPolicyEventTx(ctx, tx, policyEvent{
+				VersionID:                    active.VersionID,
+				PolicyID:                     active.PolicyID,
+				Operation:                    "StartupReuse",
+				SourceType:                   SourceTypeFile,
+				SourceRef:                    sourceRef,
+				BeforePolicyHash:             active.ConfiguredPolicyHash,
+				AfterPolicyHash:              active.ConfiguredPolicyHash,
+				BeforeMaterializedPolicyHash: active.MaterializedPolicyHash,
+				AfterMaterializedPolicyHash:  active.MaterializedPolicyHash,
+				Details: map[string]any{
+					"reason": "configured startup policy already active",
+				},
+				Actor: actor,
+			})
 		}
 		version, createErr := r.createPolicyVersionTx(ctx, tx, materialized, StatusStaged, SourceTypeFile, sourceRef, actor)
 		if createErr != nil {
@@ -141,6 +205,10 @@ func (r *Repository) ImportStartupPolicy(ctx context.Context, raw []byte, source
 }
 
 // ImportPolicy creates a staged version from API-provided policy JSON.
+//
+// The policy is validated and materialized before storage so administrators can
+// inspect the same rule rows that activation would use. The returned version is
+// not used by authorization until ActivatePolicy promotes it.
 func (r *Repository) ImportPolicy(ctx context.Context, raw []byte, sourceRef string) (*PolicyVersion, error) {
 	materialized, err := auth.MaterializeABACPolicy(raw, r.apiRouter, r.basePath)
 	if err != nil {
@@ -160,6 +228,9 @@ func (r *Repository) ImportPolicy(ctx context.Context, raw []byte, sourceRef str
 }
 
 // ListPolicyVersions returns policy versions for this service scope.
+//
+// Results are ordered newest first and include configured and materialized JSON
+// so the protected management API can present a complete administrative view.
 func (r *Repository) ListPolicyVersions(ctx context.Context) ([]PolicyVersion, error) {
 	query, args, err := goqu.From(tablePolicyVersions).
 		Select(policyVersionColumns()...).
@@ -191,16 +262,26 @@ func (r *Repository) ListPolicyVersions(ctx context.Context) ([]PolicyVersion, e
 }
 
 // GetPolicyVersion loads one policy version by internal version id.
+//
+// The lookup is scoped to the repository service scope. Active, superseded,
+// staged, and rejected versions are all inspectable through this method.
 func (r *Repository) GetPolicyVersion(ctx context.Context, versionID int64) (PolicyVersion, error) {
 	return r.loadPolicyVersion(ctx, r.db, versionID)
 }
 
 // ListRules loads materialized rules for one policy version in configured order.
+//
+// The stable 1-based rule order is security relevant because it participates in
+// matched_rule_id generation and is preserved by the evaluator.
 func (r *Repository) ListRules(ctx context.Context, versionID int64) ([]PolicyRule, error) {
 	return r.loadPolicyRules(ctx, r.db, versionID)
 }
 
-// LookupRuleByPolicyAndMatchedID resolves history audit identifiers to a stored rule row.
+// LookupRuleByPolicyAndMatchedID resolves history audit identifiers to a rule.
+//
+// policyID may be the canonical configured policy hash used by DB-backed
+// versions or a legacy raw file hash alias stored on file imports. The
+// matchedRuleID must be the deterministic value recorded in mutation history.
 func (r *Repository) LookupRuleByPolicyAndMatchedID(ctx context.Context, policyID string, matchedRuleID string) (PolicyRule, error) {
 	versionID, err := r.resolvePolicyVersionID(ctx, r.db, policyID)
 	if err != nil {
@@ -369,7 +450,19 @@ func (r *Repository) createPolicyVersionTx(
 	if err = r.insertRulesTx(ctx, tx, versionID, materialized, actor); err != nil {
 		return PolicyVersion{}, err
 	}
-	if err = r.insertPolicyEventTx(ctx, tx, versionID, materialized.PolicyID, "CreatePolicyVersion", sourceType, sourceRef, "", materialized.MaterializedPolicyHash, actor); err != nil {
+	if err = r.insertPolicyEventTx(ctx, tx, policyEvent{
+		VersionID:                   versionID,
+		PolicyID:                    materialized.PolicyID,
+		Operation:                   "CreatePolicyVersion",
+		SourceType:                  sourceType,
+		SourceRef:                   sourceRef,
+		AfterPolicyHash:             materialized.ConfiguredPolicyHash,
+		AfterMaterializedPolicyHash: materialized.MaterializedPolicyHash,
+		Details: map[string]any{
+			"status": status,
+		},
+		Actor: actor,
+	}); err != nil {
 		return PolicyVersion{}, err
 	}
 	return r.loadPolicyVersion(ctx, tx, versionID)
@@ -420,7 +513,18 @@ func (r *Repository) replaceMaterializationTx(ctx context.Context, tx *sql.Tx, v
 	if err = r.insertRulesTx(ctx, tx, versionID, materialized, actor); err != nil {
 		return PolicyVersion{}, err
 	}
-	if err = r.insertPolicyEventTx(ctx, tx, versionID, materialized.PolicyID, actor.Operation, SourceTypeAPI, "", before.ConfiguredPolicyHash, materialized.MaterializedPolicyHash, actor); err != nil {
+	if err = r.insertPolicyEventTx(ctx, tx, policyEvent{
+		VersionID:                    versionID,
+		PolicyID:                     materialized.PolicyID,
+		Operation:                    actor.Operation,
+		SourceType:                   before.SourceType,
+		SourceRef:                    before.SourceRef,
+		BeforePolicyHash:             before.ConfiguredPolicyHash,
+		AfterPolicyHash:              materialized.ConfiguredPolicyHash,
+		BeforeMaterializedPolicyHash: before.MaterializedPolicyHash,
+		AfterMaterializedPolicyHash:  materialized.MaterializedPolicyHash,
+		Actor:                        actor,
+	}); err != nil {
 		return PolicyVersion{}, err
 	}
 	return r.loadPolicyVersion(ctx, tx, versionID)
@@ -444,38 +548,32 @@ func (r *Repository) insertRulesTx(ctx context.Context, tx *sql.Tx, versionID in
 	return nil
 }
 
-func (r *Repository) insertPolicyEventTx(
-	ctx context.Context,
-	tx *sql.Tx,
-	versionID int64,
-	policyID string,
-	operation string,
-	sourceType string,
-	sourceRef string,
-	beforeHash string,
-	afterMaterializedHash string,
-	actor auditActor,
-) error {
-	if strings.TrimSpace(operation) == "" {
-		operation = "ABACPolicyChange"
+func (r *Repository) insertPolicyEventTx(ctx context.Context, tx *sql.Tx, event policyEvent) error {
+	if strings.TrimSpace(event.Operation) == "" {
+		event.Operation = "ABACPolicyChange"
+	}
+	detailsJSON, err := policyEventDetailsJSON(event.Details)
+	if err != nil {
+		return err
 	}
 	row := goqu.Record{
-		"version_id":                      versionID,
+		"version_id":                      event.VersionID,
 		"service_scope":                   r.serviceScope,
-		"policy_id":                       nullableString(policyID),
-		"operation":                       operation,
-		"endpoint":                        nullableString(actor.Endpoint),
-		"actor_subject":                   nullableString(actor.Subject),
-		"actor_issuer":                    nullableString(actor.Issuer),
-		"actor_client_id":                 nullableString(actor.ClientID),
-		"request_id":                      nullableString(actor.RequestID),
-		"correlation_id":                  nullableString(actor.CorrelationID),
-		"source_type":                     nullableString(sourceType),
-		"source_ref":                      nullableString(sourceRef),
-		"before_policy_hash":              nullableString(beforeHash),
-		"after_policy_hash":               nullableString(policyID),
-		"before_materialized_policy_hash": nil,
-		"after_materialized_policy_hash":  nullableString(afterMaterializedHash),
+		"policy_id":                       nullableString(event.PolicyID),
+		"operation":                       event.Operation,
+		"endpoint":                        nullableString(event.Actor.Endpoint),
+		"actor_subject":                   nullableString(event.Actor.Subject),
+		"actor_issuer":                    nullableString(event.Actor.Issuer),
+		"actor_client_id":                 nullableString(event.Actor.ClientID),
+		"request_id":                      nullableString(event.Actor.RequestID),
+		"correlation_id":                  nullableString(event.Actor.CorrelationID),
+		"source_type":                     nullableString(event.SourceType),
+		"source_ref":                      nullableString(event.SourceRef),
+		"before_policy_hash":              nullableString(event.BeforePolicyHash),
+		"after_policy_hash":               nullableString(event.AfterPolicyHash),
+		"before_materialized_policy_hash": nullableString(event.BeforeMaterializedPolicyHash),
+		"after_materialized_policy_hash":  nullableString(event.AfterMaterializedPolicyHash),
+		"details_json":                    detailsJSON,
 	}
 	query, args, err := goqu.Insert(tablePolicyEvents).Rows(row).ToSQL()
 	if err != nil {
@@ -485,6 +583,17 @@ func (r *Repository) insertPolicyEventTx(
 		return common.NewInternalServerError("ABACPOLICY-EVENT-INSERT " + err.Error())
 	}
 	return nil
+}
+
+func policyEventDetailsJSON(details map[string]any) (any, error) {
+	if len(details) == 0 {
+		return nil, nil
+	}
+	raw, err := common.CanonicalJSON(details)
+	if err != nil {
+		return nil, common.NewInternalServerError("ABACPOLICY-EVENT-DETAILS " + err.Error())
+	}
+	return jsonbParam(raw), nil
 }
 
 func sameStartupPolicy(active PolicyVersion, materialized auth.MaterializedABACPolicy) bool {

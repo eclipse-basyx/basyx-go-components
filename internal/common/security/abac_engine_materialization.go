@@ -103,8 +103,13 @@ type materializedPolicyDocument struct {
 	Rules                []materializedRuleDocument `json:"rules"`
 }
 
-// MaterializeABACPolicy validates raw policy JSON and returns canonical storage
-// documents plus a compiled AccessModel.
+// MaterializeABACPolicy validates raw policy JSON for repository storage.
+//
+// The returned value contains canonical configured JSON, canonical materialized
+// JSON, deterministic hashes, ordered rule rows, and a compiled AccessModel.
+// PolicyID is the SHA-256 hash of the canonical configured JSON; RawPolicyHash
+// is retained so file imports can still resolve older audit rows that stored a
+// raw source-byte hash.
 func MaterializeABACPolicy(raw []byte, apiRouter *api.Mux, basePath string) (MaterializedABACPolicy, error) {
 	model, err := ParseAccessModel(raw, apiRouter, basePath)
 	if err != nil {
@@ -144,8 +149,11 @@ func MaterializeABACPolicy(raw []byte, apiRouter *api.Mux, basePath string) (Mat
 	}, nil
 }
 
-// AccessModelFromMaterializedRules rebuilds a compiled AccessModel from stored
-// materialized rule rows.
+// AccessModelFromMaterializedRules rebuilds an AccessModel from stored rules.
+//
+// The repository uses this on startup and after activation to evaluate requests
+// from PostgreSQL-backed materialized rows instead of from a mutable policy
+// file. The caller must pass rules in the persisted order.
 func AccessModelFromMaterializedRules(policyID string, rules []MaterializedABACRule, apiRouter *api.Mux, basePath string) (*AccessModel, error) {
 	materialized := make([]materializedRule, 0, len(rules))
 	for _, row := range rules {

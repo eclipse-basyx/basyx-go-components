@@ -35,7 +35,11 @@ import (
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 )
 
-// ClonePolicyVersion copies an existing policy version into a new staged draft.
+// ClonePolicyVersion copies an existing policy version into a staged draft.
+//
+// Cloning is the normal workflow for changing authorization without mutating
+// the active policy in place. The clone receives a new version_id and can be
+// edited, validated, and activated independently.
 func (r *Repository) ClonePolicyVersion(ctx context.Context, versionID int64) (*PolicyVersion, error) {
 	actor := actorFromContext(ctx, "ClonePolicyVersion", managementBasePath)
 	var cloned PolicyVersion
@@ -59,6 +63,10 @@ func (r *Repository) ClonePolicyVersion(ctx context.Context, versionID int64) (*
 }
 
 // CreateRule inserts a configured rule into a staged policy version.
+//
+// Position is 1-based. A zero or out-of-range insert position appends the rule.
+// The full draft is materialized after insertion so rule order, hashes, and
+// matched_rule_id values are immediately inspectable.
 func (r *Repository) CreateRule(ctx context.Context, versionID int64, request RuleMutationRequest) (*PolicyVersion, error) {
 	rule, err := decodeConfiguredRule(request.Rule)
 	if err != nil {
@@ -71,6 +79,10 @@ func (r *Repository) CreateRule(ctx context.Context, versionID int64, request Ru
 }
 
 // ReplaceRule replaces one configured rule in a staged policy version.
+//
+// The rule index is 1-based and must refer to an existing configured rule. The
+// replacement is validated by materializing the complete draft policy before it
+// is persisted.
 func (r *Repository) ReplaceRule(ctx context.Context, versionID int64, ruleIndex int, raw json.RawMessage) (*PolicyVersion, error) {
 	rule, err := decodeConfiguredRule(raw)
 	if err != nil {
@@ -86,6 +98,10 @@ func (r *Repository) ReplaceRule(ctx context.Context, versionID int64, ruleIndex
 }
 
 // PatchRule applies JSON object merge semantics to one configured draft rule.
+//
+// This is not RFC 6902 JSON Patch. Object fields in the patch replace existing
+// values recursively, and null removes a field, matching the repository's
+// management API semantics.
 func (r *Repository) PatchRule(ctx context.Context, versionID int64, ruleIndex int, patch json.RawMessage) (*PolicyVersion, error) {
 	return r.updateDraftRules(ctx, versionID, "PatchRule", func(rules []grammar.AccessPermissionRule) ([]grammar.AccessPermissionRule, error) {
 		if err := validateRuleIndex(ruleIndex, len(rules)); err != nil {
@@ -109,6 +125,9 @@ func (r *Repository) PatchRule(ctx context.Context, versionID int64, ruleIndex i
 }
 
 // DeleteRule removes one configured rule from a staged policy version.
+//
+// Deleting the last rule is rejected so a policy cannot be activated with an
+// empty rule set. Rule indexes are recomputed during materialization.
 func (r *Repository) DeleteRule(ctx context.Context, versionID int64, ruleIndex int) (*PolicyVersion, error) {
 	return r.updateDraftRules(ctx, versionID, "DeleteRule", func(rules []grammar.AccessPermissionRule) ([]grammar.AccessPermissionRule, error) {
 		if err := validateRuleIndex(ruleIndex, len(rules)); err != nil {
@@ -121,7 +140,10 @@ func (r *Repository) DeleteRule(ctx context.Context, versionID int64, ruleIndex 
 	})
 }
 
-// DuplicateRule copies one configured rule to a new position in a staged policy version.
+// DuplicateRule copies one configured rule to a new staged-policy position.
+//
+// The source rule index is 1-based. Position zero inserts the copy directly
+// after the source rule; otherwise the provided 1-based position is used.
 func (r *Repository) DuplicateRule(ctx context.Context, versionID int64, ruleIndex int, position int) (*PolicyVersion, error) {
 	return r.updateDraftRules(ctx, versionID, "DuplicateRule", func(rules []grammar.AccessPermissionRule) ([]grammar.AccessPermissionRule, error) {
 		if err := validateRuleIndex(ruleIndex, len(rules)); err != nil {
@@ -136,6 +158,10 @@ func (r *Repository) DuplicateRule(ctx context.Context, versionID int64, ruleInd
 }
 
 // MoveRule moves one configured rule to an explicit 1-based position.
+//
+// Rule ordering is security relevant because the evaluator preserves configured
+// order and matched_rule_id contains the rule index. Moving a rule rematerializes
+// the draft and recomputes rule_index values.
 func (r *Repository) MoveRule(ctx context.Context, versionID int64, ruleIndex int, position int) (*PolicyVersion, error) {
 	return r.updateDraftRules(ctx, versionID, "MoveRule", func(rules []grammar.AccessPermissionRule) ([]grammar.AccessPermissionRule, error) {
 		if err := validateRuleIndex(ruleIndex, len(rules)); err != nil {
@@ -151,6 +177,10 @@ func (r *Repository) MoveRule(ctx context.Context, versionID int64, ruleIndex in
 }
 
 // SetRuleEnabled toggles one rule by setting ACL.ACCESS to ALLOW or DISABLED.
+//
+// Rules that refer to shared ACL definitions through USEACL are converted to an
+// inline rule-local ACL before toggling. This prevents enabling or disabling one
+// draft rule from changing other rules that share the same definition.
 func (r *Repository) SetRuleEnabled(ctx context.Context, versionID int64, ruleIndex int, enabled bool) (*PolicyVersion, error) {
 	return r.updateDraftRulesWithVersion(ctx, versionID, "SetRuleEnabled", func(version PolicyVersion, rules []grammar.AccessPermissionRule) ([]grammar.AccessPermissionRule, error) {
 		if err := validateRuleIndex(ruleIndex, len(rules)); err != nil {

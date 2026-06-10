@@ -26,10 +26,12 @@
 package abacpolicy
 
 import (
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
@@ -215,6 +217,79 @@ func TestDecodeRuleMutationAcceptsDirectRuleBody(t *testing.T) {
 	}
 	if len(mutation.Rule) == 0 {
 		t.Fatalf("expected direct rule body to be preserved")
+	}
+}
+
+func TestReadBodyRejectsOversizedPayload(t *testing.T) {
+	t.Parallel()
+
+	req := httptest.NewRequest(http.MethodPost, "/security/abac/policy-versions", stringsReader(strings.Repeat("x", maxManagementRequestBodyBytes+1)))
+
+	_, err := readBody(req)
+	if !common.IsErrBadRequest(err) {
+		t.Fatalf("expected bad request for oversized body, got %v", err)
+	}
+	if !strings.Contains(err.Error(), "ABACPOLICY-API-BODYTOOLARGE") {
+		t.Fatalf("expected body-too-large error code, got %v", err)
+	}
+}
+
+func TestDuplicateRuleRejectsMalformedOptionalBody(t *testing.T) {
+	t.Parallel()
+
+	router := chi.NewRouter()
+	router.Post("/security/abac/policy-versions/{versionID}/rules/{ruleIndex}/duplicate", duplicateRuleHandler(&Repository{}))
+	response := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodPost, "/security/abac/policy-versions/1/rules/1/duplicate", stringsReader(`{`))
+
+	router.ServeHTTP(response, request)
+
+	if response.Code != http.StatusBadRequest {
+		t.Fatalf("expected malformed optional body to be rejected, got status %d body=%s", response.Code, response.Body.String())
+	}
+	if !strings.Contains(response.Body.String(), "ABACPOLICY-API-DECODE") {
+		t.Fatalf("expected decode error response, got %s", response.Body.String())
+	}
+}
+
+func TestBuildActivationEvidenceArtifactIncludesActivationMetadata(t *testing.T) {
+	t.Parallel()
+
+	activatedAt := time.Date(2026, 6, 10, 10, 30, 0, 0, time.UTC)
+	version := PolicyVersion{
+		VersionID:              17,
+		ServiceScope:           "aasenvironmentservice",
+		PolicyID:               strings.Repeat("a", 64),
+		Status:                 StatusActive,
+		SourceType:             SourceTypeAPI,
+		ConfiguredPolicyJSON:   json.RawMessage(`{"AllAccessPermissionRules":{"rules":[]}}`),
+		ConfiguredPolicyHash:   strings.Repeat("b", 64),
+		MaterializedPolicyJSON: json.RawMessage(`{"rules":[]}`),
+		MaterializedPolicyHash: strings.Repeat("c", 64),
+		CreatedAt:              activatedAt.Add(-time.Hour),
+		ActivatedAt:            &activatedAt,
+		ActivatedBySubject:     "admin",
+		ActivatedByIssuer:      "issuer",
+		ActivatedByClientID:    "client",
+	}
+
+	artifact, err := buildActivationEvidenceArtifact(version, nil, auditActor{Subject: "admin"})
+	if err != nil {
+		t.Fatalf("build evidence artifact failed: %v", err)
+	}
+	var doc map[string]any
+	if err = json.Unmarshal(artifact.Data, &doc); err != nil {
+		t.Fatalf("decode evidence artifact failed: %v", err)
+	}
+
+	if doc["status"] != StatusActive {
+		t.Fatalf("expected active status in evidence artifact, got %#v", doc["status"])
+	}
+	if doc["activated_at"] != activatedAt.Format(time.RFC3339Nano) {
+		t.Fatalf("expected activated_at %s, got %#v", activatedAt.Format(time.RFC3339Nano), doc["activated_at"])
+	}
+	if doc["activated_by_subject"] != "admin" {
+		t.Fatalf("expected activation subject in evidence artifact, got %#v", doc["activated_by_subject"])
 	}
 }
 

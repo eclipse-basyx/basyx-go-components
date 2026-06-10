@@ -47,6 +47,7 @@ type abacPolicyEvidenceDocument struct {
 	VersionID              int64           `json:"version_id"`
 	ServiceScope           string          `json:"service_scope"`
 	PolicyID               string          `json:"policy_id"`
+	Status                 string          `json:"status"`
 	SourceType             string          `json:"source_type"`
 	SourceRef              string          `json:"source_ref,omitempty"`
 	ConfiguredPolicyJSON   json.RawMessage `json:"configured_policy_json"`
@@ -57,6 +58,10 @@ type abacPolicyEvidenceDocument struct {
 	Rules                  []PolicyRule    `json:"rules"`
 	Activation             auditActor      `json:"activation"`
 	CreatedAt              time.Time       `json:"created_at"`
+	ActivatedAt            *time.Time      `json:"activated_at,omitempty"`
+	ActivatedBySubject     string          `json:"activated_by_subject,omitempty"`
+	ActivatedByIssuer      string          `json:"activated_by_issuer,omitempty"`
+	ActivatedByClientID    string          `json:"activated_by_client_id,omitempty"`
 	GeneratedAt            time.Time       `json:"generated_at"`
 }
 
@@ -102,6 +107,7 @@ func buildActivationEvidenceArtifact(version PolicyVersion, rules []PolicyRule, 
 		VersionID:              version.VersionID,
 		ServiceScope:           version.ServiceScope,
 		PolicyID:               version.PolicyID,
+		Status:                 version.Status,
 		SourceType:             version.SourceType,
 		SourceRef:              version.SourceRef,
 		ConfiguredPolicyJSON:   version.ConfiguredPolicyJSON,
@@ -112,6 +118,10 @@ func buildActivationEvidenceArtifact(version PolicyVersion, rules []PolicyRule, 
 		Rules:                  rules,
 		Activation:             actor,
 		CreatedAt:              version.CreatedAt.UTC(),
+		ActivatedAt:            utcTimePtr(version.ActivatedAt),
+		ActivatedBySubject:     version.ActivatedBySubject,
+		ActivatedByIssuer:      version.ActivatedByIssuer,
+		ActivatedByClientID:    version.ActivatedByClientID,
 		GeneratedAt:            time.Now().UTC(),
 	}
 	data, err := common.CanonicalJSON(doc)
@@ -181,4 +191,12 @@ func nullableEvidenceTime(value *time.Time) any {
 		return nil
 	}
 	return value.UTC()
+}
+
+func utcTimePtr(value *time.Time) *time.Time {
+	if value == nil {
+		return nil
+	}
+	utc := value.UTC()
+	return &utc
 }

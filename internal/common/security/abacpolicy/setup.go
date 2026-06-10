@@ -48,6 +48,8 @@ type managementRoute struct {
 	handler func(*Repository) http.HandlerFunc
 }
 
+const maxManagementRequestBodyBytes = 10 << 20
+
 var managementRoutes = []managementRoute{
 	{method: http.MethodGet, pattern: "/", handler: listVersionsHandler},
 	{method: http.MethodPost, pattern: "/", handler: importPolicyHandler},
@@ -67,9 +69,14 @@ var managementRoutes = []managementRoute{
 	{method: http.MethodPut, pattern: "/{versionID}/rules/{ruleIndex}/enabled", handler: setRuleEnabledHandler},
 }
 
-// SetupSecurityWithABACRepository imports or loads the active PostgreSQL ABAC
-// policy and installs OIDC/ABAC middleware. Callers mount management routes
-// after every service middleware has been registered.
+// SetupSecurityWithABACRepository loads DB-backed ABAC and installs middleware.
+//
+// When ABAC is disabled the function returns nil, nil and leaves the router
+// unchanged. When ABAC is enabled, it applies the configured policy-file import
+// mode, loads the active materialized policy into the repository cache, and then
+// installs OIDC plus ABAC middleware. Callers should register all service-level
+// middleware before calling RegisterManagementRoutesIfEnabled, because chi
+// requires middleware to be declared before routes.
 func SetupSecurityWithABACRepository(
 	ctx context.Context,
 	cfg *common.Config,
@@ -98,21 +105,28 @@ func SetupSecurityWithABACRepository(
 	return repo, nil
 }
 
-// ManagementAPIAllowed reports whether a service scope may expose the ABAC
-// management API. Digital Twin Registry deliberately keeps its preconfigured
-// access-rule file as the only policy source of truth.
+// ManagementAPIAllowed reports whether a service may expose ABAC management.
+//
+// Digital Twin Registry deliberately returns false because its access-rule file
+// remains the operational source of truth and is re-imported on restart.
 func ManagementAPIAllowed(serviceScope string) bool {
 	return !strings.EqualFold(strings.TrimSpace(serviceScope), "digitaltwinregistryservice")
 }
 
-// ManagementRoutesEnabled reports whether this service should expose ABAC
-// policy management routes.
+// ManagementRoutesEnabled reports whether management routes should be mounted.
+//
+// The API is available only when ABAC is enabled, the management API is
+// explicitly enabled by configuration, and the service scope is allowed to
+// expose runtime policy management.
 func ManagementRoutesEnabled(cfg *common.Config, serviceScope string) bool {
 	return cfg != nil && cfg.ABAC.Enabled && cfg.ABAC.ManagementAPI.Enabled && ManagementAPIAllowed(serviceScope)
 }
 
-// RegisterManagementRoutesIfEnabled mounts the ABAC policy management API when
-// configuration allows it and a repository-backed ABAC policy is active.
+// RegisterManagementRoutesIfEnabled mounts the protected management API.
+//
+// This helper is safe to call for every service. It no-ops when the repository
+// is nil, ABAC is disabled, management is not opted in, or the service scope is
+// not allowed to expose management routes.
 func RegisterManagementRoutesIfEnabled(cfg *common.Config, r chi.Router, repo *Repository, serviceScope string) {
 	if repo == nil || !ManagementRoutesEnabled(cfg, serviceScope) {
 		return
@@ -120,9 +134,11 @@ func RegisterManagementRoutesIfEnabled(cfg *common.Config, r chi.Router, repo *R
 	RegisterManagementRoutes(r, repo)
 }
 
-// ExemptManagementMutationRoutesIfEnabled marks ABAC management mutations as
-// outside AAS payload history. These endpoints write their own policy events and
-// activation evidence instead.
+// ExemptManagementMutationRoutesIfEnabled excludes policy edits from AAS history.
+//
+// ABAC management mutations are security-configuration changes, not AAS payload
+// mutations. They record their own policy events and activation evidence, so the
+// generic mutation coverage guard should not require AAS history rows for them.
 func ExemptManagementMutationRoutesIfEnabled(cfg *common.Config, guard *history.MutationCoverageGuard, serviceScope string) {
 	if guard == nil || !ManagementRoutesEnabled(cfg, serviceScope) {
 		return
@@ -201,6 +217,10 @@ func importStartupFile(ctx context.Context, repo *Repository, modelPath string, 
 }
 
 // RegisterManagementRoutes mounts the ABAC policy management API.
+//
+// Routes are mounted below /security/abac/policy-versions. Callers are
+// responsible for installing OIDC/ABAC middleware before this function is called
+// so the active policy protects the management API itself.
 func RegisterManagementRoutes(r chi.Router, repo *Repository) {
 	r.Route(managementBasePath, func(policyRouter chi.Router) {
 		for _, route := range managementRoutes {
@@ -401,7 +421,10 @@ func duplicateRuleHandler(repo *Repository) http.HandlerFunc {
 			return
 		}
 		var request MoveRuleRequest
-		_ = decodeOptionalJSONBody(r, &request)
+		if err := decodeOptionalJSONBody(r, &request); err != nil {
+			writeError(w, err)
+			return
+		}
 		version, err := repo.DuplicateRule(r.Context(), versionID, ruleIndex, request.Position)
 		writeResult(w, version, err, http.StatusOK)
 	}
@@ -507,9 +530,12 @@ func readBody(r *http.Request) (json.RawMessage, error) {
 	defer func() {
 		_ = r.Body.Close()
 	}()
-	raw, err := io.ReadAll(io.LimitReader(r.Body, 10<<20))
+	raw, err := io.ReadAll(io.LimitReader(r.Body, maxManagementRequestBodyBytes+1))
 	if err != nil {
 		return nil, common.NewErrBadRequest("ABACPOLICY-API-READBODY " + err.Error())
+	}
+	if len(raw) > maxManagementRequestBodyBytes {
+		return nil, common.NewErrBadRequest("ABACPOLICY-API-BODYTOOLARGE request body exceeds 10485760 bytes")
 	}
 	return json.RawMessage(raw), nil
 }

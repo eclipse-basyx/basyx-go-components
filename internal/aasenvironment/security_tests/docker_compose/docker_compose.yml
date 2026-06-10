@@ -33,6 +33,8 @@ services:
       - SERVER_STRICTVERIFICATION=off
       - ABAC_ENABLED=true
       - ABAC_MODELPATH=/security_env/access-rules.json
+      - ABAC_POLICY_FILE_IMPORT=if_missing
+      - ABAC_MANAGEMENT_API_ENABLED=true
       - OIDC_TRUSTLISTPATH=/security_env/trustlist.json
       - JWS_PRIVATEKEYPATH=/app/rsa-key.pem
     ports:
@@ -57,8 +59,8 @@ services:
       KC_DB_USERNAME: admin
       KC_DB_PASSWORD: admin123
       KC_HOSTNAME: localhost
-      KC_HOSTNAME_PORT: "8080"
-      KC_HOSTNAME_URL: "http://localhost:8080"
+      KC_HOSTNAME_PORT: "18080"
+      KC_HOSTNAME_URL: "http://localhost:18080"
       KEYCLOAK_ADMIN: admin
       KEYCLOAK_ADMIN_PASSWORD: admin
       KC_HTTP_ENABLED: "true"
@@ -70,7 +72,7 @@ services:
       KC_HTTP_MANAGEMENT_ENABLED: "true"
     command: ["start-dev", "--import-realm", "--health-enabled=true"]
     ports:
-      - 8080:8080
+      - 18080:8080
     volumes:
       - ../../../aasregistry/security_tests/docker_compose/keycloak/realm:/opt/keycloak/data/import
 
