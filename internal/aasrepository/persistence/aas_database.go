@@ -34,6 +34,7 @@ import (
 	"errors"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/FriedJannik/aas-go-sdk/jsonization"
@@ -448,6 +449,10 @@ func (s *AssetAdministrationShellDatabase) createAssetAdministrationShellInTrans
 
 	if _, err := tx.Exec(ids, args...); err != nil {
 		return common.NewInternalServerError("AASREPO-NEWAAS-CREATE-EXECASSETINFORMATIONSQL " + err.Error())
+	}
+
+	if err := upsertDefaultThumbnailForAssetInformation(tx, &dialect, aasDBID, aas.AssetInformation(), "AASREPO-NEWAAS-CREATE"); err != nil {
+		return err
 	}
 
 	// specific asset ids
@@ -1256,6 +1261,45 @@ func updateAssetInformationRecord(
 	}
 	if rowsAffected == 0 {
 		return common.NewErrNotFound("AASREPO-PUTASSETINFO-ASSETINFONOTFOUND Asset Information for Asset Administration Shell with ID '" + aasIdentifier + "' not found")
+	}
+
+	return upsertDefaultThumbnailForAssetInformation(tx, dialect, aasDBID, assetInformation, "AASREPO-PUTASSETINFO")
+}
+
+func upsertDefaultThumbnailForAssetInformation(
+	tx *sql.Tx,
+	dialect *goqu.DialectWrapper,
+	aasDBID int64,
+	assetInformation types.IAssetInformation,
+	errorPrefix string,
+) error {
+	if assetInformation == nil || assetInformation.DefaultThumbnail() == nil {
+		return nil
+	}
+
+	thumbnail := assetInformation.DefaultThumbnail()
+	thumbnailPath := strings.TrimSpace(thumbnail.Path())
+	if thumbnailPath == "" {
+		return nil
+	}
+
+	upsertSQL, upsertArgs, buildErr := dialect.Insert("thumbnail_file_element").
+		Rows(goqu.Record{
+			"id":           aasDBID,
+			"content_type": thumbnail.ContentType(),
+			"value":        thumbnailPath,
+		}).
+		OnConflict(goqu.DoUpdate("id", goqu.Record{
+			"content_type": thumbnail.ContentType(),
+			"value":        thumbnailPath,
+		})).
+		ToSQL()
+	if buildErr != nil {
+		return common.NewInternalServerError(errorPrefix + "-BUILDTHUMBNAILSQL " + buildErr.Error())
+	}
+
+	if _, execErr := tx.Exec(upsertSQL, upsertArgs...); execErr != nil {
+		return common.NewInternalServerError(errorPrefix + "-EXECTHUMBNAILSQL " + execErr.Error())
 	}
 
 	return nil
