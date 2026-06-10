@@ -239,16 +239,23 @@ func UpsertAdministrationShellDescriptorTx(ctx context.Context, tx *sql.Tx, aasd
 }
 
 func lockAASDescriptorUpsertTx(ctx context.Context, tx *sql.Tx, aasID string) error {
-	d := goqu.Dialect(common.Dialect)
-	sqlStr, args, buildErr := d.
-		Select(goqu.Func("pg_advisory_xact_lock", goqu.Func("hashtext", "aas_descriptor:"+aasID))).
-		ToSQL()
-	if buildErr != nil {
-		return buildErr
+	sqlStr, args, err := buildAASDescriptorUpsertLockSQL(aasID)
+	if err != nil {
+		return common.NewInternalServerError("AASDESC-LOCKAASUPSERT-BUILDSQL " + err.Error())
 	}
 
-	_, err := tx.ExecContext(ctx, sqlStr, args...)
-	return err
+	if _, err = tx.ExecContext(ctx, sqlStr, args...); err != nil {
+		return common.NewInternalServerError("AASDESC-LOCKAASUPSERT-EXECSQL " + err.Error())
+	}
+	return nil
+}
+
+func buildAASDescriptorUpsertLockSQL(aasID string) (string, []any, error) {
+	return goqu.
+		Dialect(common.Dialect).
+		Select(goqu.Func("pg_advisory_xact_lock", goqu.Func("hashtextextended", "aas_descriptor:"+aasID, 0))).
+		Prepared(true).
+		ToSQL()
 }
 
 func selectAASDescriptorIDForUpdateTx(ctx context.Context, tx *sql.Tx, aasID string) (int64, bool, error) {

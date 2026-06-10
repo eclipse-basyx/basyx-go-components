@@ -153,16 +153,23 @@ func (p *PostgreSQLSMDatabase) UpsertSubmodelDescriptorInTransaction(
 }
 
 func lockSubmodelDescriptorUpsertTx(ctx context.Context, tx *sql.Tx, submodelID string) error {
-	d := goqu.Dialect(common.Dialect)
-	sqlStr, args, buildErr := d.
-		Select(goqu.Func("pg_advisory_xact_lock", goqu.Func("hashtext", "submodel_descriptor:"+submodelID))).
-		ToSQL()
-	if buildErr != nil {
-		return buildErr
+	sqlStr, args, err := buildSubmodelDescriptorUpsertLockSQL(submodelID)
+	if err != nil {
+		return common.NewInternalServerError("SMREG-LOCKSMDESCUPSERT-BUILDSQL " + err.Error())
 	}
 
-	_, err := tx.ExecContext(ctx, sqlStr, args...)
-	return err
+	if _, err = tx.ExecContext(ctx, sqlStr, args...); err != nil {
+		return common.NewInternalServerError("SMREG-LOCKSMDESCUPSERT-EXECSQL " + err.Error())
+	}
+	return nil
+}
+
+func buildSubmodelDescriptorUpsertLockSQL(submodelID string) (string, []any, error) {
+	return goqu.
+		Dialect(common.Dialect).
+		Select(goqu.Func("pg_advisory_xact_lock", goqu.Func("hashtextextended", "submodel_descriptor:"+submodelID, 0))).
+		Prepared(true).
+		ToSQL()
 }
 
 // GetSubmodelDescriptorByID returns a global Submodel Descriptor by its id.
