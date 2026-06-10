@@ -227,6 +227,24 @@
     "expectedStatus": 200
   },
   {
+    "context": "GET /submodels/$recent-changes - admin full access",
+    "action": "ASSERT_RECENT_CHANGE_IDS",
+    "token": { "user": "admin", "password": "pwd" },
+    "method": "GET",
+    "endpoint": "http://localhost:6004/submodels/$recent-changes?limit=20",
+    "shouldMatch": "expected/expectedRecentChangesAdminIDs.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "GET /submodels/$recent-changes - userb object filtered (IDENTIFIABLE OR)",
+    "action": "ASSERT_RECENT_CHANGE_IDS",
+    "token": { "user": "userb", "password": "pwd" },
+    "method": "GET",
+    "endpoint": "http://localhost:6004/submodels/$recent-changes?limit=20",
+    "shouldMatch": "expected/expectedRecentChangesUserBIDs.json",
+    "expectedStatus": 200
+  },
+  {
     "context": "GET annotated submodel - userb object access",
     "token": { "user": "userb", "password": "pwd" },
     "method": "GET",

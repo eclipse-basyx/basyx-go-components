@@ -28,13 +28,17 @@
 package main
 
 import (
+	"encoding/json"
 	"net/http"
 	"os"
 	"testing"
 	"time"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/testenv"
+	"github.com/stretchr/testify/require"
 )
+
+const actionAssertRecentChangeIDs = "ASSERT_RECENT_CHANGE_IDS"
 
 func TestIntegration(t *testing.T) {
 	testenv.RunJSONSuite(t, testenv.JSONSuiteOptions{
@@ -45,7 +49,51 @@ func TestIntegration(t *testing.T) {
 			"basyx-ui",
 			10*time.Second,
 		),
+		ActionHandlers: map[string]testenv.JSONStepAction{
+			actionAssertRecentChangeIDs: assertRecentChangeIDsAction,
+		},
 	})
+}
+
+func assertRecentChangeIDsAction(t *testing.T, runner *testenv.JSONSuiteRunner, step testenv.JSONSuiteStep, stepNumber int) {
+	t.Helper()
+
+	response, err := runner.RunStep(step, stepNumber)
+	require.NoError(t, err)
+
+	expectedIDs := loadExpectedRecentChangeIDs(t, step.ShouldMatch)
+	actualIDs := extractRecentChangeIDs(t, response.Body)
+
+	require.ElementsMatch(t, expectedIDs, actualIDs)
+}
+
+func loadExpectedRecentChangeIDs(t *testing.T, path string) []string {
+	t.Helper()
+
+	require.NotEmpty(t, path)
+	data, err := os.ReadFile(path)
+	require.NoError(t, err)
+
+	var expectedIDs []string
+	require.NoError(t, json.Unmarshal(data, &expectedIDs))
+	return expectedIDs
+}
+
+func extractRecentChangeIDs(t *testing.T, responseBody string) []string {
+	t.Helper()
+
+	var payload struct {
+		Result []struct {
+			ID string `json:"id"`
+		} `json:"result"`
+	}
+	require.NoError(t, json.Unmarshal([]byte(responseBody), &payload))
+
+	ids := make([]string, 0, len(payload.Result))
+	for _, change := range payload.Result {
+		ids = append(ids, change.ID)
+	}
+	return ids
 }
 
 func TestMain(m *testing.M) {

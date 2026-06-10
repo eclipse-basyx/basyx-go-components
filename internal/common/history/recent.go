@@ -34,6 +34,8 @@ import (
 
 	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
+	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 )
 
 type recentRestoreTarget struct {
@@ -93,6 +95,22 @@ type restoreChainGroup struct {
 //	}
 //	return rows, nextCursor, nil
 func RecentRows(ctx context.Context, db *sql.DB, table string, limit int32, cursor string, createdFrom time.Time, updatedFrom time.Time) ([]Row, string, error) {
+	return RecentRowsForVisibleIdentifiables(ctx, db, table, limit, cursor, createdFrom, updatedFrom, nil, nil)
+}
+
+// RecentRowsForVisibleIdentifiables returns recent history rows whose current
+// identifiable rows satisfy the formula constraints in ctx.
+func RecentRowsForVisibleIdentifiables(
+	ctx context.Context,
+	db *sql.DB,
+	table string,
+	limit int32,
+	cursor string,
+	createdFrom time.Time,
+	updatedFrom time.Time,
+	visibilityDS *goqu.SelectDataset,
+	collector *grammar.ResolvedFieldPathCollector,
+) ([]Row, string, error) {
 	if db == nil {
 		return nil, "", common.NewErrBadRequest("HISTORY-RECENT-NILDB database handle must not be nil")
 	}
@@ -132,6 +150,13 @@ func RecentRows(ctx context.Context, db *sql.DB, table string, limit int32, curs
 			historyAlias.Col("operation_time").Gte(updatedFrom.UTC()),
 			historyAlias.Col("administration_updated_at").Gte(updatedFrom.UTC()),
 		))
+	}
+	if visibilityDS != nil {
+		visibilityDS, err = auth.AddFormulaQueryFromContext(ctx, visibilityDS, collector)
+		if err != nil {
+			return nil, "", common.NewInternalServerError("HISTORY-RECENT-ABACFORMULA " + err.Error())
+		}
+		query = query.Where(goqu.L("EXISTS ?", visibilityDS))
 	}
 
 	sqlQuery, args, err := query.ToSQL()
