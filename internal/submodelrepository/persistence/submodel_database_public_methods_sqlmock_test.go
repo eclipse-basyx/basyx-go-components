@@ -766,7 +766,7 @@ func TestIsSiblingIDShortCollisionEmptyIDShortReturnsFalse(t *testing.T) {
 
 	element := types.NewProperty(types.DataTypeDefXSDString)
 
-	collision := isSiblingIDShortCollision(nil, 1, nil, element)
+	collision := isIDShortDuplicate(nil, 1, nil, element)
 	require.False(t, collision)
 }
 
@@ -791,7 +791,7 @@ func TestIsSiblingIDShortCollisionTopLevelReturnsTrue(t *testing.T) {
 		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(1))
 	mock.ExpectRollback()
 
-	collision := isSiblingIDShortCollision(tx, 42, nil, element)
+	collision := isIDShortDuplicate(tx, 42, nil, element)
 	require.True(t, collision)
 	require.NoError(t, tx.Rollback())
 	require.NoError(t, mock.ExpectationsWereMet())
@@ -819,7 +819,7 @@ func TestIsSiblingIDShortCollisionNestedReturnsFalse(t *testing.T) {
 		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(0))
 	mock.ExpectRollback()
 
-	collision := isSiblingIDShortCollision(tx, 42, &parentID, element)
+	collision := isIDShortDuplicate(tx, 42, &parentID, element)
 	require.False(t, collision)
 	require.NoError(t, tx.Rollback())
 	require.NoError(t, mock.ExpectationsWereMet())
