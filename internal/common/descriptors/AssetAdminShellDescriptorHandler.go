@@ -218,6 +218,26 @@ func insertAdministrationShellDescriptorDetailsTx(ctx context.Context, tx *sql.T
 	return createSubModelDescriptors(tx, sql.NullInt64{Int64: descriptorID, Valid: true}, aasd.SubmodelDescriptors)
 }
 
+// UpsertAdministrationShellDescriptorTx upserts an AssetAdministrationShellDescriptor
+// within the provided transaction. It first acquires an advisory lock scoped to
+// the AAS Id to prevent concurrent upserts for the same AAS. Then it attempts
+// to locate the internal descriptor id for the given AAS Id using a SELECT
+// ... FOR UPDATE to lock the row. If a descriptor is found, the function
+// replaces the descriptor details; otherwise it inserts a new descriptor and
+// related rows.
+//
+// The function returns a boolean indicating whether a new descriptor was
+// created (true) or an existing descriptor was replaced (false), and an error
+// when the operation fails. The caller is responsible for committing or
+// rolling back the supplied transaction `tx`.
+//
+// Parameters:
+//  - ctx: context for cancellation and query filtering.
+//  - tx: database transaction to use for the upsert (must be non-nil).
+//  - aasd: the AssetAdministrationShellDescriptor to insert or replace.
+//
+// Note: This function relies on advisory locks and FOR UPDATE row locking to
+// avoid race conditions; it must be invoked inside a transaction.
 func UpsertAdministrationShellDescriptorTx(ctx context.Context, tx *sql.Tx, aasd model.AssetAdministrationShellDescriptor) (bool, error) {
 	if err := lockAASDescriptorUpsertTx(ctx, tx, aasd.Id); err != nil {
 		return false, err
