@@ -293,10 +293,6 @@ func submodelHasEmbeddedDataSpecifications(submodel types.ISubmodel) bool {
 	return submodel.EmbeddedDataSpecifications() != nil && len(submodel.EmbeddedDataSpecifications()) > 0
 }
 
-func submodelHasAdministration(submodel types.ISubmodel) bool {
-	return submodel.Administration() != nil
-}
-
 func submodelHasDescription(submodel types.ISubmodel) bool {
 	return submodel.Description() != nil && len(submodel.Description()) > 0
 }
