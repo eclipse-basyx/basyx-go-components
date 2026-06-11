@@ -1301,6 +1301,10 @@ func defaultThumbnailWithPath(assetInformation types.IAssetInformation) (types.I
 		return nil, ""
 	}
 
+	if !strings.HasPrefix(thumbnailPath, "http://") && !strings.HasPrefix(thumbnailPath, "https://") {
+		return nil, ""
+	}
+
 	return thumbnail, thumbnailPath
 }
 
