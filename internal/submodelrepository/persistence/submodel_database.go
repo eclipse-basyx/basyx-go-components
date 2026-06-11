@@ -45,7 +45,21 @@ type SubmodelDatabase struct {
 	verificationMode gen.VerificationMode
 }
 
-// SetJWSCertificateChain configures the certificate chain used in signed responses.
+// SetJWSCertificateChain configures the optional certificate chain embedded in
+// signed Submodel responses.
+//
+// The provided slice must already be formatted for the JWS "x5c" protected
+// header: each entry is a base64 encoded DER certificate, ordered from signer
+// certificate to issuer certificates. Passing nil or an empty slice disables the
+// "x5c" header while still allowing signed responses when a private key is
+// configured.
+//
+// Parameters:
+//   - certificateChain: Base64 encoded DER certificate chain for the JWS "x5c"
+//     protected header.
+//
+// Returns:
+//   - None.
 func (s *SubmodelDatabase) SetJWSCertificateChain(certificateChain []string) {
 	s.signingOptions.CertificateChain = certificateChain
 }

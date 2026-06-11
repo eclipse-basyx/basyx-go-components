@@ -41,8 +41,19 @@ import (
 	jose "gopkg.in/go-jose/go-jose.v2"
 )
 
-// SigningOptions configures protected headers for BaSyx compact JWS responses.
+// SigningOptions configures optional protected-header values for compact JWS
+// responses created by this package.
+//
+// The signer always writes the mandatory RS256 algorithm header and the IDTA
+// response metadata headers generated at signing time: "typ" with value "JWS",
+// "sigT" with the UTC signature timestamp, and "sid" with a random signature
+// identifier. SigningOptions only contains values that callers can provide from
+// runtime configuration.
 type SigningOptions struct {
+	// CertificateChain contains DER encoded X.509 certificates as base64
+	// strings, ordered from signer certificate to issuer certificates, for the
+	// JWS "x5c" protected header. Leave it empty when no certificate chain
+	// should be embedded in signed responses.
 	CertificateChain []string
 }
 
@@ -125,7 +136,25 @@ func LoadPublicKey(path string) (*rsa.PublicKey, error) {
 	return rsaKey, nil
 }
 
-// LoadCertificateChain reads PEM encoded X.509 certificates for the JWS x5c header.
+// LoadCertificateChain reads a PEM encoded X.509 certificate chain and converts
+// it into the value format required by the JWS "x5c" protected header.
+//
+// The input file may contain one or more PEM blocks. Blocks with type
+// "CERTIFICATE" are parsed as X.509 certificates, validated syntactically, and
+// returned as standard-base64 encoded DER bytes. Non-certificate PEM blocks are
+// ignored. Certificate order is preserved, so the configured file should list
+// certificates in the order expected by JWS consumers, typically leaf signer
+// certificate first and issuer certificates afterwards.
+//
+// Parameters:
+//   - path: Filesystem path to a PEM file containing one or more
+//     "CERTIFICATE" blocks.
+//
+// Returns:
+//   - []string: Base64 encoded DER certificates suitable for the JWS "x5c"
+//     protected header.
+//   - error: Error when the file cannot be read, no certificate block is found,
+//     or any certificate block cannot be parsed as X.509.
 func LoadCertificateChain(path string) ([]string, error) {
 	// #nosec G304 -- the PEM path is an explicit operator configuration value.
 	certData, err := os.ReadFile(path)
@@ -155,7 +184,23 @@ func LoadCertificateChain(path string) ([]string, error) {
 	return chain, nil
 }
 
-// LoadSigningOptions loads optional JWS protected-header material from paths.
+// LoadSigningOptions loads optional JWS signing configuration from filesystem
+// paths.
+//
+// An empty or whitespace-only certificateChainPath means no certificate chain is
+// configured; in that case the returned SigningOptions has an empty
+// CertificateChain and no error. When a path is provided, the file is loaded with
+// LoadCertificateChain and the resulting certificates are used for the "x5c"
+// protected header.
+//
+// Parameters:
+//   - certificateChainPath: Optional filesystem path to a PEM encoded X.509
+//     certificate chain.
+//
+// Returns:
+//   - SigningOptions: Header options to pass to SignPayloadWithOptions.
+//   - error: Error when a non-empty certificateChainPath cannot be read or
+//     parsed as a certificate chain.
 func LoadSigningOptions(certificateChainPath string) (SigningOptions, error) {
 	if strings.TrimSpace(certificateChainPath) == "" {
 		return SigningOptions{}, nil
@@ -167,21 +212,50 @@ func LoadSigningOptions(certificateChainPath string) (SigningOptions, error) {
 	return SigningOptions{CertificateChain: chain}, nil
 }
 
-// SignPayload returns a compact RS256 JWS over payload.
+// SignPayload returns a compact RS256 JWS over payload using the default
+// BaSyx/IDTA protected headers.
+//
+// This is a convenience wrapper around SignPayloadWithOptions with empty
+// SigningOptions. The generated compact JWS includes the RS256 algorithm header
+// plus dynamic protected headers "typ", "sigT", and "sid". It does not include
+// an "x5c" certificate chain header.
 //
 // Parameters:
 //   - privateKey: RSA private key used for RS256 signing.
-//   - payload: Canonical payload bytes to sign.
+//   - payload: Payload bytes to sign. Callers that need deterministic payload
+//     bytes should canonicalize JSON before calling this function.
 //
 // Returns:
-//   - string: Compact serialized JWS.
-//   - error: Error when the key is nil, the signer cannot be created, or
-//     serialization fails.
+//   - string: Compact serialized JWS string.
+//   - error: Error when privateKey is nil, protected-header generation fails,
+//     the signer cannot be created, signing fails, or compact serialization
+//     fails.
 func SignPayload(privateKey *rsa.PrivateKey, payload []byte) (string, error) {
 	return SignPayloadWithOptions(privateKey, payload, SigningOptions{})
 }
 
-// SignPayloadWithOptions returns a compact RS256 JWS over payload with IDTA headers.
+// SignPayloadWithOptions returns a compact RS256 JWS over payload with
+// BaSyx/IDTA protected headers.
+//
+// The protected header contains:
+//   - "alg": "RS256", written by go-jose for the RSA signing key.
+//   - "typ": "JWS", identifying the compact response as a JWS.
+//   - "sigT": Current UTC signing time formatted as RFC3339.
+//   - "sid": A random UUID-style signature identifier generated per signature.
+//   - "x5c": Optional certificate chain from options.CertificateChain.
+//
+// Parameters:
+//   - privateKey: RSA private key used for RS256 signing.
+//   - payload: Payload bytes to sign. Repository callers pass canonical JSON so
+//     verifiers receive stable JSON payload bytes.
+//   - options: Optional protected-header configuration, currently the
+//     certificate chain for "x5c".
+//
+// Returns:
+//   - string: Compact serialized JWS string.
+//   - error: Error when privateKey is nil, protected-header generation fails,
+//     the signer cannot be created, signing fails, or compact serialization
+//     fails.
 func SignPayloadWithOptions(privateKey *rsa.PrivateKey, payload []byte, options SigningOptions) (string, error) {
 	if privateKey == nil {
 		return "", fmt.Errorf("JWS-SIGN-NILKEY private key must not be nil")
