@@ -48,6 +48,7 @@ services:
 
   health_observer_preconfig_it:
     image: curlimages/curl:8.15.0
+    user: "0:0"
     depends_on:
       aas_environment_preconfig_it:
         condition: service_started
