@@ -27,6 +27,7 @@ package persistence
 
 import (
 	"database/sql"
+	"strings"
 	"testing"
 
 	sqlmock "github.com/DATA-DOG/go-sqlmock"
@@ -83,6 +84,39 @@ func TestUpdateAssetInformationRecordPersistsDefaultThumbnail(t *testing.T) {
 		currentAssetInformationState{},
 	))
 	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestBuildUpsertDefaultThumbnailQueryPreservesExistingContentTypeWhenUnset(t *testing.T) {
+	dialect := goquDialect()
+	thumbnail := types.NewResource("https://example.com/thumb.png")
+
+	upsertSQL, _, err := buildUpsertDefaultThumbnailQuery(
+		&dialect,
+		int64(42),
+		thumbnail,
+		thumbnail.Path(),
+	)
+
+	require.NoError(t, err)
+	require.Contains(t, upsertSQL, `COALESCE("excluded"."content_type", "thumbnail_file_element"."content_type")`)
+	require.Contains(t, upsertSQL, `"file_name"=NULL`)
+	require.NotContains(t, strings.ToLower(upsertSQL), `"content_type"=null`)
+}
+
+func TestBuildUpsertDefaultThumbnailQueryClearsFileNameForExternalURL(t *testing.T) {
+	dialect := goquDialect()
+	assetInformation := assetInformationWithDefaultThumbnail("https://example.com/thumb-update.png", "image/png")
+	thumbnail := assetInformation.DefaultThumbnail()
+
+	upsertSQL, _, err := buildUpsertDefaultThumbnailQuery(
+		&dialect,
+		int64(42),
+		thumbnail,
+		thumbnail.Path(),
+	)
+
+	require.NoError(t, err)
+	require.Contains(t, upsertSQL, `"file_name"=NULL`)
 }
 
 func assetInformationWithDefaultThumbnail(path string, contentType string) types.IAssetInformation {

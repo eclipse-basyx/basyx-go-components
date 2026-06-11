@@ -1317,13 +1317,15 @@ func buildUpsertDefaultThumbnailQuery(
 	record := goqu.Record{
 		"id":           aasDBID,
 		"content_type": thumbnail.ContentType(),
+		"file_name":    nil,
 		"value":        thumbnailPath,
 	}
 
 	return dialect.Insert("thumbnail_file_element").
 		Rows(record).
 		OnConflict(goqu.DoUpdate("id", goqu.Record{
-			"content_type": thumbnail.ContentType(),
+			"content_type": goqu.COALESCE(goqu.I("excluded.content_type"), goqu.I("thumbnail_file_element.content_type")),
+			"file_name":    nil,
 			"value":        thumbnailPath,
 		})).
 		ToSQL()
