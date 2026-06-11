@@ -159,7 +159,7 @@ func TestRunProbeWritesFile(t *testing.T) {
 		t.Fatalf("expected no error, got %v", err)
 	}
 
-	content, readErr := os.ReadFile(filepath.Join(tempDir, outputPath)) // #nosec G304 -- outputPath is created via t.TempDir()
+	content, readErr := os.ReadFile(filepath.Join(tempDir, outputPath)) // #nosec G304 -- tempDir is created via t.TempDir() and outputPath is constant
 	if readErr != nil {
 		t.Fatalf("failed reading output file: %v", readErr)
 	}
