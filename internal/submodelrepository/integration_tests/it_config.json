@@ -2056,6 +2056,7 @@
     },
     {
         "context": "GET Signed Submodel",
+        "action": "ASSERT_SIGNED_SUBMODEL",
         "method": "GET",
         "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/$signed",
         "shouldMatch": "expected/expectedSignedSubmodel.json",

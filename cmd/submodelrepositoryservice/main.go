@@ -95,6 +95,10 @@ func runServer(ctx context.Context, configPath string) error {
 			log.Println("JWS private key loaded successfully")
 		}
 	}
+	signingOptions, err := jws.LoadSigningOptions(cfg.JWS.CertificateChainPath)
+	if err != nil {
+		log.Printf("Warning: failed to load JWS certificate chain: %v - x5c header will be omitted", err)
+	}
 
 	dsn := common.BuildPostgresDSN(cfg.Postgres)
 
@@ -123,6 +127,7 @@ func runServer(ctx context.Context, configPath string) error {
 	if err != nil {
 		return err
 	}
+	smDatabase.SetJWSCertificateChain(signingOptions.CertificateChain)
 	smRegistryPersistence, err := smregistrydb.NewPostgreSQLSMBackendFromDB(sharedDB)
 	if err != nil {
 		return err

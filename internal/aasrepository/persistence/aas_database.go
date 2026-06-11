@@ -46,11 +46,11 @@ import (
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/descriptors"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/history"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/jws"
 	commonmodel "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 	"github.com/lib/pq"
-	jose "gopkg.in/go-jose/go-jose.v2"
 )
 
 // AssetAdministrationShellDatabase is the implementation of the AssetAdministrationShellRepositoryDatabase interface using PostgreSQL as the underlying database.
@@ -58,6 +58,7 @@ type AssetAdministrationShellDatabase struct {
 	db               *sql.DB
 	verificationMode commonmodel.VerificationMode
 	privateKey       *rsa.PrivateKey
+	signingOptions   jws.SigningOptions
 }
 
 type aasDBQueryer interface {
@@ -69,6 +70,11 @@ type aasDBQueryer interface {
 // SetJWSPrivateKey configures the key used by signed AAS responses.
 func (s *AssetAdministrationShellDatabase) SetJWSPrivateKey(privateKey *rsa.PrivateKey) {
 	s.privateKey = privateKey
+}
+
+// SetJWSCertificateChain configures the certificate chain used in signed AAS responses.
+func (s *AssetAdministrationShellDatabase) SetJWSCertificateChain(certificateChain []string) {
+	s.signingOptions.CertificateChain = certificateChain
 }
 
 // ExecuteInTransaction runs fn in a database transaction bound to this backend.
@@ -200,19 +206,11 @@ func (s *AssetAdministrationShellDatabase) GetSignedAssetAdministrationShell(ctx
 	if err != nil {
 		return "", err
 	}
-	payload, err := json.Marshal(jsonAAS)
+	payload, err := common.CanonicalJSON(jsonAAS)
 	if err != nil {
 		return "", err
 	}
-	signer, err := jose.NewSigner(jose.SigningKey{Algorithm: jose.RS256, Key: s.privateKey}, nil)
-	if err != nil {
-		return "", err
-	}
-	jws, err := signer.Sign(payload)
-	if err != nil {
-		return "", err
-	}
-	return jws.CompactSerialize()
+	return jws.SignPayloadWithOptions(s.privateKey, payload, s.signingOptions)
 }
 
 // GetAssetAdministrationShellByIDAndDate returns the AAS version valid at the requested instant.

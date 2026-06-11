@@ -33,6 +33,7 @@ import (
 	"time"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/jws"
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 )
 
@@ -40,7 +41,13 @@ import (
 type SubmodelDatabase struct {
 	db               *sql.DB
 	privateKey       *rsa.PrivateKey
+	signingOptions   jws.SigningOptions
 	verificationMode gen.VerificationMode
+}
+
+// SetJWSCertificateChain configures the certificate chain used in signed responses.
+func (s *SubmodelDatabase) SetJWSCertificateChain(certificateChain []string) {
+	s.signingOptions.CertificateChain = certificateChain
 }
 
 // NewSubmodelDatabase creates a new instance of SubmodelDatabase with the provided database connection.

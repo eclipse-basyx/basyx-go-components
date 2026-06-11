@@ -32,3 +32,7 @@ general:
   externalUrl: ""
   uploadMaxSizeBytes: 134217728
   aasPreconfigPaths: []
+
+# jws:
+#   privateKeyPath: "./rsa-key.pem"
+#   certificateChainPath: "./rsa-cert.pem"

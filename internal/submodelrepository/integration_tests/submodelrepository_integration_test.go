@@ -30,6 +30,7 @@ import (
 	"bytes"
 	"context"
 	"database/sql"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -47,9 +48,11 @@ import (
 	aasregistrydb "github.com/eclipse-basyx/basyx-go-components/internal/aasregistry/persistence"
 	aasrepositorydb "github.com/eclipse-basyx/basyx-go-components/internal/aasrepository/persistence"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
+	commonjws "github.com/eclipse-basyx/basyx-go-components/internal/common/jws"
 	commonmodel "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/testenv"
 	_ "github.com/lib/pq" // PostgreSQL Treiber
+	jose "gopkg.in/go-jose/go-jose.v2"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -68,6 +71,7 @@ var (
 )
 
 const submodelRepositoryIntegrationTestDSN = "postgres://admin:admin123@127.0.0.1:6432/basyxTestDB?sslmode=disable"
+const actionAssertSignedSubmodel = "ASSERT_SIGNED_SUBMODEL"
 
 // uploadFileAttachment uploads a file to the attachment endpoint
 func uploadFileAttachment(endpoint string, filePath string, fileName string) (int, error) {
@@ -1612,6 +1616,9 @@ func TestPathNotationEndpoints(t *testing.T) {
 // IntegrationTest runs the integration tests based on the config file
 func TestIntegration(t *testing.T) {
 	testenv.RunJSONSuite(t, testenv.JSONSuiteOptions{
+		ActionHandlers: map[string]testenv.JSONStepAction{
+			actionAssertSignedSubmodel: assertSignedSubmodelResponse,
+		},
 		ShouldCompareResponse: testenv.CompareMethods(http.MethodGet, http.MethodPost),
 		ShouldSkipStep: func(step testenv.JSONSuiteStep) bool {
 			if strings.EqualFold(step.Method, http.MethodPut) && strings.Contains(step.Endpoint, "/attachment") {
@@ -1630,6 +1637,67 @@ func TestIntegration(t *testing.T) {
 			return fmt.Sprintf("Step_(%s)_%d_%s_%s", context, stepNumber, step.Method, step.Endpoint)
 		},
 	})
+}
+
+func assertSignedSubmodelResponse(t *testing.T, runner *testenv.JSONSuiteRunner, step testenv.JSONSuiteStep, stepNumber int) {
+	t.Helper()
+
+	response, err := runner.RunStep(step, stepNumber)
+	require.NoError(t, err, "Request failed")
+
+	var compact string
+	require.NoError(t, json.Unmarshal([]byte(response.Body), &compact), "response=%s", response.Body)
+	require.Equal(t, 2, strings.Count(compact, "."))
+	requireSignedSubmodelProtectedHeaders(t, compact)
+
+	privateKey, err := commonjws.LoadPrivateKey("docker_compose/rsa-key.pem")
+	require.NoError(t, err)
+	signed, err := jose.ParseSigned(compact)
+	require.NoError(t, err)
+	payload, err := signed.Verify(&privateKey.PublicKey)
+	require.NoError(t, err)
+
+	canonical, err := common.CanonicalJSON(payload)
+	require.NoError(t, err)
+	require.JSONEq(t, string(canonical), string(payload))
+
+	expectedPayload := expectedSignedSubmodelPayload(t, step.ShouldMatch)
+	require.JSONEq(t, string(expectedPayload), string(payload))
+}
+
+func requireSignedSubmodelProtectedHeaders(t *testing.T, compact string) {
+	t.Helper()
+
+	parts := strings.Split(compact, ".")
+	require.Len(t, parts, 3)
+	headerBytes, err := base64.RawURLEncoding.DecodeString(parts[0])
+	require.NoError(t, err)
+
+	var header map[string]any
+	require.NoError(t, json.Unmarshal(headerBytes, &header))
+	require.Equal(t, "RS256", header["alg"])
+	require.Equal(t, "JWS", header["typ"])
+	require.Regexp(t, regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$`), header["sid"])
+
+	signatureTime, ok := header["sigT"].(string)
+	require.True(t, ok)
+	_, err = time.Parse(time.RFC3339, signatureTime)
+	require.NoError(t, err)
+	require.NotContains(t, header, "x5c")
+}
+
+func expectedSignedSubmodelPayload(t *testing.T, expectedJWSPath string) []byte {
+	t.Helper()
+
+	expectedRaw, err := os.ReadFile(expectedJWSPath)
+	require.NoError(t, err)
+	var expectedCompact string
+	require.NoError(t, json.Unmarshal(expectedRaw, &expectedCompact))
+
+	expectedSigned, err := jose.ParseSigned(expectedCompact)
+	require.NoError(t, err)
+	require.Len(t, expectedSigned.Signatures, 1)
+	return expectedSigned.UnsafePayloadWithoutVerification()
 }
 
 // TestFileAttachmentOperations tests file upload, download, and deletion for File SME

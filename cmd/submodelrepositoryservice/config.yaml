@@ -31,6 +31,7 @@ general:
 
 # jws:
 #   privateKeyPath: "./rsa-key.pem"
+#   certificateChainPath: "./rsa-cert.pem"
 
 # swagger:
 #   contactName: "Eclipse BaSyx"

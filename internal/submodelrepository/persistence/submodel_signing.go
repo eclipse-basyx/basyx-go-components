@@ -28,13 +28,13 @@ package persistence
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 
 	"github.com/FriedJannik/aas-go-sdk/jsonization"
 	"github.com/FriedJannik/aas-go-sdk/types"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/jws"
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
-	jose "gopkg.in/go-jose/go-jose.v2"
 )
 
 // GetSignedSubmodel retrieves and signs a submodel
@@ -64,17 +64,7 @@ func (s *SubmodelDatabase) GetSignedSubmodel(ctx context.Context, submodelID str
 		return "", err
 	}
 
-	signer, err := jose.NewSigner(jose.SigningKey{Algorithm: jose.RS256, Key: s.privateKey}, nil)
-	if err != nil {
-		return "", err
-	}
-
-	jws, err := signer.Sign(payload)
-	if err != nil {
-		return "", err
-	}
-
-	return jws.CompactSerialize()
+	return jws.SignPayloadWithOptions(s.privateKey, payload, s.signingOptions)
 }
 
 // GetSignedSubmodelValueOnly returns and signs a submodel in its value-only representation
@@ -102,17 +92,7 @@ func (s *SubmodelDatabase) GetSignedSubmodelValueOnly(ctx context.Context, submo
 		return "", err
 	}
 
-	signer, err := jose.NewSigner(jose.SigningKey{Algorithm: jose.RS256, Key: s.privateKey}, nil)
-	if err != nil {
-		return "", err
-	}
-
-	jws, err := signer.Sign(payload)
-	if err != nil {
-		return "", err
-	}
-
-	return jws.CompactSerialize()
+	return jws.SignPayloadWithOptions(s.privateKey, payload, s.signingOptions)
 }
 
 func getNormalPayload(submodel types.ISubmodel) ([]byte, error) {
@@ -120,11 +100,7 @@ func getNormalPayload(submodel types.ISubmodel) ([]byte, error) {
 	if convertErr != nil {
 		return nil, convertErr
 	}
-	payload, err := json.Marshal(jsonSubmodel)
-	if err != nil {
-		return nil, err
-	}
-	return payload, err
+	return common.CanonicalJSON(jsonSubmodel)
 }
 
 func getValueOnlyPayload(submodel types.ISubmodel) ([]byte, error) {
@@ -132,9 +108,5 @@ func getValueOnlyPayload(submodel types.ISubmodel) ([]byte, error) {
 	if conversionErr != nil {
 		return nil, conversionErr
 	}
-	payload, err := json.Marshal(valueOnlySubmodel)
-	if err != nil {
-		return nil, err
-	}
-	return payload, err
+	return common.CanonicalJSON(valueOnlySubmodel)
 }
