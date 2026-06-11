@@ -221,7 +221,8 @@ type Config struct {
 
 // JWSConfig contains JSON Web Signature configuration parameters.
 type JWSConfig struct {
-	PrivateKeyPath string `mapstructure:"privateKeyPath" yaml:"privateKeyPath"` // Path to the RSA private key for signing
+	PrivateKeyPath       string `mapstructure:"privateKeyPath" yaml:"privateKeyPath"`             // Path to the RSA private key for signing
+	CertificateChainPath string `mapstructure:"certificateChainPath" yaml:"certificateChainPath"` // Path to PEM encoded X.509 certificates for x5c
 }
 
 // HistoryConfig contains history and audit configuration.
@@ -778,6 +779,7 @@ func setDefaults(v *viper.Viper) {
 
 	// JWS defaults
 	v.SetDefault("jws.privateKeyPath", "")
+	v.SetDefault("jws.certificateChainPath", "")
 
 	// History/audit defaults
 	v.SetDefault("history.mode", "off")
@@ -925,6 +927,14 @@ func PrintConfiguration(cfg *Config) {
 	} else {
 		lines = append(lines, "  Private Key Path: (not configured)")
 		lines = append(lines, "  Private Key Mounted: false")
+	}
+	if cfg.JWS.CertificateChainPath != "" {
+		lines = append(lines, fmt.Sprintf("  Certificate Chain Path: %s", cfg.JWS.CertificateChainPath))
+		if _, err := os.Stat(cfg.JWS.CertificateChainPath); err == nil {
+			lines = append(lines, "  Certificate Chain Mounted: true ✅")
+		} else {
+			lines = append(lines, "  Certificate Chain Mounted: false ❌")
+		}
 	}
 
 	// History

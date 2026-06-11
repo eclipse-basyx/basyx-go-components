@@ -142,6 +142,10 @@ func runServer(ctx context.Context, configPath string) error {
 			return err
 		}
 	}
+	signingOptions, err := jws.LoadSigningOptions(cfg.JWS.CertificateChainPath)
+	if err != nil {
+		log.Printf("Warning: failed to load JWS certificate chain: %v - x5c header will be omitted", err)
+	}
 
 	aasRegistryPersistence, err := aasregistrydb.NewPostgreSQLAASRegistryDatabaseFromDB(sharedDB, cfg.Server.CacheEnabled)
 	if err != nil {
@@ -156,10 +160,12 @@ func runServer(ctx context.Context, configPath string) error {
 		return err
 	}
 	aasRepositoryPersistence.SetJWSPrivateKey(privateKey)
+	aasRepositoryPersistence.SetJWSCertificateChain(signingOptions.CertificateChain)
 	submodelRepositoryPersistence, err := submodelrepositorydb.NewSubmodelDatabaseFromDB(sharedDB, privateKey, cfg.Server.StrictVerification)
 	if err != nil {
 		return err
 	}
+	submodelRepositoryPersistence.SetJWSCertificateChain(signingOptions.CertificateChain)
 	cdrPersistence, err := cdrdb.NewConceptDescriptionBackendFromDB(sharedDB)
 	if err != nil {
 		return err

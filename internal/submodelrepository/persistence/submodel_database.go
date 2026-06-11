@@ -33,6 +33,7 @@ import (
 	"time"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/jws"
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 )
 
@@ -40,7 +41,27 @@ import (
 type SubmodelDatabase struct {
 	db               *sql.DB
 	privateKey       *rsa.PrivateKey
+	signingOptions   jws.SigningOptions
 	verificationMode gen.VerificationMode
+}
+
+// SetJWSCertificateChain configures the optional certificate chain embedded in
+// signed Submodel responses.
+//
+// The provided slice must already be formatted for the JWS "x5c" protected
+// header: each entry is a base64 encoded DER certificate, ordered from signer
+// certificate to issuer certificates. Passing nil or an empty slice disables the
+// "x5c" header while still allowing signed responses when a private key is
+// configured.
+//
+// Parameters:
+//   - certificateChain: Base64 encoded DER certificate chain for the JWS "x5c"
+//     protected header.
+//
+// Returns:
+//   - None.
+func (s *SubmodelDatabase) SetJWSCertificateChain(certificateChain []string) {
+	s.signingOptions.CertificateChain = certificateChain
 }
 
 // NewSubmodelDatabase creates a new instance of SubmodelDatabase with the provided database connection.

@@ -30,11 +30,18 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/rsa"
+	"crypto/x509"
+	"crypto/x509/pkix"
+	"encoding/base64"
+	"encoding/json"
 	"errors"
+	"math/big"
 	"net/http"
 	"net/http/httptest"
+	"regexp"
 	"strings"
 	"testing"
+	"time"
 
 	sqlmock "github.com/DATA-DOG/go-sqlmock"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
@@ -106,6 +113,8 @@ func TestGetSignedSubmodelSignsFullRepresentation(t *testing.T) {
 	require.NoError(t, err)
 
 	sut := &SubmodelDatabase{db: db, privateKey: privateKey}
+	certificateChain := []string{newTestCertificate(t, privateKey)}
+	sut.SetJWSCertificateChain(certificateChain)
 	setupSignedSubmodelHappyPathExpectations(mock, "sm-signed")
 
 	jwsCompact, err := sut.GetSignedSubmodel(contextWithABACDisabled(t), "sm-signed")
@@ -117,6 +126,8 @@ func TestGetSignedSubmodelSignsFullRepresentation(t *testing.T) {
 	require.NoError(t, err)
 	payload, err := signed.Verify(&privateKey.PublicKey)
 	require.NoError(t, err)
+	requireCanonicalJSONPayload(t, payload)
+	requireIDTAProtectedHeaders(t, jwsCompact, certificateChain)
 
 	payloadString := string(payload)
 	require.Contains(t, payloadString, "submodelElements")
@@ -150,11 +161,68 @@ func TestGetSignedSubmodelSignsValueOnlyRepresentation(t *testing.T) {
 	require.NoError(t, err)
 	payload, err := signed.Verify(&privateKey.PublicKey)
 	require.NoError(t, err)
+	requireCanonicalJSONPayload(t, payload)
+	requireIDTAProtectedHeaders(t, jwsCompact, nil)
 
 	payloadString := string(payload)
 	require.NotContains(t, payloadString, "submodelIdentifier")
 	require.Equal(t, "{}", payloadString)
 	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func requireIDTAProtectedHeaders(t *testing.T, jwsCompact string, certificateChain []string) {
+	t.Helper()
+
+	header := parseProtectedHeader(t, jwsCompact)
+	require.Equal(t, "RS256", header["alg"])
+	require.Equal(t, "JWS", header["typ"])
+	require.Regexp(t, regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$`), header["sid"])
+
+	signatureTime, ok := header["sigT"].(string)
+	require.True(t, ok)
+	_, err := time.Parse(time.RFC3339, signatureTime)
+	require.NoError(t, err)
+
+	if len(certificateChain) > 0 {
+		require.Equal(t, []any{certificateChain[0]}, header["x5c"])
+	} else {
+		require.NotContains(t, header, "x5c")
+	}
+}
+
+func newTestCertificate(t *testing.T, privateKey *rsa.PrivateKey) string {
+	t.Helper()
+
+	template := &x509.Certificate{
+		SerialNumber: big.NewInt(1),
+		Subject:      pkix.Name{CommonName: "signed-test"},
+		NotBefore:    time.Now().Add(-time.Hour),
+		NotAfter:     time.Now().Add(time.Hour),
+	}
+	der, err := x509.CreateCertificate(rand.Reader, template, template, &privateKey.PublicKey, privateKey)
+	require.NoError(t, err)
+	return base64.StdEncoding.EncodeToString(der)
+}
+
+func parseProtectedHeader(t *testing.T, jwsCompact string) map[string]any {
+	t.Helper()
+
+	parts := strings.Split(jwsCompact, ".")
+	require.Len(t, parts, 3)
+	headerBytes, err := base64.RawURLEncoding.DecodeString(parts[0])
+	require.NoError(t, err)
+
+	var header map[string]any
+	require.NoError(t, json.Unmarshal(headerBytes, &header))
+	return header
+}
+
+func requireCanonicalJSONPayload(t *testing.T, payload []byte) {
+	t.Helper()
+
+	canonical, err := common.CanonicalJSON(payload)
+	require.NoError(t, err)
+	require.Equal(t, string(canonical), string(payload))
 }
 
 func setupSignedSubmodelHappyPathExpectations(mock sqlmock.Sqlmock, submodelIdentifier string) {
