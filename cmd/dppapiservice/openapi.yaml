@@ -1,0 +1,1205 @@
+openapi: 3.0.3
+info:
+  description: |
+    Digital Product Passport API aligned with the IDTA-01001 v3.2 DPP metamodel annex and the IDTA-01002 v3.2 DPP API mapping annex.
+  license:
+    name: Apache-2.0
+    url: https://www.apache.org/licenses/LICENSE-2.0.html
+  title: Digital Product Passport API
+  version: 1.0.0
+servers:
+- url: https://api.example.com
+security:
+- bearerAuth: []
+tags:
+- description: EN 18222 Life Cycle API operations mapped to AAS services.
+  name: DPP Life Cycle
+- description: DPP registry registration operation.
+  name: DPP Registry
+- description: EN 18222 fine-granular element-level DPP operations.
+  name: DPP Fine Granular
+paths:
+  /v1/dpps/{dppId}:
+    delete:
+      description: |
+        Deletes the AAS and DPP metadata resources when deletion is legally permitted. Implementations must enforce archiving and deletion restrictions required by applicable regulation.
+      operationId: deleteDPPById
+      parameters:
+      - description: Percent-encoded Digital Product Passport identifier.
+        explode: false
+        in: path
+        name: dppId
+        required: true
+        schema:
+          minLength: 1
+          type: string
+        style: simple
+      responses:
+        "204":
+          description: DPP deleted
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Result"
+          description: Invalid request.
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Result"
+          description: Authentication is required.
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Result"
+          description: The authenticated subject is not allowed to perform the operation.
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Result"
+          description: Resource not found.
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Result"
+          description: The request conflicts with the current resource state or regulatory
+            restrictions.
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Result"
+          description: Internal server error.
+      summary: Delete DPP by DPP ID
+      tags:
+      - DPP Life Cycle
+    get:
+      description: |
+        Retrieves an AAS and all DPP-relevant Submodels, serializes them in the requested representation, and composes a single DigitalProductPassport document.
+      operationId: readDPPById
+      parameters:
+      - description: Percent-encoded Digital Product Passport identifier.
+        explode: false
+        in: path
+        name: dppId
+        required: true
+        schema:
+          minLength: 1
+          type: string
+        style: simple
+      - description: |
+          DPP serialization representation. Compressed is mandatory and the default. Full is optional and corresponds to the expanded representation.
+        explode: true
+        in: query
+        name: representation
+        required: false
+        schema:
+          $ref: "#/components/schemas/Representation"
+        style: form
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DigitalProductPassport"
+          description: DPP document
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Result"
+          description: Invalid request.
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Result"
+          description: Authentication is required.
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Result"
+          description: The authenticated subject is not allowed to perform the operation.
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Result"
+          description: Resource not found.
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Result"
+          description: Internal server error.
+      summary: Read DPP by DPP ID
+      tags:
+      - DPP Life Cycle
+    patch:
+      description: |
+        Accepts a partial DPP document using JSON Merge Patch (RFC 7396), decomposes changed header fields into the DppMetadata Submodel and changed content fields into the corresponding content Submodels, updates lastUpdate, and archives the change according to EN 18221.
+      operationId: updateDPPById
+      parameters:
+      - description: Percent-encoded Digital Product Passport identifier.
+        explode: false
+        in: path
+        name: dppId
+        required: true
+        schema:
+          minLength: 1
+          type: string
+        style: simple
+      requestBody:
+        content:
+          application/merge-patch+json:
+            schema:
+              $ref: "#/components/schemas/DigitalProductPassportPatch"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DigitalProductPassport"
+          description: Updated DPP
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Result"
+          description: Invalid request.
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Result"
+          description: Authentication is required.
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Result"
+          description: The authenticated subject is not allowed to perform the operation.
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Result"
+          description: Resource not found.
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Result"
+          description: The request conflicts with the current resource state or regulatory
+            restrictions.
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Result"
+          description: Internal server error.
+      summary: Update DPP by DPP ID
+      tags:
+      - DPP Life Cycle
+  /v1/dpps:
+    post:
+      description: |
+        Decomposes the submitted DPP into an AAS, one mandatory DppMetadata Submodel, and one or more content Submodels. Creation should be atomic.
+      operationId: createDPP
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DigitalProductPassport"
+        required: true
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CreateDPPResponse"
+          description: DPP created
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Result"
+          description: Invalid request.
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Result"
+          description: Authentication is required.
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Result"
+          description: The authenticated subject is not allowed to perform the operation.
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Result"
+          description: The request conflicts with the current resource state or regulatory
+            restrictions.
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Result"
+          description: Internal server error.
+      summary: Create DPP
+      tags:
+      - DPP Life Cycle
+  /v1/dppsByProductId/{productId}:
+    get:
+      description: |
+        Resolves the product identifier through the AAS globalAssetId or specificAssetId linkage and composes the corresponding DPP document.
+      operationId: readDPPByProductId
+      parameters:
+      - description: Percent-encoded product identifier as specified by EN 18219.
+        explode: false
+        in: path
+        name: productId
+        required: true
+        schema:
+          minLength: 1
+          type: string
+        style: simple
+      - description: |
+          DPP serialization representation. Compressed is mandatory and the default. Full is optional and corresponds to the expanded representation.
+        explode: true
+        in: query
+        name: representation
+        required: false
+        schema:
+          $ref: "#/components/schemas/Representation"
+        style: form
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DigitalProductPassport"
+          description: DPP document
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Result"
+          description: Invalid request.
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Result"
+          description: Authentication is required.
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Result"
+          description: The authenticated subject is not allowed to perform the operation.
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Result"
+          description: Resource not found.
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Result"
+          description: Internal server error.
+      summary: Read DPP by product ID
+      tags:
+      - DPP Life Cycle
+  /v1/dppsByIdAndDate/{dppId}:
+    get:
+      description: |
+        Retrieves the DPP version that was current at the provided ISO 8601 UTC timestamp by selecting AAS and Submodel versions whose updatedAt values are less than or equal to the requested date.
+      operationId: readDPPVersionByIdAndDate
+      parameters:
+      - description: Percent-encoded Digital Product Passport identifier.
+        explode: false
+        in: path
+        name: dppId
+        required: true
+        schema:
+          minLength: 1
+          type: string
+        style: simple
+      - description: ISO 8601 UTC timestamp.
+        explode: true
+        in: query
+        name: date
+        required: true
+        schema:
+          format: date-time
+          type: string
+        style: form
+      - description: |
+          DPP serialization representation. Compressed is mandatory and the default. Full is optional and corresponds to the expanded representation.
+        explode: true
+        in: query
+        name: representation
+        required: false
+        schema:
+          $ref: "#/components/schemas/Representation"
+        style: form
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DigitalProductPassport"
+          description: Historical DPP document
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Result"
+          description: Invalid request.
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Result"
+          description: Authentication is required.
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Result"
+          description: The authenticated subject is not allowed to perform the operation.
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Result"
+          description: Resource not found.
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Result"
+          description: Internal server error.
+      summary: Read historical DPP version by ID and date
+      tags:
+      - DPP Life Cycle
+  /v1/dppsByProductIds:
+    post:
+      description: |
+        Resolves a set of product identifiers to DPP identifiers. Pagination via limit and cursor should be supported.
+      operationId: readDPPIdsByProductIds
+      parameters:
+      - description: Maximum number of returned DPP identifiers.
+        explode: true
+        in: query
+        name: limit
+        required: false
+        schema:
+          default: 100
+          minimum: 1
+          type: integer
+        style: form
+      - description: Opaque pagination cursor.
+        explode: true
+        in: query
+        name: cursor
+        required: false
+        schema:
+          type: string
+        style: form
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReadDPPIdsByProductIdsRequest"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DPPIdSearchResult"
+          description: Matching DPP IDs
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Result"
+          description: Invalid request.
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Result"
+          description: Authentication is required.
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Result"
+          description: The authenticated subject is not allowed to perform the operation.
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Result"
+          description: Internal server error.
+      summary: Resolve product IDs to DPP IDs
+      tags:
+      - DPP Life Cycle
+  /v1/dpps/{dppId}/elements/{elementPath}:
+    get:
+      description: |
+        Retrieves one data element by its DPP elementId, mapped to the idShort-based AAS SubmodelElement path. In special cases the path may address a complete Submodel.
+      operationId: readDataElement
+      parameters:
+      - description: Percent-encoded Digital Product Passport identifier.
+        explode: false
+        in: path
+        name: dppId
+        required: true
+        schema:
+          minLength: 1
+          type: string
+        style: simple
+      - description: Percent-encoded DPP elementId / AAS idShort-based SubmodelElement
+          path.
+        explode: false
+        in: path
+        name: elementPath
+        required: true
+        schema:
+          minLength: 1
+          type: string
+        style: simple
+      - description: |
+          DPP serialization representation. Compressed is mandatory and the default. Full is optional and corresponds to the expanded representation.
+        explode: true
+        in: query
+        name: representation
+        required: false
+        schema:
+          $ref: "#/components/schemas/Representation"
+        style: form
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DataElement"
+          description: Data element
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Result"
+          description: Invalid request.
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Result"
+          description: Authentication is required.
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Result"
+          description: The authenticated subject is not allowed to perform the operation.
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Result"
+          description: Resource not found.
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Result"
+          description: Internal server error.
+      summary: Read single DPP data element
+      tags:
+      - DPP Fine Granular
+    put:
+      description: |
+        Updates one DPP data element within a content Submodel and should update the lastUpdate field of the DppMetadata Submodel.
+      operationId: updateDataElement
+      parameters:
+      - description: Percent-encoded Digital Product Passport identifier.
+        explode: false
+        in: path
+        name: dppId
+        required: true
+        schema:
+          minLength: 1
+          type: string
+        style: simple
+      - description: Percent-encoded DPP elementId / AAS idShort-based SubmodelElement
+          path.
+        explode: false
+        in: path
+        name: elementPath
+        required: true
+        schema:
+          minLength: 1
+          type: string
+        style: simple
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DataElement"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DataElement"
+          description: Updated data element
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Result"
+          description: Invalid request.
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Result"
+          description: Authentication is required.
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Result"
+          description: The authenticated subject is not allowed to perform the operation.
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Result"
+          description: Resource not found.
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Result"
+          description: The request conflicts with the current resource state or regulatory
+            restrictions.
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Result"
+          description: Internal server error.
+      summary: Update single DPP data element
+      tags:
+      - DPP Fine Granular
+components:
+  parameters:
+    DppId:
+      description: Percent-encoded Digital Product Passport identifier.
+      explode: false
+      in: path
+      name: dppId
+      required: true
+      schema:
+        minLength: 1
+        type: string
+      style: simple
+    ProductId:
+      description: Percent-encoded product identifier as specified by EN 18219.
+      explode: false
+      in: path
+      name: productId
+      required: true
+      schema:
+        minLength: 1
+        type: string
+      style: simple
+    ElementPath:
+      description: Percent-encoded DPP elementId / AAS idShort-based SubmodelElement
+        path.
+      explode: false
+      in: path
+      name: elementPath
+      required: true
+      schema:
+        minLength: 1
+        type: string
+      style: simple
+    Representation:
+      description: |
+        DPP serialization representation. Compressed is mandatory and the default. Full is optional and corresponds to the expanded representation.
+      explode: true
+      in: query
+      name: representation
+      required: false
+      schema:
+        $ref: "#/components/schemas/Representation"
+      style: form
+    Date:
+      description: ISO 8601 UTC timestamp.
+      explode: true
+      in: query
+      name: date
+      required: true
+      schema:
+        format: date-time
+        type: string
+      style: form
+    Limit:
+      description: Maximum number of returned DPP identifiers.
+      explode: true
+      in: query
+      name: limit
+      required: false
+      schema:
+        default: 100
+        minimum: 1
+        type: integer
+      style: form
+    Cursor:
+      description: Opaque pagination cursor.
+      explode: true
+      in: query
+      name: cursor
+      required: false
+      schema:
+        type: string
+      style: form
+  responses:
+    BadRequest:
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Result"
+      description: Invalid request.
+    Unauthorized:
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Result"
+      description: Authentication is required.
+    Forbidden:
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Result"
+      description: The authenticated subject is not allowed to perform the operation.
+    NotFound:
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Result"
+      description: Resource not found.
+    Conflict:
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Result"
+      description: The request conflicts with the current resource state or regulatory
+        restrictions.
+    InternalServerError:
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Result"
+      description: Internal server error.
+  schemas:
+    Representation:
+      default: compressed
+      enum:
+      - compressed
+      - full
+      type: string
+    DigitalProductPassport:
+      additionalProperties: true
+      description: |
+        A single DPP JSON document composed from the DppMetadata header and one or more content Submodel sections. Content section property names shall use the contributing Submodel idShort with the first letter in lower case, and contentSpecificationIds shall list the corresponding content Submodel semantic identifiers.
+      example:
+        digitalProductPassportId: https://www.example.org/dpp/1234545
+        uniqueProductIdentifier: https://www.example.org/1234545
+        granularity: Item
+        dppSchemaVersion: ENXXX:v1.0
+        dppStatus: Active
+        lastUpdate: 2025-08-22T03:12:00Z
+        economicOperatorId: gxx:ppp456789
+        facilityId: gxx:xxx987654
+        contentSpecificationIds:
+        - carbonFootprint - IDTA-02023-1-0
+      properties:
+        digitalProductPassportId:
+          description: "DPP identifier. Similar to, but not necessarily identical\
+            \ to, the AAS id."
+          example: https://www.example.org/dpp/1234545
+          minLength: 1
+          type: string
+        uniqueProductIdentifier:
+          description: Product identifier corresponding to the AAS AssetInformation
+            globalAssetId.
+          example: https://www.example.org/1234545
+          minLength: 1
+          type: string
+        granularity:
+          $ref: "#/components/schemas/Granularity"
+        dppSchemaVersion:
+          example: ENXXX:v1.0
+          minLength: 1
+          type: string
+        dppStatus:
+          example: Active
+          minLength: 1
+          type: string
+        lastUpdate:
+          description: Timestamp corresponding to AAS AdministrativeInformation updatedAt.
+          example: 2025-08-22T03:12:00Z
+          format: date-time
+          type: string
+        economicOperatorId:
+          description: Economic operator identifier as specified by EN 18219.
+          example: gxx:ppp456789
+          minLength: 1
+          type: string
+        facilityId:
+          description: Facility identifier as specified by EN 18219.
+          example: gxx:xxx987654
+          minLength: 1
+          type: string
+        contentSpecificationIds:
+          description: |
+            Semantic identifiers of contributing content Submodels. The DPP document shall contain matching top-level content sections.
+          example:
+          - carbonFootprint - IDTA-02023-1-0
+          items:
+            minLength: 1
+            type: string
+          minItems: 1
+          type: array
+      required:
+      - contentSpecificationIds
+      - digitalProductPassportId
+      - dppSchemaVersion
+      - dppStatus
+      - economicOperatorId
+      - facilityId
+      - granularity
+      - lastUpdate
+      - uniqueProductIdentifier
+      type: object
+    DigitalProductPassportPatch:
+      additionalProperties: true
+      description: JSON Merge Patch document for a DigitalProductPassport.
+      properties:
+        digitalProductPassportId:
+          nullable: true
+          type: string
+        uniqueProductIdentifier:
+          nullable: true
+          type: string
+        granularity:
+          enum:
+          - Item
+          - Model
+          - Batch
+          - Role
+          - NotApplicable
+          nullable: true
+          type: string
+        dppSchemaVersion:
+          nullable: true
+          type: string
+        dppStatus:
+          nullable: true
+          type: string
+        lastUpdate:
+          format: date-time
+          nullable: true
+          type: string
+        economicOperatorId:
+          nullable: true
+          type: string
+        facilityId:
+          nullable: true
+          type: string
+        contentSpecificationIds:
+          items:
+            type: string
+          nullable: true
+          type: array
+      type: object
+    Granularity:
+      description: EN 18223 DPP granularity value mapped to AAS AssetKind.
+      enum:
+      - Item
+      - Model
+      - Batch
+      - Role
+      - NotApplicable
+      type: string
+    DataElement:
+      discriminator:
+        mapping:
+          SingleValuedDataElement: "#/components/schemas/SingleValuedDataElement"
+          MultiValuedDataElement: "#/components/schemas/MultiValuedDataElement"
+          MultiLanguageDataElement: "#/components/schemas/MultiLanguageDataElement"
+          DataElementCollection: "#/components/schemas/DataElementCollection"
+          RelatedResource: "#/components/schemas/RelatedResource"
+        propertyName: objectType
+      oneOf:
+      - $ref: "#/components/schemas/SingleValuedDataElement"
+      - $ref: "#/components/schemas/MultiValuedDataElement"
+      - $ref: "#/components/schemas/MultiLanguageDataElement"
+      - $ref: "#/components/schemas/DataElementCollection"
+      - $ref: "#/components/schemas/RelatedResource"
+    SingleValuedDataElement:
+      additionalProperties: false
+      example:
+        elementId: elementId
+        objectType: SingleValuedDataElement
+        dictionaryReference: dictionaryReference
+        valueDataType: xsd:string
+        value: ""
+      properties:
+        elementId:
+          description: DPP element identifier mapped to AAS Referable/idShort.
+          minLength: 1
+          type: string
+        objectType:
+          enum:
+          - SingleValuedDataElement
+          type: string
+        dictionaryReference:
+          description: DPP dictionary reference mapped to AAS semanticId.
+          type: string
+        valueDataType:
+          $ref: "#/components/schemas/XsdValueDataType"
+        value:
+          description: Scalar value serialized according to valueDataType.
+      required:
+      - elementId
+      - objectType
+      - value
+      - valueDataType
+      type: object
+    MultiValuedDataElement:
+      additionalProperties: false
+      properties:
+        elementId:
+          description: DPP element identifier mapped to AAS Referable/idShort.
+          minLength: 1
+          type: string
+        objectType:
+          enum:
+          - MultiValuedDataElement
+          type: string
+        dictionaryReference:
+          description: DPP dictionary reference mapped to AAS semanticId.
+          type: string
+        valueDataType:
+          $ref: "#/components/schemas/XsdValueDataType"
+        value:
+          items: {}
+          type: array
+      required:
+      - elementId
+      - objectType
+      - value
+      - valueDataType
+      type: object
+    MultiLanguageDataElement:
+      additionalProperties: false
+      properties:
+        elementId:
+          description: DPP element identifier mapped to AAS Referable/idShort.
+          minLength: 1
+          type: string
+        objectType:
+          enum:
+          - MultiLanguageDataElement
+          type: string
+        dictionaryReference:
+          description: DPP dictionary reference mapped to AAS semanticId.
+          type: string
+        value:
+          items:
+            $ref: "#/components/schemas/LangString"
+          minItems: 1
+          type: array
+      required:
+      - elementId
+      - objectType
+      - value
+      type: object
+    DataElementCollection:
+      additionalProperties: false
+      properties:
+        elementId:
+          description: DPP element identifier mapped to AAS Referable/idShort.
+          minLength: 1
+          type: string
+        objectType:
+          enum:
+          - DataElementCollection
+          type: string
+        dictionaryReference:
+          description: DPP dictionary reference mapped to AAS semanticId.
+          type: string
+        value:
+          items:
+            $ref: "#/components/schemas/DataElement"
+          type: array
+      required:
+      - elementId
+      - objectType
+      - value
+      type: object
+    RelatedResource:
+      additionalProperties: false
+      properties:
+        elementId:
+          description: DPP element identifier mapped to AAS Referable/idShort.
+          minLength: 1
+          type: string
+        objectType:
+          enum:
+          - RelatedResource
+          type: string
+        dictionaryReference:
+          description: DPP dictionary reference mapped to AAS semanticId.
+          type: string
+        resourceTitle:
+          type: string
+        contentType:
+          example: application/pdf
+          minLength: 1
+          type: string
+        url:
+          format: uri
+          type: string
+        language:
+          description: BCP 47 language tag.
+          example: en-GB
+          type: string
+      required:
+      - contentType
+      - elementId
+      - objectType
+      - url
+      type: object
+    LangString:
+      additionalProperties: false
+      properties:
+        value:
+          type: string
+        language:
+          description: BCP 47 language tag.
+          example: en-IE
+          type: string
+      required:
+      - language
+      - value
+      type: object
+    XsdValueDataType:
+      description: EN 18223 value data type using the xsd prefix.
+      enum:
+      - xsd:string
+      - xsd:boolean
+      - xsd:decimal
+      - xsd:float
+      - xsd:double
+      - xsd:duration
+      - xsd:dateTime
+      - xsd:time
+      - xsd:date
+      - xsd:gYearMonth
+      - xsd:gYear
+      - xsd:gMonthDay
+      - xsd:gDay
+      - xsd:gMonth
+      - xsd:hexBinary
+      - xsd:base64Binary
+      - xsd:anyURI
+      - xsd:QName
+      - xsd:NOTATION
+      - xsd:normalizedString
+      - xsd:token
+      - xsd:language
+      - xsd:NMTOKEN
+      - xsd:NMTOKENS
+      - xsd:Name
+      - xsd:NCName
+      - xsd:ID
+      - xsd:IDREF
+      - xsd:IDREFS
+      - xsd:ENTITY
+      - xsd:ENTITIES
+      - xsd:integer
+      - xsd:nonPositiveInteger
+      - xsd:negativeInteger
+      - xsd:long
+      - xsd:int
+      - xsd:short
+      - xsd:byte
+      - xsd:nonNegativeInteger
+      - xsd:unsignedLong
+      - xsd:unsignedInt
+      - xsd:unsignedShort
+      - xsd:unsignedByte
+      - xsd:positiveInteger
+      type: string
+    ReadDPPIdsByProductIdsRequest:
+      additionalProperties: false
+      properties:
+        productIds:
+          items:
+            minLength: 1
+            type: string
+          minItems: 1
+          type: array
+      required:
+      - productIds
+      type: object
+    DPPIdSearchResult:
+      additionalProperties: false
+      example:
+        items:
+        - items
+        - items
+        cursor: cursor
+      properties:
+        items:
+          items:
+            minLength: 1
+            type: string
+          type: array
+        cursor:
+          type: string
+      required:
+      - items
+      type: object
+    CreateDPPResponse:
+      additionalProperties: false
+      example:
+        digitalProductPassportId: digitalProductPassportId
+      properties:
+        digitalProductPassportId:
+          minLength: 1
+          type: string
+      required:
+      - digitalProductPassportId
+      type: object
+    RegisterProductDPPRequest:
+      additionalProperties: true
+      properties:
+        digitalProductPassportId:
+          minLength: 1
+          type: string
+        uniqueProductIdentifier:
+          minLength: 1
+          type: string
+        accessUrl:
+          description: URL where the DPP can be accessed.
+          format: uri
+          type: string
+        registrationTimestamp:
+          format: date-time
+          type: string
+      required:
+      - accessUrl
+      - digitalProductPassportId
+      - uniqueProductIdentifier
+      type: object
+    RegisterProductDPPResponse:
+      additionalProperties: false
+      properties:
+        digitalProductPassportId:
+          minLength: 1
+          type: string
+        registered:
+          type: boolean
+      required:
+      - digitalProductPassportId
+      - registered
+      type: object
+    Result:
+      additionalProperties: false
+      description: EN 18222 Result object containing one or more messages.
+      example:
+        messages:
+        - messageType: Undefined
+          text: text
+          code: code
+          correlationId: correlationId
+          timestamp: 2000-01-23T04:56:07.000+00:00
+        - messageType: Undefined
+          text: text
+          code: code
+          correlationId: correlationId
+          timestamp: 2000-01-23T04:56:07.000+00:00
+      properties:
+        messages:
+          items:
+            $ref: "#/components/schemas/Message"
+          minItems: 1
+          type: array
+      required:
+      - messages
+      type: object
+    Message:
+      additionalProperties: false
+      example:
+        messageType: Undefined
+        text: text
+        code: code
+        correlationId: correlationId
+        timestamp: 2000-01-23T04:56:07.000+00:00
+      properties:
+        messageType:
+          enum:
+          - Undefined
+          - Info
+          - Warning
+          - Error
+          - Exception
+          type: string
+        text:
+          minLength: 1
+          type: string
+        code:
+          minLength: 1
+          type: string
+        correlationId:
+          minLength: 1
+          type: string
+        timestamp:
+          format: date-time
+          type: string
+      required:
+      - code
+      - correlationId
+      - messageType
+      - text
+      - timestamp
+      type: object
+  securitySchemes:
+    bearerAuth:
+      bearerFormat: JWT
+      scheme: bearer
+      type: http

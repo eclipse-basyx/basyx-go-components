@@ -1,0 +1,46 @@
+services:
+  dpp-api:
+    build:
+      context: ../../..
+      dockerfile: cmd/dppapiservice/Dockerfile
+    command: ["/app/dppapiservice", "-config", "/config/config.json"]
+    volumes:
+      - ./config.json:/config/config.json:ro
+    ports:
+      - "127.0.0.1:${DPP_IT_PORT:-18080}:8080"
+    depends_on:
+      basyx_configuration:
+        condition: service_completed_successfully
+
+  basyx_configuration:
+    image: eclipsebasyx/basyxconfigurationservice-go:SNAPSHOT
+    environment:
+      - POSTGRES_HOST=db
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=admin
+      - POSTGRES_PASSWORD=admin123
+      - POSTGRES_DBNAME=basyxDppLifecycleIT
+      - POSTGRES_MAXOPENCONNECTIONS=10
+      - POSTGRES_MAXIDLECONNECTIONS=5
+      - POSTGRES_CONNMAXLIFETIMEMINUTES=5
+    depends_on:
+      db:
+        condition: service_healthy
+
+  db:
+    image: postgres:18
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: admin123
+      POSTGRES_DB: basyxDppLifecycleIT
+    command: ["postgres", "-c", "listen_addresses=*"]
+    volumes:
+      - postgres_data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U admin -d basyxDppLifecycleIT"]
+      interval: 2s
+      timeout: 5s
+      retries: 30
+
+volumes:
+  postgres_data:

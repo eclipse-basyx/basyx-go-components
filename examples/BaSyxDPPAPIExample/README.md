@@ -1,0 +1,117 @@
+# BaSyx DPP API Example
+
+This example starts:
+
+- Digital Product Passport API Service
+- AAS Environment Service using the same database as the DPP API
+- BaSyx Web UI connected to the AAS Environment
+- BaSyx Configuration Service for database schema initialization
+- Shared PostgreSQL database
+
+## Prerequisites
+
+- Docker + Docker Compose
+- Free ports: `3000`, `8080`, `8082`
+
+## Start The Example
+
+From this folder:
+
+```bash
+docker compose up -d
+```
+
+Open the Swagger UI:
+
+- [http://localhost:8080/swagger](http://localhost:8080/swagger)
+
+Open the BaSyx UI:
+
+- [http://localhost:3000](http://localhost:3000)
+
+## Create A DPP
+
+```bash
+curl -i \
+  -H "Content-Type: application/json" \
+  --data @sample-dpp.json \
+  http://localhost:8080/v1/dpps
+```
+
+## Read The DPP
+
+The example DPP ID is `https://example.org/dpp/demo-product-001`.
+
+```bash
+curl http://localhost:8080/v1/dpps/https%253A%252F%252Fexample.org%252Fdpp%252Fdemo-product-001
+```
+
+Read the full representation:
+
+```bash
+curl "http://localhost:8080/v1/dpps/https%253A%252F%252Fexample.org%252Fdpp%252Fdemo-product-001?representation=full"
+```
+
+Read by product ID:
+
+```bash
+curl http://localhost:8080/v1/dppsByProductId/https%253A%252F%252Fexample.org%252Fproducts%252Fdemo-product-001
+```
+
+Read a single data element:
+
+```bash
+curl http://localhost:8080/v1/dpps/https%253A%252F%252Fexample.org%252Fdpp%252Fdemo-product-001/elements/technicalData/manufacturerName
+```
+
+Update a single data element:
+
+```bash
+curl -i \
+  -X PUT \
+  -H "Content-Type: application/json" \
+  --data '"B"' \
+  http://localhost:8080/v1/dpps/https%253A%252F%252Fexample.org%252Fdpp%252Fdemo-product-001/elements/technicalData/energyClass
+```
+
+Read a historical DPP version:
+
+```bash
+curl "http://localhost:8080/v1/dppsByIdAndDate/https%253A%252F%252Fexample.org%252Fdpp%252Fdemo-product-001?date=2026-06-11T12:00:00Z&representation=compressed"
+```
+
+## Service Endpoints
+
+- DPP API: [http://localhost:8080/v1/dpps](http://localhost:8080/v1/dpps)
+- DPP Swagger UI: [http://localhost:8080/swagger](http://localhost:8080/swagger)
+- DPP OpenAPI document: [http://localhost:8080/api-docs/openapi.yaml](http://localhost:8080/api-docs/openapi.yaml)
+- DPP health endpoint: [http://localhost:8080/health](http://localhost:8080/health)
+- BaSyx UI: [http://localhost:3000](http://localhost:3000)
+- AAS Environment: [http://localhost:8082](http://localhost:8082)
+- AAS Repository API: [http://localhost:8082/shells](http://localhost:8082/shells)
+- Submodel Repository API: [http://localhost:8082/submodels](http://localhost:8082/submodels)
+- AAS Registry API: [http://localhost:8082/shell-descriptors](http://localhost:8082/shell-descriptors)
+- Submodel Registry API: [http://localhost:8082/submodel-descriptors](http://localhost:8082/submodel-descriptors)
+- Discovery API: [http://localhost:8082/lookup/shells](http://localhost:8082/lookup/shells)
+
+## Stop / Clean Up
+
+Stop containers:
+
+```bash
+docker compose down
+```
+
+Stop and remove volumes:
+
+```bash
+docker compose down -v
+```
+
+## Notes
+
+- This example is intentionally unsecured (`ABAC_ENABLED=false`).
+- The DB schema is initialized by the BaSyx Configuration Service before the DPP API and AAS Environment start.
+- The DPP API and AAS Environment use the same PostgreSQL database, so DPP-created AAS and Submodels are visible through the AAS Environment APIs and UI.
+- The DPP API Service enables audit history internally, and the compose environment enables the same audit/history settings for both DPP API and AAS Environment.
+- Path parameters containing URLs must be URL-escaped twice for the generated router.
