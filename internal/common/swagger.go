@@ -1008,11 +1008,11 @@ func schemasLineIndex(lines []string, start int, end int) int {
 func insertLines(lines []string, index int, value string) string {
 	var builder strings.Builder
 	for _, line := range lines[:index] {
-		builder.WriteString(line)
+		_, _ = builder.WriteString(line)
 	}
-	builder.WriteString(value)
+	_, _ = builder.WriteString(value)
 	for _, line := range lines[index:] {
-		builder.WriteString(line)
+		_, _ = builder.WriteString(line)
 	}
 	return builder.String()
 }
