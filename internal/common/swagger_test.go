@@ -121,6 +121,9 @@ func TestAddSwaggerUIInjectsABACManagementOnlyWhenEnabled(t *testing.T) {
 	if strings.Contains(disabledRecorder.Body.String(), "/security/abac/policy-versions") {
 		t.Fatal("expected ABAC management paths to be hidden when disabled")
 	}
+	if strings.Contains(disabledRecorder.Body.String(), "/security/abac/active-policy") {
+		t.Fatal("expected active ABAC policy paths to be hidden when disabled")
+	}
 
 	enabledRouter := chi.NewRouter()
 	includeABACManagement = true
@@ -136,6 +139,29 @@ func TestAddSwaggerUIInjectsABACManagementOnlyWhenEnabled(t *testing.T) {
 	enabledRouter.ServeHTTP(enabledRecorder, httptest.NewRequest(http.MethodGet, "/api-docs/openapi.yaml", nil))
 	if !strings.Contains(enabledRecorder.Body.String(), "/security/abac/policy-versions") {
 		t.Fatal("expected ABAC management paths to be injected when enabled")
+	}
+	if !strings.Contains(enabledRecorder.Body.String(), "/security/abac/active-policy") {
+		t.Fatal("expected active ABAC policy paths to be injected when enabled")
+	}
+	if !strings.Contains(enabledRecorder.Body.String(), "AccessPermissionRule:") {
+		t.Fatal("expected ABAC rule schema to be injected when enabled")
+	}
+	if !strings.Contains(enabledRecorder.Body.String(), "Import and activate atomically") {
+		t.Fatal("expected ABAC import examples to be injected when enabled")
+	}
+	if !strings.Contains(enabledRecorder.Body.String(), "JSON object merge patch. Null removes fields; this is not RFC 6902.") {
+		t.Fatal("expected ABAC merge-patch semantics to be documented")
+	}
+}
+
+func TestInjectABACManagementAPIAddsSchemasToExistingComponents(t *testing.T) {
+	spec := []byte("openapi: 3.0.3\npaths:\ncomponents:\n  responses:\n    Default:\n      description: default\n")
+	injected := string(injectABACManagementAPI(spec))
+	if !strings.Contains(injected, "components:\n  schemas:\n    ABACPolicyVersion:") {
+		t.Fatalf("expected schemas to be added below existing components, got:\n%s", injected)
+	}
+	if !strings.Contains(injected, "  responses:\n    Default:") {
+		t.Fatalf("expected existing component responses to be preserved, got:\n%s", injected)
 	}
 }
 

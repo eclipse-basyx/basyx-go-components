@@ -248,6 +248,36 @@ func (r *Repository) ImportPolicy(ctx context.Context, raw []byte, sourceRef str
 	return &version, nil
 }
 
+// ImportPolicyAndActivate imports and activates a policy in one transaction.
+//
+// The policy is first stored as a staged version inside the transaction, then
+// validated, evidenced when configured, and activated by the same transaction.
+// If activation fails, the imported staged version is rolled back as well so
+// callers do not receive a partial import for activate=true requests.
+func (r *Repository) ImportPolicyAndActivate(ctx context.Context, raw []byte, sourceRef string) (*PolicyVersion, error) {
+	materialized, err := auth.MaterializeABACPolicy(raw, r.apiRouter, r.basePath)
+	if err != nil {
+		return nil, common.NewErrBadRequest("ABACPOLICY-IMPORTACTIVATE-MATERIALIZE " + err.Error())
+	}
+	actor := actorFromContext(ctx, "ImportPolicyAndActivate", managementBasePath)
+	var activated PolicyVersion
+	var activatedPolicy activePolicy
+	err = common.ExecuteInTransaction(r.db, "ABACPOLICY-IMPORTACTIVATE-BEGINTX", "ABACPOLICY-IMPORTACTIVATE-COMMIT", func(tx *sql.Tx) error {
+		version, createErr := r.createPolicyVersionTx(ctx, tx, materialized, StatusStaged, SourceTypeAPI, sourceRef, actor)
+		if createErr != nil {
+			return createErr
+		}
+		var activateErr error
+		activated, activatedPolicy, activateErr = r.activateVersionTx(ctx, tx, version.VersionID, actor)
+		return activateErr
+	})
+	if err != nil {
+		return nil, err
+	}
+	r.publishActivePolicy(activatedPolicy)
+	return &activated, nil
+}
+
 // ListPolicyVersions returns policy versions for this service scope.
 //
 // Results are ordered newest first and include configured and materialized JSON
@@ -290,12 +320,34 @@ func (r *Repository) GetPolicyVersion(ctx context.Context, versionID int64) (Pol
 	return r.loadPolicyVersion(ctx, r.db, versionID)
 }
 
+// GetActivePolicyVersion loads the active policy version for this service.
+//
+// The lookup reads PostgreSQL rather than the in-memory evaluator cache so
+// operators always inspect the durable active policy state. A missing active
+// version is reported as service unavailable because ABAC-enabled services fail
+// closed without one.
+func (r *Repository) GetActivePolicyVersion(ctx context.Context) (PolicyVersion, error) {
+	return r.loadRequiredActivePolicyVersion(ctx, r.db)
+}
+
 // ListRules loads materialized rules for one policy version in configured order.
 //
 // The stable 1-based rule order is security relevant because it participates in
 // matched_rule_id generation and is preserved by the evaluator.
 func (r *Repository) ListRules(ctx context.Context, versionID int64) ([]PolicyRule, error) {
 	return r.loadPolicyRules(ctx, r.db, versionID)
+}
+
+// ListActiveRules loads materialized rules for the active policy version.
+//
+// Rules are returned in configured order and are suitable for administrative
+// inspection of the currently effective evaluator inputs.
+func (r *Repository) ListActiveRules(ctx context.Context) ([]PolicyRule, error) {
+	version, err := r.loadRequiredActivePolicyVersion(ctx, r.db)
+	if err != nil {
+		return nil, err
+	}
+	return r.loadPolicyRules(ctx, r.db, version.VersionID)
 }
 
 // LookupRuleByPolicyAndMatchedID resolves history audit identifiers to a rule.
@@ -356,12 +408,9 @@ func (r *Repository) resolvePolicyVersionID(ctx context.Context, queryer dbQuery
 }
 
 func (r *Repository) loadActivePolicy(ctx context.Context, queryer dbQueryer) (activePolicy, error) {
-	version, found, err := r.loadActivePolicyVersion(ctx, queryer)
+	version, err := r.loadRequiredActivePolicyVersion(ctx, queryer)
 	if err != nil {
 		return activePolicy{}, err
-	}
-	if !found {
-		return activePolicy{}, common.NewErrServiceUnavailable("ABACPOLICY-ACTIVE-NOTFOUND no active ABAC policy exists")
 	}
 	rules, err := r.loadPolicyRules(ctx, queryer, version.VersionID)
 	if err != nil {
@@ -376,6 +425,17 @@ func (r *Repository) loadActivePolicy(ctx context.Context, queryer dbQueryer) (a
 
 func (r *Repository) accessModelFromPolicyRules(policyID string, rules []PolicyRule) (*auth.AccessModel, error) {
 	return auth.AccessModelFromMaterializedRules(policyID, materializedRulesFromPolicyRules(rules), r.apiRouter, r.basePath)
+}
+
+func (r *Repository) loadRequiredActivePolicyVersion(ctx context.Context, queryer dbQueryer) (PolicyVersion, error) {
+	version, found, err := r.loadActivePolicyVersion(ctx, queryer)
+	if err != nil {
+		return PolicyVersion{}, err
+	}
+	if !found {
+		return PolicyVersion{}, common.NewErrServiceUnavailable("ABACPOLICY-ACTIVE-NOTFOUND no active ABAC policy exists")
+	}
+	return version, nil
 }
 
 func (r *Repository) loadActivePolicyVersion(ctx context.Context, queryer dbQueryer) (PolicyVersion, bool, error) {

@@ -194,6 +194,56 @@ func TestRegisterManagementRoutesAfterMiddlewareDoesNotPanic(t *testing.T) {
 	})
 }
 
+func TestRegisterManagementRoutesServesActivePolicyEndpoints(t *testing.T) {
+	t.Parallel()
+
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("sqlmock setup failed: %v", err)
+	}
+	defer func() {
+		_ = db.Close()
+	}()
+	repo, err := NewRepository(db, "test-service", chi.NewRouter(), "")
+	if err != nil {
+		t.Fatalf("repository setup failed: %v", err)
+	}
+	router := chi.NewRouter()
+	RegisterManagementRoutes(router, repo)
+
+	active := testPolicyVersion(3, StatusActive, testMaterializedPolicy(t))
+	mock.ExpectQuery(`SELECT (.+) FROM "abac_policy_versions"`).
+		WillReturnRows(policyVersionRows(active))
+
+	response := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodGet, "/security/abac/active-policy", nil)
+	router.ServeHTTP(response, request)
+	if response.Code != http.StatusOK {
+		t.Fatalf("expected active policy status 200, got %d body=%s", response.Code, response.Body.String())
+	}
+	if !strings.Contains(response.Body.String(), `"status":"active"`) {
+		t.Fatalf("expected active policy response, got %s", response.Body.String())
+	}
+
+	mock.ExpectQuery(`SELECT (.+) FROM "abac_policy_versions"`).
+		WillReturnRows(policyVersionRows(active))
+	mock.ExpectQuery(`SELECT (.+) FROM "abac_policy_rules"`).
+		WillReturnRows(policyRuleRows())
+
+	response = httptest.NewRecorder()
+	request = httptest.NewRequest(http.MethodGet, "/security/abac/active-policy/rules", nil)
+	router.ServeHTTP(response, request)
+	if response.Code != http.StatusOK {
+		t.Fatalf("expected active rules status 200, got %d body=%s", response.Code, response.Body.String())
+	}
+	if strings.TrimSpace(response.Body.String()) != "[]" {
+		t.Fatalf("expected empty active rules list, got %s", response.Body.String())
+	}
+	if err = mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("unmet SQL expectations: %v", err)
+	}
+}
+
 func TestManagementMutationRoutesAreHistoryExempt(t *testing.T) {
 	cfg := managementAPIEnabledConfig()
 	previous := history.ActiveConfig()
@@ -299,6 +349,52 @@ func TestDuplicateRuleRejectsMalformedOptionalBody(t *testing.T) {
 	}
 }
 
+func TestImportPolicyAndActivateRollsBackImportedVersionOnActivationFailure(t *testing.T) {
+	t.Parallel()
+
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("sqlmock setup failed: %v", err)
+	}
+	defer func() {
+		_ = db.Close()
+	}()
+	router := chi.NewRouter()
+	router.Get("/description", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	})
+	repo, err := NewRepository(db, "test-service", router, "")
+	if err != nil {
+		t.Fatalf("repository setup failed: %v", err)
+	}
+	raw := testPolicyRaw(t)
+	materialized := testMaterializedPolicy(t)
+
+	mock.ExpectBegin()
+	mock.ExpectQuery(`INSERT INTO "abac_policy_versions"`).
+		WillReturnRows(sqlmock.NewRows([]string{"version_id"}).AddRow(11))
+	mock.ExpectExec(`INSERT INTO "abac_policy_rules"`).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectExec(`INSERT INTO "abac_policy_events"`).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectQuery(`SELECT (.+) FROM "abac_policy_versions"`).
+		WillReturnRows(policyVersionRows(testPolicyVersion(11, StatusStaged, materialized)))
+	mock.ExpectQuery(`SELECT (.+) FROM "abac_policy_versions"`).
+		WillReturnRows(policyVersionRows(testPolicyVersion(11, StatusActive, materialized)))
+	mock.ExpectRollback()
+
+	_, err = repo.ImportPolicyAndActivate(t.Context(), raw, "test-import")
+	if !common.IsErrConflict(err) {
+		t.Fatalf("expected activation conflict, got %v", err)
+	}
+	if repo.ActiveAccessModel() != nil {
+		t.Fatal("expected failed atomic import+activate to leave runtime cache unchanged")
+	}
+	if err = mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("unmet SQL expectations: %v", err)
+	}
+}
+
 func TestBuildActivationEvidenceArtifactIncludesActivationMetadata(t *testing.T) {
 	t.Parallel()
 
@@ -367,4 +463,161 @@ func assertNotPanics(t *testing.T, run func()) {
 		}
 	}()
 	run()
+}
+
+func testPolicyRaw(t *testing.T) []byte {
+	t.Helper()
+	return []byte(`{
+		"AllAccessPermissionRules": {
+			"rules": [
+				{
+					"ACL": {
+						"ACCESS": "ALLOW",
+						"RIGHTS": ["READ"],
+						"ATTRIBUTES": [{ "GLOBAL": "ANONYMOUS" }]
+					},
+					"OBJECTS": [{ "ROUTE": "/description" }],
+					"FORMULA": { "$boolean": true }
+				}
+			]
+		}
+	}`)
+}
+
+func testMaterializedPolicy(t *testing.T) auth.MaterializedABACPolicy {
+	t.Helper()
+	router := chi.NewRouter()
+	router.Get("/description", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	})
+	materialized, err := auth.MaterializeABACPolicy(testPolicyRaw(t), router, "")
+	if err != nil {
+		t.Fatalf("materialize test policy failed: %v", err)
+	}
+	return materialized
+}
+
+func testPolicyVersion(versionID int64, status string, materialized auth.MaterializedABACPolicy) PolicyVersion {
+	now := time.Date(2026, 6, 14, 12, 0, 0, 0, time.UTC)
+	return PolicyVersion{
+		VersionID:              versionID,
+		ServiceScope:           "test-service",
+		PolicyID:               materialized.PolicyID,
+		Status:                 status,
+		SourceType:             SourceTypeAPI,
+		SourceRef:              "test-import",
+		ConfiguredPolicyJSON:   json.RawMessage(materialized.ConfiguredPolicyJSON),
+		ConfiguredPolicyHash:   materialized.ConfiguredPolicyHash,
+		RawPolicyHash:          materialized.RawPolicyHash,
+		MaterializedPolicyJSON: json.RawMessage(materialized.MaterializedPolicyJSON),
+		MaterializedPolicyHash: materialized.MaterializedPolicyHash,
+		CreatedAt:              now,
+	}
+}
+
+func policyVersionRows(version PolicyVersion) *sqlmock.Rows {
+	return sqlmock.NewRows(policyVersionColumnNames()).AddRow(
+		version.VersionID,
+		version.ServiceScope,
+		version.PolicyID,
+		version.Status,
+		version.SourceType,
+		nullableRowString(version.SourceRef),
+		[]byte(version.ConfiguredPolicyJSON),
+		version.ConfiguredPolicyHash,
+		nullableRowString(version.RawPolicyHash),
+		[]byte(version.MaterializedPolicyJSON),
+		version.MaterializedPolicyHash,
+		version.CreatedAt,
+		nullableRowString(version.CreatedBySubject),
+		nullableRowString(version.CreatedByIssuer),
+		nullableRowString(version.CreatedByClientID),
+		nullableRowTime(version.UpdatedAt),
+		nullableRowString(version.UpdatedBySubject),
+		nullableRowString(version.UpdatedByIssuer),
+		nullableRowString(version.UpdatedByClientID),
+		nullableRowTime(version.ActivatedAt),
+		nullableRowString(version.ActivatedBySubject),
+		nullableRowString(version.ActivatedByIssuer),
+		nullableRowString(version.ActivatedByClientID),
+		nullableRowTime(version.SupersededAt),
+		nullableJSONRowString(version.ArtifactRef),
+	)
+}
+
+func policyVersionColumnNames() []string {
+	return []string{
+		"version_id",
+		"service_scope",
+		"policy_id",
+		"status",
+		"source_type",
+		"source_ref",
+		"configured_policy_json",
+		"configured_policy_hash",
+		"raw_policy_hash",
+		"materialized_policy_json",
+		"materialized_policy_hash",
+		"created_at",
+		"created_by_subject",
+		"created_by_issuer",
+		"created_by_client_id",
+		"updated_at",
+		"updated_by_subject",
+		"updated_by_issuer",
+		"updated_by_client_id",
+		"activated_at",
+		"activated_by_subject",
+		"activated_by_issuer",
+		"activated_by_client_id",
+		"superseded_at",
+		"artifact_ref",
+	}
+}
+
+func policyRuleRows() *sqlmock.Rows {
+	return sqlmock.NewRows([]string{
+		"rule_id",
+		"version_id",
+		"policy_id",
+		"service_scope",
+		"rule_index",
+		"matched_rule_id",
+		"configured_rule_json",
+		"materialized_rule_json",
+		"acl_json",
+		"attributes_json",
+		"objects_json",
+		"formula_json",
+		"filters_json",
+		"access",
+		"rights",
+		"rule_hash",
+		"materialized_rule_hash",
+		"created_at",
+		"created_by_subject",
+		"created_by_issuer",
+		"created_by_client_id",
+	})
+}
+
+func nullableRowString(value string) any {
+	if strings.TrimSpace(value) == "" {
+		return nil
+	}
+	return value
+}
+
+func nullableJSONRowString(value json.RawMessage) any {
+	if len(value) == 0 {
+		return nil
+	}
+	return string(value)
+}
+
+func nullableRowTime(value *time.Time) any {
+	if value == nil {
+		return nil
+	}
+	return *value
 }

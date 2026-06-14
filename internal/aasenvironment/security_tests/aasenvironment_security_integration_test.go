@@ -153,6 +153,10 @@ func TestABACPolicyManagementRuleLifecycleStories(t *testing.T) {
 	require.NoError(t, err)
 
 	assertStatus(t, http.MethodGet, testBaseURL+"/security/abac/policy-versions", "", editorToken, http.StatusNotFound)
+	assertStatus(t, http.MethodGet, testBaseURL+"/security/abac/active-policy", "", editorToken, http.StatusNotFound)
+	assertStatus(t, http.MethodGet, testBaseURL+"/security/abac/active-policy/rules", "", editorToken, http.StatusNotFound)
+	assertStatus(t, http.MethodGet, testBaseURL+"/security/abac/active-policy", "", adminToken, http.StatusOK)
+	assertStatus(t, http.MethodGet, testBaseURL+"/security/abac/active-policy/rules", "", adminToken, http.StatusOK)
 
 	testSuffix := time.Now().UnixNano()
 

@@ -54,7 +54,10 @@ const (
 	tablePolicyRules    = "abac_policy_rules"
 	tablePolicyEvents   = "abac_policy_events"
 
-	managementBasePath = "/security/abac/policy-versions"
+	managementRootPath        = "/security/abac"
+	managementBasePath        = managementRootPath + "/policy-versions"
+	managementActivePath      = managementRootPath + "/active-policy"
+	managementActiveRulesPath = managementActivePath + "/rules"
 )
 
 // PolicyVersion describes one durable ABAC policy version.

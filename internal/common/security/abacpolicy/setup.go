@@ -218,10 +218,12 @@ func importStartupFile(ctx context.Context, repo *Repository, modelPath string, 
 
 // RegisterManagementRoutes mounts the ABAC policy management API.
 //
-// Routes are mounted below /security/abac/policy-versions. Callers are
+// Routes are mounted below /security/abac. Callers are
 // responsible for installing OIDC/ABAC middleware before this function is called
 // so the active policy protects the management API itself.
 func RegisterManagementRoutes(r chi.Router, repo *Repository) {
+	r.Get(managementActivePath, activePolicyHandler(repo))
+	r.Get(managementActiveRulesPath, activePolicyRulesHandler(repo))
 	r.Route(managementBasePath, func(policyRouter chi.Router) {
 		for _, route := range managementRoutes {
 			policyRouter.Method(route.method, route.pattern, route.handler(repo))
@@ -252,6 +254,20 @@ func listVersionsHandler(repo *Repository) http.HandlerFunc {
 	}
 }
 
+func activePolicyHandler(repo *Repository) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		version, err := repo.GetActivePolicyVersion(r.Context())
+		writeResult(w, version, err, http.StatusOK)
+	}
+}
+
+func activePolicyRulesHandler(repo *Repository) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		rules, err := repo.ListActiveRules(r.Context())
+		writeResult(w, rules, err, http.StatusOK)
+	}
+}
+
 func importPolicyHandler(repo *Repository) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var request PolicyImportRequest
@@ -263,9 +279,12 @@ func importPolicyHandler(repo *Repository) http.HandlerFunc {
 			writeError(w, common.NewErrBadRequest("ABACPOLICY-API-IMPORT-POLICY policy is required"))
 			return
 		}
-		version, err := repo.ImportPolicy(r.Context(), request.Policy, request.SourceRef)
-		if err == nil && request.Activate {
-			version, err = repo.ActivatePolicy(r.Context(), version.VersionID)
+		var version *PolicyVersion
+		var err error
+		if request.Activate {
+			version, err = repo.ImportPolicyAndActivate(r.Context(), request.Policy, request.SourceRef)
+		} else {
+			version, err = repo.ImportPolicy(r.Context(), request.Policy, request.SourceRef)
 		}
 		writeResult(w, version, err, http.StatusCreated)
 	}

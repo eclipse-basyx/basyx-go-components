@@ -128,7 +128,7 @@ sequenceDiagram
   - Example trustlist: [cmd/aasregistryservice/config/trustlist.json](cmd/aasregistryservice/config/trustlist.json)
 - Access rules are imported from the configured access model JSON into the PostgreSQL-backed ABAC policy repository when `abac.policyFileImport` requires it. Runtime authorization uses the active materialized DB policy.
   - Example rules: [cmd/aasregistryservice/config/access_rules/access-rules.json](cmd/aasregistryservice/config/access_rules/access-rules.json)
-- The protected ABAC management API is available only when `abac.enabled` and `abac.managementApi.enabled` are both true. Digital Twin Registry deliberately never exposes this API. The OpenAPI/Swagger documentation follows the same condition.
+- The protected ABAC management API under `/security/abac/**` is available only when `abac.enabled` and `abac.managementApi.enabled` are both true. Digital Twin Registry deliberately never exposes this API. The OpenAPI/Swagger documentation follows the same condition.
 
 ## OIDC authentication
 

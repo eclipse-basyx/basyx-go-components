@@ -50,12 +50,13 @@ The importer validates the configured JSON, canonicalizes it, materializes refer
 
 ## Management API
 
-The management API is mounted under `/security/abac/policy-versions` only when both `abac.enabled` and `abac.managementApi.enabled` are true. Swagger/OpenAPI exposes these endpoints under the same condition.
+The management API is mounted under `/security/abac/**` only when both `abac.enabled` and `abac.managementApi.enabled` are true. Swagger/OpenAPI exposes these endpoints under the same condition.
 
 Digital Twin Registry is the exception: it never exposes the management API. Its access-rule file remains the service source of truth and is imported on every restart by default.
 
 The API supports:
 
+- direct inspection of the active policy version and active materialized rules
 - import, list, inspect, validate, activate, and reject policy versions
 - clone active policy versions to staged versions
 - create, replace, merge-patch, delete, duplicate, move, and enable/disable staged rules
@@ -100,6 +101,24 @@ export TOKEN=replace-with-admin-token
 ```
 
 ### List Versions
+
+Use the active policy endpoint when you only need the currently effective policy:
+
+```bash
+curl -sS \
+  -H "Authorization: Bearer ${TOKEN}" \
+  "${BASE_URL}/security/abac/active-policy"
+```
+
+To inspect the exact active rule rows used by the evaluator:
+
+```bash
+curl -sS \
+  -H "Authorization: Bearer ${TOKEN}" \
+  "${BASE_URL}/security/abac/active-policy/rules"
+```
+
+List all versions when you need staged, superseded, or rejected versions too:
 
 ```bash
 curl -sS \
@@ -164,6 +183,36 @@ export DRAFT_VERSION_ID=replace-with-created-version-id
 ```
 
 The sample policy above is intentionally small. Do not activate a reduced sample policy for a real service unless it includes every route that should remain accessible.
+
+To import and activate in one all-or-nothing operation, set `activate` to `true`. If validation, WORM evidence writing, superseding, or activation fails, the imported staged version is rolled back as part of the same transaction.
+
+```bash
+curl -sS -X POST \
+  -H "Authorization: Bearer ${TOKEN}" \
+  -H "Content-Type: application/json" \
+  "${BASE_URL}/security/abac/policy-versions" \
+  -d @- <<'JSON'
+{
+  "source_ref": "change-ticket:SEC-1043",
+  "activate": true,
+  "policy": {
+    "AllAccessPermissionRules": {
+      "rules": [
+        {
+          "ACL": {
+            "ACCESS": "ALLOW",
+            "RIGHTS": [ "READ" ],
+            "ATTRIBUTES": [ { "GLOBAL": "ANONYMOUS" } ]
+          },
+          "OBJECTS": [ { "ROUTE": "/description" } ],
+          "FORMULA": { "$boolean": true }
+        }
+      ]
+    }
+  }
+}
+JSON
+```
 
 ### Validate And Activate A Staged Version
 
