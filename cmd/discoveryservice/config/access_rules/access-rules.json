@@ -8,7 +8,8 @@
 
     "DEFOBJECTS": [
       { "name": "description", "objects": [ { "ROUTE": "/description" }, { "ROUTE": "/api/v3/description" } ] },
-      { "name": "all_assetlinks", "objects": [ { "ROUTE": "/lookup/shells" }, { "ROUTE": "/lookup/shells/*" }] }
+      { "name": "all_assetlinks", "objects": [ { "ROUTE": "/lookup/shells" }, { "ROUTE": "/lookup/shells/*" }] },
+      { "name": "abac_policy_management", "objects": [ { "ROUTE": "/security/abac" }, { "ROUTE": "/security/abac/*" } ] }
     ],
 
     "DEFACLS": [
@@ -20,18 +21,20 @@
 
     "DEFFORMULAS": [
       { "name": "always_true", "formula": { "$boolean": true } },
-      { "name": "role_is_admin", "formula": 
+      { "name": "role_is_admin", "formula":
       { "$and": [
         { "$eq": [ { "$attribute": { "CLAIM": "role" } }, { "$strVal": "admin" } ] },
         { "$eq": [ { "$field": "$bd#specificAssetIds[].externalSubjectId.keys[].value" }, { "$strVal": "PUBLIC_READABLEs" } ] }
       ]}
+    },
+      { "name": "role_is_admin_claim", "formula": { "$eq": [ { "$attribute": { "CLAIM": "role" } }, { "$strVal": "admin" } ] }
     }
     ],
 
     "rules": [
       { "USEACL": "read_anonymous", "USEOBJECTS": ["description"], "USEFORMULA": "always_true" },
       { "USEACL": "write_admin", "USEOBJECTS": ["all_assetlinks"], "USEFORMULA": "role_is_admin" },
-      { "USEACL": "read_role", "USEOBJECTS": ["all_assetlinks"], "FORMULA": 
+      { "USEACL": "read_role", "USEOBJECTS": ["all_assetlinks"], "FORMULA":
 
             {"$eq": [ { "$attribute": { "CLAIM": "role" } }, { "$strVal": "viewer" } ] },
 
@@ -42,7 +45,8 @@
             "$boolean": false
           }
         }
-      }
+      },
+      { "USEACL": "write_admin", "USEOBJECTS": ["abac_policy_management"], "USEFORMULA": "role_is_admin_claim" }
     ]
   }
 }

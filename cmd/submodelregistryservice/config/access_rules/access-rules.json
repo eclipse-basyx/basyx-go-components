@@ -19,6 +19,13 @@
       {
         "name": "allSubmodelDescriptorsObject",
         "objects": [ { "DESCRIPTOR": "$smdesc(\"*\")" } ]
+      },
+      {
+        "name": "abac_policy_management",
+        "objects": [
+          { "ROUTE": "/security/abac" },
+          { "ROUTE": "/security/abac/*" }
+        ]
       }
     ],
 
@@ -204,7 +211,7 @@
     "rules": [
       { "USEACL": "disabled_god", "USEOBJECTS": ["god"], "USEFORMULA": "always_true" },
       { "USEACL": "read_only_public", "USEOBJECTS": ["health"], "USEFORMULA": "always_true" },
-      { "USEACL": "admin", "USEOBJECTS": ["allSubmodelDescriptorsObject"], "USEFORMULA": "isAdmin" },
+      { "USEACL": "admin", "USEOBJECTS": ["allSubmodelDescriptorsObject", "abac_policy_management"], "USEFORMULA": "isAdmin" },
       { "USEACL": "read_only_public", "USEOBJECTS": ["allSubmodelDescriptors"], "USEFORMULA": "is_public_readable_sm" },
       { "USEACL": "read_role", "USEOBJECTS": ["allSubmodelDescriptors"], "USEFORMULA": "isRole=viewer&customerHref_sm" },
       { "USEACL": "read_member", "USEOBJECTS": ["allSubmodelDescriptors"], "USEFORMULA": "isMember&manufacturerHref_sm" },

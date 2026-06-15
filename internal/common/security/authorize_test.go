@@ -118,6 +118,102 @@ func TestABACMiddleware_KnownMappedRouteWithoutMatchingRuleReturnsForbidden(t *t
 	}
 }
 
+func TestABACMiddleware_DeniedSensitivePrefixReturnsNotFound(t *testing.T) {
+	router := api.NewRouter()
+	model := &AccessModel{
+		apiRouter: router,
+		basePath:  "",
+	}
+
+	router.Use(ABACMiddleware(ABACSettings{
+		Enabled:                true,
+		Model:                  model,
+		DenyAsNotFoundPrefixes: []string{"/security/abac"},
+	}))
+	router.Get("/security/abac/policy-versions", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/security/abac/policy-versions", nil)
+	ctx := context.WithValue(req.Context(), ClaimsKey, Claims{"sub": "tester", "scope": ""})
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("expected status %d, got %d", http.StatusNotFound, rec.Code)
+	}
+}
+
+func TestABACMiddleware_DeniedSensitivePrefixDoesNotHideOtherRoutes(t *testing.T) {
+	router := api.NewRouter()
+	model := &AccessModel{
+		apiRouter: router,
+		basePath:  "",
+	}
+
+	router.Use(ABACMiddleware(ABACSettings{
+		Enabled:                true,
+		Model:                  model,
+		DenyAsNotFoundPrefixes: []string{"/security/abac"},
+	}))
+	router.Get("/description", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/description", nil)
+	ctx := context.WithValue(req.Context(), ClaimsKey, Claims{"sub": "tester", "scope": ""})
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("expected status %d, got %d", http.StatusForbidden, rec.Code)
+	}
+}
+
+func TestPathMatchesPrefixUsesPathBoundaries(t *testing.T) {
+	t.Parallel()
+
+	if !pathMatchesPrefix("/security/abac/policy-versions", "/security/abac") {
+		t.Fatal("expected nested management path to match")
+	}
+	if !pathMatchesPrefix("/api/v3/security/abac/policy-versions", "/api/v3/security/abac") {
+		t.Fatal("expected context-path management path to match")
+	}
+	if pathMatchesPrefix("/security/abacus", "/security/abac") {
+		t.Fatal("expected similar prefix without path boundary not to match")
+	}
+}
+
+func TestABACMiddleware_ModelProviderNilFailsClosed(t *testing.T) {
+	handler := ABACMiddleware(ABACSettings{
+		Enabled:       true,
+		ModelProvider: emptyModelProvider{},
+	})(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	req := httptest.NewRequest(http.MethodGet, "/description", nil)
+	ctx := context.WithValue(req.Context(), ClaimsKey, Claims{"sub": "tester"})
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("expected fail-closed status %d, got %d", http.StatusForbidden, rec.Code)
+	}
+}
+
+type emptyModelProvider struct{}
+
+func (emptyModelProvider) ActiveAccessModel() *AccessModel {
+	return nil
+}
+
 func TestHasUnrestrictedFormulaForRight_ReturnsTrueForBooleanTrue(t *testing.T) {
 	t.Parallel()
 

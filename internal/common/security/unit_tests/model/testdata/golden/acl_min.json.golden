@@ -2,8 +2,7 @@
   "ACCESS": "ALLOW",
   "ATTRIBUTES": [
     {
-      "Kind": "GLOBAL",
-      "Value": "ANONYMOUS"
+      "GLOBAL": "ANONYMOUS"
     }
   ],
   "RIGHTS": [

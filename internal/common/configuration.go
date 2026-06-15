@@ -67,6 +67,8 @@ var DefaultConfig = struct {
 	OIDCJWKSURL                         string
 	ABACEnabled                         bool
 	ABACModelPath                       string
+	ABACPolicyFileImport                string
+	ABACManagementAPIEnabled            bool
 	GeneralImplicitCasts                bool
 	GeneralDescriptorDebug              bool
 	GeneralDiscoveryIntegration         bool
@@ -120,6 +122,8 @@ var DefaultConfig = struct {
 	OIDCJWKSURL:                         "",
 	ABACEnabled:                         false,
 	ABACModelPath:                       "config/access_rules/access-rules.json",
+	ABACPolicyFileImport:                "",
+	ABACManagementAPIEnabled:            false,
 	GeneralImplicitCasts:                true,
 	GeneralDescriptorDebug:              false,
 	GeneralDiscoveryIntegration:         false,
@@ -155,6 +159,15 @@ var DefaultConfig = struct {
 	EventingOutboxEnabled:               false,
 	EventingTopicPrefix:                 "basyx",
 }
+
+const (
+	// ABACPolicyFileImportAlways imports abac.modelPath on every service start.
+	ABACPolicyFileImportAlways = "always"
+	// ABACPolicyFileImportIfMissing imports abac.modelPath only when no active DB policy exists.
+	ABACPolicyFileImportIfMissing = "if_missing"
+	// ABACPolicyFileImportNever disables startup file import and requires an active DB policy.
+	ABACPolicyFileImportNever = "never"
+)
 
 // PrintSplash displays the BaSyx Go API ASCII art logo to the console.
 // This function is typically called during application startup to provide
@@ -352,8 +365,15 @@ type OIDCConfig struct {
 
 // ABACConfig contains Attribute-Based Access Control authorization settings.
 type ABACConfig struct {
-	Enabled   bool   `mapstructure:"enabled" json:"enabled"`     // Enable/disable ABAC
-	ModelPath string `mapstructure:"modelPath" json:"modelPath"` // Path to access control model
+	Enabled          bool                    `mapstructure:"enabled" yaml:"enabled" json:"enabled"`                             // Enable/disable ABAC
+	ModelPath        string                  `mapstructure:"modelPath" yaml:"modelPath" json:"modelPath"`                       // Path to access control model
+	PolicyFileImport string                  `mapstructure:"policyFileImport" yaml:"policyFileImport" json:"policyFileImport"`  // always|if_missing|never; empty uses the service default
+	ManagementAPI    ABACManagementAPIConfig `mapstructure:"managementApi" yaml:"managementApi" json:"managementApi,omitempty"` // Runtime ABAC policy management API
+}
+
+// ABACManagementAPIConfig controls the protected runtime ABAC management API.
+type ABACManagementAPIConfig struct {
+	Enabled bool `mapstructure:"enabled" yaml:"enabled" json:"enabled"`
 }
 
 type ConfigMode int
@@ -425,6 +445,10 @@ func LoadConfig(configPath string, configMode ConfigMode) (*Config, error) {
 	}
 	cfg.Server.StrictVerification = string(verificationMode)
 	applyAASPreconfigPathOverrides(cfg)
+	applyABACEnvOverrides(cfg)
+	if err = validateABACConfig(cfg); err != nil {
+		return nil, err
+	}
 	applyHistoryEnvOverrides(cfg)
 	applyEventingEnvOverrides(cfg)
 	if err = validateHistoryAndEventingConfig(cfg); err != nil {
@@ -435,6 +459,36 @@ func LoadConfig(configPath string, configMode ConfigMode) (*Config, error) {
 		PrintConfiguration(cfg)
 	}
 	return cfg, nil
+}
+
+func applyABACEnvOverrides(cfg *Config) {
+	if cfg == nil {
+		return
+	}
+	if value, ok := lookupFirstTrimmedEnv("ABAC_POLICY_FILE_IMPORT", "BASYX_ABAC_POLICY_FILE_IMPORT"); ok {
+		cfg.ABAC.PolicyFileImport = value
+	}
+	applyFirstBoolEnv(func(value bool) { cfg.ABAC.ManagementAPI.Enabled = value },
+		"ABAC_MANAGEMENT_API_ENABLED",
+		"ABAC_MANAGEMENTAPI_ENABLED",
+		"BASYX_ABAC_MANAGEMENT_API_ENABLED",
+	)
+}
+
+func validateABACConfig(cfg *Config) error {
+	if cfg == nil {
+		return fmt.Errorf("CONFIG-ABAC-NIL configuration must not be nil")
+	}
+	if strings.TrimSpace(cfg.ABAC.PolicyFileImport) == "" {
+		return nil
+	}
+	switch strings.ToLower(strings.TrimSpace(cfg.ABAC.PolicyFileImport)) {
+	case ABACPolicyFileImportAlways, ABACPolicyFileImportIfMissing, ABACPolicyFileImportNever:
+		cfg.ABAC.PolicyFileImport = strings.ToLower(strings.TrimSpace(cfg.ABAC.PolicyFileImport))
+		return nil
+	default:
+		return fmt.Errorf("CONFIG-ABAC-POLICYFILEIMPORT unsupported abac.policyFileImport %q", cfg.ABAC.PolicyFileImport)
+	}
 }
 
 func applyHistoryEnvOverrides(cfg *Config) {
@@ -661,8 +715,25 @@ func lookupTrimmedEnv(key string) (string, bool) {
 	return strings.TrimSpace(value), true
 }
 
+func lookupFirstTrimmedEnv(keys ...string) (string, bool) {
+	for _, key := range keys {
+		if value, ok := lookupTrimmedEnv(key); ok {
+			return value, true
+		}
+	}
+	return "", false
+}
+
 func applyBoolEnv(key string, assign func(bool)) {
 	value, ok := lookupTrimmedEnv(key)
+	if !ok {
+		return
+	}
+	assign(strings.EqualFold(value, "true"))
+}
+
+func applyFirstBoolEnv(assign func(bool), keys ...string) {
+	value, ok := lookupFirstTrimmedEnv(keys...)
 	if !ok {
 		return
 	}
@@ -776,6 +847,8 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("abac.enabled", false)
 	v.SetDefault("abac.enableDebugErrorResponses", false)
 	v.SetDefault("abac.modelPath", "config/access_rules/access-rules.json")
+	v.SetDefault("abac.policyFileImport", DefaultConfig.ABACPolicyFileImport)
+	v.SetDefault("abac.managementApi.enabled", DefaultConfig.ABACManagementAPIEnabled)
 
 	// JWS defaults
 	v.SetDefault("jws.privateKeyPath", "")
@@ -907,6 +980,8 @@ func PrintConfiguration(cfg *Config) {
 	add("Enabled", cfg.ABAC.Enabled, DefaultConfig.ABACEnabled)
 	if cfg.ABAC.Enabled {
 		add("Model Path", cfg.ABAC.ModelPath, DefaultConfig.ABACModelPath)
+		add("Policy File Import", cfg.ABAC.PolicyFileImport, DefaultConfig.ABACPolicyFileImport)
+		add("Management API Enabled", cfg.ABAC.ManagementAPI.Enabled, DefaultConfig.ABACManagementAPIEnabled)
 
 		lines = append(lines, "🔹 OIDC:")
 		add("Trustlist Path", cfg.OIDC.TrustlistPath, DefaultConfig.OIDCTrustlistPath)

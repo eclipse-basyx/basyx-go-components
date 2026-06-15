@@ -169,13 +169,14 @@ func TestAuditContextMiddlewarePopulatesExtendedAuthorizationFields(t *testing.T
 	})
 	ctx = auth.ContextWithAuthorizationDecision(ctx, auth.AuthorizationDecision{
 		Result:        string(auth.DecisionAllow),
+		PolicyID:      "db-policy-id",
 		MatchedRuleID: "rule:1:abcdef0123456789,rule:3:0123456789abcdef",
 	})
 
 	handler.ServeHTTP(httptest.NewRecorder(), request.WithContext(ctx))
 
 	require.Equal(t, string(auth.DecisionAllow), captured.AuthorizationResult)
-	require.NotEmpty(t, captured.PolicyID)
+	require.Equal(t, "db-policy-id", captured.PolicyID)
 	require.Equal(t, "rule:1:abcdef0123456789,rule:3:0123456789abcdef", captured.MatchedRuleID)
 }
 

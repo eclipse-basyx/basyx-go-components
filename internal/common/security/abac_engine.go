@@ -44,6 +44,7 @@ type AccessModel struct {
 	apiRouter *api.Mux
 	rules     []materializedRule
 	basePath  string
+	policyID  string
 }
 
 type materializedRule struct {
@@ -53,6 +54,28 @@ type materializedRule struct {
 	objs       []grammar.ObjectItem
 	lexpr      *grammar.LogicalExpression
 	filterList []grammar.AccessPermissionRuleFILTER
+}
+
+// PolicyID returns the deterministic identifier of the policy version used to
+// compile this access model. File-only compatibility models may return an empty
+// value.
+func (m *AccessModel) PolicyID() string {
+	if m == nil {
+		return ""
+	}
+	return m.policyID
+}
+
+// WithPolicyID stores the durable policy identifier on a compiled access model.
+//
+// The method returns the receiver so callers can chain it while building
+// repository-backed models.
+func (m *AccessModel) WithPolicyID(policyID string) *AccessModel {
+	if m == nil {
+		return nil
+	}
+	m.policyID = policyID
+	return m
 }
 
 // ParseAccessModel parses a JSON (or YAML converted to JSON) payload that
@@ -138,6 +161,9 @@ type AuthorizationEvaluation struct {
 
 	// QueryFilter contains optional backend filter constraints for allowed requests.
 	QueryFilter *QueryFilter
+
+	// PolicyID identifies the active policy version that produced the decision.
+	PolicyID string
 
 	// MatchedRuleID contains deterministic IDs for matched allow rules.
 	//
@@ -395,6 +421,7 @@ func (m *AccessModel) AuthorizeWithFilterWithOptions(in EvalInput, opts grammar.
 		Allowed:       true,
 		Reason:        DecisionAllow,
 		QueryFilter:   qf,
+		PolicyID:      m.policyID,
 		MatchedRuleID: strings.Join(matchedRuleIDs, ","),
 	}
 }

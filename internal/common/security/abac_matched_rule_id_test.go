@@ -82,7 +82,7 @@ func TestDeterministicMatchedRuleIDHashChangesWhenRuleContentChanges(t *testing.
 func TestAuthorizeWithFilterWithOptionsReturnsOrderedMatchedRuleIDs(t *testing.T) {
 	t.Parallel()
 
-	model := mustParseAASRegistryAccessModel(t, matchedRuleModelJSON)
+	model := mustParseAASRegistryAccessModel(t, matchedRuleModelJSON).WithPolicyID("policy-db")
 
 	result := model.AuthorizeWithFilterWithOptions(EvalInput{
 		Method: http.MethodGet,
@@ -97,12 +97,15 @@ func TestAuthorizeWithFilterWithOptionsReturnsOrderedMatchedRuleIDs(t *testing.T
 	if result.MatchedRuleID != expected {
 		t.Fatalf("expected matched rule ids %q, got %q", expected, result.MatchedRuleID)
 	}
+	if result.PolicyID != "policy-db" {
+		t.Fatalf("expected policy id %q, got %q", "policy-db", result.PolicyID)
+	}
 }
 
 func TestABACMiddlewareStoresMatchedRuleIDOnAllowDecision(t *testing.T) {
 	t.Parallel()
 
-	model := mustParseAASRegistryAccessModel(t, matchedRuleModelJSON)
+	model := mustParseAASRegistryAccessModel(t, matchedRuleModelJSON).WithPolicyID("policy-db")
 	var captured AuthorizationDecision
 	handler := ABACMiddleware(ABACSettings{
 		Enabled: true,
@@ -125,6 +128,67 @@ func TestABACMiddlewareStoresMatchedRuleIDOnAllowDecision(t *testing.T) {
 	}
 	if captured.MatchedRuleID != expected {
 		t.Fatalf("expected matched rule ids %q, got %q", expected, captured.MatchedRuleID)
+	}
+	if captured.PolicyID != "policy-db" {
+		t.Fatalf("expected policy id %q, got %q", "policy-db", captured.PolicyID)
+	}
+}
+
+func TestMaterializeABACPolicyBuildsCanonicalRowsAndReloadableModel(t *testing.T) {
+	t.Parallel()
+
+	router := aasRegistryRouter()
+	materialized, err := MaterializeABACPolicy([]byte(matchedRuleModelJSON), router, "")
+	if err != nil {
+		t.Fatalf("materialize policy failed: %v", err)
+	}
+
+	if len(materialized.PolicyID) != 64 || materialized.PolicyID != materialized.ConfiguredPolicyHash {
+		t.Fatalf("unexpected policy id/hash: %q %q", materialized.PolicyID, materialized.ConfiguredPolicyHash)
+	}
+	if len(materialized.RawPolicyHash) != 64 {
+		t.Fatalf("expected raw file hash alias, got %q", materialized.RawPolicyHash)
+	}
+	if len(materialized.Rules) != 2 {
+		t.Fatalf("expected two materialized rules, got %d", len(materialized.Rules))
+	}
+	if !regexp.MustCompile(`^rule:1:[a-f0-9]{16}$`).MatchString(materialized.Rules[0].MatchedRuleID) {
+		t.Fatalf("unexpected matched rule id: %q", materialized.Rules[0].MatchedRuleID)
+	}
+
+	reloaded, err := AccessModelFromMaterializedRules(materialized.PolicyID, materialized.Rules, router, "")
+	if err != nil {
+		t.Fatalf("reload model failed: %v", err)
+	}
+	result := reloaded.AuthorizeWithFilterWithOptions(EvalInput{
+		Method: http.MethodGet,
+		Path:   "/shell-descriptors",
+		Claims: Claims{"sub": "anonymous"},
+	}, grammar.DefaultSimplifyOptions())
+
+	if !result.Allowed {
+		t.Fatalf("expected reloaded model to allow request, got %s", result.Reason)
+	}
+	if result.PolicyID != materialized.PolicyID {
+		t.Fatalf("expected policy id %q, got %q", materialized.PolicyID, result.PolicyID)
+	}
+}
+
+func TestMaterializedPolicyHashChangesWhenReferencedDefinitionChanges(t *testing.T) {
+	t.Parallel()
+
+	first, err := MaterializeABACPolicy([]byte(matchedRuleModelJSON), aasRegistryRouter(), "")
+	if err != nil {
+		t.Fatalf("materialize first policy failed: %v", err)
+	}
+	changed := strings.Replace(matchedRuleModelJSON, `{ "$boolean": true }`, `{ "$boolean": false }`, 1)
+	second, err := MaterializeABACPolicy([]byte(changed), aasRegistryRouter(), "")
+	if err != nil {
+		t.Fatalf("materialize changed policy failed: %v", err)
+	}
+
+	if first.MaterializedPolicyHash == second.MaterializedPolicyHash {
+		t.Fatalf("expected materialized policy hash to change")
 	}
 }
 
@@ -149,17 +213,21 @@ func ruleIDHashPart(id string) string {
 func mustParseAASRegistryAccessModel(t *testing.T, modelJSON string) *AccessModel {
 	t.Helper()
 
-	router := chi.NewRouter()
-	ctrl := apis.NewAssetAdministrationShellRegistryAPIAPIController(nil, "/*")
-	for _, rt := range ctrl.Routes() {
-		router.Method(rt.Method, rt.Pattern, rt.HandlerFunc)
-	}
-
+	router := aasRegistryRouter()
 	model, err := ParseAccessModel([]byte(modelJSON), router, "")
 	if err != nil {
 		t.Fatalf("parse model failed: %v", err)
 	}
 	return model
+}
+
+func aasRegistryRouter() *chi.Mux {
+	router := chi.NewRouter()
+	ctrl := apis.NewAssetAdministrationShellRegistryAPIAPIController(nil, "/*")
+	for _, rt := range ctrl.Routes() {
+		router.Method(rt.Method, rt.Pattern, rt.HandlerFunc)
+	}
+	return router
 }
 
 const matchedRuleModelJSON = `{

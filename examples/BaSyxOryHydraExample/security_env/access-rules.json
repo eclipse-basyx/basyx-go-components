@@ -42,7 +42,11 @@
       },
       {
         "name": "admin_api",
-        "objects": [{ "ROUTE": "/upload" }]
+        "objects": [
+          { "ROUTE": "/upload" },
+          { "ROUTE": "/security/abac" },
+          { "ROUTE": "/security/abac/*" }
+        ]
       }
     ],
     "DEFACLS": [

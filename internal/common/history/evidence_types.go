@@ -41,6 +41,7 @@ const (
 	EvidenceArtifactManifest     = "manifest"
 	EvidenceArtifactSnapshot     = "snapshot"
 	EvidenceArtifactHistoryEvent = "history_event"
+	EvidenceArtifactABACPolicy   = "abac_policy_version"
 
 	SignatureStateUnsigned = "unsigned"
 	SignatureStateSigned   = "signed"

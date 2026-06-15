@@ -34,11 +34,12 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"time"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/asyncbulk"
 	commonmodel "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
-	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/security/abacpolicy"
 	smregistryapi "github.com/eclipse-basyx/basyx-go-components/internal/smregistry/api"
 	smregistrypostgresql "github.com/eclipse-basyx/basyx-go-components/internal/smregistry/persistence"
 	smregistryopenapi "github.com/eclipse-basyx/basyx-go-components/pkg/smregistry"
@@ -86,17 +87,23 @@ func runServer(ctx context.Context, configPath string) error {
 	log.Printf("🗄️  Connecting to Postgres with DSN: postgres://%s:****@%s:%d/%s?sslmode=disable",
 		cfg.Postgres.User, cfg.Postgres.Host, cfg.Postgres.Port, cfg.Postgres.DBName)
 
-	smDatabase, err := smregistrypostgresql.NewPostgreSQLSMBackend(
-		dsn,
-		//nolint:gosec // configured value is bounded by deployment configuration
-		int32(cfg.Postgres.MaxOpenConnections),
-		cfg.Postgres.MaxIdleConnections,
-		cfg.Postgres.ConnMaxLifetimeMinutes,
-		cfg.Server.CacheEnabled,
-	)
-
+	sharedDB, err := common.NewDatabaseConnection(dsn)
 	if err != nil {
 		log.Printf("❌ DB connect failed: %v", err)
+		return err
+	}
+	if cfg.Postgres.MaxOpenConnections > 0 {
+		sharedDB.SetMaxOpenConns(cfg.Postgres.MaxOpenConnections)
+	}
+	if cfg.Postgres.MaxIdleConnections > 0 {
+		sharedDB.SetMaxIdleConns(cfg.Postgres.MaxIdleConnections)
+	}
+	if cfg.Postgres.ConnMaxLifetimeMinutes > 0 {
+		sharedDB.SetConnMaxLifetime(time.Duration(cfg.Postgres.ConnMaxLifetimeMinutes) * time.Minute)
+	}
+	smDatabase, err := smregistrypostgresql.NewPostgreSQLSMBackendFromDB(sharedDB)
+	if err != nil {
+		log.Printf("❌ DB init failed: %v", err)
 		return err
 	}
 	log.Println("✅ Postgres connection established")
@@ -117,9 +124,11 @@ func runServer(ctx context.Context, configPath string) error {
 	common.ConfigureAPIRouter(apiRouter, "SubmodelRegistryService")
 
 	// Apply OIDC + ABAC once for all registry endpoints
-	if err := auth.SetupSecurity(ctx, cfg, apiRouter); err != nil {
+	abacRepo, err := abacpolicy.SetupSecurityWithABACRepository(ctx, cfg, apiRouter, sharedDB, "submodelregistryservice")
+	if err != nil {
 		return err
 	}
+	abacpolicy.RegisterManagementRoutesIfEnabled(cfg, apiRouter, abacRepo, "submodelregistryservice")
 
 	// Register all registry routes (protected)
 	for _, rt := range smCtrl.Routes() {

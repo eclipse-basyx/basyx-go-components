@@ -34,6 +34,7 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+	"strconv"
 	"strings"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
@@ -274,6 +275,39 @@ func (o *ObjectItem) UnmarshalJSON(value []byte) error {
 	return errors.New("ObjectItem: unreachable")
 }
 
+// MarshalJSON writes ObjectItem in the compact access-rule grammar form.
+func (o ObjectItem) MarshalJSON() ([]byte, error) {
+	switch o.Kind {
+	case Route:
+		if o.Route == nil {
+			return nil, errors.New("ObjectItem: ROUTE value is nil")
+		}
+		return json.Marshal(map[string]string{string(Route): o.Route.Route})
+	case Identifiable:
+		if o.Identifiable == nil {
+			return nil, errors.New("ObjectItem: IDENTIFIABLE value is nil")
+		}
+		return json.Marshal(map[string]string{string(Identifiable): identifierObjectString(o.Identifiable.Scope, o.Identifiable.ID)})
+	case Referable:
+		if o.Referable == nil {
+			return nil, errors.New("ObjectItem: REFERABLE value is nil")
+		}
+		return json.Marshal(map[string]string{string(Referable): referableObjectString(*o.Referable)})
+	case Fragment:
+		if o.Fragment == nil {
+			return nil, errors.New("ObjectItem: FRAGMENT value is nil")
+		}
+		return json.Marshal(map[string]string{string(Fragment): fragmentObjectString(*o.Fragment)})
+	case Descriptor:
+		if o.Descriptor == nil {
+			return nil, errors.New("ObjectItem: DESCRIPTOR value is nil")
+		}
+		return json.Marshal(map[string]string{string(Descriptor): identifierObjectString(o.Descriptor.Scope, o.Descriptor.ID)})
+	default:
+		return nil, fmt.Errorf("ObjectItem: invalid kind %q", o.Kind)
+	}
+}
+
 // --- helpers ---
 
 func isAllowedKind(k OBJECTTYPE) bool {
@@ -287,6 +321,29 @@ func isAllowedKind(k OBJECTTYPE) bool {
 
 func wrap(kind OBJECTTYPE, err error) error {
 	return fmt.Errorf("%s: %w", kind, err)
+}
+
+func identifierObjectString(scope string, id Identifier) string {
+	return fmt.Sprintf("%s(%s)", scope, strconv.Quote(identifierText(id)))
+}
+
+func referableObjectString(value ReferableValue) string {
+	return fmt.Sprintf("%s.%s", identifierObjectString(value.Scope, value.ID), value.IDShortPath)
+}
+
+func fragmentObjectString(value FragmentValue) string {
+	out := fmt.Sprintf("%s.%s", identifierObjectString(value.Scope, value.ID), value.iDShortPath)
+	for _, fragment := range value.Fragments {
+		out += " " + strconv.Quote(fragment)
+	}
+	return out
+}
+
+func identifierText(id Identifier) string {
+	if id.IsAll {
+		return "*"
+	}
+	return id.ID
 }
 
 // --- Parsing according to your grammar ---

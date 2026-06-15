@@ -7,6 +7,7 @@ BaSyx provides technical controls that can support NIS2-aligned integrity, audit
 - Canonical `content_hash`, `payload_hash`, `previous_hash`, and `row_hash` values protect history row integrity.
 - Append-only PostgreSQL history rows and optional guarded PostgreSQL mode support traceability.
 - Per-row WORM `history_event` artifacts provide tamper-evident recovery material for acknowledged writes while evidence storage is enabled.
+- Activation-time WORM `abac_policy_version` artifacts preserve the configured and materialized access-rule version that produced audited `policy_id` and `matched_rule_id` values.
 - Signed manifests and range digests support independent verification of selected history ranges.
 - CLI verification and recovery export detect missing, modified, reordered, conflicting, or unverifiable evidence.
 - Audit context fields record request, OIDC, ABAC, route, and trusted proxy metadata when configured and available.

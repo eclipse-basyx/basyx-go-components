@@ -29,6 +29,8 @@ package main
 import (
 	"bytes"
 	"encoding/base64"
+	"encoding/json"
+	"fmt"
 	"io"
 	"mime/multipart"
 	"net/http"
@@ -44,10 +46,11 @@ import (
 
 const actionUploadMultipart = "UPLOAD_MULTIPART"
 const testBaseURL = "http://localhost:6004"
+const testKeycloakTokenURL = "http://localhost:18080/realms/basyx/protocol/openid-connect/token"
 
 func TestIntegration(t *testing.T) {
 	tokenProvider := testenv.NewPasswordGrantTokenProvider(
-		"http://localhost:8080/realms/basyx/protocol/openid-connect/token",
+		testKeycloakTokenURL,
 		"basyx-ui",
 		10*time.Second,
 	)
@@ -69,7 +72,7 @@ func TestIntegrationSerializationSecurity(t *testing.T) {
 		DefaultExpectedStatus: http.StatusOK,
 		ShouldCompareResponse: testenv.CompareMethods(http.MethodGet),
 		TokenProvider: testenv.NewPasswordGrantTokenProvider(
-			"http://localhost:8080/realms/basyx/protocol/openid-connect/token",
+			testKeycloakTokenURL,
 			"basyx-ui",
 			10*time.Second,
 		),
@@ -78,7 +81,7 @@ func TestIntegrationSerializationSecurity(t *testing.T) {
 
 func TestSuperpathEndpointsSecurity(t *testing.T) {
 	tokenProvider := testenv.NewPasswordGrantTokenProvider(
-		"http://localhost:8080/realms/basyx/protocol/openid-connect/token",
+		testKeycloakTokenURL,
 		"basyx-ui",
 		10*time.Second,
 	)
@@ -162,6 +165,88 @@ func TestSuperpathEndpointsSecurity(t *testing.T) {
 	}
 }
 
+func TestABACPolicyManagementRuleLifecycleStories(t *testing.T) {
+	tokenProvider := testenv.NewPasswordGrantTokenProvider(
+		testKeycloakTokenURL,
+		"basyx-ui",
+		10*time.Second,
+	)
+
+	adminToken, err := tokenProvider.GetAccessToken(&testenv.TokenCredentials{User: "admin", Password: "pwd"})
+	require.NoError(t, err)
+	editorToken, err := tokenProvider.GetAccessToken(&testenv.TokenCredentials{User: "userx", Password: "pwd"})
+	require.NoError(t, err)
+
+	assertStatus(t, http.MethodGet, testBaseURL+"/security/abac/policy-versions", "", editorToken, http.StatusNotFound)
+	assertStatus(t, http.MethodGet, testBaseURL+"/security/abac/active-policy", "", editorToken, http.StatusNotFound)
+	assertStatus(t, http.MethodGet, testBaseURL+"/security/abac/active-policy/rules", "", editorToken, http.StatusNotFound)
+	assertStatus(t, http.MethodGet, testBaseURL+"/security/abac/active-policy", "", adminToken, http.StatusOK)
+	assertStatus(t, http.MethodGet, testBaseURL+"/security/abac/active-policy/rules", "", adminToken, http.StatusOK)
+
+	testSuffix := time.Now().UnixNano()
+
+	t.Run("grant and revoke submodel read access over policy activations", func(t *testing.T) {
+		submodelID := fmt.Sprintf("urn:test:sm:abac-policy-grant-revoke:%d", testSuffix)
+		submodelURL := createStorySubmodel(t, submodelID, "ABACPolicyGrantRevokeSubmodel", adminToken)
+
+		assertStatus(t, http.MethodGet, submodelURL, "", editorToken, http.StatusForbidden)
+
+		activeVersionID := activePolicyVersionID(t, adminToken)
+		grantDraftVersionID := clonePolicyVersion(t, activeVersionID, adminToken)
+		grantedRuleIndex := ruleCount(t, grantDraftVersionID, adminToken) + 1
+		createEditorSubmodelReadRule(t, grantDraftVersionID, adminToken)
+		assertStatus(t, http.MethodGet, submodelURL, "", editorToken, http.StatusForbidden)
+		validatePolicyVersion(t, grantDraftVersionID, adminToken)
+		activatePolicyVersion(t, grantDraftVersionID, adminToken)
+		assertStatus(t, http.MethodGet, submodelURL, "", editorToken, http.StatusOK)
+
+		revokeDraftVersionID := clonePolicyVersion(t, activePolicyVersionID(t, adminToken), adminToken)
+		setPolicyRuleEnabled(t, revokeDraftVersionID, grantedRuleIndex, false, adminToken)
+		assertStatus(t, http.MethodGet, submodelURL, "", editorToken, http.StatusOK)
+		validatePolicyVersion(t, revokeDraftVersionID, adminToken)
+		activatePolicyVersion(t, revokeDraftVersionID, adminToken)
+		assertStatus(t, http.MethodGet, submodelURL, "", editorToken, http.StatusForbidden)
+	})
+
+	t.Run("field-based policy activation narrows visible submodels", func(t *testing.T) {
+		visibleSubmodelID := fmt.Sprintf("urn:test:sm:abac-policy-visible:%d", testSuffix)
+		hiddenSubmodelID := fmt.Sprintf("urn:test:sm:abac-policy-hidden:%d", testSuffix)
+		visibleSubmodelURL := createStorySubmodel(t, visibleSubmodelID, "ABACPolicyVisibleSubmodel", adminToken)
+		hiddenSubmodelURL := createStorySubmodel(t, hiddenSubmodelID, "ABACPolicyHiddenSubmodel", adminToken)
+
+		assertStatus(t, http.MethodGet, visibleSubmodelURL, "", editorToken, http.StatusForbidden)
+		assertStatus(t, http.MethodGet, hiddenSubmodelURL, "", editorToken, http.StatusForbidden)
+
+		filterDraftVersionID := clonePolicyVersion(t, activePolicyVersionID(t, adminToken), adminToken)
+		createEditorSubmodelIDReadRule(t, filterDraftVersionID, visibleSubmodelID, adminToken)
+		assertStatus(t, http.MethodGet, visibleSubmodelURL, "", editorToken, http.StatusForbidden)
+		validatePolicyVersion(t, filterDraftVersionID, adminToken)
+		activatePolicyVersion(t, filterDraftVersionID, adminToken)
+
+		assertStatus(t, http.MethodGet, visibleSubmodelURL, "", editorToken, http.StatusOK)
+		assertStatus(t, http.MethodGet, hiddenSubmodelURL, "", editorToken, http.StatusNotFound)
+		assertSubmodelCollectionVisibility(t, editorToken, visibleSubmodelID, hiddenSubmodelID)
+	})
+}
+
+func createStorySubmodel(t *testing.T, submodelID string, idShort string, bearerToken string) string {
+	t.Helper()
+
+	encodedSubmodelID := base64.RawURLEncoding.EncodeToString([]byte(submodelID))
+	submodelURL := testBaseURL + "/submodels/" + encodedSubmodelID
+
+	createSubmodelBody := fmt.Sprintf(`{
+		"id":"%s",
+		"idShort":"%s",
+		"modelType":"Submodel",
+		"kind":"Instance",
+		"submodelElements":[]
+	}`, submodelID, idShort)
+
+	assertStatus(t, http.MethodPost, testBaseURL+"/submodels", createSubmodelBody, bearerToken, http.StatusCreated)
+	return submodelURL
+}
+
 func runSuperpathRequest(t *testing.T, method string, path string, body string, contentType string, bearerToken string) (int, string) {
 	t.Helper()
 
@@ -192,6 +277,201 @@ func runSuperpathRequest(t *testing.T, method string, path string, body string, 
 	respBody, err := io.ReadAll(resp.Body)
 	require.NoError(t, err)
 
+	return resp.StatusCode, string(respBody)
+}
+
+func activePolicyVersionID(t *testing.T, bearerToken string) int64 {
+	t.Helper()
+
+	status, body := doAuthorizedRequest(t, http.MethodGet, testBaseURL+"/security/abac/policy-versions", "", bearerToken)
+	require.Equalf(t, http.StatusOK, status, "list policy versions failed: %s", body)
+	var versions []struct {
+		VersionID int64  `json:"version_id"`
+		Status    string `json:"status"`
+	}
+	require.NoError(t, json.Unmarshal([]byte(body), &versions))
+	for _, version := range versions {
+		if version.Status == "active" {
+			return version.VersionID
+		}
+	}
+	t.Fatalf("no active ABAC policy version found: %s", body)
+	return 0
+}
+
+func clonePolicyVersion(t *testing.T, versionID int64, bearerToken string) int64 {
+	t.Helper()
+
+	endpoint := fmt.Sprintf("%s/security/abac/policy-versions/%d/clone", testBaseURL, versionID)
+	status, body := doAuthorizedRequest(t, http.MethodPost, endpoint, "", bearerToken)
+	require.Equalf(t, http.StatusCreated, status, "clone policy failed: %s", body)
+	var version struct {
+		VersionID int64  `json:"version_id"`
+		Status    string `json:"status"`
+	}
+	require.NoError(t, json.Unmarshal([]byte(body), &version))
+	require.Equal(t, "staged", version.Status)
+	return version.VersionID
+}
+
+func createEditorSubmodelReadRule(t *testing.T, versionID int64, bearerToken string) {
+	t.Helper()
+
+	body := `{
+		"rule": {
+			"ACL": {
+				"ATTRIBUTES": [{ "CLAIM": "role" }],
+				"RIGHTS": ["READ"],
+				"ACCESS": "ALLOW"
+			},
+			"OBJECTS": [{ "ROUTE": "/submodels/*" }],
+			"FORMULA": {
+				"$eq": [
+					{ "$attribute": { "CLAIM": "role" } },
+					{ "$strVal": "editor" }
+				]
+			}
+		}
+	}`
+	endpoint := fmt.Sprintf("%s/security/abac/policy-versions/%d/rules", testBaseURL, versionID)
+	status, response := doAuthorizedRequest(t, http.MethodPost, endpoint, body, bearerToken)
+	require.Equalf(t, http.StatusOK, status, "create policy rule failed: %s", response)
+}
+
+func createEditorSubmodelIDReadRule(t *testing.T, versionID int64, submodelID string, bearerToken string) {
+	t.Helper()
+
+	body := fmt.Sprintf(`{
+		"rule": {
+			"ACL": {
+				"ATTRIBUTES": [{ "CLAIM": "role" }],
+				"RIGHTS": ["READ"],
+				"ACCESS": "ALLOW"
+			},
+			"OBJECTS": [
+				{ "ROUTE": "/submodels" },
+				{ "ROUTE": "/submodels/*" }
+			],
+			"FORMULA": {
+				"$and": [
+					{
+						"$eq": [
+							{ "$attribute": { "CLAIM": "role" } },
+							{ "$strVal": "editor" }
+						]
+					},
+					{
+						"$eq": [
+							{ "$field": "$sm#id" },
+							{ "$strVal": %q }
+						]
+					}
+				]
+			}
+		}
+	}`, submodelID)
+	endpoint := fmt.Sprintf("%s/security/abac/policy-versions/%d/rules", testBaseURL, versionID)
+	status, response := doAuthorizedRequest(t, http.MethodPost, endpoint, body, bearerToken)
+	require.Equalf(t, http.StatusOK, status, "create filtered policy rule failed: %s", response)
+}
+
+func ruleCount(t *testing.T, versionID int64, bearerToken string) int {
+	t.Helper()
+
+	endpoint := fmt.Sprintf("%s/security/abac/policy-versions/%d/rules", testBaseURL, versionID)
+	status, body := doAuthorizedRequest(t, http.MethodGet, endpoint, "", bearerToken)
+	require.Equalf(t, http.StatusOK, status, "list policy rules failed: %s", body)
+	var rules []struct {
+		RuleIndex int `json:"rule_index"`
+	}
+	require.NoError(t, json.Unmarshal([]byte(body), &rules))
+	return len(rules)
+}
+
+func setPolicyRuleEnabled(t *testing.T, versionID int64, ruleIndex int, enabled bool, bearerToken string) {
+	t.Helper()
+
+	body := fmt.Sprintf(`{"enabled":%t}`, enabled)
+	endpoint := fmt.Sprintf("%s/security/abac/policy-versions/%d/rules/%d/enabled", testBaseURL, versionID, ruleIndex)
+	status, response := doAuthorizedRequest(t, http.MethodPut, endpoint, body, bearerToken)
+	require.Equalf(t, http.StatusOK, status, "set policy rule enabled failed: %s", response)
+}
+
+func validatePolicyVersion(t *testing.T, versionID int64, bearerToken string) {
+	t.Helper()
+
+	endpoint := fmt.Sprintf("%s/security/abac/policy-versions/%d/validate", testBaseURL, versionID)
+	status, body := doAuthorizedRequest(t, http.MethodPost, endpoint, "", bearerToken)
+	require.Equalf(t, http.StatusOK, status, "validate policy failed: %s", body)
+	var result struct {
+		Valid bool `json:"valid"`
+	}
+	require.NoError(t, json.Unmarshal([]byte(body), &result))
+	require.Truef(t, result.Valid, "policy validation failed: %s", body)
+}
+
+func activatePolicyVersion(t *testing.T, versionID int64, bearerToken string) {
+	t.Helper()
+
+	endpoint := fmt.Sprintf("%s/security/abac/policy-versions/%d/activate", testBaseURL, versionID)
+	status, body := doAuthorizedRequest(t, http.MethodPost, endpoint, "", bearerToken)
+	require.Equalf(t, http.StatusOK, status, "activate policy failed: %s", body)
+	var version struct {
+		Status string `json:"status"`
+	}
+	require.NoError(t, json.Unmarshal([]byte(body), &version))
+	require.Equal(t, "active", version.Status)
+}
+
+func assertStatus(t *testing.T, method string, endpoint string, body string, bearerToken string, expectedStatus int) {
+	t.Helper()
+
+	status, response := doAuthorizedRequest(t, method, endpoint, body, bearerToken)
+	require.Equalf(t, expectedStatus, status, "%s %s returned unexpected status: %s", method, endpoint, response)
+}
+
+func assertSubmodelCollectionVisibility(t *testing.T, bearerToken string, visibleSubmodelID string, hiddenSubmodelID string) {
+	t.Helper()
+
+	status, body := doAuthorizedRequest(t, http.MethodGet, testBaseURL+"/submodels", "", bearerToken)
+	require.Equalf(t, http.StatusOK, status, "GET /submodels failed: %s", body)
+
+	var page struct {
+		Result []struct {
+			ID string `json:"id"`
+		} `json:"result"`
+	}
+	require.NoError(t, json.Unmarshal([]byte(body), &page))
+
+	ids := make([]string, 0, len(page.Result))
+	for _, submodel := range page.Result {
+		ids = append(ids, submodel.ID)
+	}
+	require.Contains(t, ids, visibleSubmodelID)
+	require.NotContains(t, ids, hiddenSubmodelID)
+}
+
+func doAuthorizedRequest(t *testing.T, method string, endpoint string, body string, bearerToken string) (int, string) {
+	t.Helper()
+
+	var reader io.Reader
+	if strings.TrimSpace(body) != "" {
+		reader = strings.NewReader(body)
+	}
+	req, err := http.NewRequest(method, endpoint, reader)
+	require.NoError(t, err)
+	req.Header.Set("Authorization", "Bearer "+bearerToken)
+	if reader != nil {
+		req.Header.Set("Content-Type", "application/json")
+	}
+
+	client := &http.Client{Timeout: 30 * time.Second}
+	resp, err := client.Do(req)
+	require.NoError(t, err)
+	defer func() { _ = resp.Body.Close() }()
+
+	respBody, err := io.ReadAll(resp.Body)
+	require.NoError(t, err)
 	return resp.StatusCode, string(respBody)
 }
 

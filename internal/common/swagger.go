@@ -93,6 +93,7 @@ type SwaggerUIConfig struct {
 	BasePath              string         // Base path for redirect to Swagger UI (e.g., "/" or "/api")
 	Contact               *ContactConfig // Contact information to inject into OpenAPI spec
 	IncludeVerifyEndpoint *bool          // nil/default=true, false disables /verify injection in OpenAPI spec
+	IncludeABACManagement *bool          // nil/default=false, true injects ABAC management API paths
 }
 
 // ContactConfig holds contact information for OpenAPI spec
@@ -104,6 +105,7 @@ type ContactConfig struct {
 
 var openAPIVersionRegex = regexp.MustCompile(`(?m)^\s*version:\s*V([0-9]+\.[0-9]+\.[0-9]+)`)
 var verifyPathRegex = regexp.MustCompile(`(?m)^\s*/verify:\s*$`)
+var abacManagementPathRegex = regexp.MustCompile(`(?m)^\s*/security/abac/policy-versions:\s*$`)
 var pathsSectionRegex = regexp.MustCompile(`(?m)^paths:\s*(?:\r?\n)`)
 
 func detectPart2SchemaVersion(specContent []byte) string {
@@ -230,6 +232,1134 @@ func injectVerifyEndpoint(specContent []byte) []byte {
 	return appended
 }
 
+const abacManagementPathsYAML = `  /security/abac/active-policy:
+    get:
+      tags:
+        - ABAC Policy Management
+      summary: Gets the active ABAC policy version
+      operationId: GetActiveABACPolicyVersion
+      responses:
+        '200':
+          description: Active ABAC policy version
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ABACPolicyVersion'
+        '404':
+          description: Hidden when the caller is not allowed to inspect ABAC policy management data
+        '503':
+          description: No active ABAC policy is available
+  /security/abac/active-policy/rules:
+    get:
+      tags:
+        - ABAC Policy Management
+      summary: Lists materialized rules for the active ABAC policy version
+      operationId: ListActiveABACPolicyRules
+      responses:
+        '200':
+          description: Active ABAC policy rules
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ABACPolicyRule'
+        '404':
+          description: Hidden when the caller is not allowed to inspect ABAC policy management data
+        '503':
+          description: No active ABAC policy is available
+  /security/abac/policy-versions:
+    get:
+      tags:
+        - ABAC Policy Management
+      summary: Lists ABAC policy versions
+      operationId: ListABACPolicyVersions
+      responses:
+        '200':
+          description: ABAC policy versions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ABACPolicyVersion'
+    post:
+      tags:
+        - ABAC Policy Management
+      summary: Imports a configured ABAC policy version
+      description: Creates a staged policy version by default. When activate=true is supplied, the import and activation are executed atomically and the returned version is active.
+      operationId: ImportABACPolicyVersion
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ABACPolicyImportRequest'
+            examples:
+              stagedImport:
+                summary: Import as staged policy version
+                value:
+                  source_ref: admin-upload-2026-06-14
+                  policy:
+                    AllAccessPermissionRules:
+                      rules:
+                        - ACL:
+                            ACCESS: ALLOW
+                            RIGHTS: [READ]
+                            ATTRIBUTES:
+                              - CLAIM: role
+                          OBJECTS:
+                            - ROUTE: /description
+                          FORMULA:
+                            $eq:
+                              - $attribute:
+                                  CLAIM: role
+                              - $strVal: admin
+              importAndActivate:
+                summary: Import and activate atomically
+                value:
+                  source_ref: emergency-policy
+                  activate: true
+                  policy:
+                    AllAccessPermissionRules:
+                      rules:
+                        - ACL:
+                            ACCESS: ALLOW
+                            RIGHTS: [ALL]
+                            ATTRIBUTES:
+                              - CLAIM: role
+                          OBJECTS:
+                            - ROUTE: /security/abac
+                            - ROUTE: /security/abac/*
+                          FORMULA:
+                            $eq:
+                              - $attribute:
+                                  CLAIM: role
+                              - $strVal: admin
+      responses:
+        '201':
+          description: Imported ABAC policy version
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ABACPolicyVersion'
+  /security/abac/policy-versions/{versionID}:
+    parameters:
+      - name: versionID
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int64
+    get:
+      tags:
+        - ABAC Policy Management
+      summary: Gets one ABAC policy version
+      operationId: GetABACPolicyVersion
+      responses:
+        '200':
+          description: ABAC policy version
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ABACPolicyVersion'
+  /security/abac/policy-versions/{versionID}/clone:
+    parameters:
+      - name: versionID
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int64
+    post:
+      tags:
+        - ABAC Policy Management
+      summary: Clones a policy version to a staged editable version
+      operationId: CloneABACPolicyVersion
+      responses:
+        '201':
+          description: Cloned staged policy version
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ABACPolicyVersion'
+  /security/abac/policy-versions/{versionID}/validate:
+    parameters:
+      - name: versionID
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int64
+    post:
+      tags:
+        - ABAC Policy Management
+      summary: Validates and materializes a staged ABAC policy version
+      operationId: ValidateABACPolicyVersion
+      responses:
+        '200':
+          description: Validation result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ABACValidationResult'
+  /security/abac/policy-versions/{versionID}/activate:
+    parameters:
+      - name: versionID
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int64
+    post:
+      tags:
+        - ABAC Policy Management
+      summary: Activates a staged ABAC policy version
+      operationId: ActivateABACPolicyVersion
+      responses:
+        '200':
+          description: Active ABAC policy version
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ABACPolicyVersion'
+  /security/abac/policy-versions/{versionID}/reject:
+    parameters:
+      - name: versionID
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int64
+    post:
+      tags:
+        - ABAC Policy Management
+      summary: Rejects a staged ABAC policy version
+      operationId: RejectABACPolicyVersion
+      responses:
+        '200':
+          description: Rejected ABAC policy version
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ABACPolicyVersion'
+  /security/abac/policy-versions/{versionID}/rules:
+    parameters:
+      - name: versionID
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int64
+    get:
+      tags:
+        - ABAC Policy Management
+      summary: Lists materialized rules for a policy version
+      operationId: ListABACPolicyRules
+      responses:
+        '200':
+          description: ABAC policy rules
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ABACPolicyRule'
+    post:
+      tags:
+        - ABAC Policy Management
+      summary: Creates one rule in a staged ABAC policy version
+      operationId: CreateABACPolicyRule
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - $ref: '#/components/schemas/ABACRuleMutationRequest'
+                - $ref: '#/components/schemas/AccessPermissionRule'
+            examples:
+              wrappedRule:
+                summary: Insert a rule at an explicit position
+                value:
+                  position: 2
+                  rule:
+                    ACL:
+                      ACCESS: ALLOW
+                      RIGHTS: [READ]
+                      ATTRIBUTES:
+                        - CLAIM: role
+                    OBJECTS:
+                      - ROUTE: /submodels
+                      - ROUTE: /submodels/*
+                    FORMULA:
+                      $and:
+                        - $eq:
+                            - $attribute:
+                                CLAIM: role
+                            - $strVal: editor
+                        - $eq:
+                            - $field: $sm#id
+                            - $strVal: urn:example:submodel:visible
+              directRule:
+                summary: Append a direct AccessPermissionRule body
+                value:
+                  ACL:
+                    ACCESS: ALLOW
+                    RIGHTS: [READ]
+                    ATTRIBUTES:
+                      - GLOBAL: ANONYMOUS
+                  OBJECTS:
+                    - ROUTE: /description
+                  FORMULA:
+                    $boolean: true
+      responses:
+        '200':
+          description: Updated staged policy version
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ABACPolicyVersion'
+  /security/abac/policy-versions/{versionID}/rules/{ruleIndex}:
+    parameters:
+      - name: versionID
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int64
+      - name: ruleIndex
+        in: path
+        required: true
+        schema:
+          type: integer
+          minimum: 1
+    get:
+      tags:
+        - ABAC Policy Management
+      summary: Gets one ABAC policy rule
+      operationId: GetABACPolicyRule
+      responses:
+        '200':
+          description: ABAC policy rule
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ABACPolicyRule'
+    put:
+      tags:
+        - ABAC Policy Management
+      summary: Replaces one rule in a staged ABAC policy version
+      operationId: ReplaceABACPolicyRule
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AccessPermissionRule'
+            example:
+              ACL:
+                ACCESS: ALLOW
+                RIGHTS: [READ]
+                ATTRIBUTES:
+                  - CLAIM: role
+              OBJECTS:
+                - ROUTE: /shells
+              FORMULA:
+                $eq:
+                  - $attribute:
+                      CLAIM: role
+                  - $strVal: viewer
+      responses:
+        '200':
+          description: Updated staged policy version
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ABACPolicyVersion'
+    patch:
+      tags:
+        - ABAC Policy Management
+      summary: Merge-patches one rule in a staged ABAC policy version
+      operationId: PatchABACPolicyRule
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+              description: JSON object merge patch. Null removes fields; this is not RFC 6902.
+            example:
+              USEFORMULA: null
+              FORMULA:
+                $boolean: true
+      responses:
+        '200':
+          description: Updated staged policy version
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ABACPolicyVersion'
+    delete:
+      tags:
+        - ABAC Policy Management
+      summary: Deletes one rule from a staged ABAC policy version
+      operationId: DeleteABACPolicyRule
+      responses:
+        '200':
+          description: Updated staged policy version
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ABACPolicyVersion'
+  /security/abac/policy-versions/{versionID}/rules/{ruleIndex}/duplicate:
+    parameters:
+      - name: versionID
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int64
+      - name: ruleIndex
+        in: path
+        required: true
+        schema:
+          type: integer
+          minimum: 1
+    post:
+      tags:
+        - ABAC Policy Management
+      summary: Duplicates one rule in a staged ABAC policy version
+      operationId: DuplicateABACPolicyRule
+      responses:
+        '200':
+          description: Updated staged policy version
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ABACPolicyVersion'
+  /security/abac/policy-versions/{versionID}/rules/{ruleIndex}/move:
+    parameters:
+      - name: versionID
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int64
+      - name: ruleIndex
+        in: path
+        required: true
+        schema:
+          type: integer
+          minimum: 1
+    post:
+      tags:
+        - ABAC Policy Management
+      summary: Moves one rule within a staged ABAC policy version
+      operationId: MoveABACPolicyRule
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ABACMoveRuleRequest'
+      responses:
+        '200':
+          description: Updated staged policy version
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ABACPolicyVersion'
+  /security/abac/policy-versions/{versionID}/rules/{ruleIndex}/enabled:
+    parameters:
+      - name: versionID
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int64
+      - name: ruleIndex
+        in: path
+        required: true
+        schema:
+          type: integer
+          minimum: 1
+    put:
+      tags:
+        - ABAC Policy Management
+      summary: Enables or disables one rule in a staged ABAC policy version
+      operationId: SetABACPolicyRuleEnabled
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ABACSetRuleEnabledRequest'
+      responses:
+        '200':
+          description: Updated staged policy version
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ABACPolicyVersion'
+  /security/abac/policy-versions/{versionID}/definitions:
+    parameters:
+      - name: versionID
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int64
+    get:
+      tags:
+        - ABAC Policy Management
+      summary: Lists reusable ABAC definitions for a policy version
+      operationId: ListABACPolicyDefinitions
+      responses:
+        '200':
+          description: ABAC policy definitions grouped by kind
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ABACPolicyDefinitions'
+  /security/abac/policy-versions/{versionID}/definitions/{kind}:
+    parameters:
+      - name: versionID
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int64
+      - name: kind
+        in: path
+        required: true
+        schema:
+          $ref: '#/components/schemas/ABACDefinitionKind'
+    get:
+      tags:
+        - ABAC Policy Management
+      summary: Lists reusable ABAC definitions by kind
+      operationId: ListABACPolicyDefinitionsByKind
+      responses:
+        '200':
+          description: ABAC policy definitions for the selected kind
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - type: array
+                    items:
+                      $ref: '#/components/schemas/ABACAttributeDefinition'
+                  - type: array
+                    items:
+                      $ref: '#/components/schemas/ABACACLDefinition'
+                  - type: array
+                    items:
+                      $ref: '#/components/schemas/ABACObjectDefinition'
+                  - type: array
+                    items:
+                      $ref: '#/components/schemas/ABACFormulaDefinition'
+    post:
+      tags:
+        - ABAC Policy Management
+      summary: Creates one reusable definition in a staged ABAC policy version
+      operationId: CreateABACPolicyDefinition
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ABACDefinition'
+            examples:
+              attributes:
+                summary: Create DEFATTRIBUTES entry
+                value:
+                  name: adminClaims
+                  attributes:
+                    - CLAIM: role
+              acl:
+                summary: Create DEFACLS entry
+                value:
+                  name: abacAdmins
+                  acl:
+                    ACCESS: ALLOW
+                    RIGHTS: [READ, CREATE, UPDATE, DELETE]
+                    USEATTRIBUTES: adminClaims
+              objects:
+                summary: Create DEFOBJECTS entry
+                value:
+                  name: abacManagement
+                  objects:
+                    - ROUTE: /security/abac/*
+              formula:
+                summary: Create DEFFORMULAS entry
+                value:
+                  name: isAdmin
+                  formula:
+                    $eq:
+                      - $attribute:
+                          CLAIM: role
+                      - $strVal: admin
+      responses:
+        '200':
+          description: Updated staged policy version
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ABACPolicyVersion'
+  /security/abac/policy-versions/{versionID}/definitions/{kind}/{name}:
+    parameters:
+      - name: versionID
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int64
+      - name: kind
+        in: path
+        required: true
+        schema:
+          $ref: '#/components/schemas/ABACDefinitionKind'
+      - name: name
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      tags:
+        - ABAC Policy Management
+      summary: Gets one reusable ABAC definition
+      operationId: GetABACPolicyDefinition
+      responses:
+        '200':
+          description: ABAC policy definition
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ABACDefinition'
+    put:
+      tags:
+        - ABAC Policy Management
+      summary: Replaces one reusable definition in a staged ABAC policy version
+      description: The definition body name must match the path name. Rename by deleting and recreating the definition so references are revalidated explicitly.
+      operationId: ReplaceABACPolicyDefinition
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ABACDefinition'
+            example:
+              name: isAdmin
+              formula:
+                $eq:
+                  - $attribute:
+                      CLAIM: scope
+                  - $strVal: basyx.abac.admin
+      responses:
+        '200':
+          description: Updated staged policy version
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ABACPolicyVersion'
+    patch:
+      tags:
+        - ABAC Policy Management
+      summary: Merge-patches one reusable definition in a staged ABAC policy version
+      operationId: PatchABACPolicyDefinition
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+              description: JSON object merge patch. Null removes fields; this is not RFC 6902. The resulting definition name must still match the path name.
+            example:
+              formula:
+                $boolean: true
+      responses:
+        '200':
+          description: Updated staged policy version
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ABACPolicyVersion'
+    delete:
+      tags:
+        - ABAC Policy Management
+      summary: Deletes one reusable definition from a staged ABAC policy version
+      description: Deletion is rejected when rules or other definitions still reference the deleted definition.
+      operationId: DeleteABACPolicyDefinition
+      responses:
+        '200':
+          description: Updated staged policy version
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ABACPolicyVersion'
+`
+
+const abacManagementSchemasYAML = `    ABACPolicyVersion:
+      type: object
+      description: Versioned ABAC policy snapshot stored for one service scope.
+      properties:
+        version_id:
+          type: integer
+          format: int64
+        service_scope:
+          type: string
+        policy_id:
+          type: string
+          description: SHA-256 hash of the canonical configured policy JSON.
+        status:
+          type: string
+          enum: [staged, active, superseded, rejected]
+        source_type:
+          type: string
+          enum: [file, api]
+        source_ref:
+          type: string
+        configured_policy_json:
+          type: object
+          additionalProperties: true
+        configured_policy_hash:
+          type: string
+        raw_policy_hash:
+          type: string
+        materialized_policy_json:
+          type: object
+          additionalProperties: true
+        materialized_policy_hash:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        activated_at:
+          type: string
+          format: date-time
+        superseded_at:
+          type: string
+          format: date-time
+        artifact_ref:
+          type: object
+          additionalProperties: true
+    ABACPolicyRule:
+      type: object
+      description: One ordered, materialized ABAC rule row.
+      properties:
+        rule_id:
+          type: integer
+          format: int64
+        version_id:
+          type: integer
+          format: int64
+        policy_id:
+          type: string
+        service_scope:
+          type: string
+        rule_index:
+          type: integer
+          minimum: 1
+        matched_rule_id:
+          type: string
+          example: rule:1:0123456789abcdef
+        configured_rule_json:
+          $ref: '#/components/schemas/AccessPermissionRule'
+        materialized_rule_json:
+          type: object
+          additionalProperties: true
+        acl_json:
+          $ref: '#/components/schemas/ABACACL'
+        attributes_json:
+          type: array
+          items:
+            $ref: '#/components/schemas/ABACAttributeItem'
+        objects_json:
+          type: array
+          items:
+            $ref: '#/components/schemas/ABACObjectItem'
+        formula_json:
+          $ref: '#/components/schemas/ABACLogicalExpression'
+        filters_json:
+          type: array
+          items:
+            $ref: '#/components/schemas/ABACAccessPermissionRuleFilter'
+        access:
+          type: string
+          enum: [ALLOW, DISABLED]
+        rights:
+          type: array
+          items:
+            type: string
+        rule_hash:
+          type: string
+        materialized_rule_hash:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+    ABACPolicyDefinitions:
+      type: object
+      description: Reusable ABAC definition sections from the configured policy JSON.
+      properties:
+        attributes:
+          type: array
+          items:
+            $ref: '#/components/schemas/ABACAttributeDefinition'
+        acls:
+          type: array
+          items:
+            $ref: '#/components/schemas/ABACACLDefinition'
+        objects:
+          type: array
+          items:
+            $ref: '#/components/schemas/ABACObjectDefinition'
+        formulas:
+          type: array
+          items:
+            $ref: '#/components/schemas/ABACFormulaDefinition'
+    ABACDefinitionKind:
+      type: string
+      enum: [attributes, acls, objects, formulas]
+      description: Definition kind. The API also accepts the original DEFATTRIBUTES, DEFACLS, DEFOBJECTS, and DEFFORMULAS names.
+    ABACDefinition:
+      oneOf:
+        - $ref: '#/components/schemas/ABACAttributeDefinition'
+        - $ref: '#/components/schemas/ABACACLDefinition'
+        - $ref: '#/components/schemas/ABACObjectDefinition'
+        - $ref: '#/components/schemas/ABACFormulaDefinition'
+    ABACAttributeDefinition:
+      type: object
+      required: [name, attributes]
+      properties:
+        name:
+          type: string
+        attributes:
+          type: array
+          items:
+            $ref: '#/components/schemas/ABACAttributeItem'
+      example:
+        name: adminClaims
+        attributes:
+          - CLAIM: role
+    ABACACLDefinition:
+      type: object
+      required: [name, acl]
+      properties:
+        name:
+          type: string
+        acl:
+          $ref: '#/components/schemas/ABACACL'
+      example:
+        name: abacAdmins
+        acl:
+          ACCESS: ALLOW
+          RIGHTS: [READ, CREATE, UPDATE, DELETE]
+          ATTRIBUTES:
+            - CLAIM: role
+    ABACObjectDefinition:
+      type: object
+      required: [name]
+      description: Reusable object selector. Exactly one of objects or USEOBJECTS must be set.
+      properties:
+        name:
+          type: string
+        objects:
+          type: array
+          items:
+            $ref: '#/components/schemas/ABACObjectItem'
+        USEOBJECTS:
+          type: array
+          items:
+            type: string
+      example:
+        name: abacManagement
+        objects:
+          - ROUTE: /security/abac/*
+    ABACFormulaDefinition:
+      type: object
+      required: [name, formula]
+      properties:
+        name:
+          type: string
+        formula:
+          $ref: '#/components/schemas/ABACLogicalExpression'
+      example:
+        name: isAdmin
+        formula:
+          $eq:
+            - $attribute:
+                CLAIM: role
+            - $strVal: admin
+    ABACPolicyImportRequest:
+      type: object
+      required: [policy]
+      properties:
+        source_ref:
+          type: string
+          description: Non-secret source reference for audit metadata.
+        activate:
+          type: boolean
+          description: When false or omitted, import creates a staged version. When true, import and activation are executed atomically and the returned version is active.
+        policy:
+          type: object
+          required: [AllAccessPermissionRules]
+          additionalProperties: true
+          description: Complete configured ABAC policy JSON accepted by abac.modelPath.
+    ABACRuleMutationRequest:
+      type: object
+      required: [rule]
+      properties:
+        position:
+          type: integer
+          minimum: 1
+          description: Optional 1-based insert position. Omitted or out of range appends.
+        rule:
+          $ref: '#/components/schemas/AccessPermissionRule'
+    AccessPermissionRule:
+      type: object
+      description: Configured ABAC access rule. Exactly one of ACL/USEACL, OBJECTS/USEOBJECTS, and FORMULA/USEFORMULA must be set.
+      properties:
+        ACL:
+          $ref: '#/components/schemas/ABACACL'
+        USEACL:
+          type: string
+        OBJECTS:
+          type: array
+          items:
+            $ref: '#/components/schemas/ABACObjectItem'
+        USEOBJECTS:
+          type: array
+          items:
+            type: string
+        FORMULA:
+          $ref: '#/components/schemas/ABACLogicalExpression'
+        USEFORMULA:
+          type: string
+        FILTER:
+          $ref: '#/components/schemas/ABACAccessPermissionRuleFilter'
+        FILTERLIST:
+          type: array
+          items:
+            $ref: '#/components/schemas/ABACAccessPermissionRuleFilter'
+      example:
+        ACL:
+          ACCESS: ALLOW
+          RIGHTS: [READ]
+          ATTRIBUTES:
+            - CLAIM: role
+        OBJECTS:
+          - ROUTE: /submodels
+          - ROUTE: /submodels/*
+        FORMULA:
+          $and:
+            - $eq:
+                - $attribute:
+                    CLAIM: role
+                - $strVal: editor
+            - $eq:
+                - $field: $sm#id
+                - $strVal: urn:example:submodel:visible
+    ABACACL:
+      type: object
+      required: [ACCESS, RIGHTS]
+      properties:
+        ACCESS:
+          type: string
+          enum: [ALLOW, DISABLED]
+        RIGHTS:
+          type: array
+          items:
+            type: string
+            enum: [CREATE, READ, UPDATE, DELETE, EXECUTE, VIEW, ALL]
+        ATTRIBUTES:
+          type: array
+          items:
+            $ref: '#/components/schemas/ABACAttributeItem'
+        USEATTRIBUTES:
+          type: string
+      description: Exactly one of ATTRIBUTES or USEATTRIBUTES must be set.
+    ABACAttributeItem:
+      type: object
+      description: Attribute source used by ACLs and formulas. Exactly one key is allowed.
+      oneOf:
+        - required: [CLAIM]
+        - required: [GLOBAL]
+        - required: [REFERENCE]
+      properties:
+        CLAIM:
+          type: string
+          example: role
+        GLOBAL:
+          type: string
+          enum: [LOCALNOW, UTCNOW, CLIENTNOW, ANONYMOUS]
+        REFERENCE:
+          type: string
+          example: $sm#id
+    ABACObjectItem:
+      type: object
+      description: Route, fragment, identifiable, referable, or descriptor object selector. Exactly one key is allowed.
+      additionalProperties: true
+      example:
+        ROUTE: /security/abac/*
+    ABACAccessPermissionRuleFilter:
+      type: object
+      required: [FRAGMENT]
+      properties:
+        FRAGMENT:
+          type: string
+          example: $sm#submodelElements[]
+        MATCH:
+          type: boolean
+          default: false
+        CONDITION:
+          $ref: '#/components/schemas/ABACLogicalExpression'
+        USEFORMULA:
+          type: string
+      description: Exactly one of CONDITION or USEFORMULA must be set.
+    ABACLogicalExpression:
+      type: object
+      description: ABAC logical expression tree using Part 4 style operators such as $and, $or, $eq, $attribute, $field, $strVal, and $boolean.
+      additionalProperties: true
+      example:
+        $eq:
+          - $attribute:
+              CLAIM: role
+          - $strVal: admin
+    ABACValidationResult:
+      type: object
+      properties:
+        valid:
+          type: boolean
+        policy_id:
+          type: string
+        materialized_policy_hash:
+          type: string
+        error:
+          type: string
+    ABACMoveRuleRequest:
+      type: object
+      required: [position]
+      properties:
+        position:
+          type: integer
+          minimum: 1
+    ABACSetRuleEnabledRequest:
+      type: object
+      required: [enabled]
+      properties:
+        enabled:
+          type: boolean
+`
+
+func injectABACManagementAPI(specContent []byte) []byte {
+	if abacManagementPathRegex.Match(specContent) {
+		return specContent
+	}
+	specContent = injectABACManagementSchemas(specContent)
+	return injectPathFragment(specContent, abacManagementPathsYAML)
+}
+
+func injectABACManagementSchemas(specContent []byte) []byte {
+	if strings.Contains(string(specContent), "    ABACPolicyDefinitions:") {
+		return specContent
+	}
+	return injectComponentSchemas(specContent, abacManagementSchemasYAML)
+}
+
+func injectComponentSchemas(specContent []byte, schemas string) []byte {
+	lines := strings.SplitAfter(string(specContent), "\n")
+	componentsIndex := topLevelLineIndex(lines, "components:")
+	if componentsIndex < 0 {
+		content := ensureTrailingNewline(string(specContent))
+		return []byte(content + "components:\n  schemas:\n" + schemas)
+	}
+
+	nextTopLevel := nextTopLevelLineIndex(lines, componentsIndex+1)
+	schemasIndex := schemasLineIndex(lines, componentsIndex+1, nextTopLevel)
+	if schemasIndex >= 0 {
+		return []byte(insertLines(lines, schemasIndex+1, schemas))
+	}
+	return []byte(insertLines(lines, componentsIndex+1, "  schemas:\n"+schemas))
+}
+
+func topLevelLineIndex(lines []string, value string) int {
+	for i, line := range lines {
+		if strings.TrimSpace(line) == value && strings.TrimLeft(line, " \t") == line {
+			return i
+		}
+	}
+	return -1
+}
+
+func nextTopLevelLineIndex(lines []string, start int) int {
+	for i := start; i < len(lines); i++ {
+		trimmed := strings.TrimSpace(lines[i])
+		if trimmed == "" || strings.HasPrefix(trimmed, "#") {
+			continue
+		}
+		if strings.TrimLeft(lines[i], " \t") == lines[i] {
+			return i
+		}
+	}
+	return len(lines)
+}
+
+func schemasLineIndex(lines []string, start int, end int) int {
+	for i := start; i < end; i++ {
+		line := lines[i]
+		if strings.TrimSpace(line) == "schemas:" && strings.HasPrefix(line, "  ") {
+			return i
+		}
+	}
+	return -1
+}
+
+func insertLines(lines []string, index int, value string) string {
+	var builder strings.Builder
+	for _, line := range lines[:index] {
+		_, _ = builder.WriteString(line)
+	}
+	_, _ = builder.WriteString(value)
+	for _, line := range lines[index:] {
+		_, _ = builder.WriteString(line)
+	}
+	return builder.String()
+}
+
+func ensureTrailingNewline(value string) string {
+	if value == "" || strings.HasSuffix(value, "\n") {
+		return value
+	}
+	return value + "\n"
+}
+
+func injectPathFragment(specContent []byte, fragment string) []byte {
+	pathLoc := pathsSectionRegex.FindIndex(specContent)
+	if pathLoc != nil {
+		injected := make([]byte, 0, len(specContent)+len(fragment))
+		injected = append(injected, specContent[:pathLoc[1]]...)
+		injected = append(injected, []byte(fragment)...)
+		injected = append(injected, specContent[pathLoc[1]:]...)
+		return injected
+	}
+
+	appended := make([]byte, 0, len(specContent)+len(fragment)+8)
+	appended = append(appended, specContent...)
+	if len(specContent) > 0 && specContent[len(specContent)-1] != '\n' {
+		appended = append(appended, '\n')
+	}
+	appended = append(appended, []byte("paths:\n")...)
+	appended = append(appended, []byte(fragment)...)
+	return appended
+}
+
 // injectServerURL modifies the OpenAPI spec to use the configured server URL
 func injectServerURL(specContent []byte, serverURL string) []byte {
 	if serverURL == "" {
@@ -329,6 +1459,13 @@ func AddSwaggerUI(r *chi.Mux, cfg SwaggerUIConfig) {
 	}
 	if includeVerifyEndpoint {
 		specContent = injectVerifyEndpoint(specContent)
+	}
+	includeABACManagement := false
+	if cfg.IncludeABACManagement != nil {
+		includeABACManagement = *cfg.IncludeABACManagement
+	}
+	if includeABACManagement {
+		specContent = injectABACManagementAPI(specContent)
 	}
 
 	// Serve the OpenAPI spec
@@ -438,6 +1575,7 @@ func AddSwaggerUIFromFS(r *chi.Mux, specFS embed.FS, specFile string, title stri
 	// Build contact config if provided
 	var contact *ContactConfig
 	var includeVerifyEndpoint *bool
+	var includeABACManagement *bool
 	if serverConfig != nil && (serverConfig.Swagger.ContactName != "" || serverConfig.Swagger.ContactEmail != "" || serverConfig.Swagger.ContactURL != "") {
 		contact = &ContactConfig{
 			Name:  serverConfig.Swagger.ContactName,
@@ -447,6 +1585,8 @@ func AddSwaggerUIFromFS(r *chi.Mux, specFS embed.FS, specFile string, title stri
 	}
 	if serverConfig != nil {
 		includeVerifyEndpoint = &serverConfig.Server.VerificationEndpointAvailable
+		abacManagementEnabled := shouldIncludeABACManagement(serverConfig)
+		includeABACManagement = &abacManagementEnabled
 	}
 
 	AddSwaggerUI(r, SwaggerUIConfig{
@@ -459,7 +1599,12 @@ func AddSwaggerUIFromFS(r *chi.Mux, specFS embed.FS, specFile string, title stri
 		BasePath:              basePath,
 		Contact:               contact,
 		IncludeVerifyEndpoint: includeVerifyEndpoint,
+		IncludeABACManagement: includeABACManagement,
 	})
 
 	return nil
+}
+
+func shouldIncludeABACManagement(serverConfig *Config) bool {
+	return serverConfig != nil && serverConfig.ABAC.Enabled && serverConfig.ABAC.ManagementAPI.Enabled
 }

@@ -491,7 +491,7 @@ jobs:
       - name: Get dependencies
         run: go mod download
 
-      - name: Run aas environment security tests
+      - name: Run aas environment security and ABAC policy management tests
         run: |
           cd internal/aasenvironment/security_tests
           go test -v .

@@ -31,6 +31,7 @@ import (
 	"errors"
 	"log"
 	"net/http"
+	"strings"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
@@ -46,6 +47,10 @@ type ABACSettings struct {
 	Enabled             bool
 	EnableImplicitCasts bool
 	Model               *AccessModel
+	ModelProvider       AccessModelProvider
+	// DenyAsNotFoundPrefixes hides denied requests below sensitive route
+	// prefixes by returning 404 instead of 403.
+	DenyAsNotFoundPrefixes []string
 }
 
 // Resource represents the target object of an authorization request.
@@ -72,7 +77,18 @@ type ResolveResource func(r *http.Request) (Resource, error)
 // AuthorizationDecision records the ABAC decision available to audit middleware.
 type AuthorizationDecision struct {
 	Result        string
+	PolicyID      string
 	MatchedRuleID string
+}
+
+// AccessModelProvider supplies the currently active compiled ABAC model.
+//
+// Implementations are expected to be concurrency-safe because the ABAC
+// middleware calls ActiveAccessModel for every protected request. Repository
+// backed deployments use this hook to atomically swap compiled policies only
+// after a policy activation transaction commits.
+type AccessModelProvider interface {
+	ActiveAccessModel() *AccessModel
 }
 
 // ABACMiddleware returns an HTTP middleware handler that enforces attribute-based
@@ -95,10 +111,11 @@ func ABACMiddleware(settings ABACSettings) func(http.Handler) http.Handler {
 				return
 			}
 
-			if settings.Model != nil {
+			model := activeAccessModel(settings)
+			if model != nil {
 				opts := grammar.DefaultSimplifyOptions()
 				opts.EnableImplicitCasts = settings.EnableImplicitCasts
-				evaluation := settings.Model.AuthorizeWithFilterWithOptions(EvalInput{
+				evaluation := model.AuthorizeWithFilterWithOptions(EvalInput{
 					Method: r.Method,
 					Path:   r.URL.Path,
 					Claims: claims,
@@ -106,6 +123,10 @@ func ABACMiddleware(settings ABACSettings) func(http.Handler) http.Handler {
 				if !evaluation.Allowed {
 					if evaluation.Reason == DecisionRouteNotFound {
 						next.ServeHTTP(w, r)
+						return
+					}
+					if denyAsNotFound(settings, r.URL.Path) {
+						http.NotFound(w, r)
 						return
 					}
 
@@ -122,6 +143,7 @@ func ABACMiddleware(settings ABACSettings) func(http.Handler) http.Handler {
 
 				ctx := ContextWithAuthorizationDecision(r.Context(), AuthorizationDecision{
 					Result:        string(DecisionAllow),
+					PolicyID:      evaluation.PolicyID,
 					MatchedRuleID: evaluation.MatchedRuleID,
 				})
 				if evaluation.QueryFilter != nil {
@@ -135,6 +157,31 @@ func ABACMiddleware(settings ABACSettings) func(http.Handler) http.Handler {
 			http.Error(w, "resource resolution failed", http.StatusForbidden)
 		})
 	}
+}
+
+func denyAsNotFound(settings ABACSettings, requestPath string) bool {
+	for _, prefix := range settings.DenyAsNotFoundPrefixes {
+		if pathMatchesPrefix(requestPath, prefix) {
+			return true
+		}
+	}
+	return false
+}
+
+func pathMatchesPrefix(requestPath string, prefix string) bool {
+	cleanPath := "/" + strings.Trim(strings.TrimSpace(requestPath), "/")
+	cleanPrefix := "/" + strings.Trim(strings.TrimSpace(prefix), "/")
+	if cleanPrefix == "/" {
+		return false
+	}
+	return cleanPath == cleanPrefix || strings.HasPrefix(cleanPath, cleanPrefix+"/")
+}
+
+func activeAccessModel(settings ABACSettings) *AccessModel {
+	if settings.ModelProvider != nil {
+		return settings.ModelProvider.ActiveAccessModel()
+	}
+	return settings.Model
 }
 
 // ContextWithAuthorizationDecision stores an evaluated ABAC decision in ctx.

@@ -129,7 +129,10 @@ func populateAuditAuthorization(r *http.Request, audit *AuditContext, mode strin
 	}
 	audit.AuthorizationResult = decision.Result
 	if mode == AuditIdentityExtended {
-		audit.PolicyID = policyID
+		audit.PolicyID = decision.PolicyID
+		if audit.PolicyID == "" {
+			audit.PolicyID = policyID
+		}
 		audit.MatchedRuleID = decision.MatchedRuleID
 	}
 }

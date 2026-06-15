@@ -41,7 +41,7 @@ import (
 	aasxpersistence "github.com/eclipse-basyx/basyx-go-components/internal/aasxfileserver/persistence"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	commonmodel "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
-	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/security/abacpolicy"
 	openapi "github.com/eclipse-basyx/basyx-go-components/pkg/aasxfileserverapi/go"
 )
 
@@ -122,9 +122,11 @@ func runServer(ctx context.Context, configPath string) error {
 	apiRouter := chi.NewRouter()
 	common.ConfigureAPIRouter(apiRouter, "AASXFileServerService")
 
-	if err := auth.SetupSecurity(ctx, cfg, apiRouter); err != nil {
+	abacRepo, err := abacpolicy.SetupSecurityWithABACRepository(ctx, cfg, apiRouter, sharedDB, "aasxfileserverservice")
+	if err != nil {
 		return err
 	}
+	abacpolicy.RegisterManagementRoutesIfEnabled(cfg, apiRouter, abacRepo, "aasxfileserverservice")
 
 	for _, rt := range aasxCtrl.Routes() {
 		apiRouter.Method(rt.Method, rt.Pattern, rt.HandlerFunc)

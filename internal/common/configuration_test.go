@@ -197,6 +197,11 @@ func TestLoadConfigAppliesHistoryAndEventingDefaults(t *testing.T) {
 	withUnsetEnv(t, "BASYX_HISTORY_EVIDENCE_REGION")
 	withUnsetEnv(t, "BASYX_HISTORY_EVIDENCE_WRITE_TIMEOUT_SECONDS")
 	withUnsetEnv(t, "BASYX_HISTORY_INTEGRITY_ANCHOR_PROVIDER")
+	withUnsetEnv(t, "ABAC_POLICY_FILE_IMPORT")
+	withUnsetEnv(t, "BASYX_ABAC_POLICY_FILE_IMPORT")
+	withUnsetEnv(t, "ABAC_MANAGEMENT_API_ENABLED")
+	withUnsetEnv(t, "ABAC_MANAGEMENTAPI_ENABLED")
+	withUnsetEnv(t, "BASYX_ABAC_MANAGEMENT_API_ENABLED")
 	withUnsetEnv(t, "BASYX_EVENTING_ENABLED")
 	withUnsetEnv(t, "BASYX_EVENTING_FORMAT")
 	withUnsetEnv(t, "BASYX_EVENTING_SINKS")
@@ -229,6 +234,37 @@ func TestLoadConfigAppliesHistoryAndEventingDefaults(t *testing.T) {
 	}
 	if cfg.Eventing.Enabled || cfg.Eventing.Format != "cloudevents" || cfg.Eventing.TopicPrefix != "basyx" {
 		t.Fatalf("unexpected eventing defaults: %+v", cfg.Eventing)
+	}
+}
+
+func TestLoadConfigAppliesABACPolicyRepositoryEnvOverrides(t *testing.T) {
+	t.Setenv("ABAC_POLICY_FILE_IMPORT", "if_missing")
+	t.Setenv("ABAC_MANAGEMENT_API_ENABLED", "true")
+	captureLogOutput(t)
+
+	cfg, err := LoadConfig("", NORMAL)
+	if err != nil {
+		t.Fatalf("unexpected config load error: %v", err)
+	}
+
+	if cfg.ABAC.PolicyFileImport != ABACPolicyFileImportIfMissing {
+		t.Fatalf("expected policy file import override, got %q", cfg.ABAC.PolicyFileImport)
+	}
+	if !cfg.ABAC.ManagementAPI.Enabled {
+		t.Fatal("expected ABAC management API env override")
+	}
+}
+
+func TestLoadConfigRejectsUnsupportedABACPolicyFileImport(t *testing.T) {
+	t.Setenv("ABAC_POLICY_FILE_IMPORT", "sometimes")
+	captureLogOutput(t)
+
+	_, err := LoadConfig("", NORMAL)
+	if err == nil {
+		t.Fatal("expected unsupported ABAC policy file import error")
+	}
+	if !strings.Contains(err.Error(), "CONFIG-ABAC-POLICYFILEIMPORT") {
+		t.Fatalf("unexpected error: %v", err)
 	}
 }
 

@@ -48,7 +48,7 @@ import (
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/history"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/jws"
 	commonmodel "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
-	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/security/abacpolicy"
 	cdrapi "github.com/eclipse-basyx/basyx-go-components/internal/conceptdescriptionrepository/api"
 	cdrdb "github.com/eclipse-basyx/basyx-go-components/internal/conceptdescriptionrepository/persistence"
 	discoveryapi "github.com/eclipse-basyx/basyx-go-components/internal/discoveryservice/api"
@@ -230,12 +230,15 @@ func runServer(ctx context.Context, configPath string) error {
 	apiRouter := chi.NewRouter()
 	common.ConfigureAPIRouter(apiRouter, "AASEnvironmentService")
 
-	if err = auth.SetupSecurity(ctx, cfg, apiRouter); err != nil {
+	abacRepo, err := abacpolicy.SetupSecurityWithABACRepository(ctx, cfg, apiRouter, sharedDB, "aasenvironmentservice")
+	if err != nil {
 		return err
 	}
 	versioningGuard := history.NewMutationCoverageGuard(apiRouter)
 	apiRouter.Use(versioningGuard.Middleware)
 	apiRouter.Use(history.AuditContextMiddleware(cfg))
+	abacpolicy.ExemptManagementMutationRoutesIfEnabled(cfg, versioningGuard, "aasenvironmentservice")
+	abacpolicy.RegisterManagementRoutesIfEnabled(cfg, apiRouter, abacRepo, "aasenvironmentservice")
 
 	for operation, rt := range aasRegistryCtrl.Routes() {
 		versioningGuard.ClassifyRoute(operation, rt.Method, rt.Pattern)
