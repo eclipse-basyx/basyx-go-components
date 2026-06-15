@@ -306,7 +306,6 @@ func TestIntegration(t *testing.T) {
 	}
 
 	testenv.RunJSONSuite(t, testenv.JSONSuiteOptions{
-		ShouldCompareResponse: testenv.CompareMethods(http.MethodGet),
 		ShouldSkipStep: func(step testenv.JSONSuiteStep) bool {
 			if !isExternalCompose {
 				return false

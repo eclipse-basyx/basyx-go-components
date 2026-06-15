@@ -85,9 +85,8 @@ type JSONSuiteOptions struct {
 	RequestTimeout        time.Duration
 	DefaultExpectedStatus int
 
-	StepName              func(step JSONSuiteStep, stepNumber int) string
-	ShouldCompareResponse func(step JSONSuiteStep) bool
-	ShouldSkipStep        func(step JSONSuiteStep) bool
+	StepName       func(step JSONSuiteStep, stepNumber int) string
+	ShouldSkipStep func(step JSONSuiteStep) bool
 
 	ActionHandlers map[string]JSONStepAction
 	TokenProvider  JSONTokenProvider
@@ -188,20 +187,6 @@ func (p *PasswordGrantTokenProvider) GetAccessToken(creds *TokenCredentials) (st
 	p.cache[cacheKey] = tokenResp.AccessToken
 	p.mu.Unlock()
 	return tokenResp.AccessToken, nil
-}
-
-func CompareMethods(methods ...string) func(step JSONSuiteStep) bool {
-	allowed := map[string]struct{}{}
-	for _, method := range methods {
-		allowed[strings.ToUpper(method)] = struct{}{}
-	}
-	return func(step JSONSuiteStep) bool {
-		if step.ShouldMatch == "" {
-			return false
-		}
-		_, ok := allowed[strings.ToUpper(step.Method)]
-		return ok
-	}
 }
 
 func DefaultJSONStepName(step JSONSuiteStep, stepNumber int) string {
@@ -328,7 +313,7 @@ func RunJSONSuite(t *testing.T, options JSONSuiteOptions) {
 				runner.compareResponseHeaders(t, step, stepNumber, response.Headers)
 			}
 
-			if normalized.ShouldCompareResponse(step) {
+			if step.ShouldMatch != "" {
 				runner.compareJSONResponse(t, step, stepNumber, response.Body)
 			}
 		})
@@ -469,11 +454,6 @@ func normalizeJSONSuiteOptions(options JSONSuiteOptions) JSONSuiteOptions {
 	}
 	if options.StepName == nil {
 		options.StepName = DefaultJSONStepName
-	}
-	if options.ShouldCompareResponse == nil {
-		options.ShouldCompareResponse = func(step JSONSuiteStep) bool {
-			return step.ShouldMatch != ""
-		}
 	}
 	if options.ActionHandlers == nil {
 		options.ActionHandlers = map[string]JSONStepAction{}

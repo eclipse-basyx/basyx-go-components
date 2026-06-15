@@ -160,7 +160,6 @@ func TestLocationHeadersForCreateEndpointsSubmodelRegistry(t *testing.T) {
 
 func TestIntegration(t *testing.T) {
 	testenv.RunJSONSuite(t, testenv.JSONSuiteOptions{
-		ShouldCompareResponse: testenv.CompareMethods(http.MethodGet),
 		ActionHandlers: map[string]testenv.JSONStepAction{
 			"DELETE_ALL_SUBMODEL_DESCRIPTORS": func(t *testing.T, runner *testenv.JSONSuiteRunner, _ testenv.JSONSuiteStep, stepNumber int) {
 				deleteAllSubmodelDescriptors(t, runner, stepNumber)

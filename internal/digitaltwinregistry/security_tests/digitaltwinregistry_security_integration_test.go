@@ -59,7 +59,6 @@ func TestMain(m *testing.M) {
 func TestIntegration(t *testing.T) {
 	testenv.RunJSONSuite(t, testenv.JSONSuiteOptions{
 		DefaultExpectedStatus: http.StatusOK,
-		ShouldCompareResponse: testenv.CompareMethods(http.MethodGet, http.MethodPost),
 		ActionHandlers: map[string]testenv.JSONStepAction{
 			deleteAllShellsActionID: deleteAllDescriptors,
 		},
