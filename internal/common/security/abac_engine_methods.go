@@ -48,7 +48,7 @@ var mapMethodAndPatternToRightsData = []mapMethodAndPatternToRights{
 	{"POST", "/security/abac/policy-versions", []grammar.RightsEnum{grammar.RightsEnumCREATE}},
 	{"GET", "/security/abac/policy-versions/{versionID}", []grammar.RightsEnum{grammar.RightsEnumREAD}},
 	{"POST", "/security/abac/policy-versions/{versionID}/clone", []grammar.RightsEnum{grammar.RightsEnumCREATE}},
-	{"POST", "/security/abac/policy-versions/{versionID}/validate", []grammar.RightsEnum{grammar.RightsEnumREAD}},
+	{"POST", "/security/abac/policy-versions/{versionID}/validate", []grammar.RightsEnum{grammar.RightsEnumUPDATE}},
 	{"POST", "/security/abac/policy-versions/{versionID}/activate", []grammar.RightsEnum{grammar.RightsEnumUPDATE}},
 	{"POST", "/security/abac/policy-versions/{versionID}/reject", []grammar.RightsEnum{grammar.RightsEnumUPDATE}},
 	{"GET", "/security/abac/policy-versions/{versionID}/rules", []grammar.RightsEnum{grammar.RightsEnumREAD}},

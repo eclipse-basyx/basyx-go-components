@@ -30,6 +30,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"os"
@@ -680,7 +681,7 @@ func readBody(r *http.Request) (json.RawMessage, error) {
 		return nil, common.NewErrBadRequest("ABACPOLICY-API-READBODY " + err.Error())
 	}
 	if len(raw) > maxManagementRequestBodyBytes {
-		return nil, common.NewErrBadRequest("ABACPOLICY-API-BODYTOOLARGE request body exceeds 10485760 bytes")
+		return nil, common.NewErrBadRequest(fmt.Sprintf("ABACPOLICY-API-BODYTOOLARGE request body exceeds %d bytes", maxManagementRequestBodyBytes))
 	}
 	return json.RawMessage(raw), nil
 }

@@ -239,11 +239,12 @@ func (r *Repository) supersedeActiveTx(ctx context.Context, tx *sql.Tx, activati
 	if !found || active.VersionID == activatingVersionID {
 		return nil
 	}
+	now := time.Now().UTC()
 	query, args, err := goqu.Update(tablePolicyVersions).
 		Set(goqu.Record{
 			"status":        StatusSuperseded,
-			"superseded_at": time.Now().UTC(),
-			"updated_at":    time.Now().UTC(),
+			"superseded_at": now,
+			"updated_at":    now,
 		}).
 		Where(
 			goqu.C("service_scope").Eq(r.serviceScope),

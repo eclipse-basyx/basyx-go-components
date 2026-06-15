@@ -30,6 +30,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -328,6 +329,9 @@ func TestReadBodyRejectsOversizedPayload(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "ABACPOLICY-API-BODYTOOLARGE") {
 		t.Fatalf("expected body-too-large error code, got %v", err)
+	}
+	if !strings.Contains(err.Error(), strconv.Itoa(maxManagementRequestBodyBytes)) {
+		t.Fatalf("expected body-too-large error to include configured byte limit, got %v", err)
 	}
 }
 
