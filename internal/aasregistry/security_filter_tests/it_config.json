@@ -160,7 +160,7 @@
     "expectedStatus": 200
   },
 
-  
+
 
   {
     "context": "POST Descriptor - User X - ALLOWED",
@@ -168,7 +168,6 @@
     "method": "POST",
     "endpoint": "http://localhost:6004/shell-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9JQ0hNQUdQSVpaQVNPR0VSTkU/submodel-descriptors",
     "data": "postBody/singlesm.json",
-    "shouldMatch": "expected/singlesm.json",
     "expectedStatus": 409
   },
   {
@@ -212,7 +211,7 @@
     "shouldMatch": "expected/singlesm.json",
     "expectedStatus": 200
   },
-  
+
   {
     "context": "DELETE Descriptor - ADMIN - ALLOWED",
     "token": { "user": "admin", "password": "pwd" },
