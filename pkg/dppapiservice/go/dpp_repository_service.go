@@ -89,13 +89,13 @@ func (s *DPPRepositoryService) CreateDPPFromJSON(ctx context.Context, data []byt
 }
 
 func (s *DPPRepositoryService) UpdateDPPFromJSON(ctx context.Context, dppID string, data []byte) (ImplResponse, error) {
-	current, err := s.composeDPP(ctx, dppID, REPRESENTATION_COMPRESSED, time.Time{})
-	if err != nil {
-		return mapPersistenceError(err, http.StatusNotFound), nil
-	}
 	patch, _, err := decodeDPPDocument(data, false)
 	if err != nil {
 		return errorResponse(http.StatusBadRequest, err), nil
+	}
+	current, err := s.composeDPP(ctx, dppID, REPRESENTATION_COMPRESSED, time.Time{})
+	if err != nil {
+		return mapPersistenceError(err, http.StatusNotFound), nil
 	}
 	mergedAny := applyMergePatch(current, patch)
 	merged := dppObjectFromAny(mergedAny)
@@ -249,15 +249,15 @@ func (s *DPPRepositoryService) ReadDataElement(ctx context.Context, dppID string
 }
 
 func (s *DPPRepositoryService) UpdateDataElementFromJSON(ctx context.Context, dppID string, elementPath string, data []byte) (ImplResponse, error) {
-	submodelID, idShortPath, err := s.resolveElementPath(ctx, dppID, elementPath)
-	if err != nil {
-		return errorResponse(http.StatusBadRequest, err), nil
-	}
 	decoder := json.NewDecoder(strings.NewReader(string(data)))
 	decoder.UseNumber()
 	var value any
 	if err := decoder.Decode(&value); err != nil {
 		return errorResponse(http.StatusBadRequest, fmt.Errorf("DPP-UPDELEM-DECODE decode element body: %w", err)), nil
+	}
+	submodelID, idShortPath, err := s.resolveElementPath(ctx, dppID, elementPath)
+	if err != nil {
+		return errorResponse(http.StatusBadRequest, err), nil
 	}
 	idShortParts := strings.Split(idShortPath, ".")
 	element, err := inferElement(idShortParts[len(idShortParts)-1], value)
@@ -621,8 +621,14 @@ func (r *DPPRepositoryRouter) ReadDPPVersionByIdAndDate(w http.ResponseWriter, r
 
 func (r *DPPRepositoryRouter) ReadDPPIdsByProductIds(w http.ResponseWriter, req *http.Request) {
 	var request ReadDppIdsByProductIdsRequest
-	if err := json.NewDecoder(req.Body).Decode(&request); err != nil {
+	decoder := json.NewDecoder(req.Body)
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&request); err != nil {
 		r.write(w, errorResponse(http.StatusBadRequest, fmt.Errorf("DPP-READIDS-DECODE decode request body: %w", err)), nil)
+		return
+	}
+	if err := validateReadDPPIdsRequest(request); err != nil {
+		r.write(w, errorResponse(http.StatusBadRequest, err), nil)
 		return
 	}
 	limit := int32(100)
@@ -636,6 +642,18 @@ func (r *DPPRepositoryRouter) ReadDPPIdsByProductIds(w http.ResponseWriter, req 
 	}
 	response, err := r.service.ReadDPPIdsByProductIds(req.Context(), request, limit, req.URL.Query().Get("cursor"))
 	r.write(w, response, err)
+}
+
+func validateReadDPPIdsRequest(request ReadDppIdsByProductIdsRequest) error {
+	if len(request.ProductIds) == 0 {
+		return fmt.Errorf("DPP-READIDS-MISSING productIds must contain at least one product id")
+	}
+	for _, productID := range request.ProductIds {
+		if strings.TrimSpace(productID) == "" {
+			return fmt.Errorf("DPP-READIDS-INVALID productIds must contain only non-empty strings")
+		}
+	}
+	return nil
 }
 
 func (r *DPPRepositoryRouter) ReadDataElement(w http.ResponseWriter, req *http.Request) {

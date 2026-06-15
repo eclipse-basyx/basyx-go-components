@@ -29,6 +29,65 @@ Open the BaSyx UI:
 
 - [http://localhost:3000](http://localhost:3000)
 
+## Start The Secured DPP API Example
+
+The unsecured example above remains the default. To run only the DPP API with route-based OIDC + ABAC security:
+
+```bash
+docker compose -f docker-compose.secured.yml up -d
+```
+
+Open the secured DPP Swagger UI:
+
+- [http://localhost:8088/swagger](http://localhost:8088/swagger)
+
+Open Keycloak:
+
+- [http://keycloak.localhost:8080](http://keycloak.localhost:8080)
+
+Useful test users from the shared BaSyx Keycloak realm:
+
+- `usera` / `pwd`: `viewer`, read-only access to DPP routes
+- `userx` / `pwd`: `editor`, create/read/update/delete access to DPP routes
+
+Get a token:
+
+```bash
+TOKEN=$(curl -s \
+  -X POST "http://keycloak.localhost:8080/realms/basyx/protocol/openid-connect/token" \
+  -H "Content-Type: application/x-www-form-urlencoded" \
+  -d "client_id=basyx-ui" \
+  -d "grant_type=password" \
+  -d "username=userx" \
+  -d "password=pwd" | sed -n 's/.*"access_token":"\([^"]*\)".*/\1/p')
+```
+
+Use the token against the secured DPP API:
+
+```bash
+curl -i \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  --data @sample-dpp.json \
+  http://localhost:8088/v1/dpps
+```
+
+Security files:
+
+- [`security_env/access-rules.json`](security_env/access-rules.json)
+- [`security_env/trustlist.json`](security_env/trustlist.json)
+
+The secured example protects DPP API routes only. It does not add DPP object-, field-, or query-filter authorization.
+
+## Postman Collection
+
+Import `BaSyx-DPP-API.postman_collection.json` into Postman to run the example scenarios:
+
+- Create and read the demo DPP
+- Resolve a DPP by product ID
+- Read and update individual DPP elements
+- Delete the demo DPP when you are done
+
 ## Create A DPP
 
 ```bash

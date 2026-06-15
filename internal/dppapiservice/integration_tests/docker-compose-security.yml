@@ -1,0 +1,112 @@
+services:
+  dpp-api:
+    build:
+      context: ../../..
+      dockerfile: cmd/dppapiservice/Dockerfile
+    environment:
+      - SERVER_PORT=8080
+      - CORS_ALLOWEDORIGINS=*
+      - CORS_ALLOWEDHEADERS=*
+      - CORS_ALLOWEDCREDENTIALS=true
+      - CORS_ALLOWEDMETHODS=GET,POST,PUT,PATCH,DELETE,OPTIONS
+      - POSTGRES_HOST=db
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=admin
+      - POSTGRES_PASSWORD=admin123
+      - POSTGRES_DBNAME=basyxDppSecurityIT
+      - POSTGRES_MAXOPENCONNECTIONS=10
+      - POSTGRES_MAXIDLECONNECTIONS=5
+      - POSTGRES_CONNMAXLIFETIMEMINUTES=5
+      - ABAC_ENABLED=true
+      - ABAC_MODELPATH=/security_env/access-rules.json
+      - OIDC_TRUSTLISTPATH=/security_env/trustlist.json
+      - BASYX_HISTORY_MODE=audit
+      - BASYX_HISTORY_RETENTION_DAYS=0
+      - BASYX_HISTORY_FULL_SNAPSHOT_INTERVAL=1
+      - BASYX_HISTORY_IMMUTABILITY=none
+      - BASYX_AUDIT_IDENTITY_MODE=extended
+      - BASYX_HISTORY_EVIDENCE_ENABLED=false
+      - BASYX_HISTORY_EVIDENCE_PROVIDER=none
+      - BASYX_HISTORY_INTEGRITY_ANCHOR_PROVIDER=none
+    volumes:
+      - ./security_env:/security_env:ro
+    ports:
+      - "127.0.0.1:${DPP_IT_PORT:-18080}:8080"
+    depends_on:
+      basyx_configuration:
+        condition: service_completed_successfully
+      keycloak-healthcheck:
+        condition: service_completed_successfully
+    extra_hosts:
+      - "keycloak.localhost:host-gateway"
+
+  keycloak:
+    image: keycloak/keycloak:26.0.6
+    environment:
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://db:5432/basyxDppSecurityIT
+      KC_DB_USERNAME: admin
+      KC_DB_PASSWORD: admin123
+      KC_HOSTNAME: http://keycloak.localhost:18081
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: admin
+      KC_HTTP_ENABLED: "true"
+      KC_HTTPS_ENABLED: "false"
+      KC_HEALTH_ENABLED: "true"
+      KC_HOSTNAME_STRICT: "false"
+      KC_HOSTNAME_STRICT_BACKCHANNEL: "false"
+      KC_IMPORT: /opt/keycloak/data/import/
+      KC_HTTP_MANAGEMENT_ENABLED: "true"
+    command: ["start-dev", "--import-realm", "--health-enabled=true"]
+    ports:
+      - "127.0.0.1:18081:8080"
+    volumes:
+      - ../../../examples/BaSyxSecuredExample/keycloak/realm:/opt/keycloak/data/import:ro
+    depends_on:
+      db:
+        condition: service_healthy
+
+  keycloak-healthcheck:
+    image: curlimages/curl:latest
+    command: >
+      sh -c "
+        echo 'Waiting for Keycloak to become ready...';
+        until curl -sf http://keycloak:9000/health/ready; do
+          sleep 5;
+        done;
+        echo 'Keycloak is ready!'"
+    depends_on:
+      - keycloak
+
+  basyx_configuration:
+    image: eclipsebasyx/basyxconfigurationservice-go:SNAPSHOT
+    environment:
+      - POSTGRES_HOST=db
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=admin
+      - POSTGRES_PASSWORD=admin123
+      - POSTGRES_DBNAME=basyxDppSecurityIT
+      - POSTGRES_MAXOPENCONNECTIONS=10
+      - POSTGRES_MAXIDLECONNECTIONS=5
+      - POSTGRES_CONNMAXLIFETIMEMINUTES=5
+    depends_on:
+      db:
+        condition: service_healthy
+
+  db:
+    image: postgres:18
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: admin123
+      POSTGRES_DB: basyxDppSecurityIT
+    command: ["postgres", "-c", "listen_addresses=*"]
+    volumes:
+      - postgres_security_data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U admin -d basyxDppSecurityIT"]
+      interval: 2s
+      timeout: 5s
+      retries: 30
+
+volumes:
+  postgres_security_data:

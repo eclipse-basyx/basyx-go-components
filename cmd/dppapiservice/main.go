@@ -43,6 +43,7 @@ import (
 	aasrepositorydb "github.com/eclipse-basyx/basyx-go-components/internal/aasrepository/persistence"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/history"
+	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 	submodelrepositorydb "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence"
 	dppapi "github.com/eclipse-basyx/basyx-go-components/pkg/dppapiservice/go"
 
@@ -81,7 +82,10 @@ func runServer(ctx context.Context, configPath string) error {
 		return err
 	}
 
-	router := createRouter(cfg, aasRepositoryPersistence, submodelRepositoryPersistence)
+	router, err := createRouter(ctx, cfg, aasRepositoryPersistence, submodelRepositoryPersistence)
+	if err != nil {
+		return err
+	}
 
 	log.Printf("Server started on %s", addr)
 	go func() {
@@ -106,30 +110,48 @@ func configureDPPHistory() {
 	})
 }
 
-func createRouter(cfg *common.Config, aasRepo *aasrepositorydb.AssetAdministrationShellDatabase, submodelRepo *submodelrepositorydb.SubmodelDatabase) http.Handler {
+func createRouter(ctx context.Context, cfg *common.Config, aasRepo *aasrepositorydb.AssetAdministrationShellDatabase, submodelRepo *submodelrepositorydb.SubmodelDatabase) (http.Handler, error) {
 	dppService := dppapi.NewDPPRepositoryService(aasRepo, submodelRepo)
-	apiRouter := dppapi.NewRouter(dppapi.NewDPPRepositoryRouter(dppService))
-	apiRouterWithConfig := withConfigMiddleware(apiRouter, cfg)
+	dppRouter := dppapi.NewDPPRepositoryRouter(dppService)
 	contextPath := common.NormalizeBasePath(cfg.Server.ContextPath)
 
 	rootRouter := chi.NewRouter()
+	rootRouter.Use(common.ConfigMiddleware(cfg))
 	common.AddCors(rootRouter, cfg)
 	common.AddHealthEndpoint(rootRouter, cfg)
 	if err := common.AddSwaggerUIFromFS(rootRouter, openapiSpec, "openapi.yaml", "Digital Product Passport API", "/swagger", "/api-docs/openapi.yaml", cfg); err != nil {
 		log.Printf("Warning: failed to load OpenAPI spec for Swagger UI: %v", err)
 	}
-	apiRouterWithConfig.Get("/", func(w http.ResponseWriter, r *http.Request) {
-		http.Redirect(w, r, contextPath+"/swagger", http.StatusFound)
+	rootRouter.Get(rootRedirectPath(contextPath), func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, swaggerRedirectPath(contextPath), http.StatusFound)
 	})
-	rootRouter.Mount(contextPath, apiRouterWithConfig)
-	return rootRouter
+
+	apiRouter := chi.NewRouter()
+	common.ConfigureAPIRouter(apiRouter, "DPPAPIService")
+	apiRouter.Use(dppapi.Logger)
+	if err := auth.SetupSecurity(ctx, cfg, apiRouter); err != nil {
+		return nil, err
+	}
+	for _, route := range dppRouter.OrderedRoutes() {
+		apiRouter.Method(route.Method, route.Pattern, route.HandlerFunc)
+	}
+
+	rootRouter.Mount(contextPath, apiRouter)
+	return rootRouter, nil
 }
 
-func withConfigMiddleware(apiRouter chi.Router, cfg *common.Config) chi.Router {
-	router := chi.NewRouter()
-	router.Use(common.ConfigMiddleware(cfg))
-	router.Mount("/", apiRouter)
-	return router
+func rootRedirectPath(contextPath string) string {
+	if contextPath == "/" {
+		return "/"
+	}
+	return contextPath + "/"
+}
+
+func swaggerRedirectPath(contextPath string) string {
+	if contextPath == "/" {
+		return "/swagger"
+	}
+	return contextPath + "/swagger"
 }
 
 func openSharedDatabase(ctx context.Context, cfg *common.Config, dsn string) (*sql.DB, error) {

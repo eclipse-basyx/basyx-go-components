@@ -1,0 +1,436 @@
+{
+  "info": {
+    "_postman_id": "a2ef7c80-c60d-4d1f-99af-80a1f2d6b6df",
+    "name": "BaSyx DPP API Example",
+    "description": "Walkthrough scenarios for the BaSyx DPP API example. Start the Docker Compose stack from examples/BaSyxDPPAPIExample before running the requests.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Scenario 1 - Create And Read A DPP",
+      "item": [
+        {
+          "name": "Check DPP API Health",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('DPP API is healthy', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{dppApiBaseUrl}}/health",
+              "host": [
+                "{{dppApiBaseUrl}}"
+              ],
+              "path": [
+                "health"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Create Demo DPP",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('DPP is created or already exists', function () {",
+                  "    pm.expect([201, 409]).to.include(pm.response.code);",
+                  "});",
+                  "",
+                  "if (pm.response.code === 201) {",
+                  "    const response = pm.response.json();",
+                  "    pm.collectionVariables.set('dppId', response.digitalProductPassportId);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"digitalProductPassportId\": \"https://example.org/dpp/demo-product-001\",\n  \"uniqueProductIdentifier\": \"https://example.org/products/demo-product-001\",\n  \"granularity\": \"item\",\n  \"dppSchemaVersion\": \"1.0.0\",\n  \"dppStatus\": \"active\",\n  \"lastUpdate\": \"2026-06-11T12:00:00Z\",\n  \"economicOperatorId\": \"operator-123\",\n  \"facilityId\": \"facility-456\",\n  \"contentSpecificationIds\": [\n    \"technicalData-specification\"\n  ],\n  \"technicalData\": {\n    \"manufacturerName\": \"Example Manufacturing GmbH\",\n    \"warrantyMonths\": 24,\n    \"energyClass\": \"A\",\n    \"serialNumbers\": [\n      \"SN-001\",\n      \"SN-002\"\n    ],\n    \"dimensions\": {\n      \"widthMm\": 120,\n      \"heightMm\": 80\n    },\n    \"manual\": {\n      \"url\": \"https://example.org/manuals/demo-product-001.pdf\",\n      \"contentType\": \"application/pdf\"\n    }\n  }\n}"
+            },
+            "url": {
+              "raw": "{{dppApiBaseUrl}}/v1/dpps",
+              "host": [
+                "{{dppApiBaseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "dpps"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Read Demo DPP - Compressed",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('DPP is returned', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    const response = pm.response.json();",
+                  "    pm.expect(response.digitalProductPassportId).to.eql(pm.collectionVariables.get('dppId'));",
+                  "    pm.expect(response.technicalData.manufacturerName).to.eql('Example Manufacturing GmbH');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{dppApiBaseUrl}}/v1/dpps/{{encodedDppId}}",
+              "host": [
+                "{{dppApiBaseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "dpps",
+                "{{encodedDppId}}"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Read Demo DPP - Full Representation",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Full DPP representation is returned', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    pm.expect(pm.response.json().digitalProductPassportId).to.eql(pm.collectionVariables.get('dppId'));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{dppApiBaseUrl}}/v1/dpps/{{encodedDppId}}?representation=full",
+              "host": [
+                "{{dppApiBaseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "dpps",
+                "{{encodedDppId}}"
+              ],
+              "query": [
+                {
+                  "key": "representation",
+                  "value": "full"
+                }
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Scenario 2 - Product Lookup And Element Updates",
+      "item": [
+        {
+          "name": "Read DPP By Product ID",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('DPP is resolved by product ID', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    const response = pm.response.json();",
+                  "    pm.expect(response.uniqueProductIdentifier).to.eql(pm.collectionVariables.get('productId'));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{dppApiBaseUrl}}/v1/dppsByProductId/{{encodedProductId}}",
+              "host": [
+                "{{dppApiBaseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "dppsByProductId",
+                "{{encodedProductId}}"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Resolve Product IDs To DPP IDs",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('DPP ID is included in product lookup result', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    const response = pm.response.json();",
+                  "    pm.expect(response.items).to.include(pm.collectionVariables.get('dppId'));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"productIds\": [\n    \"{{productId}}\"\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{dppApiBaseUrl}}/v1/dppsByProductIds?limit=10",
+              "host": [
+                "{{dppApiBaseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "dppsByProductIds"
+              ],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "10"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Read Manufacturer Name Element",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Manufacturer element is returned', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    pm.expect(pm.response.json()).to.eql('Example Manufacturing GmbH');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{dppApiBaseUrl}}/v1/dpps/{{encodedDppId}}/elements/technicalData/manufacturerName",
+              "host": [
+                "{{dppApiBaseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "dpps",
+                "{{encodedDppId}}",
+                "elements",
+                "technicalData",
+                "manufacturerName"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update Energy Class Element",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Energy class is updated', function () {",
+                  "    pm.expect([200, 204]).to.include(pm.response.code);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "\"{{updatedEnergyClass}}\""
+            },
+            "url": {
+              "raw": "{{dppApiBaseUrl}}/v1/dpps/{{encodedDppId}}/elements/technicalData/energyClass",
+              "host": [
+                "{{dppApiBaseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "dpps",
+                "{{encodedDppId}}",
+                "elements",
+                "technicalData",
+                "energyClass"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Verify Energy Class Element",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Updated energy class is returned', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    pm.expect(pm.response.json()).to.eql(pm.collectionVariables.get('updatedEnergyClass'));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{dppApiBaseUrl}}/v1/dpps/{{encodedDppId}}/elements/technicalData/energyClass",
+              "host": [
+                "{{dppApiBaseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "dpps",
+                "{{encodedDppId}}",
+                "elements",
+                "technicalData",
+                "energyClass"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Cleanup",
+      "item": [
+        {
+          "name": "Delete Demo DPP",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('DPP is deleted or already absent', function () {",
+                  "    pm.expect([200, 204, 404]).to.include(pm.response.code);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{dppApiBaseUrl}}/v1/dpps/{{encodedDppId}}",
+              "host": [
+                "{{dppApiBaseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "dpps",
+                "{{encodedDppId}}"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "dppApiBaseUrl",
+      "value": "http://localhost:8080",
+      "type": "string"
+    },
+    {
+      "key": "dppId",
+      "value": "https://example.org/dpp/demo-product-001",
+      "type": "string"
+    },
+    {
+      "key": "encodedDppId",
+      "value": "https%253A%252F%252Fexample.org%252Fdpp%252Fdemo-product-001",
+      "type": "string"
+    },
+    {
+      "key": "productId",
+      "value": "https://example.org/products/demo-product-001",
+      "type": "string"
+    },
+    {
+      "key": "encodedProductId",
+      "value": "https%253A%252F%252Fexample.org%252Fproducts%252Fdemo-product-001",
+      "type": "string"
+    },
+    {
+      "key": "updatedEnergyClass",
+      "value": "B",
+      "type": "string"
+    }
+  ]
+}

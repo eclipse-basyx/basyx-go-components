@@ -196,6 +196,17 @@ var mapMethodAndPatternToRightsData = []mapMethodAndPatternToRights{
 	{"GET", "/serialization", []grammar.RightsEnum{grammar.RightsEnumREAD}},
 	// extend mapping for endpoints that are not yet implemented.
 
+	// dpp api
+	{"GET", "/v1/dpps/{dppId}", []grammar.RightsEnum{grammar.RightsEnumREAD}},
+	{"DELETE", "/v1/dpps/{dppId}", []grammar.RightsEnum{grammar.RightsEnumDELETE}},
+	{"PATCH", "/v1/dpps/{dppId}", []grammar.RightsEnum{grammar.RightsEnumUPDATE}},
+	{"POST", "/v1/dpps", []grammar.RightsEnum{grammar.RightsEnumCREATE}},
+	{"GET", "/v1/dppsByProductId/{productId}", []grammar.RightsEnum{grammar.RightsEnumREAD}},
+	{"GET", "/v1/dppsByIdAndDate/{dppId}", []grammar.RightsEnum{grammar.RightsEnumREAD}},
+	{"POST", "/v1/dppsByProductIds", []grammar.RightsEnum{grammar.RightsEnumREAD}},
+	{"GET", "/v1/dpps/{dppId}/elements/*", []grammar.RightsEnum{grammar.RightsEnumREAD}},
+	{"PUT", "/v1/dpps/{dppId}/elements/*", []grammar.RightsEnum{grammar.RightsEnumCREATE, grammar.RightsEnumUPDATE}},
+
 	// aas discovery
 	{"GET", "/lookup/shells", []grammar.RightsEnum{grammar.RightsEnumREAD}},
 	{"POST", "/lookup/shellsByAssetLink", []grammar.RightsEnum{grammar.RightsEnumREAD}}, // this is one of the reasons why we need this complex mapping

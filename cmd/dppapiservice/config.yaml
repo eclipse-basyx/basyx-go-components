@@ -13,3 +13,9 @@ postgres:
   maxIdleConnections: 50
   connMaxLifetimeMinutes: 5
 
+oidc:
+  trustlistPath: "config/trustlist.json"
+
+abac:
+  enabled: false
+  modelPath: "config/access_rules/access-rules.json"
