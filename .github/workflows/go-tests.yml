@@ -782,6 +782,30 @@ jobs:
         run: |
           go test -v ./internal/aasxfileserver/...
 
+  dpp-api-integration-tests:
+    name: DPP API Integration Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out code
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+
+      - name: Set up Go
+        uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Get dependencies
+        run: go mod download
+
+      - name: Build BaSyx configuration image for DPP compose tests
+        run: docker build -t eclipsebasyx/basyxconfigurationservice-go:SNAPSHOT -f ./cmd/basyxconfigurationservice/Dockerfile .
+
+      - name: Run dpp api integration tests
+        run: |
+          cd internal/dppapiservice/integration_tests
+          go test -v .
+
   generated-api-and-tool-unit-tests:
     name: Generated API and Tool Unit Tests
     runs-on: ubuntu-latest
@@ -800,4 +824,4 @@ jobs:
 
       - name: Run generated API and tool unit tests
         run: |
-          go test -v ./internal/healthprobe ./internal/historyevidenceverifier ./pkg/aasrepositoryapi/go ./pkg/conceptdescriptionrepositoryapi/go ./pkg/submodelrepositoryapi
+          go test -v ./internal/healthprobe ./internal/historyevidenceverifier ./pkg/aasrepositoryapi/go ./pkg/conceptdescriptionrepositoryapi/go ./pkg/submodelrepositoryapi ./pkg/dppapiservice/go
