@@ -146,8 +146,17 @@ func TestAddSwaggerUIInjectsABACManagementOnlyWhenEnabled(t *testing.T) {
 	if !strings.Contains(enabledRecorder.Body.String(), "AccessPermissionRule:") {
 		t.Fatal("expected ABAC rule schema to be injected when enabled")
 	}
+	if !strings.Contains(enabledRecorder.Body.String(), "Creates a staged policy version by default. When activate=true") {
+		t.Fatal("expected ABAC import activation semantics to be documented")
+	}
 	if !strings.Contains(enabledRecorder.Body.String(), "Import and activate atomically") {
 		t.Fatal("expected ABAC import examples to be injected when enabled")
+	}
+	if !strings.Contains(enabledRecorder.Body.String(), "/security/abac/policy-versions/{versionID}/definitions/{kind}/{name}") {
+		t.Fatal("expected ABAC definition management paths to be injected when enabled")
+	}
+	if !strings.Contains(enabledRecorder.Body.String(), "ABACPolicyDefinitions:") {
+		t.Fatal("expected ABAC definition schemas to be injected when enabled")
 	}
 	if !strings.Contains(enabledRecorder.Body.String(), "JSON object merge patch. Null removes fields; this is not RFC 6902.") {
 		t.Fatal("expected ABAC merge-patch semantics to be documented")

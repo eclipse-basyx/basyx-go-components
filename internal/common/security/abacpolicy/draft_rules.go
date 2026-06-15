@@ -222,6 +222,23 @@ func (r *Repository) updateDraftRulesWithVersion(
 	operation string,
 	mutate func(PolicyVersion, []grammar.AccessPermissionRule) ([]grammar.AccessPermissionRule, error),
 ) (*PolicyVersion, error) {
+	return r.updateDraftPolicy(ctx, versionID, operation, func(version PolicyVersion, policy *grammar.AccessRuleModelSchemaJSON) error {
+		rules := append([]grammar.AccessPermissionRule(nil), policy.AllAccessPermissionRules.Rules...)
+		nextRules, err := mutate(version, rules)
+		if err != nil {
+			return err
+		}
+		policy.AllAccessPermissionRules.Rules = nextRules
+		return nil
+	})
+}
+
+func (r *Repository) updateDraftPolicy(
+	ctx context.Context,
+	versionID int64,
+	operation string,
+	mutate func(PolicyVersion, *grammar.AccessRuleModelSchemaJSON) error,
+) (*PolicyVersion, error) {
 	actor := actorFromContext(ctx, operation, managementBasePath)
 	var updated PolicyVersion
 	err := common.ExecuteInTransaction(r.db, "ABACPOLICY-DRAFT-BEGINTX", "ABACPOLICY-DRAFT-COMMIT", func(tx *sql.Tx) error {
@@ -236,12 +253,9 @@ func (r *Repository) updateDraftRulesWithVersion(
 		if decodeErr != nil {
 			return decodeErr
 		}
-		rules := append([]grammar.AccessPermissionRule(nil), policy.AllAccessPermissionRules.Rules...)
-		nextRules, mutateErr := mutate(version, rules)
-		if mutateErr != nil {
+		if mutateErr := mutate(version, &policy); mutateErr != nil {
 			return mutateErr
 		}
-		policy.AllAccessPermissionRules.Rules = nextRules
 		raw, canonicalErr := common.CanonicalJSON(policy)
 		if canonicalErr != nil {
 			return common.NewInternalServerError("ABACPOLICY-DRAFT-CANONICAL " + canonicalErr.Error())

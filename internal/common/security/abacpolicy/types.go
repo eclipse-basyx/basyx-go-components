@@ -32,6 +32,7 @@ import (
 	"encoding/json"
 	"time"
 
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 )
 
@@ -120,6 +121,18 @@ type PolicyRule struct {
 	CreatedBySubject     string          `json:"created_by_subject,omitempty"`
 	CreatedByIssuer      string          `json:"created_by_issuer,omitempty"`
 	CreatedByClientID    string          `json:"created_by_client_id,omitempty"`
+}
+
+// PolicyDefinitions groups the reusable definition sections of a policy.
+//
+// Definition CRUD endpoints edit these sections on staged policy versions.
+// Rules may reference definitions by name; every definition edit rematerializes
+// the full staged policy so unresolved or cyclic references are rejected.
+type PolicyDefinitions struct {
+	Attributes []grammar.AccessRuleModelSchemaJSONAllAccessPermissionRulesDEFATTRIBUTESElem `json:"attributes,omitempty"`
+	ACLs       []grammar.AccessRuleModelSchemaJSONAllAccessPermissionRulesDEFACLSElem       `json:"acls,omitempty"`
+	Objects    []grammar.AccessRuleModelSchemaJSONAllAccessPermissionRulesDEFOBJECTSElem    `json:"objects,omitempty"`
+	Formulas   []grammar.AccessRuleModelSchemaJSONAllAccessPermissionRulesDEFFORMULASElem   `json:"formulas,omitempty"`
 }
 
 // PolicyImportRequest imports configured ABAC policy JSON through the API.

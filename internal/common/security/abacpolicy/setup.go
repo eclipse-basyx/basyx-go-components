@@ -67,6 +67,13 @@ var managementRoutes = []managementRoute{
 	{method: http.MethodPost, pattern: "/{versionID}/rules/{ruleIndex}/duplicate", handler: duplicateRuleHandler},
 	{method: http.MethodPost, pattern: "/{versionID}/rules/{ruleIndex}/move", handler: moveRuleHandler},
 	{method: http.MethodPut, pattern: "/{versionID}/rules/{ruleIndex}/enabled", handler: setRuleEnabledHandler},
+	{method: http.MethodGet, pattern: "/{versionID}/definitions", handler: listDefinitionsHandler},
+	{method: http.MethodGet, pattern: "/{versionID}/definitions/{kind}", handler: listDefinitionsByKindHandler},
+	{method: http.MethodPost, pattern: "/{versionID}/definitions/{kind}", handler: createDefinitionHandler},
+	{method: http.MethodGet, pattern: "/{versionID}/definitions/{kind}/{name}", handler: getDefinitionHandler},
+	{method: http.MethodPut, pattern: "/{versionID}/definitions/{kind}/{name}", handler: replaceDefinitionHandler},
+	{method: http.MethodPatch, pattern: "/{versionID}/definitions/{kind}/{name}", handler: patchDefinitionHandler},
+	{method: http.MethodDelete, pattern: "/{versionID}/definitions/{kind}/{name}", handler: deleteDefinitionHandler},
 }
 
 // SetupSecurityWithABACRepository loads DB-backed ABAC and installs middleware.
@@ -481,6 +488,98 @@ func setRuleEnabledHandler(repo *Repository) http.HandlerFunc {
 	}
 }
 
+func listDefinitionsHandler(repo *Repository) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		versionID, ok := pathInt64(w, r, "versionID")
+		if !ok {
+			return
+		}
+		definitions, err := repo.ListDefinitions(r.Context(), versionID)
+		writeResult(w, definitions, err, http.StatusOK)
+	}
+}
+
+func listDefinitionsByKindHandler(repo *Repository) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		versionID, kind, ok := versionAndDefinitionKind(w, r)
+		if !ok {
+			return
+		}
+		definitions, err := repo.ListDefinitionsByKind(r.Context(), versionID, kind)
+		writeResult(w, definitions, err, http.StatusOK)
+	}
+}
+
+func createDefinitionHandler(repo *Repository) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		versionID, kind, ok := versionAndDefinitionKind(w, r)
+		if !ok {
+			return
+		}
+		raw, err := readBody(r)
+		if err != nil {
+			writeError(w, err)
+			return
+		}
+		version, err := repo.CreateDefinition(r.Context(), versionID, kind, raw)
+		writeResult(w, version, err, http.StatusOK)
+	}
+}
+
+func getDefinitionHandler(repo *Repository) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		versionID, kind, name, ok := versionAndDefinitionPath(w, r)
+		if !ok {
+			return
+		}
+		definition, err := repo.GetDefinition(r.Context(), versionID, kind, name)
+		writeResult(w, definition, err, http.StatusOK)
+	}
+}
+
+func replaceDefinitionHandler(repo *Repository) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		versionID, kind, name, ok := versionAndDefinitionPath(w, r)
+		if !ok {
+			return
+		}
+		raw, err := readBody(r)
+		if err != nil {
+			writeError(w, err)
+			return
+		}
+		version, err := repo.ReplaceDefinition(r.Context(), versionID, kind, name, raw)
+		writeResult(w, version, err, http.StatusOK)
+	}
+}
+
+func patchDefinitionHandler(repo *Repository) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		versionID, kind, name, ok := versionAndDefinitionPath(w, r)
+		if !ok {
+			return
+		}
+		raw, err := readBody(r)
+		if err != nil {
+			writeError(w, err)
+			return
+		}
+		version, err := repo.PatchDefinition(r.Context(), versionID, kind, name, raw)
+		writeResult(w, version, err, http.StatusOK)
+	}
+}
+
+func deleteDefinitionHandler(repo *Repository) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		versionID, kind, name, ok := versionAndDefinitionPath(w, r)
+		if !ok {
+			return
+		}
+		version, err := repo.DeleteDefinition(r.Context(), versionID, kind, name)
+		writeResult(w, version, err, http.StatusOK)
+	}
+}
+
 func versionAndRuleIndex(w http.ResponseWriter, r *http.Request) (int64, int, bool) {
 	versionID, ok := pathInt64(w, r, "versionID")
 	if !ok {
@@ -488,6 +587,24 @@ func versionAndRuleIndex(w http.ResponseWriter, r *http.Request) (int64, int, bo
 	}
 	ruleIndex, ok := pathInt(w, r, "ruleIndex")
 	return versionID, ruleIndex, ok
+}
+
+func versionAndDefinitionKind(w http.ResponseWriter, r *http.Request) (int64, string, bool) {
+	versionID, ok := pathInt64(w, r, "versionID")
+	if !ok {
+		return 0, "", false
+	}
+	kind, ok := pathString(w, r, "kind")
+	return versionID, kind, ok
+}
+
+func versionAndDefinitionPath(w http.ResponseWriter, r *http.Request) (int64, string, string, bool) {
+	versionID, kind, ok := versionAndDefinitionKind(w, r)
+	if !ok {
+		return 0, "", "", false
+	}
+	name, ok := pathString(w, r, "name")
+	return versionID, kind, name, ok
 }
 
 func pathInt64(w http.ResponseWriter, r *http.Request, name string) (int64, bool) {
@@ -504,6 +621,15 @@ func pathInt(w http.ResponseWriter, r *http.Request, name string) (int, bool) {
 	if err != nil || value < 1 {
 		writeError(w, common.NewErrBadRequest("ABACPOLICY-API-PATH invalid "+name))
 		return 0, false
+	}
+	return value, true
+}
+
+func pathString(w http.ResponseWriter, r *http.Request, name string) (string, bool) {
+	value := strings.TrimSpace(chi.URLParam(r, name))
+	if value == "" {
+		writeError(w, common.NewErrBadRequest("ABACPOLICY-API-PATH invalid "+name))
+		return "", false
 	}
 	return value, true
 }

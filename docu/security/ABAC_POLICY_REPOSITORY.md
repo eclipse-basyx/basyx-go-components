@@ -59,6 +59,7 @@ The API supports:
 - direct inspection of the active policy version and active materialized rules
 - import, list, inspect, validate, activate, and reject policy versions
 - clone active policy versions to staged versions
+- list, create, replace, merge-patch, and delete reusable staged definitions (`DEFATTRIBUTES`, `DEFACLS`, `DEFOBJECTS`, `DEFFORMULAS`)
 - create, replace, merge-patch, delete, duplicate, move, and enable/disable staged rules
 
 Only `staged` policy versions are editable. `active`, `superseded`, and `rejected` versions are immutable. Draft edits do not affect authorization until activation.
@@ -71,6 +72,7 @@ Authenticated users who do not satisfy those admin rules receive `404 Not Found`
 ```mermaid
 stateDiagram-v2
   [*] --> staged: import or clone
+  staged --> staged: create/update/patch/delete definition
   staged --> staged: create/update/patch/delete/duplicate/move rule
   staged --> staged: validate
   staged --> rejected: reject
@@ -274,6 +276,127 @@ JSON
 ```
 
 `POST /rules` also accepts a direct rule body without the `{ "rule": ... }` wrapper when you do not need to set `position`.
+
+### Manage Reusable Definitions
+
+Definitions are edited separately from rules because multiple rules can reference the same ACL, object set, attribute set, or formula. The API exposes them by kind:
+
+- `attributes` for `DEFATTRIBUTES`
+- `acls` for `DEFACLS`
+- `objects` for `DEFOBJECTS`
+- `formulas` for `DEFFORMULAS`
+
+List all definitions on a staged or active version:
+
+```bash
+curl -sS \
+  -H "Authorization: Bearer ${TOKEN}" \
+  "${BASE_URL}/security/abac/policy-versions/${DRAFT_VERSION_ID}/definitions"
+```
+
+List only reusable formulas:
+
+```bash
+curl -sS \
+  -H "Authorization: Bearer ${TOKEN}" \
+  "${BASE_URL}/security/abac/policy-versions/${DRAFT_VERSION_ID}/definitions/formulas"
+```
+
+Create a reusable object definition in the staged draft:
+
+```bash
+curl -sS -X POST \
+  -H "Authorization: Bearer ${TOKEN}" \
+  -H "Content-Type: application/json" \
+  "${BASE_URL}/security/abac/policy-versions/${DRAFT_VERSION_ID}/definitions/objects" \
+  -d @- <<'JSON'
+{
+  "name": "shared_submodel_routes",
+  "objects": [
+    { "ROUTE": "/submodels" },
+    { "ROUTE": "/submodels/*" }
+  ]
+}
+JSON
+```
+
+Create a formula definition and reference it from a rule:
+
+```bash
+curl -sS -X POST \
+  -H "Authorization: Bearer ${TOKEN}" \
+  -H "Content-Type: application/json" \
+  "${BASE_URL}/security/abac/policy-versions/${DRAFT_VERSION_ID}/definitions/formulas" \
+  -d @- <<'JSON'
+{
+  "name": "role_is_editor",
+  "formula": {
+    "$eq": [
+      { "$attribute": { "CLAIM": "role" } },
+      { "$strVal": "editor" }
+    ]
+  }
+}
+JSON
+
+curl -sS -X POST \
+  -H "Authorization: Bearer ${TOKEN}" \
+  -H "Content-Type: application/json" \
+  "${BASE_URL}/security/abac/policy-versions/${DRAFT_VERSION_ID}/rules" \
+  -d @- <<'JSON'
+{
+  "rule": {
+    "ACL": {
+      "ATTRIBUTES": [ { "CLAIM": "role" } ],
+      "RIGHTS": [ "READ" ],
+      "ACCESS": "ALLOW"
+    },
+    "USEOBJECTS": [ "shared_submodel_routes" ],
+    "USEFORMULA": "role_is_editor"
+  }
+}
+JSON
+```
+
+Replace a definition with `PUT`. The body `name` must match the path name; use delete plus create when you intentionally rename a definition so all references are revalidated explicitly.
+
+```bash
+curl -sS -X PUT \
+  -H "Authorization: Bearer ${TOKEN}" \
+  -H "Content-Type: application/json" \
+  "${BASE_URL}/security/abac/policy-versions/${DRAFT_VERSION_ID}/definitions/formulas/role_is_editor" \
+  -d @- <<'JSON'
+{
+  "name": "role_is_editor",
+  "formula": {
+    "$eq": [
+      { "$attribute": { "CLAIM": "scope" } },
+      { "$strVal": "basyx.editor" }
+    ]
+  }
+}
+JSON
+```
+
+`PATCH` uses the same merge semantics as rule patching. A `null` removes a field, and this is not RFC 6902 JSON Patch.
+
+```bash
+curl -sS -X PATCH \
+  -H "Authorization: Bearer ${TOKEN}" \
+  -H "Content-Type: application/json" \
+  "${BASE_URL}/security/abac/policy-versions/${DRAFT_VERSION_ID}/definitions/formulas/role_is_editor" \
+  -d '{ "formula": { "$boolean": true } }'
+```
+
+Delete a definition only after no rule or definition references it:
+
+```bash
+curl -sS -X DELETE \
+  -H "Authorization: Bearer ${TOKEN}" \
+  "${BASE_URL}/security/abac/policy-versions/${DRAFT_VERSION_ID}/definitions/objects/shared_submodel_routes"
+```
+
+Every definition edit rematerializes the full staged policy. If a delete or replacement leaves a `USEACL`, `USEOBJECTS`, `USEFORMULA`, or `USEATTRIBUTES` reference unresolved, the API rejects the edit and leaves the draft unchanged.
 
 ### Inspect Rules
 

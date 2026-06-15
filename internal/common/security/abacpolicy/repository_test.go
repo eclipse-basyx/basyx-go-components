@@ -349,6 +349,164 @@ func TestDuplicateRuleRejectsMalformedOptionalBody(t *testing.T) {
 	}
 }
 
+func TestDefinitionCRUDMutatesConfiguredPolicy(t *testing.T) {
+	t.Parallel()
+
+	policy, err := decodeConfiguredPolicy(testPolicyRaw(t))
+	if err != nil {
+		t.Fatalf("decode policy failed: %v", err)
+	}
+	rawDefinition := json.RawMessage(`{"name":"ownerClaims","attributes":[{"CLAIM":"owner"}]}`)
+	if err = createDefinitionInPolicy(&policy, definitionKindAttributes, rawDefinition); err != nil {
+		t.Fatalf("create definition failed: %v", err)
+	}
+	definitions := definitionsFromPolicy(policy)
+	if len(definitions.Attributes) != 1 || definitions.Attributes[0].Name != "ownerClaims" {
+		t.Fatalf("expected created attribute definition, got %#v", definitions.Attributes)
+	}
+	if definitions.Attributes[0].Attributes[0].Value != "owner" {
+		t.Fatalf("expected created claim attribute, got %#v", definitions.Attributes[0].Attributes[0])
+	}
+
+	err = createDefinitionInPolicy(&policy, definitionKindAttributes, rawDefinition)
+	if !common.IsErrConflict(err) {
+		t.Fatalf("expected duplicate conflict, got %v", err)
+	}
+
+	err = patchDefinitionInPolicy(&policy, definitionKindAttributes, "ownerClaims", json.RawMessage(`{"attributes":[{"CLAIM":"tenant"}]}`))
+	if err != nil {
+		t.Fatalf("patch definition failed: %v", err)
+	}
+	definitions = definitionsFromPolicy(policy)
+	if definitions.Attributes[0].Attributes[0].Value != "tenant" {
+		t.Fatalf("expected patched claim attribute, got %#v", definitions.Attributes[0].Attributes[0])
+	}
+
+	err = replaceDefinitionInPolicy(&policy, definitionKindAttributes, "ownerClaims", json.RawMessage(`{"name":"other","attributes":[{"CLAIM":"owner"}]}`))
+	if !common.IsErrBadRequest(err) {
+		t.Fatalf("expected path/body name mismatch to be rejected, got %v", err)
+	}
+
+	if err = deleteDefinitionFromPolicy(&policy, definitionKindAttributes, "ownerClaims"); err != nil {
+		t.Fatalf("delete definition failed: %v", err)
+	}
+	if len(definitionsFromPolicy(policy).Attributes) != 0 {
+		t.Fatalf("expected definition to be deleted, got %#v", definitionsFromPolicy(policy).Attributes)
+	}
+}
+
+func TestDeleteReferencedDefinitionBreaksMaterialization(t *testing.T) {
+	t.Parallel()
+
+	policy, err := decodeConfiguredPolicy(testPolicyWithReferencedFormulaRaw())
+	if err != nil {
+		t.Fatalf("decode policy failed: %v", err)
+	}
+	if err = deleteDefinitionFromPolicy(&policy, definitionKindFormulas, "always"); err != nil {
+		t.Fatalf("delete formula definition failed: %v", err)
+	}
+	raw, err := common.CanonicalJSON(policy)
+	if err != nil {
+		t.Fatalf("canonical policy failed: %v", err)
+	}
+	router := chi.NewRouter()
+	router.Get("/description", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	})
+
+	_, err = auth.MaterializeABACPolicy(raw, router, "")
+	if err == nil {
+		t.Fatal("expected materialization to reject missing referenced formula")
+	}
+}
+
+func TestDefinitionEndpointsValidateKindBeforeRepositoryAccess(t *testing.T) {
+	t.Parallel()
+
+	router := chi.NewRouter()
+	RegisterManagementRoutes(router, &Repository{})
+	response := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodGet, "/security/abac/policy-versions/1/definitions/nope", nil)
+
+	router.ServeHTTP(response, request)
+
+	if response.Code != http.StatusBadRequest {
+		t.Fatalf("expected unsupported definition kind to return 400, got %d body=%s", response.Code, response.Body.String())
+	}
+	if !strings.Contains(response.Body.String(), "ABACPOLICY-DEFINITION-KIND") {
+		t.Fatalf("expected definition kind error, got %s", response.Body.String())
+	}
+}
+
+func TestListDefinitionsEndpointReturnsConfiguredDefinitions(t *testing.T) {
+	t.Parallel()
+
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("sqlmock setup failed: %v", err)
+	}
+	defer func() {
+		_ = db.Close()
+	}()
+	repo, err := NewRepository(db, "test-service", chi.NewRouter(), "")
+	if err != nil {
+		t.Fatalf("repository setup failed: %v", err)
+	}
+	router := chi.NewRouter()
+	RegisterManagementRoutes(router, repo)
+
+	materialized := testMaterializedPolicyFromRaw(t, testPolicyWithDefinitionsRaw())
+	version := testPolicyVersion(7, StatusStaged, materialized)
+	mock.ExpectQuery(`SELECT (.+) FROM "abac_policy_versions"`).
+		WillReturnRows(policyVersionRows(version))
+
+	response := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodGet, "/security/abac/policy-versions/7/definitions", nil)
+	router.ServeHTTP(response, request)
+
+	if response.Code != http.StatusOK {
+		t.Fatalf("expected definitions status 200, got %d body=%s", response.Code, response.Body.String())
+	}
+	if !strings.Contains(response.Body.String(), `"attributes"`) || !strings.Contains(response.Body.String(), `"adminClaims"`) {
+		t.Fatalf("expected configured definitions in response, got %s", response.Body.String())
+	}
+	if strings.Contains(response.Body.String(), `"rules"`) {
+		t.Fatalf("expected definitions response to omit rules, got %s", response.Body.String())
+	}
+	if err = mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("unmet SQL expectations: %v", err)
+	}
+}
+
+func TestCreateDefinitionRejectsImmutablePolicyVersion(t *testing.T) {
+	t.Parallel()
+
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("sqlmock setup failed: %v", err)
+	}
+	defer func() {
+		_ = db.Close()
+	}()
+	repo, err := NewRepository(db, "test-service", chi.NewRouter(), "")
+	if err != nil {
+		t.Fatalf("repository setup failed: %v", err)
+	}
+	active := testPolicyVersion(5, StatusActive, testMaterializedPolicy(t))
+	mock.ExpectBegin()
+	mock.ExpectQuery(`SELECT (.+) FROM "abac_policy_versions"`).
+		WillReturnRows(policyVersionRows(active))
+	mock.ExpectRollback()
+
+	_, err = repo.CreateDefinition(t.Context(), 5, "attributes", json.RawMessage(`{"name":"ownerClaims","attributes":[{"CLAIM":"owner"}]}`))
+	if !common.IsErrConflict(err) {
+		t.Fatalf("expected immutable version conflict, got %v", err)
+	}
+	if err = mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("unmet SQL expectations: %v", err)
+	}
+}
+
 func TestImportPolicyAndActivateRollsBackImportedVersionOnActivationFailure(t *testing.T) {
 	t.Parallel()
 
@@ -484,13 +642,72 @@ func testPolicyRaw(t *testing.T) []byte {
 	}`)
 }
 
+func testPolicyWithDefinitionsRaw() []byte {
+	return []byte(`{
+		"AllAccessPermissionRules": {
+			"DEFATTRIBUTES": [
+				{
+					"name": "adminClaims",
+					"attributes": [{ "CLAIM": "role" }]
+				}
+			],
+			"DEFFORMULAS": [
+				{
+					"name": "always",
+					"formula": { "$boolean": true }
+				}
+			],
+			"rules": [
+				{
+					"ACL": {
+						"ACCESS": "ALLOW",
+						"RIGHTS": ["READ"],
+						"ATTRIBUTES": [{ "GLOBAL": "ANONYMOUS" }]
+					},
+					"OBJECTS": [{ "ROUTE": "/description" }],
+					"FORMULA": { "$boolean": true }
+				}
+			]
+		}
+	}`)
+}
+
+func testPolicyWithReferencedFormulaRaw() []byte {
+	return []byte(`{
+		"AllAccessPermissionRules": {
+			"DEFFORMULAS": [
+				{
+					"name": "always",
+					"formula": { "$boolean": true }
+				}
+			],
+			"rules": [
+				{
+					"ACL": {
+						"ACCESS": "ALLOW",
+						"RIGHTS": ["READ"],
+						"ATTRIBUTES": [{ "GLOBAL": "ANONYMOUS" }]
+					},
+					"OBJECTS": [{ "ROUTE": "/description" }],
+					"USEFORMULA": "always"
+				}
+			]
+		}
+	}`)
+}
+
 func testMaterializedPolicy(t *testing.T) auth.MaterializedABACPolicy {
+	t.Helper()
+	return testMaterializedPolicyFromRaw(t, testPolicyRaw(t))
+}
+
+func testMaterializedPolicyFromRaw(t *testing.T, raw []byte) auth.MaterializedABACPolicy {
 	t.Helper()
 	router := chi.NewRouter()
 	router.Get("/description", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 	})
-	materialized, err := auth.MaterializeABACPolicy(testPolicyRaw(t), router, "")
+	materialized, err := auth.MaterializeABACPolicy(raw, router, "")
 	if err != nil {
 		t.Fatalf("materialize test policy failed: %v", err)
 	}
