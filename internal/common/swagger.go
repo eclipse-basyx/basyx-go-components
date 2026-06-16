@@ -92,6 +92,7 @@ type SwaggerUIConfig struct {
 	ServerURL             string         // Server URL to use in OpenAPI spec (e.g., "http://localhost:5004/api")
 	BasePath              string         // Base path for redirect to Swagger UI (e.g., "/" or "/api")
 	Contact               *ContactConfig // Contact information to inject into OpenAPI spec
+	Enabled               *bool          // nil/default=true, false disables Swagger UI and OpenAPI spec endpoints
 	IncludeVerifyEndpoint *bool          // nil/default=true, false disables /verify injection in OpenAPI spec
 	IncludeABACManagement *bool          // nil/default=false, true injects ABAC management API paths
 }
@@ -1435,10 +1436,19 @@ func injectContact(specContent []byte, contact *ContactConfig) []byte {
 //   - r: Chi router to add endpoints to
 //   - cfg: Swagger UI configuration
 //
-// This adds two endpoints:
+// When enabled, this adds these endpoints:
 //   - cfg.UIPath: Serves the Swagger UI HTML page
 //   - cfg.SpecPath: Serves the OpenAPI specification file
 func AddSwaggerUI(r *chi.Mux, cfg SwaggerUIConfig) {
+	enabled := true
+	if cfg.Enabled != nil {
+		enabled = *cfg.Enabled
+	}
+	if !enabled {
+		log.Printf("📖 Swagger disabled")
+		return
+	}
+
 	// Inject server URL into spec if configured
 	specContent := cfg.SpecContent
 	if cfg.ServerURL != "" {
@@ -1524,7 +1534,8 @@ func AddSwaggerUI(r *chi.Mux, cfg SwaggerUIConfig) {
 	log.Printf("📄 OpenAPI spec available at %s", cfg.SpecPath)
 }
 
-// AddSwaggerUIFromFS adds Swagger UI endpoints using an embedded filesystem
+// AddSwaggerUIFromFS adds Swagger/OpenAPI documentation endpoints using an embedded filesystem.
+// When serverConfig.Swagger.Enabled is false, no documentation endpoints are added.
 //
 // Parameters:
 //   - r: Chi router to add endpoints to
@@ -1535,6 +1546,11 @@ func AddSwaggerUI(r *chi.Mux, cfg SwaggerUIConfig) {
 //   - specPath: URL path for the spec file (e.g., "/api-docs/openapi.yaml")
 //   - serverConfig: Server configuration for building the server URL
 func AddSwaggerUIFromFS(r *chi.Mux, specFS embed.FS, specFile string, title string, uiPath string, specPath string, serverConfig *Config) error {
+	if serverConfig != nil && !serverConfig.Swagger.Enabled {
+		log.Printf("📖 Swagger disabled")
+		return nil
+	}
+
 	content, err := fs.ReadFile(specFS, specFile)
 	if err != nil {
 		return err
@@ -1574,6 +1590,7 @@ func AddSwaggerUIFromFS(r *chi.Mux, specFS embed.FS, specFile string, title stri
 
 	// Build contact config if provided
 	var contact *ContactConfig
+	var enabled *bool
 	var includeVerifyEndpoint *bool
 	var includeABACManagement *bool
 	if serverConfig != nil && (serverConfig.Swagger.ContactName != "" || serverConfig.Swagger.ContactEmail != "" || serverConfig.Swagger.ContactURL != "") {
@@ -1584,6 +1601,7 @@ func AddSwaggerUIFromFS(r *chi.Mux, specFS embed.FS, specFile string, title stri
 		}
 	}
 	if serverConfig != nil {
+		enabled = &serverConfig.Swagger.Enabled
 		includeVerifyEndpoint = &serverConfig.Server.VerificationEndpointAvailable
 		abacManagementEnabled := shouldIncludeABACManagement(serverConfig)
 		includeABACManagement = &abacManagementEnabled
@@ -1598,6 +1616,7 @@ func AddSwaggerUIFromFS(r *chi.Mux, specFS embed.FS, specFile string, title stri
 		ServerURL:             serverURL,
 		BasePath:              basePath,
 		Contact:               contact,
+		Enabled:               enabled,
 		IncludeVerifyEndpoint: includeVerifyEndpoint,
 		IncludeABACManagement: includeABACManagement,
 	})

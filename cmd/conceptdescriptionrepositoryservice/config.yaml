@@ -23,6 +23,7 @@ abac:
   modelPath: "config/access_rules/access-rules.json"
 
 # swagger:
+#   enabled: true
 #   contactName: "Eclipse BaSyx"
 #   contactEmail: "basyx-dev@eclipse.org"
 #   contactUrl: "https://basyx.org"

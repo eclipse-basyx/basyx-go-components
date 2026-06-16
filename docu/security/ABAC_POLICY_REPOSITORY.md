@@ -50,7 +50,7 @@ The importer validates the configured JSON, canonicalizes it, materializes refer
 
 ## Management API
 
-The management API is mounted under `/security/abac/**` only when both `abac.enabled` and `abac.managementApi.enabled` are true. Swagger/OpenAPI exposes these endpoints under the same condition.
+The management API is mounted under `/security/abac/**` only when both `abac.enabled` and `abac.managementApi.enabled` are true. Swagger/OpenAPI exposes these endpoints only when the management API is active and `swagger.enabled` is true.
 
 Digital Twin Registry is the exception: it never exposes the management API. Its access-rule file remains the service source of truth and is imported on every restart by default.
 

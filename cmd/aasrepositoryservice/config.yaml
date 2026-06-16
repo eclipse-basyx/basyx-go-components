@@ -34,6 +34,7 @@ general:
 #   certificateChainPath: "./rsa-cert.pem"
 
 # swagger:
+#   enabled: true
 #   contactName: "Eclipse BaSyx"
 #   contactEmail: "basyx-dev@eclipse.org"
 #   contactUrl: "https://basyx.org"

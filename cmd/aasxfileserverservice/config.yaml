@@ -17,6 +17,7 @@ general:
   uploadMaxSizeBytes: 134217728
 
 # swagger:
+#   enabled: true
 #   contactName: "Eclipse BaSyx"
 #   contactEmail: "basyx-dev@eclipse.org"
 #   contactUrl: "https://basyx.org"
