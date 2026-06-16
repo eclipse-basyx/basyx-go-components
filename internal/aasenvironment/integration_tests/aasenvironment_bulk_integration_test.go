@@ -53,7 +53,7 @@ var aasEnvNoRedirectClient = &http.Client{
 }
 
 func TestAASEnvironmentBulkOperationsAndDescription(t *testing.T) {
-	t.Run("DescriptionContainsAASEnvironmentProfiles", func(t *testing.T) {
+	t.Run("DescriptionProfilesMatchExpectedSet", func(t *testing.T) {
 		resetDatabase(t)
 		status, body, _ := doAASEnvRequest(t, aasEnvNoRedirectClient, http.MethodGet, aasEnvBaseURL+"/description", nil)
 		require.Equal(t, http.StatusOK, status)

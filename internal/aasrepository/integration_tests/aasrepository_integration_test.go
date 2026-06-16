@@ -609,22 +609,22 @@ func TestIntegration(t *testing.T) {
 			}
 			return fmt.Sprintf("Step_(%s)_%d_%s_%s", context, stepNumber, step.Method, step.Endpoint)
 		},
-		ShouldSkipStep: shouldSkipImportedDescriptionStepForAASEnvironment,
+		ShouldMatchJSON: shouldMatchImportedDescriptionResponseForAASEnvironment,
 	})
 }
 
-func shouldSkipImportedDescriptionStepForAASEnvironment(step testenv.JSONSuiteStep) bool {
+func shouldMatchImportedDescriptionResponseForAASEnvironment(step testenv.JSONSuiteStep) bool {
 	if os.Getenv("BASYX_AASENVIRONMENT_SKIP_IMPORTED_DESCRIPTION") != "1" {
-		return false
+		return true
 	}
 	if !strings.EqualFold(step.Method, http.MethodGet) {
-		return false
+		return true
 	}
 	parsedEndpoint, err := url.Parse(step.Endpoint)
 	if err != nil {
-		return false
+		return true
 	}
-	return parsedEndpoint.Path == "/description"
+	return parsedEndpoint.Path != "/description"
 }
 
 func TestQueryAssetAdministrationShellFalseFragmentFiltersKeepRootAAS(t *testing.T) {
