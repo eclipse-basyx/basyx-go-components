@@ -36,7 +36,7 @@ import (
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 )
 
-const pattern = `^(?:\$aas#(?:idShort|id|assetInformation\.assetKind|assetInformation\.assetType|assetInformation\.globalAssetId|assetInformation\.specificAssetIds\[[0-9]*\]\.(?:name|value|externalSubjectId(?:\.(?:type|keys\[[0-9]*\]\.(?:type|value)))?)|submodels\[[0-9]*\]\.(?:type|keys\[[0-9]*\]\.(?:type|value)))|\$sm#(?:semanticId(?:\.(?:type|keys\[[0-9]*\]\.(?:type|value)))?|idShort|id)|\$sme(?:\.[A-Za-z](?:[A-Za-z0-9_-]*[A-Za-z0-9_])?(?:\[[0-9]*\])*(?:\.[A-Za-z](?:[A-Za-z0-9_-]*[A-Za-z0-9_])?(?:\[[0-9]*\])*)*)?#(?:semanticId(?:\.(?:type|keys\[[0-9]*\]\.(?:type|value)))?|idShort|value|valueType|language)|\$cd#(?:idShort|id)|\$aasdesc#(?:idShort|id|assetKind|assetType|globalAssetId|createdAt|specificAssetIds\[[0-9]*\]\.(?:name|value|externalSubjectId(?:\.(?:type|keys\[[0-9]*\]\.(?:type|value)))?)|endpoints\[[0-9]*\]\.(?:interface|protocolinformation\.href)|submodelDescriptors\[[0-9]*\]\.(?:semanticId(?:\.(?:type|keys\[[0-9]*\]\.(?:type|value)))?|idShort|id|endpoints\[[0-9]*\]\.(?:interface|protocolinformation\.href)))|\$smdesc#(?:semanticId(?:\.(?:type|keys\[[0-9]*\]\.(?:type|value)))?|idShort|id|createdAt|endpoints\[[0-9]*\]\.(?:interface|protocolinformation\.href))|\$bd#(?:createdAt|specificAssetIds\[[0-9]*\]\.(?:name|value|externalSubjectId(?:\.(?:type|keys\[[0-9]*\]\.(?:type|value)))?)))$`
+const pattern = `^(?:\$aas#(?:idShort|id|assetInformation\.assetKind|assetInformation\.assetType|assetInformation\.globalAssetId|assetInformation\.specificAssetIds\[[0-9]*\]\.(?:name|value|externalSubjectId(?:\.(?:type|keys\[[0-9]*\]\.(?:type|value)))?)|submodels\[[0-9]*\]\.(?:type|keys\[[0-9]*\]\.(?:type|value)))|\$sm#(?:semanticId(?:\.(?:type|keys\[[0-9]*\]\.(?:type|value)))?|supplementalSemanticIds(?:\[[0-9]*\])?(?:\.(?:type|keys\[[0-9]*\]\.(?:type|value)))?|idShort|id)|\$sme(?:\.[A-Za-z](?:[A-Za-z0-9_-]*[A-Za-z0-9_])?(?:\[[0-9]*\])*(?:\.[A-Za-z](?:[A-Za-z0-9_-]*[A-Za-z0-9_])?(?:\[[0-9]*\])*)*)?#(?:semanticId(?:\.(?:type|keys\[[0-9]*\]\.(?:type|value)))?|supplementalSemanticIds(?:\[[0-9]*\])?(?:\.(?:type|keys\[[0-9]*\]\.(?:type|value)))?|idShort|value|valueType|language)|\$cd#(?:idShort|id)|\$aasdesc#(?:idShort|id|assetKind|assetType|globalAssetId|specificAssetIds\[[0-9]*\]\.(?:name|value|externalSubjectId(?:\.(?:type|keys\[[0-9]*\]\.(?:type|value)))?)|endpoints\[[0-9]*\]\.(?:interface|protocolinformation\.href)|submodelDescriptors\[[0-9]*\]\.(?:semanticId(?:\.(?:type|keys\[[0-9]*\]\.(?:type|value)))?|supplementalSemanticIds(?:\[[0-9]*\])?(?:\.(?:type|keys\[[0-9]*\]\.(?:type|value)))?|idShort|id|endpoints\[[0-9]*\]\.(?:interface|protocolinformation\.href)))|\$smdesc#(?:semanticId(?:\.(?:type|keys\[[0-9]*\]\.(?:type|value)))?|supplementalSemanticIds(?:\[[0-9]*\])?(?:\.(?:type|keys\[[0-9]*\]\.(?:type|value)))?|idShort|id|endpoints\[[0-9]*\]\.(?:interface|protocolinformation\.href)))$`
 
 // ModelStringPattern represents a string pattern for model references in the AAS grammar.
 //
@@ -52,14 +52,12 @@ const pattern = `^(?:\$aas#(?:idShort|id|assetInformation\.assetKind|assetInform
 //   - $cd#       : Concept Description references
 //   - $aasdesc#  : AAS Descriptor references
 //   - $smdesc#   : Submodel Descriptor references
-//   - $bd#       : Basic Discovery references
 //
 // Examples:
 //   - "$aas#idShort"
 //   - "$sm#semanticId.keys[0].value"
 //   - "$sme.property1#value"
 //   - "$aasdesc#endpoints[0].interface"
-//   - "$bd#specificAssetIds[0].name"
 type ModelStringPattern string
 
 // UnmarshalJSON implements the json.Unmarshaler interface for ModelStringPattern.

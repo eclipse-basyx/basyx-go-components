@@ -30,9 +30,11 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"strings"
 
 	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/doug-martin/goqu/v9"
+	"github.com/doug-martin/goqu/v9/exp"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/builder"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
@@ -185,6 +187,21 @@ func ReadSubmodelDescriptorSupplementalSemanticReferencesByDescriptorIDs(
 		common.TblSubmodelDescriptorSuppSemantic,
 		common.ColDescriptorID,
 		"REFREAD-SUPPSMDESC",
+		contextReferences1ToManyOptions{
+			referenceAlias:    "aasdesc_submodel_descriptor_supplemental_semantic_id_reference",
+			referenceKeyAlias: "aasdesc_submodel_descriptor_supplemental_semantic_id_reference_key",
+			orderByPosition:   true,
+			filterSpecs: []referenceFilterSpec{
+				{
+					fragment:  "$aasdesc#submodelDescriptors[].supplementalSemanticIds[]",
+					collector: nil,
+				},
+				{
+					fragment:  "$smdesc#supplementalSemanticIds[]",
+					collector: nil,
+				},
+			},
+		},
 	)
 }
 
@@ -211,6 +228,27 @@ type referenceQuerySpec struct {
 	referenceAlias    string
 	referenceKeyAlias string
 	filterSpecs       []referenceFilterSpec
+}
+
+type contextReferences1ToManyOptions struct {
+	referenceAlias    string
+	referenceKeyAlias string
+	payloadAlias      string
+	orderByPosition   bool
+	filterSpecs       []referenceFilterSpec
+}
+
+func (o contextReferences1ToManyOptions) withDefaults() contextReferences1ToManyOptions {
+	if strings.TrimSpace(o.referenceAlias) == "" {
+		o.referenceAlias = "rt"
+	}
+	if strings.TrimSpace(o.referenceKeyAlias) == "" {
+		o.referenceKeyAlias = "rkt"
+	}
+	if strings.TrimSpace(o.payloadAlias) == "" {
+		o.payloadAlias = "rpt"
+	}
+	return o
 }
 
 func queryReferenceRowsByOwnerIDs(
@@ -326,18 +364,28 @@ func readContextReferences1ToManyByOwnerIDs(
 	referenceTable string,
 	ownerIDColumn string,
 	errPrefix string,
+	options ...contextReferences1ToManyOptions,
 ) (map[int64][]types.IReference, error) {
 	out := make(map[int64][]types.IReference, len(ownerIDs))
 	if len(ownerIDs) == 0 {
 		return out, nil
 	}
 
+	opts := contextReferences1ToManyOptions{
+		referenceAlias:    "rt",
+		referenceKeyAlias: "rkt",
+		payloadAlias:      "rpt",
+	}
+	if len(options) > 0 {
+		opts = options[0].withDefaults()
+	}
+
 	d := goqu.Dialect(common.Dialect)
 	arr := pq.Array(ownerIDs)
 
-	rt := goqu.T(referenceTable).As("rt")
-	rkt := goqu.T(referenceTable + "_key").As("rkt")
-	rpt := goqu.T(referenceTable + "_payload").As("rpt")
+	rt := goqu.T(referenceTable).As(opts.referenceAlias)
+	rkt := goqu.T(referenceTable + "_key").As(opts.referenceKeyAlias)
+	rpt := goqu.T(referenceTable + "_payload").As(opts.payloadAlias)
 
 	ds := d.From(rt).
 		LeftJoin(rpt, goqu.On(rpt.Col(common.ColReferenceID).Eq(rt.Col(common.ColID)))).
@@ -351,13 +399,24 @@ func readContextReferences1ToManyByOwnerIDs(
 			rkt.Col(common.ColValue).As("key_value"),
 			rpt.Col("parent_reference_payload").As("parent_reference_payload"),
 		).
-		Where(goqu.L(fmt.Sprintf("rt.%s = ANY(?::bigint[])", ownerIDColumn), arr)).
-		Order(
-			rt.Col(ownerIDColumn).Asc(),
-			rt.Col(common.ColID).Asc(),
-			rkt.Col(common.ColPosition).Asc(),
-			rkt.Col(common.ColID).Asc(),
-		)
+		Where(goqu.L(fmt.Sprintf("%s.%s = ANY(?::bigint[])", opts.referenceAlias, ownerIDColumn), arr))
+
+	orderExpressions := []exp.OrderedExpression{
+		rt.Col(ownerIDColumn).Asc(),
+	}
+	if opts.orderByPosition {
+		orderExpressions = append(orderExpressions, rt.Col(common.ColPosition).Asc())
+	}
+	orderExpressions = append(orderExpressions, rt.Col(common.ColID).Asc(), rkt.Col(common.ColPosition).Asc(), rkt.Col(common.ColID).Asc())
+	ds = ds.Order(orderExpressions...)
+
+	var err error
+	for _, filterSpec := range opts.filterSpecs {
+		ds, err = auth.AddFilterQueryFromContext(ctx, ds, filterSpec.fragment, filterSpec.collector)
+		if err != nil {
+			return nil, fmt.Errorf("%s-ADDFILTER: %w", errPrefix, err)
+		}
+	}
 
 	sqlStr, args, err := ds.ToSQL()
 	if err != nil {

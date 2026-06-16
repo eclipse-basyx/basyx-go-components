@@ -1,0 +1,8 @@
+{
+  "$condition": {
+    "$eq": [
+      { "$field": "$aasdesc#submodelDescriptors[].supplementalSemanticIds[].keys[].value" },
+      { "$strVal": "SUPP-WRITTEN-BY-X" }
+    ]
+  }
+}

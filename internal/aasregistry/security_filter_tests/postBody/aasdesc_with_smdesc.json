@@ -12,6 +12,17 @@
           }
         ]
       },
+      "supplementalSemanticIds": [
+        {
+          "type": "ExternalReference",
+          "keys": [
+            {
+              "type": "GlobalReference",
+              "value": "SUPP_WRITTEN_BY_Y"
+            }
+          ]
+        }
+      ],
       "endpoints": [
         {
           "interface": "AAS-3.0",
@@ -32,6 +43,17 @@
           }
         ]
       },
+      "supplementalSemanticIds": [
+        {
+          "type": "ExternalReference",
+          "keys": [
+            {
+              "type": "GlobalReference",
+              "value": "SUPP_WRITTEN_BY_X"
+            }
+          ]
+        }
+      ],
       "endpoints": [
         {
           "interface": "AAS-3.0",
@@ -52,6 +74,17 @@
           }
         ]
       },
+      "supplementalSemanticIds": [
+        {
+          "type": "ExternalReference",
+          "keys": [
+            {
+              "type": "GlobalReference",
+              "value": "SUPP_UNIQUE_SM"
+            }
+          ]
+        }
+      ],
       "endpoints": [
         {
           "interface": "AAS-3.0",

@@ -1,0 +1,19 @@
+{
+  "$condition": {
+    "$eq": [
+      { "$field": "$aasdesc#submodelDescriptors[].supplementalSemanticIds[].keys[].value" },
+      { "$strVal": "SUPP-WRITTEN-BY-X" }
+    ]
+  },
+  "$filters": [
+    {
+      "$fragment": "$aasdesc#submodelDescriptors[].supplementalSemanticIds[]",
+      "$condition": {
+        "$eq": [
+          { "$field": "$aasdesc#submodelDescriptors[].supplementalSemanticIds[].keys[].value" },
+          { "$strVal": "SUPP-WRITTEN-BY-X" }
+        ]
+      }
+    }
+  ]
+}

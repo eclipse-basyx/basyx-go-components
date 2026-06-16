@@ -159,7 +159,7 @@ func getNextSubmodelDescriptorPosition(tx *sql.Tx, aasDescriptorID int64) (int, 
 }
 
 func createsubModelDescriptorSupplementalSemantic(tx *sql.Tx, subModelDescriptorID int64, references []types.IReference) error {
-	return common.CreateContextReferences1ToMany(
+	return common.CreateContextReferences1ToManyWithPosition(
 		tx,
 		subModelDescriptorID,
 		references,

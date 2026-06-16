@@ -38,6 +38,32 @@
     "expectedStatus": 201
   },
   {
+    "context": "POST Descriptor Supplemental - Admin - ALLOWED",
+    "token": { "user": "admin", "password": "pwd" },
+    "method": "POST",
+    "endpoint": "http://localhost:6005/shell-descriptors",
+    "data": "postBody/simple_aas_supplemental.json",
+    "expectedStatus": 201
+  },
+  {
+    "context": "POST Query Supplemental Condition - Admin - MATCH",
+    "token": { "user": "admin", "password": "pwd" },
+    "method": "POST",
+    "endpoint": "http://localhost:6005/query/shell-descriptors",
+    "data": "postBody/query_shells_supplemental_condition.json",
+    "shouldMatch": "expected/query_supplemental_condition.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "POST Query Supplemental Fragment - Admin - FILTERED",
+    "token": { "user": "admin", "password": "pwd" },
+    "method": "POST",
+    "endpoint": "http://localhost:6005/query/shell-descriptors",
+    "data": "postBody/query_shells_supplemental_fragment.json",
+    "shouldMatch": "expected/query_supplemental_fragment.json",
+    "expectedStatus": 200
+  },
+  {
     "context": "POST Query - Viewer - FILTERED",
     "token": { "user": "usera", "password": "pwd" },
     "method": "POST",

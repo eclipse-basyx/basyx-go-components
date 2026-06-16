@@ -126,6 +126,16 @@
                   ]
                 }
               ]
+            },
+            {
+              "$eq": [
+                {
+                  "$strVal": "PUBLIC_READABLE"
+                },
+                {
+                  "$field": "$aasdesc#submodelDescriptors[].supplementalSemanticIds[].keys[].value"
+                }
+              ]
             }
           ]
         }

@@ -160,6 +160,63 @@ func TestHandleComparison_BuildsExistsForSpecificAssetExternalSubjectKeyValue(t 
 	}
 }
 
+func TestHandleComparison_BuildsExistsForSubmodelDescriptorSupplementalSemanticKeyValue(t *testing.T) {
+	field := ModelStringPattern("$aasdesc#submodelDescriptors[2].supplementalSemanticIds[0].keys[1].value")
+	lit := StandardString("SUPP-WRITTEN-BY-X")
+
+	left := Value{Field: &field}
+	right := Value{StrVal: &lit}
+
+	collector := mustCollectorForRoot(t, "$aasdesc")
+	expr, _, err := HandleComparisonWithCollector(&left, &right, "$eq", collector)
+	if err != nil {
+		t.Fatalf("HandleComparison returned error: %v", err)
+	}
+
+	d := goqu.Dialect("postgres")
+	ds := d.From(goqu.T("descriptor").As("descriptor")).
+		InnerJoin(
+			goqu.T("aas_descriptor").As("aas_descriptor"),
+			goqu.On(goqu.I("aas_descriptor.descriptor_id").Eq(goqu.I("descriptor.id"))),
+		).
+		Select(goqu.V(1)).
+		Where(expr).
+		Prepared(true)
+
+	sql, args, err := ds.ToSQL()
+	if err != nil {
+		t.Fatalf("ToSQL returned error: %v", err)
+	}
+
+	if !strings.Contains(sql, "EXISTS") {
+		t.Fatalf("expected EXISTS in SQL, got: %s", sql)
+	}
+	if !strings.Contains(sql, "JOIN \"submodel_descriptor_supplemental_semantic_id_reference\" AS \"aasdesc_submodel_descriptor_supplemental_semantic_id_reference\"") {
+		t.Fatalf("expected join to supplemental semantic reference in SQL, got: %s", sql)
+	}
+	if !strings.Contains(sql, "JOIN \"submodel_descriptor_supplemental_semantic_id_reference_key\" AS \"aasdesc_submodel_descriptor_supplemental_semantic_id_reference_key\"") {
+		t.Fatalf("expected join to supplemental semantic reference key in SQL, got: %s", sql)
+	}
+	if !strings.Contains(sql, "\"submodel_descriptor\".\"position\"") {
+		t.Fatalf("expected submodel descriptor position constraint in SQL, got: %s", sql)
+	}
+	if !strings.Contains(sql, "\"aasdesc_submodel_descriptor_supplemental_semantic_id_reference\".\"position\"") {
+		t.Fatalf("expected supplemental reference position constraint in SQL, got: %s", sql)
+	}
+	if !strings.Contains(sql, "\"aasdesc_submodel_descriptor_supplemental_semantic_id_reference_key\".\"position\"") {
+		t.Fatalf("expected supplemental key position constraint in SQL, got: %s", sql)
+	}
+	if !strings.Contains(sql, "\"aasdesc_submodel_descriptor_supplemental_semantic_id_reference_key\".\"value\"") {
+		t.Fatalf("expected predicate on supplemental key value in SQL, got: %s", sql)
+	}
+	if !argListContains(args, 2) || !argListContains(args, 0) || !argListContains(args, 1) {
+		t.Fatalf("expected args to contain index bindings 2, 0, and 1, got %#v", args)
+	}
+	if !argListContains(args, string(lit)) {
+		t.Fatalf("expected args to contain %q, got %#v", string(lit), args)
+	}
+}
+
 func TestLogicalExpression_ExistsSQL_DoesNotIncludeLimitOne(t *testing.T) {
 	expr := LogicalExpression{
 		Eq: ComparisonItems{

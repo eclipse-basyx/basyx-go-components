@@ -46,11 +46,15 @@ func TestModelStringPattern_UnmarshalJSON_AcceptsAASAndSME(t *testing.T) {
 		"$sm#idShort",
 		"$sm#semanticId.type",
 		"$sm#semanticId.keys[0].value",
+		"$sm#supplementalSemanticIds[0].keys[1].value",
 		"$sme#idShort",
 		"$sme#value",
 		"$sme#valueType",
 		"$sme#language",
+		"$sme.temperature#supplementalSemanticIds[0].type",
 		"$cd#id",
+		"$aasdesc#submodelDescriptors[0].supplementalSemanticIds[1].keys[2].type",
+		"$smdesc#supplementalSemanticIds[0].keys[0].value",
 	}
 
 	for _, in := range cases {
@@ -79,6 +83,9 @@ func TestModelStringPattern_UnmarshalJSON_RejectsInvalid(t *testing.T) {
 		"$sme",
 		"$sme#",
 		"$sm#unknownField",
+		"$aasdesc#createdAt",
+		"$smdesc#createdAt",
+		"$bd#createdAt",
 	}
 
 	for _, in := range cases {
@@ -101,15 +108,26 @@ func TestFragmentStringPattern_UnmarshalJSON_AcceptsAASAndSMEFragments(t *testin
 
 	cases := []string{
 		"$aas#assetInformation.assetType",
+		"$aas#assetInformation.specificAssetIds",
 		"$aas#submodels[0]",
+		"$aas#submodels",
+		"$aas#submodels[0].keys",
 		"$aas#assetInformation.specificAssetIds[0]",
+		"$aas#assetInformation.specificAssetIds[0].externalSubjectId.keys",
 		"$aas#assetInformation.specificAssetIds[0].externalSubjectId.keys[3]",
 		"$aasdesc#description",
 		"$aasdesc#displayName",
 		"$aasdesc#administration",
+		"$aasdesc#endpoints",
+		"$aasdesc#submodelDescriptors",
+		"$aasdesc#submodelDescriptors[0].supplementalSemanticIds[1].keys",
 		"$sme#idShort",
 		"$sme#value",
+		"$sme#supplementalSemanticIds[0].keys",
+		"$sm#supplementalSemanticIds[0].keys",
+		"$smdesc#supplementalSemanticIds[0].keys",
 		"$sm#semanticId.keys[0]",
+		"$sm#semanticId.keys",
 	}
 
 	for _, in := range cases {
@@ -135,6 +153,7 @@ func TestFragmentStringPattern_UnmarshalJSON_RejectsInvalid(t *testing.T) {
 		"$aas",
 		"$aas#",
 		"$sme#",
+		"$sm#id",
 		"$aasdesc#endpoints[].protocolinformation",
 	}
 

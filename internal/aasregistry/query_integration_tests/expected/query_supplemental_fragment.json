@@ -1,0 +1,43 @@
+{
+  "paging_metadata": {},
+  "result": [
+    {
+      "id": "https://example.org/SUPP",
+      "submodelDescriptors": [
+        {
+          "id": "https://example.org/SUPP/SM-A",
+          "supplementalSemanticIds": [
+            {
+              "type": "ExternalReference",
+              "keys": [
+                {
+                  "type": "GlobalReference",
+                  "value": "SUPP-WRITTEN-BY-X"
+                }
+              ]
+            }
+          ],
+          "endpoints": [
+            {
+              "interface": "AAS-3.0",
+              "protocolInformation": {
+                "href": "https://endpoint.example/supp-a"
+              }
+            }
+          ]
+        },
+        {
+          "id": "https://example.org/SUPP/SM-B",
+          "endpoints": [
+            {
+              "interface": "AAS-3.0",
+              "protocolInformation": {
+                "href": "https://endpoint.example/supp-b"
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -212,6 +212,31 @@ var fieldIdentifierProcessingCases = []fidTestCase{
 		WantScalar: &expectedScalar{Column: "aasdesc_submodel_descriptor_semantic_id_reference_key.value", Bindings: []expectedBinding{}},
 	},
 	{
+		Name:       "smdesc_supplementalSemanticIds_type_indexed",
+		Kind:       "scalar",
+		Input:      `$smdesc#supplementalSemanticIds[0].type`,
+		WantScalar: &expectedScalar{Column: "aasdesc_submodel_descriptor_supplemental_semantic_id_reference.type", Bindings: []expectedBinding{{Alias: "aasdesc_submodel_descriptor_supplemental_semantic_id_reference.position", Index: idx(0)}}},
+	},
+	{
+		Name:       "smdesc_supplementalSemanticIds_keys_value_indexed",
+		Kind:       "scalar",
+		Input:      `$smdesc#supplementalSemanticIds.keys[1].value`,
+		WantScalar: &expectedScalar{Column: "aasdesc_submodel_descriptor_supplemental_semantic_id_reference_key.value", Bindings: []expectedBinding{{Alias: "aasdesc_submodel_descriptor_supplemental_semantic_id_reference_key.position", Index: idx(1)}}},
+	},
+	{
+		Name:  "aasdesc_submodelDescriptor_supplementalSemanticIds_keys_value_double_indexed",
+		Kind:  "scalar",
+		Input: `$aasdesc#submodelDescriptors[2].supplementalSemanticIds[0].keys[1].value`,
+		WantScalar: &expectedScalar{
+			Column: "aasdesc_submodel_descriptor_supplemental_semantic_id_reference_key.value",
+			Bindings: []expectedBinding{
+				{Alias: "submodel_descriptor.position", Index: idx(2)},
+				{Alias: "aasdesc_submodel_descriptor_supplemental_semantic_id_reference.position", Index: idx(0)},
+				{Alias: "aasdesc_submodel_descriptor_supplemental_semantic_id_reference_key.position", Index: idx(1)},
+			},
+		},
+	},
+	{
 		Name:       "sm_semanticId_type_scalar",
 		Kind:       "scalar",
 		Input:      `$sm#semanticId.type`,
@@ -345,6 +370,16 @@ var fieldIdentifierProcessingCases = []fidTestCase{
 		Kind:         "fragment",
 		Input:        `$aasdesc#submodelDescriptors[3].semanticId.keys[]`,
 		WantFragment: &expectedFragment{Bindings: []expectedBinding{{Alias: "submodel_descriptor.position", Index: idx(3)}}},
+	},
+	{
+		Name:  "aasdesc_submodelDescriptor_supplementalSemanticIds_keys_fragment_indexed",
+		Kind:  "fragment",
+		Input: `$aasdesc#submodelDescriptors[1].supplementalSemanticIds[0].keys[2]`,
+		WantFragment: &expectedFragment{Bindings: []expectedBinding{
+			{Alias: "submodel_descriptor.position", Index: idx(1)},
+			{Alias: "aasdesc_submodel_descriptor_supplemental_semantic_id_reference.position", Index: idx(0)},
+			{Alias: "aasdesc_submodel_descriptor_supplemental_semantic_id_reference_key.position", Index: idx(2)},
+		}},
 	},
 	{
 		Name:         "smdesc_endpoints_fragment_wildcard",

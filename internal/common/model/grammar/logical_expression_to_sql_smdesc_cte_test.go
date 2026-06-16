@@ -91,3 +91,66 @@ func TestLogicalExpression_SMDesc_WithCollector_BuildsCTE(t *testing.T) {
 		t.Fatalf("expected SQL to contain position binding 0, got: %s", sql)
 	}
 }
+
+func TestLogicalExpression_SMDesc_SupplementalSemanticIds_BuildsCTE(t *testing.T) {
+	expr := LogicalExpression{
+		And: []LogicalExpression{
+			{
+				Eq: ComparisonItems{
+					field("$smdesc#supplementalSemanticIds[0].type"),
+					strVal("ExternalReference"),
+				},
+			},
+			{
+				Eq: ComparisonItems{
+					field("$smdesc#supplementalSemanticIds[0].keys[1].value"),
+					strVal("SUPP-WRITTEN-BY-X"),
+				},
+			},
+		},
+	}
+
+	collector, err := NewResolvedFieldPathCollectorForRoot(CollectorRootSMDesc)
+	if err != nil {
+		t.Fatalf("NewResolvedFieldPathCollectorForRoot returned error: %v", err)
+	}
+
+	whereExpr, _, err := expr.EvaluateToExpression(collector)
+	if err != nil {
+		t.Fatalf("EvaluateToExpression returned error: %v", err)
+	}
+
+	d := goqu.Dialect("postgres")
+	ds := d.From(goqu.T("descriptor").As("descriptor")).
+		InnerJoin(
+			goqu.T("aas_descriptor").As("aas_descriptor"),
+			goqu.On(goqu.I("aas_descriptor.descriptor_id").Eq(goqu.I("descriptor.id"))),
+		).
+		LeftJoin(
+			goqu.T("submodel_descriptor").As("submodel_descriptor"),
+			goqu.On(goqu.I("submodel_descriptor.aas_descriptor_id").Eq(goqu.I("aas_descriptor.descriptor_id"))),
+		).
+		Select(goqu.V(1)).
+		Where(whereExpr)
+
+	sql, _, err := ds.Prepared(true).ToSQL()
+	if err != nil {
+		t.Fatalf("ToSQL returned error: %v", err)
+	}
+
+	if !strings.Contains(sql, "submodel_descriptor_supplemental_semantic_id_reference") {
+		t.Fatalf("expected supplemental semantic ID reference join, got: %s", sql)
+	}
+	if !strings.Contains(sql, "submodel_descriptor_supplemental_semantic_id_reference_key") {
+		t.Fatalf("expected supplemental semantic ID reference key join, got: %s", sql)
+	}
+	if !strings.Contains(sql, "'ExternalReference'") {
+		t.Fatalf("expected SQL to contain %q, got: %s", "'ExternalReference'", sql)
+	}
+	if !strings.Contains(sql, "'SUPP-WRITTEN-BY-X'") {
+		t.Fatalf("expected SQL to contain %q, got: %s", "'SUPP-WRITTEN-BY-X'", sql)
+	}
+	if !strings.Contains(sql, "position\" = 0") || !strings.Contains(sql, "position\" = 1") {
+		t.Fatalf("expected supplemental reference and key position bindings, got: %s", sql)
+	}
+}

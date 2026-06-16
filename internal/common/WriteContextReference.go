@@ -113,6 +113,29 @@ func CreateContextReferences1ToMany(
 	referenceTable string,
 	ownerColumn string,
 ) error {
+	return createContextReferences1ToMany(tx, ownerID, references, referenceTable, ownerColumn, false)
+}
+
+// CreateContextReferences1ToManyWithPosition stores multiple context references
+// and records the reference order in the reference table's position column.
+func CreateContextReferences1ToManyWithPosition(
+	tx *sql.Tx,
+	ownerID int64,
+	references []types.IReference,
+	referenceTable string,
+	ownerColumn string,
+) error {
+	return createContextReferences1ToMany(tx, ownerID, references, referenceTable, ownerColumn, true)
+}
+
+func createContextReferences1ToMany(
+	tx *sql.Tx,
+	ownerID int64,
+	references []types.IReference,
+	referenceTable string,
+	ownerColumn string,
+	withPosition bool,
+) error {
 	if len(references) == 0 {
 		return nil
 	}
@@ -121,15 +144,20 @@ func CreateContextReferences1ToMany(
 	referenceKeyTable := referenceTable + "_key"
 	payloadTable := referenceTable + "_payload"
 
-	for _, reference := range references {
+	for i, reference := range references {
 		if reference == nil {
 			continue
 		}
 
-		sqlStr, args, err := d.Insert(referenceTable).Rows(goqu.Record{
+		row := goqu.Record{
 			ownerColumn: ownerID,
 			ColType:     reference.Type(),
-		}).Returning(goqu.C(ColID)).ToSQL()
+		}
+		if withPosition {
+			row[ColPosition] = i
+		}
+
+		sqlStr, args, err := d.Insert(referenceTable).Rows(row).Returning(goqu.C(ColID)).ToSQL()
 		if err != nil {
 			return err
 		}

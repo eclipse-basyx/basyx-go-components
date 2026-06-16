@@ -32,6 +32,30 @@
           "name": "digitalTwinType",
           "value": "ComponentInstanceX"
         }
+      ],
+      "submodelDescriptors": [
+        {
+          "id": "urn:uuid:9f3d4f8f-1b9a-4c6e-8f1b-2a6d9c4e7b11:submodel",
+          "supplementalSemanticIds": [
+            {
+              "keys": [
+                {
+                  "type": "GlobalReference",
+                  "value": "PUBLIC_READABLE"
+                }
+              ],
+              "type": "ExternalReference"
+            }
+          ],
+          "endpoints": [
+            {
+              "interface": "SUBMODEL-3.0",
+              "protocolInformation": {
+                "href": "https://example.org/submodels/urn:uuid:9f3d4f8f-1b9a-4c6e-8f1b-2a6d9c4e7b11"
+              }
+            }
+          ]
+        }
       ]
     }
   ]

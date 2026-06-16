@@ -29,6 +29,15 @@
     "expectedStatus": 200
   },
   {
+    "context": "POST query shell descriptors by supplemental semantic id returns posted descriptor",
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:8082/api/v3/query/shell-descriptors",
+    "data": "bodies/post/query_shell_descriptors_by_supplemental_semantic_id.json",
+    "token": { "user": "admin", "password": "pwd" },
+    "shouldMatch": "expected/shell-descriptors/created_after_2025_result.json",
+    "expectedStatus": 200
+  },
+  {
     "context": "POST lookup shellsByAssetLink with createdAfter 2025 returns posted descriptor id",
     "method": "POST",
     "endpoint": "http://127.0.0.1:8082/api/v3/lookup/shellsByAssetLink?createdAfter=2025-05-18T14:18:00.748914Z",
