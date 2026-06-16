@@ -104,6 +104,80 @@ func TestAddSwaggerUIServesLocalPart2Schemas(t *testing.T) {
 	}
 }
 
+func TestAddSwaggerUIFromFSHonorsSwaggerEnabled(t *testing.T) {
+	r := chi.NewRouter()
+	cfg := &Config{
+		Server: ServerConfig{
+			Host:                          "0.0.0.0",
+			Port:                          5004,
+			VerificationEndpointAvailable: true,
+		},
+		Swagger: SwaggerConfig{
+			Enabled: false,
+		},
+	}
+
+	err := AddSwaggerUIFromFS(r, part2SchemasFS, "swagger_part2_schemas/V3.1.1/openapi.yaml", "test", "/swagger", "/api-docs/openapi.yaml", cfg)
+	if err != nil {
+		t.Fatalf("unexpected AddSwaggerUIFromFS error: %v", err)
+	}
+
+	specRecorder := httptest.NewRecorder()
+	r.ServeHTTP(specRecorder, httptest.NewRequest(http.MethodGet, "/api-docs/openapi.yaml", nil))
+	if specRecorder.Code != http.StatusNotFound {
+		t.Fatalf("expected disabled OpenAPI spec status 404, got %d", specRecorder.Code)
+	}
+
+	uiRecorder := httptest.NewRecorder()
+	r.ServeHTTP(uiRecorder, httptest.NewRequest(http.MethodGet, "/swagger", nil))
+	if uiRecorder.Code != http.StatusNotFound {
+		t.Fatalf("expected disabled Swagger status 404, got %d", uiRecorder.Code)
+	}
+
+	baseRecorder := httptest.NewRecorder()
+	r.ServeHTTP(baseRecorder, httptest.NewRequest(http.MethodGet, "/", nil))
+	if baseRecorder.Code != http.StatusNotFound {
+		t.Fatalf("expected disabled Swagger UI base path status 404, got %d", baseRecorder.Code)
+	}
+}
+
+func TestAddSwaggerUIFromFSDisablesSpecWhenABACManagementIsEnabled(t *testing.T) {
+	r := chi.NewRouter()
+	cfg := &Config{
+		Server: ServerConfig{
+			Host:                          "0.0.0.0",
+			Port:                          5004,
+			VerificationEndpointAvailable: true,
+		},
+		Swagger: SwaggerConfig{
+			Enabled: false,
+		},
+		ABAC: ABACConfig{
+			Enabled: true,
+			ManagementAPI: ABACManagementAPIConfig{
+				Enabled: true,
+			},
+		},
+	}
+
+	err := AddSwaggerUIFromFS(r, part2SchemasFS, "swagger_part2_schemas/V3.1.1/openapi.yaml", "test", "/swagger", "/api-docs/openapi.yaml", cfg)
+	if err != nil {
+		t.Fatalf("unexpected AddSwaggerUIFromFS error: %v", err)
+	}
+
+	uiRecorder := httptest.NewRecorder()
+	r.ServeHTTP(uiRecorder, httptest.NewRequest(http.MethodGet, "/swagger", nil))
+	if uiRecorder.Code != http.StatusNotFound {
+		t.Fatalf("expected disabled Swagger UI status 404, got %d", uiRecorder.Code)
+	}
+
+	specRecorder := httptest.NewRecorder()
+	r.ServeHTTP(specRecorder, httptest.NewRequest(http.MethodGet, "/api-docs/openapi.yaml", nil))
+	if specRecorder.Code != http.StatusNotFound {
+		t.Fatalf("expected disabled OpenAPI spec status 404, got %d", specRecorder.Code)
+	}
+}
+
 func TestAddSwaggerUIDoesNotInjectVerifyEndpointWhenDisabled(t *testing.T) {
 	r := chi.NewRouter()
 	includeVerifyEndpoint := false

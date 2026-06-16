@@ -108,6 +108,16 @@ func TestViperAndStructStrictVerificationDefaultsMatch(t *testing.T) {
 	}
 }
 
+func TestViperAndStructSwaggerEnabledDefaultsMatch(t *testing.T) {
+	v := viper.New()
+	setDefaults(v)
+
+	actual := v.GetBool("swagger.enabled")
+	if actual != DefaultConfig.SwaggerEnabled {
+		t.Fatalf("viper default %t differs from DefaultConfig %t", actual, DefaultConfig.SwaggerEnabled)
+	}
+}
+
 func TestPrintConfigurationMarksPermissiveVerificationModeAsDefault(t *testing.T) {
 	output := captureLogOutput(t)
 	cfg := &Config{
@@ -134,12 +144,18 @@ func TestPrintConfigurationMarksPermissiveVerificationModeAsDefault(t *testing.T
 		ABAC: ABACConfig{
 			Enabled: DefaultConfig.ABACEnabled,
 		},
+		Swagger: SwaggerConfig{
+			Enabled: DefaultConfig.SwaggerEnabled,
+		},
 	}
 
 	PrintConfiguration(cfg)
 
 	if !strings.Contains(output.String(), "Verification Mode: permissive (default)") {
 		t.Fatalf("printed configuration did not mark permissive verification mode as default:\n%s", output.String())
+	}
+	if !strings.Contains(output.String(), "Enabled: true (default)") {
+		t.Fatalf("printed configuration did not mark Swagger enabled as default:\n%s", output.String())
 	}
 }
 
@@ -182,6 +198,28 @@ func TestLoadConfigAcceptsPermissiveStrictVerification(t *testing.T) {
 	}
 	if cfg.Server.StrictVerification != "permissive" {
 		t.Fatalf("unexpected strictVerification mode: %q", cfg.Server.StrictVerification)
+	}
+}
+
+func TestLoadConfigAppliesSwaggerEnabled(t *testing.T) {
+	withUnsetEnv(t, "SWAGGER_ENABLED")
+	captureLogOutput(t)
+
+	cfg, err := LoadConfig("", NORMAL)
+	if err != nil {
+		t.Fatalf("unexpected config load error: %v", err)
+	}
+	if !cfg.Swagger.Enabled {
+		t.Fatal("expected Swagger to be enabled by default")
+	}
+
+	path := writeTempConfig(t, "swagger:\n  enabled: false\n")
+	cfg, err = LoadConfig(path, NORMAL)
+	if err != nil {
+		t.Fatalf("unexpected config load error: %v", err)
+	}
+	if cfg.Swagger.Enabled {
+		t.Fatal("expected Swagger to be disabled from config")
 	}
 }
 

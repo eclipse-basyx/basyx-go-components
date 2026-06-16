@@ -103,6 +103,7 @@ var DefaultConfig = struct {
 	EventingSinks                       []string
 	EventingOutboxEnabled               bool
 	EventingTopicPrefix                 string
+	SwaggerEnabled                      bool
 }{
 	ServerPort:                          5004,
 	ServerContextPath:                   "",
@@ -158,6 +159,7 @@ var DefaultConfig = struct {
 	EventingSinks:                       []string{},
 	EventingOutboxEnabled:               false,
 	EventingTopicPrefix:                 "basyx",
+	SwaggerEnabled:                      true,
 }
 
 const (
@@ -227,7 +229,7 @@ type Config struct {
 	OIDC     OIDCConfig     `mapstructure:"oidc" yaml:"oidc"`         // OpenID Connect authentication
 	ABAC     ABACConfig     `mapstructure:"abac" yaml:"abac"`         // Attribute-Based Access Control
 	JWS      JWSConfig      `mapstructure:"jws" yaml:"jws"`           // JWS signing configuration
-	Swagger  SwaggerConfig  `mapstructure:"swagger" yaml:"swagger"`   // Swagger UI configuration
+	Swagger  SwaggerConfig  `mapstructure:"swagger" yaml:"swagger"`   // Swagger/OpenAPI documentation configuration
 	History  HistoryConfig  `mapstructure:"history" yaml:"history"`   // History/audit behavior
 	Eventing EventingConfig `mapstructure:"eventing" yaml:"eventing"` // Eventing placeholders
 }
@@ -287,8 +289,9 @@ type EventingConfig struct {
 	TopicPrefix   string   `mapstructure:"topicPrefix" yaml:"topicPrefix" json:"topicPrefix"`
 }
 
-// SwaggerConfig contains Swagger UI configuration parameters.
+// SwaggerConfig contains Swagger/OpenAPI documentation configuration parameters.
 type SwaggerConfig struct {
+	Enabled      bool   `mapstructure:"enabled" yaml:"enabled"`           // Enable/disable Swagger UI and OpenAPI spec endpoints
 	ContactName  string `mapstructure:"contactName" yaml:"contactName"`   // Contact name for OpenAPI spec
 	ContactEmail string `mapstructure:"contactEmail" yaml:"contactEmail"` // Contact email for OpenAPI spec
 	ContactURL   string `mapstructure:"contactUrl" yaml:"contactUrl"`     // Contact URL for OpenAPI spec
@@ -885,6 +888,7 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("eventing.topicPrefix", "basyx")
 
 	// Swagger defaults
+	v.SetDefault("swagger.enabled", DefaultConfig.SwaggerEnabled)
 	v.SetDefault("swagger.contactName", "Eclipse BaSyx")
 	v.SetDefault("swagger.contactEmail", "basyx-dev@eclipse.org")
 	v.SetDefault("swagger.contactUrl", "https://basyx.org")
@@ -1011,6 +1015,9 @@ func PrintConfiguration(cfg *Config) {
 			lines = append(lines, "  Certificate Chain Mounted: false ❌")
 		}
 	}
+
+	lines = append(lines, "🔹 Swagger:")
+	add("Enabled", cfg.Swagger.Enabled, DefaultConfig.SwaggerEnabled)
 
 	// History
 	lines = append(lines, "🔹 History/Audit:")
