@@ -70,7 +70,6 @@ func TestIntegrationSerializationSecurity(t *testing.T) {
 	testenv.RunJSONSuite(t, testenv.JSONSuiteOptions{
 		ConfigPath:            "serialization_it_config.json",
 		DefaultExpectedStatus: http.StatusOK,
-		ShouldCompareResponse: testenv.CompareMethods(http.MethodGet),
 		TokenProvider: testenv.NewPasswordGrantTokenProvider(
 			testKeycloakTokenURL,
 			"basyx-ui",

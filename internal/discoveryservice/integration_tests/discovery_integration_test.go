@@ -56,10 +56,6 @@ func TestMain(m *testing.M) {
 func TestIntegration(t *testing.T) {
 	testenv.RunJSONSuite(t, testenv.JSONSuiteOptions{
 		ConfigPath: "it_config.json",
-		ShouldCompareResponse: testenv.CompareMethods(
-			http.MethodGet,
-			http.MethodPost,
-		),
 		ActionHandlers: map[string]testenv.JSONStepAction{
 			actionShellsByAssetLinkMissingBody: checkPostNilBodyExpectedStatus,
 			actionLookupShellsNilBody:          checkPostNilBodyExpectedStatus,

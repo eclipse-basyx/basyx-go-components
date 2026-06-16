@@ -592,19 +592,7 @@ EXECUTE FUNCTION %s();`, restoreTriggerName, restoreFunctionName)
 
 // IntegrationTest runs the integration tests based on the config file
 func TestIntegration(t *testing.T) {
-	shouldCompareResponse := testenv.CompareMethods(http.MethodGet, http.MethodPost)
-	if os.Getenv("BASYX_EXTERNAL_COMPOSE") == "1" {
-		baseComparator := shouldCompareResponse
-		shouldCompareResponse = func(step testenv.JSONSuiteStep) bool {
-			if strings.EqualFold(step.Method, http.MethodGet) && strings.Contains(step.Endpoint, "/description") {
-				return false
-			}
-			return baseComparator(step)
-		}
-	}
-
 	testenv.RunJSONSuite(t, testenv.JSONSuiteOptions{
-		ShouldCompareResponse: shouldCompareResponse,
 		ActionHandlers: map[string]testenv.JSONStepAction{
 			actionDeleteAllAAS: func(t *testing.T, runner *testenv.JSONSuiteRunner, _ testenv.JSONSuiteStep, stepNumber int) {
 				deleteAllAAS(t, runner, stepNumber)
@@ -621,7 +609,22 @@ func TestIntegration(t *testing.T) {
 			}
 			return fmt.Sprintf("Step_(%s)_%d_%s_%s", context, stepNumber, step.Method, step.Endpoint)
 		},
+		ShouldMatchJSON: shouldMatchImportedDescriptionResponseForAASEnvironment,
 	})
+}
+
+func shouldMatchImportedDescriptionResponseForAASEnvironment(step testenv.JSONSuiteStep) bool {
+	if os.Getenv("BASYX_AASENVIRONMENT_SKIP_IMPORTED_DESCRIPTION") != "1" {
+		return true
+	}
+	if !strings.EqualFold(step.Method, http.MethodGet) {
+		return true
+	}
+	parsedEndpoint, err := url.Parse(step.Endpoint)
+	if err != nil {
+		return true
+	}
+	return parsedEndpoint.Path != "/description"
 }
 
 func TestQueryAssetAdministrationShellFalseFragmentFiltersKeepRootAAS(t *testing.T) {

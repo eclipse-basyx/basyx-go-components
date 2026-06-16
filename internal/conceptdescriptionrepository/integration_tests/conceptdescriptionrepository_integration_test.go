@@ -205,7 +205,6 @@ func TestLocationHeadersForCreateEndpointsConceptDescriptionRepository(t *testin
 // IntegrationTest runs the integration tests based on the config file
 func TestIntegration(t *testing.T) {
 	testenv.RunJSONSuite(t, testenv.JSONSuiteOptions{
-		ShouldCompareResponse: testenv.CompareMethods(http.MethodGet, http.MethodPost),
 		ShouldSkipStep: func(step testenv.JSONSuiteStep) bool {
 			if strings.EqualFold(step.Method, http.MethodPut) && strings.Contains(step.Endpoint, "/attachment") {
 				return true

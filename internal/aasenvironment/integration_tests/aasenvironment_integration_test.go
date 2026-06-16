@@ -80,7 +80,10 @@ func TestIntegration(t *testing.T) {
 
 			// #nosec G204 -- pkg is validated against a static allow-list above.
 			cmd := exec.Command("go", "test", "-v", "-count=1", pkg)
-			cmd.Env = append(os.Environ(), "BASYX_EXTERNAL_COMPOSE=1")
+			cmd.Env = append(os.Environ(),
+				"BASYX_EXTERNAL_COMPOSE=1",
+				"BASYX_AASENVIRONMENT_SKIP_IMPORTED_DESCRIPTION=1",
+			)
 			cmd.Stdout = os.Stdout
 			cmd.Stderr = os.Stderr
 

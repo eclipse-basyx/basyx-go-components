@@ -1619,7 +1619,6 @@ func TestIntegration(t *testing.T) {
 		ActionHandlers: map[string]testenv.JSONStepAction{
 			actionAssertSignedSubmodel: assertSignedSubmodelResponse,
 		},
-		ShouldCompareResponse: testenv.CompareMethods(http.MethodGet, http.MethodPost),
 		ShouldSkipStep: func(step testenv.JSONSuiteStep) bool {
 			if strings.EqualFold(step.Method, http.MethodPut) && strings.Contains(step.Endpoint, "/attachment") {
 				return true

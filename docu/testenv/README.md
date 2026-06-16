@@ -18,7 +18,6 @@ func TestMain(m *testing.M) {
 func TestIntegration(t *testing.T) {
 	testenv.RunJSONSuite(t, testenv.JSONSuiteOptions{
 		DefaultExpectedStatus: http.StatusOK,
-		ShouldCompareResponse: testenv.CompareMethods(http.MethodGet),
 	})
 }
 ```
@@ -83,10 +82,11 @@ Step fields (`JSONSuiteStep`):
 - `LogsDir` default: `logs`
 - `RequestTimeout` default: `10s`
 - `DefaultExpectedStatus` (fallback is 200)
-- `ShouldCompareResponse`
 - `ActionHandlers` for `action` steps
 - `TokenProvider` for token-based steps
 - `EnableRequestLog` and `EnableRawDump`
+
+Any step with `shouldMatch` compares the response JSON body against that file.
 
 Built-in reusable action helpers:
 
@@ -98,7 +98,6 @@ Built-in reusable action helpers:
 func TestIntegration(t *testing.T) {
 	testenv.RunJSONSuite(t, testenv.JSONSuiteOptions{
 		DefaultExpectedStatus: http.StatusOK,
-		ShouldCompareResponse: testenv.CompareMethods(http.MethodGet),
 		ActionHandlers: map[string]testenv.JSONStepAction{
 			"DELETE_ALL_ITEMS": func(t *testing.T, runner *testenv.JSONSuiteRunner, _ testenv.JSONSuiteStep, stepNumber int) {
 				_, err := runner.RunStep(testenv.JSONSuiteStep{
@@ -156,5 +155,4 @@ If `EnableRawDump` is also true, raw HTTP dumps are written too.
 
 ## Useful Helpers
 
-- `CompareMethods("GET", ...)` to compare `shouldMatch` only for chosen methods
 - `NewPasswordGrantTokenProvider(tokenURL, clientID, timeout)` for OIDC password grant tokens

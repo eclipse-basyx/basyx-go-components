@@ -53,7 +53,7 @@ var aasEnvNoRedirectClient = &http.Client{
 }
 
 func TestAASEnvironmentBulkOperationsAndDescription(t *testing.T) {
-	t.Run("DescriptionContainsSSP003Profiles", func(t *testing.T) {
+	t.Run("DescriptionProfilesMatchExpectedSet", func(t *testing.T) {
 		resetDatabase(t)
 		status, body, _ := doAASEnvRequest(t, aasEnvNoRedirectClient, http.MethodGet, aasEnvBaseURL+"/description", nil)
 		require.Equal(t, http.StatusOK, status)
@@ -61,8 +61,7 @@ func TestAASEnvironmentBulkOperationsAndDescription(t *testing.T) {
 		var payload map[string]any
 		require.NoError(t, json.Unmarshal(body, &payload))
 		profiles := toStringSliceAASEnv(t, payload["profiles"])
-		require.Contains(t, profiles, "https://admin-shell.io/aas/API/3/2/AssetAdministrationShellRegistryServiceSpecification/SSP-003")
-		require.Contains(t, profiles, "https://admin-shell.io/aas/API/3/2/SubmodelRegistryServiceSpecification/SSP-003")
+		require.ElementsMatch(t, expectedAASEnvironmentDescriptionProfiles(), profiles)
 	})
 
 	t.Run("AASBulkSuccessAndFailureRollback", func(t *testing.T) {
@@ -133,6 +132,28 @@ func TestAASEnvironmentBulkOperationsAndDescription(t *testing.T) {
 		assertAASEnvAASDescriptorStatus(t, "https://iese.fraunhofer.de/ids/aas/w456kjw5k6z", http.StatusOK)
 		assertAASEnvSubmodelDescriptorStatus(t, "urn:example:sm:003", http.StatusOK)
 	})
+}
+
+func expectedAASEnvironmentDescriptionProfiles() []string {
+	return []string{
+		"https://basyx.org/aas/API/3/2/AssetAdministrationShellEnvironment/SSP-001",
+		"https://admin-shell.io/aas/API/3/2/AssetAdministrationShellRegistryServiceSpecification/SSP-001",
+		"https://admin-shell.io/aas/API/3/2/AssetAdministrationShellRegistryServiceSpecification/SSP-003",
+		"https://admin-shell.io/aas/API/3/2/AssetAdministrationShellRegistryServiceSpecification/SSP-004",
+		"https://basyx.org/aas/API/3/2/AssetAdministrationShellRegistryServiceSpecification/SSP-001",
+		"https://admin-shell.io/aas/API/3/2/SubmodelRegistryServiceSpecification/SSP-001",
+		"https://admin-shell.io/aas/API/3/2/SubmodelRegistryServiceSpecification/SSP-003",
+		"https://basyx.org/aas/API/3/2/SubmodelRegistryServiceSpecification/SSP-001",
+		"https://admin-shell.io/aas/API/3/2/AssetAdministrationShellRepositoryServiceSpecification/SSP-001",
+		"https://basyx.org/aas/API/3/2/AssetAdministrationShellRepositoryServiceSpecification/SSP-001",
+		"https://admin-shell.io/aas/API/3/2/SubmodelRepositoryServiceSpecification/SSP-001",
+		"https://admin-shell.io/aas/API/3/2/SubmodelRepositoryServiceSpecification/SSP-005",
+		"https://basyx.org/aas/API/3/2/SubmodelRepositoryService/1.0",
+		"https://admin-shell.io/aas/API/3/2/ConceptDescriptionRepositoryServiceSpecification/SSP-001",
+		"https://basyx.org/aas/API/3/2/ConceptDescriptionRepositoryService/1.0",
+		"https://admin-shell.io/aas/API/3/2/DiscoveryServiceSpecification/SSP-001",
+		"https://basyx.org/aas/API/3/2/DiscoveryServiceSpecification/SSP-001",
+	}
 }
 
 func loadAASEnvJSONFixtureMap(t *testing.T, relativePath string) map[string]any {

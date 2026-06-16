@@ -54,7 +54,6 @@ func TestIntegration(t *testing.T) {
 
 	testenv.RunJSONSuite(t, testenv.JSONSuiteOptions{
 		DefaultExpectedStatus: http.StatusOK,
-		ShouldCompareResponse: testenv.CompareMethods(http.MethodGet, http.MethodPost),
 		TokenProvider:         tokenProvider,
 		ActionHandlers: map[string]testenv.JSONStepAction{
 			actionUploadAttachmentMultipart: func(t *testing.T, _ *testenv.JSONSuiteRunner, step testenv.JSONSuiteStep, _ int) {

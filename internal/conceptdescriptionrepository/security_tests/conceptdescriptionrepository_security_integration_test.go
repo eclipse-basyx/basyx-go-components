@@ -42,7 +42,6 @@ const actionAssertRecentChangeIDs = "ASSERT_RECENT_CHANGE_IDS"
 func TestIntegration(t *testing.T) {
 	testenv.RunJSONSuite(t, testenv.JSONSuiteOptions{
 		DefaultExpectedStatus: http.StatusOK,
-		ShouldCompareResponse: testenv.CompareMethods(http.MethodGet, http.MethodPost),
 		TokenProvider: testenv.NewPasswordGrantTokenProvider(
 			"http://localhost:8080/realms/basyx/protocol/openid-connect/token",
 			"basyx-ui",

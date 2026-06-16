@@ -68,9 +68,8 @@ func deleteAllCompanyDescriptors(t *testing.T, runner *testenv.JSONSuiteRunner, 
 
 func TestIntegration(t *testing.T) {
 	testenv.RunJSONSuite(t, testenv.JSONSuiteOptions{
-		ShouldCompareResponse: testenv.CompareMethods(http.MethodGet, http.MethodPost, http.MethodPut),
-		EnableRequestLog:      true,
-		EnableRawDump:         true,
+		EnableRequestLog: true,
+		EnableRawDump:    true,
 		StepName: func(step testenv.JSONSuiteStep, stepNumber int) string {
 			context := "Not Provided"
 			if step.Context != "" {
