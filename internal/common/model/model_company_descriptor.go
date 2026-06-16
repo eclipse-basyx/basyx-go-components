@@ -27,6 +27,7 @@ var allowedCompanyEndpointInterfaces = map[string]struct{}{
 	"AASX-FILE-3.0":           {},
 	"AASX-FILE-3.1":           {},
 	"MQTT-BROKER-3.1.1":       {},
+	"EDC-PROTOCOL":            {},
 }
 
 var requiredCoreCompanyEndpointInterfaces = map[string]struct{}{
