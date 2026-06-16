@@ -141,7 +141,7 @@ func TestAddSwaggerUIFromFSHonorsSwaggerEnabled(t *testing.T) {
 	}
 }
 
-func TestAddSwaggerUIFromFSDisablesSpecWhenABACManagementIsEnabled(t *testing.T) {
+func TestAddSwaggerUIFromFSDisablesAllDocumentationWhenABACManagementIsEnabled(t *testing.T) {
 	r := chi.NewRouter()
 	cfg := &Config{
 		Server: ServerConfig{

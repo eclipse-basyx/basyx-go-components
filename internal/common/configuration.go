@@ -1016,8 +1016,12 @@ func PrintConfiguration(cfg *Config) {
 		}
 	}
 
+	lines = append(lines, divider)
+
 	lines = append(lines, "🔹 Swagger:")
 	add("Enabled", cfg.Swagger.Enabled, DefaultConfig.SwaggerEnabled)
+
+	lines = append(lines, divider)
 
 	// History
 	lines = append(lines, "🔹 History/Audit:")
