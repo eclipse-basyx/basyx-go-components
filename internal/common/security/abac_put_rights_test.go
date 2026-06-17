@@ -69,6 +69,7 @@ func TestSelectPutFormulaByExistence_DefaultsToFalseIfMissing(t *testing.T) {
 	qf := GetQueryFilter(updateCtx)
 	if qf == nil {
 		t.Fatalf("expected query filter in context")
+		return
 	}
 	assertBooleanFormulaPointer(t, qf.Formula, false)
 	assertFormulaByRightBoolean(t, qf, grammar.RightsEnumUPDATE, false)
@@ -82,6 +83,7 @@ func TestSelectPutFormulaByExistence_DefaultsToFalseIfMapIsNil(t *testing.T) {
 	qf := GetQueryFilter(createCtx)
 	if qf == nil {
 		t.Fatalf("expected query filter in context")
+		return
 	}
 	assertBooleanFormulaPointer(t, qf.Formula, false)
 	assertFormulaByRightBoolean(t, qf, grammar.RightsEnumCREATE, false)
@@ -97,6 +99,7 @@ func TestSelectPutFormulaByExistence_FailsClosedOnCloneError(t *testing.T) {
 	qf := GetQueryFilter(updateCtx)
 	if qf == nil {
 		t.Fatalf("expected query filter in context")
+		return
 	}
 	assertBooleanFormulaPointer(t, qf.Formula, false)
 	assertFormulaByRightBoolean(t, qf, grammar.RightsEnumUPDATE, false)
@@ -113,6 +116,7 @@ func TestMergeQueryFilter_FailsClosedOnCloneError(t *testing.T) {
 	qf := GetQueryFilter(mergedCtx)
 	if qf == nil {
 		t.Fatalf("expected query filter in context")
+		return
 	}
 	assertBooleanFormulaPointer(t, qf.Formula, false)
 	assertFormulaByRightBoolean(t, qf, grammar.RightsEnumREAD, false)
@@ -163,9 +167,11 @@ func assertFormulaByRightBoolean(t *testing.T, qf *QueryFilter, right grammar.Ri
 	t.Helper()
 	if qf == nil {
 		t.Fatalf("expected query filter")
+		return
 	}
 	if qf.FormulasByRight == nil {
 		t.Fatalf("expected FormulasByRight map")
+		return
 	}
 	expr, ok := qf.FormulasByRight[right]
 	if !ok {
