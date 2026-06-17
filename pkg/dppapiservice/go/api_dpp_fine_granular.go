@@ -1,3 +1,6 @@
+//go:build dpp_generated_controllers
+// +build dpp_generated_controllers
+
 /*******************************************************************************
 * Copyright (C) 2026 the Eclipse BaSyx Authors and Fraunhofer IESE
 *

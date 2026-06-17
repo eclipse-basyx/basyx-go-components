@@ -43,11 +43,8 @@ import (
 	aasrepositorydb "github.com/eclipse-basyx/basyx-go-components/internal/aasrepository/persistence"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/history"
-	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
+	dppapiservice "github.com/eclipse-basyx/basyx-go-components/internal/dppapiservice"
 	submodelrepositorydb "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence"
-	dppapi "github.com/eclipse-basyx/basyx-go-components/pkg/dppapiservice/go"
-
-	"github.com/go-chi/chi/v5"
 )
 
 //go:embed openapi.yaml
@@ -59,7 +56,7 @@ func runServer(ctx context.Context, configPath string) error {
 		return err
 	}
 
-	configureDPPHistory(cfg.History)
+	dppapiservice.ConfigureHistory(cfg.History)
 	if err = history.ConfigureEvidence(ctx, cfg.History.Evidence); err != nil {
 		return err
 	}
@@ -82,7 +79,7 @@ func runServer(ctx context.Context, configPath string) error {
 		return err
 	}
 
-	router, err := createRouter(ctx, cfg, aasRepositoryPersistence, submodelRepositoryPersistence)
+	router, err := dppapiservice.NewHTTPHandler(ctx, cfg, openapiSpec, aasRepositoryPersistence, submodelRepositoryPersistence)
 	if err != nil {
 		return err
 	}
@@ -111,75 +108,6 @@ func runServer(ctx context.Context, configPath string) error {
 		return fmt.Errorf("DPP-SRV-SHUTDOWN %w", err)
 	}
 	return nil
-}
-
-func configureDPPHistory(cfg common.HistoryConfig) {
-	history.Configure(history.Config{
-		Mode:                 cfg.Mode,
-		RetentionDays:        cfg.RetentionDays,
-		FullSnapshotInterval: cfg.FullSnapshotInterval,
-		Immutability:         cfg.Immutability,
-		AuditIdentityMode:    cfg.AuditIdentityMode,
-	})
-}
-
-func createRouter(ctx context.Context, cfg *common.Config, aasRepo *aasrepositorydb.AssetAdministrationShellDatabase, submodelRepo *submodelrepositorydb.SubmodelDatabase) (http.Handler, error) {
-	dppService := dppapi.NewDPPRepositoryService(aasRepo, submodelRepo)
-	dppRouter := dppapi.NewDPPRepositoryRouter(dppService)
-	contextPath := common.NormalizeBasePath(cfg.Server.ContextPath)
-
-	rootRouter := chi.NewRouter()
-	rootRouter.Use(common.ConfigMiddleware(cfg))
-	common.AddCors(rootRouter, cfg)
-	common.AddHealthEndpoint(rootRouter, cfg)
-	if err := common.AddSwaggerUIFromFS(rootRouter, openapiSpec, "openapi.yaml", "Digital Product Passport API", "/swagger", "/api-docs/openapi.yaml", cfg); err != nil {
-		log.Printf("Warning: failed to load OpenAPI spec for Swagger UI: %v", err)
-	}
-	rootRouter.Get(rootRedirectPath(contextPath), func(w http.ResponseWriter, r *http.Request) {
-		http.Redirect(w, r, swaggerRedirectPath(contextPath), http.StatusFound)
-	})
-
-	apiRouter := chi.NewRouter()
-	common.ConfigureAPIRouter(apiRouter, "DPPAPIService")
-	apiRouter.Use(dppapi.Logger)
-	if err := auth.SetupSecurity(ctx, cfg, apiRouter); err != nil {
-		return nil, err
-	}
-	versioningGuard := history.NewMutationCoverageGuard(apiRouter)
-	apiRouter.Use(versioningGuard.Middleware)
-	apiRouter.Use(history.AuditContextMiddleware(cfg))
-	for _, route := range dppRouter.OrderedRoutes() {
-		classifyDPPRoute(versioningGuard, route)
-		apiRouter.Method(route.Method, route.Pattern, route.HandlerFunc)
-	}
-
-	rootRouter.Mount(contextPath, apiRouter)
-	return rootRouter, nil
-}
-
-func classifyDPPRoute(versioningGuard *history.MutationCoverageGuard, route dppapi.Route) {
-	switch route.Name {
-	case "CreateDPP", "UpdateDPPById", "DeleteDPPById", "UpdateDataElement":
-		versioningGuard.Cover(route.Method, route.Pattern)
-	case "ReadDPPIdsByProductIds":
-		versioningGuard.Exempt(route.Method, route.Pattern)
-	default:
-		versioningGuard.ClassifyRoute(route.Name, route.Method, route.Pattern)
-	}
-}
-
-func rootRedirectPath(contextPath string) string {
-	if contextPath == "/" {
-		return "/"
-	}
-	return contextPath + "/"
-}
-
-func swaggerRedirectPath(contextPath string) string {
-	if contextPath == "/" {
-		return "/swagger"
-	}
-	return contextPath + "/swagger"
 }
 
 func openSharedDatabase(ctx context.Context, cfg *common.Config, dsn string) (*sql.DB, error) {
