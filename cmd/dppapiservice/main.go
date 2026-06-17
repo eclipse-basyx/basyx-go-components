@@ -87,16 +87,29 @@ func runServer(ctx context.Context, configPath string) error {
 		return err
 	}
 
+	server := &http.Server{
+		Addr:              addr,
+		Handler:           router,
+		ReadHeaderTimeout: 15 * time.Second,
+		ReadTimeout:       30 * time.Second,
+		WriteTimeout:      30 * time.Second,
+		IdleTimeout:       60 * time.Second,
+	}
+
 	log.Printf("Server started on %s", addr)
 	go func() {
-		//nolint:gosec // The configured BaSyx services listen on all interfaces.
-		if err := http.ListenAndServe(addr, router); err != nil && err != http.ErrServerClosed {
+		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Printf("Server error: %v", err)
 		}
 	}()
 
 	<-ctx.Done()
 	log.Println("Shutting down server...")
+	shutdownCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
+	defer cancel()
+	if err := server.Shutdown(shutdownCtx); err != nil {
+		return fmt.Errorf("DPP-SRV-SHUTDOWN %w", err)
+	}
 	return nil
 }
 

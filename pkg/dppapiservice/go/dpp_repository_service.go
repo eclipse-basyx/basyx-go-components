@@ -227,17 +227,18 @@ func (s *DPPRepositoryService) DeleteDPPById(ctx context.Context, dppID string) 
 
 // ReadDPPByProductId resolves a unique product ID to its DPP.
 func (s *DPPRepositoryService) ReadDPPByProductId(ctx context.Context, productID string, representation Representation) (ImplResponse, error) {
-	shells, _, err := s.aasRepo.GetAssetAdministrationShells(ctx, 2, "", "", []string{productID})
-	if err != nil {
+	ids := make([]string, 0)
+	seen := make(map[string]struct{})
+	if err := s.collectDPPIDsForProduct(ctx, productID, seen, &ids); err != nil {
 		return mapPersistenceError(err, http.StatusNotFound), nil
 	}
-	if len(shells) == 0 {
+	if len(ids) == 0 {
 		return errorResponse(http.StatusNotFound, fmt.Errorf("DPP-READBYPRODUCT-NOTFOUND no DPP for product %s", productID)), nil
 	}
-	if len(shells) > 1 {
+	if len(ids) > 1 {
 		return errorResponse(http.StatusConflict, fmt.Errorf("DPP-READBYPRODUCT-AMBIGUOUS multiple DPPs for product %s", productID)), nil
 	}
-	doc, err := s.composeDPP(ctx, shells[0].ID(), normalizeRepresentation(representation), time.Time{})
+	doc, err := s.composeDPP(ctx, ids[0], normalizeRepresentation(representation), time.Time{})
 	if err != nil {
 		return mapPersistenceError(err, http.StatusNotFound), nil
 	}
@@ -278,6 +279,9 @@ func (s *DPPRepositoryService) collectDPPIDsForProduct(ctx context.Context, prod
 			if _, ok := seen[shell.ID()]; ok {
 				continue
 			}
+			if !s.isDPPShell(ctx, shell.ID()) {
+				continue
+			}
 			seen[shell.ID()] = struct{}{}
 			*ids = append(*ids, shell.ID())
 		}
@@ -289,6 +293,13 @@ func (s *DPPRepositoryService) collectDPPIDsForProduct(ctx context.Context, prod
 		}
 		cursor = nextCursor
 	}
+}
+
+func (s *DPPRepositoryService) isDPPShell(ctx context.Context, shellID string) bool {
+	if _, err := s.resolveSubmodels(ctx, shellID, time.Time{}); err != nil {
+		return false
+	}
+	return true
 }
 
 // ReadDataElement reads one DPP data element by content section and idShort path.

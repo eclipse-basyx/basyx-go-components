@@ -7,7 +7,7 @@ postgres:
   host: localhost
   port: 5432
   user: postgres
-  password: snoopy2002
+  password: change-me
   dbname: basyx
   maxOpenConnections: 50
   maxIdleConnections: 50
