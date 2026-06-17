@@ -58,6 +58,14 @@ var dppHeaderFields = map[string]struct{}{
 	headerContentSpecificationIDs:  {},
 }
 
+var validGranularities = map[string]struct{}{
+	"Item":          {},
+	"Model":         {},
+	"Batch":         {},
+	"Role":          {},
+	"NotApplicable": {},
+}
+
 type dppDocument map[string]any
 
 type dppHeader struct {
@@ -103,7 +111,7 @@ func parseDPPHeader(doc dppDocument, requireHeaders bool) (dppHeader, error) {
 	if err != nil {
 		return header, err
 	}
-	header.Granularity, err = stringField(doc, headerGranularity, requireHeaders)
+	header.Granularity, err = granularityField(doc, requireHeaders)
 	if err != nil {
 		return header, err
 	}
@@ -132,6 +140,17 @@ func parseDPPHeader(doc dppDocument, requireHeaders bool) (dppHeader, error) {
 		return header, err
 	}
 	return header, nil
+}
+
+func granularityField(doc dppDocument, required bool) (string, error) {
+	value, err := stringField(doc, headerGranularity, required)
+	if err != nil || value == "" {
+		return value, err
+	}
+	if _, ok := validGranularities[value]; !ok {
+		return "", fmt.Errorf("DPP-HEADER-GRANULARITY field %s must be one of Item, Model, Batch, Role, NotApplicable", headerGranularity)
+	}
+	return value, nil
 }
 
 func stringField(doc dppDocument, name string, required bool) (string, error) {

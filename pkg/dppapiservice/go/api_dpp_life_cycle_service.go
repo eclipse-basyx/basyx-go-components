@@ -24,7 +24,6 @@
 ******************************************************************************/
 // Author: Jannik Fried ( Fraunhofer IESE ), Aaron Zielstorff ( Fraunhofer IESE )
 
-//nolint:revive
 package dppapi
 
 import (
@@ -34,18 +33,22 @@ import (
 	"time"
 )
 
+// DPPLifeCycleAPIService delegates lifecycle operations to a configured implementation.
 type DPPLifeCycleAPIService struct {
 	delegate DPPLifeCycleAPIServicer
 }
 
+// NewDPPLifeCycleAPIService creates an unconfigured lifecycle API service.
 func NewDPPLifeCycleAPIService() *DPPLifeCycleAPIService {
 	return &DPPLifeCycleAPIService{}
 }
 
+// NewDPPLifeCycleAPIServiceWithDelegate creates a lifecycle API service using the supplied delegate.
 func NewDPPLifeCycleAPIServiceWithDelegate(delegate DPPLifeCycleAPIServicer) *DPPLifeCycleAPIService {
 	return &DPPLifeCycleAPIService{delegate: delegate}
 }
 
+// ReadDPPById delegates reading a DPP by ID.
 func (s *DPPLifeCycleAPIService) ReadDPPById(ctx context.Context, dppID string, representation Representation) (ImplResponse, error) {
 	if s.delegate != nil {
 		return s.delegate.ReadDPPById(ctx, dppID, representation)
@@ -53,6 +56,7 @@ func (s *DPPLifeCycleAPIService) ReadDPPById(ctx context.Context, dppID string, 
 	return serviceNotConfigured("ReadDPPById"), nil
 }
 
+// DeleteDPPById delegates deleting a DPP by ID.
 func (s *DPPLifeCycleAPIService) DeleteDPPById(ctx context.Context, dppID string) (ImplResponse, error) {
 	if s.delegate != nil {
 		return s.delegate.DeleteDPPById(ctx, dppID)
@@ -60,6 +64,7 @@ func (s *DPPLifeCycleAPIService) DeleteDPPById(ctx context.Context, dppID string
 	return serviceNotConfigured("DeleteDPPById"), nil
 }
 
+// UpdateDPPById delegates updating a DPP by ID.
 func (s *DPPLifeCycleAPIService) UpdateDPPById(ctx context.Context, dppID string, patch DigitalProductPassportPatch) (ImplResponse, error) {
 	if s.delegate != nil {
 		return s.delegate.UpdateDPPById(ctx, dppID, patch)
@@ -67,6 +72,7 @@ func (s *DPPLifeCycleAPIService) UpdateDPPById(ctx context.Context, dppID string
 	return serviceNotConfigured("UpdateDPPById"), nil
 }
 
+// CreateDPP delegates creating a DPP.
 func (s *DPPLifeCycleAPIService) CreateDPP(ctx context.Context, passport DigitalProductPassport) (ImplResponse, error) {
 	if s.delegate != nil {
 		return s.delegate.CreateDPP(ctx, passport)
@@ -74,6 +80,7 @@ func (s *DPPLifeCycleAPIService) CreateDPP(ctx context.Context, passport Digital
 	return serviceNotConfigured("CreateDPP"), nil
 }
 
+// ReadDPPByProductId delegates reading a DPP by product ID.
 func (s *DPPLifeCycleAPIService) ReadDPPByProductId(ctx context.Context, productID string, representation Representation) (ImplResponse, error) {
 	if s.delegate != nil {
 		return s.delegate.ReadDPPByProductId(ctx, productID, representation)
@@ -81,6 +88,7 @@ func (s *DPPLifeCycleAPIService) ReadDPPByProductId(ctx context.Context, product
 	return serviceNotConfigured("ReadDPPByProductId"), nil
 }
 
+// ReadDPPVersionByIdAndDate delegates reading a historic DPP by ID and date.
 func (s *DPPLifeCycleAPIService) ReadDPPVersionByIdAndDate(ctx context.Context, dppID string, date time.Time, representation Representation) (ImplResponse, error) {
 	if s.delegate != nil {
 		return s.delegate.ReadDPPVersionByIdAndDate(ctx, dppID, date, representation)
@@ -88,6 +96,7 @@ func (s *DPPLifeCycleAPIService) ReadDPPVersionByIdAndDate(ctx context.Context, 
 	return serviceNotConfigured("ReadDPPVersionByIdAndDate"), nil
 }
 
+// ReadDPPIdsByProductIds delegates resolving product IDs to DPP IDs.
 func (s *DPPLifeCycleAPIService) ReadDPPIdsByProductIds(ctx context.Context, request ReadDppIdsByProductIdsRequest, limit int32, cursor string) (ImplResponse, error) {
 	if s.delegate != nil {
 		return s.delegate.ReadDPPIdsByProductIds(ctx, request, limit, cursor)

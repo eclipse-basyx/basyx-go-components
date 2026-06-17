@@ -148,7 +148,7 @@ func lifecycleDPPDocument(dppID string, productID string, now time.Time) map[str
 	return map[string]any{
 		"digitalProductPassportId": dppID,
 		"uniqueProductIdentifier":  productID,
-		"granularity":              "item",
+		"granularity":              "Item",
 		"dppSchemaVersion":         "1.0.0",
 		"dppStatus":                "active",
 		"lastUpdate":               now.Format(time.RFC3339Nano),

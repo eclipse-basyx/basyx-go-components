@@ -24,7 +24,6 @@
 ******************************************************************************/
 // Author: Jannik Fried ( Fraunhofer IESE ), Aaron Zielstorff ( Fraunhofer IESE )
 
-//nolint:revive
 package dppapi
 
 import (
@@ -48,15 +47,25 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
+const (
+	defaultDPPPageLimit        int32 = 100
+	dppProductIDSearchPageSize int32 = 500
+	maxDPPProductIDSearchItems       = 100
+	maxDPPRequestBodyBytes     int64 = 10 << 20
+)
+
+// DPPRepositoryService persists and retrieves Digital Product Passport documents.
 type DPPRepositoryService struct {
 	aasRepo      *aasrepositorydb.AssetAdministrationShellDatabase
 	submodelRepo *submodelrepositorydb.SubmodelDatabase
 }
 
+// NewDPPRepositoryService creates a DPP repository service backed by AAS and submodel repositories.
 func NewDPPRepositoryService(aasRepo *aasrepositorydb.AssetAdministrationShellDatabase, submodelRepo *submodelrepositorydb.SubmodelDatabase) *DPPRepositoryService {
 	return &DPPRepositoryService{aasRepo: aasRepo, submodelRepo: submodelRepo}
 }
 
+// CreateDPPFromJSON creates a DPP from a compressed JSON document.
 func (s *DPPRepositoryService) CreateDPPFromJSON(ctx context.Context, data []byte) (ImplResponse, error) {
 	doc, header, err := decodeDPPDocument(data, true)
 	if err != nil {
@@ -88,10 +97,15 @@ func (s *DPPRepositoryService) CreateDPPFromJSON(ctx context.Context, data []byt
 	return Response(http.StatusCreated, CreateDppResponse{DigitalProductPassportId: header.DigitalProductPassportID}), nil
 }
 
+// UpdateDPPFromJSON applies a JSON merge patch to an existing DPP.
 func (s *DPPRepositoryService) UpdateDPPFromJSON(ctx context.Context, dppID string, data []byte) (ImplResponse, error) {
 	patch, _, err := decodeDPPDocument(data, false)
 	if err != nil {
 		return errorResponse(http.StatusBadRequest, err), nil
+	}
+	currentResolved, err := s.resolveSubmodels(ctx, dppID, time.Time{})
+	if err != nil {
+		return mapPersistenceError(err, http.StatusNotFound), nil
 	}
 	current, err := s.composeDPP(ctx, dppID, REPRESENTATION_COMPRESSED, time.Time{})
 	if err != nil {
@@ -120,6 +134,7 @@ func (s *DPPRepositoryService) UpdateDPPFromJSON(ctx context.Context, dppID stri
 		return errorResponse(http.StatusBadRequest, err), nil
 	}
 	aas := buildAAS(header, refs)
+	staleSubmodelIDs := staleContentSubmodelIDs(currentResolved, submodels)
 
 	err = s.aasRepo.ExecuteInTransaction("DPP-UPDDPP-STARTTX", "DPP-UPDDPP-COMMITTX", func(tx *sql.Tx) error {
 		if _, err := s.aasRepo.PutAssetAdministrationShellByIDInTransaction(ctx, tx, dppID, aas); err != nil {
@@ -128,6 +143,11 @@ func (s *DPPRepositoryService) UpdateDPPFromJSON(ctx context.Context, dppID stri
 		for _, submodel := range submodels {
 			if _, err := s.submodelRepo.PutSubmodelInTransaction(ctx, tx, submodel.ID(), submodel); err != nil {
 				return fmt.Errorf("DPP-UPDDPP-PUTSUBMODEL put submodel %s: %w", submodel.ID(), err)
+			}
+		}
+		for _, submodelID := range staleSubmodelIDs {
+			if err := s.submodelRepo.DeleteSubmodelInTransaction(ctx, tx, submodelID); err != nil {
+				return fmt.Errorf("DPP-UPDDPP-DELETESUBMODEL delete stale submodel %s: %w", submodelID, err)
 			}
 		}
 		return nil
@@ -143,6 +163,24 @@ func (s *DPPRepositoryService) UpdateDPPFromJSON(ctx context.Context, dppID stri
 	return Response(http.StatusOK, updated), nil
 }
 
+func staleContentSubmodelIDs(current resolvedDPP, replacement []types.ISubmodel) []string {
+	replacementIDs := make(map[string]struct{}, len(replacement))
+	for _, submodel := range replacement {
+		replacementIDs[submodel.ID()] = struct{}{}
+	}
+	stale := make([]string, 0)
+	for _, submodel := range current.submodels {
+		if submodel.ID() == current.metadata.ID() {
+			continue
+		}
+		if _, stillPresent := replacementIDs[submodel.ID()]; !stillPresent {
+			stale = append(stale, submodel.ID())
+		}
+	}
+	sort.Strings(stale)
+	return stale
+}
+
 func dppObjectFromAny(value any) map[string]any {
 	switch typed := value.(type) {
 	case map[string]any:
@@ -154,6 +192,7 @@ func dppObjectFromAny(value any) map[string]any {
 	}
 }
 
+// ReadDPPById reads a DPP by its identifier.
 func (s *DPPRepositoryService) ReadDPPById(ctx context.Context, dppID string, representation Representation) (ImplResponse, error) {
 	doc, err := s.composeDPP(ctx, dppID, normalizeRepresentation(representation), time.Time{})
 	if err != nil {
@@ -162,6 +201,7 @@ func (s *DPPRepositoryService) ReadDPPById(ctx context.Context, dppID string, re
 	return Response(http.StatusOK, doc), nil
 }
 
+// DeleteDPPById deletes a DPP and its currently referenced submodels.
 func (s *DPPRepositoryService) DeleteDPPById(ctx context.Context, dppID string) (ImplResponse, error) {
 	resolved, err := s.resolveSubmodels(ctx, dppID, time.Time{})
 	if err != nil {
@@ -185,6 +225,7 @@ func (s *DPPRepositoryService) DeleteDPPById(ctx context.Context, dppID string) 
 	return Response(http.StatusNoContent, nil), nil
 }
 
+// ReadDPPByProductId resolves a unique product ID to its DPP.
 func (s *DPPRepositoryService) ReadDPPByProductId(ctx context.Context, productID string, representation Representation) (ImplResponse, error) {
 	shells, _, err := s.aasRepo.GetAssetAdministrationShells(ctx, 2, "", "", []string{productID})
 	if err != nil {
@@ -203,6 +244,7 @@ func (s *DPPRepositoryService) ReadDPPByProductId(ctx context.Context, productID
 	return Response(http.StatusOK, doc), nil
 }
 
+// ReadDPPVersionByIdAndDate reads a historic DPP version at the requested timestamp.
 func (s *DPPRepositoryService) ReadDPPVersionByIdAndDate(ctx context.Context, dppID string, date time.Time, representation Representation) (ImplResponse, error) {
 	doc, err := s.composeDPP(ctx, dppID, normalizeRepresentation(representation), date)
 	if err != nil {
@@ -211,20 +253,13 @@ func (s *DPPRepositoryService) ReadDPPVersionByIdAndDate(ctx context.Context, dp
 	return Response(http.StatusOK, doc), nil
 }
 
+// ReadDPPIdsByProductIds resolves product IDs to sorted, paged DPP IDs.
 func (s *DPPRepositoryService) ReadDPPIdsByProductIds(ctx context.Context, request ReadDppIdsByProductIdsRequest, limit int32, cursor string) (ImplResponse, error) {
 	ids := make([]string, 0)
 	seen := make(map[string]struct{})
 	for _, productID := range request.ProductIds {
-		shells, _, err := s.aasRepo.GetAssetAdministrationShells(ctx, limitOrDefault(limit), "", "", []string{productID})
-		if err != nil {
+		if err := s.collectDPPIDsForProduct(ctx, productID, seen, &ids); err != nil {
 			return mapPersistenceError(err, http.StatusInternalServerError), nil
-		}
-		for _, shell := range shells {
-			if _, ok := seen[shell.ID()]; ok {
-				continue
-			}
-			seen[shell.ID()] = struct{}{}
-			ids = append(ids, shell.ID())
 		}
 	}
 	sort.Strings(ids)
@@ -232,6 +267,31 @@ func (s *DPPRepositoryService) ReadDPPIdsByProductIds(ctx context.Context, reque
 	return Response(http.StatusOK, DppidSearchResult{Items: paged, Cursor: nextCursor}), nil
 }
 
+func (s *DPPRepositoryService) collectDPPIDsForProduct(ctx context.Context, productID string, seen map[string]struct{}, ids *[]string) error {
+	cursor := ""
+	for {
+		shells, nextCursor, err := s.aasRepo.GetAssetAdministrationShells(ctx, dppProductIDSearchPageSize, cursor, "", []string{productID})
+		if err != nil {
+			return fmt.Errorf("DPP-READIDS-GETAAS get AAS for product %s: %w", productID, err)
+		}
+		for _, shell := range shells {
+			if _, ok := seen[shell.ID()]; ok {
+				continue
+			}
+			seen[shell.ID()] = struct{}{}
+			*ids = append(*ids, shell.ID())
+		}
+		if nextCursor == "" {
+			return nil
+		}
+		if nextCursor == cursor {
+			return fmt.Errorf("DPP-READIDS-CURSOR repository returned repeated cursor %q", cursor)
+		}
+		cursor = nextCursor
+	}
+}
+
+// ReadDataElement reads one DPP data element by content section and idShort path.
 func (s *DPPRepositoryService) ReadDataElement(ctx context.Context, dppID string, elementPath string, representation Representation) (ImplResponse, error) {
 	submodelID, idShortPath, err := s.resolveElementPath(ctx, dppID, elementPath)
 	if err != nil {
@@ -248,6 +308,7 @@ func (s *DPPRepositoryService) ReadDataElement(ctx context.Context, dppID string
 	return Response(http.StatusOK, body), nil
 }
 
+// UpdateDataElementFromJSON replaces one DPP data element from its compressed JSON value.
 func (s *DPPRepositoryService) UpdateDataElementFromJSON(ctx context.Context, dppID string, elementPath string, data []byte) (ImplResponse, error) {
 	decoder := json.NewDecoder(strings.NewReader(string(data)))
 	decoder.UseNumber()
@@ -259,20 +320,49 @@ func (s *DPPRepositoryService) UpdateDataElementFromJSON(ctx context.Context, dp
 	if err != nil {
 		return errorResponse(http.StatusBadRequest, err), nil
 	}
+	existing, err := s.submodelRepo.GetSubmodelElement(ctx, submodelID, idShortPath, false, "deep")
+	if err != nil {
+		return mapPersistenceError(err, http.StatusNotFound), nil
+	}
 	idShortParts := strings.Split(idShortPath, ".")
 	element, err := inferElement(idShortParts[len(idShortParts)-1], value)
 	if err != nil {
 		return errorResponse(http.StatusBadRequest, err), nil
 	}
-	if _, err := s.submodelRepo.PutSubmodelElement(ctx, submodelID, idShortPath, element); err != nil {
-		return mapPersistenceError(err, http.StatusConflict), nil
-	}
-	if err := s.touchMetadata(ctx, dppID); err != nil {
+	preserveElementMetadata(existing, element)
+	metadata, err := s.updatedMetadata(ctx, dppID)
+	if err != nil {
 		return mapPersistenceError(err, http.StatusInternalServerError), nil
 	}
+
+	err = s.aasRepo.ExecuteInTransaction("DPP-UPDELEM-STARTTX", "DPP-UPDELEM-COMMITTX", func(tx *sql.Tx) error {
+		if _, err := s.submodelRepo.PutSubmodelElementInTransaction(ctx, tx, submodelID, idShortPath, element); err != nil {
+			return fmt.Errorf("DPP-UPDELEM-PUTELEMENT put element %s: %w", idShortPath, err)
+		}
+		if _, err := s.submodelRepo.PutSubmodelInTransaction(ctx, tx, metadata.ID(), metadata); err != nil {
+			return fmt.Errorf("DPP-UPDELEM-PUTMETADATA put metadata: %w", err)
+		}
+		return nil
+	})
+	if err != nil {
+		return mapPersistenceError(err, http.StatusConflict), nil
+	}
+
 	return s.ReadDataElement(ctx, dppID, elementPath, REPRESENTATION_COMPRESSED)
 }
 
+func preserveElementMetadata(existing types.ISubmodelElement, replacement types.ISubmodelElement) {
+	replacement.SetExtensions(existing.Extensions())
+	replacement.SetCategory(existing.Category())
+	replacement.SetDisplayName(existing.DisplayName())
+	replacement.SetDescription(existing.Description())
+	replacement.SetSemanticID(existing.SemanticID())
+	replacement.SetSupplementalSemanticIDs(existing.SupplementalSemanticIDs())
+	replacement.SetQualifiers(existing.Qualifiers())
+	replacement.SetEmbeddedDataSpecifications(existing.EmbeddedDataSpecifications())
+}
+
+// UpdateDataElement replaces one DPP data element from a generated model value.
 func (s *DPPRepositoryService) UpdateDataElement(ctx context.Context, dppID string, elementPath string, dataElement DataElement) (ImplResponse, error) {
 	raw, err := json.Marshal(dataElement)
 	if err != nil {
@@ -281,6 +371,7 @@ func (s *DPPRepositoryService) UpdateDataElement(ctx context.Context, dppID stri
 	return s.UpdateDataElementFromJSON(ctx, dppID, elementPath, raw)
 }
 
+// CreateDPP creates a DPP from the generated OpenAPI model.
 func (s *DPPRepositoryService) CreateDPP(ctx context.Context, passport DigitalProductPassport) (ImplResponse, error) {
 	raw, err := json.Marshal(passport)
 	if err != nil {
@@ -289,6 +380,7 @@ func (s *DPPRepositoryService) CreateDPP(ctx context.Context, passport DigitalPr
 	return s.CreateDPPFromJSON(ctx, raw)
 }
 
+// UpdateDPPById applies a generated model patch to an existing DPP.
 func (s *DPPRepositoryService) UpdateDPPById(ctx context.Context, dppID string, patch DigitalProductPassportPatch) (ImplResponse, error) {
 	raw, err := json.Marshal(patch)
 	if err != nil {
@@ -410,10 +502,10 @@ func (s *DPPRepositoryService) resolveElementPath(ctx context.Context, dppID str
 	return "", "", fmt.Errorf("DPP-ELEMPATH-NOTFOUND content section %s not found", parts[0])
 }
 
-func (s *DPPRepositoryService) touchMetadata(ctx context.Context, dppID string) error {
+func (s *DPPRepositoryService) updatedMetadata(ctx context.Context, dppID string) (types.ISubmodel, error) {
 	metadata, err := s.submodelRepo.GetSubmodelByID(ctx, metadataSubmodelID(dppID), "deep", false)
 	if err != nil {
-		return fmt.Errorf("DPP-TOUCHMETA-GET get metadata: %w", err)
+		return nil, fmt.Errorf("DPP-TOUCHMETA-GET get metadata: %w", err)
 	}
 	for _, element := range metadata.SubmodelElements() {
 		if element.IDShort() != nil && *element.IDShort() == headerLastUpdate {
@@ -423,10 +515,7 @@ func (s *DPPRepositoryService) touchMetadata(ctx context.Context, dppID string) 
 			}
 		}
 	}
-	if _, err := s.submodelRepo.PutSubmodel(ctx, metadata.ID(), metadata); err != nil {
-		return fmt.Errorf("DPP-TOUCHMETA-PUT put metadata: %w", err)
-	}
-	return nil
+	return metadata, nil
 }
 
 func elementResponse(element types.ISubmodelElement, representation Representation) (any, error) {
@@ -470,7 +559,7 @@ func normalizeRepresentation(representation Representation) Representation {
 
 func limitOrDefault(limit int32) int32 {
 	if limit <= 0 {
-		return 100
+		return defaultDPPPageLimit
 	}
 	return limit
 }
@@ -529,14 +618,17 @@ func firstErrorCode(text string) string {
 	return "DPP-ERROR-UNKNOWN"
 }
 
+// DPPRepositoryRouter exposes DPP repository service operations as HTTP handlers.
 type DPPRepositoryRouter struct {
 	service *DPPRepositoryService
 }
 
+// NewDPPRepositoryRouter creates an HTTP router adapter for the DPP repository service.
 func NewDPPRepositoryRouter(service *DPPRepositoryService) *DPPRepositoryRouter {
 	return &DPPRepositoryRouter{service: service}
 }
 
+// OrderedRoutes returns DPP routes in registration order.
 func (r *DPPRepositoryRouter) OrderedRoutes() []Route {
 	return []Route{
 		{"ReadDPPById", http.MethodGet, "/v1/dpps/{dppId}", r.ReadDPPById},
@@ -551,6 +643,7 @@ func (r *DPPRepositoryRouter) OrderedRoutes() []Route {
 	}
 }
 
+// Routes returns DPP routes keyed by operation name.
 func (r *DPPRepositoryRouter) Routes() Routes {
 	routes := make(Routes)
 	for _, route := range r.OrderedRoutes() {
@@ -559,6 +652,7 @@ func (r *DPPRepositoryRouter) Routes() Routes {
 	return routes
 }
 
+// ReadDPPById handles GET /v1/dpps/{dppId}.
 func (r *DPPRepositoryRouter) ReadDPPById(w http.ResponseWriter, req *http.Request) {
 	representation, invalid := queryRepresentation(req)
 	if invalid != nil {
@@ -569,31 +663,35 @@ func (r *DPPRepositoryRouter) ReadDPPById(w http.ResponseWriter, req *http.Reque
 	r.write(w, response, err)
 }
 
+// DeleteDPPById handles DELETE /v1/dpps/{dppId}.
 func (r *DPPRepositoryRouter) DeleteDPPById(w http.ResponseWriter, req *http.Request) {
 	response, err := r.service.DeleteDPPById(req.Context(), pathParam(req, "dppId"))
 	r.write(w, response, err)
 }
 
+// UpdateDPPById handles PATCH /v1/dpps/{dppId}.
 func (r *DPPRepositoryRouter) UpdateDPPById(w http.ResponseWriter, req *http.Request) {
-	body, err := io.ReadAll(req.Body)
+	body, err := readRequestBody(w, req)
 	if err != nil {
-		r.write(w, errorResponse(http.StatusBadRequest, fmt.Errorf("DPP-UPDDPP-READBODY read request body: %w", err)), nil)
+		r.write(w, requestBodyErrorResponse("UPDDPP", err), nil)
 		return
 	}
 	response, err := r.service.UpdateDPPFromJSON(req.Context(), pathParam(req, "dppId"), body)
 	r.write(w, response, err)
 }
 
+// CreateDPP handles POST /v1/dpps.
 func (r *DPPRepositoryRouter) CreateDPP(w http.ResponseWriter, req *http.Request) {
-	body, err := io.ReadAll(req.Body)
+	body, err := readRequestBody(w, req)
 	if err != nil {
-		r.write(w, errorResponse(http.StatusBadRequest, fmt.Errorf("DPP-CREATEDPP-READBODY read request body: %w", err)), nil)
+		r.write(w, requestBodyErrorResponse("CREATEDPP", err), nil)
 		return
 	}
 	response, err := r.service.CreateDPPFromJSON(req.Context(), body)
 	r.write(w, response, err)
 }
 
+// ReadDPPByProductId handles GET /v1/dppsByProductId/{productId}.
 func (r *DPPRepositoryRouter) ReadDPPByProductId(w http.ResponseWriter, req *http.Request) {
 	representation, invalid := queryRepresentation(req)
 	if invalid != nil {
@@ -604,6 +702,7 @@ func (r *DPPRepositoryRouter) ReadDPPByProductId(w http.ResponseWriter, req *htt
 	r.write(w, response, err)
 }
 
+// ReadDPPVersionByIdAndDate handles GET /v1/dppsByIdAndDate/{dppId}.
 func (r *DPPRepositoryRouter) ReadDPPVersionByIdAndDate(w http.ResponseWriter, req *http.Request) {
 	date, err := time.Parse(time.RFC3339Nano, req.URL.Query().Get("date"))
 	if err != nil {
@@ -619,19 +718,20 @@ func (r *DPPRepositoryRouter) ReadDPPVersionByIdAndDate(w http.ResponseWriter, r
 	r.write(w, response, err)
 }
 
+// ReadDPPIdsByProductIds handles POST /v1/dppsByProductIds.
 func (r *DPPRepositoryRouter) ReadDPPIdsByProductIds(w http.ResponseWriter, req *http.Request) {
 	var request ReadDppIdsByProductIdsRequest
-	decoder := json.NewDecoder(req.Body)
+	decoder := json.NewDecoder(http.MaxBytesReader(w, req.Body, maxDPPRequestBodyBytes))
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(&request); err != nil {
-		r.write(w, errorResponse(http.StatusBadRequest, fmt.Errorf("DPP-READIDS-DECODE decode request body: %w", err)), nil)
+		r.write(w, requestBodyDecodeErrorResponse("READIDS", err), nil)
 		return
 	}
 	if err := validateReadDPPIdsRequest(request); err != nil {
 		r.write(w, errorResponse(http.StatusBadRequest, err), nil)
 		return
 	}
-	limit := int32(100)
+	limit := defaultDPPPageLimit
 	if rawLimit := req.URL.Query().Get("limit"); rawLimit != "" {
 		parsed, err := strconv.ParseInt(rawLimit, 10, 32)
 		if err != nil || parsed < 1 {
@@ -648,6 +748,9 @@ func validateReadDPPIdsRequest(request ReadDppIdsByProductIdsRequest) error {
 	if len(request.ProductIds) == 0 {
 		return fmt.Errorf("DPP-READIDS-MISSING productIds must contain at least one product id")
 	}
+	if len(request.ProductIds) > maxDPPProductIDSearchItems {
+		return fmt.Errorf("DPP-READIDS-MAXITEMS productIds must contain at most %d product ids", maxDPPProductIDSearchItems)
+	}
 	for _, productID := range request.ProductIds {
 		if strings.TrimSpace(productID) == "" {
 			return fmt.Errorf("DPP-READIDS-INVALID productIds must contain only non-empty strings")
@@ -656,6 +759,7 @@ func validateReadDPPIdsRequest(request ReadDppIdsByProductIdsRequest) error {
 	return nil
 }
 
+// ReadDataElement handles GET /v1/dpps/{dppId}/elements/{elementPath}.
 func (r *DPPRepositoryRouter) ReadDataElement(w http.ResponseWriter, req *http.Request) {
 	representation, invalid := queryRepresentation(req)
 	if invalid != nil {
@@ -666,14 +770,37 @@ func (r *DPPRepositoryRouter) ReadDataElement(w http.ResponseWriter, req *http.R
 	r.write(w, response, err)
 }
 
+// UpdateDataElement handles PUT /v1/dpps/{dppId}/elements/{elementPath}.
 func (r *DPPRepositoryRouter) UpdateDataElement(w http.ResponseWriter, req *http.Request) {
-	body, err := io.ReadAll(req.Body)
+	body, err := readRequestBody(w, req)
 	if err != nil {
-		r.write(w, errorResponse(http.StatusBadRequest, fmt.Errorf("DPP-UPDELEM-READBODY read request body: %w", err)), nil)
+		r.write(w, requestBodyErrorResponse("UPDELEM", err), nil)
 		return
 	}
 	response, err := r.service.UpdateDataElementFromJSON(req.Context(), pathParam(req, "dppId"), elementPathParam(req), body)
 	r.write(w, response, err)
+}
+
+func readRequestBody(w http.ResponseWriter, req *http.Request) ([]byte, error) {
+	return io.ReadAll(http.MaxBytesReader(w, req.Body, maxDPPRequestBodyBytes))
+}
+
+func requestBodyErrorResponse(operation string, err error) ImplResponse {
+	if isRequestBodyTooLarge(err) {
+		return errorResponse(http.StatusRequestEntityTooLarge, fmt.Errorf("DPP-%s-BODYTOOLARGE request body exceeds %d bytes", operation, maxDPPRequestBodyBytes))
+	}
+	return errorResponse(http.StatusBadRequest, fmt.Errorf("DPP-%s-READBODY read request body: %w", operation, err))
+}
+
+func requestBodyDecodeErrorResponse(operation string, err error) ImplResponse {
+	if isRequestBodyTooLarge(err) {
+		return errorResponse(http.StatusRequestEntityTooLarge, fmt.Errorf("DPP-%s-BODYTOOLARGE request body exceeds %d bytes", operation, maxDPPRequestBodyBytes))
+	}
+	return errorResponse(http.StatusBadRequest, fmt.Errorf("DPP-%s-DECODE decode request body: %w", operation, err))
+}
+
+func isRequestBodyTooLarge(err error) bool {
+	return strings.Contains(err.Error(), "request body too large")
 }
 
 func pathParam(req *http.Request, name string) string {

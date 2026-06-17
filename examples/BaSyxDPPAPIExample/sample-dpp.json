@@ -1,7 +1,7 @@
 {
   "digitalProductPassportId": "https://example.org/dpp/demo-product-001",
   "uniqueProductIdentifier": "https://example.org/products/demo-product-001",
-  "granularity": "item",
+  "granularity": "Item",
   "dppSchemaVersion": "1.0.0",
   "dppStatus": "active",
   "lastUpdate": "2026-06-11T12:00:00Z",

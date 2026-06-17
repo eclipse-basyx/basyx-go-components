@@ -463,7 +463,7 @@ paths:
   /v1/dpps/{dppId}/elements/{elementPath}:
     get:
       description: |
-        Retrieves one data element by its DPP elementId, mapped to the idShort-based AAS SubmodelElement path. In special cases the path may address a complete Submodel.
+        Retrieves one data element by content section and AAS idShort-based SubmodelElement path. Use <contentSection>/<idShort.path>; slash-containing paths must be percent-encoded.
       operationId: readDataElement
       parameters:
       - description: Percent-encoded Digital Product Passport identifier.
@@ -475,8 +475,7 @@ paths:
           minLength: 1
           type: string
         style: simple
-      - description: Percent-encoded DPP elementId / AAS idShort-based SubmodelElement
-          path.
+      - description: Percent-encoded <contentSection>/<idShort.path> DPP element path.
         explode: false
         in: path
         name: elementPath
@@ -499,7 +498,9 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/DataElement"
+                oneOf:
+                - $ref: "#/components/schemas/CompressedDataElementValue"
+                - $ref: "#/components/schemas/DataElement"
           description: Data element
         "400":
           content:
@@ -536,7 +537,7 @@ paths:
       - DPP Fine Granular
     put:
       description: |
-        Updates one DPP data element within a content Submodel and should update the lastUpdate field of the DppMetadata Submodel.
+        Updates one DPP data element within a content Submodel using its compressed JSON value and updates the lastUpdate field of the DppMetadata Submodel.
       operationId: updateDataElement
       parameters:
       - description: Percent-encoded Digital Product Passport identifier.
@@ -548,8 +549,7 @@ paths:
           minLength: 1
           type: string
         style: simple
-      - description: Percent-encoded DPP elementId / AAS idShort-based SubmodelElement
-          path.
+      - description: Percent-encoded <contentSection>/<idShort.path> DPP element path.
         explode: false
         in: path
         name: elementPath
@@ -562,14 +562,14 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/DataElement"
+              $ref: "#/components/schemas/CompressedDataElementValue"
         required: true
       responses:
         "200":
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/DataElement"
+                $ref: "#/components/schemas/CompressedDataElementValue"
           description: Updated data element
         "400":
           content:
@@ -868,6 +868,18 @@ components:
       - $ref: "#/components/schemas/MultiLanguageDataElement"
       - $ref: "#/components/schemas/DataElementCollection"
       - $ref: "#/components/schemas/RelatedResource"
+    CompressedDataElementValue:
+      description: Raw compressed DPP element value. The value may be a scalar, object, array, or null and is mapped to the target AAS SubmodelElement.
+      nullable: true
+      oneOf:
+      - type: string
+      - type: number
+      - type: integer
+      - type: boolean
+      - additionalProperties: true
+        type: object
+      - items: {}
+        type: array
     SingleValuedDataElement:
       additionalProperties: false
       example:
@@ -1071,6 +1083,7 @@ components:
           items:
             minLength: 1
             type: string
+          maxItems: 100
           minItems: 1
           type: array
       required:

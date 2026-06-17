@@ -24,23 +24,26 @@
 ******************************************************************************/
 // Author: Jannik Fried ( Fraunhofer IESE ), Aaron Zielstorff ( Fraunhofer IESE )
 
-//nolint:revive
 package dppapi
 
 import "context"
 
+// DPPFineGranularAPIService delegates fine-grained DPP operations to a configured implementation.
 type DPPFineGranularAPIService struct {
 	delegate DPPFineGranularAPIServicer
 }
 
+// NewDPPFineGranularAPIService creates an unconfigured fine-grained API service.
 func NewDPPFineGranularAPIService() *DPPFineGranularAPIService {
 	return &DPPFineGranularAPIService{}
 }
 
+// NewDPPFineGranularAPIServiceWithDelegate creates a fine-grained API service using the supplied delegate.
 func NewDPPFineGranularAPIServiceWithDelegate(delegate DPPFineGranularAPIServicer) *DPPFineGranularAPIService {
 	return &DPPFineGranularAPIService{delegate: delegate}
 }
 
+// ReadDataElement delegates reading one DPP data element.
 func (s *DPPFineGranularAPIService) ReadDataElement(ctx context.Context, dppID string, elementPath string, representation Representation) (ImplResponse, error) {
 	if s.delegate != nil {
 		return s.delegate.ReadDataElement(ctx, dppID, elementPath, representation)
@@ -48,6 +51,7 @@ func (s *DPPFineGranularAPIService) ReadDataElement(ctx context.Context, dppID s
 	return serviceNotConfigured("ReadDataElement"), nil
 }
 
+// UpdateDataElement delegates updating one DPP data element.
 func (s *DPPFineGranularAPIService) UpdateDataElement(ctx context.Context, dppID string, elementPath string, dataElement DataElement) (ImplResponse, error) {
 	if s.delegate != nil {
 		return s.delegate.UpdateDataElement(ctx, dppID, elementPath, dataElement)

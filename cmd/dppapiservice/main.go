@@ -59,8 +59,8 @@ func runServer(ctx context.Context, configPath string) error {
 		return err
 	}
 
-	configureDPPHistory()
-	if err = history.ConfigureEvidence(ctx, common.HistoryEvidenceConfig{}); err != nil {
+	configureDPPHistory(cfg.History)
+	if err = history.ConfigureEvidence(ctx, cfg.History.Evidence); err != nil {
 		return err
 	}
 
@@ -100,13 +100,13 @@ func runServer(ctx context.Context, configPath string) error {
 	return nil
 }
 
-func configureDPPHistory() {
+func configureDPPHistory(cfg common.HistoryConfig) {
 	history.Configure(history.Config{
-		Mode:                 history.ModeAudit,
-		RetentionDays:        0,
-		FullSnapshotInterval: 1,
-		Immutability:         history.ImmutabilityNone,
-		AuditIdentityMode:    history.AuditIdentityExtended,
+		Mode:                 cfg.Mode,
+		RetentionDays:        cfg.RetentionDays,
+		FullSnapshotInterval: cfg.FullSnapshotInterval,
+		Immutability:         cfg.Immutability,
+		AuditIdentityMode:    cfg.AuditIdentityMode,
 	})
 }
 
@@ -132,12 +132,27 @@ func createRouter(ctx context.Context, cfg *common.Config, aasRepo *aasrepositor
 	if err := auth.SetupSecurity(ctx, cfg, apiRouter); err != nil {
 		return nil, err
 	}
+	versioningGuard := history.NewMutationCoverageGuard(apiRouter)
+	apiRouter.Use(versioningGuard.Middleware)
+	apiRouter.Use(history.AuditContextMiddleware(cfg))
 	for _, route := range dppRouter.OrderedRoutes() {
+		classifyDPPRoute(versioningGuard, route)
 		apiRouter.Method(route.Method, route.Pattern, route.HandlerFunc)
 	}
 
 	rootRouter.Mount(contextPath, apiRouter)
 	return rootRouter, nil
+}
+
+func classifyDPPRoute(versioningGuard *history.MutationCoverageGuard, route dppapi.Route) {
+	switch route.Name {
+	case "CreateDPP", "UpdateDPPById", "DeleteDPPById", "UpdateDataElement":
+		versioningGuard.Cover(route.Method, route.Pattern)
+	case "ReadDPPIdsByProductIds":
+		versioningGuard.Exempt(route.Method, route.Pattern)
+	default:
+		versioningGuard.ClassifyRoute(route.Name, route.Method, route.Pattern)
+	}
 }
 
 func rootRedirectPath(contextPath string) string {

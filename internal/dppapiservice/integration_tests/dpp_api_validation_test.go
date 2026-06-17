@@ -29,6 +29,7 @@ package integration_tests
 import (
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -146,6 +147,14 @@ func TestDPPAPIRejectsInvalidPayloadsBeforePersistence(t *testing.T) {
 			errorCode:  "DPP-HEADER-PARSETIME",
 		},
 		{
+			name:       "create rejects invalid granularity",
+			method:     http.MethodPost,
+			target:     "/v1/dpps",
+			body:       withDPPField("granularity", `"item"`),
+			statusCode: http.StatusBadRequest,
+			errorCode:  "DPP-HEADER-GRANULARITY",
+		},
+		{
 			name:       "create rejects empty contentSpecificationIds",
 			method:     http.MethodPost,
 			target:     "/v1/dpps",
@@ -210,6 +219,14 @@ func TestDPPAPIRejectsInvalidPayloadsBeforePersistence(t *testing.T) {
 			errorCode:  "DPP-READIDS-INVALID",
 		},
 		{
+			name:       "product id search rejects too many product ids",
+			method:     http.MethodPost,
+			target:     "/v1/dppsByProductIds",
+			body:       productIDSearchBody(101),
+			statusCode: http.StatusBadRequest,
+			errorCode:  "DPP-READIDS-MAXITEMS",
+		},
+		{
 			name:       "element update rejects malformed json",
 			method:     http.MethodPut,
 			target:     "/v1/dpps/dpp-1/elements/technicalData/manufacturerName",
@@ -257,6 +274,7 @@ func assertDPPAPIError(t *testing.T, method string, target string, body string, 
 func withDPPField(field string, value string) string {
 	replacements := map[string]string{
 		"digitalProductPassportId": `"digitalProductPassportId":"dpp-1"`,
+		"granularity":              `"granularity":"Item"`,
 		"lastUpdate":               `"lastUpdate":"2026-01-02T03:04:05Z"`,
 		"contentSpecificationIds":  `"contentSpecificationIds":["technicalData-specification"]`,
 		"technicalData":            `"technicalData":{"manufacturerName":"Acme GmbH"}`,
@@ -268,7 +286,7 @@ func validDPPBody() string {
 	return `{
 		"digitalProductPassportId":"dpp-1",
 		"uniqueProductIdentifier":"product-1",
-		"granularity":"item",
+		"granularity":"Item",
 		"dppSchemaVersion":"1.0.0",
 		"dppStatus":"active",
 		"lastUpdate":"2026-01-02T03:04:05Z",
@@ -277,4 +295,12 @@ func validDPPBody() string {
 		"contentSpecificationIds":["technicalData-specification"],
 		"technicalData":{"manufacturerName":"Acme GmbH"}
 	}`
+}
+
+func productIDSearchBody(count int) string {
+	productIDs := make([]string, 0, count)
+	for index := range count {
+		productIDs = append(productIDs, `"product-`+strconv.Itoa(index)+`"`)
+	}
+	return `{"productIds":[` + strings.Join(productIDs, ",") + `]}`
 }
