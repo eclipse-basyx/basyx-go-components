@@ -427,7 +427,7 @@ func sanitizeIDShort(value string, fallback string) string {
 	var builder strings.Builder
 	for _, r := range value {
 		if r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' || r == '_' {
-			builder.WriteRune(r)
+			_, _ = builder.WriteRune(r)
 		}
 	}
 	if builder.Len() == 0 {

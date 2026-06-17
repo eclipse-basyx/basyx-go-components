@@ -799,7 +799,7 @@ jobs:
         run: go mod download
 
       - name: Build BaSyx configuration image for DPP compose tests
-        run: docker build -t eclipsebasyx/basyxconfigurationservice-go:SNAPSHOT -f ./cmd/basyxconfigurationservice/Dockerfile .
+        run: docker build --no-cache -t eclipsebasyx/basyxconfigurationservice-go:SNAPSHOT -f ./cmd/basyxconfigurationservice/Dockerfile .
 
       - name: Run dpp api integration tests
         run: |

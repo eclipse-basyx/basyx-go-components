@@ -50,7 +50,7 @@ func TestDPPSecurityWithDockerCompose(t *testing.T) {
 	port := reserveLocalPort(t)
 	projectName := "dpp-security-it-" + strings.ReplaceAll(time.Now().UTC().Format("20060102150405.000000000"), ".", "")
 	composeFile := "docker-compose-security.yml"
-	ctx, cancel := context.WithTimeout(context.TODO(), 4*time.Minute)
+	ctx, cancel := context.WithTimeout(context.TODO(), dppComposeTestTimeout)
 	defer cancel()
 
 	composeDown(t, context.TODO(), composeFile, projectName, port)

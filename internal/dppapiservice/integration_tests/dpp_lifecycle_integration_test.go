@@ -42,6 +42,8 @@ import (
 	"time"
 )
 
+const dppComposeTestTimeout = 8 * time.Minute
+
 func TestDPPLifecycleWithDockerCompose(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping Docker Compose integration test in short mode")
@@ -51,7 +53,7 @@ func TestDPPLifecycleWithDockerCompose(t *testing.T) {
 	port := reserveLocalPort(t)
 	projectName := fmt.Sprintf("dpp-lifecycle-it-%d", time.Now().UnixNano())
 	composeFile := "docker-compose.yml"
-	ctx, cancel := context.WithTimeout(context.TODO(), 4*time.Minute)
+	ctx, cancel := context.WithTimeout(context.TODO(), dppComposeTestTimeout)
 	defer cancel()
 
 	composeDown(t, context.TODO(), composeFile, projectName, port)
@@ -181,12 +183,8 @@ func requireDockerCompose(t *testing.T) {
 //nolint:revive
 func composeUp(t *testing.T, ctx context.Context, composeFile string, projectName string, port int) {
 	t.Helper()
-	args := []string{"compose", "-f", composeFile, "-p", projectName, "up", "--build", "-d"}
-	cmd := composeCommand(ctx, port, args...)
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		t.Fatalf("docker compose up failed: %v\n%s", err, output)
-	}
+	runComposeCommand(ctx, t, port, "docker compose build failed", "compose", "-f", composeFile, "-p", projectName, "build", "--no-cache")
+	runComposeCommand(ctx, t, port, "docker compose up failed", "compose", "-f", composeFile, "-p", projectName, "up", "-d")
 }
 
 //nolint:revive
@@ -200,6 +198,15 @@ func composeDown(t *testing.T, ctx context.Context, composeFile string, projectN
 	}
 }
 
+func runComposeCommand(ctx context.Context, t *testing.T, port int, errorMessage string, args ...string) {
+	t.Helper()
+	cmd := composeCommand(ctx, port, args...)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("%s: %v\n%s", errorMessage, err, output)
+	}
+}
+
 func composeCommand(ctx context.Context, port int, args ...string) *exec.Cmd {
 	//nolint:gosec
 	cmd := exec.CommandContext(ctx, "docker", args...)
@@ -210,8 +217,7 @@ func composeCommand(ctx context.Context, port int, args ...string) *exec.Cmd {
 //nolint:revive
 func waitForDPPAPI(t *testing.T, ctx context.Context, baseURL string) {
 	t.Helper()
-	deadline := time.Now().Add(90 * time.Second)
-	for time.Now().Before(deadline) {
+	for {
 		request, err := http.NewRequestWithContext(ctx, http.MethodGet, baseURL+"/api-docs/openapi.yaml", nil)
 		if err != nil {
 			t.Fatalf("create readiness request: %v", err)
@@ -229,7 +235,6 @@ func waitForDPPAPI(t *testing.T, ctx context.Context, baseURL string) {
 		case <-time.After(2 * time.Second):
 		}
 	}
-	t.Fatal("DPP API did not become ready before timeout")
 }
 
 func reserveLocalPort(t *testing.T) int {
