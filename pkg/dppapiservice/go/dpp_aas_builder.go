@@ -21,7 +21,7 @@ import (
 )
 
 func buildAAS(header dppHeader, submodelRefs []types.IReference) types.IAssetAdministrationShell {
-	assetInformation := types.NewAssetInformation(types.AssetKindInstance)
+	assetInformation := types.NewAssetInformation(granularityAssetKind(header.Granularity))
 	assetInformation.SetGlobalAssetID(&header.UniqueProductIdentifier)
 
 	aas := types.NewAssetAdministrationShell(header.DigitalProductPassportID, assetInformation)
@@ -63,6 +63,9 @@ func buildContentSubmodel(dppID string, sectionName string, semanticID string, v
 	if !ok {
 		return nil, fmt.Errorf("DPP-BUILDSM-CONTENTSECTION content section %s must be a JSON object", sectionName)
 	}
+	if err := rejectExpandedDataElementShape(sectionName, object); err != nil {
+		return nil, err
+	}
 	elements := make([]types.ISubmodelElement, 0, len(object))
 	keys := sortedKeys(object)
 	for _, key := range keys {
@@ -74,4 +77,15 @@ func buildContentSubmodel(dppID string, sectionName string, semanticID string, v
 	}
 	submodel.SetSubmodelElements(elements)
 	return submodel, nil
+}
+
+func granularityAssetKind(granularity string) types.AssetKind {
+	switch granularity {
+	case "Model":
+		return types.AssetKindType
+	case "Batch":
+		return types.AssetKindBatch
+	default:
+		return types.AssetKindInstance
+	}
 }

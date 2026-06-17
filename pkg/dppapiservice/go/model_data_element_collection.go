@@ -46,7 +46,7 @@ type DataElementCollection struct {
 	// DPP dictionary reference mapped to AAS semanticId.
 	DictionaryReference string `json:"dictionaryReference,omitempty"`
 
-	Value []DataElement `json:"value"`
+	Elements []DataElement `json:"elements"`
 }
 
 // AssertDataElementCollectionRequired checks if the required fields are not zero-ed
@@ -54,7 +54,7 @@ func AssertDataElementCollectionRequired(obj DataElementCollection) error {
 	elements := map[string]interface{}{
 		"elementId":  obj.ElementId,
 		"objectType": obj.ObjectType,
-		"value":      obj.Value,
+		"elements":   obj.Elements,
 	}
 	for name, el := range elements {
 		if isZero := IsZeroValue(el); isZero {
@@ -62,7 +62,7 @@ func AssertDataElementCollectionRequired(obj DataElementCollection) error {
 		}
 	}
 
-	for _, el := range obj.Value {
+	for _, el := range obj.Elements {
 		if err := AssertDataElementRequired(el); err != nil {
 			return err
 		}
@@ -72,7 +72,7 @@ func AssertDataElementCollectionRequired(obj DataElementCollection) error {
 
 // AssertDataElementCollectionConstraints checks if the values respects the defined constraints
 func AssertDataElementCollectionConstraints(obj DataElementCollection) error {
-	for _, el := range obj.Value {
+	for _, el := range obj.Elements {
 		if err := AssertDataElementConstraints(el); err != nil {
 			return err
 		}

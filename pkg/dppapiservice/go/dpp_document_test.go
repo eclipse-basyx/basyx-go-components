@@ -28,6 +28,7 @@ package dppapi
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 
 	"github.com/FriedJannik/aas-go-sdk/types"
@@ -115,6 +116,33 @@ func TestNormalizeValueOnlyConvertsFileAndLanguageShapes(t *testing.T) {
 	}
 }
 
+func TestDecodeDPPDocumentRejectsExpandedPayloads(t *testing.T) {
+	body := []byte(`{
+		"digitalProductPassportId":"dpp-1",
+		"uniqueProductIdentifier":"product-1",
+		"granularity":"Item",
+		"dppSchemaVersion":"EN18223:v1",
+		"dppStatus":"Active",
+		"lastUpdate":"2026-06-10T10:00:00Z",
+		"economicOperatorId":"operator-1",
+		"facilityId":"facility-1",
+		"contentSpecificationIds":["technicalData-specification"],
+		"elements":[{
+			"elementId":"technicalData",
+			"objectType":"DataElementCollection",
+			"elements":[]
+		}]
+	}`)
+
+	_, _, err := decodeDPPDocument(body, true)
+	if err == nil {
+		t.Fatal("decodeDPPDocument() error = nil, want expanded payload rejection")
+	}
+	if !strings.Contains(err.Error(), "DPP-COMPACT-FULLWRITE") {
+		t.Fatalf("decodeDPPDocument() error = %v, want DPP-COMPACT-FULLWRITE", err)
+	}
+}
+
 func TestFullContentMapsAASElementsToDPPDataElements(t *testing.T) {
 	manufacturerName := types.NewProperty(types.DataTypeDefXSDString)
 	manufacturerNameIDShort := "manufacturerName"
@@ -147,11 +175,25 @@ func TestFullContentMapsAASElementsToDPPDataElements(t *testing.T) {
 	manual.SetIDShort(&manualIDShort)
 	manual.SetValue(&manualURL)
 	manual.SetContentType(&manualContentType)
+	manual.SetExtensions([]types.IExtension{
+		stringExtension(dppResourceTitleExtensionName, "User Manual"),
+		stringExtension(dppLanguageExtensionName, "en-GB"),
+	})
 
 	documentation := types.NewSubmodelElementCollection()
 	documentationIDShort := "documentation"
 	documentation.SetIDShort(&documentationIDShort)
 	documentation.SetValue([]types.ISubmodelElement{name, manual})
+
+	packageItem := types.NewSubmodelElementCollection()
+	packageItemIDShort := "packages0"
+	packageItem.SetIDShort(&packageItemIDShort)
+	packageItem.SetValue([]types.ISubmodelElement{stringProperty("material", "steel")})
+
+	packages := types.NewSubmodelElementList(types.AASSubmodelElementsSubmodelElementCollection)
+	packagesIDShort := "packages"
+	packages.SetIDShort(&packagesIDShort)
+	packages.SetValue([]types.ISubmodelElement{packageItem})
 
 	submodel := types.NewSubmodel("technical-data")
 	submodelIDShort := "TechnicalData"
@@ -159,6 +201,7 @@ func TestFullContentMapsAASElementsToDPPDataElements(t *testing.T) {
 	submodel.SetSubmodelElements([]types.ISubmodelElement{
 		manufacturerName,
 		energyClasses,
+		packages,
 		documentation,
 	})
 
@@ -171,7 +214,7 @@ func TestFullContentMapsAASElementsToDPPDataElements(t *testing.T) {
 	assertMapValue(t, root, "objectType", "DataElementCollection")
 	assertMapValue(t, root, "elementId", "TechnicalData")
 
-	elements := root["value"].([]map[string]any)
+	elements := root["elements"].([]map[string]any)
 	assertMapValue(t, elements[0], "objectType", "SingleValuedDataElement")
 	assertMapValue(t, elements[0], "elementId", "manufacturerName")
 	assertMapValue(t, elements[0], "valueDataType", "xsd:string")
@@ -180,15 +223,53 @@ func TestFullContentMapsAASElementsToDPPDataElements(t *testing.T) {
 	assertMapValue(t, elements[1], "objectType", "MultiValuedDataElement")
 	assertMapValue(t, elements[1], "elementId", "energyClasses")
 	assertMapValue(t, elements[1], "valueDataType", "xsd:string")
-	assertSliceValue(t, elements[1]["value"], 0, "A")
-	assertSliceValue(t, elements[1]["value"], 1, "B")
+	energyClassElements := elements[1]["elements"].([]map[string]any)
+	assertMapValue(t, energyClassElements[0], "elementId", "energyClasses0")
+	assertMapValue(t, energyClassElements[0], "value", "A")
+	assertMapValue(t, energyClassElements[1], "elementId", "energyClasses1")
+	assertMapValue(t, energyClassElements[1], "value", "B")
 
-	assertMapValue(t, elements[2], "objectType", "DataElementCollection")
-	nested := elements[2]["value"].([]map[string]any)
+	assertMapValue(t, elements[2], "objectType", "MultiValuedDataElement")
+	assertMapValue(t, elements[2], "elementId", "packages")
+	assertMapMissing(t, elements[2], "valueDataType")
+	packageElements := elements[2]["elements"].([]map[string]any)
+	assertMapValue(t, packageElements[0], "objectType", "DataElementCollection")
+
+	assertMapValue(t, elements[3], "objectType", "DataElementCollection")
+	nested := elements[3]["elements"].([]map[string]any)
 	assertMapValue(t, nested[0], "objectType", "MultiLanguageDataElement")
 	assertMapValue(t, nested[1], "objectType", "RelatedResource")
 	assertMapValue(t, nested[1], "contentType", "application/pdf")
 	assertMapValue(t, nested[1], "url", "https://example.test/manual.pdf")
+	assertMapValue(t, nested[1], "resourceTitle", "User Manual")
+	assertMapValue(t, nested[1], "language", "en-GB")
+}
+
+func TestCompressedContentEnrichesRelatedResourceMetadata(t *testing.T) {
+	manual := types.NewFile()
+	manualIDShort := "manual"
+	manualURL := "https://example.test/manual.pdf"
+	manualContentType := "application/pdf"
+	manual.SetIDShort(&manualIDShort)
+	manual.SetValue(&manualURL)
+	manual.SetContentType(&manualContentType)
+	manual.SetExtensions([]types.IExtension{
+		stringExtension(dppResourceTitleExtensionName, "User Manual"),
+		stringExtension(dppLanguageExtensionName, "en-GB"),
+	})
+
+	submodel := types.NewSubmodel("technical-data")
+	submodel.SetSubmodelElements([]types.ISubmodelElement{manual})
+
+	content, err := compressedContent(submodel)
+	if err != nil {
+		t.Fatalf("compressedContent() error = %v", err)
+	}
+	manualValue := content.(map[string]any)["manual"].(map[string]any)
+	assertMapValue(t, manualValue, "url", "https://example.test/manual.pdf")
+	assertMapValue(t, manualValue, "contentType", "application/pdf")
+	assertMapValue(t, manualValue, "resourceTitle", "User Manual")
+	assertMapValue(t, manualValue, "language", "en-GB")
 }
 
 func assertMapValue(t *testing.T, value map[string]any, key string, expected any) {
@@ -198,10 +279,9 @@ func assertMapValue(t *testing.T, value map[string]any, key string, expected any
 	}
 }
 
-func assertSliceValue(t *testing.T, value any, index int, expected any) {
+func assertMapMissing(t *testing.T, value map[string]any, key string) {
 	t.Helper()
-	items := value.([]any)
-	if items[index] != expected {
-		t.Fatalf("value[%d] = %#v, want %#v in %#v", index, items[index], expected, items)
+	if _, ok := value[key]; ok {
+		t.Fatalf("%s unexpectedly present in %#v", key, value)
 	}
 }

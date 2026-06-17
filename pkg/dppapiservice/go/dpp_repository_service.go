@@ -348,7 +348,7 @@ func (s *DPPRepositoryService) collectDPPIDsForProduct(ctx context.Context, prod
 			if _, ok := seen[shell.ID()]; ok {
 				continue
 			}
-			if !s.isDPPShell(ctx, shell.ID()) {
+			if !isDPPShell(shell) {
 				continue
 			}
 			seen[shell.ID()] = struct{}{}
@@ -364,11 +364,13 @@ func (s *DPPRepositoryService) collectDPPIDsForProduct(ctx context.Context, prod
 	}
 }
 
-func (s *DPPRepositoryService) isDPPShell(ctx context.Context, shellID string) bool {
-	if _, err := s.resolveSubmodels(ctx, shellID, time.Time{}); err != nil {
-		return false
+func isDPPShell(shell types.IAssetAdministrationShell) bool {
+	for _, ref := range shell.Submodels() {
+		if referenceLastValue(ref) == metadataSubmodelID(shell.ID()) {
+			return true
+		}
 	}
-	return true
+	return false
 }
 
 // ReadDataElement reads one DPP data element by content section and idShort path.
@@ -416,6 +418,9 @@ func (s *DPPRepositoryService) UpdateDataElementFromJSON(ctx context.Context, dp
 	if err := decoder.Decode(&value); err != nil {
 		return errorResponse(http.StatusBadRequest, fmt.Errorf("DPP-UPDELEM-DECODE decode element body: %w", err)), nil
 	}
+	if err := rejectExpandedDataElementShape(elementPath, value); err != nil {
+		return errorResponse(http.StatusBadRequest, err), nil
+	}
 	submodelID, idShortPath, err := s.resolveElementPath(ctx, dppID, elementPath)
 	if err != nil {
 		return errorResponse(http.StatusBadRequest, err), nil
@@ -452,7 +457,7 @@ func (s *DPPRepositoryService) UpdateDataElementFromJSON(ctx context.Context, dp
 }
 
 func preserveElementMetadata(existing types.ISubmodelElement, replacement types.ISubmodelElement) {
-	replacement.SetExtensions(existing.Extensions())
+	replacement.SetExtensions(mergeElementExtensions(existing.Extensions(), replacement.Extensions()))
 	replacement.SetCategory(existing.Category())
 	replacement.SetDisplayName(existing.DisplayName())
 	replacement.SetDescription(existing.Description())
@@ -460,6 +465,34 @@ func preserveElementMetadata(existing types.ISubmodelElement, replacement types.
 	replacement.SetSupplementalSemanticIDs(existing.SupplementalSemanticIDs())
 	replacement.SetQualifiers(existing.Qualifiers())
 	replacement.SetEmbeddedDataSpecifications(existing.EmbeddedDataSpecifications())
+}
+
+func mergeElementExtensions(existing []types.IExtension, replacement []types.IExtension) []types.IExtension {
+	if len(existing) == 0 {
+		return replacement
+	}
+	if len(replacement) == 0 {
+		return existing
+	}
+	merged := make([]types.IExtension, 0, len(existing)+len(replacement))
+	replacementByName := make(map[string]types.IExtension, len(replacement))
+	for _, extension := range replacement {
+		replacementByName[extension.Name()] = extension
+	}
+	for _, extension := range existing {
+		if replacementExtension, ok := replacementByName[extension.Name()]; ok {
+			merged = append(merged, replacementExtension)
+			delete(replacementByName, extension.Name())
+			continue
+		}
+		merged = append(merged, extension)
+	}
+	for _, extension := range replacement {
+		if _, ok := replacementByName[extension.Name()]; ok {
+			merged = append(merged, extension)
+		}
+	}
+	return merged
 }
 
 // UpdateDataElement replaces one DPP data element from a generated model value.
@@ -530,17 +563,31 @@ func (s *DPPRepositoryService) composeDPP(ctx context.Context, dppID string, rep
 	if err != nil {
 		return nil, err
 	}
+	if representation == REPRESENTATION_FULL {
+		elements := make([]map[string]any, 0, len(resolved.submodels))
+		for _, submodel := range resolved.submodels {
+			if submodel.ID() == resolved.metadata.ID() {
+				continue
+			}
+			content, err := fullContent(submodel)
+			if err != nil {
+				return nil, err
+			}
+			element, ok := content.(map[string]any)
+			if !ok {
+				return nil, fmt.Errorf("DPP-COMPOSE-FULLTYPE full content for %s is not a DataElement object", submodel.ID())
+			}
+			elements = append(elements, element)
+		}
+		doc["elements"] = elements
+		return doc, nil
+	}
 	for _, submodel := range resolved.submodels {
 		if submodel.ID() == resolved.metadata.ID() {
 			continue
 		}
 		sectionName := lowerFirst(idShortOrID(submodel))
-		var content any
-		if representation == REPRESENTATION_FULL {
-			content, err = fullContent(submodel)
-		} else {
-			content, err = compressedContent(submodel)
-		}
+		content, err := compressedContent(submodel)
 		if err != nil {
 			return nil, err
 		}

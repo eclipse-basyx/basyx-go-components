@@ -88,6 +88,27 @@ func TestDPPAPIRejectsInvalidQueryParameters(t *testing.T) {
 			statusCode: http.StatusBadRequest,
 			errorCode:  "DPP-READIDS-LIMIT",
 		},
+		{
+			name:       "create rejects full write representation",
+			method:     http.MethodPost,
+			target:     "/v1/dpps?representation=full",
+			statusCode: http.StatusNotImplemented,
+			errorCode:  "DPP-CREATEDPP-FULLWRITE",
+		},
+		{
+			name:       "update rejects full write representation",
+			method:     http.MethodPatch,
+			target:     "/v1/dpps/dpp-1?representation=full",
+			statusCode: http.StatusNotImplemented,
+			errorCode:  "DPP-UPDDPP-FULLWRITE",
+		},
+		{
+			name:       "element update rejects full write representation",
+			method:     http.MethodPatch,
+			target:     "/v1/dpps/dpp-1/elements/technicalData/manufacturerName?representation=full",
+			statusCode: http.StatusNotImplemented,
+			errorCode:  "DPP-UPDELEM-FULLWRITE",
+		},
 	}
 
 	for _, test := range tests {
@@ -179,6 +200,38 @@ func TestDPPAPIRejectsInvalidPayloadsBeforePersistence(t *testing.T) {
 			errorCode:  "DPP-SEMSPEC-EXPLICIT",
 		},
 		{
+			name:       "create rejects top-level full elements",
+			method:     http.MethodPost,
+			target:     "/v1/dpps",
+			body:       withAdditionalDPPField(`"elements":[{"elementId":"TechnicalData","objectType":"DataElementCollection","elements":[]}]`),
+			statusCode: http.StatusBadRequest,
+			errorCode:  "DPP-COMPACT-FULLWRITE",
+		},
+		{
+			name:       "create rejects expanded content object",
+			method:     http.MethodPost,
+			target:     "/v1/dpps",
+			body:       withDPPField("technicalData", `{"elementId":"TechnicalData","objectType":"DataElementCollection","elements":[]}`),
+			statusCode: http.StatusBadRequest,
+			errorCode:  "DPP-COMPACT-FULLWRITE",
+		},
+		{
+			name:       "create rejects empty compact array",
+			method:     http.MethodPost,
+			target:     "/v1/dpps",
+			body:       withDPPField("technicalData", `{"serialNumbers":[]}`),
+			statusCode: http.StatusBadRequest,
+			errorCode:  "DPP-ELEM-EMPTYARRAY",
+		},
+		{
+			name:       "create rejects mixed compact array",
+			method:     http.MethodPost,
+			target:     "/v1/dpps",
+			body:       withDPPField("technicalData", `{"serialNumbers":["A",true]}`),
+			statusCode: http.StatusBadRequest,
+			errorCode:  "DPP-ELEM-MIXEDARRAY",
+		},
+		{
 			name:       "update rejects malformed json",
 			method:     http.MethodPatch,
 			target:     "/v1/dpps/dpp-1",
@@ -228,11 +281,19 @@ func TestDPPAPIRejectsInvalidPayloadsBeforePersistence(t *testing.T) {
 		},
 		{
 			name:       "element update rejects malformed json",
-			method:     http.MethodPut,
+			method:     http.MethodPatch,
 			target:     "/v1/dpps/dpp-1/elements/technicalData/manufacturerName",
 			body:       `{"value":`,
 			statusCode: http.StatusBadRequest,
 			errorCode:  "DPP-UPDELEM-DECODE",
+		},
+		{
+			name:       "element update rejects expanded object",
+			method:     http.MethodPatch,
+			target:     "/v1/dpps/dpp-1/elements/technicalData/manufacturerName",
+			body:       `{"elementId":"manufacturerName","objectType":"SingleValuedDataElement","value":"Acme"}`,
+			statusCode: http.StatusBadRequest,
+			errorCode:  "DPP-COMPACT-FULLWRITE",
 		},
 		{
 			name:       "element read rejects invalid path",
@@ -247,6 +308,19 @@ func TestDPPAPIRejectsInvalidPayloadsBeforePersistence(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			assertDPPAPIError(t, test.method, test.target, test.body, test.statusCode, test.errorCode)
 		})
+	}
+}
+
+func TestDPPAPIUpdateDataElementDoesNotRegisterPUT(t *testing.T) {
+	service := dppapi.NewDPPRepositoryService(nil, nil)
+	router := dppapi.NewRouter(dppapi.NewDPPRepositoryRouter(service))
+	request := httptest.NewRequest(http.MethodPut, "/v1/dpps/dpp-1/elements/technicalData/manufacturerName", strings.NewReader(`"Acme"`))
+	response := httptest.NewRecorder()
+
+	router.ServeHTTP(response, request)
+
+	if response.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("PUT element update status = %d, want %d", response.Code, http.StatusMethodNotAllowed)
 	}
 }
 
@@ -295,6 +369,11 @@ func validDPPBody() string {
 		"contentSpecificationIds":["technicalData-specification"],
 		"technicalData":{"manufacturerName":"Acme GmbH"}
 	}`
+}
+
+func withAdditionalDPPField(field string) string {
+	body := strings.TrimSpace(validDPPBody())
+	return strings.TrimSuffix(body, "}") + "," + field + "}"
 }
 
 func productIDSearchBody(count int) string {

@@ -59,11 +59,17 @@ var dppHeaderFields = map[string]struct{}{
 }
 
 var validGranularities = map[string]struct{}{
-	"Item":          {},
-	"Model":         {},
-	"Batch":         {},
-	"Role":          {},
-	"NotApplicable": {},
+	"Item":  {},
+	"Model": {},
+	"Batch": {},
+}
+
+var expandedDPPObjectTypes = map[string]struct{}{
+	"DataElementCollection":    {},
+	"SingleValuedDataElement":  {},
+	"MultiValuedDataElement":   {},
+	"MultiLanguageDataElement": {},
+	"RelatedResource":          {},
 }
 
 type dppDocument map[string]any
@@ -90,6 +96,9 @@ func decodeDPPDocument(data []byte, requireHeaders bool) (dppDocument, dppHeader
 	}
 	if doc == nil {
 		return nil, dppHeader{}, fmt.Errorf("DPP-DECDOC-EMPTY document must be a JSON object")
+	}
+	if err := validateCompressedDPPDocument(doc); err != nil {
+		return nil, dppHeader{}, err
 	}
 
 	header, err := parseDPPHeader(doc, requireHeaders)
@@ -148,7 +157,7 @@ func granularityField(doc dppDocument, required bool) (string, error) {
 		return value, err
 	}
 	if _, ok := validGranularities[value]; !ok {
-		return "", fmt.Errorf("DPP-HEADER-GRANULARITY field %s must be one of Item, Model, Batch, Role, NotApplicable", headerGranularity)
+		return "", fmt.Errorf("DPP-HEADER-GRANULARITY field %s must be one of Item, Model, Batch", headerGranularity)
 	}
 	return value, nil
 }
@@ -221,6 +230,59 @@ func contentSections(doc dppDocument) map[string]any {
 		}
 	}
 	return sections
+}
+
+func validateCompressedDPPDocument(doc dppDocument) error {
+	for key, value := range doc {
+		if key == "elements" {
+			return fmt.Errorf("DPP-COMPACT-FULLWRITE top-level elements is only valid for expanded full representation")
+		}
+		if _, isHeader := dppHeaderFields[key]; isHeader {
+			continue
+		}
+		if err := rejectExpandedDataElementShape(key, value); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func rejectExpandedDataElementShape(path string, value any) error {
+	switch typed := value.(type) {
+	case map[string]any:
+		if isExpandedDataElementObject(typed) {
+			return fmt.Errorf("DPP-COMPACT-FULLWRITE expanded DataElement at %s is only valid for read-only full representation", path)
+		}
+		for key, child := range typed {
+			childPath := key
+			if path != "" {
+				childPath = path + "." + key
+			}
+			if err := rejectExpandedDataElementShape(childPath, child); err != nil {
+				return err
+			}
+		}
+	case []any:
+		for index, child := range typed {
+			childPath := fmt.Sprintf("%s[%d]", path, index)
+			if err := rejectExpandedDataElementShape(childPath, child); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func isExpandedDataElementObject(value map[string]any) bool {
+	objectType, hasObjectType := value["objectType"].(string)
+	if !hasObjectType {
+		return false
+	}
+	if _, known := expandedDPPObjectTypes[objectType]; !known {
+		return false
+	}
+	_, hasElementID := value["elementId"].(string)
+	return hasElementID
 }
 
 func applyMergePatch(target any, patch any) any {

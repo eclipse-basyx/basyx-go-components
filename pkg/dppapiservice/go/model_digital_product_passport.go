@@ -40,7 +40,7 @@ import (
 	"time"
 )
 
-// DigitalProductPassport - A single DPP JSON document composed from the DppMetadata header and one or more content Submodel sections. Content section property names shall use the contributing Submodel idShort with the first letter in lower case, and contentSpecificationIds shall list the corresponding content Submodel semantic identifiers.
+// DigitalProductPassport - A single DPP JSON document composed from the DppMetadata header and DPP content.
 type DigitalProductPassport struct {
 
 	// DPP identifier. Similar to, but not necessarily identical to, the AAS id.
@@ -66,6 +66,9 @@ type DigitalProductPassport struct {
 
 	// Semantic identifiers of contributing content Submodels. The DPP document shall contain matching top-level content sections.
 	ContentSpecificationIds []string `json:"contentSpecificationIds"`
+
+	// Expanded read-only DPP DataElements returned when representation=full.
+	Elements []DataElement `json:"elements,omitempty"`
 }
 
 // AssertDigitalProductPassportRequired checks if the required fields are not zero-ed

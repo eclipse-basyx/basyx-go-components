@@ -88,7 +88,7 @@ func (c *DPPFineGranularAPIController) Routes() Routes {
 		},
 		"UpdateDataElement": Route{
 			"UpdateDataElement",
-			strings.ToUpper("Put"),
+			strings.ToUpper("Patch"),
 			"/v1/dpps/{dppId}/elements/{elementPath}",
 			c.UpdateDataElement,
 		},
@@ -106,7 +106,7 @@ func (c *DPPFineGranularAPIController) OrderedRoutes() []Route {
 		},
 		Route{
 			"UpdateDataElement",
-			strings.ToUpper("Put"),
+			strings.ToUpper("Patch"),
 			"/v1/dpps/{dppId}/elements/{elementPath}",
 			c.UpdateDataElement,
 		},

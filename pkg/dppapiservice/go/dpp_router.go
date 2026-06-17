@@ -66,7 +66,7 @@ func (r *DPPRepositoryRouter) OrderedRoutes() []Route {
 		{"ReadDPPVersionByIdAndDate", http.MethodGet, "/v1/dppsByIdAndDate/{dppId}", r.ReadDPPVersionByIdAndDate},
 		{"ReadDPPIdsByProductIds", http.MethodPost, "/v1/dppsByProductIds", r.ReadDPPIdsByProductIds},
 		{"ReadDataElement", http.MethodGet, "/v1/dpps/{dppId}/elements/*", r.ReadDataElement},
-		{"UpdateDataElement", http.MethodPut, "/v1/dpps/{dppId}/elements/*", r.UpdateDataElement},
+		{"UpdateDataElement", http.MethodPatch, "/v1/dpps/{dppId}/elements/*", r.UpdateDataElement},
 	}
 }
 
@@ -113,6 +113,10 @@ func (r *DPPRepositoryRouter) DeleteDPPById(w http.ResponseWriter, req *http.Req
 //   - w: HTTP response writer used to encode the DPP response
 //   - req: HTTP request containing the dppId path value and patch body
 func (r *DPPRepositoryRouter) UpdateDPPById(w http.ResponseWriter, req *http.Request) {
+	if invalid := queryCompressedWriteRepresentation(req, "UPDDPP"); invalid != nil {
+		r.write(w, *invalid, nil)
+		return
+	}
 	body, err := readRequestBody(w, req)
 	if err != nil {
 		r.write(w, requestBodyErrorResponse("UPDDPP", err), nil)
@@ -128,6 +132,10 @@ func (r *DPPRepositoryRouter) UpdateDPPById(w http.ResponseWriter, req *http.Req
 //   - w: HTTP response writer used to encode the DPP response
 //   - req: HTTP request containing the DPP creation body
 func (r *DPPRepositoryRouter) CreateDPP(w http.ResponseWriter, req *http.Request) {
+	if invalid := queryCompressedWriteRepresentation(req, "CREATEDPP"); invalid != nil {
+		r.write(w, *invalid, nil)
+		return
+	}
 	body, err := readRequestBody(w, req)
 	if err != nil {
 		r.write(w, requestBodyErrorResponse("CREATEDPP", err), nil)
@@ -213,12 +221,16 @@ func (r *DPPRepositoryRouter) ReadDataElement(w http.ResponseWriter, req *http.R
 	r.write(w, response, err)
 }
 
-// UpdateDataElement handles PUT /v1/dpps/{dppId}/elements/{elementPath}.
+// UpdateDataElement handles PATCH /v1/dpps/{dppId}/elements/{elementPath}.
 //
 // Parameters:
 //   - w: HTTP response writer used to encode the element response
 //   - req: HTTP request containing dppId, elementPath, and replacement element body
 func (r *DPPRepositoryRouter) UpdateDataElement(w http.ResponseWriter, req *http.Request) {
+	if invalid := queryCompressedWriteRepresentation(req, "UPDELEM"); invalid != nil {
+		r.write(w, *invalid, nil)
+		return
+	}
 	body, err := readRequestBody(w, req)
 	if err != nil {
 		r.write(w, requestBodyErrorResponse("UPDELEM", err), nil)

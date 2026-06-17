@@ -65,6 +65,7 @@ func compressedContent(submodel types.ISubmodel) (any, error) {
 		return nil, fmt.Errorf("DPP-CONTENT-UNMARSHAL unmarshal submodel value-only: %w", err)
 	}
 	normalizeValueOnly(content)
+	enrichCompressedValue(content, submodel.SubmodelElements())
 	return content, nil
 }
 
@@ -99,12 +100,12 @@ func normalizeValueOnly(value any) {
 }
 
 func dppCollectionFromSubmodel(submodel types.ISubmodel) (map[string]any, error) {
-	value, err := dppElementsFromAAS(submodel.SubmodelElements())
+	elements, err := dppElementsFromAAS(submodel.SubmodelElements())
 	if err != nil {
 		return nil, err
 	}
 	result := dppElementBase(idShortOrID(submodel), "DataElementCollection", submodel.SemanticID())
-	result["value"] = value
+	result["elements"] = elements
 	return result, nil
 }
 
@@ -134,16 +135,21 @@ func singleValuedDataElement(property *types.Property) map[string]any {
 
 func multiValuedDataElement(list *types.SubmodelElementList) (map[string]any, error) {
 	result := dppElementBase(idShortValue(list), "MultiValuedDataElement", list.SemanticID())
-	result["valueDataType"] = dppListValueType(list)
-	values := make([]any, 0, len(list.Value()))
-	for _, child := range list.Value() {
-		value, err := dppListValue(child)
+	if valueType, ok := dppListValueType(list); ok {
+		result["valueDataType"] = valueType
+	}
+	elements := make([]map[string]any, 0, len(list.Value()))
+	for index, child := range list.Value() {
+		element, err := dppElementFromAAS(child)
 		if err != nil {
 			return nil, err
 		}
-		values = append(values, value)
+		if element["elementId"] == "" {
+			element["elementId"] = fmt.Sprintf("%s%d", idShortValue(list), index)
+		}
+		elements = append(elements, element)
 	}
-	result["value"] = values
+	result["elements"] = elements
 	return result, nil
 }
 
@@ -161,12 +167,12 @@ func multiLanguageDataElement(property *types.MultiLanguageProperty) map[string]
 }
 
 func dataElementCollection(collection *types.SubmodelElementCollection) (map[string]any, error) {
-	value, err := dppElementsFromAAS(collection.Value())
+	elements, err := dppElementsFromAAS(collection.Value())
 	if err != nil {
 		return nil, err
 	}
 	result := dppElementBase(idShortValue(collection), "DataElementCollection", collection.SemanticID())
-	result["value"] = value
+	result["elements"] = elements
 	return result, nil
 }
 
@@ -174,6 +180,12 @@ func relatedResource(file *types.File) map[string]any {
 	result := dppElementBase(idShortValue(file), "RelatedResource", file.SemanticID())
 	result["contentType"] = dereferenceString(file.ContentType())
 	result["url"] = dereferenceString(file.Value())
+	if resourceTitle := extensionValue(file.Extensions(), dppResourceTitleExtensionName); resourceTitle != "" {
+		result["resourceTitle"] = resourceTitle
+	}
+	if language := extensionValue(file.Extensions(), dppLanguageExtensionName); language != "" {
+		result["language"] = language
+	}
 	return result
 }
 
@@ -207,33 +219,19 @@ func idShortValue(value interface{ IDShort() *string }) string {
 	return *value.IDShort()
 }
 
-func dppListValue(element types.ISubmodelElement) (any, error) {
-	switch typed := element.(type) {
-	case *types.Property:
-		return dereferenceString(typed.Value()), nil
-	case *types.File:
-		return relatedResource(typed), nil
-	case *types.MultiLanguageProperty:
-		return multiLanguageDataElement(typed), nil
-	case *types.SubmodelElementCollection:
-		return dataElementCollection(typed)
-	case *types.SubmodelElementList:
-		return multiValuedDataElement(typed)
-	default:
-		return nil, fmt.Errorf("DPP-ELEM-FULL-UNSUPPORTEDLIST unsupported AAS list element type %v", element.ModelType())
+func dppListValueType(list *types.SubmodelElementList) (string, bool) {
+	if list.TypeValueListElement() != types.AASSubmodelElementsProperty {
+		return "", false
 	}
-}
-
-func dppListValueType(list *types.SubmodelElementList) string {
 	if list.ValueTypeListElement() != nil {
-		return dppValueType(*list.ValueTypeListElement())
+		return dppValueType(*list.ValueTypeListElement()), true
 	}
 	for _, child := range list.Value() {
 		if property, ok := child.(*types.Property); ok {
-			return dppValueType(property.ValueType())
+			return dppValueType(property.ValueType()), true
 		}
 	}
-	return dppValueType(types.DataTypeDefXSDString)
+	return "", false
 }
 
 func dppValueType(valueType types.DataTypeDefXSD) string {
@@ -314,4 +312,60 @@ func dereferenceString(value *string) string {
 		return ""
 	}
 	return *value
+}
+
+func enrichCompressedValue(value any, elements []types.ISubmodelElement) {
+	object, ok := value.(map[string]any)
+	if !ok {
+		return
+	}
+	for _, element := range elements {
+		idShort := idShortValue(element)
+		if idShort == "" {
+			continue
+		}
+		enrichCompressedElementValue(object[idShort], element)
+	}
+}
+
+func enrichCompressedElementValue(value any, element types.ISubmodelElement) {
+	switch typed := element.(type) {
+	case *types.File:
+		enrichCompressedFileValue(value, typed)
+	case *types.SubmodelElementCollection:
+		enrichCompressedValue(value, typed.Value())
+	case *types.SubmodelElementList:
+		items, ok := value.([]any)
+		if !ok {
+			return
+		}
+		for index, child := range typed.Value() {
+			if index >= len(items) {
+				return
+			}
+			enrichCompressedElementValue(items[index], child)
+		}
+	}
+}
+
+func enrichCompressedFileValue(value any, file *types.File) {
+	object, ok := value.(map[string]any)
+	if !ok {
+		return
+	}
+	if resourceTitle := extensionValue(file.Extensions(), dppResourceTitleExtensionName); resourceTitle != "" {
+		object["resourceTitle"] = resourceTitle
+	}
+	if language := extensionValue(file.Extensions(), dppLanguageExtensionName); language != "" {
+		object["language"] = language
+	}
+}
+
+func extensionValue(extensions []types.IExtension, name string) string {
+	for _, extension := range extensions {
+		if extension.Name() == name {
+			return dereferenceString(extension.Value())
+		}
+	}
+	return ""
 }

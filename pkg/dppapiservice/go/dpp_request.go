@@ -91,6 +91,18 @@ func queryRepresentation(req *http.Request) (Representation, *ImplResponse) {
 	return representation, nil
 }
 
+func queryCompressedWriteRepresentation(req *http.Request, operation string) *ImplResponse {
+	representation, invalid := queryRepresentation(req)
+	if invalid != nil {
+		return invalid
+	}
+	if representation == REPRESENTATION_FULL {
+		response := errorResponse(http.StatusNotImplemented, fmt.Errorf("DPP-%s-FULLWRITE full representation is read-only; write requests must use compressed representation", operation))
+		return &response
+	}
+	return nil
+}
+
 func queryReadDPPIDsLimit(req *http.Request) (int32, *ImplResponse) {
 	rawLimit := req.URL.Query().Get("limit")
 	if rawLimit == "" {

@@ -83,6 +83,7 @@ func TestDPPLifecycleWithDockerCompose(t *testing.T) {
 	assertJSONPathEquals(t, readBody, "uniqueProductIdentifier", productID)
 	assertJSONPathEquals(t, readBody, "technicalData.manufacturerName", "Acme GmbH")
 	assertJSONPathEquals(t, readBody, "technicalData.manual.url", "https://example.test/manual.pdf")
+	assertJSONPathEquals(t, readBody, "technicalData.manual.resourceTitle", "User Manual")
 
 	time.Sleep(30 * time.Millisecond)
 	createdVersionDate := time.Now().UTC()
@@ -91,11 +92,15 @@ func TestDPPLifecycleWithDockerCompose(t *testing.T) {
 	assertJSONPathEquals(t, createdVersionBody, "technicalData.manufacturerName", "Acme GmbH")
 
 	fullBody := doJSON(t, client, http.MethodGet, baseURL+"/v1/dpps/"+encodedDPPID+"?representation=full", nil, http.StatusOK)
-	assertJSONPathEquals(t, fullBody, "technicalData.objectType", "DataElementCollection")
+	assertFullDPPSectionObjectType(t, fullBody, "technicalData", "DataElementCollection")
 	assertDPPElementObjectType(t, fullBody, "technicalData", "dimensions", "DataElementCollection")
 	assertDPPElementObjectType(t, fullBody, "technicalData", "manufacturerName", "SingleValuedDataElement")
 	assertDPPElementObjectType(t, fullBody, "technicalData", "manual", "RelatedResource")
+	assertDPPElementObjectType(t, fullBody, "technicalData", "productDescription", "MultiLanguageDataElement")
 	assertDPPElementObjectType(t, fullBody, "technicalData", "serialNumbers", "MultiValuedDataElement")
+	assertDPPElementValue(t, fullBody, "technicalData", "warrantyMonths", "valueDataType", "xsd:long")
+	assertDPPElementValue(t, fullBody, "technicalData", "manual", "resourceTitle", "User Manual")
+	assertDPPElementValue(t, fullBody, "technicalData", "manual", "language", "en-GB")
 
 	productBody := doJSON(t, client, http.MethodGet, baseURL+"/v1/dppsByProductId/"+encodedProductID, nil, http.StatusOK)
 	assertJSONPathEquals(t, productBody, "digitalProductPassportId", dppID)
@@ -127,7 +132,7 @@ func TestDPPLifecycleWithDockerCompose(t *testing.T) {
 	assertJSONPathEquals(t, updatedVersionBody, "technicalData.manufacturerName", "Acme Updated GmbH")
 
 	fullVersionBody := doJSON(t, client, http.MethodGet, historyURL(baseURL, encodedDPPID, updatedVersionDate, "full"), nil, http.StatusOK)
-	assertJSONPathEquals(t, fullVersionBody, "technicalData.objectType", "DataElementCollection")
+	assertFullDPPSectionObjectType(t, fullVersionBody, "technicalData", "DataElementCollection")
 	assertDPPElementObjectType(t, fullVersionBody, "technicalData", "dimensions", "DataElementCollection")
 	assertDPPElementObjectType(t, fullVersionBody, "technicalData", "manufacturerName", "SingleValuedDataElement")
 
@@ -137,7 +142,7 @@ func TestDPPLifecycleWithDockerCompose(t *testing.T) {
 	fullElementBody := doJSONAny(t, client, http.MethodGet, baseURL+"/v1/dpps/"+encodedDPPID+"/elements/technicalData/manufacturerName?representation=full", nil, http.StatusOK)
 	assertDataElementObjectType(t, fullElementBody, "manufacturerName", "SingleValuedDataElement")
 
-	updatedElementBody := doJSONAny(t, client, http.MethodPut, baseURL+"/v1/dpps/"+encodedDPPID+"/elements/technicalData/energyClass", "B", http.StatusOK)
+	updatedElementBody := doJSONAny(t, client, http.MethodPatch, baseURL+"/v1/dpps/"+encodedDPPID+"/elements/technicalData/energyClass", "B", http.StatusOK)
 	assertScalarEquals(t, updatedElementBody, "B")
 
 	readAfterElementUpdate := doJSON(t, client, http.MethodGet, baseURL+"/v1/dpps/"+encodedDPPID, nil, http.StatusOK)
@@ -168,14 +173,20 @@ func lifecycleDPPDocument(dppID string, productID string, now time.Time) map[str
 			"manufacturerName": "Acme GmbH",
 			"warrantyMonths":   24,
 			"energyClass":      "A",
-			"serialNumbers":    []string{"SN-001", "SN-002"},
+			"productDescription": []map[string]any{
+				{"language": "en-IE", "value": "One Thing"},
+				{"language": "es-ES", "value": "Una Cosa"},
+			},
+			"serialNumbers": []string{"SN-001", "SN-002"},
 			"dimensions": map[string]any{
 				"widthMm":  120,
 				"heightMm": 80,
 			},
 			"manual": map[string]any{
-				"url":         "https://example.test/manual.pdf",
-				"contentType": "application/pdf",
+				"url":           "https://example.test/manual.pdf",
+				"contentType":   "application/pdf",
+				"language":      "en-GB",
+				"resourceTitle": "User Manual",
 			},
 		},
 	}
@@ -362,27 +373,73 @@ func assertJSONPathEquals(t *testing.T, body map[string]any, path string, expect
 
 func assertDPPElementObjectType(t *testing.T, body map[string]any, sectionName string, elementID string, expectedObjectType string) {
 	t.Helper()
-	section, ok := body[sectionName].(map[string]any)
-	if !ok {
-		t.Fatalf("%s = %#v, want object", sectionName, body[sectionName])
+	element := fullDPPElement(t, body, sectionName, elementID)
+	if element["objectType"] != expectedObjectType {
+		t.Fatalf("%s.%s objectType = %#v, want %q", sectionName, elementID, element["objectType"], expectedObjectType)
 	}
-	elements, ok := section["value"].([]any)
-	if !ok {
-		t.Fatalf("%s.value = %#v, want array", sectionName, section["value"])
+}
+
+func assertDPPElementValue(t *testing.T, body map[string]any, sectionName string, elementID string, field string, expected string) {
+	t.Helper()
+	element := fullDPPElement(t, body, sectionName, elementID)
+	if element[field] != expected {
+		t.Fatalf("%s.%s.%s = %#v, want %q", sectionName, elementID, field, element[field], expected)
 	}
+}
+
+func assertFullDPPSectionObjectType(t *testing.T, body map[string]any, sectionName string, expectedObjectType string) {
+	t.Helper()
+	section := fullDPPSection(t, body, sectionName)
+	if section["objectType"] != expectedObjectType {
+		t.Fatalf("%s objectType = %#v, want %q", sectionName, section["objectType"], expectedObjectType)
+	}
+}
+
+func fullDPPElement(t *testing.T, body map[string]any, sectionName string, elementID string) map[string]any {
+	t.Helper()
+	section := fullDPPSection(t, body, sectionName)
+	elements, ok := section["elements"].([]any)
+	if !ok {
+		t.Fatalf("%s.elements = %#v, want array", sectionName, section["elements"])
+	}
+	if element, ok := findFullElement(elements, elementID); ok {
+		return element
+	}
+	t.Fatalf("%s.elements does not contain elementId %q: %#v", sectionName, elementID, elements)
+	return nil
+}
+
+func fullDPPSection(t *testing.T, body map[string]any, sectionName string) map[string]any {
+	t.Helper()
+	elements, ok := body["elements"].([]any)
+	if !ok {
+		t.Fatalf("elements = %#v, want array", body["elements"])
+	}
+	if section, ok := findFullElement(elements, upperFirst(sectionName)); ok {
+		return section
+	}
+	t.Fatalf("elements does not contain section %q: %#v", sectionName, elements)
+	return nil
+}
+
+func findFullElement(elements []any, elementID string) (map[string]any, bool) {
 	for _, item := range elements {
 		element, ok := item.(map[string]any)
 		if !ok {
-			t.Fatalf("%s.value item = %#v, want object", sectionName, item)
+			continue
 		}
 		if element["elementId"] == elementID {
-			if element["objectType"] != expectedObjectType {
-				t.Fatalf("%s.%s objectType = %#v, want %q", sectionName, elementID, element["objectType"], expectedObjectType)
-			}
-			return
+			return element, true
 		}
 	}
-	t.Fatalf("%s.value does not contain elementId %q: %#v", sectionName, elementID, elements)
+	return nil, false
+}
+
+func upperFirst(value string) string {
+	if value == "" {
+		return value
+	}
+	return strings.ToUpper(value[:1]) + value[1:]
 }
 
 func assertDataElementObjectType(t *testing.T, body any, elementID string, expectedObjectType string) {

@@ -46,9 +46,11 @@ type DataElement struct {
 	// DPP dictionary reference mapped to AAS semanticId.
 	DictionaryReference string `json:"dictionaryReference,omitempty"`
 
-	ValueDataType XsdValueDataType `json:"valueDataType"`
+	ValueDataType XsdValueDataType `json:"valueDataType,omitempty"`
 
-	Value []DataElement `json:"value"`
+	Value *interface{} `json:"value,omitempty"`
+
+	Elements []DataElement `json:"elements,omitempty"`
 
 	ResourceTitle string `json:"resourceTitle,omitempty"`
 
@@ -63,12 +65,8 @@ type DataElement struct {
 // AssertDataElementRequired checks if the required fields are not zero-ed
 func AssertDataElementRequired(obj DataElement) error {
 	elements := map[string]interface{}{
-		"elementId":     obj.ElementId,
-		"objectType":    obj.ObjectType,
-		"valueDataType": obj.ValueDataType,
-		"value":         obj.Value,
-		"contentType":   obj.ContentType,
-		"url":           obj.Url,
+		"elementId":  obj.ElementId,
+		"objectType": obj.ObjectType,
 	}
 	for name, el := range elements {
 		if isZero := IsZeroValue(el); isZero {
@@ -76,7 +74,7 @@ func AssertDataElementRequired(obj DataElement) error {
 		}
 	}
 
-	for _, el := range obj.Value {
+	for _, el := range obj.Elements {
 		if err := AssertDataElementRequired(el); err != nil {
 			return err
 		}
@@ -86,7 +84,7 @@ func AssertDataElementRequired(obj DataElement) error {
 
 // AssertDataElementConstraints checks if the values respects the defined constraints
 func AssertDataElementConstraints(obj DataElement) error {
-	for _, el := range obj.Value {
+	for _, el := range obj.Elements {
 		if err := AssertDataElementConstraints(el); err != nil {
 			return err
 		}

@@ -45,11 +45,9 @@ type Granularity string
 
 // List of Granularity
 const (
-	GRANULARITY_ITEM           Granularity = "Item"
-	GRANULARITY_MODEL          Granularity = "Model"
-	GRANULARITY_BATCH          Granularity = "Batch"
-	GRANULARITY_ROLE           Granularity = "Role"
-	GRANULARITY_NOT_APPLICABLE Granularity = "NotApplicable"
+	GRANULARITY_ITEM  Granularity = "Item"
+	GRANULARITY_MODEL Granularity = "Model"
+	GRANULARITY_BATCH Granularity = "Batch"
 )
 
 // AllowedGranularityEnumValues is all the allowed values of Granularity enum
@@ -57,17 +55,13 @@ var AllowedGranularityEnumValues = []Granularity{
 	"Item",
 	"Model",
 	"Batch",
-	"Role",
-	"NotApplicable",
 }
 
 // validGranularityEnumValue provides a map of Granularitys for fast verification of use input
 var validGranularityEnumValues = map[Granularity]struct{}{
-	"Item":          {},
-	"Model":         {},
-	"Batch":         {},
-	"Role":          {},
-	"NotApplicable": {},
+	"Item":  {},
+	"Model": {},
+	"Batch": {},
 }
 
 // IsValid return true if the value is valid for the enum, false otherwise

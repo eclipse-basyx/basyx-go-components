@@ -46,18 +46,17 @@ type MultiValuedDataElement struct {
 	// DPP dictionary reference mapped to AAS semanticId.
 	DictionaryReference string `json:"dictionaryReference,omitempty"`
 
-	ValueDataType XsdValueDataType `json:"valueDataType"`
+	ValueDataType XsdValueDataType `json:"valueDataType,omitempty"`
 
-	Value []interface{} `json:"value"`
+	Elements []DataElement `json:"elements"`
 }
 
 // AssertMultiValuedDataElementRequired checks if the required fields are not zero-ed
 func AssertMultiValuedDataElementRequired(obj MultiValuedDataElement) error {
 	elements := map[string]interface{}{
-		"elementId":     obj.ElementId,
-		"objectType":    obj.ObjectType,
-		"valueDataType": obj.ValueDataType,
-		"value":         obj.Value,
+		"elementId":  obj.ElementId,
+		"objectType": obj.ObjectType,
+		"elements":   obj.Elements,
 	}
 	for name, el := range elements {
 		if isZero := IsZeroValue(el); isZero {
@@ -70,5 +69,10 @@ func AssertMultiValuedDataElementRequired(obj MultiValuedDataElement) error {
 
 // AssertMultiValuedDataElementConstraints checks if the values respects the defined constraints
 func AssertMultiValuedDataElementConstraints(obj MultiValuedDataElement) error {
+	for _, el := range obj.Elements {
+		if err := AssertDataElementConstraints(el); err != nil {
+			return err
+		}
+	}
 	return nil
 }

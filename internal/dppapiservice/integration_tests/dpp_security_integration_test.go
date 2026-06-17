@@ -108,7 +108,7 @@ func TestDPPSecurityWithDockerCompose(t *testing.T) {
 	}, http.StatusOK)
 	assertJSONPathEquals(t, patchBody, "technicalData.manufacturerName", "Secured Updated GmbH")
 
-	elementBody := doJSONAnyAuth(t, client, http.MethodPut, baseURL+"/v1/dpps/"+encodedDPPID+"/elements/technicalData/energyClass", editorToken, "B", http.StatusOK)
+	elementBody := doJSONAnyAuth(t, client, http.MethodPatch, baseURL+"/v1/dpps/"+encodedDPPID+"/elements/technicalData/energyClass", editorToken, "B", http.StatusOK)
 	assertScalarEquals(t, elementBody, "B")
 
 	doJSONAnyAuth(t, client, http.MethodDelete, baseURL+"/v1/dpps/"+encodedDPPID, editorToken, nil, http.StatusNoContent)

@@ -127,7 +127,7 @@ Update a single data element:
 
 ```bash
 curl -i \
-  -X PUT \
+  -X PATCH \
   -H "Content-Type: application/json" \
   --data '"B"' \
   http://localhost:8080/v1/dpps/https%253A%252F%252Fexample.org%252Fdpp%252Fdemo-product-001/elements/technicalData/energyClass

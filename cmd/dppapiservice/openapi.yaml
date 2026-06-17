@@ -77,7 +77,7 @@ paths:
       - DPP Life Cycle
     get:
       description: |
-        Retrieves an AAS and all DPP-relevant Submodels, serializes them in the requested representation, and composes a single DigitalProductPassport document.
+        Retrieves an AAS and all DPP-relevant Submodels, then composes a single DigitalProductPassport document. Compressed responses use content section properties; full responses use the expanded read-only elements array.
       operationId: readDPPById
       parameters:
       - description: Percent-encoded Digital Product Passport identifier.
@@ -140,7 +140,7 @@ paths:
       - DPP Life Cycle
     patch:
       description: |
-        Accepts a partial DPP document using JSON Merge Patch (RFC 7396), decomposes changed header fields into the DppMetadata Submodel and changed content fields into the corresponding content Submodels, updates lastUpdate, and archives the change according to EN 18221.
+        Accepts a compressed partial DPP document using JSON Merge Patch (RFC 7396), decomposes changed header fields into the DppMetadata Submodel and changed content fields into the corresponding content Submodels, updates lastUpdate, and archives the change according to EN 18221. Full representation writes are not supported.
       operationId: updateDPPById
       parameters:
       - description: Percent-encoded Digital Product Passport identifier.
@@ -152,6 +152,15 @@ paths:
           minLength: 1
           type: string
         style: simple
+      - description: |
+          DPP serialization representation for the write payload. Compressed is the default and only supported write representation; full returns 501.
+        explode: true
+        in: query
+        name: representation
+        required: false
+        schema:
+          $ref: "#/components/schemas/Representation"
+        style: form
       requestBody:
         content:
           application/merge-patch+json:
@@ -208,8 +217,18 @@ paths:
   /v1/dpps:
     post:
       description: |
-        Decomposes the submitted DPP into an AAS, one mandatory DppMetadata Submodel, and one or more content Submodels. Creation should be atomic.
+        Decomposes the submitted compressed DPP into an AAS, one mandatory DppMetadata Submodel, and one or more content Submodels. Creation is atomic. Full representation writes are not supported.
       operationId: createDPP
+      parameters:
+      - description: |
+          DPP serialization representation for the write payload. Compressed is the default and only supported write representation; full returns 501.
+        explode: true
+        in: query
+        name: representation
+        required: false
+        schema:
+          $ref: "#/components/schemas/Representation"
+        style: form
       requestBody:
         content:
           application/json:
@@ -533,9 +552,9 @@ paths:
       summary: Read single DPP data element
       tags:
       - DPP Fine Granular
-    put:
+    patch:
       description: |
-        Updates one DPP data element within a content Submodel using its compressed JSON value and updates the lastUpdate field of the DppMetadata Submodel.
+        Updates one DPP data element within a content Submodel using its compressed JSON value and updates the lastUpdate field of the DppMetadata Submodel. Full representation writes are not supported.
       operationId: updateDataElement
       parameters:
       - description: Percent-encoded Digital Product Passport identifier.
@@ -556,6 +575,15 @@ paths:
           minLength: 1
           type: string
         style: simple
+      - description: |
+          DPP serialization representation for the write payload. Compressed is the default and only supported write representation; full returns 501.
+        explode: true
+        in: query
+        name: representation
+        required: false
+        schema:
+          $ref: "#/components/schemas/Representation"
+        style: form
       requestBody:
         content:
           application/json:
@@ -730,7 +758,7 @@ components:
     DigitalProductPassport:
       additionalProperties: true
       description: |
-        A single DPP JSON document composed from the DppMetadata header and one or more content Submodel sections. Content section property names shall use the contributing Submodel idShort with the first letter in lower case, and contentSpecificationIds shall list the corresponding content Submodel semantic identifiers. When multiple content sections or multiple contentSpecificationIds are present, expanded DataElementCollection sections shall carry dictionaryReference so each section is mapped explicitly to its semantic identifier.
+        A single DPP JSON document composed from the DppMetadata header and DPP content. Compressed write payloads use top-level content section properties whose names become contributing Submodel idShort values. Full read payloads use the expanded read-only elements array defined by EN 18223 Annex A.
       example:
         digitalProductPassportId: https://www.example.org/dpp/1234545
         uniqueProductIdentifier: https://www.example.org/1234545
@@ -782,13 +810,18 @@ components:
           type: string
         contentSpecificationIds:
           description: |
-            Semantic identifiers of contributing content Submodels. The DPP document shall contain matching top-level content sections. Multiple sections require explicit section-level dictionaryReference values in expanded DataElementCollection sections.
+            Semantic identifiers of contributing content Submodels. Compressed writes currently support unambiguous section-to-specification mapping; expanded DataElementCollection write payloads are rejected.
           example:
           - carbonFootprint - IDTA-02023-1-0
           items:
             minLength: 1
             type: string
           minItems: 1
+          type: array
+        elements:
+          description: Expanded read-only DPP DataElements returned when representation=full.
+          items:
+            $ref: "#/components/schemas/DataElement"
           type: array
       required:
       - contentSpecificationIds
@@ -816,8 +849,6 @@ components:
           - Item
           - Model
           - Batch
-          - Role
-          - NotApplicable
           nullable: true
           type: string
         dppSchemaVersion:
@@ -848,8 +879,6 @@ components:
       - Item
       - Model
       - Batch
-      - Role
-      - NotApplicable
       type: string
     DataElement:
       discriminator:
@@ -923,15 +952,16 @@ components:
           description: DPP dictionary reference mapped to AAS semanticId.
           type: string
         valueDataType:
+          description: Scalar item datatype. Omitted for multi-valued elements whose children are collections, multilingual data, or related resources.
           $ref: "#/components/schemas/XsdValueDataType"
-        value:
-          items: {}
+        elements:
+          items:
+            $ref: "#/components/schemas/DataElement"
           type: array
       required:
       - elementId
+      - elements
       - objectType
-      - value
-      - valueDataType
       type: object
     MultiLanguageDataElement:
       additionalProperties: false
@@ -971,14 +1001,14 @@ components:
         dictionaryReference:
           description: DPP dictionary reference mapped to AAS semanticId.
           type: string
-        value:
+        elements:
           items:
             $ref: "#/components/schemas/DataElement"
           type: array
       required:
       - elementId
+      - elements
       - objectType
-      - value
       type: object
     RelatedResource:
       additionalProperties: false
