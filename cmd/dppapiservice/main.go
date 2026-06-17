@@ -43,7 +43,7 @@ import (
 	aasrepositorydb "github.com/eclipse-basyx/basyx-go-components/internal/aasrepository/persistence"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/history"
-	dppapiservice "github.com/eclipse-basyx/basyx-go-components/internal/dppapiservice"
+	"github.com/eclipse-basyx/basyx-go-components/internal/dppapiservice"
 	submodelrepositorydb "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence"
 )
 

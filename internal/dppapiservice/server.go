@@ -24,6 +24,7 @@
 ******************************************************************************/
 // Author: Jannik Fried ( Fraunhofer IESE ), Aaron Zielstorff ( Fraunhofer IESE )
 
+// Package dppapiservice assembles the Digital Product Passport API HTTP server.
 package dppapiservice
 
 import (

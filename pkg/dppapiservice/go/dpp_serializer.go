@@ -29,7 +29,6 @@ package dppapi
 import (
 	"encoding/json"
 	"fmt"
-	"strings"
 
 	"github.com/FriedJannik/aas-go-sdk/types"
 	basyxmodel "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
@@ -315,33 +314,4 @@ func dereferenceString(value *string) string {
 		return ""
 	}
 	return *value
-}
-
-func referenceJSONToString(value any) any {
-	object, ok := value.(map[string]any)
-	if !ok {
-		return value
-	}
-	keys, ok := object["keys"].([]any)
-	if !ok || len(keys) == 0 {
-		return value
-	}
-	lastKey, ok := keys[len(keys)-1].(map[string]any)
-	if !ok {
-		return value
-	}
-	if keyValue, ok := lastKey["value"].(string); ok {
-		return keyValue
-	}
-	return value
-}
-
-func aasValueTypeToXSD(value any) any {
-	text, ok := value.(string)
-	if !ok {
-		return value
-	}
-	text = strings.TrimPrefix(text, "xs:")
-	text = strings.TrimPrefix(text, "xsd:")
-	return "xsd:" + strings.ToLower(text[:1]) + text[1:]
 }

@@ -24,6 +24,7 @@
 ******************************************************************************/
 // Author: Jannik Fried ( Fraunhofer IESE ), Aaron Zielstorff ( Fraunhofer IESE )
 
+// Package dppapi contains the generated and custom Digital Product Passport API bindings.
 package dppapi
 
 import "context"
