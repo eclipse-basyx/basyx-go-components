@@ -58,7 +58,7 @@ func TestDPPLifecycleWithDockerCompose(t *testing.T) {
 	defer cancel()
 
 	composeDown(t, context.TODO(), composeFile, projectName, composeEnv)
-	composeUp(t, ctx, composeFile, projectName, composeEnv)
+	composeUp(ctx, t, composeFile, projectName, composeEnv)
 	t.Cleanup(func() {
 		composeDown(t, context.TODO(), composeFile, projectName, composeEnv)
 	})
@@ -203,7 +203,7 @@ func (environment dppComposeEnvironment) values() []string {
 	return values
 }
 
-func composeUp(t *testing.T, ctx context.Context, composeFile string, projectName string, environment dppComposeEnvironment) {
+func composeUp(ctx context.Context, t *testing.T, composeFile string, projectName string, environment dppComposeEnvironment) {
 	t.Helper()
 	runComposeCommand(ctx, t, environment, "docker compose build failed", "compose", "-f", composeFile, "-p", projectName, "build", "--no-cache")
 	runComposeCommand(ctx, t, environment, "docker compose up failed", "compose", "-f", composeFile, "-p", projectName, "up", "-d")
