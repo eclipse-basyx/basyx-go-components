@@ -205,7 +205,7 @@ var mapMethodAndPatternToRightsData = []mapMethodAndPatternToRights{
 	{"GET", "/v1/dppsByIdAndDate/{dppId}", []grammar.RightsEnum{grammar.RightsEnumREAD}},
 	{"POST", "/v1/dppsByProductIds", []grammar.RightsEnum{grammar.RightsEnumREAD}},
 	{"GET", "/v1/dpps/{dppId}/elements/*", []grammar.RightsEnum{grammar.RightsEnumREAD}},
-	{"PUT", "/v1/dpps/{dppId}/elements/*", []grammar.RightsEnum{grammar.RightsEnumCREATE, grammar.RightsEnumUPDATE}},
+	{"PATCH", "/v1/dpps/{dppId}/elements/*", []grammar.RightsEnum{grammar.RightsEnumUPDATE}},
 
 	// aas discovery
 	{"GET", "/lookup/shells", []grammar.RightsEnum{grammar.RightsEnumREAD}},

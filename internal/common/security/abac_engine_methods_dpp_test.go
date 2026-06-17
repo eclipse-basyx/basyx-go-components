@@ -96,10 +96,10 @@ func TestMapMethodAndPathToRights_DPPAPIRoutes(t *testing.T) {
 			want:   []grammar.RightsEnum{grammar.RightsEnumREAD},
 		},
 		{
-			name:   "update data element maps to create and update",
-			method: http.MethodPut,
+			name:   "patch data element maps to update",
+			method: http.MethodPatch,
 			path:   "/v1/dpps/demo/elements/technicalData/energyClass",
-			want:   []grammar.RightsEnum{grammar.RightsEnumCREATE, grammar.RightsEnumUPDATE},
+			want:   []grammar.RightsEnum{grammar.RightsEnumUPDATE},
 		},
 	}
 
@@ -132,7 +132,7 @@ func registerDPPTestRoutes(router chi.Router) {
 	router.Method(http.MethodGet, "/v1/dppsByIdAndDate/{dppId}", handler)
 	router.Method(http.MethodPost, "/v1/dppsByProductIds", handler)
 	router.Method(http.MethodGet, "/v1/dpps/{dppId}/elements/*", handler)
-	router.Method(http.MethodPut, "/v1/dpps/{dppId}/elements/*", handler)
+	router.Method(http.MethodPatch, "/v1/dpps/{dppId}/elements/*", handler)
 }
 
 func assertRightsAlternative(t *testing.T, rights [][]grammar.RightsEnum, want []grammar.RightsEnum) {
