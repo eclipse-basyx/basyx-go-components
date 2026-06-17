@@ -164,9 +164,11 @@ func ReadSpecificAssetSupplementalSemanticReferencesBySpecificAssetIDs(
 		ctx,
 		db,
 		specificAssetIDs,
-		common.TblSpecificAssetIDSuppSemantic,
-		common.ColSpecificAssetIDID,
-		"REFREAD-SUPPSPEC",
+		contextReferences1ToManyQuerySpec{
+			ownerIDColumn:  common.ColSpecificAssetIDID,
+			referenceTable: common.TblSpecificAssetIDSuppSemantic,
+			errPrefix:      "REFREAD-SUPPSPEC",
+		},
 	)
 }
 
@@ -182,9 +184,33 @@ func ReadSubmodelDescriptorSupplementalSemanticReferencesByDescriptorIDs(
 		ctx,
 		db,
 		descriptorIDs,
-		common.TblSubmodelDescriptorSuppSemantic,
-		common.ColDescriptorID,
-		"REFREAD-SUPPSMDESC",
+		contextReferences1ToManyQuerySpec{
+			ownerTable:        common.TblSubmodelDescriptor,
+			ownerIDColumn:     common.ColDescriptorID,
+			referenceTable:    common.TblSubmodelDescriptorSuppSemantic,
+			ownerAlias:        common.AliasSubmodelDescriptor,
+			referenceAlias:    "aasdesc_submodel_descriptor_supplemental_semantic_id_reference",
+			referenceKeyAlias: "aasdesc_submodel_descriptor_supplemental_semantic_id_reference_key",
+			filterSpecs: []referenceFilterSpec{
+				{
+					fragment:  "$aasdesc#submodelDescriptors[].supplementalSemanticIds[]",
+					collector: nil,
+				},
+				{
+					fragment:  "$aasdesc#submodelDescriptors[].supplementalSemanticIds[].keys[]",
+					collector: nil,
+				},
+				{
+					fragment:  "$smdesc#supplementalSemanticIds[]",
+					collector: nil,
+				},
+				{
+					fragment:  "$smdesc#supplementalSemanticIds[].keys[]",
+					collector: nil,
+				},
+			},
+			errPrefix: "REFREAD-SUPPSMDESC",
+		},
 	)
 }
 
@@ -211,6 +237,17 @@ type referenceQuerySpec struct {
 	referenceAlias    string
 	referenceKeyAlias string
 	filterSpecs       []referenceFilterSpec
+}
+
+type contextReferences1ToManyQuerySpec struct {
+	ownerTable        string
+	ownerIDColumn     string
+	referenceTable    string
+	ownerAlias        string
+	referenceAlias    string
+	referenceKeyAlias string
+	filterSpecs       []referenceFilterSpec
+	errPrefix         string
 }
 
 func queryReferenceRowsByOwnerIDs(
@@ -323,9 +360,7 @@ func readContextReferences1ToManyByOwnerIDs(
 	ctx context.Context,
 	db DBQueryer,
 	ownerIDs []int64,
-	referenceTable string,
-	ownerIDColumn string,
-	errPrefix string,
+	spec contextReferences1ToManyQuerySpec,
 ) (map[int64][]types.IReference, error) {
 	out := make(map[int64][]types.IReference, len(ownerIDs))
 	if len(ownerIDs) == 0 {
@@ -335,15 +370,18 @@ func readContextReferences1ToManyByOwnerIDs(
 	d := goqu.Dialect(common.Dialect)
 	arr := pq.Array(ownerIDs)
 
-	rt := goqu.T(referenceTable).As("rt")
-	rkt := goqu.T(referenceTable + "_key").As("rkt")
-	rpt := goqu.T(referenceTable + "_payload").As("rpt")
+	referenceAlias := firstNonEmpty(spec.referenceAlias, "rt")
+	referenceKeyAlias := firstNonEmpty(spec.referenceKeyAlias, "rkt")
+
+	rt := goqu.T(spec.referenceTable).As(referenceAlias)
+	rkt := goqu.T(spec.referenceTable + "_key").As(referenceKeyAlias)
+	rpt := goqu.T(spec.referenceTable + "_payload").As("rpt")
 
 	ds := d.From(rt).
 		LeftJoin(rpt, goqu.On(rpt.Col(common.ColReferenceID).Eq(rt.Col(common.ColID)))).
 		LeftJoin(rkt, goqu.On(rkt.Col(common.ColReferenceID).Eq(rt.Col(common.ColID)))).
 		Select(
-			rt.Col(ownerIDColumn).As("owner_id"),
+			rt.Col(spec.ownerIDColumn).As("owner_id"),
 			rt.Col(common.ColID).As("ref_id"),
 			rt.Col(common.ColType).As("ref_type"),
 			rkt.Col(common.ColID).As("key_id"),
@@ -351,22 +389,38 @@ func readContextReferences1ToManyByOwnerIDs(
 			rkt.Col(common.ColValue).As("key_value"),
 			rpt.Col("parent_reference_payload").As("parent_reference_payload"),
 		).
-		Where(goqu.L(fmt.Sprintf("rt.%s = ANY(?::bigint[])", ownerIDColumn), arr)).
+		Where(goqu.L(fmt.Sprintf("%s.%s = ANY(?::bigint[])", referenceAlias, spec.ownerIDColumn), arr)).
 		Order(
-			rt.Col(ownerIDColumn).Asc(),
-			rt.Col(common.ColID).Asc(),
+			rt.Col(spec.ownerIDColumn).Asc(),
+			rt.Col(common.ColPosition).Asc(),
 			rkt.Col(common.ColPosition).Asc(),
 			rkt.Col(common.ColID).Asc(),
 		)
 
+	if spec.ownerTable != "" && spec.ownerAlias != "" {
+		ot := goqu.T(spec.ownerTable).As(spec.ownerAlias)
+		ds = ds.Join(
+			ot,
+			goqu.On(ot.Col(spec.ownerIDColumn).Eq(rt.Col(spec.ownerIDColumn))),
+		)
+	}
+
+	var err error
+	for _, filterSpec := range spec.filterSpecs {
+		ds, err = auth.AddFilterQueryFromContext(ctx, ds, filterSpec.fragment, filterSpec.collector)
+		if err != nil {
+			return nil, fmt.Errorf("%s-ADDFILTER: %w", spec.errPrefix, err)
+		}
+	}
+
 	sqlStr, args, err := ds.ToSQL()
 	if err != nil {
-		return nil, fmt.Errorf("%s-BUILDQUERY: %w", errPrefix, err)
+		return nil, fmt.Errorf("%s-BUILDQUERY: %w", spec.errPrefix, err)
 	}
 
 	rows, err := db.QueryContext(ctx, sqlStr, args...)
 	if err != nil {
-		return nil, fmt.Errorf("%s-QUERYDB: %w", errPrefix, err)
+		return nil, fmt.Errorf("%s-QUERYDB: %w", spec.errPrefix, err)
 	}
 	defer func() {
 		_ = rows.Close()
@@ -398,7 +452,7 @@ func readContextReferences1ToManyByOwnerIDs(
 			&row.keyVal,
 			&row.parentReferencePayload,
 		); err != nil {
-			return nil, fmt.Errorf("%s-SCANROW: %w", errPrefix, err)
+			return nil, fmt.Errorf("%s-SCANROW: %w", spec.errPrefix, err)
 		}
 
 		if !row.ownerID.Valid || !row.referenceID.Valid || !row.refType.Valid {
@@ -411,7 +465,7 @@ func readContextReferences1ToManyByOwnerIDs(
 			ref, rb := builder.NewReferenceBuilder(types.ReferenceTypes(row.refType.Int64), referenceID)
 			parentReference, err := parseReferencePayload(row.parentReferencePayload)
 			if err != nil {
-				return nil, fmt.Errorf("%s-PARSEPARENTPAYLOAD: %w", errPrefix, err)
+				return nil, fmt.Errorf("%s-PARSEPARENTPAYLOAD: %w", spec.errPrefix, err)
 			}
 			ref.SetReferredSemanticID(parentReference)
 			refBuilders[referenceID] = rb
@@ -435,7 +489,7 @@ func readContextReferences1ToManyByOwnerIDs(
 		}
 	}
 	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("%s-ITERATEROWS: %w", errPrefix, err)
+		return nil, fmt.Errorf("%s-ITERATEROWS: %w", spec.errPrefix, err)
 	}
 
 	for _, b := range refBuilders {
@@ -459,4 +513,13 @@ func readContextReferences1ToManyByOwnerIDs(
 	}
 
 	return out, nil
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		if value != "" {
+			return value
+		}
+	}
+	return ""
 }
