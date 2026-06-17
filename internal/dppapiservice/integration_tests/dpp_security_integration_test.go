@@ -67,7 +67,7 @@ func TestDPPSecurityWithDockerCompose(t *testing.T) {
 	defer cancel()
 
 	composeDown(t, context.TODO(), composeFile, projectName, composeEnv)
-	composeUp(t, ctx, composeFile, projectName, composeEnv)
+	composeUp(ctx, t, composeFile, projectName, composeEnv)
 	t.Cleanup(func() {
 		composeDown(t, context.TODO(), composeFile, projectName, composeEnv)
 	})
