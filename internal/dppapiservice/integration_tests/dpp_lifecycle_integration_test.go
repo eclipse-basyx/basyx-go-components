@@ -91,7 +91,11 @@ func TestDPPLifecycleWithDockerCompose(t *testing.T) {
 	assertJSONPathEquals(t, createdVersionBody, "technicalData.manufacturerName", "Acme GmbH")
 
 	fullBody := doJSON(t, client, http.MethodGet, baseURL+"/v1/dpps/"+encodedDPPID+"?representation=full", nil, http.StatusOK)
-	assertJSONPathEquals(t, fullBody, "technicalData.objectType", "Submodel")
+	assertJSONPathEquals(t, fullBody, "technicalData.objectType", "DataElementCollection")
+	assertDPPElementObjectType(t, fullBody, "technicalData", "dimensions", "DataElementCollection")
+	assertDPPElementObjectType(t, fullBody, "technicalData", "manufacturerName", "SingleValuedDataElement")
+	assertDPPElementObjectType(t, fullBody, "technicalData", "manual", "RelatedResource")
+	assertDPPElementObjectType(t, fullBody, "technicalData", "serialNumbers", "MultiValuedDataElement")
 
 	productBody := doJSON(t, client, http.MethodGet, baseURL+"/v1/dppsByProductId/"+encodedProductID, nil, http.StatusOK)
 	assertJSONPathEquals(t, productBody, "digitalProductPassportId", dppID)
@@ -123,10 +127,15 @@ func TestDPPLifecycleWithDockerCompose(t *testing.T) {
 	assertJSONPathEquals(t, updatedVersionBody, "technicalData.manufacturerName", "Acme Updated GmbH")
 
 	fullVersionBody := doJSON(t, client, http.MethodGet, historyURL(baseURL, encodedDPPID, updatedVersionDate, "full"), nil, http.StatusOK)
-	assertJSONPathEquals(t, fullVersionBody, "technicalData.objectType", "Submodel")
+	assertJSONPathEquals(t, fullVersionBody, "technicalData.objectType", "DataElementCollection")
+	assertDPPElementObjectType(t, fullVersionBody, "technicalData", "dimensions", "DataElementCollection")
+	assertDPPElementObjectType(t, fullVersionBody, "technicalData", "manufacturerName", "SingleValuedDataElement")
 
 	elementBody := doJSONAny(t, client, http.MethodGet, baseURL+"/v1/dpps/"+encodedDPPID+"/elements/technicalData/manufacturerName", nil, http.StatusOK)
 	assertScalarEquals(t, elementBody, "Acme Updated GmbH")
+
+	fullElementBody := doJSONAny(t, client, http.MethodGet, baseURL+"/v1/dpps/"+encodedDPPID+"/elements/technicalData/manufacturerName?representation=full", nil, http.StatusOK)
+	assertDataElementObjectType(t, fullElementBody, "manufacturerName", "SingleValuedDataElement")
 
 	updatedElementBody := doJSONAny(t, client, http.MethodPut, baseURL+"/v1/dpps/"+encodedDPPID+"/elements/technicalData/energyClass", "B", http.StatusOK)
 	assertScalarEquals(t, updatedElementBody, "B")
@@ -348,6 +357,45 @@ func assertJSONPathEquals(t *testing.T, body map[string]any, path string, expect
 	}
 	if value != expected {
 		t.Fatalf("%s = %#v, want %q", path, value, expected)
+	}
+}
+
+func assertDPPElementObjectType(t *testing.T, body map[string]any, sectionName string, elementID string, expectedObjectType string) {
+	t.Helper()
+	section, ok := body[sectionName].(map[string]any)
+	if !ok {
+		t.Fatalf("%s = %#v, want object", sectionName, body[sectionName])
+	}
+	elements, ok := section["value"].([]any)
+	if !ok {
+		t.Fatalf("%s.value = %#v, want array", sectionName, section["value"])
+	}
+	for _, item := range elements {
+		element, ok := item.(map[string]any)
+		if !ok {
+			t.Fatalf("%s.value item = %#v, want object", sectionName, item)
+		}
+		if element["elementId"] == elementID {
+			if element["objectType"] != expectedObjectType {
+				t.Fatalf("%s.%s objectType = %#v, want %q", sectionName, elementID, element["objectType"], expectedObjectType)
+			}
+			return
+		}
+	}
+	t.Fatalf("%s.value does not contain elementId %q: %#v", sectionName, elementID, elements)
+}
+
+func assertDataElementObjectType(t *testing.T, body any, elementID string, expectedObjectType string) {
+	t.Helper()
+	element, ok := body.(map[string]any)
+	if !ok {
+		t.Fatalf("element response = %#v, want object", body)
+	}
+	if element["elementId"] != elementID {
+		t.Fatalf("elementId = %#v, want %q", element["elementId"], elementID)
+	}
+	if element["objectType"] != expectedObjectType {
+		t.Fatalf("%s objectType = %#v, want %q", elementID, element["objectType"], expectedObjectType)
 	}
 }
 

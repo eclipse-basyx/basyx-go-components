@@ -171,12 +171,12 @@ func TestDPPAPIRejectsInvalidPayloadsBeforePersistence(t *testing.T) {
 			errorCode:  "DPP-BUILDSM-CONTENTSECTION",
 		},
 		{
-			name:       "create rejects ambiguous content specification",
+			name:       "create rejects implicit content specification mapping",
 			method:     http.MethodPost,
 			target:     "/v1/dpps",
 			body:       withDPPField("contentSpecificationIds", `["technicalData alpha","technicalData beta"]`),
 			statusCode: http.StatusBadRequest,
-			errorCode:  "DPP-SEMSPEC-AMBIGUOUS",
+			errorCode:  "DPP-SEMSPEC-EXPLICIT",
 		},
 		{
 			name:       "update rejects malformed json",

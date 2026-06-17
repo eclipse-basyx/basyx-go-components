@@ -29,6 +29,8 @@ package dppapi
 import (
 	"encoding/json"
 	"testing"
+
+	"github.com/FriedJannik/aas-go-sdk/types"
 )
 
 func TestDecodeDPPDocumentPreservesContentSections(t *testing.T) {
@@ -110,5 +112,96 @@ func TestNormalizeValueOnlyConvertsFileAndLanguageShapes(t *testing.T) {
 	}
 	if _, ok := document["value"]; ok {
 		t.Fatalf("file value field still exists: %#v", document)
+	}
+}
+
+func TestFullContentMapsAASElementsToDPPDataElements(t *testing.T) {
+	manufacturerName := types.NewProperty(types.DataTypeDefXSDString)
+	manufacturerNameIDShort := "manufacturerName"
+	manufacturerNameValue := "Acme GmbH"
+	manufacturerName.SetIDShort(&manufacturerNameIDShort)
+	manufacturerName.SetValue(&manufacturerNameValue)
+
+	energyClasses := types.NewSubmodelElementList(types.AASSubmodelElementsProperty)
+	energyClassesIDShort := "energyClasses"
+	energyClasses.SetIDShort(&energyClassesIDShort)
+	energyClassesValueType := types.DataTypeDefXSDString
+	energyClasses.SetValueTypeListElement(&energyClassesValueType)
+	energyClasses.SetValue([]types.ISubmodelElement{
+		stringProperty("", "A"),
+		stringProperty("", "B"),
+	})
+
+	name := types.NewMultiLanguageProperty()
+	nameIDShort := "name"
+	name.SetIDShort(&nameIDShort)
+	name.SetValue([]types.ILangStringTextType{
+		types.NewLangStringTextType("en", "Manual"),
+		types.NewLangStringTextType("de", "Handbuch"),
+	})
+
+	manual := types.NewFile()
+	manualIDShort := "manual"
+	manualURL := "https://example.test/manual.pdf"
+	manualContentType := "application/pdf"
+	manual.SetIDShort(&manualIDShort)
+	manual.SetValue(&manualURL)
+	manual.SetContentType(&manualContentType)
+
+	documentation := types.NewSubmodelElementCollection()
+	documentationIDShort := "documentation"
+	documentation.SetIDShort(&documentationIDShort)
+	documentation.SetValue([]types.ISubmodelElement{name, manual})
+
+	submodel := types.NewSubmodel("technical-data")
+	submodelIDShort := "TechnicalData"
+	submodel.SetIDShort(&submodelIDShort)
+	submodel.SetSubmodelElements([]types.ISubmodelElement{
+		manufacturerName,
+		energyClasses,
+		documentation,
+	})
+
+	content, err := fullContent(submodel)
+	if err != nil {
+		t.Fatalf("fullContent() error = %v", err)
+	}
+
+	root := content.(map[string]any)
+	assertMapValue(t, root, "objectType", "DataElementCollection")
+	assertMapValue(t, root, "elementId", "TechnicalData")
+
+	elements := root["value"].([]map[string]any)
+	assertMapValue(t, elements[0], "objectType", "SingleValuedDataElement")
+	assertMapValue(t, elements[0], "elementId", "manufacturerName")
+	assertMapValue(t, elements[0], "valueDataType", "xsd:string")
+	assertMapValue(t, elements[0], "value", "Acme GmbH")
+
+	assertMapValue(t, elements[1], "objectType", "MultiValuedDataElement")
+	assertMapValue(t, elements[1], "elementId", "energyClasses")
+	assertMapValue(t, elements[1], "valueDataType", "xsd:string")
+	assertSliceValue(t, elements[1]["value"], 0, "A")
+	assertSliceValue(t, elements[1]["value"], 1, "B")
+
+	assertMapValue(t, elements[2], "objectType", "DataElementCollection")
+	nested := elements[2]["value"].([]map[string]any)
+	assertMapValue(t, nested[0], "objectType", "MultiLanguageDataElement")
+	assertMapValue(t, nested[1], "objectType", "RelatedResource")
+	assertMapValue(t, nested[1], "contentType", "application/pdf")
+	assertMapValue(t, nested[1], "url", "https://example.test/manual.pdf")
+}
+
+func assertMapValue(t *testing.T, value map[string]any, key string, expected any) {
+	t.Helper()
+	if value[key] != expected {
+		t.Fatalf("%s = %#v, want %#v in %#v", key, value[key], expected, value)
+	}
+}
+
+func assertSliceValue(t *testing.T, value any, index int, expected any) {
+	t.Helper()
+	items := value.([]any)
+	if items[index] != expected {
+		t.Fatalf("value[%d] = %#v, want %#v in %#v", index, items[index], expected, items)
 	}
 }

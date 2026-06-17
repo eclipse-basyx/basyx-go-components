@@ -34,16 +34,28 @@ import (
 )
 
 // DPPRepositoryRouter exposes DPP repository service operations as HTTP handlers.
+//
+// Fields:
+//   - service: DPP repository service used by all HTTP route handlers
 type DPPRepositoryRouter struct {
 	service *DPPRepositoryService
 }
 
 // NewDPPRepositoryRouter creates an HTTP router adapter for the DPP repository service.
+//
+// Parameters:
+//   - service: DPP repository service that executes domain operations
+//
+// Returns:
+//   - *DPPRepositoryRouter: Router adapter exposing the service through HTTP handlers
 func NewDPPRepositoryRouter(service *DPPRepositoryService) *DPPRepositoryRouter {
 	return &DPPRepositoryRouter{service: service}
 }
 
 // OrderedRoutes returns DPP routes in registration order.
+//
+// Returns:
+//   - []Route: DPP API routes ordered for deterministic registration
 func (r *DPPRepositoryRouter) OrderedRoutes() []Route {
 	return []Route{
 		{"ReadDPPById", http.MethodGet, "/v1/dpps/{dppId}", r.ReadDPPById},
@@ -59,6 +71,9 @@ func (r *DPPRepositoryRouter) OrderedRoutes() []Route {
 }
 
 // Routes returns DPP routes keyed by operation name.
+//
+// Returns:
+//   - Routes: DPP API routes keyed by operation name
 func (r *DPPRepositoryRouter) Routes() Routes {
 	routes := make(Routes)
 	for _, route := range r.OrderedRoutes() {
@@ -68,6 +83,10 @@ func (r *DPPRepositoryRouter) Routes() Routes {
 }
 
 // ReadDPPById handles GET /v1/dpps/{dppId}.
+//
+// Parameters:
+//   - w: HTTP response writer used to encode the DPP response
+//   - req: HTTP request containing dppId path and representation query values
 func (r *DPPRepositoryRouter) ReadDPPById(w http.ResponseWriter, req *http.Request) {
 	representation, invalid := queryRepresentation(req)
 	if invalid != nil {
@@ -79,12 +98,20 @@ func (r *DPPRepositoryRouter) ReadDPPById(w http.ResponseWriter, req *http.Reque
 }
 
 // DeleteDPPById handles DELETE /v1/dpps/{dppId}.
+//
+// Parameters:
+//   - w: HTTP response writer used to encode the DPP response
+//   - req: HTTP request containing the dppId path value
 func (r *DPPRepositoryRouter) DeleteDPPById(w http.ResponseWriter, req *http.Request) {
 	response, err := r.service.DeleteDPPById(req.Context(), pathParam(req, "dppId"))
 	r.write(w, response, err)
 }
 
 // UpdateDPPById handles PATCH /v1/dpps/{dppId}.
+//
+// Parameters:
+//   - w: HTTP response writer used to encode the DPP response
+//   - req: HTTP request containing the dppId path value and patch body
 func (r *DPPRepositoryRouter) UpdateDPPById(w http.ResponseWriter, req *http.Request) {
 	body, err := readRequestBody(w, req)
 	if err != nil {
@@ -96,6 +123,10 @@ func (r *DPPRepositoryRouter) UpdateDPPById(w http.ResponseWriter, req *http.Req
 }
 
 // CreateDPP handles POST /v1/dpps.
+//
+// Parameters:
+//   - w: HTTP response writer used to encode the DPP response
+//   - req: HTTP request containing the DPP creation body
 func (r *DPPRepositoryRouter) CreateDPP(w http.ResponseWriter, req *http.Request) {
 	body, err := readRequestBody(w, req)
 	if err != nil {
@@ -107,6 +138,10 @@ func (r *DPPRepositoryRouter) CreateDPP(w http.ResponseWriter, req *http.Request
 }
 
 // ReadDPPByProductId handles GET /v1/dppsByProductId/{productId}.
+//
+// Parameters:
+//   - w: HTTP response writer used to encode the DPP response
+//   - req: HTTP request containing productId path and representation query values
 func (r *DPPRepositoryRouter) ReadDPPByProductId(w http.ResponseWriter, req *http.Request) {
 	representation, invalid := queryRepresentation(req)
 	if invalid != nil {
@@ -118,6 +153,10 @@ func (r *DPPRepositoryRouter) ReadDPPByProductId(w http.ResponseWriter, req *htt
 }
 
 // ReadDPPVersionByIdAndDate handles GET /v1/dppsByIdAndDate/{dppId}.
+//
+// Parameters:
+//   - w: HTTP response writer used to encode the DPP response
+//   - req: HTTP request containing dppId path, date query, and representation query values
 func (r *DPPRepositoryRouter) ReadDPPVersionByIdAndDate(w http.ResponseWriter, req *http.Request) {
 	date, err := time.Parse(time.RFC3339Nano, req.URL.Query().Get("date"))
 	if err != nil {
@@ -134,6 +173,10 @@ func (r *DPPRepositoryRouter) ReadDPPVersionByIdAndDate(w http.ResponseWriter, r
 }
 
 // ReadDPPIdsByProductIds handles POST /v1/dppsByProductIds.
+//
+// Parameters:
+//   - w: HTTP response writer used to encode the DPP ID search response
+//   - req: HTTP request containing product IDs body plus limit and cursor query values
 func (r *DPPRepositoryRouter) ReadDPPIdsByProductIds(w http.ResponseWriter, req *http.Request) {
 	var request ReadDppIdsByProductIdsRequest
 	decoder := json.NewDecoder(http.MaxBytesReader(w, req.Body, maxDPPRequestBodyBytes))
@@ -156,6 +199,10 @@ func (r *DPPRepositoryRouter) ReadDPPIdsByProductIds(w http.ResponseWriter, req 
 }
 
 // ReadDataElement handles GET /v1/dpps/{dppId}/elements/{elementPath}.
+//
+// Parameters:
+//   - w: HTTP response writer used to encode the element response
+//   - req: HTTP request containing dppId, elementPath, and representation values
 func (r *DPPRepositoryRouter) ReadDataElement(w http.ResponseWriter, req *http.Request) {
 	representation, invalid := queryRepresentation(req)
 	if invalid != nil {
@@ -167,6 +214,10 @@ func (r *DPPRepositoryRouter) ReadDataElement(w http.ResponseWriter, req *http.R
 }
 
 // UpdateDataElement handles PUT /v1/dpps/{dppId}/elements/{elementPath}.
+//
+// Parameters:
+//   - w: HTTP response writer used to encode the element response
+//   - req: HTTP request containing dppId, elementPath, and replacement element body
 func (r *DPPRepositoryRouter) UpdateDataElement(w http.ResponseWriter, req *http.Request) {
 	body, err := readRequestBody(w, req)
 	if err != nil {

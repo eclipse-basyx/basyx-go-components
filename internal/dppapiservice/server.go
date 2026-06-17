@@ -42,6 +42,17 @@ import (
 )
 
 // NewHTTPHandler assembles the DPP API HTTP handler from configured dependencies.
+//
+// Parameters:
+//   - ctx: Request-independent context used for security setup
+//   - cfg: Runtime configuration for routing, security, CORS, and context path
+//   - openapiSpec: Embedded OpenAPI specification used for Swagger UI
+//   - aasRepo: Asset Administration Shell repository persistence dependency
+//   - submodelRepo: Submodel repository persistence dependency
+//
+// Returns:
+//   - http.Handler: Configured root HTTP handler for the DPP API service
+//   - error: Setup error if security or router assembly fails
 func NewHTTPHandler(ctx context.Context, cfg *common.Config, openapiSpec embed.FS, aasRepo *aasrepositorydb.AssetAdministrationShellDatabase, submodelRepo *submodelrepositorydb.SubmodelDatabase) (http.Handler, error) {
 	dppService := dppapi.NewDPPRepositoryService(aasRepo, submodelRepo)
 	dppRouter := dppapi.NewDPPRepositoryRouter(dppService)
@@ -77,6 +88,9 @@ func NewHTTPHandler(ctx context.Context, cfg *common.Config, openapiSpec embed.F
 }
 
 // ConfigureHistory applies DPP history settings.
+//
+// Parameters:
+//   - cfg: History configuration values loaded for the DPP API service
 func ConfigureHistory(cfg common.HistoryConfig) {
 	history.Configure(history.Config{
 		Mode:                 cfg.Mode,

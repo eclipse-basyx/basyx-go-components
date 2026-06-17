@@ -34,21 +34,42 @@ import (
 )
 
 // DPPLifeCycleAPIService delegates lifecycle operations to a configured implementation.
+//
+// Fields:
+//   - delegate: Optional service implementation used to execute lifecycle operations
 type DPPLifeCycleAPIService struct {
 	delegate DPPLifeCycleAPIServicer
 }
 
 // NewDPPLifeCycleAPIService creates an unconfigured lifecycle API service.
+//
+// Returns:
+//   - *DPPLifeCycleAPIService: Lifecycle service that returns not-configured responses
 func NewDPPLifeCycleAPIService() *DPPLifeCycleAPIService {
 	return &DPPLifeCycleAPIService{}
 }
 
 // NewDPPLifeCycleAPIServiceWithDelegate creates a lifecycle API service using the supplied delegate.
+//
+// Parameters:
+//   - delegate: Service implementation used to execute lifecycle operations
+//
+// Returns:
+//   - *DPPLifeCycleAPIService: Lifecycle service delegating to the supplied implementation
 func NewDPPLifeCycleAPIServiceWithDelegate(delegate DPPLifeCycleAPIServicer) *DPPLifeCycleAPIService {
 	return &DPPLifeCycleAPIService{delegate: delegate}
 }
 
 // ReadDPPById delegates reading a DPP by ID.
+//
+// Parameters:
+//   - ctx: Request context used by the delegate
+//   - dppID: Identifier of the DPP to read
+//   - representation: Requested compressed or full DPP representation
+//
+// Returns:
+//   - ImplResponse: Delegate response or not-configured response
+//   - error: Delegate error, if one is returned
 func (s *DPPLifeCycleAPIService) ReadDPPById(ctx context.Context, dppID string, representation Representation) (ImplResponse, error) {
 	if s.delegate != nil {
 		return s.delegate.ReadDPPById(ctx, dppID, representation)
@@ -57,6 +78,14 @@ func (s *DPPLifeCycleAPIService) ReadDPPById(ctx context.Context, dppID string, 
 }
 
 // DeleteDPPById delegates deleting a DPP by ID.
+//
+// Parameters:
+//   - ctx: Request context used by the delegate
+//   - dppID: Identifier of the DPP to delete
+//
+// Returns:
+//   - ImplResponse: Delegate response or not-configured response
+//   - error: Delegate error, if one is returned
 func (s *DPPLifeCycleAPIService) DeleteDPPById(ctx context.Context, dppID string) (ImplResponse, error) {
 	if s.delegate != nil {
 		return s.delegate.DeleteDPPById(ctx, dppID)
@@ -65,6 +94,15 @@ func (s *DPPLifeCycleAPIService) DeleteDPPById(ctx context.Context, dppID string
 }
 
 // UpdateDPPById delegates updating a DPP by ID.
+//
+// Parameters:
+//   - ctx: Request context used by the delegate
+//   - dppID: Identifier of the DPP to update
+//   - patch: Generated OpenAPI DPP patch model
+//
+// Returns:
+//   - ImplResponse: Delegate response or not-configured response
+//   - error: Delegate error, if one is returned
 func (s *DPPLifeCycleAPIService) UpdateDPPById(ctx context.Context, dppID string, patch DigitalProductPassportPatch) (ImplResponse, error) {
 	if s.delegate != nil {
 		return s.delegate.UpdateDPPById(ctx, dppID, patch)
@@ -73,6 +111,14 @@ func (s *DPPLifeCycleAPIService) UpdateDPPById(ctx context.Context, dppID string
 }
 
 // CreateDPP delegates creating a DPP.
+//
+// Parameters:
+//   - ctx: Request context used by the delegate
+//   - passport: Generated OpenAPI DPP model to create
+//
+// Returns:
+//   - ImplResponse: Delegate response or not-configured response
+//   - error: Delegate error, if one is returned
 func (s *DPPLifeCycleAPIService) CreateDPP(ctx context.Context, passport DigitalProductPassport) (ImplResponse, error) {
 	if s.delegate != nil {
 		return s.delegate.CreateDPP(ctx, passport)
@@ -81,6 +127,15 @@ func (s *DPPLifeCycleAPIService) CreateDPP(ctx context.Context, passport Digital
 }
 
 // ReadDPPByProductId delegates reading a DPP by product ID.
+//
+// Parameters:
+//   - ctx: Request context used by the delegate
+//   - productID: Unique product identifier used to resolve the DPP
+//   - representation: Requested compressed or full DPP representation
+//
+// Returns:
+//   - ImplResponse: Delegate response or not-configured response
+//   - error: Delegate error, if one is returned
 func (s *DPPLifeCycleAPIService) ReadDPPByProductId(ctx context.Context, productID string, representation Representation) (ImplResponse, error) {
 	if s.delegate != nil {
 		return s.delegate.ReadDPPByProductId(ctx, productID, representation)
@@ -89,6 +144,16 @@ func (s *DPPLifeCycleAPIService) ReadDPPByProductId(ctx context.Context, product
 }
 
 // ReadDPPVersionByIdAndDate delegates reading a historic DPP by ID and date.
+//
+// Parameters:
+//   - ctx: Request context used by the delegate
+//   - dppID: Identifier of the DPP to read
+//   - date: Historical timestamp to resolve
+//   - representation: Requested compressed or full DPP representation
+//
+// Returns:
+//   - ImplResponse: Delegate response or not-configured response
+//   - error: Delegate error, if one is returned
 func (s *DPPLifeCycleAPIService) ReadDPPVersionByIdAndDate(ctx context.Context, dppID string, date time.Time, representation Representation) (ImplResponse, error) {
 	if s.delegate != nil {
 		return s.delegate.ReadDPPVersionByIdAndDate(ctx, dppID, date, representation)
@@ -97,6 +162,16 @@ func (s *DPPLifeCycleAPIService) ReadDPPVersionByIdAndDate(ctx context.Context, 
 }
 
 // ReadDPPIdsByProductIds delegates resolving product IDs to DPP IDs.
+//
+// Parameters:
+//   - ctx: Request context used by the delegate
+//   - request: Product ID search request
+//   - limit: Maximum number of DPP IDs to return
+//   - cursor: Cursor after which the next page starts
+//
+// Returns:
+//   - ImplResponse: Delegate response or not-configured response
+//   - error: Delegate error, if one is returned
 func (s *DPPLifeCycleAPIService) ReadDPPIdsByProductIds(ctx context.Context, request ReadDppIdsByProductIdsRequest, limit int32, cursor string) (ImplResponse, error) {
 	if s.delegate != nil {
 		return s.delegate.ReadDPPIdsByProductIds(ctx, request, limit, cursor)

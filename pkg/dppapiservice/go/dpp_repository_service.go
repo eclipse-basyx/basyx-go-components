@@ -37,7 +37,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/FriedJannik/aas-go-sdk/jsonization"
 	"github.com/FriedJannik/aas-go-sdk/types"
 	aasrepositorydb "github.com/eclipse-basyx/basyx-go-components/internal/aasrepository/persistence"
 	submodelrepositorydb "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence"
@@ -51,17 +50,36 @@ const (
 )
 
 // DPPRepositoryService persists and retrieves Digital Product Passport documents.
+//
+// Fields:
+//   - aasRepo: Persistence repository for Asset Administration Shell records
+//   - submodelRepo: Persistence repository for DPP metadata and content submodels
 type DPPRepositoryService struct {
 	aasRepo      *aasrepositorydb.AssetAdministrationShellDatabase
 	submodelRepo *submodelrepositorydb.SubmodelDatabase
 }
 
 // NewDPPRepositoryService creates a DPP repository service backed by AAS and submodel repositories.
+//
+// Parameters:
+//   - aasRepo: Persistence repository for Asset Administration Shell records
+//   - submodelRepo: Persistence repository for DPP metadata and content submodels
+//
+// Returns:
+//   - *DPPRepositoryService: Configured DPP repository service
 func NewDPPRepositoryService(aasRepo *aasrepositorydb.AssetAdministrationShellDatabase, submodelRepo *submodelrepositorydb.SubmodelDatabase) *DPPRepositoryService {
 	return &DPPRepositoryService{aasRepo: aasRepo, submodelRepo: submodelRepo}
 }
 
 // CreateDPPFromJSON creates a DPP from a compressed JSON document.
+//
+// Parameters:
+//   - ctx: Request context used for repository persistence calls
+//   - data: Compressed DPP JSON document bytes
+//
+// Returns:
+//   - ImplResponse: HTTP-style response containing the created DPP identifier or validation error
+//   - error: Unexpected service error, if one occurs outside normal response mapping
 func (s *DPPRepositoryService) CreateDPPFromJSON(ctx context.Context, data []byte) (ImplResponse, error) {
 	doc, header, err := decodeDPPDocument(data, true)
 	if err != nil {
@@ -94,6 +112,15 @@ func (s *DPPRepositoryService) CreateDPPFromJSON(ctx context.Context, data []byt
 }
 
 // UpdateDPPFromJSON applies a JSON merge patch to an existing DPP.
+//
+// Parameters:
+//   - ctx: Request context used for repository persistence calls
+//   - dppID: Identifier of the DPP to update
+//   - data: Compressed JSON merge patch document bytes
+//
+// Returns:
+//   - ImplResponse: HTTP-style response containing the updated DPP or mapped error payload
+//   - error: Unexpected service error, if one occurs outside normal response mapping
 func (s *DPPRepositoryService) UpdateDPPFromJSON(ctx context.Context, dppID string, data []byte) (ImplResponse, error) {
 	patch, _, err := decodeDPPDocument(data, false)
 	if err != nil {
@@ -189,6 +216,15 @@ func dppObjectFromAny(value any) map[string]any {
 }
 
 // ReadDPPById reads a DPP by its identifier.
+//
+// Parameters:
+//   - ctx: Request context used for repository read calls
+//   - dppID: Identifier of the DPP to read
+//   - representation: Requested compressed or full DPP representation
+//
+// Returns:
+//   - ImplResponse: HTTP-style response containing the DPP document or mapped error payload
+//   - error: Unexpected service error, if one occurs outside normal response mapping
 func (s *DPPRepositoryService) ReadDPPById(ctx context.Context, dppID string, representation Representation) (ImplResponse, error) {
 	doc, err := s.composeDPP(ctx, dppID, normalizeRepresentation(representation), time.Time{})
 	if err != nil {
@@ -198,6 +234,14 @@ func (s *DPPRepositoryService) ReadDPPById(ctx context.Context, dppID string, re
 }
 
 // DeleteDPPById deletes a DPP and its currently referenced submodels.
+//
+// Parameters:
+//   - ctx: Request context used for repository persistence calls
+//   - dppID: Identifier of the DPP to delete
+//
+// Returns:
+//   - ImplResponse: HTTP-style response with no body on success or a mapped error payload
+//   - error: Unexpected service error, if one occurs outside normal response mapping
 func (s *DPPRepositoryService) DeleteDPPById(ctx context.Context, dppID string) (ImplResponse, error) {
 	resolved, err := s.resolveSubmodels(ctx, dppID, time.Time{})
 	if err != nil {
@@ -222,6 +266,15 @@ func (s *DPPRepositoryService) DeleteDPPById(ctx context.Context, dppID string) 
 }
 
 // ReadDPPByProductId resolves a unique product ID to its DPP.
+//
+// Parameters:
+//   - ctx: Request context used for repository read calls
+//   - productID: Unique product identifier used to find matching DPP shells
+//   - representation: Requested compressed or full DPP representation
+//
+// Returns:
+//   - ImplResponse: HTTP-style response containing the resolved DPP or mapped error payload
+//   - error: Unexpected service error, if one occurs outside normal response mapping
 func (s *DPPRepositoryService) ReadDPPByProductId(ctx context.Context, productID string, representation Representation) (ImplResponse, error) {
 	ids := make([]string, 0)
 	seen := make(map[string]struct{})
@@ -242,6 +295,16 @@ func (s *DPPRepositoryService) ReadDPPByProductId(ctx context.Context, productID
 }
 
 // ReadDPPVersionByIdAndDate reads a historic DPP version at the requested timestamp.
+//
+// Parameters:
+//   - ctx: Request context used for repository read calls
+//   - dppID: Identifier of the DPP to read
+//   - date: Historical timestamp to resolve
+//   - representation: Requested compressed or full DPP representation
+//
+// Returns:
+//   - ImplResponse: HTTP-style response containing the historic DPP or mapped error payload
+//   - error: Unexpected service error, if one occurs outside normal response mapping
 func (s *DPPRepositoryService) ReadDPPVersionByIdAndDate(ctx context.Context, dppID string, date time.Time, representation Representation) (ImplResponse, error) {
 	doc, err := s.composeDPP(ctx, dppID, normalizeRepresentation(representation), date)
 	if err != nil {
@@ -251,6 +314,16 @@ func (s *DPPRepositoryService) ReadDPPVersionByIdAndDate(ctx context.Context, dp
 }
 
 // ReadDPPIdsByProductIds resolves product IDs to sorted, paged DPP IDs.
+//
+// Parameters:
+//   - ctx: Request context used for repository read calls
+//   - request: Product ID search request
+//   - limit: Maximum number of DPP IDs to return
+//   - cursor: Cursor after which the next page starts
+//
+// Returns:
+//   - ImplResponse: HTTP-style response containing a paged DPP ID search result
+//   - error: Unexpected service error, if one occurs outside normal response mapping
 func (s *DPPRepositoryService) ReadDPPIdsByProductIds(ctx context.Context, request ReadDppIdsByProductIdsRequest, limit int32, cursor string) (ImplResponse, error) {
 	ids := make([]string, 0)
 	seen := make(map[string]struct{})
@@ -299,6 +372,16 @@ func (s *DPPRepositoryService) isDPPShell(ctx context.Context, shellID string) b
 }
 
 // ReadDataElement reads one DPP data element by content section and idShort path.
+//
+// Parameters:
+//   - ctx: Request context used for repository read calls
+//   - dppID: Identifier of the DPP that owns the element
+//   - elementPath: Content section and idShort path in <section>/<path> form
+//   - representation: Requested compressed or full element representation
+//
+// Returns:
+//   - ImplResponse: HTTP-style response containing the DPP data element or mapped error payload
+//   - error: Unexpected service error, if one occurs outside normal response mapping
 func (s *DPPRepositoryService) ReadDataElement(ctx context.Context, dppID string, elementPath string, representation Representation) (ImplResponse, error) {
 	submodelID, idShortPath, err := s.resolveElementPath(ctx, dppID, elementPath)
 	if err != nil {
@@ -316,6 +399,16 @@ func (s *DPPRepositoryService) ReadDataElement(ctx context.Context, dppID string
 }
 
 // UpdateDataElementFromJSON replaces one DPP data element from its compressed JSON value.
+//
+// Parameters:
+//   - ctx: Request context used for repository persistence calls
+//   - dppID: Identifier of the DPP that owns the element
+//   - elementPath: Content section and idShort path in <section>/<path> form
+//   - data: Compressed JSON value used as the replacement element content
+//
+// Returns:
+//   - ImplResponse: HTTP-style response containing the updated DPP data element or mapped error payload
+//   - error: Unexpected service error, if one occurs outside normal response mapping
 func (s *DPPRepositoryService) UpdateDataElementFromJSON(ctx context.Context, dppID string, elementPath string, data []byte) (ImplResponse, error) {
 	decoder := json.NewDecoder(strings.NewReader(string(data)))
 	decoder.UseNumber()
@@ -370,6 +463,16 @@ func preserveElementMetadata(existing types.ISubmodelElement, replacement types.
 }
 
 // UpdateDataElement replaces one DPP data element from a generated model value.
+//
+// Parameters:
+//   - ctx: Request context used for repository persistence calls
+//   - dppID: Identifier of the DPP that owns the element
+//   - elementPath: Content section and idShort path in <section>/<path> form
+//   - dataElement: Generated DPP data element model used as replacement content
+//
+// Returns:
+//   - ImplResponse: HTTP-style response containing the updated DPP data element or mapped error payload
+//   - error: Unexpected service error, if one occurs outside normal response mapping
 func (s *DPPRepositoryService) UpdateDataElement(ctx context.Context, dppID string, elementPath string, dataElement DataElement) (ImplResponse, error) {
 	raw, err := json.Marshal(dataElement)
 	if err != nil {
@@ -379,6 +482,14 @@ func (s *DPPRepositoryService) UpdateDataElement(ctx context.Context, dppID stri
 }
 
 // CreateDPP creates a DPP from the generated OpenAPI model.
+//
+// Parameters:
+//   - ctx: Request context used for repository persistence calls
+//   - passport: Generated OpenAPI DPP model to persist
+//
+// Returns:
+//   - ImplResponse: HTTP-style response containing the created DPP identifier or validation error
+//   - error: Unexpected service error, if one occurs outside normal response mapping
 func (s *DPPRepositoryService) CreateDPP(ctx context.Context, passport DigitalProductPassport) (ImplResponse, error) {
 	raw, err := json.Marshal(passport)
 	if err != nil {
@@ -388,6 +499,15 @@ func (s *DPPRepositoryService) CreateDPP(ctx context.Context, passport DigitalPr
 }
 
 // UpdateDPPById applies a generated model patch to an existing DPP.
+//
+// Parameters:
+//   - ctx: Request context used for repository persistence calls
+//   - dppID: Identifier of the DPP to update
+//   - patch: Generated OpenAPI DPP patch model
+//
+// Returns:
+//   - ImplResponse: HTTP-style response containing the updated DPP or mapped error payload
+//   - error: Unexpected service error, if one occurs outside normal response mapping
 func (s *DPPRepositoryService) UpdateDPPById(ctx context.Context, dppID string, patch DigitalProductPassportPatch) (ImplResponse, error) {
 	raw, err := json.Marshal(patch)
 	if err != nil {
@@ -473,13 +593,13 @@ func (s *DPPRepositoryService) buildSubmodels(header dppHeader, sections map[str
 	submodels := []types.ISubmodel{metadata}
 	refs := []types.IReference{submodelReference(metadata.ID())}
 
+	semanticIDs, err := semanticIDsForSections(sections, header.ContentSpecificationIDs)
+	if err != nil {
+		return nil, nil, err
+	}
 	sectionNames := sortedKeys(sections)
 	for _, sectionName := range sectionNames {
-		semanticID, err := semanticIDForSection(sectionName, header.ContentSpecificationIDs)
-		if err != nil {
-			return nil, nil, err
-		}
-		submodel, err := buildContentSubmodel(header.DigitalProductPassportID, sectionName, semanticID, sections[sectionName])
+		submodel, err := buildContentSubmodel(header.DigitalProductPassportID, sectionName, semanticIDs[sectionName], sections[sectionName])
 		if err != nil {
 			return nil, nil, err
 		}
@@ -527,11 +647,11 @@ func (s *DPPRepositoryService) updatedMetadata(ctx context.Context, dppID string
 
 func elementResponse(element types.ISubmodelElement, representation Representation) (any, error) {
 	if representation == REPRESENTATION_FULL {
-		jsonable, err := jsonization.ToJsonable(element)
+		response, err := dppElementFromAAS(element)
 		if err != nil {
-			return nil, fmt.Errorf("DPP-ELEM-FULL convert element normal serialization: %w", err)
+			return nil, fmt.Errorf("DPP-ELEM-FULL convert element to DPP expanded representation: %w", err)
 		}
-		return aasNormalToDPPExpanded(jsonable), nil
+		return response, nil
 	}
 	idShort := element.IDShort()
 	if idShort == nil || *idShort == "" {

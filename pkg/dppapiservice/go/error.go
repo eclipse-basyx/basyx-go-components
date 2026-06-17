@@ -43,20 +43,32 @@ import (
 )
 
 var (
-	// ErrTypeAssertionError is thrown when type an interface does not match the asserted type
+	// ErrTypeAssertionError is thrown when type an interface does not match the asserted type.
 	ErrTypeAssertionError = errors.New("unable to assert type")
 )
 
-// ParsingError indicates that an error has occurred when parsing request parameters
+// ParsingError indicates that an error has occurred when parsing request parameters.
+//
+// Fields:
+//   - Param: Request parameter that failed parsing
+//   - Err: Underlying parsing error
 type ParsingError struct {
 	Param string
 	Err   error
 }
 
+// Unwrap returns the underlying parsing error.
+//
+// Returns:
+//   - error: Wrapped parsing error
 func (e *ParsingError) Unwrap() error {
 	return e.Err
 }
 
+// Error returns the parsing error text.
+//
+// Returns:
+//   - string: Error text with the parameter name when available
 func (e *ParsingError) Error() string {
 	if e.Param == "" {
 		return e.Err.Error()
@@ -65,21 +77,33 @@ func (e *ParsingError) Error() string {
 	return e.Param + ": " + e.Err.Error()
 }
 
-// RequiredError indicates that an error has occurred when parsing request parameters
+// RequiredError indicates that an error has occurred when parsing request parameters.
+//
+// Fields:
+//   - Field: Required request field that was missing or zero-valued
 type RequiredError struct {
 	Field string
 }
 
+// Error returns the required field error text.
+//
+// Returns:
+//   - string: Error text containing the required field name
 func (e *RequiredError) Error() string {
 	return fmt.Sprintf("required field '%s' is zero value.", e.Field)
 }
 
 // ErrorHandler defines the required method for handling error. You may implement it and inject this into a controller if
-// you would like errors to be handled differently from the DefaultErrorHandler
+// you would like errors to be handled differently from the DefaultErrorHandler.
 type ErrorHandler func(w http.ResponseWriter, r *http.Request, err error, result *ImplResponse)
 
 // DefaultErrorHandler defines the default logic on how to handle errors from the controller. Any errors from parsing
 // request params will return a StatusBadRequest. Otherwise, the error code originating from the servicer will be used.
+//
+// Parameters:
+//   - w: HTTP response writer used to encode the error response
+//   - err: Error returned while parsing or serving the request
+//   - result: Service response used to preserve status codes for non-parsing errors
 func DefaultErrorHandler(w http.ResponseWriter, _ *http.Request, err error, result *ImplResponse) {
 	var parsingErr *ParsingError
 	if ok := errors.As(err, &parsingErr); ok {

@@ -36,7 +36,11 @@
 
 package dppapi
 
-// ImplResponse defines an implementation response with error code and the associated body
+// ImplResponse defines an implementation response with error code and the associated body.
+//
+// Fields:
+//   - Code: HTTP status code for the response
+//   - Body: Response payload to encode
 type ImplResponse struct {
 	Code int
 	Body interface{}

@@ -41,6 +41,13 @@ import (
 	"net/http"
 )
 
+// Logger wraps an HTTP handler with chi request logging middleware.
+//
+// Parameters:
+//   - inner: HTTP handler to wrap
+//
+// Returns:
+//   - http.Handler: Handler wrapped with request logging middleware
 func Logger(inner http.Handler) http.Handler {
 	return middleware.Logger(inner)
 }

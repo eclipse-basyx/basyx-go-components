@@ -14,8 +14,6 @@ security:
 tags:
 - description: EN 18222 Life Cycle API operations mapped to AAS services.
   name: DPP Life Cycle
-- description: DPP registry registration operation.
-  name: DPP Registry
 - description: EN 18222 fine-granular element-level DPP operations.
   name: DPP Fine Granular
 paths:
@@ -732,7 +730,7 @@ components:
     DigitalProductPassport:
       additionalProperties: true
       description: |
-        A single DPP JSON document composed from the DppMetadata header and one or more content Submodel sections. Content section property names shall use the contributing Submodel idShort with the first letter in lower case, and contentSpecificationIds shall list the corresponding content Submodel semantic identifiers.
+        A single DPP JSON document composed from the DppMetadata header and one or more content Submodel sections. Content section property names shall use the contributing Submodel idShort with the first letter in lower case, and contentSpecificationIds shall list the corresponding content Submodel semantic identifiers. When multiple content sections or multiple contentSpecificationIds are present, expanded DataElementCollection sections shall carry dictionaryReference so each section is mapped explicitly to its semantic identifier.
       example:
         digitalProductPassportId: https://www.example.org/dpp/1234545
         uniqueProductIdentifier: https://www.example.org/1234545
@@ -784,7 +782,7 @@ components:
           type: string
         contentSpecificationIds:
           description: |
-            Semantic identifiers of contributing content Submodels. The DPP document shall contain matching top-level content sections.
+            Semantic identifiers of contributing content Submodels. The DPP document shall contain matching top-level content sections. Multiple sections require explicit section-level dictionaryReference values in expanded DataElementCollection sections.
           example:
           - carbonFootprint - IDTA-02023-1-0
           items:
@@ -1117,39 +1115,6 @@ components:
           type: string
       required:
       - digitalProductPassportId
-      type: object
-    RegisterProductDPPRequest:
-      additionalProperties: true
-      properties:
-        digitalProductPassportId:
-          minLength: 1
-          type: string
-        uniqueProductIdentifier:
-          minLength: 1
-          type: string
-        accessUrl:
-          description: URL where the DPP can be accessed.
-          format: uri
-          type: string
-        registrationTimestamp:
-          format: date-time
-          type: string
-      required:
-      - accessUrl
-      - digitalProductPassportId
-      - uniqueProductIdentifier
-      type: object
-    RegisterProductDPPResponse:
-      additionalProperties: false
-      properties:
-        digitalProductPassportId:
-          minLength: 1
-          type: string
-        registered:
-          type: boolean
-      required:
-      - digitalProductPassportId
-      - registered
       type: object
     Result:
       additionalProperties: false

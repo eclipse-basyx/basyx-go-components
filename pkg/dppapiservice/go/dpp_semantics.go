@@ -46,26 +46,55 @@ func hasDPPMetadataSemanticID(submodel types.ISubmodel) bool {
 	return ok
 }
 
-func semanticIDForSection(sectionName string, contentSpecificationIDs []string) (string, error) {
-	if len(contentSpecificationIDs) == 0 {
-		return "", nil
+func semanticIDsForSections(sections map[string]any, contentSpecificationIDs []string) (map[string]string, error) {
+	semanticIDs := make(map[string]string, len(sections))
+	if len(sections) == 0 || len(contentSpecificationIDs) == 0 {
+		return semanticIDs, nil
 	}
-	normalized := strings.ToLower(sectionName)
-	var matches []string
+
+	contentSpecificationSet := make(map[string]struct{}, len(contentSpecificationIDs))
 	for _, id := range contentSpecificationIDs {
-		candidate := strings.ToLower(strings.TrimSpace(id))
-		if strings.HasPrefix(candidate, normalized) || strings.Contains(candidate, normalized+" ") || strings.Contains(candidate, normalized+"-") {
-			matches = append(matches, id)
+		contentSpecificationSet[id] = struct{}{}
+	}
+	for sectionName, section := range sections {
+		semanticID, hasExplicitMapping, err := explicitSemanticIDForSection(sectionName, section)
+		if err != nil {
+			return nil, err
 		}
+		if !hasExplicitMapping {
+			continue
+		}
+		if _, ok := contentSpecificationSet[semanticID]; !ok {
+			return nil, fmt.Errorf("DPP-SEMSPEC-UNKNOWN section %s dictionaryReference must be listed in contentSpecificationIds", sectionName)
+		}
+		semanticIDs[sectionName] = semanticID
 	}
-	if len(matches) > 1 {
-		return "", fmt.Errorf("DPP-SEMSPEC-AMBIGUOUS contentSpecificationIds are ambiguous for section %s", sectionName)
+
+	if len(semanticIDs) == len(sections) {
+		return semanticIDs, nil
 	}
-	if len(matches) == 1 {
-		return matches[0], nil
+	if len(sections) == 1 && len(contentSpecificationIDs) == 1 {
+		for sectionName := range sections {
+			semanticIDs[sectionName] = contentSpecificationIDs[0]
+		}
+		return semanticIDs, nil
 	}
-	if len(contentSpecificationIDs) == 1 {
-		return contentSpecificationIDs[0], nil
+
+	return nil, fmt.Errorf("DPP-SEMSPEC-EXPLICIT content sections must define dictionaryReference when multiple contentSpecificationIds or content sections are present")
+}
+
+func explicitSemanticIDForSection(sectionName string, section any) (string, bool, error) {
+	object, ok := section.(map[string]any)
+	if !ok {
+		return "", false, nil
 	}
-	return "", fmt.Errorf("DPP-SEMSPEC-MISSING no contentSpecificationId matches section %s", sectionName)
+	objectType, ok := object["objectType"].(string)
+	if !ok || objectType != "DataElementCollection" {
+		return "", false, nil
+	}
+	dictionaryReference, ok := object["dictionaryReference"].(string)
+	if !ok || strings.TrimSpace(dictionaryReference) == "" {
+		return "", true, fmt.Errorf("DPP-SEMSPEC-DICTIONARY section %s DataElementCollection must define dictionaryReference", sectionName)
+	}
+	return dictionaryReference, true, nil
 }

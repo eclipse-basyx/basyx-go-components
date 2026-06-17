@@ -45,6 +45,10 @@ import (
 // DPPFineGranularAPIRouter defines the required methods for binding the api requests to a responses for the DPPFineGranularAPI
 // The DPPFineGranularAPIRouter implementation should parse necessary information from the http request,
 // pass the data to a DPPFineGranularAPIServicer to perform the required actions, then write the service results to the http response.
+//
+// Methods:
+//   - ReadDataElement: Handles HTTP requests for reading one DPP data element
+//   - UpdateDataElement: Handles HTTP requests for replacing one DPP data element
 type DPPFineGranularAPIRouter interface {
 	ReadDataElement(http.ResponseWriter, *http.Request)
 	UpdateDataElement(http.ResponseWriter, *http.Request)
@@ -53,6 +57,15 @@ type DPPFineGranularAPIRouter interface {
 // DPPLifeCycleAPIRouter defines the required methods for binding the api requests to a responses for the DPPLifeCycleAPI
 // The DPPLifeCycleAPIRouter implementation should parse necessary information from the http request,
 // pass the data to a DPPLifeCycleAPIServicer to perform the required actions, then write the service results to the http response.
+//
+// Methods:
+//   - ReadDPPById: Handles HTTP requests for reading one DPP by identifier
+//   - DeleteDPPById: Handles HTTP requests for deleting one DPP by identifier
+//   - UpdateDPPById: Handles HTTP requests for patching one DPP by identifier
+//   - CreateDPP: Handles HTTP requests for creating one DPP
+//   - ReadDPPByProductId: Handles HTTP requests for resolving a DPP by product identifier
+//   - ReadDPPVersionByIdAndDate: Handles HTTP requests for reading a historic DPP version
+//   - ReadDPPIdsByProductIds: Handles HTTP requests for resolving product identifiers to DPP identifiers
 type DPPLifeCycleAPIRouter interface {
 	ReadDPPById(http.ResponseWriter, *http.Request)
 	DeleteDPPById(http.ResponseWriter, *http.Request)
@@ -67,6 +80,10 @@ type DPPLifeCycleAPIRouter interface {
 // This interface intended to stay up to date with the openapi yaml used to generate it,
 // while the service implementation can be ignored with the .openapi-generator-ignore file
 // and updated with the logic required for the API.
+//
+// Methods:
+//   - ReadDataElement: Reads one DPP data element and returns an implementation response
+//   - UpdateDataElement: Replaces one DPP data element and returns an implementation response
 type DPPFineGranularAPIServicer interface {
 	ReadDataElement(context.Context, string, string, Representation) (ImplResponse, error)
 	UpdateDataElement(context.Context, string, string, DataElement) (ImplResponse, error)
@@ -76,6 +93,15 @@ type DPPFineGranularAPIServicer interface {
 // This interface intended to stay up to date with the openapi yaml used to generate it,
 // while the service implementation can be ignored with the .openapi-generator-ignore file
 // and updated with the logic required for the API.
+//
+// Methods:
+//   - ReadDPPById: Reads one DPP by identifier and returns an implementation response
+//   - DeleteDPPById: Deletes one DPP by identifier and returns an implementation response
+//   - UpdateDPPById: Patches one DPP by identifier and returns an implementation response
+//   - CreateDPP: Creates one DPP and returns an implementation response
+//   - ReadDPPByProductId: Resolves a product identifier to one DPP and returns an implementation response
+//   - ReadDPPVersionByIdAndDate: Reads one historic DPP version and returns an implementation response
+//   - ReadDPPIdsByProductIds: Resolves product identifiers to DPP identifiers and returns an implementation response
 type DPPLifeCycleAPIServicer interface {
 	ReadDPPById(context.Context, string, Representation) (ImplResponse, error)
 	DeleteDPPById(context.Context, string) (ImplResponse, error)

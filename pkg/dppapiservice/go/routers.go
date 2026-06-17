@@ -41,7 +41,13 @@ import (
 	"net/http"
 )
 
-// A Route defines the parameters for an api endpoint
+// Route defines the parameters for an api endpoint.
+//
+// Fields:
+//   - Name: Operation name for the route
+//   - Method: HTTP method used by the route
+//   - Pattern: chi route pattern used for registration
+//   - HandlerFunc: HTTP handler function invoked for the route
 type Route struct {
 	Name        string
 	Method      string
@@ -49,16 +55,22 @@ type Route struct {
 	HandlerFunc http.HandlerFunc
 }
 
-// Routes is a map of defined api endpoints
+// Routes is a map of defined api endpoints.
 type Routes map[string]Route
 
-// Router defines the required methods for retrieving api routes
+// Router defines the required methods for retrieving api routes.
 type Router interface {
 	Routes() Routes
 	OrderedRoutes() []Route
 }
 
-// NewRouter creates a new router for any number of api routers
+// NewRouter creates a new router for any number of api routers.
+//
+// Parameters:
+//   - routers: API router implementations to register
+//
+// Returns:
+//   - chi.Router: Configured chi router with all supplied routes
 func NewRouter(routers ...Router) chi.Router {
 	router := chi.NewRouter()
 	router.Use(Logger)
