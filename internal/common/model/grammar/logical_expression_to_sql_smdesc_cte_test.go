@@ -91,3 +91,43 @@ func TestLogicalExpression_SMDesc_WithCollector_BuildsCTE(t *testing.T) {
 		t.Fatalf("expected SQL to contain position binding 0, got: %s", sql)
 	}
 }
+
+func TestLogicalExpression_SMDesc_SupplementalSemanticIdsWithCollector_BuildsCTE(t *testing.T) {
+	expr := LogicalExpression{
+		Eq: ComparisonItems{
+			field("$smdesc#supplementalSemanticIds[1].keys[0].value"),
+			strVal("urn:supplemental"),
+		},
+	}
+
+	collector, err := NewResolvedFieldPathCollectorForRoot(CollectorRootSMDesc)
+	if err != nil {
+		t.Fatalf("NewResolvedFieldPathCollectorForRoot returned error: %v", err)
+	}
+
+	whereExpr, _, err := expr.EvaluateToExpression(collector)
+	if err != nil {
+		t.Fatalf("EvaluateToExpression returned error: %v", err)
+	}
+
+	d := goqu.Dialect("postgres")
+	ds := d.From(goqu.T("submodel_descriptor")).Select(goqu.V(1)).Where(whereExpr)
+	sql, _, err := ds.Prepared(true).ToSQL()
+	if err != nil {
+		t.Fatalf("ToSQL returned error: %v", err)
+	}
+	t.Logf("SQL: %s", sql)
+
+	if !strings.Contains(sql, "submodel_descriptor_supplemental_semantic_id_reference") {
+		t.Fatalf("expected supplemental semantic ID reference join, got: %s", sql)
+	}
+	if !strings.Contains(sql, "submodel_descriptor_supplemental_semantic_id_reference_key") {
+		t.Fatalf("expected supplemental semantic ID reference key join, got: %s", sql)
+	}
+	if !strings.Contains(sql, "'urn:supplemental'") {
+		t.Fatalf("expected SQL to contain %q, got: %s", "'urn:supplemental'", sql)
+	}
+	if !strings.Contains(sql, "position\" = 1") || !strings.Contains(sql, "position\" = 0") {
+		t.Fatalf("expected SQL to contain supplemental reference and key position bindings, got: %s", sql)
+	}
+}

@@ -121,13 +121,14 @@ func CreateContextReferences1ToMany(
 	referenceKeyTable := referenceTable + "_key"
 	payloadTable := referenceTable + "_payload"
 
-	for _, reference := range references {
+	for referencePosition, reference := range references {
 		if reference == nil {
 			continue
 		}
 
 		sqlStr, args, err := d.Insert(referenceTable).Rows(goqu.Record{
 			ownerColumn: ownerID,
+			ColPosition: referencePosition,
 			ColType:     reference.Type(),
 		}).Returning(goqu.C(ColID)).ToSQL()
 		if err != nil {

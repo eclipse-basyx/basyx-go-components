@@ -1176,6 +1176,10 @@ func existsTableForAlias(alias string) (string, bool) {
 		return "submodel_descriptor_semantic_id_reference", true
 	case "aasdesc_submodel_descriptor_semantic_id_reference_key":
 		return "submodel_descriptor_semantic_id_reference_key", true
+	case "aasdesc_submodel_descriptor_supplemental_semantic_id_reference":
+		return "submodel_descriptor_supplemental_semantic_id_reference", true
+	case "aasdesc_submodel_descriptor_supplemental_semantic_id_reference_key":
+		return "submodel_descriptor_supplemental_semantic_id_reference_key", true
 	default:
 		return "", false
 	}
@@ -1276,6 +1280,26 @@ func existsJoinRulesForAASDescriptors() map[string]existsJoinRule {
 				return ds.Join(
 					goqu.T("submodel_descriptor_semantic_id_reference_key").As("aasdesc_submodel_descriptor_semantic_id_reference_key"),
 					goqu.On(goqu.I("aasdesc_submodel_descriptor_semantic_id_reference_key.reference_id").Eq(goqu.I("aasdesc_submodel_descriptor_semantic_id_reference.id"))),
+				)
+			},
+		},
+		"aasdesc_submodel_descriptor_supplemental_semantic_id_reference": {
+			Alias: "aasdesc_submodel_descriptor_supplemental_semantic_id_reference",
+			Deps:  []string{"submodel_descriptor"},
+			Apply: func(ds *goqu.SelectDataset) *goqu.SelectDataset {
+				return ds.Join(
+					goqu.T("submodel_descriptor_supplemental_semantic_id_reference").As("aasdesc_submodel_descriptor_supplemental_semantic_id_reference"),
+					goqu.On(goqu.I("aasdesc_submodel_descriptor_supplemental_semantic_id_reference.descriptor_id").Eq(goqu.I("submodel_descriptor.descriptor_id"))),
+				)
+			},
+		},
+		"aasdesc_submodel_descriptor_supplemental_semantic_id_reference_key": {
+			Alias: "aasdesc_submodel_descriptor_supplemental_semantic_id_reference_key",
+			Deps:  []string{"aasdesc_submodel_descriptor_supplemental_semantic_id_reference"},
+			Apply: func(ds *goqu.SelectDataset) *goqu.SelectDataset {
+				return ds.Join(
+					goqu.T("submodel_descriptor_supplemental_semantic_id_reference_key").As("aasdesc_submodel_descriptor_supplemental_semantic_id_reference_key"),
+					goqu.On(goqu.I("aasdesc_submodel_descriptor_supplemental_semantic_id_reference_key.reference_id").Eq(goqu.I("aasdesc_submodel_descriptor_supplemental_semantic_id_reference.id"))),
 				)
 			},
 		},
@@ -1917,6 +1941,12 @@ func normalizeSemanticShorthand(operand *Value) {
 	}
 
 	if strings.HasSuffix(suffix, "semanticId") || strings.HasSuffix(suffix, "externalSubjectId") {
+		suffix += ".keys[0].value"
+		*inner.Field = ModelStringPattern(prefix + "#" + suffix)
+		return
+	}
+
+	if strings.HasSuffix(suffix, "supplementalSemanticIds") {
 		suffix += ".keys[0].value"
 		*inner.Field = ModelStringPattern(prefix + "#" + suffix)
 	}

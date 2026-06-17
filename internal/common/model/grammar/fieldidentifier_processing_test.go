@@ -212,6 +212,30 @@ var fieldIdentifierProcessingCases = []fidTestCase{
 		WantScalar: &expectedScalar{Column: "aasdesc_submodel_descriptor_semantic_id_reference_key.value", Bindings: []expectedBinding{}},
 	},
 	{
+		Name:  "smdesc_supplementalSemanticIds_keys_value_indexed",
+		Kind:  "scalar",
+		Input: `$smdesc#supplementalSemanticIds[1].keys[2].value`,
+		WantScalar: &expectedScalar{
+			Column: "aasdesc_submodel_descriptor_supplemental_semantic_id_reference_key.value",
+			Bindings: []expectedBinding{
+				{Alias: "aasdesc_submodel_descriptor_supplemental_semantic_id_reference.position", Index: idx(1)},
+				{Alias: "aasdesc_submodel_descriptor_supplemental_semantic_id_reference_key.position", Index: idx(2)},
+			},
+		},
+	},
+	{
+		Name:  "aasdesc_submodelDescriptor_supplementalSemanticIds_type_indexed",
+		Kind:  "scalar",
+		Input: `$aasdesc#submodelDescriptors[3].supplementalSemanticIds[1].type`,
+		WantScalar: &expectedScalar{
+			Column: "aasdesc_submodel_descriptor_supplemental_semantic_id_reference.type",
+			Bindings: []expectedBinding{
+				{Alias: "submodel_descriptor.position", Index: idx(3)},
+				{Alias: "aasdesc_submodel_descriptor_supplemental_semantic_id_reference.position", Index: idx(1)},
+			},
+		},
+	},
+	{
 		Name:       "sm_semanticId_type_scalar",
 		Kind:       "scalar",
 		Input:      `$sm#semanticId.type`,
@@ -351,6 +375,15 @@ var fieldIdentifierProcessingCases = []fidTestCase{
 		Kind:         "fragment",
 		Input:        `$smdesc#endpoints[]`,
 		WantFragment: &expectedFragment{Bindings: []expectedBinding{}},
+	},
+	{
+		Name:  "smdesc_supplementalSemanticIds_keys_fragment_indexed",
+		Kind:  "fragment",
+		Input: `$smdesc#supplementalSemanticIds[1].keys[2]`,
+		WantFragment: &expectedFragment{Bindings: []expectedBinding{
+			{Alias: "aasdesc_submodel_descriptor_supplemental_semantic_id_reference.position", Index: idx(1)},
+			{Alias: "aasdesc_submodel_descriptor_supplemental_semantic_id_reference_key.position", Index: idx(2)},
+		}},
 	},
 	{
 		Name:         "sm_semanticId_keys_fragment_indexed",
