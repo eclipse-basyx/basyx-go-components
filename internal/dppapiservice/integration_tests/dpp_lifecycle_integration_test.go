@@ -51,15 +51,16 @@ func TestDPPLifecycleWithDockerCompose(t *testing.T) {
 	requireDockerCompose(t)
 
 	port := reserveLocalPort(t)
+	composeEnv := dppComposeEnvironment{apiPort: port}
 	projectName := fmt.Sprintf("dpp-lifecycle-it-%d", time.Now().UnixNano())
 	composeFile := "docker-compose.yml"
 	ctx, cancel := context.WithTimeout(context.TODO(), dppComposeTestTimeout)
 	defer cancel()
 
-	composeDown(t, context.TODO(), composeFile, projectName, port)
-	composeUp(t, ctx, composeFile, projectName, port)
+	composeDown(t, context.TODO(), composeFile, projectName, composeEnv)
+	composeUp(t, ctx, composeFile, projectName, composeEnv)
 	t.Cleanup(func() {
-		composeDown(t, context.TODO(), composeFile, projectName, port)
+		composeDown(t, context.TODO(), composeFile, projectName, composeEnv)
 	})
 
 	baseURL := fmt.Sprintf("http://127.0.0.1:%d", port)
@@ -181,36 +182,57 @@ func requireDockerCompose(t *testing.T) {
 }
 
 //nolint:revive
-func composeUp(t *testing.T, ctx context.Context, composeFile string, projectName string, port int) {
+type dppComposeEnvironment struct {
+	apiPort       int
+	keycloakPort  int
+	securityEnv   string
+	keycloakRealm string
+}
+
+func (environment dppComposeEnvironment) values() []string {
+	values := []string{fmt.Sprintf("DPP_IT_PORT=%d", environment.apiPort)}
+	if environment.keycloakPort != 0 {
+		values = append(values, fmt.Sprintf("DPP_IT_KEYCLOAK_PORT=%d", environment.keycloakPort))
+	}
+	if environment.securityEnv != "" {
+		values = append(values, "DPP_IT_SECURITY_ENV="+environment.securityEnv)
+	}
+	if environment.keycloakRealm != "" {
+		values = append(values, "DPP_IT_KEYCLOAK_REALM="+environment.keycloakRealm)
+	}
+	return values
+}
+
+func composeUp(t *testing.T, ctx context.Context, composeFile string, projectName string, environment dppComposeEnvironment) {
 	t.Helper()
-	runComposeCommand(ctx, t, port, "docker compose build failed", "compose", "-f", composeFile, "-p", projectName, "build", "--no-cache")
-	runComposeCommand(ctx, t, port, "docker compose up failed", "compose", "-f", composeFile, "-p", projectName, "up", "-d")
+	runComposeCommand(ctx, t, environment, "docker compose build failed", "compose", "-f", composeFile, "-p", projectName, "build", "--no-cache")
+	runComposeCommand(ctx, t, environment, "docker compose up failed", "compose", "-f", composeFile, "-p", projectName, "up", "-d")
 }
 
 //nolint:revive
-func composeDown(t *testing.T, ctx context.Context, composeFile string, projectName string, port int) {
+func composeDown(t *testing.T, ctx context.Context, composeFile string, projectName string, environment dppComposeEnvironment) {
 	t.Helper()
 	args := []string{"compose", "-f", composeFile, "-p", projectName, "down", "-v", "--remove-orphans"}
-	cmd := composeCommand(ctx, port, args...)
+	cmd := composeCommand(ctx, environment, args...)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Logf("docker compose down failed: %v\n%s", err, output)
 	}
 }
 
-func runComposeCommand(ctx context.Context, t *testing.T, port int, errorMessage string, args ...string) {
+func runComposeCommand(ctx context.Context, t *testing.T, environment dppComposeEnvironment, errorMessage string, args ...string) {
 	t.Helper()
-	cmd := composeCommand(ctx, port, args...)
+	cmd := composeCommand(ctx, environment, args...)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("%s: %v\n%s", errorMessage, err, output)
 	}
 }
 
-func composeCommand(ctx context.Context, port int, args ...string) *exec.Cmd {
+func composeCommand(ctx context.Context, environment dppComposeEnvironment, args ...string) *exec.Cmd {
 	//nolint:gosec
 	cmd := exec.CommandContext(ctx, "docker", args...)
-	cmd.Env = append(os.Environ(), fmt.Sprintf("DPP_IT_PORT=%d", port))
+	cmd.Env = append(os.Environ(), environment.values()...)
 	return cmd
 }
 

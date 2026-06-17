@@ -30,16 +30,19 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/url"
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"testing"
 	"time"
 )
 
-const dppSecurityTokenEndpoint = "http://keycloak.localhost:18081/realms/basyx/protocol/openid-connect/token" // #nosec G101 -- local test OIDC endpoint, not a credential.
+const dppSecurityRealm = "basyx"
 
 func TestDPPSecurityWithDockerCompose(t *testing.T) {
 	if testing.Short() {
@@ -48,23 +51,34 @@ func TestDPPSecurityWithDockerCompose(t *testing.T) {
 	requireDockerCompose(t)
 
 	port := reserveLocalPort(t)
+	keycloakPort := reserveLocalPort(t)
+	issuerURL := dppSecurityIssuerURL(keycloakPort)
+	securityEnv := writeDPPSecurityEnvironment(t, issuerURL)
+	keycloakRealm := writeDPPSecurityKeycloakRealm(t)
+	composeEnv := dppComposeEnvironment{
+		apiPort:       port,
+		keycloakPort:  keycloakPort,
+		securityEnv:   securityEnv,
+		keycloakRealm: keycloakRealm,
+	}
 	projectName := "dpp-security-it-" + strings.ReplaceAll(time.Now().UTC().Format("20060102150405.000000000"), ".", "")
 	composeFile := "docker-compose-security.yml"
 	ctx, cancel := context.WithTimeout(context.TODO(), dppComposeTestTimeout)
 	defer cancel()
 
-	composeDown(t, context.TODO(), composeFile, projectName, port)
-	composeUp(t, ctx, composeFile, projectName, port)
+	composeDown(t, context.TODO(), composeFile, projectName, composeEnv)
+	composeUp(t, ctx, composeFile, projectName, composeEnv)
 	t.Cleanup(func() {
-		composeDown(t, context.TODO(), composeFile, projectName, port)
+		composeDown(t, context.TODO(), composeFile, projectName, composeEnv)
 	})
 
 	baseURL := "http://127.0.0.1:" + strconv.Itoa(port)
 	waitForDPPAPI(t, ctx, baseURL)
 
 	client := &http.Client{Timeout: 10 * time.Second}
-	viewerToken := passwordGrantToken(t, client, "usera", "pwd")
-	editorToken := passwordGrantToken(t, client, "userx", "pwd")
+	tokenEndpoint := issuerURL + "/protocol/openid-connect/token"
+	viewerToken := passwordGrantToken(t, client, tokenEndpoint, "usera", "pwd")
+	editorToken := passwordGrantToken(t, client, tokenEndpoint, "userx", "pwd")
 
 	dppID := "https://www.example.org/dpp/security-" + strings.ReplaceAll(projectName, "-", "")
 	productID := "https://www.example.org/products/security-" + strings.ReplaceAll(projectName, "-", "")
@@ -100,7 +114,115 @@ func TestDPPSecurityWithDockerCompose(t *testing.T) {
 	doJSONAnyAuth(t, client, http.MethodDelete, baseURL+"/v1/dpps/"+encodedDPPID, editorToken, nil, http.StatusNoContent)
 }
 
-func passwordGrantToken(t *testing.T, client *http.Client, username string, password string) string {
+func dppSecurityIssuerURL(keycloakPort int) string {
+	return fmt.Sprintf("http://keycloak.localhost:%d/realms/%s", keycloakPort, dppSecurityRealm)
+}
+
+func writeDPPSecurityEnvironment(t *testing.T, issuerURL string) string {
+	t.Helper()
+
+	directory, err := os.MkdirTemp(".", ".dpp-security-env-*")
+	if err != nil {
+		t.Fatalf("create DPP security env: %v", err)
+	}
+	directory, err = filepath.Abs(directory)
+	if err != nil {
+		_ = os.RemoveAll(directory)
+		t.Fatalf("resolve DPP security env path: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = os.RemoveAll(directory)
+	})
+	//nolint:gosec // Generated test fixtures must be readable by non-root Docker containers.
+	if err := os.Chmod(directory, 0o755); err != nil {
+		t.Fatalf("chmod DPP security env: %v", err)
+	}
+
+	copyDPPSecurityAccessRules(t, directory)
+	writeDPPSecurityTrustlist(t, directory, issuerURL)
+	return directory
+}
+
+func copyDPPSecurityAccessRules(t *testing.T, directory string) {
+	t.Helper()
+
+	accessRules, err := os.ReadFile(filepath.Join("security_env", "access-rules.json")) // #nosec G304 -- test fixture path is static.
+	if err != nil {
+		t.Fatalf("read DPP access rules: %v", err)
+	}
+	//nolint:gosec // Generated test fixtures must be readable by non-root Docker containers.
+	if err := os.WriteFile(filepath.Join(directory, "access-rules.json"), accessRules, 0o644); err != nil {
+		t.Fatalf("write DPP access rules: %v", err)
+	}
+}
+
+func writeDPPSecurityTrustlist(t *testing.T, directory string, issuerURL string) {
+	t.Helper()
+
+	trustlist := []map[string]any{{
+		"issuer":   issuerURL,
+		"audience": "",
+		"scopes":   []string{"email", "profile"},
+	}}
+	data, err := json.MarshalIndent(trustlist, "", "  ")
+	if err != nil {
+		t.Fatalf("encode DPP trustlist: %v", err)
+	}
+	//nolint:gosec // Generated test fixtures must be readable by non-root Docker containers.
+	if err := os.WriteFile(filepath.Join(directory, "trustlist.json"), data, 0o644); err != nil {
+		t.Fatalf("write DPP trustlist: %v", err)
+	}
+}
+
+func writeDPPSecurityKeycloakRealm(t *testing.T) string {
+	t.Helper()
+
+	directory, err := os.MkdirTemp(".", ".dpp-keycloak-realm-*")
+	if err != nil {
+		t.Fatalf("create DPP Keycloak realm dir: %v", err)
+	}
+	directory, err = filepath.Abs(directory)
+	if err != nil {
+		_ = os.RemoveAll(directory)
+		t.Fatalf("resolve DPP Keycloak realm path: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = os.RemoveAll(directory)
+	})
+	//nolint:gosec // Generated test fixtures must be readable by non-root Docker containers.
+	if err := os.Chmod(directory, 0o755); err != nil {
+		t.Fatalf("chmod DPP Keycloak realm dir: %v", err)
+	}
+
+	realm, err := readDPPSecurityKeycloakRealm()
+	if err != nil {
+		t.Fatalf("read DPP Keycloak realm: %v", err)
+	}
+	realm["sslRequired"] = "none"
+	data, err := json.MarshalIndent(realm, "", "  ")
+	if err != nil {
+		t.Fatalf("encode DPP Keycloak realm: %v", err)
+	}
+	//nolint:gosec // Generated test fixtures must be readable by non-root Docker containers.
+	if err := os.WriteFile(filepath.Join(directory, "basyx-realm.json"), data, 0o644); err != nil {
+		t.Fatalf("write DPP Keycloak realm: %v", err)
+	}
+	return directory
+}
+
+func readDPPSecurityKeycloakRealm() (map[string]any, error) {
+	data, err := os.ReadFile(filepath.Join("..", "..", "..", "examples", "BaSyxSecuredExample", "keycloak", "realm", "basyx-realm.json")) // #nosec G304 -- test fixture path is static.
+	if err != nil {
+		return nil, err
+	}
+	var realm map[string]any
+	if err := json.Unmarshal(data, &realm); err != nil {
+		return nil, err
+	}
+	return realm, nil
+}
+
+func passwordGrantToken(t *testing.T, client *http.Client, tokenEndpoint string, username string, password string) string {
 	t.Helper()
 
 	form := url.Values{}
@@ -109,7 +231,7 @@ func passwordGrantToken(t *testing.T, client *http.Client, username string, pass
 	form.Set("username", username)
 	form.Set("password", password)
 
-	request, err := http.NewRequest(http.MethodPost, dppSecurityTokenEndpoint, strings.NewReader(form.Encode()))
+	request, err := http.NewRequest(http.MethodPost, tokenEndpoint, strings.NewReader(form.Encode()))
 	if err != nil {
 		t.Fatalf("create token request: %v", err)
 	}
