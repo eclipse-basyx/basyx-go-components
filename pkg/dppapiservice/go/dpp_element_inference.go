@@ -116,11 +116,12 @@ func listElement(idShort string, values []any) (types.ISubmodelElement, error) {
 			return nil, err
 		}
 		if idShorter, ok := element.(interface{ SetIDShort(*string) }); ok {
-			empty := ""
 			if listType == types.AASSubmodelElementsSubmodelElementCollection {
-				empty = fmt.Sprintf("%s%d", idShort, index)
+				itemIDShort := fmt.Sprintf("%s%d", idShort, index)
+				idShorter.SetIDShort(&itemIDShort)
+			} else {
+				idShorter.SetIDShort(nil)
 			}
-			idShorter.SetIDShort(&empty)
 		}
 		elements = append(elements, element)
 	}
