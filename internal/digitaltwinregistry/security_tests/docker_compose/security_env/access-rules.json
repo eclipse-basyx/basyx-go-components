@@ -62,7 +62,7 @@
         "acl": {
           "USEATTRIBUTES": "anonymous",
           "RIGHTS": [
-            "ALL"
+            "READ"
           ],
           "ACCESS": "ALLOW"
         }
@@ -81,20 +81,9 @@
     "DEFFORMULAS": [
       {
         "name": "always_true",
-        "formula": { "$eq": [
-            {
-              "$field": "$aasdesc#id"
-            },
-            {
-              "$strVal": "3289"
-            }
-        ]
+        "formula": {
+          "$boolean": true
         }
-      },
-      {
-        "name": "true",
-        "formula": { "$boolean": true }
-
       },
       {
         "name": "match_client_and_bpn",
@@ -146,11 +135,17 @@
       {
         "USEACL": "anonymous_access",
         "USEOBJECTS": [
-          "description_api",
+          "description_api"
+        ],
+        "USEFORMULA": "always_true"
+      },
+      {
+        "USEACL": "full_access",
+        "USEOBJECTS": [
           "aas_registry_api",
           "discovery_api"
         ],
-        "USEFORMULA": "true"
+        "USEFORMULA": "match_client_and_bpn"
       }
     ]
   }
