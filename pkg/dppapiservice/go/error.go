@@ -120,5 +120,9 @@ func DefaultErrorHandler(w http.ResponseWriter, _ *http.Request, err error, resu
 	}
 
 	// Handle all other errors
-	_ = EncodeJSONResponse(err.Error(), &result.Code, w)
+	status := http.StatusInternalServerError
+	if result != nil && result.Code != 0 {
+		status = result.Code
+	}
+	_ = EncodeJSONResponse(err.Error(), &status, w)
 }
