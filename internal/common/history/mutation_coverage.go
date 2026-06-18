@@ -105,6 +105,7 @@ var exemptMutationOperations = map[string]struct{}{
 	"QueryAssetAdministrationShellDescriptors":        {},
 	"QueryAssetAdministrationShells":                  {},
 	"QueryConceptDescriptions":                        {},
+	"QuerySubmodelDescriptors":                        {},
 	"QuerySubmodels":                                  {},
 	"SearchAllAssetAdministrationShellIdsByAssetLink": {},
 }
