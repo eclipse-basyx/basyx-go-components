@@ -78,6 +78,13 @@ jobs:
             image_builds: |
               eclipsebasyx/aasenvironment-go:SNAPSHOT|./cmd/aasenvironmentservice/Dockerfile
               eclipsebasyx/basyxconfigurationservice-go:SNAPSHOT|./cmd/basyxconfigurationservice/Dockerfile
+          - target_name: DPP API Example
+            compose_files: |
+              examples/BaSyxDPPAPIExample/docker-compose.yml
+            image_builds: |
+              eclipsebasyx/dppapi-go:SNAPSHOT|./cmd/dppapiservice/Dockerfile
+              eclipsebasyx/aasenvironment-go:SNAPSHOT|./cmd/aasenvironmentservice/Dockerfile
+              eclipsebasyx/basyxconfigurationservice-go:SNAPSHOT|./cmd/basyxconfigurationservice/Dockerfile
 
     steps:
       - name: Checkout code

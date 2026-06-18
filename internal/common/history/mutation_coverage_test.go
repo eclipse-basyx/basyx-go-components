@@ -78,6 +78,28 @@ func TestMutationCoverageGuardDoesNotMatchExtraLeadingPathSegments(t *testing.T)
 	require.Equal(t, http.StatusInternalServerError, recorder.Code)
 }
 
+func TestMutationCoverageGuardAllowsCoveredWildcardRoute(t *testing.T) {
+	configureMutationCoverageTest(t, ModeAPI)
+	guard := NewMutationCoverageGuard()
+	guard.Cover(http.MethodPut, "/v1/dpps/{dppId}/elements/*")
+
+	handlerCalled := false
+	handler := guard.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handlerCalled = true
+		coverage, ok := MutationCoverageFromContext(r.Context())
+		require.True(t, ok)
+		require.True(t, coverage.Versioned)
+		require.Equal(t, "/v1/dpps/{dppId}/elements/*", coverage.Pattern)
+		w.WriteHeader(http.StatusNoContent)
+	}))
+
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(recorder, httptest.NewRequest(http.MethodPut, "/v1/dpps/dpp-1/elements/technicalData/name/de", nil))
+
+	require.True(t, handlerCalled)
+	require.Equal(t, http.StatusNoContent, recorder.Code)
+}
+
 func TestMutationCoverageGuardAllowsExplicitExemption(t *testing.T) {
 	configureMutationCoverageTest(t, ModeAudit)
 	tests := []struct {

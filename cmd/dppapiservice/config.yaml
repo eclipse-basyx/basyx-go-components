@@ -1,0 +1,21 @@
+server:
+  port: 8080
+  contextPath: ""
+  host: 0.0.0.0
+
+postgres:
+  host: localhost
+  port: 5432
+  user: postgres
+  password: change-me
+  dbname: basyx
+  maxOpenConnections: 50
+  maxIdleConnections: 50
+  connMaxLifetimeMinutes: 5
+
+oidc:
+  trustlistPath: "config/trustlist.json"
+
+abac:
+  enabled: false
+  modelPath: "config/access_rules/access-rules.json"

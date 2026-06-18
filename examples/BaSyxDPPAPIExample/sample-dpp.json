@@ -1,0 +1,30 @@
+{
+  "digitalProductPassportId": "https://example.org/dpp/demo-product-001",
+  "uniqueProductIdentifier": "https://example.org/products/demo-product-001",
+  "granularity": "Item",
+  "dppSchemaVersion": "1.0.0",
+  "dppStatus": "active",
+  "lastUpdate": "2026-06-11T12:00:00Z",
+  "economicOperatorId": "operator-123",
+  "facilityId": "facility-456",
+  "contentSpecificationIds": [
+    "technicalData-specification"
+  ],
+  "technicalData": {
+    "manufacturerName": "Example Manufacturing GmbH",
+    "warrantyMonths": 24,
+    "energyClass": "A",
+    "serialNumbers": [
+      "SN-001",
+      "SN-002"
+    ],
+    "dimensions": {
+      "widthMm": 120,
+      "heightMm": 80
+    },
+    "manual": {
+      "url": "https://example.org/manuals/demo-product-001.pdf",
+      "contentType": "application/pdf"
+    }
+  }
+}

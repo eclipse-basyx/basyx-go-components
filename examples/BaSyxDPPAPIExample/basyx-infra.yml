@@ -1,0 +1,23 @@
+infrastructures:
+  default: dpp
+
+  dpp:
+    name: DPP Shared AAS Environment
+    components:
+      aasDiscovery:
+        baseUrl: "http://localhost:8082/lookup/shells"
+      aasRegistry:
+        baseUrl: "http://localhost:8082/shell-descriptors"
+        hasDiscoveryIntegration: true
+      submodelRegistry:
+        baseUrl: "http://localhost:8082/submodel-descriptors"
+      aasRepository:
+        baseUrl: "http://localhost:8082/shells"
+        hasRegistryIntegration: true
+      submodelRepository:
+        baseUrl: "http://localhost:8082/submodels"
+        hasRegistryIntegration: true
+      conceptDescriptionRepository:
+        baseUrl: "http://localhost:8082/concept-descriptions"
+    security:
+      type: none

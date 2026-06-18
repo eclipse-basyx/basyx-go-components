@@ -1,0 +1,118 @@
+{
+  "AllAccessPermissionRules": {
+    "DEFATTRIBUTES": [
+      {
+        "name": "role_attr",
+        "attributes": [
+          {
+            "CLAIM": "role"
+          }
+        ]
+      }
+    ],
+    "DEFOBJECTS": [
+      {
+        "name": "dpp_read_routes",
+        "objects": [
+          {
+            "ROUTE": "/v1/dpps/*"
+          },
+          {
+            "ROUTE": "/v1/dppsByProductId/*"
+          },
+          {
+            "ROUTE": "/v1/dppsByIdAndDate/*"
+          },
+          {
+            "ROUTE": "/v1/dppsByProductIds"
+          }
+        ]
+      },
+      {
+        "name": "dpp_write_routes",
+        "objects": [
+          {
+            "ROUTE": "/v1/dpps"
+          },
+          {
+            "ROUTE": "/v1/dpps/*"
+          }
+        ]
+      }
+    ],
+    "DEFACLS": [
+      {
+        "name": "viewer_read",
+        "acl": {
+          "USEATTRIBUTES": "role_attr",
+          "RIGHTS": [
+            "READ"
+          ],
+          "ACCESS": "ALLOW"
+        }
+      },
+      {
+        "name": "editor_full",
+        "acl": {
+          "USEATTRIBUTES": "role_attr",
+          "RIGHTS": [
+            "CREATE",
+            "READ",
+            "UPDATE",
+            "DELETE"
+          ],
+          "ACCESS": "ALLOW"
+        }
+      }
+    ],
+    "DEFFORMULAS": [
+      {
+        "name": "is_viewer",
+        "formula": {
+          "$eq": [
+            {
+              "$attribute": {
+                "CLAIM": "role"
+              }
+            },
+            {
+              "$strVal": "viewer"
+            }
+          ]
+        }
+      },
+      {
+        "name": "is_editor",
+        "formula": {
+          "$eq": [
+            {
+              "$attribute": {
+                "CLAIM": "role"
+              }
+            },
+            {
+              "$strVal": "editor"
+            }
+          ]
+        }
+      }
+    ],
+    "rules": [
+      {
+        "USEACL": "viewer_read",
+        "USEOBJECTS": [
+          "dpp_read_routes"
+        ],
+        "USEFORMULA": "is_viewer"
+      },
+      {
+        "USEACL": "editor_full",
+        "USEOBJECTS": [
+          "dpp_read_routes",
+          "dpp_write_routes"
+        ],
+        "USEFORMULA": "is_editor"
+      }
+    ]
+  }
+}

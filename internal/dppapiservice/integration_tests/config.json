@@ -1,0 +1,36 @@
+{
+  "server": {
+    "host": "0.0.0.0",
+    "port": 8080,
+    "contextPath": ""
+  },
+  "swagger": {
+    "contactName": "Eclipse BaSyx",
+    "contactEmail": "basyx-dev@eclipse.org",
+    "contactUrl": "https://basyx.org"
+  },
+  "postgres": {
+    "host": "db",
+    "port": 5432,
+    "user": "admin",
+    "password": "admin123",
+    "dbname": "basyxDppLifecycleIT",
+    "maxOpenConnections": 10,
+    "maxIdleConnections": 5,
+    "connMaxLifetimeMinutes": 5
+  },
+  "history": {
+    "mode": "api",
+    "retentionDays": 0,
+    "fullSnapshotInterval": 1,
+    "immutability": "none",
+    "auditIdentityMode": "none",
+    "evidence": {
+      "enabled": false,
+      "provider": "none"
+    },
+    "integrityAnchor": {
+      "provider": "none"
+    }
+  }
+}
