@@ -1,16 +1,26 @@
 {
   "$condition": {
-    "$or": [
+    "$and": [
       {
-        "$eq": [
-          { "$field": "$aasdesc#specificAssetIds[].externalSubjectId.keys[].value" },
-          { "$strVal": "WRITTEN_BY_X" }
+        "$or": [
+          {
+            "$eq": [
+              { "$field": "$aasdesc#specificAssetIds[].externalSubjectId.keys[].value" },
+              { "$strVal": "WRITTEN_BY_X" }
+            ]
+          },
+          {
+            "$eq": [
+              { "$field": "$aasdesc#specificAssetIds[].externalSubjectId.keys[].value" },
+              { "$strVal": "WRITTEN_BY_Y" }
+            ]
+          }
         ]
       },
       {
         "$eq": [
-          { "$field": "$aasdesc#specificAssetIds[].externalSubjectId.keys[].value" },
-          { "$strVal": "WRITTEN_BY_Y" }
+          { "$field": "$aasdesc#submodelDescriptors[].supplementalSemanticIds" },
+          { "$strVal": "QUERY_ALLOWED" }
         ]
       }
     ]
@@ -31,6 +41,15 @@
         "$eq": [
           { "$field": "$aasdesc#specificAssetIds[].name" },
           { "$strVal": "customerPartId" }
+        ]
+      }
+    },
+    {
+      "$fragment": "$aasdesc#submodelDescriptors[].supplementalSemanticIds[]",
+      "$condition": {
+        "$eq": [
+          { "$field": "$aasdesc#submodelDescriptors[].supplementalSemanticIds[].keys[].value" },
+          { "$strVal": "FILTER_VISIBLE" }
         ]
       }
     }

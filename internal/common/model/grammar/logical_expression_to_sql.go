@@ -30,6 +30,7 @@
 package grammar
 
 import (
+	"crypto/sha256"
 	"fmt"
 	"reflect"
 	"regexp"
@@ -783,8 +784,9 @@ func buildInlineExistsExpression(resolved []ResolvedFieldPath, predicate exp.Exp
 		if err != nil {
 			return nil, err
 		}
+		existsAliases := buildPostgresExistsAliases(plan.ExpandedAliases)
 		for _, a := range plan.ExpandedAliases {
-			mapped := a + "__exists"
+			mapped := existsAliases[a]
 			sql = strings.ReplaceAll(sql, "\""+a+"\".", "\""+mapped+"\".")
 			sql = strings.ReplaceAll(sql, " AS \""+a+"\"", " AS \""+mapped+"\"")
 
@@ -805,6 +807,34 @@ func buildInlineExistsExpression(resolved []ResolvedFieldPath, predicate exp.Exp
 	}
 
 	return goqu.L("EXISTS ?", ds), nil
+}
+
+const postgresIdentifierMaxBytes = 63
+
+func buildPostgresExistsAliases(aliases []string) map[string]string {
+	sortedAliases := append([]string(nil), aliases...)
+	sort.Strings(sortedAliases)
+
+	result := make(map[string]string, len(sortedAliases))
+	used := make(map[string]struct{}, len(sortedAliases))
+	for _, alias := range sortedAliases {
+		base := alias + "__exists"
+		candidate := base
+		for salt := 0; len(candidate) > postgresIdentifierMaxBytes || hasAlias(used, candidate); salt++ {
+			digest := sha256.Sum256([]byte(fmt.Sprintf("%s:%d", base, salt)))
+			suffix := fmt.Sprintf("_%x", digest[:6])
+			prefixLength := postgresIdentifierMaxBytes - len(suffix)
+			candidate = base[:min(len(base), prefixLength)] + suffix
+		}
+		result[alias] = candidate
+		used[candidate] = struct{}{}
+	}
+	return result
+}
+
+func hasAlias(aliases map[string]struct{}, alias string) bool {
+	_, exists := aliases[alias]
+	return exists
 }
 
 func defaultJoinPlanConfig() JoinPlanConfig {
@@ -1946,7 +1976,16 @@ func normalizeSemanticShorthand(operand *Value) {
 		return
 	}
 
-	if strings.HasSuffix(suffix, "supplementalSemanticIds") {
+	lastSegment := suffix
+	if separator := strings.LastIndex(lastSegment, "."); separator >= 0 {
+		lastSegment = lastSegment[separator+1:]
+	}
+	if lastSegment == "supplementalSemanticIds" {
+		suffix += "[].keys[0].value"
+		*inner.Field = ModelStringPattern(prefix + "#" + suffix)
+		return
+	}
+	if strings.HasPrefix(lastSegment, "supplementalSemanticIds[") && strings.HasSuffix(lastSegment, "]") {
 		suffix += ".keys[0].value"
 		*inner.Field = ModelStringPattern(prefix + "#" + suffix)
 	}

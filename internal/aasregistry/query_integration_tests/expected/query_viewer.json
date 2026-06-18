@@ -2,25 +2,6 @@
   "paging_metadata": {},
   "result": [
     {
-      "id": "https://example.org/A",
-      "endpoints": [
-        {
-          "protocolInformation": {
-            "href": "hrefA",
-            "endpointProtocol": "http"
-          },
-          "interface": "AAS-3.0"
-        }
-      ],
-      "extensions": [
-        {
-          "name": "help",
-          "valueType": "xs:string",
-          "value": "test"
-        }
-      ]
-    },
-    {
       "id": "https://example.org/B",
       "endpoints": [
         {
@@ -36,6 +17,30 @@
           "name": "help",
           "valueType": "xs:string",
           "value": "test"
+        }
+      ],
+      "submodelDescriptors": [
+        {
+          "id": "https://example.org/B/SM",
+          "endpoints": [
+            {
+              "interface": "SUBMODEL-3.0",
+              "protocolInformation": {
+                "href": "https://example.org/B/SM"
+              }
+            }
+          ],
+          "supplementalSemanticIds": [
+            {
+              "type": "ExternalReference",
+              "keys": [
+                {
+                  "type": "GlobalReference",
+                  "value": "FILTER_VISIBLE"
+                }
+              ]
+            }
+          ]
         }
       ],
       "specificAssetIds": [
@@ -70,6 +75,19 @@
           "name": "help",
           "valueType": "xs:string",
           "value": "test"
+        }
+      ],
+      "submodelDescriptors": [
+        {
+          "id": "https://example.org/C/SM",
+          "endpoints": [
+            {
+              "interface": "SUBMODEL-3.0",
+              "protocolInformation": {
+                "href": "https://example.org/C/SM"
+              }
+            }
+          ]
         }
       ]
     }

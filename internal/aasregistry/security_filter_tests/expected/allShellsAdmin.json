@@ -156,6 +156,26 @@
           }
         ]
       },
+      "supplementalSemanticIds": [
+        {
+          "type": "ExternalReference",
+          "keys": [
+            {
+              "type": "GlobalReference",
+              "value": "WRITTEN_BY_X"
+            }
+          ]
+        },
+        {
+          "type": "ExternalReference",
+          "keys": [
+            {
+              "type": "GlobalReference",
+              "value": "FILTER_HIDDEN"
+            }
+          ]
+        }
+      ],
       "endpoints": [
         {
           "interface": "AAS-3.0",

@@ -93,30 +93,55 @@ func TestLogicalExpression_SMDesc_WithCollector_BuildsCTE(t *testing.T) {
 }
 
 func TestLogicalExpression_SMDesc_SupplementalSemanticIdsWithCollector_BuildsCTE(t *testing.T) {
-	expr := LogicalExpression{
-		Eq: ComparisonItems{
-			field("$smdesc#supplementalSemanticIds[1].keys[0].value"),
-			strVal("urn:supplemental"),
+	testCases := []struct {
+		name      string
+		root      CollectorRoot
+		shorthand string
+		explicit  string
+	}{
+		{
+			name:      "aasdesc wildcard shorthand",
+			root:      CollectorRootAASDesc,
+			shorthand: "$aasdesc#submodelDescriptors[].supplementalSemanticIds",
+			explicit:  "$aasdesc#submodelDescriptors[].supplementalSemanticIds[].keys[0].value",
+		},
+		{
+			name:      "smdesc wildcard shorthand",
+			root:      CollectorRootSMDesc,
+			shorthand: "$smdesc#supplementalSemanticIds",
+			explicit:  "$smdesc#supplementalSemanticIds[].keys[0].value",
+		},
+		{
+			name:      "aasdesc indexed shorthand",
+			root:      CollectorRootAASDesc,
+			shorthand: "$aasdesc#submodelDescriptors[2].supplementalSemanticIds[1]",
+			explicit:  "$aasdesc#submodelDescriptors[2].supplementalSemanticIds[1].keys[0].value",
+		},
+		{
+			name:      "smdesc indexed shorthand",
+			root:      CollectorRootSMDesc,
+			shorthand: "$smdesc#supplementalSemanticIds[1]",
+			explicit:  "$smdesc#supplementalSemanticIds[1].keys[0].value",
 		},
 	}
 
-	collector, err := NewResolvedFieldPathCollectorForRoot(CollectorRootSMDesc)
-	if err != nil {
-		t.Fatalf("NewResolvedFieldPathCollectorForRoot returned error: %v", err)
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			shorthandSQL := supplementalSemanticIDSQL(t, testCase.root, testCase.shorthand)
+			explicitSQL := supplementalSemanticIDSQL(t, testCase.root, testCase.explicit)
+			if shorthandSQL != explicitSQL {
+				t.Fatalf("expected shorthand and explicit paths to generate identical SQL:\nshorthand: %s\nexplicit:  %s", shorthandSQL, explicitSQL)
+			}
+		})
 	}
 
-	whereExpr, _, err := expr.EvaluateToExpression(collector)
-	if err != nil {
-		t.Fatalf("EvaluateToExpression returned error: %v", err)
+	aasdescResolved := resolvedSupplementalSemanticIDPath(t, "$aasdesc#submodelDescriptors[].supplementalSemanticIds")
+	smdescResolved := resolvedSupplementalSemanticIDPath(t, "$smdesc#supplementalSemanticIds")
+	if !resolvedSlicesEqual([]ResolvedFieldPath{aasdescResolved}, []ResolvedFieldPath{smdescResolved}) {
+		t.Fatalf("expected AAS descriptor and submodel descriptor shorthand to resolve equally:\naasdesc: %#v\nsmdesc:  %#v", aasdescResolved, smdescResolved)
 	}
 
-	d := goqu.Dialect("postgres")
-	ds := d.From(goqu.T("submodel_descriptor")).Select(goqu.V(1)).Where(whereExpr)
-	sql, _, err := ds.Prepared(true).ToSQL()
-	if err != nil {
-		t.Fatalf("ToSQL returned error: %v", err)
-	}
-	t.Logf("SQL: %s", sql)
+	sql := supplementalSemanticIDSQL(t, CollectorRootSMDesc, "$smdesc#supplementalSemanticIds[].keys[].value")
 
 	if !strings.Contains(sql, "submodel_descriptor_supplemental_semantic_id_reference") {
 		t.Fatalf("expected supplemental semantic ID reference join, got: %s", sql)
@@ -127,7 +152,68 @@ func TestLogicalExpression_SMDesc_SupplementalSemanticIdsWithCollector_BuildsCTE
 	if !strings.Contains(sql, "'urn:supplemental'") {
 		t.Fatalf("expected SQL to contain %q, got: %s", "'urn:supplemental'", sql)
 	}
-	if !strings.Contains(sql, "position\" = 1") || !strings.Contains(sql, "position\" = 0") {
-		t.Fatalf("expected SQL to contain supplemental reference and key position bindings, got: %s", sql)
+	if strings.Contains(sql, ".position\" =") {
+		t.Fatalf("did not expect wildcard supplemental references to contain position bindings, got: %s", sql)
 	}
+
+	aliases := buildPostgresExistsAliases([]string{
+		"aasdesc_submodel_descriptor_supplemental_semantic_id_reference",
+		"aasdesc_submodel_descriptor_supplemental_semantic_id_reference_key",
+	})
+	referenceAlias := aliases["aasdesc_submodel_descriptor_supplemental_semantic_id_reference"]
+	keyAlias := aliases["aasdesc_submodel_descriptor_supplemental_semantic_id_reference_key"]
+	if referenceAlias == keyAlias {
+		t.Fatalf("expected distinct PostgreSQL aliases, got %q", referenceAlias)
+	}
+	if len(referenceAlias) > postgresIdentifierMaxBytes || len(keyAlias) > postgresIdentifierMaxBytes {
+		t.Fatalf("expected aliases within PostgreSQL's identifier limit, got %q and %q", referenceAlias, keyAlias)
+	}
+	if !strings.Contains(sql, `AS "`+referenceAlias+`"`) || !strings.Contains(sql, `AS "`+keyAlias+`"`) {
+		t.Fatalf("expected SQL to use collision-safe aliases %q and %q, got: %s", referenceAlias, keyAlias, sql)
+	}
+}
+
+func supplementalSemanticIDSQL(t *testing.T, root CollectorRoot, fieldPath string) string {
+	t.Helper()
+
+	expr := LogicalExpression{
+		Eq: ComparisonItems{
+			field(fieldPath),
+			strVal("urn:supplemental"),
+		},
+	}
+	collector, err := NewResolvedFieldPathCollectorForRoot(root)
+	if err != nil {
+		t.Fatalf("NewResolvedFieldPathCollectorForRoot returned error: %v", err)
+	}
+	whereExpr, _, err := expr.EvaluateToExpression(collector)
+	if err != nil {
+		t.Fatalf("EvaluateToExpression returned error for %q: %v", fieldPath, err)
+	}
+
+	d := goqu.Dialect("postgres")
+	var ds *goqu.SelectDataset
+	if root == CollectorRootAASDesc {
+		ds = d.From(goqu.T("descriptor").As("descriptor"))
+	} else {
+		ds = d.From(goqu.T("submodel_descriptor"))
+	}
+	sql, _, err := ds.Select(goqu.V(1)).Where(whereExpr).ToSQL()
+	if err != nil {
+		t.Fatalf("ToSQL returned error for %q: %v", fieldPath, err)
+	}
+	return sql
+}
+
+func resolvedSupplementalSemanticIDPath(t *testing.T, fieldPath string) ResolvedFieldPath {
+	t.Helper()
+
+	fieldIdentifier := ModelStringPattern(fieldPath)
+	operand := Value{Field: &fieldIdentifier}
+	normalizeSemanticShorthand(&operand)
+	resolved, err := ResolveScalarFieldToSQL(operand.Field)
+	if err != nil {
+		t.Fatalf("ResolveScalarFieldToSQL returned error for %q: %v", fieldPath, err)
+	}
+	return resolved
 }

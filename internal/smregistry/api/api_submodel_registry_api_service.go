@@ -44,6 +44,7 @@ import (
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 	smregistrypostgresql "github.com/eclipse-basyx/basyx-go-components/internal/smregistry/persistence"
 )
@@ -98,6 +99,50 @@ func (s *SubmodelRegistryAPIAPIService) GetAllSubmodelDescriptors(ctx context.Co
 			), toJsonErr
 		}
 		jsonable = append(jsonable, j)
+	}
+
+	return pagedResponse(jsonable, nextCursor), nil
+}
+
+// QuerySubmodelDescriptors returns all Submodel Descriptors that conform to the input query.
+func (s *SubmodelRegistryAPIAPIService) QuerySubmodelDescriptors(
+	ctx context.Context,
+	limit int32,
+	cursor string,
+	query grammar.Query,
+) (model.ImplResponse, error) {
+	internalCursor, resp, err := decodeCursor(strings.TrimSpace(cursor), "QuerySubmodelDescriptors")
+	if resp != nil || err != nil {
+		return *resp, err
+	}
+
+	queryCtx := auth.MergeQueryFilter(ctx, query)
+	smds, nextCursor, err := s.smRegistryBackend.ListSubmodelDescriptors(queryCtx, limit, internalCursor)
+	if err != nil {
+		log.Printf("[ERROR] [%s] Error in QuerySubmodelDescriptors: list failed (limit=%d cursor=%q): %v", componentName, limit, internalCursor, err)
+		if common.IsErrBadRequest(err) {
+			return common.NewErrorResponse(
+				err, http.StatusBadRequest, componentName, "QuerySubmodelDescriptors", "BadRequest",
+			), nil
+		}
+		return common.NewErrorResponse(
+			err, http.StatusInternalServerError, componentName, "QuerySubmodelDescriptors", "InternalServerError",
+		), err
+	}
+
+	jsonable := make([]map[string]any, 0, len(smds))
+	for _, smd := range smds {
+		item, toJSONErr := smd.ToJsonable()
+		if toJSONErr != nil {
+			return common.NewErrorResponse(
+				toJSONErr,
+				http.StatusInternalServerError,
+				componentName,
+				"QuerySubmodelDescriptors",
+				"ToJsonable",
+			), toJSONErr
+		}
+		jsonable = append(jsonable, item)
 	}
 
 	return pagedResponse(jsonable, nextCursor), nil

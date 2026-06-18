@@ -41,13 +41,13 @@
           ]
         }
       },
-      { 
+      {
         "name": "role_is_editor_written_x", 
         "formula": { 
           "$and": 
           [
             { "$eq": [ { "$attribute": { "CLAIM": "role" } }, { "$strVal": "editor" } ] },
-            {"$eq": [ {"$field": "$smdesc#semanticId.keys[].value"}, {"$strVal": "WRITTEN_BY_X"}]}
+            {"$eq": [ {"$field": "$smdesc#supplementalSemanticIds"}, {"$strVal": "WRITTEN_BY_X"}]}
           ]
         }
       },
@@ -116,13 +116,23 @@
         }
       },
       { "USEACL": "all_admin", "USEOBJECTS": ["submodel_descriptors"], "USEFORMULA": "role_is_editor_written_x",
-        "FILTER": {
-          "FRAGMENT": "$aasdesc#submodelDescriptors[].semanticId",
-          "CONDITION": 
-           {
-            "$boolean": false
+        "FILTERLIST": [
+          {
+            "FRAGMENT": "$aasdesc#submodelDescriptors[].semanticId",
+            "CONDITION": {
+              "$boolean": false
+            }
+          },
+          {
+            "FRAGMENT": "$aasdesc#submodelDescriptors[].supplementalSemanticIds[]",
+            "CONDITION": {
+              "$eq": [
+                {"$field": "$aasdesc#submodelDescriptors[].supplementalSemanticIds[].keys[].value"},
+                {"$strVal": "WRITTEN_BY_X"}
+              ]
+            }
           }
-        }
+        ]
       }
     ]
   }

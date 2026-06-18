@@ -13,12 +13,15 @@ package smregistryopenapi
 
 import (
 	"encoding/json"
+	"errors"
+	"io"
 	"log"
 	"net/http"
 	"strings"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
 	"github.com/go-chi/chi/v5"
 )
 
@@ -93,6 +96,12 @@ func (c *SubmodelRegistryAPIAPIController) Routes() Routes {
 			"/submodel-descriptors/{submodelIdentifier}",
 			c.DeleteSubmodelDescriptorById,
 		},
+		"QuerySubmodelDescriptors": Route{
+			"QuerySubmodelDescriptors",
+			strings.ToUpper("Post"),
+			"/query/submodel-descriptors",
+			c.QuerySubmodelDescriptors,
+		},
 	}
 }
 
@@ -129,7 +138,68 @@ func (c *SubmodelRegistryAPIAPIController) OrderedRoutes() []Route {
 			"/submodel-descriptors/{submodelIdentifier}",
 			c.DeleteSubmodelDescriptorById,
 		},
+		Route{
+			"QuerySubmodelDescriptors",
+			strings.ToUpper("Post"),
+			"/query/submodel-descriptors",
+			c.QuerySubmodelDescriptors,
+		},
 	}
+}
+
+// QuerySubmodelDescriptors - Returns all Submodel Descriptors that conform to the input query
+func (c *SubmodelRegistryAPIAPIController) QuerySubmodelDescriptors(w http.ResponseWriter, r *http.Request) {
+	query, err := parseQuery(r.URL.RawQuery)
+	if err != nil {
+		result := common.NewErrorResponse(err, http.StatusBadRequest, componentName, "QuerySubmodelDescriptors", "query")
+		_ = EncodeJSONResponse(result.Body, &result.Code, w)
+		return
+	}
+
+	var limitParam int32
+	if query.Has("limit") {
+		limitParam, err = parseNumericParameter[int32](
+			query.Get("limit"),
+			WithParse[int32](parseInt32),
+			WithMinimum[int32](1),
+		)
+		if err != nil {
+			result := common.NewErrorResponse(err, http.StatusBadRequest, componentName, "QuerySubmodelDescriptors", "limit")
+			_ = EncodeJSONResponse(result.Body, &result.Code, w)
+			return
+		}
+	}
+
+	var cursorParam string
+	if query.Has("cursor") {
+		cursorParam = query.Get("cursor")
+	}
+
+	var queryParam grammar.Query
+	decoder := json.NewDecoder(r.Body)
+	decoder.DisallowUnknownFields()
+	if err = decoder.Decode(&queryParam); err != nil && !errors.Is(err, io.EOF) {
+		result := common.NewErrorResponse(err, http.StatusBadRequest, componentName, "QuerySubmodelDescriptors", "RequestBody")
+		_ = EncodeJSONResponse(result.Body, &result.Code, w)
+		return
+	}
+	if err = grammar.AssertQueryRequired(queryParam); err != nil {
+		result := common.NewErrorResponse(err, http.StatusBadRequest, componentName, "QuerySubmodelDescriptors", "RequestBody")
+		_ = EncodeJSONResponse(result.Body, &result.Code, w)
+		return
+	}
+	if err = grammar.AssertQueryConstraints(queryParam); err != nil {
+		result := common.NewErrorResponse(err, http.StatusBadRequest, componentName, "QuerySubmodelDescriptors", "RequestBody")
+		_ = EncodeJSONResponse(result.Body, &result.Code, w)
+		return
+	}
+
+	result, err := c.service.QuerySubmodelDescriptors(r.Context(), limitParam, cursorParam, queryParam)
+	if err != nil {
+		c.errorHandler(w, r, err, &result)
+		return
+	}
+	_ = EncodeJSONResponse(result.Body, &result.Code, w)
 }
 
 // GetAllSubmodelDescriptors - Returns all Submodel Descriptors
