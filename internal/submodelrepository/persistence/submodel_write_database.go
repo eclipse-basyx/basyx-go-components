@@ -149,6 +149,16 @@ func (s *SubmodelDatabase) createSubmodelInTransaction(tx *sql.Tx, submodel type
 		return common.NewInternalServerError("SMREPO-NEWSM-CREATE-EXECPAYLOADSQL " + err.Error())
 	}
 
+	if err := common.CreateContextReferences1ToMany(
+		tx,
+		submodelDBID,
+		submodel.SupplementalSemanticIDs(),
+		common.TblSubmodelSuppSemantic,
+		common.ColSubmodelID,
+	); err != nil {
+		return common.NewInternalServerError("SMREPO-NEWSM-CREATE-SUPPSEM " + err.Error())
+	}
+
 	semanticID := submodel.SemanticID()
 	if semanticID != nil {
 		ids, args, err = submodelqueries.BuildInsertSubmodelSemanticIDReferenceSQL(submodelDBID, semanticID)
@@ -562,6 +572,16 @@ func (s *SubmodelDatabase) patchSubmodelMetadataInTransaction(tx *sql.Tx, submod
 
 	if _, err = tx.Exec(upsertPayloadQuery, upsertPayloadArgs...); err != nil {
 		return common.NewInternalServerError("SMREPO-PATCHSMMETA-UPSERTPAYLOAD " + err.Error())
+	}
+
+	if err = common.ReplaceContextReferences1ToMany(
+		tx,
+		int64(submodelDatabaseID),
+		submodel.SupplementalSemanticIDs(),
+		common.TblSubmodelSuppSemantic,
+		common.ColSubmodelID,
+	); err != nil {
+		return common.NewInternalServerError("SMREPO-PATCHSMMETA-SUPPSEM " + err.Error())
 	}
 
 	deleteSemanticIDQuery, deleteSemanticIDArgs, err := submodelqueries.BuildDeleteSubmodelSemanticIDSQL(submodelDatabaseID)

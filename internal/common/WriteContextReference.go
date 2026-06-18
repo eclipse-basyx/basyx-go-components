@@ -181,6 +181,35 @@ func CreateContextReferences1ToMany(
 	return nil
 }
 
+// ReplaceContextReferences1ToMany replaces all references belonging to one owner.
+func ReplaceContextReferences1ToMany(
+	tx *sql.Tx,
+	ownerID int64,
+	references []types.IReference,
+	referenceTable string,
+	ownerColumn string,
+) error {
+	if tx == nil {
+		return fmt.Errorf("CTXREF-REPLACE-NILTX transaction is nil")
+	}
+
+	d := goqu.Dialect(Dialect)
+	deleteSQL, args, err := d.Delete(referenceTable).
+		Where(goqu.C(ownerColumn).Eq(ownerID)).
+		ToSQL()
+	if err != nil {
+		return fmt.Errorf("CTXREF-REPLACE-BUILDDELETE: %w", err)
+	}
+	if _, err = tx.Exec(deleteSQL, args...); err != nil {
+		return fmt.Errorf("CTXREF-REPLACE-EXECDELETE: %w", err)
+	}
+
+	if err = CreateContextReferences1ToMany(tx, ownerID, references, referenceTable, ownerColumn); err != nil {
+		return fmt.Errorf("CTXREF-REPLACE-CREATE: %w", err)
+	}
+	return nil
+}
+
 func buildReferencePayload(value types.IReference) (json.RawMessage, error) {
 	if value == nil {
 		return json.RawMessage("{}"), nil

@@ -140,6 +140,8 @@ var terminalColumnMappings = map[string]terminalColumnMapping{
 					ctxSpecificAssetID: "external_subject_reference_key.value",
 				},
 				"supplementalSemanticIds": {
+					ctxSubmodelSupplementalSemanticID:           "sm_supplemental_semantic_id_reference_key.value",
+					ctxSubmodelElementSupplementalSemanticID:    "sme_supplemental_semantic_id_reference_key.value",
 					ctxSubmodelDescriptorSupplementalSemanticID: "aasdesc_submodel_descriptor_supplemental_semantic_id_reference_key.value",
 				},
 			},
@@ -161,8 +163,12 @@ var terminalColumnMappings = map[string]terminalColumnMapping{
 				ctxSubmodelDescriptor: "aasdesc_submodel_descriptor_semantic_id_reference.type",
 			},
 			"supplementalSemanticIds": {
-				ctxSMDesc:             "aasdesc_submodel_descriptor_supplemental_semantic_id_reference.type",
-				ctxSubmodelDescriptor: "aasdesc_submodel_descriptor_supplemental_semantic_id_reference.type",
+				ctxSM:                                    "sm_supplemental_semantic_id_reference.type",
+				ctxSME:                                   "sme_supplemental_semantic_id_reference.type",
+				ctxSubmodelSupplementalSemanticID:        "sm_supplemental_semantic_id_reference.type",
+				ctxSubmodelElementSupplementalSemanticID: "sme_supplemental_semantic_id_reference.type",
+				ctxSMDesc:                                "aasdesc_submodel_descriptor_supplemental_semantic_id_reference.type",
+				ctxSubmodelDescriptor:                    "aasdesc_submodel_descriptor_supplemental_semantic_id_reference.type",
 				ctxSubmodelDescriptorSupplementalSemanticID: "aasdesc_submodel_descriptor_supplemental_semantic_id_reference.type",
 			},
 		},
@@ -181,6 +187,8 @@ var terminalColumnMappings = map[string]terminalColumnMapping{
 					ctxSpecificAssetID: "external_subject_reference_key.type",
 				},
 				"supplementalSemanticIds": {
+					ctxSubmodelSupplementalSemanticID:           "sm_supplemental_semantic_id_reference_key.type",
+					ctxSubmodelElementSupplementalSemanticID:    "sme_supplemental_semantic_id_reference_key.type",
 					ctxSubmodelDescriptorSupplementalSemanticID: "aasdesc_submodel_descriptor_supplemental_semantic_id_reference_key.type",
 				},
 			},

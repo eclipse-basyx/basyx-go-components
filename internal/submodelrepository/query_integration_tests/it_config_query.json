@@ -764,6 +764,75 @@
                   }
     },
     {
+        "context":  "Create supplemental semantic ID query submodel",
+        "method":  "POST",
+        "endpoint":  "http://127.0.0.1:6004/submodels",
+        "data":  "bodies/post/supplementalSemanticIdsQuerySubmodel.json",
+        "expectedStatus":  201,
+        "token":  {
+                      "user":  "admin",
+                      "password":  "pwd"
+                  }
+    },
+    {
+        "context":  "Query 059 - Submodel supplemental semantic ID shorthand",
+        "method":  "POST",
+        "endpoint":  "http://127.0.0.1:6004/query/submodels",
+        "data":  "bodies/query_tests/059_sm_supplemental_semantic_id.json",
+        "shouldMatch":  "expected/sophisticatedQueryTests/supplementalSemanticIdsQueryResult.json",
+        "expectedStatus":  200,
+        "token":  {
+                      "user":  "admin",
+                      "password":  "pwd"
+                  }
+    },
+    {
+        "context":  "Query 060 - Indexed submodel supplemental semantic ID",
+        "method":  "POST",
+        "endpoint":  "http://127.0.0.1:6004/query/submodels",
+        "data":  "bodies/query_tests/060_sm_supplemental_semantic_id_indexed.json",
+        "shouldMatch":  "expected/sophisticatedQueryTests/supplementalSemanticIdsQueryResult.json",
+        "expectedStatus":  200,
+        "token":  {
+                      "user":  "admin",
+                      "password":  "pwd"
+                  }
+    },
+    {
+        "context":  "Query 061 - Submodel element supplemental semantic ID shorthand",
+        "method":  "POST",
+        "endpoint":  "http://127.0.0.1:6004/query/submodels",
+        "data":  "bodies/query_tests/061_sme_supplemental_semantic_id.json",
+        "shouldMatch":  "expected/sophisticatedQueryTests/supplementalSemanticIdsQueryResult.json",
+        "expectedStatus":  200,
+        "token":  {
+                      "user":  "admin",
+                      "password":  "pwd"
+                  }
+    },
+    {
+        "context":  "Query 062 - Indexed submodel element supplemental semantic ID",
+        "method":  "POST",
+        "endpoint":  "http://127.0.0.1:6004/query/submodels",
+        "data":  "bodies/query_tests/062_sme_supplemental_semantic_id_indexed.json",
+        "shouldMatch":  "expected/sophisticatedQueryTests/supplementalSemanticIdsQueryResult.json",
+        "expectedStatus":  200,
+        "token":  {
+                      "user":  "admin",
+                      "password":  "pwd"
+                  }
+    },
+    {
+        "context":  "Delete supplemental semantic ID query submodel",
+        "method":  "DELETE",
+        "endpoint":  "http://127.0.0.1:6004/submodels/c3VwcGxlbWVudGFsLXF1ZXJ5LXNt",
+        "expectedStatus":  204,
+        "token":  {
+                      "user":  "admin",
+                      "password":  "pwd"
+                  }
+    },
+    {
         "context":  "Security userx GET all submodels",
         "method":  "GET",
         "endpoint":  "http://127.0.0.1:6004/submodels",

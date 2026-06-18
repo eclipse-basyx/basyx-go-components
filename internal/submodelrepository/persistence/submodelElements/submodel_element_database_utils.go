@@ -331,7 +331,25 @@ func insertPayloadAndSemanticReferences(tx *sql.Tx, dialect goqu.DialectWrapper,
 		}
 	}
 
-	return insertSemanticReferencesBulk(tx, dialect, nodes)
+	if err := insertSemanticReferencesBulk(tx, dialect, nodes); err != nil {
+		return err
+	}
+	return insertSupplementalSemanticReferences(tx, nodes)
+}
+
+func insertSupplementalSemanticReferences(tx *sql.Tx, nodes []*flattenedInsertNode) error {
+	for _, node := range nodes {
+		if err := common.CreateContextReferences1ToMany(
+			tx,
+			int64(node.dbID),
+			node.element.SupplementalSemanticIDs(),
+			common.TblSubmodelElementSuppSemantic,
+			common.ColSubmodelElementID,
+		); err != nil {
+			return common.NewInternalServerError("SMREPO-INSSME-INSSUPPSEM " + err.Error())
+		}
+	}
+	return nil
 }
 
 func insertSemanticReferencesBulk(tx *sql.Tx, dialect goqu.DialectWrapper, nodes []*flattenedInsertNode) error {
