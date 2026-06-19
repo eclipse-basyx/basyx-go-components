@@ -1,9 +1,8 @@
 services:
   dpp-api:
     container_name: dpp-api
-    build:
-      context: ../..
-      dockerfile: ./cmd/dppapiservice/Dockerfile
+    image: eclipsebasyx/dppapi-go:1.0.0-rc.6
+    pull_policy: always
     environment:
       - SERVER_PORT=8080
       - CORS_ALLOWEDORIGINS=*
@@ -42,9 +41,8 @@ services:
 
   aas-environment:
     container_name: dpp-aas-environment
-    build:
-      context: ../..
-      dockerfile: ./cmd/aasenvironmentservice/Dockerfile
+    image: eclipsebasyx/aasenvironment-go:1.0.0-rc.6
+    pull_policy: always
     environment:
       - SERVER_PORT=8082
       - CORS_ALLOWEDORIGINS=*
@@ -102,7 +100,8 @@ services:
 
   basyx_configuration:
     container_name: dpp-basyx-configuration
-    image: eclipsebasyx/basyxconfigurationservice-go:SNAPSHOT
+    image: eclipsebasyx/basyxconfigurationservice-go:1.0.0-rc.6
+    pull_policy: always
     environment:
       - POSTGRES_HOST=db
       - POSTGRES_PORT=5432
