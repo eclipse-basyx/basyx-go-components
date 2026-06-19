@@ -106,6 +106,18 @@ func ReadSpecificAssetExternalSubjectReferencesBySpecificAssetIDs(
 		return out, nil
 	}
 
+	collector, err := grammar.NewResolvedFieldPathCollectorForRoot(grammar.CollectorRootAASDesc)
+	if err != nil {
+		return nil, fmt.Errorf("REFREAD-EXTSUBJECT-COLLECTOR: %w", err)
+	}
+	collector.AllowInlineAliases(
+		"descriptor",
+		"aas_descriptor",
+		common.AliasSpecificAssetID,
+		common.AliasExternalSubjectReference,
+		common.AliasExternalSubjectReferenceKey,
+	)
+
 	rows, err := queryReferenceRowsByOwnerIDs(
 		ctx,
 		db,
@@ -129,7 +141,7 @@ func ReadSpecificAssetExternalSubjectReferencesBySpecificAssetIDs(
 				},
 				{
 					fragment:  "$aasdesc#specificAssetIds[].externalSubjectId.keys[]",
-					collector: nil,
+					collector: collector,
 				},
 				{
 					fragment:  "$bd#specificAssetIds[].externalSubjectId.keys[]",
@@ -182,6 +194,16 @@ func ReadSubmodelDescriptorSupplementalSemanticReferencesByDescriptorIDs(
 	db DBQueryer,
 	descriptorIDs []int64,
 ) (map[int64][]types.IReference, error) {
+	collector, err := grammar.NewResolvedFieldPathCollectorForRoot(grammar.CollectorRootSMDesc)
+	if err != nil {
+		return nil, fmt.Errorf("REFREAD-SUPPSMDESC-COLLECTOR: %w", err)
+	}
+	collector.AllowInlineAliases(
+		"submodel_descriptor",
+		"aasdesc_submodel_descriptor_supplemental_semantic_id_reference",
+		"aasdesc_submodel_descriptor_supplemental_semantic_id_reference_key",
+	)
+
 	return readContextReferences1ToManyByOwnerIDs(
 		ctx,
 		db,
@@ -196,19 +218,19 @@ func ReadSubmodelDescriptorSupplementalSemanticReferencesByDescriptorIDs(
 			filterSpecs: []referenceFilterSpec{
 				{
 					fragment:  "$aasdesc#submodelDescriptors[].supplementalSemanticIds[]",
-					collector: nil,
+					collector: collector,
 				},
 				{
 					fragment:  "$aasdesc#submodelDescriptors[].supplementalSemanticIds[].keys[]",
-					collector: nil,
+					collector: collector,
 				},
 				{
 					fragment:  "$smdesc#supplementalSemanticIds[]",
-					collector: nil,
+					collector: collector,
 				},
 				{
 					fragment:  "$smdesc#supplementalSemanticIds[].keys[]",
-					collector: nil,
+					collector: collector,
 				},
 			},
 			errPrefix: "REFREAD-SUPPSMDESC",
@@ -227,6 +249,11 @@ func ReadSubmodelSupplementalSemanticReferencesBySubmodelIDs(
 	if err != nil {
 		return nil, fmt.Errorf("REFREAD-SUPPSM-COLLECTOR: %w", err)
 	}
+	collector.AllowInlineAliases(
+		"s",
+		"sm_supplemental_semantic_id_reference",
+		"sm_supplemental_semantic_id_reference_key",
+	)
 	filterCtx, filterSpecs := supplementalSemanticIDFilterContext(ctx, "$sm#", collector)
 
 	return readContextReferences1ToManyByOwnerIDs(
@@ -258,6 +285,12 @@ func ReadSubmodelElementSupplementalSemanticReferencesByElementIDs(
 	if err != nil {
 		return nil, fmt.Errorf("REFREAD-SUPPSME-COLLECTOR: %w", err)
 	}
+	collector.SetRootJoinKey("submodel_element", common.ColSubmodelID)
+	collector.AllowInlineAliases(
+		"submodel_element",
+		"sme_supplemental_semantic_id_reference",
+		"sme_supplemental_semantic_id_reference_key",
+	)
 	filterCtx, filterSpecs := supplementalSemanticIDFilterContext(ctx, "$sme", collector)
 
 	return readContextReferences1ToManyByOwnerIDs(

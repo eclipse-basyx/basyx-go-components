@@ -1,0 +1,60 @@
+{
+  "id": "urn:example:submodel:serial-part-typization",
+  "idShort": "RestrictedSerialPartTypization",
+  "modelType": "Submodel",
+  "supplementalSemanticIds": [
+    {
+      "type": "ExternalReference",
+      "keys": [
+        {
+          "type": "GlobalReference",
+          "value": "BPN_COMPANY_001"
+        },
+        {
+          "type": "GlobalReference",
+          "value": "BPN_COMPANY_002"
+        }
+      ]
+    }
+  ],
+  "submodelElements": [
+    {
+      "idShort": "PublicPartType",
+      "modelType": "Property",
+      "valueType": "xs:string",
+      "value": "PUBLIC-TYPE",
+      "supplementalSemanticIds": [
+        {
+          "type": "ExternalReference",
+          "keys": [
+            {
+              "type": "GlobalReference",
+              "value": "PUBLIC_READABLE"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "idShort": "PartnerSerialNumber",
+      "modelType": "Property",
+      "valueType": "xs:string",
+      "value": "SECRET-001",
+      "supplementalSemanticIds": [
+        {
+          "type": "ExternalReference",
+          "keys": [
+            {
+              "type": "GlobalReference",
+              "value": "BPN_COMPANY_001"
+            },
+            {
+              "type": "GlobalReference",
+              "value": "BPN_COMPANY_002"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

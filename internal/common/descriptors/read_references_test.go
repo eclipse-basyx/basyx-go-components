@@ -39,12 +39,24 @@ import (
 
 func TestReadSubmodelDescriptorSupplementalSemanticReferencesAppliesFragmentFilter(t *testing.T) {
 	field := grammar.ModelStringPattern("$aasdesc#submodelDescriptors[].supplementalSemanticIds[].keys[].value")
+	routeField := grammar.ModelStringPattern("$aasdesc#specificAssetIds[].externalSubjectId.keys[].value")
 	value := grammar.StandardString("supplementalsemanticIdExample value")
+	routeValue := grammar.StandardString("PUBLIC_READABLE")
 	fragment := grammar.FragmentStringPattern("$aasdesc#submodelDescriptors[].supplementalSemanticIds[]")
 	condition := grammar.LogicalExpression{
-		Eq: grammar.ComparisonItems{
-			{Field: &field},
-			{StrVal: &value},
+		And: []grammar.LogicalExpression{
+			{
+				Eq: grammar.ComparisonItems{
+					{Field: &routeField},
+					{StrVal: &routeValue},
+				},
+			},
+			{
+				Eq: grammar.ComparisonItems{
+					{Field: &field},
+					{StrVal: &value},
+				},
+			},
 		},
 	}
 	ctx := auth.WithQueryFilter(context.Background(), &auth.QueryFilter{
@@ -62,6 +74,9 @@ func TestReadSubmodelDescriptorSupplementalSemanticReferencesAppliesFragmentFilt
 			`aasdesc_submodel_descriptor_supplemental_semantic_id_reference_key`,
 			`"aasdesc_submodel_descriptor_supplemental_semantic_id_reference_key"."value"`,
 			`'supplementalsemanticIdExample value'`,
+			`EXISTS`,
+			`external_subject_reference_key`,
+			`'PUBLIC_READABLE'`,
 		} {
 			if !strings.Contains(actual, want) {
 				return fmt.Errorf("expected SQL to contain %q, got: %s", want, actual)
@@ -138,6 +153,21 @@ func TestReadRepositorySupplementalSemanticReferencesAppliesFragmentFilter(t *te
 					{StrVal: &value},
 				},
 			}
+			if test.name == "submodel element" {
+				routeField := grammar.ModelStringPattern("$sm#supplementalSemanticIds[].keys[].value")
+				routeValue := grammar.StandardString("PUBLIC_READABLE")
+				condition = grammar.LogicalExpression{
+					And: []grammar.LogicalExpression{
+						{
+							Eq: grammar.ComparisonItems{
+								{Field: &routeField},
+								{StrVal: &routeValue},
+							},
+						},
+						condition,
+					},
+				}
+			}
 			unrelatedFragment := grammar.FragmentStringPattern("$sme#supplementalSemanticIds[]")
 			if test.name == "submodel element" {
 				unrelatedFragment = "$sm#supplementalSemanticIds[]"
@@ -167,7 +197,9 @@ func TestReadRepositorySupplementalSemanticReferencesAppliesFragmentFilter(t *te
 					return fmt.Errorf("submodel SQL must not include SME filter aliases: %s", actual)
 				}
 				if test.name == "submodel element" && strings.Contains(actual, "sm_supplemental_semantic_id_reference") {
-					return fmt.Errorf("SME SQL must not include submodel filter aliases: %s", actual)
+					if !strings.Contains(actual, "EXISTS") {
+						return fmt.Errorf("SME route guard must use a correlated EXISTS: %s", actual)
+					}
 				}
 				return nil
 			})))

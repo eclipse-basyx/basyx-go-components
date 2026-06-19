@@ -113,6 +113,13 @@ func ReadSpecificAssetIDsByDescriptorIDs(
 	if err != nil {
 		return nil, err
 	}
+	collector.AllowInlineAliases(
+		"descriptor",
+		"aas_descriptor",
+		common.AliasSpecificAssetID,
+		common.AliasExternalSubjectReference,
+		common.AliasExternalSubjectReferenceKey,
+	)
 	const dataAlias = "specific_asset_id_data"
 	maskedColumns := []auth.MaskedInnerColumnSpec{
 		{Fragment: "$aasdesc#specificAssetIds[].name", FlagAlias: "flag_said_name", RawAlias: "c2"},

@@ -120,6 +120,13 @@ func TestAddFilterQueryFromContext_ArrayEndedFragment_UsesInlinePredicate(t *tes
 	if err != nil {
 		t.Fatalf("NewResolvedFieldPathCollectorForRoot returned error: %v", err)
 	}
+	collector.AllowInlineAliases(
+		"descriptor",
+		"aas_descriptor",
+		common.AliasSpecificAssetID,
+		common.AliasExternalSubjectReference,
+		common.AliasExternalSubjectReferenceKey,
+	)
 
 	d := goqu.Dialect("postgres")
 	ds := d.From(goqu.T(common.TblDescriptor).As("descriptor")).

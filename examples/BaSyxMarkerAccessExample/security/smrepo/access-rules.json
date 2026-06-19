@@ -1,0 +1,276 @@
+{
+  "AllAccessPermissionRules": {
+    "DEFATTRIBUTES": [
+      {
+        "name": "anonymous",
+        "attributes": [
+          {
+            "GLOBAL": "ANONYMOUS"
+          }
+        ]
+      }
+    ],
+    "DEFOBJECTS": [
+      {
+        "name": "all_routes",
+        "objects": [
+          {
+            "ROUTE": "*"
+          }
+        ]
+      },
+      {
+        "name": "submodel_routes",
+        "objects": [
+          {
+            "ROUTE": "/submodels"
+          },
+          {
+            "ROUTE": "/submodels/*"
+          },
+          {
+            "ROUTE": "/submodels/*/submodel-elements"
+          },
+          {
+            "ROUTE": "/submodels/*/submodel-elements/*"
+          },
+          {
+            "ROUTE": "/query/submodels"
+          }
+        ]
+      }
+    ],
+    "DEFACLS": [
+      {
+        "name": "read",
+        "acl": {
+          "USEATTRIBUTES": "anonymous",
+          "RIGHTS": [
+            "READ"
+          ],
+          "ACCESS": "ALLOW"
+        }
+      },
+      {
+        "name": "write",
+        "acl": {
+          "USEATTRIBUTES": "anonymous",
+          "RIGHTS": [
+            "CREATE",
+            "UPDATE",
+            "DELETE"
+          ],
+          "ACCESS": "ALLOW"
+        }
+      }
+    ],
+    "DEFFORMULAS": [
+      {
+        "name": "data_provider_read",
+        "formula": {
+          "$contains": [
+            {
+              "$attribute": {
+                "CLAIM": "role"
+              }
+            },
+            {
+              "$strVal": "view_digital_twin"
+            }
+          ]
+        }
+      },
+      {
+        "name": "data_provider",
+        "formula": {
+          "$or": [
+            {
+              "$contains": [
+                {
+                  "$attribute": {
+                    "CLAIM": "role"
+                  }
+                },
+                {
+                  "$strVal": "add_digital_twin"
+                }
+              ]
+            },
+            {
+              "$contains": [
+                {
+                  "$attribute": {
+                    "CLAIM": "role"
+                  }
+                },
+                {
+                  "$strVal": "update_digital_twin"
+                }
+              ]
+            },
+            {
+              "$contains": [
+                {
+                  "$attribute": {
+                    "CLAIM": "role"
+                  }
+                },
+                {
+                  "$strVal": "delete_digital_twin"
+                }
+              ]
+            }
+          ]
+        }
+      },
+      {
+        "name": "submodel_bpn_or_public",
+        "formula": {
+          "$or": [
+            {
+              "$eq": [
+                {
+                  "$attribute": {
+                    "CLAIM": "Edc-Bpn"
+                  }
+                },
+                {
+                  "$field": "$sm#supplementalSemanticIds[].keys[].value"
+                }
+              ]
+            },
+            {
+              "$eq": [
+                {
+                  "$strVal": "PUBLIC_READABLE"
+                },
+                {
+                  "$field": "$sm#supplementalSemanticIds[].keys[].value"
+                }
+              ]
+            }
+          ]
+        }
+      },
+      {
+        "name": "submodel_element_bpn_or_public",
+        "formula": {
+          "$or": [
+            {
+              "$eq": [
+                {
+                  "$attribute": {
+                    "CLAIM": "Edc-Bpn"
+                  }
+                },
+                {
+                  "$field": "$sme#supplementalSemanticIds[].keys[].value"
+                }
+              ]
+            },
+            {
+              "$eq": [
+                {
+                  "$strVal": "PUBLIC_READABLE"
+                },
+                {
+                  "$field": "$sme#supplementalSemanticIds[].keys[].value"
+                }
+              ]
+            }
+          ]
+        }
+      },
+      {
+        "name": "submodel_descriptor_bpn_or_public_with_header",
+        "formula": {
+          "$or": [
+            {
+              "$eq": [
+                {
+                  "$attribute": {
+                    "CLAIM": "Edc-Bpn"
+                  }
+                },
+                {
+                  "$field": "$aasdesc#submodelDescriptors[].supplementalSemanticIds[].keys[].value"
+                }
+              ]
+            },
+            {
+              "$and": [
+                {
+                  "$eq": [
+                    {
+                      "$strVal": "PUBLIC_READABLE"
+                    },
+                    {
+                      "$field": "$aasdesc#submodelDescriptors[].supplementalSemanticIds[].keys[].value"
+                    }
+                  ]
+                },
+                {
+                  "$ne": [
+                    {
+                      "$attribute": {
+                        "CLAIM": "Edc-Bpn"
+                      }
+                    },
+                    {
+                      "$strVal": "<nil>"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      }
+    ],
+    "rules": [
+      {
+        "USEACL": "read",
+        "USEOBJECTS": [
+          "submodel_routes"
+        ],
+        "USEFORMULA": "data_provider_read"
+      },
+      {
+        "USEACL": "write",
+        "USEOBJECTS": [
+          "all_routes"
+        ],
+        "USEFORMULA": "data_provider"
+      },
+      {
+        "USEACL": "read",
+        "USEOBJECTS": [
+          "submodel_routes"
+        ],
+        "USEFORMULA": "submodel_bpn_or_public",
+        "FILTERLIST": [
+          {
+            "FRAGMENT": "$sm#supplementalSemanticIds[]",
+            "USEFORMULA": "submodel_bpn_or_public",
+            "MATCH": true
+          },
+          {
+            "FRAGMENT": "$sm#supplementalSemanticIds[].keys[]",
+            "USEFORMULA": "submodel_bpn_or_public",
+            "MATCH": true
+          },
+          {
+            "FRAGMENT": "$sme#supplementalSemanticIds[]",
+            "USEFORMULA": "submodel_element_bpn_or_public_with_header",
+            "MATCH": true
+          },
+          {
+            "FRAGMENT": "$sme#supplementalSemanticIds[].keys[]",
+            "USEFORMULA": "submodel_element_bpn_or_public",
+            "MATCH": true
+          }
+        ]
+      }
+    ]
+  }
+}

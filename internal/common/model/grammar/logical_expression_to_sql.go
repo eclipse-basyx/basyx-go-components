@@ -778,12 +778,83 @@ func joinPlanConfigForBD() JoinPlanConfig {
 
 // ResolvedFieldPathCollector carries join configuration for inline EXISTS evaluation.
 type ResolvedFieldPathCollector struct {
-	joinConfig *JoinPlanConfig
+	joinConfig    *JoinPlanConfig
+	inlineAliases map[string]struct{}
 }
 
 // NewResolvedFieldPathCollectorWithConfig creates a collector with the provided join config.
 func NewResolvedFieldPathCollectorWithConfig(config *JoinPlanConfig) *ResolvedFieldPathCollector {
 	return &ResolvedFieldPathCollector{joinConfig: config}
+}
+
+// AllowInlineAliases marks aliases that are already joined by the caller's
+// dataset and may therefore be evaluated row-locally.
+func (c *ResolvedFieldPathCollector) AllowInlineAliases(aliases ...string) {
+	if c == nil {
+		return
+	}
+	if c.inlineAliases == nil {
+		c.inlineAliases = make(map[string]struct{}, len(aliases))
+	}
+	for _, alias := range aliases {
+		alias = strings.TrimSpace(alias)
+		if alias != "" {
+			c.inlineAliases[alias] = struct{}{}
+		}
+	}
+}
+
+// SetRootJoinKey configures the outer alias and column used to correlate
+// generated EXISTS expressions with the caller's dataset.
+func (c *ResolvedFieldPathCollector) SetRootJoinKey(alias string, column string) {
+	if c == nil {
+		return
+	}
+	if c.joinConfig == nil {
+		cfg := defaultJoinPlanConfig()
+		c.joinConfig = &cfg
+	}
+	alias = strings.TrimSpace(alias)
+	column = strings.TrimSpace(column)
+	c.joinConfig.RootJoinKey = func() exp.IdentifierExpression {
+		return goqu.I(alias + "." + column)
+	}
+	c.joinConfig.RootJoinKeyAlias = func() string {
+		return alias
+	}
+	c.joinConfig.RootJoinKeyColumn = func() string {
+		return column
+	}
+}
+
+func (c *ResolvedFieldPathCollector) canEvaluateInline(resolved []ResolvedFieldPath) bool {
+	if c == nil || len(c.inlineAliases) == 0 {
+		return false
+	}
+	for _, path := range resolved {
+		if strings.TrimSpace(path.Column) != "" {
+			alias, ok := leadingAlias(path.Column)
+			if !ok {
+				return false
+			}
+			if _, ok := c.inlineAliases[alias]; !ok {
+				return false
+			}
+		}
+		for _, binding := range path.ArrayBindings {
+			if binding.Index.intValue == nil && binding.Index.stringValue == nil {
+				continue
+			}
+			alias, ok := leadingAlias(binding.Alias)
+			if !ok {
+				return false
+			}
+			if _, ok := c.inlineAliases[alias]; !ok {
+				return false
+			}
+		}
+	}
+	return true
 }
 
 func buildInlineExistsExpression(resolved []ResolvedFieldPath, predicate exp.Expression, collector *ResolvedFieldPathCollector) (exp.Expression, error) {
@@ -1609,6 +1680,9 @@ func handleBinaryOperationWithCollector(
 		return opExpr, nil, nil
 	}
 
+	if collector != nil && collector.canEvaluateInline(resolved) {
+		return andBindingsForResolvedFieldPaths(resolved, opExpr), resolved, nil
+	}
 	if collector != nil && resolvedNeedsCTE(resolved) {
 		existsExpr, err := buildInlineExistsExpression(resolved, opExpr, collector)
 		if err != nil {
@@ -1689,6 +1763,9 @@ func (le *LogicalExpression) EvaluateToExpression(collector *ResolvedFieldPathCo
 		if err != nil {
 			return nil, nil, err
 		}
+		if collector != nil && collector.canEvaluateInline(resolved) {
+			return andBindingsForResolvedFieldPaths(resolved, expr), resolved, nil
+		}
 		if collector != nil && resolvedNeedsCTE(resolved) {
 			existsExpr, err := buildInlineExistsExpression(resolved, expr, collector)
 			if err != nil {
@@ -1732,6 +1809,10 @@ func (le *LogicalExpression) EvaluateToExpression(collector *ResolvedFieldPathCo
 					break
 				}
 				if len(resolved) == 0 || !resolvedNeedsCTE(resolved) || anyResolvedHasBindings(resolved) {
+					canGroup = false
+					break
+				}
+				if collector.canEvaluateInline(resolved) {
 					canGroup = false
 					break
 				}
