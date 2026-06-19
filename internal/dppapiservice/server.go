@@ -47,7 +47,7 @@ import (
 // Parameters:
 //   - ctx: Request-independent context used for security setup
 //   - cfg: Runtime configuration for routing, security, CORS, and context path
-//   - openapiSpec: Embedded OpenAPI specification used for Swagger UI
+//   - openapiSpec: Filesystem containing the OpenAPI specification used for Swagger UI
 //   - aasRepo: Asset Administration Shell repository persistence dependency
 //   - submodelRepo: Submodel repository persistence dependency
 //
