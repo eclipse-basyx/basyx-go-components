@@ -22,39 +22,13 @@
       "idShort": "PublicPartType",
       "modelType": "Property",
       "valueType": "xs:string",
-      "value": "PUBLIC-TYPE",
-      "supplementalSemanticIds": [
-        {
-          "type": "ExternalReference",
-          "keys": [
-            {
-              "type": "GlobalReference",
-              "value": "PUBLIC_READABLE"
-            }
-          ]
-        }
-      ]
+      "value": "PUBLIC-TYPE"
     },
     {
       "idShort": "PartnerSerialNumber",
       "modelType": "Property",
       "valueType": "xs:string",
-      "value": "SECRET-001",
-      "supplementalSemanticIds": [
-        {
-          "type": "ExternalReference",
-          "keys": [
-            {
-              "type": "GlobalReference",
-              "value": "BPN_COMPANY_001"
-            },
-            {
-              "type": "GlobalReference",
-              "value": "BPN_COMPANY_002"
-            }
-          ]
-        }
-      ]
+      "value": "SECRET-001"
     }
   ]
 }

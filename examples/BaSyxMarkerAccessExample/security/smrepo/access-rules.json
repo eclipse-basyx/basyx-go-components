@@ -153,80 +153,6 @@
         }
       },
       {
-        "name": "submodel_element_bpn_or_public",
-        "formula": {
-          "$or": [
-            {
-              "$eq": [
-                {
-                  "$attribute": {
-                    "CLAIM": "Edc-Bpn"
-                  }
-                },
-                {
-                  "$field": "$sme#supplementalSemanticIds[].keys[].value"
-                }
-              ]
-            },
-            {
-              "$eq": [
-                {
-                  "$strVal": "PUBLIC_READABLE"
-                },
-                {
-                  "$field": "$sme#supplementalSemanticIds[].keys[].value"
-                }
-              ]
-            }
-          ]
-        }
-      },
-      {
-        "name": "submodel_element_bpn_or_public_with_header",
-        "formula": {
-          "$or": [
-            {
-              "$eq": [
-                {
-                  "$attribute": {
-                    "CLAIM": "Edc-Bpn"
-                  }
-                },
-                {
-                  "$field": "$sme#supplementalSemanticIds[].keys[].value"
-                }
-              ]
-            },
-            {
-              "$and": [
-                {
-                  "$eq": [
-                    {
-                      "$strVal": "PUBLIC_READABLE"
-                    },
-                    {
-                      "$field": "$sme#supplementalSemanticIds[].keys[].value"
-                    }
-                  ]
-                },
-                {
-                  "$ne": [
-                    {
-                      "$attribute": {
-                        "CLAIM": "Edc-Bpn"
-                      }
-                    },
-                    {
-                      "$strVal": "<nil>"
-                    }
-                  ]
-                }
-              ]
-            }
-          ]
-        }
-      },
-      {
         "name": "submodel_bpn_or_public_with_header",
         "formula": {
           "$or": [
@@ -302,16 +228,6 @@
           {
             "FRAGMENT": "$sm#supplementalSemanticIds[].keys[]",
             "USEFORMULA": "submodel_bpn_or_public_with_header",
-            "MATCH": true
-          },
-          {
-            "FRAGMENT": "$sme#supplementalSemanticIds[]",
-            "USEFORMULA": "submodel_element_bpn_or_public_with_header",
-            "MATCH": true
-          },
-          {
-            "FRAGMENT": "$sme#supplementalSemanticIds[].keys[]",
-            "USEFORMULA": "submodel_element_bpn_or_public_with_header",
             "MATCH": true
           }
         ]

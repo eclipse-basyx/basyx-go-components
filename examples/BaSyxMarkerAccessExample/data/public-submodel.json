@@ -18,18 +18,7 @@
       "idShort": "ManufacturerName",
       "modelType": "Property",
       "valueType": "xs:string",
-      "value": "Example Corp",
-      "supplementalSemanticIds": [
-        {
-          "type": "ExternalReference",
-          "keys": [
-            {
-              "type": "GlobalReference",
-              "value": "PUBLIC_READABLE"
-            }
-          ]
-        }
-      ]
+      "value": "Example Corp"
     }
   ]
 }
