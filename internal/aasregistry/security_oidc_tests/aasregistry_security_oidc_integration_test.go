@@ -50,6 +50,7 @@ const (
 	rolesRegistryURL  = "http://localhost:6204"
 	securityEnvVar    = "OIDC_TEST_SECURITY_ENV"
 	composeConfigPath = "docker_compose/docker_compose.yml"
+	readinessTimeout  = 5 * time.Minute
 )
 
 type testIssuer struct {
@@ -133,12 +134,14 @@ func TestMain(m *testing.M) {
 	}
 
 	code := testenv.RunComposeTestMain(m, testenv.ComposeTestMainOptions{
-		ComposeFile: composeConfigPath,
+		ComposeFile:     composeConfigPath,
+		PreDownBeforeUp: true,
+		DownArgs:        []string{"down", "--remove-orphans"},
 		WaitForReady: func() error {
-			if err := testenv.WaitHealthyURL(scpRegistryURL+"/health", 2*time.Minute); err != nil {
+			if err := testenv.WaitHealthyURL(scpRegistryURL+"/health", readinessTimeout); err != nil {
 				return err
 			}
-			return testenv.WaitHealthyURL(rolesRegistryURL+"/health", 2*time.Minute)
+			return testenv.WaitHealthyURL(rolesRegistryURL+"/health", readinessTimeout)
 		},
 	})
 
