@@ -33,15 +33,57 @@ import (
 
 // BuildPostgresDSN creates a PostgreSQL DSN with URL-encoded credentials.
 func BuildPostgresDSN(cfg PostgresConfig) string {
+	if strings.TrimSpace(cfg.DSN) != "" {
+		return NormalizePostgresDSN(cfg.DSN)
+	}
+
 	postgresURL := &url.URL{
-		Scheme:   "postgres",
-		Host:     fmt.Sprintf("%s:%d", cfg.Host, cfg.Port),
-		Path:     cfg.DBName,
-		RawQuery: "sslmode=disable",
+		Scheme: "postgres",
+		Host:   fmt.Sprintf("%s:%d", cfg.Host, cfg.Port),
+		Path:   cfg.DBName,
 	}
 	postgresURL.User = url.UserPassword(cfg.User, cfg.Password)
+	postgresURL.RawQuery = buildPostgresQuery(cfg).Encode()
 
 	return postgresURL.String()
+}
+
+func buildPostgresQuery(cfg PostgresConfig) url.Values {
+	query := url.Values{}
+	addQueryValue(query, "sslmode", effectivePostgresSSLMode(cfg.SSLMode))
+	addQueryValue(query, "sslcert", cfg.SSLCert)
+	addQueryValue(query, "sslkey", cfg.SSLKey)
+	addQueryValue(query, "sslrootcert", cfg.SSLRootCert)
+	addPositiveIntQueryValue(query, "connect_timeout", cfg.ConnectTimeoutSeconds)
+	addQueryValue(query, "application_name", cfg.ApplicationName)
+	addQueryValue(query, "fallback_application_name", cfg.FallbackApplicationName)
+	addQueryValue(query, "search_path", cfg.SearchPath)
+	addQueryValue(query, "options", cfg.Options)
+	addQueryValue(query, "TimeZone", cfg.TimeZone)
+
+	return query
+}
+
+func effectivePostgresSSLMode(sslMode string) string {
+	trimmed := strings.TrimSpace(sslMode)
+	if trimmed == "" {
+		return DefaultConfig.PgSSLMode
+	}
+	return trimmed
+}
+
+func addQueryValue(query url.Values, key string, value string) {
+	if strings.TrimSpace(value) == "" {
+		return
+	}
+	query.Set(key, value)
+}
+
+func addPositiveIntQueryValue(query url.Values, key string, value int) {
+	if value <= 0 {
+		return
+	}
+	query.Set(key, fmt.Sprintf("%d", value))
 }
 
 // NormalizePostgresDSN ensures URL-based PostgreSQL DSNs are encoded correctly.

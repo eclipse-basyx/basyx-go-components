@@ -56,6 +56,7 @@ var DefaultConfig = struct {
 	ServerVerificationEndpointAvailable bool
 	PgPort                              int
 	PgDBName                            string
+	PgSSLMode                           string
 	PgMaxOpen                           int
 	PgMaxIdle                           int
 	PgConnLifetime                      int
@@ -112,6 +113,7 @@ var DefaultConfig = struct {
 	ServerVerificationEndpointAvailable: true,
 	PgPort:                              5432,
 	PgDBName:                            "basyxTestDB",
+	PgSSLMode:                           "disable",
 	PgMaxOpen:                           50,
 	PgMaxIdle:                           50,
 	PgConnLifetime:                      5,
@@ -310,14 +312,25 @@ type ServerConfig struct {
 // PostgresConfig contains PostgreSQL database connection parameters.
 // It includes connection pooling settings for optimal performance.
 type PostgresConfig struct {
-	Host                   string `mapstructure:"host" yaml:"host"`                                     // Database host address
-	Port                   int    `mapstructure:"port" yaml:"port"`                                     // Database port (default: 5432)
-	User                   string `mapstructure:"user" yaml:"user"`                                     // Database username
-	Password               string `mapstructure:"password" yaml:"password"`                             // Database password
-	DBName                 string `mapstructure:"dbname" yaml:"dbname"`                                 // Database name
-	MaxOpenConnections     int    `mapstructure:"maxOpenConnections" yaml:"maxOpenConnections"`         // Maximum open connections
-	MaxIdleConnections     int    `mapstructure:"maxIdleConnections" yaml:"maxIdleConnections"`         // Maximum idle connections
-	ConnMaxLifetimeMinutes int    `mapstructure:"connMaxLifetimeMinutes" yaml:"connMaxLifetimeMinutes"` // Connection lifetime in minutes
+	DSN                     string `mapstructure:"dsn" yaml:"dsn"`                                         // Complete PostgreSQL DSN; mutually exclusive with connection fields
+	Host                    string `mapstructure:"host" yaml:"host"`                                       // Database host address
+	Port                    int    `mapstructure:"port" yaml:"port"`                                       // Database port (default: 5432)
+	User                    string `mapstructure:"user" yaml:"user"`                                       // Database username
+	Password                string `mapstructure:"password" yaml:"password"`                               // Database password
+	DBName                  string `mapstructure:"dbname" yaml:"dbname"`                                   // Database name
+	SSLMode                 string `mapstructure:"sslmode" yaml:"sslmode"`                                 // SSL mode: disable|allow|prefer|require|verify-ca|verify-full
+	SSLCert                 string `mapstructure:"sslcert" yaml:"sslcert"`                                 // Client certificate path
+	SSLKey                  string `mapstructure:"sslkey" yaml:"sslkey"`                                   // Client private key path
+	SSLRootCert             string `mapstructure:"sslrootcert" yaml:"sslrootcert"`                         // Root certificate path
+	ConnectTimeoutSeconds   int    `mapstructure:"connectTimeoutSeconds" yaml:"connectTimeoutSeconds"`     // Connection timeout in seconds
+	ApplicationName         string `mapstructure:"applicationName" yaml:"applicationName"`                 // PostgreSQL application_name
+	FallbackApplicationName string `mapstructure:"fallbackApplicationName" yaml:"fallbackApplicationName"` // PostgreSQL fallback_application_name
+	SearchPath              string `mapstructure:"searchPath" yaml:"searchPath"`                           // PostgreSQL search_path
+	Options                 string `mapstructure:"options" yaml:"options"`                                 // PostgreSQL startup options
+	TimeZone                string `mapstructure:"timezone" yaml:"timezone"`                               // PostgreSQL session timezone
+	MaxOpenConnections      int    `mapstructure:"maxOpenConnections" yaml:"maxOpenConnections"`           // Maximum open connections
+	MaxIdleConnections      int    `mapstructure:"maxIdleConnections" yaml:"maxIdleConnections"`           // Maximum idle connections
+	ConnMaxLifetimeMinutes  int    `mapstructure:"connMaxLifetimeMinutes" yaml:"connMaxLifetimeMinutes"`   // Connection lifetime in minutes
 }
 
 // CorsConfig contains Cross-Origin Resource Sharing (CORS) policy settings.
@@ -448,6 +461,9 @@ func LoadConfig(configPath string, configMode ConfigMode) (*Config, error) {
 	}
 	cfg.Server.StrictVerification = string(verificationMode)
 	applyAASPreconfigPathOverrides(cfg)
+	if err = validatePostgresConfig(v, cfg.Postgres); err != nil {
+		return nil, err
+	}
 	applyABACEnvOverrides(cfg)
 	if err = validateABACConfig(cfg); err != nil {
 		return nil, err
@@ -462,6 +478,61 @@ func LoadConfig(configPath string, configMode ConfigMode) (*Config, error) {
 		PrintConfiguration(cfg)
 	}
 	return cfg, nil
+}
+
+func validatePostgresConfig(v *viper.Viper, cfg PostgresConfig) error {
+	if strings.TrimSpace(cfg.DSN) != "" {
+		conflictingKeys := explicitlyConfiguredPostgresConnectionKeys(v)
+		if len(conflictingKeys) > 0 {
+			return fmt.Errorf("CONFIG-POSTGRES-DSN-CONFLICT postgres.dsn is mutually exclusive with individual postgres connection fields; remove postgres.dsn or remove these fields: %s", strings.Join(conflictingKeys, ", "))
+		}
+		return nil
+	}
+
+	switch strings.ToLower(strings.TrimSpace(cfg.SSLMode)) {
+	case "", "disable", "allow", "prefer", "require", "verify-ca", "verify-full":
+	default:
+		return fmt.Errorf("CONFIG-POSTGRES-SSLMODE unsupported postgres.sslmode %q", cfg.SSLMode)
+	}
+	if cfg.ConnectTimeoutSeconds < 0 {
+		return fmt.Errorf("CONFIG-POSTGRES-CONNECTTIMEOUT postgres.connectTimeoutSeconds must not be negative")
+	}
+	return nil
+}
+
+func explicitlyConfiguredPostgresConnectionKeys(v *viper.Viper) []string {
+	keys := []string{
+		"host",
+		"port",
+		"user",
+		"password",
+		"dbname",
+		"sslmode",
+		"sslcert",
+		"sslkey",
+		"sslrootcert",
+		"connectTimeoutSeconds",
+		"applicationName",
+		"fallbackApplicationName",
+		"searchPath",
+		"options",
+		"timezone",
+	}
+
+	conflictingKeys := make([]string, 0, len(keys))
+	for _, key := range keys {
+		configKey := "postgres." + key
+		if v.InConfig(configKey) || postgresEnvConfigured(configKey) {
+			conflictingKeys = append(conflictingKeys, configKey)
+		}
+	}
+	return conflictingKeys
+}
+
+func postgresEnvConfigured(configKey string) bool {
+	envKey := strings.ToUpper(strings.ReplaceAll(configKey, ".", "_"))
+	_, ok := os.LookupEnv(envKey)
+	return ok
 }
 
 func applyABACEnvOverrides(cfg *Config) {
@@ -835,6 +906,17 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("postgres.user", "admin")
 	v.SetDefault("postgres.password", "admin123")
 	v.SetDefault("postgres.dbname", "basyxTestDB")
+	v.SetDefault("postgres.dsn", "")
+	v.SetDefault("postgres.sslmode", DefaultConfig.PgSSLMode)
+	v.SetDefault("postgres.sslcert", "")
+	v.SetDefault("postgres.sslkey", "")
+	v.SetDefault("postgres.sslrootcert", "")
+	v.SetDefault("postgres.connectTimeoutSeconds", 0)
+	v.SetDefault("postgres.applicationName", "")
+	v.SetDefault("postgres.fallbackApplicationName", "")
+	v.SetDefault("postgres.searchPath", "")
+	v.SetDefault("postgres.options", "")
+	v.SetDefault("postgres.timezone", "")
 	v.SetDefault("postgres.maxOpenConnections", 50)
 	v.SetDefault("postgres.maxIdleConnections", 50)
 	v.SetDefault("postgres.connMaxLifetimeMinutes", 5)
@@ -964,6 +1046,7 @@ func PrintConfiguration(cfg *Config) {
 	lines = append(lines, "🔹 Postgres:")
 	add("Port", cfg.Postgres.Port, DefaultConfig.PgPort)
 	add("DB Name", cfg.Postgres.DBName, DefaultConfig.PgDBName)
+	add("SSL Mode", cfg.Postgres.SSLMode, DefaultConfig.PgSSLMode)
 	add("Max Open Connections", cfg.Postgres.MaxOpenConnections, DefaultConfig.PgMaxOpen)
 	add("Max Idle Connections", cfg.Postgres.MaxIdleConnections, DefaultConfig.PgMaxIdle)
 	add("Conn Max Lifetime (min)", cfg.Postgres.ConnMaxLifetimeMinutes, DefaultConfig.PgConnLifetime)

@@ -6,12 +6,26 @@ server:
   verificationEndpointAvailable: true
 
 postgres:
+  # Choose exactly one connection variant:
+  # 1) individual fields below, or 2) dsn. Do not mix dsn with host/port/user/password/dbname/ssl settings.
+  # Pool settings may be used with either variant.
+  # dsn: postgres://user:password@localhost:5432/basyxTestDB?sslmode=require
   host: localhost
   port: 5432
   user: admin
   password: admin123
   # dbname: basyxGoBenchmarkTest
   dbname: basyxTestDB
+  # sslmode: disable
+  # sslcert: ""
+  # sslkey: ""
+  # sslrootcert: ""
+  # connectTimeoutSeconds: 0
+  # applicationName: ""
+  # fallbackApplicationName: ""
+  # searchPath: ""
+  # options: ""
+  # timezone: ""
   maxOpenConnections: 500
   maxIdleConnections: 500
   connMaxLifetimeMinutes: 5

@@ -1,9 +1,23 @@
 postgres:
+  # Choose exactly one connection variant:
+  # 1) individual fields below, or 2) dsn. Do not mix dsn with host/port/user/password/dbname/ssl settings.
+  # Pool settings may be used with either variant.
+  # dsn: postgres://user:password@localhost:5432/basyxConfigService?sslmode=require
   host: localhost
   port: 5432
   user: postgres
   password: change-me
   dbname: basyxConfigService
+  # sslmode: disable
+  # sslcert: ""
+  # sslkey: ""
+  # sslrootcert: ""
+  # connectTimeoutSeconds: 0
+  # applicationName: ""
+  # fallbackApplicationName: ""
+  # searchPath: ""
+  # options: ""
+  # timezone: ""
   maxOpenConnections: 50
   maxIdleConnections: 25
   connMaxLifetimeMinutes: 5
