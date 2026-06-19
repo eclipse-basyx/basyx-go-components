@@ -76,6 +76,13 @@
 		"expectedStatus": 200
 	},
 	{
+		"context": "004.1d.1 - GET /shells - filter by specificAssetId value",
+		"method": "GET",
+		"endpoint": "http://127.0.0.1:6004/shells?assetIds=value-without-external-subject",
+		"shouldMatch": "expected/expectedAssetAdministrationShellFilterSpecificAssetIds.json",
+		"expectedStatus": 200
+	},
+	{
 		"context": "004.1e - POST /shells - create AAS with specificAssetId with semanticId",
 		"method": "POST",
 		"endpoint": "http://127.0.0.1:6004/shells",

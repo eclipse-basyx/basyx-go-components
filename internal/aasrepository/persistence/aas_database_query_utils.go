@@ -172,10 +172,23 @@ func buildGetAssetAdministrationShellsDataset(dialect *goqu.DialectWrapper, limi
 	}
 
 	if len(assetIDs) > 0 {
-		ds = ds.Where(goqu.I("asset_information.global_asset_id").In(assetIDs))
+		ds = ds.Where(buildAssetIDFilterExpression(assetIDs))
 	}
 
 	return ds, nil
+}
+
+func buildAssetIDFilterExpression(assetIDs []string) goqu.Expression {
+	return goqu.Or(
+		goqu.I("asset_information.global_asset_id").In(assetIDs),
+		goqu.L(
+			"EXISTS (SELECT 1 FROM ? WHERE ? = ? AND ?)",
+			goqu.T("specific_asset_id").As("specific_asset_id_filter"),
+			goqu.I("specific_asset_id_filter.asset_information_id"),
+			goqu.I("asset_information.asset_information_id"),
+			goqu.I("specific_asset_id_filter.value").In(assetIDs),
+		),
+	)
 }
 
 func buildGetAssetAdministrationShellCursorByDBIDQuery(dialect *goqu.DialectWrapper, aasDBID int64) (string, []any, error) {
