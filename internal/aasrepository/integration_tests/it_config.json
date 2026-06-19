@@ -78,7 +78,7 @@
 	{
 		"context": "004.1d.1 - GET /shells - filter by specificAssetId value",
 		"method": "GET",
-		"endpoint": "http://127.0.0.1:6004/shells?assetIds=value-without-external-subject",
+		"endpoint": "http://127.0.0.1:6004/shells?assetIds=eyJuYW1lIjoic3BlY2lmaWMtd2l0aG91dC1leHRlcm5hbC1zdWJqZWN0IiwidmFsdWUiOiJ2YWx1ZS13aXRob3V0LWV4dGVybmFsLXN1YmplY3QifQ",
 		"shouldMatch": "expected/expectedAssetAdministrationShellFilterSpecificAssetIds.json",
 		"expectedStatus": 200
 	},
@@ -199,7 +199,7 @@
 	{
 		"context": "004.6 - GET /shells - filter by assetIds",
 		"method": "GET",
-		"endpoint": "http://127.0.0.1:6004/shells?assetIds=assetIdValueX",
+		"endpoint": "http://127.0.0.1:6004/shells?assetIds=eyJuYW1lIjoiZ2xvYmFsQXNzZXRJZCIsInZhbHVlIjoiYXNzZXRJZFZhbHVlWCJ9",
 		"shouldMatch": "expected/expectedAssetAdministrationShellFilterAssetIds.json",
 		"expectedStatus": 200
 	},
@@ -234,7 +234,7 @@
 	{
 		"context": "004.10 - GET /shells - filter by cursor",
 		"method": "GET",
-		"endpoint": "http://127.0.0.1:6004/shells?assetIds=assetIdValueX&idShort=aasTestC",
+		"endpoint": "http://127.0.0.1:6004/shells?assetIds=eyJuYW1lIjoiZ2xvYmFsQXNzZXRJZCIsInZhbHVlIjoiYXNzZXRJZFZhbHVlWCJ9&idShort=aasTestC",
 		"shouldMatch": "expected/expectedAssetAdministrationShellFilterAssetIdsAndIdShort.json",
 		"expectedStatus": 200
 	},

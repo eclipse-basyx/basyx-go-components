@@ -130,7 +130,12 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) GetAllAssetAdministrat
 		return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "BadCursor"), nil
 	}
 
-	aasList, nextCursor, err := s.assetAdministrationShellBackend.GetAssetAdministrationShells(ctx, limit, decodedCursor, idShort, assetIds)
+	assetLinks, decodeErr := decodeAssetLinks(assetIds)
+	if decodeErr != nil {
+		return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "BadAssetIds"), nil
+	}
+
+	aasList, nextCursor, err := s.assetAdministrationShellBackend.GetAssetAdministrationShells(ctx, limit, decodedCursor, idShort, assetLinks)
 	if err != nil {
 		if common.IsErrBadRequest(err) {
 			return newAPIErrorResponse(err, http.StatusBadRequest, operation, "BadRequest"), nil
@@ -197,7 +202,12 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) GetAllAssetAdministrat
 		return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "BadCursor"), nil
 	}
 
-	references, nextCursor, err := s.assetAdministrationShellBackend.GetAssetAdministrationShellReferences(ctx, limit, decodedCursor, idShort, assetIds)
+	assetLinks, decodeErr := decodeAssetLinks(assetIds)
+	if decodeErr != nil {
+		return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "BadAssetIds"), nil
+	}
+
+	references, nextCursor, err := s.assetAdministrationShellBackend.GetAssetAdministrationShellReferences(ctx, limit, decodedCursor, idShort, assetLinks)
 	if err != nil {
 		if common.IsErrBadRequest(err) {
 			return newAPIErrorResponse(err, http.StatusBadRequest, operation, "BadRequest"), nil
@@ -218,6 +228,25 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) GetAllAssetAdministrat
 		PagingMetadata: gen.PagedResultPagingMetadata{Cursor: common.EncodeString(nextCursor)},
 		Result:         jsonReferences,
 	}), nil
+}
+
+func decodeAssetLinks(assetIds []string) ([]gen.AssetLink, error) {
+	links := make([]gen.AssetLink, 0, len(assetIds))
+	for _, encodedAssetID := range assetIds {
+		if strings.TrimSpace(encodedAssetID) == "" {
+			continue
+		}
+		decodedAssetID, err := common.DecodeString(encodedAssetID)
+		if err != nil {
+			return nil, err
+		}
+		var link gen.AssetLink
+		if err = json.Unmarshal([]byte(decodedAssetID), &link); err != nil {
+			return nil, err
+		}
+		links = append(links, link)
+	}
+	return links, nil
 }
 
 // GetAssetAdministrationShellById - Returns a specific Asset Administration Shell

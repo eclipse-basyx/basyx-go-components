@@ -39,6 +39,7 @@ import (
 
 	"github.com/FriedJannik/aas-go-sdk/types"
 	aasrepositorydb "github.com/eclipse-basyx/basyx-go-components/internal/aasrepository/persistence"
+	commonmodel "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	submodelrepositorydb "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence"
 )
 
@@ -339,8 +340,9 @@ func (s *DPPRepositoryService) ReadDPPIdsByProductIds(ctx context.Context, reque
 
 func (s *DPPRepositoryService) collectDPPIDsForProduct(ctx context.Context, productID string, seen map[string]struct{}, ids *[]string) error {
 	cursor := ""
+	assetLinks := []commonmodel.AssetLink{{Name: "globalAssetId", Value: productID}}
 	for {
-		shells, nextCursor, err := s.aasRepo.GetAssetAdministrationShells(ctx, dppProductIDSearchPageSize, cursor, "", []string{productID})
+		shells, nextCursor, err := s.aasRepo.GetAssetAdministrationShells(ctx, dppProductIDSearchPageSize, cursor, "", assetLinks)
 		if err != nil {
 			return fmt.Errorf("DPP-READIDS-GETAAS get AAS for product %s: %w", productID, err)
 		}

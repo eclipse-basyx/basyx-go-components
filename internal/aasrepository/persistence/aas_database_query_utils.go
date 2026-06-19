@@ -32,8 +32,11 @@ import (
 	"github.com/FriedJannik/aas-go-sdk/jsonization"
 	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/doug-martin/goqu/v9"
+	commonmodel "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	jsoniter "github.com/json-iterator/go"
 )
+
+const globalAssetIDAssetLinkName = "globalAssetId"
 
 func buildPageLimitPlusOne(limit int32) (uint, error) {
 	pageLimitPlusOneString := strconv.FormatInt(int64(limit)+1, 10)
@@ -147,7 +150,7 @@ func buildCheckAssetAdministrationShellSubmodelReferenceExistsQuery(dialect *goq
 		ToSQL()
 }
 
-func buildGetAssetAdministrationShellsDataset(dialect *goqu.DialectWrapper, limit int32, cursor string, idShort string, assetIDs []string) (*goqu.SelectDataset, error) {
+func buildGetAssetAdministrationShellsDataset(dialect *goqu.DialectWrapper, limit int32, cursor string, idShort string, assetLinks []commonmodel.AssetLink) (*goqu.SelectDataset, error) {
 	ds := dialect.
 		From(goqu.T("aas").As("aas")).
 		LeftJoin(goqu.T("asset_information").As("asset_information"), goqu.On(goqu.I("asset_information.asset_information_id").Eq(goqu.I("aas.id")))).
@@ -171,24 +174,41 @@ func buildGetAssetAdministrationShellsDataset(dialect *goqu.DialectWrapper, limi
 		ds = ds.Where(goqu.I("aas.id_short").Eq(idShort))
 	}
 
-	if len(assetIDs) > 0 {
-		ds = ds.Where(buildAssetIDFilterExpression(assetIDs))
+	for _, link := range uniqueAssetLinks(assetLinks) {
+		ds = ds.Where(buildAssetLinkFilterExpression(dialect, link))
 	}
 
 	return ds, nil
 }
 
-func buildAssetIDFilterExpression(assetIDs []string) goqu.Expression {
-	return goqu.Or(
-		goqu.I("asset_information.global_asset_id").In(assetIDs),
-		goqu.L(
-			"EXISTS (SELECT 1 FROM ? WHERE ? = ? AND ?)",
-			goqu.T("specific_asset_id").As("specific_asset_id_filter"),
-			goqu.I("specific_asset_id_filter.asset_information_id"),
-			goqu.I("asset_information.asset_information_id"),
-			goqu.I("specific_asset_id_filter.value").In(assetIDs),
-		),
-	)
+func buildAssetLinkFilterExpression(dialect *goqu.DialectWrapper, link commonmodel.AssetLink) goqu.Expression {
+	if link.Name == globalAssetIDAssetLinkName {
+		return goqu.I("asset_information.global_asset_id").Eq(link.Value)
+	}
+
+	specificAssetID := goqu.T("specific_asset_id").As("specific_asset_id_filter")
+	existsSub := dialect.From(specificAssetID).
+		Select(goqu.V(1)).
+		Where(goqu.And(
+			goqu.I("specific_asset_id_filter.asset_information_id").Eq(goqu.I("asset_information.asset_information_id")),
+			goqu.I("specific_asset_id_filter.name").Eq(link.Name),
+			goqu.I("specific_asset_id_filter.value").Eq(link.Value),
+		))
+	return goqu.L("EXISTS ?", existsSub)
+}
+
+func uniqueAssetLinks(assetLinks []commonmodel.AssetLink) []commonmodel.AssetLink {
+	seen := make(map[string]struct{}, len(assetLinks))
+	out := make([]commonmodel.AssetLink, 0, len(assetLinks))
+	for _, link := range assetLinks {
+		key := link.Name + "\x1f" + link.Value
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+		out = append(out, link)
+	}
+	return out
 }
 
 func buildGetAssetAdministrationShellCursorByDBIDQuery(dialect *goqu.DialectWrapper, aasDBID int64) (string, []any, error) {
