@@ -121,6 +121,35 @@ func TestOIDCMiddleware_RejectsUnknownIssuer(t *testing.T) {
 	}
 }
 
+func TestOIDCMiddleware_AnonymousClaimsDoNotContainSubject(t *testing.T) {
+	t.Parallel()
+
+	middleware := (&OIDC{
+		verifiers: map[string]issuerVerifier{},
+		settings: OIDCSettings{
+			AllowAnonymous: true,
+		},
+	}).Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		claims := FromContext(r)
+		if claims == nil {
+			t.Fatal("expected anonymous claims in context")
+		}
+		if _, ok := claims["sub"]; ok {
+			t.Fatal("anonymous claims must not contain sub")
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}))
+
+	request := httptest.NewRequest(http.MethodGet, "/", nil)
+	response := httptest.NewRecorder()
+
+	middleware.ServeHTTP(response, request)
+
+	if response.Code != http.StatusNoContent {
+		t.Fatalf("status = %d, want %d", response.Code, http.StatusNoContent)
+	}
+}
+
 func TestOIDCMiddleware_AppliesClaimMappingsAndTokenTypeIndicators(t *testing.T) {
 	t.Parallel()
 

@@ -37,6 +37,122 @@ import (
 	api "github.com/go-chi/chi/v5"
 )
 
+func TestSecurityMiddleware_RejectsAnonymousGetWhenACLRequiresSubClaim(t *testing.T) {
+	router := api.NewRouter()
+	model, err := ParseAccessModel([]byte(`{
+		"AllAccessPermissionRules": {
+			"DEFATTRIBUTES": [
+				{
+					"name": "anonymous",
+					"attributes": [
+						{ "GLOBAL": "ANONYMOUS" }
+					]
+				},
+				{
+					"name": "sub_claim",
+					"attributes": [
+						{ "CLAIM": "sub" }
+					]
+				}
+			],
+			"DEFOBJECTS": [
+				{
+					"name": "description_api",
+					"objects": [
+						{ "ROUTE": "/description" }
+					]
+				},
+				{
+					"name": "aas_registry_api",
+					"objects": [
+						{ "ROUTE": "/shell-descriptors" }
+					]
+				}
+			],
+			"DEFACLS": [
+				{
+					"name": "anonymous_access",
+					"acl": {
+						"USEATTRIBUTES": "anonymous",
+						"RIGHTS": [ "READ" ],
+						"ACCESS": "ALLOW"
+					}
+				},
+				{
+					"name": "read_access",
+					"acl": {
+						"USEATTRIBUTES": "sub_claim",
+						"RIGHTS": [ "READ" ],
+						"ACCESS": "ALLOW"
+					}
+				}
+			],
+			"DEFFORMULAS": [
+				{
+					"name": "always_true",
+					"formula": { "$boolean": true }
+				}
+			],
+			"rules": [
+				{
+					"USEACL": "anonymous_access",
+					"USEOBJECTS": [ "description_api" ],
+					"USEFORMULA": "always_true"
+				},
+				{
+					"USEACL": "read_access",
+					"USEOBJECTS": [ "aas_registry_api" ],
+					"USEFORMULA": "always_true"
+				}
+			]
+		}
+	}`), router, "")
+	if err != nil {
+		t.Fatalf("ParseAccessModel() error = %v", err)
+	}
+
+	oidc := &OIDC{
+		verifiers: map[string]issuerVerifier{},
+		settings: OIDCSettings{
+			AllowAnonymous: true,
+		},
+	}
+	router.Use(
+		oidc.Middleware,
+		ABACMiddleware(ABACSettings{
+			Enabled: true,
+			Model:   model,
+		}),
+	)
+	router.Get("/shell-descriptors", func(http.ResponseWriter, *http.Request) {
+		t.Fatal("protected handler must not be called without a token")
+	})
+	router.Get("/description", func(w http.ResponseWriter, r *http.Request) {
+		if _, ok := FromContext(r)["sub"]; ok {
+			t.Fatal("anonymous claims must not contain sub")
+		}
+		w.WriteHeader(http.StatusOK)
+	})
+
+	protectedReq := httptest.NewRequest(http.MethodGet, "/shell-descriptors", nil)
+	protectedRec := httptest.NewRecorder()
+
+	router.ServeHTTP(protectedRec, protectedReq)
+
+	if protectedRec.Code != http.StatusForbidden {
+		t.Fatalf("expected status %d without token, got %d", http.StatusForbidden, protectedRec.Code)
+	}
+
+	anonymousReq := httptest.NewRequest(http.MethodGet, "/description", nil)
+	anonymousRec := httptest.NewRecorder()
+
+	router.ServeHTTP(anonymousRec, anonymousReq)
+
+	if anonymousRec.Code != http.StatusOK {
+		t.Fatalf("expected GLOBAL ANONYMOUS access status %d, got %d", http.StatusOK, anonymousRec.Code)
+	}
+}
+
 func TestABACMiddleware_UnknownRouteReturnsNotFound(t *testing.T) {
 	router := api.NewRouter()
 	model := &AccessModel{

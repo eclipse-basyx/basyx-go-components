@@ -175,7 +175,7 @@ func ClaimsFromContext(ctx context.Context) Claims {
 //
 // Behavior:
 //   - If Authorization header is missing or not Bearer:
-//   - If AllowAnonymous is true → inject anonymous claims and continue.
+//   - If AllowAnonymous is true → inject an empty claims set and continue.
 //   - Otherwise → 401 Unauthorized.
 //   - If Bearer is present → verify the token, parse claims, check scopes,
 //     and store claims and iat in the request context.
@@ -184,7 +184,7 @@ func (o *OIDC) Middleware(next http.Handler) http.Handler {
 		authz := r.Header.Get("Authorization")
 		if !strings.HasPrefix(authz, "Bearer ") {
 			if o.settings.AllowAnonymous {
-				anon := Claims{"sub": "anonymous", "scope": ""}
+				anon := Claims{}
 				ctx := context.WithValue(r.Context(), ClaimsKey, anon)
 				next.ServeHTTP(w, r.WithContext(ctx))
 				return
