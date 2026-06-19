@@ -44,7 +44,7 @@ services:
 
   submodel_repository:
     container_name: delegated-operations-submodel-repository
-    image: eclipsebasyx/submodelrepositoryservice-go:SNAPSHOT
+    image: eclipsebasyx/submodelrepository-go:SNAPSHOT
     pull_policy: always
     command: ["/app/submodelrepositoryservice"]
     environment:
