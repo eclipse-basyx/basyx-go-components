@@ -29,7 +29,7 @@ package dppapiservice
 
 import (
 	"context"
-	"embed"
+	"io/fs"
 	"log"
 	"net/http"
 
@@ -54,7 +54,7 @@ import (
 // Returns:
 //   - http.Handler: Configured root HTTP handler for the DPP API service
 //   - error: Setup error if security or router assembly fails
-func NewHTTPHandler(ctx context.Context, cfg *common.Config, openapiSpec embed.FS, aasRepo *aasrepositorydb.AssetAdministrationShellDatabase, submodelRepo *submodelrepositorydb.SubmodelDatabase) (http.Handler, error) {
+func NewHTTPHandler(ctx context.Context, cfg *common.Config, openapiSpec fs.FS, aasRepo *aasrepositorydb.AssetAdministrationShellDatabase, submodelRepo *submodelrepositorydb.SubmodelDatabase) (http.Handler, error) {
 	dppService := dppapi.NewDPPRepositoryService(aasRepo, submodelRepo)
 	dppRouter := dppapi.NewDPPRepositoryRouter(dppService)
 	contextPath := common.NormalizeBasePath(cfg.Server.ContextPath)
@@ -63,7 +63,7 @@ func NewHTTPHandler(ctx context.Context, cfg *common.Config, openapiSpec embed.F
 	rootRouter.Use(common.ConfigMiddleware(cfg))
 	common.AddCors(rootRouter, cfg)
 	common.AddHealthEndpoint(rootRouter, cfg)
-	if err := common.AddSwaggerUIFromFS(rootRouter, openapiSpec, "openapi.yaml", "Digital Product Passport API", "/swagger", "/api-docs/openapi.yaml", cfg); err != nil {
+	if err := common.AddSwaggerUIFromFS(rootRouter, openapiSpec, "openapi.yaml", "Digital Product Passport API", "/swagger", "/api-docs/openapi.yaml", dppSwaggerConfig(cfg)); err != nil {
 		log.Printf("Warning: failed to load OpenAPI spec for Swagger UI: %v", err)
 	}
 	rootRouter.Get(rootRedirectPath(contextPath), func(w http.ResponseWriter, r *http.Request) {
@@ -100,6 +100,16 @@ func ConfigureHistory(cfg common.HistoryConfig) {
 		Immutability:         cfg.Immutability,
 		AuditIdentityMode:    cfg.AuditIdentityMode,
 	})
+}
+
+func dppSwaggerConfig(cfg *common.Config) *common.Config {
+	if cfg == nil {
+		return nil
+	}
+
+	swaggerConfig := *cfg
+	swaggerConfig.Server.VerificationEndpointAvailable = false
+	return &swaggerConfig
 }
 
 func classifyDPPRoute(versioningGuard *history.MutationCoverageGuard, route dppapi.Route) {
