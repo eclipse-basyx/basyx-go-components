@@ -182,7 +182,7 @@
         }
       },
       {
-        "name": "submodel_descriptor_bpn_or_public_with_header",
+        "name": "submodel_element_bpn_or_public_with_header",
         "formula": {
           "$or": [
             {
@@ -193,7 +193,7 @@
                   }
                 },
                 {
-                  "$field": "$aasdesc#submodelDescriptors[].supplementalSemanticIds[].keys[].value"
+                  "$field": "$sme#supplementalSemanticIds[].keys[].value"
                 }
               ]
             },
@@ -205,7 +205,52 @@
                       "$strVal": "PUBLIC_READABLE"
                     },
                     {
-                      "$field": "$aasdesc#submodelDescriptors[].supplementalSemanticIds[].keys[].value"
+                      "$field": "$sme#supplementalSemanticIds[].keys[].value"
+                    }
+                  ]
+                },
+                {
+                  "$ne": [
+                    {
+                      "$attribute": {
+                        "CLAIM": "Edc-Bpn"
+                      }
+                    },
+                    {
+                      "$strVal": "<nil>"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      },
+      {
+        "name": "submodel_bpn_or_public_with_header",
+        "formula": {
+          "$or": [
+            {
+              "$eq": [
+                {
+                  "$attribute": {
+                    "CLAIM": "Edc-Bpn"
+                  }
+                },
+                {
+                  "$field": "$sm#supplementalSemanticIds[].keys[].value"
+                }
+              ]
+            },
+            {
+              "$and": [
+                {
+                  "$eq": [
+                    {
+                      "$strVal": "PUBLIC_READABLE"
+                    },
+                    {
+                      "$field": "$sm#supplementalSemanticIds[].keys[].value"
                     }
                   ]
                 },
@@ -251,12 +296,12 @@
         "FILTERLIST": [
           {
             "FRAGMENT": "$sm#supplementalSemanticIds[]",
-            "USEFORMULA": "submodel_bpn_or_public",
+            "USEFORMULA": "submodel_bpn_or_public_with_header",
             "MATCH": true
           },
           {
             "FRAGMENT": "$sm#supplementalSemanticIds[].keys[]",
-            "USEFORMULA": "submodel_bpn_or_public",
+            "USEFORMULA": "submodel_bpn_or_public_with_header",
             "MATCH": true
           },
           {
@@ -266,7 +311,7 @@
           },
           {
             "FRAGMENT": "$sme#supplementalSemanticIds[].keys[]",
-            "USEFORMULA": "submodel_element_bpn_or_public",
+            "USEFORMULA": "submodel_element_bpn_or_public_with_header",
             "MATCH": true
           }
         ]
