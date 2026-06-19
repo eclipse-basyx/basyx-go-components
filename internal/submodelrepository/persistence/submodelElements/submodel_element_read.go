@@ -1326,7 +1326,7 @@ func executeLoadedSMERowQuery(
 	args []interface{},
 	errorCodePrefix string,
 ) ([]loadedSMERow, error) {
-	rows, queryErr := db.Query(sqlQuery, args...)
+	rows, queryErr := db.QueryContext(ctx, sqlQuery, args...)
 	if queryErr != nil {
 		return nil, common.NewInternalServerError(errorCodePrefix + "-EXECQ " + queryErr.Error())
 	}
@@ -1406,9 +1406,6 @@ func executeLoadedSMERowQuery(
 	}
 	if rowsErr := rows.Err(); rowsErr != nil {
 		return nil, common.NewInternalServerError(errorCodePrefix + "-ROWSERR " + rowsErr.Error())
-	}
-	if closeErr := rows.Close(); closeErr != nil {
-		return nil, common.NewInternalServerError(errorCodePrefix + "-CLOSEROWS " + closeErr.Error())
 	}
 
 	if hasSMESupplementalSemanticIDFilter(ctx) {

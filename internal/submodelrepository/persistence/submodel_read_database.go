@@ -349,7 +349,7 @@ func (s *SubmodelDatabase) getSubmodelsWithOptionalSemanticIDFilter(ctx context.
 	var identifier, idShort, category, descriptionJsonString, displayNameJsonString, administrativeInformationJsonString, embeddedDataSpecificationJsonString, supplementalSemanticIDsJsonString, extensionsJsonString, qualifiersJsonString, semanticIDJSONString sql.NullString
 	var kind sql.NullInt64
 
-	rows, err := s.db.Query(query, args...)
+	rows, err := s.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, "", err
 	}
@@ -431,9 +431,6 @@ func (s *SubmodelDatabase) getSubmodelsWithOptionalSemanticIDFilter(ctx context.
 
 	if err := rows.Err(); err != nil {
 		return nil, "", err
-	}
-	if closeErr := rows.Close(); closeErr != nil {
-		return nil, "", common.NewInternalServerError("SMREPO-GETSMS-CLOSEROWS " + closeErr.Error())
 	}
 
 	if filterSupplementalSemanticIDs {
