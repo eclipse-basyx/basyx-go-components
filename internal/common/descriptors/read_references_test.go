@@ -141,6 +141,9 @@ func TestReadRepositorySupplementalSemanticReferencesAppliesFragmentFilter(t *te
 			ctx := auth.WithQueryFilter(context.Background(), &auth.QueryFilter{
 				Filters: auth.FragmentFilters{
 					test.fragment: condition,
+					"$sme#supplementalSemanticIds[]": {
+						Boolean: boolPointer(false),
+					},
 				},
 				FilterMatch: auth.FragmentMatchModes{
 					test.fragment: true,
@@ -155,6 +158,9 @@ func TestReadRepositorySupplementalSemanticReferencesAppliesFragmentFilter(t *te
 				}
 				if !strings.Contains(actual, "FILTER_VISIBLE") {
 					return fmt.Errorf("expected SQL to contain filter value, got: %s", actual)
+				}
+				if test.name == "submodel" && strings.Contains(actual, "sme_supplemental_semantic_id_reference") {
+					return fmt.Errorf("submodel SQL must not include SME filter aliases: %s", actual)
 				}
 				return nil
 			})))
@@ -188,4 +194,8 @@ func TestReadRepositorySupplementalSemanticReferencesAppliesFragmentFilter(t *te
 			}
 		})
 	}
+}
+
+func boolPointer(value bool) *bool {
+	return &value
 }

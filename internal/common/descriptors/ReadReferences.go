@@ -227,9 +227,10 @@ func ReadSubmodelSupplementalSemanticReferencesBySubmodelIDs(
 	if err != nil {
 		return nil, fmt.Errorf("REFREAD-SUPPSM-COLLECTOR: %w", err)
 	}
+	filterCtx, filterSpecs := supplementalSemanticIDFilterContext(ctx, "$sm#", collector)
 
 	return readContextReferences1ToManyByOwnerIDs(
-		ctx,
+		filterCtx,
 		db,
 		submodelIDs,
 		contextReferences1ToManyQuerySpec{
@@ -240,7 +241,7 @@ func ReadSubmodelSupplementalSemanticReferencesBySubmodelIDs(
 			ownerAlias:        "s",
 			referenceAlias:    "sm_supplemental_semantic_id_reference",
 			referenceKeyAlias: "sm_supplemental_semantic_id_reference_key",
-			filterSpecs:       supplementalSemanticIDFilterSpecs(ctx, "$sm#", collector),
+			filterSpecs:       filterSpecs,
 			errPrefix:         "REFREAD-SUPPSM",
 		},
 	)
@@ -257,9 +258,10 @@ func ReadSubmodelElementSupplementalSemanticReferencesByElementIDs(
 	if err != nil {
 		return nil, fmt.Errorf("REFREAD-SUPPSME-COLLECTOR: %w", err)
 	}
+	filterCtx, filterSpecs := supplementalSemanticIDFilterContext(ctx, "$sme", collector)
 
 	return readContextReferences1ToManyByOwnerIDs(
-		ctx,
+		filterCtx,
 		db,
 		submodelElementIDs,
 		contextReferences1ToManyQuerySpec{
@@ -270,20 +272,20 @@ func ReadSubmodelElementSupplementalSemanticReferencesByElementIDs(
 			ownerAlias:        "submodel_element",
 			referenceAlias:    "sme_supplemental_semantic_id_reference",
 			referenceKeyAlias: "sme_supplemental_semantic_id_reference_key",
-			filterSpecs:       supplementalSemanticIDFilterSpecs(ctx, "$sme", collector),
+			filterSpecs:       filterSpecs,
 			errPrefix:         "REFREAD-SUPPSME",
 		},
 	)
 }
 
-func supplementalSemanticIDFilterSpecs(
+func supplementalSemanticIDFilterContext(
 	ctx context.Context,
 	prefix string,
 	collector *grammar.ResolvedFieldPathCollector,
-) []referenceFilterSpec {
+) (context.Context, []referenceFilterSpec) {
 	queryFilter := auth.GetQueryFilter(ctx)
 	if queryFilter == nil {
-		return nil
+		return ctx, nil
 	}
 
 	fragments := make([]grammar.FragmentStringPattern, 0)
@@ -298,13 +300,21 @@ func supplementalSemanticIDFilterSpecs(
 	})
 
 	specs := make([]referenceFilterSpec, 0, len(fragments))
+	filteredQueryFilter := &auth.QueryFilter{
+		Filters:     make(auth.FragmentFilters, len(fragments)),
+		FilterMatch: make(auth.FragmentMatchModes, len(fragments)),
+	}
 	for _, fragment := range fragments {
+		filteredQueryFilter.Filters[fragment] = queryFilter.Filters[fragment]
+		if queryFilter.FilterMatch != nil {
+			filteredQueryFilter.FilterMatch[fragment] = queryFilter.FilterMatch[fragment]
+		}
 		specs = append(specs, referenceFilterSpec{
 			fragment:  fragment,
 			collector: collector,
 		})
 	}
-	return specs
+	return auth.WithQueryFilter(ctx, filteredQueryFilter), specs
 }
 
 type contextReferenceRow struct {

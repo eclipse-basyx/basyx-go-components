@@ -1,0 +1,41 @@
+{
+  "id": "urn:basyx:migration:submodel-descriptor:1",
+  "idShort": "MigrationSubmodelDescriptor",
+  "semanticId": {
+    "type": "ExternalReference",
+    "keys": [
+      {
+        "type": "GlobalReference",
+        "value": "urn:basyx:migration:descriptor:semantic"
+      }
+    ]
+  },
+  "supplementalSemanticIds": [
+    {
+      "type": "ExternalReference",
+      "keys": [
+        {
+          "type": "GlobalReference",
+          "value": "urn:basyx:migration:descriptor:supplemental:1"
+        }
+      ]
+    },
+    {
+      "type": "ExternalReference",
+      "keys": [
+        {
+          "type": "GlobalReference",
+          "value": "urn:basyx:migration:descriptor:supplemental:2"
+        }
+      ]
+    }
+  ],
+  "endpoints": [
+    {
+      "interface": "SUBMODEL-3.0",
+      "protocolInformation": {
+        "href": "http://example.invalid/submodels/migration"
+      }
+    }
+  ]
+}
