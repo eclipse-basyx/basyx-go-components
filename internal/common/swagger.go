@@ -1534,18 +1534,18 @@ func AddSwaggerUI(r *chi.Mux, cfg SwaggerUIConfig) {
 	log.Printf("📄 OpenAPI spec available at %s", cfg.SpecPath)
 }
 
-// AddSwaggerUIFromFS adds Swagger/OpenAPI documentation endpoints using an embedded filesystem.
+// AddSwaggerUIFromFS adds Swagger/OpenAPI documentation endpoints using a filesystem.
 // When serverConfig.Swagger.Enabled is false, no documentation endpoints are added.
 //
 // Parameters:
 //   - r: Chi router to add endpoints to
-//   - specFS: Embedded filesystem containing the OpenAPI spec
-//   - specFile: Path to the spec file within the embedded FS
+//   - specFS: Filesystem containing the OpenAPI spec
+//   - specFile: Path to the spec file within the filesystem
 //   - title: Title for the Swagger UI page
 //   - uiPath: URL path for Swagger UI (e.g., "/swagger")
 //   - specPath: URL path for the spec file (e.g., "/api-docs/openapi.yaml")
 //   - serverConfig: Server configuration for building the server URL
-func AddSwaggerUIFromFS(r *chi.Mux, specFS embed.FS, specFile string, title string, uiPath string, specPath string, serverConfig *Config) error {
+func AddSwaggerUIFromFS(r *chi.Mux, specFS fs.FS, specFile string, title string, uiPath string, specPath string, serverConfig *Config) error {
 	if serverConfig != nil && !serverConfig.Swagger.Enabled {
 		log.Printf("📖 Swagger disabled")
 		return nil
