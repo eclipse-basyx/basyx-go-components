@@ -30,6 +30,8 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"sort"
+	"strings"
 
 	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/doug-martin/goqu/v9"
@@ -214,6 +216,97 @@ func ReadSubmodelDescriptorSupplementalSemanticReferencesByDescriptorIDs(
 	)
 }
 
+// ReadSubmodelSupplementalSemanticReferencesBySubmodelIDs loads filtered
+// supplemental semantic references for submodels keyed by database ID.
+func ReadSubmodelSupplementalSemanticReferencesBySubmodelIDs(
+	ctx context.Context,
+	db DBQueryer,
+	submodelIDs []int64,
+) (map[int64][]types.IReference, error) {
+	collector, err := grammar.NewResolvedFieldPathCollectorForRoot(grammar.CollectorRootSM)
+	if err != nil {
+		return nil, fmt.Errorf("REFREAD-SUPPSM-COLLECTOR: %w", err)
+	}
+
+	return readContextReferences1ToManyByOwnerIDs(
+		ctx,
+		db,
+		submodelIDs,
+		contextReferences1ToManyQuerySpec{
+			ownerTable:        "submodel",
+			ownerJoinColumn:   common.ColID,
+			ownerIDColumn:     common.ColSubmodelID,
+			referenceTable:    common.TblSubmodelSuppSemantic,
+			ownerAlias:        "s",
+			referenceAlias:    "sm_supplemental_semantic_id_reference",
+			referenceKeyAlias: "sm_supplemental_semantic_id_reference_key",
+			filterSpecs:       supplementalSemanticIDFilterSpecs(ctx, "$sm#", collector),
+			errPrefix:         "REFREAD-SUPPSM",
+		},
+	)
+}
+
+// ReadSubmodelElementSupplementalSemanticReferencesByElementIDs loads filtered
+// supplemental semantic references for submodel elements keyed by database ID.
+func ReadSubmodelElementSupplementalSemanticReferencesByElementIDs(
+	ctx context.Context,
+	db DBQueryer,
+	submodelElementIDs []int64,
+) (map[int64][]types.IReference, error) {
+	collector, err := grammar.NewResolvedFieldPathCollectorForRoot(grammar.CollectorRootSME)
+	if err != nil {
+		return nil, fmt.Errorf("REFREAD-SUPPSME-COLLECTOR: %w", err)
+	}
+
+	return readContextReferences1ToManyByOwnerIDs(
+		ctx,
+		db,
+		submodelElementIDs,
+		contextReferences1ToManyQuerySpec{
+			ownerTable:        "submodel_element",
+			ownerJoinColumn:   common.ColID,
+			ownerIDColumn:     common.ColSubmodelElementID,
+			referenceTable:    common.TblSubmodelElementSuppSemantic,
+			ownerAlias:        "submodel_element",
+			referenceAlias:    "sme_supplemental_semantic_id_reference",
+			referenceKeyAlias: "sme_supplemental_semantic_id_reference_key",
+			filterSpecs:       supplementalSemanticIDFilterSpecs(ctx, "$sme", collector),
+			errPrefix:         "REFREAD-SUPPSME",
+		},
+	)
+}
+
+func supplementalSemanticIDFilterSpecs(
+	ctx context.Context,
+	prefix string,
+	collector *grammar.ResolvedFieldPathCollector,
+) []referenceFilterSpec {
+	queryFilter := auth.GetQueryFilter(ctx)
+	if queryFilter == nil {
+		return nil
+	}
+
+	fragments := make([]grammar.FragmentStringPattern, 0)
+	for fragment := range queryFilter.Filters {
+		value := string(fragment)
+		if strings.HasPrefix(value, prefix) && strings.Contains(value, "#supplementalSemanticIds") {
+			fragments = append(fragments, fragment)
+		}
+	}
+	sort.Slice(fragments, func(i, j int) bool {
+		return fragments[i] < fragments[j]
+	})
+
+	specs := make([]referenceFilterSpec, 0, len(fragments))
+	for _, fragment := range fragments {
+		specs = append(specs, referenceFilterSpec{
+			fragment:  fragment,
+			collector: collector,
+		})
+	}
+	return specs
+}
+
 type contextReferenceRow struct {
 	ownerID                int64
 	refType                sql.NullInt64
@@ -241,6 +334,7 @@ type referenceQuerySpec struct {
 
 type contextReferences1ToManyQuerySpec struct {
 	ownerTable        string
+	ownerJoinColumn   string
 	ownerIDColumn     string
 	referenceTable    string
 	ownerAlias        string
@@ -399,9 +493,10 @@ func readContextReferences1ToManyByOwnerIDs(
 
 	if spec.ownerTable != "" && spec.ownerAlias != "" {
 		ot := goqu.T(spec.ownerTable).As(spec.ownerAlias)
+		ownerJoinColumn := firstNonEmpty(spec.ownerJoinColumn, spec.ownerIDColumn)
 		ds = ds.Join(
 			ot,
-			goqu.On(ot.Col(spec.ownerIDColumn).Eq(rt.Col(spec.ownerIDColumn))),
+			goqu.On(ot.Col(ownerJoinColumn).Eq(rt.Col(spec.ownerIDColumn))),
 		)
 	}
 

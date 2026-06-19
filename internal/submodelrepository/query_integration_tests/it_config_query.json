@@ -823,6 +823,30 @@
                   }
     },
     {
+        "context":  "Query 063 - Filter submodel supplemental semantic IDs",
+        "method":  "POST",
+        "endpoint":  "http://127.0.0.1:6004/query/submodels",
+        "data":  "bodies/query_tests/063_sm_supplemental_semantic_id_filter.json",
+        "shouldMatch":  "expected/sophisticatedQueryTests/smSupplementalSemanticIdsFilteredResult.json",
+        "expectedStatus":  200,
+        "token":  {
+                      "user":  "admin",
+                      "password":  "pwd"
+                  }
+    },
+    {
+        "context":  "Query 064 - Filter submodel element supplemental semantic IDs",
+        "method":  "POST",
+        "endpoint":  "http://127.0.0.1:6004/query/submodels",
+        "data":  "bodies/query_tests/064_sme_supplemental_semantic_id_filter.json",
+        "shouldMatch":  "expected/sophisticatedQueryTests/smeSupplementalSemanticIdsFilteredResult.json",
+        "expectedStatus":  200,
+        "token":  {
+                      "user":  "admin",
+                      "password":  "pwd"
+                  }
+    },
+    {
         "context":  "Delete supplemental semantic ID query submodel",
         "method":  "DELETE",
         "endpoint":  "http://127.0.0.1:6004/submodels/c3VwcGxlbWVudGFsLXF1ZXJ5LXNt",

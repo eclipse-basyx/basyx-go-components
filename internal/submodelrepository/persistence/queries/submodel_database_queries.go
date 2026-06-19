@@ -188,22 +188,38 @@ func ApplySubmodelSemanticIDFilter(selectDS *goqu.SelectDataset, semanticID stri
 
 // BuildSubmodelListSQL builds the final SQL for a masked submodel list query.
 func BuildSubmodelListSQL(selectDS *goqu.SelectDataset, dataAlias string, maskedExpressions []exp.Expression) (string, []any, error) {
+	return BuildSubmodelListSQLWithSupplementalOwnerID(selectDS, dataAlias, maskedExpressions, false)
+}
+
+// BuildSubmodelListSQLWithSupplementalOwnerID builds the final SQL and
+// optionally exposes the database ID needed to reconstruct filtered references.
+func BuildSubmodelListSQLWithSupplementalOwnerID(
+	selectDS *goqu.SelectDataset,
+	dataAlias string,
+	maskedExpressions []exp.Expression,
+	includeSupplementalOwnerID bool,
+) (string, []any, error) {
 	dialect := goqu.Dialect(common.Dialect)
+	projections := []interface{}{
+		goqu.I(dataAlias + ".c0"),
+		maskedExpressions[0],
+		goqu.I(dataAlias + ".c2"),
+		goqu.I(dataAlias + ".c3"),
+		goqu.I(dataAlias + ".raw_description_payload"),
+		goqu.I(dataAlias + ".raw_displayname_payload"),
+		goqu.I(dataAlias + ".raw_administrative_information_payload"),
+		goqu.I(dataAlias + ".raw_embedded_data_specification_payload"),
+		goqu.I(dataAlias + ".raw_supplemental_semantic_ids_payload"),
+		goqu.I(dataAlias + ".raw_extensions_payload"),
+		goqu.I(dataAlias + ".raw_qualifiers_payload"),
+		maskedExpressions[1],
+	}
+	if includeSupplementalOwnerID {
+		projections = append(projections, goqu.I(dataAlias+".supplemental_owner_id"))
+	}
+
 	return dialect.From(selectDS.As(dataAlias)).
-		Select(
-			goqu.I(dataAlias+".c0"),
-			maskedExpressions[0],
-			goqu.I(dataAlias+".c2"),
-			goqu.I(dataAlias+".c3"),
-			goqu.I(dataAlias+".raw_description_payload"),
-			goqu.I(dataAlias+".raw_displayname_payload"),
-			goqu.I(dataAlias+".raw_administrative_information_payload"),
-			goqu.I(dataAlias+".raw_embedded_data_specification_payload"),
-			goqu.I(dataAlias+".raw_supplemental_semantic_ids_payload"),
-			goqu.I(dataAlias+".raw_extensions_payload"),
-			goqu.I(dataAlias+".raw_qualifiers_payload"),
-			maskedExpressions[1],
-		).
+		Select(projections...).
 		Order(goqu.I(dataAlias + ".sort_submodel_identifier").Asc()).
 		ToSQL()
 }
