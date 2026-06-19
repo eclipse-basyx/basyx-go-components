@@ -1,7 +1,7 @@
 services:
-  db:
+  db-scp:
     image: postgres:18
-    container_name: postgres_oidc_test
+    container_name: postgres_oidc_scp_test
     environment:
       POSTGRES_USER: admin
       POSTGRES_PASSWORD: admin123
@@ -13,13 +13,27 @@ services:
       timeout: 5s
       retries: 5
 
-  basyx_configuration:
-    container_name: basyx_configuration_oidc_test
+  db-roles:
+    image: postgres:18
+    container_name: postgres_oidc_roles_test
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: admin123
+      POSTGRES_DB: basyxTestDB
+    command: ["postgres", "-c", "listen_addresses=*"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U admin -d basyxTestDB"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  basyx-configuration-scp:
+    container_name: basyx_configuration_oidc_scp_test
     build:
       context: ../../../..
       dockerfile: ./cmd/basyxconfigurationservice/Dockerfile
     environment:
-      - POSTGRES_HOST=db
+      - POSTGRES_HOST=db-scp
       - POSTGRES_PORT=5432
       - POSTGRES_USER=admin
       - POSTGRES_PASSWORD=admin123
@@ -28,7 +42,25 @@ services:
       - POSTGRES_MAXIDLECONNECTIONS=500
       - POSTGRES_CONNMAXLIFETIMEMINUTES=5
     depends_on:
-      db:
+      db-scp:
+        condition: service_healthy
+
+  basyx-configuration-roles:
+    container_name: basyx_configuration_oidc_roles_test
+    build:
+      context: ../../../..
+      dockerfile: ./cmd/basyxconfigurationservice/Dockerfile
+    environment:
+      - POSTGRES_HOST=db-roles
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=admin
+      - POSTGRES_PASSWORD=admin123
+      - POSTGRES_DBNAME=basyxTestDB
+      - POSTGRES_MAXOPENCONNECTIONS=500
+      - POSTGRES_MAXIDLECONNECTIONS=500
+      - POSTGRES_CONNMAXLIFETIMEMINUTES=5
+    depends_on:
+      db-roles:
         condition: service_healthy
 
   aas-registry-scp:
@@ -38,7 +70,7 @@ services:
       dockerfile: ./cmd/aasregistryservice/Dockerfile
     environment:
       - SERVER_PORT=5004
-      - POSTGRES_HOST=db
+      - POSTGRES_HOST=db-scp
       - POSTGRES_PORT=5432
       - POSTGRES_USER=admin
       - POSTGRES_PASSWORD=admin123
@@ -52,7 +84,7 @@ services:
     ports:
       - "6104:5004"
     depends_on:
-      basyx_configuration:
+      basyx-configuration-scp:
         condition: service_completed_successfully
     volumes:
       - ${OIDC_TEST_SECURITY_ENV}:/security_env:ro
@@ -66,7 +98,7 @@ services:
       dockerfile: ./cmd/aasregistryservice/Dockerfile
     environment:
       - SERVER_PORT=5004
-      - POSTGRES_HOST=db
+      - POSTGRES_HOST=db-roles
       - POSTGRES_PORT=5432
       - POSTGRES_USER=admin
       - POSTGRES_PASSWORD=admin123
@@ -80,7 +112,7 @@ services:
     ports:
       - "6204:5004"
     depends_on:
-      basyx_configuration:
+      basyx-configuration-roles:
         condition: service_completed_successfully
     volumes:
       - ${OIDC_TEST_SECURITY_ENV}:/security_env:ro
