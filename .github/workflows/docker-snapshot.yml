@@ -84,6 +84,8 @@ jobs:
             image: eclipsebasyx/aasxfileserver-go
           - name: basyxconfigurationservice
             image: eclipsebasyx/basyxconfigurationservice-go
+          - name: dppapiservice
+            image: eclipsebasyx/dppapi-go
 
     steps:
       - name: Checkout code

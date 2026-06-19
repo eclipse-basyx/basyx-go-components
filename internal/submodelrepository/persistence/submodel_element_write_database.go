@@ -284,6 +284,26 @@ func (s *SubmodelDatabase) PutSubmodelElement(
 	}
 	defer cleanup(&err)
 
+	elementExists, err := s.PutSubmodelElementInTransaction(ctx, tx, submodelID, idShortPath, submodelElement)
+	if err != nil {
+		return false, err
+	}
+
+	if err = tx.Commit(); err != nil {
+		return false, err
+	}
+
+	return elementExists, nil
+}
+
+// PutSubmodelElementInTransaction creates or replaces a submodel element within an existing transaction.
+func (s *SubmodelDatabase) PutSubmodelElementInTransaction(
+	ctx context.Context,
+	tx *sql.Tx,
+	submodelID string,
+	idShortPath string,
+	submodelElement types.ISubmodelElement,
+) (bool, error) {
 	submodelDatabaseID, err := persistenceutils.GetSubmodelDatabaseID(tx, submodelID)
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -323,10 +343,6 @@ func (s *SubmodelDatabase) PutSubmodelElement(
 	}
 
 	if err = s.appendChangedSubmodelElementHistoryTx(ctx, tx, submodelID, historyMutation); err != nil {
-		return false, err
-	}
-
-	if err = tx.Commit(); err != nil {
 		return false, err
 	}
 

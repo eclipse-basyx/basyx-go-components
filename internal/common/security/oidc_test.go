@@ -40,6 +40,7 @@ func TestOIDCVerifierConfig_UsesClientIDWhenAudienceProvided(t *testing.T) {
 	cfg := oidcVerifierConfig("discovery-service")
 	if cfg == nil {
 		t.Fatalf("expected verifier config, got nil")
+		return
 	}
 	if cfg.SkipClientIDCheck {
 		t.Fatalf("expected SkipClientIDCheck=false when audience is provided")
@@ -55,6 +56,7 @@ func TestOIDCVerifierConfig_SkipsClientIDCheckWhenAudienceMissing(t *testing.T) 
 	cfg := oidcVerifierConfig("   ")
 	if cfg == nil {
 		t.Fatalf("expected verifier config, got nil")
+		return
 	}
 	if !cfg.SkipClientIDCheck {
 		t.Fatalf("expected SkipClientIDCheck=true when audience is missing")

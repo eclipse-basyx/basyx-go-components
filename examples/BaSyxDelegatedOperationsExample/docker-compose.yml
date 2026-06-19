@@ -44,9 +44,8 @@ services:
 
   submodel_repository:
     container_name: delegated-operations-submodel-repository
-    build:
-      context: ../..
-      dockerfile: ./cmd/submodelrepositoryservice/Dockerfile
+    image: eclipsebasyx/submodelrepository-go:SNAPSHOT
+    pull_policy: always
     command: ["/app/submodelrepositoryservice"]
     environment:
       - SERVER_PORT=5004

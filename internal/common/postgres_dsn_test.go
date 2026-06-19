@@ -73,6 +73,76 @@ func TestBuildPostgresDSN(t *testing.T) {
 	}
 }
 
+func TestBuildPostgresDSNUsesConfiguredDSN(t *testing.T) {
+	cfg := PostgresConfig{
+		DSN: "  postgres://user:p@ss@localhost:5432/basyx?sslmode=require&application_name=svc  ",
+	}
+
+	dsn := BuildPostgresDSN(cfg)
+	parsed, err := url.Parse(dsn)
+	if err != nil {
+		t.Fatalf("parse dsn: %v", err)
+	}
+
+	if parsed.Scheme != "postgres" {
+		t.Fatalf("unexpected scheme: %s", parsed.Scheme)
+	}
+	pass, ok := parsed.User.Password()
+	if !ok {
+		t.Fatal("expected password")
+	}
+	if pass != "p@ss" {
+		t.Fatalf("unexpected password: %s", pass)
+	}
+	assertQueryValue(t, parsed.Query(), "sslmode", "require")
+	assertQueryValue(t, parsed.Query(), "application_name", "svc")
+}
+
+func TestBuildPostgresDSNWithConfiguredParameters(t *testing.T) {
+	cfg := PostgresConfig{
+		Host:                    "localhost",
+		Port:                    5432,
+		User:                    "user",
+		Password:                "password",
+		DBName:                  "basyx",
+		SSLMode:                 "verify-full",
+		SSLCert:                 "/certs/client.crt",
+		SSLKey:                  "/certs/client.key",
+		SSLRootCert:             "/certs/root.crt",
+		ConnectTimeoutSeconds:   15,
+		ApplicationName:         "basyx-service",
+		FallbackApplicationName: "basyx",
+		SearchPath:              "tenant_a,public",
+		Options:                 "-c statement_timeout=5000",
+		TimeZone:                "Europe/Berlin",
+	}
+
+	dsn := BuildPostgresDSN(cfg)
+	parsed, err := url.Parse(dsn)
+	if err != nil {
+		t.Fatalf("parse dsn: %v", err)
+	}
+
+	query := parsed.Query()
+	assertQueryValue(t, query, "sslmode", "verify-full")
+	assertQueryValue(t, query, "sslcert", "/certs/client.crt")
+	assertQueryValue(t, query, "sslkey", "/certs/client.key")
+	assertQueryValue(t, query, "sslrootcert", "/certs/root.crt")
+	assertQueryValue(t, query, "connect_timeout", "15")
+	assertQueryValue(t, query, "application_name", "basyx-service")
+	assertQueryValue(t, query, "fallback_application_name", "basyx")
+	assertQueryValue(t, query, "search_path", "tenant_a,public")
+	assertQueryValue(t, query, "options", "-c statement_timeout=5000")
+	assertQueryValue(t, query, "TimeZone", "Europe/Berlin")
+}
+
+func assertQueryValue(t *testing.T, query url.Values, key string, want string) {
+	t.Helper()
+	if got := query.Get(key); got != want {
+		t.Fatalf("unexpected %s: %q, want %q", key, got, want)
+	}
+}
+
 func TestNormalizePostgresDSN(t *testing.T) {
 	tests := []struct {
 		name string

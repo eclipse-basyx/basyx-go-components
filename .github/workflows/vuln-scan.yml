@@ -82,6 +82,7 @@ jobs:
           - name: aasrepositoryservice
           - name: aasxfileserverservice
           - name: basyxconfigurationservice
+          - name: dppapiservice
 
     steps:
       - name: Checkout code

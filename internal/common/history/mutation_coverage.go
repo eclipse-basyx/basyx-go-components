@@ -360,10 +360,13 @@ func isMutationMethod(method string) bool {
 func mutationPathMatches(pattern string, path string) bool {
 	patternParts := splitMutationPath(pattern)
 	pathParts := splitMutationPath(path)
-	if len(patternParts) != len(pathParts) {
-		return false
-	}
 	for index, patternPart := range patternParts {
+		if patternPart == "*" {
+			return index == len(patternParts)-1 && len(pathParts) >= index
+		}
+		if index >= len(pathParts) {
+			return false
+		}
 		if strings.HasPrefix(patternPart, "{") && strings.HasSuffix(patternPart, "}") {
 			continue
 		}
@@ -371,7 +374,7 @@ func mutationPathMatches(pattern string, path string) bool {
 			return false
 		}
 	}
-	return true
+	return len(patternParts) == len(pathParts)
 }
 
 func requestMutationPath(r *http.Request) string {

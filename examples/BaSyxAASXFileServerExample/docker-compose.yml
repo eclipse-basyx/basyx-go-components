@@ -16,9 +16,8 @@ services:
 
   aasx-file-server:
     container_name: aasx-file-server
-    build:
-      context: ../..
-      dockerfile: ./cmd/aasxfileserverservice/Dockerfile
+    image: eclipsebasyx/aasxfileserver-go:SNAPSHOT
+    pull_policy: always
     environment:
       - SERVER_PORT=5004
       - CORS_ALLOWEDORIGINS=*

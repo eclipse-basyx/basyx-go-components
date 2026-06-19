@@ -1,0 +1,131 @@
+services:
+  dpp-api:
+    container_name: dpp-api
+    image: eclipsebasyx/dppapi-go:SNAPSHOT
+    pull_policy: always
+    environment:
+      - SERVER_PORT=8080
+      - CORS_ALLOWEDORIGINS=*
+      - CORS_ALLOWEDHEADERS=*
+      - CORS_ALLOWEDCREDENTIALS=true
+      - CORS_ALLOWEDMETHODS=GET,POST,PUT,PATCH,DELETE,OPTIONS
+      - POSTGRES_HOST=db
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=admin
+      - POSTGRES_PASSWORD=admin123
+      - POSTGRES_DBNAME=basyxDppExample
+      - POSTGRES_MAXOPENCONNECTIONS=50
+      - POSTGRES_MAXIDLECONNECTIONS=50
+      - POSTGRES_CONNMAXLIFETIMEMINUTES=5
+      - ABAC_ENABLED=false
+      - BASYX_HISTORY_MODE=audit
+      - BASYX_HISTORY_RETENTION_DAYS=0
+      - BASYX_HISTORY_FULL_SNAPSHOT_INTERVAL=1
+      - BASYX_HISTORY_IMMUTABILITY=none
+      - BASYX_AUDIT_IDENTITY_MODE=extended
+      - BASYX_HISTORY_EVIDENCE_ENABLED=false
+      - BASYX_HISTORY_EVIDENCE_PROVIDER=none
+      - BASYX_HISTORY_INTEGRITY_ANCHOR_PROVIDER=none
+    ports:
+      - "8080:8080"
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--output-document=-", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    depends_on:
+      basyx_configuration:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+  aas-environment:
+    container_name: dpp-aas-environment
+    image: eclipsebasyx/aasenvironment-go:SNAPSHOT
+    pull_policy: always
+    environment:
+      - SERVER_PORT=8082
+      - CORS_ALLOWEDORIGINS=*
+      - CORS_ALLOWEDHEADERS=*
+      - CORS_ALLOWEDCREDENTIALS=true
+      - CORS_ALLOWEDMETHODS=GET,POST,PUT,PATCH,DELETE,OPTIONS
+      - POSTGRES_HOST=db
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=admin
+      - POSTGRES_PASSWORD=admin123
+      - POSTGRES_DBNAME=basyxDppExample
+      - POSTGRES_MAXOPENCONNECTIONS=50
+      - POSTGRES_MAXIDLECONNECTIONS=50
+      - POSTGRES_CONNMAXLIFETIMEMINUTES=5
+      - ABAC_ENABLED=false
+      - GENERAL_AASREGISTRYINTEGRATION=true
+      - GENERAL_SUBMODELREGISTRYINTEGRATION=true
+      - GENERAL_DISCOVERYINTEGRATION=true
+      - GENERAL_EXTERNALURL=http://localhost:8082
+      - BASYX_HISTORY_MODE=audit
+      - BASYX_HISTORY_RETENTION_DAYS=0
+      - BASYX_HISTORY_FULL_SNAPSHOT_INTERVAL=1
+      - BASYX_HISTORY_IMMUTABILITY=none
+      - BASYX_AUDIT_IDENTITY_MODE=extended
+      - BASYX_HISTORY_EVIDENCE_ENABLED=false
+      - BASYX_HISTORY_EVIDENCE_PROVIDER=none
+      - BASYX_HISTORY_INTEGRITY_ANCHOR_PROVIDER=none
+    ports:
+      - "8082:8082"
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--output-document=-", "http://localhost:8082/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    depends_on:
+      basyx_configuration:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+  aas-ui:
+    container_name: dpp-aas-web-ui
+    image: eclipsebasyx/aas-gui:SNAPSHOT
+    pull_policy: always
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./basyx-infra.yml:/basyx-infra.yml:ro
+    environment:
+      - ENDPOINT_CONFIG_AVAILABLE=false
+    depends_on:
+      aas-environment:
+        condition: service_healthy
+    restart: unless-stopped
+
+  basyx_configuration:
+    container_name: dpp-basyx-configuration
+    image: eclipsebasyx/basyxconfigurationservice-go:SNAPSHOT
+    pull_policy: always
+    environment:
+      - POSTGRES_HOST=db
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=admin
+      - POSTGRES_PASSWORD=admin123
+      - POSTGRES_DBNAME=basyxDppExample
+      - POSTGRES_MAXOPENCONNECTIONS=50
+      - POSTGRES_MAXIDLECONNECTIONS=50
+      - POSTGRES_CONNMAXLIFETIMEMINUTES=5
+    depends_on:
+      db:
+        condition: service_healthy
+
+  db:
+    container_name: dpp-postgres-db
+    image: postgres:18
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: admin123
+      POSTGRES_DB: basyxDppExample
+    command: ["postgres", "-c", "listen_addresses=*"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U admin -d basyxDppExample"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped

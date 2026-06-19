@@ -60,6 +60,7 @@ jobs:
               examples/BaSyxSubmodelRepositoryExample/docker-compose.yml
             image_builds: |
               eclipsebasyx/submodelrepository-go:SNAPSHOT|./cmd/submodelrepositoryservice/Dockerfile
+              eclipsebasyx/basyxconfigurationservice-go:SNAPSHOT|./cmd/basyxconfigurationservice/Dockerfile
           - target_name: Digital Twin Registry Example
             compose_files: |
               examples/BaSyxDigitalTwinRegistryExample/docker-compose.yml
@@ -76,6 +77,13 @@ jobs:
             compose_files: |
               examples/BaSyxHistoryAuditGuardedExample/docker-compose.yml
             image_builds: |
+              eclipsebasyx/aasenvironment-go:SNAPSHOT|./cmd/aasenvironmentservice/Dockerfile
+              eclipsebasyx/basyxconfigurationservice-go:SNAPSHOT|./cmd/basyxconfigurationservice/Dockerfile
+          - target_name: DPP API Example
+            compose_files: |
+              examples/BaSyxDPPAPIExample/docker-compose.yml
+            image_builds: |
+              eclipsebasyx/dppapi-go:SNAPSHOT|./cmd/dppapiservice/Dockerfile
               eclipsebasyx/aasenvironment-go:SNAPSHOT|./cmd/aasenvironmentservice/Dockerfile
               eclipsebasyx/basyxconfigurationservice-go:SNAPSHOT|./cmd/basyxconfigurationservice/Dockerfile
 
