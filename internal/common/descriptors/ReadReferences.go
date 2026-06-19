@@ -545,7 +545,7 @@ func readContextReferences1ToManyByOwnerIDs(
 
 	var err error
 	for _, filterSpec := range spec.filterSpecs {
-		ds, err = auth.AddFilterQueryFromContext(ctx, ds, filterSpec.fragment, filterSpec.collector)
+		ds, err = auth.AddCorrelatedFilterQueryFromContext(ctx, ds, filterSpec.fragment, filterSpec.collector)
 		if err != nil {
 			return nil, fmt.Errorf("%s-ADDFILTER: %w", spec.errPrefix, err)
 		}

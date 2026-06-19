@@ -295,7 +295,7 @@ func ReadSubmodelDescriptorsByAASDescriptorIDs(
 		submodelDescriptorAlias.Col(common.ColDescriptorID).Asc(),
 	)
 
-	inner, err = auth.AddFilterQueryFromContext(ctx, inner, "$aasdesc#submodelDescriptors[]", collector)
+	inner, err = auth.AddCorrelatedFilterQueryFromContext(ctx, inner, "$aasdesc#submodelDescriptors[]", collector)
 	if err != nil {
 		return nil, err
 	}

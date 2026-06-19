@@ -53,7 +53,30 @@ func AddFilterQueryFromContext(
 	fragment grammar.FragmentStringPattern,
 	collector *grammar.ResolvedFieldPathCollector,
 ) (*goqu.SelectDataset, error) {
-	maskCondition, hasMask, err := buildFragmentMaskCondition(ctx, fragment, collector)
+	maskCondition, hasMask, err := buildFragmentMaskConditionWithOptions(ctx, fragment, collector, true)
+	return addFilterCondition(ds, maskCondition, hasMask, err)
+}
+
+// AddCorrelatedFilterQueryFromContext appends a fragment filter while keeping
+// the collector active for MATCH expressions. Readers use this when a filter
+// combines row-local fields with route-level fields that require correlated
+// EXISTS queries.
+func AddCorrelatedFilterQueryFromContext(
+	ctx context.Context,
+	ds *goqu.SelectDataset,
+	fragment grammar.FragmentStringPattern,
+	collector *grammar.ResolvedFieldPathCollector,
+) (*goqu.SelectDataset, error) {
+	maskCondition, hasMask, err := buildFragmentMaskConditionWithOptions(ctx, fragment, collector, false)
+	return addFilterCondition(ds, maskCondition, hasMask, err)
+}
+
+func addFilterCondition(
+	ds *goqu.SelectDataset,
+	maskCondition exp.Expression,
+	hasMask bool,
+	err error,
+) (*goqu.SelectDataset, error) {
 	if err != nil {
 		return nil, err
 	}
@@ -372,6 +395,15 @@ func buildFragmentMaskCondition(
 	fragment grammar.FragmentStringPattern,
 	collector *grammar.ResolvedFieldPathCollector,
 ) (exp.Expression, bool, error) {
+	return buildFragmentMaskConditionWithOptions(ctx, fragment, collector, false)
+}
+
+func buildFragmentMaskConditionWithOptions(
+	ctx context.Context,
+	fragment grammar.FragmentStringPattern,
+	collector *grammar.ResolvedFieldPathCollector,
+	inlineArrayEndedFragments bool,
+) (exp.Expression, bool, error) {
 	p := GetQueryFilter(ctx)
 	if p == nil {
 		return nil, false, nil
@@ -384,8 +416,14 @@ func buildFragmentMaskCondition(
 
 	wcs := make([]exp.Expression, 0, len(filters))
 	for _, filter := range filters {
+		evalCollector := collector
+		if inlineArrayEndedFragments && filter.Match && fragmentEndsWithArraySegment(filter.Fragment) {
+			// Array-ended fragments must be evaluated against the current row context
+			// instead of descriptor-wide EXISTS correlation.
+			evalCollector = nil
+		}
 		wc, _, err := filter.Expression.EvaluateToExpressionWithNegatedFragments(
-			collector,
+			evalCollector,
 			[]grammar.FragmentStringPattern{grammar.FragmentStringPattern(filter.Fragment)},
 		)
 		if err != nil {
