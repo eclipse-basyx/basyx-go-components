@@ -138,10 +138,14 @@ func TestReadRepositorySupplementalSemanticReferencesAppliesFragmentFilter(t *te
 					{StrVal: &value},
 				},
 			}
+			unrelatedFragment := grammar.FragmentStringPattern("$sme#supplementalSemanticIds[]")
+			if test.name == "submodel element" {
+				unrelatedFragment = "$sm#supplementalSemanticIds[]"
+			}
 			ctx := auth.WithQueryFilter(context.Background(), &auth.QueryFilter{
 				Filters: auth.FragmentFilters{
 					test.fragment: condition,
-					"$sme#supplementalSemanticIds[]": {
+					unrelatedFragment: {
 						Boolean: boolPointer(false),
 					},
 				},
@@ -161,6 +165,9 @@ func TestReadRepositorySupplementalSemanticReferencesAppliesFragmentFilter(t *te
 				}
 				if test.name == "submodel" && strings.Contains(actual, "sme_supplemental_semantic_id_reference") {
 					return fmt.Errorf("submodel SQL must not include SME filter aliases: %s", actual)
+				}
+				if test.name == "submodel element" && strings.Contains(actual, "sm_supplemental_semantic_id_reference") {
+					return fmt.Errorf("SME SQL must not include submodel filter aliases: %s", actual)
 				}
 				return nil
 			})))
