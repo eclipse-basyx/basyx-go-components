@@ -841,17 +841,8 @@ func (c *ResolvedFieldPathCollector) canEvaluateInline(resolved []ResolvedFieldP
 				return false
 			}
 		}
-		for _, binding := range path.ArrayBindings {
-			if binding.Index.intValue == nil && binding.Index.stringValue == nil {
-				continue
-			}
-			alias, ok := leadingAlias(binding.Alias)
-			if !ok {
-				return false
-			}
-			if _, ok := c.inlineAliases[alias]; !ok {
-				return false
-			}
+		if len(path.ArrayBindings) > 0 {
+			return false
 		}
 	}
 	return true
