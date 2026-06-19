@@ -29,7 +29,7 @@ services:
 
   submodel_repository:
     container_name: submodel-repository-go
-    image: eclipsebasyx/submodelrepository-go:SNAPSHOT      
+    image: eclipsebasyx/submodelrepository-go:SNAPSHOT
     pull_policy: always
     environment:
       - SERVER_PORT=5004
@@ -52,9 +52,8 @@ services:
 
   basyx_configuration:
     container_name: basyx_configuration
-    build:
-      context: ../..
-      dockerfile: ./cmd/basyxconfigurationservice/Dockerfile
+    image: eclipsebasyx/basyxconfigurationservice-go:SNAPSHOT
+    pull_policy: always
     environment:
       - POSTGRES_HOST=db
       - POSTGRES_PORT=5432
