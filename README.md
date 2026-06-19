@@ -100,6 +100,11 @@ Configuration is managed via YAML files in `cmd/<service>/config.yaml` and envir
 postgres:
     # Either set dsn or the individual connection fields below. Do not mix them.
     # dsn: postgres://user:password@db:5432/basyx?sslmode=require
+    host: localhost
+    port: 5432
+    user: postgres
+    password: postgres
+    dbname: basyx
     sslmode: disable
     sslcert: ""
     sslkey: ""
@@ -120,6 +125,11 @@ Or via `.env`:
 ```env
 # Either set POSTGRES_DSN or the individual connection variables below. Do not mix them.
 # POSTGRES_DSN=postgres://user:password@db:5432/basyx?sslmode=require
+POSTGRES_HOST=localhost
+POSTGRES_PORT=5432
+POSTGRES_USER=postgres
+POSTGRES_PASSWORD=postgres
+POSTGRES_DBNAME=basyx
 POSTGRES_SSLMODE=disable
 POSTGRES_SSLCERT=
 POSTGRES_SSLKEY=
