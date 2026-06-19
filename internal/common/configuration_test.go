@@ -131,6 +131,7 @@ func TestPrintConfigurationMarksPermissiveVerificationModeAsDefault(t *testing.T
 		Postgres: PostgresConfig{
 			Port:                   DefaultConfig.PgPort,
 			DBName:                 DefaultConfig.PgDBName,
+			SSLMode:                DefaultConfig.PgSSLMode,
 			MaxOpenConnections:     DefaultConfig.PgMaxOpen,
 			MaxIdleConnections:     DefaultConfig.PgMaxIdle,
 			ConnMaxLifetimeMinutes: DefaultConfig.PgConnLifetime,
@@ -220,6 +221,164 @@ func TestLoadConfigAppliesSwaggerEnabled(t *testing.T) {
 	}
 	if cfg.Swagger.Enabled {
 		t.Fatal("expected Swagger to be disabled from config")
+	}
+}
+
+func TestLoadConfigAppliesPostgresConnectionParameters(t *testing.T) {
+	captureLogOutput(t)
+	path := writeTempConfig(t, `postgres:
+  sslmode: verify-full
+  sslcert: /certs/client.crt
+  sslkey: /certs/client.key
+  sslrootcert: /certs/root.crt
+  connectTimeoutSeconds: 15
+  applicationName: basyx-service
+  fallbackApplicationName: basyx
+  searchPath: tenant_a,public
+  options: "-c statement_timeout=5000"
+  timezone: Europe/Berlin
+`)
+
+	cfg, err := LoadConfig(path, NORMAL)
+	if err != nil {
+		t.Fatalf("unexpected config load error: %v", err)
+	}
+
+	if cfg.Postgres.SSLMode != "verify-full" ||
+		cfg.Postgres.SSLCert != "/certs/client.crt" ||
+		cfg.Postgres.SSLKey != "/certs/client.key" ||
+		cfg.Postgres.SSLRootCert != "/certs/root.crt" ||
+		cfg.Postgres.ConnectTimeoutSeconds != 15 ||
+		cfg.Postgres.ApplicationName != "basyx-service" ||
+		cfg.Postgres.FallbackApplicationName != "basyx" ||
+		cfg.Postgres.SearchPath != "tenant_a,public" ||
+		cfg.Postgres.Options != "-c statement_timeout=5000" ||
+		cfg.Postgres.TimeZone != "Europe/Berlin" {
+		t.Fatalf("unexpected postgres config: %+v", cfg.Postgres)
+	}
+}
+
+func TestLoadConfigAppliesPostgresEnvironmentOverrides(t *testing.T) {
+	t.Setenv("POSTGRES_SSLMODE", "require")
+	t.Setenv("POSTGRES_SSLCERT", "/env/client.crt")
+	t.Setenv("POSTGRES_SSLKEY", "/env/client.key")
+	t.Setenv("POSTGRES_SSLROOTCERT", "/env/root.crt")
+	t.Setenv("POSTGRES_CONNECTTIMEOUTSECONDS", "7")
+	t.Setenv("POSTGRES_APPLICATIONNAME", "basyx-env-service")
+	t.Setenv("POSTGRES_FALLBACKAPPLICATIONNAME", "basyx-env")
+	t.Setenv("POSTGRES_SEARCHPATH", "env_schema,public")
+	t.Setenv("POSTGRES_OPTIONS", "-c lock_timeout=1000")
+	t.Setenv("POSTGRES_TIMEZONE", "UTC")
+	captureLogOutput(t)
+
+	cfg, err := LoadConfig("", NORMAL)
+	if err != nil {
+		t.Fatalf("unexpected config load error: %v", err)
+	}
+
+	if cfg.Postgres.SSLMode != "require" ||
+		cfg.Postgres.SSLCert != "/env/client.crt" ||
+		cfg.Postgres.SSLKey != "/env/client.key" ||
+		cfg.Postgres.SSLRootCert != "/env/root.crt" ||
+		cfg.Postgres.ConnectTimeoutSeconds != 7 ||
+		cfg.Postgres.ApplicationName != "basyx-env-service" ||
+		cfg.Postgres.FallbackApplicationName != "basyx-env" ||
+		cfg.Postgres.SearchPath != "env_schema,public" ||
+		cfg.Postgres.Options != "-c lock_timeout=1000" ||
+		cfg.Postgres.TimeZone != "UTC" {
+		t.Fatalf("unexpected postgres env config: %+v", cfg.Postgres)
+	}
+}
+
+func TestLoadConfigAppliesPostgresDSN(t *testing.T) {
+	captureLogOutput(t)
+	path := writeTempConfig(t, `postgres:
+  dsn: postgres://postgres.example:5432/basyx?sslmode=require
+  maxOpenConnections: 100
+`)
+
+	cfg, err := LoadConfig(path, NORMAL)
+	if err != nil {
+		t.Fatalf("unexpected config load error: %v", err)
+	}
+
+	if cfg.Postgres.DSN != "postgres://postgres.example:5432/basyx?sslmode=require" {
+		t.Fatalf("unexpected postgres dsn: %q", cfg.Postgres.DSN)
+	}
+	if cfg.Postgres.MaxOpenConnections != 100 {
+		t.Fatalf("unexpected max open connections: %d", cfg.Postgres.MaxOpenConnections)
+	}
+}
+
+func TestLoadConfigAppliesPostgresDSNEnvironmentOverride(t *testing.T) {
+	t.Setenv("POSTGRES_DSN", "postgres://postgres.example:5432/basyx?sslmode=require")
+	captureLogOutput(t)
+
+	cfg, err := LoadConfig("", NORMAL)
+	if err != nil {
+		t.Fatalf("unexpected config load error: %v", err)
+	}
+
+	if cfg.Postgres.DSN != "postgres://postgres.example:5432/basyx?sslmode=require" {
+		t.Fatalf("unexpected postgres dsn: %q", cfg.Postgres.DSN)
+	}
+}
+
+func TestLoadConfigRejectsPostgresDSNWithConnectionField(t *testing.T) {
+	captureLogOutput(t)
+	path := writeTempConfig(t, `postgres:
+  dsn: postgres://postgres.example:5432/basyx?sslmode=require
+  host: db
+`)
+
+	_, err := LoadConfig(path, NORMAL)
+	if err == nil {
+		t.Fatal("expected postgres dsn conflict error")
+	}
+	if !strings.Contains(err.Error(), "CONFIG-POSTGRES-DSN-CONFLICT") ||
+		!strings.Contains(err.Error(), "postgres.host") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestLoadConfigRejectsPostgresDSNWithConnectionFieldEnv(t *testing.T) {
+	t.Setenv("POSTGRES_DSN", "postgres://postgres.example:5432/basyx?sslmode=require")
+	t.Setenv("POSTGRES_SSLMODE", "disable")
+	captureLogOutput(t)
+
+	_, err := LoadConfig("", NORMAL)
+	if err == nil {
+		t.Fatal("expected postgres dsn conflict error")
+	}
+	if !strings.Contains(err.Error(), "CONFIG-POSTGRES-DSN-CONFLICT") ||
+		!strings.Contains(err.Error(), "postgres.sslmode") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestLoadConfigRejectsUnsupportedPostgresSSLMode(t *testing.T) {
+	captureLogOutput(t)
+	path := writeTempConfig(t, "postgres:\n  sslmode: invalid\n")
+
+	_, err := LoadConfig(path, NORMAL)
+	if err == nil {
+		t.Fatal("expected unsupported postgres sslmode error")
+	}
+	if !strings.Contains(err.Error(), "CONFIG-POSTGRES-SSLMODE") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestLoadConfigRejectsNegativePostgresConnectTimeout(t *testing.T) {
+	captureLogOutput(t)
+	path := writeTempConfig(t, "postgres:\n  connectTimeoutSeconds: -1\n")
+
+	_, err := LoadConfig(path, NORMAL)
+	if err == nil {
+		t.Fatal("expected negative postgres connect timeout error")
+	}
+	if !strings.Contains(err.Error(), "CONFIG-POSTGRES-CONNECTTIMEOUT") {
+		t.Fatalf("unexpected error: %v", err)
 	}
 }
 

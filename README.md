@@ -97,14 +97,49 @@ If a setup uses mutable tags and pulls images on every start or restart, include
 Configuration is managed via YAML files in `cmd/<service>/config.yaml` and environment variables. Key variables include database connection settings (see [docu/errors.md](docu/errors.md) for troubleshooting):
 
 ```yaml
-maxOpenConnections: 500
-maxIdleConnections: 500
-connMaxLifetimeMinutes: 5
+postgres:
+    # Either set dsn or the individual connection fields below. Do not mix them.
+    # dsn: postgres://user:password@db:5432/basyx?sslmode=require
+    host: localhost
+    port: 5432
+    user: postgres
+    password: postgres
+    dbname: basyx
+    sslmode: disable
+    sslcert: ""
+    sslkey: ""
+    sslrootcert: ""
+    connectTimeoutSeconds: 0
+    applicationName: ""
+    fallbackApplicationName: ""
+    searchPath: ""
+    options: ""
+    timezone: ""
+    maxOpenConnections: 500
+    maxIdleConnections: 500
+    connMaxLifetimeMinutes: 5
 ```
 
 Or via `.env`:
 
 ```env
+# Either set POSTGRES_DSN or the individual connection variables below. Do not mix them.
+# POSTGRES_DSN=postgres://user:password@db:5432/basyx?sslmode=require
+POSTGRES_HOST=localhost
+POSTGRES_PORT=5432
+POSTGRES_USER=postgres
+POSTGRES_PASSWORD=postgres
+POSTGRES_DBNAME=basyx
+POSTGRES_SSLMODE=disable
+POSTGRES_SSLCERT=
+POSTGRES_SSLKEY=
+POSTGRES_SSLROOTCERT=
+POSTGRES_CONNECTTIMEOUTSECONDS=0
+POSTGRES_APPLICATIONNAME=
+POSTGRES_FALLBACKAPPLICATIONNAME=
+POSTGRES_SEARCHPATH=
+POSTGRES_OPTIONS=
+POSTGRES_TIMEZONE=
 POSTGRES_MAXOPENCONNECTIONS=500
 POSTGRES_MAXIDLECONNECTIONS=500
 POSTGRES_CONNMAXLIFETIMEMINUTES=5
