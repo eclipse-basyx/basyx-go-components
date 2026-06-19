@@ -1,7 +1,7 @@
 services:
   dpp-api:
     container_name: dpp-api-secured
-    image: eclipsebasyx/dppapi-go:1.0.0-rc.6
+    image: eclipsebasyx/dppapi-go:SNAPSHOT
     pull_policy: always
     environment:
       - SERVER_PORT=8080
@@ -90,7 +90,7 @@ services:
 
   basyx_configuration:
     container_name: dpp-basyx-configuration-secured
-    image: eclipsebasyx/basyxconfigurationservice-go:1.0.0-rc.6
+    image: eclipsebasyx/basyxconfigurationservice-go:SNAPSHOT
     pull_policy: always
     environment:
       - POSTGRES_HOST=db
