@@ -1,8 +1,8 @@
 server:
   port: 5004
-  contextPath: "/api/v3"
+  contextPath: ""
   host: 0.0.0.0
-  strictVerification: off  # Values: off|permissive|strict (default: permissive)
+  strictVerification: permissive  # Values: off|permissive|strict (default: permissive)
   verificationEndpointAvailable: true
 
 postgres:

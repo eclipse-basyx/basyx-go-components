@@ -98,7 +98,7 @@ func InsertAssetAdministrationShellDescriptor(ctx context.Context, db *sql.DB, a
 	return result, tx.Commit()
 }
 
-// canSkipPostInsertReadback returns true for contexts where no post-insert
+// CanSkipPostInsertReadback returns true for contexts where no post-insert
 // descriptor re-read is needed for ABAC enforcement or field filtering.
 func CanSkipPostInsertReadback(ctx context.Context) bool {
 	queryFilter := auth.GetQueryFilter(ctx)

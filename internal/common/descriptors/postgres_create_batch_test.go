@@ -44,8 +44,12 @@ func TestBuildAdministrationShellDescriptorCreateBatchCollectsCompleteGraph(t *t
 		if len(statement.Args) != 0 {
 			t.Fatalf("expected fully rendered Goqu statement, got args %#v for %s", statement.Args, statement.SQL)
 		}
-		collectedSQL.WriteString(statement.SQL)
-		collectedSQL.WriteByte('\n')
+		if _, err = collectedSQL.WriteString(statement.SQL); err != nil {
+			t.Fatalf("failed to collect statement SQL: %v", err)
+		}
+		if err = collectedSQL.WriteByte('\n'); err != nil {
+			t.Fatalf("failed to collect statement separator: %v", err)
+		}
 	}
 
 	for _, table := range []string{

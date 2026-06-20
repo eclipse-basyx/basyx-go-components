@@ -16,6 +16,8 @@ import (
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 )
 
+// BuildAdministrationShellDescriptorCreateBatch collects all inserts for one
+// Asset Administration Shell descriptor in execution order.
 func BuildAdministrationShellDescriptorCreateBatch(
 	ctx context.Context,
 	descriptor model.AssetAdministrationShellDescriptor,

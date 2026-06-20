@@ -13,6 +13,7 @@ import (
 	"github.com/doug-martin/goqu/v9"
 )
 
+// AppendContextReference appends one owned reference and its payload and keys.
 func (b *PostgreSQLBatch) AppendContextReference(
 	ownerID any,
 	reference types.IReference,
@@ -58,6 +59,7 @@ func (b *PostgreSQLBatch) AppendContextReference(
 	return b.AppendDataset(dialect.Insert(referenceKeyTable).Rows(rows))
 }
 
+// AppendContextReferences appends generated references and their payloads and keys.
 func (b *PostgreSQLBatch) AppendContextReferences(
 	ownerID any,
 	references []types.IReference,
@@ -108,6 +110,7 @@ func (b *PostgreSQLBatch) AppendContextReferences(
 	return nil
 }
 
+// AppendSpecificAssetIDs appends specific asset IDs and their dependent references.
 func (b *PostgreSQLBatch) AppendSpecificAssetIDs(
 	descriptorID any,
 	aasRef any,

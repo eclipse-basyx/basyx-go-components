@@ -58,6 +58,8 @@ type bulkCreateIDCursor struct {
 	submodelSupplementalIndex int
 }
 
+// BuildAdministrationShellDescriptorsCreateBatch collects bulk descriptor
+// inserts while reserving the identifiers needed by dependent rows.
 func BuildAdministrationShellDescriptorsCreateBatch(
 	ctx context.Context,
 	tx *sql.Tx,
