@@ -196,3 +196,8 @@ func buildReferencePayload(value types.IReference) (json.RawMessage, error) {
 	}
 	return payload, nil
 }
+
+// BuildReferencePayload serializes the referred semantic reference payload.
+func BuildReferencePayload(value types.IReference) (json.RawMessage, error) {
+	return buildReferencePayload(value)
+}

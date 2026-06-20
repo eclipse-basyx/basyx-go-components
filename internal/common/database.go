@@ -35,6 +35,7 @@ import (
 
 	"github.com/doug-martin/goqu/v9"
 	_ "github.com/doug-martin/goqu/v9/dialect/postgres"
+	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
 const (
@@ -70,7 +71,7 @@ const (
 //	defer db.Close()
 func NewDatabaseConnection(dsn string) (*sql.DB, error) {
 	encodedDSN := NormalizePostgresDSN(dsn)
-	db, err := sql.Open("postgres", encodedDSN)
+	db, err := sql.Open("pgx", encodedDSN)
 	if err != nil {
 		return nil, err
 	}

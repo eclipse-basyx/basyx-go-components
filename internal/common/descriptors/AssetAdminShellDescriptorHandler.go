@@ -87,7 +87,7 @@ func InsertAssetAdministrationShellDescriptor(ctx context.Context, db *sql.DB, a
 		_ = tx.Rollback()
 		return model.AssetAdministrationShellDescriptor{}, err
 	}
-	if canSkipPostInsertReadback(ctx) {
+	if CanSkipPostInsertReadback(ctx) {
 		return aasd, tx.Commit()
 	}
 	result, err := GetAssetAdministrationShellDescriptorByIDTx(ctx, tx, aasd.Id)
@@ -100,7 +100,7 @@ func InsertAssetAdministrationShellDescriptor(ctx context.Context, db *sql.DB, a
 
 // canSkipPostInsertReadback returns true for contexts where no post-insert
 // descriptor re-read is needed for ABAC enforcement or field filtering.
-func canSkipPostInsertReadback(ctx context.Context) bool {
+func CanSkipPostInsertReadback(ctx context.Context) bool {
 	queryFilter := auth.GetQueryFilter(ctx)
 	if queryFilter == nil {
 		return true
@@ -377,7 +377,7 @@ func deleteDescriptorRowsBySelectTx(ctx context.Context, tx *sql.Tx, descriptorI
 
 func buildAASDescriptorInsertRecord(
 	ctx context.Context,
-	descriptorID int64,
+	descriptorID any,
 	aasd model.AssetAdministrationShellDescriptor,
 ) goqu.Record {
 	record := goqu.Record{

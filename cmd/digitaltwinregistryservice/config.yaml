@@ -1,8 +1,8 @@
 server:
   port: 5004
-  contextPath: ""
+  contextPath: "/api/v3"
   host: 0.0.0.0
-  strictVerification: permissive  # Values: off|permissive|strict (default: permissive)
+  strictVerification: off  # Values: off|permissive|strict (default: permissive)
   verificationEndpointAvailable: true
 
 postgres:
@@ -11,10 +11,10 @@ postgres:
   # Pool settings may be used with either variant.
   # dsn: postgres://user:password@localhost:5432/basyxTestDB?sslmode=require
   host: localhost
-  port: 5432
-  user: admin
-  password: admin123
-  dbname: basyxTestDB
+  port: 7432
+  user: postgres
+  password: postgres
+  dbname: postgres
   # sslmode: disable
   # sslcert: ""
   # sslkey: ""
@@ -33,7 +33,7 @@ oidc:
   trustlistPath: "config/trustlist.json"
 
 abac:
-  enabled: false
+  enabled: true
   modelPath: "config/access_rules/access-rules.json"
 
 general:
