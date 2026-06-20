@@ -208,7 +208,7 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) PostAssetAdministrationS
 			return common.NewErrorResponse(
 				err, http.StatusConflict, componentName, "InsertAdministrationShellDescriptor", "Conflict",
 			), nil
-		case common.IsErrNotFound(err):
+		case common.IsErrNotFound(err), common.IsErrDenied(err):
 			deniedErr := common.NewErrDenied("AAS Descriptor access not allowed")
 			log.Printf("🧩 [%s] Error in InsertAdministrationShellDescriptor: not allowed (aasId=%q): %v", componentName, assetAdministrationShellDescriptor.Id, err)
 			return common.NewErrorResponse(
@@ -320,7 +320,7 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) PutAssetAdministrationSh
 				return common.NewErrorResponse(
 					err, http.StatusConflict, componentName, "InsertAdministrationShellDescriptor", "Conflict",
 				), nil
-			case common.IsErrNotFound(err):
+			case common.IsErrNotFound(err), common.IsErrDenied(err):
 				deniedErr := common.NewErrDenied("AAS Descriptor access not allowed")
 				log.Printf("🧩 [%s] Error in InsertAdministrationShellDescriptor: not allowed (aasId=%q): %v", componentName, assetAdministrationShellDescriptor.Id, err)
 				return common.NewErrorResponse(

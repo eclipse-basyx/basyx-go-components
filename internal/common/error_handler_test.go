@@ -30,6 +30,9 @@ import (
 	"fmt"
 	"net/http"
 	"testing"
+
+	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/lib/pq"
 )
 
 func TestErrorClassifiers_RecognizeWrappedErrors(t *testing.T) {
@@ -96,5 +99,31 @@ func TestNewErrorResponsePreservesExplicitServiceUnavailable(t *testing.T) {
 
 	if response.Code != http.StatusServiceUnavailable {
 		t.Fatalf("expected status %d, got %d", http.StatusServiceUnavailable, response.Code)
+	}
+}
+
+func TestIsPostgresUniqueViolationSupportsPQAndPGX(t *testing.T) {
+	t.Parallel()
+
+	testCases := []struct {
+		name string
+		err  error
+		want bool
+	}{
+		{name: "pq", err: &pq.Error{Code: "23505"}, want: true},
+		{name: "pgx", err: &pgconn.PgError{Code: "23505"}, want: true},
+		{name: "wrapped pgx", err: fmt.Errorf("insert failed: %w", &pgconn.PgError{Code: "23505"}), want: true},
+		{name: "different state", err: &pgconn.PgError{Code: "23503"}, want: false},
+		{name: "ordinary error", err: errors.New("failed"), want: false},
+	}
+
+	for _, testCase := range testCases {
+		testCase := testCase
+		t.Run(testCase.name, func(t *testing.T) {
+			t.Parallel()
+			if got := IsPostgresUniqueViolation(testCase.err); got != testCase.want {
+				t.Fatalf("IsPostgresUniqueViolation() = %t, want %t", got, testCase.want)
+			}
+		})
 	}
 }
