@@ -51,7 +51,7 @@ func TestBulkCreateCollectorUsesOneMultiRowInsertPerTable(t *testing.T) {
 	}
 
 	batch := &common.PostgreSQLBatch{}
-	if err := appendBulkCreateRows(batch, rows); err != nil {
+	if err := appendBulkCreateRows(context.Background(), batch, rows); err != nil {
 		t.Fatalf("appendBulkCreateRows returned error: %v", err)
 	}
 
@@ -82,16 +82,59 @@ func TestBulkCreateCollectorUsesOneMultiRowInsertPerTable(t *testing.T) {
 	}
 }
 
-func TestAppendChunkedRowsSplitsAfterBulkRowLimit(t *testing.T) {
+func TestBulkCreateCollectorSupportsGlobalSubmodelDescriptors(t *testing.T) {
 	t.Parallel()
 
-	rows := make([]goqu.Record, bulkInsertRowLimit+1)
+	endpoint := model.Endpoint{
+		Interface: "SUBMODEL-3.0",
+		ProtocolInformation: model.ProtocolInformation{
+			Href: "https://example.com/submodel",
+		},
+	}
+	rows := &bulkCreateRows{}
+	cursor := &bulkCreateIDCursor{ids: bulkCreateIDs{descriptor: []int64{201}}}
+	err := collectSubmodelDescriptorRows(
+		rows,
+		cursor,
+		nil,
+		0,
+		model.SubmodelDescriptor{Id: "urn:example:submodel:1", Endpoints: []model.Endpoint{endpoint}},
+	)
+	if err != nil {
+		t.Fatalf("collectSubmodelDescriptorRows returned error: %v", err)
+	}
+
+	batch := &common.PostgreSQLBatch{}
+	if err = appendBulkCreateRows(context.Background(), batch, rows); err != nil {
+		t.Fatalf("appendBulkCreateRows returned error: %v", err)
+	}
+
+	var submodelInsert string
+	for _, statement := range batch.Statements() {
+		if strings.HasPrefix(statement.SQL, `INSERT INTO "`+common.TblSubmodelDescriptor+`"`) {
+			submodelInsert = statement.SQL
+		}
+	}
+	if submodelInsert == "" {
+		t.Fatal("expected submodel descriptor insert statement")
+	}
+	if !strings.Contains(submodelInsert, `"aas_descriptor_id"`) || !strings.Contains(submodelInsert, "NULL") {
+		t.Fatalf("expected global submodel insert to use NULL aas_descriptor_id, got %s", submodelInsert)
+	}
+}
+
+func TestAppendChunkedRowsSplitsAfterBulkBatchLimit(t *testing.T) {
+	t.Parallel()
+
+	const limit = 2
+
+	rows := make([]goqu.Record, limit+1)
 	for index := range rows {
 		rows[index] = goqu.Record{common.ColID: index + 1}
 	}
 
 	batch := &common.PostgreSQLBatch{}
-	if err := appendChunkedRows(batch, common.TblDescriptor, rows, nil); err != nil {
+	if err := appendChunkedRows(batch, common.TblDescriptor, rows, nil, limit); err != nil {
 		t.Fatalf("appendChunkedRows returned error: %v", err)
 	}
 	if len(batch.Statements()) != 2 {

@@ -474,6 +474,41 @@ func DeleteAssetAdministrationShellDescriptorByIDTx(ctx context.Context, tx *sql
 	return deleteAssetAdministrationShellDescriptorByIDTx(ctx, tx, aasIdentifier)
 }
 
+// DeleteAssetAdministrationShellDescriptorsByIDsTx deletes AAS descriptor base
+// rows and their embedded submodel descriptor rows in bounded chunks. The
+// caller is responsible for prior existence and access checks when item-level
+// error reporting is required.
+func DeleteAssetAdministrationShellDescriptorsByIDsTx(ctx context.Context, tx *sql.Tx, aasIdentifiers []string) error {
+	if len(aasIdentifiers) == 0 {
+		return nil
+	}
+	d := goqu.Dialect(common.Dialect)
+	batch := &common.PostgreSQLBatch{}
+	limit := common.BulkBatchLimitFromContext(ctx)
+	for start := 0; start < len(aasIdentifiers); start += limit {
+		end := min(start+limit, len(aasIdentifiers))
+		descriptorIDs := d.
+			From(common.TblAASDescriptor).
+			Select(common.ColDescriptorID).
+			Where(goqu.C(common.ColAASID).In(aasIdentifiers[start:end]))
+		childDescriptorIDs := d.
+			From(common.TblSubmodelDescriptor).
+			Select(common.ColDescriptorID).
+			Where(goqu.C(common.ColAASDescriptorID).In(descriptorIDs))
+		if err := batch.AppendDataset(
+			d.Delete(common.TblDescriptor).Where(
+				goqu.Or(
+					goqu.C(common.ColID).In(descriptorIDs),
+					goqu.C(common.ColID).In(childDescriptorIDs),
+				),
+			),
+		); err != nil {
+			return common.NewInternalServerError("AASDESC-BULKDELETE-BUILDSQL " + err.Error())
+		}
+	}
+	return common.ExecutePostgreSQLBatchInTransaction(ctx, tx, batch.Statements())
+}
+
 // DeleteAssetAdministrationShellDescriptorByIDTx deletes using the provided
 // transaction. It resolves the internal descriptor id and removes the base
 // descriptor row plus descriptor rows of linked submodel descriptors.

@@ -78,6 +78,7 @@ var DefaultConfig = struct {
 	GeneralTrustProxyHeaders            bool
 	GeneralTrustedProxyCIDRs            []string
 	GeneralAASPreconfigPaths            []string
+	GeneralBulkBatchLimit               int
 	HistoryConfigMode                   string
 	HistoryConfigRetentionDays          int
 	HistoryConfigFullSnapshotInterval   int
@@ -135,6 +136,7 @@ var DefaultConfig = struct {
 	GeneralTrustProxyHeaders:            false,
 	GeneralTrustedProxyCIDRs:            []string{},
 	GeneralAASPreconfigPaths:            []string{},
+	GeneralBulkBatchLimit:               1000,
 	HistoryConfigMode:                   "off",
 	HistoryConfigRetentionDays:          0,
 	HistoryConfigFullSnapshotInterval:   1,
@@ -355,6 +357,7 @@ type GeneralConfig struct {
 	TrustedProxyCIDRs                      []string `mapstructure:"trustedProxyCIDRs" yaml:"trustedProxyCIDRs" json:"trustedProxyCIDRs"`                                                                // CIDR allowlist for proxy source addresses eligible to provide forwarded headers
 	UploadMaxSizeBytes                     int64    `mapstructure:"uploadMaxSizeBytes" yaml:"uploadMaxSizeBytes" json:"uploadMaxSizeBytes"`                                                             // Maximum allowed upload payload size in bytes
 	AASPreconfigPaths                      []string `mapstructure:"aasPreconfigPaths" yaml:"aasPreconfigPaths" json:"aasPreconfigPaths"`                                                                // Files/directories loaded at startup for AAS preconfiguration
+	BulkBatchLimit                         int      `mapstructure:"bulkBatchLimit" yaml:"bulkBatchLimit" json:"bulkBatchLimit"`                                                                         // Maximum row count per generated bulk SQL statement
 }
 
 // OIDCProviderConfig contains OpenID Connect authentication provider settings.
@@ -461,10 +464,14 @@ func LoadConfig(configPath string, configMode ConfigMode) (*Config, error) {
 	}
 	cfg.Server.StrictVerification = string(verificationMode)
 	applyAASPreconfigPathOverrides(cfg)
+	applyGeneralEnvOverrides(cfg)
 	if err = validatePostgresConfig(v, cfg.Postgres); err != nil {
 		return nil, err
 	}
 	applyABACEnvOverrides(cfg)
+	if err = validateGeneralConfig(cfg); err != nil {
+		return nil, err
+	}
 	if err = validateABACConfig(cfg); err != nil {
 		return nil, err
 	}
@@ -478,6 +485,28 @@ func LoadConfig(configPath string, configMode ConfigMode) (*Config, error) {
 		PrintConfiguration(cfg)
 	}
 	return cfg, nil
+}
+
+func applyGeneralEnvOverrides(cfg *Config) {
+	if cfg == nil {
+		return
+	}
+	if value, ok := lookupFirstTrimmedEnv("GENERAL_BULK_BATCH_LIMIT", "BASYX_GENERAL_BULK_BATCH_LIMIT"); ok {
+		var parsed int
+		if _, err := fmt.Sscanf(value, "%d", &parsed); err == nil {
+			cfg.General.BulkBatchLimit = parsed
+		}
+	}
+}
+
+func validateGeneralConfig(cfg *Config) error {
+	if cfg == nil {
+		return fmt.Errorf("CONFIG-GENERAL-NIL configuration must not be nil")
+	}
+	if cfg.General.BulkBatchLimit <= 0 {
+		return fmt.Errorf("CONFIG-GENERAL-BULKBATCHLIMIT general.bulkBatchLimit must be greater than 0")
+	}
+	return nil
 }
 
 func validatePostgresConfig(v *viper.Viper, cfg PostgresConfig) error {
@@ -988,6 +1017,7 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("general.trustedProxyCIDRs", DefaultConfig.GeneralTrustedProxyCIDRs)
 	v.SetDefault("general.uploadMaxSizeBytes", int64(128<<20))
 	v.SetDefault("general.aasPreconfigPaths", []string{})
+	v.SetDefault("general.bulkBatchLimit", DefaultConfig.GeneralBulkBatchLimit)
 
 }
 
@@ -1073,6 +1103,12 @@ func PrintConfiguration(cfg *Config) {
 		lines = append(lines, "🔹 OIDC:")
 		add("Trustlist Path", cfg.OIDC.TrustlistPath, DefaultConfig.OIDCTrustlistPath)
 	}
+
+	lines = append(lines, divider)
+
+	// General
+	lines = append(lines, "General:")
+	add("Bulk Batch Limit", cfg.General.BulkBatchLimit, DefaultConfig.GeneralBulkBatchLimit)
 
 	lines = append(lines, divider)
 

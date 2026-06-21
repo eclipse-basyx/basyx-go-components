@@ -179,29 +179,7 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) executeAtomicAASIdentifi
 ) asyncbulk.OperationResult {
 	failure := asyncbulk.ItemFailure{}
 	err := s.aasRegistryBackend.ExecuteInTransaction(startErrorCode, commitErrorCode, func(tx *sql.Tx) error {
-		for idx, rawID := range aasIdentifiers {
-			descriptorID := strings.TrimSpace(rawID)
-			if descriptorID == "" {
-				failure = asyncbulk.ItemFailure{
-					Index:      idx,
-					Identifier: rawID,
-					StatusCode: http.StatusBadRequest,
-					Message:    "AASR-BULK-DELAASDESC-MISSINGID descriptor id must not be empty",
-				}
-				return common.NewErrBadRequest(failure.Message)
-			}
-
-			if err := s.aasRegistryBackend.DeleteAssetAdministrationShellDescriptorByIDInTransaction(ctx, tx, descriptorID); err != nil {
-				failure = asyncbulk.ItemFailure{
-					Index:      idx,
-					Identifier: descriptorID,
-					StatusCode: aasBulkDeleteErrorStatusCode(err),
-					Message:    err.Error(),
-				}
-				return err
-			}
-		}
-		return nil
+		return s.executeBulkDeleteAASIdentifiersTx(ctx, tx, aasIdentifiers, &failure)
 	})
 	if err != nil {
 		if failure.StatusCode == 0 {
@@ -214,6 +192,86 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) executeAtomicAASIdentifi
 		return failedAtomicResult(normalizeAASIdentifiers(aasIdentifiers), failure)
 	}
 	return successfulAtomicResult(len(aasIdentifiers))
+}
+
+func (s *AssetAdministrationShellRegistryAPIAPIService) executeBulkDeleteAASIdentifiersTx(
+	ctx context.Context,
+	tx *sql.Tx,
+	rawIdentifiers []string,
+	failure *asyncbulk.ItemFailure,
+) error {
+	identifiers, err := s.validateBulkDeleteAASIdentifiersTx(ctx, tx, rawIdentifiers, failure)
+	if err != nil {
+		return err
+	}
+	failedIndex, err := s.aasRegistryBackend.DeleteAssetAdministrationShellDescriptorsByIDsInTransaction(ctx, tx, identifiers)
+	if err == nil {
+		return nil
+	}
+	if failedIndex < 0 || failedIndex >= len(identifiers) {
+		failedIndex = 0
+	}
+	*failure = asyncbulk.ItemFailure{
+		Index:      failedIndex,
+		Identifier: identifiers[failedIndex],
+		StatusCode: aasBulkDeleteErrorStatusCode(err),
+		Message:    err.Error(),
+	}
+	return err
+}
+
+func (s *AssetAdministrationShellRegistryAPIAPIService) validateBulkDeleteAASIdentifiersTx(
+	ctx context.Context,
+	tx *sql.Tx,
+	rawIdentifiers []string,
+	failure *asyncbulk.ItemFailure,
+) ([]string, error) {
+	identifiers := normalizeAASIdentifiers(rawIdentifiers)
+	existing, err := s.aasRegistryBackend.ExistingAASDescriptorIDsInTransaction(ctx, tx, identifiers)
+	if err != nil {
+		*failure = asyncbulk.ItemFailure{Index: 0, Identifier: firstIdentifier(identifiers), StatusCode: http.StatusInternalServerError, Message: err.Error()}
+		return nil, err
+	}
+	return identifiers, validateExistingAASDeleteIdentifiers(rawIdentifiers, identifiers, existing, failure)
+}
+
+func validateExistingAASDeleteIdentifiers(
+	rawIdentifiers []string,
+	identifiers []string,
+	existing map[string]struct{},
+	failure *asyncbulk.ItemFailure,
+) error {
+	seen := make(map[string]struct{}, len(identifiers))
+	for idx, identifier := range identifiers {
+		if identifier == "" {
+			*failure = asyncbulk.ItemFailure{
+				Index:      idx,
+				Identifier: rawIdentifiers[idx],
+				StatusCode: http.StatusBadRequest,
+				Message:    "AASR-BULK-DELAASDESC-MISSINGID descriptor id must not be empty",
+			}
+			return common.NewErrBadRequest(failure.Message)
+		}
+		if _, found := existing[identifier]; !found {
+			return aasBulkDeleteNotFound(idx, identifier, failure)
+		}
+		if _, duplicate := seen[identifier]; duplicate {
+			return aasBulkDeleteNotFound(idx, identifier, failure)
+		}
+		seen[identifier] = struct{}{}
+	}
+	return nil
+}
+
+func aasBulkDeleteNotFound(index int, identifier string, failure *asyncbulk.ItemFailure) error {
+	err := common.NewErrNotFound("AAS Descriptor not found")
+	*failure = asyncbulk.ItemFailure{
+		Index:      index,
+		Identifier: identifier,
+		StatusCode: aasBulkDeleteErrorStatusCode(err),
+		Message:    err.Error(),
+	}
+	return err
 }
 
 func validateBulkCreateDescriptors(descriptors []model.AssetAdministrationShellDescriptor) asyncbulk.ItemFailure {
@@ -309,6 +367,13 @@ func normalizeAASIdentifiers(rawIdentifiers []string) []string {
 		identifiers = append(identifiers, strings.TrimSpace(rawID))
 	}
 	return identifiers
+}
+
+func firstIdentifier(identifiers []string) string {
+	if len(identifiers) == 0 {
+		return ""
+	}
+	return identifiers[0]
 }
 
 func aasBulkCreateErrorStatusCode(err error) int {

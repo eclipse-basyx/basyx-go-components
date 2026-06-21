@@ -59,3 +59,12 @@ func ContextWithConfig(ctx context.Context, cfg *Config) context.Context {
 	}
 	return context.WithValue(ctx, configKey{}, cfg)
 }
+
+// BulkBatchLimitFromContext returns the configured bulk SQL statement row limit.
+func BulkBatchLimitFromContext(ctx context.Context) int {
+	cfg, ok := ConfigFromContext(ctx)
+	if !ok || cfg == nil || cfg.General.BulkBatchLimit <= 0 {
+		return DefaultConfig.GeneralBulkBatchLimit
+	}
+	return cfg.General.BulkBatchLimit
+}

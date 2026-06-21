@@ -269,34 +269,50 @@ func (p *PostgreSQLAASRegistryDatabase) ExistingAASDescriptorIDsInTransaction(
 		return map[string]struct{}{}, nil
 	}
 
+	existing := make(map[string]struct{})
+	limit := common.BulkBatchLimitFromContext(ctx)
+	for start := 0; start < len(identifiers); start += limit {
+		end := min(start+limit, len(identifiers))
+		if err := collectExistingAASDescriptorIDs(ctx, tx, identifiers[start:end], existing); err != nil {
+			return nil, err
+		}
+	}
+	return existing, nil
+}
+
+func collectExistingAASDescriptorIDs(
+	ctx context.Context,
+	tx *sql.Tx,
+	identifiers []string,
+	existing map[string]struct{},
+) error {
 	query, args, err := goqu.
 		From(common.TblAASDescriptor).
 		Select(common.ColAASID).
 		Where(goqu.C(common.ColAASID).In(identifiers)).
 		ToSQL()
 	if err != nil {
-		return nil, common.NewInternalServerError("AASREG-BULKEXISTS-BUILDSQL " + err.Error())
+		return common.NewInternalServerError("AASREG-BULKEXISTS-BUILDSQL " + err.Error())
 	}
 	rows, err := tx.QueryContext(ctx, query, args...)
 	if err != nil {
-		return nil, common.NewInternalServerError("AASREG-BULKEXISTS-EXECQUERY " + err.Error())
+		return common.NewInternalServerError("AASREG-BULKEXISTS-EXECQUERY " + err.Error())
 	}
 	defer func() {
 		_ = rows.Close()
 	}()
 
-	existing := make(map[string]struct{})
 	for rows.Next() {
 		var identifier string
 		if scanErr := rows.Scan(&identifier); scanErr != nil {
-			return nil, common.NewInternalServerError("AASREG-BULKEXISTS-SCANID " + scanErr.Error())
+			return common.NewInternalServerError("AASREG-BULKEXISTS-SCANID " + scanErr.Error())
 		}
 		existing[identifier] = struct{}{}
 	}
 	if err = rows.Err(); err != nil {
-		return nil, common.NewInternalServerError("AASREG-BULKEXISTS-ITERATE " + err.Error())
+		return common.NewInternalServerError("AASREG-BULKEXISTS-ITERATE " + err.Error())
 	}
-	return existing, nil
+	return nil
 }
 
 // GetAssetAdministrationShellDescriptorByID returns the AAS descriptor
@@ -418,6 +434,42 @@ func (p *PostgreSQLAASRegistryDatabase) DeleteAssetAdministrationShellDescriptor
 		return err
 	}
 	return appendDescriptorHistoryTx(ctx, tx, existing, history.ChangeDeleted, true)
+}
+
+// DeleteAssetAdministrationShellDescriptorsByIDsInTransaction deletes multiple
+// AAS descriptors with chunked delete statements after preserving the current
+// per-item access/readback behavior. The returned index identifies the first
+// item that failed before the batched delete or history append.
+func (p *PostgreSQLAASRegistryDatabase) DeleteAssetAdministrationShellDescriptorsByIDsInTransaction(
+	ctx context.Context,
+	tx *sql.Tx,
+	aasIdentifiers []string,
+) (int, error) {
+	if tx == nil {
+		return 0, common.NewInternalServerError("AASREG-BULKDELETE-NILTX transaction must not be nil")
+	}
+	if len(aasIdentifiers) == 0 {
+		return -1, nil
+	}
+
+	existingDescriptors := make([]model.AssetAdministrationShellDescriptor, len(aasIdentifiers))
+	for index, identifier := range aasIdentifiers {
+		existing, err := descriptors.GetAssetAdministrationShellDescriptorByIDTx(ctx, tx, identifier)
+		if err != nil {
+			return index, err
+		}
+		existingDescriptors[index] = existing
+	}
+
+	if err := descriptors.DeleteAssetAdministrationShellDescriptorsByIDsTx(ctx, tx, aasIdentifiers); err != nil {
+		return 0, err
+	}
+	for index, existing := range existingDescriptors {
+		if err := appendDescriptorHistoryTx(ctx, tx, existing, history.ChangeDeleted, true); err != nil {
+			return index, err
+		}
+	}
+	return -1, nil
 }
 
 // GetAssetAdministrationShellDescriptorRecentChanges returns descriptor history rows for recent-change APIs.

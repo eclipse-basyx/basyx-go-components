@@ -37,8 +37,6 @@ import (
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 )
 
-const bulkInsertRowLimit = 1000
-
 type bulkCreateRows struct {
 	descriptor                      []goqu.Record
 	descriptorPayload               []goqu.Record
@@ -101,7 +99,36 @@ func BuildAdministrationShellDescriptorsCreateBatch(
 	}
 
 	batch := &common.PostgreSQLBatch{}
-	if err = appendBulkCreateRows(batch, rows); err != nil {
+	if err = appendBulkCreateRows(ctx, batch, rows); err != nil {
+		return nil, err
+	}
+	return batch, nil
+}
+
+// BuildSubmodelDescriptorsCreateBatch builds table-oriented insert statements
+// for global Submodel Descriptors. Rows are chunked in the same way as AAS
+// descriptor bulk inserts to keep single statements bounded.
+func BuildSubmodelDescriptorsCreateBatch(
+	ctx context.Context,
+	tx *sql.Tx,
+	descriptors []model.SubmodelDescriptor,
+) (*common.PostgreSQLBatch, error) {
+	counts := countBulkSubmodelCreateIDs(descriptors)
+	ids, err := reserveBulkCreateIDs(ctx, tx, counts)
+	if err != nil {
+		return nil, err
+	}
+
+	rows := &bulkCreateRows{}
+	cursor := &bulkCreateIDCursor{ids: ids}
+	for position, descriptor := range descriptors {
+		if err = collectSubmodelDescriptorRows(rows, cursor, nil, position, descriptor); err != nil {
+			return nil, err
+		}
+	}
+
+	batch := &common.PostgreSQLBatch{}
+	if err = appendBulkCreateRows(ctx, batch, rows); err != nil {
 		return nil, err
 	}
 	return batch, nil
@@ -136,6 +163,18 @@ func countBulkCreateIDs(
 				make([]int64, len(submodel.SupplementalSemanticId))...,
 			)
 		}
+	}
+	return counts
+}
+
+func countBulkSubmodelCreateIDs(descriptors []model.SubmodelDescriptor) bulkCreateIDs {
+	var counts bulkCreateIDs
+	for _, descriptor := range descriptors {
+		counts.descriptor = append(counts.descriptor, 0)
+		counts.submodelSupplementalReference = append(
+			counts.submodelSupplementalReference,
+			make([]int64, len(descriptor.SupplementalSemanticId))...,
+		)
 	}
 	return counts
 }
@@ -313,7 +352,7 @@ func collectSpecificAssetIDReferenceRows(
 func collectSubmodelDescriptorRows(
 	rows *bulkCreateRows,
 	cursor *bulkCreateIDCursor,
-	aasDescriptorID int64,
+	aasDescriptorID any,
 	position int,
 	descriptor model.SubmodelDescriptor,
 ) error {
@@ -477,7 +516,7 @@ func collectReferencePayloadAndKeys(
 	return nil
 }
 
-func appendBulkCreateRows(batch *common.PostgreSQLBatch, rows *bulkCreateRows) error {
+func appendBulkCreateRows(ctx context.Context, batch *common.PostgreSQLBatch, rows *bulkCreateRows) error {
 	tableRows := []struct {
 		table      string
 		rows       []goqu.Record
@@ -504,8 +543,9 @@ func appendBulkCreateRows(batch *common.PostgreSQLBatch, rows *bulkCreateRows) e
 		{common.TblSubmodelDescriptorSuppSemantic + "_key", rows.submodelSupplementalKey, nil},
 		{common.TblAASDescriptorEndpoint, rows.endpoint, nil},
 	}
+	limit := common.BulkBatchLimitFromContext(ctx)
 	for _, entry := range tableRows {
-		if err := appendChunkedRows(batch, entry.table, entry.rows, entry.onConflict); err != nil {
+		if err := appendChunkedRows(batch, entry.table, entry.rows, entry.onConflict, limit); err != nil {
 			return err
 		}
 	}
@@ -517,9 +557,13 @@ func appendChunkedRows(
 	table string,
 	rows []goqu.Record,
 	conflict exp.ConflictExpression,
+	limit int,
 ) error {
-	for start := 0; start < len(rows); start += bulkInsertRowLimit {
-		end := min(start+bulkInsertRowLimit, len(rows))
+	if limit <= 0 {
+		limit = common.DefaultConfig.GeneralBulkBatchLimit
+	}
+	for start := 0; start < len(rows); start += limit {
+		end := min(start+limit, len(rows))
 		insert := goqu.Insert(table).Rows(rows[start:end])
 		if conflict != nil {
 			insert = insert.OnConflict(conflict)
