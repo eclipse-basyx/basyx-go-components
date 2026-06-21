@@ -318,6 +318,7 @@ func buildUpdatePropertyRecordObject(property *types.Property, isPut bool, local
 		updateRecord["value_num"] = typedValue.Numeric
 		updateRecord["value_bool"] = typedValue.Boolean
 		updateRecord["value_time"] = typedValue.Time
+		updateRecord["value_date"] = typedValue.Date
 		updateRecord["value_datetime"] = typedValue.DateTime
 	}
 
