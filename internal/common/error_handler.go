@@ -46,7 +46,7 @@ type sqlStateError interface {
 }
 
 // IsPostgresErrorCode reports whether err or a wrapped error exposes the
-// provided PostgreSQL SQLSTATE. It supports both lib/pq and pgx errors.
+// provided PostgreSQL SQLSTATE.
 func IsPostgresErrorCode(err error, code string) bool {
 	if err == nil {
 		return false

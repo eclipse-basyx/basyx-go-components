@@ -351,7 +351,7 @@ func buildLockIdentifierQuery(table string, identifier string) (string, []any, e
 	lockKey := table + ":" + identifier
 	return goqu.
 		Dialect("postgres").
-		Select(goqu.Func("pg_advisory_xact_lock", goqu.Func("hashtextextended", lockKey, 0))).
+		Select(goqu.Func("pg_advisory_xact_lock", goqu.Func("hashtextextended", lockKey, int64(0)))).
 		Prepared(true).
 		ToSQL()
 }

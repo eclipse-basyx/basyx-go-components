@@ -35,7 +35,7 @@ import (
 	"time"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/testenv"
-	_ "github.com/lib/pq"
+	_ "github.com/jackc/pgx/v5/stdlib"
 	"github.com/stretchr/testify/require"
 )
 
@@ -95,7 +95,7 @@ func TestIntegration(t *testing.T) {
 func resetDatabase(t *testing.T) {
 	t.Helper()
 
-	db, err := sql.Open("postgres", integrationTestDSN)
+	db, err := sql.Open("pgx", integrationTestDSN)
 	require.NoError(t, err)
 	defer func() { _ = db.Close() }()
 

@@ -45,7 +45,7 @@ import (
 
 	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/testenv"
-	_ "github.com/lib/pq" // PostgreSQL Treiber
+	_ "github.com/jackc/pgx/v5/stdlib"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -447,7 +447,7 @@ func getThumbnailWithoutFollowingRedirect(endpoint string) (int, string, error) 
 }
 
 func setExternalThumbnailForAAS(aasID string, externalURL string) error {
-	db, err := sql.Open("postgres", integrationTestDSN)
+	db, err := sql.Open("pgx", integrationTestDSN)
 	if err != nil {
 		return fmt.Errorf("failed to open db connection: %v", err)
 	}
@@ -598,7 +598,7 @@ func TestIntegration(t *testing.T) {
 				deleteAllAAS(t, runner, stepNumber)
 			},
 			testenv.ActionAssertSubmodelAbsent: testenv.NewCheckSubmodelAbsentAction(testenv.CheckSubmodelAbsentOptions{
-				Driver: "postgres",
+				Driver: "pgx",
 				DSN:    integrationTestDSN,
 			}),
 		},
@@ -1117,7 +1117,7 @@ func TestDeleteSubmodelByIdAasRepositoryRollsBackReferenceDeleteOnSubmodelDelete
 	require.NoError(t, putErr, "PUT submodel request failed")
 	require.Equal(t, http.StatusCreated, putStatusCode, "Expected 201 Created when creating submodel via AAS endpoint")
 
-	db, openErr := sql.Open("postgres", integrationTestDSN)
+	db, openErr := sql.Open("pgx", integrationTestDSN)
 	require.NoError(t, openErr, "failed to open db connection")
 	t.Cleanup(func() { _ = db.Close() })
 

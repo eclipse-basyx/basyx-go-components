@@ -276,7 +276,7 @@ func lockAASDescriptorUpsertTx(ctx context.Context, tx *sql.Tx, aasID string) er
 func buildAASDescriptorUpsertLockSQL(aasID string) (string, []any, error) {
 	return goqu.
 		Dialect(common.Dialect).
-		Select(goqu.Func("pg_advisory_xact_lock", goqu.Func("hashtextextended", "aas_descriptor:"+aasID, 0))).
+		Select(goqu.Func("pg_advisory_xact_lock", goqu.Func("hashtextextended", "aas_descriptor:"+aasID, int64(0)))).
 		Prepared(true).
 		ToSQL()
 }

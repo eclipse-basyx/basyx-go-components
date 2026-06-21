@@ -44,7 +44,7 @@ import (
 	"time"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/testenv"
-	_ "github.com/lib/pq"
+	_ "github.com/jackc/pgx/v5/stdlib"
 	"github.com/stretchr/testify/require"
 )
 
@@ -150,7 +150,7 @@ func waitForIntegrationHealth(t *testing.T, endpoint string, timeout time.Durati
 func resetDatabaseForUploadIT(t *testing.T, dsn string) {
 	t.Helper()
 
-	db, err := sql.Open("postgres", dsn)
+	db, err := sql.Open("pgx", dsn)
 	require.NoError(t, err)
 	defer func() { _ = db.Close() }()
 
@@ -367,7 +367,7 @@ func verifyStoredAttachments(t *testing.T, step testenv.JSONSuiteStep) {
 func readStoredAttachmentsFromDB(t *testing.T) []storedAttachment {
 	t.Helper()
 
-	db, err := sql.Open("postgres", uploadIntegrationDSN)
+	db, err := sql.Open("pgx", uploadIntegrationDSN)
 	require.NoError(t, err)
 	defer func() { _ = db.Close() }()
 

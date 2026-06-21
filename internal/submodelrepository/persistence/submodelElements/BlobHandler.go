@@ -40,7 +40,6 @@ import (
 	smrepoconfig "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/config"
 	smrepoerrors "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/errors"
 	persistenceutils "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/utils"
-	_ "github.com/lib/pq" // PostgreSQL Treiber
 )
 
 // PostgreSQLBlobHandler provides PostgreSQL-based persistence operations for Blob submodel elements.

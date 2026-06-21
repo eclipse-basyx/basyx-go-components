@@ -41,7 +41,6 @@ import (
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	persistenceutils "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/utils"
 	jsoniter "github.com/json-iterator/go"
-	_ "github.com/lib/pq" // PostgreSQL Treiber
 )
 
 // PostgreSQLOperationHandler handles persistence operations for Operation submodel elements.

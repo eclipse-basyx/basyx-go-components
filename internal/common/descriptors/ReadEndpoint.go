@@ -40,7 +40,6 @@ import (
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
-	"github.com/lib/pq"
 )
 
 // ReadEndpointsByDescriptorID returns all endpoints that belong to a single
@@ -80,7 +79,7 @@ func ReadEndpointsByDescriptorID(
 //   - Nullable text columns are COALESCE'd to empty strings; JSON arrays default to empty.
 //
 // Implementation notes:
-// - Uses pq.Array with SQL ANY for efficient multi-key filtering.
+// - Uses SQL ANY with pgx slice parameters for efficient multi-key filtering.
 // - Uses LEFT JOINs so descriptors without endpoints are still handled.
 // - Prepared statements are enabled via goqu to allow DB plan caching.
 //
@@ -104,7 +103,6 @@ func ReadEndpointsByDescriptorIDs(
 	}
 
 	d := goqu.Dialect(common.Dialect)
-	arr := pq.Array(descriptorIDs)
 
 	ds := d.From(common.TDescriptor)
 	var joinOn exp.AliasedExpression
@@ -141,7 +139,7 @@ func ReadEndpointsByDescriptorIDs(
 	}
 
 	ds = ds.
-		Where(goqu.L("? = ANY(?::bigint[])", joinOn.Col(common.ColDescriptorID), arr)).
+		Where(joinOn.Col(common.ColDescriptorID).In(descriptorIDs)).
 		Select(
 			joinOn.Col(common.ColDescriptorID),
 			joinOn.Col(common.ColID),

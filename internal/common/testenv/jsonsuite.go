@@ -43,6 +43,7 @@ import (
 	"testing"
 	"time"
 
+	_ "github.com/jackc/pgx/v5/stdlib"
 	"github.com/stretchr/testify/require"
 )
 
@@ -203,7 +204,7 @@ func DefaultJSONStepName(step JSONSuiteStep, stepNumber int) string {
 func NewCheckDBIsEmptyAction(options CheckDBIsEmptyOptions) JSONStepAction {
 	driver := strings.TrimSpace(options.Driver)
 	if driver == "" {
-		driver = "postgres"
+		driver = "pgx"
 	}
 
 	schema := strings.TrimSpace(options.Schema)
@@ -251,7 +252,7 @@ func defaultCheckDBIsEmptyExcludedTables(extraTables []string) map[string]struct
 func NewCheckSubmodelAbsentAction(options CheckSubmodelAbsentOptions) JSONStepAction {
 	driver := strings.TrimSpace(options.Driver)
 	if driver == "" {
-		driver = "postgres"
+		driver = "pgx"
 	}
 
 	return func(t *testing.T, _ *JSONSuiteRunner, step JSONSuiteStep, _ int) {

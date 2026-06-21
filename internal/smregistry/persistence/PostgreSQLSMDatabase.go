@@ -167,7 +167,7 @@ func lockSubmodelDescriptorUpsertTx(ctx context.Context, tx *sql.Tx, submodelID 
 func buildSubmodelDescriptorUpsertLockSQL(submodelID string) (string, []any, error) {
 	return goqu.
 		Dialect(common.Dialect).
-		Select(goqu.Func("pg_advisory_xact_lock", goqu.Func("hashtextextended", "submodel_descriptor:"+submodelID, 0))).
+		Select(goqu.Func("pg_advisory_xact_lock", goqu.Func("hashtextextended", "submodel_descriptor:"+submodelID, int64(0)))).
 		Prepared(true).
 		ToSQL()
 }

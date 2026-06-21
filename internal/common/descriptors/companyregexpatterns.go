@@ -31,7 +31,6 @@ import (
 
 	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
-	"github.com/lib/pq"
 )
 
 func createCompanyAssetIDRegexPatterns(tx *sql.Tx, descriptorID int64, patterns []string) error {
@@ -84,7 +83,6 @@ func readCompanyRegexPatternsByDescriptorIDs(ctx context.Context, db DBQueryer, 
 
 	d := goqu.Dialect(common.Dialect)
 	patternTbl := goqu.T(tableName).As("comp_pattern")
-	arr := pq.Array(descriptorIDs)
 
 	sqlStr, args, err := d.
 		From(patternTbl).
@@ -92,7 +90,7 @@ func readCompanyRegexPatternsByDescriptorIDs(ctx context.Context, db DBQueryer, 
 			patternTbl.Col(common.ColDescriptorID),
 			patternTbl.Col(common.ColRegexPattern),
 		).
-		Where(goqu.L("? = ANY(?::bigint[])", patternTbl.Col(common.ColDescriptorID), arr)).
+		Where(patternTbl.Col(common.ColDescriptorID).In(descriptorIDs)).
 		Order(patternTbl.Col(common.ColDescriptorID).Asc(), patternTbl.Col(common.ColPosition).Asc()).
 		ToSQL()
 	if err != nil {

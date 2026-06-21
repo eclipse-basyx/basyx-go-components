@@ -32,7 +32,6 @@ import (
 	"testing"
 
 	"github.com/jackc/pgx/v5/pgconn"
-	"github.com/lib/pq"
 )
 
 func TestErrorClassifiers_RecognizeWrappedErrors(t *testing.T) {
@@ -102,7 +101,7 @@ func TestNewErrorResponsePreservesExplicitServiceUnavailable(t *testing.T) {
 	}
 }
 
-func TestIsPostgresUniqueViolationSupportsPQAndPGX(t *testing.T) {
+func TestIsPostgresUniqueViolationSupportsPGX(t *testing.T) {
 	t.Parallel()
 
 	testCases := []struct {
@@ -110,7 +109,6 @@ func TestIsPostgresUniqueViolationSupportsPQAndPGX(t *testing.T) {
 		err  error
 		want bool
 	}{
-		{name: "pq", err: &pq.Error{Code: "23505"}, want: true},
 		{name: "pgx", err: &pgconn.PgError{Code: "23505"}, want: true},
 		{name: "wrapped pgx", err: fmt.Errorf("insert failed: %w", &pgconn.PgError{Code: "23505"}), want: true},
 		{name: "different state", err: &pgconn.PgError{Code: "23503"}, want: false},
