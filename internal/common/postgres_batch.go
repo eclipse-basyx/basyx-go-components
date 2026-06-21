@@ -78,7 +78,7 @@ func ExecutePostgreSQLBatchInTransaction(
 		queries = append(queries, statement.SQL)
 	}
 	if _, err := tx.ExecContext(ctx, strings.Join(queries, ";\n")); err != nil {
-		return NewInternalServerError("COMMON-PGBATCH-EXEC " + err.Error())
+		return internalServerErrorWithCause("COMMON-PGBATCH-EXEC", err)
 	}
 	return nil
 }
@@ -116,31 +116,52 @@ func ExecutePostgreSQLBatchTransaction(
 			return fmt.Errorf("COMMON-PGBATCH-UNSUPPORTEDDRIVER expected pgx stdlib connection")
 		}
 
+		pgxTx, beginErr := pgxConn.Conn().Begin(ctx)
+		if beginErr != nil {
+			return internalServerErrorWithCause("COMMON-PGBATCH-BEGIN", beginErr)
+		}
+		committed := false
+		defer func() {
+			if !committed {
+				_ = pgxTx.Rollback(ctx)
+			}
+		}()
+
 		batch := &pgx.Batch{}
-		batch.Queue("BEGIN")
 		for _, statement := range statements {
 			batch.Queue(statement.SQL, statement.Args...)
 		}
-		batch.Queue("COMMIT")
 
-		results := pgxConn.Conn().SendBatch(ctx, batch)
-		if _, execErr := results.Exec(); execErr != nil {
-			_ = results.Close()
-			return NewInternalServerError("COMMON-PGBATCH-BEGIN " + execErr.Error())
-		}
+		results := pgxTx.SendBatch(ctx, batch)
 		if readResults != nil {
 			if readErr := readResults(results); readErr != nil {
 				_ = results.Close()
 				return readErr
 			}
-		}
-		if _, execErr := results.Exec(); execErr != nil {
-			_ = results.Close()
-			return NewInternalServerError("COMMON-PGBATCH-COMMIT " + execErr.Error())
+		} else if execErr := executePostgreSQLBatchResults(results, len(statements)); execErr != nil {
+			return execErr
 		}
 		if closeErr := results.Close(); closeErr != nil {
-			return NewInternalServerError("COMMON-PGBATCH-CLOSE " + closeErr.Error())
+			return internalServerErrorWithCause("COMMON-PGBATCH-CLOSE", closeErr)
 		}
+		if commitErr := pgxTx.Commit(ctx); commitErr != nil {
+			return internalServerErrorWithCause("COMMON-PGBATCH-COMMIT", commitErr)
+		}
+		committed = true
 		return nil
 	})
+}
+
+func executePostgreSQLBatchResults(results pgx.BatchResults, count int) error {
+	for index := 0; index < count; index++ {
+		if _, execErr := results.Exec(); execErr != nil {
+			_ = results.Close()
+			return internalServerErrorWithCause("COMMON-PGBATCH-EXEC", execErr)
+		}
+	}
+	return nil
+}
+
+func internalServerErrorWithCause(code string, err error) error {
+	return fmt.Errorf("%s: %w", NewInternalServerError(code), err)
 }

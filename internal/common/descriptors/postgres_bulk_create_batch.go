@@ -297,7 +297,7 @@ func collectSubmodelDescriptorRows(
 	descriptor model.SubmodelDescriptor,
 ) error {
 	if len(descriptor.Endpoints) == 0 {
-		return common.NewErrBadRequest("Submodel Descriptor needs at least 1 Endpoint.")
+		return common.NewErrBadRequest("AASDESC-BULK-SMD-ENDPOINTS Submodel Descriptor needs at least 1 Endpoint.")
 	}
 	descriptorID := cursor.nextDescriptorID()
 	rows.descriptor = append(rows.descriptor, goqu.Record{common.ColID: descriptorID})

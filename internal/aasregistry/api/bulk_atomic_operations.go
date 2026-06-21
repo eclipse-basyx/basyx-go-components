@@ -220,6 +220,7 @@ func validateBulkCreateDescriptors(descriptors []model.AssetAdministrationShellD
 	seen := make(map[string]struct{}, len(descriptors))
 	for index, descriptor := range descriptors {
 		identifier := strings.TrimSpace(descriptor.Id)
+		descriptors[index].Id = identifier
 		if identifier == "" {
 			err := common.NewErrBadRequest("AASR-BULK-CREATE-MISSINGID descriptor id must not be empty")
 			return asyncbulk.ItemFailure{

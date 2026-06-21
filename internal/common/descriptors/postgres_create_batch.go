@@ -77,7 +77,7 @@ func appendSubmodelDescriptors(
 ) error {
 	for position, descriptor := range descriptors {
 		if len(descriptor.Endpoints) == 0 {
-			return common.NewErrBadRequest("Submodel Descriptor needs at least 1 Endpoint.")
+			return common.NewErrBadRequest("AASDESC-PGBATCH-SMD-ENDPOINTS Submodel Descriptor needs at least 1 Endpoint.")
 		}
 		if err := batch.AppendDataset(goqu.Insert(common.TblDescriptor).Rows(goqu.Record{})); err != nil {
 			return err
