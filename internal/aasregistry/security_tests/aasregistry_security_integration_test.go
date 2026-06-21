@@ -49,7 +49,8 @@ func TestIntegration(t *testing.T) {
 			10*time.Second,
 		),
 		ActionHandlers: map[string]testenv.JSONStepAction{
-			actionAssertRecentChangeIDs: assertRecentChangeIDsAction,
+			actionAssertRecentChangeIDs:     assertRecentChangeIDsAction,
+			testenv.ActionAssertBulkFailure: testenv.AssertBulkFailureAction,
 		},
 	})
 }

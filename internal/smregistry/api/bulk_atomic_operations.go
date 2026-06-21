@@ -330,30 +330,6 @@ func validateBulkCreateSubmodelDescriptors(descriptors []model.SubmodelDescripto
 	return asyncbulk.ItemFailure{}
 }
 
-func (s *SubmodelRegistryAPIAPIService) createDescriptorInTransaction(
-	ctx context.Context,
-	tx *sql.Tx,
-	descriptor model.SubmodelDescriptor,
-) (int, error) {
-	descriptorID := strings.TrimSpace(descriptor.Id)
-	if descriptorID == "" {
-		return http.StatusBadRequest, common.NewErrBadRequest("SMR-BULK-CREATE-MISSINGID descriptor id must not be empty")
-	}
-
-	_, err := s.smRegistryBackend.GetSubmodelDescriptorByIDInTransaction(ctx, tx, descriptorID)
-	if err == nil {
-		return http.StatusConflict, common.NewErrConflict("Submodel with given id already exists")
-	}
-	if !common.IsErrNotFound(err) {
-		return http.StatusInternalServerError, err
-	}
-
-	if _, err = s.smRegistryBackend.InsertSubmodelDescriptorInTransaction(ctx, tx, descriptor); err != nil {
-		return smBulkCreateErrorStatusCode(err), err
-	}
-	return http.StatusCreated, nil
-}
-
 func (s *SubmodelRegistryAPIAPIService) upsertDescriptorInTransaction(
 	ctx context.Context,
 	tx *sql.Tx,
