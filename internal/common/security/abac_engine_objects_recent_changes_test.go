@@ -75,6 +75,15 @@ func TestMatchRouteObjectsObjItem_RecentChangesSpecificObjectAddsIdentifierFilte
 			path:        "/shell-descriptors/$recent-changes",
 			filterField: "$aasdesc#id",
 		},
+		{
+			name: "submodel descriptor",
+			object: grammar.ObjectItem{
+				Kind:       grammar.Descriptor,
+				Descriptor: &grammar.DescriptorValue{Scope: "$smdesc", ID: grammar.Identifier{ID: "sm-desc-1"}},
+			},
+			path:        "/submodel-descriptors/$recent-changes",
+			filterField: "$smdesc#id",
+		},
 	}
 
 	for _, testCase := range testCases {

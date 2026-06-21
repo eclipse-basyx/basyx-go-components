@@ -35,7 +35,10 @@ import (
 	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/descriptors"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/history"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
+	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 )
 
 // PostgreSQLSMDatabase provides PostgreSQL-based persistence for the Submodel Registry Service.
@@ -96,12 +99,36 @@ func (p *PostgreSQLSMDatabase) ListSubmodelDescriptors(
 	return descriptors.ListSubmodelDescriptors(ctx, p.db, limit, cursor)
 }
 
+func appendSubmodelDescriptorHistoryTx(ctx context.Context, tx *sql.Tx, descriptor model.SubmodelDescriptor, changeType string, deleted bool) error {
+	snapshot, err := descriptor.ToJsonable()
+	if err != nil {
+		return common.NewInternalServerError("SMREG-HISTORY-TOJSONABLE " + err.Error())
+	}
+
+	return history.AppendVersionTx(ctx, tx, history.TableSubmodelDescriptor, descriptor.Id, changeType, snapshot, deleted)
+}
+
 // InsertSubmodelDescriptor inserts a global Submodel Descriptor (no AAS association).
 func (p *PostgreSQLSMDatabase) InsertSubmodelDescriptor(
 	ctx context.Context,
 	submodel model.SubmodelDescriptor,
 ) (model.SubmodelDescriptor, error) {
-	return descriptors.InsertSubmodelDescriptor(ctx, p.db, submodel)
+	var result model.SubmodelDescriptor
+	err := common.ExecuteInTransaction(p.db, "SMREG-INSERTSMDESC-STARTTX", "SMREG-INSERTSMDESC-COMMITTX", func(tx *sql.Tx) error {
+		stored, err := descriptors.InsertSubmodelDescriptorTx(ctx, tx, submodel)
+		if err != nil {
+			return err
+		}
+		if err = appendSubmodelDescriptorHistoryTx(ctx, tx, stored, history.ChangeCreated, false); err != nil {
+			return err
+		}
+		result = stored
+		return nil
+	})
+	if err != nil {
+		return model.SubmodelDescriptor{}, err
+	}
+	return result, nil
 }
 
 // InsertSubmodelDescriptorInTransaction inserts a global submodel descriptor
@@ -114,7 +141,14 @@ func (p *PostgreSQLSMDatabase) InsertSubmodelDescriptorInTransaction(
 	if tx == nil {
 		return model.SubmodelDescriptor{}, common.NewInternalServerError("SMREG-INSERTSMDESC-NILTX transaction must not be nil")
 	}
-	return descriptors.InsertSubmodelDescriptorTx(ctx, tx, submodel)
+	stored, err := descriptors.InsertSubmodelDescriptorTx(ctx, tx, submodel)
+	if err != nil {
+		return model.SubmodelDescriptor{}, err
+	}
+	if err = appendSubmodelDescriptorHistoryTx(ctx, tx, stored, history.ChangeCreated, false); err != nil {
+		return model.SubmodelDescriptor{}, err
+	}
+	return stored, nil
 }
 
 // ReplaceSubmodelDescriptor replaces a global Submodel Descriptor (no AAS association).
@@ -122,7 +156,25 @@ func (p *PostgreSQLSMDatabase) ReplaceSubmodelDescriptor(
 	ctx context.Context,
 	submodel model.SubmodelDescriptor,
 ) (model.SubmodelDescriptor, error) {
-	return descriptors.ReplaceSubmodelDescriptor(ctx, p.db, submodel)
+	var result model.SubmodelDescriptor
+	err := common.ExecuteInTransaction(p.db, "SMREG-REPLACESMDESC-STARTTX", "SMREG-REPLACESMDESC-COMMITTX", func(tx *sql.Tx) error {
+		if err := descriptors.DeleteSubmodelDescriptorByIDTx(ctx, tx, submodel.Id); err != nil {
+			return err
+		}
+		stored, err := descriptors.InsertSubmodelDescriptorTx(ctx, tx, submodel)
+		if err != nil {
+			return err
+		}
+		if err = appendSubmodelDescriptorHistoryTx(ctx, tx, stored, history.ChangeUpdated, false); err != nil {
+			return err
+		}
+		result = stored
+		return nil
+	})
+	if err != nil {
+		return model.SubmodelDescriptor{}, err
+	}
+	return result, nil
 }
 
 // UpsertSubmodelDescriptorInTransaction replaces an existing global submodel
@@ -140,16 +192,23 @@ func (p *PostgreSQLSMDatabase) UpsertSubmodelDescriptorInTransaction(
 		return err
 	}
 
+	created := false
 	if err := descriptors.DeleteSubmodelDescriptorByIDTx(ctx, tx, submodel.Id); err != nil {
 		if !common.IsErrNotFound(err) {
 			return err
 		}
-		_, insertErr := descriptors.InsertSubmodelDescriptorTx(ctx, tx, submodel)
-		return insertErr
+		created = true
 	}
 
-	_, err := descriptors.InsertSubmodelDescriptorTx(ctx, tx, submodel)
-	return err
+	stored, err := descriptors.InsertSubmodelDescriptorTx(ctx, tx, submodel)
+	if err != nil {
+		return err
+	}
+	changeType := history.ChangeUpdated
+	if created {
+		changeType = history.ChangeCreated
+	}
+	return appendSubmodelDescriptorHistoryTx(ctx, tx, stored, changeType, false)
 }
 
 func lockSubmodelDescriptorUpsertTx(ctx context.Context, tx *sql.Tx, submodelID string) error {
@@ -198,7 +257,16 @@ func (p *PostgreSQLSMDatabase) DeleteSubmodelDescriptorByID(
 	ctx context.Context,
 	submodelID string,
 ) error {
-	return descriptors.DeleteSubmodelDescriptorByID(ctx, p.db, submodelID)
+	return common.ExecuteInTransaction(p.db, "SMREG-DELSMDESC-STARTTX", "SMREG-DELSMDESC-COMMITTX", func(tx *sql.Tx) error {
+		existing, err := descriptors.GetSubmodelDescriptorByID(ctx, tx, submodelID)
+		if err != nil {
+			return err
+		}
+		if err = descriptors.DeleteSubmodelDescriptorByIDTx(ctx, tx, submodelID); err != nil {
+			return err
+		}
+		return appendSubmodelDescriptorHistoryTx(ctx, tx, existing, history.ChangeDeleted, true)
+	})
 }
 
 // DeleteSubmodelDescriptorByIDInTransaction deletes a global submodel
@@ -211,7 +279,14 @@ func (p *PostgreSQLSMDatabase) DeleteSubmodelDescriptorByIDInTransaction(
 	if tx == nil {
 		return common.NewInternalServerError("SMREG-DELSMDESC-NILTX transaction must not be nil")
 	}
-	return descriptors.DeleteSubmodelDescriptorByIDTx(ctx, tx, submodelID)
+	existing, err := descriptors.GetSubmodelDescriptorByID(ctx, tx, submodelID)
+	if err != nil {
+		return err
+	}
+	if err = descriptors.DeleteSubmodelDescriptorByIDTx(ctx, tx, submodelID); err != nil {
+		return err
+	}
+	return appendSubmodelDescriptorHistoryTx(ctx, tx, existing, history.ChangeDeleted, true)
 }
 
 // ExistsSubmodelByID reports whether a global Submodel Descriptor exists by its id.
@@ -220,4 +295,30 @@ func (p *PostgreSQLSMDatabase) ExistsSubmodelByID(
 	submodelID string,
 ) (bool, error) {
 	return descriptors.ExistsSubmodelByID(ctx, p.db, submodelID)
+}
+
+// GetSubmodelDescriptorRecentChanges returns submodel descriptor history rows for recent-change APIs.
+func (p *PostgreSQLSMDatabase) GetSubmodelDescriptorRecentChanges(ctx context.Context, limit int32, cursor string, createdFrom time.Time, updatedFrom time.Time) ([]history.Row, string, error) {
+	shouldEnforceFormula, enforceErr := auth.ShouldEnforceFormula(ctx)
+	if enforceErr != nil {
+		return nil, "", common.NewInternalServerError("SMREG-RECENT-SHOULDENFORCE " + enforceErr.Error())
+	}
+
+	var collector *grammar.ResolvedFieldPathCollector
+	if shouldEnforceFormula {
+		var err error
+		collector, err = grammar.NewResolvedFieldPathCollectorForRoot(grammar.CollectorRootSMDesc)
+		if err != nil {
+			return nil, "", common.NewInternalServerError("SMREG-RECENT-BADCOLLECTOR " + err.Error())
+		}
+	}
+	submodelDescriptor := goqu.T(common.TblSubmodelDescriptor).As("submodel_descriptor")
+	visibilityDS := goqu.From(submodelDescriptor).
+		Select(goqu.V(1)).
+		Where(
+			submodelDescriptor.Col(common.ColAASID).Eq(goqu.I("history.identifier")),
+			submodelDescriptor.Col(common.ColAASDescriptorID).IsNull(),
+		)
+
+	return history.RecentRowsForVisibleIdentifiables(ctx, p.db, history.TableSubmodelDescriptor, limit, cursor, createdFrom, updatedFrom, visibilityDS, collector)
 }

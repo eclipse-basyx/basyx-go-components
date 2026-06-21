@@ -38,6 +38,7 @@ import (
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/asyncbulk"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/history"
 	commonmodel "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/security/abacpolicy"
 	smregistryapi "github.com/eclipse-basyx/basyx-go-components/internal/smregistry/api"
@@ -58,6 +59,16 @@ func runServer(ctx context.Context, configPath string) error {
 		return err
 	}
 	if err := commonmodel.SetVerificationMode(cfg.Server.StrictVerification); err != nil {
+		return err
+	}
+	history.Configure(history.Config{
+		Mode:                 cfg.History.Mode,
+		RetentionDays:        cfg.History.RetentionDays,
+		FullSnapshotInterval: cfg.History.FullSnapshotInterval,
+		Immutability:         cfg.History.Immutability,
+		AuditIdentityMode:    cfg.History.AuditIdentityMode,
+	})
+	if err = history.ConfigureEvidence(ctx, cfg.History.Evidence); err != nil {
 		return err
 	}
 	commonmodel.SetSupportsSingularSupplementalSemanticId(cfg.General.SupportsSingularSupplementalSemanticId)
@@ -101,6 +112,9 @@ func runServer(ctx context.Context, configPath string) error {
 	if cfg.Postgres.ConnMaxLifetimeMinutes > 0 {
 		sharedDB.SetConnMaxLifetime(time.Duration(cfg.Postgres.ConnMaxLifetimeMinutes) * time.Minute)
 	}
+	if err = history.ApplyPostgresGuardConfig(ctx, sharedDB); err != nil {
+		return err
+	}
 	smDatabase, err := smregistrypostgresql.NewPostgreSQLSMBackendFromDB(sharedDB)
 	if err != nil {
 		log.Printf("❌ DB init failed: %v", err)
@@ -128,17 +142,26 @@ func runServer(ctx context.Context, configPath string) error {
 	if err != nil {
 		return err
 	}
+	versioningGuard := history.NewMutationCoverageGuard(apiRouter)
+	apiRouter.Use(versioningGuard.Middleware)
+	apiRouter.Use(history.AuditContextMiddleware(cfg))
+	abacpolicy.ExemptManagementMutationRoutesIfEnabled(cfg, versioningGuard, "submodelregistryservice")
 	abacpolicy.RegisterManagementRoutesIfEnabled(cfg, apiRouter, abacRepo, "submodelregistryservice")
 
 	// Register all registry routes (protected)
-	for _, rt := range smCtrl.Routes() {
+	for _, rt := range smCtrl.OrderedRoutes() {
+		versioningGuard.ClassifyRoute(rt.Name, rt.Method, rt.Pattern)
 		apiRouter.Method(rt.Method, rt.Pattern, rt.HandlerFunc)
 	}
 
 	// Register all description routes (protected)
-	for _, rt := range descCtrl.Routes() {
+	for _, rt := range descCtrl.OrderedRoutes() {
+		versioningGuard.ClassifyRoute(rt.Name, rt.Method, rt.Pattern)
 		apiRouter.Method(rt.Method, rt.Pattern, rt.HandlerFunc)
 	}
+	versioningGuard.Cover(http.MethodPost, "/bulk/submodel-descriptors")
+	versioningGuard.Cover(http.MethodPut, "/bulk/submodel-descriptors")
+	versioningGuard.Cover(http.MethodDelete, "/bulk/submodel-descriptors")
 	bulkHandler.RegisterRoutes(apiRouter, true)
 
 	// Mount protected API under base path

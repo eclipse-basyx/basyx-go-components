@@ -60,6 +60,8 @@ const (
 	TableConcept = "concept_description_history"
 	// TableDescriptor stores AAS descriptor history snapshots.
 	TableDescriptor = "descriptor_history"
+	// TableSubmodelDescriptor stores Submodel Registry descriptor history snapshots.
+	TableSubmodelDescriptor = "submodel_descriptor_history"
 	// TableGuardConfig stores the runtime switch for PostgreSQL history guards.
 	TableGuardConfig = "history_guard_config"
 
@@ -85,10 +87,11 @@ const (
 )
 
 var payloadTables = map[string]string{
-	TableAAS:        "aas_history_payload",
-	TableSubmodel:   "submodel_history_payload",
-	TableConcept:    "concept_description_history_payload",
-	TableDescriptor: "descriptor_history_payload",
+	TableAAS:                "aas_history_payload",
+	TableSubmodel:           "submodel_history_payload",
+	TableConcept:            "concept_description_history_payload",
+	TableDescriptor:         "descriptor_history_payload",
+	TableSubmodelDescriptor: "submodel_descriptor_history_payload",
 }
 
 // Row is a normalized history entry loaded from one of the history tables.

@@ -14,6 +14,7 @@ package smregistryopenapi
 import (
 	"context"
 	"net/http"
+	"time"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 )
@@ -30,6 +31,7 @@ type DescriptionAPIAPIRouter interface {
 // pass the data to a SubmodelRegistryAPIAPIServicer to perform the required actions, then write the service results to the http response.
 type SubmodelRegistryAPIAPIRouter interface {
 	GetAllSubmodelDescriptors(http.ResponseWriter, *http.Request)
+	GetAllSubmodelDescriptorsRecentChanges(http.ResponseWriter, *http.Request)
 	PostSubmodelDescriptor(http.ResponseWriter, *http.Request)
 	GetSubmodelDescriptorById(http.ResponseWriter, *http.Request)
 	PutSubmodelDescriptorById(http.ResponseWriter, *http.Request)
@@ -50,6 +52,7 @@ type DescriptionAPIAPIServicer interface {
 // and updated with the logic required for the API.
 type SubmodelRegistryAPIAPIServicer interface {
 	GetAllSubmodelDescriptors(context.Context, int32, string) (model.ImplResponse, error)
+	GetAllSubmodelDescriptorsRecentChanges(context.Context, time.Time, time.Time, int32, string) (model.ImplResponse, error)
 	PostSubmodelDescriptor(context.Context, model.SubmodelDescriptor) (model.ImplResponse, error)
 	GetSubmodelDescriptorById(context.Context, string) (model.ImplResponse, error)
 	PutSubmodelDescriptorById(context.Context, string, model.SubmodelDescriptor) (model.ImplResponse, error)

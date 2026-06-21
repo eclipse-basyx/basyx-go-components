@@ -128,6 +128,15 @@
     "expectedStatus": 200
   },
   {
+    "context": "GET /submodel-descriptors/$recent-changes - ANON - filtered",
+    "action": "ASSERT_RECENT_CHANGE_IDS",
+    "token": null,
+    "method": "GET",
+    "endpoint": "http://localhost:6005/submodel-descriptors/$recent-changes?limit=20",
+    "shouldMatch": "expected/expectedRecentChangesAnonDescriptorIDs.json",
+    "expectedStatus": 200
+  },
+  {
     "context": "GET ALL Submodels - User A - ALLOWED",
     "token": { "user": "usera", "password": "pwd" },
     "method": "GET",
@@ -136,11 +145,29 @@
     "expectedStatus": 200
   },
   {
+    "context": "GET /submodel-descriptors/$recent-changes - User A - filtered",
+    "action": "ASSERT_RECENT_CHANGE_IDS",
+    "token": { "user": "usera", "password": "pwd" },
+    "method": "GET",
+    "endpoint": "http://localhost:6005/submodel-descriptors/$recent-changes?limit=20",
+    "shouldMatch": "expected/expectedRecentChangesUserADescriptorIDs.json",
+    "expectedStatus": 200
+  },
+  {
     "context": "GET ALL Submodels - User B - ALLOWED",
     "token": { "user": "userb", "password": "pwd" },
     "method": "GET",
     "endpoint": "http://localhost:6005/submodel-descriptors",
     "shouldMatch": "expected/expectedSMDUserB.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "GET /submodel-descriptors/$recent-changes - User B - filtered",
+    "action": "ASSERT_RECENT_CHANGE_IDS",
+    "token": { "user": "userb", "password": "pwd" },
+    "method": "GET",
+    "endpoint": "http://localhost:6005/submodel-descriptors/$recent-changes?limit=20",
+    "shouldMatch": "expected/expectedRecentChangesUserBDescriptorIDs.json",
     "expectedStatus": 200
   },
   {
@@ -165,6 +192,15 @@
     "method": "GET",
     "endpoint": "http://localhost:6005/submodel-descriptors",
     "shouldMatch": "expected/expectedSMDAdmin.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "GET /submodel-descriptors/$recent-changes - ADMIN - filtered",
+    "action": "ASSERT_RECENT_CHANGE_IDS",
+    "token": { "user": "admin", "password": "pwd" },
+    "method": "GET",
+    "endpoint": "http://localhost:6005/submodel-descriptors/$recent-changes?limit=20",
+    "shouldMatch": "expected/expectedRecentChangesAdminDescriptorIDs.json",
     "expectedStatus": 200
   },
 
