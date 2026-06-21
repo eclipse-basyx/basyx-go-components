@@ -116,7 +116,7 @@ var terminalColumnMappings = map[string]terminalColumnMapping{
 	"value": {
 		ByContext: map[resolveContext]string{
 			ctxSpecificAssetID: "specific_asset_id.value",
-			ctxSME:             "COALESCE(property_element.value_text, property_element.value_num::text, property_element.value_bool::text, property_element.value_time::text, property_element.value_datetime::text)",
+			ctxSME:             "COALESCE(property_element.value_text, property_element.value_num::text, property_element.value_bool::text, property_element.value_time::text, property_element.value_date::text, property_element.value_datetime::text)",
 		},
 		ByParentSimple: map[string]map[resolveContext]string{
 			// submodelDescriptor semanticId mapping (used by $aasdesc#submodelDescriptors[].semanticId.* and $smdesc#semanticId.*).
@@ -178,7 +178,7 @@ var terminalColumnMappings = map[string]terminalColumnMapping{
 
 	"valueType": {
 		ByContext: map[resolveContext]string{
-			ctxSME: "(CASE WHEN property_element.value_bool IS NOT NULL THEN 'xs:boolean' WHEN property_element.value_time IS NOT NULL THEN 'xs:time' WHEN property_element.value_datetime IS NOT NULL THEN 'xs:dateTime' WHEN property_element.value_num IS NOT NULL THEN 'xs:double' ELSE 'xs:string' END)",
+			ctxSME: "(CASE WHEN property_element.value_bool IS NOT NULL THEN 'xs:boolean' WHEN property_element.value_time IS NOT NULL THEN 'xs:time' WHEN property_element.value_date IS NOT NULL THEN 'xs:date' WHEN property_element.value_datetime IS NOT NULL THEN 'xs:dateTime' WHEN property_element.value_num IS NOT NULL THEN 'xs:double' ELSE 'xs:string' END)",
 		},
 	},
 
