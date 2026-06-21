@@ -1,6 +1,25 @@
 /*******************************************************************************
 * Copyright (C) 2026 the Eclipse BaSyx Authors and Fraunhofer IESE
 *
+* Permission is hereby granted, free of charge, to any person obtaining
+* a copy of this software and associated documentation files (the
+* "Software"), to deal in the Software without restriction, including
+* without limitation the rights to use, copy, modify, merge, publish,
+* distribute, sublicense, and/or sell copies of the Software, and to
+* permit persons to whom the Software is furnished to do so, subject to
+* the following conditions:
+*
+* The above copyright notice and this permission notice shall be
+* included in all copies or substantial portions of the Software.
+*
+* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+* NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
+* LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+* OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
+* WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+*
 * SPDX-License-Identifier: MIT
 ******************************************************************************/
 
@@ -13,7 +32,9 @@ import (
 	"github.com/doug-martin/goqu/v9"
 )
 
-// AppendContextReference appends one owned reference and its payload and keys.
+// AppendContextReference appends statements for one reference whose primary key
+// is the owning row ID. It writes the reference row, its payload row, and all
+// reference key rows to the provided reference tables.
 func (b *PostgreSQLBatch) AppendContextReference(
 	ownerID any,
 	reference types.IReference,
@@ -59,7 +80,9 @@ func (b *PostgreSQLBatch) AppendContextReference(
 	return b.AppendDataset(dialect.Insert(referenceKeyTable).Rows(rows))
 }
 
-// AppendContextReferences appends generated references and their payloads and keys.
+// AppendContextReferences appends statements for references that get generated
+// IDs from referenceTable. Each reference is linked to ownerID through
+// ownerColumn and includes payload and key rows.
 func (b *PostgreSQLBatch) AppendContextReferences(
 	ownerID any,
 	references []types.IReference,
@@ -110,7 +133,9 @@ func (b *PostgreSQLBatch) AppendContextReferences(
 	return nil
 }
 
-// AppendSpecificAssetIDs appends specific asset IDs and their dependent references.
+// AppendSpecificAssetIDs appends statements for descriptor specific asset IDs
+// and their dependent semantic, supplemental semantic, and external subject
+// references.
 func (b *PostgreSQLBatch) AppendSpecificAssetIDs(
 	descriptorID any,
 	aasRef any,

@@ -98,8 +98,11 @@ func InsertAssetAdministrationShellDescriptor(ctx context.Context, db *sql.DB, a
 	return result, tx.Commit()
 }
 
-// CanSkipPostInsertReadback returns true for contexts where no post-insert
-// descriptor re-read is needed for ABAC enforcement or field filtering.
+// CanSkipPostInsertReadback reports whether a newly inserted AAS descriptor can
+// be returned without loading it again from the database. Readback is required
+// when ABAC filters or field-level masking may hide data from the caller; it can
+// be skipped when no query filter exists, no filters are active, or the active
+// create formula grants unrestricted access.
 func CanSkipPostInsertReadback(ctx context.Context) bool {
 	queryFilter := auth.GetQueryFilter(ctx)
 	if queryFilter == nil {
@@ -375,6 +378,9 @@ func deleteDescriptorRowsBySelectTx(ctx context.Context, tx *sql.Tx, descriptorI
 	return err
 }
 
+// buildAASDescriptorInsertRecord accepts either a concrete descriptor id or a
+// Goqu sequence expression, because batch inserts reference ids before they are
+// scanned back as int64 values.
 func buildAASDescriptorInsertRecord(
 	ctx context.Context,
 	descriptorID any,

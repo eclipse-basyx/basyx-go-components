@@ -215,9 +215,13 @@ func (p *PostgreSQLAASRegistryDatabase) InsertAdministrationShellDescriptorInTra
 	return appendDescriptorHistoryTx(ctx, tx, stored, history.ChangeCreated, false)
 }
 
-// InsertAdministrationShellDescriptorsInTransaction inserts descriptors with
-// table-oriented multi-row statements and returns the index of a descriptor
-// whose authorization or history processing failed.
+// InsertAdministrationShellDescriptorsInTransaction inserts multiple AAS
+// descriptors and their descriptor graph rows in the provided transaction. The
+// method builds table-oriented multi-row statements, executes them as one
+// batched block, then appends history entries for the stored descriptors. It
+// returns the index of the descriptor that failed during post-insert readback or
+// history processing; when the batched insert itself fails before an item can be
+// identified, the index is 0.
 func (p *PostgreSQLAASRegistryDatabase) InsertAdministrationShellDescriptorsInTransaction(
 	ctx context.Context,
 	tx *sql.Tx,
@@ -249,7 +253,10 @@ func (p *PostgreSQLAASRegistryDatabase) InsertAdministrationShellDescriptorsInTr
 	return -1, nil
 }
 
-// ExistingAASDescriptorIDsInTransaction returns identifiers that already exist.
+// ExistingAASDescriptorIDsInTransaction returns the subset of identifiers that
+// already exist in aas_descriptor using the caller's transaction. The result map
+// is keyed by AAS identifier so bulk create validation can report the first
+// conflicting input item without loading full descriptors.
 func (p *PostgreSQLAASRegistryDatabase) ExistingAASDescriptorIDsInTransaction(
 	ctx context.Context,
 	tx *sql.Tx,

@@ -1,6 +1,25 @@
 /*******************************************************************************
 * Copyright (C) 2026 the Eclipse BaSyx Authors and Fraunhofer IESE
 *
+* Permission is hereby granted, free of charge, to any person obtaining
+* a copy of this software and associated documentation files (the
+* "Software"), to deal in the Software without restriction, including
+* without limitation the rights to use, copy, modify, merge, publish,
+* distribute, sublicense, and/or sell copies of the Software, and to
+* permit persons to whom the Software is furnished to do so, subject to
+* the following conditions:
+*
+* The above copyright notice and this permission notice shall be
+* included in all copies or substantial portions of the Software.
+*
+* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+* NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
+* LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+* OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
+* WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+*
 * SPDX-License-Identifier: MIT
 ******************************************************************************/
 
@@ -18,13 +37,15 @@ import (
 	"github.com/jackc/pgx/v5/stdlib"
 )
 
-// PostgreSQLBatchStatement contains one SQL statement and its arguments.
+// PostgreSQLBatchStatement is one rendered PostgreSQL statement and the values
+// that must be passed when executing it with pgx batch support.
 type PostgreSQLBatchStatement struct {
 	SQL  string
 	Args []any
 }
 
-// PostgreSQLBatch stores statements that must be executed in order.
+// PostgreSQLBatch stores rendered statements in the order required by their
+// table dependencies.
 type PostgreSQLBatch struct {
 	statements []PostgreSQLBatchStatement
 }
@@ -33,7 +54,8 @@ type sqlDataset interface {
 	ToSQL() (string, []interface{}, error)
 }
 
-// SupportsPostgreSQLBatch reports whether the database uses the pgx stdlib driver.
+// SupportsPostgreSQLBatch reports whether db uses the pgx stdlib driver needed
+// for pgx Batch execution through database/sql.
 func SupportsPostgreSQLBatch(db *sql.DB) bool {
 	if db == nil {
 		return false
@@ -42,7 +64,8 @@ func SupportsPostgreSQLBatch(db *sql.DB) bool {
 	return ok
 }
 
-// AppendDataset builds and appends a Goqu dataset to the batch.
+// AppendDataset renders dataset to SQL immediately and appends the resulting
+// statement to the batch.
 func (b *PostgreSQLBatch) AppendDataset(dataset sqlDataset) error {
 	query, args, err := dataset.ToSQL()
 	if err != nil {
@@ -52,12 +75,15 @@ func (b *PostgreSQLBatch) AppendDataset(dataset sqlDataset) error {
 	return nil
 }
 
-// Statements returns the statements collected in execution order.
+// Statements returns the statements collected in append order.
 func (b *PostgreSQLBatch) Statements() []PostgreSQLBatchStatement {
 	return b.statements
 }
 
-// ExecutePostgreSQLBatchInTransaction executes rendered statements in an existing transaction.
+// ExecutePostgreSQLBatchInTransaction executes fully rendered statements inside
+// an existing database/sql transaction. It joins the statements into one
+// multi-statement Exec call, so each statement must already have all Goqu
+// placeholders rendered into SQL and no remaining Args.
 func ExecutePostgreSQLBatchInTransaction(
 	ctx context.Context,
 	tx *sql.Tx,
@@ -83,12 +109,16 @@ func ExecutePostgreSQLBatchInTransaction(
 	return nil
 }
 
-// PostgreSQLCurrentSequenceValue returns a Goqu expression for the current sequence value.
+// PostgreSQLCurrentSequenceValue returns a Goqu expression for the current value
+// of a table column sequence in the current PostgreSQL session.
 func PostgreSQLCurrentSequenceValue(table string, column string) exp.LiteralExpression {
 	return goqu.L("currval(pg_get_serial_sequence(?, ?))", table, column)
 }
 
-// ExecutePostgreSQLBatchTransaction sends a complete pgx batch enclosed by BEGIN and COMMIT.
+// ExecutePostgreSQLBatchTransaction executes statements as one pgx Batch in a
+// dedicated transaction. If readResults is nil, every statement result is
+// consumed with Exec; otherwise readResults must consume the queued results in
+// statement order before the transaction is committed.
 func ExecutePostgreSQLBatchTransaction(
 	ctx context.Context,
 	db *sql.DB,
