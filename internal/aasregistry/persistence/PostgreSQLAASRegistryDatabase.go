@@ -114,115 +114,6 @@ func appendDescriptorHistoryTx(ctx context.Context, tx *sql.Tx, descriptor model
 	return history.AppendVersionTx(ctx, tx, history.TableDescriptor, descriptor.Id, changeType, snapshot, deleted)
 }
 
-func appendBulkCreatedDescriptorHistoryFromInputTx(
-	ctx context.Context,
-	tx *sql.Tx,
-	aasDescriptors []model.AssetAdministrationShellDescriptor,
-) (int, error) {
-	if history.ActiveConfig().Mode == history.ModeOff {
-		return -1, nil
-	}
-
-	snapshots, failedIndex, err := prepareBulkCreatedDescriptorHistorySnapshotsTx(ctx, tx, aasDescriptors)
-	if err != nil {
-		return failedIndex, err
-	}
-	for index, descriptor := range snapshots {
-		if historyErr := appendDescriptorHistoryTx(ctx, tx, descriptor, history.ChangeCreated, false); historyErr != nil {
-			return index, historyErr
-		}
-	}
-	return -1, nil
-}
-
-func prepareBulkCreatedDescriptorHistorySnapshotsTx(
-	ctx context.Context,
-	tx *sql.Tx,
-	aasDescriptors []model.AssetAdministrationShellDescriptor,
-) ([]model.AssetAdministrationShellDescriptor, int, error) {
-	snapshots := make([]model.AssetAdministrationShellDescriptor, len(aasDescriptors))
-	copy(snapshots, aasDescriptors)
-
-	idsMissingCreatedAt := make([]string, 0)
-	for _, descriptor := range snapshots {
-		if descriptor.CreatedAt == nil {
-			idsMissingCreatedAt = append(idsMissingCreatedAt, descriptor.Id)
-		}
-	}
-	if len(idsMissingCreatedAt) == 0 {
-		return snapshots, -1, nil
-	}
-
-	createdAtByID, err := readAASCreatedAtByIDTx(ctx, tx, idsMissingCreatedAt)
-	if err != nil {
-		return nil, 0, err
-	}
-	for index := range snapshots {
-		if snapshots[index].CreatedAt != nil {
-			continue
-		}
-		createdAt, ok := createdAtByID[snapshots[index].Id]
-		if !ok {
-			return nil, index, common.NewInternalServerError("AASREG-BULKHISTORY-MISSINGCREATEDAT missing created_at for " + snapshots[index].Id)
-		}
-		createdAtCopy := createdAt
-		snapshots[index].CreatedAt = &createdAtCopy
-	}
-	return snapshots, -1, nil
-}
-
-func readAASCreatedAtByIDTx(ctx context.Context, tx *sql.Tx, identifiers []string) (map[string]time.Time, error) {
-	if tx == nil {
-		return nil, common.NewInternalServerError("AASREG-BULKHISTORY-NILTX transaction must not be nil")
-	}
-
-	createdAtByID := make(map[string]time.Time, len(identifiers))
-	limit := common.BulkBatchLimitFromContext(ctx)
-	for start := 0; start < len(identifiers); start += limit {
-		end := min(start+limit, len(identifiers))
-		if err := collectAASCreatedAtByIDTx(ctx, tx, identifiers[start:end], createdAtByID); err != nil {
-			return nil, err
-		}
-	}
-	return createdAtByID, nil
-}
-
-func collectAASCreatedAtByIDTx(
-	ctx context.Context,
-	tx *sql.Tx,
-	identifiers []string,
-	createdAtByID map[string]time.Time,
-) error {
-	query, args, err := goqu.
-		From(common.TblAASDescriptor).
-		Select(common.ColAASID, common.ColCreatedAt).
-		Where(goqu.C(common.ColAASID).In(identifiers)).
-		ToSQL()
-	if err != nil {
-		return common.NewInternalServerError("AASREG-BULKHISTORY-BUILDCREATEDAT " + err.Error())
-	}
-	rows, err := tx.QueryContext(ctx, query, args...)
-	if err != nil {
-		return common.NewInternalServerError("AASREG-BULKHISTORY-READCREATEDAT " + err.Error())
-	}
-	defer func() {
-		_ = rows.Close()
-	}()
-
-	for rows.Next() {
-		var identifier string
-		var createdAt time.Time
-		if scanErr := rows.Scan(&identifier, &createdAt); scanErr != nil {
-			return common.NewInternalServerError("AASREG-BULKHISTORY-SCANCREATEDAT " + scanErr.Error())
-		}
-		createdAtByID[identifier] = createdAt
-	}
-	if err = rows.Err(); err != nil {
-		return common.NewInternalServerError("AASREG-BULKHISTORY-ITERATECREATEDAT " + err.Error())
-	}
-	return nil
-}
-
 // InsertAdministrationShellDescriptor inserts the provided AAS descriptor
 // and all related nested entities into the database.
 func (p *PostgreSQLAASRegistryDatabase) InsertAdministrationShellDescriptor(
@@ -363,8 +254,8 @@ func (p *PostgreSQLAASRegistryDatabase) InsertAdministrationShellDescriptorsInTr
 		return 0, err
 	}
 
-	if descriptors.CanSkipCreateReadback(ctx) {
-		return appendBulkCreatedDescriptorHistoryFromInputTx(ctx, tx, aasDescriptors)
+	if descriptors.CanSkipCreateReadback(ctx) && history.ActiveConfig().Mode == history.ModeOff {
+		return -1, nil
 	}
 
 	for index, descriptor := range aasDescriptors {

@@ -192,6 +192,10 @@ func (s *SubmodelRegistryAPIAPIService) ensureSubmodelDescriptorsDoNotExist(
 	identifiers []string,
 	failure *asyncbulk.ItemFailure,
 ) error {
+	if auth.GetQueryFilter(ctx) != nil {
+		return s.ensureVisibleSubmodelDescriptorsDoNotExist(ctx, tx, identifiers, failure)
+	}
+
 	existing, err := s.smRegistryBackend.ExistingSubmodelDescriptorIDsInTransaction(ctx, tx, identifiers)
 	if err != nil {
 		*failure = asyncbulk.ItemFailure{Index: 0, Identifier: firstIdentifier(identifiers), StatusCode: http.StatusInternalServerError, Message: err.Error()}
@@ -203,6 +207,28 @@ func (s *SubmodelRegistryAPIAPIService) ensureSubmodelDescriptorsDoNotExist(
 			*failure = asyncbulk.ItemFailure{Index: index, Identifier: identifier, StatusCode: http.StatusConflict, Message: err.Error()}
 			return err
 		}
+	}
+	return nil
+}
+
+func (s *SubmodelRegistryAPIAPIService) ensureVisibleSubmodelDescriptorsDoNotExist(
+	ctx context.Context,
+	tx *sql.Tx,
+	identifiers []string,
+	failure *asyncbulk.ItemFailure,
+) error {
+	for index, identifier := range identifiers {
+		_, err := s.smRegistryBackend.GetSubmodelDescriptorByIDInTransaction(ctx, tx, identifier)
+		if err == nil {
+			err = common.NewErrConflict("Submodel with given id already exists")
+			*failure = asyncbulk.ItemFailure{Index: index, Identifier: identifier, StatusCode: http.StatusConflict, Message: err.Error()}
+			return err
+		}
+		if common.IsErrNotFound(err) {
+			continue
+		}
+		*failure = asyncbulk.ItemFailure{Index: index, Identifier: identifier, StatusCode: smBulkCreateErrorStatusCode(err), Message: err.Error()}
+		return err
 	}
 	return nil
 }

@@ -27,7 +27,6 @@ package aasregistrydatabase
 
 import (
 	"context"
-	"database/sql"
 	"testing"
 	"time"
 
@@ -37,13 +36,13 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestBulkAASInsertWritesHistoryFromSubmittedDescriptorWithoutReadback(t *testing.T) {
+func TestBulkAASInsertSkipsReadbackWhenHistoryIsOff(t *testing.T) {
 	previousHistoryConfig := history.ActiveConfig()
 	t.Cleanup(func() {
 		history.Configure(previousHistoryConfig)
 	})
 	history.Configure(history.Config{
-		Mode:              history.ModeAPI,
+		Mode:              history.ModeOff,
 		Immutability:      history.ImmutabilityNone,
 		AuditIdentityMode: history.AuditIdentityNone,
 	})
@@ -66,14 +65,6 @@ func TestBulkAASInsertWritesHistoryFromSubmittedDescriptorWithoutReadback(t *tes
 		WillReturnRows(sqlmock.NewRows([]string{"nextval"}).AddRow(int64(11)))
 	mock.ExpectExec(`INSERT INTO "descriptor"`).
 		WillReturnResult(sqlmock.NewResult(0, 3))
-	mock.ExpectExec(`SELECT pg_advisory_xact_lock`).
-		WillReturnResult(sqlmock.NewResult(0, 1))
-	mock.ExpectQuery(`SELECT "row_hash" FROM "descriptor_history"`).
-		WillReturnError(sql.ErrNoRows)
-	mock.ExpectQuery(`INSERT INTO "descriptor_history".*RETURNING "history_id"`).
-		WillReturnRows(sqlmock.NewRows([]string{"history_id"}).AddRow(int64(1)))
-	mock.ExpectExec(`INSERT INTO "descriptor_history_payload"`).
-		WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectCommit()
 
 	tx, err := db.Begin()
@@ -88,66 +79,4 @@ func TestBulkAASInsertWritesHistoryFromSubmittedDescriptorWithoutReadback(t *tes
 	require.Equal(t, -1, failedIndex)
 	require.NoError(t, tx.Commit())
 	require.NoError(t, mock.ExpectationsWereMet())
-}
-
-func TestPrepareBulkCreatedDescriptorHistorySnapshotsFetchesGeneratedCreatedAt(t *testing.T) {
-	db, mock, err := sqlmock.New()
-	require.NoError(t, err)
-	defer func() {
-		_ = db.Close()
-	}()
-
-	createdAt := time.Date(2026, time.February, 3, 4, 5, 6, 0, time.UTC)
-
-	mock.ExpectBegin()
-	mock.ExpectQuery(`SELECT "id", "created_at" FROM "aas_descriptor"`).
-		WillReturnRows(sqlmock.NewRows([]string{"id", "created_at"}).AddRow("aas-1", createdAt))
-	mock.ExpectCommit()
-
-	tx, err := db.Begin()
-	require.NoError(t, err)
-	snapshots, failedIndex, err := prepareBulkCreatedDescriptorHistorySnapshotsTx(
-		context.Background(),
-		tx,
-		[]model.AssetAdministrationShellDescriptor{{Id: "aas-1"}},
-	)
-	require.NoError(t, err)
-	require.Equal(t, -1, failedIndex)
-	require.NoError(t, tx.Commit())
-	require.NoError(t, mock.ExpectationsWereMet())
-	require.Len(t, snapshots, 1)
-	require.NotNil(t, snapshots[0].CreatedAt)
-	require.True(t, snapshots[0].CreatedAt.Equal(createdAt))
-
-	jsonable, err := snapshots[0].ToJsonable()
-	require.NoError(t, err)
-	require.Equal(t, createdAt.Format(time.RFC3339Nano), jsonable["createdAt"])
-}
-
-func TestPrepareBulkCreatedDescriptorHistorySnapshotsKeepsSubmittedCreatedAt(t *testing.T) {
-	db, mock, err := sqlmock.New()
-	require.NoError(t, err)
-	defer func() {
-		_ = db.Close()
-	}()
-
-	createdAt := time.Date(2026, time.March, 4, 5, 6, 7, 0, time.UTC)
-
-	mock.ExpectBegin()
-	mock.ExpectCommit()
-
-	tx, err := db.Begin()
-	require.NoError(t, err)
-	snapshots, failedIndex, err := prepareBulkCreatedDescriptorHistorySnapshotsTx(
-		context.Background(),
-		tx,
-		[]model.AssetAdministrationShellDescriptor{{Id: "aas-1", CreatedAt: &createdAt}},
-	)
-	require.NoError(t, err)
-	require.Equal(t, -1, failedIndex)
-	require.NoError(t, tx.Commit())
-	require.NoError(t, mock.ExpectationsWereMet())
-	require.Len(t, snapshots, 1)
-	require.NotNil(t, snapshots[0].CreatedAt)
-	require.True(t, snapshots[0].CreatedAt.Equal(createdAt))
 }

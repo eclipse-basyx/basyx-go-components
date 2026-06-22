@@ -106,6 +106,9 @@ func BuildAdministrationShellDescriptorsCreateBatch(
 			return nil, err
 		}
 	}
+	if err = cursor.validateConsumed(); err != nil {
+		return nil, err
+	}
 
 	batch := &common.PostgreSQLBatch{}
 	if err = appendBulkCreateRows(ctx, batch, rows); err != nil {
@@ -145,6 +148,9 @@ func BuildSubmodelDescriptorsCreateBatch(
 			return nil, err
 		}
 	}
+	if err = cursor.validateConsumed(); err != nil {
+		return nil, err
+	}
 
 	batch := &common.PostgreSQLBatch{}
 	if err = appendBulkCreateRows(ctx, batch, rows); err != nil {
@@ -172,14 +178,14 @@ func countBulkCreateIDs(
 		for _, assetID := range descriptor.SpecificAssetIds {
 			counts.specificSupplementalReference = append(
 				counts.specificSupplementalReference,
-				make([]int64, len(assetID.SupplementalSemanticIDs()))...,
+				make([]int64, countNonNilReferences(assetID.SupplementalSemanticIDs()))...,
 			)
 		}
 		for _, submodel := range descriptor.SubmodelDescriptors {
 			counts.descriptor = append(counts.descriptor, 0)
 			counts.submodelSupplementalReference = append(
 				counts.submodelSupplementalReference,
-				make([]int64, len(submodel.SupplementalSemanticId))...,
+				make([]int64, countNonNilReferences(submodel.SupplementalSemanticId))...,
 			)
 		}
 	}
@@ -192,10 +198,20 @@ func countBulkSubmodelCreateIDs(descriptors []model.SubmodelDescriptor) bulkCrea
 		counts.descriptor = append(counts.descriptor, 0)
 		counts.submodelSupplementalReference = append(
 			counts.submodelSupplementalReference,
-			make([]int64, len(descriptor.SupplementalSemanticId))...,
+			make([]int64, countNonNilReferences(descriptor.SupplementalSemanticId))...,
 		)
 	}
 	return counts
+}
+
+func countNonNilReferences(references []types.IReference) int {
+	count := 0
+	for _, reference := range references {
+		if reference != nil {
+			count++
+		}
+	}
+	return count
 }
 
 func reserveBulkCreateIDs(ctx context.Context, tx *sql.Tx, counts bulkCreateIDs) (bulkCreateIDs, error) {
@@ -261,7 +277,10 @@ func collectAASDescriptorRows(
 	cursor *bulkCreateIDCursor,
 	descriptor model.AssetAdministrationShellDescriptor,
 ) error {
-	descriptorID := cursor.nextDescriptorID()
+	descriptorID, err := cursor.nextDescriptorID()
+	if err != nil {
+		return err
+	}
 	rows.descriptor = append(rows.descriptor, goqu.Record{common.ColID: descriptorID})
 	payload, err := buildDescriptorPayloadRecord(descriptorID, descriptor.Description, descriptor.DisplayName, descriptor.Administration, descriptor.Extensions)
 	if err != nil {
@@ -304,7 +323,10 @@ func collectSpecificAssetIDRows(
 		}
 	}
 	for position, assetID := range assetIDs {
-		specificAssetID := cursor.nextSpecificAssetID()
+		specificAssetID, err := cursor.nextSpecificAssetID()
+		if err != nil {
+			return err
+		}
 		rows.specificAssetID = append(rows.specificAssetID, goqu.Record{
 			common.ColID:                 specificAssetID,
 			common.ColDescriptorID:       descriptorID,
@@ -352,7 +374,10 @@ func collectSpecificAssetIDReferenceRows(
 		if reference == nil {
 			continue
 		}
-		referenceID := cursor.nextSpecificSupplementalID()
+		referenceID, err := cursor.nextSpecificSupplementalID()
+		if err != nil {
+			return err
+		}
 		if err := collectGeneratedReferenceRows(
 			referenceID,
 			specificAssetID,
@@ -378,7 +403,10 @@ func collectSubmodelDescriptorRows(
 	if len(descriptor.Endpoints) == 0 {
 		return common.NewErrBadRequest("AASDESC-BULK-SMD-ENDPOINTS Submodel Descriptor needs at least 1 Endpoint.")
 	}
-	descriptorID := cursor.nextDescriptorID()
+	descriptorID, err := cursor.nextDescriptorID()
+	if err != nil {
+		return err
+	}
 	rows.descriptor = append(rows.descriptor, goqu.Record{common.ColID: descriptorID})
 	rows.submodelDescriptor = append(rows.submodelDescriptor, goqu.Record{
 		common.ColDescriptorID:    descriptorID,
@@ -405,7 +433,10 @@ func collectSubmodelDescriptorRows(
 		if reference == nil {
 			continue
 		}
-		referenceID := cursor.nextSubmodelSupplementalID()
+		referenceID, err := cursor.nextSubmodelSupplementalID()
+		if err != nil {
+			return err
+		}
 		if err = collectGeneratedReferenceRows(
 			referenceID,
 			descriptorID,
@@ -598,26 +629,54 @@ func aasIdentifierConflict() exp.ConflictExpression {
 	return goqu.DoUpdate("aasid", goqu.Record{"aasid": goqu.I("excluded.aasid")})
 }
 
-func (c *bulkCreateIDCursor) nextDescriptorID() int64 {
+func (c *bulkCreateIDCursor) nextDescriptorID() (int64, error) {
+	if c.descriptorIndex >= len(c.ids.descriptor) {
+		return 0, common.NewInternalServerError("AASDESC-BULK-CURSOR-DESCRIPTOR exhausted reserved descriptor ids")
+	}
 	id := c.ids.descriptor[c.descriptorIndex]
 	c.descriptorIndex++
-	return id
+	return id, nil
 }
 
-func (c *bulkCreateIDCursor) nextSpecificAssetID() int64 {
+func (c *bulkCreateIDCursor) nextSpecificAssetID() (int64, error) {
+	if c.specificAssetIDIndex >= len(c.ids.specificAssetID) {
+		return 0, common.NewInternalServerError("AASDESC-BULK-CURSOR-SPECIFICASSETID exhausted reserved specific asset id ids")
+	}
 	id := c.ids.specificAssetID[c.specificAssetIDIndex]
 	c.specificAssetIDIndex++
-	return id
+	return id, nil
 }
 
-func (c *bulkCreateIDCursor) nextSpecificSupplementalID() int64 {
+func (c *bulkCreateIDCursor) nextSpecificSupplementalID() (int64, error) {
+	if c.specificSupplementalIndex >= len(c.ids.specificSupplementalReference) {
+		return 0, common.NewInternalServerError("AASDESC-BULK-CURSOR-SPECIFICSUPP exhausted reserved specific asset supplemental reference ids")
+	}
 	id := c.ids.specificSupplementalReference[c.specificSupplementalIndex]
 	c.specificSupplementalIndex++
-	return id
+	return id, nil
 }
 
-func (c *bulkCreateIDCursor) nextSubmodelSupplementalID() int64 {
+func (c *bulkCreateIDCursor) nextSubmodelSupplementalID() (int64, error) {
+	if c.submodelSupplementalIndex >= len(c.ids.submodelSupplementalReference) {
+		return 0, common.NewInternalServerError("AASDESC-BULK-CURSOR-SMSUPP exhausted reserved submodel supplemental reference ids")
+	}
 	id := c.ids.submodelSupplementalReference[c.submodelSupplementalIndex]
 	c.submodelSupplementalIndex++
-	return id
+	return id, nil
+}
+
+func (c *bulkCreateIDCursor) validateConsumed() error {
+	if c.descriptorIndex != len(c.ids.descriptor) {
+		return common.NewInternalServerError("AASDESC-BULK-CURSOR-DESCRIPTOR unused reserved descriptor ids")
+	}
+	if c.specificAssetIDIndex != len(c.ids.specificAssetID) {
+		return common.NewInternalServerError("AASDESC-BULK-CURSOR-SPECIFICASSETID unused reserved specific asset id ids")
+	}
+	if c.specificSupplementalIndex != len(c.ids.specificSupplementalReference) {
+		return common.NewInternalServerError("AASDESC-BULK-CURSOR-SPECIFICSUPP unused reserved specific asset supplemental reference ids")
+	}
+	if c.submodelSupplementalIndex != len(c.ids.submodelSupplementalReference) {
+		return common.NewInternalServerError("AASDESC-BULK-CURSOR-SMSUPP unused reserved submodel supplemental reference ids")
+	}
+	return nil
 }
