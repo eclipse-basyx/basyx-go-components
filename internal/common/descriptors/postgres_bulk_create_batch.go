@@ -75,10 +75,19 @@ type bulkCreateIDCursor struct {
 	submodelSupplementalIndex int
 }
 
-// BuildAdministrationShellDescriptorsCreateBatch builds table-oriented insert
-// statements for multiple Asset Administration Shell descriptors. It reserves
-// sequence values inside tx before rendering dependent rows, so the returned
-// batch can insert each table in chunks without per-descriptor round trips.
+// BuildAdministrationShellDescriptorsCreateBatch builds bulk insert statements for AAS descriptors.
+//
+// The function reserves database ids in the provided transaction and renders
+// table-oriented insert statements in dependency order.
+//
+// Parameters:
+//   - ctx: Request context carrying configuration and security data.
+//   - tx: Transaction used to reserve database ids.
+//   - descriptors: Asset Administration Shell descriptors to insert.
+//
+// Returns:
+//   - *common.PostgreSQLBatch: Ordered bulk insert batch.
+//   - error: Error when id reservation, row collection, or statement rendering fails.
 func BuildAdministrationShellDescriptorsCreateBatch(
 	ctx context.Context,
 	tx *sql.Tx,
@@ -105,9 +114,19 @@ func BuildAdministrationShellDescriptorsCreateBatch(
 	return batch, nil
 }
 
-// BuildSubmodelDescriptorsCreateBatch builds table-oriented insert statements
-// for global Submodel Descriptors. Rows are chunked in the same way as AAS
-// descriptor bulk inserts to keep single statements bounded.
+// BuildSubmodelDescriptorsCreateBatch builds bulk insert statements for submodel descriptors.
+//
+// The function reserves database ids in the provided transaction and renders
+// table-oriented insert statements in dependency order.
+//
+// Parameters:
+//   - ctx: Request context carrying configuration and batch settings.
+//   - tx: Transaction used to reserve database ids.
+//   - descriptors: Global submodel descriptors to insert.
+//
+// Returns:
+//   - *common.PostgreSQLBatch: Ordered bulk insert batch.
+//   - error: Error when id reservation, row collection, or statement rendering fails.
 func BuildSubmodelDescriptorsCreateBatch(
 	ctx context.Context,
 	tx *sql.Tx,

@@ -54,8 +54,16 @@ type sqlDataset interface {
 	ToSQL() (string, []interface{}, error)
 }
 
-// SupportsPostgreSQLBatch reports whether db uses the pgx stdlib driver needed
-// for pgx Batch execution through database/sql.
+// SupportsPostgreSQLBatch reports whether pgx batch execution is available.
+//
+// The function inspects the database handle's driver and returns true only for
+// the pgx stdlib driver.
+//
+// Parameters:
+//   - db: Database handle to inspect.
+//
+// Returns:
+//   - bool: True when pgx batch execution is supported.
 func SupportsPostgreSQLBatch(db *sql.DB) bool {
 	if db == nil {
 		return false
@@ -64,8 +72,15 @@ func SupportsPostgreSQLBatch(db *sql.DB) bool {
 	return ok
 }
 
-// AppendDataset renders dataset to SQL immediately and appends the resulting
-// statement to the batch.
+// AppendDataset appends a rendered SQL dataset to the batch.
+//
+// The dataset is rendered immediately and stored in append order.
+//
+// Parameters:
+//   - dataset: SQL dataset to render and append.
+//
+// Returns:
+//   - error: Error when dataset rendering fails.
 func (b *PostgreSQLBatch) AppendDataset(dataset sqlDataset) error {
 	query, args, err := dataset.ToSQL()
 	if err != nil {
@@ -76,14 +91,25 @@ func (b *PostgreSQLBatch) AppendDataset(dataset sqlDataset) error {
 }
 
 // Statements returns the statements collected in append order.
+//
+// Returns:
+//   - []PostgreSQLBatchStatement: Rendered statements in dependency order.
 func (b *PostgreSQLBatch) Statements() []PostgreSQLBatchStatement {
 	return b.statements
 }
 
-// ExecutePostgreSQLBatchInTransaction executes fully rendered statements inside
-// an existing database/sql transaction. It joins the statements into one
-// multi-statement Exec call, so each statement must already have all Goqu
-// placeholders rendered into SQL and no remaining Args.
+// ExecutePostgreSQLBatchInTransaction executes rendered statements in a transaction.
+//
+// Statements must already be rendered to SQL and must not contain unresolved
+// Goqu arguments.
+//
+// Parameters:
+//   - ctx: Request context used for statement execution.
+//   - tx: Transaction used to execute the statements.
+//   - statements: Rendered PostgreSQL statements to execute in order.
+//
+// Returns:
+//   - error: Error when validation fails or PostgreSQL execution fails.
 func ExecutePostgreSQLBatchInTransaction(
 	ctx context.Context,
 	tx *sql.Tx,
@@ -109,16 +135,34 @@ func ExecutePostgreSQLBatchInTransaction(
 	return nil
 }
 
-// PostgreSQLCurrentSequenceValue returns a Goqu expression for the current value
-// of a table column sequence in the current PostgreSQL session.
+// PostgreSQLCurrentSequenceValue returns a Goqu expression for a sequence value.
+//
+// The expression resolves the current value of the table column sequence in the
+// current PostgreSQL session.
+//
+// Parameters:
+//   - table: Table that owns the sequence.
+//   - column: Column that owns the sequence.
+//
+// Returns:
+//   - exp.LiteralExpression: Goqu expression for currval(pg_get_serial_sequence(...)).
 func PostgreSQLCurrentSequenceValue(table string, column string) exp.LiteralExpression {
 	return goqu.L("currval(pg_get_serial_sequence(?, ?))", table, column)
 }
 
-// ExecutePostgreSQLBatchTransaction executes statements as one pgx Batch in a
-// dedicated transaction. If readResults is nil, every statement result is
-// consumed with Exec; otherwise readResults must consume the queued results in
-// statement order before the transaction is committed.
+// ExecutePostgreSQLBatchTransaction executes statements as one pgx batch.
+//
+// The function opens a dedicated connection, starts a pgx transaction, sends all
+// statements as one batch, consumes results, and commits on success.
+//
+// Parameters:
+//   - ctx: Request context used for connection and batch execution.
+//   - db: Database handle used to obtain the pgx connection.
+//   - statements: Rendered PostgreSQL statements to queue in order.
+//   - readResults: Optional callback that consumes queued batch results.
+//
+// Returns:
+//   - error: Error when connection setup, execution, result reading, or commit fails.
 func ExecutePostgreSQLBatchTransaction(
 	ctx context.Context,
 	db *sql.DB,

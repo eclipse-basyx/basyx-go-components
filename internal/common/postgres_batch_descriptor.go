@@ -32,9 +32,19 @@ import (
 	"github.com/doug-martin/goqu/v9"
 )
 
-// AppendContextReference appends statements for one reference whose primary key
-// is the owning row ID. It writes the reference row, its payload row, and all
-// reference key rows to the provided reference tables.
+// AppendContextReference appends statements for one owned reference.
+//
+// The reference row uses the owner id as its primary key and writes payload and
+// key rows to the supplied reference tables.
+//
+// Parameters:
+//   - ownerID: Owning row id and reference id.
+//   - reference: Reference value to append.
+//   - referenceTable: Table that stores the reference row and payload table prefix.
+//   - referenceKeyTable: Table that stores reference key rows.
+//
+// Returns:
+//   - error: Error when payload rendering or statement appending fails.
 func (b *PostgreSQLBatch) AppendContextReference(
 	ownerID any,
 	reference types.IReference,
@@ -80,9 +90,19 @@ func (b *PostgreSQLBatch) AppendContextReference(
 	return b.AppendDataset(dialect.Insert(referenceKeyTable).Rows(rows))
 }
 
-// AppendContextReferences appends statements for references that get generated
-// IDs from referenceTable. Each reference is linked to ownerID through
-// ownerColumn and includes payload and key rows.
+// AppendContextReferences appends statements for generated-id references.
+//
+// Each reference is linked to its owner through ownerColumn and writes payload
+// and key rows next to the reference table.
+//
+// Parameters:
+//   - ownerID: Owning row id.
+//   - references: Reference values to append.
+//   - referenceTable: Table that stores reference rows and payload table prefix.
+//   - ownerColumn: Column linking each reference to ownerID.
+//
+// Returns:
+//   - error: Error when payload rendering or statement appending fails.
 func (b *PostgreSQLBatch) AppendContextReferences(
 	ownerID any,
 	references []types.IReference,
@@ -133,9 +153,18 @@ func (b *PostgreSQLBatch) AppendContextReferences(
 	return nil
 }
 
-// AppendSpecificAssetIDs appends statements for descriptor specific asset IDs
-// and their dependent semantic, supplemental semantic, and external subject
-// references.
+// AppendSpecificAssetIDs appends statements for descriptor specific asset ids.
+//
+// The function appends rows for the specific asset ids and their semantic,
+// supplemental semantic, and external subject references.
+//
+// Parameters:
+//   - descriptorID: Descriptor row id that owns the specific asset ids.
+//   - aasRef: Optional discovery AAS reference id expression.
+//   - specificAssetIDs: Specific asset id values to append.
+//
+// Returns:
+//   - error: Error when payload rendering or statement appending fails.
 func (b *PostgreSQLBatch) AppendSpecificAssetIDs(
 	descriptorID any,
 	aasRef any,

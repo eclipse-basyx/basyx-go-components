@@ -197,7 +197,17 @@ func buildReferencePayload(value types.IReference) (json.RawMessage, error) {
 	return payload, nil
 }
 
-// BuildReferencePayload serializes the referred semantic reference payload.
+// BuildReferencePayload serializes a reference payload.
+//
+// The function converts a reference to its JSONable representation and marshals
+// it as raw JSON.
+//
+// Parameters:
+//   - value: Reference value to serialize.
+//
+// Returns:
+//   - json.RawMessage: Serialized reference payload.
+//   - error: Error when JSON conversion or marshaling fails.
 func BuildReferencePayload(value types.IReference) (json.RawMessage, error) {
 	return buildReferencePayload(value)
 }

@@ -98,9 +98,16 @@ func InsertAssetAdministrationShellDescriptor(ctx context.Context, db *sql.DB, a
 	return result, tx.Commit()
 }
 
-// CanSkipCreateReadback reports whether a CREATE result can be trusted without
-// loading it again from the database. Route-level authorization has already run;
-// readback is only required for ABAC filters or restricted create formulas.
+// CanSkipCreateReadback reports whether create readback can be skipped.
+//
+// Route-level authorization has already run, so readback is only required when
+// the request context contains ABAC filters or restricted create formulas.
+//
+// Parameters:
+//   - ctx: Request context carrying the ABAC query filter.
+//
+// Returns:
+//   - bool: True when callers can trust the created descriptor without readback.
 func CanSkipCreateReadback(ctx context.Context) bool {
 	queryFilter := auth.GetQueryFilter(ctx)
 	if queryFilter == nil {
@@ -118,8 +125,16 @@ func CanSkipCreateReadback(ctx context.Context) bool {
 	return auth.HasUnrestrictedFormulaForRight(ctx, grammar.RightsEnumCREATE)
 }
 
-// CanSkipPostInsertReadback keeps the old AAS descriptor helper name for
-// callers that return newly inserted descriptors.
+// CanSkipPostInsertReadback reports whether post-insert readback can be skipped.
+//
+// This helper keeps the AAS descriptor-specific name for callers that return
+// newly inserted descriptors.
+//
+// Parameters:
+//   - ctx: Request context carrying the ABAC query filter.
+//
+// Returns:
+//   - bool: True when post-insert readback can be skipped.
 func CanSkipPostInsertReadback(ctx context.Context) bool {
 	return CanSkipCreateReadback(ctx)
 }
@@ -481,10 +496,18 @@ func DeleteAssetAdministrationShellDescriptorByIDTx(ctx context.Context, tx *sql
 	return deleteAssetAdministrationShellDescriptorByIDTx(ctx, tx, aasIdentifier)
 }
 
-// DeleteAssetAdministrationShellDescriptorsByIDsTx deletes AAS descriptor base
-// rows and their embedded submodel descriptor rows in bounded chunks. The
-// caller is responsible for prior existence and access checks when item-level
-// error reporting is required.
+// DeleteAssetAdministrationShellDescriptorsByIDsTx deletes AAS descriptors by id.
+//
+// The function deletes AAS descriptor base rows and embedded submodel descriptor
+// rows in bounded chunks.
+//
+// Parameters:
+//   - ctx: Request context carrying configuration data.
+//   - tx: Transaction used for deletion.
+//   - aasIdentifiers: AAS descriptor identifiers to delete.
+//
+// Returns:
+//   - error: Error when SQL rendering or deletion fails.
 func DeleteAssetAdministrationShellDescriptorsByIDsTx(ctx context.Context, tx *sql.Tx, aasIdentifiers []string) error {
 	if len(aasIdentifiers) == 0 {
 		return nil

@@ -611,9 +611,18 @@ func DeleteSubmodelDescriptorByIDTx(
 	return deleteSubmodelDescriptorByIDTx(ctx, tx, submodelID)
 }
 
-// DeleteSubmodelDescriptorsByIDsTx deletes global submodel descriptors in
-// bounded chunks. The caller is responsible for validating which ids exist when
-// item-level error reporting is required.
+// DeleteSubmodelDescriptorsByIDsTx deletes global submodel descriptors by id.
+//
+// The function deletes descriptor rows in bounded chunks. Callers remain
+// responsible for item-level existence checks when they need item-level errors.
+//
+// Parameters:
+//   - ctx: Request context carrying configuration data.
+//   - tx: Transaction used for deletion.
+//   - submodelIDs: Global submodel descriptor identifiers to delete.
+//
+// Returns:
+//   - error: Error when SQL rendering or deletion fails.
 func DeleteSubmodelDescriptorsByIDsTx(
 	ctx context.Context,
 	tx *sql.Tx,

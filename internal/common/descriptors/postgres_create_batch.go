@@ -35,11 +35,19 @@ import (
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 )
 
-// BuildAdministrationShellDescriptorCreateBatch renders the statements needed
-// to create one Asset Administration Shell descriptor and its dependent rows.
-// The returned batch preserves dependency order and uses current sequence values
-// for rows that reference the descriptor inserted earlier in the same
-// transaction.
+// BuildAdministrationShellDescriptorCreateBatch builds insert statements for one AAS descriptor.
+//
+// The returned batch contains the descriptor, payload, endpoint, specific asset
+// id, discovery integration, and submodel descriptor insert statements in
+// dependency order.
+//
+// Parameters:
+//   - ctx: Request context carrying configuration and security data.
+//   - descriptor: Asset Administration Shell descriptor to insert.
+//
+// Returns:
+//   - *common.PostgreSQLBatch: Ordered insert batch.
+//   - error: Error when statement rendering or reference payload rendering fails.
 func BuildAdministrationShellDescriptorCreateBatch(
 	ctx context.Context,
 	descriptor model.AssetAdministrationShellDescriptor,

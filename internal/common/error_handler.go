@@ -45,8 +45,16 @@ type sqlStateError interface {
 	SQLState() string
 }
 
-// IsPostgresErrorCode reports whether err or a wrapped error exposes the
-// provided PostgreSQL SQLSTATE.
+// IsPostgresErrorCode reports whether an error has a PostgreSQL SQLSTATE.
+//
+// The function unwraps err and checks any error that exposes SQLState().
+//
+// Parameters:
+//   - err: Error to inspect.
+//   - code: PostgreSQL SQLSTATE code to match.
+//
+// Returns:
+//   - bool: True when err or a wrapped error exposes the requested code.
 func IsPostgresErrorCode(err error, code string) bool {
 	if err == nil {
 		return false
@@ -56,6 +64,12 @@ func IsPostgresErrorCode(err error, code string) bool {
 }
 
 // IsPostgresUniqueViolation reports PostgreSQL unique constraint violations.
+//
+// Parameters:
+//   - err: Error to inspect.
+//
+// Returns:
+//   - bool: True when err or a wrapped error has SQLSTATE 23505.
 func IsPostgresUniqueViolation(err error) bool {
 	return IsPostgresErrorCode(err, "23505")
 }

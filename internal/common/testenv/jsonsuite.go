@@ -276,6 +276,17 @@ func NewCheckSubmodelAbsentAction(options CheckSubmodelAbsentOptions) JSONStepAc
 	}
 }
 
+// AssertBulkFailureAction asserts an asynchronous bulk operation failure.
+//
+// The helper starts the bulk step, follows the returned operation handle, and
+// compares the completed failure status and message with the expected values
+// from the JSON suite step.
+//
+// Parameters:
+//   - t: Test handle used for assertions.
+//   - runner: JSON suite runner that executes the step and reads the result.
+//   - step: JSON suite step containing the bulk request and expected failure.
+//   - stepNumber: Step number used in assertion messages.
 func AssertBulkFailureAction(t *testing.T, runner *JSONSuiteRunner, step JSONSuiteStep, stepNumber int) {
 	t.Helper()
 

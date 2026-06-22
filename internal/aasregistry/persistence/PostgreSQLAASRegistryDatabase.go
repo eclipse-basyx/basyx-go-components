@@ -334,13 +334,19 @@ func (p *PostgreSQLAASRegistryDatabase) InsertAdministrationShellDescriptorInTra
 	return appendDescriptorHistoryTx(ctx, tx, stored, history.ChangeCreated, false)
 }
 
-// InsertAdministrationShellDescriptorsInTransaction inserts multiple AAS
-// descriptors and their descriptor graph rows in the provided transaction. The
-// method builds table-oriented multi-row statements, executes them as one
-// batched block, then appends history entries for the stored descriptors. It
-// returns the index of the descriptor that failed during post-insert readback or
-// history processing; when the batched insert itself fails before an item can be
-// identified, the index is 0.
+// InsertAdministrationShellDescriptorsInTransaction inserts multiple AAS descriptors.
+//
+// The method inserts descriptor graph rows in the provided transaction and
+// appends history entries for the created descriptors.
+//
+// Parameters:
+//   - ctx: Request context carrying configuration and security data.
+//   - tx: Transaction used for the bulk insert.
+//   - aasDescriptors: Asset Administration Shell descriptors to insert.
+//
+// Returns:
+//   - int: Failed descriptor index, or -1 on success.
+//   - error: Error when batch creation, insertion, readback, or history writing fails.
 func (p *PostgreSQLAASRegistryDatabase) InsertAdministrationShellDescriptorsInTransaction(
 	ctx context.Context,
 	tx *sql.Tx,
@@ -376,10 +382,19 @@ func (p *PostgreSQLAASRegistryDatabase) InsertAdministrationShellDescriptorsInTr
 	return -1, nil
 }
 
-// ExistingAASDescriptorIDsInTransaction returns the subset of identifiers that
-// already exist in aas_descriptor using the caller's transaction. The result map
-// is keyed by AAS identifier so bulk create validation can report the first
-// conflicting input item without loading full descriptors.
+// ExistingAASDescriptorIDsInTransaction returns existing AAS descriptor ids.
+//
+// The result map contains only identifiers that already exist in the AAS
+// descriptor table.
+//
+// Parameters:
+//   - ctx: Request context carrying configuration and security data.
+//   - tx: Transaction used for the existence lookup.
+//   - identifiers: Candidate AAS descriptor identifiers.
+//
+// Returns:
+//   - map[string]struct{}: Set keyed by existing identifier.
+//   - error: Error when SQL rendering or database reads fail.
 func (p *PostgreSQLAASRegistryDatabase) ExistingAASDescriptorIDsInTransaction(
 	ctx context.Context,
 	tx *sql.Tx,
@@ -559,10 +574,19 @@ func (p *PostgreSQLAASRegistryDatabase) DeleteAssetAdministrationShellDescriptor
 	return appendDescriptorHistoryTx(ctx, tx, existing, history.ChangeDeleted, true)
 }
 
-// DeleteAssetAdministrationShellDescriptorsByIDsInTransaction deletes multiple
-// AAS descriptors with chunked delete statements after preserving the current
-// per-item access/readback behavior. The returned index identifies the first
-// item that failed before the batched delete or history append.
+// DeleteAssetAdministrationShellDescriptorsByIDsInTransaction deletes multiple AAS descriptors.
+//
+// The method reads each descriptor for access and history handling, deletes the
+// descriptors in the provided transaction, and appends deletion history.
+//
+// Parameters:
+//   - ctx: Request context carrying configuration and security data.
+//   - tx: Transaction used for readback, deletion, and history writes.
+//   - aasIdentifiers: AAS descriptor identifiers to delete.
+//
+// Returns:
+//   - int: Failed item index, or -1 on success.
+//   - error: Error when readback, deletion, or history writing fails.
 func (p *PostgreSQLAASRegistryDatabase) DeleteAssetAdministrationShellDescriptorsByIDsInTransaction(
 	ctx context.Context,
 	tx *sql.Tx,

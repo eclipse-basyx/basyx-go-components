@@ -117,10 +117,19 @@ func (p *PostgreSQLSMDatabase) InsertSubmodelDescriptorInTransaction(
 	return descriptors.InsertSubmodelDescriptorTx(ctx, tx, submodel)
 }
 
-// InsertSubmodelDescriptorsInTransaction inserts multiple global submodel
-// descriptors with table-oriented multi-row statements. It returns the first
-// descriptor index that failed during post-insert readback; batched insert
-// failures that cannot be mapped to one item return index 0.
+// InsertSubmodelDescriptorsInTransaction inserts multiple global submodel descriptors.
+//
+// The method inserts descriptor graph rows in the provided transaction and
+// performs readback when create authorization requires it.
+//
+// Parameters:
+//   - ctx: Request context carrying configuration and security data.
+//   - tx: Transaction used for the bulk insert.
+//   - submodels: Global submodel descriptors to insert.
+//
+// Returns:
+//   - int: Failed descriptor index, or -1 on success.
+//   - error: Error when batch creation, insertion, or readback fails.
 func (p *PostgreSQLSMDatabase) InsertSubmodelDescriptorsInTransaction(
 	ctx context.Context,
 	tx *sql.Tx,
@@ -253,8 +262,17 @@ func (p *PostgreSQLSMDatabase) DeleteSubmodelDescriptorByIDInTransaction(
 	return descriptors.DeleteSubmodelDescriptorByIDTx(ctx, tx, submodelID)
 }
 
-// DeleteSubmodelDescriptorsByIDsInTransaction deletes multiple global submodel
-// descriptors using chunked delete statements.
+// DeleteSubmodelDescriptorsByIDsInTransaction deletes multiple global submodel descriptors.
+//
+// The method deletes all supplied descriptors in the provided transaction.
+//
+// Parameters:
+//   - ctx: Request context carrying configuration data.
+//   - tx: Transaction used for deletion.
+//   - submodelIDs: Global submodel descriptor identifiers to delete.
+//
+// Returns:
+//   - error: Error when the transaction is missing or deletion fails.
 func (p *PostgreSQLSMDatabase) DeleteSubmodelDescriptorsByIDsInTransaction(
 	ctx context.Context,
 	tx *sql.Tx,
@@ -274,8 +292,19 @@ func (p *PostgreSQLSMDatabase) ExistsSubmodelByID(
 	return descriptors.ExistsSubmodelByID(ctx, p.db, submodelID)
 }
 
-// ExistingSubmodelDescriptorIDsInTransaction returns existing global submodel
-// descriptor ids from the supplied id list.
+// ExistingSubmodelDescriptorIDsInTransaction returns existing global submodel descriptor ids.
+//
+// The result map contains only identifiers that already exist for global
+// submodel descriptors.
+//
+// Parameters:
+//   - ctx: Request context carrying configuration data.
+//   - tx: Transaction used for the existence lookup.
+//   - identifiers: Candidate submodel descriptor identifiers.
+//
+// Returns:
+//   - map[string]struct{}: Set keyed by existing identifier.
+//   - error: Error when SQL rendering or database reads fail.
 func (p *PostgreSQLSMDatabase) ExistingSubmodelDescriptorIDsInTransaction(
 	ctx context.Context,
 	tx *sql.Tx,
