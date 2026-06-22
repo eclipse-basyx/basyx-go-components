@@ -243,7 +243,7 @@ func (p *PostgreSQLAASRegistryDatabase) InsertAdministrationShellDescriptor(
 	var result model.AssetAdministrationShellDescriptor
 	err = common.ExecuteInTransaction(p.db, "AASREG-INSERTAASDESC-STARTTX", "AASREG-INSERTAASDESC-COMMIT", func(tx *sql.Tx) error {
 		if batchErr := common.ExecutePostgreSQLBatchInTransaction(ctx, tx, batch.Statements()); batchErr != nil {
-			return batchErr
+			return mapInsertAASDescriptorError(batchErr)
 		}
 
 		stored, getErr := descriptors.GetAssetAdministrationShellDescriptorByIDTx(ctx, tx, aasd.Id)
@@ -261,9 +261,16 @@ func (p *PostgreSQLAASRegistryDatabase) InsertAdministrationShellDescriptor(
 		return nil
 	})
 	if err != nil {
-		return model.AssetAdministrationShellDescriptor{}, err
+		return model.AssetAdministrationShellDescriptor{}, mapInsertAASDescriptorError(err)
 	}
 	return result, nil
+}
+
+func mapInsertAASDescriptorError(err error) error {
+	if common.IsPostgresUniqueViolation(err) {
+		return common.NewErrConflict("AASREG-INSERTAASDESC-CONFLICT AAS with given id already exists")
+	}
+	return err
 }
 
 func (p *PostgreSQLAASRegistryDatabase) insertAdministrationShellDescriptorBatch(
@@ -288,6 +295,9 @@ func (p *PostgreSQLAASRegistryDatabase) insertAdministrationShellDescriptorBatch
 	err = common.ExecutePostgreSQLBatchTransaction(ctx, p.db, statements, func(batchResults pgx.BatchResults) error {
 		for statementIndex := 0; statementIndex < mutationCount; statementIndex++ {
 			if _, execErr := batchResults.Exec(); execErr != nil {
+				if mappedErr := mapInsertAASDescriptorError(execErr); mappedErr != execErr {
+					return mappedErr
+				}
 				return common.NewInternalServerError("AASREG-PGBATCH-EXEC " + execErr.Error())
 			}
 		}
