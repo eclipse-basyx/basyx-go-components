@@ -246,12 +246,16 @@ func (p *PostgreSQLAASRegistryDatabase) InsertAdministrationShellDescriptorsInTr
 	if tx == nil {
 		return 0, common.NewInternalServerError("AASREG-BULKINSERT-NILTX transaction must not be nil")
 	}
+	if len(aasDescriptors) == 0 {
+		return -1, nil
+	}
+
 	batch, err := descriptors.BuildAdministrationShellDescriptorsCreateBatch(ctx, tx, aasDescriptors)
 	if err != nil {
 		return 0, err
 	}
 	if err = common.ExecutePostgreSQLBatchInTransaction(ctx, tx, batch.Statements()); err != nil {
-		return 0, err
+		return 0, mapInsertAASDescriptorError(err)
 	}
 
 	if descriptors.CanSkipCreateReadback(ctx) && history.ActiveConfig().Mode == history.ModeOff {

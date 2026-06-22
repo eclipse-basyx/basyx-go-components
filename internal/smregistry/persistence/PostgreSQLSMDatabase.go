@@ -147,7 +147,7 @@ func (p *PostgreSQLSMDatabase) InsertSubmodelDescriptorsInTransaction(
 		return 0, err
 	}
 	if err = common.ExecutePostgreSQLBatchInTransaction(ctx, tx, batch.Statements()); err != nil {
-		return 0, err
+		return 0, mapBulkInsertSubmodelDescriptorError(err)
 	}
 
 	if descriptors.CanSkipCreateReadback(ctx) {
@@ -163,6 +163,13 @@ func (p *PostgreSQLSMDatabase) InsertSubmodelDescriptorsInTransaction(
 		}
 	}
 	return -1, nil
+}
+
+func mapBulkInsertSubmodelDescriptorError(err error) error {
+	if common.IsPostgresUniqueViolation(err) {
+		return common.NewErrConflict("SMREG-BULKINSERT-CONFLICT Submodel with given id already exists")
+	}
+	return err
 }
 
 // ReplaceSubmodelDescriptor replaces a global Submodel Descriptor (no AAS association).
