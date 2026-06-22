@@ -34,7 +34,6 @@ import (
 	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	jsoniter "github.com/json-iterator/go"
-	"github.com/lib/pq"
 )
 
 // BatchInsertContext provides context for batch inserting submodel elements.
@@ -690,12 +689,7 @@ func mapConflictInsertError(err error) error {
 		return nil
 	}
 
-	pqErr, ok := err.(*pq.Error)
-	if !ok {
-		return nil
-	}
-
-	if pqErr.Code == "23505" {
+	if common.IsPostgresUniqueViolation(err) {
 		return common.NewErrConflict("SMREPO-INSSME-CONFLICT Duplicate submodel element")
 	}
 

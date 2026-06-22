@@ -51,7 +51,7 @@ import (
 	commonjws "github.com/eclipse-basyx/basyx-go-components/internal/common/jws"
 	commonmodel "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/testenv"
-	_ "github.com/lib/pq" // PostgreSQL Treiber
+	_ "github.com/jackc/pgx/v5/stdlib"
 	jose "gopkg.in/go-jose/go-jose.v2"
 
 	"github.com/stretchr/testify/assert"
@@ -340,20 +340,43 @@ func getRangeValuesByIDShort(t *testing.T, submodel map[string]any, idShort stri
 	return "", ""
 }
 
+func getPropertyValueByEndpoint(t *testing.T, endpoint string) string {
+	t.Helper()
+
+	statusCode, body, err := requestJSON(http.MethodGet, endpoint, nil)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusOK, statusCode, "response=%s", string(body))
+
+	var property map[string]any
+	require.NoError(t, json.Unmarshal(body, &property), "response=%s", string(body))
+	value, ok := property["value"].(string)
+	require.True(t, ok, "Property value must be string")
+
+	return value
+}
+
+func parseXSDDateTimeValue(t *testing.T, value string) time.Time {
+	t.Helper()
+
+	layouts := []string{time.RFC3339Nano, "2006-01-02T15:04:05.999999999-07:00", "2006-01-02T15:04:05-07:00"}
+	for _, layout := range layouts {
+		parsed, err := time.Parse(layout, value)
+		if err == nil {
+			return parsed
+		}
+	}
+
+	t.Fatalf("xs:dateTime value is not parseable with expected lexical forms: %s", value)
+	return time.Time{}
+}
+
 func assertXSDDateTimeLexical(t *testing.T, value string) {
 	t.Helper()
 
 	assert.NotContains(t, value, " ", "xs:dateTime must not contain a space separator")
 	assert.Contains(t, value, "T", "xs:dateTime must contain T separator")
 
-	layouts := []string{time.RFC3339Nano, "2006-01-02T15:04:05.999999999-07:00", "2006-01-02T15:04:05-07:00"}
-	for _, layout := range layouts {
-		if _, err := time.Parse(layout, value); err == nil {
-			return
-		}
-	}
-
-	t.Fatalf("xs:dateTime value is not parseable with expected lexical forms: %s", value)
+	_ = parseXSDDateTimeValue(t, value)
 }
 
 func assertXSDDateLexical(t *testing.T, value string) {
@@ -519,6 +542,126 @@ func TestTemporalXSDRoundTripFormatting(t *testing.T) {
 		require.True(t, ok, "Range max value must be string")
 		assertXSDDateTimeLexical(t, minValue)
 		assertXSDDateTimeLexical(t, maxValue)
+	})
+}
+
+func TestTemporalPropertyUpdateRoundTrip(t *testing.T) {
+	baseURL := "http://localhost:6004"
+	submodelID := fmt.Sprintf("urn:basyx:integration:temporal-update-%d", time.Now().UnixNano())
+	submodelIDEncoded := common.EncodeString(submodelID)
+	elementEndpoint := func(idShort string) string {
+		return fmt.Sprintf("%s/submodels/%s/submodel-elements/%s", baseURL, submodelIDEncoded, idShort)
+	}
+
+	t.Cleanup(func() {
+		statusCode, body, err := requestJSON(http.MethodDelete, fmt.Sprintf("%s/submodels/%s", baseURL, submodelIDEncoded), nil)
+		if err != nil {
+			t.Logf("cleanup delete failed for temporal update test submodel: %v", err)
+			return
+		}
+		if statusCode != http.StatusNoContent && statusCode != http.StatusNotFound {
+			t.Logf("cleanup delete returned unexpected status=%d body=%s", statusCode, string(body))
+		}
+	})
+
+	statusCode, body, err := requestJSON(http.MethodPost, fmt.Sprintf("%s/submodels", baseURL), map[string]any{
+		"id":        submodelID,
+		"idShort":   "TemporalUpdateSubmodel",
+		"kind":      "Instance",
+		"modelType": "Submodel",
+		"submodelElements": []map[string]any{
+			{
+				"idShort":   "DateProperty",
+				"valueType": "xs:date",
+				"value":     "2024-01-01",
+				"modelType": "Property",
+			},
+			{
+				"idShort":   "DateTimeProperty",
+				"valueType": "xs:dateTime",
+				"value":     "2024-01-01T10:11:12Z",
+				"modelType": "Property",
+			},
+			{
+				"idShort":   "TimeProperty",
+				"valueType": "xs:time",
+				"value":     "10:11:12.123",
+				"modelType": "Property",
+			},
+		},
+	})
+	require.NoError(t, err)
+	require.Equal(t, http.StatusCreated, statusCode, "response=%s", string(body))
+
+	assertExactValue := func(t *testing.T, expected string, actual string) {
+		t.Helper()
+		assert.Equal(t, expected, actual)
+	}
+	assertDateTimeInstant := func(t *testing.T, expected string, actual string) {
+		t.Helper()
+		expectedTime := parseXSDDateTimeValue(t, expected)
+		actualTime := parseXSDDateTimeValue(t, actual)
+		assert.True(t, expectedTime.Equal(actualTime), "expected instant %s, got %s", expectedTime, actualTime)
+	}
+
+	testCases := []struct {
+		name        string
+		idShort     string
+		valueType   string
+		updated     string
+		assertValue func(*testing.T, string, string)
+	}{
+		{
+			name:        "date",
+			idShort:     "DateProperty",
+			valueType:   "xs:date",
+			updated:     "2024-06-15",
+			assertValue: assertExactValue,
+		},
+		{
+			name:        "dateTime",
+			idShort:     "DateTimeProperty",
+			valueType:   "xs:dateTime",
+			updated:     "2024-06-15T13:14:15.123Z",
+			assertValue: assertDateTimeInstant,
+		},
+		{
+			name:        "time",
+			idShort:     "TimeProperty",
+			valueType:   "xs:time",
+			updated:     "13:14:15.987",
+			assertValue: assertExactValue,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run("PUT updates xs:"+tc.name, func(t *testing.T) {
+			statusCode, body, err := requestJSON(http.MethodPut, elementEndpoint(tc.idShort), map[string]any{
+				"idShort":   tc.idShort,
+				"valueType": tc.valueType,
+				"value":     tc.updated,
+				"modelType": "Property",
+			})
+			require.NoError(t, err)
+			require.Equal(t, http.StatusNoContent, statusCode, "response=%s", string(body))
+
+			actualValue := getPropertyValueByEndpoint(t, elementEndpoint(tc.idShort))
+			tc.assertValue(t, tc.updated, actualValue)
+		})
+	}
+
+	t.Run("PATCH updates xs:date", func(t *testing.T) {
+		updated := "2024-06-16"
+		statusCode, body, err := requestJSON(http.MethodPatch, elementEndpoint("DateProperty"), map[string]any{
+			"valueType": "xs:date",
+			"value":     updated,
+			"modelType": "Property",
+		})
+		require.NoError(t, err)
+		require.Equal(t, http.StatusNoContent, statusCode, "response=%s", string(body))
+
+		actualValue := getPropertyValueByEndpoint(t, elementEndpoint("DateProperty"))
+		assert.Equal(t, updated, actualValue)
 	})
 }
 
@@ -2096,7 +2239,7 @@ func TestStandaloneSubmodelRepositorySyncUpdatesReferencingAASDescriptor(t *test
 		}
 	})
 
-	db, err := sql.Open("postgres", submodelRepositoryIntegrationTestDSN)
+	db, err := sql.Open("pgx", submodelRepositoryIntegrationTestDSN)
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = db.Close() })
 

@@ -39,7 +39,6 @@ import (
 	"time"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/testenv"
-	_ "github.com/lib/pq" // PostgreSQL Treiber
 )
 
 // #nosec G101 -- integration test DSN matches the local Docker Compose database credentials.

@@ -46,7 +46,6 @@ import (
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/history"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
-	_ "github.com/lib/pq" // PostgreSQL Treiber
 )
 
 // ConceptDescriptionBackend is the struct that implements the persistence layer for the Concept Description Repository API service.

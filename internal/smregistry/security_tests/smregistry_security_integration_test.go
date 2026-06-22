@@ -44,6 +44,9 @@ func TestIntegration(t *testing.T) {
 			"basyx-ui",
 			10*time.Second,
 		),
+		ActionHandlers: map[string]testenv.JSONStepAction{
+			testenv.ActionAssertBulkFailure: testenv.AssertBulkFailureAction,
+		},
 	})
 }
 

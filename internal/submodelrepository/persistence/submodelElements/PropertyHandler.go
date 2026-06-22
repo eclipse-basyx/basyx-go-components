@@ -40,7 +40,6 @@ import (
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	persistenceutils "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/utils"
-	_ "github.com/lib/pq" // PostgreSQL Treiber
 )
 
 // PostgreSQLPropertyHandler handles persistence operations for Property submodel elements.
@@ -318,6 +317,7 @@ func buildUpdatePropertyRecordObject(property *types.Property, isPut bool, local
 		updateRecord["value_num"] = typedValue.Numeric
 		updateRecord["value_bool"] = typedValue.Boolean
 		updateRecord["value_time"] = typedValue.Time
+		updateRecord["value_date"] = typedValue.Date
 		updateRecord["value_datetime"] = typedValue.DateTime
 	}
 

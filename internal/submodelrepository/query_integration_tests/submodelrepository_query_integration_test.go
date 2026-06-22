@@ -33,7 +33,6 @@ import (
 	"time"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/testenv"
-	_ "github.com/lib/pq" // PostgreSQL Treiber
 )
 
 func TestIntegrationQuerySuite(t *testing.T) {

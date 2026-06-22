@@ -39,7 +39,6 @@ import (
 	"time"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/testenv"
-	_ "github.com/lib/pq" // PostgreSQL Treiber
 	"github.com/stretchr/testify/require"
 )
 

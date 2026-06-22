@@ -41,7 +41,6 @@ import (
 	aasx "github.com/aas-core-works/aas-package3-golang"
 	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
-	"github.com/lib/pq"
 )
 
 const (
@@ -713,11 +712,7 @@ func normalizeFileName(providedFileName string, tempFile *os.File) string {
 }
 
 func isUniqueViolation(err error) bool {
-	var pqErr *pq.Error
-	if errors.As(err, &pqErr) {
-		return pqErr.Code == "23505"
-	}
-	return false
+	return common.IsPostgresUniqueViolation(err)
 }
 
 // ParseCursorID parses a cursor string into a non-negative database identifier.

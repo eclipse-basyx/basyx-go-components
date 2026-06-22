@@ -50,7 +50,6 @@ import (
 	commonmodel "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
-	"github.com/lib/pq"
 )
 
 // AssetAdministrationShellDatabase is the implementation of the AssetAdministrationShellRepositoryDatabase interface using PostgreSQL as the underlying database.
@@ -529,12 +528,7 @@ func mapCreateAASInsertError(err error) error {
 		return nil
 	}
 
-	pqErr, ok := err.(*pq.Error)
-	if !ok {
-		return nil
-	}
-
-	if pqErr.Code == "23505" {
+	if common.IsPostgresUniqueViolation(err) {
 		return common.NewErrConflict("AASREPO-NEWAAS-CONFLICT AAS with given id already exists")
 	}
 
@@ -740,7 +734,7 @@ func (s *AssetAdministrationShellDatabase) checkIfSubmodelReferenceExistsInAsset
 }
 
 // GetAssetAdministrationShells returns a paginated list of AAS objects and the next cursor.
-func (s *AssetAdministrationShellDatabase) GetAssetAdministrationShells(ctx context.Context, limit int32, cursor string, idShort string, assetIDs []string) ([]types.IAssetAdministrationShell, string, error) {
+func (s *AssetAdministrationShellDatabase) GetAssetAdministrationShells(ctx context.Context, limit int32, cursor string, idShort string, specificAssetIDs []types.ISpecificAssetID) ([]types.IAssetAdministrationShell, string, error) {
 	dialect := goqu.Dialect("postgres")
 
 	if limit < 0 {
@@ -756,7 +750,7 @@ func (s *AssetAdministrationShellDatabase) GetAssetAdministrationShells(ctx cont
 		}
 	}
 
-	selectDS, err := buildGetAssetAdministrationShellsDataset(&dialect, limit, cursor, idShort, assetIDs)
+	selectDS, err := buildGetAssetAdministrationShellsDataset(&dialect, limit, cursor, idShort, specificAssetIDs)
 	if err != nil {
 		return nil, "", common.NewInternalServerError("AASREPO-GETAASLIST-BUILDSQL " + err.Error())
 	}
@@ -1057,8 +1051,8 @@ func (s *AssetAdministrationShellDatabase) DeleteAssetAdministrationShellByIDInT
 }
 
 // GetAssetAdministrationShellReferences returns paginated model references while preserving ABAC filters from ctx.
-func (s *AssetAdministrationShellDatabase) GetAssetAdministrationShellReferences(ctx context.Context, limit int32, cursor string, idShort string, assetIDs []string) ([]types.IReference, string, error) {
-	aasList, nextCursor, err := s.GetAssetAdministrationShells(ctx, limit, cursor, idShort, assetIDs)
+func (s *AssetAdministrationShellDatabase) GetAssetAdministrationShellReferences(ctx context.Context, limit int32, cursor string, idShort string, specificAssetIDs []types.ISpecificAssetID) ([]types.IReference, string, error) {
+	aasList, nextCursor, err := s.GetAssetAdministrationShells(ctx, limit, cursor, idShort, specificAssetIDs)
 	if err != nil {
 		return nil, "", err
 	}

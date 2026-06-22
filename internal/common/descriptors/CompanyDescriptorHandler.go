@@ -34,7 +34,6 @@ import (
 	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
-	"github.com/lib/pq"
 )
 
 // InsertCompanyDescriptor creates a new CompanyDescriptor
@@ -173,12 +172,7 @@ func mapInsertCompanyDescriptorError(err error) error {
 		return nil
 	}
 
-	pqErr, ok := err.(*pq.Error)
-	if !ok {
-		return nil
-	}
-
-	if pqErr.Code == "23505" {
+	if common.IsPostgresUniqueViolation(err) {
 		return common.NewErrConflict("ROI-COMDESC-INSERT-CONFLICT Company Descriptor with given domain already exists")
 	}
 

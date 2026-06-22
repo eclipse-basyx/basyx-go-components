@@ -38,7 +38,6 @@ import (
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
-	"github.com/lib/pq"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -116,7 +115,6 @@ func ReadSubmodelDescriptorsByDescriptorIDs(
 		return nil, err
 	}
 
-	arr := pq.Array(uniqDesc)
 	inner := d.From(submodelDescriptorAlias).
 		LeftJoin(
 			semanticRefAlias,
@@ -140,7 +138,7 @@ func ReadSubmodelDescriptorsByDescriptorIDs(
 		}, maskRuntime.Projections()...)...).
 		Where(
 			goqu.And(
-				goqu.L("? = ANY(?::bigint[])", submodelDescriptorAlias.Col(common.ColDescriptorID), arr),
+				submodelDescriptorAlias.Col(common.ColDescriptorID).In(uniqDesc),
 				submodelDescriptorAlias.Col(common.ColAASDescriptorID).IsNull(),
 			),
 		)
@@ -258,7 +256,6 @@ func ReadSubmodelDescriptorsByAASDescriptorIDs(
 	if err != nil {
 		return nil, err
 	}
-	arr := pq.Array(uniqAASDesc)
 	inner := d.From(common.TDescriptor).
 		InnerJoin(
 			common.TAASDescriptor,
@@ -288,7 +285,7 @@ func ReadSubmodelDescriptorsByAASDescriptorIDs(
 			submodelDescriptorAlias.Col(common.ColPosition).As("sort_smd_position"),
 			submodelDescriptorAlias.Col(common.ColDescriptorID).As("sort_smd_descriptor_id"),
 		}, maskRuntime.Projections()...)...).
-		Where(goqu.L("? = ANY(?::bigint[])", submodelDescriptorAlias.Col(common.ColAASDescriptorID), arr))
+		Where(submodelDescriptorAlias.Col(common.ColAASDescriptorID).In(uniqAASDesc))
 
 	inner = inner.Order(
 		submodelDescriptorAlias.Col(common.ColPosition).Asc(),

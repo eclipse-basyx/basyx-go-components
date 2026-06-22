@@ -31,7 +31,6 @@ import (
 	"time"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
-	_ "github.com/lib/pq" // PostgreSQL driver registration for database/sql
 )
 
 // DatabaseConnection Step for connecting to the PGSQL DB.

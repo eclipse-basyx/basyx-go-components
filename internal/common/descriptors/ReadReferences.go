@@ -39,7 +39,6 @@ import (
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/builder"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
-	"github.com/lib/pq"
 )
 
 // ReadSubmodelDescriptorSemanticReferencesByDescriptorIDs loads semantic
@@ -398,7 +397,6 @@ func queryReferenceRowsByOwnerIDs(
 	}
 
 	d := goqu.Dialect(common.Dialect)
-	arr := pq.Array(ownerIDs)
 
 	ot := goqu.T(spec.ownerTable).As(spec.ownerAlias)
 	rt := goqu.T(spec.referenceTable).As(spec.referenceAlias)
@@ -417,7 +415,7 @@ func queryReferenceRowsByOwnerIDs(
 			rkt.Col(common.ColValue).As("key_value"),
 			rpt.Col("parent_reference_payload").As("parent_reference_payload"),
 		).
-		Where(goqu.L(fmt.Sprintf("%s.%s = ANY(?::bigint[])", spec.ownerAlias, spec.ownerIDColumn), arr)).
+		Where(ot.Col(spec.ownerIDColumn).In(ownerIDs)).
 		Order(
 			ot.Col(spec.ownerIDColumn).Asc(),
 			rkt.Col(common.ColPosition).Asc(),
@@ -505,7 +503,6 @@ func readContextReferences1ToManyByOwnerIDs(
 	}
 
 	d := goqu.Dialect(common.Dialect)
-	arr := pq.Array(ownerIDs)
 
 	referenceAlias := firstNonEmpty(spec.referenceAlias, "rt")
 	referenceKeyAlias := firstNonEmpty(spec.referenceKeyAlias, "rkt")
@@ -526,7 +523,7 @@ func readContextReferences1ToManyByOwnerIDs(
 			rkt.Col(common.ColValue).As("key_value"),
 			rpt.Col("parent_reference_payload").As("parent_reference_payload"),
 		).
-		Where(goqu.L(fmt.Sprintf("%s.%s = ANY(?::bigint[])", referenceAlias, spec.ownerIDColumn), arr)).
+		Where(rt.Col(spec.ownerIDColumn).In(ownerIDs)).
 		Order(
 			rt.Col(spec.ownerIDColumn).Asc(),
 			rt.Col(common.ColPosition).Asc(),
