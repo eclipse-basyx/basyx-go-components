@@ -36,6 +36,7 @@ import (
 	"time"
 
 	"github.com/doug-martin/goqu/v9"
+	_ "github.com/jackc/pgx/v5/stdlib"
 	"github.com/stretchr/testify/require"
 )
 
@@ -198,7 +199,7 @@ func TestSubmodelRepositoryHistoryTracksSubmodelElementChangesAndRecentDeletes(t
 
 func requireSubmodelHistoryPayloadTypes(t *testing.T, id string, expected []string) {
 	t.Helper()
-	db, err := sql.Open("postgres", submodelRepositoryIntegrationTestDSN)
+	db, err := sql.Open("pgx", submodelRepositoryIntegrationTestDSN)
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = db.Close() })
 

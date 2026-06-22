@@ -33,7 +33,6 @@ import (
 
 	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
-	_ "github.com/lib/pq" // PostgreSQL Treiber
 )
 
 // ReferenceBuilder constructs Reference objects with nested ReferredSemanticID structures

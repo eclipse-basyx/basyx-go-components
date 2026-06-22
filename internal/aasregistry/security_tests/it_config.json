@@ -65,6 +65,18 @@
     "expectedStatus": 403
   },
   {
+    "context": "BULK POST Descriptor B - User A - DENIED",
+    "action": "ASSERT_BULK_FAILURE",
+    "token": { "user": "userx", "password": "pwd" },
+    "method": "POST",
+    "endpoint": "http://localhost:6004/bulk/shell-descriptors",
+    "data": "postBody/bulk_create_aas_b.json",
+    "expectedStatus": 202,
+    "expectedBulkFailureStatus": 403,
+    "expectedBulkFailureIndex": 0,
+    "expectedBulkFailureIdentifier": "https://example.org/B"
+  },
+  {
     "context": "POST Descriptor C - User A - DENIED",
     "token": { "user": "userx", "password": "pwd" },
     "method": "POST",

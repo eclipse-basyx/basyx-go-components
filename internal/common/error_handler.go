@@ -41,6 +41,39 @@ import (
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 )
 
+type sqlStateError interface {
+	SQLState() string
+}
+
+// IsPostgresErrorCode reports whether an error has a PostgreSQL SQLSTATE.
+//
+// The function unwraps err and checks any error that exposes SQLState().
+//
+// Parameters:
+//   - err: Error to inspect.
+//   - code: PostgreSQL SQLSTATE code to match.
+//
+// Returns:
+//   - bool: True when err or a wrapped error exposes the requested code.
+func IsPostgresErrorCode(err error, code string) bool {
+	if err == nil {
+		return false
+	}
+	var stateErr sqlStateError
+	return errors.As(err, &stateErr) && stateErr.SQLState() == code
+}
+
+// IsPostgresUniqueViolation reports PostgreSQL unique constraint violations.
+//
+// Parameters:
+//   - err: Error to inspect.
+//
+// Returns:
+//   - bool: True when err or a wrapped error has SQLSTATE 23505.
+func IsPostgresUniqueViolation(err error) bool {
+	return IsPostgresErrorCode(err, "23505")
+}
+
 // ErrorHandler represents a structured error response with metadata.
 // It provides standardized error information including message type,
 // error text, error code, correlation ID for tracking, and timestamp.

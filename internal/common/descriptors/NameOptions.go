@@ -31,7 +31,6 @@ import (
 
 	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
-	"github.com/lib/pq"
 )
 
 func createCompanyNameOptions(tx *sql.Tx, descriptorID int64, nameOptions []string) error {
@@ -76,7 +75,6 @@ func readCompanyNameOptionsByDescriptorIDs(ctx context.Context, db DBQueryer, de
 
 	d := goqu.Dialect(common.Dialect)
 	nameOpt := goqu.T(common.TblCompanyDescriptorNameOption).As("comp_name_opt")
-	arr := pq.Array(descriptorIDs)
 
 	sqlStr, args, err := d.
 		From(nameOpt).
@@ -84,7 +82,7 @@ func readCompanyNameOptionsByDescriptorIDs(ctx context.Context, db DBQueryer, de
 			nameOpt.Col(common.ColDescriptorID),
 			nameOpt.Col(common.ColNameOption),
 		).
-		Where(goqu.L("? = ANY(?::bigint[])", nameOpt.Col(common.ColDescriptorID), arr)).
+		Where(nameOpt.Col(common.ColDescriptorID).In(descriptorIDs)).
 		Order(nameOpt.Col(common.ColDescriptorID).Asc(), nameOpt.Col(common.ColPosition).Asc()).
 		ToSQL()
 	if err != nil {

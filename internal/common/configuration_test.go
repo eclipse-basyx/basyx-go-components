@@ -27,6 +27,7 @@ package common
 
 import (
 	"bytes"
+	"context"
 	"log"
 	"os"
 	"strings"
@@ -115,6 +116,61 @@ func TestViperAndStructSwaggerEnabledDefaultsMatch(t *testing.T) {
 	actual := v.GetBool("swagger.enabled")
 	if actual != DefaultConfig.SwaggerEnabled {
 		t.Fatalf("viper default %t differs from DefaultConfig %t", actual, DefaultConfig.SwaggerEnabled)
+	}
+}
+
+func TestBulkBatchLimitDefaultIsOneThousand(t *testing.T) {
+	for _, key := range []string{"GENERAL_BULKBATCHLIMIT", "GENERAL_BULK_BATCH_LIMIT", "BASYX_GENERAL_BULK_BATCH_LIMIT"} {
+		withUnsetEnv(t, key)
+	}
+	captureLogOutput(t)
+
+	cfg, err := LoadConfig("", NORMAL)
+	if err != nil {
+		t.Fatalf("unexpected config load error: %v", err)
+	}
+
+	if cfg.General.BulkBatchLimit != DefaultConfig.GeneralBulkBatchLimit {
+		t.Fatalf("bulkBatchLimit default mismatch: cfg=%d default=%d", cfg.General.BulkBatchLimit, DefaultConfig.GeneralBulkBatchLimit)
+	}
+	if cfg.General.BulkBatchLimit != 1000 {
+		t.Fatalf("expected bulkBatchLimit default 1000, got %d", cfg.General.BulkBatchLimit)
+	}
+	if actual := BulkBatchLimitFromContext(context.Background()); actual != 1000 {
+		t.Fatalf("expected context fallback bulkBatchLimit 1000, got %d", actual)
+	}
+}
+
+func TestBulkBatchLimitCanBeOverriddenByReadableEnvironmentVariable(t *testing.T) {
+	for _, key := range []string{"GENERAL_BULKBATCHLIMIT", "GENERAL_BULK_BATCH_LIMIT", "BASYX_GENERAL_BULK_BATCH_LIMIT"} {
+		withUnsetEnv(t, key)
+	}
+	t.Setenv("GENERAL_BULK_BATCH_LIMIT", "17")
+	captureLogOutput(t)
+
+	cfg, err := LoadConfig("", NORMAL)
+	if err != nil {
+		t.Fatalf("unexpected config load error: %v", err)
+	}
+
+	if cfg.General.BulkBatchLimit != 17 {
+		t.Fatalf("expected env bulkBatchLimit 17, got %d", cfg.General.BulkBatchLimit)
+	}
+}
+
+func TestBulkBatchLimitRejectsNonPositiveValues(t *testing.T) {
+	for _, key := range []string{"GENERAL_BULKBATCHLIMIT", "GENERAL_BULK_BATCH_LIMIT", "BASYX_GENERAL_BULK_BATCH_LIMIT"} {
+		withUnsetEnv(t, key)
+	}
+	t.Setenv("GENERAL_BULK_BATCH_LIMIT", "0")
+	captureLogOutput(t)
+
+	_, err := LoadConfig("", NORMAL)
+	if err == nil {
+		t.Fatal("expected config load error for non-positive bulkBatchLimit")
+	}
+	if !strings.Contains(err.Error(), "CONFIG-GENERAL-BULKBATCHLIMIT") {
+		t.Fatalf("expected CONFIG-GENERAL-BULKBATCHLIMIT error, got %v", err)
 	}
 }
 

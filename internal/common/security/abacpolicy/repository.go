@@ -39,7 +39,7 @@ import (
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/history"
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 	"github.com/go-chi/chi/v5"
-	"github.com/lib/pq"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 type dbQueryer interface {
@@ -721,13 +721,21 @@ func policyRuleInsertRecord(serviceScope string, versionID int64, policyID strin
 		"formula_json":           jsonbParam(rule.FormulaJSON),
 		"filters_json":           jsonbParam(rule.FiltersJSON),
 		"access":                 rule.Access,
-		"rights":                 pq.Array(rule.Rights),
+		"rights":                 textArrayParam(rule.Rights),
 		"rule_hash":              rule.ConfiguredRuleHash,
 		"materialized_rule_hash": rule.MaterializedRuleHash,
 		"created_by_subject":     nullableString(actor.Subject),
 		"created_by_issuer":      nullableString(actor.Issuer),
 		"created_by_client_id":   nullableString(actor.ClientID),
 	}
+}
+
+func textArrayParam(values []string) any {
+	encoded, err := json.Marshal(values)
+	if err != nil {
+		encoded = []byte("[]")
+	}
+	return goqu.L("ARRAY(SELECT jsonb_array_elements_text(?::jsonb))", string(encoded))
 }
 
 func materializedRulesFromPolicyRules(rules []PolicyRule) []auth.MaterializedABACRule {
@@ -925,7 +933,7 @@ func scanPolicyRule(scanner rowScanner) (PolicyRule, error) {
 		&rule.FormulaJSON,
 		&rule.FiltersJSON,
 		&rule.Access,
-		pq.Array(&rights),
+		pgtype.NewMap().SQLScanner(&rights),
 		&rule.RuleHash,
 		&rule.MaterializedRuleHash,
 		&rule.CreatedAt,

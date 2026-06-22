@@ -12,7 +12,8 @@
       { "name": "description",          "objects": [ { "ROUTE": "/description" } ] },
       { "name": "shellDescriptorById",  "objects": [ { "ROUTE": "/shell-descriptors/*" } ] },
       { "name": "shellDescriptors",     "objects": [ { "ROUTE": "/shell-descriptors" } ] },
-      { "name": "allShellDescriptors",  "objects": [ { "ROUTE": "/shell-descriptors" }, { "ROUTE": "/shell-descriptors/*" } ] },
+      { "name": "allShellDescriptors",  "objects": [ { "ROUTE": "/bulk/shell-descriptors" }, { "ROUTE": "/shell-descriptors" }, { "ROUTE": "/shell-descriptors/*" } ] },
+      { "name": "bulkOperations",  "objects": [ { "ROUTE": "/bulk/status/*" }, { "ROUTE": "/bulk/result/*" } ] },
       { "name": "allShellDescriptorsObject",  "objects": [ { "DESCRIPTOR": "$aasdesc(\"*\")"} ] },
       { "name": "specialShellDescritpor",  "objects": [ { "DESCRIPTOR": "$aasdesc(\"https://example.org/X\")" } ] },
       { "name": "submodelDescriptorById",  "objects": [ { "ROUTE": "/shell-descriptors/*/submodel-descriptors/*" } ] },
@@ -108,6 +109,7 @@
       { "USEACL": "read_member", "USEOBJECTS": ["allShellDescriptors"], "USEFORMULA": "isMember&manufacturerPartId" },
       { "USEACL": "write_role", "USEOBJECTS": ["allShellDescriptors"], "USEFORMULA": "isRole=editor&X" },
       { "USEACL": "write_member", "USEOBJECTS": ["allShellDescriptors"], "USEFORMULA": "isMember&Y" },
+      { "USEACL": "read_role", "USEOBJECTS": ["bulkOperations"], "USEFORMULA": "always_true" },
       { "USEACL": "read_role", "OBJECTS": [{ "DESCRIPTOR": "$aasdesc(\"https://example.org/X\")" }], "USEFORMULA": "isTest" },
 
       { "USEACL": "read_only_public", "USEOBJECTS": ["allSubmodelDescriptors"], "USEFORMULA": "is_public_readable_sm" },

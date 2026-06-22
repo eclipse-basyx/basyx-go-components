@@ -38,7 +38,7 @@ import (
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
-	"github.com/lib/pq"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/stretchr/testify/require"
 )
 
@@ -134,7 +134,7 @@ func TestCreateSubmodelDuplicateIdentifierReturnsConflict(t *testing.T) {
 
 	mock.ExpectBegin()
 	mock.ExpectQuery(`INSERT INTO .*submodel.*RETURNING`).
-		WillReturnError(&pq.Error{Code: "23505"})
+		WillReturnError(&pgconn.PgError{Code: "23505"})
 	mock.ExpectRollback()
 
 	err = sut.CreateSubmodel(contextWithABACDisabled(t), submodel)

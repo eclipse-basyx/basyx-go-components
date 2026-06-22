@@ -87,7 +87,7 @@ func InsertAssetAdministrationShellDescriptor(ctx context.Context, db *sql.DB, a
 		_ = tx.Rollback()
 		return model.AssetAdministrationShellDescriptor{}, err
 	}
-	if canSkipPostInsertReadback(ctx) {
+	if CanSkipPostInsertReadback(ctx) {
 		return aasd, tx.Commit()
 	}
 	result, err := GetAssetAdministrationShellDescriptorByIDTx(ctx, tx, aasd.Id)
@@ -98,9 +98,17 @@ func InsertAssetAdministrationShellDescriptor(ctx context.Context, db *sql.DB, a
 	return result, tx.Commit()
 }
 
-// canSkipPostInsertReadback returns true for contexts where no post-insert
-// descriptor re-read is needed for ABAC enforcement or field filtering.
-func canSkipPostInsertReadback(ctx context.Context) bool {
+// CanSkipCreateReadback reports whether create readback can be skipped.
+//
+// Route-level authorization has already run, so readback is only required when
+// the request context contains ABAC filters or restricted create formulas.
+//
+// Parameters:
+//   - ctx: Request context carrying the ABAC query filter.
+//
+// Returns:
+//   - bool: True when callers can trust the created descriptor without readback.
+func CanSkipCreateReadback(ctx context.Context) bool {
 	queryFilter := auth.GetQueryFilter(ctx)
 	if queryFilter == nil {
 		return true
@@ -108,10 +116,27 @@ func canSkipPostInsertReadback(ctx context.Context) bool {
 	if len(queryFilter.Filters) > 0 {
 		return false
 	}
+	if len(queryFilter.FormulasByRight) > 0 {
+		return auth.HasUnrestrictedFormulaForRight(ctx, grammar.RightsEnumCREATE)
+	}
 	if queryFilter.Formula == nil {
 		return true
 	}
 	return auth.HasUnrestrictedFormulaForRight(ctx, grammar.RightsEnumCREATE)
+}
+
+// CanSkipPostInsertReadback reports whether post-insert readback can be skipped.
+//
+// This helper keeps the AAS descriptor-specific name for callers that return
+// newly inserted descriptors.
+//
+// Parameters:
+//   - ctx: Request context carrying the ABAC query filter.
+//
+// Returns:
+//   - bool: True when post-insert readback can be skipped.
+func CanSkipPostInsertReadback(ctx context.Context) bool {
+	return CanSkipCreateReadback(ctx)
 }
 
 // InsertAdministrationShellDescriptorTx performs the same insert as
@@ -273,7 +298,7 @@ func lockAASDescriptorUpsertTx(ctx context.Context, tx *sql.Tx, aasID string) er
 func buildAASDescriptorUpsertLockSQL(aasID string) (string, []any, error) {
 	return goqu.
 		Dialect(common.Dialect).
-		Select(goqu.Func("pg_advisory_xact_lock", goqu.Func("hashtextextended", "aas_descriptor:"+aasID, 0))).
+		Select(goqu.Func("pg_advisory_xact_lock", goqu.Func("hashtextextended", "aas_descriptor:"+aasID, int64(0)))).
 		Prepared(true).
 		ToSQL()
 }
@@ -375,9 +400,12 @@ func deleteDescriptorRowsBySelectTx(ctx context.Context, tx *sql.Tx, descriptorI
 	return err
 }
 
+// buildAASDescriptorInsertRecord accepts either a concrete descriptor id or a
+// Goqu sequence expression, because batch inserts reference ids before they are
+// scanned back as int64 values.
 func buildAASDescriptorInsertRecord(
 	ctx context.Context,
-	descriptorID int64,
+	descriptorID any,
 	aasd model.AssetAdministrationShellDescriptor,
 ) goqu.Record {
 	record := goqu.Record{
@@ -466,6 +494,49 @@ func DeleteAssetAdministrationShellDescriptorByID(ctx context.Context, db *sql.D
 // using the provided transaction.
 func DeleteAssetAdministrationShellDescriptorByIDTx(ctx context.Context, tx *sql.Tx, aasIdentifier string) error {
 	return deleteAssetAdministrationShellDescriptorByIDTx(ctx, tx, aasIdentifier)
+}
+
+// DeleteAssetAdministrationShellDescriptorsByIDsTx deletes AAS descriptors by id.
+//
+// The function deletes AAS descriptor base rows and embedded submodel descriptor
+// rows in bounded chunks.
+//
+// Parameters:
+//   - ctx: Request context carrying configuration data.
+//   - tx: Transaction used for deletion.
+//   - aasIdentifiers: AAS descriptor identifiers to delete.
+//
+// Returns:
+//   - error: Error when SQL rendering or deletion fails.
+func DeleteAssetAdministrationShellDescriptorsByIDsTx(ctx context.Context, tx *sql.Tx, aasIdentifiers []string) error {
+	if len(aasIdentifiers) == 0 {
+		return nil
+	}
+	d := goqu.Dialect(common.Dialect)
+	batch := &common.PostgreSQLBatch{}
+	limit := common.BulkBatchLimitFromContext(ctx)
+	for start := 0; start < len(aasIdentifiers); start += limit {
+		end := min(start+limit, len(aasIdentifiers))
+		descriptorIDs := d.
+			From(common.TblAASDescriptor).
+			Select(common.ColDescriptorID).
+			Where(goqu.C(common.ColAASID).In(aasIdentifiers[start:end]))
+		childDescriptorIDs := d.
+			From(common.TblSubmodelDescriptor).
+			Select(common.ColDescriptorID).
+			Where(goqu.C(common.ColAASDescriptorID).In(descriptorIDs))
+		if err := batch.AppendDataset(
+			d.Delete(common.TblDescriptor).Where(
+				goqu.Or(
+					goqu.C(common.ColID).In(descriptorIDs),
+					goqu.C(common.ColID).In(childDescriptorIDs),
+				),
+			),
+		); err != nil {
+			return common.NewInternalServerError("AASDESC-BULKDELETE-BUILDSQL " + err.Error())
+		}
+	}
+	return common.ExecutePostgreSQLBatchInTransaction(ctx, tx, batch.Statements())
 }
 
 // DeleteAssetAdministrationShellDescriptorByIDTx deletes using the provided

@@ -50,7 +50,6 @@ import (
 	commonmodel "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
-	"github.com/lib/pq"
 )
 
 // AssetAdministrationShellDatabase is the implementation of the AssetAdministrationShellRepositoryDatabase interface using PostgreSQL as the underlying database.
@@ -529,12 +528,7 @@ func mapCreateAASInsertError(err error) error {
 		return nil
 	}
 
-	pqErr, ok := err.(*pq.Error)
-	if !ok {
-		return nil
-	}
-
-	if pqErr.Code == "23505" {
+	if common.IsPostgresUniqueViolation(err) {
 		return common.NewErrConflict("AASREPO-NEWAAS-CONFLICT AAS with given id already exists")
 	}
 

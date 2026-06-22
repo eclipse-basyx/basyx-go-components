@@ -35,7 +35,6 @@ import (
 	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
-	_ "github.com/lib/pq" // PostgreSQL Treiber
 )
 
 // PostgreSQLCapabilityHandler provides PostgreSQL-based persistence operations for Capability submodel elements.
