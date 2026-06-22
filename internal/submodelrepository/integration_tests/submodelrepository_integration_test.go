@@ -51,7 +51,7 @@ import (
 	commonjws "github.com/eclipse-basyx/basyx-go-components/internal/common/jws"
 	commonmodel "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/testenv"
-	_ "github.com/lib/pq" // PostgreSQL Treiber
+	_ "github.com/jackc/pgx/v5/stdlib"
 	jose "gopkg.in/go-jose/go-jose.v2"
 
 	"github.com/stretchr/testify/assert"
@@ -2239,7 +2239,7 @@ func TestStandaloneSubmodelRepositorySyncUpdatesReferencingAASDescriptor(t *test
 		}
 	})
 
-	db, err := sql.Open("postgres", submodelRepositoryIntegrationTestDSN)
+	db, err := sql.Open("pgx", submodelRepositoryIntegrationTestDSN)
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = db.Close() })
 

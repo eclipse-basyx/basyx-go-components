@@ -33,7 +33,6 @@ import (
 	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
-	"github.com/lib/pq"
 )
 
 // ReadExtensionsByDescriptorID returns all extensions that belong to a single
@@ -75,7 +74,7 @@ func ReadExtensionsByDescriptorID(
 //     references are loaded via the respective link tables.
 //
 // Implementation notes:
-//   - Uses pq.Array with SQL ANY for efficient multi-key filtering.
+//   - Uses SQL ANY with pgx slice parameters for efficient multi-key filtering.
 //   - Performs a single join to fetch base extension rows, then batches lookups
 //     for references to minimize round trips.
 //   - Converts ValueType strings to model.DataTypeDefXsd via
@@ -96,14 +95,13 @@ func ReadExtensionsByDescriptorIDs(
 	d := goqu.Dialect(common.Dialect)
 	dp := goqu.T(common.TblDescriptorPayload).As("dp")
 
-	arr := pq.Array(descriptorIDs)
 	sqlStr, args, err := d.
 		From(dp).
 		Select(
 			dp.Col(common.ColDescriptorID),
 			dp.Col(common.ColExtensionsPayload),
 		).
-		Where(goqu.L("dp.descriptor_id = ANY(?::bigint[])", arr)).
+		Where(dp.Col(common.ColDescriptorID).In(descriptorIDs)).
 		Order(dp.Col(common.ColDescriptorID).Asc()).
 		ToSQL()
 	if err != nil {

@@ -1,0 +1,33 @@
+{
+    "paging_metadata": {},
+    "result": [
+        {
+            "assetInformation": {
+                "assetKind": "Instance",
+                "globalAssetId": "assetId-global-mixed",
+                "specificAssetIds": [
+                    {
+                        "externalSubjectId": {
+                            "keys": [
+                                {
+                                    "type": "GlobalReference",
+                                    "value": "https://example.com/ids/externalSubjectId/mixed"
+                                }
+                            ],
+                            "type": "ExternalReference"
+                        },
+                        "name": "specific-with-external-subject",
+                        "value": "value-with-external-subject"
+                    },
+                    {
+                        "name": "specific-without-external-subject",
+                        "value": "value-without-external-subject"
+                    }
+                ]
+            },
+            "id": "https://example.com/ids/aas/assetids_mixed_specific",
+            "idShort": "AASAssetIdsMixedSpecific",
+            "modelType": "AssetAdministrationShell"
+        }
+    ]
+}

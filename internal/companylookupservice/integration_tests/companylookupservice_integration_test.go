@@ -36,7 +36,6 @@ import (
 	"testing"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/testenv"
-	_ "github.com/lib/pq"
 	"github.com/stretchr/testify/require"
 )
 
@@ -82,7 +81,7 @@ func TestIntegration(t *testing.T) {
 				deleteAllCompanyDescriptors(t, runner, stepNumber)
 			},
 			testenv.ActionCheckDBIsEmpty: testenv.NewCheckDBIsEmptyAction(testenv.CheckDBIsEmptyOptions{
-				Driver: "postgres",
+				Driver: "pgx",
 				DSN:    "host=127.0.0.1 port=6432 user=admin password=admin123 dbname=basyxTestDB sslmode=disable",
 			}),
 		},

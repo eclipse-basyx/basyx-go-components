@@ -12,8 +12,16 @@
       {
         "name": "allSubmodelDescriptors",
         "objects": [
+          { "ROUTE": "/bulk/submodel-descriptors" },
           { "ROUTE": "/submodel-descriptors" },
           { "ROUTE": "/submodel-descriptors/*" }
+        ]
+      },
+      {
+        "name": "bulkOperations",
+        "objects": [
+          { "ROUTE": "/bulk/status/*" },
+          { "ROUTE": "/bulk/result/*" }
         ]
       },
       {
@@ -209,7 +217,8 @@
       { "USEACL": "read_role", "USEOBJECTS": ["allSubmodelDescriptors"], "USEFORMULA": "isRole=viewer&customerHref_sm" },
       { "USEACL": "read_member", "USEOBJECTS": ["allSubmodelDescriptors"], "USEFORMULA": "isMember&manufacturerHref_sm" },
       { "USEACL": "write_role", "USEOBJECTS": ["allSubmodelDescriptors"], "USEFORMULA": "isRole=editor&X_sm" },
-      { "USEACL": "write_member", "USEOBJECTS": ["allSubmodelDescriptors"], "USEFORMULA": "isMember&Y_sm" }
+      { "USEACL": "write_member", "USEOBJECTS": ["allSubmodelDescriptors"], "USEFORMULA": "isMember&Y_sm" },
+      { "USEACL": "read_role", "USEOBJECTS": ["bulkOperations"], "USEFORMULA": "always_true" }
     ]
   }
 }

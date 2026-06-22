@@ -339,8 +339,9 @@ func (s *DPPRepositoryService) ReadDPPIdsByProductIds(ctx context.Context, reque
 
 func (s *DPPRepositoryService) collectDPPIDsForProduct(ctx context.Context, productID string, seen map[string]struct{}, ids *[]string) error {
 	cursor := ""
+	specificAssetIDs := []types.ISpecificAssetID{types.NewSpecificAssetID("globalAssetId", productID)}
 	for {
-		shells, nextCursor, err := s.aasRepo.GetAssetAdministrationShells(ctx, dppProductIDSearchPageSize, cursor, "", []string{productID})
+		shells, nextCursor, err := s.aasRepo.GetAssetAdministrationShells(ctx, dppProductIDSearchPageSize, cursor, "", specificAssetIDs)
 		if err != nil {
 			return fmt.Errorf("DPP-READIDS-GETAAS get AAS for product %s: %w", productID, err)
 		}

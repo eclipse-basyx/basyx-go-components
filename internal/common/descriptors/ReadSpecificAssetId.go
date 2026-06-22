@@ -37,7 +37,6 @@ import (
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
-	"github.com/lib/pq"
 )
 
 const globalAssetIDSpecificAssetIDName = "globalAssetId"
@@ -84,7 +83,7 @@ func ReadSpecificAssetIDsByDescriptorID(
 // present in the map with a nil slice to distinguish from absent keys.
 //
 // Implementation notes:
-// - Uses goqu to build SQL and pq.Array for efficient ANY(bigint[]) filtering.
+// - Uses goqu to build SQL and pgx slice parameters for efficient ANY(bigint[]) filtering.
 // - Preloads semantic and external subject references in one pass to avoid N+1.
 // - Preserves a stable order by descriptor_id, id to ensure deterministic output.
 func ReadSpecificAssetIDsByDescriptorIDs(
@@ -106,8 +105,6 @@ func ReadSpecificAssetIDsByDescriptorIDs(
 	externalSubjectReferenceAlias := goqu.T("specific_asset_id_external_subject_id_reference").As(common.AliasExternalSubjectReference)
 	externalSubjectReferenceKeyAlias := goqu.T("specific_asset_id_external_subject_id_reference_key").As(common.AliasExternalSubjectReferenceKey)
 	specificAssetIDPayloadAlias := goqu.T(common.TblSpecificAssetIDPayload).As("specific_asset_id_payload")
-
-	arr := pq.Array(descriptorIDs)
 
 	collector, err := grammar.NewResolvedFieldPathCollectorForRoot(grammar.CollectorRootAASDesc)
 	if err != nil {
@@ -158,7 +155,7 @@ func ReadSpecificAssetIDsByDescriptorIDs(
 		common.TSpecificAssetID.Col(common.ColPosition).As("sort_specific_asset_position"),
 	}, maskRuntime.Projections()...)...).
 		Where(
-			goqu.L(fmt.Sprintf("%s.%s = ANY(?::bigint[])", common.AliasSpecificAssetID, common.ColDescriptorID), arr),
+			specificAssetIDAlias.Col(common.ColDescriptorID).In(descriptorIDs),
 			common.TSpecificAssetID.Col(common.ColName).Neq(globalAssetIDSpecificAssetIDName),
 		)
 

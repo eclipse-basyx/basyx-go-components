@@ -43,11 +43,13 @@ import (
 	"testing"
 	"time"
 
+	_ "github.com/jackc/pgx/v5/stdlib"
 	"github.com/stretchr/testify/require"
 )
 
 const ActionCheckDBIsEmpty = "CHECK_DB_IS_EMPTY"
 const ActionAssertSubmodelAbsent = "ASSERT_SUBMODEL_ABSENT"
+const ActionAssertBulkFailure = "ASSERT_BULK_FAILURE"
 
 type TokenCredentials struct {
 	User     string `json:"user"`
@@ -55,16 +57,19 @@ type TokenCredentials struct {
 }
 
 type JSONSuiteStep struct {
-	Context                 string            `json:"context,omitempty"`
-	Method                  string            `json:"method"`
-	Endpoint                string            `json:"endpoint"`
-	Data                    string            `json:"data,omitempty"`
-	ShouldMatch             string            `json:"shouldMatch,omitempty"`
-	ExpectedResponseHeaders map[string]string `json:"expectedResponseHeaders,omitempty"`
-	ExpectedStatus          int               `json:"expectedStatus,omitempty"`
-	Action                  string            `json:"action,omitempty"`
-	Headers                 map[string]string `json:"headers,omitempty"`
-	Token                   *TokenCredentials `json:"token,omitempty"`
+	Context                   string            `json:"context,omitempty"`
+	Method                    string            `json:"method"`
+	Endpoint                  string            `json:"endpoint"`
+	Data                      string            `json:"data,omitempty"`
+	ShouldMatch               string            `json:"shouldMatch,omitempty"`
+	ExpectedResponseHeaders   map[string]string `json:"expectedResponseHeaders,omitempty"`
+	ExpectedStatus            int               `json:"expectedStatus,omitempty"`
+	ExpectedBulkFailureStatus int               `json:"expectedBulkFailureStatus,omitempty"`
+	ExpectedBulkFailureIndex  int               `json:"expectedBulkFailureIndex,omitempty"`
+	ExpectedBulkFailureID     string            `json:"expectedBulkFailureIdentifier,omitempty"`
+	Action                    string            `json:"action,omitempty"`
+	Headers                   map[string]string `json:"headers,omitempty"`
+	Token                     *TokenCredentials `json:"token,omitempty"`
 }
 
 type JSONStepResult struct {
@@ -203,7 +208,7 @@ func DefaultJSONStepName(step JSONSuiteStep, stepNumber int) string {
 func NewCheckDBIsEmptyAction(options CheckDBIsEmptyOptions) JSONStepAction {
 	driver := strings.TrimSpace(options.Driver)
 	if driver == "" {
-		driver = "postgres"
+		driver = "pgx"
 	}
 
 	schema := strings.TrimSpace(options.Schema)
@@ -253,7 +258,7 @@ func defaultCheckDBIsEmptyExcludedTables(extraTables []string) map[string]struct
 func NewCheckSubmodelAbsentAction(options CheckSubmodelAbsentOptions) JSONStepAction {
 	driver := strings.TrimSpace(options.Driver)
 	if driver == "" {
-		driver = "postgres"
+		driver = "pgx"
 	}
 
 	return func(t *testing.T, _ *JSONSuiteRunner, step JSONSuiteStep, _ int) {
@@ -271,6 +276,144 @@ func NewCheckSubmodelAbsentAction(options CheckSubmodelAbsentOptions) JSONStepAc
 		require.NoError(t, err)
 		require.Equalf(t, 0, count, "Expected no submodel row for identifier '%s'", identifier)
 	}
+}
+
+// AssertBulkFailureAction asserts an asynchronous bulk operation failure.
+//
+// The helper starts the bulk step, follows the returned operation handle, and
+// compares the completed failure status and message with the expected values
+// from the JSON suite step.
+//
+// Parameters:
+//   - t: Test handle used for assertions.
+//   - runner: JSON suite runner that executes the step and reads the result.
+//   - step: JSON suite step containing the bulk request and expected failure.
+//   - stepNumber: Step number used in assertion messages.
+func AssertBulkFailureAction(t *testing.T, runner *JSONSuiteRunner, step JSONSuiteStep, stepNumber int) {
+	t.Helper()
+
+	response, err := runner.RunStep(step, stepNumber)
+	require.NoError(t, err)
+
+	location := response.Headers.Get("Location")
+	require.NotEmpty(t, location, "expected bulk start response to include Location header")
+
+	resultEndpoint, err := bulkResultEndpoint(step.Endpoint, location)
+	require.NoError(t, err)
+
+	resultBody := waitForBulkFailureResult(t, runner, step, stepNumber, resultEndpoint)
+	assertBulkFailureResult(t, step, resultBody)
+}
+
+func bulkResultEndpoint(startEndpoint string, location string) (string, error) {
+	baseURL, err := url.Parse(startEndpoint)
+	if err != nil {
+		return "", err
+	}
+	locationURL, err := url.Parse(location)
+	if err != nil {
+		return "", err
+	}
+
+	resultURL := baseURL.ResolveReference(locationURL)
+	statusPath := "/bulk/status/"
+	if !strings.Contains(resultURL.Path, statusPath) {
+		return "", fmt.Errorf("TESTENV-BULK-LOCATION expected status location, got %s", location)
+	}
+
+	resultURL.Path = strings.Replace(resultURL.Path, statusPath, "/bulk/result/", 1)
+	resultURL.RawQuery = ""
+	return resultURL.String(), nil
+}
+
+func waitForBulkFailureResult(
+	t *testing.T,
+	runner *JSONSuiteRunner,
+	step JSONSuiteStep,
+	stepNumber int,
+	resultEndpoint string,
+) string {
+	t.Helper()
+
+	deadline := time.Now().Add(10 * time.Second)
+	resultStep := step
+	resultStep.Method = http.MethodGet
+	resultStep.Endpoint = resultEndpoint
+	resultStep.Data = ""
+	resultStep.ShouldMatch = ""
+	resultStep.ExpectedResponseHeaders = nil
+
+	for {
+		body, statusCode, err := runner.runRawStep(resultStep, stepNumber)
+		require.NoError(t, err)
+
+		if statusCode == http.StatusNoContent {
+			t.Fatalf("expected failed bulk result, got successful 204 response")
+		}
+		if statusCode == http.StatusBadRequest && bulkResultHasDetails(body) {
+			return body
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("timed out waiting for failed bulk result from %s; last status %d body %s", resultEndpoint, statusCode, body)
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+}
+
+func bulkResultHasDetails(body string) bool {
+	var result struct {
+		Details []bulkFailureDetail `json:"details"`
+	}
+	if err := json.Unmarshal([]byte(body), &result); err != nil {
+		return false
+	}
+	return len(result.Details) > 0
+}
+
+type bulkFailureDetail struct {
+	Index      int    `json:"index"`
+	Identifier string `json:"identifier"`
+	StatusCode int    `json:"statusCode"`
+	Message    string `json:"message"`
+}
+
+func assertBulkFailureResult(t *testing.T, step JSONSuiteStep, body string) {
+	t.Helper()
+
+	var result struct {
+		ExecutionState string              `json:"executionState"`
+		Success        bool                `json:"success"`
+		FailedCount    int                 `json:"failedCount"`
+		Details        []bulkFailureDetail `json:"details"`
+	}
+	require.NoError(t, json.Unmarshal([]byte(body), &result))
+	require.Equal(t, "Completed", result.ExecutionState)
+	require.False(t, result.Success)
+	require.NotZero(t, result.FailedCount)
+
+	expectedStatus := step.ExpectedBulkFailureStatus
+	if expectedStatus == 0 {
+		expectedStatus = http.StatusForbidden
+	}
+
+	for _, detail := range result.Details {
+		if detail.Index != step.ExpectedBulkFailureIndex {
+			continue
+		}
+		if step.ExpectedBulkFailureID != "" && detail.Identifier != step.ExpectedBulkFailureID {
+			continue
+		}
+		require.Equal(t, expectedStatus, detail.StatusCode)
+		return
+	}
+
+	t.Fatalf(
+		"expected bulk failure detail index=%d identifier=%q status=%d, got %+v",
+		step.ExpectedBulkFailureIndex,
+		step.ExpectedBulkFailureID,
+		expectedStatus,
+		result.Details,
+	)
 }
 
 func RunJSONSuite(t *testing.T, options JSONSuiteOptions) {
@@ -359,6 +502,36 @@ func (r *JSONSuiteRunner) RunStep(step JSONSuiteStep, stepNumber int) (JSONStepR
 		Body:    string(respBody),
 		Headers: resp.Header,
 	}, nil
+}
+
+func (r *JSONSuiteRunner) runRawStep(step JSONSuiteStep, stepNumber int) (string, int, error) {
+	bodyBytes, err := loadStepBody(step)
+	if err != nil {
+		return "", 0, err
+	}
+
+	req, _, err := r.buildRequest(step, bodyBytes)
+	if err != nil {
+		return "", 0, err
+	}
+
+	if r.options.EnableRequestLog {
+		r.writeRequestLog(stepNumber, req, bodyBytes)
+	}
+
+	resp, err := r.client.Do(req)
+	if err != nil {
+		r.writeRequestError(stepNumber, err)
+		return "", 0, err
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", 0, err
+	}
+
+	return string(respBody), resp.StatusCode, nil
 }
 
 func (r *JSONSuiteRunner) compareResponseHeaders(t *testing.T, step JSONSuiteStep, stepNumber int, headers http.Header) {

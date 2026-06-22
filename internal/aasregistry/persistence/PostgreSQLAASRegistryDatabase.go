@@ -44,6 +44,7 @@ import (
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
+	"github.com/jackc/pgx/v5"
 )
 
 // PostgreSQLAASRegistryDatabase is a PostgreSQL-backed implementation of the AAS
@@ -119,21 +120,83 @@ func (p *PostgreSQLAASRegistryDatabase) InsertAdministrationShellDescriptor(
 	ctx context.Context,
 	aasd model.AssetAdministrationShellDescriptor,
 ) (model.AssetAdministrationShellDescriptor, error) {
+	if common.SupportsPostgreSQLBatch(p.db) &&
+		history.ActiveConfig().Mode == history.ModeOff &&
+		descriptors.CanSkipPostInsertReadback(ctx) {
+		return p.insertAdministrationShellDescriptorBatch(ctx, aasd)
+	}
+
+	batch, err := descriptors.BuildAdministrationShellDescriptorCreateBatch(ctx, aasd)
+	if err != nil {
+		return model.AssetAdministrationShellDescriptor{}, err
+	}
+
 	var result model.AssetAdministrationShellDescriptor
-	err := common.ExecuteInTransaction(p.db, "AASREG-INSERTAASDESC-STARTTX", "AASREG-INSERTAASDESC-COMMIT", func(tx *sql.Tx) error {
-		if err := descriptors.InsertAdministrationShellDescriptorTx(ctx, tx, aasd); err != nil {
-			return err
+	err = common.ExecuteInTransaction(p.db, "AASREG-INSERTAASDESC-STARTTX", "AASREG-INSERTAASDESC-COMMIT", func(tx *sql.Tx) error {
+		if batchErr := common.ExecutePostgreSQLBatchInTransaction(ctx, tx, batch.Statements()); batchErr != nil {
+			return mapInsertAASDescriptorError(batchErr)
 		}
 
-		stored, err := descriptors.GetAssetAdministrationShellDescriptorByIDTx(ctx, tx, aasd.Id)
-		if err != nil {
-			return err
+		stored, getErr := descriptors.GetAssetAdministrationShellDescriptorByIDTx(ctx, tx, aasd.Id)
+		if getErr != nil {
+			if common.IsErrNotFound(getErr) {
+				return common.NewErrDenied("AAS Descriptor access not allowed")
+			}
+			return getErr
 		}
-		if err := appendDescriptorHistoryTx(ctx, tx, stored, history.ChangeCreated, false); err != nil {
-			return err
+		if historyErr := appendDescriptorHistoryTx(ctx, tx, stored, history.ChangeCreated, false); historyErr != nil {
+			return historyErr
 		}
 
 		result = stored
+		return nil
+	})
+	if err != nil {
+		return model.AssetAdministrationShellDescriptor{}, mapInsertAASDescriptorError(err)
+	}
+	return result, nil
+}
+
+func mapInsertAASDescriptorError(err error) error {
+	if common.IsPostgresUniqueViolation(err) {
+		return common.NewErrConflict("AASREG-INSERTAASDESC-CONFLICT AAS with given id already exists")
+	}
+	return err
+}
+
+func (p *PostgreSQLAASRegistryDatabase) insertAdministrationShellDescriptorBatch(
+	ctx context.Context,
+	aasd model.AssetAdministrationShellDescriptor,
+) (model.AssetAdministrationShellDescriptor, error) {
+	batch, err := descriptors.BuildAdministrationShellDescriptorCreateBatch(ctx, aasd)
+	if err != nil {
+		return model.AssetAdministrationShellDescriptor{}, err
+	}
+	createdAtQuery := goqu.
+		From(common.TblAASDescriptor).
+		Select(common.ColCreatedAt).
+		Where(goqu.C(common.ColAASID).Eq(aasd.Id))
+	if err = batch.AppendDataset(createdAtQuery); err != nil {
+		return model.AssetAdministrationShellDescriptor{}, common.NewInternalServerError("AASREG-PGBATCH-BUILDCREATEDAT " + err.Error())
+	}
+
+	statements := batch.Statements()
+	mutationCount := len(statements) - 1
+	result := aasd
+	err = common.ExecutePostgreSQLBatchTransaction(ctx, p.db, statements, func(batchResults pgx.BatchResults) error {
+		for statementIndex := 0; statementIndex < mutationCount; statementIndex++ {
+			if _, execErr := batchResults.Exec(); execErr != nil {
+				if mappedErr := mapInsertAASDescriptorError(execErr); mappedErr != execErr {
+					return mappedErr
+				}
+				return common.NewInternalServerError("AASREG-PGBATCH-EXEC " + execErr.Error())
+			}
+		}
+		var createdAt time.Time
+		if scanErr := batchResults.QueryRow().Scan(&createdAt); scanErr != nil {
+			return common.NewInternalServerError("AASREG-PGBATCH-READCREATEDAT " + scanErr.Error())
+		}
+		result.CreatedAt = &createdAt
 		return nil
 	})
 	if err != nil {
@@ -160,6 +223,129 @@ func (p *PostgreSQLAASRegistryDatabase) InsertAdministrationShellDescriptorInTra
 		return err
 	}
 	return appendDescriptorHistoryTx(ctx, tx, stored, history.ChangeCreated, false)
+}
+
+// InsertAdministrationShellDescriptorsInTransaction inserts multiple AAS descriptors.
+//
+// The method inserts descriptor graph rows in the provided transaction and
+// appends history entries for the created descriptors.
+//
+// Parameters:
+//   - ctx: Request context carrying configuration and security data.
+//   - tx: Transaction used for the bulk insert.
+//   - aasDescriptors: Asset Administration Shell descriptors to insert.
+//
+// Returns:
+//   - int: Failed descriptor index, or -1 on success.
+//   - error: Error when batch creation, insertion, readback, or history writing fails.
+func (p *PostgreSQLAASRegistryDatabase) InsertAdministrationShellDescriptorsInTransaction(
+	ctx context.Context,
+	tx *sql.Tx,
+	aasDescriptors []model.AssetAdministrationShellDescriptor,
+) (int, error) {
+	if tx == nil {
+		return 0, common.NewInternalServerError("AASREG-BULKINSERT-NILTX transaction must not be nil")
+	}
+	if len(aasDescriptors) == 0 {
+		return -1, nil
+	}
+
+	batch, err := descriptors.BuildAdministrationShellDescriptorsCreateBatch(ctx, tx, aasDescriptors)
+	if err != nil {
+		return 0, err
+	}
+	if err = common.ExecutePostgreSQLBatchInTransaction(ctx, tx, batch.Statements()); err != nil {
+		return 0, mapInsertAASDescriptorError(err)
+	}
+
+	if descriptors.CanSkipCreateReadback(ctx) && history.ActiveConfig().Mode == history.ModeOff {
+		return -1, nil
+	}
+
+	for index, descriptor := range aasDescriptors {
+		stored, getErr := descriptors.GetAssetAdministrationShellDescriptorByIDTx(ctx, tx, descriptor.Id)
+		if getErr != nil {
+			if common.IsErrNotFound(getErr) {
+				return index, common.NewErrDenied("AAS Descriptor access not allowed")
+			}
+			return index, getErr
+		}
+		if historyErr := appendDescriptorHistoryTx(ctx, tx, stored, history.ChangeCreated, false); historyErr != nil {
+			return index, historyErr
+		}
+	}
+	return -1, nil
+}
+
+// ExistingAASDescriptorIDsInTransaction returns existing AAS descriptor ids.
+//
+// The result map contains only identifiers that already exist in the AAS
+// descriptor table.
+//
+// Parameters:
+//   - ctx: Request context carrying configuration and security data.
+//   - tx: Transaction used for the existence lookup.
+//   - identifiers: Candidate AAS descriptor identifiers.
+//
+// Returns:
+//   - map[string]struct{}: Set keyed by existing identifier.
+//   - error: Error when SQL rendering or database reads fail.
+func (p *PostgreSQLAASRegistryDatabase) ExistingAASDescriptorIDsInTransaction(
+	ctx context.Context,
+	tx *sql.Tx,
+	identifiers []string,
+) (map[string]struct{}, error) {
+	if tx == nil {
+		return nil, common.NewInternalServerError("AASREG-BULKEXISTS-NILTX transaction must not be nil")
+	}
+	if len(identifiers) == 0 {
+		return map[string]struct{}{}, nil
+	}
+
+	existing := make(map[string]struct{})
+	limit := common.BulkBatchLimitFromContext(ctx)
+	for start := 0; start < len(identifiers); start += limit {
+		end := min(start+limit, len(identifiers))
+		if err := collectExistingAASDescriptorIDs(ctx, tx, identifiers[start:end], existing); err != nil {
+			return nil, err
+		}
+	}
+	return existing, nil
+}
+
+func collectExistingAASDescriptorIDs(
+	ctx context.Context,
+	tx *sql.Tx,
+	identifiers []string,
+	existing map[string]struct{},
+) error {
+	query, args, err := goqu.
+		From(common.TblAASDescriptor).
+		Select(common.ColAASID).
+		Where(goqu.C(common.ColAASID).In(identifiers)).
+		ToSQL()
+	if err != nil {
+		return common.NewInternalServerError("AASREG-BULKEXISTS-BUILDSQL " + err.Error())
+	}
+	rows, err := tx.QueryContext(ctx, query, args...)
+	if err != nil {
+		return common.NewInternalServerError("AASREG-BULKEXISTS-EXECQUERY " + err.Error())
+	}
+	defer func() {
+		_ = rows.Close()
+	}()
+
+	for rows.Next() {
+		var identifier string
+		if scanErr := rows.Scan(&identifier); scanErr != nil {
+			return common.NewInternalServerError("AASREG-BULKEXISTS-SCANID " + scanErr.Error())
+		}
+		existing[identifier] = struct{}{}
+	}
+	if err = rows.Err(); err != nil {
+		return common.NewInternalServerError("AASREG-BULKEXISTS-ITERATE " + err.Error())
+	}
+	return nil
 }
 
 // GetAssetAdministrationShellDescriptorByID returns the AAS descriptor
@@ -281,6 +467,51 @@ func (p *PostgreSQLAASRegistryDatabase) DeleteAssetAdministrationShellDescriptor
 		return err
 	}
 	return appendDescriptorHistoryTx(ctx, tx, existing, history.ChangeDeleted, true)
+}
+
+// DeleteAssetAdministrationShellDescriptorsByIDsInTransaction deletes multiple AAS descriptors.
+//
+// The method reads each descriptor for access and history handling, deletes the
+// descriptors in the provided transaction, and appends deletion history.
+//
+// Parameters:
+//   - ctx: Request context carrying configuration and security data.
+//   - tx: Transaction used for readback, deletion, and history writes.
+//   - aasIdentifiers: AAS descriptor identifiers to delete.
+//
+// Returns:
+//   - int: Failed item index, or -1 on success.
+//   - error: Error when readback, deletion, or history writing fails.
+func (p *PostgreSQLAASRegistryDatabase) DeleteAssetAdministrationShellDescriptorsByIDsInTransaction(
+	ctx context.Context,
+	tx *sql.Tx,
+	aasIdentifiers []string,
+) (int, error) {
+	if tx == nil {
+		return 0, common.NewInternalServerError("AASREG-BULKDELETE-NILTX transaction must not be nil")
+	}
+	if len(aasIdentifiers) == 0 {
+		return -1, nil
+	}
+
+	existingDescriptors := make([]model.AssetAdministrationShellDescriptor, len(aasIdentifiers))
+	for index, identifier := range aasIdentifiers {
+		existing, err := descriptors.GetAssetAdministrationShellDescriptorByIDTx(ctx, tx, identifier)
+		if err != nil {
+			return index, err
+		}
+		existingDescriptors[index] = existing
+	}
+
+	if err := descriptors.DeleteAssetAdministrationShellDescriptorsByIDsTx(ctx, tx, aasIdentifiers); err != nil {
+		return 0, err
+	}
+	for index, existing := range existingDescriptors {
+		if err := appendDescriptorHistoryTx(ctx, tx, existing, history.ChangeDeleted, true); err != nil {
+			return index, err
+		}
+	}
+	return -1, nil
 }
 
 // GetAssetAdministrationShellDescriptorRecentChanges returns descriptor history rows for recent-change APIs.

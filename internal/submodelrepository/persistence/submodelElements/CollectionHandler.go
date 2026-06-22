@@ -37,7 +37,6 @@ import (
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	persistenceutils "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/utils"
-	_ "github.com/lib/pq" // PostgreSQL Treiber
 )
 
 // PostgreSQLSubmodelElementCollectionHandler provides PostgreSQL-based persistence operations

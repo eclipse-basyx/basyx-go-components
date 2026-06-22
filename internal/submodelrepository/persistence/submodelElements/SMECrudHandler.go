@@ -43,7 +43,6 @@ import (
 	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	persistenceutils "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/utils"
-	_ "github.com/lib/pq" // PostgreSQL Treiber
 )
 
 // PostgreSQLSMECrudHandler provides base CRUD operations for submodel elements in PostgreSQL.

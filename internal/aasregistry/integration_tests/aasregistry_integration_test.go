@@ -40,7 +40,6 @@ import (
 	"time"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/testenv"
-	_ "github.com/lib/pq" // PostgreSQL Treiber
 	"github.com/stretchr/testify/require"
 )
 
@@ -298,7 +297,7 @@ func TestLocationHeadersForCreateEndpointsAASRegistry(t *testing.T) {
 func TestIntegration(t *testing.T) {
 	isExternalCompose := os.Getenv("BASYX_EXTERNAL_COMPOSE") == "1"
 	checkDBOptions := testenv.CheckDBIsEmptyOptions{
-		Driver: "postgres",
+		Driver: "pgx",
 		DSN:    aasRegistryIntegrationTestDSN,
 	}
 	if isExternalCompose {

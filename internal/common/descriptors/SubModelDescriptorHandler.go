@@ -611,6 +611,49 @@ func DeleteSubmodelDescriptorByIDTx(
 	return deleteSubmodelDescriptorByIDTx(ctx, tx, submodelID)
 }
 
+// DeleteSubmodelDescriptorsByIDsTx deletes global submodel descriptors by id.
+//
+// The function deletes descriptor rows in bounded chunks. Callers remain
+// responsible for item-level existence checks when they need item-level errors.
+//
+// Parameters:
+//   - ctx: Request context carrying configuration data.
+//   - tx: Transaction used for deletion.
+//   - submodelIDs: Global submodel descriptor identifiers to delete.
+//
+// Returns:
+//   - error: Error when SQL rendering or deletion fails.
+func DeleteSubmodelDescriptorsByIDsTx(
+	ctx context.Context,
+	tx *sql.Tx,
+	submodelIDs []string,
+) error {
+	if len(submodelIDs) == 0 {
+		return nil
+	}
+	d := goqu.Dialect(common.Dialect)
+	batch := &common.PostgreSQLBatch{}
+	limit := common.BulkBatchLimitFromContext(ctx)
+	for start := 0; start < len(submodelIDs); start += limit {
+		end := min(start+limit, len(submodelIDs))
+		descriptorIDs := d.
+			From(common.TblSubmodelDescriptor).
+			Select(common.ColDescriptorID).
+			Where(
+				goqu.And(
+					goqu.C(common.ColAASID).In(submodelIDs[start:end]),
+					goqu.C(common.ColAASDescriptorID).IsNull(),
+				),
+			)
+		if err := batch.AppendDataset(
+			d.Delete(common.TblDescriptor).Where(goqu.C(common.ColID).In(descriptorIDs)),
+		); err != nil {
+			return common.NewInternalServerError("SMDESC-BULKDELETE-BUILDSQL " + err.Error())
+		}
+	}
+	return common.ExecutePostgreSQLBatchInTransaction(ctx, tx, batch.Statements())
+}
+
 // ExistsSubmodelByID performs a lightweight existence check for a submodel
 // descriptor without an AAS association.
 func ExistsSubmodelByID(ctx context.Context, db *sql.DB, submodelID string) (bool, error) {

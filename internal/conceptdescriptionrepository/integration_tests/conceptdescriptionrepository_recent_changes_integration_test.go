@@ -37,6 +37,7 @@ import (
 	"time"
 
 	"github.com/doug-martin/goqu/v9"
+	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
 func TestConceptDescriptionRepositoryRecentChanges(t *testing.T) {
@@ -122,7 +123,7 @@ func conceptDescriptionRecentChangePayload(id string, idShort string, updatedAt 
 
 func requireConceptDescriptionHistoryPayloadTypes(t *testing.T, id string, expected []string) {
 	t.Helper()
-	db, err := sql.Open("postgres", conceptDescriptionRepositoryIntegrationTestDSN)
+	db, err := sql.Open("pgx", conceptDescriptionRepositoryIntegrationTestDSN)
 	if err != nil {
 		t.Fatalf("open database: %v", err)
 	}

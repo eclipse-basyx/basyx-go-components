@@ -33,6 +33,18 @@
     "expectedStatus": 403
   },
   {
+    "context": "BULK POST Submodel B - User X - DENIED",
+    "action": "ASSERT_BULK_FAILURE",
+    "token": { "user": "userx", "password": "pwd" },
+    "method": "POST",
+    "endpoint": "http://localhost:6005/bulk/submodel-descriptors",
+    "data": "postBody/bulk_create_smd_b.json",
+    "expectedStatus": 202,
+    "expectedBulkFailureStatus": 403,
+    "expectedBulkFailureIndex": 0,
+    "expectedBulkFailureIdentifier": "https://example.org/X/SM-B"
+  },
+  {
     "context": "POST Submodel D - User X - ALLOWED",
     "token": { "user": "userx", "password": "pwd" },
     "method": "POST",

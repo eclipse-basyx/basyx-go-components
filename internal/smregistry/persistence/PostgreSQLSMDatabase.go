@@ -151,6 +151,65 @@ func (p *PostgreSQLSMDatabase) InsertSubmodelDescriptorInTransaction(
 	return stored, nil
 }
 
+// InsertSubmodelDescriptorsInTransaction inserts multiple global submodel descriptors.
+//
+// The method inserts descriptor graph rows in the provided transaction and
+// appends history entries for the created descriptors.
+//
+// Parameters:
+//   - ctx: Request context carrying configuration and security data.
+//   - tx: Transaction used for the bulk insert.
+//   - submodels: Global submodel descriptors to insert.
+//
+// Returns:
+//   - int: Failed descriptor index, or -1 on success.
+//   - error: Error when batch creation, insertion, readback, or history writing fails.
+func (p *PostgreSQLSMDatabase) InsertSubmodelDescriptorsInTransaction(
+	ctx context.Context,
+	tx *sql.Tx,
+	submodels []model.SubmodelDescriptor,
+) (int, error) {
+	if tx == nil {
+		return 0, common.NewInternalServerError("SMREG-BULKINSERT-NILTX transaction must not be nil")
+	}
+	if len(submodels) == 0 {
+		return -1, nil
+	}
+
+	batch, err := descriptors.BuildSubmodelDescriptorsCreateBatch(ctx, tx, submodels)
+	if err != nil {
+		return 0, err
+	}
+	if err = common.ExecutePostgreSQLBatchInTransaction(ctx, tx, batch.Statements()); err != nil {
+		return 0, mapBulkInsertSubmodelDescriptorError(err)
+	}
+
+	if descriptors.CanSkipCreateReadback(ctx) && history.ActiveConfig().Mode == history.ModeOff {
+		return -1, nil
+	}
+
+	for index, descriptor := range submodels {
+		stored, getErr := descriptors.GetSubmodelDescriptorByID(ctx, tx, descriptor.Id)
+		if getErr != nil {
+			if common.IsErrNotFound(getErr) {
+				return index, common.NewErrDenied("Submodel Descriptor access not allowed")
+			}
+			return index, getErr
+		}
+		if historyErr := appendSubmodelDescriptorHistoryTx(ctx, tx, stored, history.ChangeCreated, false); historyErr != nil {
+			return index, historyErr
+		}
+	}
+	return -1, nil
+}
+
+func mapBulkInsertSubmodelDescriptorError(err error) error {
+	if common.IsPostgresUniqueViolation(err) {
+		return common.NewErrConflict("SMREG-BULKINSERT-CONFLICT Submodel with given id already exists")
+	}
+	return err
+}
+
 // ReplaceSubmodelDescriptor replaces a global Submodel Descriptor (no AAS association).
 func (p *PostgreSQLSMDatabase) ReplaceSubmodelDescriptor(
 	ctx context.Context,
@@ -226,7 +285,7 @@ func lockSubmodelDescriptorUpsertTx(ctx context.Context, tx *sql.Tx, submodelID 
 func buildSubmodelDescriptorUpsertLockSQL(submodelID string) (string, []any, error) {
 	return goqu.
 		Dialect(common.Dialect).
-		Select(goqu.Func("pg_advisory_xact_lock", goqu.Func("hashtextextended", "submodel_descriptor:"+submodelID, 0))).
+		Select(goqu.Func("pg_advisory_xact_lock", goqu.Func("hashtextextended", "submodel_descriptor:"+submodelID, int64(0)))).
 		Prepared(true).
 		ToSQL()
 }
@@ -289,12 +348,120 @@ func (p *PostgreSQLSMDatabase) DeleteSubmodelDescriptorByIDInTransaction(
 	return appendSubmodelDescriptorHistoryTx(ctx, tx, existing, history.ChangeDeleted, true)
 }
 
+// DeleteSubmodelDescriptorsByIDsInTransaction deletes multiple global submodel descriptors.
+//
+// The method reads each descriptor for access and history handling, deletes the
+// descriptors in the provided transaction, and appends deletion history.
+//
+// Parameters:
+//   - ctx: Request context carrying configuration and security data.
+//   - tx: Transaction used for readback, deletion, and history writes.
+//   - submodelIDs: Global submodel descriptor identifiers to delete.
+//
+// Returns:
+//   - int: Failed item index, or -1 on success.
+//   - error: Error when readback, deletion, or history writing fails.
+func (p *PostgreSQLSMDatabase) DeleteSubmodelDescriptorsByIDsInTransaction(
+	ctx context.Context,
+	tx *sql.Tx,
+	submodelIDs []string,
+) (int, error) {
+	if tx == nil {
+		return 0, common.NewInternalServerError("SMREG-BULKDELETE-NILTX transaction must not be nil")
+	}
+	if len(submodelIDs) == 0 {
+		return -1, nil
+	}
+
+	existingDescriptors := make([]model.SubmodelDescriptor, len(submodelIDs))
+	for index, identifier := range submodelIDs {
+		existing, err := descriptors.GetSubmodelDescriptorByID(ctx, tx, identifier)
+		if err != nil {
+			return index, err
+		}
+		existingDescriptors[index] = existing
+	}
+
+	if err := descriptors.DeleteSubmodelDescriptorsByIDsTx(ctx, tx, submodelIDs); err != nil {
+		return 0, err
+	}
+	for index, existing := range existingDescriptors {
+		if err := appendSubmodelDescriptorHistoryTx(ctx, tx, existing, history.ChangeDeleted, true); err != nil {
+			return index, err
+		}
+	}
+	return -1, nil
+}
+
 // ExistsSubmodelByID reports whether a global Submodel Descriptor exists by its id.
 func (p *PostgreSQLSMDatabase) ExistsSubmodelByID(
 	ctx context.Context,
 	submodelID string,
 ) (bool, error) {
 	return descriptors.ExistsSubmodelByID(ctx, p.db, submodelID)
+}
+
+// ExistingSubmodelDescriptorIDsInTransaction returns existing global submodel descriptor ids.
+//
+// The result map contains only identifiers that already exist for global
+// submodel descriptors.
+//
+// Parameters:
+//   - ctx: Request context carrying configuration data.
+//   - tx: Transaction used for the existence lookup.
+//   - identifiers: Candidate submodel descriptor identifiers.
+//
+// Returns:
+//   - map[string]struct{}: Set keyed by existing identifier.
+//   - error: Error when SQL rendering or database reads fail.
+func (p *PostgreSQLSMDatabase) ExistingSubmodelDescriptorIDsInTransaction(
+	ctx context.Context,
+	tx *sql.Tx,
+	identifiers []string,
+) (map[string]struct{}, error) {
+	if tx == nil {
+		return nil, common.NewInternalServerError("SMREG-BULKEXISTS-NILTX transaction must not be nil")
+	}
+	if len(identifiers) == 0 {
+		return map[string]struct{}{}, nil
+	}
+
+	existing := make(map[string]struct{})
+	limit := common.BulkBatchLimitFromContext(ctx)
+	for start := 0; start < len(identifiers); start += limit {
+		end := min(start+limit, len(identifiers))
+		query, args, err := goqu.
+			From(common.TblSubmodelDescriptor).
+			Select(common.ColAASID).
+			Where(
+				goqu.And(
+					goqu.C(common.ColAASID).In(identifiers[start:end]),
+					goqu.C(common.ColAASDescriptorID).IsNull(),
+				),
+			).
+			ToSQL()
+		if err != nil {
+			return nil, common.NewInternalServerError("SMREG-BULKEXISTS-BUILDSQL " + err.Error())
+		}
+		rows, err := tx.QueryContext(ctx, query, args...)
+		if err != nil {
+			return nil, common.NewInternalServerError("SMREG-BULKEXISTS-EXECQUERY " + err.Error())
+		}
+		for rows.Next() {
+			var identifier string
+			if scanErr := rows.Scan(&identifier); scanErr != nil {
+				_ = rows.Close()
+				return nil, common.NewInternalServerError("SMREG-BULKEXISTS-SCANID " + scanErr.Error())
+			}
+			existing[identifier] = struct{}{}
+		}
+		if err = rows.Err(); err != nil {
+			_ = rows.Close()
+			return nil, common.NewInternalServerError("SMREG-BULKEXISTS-ITERATE " + err.Error())
+		}
+		_ = rows.Close()
+	}
+	return existing, nil
 }
 
 // GetSubmodelDescriptorRecentChanges returns submodel descriptor history rows for recent-change APIs.
