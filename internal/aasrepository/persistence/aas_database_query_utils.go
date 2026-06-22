@@ -32,11 +32,10 @@ import (
 	"github.com/FriedJannik/aas-go-sdk/jsonization"
 	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/doug-martin/goqu/v9"
-	commonmodel "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	jsoniter "github.com/json-iterator/go"
 )
 
-const globalAssetIDAssetLinkName = "globalAssetId"
+const globalAssetIDSpecificAssetIDName = "globalAssetId"
 
 func buildPageLimitPlusOne(limit int32) (uint, error) {
 	pageLimitPlusOneString := strconv.FormatInt(int64(limit)+1, 10)
@@ -150,7 +149,7 @@ func buildCheckAssetAdministrationShellSubmodelReferenceExistsQuery(dialect *goq
 		ToSQL()
 }
 
-func buildGetAssetAdministrationShellsDataset(dialect *goqu.DialectWrapper, limit int32, cursor string, idShort string, assetLinks []commonmodel.AssetLink) (*goqu.SelectDataset, error) {
+func buildGetAssetAdministrationShellsDataset(dialect *goqu.DialectWrapper, limit int32, cursor string, idShort string, specificAssetIDs []types.ISpecificAssetID) (*goqu.SelectDataset, error) {
 	ds := dialect.
 		From(goqu.T("aas").As("aas")).
 		LeftJoin(goqu.T("asset_information").As("asset_information"), goqu.On(goqu.I("asset_information.asset_information_id").Eq(goqu.I("aas.id")))).
@@ -174,39 +173,42 @@ func buildGetAssetAdministrationShellsDataset(dialect *goqu.DialectWrapper, limi
 		ds = ds.Where(goqu.I("aas.id_short").Eq(idShort))
 	}
 
-	for _, link := range uniqueAssetLinks(assetLinks) {
-		ds = ds.Where(buildAssetLinkFilterExpression(dialect, link))
+	for _, specificAssetID := range uniqueSpecificAssetIDs(specificAssetIDs) {
+		ds = ds.Where(buildSpecificAssetIDFilterExpression(dialect, specificAssetID))
 	}
 
 	return ds, nil
 }
 
-func buildAssetLinkFilterExpression(dialect *goqu.DialectWrapper, link commonmodel.AssetLink) goqu.Expression {
-	if link.Name == globalAssetIDAssetLinkName {
-		return goqu.I("asset_information.global_asset_id").Eq(link.Value)
+func buildSpecificAssetIDFilterExpression(dialect *goqu.DialectWrapper, specificAssetID types.ISpecificAssetID) goqu.Expression {
+	if specificAssetID.Name() == globalAssetIDSpecificAssetIDName {
+		return goqu.I("asset_information.global_asset_id").Eq(specificAssetID.Value())
 	}
 
-	specificAssetID := goqu.T("specific_asset_id").As("specific_asset_id_filter")
-	existsSub := dialect.From(specificAssetID).
+	specificAssetIDTable := goqu.T("specific_asset_id").As("specific_asset_id_filter")
+	existsSub := dialect.From(specificAssetIDTable).
 		Select(goqu.V(1)).
 		Where(goqu.And(
 			goqu.I("specific_asset_id_filter.asset_information_id").Eq(goqu.I("asset_information.asset_information_id")),
-			goqu.I("specific_asset_id_filter.name").Eq(link.Name),
-			goqu.I("specific_asset_id_filter.value").Eq(link.Value),
+			goqu.I("specific_asset_id_filter.name").Eq(specificAssetID.Name()),
+			goqu.I("specific_asset_id_filter.value").Eq(specificAssetID.Value()),
 		))
 	return goqu.L("EXISTS ?", existsSub)
 }
 
-func uniqueAssetLinks(assetLinks []commonmodel.AssetLink) []commonmodel.AssetLink {
-	seen := make(map[string]struct{}, len(assetLinks))
-	out := make([]commonmodel.AssetLink, 0, len(assetLinks))
-	for _, link := range assetLinks {
-		key := link.Name + "\x1f" + link.Value
+func uniqueSpecificAssetIDs(specificAssetIDs []types.ISpecificAssetID) []types.ISpecificAssetID {
+	seen := make(map[string]struct{}, len(specificAssetIDs))
+	out := make([]types.ISpecificAssetID, 0, len(specificAssetIDs))
+	for _, specificAssetID := range specificAssetIDs {
+		if specificAssetID == nil {
+			continue
+		}
+		key := specificAssetID.Name() + "\x1f" + specificAssetID.Value()
 		if _, ok := seen[key]; ok {
 			continue
 		}
 		seen[key] = struct{}{}
-		out = append(out, link)
+		out = append(out, specificAssetID)
 	}
 	return out
 }

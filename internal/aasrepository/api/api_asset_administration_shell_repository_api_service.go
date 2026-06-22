@@ -130,12 +130,12 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) GetAllAssetAdministrat
 		return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "BadCursor"), nil
 	}
 
-	assetLinks, decodeErr := decodeAssetLinks(assetIds)
+	specificAssetIDs, decodeErr := decodeSpecificAssetIDs(assetIds)
 	if decodeErr != nil {
 		return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "BadAssetIds"), nil
 	}
 
-	aasList, nextCursor, err := s.assetAdministrationShellBackend.GetAssetAdministrationShells(ctx, limit, decodedCursor, idShort, assetLinks)
+	aasList, nextCursor, err := s.assetAdministrationShellBackend.GetAssetAdministrationShells(ctx, limit, decodedCursor, idShort, specificAssetIDs)
 	if err != nil {
 		if common.IsErrBadRequest(err) {
 			return newAPIErrorResponse(err, http.StatusBadRequest, operation, "BadRequest"), nil
@@ -202,12 +202,12 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) GetAllAssetAdministrat
 		return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "BadCursor"), nil
 	}
 
-	assetLinks, decodeErr := decodeAssetLinks(assetIds)
+	specificAssetIDs, decodeErr := decodeSpecificAssetIDs(assetIds)
 	if decodeErr != nil {
 		return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "BadAssetIds"), nil
 	}
 
-	references, nextCursor, err := s.assetAdministrationShellBackend.GetAssetAdministrationShellReferences(ctx, limit, decodedCursor, idShort, assetLinks)
+	references, nextCursor, err := s.assetAdministrationShellBackend.GetAssetAdministrationShellReferences(ctx, limit, decodedCursor, idShort, specificAssetIDs)
 	if err != nil {
 		if common.IsErrBadRequest(err) {
 			return newAPIErrorResponse(err, http.StatusBadRequest, operation, "BadRequest"), nil
@@ -230,8 +230,8 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) GetAllAssetAdministrat
 	}), nil
 }
 
-func decodeAssetLinks(assetIds []string) ([]gen.AssetLink, error) {
-	links := make([]gen.AssetLink, 0, len(assetIds))
+func decodeSpecificAssetIDs(assetIds []string) ([]types.ISpecificAssetID, error) {
+	specificAssetIDs := make([]types.ISpecificAssetID, 0, len(assetIds))
 	for _, encodedAssetID := range assetIds {
 		if strings.TrimSpace(encodedAssetID) == "" {
 			continue
@@ -240,13 +240,17 @@ func decodeAssetLinks(assetIds []string) ([]gen.AssetLink, error) {
 		if err != nil {
 			return nil, err
 		}
-		var link gen.AssetLink
-		if err = json.Unmarshal([]byte(decodedAssetID), &link); err != nil {
+		var jsonable map[string]any
+		if err = json.Unmarshal([]byte(decodedAssetID), &jsonable); err != nil {
 			return nil, err
 		}
-		links = append(links, link)
+		specificAssetID, err := jsonization.SpecificAssetIDFromJsonable(jsonable)
+		if err != nil {
+			return nil, err
+		}
+		specificAssetIDs = append(specificAssetIDs, specificAssetID)
 	}
-	return links, nil
+	return specificAssetIDs, nil
 }
 
 // GetAssetAdministrationShellById - Returns a specific Asset Administration Shell
