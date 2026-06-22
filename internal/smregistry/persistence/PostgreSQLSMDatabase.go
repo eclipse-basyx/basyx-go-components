@@ -141,6 +141,10 @@ func (p *PostgreSQLSMDatabase) InsertSubmodelDescriptorsInTransaction(
 		return 0, err
 	}
 
+	if descriptors.CanSkipCreateReadback(ctx) {
+		return -1, nil
+	}
+
 	for index, descriptor := range submodels {
 		if _, getErr := descriptors.GetSubmodelDescriptorByID(ctx, tx, descriptor.Id); getErr != nil {
 			if common.IsErrNotFound(getErr) {

@@ -98,12 +98,10 @@ func InsertAssetAdministrationShellDescriptor(ctx context.Context, db *sql.DB, a
 	return result, tx.Commit()
 }
 
-// CanSkipPostInsertReadback reports whether a newly inserted AAS descriptor can
-// be returned without loading it again from the database. Readback is required
-// when ABAC filters or field-level masking may hide data from the caller; it can
-// be skipped when no query filter exists, no filters are active, or the active
-// create formula grants unrestricted access.
-func CanSkipPostInsertReadback(ctx context.Context) bool {
+// CanSkipCreateReadback reports whether a CREATE result can be trusted without
+// loading it again from the database. Route-level authorization has already run;
+// readback is only required for ABAC filters or restricted create formulas.
+func CanSkipCreateReadback(ctx context.Context) bool {
 	queryFilter := auth.GetQueryFilter(ctx)
 	if queryFilter == nil {
 		return true
@@ -111,10 +109,19 @@ func CanSkipPostInsertReadback(ctx context.Context) bool {
 	if len(queryFilter.Filters) > 0 {
 		return false
 	}
+	if len(queryFilter.FormulasByRight) > 0 {
+		return auth.HasUnrestrictedFormulaForRight(ctx, grammar.RightsEnumCREATE)
+	}
 	if queryFilter.Formula == nil {
 		return true
 	}
 	return auth.HasUnrestrictedFormulaForRight(ctx, grammar.RightsEnumCREATE)
+}
+
+// CanSkipPostInsertReadback keeps the old AAS descriptor helper name for
+// callers that return newly inserted descriptors.
+func CanSkipPostInsertReadback(ctx context.Context) bool {
+	return CanSkipCreateReadback(ctx)
 }
 
 // InsertAdministrationShellDescriptorTx performs the same insert as
