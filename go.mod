@@ -15,7 +15,7 @@ require (
 	github.com/coreos/go-oidc/v3 v3.19.0
 	github.com/doug-martin/goqu/v9 v9.19.0
 	github.com/go-chi/cors v1.2.2
-	github.com/jackc/pgx/v5 v5.8.0
+	github.com/jackc/pgx/v5 v5.9.2
 	github.com/json-iterator/go v1.1.12
 	github.com/spf13/viper v1.21.0
 	github.com/stretchr/testify v1.11.1
