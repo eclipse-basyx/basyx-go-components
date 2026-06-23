@@ -29,8 +29,12 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
+	"net"
 	"net/http"
 	"net/http/httptest"
+	"net/netip"
+	"net/url"
 	"strings"
 	"testing"
 	"time"
@@ -229,17 +233,140 @@ func TestToDelegatedOperationResultPayloadFromBodyForMapSeparatesOutputAndInoutp
 	require.Len(t, inoutputArguments, 1)
 }
 
-func TestShouldForwardAuthorizationHeaderTrustedByDefaultLocalhost(t *testing.T) {
-	t.Parallel()
+func mustParseDelegationTestURL(t *testing.T, rawURL string) *url.URL {
+	t.Helper()
 
-	require.True(t, isTrustedDelegationHost("localhost"))
-	require.True(t, isTrustedDelegationHost("127.0.0.1"))
-	require.False(t, isTrustedDelegationHost("example.com"))
+	parsedURL, err := url.Parse(rawURL)
+	require.NoError(t, err)
+	return parsedURL
 }
 
-func TestShouldForwardAuthorizationHeaderTrustedByAllowlist(t *testing.T) {
-	t.Setenv(delegationTrustedHostsKey, "delegate.example.com")
-	require.True(t, isTrustedDelegationHost("delegate.example.com"))
+func TestDelegationAuthorityRejectsImplicitLocalAndInternalTrust(t *testing.T) {
+	t.Setenv(delegationTrustedHostsKey, "")
+
+	require.False(t, isTrustedDelegationAuthority("localhost:80"))
+	require.False(t, isTrustedDelegationAuthority("127.0.0.1:80"))
+	require.False(t, isTrustedDelegationAuthority("10.0.0.1:80"))
+	require.False(t, isTrustedDelegationAuthority("service.internal:80"))
+	require.False(t, isTrustedDelegationAuthority("service.svc:80"))
+	require.False(t, isTrustedDelegationAuthority("service.cluster.local:80"))
+}
+
+func TestDelegationAuthorityRequiresPortAndSupportsWildcardPort(t *testing.T) {
+	t.Setenv(delegationTrustedHostsKey, "delegate.example.com,delegate.example.com:8080,localhost:*,*:*,*.svc:*")
+
+	require.False(t, isTrustedDelegationAuthority("delegate.example.com:80"))
+	require.True(t, isTrustedDelegationAuthority("delegate.example.com:8080"))
+	require.True(t, isTrustedDelegationAuthority("localhost:12345"))
+	require.False(t, isTrustedDelegationAuthority("service.svc:12345"))
+}
+
+func TestResolveTrustedURLTargetRequiresOriginalAndResolvedAddresses(t *testing.T) {
+	resolveToLoopback := func(_ context.Context, host string) ([]netip.Addr, error) {
+		require.Equal(t, "localhost", host)
+		return []netip.Addr{netip.MustParseAddr("127.0.0.1")}, nil
+	}
+
+	t.Setenv(delegationTrustedHostsKey, "localhost:*")
+	guard := newDelegationAddressGuard(resolveToLoopback, nil)
+	_, err := guard.resolveTrustedURLTarget(context.Background(), mustParseDelegationTestURL(t, "http://localhost:1234/delegate"))
+	require.ErrorContains(t, err, "UNTRUSTEDRESOLVED")
+
+	t.Setenv(delegationTrustedHostsKey, "localhost:*,127.0.0.1:*")
+	guard = newDelegationAddressGuard(resolveToLoopback, nil)
+	target, err := guard.resolveTrustedURLTarget(context.Background(), mustParseDelegationTestURL(t, "http://localhost:1234/delegate"))
+	require.NoError(t, err)
+	require.Equal(t, "localhost:1234", target.originalAuthority)
+	require.Equal(t, "127.0.0.1:1234", target.resolvedAuthority)
+}
+
+func TestResolveTrustedURLTargetUsesDefaultHTTPAndHTTPSPorts(t *testing.T) {
+	t.Setenv(delegationTrustedHostsKey, "example.com:80,secure.example.com:443,93.184.216.34:80,93.184.216.34:443")
+
+	resolveToDocumentationIP := func(_ context.Context, _ string) ([]netip.Addr, error) {
+		return []netip.Addr{netip.MustParseAddr("93.184.216.34")}, nil
+	}
+	guard := newDelegationAddressGuard(resolveToDocumentationIP, nil)
+
+	httpTarget, httpErr := guard.resolveTrustedURLTarget(context.Background(), mustParseDelegationTestURL(t, "http://example.com/delegate"))
+	require.NoError(t, httpErr)
+	require.Equal(t, "example.com:80", httpTarget.originalAuthority)
+	require.Equal(t, "93.184.216.34:80", httpTarget.resolvedAuthority)
+
+	httpsTarget, httpsErr := guard.resolveTrustedURLTarget(context.Background(), mustParseDelegationTestURL(t, "https://secure.example.com/delegate"))
+	require.NoError(t, httpsErr)
+	require.Equal(t, "secure.example.com:443", httpsTarget.originalAuthority)
+	require.Equal(t, "93.184.216.34:443", httpsTarget.resolvedAuthority)
+}
+
+func TestDelegationHTTPClientRejectsDisallowedResolvedIPBeforeDial(t *testing.T) {
+	t.Setenv(delegationTrustedHostsKey, "service.internal:8080")
+
+	dialed := false
+	resolveToPrivateIP := func(_ context.Context, host string) ([]netip.Addr, error) {
+		require.Equal(t, "service.internal", host)
+		return []netip.Addr{netip.MustParseAddr("10.0.0.1")}, nil
+	}
+	failOnDial := func(_ context.Context, _ string, _ string) (net.Conn, error) {
+		dialed = true
+		return nil, errors.New("dial should not be called")
+	}
+
+	guard := newDelegationAddressGuard(resolveToPrivateIP, failOnDial)
+	client := newDelegationHTTPClient(time.Second, guard)
+	_, err := client.Post("http://service.internal:8080/delegate", "application/json", strings.NewReader("[]"))
+	require.ErrorContains(t, err, "UNTRUSTEDRESOLVED")
+	require.False(t, dialed)
+}
+
+func TestDelegationHTTPClientRechecksRedirectTargets(t *testing.T) {
+	redirectServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "http://192.0.2.1:8080/delegate", http.StatusFound)
+	}))
+	defer redirectServer.Close()
+
+	serverURL := mustParseDelegationTestURL(t, redirectServer.URL)
+	t.Setenv(delegationTrustedHostsKey, serverURL.Host)
+
+	guard := newDelegationAddressGuard(nil, nil)
+	client := newDelegationHTTPClient(2*time.Second, guard)
+	_, err := client.Get(redirectServer.URL)
+	require.ErrorContains(t, err, "UNTRUSTED")
+}
+
+func TestDelegatedOperationForwardsAuthorizationAfterStrictTrust(t *testing.T) {
+	capturedAuthorization := ""
+	delegationServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		capturedAuthorization = r.Header.Get("Authorization")
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("[]"))
+	}))
+	defer delegationServer.Close()
+
+	serverURL := mustParseDelegationTestURL(t, delegationServer.URL)
+	t.Setenv(delegationTrustedHostsKey, serverURL.Host)
+
+	ctx := common.WithAuthorizationHeader(contextWithABACDisabled(t), "Bearer delegated")
+	statusCode, _, err := doDelegatedOperationCall(ctx, delegationServer.URL, []types.IOperationVariable{}, time.Second)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusOK, statusCode)
+	require.Equal(t, "Bearer delegated", capturedAuthorization)
+}
+
+func TestDelegatedOperationRejectsUntrustedTargetBeforeForwardingAuthorization(t *testing.T) {
+	delegationServerCalled := false
+	delegationServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		delegationServerCalled = true
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer delegationServer.Close()
+
+	t.Setenv(delegationTrustedHostsKey, "")
+	ctx := common.WithAuthorizationHeader(contextWithABACDisabled(t), "Bearer delegated")
+	_, _, err := doDelegatedOperationCall(ctx, delegationServer.URL, []types.IOperationVariable{}, time.Second)
+	require.ErrorContains(t, err, "UNTRUSTED")
+	require.False(t, delegationServerCalled)
 }
 
 func TestParseDelegationAsyncTTLUsesDefaultOnInvalidValue(t *testing.T) {

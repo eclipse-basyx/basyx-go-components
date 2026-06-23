@@ -34,6 +34,7 @@ services:
       - BASYX_HISTORY_FULL_SNAPSHOT_INTERVAL=3
       - JWS_PRIVATEKEYPATH=/app/rsa-key.pem
       - SERVER_STRICTVERIFICATION=off
+      - SMREPO_DELEGATION_TRUSTED_HOSTS=localhost:*,127.0.0.1:*,[::1]:*,172.17.0.1:*,192.168.65.2:*
     volumes:
       - ./rsa-key.pem:/app/rsa-key.pem:ro
     ports:

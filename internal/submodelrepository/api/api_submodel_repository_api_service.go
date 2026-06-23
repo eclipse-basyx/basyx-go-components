@@ -614,57 +614,282 @@ func parseDelegationAsyncTTL() time.Duration {
 	return parsedTTL
 }
 
-func parseTrustedDelegationHosts() map[string]struct{} {
-	rawHosts := strings.TrimSpace(os.Getenv(delegationTrustedHostsKey))
-	if rawHosts == "" {
-		return map[string]struct{}{}
-	}
+type delegationAuthoritySet map[string]struct{}
 
-	trustedHosts := map[string]struct{}{}
-	for _, rawHost := range strings.Split(rawHosts, ",") {
-		host := strings.ToLower(strings.TrimSpace(rawHost))
-		if host == "" {
-			continue
-		}
-		trustedHosts[host] = struct{}{}
-	}
-
-	return trustedHosts
+type delegationAddressGuard struct {
+	trustedAuthorities delegationAuthoritySet
+	resolveHost        func(context.Context, string) ([]netip.Addr, error)
+	dialContext        func(context.Context, string, string) (net.Conn, error)
 }
 
-func isTrustedDelegationHost(host string) bool {
-	normalizedHost := strings.ToLower(strings.TrimSpace(host))
-	if normalizedHost == "" {
-		return false
+type trustedDelegationTarget struct {
+	originalAuthority string
+	resolvedAuthority string
+}
+
+func parseTrustedDelegationAuthorities() delegationAuthoritySet {
+	rawHosts := strings.TrimSpace(os.Getenv(delegationTrustedHostsKey))
+	if rawHosts == "" {
+		return delegationAuthoritySet{}
 	}
 
-	if normalizedHost == "localhost" || strings.HasSuffix(normalizedHost, ".localhost") {
-		return true
+	trustedAuthorities := delegationAuthoritySet{}
+	for _, rawAuthority := range strings.Split(rawHosts, ",") {
+		authority, ok := normalizeTrustedDelegationAuthority(rawAuthority)
+		if !ok {
+			continue
+		}
+		trustedAuthorities[authority] = struct{}{}
+	}
+
+	return trustedAuthorities
+}
+
+func normalizeTrustedDelegationAuthority(rawAuthority string) (string, bool) {
+	host, port, err := net.SplitHostPort(strings.TrimSpace(rawAuthority))
+	if err != nil {
+		return "", false
+	}
+
+	authority, err := normalizeDelegationAuthority(host, port)
+	if err != nil {
+		return "", false
+	}
+
+	return authority, true
+}
+
+func normalizeDelegationAuthority(host string, port string) (string, error) {
+	normalizedHost, err := normalizeDelegationHost(host)
+	if err != nil {
+		return "", err
+	}
+
+	normalizedPort, err := normalizeDelegationPort(port)
+	if err != nil {
+		return "", err
+	}
+
+	return net.JoinHostPort(normalizedHost, normalizedPort), nil
+}
+
+func normalizeDelegationHost(host string) (string, error) {
+	normalizedHost := strings.ToLower(strings.TrimSpace(host))
+	if strings.HasPrefix(normalizedHost, "[") && strings.HasSuffix(normalizedHost, "]") {
+		normalizedHost = strings.TrimPrefix(strings.TrimSuffix(normalizedHost, "]"), "[")
+	}
+
+	if normalizedHost == "" {
+		return "", errors.New("SMREPO-NORMDELAUTH-MISSINGHOST delegation authority host is missing")
+	}
+	if strings.Contains(normalizedHost, "*") {
+		return "", errors.New("SMREPO-NORMDELAUTH-HOSTWILDCARD delegation authority host wildcards are not supported")
+	}
+	if strings.Contains(normalizedHost, "/") {
+		return "", errors.New("SMREPO-NORMDELAUTH-CIDR delegation authority CIDR ranges are not supported")
 	}
 
 	if ip, parseErr := netip.ParseAddr(normalizedHost); parseErr == nil {
-		return ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast()
+		return ip.String(), nil
 	}
 
-	if parsedIP := net.ParseIP(normalizedHost); parsedIP != nil {
-		return parsedIP.IsLoopback() || parsedIP.IsPrivate() || parsedIP.IsLinkLocalUnicast() || parsedIP.IsLinkLocalMulticast()
-	}
-
-	if strings.HasSuffix(normalizedHost, ".internal") || strings.HasSuffix(normalizedHost, ".svc") || strings.HasSuffix(normalizedHost, ".cluster.local") {
-		return true
-	}
-
-	trustedHosts := parseTrustedDelegationHosts()
-	_, trusted := trustedHosts[normalizedHost]
-	return trusted
+	return normalizedHost, nil
 }
 
-func shouldForwardAuthorizationHeader(parsedDelegationURL *url.URL) bool {
-	if parsedDelegationURL == nil {
+func normalizeDelegationPort(port string) (string, error) {
+	normalizedPort := strings.TrimSpace(port)
+	if normalizedPort == "" {
+		return "", errors.New("SMREPO-NORMDELAUTH-MISSINGPORT delegation authority port is missing")
+	}
+	if normalizedPort == "*" {
+		return normalizedPort, nil
+	}
+
+	portNumber, err := strconv.Atoi(normalizedPort)
+	if err != nil || portNumber < 1 || portNumber > 65535 {
+		return "", errors.New("SMREPO-NORMDELAUTH-INVALIDPORT delegation authority port must be 1-65535 or *")
+	}
+
+	return strconv.Itoa(portNumber), nil
+}
+
+func isTrustedDelegationAuthority(authority string) bool {
+	normalizedAuthority, err := normalizeDelegationAuthorityFromAddress(authority)
+	if err != nil {
 		return false
 	}
 
-	return isTrustedDelegationHost(parsedDelegationURL.Hostname())
+	return parseTrustedDelegationAuthorities().contains(normalizedAuthority)
+}
+
+func normalizeDelegationAuthorityFromAddress(address string) (string, error) {
+	host, port, err := net.SplitHostPort(strings.TrimSpace(address))
+	if err != nil {
+		return "", err
+	}
+
+	return normalizeDelegationAuthority(host, port)
+}
+
+func delegationURLPort(parsedDelegationURL *url.URL) (string, error) {
+	port := strings.TrimSpace(parsedDelegationURL.Port())
+	if port != "" {
+		return normalizeDelegationPort(port)
+	}
+
+	switch parsedDelegationURL.Scheme {
+	case "http":
+		return "80", nil
+	case "https":
+		return "443", nil
+	default:
+		return "", errors.New("SMREPO-DELURLPORT-UNSUPPORTEDSCHEME delegation URL must use http or https")
+	}
+}
+
+func newDelegationAddressGuard(
+	resolveHost func(context.Context, string) ([]netip.Addr, error),
+	dialContext func(context.Context, string, string) (net.Conn, error),
+) delegationAddressGuard {
+	if resolveHost == nil {
+		resolveHost = func(ctx context.Context, host string) ([]netip.Addr, error) {
+			return net.DefaultResolver.LookupNetIP(ctx, "ip", host)
+		}
+	}
+
+	if dialContext == nil {
+		netDialer := &net.Dialer{}
+		dialContext = netDialer.DialContext
+	}
+
+	return delegationAddressGuard{
+		trustedAuthorities: parseTrustedDelegationAuthorities(),
+		resolveHost:        resolveHost,
+		dialContext:        dialContext,
+	}
+}
+
+func (g delegationAddressGuard) isTrusted(authority string) bool {
+	normalizedAuthority, err := normalizeDelegationAuthorityFromAddress(authority)
+	if err != nil {
+		return false
+	}
+
+	return g.trustedAuthorities.contains(normalizedAuthority)
+}
+
+func (trustedAuthorities delegationAuthoritySet) contains(normalizedAuthority string) bool {
+	if _, trusted := trustedAuthorities[normalizedAuthority]; trusted {
+		return true
+	}
+
+	host, _, err := net.SplitHostPort(normalizedAuthority)
+	if err != nil {
+		return false
+	}
+
+	wildcardPortAuthority, err := normalizeDelegationAuthority(host, "*")
+	if err != nil {
+		return false
+	}
+
+	_, trusted := trustedAuthorities[wildcardPortAuthority]
+	return trusted
+}
+
+func (g delegationAddressGuard) resolveTrustedURLTarget(ctx context.Context, parsedDelegationURL *url.URL) (trustedDelegationTarget, error) {
+	if parsedDelegationURL == nil {
+		return trustedDelegationTarget{}, errors.New("SMREPO-RSLVDELAUTH-NILURL delegation URL is nil")
+	}
+
+	if parsedDelegationURL.Scheme != "http" && parsedDelegationURL.Scheme != "https" {
+		return trustedDelegationTarget{}, errors.New("SMREPO-DOOPDELG-UNSUPPORTEDSCHEME delegation URL must use http or https")
+	}
+	if strings.TrimSpace(parsedDelegationURL.Host) == "" {
+		return trustedDelegationTarget{}, errors.New("SMREPO-DOOPDELG-MISSINGHOST delegation URL host is missing")
+	}
+
+	port, err := delegationURLPort(parsedDelegationURL)
+	if err != nil {
+		return trustedDelegationTarget{}, err
+	}
+
+	return g.resolveTrustedDialTarget(ctx, parsedDelegationURL.Hostname(), port)
+}
+
+func (g delegationAddressGuard) resolveTrustedDialTarget(ctx context.Context, host string, port string) (trustedDelegationTarget, error) {
+	originalAuthority, err := normalizeDelegationAuthority(host, port)
+	if err != nil {
+		return trustedDelegationTarget{}, err
+	}
+	if !g.isTrusted(originalAuthority) {
+		return trustedDelegationTarget{}, fmt.Errorf("SMREPO-RSLVDELAUTH-UNTRUSTED delegation URL address %q is not in %s allowlist", originalAuthority, delegationTrustedHostsKey)
+	}
+
+	resolvedIPs, err := g.resolveHostToIPs(ctx, host)
+	if err != nil {
+		return trustedDelegationTarget{}, err
+	}
+
+	for _, resolvedIP := range resolvedIPs {
+		resolvedAuthority, authorityErr := normalizeDelegationAuthority(resolvedIP.String(), port)
+		if authorityErr != nil {
+			continue
+		}
+		if g.isTrusted(resolvedAuthority) {
+			return trustedDelegationTarget{
+				originalAuthority: originalAuthority,
+				resolvedAuthority: resolvedAuthority,
+			}, nil
+		}
+	}
+
+	return trustedDelegationTarget{}, fmt.Errorf("SMREPO-RSLVDELAUTH-UNTRUSTEDRESOLVED delegation URL address %q resolved to addresses that are not in %s allowlist", originalAuthority, delegationTrustedHostsKey)
+}
+
+func (g delegationAddressGuard) resolveHostToIPs(ctx context.Context, host string) ([]netip.Addr, error) {
+	normalizedHost, err := normalizeDelegationHost(host)
+	if err != nil {
+		return nil, err
+	}
+
+	if ip, parseErr := netip.ParseAddr(normalizedHost); parseErr == nil {
+		return []netip.Addr{ip}, nil
+	}
+
+	resolvedIPs, lookupErr := g.resolveHost(ctx, normalizedHost)
+	if lookupErr != nil {
+		return nil, fmt.Errorf("SMREPO-RSLVDELAUTH-LOOKUP %w", lookupErr)
+	}
+	if len(resolvedIPs) == 0 {
+		return nil, fmt.Errorf("SMREPO-RSLVDELAUTH-NOIP delegation URL host %q did not resolve to an IP address", normalizedHost)
+	}
+
+	return resolvedIPs, nil
+}
+
+func (g delegationAddressGuard) dialTrustedContext(ctx context.Context, network string, address string) (net.Conn, error) {
+	host, port, err := net.SplitHostPort(address)
+	if err != nil {
+		return nil, fmt.Errorf("SMREPO-DELDIAL-SPLITADDR %w", err)
+	}
+
+	target, err := g.resolveTrustedDialTarget(ctx, host, port)
+	if err != nil {
+		return nil, err
+	}
+
+	return g.dialContext(ctx, network, target.resolvedAuthority)
+}
+
+func newDelegationHTTPClient(timeout time.Duration, guard delegationAddressGuard) *http.Client {
+	return &http.Client{
+		Timeout: timeout,
+		Transport: &http.Transport{
+			Proxy:       nil,
+			DialContext: guard.dialTrustedContext,
+		},
+	}
 }
 
 func doDelegatedOperationCall(ctx context.Context, delegationURL string, payload []types.IOperationVariable, timeout time.Duration) (int, any, error) {
@@ -678,8 +903,10 @@ func doDelegatedOperationCall(ctx context.Context, delegationURL string, payload
 	if strings.TrimSpace(parsedDelegationURL.Host) == "" {
 		return 0, nil, errors.New("SMREPO-DOOPDELG-MISSINGHOST delegation URL host is missing")
 	}
-	if !isTrustedDelegationHost(parsedDelegationURL.Hostname()) {
-		return 0, nil, fmt.Errorf("SMREPO-DOOPDELG-UNTRUSTEDHOST delegation URL host %q is not in SMREPO_DELEGATION_TRUSTED_HOSTS allowlist", parsedDelegationURL.Host)
+
+	delegationGuard := newDelegationAddressGuard(nil, nil)
+	if _, trustErr := delegationGuard.resolveTrustedURLTarget(ctx, parsedDelegationURL); trustErr != nil {
+		return 0, nil, fmt.Errorf("SMREPO-DOOPDELG-UNTRUSTEDHOST %w", trustErr)
 	}
 
 	requestBody, marshalErr := serializeDelegatedOperationPayload(payload)
@@ -694,12 +921,12 @@ func doDelegatedOperationCall(ctx context.Context, delegationURL string, payload
 
 	request.Header.Set("Content-Type", "application/json")
 	authorizationHeader := common.AuthorizationHeaderFromContext(ctx)
-	if strings.TrimSpace(authorizationHeader) != "" && shouldForwardAuthorizationHeader(parsedDelegationURL) {
+	if strings.TrimSpace(authorizationHeader) != "" {
 		request.Header.Set("Authorization", authorizationHeader)
 	}
 
-	httpClient := &http.Client{Timeout: timeout}
-	// #nosec G704 -- delegation target is validated for scheme and host before request execution.
+	httpClient := newDelegationHTTPClient(timeout, delegationGuard)
+	// #nosec G107,G704 -- delegation requests use a guarded transport that allowlists and pins the resolved IP before dialing.
 	response, responseErr := httpClient.Do(request)
 	if responseErr != nil {
 		return 0, nil, fmt.Errorf("SMREPO-DOOPDELG-EXECREQ %w", responseErr)
