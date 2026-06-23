@@ -149,6 +149,8 @@ When guarded mode is active, PostgreSQL triggers block normal mutations on these
 - `concept_description_history_payload`
 - `descriptor_history`
 - `descriptor_history_payload`
+- `submodel_descriptor_history`
+- `submodel_descriptor_history_payload`
 
 The blocked operations are `UPDATE`, `DELETE`, and `TRUNCATE`. PostgreSQL returns the error message `history tables are append-only`.
 

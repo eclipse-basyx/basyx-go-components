@@ -262,16 +262,20 @@ func (s *SubmodelRegistryAPIAPIService) executeBulkDeleteSubmodelIdentifiersTx(
 	if err != nil {
 		return err
 	}
-	if err = s.smRegistryBackend.DeleteSubmodelDescriptorsByIDsInTransaction(ctx, tx, identifiers); err != nil {
-		*failure = asyncbulk.ItemFailure{
-			Index:      0,
-			Identifier: firstIdentifier(identifiers),
-			StatusCode: smBulkDeleteErrorStatusCode(err),
-			Message:    err.Error(),
-		}
-		return err
+	failedIndex, err := s.smRegistryBackend.DeleteSubmodelDescriptorsByIDsInTransaction(ctx, tx, identifiers)
+	if err == nil {
+		return nil
 	}
-	return nil
+	if failedIndex < 0 || failedIndex >= len(identifiers) {
+		failedIndex = 0
+	}
+	*failure = asyncbulk.ItemFailure{
+		Index:      failedIndex,
+		Identifier: identifiers[failedIndex],
+		StatusCode: smBulkDeleteErrorStatusCode(err),
+		Message:    err.Error(),
+	}
+	return err
 }
 
 func (s *SubmodelRegistryAPIAPIService) validateBulkDeleteSubmodelIdentifiersTx(

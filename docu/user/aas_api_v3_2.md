@@ -32,7 +32,7 @@ This guide summarizes the user-visible AAS API v3.2 changes in the BaSyx Go comp
 The most important additions are:
 
 - Historical reads for AAS and Submodels.
-- Recent-change feeds for AAS, Submodels, Concept Descriptions, and AAS descriptors.
+- Recent-change feeds for AAS, Submodels, Concept Descriptions, AAS descriptors, and Submodel descriptors.
 - Signed AAS and Submodel reads.
 - The new `Batch` value for `AssetKind`.
 - Extended administrative timestamp fields used by recent-change filters.
@@ -51,6 +51,7 @@ Implemented history, recent-change, and signing endpoints:
 - Submodel Repository: `GET /submodels/{submodelIdentifier}/$signed`
 - Concept Description Repository: `GET /concept-descriptions/$recent-changes`
 - AAS Registry and Digital Twin Registry: `GET /shell-descriptors/$recent-changes`
+- Submodel Registry: `GET /submodel-descriptors/$recent-changes`
 - AAS Environment: exposes the corresponding AAS, Submodel, Concept Description, and descriptor endpoints through the composed service.
 
 Additional compatibility endpoint:
@@ -217,6 +218,7 @@ flowchart TD
     SME["Submodel write, SME write, or attachment change"] --> SMSnapshot["Submodel snapshot"]
     CD["Concept Description write"] --> CDSnapshot["Concept Description snapshot"]
     Descriptor["AAS descriptor or nested Submodel descriptor write"] --> DescriptorSnapshot["AAS descriptor snapshot"]
+    SMDescriptor["Standalone Submodel descriptor write"] --> SMDescriptorSnapshot["Submodel descriptor snapshot"]
 ```
 
 This has operational consequences:
@@ -320,6 +322,7 @@ Recent-change endpoints return append-only, cursor-paged results from the histor
 | Submodel Repository | `type`, `createdAt`, `updatedAt`, `id`, and optional `semanticId` and `supplementalSemanticIds` |
 | Concept Description Repository | `type`, `createdAt`, `updatedAt`, and `id` |
 | AAS Registry and DTR | Complete AAS descriptor snapshots |
+| Submodel Registry | Complete Submodel descriptor snapshots |
 
 Example:
 
@@ -343,8 +346,9 @@ Additional filters:
 - AAS recent changes support `assetIds`. Each value is a base64url-encoded `SpecificAssetId`.
 - Submodel recent changes support `semanticId`. Its semantic-reference value is base64url encoded.
 - AAS descriptor recent changes support `assetKind`, base64url-encoded UTF-8 `assetType`, and base64url-encoded `assetIds`.
+- Submodel descriptor recent changes intentionally support only the common `createdFrom`, `updatedFrom`, `limit`, and `cursor` parameters.
 
-For AAS, Submodels, and Concept Descriptions, deleted identifiables remain visible as tombstones with `id`, `type`, `createdAt`, and `updatedAt`. Optional resource metadata is absent from tombstones. Descriptor recent-change endpoints omit deleted descriptor rows because their response type requires complete descriptors.
+For AAS, Submodels, and Concept Descriptions, deleted identifiables remain visible as tombstones with `id`, `type`, `createdAt`, and `updatedAt`. Optional resource metadata is absent from tombstones. Descriptor recent-change endpoints omit deleted descriptor rows because their response types do not model tombstones.
 
 ## Signed Reads
 
@@ -378,7 +382,7 @@ The new history, recent-change, and signed endpoints are protected as read endpo
 
 Important operational note:
 
-- `$history` is route-authorized in this release. It does not apply current-table ABAC filters or logical-expression redaction to stored snapshots. `$recent-changes` applies current identifiable ABAC filters.
+- `$history` is route-authorized in this release. It does not apply current-table ABAC filters or logical-expression redaction to stored snapshots. `$recent-changes` applies current identifiable or descriptor ABAC filters.
 - Fine-grained snapshot field filtering is intentionally out of scope for history responses.
 
 ## Operational Considerations

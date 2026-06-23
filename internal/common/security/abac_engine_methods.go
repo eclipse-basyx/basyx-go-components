@@ -97,6 +97,7 @@ var mapMethodAndPatternToRightsData = []mapMethodAndPatternToRights{
 	{"POST", "/bulk/submodel-descriptors", []grammar.RightsEnum{grammar.RightsEnumCREATE}},
 	{"PUT", "/bulk/submodel-descriptors", []grammar.RightsEnum{grammar.RightsEnumCREATE, grammar.RightsEnumUPDATE}},
 	{"DELETE", "/bulk/submodel-descriptors", []grammar.RightsEnum{grammar.RightsEnumDELETE}},
+	{"GET", "/submodel-descriptors/$recent-changes", []grammar.RightsEnum{grammar.RightsEnumREAD}},
 
 	// concept description repository
 	{"POST", "/query/concept-descriptions", []grammar.RightsEnum{grammar.RightsEnumREAD}},

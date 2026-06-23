@@ -240,6 +240,8 @@ func defaultCheckDBIsEmptyExcludedTables(extraTables []string) map[string]struct
 		"concept_description_history_payload",
 		"descriptor_history",
 		"descriptor_history_payload",
+		"submodel_descriptor_history",
+		"submodel_descriptor_history_payload",
 	} {
 		excluded[table] = struct{}{}
 	}

@@ -28,6 +28,7 @@ package history
 import (
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/go-chi/chi/v5"
@@ -59,6 +60,41 @@ func TestMutationCoverageGuardAllowsCoveredContextPathMutation(t *testing.T) {
 
 	require.True(t, handlerCalled)
 	require.Equal(t, http.StatusNoContent, recorder.Code)
+}
+
+func TestMutationCoverageGuardClassifiesSubmodelRegistryDescriptorMutationsAsVersioned(t *testing.T) {
+	configureMutationCoverageTest(t, ModeAPI)
+	tests := []struct {
+		operation string
+		method    string
+		path      string
+	}{
+		{operation: "PostSubmodelDescriptor", method: http.MethodPost, path: "/submodel-descriptors"},
+		{operation: "PutSubmodelDescriptorById", method: http.MethodPut, path: "/submodel-descriptors/{submodelIdentifier}"},
+		{operation: "DeleteSubmodelDescriptorById", method: http.MethodDelete, path: "/submodel-descriptors/{submodelIdentifier}"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.operation, func(t *testing.T) {
+			guard := NewMutationCoverageGuard()
+			guard.ClassifyRoute(tt.operation, tt.method, tt.path)
+
+			handler := guard.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				coverage, ok := MutationCoverageFromContext(r.Context())
+				require.True(t, ok)
+				require.True(t, coverage.Versioned)
+				require.Equal(t, tt.operation, coverage.Operation)
+				require.Equal(t, tt.path, coverage.Pattern)
+				w.WriteHeader(http.StatusNoContent)
+			}))
+
+			requestPath := strings.ReplaceAll(tt.path, "{submodelIdentifier}", "c20tMQ")
+			recorder := httptest.NewRecorder()
+			handler.ServeHTTP(recorder, httptest.NewRequest(tt.method, requestPath, nil))
+
+			require.Equal(t, http.StatusNoContent, recorder.Code)
+		})
+	}
 }
 
 func TestMutationCoverageGuardDoesNotMatchExtraLeadingPathSegments(t *testing.T) {
