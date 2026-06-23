@@ -684,6 +684,10 @@ func selectedContentSubmodelsForHeader(header dppDocument, metadataID string, su
 		if submodel.ID() == metadataID {
 			continue
 		}
+		if len(specificationSet) == 0 {
+			selected = append(selected, submodel)
+			continue
+		}
 		if _, included := specificationSet[referenceToString(submodel.SemanticID())]; included {
 			selected = append(selected, submodel)
 		}
@@ -694,7 +698,7 @@ func selectedContentSubmodelsForHeader(header dppDocument, metadataID string, su
 func contentSpecificationIDsFromHeader(header dppDocument) ([]string, error) {
 	rawIDs, ok := header[headerContentSpecificationIDs]
 	if !ok {
-		return nil, fmt.Errorf("DPP-FILTER-SEMSPEC metadata %s missing", headerContentSpecificationIDs)
+		return nil, nil
 	}
 	switch typedIDs := rawIDs.(type) {
 	case []any:
