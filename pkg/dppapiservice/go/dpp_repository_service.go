@@ -130,10 +130,6 @@ func (s *DPPRepositoryService) UpdateDPPFromJSON(ctx context.Context, dppID stri
 	if err != nil {
 		return mapPersistenceError(err, http.StatusNotFound), nil
 	}
-	currentContentSubmodels, err := selectedResolvedContentSubmodels(currentResolved)
-	if err != nil {
-		return mapPersistenceError(err, http.StatusInternalServerError), nil
-	}
 	current, err := s.composeDPP(ctx, dppID, REPRESENTATION_COMPRESSED, time.Time{})
 	if err != nil {
 		return mapPersistenceError(err, http.StatusNotFound), nil
@@ -160,9 +156,8 @@ func (s *DPPRepositoryService) UpdateDPPFromJSON(ctx context.Context, dppID stri
 	if err != nil {
 		return errorResponse(http.StatusBadRequest, err), nil
 	}
-	refs = appendUnselectedContentSubmodelReferences(refs, currentResolved, currentContentSubmodels)
 	aas := buildAAS(header, refs)
-	staleSubmodelIDs := staleContentSubmodelIDs(currentContentSubmodels, submodels)
+	staleSubmodelIDs := staleContentSubmodelIDs(currentResolved, submodels)
 
 	err = s.aasRepo.ExecuteInTransaction("DPP-UPDDPP-STARTTX", "DPP-UPDDPP-COMMITTX", func(tx *sql.Tx) error {
 		if _, err := s.aasRepo.PutAssetAdministrationShellByIDInTransaction(ctx, tx, dppID, aas); err != nil {
@@ -191,41 +186,22 @@ func (s *DPPRepositoryService) UpdateDPPFromJSON(ctx context.Context, dppID stri
 	return Response(http.StatusOK, updated), nil
 }
 
-func staleContentSubmodelIDs(currentContent []types.ISubmodel, replacement []types.ISubmodel) []string {
+func staleContentSubmodelIDs(current resolvedDPP, replacement []types.ISubmodel) []string {
 	replacementIDs := make(map[string]struct{}, len(replacement))
 	for _, submodel := range replacement {
 		replacementIDs[submodel.ID()] = struct{}{}
 	}
 	stale := make([]string, 0)
-	for _, submodel := range currentContent {
+	for _, submodel := range current.submodels {
+		if submodel.ID() == current.metadata.ID() {
+			continue
+		}
 		if _, stillPresent := replacementIDs[submodel.ID()]; !stillPresent {
 			stale = append(stale, submodel.ID())
 		}
 	}
 	sort.Strings(stale)
 	return stale
-}
-
-func appendUnselectedContentSubmodelReferences(refs []types.IReference, resolved resolvedDPP, selectedContent []types.ISubmodel) []types.IReference {
-	includedIDs := make(map[string]struct{}, len(refs))
-	for _, ref := range refs {
-		includedIDs[referenceLastValue(ref)] = struct{}{}
-	}
-	selectedIDs := map[string]struct{}{resolved.metadata.ID(): {}}
-	for _, submodel := range selectedContent {
-		selectedIDs[submodel.ID()] = struct{}{}
-	}
-	for _, submodel := range resolved.submodels {
-		if _, selected := selectedIDs[submodel.ID()]; selected {
-			continue
-		}
-		if _, included := includedIDs[submodel.ID()]; included {
-			continue
-		}
-		refs = append(refs, submodelReference(submodel.ID()))
-		includedIDs[submodel.ID()] = struct{}{}
-	}
-	return refs
 }
 
 func dppObjectFromAny(value any) map[string]any {
@@ -584,21 +560,16 @@ func (s *DPPRepositoryService) composeDPP(ctx context.Context, dppID string, rep
 	if err != nil {
 		return nil, err
 	}
-	return composeResolvedDPP(resolved, representation)
-}
-
-func composeResolvedDPP(resolved resolvedDPP, representation Representation) (dppDocument, error) {
 	doc, err := composeHeader(resolved.metadata)
 	if err != nil {
 		return nil, err
 	}
-	contentSubmodels, err := selectedContentSubmodelsForHeader(doc, resolved.metadata.ID(), resolved.submodels)
-	if err != nil {
-		return nil, err
-	}
 	if representation == REPRESENTATION_FULL {
-		elements := make([]map[string]any, 0, len(contentSubmodels))
-		for _, submodel := range contentSubmodels {
+		elements := make([]map[string]any, 0, len(resolved.submodels))
+		for _, submodel := range resolved.submodels {
+			if submodel.ID() == resolved.metadata.ID() {
+				continue
+			}
 			content, err := fullContent(submodel)
 			if err != nil {
 				return nil, err
@@ -612,7 +583,10 @@ func composeResolvedDPP(resolved resolvedDPP, representation Representation) (dp
 		doc["elements"] = elements
 		return doc, nil
 	}
-	for _, submodel := range contentSubmodels {
+	for _, submodel := range resolved.submodels {
+		if submodel.ID() == resolved.metadata.ID() {
+			continue
+		}
 		sectionName := lowerFirst(idShortOrID(submodel))
 		content, err := compressedContent(submodel)
 		if err != nil {
@@ -662,77 +636,6 @@ func (s *DPPRepositoryService) resolveSubmodels(ctx context.Context, dppID strin
 	return resolvedDPP{metadata: metadata, submodels: submodels}, nil
 }
 
-func selectedResolvedContentSubmodels(resolved resolvedDPP) ([]types.ISubmodel, error) {
-	header, err := composeHeader(resolved.metadata)
-	if err != nil {
-		return nil, err
-	}
-	return selectedContentSubmodelsForHeader(header, resolved.metadata.ID(), resolved.submodels)
-}
-
-func selectedContentSubmodelsForHeader(header dppDocument, metadataID string, submodels []types.ISubmodel) ([]types.ISubmodel, error) {
-	specificationIDs, err := contentSpecificationIDsFromHeader(header)
-	if err != nil {
-		return nil, err
-	}
-	specificationSet := make(map[string]struct{}, len(specificationIDs))
-	for _, specificationID := range specificationIDs {
-		specificationSet[specificationID] = struct{}{}
-	}
-	selected := make([]types.ISubmodel, 0, len(submodels))
-	for _, submodel := range submodels {
-		if submodel.ID() == metadataID {
-			continue
-		}
-		if len(specificationSet) == 0 {
-			selected = append(selected, submodel)
-			continue
-		}
-		if _, included := specificationSet[referenceToString(submodel.SemanticID())]; included {
-			selected = append(selected, submodel)
-		}
-	}
-	return selected, nil
-}
-
-func contentSpecificationIDsFromHeader(header dppDocument) ([]string, error) {
-	rawIDs, ok := header[headerContentSpecificationIDs]
-	if !ok {
-		return nil, nil
-	}
-	switch typedIDs := rawIDs.(type) {
-	case []any:
-		return contentSpecificationIDsFromValues(typedIDs)
-	case []string:
-		return contentSpecificationIDsFromStrings(typedIDs)
-	default:
-		return nil, fmt.Errorf("DPP-FILTER-SEMSPEC metadata %s must be an array of strings", headerContentSpecificationIDs)
-	}
-}
-
-func contentSpecificationIDsFromValues(rawItems []any) ([]string, error) {
-	ids := make([]string, 0, len(rawItems))
-	for _, rawItem := range rawItems {
-		id, ok := rawItem.(string)
-		if !ok || strings.TrimSpace(id) == "" {
-			return nil, fmt.Errorf("DPP-FILTER-SEMSPEC metadata %s must contain only non-empty strings", headerContentSpecificationIDs)
-		}
-		ids = append(ids, id)
-	}
-	return ids, nil
-}
-
-func contentSpecificationIDsFromStrings(rawItems []string) ([]string, error) {
-	ids := make([]string, 0, len(rawItems))
-	for _, id := range rawItems {
-		if strings.TrimSpace(id) == "" {
-			return nil, fmt.Errorf("DPP-FILTER-SEMSPEC metadata %s must contain only non-empty strings", headerContentSpecificationIDs)
-		}
-		ids = append(ids, id)
-	}
-	return ids, nil
-}
-
 func (s *DPPRepositoryService) buildSubmodels(header dppHeader, sections map[string]any) ([]types.ISubmodel, []types.IReference, error) {
 	metadata := buildMetadataSubmodel(header.DigitalProductPassportID, header)
 	submodels := []types.ISubmodel{metadata}
@@ -755,44 +658,23 @@ func (s *DPPRepositoryService) buildSubmodels(header dppHeader, sections map[str
 }
 
 func (s *DPPRepositoryService) resolveElementPath(ctx context.Context, dppID string, elementPath string) (string, string, error) {
-	sectionName, idShortPath, err := splitDPPElementPath(elementPath)
-	if err != nil {
-		return "", "", err
+	parts := strings.SplitN(elementPath, "/", 2)
+	if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
+		return "", "", fmt.Errorf("DPP-ELEMPATH-INVALID elementPath must be <contentSection>/<idShort.path>")
 	}
 	resolved, err := s.resolveSubmodels(ctx, dppID, time.Time{})
 	if err != nil {
 		return "", "", err
 	}
-	return resolveDPPElementPathParts(resolved, sectionName, idShortPath)
-}
-
-func resolveDPPElementPath(resolved resolvedDPP, elementPath string) (string, string, error) {
-	sectionName, idShortPath, err := splitDPPElementPath(elementPath)
-	if err != nil {
-		return "", "", err
-	}
-	return resolveDPPElementPathParts(resolved, sectionName, idShortPath)
-}
-
-func splitDPPElementPath(elementPath string) (string, string, error) {
-	parts := strings.SplitN(elementPath, "/", 2)
-	if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
-		return "", "", fmt.Errorf("DPP-ELEMPATH-INVALID elementPath must be <contentSection>/<idShort.path>")
-	}
-	return parts[0], parts[1], nil
-}
-
-func resolveDPPElementPathParts(resolved resolvedDPP, sectionName string, idShortPath string) (string, string, error) {
-	contentSubmodels, err := selectedResolvedContentSubmodels(resolved)
-	if err != nil {
-		return "", "", err
-	}
-	for _, submodel := range contentSubmodels {
-		if lowerFirst(idShortOrID(submodel)) == sectionName {
-			return submodel.ID(), idShortPath, nil
+	for _, submodel := range resolved.submodels {
+		if submodel.ID() == resolved.metadata.ID() {
+			continue
+		}
+		if lowerFirst(idShortOrID(submodel)) == parts[0] {
+			return submodel.ID(), parts[1], nil
 		}
 	}
-	return "", "", fmt.Errorf("DPP-ELEMPATH-NOTFOUND content section %s not found", sectionName)
+	return "", "", fmt.Errorf("DPP-ELEMPATH-NOTFOUND content section %s not found", parts[0])
 }
 
 func (s *DPPRepositoryService) updatedMetadata(ctx context.Context, dppID string) (types.ISubmodel, error) {
