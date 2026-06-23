@@ -115,7 +115,7 @@ func normalizeDelegationHost(host string) (string, error) {
 	}
 
 	if ip, parseErr := netip.ParseAddr(normalizedHost); parseErr == nil {
-		return ip.String(), nil
+		return ip.Unmap().String(), nil
 	}
 
 	return normalizedHost, nil
@@ -243,33 +243,47 @@ func (g delegationAddressGuard) resolveTrustedURLTarget(ctx context.Context, par
 }
 
 func (g delegationAddressGuard) resolveTrustedDialTarget(ctx context.Context, host string, port string) (trustedDelegationTarget, error) {
-	originalAuthority, err := normalizeDelegationAuthority(host, port)
+	trustedTargets, err := g.resolveTrustedDialTargets(ctx, host, port)
 	if err != nil {
 		return trustedDelegationTarget{}, err
 	}
+
+	return trustedTargets[0], nil
+}
+
+func (g delegationAddressGuard) resolveTrustedDialTargets(ctx context.Context, host string, port string) ([]trustedDelegationTarget, error) {
+	originalAuthority, err := normalizeDelegationAuthority(host, port)
+	if err != nil {
+		return nil, err
+	}
 	if !g.isTrusted(originalAuthority) {
-		return trustedDelegationTarget{}, fmt.Errorf("SMREPO-RSLVDELAUTH-UNTRUSTED delegation URL address %q is not in %s allowlist", originalAuthority, delegationTrustedHostsKey)
+		return nil, fmt.Errorf("SMREPO-RSLVDELAUTH-UNTRUSTED delegation URL address %q is not in %s allowlist", originalAuthority, delegationTrustedHostsKey)
 	}
 
 	resolvedIPs, err := g.resolveHostToIPs(ctx, host)
 	if err != nil {
-		return trustedDelegationTarget{}, err
+		return nil, err
 	}
 
+	trustedTargets := make([]trustedDelegationTarget, 0, len(resolvedIPs))
 	for _, resolvedIP := range resolvedIPs {
 		resolvedAuthority, authorityErr := normalizeDelegationAuthority(resolvedIP.String(), port)
 		if authorityErr != nil {
 			continue
 		}
 		if g.isTrusted(resolvedAuthority) {
-			return trustedDelegationTarget{
+			trustedTargets = append(trustedTargets, trustedDelegationTarget{
 				originalAuthority: originalAuthority,
 				resolvedAuthority: resolvedAuthority,
-			}, nil
+			})
 		}
 	}
 
-	return trustedDelegationTarget{}, fmt.Errorf("SMREPO-RSLVDELAUTH-UNTRUSTEDRESOLVED delegation URL address %q resolved to addresses that are not in %s allowlist", originalAuthority, delegationTrustedHostsKey)
+	if len(trustedTargets) == 0 {
+		return nil, fmt.Errorf("SMREPO-RSLVDELAUTH-UNTRUSTEDRESOLVED delegation URL address %q resolved to addresses that are not in %s allowlist", originalAuthority, delegationTrustedHostsKey)
+	}
+
+	return trustedTargets, nil
 }
 
 func (g delegationAddressGuard) resolveHostToIPs(ctx context.Context, host string) ([]netip.Addr, error) {
@@ -299,12 +313,29 @@ func (g delegationAddressGuard) dialTrustedContext(ctx context.Context, network 
 		return nil, fmt.Errorf("SMREPO-DELDIAL-SPLITADDR %w", err)
 	}
 
-	target, err := g.resolveTrustedDialTarget(ctx, host, port)
+	targets, err := g.resolveTrustedDialTargets(ctx, host, port)
 	if err != nil {
 		return nil, err
 	}
 
-	return g.dialContext(ctx, network, target.resolvedAuthority)
+	return g.dialTrustedTargets(ctx, network, targets)
+}
+
+func (g delegationAddressGuard) dialTrustedTargets(ctx context.Context, network string, targets []trustedDelegationTarget) (net.Conn, error) {
+	var lastDialErr error
+	for _, target := range targets {
+		conn, err := g.dialContext(ctx, network, target.resolvedAuthority)
+		if err == nil {
+			return conn, nil
+		}
+		lastDialErr = err
+	}
+
+	if lastDialErr == nil {
+		return nil, errors.New("SMREPO-DELDIAL-NOTARGET no trusted delegation dial target is available")
+	}
+
+	return nil, fmt.Errorf("SMREPO-DELDIAL-EXEC %w", lastDialErr)
 }
 
 func newDelegationHTTPClient(timeout time.Duration, guard delegationAddressGuard) *http.Client {

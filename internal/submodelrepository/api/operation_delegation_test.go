@@ -172,6 +172,48 @@ func TestResolveTrustedURLTargetRequiresOriginalAndResolvedAddresses(t *testing.
 	require.Equal(t, "127.0.0.1:1234", target.resolvedAuthority)
 }
 
+func TestDelegationDialFallsBackAcrossTrustedResolvedAddresses(t *testing.T) {
+	t.Setenv(delegationTrustedHostsKey, "localhost:*,127.0.0.1:*,[::1]:*")
+
+	resolveToLoopback := func(_ context.Context, host string) ([]netip.Addr, error) {
+		require.Equal(t, "localhost", host)
+		return []netip.Addr{netip.MustParseAddr("::1"), netip.MustParseAddr("127.0.0.1")}, nil
+	}
+
+	dialedAddresses := []string{}
+	dialContext := func(_ context.Context, _ string, address string) (net.Conn, error) {
+		dialedAddresses = append(dialedAddresses, address)
+		if address == "[::1]:1234" {
+			return nil, errors.New("first endpoint is unavailable")
+		}
+
+		clientConn, serverConn := net.Pipe()
+		_ = serverConn.Close()
+		return clientConn, nil
+	}
+
+	guard := newDelegationAddressGuard(resolveToLoopback, dialContext)
+	conn, err := guard.dialTrustedContext(context.Background(), "tcp", "localhost:1234")
+	require.NoError(t, err)
+	require.NoError(t, conn.Close())
+	require.Equal(t, []string{"[::1]:1234", "127.0.0.1:1234"}, dialedAddresses)
+}
+
+func TestResolveTrustedURLTargetUnmapsIPv4MappedResolvedAddresses(t *testing.T) {
+	t.Setenv(delegationTrustedHostsKey, "host.docker.internal:*,192.168.65.254:*")
+
+	resolveToIPv4MappedGateway := func(_ context.Context, host string) ([]netip.Addr, error) {
+		require.Equal(t, "host.docker.internal", host)
+		return []netip.Addr{netip.MustParseAddr("::ffff:192.168.65.254")}, nil
+	}
+
+	guard := newDelegationAddressGuard(resolveToIPv4MappedGateway, nil)
+	target, err := guard.resolveTrustedURLTarget(context.Background(), mustParseDelegationTestURL(t, "http://host.docker.internal:1234/delegate"))
+	require.NoError(t, err)
+	require.Equal(t, "host.docker.internal:1234", target.originalAuthority)
+	require.Equal(t, "192.168.65.254:1234", target.resolvedAuthority)
+}
+
 func TestResolveTrustedURLTargetUsesDefaultHTTPAndHTTPSPorts(t *testing.T) {
 	t.Setenv(delegationTrustedHostsKey, "example.com:80,secure.example.com:443,93.184.216.34:80,93.184.216.34:443")
 
