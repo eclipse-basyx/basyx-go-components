@@ -34,12 +34,14 @@ services:
       - BASYX_HISTORY_FULL_SNAPSHOT_INTERVAL=3
       - JWS_PRIVATEKEYPATH=/app/rsa-key.pem
       - SERVER_STRICTVERIFICATION=off
+      - SMREPO_DELEGATION_TRUSTED_HOSTS=localhost:*,127.0.0.1:*,[::1]:*,host.docker.internal:*,172.17.0.1:*,192.168.65.2:*,192.168.65.254:*
     volumes:
       - ./rsa-key.pem:/app/rsa-key.pem:ro
     ports:
       - "6004:5004"
     extra_hosts:
       - "localhost:host-gateway"
+      - "host.docker.internal:host-gateway"
     depends_on:
       basyx_configuration:
         condition: service_completed_successfully
