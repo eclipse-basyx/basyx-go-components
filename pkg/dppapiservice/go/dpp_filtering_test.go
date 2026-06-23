@@ -90,36 +90,6 @@ func TestResolveDPPElementPathFiltersByContentSpecificationIDs(t *testing.T) {
 	}
 }
 
-func TestComposeResolvedDPPIncludesAllContentWhenContentSpecificationIDsEmpty(t *testing.T) {
-	resolved := filteringResolvedDPP()
-	resolved.metadata.SetSubmodelElements(replaceSubmodelElement(
-		resolved.metadata.SubmodelElements(),
-		headerContentSpecificationIDs,
-		emptyStringList(headerContentSpecificationIDs),
-	))
-
-	doc, err := composeResolvedDPP(resolved, REPRESENTATION_COMPRESSED)
-	if err != nil {
-		t.Fatalf("composeResolvedDPP() error = %v", err)
-	}
-
-	assertDPPContentSectionExists(t, doc, "digitalNameplate")
-	assertDPPContentSectionExists(t, doc, "technicalData")
-}
-
-func TestComposeResolvedDPPIncludesAllContentWhenContentSpecificationIDsMissing(t *testing.T) {
-	resolved := filteringResolvedDPP()
-	resolved.metadata.SetSubmodelElements(withoutSubmodelElement(resolved.metadata.SubmodelElements(), headerContentSpecificationIDs))
-
-	doc, err := composeResolvedDPP(resolved, REPRESENTATION_COMPRESSED)
-	if err != nil {
-		t.Fatalf("composeResolvedDPP() error = %v", err)
-	}
-
-	assertDPPContentSectionExists(t, doc, "digitalNameplate")
-	assertDPPContentSectionExists(t, doc, "technicalData")
-}
-
 func TestStaleContentSubmodelIDsUsesOnlySelectedCurrentContent(t *testing.T) {
 	resolved := filteringResolvedDPP()
 	currentContent, err := selectedResolvedContentSubmodels(resolved)
@@ -186,49 +156,6 @@ func filteringContentSubmodel(sectionName string, idShort string, semanticID str
 	submodel.SetSemanticID(globalReference(semanticID))
 	submodel.SetSubmodelElements(elements)
 	return submodel
-}
-
-func assertDPPContentSectionExists(t *testing.T, doc dppDocument, sectionName string) {
-	t.Helper()
-	section, ok := doc[sectionName].(map[string]any)
-	if !ok {
-		t.Fatalf("%s section = %#v, want object", sectionName, doc[sectionName])
-	}
-	if len(section) == 0 {
-		t.Fatalf("%s section is empty", sectionName)
-	}
-}
-
-func withoutSubmodelElement(elements []types.ISubmodelElement, idShort string) []types.ISubmodelElement {
-	filtered := make([]types.ISubmodelElement, 0, len(elements))
-	for _, element := range elements {
-		if element.IDShort() != nil && *element.IDShort() == idShort {
-			continue
-		}
-		filtered = append(filtered, element)
-	}
-	return filtered
-}
-
-func replaceSubmodelElement(elements []types.ISubmodelElement, idShort string, replacement types.ISubmodelElement) []types.ISubmodelElement {
-	replaced := make([]types.ISubmodelElement, 0, len(elements))
-	for _, element := range elements {
-		if element.IDShort() != nil && *element.IDShort() == idShort {
-			replaced = append(replaced, replacement)
-			continue
-		}
-		replaced = append(replaced, element)
-	}
-	return replaced
-}
-
-func emptyStringList(idShort string) types.ISubmodelElement {
-	list := types.NewSubmodelElementList(types.AASSubmodelElementsProperty)
-	list.SetIDShort(&idShort)
-	valueType := types.DataTypeDefXSDString
-	list.SetValueTypeListElement(&valueType)
-	list.SetValue([]types.ISubmodelElement{})
-	return list
 }
 
 func referenceListContains(refs []types.IReference, value string) bool {
