@@ -327,12 +327,7 @@ func doDelegatedOperationCall(ctx context.Context, delegationURL string, payload
 		return 0, nil, errors.New("SMREPO-DOOPDELG-MISSINGHOST delegation URL host is missing")
 	}
 
-	delegationGuard := newDelegationAddressGuard(nil, nil)
-	if _, trustErr := delegationGuard.resolveTrustedURLTarget(ctx, parsedDelegationURL); trustErr != nil {
-		return 0, nil, fmt.Errorf("SMREPO-DOOPDELG-UNTRUSTEDHOST %w", trustErr)
-	}
-
-	return doTrustedDelegatedOperationCall(ctx, delegationURL, payload, timeout, delegationGuard)
+	return doTrustedDelegatedOperationCall(ctx, delegationURL, payload, timeout, newDelegationAddressGuard(nil, nil))
 }
 
 func doTrustedDelegatedOperationCall(

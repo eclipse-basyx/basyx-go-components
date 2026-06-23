@@ -340,10 +340,14 @@ func (g delegationAddressGuard) dialTrustedTargets(ctx context.Context, network 
 
 func newDelegationHTTPClient(timeout time.Duration, guard delegationAddressGuard) *http.Client {
 	return &http.Client{
-		Timeout: timeout,
-		Transport: &http.Transport{
-			Proxy:       nil,
-			DialContext: guard.dialTrustedContext,
-		},
+		Timeout:   timeout,
+		Transport: newDelegationHTTPTransport(guard),
 	}
+}
+
+func newDelegationHTTPTransport(guard delegationAddressGuard) *http.Transport {
+	transport := http.DefaultTransport.(*http.Transport).Clone()
+	transport.Proxy = nil
+	transport.DialContext = guard.dialTrustedContext
+	return transport
 }

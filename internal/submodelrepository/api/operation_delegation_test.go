@@ -253,6 +253,21 @@ func TestDelegationHTTPClientRejectsDisallowedResolvedIPBeforeDial(t *testing.T)
 	require.False(t, dialed)
 }
 
+func TestNewDelegationHTTPTransportClonesDefaultTransportSettings(t *testing.T) {
+	guard := newDelegationAddressGuard(nil, nil)
+	transport := newDelegationHTTPTransport(guard)
+	defaultTransport := http.DefaultTransport.(*http.Transport)
+
+	require.NotSame(t, defaultTransport, transport)
+	require.Nil(t, transport.Proxy)
+	require.NotNil(t, transport.DialContext)
+	require.Equal(t, defaultTransport.ForceAttemptHTTP2, transport.ForceAttemptHTTP2)
+	require.Equal(t, defaultTransport.MaxIdleConns, transport.MaxIdleConns)
+	require.Equal(t, defaultTransport.IdleConnTimeout, transport.IdleConnTimeout)
+	require.Equal(t, defaultTransport.TLSHandshakeTimeout, transport.TLSHandshakeTimeout)
+	require.Equal(t, defaultTransport.ExpectContinueTimeout, transport.ExpectContinueTimeout)
+}
+
 func TestDelegationHTTPClientRechecksRedirectTargets(t *testing.T) {
 	redirectServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "http://192.0.2.1:8080/delegate", http.StatusFound)
