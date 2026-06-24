@@ -94,13 +94,7 @@ func (s *CustomDiscoveryService) SearchAllAssetAdministrationShellIdsByAssetLink
 		), enforceErr
 	}
 
-	if shouldEnforceFormula {
-		assetLinkQuery := buildAssetLinkQuery(ctx, assetLink)
-		if assetLinkQuery.Condition != nil || len(assetLinkQuery.FilterConditions) > 0 {
-			ctx = auth.MergeQueryFilter(ctx, assetLinkQuery)
-			ctx = discoveryapiinternal.WithAssetLinksAlreadyConstrained(ctx)
-		}
-	}
+	ctx, backendAssetLinks := applyDTRAssetLinkLookupFilters(ctx, assetLink, shouldEnforceFormula)
 
 	createdAfter, _ := CreatedAfterFromContext(ctx)
 	if createdAfter != nil {
@@ -108,7 +102,7 @@ func (s *CustomDiscoveryService) SearchAllAssetAdministrationShellIdsByAssetLink
 		ctx = auth.MergeQueryFilter(ctx, createdAfterQuery)
 	}
 
-	res, err := s.AssetAdministrationShellBasicDiscoveryAPIAPIService.SearchAllAssetAdministrationShellIdsByAssetLink(ctx, limit, cursor, assetLink)
+	res, err := s.AssetAdministrationShellBasicDiscoveryAPIAPIService.SearchAllAssetAdministrationShellIdsByAssetLink(ctx, limit, cursor, backendAssetLinks)
 	if err != nil {
 		return res, err
 	}
@@ -188,6 +182,56 @@ func omitEmptySearchResultForDTR(res model.ImplResponse) model.ImplResponse {
 	default:
 		return res
 	}
+}
+
+func applyDTRAssetLinkLookupFilters(
+	ctx context.Context,
+	assetLinks []model.AssetLink,
+	shouldEnforceFormula bool,
+) (context.Context, []model.AssetLink) {
+	globalAssetIDLinks, backendAssetLinks := splitGlobalAssetIDLinks(assetLinks)
+	authorizationQuery := grammar.Query{}
+	if shouldEnforceFormula {
+		authorizationQuery = buildAssetLinkAuthorizationQuery(ctx, globalAssetIDLinks, backendAssetLinks)
+	}
+
+	if len(globalAssetIDLinks) > 0 {
+		ctx = mergeGlobalAssetIDLookupFilter(ctx, globalAssetIDLinks)
+	}
+	if hasQueryConditions(authorizationQuery) {
+		ctx = auth.MergeQueryFilter(ctx, authorizationQuery)
+		ctx = discoveryapiinternal.WithAssetLinksAlreadyConstrained(ctx)
+	}
+	if len(globalAssetIDLinks) > 0 && len(backendAssetLinks) == 0 {
+		ctx = discoveryapiinternal.WithAssetLinksAlreadyConstrained(ctx)
+	}
+
+	return ctx, backendAssetLinks
+}
+
+func splitGlobalAssetIDLinks(assetLinks []model.AssetLink) ([]model.AssetLink, []model.AssetLink) {
+	globalAssetIDLinks := make([]model.AssetLink, 0)
+	backendAssetLinks := make([]model.AssetLink, 0, len(assetLinks))
+	for _, link := range assetLinks {
+		if link.Name == common.GlobalAssetIDAssetLinkName {
+			globalAssetIDLinks = append(globalAssetIDLinks, link)
+			continue
+		}
+		backendAssetLinks = append(backendAssetLinks, link)
+	}
+	return globalAssetIDLinks, backendAssetLinks
+}
+
+func mergeGlobalAssetIDLookupFilter(ctx context.Context, globalAssetIDLinks []model.AssetLink) context.Context {
+	query := buildGlobalAssetIDLookupQuery(globalAssetIDLinks)
+	if !hasQueryConditions(query) {
+		return ctx
+	}
+	return auth.MergeQueryFilter(ctx, query)
+}
+
+func hasQueryConditions(query grammar.Query) bool {
+	return query.Condition != nil || len(query.FilterConditions) > 0
 }
 
 func baseCheckerOrFallback(checker aasExistenceChecker) aasExistenceChecker {
@@ -297,45 +341,44 @@ func buildEdcBpnClaimEqualsHeaderExpression(t *time.Time, pattern string) gramma
 	}
 }
 
-// buildAssetLinkQuery creates the discovery lookup filter for asset links.
-//
-// Behavior:
-//   - Returns an empty query when no asset links are provided.
-//   - Returns an empty query when ABAC READ access is already unrestricted.
-//   - Otherwise builds an AND of per-link conditions.
-//
-// Per link, the condition is an OR:
-//   - exact link match + Edc-Bpn authorization (when Edc-Bpn claim exists), or
-//   - exact link match + PUBLIC_READABLE authorization.
-//
-// globalAssetId links are handled separately and require an Edc-Bpn match when
-// authorization is enforced.
-func buildAssetLinkQuery(ctx context.Context, assetLink []model.AssetLink) grammar.Query {
-	if len(assetLink) == 0 {
+func buildGlobalAssetIDLookupQuery(globalAssetIDLinks []model.AssetLink) grammar.Query {
+	if len(globalAssetIDLinks) == 0 {
 		return grammar.Query{}
 	}
 
+	conditions := make([]grammar.LogicalExpression, 0, len(globalAssetIDLinks))
+	for _, link := range globalAssetIDLinks {
+		conditions = append(conditions, eqFieldToStringExpression("$aasdesc#globalAssetId", link.Value))
+	}
+
+	return grammar.Query{
+		Condition: &grammar.LogicalExpression{And: conditions},
+	}
+}
+
+func buildAssetLinkAuthorizationQuery(
+	ctx context.Context,
+	globalAssetIDLinks []model.AssetLink,
+	backendAssetLinks []model.AssetLink,
+) grammar.Query {
+	if len(globalAssetIDLinks) == 0 && len(backendAssetLinks) == 0 {
+		return grammar.Query{}
+	}
 	if auth.HasUnrestrictedFormulaForRight(ctx, grammar.RightsEnumREAD) {
 		return grammar.Query{}
 	}
 
-	return buildDTRAssetLinkLookupQuery(ctx, assetLink, true)
-}
-
-func buildDTRAssetLinkLookupQuery(ctx context.Context, assetLink []model.AssetLink, enforceAuthorization bool) grammar.Query {
-	if len(assetLink) == 0 {
-		return grammar.Query{}
-	}
-
 	edcBpnClaim, hasEdcBpnClaim := edcBpnClaimFromContext(ctx)
-	requireAuthorization := enforceAuthorization && !auth.HasUnrestrictedFormulaForRight(ctx, grammar.RightsEnumREAD)
-	assetLinkLe := grammar.LogicalExpression{And: make([]grammar.LogicalExpression, 0, len(assetLink))}
-	for _, link := range assetLink {
-		assetLinkLe.And = append(assetLinkLe.And, buildAssetLinkCondition(link, edcBpnClaim, hasEdcBpnClaim, requireAuthorization))
+	conditions := make([]grammar.LogicalExpression, 0, len(globalAssetIDLinks)+len(backendAssetLinks))
+	if len(globalAssetIDLinks) > 0 {
+		conditions = append(conditions, globalAssetIDBPNAuthorizationCondition(edcBpnClaim, hasEdcBpnClaim))
+	}
+	for _, link := range backendAssetLinks {
+		conditions = append(conditions, buildSpecificAssetLinkCondition(link, edcBpnClaim, hasEdcBpnClaim, true))
 	}
 
 	return grammar.Query{
-		Condition: &assetLinkLe,
+		Condition: &grammar.LogicalExpression{And: conditions},
 	}
 }
 
@@ -343,13 +386,6 @@ func edcBpnClaimFromContext(ctx context.Context) (string, bool) {
 	claims := auth.ClaimsFromContext(ctx)
 	edcBpnClaim, hasEdcBpnClaim := claims.GetString("Edc-Bpn")
 	return edcBpnClaim, hasEdcBpnClaim && strings.TrimSpace(edcBpnClaim) != ""
-}
-
-func buildAssetLinkCondition(link model.AssetLink, edcBpnClaim string, hasEdcBpnClaim bool, requireAuthorization bool) grammar.LogicalExpression {
-	if link.Name == common.GlobalAssetIDAssetLinkName {
-		return buildGlobalAssetIDAssetLinkCondition(link.Value, edcBpnClaim, hasEdcBpnClaim, requireAuthorization)
-	}
-	return buildSpecificAssetLinkCondition(link, edcBpnClaim, hasEdcBpnClaim, requireAuthorization)
 }
 
 func buildSpecificAssetLinkCondition(link model.AssetLink, edcBpnClaim string, hasEdcBpnClaim bool, requireAuthorization bool) grammar.LogicalExpression {
@@ -369,20 +405,6 @@ func buildSpecificAssetLinkCondition(link model.AssetLink, edcBpnClaim string, h
 				Match: subjectMatches,
 			}
 		}),
-	}
-}
-
-func buildGlobalAssetIDAssetLinkCondition(value string, edcBpnClaim string, hasEdcBpnClaim bool, requireAuthorization bool) grammar.LogicalExpression {
-	globalAssetIDCondition := eqFieldToStringExpression("$aasdesc#globalAssetId", value)
-	if !requireAuthorization {
-		return globalAssetIDCondition
-	}
-
-	return grammar.LogicalExpression{
-		And: []grammar.LogicalExpression{
-			globalAssetIDCondition,
-			globalAssetIDBPNAuthorizationCondition(edcBpnClaim, hasEdcBpnClaim),
-		},
 	}
 }
 
