@@ -400,10 +400,15 @@ func (p *PostgreSQLAASRegistryDatabase) ReplaceAdministrationShellDescriptor(
 		if _, err := descriptors.GetAssetAdministrationShellDescriptorByIDTx(ctx, tx, aasd.Id); err != nil {
 			return err
 		}
+		createdAt, err := descriptors.GetAASDescriptorCreatedAtByIDTx(ctx, tx, aasd.Id)
+		if err != nil {
+			return err
+		}
+		aasd.CreatedAt = &createdAt
 		if err := descriptors.DeleteAssetAdministrationShellDescriptorByIDTx(ctx, tx, aasd.Id); err != nil {
 			return err
 		}
-		if err := descriptors.InsertAdministrationShellDescriptorTx(ctx, tx, aasd); err != nil {
+		if err := descriptors.InsertAdministrationShellDescriptorTx(descriptors.WithAllowAASDescriptorCreatedAtOverride(ctx), tx, aasd); err != nil {
 			return err
 		}
 		stored, err := descriptors.GetAssetAdministrationShellDescriptorByIDTx(ctx, tx, aasd.Id)

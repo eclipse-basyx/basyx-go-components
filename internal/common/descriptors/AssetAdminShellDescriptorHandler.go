@@ -279,6 +279,33 @@ func UpsertAdministrationShellDescriptorTx(ctx context.Context, tx *sql.Tx, aasd
 	return true, InsertAdministrationShellDescriptorTx(ctx, tx, aasd)
 }
 
+// GetAASDescriptorCreatedAtByIDTx returns and locks the persisted AAS descriptor
+// creation timestamp so replace operations can preserve it across delete/insert.
+func GetAASDescriptorCreatedAtByIDTx(ctx context.Context, tx *sql.Tx, aasID string) (time.Time, error) {
+	d := goqu.Dialect(common.Dialect)
+	aasTbl := goqu.T(common.TblAASDescriptor)
+
+	sqlStr, args, buildErr := d.
+		From(aasTbl).
+		Select(aasTbl.Col(common.ColCreatedAt)).
+		Where(aasTbl.Col(common.ColAASID).Eq(aasID)).
+		ForUpdate(goqu.Wait).
+		ToSQL()
+	if buildErr != nil {
+		return time.Time{}, buildErr
+	}
+
+	var createdAt time.Time
+	if err := tx.QueryRowContext(ctx, sqlStr, args...).Scan(&createdAt); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return time.Time{}, common.NewErrNotFound("AAS Descriptor not found")
+		}
+		return time.Time{}, err
+	}
+
+	return createdAt, nil
+}
+
 func lockAASDescriptorUpsertTx(ctx context.Context, tx *sql.Tx, aasID string) error {
 	sqlStr, args, err := buildAASDescriptorUpsertLockSQL(aasID)
 	if err != nil {
@@ -336,8 +363,7 @@ func replaceAdministrationShellDescriptorDetailsTx(ctx context.Context, tx *sql.
 
 func updateAASDescriptorRowTx(ctx context.Context, tx *sql.Tx, descriptorID int64, aasd model.AssetAdministrationShellDescriptor) error {
 	d := goqu.Dialect(common.Dialect)
-	record := buildAASDescriptorInsertRecord(ctx, descriptorID, aasd)
-	delete(record, common.ColDescriptorID)
+	record := buildAASDescriptorUpdateRecord(ctx, descriptorID, aasd)
 
 	sqlStr, args, buildErr := d.
 		Update(common.TblAASDescriptor).
@@ -417,6 +443,17 @@ func buildAASDescriptorInsertRecord(
 		record[common.ColCreatedAt] = *aasd.CreatedAt
 	}
 
+	return record
+}
+
+func buildAASDescriptorUpdateRecord(
+	ctx context.Context,
+	descriptorID any,
+	aasd model.AssetAdministrationShellDescriptor,
+) goqu.Record {
+	record := buildAASDescriptorInsertRecord(ctx, descriptorID, aasd)
+	delete(record, common.ColDescriptorID)
+	delete(record, common.ColCreatedAt)
 	return record
 }
 
@@ -611,13 +648,19 @@ func ReplaceAdministrationShellDescriptor(ctx context.Context, db *sql.DB, aasd 
 	if err != nil {
 		return model.AssetAdministrationShellDescriptor{}, err
 	}
+	createdAt, err := GetAASDescriptorCreatedAtByIDTx(ctx, tx, aasd.Id)
+	if err != nil {
+		_ = tx.Rollback()
+		return model.AssetAdministrationShellDescriptor{}, err
+	}
+	aasd.CreatedAt = &createdAt
 	// delete existing descriptor
 	if err = deleteAssetAdministrationShellDescriptorByIDTx(ctx, tx, aasd.Id); err != nil {
 		_ = tx.Rollback()
 		return model.AssetAdministrationShellDescriptor{}, err
 	}
 	// insert new descriptor
-	if err = InsertAdministrationShellDescriptorTx(ctx, tx, aasd); err != nil {
+	if err = InsertAdministrationShellDescriptorTx(WithAllowAASDescriptorCreatedAtOverride(ctx), tx, aasd); err != nil {
 		_ = tx.Rollback()
 		return model.AssetAdministrationShellDescriptor{}, err
 	}
