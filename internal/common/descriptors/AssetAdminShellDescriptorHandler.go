@@ -522,14 +522,14 @@ func DeleteAssetAdministrationShellDescriptorsByIDsTx(ctx context.Context, tx *s
 			Select(common.ColDescriptorID).
 			Where(goqu.C(common.ColAASDescriptorID).In(descriptorIDs))
 		if err := batch.AppendDataset(
-			d.Delete(common.TblDescriptor).Where(
-				goqu.Or(
-					goqu.C(common.ColID).In(descriptorIDs),
-					goqu.C(common.ColID).In(childDescriptorIDs),
-				),
-			),
+			d.Delete(common.TblDescriptor).Where(goqu.C(common.ColID).In(childDescriptorIDs)),
 		); err != nil {
-			return common.NewInternalServerError("AASDESC-BULKDELETE-BUILDSQL " + err.Error())
+			return common.NewInternalServerError("AASDESC-BULKDELETE-BUILDCHILDSQL " + err.Error())
+		}
+		if err := batch.AppendDataset(
+			d.Delete(common.TblDescriptor).Where(goqu.C(common.ColID).In(descriptorIDs)),
+		); err != nil {
+			return common.NewInternalServerError("AASDESC-BULKDELETE-BUILDPARENTSQL " + err.Error())
 		}
 	}
 	return common.ExecutePostgreSQLBatchInTransaction(ctx, tx, batch.Statements())
@@ -565,19 +565,26 @@ func deleteAssetAdministrationShellDescriptorByIDTx(ctx context.Context, tx *sql
 		From(common.TblSubmodelDescriptor).
 		Select(common.ColDescriptorID).
 		Where(goqu.C(common.ColAASDescriptorID).Eq(descID))
-	delStr, delArgs, buildDelErr := d.
+
+	childDelStr, childDelArgs, buildChildDelErr := d.
 		Delete(common.TblDescriptor).
-		Where(
-			goqu.Or(
-				goqu.C(common.ColID).Eq(descID),
-				goqu.C(common.ColID).In(childDescriptorIDs),
-			),
-		).
+		Where(goqu.C(common.ColID).In(childDescriptorIDs)).
 		ToSQL()
-	if buildDelErr != nil {
-		return buildDelErr
+	if buildChildDelErr != nil {
+		return buildChildDelErr
 	}
-	if _, execErr := tx.Exec(delStr, delArgs...); execErr != nil {
+	if _, execErr := tx.ExecContext(ctx, childDelStr, childDelArgs...); execErr != nil {
+		return execErr
+	}
+
+	parentDelStr, parentDelArgs, buildParentDelErr := d.
+		Delete(common.TblDescriptor).
+		Where(goqu.C(common.ColID).Eq(descID)).
+		ToSQL()
+	if buildParentDelErr != nil {
+		return buildParentDelErr
+	}
+	if _, execErr := tx.ExecContext(ctx, parentDelStr, parentDelArgs...); execErr != nil {
 		return execErr
 	}
 	return nil
