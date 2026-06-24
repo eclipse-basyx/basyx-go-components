@@ -29,6 +29,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"strings"
 
 	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/doug-martin/goqu/v9"
@@ -171,7 +172,7 @@ func countBulkCreateIDs(
 	for _, descriptor := range descriptors {
 		counts.descriptor = append(counts.descriptor, 0)
 		specificAssetIDCount := len(descriptor.SpecificAssetIds)
-		if discoveryIntegration && descriptor.GlobalAssetId != "" {
+		if discoveryIntegration && strings.TrimSpace(descriptor.GlobalAssetId) != "" {
 			specificAssetIDCount++
 		}
 		counts.specificAssetID = append(counts.specificAssetID, make([]int64, specificAssetIDCount)...)
