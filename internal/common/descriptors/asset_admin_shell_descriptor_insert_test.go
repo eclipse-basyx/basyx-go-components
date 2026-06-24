@@ -152,7 +152,7 @@ func TestGetAASDescriptorCreatedAtByIDTxLocksAndReturnsTimestamp(t *testing.T) {
 	}()
 
 	createdAt := time.Date(2024, time.March, 1, 2, 3, 4, 0, time.UTC)
-	query := regexp.QuoteMeta(`SELECT "created_at" FROM "aas_descriptor" WHERE ("id" = 'aas-1') FOR UPDATE`)
+	query := regexp.QuoteMeta(`SELECT "aas_descriptor"."created_at" FROM "aas_descriptor" WHERE ("aas_descriptor"."id" = 'aas-1') FOR UPDATE`)
 
 	mock.ExpectBegin()
 	mock.ExpectQuery(query).
