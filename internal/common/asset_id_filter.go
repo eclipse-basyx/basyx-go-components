@@ -34,6 +34,7 @@ import (
 	"github.com/FriedJannik/aas-go-sdk/types"
 )
 
+// GlobalAssetIDAssetLinkName is the reserved asset-link name for globalAssetId lookup.
 const GlobalAssetIDAssetLinkName = "globalAssetId"
 
 // AssetIDFilter contains decoded SpecificAssetId query parameters.
