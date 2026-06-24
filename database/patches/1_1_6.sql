@@ -113,3 +113,13 @@ SELECT reference_id, position, type, value
 FROM positioned_keys;
 
 DROP TABLE IF EXISTS pg_temp.tmp_global_asset_id_subject_keys;
+
+UPDATE basyxsystem
+SET schema_version = 'v1.1.6',
+    state = 'clean'
+WHERE identifier = (
+  SELECT identifier
+  FROM basyxsystem
+  ORDER BY identifier ASC
+  LIMIT 1
+);
