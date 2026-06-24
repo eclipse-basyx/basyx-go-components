@@ -313,14 +313,11 @@ func collectSpecificAssetIDRows(
 	descriptorID int64,
 	descriptor model.AssetAdministrationShellDescriptor,
 ) error {
-	assetIDs := append([]types.ISpecificAssetID(nil), descriptor.SpecificAssetIds...)
+	assetIDs := specificAssetIDsWithGlobalAssetID(ctx, descriptor)
 	var aasRef any
 	if cfg, ok := common.ConfigFromContext(ctx); ok && cfg.General.DiscoveryIntegration {
 		rows.aasIdentifier = append(rows.aasIdentifier, goqu.Record{"aasid": descriptor.Id})
 		aasRef = goqu.From(common.TblAASIdentifier).Select(common.ColID).Where(goqu.C("aasid").Eq(descriptor.Id))
-		if descriptor.GlobalAssetId != "" {
-			assetIDs = append(assetIDs, types.NewSpecificAssetID(globalAssetIDSpecificAssetIDName, descriptor.GlobalAssetId))
-		}
 	}
 	for position, assetID := range assetIDs {
 		specificAssetID, err := cursor.nextSpecificAssetID()

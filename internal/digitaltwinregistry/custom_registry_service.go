@@ -97,8 +97,7 @@ func (s *CustomRegistryService) PostAssetAdministrationShellDescriptor(
 	ctx context.Context,
 	assetAdministrationShellDescriptor model.AssetAdministrationShellDescriptor,
 ) (model.ImplResponse, error) {
-	ctx = descriptorsutil.WithAllowAASDescriptorCreatedAtOverride(ctx)
-	ctx = descriptorsutil.WithIncludeAASDescriptorCreatedAt(ctx)
+	ctx = withDTRDescriptorWriteContext(ctx)
 
 	baseResp, baseErr := s.AssetAdministrationShellRegistryAPIAPIService.PostAssetAdministrationShellDescriptor(
 		ctx,
@@ -117,8 +116,7 @@ func (s *CustomRegistryService) PutAssetAdministrationShellDescriptorById(
 	aasIdentifier string,
 	assetAdministrationShellDescriptor model.AssetAdministrationShellDescriptor,
 ) (model.ImplResponse, error) {
-	ctx = descriptorsutil.WithAllowAASDescriptorCreatedAtOverride(ctx)
-	ctx = descriptorsutil.WithIncludeAASDescriptorCreatedAt(ctx)
+	ctx = withDTRDescriptorWriteContext(ctx)
 
 	decodedAASID, decodeErr := common.DecodeString(aasIdentifier)
 	if decodeErr != nil {
@@ -188,8 +186,7 @@ func (s *CustomRegistryService) ExecuteBulkCreateAtomic(
 	ctx context.Context,
 	descriptors []model.AssetAdministrationShellDescriptor,
 ) asyncbulk.OperationResult {
-	ctx = descriptorsutil.WithAllowAASDescriptorCreatedAtOverride(ctx)
-	ctx = descriptorsutil.WithIncludeAASDescriptorCreatedAt(ctx)
+	ctx = withDTRDescriptorWriteContext(ctx)
 	return s.AssetAdministrationShellRegistryAPIAPIService.ExecuteBulkCreateAtomic(ctx, descriptors)
 }
 
@@ -198,9 +195,14 @@ func (s *CustomRegistryService) ExecuteBulkPutAtomic(
 	ctx context.Context,
 	descriptors []model.AssetAdministrationShellDescriptor,
 ) asyncbulk.OperationResult {
-	ctx = descriptorsutil.WithAllowAASDescriptorCreatedAtOverride(ctx)
-	ctx = descriptorsutil.WithIncludeAASDescriptorCreatedAt(ctx)
+	ctx = withDTRDescriptorWriteContext(ctx)
 	return s.AssetAdministrationShellRegistryAPIAPIService.ExecuteBulkPutAtomic(ctx, descriptors)
+}
+
+func withDTRDescriptorWriteContext(ctx context.Context) context.Context {
+	ctx = descriptorsutil.WithDigitalTwinRegistryDiscovery(ctx)
+	ctx = descriptorsutil.WithAllowAASDescriptorCreatedAtOverride(ctx)
+	return descriptorsutil.WithIncludeAASDescriptorCreatedAt(ctx)
 }
 
 func is2xx(code int) bool {

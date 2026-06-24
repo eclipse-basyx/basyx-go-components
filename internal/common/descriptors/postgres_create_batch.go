@@ -68,7 +68,7 @@ func BuildAdministrationShellDescriptorCreateBatch(
 		return nil, err
 	}
 
-	specificAssetIDs := descriptor.SpecificAssetIds
+	specificAssetIDs := specificAssetIDsWithGlobalAssetID(ctx, descriptor)
 	var aasRef any
 	if cfg, ok := common.ConfigFromContext(ctx); ok && cfg.General.DiscoveryIntegration {
 		if err := batch.AppendDataset(
@@ -81,12 +81,6 @@ func BuildAdministrationShellDescriptorCreateBatch(
 		aasRef = goqu.From(common.TblAASIdentifier).
 			Select(common.ColID).
 			Where(goqu.C("aasid").Eq(descriptor.Id))
-		if descriptor.GlobalAssetId != "" {
-			specificAssetIDs = append(
-				append([]types.ISpecificAssetID(nil), specificAssetIDs...),
-				types.NewSpecificAssetID(globalAssetIDSpecificAssetIDName, descriptor.GlobalAssetId),
-			)
-		}
 	}
 	if err := batch.AppendSpecificAssetIDs(descriptorID, aasRef, specificAssetIDs); err != nil {
 		return nil, err
