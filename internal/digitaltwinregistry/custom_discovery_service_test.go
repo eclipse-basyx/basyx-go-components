@@ -81,27 +81,7 @@ func TestBuildAssetLinkQuery_GlobalAssetIDUsesDescriptorValueAndTwinExternalSubj
 		t.Fatalf("expected globalAssetId condition")
 	}
 
-	collector, err := grammar.NewResolvedFieldPathCollectorForRoot(grammar.CollectorRootBD)
-	if err != nil {
-		t.Fatalf("failed to build collector: %v", err)
-	}
-	expr, _, err := query.Condition.EvaluateToExpression(collector)
-	if err != nil {
-		t.Fatalf("expected globalAssetId query to compile: %v", err)
-	}
-
-	sql, _, err := goqu.Dialect(common.Dialect).
-		From(goqu.T(common.TblAASIdentifier)).
-		LeftJoin(
-			goqu.T(common.TblAASDescriptor),
-			goqu.On(goqu.I(common.TblAASDescriptor+"."+common.ColAASID).Eq(goqu.I(common.TblAASIdentifier+".aasid"))),
-		).
-		Select(goqu.V(1)).
-		Where(expr).
-		ToSQL()
-	if err != nil {
-		t.Fatalf("expected SQL generation to succeed: %v", err)
-	}
+	sql := renderBDQuerySQL(t, query)
 
 	if !strings.Contains(sql, `"aas_descriptor"."global_asset_id" = 'global-asset'`) {
 		t.Fatalf("expected direct global_asset_id comparison, got SQL: %s", sql)
@@ -109,8 +89,34 @@ func TestBuildAssetLinkQuery_GlobalAssetIDUsesDescriptorValueAndTwinExternalSubj
 	if !strings.Contains(sql, "EXISTS") || !strings.Contains(sql, `"external_subject_reference_key"`) {
 		t.Fatalf("expected external-subject EXISTS authorization, got SQL: %s", sql)
 	}
+	if !strings.Contains(sql, "BPN_COMPANY_001") {
+		t.Fatalf("expected globalAssetId lookup to authorize through the caller Edc-Bpn, got SQL: %s", sql)
+	}
 	if strings.Contains(sql, `"specific_asset_id"."name" = 'globalAssetId'`) {
 		t.Fatalf("did not expect globalAssetId visibility to depend on generated specific_asset_id row, got SQL: %s", sql)
+	}
+	if strings.Contains(sql, publicReadableExternalSubjectValue) {
+		t.Fatalf("globalAssetId lookup must not be authorized through PUBLIC_READABLE specific asset IDs, got SQL: %s", sql)
+	}
+}
+
+func TestBuildAssetLinkQuery_GlobalAssetIDDoesNotAllowAnonymousPublicReadableSubject(t *testing.T) {
+	t.Parallel()
+
+	query := buildAssetLinkQuery(restrictedReadContext(), []model.AssetLink{
+		{Name: common.GlobalAssetIDAssetLinkName, Value: "global-asset"},
+	})
+	if query.Condition == nil {
+		t.Fatalf("expected globalAssetId condition")
+	}
+
+	sql := renderBDQuerySQL(t, query)
+
+	if !strings.Contains(sql, `"aas_descriptor"."global_asset_id" = 'global-asset'`) {
+		t.Fatalf("expected direct global_asset_id comparison, got SQL: %s", sql)
+	}
+	if strings.Contains(sql, publicReadableExternalSubjectValue) {
+		t.Fatalf("anonymous globalAssetId lookup must not be authorized through PUBLIC_READABLE specific asset IDs, got SQL: %s", sql)
 	}
 }
 
@@ -124,6 +130,22 @@ func TestBuildDTRAssetLinkLookupQuery_GlobalAssetIDUsesDescriptorValueWithoutAss
 		t.Fatalf("expected globalAssetId condition")
 	}
 
+	sql := renderBDQuerySQL(t, query)
+
+	if !strings.Contains(sql, `"aas_descriptor"."global_asset_id" = 'global-asset'`) {
+		t.Fatalf("expected direct global_asset_id comparison, got SQL: %s", sql)
+	}
+	if strings.Contains(sql, `"specific_asset_id"."name" = 'globalAssetId'`) {
+		t.Fatalf("did not expect generated globalAssetId asset-link fallback, got SQL: %s", sql)
+	}
+	if strings.Contains(sql, `"external_subject_reference_key"`) {
+		t.Fatalf("did not expect external-subject authorization in lookup-only query, got SQL: %s", sql)
+	}
+}
+
+func renderBDQuerySQL(t *testing.T, query grammar.Query) string {
+	t.Helper()
+
 	collector, err := grammar.NewResolvedFieldPathCollectorForRoot(grammar.CollectorRootBD)
 	if err != nil {
 		t.Fatalf("failed to build collector: %v", err)
@@ -145,16 +167,7 @@ func TestBuildDTRAssetLinkLookupQuery_GlobalAssetIDUsesDescriptorValueWithoutAss
 	if err != nil {
 		t.Fatalf("expected SQL generation to succeed: %v", err)
 	}
-
-	if !strings.Contains(sql, `"aas_descriptor"."global_asset_id" = 'global-asset'`) {
-		t.Fatalf("expected direct global_asset_id comparison, got SQL: %s", sql)
-	}
-	if strings.Contains(sql, `"specific_asset_id"."name" = 'globalAssetId'`) {
-		t.Fatalf("did not expect generated globalAssetId asset-link fallback, got SQL: %s", sql)
-	}
-	if strings.Contains(sql, `"external_subject_reference_key"`) {
-		t.Fatalf("did not expect external-subject authorization in lookup-only query, got SQL: %s", sql)
-	}
+	return sql
 }
 
 func restrictedReadContext() context.Context {

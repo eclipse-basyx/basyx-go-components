@@ -305,6 +305,9 @@ func buildEdcBpnClaimEqualsHeaderExpression(t *time.Time, pattern string) gramma
 // Per link, the condition is an OR:
 //   - exact link match + Edc-Bpn authorization (when Edc-Bpn claim exists), or
 //   - exact link match + PUBLIC_READABLE authorization.
+//
+// globalAssetId links are handled separately and require an Edc-Bpn match when
+// authorization is enforced.
 func buildAssetLinkQuery(ctx context.Context, assetLink []model.AssetLink) grammar.Query {
 	if len(assetLink) == 0 {
 		return grammar.Query{}
@@ -376,15 +379,19 @@ func buildGlobalAssetIDAssetLinkCondition(value string, edcBpnClaim string, hasE
 	return grammar.LogicalExpression{
 		And: []grammar.LogicalExpression{
 			globalAssetIDCondition,
-			{
-				Or: authorizedSubjectExpressions(edcBpnClaim, hasEdcBpnClaim, func(subject string) grammar.LogicalExpression {
-					return grammar.LogicalExpression{
-						Match: []grammar.MatchExpression{
-							eqStringToFieldMatch(subject, "$aasdesc#specificAssetIds[].externalSubjectId.keys[].value"),
-						},
-					}
-				}),
-			},
+			globalAssetIDBPNAuthorizationCondition(edcBpnClaim, hasEdcBpnClaim),
+		},
+	}
+}
+
+func globalAssetIDBPNAuthorizationCondition(edcBpnClaim string, hasEdcBpnClaim bool) grammar.LogicalExpression {
+	if !hasEdcBpnClaim {
+		b := false
+		return grammar.LogicalExpression{Boolean: &b}
+	}
+	return grammar.LogicalExpression{
+		Match: []grammar.MatchExpression{
+			eqStringToFieldMatch(edcBpnClaim, "$aasdesc#specificAssetIds[].externalSubjectId.keys[].value"),
 		},
 	}
 }

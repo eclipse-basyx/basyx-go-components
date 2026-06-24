@@ -106,8 +106,18 @@
     "method": "POST",
     "endpoint": "http://127.0.0.1:6004/lookup/shellsByAssetLink",
     "data": "postBody/globalAssetIdAssetLink.json",
-    "shouldMatch": "expected/lookup/publicId.json",
+    "shouldMatch": "expected/lookup/emptyId.json",
     "expectedStatus": 200
+  },
+  {
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:6004/lookup/shellsByAssetLink",
+    "data": "postBody/globalAssetIdAssetLink.json",
+    "shouldMatch": "expected/lookup/emptyId.json",
+    "expectedStatus": 200,
+    "headers": {
+      "Edc-Bpn": "BPNL00000000015G"
+    }
   },
   {
     "method": "POST",
@@ -292,6 +302,14 @@
     "method": "POST",
     "endpoint": "http://127.0.0.1:6004/lookup/shellsByAssetLink",
     "data": "postBody/num4AssetLink.json",
+    "shouldMatch": "expected/lookup/publicId.json",
+    "expectedStatus": 200,
+    "token": { "user": "admin", "password": "pwd" }
+  },
+  {
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:6004/lookup/shellsByAssetLink",
+    "data": "postBody/globalAssetIdAssetLink.json",
     "shouldMatch": "expected/lookup/publicId.json",
     "expectedStatus": 200,
     "token": { "user": "admin", "password": "pwd" }
