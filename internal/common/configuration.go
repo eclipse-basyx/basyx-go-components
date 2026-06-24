@@ -69,6 +69,7 @@ var DefaultConfig = struct {
 	ABACEnabled                         bool
 	ABACModelPath                       string
 	ABACPolicyFileImport                string
+	ABACPolicyScope                     string
 	ABACManagementAPIEnabled            bool
 	GeneralImplicitCasts                bool
 	GeneralDescriptorDebug              bool
@@ -127,6 +128,7 @@ var DefaultConfig = struct {
 	ABACEnabled:                         false,
 	ABACModelPath:                       "config/access_rules/access-rules.json",
 	ABACPolicyFileImport:                "",
+	ABACPolicyScope:                     "",
 	ABACManagementAPIEnabled:            false,
 	GeneralImplicitCasts:                true,
 	GeneralDescriptorDebug:              false,
@@ -173,6 +175,8 @@ const (
 	ABACPolicyFileImportIfMissing = "if_missing"
 	// ABACPolicyFileImportNever disables startup file import and requires an active DB policy.
 	ABACPolicyFileImportNever = "never"
+
+	maxABACPolicyScopeLength = 255
 )
 
 // PrintSplash displays the BaSyx Go API ASCII art logo to the console.
@@ -387,6 +391,7 @@ type ABACConfig struct {
 	Enabled          bool                    `mapstructure:"enabled" yaml:"enabled" json:"enabled"`                             // Enable/disable ABAC
 	ModelPath        string                  `mapstructure:"modelPath" yaml:"modelPath" json:"modelPath"`                       // Path to access control model
 	PolicyFileImport string                  `mapstructure:"policyFileImport" yaml:"policyFileImport" json:"policyFileImport"`  // always|if_missing|never; empty uses the service default
+	PolicyScope      string                  `mapstructure:"policyScope" yaml:"policyScope" json:"policyScope"`                 // Optional DB policy namespace; empty uses the service default
 	ManagementAPI    ABACManagementAPIConfig `mapstructure:"managementApi" yaml:"managementApi" json:"managementApi,omitempty"` // Runtime ABAC policy management API
 }
 
@@ -571,6 +576,9 @@ func applyABACEnvOverrides(cfg *Config) {
 	if value, ok := lookupFirstTrimmedEnv("ABAC_POLICY_FILE_IMPORT", "BASYX_ABAC_POLICY_FILE_IMPORT"); ok {
 		cfg.ABAC.PolicyFileImport = value
 	}
+	if value, ok := lookupFirstTrimmedEnv("ABAC_POLICY_SCOPE", "BASYX_ABAC_POLICY_SCOPE"); ok {
+		cfg.ABAC.PolicyScope = value
+	}
 	applyFirstBoolEnv(func(value bool) { cfg.ABAC.ManagementAPI.Enabled = value },
 		"ABAC_MANAGEMENT_API_ENABLED",
 		"ABAC_MANAGEMENTAPI_ENABLED",
@@ -582,16 +590,62 @@ func validateABACConfig(cfg *Config) error {
 	if cfg == nil {
 		return fmt.Errorf("CONFIG-ABAC-NIL configuration must not be nil")
 	}
-	if strings.TrimSpace(cfg.ABAC.PolicyFileImport) == "" {
+	if strings.TrimSpace(cfg.ABAC.PolicyFileImport) != "" {
+		switch strings.ToLower(strings.TrimSpace(cfg.ABAC.PolicyFileImport)) {
+		case ABACPolicyFileImportAlways, ABACPolicyFileImportIfMissing, ABACPolicyFileImportNever:
+			cfg.ABAC.PolicyFileImport = strings.ToLower(strings.TrimSpace(cfg.ABAC.PolicyFileImport))
+		default:
+			return fmt.Errorf("CONFIG-ABAC-POLICYFILEIMPORT unsupported abac.policyFileImport %q", cfg.ABAC.PolicyFileImport)
+		}
+	}
+	if strings.TrimSpace(cfg.ABAC.PolicyScope) == "" {
+		cfg.ABAC.PolicyScope = ""
 		return nil
 	}
-	switch strings.ToLower(strings.TrimSpace(cfg.ABAC.PolicyFileImport)) {
-	case ABACPolicyFileImportAlways, ABACPolicyFileImportIfMissing, ABACPolicyFileImportNever:
-		cfg.ABAC.PolicyFileImport = strings.ToLower(strings.TrimSpace(cfg.ABAC.PolicyFileImport))
-		return nil
-	default:
-		return fmt.Errorf("CONFIG-ABAC-POLICYFILEIMPORT unsupported abac.policyFileImport %q", cfg.ABAC.PolicyFileImport)
+	scope, err := normalizeABACPolicyScope(cfg.ABAC.PolicyScope)
+	if err != nil {
+		return err
 	}
+	cfg.ABAC.PolicyScope = scope
+	return nil
+}
+
+// ConfiguredPolicyScope resolves the DB-backed ABAC policy namespace for a service.
+//
+// When abac.policyScope is empty, the service's built-in scope is used so
+// existing deployments keep their current policy isolation behavior.
+func ConfiguredPolicyScope(cfg *Config, defaultServiceScope string) (string, error) {
+	scope := defaultServiceScope
+	if cfg != nil && strings.TrimSpace(cfg.ABAC.PolicyScope) != "" {
+		scope = cfg.ABAC.PolicyScope
+	}
+	return normalizeABACPolicyScope(scope)
+}
+
+func normalizeABACPolicyScope(scope string) (string, error) {
+	trimmed := strings.TrimSpace(scope)
+	if trimmed == "" {
+		return "", fmt.Errorf("CONFIG-ABAC-POLICYSCOPE abac.policyScope must not be empty")
+	}
+	if len(trimmed) > maxABACPolicyScopeLength {
+		return "", fmt.Errorf("CONFIG-ABAC-POLICYSCOPE abac.policyScope must not exceed %d characters", maxABACPolicyScopeLength)
+	}
+	for _, char := range trimmed {
+		if !isABACPolicyScopeChar(char) {
+			return "", fmt.Errorf("CONFIG-ABAC-POLICYSCOPE abac.policyScope contains unsupported character %q", char)
+		}
+	}
+	return trimmed, nil
+}
+
+func isABACPolicyScopeChar(char rune) bool {
+	return char >= 'a' && char <= 'z' ||
+		char >= 'A' && char <= 'Z' ||
+		char >= '0' && char <= '9' ||
+		char == '_' ||
+		char == '-' ||
+		char == '.' ||
+		char == ':'
 }
 
 func applyHistoryEnvOverrides(cfg *Config) {
@@ -962,6 +1016,7 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("abac.enableDebugErrorResponses", false)
 	v.SetDefault("abac.modelPath", "config/access_rules/access-rules.json")
 	v.SetDefault("abac.policyFileImport", DefaultConfig.ABACPolicyFileImport)
+	v.SetDefault("abac.policyScope", DefaultConfig.ABACPolicyScope)
 	v.SetDefault("abac.managementApi.enabled", DefaultConfig.ABACManagementAPIEnabled)
 
 	// JWS defaults
@@ -1098,6 +1153,7 @@ func PrintConfiguration(cfg *Config) {
 	if cfg.ABAC.Enabled {
 		add("Model Path", cfg.ABAC.ModelPath, DefaultConfig.ABACModelPath)
 		add("Policy File Import", cfg.ABAC.PolicyFileImport, DefaultConfig.ABACPolicyFileImport)
+		add("Policy Scope", cfg.ABAC.PolicyScope, DefaultConfig.ABACPolicyScope)
 		add("Management API Enabled", cfg.ABAC.ManagementAPI.Enabled, DefaultConfig.ABACManagementAPIEnabled)
 
 		lines = append(lines, "🔹 OIDC:")
