@@ -94,10 +94,12 @@ func (s *CustomDiscoveryService) SearchAllAssetAdministrationShellIdsByAssetLink
 		), enforceErr
 	}
 
-	assetLinkQuery := buildDTRAssetLinkLookupQuery(ctx, assetLink, shouldEnforceFormula)
-	if assetLinkQuery.Condition != nil || len(assetLinkQuery.FilterConditions) > 0 {
-		ctx = auth.MergeQueryFilter(ctx, assetLinkQuery)
-		ctx = discoveryapiinternal.WithAssetLinksAlreadyConstrained(ctx)
+	if shouldEnforceFormula {
+		assetLinkQuery := buildAssetLinkQuery(ctx, assetLink)
+		if assetLinkQuery.Condition != nil || len(assetLinkQuery.FilterConditions) > 0 {
+			ctx = auth.MergeQueryFilter(ctx, assetLinkQuery)
+			ctx = discoveryapiinternal.WithAssetLinksAlreadyConstrained(ctx)
+		}
 	}
 
 	createdAfter, _ := CreatedAfterFromContext(ctx)

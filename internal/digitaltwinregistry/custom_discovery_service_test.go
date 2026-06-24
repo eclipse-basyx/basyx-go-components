@@ -27,14 +27,19 @@ package digitaltwinregistry
 
 import (
 	"context"
+	"fmt"
+	"net/http"
 	"strings"
 	"testing"
 
+	sqlmock "github.com/DATA-DOG/go-sqlmock"
 	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
+	discoveryapiinternal "github.com/eclipse-basyx/basyx-go-components/internal/discoveryservice/api"
+	persistencepostgresql "github.com/eclipse-basyx/basyx-go-components/internal/discoveryservice/persistence"
 )
 
 func TestBuildAssetLinkQuery_ReturnsEmptyWhenReadFormulaIsUnrestricted(t *testing.T) {
@@ -140,6 +145,63 @@ func TestBuildDTRAssetLinkLookupQuery_GlobalAssetIDUsesDescriptorValueWithoutAss
 	}
 	if strings.Contains(sql, `"external_subject_reference_key"`) {
 		t.Fatalf("did not expect external-subject authorization in lookup-only query, got SQL: %s", sql)
+	}
+}
+
+func TestSearchAllAssetAdministrationShellIdsByAssetLink_WhenFormulaDisabledKeepsBackendGlobalAssetIDFallback(t *testing.T) {
+	t.Parallel()
+
+	matcher := sqlmock.QueryMatcherFunc(func(_ string, actualSQL string) error {
+		if !strings.Contains(actualSQL, `"aas_descriptor"."global_asset_id" = 'global-asset'`) {
+			return fmt.Errorf("expected direct global_asset_id lookup, got SQL: %s", actualSQL)
+		}
+		if !strings.Contains(actualSQL, "OR EXISTS") {
+			return fmt.Errorf("expected backend globalAssetId fallback OR, got SQL: %s", actualSQL)
+		}
+		if !strings.Contains(actualSQL, `"sai"."name" = 'globalAssetId'`) {
+			return fmt.Errorf("expected backend generated asset-link fallback, got SQL: %s", actualSQL)
+		}
+		return nil
+	})
+	db, mock, err := sqlmock.New(sqlmock.QueryMatcherOption(matcher))
+	if err != nil {
+		t.Fatalf("failed to create sqlmock: %v", err)
+	}
+	defer func() { _ = db.Close() }()
+
+	backend, err := persistencepostgresql.NewPostgreSQLDiscoveryBackendFromDB(db)
+	if err != nil {
+		t.Fatalf("failed to create backend: %v", err)
+	}
+	base := discoveryapiinternal.NewAssetAdministrationShellBasicDiscoveryAPIAPIService(*backend)
+	service := NewCustomDiscoveryService(base, nil)
+
+	rows := sqlmock.NewRows([]string{"aasid"}).AddRow("urn:aas:test:global")
+	mock.ExpectQuery("global asset id lookup").WillReturnRows(rows)
+
+	ctx := common.ContextWithConfig(context.Background(), &common.Config{})
+	response, searchErr := service.SearchAllAssetAdministrationShellIdsByAssetLink(
+		ctx,
+		100,
+		"",
+		[]model.AssetLink{{Name: common.GlobalAssetIDAssetLinkName, Value: "global-asset"}},
+	)
+	if searchErr != nil {
+		t.Fatalf("expected search to succeed: %v", searchErr)
+	}
+	if response.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d", http.StatusOK, response.Code)
+	}
+
+	body, ok := response.Body.(model.GetAllAssetAdministrationShellIdsByAssetLink200Response)
+	if !ok {
+		t.Fatalf("expected response body type GetAllAssetAdministrationShellIdsByAssetLink200Response, got %T", response.Body)
+	}
+	if len(body.Result) != 1 || body.Result[0] != "urn:aas:test:global" {
+		t.Fatalf("expected global AAS id result, got %#v", body.Result)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("expected query to be executed: %v", err)
 	}
 }
 
