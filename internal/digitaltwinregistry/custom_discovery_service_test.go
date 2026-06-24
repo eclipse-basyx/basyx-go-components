@@ -114,6 +114,49 @@ func TestBuildAssetLinkQuery_GlobalAssetIDUsesDescriptorValueAndTwinExternalSubj
 	}
 }
 
+func TestBuildDTRAssetLinkLookupQuery_GlobalAssetIDUsesDescriptorValueWithoutAssetLinkFallback(t *testing.T) {
+	t.Parallel()
+
+	query := buildDTRAssetLinkLookupQuery(context.Background(), []model.AssetLink{
+		{Name: common.GlobalAssetIDAssetLinkName, Value: "global-asset"},
+	}, false)
+	if query.Condition == nil {
+		t.Fatalf("expected globalAssetId condition")
+	}
+
+	collector, err := grammar.NewResolvedFieldPathCollectorForRoot(grammar.CollectorRootBD)
+	if err != nil {
+		t.Fatalf("failed to build collector: %v", err)
+	}
+	expr, _, err := query.Condition.EvaluateToExpression(collector)
+	if err != nil {
+		t.Fatalf("expected globalAssetId query to compile: %v", err)
+	}
+
+	sql, _, err := goqu.Dialect(common.Dialect).
+		From(goqu.T(common.TblAASIdentifier)).
+		LeftJoin(
+			goqu.T(common.TblAASDescriptor),
+			goqu.On(goqu.I(common.TblAASDescriptor+"."+common.ColAASID).Eq(goqu.I(common.TblAASIdentifier+".aasid"))),
+		).
+		Select(goqu.V(1)).
+		Where(expr).
+		ToSQL()
+	if err != nil {
+		t.Fatalf("expected SQL generation to succeed: %v", err)
+	}
+
+	if !strings.Contains(sql, `"aas_descriptor"."global_asset_id" = 'global-asset'`) {
+		t.Fatalf("expected direct global_asset_id comparison, got SQL: %s", sql)
+	}
+	if strings.Contains(sql, `"specific_asset_id"."name" = 'globalAssetId'`) {
+		t.Fatalf("did not expect generated globalAssetId asset-link fallback, got SQL: %s", sql)
+	}
+	if strings.Contains(sql, `"external_subject_reference_key"`) {
+		t.Fatalf("did not expect external-subject authorization in lookup-only query, got SQL: %s", sql)
+	}
+}
+
 func restrictedReadContext() context.Context {
 	b := false
 	return auth.MergeQueryFilter(context.Background(), grammar.Query{

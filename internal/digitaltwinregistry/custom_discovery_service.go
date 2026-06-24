@@ -94,12 +94,10 @@ func (s *CustomDiscoveryService) SearchAllAssetAdministrationShellIdsByAssetLink
 		), enforceErr
 	}
 
-	if shouldEnforceFormula {
-		assetLinkQuery := buildAssetLinkQuery(ctx, assetLink)
-		if assetLinkQuery.Condition != nil || len(assetLinkQuery.FilterConditions) > 0 {
-			ctx = auth.MergeQueryFilter(ctx, assetLinkQuery)
-			ctx = discoveryapiinternal.WithAssetLinksAlreadyConstrained(ctx)
-		}
+	assetLinkQuery := buildDTRAssetLinkLookupQuery(ctx, assetLink, shouldEnforceFormula)
+	if assetLinkQuery.Condition != nil || len(assetLinkQuery.FilterConditions) > 0 {
+		ctx = auth.MergeQueryFilter(ctx, assetLinkQuery)
+		ctx = discoveryapiinternal.WithAssetLinksAlreadyConstrained(ctx)
 	}
 
 	createdAfter, _ := CreatedAfterFromContext(ctx)
@@ -316,10 +314,19 @@ func buildAssetLinkQuery(ctx context.Context, assetLink []model.AssetLink) gramm
 		return grammar.Query{}
 	}
 
+	return buildDTRAssetLinkLookupQuery(ctx, assetLink, true)
+}
+
+func buildDTRAssetLinkLookupQuery(ctx context.Context, assetLink []model.AssetLink, enforceAuthorization bool) grammar.Query {
+	if len(assetLink) == 0 {
+		return grammar.Query{}
+	}
+
 	edcBpnClaim, hasEdcBpnClaim := edcBpnClaimFromContext(ctx)
+	requireAuthorization := enforceAuthorization && !auth.HasUnrestrictedFormulaForRight(ctx, grammar.RightsEnumREAD)
 	assetLinkLe := grammar.LogicalExpression{And: make([]grammar.LogicalExpression, 0, len(assetLink))}
 	for _, link := range assetLink {
-		assetLinkLe.And = append(assetLinkLe.And, buildAssetLinkCondition(link, edcBpnClaim, hasEdcBpnClaim))
+		assetLinkLe.And = append(assetLinkLe.And, buildAssetLinkCondition(link, edcBpnClaim, hasEdcBpnClaim, requireAuthorization))
 	}
 
 	return grammar.Query{
@@ -333,31 +340,42 @@ func edcBpnClaimFromContext(ctx context.Context) (string, bool) {
 	return edcBpnClaim, hasEdcBpnClaim && strings.TrimSpace(edcBpnClaim) != ""
 }
 
-func buildAssetLinkCondition(link model.AssetLink, edcBpnClaim string, hasEdcBpnClaim bool) grammar.LogicalExpression {
+func buildAssetLinkCondition(link model.AssetLink, edcBpnClaim string, hasEdcBpnClaim bool, requireAuthorization bool) grammar.LogicalExpression {
 	if link.Name == common.GlobalAssetIDAssetLinkName {
-		return buildGlobalAssetIDAssetLinkCondition(link.Value, edcBpnClaim, hasEdcBpnClaim)
+		return buildGlobalAssetIDAssetLinkCondition(link.Value, edcBpnClaim, hasEdcBpnClaim, requireAuthorization)
 	}
-	return buildSpecificAssetLinkCondition(link, edcBpnClaim, hasEdcBpnClaim)
+	return buildSpecificAssetLinkCondition(link, edcBpnClaim, hasEdcBpnClaim, requireAuthorization)
 }
 
-func buildSpecificAssetLinkCondition(link model.AssetLink, edcBpnClaim string, hasEdcBpnClaim bool) grammar.LogicalExpression {
+func buildSpecificAssetLinkCondition(link model.AssetLink, edcBpnClaim string, hasEdcBpnClaim bool, requireAuthorization bool) grammar.LogicalExpression {
+	matches := []grammar.MatchExpression{
+		eqFieldToStringMatch("$aasdesc#specificAssetIds[].value", link.Value),
+		eqFieldToStringMatch("$aasdesc#specificAssetIds[].name", link.Name),
+	}
+	if !requireAuthorization {
+		return grammar.LogicalExpression{Match: matches}
+	}
+
 	return grammar.LogicalExpression{
 		Or: authorizedSubjectExpressions(edcBpnClaim, hasEdcBpnClaim, func(subject string) grammar.LogicalExpression {
+			subjectMatches := append([]grammar.MatchExpression(nil), matches...)
+			subjectMatches = append(subjectMatches, eqStringToFieldMatch(subject, "$aasdesc#specificAssetIds[].externalSubjectId.keys[].value"))
 			return grammar.LogicalExpression{
-				Match: []grammar.MatchExpression{
-					eqFieldToStringMatch("$aasdesc#specificAssetIds[].value", link.Value),
-					eqFieldToStringMatch("$aasdesc#specificAssetIds[].name", link.Name),
-					eqStringToFieldMatch(subject, "$aasdesc#specificAssetIds[].externalSubjectId.keys[].value"),
-				},
+				Match: subjectMatches,
 			}
 		}),
 	}
 }
 
-func buildGlobalAssetIDAssetLinkCondition(value string, edcBpnClaim string, hasEdcBpnClaim bool) grammar.LogicalExpression {
+func buildGlobalAssetIDAssetLinkCondition(value string, edcBpnClaim string, hasEdcBpnClaim bool, requireAuthorization bool) grammar.LogicalExpression {
+	globalAssetIDCondition := eqFieldToStringExpression("$aasdesc#globalAssetId", value)
+	if !requireAuthorization {
+		return globalAssetIDCondition
+	}
+
 	return grammar.LogicalExpression{
 		And: []grammar.LogicalExpression{
-			eqFieldToStringExpression("$aasdesc#globalAssetId", value),
+			globalAssetIDCondition,
 			{
 				Or: authorizedSubjectExpressions(edcBpnClaim, hasEdcBpnClaim, func(subject string) grammar.LogicalExpression {
 					return grammar.LogicalExpression{
