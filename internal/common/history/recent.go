@@ -100,6 +100,52 @@ func RecentRows(ctx context.Context, db *sql.DB, table string, limit int32, curs
 
 // RecentRowsForVisibleIdentifiables returns recent history rows whose current
 // identifiable rows satisfy the formula constraints in ctx.
+//
+// The function uses the same cursor, timestamp filter, restore, and ordering
+// semantics as RecentRows. When visibilityDS is provided, ABAC formula
+// constraints from ctx are added to that dataset and the history query includes
+// only rows for which the current normalized entity still exists and is visible.
+// Pass a nil visibilityDS and collector to read directly from history without
+// current-table visibility filtering.
+//
+// Parameters:
+//   - ctx: Request context used for database reads and optional ABAC formula
+//     lookup.
+//   - db: Database handle that can read the history, payload, and optional
+//     current visibility tables.
+//   - table: History table name, for example TableAAS, TableDescriptor, or
+//     TableSubmodelDescriptor.
+//   - limit: Maximum number of rows to return. Values less than one use
+//     DefaultRecentChangesLimit.
+//   - cursor: Optional history_id cursor from a previous response.
+//   - createdFrom: Optional lower bound for operation or administration-created
+//     timestamps.
+//   - updatedFrom: Optional lower bound for operation or administration-updated
+//     timestamps.
+//   - visibilityDS: Optional goqu dataset selecting visible current rows. The
+//     dataset should reference the history row through the alias "history".
+//   - collector: Optional resolved field-path collector for the ABAC formula
+//     root used by visibilityDS.
+//
+// Returns:
+//   - []Row: Restored visible rows ordered newest first.
+//   - string: Cursor for the next older page, or an empty string when exhausted.
+//   - error: Error when limits/cursors are invalid, ABAC formula expansion fails,
+//     snapshots cannot be restored, hashes fail verification, or database reads
+//     fail.
+//
+// Example:
+//
+//	visibility := goqu.From(goqu.T("submodel_descriptor")).
+//		Select(goqu.V(1)).
+//		Where(goqu.I("submodel_descriptor.id").Eq(goqu.I("history.identifier")))
+//	rows, nextCursor, err := RecentRowsForVisibleIdentifiables(
+//		ctx, db, TableSubmodelDescriptor, 100, cursor, createdFrom, updatedFrom, visibility, collector,
+//	)
+//	if err != nil {
+//		return nil, "", err
+//	}
+//	return rows, nextCursor, nil
 func RecentRowsForVisibleIdentifiables(
 	ctx context.Context,
 	db *sql.DB,

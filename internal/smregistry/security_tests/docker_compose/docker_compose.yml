@@ -33,6 +33,7 @@ services:
       - ABAC_ENABLED=true
       - ABAC_MODELPATH=/security_env/access-rules.json
       - OIDC_TRUSTLISTPATH=/security_env/trustlist.json
+      - BASYX_HISTORY_MODE=api
     ports:
       - "6005:5004"
     depends_on:

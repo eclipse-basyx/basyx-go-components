@@ -63,9 +63,6 @@ func runServer(ctx context.Context, configPath string) error {
 	if err != nil {
 		return err
 	}
-	if !abacpolicy.ManagementAPIAllowed("digitaltwinregistryservice") {
-		cfg.ABAC.ManagementAPI.Enabled = false
-	}
 	if err := commonmodel.SetVerificationMode(cfg.Server.StrictVerification); err != nil {
 		return err
 	}

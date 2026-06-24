@@ -40,13 +40,14 @@ Implemented history, recent-change, and signing runtime areas from the v3.2 Open
 - Submodel Repository compatibility route: `/submodels/{submodelIdentifier}/$value/$signed` is exposed by the generated Go router and existing integration coverage, although it is not listed in the current local v3.2 OpenAPI file.
 - Concept Description Repository: `/concept-descriptions/$recent-changes`.
 - AAS Registry and Digital Twin Registry: `/shell-descriptors/$recent-changes`.
+- Submodel Registry: `/submodel-descriptors/$recent-changes`.
 - AAS Environment: `/serialization`, `/upload`, `/shell-descriptors/$recent-changes`, `/shells/$recent-changes`, `/shells/{aasIdentifier}/$history`, `/shells/{aasIdentifier}/$signed`, `/submodels/$recent-changes`, `/submodels/{submodelIdentifier}/$history`, `/submodels/{submodelIdentifier}/$signed`, `/submodels/{submodelIdentifier}/$value/$signed`, `/concept-descriptions/$recent-changes`, and the composed asynchronous operation result/status endpoints.
 - Migration `1_1_0.sql`: adds v3.2 timestamp columns and the enum migration for `Batch`.
 - Migration `1_1_1.sql`: adds history metadata and payload tables, indexes, and PostgreSQL mutation guards.
 - Migration `1_1_2.sql`: adds snapshot-checkpoint indexes for diff-backed restore.
 - Migration `1_1_3.sql`: adds WORM evidence manifest and artifact receipt catalogs.
-
-The Submodel Registry does not have a recent-changes endpoint in the official v3.2 profile currently used here.
+- Migration `1_1_4.sql`: adds ABAC policy version, rule, and policy-event tables plus ABAC policy evidence artifact support.
+- Migration `1_1_5.sql`: adds dedicated Submodel Registry descriptor history metadata and payload tables.
 
 The current v3.2 Submodel Repository OpenAPI also defines `PUT`, `PATCH`, and `DELETE` on `/submodels/{submodelIdentifier}/$signed`. These operations use the normal Submodel request bodies and are routed to the same runtime behavior as `PUT`, `PATCH`, and `DELETE` on `/submodels/{submodelIdentifier}`.
 
@@ -67,6 +68,7 @@ History metadata is stored in dedicated append-only tables:
 - `submodel_history`
 - `concept_description_history`
 - `descriptor_history`
+- `submodel_descriptor_history`
 
 The complete JSON snapshot is stored in a one-to-one payload table:
 
@@ -74,6 +76,7 @@ The complete JSON snapshot is stored in a one-to-one payload table:
 - `submodel_history_payload`
 - `concept_description_history_payload`
 - `descriptor_history_payload`
+- `submodel_descriptor_history_payload`
 
 Each metadata row stores:
 
@@ -147,6 +150,7 @@ This reduces reads against the normalized backend for partial updates and bounds
 | Submodel | Create, full replace, and full patch append a complete Submodel snapshot. Delete appends an `{id}` tombstone. | Metadata updates replace metadata while preserving `submodelElements`. SME create/update/patch/delete, value-only changes, and attachment changes reload only the affected top-level SME root subtree and splice it into the previous snapshot. | Materialize the complete current Submodel once. |
 | Concept Description | Create and replace append the supplied complete Concept Description snapshot. Delete appends an `{id}` tombstone. | No nested partial write path is required. | Not applicable. |
 | AAS descriptor | Create and full replace append the stored complete AAS descriptor. Delete appends the complete descriptor marked as deleted. | Nested Submodel descriptor add/replace/remove mutates the owning AAS descriptor snapshot. | Materialize the complete current AAS descriptor once. |
+| Submodel descriptor | Create, replace, and delete append the stored complete standalone Submodel descriptor. | No nested partial write path is required. | Not applicable. |
 
 Submodel elements and nested Submodel descriptors are not versioned independently. A child mutation creates a new snapshot for its owning identifiable. For SMEs, reloading the top-level subtree after the current-state mutation covers nested edits, renamed `idShort` values, and list-position changes without re-reading the entire Submodel.
 
@@ -197,6 +201,10 @@ The table lists direct write endpoints. The AAS Environment exposes the correspo
 | `/shell-descriptors/{aasIdentifier}/submodel-descriptors` | `POST` | `descriptor_history` | `Updated` |
 | `/shell-descriptors/{aasIdentifier}/submodel-descriptors/{submodelIdentifier}` | `PUT`, `DELETE` | `descriptor_history` | `Updated` |
 | `/bulk/shell-descriptors` | `POST`, `PUT`, `DELETE` | `descriptor_history` | One corresponding event per descriptor after asynchronous processing succeeds |
+| `/submodel-descriptors` | `POST` | `submodel_descriptor_history` | `Created` |
+| `/submodel-descriptors/{submodelIdentifier}` | `PUT` | `submodel_descriptor_history` | `Created` or `Updated` |
+| `/submodel-descriptors/{submodelIdentifier}` | `DELETE` | `submodel_descriptor_history` | `Deleted` |
+| `/bulk/submodel-descriptors` | `POST`, `PUT`, `DELETE` | `submodel_descriptor_history` | One corresponding event per descriptor after asynchronous processing succeeds |
 
 The environment import portion of AAS Environment `/upload` invokes the corresponding identifiable `PUT` paths. One upload can therefore append multiple rows across the Concept Description, Submodel, and AAS streams rather than one special upload event.
 
@@ -351,7 +359,7 @@ Diff-backed rows use the existing `payload_type`, `payload_hash`, and nullable `
 History-aware HTTP services install a shared mutation-coverage middleware. Every `POST`, `PUT`, `PATCH`, or `DELETE` request must match an explicitly classified route whenever history is active:
 
 - Versioned routes are allowed and carry a `MutationCoverage` context value with `Versioned: true`.
-- Deliberately non-versioned writes, such as query, invocation, discovery-link, and standalone Submodel Registry routes, are explicit exemptions with `Versioned: false`.
+- Deliberately non-versioned writes, such as query, invocation, and discovery-link routes, are explicit exemptions with `Versioned: false`.
 - An unclassified mutation is rejected before its handler runs with `HISTORY-COVERAGE-UNCLASSIFIED`.
 
 Generated component routes are classified centrally by operation name during server startup. Hand-written routes such as `/bulk/shell-descriptors`, AAS Environment `/upload`, and `/bulk/submodel-descriptors` are classified where they are registered. This makes a forgotten trigger point fail closed instead of committing a current-state write without its required snapshot.
@@ -377,18 +385,20 @@ Current filters:
 - `updatedFrom`
 - AAS recent changes additionally apply asset-id filtering to non-deleted rows.
 - Submodel recent changes additionally apply semantic-id filtering to non-deleted rows.
-- Descriptor recent changes additionally apply `assetKind`, `assetType`, and asset-id filtering to non-deleted rows.
+- AAS descriptor recent changes additionally apply `assetKind`, `assetType`, and asset-id filtering to non-deleted rows.
+- Submodel descriptor recent changes intentionally have no descriptor-specific filter; they support only `cursor`, `limit`, `createdFrom`, and `updatedFrom`.
 
 The published Part 2 OpenAPI schema is the source of truth for the response projection. The result shapes are intentionally component-specific:
 
 - AAS results contain the shared `type`, `createdAt`, and `updatedAt` fields plus `id`, `globalAssetId`, and `specificAssetIds`.
 - Submodel results contain the shared fields plus `id`, `semanticId`, and `supplementalSemanticIds`.
 - Concept Description results contain the shared fields plus `id`. This fills the missing shared-schema result type consistently with the other identifiable repositories.
-- Descriptor results contain complete AAS descriptor snapshots as required by the registry profile.
+- AAS descriptor results contain complete AAS descriptor snapshots as required by the registry profile.
+- Submodel descriptor results contain complete Submodel descriptor snapshots as required by the registry profile.
 
-For AAS and Submodel reads, resource-specific metadata is projected from the restored history snapshot, never from current normalized tables. Deleted AAS, Submodel, and Concept Description rows remain id-based tombstones with the shared change metadata. Descriptor recent changes skip deleted descriptor rows because there is no complete descriptor snapshot to return.
+For AAS and Submodel reads, resource-specific metadata is projected from the restored history snapshot, never from current normalized tables. Deleted AAS, Submodel, and Concept Description rows remain id-based tombstones with the shared change metadata. Descriptor recent changes skip deleted descriptor rows because the registry result schemas do not model tombstones.
 
-The encoded query contract is applied consistently: `assetIds` contain base64url-encoded `SpecificAssetId` JSON objects, Submodel `semanticId` contains a base64url-encoded reference value, and descriptor `assetType` is base64url-encoded UTF-8. Filtered feeds continue scanning history pages until the requested result limit is filled or the feed ends, so post-snapshot filtering does not underfill pages incorrectly.
+The encoded query contract is applied consistently: `assetIds` contain base64url-encoded `SpecificAssetId` JSON objects, Submodel `semanticId` contains a base64url-encoded reference value, and AAS descriptor `assetType` is base64url-encoded UTF-8. Filtered feeds continue scanning history pages until the requested result limit is filled or the feed ends, so post-snapshot filtering does not underfill pages incorrectly.
 
 When a payload does not carry administrative timestamps, the recent-change projection uses the history operation timestamp. This keeps `createdAt` and `updatedAt` populated without re-reading current tables.
 
@@ -424,11 +434,13 @@ Current behavior:
 - Route-level authorization applies to history and recent-change endpoints.
 - Normal current-entity reads still use their established ABAC filtering paths.
 - Recent-change delete tombstones only expose identifiers and shared change metadata for AAS, Submodel, and Concept Description rows.
+- Descriptor recent-change feeds apply current descriptor visibility and omit deleted descriptors.
 
 Intentional scope boundary for this release:
 
 - Historical snapshots are stored as JSON and are not re-querying the normalized current tables.
-- `$history` and `$recent-changes` do not apply current-table ABAC formula filters or logical-expression redaction to snapshot JSON.
+- `$history` does not apply current-table ABAC formula filters or logical-expression redaction to stored snapshots.
+- `$recent-changes` applies current-table ABAC formula filters for current visible rows but does not redact fields inside returned snapshot JSON.
 - Route assignments for these endpoints must only be granted to principals allowed to read the complete resource returned by the endpoint.
 
 Recommended follow-up:

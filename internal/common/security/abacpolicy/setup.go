@@ -90,21 +90,25 @@ func SetupSecurityWithABACRepository(
 	cfg *common.Config,
 	r *chi.Mux,
 	db *sql.DB,
-	serviceScope string,
+	serviceType string,
 	claimsMiddleware ...func(http.Handler) http.Handler,
 ) (*Repository, error) {
 	if cfg == nil || !cfg.ABAC.Enabled {
 		return nil, nil
 	}
-	repo, err := NewRepository(db, serviceScope, r, cfg.Server.ContextPath)
+	policyScope, err := common.ConfiguredPolicyScope(cfg, serviceType)
 	if err != nil {
 		return nil, err
 	}
-	mode, err := resolvePolicyFileImportMode(cfg.ABAC.PolicyFileImport, serviceScope)
+	repo, err := NewRepository(db, policyScope, r, cfg.Server.ContextPath)
 	if err != nil {
 		return nil, err
 	}
-	if err = initializeRepository(ctx, repo, cfg.ABAC.ModelPath, serviceScope, mode); err != nil {
+	mode, err := resolvePolicyFileImportMode(cfg.ABAC.PolicyFileImport, serviceType)
+	if err != nil {
+		return nil, err
+	}
+	if err = initializeRepository(ctx, repo, cfg.ABAC.ModelPath, policyScope, mode); err != nil {
 		return nil, err
 	}
 	if err = auth.SetupSecurityWithAccessModelProvider(ctx, cfg, r, repo, claimsMiddleware...); err != nil {
@@ -113,28 +117,18 @@ func SetupSecurityWithABACRepository(
 	return repo, nil
 }
 
-// ManagementAPIAllowed reports whether a service may expose ABAC management.
-//
-// Digital Twin Registry deliberately returns false because its access-rule file
-// remains the operational source of truth and is re-imported on restart.
-func ManagementAPIAllowed(serviceScope string) bool {
-	return !strings.EqualFold(strings.TrimSpace(serviceScope), "digitaltwinregistryservice")
-}
-
 // ManagementRoutesEnabled reports whether management routes should be mounted.
 //
 // The API is available only when ABAC is enabled, the management API is
-// explicitly enabled by configuration, and the service scope is allowed to
-// expose runtime policy management.
-func ManagementRoutesEnabled(cfg *common.Config, serviceScope string) bool {
-	return cfg != nil && cfg.ABAC.Enabled && cfg.ABAC.ManagementAPI.Enabled && ManagementAPIAllowed(serviceScope)
+// explicitly enabled by configuration.
+func ManagementRoutesEnabled(cfg *common.Config, _ string) bool {
+	return cfg != nil && cfg.ABAC.Enabled && cfg.ABAC.ManagementAPI.Enabled
 }
 
 // RegisterManagementRoutesIfEnabled mounts the protected management API.
 //
 // This helper is safe to call for every service. It no-ops when the repository
-// is nil, ABAC is disabled, management is not opted in, or the service scope is
-// not allowed to expose management routes.
+// is nil, ABAC is disabled, or management is not opted in.
 func RegisterManagementRoutesIfEnabled(cfg *common.Config, r chi.Router, repo *Repository, serviceScope string) {
 	if repo == nil || !ManagementRoutesEnabled(cfg, serviceScope) {
 		return

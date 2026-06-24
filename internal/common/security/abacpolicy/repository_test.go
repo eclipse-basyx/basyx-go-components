@@ -113,6 +113,58 @@ func TestPublishActivePolicyAfterFailClosedClearRestoresCache(t *testing.T) {
 	}
 }
 
+func TestRepositoriesWithDifferentScopesLoadIndependentActivePolicies(t *testing.T) {
+	t.Parallel()
+
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("sqlmock setup failed: %v", err)
+	}
+	defer func() {
+		_ = db.Close()
+	}()
+	publicRepo, err := NewRepository(db, "dtr-public", chi.NewRouter(), "")
+	if err != nil {
+		t.Fatalf("public repository setup failed: %v", err)
+	}
+	internalRepo, err := NewRepository(db, "aasregistry-internal", chi.NewRouter(), "")
+	if err != nil {
+		t.Fatalf("internal repository setup failed: %v", err)
+	}
+	materialized := testMaterializedPolicy(t)
+	publicActive := testPolicyVersion(10, StatusActive, materialized)
+	publicActive.ServiceScope = "dtr-public"
+	publicActive.PolicyID = strings.Repeat("a", 64)
+	internalActive := testPolicyVersion(20, StatusActive, materialized)
+	internalActive.ServiceScope = "aasregistry-internal"
+	internalActive.PolicyID = strings.Repeat("b", 64)
+
+	mock.ExpectQuery(`FROM "abac_policy_versions".*"service_scope" = 'dtr-public'.*"status" = 'active'`).
+		WillReturnRows(policyVersionRows(publicActive))
+	mock.ExpectQuery(`FROM "abac_policy_rules".*"service_scope" = 'dtr-public'.*"version_id" = 10`).
+		WillReturnRows(policyRuleRows())
+	mock.ExpectQuery(`FROM "abac_policy_versions".*"service_scope" = 'aasregistry-internal'.*"status" = 'active'`).
+		WillReturnRows(policyVersionRows(internalActive))
+	mock.ExpectQuery(`FROM "abac_policy_rules".*"service_scope" = 'aasregistry-internal'.*"version_id" = 20`).
+		WillReturnRows(policyRuleRows())
+
+	if err = publicRepo.RefreshActiveModel(t.Context()); err != nil {
+		t.Fatalf("refresh public policy failed: %v", err)
+	}
+	if err = internalRepo.RefreshActiveModel(t.Context()); err != nil {
+		t.Fatalf("refresh internal policy failed: %v", err)
+	}
+	if publicRepo.ActiveAccessModel().PolicyID() != publicActive.PolicyID {
+		t.Fatalf("expected public policy %q, got %q", publicActive.PolicyID, publicRepo.ActiveAccessModel().PolicyID())
+	}
+	if internalRepo.ActiveAccessModel().PolicyID() != internalActive.PolicyID {
+		t.Fatalf("expected internal policy %q, got %q", internalActive.PolicyID, internalRepo.ActiveAccessModel().PolicyID())
+	}
+	if err = mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("unmet SQL expectations: %v", err)
+	}
+}
+
 func TestResolvePolicyFileImportModeAppliesServiceDefaults(t *testing.T) {
 	t.Parallel()
 
@@ -162,17 +214,17 @@ func TestResolvePolicyFileImportModeRejectsUnsupportedValue(t *testing.T) {
 	}
 }
 
-func TestManagementAPIAllowedRejectsDigitalTwinRegistry(t *testing.T) {
+func TestManagementRoutesEnabledRequiresExplicitOptIn(t *testing.T) {
 	t.Parallel()
 
-	if ManagementAPIAllowed("digitaltwinregistryservice") {
-		t.Fatal("expected Digital Twin Registry management API to be rejected")
+	cfg := &common.Config{
+		ABAC: common.ABACConfig{
+			Enabled: true,
+		},
 	}
-	if ManagementAPIAllowed(" DigitalTwinRegistryService ") {
-		t.Fatal("expected Digital Twin Registry management API to be rejected with whitespace and case normalization")
-	}
-	if !ManagementAPIAllowed("submodelrepositoryservice") {
-		t.Fatal("expected non-DTR service scope to allow opt-in management API")
+
+	if ManagementRoutesEnabled(cfg, "digitaltwinregistryservice") {
+		t.Fatal("expected management routes to stay disabled without explicit opt-in")
 	}
 }
 

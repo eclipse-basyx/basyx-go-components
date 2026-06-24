@@ -18,6 +18,7 @@ import (
 	"log"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
@@ -72,6 +73,12 @@ func (c *SubmodelRegistryAPIAPIController) Routes() Routes {
 			"/submodel-descriptors",
 			c.GetAllSubmodelDescriptors,
 		},
+		"GetAllSubmodelDescriptorsRecentChanges": Route{
+			"GetAllSubmodelDescriptorsRecentChanges",
+			strings.ToUpper("Get"),
+			"/submodel-descriptors/$recent-changes",
+			c.GetAllSubmodelDescriptorsRecentChanges,
+		},
 		"PostSubmodelDescriptor": Route{
 			"PostSubmodelDescriptor",
 			strings.ToUpper("Post"),
@@ -113,6 +120,12 @@ func (c *SubmodelRegistryAPIAPIController) OrderedRoutes() []Route {
 			strings.ToUpper("Get"),
 			"/submodel-descriptors",
 			c.GetAllSubmodelDescriptors,
+		},
+		Route{
+			"GetAllSubmodelDescriptorsRecentChanges",
+			strings.ToUpper("Get"),
+			"/submodel-descriptors/$recent-changes",
+			c.GetAllSubmodelDescriptorsRecentChanges,
 		},
 		Route{
 			"PostSubmodelDescriptor",
@@ -253,6 +266,78 @@ func (c *SubmodelRegistryAPIAPIController) GetAllSubmodelDescriptors(w http.Resp
 		return
 	}
 	// If no error, encode the body and the result code
+	_ = EncodeJSONResponse(result.Body, &result.Code, w)
+}
+
+// GetAllSubmodelDescriptorsRecentChanges - Returns all Submodel Descriptors that have been changed recently
+func (c *SubmodelRegistryAPIAPIController) GetAllSubmodelDescriptorsRecentChanges(w http.ResponseWriter, r *http.Request) {
+	query, err := parseQuery(r.URL.RawQuery)
+	if err != nil {
+		log.Printf("🧩 [%s] Error in GetAllSubmodelDescriptorsRecentChanges: parse query raw=%q: %v", componentName, r.URL.RawQuery, err)
+		result := common.NewErrorResponse(
+			err,
+			http.StatusBadRequest,
+			componentName,
+			"GetAllSubmodelDescriptorsRecentChanges",
+			"query",
+		)
+		_ = EncodeJSONResponse(result.Body, &result.Code, w)
+		return
+	}
+
+	var createdFromParam time.Time
+	if query.Has("createdFrom") {
+		createdFromParam, err = parseTime(query.Get("createdFrom"))
+		if err != nil {
+			result := common.NewErrorResponse(err, http.StatusBadRequest, componentName, "GetAllSubmodelDescriptorsRecentChanges", "createdFrom")
+			_ = EncodeJSONResponse(result.Body, &result.Code, w)
+			return
+		}
+	}
+
+	var updatedFromParam time.Time
+	if query.Has("updatedFrom") {
+		updatedFromParam, err = parseTime(query.Get("updatedFrom"))
+		if err != nil {
+			result := common.NewErrorResponse(err, http.StatusBadRequest, componentName, "GetAllSubmodelDescriptorsRecentChanges", "updatedFrom")
+			_ = EncodeJSONResponse(result.Body, &result.Code, w)
+			return
+		}
+	}
+
+	var limitParam int32
+	if query.Has("limit") {
+		param, err := parseNumericParameter[int32](
+			query.Get("limit"),
+			WithParse[int32](parseInt32),
+			WithMinimum[int32](1),
+		)
+		if err != nil {
+			result := common.NewErrorResponse(
+				err,
+				http.StatusBadRequest,
+				componentName,
+				"GetAllSubmodelDescriptorsRecentChanges",
+				"limit",
+			)
+			_ = EncodeJSONResponse(result.Body, &result.Code, w)
+			return
+		}
+		limitParam = param
+	}
+
+	result, err := c.service.GetAllSubmodelDescriptorsRecentChanges(
+		r.Context(),
+		createdFromParam,
+		updatedFromParam,
+		limitParam,
+		query.Get("cursor"),
+	)
+	if err != nil {
+		log.Printf("🧩 [%s] Error in GetAllSubmodelDescriptorsRecentChanges: service failure (limit=%d cursor=%q): %v", componentName, limitParam, query.Get("cursor"), err)
+		c.errorHandler(w, r, err, &result)
+		return
+	}
 	_ = EncodeJSONResponse(result.Body, &result.Code, w)
 }
 

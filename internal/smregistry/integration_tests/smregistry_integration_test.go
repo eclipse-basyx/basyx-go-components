@@ -127,6 +127,103 @@ func assertLocationHeaderMatches(t *testing.T, expectedLocation string, actualLo
 	require.Contains(t, allowedLoopbackHosts, actualHost)
 }
 
+func TestSubmodelRegistryRecentChanges(t *testing.T) {
+	prefix := fmt.Sprintf("urn:example:sm:recent-%d", time.Now().UnixNano())
+	currentID := prefix + "-current"
+	deletedID := prefix + "-deleted"
+	t.Cleanup(func() {
+		cleanupSubmodelDescriptorHTTP(t, currentID)
+		cleanupSubmodelDescriptorHTTP(t, deletedID)
+	})
+
+	changedAfter := time.Now().UTC()
+	time.Sleep(50 * time.Millisecond)
+
+	endpoint := smRegistryBaseURL + "/submodel-descriptors"
+	statusCode, body, _ := doRequest(t, smNoRedirectClient, http.MethodPost, endpoint, buildSubmodelDescriptorPayload(currentID, "v1"))
+	require.Equal(t, http.StatusCreated, statusCode, "response=%s", string(body))
+
+	currentIdentifier := base64.RawURLEncoding.EncodeToString([]byte(currentID))
+	statusCode, body, _ = doRequest(t, smNoRedirectClient, http.MethodPut, endpoint+"/"+currentIdentifier, buildSubmodelDescriptorPayload(currentID, "v2"))
+	require.Equal(t, http.StatusNoContent, statusCode, "response=%s", string(body))
+
+	statusCode, body, _ = doRequest(t, smNoRedirectClient, http.MethodPost, endpoint, buildSubmodelDescriptorPayload(deletedID, "deleted"))
+	require.Equal(t, http.StatusCreated, statusCode, "response=%s", string(body))
+	deletedIdentifier := base64.RawURLEncoding.EncodeToString([]byte(deletedID))
+	statusCode, body, _ = doRequest(t, smNoRedirectClient, http.MethodDelete, endpoint+"/"+deletedIdentifier, nil)
+	require.Equal(t, http.StatusNoContent, statusCode, "response=%s", string(body))
+
+	updatedPage := getRecentSubmodelDescriptorPage(t, url.Values{
+		"updatedFrom": []string{changedAfter.Format(time.RFC3339Nano)},
+		"limit":       []string{"10"},
+	})
+	require.ElementsMatch(t, []string{"v1", "v2"}, descriptorTagValues(updatedPage, currentID))
+	require.Empty(t, descriptorTagValues(updatedPage, deletedID))
+
+	createdPage := getRecentSubmodelDescriptorPage(t, url.Values{
+		"createdFrom": []string{changedAfter.Format(time.RFC3339Nano)},
+		"limit":       []string{"10"},
+	})
+	require.NotEmpty(t, descriptorTagValues(createdPage, currentID))
+	require.Empty(t, descriptorTagValues(createdPage, deletedID))
+
+	firstPage := getRecentSubmodelDescriptorPage(t, url.Values{
+		"updatedFrom": []string{changedAfter.Format(time.RFC3339Nano)},
+		"limit":       []string{"1"},
+	})
+	require.Len(t, firstPage.Result, 1)
+	require.NotEmpty(t, firstPage.PagingMetadata.Cursor)
+
+	secondPage := getRecentSubmodelDescriptorPage(t, url.Values{
+		"updatedFrom": []string{changedAfter.Format(time.RFC3339Nano)},
+		"limit":       []string{"1"},
+		"cursor":      []string{firstPage.PagingMetadata.Cursor},
+	})
+	require.Len(t, secondPage.Result, 1)
+	require.Equal(t, currentID, secondPage.Result[0]["id"])
+}
+
+type recentSubmodelDescriptorPage struct {
+	PagingMetadata struct {
+		Cursor string `json:"cursor"`
+	} `json:"paging_metadata"`
+	Result []map[string]any `json:"result"`
+}
+
+func getRecentSubmodelDescriptorPage(t *testing.T, query url.Values) recentSubmodelDescriptorPage {
+	t.Helper()
+
+	endpoint := smRegistryBaseURL + "/submodel-descriptors/$recent-changes"
+	if len(query) > 0 {
+		endpoint += "?" + query.Encode()
+	}
+	statusCode, body, _ := doRequest(t, smNoRedirectClient, http.MethodGet, endpoint, nil)
+	require.Equal(t, http.StatusOK, statusCode, "response=%s", string(body))
+
+	var page recentSubmodelDescriptorPage
+	require.NoError(t, json.Unmarshal(body, &page))
+	return page
+}
+
+func descriptorTagValues(page recentSubmodelDescriptorPage, descriptorID string) []string {
+	values := []string{}
+	for _, descriptor := range page.Result {
+		if descriptor["id"] != descriptorID {
+			continue
+		}
+		extensions, _ := descriptor["extensions"].([]any)
+		for _, extensionValue := range extensions {
+			extension, _ := extensionValue.(map[string]any)
+			if extension["name"] == "tag" {
+				if tag, ok := extension["value"].(string); ok {
+					values = append(values, tag)
+				}
+			}
+		}
+	}
+	return values
+}
+
 func TestLocationHeadersForCreateEndpointsSubmodelRegistry(t *testing.T) {
 	t.Run("PostSubmodelDescriptorSetsLocation", func(t *testing.T) {
 		submodelID := fmt.Sprintf("urn:example:sm:location-post-%d", time.Now().UnixNano())

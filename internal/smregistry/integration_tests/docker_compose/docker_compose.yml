@@ -31,6 +31,7 @@ services:
       - POSTGRES_MAXIDLECONNECTIONS=500
       - POSTGRES_CONNMAXLIFETIMEMINUTES=5
       - ABAC_ENABLED=false
+      - BASYX_HISTORY_MODE=api
     ports:
       - "6004:5004"
     depends_on:

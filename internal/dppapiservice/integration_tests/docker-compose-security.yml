@@ -79,7 +79,9 @@ services:
       - keycloak
 
   basyx_configuration:
-    image: eclipsebasyx/basyxconfigurationservice-go:SNAPSHOT
+    build:
+      context: ../../..
+      dockerfile: cmd/basyxconfigurationservice/Dockerfile
     environment:
       - POSTGRES_HOST=db
       - POSTGRES_PORT=5432

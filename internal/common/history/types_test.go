@@ -23,7 +23,7 @@
 * SPDX-License-Identifier: MIT
 ******************************************************************************/
 
-package testenv
+package history
 
 import (
 	"testing"
@@ -31,25 +31,9 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestDefaultCheckDBIsEmptyExcludedTablesIncludesPersistentSchemaTables(t *testing.T) {
-	excluded := defaultCheckDBIsEmptyExcludedTables([]string{"AAS_Identifier", " "})
+func TestHistoryPayloadTableIncludesSubmodelDescriptorHistory(t *testing.T) {
+	payloadTable, err := historyPayloadTable(TableSubmodelDescriptor)
 
-	for _, table := range []string{
-		"basyxsystem",
-		"history_guard_config",
-		"aas_history",
-		"aas_history_payload",
-		"submodel_history",
-		"submodel_history_payload",
-		"concept_description_history",
-		"concept_description_history_payload",
-		"descriptor_history",
-		"descriptor_history_payload",
-		"submodel_descriptor_history",
-		"submodel_descriptor_history_payload",
-		"aas_identifier",
-	} {
-		_, ok := excluded[table]
-		require.Truef(t, ok, "expected %s to be excluded", table)
-	}
+	require.NoError(t, err)
+	require.Equal(t, "submodel_descriptor_history_payload", payloadTable)
 }

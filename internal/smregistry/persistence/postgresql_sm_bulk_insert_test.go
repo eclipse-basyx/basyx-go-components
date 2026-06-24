@@ -30,11 +30,22 @@ import (
 	"testing"
 
 	sqlmock "github.com/DATA-DOG/go-sqlmock"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/history"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	"github.com/stretchr/testify/require"
 )
 
 func TestBulkSubmodelInsertSkipsReadbackForUnrestrictedCreate(t *testing.T) {
+	previousHistoryConfig := history.ActiveConfig()
+	t.Cleanup(func() {
+		history.Configure(previousHistoryConfig)
+	})
+	history.Configure(history.Config{
+		Mode:              history.ModeOff,
+		Immutability:      history.ImmutabilityNone,
+		AuditIdentityMode: history.AuditIdentityNone,
+	})
+
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
 	defer func() {
