@@ -200,7 +200,6 @@ func (s *CustomRegistryService) ExecuteBulkPutAtomic(
 }
 
 func withDTRDescriptorWriteContext(ctx context.Context) context.Context {
-	ctx = descriptorsutil.WithDigitalTwinRegistryDiscovery(ctx)
 	ctx = descriptorsutil.WithAllowAASDescriptorCreatedAtOverride(ctx)
 	return descriptorsutil.WithIncludeAASDescriptorCreatedAt(ctx)
 }

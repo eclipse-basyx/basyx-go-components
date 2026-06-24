@@ -26,7 +26,7 @@ import (
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 )
 
-func TestSpecificAssetIDsWithGlobalAssetIDCopiesDTRVisibleExternalSubjects(t *testing.T) {
+func TestSpecificAssetIDsWithGlobalAssetIDAddsGlobalAssetIDWithoutExternalSubjects(t *testing.T) {
 	t.Parallel()
 
 	descriptor := model.AssetAdministrationShellDescriptor{
@@ -37,7 +37,7 @@ func TestSpecificAssetIDsWithGlobalAssetIDCopiesDTRVisibleExternalSubjects(t *te
 		},
 	}
 
-	assetIDs := specificAssetIDsWithGlobalAssetID(dtrDiscoveryContext(), descriptor)
+	assetIDs := specificAssetIDsWithGlobalAssetID(discoveryContext(), descriptor)
 	if len(assetIDs) != 3 {
 		t.Fatalf("expected original asset IDs plus generated globalAssetId, got %d", len(assetIDs))
 	}
@@ -46,14 +46,8 @@ func TestSpecificAssetIDsWithGlobalAssetIDCopiesDTRVisibleExternalSubjects(t *te
 	if globalAssetID.Name() != globalAssetIDSpecificAssetIDName || globalAssetID.Value() != "global-asset" {
 		t.Fatalf("unexpected generated globalAssetId asset link: name=%q value=%q", globalAssetID.Name(), globalAssetID.Value())
 	}
-	if globalAssetID.ExternalSubjectID() == nil {
-		t.Fatalf("expected generated globalAssetId to have externalSubjectId")
-	}
-
-	values := referenceKeyValues(globalAssetID.ExternalSubjectID())
-	want := []string{"BPN_COMPANY_001", "BPN_COMPANY_002", "PUBLIC_READABLE"}
-	if !sameStrings(values, want) {
-		t.Fatalf("expected inherited externalSubjectId keys %#v, got %#v", want, values)
+	if globalAssetID.ExternalSubjectID() != nil {
+		t.Fatalf("expected generated globalAssetId to keep empty externalSubjectId")
 	}
 }
 
@@ -75,10 +69,6 @@ func TestSpecificAssetIDsWithGlobalAssetIDKeepsNonDTRBehavior(t *testing.T) {
 	}
 }
 
-func dtrDiscoveryContext() context.Context {
-	return WithDigitalTwinRegistryDiscovery(discoveryContext())
-}
-
 func discoveryContext() context.Context {
 	cfg := &common.Config{}
 	cfg.General.DiscoveryIntegration = true
@@ -93,24 +83,4 @@ func specificAssetIDWithExternalSubjects(name string, value string, subjects ...
 	}
 	assetID.SetExternalSubjectID(types.NewReference(types.ReferenceTypesExternalReference, keys))
 	return assetID
-}
-
-func referenceKeyValues(reference types.IReference) []string {
-	values := make([]string, 0, len(reference.Keys()))
-	for _, key := range reference.Keys() {
-		values = append(values, key.Value())
-	}
-	return values
-}
-
-func sameStrings(got []string, want []string) bool {
-	if len(got) != len(want) {
-		return false
-	}
-	for i := range want {
-		if got[i] != want[i] {
-			return false
-		}
-	}
-	return true
 }
