@@ -7,6 +7,7 @@
          "text":"Example of human readable description of digital twin."
       }
    ],
+   "globalAssetId":"test",
    "specificAssetIds":[
       {
          "name":"partInstanceId",

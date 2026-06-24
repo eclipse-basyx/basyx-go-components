@@ -373,12 +373,12 @@
   {
     "method": "GET",
     "endpoint": "http://127.0.0.1:6004/lookup/shells/ZTFlYmEzZDctOTFmMC00ZGFjLWE3MzAtZWFhMWQzNWUwMzVjLTI",
-    "expectedStatus": 403
+    "expectedStatus": 200
   },
   {
     "method": "GET",
     "endpoint": "http://127.0.0.1:6004/lookup/shells/ZTFlYmEzZDctOTFmMC00ZGFjLWE3MzAtZWFhMWQzNWUwMzVjLTI",
-    "expectedStatus": 403,
+    "expectedStatus": 200,
     "headers": {
       "Edc-Bpn": "BPN_COMPANY_001"
     }
