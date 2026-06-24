@@ -43,11 +43,11 @@ func TestSearchAASIDsByAssetLinks_GlobalAssetIDUsesDescriptorColumn(t *testing.T
 		if !strings.Contains(actualSQL, `"aas_descriptor"."global_asset_id" = 'global-asset'`) {
 			return fmt.Errorf("expected direct global_asset_id lookup, got SQL: %s", actualSQL)
 		}
-		if !strings.Contains(actualSQL, "OR EXISTS") {
-			return fmt.Errorf("expected specific_asset_id fallback, got SQL: %s", actualSQL)
+		if strings.Contains(actualSQL, "OR EXISTS") {
+			return fmt.Errorf("did not expect specific_asset_id fallback OR, got SQL: %s", actualSQL)
 		}
-		if !strings.Contains(actualSQL, `"sai"."name" = 'globalAssetId'`) {
-			return fmt.Errorf("expected generated asset-link fallback, got SQL: %s", actualSQL)
+		if strings.Contains(actualSQL, `"sai"."name" = 'globalAssetId'`) {
+			return fmt.Errorf("did not expect generated globalAssetId asset-link fallback, got SQL: %s", actualSQL)
 		}
 		return nil
 	})
