@@ -452,6 +452,8 @@ func TestLoadConfigAppliesHistoryAndEventingDefaults(t *testing.T) {
 	withUnsetEnv(t, "BASYX_HISTORY_INTEGRITY_ANCHOR_PROVIDER")
 	withUnsetEnv(t, "ABAC_POLICY_FILE_IMPORT")
 	withUnsetEnv(t, "BASYX_ABAC_POLICY_FILE_IMPORT")
+	withUnsetEnv(t, "ABAC_POLICY_SCOPE")
+	withUnsetEnv(t, "BASYX_ABAC_POLICY_SCOPE")
 	withUnsetEnv(t, "ABAC_MANAGEMENT_API_ENABLED")
 	withUnsetEnv(t, "ABAC_MANAGEMENTAPI_ENABLED")
 	withUnsetEnv(t, "BASYX_ABAC_MANAGEMENT_API_ENABLED")
@@ -492,6 +494,7 @@ func TestLoadConfigAppliesHistoryAndEventingDefaults(t *testing.T) {
 
 func TestLoadConfigAppliesABACPolicyRepositoryEnvOverrides(t *testing.T) {
 	t.Setenv("ABAC_POLICY_FILE_IMPORT", "if_missing")
+	t.Setenv("ABAC_POLICY_SCOPE", "aasregistry-internal")
 	t.Setenv("ABAC_MANAGEMENT_API_ENABLED", "true")
 	captureLogOutput(t)
 
@@ -503,8 +506,97 @@ func TestLoadConfigAppliesABACPolicyRepositoryEnvOverrides(t *testing.T) {
 	if cfg.ABAC.PolicyFileImport != ABACPolicyFileImportIfMissing {
 		t.Fatalf("expected policy file import override, got %q", cfg.ABAC.PolicyFileImport)
 	}
+	if cfg.ABAC.PolicyScope != "aasregistry-internal" {
+		t.Fatalf("expected policy scope override, got %q", cfg.ABAC.PolicyScope)
+	}
 	if !cfg.ABAC.ManagementAPI.Enabled {
 		t.Fatal("expected ABAC management API env override")
+	}
+}
+
+func TestLoadConfigAppliesABACPolicyScopeFromConfig(t *testing.T) {
+	withUnsetEnv(t, "ABAC_POLICY_SCOPE")
+	withUnsetEnv(t, "BASYX_ABAC_POLICY_SCOPE")
+	path := writeTempConfig(t, `
+abac:
+  policyScope: " dtr:public-01 "
+`)
+	captureLogOutput(t)
+
+	cfg, err := LoadConfig(path, NORMAL)
+	if err != nil {
+		t.Fatalf("unexpected config load error: %v", err)
+	}
+
+	if cfg.ABAC.PolicyScope != "dtr:public-01" {
+		t.Fatalf("expected trimmed policy scope, got %q", cfg.ABAC.PolicyScope)
+	}
+}
+
+func TestLoadConfigAppliesABACPolicyScopeBasyxEnvOverride(t *testing.T) {
+	withUnsetEnv(t, "ABAC_POLICY_SCOPE")
+	t.Setenv("BASYX_ABAC_POLICY_SCOPE", "shared.scope")
+	captureLogOutput(t)
+
+	cfg, err := LoadConfig("", NORMAL)
+	if err != nil {
+		t.Fatalf("unexpected config load error: %v", err)
+	}
+
+	if cfg.ABAC.PolicyScope != "shared.scope" {
+		t.Fatalf("expected BASYX policy scope override, got %q", cfg.ABAC.PolicyScope)
+	}
+}
+
+func TestConfiguredPolicyScopeUsesDefaultForEmptyConfig(t *testing.T) {
+	cfg := &Config{
+		ABAC: ABACConfig{
+			PolicyScope: " ",
+		},
+	}
+
+	scope, err := ConfiguredPolicyScope(cfg, "aasregistryservice")
+	if err != nil {
+		t.Fatalf("unexpected policy scope error: %v", err)
+	}
+	if scope != "aasregistryservice" {
+		t.Fatalf("expected default service scope, got %q", scope)
+	}
+}
+
+func TestConfiguredPolicyScopeRejectsEmptyDefault(t *testing.T) {
+	_, err := ConfiguredPolicyScope(&Config{}, " ")
+	if err == nil {
+		t.Fatal("expected empty default service scope error")
+	}
+	if !strings.Contains(err.Error(), "CONFIG-ABAC-POLICYSCOPE") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestLoadConfigRejectsInvalidABACPolicyScope(t *testing.T) {
+	t.Setenv("ABAC_POLICY_SCOPE", "aasregistry/internal")
+	captureLogOutput(t)
+
+	_, err := LoadConfig("", NORMAL)
+	if err == nil {
+		t.Fatal("expected invalid ABAC policy scope error")
+	}
+	if !strings.Contains(err.Error(), "CONFIG-ABAC-POLICYSCOPE") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestLoadConfigRejectsTooLongABACPolicyScope(t *testing.T) {
+	t.Setenv("ABAC_POLICY_SCOPE", strings.Repeat("a", maxABACPolicyScopeLength+1))
+	captureLogOutput(t)
+
+	_, err := LoadConfig("", NORMAL)
+	if err == nil {
+		t.Fatal("expected too long ABAC policy scope error")
+	}
+	if !strings.Contains(err.Error(), "CONFIG-ABAC-POLICYSCOPE") {
+		t.Fatalf("unexpected error: %v", err)
 	}
 }
 

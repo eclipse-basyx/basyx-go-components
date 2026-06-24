@@ -16,6 +16,7 @@ abac:
   enabled: true
   modelPath: config/access_rules/access-rules.json
   policyFileImport: if_missing
+  policyScope: aasregistryservice
   managementApi:
     enabled: false
 ```
@@ -25,13 +26,25 @@ Environment variables:
 - `ABAC_ENABLED=true`
 - `ABAC_MODELPATH=/security_env/access-rules.json`
 - `ABAC_POLICY_FILE_IMPORT=always|if_missing|never`
+- `ABAC_POLICY_SCOPE=aasregistryservice`
 - `ABAC_MANAGEMENT_API_ENABLED=true|false`
+
+`abac.policyScope` controls the database namespace used for stored policy versions, rule rows, events, and activation evidence. When it is empty, the service uses its built-in scope, such as `digitaltwinregistryservice` or `aasregistryservice`, so existing deployments keep their current behavior.
+
+Use different scopes when two instances or deployments must not share access rules even though they use the same PostgreSQL database:
+
+```yaml
+abac:
+  policyScope: aasregistry-internal
+```
+
+Use the same scope only when the services are meant to share one active policy. Sharing a scope across services with different route surfaces can make a policy valid for one service but incomplete or unsafe for another service, so do it deliberately and test the effective routes.
 
 `abac.policyFileImport` controls startup file import:
 
 - `always`: import `abac.modelPath` on every startup. Use this when the configured file is the source of truth.
-- `if_missing`: import `abac.modelPath` only when no active database-backed policy exists for the service scope.
-- `never`: do not import the file. ABAC startup fails closed unless an active database-backed policy already exists.
+- `if_missing`: import `abac.modelPath` only when no active database-backed policy exists for the effective policy scope.
+- `never`: do not import the file. ABAC startup fails closed unless an active database-backed policy already exists for the effective policy scope.
 
 When the value is empty, each service uses its default. Digital Twin Registry defaults to `always`; other ABAC-enabled services default to `if_missing`.
 
@@ -52,7 +65,7 @@ The importer validates the configured JSON, canonicalizes it, materializes refer
 
 The management API is mounted under `/security/abac/**` only when both `abac.enabled` and `abac.managementApi.enabled` are true. Swagger/OpenAPI exposes these endpoints only when the management API is active and `swagger.enabled` is true.
 
-Digital Twin Registry is the exception: it never exposes the management API. Its access-rule file remains the service source of truth and is imported on every restart by default.
+Digital Twin Registry keeps the same defaults as before: its startup policy-file import defaults to `always`, and its management API remains disabled unless explicitly enabled.
 
 The API supports:
 
@@ -539,9 +552,11 @@ Normal history event artifacts continue to store only `policy_id` and `matched_r
 
 ## Shared Database Operation
 
-Different components can run against the same database because policy state is separated by `service_scope` and the schema enforces one active policy per service scope.
+Different components can run against the same database because policy state is separated by `service_scope` and the schema enforces one active policy per service scope. Operators can override the default service scope with `abac.policyScope` to split same-service deployments or intentionally share a policy namespace.
 
-For a given service scope, operate only one startup file-import owner at a time. If several instances of the same component are deployed, prefer `if_missing` or `never` for follower instances after the first active policy exists. A future configuration service flow can centralize policy import and activation.
+For a given effective policy scope, operate only one startup file-import owner at a time. If several instances of the same component are deployed, prefer `if_missing` or `never` for follower instances after the first active policy exists. A future configuration service flow can centralize policy import and activation.
+
+This is especially important for Digital Twin Registry: two DTR instances using the same database, the default `digitaltwinregistryservice` policy scope, and different mounted access-rule files will both import with the default `always` mode. The instance that starts later can supersede the active policy imported by the other instance. Use distinct `abac.policyScope` values when the DTRs must be isolated, or configure exactly one DTR as the import owner and run the others with `if_missing` or `never`.
 
 ## NIS2 Support Scope
 

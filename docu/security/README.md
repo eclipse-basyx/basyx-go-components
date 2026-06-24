@@ -128,7 +128,8 @@ sequenceDiagram
   - Example trustlist: [cmd/aasregistryservice/config/trustlist.json](cmd/aasregistryservice/config/trustlist.json)
 - Access rules are imported from the configured access model JSON into the PostgreSQL-backed ABAC policy repository when `abac.policyFileImport` requires it. Runtime authorization uses the active materialized DB policy.
   - Example rules: [cmd/aasregistryservice/config/access_rules/access-rules.json](cmd/aasregistryservice/config/access_rules/access-rules.json)
-- The protected ABAC management API under `/security/abac/**` is available only when `abac.enabled` and `abac.managementApi.enabled` are both true. Digital Twin Registry deliberately never exposes this API. The OpenAPI/Swagger documentation follows the same condition.
+- DB-backed policy rows are isolated by service scope by default. Set `abac.policyScope` only when a deployment must split same-service instances or deliberately share one policy namespace.
+- The protected ABAC management API under `/security/abac/**` is available only when `abac.enabled` and `abac.managementApi.enabled` are both true. Digital Twin Registry keeps this API disabled by default but can expose it through the same explicit opt-in. The OpenAPI/Swagger documentation follows the same condition.
 
 ## OIDC authentication
 
@@ -335,5 +336,6 @@ Example file:
 - Confirm route-to-rights mapping covers all endpoints used by the service.
 - Validate the access rules against the intended claims and objects.
 - Choose `abac.policyFileImport` deliberately. Use `always` only when the file is the source of truth; use `if_missing` when the database-managed policy should survive restarts; use `never` when an active DB policy is mandatory.
-- Enable `abac.managementApi.enabled` only for services where runtime policy administration is required. Do not enable it for Digital Twin Registry; DTR uses the configured access-rule file as source of truth. Protect `/security/abac/**` with admin-only ABAC rules.
+- Use `abac.policyScope` deliberately. Sharing a scope across services with different routes can make one service's policy incomplete or unsafe for another service.
+- Enable `abac.managementApi.enabled` only for services where runtime policy administration is required. For Digital Twin Registry, remember that startup file import defaults to `always`; if multiple DTRs share the default policy scope with different files, later startups can supersede earlier active policies. Protect `/security/abac/**` with admin-only ABAC rules.
 - Restarting is no longer the only update path when the management API is enabled; staged rule edits still require explicit activation before they affect authorization.
