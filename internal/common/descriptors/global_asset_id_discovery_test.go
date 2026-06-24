@@ -51,7 +51,7 @@ func TestSpecificAssetIDsWithGlobalAssetIDAddsGlobalAssetIDWithoutExternalSubjec
 	}
 }
 
-func TestSpecificAssetIDsWithGlobalAssetIDKeepsNonDTRBehavior(t *testing.T) {
+func TestSpecificAssetIDsWithGlobalAssetIDDoesNotAddGlobalAssetIDWhenDiscoveryIntegrationIsDisabled(t *testing.T) {
 	t.Parallel()
 
 	descriptor := model.AssetAdministrationShellDescriptor{
@@ -60,12 +60,13 @@ func TestSpecificAssetIDsWithGlobalAssetIDKeepsNonDTRBehavior(t *testing.T) {
 		SubmodelDescriptors: nil,
 	}
 
-	assetIDs := specificAssetIDsWithGlobalAssetID(discoveryContext(), descriptor)
-	if len(assetIDs) != 2 {
-		t.Fatalf("expected original asset ID plus generated globalAssetId, got %d", len(assetIDs))
-	}
-	if assetIDs[1].ExternalSubjectID() != nil {
-		t.Fatalf("expected non-DTR generated globalAssetId to keep empty externalSubjectId")
+	cfg := &common.Config{}
+	cfg.General.DiscoveryIntegration = false
+	ctx := common.ContextWithConfig(context.Background(), cfg)
+
+	assetIDs := specificAssetIDsWithGlobalAssetID(ctx, descriptor)
+	if len(assetIDs) != 1 {
+		t.Fatalf("expected no generated globalAssetId when discovery integration is disabled, got %d", len(assetIDs))
 	}
 }
 
