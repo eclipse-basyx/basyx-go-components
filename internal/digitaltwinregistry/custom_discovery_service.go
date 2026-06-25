@@ -95,8 +95,8 @@ func (s *CustomDiscoveryService) SearchAllAssetAdministrationShellIdsByAssetLink
 
 	if shouldEnforceFormula {
 		assetLinkQuery := buildAssetLinkQuery(ctx, assetLink)
-		if assetLinkQuery.Condition != nil || len(assetLinkQuery.FilterConditions) > 0 {
-			ctx = auth.MergeQueryFilter(ctx, assetLinkQuery)
+		if assetLinkQuery.Condition != nil {
+			ctx = replaceReadFormula(ctx, *assetLinkQuery.Condition)
 			ctx = discoveryapiinternal.WithAssetLinksAlreadyConstrained(ctx)
 		}
 	}
@@ -194,6 +194,25 @@ func baseCheckerOrFallback(checker aasExistenceChecker) aasExistenceChecker {
 		return checker
 	}
 	return noopAASChecker{}
+}
+
+func replaceReadFormula(ctx context.Context, condition grammar.LogicalExpression) context.Context {
+	qf, cloneErr := auth.CloneQueryFilter(auth.GetQueryFilter(ctx))
+	if cloneErr != nil {
+		log.Printf("[%s] Error replaceReadFormula: clone query filter failed: %v", customDiscoveryComponentName, cloneErr)
+		deny := false
+		condition = grammar.LogicalExpression{Boolean: &deny}
+		qf = &auth.QueryFilter{}
+	}
+	if qf == nil {
+		qf = &auth.QueryFilter{}
+	}
+	if qf.FormulasByRight == nil {
+		qf.FormulasByRight = make(map[grammar.RightsEnum]grammar.LogicalExpression)
+	}
+	qf.Formula = &condition
+	qf.FormulasByRight[grammar.RightsEnumREAD] = condition
+	return auth.WithQueryFilter(ctx, qf)
 }
 
 type noopAASChecker struct{}
