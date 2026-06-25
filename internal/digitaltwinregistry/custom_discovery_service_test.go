@@ -82,7 +82,7 @@ func TestReplaceReadFormula_GlobalAssetIDLookupSkipsRouteSpecificAssetAuthorizat
 	}
 
 	ctx = replaceReadFormula(ctx, *query.Condition)
-	sql, args := renderBDReadFormulaSQL(t, ctx)
+	sql, args := renderBDReadFormulaSQL(ctx, t)
 
 	for _, want := range []string{common.GlobalAssetIDAssetLinkName, "global-asset"} {
 		if !containsArg(args, want) {
@@ -110,7 +110,7 @@ func TestReplaceReadFormula_MixedGlobalAssetIDLookupKeepsSpecificAssetAuthorizat
 	}
 
 	ctx = replaceReadFormula(ctx, *query.Condition)
-	sql, args := renderBDReadFormulaSQL(t, ctx)
+	sql, args := renderBDReadFormulaSQL(ctx, t)
 
 	for _, want := range []string{
 		common.GlobalAssetIDAssetLinkName,
@@ -140,7 +140,7 @@ func publicReadableExternalSubjectExpression() grammar.LogicalExpression {
 	}
 }
 
-func renderBDReadFormulaSQL(t *testing.T, ctx context.Context) (string, []interface{}) {
+func renderBDReadFormulaSQL(ctx context.Context, t *testing.T) (string, []interface{}) {
 	t.Helper()
 
 	qf := auth.GetQueryFilter(ctx)
