@@ -46,7 +46,6 @@ import (
 )
 
 const customDiscoveryComponentName = "DTRDISC"
-const publicReadableExternalSubjectValue = "PUBLIC_READABLE"
 
 type aasExistenceChecker interface {
 	ExistsAASByID(ctx context.Context, aasID string) (bool, error)
@@ -94,7 +93,13 @@ func (s *CustomDiscoveryService) SearchAllAssetAdministrationShellIdsByAssetLink
 		), enforceErr
 	}
 
-	ctx, backendAssetLinks := applyDTRAssetLinkLookupFilters(ctx, assetLink, shouldEnforceFormula)
+	if shouldEnforceFormula {
+		assetLinkQuery := buildAssetLinkQuery(ctx, assetLink)
+		if assetLinkQuery.Condition != nil || len(assetLinkQuery.FilterConditions) > 0 {
+			ctx = auth.MergeQueryFilter(ctx, assetLinkQuery)
+			ctx = discoveryapiinternal.WithAssetLinksAlreadyConstrained(ctx)
+		}
+	}
 
 	createdAfter, _ := CreatedAfterFromContext(ctx)
 	if createdAfter != nil {
@@ -102,7 +107,7 @@ func (s *CustomDiscoveryService) SearchAllAssetAdministrationShellIdsByAssetLink
 		ctx = auth.MergeQueryFilter(ctx, createdAfterQuery)
 	}
 
-	res, err := s.AssetAdministrationShellBasicDiscoveryAPIAPIService.SearchAllAssetAdministrationShellIdsByAssetLink(ctx, limit, cursor, backendAssetLinks)
+	res, err := s.AssetAdministrationShellBasicDiscoveryAPIAPIService.SearchAllAssetAdministrationShellIdsByAssetLink(ctx, limit, cursor, assetLink)
 	if err != nil {
 		return res, err
 	}
@@ -182,60 +187,6 @@ func omitEmptySearchResultForDTR(res model.ImplResponse) model.ImplResponse {
 	default:
 		return res
 	}
-}
-
-func applyDTRAssetLinkLookupFilters(
-	ctx context.Context,
-	assetLinks []model.AssetLink,
-	shouldEnforceFormula bool,
-) (context.Context, []model.AssetLink) {
-	if !shouldEnforceFormula {
-		return ctx, assetLinks
-	}
-
-	authorizationQuery := buildAssetLinkAuthorizationQuery(ctx, assetLinks)
-	if hasQueryConditions(authorizationQuery) {
-		ctx = replaceReadFormula(ctx, *authorizationQuery.Condition)
-		ctx = discoveryapiinternal.WithAssetLinksAlreadyConstrained(ctx)
-	}
-
-	return ctx, assetLinks
-}
-
-func splitGlobalAssetIDLinks(assetLinks []model.AssetLink) ([]model.AssetLink, []model.AssetLink) {
-	globalAssetIDLinks := make([]model.AssetLink, 0)
-	specificAssetLinks := make([]model.AssetLink, 0, len(assetLinks))
-	for _, link := range assetLinks {
-		if link.Name == common.GlobalAssetIDAssetLinkName {
-			globalAssetIDLinks = append(globalAssetIDLinks, link)
-			continue
-		}
-		specificAssetLinks = append(specificAssetLinks, link)
-	}
-	return globalAssetIDLinks, specificAssetLinks
-}
-
-func replaceReadFormula(ctx context.Context, condition grammar.LogicalExpression) context.Context {
-	qf, cloneErr := auth.CloneQueryFilter(auth.GetQueryFilter(ctx))
-	if cloneErr != nil {
-		log.Printf("[%s] Error replaceReadFormula: clone query filter failed: %v", customDiscoveryComponentName, cloneErr)
-		deny := false
-		condition = grammar.LogicalExpression{Boolean: &deny}
-		qf = &auth.QueryFilter{}
-	}
-	if qf == nil {
-		qf = &auth.QueryFilter{}
-	}
-	if qf.FormulasByRight == nil {
-		qf.FormulasByRight = make(map[grammar.RightsEnum]grammar.LogicalExpression)
-	}
-	qf.Formula = &condition
-	qf.FormulasByRight[grammar.RightsEnumREAD] = condition
-	return auth.WithQueryFilter(ctx, qf)
-}
-
-func hasQueryConditions(query grammar.Query) bool {
-	return query.Condition != nil || len(query.FilterConditions) > 0
 }
 
 func baseCheckerOrFallback(checker aasExistenceChecker) aasExistenceChecker {
@@ -345,96 +296,108 @@ func buildEdcBpnClaimEqualsHeaderExpression(t *time.Time, pattern string) gramma
 	}
 }
 
-func buildAssetLinkAuthorizationQuery(
-	ctx context.Context,
-	assetLinks []model.AssetLink,
-) grammar.Query {
-	if len(assetLinks) == 0 {
+// buildAssetLinkQuery creates the discovery lookup filter for asset links.
+//
+// Behavior:
+//   - Returns an empty query when no asset links are provided.
+//   - Returns an empty query when ABAC READ access is already unrestricted.
+//   - Otherwise builds an AND of per-link conditions.
+//
+// Per link, the condition is an OR:
+//   - exact link match + Edc-Bpn authorization (when Edc-Bpn claim exists), or
+//   - exact link match + PUBLIC_READABLE authorization.
+func buildAssetLinkQuery(ctx context.Context, assetLink []model.AssetLink) grammar.Query {
+	if len(assetLink) == 0 {
 		return grammar.Query{}
 	}
+
 	if auth.HasUnrestrictedFormulaForRight(ctx, grammar.RightsEnumREAD) {
 		return grammar.Query{}
 	}
 
-	globalAssetIDLinks, specificAssetLinks := splitGlobalAssetIDLinks(assetLinks)
-	edcBpnClaim, hasEdcBpnClaim := edcBpnClaimFromContext(ctx)
-	conditions := make([]grammar.LogicalExpression, 0, len(assetLinks))
-	for _, link := range globalAssetIDLinks {
-		conditions = append(conditions, eqFieldToStringExpression("$aasdesc#globalAssetId", link.Value))
-	}
-	for _, link := range specificAssetLinks {
-		conditions = append(conditions, buildSpecificAssetLinkCondition(link, edcBpnClaim, hasEdcBpnClaim))
+	assetLinkFieldPattern := grammar.ModelStringPattern("$aasdesc#specificAssetIds[].externalSubjectId.keys[].value")
+	assetLinkFieldValue := grammar.ModelStringPattern("$aasdesc#specificAssetIds[].value")
+	assetLinkFieldName := grammar.ModelStringPattern("$aasdesc#specificAssetIds[].name")
+	publicReadable := grammar.StandardString("PUBLIC_READABLE")
+
+	claims := auth.ClaimsFromContext(ctx)
+	edcBpnClaim, hasEdcBpnClaim := claims.GetString("Edc-Bpn")
+	hasEdcBpnClaim = hasEdcBpnClaim && strings.TrimSpace(edcBpnClaim) != ""
+	edcBpn := grammar.StandardString(edcBpnClaim)
+
+	assetLinkLe := grammar.LogicalExpression{And: []grammar.LogicalExpression{}}
+	for _, link := range assetLink {
+		assetLinkValue := grammar.StandardString(link.Value)
+		assetLinkName := grammar.StandardString(link.Name)
+
+		if link.Name == common.GlobalAssetIDAssetLinkName {
+			assetLinkLe.And = append(assetLinkLe.And, grammar.LogicalExpression{
+				Match: []grammar.MatchExpression{
+					{Eq: grammar.ComparisonItems{
+						{Field: &assetLinkFieldValue},
+						{StrVal: &assetLinkValue},
+					}},
+					{Eq: grammar.ComparisonItems{
+						{Field: &assetLinkFieldName},
+						{StrVal: &assetLinkName},
+					}},
+				},
+			})
+			continue
+		}
+
+		assetLinkLeInner := grammar.LogicalExpression{Or: []grammar.LogicalExpression{}}
+		if hasEdcBpnClaim {
+			assetLinkLeInner.Or = append(assetLinkLeInner.Or, grammar.LogicalExpression{
+				Match: []grammar.MatchExpression{
+					{
+						Eq: grammar.ComparisonItems{
+							{Field: &assetLinkFieldValue},
+							{StrVal: &assetLinkValue},
+						},
+					},
+					{
+						Eq: grammar.ComparisonItems{
+							{Field: &assetLinkFieldName},
+							{StrVal: &assetLinkName},
+						},
+					},
+					{
+						Eq: grammar.ComparisonItems{
+							{StrVal: &edcBpn},
+							{Field: &assetLinkFieldPattern},
+						},
+					},
+				},
+			})
+		}
+
+		assetLinkLeInner.Or = append(assetLinkLeInner.Or, grammar.LogicalExpression{
+			Match: []grammar.MatchExpression{
+				{
+					Eq: grammar.ComparisonItems{
+						{Field: &assetLinkFieldValue},
+						{StrVal: &assetLinkValue},
+					},
+				},
+				{
+					Eq: grammar.ComparisonItems{
+						{Field: &assetLinkFieldName},
+						{StrVal: &assetLinkName},
+					},
+				},
+				{
+					Eq: grammar.ComparisonItems{
+						{StrVal: &publicReadable},
+						{Field: &assetLinkFieldPattern},
+					},
+				},
+			},
+		})
+		assetLinkLe.And = append(assetLinkLe.And, assetLinkLeInner)
 	}
 
 	return grammar.Query{
-		Condition: &grammar.LogicalExpression{And: conditions},
-	}
-}
-
-func edcBpnClaimFromContext(ctx context.Context) (string, bool) {
-	claims := auth.ClaimsFromContext(ctx)
-	edcBpnClaim, hasEdcBpnClaim := claims.GetString("Edc-Bpn")
-	return edcBpnClaim, hasEdcBpnClaim && strings.TrimSpace(edcBpnClaim) != ""
-}
-
-func buildSpecificAssetLinkCondition(link model.AssetLink, edcBpnClaim string, hasEdcBpnClaim bool) grammar.LogicalExpression {
-	matches := []grammar.MatchExpression{
-		eqFieldToStringMatch("$aasdesc#specificAssetIds[].value", link.Value),
-		eqFieldToStringMatch("$aasdesc#specificAssetIds[].name", link.Name),
-	}
-
-	return grammar.LogicalExpression{
-		Or: authorizedSubjectExpressions(edcBpnClaim, hasEdcBpnClaim, func(subject string) grammar.LogicalExpression {
-			subjectMatches := append([]grammar.MatchExpression(nil), matches...)
-			subjectMatches = append(subjectMatches, eqStringToFieldMatch(subject, "$aasdesc#specificAssetIds[].externalSubjectId.keys[].value"))
-			return grammar.LogicalExpression{
-				Match: subjectMatches,
-			}
-		}),
-	}
-}
-
-func authorizedSubjectExpressions(
-	edcBpnClaim string,
-	hasEdcBpnClaim bool,
-	build func(string) grammar.LogicalExpression,
-) []grammar.LogicalExpression {
-	expressions := make([]grammar.LogicalExpression, 0, 2)
-	if hasEdcBpnClaim {
-		expressions = append(expressions, build(edcBpnClaim))
-	}
-	return append(expressions, build(publicReadableExternalSubjectValue))
-}
-
-func eqFieldToStringExpression(fieldPath string, value string) grammar.LogicalExpression {
-	field := grammar.ModelStringPattern(fieldPath)
-	strValue := grammar.StandardString(value)
-	return grammar.LogicalExpression{
-		Eq: grammar.ComparisonItems{
-			{Field: &field},
-			{StrVal: &strValue},
-		},
-	}
-}
-
-func eqFieldToStringMatch(fieldPath string, value string) grammar.MatchExpression {
-	field := grammar.ModelStringPattern(fieldPath)
-	strValue := grammar.StandardString(value)
-	return grammar.MatchExpression{
-		Eq: grammar.ComparisonItems{
-			{Field: &field},
-			{StrVal: &strValue},
-		},
-	}
-}
-
-func eqStringToFieldMatch(value string, fieldPath string) grammar.MatchExpression {
-	field := grammar.ModelStringPattern(fieldPath)
-	strValue := grammar.StandardString(value)
-	return grammar.MatchExpression{
-		Eq: grammar.ComparisonItems{
-			{StrVal: &strValue},
-			{Field: &field},
-		},
+		Condition: &assetLinkLe,
 	}
 }
