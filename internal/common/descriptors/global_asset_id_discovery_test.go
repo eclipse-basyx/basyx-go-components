@@ -34,7 +34,7 @@ import (
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 )
 
-func TestSpecificAssetIDsWithGlobalAssetIDAddsPublicReadableGlobalAssetID(t *testing.T) {
+func TestSpecificAssetIDsWithGlobalAssetIDAddsPublicReadableGlobalAssetIDForDTRContext(t *testing.T) {
 	t.Parallel()
 
 	descriptor := model.AssetAdministrationShellDescriptor{
@@ -45,7 +45,7 @@ func TestSpecificAssetIDsWithGlobalAssetIDAddsPublicReadableGlobalAssetID(t *tes
 		},
 	}
 
-	assetIDs := specificAssetIDsWithGlobalAssetID(discoveryContext(), descriptor)
+	assetIDs := specificAssetIDsWithGlobalAssetID(dtrDiscoveryContext(), descriptor)
 	if len(assetIDs) != 3 {
 		t.Fatalf("expected original asset IDs plus generated globalAssetId, got %d", len(assetIDs))
 	}
@@ -67,6 +67,23 @@ func TestSpecificAssetIDsWithGlobalAssetIDAddsPublicReadableGlobalAssetID(t *tes
 	}
 	if keys[0].Type() != types.KeyTypesGlobalReference || keys[0].Value() != globalAssetIDExternalSubjectIDValue {
 		t.Fatalf("unexpected externalSubjectId key: type=%v value=%q", keys[0].Type(), keys[0].Value())
+	}
+}
+
+func TestSpecificAssetIDsWithGlobalAssetIDKeepsExternalSubjectEmptyWithoutDTRContext(t *testing.T) {
+	t.Parallel()
+
+	descriptor := model.AssetAdministrationShellDescriptor{
+		GlobalAssetId:    "global-asset",
+		SpecificAssetIds: []types.ISpecificAssetID{specificAssetIDWithExternalSubjects("manufacturerId", "0815", "BPN_COMPANY_001")},
+	}
+
+	assetIDs := specificAssetIDsWithGlobalAssetID(discoveryContext(), descriptor)
+	if len(assetIDs) != 2 {
+		t.Fatalf("expected original asset ID plus generated globalAssetId, got %d", len(assetIDs))
+	}
+	if assetIDs[1].ExternalSubjectID() != nil {
+		t.Fatalf("expected generated globalAssetId to keep empty externalSubjectId without DTR context")
 	}
 }
 
@@ -93,6 +110,10 @@ func discoveryContext() context.Context {
 	cfg := &common.Config{}
 	cfg.General.DiscoveryIntegration = true
 	return common.ContextWithConfig(context.Background(), cfg)
+}
+
+func dtrDiscoveryContext() context.Context {
+	return WithPublicReadableGlobalAssetIDExternalSubjectID(discoveryContext())
 }
 
 func specificAssetIDWithExternalSubjects(name string, value string, subjects ...string) types.ISpecificAssetID {

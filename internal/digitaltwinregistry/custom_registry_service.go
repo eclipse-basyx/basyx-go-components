@@ -201,7 +201,8 @@ func (s *CustomRegistryService) ExecuteBulkPutAtomic(
 
 func withDTRDescriptorWriteContext(ctx context.Context) context.Context {
 	ctx = descriptorsutil.WithAllowAASDescriptorCreatedAtOverride(ctx)
-	return descriptorsutil.WithIncludeAASDescriptorCreatedAt(ctx)
+	ctx = descriptorsutil.WithIncludeAASDescriptorCreatedAt(ctx)
+	return descriptorsutil.WithPublicReadableGlobalAssetIDExternalSubjectID(ctx)
 }
 
 func is2xx(code int) bool {

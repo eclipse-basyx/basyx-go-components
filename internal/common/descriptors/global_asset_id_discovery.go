@@ -36,6 +36,13 @@ import (
 
 const globalAssetIDExternalSubjectIDValue = "PUBLIC_READABLE"
 
+type publicReadableGlobalAssetIDExternalSubjectIDKey struct{}
+
+// WithPublicReadableGlobalAssetIDExternalSubjectID marks descriptor writes that should expose generated globalAssetId asset links publicly.
+func WithPublicReadableGlobalAssetIDExternalSubjectID(ctx context.Context) context.Context {
+	return context.WithValue(ctx, publicReadableGlobalAssetIDExternalSubjectIDKey{}, true)
+}
+
 func specificAssetIDsWithGlobalAssetID(
 	ctx context.Context,
 	descriptor model.AssetAdministrationShellDescriptor,
@@ -49,17 +56,24 @@ func specificAssetIDsWithGlobalAssetID(
 }
 
 func globalAssetIDSpecificAssetID(
-	_ context.Context,
+	ctx context.Context,
 	descriptor model.AssetAdministrationShellDescriptor,
 ) types.ISpecificAssetID {
 	assetID := types.NewSpecificAssetID(globalAssetIDSpecificAssetIDName, descriptor.GlobalAssetId)
-	assetID.SetExternalSubjectID(types.NewReference(types.ReferenceTypesExternalReference, []types.IKey{
-		types.NewKey(types.KeyTypesGlobalReference, globalAssetIDExternalSubjectIDValue),
-	}))
+	if publicReadableGlobalAssetIDExternalSubjectIDEnabled(ctx) {
+		assetID.SetExternalSubjectID(types.NewReference(types.ReferenceTypesExternalReference, []types.IKey{
+			types.NewKey(types.KeyTypesGlobalReference, globalAssetIDExternalSubjectIDValue),
+		}))
+	}
 	return assetID
 }
 
 func discoveryIntegrationEnabled(ctx context.Context) bool {
 	cfg, ok := common.ConfigFromContext(ctx)
 	return ok && cfg.General.DiscoveryIntegration
+}
+
+func publicReadableGlobalAssetIDExternalSubjectIDEnabled(ctx context.Context) bool {
+	enabled, _ := ctx.Value(publicReadableGlobalAssetIDExternalSubjectIDKey{}).(bool)
+	return enabled
 }
