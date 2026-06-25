@@ -180,13 +180,25 @@ func (s *SubmodelDatabase) createSubmodelInTransaction(tx *sql.Tx, submodel type
 	}
 
 	if len(submodel.SubmodelElements()) > 0 {
-		_, err = submodelelements.InsertSubmodelElements(s.db, submodel.ID(), submodel.SubmodelElements(), tx, nil)
+		submodelDatabaseID, conversionErr := submodelDatabaseIDAsInt(submodelDBID)
+		if conversionErr != nil {
+			return conversionErr
+		}
+
+		_, err = submodelelements.InsertSubmodelElementsForSubmodelDatabaseID(s.db, submodelDatabaseID, submodel.SubmodelElements(), tx, nil)
 		if err != nil {
-			return common.NewInternalServerError("SMREPO-NEWSM-CREATESM-INSERTSME " + err.Error())
+			return err
 		}
 	}
 
 	return nil
+}
+
+func submodelDatabaseIDAsInt(submodelDBID int64) (int, error) {
+	if submodelDBID <= 0 || submodelDBID > int64(int(^uint(0)>>1)) {
+		return 0, common.NewInternalServerError("SMREPO-NEWSM-CREATESM-SMDATABASEIDRANGE Submodel database ID is outside the supported integer range")
+	}
+	return int(submodelDBID), nil
 }
 
 func (s *SubmodelDatabase) verifySubmodel(submodel types.ISubmodel, errorPrefix string) error {

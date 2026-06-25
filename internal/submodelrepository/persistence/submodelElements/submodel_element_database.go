@@ -578,6 +578,29 @@ func DeleteAllChildren(db *sql.DB, submodelId string, idShortPath string, tx *sq
 //
 //nolint:revive // cognitive-complexity is acceptable for performance-focused persistence orchestration
 func InsertSubmodelElements(db *sql.DB, submodelID string, elements []types.ISubmodelElement, tx *sql.Tx, ctx *BatchInsertContext) ([]int, error) {
+	return insertSubmodelElements(db, elements, tx, ctx, func(localTx *sql.Tx) (int, error) {
+		submodelDatabaseID, submodelDatabaseIDErr := persistenceutils.GetSubmodelDatabaseID(localTx, submodelID)
+		if submodelDatabaseIDErr != nil {
+			if errors.Is(submodelDatabaseIDErr, sql.ErrNoRows) {
+				return 0, common.NewErrNotFound("SMREPO-INSSME-SMNOTFOUND Submodel with ID '" + submodelID + "' not found")
+			}
+			return 0, common.NewInternalServerError("SMREPO-INSSME-GETSMDATABASEID " + submodelDatabaseIDErr.Error())
+		}
+		return submodelDatabaseID, nil
+	})
+}
+
+// InsertSubmodelElementsForSubmodelDatabaseID inserts submodel elements when the caller already knows the submodel database ID.
+func InsertSubmodelElementsForSubmodelDatabaseID(db *sql.DB, submodelDatabaseID int, elements []types.ISubmodelElement, tx *sql.Tx, ctx *BatchInsertContext) ([]int, error) {
+	return insertSubmodelElements(db, elements, tx, ctx, func(_ *sql.Tx) (int, error) {
+		if submodelDatabaseID <= 0 {
+			return 0, common.NewInternalServerError("SMREPO-INSSME-SMDATABASEIDINVALID Submodel database ID must be positive")
+		}
+		return submodelDatabaseID, nil
+	})
+}
+
+func insertSubmodelElements(db *sql.DB, elements []types.ISubmodelElement, tx *sql.Tx, ctx *BatchInsertContext, resolveSubmodelDatabaseID func(*sql.Tx) (int, error)) ([]int, error) {
 	// Handle empty elements slice
 	if len(elements) == 0 {
 		return []int{}, nil
@@ -607,9 +630,9 @@ func InsertSubmodelElements(db *sql.DB, submodelID string, elements []types.ISub
 	dialect := goqu.Dialect("postgres")
 	jsonLib := jsoniter.ConfigCompatibleWithStandardLibrary
 
-	submodelDatabaseID, submodelDatabaseIDErr := persistenceutils.GetSubmodelDatabaseID(localTx, submodelID)
+	submodelDatabaseID, submodelDatabaseIDErr := resolveSubmodelDatabaseID(localTx)
 	if submodelDatabaseIDErr != nil {
-		err = common.NewInternalServerError("SMREPO-INSSME-GETSMDATABASEID " + submodelDatabaseIDErr.Error())
+		err = submodelDatabaseIDErr
 		return nil, err
 	}
 
