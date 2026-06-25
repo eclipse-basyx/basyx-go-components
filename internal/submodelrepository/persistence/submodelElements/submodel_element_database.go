@@ -581,6 +581,9 @@ func InsertSubmodelElements(db *sql.DB, submodelID string, elements []types.ISub
 	return insertSubmodelElements(db, elements, tx, ctx, func(localTx *sql.Tx) (int, error) {
 		submodelDatabaseID, submodelDatabaseIDErr := persistenceutils.GetSubmodelDatabaseID(localTx, submodelID)
 		if submodelDatabaseIDErr != nil {
+			if errors.Is(submodelDatabaseIDErr, sql.ErrNoRows) {
+				return 0, common.NewErrNotFound("SMREPO-INSSME-SMNOTFOUND Submodel with ID '" + submodelID + "' not found")
+			}
 			return 0, common.NewInternalServerError("SMREPO-INSSME-GETSMDATABASEID " + submodelDatabaseIDErr.Error())
 		}
 		return submodelDatabaseID, nil

@@ -228,7 +228,7 @@ func insertBaseNodesDepthWise(tx *sql.Tx, dialect goqu.DialectWrapper, submodelD
 		"SMREPO-INSSME-INSBASE",
 	)
 	if insertErr != nil {
-		return common.NewInternalServerError("SMREPO-INSSME-INSBASE-EXECQ " + insertErr.Error())
+		return insertErr
 	}
 
 	return nil
@@ -663,7 +663,7 @@ func buildBaseSubmodelElementRecord(params baseRecordParams) (goqu.Record, error
 		parentDBId = sql.NullInt64{Int64: int64(params.ParentID), Valid: true}
 	}
 
-	// Build root_sme_id (will be updated later for top-level elements)
+	// Build root_sme_id from the precomputed hierarchy.
 	var rootDbID sql.NullInt64
 	if params.RootSmeID == 0 {
 		rootDbID = sql.NullInt64{}
