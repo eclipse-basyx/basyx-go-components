@@ -141,8 +141,23 @@ func (p *PostgreSQLSMDatabase) InsertSubmodelDescriptorInTransaction(
 	if tx == nil {
 		return model.SubmodelDescriptor{}, common.NewInternalServerError("SMREG-INSERTSMDESC-NILTX transaction must not be nil")
 	}
-	stored, err := descriptors.InsertSubmodelDescriptorTx(ctx, tx, submodel)
+	batch, err := descriptors.BuildSubmodelDescriptorsCreateBatch(ctx, tx, []model.SubmodelDescriptor{submodel})
 	if err != nil {
+		return model.SubmodelDescriptor{}, err
+	}
+	if err = common.ExecutePostgreSQLBatchInTransaction(ctx, tx, batch.Statements()); err != nil {
+		return model.SubmodelDescriptor{}, mapBulkInsertSubmodelDescriptorError(err)
+	}
+
+	if descriptors.CanSkipCreateReadback(ctx) && history.ActiveConfig().Mode == history.ModeOff {
+		return submodel, nil
+	}
+
+	stored, err := descriptors.GetSubmodelDescriptorByID(ctx, tx, submodel.Id)
+	if err != nil {
+		if common.IsErrNotFound(err) {
+			return model.SubmodelDescriptor{}, common.NewErrDenied("Submodel Descriptor access not allowed")
+		}
 		return model.SubmodelDescriptor{}, err
 	}
 	if err = appendSubmodelDescriptorHistoryTx(ctx, tx, stored, history.ChangeCreated, false); err != nil {

@@ -215,9 +215,18 @@ func (p *PostgreSQLAASRegistryDatabase) InsertAdministrationShellDescriptorInTra
 	if tx == nil {
 		return common.NewInternalServerError("AASREG-INSERTAASDESC-NILTX transaction must not be nil")
 	}
-	if err := descriptors.InsertAdministrationShellDescriptorTx(ctx, tx, aasd); err != nil {
+	batch, err := descriptors.BuildAdministrationShellDescriptorCreateBatch(ctx, aasd)
+	if err != nil {
 		return err
 	}
+	if err = common.ExecutePostgreSQLBatchInTransaction(ctx, tx, batch.Statements()); err != nil {
+		return mapInsertAASDescriptorError(err)
+	}
+
+	if descriptors.CanSkipCreateReadback(ctx) && history.ActiveConfig().Mode == history.ModeOff {
+		return nil
+	}
+
 	stored, err := descriptors.GetAssetAdministrationShellDescriptorByIDTx(ctx, tx, aasd.Id)
 	if err != nil {
 		return err
