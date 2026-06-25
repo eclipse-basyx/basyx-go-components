@@ -34,7 +34,7 @@ import (
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 )
 
-func TestSpecificAssetIDsWithGlobalAssetIDAddsGlobalAssetIDWithoutExternalSubjects(t *testing.T) {
+func TestSpecificAssetIDsWithGlobalAssetIDAddsPublicReadableGlobalAssetID(t *testing.T) {
 	t.Parallel()
 
 	descriptor := model.AssetAdministrationShellDescriptor{
@@ -54,8 +54,19 @@ func TestSpecificAssetIDsWithGlobalAssetIDAddsGlobalAssetIDWithoutExternalSubjec
 	if globalAssetID.Name() != globalAssetIDSpecificAssetIDName || globalAssetID.Value() != "global-asset" {
 		t.Fatalf("unexpected generated globalAssetId asset link: name=%q value=%q", globalAssetID.Name(), globalAssetID.Value())
 	}
-	if globalAssetID.ExternalSubjectID() != nil {
-		t.Fatalf("expected generated globalAssetId to keep empty externalSubjectId")
+	externalSubjectID := globalAssetID.ExternalSubjectID()
+	if externalSubjectID == nil {
+		t.Fatalf("expected generated globalAssetId to include externalSubjectId")
+	}
+	if externalSubjectID.Type() != types.ReferenceTypesExternalReference {
+		t.Fatalf("expected externalSubjectId type ExternalReference, got %v", externalSubjectID.Type())
+	}
+	keys := externalSubjectID.Keys()
+	if len(keys) != 1 {
+		t.Fatalf("expected one externalSubjectId key, got %d", len(keys))
+	}
+	if keys[0].Type() != types.KeyTypesGlobalReference || keys[0].Value() != globalAssetIDExternalSubjectIDValue {
+		t.Fatalf("unexpected externalSubjectId key: type=%v value=%q", keys[0].Type(), keys[0].Value())
 	}
 }
 

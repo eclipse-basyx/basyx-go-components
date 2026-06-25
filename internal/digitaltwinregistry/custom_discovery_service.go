@@ -95,8 +95,8 @@ func (s *CustomDiscoveryService) SearchAllAssetAdministrationShellIdsByAssetLink
 
 	if shouldEnforceFormula {
 		assetLinkQuery := buildAssetLinkQuery(ctx, assetLink)
-		if assetLinkQuery.Condition != nil {
-			ctx = replaceReadFormula(ctx, *assetLinkQuery.Condition)
+		if assetLinkQuery.Condition != nil || len(assetLinkQuery.FilterConditions) > 0 {
+			ctx = auth.MergeQueryFilter(ctx, assetLinkQuery)
 			ctx = discoveryapiinternal.WithAssetLinksAlreadyConstrained(ctx)
 		}
 	}
@@ -194,25 +194,6 @@ func baseCheckerOrFallback(checker aasExistenceChecker) aasExistenceChecker {
 		return checker
 	}
 	return noopAASChecker{}
-}
-
-func replaceReadFormula(ctx context.Context, condition grammar.LogicalExpression) context.Context {
-	qf, cloneErr := auth.CloneQueryFilter(auth.GetQueryFilter(ctx))
-	if cloneErr != nil {
-		log.Printf("[%s] Error replaceReadFormula: clone query filter failed: %v", customDiscoveryComponentName, cloneErr)
-		deny := false
-		condition = grammar.LogicalExpression{Boolean: &deny}
-		qf = &auth.QueryFilter{}
-	}
-	if qf == nil {
-		qf = &auth.QueryFilter{}
-	}
-	if qf.FormulasByRight == nil {
-		qf.FormulasByRight = make(map[grammar.RightsEnum]grammar.LogicalExpression)
-	}
-	qf.Formula = &condition
-	qf.FormulasByRight[grammar.RightsEnumREAD] = condition
-	return auth.WithQueryFilter(ctx, qf)
 }
 
 type noopAASChecker struct{}
@@ -348,22 +329,6 @@ func buildAssetLinkQuery(ctx context.Context, assetLink []model.AssetLink) gramm
 	for _, link := range assetLink {
 		assetLinkValue := grammar.StandardString(link.Value)
 		assetLinkName := grammar.StandardString(link.Name)
-
-		if link.Name == common.GlobalAssetIDAssetLinkName {
-			assetLinkLe.And = append(assetLinkLe.And, grammar.LogicalExpression{
-				Match: []grammar.MatchExpression{
-					{Eq: grammar.ComparisonItems{
-						{Field: &assetLinkFieldValue},
-						{StrVal: &assetLinkValue},
-					}},
-					{Eq: grammar.ComparisonItems{
-						{Field: &assetLinkFieldName},
-						{StrVal: &assetLinkName},
-					}},
-				},
-			})
-			continue
-		}
 
 		assetLinkLeInner := grammar.LogicalExpression{Or: []grammar.LogicalExpression{}}
 		if hasEdcBpnClaim {

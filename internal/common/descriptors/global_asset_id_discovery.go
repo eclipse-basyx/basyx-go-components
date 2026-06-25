@@ -34,6 +34,8 @@ import (
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 )
 
+const globalAssetIDExternalSubjectIDValue = "PUBLIC_READABLE"
+
 func specificAssetIDsWithGlobalAssetID(
 	ctx context.Context,
 	descriptor model.AssetAdministrationShellDescriptor,
@@ -50,7 +52,11 @@ func globalAssetIDSpecificAssetID(
 	_ context.Context,
 	descriptor model.AssetAdministrationShellDescriptor,
 ) types.ISpecificAssetID {
-	return types.NewSpecificAssetID(globalAssetIDSpecificAssetIDName, descriptor.GlobalAssetId)
+	assetID := types.NewSpecificAssetID(globalAssetIDSpecificAssetIDName, descriptor.GlobalAssetId)
+	assetID.SetExternalSubjectID(types.NewReference(types.ReferenceTypesExternalReference, []types.IKey{
+		types.NewKey(types.KeyTypesGlobalReference, globalAssetIDExternalSubjectIDValue),
+	}))
+	return assetID
 }
 
 func discoveryIntegrationEnabled(ctx context.Context) bool {
