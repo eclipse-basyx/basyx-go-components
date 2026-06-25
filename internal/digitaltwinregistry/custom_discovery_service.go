@@ -189,45 +189,49 @@ func applyDTRAssetLinkLookupFilters(
 	assetLinks []model.AssetLink,
 	shouldEnforceFormula bool,
 ) (context.Context, []model.AssetLink) {
-	globalAssetIDLinks, backendAssetLinks := splitGlobalAssetIDLinks(assetLinks)
-	authorizationQuery := grammar.Query{}
-	if shouldEnforceFormula {
-		authorizationQuery = buildAssetLinkAuthorizationQuery(ctx, globalAssetIDLinks, backendAssetLinks)
+	if !shouldEnforceFormula {
+		return ctx, assetLinks
 	}
 
-	if len(globalAssetIDLinks) > 0 {
-		ctx = mergeGlobalAssetIDLookupFilter(ctx, globalAssetIDLinks)
-	}
+	authorizationQuery := buildAssetLinkAuthorizationQuery(ctx, assetLinks)
 	if hasQueryConditions(authorizationQuery) {
-		ctx = auth.MergeQueryFilter(ctx, authorizationQuery)
-		ctx = discoveryapiinternal.WithAssetLinksAlreadyConstrained(ctx)
-	}
-	if len(globalAssetIDLinks) > 0 && len(backendAssetLinks) == 0 {
+		ctx = replaceReadFormula(ctx, *authorizationQuery.Condition)
 		ctx = discoveryapiinternal.WithAssetLinksAlreadyConstrained(ctx)
 	}
 
-	return ctx, backendAssetLinks
+	return ctx, assetLinks
 }
 
 func splitGlobalAssetIDLinks(assetLinks []model.AssetLink) ([]model.AssetLink, []model.AssetLink) {
 	globalAssetIDLinks := make([]model.AssetLink, 0)
-	backendAssetLinks := make([]model.AssetLink, 0, len(assetLinks))
+	specificAssetLinks := make([]model.AssetLink, 0, len(assetLinks))
 	for _, link := range assetLinks {
 		if link.Name == common.GlobalAssetIDAssetLinkName {
 			globalAssetIDLinks = append(globalAssetIDLinks, link)
 			continue
 		}
-		backendAssetLinks = append(backendAssetLinks, link)
+		specificAssetLinks = append(specificAssetLinks, link)
 	}
-	return globalAssetIDLinks, backendAssetLinks
+	return globalAssetIDLinks, specificAssetLinks
 }
 
-func mergeGlobalAssetIDLookupFilter(ctx context.Context, globalAssetIDLinks []model.AssetLink) context.Context {
-	query := buildGlobalAssetIDLookupQuery(globalAssetIDLinks)
-	if !hasQueryConditions(query) {
-		return ctx
+func replaceReadFormula(ctx context.Context, condition grammar.LogicalExpression) context.Context {
+	qf, cloneErr := auth.CloneQueryFilter(auth.GetQueryFilter(ctx))
+	if cloneErr != nil {
+		log.Printf("[%s] Error replaceReadFormula: clone query filter failed: %v", customDiscoveryComponentName, cloneErr)
+		deny := false
+		condition = grammar.LogicalExpression{Boolean: &deny}
+		qf = &auth.QueryFilter{}
 	}
-	return auth.MergeQueryFilter(ctx, query)
+	if qf == nil {
+		qf = &auth.QueryFilter{}
+	}
+	if qf.FormulasByRight == nil {
+		qf.FormulasByRight = make(map[grammar.RightsEnum]grammar.LogicalExpression)
+	}
+	qf.Formula = &condition
+	qf.FormulasByRight[grammar.RightsEnumREAD] = condition
+	return auth.WithQueryFilter(ctx, qf)
 }
 
 func hasQueryConditions(query grammar.Query) bool {
@@ -341,40 +345,25 @@ func buildEdcBpnClaimEqualsHeaderExpression(t *time.Time, pattern string) gramma
 	}
 }
 
-func buildGlobalAssetIDLookupQuery(globalAssetIDLinks []model.AssetLink) grammar.Query {
-	if len(globalAssetIDLinks) == 0 {
-		return grammar.Query{}
-	}
-
-	conditions := make([]grammar.LogicalExpression, 0, len(globalAssetIDLinks))
-	for _, link := range globalAssetIDLinks {
-		conditions = append(conditions, eqFieldToStringExpression("$aasdesc#globalAssetId", link.Value))
-	}
-
-	return grammar.Query{
-		Condition: &grammar.LogicalExpression{And: conditions},
-	}
-}
-
 func buildAssetLinkAuthorizationQuery(
 	ctx context.Context,
-	globalAssetIDLinks []model.AssetLink,
-	backendAssetLinks []model.AssetLink,
+	assetLinks []model.AssetLink,
 ) grammar.Query {
-	if len(globalAssetIDLinks) == 0 && len(backendAssetLinks) == 0 {
+	if len(assetLinks) == 0 {
 		return grammar.Query{}
 	}
 	if auth.HasUnrestrictedFormulaForRight(ctx, grammar.RightsEnumREAD) {
 		return grammar.Query{}
 	}
 
+	globalAssetIDLinks, specificAssetLinks := splitGlobalAssetIDLinks(assetLinks)
 	edcBpnClaim, hasEdcBpnClaim := edcBpnClaimFromContext(ctx)
-	conditions := make([]grammar.LogicalExpression, 0, len(globalAssetIDLinks)+len(backendAssetLinks))
-	if len(globalAssetIDLinks) > 0 {
-		conditions = append(conditions, globalAssetIDBPNAuthorizationCondition(edcBpnClaim, hasEdcBpnClaim))
+	conditions := make([]grammar.LogicalExpression, 0, len(assetLinks))
+	for _, link := range globalAssetIDLinks {
+		conditions = append(conditions, eqFieldToStringExpression("$aasdesc#globalAssetId", link.Value))
 	}
-	for _, link := range backendAssetLinks {
-		conditions = append(conditions, buildSpecificAssetLinkCondition(link, edcBpnClaim, hasEdcBpnClaim, true))
+	for _, link := range specificAssetLinks {
+		conditions = append(conditions, buildSpecificAssetLinkCondition(link, edcBpnClaim, hasEdcBpnClaim))
 	}
 
 	return grammar.Query{
@@ -388,13 +377,10 @@ func edcBpnClaimFromContext(ctx context.Context) (string, bool) {
 	return edcBpnClaim, hasEdcBpnClaim && strings.TrimSpace(edcBpnClaim) != ""
 }
 
-func buildSpecificAssetLinkCondition(link model.AssetLink, edcBpnClaim string, hasEdcBpnClaim bool, requireAuthorization bool) grammar.LogicalExpression {
+func buildSpecificAssetLinkCondition(link model.AssetLink, edcBpnClaim string, hasEdcBpnClaim bool) grammar.LogicalExpression {
 	matches := []grammar.MatchExpression{
 		eqFieldToStringMatch("$aasdesc#specificAssetIds[].value", link.Value),
 		eqFieldToStringMatch("$aasdesc#specificAssetIds[].name", link.Name),
-	}
-	if !requireAuthorization {
-		return grammar.LogicalExpression{Match: matches}
 	}
 
 	return grammar.LogicalExpression{
@@ -405,18 +391,6 @@ func buildSpecificAssetLinkCondition(link model.AssetLink, edcBpnClaim string, h
 				Match: subjectMatches,
 			}
 		}),
-	}
-}
-
-func globalAssetIDBPNAuthorizationCondition(edcBpnClaim string, hasEdcBpnClaim bool) grammar.LogicalExpression {
-	if !hasEdcBpnClaim {
-		b := false
-		return grammar.LogicalExpression{Boolean: &b}
-	}
-	return grammar.LogicalExpression{
-		Match: []grammar.MatchExpression{
-			eqStringToFieldMatch(edcBpnClaim, "$aasdesc#specificAssetIds[].externalSubjectId.keys[].value"),
-		},
 	}
 }
 

@@ -50,7 +50,7 @@ func TestBuildAssetLinkAuthorizationQuery_ReturnsEmptyWhenReadFormulaIsUnrestric
 		Condition: &grammar.LogicalExpression{Boolean: &b},
 	})
 
-	query := buildAssetLinkAuthorizationQuery(ctx, nil, []model.AssetLink{{Name: "name", Value: "value"}})
+	query := buildAssetLinkAuthorizationQuery(ctx, []model.AssetLink{{Name: "name", Value: "value"}})
 	if query.Condition != nil {
 		t.Fatalf("expected no additional condition when READ formula is unrestricted, got %#v", query.Condition)
 	}
@@ -64,7 +64,7 @@ func TestBuildAssetLinkAuthorizationQuery_BuildsConditionWhenReadFormulaIsRestri
 		Condition: &grammar.LogicalExpression{Boolean: &b},
 	})
 
-	query := buildAssetLinkAuthorizationQuery(ctx, nil, []model.AssetLink{{Name: "name", Value: "value"}})
+	query := buildAssetLinkAuthorizationQuery(ctx, []model.AssetLink{{Name: "name", Value: "value"}})
 	if query.Condition == nil {
 		t.Fatalf("expected asset-link condition when READ formula is restricted")
 	}
@@ -73,7 +73,7 @@ func TestBuildAssetLinkAuthorizationQuery_BuildsConditionWhenReadFormulaIsRestri
 	}
 }
 
-func TestBuildAssetLinkAuthorizationQuery_GlobalAssetIDUsesTwinExternalSubjects(t *testing.T) {
+func TestBuildAssetLinkAuthorizationQuery_GlobalAssetIDSkipsSpecificAssetAuthorization(t *testing.T) {
 	t.Parallel()
 
 	ctx := restrictedReadContext()
@@ -81,85 +81,91 @@ func TestBuildAssetLinkAuthorizationQuery_GlobalAssetIDUsesTwinExternalSubjects(
 
 	query := buildAssetLinkAuthorizationQuery(ctx, []model.AssetLink{
 		{Name: common.GlobalAssetIDAssetLinkName, Value: "global-asset"},
-	}, nil)
-	if query.Condition == nil {
-		t.Fatalf("expected globalAssetId authorization condition")
-	}
-
-	sql, args := renderBDQuerySQL(t, query)
-
-	if strings.Contains(sql, `"aas_descriptor"."global_asset_id" =`) || containsArg(args, "global-asset") {
-		t.Fatalf("did not expect globalAssetId authorization to duplicate lookup identity, got SQL: %s", sql)
-	}
-	if !strings.Contains(sql, "EXISTS") || !strings.Contains(sql, `"external_subject_reference_key"`) {
-		t.Fatalf("expected external-subject EXISTS authorization, got SQL: %s", sql)
-	}
-	if !containsArg(args, "BPN_COMPANY_001") {
-		t.Fatalf("expected globalAssetId lookup to authorize through the caller Edc-Bpn, got SQL: %s", sql)
-	}
-	if strings.Contains(sql, `"specific_asset_id"."name"`) {
-		t.Fatalf("did not expect globalAssetId visibility to depend on generated specific_asset_id row, got SQL: %s", sql)
-	}
-	if containsArg(args, publicReadableExternalSubjectValue) {
-		t.Fatalf("globalAssetId lookup must not be authorized through PUBLIC_READABLE specific asset IDs, got SQL: %s", sql)
-	}
-}
-
-func TestBuildAssetLinkAuthorizationQuery_GlobalAssetIDDoesNotAllowAnonymousPublicReadableSubject(t *testing.T) {
-	t.Parallel()
-
-	query := buildAssetLinkAuthorizationQuery(restrictedReadContext(), []model.AssetLink{
-		{Name: common.GlobalAssetIDAssetLinkName, Value: "global-asset"},
-	}, nil)
-	if query.Condition == nil {
-		t.Fatalf("expected globalAssetId authorization condition")
-	}
-
-	sql, args := renderBDQuerySQL(t, query)
-
-	if strings.Contains(sql, `"aas_descriptor"."global_asset_id" =`) || containsArg(args, "global-asset") {
-		t.Fatalf("did not expect globalAssetId authorization to duplicate lookup identity, got SQL: %s", sql)
-	}
-	if containsArg(args, publicReadableExternalSubjectValue) {
-		t.Fatalf("anonymous globalAssetId lookup must not be authorized through PUBLIC_READABLE specific asset IDs, got SQL: %s", sql)
-	}
-}
-
-func TestBuildGlobalAssetIDLookupQuery_UsesDescriptorValueWithoutAssetLinkFallback(t *testing.T) {
-	t.Parallel()
-
-	query := buildGlobalAssetIDLookupQuery([]model.AssetLink{
-		{Name: common.GlobalAssetIDAssetLinkName, Value: "global-asset"},
 	})
 	if query.Condition == nil {
-		t.Fatalf("expected globalAssetId condition")
+		t.Fatalf("expected globalAssetId authorization condition")
 	}
 
 	sql, args := renderBDQuerySQL(t, query)
 
 	if !strings.Contains(sql, `"aas_descriptor"."global_asset_id" =`) || !containsArg(args, "global-asset") {
-		t.Fatalf("expected direct global_asset_id comparison, got SQL: %s", sql)
+		t.Fatalf("expected direct global_asset_id lookup, got SQL: %s args: %#v", sql, args)
 	}
-	if strings.Contains(sql, `"specific_asset_id"."name"`) {
-		t.Fatalf("did not expect generated globalAssetId asset-link fallback, got SQL: %s", sql)
+	if strings.Contains(sql, `"specific_asset_id"."name"`) || containsArg(args, common.GlobalAssetIDAssetLinkName) {
+		t.Fatalf("did not expect globalAssetId lookup to require generated specific_asset_id row, got SQL: %s args: %#v", sql, args)
 	}
 	if strings.Contains(sql, `"external_subject_reference_key"`) {
-		t.Fatalf("did not expect external-subject authorization in lookup-only query, got SQL: %s", sql)
+		t.Fatalf("did not expect globalAssetId lookup to check external subjects, got SQL: %s", sql)
+	}
+	if containsArg(args, "BPN_COMPANY_001") || containsArg(args, publicReadableExternalSubjectValue) {
+		t.Fatalf("did not expect globalAssetId lookup to depend on Edc-Bpn or PUBLIC_READABLE, got SQL: %s args: %#v", sql, args)
 	}
 }
 
-func TestSearchAllAssetAdministrationShellIdsByAssetLink_WhenFormulaDisabledUsesDTRGlobalAssetIDFilter(t *testing.T) {
+func TestBuildAssetLinkAuthorizationQuery_GlobalAssetIDAllowsAnonymousLookup(t *testing.T) {
+	t.Parallel()
+
+	query := buildAssetLinkAuthorizationQuery(restrictedReadContext(), []model.AssetLink{
+		{Name: common.GlobalAssetIDAssetLinkName, Value: "global-asset"},
+	})
+	if query.Condition == nil {
+		t.Fatalf("expected globalAssetId authorization condition")
+	}
+
+	sql, args := renderBDQuerySQL(t, query)
+
+	if !strings.Contains(sql, `"aas_descriptor"."global_asset_id" =`) || !containsArg(args, "global-asset") {
+		t.Fatalf("expected direct global_asset_id lookup, got SQL: %s args: %#v", sql, args)
+	}
+	if strings.Contains(sql, `"specific_asset_id"."name"`) || containsArg(args, common.GlobalAssetIDAssetLinkName) {
+		t.Fatalf("did not expect anonymous globalAssetId lookup to require generated specific_asset_id row, got SQL: %s args: %#v", sql, args)
+	}
+	if strings.Contains(sql, `"external_subject_reference_key"`) || containsArg(args, publicReadableExternalSubjectValue) {
+		t.Fatalf("did not expect anonymous globalAssetId lookup to check external subjects, got SQL: %s args: %#v", sql, args)
+	}
+}
+
+func TestBuildAssetLinkAuthorizationQuery_CombinedGlobalAssetIDKeepsSpecificAssetAuthorization(t *testing.T) {
+	t.Parallel()
+
+	ctx := restrictedReadContext()
+	ctx = context.WithValue(ctx, auth.ClaimsKey, auth.Claims{"Edc-Bpn": "BPN_COMPANY_001"})
+
+	query := buildAssetLinkAuthorizationQuery(ctx, []model.AssetLink{
+		{Name: common.GlobalAssetIDAssetLinkName, Value: "global-asset"},
+		{Name: "customerPartId", Value: "4711"},
+	})
+	if query.Condition == nil {
+		t.Fatalf("expected combined asset-link authorization condition")
+	}
+
+	sql, args := renderBDQuerySQL(t, query)
+
+	if !strings.Contains(sql, `"aas_descriptor"."global_asset_id" =`) || !containsArg(args, "global-asset") {
+		t.Fatalf("expected direct global_asset_id lookup, got SQL: %s args: %#v", sql, args)
+	}
+	if !strings.Contains(sql, `"specific_asset_id"."name"`) || !strings.Contains(sql, `"external_subject_reference_key"`) {
+		t.Fatalf("expected specific asset-link authorization in combined lookup, got SQL: %s", sql)
+	}
+	for _, want := range []string{"customerPartId", "4711", "BPN_COMPANY_001", publicReadableExternalSubjectValue} {
+		if !containsArg(args, want) {
+			t.Fatalf("expected combined lookup arg %q, got SQL: %s args: %#v", want, sql, args)
+		}
+	}
+}
+
+func TestSearchAllAssetAdministrationShellIdsByAssetLink_WhenFormulaDisabledUsesBackendGlobalAssetIDLookup(t *testing.T) {
 	t.Parallel()
 
 	matcher := sqlmock.QueryMatcherFunc(func(_ string, actualSQL string) error {
 		if !strings.Contains(actualSQL, `"aas_descriptor"."global_asset_id" =`) {
 			return fmt.Errorf("expected direct global_asset_id lookup, got SQL: %s", actualSQL)
 		}
-		if strings.Contains(actualSQL, "OR EXISTS") {
-			return fmt.Errorf("did not expect backend globalAssetId fallback OR, got SQL: %s", actualSQL)
+		if !strings.Contains(actualSQL, "OR EXISTS") {
+			return fmt.Errorf("expected backend globalAssetId asset-link fallback OR, got SQL: %s", actualSQL)
 		}
-		if strings.Contains(actualSQL, `"sai"."name" =`) {
-			return fmt.Errorf("did not expect generated globalAssetId asset-link fallback, got SQL: %s", actualSQL)
+		if !strings.Contains(actualSQL, `"sai"."name" =`) {
+			return fmt.Errorf("expected generated globalAssetId asset-link fallback, got SQL: %s", actualSQL)
 		}
 		return nil
 	})
@@ -218,8 +224,11 @@ func TestSearchAllAssetAdministrationShellIdsByAssetLink_WhenFormulaEnabledDoesN
 		if strings.Contains(actualSQL, `"sai"."name" =`) {
 			return fmt.Errorf("did not expect generated globalAssetId asset-link fallback, got SQL: %s", actualSQL)
 		}
-		if !strings.Contains(actualSQL, `"external_subject_reference_key"`) {
-			return fmt.Errorf("expected globalAssetId authorization through external subject references, got SQL: %s", actualSQL)
+		if strings.Contains(actualSQL, `"external_subject_reference_key"`) {
+			return fmt.Errorf("did not expect globalAssetId lookup to check external subjects, got SQL: %s", actualSQL)
+		}
+		if strings.Contains(actualSQL, "PUBLIC_READABLE") || strings.Contains(actualSQL, "BPN_COMPANY_001") {
+			return fmt.Errorf("did not expect globalAssetId lookup to depend on Edc-Bpn or PUBLIC_READABLE, got SQL: %s", actualSQL)
 		}
 		return nil
 	})
@@ -271,8 +280,8 @@ func TestSearchAllAssetAdministrationShellIdsByAssetLink_WhenFormulaDisabledKeep
 		if !strings.Contains(actualSQL, "customerPartId") {
 			return fmt.Errorf("expected normal asset-link name in backend query, got SQL: %s", actualSQL)
 		}
-		if strings.Contains(actualSQL, "globalAssetId") {
-			return fmt.Errorf("did not expect globalAssetId to be passed as backend asset link, got SQL: %s", actualSQL)
+		if !strings.Contains(actualSQL, "globalAssetId") {
+			return fmt.Errorf("expected globalAssetId to be passed as backend asset link, got SQL: %s", actualSQL)
 		}
 		return nil
 	})
@@ -330,7 +339,7 @@ func renderBDQuerySQL(t *testing.T, query grammar.Query) (string, []interface{})
 	}
 	expr, _, err := query.Condition.EvaluateToExpression(collector)
 	if err != nil {
-		t.Fatalf("expected globalAssetId query to compile: %v", err)
+		t.Fatalf("expected asset-link query to compile: %v", err)
 	}
 
 	sql, args, err := goqu.Dialect(common.Dialect).
