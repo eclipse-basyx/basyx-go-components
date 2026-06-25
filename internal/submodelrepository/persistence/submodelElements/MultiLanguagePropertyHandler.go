@@ -179,6 +179,19 @@ func (p PostgreSQLMultiLanguagePropertyHandler) Update(submodelID string, idShor
 	}
 
 	if isPut || mlp.ValueID() != nil {
+		ensurePayloadQuery, ensurePayloadArgs, ensurePayloadErr := dialect.Insert("multilanguage_property_payload").
+			Rows(goqu.Record{"submodel_element_id": elementID}).
+			OnConflict(goqu.DoNothing()).
+			ToSQL()
+		if ensurePayloadErr != nil {
+			return ensurePayloadErr
+		}
+
+		_, err = localTx.Exec(ensurePayloadQuery, ensurePayloadArgs...)
+		if err != nil {
+			return err
+		}
+
 		updateMLPQuery, updateMLPArgs, updateMLPErr := dialect.Update("multilanguage_property_payload").
 			Set(goqu.Record{"value_id_payload": goqu.L("?::jsonb", valueIDPayload)}).
 			Where(goqu.C("submodel_element_id").Eq(elementID)).

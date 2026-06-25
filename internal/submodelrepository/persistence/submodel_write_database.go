@@ -180,7 +180,7 @@ func (s *SubmodelDatabase) createSubmodelInTransaction(tx *sql.Tx, submodel type
 	}
 
 	if len(submodel.SubmodelElements()) > 0 {
-		_, err = submodelelements.InsertSubmodelElements(s.db, submodel.ID(), submodel.SubmodelElements(), tx, nil)
+		_, err = submodelelements.InsertSubmodelElementsForSubmodelDatabaseID(s.db, int(submodelDBID), submodel.SubmodelElements(), tx, nil)
 		if err != nil {
 			return common.NewInternalServerError("SMREPO-NEWSM-CREATESM-INSERTSME " + err.Error())
 		}
