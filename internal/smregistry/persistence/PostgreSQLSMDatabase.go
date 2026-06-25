@@ -146,7 +146,7 @@ func (p *PostgreSQLSMDatabase) InsertSubmodelDescriptorInTransaction(
 		return model.SubmodelDescriptor{}, err
 	}
 	if err = common.ExecutePostgreSQLBatchInTransaction(ctx, tx, batch.Statements()); err != nil {
-		return model.SubmodelDescriptor{}, mapBulkInsertSubmodelDescriptorError(err)
+		return model.SubmodelDescriptor{}, mapInsertSubmodelDescriptorError(err)
 	}
 
 	if descriptors.CanSkipCreateReadback(ctx) && history.ActiveConfig().Mode == history.ModeOff {
@@ -216,6 +216,13 @@ func (p *PostgreSQLSMDatabase) InsertSubmodelDescriptorsInTransaction(
 		}
 	}
 	return -1, nil
+}
+
+func mapInsertSubmodelDescriptorError(err error) error {
+	if common.IsPostgresUniqueViolation(err) {
+		return common.NewErrConflict("SMREG-INSERTSMDESC-CONFLICT Submodel with given id already exists")
+	}
+	return err
 }
 
 func mapBulkInsertSubmodelDescriptorError(err error) error {

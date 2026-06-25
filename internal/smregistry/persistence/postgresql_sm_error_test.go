@@ -27,11 +27,30 @@ package smregistrypostgresql
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/jackc/pgx/v5/pgconn"
 )
+
+func TestMapInsertSubmodelDescriptorErrorMapsUniqueViolationToInsertConflict(t *testing.T) {
+	err := mapInsertSubmodelDescriptorError(fmt.Errorf("insert failed: %w", &pgconn.PgError{Code: "23505"}))
+	if !common.IsErrConflict(err) {
+		t.Fatalf("expected conflict error, got %v", err)
+	}
+	if !strings.Contains(err.Error(), "SMREG-INSERTSMDESC-CONFLICT") {
+		t.Fatalf("expected insert-specific error code, got %v", err)
+	}
+}
+
+func TestMapInsertSubmodelDescriptorErrorPreservesNonUniqueViolation(t *testing.T) {
+	originalErr := fmt.Errorf("insert failed: %w", &pgconn.PgError{Code: "23503"})
+	err := mapInsertSubmodelDescriptorError(originalErr)
+	if err != originalErr {
+		t.Fatalf("expected original error, got %v", err)
+	}
+}
 
 func TestMapBulkInsertSubmodelDescriptorErrorMapsUniqueViolationToConflict(t *testing.T) {
 	err := mapBulkInsertSubmodelDescriptorError(fmt.Errorf("insert failed: %w", &pgconn.PgError{Code: "23505"}))
