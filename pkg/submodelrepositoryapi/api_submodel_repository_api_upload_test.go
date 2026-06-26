@@ -20,7 +20,7 @@ type captureSubmodelFileUploadService struct {
 	content  []byte
 }
 
-func (s *captureSubmodelFileUploadService) PutFileByPathSubmodelRepo(_ context.Context, _ string, _ string, fileName string, file io.ReadSeeker) (commonmodel.ImplResponse, error) {
+func (s *captureSubmodelFileUploadService) PutFileByPathSubmodelRepo(_ context.Context, _ string, _ string, fileName string, file io.Reader) (commonmodel.ImplResponse, error) {
 	content, err := io.ReadAll(file)
 	if err != nil {
 		return commonmodel.ImplResponse{}, err
@@ -62,15 +62,15 @@ func newMultipartUploadRequest(t *testing.T, target string, fileName string, pay
 
 	var body bytes.Buffer
 	writer := multipart.NewWriter(&body)
+	if err := writer.WriteField("fileName", fileName); err != nil {
+		t.Fatalf("failed to write fileName field: %v", err)
+	}
 	part, err := writer.CreateFormFile("file", fileName)
 	if err != nil {
 		t.Fatalf("failed to create multipart file: %v", err)
 	}
 	if _, err = part.Write(payload); err != nil {
 		t.Fatalf("failed to write multipart payload: %v", err)
-	}
-	if err = writer.WriteField("fileName", fileName); err != nil {
-		t.Fatalf("failed to write fileName field: %v", err)
 	}
 	if err = writer.Close(); err != nil {
 		t.Fatalf("failed to close multipart writer: %v", err)

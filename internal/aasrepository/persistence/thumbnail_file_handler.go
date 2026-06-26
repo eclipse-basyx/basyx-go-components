@@ -29,7 +29,6 @@ import (
 	"database/sql"
 	"io"
 	"log"
-	"net/http"
 	"os"
 	"strconv"
 	"strings"
@@ -160,8 +159,8 @@ func (h *PostgreSQLThumbnailFileHandler) UploadThumbnailByAASID(aasIdentifier st
 	return h.UploadThumbnailByAASIDReader(aasIdentifier, fileName, file)
 }
 
-// UploadThumbnailByAASIDReader uploads thumbnail content for an AAS from a seekable reader and persists metadata.
-func (h *PostgreSQLThumbnailFileHandler) UploadThumbnailByAASIDReader(aasIdentifier string, fileName string, file io.ReadSeeker) error {
+// UploadThumbnailByAASIDReader uploads thumbnail content for an AAS from a reader and persists metadata.
+func (h *PostgreSQLThumbnailFileHandler) UploadThumbnailByAASIDReader(aasIdentifier string, fileName string, file io.Reader) error {
 	tx, cleanup, err := common.StartTransaction(h.db)
 	if err != nil {
 		return common.NewInternalServerError("AASREPO-PUTTHUMBNAIL-STARTTX " + err.Error())
@@ -182,7 +181,7 @@ func (h *PostgreSQLThumbnailFileHandler) UploadThumbnailByAASIDReader(aasIdentif
 }
 
 // nolint:revive // cyclomatic complexity of 33
-func (h *PostgreSQLThumbnailFileHandler) uploadThumbnailByAASIDReaderInTransaction(tx *sql.Tx, aasIdentifier string, fileName string, file io.ReadSeeker) error {
+func (h *PostgreSQLThumbnailFileHandler) uploadThumbnailByAASIDReaderInTransaction(tx *sql.Tx, aasIdentifier string, fileName string, file io.Reader) error {
 	aasDBID, err := persistenceutils.GetAssetAdministrationShellDatabaseID(tx, aasIdentifier)
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -213,18 +212,9 @@ func (h *PostgreSQLThumbnailFileHandler) uploadThumbnailByAASIDReaderInTransacti
 		return common.NewInternalServerError("AASREPO-PUTTHUMBNAIL-EXECEXISTINGELEMENTSQL " + existingElementErr.Error())
 	}
 
-	if _, seekErr := file.Seek(0, 0); seekErr != nil {
-		return common.NewInternalServerError("AASREPO-PUTTHUMBNAIL-SEEKFILE " + seekErr.Error())
-	}
-
-	contentTypeBuffer := make([]byte, 512)
-	readBytes, readErr := file.Read(contentTypeBuffer)
-	if readErr != nil && readErr != io.EOF {
-		return common.NewInternalServerError("AASREPO-PUTTHUMBNAIL-READCONTENTTYPE " + readErr.Error())
-	}
-	detectedContentType := "application/octet-stream"
-	if readBytes > 0 {
-		detectedContentType = http.DetectContentType(contentTypeBuffer[:readBytes])
+	detectedContentType, uploadContent, sniffErr := common.SniffContentTypeReader(file)
+	if sniffErr != nil {
+		return common.NewInternalServerError("AASREPO-PUTTHUMBNAIL-READCONTENTTYPE " + sniffErr.Error())
 	}
 
 	resolvedFileName := strings.TrimSpace(fileName)
@@ -235,10 +225,6 @@ func (h *PostgreSQLThumbnailFileHandler) uploadThumbnailByAASIDReaderInTransacti
 	resolvedContentType, mismatchDetectedVsDeclared := common.ResolveUploadedContentType(detectedContentType, existingContentType.String, resolvedFileName)
 	if mismatchDetectedVsDeclared {
 		log.Printf("[WARN] AASREPO-PUTTHUMBNAIL-RESOLVEMIME detected content type differs from declared content type; using detected content type")
-	}
-
-	if _, seekErr := file.Seek(0, 0); seekErr != nil {
-		return common.NewInternalServerError("AASREPO-PUTTHUMBNAIL-SEEKFILE " + seekErr.Error())
 	}
 
 	oldOIDQuery, oldOIDArgs, oldOIDBuildErr := dialect.
@@ -274,7 +260,7 @@ func (h *PostgreSQLThumbnailFileHandler) uploadThumbnailByAASIDReaderInTransacti
 
 	buffer := make([]byte, 8192)
 	for {
-		readCount, chunkErr := file.Read(buffer)
+		readCount, chunkErr := uploadContent.Read(buffer)
 		if readCount > 0 {
 			if _, writeErr := tx.Exec(`SELECT lowrite($1, $2)`, loFD, buffer[:readCount]); writeErr != nil {
 				_, _ = tx.Exec(`SELECT lo_close($1)`, loFD)

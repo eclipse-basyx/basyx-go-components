@@ -679,33 +679,18 @@ func (c *AssetAdministrationShellRepositoryAPIAPIController) PutThumbnailAasRepo
 	maxUploadSizeBytes := uploadMaxSizeFromRequestContext(r)
 	r.Body = http.MaxBytesReader(w, r.Body, maxUploadSizeBytes)
 
-	if err := r.ParseMultipartForm(maxUploadSizeBytes); err != nil {
-		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
-		return
-	}
-	defer func() {
-		if r.MultipartForm != nil {
-			_ = r.MultipartForm.RemoveAll()
-		}
-	}()
-
 	aasIdentifierParam := chi.URLParam(r, "aasIdentifier")
 	if aasIdentifierParam == "" {
 		c.errorHandler(w, r, &RequiredError{"aasIdentifier"}, nil)
 		return
 	}
 
-	fileNameParam := r.FormValue("fileName")
-	fileParam, fileErr := OpenFormFile(r, "file")
-	if fileErr != nil {
-		c.errorHandler(w, r, &ParsingError{Param: "file", Err: fileErr}, nil)
-		return
-	}
-	defer func() {
-		_ = fileParam.Close()
-	}()
-
-	result, err := c.service.PutThumbnailAasRepository(r.Context(), aasIdentifierParam, fileNameParam, fileParam)
+	var result model.ImplResponse
+	err := HandleMultipartFileStream(r, "file", "fileName", func(fileName string, file io.Reader) error {
+		var uploadErr error
+		result, uploadErr = c.service.PutThumbnailAasRepository(r.Context(), aasIdentifierParam, fileName, file)
+		return uploadErr
+	})
 	if err != nil {
 		c.errorHandler(w, r, err, &result)
 		return
@@ -2177,16 +2162,6 @@ func (c *AssetAdministrationShellRepositoryAPIAPIController) PutFileByPathAasRep
 	maxUploadSizeBytes := uploadMaxSizeFromRequestContext(r)
 	r.Body = http.MaxBytesReader(w, r.Body, maxUploadSizeBytes)
 
-	if err := r.ParseMultipartForm(maxUploadSizeBytes); err != nil {
-		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
-		return
-	}
-	defer func() {
-		if r.MultipartForm != nil {
-			_ = r.MultipartForm.RemoveAll()
-		}
-	}()
-
 	aasIdentifierParam := chi.URLParam(r, "aasIdentifier")
 	if aasIdentifierParam == "" {
 		c.errorHandler(w, r, &RequiredError{"aasIdentifier"}, nil)
@@ -2205,24 +2180,19 @@ func (c *AssetAdministrationShellRepositoryAPIAPIController) PutFileByPathAasRep
 		return
 	}
 
-	fileNameParam := r.FormValue("fileName")
-	fileParam, err := OpenFormFile(r, "file")
-	if err != nil {
-		c.errorHandler(w, r, &ParsingError{Param: "file", Err: err}, nil)
-		return
-	}
-	defer func() {
-		_ = fileParam.Close()
-	}()
-
-	result, err := c.service.PutFileByPathAasRepository(
-		r.Context(),
-		aasIdentifierParam,
-		submodelIdentifierParam,
-		idShortPathParam,
-		fileNameParam,
-		fileParam,
-	)
+	var result model.ImplResponse
+	err := HandleMultipartFileStream(r, "file", "fileName", func(fileName string, file io.Reader) error {
+		var uploadErr error
+		result, uploadErr = c.service.PutFileByPathAasRepository(
+			r.Context(),
+			aasIdentifierParam,
+			submodelIdentifierParam,
+			idShortPathParam,
+			fileName,
+			file,
+		)
+		return uploadErr
+	})
 	if err != nil {
 		c.errorHandler(w, r, err, &result)
 		return

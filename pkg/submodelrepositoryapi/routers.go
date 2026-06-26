@@ -55,6 +55,7 @@ type Router interface {
 const errMsgRequiredMissing = "required parameter is missing"
 const errMsgMinValueConstraint = "provided parameter is not respecting minimum value constraint"
 const errMsgMaxValueConstraint = "provided parameter is not respecting maximum value constraint"
+const maxMultipartMetadataFieldBytes int64 = 1 << 20
 
 // NewRouter creates a new chi router for any number of API routers.
 //
@@ -225,6 +226,69 @@ func OpenFormFile(r *http.Request, key string) (multipart.File, error) {
 		return nil, err
 	}
 	return formFile, nil
+}
+
+// HandleMultipartFileStream streams a multipart file part without staging it in memory or on disk.
+func HandleMultipartFileStream(r *http.Request, fileKey string, fileNameKey string, handleFile func(fileName string, file io.Reader) error) error {
+	reader, err := r.MultipartReader()
+	if err != nil {
+		return &ParsingError{Err: err}
+	}
+
+	fileName := ""
+	for {
+		part, nextErr := reader.NextPart()
+		if nextErr != nil {
+			if errors.Is(nextErr, io.EOF) {
+				return &ParsingError{Param: fileKey, Err: errors.New("multipart file field is required")}
+			}
+			return &ParsingError{Err: nextErr}
+		}
+
+		switch part.FormName() {
+		case fileNameKey:
+			value, readErr := readMultipartMetadataField(part)
+			closeErr := part.Close()
+			if readErr != nil {
+				return &ParsingError{Param: fileNameKey, Err: readErr}
+			}
+			if closeErr != nil {
+				return &ParsingError{Param: fileNameKey, Err: closeErr}
+			}
+			if value != "" {
+				fileName = value
+			}
+		case fileKey:
+			resolvedFileName := fileName
+			if resolvedFileName == "" {
+				resolvedFileName = strings.TrimSpace(part.FileName())
+			}
+
+			handleErr := handleFile(resolvedFileName, part)
+			closeErr := part.Close()
+			if handleErr != nil {
+				return handleErr
+			}
+			if closeErr != nil {
+				return &ParsingError{Param: fileKey, Err: closeErr}
+			}
+			return nil
+		default:
+			_, _ = io.Copy(io.Discard, part)
+			_ = part.Close()
+		}
+	}
+}
+
+func readMultipartMetadataField(part *multipart.Part) (string, error) {
+	content, err := io.ReadAll(io.LimitReader(part, maxMultipartMetadataFieldBytes+1))
+	if err != nil {
+		return "", err
+	}
+	if int64(len(content)) > maxMultipartMetadataFieldBytes {
+		return "", errors.New("multipart metadata field is too large")
+	}
+	return strings.TrimSpace(string(content)), nil
 }
 
 // ReadFormFilesToTempFiles reads multiple files from a multipart form request and writes them to temporary files.

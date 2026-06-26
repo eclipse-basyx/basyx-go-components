@@ -2501,7 +2501,7 @@ func (s *SubmodelRepositoryAPIAPIService) GetFileByPathSubmodelRepo(ctx context.
 // PutFileByPathSubmodelRepo - Uploads file content to an existing submodel element at a specified path within submodel elements hierarchy
 //
 //nolint:revive
-func (s *SubmodelRepositoryAPIAPIService) PutFileByPathSubmodelRepo(ctx context.Context, submodelIdentifier string, idShortPath string, fileName string, file io.ReadSeeker) (gen.ImplResponse, error) {
+func (s *SubmodelRepositoryAPIAPIService) PutFileByPathSubmodelRepo(ctx context.Context, submodelIdentifier string, idShortPath string, fileName string, file io.Reader) (gen.ImplResponse, error) {
 	const operation = "PutFileByPathSubmodelRepo"
 
 	decodedSubmodelIdentifier, decodeErr := common.DecodeString(submodelIdentifier)

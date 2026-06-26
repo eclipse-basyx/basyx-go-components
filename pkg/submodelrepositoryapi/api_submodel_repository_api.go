@@ -2046,16 +2046,6 @@ func (c *SubmodelRepositoryAPIAPIController) PutFileByPathSubmodelRepo(w http.Re
 	maxUploadSizeBytes := uploadMaxSizeFromRequestContext(r)
 	r.Body = http.MaxBytesReader(w, r.Body, maxUploadSizeBytes)
 
-	if err := r.ParseMultipartForm(maxUploadSizeBytes); err != nil {
-		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
-		return
-	}
-	defer func() {
-		if r.MultipartForm != nil {
-			_ = r.MultipartForm.RemoveAll()
-		}
-	}()
-
 	submodelIdentifierParam := chi.URLParam(r, "submodelIdentifier")
 	if submodelIdentifierParam == "" {
 		c.errorHandler(w, r, &RequiredError{"submodelIdentifier"}, nil)
@@ -2067,18 +2057,12 @@ func (c *SubmodelRepositoryAPIAPIController) PutFileByPathSubmodelRepo(w http.Re
 		return
 	}
 
-	fileNameParam := r.FormValue("fileName")
-	fileParam, err := OpenFormFile(r, "file")
-	if err != nil {
-		c.errorHandler(w, r, &ParsingError{Param: "file", Err: err}, nil)
-		return
-	}
-	defer func() {
-		_ = fileParam.Close()
-	}()
-
-	result, err := c.service.PutFileByPathSubmodelRepo(r.Context(), submodelIdentifierParam, idShortPathParam, fileNameParam, fileParam)
-	// If an error occurred, encode the error with the status code
+	var result model.ImplResponse
+	err := HandleMultipartFileStream(r, "file", "fileName", func(fileName string, file io.Reader) error {
+		var uploadErr error
+		result, uploadErr = c.service.PutFileByPathSubmodelRepo(r.Context(), submodelIdentifierParam, idShortPathParam, fileName, file)
+		return uploadErr
+	})
 	if err != nil {
 		c.errorHandler(w, r, err, &result)
 		return

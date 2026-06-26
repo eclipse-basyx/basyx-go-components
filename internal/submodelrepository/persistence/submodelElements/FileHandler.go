@@ -32,7 +32,6 @@ import (
 	"fmt"
 	"io"
 	"log"
-	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -344,13 +343,13 @@ func (p PostgreSQLFileHandler) GetInsertQueryPart(_ *sql.Tx, id int, element typ
 //
 //nolint:revive // cyclomatic complexity is acceptable for this function as the SQL process is complex and requires multiple steps, refactoring would not improve readability
 func (p PostgreSQLFileHandler) UploadFileAttachment(submodelID string, idShortPath string, file *os.File, fileName string) error {
-	return withReopenedUploadFile(file, func(uploadFile io.ReadSeeker) error {
+	return withReopenedUploadFile(file, func(uploadFile io.Reader) error {
 		return p.UploadFileAttachmentReader(submodelID, idShortPath, uploadFile, fileName)
 	})
 }
 
-// UploadFileAttachmentReader uploads attachment content from a seekable reader.
-func (p PostgreSQLFileHandler) UploadFileAttachmentReader(submodelID string, idShortPath string, file io.ReadSeeker, fileName string) error {
+// UploadFileAttachmentReader uploads attachment content from a reader.
+func (p PostgreSQLFileHandler) UploadFileAttachmentReader(submodelID string, idShortPath string, file io.Reader, fileName string) error {
 	tx, err := p.db.Begin()
 	if err != nil {
 		return fmt.Errorf("failed to begin transaction: %w", err)
@@ -374,13 +373,13 @@ func (p PostgreSQLFileHandler) UploadFileAttachmentReader(submodelID string, idS
 
 // UploadFileAttachmentTx uploads attachment content using the provided transaction.
 func (p PostgreSQLFileHandler) UploadFileAttachmentTx(tx *sql.Tx, submodelID string, idShortPath string, file *os.File, fileName string) error {
-	return withReopenedUploadFile(file, func(uploadFile io.ReadSeeker) error {
+	return withReopenedUploadFile(file, func(uploadFile io.Reader) error {
 		return p.UploadFileAttachmentReaderTx(tx, submodelID, idShortPath, uploadFile, fileName)
 	})
 }
 
-// UploadFileAttachmentReaderTx uploads attachment content from a seekable reader using the provided transaction.
-func (p PostgreSQLFileHandler) UploadFileAttachmentReaderTx(tx *sql.Tx, submodelID string, idShortPath string, file io.ReadSeeker, fileName string) error {
+// UploadFileAttachmentReaderTx uploads attachment content from a reader using the provided transaction.
+func (p PostgreSQLFileHandler) UploadFileAttachmentReaderTx(tx *sql.Tx, submodelID string, idShortPath string, file io.Reader, fileName string) error {
 	dialect := goqu.Dialect("postgres")
 	if file == nil {
 		return common.NewErrBadRequest("SMREPO-UPLOADATTACHMENT-MISSINGFILE file payload is required")
@@ -391,7 +390,7 @@ func (p PostgreSQLFileHandler) UploadFileAttachmentReaderTx(tx *sql.Tx, submodel
 		return err
 	}
 
-	resolvedFileName, resolvedContentType, err := resolveUploadFileMetadata(file, fileName, metadata)
+	resolvedFileName, resolvedContentType, uploadContent, err := resolveUploadFileMetadata(file, fileName, metadata)
 	if err != nil {
 		return err
 	}
@@ -407,7 +406,7 @@ func (p PostgreSQLFileHandler) UploadFileAttachmentReaderTx(tx *sql.Tx, submodel
 		}
 	}
 
-	newOID, err := createAndWriteLargeObject(tx, file)
+	newOID, err := createAndWriteLargeObject(tx, uploadContent)
 	if err != nil {
 		return err
 	}
@@ -423,7 +422,7 @@ type fileElementUploadMetadata struct {
 	existingFileName    sql.NullString
 }
 
-func withReopenedUploadFile(file *os.File, useFile func(io.ReadSeeker) error) error {
+func withReopenedUploadFile(file *os.File, useFile func(io.Reader) error) error {
 	reopenedFile, err := reopenUploadedFile(file)
 	if err != nil {
 		return err
@@ -481,10 +480,10 @@ func readFileElementUploadMetadata(tx *sql.Tx, dialect goqu.DialectWrapper, subm
 	return metadata, nil
 }
 
-func resolveUploadFileMetadata(file io.ReadSeeker, fileName string, metadata fileElementUploadMetadata) (string, string, error) {
-	detectedContentType, err := detectContentType(file)
+func resolveUploadFileMetadata(file io.Reader, fileName string, metadata fileElementUploadMetadata) (string, string, io.Reader, error) {
+	detectedContentType, uploadContent, err := common.SniffContentTypeReader(file)
 	if err != nil {
-		return "", "", err
+		return "", "", nil, fmt.Errorf("failed to read file for content type detection: %w", err)
 	}
 
 	resolvedFileName := strings.TrimSpace(fileName)
@@ -497,22 +496,7 @@ func resolveUploadFileMetadata(file io.ReadSeeker, fileName string, metadata fil
 		log.Printf("[WARN] SMREPO-UPLOADATTACHMENT-RESOLVEMIME detected content type differs from declared content type; using detected content type")
 	}
 
-	if _, err = file.Seek(0, 0); err != nil {
-		return "", "", fmt.Errorf("failed to seek file: %w", err)
-	}
-	return resolvedFileName, resolvedContentType, nil
-}
-
-func detectContentType(file io.Reader) (string, error) {
-	contentTypeBuffer := make([]byte, 512)
-	n, err := file.Read(contentTypeBuffer)
-	if err != nil && err != io.EOF {
-		return "", fmt.Errorf("failed to read file for content type detection: %w", err)
-	}
-	if n == 0 {
-		return "application/octet-stream", nil
-	}
-	return http.DetectContentType(contentTypeBuffer[:n]), nil
+	return resolvedFileName, resolvedContentType, uploadContent, nil
 }
 
 func readExistingFileOID(tx *sql.Tx, dialect goqu.DialectWrapper, elementID int64) (sql.NullInt64, error) {

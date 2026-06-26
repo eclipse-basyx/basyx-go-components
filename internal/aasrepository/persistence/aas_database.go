@@ -1421,7 +1421,7 @@ func (s *AssetAdministrationShellDatabase) PutThumbnailByAASID(ctx context.Conte
 }
 
 // PutThumbnailByAASIDReader uploads or replaces the thumbnail and checks ABAC visibility.
-func (s *AssetAdministrationShellDatabase) PutThumbnailByAASIDReader(ctx context.Context, aasIdentifier string, fileName string, file io.ReadSeeker) error {
+func (s *AssetAdministrationShellDatabase) PutThumbnailByAASIDReader(ctx context.Context, aasIdentifier string, fileName string, file io.Reader) error {
 	tx, cleanup, err := common.StartTransaction(s.db)
 	if err != nil {
 		return common.NewInternalServerError("AASREPO-PUTTHUMBNAIL-STARTTX " + err.Error())

@@ -611,7 +611,7 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) GetThumbnailAasReposit
 }
 
 // PutThumbnailAasRepository -
-func (s *AssetAdministrationShellRepositoryAPIAPIService) PutThumbnailAasRepository(ctx context.Context, aasIdentifier string, fileName string, file io.ReadSeeker) (gen.ImplResponse, error) {
+func (s *AssetAdministrationShellRepositoryAPIAPIService) PutThumbnailAasRepository(ctx context.Context, aasIdentifier string, fileName string, file io.Reader) (gen.ImplResponse, error) {
 
 	const operation = "PutThumbnailAasRepository"
 
@@ -1543,7 +1543,7 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) GetFileByPathAasReposi
 }
 
 // PutFileByPathAasRepository - Uploads file content to an existing submodel element at a specified path within submodel elements hierarchy
-func (s *AssetAdministrationShellRepositoryAPIAPIService) PutFileByPathAasRepository(ctx context.Context, aasIdentifier string, submodelIdentifier string, idShortPath string, fileName string, file io.ReadSeeker) (gen.ImplResponse, error) {
+func (s *AssetAdministrationShellRepositoryAPIAPIService) PutFileByPathAasRepository(ctx context.Context, aasIdentifier string, submodelIdentifier string, idShortPath string, fileName string, file io.Reader) (gen.ImplResponse, error) {
 	const operation = "PutFileByPathAasRepository"
 
 	if response, err, ok := s.ensureSubmodelBackend(operation); !ok {

@@ -71,8 +71,8 @@ func (s *SubmodelDatabase) UploadFileAttachment(submodelID string, idShortPath s
 	return fileHandler.UploadFileAttachment(submodelID, idShortPath, file, fileName)
 }
 
-// UploadFileAttachmentReader uploads attachment content for a File submodel element from a seekable reader.
-func (s *SubmodelDatabase) UploadFileAttachmentReader(submodelID string, idShortPath string, file io.ReadSeeker, fileName string) error {
+// UploadFileAttachmentReader uploads attachment content for a File submodel element from a reader.
+func (s *SubmodelDatabase) UploadFileAttachmentReader(submodelID string, idShortPath string, file io.Reader, fileName string) error {
 	fileHandler, err := submodelelements.NewPostgreSQLFileHandler(s.db)
 	if err != nil {
 		return err
@@ -99,8 +99,8 @@ func (s *SubmodelDatabase) UploadFileAttachmentWithHistory(ctx context.Context, 
 	})
 }
 
-// UploadFileAttachmentReaderWithHistory uploads attachment content from a seekable reader and appends the current Submodel snapshot atomically.
-func (s *SubmodelDatabase) UploadFileAttachmentReaderWithHistory(ctx context.Context, submodelID string, idShortPath string, file io.ReadSeeker, fileName string) error {
+// UploadFileAttachmentReaderWithHistory uploads attachment content from a reader and appends the current Submodel snapshot atomically.
+func (s *SubmodelDatabase) UploadFileAttachmentReaderWithHistory(ctx context.Context, submodelID string, idShortPath string, file io.Reader, fileName string) error {
 	fileHandler, err := submodelelements.NewPostgreSQLFileHandler(s.db)
 	if err != nil {
 		return err
