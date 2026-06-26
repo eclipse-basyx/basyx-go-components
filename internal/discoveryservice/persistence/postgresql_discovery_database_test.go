@@ -36,18 +36,21 @@ import (
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 )
 
-func TestSearchAASIDsByAssetLinks_GlobalAssetIDUsesOnlyDescriptorColumn(t *testing.T) {
+func TestSearchAASIDsByAssetLinks_GlobalAssetIDUsesIndexedUnionCandidates(t *testing.T) {
 	t.Parallel()
 
 	matcher := sqlmock.QueryMatcherFunc(func(_ string, actualSQL string) error {
-		if !strings.Contains(actualSQL, `"aas_descriptor"."global_asset_id" =`) {
+		if !strings.Contains(actualSQL, `"ad_global"."global_asset_id" =`) {
 			return fmt.Errorf("expected direct global_asset_id lookup, got SQL: %s", actualSQL)
+		}
+		if !strings.Contains(actualSQL, "UNION") {
+			return fmt.Errorf("expected globalAssetId candidate UNION, got SQL: %s", actualSQL)
+		}
+		if !strings.Contains(actualSQL, `"sai_global"."name" =`) {
+			return fmt.Errorf("expected indexed specific_asset_id globalAssetId branch, got SQL: %s", actualSQL)
 		}
 		if strings.Contains(actualSQL, "OR EXISTS") {
 			return fmt.Errorf("did not expect specific_asset_id fallback OR, got SQL: %s", actualSQL)
-		}
-		if strings.Contains(actualSQL, `"sai"."name" =`) {
-			return fmt.Errorf("did not expect generated asset-link fallback, got SQL: %s", actualSQL)
 		}
 		return nil
 	})
