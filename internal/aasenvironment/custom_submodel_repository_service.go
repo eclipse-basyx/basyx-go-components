@@ -31,6 +31,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"sync"
 
 	"github.com/FriedJannik/aas-go-sdk/jsonization"
 	"github.com/FriedJannik/aas-go-sdk/types"
@@ -45,6 +46,9 @@ type CustomSubmodelRepositoryService struct {
 	persistence                                 *Persistence
 	syncConfig                                  RegistrySyncConfig
 	enableReferencingAASDescriptorEmbeddingSync bool
+	dynamicReconciliationMu                     sync.Mutex
+	dynamicReconcilingExternalBase              string
+	dynamicReconciledExternalBase               string
 }
 
 // NewCustomSubmodelRepositoryService creates a new pass-through submodel repository decorator.
@@ -113,11 +117,13 @@ func (s *CustomSubmodelRepositoryService) PostSubmodel(ctx context.Context, subm
 	if !s.syncConfig.SubmodelRegistryIntegration {
 		return s.SubmodelRepositoryAPIAPIService.PostSubmodel(ctx, submodel)
 	}
+	if !s.syncConfig.hasEndpointBaseURL(ctx) {
+		return s.SubmodelRepositoryAPIAPIService.PostSubmodel(ctx, submodel)
+	}
 	if dependencyErr := s.validateSyncDependencies(s.enableReferencingAASDescriptorEmbeddingSync, s.enableReferencingAASDescriptorEmbeddingSync); dependencyErr != nil {
 		return newSubmodelRepoErrorResponse(dependencyErr, http.StatusInternalServerError, operation, "ValidateDependencies"), nil
 	}
-
-	descriptor, descriptorErr := s.syncConfig.buildSubmodelDescriptor(submodel)
+	descriptor, descriptorErr := s.syncConfig.buildSubmodelDescriptorForContext(ctx, submodel)
 	if descriptorErr != nil {
 		return newSubmodelRepoErrorResponse(descriptorErr, http.StatusBadRequest, operation, "InvalidSubmodelData"), nil
 	}
@@ -161,10 +167,12 @@ func (s *CustomSubmodelRepositoryService) PutSubmodelByID(ctx context.Context, s
 	if !s.syncConfig.SubmodelRegistryIntegration {
 		return s.SubmodelRepositoryAPIAPIService.PutSubmodelByID(ctx, submodelIdentifier, submodel)
 	}
+	if !s.syncConfig.hasEndpointBaseURL(ctx) {
+		return s.SubmodelRepositoryAPIAPIService.PutSubmodelByID(ctx, submodelIdentifier, submodel)
+	}
 	if dependencyErr := s.validateSyncDependencies(s.enableReferencingAASDescriptorEmbeddingSync, s.enableReferencingAASDescriptorEmbeddingSync); dependencyErr != nil {
 		return newSubmodelRepoErrorResponse(dependencyErr, http.StatusInternalServerError, operation, "ValidateDependencies"), nil
 	}
-
 	decodedIdentifier, decodeErr := common.DecodeString(submodelIdentifier)
 	if decodeErr != nil {
 		return newSubmodelRepoErrorResponse(decodeErr, http.StatusBadRequest, operation, "MalformedSubmodelIdentifier"), nil
@@ -181,7 +189,7 @@ func (s *CustomSubmodelRepositoryService) PutSubmodelByID(ctx context.Context, s
 		}
 		isUpdate = updated
 
-		descriptor, descriptorErr := s.syncConfig.buildSubmodelDescriptor(submodel)
+		descriptor, descriptorErr := s.syncConfig.buildSubmodelDescriptorForContext(ctx, submodel)
 		if descriptorErr != nil {
 			return descriptorErr
 		}
@@ -270,6 +278,9 @@ func (s *CustomSubmodelRepositoryService) PatchSubmodelByID(ctx context.Context,
 	if !s.syncConfig.SubmodelRegistryIntegration {
 		return s.SubmodelRepositoryAPIAPIService.PatchSubmodelByID(ctx, submodelIdentifier, submodel, level)
 	}
+	if !s.syncConfig.hasEndpointBaseURL(ctx) {
+		return s.SubmodelRepositoryAPIAPIService.PatchSubmodelByID(ctx, submodelIdentifier, submodel, level)
+	}
 	if dependencyErr := s.validateSyncDependencies(s.enableReferencingAASDescriptorEmbeddingSync, s.enableReferencingAASDescriptorEmbeddingSync); dependencyErr != nil {
 		return newSubmodelRepoErrorResponse(dependencyErr, http.StatusInternalServerError, operation, "ValidateDependencies"), nil
 	}
@@ -331,7 +342,7 @@ func (s *CustomSubmodelRepositoryService) PatchSubmodelByID(ctx context.Context,
 			}
 		}
 
-		descriptor, descriptorErr := s.syncConfig.buildSubmodelDescriptor(mergedSubmodel)
+		descriptor, descriptorErr := s.syncConfig.buildSubmodelDescriptorForContext(ctx, mergedSubmodel)
 		if descriptorErr != nil {
 			return descriptorErr
 		}
@@ -360,6 +371,9 @@ func (s *CustomSubmodelRepositoryService) PatchSubmodelByID(ctx context.Context,
 func (s *CustomSubmodelRepositoryService) PatchSubmodelByIDMetadata(ctx context.Context, submodelIdentifier string, submodelMetadata commonmodel.SubmodelMetadata) (commonmodel.ImplResponse, error) {
 	const operation = "PatchSubmodelByIDMetadata"
 	if !s.syncConfig.SubmodelRegistryIntegration {
+		return s.SubmodelRepositoryAPIAPIService.PatchSubmodelByIDMetadata(ctx, submodelIdentifier, submodelMetadata)
+	}
+	if !s.syncConfig.hasEndpointBaseURL(ctx) {
 		return s.SubmodelRepositoryAPIAPIService.PatchSubmodelByIDMetadata(ctx, submodelIdentifier, submodelMetadata)
 	}
 	if dependencyErr := s.validateSyncDependencies(s.enableReferencingAASDescriptorEmbeddingSync, s.enableReferencingAASDescriptorEmbeddingSync); dependencyErr != nil {
@@ -421,7 +435,7 @@ func (s *CustomSubmodelRepositoryService) PatchSubmodelByIDMetadata(ctx context.
 			return patchErr
 		}
 
-		descriptor, descriptorErr := s.syncConfig.buildSubmodelDescriptor(mergedSubmodel)
+		descriptor, descriptorErr := s.syncConfig.buildSubmodelDescriptorForContext(ctx, mergedSubmodel)
 		if descriptorErr != nil {
 			return descriptorErr
 		}
@@ -541,7 +555,7 @@ func (s *CustomSubmodelRepositoryService) syncReferencingAASDescriptorsInTransac
 		}
 
 		if len(aasDescriptor.Endpoints) == 0 {
-			aasDescriptor.Endpoints = s.syncConfig.buildAASDescriptorEndpoints(aasID)
+			aasDescriptor.Endpoints = s.syncConfig.buildAASDescriptorEndpointsForContext(ctx, aasID)
 		}
 
 		if upsertErr := s.persistence.AASRegistry.UpsertAdministrationShellDescriptorInTransaction(

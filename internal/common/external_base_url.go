@@ -28,9 +28,13 @@ package common
 
 import (
 	"context"
+	"net"
+	"net/http"
 	"net/url"
 	"strings"
 )
+
+type requestExternalBaseURLKey struct{}
 
 // ExternalBaseURLFromContext returns the normalized external base URL from the request context configuration.
 //
@@ -46,6 +50,101 @@ func ExternalBaseURLFromContext(ctx context.Context) string {
 	}
 
 	return NormalizePrimaryExternalBaseURL(cfg.General.ExternalURL)
+}
+
+// ContextWithRequestExternalBaseURL returns a context containing a normalized request-derived external base URL.
+func ContextWithRequestExternalBaseURL(ctx context.Context, externalBaseURL string) context.Context {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	return context.WithValue(ctx, requestExternalBaseURLKey{}, NormalizePrimaryExternalBaseURL(externalBaseURL))
+}
+
+// RequestExternalBaseURLFromContext returns the normalized request-derived external base URL from context.
+func RequestExternalBaseURLFromContext(ctx context.Context) string {
+	if ctx == nil {
+		return ""
+	}
+	externalBaseURL, ok := ctx.Value(requestExternalBaseURLKey{}).(string)
+	if !ok {
+		return ""
+	}
+	return NormalizePrimaryExternalBaseURL(externalBaseURL)
+}
+
+// ExternalBaseURLFromRequest returns the normalized public base URL derived from a request.
+func ExternalBaseURLFromRequest(r *http.Request) string {
+	if r == nil {
+		return ""
+	}
+
+	cfg, hasConfig := ConfigFromContext(r.Context())
+	if !hasConfig || cfg == nil {
+		return ""
+	}
+
+	host := requestExternalHost(r, cfg)
+	if host == "" {
+		return ""
+	}
+
+	basePath := NormalizeBasePath(cfg.Server.ContextPath)
+	if basePath == "/" {
+		basePath = ""
+	}
+
+	return NormalizePrimaryExternalBaseURL(RequestScheme(r) + "://" + host + basePath)
+}
+
+func requestExternalHost(r *http.Request, cfg *Config) string {
+	if cfg.General.TrustProxyHeaders {
+		if !remoteAddrInTrustedCIDRs(r.RemoteAddr, cfg.General.TrustedProxyCIDRs) {
+			return ""
+		}
+		return RequestHost(r)
+	}
+
+	host := normalizeHostValue(r.Host)
+	if !hostAllowed(host, cfg.General.TrustedDynamicHosts) {
+		return ""
+	}
+	return host
+}
+
+func hostAllowed(host string, allowedHosts []string) bool {
+	hostOnly, hostPort, _ := canonicalHostForAllowlist(host)
+	if hostOnly == "" {
+		return false
+	}
+
+	for _, allowedHost := range allowedHosts {
+		allowedOnly, allowedHostPort, allowedHasPort := canonicalHostForAllowlist(allowedHost)
+		if allowedOnly == "" {
+			continue
+		}
+		if allowedHasPort && hostPort == allowedHostPort {
+			return true
+		}
+		if !allowedHasPort && hostOnly == allowedOnly {
+			return true
+		}
+	}
+
+	return false
+}
+
+func canonicalHostForAllowlist(host string) (string, string, bool) {
+	normalizedHost := strings.ToLower(strings.Trim(strings.TrimSpace(host), "[]"))
+	if normalizedHost == "" {
+		return "", "", false
+	}
+
+	if parsedHost, parsedPort, err := net.SplitHostPort(normalizedHost); err == nil {
+		hostOnly := strings.Trim(parsedHost, "[]")
+		return hostOnly, net.JoinHostPort(hostOnly, parsedPort), true
+	}
+
+	return normalizedHost, normalizedHost, false
 }
 
 // NormalizePrimaryExternalBaseURL parses and normalizes the first external base URL from a config string.

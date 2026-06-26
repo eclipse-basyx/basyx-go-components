@@ -39,6 +39,11 @@ func WithQueryFilter(ctx context.Context, queryFilter *QueryFilter) context.Cont
 	return context.WithValue(ctx, filterKey, queryFilter)
 }
 
+// ContextWithoutQueryFilter masks any inherited query filter in ctx.
+func ContextWithoutQueryFilter(ctx context.Context) context.Context {
+	return context.WithValue(ctx, filterKey, (*QueryFilter)(nil))
+}
+
 // CloneQueryFilter returns a deep copy of the provided query filter.
 func CloneQueryFilter(queryFilter *QueryFilter) (*QueryFilter, error) {
 	if queryFilter == nil {
