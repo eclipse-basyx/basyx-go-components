@@ -104,16 +104,46 @@ func (s *inMemoryReadWriteSeeker) Write(source []byte) (int, error) {
 		return 0, errors.New("negative stream offset")
 	}
 
+	maxInt := int64(int(^uint(0) >> 1))
+	if s.offset > maxInt-int64(len(source)) {
+		return 0, errors.New("stream size exceeds addressable memory")
+	}
+
 	requiredLength := int(s.offset) + len(source)
 	if requiredLength > len(s.content) {
-		grown := make([]byte, requiredLength)
-		copy(grown, s.content)
-		s.content = grown
+		s.grow(requiredLength, len(source))
 	}
 
 	copy(s.content[s.offset:], source)
 	s.offset += int64(len(source))
 	return len(source), nil
+}
+
+func (s *inMemoryReadWriteSeeker) grow(requiredLength int, sourceLength int) {
+	if requiredLength <= cap(s.content) {
+		s.content = s.content[:requiredLength]
+		return
+	}
+
+	maxInt := int(^uint(0) >> 1)
+	newCapacity := cap(s.content)
+	if newCapacity == 0 {
+		newCapacity = sourceLength
+		if newCapacity < 1024 {
+			newCapacity = 1024
+		}
+	}
+	for newCapacity < requiredLength {
+		if newCapacity > maxInt/2 {
+			newCapacity = requiredLength
+			break
+		}
+		newCapacity *= 2
+	}
+
+	grown := make([]byte, requiredLength, newCapacity)
+	copy(grown, s.content)
+	s.content = grown
 }
 
 func (s *inMemoryReadWriteSeeker) Seek(offset int64, whence int) (int64, error) {

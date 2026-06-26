@@ -17,7 +17,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -677,9 +676,10 @@ func (c *AssetAdministrationShellRepositoryAPIAPIController) GetThumbnailAasRepo
 
 // PutThumbnailAasRepository -
 func (c *AssetAdministrationShellRepositoryAPIAPIController) PutThumbnailAasRepository(w http.ResponseWriter, r *http.Request) {
-	r.Body = http.MaxBytesReader(w, r.Body, uploadMaxSizeFromRequestContext(r))
+	maxUploadSizeBytes := uploadMaxSizeFromRequestContext(r)
+	r.Body = http.MaxBytesReader(w, r.Body, maxUploadSizeBytes)
 
-	if err := r.ParseMultipartForm(32 << 20); err != nil {
+	if err := r.ParseMultipartForm(maxUploadSizeBytes); err != nil {
 		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
 		return
 	}
@@ -696,18 +696,13 @@ func (c *AssetAdministrationShellRepositoryAPIAPIController) PutThumbnailAasRepo
 	}
 
 	fileNameParam := r.FormValue("fileName")
-	fileParam, fileErr := ReadFormFileToTempFile(r, "file")
+	fileParam, fileErr := OpenFormFile(r, "file")
 	if fileErr != nil {
 		c.errorHandler(w, r, &ParsingError{Param: "file", Err: fileErr}, nil)
 		return
 	}
 	defer func() {
-		if fileParam != nil {
-			tempFilePath := fileParam.Name()
-			_ = fileParam.Close()
-			// #nosec G703 -- path comes from server-generated temporary file.
-			_ = os.Remove(tempFilePath)
-		}
+		_ = fileParam.Close()
 	}()
 
 	result, err := c.service.PutThumbnailAasRepository(r.Context(), aasIdentifierParam, fileNameParam, fileParam)
@@ -2179,9 +2174,10 @@ func (c *AssetAdministrationShellRepositoryAPIAPIController) GetFileByPathAasRep
 // PutFileByPathAasRepository - Uploads file content to an existing submodel element at a specified path within submodel elements hierarchy
 // nolint:revive
 func (c *AssetAdministrationShellRepositoryAPIAPIController) PutFileByPathAasRepository(w http.ResponseWriter, r *http.Request) {
-	r.Body = http.MaxBytesReader(w, r.Body, uploadMaxSizeFromRequestContext(r))
+	maxUploadSizeBytes := uploadMaxSizeFromRequestContext(r)
+	r.Body = http.MaxBytesReader(w, r.Body, maxUploadSizeBytes)
 
-	if err := r.ParseMultipartForm(32 << 20); err != nil {
+	if err := r.ParseMultipartForm(maxUploadSizeBytes); err != nil {
 		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
 		return
 	}
@@ -2210,22 +2206,13 @@ func (c *AssetAdministrationShellRepositoryAPIAPIController) PutFileByPathAasRep
 	}
 
 	fileNameParam := r.FormValue("fileName")
-	var fileParam *os.File
-	{
-		param, err := ReadFormFileToTempFile(r, "file")
-		if err != nil {
-			c.errorHandler(w, r, &ParsingError{Param: "file", Err: err}, nil)
-			return
-		}
-		fileParam = param
+	fileParam, err := OpenFormFile(r, "file")
+	if err != nil {
+		c.errorHandler(w, r, &ParsingError{Param: "file", Err: err}, nil)
+		return
 	}
 	defer func() {
-		if fileParam != nil {
-			tempFilePath := fileParam.Name()
-			_ = fileParam.Close()
-			// #nosec G703 -- path comes from server-generated temporary file.
-			_ = os.Remove(tempFilePath)
-		}
+		_ = fileParam.Close()
 	}()
 
 	result, err := c.service.PutFileByPathAasRepository(

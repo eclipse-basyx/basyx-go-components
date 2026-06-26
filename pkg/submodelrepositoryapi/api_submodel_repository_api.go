@@ -16,7 +16,6 @@ import (
 	"io"
 	"log"
 	"net/http"
-	"os"
 	"strings"
 	"time"
 
@@ -2044,9 +2043,10 @@ func (c *SubmodelRepositoryAPIAPIController) GetFileByPathSubmodelRepo(w http.Re
 
 // PutFileByPathSubmodelRepo - Uploads file content to an existing submodel element at a specified path within submodel elements hierarchy
 func (c *SubmodelRepositoryAPIAPIController) PutFileByPathSubmodelRepo(w http.ResponseWriter, r *http.Request) {
-	r.Body = http.MaxBytesReader(w, r.Body, uploadMaxSizeFromRequestContext(r))
+	maxUploadSizeBytes := uploadMaxSizeFromRequestContext(r)
+	r.Body = http.MaxBytesReader(w, r.Body, maxUploadSizeBytes)
 
-	if err := r.ParseMultipartForm(32 << 20); err != nil {
+	if err := r.ParseMultipartForm(maxUploadSizeBytes); err != nil {
 		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
 		return
 	}
@@ -2068,23 +2068,13 @@ func (c *SubmodelRepositoryAPIAPIController) PutFileByPathSubmodelRepo(w http.Re
 	}
 
 	fileNameParam := r.FormValue("fileName")
-	var fileParam *os.File
-	{
-		param, err := ReadFormFileToTempFile(r, "file")
-		if err != nil {
-			c.errorHandler(w, r, &ParsingError{Param: "file", Err: err}, nil)
-			return
-		}
-
-		fileParam = param
+	fileParam, err := OpenFormFile(r, "file")
+	if err != nil {
+		c.errorHandler(w, r, &ParsingError{Param: "file", Err: err}, nil)
+		return
 	}
 	defer func() {
-		if fileParam != nil {
-			tempFilePath := fileParam.Name()
-			_ = fileParam.Close()
-			// #nosec G703 -- path comes from server-generated temporary file.
-			_ = os.Remove(tempFilePath)
-		}
+		_ = fileParam.Close()
 	}()
 
 	result, err := c.service.PutFileByPathSubmodelRepo(r.Context(), submodelIdentifierParam, idShortPathParam, fileNameParam, fileParam)

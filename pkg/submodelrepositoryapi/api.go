@@ -12,8 +12,8 @@ package openapi
 
 import (
 	"context"
+	"io"
 	"net/http"
-	"os"
 	"time"
 
 	"github.com/FriedJannik/aas-go-sdk/types"
@@ -147,7 +147,7 @@ type SubmodelRepositoryAPIAPIServicer interface {
 	GetSubmodelElementByPathReferenceSubmodelRepo(context.Context, string, string) (model.ImplResponse, error)
 	GetSubmodelElementByPathPathSubmodelRepo(context.Context, string, string, string) (model.ImplResponse, error)
 	GetFileByPathSubmodelRepo(context.Context, string, string) (model.ImplResponse, error)
-	PutFileByPathSubmodelRepo(context.Context, string, string, string, *os.File) (model.ImplResponse, error)
+	PutFileByPathSubmodelRepo(context.Context, string, string, string, io.ReadSeeker) (model.ImplResponse, error)
 	DeleteFileByPathSubmodelRepo(context.Context, string, string) (model.ImplResponse, error)
 	InvokeOperationSubmodelRepo(context.Context, string, string, model.OperationRequest, bool) (model.ImplResponse, error)
 	InvokeOperationValueOnly(context.Context, string, string, string, model.OperationRequestValueOnly, bool) (model.ImplResponse, error)

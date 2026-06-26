@@ -26,7 +26,6 @@
 package aasenvironment
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -101,13 +100,16 @@ func (a *uploadAPI) HandleUpload(w http.ResponseWriter, r *http.Request) {
 	}
 	fileName = sanitizeUploadFileName(fileName)
 
-	fileContent, err := readMultipartFileContent(fileHeader, a.maxUploadSizeBytes)
+	file, err := openMultipartFile(fileHeader)
 	if err != nil {
 		writeUploadError(w, http.StatusBadRequest, err, "AASENV-UPLOAD-READFILE")
 		return
 	}
+	defer func() {
+		_ = file.Close()
+	}()
 
-	result, err := a.service.HandleUpload(r.Context(), fileName, contentType, bytes.NewReader(fileContent))
+	result, err := a.service.HandleUpload(r.Context(), fileName, contentType, file)
 	if err != nil {
 		writeUploadError(w, http.StatusInternalServerError, err, "AASENV-UPLOAD-HANDLER")
 		return
@@ -118,24 +120,12 @@ func (a *uploadAPI) HandleUpload(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func readMultipartFileContent(fileHeader *multipart.FileHeader, maxSizeBytes int64) ([]byte, error) {
+func openMultipartFile(fileHeader *multipart.FileHeader) (multipart.File, error) {
 	formFile, err := fileHeader.Open()
 	if err != nil {
 		return nil, err
 	}
-	defer func() {
-		_ = formFile.Close()
-	}()
-
-	content, err := io.ReadAll(io.LimitReader(formFile, maxSizeBytes+1))
-	if err != nil {
-		return nil, err
-	}
-	if int64(len(content)) > maxSizeBytes {
-		return nil, fmt.Errorf("uploaded file exceeds upload limit of %d bytes", maxSizeBytes)
-	}
-
-	return content, nil
+	return formFile, nil
 }
 
 func writeUploadError(w http.ResponseWriter, status int, err error, info string) {

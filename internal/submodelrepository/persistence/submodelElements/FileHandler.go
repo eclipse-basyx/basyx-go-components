@@ -34,6 +34,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/FriedJannik/aas-go-sdk/types"
@@ -343,7 +344,9 @@ func (p PostgreSQLFileHandler) GetInsertQueryPart(_ *sql.Tx, id int, element typ
 //
 //nolint:revive // cyclomatic complexity is acceptable for this function as the SQL process is complex and requires multiple steps, refactoring would not improve readability
 func (p PostgreSQLFileHandler) UploadFileAttachment(submodelID string, idShortPath string, file *os.File, fileName string) error {
-	return p.UploadFileAttachmentReader(submodelID, idShortPath, file, fileName)
+	return withReopenedUploadFile(file, func(uploadFile io.ReadSeeker) error {
+		return p.UploadFileAttachmentReader(submodelID, idShortPath, uploadFile, fileName)
+	})
 }
 
 // UploadFileAttachmentReader uploads attachment content from a seekable reader.
@@ -371,7 +374,9 @@ func (p PostgreSQLFileHandler) UploadFileAttachmentReader(submodelID string, idS
 
 // UploadFileAttachmentTx uploads attachment content using the provided transaction.
 func (p PostgreSQLFileHandler) UploadFileAttachmentTx(tx *sql.Tx, submodelID string, idShortPath string, file *os.File, fileName string) error {
-	return p.UploadFileAttachmentReaderTx(tx, submodelID, idShortPath, file, fileName)
+	return withReopenedUploadFile(file, func(uploadFile io.ReadSeeker) error {
+		return p.UploadFileAttachmentReaderTx(tx, submodelID, idShortPath, uploadFile, fileName)
+	})
 }
 
 // UploadFileAttachmentReaderTx uploads attachment content from a seekable reader using the provided transaction.
@@ -416,6 +421,32 @@ type fileElementUploadMetadata struct {
 	elementID           int64
 	existingContentType sql.NullString
 	existingFileName    sql.NullString
+}
+
+func withReopenedUploadFile(file *os.File, useFile func(io.ReadSeeker) error) error {
+	reopenedFile, err := reopenUploadedFile(file)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		_ = reopenedFile.Close()
+	}()
+
+	return useFile(reopenedFile)
+}
+
+func reopenUploadedFile(file *os.File) (*os.File, error) {
+	if file == nil {
+		return nil, common.NewErrBadRequest("SMREPO-UPLOADATTACHMENT-MISSINGFILE file payload is required")
+	}
+
+	filePath := filepath.Clean(file.Name())
+	// #nosec G703 -- path comes from server-created temporary file and is normalized with filepath.Clean.
+	reopenedFile, err := os.Open(filePath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to reopen file: %w", err)
+	}
+	return reopenedFile, nil
 }
 
 func readFileElementUploadMetadata(tx *sql.Tx, dialect goqu.DialectWrapper, submodelID string, idShortPath string) (fileElementUploadMetadata, error) {

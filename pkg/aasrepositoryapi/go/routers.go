@@ -162,6 +162,25 @@ func ReadFormFileToTempFile(r *http.Request, key string) (*os.File, error) {
 	return readFileHeaderToTempFile(fileHeader)
 }
 
+// OpenFormFile opens a multipart form file without staging it in the temp directory.
+func OpenFormFile(r *http.Request, key string) (multipart.File, error) {
+	if r.MultipartForm == nil {
+		if err := r.ParseMultipartForm(uploadMaxSizeFromRequestContext(r)); err != nil {
+			return nil, err
+		}
+	}
+
+	formFile, _, err := r.FormFile(key)
+	if err != nil {
+		return nil, err
+	}
+	if _, err = formFile.Seek(0, io.SeekStart); err != nil {
+		_ = formFile.Close()
+		return nil, err
+	}
+	return formFile, nil
+}
+
 // ReadFormFilesToTempFiles reads files array data from a request form and writes it to a temporary files
 func ReadFormFilesToTempFiles(r *http.Request, key string) ([]*os.File, error) {
 	if err := r.ParseMultipartForm(32 << 20); err != nil {
