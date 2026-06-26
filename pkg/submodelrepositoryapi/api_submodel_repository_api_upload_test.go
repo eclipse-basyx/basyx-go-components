@@ -81,7 +81,9 @@ func TestPutFileByPathSubmodelRepoReturnsPayloadTooLargeForOversizedStream(t *te
 	}
 }
 
-func TestPutFileByPathSubmodelRepoUsesMultipartFilenameWhenFileNameFieldFollowsFile(t *testing.T) {
+func TestPutFileByPathSubmodelRepoUsesFileNameFieldWhenItFollowsFile(t *testing.T) {
+	t.Setenv("TMPDIR", filepath.Join(t.TempDir(), "missing"))
+
 	payload := []byte("submodel attachment payload")
 	request := newMultipartUploadRequestWithFileNameOrder(
 		t,
@@ -103,8 +105,8 @@ func TestPutFileByPathSubmodelRepoUsesMultipartFilenameWhenFileNameFieldFollowsF
 	if response.Code != http.StatusNoContent {
 		t.Fatalf("expected upload to succeed, got status %d body %s", response.Code, response.Body.String())
 	}
-	if service.fileName != "part-name.txt" {
-		t.Fatalf("expected multipart part filename part-name.txt, got %q", service.fileName)
+	if service.fileName != "metadata-name.txt" {
+		t.Fatalf("expected metadata filename metadata-name.txt, got %q", service.fileName)
 	}
 	if !bytes.Equal(service.content, payload) {
 		t.Fatalf("expected uploaded payload %q, got %q", string(payload), string(service.content))

@@ -12,6 +12,7 @@
 package openapi
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"io"
@@ -182,8 +183,9 @@ func OpenFormFile(r *http.Request, key string) (multipart.File, error) {
 	return formFile, nil
 }
 
-// HandleMultipartFileStream streams a multipart file part without staging it in memory or on disk.
-// A fileName field only overrides the multipart filename when it appears before the file part.
+// HandleMultipartFileStream streams a multipart file part without staging it on disk.
+// It keeps old form semantics for fileName fields that appear after the file by
+// buffering that single file in memory under the request's configured size limit.
 func HandleMultipartFileStream(r *http.Request, fileKey string, fileNameKey string, handleFile func(fileName string, file io.Reader) error) error {
 	reader, err := r.MultipartReader()
 	if err != nil {
@@ -191,11 +193,15 @@ func HandleMultipartFileStream(r *http.Request, fileKey string, fileNameKey stri
 	}
 
 	fileName := ""
+	var bufferedFile *bufferedMultipartFile
 	for {
 		part, nextErr := reader.NextPart()
 		if nextErr != nil {
 			if errors.Is(nextErr, io.EOF) {
-				return &ParsingError{Param: fileKey, Err: errors.New("multipart file field is required")}
+				if bufferedFile == nil {
+					return &ParsingError{Param: fileKey, Err: errors.New("multipart file field is required")}
+				}
+				return handleBufferedMultipartFile(bufferedFile, fileName, handleFile)
 			}
 			return &ParsingError{Err: nextErr}
 		}
@@ -210,36 +216,82 @@ func HandleMultipartFileStream(r *http.Request, fileKey string, fileNameKey stri
 			if closeErr != nil {
 				return &ParsingError{Param: fileNameKey, Err: closeErr}
 			}
-			if value != "" {
+			if value != "" && fileName == "" {
 				fileName = value
 			}
 		case fileKey:
-			resolvedFileName := fileName
-			if resolvedFileName == "" {
-				resolvedFileName = strings.TrimSpace(part.FileName())
+			if bufferedFile != nil {
+				_, _ = io.Copy(io.Discard, part)
+				_ = part.Close()
+				continue
 			}
-
-			fileReader := &maxBytesTrackingReader{reader: part}
-			handleErr := handleFile(resolvedFileName, fileReader)
-			closeErr := part.Close()
-			if maxBytesErr := fileReader.MaxBytesError(); maxBytesErr != nil {
-				return &ParsingError{Param: fileKey, Err: maxBytesErr}
+			if fileName != "" {
+				return handleStreamingMultipartFile(part, fileKey, fileName, handleFile)
 			}
-			if handleErr != nil {
-				return handleErr
+			bufferedFile, err = bufferMultipartFilePart(part, fileKey)
+			if err != nil {
+				return err
 			}
-			if closeErr != nil {
-				if maxBytesErr := maxBytesErrorFromError(closeErr); maxBytesErr != nil {
-					return &ParsingError{Param: fileKey, Err: maxBytesErr}
-				}
-				return &ParsingError{Param: fileKey, Err: closeErr}
-			}
-			return nil
 		default:
 			_, _ = io.Copy(io.Discard, part)
 			_ = part.Close()
 		}
 	}
+}
+
+type bufferedMultipartFile struct {
+	fileName string
+	content  []byte
+}
+
+func handleStreamingMultipartFile(part *multipart.Part, fileKey string, fileName string, handleFile func(fileName string, file io.Reader) error) error {
+	fileReader := &maxBytesTrackingReader{reader: part}
+	handleErr := handleFile(fileName, fileReader)
+	closeErr := part.Close()
+	if maxBytesErr := fileReader.MaxBytesError(); maxBytesErr != nil {
+		return &ParsingError{Param: fileKey, Err: maxBytesErr}
+	}
+	if handleErr != nil {
+		return handleErr
+	}
+	if closeErr != nil {
+		if maxBytesErr := maxBytesErrorFromError(closeErr); maxBytesErr != nil {
+			return &ParsingError{Param: fileKey, Err: maxBytesErr}
+		}
+		return &ParsingError{Param: fileKey, Err: closeErr}
+	}
+	return nil
+}
+
+func bufferMultipartFilePart(part *multipart.Part, fileKey string) (*bufferedMultipartFile, error) {
+	fileReader := &maxBytesTrackingReader{reader: part}
+	var buffer bytes.Buffer
+	_, copyErr := io.Copy(&buffer, fileReader)
+	closeErr := part.Close()
+	if maxBytesErr := fileReader.MaxBytesError(); maxBytesErr != nil {
+		return nil, &ParsingError{Param: fileKey, Err: maxBytesErr}
+	}
+	if copyErr != nil {
+		return nil, &ParsingError{Param: fileKey, Err: copyErr}
+	}
+	if closeErr != nil {
+		if maxBytesErr := maxBytesErrorFromError(closeErr); maxBytesErr != nil {
+			return nil, &ParsingError{Param: fileKey, Err: maxBytesErr}
+		}
+		return nil, &ParsingError{Param: fileKey, Err: closeErr}
+	}
+	return &bufferedMultipartFile{
+		fileName: strings.TrimSpace(part.FileName()),
+		content:  buffer.Bytes(),
+	}, nil
+}
+
+func handleBufferedMultipartFile(bufferedFile *bufferedMultipartFile, fileName string, handleFile func(fileName string, file io.Reader) error) error {
+	resolvedFileName := strings.TrimSpace(fileName)
+	if resolvedFileName == "" {
+		resolvedFileName = bufferedFile.fileName
+	}
+	return handleFile(resolvedFileName, bytes.NewReader(bufferedFile.content))
 }
 
 type maxBytesTrackingReader struct {

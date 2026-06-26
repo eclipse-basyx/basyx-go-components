@@ -119,7 +119,9 @@ func TestPutFileByPathAasRepositoryReturnsPayloadTooLargeForOversizedStream(t *t
 	}
 }
 
-func TestPutThumbnailAasRepositoryUsesMultipartFilenameWhenFileNameFieldFollowsFile(t *testing.T) {
+func TestPutThumbnailAasRepositoryUsesFileNameFieldWhenItFollowsFile(t *testing.T) {
+	t.Setenv("TMPDIR", filepath.Join(t.TempDir(), "missing"))
+
 	payload := []byte("thumbnail payload")
 	request := newMultipartUploadRequestWithFileNameOrder(
 		t,
@@ -137,7 +139,7 @@ func TestPutThumbnailAasRepositoryUsesMultipartFilenameWhenFileNameFieldFollowsF
 
 	controller.PutThumbnailAasRepository(response, request)
 
-	assertCapturedUpload(t, response, service, "part-thumbnail.bin", payload)
+	assertCapturedUpload(t, response, service, "metadata-thumbnail.bin", payload)
 }
 
 func assertCapturedUpload(t *testing.T, response *httptest.ResponseRecorder, service *captureAASUploadService, expectedFileName string, expectedPayload []byte) {
