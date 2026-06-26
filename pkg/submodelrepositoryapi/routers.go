@@ -229,6 +229,7 @@ func OpenFormFile(r *http.Request, key string) (multipart.File, error) {
 }
 
 // HandleMultipartFileStream streams a multipart file part without staging it in memory or on disk.
+// A fileName field only overrides the multipart filename when it appears before the file part.
 func HandleMultipartFileStream(r *http.Request, fileKey string, fileNameKey string, handleFile func(fileName string, file io.Reader) error) error {
 	reader, err := r.MultipartReader()
 	if err != nil {
@@ -264,12 +265,19 @@ func HandleMultipartFileStream(r *http.Request, fileKey string, fileNameKey stri
 				resolvedFileName = strings.TrimSpace(part.FileName())
 			}
 
-			handleErr := handleFile(resolvedFileName, part)
+			fileReader := &maxBytesTrackingReader{reader: part}
+			handleErr := handleFile(resolvedFileName, fileReader)
 			closeErr := part.Close()
+			if maxBytesErr := fileReader.MaxBytesError(); maxBytesErr != nil {
+				return &ParsingError{Param: fileKey, Err: maxBytesErr}
+			}
 			if handleErr != nil {
 				return handleErr
 			}
 			if closeErr != nil {
+				if maxBytesErr := maxBytesErrorFromError(closeErr); maxBytesErr != nil {
+					return &ParsingError{Param: fileKey, Err: maxBytesErr}
+				}
 				return &ParsingError{Param: fileKey, Err: closeErr}
 			}
 			return nil
@@ -278,6 +286,31 @@ func HandleMultipartFileStream(r *http.Request, fileKey string, fileNameKey stri
 			_ = part.Close()
 		}
 	}
+}
+
+type maxBytesTrackingReader struct {
+	reader      io.Reader
+	maxBytesErr *http.MaxBytesError
+}
+
+func (r *maxBytesTrackingReader) Read(target []byte) (int, error) {
+	readCount, err := r.reader.Read(target)
+	if maxBytesErr := maxBytesErrorFromError(err); maxBytesErr != nil {
+		r.maxBytesErr = maxBytesErr
+	}
+	return readCount, err
+}
+
+func (r *maxBytesTrackingReader) MaxBytesError() *http.MaxBytesError {
+	return r.maxBytesErr
+}
+
+func maxBytesErrorFromError(err error) *http.MaxBytesError {
+	var maxBytesErr *http.MaxBytesError
+	if errors.As(err, &maxBytesErr) {
+		return maxBytesErr
+	}
+	return nil
 }
 
 func readMultipartMetadataField(part *multipart.Part) (string, error) {
