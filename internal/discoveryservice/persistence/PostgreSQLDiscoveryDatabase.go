@@ -271,6 +271,11 @@ func (p *PostgreSQLDiscoveryDatabase) SearchAASIDsByAssetLinks(
 	if len(uniqueLinks) > 0 {
 		sai := goqu.T(common.TblSpecificAssetID).As("sai")
 		for _, link := range uniqueLinks {
+			if link.Name == common.GlobalAssetIDAssetLinkName {
+				ds = ds.Where(ad.Col(common.ColGlobalAssetID).Eq(link.Value))
+				continue
+			}
+
 			existsSub := d.From(sai).
 				Select(goqu.V(1)).
 				Where(goqu.And(
@@ -278,13 +283,6 @@ func (p *PostgreSQLDiscoveryDatabase) SearchAASIDsByAssetLinks(
 					goqu.I("sai.name").Eq(link.Name),
 					goqu.I("sai.value").Eq(link.Value),
 				))
-			if link.Name == common.GlobalAssetIDAssetLinkName {
-				ds = ds.Where(goqu.Or(
-					ad.Col(common.ColGlobalAssetID).Eq(link.Value),
-					goqu.L("EXISTS ?", existsSub),
-				))
-				continue
-			}
 			ds = ds.Where(goqu.L("EXISTS ?", existsSub))
 		}
 	}
