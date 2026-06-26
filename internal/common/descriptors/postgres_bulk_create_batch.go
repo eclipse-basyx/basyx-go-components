@@ -29,6 +29,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"strings"
 
 	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/doug-martin/goqu/v9"
@@ -171,7 +172,7 @@ func countBulkCreateIDs(
 	for _, descriptor := range descriptors {
 		counts.descriptor = append(counts.descriptor, 0)
 		specificAssetIDCount := len(descriptor.SpecificAssetIds)
-		if discoveryIntegration && descriptor.GlobalAssetId != "" {
+		if discoveryIntegration && strings.TrimSpace(descriptor.GlobalAssetId) != "" {
 			specificAssetIDCount++
 		}
 		counts.specificAssetID = append(counts.specificAssetID, make([]int64, specificAssetIDCount)...)
@@ -313,14 +314,11 @@ func collectSpecificAssetIDRows(
 	descriptorID int64,
 	descriptor model.AssetAdministrationShellDescriptor,
 ) error {
-	assetIDs := append([]types.ISpecificAssetID(nil), descriptor.SpecificAssetIds...)
+	assetIDs := specificAssetIDsWithGlobalAssetID(ctx, descriptor)
 	var aasRef any
 	if cfg, ok := common.ConfigFromContext(ctx); ok && cfg.General.DiscoveryIntegration {
 		rows.aasIdentifier = append(rows.aasIdentifier, goqu.Record{"aasid": descriptor.Id})
 		aasRef = goqu.From(common.TblAASIdentifier).Select(common.ColID).Where(goqu.C("aasid").Eq(descriptor.Id))
-		if descriptor.GlobalAssetId != "" {
-			assetIDs = append(assetIDs, types.NewSpecificAssetID(globalAssetIDSpecificAssetIDName, descriptor.GlobalAssetId))
-		}
 	}
 	for position, assetID := range assetIDs {
 		specificAssetID, err := cursor.nextSpecificAssetID()

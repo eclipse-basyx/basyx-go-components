@@ -230,11 +230,7 @@ func insertAdministrationShellDescriptorDetailsTx(ctx context.Context, tx *sql.T
 		aasRef = sql.NullInt64{Int64: ref, Valid: true}
 	}
 
-	specificAssetIds := aasd.SpecificAssetIds
-	// Add globalAssetId as a specific asset ID when DiscoveryIntegration is enabled and GlobalAssetId is set.
-	if cfg, ok := common.ConfigFromContext(ctx); ok && cfg.General.DiscoveryIntegration && aasd.GlobalAssetId != "" {
-		specificAssetIds = append(specificAssetIds, types.NewSpecificAssetID(globalAssetIDSpecificAssetIDName, aasd.GlobalAssetId))
-	}
+	specificAssetIds := specificAssetIDsWithGlobalAssetID(ctx, aasd)
 
 	if err = common.CreateSpecificAssetIDDescriptor(tx, descriptorID, aasRef, specificAssetIds); err != nil {
 		return err
@@ -281,6 +277,33 @@ func UpsertAdministrationShellDescriptorTx(ctx context.Context, tx *sql.Tx, aasd
 	}
 
 	return true, InsertAdministrationShellDescriptorTx(ctx, tx, aasd)
+}
+
+// GetAASDescriptorCreatedAtByIDTx returns and locks the persisted AAS descriptor
+// creation timestamp so replace operations can preserve it across delete/insert.
+func GetAASDescriptorCreatedAtByIDTx(ctx context.Context, tx *sql.Tx, aasID string) (time.Time, error) {
+	d := goqu.Dialect(common.Dialect)
+	aasTbl := goqu.T(common.TblAASDescriptor)
+
+	sqlStr, args, buildErr := d.
+		From(aasTbl).
+		Select(aasTbl.Col(common.ColCreatedAt)).
+		Where(aasTbl.Col(common.ColAASID).Eq(aasID)).
+		ForUpdate(goqu.Wait).
+		ToSQL()
+	if buildErr != nil {
+		return time.Time{}, buildErr
+	}
+
+	var createdAt time.Time
+	if err := tx.QueryRowContext(ctx, sqlStr, args...).Scan(&createdAt); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return time.Time{}, common.NewErrNotFound("AAS Descriptor not found")
+		}
+		return time.Time{}, err
+	}
+
+	return createdAt, nil
 }
 
 func lockAASDescriptorUpsertTx(ctx context.Context, tx *sql.Tx, aasID string) error {
@@ -340,8 +363,7 @@ func replaceAdministrationShellDescriptorDetailsTx(ctx context.Context, tx *sql.
 
 func updateAASDescriptorRowTx(ctx context.Context, tx *sql.Tx, descriptorID int64, aasd model.AssetAdministrationShellDescriptor) error {
 	d := goqu.Dialect(common.Dialect)
-	record := buildAASDescriptorInsertRecord(ctx, descriptorID, aasd)
-	delete(record, common.ColDescriptorID)
+	record := buildAASDescriptorUpdateRecord(ctx, descriptorID, aasd)
 
 	sqlStr, args, buildErr := d.
 		Update(common.TblAASDescriptor).
@@ -421,6 +443,17 @@ func buildAASDescriptorInsertRecord(
 		record[common.ColCreatedAt] = *aasd.CreatedAt
 	}
 
+	return record
+}
+
+func buildAASDescriptorUpdateRecord(
+	ctx context.Context,
+	descriptorID any,
+	aasd model.AssetAdministrationShellDescriptor,
+) goqu.Record {
+	record := buildAASDescriptorInsertRecord(ctx, descriptorID, aasd)
+	delete(record, common.ColDescriptorID)
+	delete(record, common.ColCreatedAt)
 	return record
 }
 
@@ -526,14 +559,14 @@ func DeleteAssetAdministrationShellDescriptorsByIDsTx(ctx context.Context, tx *s
 			Select(common.ColDescriptorID).
 			Where(goqu.C(common.ColAASDescriptorID).In(descriptorIDs))
 		if err := batch.AppendDataset(
-			d.Delete(common.TblDescriptor).Where(
-				goqu.Or(
-					goqu.C(common.ColID).In(descriptorIDs),
-					goqu.C(common.ColID).In(childDescriptorIDs),
-				),
-			),
+			d.Delete(common.TblDescriptor).Where(goqu.C(common.ColID).In(childDescriptorIDs)),
 		); err != nil {
-			return common.NewInternalServerError("AASDESC-BULKDELETE-BUILDSQL " + err.Error())
+			return common.NewInternalServerError("AASDESC-BULKDELETE-BUILDCHILDSQL " + err.Error())
+		}
+		if err := batch.AppendDataset(
+			d.Delete(common.TblDescriptor).Where(goqu.C(common.ColID).In(descriptorIDs)),
+		); err != nil {
+			return common.NewInternalServerError("AASDESC-BULKDELETE-BUILDPARENTSQL " + err.Error())
 		}
 	}
 	return common.ExecutePostgreSQLBatchInTransaction(ctx, tx, batch.Statements())
@@ -569,19 +602,26 @@ func deleteAssetAdministrationShellDescriptorByIDTx(ctx context.Context, tx *sql
 		From(common.TblSubmodelDescriptor).
 		Select(common.ColDescriptorID).
 		Where(goqu.C(common.ColAASDescriptorID).Eq(descID))
-	delStr, delArgs, buildDelErr := d.
+
+	childDelStr, childDelArgs, buildChildDelErr := d.
 		Delete(common.TblDescriptor).
-		Where(
-			goqu.Or(
-				goqu.C(common.ColID).Eq(descID),
-				goqu.C(common.ColID).In(childDescriptorIDs),
-			),
-		).
+		Where(goqu.C(common.ColID).In(childDescriptorIDs)).
 		ToSQL()
-	if buildDelErr != nil {
-		return buildDelErr
+	if buildChildDelErr != nil {
+		return buildChildDelErr
 	}
-	if _, execErr := tx.Exec(delStr, delArgs...); execErr != nil {
+	if _, execErr := tx.ExecContext(ctx, childDelStr, childDelArgs...); execErr != nil {
+		return execErr
+	}
+
+	parentDelStr, parentDelArgs, buildParentDelErr := d.
+		Delete(common.TblDescriptor).
+		Where(goqu.C(common.ColID).Eq(descID)).
+		ToSQL()
+	if buildParentDelErr != nil {
+		return buildParentDelErr
+	}
+	if _, execErr := tx.ExecContext(ctx, parentDelStr, parentDelArgs...); execErr != nil {
 		return execErr
 	}
 	return nil
@@ -608,13 +648,19 @@ func ReplaceAdministrationShellDescriptor(ctx context.Context, db *sql.DB, aasd 
 	if err != nil {
 		return model.AssetAdministrationShellDescriptor{}, err
 	}
+	createdAt, err := GetAASDescriptorCreatedAtByIDTx(ctx, tx, aasd.Id)
+	if err != nil {
+		_ = tx.Rollback()
+		return model.AssetAdministrationShellDescriptor{}, err
+	}
+	aasd.CreatedAt = &createdAt
 	// delete existing descriptor
 	if err = deleteAssetAdministrationShellDescriptorByIDTx(ctx, tx, aasd.Id); err != nil {
 		_ = tx.Rollback()
 		return model.AssetAdministrationShellDescriptor{}, err
 	}
 	// insert new descriptor
-	if err = InsertAdministrationShellDescriptorTx(ctx, tx, aasd); err != nil {
+	if err = InsertAdministrationShellDescriptorTx(WithAllowAASDescriptorCreatedAtOverride(ctx), tx, aasd); err != nil {
 		_ = tx.Rollback()
 		return model.AssetAdministrationShellDescriptor{}, err
 	}

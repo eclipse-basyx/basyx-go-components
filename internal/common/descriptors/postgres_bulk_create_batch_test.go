@@ -123,6 +123,32 @@ func TestBulkCreateCollectorSupportsGlobalSubmodelDescriptors(t *testing.T) {
 	}
 }
 
+func TestBulkCreateCollectorDoesNotReserveWhitespaceGlobalAssetID(t *testing.T) {
+	t.Parallel()
+
+	ctx := discoveryContext()
+	descriptor := model.AssetAdministrationShellDescriptor{
+		Id:            "urn:example:aas:whitespace-global-asset-id",
+		GlobalAssetId: " \t\n ",
+	}
+	counts := countBulkCreateIDs(ctx, []model.AssetAdministrationShellDescriptor{descriptor})
+	rows := &bulkCreateRows{}
+	cursor := &bulkCreateIDCursor{ids: bulkCreateIDs{
+		descriptor:      []int64{301},
+		specificAssetID: counts.specificAssetID,
+	}}
+
+	if err := collectAASDescriptorRows(ctx, rows, cursor, descriptor); err != nil {
+		t.Fatalf("collectAASDescriptorRows returned error: %v", err)
+	}
+	if err := cursor.validateConsumed(); err != nil {
+		t.Fatalf("validateConsumed returned error: %v", err)
+	}
+	if len(rows.specificAssetID) != 0 {
+		t.Fatalf("expected no generated globalAssetId specific asset ID row, got %d", len(rows.specificAssetID))
+	}
+}
+
 func TestAppendChunkedRowsSplitsAfterBulkBatchLimit(t *testing.T) {
 	t.Parallel()
 

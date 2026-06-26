@@ -278,6 +278,13 @@ func (p *PostgreSQLDiscoveryDatabase) SearchAASIDsByAssetLinks(
 					goqu.I("sai.name").Eq(link.Name),
 					goqu.I("sai.value").Eq(link.Value),
 				))
+			if link.Name == common.GlobalAssetIDAssetLinkName {
+				ds = ds.Where(goqu.Or(
+					ad.Col(common.ColGlobalAssetID).Eq(link.Value),
+					goqu.L("EXISTS ?", existsSub),
+				))
+				continue
+			}
 			ds = ds.Where(goqu.L("EXISTS ?", existsSub))
 		}
 	}
