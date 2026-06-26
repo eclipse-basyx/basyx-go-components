@@ -31,7 +31,6 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
-	"sync"
 
 	"github.com/FriedJannik/aas-go-sdk/jsonization"
 	"github.com/FriedJannik/aas-go-sdk/types"
@@ -46,9 +45,7 @@ type CustomSubmodelRepositoryService struct {
 	persistence                                 *Persistence
 	syncConfig                                  RegistrySyncConfig
 	enableReferencingAASDescriptorEmbeddingSync bool
-	dynamicReconciliationMu                     sync.Mutex
-	dynamicReconcilingExternalBase              string
-	dynamicReconciledExternalBase               string
+	dynamicReconciliationState                  dynamicRegistryReconciliationState
 }
 
 // NewCustomSubmodelRepositoryService creates a new pass-through submodel repository decorator.

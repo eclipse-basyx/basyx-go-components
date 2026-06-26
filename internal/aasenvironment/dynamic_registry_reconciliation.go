@@ -30,12 +30,45 @@ import (
 	"database/sql"
 	"log"
 	"net/http"
+	"sync"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 )
 
 const dynamicRegistryReconciliationPageSize int32 = 100
+
+type dynamicRegistryReconciliationState struct {
+	mu              sync.Mutex
+	reconcilingBase string
+	reconciledBase  string
+}
+
+func (s *dynamicRegistryReconciliationState) reserve(externalBaseURL string) bool {
+	if externalBaseURL == "" {
+		return false
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.reconciledBase == externalBaseURL || s.reconcilingBase == externalBaseURL {
+		return false
+	}
+
+	s.reconcilingBase = externalBaseURL
+	return true
+}
+
+func (s *dynamicRegistryReconciliationState) complete(externalBaseURL string, succeeded bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if succeeded {
+		s.reconciledBase = externalBaseURL
+	}
+	if s.reconcilingBase == externalBaseURL {
+		s.reconcilingBase = ""
+	}
+}
 
 type dynamicRegistryReconciler interface {
 	triggerDynamicRegistryReconciliation(ctx context.Context)
@@ -63,13 +96,13 @@ func (s *CustomAASRepositoryService) triggerDynamicRegistryReconciliation(ctx co
 		return
 	}
 	externalBaseURL := s.dynamicExternalBaseURL(reconciliationCtx)
-	if !s.reserveDynamicRegistryReconciliation(externalBaseURL) {
+	if !s.dynamicReconciliationState.reserve(externalBaseURL) {
 		return
 	}
 
 	go func() {
 		err := s.reconcileDynamicRegistryDescriptors(reconciliationCtx)
-		s.completeDynamicRegistryReconciliation(externalBaseURL, err == nil)
+		s.dynamicReconciliationState.complete(externalBaseURL, err == nil)
 		if err != nil {
 			log.Printf("AASENV-DYNREGRECON-AASERR dynamic registry reconciliation failed: %v", err)
 		}
@@ -82,13 +115,13 @@ func (s *CustomSubmodelRepositoryService) triggerDynamicRegistryReconciliation(c
 		return
 	}
 	externalBaseURL := s.dynamicExternalBaseURL(reconciliationCtx)
-	if !s.reserveDynamicRegistryReconciliation(externalBaseURL) {
+	if !s.dynamicReconciliationState.reserve(externalBaseURL) {
 		return
 	}
 
 	go func() {
 		err := s.reconcileDynamicRegistryDescriptors(reconciliationCtx)
-		s.completeDynamicRegistryReconciliation(externalBaseURL, err == nil)
+		s.dynamicReconciliationState.complete(externalBaseURL, err == nil)
 		if err != nil {
 			log.Printf("AASENV-DYNREGRECON-SMERR dynamic registry reconciliation failed: %v", err)
 		}
@@ -124,39 +157,8 @@ func (s *CustomAASRepositoryService) reconcileDynamicRegistryDescriptors(ctx con
 			return err
 		}
 	}
-	if s.syncConfig.SubmodelRegistryIntegration {
-		if err := s.reconcileDynamicSubmodelDescriptors(ctx); err != nil {
-			return err
-		}
-	}
 
 	return nil
-}
-
-func (s *CustomAASRepositoryService) reserveDynamicRegistryReconciliation(externalBaseURL string) bool {
-	if externalBaseURL == "" {
-		return false
-	}
-
-	s.dynamicReconciliationMu.Lock()
-	defer s.dynamicReconciliationMu.Unlock()
-	if s.dynamicReconciledExternalBase == externalBaseURL || s.dynamicReconcilingExternalBase == externalBaseURL {
-		return false
-	}
-
-	s.dynamicReconcilingExternalBase = externalBaseURL
-	return true
-}
-
-func (s *CustomAASRepositoryService) completeDynamicRegistryReconciliation(externalBaseURL string, succeeded bool) {
-	s.dynamicReconciliationMu.Lock()
-	defer s.dynamicReconciliationMu.Unlock()
-	if succeeded {
-		s.dynamicReconciledExternalBase = externalBaseURL
-	}
-	if s.dynamicReconcilingExternalBase == externalBaseURL {
-		s.dynamicReconcilingExternalBase = ""
-	}
 }
 
 func (s *CustomAASRepositoryService) dynamicExternalBaseURL(ctx context.Context) string {
@@ -202,42 +204,6 @@ func (s *CustomAASRepositoryService) reconcileDynamicAASDescriptors(ctx context.
 	}
 }
 
-func (s *CustomAASRepositoryService) reconcileDynamicSubmodelDescriptors(ctx context.Context) error {
-	if dependencyErr := s.validateSyncDependencies(false, true, true); dependencyErr != nil {
-		return dependencyErr
-	}
-
-	cursor := ""
-	for {
-		submodels, nextCursor, getErr := s.persistence.SubmodelRepository.GetSubmodels(ctx, dynamicRegistryReconciliationPageSize, cursor, "")
-		if getErr != nil {
-			return getErr
-		}
-
-		for _, submodel := range submodels {
-			descriptor, descriptorErr := s.syncConfig.buildSubmodelDescriptorForContext(ctx, submodel)
-			if descriptorErr != nil {
-				return descriptorErr
-			}
-			if len(descriptor.Endpoints) == 0 {
-				return common.NewInternalServerError("AASENV-DYNREGRECON-SMNOENDPOINTS dynamic submodel descriptor endpoints must not be empty")
-			}
-			if upsertErr := s.ExecuteInTransaction(func(tx *sql.Tx) error {
-				return s.persistence.SubmodelRegistry.UpsertSubmodelDescriptorInTransaction(
-					submodelRegistryAddAuditMetadataIfNotAvailable(ctx, submodelRegistrySyncUpsertOperation), tx, descriptor,
-				)
-			}); upsertErr != nil {
-				return upsertErr
-			}
-		}
-
-		if nextCursor == "" {
-			return nil
-		}
-		cursor = nextCursor
-	}
-}
-
 func (s *CustomSubmodelRepositoryService) reconcileDynamicRegistryDescriptors(ctx context.Context) error {
 	externalBaseURL := s.dynamicExternalBaseURL(ctx)
 	if externalBaseURL == "" {
@@ -245,32 +211,6 @@ func (s *CustomSubmodelRepositoryService) reconcileDynamicRegistryDescriptors(ct
 	}
 
 	return s.reconcileDynamicSubmodelDescriptors(ctx)
-}
-
-func (s *CustomSubmodelRepositoryService) reserveDynamicRegistryReconciliation(externalBaseURL string) bool {
-	if externalBaseURL == "" {
-		return false
-	}
-
-	s.dynamicReconciliationMu.Lock()
-	defer s.dynamicReconciliationMu.Unlock()
-	if s.dynamicReconciledExternalBase == externalBaseURL || s.dynamicReconcilingExternalBase == externalBaseURL {
-		return false
-	}
-
-	s.dynamicReconcilingExternalBase = externalBaseURL
-	return true
-}
-
-func (s *CustomSubmodelRepositoryService) completeDynamicRegistryReconciliation(externalBaseURL string, succeeded bool) {
-	s.dynamicReconciliationMu.Lock()
-	defer s.dynamicReconciliationMu.Unlock()
-	if succeeded {
-		s.dynamicReconciledExternalBase = externalBaseURL
-	}
-	if s.dynamicReconcilingExternalBase == externalBaseURL {
-		s.dynamicReconcilingExternalBase = ""
-	}
 }
 
 func (s *CustomSubmodelRepositoryService) dynamicExternalBaseURL(ctx context.Context) string {

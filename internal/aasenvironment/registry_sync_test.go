@@ -163,6 +163,48 @@ func TestRegistrySyncConfigPrefersStaticExternalURLsOverDynamicContext(t *testin
 	require.Equal(t, "https://static.example/api/v3/shells/dXJuOmV4YW1wbGU6YWFzOjAwMQ", endpoints[0].ProtocolInformation.Href)
 }
 
+func TestDynamicBlankModeSubmodelDescriptorRequiresEndpointBase(t *testing.T) {
+	config := RegistrySyncConfig{
+		AASRegistryIntegration:      true,
+		SubmodelRegistryIntegration: true,
+	}
+	submodel, err := jsonization.SubmodelFromJsonable(map[string]any{
+		"id":        "urn:example:sm:superpath",
+		"idShort":   "SuperpathSubmodel",
+		"modelType": "Submodel",
+	})
+	require.NoError(t, err)
+
+	descriptor, err := config.buildSubmodelDescriptorForContext(context.Background(), submodel)
+	require.NoError(t, err)
+	require.Empty(t, descriptor.Endpoints)
+	require.False(t, config.hasEndpointBaseURL(context.Background()))
+
+	ctx := common.ContextWithRequestExternalBaseURL(context.Background(), "https://public.example/api/v3")
+	descriptor, err = config.buildSubmodelDescriptorForContext(ctx, submodel)
+	require.NoError(t, err)
+	require.Len(t, descriptor.Endpoints, 1)
+	require.Equal(
+		t,
+		"https://public.example/api/v3/submodels/"+common.EncodeString("urn:example:sm:superpath"),
+		descriptor.Endpoints[0].ProtocolInformation.Href,
+	)
+	require.True(t, config.hasEndpointBaseURL(ctx))
+}
+
+func TestDynamicRegistryReconciliationStateSkipsDuplicateRuns(t *testing.T) {
+	var state dynamicRegistryReconciliationState
+
+	require.True(t, state.reserve("https://public.example/api/v3"))
+	require.False(t, state.reserve("https://public.example/api/v3"))
+
+	state.complete("https://public.example/api/v3", false)
+	require.True(t, state.reserve("https://public.example/api/v3"))
+
+	state.complete("https://public.example/api/v3", true)
+	require.False(t, state.reserve("https://public.example/api/v3"))
+}
+
 func TestBuildAASDescriptorDerivesFromIdentifiable(t *testing.T) {
 	config := RegistrySyncConfig{ExternalBaseURLs: []string{"https://public.example/api/v3"}}
 	aas, err := jsonization.AssetAdministrationShellFromJsonable(map[string]any{

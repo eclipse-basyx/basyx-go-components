@@ -31,7 +31,6 @@ import (
 	"errors"
 	"net/http"
 	"strings"
-	"sync"
 
 	"github.com/FriedJannik/aas-go-sdk/jsonization"
 	"github.com/FriedJannik/aas-go-sdk/types"
@@ -43,11 +42,9 @@ import (
 // CustomAASRepositoryService is a pass-through stub for future combined logic.
 type CustomAASRepositoryService struct {
 	*aasrepositoryapi.AssetAdministrationShellRepositoryAPIAPIService
-	persistence                    *Persistence
-	syncConfig                     RegistrySyncConfig
-	dynamicReconciliationMu        sync.Mutex
-	dynamicReconcilingExternalBase string
-	dynamicReconciledExternalBase  string
+	persistence                *Persistence
+	syncConfig                 RegistrySyncConfig
+	dynamicReconciliationState dynamicRegistryReconciliationState
 }
 
 // NewCustomAASRepositoryService creates a new pass-through AAS repository decorator.
