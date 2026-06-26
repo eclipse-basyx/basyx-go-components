@@ -37,7 +37,6 @@ import (
 	"mime"
 	"net/http"
 	"net/url"
-	"os"
 	"path"
 	"path/filepath"
 	"strconv"
@@ -86,7 +85,7 @@ func NewUploadAPIService(
 	}
 }
 
-func (s *uploadAPIService) HandleUpload(ctx context.Context, fileName string, contentType string, file *os.File) (commonmodel.ImplResponse, error) {
+func (s *uploadAPIService) HandleUpload(ctx context.Context, fileName string, contentType string, file io.ReadSeeker) (commonmodel.ImplResponse, error) {
 	if file == nil {
 		return newUploadErrorResponse(http.StatusBadRequest, "AASENV-HANDLEUPLOAD-MISSINGFILE", fmt.Errorf("uploaded file is required"))
 	}
@@ -119,17 +118,13 @@ func (s *uploadAPIService) HandleUpload(ctx context.Context, fileName string, co
 	}
 }
 
-func (s *uploadAPIService) handleAASXUpload(ctx context.Context, fileName string, contentType string, file *os.File) (commonmodel.ImplResponse, error) {
-	fileReader, err := openUploadTempFile(file)
-	if err != nil {
-		return newUploadErrorResponse(http.StatusInternalServerError, "AASENV-HANDLEUPLOAD-OPENAASXFILE", err)
+func (s *uploadAPIService) handleAASXUpload(ctx context.Context, fileName string, contentType string, file io.ReadSeeker) (commonmodel.ImplResponse, error) {
+	if _, err := file.Seek(0, 0); err != nil {
+		return newUploadErrorResponse(http.StatusInternalServerError, "AASENV-HANDLEUPLOAD-SEEKAASXFILE", err)
 	}
-	defer func() {
-		_ = fileReader.Close()
-	}()
 
 	packaging := aasx.NewPackaging()
-	packageReader, err := packaging.OpenReadFromStream(fileReader)
+	packageReader, err := packaging.OpenReadFromStream(file)
 	if err != nil {
 		return newUploadErrorResponse(http.StatusBadRequest, "AASENV-HANDLEUPLOAD-PARSEAASX", err)
 	}
@@ -161,17 +156,12 @@ func (s *uploadAPIService) handleAASXUpload(ctx context.Context, fileName string
 	}), nil
 }
 
-func (s *uploadAPIService) handleJSONUpload(ctx context.Context, fileName string, contentType string, file *os.File) (commonmodel.ImplResponse, error) {
-	fileReader, err := openUploadTempFile(file)
-	if err != nil {
-		return newUploadErrorResponse(http.StatusInternalServerError, "AASENV-HANDLEUPLOAD-OPENJSONFILE", err)
+func (s *uploadAPIService) handleJSONUpload(ctx context.Context, fileName string, contentType string, file io.ReadSeeker) (commonmodel.ImplResponse, error) {
+	if _, err := file.Seek(0, 0); err != nil {
+		return newUploadErrorResponse(http.StatusInternalServerError, "AASENV-HANDLEUPLOAD-SEEKJSONFILE", err)
 	}
-	defer func() {
-		_ = fileReader.Close()
-	}()
-
 	var jsonable any
-	decoder := json.NewDecoder(fileReader)
+	decoder := json.NewDecoder(file)
 	if err := decoder.Decode(&jsonable); err != nil {
 		return newUploadErrorResponse(http.StatusBadRequest, "AASENV-HANDLEUPLOAD-PARSEJSON", err)
 	}
@@ -196,16 +186,11 @@ func (s *uploadAPIService) handleJSONUpload(ctx context.Context, fileName string
 	}), nil
 }
 
-func (s *uploadAPIService) handleXMLUpload(ctx context.Context, fileName string, contentType string, file *os.File) (commonmodel.ImplResponse, error) {
-	fileReader, err := openUploadTempFile(file)
-	if err != nil {
-		return newUploadErrorResponse(http.StatusInternalServerError, "AASENV-HANDLEUPLOAD-OPENXMLFILE", err)
+func (s *uploadAPIService) handleXMLUpload(ctx context.Context, fileName string, contentType string, file io.ReadSeeker) (commonmodel.ImplResponse, error) {
+	if _, err := file.Seek(0, 0); err != nil {
+		return newUploadErrorResponse(http.StatusInternalServerError, "AASENV-HANDLEUPLOAD-SEEKXMLFILE", err)
 	}
-	defer func() {
-		_ = fileReader.Close()
-	}()
-
-	specContent, err := io.ReadAll(fileReader)
+	specContent, err := io.ReadAll(file)
 	if err != nil {
 		return newUploadErrorResponse(http.StatusInternalServerError, "AASENV-HANDLEUPLOAD-READXMLFILE", err)
 	}
@@ -773,13 +758,7 @@ func (s *uploadAPIService) uploadSupplementaryFiles(
 				uploadName = "supplementary.bin"
 			}
 
-			tempFile, tempErr := createTempFileForUpload(uploadName, suppBytes)
-			if tempErr != nil {
-				return fmt.Errorf("AASENV-UPLDSUPPL-CREATETEMP failed to stage supplementary '%s': %w", uploadName, tempErr)
-			}
-
-			uploadErr := s.persistence.SubmodelRepository.UploadFileAttachment(location.SubmodelID, location.IDShortPath, tempFile, uploadName)
-			closeAndRemoveTempFile(tempFile)
+			uploadErr := s.persistence.SubmodelRepository.UploadFileAttachmentReader(location.SubmodelID, location.IDShortPath, bytes.NewReader(suppBytes), uploadName)
 			if uploadErr != nil {
 				return fmt.Errorf(
 					"AASENV-UPLDSUPPL-UPLOAD failed to upload supplementary '%s' for submodel '%s' at path '%s': %w",
@@ -846,13 +825,7 @@ func (s *uploadAPIService) storeAASXThumbnail(ctx context.Context, packageReader
 			thumbnailName = "thumbnail.bin"
 		}
 
-		tempFile, tempErr := createTempFileForUpload(thumbnailName, thumbnailBytes)
-		if tempErr != nil {
-			return fmt.Errorf("AASENV-UPLDTHUMB-CREATETEMP failed to stage thumbnail for AAS '%s': %w", aas.ID(), tempErr)
-		}
-
-		uploadErr := s.persistence.AASRepository.PutThumbnailByAASID(ctx, aas.ID(), thumbnailName, tempFile)
-		closeAndRemoveTempFile(tempFile)
+		uploadErr := s.persistence.AASRepository.PutThumbnailByAASIDReader(ctx, aas.ID(), thumbnailName, bytes.NewReader(thumbnailBytes))
 		if uploadErr != nil {
 			return fmt.Errorf("AASENV-UPLDTHUMB-UPLOAD failed to store thumbnail for AAS '%s': %w", aas.ID(), uploadErr)
 		}
@@ -1106,38 +1079,6 @@ func normalizePartURI(uri *url.URL) string {
 	return path.Clean(uriPath)
 }
 
-func createTempFileForUpload(fileName string, content []byte) (*os.File, error) {
-	baseName := filepath.Base(strings.TrimSpace(fileName))
-	if baseName == "." || baseName == "/" || baseName == "" {
-		baseName = "supplementary.bin"
-	}
-
-	tempFile, err := os.CreateTemp("", baseName+".*")
-	if err != nil {
-		return nil, err
-	}
-	if _, err = tempFile.Write(content); err != nil {
-		closeAndRemoveTempFile(tempFile)
-		return nil, err
-	}
-	if _, err = tempFile.Seek(0, 0); err != nil {
-		closeAndRemoveTempFile(tempFile)
-		return nil, err
-	}
-	return tempFile, nil
-}
-
-func closeAndRemoveTempFile(tempFile *os.File) {
-	if tempFile == nil {
-		return
-	}
-
-	tempFileName := tempFile.Name()
-	_ = tempFile.Close()
-	// #nosec G703 -- path comes from os.CreateTemp/commonmodel.ReadFormFileToTempFile and is not user-controlled traversal.
-	_ = os.Remove(tempFileName)
-}
-
 func sanitizeUploadLogValue(value string) string {
 	sanitized := strings.ReplaceAll(value, "\r", "")
 	sanitized = strings.ReplaceAll(sanitized, "\n", "")
@@ -1151,34 +1092,18 @@ func newUploadErrorResponse(status int, step string, err error) (commonmodel.Imp
 	return common.NewErrorResponse(err, status, uploadComponent, uploadOperation, step), nil
 }
 
-func openUploadTempFile(file *os.File) (*os.File, error) {
-	if file == nil {
-		return nil, errors.New("upload file is nil")
-	}
-
-	uploadPath := filepath.Clean(file.Name())
-	// #nosec G304,G703 -- path is from server-generated temporary file and normalized.
-	opened, err := os.Open(uploadPath)
-	if err != nil {
+func readUploadSignature(file io.ReadSeeker) ([]byte, error) {
+	if _, err := file.Seek(0, 0); err != nil {
 		return nil, err
 	}
-
-	return opened, nil
-}
-
-func readUploadSignature(file *os.File) ([]byte, error) {
-	fileReader, err := openUploadTempFile(file)
-	if err != nil {
-		return nil, err
-	}
-	defer func() {
-		_ = fileReader.Close()
-	}()
 
 	buffer := make([]byte, 1024)
-	readCount, readErr := fileReader.Read(buffer)
+	readCount, readErr := file.Read(buffer)
 	if readErr != nil && !errors.Is(readErr, io.EOF) {
 		return nil, readErr
+	}
+	if _, err := file.Seek(0, 0); err != nil {
+		return nil, err
 	}
 
 	return buffer[:readCount], nil

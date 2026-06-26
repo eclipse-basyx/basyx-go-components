@@ -28,6 +28,7 @@ package aasenvironment
 import (
 	"context"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -44,7 +45,7 @@ type mockUploadService struct {
 	calls            []string
 }
 
-func (m *mockUploadService) HandleUpload(_ context.Context, fileName string, _ string, _ *os.File) (commonmodel.ImplResponse, error) {
+func (m *mockUploadService) HandleUpload(_ context.Context, fileName string, _ string, _ io.ReadSeeker) (commonmodel.ImplResponse, error) {
 	m.calls = append(m.calls, fileName)
 	status := m.statusByFileName[fileName]
 	if status == 0 {

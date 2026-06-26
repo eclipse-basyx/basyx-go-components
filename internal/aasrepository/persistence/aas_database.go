@@ -32,6 +32,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"io"
 	"os"
 	"strconv"
 	"strings"
@@ -1416,6 +1417,11 @@ func (s *AssetAdministrationShellDatabase) GetThumbnailByAASID(ctx context.Conte
 
 // PutThumbnailByAASID uploads or replaces the thumbnail and checks ABAC visibility.
 func (s *AssetAdministrationShellDatabase) PutThumbnailByAASID(ctx context.Context, aasIdentifier string, fileName string, file *os.File) error {
+	return s.PutThumbnailByAASIDReader(ctx, aasIdentifier, fileName, file)
+}
+
+// PutThumbnailByAASIDReader uploads or replaces the thumbnail and checks ABAC visibility.
+func (s *AssetAdministrationShellDatabase) PutThumbnailByAASIDReader(ctx context.Context, aasIdentifier string, fileName string, file io.ReadSeeker) error {
 	tx, cleanup, err := common.StartTransaction(s.db)
 	if err != nil {
 		return common.NewInternalServerError("AASREPO-PUTTHUMBNAIL-STARTTX " + err.Error())
@@ -1476,7 +1482,7 @@ func (s *AssetAdministrationShellDatabase) PutThumbnailByAASID(ctx context.Conte
 		return common.NewInternalServerError("AASREPO-PUTTHUMBNAIL-NEWHANDLER " + err.Error())
 	}
 
-	if uploadErr := thumbnailHandler.uploadThumbnailByAASIDInTransaction(tx, aasIdentifier, fileName, file); uploadErr != nil {
+	if uploadErr := thumbnailHandler.uploadThumbnailByAASIDReaderInTransaction(tx, aasIdentifier, fileName, file); uploadErr != nil {
 		return uploadErr
 	}
 

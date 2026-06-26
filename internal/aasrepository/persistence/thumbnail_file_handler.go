@@ -157,13 +157,18 @@ func (h *PostgreSQLThumbnailFileHandler) DownloadThumbnailByAASID(aasIdentifier 
 // UploadThumbnailByAASID uploads thumbnail content for an AAS and persists metadata.
 // nolint:revive // cyclomatic complexity of 33
 func (h *PostgreSQLThumbnailFileHandler) UploadThumbnailByAASID(aasIdentifier string, fileName string, file *os.File) error {
+	return h.UploadThumbnailByAASIDReader(aasIdentifier, fileName, file)
+}
+
+// UploadThumbnailByAASIDReader uploads thumbnail content for an AAS from a seekable reader and persists metadata.
+func (h *PostgreSQLThumbnailFileHandler) UploadThumbnailByAASIDReader(aasIdentifier string, fileName string, file io.ReadSeeker) error {
 	tx, cleanup, err := common.StartTransaction(h.db)
 	if err != nil {
 		return common.NewInternalServerError("AASREPO-PUTTHUMBNAIL-STARTTX " + err.Error())
 	}
 	defer cleanup(&err)
 
-	err = h.uploadThumbnailByAASIDInTransaction(tx, aasIdentifier, fileName, file)
+	err = h.uploadThumbnailByAASIDReaderInTransaction(tx, aasIdentifier, fileName, file)
 	if err != nil {
 		return err
 	}
@@ -177,7 +182,7 @@ func (h *PostgreSQLThumbnailFileHandler) UploadThumbnailByAASID(aasIdentifier st
 }
 
 // nolint:revive // cyclomatic complexity of 33
-func (h *PostgreSQLThumbnailFileHandler) uploadThumbnailByAASIDInTransaction(tx *sql.Tx, aasIdentifier string, fileName string, file *os.File) error {
+func (h *PostgreSQLThumbnailFileHandler) uploadThumbnailByAASIDReaderInTransaction(tx *sql.Tx, aasIdentifier string, fileName string, file io.ReadSeeker) error {
 	aasDBID, err := persistenceutils.GetAssetAdministrationShellDatabaseID(tx, aasIdentifier)
 	if err != nil {
 		if err == sql.ErrNoRows {

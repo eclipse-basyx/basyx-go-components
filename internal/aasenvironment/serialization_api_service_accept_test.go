@@ -26,8 +26,12 @@
 package aasenvironment
 
 import (
+	"bytes"
+	"os"
+	"path/filepath"
 	"testing"
 
+	aasx "github.com/aas-core-works/aas-package3-golang"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/stretchr/testify/require"
 )
@@ -94,4 +98,36 @@ func TestNegotiateSerializationContentTypeReturnsBadRequestForUnsupportedType(t 
 	require.Error(t, err)
 	require.True(t, common.IsErrBadRequest(err))
 	require.Empty(t, contentType)
+}
+
+func TestSerializeEnvironmentToAASXPackageDoesNotRequireWritableTempDirectory(t *testing.T) {
+	tempRoot := t.TempDir()
+	noWriteTemp := filepath.Join(tempRoot, "no-write")
+	require.NoError(t, os.Mkdir(noWriteTemp, 0o500))
+	t.Cleanup(func() {
+		// #nosec G302 -- test cleanup restores owner access on a temporary directory created by this test.
+		_ = os.Chmod(noWriteTemp, 0o700)
+	})
+	t.Setenv("TMPDIR", noWriteTemp)
+
+	payload, err := serializeEnvironmentToAASXPackage(
+		[]byte(`{"assetAdministrationShells":[],"submodels":[],"conceptDescriptions":[]}`),
+		"application/json",
+		serializationAASXJSONSpecURI,
+		nil,
+		nil,
+	)
+	require.NoError(t, err)
+	require.NotEmpty(t, payload)
+
+	packageReader, err := aasx.NewPackaging().OpenReadFromStream(bytes.NewReader(payload))
+	require.NoError(t, err)
+	defer func() {
+		_ = packageReader.Close()
+	}()
+
+	specs, err := packageReader.Specs()
+	require.NoError(t, err)
+	require.Len(t, specs, 1)
+	require.Equal(t, serializationAASXJSONSpecURI, normalizePartURI(specs[0].URI))
 }

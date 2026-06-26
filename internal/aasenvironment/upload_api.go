@@ -26,12 +26,13 @@
 package aasenvironment
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"mime/multipart"
 	"net/http"
-	"os"
 	"strings"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
@@ -54,7 +55,7 @@ func RegisterUploadAPI(r chi.Router, service UploadService, maxUploadSizeBytes i
 
 // UploadService defines upload business logic without HTTP dependencies.
 type UploadService interface {
-	HandleUpload(ctx context.Context, fileName string, contentType string, file *os.File) (commonmodel.ImplResponse, error)
+	HandleUpload(ctx context.Context, fileName string, contentType string, file io.ReadSeeker) (commonmodel.ImplResponse, error)
 }
 
 type uploadAPI struct {
@@ -65,7 +66,7 @@ type uploadAPI struct {
 func (a *uploadAPI) HandleUpload(w http.ResponseWriter, r *http.Request) {
 	r.Body = http.MaxBytesReader(w, r.Body, a.maxUploadSizeBytes)
 
-	if err := r.ParseMultipartForm(32 << 20); err != nil {
+	if err := r.ParseMultipartForm(a.maxUploadSizeBytes); err != nil {
 		var maxBytesError *http.MaxBytesError
 		if errors.As(err, &maxBytesError) {
 			writeUploadError(
@@ -100,16 +101,13 @@ func (a *uploadAPI) HandleUpload(w http.ResponseWriter, r *http.Request) {
 	}
 	fileName = sanitizeUploadFileName(fileName)
 
-	file, err := commonmodel.ReadFileHeaderToTempFile(fileHeader)
+	fileContent, err := readMultipartFileContent(fileHeader, a.maxUploadSizeBytes)
 	if err != nil {
 		writeUploadError(w, http.StatusBadRequest, err, "AASENV-UPLOAD-READFILE")
 		return
 	}
-	defer func() {
-		closeAndRemoveTempFile(file)
-	}()
 
-	result, err := a.service.HandleUpload(r.Context(), fileName, contentType, file)
+	result, err := a.service.HandleUpload(r.Context(), fileName, contentType, bytes.NewReader(fileContent))
 	if err != nil {
 		writeUploadError(w, http.StatusInternalServerError, err, "AASENV-UPLOAD-HANDLER")
 		return
@@ -118,6 +116,26 @@ func (a *uploadAPI) HandleUpload(w http.ResponseWriter, r *http.Request) {
 	if encErr := commonmodel.EncodeJSONResponse(result.Body, &result.Code, w); encErr != nil {
 		writeUploadError(w, http.StatusInternalServerError, encErr, "AASENV-UPLOAD-ENCODERESPONSE")
 	}
+}
+
+func readMultipartFileContent(fileHeader *multipart.FileHeader, maxSizeBytes int64) ([]byte, error) {
+	formFile, err := fileHeader.Open()
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		_ = formFile.Close()
+	}()
+
+	content, err := io.ReadAll(io.LimitReader(formFile, maxSizeBytes+1))
+	if err != nil {
+		return nil, err
+	}
+	if int64(len(content)) > maxSizeBytes {
+		return nil, fmt.Errorf("uploaded file exceeds upload limit of %d bytes", maxSizeBytes)
+	}
+
+	return content, nil
 }
 
 func writeUploadError(w http.ResponseWriter, status int, err error, info string) {

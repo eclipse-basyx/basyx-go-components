@@ -34,7 +34,6 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"path/filepath"
 	"strings"
 
 	"github.com/FriedJannik/aas-go-sdk/types"
@@ -344,6 +343,11 @@ func (p PostgreSQLFileHandler) GetInsertQueryPart(_ *sql.Tx, id int, element typ
 //
 //nolint:revive // cyclomatic complexity is acceptable for this function as the SQL process is complex and requires multiple steps, refactoring would not improve readability
 func (p PostgreSQLFileHandler) UploadFileAttachment(submodelID string, idShortPath string, file *os.File, fileName string) error {
+	return p.UploadFileAttachmentReader(submodelID, idShortPath, file, fileName)
+}
+
+// UploadFileAttachmentReader uploads attachment content from a seekable reader.
+func (p PostgreSQLFileHandler) UploadFileAttachmentReader(submodelID string, idShortPath string, file io.ReadSeeker, fileName string) error {
 	tx, err := p.db.Begin()
 	if err != nil {
 		return fmt.Errorf("failed to begin transaction: %w", err)
@@ -355,7 +359,7 @@ func (p PostgreSQLFileHandler) UploadFileAttachment(submodelID string, idShortPa
 		}
 	}()
 
-	if err := p.UploadFileAttachmentTx(tx, submodelID, idShortPath, file, fileName); err != nil {
+	if err := p.UploadFileAttachmentReaderTx(tx, submodelID, idShortPath, file, fileName); err != nil {
 		return err
 	}
 	if err := tx.Commit(); err != nil {
@@ -367,21 +371,22 @@ func (p PostgreSQLFileHandler) UploadFileAttachment(submodelID string, idShortPa
 
 // UploadFileAttachmentTx uploads attachment content using the provided transaction.
 func (p PostgreSQLFileHandler) UploadFileAttachmentTx(tx *sql.Tx, submodelID string, idShortPath string, file *os.File, fileName string) error {
+	return p.UploadFileAttachmentReaderTx(tx, submodelID, idShortPath, file, fileName)
+}
+
+// UploadFileAttachmentReaderTx uploads attachment content from a seekable reader using the provided transaction.
+func (p PostgreSQLFileHandler) UploadFileAttachmentReaderTx(tx *sql.Tx, submodelID string, idShortPath string, file io.ReadSeeker, fileName string) error {
 	dialect := goqu.Dialect("postgres")
-	reopenedFile, err := reopenUploadedFile(file)
-	if err != nil {
-		return err
+	if file == nil {
+		return common.NewErrBadRequest("SMREPO-UPLOADATTACHMENT-MISSINGFILE file payload is required")
 	}
-	defer func() {
-		_ = reopenedFile.Close()
-	}()
 
 	metadata, err := readFileElementUploadMetadata(tx, dialect, submodelID, idShortPath)
 	if err != nil {
 		return err
 	}
 
-	resolvedFileName, resolvedContentType, err := resolveUploadFileMetadata(reopenedFile, fileName, metadata)
+	resolvedFileName, resolvedContentType, err := resolveUploadFileMetadata(file, fileName, metadata)
 	if err != nil {
 		return err
 	}
@@ -397,7 +402,7 @@ func (p PostgreSQLFileHandler) UploadFileAttachmentTx(tx *sql.Tx, submodelID str
 		}
 	}
 
-	newOID, err := createAndWriteLargeObject(tx, reopenedFile)
+	newOID, err := createAndWriteLargeObject(tx, file)
 	if err != nil {
 		return err
 	}
@@ -411,16 +416,6 @@ type fileElementUploadMetadata struct {
 	elementID           int64
 	existingContentType sql.NullString
 	existingFileName    sql.NullString
-}
-
-func reopenUploadedFile(file *os.File) (*os.File, error) {
-	filePath := filepath.Clean(file.Name())
-	// #nosec G703 -- path comes from server-created temporary file and is normalized with filepath.Clean
-	reopenedFile, err := os.Open(filePath)
-	if err != nil {
-		return nil, fmt.Errorf("failed to reopen file: %w", err)
-	}
-	return reopenedFile, nil
 }
 
 func readFileElementUploadMetadata(tx *sql.Tx, dialect goqu.DialectWrapper, submodelID string, idShortPath string) (fileElementUploadMetadata, error) {
@@ -455,7 +450,7 @@ func readFileElementUploadMetadata(tx *sql.Tx, dialect goqu.DialectWrapper, subm
 	return metadata, nil
 }
 
-func resolveUploadFileMetadata(file *os.File, fileName string, metadata fileElementUploadMetadata) (string, string, error) {
+func resolveUploadFileMetadata(file io.ReadSeeker, fileName string, metadata fileElementUploadMetadata) (string, string, error) {
 	detectedContentType, err := detectContentType(file)
 	if err != nil {
 		return "", "", err
@@ -477,7 +472,7 @@ func resolveUploadFileMetadata(file *os.File, fileName string, metadata fileElem
 	return resolvedFileName, resolvedContentType, nil
 }
 
-func detectContentType(file *os.File) (string, error) {
+func detectContentType(file io.Reader) (string, error) {
 	contentTypeBuffer := make([]byte, 512)
 	n, err := file.Read(contentTypeBuffer)
 	if err != nil && err != io.EOF {
@@ -513,7 +508,7 @@ func unlinkLargeObject(tx *sql.Tx, oid int64) error {
 	return nil
 }
 
-func createAndWriteLargeObject(tx *sql.Tx, file *os.File) (int64, error) {
+func createAndWriteLargeObject(tx *sql.Tx, file io.Reader) (int64, error) {
 	var newOID int64
 	if err := tx.QueryRow(`SELECT lo_create(0)`).Scan(&newOID); err != nil {
 		return 0, fmt.Errorf("failed to create large object: %w", err)
@@ -529,7 +524,7 @@ func createAndWriteLargeObject(tx *sql.Tx, file *os.File) (int64, error) {
 	return newOID, nil
 }
 
-func writeLargeObject(tx *sql.Tx, file *os.File, loFD int) error {
+func writeLargeObject(tx *sql.Tx, file io.Reader, loFD int) error {
 	buffer := make([]byte, 8192)
 	for {
 		n, readErr := file.Read(buffer)
