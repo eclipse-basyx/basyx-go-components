@@ -166,9 +166,7 @@ func (s *inMemoryReadWriteSeeker) Seek(offset int64, whence int) (int64, error) 
 }
 
 func (s *inMemoryReadWriteSeeker) Bytes() []byte {
-	result := make([]byte, len(s.content))
-	copy(result, s.content)
-	return result
+	return s.content
 }
 
 // SerializationFileDownload defines a binary payload response for serialization downloads.

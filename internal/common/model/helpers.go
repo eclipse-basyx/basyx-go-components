@@ -41,7 +41,6 @@ import (
 	"errors"
 	"io"
 	"mime"
-	"mime/multipart"
 	"net/http"
 	"net/url"
 	"os"
@@ -194,79 +193,6 @@ func EncodeJSONResponse(i interface{}, status *int, w http.ResponseWriter) error
 	}
 
 	return nil
-}
-
-// ReadFormFileToTempFile reads file data from a request form and writes it to a temporary file
-func ReadFormFileToTempFile(r *http.Request, key string) (*os.File, error) {
-	formFile, fileHeader, err := r.FormFile(key)
-	if err != nil {
-		return nil, err
-	}
-	defer func() {
-		_ = formFile.Close()
-	}()
-
-	return readFileHeaderToTempFile(fileHeader)
-}
-
-// ReadFileHeaderToTempFile reads multipart.FileHeader and writes it to a temporary file.
-func ReadFileHeaderToTempFile(fileHeader *multipart.FileHeader) (*os.File, error) {
-	return readFileHeaderToTempFile(fileHeader)
-}
-
-// ReadFormFilesToTempFiles reads files array data from a request form and writes it to a temporary files
-func ReadFormFilesToTempFiles(r *http.Request, key string) ([]*os.File, error) {
-	if err := r.ParseMultipartForm(32 << 20); err != nil {
-		return nil, err
-	}
-
-	files := make([]*os.File, 0, len(r.MultipartForm.File[key]))
-
-	for _, fileHeader := range r.MultipartForm.File[key] {
-		file, err := readFileHeaderToTempFile(fileHeader)
-		if err != nil {
-			return nil, err
-		}
-
-		files = append(files, file)
-	}
-
-	return files, nil
-}
-
-// readFileHeaderToTempFile reads multipart.FileHeader and writes it to a temporary file
-func readFileHeaderToTempFile(fileHeader *multipart.FileHeader) (*os.File, error) {
-	formFile, err := fileHeader.Open()
-	if err != nil {
-		return nil, err
-	}
-
-	defer func() {
-		_ = formFile.Close()
-	}()
-
-	safeFileName := filepath.Base(strings.TrimSpace(fileHeader.Filename))
-	if safeFileName == "" || safeFileName == "." || safeFileName == "/" {
-		safeFileName = "upload.bin"
-	}
-
-	// Use .* as suffix, because the asterisk is a placeholder for the random value,
-	// and the period allows consumers of this file to remove the suffix to obtain the original file name
-	file, err := os.CreateTemp("", safeFileName+".*")
-	if err != nil {
-		return nil, err
-	}
-
-	defer func() {
-		_ = file.Close()
-	}()
-
-	_, err = io.Copy(file, formFile)
-	if err != nil {
-		return nil, err
-	}
-
-	return file, nil
 }
 
 // nolint:unused
