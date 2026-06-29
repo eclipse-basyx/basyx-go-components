@@ -553,7 +553,7 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodels(
 		}
 	}
 
-	sms, nextCursor, err := s.submodelBackend.GetSubmodels(ctx, limit, decodedCursor, idShort, decodedSemanticID, createdFrom, updatedFrom)
+	sms, nextCursor, err := s.submodelBackend.GetSubmodelsByListFilters(ctx, limit, decodedCursor, idShort, decodedSemanticID, createdFrom, updatedFrom)
 	if err != nil {
 		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "GetSubmodels"), nil
 	}
@@ -685,7 +685,7 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelsRecentChanges(
 		return newAPIErrorResponse(err, http.StatusBadRequest, operation, "BadRequest"), nil
 	}
 
-	submodels, nextCursor, err := s.submodelBackend.GetSubmodels(ctx, normalizedLimit, decodedCursor, idShort, decodedSemanticID, createdFrom, updatedFrom)
+	submodels, nextCursor, err := s.submodelBackend.GetSubmodelsByListFilters(ctx, normalizedLimit, decodedCursor, idShort, decodedSemanticID, createdFrom, updatedFrom)
 	if err != nil {
 		if common.IsErrBadRequest(err) {
 			return newAPIErrorResponse(err, http.StatusBadRequest, operation, "BadRequest"), nil
@@ -947,7 +947,7 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelsMetadata(
 		}
 	}
 
-	submodels, nextCursor, err := s.submodelBackend.GetSubmodels(ctx, limit, decodedCursor, idShort, decodedSemanticID, time.Time{}, time.Time{})
+	submodels, nextCursor, err := s.submodelBackend.GetSubmodelsByListFilters(ctx, limit, decodedCursor, idShort, decodedSemanticID, time.Time{}, time.Time{})
 	if err != nil {
 		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "GetSubmodels"), nil
 	}
@@ -1008,7 +1008,7 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelsValueOnly(ctx context.C
 		}
 	}
 
-	sms, nextCursor, err := s.submodelBackend.GetSubmodels(ctx, limit, decodedCursor, idShort, decodedSemanticID, time.Time{}, time.Time{})
+	sms, nextCursor, err := s.submodelBackend.GetSubmodelsByListFilters(ctx, limit, decodedCursor, idShort, decodedSemanticID, time.Time{}, time.Time{})
 	if err != nil {
 		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "GetSubmodels"), nil
 	}

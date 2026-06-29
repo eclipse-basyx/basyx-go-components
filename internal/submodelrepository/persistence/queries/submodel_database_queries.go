@@ -118,6 +118,7 @@ func BuildInsertSubmodelSemanticIDReferencePayloadSQL(submodelDBID int64, semant
 // SelectSubmodelDataset builds the base submodel select dataset.
 func SelectSubmodelDataset(
 	submodelIdentifier *string,
+	idShort *string,
 	limit *int32,
 	cursor *string,
 	createdFrom time.Time,
@@ -151,6 +152,10 @@ func SelectSubmodelDataset(
 	if submodelIdentifier != nil {
 		selectDS = selectDS.Where(goqu.Ex{"submodel.submodel_identifier": *submodelIdentifier}).Limit(1)
 		return selectDS, nil
+	}
+
+	if idShort != nil && *idShort != "" {
+		selectDS = selectDS.Where(goqu.Ex{"submodel.id_short": *idShort})
 	}
 
 	if cursor != nil && *cursor != "" {

@@ -33,8 +33,8 @@ import (
 )
 
 const (
-	profileSSP001 = "https://basyx.org/aas/API/3/1/AssetAdministrationShellRegistryServiceSpecification/SSP-001"
-	profileSSP003 = "https://admin-shell.io/aas/API/3/1/AssetAdministrationShellRegistryServiceSpecification/SSP-003"
+	profileSSP001 = "https://basyx.org/aas/API/3/2/AssetAdministrationShellRegistryServiceSpecification/SSP-001"
+	profileSSP003 = "https://admin-shell.io/aas/API/3/2/AssetAdministrationShellRegistryServiceSpecification/SSP-003"
 )
 
 // DescriptionService provides the combined service description for the Digital Twin Registry.

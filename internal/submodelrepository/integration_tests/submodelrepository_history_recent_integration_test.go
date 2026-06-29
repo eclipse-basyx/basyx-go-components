@@ -43,7 +43,9 @@ import (
 
 func TestSubmodelRepositoryHistoryTracksSubmodelElementChangesAndRecentDeletes(t *testing.T) {
 	baseURL := "http://localhost:6004"
-	submodelID := fmt.Sprintf("urn:example:sm:history:%d", time.Now().UnixNano())
+	uniqueSuffix := time.Now().UnixNano()
+	submodelID := fmt.Sprintf("urn:example:sm:history:%d", uniqueSuffix)
+	submodelIDShort := fmt.Sprintf("HistorySubmodel%d", uniqueSuffix)
 	encodedSubmodelID := base64.RawURLEncoding.EncodeToString([]byte(submodelID))
 	semanticID := "urn:example:semantic:history"
 	supplementalSemanticID := "urn:example:semantic:history:supplemental"
@@ -62,7 +64,7 @@ func TestSubmodelRepositoryHistoryTracksSubmodelElementChangesAndRecentDeletes(t
 
 	createPayload := map[string]any{
 		"id":        submodelID,
-		"idShort":   "HistorySubmodel",
+		"idShort":   submodelIDShort,
 		"kind":      "Instance",
 		"modelType": "Submodel",
 		"administration": map[string]any{
@@ -96,6 +98,11 @@ func TestSubmodelRepositoryHistoryTracksSubmodelElementChangesAndRecentDeletes(t
 	status, body, err := requestJSON(http.MethodPost, baseURL+"/submodels", createPayload)
 	require.NoError(t, err)
 	require.Equal(t, http.StatusCreated, status, "response=%s", string(body))
+
+	status, body, err = requestJSON(http.MethodGet, baseURL+"/submodels?limit=10&idShort="+url.QueryEscape(submodelIDShort), nil)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusOK, status, "response=%s", string(body))
+	requireSubmodelListContainsID(t, decodeMap(t, body), submodelIDShort, submodelID)
 
 	time.Sleep(30 * time.Millisecond)
 	v1Date := time.Now().UTC()
@@ -186,6 +193,21 @@ func TestSubmodelRepositoryHistoryTracksSubmodelElementChangesAndRecentDeletes(t
 	require.Equal(t, http.StatusOK, status, "response=%s", string(body))
 	recent = decodeMap(t, body)
 	requireNoRecentChangesForIDSubmodel(t, recent, submodelID)
+}
+
+func requireSubmodelListContainsID(t *testing.T, payload map[string]any, idShort string, id string) {
+	t.Helper()
+	result, ok := payload["result"].([]any)
+	require.True(t, ok, "submodel list result must be an array")
+	for _, entry := range result {
+		item, ok := entry.(map[string]any)
+		if !ok || item["idShort"] != idShort {
+			continue
+		}
+		require.Equal(t, id, item["id"])
+		return
+	}
+	t.Fatalf("expected submodel idShort=%s id=%s in payload: %#v", idShort, id, payload)
 }
 
 func requireSubmodelHistoryPayloadTypes(t *testing.T, id string, expected []string) {

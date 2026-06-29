@@ -44,10 +44,10 @@ func (s *DescriptionAPIAPIService) GetSelfDescription(ctx context.Context) (mode
 
 	return model.Response(200, model.ServiceDescription{
 		Profiles: []string{
-			"https://admin-shell.io/aas/API/3/1/AssetAdministrationShellRegistryServiceSpecification/SSP-001",
-			"https://admin-shell.io/aas/API/3/1/AssetAdministrationShellRegistryServiceSpecification/SSP-003",
-			"https://admin-shell.io/aas/API/3/1/AssetAdministrationShellRegistryServiceSpecification/SSP-004",
-			"https://basyx.org/aas/API/3/1/AssetAdministrationShellRegistryServiceSpecification/SSP-001",
+			"https://admin-shell.io/aas/API/3/2/AssetAdministrationShellRegistryServiceSpecification/SSP-001",
+			"https://admin-shell.io/aas/API/3/2/AssetAdministrationShellRegistryServiceSpecification/SSP-003",
+			"https://admin-shell.io/aas/API/3/2/AssetAdministrationShellRegistryServiceSpecification/SSP-004",
+			"https://basyx.org/aas/API/3/2/AssetAdministrationShellRegistryServiceSpecification/SSP-001",
 		},
 	}), nil
 }

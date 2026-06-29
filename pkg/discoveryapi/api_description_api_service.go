@@ -32,8 +32,8 @@ func NewDescriptionAPIAPIService() *DescriptionAPIAPIService {
 func (s *DescriptionAPIAPIService) GetDescription(ctx context.Context) (model.ImplResponse, error) {
 	return model.Response(200, model.ServiceDescription{
 		Profiles: []string{
-			"https://admin-shell.io/aas/API/3/1/DiscoveryServiceSpecification/SSP-001",
-			"https://basyx.org/aas/API/3/1/DiscoveryServiceSpecification/SSP-001",
+			"https://admin-shell.io/aas/API/3/2/DiscoveryServiceSpecification/SSP-001",
+			"https://basyx.org/aas/API/3/2/DiscoveryServiceSpecification/SSP-001",
 		},
 	}), nil
 }

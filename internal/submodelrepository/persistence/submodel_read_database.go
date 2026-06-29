@@ -93,12 +93,17 @@ func (s *SubmodelDatabase) GetSubmodelByID(ctx context.Context, submodelIdentifi
 
 // GetSubmodels retrieves submodels and applies optional ABAC formula filters from ctx.
 func (s *SubmodelDatabase) GetSubmodels(ctx context.Context, limit int32, cursor string, submodelIdentifier string, semanticID string, createdFrom time.Time, updatedFrom time.Time) ([]types.ISubmodel, string, error) {
-	return s.getSubmodelsWithOptionalSemanticIDFilter(ctx, limit, cursor, submodelIdentifier, semanticID, createdFrom, updatedFrom)
+	return s.getSubmodelsWithOptionalFilters(ctx, limit, cursor, submodelIdentifier, "", semanticID, createdFrom, updatedFrom)
+}
+
+// GetSubmodelsByListFilters retrieves submodels using public list filters.
+func (s *SubmodelDatabase) GetSubmodelsByListFilters(ctx context.Context, limit int32, cursor string, idShort string, semanticID string, createdFrom time.Time, updatedFrom time.Time) ([]types.ISubmodel, string, error) {
+	return s.getSubmodelsWithOptionalFilters(ctx, limit, cursor, "", idShort, semanticID, createdFrom, updatedFrom)
 }
 
 // GetSubmodelReferences retrieves references and applies optional ABAC formula filters from ctx.
-func (s *SubmodelDatabase) GetSubmodelReferences(ctx context.Context, limit int32, cursor string, submodelIdentifier string, semanticID string) ([]types.IReference, string, error) {
-	submodels, nextCursor, err := s.getSubmodelsWithOptionalSemanticIDFilter(ctx, limit, cursor, submodelIdentifier, semanticID, time.Time{}, time.Time{})
+func (s *SubmodelDatabase) GetSubmodelReferences(ctx context.Context, limit int32, cursor string, idShort string, semanticID string) ([]types.IReference, string, error) {
+	submodels, nextCursor, err := s.getSubmodelsWithOptionalFilters(ctx, limit, cursor, "", idShort, semanticID, time.Time{}, time.Time{})
 	if err != nil {
 		return nil, "", err
 	}
@@ -168,7 +173,7 @@ func (s *SubmodelDatabase) getSubmodelByIDInTransaction(ctx context.Context, tx 
 
 func (s *SubmodelDatabase) getSubmodelMetadataByIDInTransaction(ctx context.Context, tx *sql.Tx, submodelIdentifier string) (types.ISubmodel, error) {
 	limit := int32(1)
-	selectDS, err := submodelqueries.SelectSubmodelDataset(&submodelIdentifier, &limit, nil, time.Time{}, time.Time{}, nil)
+	selectDS, err := submodelqueries.SelectSubmodelDataset(&submodelIdentifier, nil, &limit, nil, time.Time{}, time.Time{}, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -243,7 +248,7 @@ func (s *SubmodelDatabase) QuerySubmodels(ctx context.Context, limit int32, curs
 }
 
 //nolint:revive // cyclomatic complexity is acceptable for this function due to query/filter orchestration in one flow
-func (s *SubmodelDatabase) getSubmodelsWithOptionalSemanticIDFilter(ctx context.Context, limit int32, cursor string, submodelIdentifier string, semanticID string, createdFrom time.Time, updatedFrom time.Time) ([]types.ISubmodel, string, error) {
+func (s *SubmodelDatabase) getSubmodelsWithOptionalFilters(ctx context.Context, limit int32, cursor string, submodelIdentifier string, idShort string, semanticID string, createdFrom time.Time, updatedFrom time.Time) ([]types.ISubmodel, string, error) {
 	var limitFilter *int32
 
 	if limit == 0 {
@@ -270,6 +275,10 @@ func (s *SubmodelDatabase) getSubmodelsWithOptionalSemanticIDFilter(ctx context.
 	if submodelIdentifier != "" {
 		submodelIdentifierFilter = &submodelIdentifier
 	}
+	var idShortFilter *string
+	if idShort != "" {
+		idShortFilter = &idShort
+	}
 	collector, collectorErr := grammar.NewResolvedFieldPathCollectorForRoot(grammar.CollectorRootSM)
 	if collectorErr != nil {
 		return nil, "", common.NewInternalServerError("SMREPO-GETSMS-BADCOLLECTOR " + collectorErr.Error())
@@ -289,7 +298,7 @@ func (s *SubmodelDatabase) getSubmodelsWithOptionalSemanticIDFilter(ctx context.
 		return nil, "", common.NewInternalServerError("SMREPO-GETSMS-MASKEXPR " + maskedExprErr.Error())
 	}
 
-	selectDS, err := submodelqueries.SelectSubmodelDataset(submodelIdentifierFilter, limitFilter, cursorFilter, createdFrom, updatedFrom, maskRuntime.Projections())
+	selectDS, err := submodelqueries.SelectSubmodelDataset(submodelIdentifierFilter, idShortFilter, limitFilter, cursorFilter, createdFrom, updatedFrom, maskRuntime.Projections())
 	if err != nil {
 		return nil, "", err
 	}
@@ -312,7 +321,7 @@ func (s *SubmodelDatabase) getSubmodelsWithOptionalSemanticIDFilter(ctx context.
 		return nil, "", common.NewInternalServerError("SMREPO-GETSMS-BUILDSQL " + err.Error())
 	}
 
-	var identifier, idShort, category, descriptionJsonString, displayNameJsonString, administrativeInformationJsonString, embeddedDataSpecificationJsonString, supplementalSemanticIDsJsonString, extensionsJsonString, qualifiersJsonString, semanticIDJSONString sql.NullString
+	var identifier, rawIDShort, category, descriptionJsonString, displayNameJsonString, administrativeInformationJsonString, embeddedDataSpecificationJsonString, supplementalSemanticIDsJsonString, extensionsJsonString, qualifiersJsonString, semanticIDJSONString sql.NullString
 	var kind sql.NullInt64
 
 	rows, err := s.db.Query(query, args...)
@@ -331,7 +340,7 @@ func (s *SubmodelDatabase) getSubmodelsWithOptionalSemanticIDFilter(ctx context.
 	submodels := make([]types.ISubmodel, 0)
 	nextCursor := ""
 	for rows.Next() {
-		if err := rows.Scan(&identifier, &idShort, &category, &kind, &descriptionJsonString, &displayNameJsonString, &administrativeInformationJsonString, &embeddedDataSpecificationJsonString, &supplementalSemanticIDsJsonString, &extensionsJsonString, &qualifiersJsonString, &semanticIDJSONString); err != nil {
+		if err := rows.Scan(&identifier, &rawIDShort, &category, &kind, &descriptionJsonString, &displayNameJsonString, &administrativeInformationJsonString, &embeddedDataSpecificationJsonString, &supplementalSemanticIDsJsonString, &extensionsJsonString, &qualifiersJsonString, &semanticIDJSONString); err != nil {
 			return nil, "", err
 		}
 
@@ -342,8 +351,8 @@ func (s *SubmodelDatabase) getSubmodelsWithOptionalSemanticIDFilter(ctx context.
 
 		var submodel types.ISubmodel
 		submodel = types.NewSubmodel(identifier.String)
-		if idShort.Valid {
-			idShortValue := idShort.String
+		if rawIDShort.Valid {
+			idShortValue := rawIDShort.String
 			submodel.SetIDShort(&idShortValue)
 		}
 		if category.Valid {
