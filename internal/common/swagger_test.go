@@ -42,20 +42,20 @@ func TestDetectPart2SchemaVersion(t *testing.T) {
 	}
 
 	fallback := detectPart2SchemaVersion([]byte("openapi: 3.0.3\ninfo:\n  title: x\n"))
-	if fallback != "V3.1.1" {
-		t.Fatalf("expected fallback V3.1.1, got %s", fallback)
+	if fallback != "V3.2.0" {
+		t.Fatalf("expected fallback V3.2.0, got %s", fallback)
 	}
 }
 
 func TestLocalizePart2SchemaReferences_RewritesRemoteAndRelativeRefs(t *testing.T) {
-	specRemote := []byte("openapi: 3.0.3\ninfo:\n  version: V3.1.1_SSP-001\npaths:\n  /x:\n    get:\n      responses:\n        '400':\n          $ref: 'https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.1.1#/components/responses/bad-request'\n")
+	specRemote := []byte("openapi: 3.0.3\ninfo:\n  version: V3.2.0\npaths:\n  /x:\n    get:\n      responses:\n        '400':\n          $ref: 'https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.2.0#/components/responses/bad-request'\n")
 	localizedRemote := localizePart2SchemaReferences(specRemote, "/api-docs/openapi.yaml")
 	localizedRemoteText := string(localizedRemote)
 	if strings.Contains(localizedRemoteText, "api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas") {
 		t.Fatal("expected remote references to be removed")
 	}
-	if !strings.Contains(localizedRemoteText, "/api-docs/part2-schemas/V3.1.1/openapi.yaml#/components/responses/bad-request") {
-		t.Fatal("expected local V3.1.1 part2 schema reference")
+	if !strings.Contains(localizedRemoteText, "/api-docs/part2-schemas/V3.2.0/openapi.yaml#/components/responses/bad-request") {
+		t.Fatal("expected local V3.2.0 part2 schema reference")
 	}
 
 	specRelative := []byte("openapi: 3.0.3\ninfo:\n  version: V3.2.0\npaths:\n  /x:\n    get:\n      responses:\n        '400':\n          $ref: '../Part2-API-Schemas/openapi.yaml#/components/responses/bad-request'\n")
@@ -69,6 +69,28 @@ func TestLocalizePart2SchemaReferences_RewritesRemoteAndRelativeRefs(t *testing.
 	}
 }
 
+func TestLocalizePart1SchemaReferences_RewritesRemoteAndRelativeRefs(t *testing.T) {
+	specRemote := []byte("openapi: 3.0.3\ninfo:\n  version: V3.2.0\ncomponents:\n  schemas:\n    Reference:\n      $ref: 'https://api.swaggerhub.com/domains/Plattform_i40/Part1-MetaModel-Schemas/V3.2.0#/components/schemas/Reference'\n")
+	localizedRemote := localizePart1SchemaReferences(specRemote, "/api-docs/openapi.yaml")
+	localizedRemoteText := string(localizedRemote)
+	if strings.Contains(localizedRemoteText, "api.swaggerhub.com/domains/Plattform_i40/Part1-MetaModel-Schemas") {
+		t.Fatal("expected remote Part1 references to be removed")
+	}
+	if !strings.Contains(localizedRemoteText, "/api-docs/part1-schemas/V3.2.0/openapi.yaml#/components/schemas/Reference") {
+		t.Fatal("expected local V3.2.0 part1 schema reference")
+	}
+
+	specRelative := []byte("openapi: 3.0.3\ninfo:\n  version: V3.2.0\ncomponents:\n  schemas:\n    Reference:\n      $ref: '../Part1-MetaModel-Schemas/openapi.yaml#/components/schemas/Reference'\n")
+	localizedRelative := localizePart1SchemaReferences(specRelative, "/api-docs/openapi.yaml")
+	localizedRelativeText := string(localizedRelative)
+	if strings.Contains(localizedRelativeText, "../Part1-MetaModel-Schemas/openapi.yaml") {
+		t.Fatal("expected relative Part1 references to be removed")
+	}
+	if !strings.Contains(localizedRelativeText, "/api-docs/part1-schemas/V3.2.0/openapi.yaml#/components/schemas/Reference") {
+		t.Fatal("expected local V3.2.0 part1 schema reference")
+	}
+}
+
 func TestAddSwaggerUIServesLocalPart2Schemas(t *testing.T) {
 	r := chi.NewRouter()
 	AddSwaggerUI(r, SwaggerUIConfig{
@@ -76,7 +98,7 @@ func TestAddSwaggerUIServesLocalPart2Schemas(t *testing.T) {
 		SpecURL:     "/api-docs/openapi.yaml",
 		UIPath:      "/swagger",
 		SpecPath:    "/api-docs/openapi.yaml",
-		SpecContent: []byte("openapi: 3.0.3\ninfo:\n  version: V3.1.1_SSP-001\npaths:\n  /x:\n    get:\n      responses:\n        '400':\n          $ref: 'https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.1.1#/components/responses/bad-request'\n"),
+		SpecContent: []byte("openapi: 3.0.3\ninfo:\n  version: V3.2.0\npaths:\n  /x:\n    get:\n      responses:\n        '400':\n          $ref: 'https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.2.0#/components/responses/bad-request'\n"),
 		BasePath:    "/",
 	})
 
@@ -86,14 +108,14 @@ func TestAddSwaggerUIServesLocalPart2Schemas(t *testing.T) {
 	if specRecorder.Code != http.StatusOK {
 		t.Fatalf("expected spec status 200, got %d", specRecorder.Code)
 	}
-	if !strings.Contains(specRecorder.Body.String(), "/api-docs/part2-schemas/V3.1.1/openapi.yaml#") {
+	if !strings.Contains(specRecorder.Body.String(), "/api-docs/part2-schemas/V3.2.0/openapi.yaml#") {
 		t.Fatal("expected spec to contain localized part2 schema path")
 	}
 	if !strings.Contains(specRecorder.Body.String(), "\n  /verify:\n") {
 		t.Fatal("expected spec to contain injected /verify endpoint")
 	}
 
-	schemaReq := httptest.NewRequest(http.MethodGet, "/api-docs/part2-schemas/V3.1.1/openapi.yaml", nil)
+	schemaReq := httptest.NewRequest(http.MethodGet, "/api-docs/part2-schemas/V3.2.0/openapi.yaml", nil)
 	schemaRecorder := httptest.NewRecorder()
 	r.ServeHTTP(schemaRecorder, schemaReq)
 	if schemaRecorder.Code != http.StatusOK {
@@ -101,6 +123,51 @@ func TestAddSwaggerUIServesLocalPart2Schemas(t *testing.T) {
 	}
 	if !strings.Contains(schemaRecorder.Body.String(), "openapi: 3.0.3") {
 		t.Fatal("expected schema response to contain OpenAPI content")
+	}
+}
+
+func TestAddSwaggerUIServesLocalPart1Schemas(t *testing.T) {
+	r := chi.NewRouter()
+	AddSwaggerUI(r, SwaggerUIConfig{
+		Title:       "test",
+		SpecURL:     "/api-docs/openapi.yaml",
+		UIPath:      "/swagger",
+		SpecPath:    "/api-docs/openapi.yaml",
+		SpecContent: []byte("openapi: 3.0.3\ninfo:\n  version: V3.2.0\npaths:\n  /x:\n    get:\n      responses:\n        '200':\n          description: ok\n          content:\n            application/json:\n              schema:\n                $ref: '../Part1-MetaModel-Schemas/openapi.yaml#/components/schemas/Reference'\n"),
+		BasePath:    "/",
+	})
+
+	specReq := httptest.NewRequest(http.MethodGet, "/api-docs/openapi.yaml", nil)
+	specRecorder := httptest.NewRecorder()
+	r.ServeHTTP(specRecorder, specReq)
+	if specRecorder.Code != http.StatusOK {
+		t.Fatalf("expected spec status 200, got %d", specRecorder.Code)
+	}
+	if !strings.Contains(specRecorder.Body.String(), "/api-docs/part1-schemas/V3.2.0/openapi.yaml#") {
+		t.Fatal("expected spec to contain localized part1 schema path")
+	}
+
+	part2Req := httptest.NewRequest(http.MethodGet, "/api-docs/part2-schemas/V3.2.0/openapi.yaml", nil)
+	part2Recorder := httptest.NewRecorder()
+	r.ServeHTTP(part2Recorder, part2Req)
+	if part2Recorder.Code != http.StatusOK {
+		t.Fatalf("expected part2 schema status 200, got %d", part2Recorder.Code)
+	}
+	if strings.Contains(part2Recorder.Body.String(), "../Part1-MetaModel-Schemas/openapi.yaml") {
+		t.Fatal("expected part2 schema response to localize Part1 references")
+	}
+	if !strings.Contains(part2Recorder.Body.String(), "/api-docs/part1-schemas/V3.2.0/openapi.yaml#") {
+		t.Fatal("expected part2 schema response to contain localized Part1 schema path")
+	}
+
+	part1Req := httptest.NewRequest(http.MethodGet, "/api-docs/part1-schemas/V3.2.0/openapi.yaml", nil)
+	part1Recorder := httptest.NewRecorder()
+	r.ServeHTTP(part1Recorder, part1Req)
+	if part1Recorder.Code != http.StatusOK {
+		t.Fatalf("expected part1 schema status 200, got %d", part1Recorder.Code)
+	}
+	if !strings.Contains(part1Recorder.Body.String(), "referredSemanticId") {
+		t.Fatal("expected part1 schema response to contain Reference fields")
 	}
 }
 
@@ -117,7 +184,7 @@ func TestAddSwaggerUIFromFSHonorsSwaggerEnabled(t *testing.T) {
 		},
 	}
 
-	err := AddSwaggerUIFromFS(r, part2SchemasFS, "swagger_part2_schemas/V3.1.1/openapi.yaml", "test", "/swagger", "/api-docs/openapi.yaml", cfg)
+	err := AddSwaggerUIFromFS(r, part2SchemasFS, "swagger_part2_schemas/V3.2.0/openapi.yaml", "test", "/swagger", "/api-docs/openapi.yaml", cfg)
 	if err != nil {
 		t.Fatalf("unexpected AddSwaggerUIFromFS error: %v", err)
 	}
@@ -160,7 +227,7 @@ func TestAddSwaggerUIFromFSDisablesAllDocumentationWhenABACManagementIsEnabled(t
 		},
 	}
 
-	err := AddSwaggerUIFromFS(r, part2SchemasFS, "swagger_part2_schemas/V3.1.1/openapi.yaml", "test", "/swagger", "/api-docs/openapi.yaml", cfg)
+	err := AddSwaggerUIFromFS(r, part2SchemasFS, "swagger_part2_schemas/V3.2.0/openapi.yaml", "test", "/swagger", "/api-docs/openapi.yaml", cfg)
 	if err != nil {
 		t.Fatalf("unexpected AddSwaggerUIFromFS error: %v", err)
 	}

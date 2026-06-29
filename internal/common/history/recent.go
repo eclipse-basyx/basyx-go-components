@@ -63,11 +63,12 @@ type restoreChainGroup struct {
 // RecentRows returns recent history rows ordered from newest to oldest.
 //
 // The cursor is the history_id returned by a previous call and, when present,
-// limits the scan to older rows. createdFrom and updatedFrom match either the
-// operation timestamp or the corresponding administration timestamp so callers
-// can use recent-change API filters without losing rows that lack administration
-// metadata. Returned rows include restored snapshots and a next cursor when an
-// additional page is available.
+// limits the scan to older rows. createdFrom and updatedFrom form one ORed
+// timestamp group and each value matches either the operation timestamp or the
+// corresponding administration timestamp so callers can use recent-change API
+// filters without losing rows that lack administration metadata. Returned rows
+// include restored snapshots and a next cursor when an additional page is
+// available.
 //
 // Parameters:
 //   - ctx: Request context used for database reads.
@@ -185,13 +186,24 @@ func RecentRowsForVisibleIdentifiables(
 	if cursorID > 0 {
 		query = query.Where(historyAlias.Col("history_id").Lt(cursorID))
 	}
-	if !createdFrom.IsZero() {
+	switch {
+	case !createdFrom.IsZero() && !updatedFrom.IsZero():
+		query = query.Where(goqu.Or(
+			goqu.Or(
+				historyAlias.Col("operation_time").Gte(createdFrom.UTC()),
+				historyAlias.Col("administration_created_at").Gte(createdFrom.UTC()),
+			),
+			goqu.Or(
+				historyAlias.Col("operation_time").Gte(updatedFrom.UTC()),
+				historyAlias.Col("administration_updated_at").Gte(updatedFrom.UTC()),
+			),
+		))
+	case !createdFrom.IsZero():
 		query = query.Where(goqu.Or(
 			historyAlias.Col("operation_time").Gte(createdFrom.UTC()),
 			historyAlias.Col("administration_created_at").Gte(createdFrom.UTC()),
 		))
-	}
-	if !updatedFrom.IsZero() {
+	case !updatedFrom.IsZero():
 		query = query.Where(goqu.Or(
 			historyAlias.Col("operation_time").Gte(updatedFrom.UTC()),
 			historyAlias.Col("administration_updated_at").Gte(updatedFrom.UTC()),

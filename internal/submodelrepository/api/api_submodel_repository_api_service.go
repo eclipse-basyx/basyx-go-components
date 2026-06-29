@@ -522,12 +522,14 @@ func getModelTypeLiteral(element types.ISubmodelElement) string {
 //   - error: Error if the operation fails
 func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodels(
 	ctx context.Context,
-	_ /*semanticID*/ string,
+	semanticID string,
 	idShort string,
 	limit int32,
 	cursor string,
 	level string,
 	_ /*extent*/ string,
+	createdFrom time.Time,
+	updatedFrom time.Time,
 ) (gen.ImplResponse, error) {
 	const operation = "GetAllSubmodels"
 
@@ -543,8 +545,16 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodels(
 	if !isLevelValid(level) {
 		return newAPIErrorResponse(errors.New("invalid level parameter"), http.StatusBadRequest, operation, "InvalidLevelParameter"), nil
 	}
+	decodedSemanticID := ""
+	if semanticID != "" {
+		var decodeErr error
+		decodedSemanticID, decodeErr = common.DecodeString(semanticID)
+		if decodeErr != nil {
+			return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "BadSemanticID"), nil
+		}
+	}
 
-	sms, nextCursor, err := s.submodelBackend.GetSubmodels(ctx, limit, decodedCursor, idShort)
+	sms, nextCursor, err := s.submodelBackend.GetSubmodels(ctx, limit, decodedCursor, idShort, decodedSemanticID, createdFrom, updatedFrom)
 	if err != nil {
 		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "GetSubmodels"), nil
 	}
@@ -647,16 +657,17 @@ func (s *SubmodelRepositoryAPIAPIService) GetSubmodelByID(
 	return gen.Response(200, jsonSubmodel), nil
 }
 
-// GetAllSubmodelRecentChanges returns changed Submodels.
-func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelRecentChanges(
+// GetAllSubmodelsRecentChanges returns changed Submodels.
+func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelsRecentChanges(
 	ctx context.Context,
 	semanticID string,
+	idShort string,
 	createdFrom time.Time,
 	updatedFrom time.Time,
 	limit int32,
 	cursor string,
 ) (gen.ImplResponse, error) {
-	const operation = "GetAllSubmodelRecentChanges"
+	const operation = "GetAllSubmodelsRecentChanges"
 
 	decodedCursor, decodeErr := common.DecodeString(cursor)
 	if decodeErr != nil {
@@ -673,16 +684,15 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelRecentChanges(
 	fetch := func(pageLimit int32, pageCursor string) ([]history.Row, string, error) {
 		return s.submodelBackend.GetSubmodelRecentChanges(ctx, pageLimit, pageCursor, createdFrom, updatedFrom)
 	}
-	var rows []history.Row
-	var nextCursor string
-	var err error
-	if semanticID == "" {
-		rows, nextCursor, err = fetch(limit, decodedCursor)
-	} else {
-		rows, nextCursor, err = history.FilterRecentRows(limit, decodedCursor, fetch, func(row history.Row) (bool, error) {
-			return matchesSubmodelRecentRowSemanticID(row, decodedSemanticID)
-		})
-	}
+	rows, nextCursor, err := history.FilterRecentRows(limit, decodedCursor, fetch, func(row history.Row) (bool, error) {
+		if row.Deleted {
+			return false, nil
+		}
+		if semanticID == "" && idShort == "" {
+			return true, nil
+		}
+		return matchesSubmodelRecentRowFilters(row, decodedSemanticID, idShort)
+	})
 	if err != nil {
 		if common.IsErrBadRequest(err) {
 			return newAPIErrorResponse(err, http.StatusBadRequest, operation, "BadRequest"), nil
@@ -692,18 +702,6 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelRecentChanges(
 
 	changes := make([]gen.SubmodelRecentChange, 0, len(rows))
 	for _, row := range rows {
-		if row.Deleted {
-			changes = append(changes, gen.SubmodelRecentChange{
-				RecentChange: gen.RecentChange{
-					Type:      row.ChangeType,
-					CreatedAt: row.CreatedAt,
-					UpdatedAt: row.UpdatedAt,
-				},
-				Id: row.Identifier,
-			})
-			continue
-		}
-
 		submodel, fromJSONErr := jsonization.SubmodelFromJsonable(row.Snapshot)
 		if fromJSONErr != nil {
 			return newAPIErrorResponse(fromJSONErr, http.StatusInternalServerError, operation, "FromJsonable"), nil
@@ -718,7 +716,6 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelRecentChanges(
 		}
 		changes = append(changes, gen.SubmodelRecentChange{
 			RecentChange: gen.RecentChange{
-				Type:      row.ChangeType,
 				CreatedAt: row.CreatedAt,
 				UpdatedAt: row.UpdatedAt,
 			},
@@ -728,19 +725,36 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelRecentChanges(
 		})
 	}
 
-	return gen.Response(http.StatusOK, gen.GetAllSubmodelRecentChangesResult{
+	return gen.Response(http.StatusOK, gen.GetAllSubmodelsRecentChangesResult{
 		PagingMetadata: gen.PagedResultPagingMetadata{Cursor: common.EncodeString(nextCursor)},
 		Result:         changes,
 	}), nil
 }
 
-func matchesSubmodelRecentRowSemanticID(row history.Row, semanticID string) (bool, error) {
+// GetAllSubmodelRecentChanges is kept for compatibility with older generated code.
+func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelRecentChanges(
+	ctx context.Context,
+	semanticID string,
+	createdFrom time.Time,
+	updatedFrom time.Time,
+	limit int32,
+	cursor string,
+) (gen.ImplResponse, error) {
+	return s.GetAllSubmodelsRecentChanges(ctx, semanticID, "", createdFrom, updatedFrom, limit, cursor)
+}
+
+func matchesSubmodelRecentRowFilters(row history.Row, semanticID string, idShort string) (bool, error) {
 	if row.Deleted {
 		return false, nil
 	}
 	submodel, err := jsonization.SubmodelFromJsonable(row.Snapshot)
 	if err != nil {
 		return false, err
+	}
+	if idShort != "" {
+		if submodel.IDShort() == nil || *submodel.IDShort() != idShort {
+			return false, nil
+		}
 	}
 	return matchesSubmodelSemanticID(submodel, semanticID), nil
 }
@@ -963,7 +977,7 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelsMetadata(
 		decodedCursor = string(decodedCursorBytes)
 	}
 
-	submodels, nextCursor, err := s.submodelBackend.GetSubmodels(ctx, limit, decodedCursor, "")
+	submodels, nextCursor, err := s.submodelBackend.GetSubmodels(ctx, limit, decodedCursor, "", "", time.Time{}, time.Time{})
 	if err != nil {
 		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "GetSubmodels"), nil
 	}
@@ -1048,7 +1062,7 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelsValueOnly(ctx context.C
 		return newAPIErrorResponse(errors.New("invalid level parameter"), http.StatusBadRequest, operation, "InvalidLevelParameter"), nil
 	}
 
-	sms, nextCursor, err := s.submodelBackend.GetSubmodels(ctx, limit, decodedCursor, idShort)
+	sms, nextCursor, err := s.submodelBackend.GetSubmodels(ctx, limit, decodedCursor, idShort, "", time.Time{}, time.Time{})
 	if err != nil {
 		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "GetSubmodels"), nil
 	}
@@ -1379,7 +1393,7 @@ func (s *SubmodelRepositoryAPIAPIService) PatchSubmodelByID(ctx context.Context,
 
 	_, patchIncludesSubmodelElements := patchJSON["submodelElements"]
 
-	existingSubmodels, _, getErr := s.submodelBackend.GetSubmodels(ctx, 1, "", decodedIdentifier)
+	existingSubmodels, _, getErr := s.submodelBackend.GetSubmodels(ctx, 1, "", decodedIdentifier, "", time.Time{}, time.Time{})
 	if getErr != nil {
 		if common.IsErrNotFound(getErr) || errors.Is(getErr, sql.ErrNoRows) {
 			return newAPIErrorResponse(getErr, http.StatusNotFound, operation, "SubmodelNotFound"), nil
@@ -2844,7 +2858,7 @@ func (s *SubmodelRepositoryAPIAPIService) QuerySubmodels(
 ) (gen.ImplResponse, error) {
 	querySelectionCtx := auth.MergeQueryFilter(ctx, query)
 
-	sms, nextCursor, err := s.submodelBackend.GetSubmodels(querySelectionCtx, limit, cursor, "")
+	sms, nextCursor, err := s.submodelBackend.GetSubmodels(querySelectionCtx, limit, cursor, "", "", time.Time{}, time.Time{})
 	if err != nil {
 		switch {
 		case common.IsErrBadRequest(err):

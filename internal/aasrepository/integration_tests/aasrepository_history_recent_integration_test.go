@@ -140,8 +140,6 @@ func TestAASRepositoryHistoryRecentChangesAndBatchAssetKind(t *testing.T) {
 	require.Equal(t, http.StatusOK, status)
 	requireRecentChangesForID(t, recent, aasID, 3)
 	requireRecentSpecificAssetID(t, recent, aasID, specificAssetIDName, specificAssetIDValue)
-	requireRecentChangeTypeForID(t, recent, aasID, "Created")
-	requireRecentChangeTypeForID(t, recent, aasID, "Updated")
 
 	recent, status, err = getJSONResponse(baseURL + "/shells/$recent-changes?limit=10&assetIds=" + url.QueryEscape(encodedAssetID))
 	require.NoError(t, err)
@@ -160,8 +158,7 @@ func TestAASRepositoryHistoryRecentChangesAndBatchAssetKind(t *testing.T) {
 	recent, status, err = getJSONResponse(baseURL + "/shells/$recent-changes?limit=10")
 	require.NoError(t, err)
 	require.Equal(t, http.StatusOK, status)
-	requireRecentChangesForID(t, recent, aasID, 4)
-	requireRecentChangeTypeForID(t, recent, aasID, "Deleted")
+	requireRecentChangesForID(t, recent, aasID, 3)
 }
 
 func TestAASRepositoryHistoryAllowsAddingIDShortAfterCreate(t *testing.T) {
@@ -247,7 +244,7 @@ func requireRecentChangesForID(t *testing.T, payload map[string]any, id string, 
 			continue
 		}
 		if item["id"] == id {
-			require.NotEmpty(t, item["type"])
+			require.NotContains(t, item, "type")
 			require.NotEmpty(t, item["createdAt"])
 			require.NotEmpty(t, item["updatedAt"])
 			if item["globalAssetId"] != nil {
@@ -258,19 +255,6 @@ func requireRecentChangesForID(t *testing.T, payload map[string]any, id string, 
 	}
 	require.GreaterOrEqual(t, count, minimumCount, "recent changes payload: %#v", payload)
 	require.True(t, sawGlobalAssetID, "expected AAS asset metadata in recent changes payload: %#v", payload)
-}
-
-func requireRecentChangeTypeForID(t *testing.T, payload map[string]any, id string, changeType string) {
-	t.Helper()
-	result, ok := payload["result"].([]any)
-	require.True(t, ok, "recent changes result must be an array")
-	for _, entry := range result {
-		item, ok := entry.(map[string]any)
-		if ok && item["id"] == id && item["type"] == changeType {
-			return
-		}
-	}
-	t.Fatalf("expected recent change id=%s type=%s in payload: %#v", id, changeType, payload)
 }
 
 func requireRecentSpecificAssetID(t *testing.T, payload map[string]any, id string, name string, value string) {

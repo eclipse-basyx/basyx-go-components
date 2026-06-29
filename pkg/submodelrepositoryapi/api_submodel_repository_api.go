@@ -107,10 +107,10 @@ func (c *SubmodelRepositoryAPIAPIController) Routes() Routes {
 			c.contextPath + "/submodels/$path",
 			c.GetAllSubmodelsPath,
 		},
-		"GetAllSubmodelRecentChanges": Route{
+		"GetAllSubmodelsRecentChanges": Route{
 			strings.ToUpper("Get"),
 			c.contextPath + "/submodels/$recent-changes",
-			c.GetAllSubmodelRecentChanges,
+			c.GetAllSubmodelsRecentChanges,
 		},
 		"GetSubmodelById": Route{
 			strings.ToUpper("Get"),
@@ -391,7 +391,23 @@ func (c *SubmodelRepositoryAPIAPIController) GetAllSubmodels(w http.ResponseWrit
 		param := "withoutBlobValue"
 		extentParam = param
 	}
-	result, err := c.service.GetAllSubmodels(r.Context(), semanticIDParam, idShortParam, limitParam, cursorParam, levelParam, extentParam)
+	var createdFromParam time.Time
+	if query.Has("createdFrom") {
+		createdFromParam, err = parseTime(query.Get("createdFrom"))
+		if err != nil {
+			c.errorHandler(w, r, &ParsingError{Param: "createdFrom", Err: err}, nil)
+			return
+		}
+	}
+	var updatedFromParam time.Time
+	if query.Has("updatedFrom") {
+		updatedFromParam, err = parseTime(query.Get("updatedFrom"))
+		if err != nil {
+			c.errorHandler(w, r, &ParsingError{Param: "updatedFrom", Err: err}, nil)
+			return
+		}
+	}
+	result, err := c.service.GetAllSubmodels(r.Context(), semanticIDParam, idShortParam, limitParam, cursorParam, levelParam, extentParam, createdFromParam, updatedFromParam)
 	// If an error occurred, encode the error with the status code
 	if err != nil {
 		c.errorHandler(w, r, err, &result)
@@ -808,8 +824,8 @@ func (c *SubmodelRepositoryAPIAPIController) GetSignedSubmodelByIDValueOnly(w ht
 	_ = EncodeJSONResponse(result.Body, &result.Code, w)
 }
 
-// GetAllSubmodelRecentChanges - Returns information about all Submodels that have been changed recently
-func (c *SubmodelRepositoryAPIAPIController) GetAllSubmodelRecentChanges(w http.ResponseWriter, r *http.Request) {
+// GetAllSubmodelsRecentChanges - Returns information about all Submodels that have been changed recently
+func (c *SubmodelRepositoryAPIAPIController) GetAllSubmodelsRecentChanges(w http.ResponseWriter, r *http.Request) {
 	query, err := parseQuery(r.URL.RawQuery)
 	if err != nil {
 		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
@@ -844,7 +860,7 @@ func (c *SubmodelRepositoryAPIAPIController) GetAllSubmodelRecentChanges(w http.
 		}
 	}
 
-	result, err := c.service.GetAllSubmodelRecentChanges(r.Context(), query.Get("semanticId"), createdFromParam, updatedFromParam, limitParam, query.Get("cursor"))
+	result, err := c.service.GetAllSubmodelsRecentChanges(r.Context(), query.Get("semanticId"), query.Get("idShort"), createdFromParam, updatedFromParam, limitParam, query.Get("cursor"))
 	if err != nil {
 		c.errorHandler(w, r, err, &result)
 		return

@@ -561,8 +561,10 @@ func (p *PostgreSQLAASRegistryDatabase) ListAssetAdministrationShellDescriptors(
 	cursor string,
 	assetKind model.AssetKind,
 	assetType string,
+	createdFrom time.Time,
+	updatedFrom time.Time,
 ) ([]model.AssetAdministrationShellDescriptor, string, error) {
-	return descriptors.ListAssetAdministrationShellDescriptors(ctx, p.db, limit, cursor, assetKind, assetType, "")
+	return descriptors.ListAssetAdministrationShellDescriptors(ctx, p.db, limit, cursor, assetKind, assetType, "", createdFrom, updatedFrom)
 }
 
 // ListSubmodelDescriptorsForAAS lists submodel descriptors for a given AAS ID

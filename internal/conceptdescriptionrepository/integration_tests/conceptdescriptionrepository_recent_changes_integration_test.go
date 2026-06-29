@@ -178,8 +178,11 @@ func requireConceptDescriptionRecentChanges(t *testing.T, payload map[string]any
 			continue
 		}
 		if item["id"] == id {
-			if len(item) != 4 || item["type"] == "" || item["createdAt"] == "" || item["updatedAt"] == "" {
+			if len(item) != 3 || item["createdAt"] == "" || item["updatedAt"] == "" {
 				t.Fatalf("expected concept description recent-change payload, got %#v", item)
+			}
+			if _, exists := item["type"]; exists {
+				t.Fatalf("expected concept description recent-change payload without type, got %#v", item)
 			}
 			count++
 		}

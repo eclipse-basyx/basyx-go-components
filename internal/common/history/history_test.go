@@ -120,6 +120,34 @@ func TestRecentRowsForVisibleIdentifiablesAddsVisibilityFilter(t *testing.T) {
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 
+func TestRecentRowsCombinesCreatedAndUpdatedFiltersAsOneOrGroup(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer func() {
+		_ = db.Close()
+	}()
+
+	createdFrom := time.Date(2026, 5, 28, 10, 0, 0, 0, time.UTC)
+	updatedFrom := time.Date(2026, 5, 28, 11, 0, 0, 0, time.UTC)
+
+	mock.ExpectQuery(`SELECT .*FROM "aas_history" AS "history".*WHERE \(\(\("history"\."operation_time" >= .* OR \("history"\."administration_created_at" >= .*\) OR \(\("history"\."operation_time" >= .* OR \("history"\."administration_updated_at" >= .*\)\).*ORDER BY "history"."history_id" DESC LIMIT 2`).
+		WillReturnRows(sqlmock.NewRows([]string{
+			"history_id",
+			"identifier",
+			"change_type",
+			"deleted",
+			"administration_created_at_text",
+			"administration_updated_at_text",
+			"operation_time",
+		}))
+
+	rows, cursor, err := RecentRows(context.Background(), db, TableAAS, 1, "", createdFrom, updatedFrom)
+	require.NoError(t, err)
+	require.Empty(t, rows)
+	require.Empty(t, cursor)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
 func TestRecentRowsReusesRestoredChainForRowsInSameCheckpoint(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)

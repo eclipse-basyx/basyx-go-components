@@ -32,7 +32,6 @@ import (
 
 // RecentChange contains shared metadata for v3.2 recent-change responses.
 type RecentChange struct {
-	Type      string `json:"type,omitempty"`
 	CreatedAt string `json:"createdAt,omitempty"`
 	UpdatedAt string `json:"updatedAt,omitempty"`
 }
@@ -65,17 +64,23 @@ type GetAllAssetAdministrationShellsRecentChangesResult struct {
 	Result         []AssetAdministrationShellRecentChange `json:"result"`
 }
 
-// GetAllSubmodelRecentChangesResult is the paged Submodel recent-change response.
-type GetAllSubmodelRecentChangesResult struct {
+// GetAllSubmodelsRecentChangesResult is the paged Submodel recent-change response.
+type GetAllSubmodelsRecentChangesResult struct {
 	PagingMetadata PagedResultPagingMetadata `json:"paging_metadata"`
 	Result         []SubmodelRecentChange    `json:"result"`
 }
 
-// GetAllConceptDescriptionRecentChangesResult is the paged Concept Description recent-change response.
-type GetAllConceptDescriptionRecentChangesResult struct {
+// GetAllSubmodelRecentChangesResult is kept for compatibility with older generated code.
+type GetAllSubmodelRecentChangesResult = GetAllSubmodelsRecentChangesResult
+
+// GetAllConceptDescriptionsRecentChangesResult is the paged Concept Description recent-change response.
+type GetAllConceptDescriptionsRecentChangesResult struct {
 	PagingMetadata PagedResultPagingMetadata        `json:"paging_metadata"`
 	Result         []ConceptDescriptionRecentChange `json:"result"`
 }
+
+// GetAllConceptDescriptionRecentChangesResult is kept for compatibility with older generated code.
+type GetAllConceptDescriptionRecentChangesResult = GetAllConceptDescriptionsRecentChangesResult
 
 // JsonableSpecificAssetIDs converts SDK interfaces into JSON-ready recent-change fields.
 func JsonableSpecificAssetIDs(assetIDs []types.ISpecificAssetID) ([]map[string]any, error) {

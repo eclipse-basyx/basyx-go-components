@@ -164,6 +164,13 @@ func ReferenceElementToValueOnly(re *types.ReferenceElement) ReferenceElementVal
 		refElemVal.Type = refType
 	}
 
+	if referredSemanticID := re.Value().ReferredSemanticID(); referredSemanticID != nil {
+		referredSemanticIDJSON, err := jsonization.ToJsonable(referredSemanticID)
+		if err == nil {
+			refElemVal.ReferredSemanticId = referredSemanticIDJSON
+		}
+	}
+
 	var keys []map[string]any
 	for _, key := range re.Value().Keys() {
 		key, err := jsonization.ToJsonable(key)

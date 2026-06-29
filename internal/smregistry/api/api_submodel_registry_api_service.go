@@ -30,7 +30,7 @@
  *
  * The Full Profile of the Submodel Registry Service Specification as part of the [Specification of the Asset Administration Shell: Part 2](https://industrialdigitaltwin.org/en/content-hub/aasspecifications).   Copyright: Industrial Digital Twin Association (IDTA) 2025
  *
- * API version: V3.1.1_SSP-001
+ * API version: V3.2.0
  * Contact: info@idtwin.org
  */
 package smregistryapi
@@ -69,13 +69,13 @@ func NewSubmodelRegistryAPIAPIService(databaseBackend smregistrypostgresql.Postg
 }
 
 // GetAllSubmodelDescriptors - Returns all Submodel Descriptors
-func (s *SubmodelRegistryAPIAPIService) GetAllSubmodelDescriptors(ctx context.Context, limit int32, cursor string) (model.ImplResponse, error) {
+func (s *SubmodelRegistryAPIAPIService) GetAllSubmodelDescriptors(ctx context.Context, limit int32, cursor string, createdFrom time.Time, updatedFrom time.Time) (model.ImplResponse, error) {
 	internalCursor, resp, err := decodeCursor(strings.TrimSpace(cursor), "GetAllSubmodelDescriptors")
 	if resp != nil || err != nil {
 		return *resp, err
 	}
 
-	smds, nextCursor, err := s.smRegistryBackend.ListSubmodelDescriptors(ctx, limit, internalCursor)
+	smds, nextCursor, err := s.smRegistryBackend.ListSubmodelDescriptors(ctx, limit, internalCursor, createdFrom, updatedFrom)
 	if err != nil {
 		log.Printf("[ERROR] [%s] Error in GetAllSubmodelDescriptors: list failed (limit=%d cursor=%q): %v", componentName, limit, internalCursor, err)
 		switch {

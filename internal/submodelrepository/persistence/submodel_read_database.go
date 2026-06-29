@@ -51,7 +51,7 @@ func (s *SubmodelDatabase) GetSubmodelByID(ctx context.Context, submodelIdentifi
 	var submodels []types.ISubmodel
 	eg.Go(func() error {
 		var err error
-		submodels, _, err = s.GetSubmodels(ctx, 0, "", submodelIdentifier)
+		submodels, _, err = s.GetSubmodels(ctx, 0, "", submodelIdentifier, "", time.Time{}, time.Time{})
 		if err != nil {
 			return err
 		}
@@ -93,13 +93,13 @@ func (s *SubmodelDatabase) GetSubmodelByID(ctx context.Context, submodelIdentifi
 }
 
 // GetSubmodels retrieves submodels and applies optional ABAC formula filters from ctx.
-func (s *SubmodelDatabase) GetSubmodels(ctx context.Context, limit int32, cursor string, submodelIdentifier string) ([]types.ISubmodel, string, error) {
-	return s.getSubmodelsWithOptionalSemanticIDFilter(ctx, limit, cursor, submodelIdentifier, "")
+func (s *SubmodelDatabase) GetSubmodels(ctx context.Context, limit int32, cursor string, submodelIdentifier string, semanticID string, createdFrom time.Time, updatedFrom time.Time) ([]types.ISubmodel, string, error) {
+	return s.getSubmodelsWithOptionalSemanticIDFilter(ctx, limit, cursor, submodelIdentifier, semanticID, createdFrom, updatedFrom)
 }
 
 // GetSubmodelReferences retrieves references and applies optional ABAC formula filters from ctx.
 func (s *SubmodelDatabase) GetSubmodelReferences(ctx context.Context, limit int32, cursor string, submodelIdentifier string, semanticID string) ([]types.IReference, string, error) {
-	submodels, nextCursor, err := s.getSubmodelsWithOptionalSemanticIDFilter(ctx, limit, cursor, submodelIdentifier, semanticID)
+	submodels, nextCursor, err := s.getSubmodelsWithOptionalSemanticIDFilter(ctx, limit, cursor, submodelIdentifier, semanticID, time.Time{}, time.Time{})
 	if err != nil {
 		return nil, "", err
 	}
@@ -128,7 +128,7 @@ func (s *SubmodelDatabase) GetSubmodelReference(ctx context.Context, submodelIde
 		return nil, common.NewErrBadRequest("SMREPO-GETSMREFONE-EMPTYIDENTIFIER submodel identifier is required")
 	}
 
-	submodels, _, err := s.GetSubmodels(ctx, 1, "", submodelIdentifier)
+	submodels, _, err := s.GetSubmodels(ctx, 1, "", submodelIdentifier, "", time.Time{}, time.Time{})
 	if err != nil {
 		return nil, err
 	}
@@ -169,7 +169,7 @@ func (s *SubmodelDatabase) getSubmodelByIDInTransaction(ctx context.Context, tx 
 
 func (s *SubmodelDatabase) getSubmodelMetadataByIDInTransaction(ctx context.Context, tx *sql.Tx, submodelIdentifier string) (types.ISubmodel, error) {
 	limit := int32(1)
-	selectDS, err := submodelqueries.SelectSubmodelDataset(&submodelIdentifier, &limit, nil, nil)
+	selectDS, err := submodelqueries.SelectSubmodelDataset(&submodelIdentifier, &limit, nil, time.Time{}, time.Time{}, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -261,11 +261,11 @@ func (s *SubmodelDatabase) QuerySubmodels(ctx context.Context, limit int32, curs
 	}
 
 	ctx = auth.MergeQueryFilter(ctx, queryWrapper.Query)
-	return s.GetSubmodels(ctx, limit, cursor, "")
+	return s.GetSubmodels(ctx, limit, cursor, "", "", time.Time{}, time.Time{})
 }
 
 //nolint:revive // cyclomatic complexity is acceptable for this function due to query/filter orchestration in one flow
-func (s *SubmodelDatabase) getSubmodelsWithOptionalSemanticIDFilter(ctx context.Context, limit int32, cursor string, submodelIdentifier string, semanticID string) ([]types.ISubmodel, string, error) {
+func (s *SubmodelDatabase) getSubmodelsWithOptionalSemanticIDFilter(ctx context.Context, limit int32, cursor string, submodelIdentifier string, semanticID string, createdFrom time.Time, updatedFrom time.Time) ([]types.ISubmodel, string, error) {
 	var limitFilter *int32
 
 	if limit == 0 {
@@ -311,7 +311,7 @@ func (s *SubmodelDatabase) getSubmodelsWithOptionalSemanticIDFilter(ctx context.
 		return nil, "", common.NewInternalServerError("SMREPO-GETSMS-MASKEXPR " + maskedExprErr.Error())
 	}
 
-	selectDS, err := submodelqueries.SelectSubmodelDataset(submodelIdentifierFilter, limitFilter, cursorFilter, maskRuntime.Projections())
+	selectDS, err := submodelqueries.SelectSubmodelDataset(submodelIdentifierFilter, limitFilter, cursorFilter, createdFrom, updatedFrom, maskRuntime.Projections())
 	if err != nil {
 		return nil, "", err
 	}

@@ -46,7 +46,7 @@ type SubmodelRepositoryAPIAPIRouter interface {
 	GetAllSubmodelsValueOnly(http.ResponseWriter, *http.Request)
 	GetAllSubmodelsReference(http.ResponseWriter, *http.Request)
 	GetAllSubmodelsPath(http.ResponseWriter, *http.Request)
-	GetAllSubmodelRecentChanges(http.ResponseWriter, *http.Request)
+	GetAllSubmodelsRecentChanges(http.ResponseWriter, *http.Request)
 	GetSubmodelByID(http.ResponseWriter, *http.Request)
 	PutSubmodelByID(http.ResponseWriter, *http.Request)
 	DeleteSubmodelByID(http.ResponseWriter, *http.Request)
@@ -109,7 +109,7 @@ type SerializationAPIAPIServicer interface {
 // and updated with the logic required for the API.
 type SubmodelRepositoryAPIAPIServicer interface {
 	QuerySubmodels(context.Context, int32, string, grammar.Query) (model.ImplResponse, error)
-	GetAllSubmodels(context.Context, string, string, int32, string, string, string) (model.ImplResponse, error)
+	GetAllSubmodels(context.Context, string, string, int32, string, string, string, time.Time, time.Time) (model.ImplResponse, error)
 	PostSubmodel(context.Context, types.ISubmodel) (model.ImplResponse, error)
 	GetAllSubmodelsMetadata(context.Context, string, string, int32, string) (model.ImplResponse, error)
 	GetAllSubmodelsValueOnly(context.Context, string, string, int32, string, string, string) (model.ImplResponse, error)
@@ -119,7 +119,7 @@ type SubmodelRepositoryAPIAPIServicer interface {
 	GetSignedSubmodelByID(context.Context, string, string, string) (model.ImplResponse, error)
 	GetSignedSubmodelByIDValueOnly(context.Context, string, string, string) (model.ImplResponse, error)
 	GetSubmodelByIdAndDate(context.Context, string, string, string, time.Time) (model.ImplResponse, error)
-	GetAllSubmodelRecentChanges(context.Context, string, time.Time, time.Time, int32, string) (model.ImplResponse, error)
+	GetAllSubmodelsRecentChanges(context.Context, string, string, time.Time, time.Time, int32, string) (model.ImplResponse, error)
 	PutSubmodelByID(context.Context, string, types.ISubmodel) (model.ImplResponse, error)
 	DeleteSubmodelByID(context.Context, string) (model.ImplResponse, error)
 	PatchSubmodelByID(context.Context, string, types.ISubmodel, string) (model.ImplResponse, error)

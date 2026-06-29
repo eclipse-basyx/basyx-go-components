@@ -5,7 +5,7 @@
  *
  * The Full Profile of the Asset Administration Shell Registry Service Specification as part of the [Specification of the Asset Administration Shell: Part 2](https://industrialdigitaltwin.org/en/content-hub/aasspecifications).   Copyright: Industrial Digital Twin Association (IDTA) 2025
  *
- * API version: V3.1.1_SSP-001
+ * API version: V3.2.0
  * Contact: info@idtwin.org
  */
 
@@ -78,12 +78,6 @@ func (c *AssetAdministrationShellRegistryAPIAPIController) Routes() Routes {
 			"/shell-descriptors",
 			c.PostAssetAdministrationShellDescriptor,
 		},
-		"GetAllAssetAdministrationShellDescriptorsRecentChanges": Route{
-			"GetAllAssetAdministrationShellDescriptorsRecentChanges",
-			strings.ToUpper("Get"),
-			"/shell-descriptors/$recent-changes",
-			c.GetAllAssetAdministrationShellDescriptorsRecentChanges,
-		},
 		"GetAssetAdministrationShellDescriptorById": Route{
 			"GetAssetAdministrationShellDescriptorById",
 			strings.ToUpper("Get"),
@@ -155,12 +149,6 @@ func (c *AssetAdministrationShellRegistryAPIAPIController) OrderedRoutes() []Rou
 			strings.ToUpper("Post"),
 			"/shell-descriptors",
 			c.PostAssetAdministrationShellDescriptor,
-		},
-		Route{
-			"GetAllAssetAdministrationShellDescriptorsRecentChanges",
-			strings.ToUpper("Get"),
-			"/shell-descriptors/$recent-changes",
-			c.GetAllAssetAdministrationShellDescriptorsRecentChanges,
 		},
 		Route{
 			"GetAssetAdministrationShellDescriptorById",
@@ -268,8 +256,28 @@ func (c *AssetAdministrationShellRegistryAPIAPIController) GetAllAssetAdministra
 	if query.Has("assetType") {
 		assetTypeParam = query.Get("assetType")
 	}
+	assetIdsParam := query["assetIds"]
+	var createdFromParam time.Time
+	if query.Has("createdFrom") {
+		createdFromParam, err = parseTime(query.Get("createdFrom"))
+		if err != nil {
+			result := common.NewErrorResponse(err, http.StatusBadRequest, componentName, "GetAllAssetAdministrationShellDescriptors", "createdFrom")
+			EncodeJSONResponse(result.Body, &result.Code, w)
+			return
+		}
+	}
 
-	result, err := c.service.GetAllAssetAdministrationShellDescriptors(r.Context(), limitParam, cursorParam, assetKindParam, assetTypeParam)
+	var updatedFromParam time.Time
+	if query.Has("updatedFrom") {
+		updatedFromParam, err = parseTime(query.Get("updatedFrom"))
+		if err != nil {
+			result := common.NewErrorResponse(err, http.StatusBadRequest, componentName, "GetAllAssetAdministrationShellDescriptors", "updatedFrom")
+			EncodeJSONResponse(result.Body, &result.Code, w)
+			return
+		}
+	}
+
+	result, err := c.service.GetAllAssetAdministrationShellDescriptors(r.Context(), limitParam, cursorParam, assetKindParam, assetTypeParam, assetIdsParam, createdFromParam, updatedFromParam)
 	if err != nil {
 		log.Printf("🧩 [%s] Error in GetAllAssetAdministrationShellDescriptors: service failure (limit=%d cursor=%q assetKind=%q assetType=%q): %v", componentName, limitParam, cursorParam, string(assetKindParam), assetTypeParam, err)
 		c.errorHandler(w, r, err, &result)

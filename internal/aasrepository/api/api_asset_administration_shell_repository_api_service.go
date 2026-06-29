@@ -5,7 +5,7 @@
  *
  * The Full Profile of the Asset Administration Shell Repository Service Specification as part of the [Specification of the Asset Administration Shell: Part 2](https://industrialdigitaltwin.org/en/content-hub/aasspecifications).   Copyright: Industrial Digital Twin Association (IDTA) 2025
  *
- * API version: V3.1.1_SSP-001
+ * API version: V3.2.0
  * Contact: info@idtwin.org
  */
 
@@ -92,7 +92,7 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) QueryAssetAdministrati
 	}
 
 	queryCtx := auth.MergeQueryFilter(ctx, query)
-	aasList, nextCursor, err := s.assetAdministrationShellBackend.GetAssetAdministrationShells(queryCtx, limit, decodedCursor, "", nil)
+	aasList, nextCursor, err := s.assetAdministrationShellBackend.GetAssetAdministrationShells(queryCtx, limit, decodedCursor, "", nil, time.Time{}, time.Time{})
 	if err != nil {
 		if common.IsErrBadRequest(err) {
 			return newAPIErrorResponse(err, http.StatusBadRequest, operation, "BadRequest"), nil
@@ -121,7 +121,7 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) QueryAssetAdministrati
 }
 
 // GetAllAssetAdministrationShells - Returns all Asset Administration Shells
-func (s *AssetAdministrationShellRepositoryAPIAPIService) GetAllAssetAdministrationShells(ctx context.Context, assetIds []string, idShort string, limit int32, cursor string) (gen.ImplResponse, error) {
+func (s *AssetAdministrationShellRepositoryAPIAPIService) GetAllAssetAdministrationShells(ctx context.Context, assetIds []string, idShort string, limit int32, cursor string, createdFrom time.Time, updatedFrom time.Time) (gen.ImplResponse, error) {
 
 	const operation = "GetAllAssetAdministrationShells"
 
@@ -135,7 +135,7 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) GetAllAssetAdministrat
 		return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "BadAssetIds"), nil
 	}
 
-	aasList, nextCursor, err := s.assetAdministrationShellBackend.GetAssetAdministrationShells(ctx, limit, decodedCursor, idShort, specificAssetIDs)
+	aasList, nextCursor, err := s.assetAdministrationShellBackend.GetAssetAdministrationShells(ctx, limit, decodedCursor, idShort, specificAssetIDs, createdFrom, updatedFrom)
 	if err != nil {
 		if common.IsErrBadRequest(err) {
 			return newAPIErrorResponse(err, http.StatusBadRequest, operation, "BadRequest"), nil
@@ -287,6 +287,7 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) GetAssetAdministration
 func (s *AssetAdministrationShellRepositoryAPIAPIService) GetAllAssetAdministrationShellsRecentChanges(
 	ctx context.Context,
 	assetIds []string,
+	idShort string,
 	createdFrom time.Time,
 	updatedFrom time.Time,
 	limit int32,
@@ -306,16 +307,15 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) GetAllAssetAdministrat
 	fetch := func(pageLimit int32, pageCursor string) ([]history.Row, string, error) {
 		return s.assetAdministrationShellBackend.GetAssetAdministrationShellRecentChanges(ctx, pageLimit, pageCursor, createdFrom, updatedFrom)
 	}
-	var rows []history.Row
-	var nextCursor string
-	var err error
-	if assetIDFilter.IsEmpty() {
-		rows, nextCursor, err = fetch(limit, decodedCursor)
-	} else {
-		rows, nextCursor, err = history.FilterRecentRows(limit, decodedCursor, fetch, func(row history.Row) (bool, error) {
-			return matchesAASRecentRowAssetFilter(row, assetIDFilter)
-		})
-	}
+	rows, nextCursor, err := history.FilterRecentRows(limit, decodedCursor, fetch, func(row history.Row) (bool, error) {
+		if row.Deleted {
+			return false, nil
+		}
+		if assetIDFilter.IsEmpty() && idShort == "" {
+			return true, nil
+		}
+		return matchesAASRecentRowFilters(row, assetIDFilter, idShort)
+	})
 	if err != nil {
 		if common.IsErrBadRequest(err) {
 			return newAPIErrorResponse(err, http.StatusBadRequest, operation, "BadRequest"), nil
@@ -325,25 +325,12 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) GetAllAssetAdministrat
 
 	changes := make([]gen.AssetAdministrationShellRecentChange, 0, len(rows))
 	for _, row := range rows {
-		if row.Deleted {
-			changes = append(changes, gen.AssetAdministrationShellRecentChange{
-				RecentChange: gen.RecentChange{
-					Type:      row.ChangeType,
-					CreatedAt: row.CreatedAt,
-					UpdatedAt: row.UpdatedAt,
-				},
-				Id: row.Identifier,
-			})
-			continue
-		}
-
 		aas, fromJSONErr := jsonization.AssetAdministrationShellFromJsonable(row.Snapshot)
 		if fromJSONErr != nil {
 			return newAPIErrorResponse(fromJSONErr, http.StatusInternalServerError, operation, "FromJsonable"), nil
 		}
 		change := gen.AssetAdministrationShellRecentChange{
 			RecentChange: gen.RecentChange{
-				Type:      row.ChangeType,
 				CreatedAt: row.CreatedAt,
 				UpdatedAt: row.UpdatedAt,
 			},
@@ -367,13 +354,21 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) GetAllAssetAdministrat
 	}), nil
 }
 
-func matchesAASRecentRowAssetFilter(row history.Row, filter common.AssetIDFilter) (bool, error) {
+func matchesAASRecentRowFilters(row history.Row, filter common.AssetIDFilter, idShort string) (bool, error) {
 	if row.Deleted {
 		return false, nil
 	}
 	aas, err := jsonization.AssetAdministrationShellFromJsonable(row.Snapshot)
 	if err != nil {
 		return false, err
+	}
+	if idShort != "" {
+		if aas.IDShort() == nil || *aas.IDShort() != idShort {
+			return false, nil
+		}
+	}
+	if filter.IsEmpty() {
+		return true, nil
 	}
 	return matchesAASAssetFilter(aas, filter)
 }

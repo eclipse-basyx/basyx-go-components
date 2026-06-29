@@ -95,8 +95,10 @@ func (p *PostgreSQLSMDatabase) ListSubmodelDescriptors(
 	ctx context.Context,
 	limit int32,
 	cursor string,
+	createdFrom time.Time,
+	updatedFrom time.Time,
 ) ([]model.SubmodelDescriptor, string, error) {
-	return descriptors.ListSubmodelDescriptors(ctx, p.db, limit, cursor)
+	return descriptors.ListSubmodelDescriptors(ctx, p.db, limit, cursor, createdFrom, updatedFrom)
 }
 
 func appendSubmodelDescriptorHistoryTx(ctx context.Context, tx *sql.Tx, descriptor model.SubmodelDescriptor, changeType string, deleted bool) error {

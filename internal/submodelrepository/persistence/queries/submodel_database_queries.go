@@ -29,6 +29,7 @@ package queries
 
 import (
 	"strconv"
+	"time"
 
 	"github.com/FriedJannik/aas-go-sdk/jsonization"
 	"github.com/FriedJannik/aas-go-sdk/stringification"
@@ -119,6 +120,8 @@ func SelectSubmodelDataset(
 	submodelIdentifier *string,
 	limit *int32,
 	cursor *string,
+	createdFrom time.Time,
+	updatedFrom time.Time,
 	additionalProjections []interface{},
 ) (*goqu.SelectDataset, error) {
 	dialect := goqu.Dialect(common.Dialect)
@@ -158,6 +161,17 @@ func SelectSubmodelDataset(
 		selectDS = selectDS.
 			Where(goqu.Func("EXISTS", cursorExistsDS)).
 			Where(goqu.I("submodel.submodel_identifier").Gte(*cursor))
+	}
+	switch {
+	case !createdFrom.IsZero() && !updatedFrom.IsZero():
+		selectDS = selectDS.Where(goqu.Or(
+			goqu.I("submodel.administration_created_at").Gte(createdFrom.UTC()),
+			goqu.I("submodel.administration_updated_at").Gte(updatedFrom.UTC()),
+		))
+	case !createdFrom.IsZero():
+		selectDS = selectDS.Where(goqu.I("submodel.administration_created_at").Gte(createdFrom.UTC()))
+	case !updatedFrom.IsZero():
+		selectDS = selectDS.Where(goqu.I("submodel.administration_updated_at").Gte(updatedFrom.UTC()))
 	}
 
 	if limit != nil && *limit > 0 {

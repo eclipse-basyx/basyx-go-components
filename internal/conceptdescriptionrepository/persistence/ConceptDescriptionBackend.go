@@ -329,7 +329,7 @@ func (b *ConceptDescriptionBackend) CreateConceptDescription(ctx context.Context
 }
 
 // GetConceptDescriptions retrieves a paginated list of concept descriptions with optional filters.
-func (b *ConceptDescriptionBackend) GetConceptDescriptions(ctx context.Context, idShort *string, isCaseOf *string, dataSpecificationRef *string, limit uint, cursor *string) ([]types.IConceptDescription, string, error) {
+func (b *ConceptDescriptionBackend) GetConceptDescriptions(ctx context.Context, idShort *string, isCaseOf *string, dataSpecificationRef *string, limit uint, cursor *string, createdFrom time.Time, updatedFrom time.Time) ([]types.IConceptDescription, string, error) {
 	if limit == 0 {
 		limit = 100
 	}
@@ -373,6 +373,17 @@ func (b *ConceptDescriptionBackend) GetConceptDescriptions(ctx context.Context, 
 				 jsonb_array_elements(COALESCE(eds->'dataSpecification'->'keys', '[]'::jsonb)) AS key_item
 			WHERE key_item->>'value' = ?
 		)`, strings.TrimSpace(*dataSpecificationRef)))
+	}
+	switch {
+	case !createdFrom.IsZero() && !updatedFrom.IsZero():
+		query = query.Where(goqu.Or(
+			goqu.C("administration_created_at").Gte(createdFrom.UTC()),
+			goqu.C("administration_updated_at").Gte(updatedFrom.UTC()),
+		))
+	case !createdFrom.IsZero():
+		query = query.Where(goqu.C("administration_created_at").Gte(createdFrom.UTC()))
+	case !updatedFrom.IsZero():
+		query = query.Where(goqu.C("administration_updated_at").Gte(updatedFrom.UTC()))
 	}
 
 	if cursor != nil && strings.TrimSpace(*cursor) != "" {

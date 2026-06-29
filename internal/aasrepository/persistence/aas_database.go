@@ -735,7 +735,7 @@ func (s *AssetAdministrationShellDatabase) checkIfSubmodelReferenceExistsInAsset
 }
 
 // GetAssetAdministrationShells returns a paginated list of AAS objects and the next cursor.
-func (s *AssetAdministrationShellDatabase) GetAssetAdministrationShells(ctx context.Context, limit int32, cursor string, idShort string, specificAssetIDs []types.ISpecificAssetID) ([]types.IAssetAdministrationShell, string, error) {
+func (s *AssetAdministrationShellDatabase) GetAssetAdministrationShells(ctx context.Context, limit int32, cursor string, idShort string, specificAssetIDs []types.ISpecificAssetID, createdFrom time.Time, updatedFrom time.Time) ([]types.IAssetAdministrationShell, string, error) {
 	dialect := goqu.Dialect("postgres")
 
 	if limit < 0 {
@@ -751,7 +751,7 @@ func (s *AssetAdministrationShellDatabase) GetAssetAdministrationShells(ctx cont
 		}
 	}
 
-	selectDS, err := buildGetAssetAdministrationShellsDataset(&dialect, limit, cursor, idShort, specificAssetIDs)
+	selectDS, err := buildGetAssetAdministrationShellsDataset(&dialect, limit, cursor, idShort, specificAssetIDs, createdFrom, updatedFrom)
 	if err != nil {
 		return nil, "", common.NewInternalServerError("AASREPO-GETAASLIST-BUILDSQL " + err.Error())
 	}
@@ -1053,7 +1053,7 @@ func (s *AssetAdministrationShellDatabase) DeleteAssetAdministrationShellByIDInT
 
 // GetAssetAdministrationShellReferences returns paginated model references while preserving ABAC filters from ctx.
 func (s *AssetAdministrationShellDatabase) GetAssetAdministrationShellReferences(ctx context.Context, limit int32, cursor string, idShort string, specificAssetIDs []types.ISpecificAssetID) ([]types.IReference, string, error) {
-	aasList, nextCursor, err := s.GetAssetAdministrationShells(ctx, limit, cursor, idShort, specificAssetIDs)
+	aasList, nextCursor, err := s.GetAssetAdministrationShells(ctx, limit, cursor, idShort, specificAssetIDs, time.Time{}, time.Time{})
 	if err != nil {
 		return nil, "", err
 	}

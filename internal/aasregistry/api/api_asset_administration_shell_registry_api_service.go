@@ -29,7 +29,7 @@
  *
  * The Full Profile of the Asset Administration Shell Registry Service Specification as part of the [Specification of the Asset Administration Shell: Part 2](https://industrialdigitaltwin.org/en/content-hub/aasspecifications).   Copyright: Industrial Digital Twin Association (IDTA) 2025
  *
- * API version: V3.1.1_SSP-001
+ * API version: V3.2.0
  * Contact: info@idtwin.org
  */
 // Author: Martin Stemmer ( Fraunhofer IESE )
@@ -71,7 +71,7 @@ func NewAssetAdministrationShellRegistryAPIAPIService(databaseBackend persistenc
 }
 
 // GetAllAssetAdministrationShellDescriptors - Returns all Asset Administration Shell Descriptors
-func (s *AssetAdministrationShellRegistryAPIAPIService) GetAllAssetAdministrationShellDescriptors(ctx context.Context, limit int32, cursor string, assetKind model.AssetKind, assetType string) (model.ImplResponse, error) {
+func (s *AssetAdministrationShellRegistryAPIAPIService) GetAllAssetAdministrationShellDescriptors(ctx context.Context, limit int32, cursor string, assetKind model.AssetKind, assetType string, assetIds []string, createdFrom time.Time, updatedFrom time.Time) (model.ImplResponse, error) {
 	internalCursor, resp, err := decodeCursor(strings.TrimSpace(cursor), "GetAllAssetAdministrationShellDescriptors")
 	if resp != nil || err != nil {
 		return *resp, err
@@ -80,7 +80,22 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) GetAllAssetAdministratio
 	if resp != nil || err != nil {
 		return *resp, err
 	}
-	aasds, nextCursor, err := s.aasRegistryBackend.ListAssetAdministrationShellDescriptors(ctx, limit, internalCursor, assetKind, decodedAssetType)
+	assetIDFilter, err := common.DecodeAssetIDFilter(assetIds)
+	if err != nil {
+		return common.NewErrorResponse(
+			err, http.StatusBadRequest, componentName, "GetAllAssetAdministrationShellDescriptors", "BadAssetIds",
+		), nil
+	}
+	fetch := func(pageLimit int32, pageCursor string) ([]model.AssetAdministrationShellDescriptor, string, error) {
+		return s.aasRegistryBackend.ListAssetAdministrationShellDescriptors(ctx, pageLimit, pageCursor, assetKind, decodedAssetType, createdFrom, updatedFrom)
+	}
+	var aasds []model.AssetAdministrationShellDescriptor
+	var nextCursor string
+	if assetIDFilter.IsEmpty() {
+		aasds, nextCursor, err = fetch(limit, internalCursor)
+	} else {
+		aasds, nextCursor, err = filterAssetAdministrationShellDescriptorPages(limit, internalCursor, fetch, assetIDFilter)
+	}
 	if err != nil {
 		log.Printf("🧩 [%s] Error in GetAllAssetAdministrationShellDescriptors: list failed (limit=%d cursor=%q assetKind=%q assetType=%q): %v", componentName, limit, internalCursor, string(assetKind), assetType, err)
 		switch {
@@ -107,6 +122,45 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) GetAllAssetAdministratio
 	}
 
 	return pagedResponse(jsonable, nextCursor), nil
+}
+
+type assetAdministrationShellDescriptorFetcher func(limit int32, cursor string) ([]model.AssetAdministrationShellDescriptor, string, error)
+
+func filterAssetAdministrationShellDescriptorPages(
+	limit int32,
+	cursor string,
+	fetch assetAdministrationShellDescriptorFetcher,
+	filter common.AssetIDFilter,
+) ([]model.AssetAdministrationShellDescriptor, string, error) {
+	if limit <= 0 {
+		limit = 100
+	}
+	pageLimit := limit + 1
+	result := make([]model.AssetAdministrationShellDescriptor, 0, limit)
+	currentCursor := cursor
+	for {
+		page, nextCursor, err := fetch(pageLimit, currentCursor)
+		if err != nil {
+			return nil, "", err
+		}
+		for _, descriptor := range page {
+			matches, matchErr := filter.Matches(descriptor.GlobalAssetId, descriptor.SpecificAssetIds)
+			if matchErr != nil {
+				return nil, "", matchErr
+			}
+			if !matches {
+				continue
+			}
+			if len(result) == int(limit) {
+				return result, descriptor.Id, nil
+			}
+			result = append(result, descriptor)
+		}
+		if nextCursor == "" || nextCursor == currentCursor {
+			return result, "", nil
+		}
+		currentCursor = nextCursor
+	}
 }
 
 // GetAllAssetAdministrationShellDescriptorsRecentChanges returns changed AAS descriptors.
@@ -743,7 +797,7 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) DeleteSubmodelDescriptor
 func (s *AssetAdministrationShellRegistryAPIAPIService) QueryAssetAdministrationShellDescriptors(ctx context.Context, limit int32, cursor string, query grammar.Query) (model.ImplResponse, error) {
 	ctx = auth.MergeQueryFilter(ctx, query)
 
-	aasds, nextCursor, err := s.aasRegistryBackend.ListAssetAdministrationShellDescriptors(ctx, limit, cursor, "", "")
+	aasds, nextCursor, err := s.aasRegistryBackend.ListAssetAdministrationShellDescriptors(ctx, limit, cursor, "", "", time.Time{}, time.Time{})
 	if err != nil {
 		log.Printf("🧩 [%s] Error in QueryAssetAdministrationShellDescriptors: list failed (limit=%d cursor=%q ): %v", componentName, limit, cursor, err)
 		switch {
