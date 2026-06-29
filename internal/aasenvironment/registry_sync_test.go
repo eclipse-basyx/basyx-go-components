@@ -43,11 +43,11 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestNewRegistrySyncConfigRequiresExternalURLWhenEnabled(t *testing.T) {
-	_, err := NewRegistrySyncConfig(true, false, "")
-	require.Error(t, err)
-	require.True(t, common.IsErrBadRequest(err))
-	require.Contains(t, err.Error(), externalURLKey)
+func TestNewRegistrySyncConfigAllowsBlankExternalURLWhenEnabled(t *testing.T) {
+	config, err := NewRegistrySyncConfig(true, false, "")
+	require.NoError(t, err)
+	require.True(t, config.AASRegistryIntegration)
+	require.Empty(t, config.ExternalBaseURLs)
 }
 
 func TestNewRegistrySyncConfigParsesAndNormalizesExternalURLs(t *testing.T) {
@@ -130,6 +130,79 @@ func TestRegistrySyncConfigBuildsDeterministicEndpoints(t *testing.T) {
 	require.Equal(t, "https://public.example/api/v3/submodels/dXJuOmV4YW1wbGU6c206MDAx", submodelEndpoints[0].ProtocolInformation.Href)
 	require.Equal(t, "https://internal.example/api/v3/submodels/dXJuOmV4YW1wbGU6c206MDAx", submodelEndpoints[1].ProtocolInformation.Href)
 	require.Equal(t, "https", submodelEndpoints[0].ProtocolInformation.EndpointProtocol)
+}
+
+func TestRegistrySyncConfigBuildsDynamicEndpointsFromRequestContext(t *testing.T) {
+	config := RegistrySyncConfig{}
+	ctx := common.ContextWithRequestExternalBaseURL(context.Background(), "https://public.example/api/v3")
+
+	aasEndpoints := config.buildAASDescriptorEndpointsForContext(ctx, "urn:example:aas:001")
+	require.Len(t, aasEndpoints, 1)
+	require.Equal(t, "https://public.example/api/v3/shells/dXJuOmV4YW1wbGU6YWFzOjAwMQ", aasEndpoints[0].ProtocolInformation.Href)
+	require.Equal(t, "https", aasEndpoints[0].ProtocolInformation.EndpointProtocol)
+
+	submodelEndpoints := config.buildSubmodelDescriptorEndpointsForContext(ctx, "urn:example:sm:001")
+	require.Len(t, submodelEndpoints, 1)
+	require.Equal(t, "https://public.example/api/v3/submodels/dXJuOmV4YW1wbGU6c206MDAx", submodelEndpoints[0].ProtocolInformation.Href)
+}
+
+func TestRegistrySyncConfigDoesNotEmitBlankDynamicEndpoints(t *testing.T) {
+	config := RegistrySyncConfig{}
+
+	require.Empty(t, config.buildAASDescriptorEndpointsForContext(context.Background(), "urn:example:aas:001"))
+	require.Empty(t, config.buildSubmodelDescriptorEndpointsForContext(context.Background(), "urn:example:sm:001"))
+	require.False(t, config.hasEndpointBaseURL(context.Background()))
+}
+
+func TestRegistrySyncConfigPrefersStaticExternalURLsOverDynamicContext(t *testing.T) {
+	config := RegistrySyncConfig{ExternalBaseURLs: []string{"https://static.example/api/v3"}}
+	ctx := common.ContextWithRequestExternalBaseURL(context.Background(), "https://dynamic.example/api/v3")
+
+	endpoints := config.buildAASDescriptorEndpointsForContext(ctx, "urn:example:aas:001")
+	require.Len(t, endpoints, 1)
+	require.Equal(t, "https://static.example/api/v3/shells/dXJuOmV4YW1wbGU6YWFzOjAwMQ", endpoints[0].ProtocolInformation.Href)
+}
+
+func TestDynamicBlankModeSubmodelDescriptorRequiresEndpointBase(t *testing.T) {
+	config := RegistrySyncConfig{
+		AASRegistryIntegration:      true,
+		SubmodelRegistryIntegration: true,
+	}
+	submodel, err := jsonization.SubmodelFromJsonable(map[string]any{
+		"id":        "urn:example:sm:superpath",
+		"idShort":   "SuperpathSubmodel",
+		"modelType": "Submodel",
+	})
+	require.NoError(t, err)
+
+	descriptor, err := config.buildSubmodelDescriptorForContext(context.Background(), submodel)
+	require.NoError(t, err)
+	require.Empty(t, descriptor.Endpoints)
+	require.False(t, config.hasEndpointBaseURL(context.Background()))
+
+	ctx := common.ContextWithRequestExternalBaseURL(context.Background(), "https://public.example/api/v3")
+	descriptor, err = config.buildSubmodelDescriptorForContext(ctx, submodel)
+	require.NoError(t, err)
+	require.Len(t, descriptor.Endpoints, 1)
+	require.Equal(
+		t,
+		"https://public.example/api/v3/submodels/"+common.EncodeString("urn:example:sm:superpath"),
+		descriptor.Endpoints[0].ProtocolInformation.Href,
+	)
+	require.True(t, config.hasEndpointBaseURL(ctx))
+}
+
+func TestDynamicRegistryReconciliationStateSkipsDuplicateRuns(t *testing.T) {
+	var state dynamicRegistryReconciliationState
+
+	require.True(t, state.reserve("https://public.example/api/v3"))
+	require.False(t, state.reserve("https://public.example/api/v3"))
+
+	state.complete("https://public.example/api/v3", false)
+	require.True(t, state.reserve("https://public.example/api/v3"))
+
+	state.complete("https://public.example/api/v3", true)
+	require.False(t, state.reserve("https://public.example/api/v3"))
 }
 
 func TestBuildAASDescriptorDerivesFromIdentifiable(t *testing.T) {

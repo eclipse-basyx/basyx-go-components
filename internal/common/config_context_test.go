@@ -27,6 +27,8 @@ package common
 
 import (
 	"context"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 )
 
@@ -41,4 +43,147 @@ func TestContextWithConfig_RoundTrip(t *testing.T) {
 	if resolved != cfg {
 		t.Fatalf("expected same config pointer from context")
 	}
+}
+
+func TestExternalBaseURLFromRequestUsesTrustedForwardedHeaders(t *testing.T) {
+	cfg := &Config{Server: ServerConfig{ContextPath: "/api/v3"}}
+	cfg.General.TrustProxyHeaders = true
+	cfg.General.TrustedProxyCIDRs = []string{"10.10.10.0/24"}
+
+	req, err := http.NewRequest(http.MethodGet, "http://service.local/api/v3/shells", nil)
+	if err != nil {
+		t.Fatalf("create request: %v", err)
+	}
+	req.Host = "service.local"
+	req.RemoteAddr = "10.10.10.10:12345"
+	req.Header.Set("Forwarded", "proto=https;host=public.example")
+	req = req.WithContext(ContextWithConfig(context.Background(), cfg))
+
+	if got := ExternalBaseURLFromRequest(req); got != "https://public.example/api/v3" {
+		t.Fatalf("expected trusted forwarded external base URL, got %q", got)
+	}
+}
+
+func TestExternalBaseURLFromRequestRejectsUntrustedProxySource(t *testing.T) {
+	cfg := &Config{Server: ServerConfig{ContextPath: "/api/v3"}}
+	cfg.General.TrustProxyHeaders = true
+	cfg.General.TrustedProxyCIDRs = []string{"10.10.10.0/24"}
+
+	req, err := http.NewRequest(http.MethodGet, "http://service.local/api/v3/shells", nil)
+	if err != nil {
+		t.Fatalf("create request: %v", err)
+	}
+	req.Host = "service.local"
+	req.RemoteAddr = "192.0.2.10:12345"
+	req.Header.Set("Forwarded", "proto=https;host=evil.example")
+	req.Header.Set("X-Forwarded-Host", "evil.example")
+	req = req.WithContext(ContextWithConfig(context.Background(), cfg))
+
+	if got := ExternalBaseURLFromRequest(req); got != "" {
+		t.Fatalf("expected no external base URL from untrusted proxy source, got %q", got)
+	}
+}
+
+func TestExternalBaseURLFromRequestUsesAllowedDirectHost(t *testing.T) {
+	cfg := &Config{Server: ServerConfig{ContextPath: "/api/v3"}}
+	cfg.General.TrustedDynamicHosts = []string{"service.local"}
+
+	req, err := http.NewRequest(http.MethodGet, "http://service.local/api/v3/shells", nil)
+	if err != nil {
+		t.Fatalf("create request: %v", err)
+	}
+	req.Host = "service.local"
+	req = req.WithContext(ContextWithConfig(context.Background(), cfg))
+
+	if got := ExternalBaseURLFromRequest(req); got != "http://service.local/api/v3" {
+		t.Fatalf("expected allowed direct host external base URL, got %q", got)
+	}
+}
+
+func TestExternalBaseURLFromRequestHonorsAllowedDirectHostPort(t *testing.T) {
+	cfg := &Config{Server: ServerConfig{ContextPath: "/api/v3"}}
+	cfg.General.TrustedDynamicHosts = []string{"service.local:8443"}
+
+	req, err := http.NewRequest(http.MethodGet, "http://service.local:8443/api/v3/shells", nil)
+	if err != nil {
+		t.Fatalf("create request: %v", err)
+	}
+	req.Host = "service.local:8443"
+	req = req.WithContext(ContextWithConfig(context.Background(), cfg))
+
+	if got := ExternalBaseURLFromRequest(req); got != "http://service.local:8443/api/v3" {
+		t.Fatalf("expected allowed direct host with port external base URL, got %q", got)
+	}
+
+	req.Host = "service.local:9443"
+	if got := ExternalBaseURLFromRequest(req); got != "" {
+		t.Fatalf("expected direct host with unallowed port to be rejected, got %q", got)
+	}
+}
+
+func TestExternalBaseURLFromRequestSupportsIPv6AllowedDirectHost(t *testing.T) {
+	cfg := &Config{Server: ServerConfig{ContextPath: "/api/v3"}}
+	cfg.General.TrustedDynamicHosts = []string{"::1"}
+
+	req, err := http.NewRequest(http.MethodGet, "http://[::1]/api/v3/shells", nil)
+	if err != nil {
+		t.Fatalf("create request: %v", err)
+	}
+	req.Host = "[::1]"
+	req = req.WithContext(ContextWithConfig(context.Background(), cfg))
+
+	if got := ExternalBaseURLFromRequest(req); got != "http://[::1]/api/v3" {
+		t.Fatalf("expected allowed IPv6 direct host external base URL, got %q", got)
+	}
+}
+
+func TestExternalBaseURLFromRequestHonorsIPv6AllowedDirectHostPort(t *testing.T) {
+	cfg := &Config{Server: ServerConfig{ContextPath: "/api/v3"}}
+	cfg.General.TrustedDynamicHosts = []string{"[::1]:8443"}
+
+	req, err := http.NewRequest(http.MethodGet, "http://[::1]:8443/api/v3/shells", nil)
+	if err != nil {
+		t.Fatalf("create request: %v", err)
+	}
+	req.Host = "[::1]:8443"
+	req = req.WithContext(ContextWithConfig(context.Background(), cfg))
+
+	if got := ExternalBaseURLFromRequest(req); got != "http://[::1]:8443/api/v3" {
+		t.Fatalf("expected allowed IPv6 direct host with port external base URL, got %q", got)
+	}
+
+	req.Host = "[::1]:9443"
+	if got := ExternalBaseURLFromRequest(req); got != "" {
+		t.Fatalf("expected IPv6 direct host with unallowed port to be rejected, got %q", got)
+	}
+}
+
+func TestExternalBaseURLFromRequestRejectsUnallowedDirectHost(t *testing.T) {
+	cfg := &Config{Server: ServerConfig{ContextPath: "/api/v3"}}
+
+	req, err := http.NewRequest(http.MethodGet, "http://service.local/api/v3/shells", nil)
+	if err != nil {
+		t.Fatalf("create request: %v", err)
+	}
+	req.Host = "evil.example"
+	req = req.WithContext(ContextWithConfig(context.Background(), cfg))
+
+	if got := ExternalBaseURLFromRequest(req); got != "" {
+		t.Fatalf("expected no external base URL from unallowed direct host, got %q", got)
+	}
+}
+
+func TestConfigMiddlewareStoresRequestExternalBaseURL(t *testing.T) {
+	cfg := &Config{Server: ServerConfig{ContextPath: "/api/v3"}}
+	cfg.General.TrustedDynamicHosts = []string{"service.local"}
+
+	handler := ConfigMiddleware(cfg)(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+		if got := RequestExternalBaseURLFromContext(r.Context()); got != "http://service.local/api/v3" {
+			t.Fatalf("expected request external base URL in context, got %q", got)
+		}
+	}))
+
+	req := httptest.NewRequest(http.MethodGet, "http://service.local/api/v3/shells", nil)
+	req.Host = "service.local"
+	handler.ServeHTTP(httptest.NewRecorder(), req)
 }

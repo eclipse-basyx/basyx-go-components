@@ -75,5 +75,11 @@ docker compose down -v
   - `GENERAL_DISCOVERYINTEGRATION=true`
   - `GENERAL_AASREGISTRYINTEGRATION=true`
   - `GENERAL_SUBMODELREGISTRYINTEGRATION=true`
-- Descriptor endpoints are derived from `GENERAL_EXTERNALURL`; for this compose setup it must match the externally reachable backend URL (`http://localhost:8082`).
+- Descriptor endpoints are derived dynamically in this local compose setup. Direct request hosts are accepted only when they match `GENERAL_TRUSTEDDYNAMICHOSTS=localhost`.
+- For production deployments with a stable public backend URL, prefer `GENERAL_EXTERNALURL=https://...`; comma-separated URLs are supported.
+- For generic deployments behind a reverse proxy where the final public host is not known in the compose file, leave `GENERAL_EXTERNALURL` blank and configure the backend to trust only that proxy:
+  - `GENERAL_TRUSTPROXYHEADERS=true`
+  - `GENERAL_TRUSTEDPROXYCIDRS=<proxy CIDR>`
+  - ensure the proxy sends `Forwarded` or `X-Forwarded-*` headers.
+- Do not use dynamic direct-host mode without `GENERAL_TRUSTEDDYNAMICHOSTS`; unlisted `Host` values are ignored for registry descriptor generation.
 - The UI integration hints in `basyx-infra.yml` are aligned with this behavior (`hasDiscoveryIntegration: true`, `hasRegistryIntegration: true`).

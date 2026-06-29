@@ -42,8 +42,9 @@ import (
 // CustomAASRepositoryService is a pass-through stub for future combined logic.
 type CustomAASRepositoryService struct {
 	*aasrepositoryapi.AssetAdministrationShellRepositoryAPIAPIService
-	persistence *Persistence
-	syncConfig  RegistrySyncConfig
+	persistence                *Persistence
+	syncConfig                 RegistrySyncConfig
+	dynamicReconciliationState dynamicRegistryReconciliationState
 }
 
 // NewCustomAASRepositoryService creates a new pass-through AAS repository decorator.
@@ -96,11 +97,13 @@ func (s *CustomAASRepositoryService) PostAssetAdministrationShell(ctx context.Co
 	if !s.syncConfig.AASRegistryIntegration {
 		return s.AssetAdministrationShellRepositoryAPIAPIService.PostAssetAdministrationShell(ctx, aas)
 	}
+	if !s.syncConfig.hasEndpointBaseURL(ctx) {
+		return s.AssetAdministrationShellRepositoryAPIAPIService.PostAssetAdministrationShell(ctx, aas)
+	}
 	if dependencyErr := s.validateSyncDependencies(true, false, false); dependencyErr != nil {
 		return newAASRepoErrorResponse(dependencyErr, http.StatusInternalServerError, operation, "ValidateDependencies"), nil
 	}
-
-	descriptor, descriptorErr := s.syncConfig.buildAASDescriptor(aas)
+	descriptor, descriptorErr := s.syncConfig.buildAASDescriptorForContext(ctx, aas)
 	if descriptorErr != nil {
 		return newAASRepoErrorResponse(descriptorErr, http.StatusBadRequest, operation, "InvalidAssetAdministrationShellData"), nil
 	}
@@ -140,10 +143,12 @@ func (s *CustomAASRepositoryService) PutAssetAdministrationShellById(ctx context
 	if !s.syncConfig.AASRegistryIntegration {
 		return s.AssetAdministrationShellRepositoryAPIAPIService.PutAssetAdministrationShellById(ctx, aasIdentifier, assetAdministrationShell)
 	}
+	if !s.syncConfig.hasEndpointBaseURL(ctx) {
+		return s.AssetAdministrationShellRepositoryAPIAPIService.PutAssetAdministrationShellById(ctx, aasIdentifier, assetAdministrationShell)
+	}
 	if dependencyErr := s.validateSyncDependencies(true, false, false); dependencyErr != nil {
 		return newAASRepoErrorResponse(dependencyErr, http.StatusInternalServerError, operation, "ValidateDependencies"), nil
 	}
-
 	decodedIdentifier, decodeErr := common.DecodeString(aasIdentifier)
 	if decodeErr != nil {
 		return newAASRepoErrorResponse(decodeErr, http.StatusBadRequest, operation, "MalformedAssetAdministrationShellIdentifier"), nil
@@ -157,7 +162,7 @@ func (s *CustomAASRepositoryService) PutAssetAdministrationShellById(ctx context
 		}
 		isUpdate = updated
 
-		descriptor, descriptorErr := s.syncConfig.buildAASDescriptor(assetAdministrationShell)
+		descriptor, descriptorErr := s.syncConfig.buildAASDescriptorForContext(ctx, assetAdministrationShell)
 		if descriptorErr != nil {
 			return descriptorErr
 		}
@@ -231,6 +236,9 @@ func (s *CustomAASRepositoryService) PutAssetInformationAasRepository(ctx contex
 	if !s.syncConfig.AASRegistryIntegration {
 		return s.AssetAdministrationShellRepositoryAPIAPIService.PutAssetInformationAasRepository(ctx, aasIdentifier, assetInformation)
 	}
+	if !s.syncConfig.hasEndpointBaseURL(ctx) {
+		return s.AssetAdministrationShellRepositoryAPIAPIService.PutAssetInformationAasRepository(ctx, aasIdentifier, assetInformation)
+	}
 	if dependencyErr := s.validateSyncDependencies(true, false, false); dependencyErr != nil {
 		return newAASRepoErrorResponse(dependencyErr, http.StatusInternalServerError, operation, "ValidateDependencies"), nil
 	}
@@ -287,6 +295,9 @@ func (s *CustomAASRepositoryService) PutAssetInformationAasRepository(ctx contex
 func (s *CustomAASRepositoryService) PostSubmodelReferenceAasRepository(ctx context.Context, aasIdentifier string, reference types.IReference) (commonmodel.ImplResponse, error) {
 	const operation = "PostSubmodelReferenceAasRepository"
 	if !s.syncConfig.AASRegistryIntegration {
+		return s.AssetAdministrationShellRepositoryAPIAPIService.PostSubmodelReferenceAasRepository(ctx, aasIdentifier, reference)
+	}
+	if !s.syncConfig.hasEndpointBaseURL(ctx) {
 		return s.AssetAdministrationShellRepositoryAPIAPIService.PostSubmodelReferenceAasRepository(ctx, aasIdentifier, reference)
 	}
 	if dependencyErr := s.validateSyncDependencies(true, true, false); dependencyErr != nil {
@@ -352,6 +363,9 @@ func (s *CustomAASRepositoryService) DeleteSubmodelReferenceAasRepository(ctx co
 	if !s.syncConfig.AASRegistryIntegration {
 		return s.AssetAdministrationShellRepositoryAPIAPIService.DeleteSubmodelReferenceAasRepository(ctx, aasIdentifier, submodelIdentifier)
 	}
+	if !s.syncConfig.hasEndpointBaseURL(ctx) {
+		return s.AssetAdministrationShellRepositoryAPIAPIService.DeleteSubmodelReferenceAasRepository(ctx, aasIdentifier, submodelIdentifier)
+	}
 	if dependencyErr := s.validateSyncDependencies(true, false, false); dependencyErr != nil {
 		return newAASRepoErrorResponse(dependencyErr, http.StatusInternalServerError, operation, "ValidateDependencies"), nil
 	}
@@ -403,6 +417,9 @@ func (s *CustomAASRepositoryService) PutSubmodelByIdAasRepository(ctx context.Co
 	if !s.syncConfig.AASRegistryIntegration && !s.syncConfig.SubmodelRegistryIntegration {
 		return s.AssetAdministrationShellRepositoryAPIAPIService.PutSubmodelByIdAasRepository(ctx, aasIdentifier, submodelIdentifier, submodel)
 	}
+	if !s.syncConfig.hasEndpointBaseURL(ctx) {
+		return s.AssetAdministrationShellRepositoryAPIAPIService.PutSubmodelByIdAasRepository(ctx, aasIdentifier, submodelIdentifier, submodel)
+	}
 	if dependencyErr := s.validateSyncDependencies(s.syncConfig.AASRegistryIntegration, true, s.syncConfig.SubmodelRegistryIntegration); dependencyErr != nil {
 		return newAASRepoErrorResponse(dependencyErr, http.StatusInternalServerError, operation, "ValidateDependencies"), nil
 	}
@@ -434,7 +451,7 @@ func (s *CustomAASRepositoryService) PutSubmodelByIdAasRepository(ctx context.Co
 		return newAASRepoErrorResponse(aasLookupErr, http.StatusInternalServerError, operation, "GetAssetAdministrationShellByID"), nil
 	}
 
-	submodelDescriptor, descriptorErr := s.syncConfig.buildSubmodelDescriptor(submodel)
+	submodelDescriptor, descriptorErr := s.syncConfig.buildSubmodelDescriptorForContext(ctx, submodel)
 	if descriptorErr != nil {
 		return newAASRepoErrorResponse(descriptorErr, http.StatusInternalServerError, operation, "BuildSubmodelDescriptor"), nil
 	}
@@ -510,6 +527,9 @@ func (s *CustomAASRepositoryService) PutSubmodelByIdAasRepository(ctx context.Co
 func (s *CustomAASRepositoryService) DeleteSubmodelByIdAasRepository(ctx context.Context, aasIdentifier string, submodelIdentifier string) (commonmodel.ImplResponse, error) {
 	const operation = "DeleteSubmodelByIdAasRepository"
 	if !s.syncConfig.AASRegistryIntegration && !s.syncConfig.SubmodelRegistryIntegration {
+		return s.AssetAdministrationShellRepositoryAPIAPIService.DeleteSubmodelByIdAasRepository(ctx, aasIdentifier, submodelIdentifier)
+	}
+	if !s.syncConfig.hasEndpointBaseURL(ctx) {
 		return s.AssetAdministrationShellRepositoryAPIAPIService.DeleteSubmodelByIdAasRepository(ctx, aasIdentifier, submodelIdentifier)
 	}
 	if dependencyErr := s.validateSyncDependencies(s.syncConfig.AASRegistryIntegration, true, s.syncConfig.SubmodelRegistryIntegration); dependencyErr != nil {
@@ -597,6 +617,9 @@ func (s *CustomAASRepositoryService) PatchSubmodelAasRepository(ctx context.Cont
 	if !s.syncConfig.AASRegistryIntegration && !s.syncConfig.SubmodelRegistryIntegration {
 		return s.AssetAdministrationShellRepositoryAPIAPIService.PatchSubmodelAasRepository(ctx, aasIdentifier, submodelIdentifier, submodel, level)
 	}
+	if !s.syncConfig.hasEndpointBaseURL(ctx) {
+		return s.AssetAdministrationShellRepositoryAPIAPIService.PatchSubmodelAasRepository(ctx, aasIdentifier, submodelIdentifier, submodel, level)
+	}
 	if dependencyErr := s.validateSyncDependencies(s.syncConfig.AASRegistryIntegration, true, s.syncConfig.SubmodelRegistryIntegration); dependencyErr != nil {
 		return newAASRepoErrorResponse(dependencyErr, http.StatusInternalServerError, operation, "ValidateDependencies"), nil
 	}
@@ -649,6 +672,9 @@ func (s *CustomAASRepositoryService) PatchSubmodelAasRepository(ctx context.Cont
 func (s *CustomAASRepositoryService) PatchSubmodelByIdMetadataAasRepository(ctx context.Context, aasIdentifier string, submodelIdentifier string, submodelMetadata commonmodel.SubmodelMetadata) (commonmodel.ImplResponse, error) {
 	const operation = "PatchSubmodelByIdMetadataAasRepository"
 	if !s.syncConfig.AASRegistryIntegration && !s.syncConfig.SubmodelRegistryIntegration {
+		return s.AssetAdministrationShellRepositoryAPIAPIService.PatchSubmodelByIdMetadataAasRepository(ctx, aasIdentifier, submodelIdentifier, submodelMetadata)
+	}
+	if !s.syncConfig.hasEndpointBaseURL(ctx) {
 		return s.AssetAdministrationShellRepositoryAPIAPIService.PatchSubmodelByIdMetadataAasRepository(ctx, aasIdentifier, submodelIdentifier, submodelMetadata)
 	}
 	if dependencyErr := s.validateSyncDependencies(s.syncConfig.AASRegistryIntegration, true, s.syncConfig.SubmodelRegistryIntegration); dependencyErr != nil {
@@ -778,7 +804,7 @@ func (s *CustomAASRepositoryService) buildMergedPatchedSubmodel(ctx context.Cont
 }
 
 func (s *CustomAASRepositoryService) patchSubmodelAndSyncDescriptorsInTransaction(ctx context.Context, aasID string, submodelID string, submodel types.ISubmodel, patchIncludesSubmodelElements bool) error {
-	submodelDescriptor, descriptorErr := s.syncConfig.buildSubmodelDescriptor(submodel)
+	submodelDescriptor, descriptorErr := s.syncConfig.buildSubmodelDescriptorForContext(ctx, submodel)
 	if descriptorErr != nil {
 		return descriptorErr
 	}
@@ -834,7 +860,7 @@ func (s *CustomAASRepositoryService) buildSubmodelDescriptorForReference(ctx con
 
 	submodel, getSubmodelErr := s.persistence.SubmodelRepository.GetSubmodelByID(ctx, submodelID, "core", true)
 	if getSubmodelErr == nil {
-		descriptor, descriptorErr := s.syncConfig.buildSubmodelDescriptor(submodel)
+		descriptor, descriptorErr := s.syncConfig.buildSubmodelDescriptorForContext(ctx, submodel)
 		return descriptor, true, descriptorErr
 	}
 	if !common.IsErrNotFound(getSubmodelErr) && !errors.Is(getSubmodelErr, sql.ErrNoRows) {
@@ -843,7 +869,7 @@ func (s *CustomAASRepositoryService) buildSubmodelDescriptorForReference(ctx con
 
 	return commonmodel.SubmodelDescriptor{
 		Id:        submodelID,
-		Endpoints: s.syncConfig.buildSubmodelDescriptorEndpoints(submodelID),
+		Endpoints: s.syncConfig.buildSubmodelDescriptorEndpointsForContext(ctx, submodelID),
 	}, true, nil
 }
 
@@ -858,7 +884,7 @@ func (s *CustomAASRepositoryService) ensureAASDescriptorForSubmodelSyncInTransac
 	descriptor, getDescriptorErr := s.persistence.AASRegistry.GetAssetAdministrationShellDescriptorByIDInTransaction(ctx, tx, aasID)
 	if getDescriptorErr == nil {
 		if len(descriptor.Endpoints) == 0 {
-			descriptor.Endpoints = s.syncConfig.buildAASDescriptorEndpoints(aasID)
+			descriptor.Endpoints = s.syncConfig.buildAASDescriptorEndpointsForContext(ctx, aasID)
 		}
 		return descriptor, true, nil
 	}
@@ -868,7 +894,7 @@ func (s *CustomAASRepositoryService) ensureAASDescriptorForSubmodelSyncInTransac
 
 	descriptor = commonmodel.AssetAdministrationShellDescriptor{
 		Id:        aasID,
-		Endpoints: s.syncConfig.buildAASDescriptorEndpoints(aasID),
+		Endpoints: s.syncConfig.buildAASDescriptorEndpointsForContext(ctx, aasID),
 	}
 	if fallbackIDShort != "" {
 		descriptor.IdShort = fallbackIDShort

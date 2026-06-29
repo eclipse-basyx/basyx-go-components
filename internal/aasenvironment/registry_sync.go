@@ -26,6 +26,7 @@
 package aasenvironment
 
 import (
+	"context"
 	"fmt"
 	"net/url"
 	"strings"
@@ -89,16 +90,14 @@ func NewRegistrySyncConfig(
 	}
 	config.ExternalBaseURLs = parsedExternalURLs
 
-	if (aasRegistryIntegration || submodelRegistryIntegration) && len(config.ExternalBaseURLs) == 0 {
-		return RegistrySyncConfig{}, common.NewErrBadRequest(
-			"AASENV-REGSYNCCFG-MISSINGEXTERNALURL " + externalURLKey + " must be set when registry synchronization is enabled",
-		)
-	}
-
 	return config, nil
 }
 
 func (c RegistrySyncConfig) buildAASDescriptor(aas types.IAssetAdministrationShell) (commonmodel.AssetAdministrationShellDescriptor, error) {
+	return c.buildAASDescriptorForContext(context.Background(), aas)
+}
+
+func (c RegistrySyncConfig) buildAASDescriptorForContext(ctx context.Context, aas types.IAssetAdministrationShell) (commonmodel.AssetAdministrationShellDescriptor, error) {
 	if aas == nil {
 		return commonmodel.AssetAdministrationShellDescriptor{}, common.NewErrBadRequest(
 			"AASENV-SYNCAAS-NILAAS asset administration shell must not be nil",
@@ -119,18 +118,22 @@ func (c RegistrySyncConfig) buildAASDescriptor(aas types.IAssetAdministrationShe
 		Extensions:          toExtensionValues(aas.Extensions()),
 		AssetKind:           assetKindPointer(assetInformation.AssetKind()),
 		AssetType:           readOptionalString(assetInformation.AssetType()),
-		Endpoints:           c.buildAASDescriptorEndpoints(aas.ID()),
+		Endpoints:           c.buildAASDescriptorEndpointsForContext(ctx, aas.ID()),
 		GlobalAssetId:       readOptionalString(assetInformation.GlobalAssetID()),
 		IdShort:             readOptionalString(aas.IDShort()),
 		Id:                  aas.ID(),
 		SpecificAssetIds:    assetInformation.SpecificAssetIDs(),
-		SubmodelDescriptors: c.buildEmbeddedSubmodelDescriptors(aas.Submodels()),
+		SubmodelDescriptors: c.buildEmbeddedSubmodelDescriptorsForContext(ctx, aas.Submodels()),
 	}
 
 	return descriptor, nil
 }
 
 func (c RegistrySyncConfig) buildSubmodelDescriptor(submodel types.ISubmodel) (commonmodel.SubmodelDescriptor, error) {
+	return c.buildSubmodelDescriptorForContext(context.Background(), submodel)
+}
+
+func (c RegistrySyncConfig) buildSubmodelDescriptorForContext(ctx context.Context, submodel types.ISubmodel) (commonmodel.SubmodelDescriptor, error) {
 	if submodel == nil {
 		return commonmodel.SubmodelDescriptor{}, common.NewErrBadRequest(
 			"AASENV-SYNCSM-NILSUBMODEL submodel must not be nil",
@@ -141,7 +144,7 @@ func (c RegistrySyncConfig) buildSubmodelDescriptor(submodel types.ISubmodel) (c
 		Administration:         submodel.Administration(),
 		Description:            submodel.Description(),
 		DisplayName:            submodel.DisplayName(),
-		Endpoints:              c.buildSubmodelDescriptorEndpoints(submodel.ID()),
+		Endpoints:              c.buildSubmodelDescriptorEndpointsForContext(ctx, submodel.ID()),
 		Extensions:             toExtensionValues(submodel.Extensions()),
 		Id:                     submodel.ID(),
 		IdShort:                readOptionalString(submodel.IDShort()),
@@ -153,16 +156,28 @@ func (c RegistrySyncConfig) buildSubmodelDescriptor(submodel types.ISubmodel) (c
 }
 
 func (c RegistrySyncConfig) buildAASDescriptorEndpoints(aasID string) []commonmodel.Endpoint {
+	return c.buildAASDescriptorEndpointsForContext(context.Background(), aasID)
+}
+
+func (c RegistrySyncConfig) buildAASDescriptorEndpointsForContext(ctx context.Context, aasID string) []commonmodel.Endpoint {
 	encodedID := common.EncodeString(aasID)
-	return c.buildEndpoints("/shells/" + encodedID)
+	return c.buildEndpointsForContext(ctx, "/shells/"+encodedID)
 }
 
 func (c RegistrySyncConfig) buildSubmodelDescriptorEndpoints(submodelID string) []commonmodel.Endpoint {
+	return c.buildSubmodelDescriptorEndpointsForContext(context.Background(), submodelID)
+}
+
+func (c RegistrySyncConfig) buildSubmodelDescriptorEndpointsForContext(ctx context.Context, submodelID string) []commonmodel.Endpoint {
 	encodedID := common.EncodeString(submodelID)
-	return c.buildEndpoints("/submodels/" + encodedID)
+	return c.buildEndpointsForContext(ctx, "/submodels/"+encodedID)
 }
 
 func (c RegistrySyncConfig) buildEmbeddedSubmodelDescriptors(references []types.IReference) []commonmodel.SubmodelDescriptor {
+	return c.buildEmbeddedSubmodelDescriptorsForContext(context.Background(), references)
+}
+
+func (c RegistrySyncConfig) buildEmbeddedSubmodelDescriptorsForContext(ctx context.Context, references []types.IReference) []commonmodel.SubmodelDescriptor {
 	if len(references) == 0 {
 		return []commonmodel.SubmodelDescriptor{}
 	}
@@ -194,7 +209,7 @@ func (c RegistrySyncConfig) buildEmbeddedSubmodelDescriptors(references []types.
 			seen[submodelID] = struct{}{}
 			result = append(result, commonmodel.SubmodelDescriptor{
 				Id:        submodelID,
-				Endpoints: c.buildSubmodelDescriptorEndpoints(submodelID),
+				Endpoints: c.buildSubmodelDescriptorEndpointsForContext(ctx, submodelID),
 			})
 		}
 	}
@@ -202,9 +217,10 @@ func (c RegistrySyncConfig) buildEmbeddedSubmodelDescriptors(references []types.
 	return result
 }
 
-func (c RegistrySyncConfig) buildEndpoints(resourcePath string) []commonmodel.Endpoint {
-	endpoints := make([]commonmodel.Endpoint, 0, len(c.ExternalBaseURLs))
-	for _, externalBaseURL := range c.ExternalBaseURLs {
+func (c RegistrySyncConfig) buildEndpointsForContext(ctx context.Context, resourcePath string) []commonmodel.Endpoint {
+	externalBaseURLs := c.externalBaseURLsForContext(ctx)
+	endpoints := make([]commonmodel.Endpoint, 0, len(externalBaseURLs))
+	for _, externalBaseURL := range externalBaseURLs {
 		endpointURL := strings.TrimRight(externalBaseURL, "/") + resourcePath
 		endpoints = append(endpoints, commonmodel.Endpoint{
 			Interface: "AAS-3.0",
@@ -215,6 +231,23 @@ func (c RegistrySyncConfig) buildEndpoints(resourcePath string) []commonmodel.En
 		})
 	}
 	return endpoints
+}
+
+func (c RegistrySyncConfig) externalBaseURLsForContext(ctx context.Context) []string {
+	if len(c.ExternalBaseURLs) > 0 {
+		return c.ExternalBaseURLs
+	}
+
+	requestExternalBaseURL := common.RequestExternalBaseURLFromContext(ctx)
+	if requestExternalBaseURL == "" {
+		return []string{}
+	}
+
+	return []string{requestExternalBaseURL}
+}
+
+func (c RegistrySyncConfig) hasEndpointBaseURL(ctx context.Context) bool {
+	return len(c.externalBaseURLsForContext(ctx)) > 0
 }
 
 func parseExternalBaseURLs(rawExternalURL string) ([]string, error) {

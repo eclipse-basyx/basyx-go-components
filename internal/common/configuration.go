@@ -78,6 +78,7 @@ var DefaultConfig = struct {
 	GeneralEnableCustomHeaderMW         bool
 	GeneralTrustProxyHeaders            bool
 	GeneralTrustedProxyCIDRs            []string
+	GeneralTrustedDynamicHosts          []string
 	GeneralAASPreconfigPaths            []string
 	GeneralBulkBatchLimit               int
 	HistoryConfigMode                   string
@@ -137,6 +138,7 @@ var DefaultConfig = struct {
 	GeneralEnableCustomHeaderMW:         false,
 	GeneralTrustProxyHeaders:            false,
 	GeneralTrustedProxyCIDRs:            []string{},
+	GeneralTrustedDynamicHosts:          []string{},
 	GeneralAASPreconfigPaths:            []string{},
 	GeneralBulkBatchLimit:               1000,
 	HistoryConfigMode:                   "off",
@@ -359,6 +361,7 @@ type GeneralConfig struct {
 	ExternalURL                            string   `mapstructure:"externalUrl" yaml:"externalUrl" json:"externalUrl"`                                                                                  // Public base URL(s) used for registry synchronization endpoint generation
 	TrustProxyHeaders                      bool     `mapstructure:"trustProxyHeaders" yaml:"trustProxyHeaders" json:"trustProxyHeaders"`                                                                // Trust Forwarded/X-Forwarded-* headers when request source matches trustedProxyCIDRs
 	TrustedProxyCIDRs                      []string `mapstructure:"trustedProxyCIDRs" yaml:"trustedProxyCIDRs" json:"trustedProxyCIDRs"`                                                                // CIDR allowlist for proxy source addresses eligible to provide forwarded headers
+	TrustedDynamicHosts                    []string `mapstructure:"trustedDynamicHosts" yaml:"trustedDynamicHosts" json:"trustedDynamicHosts"`                                                          // Host allowlist for direct request-derived registry endpoint URLs when proxy headers are not trusted
 	UploadMaxSizeBytes                     int64    `mapstructure:"uploadMaxSizeBytes" yaml:"uploadMaxSizeBytes" json:"uploadMaxSizeBytes"`                                                             // Maximum allowed upload payload size in bytes
 	AASPreconfigPaths                      []string `mapstructure:"aasPreconfigPaths" yaml:"aasPreconfigPaths" json:"aasPreconfigPaths"`                                                                // Files/directories loaded at startup for AAS preconfiguration
 	BulkBatchLimit                         int      `mapstructure:"bulkBatchLimit" yaml:"bulkBatchLimit" json:"bulkBatchLimit"`                                                                         // Maximum row count per generated bulk SQL statement
@@ -1070,6 +1073,7 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("general.externalUrl", "")
 	v.SetDefault("general.trustProxyHeaders", DefaultConfig.GeneralTrustProxyHeaders)
 	v.SetDefault("general.trustedProxyCIDRs", DefaultConfig.GeneralTrustedProxyCIDRs)
+	v.SetDefault("general.trustedDynamicHosts", DefaultConfig.GeneralTrustedDynamicHosts)
 	v.SetDefault("general.uploadMaxSizeBytes", int64(128<<20))
 	v.SetDefault("general.aasPreconfigPaths", []string{})
 	v.SetDefault("general.bulkBatchLimit", DefaultConfig.GeneralBulkBatchLimit)
