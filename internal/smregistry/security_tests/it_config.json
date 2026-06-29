@@ -140,11 +140,11 @@
     "expectedStatus": 200
   },
   {
-    "context": "GET /submodel-descriptors/$recent-changes - ANON - filtered",
+    "context": "GET /submodel-descriptors - ANON - filtered",
     "action": "ASSERT_RECENT_CHANGE_IDS",
     "token": null,
     "method": "GET",
-    "endpoint": "http://localhost:6005/submodel-descriptors/$recent-changes?limit=20",
+    "endpoint": "http://localhost:6005/submodel-descriptors?limit=20",
     "shouldMatch": "expected/expectedRecentChangesAnonDescriptorIDs.json",
     "expectedStatus": 200
   },
@@ -157,11 +157,11 @@
     "expectedStatus": 200
   },
   {
-    "context": "GET /submodel-descriptors/$recent-changes - User A - filtered",
+    "context": "GET /submodel-descriptors - User A - filtered",
     "action": "ASSERT_RECENT_CHANGE_IDS",
     "token": { "user": "usera", "password": "pwd" },
     "method": "GET",
-    "endpoint": "http://localhost:6005/submodel-descriptors/$recent-changes?limit=20",
+    "endpoint": "http://localhost:6005/submodel-descriptors?limit=20",
     "shouldMatch": "expected/expectedRecentChangesUserADescriptorIDs.json",
     "expectedStatus": 200
   },
@@ -174,11 +174,11 @@
     "expectedStatus": 200
   },
   {
-    "context": "GET /submodel-descriptors/$recent-changes - User B - filtered",
+    "context": "GET /submodel-descriptors - User B - filtered",
     "action": "ASSERT_RECENT_CHANGE_IDS",
     "token": { "user": "userb", "password": "pwd" },
     "method": "GET",
-    "endpoint": "http://localhost:6005/submodel-descriptors/$recent-changes?limit=20",
+    "endpoint": "http://localhost:6005/submodel-descriptors?limit=20",
     "shouldMatch": "expected/expectedRecentChangesUserBDescriptorIDs.json",
     "expectedStatus": 200
   },
@@ -207,11 +207,11 @@
     "expectedStatus": 200
   },
   {
-    "context": "GET /submodel-descriptors/$recent-changes - ADMIN - filtered",
+    "context": "GET /submodel-descriptors - ADMIN - filtered",
     "action": "ASSERT_RECENT_CHANGE_IDS",
     "token": { "user": "admin", "password": "pwd" },
     "method": "GET",
-    "endpoint": "http://localhost:6005/submodel-descriptors/$recent-changes?limit=20",
+    "endpoint": "http://localhost:6005/submodel-descriptors?limit=20",
     "shouldMatch": "expected/expectedRecentChangesAdminDescriptorIDs.json",
     "expectedStatus": 200
   },

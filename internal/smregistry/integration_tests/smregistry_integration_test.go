@@ -79,8 +79,13 @@ func cleanupSubmodelDescriptorHTTP(t *testing.T, submodelID string) {
 }
 
 func buildSubmodelDescriptorPayload(submodelID string, tag string) map[string]any {
+	administrationTimestamp := time.Now().UTC().Format(time.RFC3339Nano)
 	return map[string]any{
 		"id": submodelID,
+		"administration": map[string]any{
+			"createdAt": administrationTimestamp,
+			"updatedAt": administrationTimestamp,
+		},
 		"endpoints": []any{
 			map[string]any{
 				"interface": "AAS-3.0",
@@ -130,9 +135,11 @@ func assertLocationHeaderMatches(t *testing.T, expectedLocation string, actualLo
 func TestSubmodelRegistryRecentChanges(t *testing.T) {
 	prefix := fmt.Sprintf("urn:example:sm:recent-%d", time.Now().UnixNano())
 	currentID := prefix + "-current"
+	secondID := prefix + "-second"
 	deletedID := prefix + "-deleted"
 	t.Cleanup(func() {
 		cleanupSubmodelDescriptorHTTP(t, currentID)
+		cleanupSubmodelDescriptorHTTP(t, secondID)
 		cleanupSubmodelDescriptorHTTP(t, deletedID)
 	})
 
@@ -147,65 +154,74 @@ func TestSubmodelRegistryRecentChanges(t *testing.T) {
 	statusCode, body, _ = doRequest(t, smNoRedirectClient, http.MethodPut, endpoint+"/"+currentIdentifier, buildSubmodelDescriptorPayload(currentID, "v2"))
 	require.Equal(t, http.StatusNoContent, statusCode, "response=%s", string(body))
 
+	statusCode, body, _ = doRequest(t, smNoRedirectClient, http.MethodPost, endpoint, buildSubmodelDescriptorPayload(secondID, "second"))
+	require.Equal(t, http.StatusCreated, statusCode, "response=%s", string(body))
+
 	statusCode, body, _ = doRequest(t, smNoRedirectClient, http.MethodPost, endpoint, buildSubmodelDescriptorPayload(deletedID, "deleted"))
 	require.Equal(t, http.StatusCreated, statusCode, "response=%s", string(body))
 	deletedIdentifier := base64.RawURLEncoding.EncodeToString([]byte(deletedID))
 	statusCode, body, _ = doRequest(t, smNoRedirectClient, http.MethodDelete, endpoint+"/"+deletedIdentifier, nil)
 	require.Equal(t, http.StatusNoContent, statusCode, "response=%s", string(body))
 
-	updatedPage := getRecentSubmodelDescriptorPage(t, url.Values{
+	updatedPage := getSubmodelDescriptorPage(t, url.Values{
 		"updatedFrom": []string{changedAfter.Format(time.RFC3339Nano)},
 		"limit":       []string{"10"},
 	})
-	require.ElementsMatch(t, []string{"v1", "v2"}, descriptorTagValues(updatedPage, currentID))
+	require.ElementsMatch(t, []string{"v2"}, descriptorTagValues(updatedPage, currentID))
+	require.ElementsMatch(t, []string{"second"}, descriptorTagValues(updatedPage, secondID))
 	require.Empty(t, descriptorTagValues(updatedPage, deletedID))
 
-	createdPage := getRecentSubmodelDescriptorPage(t, url.Values{
+	createdPage := getSubmodelDescriptorPage(t, url.Values{
 		"createdFrom": []string{changedAfter.Format(time.RFC3339Nano)},
 		"limit":       []string{"10"},
 	})
-	require.NotEmpty(t, descriptorTagValues(createdPage, currentID))
+	require.ElementsMatch(t, []string{"v2"}, descriptorTagValues(createdPage, currentID))
+	require.ElementsMatch(t, []string{"second"}, descriptorTagValues(createdPage, secondID))
 	require.Empty(t, descriptorTagValues(createdPage, deletedID))
 
-	firstPage := getRecentSubmodelDescriptorPage(t, url.Values{
+	firstPage := getSubmodelDescriptorPage(t, url.Values{
 		"updatedFrom": []string{changedAfter.Format(time.RFC3339Nano)},
 		"limit":       []string{"1"},
 	})
 	require.Len(t, firstPage.Result, 1)
 	require.NotEmpty(t, firstPage.PagingMetadata.Cursor)
+	firstPageID, _ := firstPage.Result[0]["id"].(string)
+	require.Contains(t, []string{currentID, secondID}, firstPageID)
 
-	secondPage := getRecentSubmodelDescriptorPage(t, url.Values{
+	secondPage := getSubmodelDescriptorPage(t, url.Values{
 		"updatedFrom": []string{changedAfter.Format(time.RFC3339Nano)},
 		"limit":       []string{"1"},
 		"cursor":      []string{firstPage.PagingMetadata.Cursor},
 	})
 	require.Len(t, secondPage.Result, 1)
-	require.Equal(t, currentID, secondPage.Result[0]["id"])
+	secondPageID, _ := secondPage.Result[0]["id"].(string)
+	require.Contains(t, []string{currentID, secondID}, secondPageID)
+	require.NotEqual(t, firstPageID, secondPageID)
 }
 
-type recentSubmodelDescriptorPage struct {
+type submodelDescriptorPage struct {
 	PagingMetadata struct {
 		Cursor string `json:"cursor"`
 	} `json:"paging_metadata"`
 	Result []map[string]any `json:"result"`
 }
 
-func getRecentSubmodelDescriptorPage(t *testing.T, query url.Values) recentSubmodelDescriptorPage {
+func getSubmodelDescriptorPage(t *testing.T, query url.Values) submodelDescriptorPage {
 	t.Helper()
 
-	endpoint := smRegistryBaseURL + "/submodel-descriptors/$recent-changes"
+	endpoint := smRegistryBaseURL + "/submodel-descriptors"
 	if len(query) > 0 {
 		endpoint += "?" + query.Encode()
 	}
 	statusCode, body, _ := doRequest(t, smNoRedirectClient, http.MethodGet, endpoint, nil)
 	require.Equal(t, http.StatusOK, statusCode, "response=%s", string(body))
 
-	var page recentSubmodelDescriptorPage
+	var page submodelDescriptorPage
 	require.NoError(t, json.Unmarshal(body, &page))
 	return page
 }
 
-func descriptorTagValues(page recentSubmodelDescriptorPage, descriptorID string) []string {
+func descriptorTagValues(page submodelDescriptorPage, descriptorID string) []string {
 	values := []string{}
 	for _, descriptor := range page.Result {
 		if descriptor["id"] != descriptorID {
