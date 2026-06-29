@@ -2,6 +2,10 @@
   "paging_metadata": {},
   "result": [
     {
+      "administration": {
+        "createdAt": "2030-01-02T03:04:05Z",
+        "updatedAt": "2030-01-02T03:04:06Z"
+      },
       "assetInformation": {
         "assetKind": "Instance",
         "assetType": "viewer-visible"

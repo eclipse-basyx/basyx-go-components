@@ -1,5 +1,9 @@
 {
   "id": "urn:example:cd:viewer:allowed",
   "idShort": "ViewerAllowed",
+  "administration": {
+    "createdAt": "2030-01-02T03:04:05Z",
+    "updatedAt": "2030-01-02T03:04:06Z"
+  },
   "modelType": "ConceptDescription"
 }

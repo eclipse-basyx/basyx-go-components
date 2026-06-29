@@ -367,7 +367,7 @@ Generated component routes are classified centrally by operation name during ser
 
 ## Recent Changes
 
-Recent-change endpoints are data-bound current-state reads. They use the same live repository queries as the matching `GET all` endpoints, including administrative timestamp filters, and only project the result into the V3.2 recent-change response shape. The default page size is `100`; requests above `1000` are rejected.
+Recent-change endpoints are data-bound current-state reads. They use the same live repository queries as the matching `GET all` endpoints, including administrative timestamp filters, and only project the result into the V3.2 recent-change response shape. The default page size is `100`.
 
 ```mermaid
 flowchart LR
@@ -503,7 +503,7 @@ Delete rows are stored internally as compact tombstones where supported, but pub
 
 ### Existing Data After Migration
 
-Migration does not create history rows or backfill administrative timestamps for existing data. The first complete write records the supplied current snapshot after write-side timestamp normalization. The first partial write falls back to a one-time complete current-state materialization if no prior history snapshot exists, and also updates the live administrative update timestamp.
+Migration does not create history rows or backfill administrative timestamps for existing data. The first complete write records the supplied current snapshot without generating or overwriting administrative timestamps. The first partial write falls back to a one-time complete current-state materialization if no prior history snapshot exists.
 
 ### AAS Environment
 

@@ -121,7 +121,7 @@ history:
 Mode semantics:
 
 - `off`: new history writes are skipped. Existing history rows remain readable.
-- `api`: functional AAS v3.2 history and recent-change behavior for API consumers.
+- `api`: functional AAS v3.2 history behavior for API consumers.
 - `audit`: the same runtime snapshot writes as `api`, intended for audit-oriented deployments where guarded storage is configured explicitly.
 
 Current implementation status:
@@ -199,7 +199,7 @@ The verifier and recovery modes print machine-readable JSON and exit non-zero wh
 
 When versioning is active, each supported identifiable create, update, or delete appends a new row to a dedicated history table. With `fullSnapshotInterval: 1`, every row stores a complete identifiable snapshot. With a larger interval, the runtime stores a full checkpoint followed by up to `N-1` RFC 6902 diffs against the previous reconstructed snapshot.
 
-For example, `history.fullSnapshotInterval: 3` stores at most two diffs after a checkpoint: `snapshot, diff, diff, snapshot...`. The runtime may insert an earlier full snapshot when the diff JSON would not be smaller than the full snapshot payload. Historical reads and recent-change feeds rebuild the full snapshot at query time from the nearest checkpoint and verify the stored payload/content hashes before returning it.
+For example, `history.fullSnapshotInterval: 3` stores at most two diffs after a checkpoint: `snapshot, diff, diff, snapshot...`. The runtime may insert an earlier full snapshot when the diff JSON would not be smaller than the full snapshot payload. Historical reads rebuild the full snapshot at query time from the nearest checkpoint and verify the stored payload/content hashes before returning it.
 
 ```mermaid
 flowchart LR
@@ -208,7 +208,7 @@ flowchart LR
     Mode -->|off| Done["No history append"]
     Mode -->|api or audit| Snapshot["Build complete identifiable snapshot"]
     Snapshot --> History["INSERT metadata and snapshot/diff payload row"]
-    History --> Read["$history and $recent-changes rebuild full snapshots"]
+    History --> Read["$history rebuilds full snapshots"]
 ```
 
 The owning identifiable depends on the write:
@@ -315,7 +315,7 @@ These routes delegate to the same Submodel behavior. An SME-only change appends 
 
 ## Recent Changes
 
-Recent-change endpoints return append-only, cursor-paged results from the history tables. Their result shape depends on the component:
+Recent-change endpoints return cursor-paged projections of the current repository rows that carry valid administrative timestamps. Their result shape depends on the component:
 
 | Component | Result fields |
 | --- | --- |
@@ -335,7 +335,7 @@ curl 'http://localhost:6004/submodels/$recent-changes?limit=50&updatedFrom=2026-
 
 Common query parameters:
 
-- `limit`: maximum number of changes to return. The default is `100`; the maximum accepted value is `1000`.
+- `limit`: maximum number of changes to return. The default is `100`.
 - `cursor`: pagination cursor from the previous response.
 - `createdFrom`: lower bound for administrative creation timestamps.
 - `updatedFrom`: lower bound for administrative update timestamps.
@@ -345,7 +345,7 @@ Additional filters:
 - AAS recent changes support `assetIds`. Each value is a base64url-encoded `SpecificAssetId`.
 - Submodel recent changes support `semanticId`. Its semantic-reference value is base64url encoded.
 
-Recent-change endpoints use the current repository rows and project them into the V3.2 recent-change response shape. The `createdFrom` and `updatedFrom` filters use the administrative timestamps supplied in the persisted resource payload. BaSyx does not generate or overwrite `administration.createdAt` or `administration.updatedAt`. Resources without administrative timestamps are not matched by timestamp filters. Deleted resources do not appear in public recent-change results, while internal history rows remain available for historical reconstruction when history is enabled.
+Recent-change endpoints use the current repository rows and project them into the V3.2 recent-change response shape. The `createdFrom` and `updatedFrom` filters use the administrative timestamps supplied in the persisted resource payload. BaSyx does not generate or overwrite `administration.createdAt` or `administration.updatedAt`. Resources without valid administrative timestamps are not returned by public recent-change endpoints. Deleted resources do not appear in public recent-change results, while internal history rows remain available for historical reconstruction when history is enabled.
 
 Registry descriptor list endpoints use current descriptor rows and accept timestamp filters directly:
 
