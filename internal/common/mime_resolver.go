@@ -26,7 +26,11 @@
 package common
 
 import (
+	"bytes"
+	"errors"
+	"io"
 	"mime"
+	"net/http"
 	"path/filepath"
 	"strings"
 )
@@ -59,6 +63,27 @@ func ResolveUploadedContentType(detectedContentType, declaredContentType, fileNa
 	}
 
 	return fallbackBinaryContentType, false
+}
+
+// SniffContentTypeReader detects a stream's content type and returns a reader
+// that replays the sniffed bytes before continuing with the remaining stream.
+func SniffContentTypeReader(reader io.Reader) (string, io.Reader, error) {
+	if reader == nil {
+		return "", nil, errors.New("reader is nil")
+	}
+
+	contentTypeBuffer := make([]byte, 512)
+	readBytes, err := io.ReadFull(reader, contentTypeBuffer)
+	if err != nil && !errors.Is(err, io.EOF) && !errors.Is(err, io.ErrUnexpectedEOF) {
+		return "", nil, err
+	}
+
+	detectedContentType := fallbackBinaryContentType
+	if readBytes > 0 {
+		detectedContentType = http.DetectContentType(contentTypeBuffer[:readBytes])
+	}
+
+	return detectedContentType, io.MultiReader(bytes.NewReader(contentTypeBuffer[:readBytes]), reader), nil
 }
 
 func normalizeContentType(rawContentType string) string {

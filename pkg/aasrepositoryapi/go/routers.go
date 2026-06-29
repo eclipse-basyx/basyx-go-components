@@ -15,7 +15,6 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
-	"mime/multipart"
 	"net/http"
 	"net/url"
 	"os"
@@ -151,65 +150,19 @@ func EncodeJSONResponse(i interface{}, status *int, w http.ResponseWriter) error
 	return nil
 }
 
-// ReadFormFileToTempFile reads file data from a request form and writes it to a temporary file
-func ReadFormFileToTempFile(r *http.Request, key string) (*os.File, error) {
-	formFile, fileHeader, err := r.FormFile(key)
-	if err != nil {
-		return nil, err
-	}
-	defer formFile.Close()
-
-	return readFileHeaderToTempFile(fileHeader)
-}
-
-// ReadFormFilesToTempFiles reads files array data from a request form and writes it to a temporary files
-func ReadFormFilesToTempFiles(r *http.Request, key string) ([]*os.File, error) {
-	if err := r.ParseMultipartForm(32 << 20); err != nil {
-		return nil, err
+// HandleMultipartFileStream streams a multipart file part without staging it on disk.
+func HandleMultipartFileStream(r *http.Request, fileKey string, fileNameKey string, handleFile func(fileName string, file io.Reader) error) error {
+	err := model.HandleMultipartFileStream(r, fileKey, fileNameKey, handleFile)
+	if err == nil {
+		return nil
 	}
 
-	files := make([]*os.File, 0, len(r.MultipartForm.File[key]))
-
-	for _, fileHeader := range r.MultipartForm.File[key] {
-		file, err := readFileHeaderToTempFile(fileHeader)
-		if err != nil {
-			return nil, err
-		}
-
-		files = append(files, file)
+	var parsingErr *model.ParsingError
+	if errors.As(err, &parsingErr) {
+		return &ParsingError{Param: parsingErr.Param, Err: parsingErr.Err}
 	}
 
-	return files, nil
-}
-
-// readFileHeaderToTempFile reads multipart.FileHeader and writes it to a temporary file
-func readFileHeaderToTempFile(fileHeader *multipart.FileHeader) (*os.File, error) {
-	formFile, err := fileHeader.Open()
-	if err != nil {
-		return nil, err
-	}
-
-	defer formFile.Close()
-
-	// Use .* as suffix, because the asterisk is a placeholder for the random value,
-	// and the period allows consumers of this file to remove the suffix to obtain the original file name
-	file, err := os.CreateTemp("", fileHeader.Filename+".*")
-	if err != nil {
-		return nil, err
-	}
-
-	_, err = io.Copy(file, formFile)
-	if err != nil {
-		_ = file.Close()
-		return nil, err
-	}
-
-	if _, err = file.Seek(0, 0); err != nil {
-		_ = file.Close()
-		return nil, err
-	}
-
-	return file, nil
+	return err
 }
 
 func parseTimes(param string) ([]time.Time, error) {

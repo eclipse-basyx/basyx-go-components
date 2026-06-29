@@ -17,9 +17,9 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
-	"os"
 	"reflect"
 	"strings"
 	"time"
@@ -2501,7 +2501,7 @@ func (s *SubmodelRepositoryAPIAPIService) GetFileByPathSubmodelRepo(ctx context.
 // PutFileByPathSubmodelRepo - Uploads file content to an existing submodel element at a specified path within submodel elements hierarchy
 //
 //nolint:revive
-func (s *SubmodelRepositoryAPIAPIService) PutFileByPathSubmodelRepo(ctx context.Context, submodelIdentifier string, idShortPath string, fileName string, file *os.File) (gen.ImplResponse, error) {
+func (s *SubmodelRepositoryAPIAPIService) PutFileByPathSubmodelRepo(ctx context.Context, submodelIdentifier string, idShortPath string, fileName string, file io.Reader) (gen.ImplResponse, error) {
 	const operation = "PutFileByPathSubmodelRepo"
 
 	decodedSubmodelIdentifier, decodeErr := common.DecodeString(submodelIdentifier)
@@ -2543,7 +2543,7 @@ func (s *SubmodelRepositoryAPIAPIService) PutFileByPathSubmodelRepo(ctx context.
 		}
 	}
 
-	err = s.submodelBackend.UploadFileAttachmentWithHistory(ctx, decodedSubmodelIdentifier, idShortPath, file, fileName)
+	err = s.submodelBackend.UploadFileAttachmentReaderWithHistory(ctx, decodedSubmodelIdentifier, idShortPath, file, fileName)
 	if err != nil {
 		if common.IsErrNotFound(err) || errors.Is(err, sql.ErrNoRows) {
 			return newAPIErrorResponse(err, http.StatusNotFound, operation, "SubmodelElementNotFound"), nil

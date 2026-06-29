@@ -16,7 +16,6 @@ import (
 	"io"
 	"log"
 	"net/http"
-	"os"
 	"strings"
 	"time"
 
@@ -2044,17 +2043,8 @@ func (c *SubmodelRepositoryAPIAPIController) GetFileByPathSubmodelRepo(w http.Re
 
 // PutFileByPathSubmodelRepo - Uploads file content to an existing submodel element at a specified path within submodel elements hierarchy
 func (c *SubmodelRepositoryAPIAPIController) PutFileByPathSubmodelRepo(w http.ResponseWriter, r *http.Request) {
-	r.Body = http.MaxBytesReader(w, r.Body, uploadMaxSizeFromRequestContext(r))
-
-	if err := r.ParseMultipartForm(32 << 20); err != nil {
-		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
-		return
-	}
-	defer func() {
-		if r.MultipartForm != nil {
-			_ = r.MultipartForm.RemoveAll()
-		}
-	}()
+	maxUploadSizeBytes := uploadMaxSizeFromRequestContext(r)
+	r.Body = http.MaxBytesReader(w, r.Body, maxUploadSizeBytes)
 
 	submodelIdentifierParam := chi.URLParam(r, "submodelIdentifier")
 	if submodelIdentifierParam == "" {
@@ -2067,28 +2057,12 @@ func (c *SubmodelRepositoryAPIAPIController) PutFileByPathSubmodelRepo(w http.Re
 		return
 	}
 
-	fileNameParam := r.FormValue("fileName")
-	var fileParam *os.File
-	{
-		param, err := ReadFormFileToTempFile(r, "file")
-		if err != nil {
-			c.errorHandler(w, r, &ParsingError{Param: "file", Err: err}, nil)
-			return
-		}
-
-		fileParam = param
-	}
-	defer func() {
-		if fileParam != nil {
-			tempFilePath := fileParam.Name()
-			_ = fileParam.Close()
-			// #nosec G703 -- path comes from server-generated temporary file.
-			_ = os.Remove(tempFilePath)
-		}
-	}()
-
-	result, err := c.service.PutFileByPathSubmodelRepo(r.Context(), submodelIdentifierParam, idShortPathParam, fileNameParam, fileParam)
-	// If an error occurred, encode the error with the status code
+	var result model.ImplResponse
+	err := HandleMultipartFileStream(r, "file", "fileName", func(fileName string, file io.Reader) error {
+		var uploadErr error
+		result, uploadErr = c.service.PutFileByPathSubmodelRepo(r.Context(), submodelIdentifierParam, idShortPathParam, fileName, file)
+		return uploadErr
+	})
 	if err != nil {
 		c.errorHandler(w, r, err, &result)
 		return

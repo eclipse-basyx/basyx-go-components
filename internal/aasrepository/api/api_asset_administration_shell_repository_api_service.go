@@ -17,8 +17,8 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
-	"os"
 	"strings"
 	"time"
 
@@ -611,7 +611,7 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) GetThumbnailAasReposit
 }
 
 // PutThumbnailAasRepository -
-func (s *AssetAdministrationShellRepositoryAPIAPIService) PutThumbnailAasRepository(ctx context.Context, aasIdentifier string, fileName string, file *os.File) (gen.ImplResponse, error) {
+func (s *AssetAdministrationShellRepositoryAPIAPIService) PutThumbnailAasRepository(ctx context.Context, aasIdentifier string, fileName string, file io.Reader) (gen.ImplResponse, error) {
 
 	const operation = "PutThumbnailAasRepository"
 
@@ -620,7 +620,7 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) PutThumbnailAasReposit
 		return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "MalformedAssetAdministrationShellIdentifier"), nil
 	}
 
-	err := s.assetAdministrationShellBackend.PutThumbnailByAASID(ctx, decodedIdentifier, fileName, file)
+	err := s.assetAdministrationShellBackend.PutThumbnailByAASIDReader(ctx, decodedIdentifier, fileName, file)
 	if err != nil {
 		if common.IsErrDenied(err) {
 			return newAPIErrorResponse(err, http.StatusForbidden, operation, "Forbidden"), nil
@@ -1543,7 +1543,7 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) GetFileByPathAasReposi
 }
 
 // PutFileByPathAasRepository - Uploads file content to an existing submodel element at a specified path within submodel elements hierarchy
-func (s *AssetAdministrationShellRepositoryAPIAPIService) PutFileByPathAasRepository(ctx context.Context, aasIdentifier string, submodelIdentifier string, idShortPath string, fileName string, file *os.File) (gen.ImplResponse, error) {
+func (s *AssetAdministrationShellRepositoryAPIAPIService) PutFileByPathAasRepository(ctx context.Context, aasIdentifier string, submodelIdentifier string, idShortPath string, fileName string, file io.Reader) (gen.ImplResponse, error) {
 	const operation = "PutFileByPathAasRepository"
 
 	if response, err, ok := s.ensureSubmodelBackend(operation); !ok {

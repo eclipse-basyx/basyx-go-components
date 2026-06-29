@@ -29,9 +29,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"mime/multipart"
 	"net/http"
-	"os"
 	"strings"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
@@ -54,7 +54,7 @@ func RegisterUploadAPI(r chi.Router, service UploadService, maxUploadSizeBytes i
 
 // UploadService defines upload business logic without HTTP dependencies.
 type UploadService interface {
-	HandleUpload(ctx context.Context, fileName string, contentType string, file *os.File) (commonmodel.ImplResponse, error)
+	HandleUpload(ctx context.Context, fileName string, contentType string, file io.ReadSeeker) (commonmodel.ImplResponse, error)
 }
 
 type uploadAPI struct {
@@ -65,7 +65,7 @@ type uploadAPI struct {
 func (a *uploadAPI) HandleUpload(w http.ResponseWriter, r *http.Request) {
 	r.Body = http.MaxBytesReader(w, r.Body, a.maxUploadSizeBytes)
 
-	if err := r.ParseMultipartForm(32 << 20); err != nil {
+	if err := r.ParseMultipartForm(a.maxUploadSizeBytes); err != nil {
 		var maxBytesError *http.MaxBytesError
 		if errors.As(err, &maxBytesError) {
 			writeUploadError(
@@ -100,13 +100,13 @@ func (a *uploadAPI) HandleUpload(w http.ResponseWriter, r *http.Request) {
 	}
 	fileName = sanitizeUploadFileName(fileName)
 
-	file, err := commonmodel.ReadFileHeaderToTempFile(fileHeader)
+	file, err := openMultipartFile(fileHeader)
 	if err != nil {
 		writeUploadError(w, http.StatusBadRequest, err, "AASENV-UPLOAD-READFILE")
 		return
 	}
 	defer func() {
-		closeAndRemoveTempFile(file)
+		_ = file.Close()
 	}()
 
 	result, err := a.service.HandleUpload(r.Context(), fileName, contentType, file)
@@ -118,6 +118,14 @@ func (a *uploadAPI) HandleUpload(w http.ResponseWriter, r *http.Request) {
 	if encErr := commonmodel.EncodeJSONResponse(result.Body, &result.Code, w); encErr != nil {
 		writeUploadError(w, http.StatusInternalServerError, encErr, "AASENV-UPLOAD-ENCODERESPONSE")
 	}
+}
+
+func openMultipartFile(fileHeader *multipart.FileHeader) (multipart.File, error) {
+	formFile, err := fileHeader.Open()
+	if err != nil {
+		return nil, err
+	}
+	return formFile, nil
 }
 
 func writeUploadError(w http.ResponseWriter, status int, err error, info string) {
