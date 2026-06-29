@@ -585,6 +585,9 @@ func (p *PostgreSQLAASRegistryDatabase) ReplaceSubmodelDescriptorForAAS(
 ) (model.SubmodelDescriptor, error) {
 	var result model.SubmodelDescriptor
 	err := common.ExecuteInTransaction(p.db, "AASREG-REPLACESMDESCFORAAS-STARTTX", "AASREG-REPLACESMDESCFORAAS-COMMIT", func(tx *sql.Tx) error {
+		if _, err := descriptors.GetSubmodelDescriptorForAASByID(ctx, tx, aasID, submodel.Id); err != nil {
+			return err
+		}
 		if err := descriptors.DeleteSubmodelDescriptorForAASByIDTx(ctx, tx, aasID, submodel.Id); err != nil {
 			return err
 		}

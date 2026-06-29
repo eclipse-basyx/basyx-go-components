@@ -112,8 +112,6 @@ func TestAASRepositoryHistoryRecentChangesAndBatchAssetKind(t *testing.T) {
 	require.Equal(t, http.StatusOK, status)
 	require.Equal(t, "type-v2", current["assetInformation"].(map[string]any)["assetType"])
 
-	time.Sleep(30 * time.Millisecond)
-
 	childUpdateBody := fmt.Sprintf(`{"assetKind":"Batch","assetType":"type-v3-child","globalAssetId":%q}`, globalAssetID)
 	_, status, _, err = putJSONResponse(baseURL+"/shells/"+encodedAASID+"/asset-information", childUpdateBody)
 	require.NoError(t, err)
@@ -138,13 +136,18 @@ func TestAASRepositoryHistoryRecentChangesAndBatchAssetKind(t *testing.T) {
 	recent, status, err := getJSONResponse(baseURL + "/shells/$recent-changes?limit=10")
 	require.NoError(t, err)
 	require.Equal(t, http.StatusOK, status)
-	requireRecentChangesForID(t, recent, aasID, 3)
+	requireRecentChangesForID(t, recent, aasID, 1)
 	requireRecentSpecificAssetID(t, recent, aasID, specificAssetIDName, specificAssetIDValue)
+
+	recent, status, err = getJSONResponse(baseURL + "/shells/$recent-changes?limit=10&updatedFrom=" + url.QueryEscape("2026-01-02T03:04:08Z"))
+	require.NoError(t, err)
+	require.Equal(t, http.StatusOK, status)
+	requireNoRecentChangesForID(t, recent, aasID)
 
 	recent, status, err = getJSONResponse(baseURL + "/shells/$recent-changes?limit=10&assetIds=" + url.QueryEscape(encodedAssetID))
 	require.NoError(t, err)
 	require.Equal(t, http.StatusOK, status)
-	requireRecentChangesForID(t, recent, aasID, 3)
+	requireRecentChangesForID(t, recent, aasID, 1)
 
 	status, err = deleteResponseStatus(baseURL + "/shells/" + encodedAASID)
 	require.NoError(t, err)
@@ -158,7 +161,7 @@ func TestAASRepositoryHistoryRecentChangesAndBatchAssetKind(t *testing.T) {
 	recent, status, err = getJSONResponse(baseURL + "/shells/$recent-changes?limit=10")
 	require.NoError(t, err)
 	require.Equal(t, http.StatusOK, status)
-	requireRecentChangesForID(t, recent, aasID, 3)
+	requireNoRecentChangesForID(t, recent, aasID)
 }
 
 func TestAASRepositoryHistoryAllowsAddingIDShortAfterCreate(t *testing.T) {
@@ -202,6 +205,10 @@ func TestAASRepositoryHistoryAllowsAddingIDShortAfterCreate(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, http.StatusOK, status)
 	require.Equal(t, "AddedLater", current["idShort"])
+	if administration, ok := current["administration"].(map[string]any); ok {
+		require.NotContains(t, administration, "createdAt")
+		require.NotContains(t, administration, "updatedAt")
+	}
 	requireAASHistoryPayloadTypes(t, aasID, []string{"snapshot", "diff"})
 }
 
@@ -255,6 +262,18 @@ func requireRecentChangesForID(t *testing.T, payload map[string]any, id string, 
 	}
 	require.GreaterOrEqual(t, count, minimumCount, "recent changes payload: %#v", payload)
 	require.True(t, sawGlobalAssetID, "expected AAS asset metadata in recent changes payload: %#v", payload)
+}
+
+func requireNoRecentChangesForID(t *testing.T, payload map[string]any, id string) {
+	t.Helper()
+	result, ok := payload["result"].([]any)
+	require.True(t, ok, "recent changes result must be an array")
+	for _, entry := range result {
+		item, ok := entry.(map[string]any)
+		if ok && item["id"] == id {
+			t.Fatalf("did not expect recent change id=%s in payload: %#v", id, payload)
+		}
+	}
 }
 
 func requireRecentSpecificAssetID(t *testing.T, payload map[string]any, id string, name string, value string) {

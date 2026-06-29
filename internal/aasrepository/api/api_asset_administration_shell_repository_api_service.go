@@ -26,7 +26,6 @@ import (
 	"github.com/FriedJannik/aas-go-sdk/types"
 	persistencepostgresql "github.com/eclipse-basyx/basyx-go-components/internal/aasrepository/persistence"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
-	"github.com/eclipse-basyx/basyx-go-components/internal/common/history"
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
@@ -299,40 +298,35 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) GetAllAssetAdministrat
 	if decodeErr != nil {
 		return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "BadCursor"), nil
 	}
-	assetIDFilter, decodeErr := common.DecodeAssetIDFilter(assetIds)
+	specificAssetIDs, decodeErr := decodeSpecificAssetIDs(assetIds)
 	if decodeErr != nil {
 		return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "BadAssetIds"), nil
 	}
 
-	fetch := func(pageLimit int32, pageCursor string) ([]history.Row, string, error) {
-		return s.assetAdministrationShellBackend.GetAssetAdministrationShellRecentChanges(ctx, pageLimit, pageCursor, createdFrom, updatedFrom)
+	normalizedLimit, err := common.NormalizeRecentChangesLimit(limit)
+	if err != nil {
+		return newAPIErrorResponse(err, http.StatusBadRequest, operation, "BadRequest"), nil
 	}
-	rows, nextCursor, err := history.FilterRecentRows(limit, decodedCursor, fetch, func(row history.Row) (bool, error) {
-		if row.Deleted {
-			return false, nil
-		}
-		if assetIDFilter.IsEmpty() && idShort == "" {
-			return true, nil
-		}
-		return matchesAASRecentRowFilters(row, assetIDFilter, idShort)
-	})
+
+	aasList, nextCursor, err := s.assetAdministrationShellBackend.GetAssetAdministrationShells(ctx, normalizedLimit, decodedCursor, idShort, specificAssetIDs, createdFrom, updatedFrom)
 	if err != nil {
 		if common.IsErrBadRequest(err) {
 			return newAPIErrorResponse(err, http.StatusBadRequest, operation, "BadRequest"), nil
 		}
-		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "GetRecentChanges"), nil
+		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "GetAssetAdministrationShells"), nil
 	}
 
-	changes := make([]gen.AssetAdministrationShellRecentChange, 0, len(rows))
-	for _, row := range rows {
-		aas, fromJSONErr := jsonization.AssetAdministrationShellFromJsonable(row.Snapshot)
-		if fromJSONErr != nil {
-			return newAPIErrorResponse(fromJSONErr, http.StatusInternalServerError, operation, "FromJsonable"), nil
+	changes := make([]gen.AssetAdministrationShellRecentChange, 0, len(aasList))
+	for _, aas := range aasList {
+		if aas == nil {
+			err = common.NewInternalServerError("AASREPO-GETAASRECENT-NILAAS loaded AAS is nil")
+			return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "GetAssetAdministrationShells"), nil
 		}
+		createdAt, updatedAt := common.RecentChangeTimestamps(aas.Administration())
 		change := gen.AssetAdministrationShellRecentChange{
 			RecentChange: gen.RecentChange{
-				CreatedAt: row.CreatedAt,
-				UpdatedAt: row.UpdatedAt,
+				CreatedAt: createdAt,
+				UpdatedAt: updatedAt,
 			},
 			Id: aas.ID(),
 		}
@@ -340,9 +334,10 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) GetAllAssetAdministrat
 			if globalAssetID := assetInformation.GlobalAssetID(); globalAssetID != nil {
 				change.GlobalAssetId = *globalAssetID
 			}
-			change.SpecificAssetIds, fromJSONErr = gen.JsonableSpecificAssetIDs(assetInformation.SpecificAssetIDs())
-			if fromJSONErr != nil {
-				return newAPIErrorResponse(fromJSONErr, http.StatusInternalServerError, operation, "SpecificAssetIdsToJsonable"), nil
+			var jsonErr error
+			change.SpecificAssetIds, jsonErr = gen.JsonableSpecificAssetIDs(assetInformation.SpecificAssetIDs())
+			if jsonErr != nil {
+				return newAPIErrorResponse(jsonErr, http.StatusInternalServerError, operation, "SpecificAssetIdsToJsonable"), nil
 			}
 		}
 		changes = append(changes, change)
@@ -352,25 +347,6 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) GetAllAssetAdministrat
 		PagingMetadata: gen.PagedResultPagingMetadata{Cursor: common.EncodeString(nextCursor)},
 		Result:         changes,
 	}), nil
-}
-
-func matchesAASRecentRowFilters(row history.Row, filter common.AssetIDFilter, idShort string) (bool, error) {
-	if row.Deleted {
-		return false, nil
-	}
-	aas, err := jsonization.AssetAdministrationShellFromJsonable(row.Snapshot)
-	if err != nil {
-		return false, err
-	}
-	if idShort != "" {
-		if aas.IDShort() == nil || *aas.IDShort() != idShort {
-			return false, nil
-		}
-	}
-	if filter.IsEmpty() {
-		return true, nil
-	}
-	return matchesAASAssetFilter(aas, filter)
 }
 
 func (s *AssetAdministrationShellRepositoryAPIAPIService) GetAssetAdministrationShellByIdSigned(ctx context.Context, aasIdentifier string) (gen.ImplResponse, error) {
@@ -416,18 +392,6 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) GetAssetAdministration
 		return newAPIErrorResponse(jsonErr, http.StatusInternalServerError, operation, "ToJsonable"), nil
 	}
 	return gen.Response(http.StatusOK, aasMap), nil
-}
-
-func matchesAASAssetFilter(aas types.IAssetAdministrationShell, filter common.AssetIDFilter) (bool, error) {
-	assetInformation := aas.AssetInformation()
-	if assetInformation == nil {
-		return false, nil
-	}
-	globalAssetID := ""
-	if value := assetInformation.GlobalAssetID(); value != nil {
-		globalAssetID = *value
-	}
-	return filter.Matches(globalAssetID, assetInformation.SpecificAssetIDs())
 }
 
 // PutAssetAdministrationShellById - Creates or updates an existing Asset Administration Shell

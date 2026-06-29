@@ -367,15 +367,14 @@ Generated component routes are classified centrally by operation name during ser
 
 ## Recent Changes
 
-Recent-change endpoints read indexed metadata from the history tables, then restore the full snapshot for rows that are returned or need post-snapshot filtering. They are ordered by decreasing `history_id`, with cursor-based pagination from newest changes to older changes.
-The default page size is `100`; requests above `1000` are rejected.
+Recent-change endpoints are data-bound current-state reads. They use the same live repository queries as the matching `GET all` endpoints, including administrative timestamp filters, and only project the result into the V3.2 recent-change response shape. The default page size is `100`; requests above `1000` are rejected.
 
 ```mermaid
 flowchart LR
     Historical["GET .../{id}/$history?date=..."] --> Validity["identifier + valid_from index"]
     Validity --> Snapshot["Latest version at or before date"]
-    Recent["GET .../$recent-changes?cursor=..."] --> Cursor["descending history_id cursor + typed timestamp indexes"]
-    Cursor --> Page["Newest-first page plus next cursor"]
+    Recent["GET .../$recent-changes?cursor=..."] --> Current["current repository rows + admin timestamp indexes"]
+    Current --> Projection["V3.2 recent-change response projection"]
 ```
 
 Repository recent-change filters:
@@ -384,8 +383,8 @@ Repository recent-change filters:
 - `limit`
 - `createdFrom`
 - `updatedFrom`
-- AAS recent changes additionally apply asset-id filtering to non-deleted rows.
-- Submodel recent changes additionally apply semantic-id filtering to non-deleted rows.
+- AAS recent changes additionally apply `assetIds` and `idShort` to current AAS rows.
+- Submodel recent changes additionally apply `semanticId` and `idShort` to current Submodel rows.
 
 Registry descriptor list filters:
 
@@ -398,11 +397,11 @@ The published Part 2 OpenAPI schema is the source of truth for the response proj
 - Submodel results contain the shared fields plus `id`, `semanticId`, and `supplementalSemanticIds`.
 - Concept Description results contain the shared fields plus `id`. This fills the missing shared-schema result type consistently with the other identifiable repositories.
 
-For AAS and Submodel reads, resource-specific metadata is projected from the restored history snapshot, never from current normalized tables. Public recent-change endpoints skip deleted history rows.
+For AAS, Submodel, and Concept Description recent changes, resource-specific metadata is projected from the current live entity. Deleted resources do not appear in public recent-change responses. Technical history and audit rows are still appended independently when history is enabled.
 
-The encoded query contract is applied consistently: AAS recent-change `assetIds` contain base64url-encoded `SpecificAssetId` JSON objects, Submodel recent-change `semanticId` contains a base64url-encoded reference value, and AAS descriptor list `assetType` is base64url-encoded UTF-8. Filtered recent-change feeds continue scanning history pages until the requested result limit is filled or the feed ends, so post-snapshot filtering does not underfill pages incorrectly.
+The encoded query contract is applied consistently: AAS recent-change `assetIds` contain base64url-encoded `SpecificAssetId` JSON objects, Submodel recent-change `semanticId` contains a base64url-encoded reference value, and AAS descriptor list `assetType` is base64url-encoded UTF-8.
 
-When a payload does not carry administrative timestamps, the recent-change projection uses the history operation timestamp. This keeps `createdAt` and `updatedAt` populated without re-reading current tables.
+BaSyx treats `administration.createdAt` and `administration.updatedAt` as user-provided model data. Create, update, replace, patch, and descriptor write operations persist the submitted administrative timestamp values without generating or overwriting them. Rows without administrative timestamps are not matched by timestamp-filtered recent changes or descriptor list filters until a later request explicitly persists those values.
 
 ## Migration Behavior
 
@@ -457,7 +456,7 @@ Yes, the database can still grow quickly. Every versioned write creates at least
 Safeguards already implemented:
 
 - History is stored separately from current tables, so normal GET/list endpoints continue to read current tables.
-- Recent changes use indexed metadata instead of scanning current domain tables.
+- Recent changes use current repository indexes, including indexed administrative timestamp columns, rather than restoring history snapshots.
 - JSONB snapshot/diff payloads live in one-to-one payload tables, keeping indexed event rows narrow.
 - History lookup is indexed by identifier and validity range.
 - Latest-version derivation is indexed by identifier and descending `history_id`.
@@ -500,11 +499,11 @@ Dates before deletion resolve to the previous snapshot. Dates after deletion ret
 
 ### Recent Changes After Delete
 
-Delete rows are stored internally as compact tombstones where supported, but public recent-change endpoints skip deleted history rows.
+Delete rows are stored internally as compact tombstones where supported, but public recent-change endpoints read current rows and therefore do not return deleted resources.
 
 ### Existing Data After Migration
 
-Migration does not create history rows for existing data. The first complete write records the supplied snapshot. The first partial write falls back to a one-time complete current-state materialization if no prior history snapshot exists.
+Migration does not create history rows or backfill administrative timestamps for existing data. The first complete write records the supplied current snapshot after write-side timestamp normalization. The first partial write falls back to a one-time complete current-state materialization if no prior history snapshot exists, and also updates the live administrative update timestamp.
 
 ### AAS Environment
 

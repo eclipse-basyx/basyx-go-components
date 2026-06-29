@@ -239,6 +239,9 @@ func (p *PostgreSQLSMDatabase) ReplaceSubmodelDescriptor(
 ) (model.SubmodelDescriptor, error) {
 	var result model.SubmodelDescriptor
 	err := common.ExecuteInTransaction(p.db, "SMREG-REPLACESMDESC-STARTTX", "SMREG-REPLACESMDESC-COMMITTX", func(tx *sql.Tx) error {
+		if _, err := descriptors.GetSubmodelDescriptorByID(ctx, tx, submodel.Id); err != nil {
+			return err
+		}
 		if err := descriptors.DeleteSubmodelDescriptorByIDTx(ctx, tx, submodel.Id); err != nil {
 			return err
 		}
@@ -274,11 +277,18 @@ func (p *PostgreSQLSMDatabase) UpsertSubmodelDescriptorInTransaction(
 	}
 
 	created := false
+	_, err := descriptors.GetSubmodelDescriptorByID(ctx, tx, submodel.Id)
+	if err != nil && !common.IsErrNotFound(err) {
+		return err
+	}
+	if common.IsErrNotFound(err) {
+		created = true
+	}
+
 	if err := descriptors.DeleteSubmodelDescriptorByIDTx(ctx, tx, submodel.Id); err != nil {
 		if !common.IsErrNotFound(err) {
 			return err
 		}
-		created = true
 	}
 
 	stored, err := descriptors.InsertSubmodelDescriptorTx(ctx, tx, submodel)

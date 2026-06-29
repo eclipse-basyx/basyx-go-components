@@ -148,6 +148,10 @@ func CanSkipPostInsertReadback(ctx context.Context) bool {
 // and submodel descriptors). If any step fails, the error is returned and the
 // caller is responsible for rolling back the transaction.
 func InsertAdministrationShellDescriptorTx(ctx context.Context, tx *sql.Tx, aasd model.AssetAdministrationShellDescriptor) error {
+	return insertAdministrationShellDescriptorTx(ctx, tx, aasd)
+}
+
+func insertAdministrationShellDescriptorTx(ctx context.Context, tx *sql.Tx, aasd model.AssetAdministrationShellDescriptor) error {
 	d := goqu.Dialect(common.Dialect)
 
 	descTbl := goqu.T(common.TblDescriptor)
@@ -644,8 +648,7 @@ func ReplaceAdministrationShellDescriptor(ctx context.Context, db *sql.DB, aasd 
 	}()
 
 	// first check if user is allowed to replace
-	_, err = GetAssetAdministrationShellDescriptorByIDTx(ctx, tx, aasd.Id)
-	if err != nil {
+	if _, err = GetAssetAdministrationShellDescriptorByIDTx(ctx, tx, aasd.Id); err != nil {
 		return model.AssetAdministrationShellDescriptor{}, err
 	}
 	createdAt, err := GetAASDescriptorCreatedAtByIDTx(ctx, tx, aasd.Id)

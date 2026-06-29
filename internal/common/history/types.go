@@ -214,15 +214,3 @@ func (NoopAnchorClient) Anchor(_ context.Context, _ AnchorBatch) (*AnchorResult,
 // AppendMutatedVersionTx passes a mutable restored snapshot to the mutator and
 // then persists the mutated value as the next version.
 type SnapshotMutator func(snapshot map[string]any) error
-
-// RecentRowsFetcher loads one raw history page.
-//
-// FilterRecentRows uses this callback to page through unfiltered rows while
-// applying service-specific predicates.
-type RecentRowsFetcher func(limit int32, cursor string) ([]Row, string, error)
-
-// RecentRowPredicate decides whether a history row belongs in a filtered response.
-//
-// Predicates can inspect the restored Snapshot as well as normalized row
-// metadata, and may return an error when snapshot content is malformed.
-type RecentRowPredicate func(row Row) (bool, error)

@@ -234,13 +234,18 @@ func ReplaceSubmodelDescriptorForAAS(
 		return model.SubmodelDescriptor{}, common.NewInternalServerError("Failed to start postgres transaction. See console for information.")
 	}
 
+	if _, err = GetSubmodelDescriptorForAASByID(ctx, tx, aasID, submodel.Id); err != nil {
+		_ = tx.Rollback()
+		return model.SubmodelDescriptor{}, err
+	}
+
 	err = deleteSubmodelDescriptorForAASByIDTx(ctx, tx, aasID, submodel.Id)
 
 	if err != nil {
 		_ = tx.Rollback()
 		return model.SubmodelDescriptor{}, err
 	}
-	result, err := insertSubmodelDescriptorForAASTx(ctx, tx, aasID, submodel)
+	result, err := InsertSubmodelDescriptorForAASTx(ctx, tx, aasID, submodel)
 	if err != nil {
 		_ = tx.Rollback()
 		return model.SubmodelDescriptor{}, err
@@ -522,11 +527,16 @@ func ReplaceSubmodelDescriptor(
 		}
 	}()
 
+	if _, err = GetSubmodelDescriptorByID(ctx, tx, submodel.Id); err != nil {
+		_ = tx.Rollback()
+		return model.SubmodelDescriptor{}, err
+	}
+
 	if err = deleteSubmodelDescriptorByIDTx(ctx, tx, submodel.Id); err != nil {
 		_ = tx.Rollback()
 		return model.SubmodelDescriptor{}, err
 	}
-	result, err := insertSubmodelDescriptorTx(ctx, tx, submodel)
+	result, err := InsertSubmodelDescriptorTx(ctx, tx, submodel)
 	if err != nil {
 		_ = tx.Rollback()
 		return model.SubmodelDescriptor{}, err

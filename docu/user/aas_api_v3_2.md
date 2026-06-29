@@ -345,7 +345,7 @@ Additional filters:
 - AAS recent changes support `assetIds`. Each value is a base64url-encoded `SpecificAssetId`.
 - Submodel recent changes support `semanticId`. Its semantic-reference value is base64url encoded.
 
-Deleted history rows are stored internally where required for historical reconstruction, but public recent-change endpoints skip deleted rows.
+Recent-change endpoints use the current repository rows and project them into the V3.2 recent-change response shape. The `createdFrom` and `updatedFrom` filters use the administrative timestamps supplied in the persisted resource payload. BaSyx does not generate or overwrite `administration.createdAt` or `administration.updatedAt`. Resources without administrative timestamps are not matched by timestamp filters. Deleted resources do not appear in public recent-change results, while internal history rows remain available for historical reconstruction when history is enabled.
 
 Registry descriptor list endpoints use current descriptor rows and accept timestamp filters directly:
 
@@ -356,6 +356,8 @@ curl 'http://localhost:6003/shell-descriptors?limit=50&updatedFrom=2026-05-28T00
 ```sh
 curl 'http://localhost:6002/submodel-descriptors?limit=50&createdFrom=2026-05-28T00:00:00Z'
 ```
+
+Descriptor timestamp filters use the descriptor payload's persisted `administration.createdAt` and `administration.updatedAt` values. Descriptor writes do not generate or overwrite those fields.
 
 ## Signed Reads
 

@@ -45,7 +45,6 @@ import (
 	"github.com/FriedJannik/aas-go-sdk/jsonization"
 	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
-	"github.com/eclipse-basyx/basyx-go-components/internal/common/history"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
@@ -203,12 +202,18 @@ func (s *ConceptDescriptionRepositoryAPIAPIService) GetAllConceptDescriptionsRec
 		}
 	}
 
-	fetch := func(pageLimit int32, pageCursor string) ([]history.Row, string, error) {
-		return s.d.GetConceptDescriptionRecentChanges(ctx, pageLimit, pageCursor, createdFrom, updatedFrom)
+	normalizedLimit, limitErr := common.NormalizeRecentChangesLimit(limit)
+	if limitErr != nil {
+		return common.NewErrorResponse(limitErr, http.StatusBadRequest, componentName, "GetAllConceptDescriptionsRecentChanges", "BadRequest"), nil
 	}
-	rows, nextCursor, err := history.FilterRecentRows(limit, decodedCursor, fetch, func(row history.Row) (bool, error) {
-		return !row.Deleted, nil
-	})
+
+	uintLimit64, convErr := strconv.ParseUint(strconv.FormatInt(int64(normalizedLimit), 10), 10, 64)
+	if convErr != nil {
+		err := common.NewErrBadRequest("invalid limit")
+		return common.NewErrorResponse(err, http.StatusBadRequest, componentName, "GetAllConceptDescriptionsRecentChanges", "BadLimit"), nil
+	}
+
+	cds, nextCursor, err := s.d.GetConceptDescriptions(ctx, nil, nil, nil, uint(uintLimit64), &decodedCursor, createdFrom, updatedFrom)
 	if err != nil {
 		switch {
 		case common.IsErrBadRequest(err):
@@ -220,14 +225,19 @@ func (s *ConceptDescriptionRepositoryAPIAPIService) GetAllConceptDescriptionsRec
 		}
 	}
 
-	changes := make([]model.ConceptDescriptionRecentChange, 0, len(rows))
-	for _, row := range rows {
+	changes := make([]model.ConceptDescriptionRecentChange, 0, len(cds))
+	for _, cd := range cds {
+		if cd == nil {
+			err = common.NewInternalServerError("CDREPO-GETCDRECENT-NILCD loaded ConceptDescription is nil")
+			return common.NewErrorResponse(err, http.StatusInternalServerError, componentName, "GetAllConceptDescriptionsRecentChanges", "GetConceptDescriptions"), nil
+		}
+		createdAt, updatedAt := common.RecentChangeTimestamps(cd.Administration())
 		changes = append(changes, model.ConceptDescriptionRecentChange{
 			RecentChange: model.RecentChange{
-				CreatedAt: row.CreatedAt,
-				UpdatedAt: row.UpdatedAt,
+				CreatedAt: createdAt,
+				UpdatedAt: updatedAt,
 			},
-			Id: row.Identifier,
+			Id: cd.ID(),
 		})
 	}
 	return pagedResponse(changes, nextCursor), nil

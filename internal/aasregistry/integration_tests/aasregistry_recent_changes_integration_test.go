@@ -43,7 +43,6 @@ import (
 
 func TestAASRegistryListFiltersHistoryAndBatchAssetKind(t *testing.T) {
 	deleteAllAASDescriptorsHTTP(t)
-	const changedAfter = "2029-01-01T00:00:00Z"
 	descriptorID := fmt.Sprintf("https://example.com/ids/aasdesc/history-batch-%d", time.Now().UnixNano())
 	encodedDescriptorID := base64.RawURLEncoding.EncodeToString([]byte(descriptorID))
 	globalAssetID := "urn:example:asset:descriptor-history"
@@ -111,6 +110,7 @@ func TestAASRegistryListFiltersHistoryAndBatchAssetKind(t *testing.T) {
 			"updatedAt": "2030-01-02T03:04:08Z",
 		},
 	}
+	changedAfter := time.Now().Add(-1 * time.Second).UTC().Format(time.RFC3339Nano)
 	status, body, _ = doAASRequest(t, aasNoRedirectClient, http.MethodPut, aasRegistryBaseURL+"/shell-descriptors/"+encodedDescriptorID, updatePayloadV3)
 	require.Equal(t, http.StatusNoContent, status, "response=%s", string(body))
 	requireDescriptorHistoryPayloadTypes(t, descriptorID, []string{"snapshot", "diff", "diff", "snapshot", "diff", "diff"})
