@@ -51,7 +51,6 @@ type DescriptionAPIAPIServicer interface {
 // and updated with the logic required for the API.
 type SubmodelRegistryAPIAPIServicer interface {
 	GetAllSubmodelDescriptors(context.Context, int32, string, time.Time, time.Time) (model.ImplResponse, error)
-	GetAllSubmodelDescriptorsRecentChanges(context.Context, time.Time, time.Time, int32, string) (model.ImplResponse, error)
 	PostSubmodelDescriptor(context.Context, model.SubmodelDescriptor) (model.ImplResponse, error)
 	GetSubmodelDescriptorById(context.Context, string) (model.ImplResponse, error)
 	PutSubmodelDescriptorById(context.Context, string, model.SubmodelDescriptor) (model.ImplResponse, error)

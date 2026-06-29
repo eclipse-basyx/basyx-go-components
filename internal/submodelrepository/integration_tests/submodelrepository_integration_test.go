@@ -777,6 +777,77 @@ func TestContractSubmodelRepository(t *testing.T) {
 		assert.NotEmpty(t, metadata, "metadata response should not be empty")
 	})
 
+	t.Run("GetAllSubmodelsMetadataAndValueOnlyHonorSemanticIDFilter", func(t *testing.T) {
+		semanticMatch := fmt.Sprintf("urn:basyx:semantic:metadata-value-match-%d", time.Now().UnixNano())
+		semanticOther := fmt.Sprintf("urn:basyx:semantic:metadata-value-other-%d", time.Now().UnixNano())
+		matchingID := fmt.Sprintf("000-basyx-metadata-value-filter-match-%d", time.Now().UnixNano())
+		otherID := fmt.Sprintf("000-basyx-metadata-value-filter-other-%d", time.Now().UnixNano())
+
+		createSemanticSubmodel := func(id string, idShort string, semanticID string, propertyIDShort string, propertyValue string) string {
+			t.Helper()
+
+			statusCode, body, err := requestJSON(http.MethodPost, fmt.Sprintf("%s/submodels", baseURL), map[string]any{
+				"id":        id,
+				"idShort":   idShort,
+				"kind":      "Instance",
+				"modelType": "Submodel",
+				"semanticId": map[string]any{
+					"type": "ExternalReference",
+					"keys": []map[string]any{
+						{
+							"type":  "GlobalReference",
+							"value": semanticID,
+						},
+					},
+				},
+				"submodelElements": []map[string]any{
+					{
+						"idShort":   propertyIDShort,
+						"modelType": "Property",
+						"valueType": "xs:string",
+						"value":     propertyValue,
+					},
+				},
+			})
+			require.NoError(t, err)
+			require.Equal(t, http.StatusCreated, statusCode, "response=%s", string(body))
+
+			encodedID := common.EncodeString(id)
+			t.Cleanup(func() {
+				_, _, _ = requestJSON(http.MethodDelete, fmt.Sprintf("%s/submodels/%s", baseURL, encodedID), nil)
+			})
+			return encodedID
+		}
+
+		createSemanticSubmodel(matchingID, "MetadataValueFilterMatch", semanticMatch, "FilteredValueOnlyMatch", "match-value")
+		createSemanticSubmodel(otherID, "MetadataValueFilterOther", semanticOther, "FilteredValueOnlyOther", "other-value")
+
+		encodedSemanticMatch := common.EncodeString(semanticMatch)
+		statusCode, body, err := requestJSON(http.MethodGet, fmt.Sprintf("%s/submodels/$metadata?limit=10&semanticId=%s", baseURL, encodedSemanticMatch), nil)
+		require.NoError(t, err)
+		require.Equal(t, http.StatusOK, statusCode, "response=%s", string(body))
+
+		var metadataResponse struct {
+			Result []map[string]any `json:"result"`
+		}
+		require.NoError(t, json.Unmarshal(body, &metadataResponse), "response=%s", string(body))
+		require.Len(t, metadataResponse.Result, 1, "response=%s", string(body))
+		assert.Equal(t, matchingID, metadataResponse.Result[0]["id"])
+		assert.Equal(t, "MetadataValueFilterMatch", metadataResponse.Result[0]["idShort"])
+
+		statusCode, body, err = requestJSON(http.MethodGet, fmt.Sprintf("%s/submodels/$value?level=deep&limit=10&semanticId=%s", baseURL, encodedSemanticMatch), nil)
+		require.NoError(t, err)
+		require.Equal(t, http.StatusOK, statusCode, "response=%s", string(body))
+
+		var valueResponse struct {
+			Result []map[string]any `json:"result"`
+		}
+		require.NoError(t, json.Unmarshal(body, &valueResponse), "response=%s", string(body))
+		require.Len(t, valueResponse.Result, 1, "response=%s", string(body))
+		assert.Equal(t, "match-value", valueResponse.Result[0]["FilteredValueOnlyMatch"])
+		assert.NotContains(t, valueResponse.Result[0], "FilteredValueOnlyOther")
+	})
+
 	t.Run("PostSubmodelAcceptsNullSubmodelElements", func(t *testing.T) {
 		submodelID := fmt.Sprintf("https://example.com/ids/sm/contract-null-elements-%d", time.Now().UnixNano())
 		submodelIDShort := fmt.Sprintf("contractNullElements%d", time.Now().UnixNano())

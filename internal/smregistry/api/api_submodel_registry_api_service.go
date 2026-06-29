@@ -44,7 +44,6 @@ import (
 	"time"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
-	"github.com/eclipse-basyx/basyx-go-components/internal/common/history"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 	smregistrypostgresql "github.com/eclipse-basyx/basyx-go-components/internal/smregistry/persistence"
@@ -100,46 +99,6 @@ func (s *SubmodelRegistryAPIAPIService) GetAllSubmodelDescriptors(ctx context.Co
 			), toJsonErr
 		}
 		jsonable = append(jsonable, j)
-	}
-
-	return pagedResponse(jsonable, nextCursor), nil
-}
-
-// GetAllSubmodelDescriptorsRecentChanges returns changed Submodel Descriptors.
-func (s *SubmodelRegistryAPIAPIService) GetAllSubmodelDescriptorsRecentChanges(
-	ctx context.Context,
-	createdFrom time.Time,
-	updatedFrom time.Time,
-	limit int32,
-	cursor string,
-) (model.ImplResponse, error) {
-	const operation = "GetAllSubmodelDescriptorsRecentChanges"
-
-	internalCursor, resp, err := decodeCursor(strings.TrimSpace(cursor), operation)
-	if resp != nil || err != nil {
-		return *resp, err
-	}
-
-	fetch := func(pageLimit int32, pageCursor string) ([]history.Row, string, error) {
-		return s.smRegistryBackend.GetSubmodelDescriptorRecentChanges(ctx, pageLimit, pageCursor, createdFrom, updatedFrom)
-	}
-	rows, nextCursor, err := history.FilterRecentRows(limit, internalCursor, fetch, func(row history.Row) (bool, error) {
-		return !row.Deleted, nil
-	})
-	if err != nil {
-		if common.IsErrBadRequest(err) {
-			return common.NewErrorResponse(
-				err, http.StatusBadRequest, componentName, operation, "BadRequest",
-			), nil
-		}
-		return common.NewErrorResponse(
-			err, http.StatusInternalServerError, componentName, operation, "InternalServerError",
-		), err
-	}
-
-	jsonable := make([]map[string]any, 0, len(rows))
-	for _, row := range rows {
-		jsonable = append(jsonable, row.Snapshot)
 	}
 
 	return pagedResponse(jsonable, nextCursor), nil

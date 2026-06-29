@@ -37,8 +37,6 @@ import (
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/descriptors"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/history"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
-	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
-	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 )
 
 // PostgreSQLSMDatabase provides PostgreSQL-based persistence for the Submodel Registry Service.
@@ -486,30 +484,4 @@ func (p *PostgreSQLSMDatabase) ExistingSubmodelDescriptorIDsInTransaction(
 		_ = rows.Close()
 	}
 	return existing, nil
-}
-
-// GetSubmodelDescriptorRecentChanges returns submodel descriptor history rows for recent-change APIs.
-func (p *PostgreSQLSMDatabase) GetSubmodelDescriptorRecentChanges(ctx context.Context, limit int32, cursor string, createdFrom time.Time, updatedFrom time.Time) ([]history.Row, string, error) {
-	shouldEnforceFormula, enforceErr := auth.ShouldEnforceFormula(ctx)
-	if enforceErr != nil {
-		return nil, "", common.NewInternalServerError("SMREG-RECENT-SHOULDENFORCE " + enforceErr.Error())
-	}
-
-	var collector *grammar.ResolvedFieldPathCollector
-	if shouldEnforceFormula {
-		var err error
-		collector, err = grammar.NewResolvedFieldPathCollectorForRoot(grammar.CollectorRootSMDesc)
-		if err != nil {
-			return nil, "", common.NewInternalServerError("SMREG-RECENT-BADCOLLECTOR " + err.Error())
-		}
-	}
-	submodelDescriptor := goqu.T(common.TblSubmodelDescriptor).As("submodel_descriptor")
-	visibilityDS := goqu.From(submodelDescriptor).
-		Select(goqu.V(1)).
-		Where(
-			submodelDescriptor.Col(common.ColAASID).Eq(goqu.I("history.identifier")),
-			submodelDescriptor.Col(common.ColAASDescriptorID).IsNull(),
-		)
-
-	return history.RecentRowsForVisibleIdentifiables(ctx, p.db, history.TableSubmodelDescriptor, limit, cursor, createdFrom, updatedFrom, visibilityDS, collector)
 }

@@ -42,8 +42,6 @@ import (
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/descriptors"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/history"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
-	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
-	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -526,31 +524,6 @@ func (p *PostgreSQLAASRegistryDatabase) DeleteAssetAdministrationShellDescriptor
 		}
 	}
 	return -1, nil
-}
-
-// GetAssetAdministrationShellDescriptorRecentChanges returns descriptor history rows for recent-change APIs.
-func (p *PostgreSQLAASRegistryDatabase) GetAssetAdministrationShellDescriptorRecentChanges(ctx context.Context, limit int32, cursor string, createdFrom time.Time, updatedFrom time.Time) ([]history.Row, string, error) {
-	shouldEnforceFormula, enforceErr := auth.ShouldEnforceFormula(ctx)
-	if enforceErr != nil {
-		return nil, "", common.NewInternalServerError("AASREG-RECENT-SHOULDENFORCE " + enforceErr.Error())
-	}
-	if !shouldEnforceFormula {
-		return history.RecentRows(ctx, p.db, history.TableDescriptor, limit, cursor, createdFrom, updatedFrom)
-	}
-
-	collector, err := grammar.NewResolvedFieldPathCollectorForRoot(grammar.CollectorRootAASDesc)
-	if err != nil {
-		return nil, "", common.NewInternalServerError("AASREG-RECENT-BADCOLLECTOR " + err.Error())
-	}
-	visibilityDS := goqu.From(common.TDescriptor).
-		InnerJoin(
-			common.TAASDescriptor,
-			goqu.On(common.TAASDescriptor.Col(common.ColDescriptorID).Eq(common.TDescriptor.Col(common.ColID))),
-		).
-		Select(goqu.V(1)).
-		Where(common.TAASDescriptor.Col(common.ColAASID).Eq(goqu.I("history.identifier")))
-
-	return history.RecentRowsForVisibleIdentifiables(ctx, p.db, history.TableDescriptor, limit, cursor, createdFrom, updatedFrom, visibilityDS, collector)
 }
 
 // ListAssetAdministrationShellDescriptors lists AAS descriptors with optional

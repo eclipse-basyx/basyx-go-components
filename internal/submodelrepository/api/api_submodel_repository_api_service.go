@@ -977,47 +977,24 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelsMetadata(
 		decodedCursor = string(decodedCursorBytes)
 	}
 
-	submodels, nextCursor, err := s.submodelBackend.GetSubmodels(ctx, limit, decodedCursor, "", "", time.Time{}, time.Time{})
+	decodedSemanticID := ""
+	if semanticID != "" {
+		var decodeErr error
+		decodedSemanticID, decodeErr = common.DecodeString(semanticID)
+		if decodeErr != nil {
+			return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "BadSemanticID"), nil
+		}
+	}
+
+	submodels, nextCursor, err := s.submodelBackend.GetSubmodels(ctx, limit, decodedCursor, idShort, decodedSemanticID, time.Time{}, time.Time{})
 	if err != nil {
 		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "GetSubmodels"), nil
 	}
-
-	idShortFilter := strings.ToLower(strings.TrimSpace(idShort))
-	semanticIDFilter := strings.ToLower(strings.TrimSpace(semanticID))
 
 	converted := make([]map[string]any, 0, len(submodels))
 	for _, sm := range submodels {
 		if sm == nil {
 			continue
-		}
-
-		if idShortFilter != "" {
-			currentIDShort := ""
-			if sm.IDShort() != nil {
-				currentIDShort = strings.ToLower(*sm.IDShort())
-			}
-			if !strings.Contains(currentIDShort, idShortFilter) {
-				continue
-			}
-		}
-
-		if semanticIDFilter != "" {
-			semanticRef := sm.SemanticID()
-			if semanticRef == nil {
-				continue
-			}
-
-			matchesSemanticID := false
-			for _, key := range semanticRef.Keys() {
-				if strings.Contains(strings.ToLower(key.Value()), semanticIDFilter) {
-					matchesSemanticID = true
-					break
-				}
-			}
-
-			if !matchesSemanticID {
-				continue
-			}
 		}
 
 		jsonSubmodel, convertErr := jsonization.ToJsonable(sm)
@@ -1045,7 +1022,6 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelsMetadata(
 //
 //nolint:revive
 func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelsValueOnly(ctx context.Context, semanticID string, idShort string, limit int32, cursor string, level string, extent string) (gen.ImplResponse, error) {
-	_ = semanticID
 	_ = extent
 	const operation = "GetAllSubmodelsValueOnly"
 
@@ -1062,7 +1038,16 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelsValueOnly(ctx context.C
 		return newAPIErrorResponse(errors.New("invalid level parameter"), http.StatusBadRequest, operation, "InvalidLevelParameter"), nil
 	}
 
-	sms, nextCursor, err := s.submodelBackend.GetSubmodels(ctx, limit, decodedCursor, idShort, "", time.Time{}, time.Time{})
+	decodedSemanticID := ""
+	if semanticID != "" {
+		var decodeErr error
+		decodedSemanticID, decodeErr = common.DecodeString(semanticID)
+		if decodeErr != nil {
+			return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "BadSemanticID"), nil
+		}
+	}
+
+	sms, nextCursor, err := s.submodelBackend.GetSubmodels(ctx, limit, decodedCursor, idShort, decodedSemanticID, time.Time{}, time.Time{})
 	if err != nil {
 		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "GetSubmodels"), nil
 	}
