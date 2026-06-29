@@ -226,12 +226,20 @@ func (s *ConceptDescriptionRepositoryAPIAPIService) GetAllConceptDescriptionsRec
 	}
 
 	changes := make([]model.ConceptDescriptionRecentChange, 0, len(cds))
+	seenIDs := make(map[string]struct{}, len(cds))
 	for _, cd := range cds {
 		if cd == nil {
 			err = common.NewInternalServerError("CDREPO-GETCDRECENT-NILCD loaded ConceptDescription is nil")
 			return common.NewErrorResponse(err, http.StatusInternalServerError, componentName, "GetAllConceptDescriptionsRecentChanges", "GetConceptDescriptions"), nil
 		}
-		createdAt, updatedAt := common.RecentChangeTimestamps(cd.Administration())
+		if _, seen := seenIDs[cd.ID()]; seen {
+			continue
+		}
+		createdAt, updatedAt, ok := common.RecentChangeTimestamps(cd.Administration())
+		if !ok {
+			continue
+		}
+		seenIDs[cd.ID()] = struct{}{}
 		changes = append(changes, model.ConceptDescriptionRecentChange{
 			RecentChange: model.RecentChange{
 				CreatedAt: createdAt,

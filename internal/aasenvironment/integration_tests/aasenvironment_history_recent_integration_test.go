@@ -58,6 +58,10 @@ func TestAASEnvironmentDelegatesHistoryRecentChangesAndBatchAssetKind(t *testing
 		"id":        aasID,
 		"idShort":   "AASEnvHistoryBatch",
 		"modelType": "AssetAdministrationShell",
+		"administration": map[string]any{
+			"createdAt": "2026-01-02T03:04:05Z",
+			"updatedAt": "2026-01-02T03:04:06Z",
+		},
 		"assetInformation": map[string]any{
 			"assetKind": "Batch",
 			"assetType": "env-type-v1",
@@ -89,6 +93,10 @@ func TestAASEnvironmentDelegatesHistoryRecentChangesAndBatchAssetKind(t *testing
 		"idShort":   "AASEnvHistorySubmodel",
 		"kind":      "Instance",
 		"modelType": "Submodel",
+		"administration": map[string]any{
+			"createdAt": "2026-01-02T03:04:05Z",
+			"updatedAt": "2026-01-02T03:04:06Z",
+		},
 	}
 	status, body, _ = doAASEnvRequest(t, aasEnvNoRedirectClient, http.MethodPost, aasEnvBaseURL+"/submodels", submodelPayload)
 	require.Equal(t, http.StatusCreated, status, "response=%s", string(body))

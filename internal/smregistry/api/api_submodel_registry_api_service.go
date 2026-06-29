@@ -219,7 +219,7 @@ func (s *SubmodelRegistryAPIAPIService) PutSubmodelDescriptorById(ctx context.Co
 		), enforceErr
 	}
 
-	if exists, chkErr := s.smRegistryBackend.ExistsSubmodelByID(ctx, submodelDescriptor.Id); chkErr != nil {
+	if exists, chkErr := s.smRegistryBackend.ExistsSubmodelByID(auth.WithoutQueryFilter(ctx), submodelDescriptor.Id); chkErr != nil {
 		log.Printf("[ERROR] [%s] Error in PutSubmodelDescriptorById: existence check failed (submodelId=%q): %v", componentName, submodelDescriptor.Id, chkErr)
 		return common.NewErrorResponse(
 			chkErr, http.StatusInternalServerError, componentName, "PutSubmodelDescriptorById", "Unhandled-Precheck",
@@ -284,9 +284,10 @@ func (s *SubmodelRegistryAPIAPIService) PutSubmodelDescriptorById(ctx context.Co
 				err, http.StatusForbidden, componentName, "PutSubmodelDescriptorById", "Denied",
 			), nil
 		case common.IsErrNotFound(err):
-			log.Printf("[ERROR] [%s] Error in PutSubmodelDescriptorById: not found (submodelId=%q): %v", componentName, decoded, err)
+			deniedErr := common.NewErrDenied("Submodel Descriptor access not allowed")
+			log.Printf("[ERROR] [%s] Error in PutSubmodelDescriptorById: not allowed (submodelId=%q): %v", componentName, decoded, err)
 			return common.NewErrorResponse(
-				err, http.StatusNotFound, componentName, "PutSubmodelDescriptorById", "NotFound",
+				deniedErr, http.StatusForbidden, componentName, "PutSubmodelDescriptorById", "Denied",
 			), nil
 		default:
 			log.Printf("[ERROR] [%s] Error in PutSubmodelDescriptorById: internal (submodelId=%q): %v", componentName, decoded, err)

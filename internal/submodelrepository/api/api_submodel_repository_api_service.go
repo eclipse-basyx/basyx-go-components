@@ -694,10 +694,14 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelsRecentChanges(
 	}
 
 	changes := make([]gen.SubmodelRecentChange, 0, len(submodels))
+	seenIDs := make(map[string]struct{}, len(submodels))
 	for _, submodel := range submodels {
 		if submodel == nil {
 			err = common.NewInternalServerError("SMREPO-GETSMRECENT-NILSM loaded Submodel is nil")
 			return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "GetSubmodels"), nil
+		}
+		if _, seen := seenIDs[submodel.ID()]; seen {
+			continue
 		}
 		semanticID, jsonErr := gen.JsonableReference(submodel.SemanticID())
 		if jsonErr != nil {
@@ -707,7 +711,11 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelsRecentChanges(
 		if jsonErr != nil {
 			return newAPIErrorResponse(jsonErr, http.StatusInternalServerError, operation, "SupplementalSemanticIdsToJsonable"), nil
 		}
-		createdAt, updatedAt := common.RecentChangeTimestamps(submodel.Administration())
+		createdAt, updatedAt, ok := common.RecentChangeTimestamps(submodel.Administration())
+		if !ok {
+			continue
+		}
+		seenIDs[submodel.ID()] = struct{}{}
 		changes = append(changes, gen.SubmodelRecentChange{
 			RecentChange: gen.RecentChange{
 				CreatedAt: createdAt,

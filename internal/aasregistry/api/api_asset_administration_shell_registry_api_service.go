@@ -282,7 +282,7 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) PutAssetAdministrationSh
 		), enforceErr
 	}
 
-	if exists, chkErr := s.aasRegistryBackend.ExistsAASByID(ctx, assetAdministrationShellDescriptor.Id); chkErr != nil {
+	if exists, chkErr := s.aasRegistryBackend.ExistsAASByID(auth.WithoutQueryFilter(ctx), assetAdministrationShellDescriptor.Id); chkErr != nil {
 		log.Printf("🧩 [%s] Error in PutAssetAdministrationShellDescriptorById: existence check failed (aasId=%q): %v", componentName, assetAdministrationShellDescriptor.Id, chkErr)
 		return common.NewErrorResponse(
 			chkErr, http.StatusInternalServerError, componentName, "PutAssetAdministrationShellDescriptorById", "Unhandled-Precheck",
@@ -593,7 +593,23 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) PutSubmodelDescriptorByI
 		), enforceErr
 	}
 
-	if exists, chkErr := s.aasRegistryBackend.ExistsSubmodelForAAS(ctx, decodedAAS, decodedSMD); chkErr != nil {
+	technicalCtx := auth.WithoutQueryFilter(ctx)
+	aasExists, chkErr := s.aasRegistryBackend.ExistsAASByID(technicalCtx, decodedAAS)
+	if chkErr != nil {
+		log.Printf("🧩 [%s] Error in PutSubmodelDescriptorByIdThroughSuperpath: AAS existence check failed (aasId=%q): %v", componentName, decodedAAS, chkErr)
+		return common.NewErrorResponse(
+			chkErr, http.StatusInternalServerError, componentName, "PutSubmodelDescriptorByIdThroughSuperpath", "Unhandled-AASPrecheck",
+		), chkErr
+	}
+	if !aasExists {
+		err := common.NewErrNotFound("AAS Descriptor not found")
+		log.Printf("🧩 [%s] Error in PutSubmodelDescriptorByIdThroughSuperpath: AAS not found (aasId=%q): %v", componentName, decodedAAS, err)
+		return common.NewErrorResponse(
+			err, http.StatusNotFound, componentName, "PutSubmodelDescriptorByIdThroughSuperpath", "AASNotFound",
+		), nil
+	}
+
+	if exists, chkErr := s.aasRegistryBackend.ExistsSubmodelForAAS(technicalCtx, decodedAAS, decodedSMD); chkErr != nil {
 		log.Printf("🧩 [%s] Error in PutSubmodelDescriptorByIdThroughSuperpath: existence check failed (aasId=%q): %v", componentName, decodedAAS, chkErr)
 		return common.NewErrorResponse(
 			chkErr, http.StatusInternalServerError, componentName, "PutSubmodelDescriptorByIdThroughSuperpath", "Unhandled-Precheck",
@@ -607,9 +623,10 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) PutSubmodelDescriptorByI
 		if err != nil {
 			switch {
 			case common.IsErrNotFound(err):
-				log.Printf("🧩 [%s] Error in PutSubmodelDescriptorByIdThroughSuperpath: not found (aasId=%q submodelId=%q): %v", componentName, decodedAAS, submodelDescriptor.Id, err)
+				deniedErr := common.NewErrDenied("Submodel Descriptor access not allowed")
+				log.Printf("🧩 [%s] Error in PutSubmodelDescriptorByIdThroughSuperpath: not allowed (aasId=%q submodelId=%q): %v", componentName, decodedAAS, submodelDescriptor.Id, err)
 				return common.NewErrorResponse(
-					err, http.StatusNotFound, componentName, "PutSubmodelDescriptorByIdThroughSuperpath", "NotFound",
+					deniedErr, http.StatusForbidden, componentName, "PutSubmodelDescriptorByIdThroughSuperpath", "Denied",
 				), nil
 			case common.IsErrDenied(err):
 				log.Printf("🧩 [%s] Error in PutSubmodelDescriptorByIdThroughSuperpath: denied (aasId=%q submodelId=%q): %v", componentName, decodedAAS, submodelDescriptor.Id, err)
@@ -652,15 +669,11 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) PutSubmodelDescriptorByI
 	_, err = s.aasRegistryBackend.ReplaceSubmodelDescriptorForAAS(ctx, decodedAAS, submodelDescriptor)
 	if err != nil {
 		switch {
-		case common.IsErrNotFound(err):
-			log.Printf("🧩 [%s] Error in PutSubmodelDescriptorByIdThroughSuperpath: not found (aasId=%q submodelId=%q): %v", componentName, decodedAAS, submodelDescriptor.Id, err)
+		case common.IsErrNotFound(err), common.IsErrDenied(err):
+			deniedErr := common.NewErrDenied("Submodel Descriptor access not allowed")
+			log.Printf("🧩 [%s] Error in PutSubmodelDescriptorByIdThroughSuperpath: not allowed (aasId=%q submodelId=%q): %v", componentName, decodedAAS, submodelDescriptor.Id, err)
 			return common.NewErrorResponse(
-				err, http.StatusNotFound, componentName, "PutSubmodelDescriptorByIdThroughSuperpath", "NotFound",
-			), nil
-		case common.IsErrDenied(err):
-			log.Printf("🧩 [%s] Error in PutSubmodelDescriptorByIdThroughSuperpath: denied (aasId=%q submodelId=%q): %v", componentName, decodedAAS, submodelDescriptor.Id, err)
-			return common.NewErrorResponse(
-				err, http.StatusForbidden, componentName, "PutSubmodelDescriptorByIdThroughSuperpath", "Denied",
+				deniedErr, http.StatusForbidden, componentName, "PutSubmodelDescriptorByIdThroughSuperpath", "Denied",
 			), nil
 		case common.IsErrBadRequest(err):
 			log.Printf("🧩 [%s] Error in PutSubmodelDescriptorByIdThroughSuperpath: bad request (aasId=%q submodelId=%q): %v", componentName, decodedAAS, submodelDescriptor.Id, err)

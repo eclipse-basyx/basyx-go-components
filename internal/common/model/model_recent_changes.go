@@ -32,8 +32,8 @@ import (
 
 // RecentChange contains shared metadata for v3.2 recent-change responses.
 type RecentChange struct {
-	CreatedAt string `json:"createdAt,omitempty"`
-	UpdatedAt string `json:"updatedAt,omitempty"`
+	CreatedAt string `json:"createdAt"`
+	UpdatedAt string `json:"updatedAt"`
 }
 
 // AssetAdministrationShellRecentChange describes a changed Asset Administration Shell.

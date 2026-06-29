@@ -26,7 +26,6 @@
 package common
 
 import (
-	"strconv"
 	"strings"
 
 	"github.com/FriedJannik/aas-go-sdk/types"
@@ -35,8 +34,6 @@ import (
 const (
 	// DefaultRecentChangesLimit is the recent-change page size used when no limit is provided.
 	DefaultRecentChangesLimit int32 = 100
-	// MaxRecentChangesLimit bounds one recent-change request.
-	MaxRecentChangesLimit int32 = 1000
 )
 
 // NormalizeRecentChangesLimit applies the public recent-change endpoint limit contract.
@@ -44,27 +41,38 @@ func NormalizeRecentChangesLimit(limit int32) (int32, error) {
 	if limit <= 0 {
 		return DefaultRecentChangesLimit, nil
 	}
-	if limit > MaxRecentChangesLimit {
-		return 0, NewErrBadRequest("RECENTCHANGES-LIMIT limit must not exceed " + strconv.FormatInt(int64(MaxRecentChangesLimit), 10))
-	}
 	return limit, nil
 }
 
 // RecentChangeTimestamps extracts the data-bound timestamps used by recent-change responses.
-func RecentChangeTimestamps(administration types.IAdministrativeInformation) (string, string) {
+func RecentChangeTimestamps(administration types.IAdministrativeInformation) (string, string, bool) {
 	if administration == nil {
-		return "", ""
+		return "", "", false
 	}
 
-	createdAt := ""
-	if value := administration.CreatedAt(); value != nil {
-		createdAt = strings.TrimSpace(*value)
+	createdAt, ok := validAdministrationTimestamp(administration.CreatedAt())
+	if !ok {
+		return "", "", false
 	}
 
-	updatedAt := ""
-	if value := administration.UpdatedAt(); value != nil {
-		updatedAt = strings.TrimSpace(*value)
+	updatedAt, ok := validAdministrationTimestamp(administration.UpdatedAt())
+	if !ok {
+		return "", "", false
 	}
 
-	return createdAt, updatedAt
+	return createdAt, updatedAt, true
+}
+
+func validAdministrationTimestamp(value *string) (string, bool) {
+	if value == nil {
+		return "", false
+	}
+	trimmed := strings.TrimSpace(*value)
+	if trimmed == "" {
+		return "", false
+	}
+	if _, err := ParseISO8601DateTime(trimmed); err != nil {
+		return "", false
+	}
+	return trimmed, true
 }

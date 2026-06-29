@@ -317,12 +317,20 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) GetAllAssetAdministrat
 	}
 
 	changes := make([]gen.AssetAdministrationShellRecentChange, 0, len(aasList))
+	seenIDs := make(map[string]struct{}, len(aasList))
 	for _, aas := range aasList {
 		if aas == nil {
 			err = common.NewInternalServerError("AASREPO-GETAASRECENT-NILAAS loaded AAS is nil")
 			return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "GetAssetAdministrationShells"), nil
 		}
-		createdAt, updatedAt := common.RecentChangeTimestamps(aas.Administration())
+		if _, seen := seenIDs[aas.ID()]; seen {
+			continue
+		}
+		createdAt, updatedAt, ok := common.RecentChangeTimestamps(aas.Administration())
+		if !ok {
+			continue
+		}
+		seenIDs[aas.ID()] = struct{}{}
 		change := gen.AssetAdministrationShellRecentChange{
 			RecentChange: gen.RecentChange{
 				CreatedAt: createdAt,

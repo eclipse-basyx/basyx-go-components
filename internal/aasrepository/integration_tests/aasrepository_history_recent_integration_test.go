@@ -209,6 +209,10 @@ func TestAASRepositoryHistoryAllowsAddingIDShortAfterCreate(t *testing.T) {
 		require.NotContains(t, administration, "createdAt")
 		require.NotContains(t, administration, "updatedAt")
 	}
+	recent, status, err := getJSONResponse(baseURL + "/shells/$recent-changes?limit=10&idShort=" + url.QueryEscape("AddedLater"))
+	require.NoError(t, err)
+	require.Equal(t, http.StatusOK, status)
+	requireNoRecentChangesForID(t, recent, aasID)
 	requireAASHistoryPayloadTypes(t, aasID, []string{"snapshot", "diff"})
 }
 
