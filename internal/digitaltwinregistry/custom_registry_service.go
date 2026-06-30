@@ -29,6 +29,7 @@ package digitaltwinregistry
 import (
 	"context"
 	"net/http"
+	"time"
 
 	registryapiinternal "github.com/eclipse-basyx/basyx-go-components/internal/aasregistry/api"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
@@ -65,6 +66,9 @@ func (s *CustomRegistryService) GetAllAssetAdministrationShellDescriptors(
 	cursor string,
 	assetKind model.AssetKind,
 	assetType string,
+	assetIds []string,
+	createdFrom time.Time,
+	updatedFrom time.Time,
 ) (model.ImplResponse, error) {
 	createdAfter, _ := CreatedAfterFromContext(ctx)
 	if createdAfter != nil {
@@ -79,6 +83,9 @@ func (s *CustomRegistryService) GetAllAssetAdministrationShellDescriptors(
 		cursor,
 		assetKind,
 		assetType,
+		assetIds,
+		createdFrom,
+		updatedFrom,
 	)
 }
 

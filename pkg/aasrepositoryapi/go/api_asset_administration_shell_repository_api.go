@@ -3,7 +3,7 @@
  *
  * The Full Profile of the Asset Administration Shell Repository Service Specification as part of the [Specification of the Asset Administration Shell: Part 2](https://industrialdigitaltwin.org/en/content-hub/aasspecifications).   Copyright: Industrial Digital Twin Association (IDTA) 2025
  *
- * API version: V3.1.1_SSP-001
+ * API version: V3.2.0
  * Contact: info@idtwin.org
  */
 
@@ -438,7 +438,27 @@ func (c *AssetAdministrationShellRepositoryAPIAPIController) GetAllAssetAdminist
 
 	cursorParam := query.Get("cursor")
 
-	result, err := c.service.GetAllAssetAdministrationShells(r.Context(), assetIdsParam, idShortParam, limitParam, cursorParam)
+	var createdFromParam time.Time
+	if query.Has("createdFrom") {
+		parsed, err := parseTime(query.Get("createdFrom"))
+		if err != nil {
+			c.errorHandler(w, r, &ParsingError{Param: "createdFrom", Err: err}, nil)
+			return
+		}
+		createdFromParam = parsed
+	}
+
+	var updatedFromParam time.Time
+	if query.Has("updatedFrom") {
+		parsed, err := parseTime(query.Get("updatedFrom"))
+		if err != nil {
+			c.errorHandler(w, r, &ParsingError{Param: "updatedFrom", Err: err}, nil)
+			return
+		}
+		updatedFromParam = parsed
+	}
+
+	result, err := c.service.GetAllAssetAdministrationShells(r.Context(), assetIdsParam, idShortParam, limitParam, cursorParam, createdFromParam, updatedFromParam)
 	if err != nil {
 		c.errorHandler(w, r, err, &result)
 		return
@@ -2561,6 +2581,7 @@ func (c *AssetAdministrationShellRepositoryAPIAPIController) GetAllAssetAdminist
 		return
 	}
 	assetIdsParam := query["assetIds"]
+	idShortParam := query.Get("idShort")
 
 	var createdFromParam time.Time
 	if query.Has("createdFrom") {
@@ -2596,6 +2617,7 @@ func (c *AssetAdministrationShellRepositoryAPIAPIController) GetAllAssetAdminist
 	result, err := c.service.GetAllAssetAdministrationShellsRecentChanges(
 		r.Context(),
 		assetIdsParam,
+		idShortParam,
 		createdFromParam,
 		updatedFromParam,
 		limitParam,

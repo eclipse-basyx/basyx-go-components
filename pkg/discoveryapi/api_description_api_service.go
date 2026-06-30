@@ -5,7 +5,7 @@
  *
  * The entire Full Profile of the Discovery Service Specification as part of the [Specification of the Asset Administration Shell: Part 2](http://industrialdigitaltwin.org/en/content-hub).   Publisher: Industrial Digital Twin Association (IDTA) April 2023
  *
- * API version: V3.0.3_SSP-001
+ * API version: V3.2.0
  * Contact: info@idtwin.org
  */
 
@@ -32,8 +32,8 @@ func NewDescriptionAPIAPIService() *DescriptionAPIAPIService {
 func (s *DescriptionAPIAPIService) GetDescription(ctx context.Context) (model.ImplResponse, error) {
 	return model.Response(200, model.ServiceDescription{
 		Profiles: []string{
-			"https://admin-shell.io/aas/API/3/1/DiscoveryServiceSpecification/SSP-001",
-			"https://basyx.org/aas/API/3/1/DiscoveryServiceSpecification/SSP-001",
+			"https://admin-shell.io/aas/API/3/2/DiscoveryServiceSpecification/SSP-001",
+			"https://basyx.org/aas/API/3/2/DiscoveryServiceSpecification/SSP-001",
 		},
 	}), nil
 }

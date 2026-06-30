@@ -47,9 +47,13 @@ func NewDescriptionAPIAPIService() *DescriptionAPIAPIService {
 func (s *DescriptionAPIAPIService) GetSelfDescription(_ context.Context) (model.ImplResponse, error) {
 	sd := model.ServiceDescription{
 		Profiles: []string{
-			"https://admin-shell.io/aas/API/3/1/SubmodelRepositoryServiceSpecification/SSP-001",
-			"https://admin-shell.io/aas/API/3/1/SubmodelRepositoryServiceSpecification/SSP-005",
-			"https://basyx.org/aas/API/3/1/SubmodelRepositoryService/1.0",
+			"https://admin-shell.io/aas/API/3/2/SubmodelRepositoryServiceSpecification/SSP-001",
+			"https://admin-shell.io/aas/API/3/2/SubmodelRepositoryServiceSpecification/SSP-003",
+			"https://admin-shell.io/aas/API/3/2/SubmodelRepositoryServiceSpecification/SSP-004",
+			"https://admin-shell.io/aas/API/3/2/SubmodelRepositoryServiceSpecification/SSP-005",
+			"https://admin-shell.io/aas/API/3/2/SubmodelRepositoryServiceSpecification/SSP-006",
+			"https://admin-shell.io/aas/API/3/2/SubmodelRepositoryServiceSpecification/SSP-007",
+			"https://basyx.org/aas/API/3/2/SubmodelRepositoryService/1.0",
 		},
 	}
 

@@ -42,5 +42,5 @@ func TestDescriptionContainsSSP003Profile(t *testing.T) {
 
 	description, ok := resp.Body.(model.ServiceDescription)
 	require.True(t, ok)
-	require.Contains(t, description.Profiles, "https://admin-shell.io/aas/API/3/1/AssetAdministrationShellRegistryServiceSpecification/SSP-003")
+	require.Contains(t, description.Profiles, "https://admin-shell.io/aas/API/3/2/AssetAdministrationShellRegistryServiceSpecification/SSP-003")
 }

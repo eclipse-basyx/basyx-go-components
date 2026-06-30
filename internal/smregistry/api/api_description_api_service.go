@@ -30,7 +30,7 @@
  *
  * The Full Profile of the Submodel Registry Service Specification as part of the [Specification of the Asset Administration Shell: Part 2](https://industrialdigitaltwin.org/en/content-hub/aasspecifications).   Copyright: Industrial Digital Twin Association (IDTA) 2025
  *
- * API version: V3.1.1_SSP-001
+ * API version: V3.2.0
  * Contact: info@idtwin.org
  */
 
@@ -70,9 +70,10 @@ func (s *DescriptionAPIAPIService) GetSelfDescription(ctx context.Context) (mode
 
 	return model.Response(200, model.ServiceDescription{
 		Profiles: []string{
-			"https://app.swaggerhub.com/apis/Plattform_i40/SubmodelRegistryServiceSpecification/V3.1.1_SSP-001",
-			"https://admin-shell.io/aas/API/3/1/SubmodelRegistryServiceSpecification/SSP-003",
-			"https://basyx.org/aas/API/3/1/SubmodelRegistryServiceSpecification/SSP-001",
+			"https://admin-shell.io/aas/API/3/2/SubmodelRegistryServiceSpecification/SSP-001",
+			"https://admin-shell.io/aas/API/3/2/SubmodelRegistryServiceSpecification/SSP-003",
+			"https://admin-shell.io/aas/API/3/2/SubmodelRegistryServiceSpecification/SSP-004",
+			"https://basyx.org/aas/API/3/2/SubmodelRegistryServiceSpecification/SSP-001",
 		},
 	}), nil
 }

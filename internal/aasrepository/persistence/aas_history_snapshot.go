@@ -44,7 +44,9 @@ const (
 )
 
 func (s *AssetAdministrationShellDatabase) appendMutatedAASHistoryTx(ctx context.Context, tx *sql.Tx, aasIdentifier string, mutate history.SnapshotMutator) error {
-	err := history.AppendMutatedVersionTx(ctx, tx, history.TableAAS, aasIdentifier, history.ChangeUpdated, mutate)
+	err := history.AppendMutatedVersionTx(ctx, tx, history.TableAAS, aasIdentifier, history.ChangeUpdated, func(snapshot map[string]any) error {
+		return mutate(snapshot)
+	})
 	if err == nil || !common.IsErrNotFound(err) {
 		return err
 	}

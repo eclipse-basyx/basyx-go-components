@@ -5,7 +5,7 @@
  *
  * The Full Profile of the Submodel Registry Service Specification as part of the [Specification of the Asset Administration Shell: Part 2](https://industrialdigitaltwin.org/en/content-hub/aasspecifications).   Copyright: Industrial Digital Twin Association (IDTA) 2025
  *
- * API version: V3.1.1_SSP-001
+ * API version: V3.2.0
  * Contact: info@idtwin.org
  */
 
@@ -31,7 +31,6 @@ type DescriptionAPIAPIRouter interface {
 // pass the data to a SubmodelRegistryAPIAPIServicer to perform the required actions, then write the service results to the http response.
 type SubmodelRegistryAPIAPIRouter interface {
 	GetAllSubmodelDescriptors(http.ResponseWriter, *http.Request)
-	GetAllSubmodelDescriptorsRecentChanges(http.ResponseWriter, *http.Request)
 	PostSubmodelDescriptor(http.ResponseWriter, *http.Request)
 	GetSubmodelDescriptorById(http.ResponseWriter, *http.Request)
 	PutSubmodelDescriptorById(http.ResponseWriter, *http.Request)
@@ -51,8 +50,7 @@ type DescriptionAPIAPIServicer interface {
 // while the service implementation can be ignored with the .openapi-generator-ignore file
 // and updated with the logic required for the API.
 type SubmodelRegistryAPIAPIServicer interface {
-	GetAllSubmodelDescriptors(context.Context, int32, string) (model.ImplResponse, error)
-	GetAllSubmodelDescriptorsRecentChanges(context.Context, time.Time, time.Time, int32, string) (model.ImplResponse, error)
+	GetAllSubmodelDescriptors(context.Context, int32, string, time.Time, time.Time) (model.ImplResponse, error)
 	PostSubmodelDescriptor(context.Context, model.SubmodelDescriptor) (model.ImplResponse, error)
 	GetSubmodelDescriptorById(context.Context, string) (model.ImplResponse, error)
 	PutSubmodelDescriptorById(context.Context, string, model.SubmodelDescriptor) (model.ImplResponse, error)

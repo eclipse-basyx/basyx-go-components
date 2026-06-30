@@ -271,9 +271,9 @@ func runServer(ctx context.Context, configPath string) error {
 	versioningGuard.Cover(http.MethodPost, "/bulk/shell-descriptors")
 	versioningGuard.Cover(http.MethodPut, "/bulk/shell-descriptors")
 	versioningGuard.Cover(http.MethodDelete, "/bulk/shell-descriptors")
-	versioningGuard.Exempt(http.MethodPost, "/bulk/submodel-descriptors")
-	versioningGuard.Exempt(http.MethodPut, "/bulk/submodel-descriptors")
-	versioningGuard.Exempt(http.MethodDelete, "/bulk/submodel-descriptors")
+	versioningGuard.Cover(http.MethodPost, "/bulk/submodel-descriptors")
+	versioningGuard.Cover(http.MethodPut, "/bulk/submodel-descriptors")
+	versioningGuard.Cover(http.MethodDelete, "/bulk/submodel-descriptors")
 	aasBulkHandler.RegisterRoutes(apiRouter, true)
 	smBulkHandler.RegisterRoutes(apiRouter, false)
 

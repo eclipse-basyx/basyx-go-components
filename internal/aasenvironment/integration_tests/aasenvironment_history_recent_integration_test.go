@@ -31,6 +31,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
 	"testing"
 	"time"
 
@@ -57,6 +58,10 @@ func TestAASEnvironmentDelegatesHistoryRecentChangesAndBatchAssetKind(t *testing
 		"id":        aasID,
 		"idShort":   "AASEnvHistoryBatch",
 		"modelType": "AssetAdministrationShell",
+		"administration": map[string]any{
+			"createdAt": "2026-01-02T03:04:05Z",
+			"updatedAt": "2026-01-02T03:04:06Z",
+		},
 		"assetInformation": map[string]any{
 			"assetKind": "Batch",
 			"assetType": "env-type-v1",
@@ -81,29 +86,34 @@ func TestAASEnvironmentDelegatesHistoryRecentChangesAndBatchAssetKind(t *testing
 
 	status, body, _ = doAASEnvRequest(t, aasEnvNoRedirectClient, http.MethodGet, aasEnvBaseURL+"/shells/$recent-changes?limit=10", nil)
 	require.Equal(t, http.StatusOK, status, "response=%s", string(body))
-	requireAASEnvRecentChange(t, decodeAASEnvMap(t, body), aasID, "Updated")
+	requireAASEnvRecentChange(t, decodeAASEnvMap(t, body), aasID)
 
 	submodelPayload := map[string]any{
 		"id":        submodelID,
 		"idShort":   "AASEnvHistorySubmodel",
 		"kind":      "Instance",
 		"modelType": "Submodel",
+		"administration": map[string]any{
+			"createdAt": "2026-01-02T03:04:05Z",
+			"updatedAt": "2026-01-02T03:04:06Z",
+		},
 	}
 	status, body, _ = doAASEnvRequest(t, aasEnvNoRedirectClient, http.MethodPost, aasEnvBaseURL+"/submodels", submodelPayload)
 	require.Equal(t, http.StatusCreated, status, "response=%s", string(body))
 	status, body, _ = doAASEnvRequest(t, aasEnvNoRedirectClient, http.MethodGet, aasEnvBaseURL+"/submodels/$recent-changes?limit=10", nil)
 	require.Equal(t, http.StatusOK, status, "response=%s", string(body))
-	requireAASEnvRecentChange(t, decodeAASEnvMap(t, body), submodelID, "Created")
+	requireAASEnvRecentChange(t, decodeAASEnvMap(t, body), submodelID)
 
 	descriptorPayload := map[string]any{
-		"id":        descriptorID,
-		"idShort":   "AASEnvDescriptorRecent",
-		"assetKind": "Batch",
-		"assetType": "descriptor-type-v1",
+		"id":             descriptorID,
+		"idShort":        "AASEnvDescriptorRecent",
+		"assetKind":      "Batch",
+		"assetType":      "descriptor-type-v1",
+		"administration": map[string]any{"createdAt": "2026-01-02T03:04:05Z", "updatedAt": "2026-01-02T03:04:06Z"},
 	}
 	status, body, _ = doAASEnvRequest(t, aasEnvNoRedirectClient, http.MethodPost, aasEnvBaseURL+"/shell-descriptors", descriptorPayload)
 	require.Equal(t, http.StatusCreated, status, "response=%s", string(body))
-	status, body, _ = doAASEnvRequest(t, aasEnvNoRedirectClient, http.MethodGet, aasEnvBaseURL+"/shell-descriptors/$recent-changes?limit=10", nil)
+	status, body, _ = doAASEnvRequest(t, aasEnvNoRedirectClient, http.MethodGet, aasEnvBaseURL+"/shell-descriptors?limit=10&updatedFrom="+url.QueryEscape("2026-01-02T03:04:06Z"), nil)
 	require.Equal(t, http.StatusOK, status, "response=%s", string(body))
 	requireAASEnvDescriptor(t, decodeAASEnvMap(t, body), descriptorID, "descriptor-type-v1")
 }
@@ -146,7 +156,7 @@ func decodeAASEnvMap(t *testing.T, body []byte) map[string]any {
 	return payload
 }
 
-func requireAASEnvRecentChange(t *testing.T, payload map[string]any, id string, changeType string) {
+func requireAASEnvRecentChange(t *testing.T, payload map[string]any, id string) {
 	t.Helper()
 	result, ok := payload["result"].([]any)
 	require.True(t, ok, "result must be an array")
@@ -155,13 +165,14 @@ func requireAASEnvRecentChange(t *testing.T, payload map[string]any, id string, 
 		if !ok {
 			continue
 		}
-		if item["id"] == id && item["type"] == changeType {
+		if item["id"] == id {
+			require.NotContains(t, item, "type")
 			require.NotEmpty(t, item["createdAt"])
 			require.NotEmpty(t, item["updatedAt"])
 			return
 		}
 	}
-	t.Fatalf("expected recent change id=%s type=%s in payload: %#v", id, changeType, payload)
+	t.Fatalf("expected recent change id=%s in payload: %#v", id, payload)
 }
 
 func requireAASEnvDescriptor(t *testing.T, payload map[string]any, id string, assetType string) {

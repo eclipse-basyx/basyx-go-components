@@ -30,6 +30,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/stretchr/testify/require"
@@ -57,7 +58,7 @@ func TestGetAllConceptDescriptionsRejectsInvalidCursorWithStandardErrorBody(t *t
 	require.Error(t, expectedDecodeErr)
 
 	sut := NewConceptDescriptionRepositoryAPIAPIService(nil)
-	response, err := sut.GetAllConceptDescriptions(contextWithABACDisabled(t), "", "", "", 1, invalidCursor)
+	response, err := sut.GetAllConceptDescriptions(contextWithABACDisabled(t), "", "", "", 1, invalidCursor, time.Time{}, time.Time{})
 
 	require.NoError(t, err)
 	require.Equal(t, http.StatusBadRequest, response.Code)

@@ -43,6 +43,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/FriedJannik/aas-go-sdk/jsonization"
 	aastypes "github.com/FriedJannik/aas-go-sdk/types"
@@ -297,7 +298,7 @@ func (s *SerializationAPIService) loadAssetAdministrationShells(ctx context.Cont
 	result := make([]aastypes.IAssetAdministrationShell, 0)
 	cursor := ""
 	for {
-		aasPage, nextCursor, getErr := s.persistence.AASRepository.GetAssetAdministrationShells(ctx, defaultListPageSize, cursor, "", nil)
+		aasPage, nextCursor, getErr := s.persistence.AASRepository.GetAssetAdministrationShells(ctx, defaultListPageSize, cursor, "", nil, time.Time{}, time.Time{})
 		if getErr != nil {
 			return nil, getErr
 		}
@@ -333,7 +334,7 @@ func (s *SerializationAPIService) loadSubmodels(ctx context.Context, ids []strin
 	result := make([]aastypes.ISubmodel, 0)
 	cursor := ""
 	for {
-		submodelPage, nextCursor, getErr := s.persistence.SubmodelRepository.GetSubmodels(ctx, defaultListPageSize, cursor, "")
+		submodelPage, nextCursor, getErr := s.persistence.SubmodelRepository.GetSubmodels(ctx, defaultListPageSize, cursor, "", "", time.Time{}, time.Time{})
 		if getErr != nil {
 			return nil, getErr
 		}
@@ -380,7 +381,7 @@ func (s *SerializationAPIService) loadConceptDescriptions(ctx context.Context, i
 	result := make([]aastypes.IConceptDescription, 0)
 	cursor := ""
 	for {
-		conceptDescriptionPage, nextCursor, getErr := s.persistence.ConceptDescriptionRepository.GetConceptDescriptions(ctx, nil, nil, nil, uint(defaultListPageSize), &cursor)
+		conceptDescriptionPage, nextCursor, getErr := s.persistence.ConceptDescriptionRepository.GetConceptDescriptions(ctx, nil, nil, nil, uint(defaultListPageSize), &cursor, time.Time{}, time.Time{})
 		if getErr != nil {
 			return nil, getErr
 		}

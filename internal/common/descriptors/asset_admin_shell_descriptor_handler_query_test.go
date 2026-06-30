@@ -31,6 +31,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
@@ -62,6 +63,8 @@ func TestBuildListAssetAdministrationShellDescriptorsQuery_UsesPagedInnerQueryAn
 		"",
 		"",
 		"",
+		time.Time{},
+		time.Time{},
 	)
 	if err != nil {
 		t.Fatalf("buildListAssetAdministrationShellDescriptorsQuery returned error: %v", err)
@@ -122,7 +125,7 @@ func TestBuildListAssetAdministrationShellDescriptorsQuery_ReusesSameMaskConditi
 		},
 	})
 
-	ds, err := buildListAssetAdministrationShellDescriptorsQuery(ctx, 2, "", "", "", "")
+	ds, err := buildListAssetAdministrationShellDescriptorsQuery(ctx, 2, "", "", "", "", time.Time{}, time.Time{})
 	if err != nil {
 		t.Fatalf("buildListAssetAdministrationShellDescriptorsQuery returned error: %v", err)
 	}

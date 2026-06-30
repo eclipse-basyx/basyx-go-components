@@ -35,7 +35,6 @@ import (
 
 	"github.com/FriedJannik/aas-go-sdk/jsonization"
 	"github.com/FriedJannik/aas-go-sdk/types"
-	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/history"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
@@ -51,7 +50,7 @@ func (s *SubmodelDatabase) GetSubmodelByID(ctx context.Context, submodelIdentifi
 	var submodels []types.ISubmodel
 	eg.Go(func() error {
 		var err error
-		submodels, _, err = s.GetSubmodels(ctx, 0, "", submodelIdentifier)
+		submodels, _, err = s.GetSubmodels(ctx, 0, "", submodelIdentifier, "", time.Time{}, time.Time{})
 		if err != nil {
 			return err
 		}
@@ -93,13 +92,18 @@ func (s *SubmodelDatabase) GetSubmodelByID(ctx context.Context, submodelIdentifi
 }
 
 // GetSubmodels retrieves submodels and applies optional ABAC formula filters from ctx.
-func (s *SubmodelDatabase) GetSubmodels(ctx context.Context, limit int32, cursor string, submodelIdentifier string) ([]types.ISubmodel, string, error) {
-	return s.getSubmodelsWithOptionalSemanticIDFilter(ctx, limit, cursor, submodelIdentifier, "")
+func (s *SubmodelDatabase) GetSubmodels(ctx context.Context, limit int32, cursor string, submodelIdentifier string, semanticID string, createdFrom time.Time, updatedFrom time.Time) ([]types.ISubmodel, string, error) {
+	return s.getSubmodelsWithOptionalFilters(ctx, limit, cursor, submodelIdentifier, "", semanticID, createdFrom, updatedFrom)
+}
+
+// GetSubmodelsByListFilters retrieves submodels using public list filters.
+func (s *SubmodelDatabase) GetSubmodelsByListFilters(ctx context.Context, limit int32, cursor string, idShort string, semanticID string, createdFrom time.Time, updatedFrom time.Time) ([]types.ISubmodel, string, error) {
+	return s.getSubmodelsWithOptionalFilters(ctx, limit, cursor, "", idShort, semanticID, createdFrom, updatedFrom)
 }
 
 // GetSubmodelReferences retrieves references and applies optional ABAC formula filters from ctx.
-func (s *SubmodelDatabase) GetSubmodelReferences(ctx context.Context, limit int32, cursor string, submodelIdentifier string, semanticID string) ([]types.IReference, string, error) {
-	submodels, nextCursor, err := s.getSubmodelsWithOptionalSemanticIDFilter(ctx, limit, cursor, submodelIdentifier, semanticID)
+func (s *SubmodelDatabase) GetSubmodelReferences(ctx context.Context, limit int32, cursor string, idShort string, semanticID string) ([]types.IReference, string, error) {
+	submodels, nextCursor, err := s.getSubmodelsWithOptionalFilters(ctx, limit, cursor, "", idShort, semanticID, time.Time{}, time.Time{})
 	if err != nil {
 		return nil, "", err
 	}
@@ -128,7 +132,7 @@ func (s *SubmodelDatabase) GetSubmodelReference(ctx context.Context, submodelIde
 		return nil, common.NewErrBadRequest("SMREPO-GETSMREFONE-EMPTYIDENTIFIER submodel identifier is required")
 	}
 
-	submodels, _, err := s.GetSubmodels(ctx, 1, "", submodelIdentifier)
+	submodels, _, err := s.GetSubmodels(ctx, 1, "", submodelIdentifier, "", time.Time{}, time.Time{})
 	if err != nil {
 		return nil, err
 	}
@@ -169,7 +173,7 @@ func (s *SubmodelDatabase) getSubmodelByIDInTransaction(ctx context.Context, tx 
 
 func (s *SubmodelDatabase) getSubmodelMetadataByIDInTransaction(ctx context.Context, tx *sql.Tx, submodelIdentifier string) (types.ISubmodel, error) {
 	limit := int32(1)
-	selectDS, err := submodelqueries.SelectSubmodelDataset(&submodelIdentifier, &limit, nil, nil)
+	selectDS, err := submodelqueries.SelectSubmodelDataset(&submodelIdentifier, nil, &limit, nil, time.Time{}, time.Time{}, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -226,27 +230,6 @@ func (s *SubmodelDatabase) GetSubmodelByIDAndDate(ctx context.Context, submodelI
 	return submodel, nil
 }
 
-// GetSubmodelRecentChanges returns Submodel history rows for recent-change APIs.
-func (s *SubmodelDatabase) GetSubmodelRecentChanges(ctx context.Context, limit int32, cursor string, createdFrom time.Time, updatedFrom time.Time) ([]history.Row, string, error) {
-	shouldEnforce, enforceErr := shouldEnforceFormula(ctx, "SMREPO-RECENT-SHOULDENFORCE")
-	if enforceErr != nil {
-		return nil, "", enforceErr
-	}
-	if !shouldEnforce {
-		return history.RecentRows(ctx, s.db, history.TableSubmodel, limit, cursor, createdFrom, updatedFrom)
-	}
-
-	collector, err := grammar.NewResolvedFieldPathCollectorForRoot(grammar.CollectorRootSM)
-	if err != nil {
-		return nil, "", common.NewInternalServerError("SMREPO-RECENT-BADCOLLECTOR " + err.Error())
-	}
-	visibilityDS := goqu.From("submodel").
-		Select(goqu.V(1)).
-		Where(goqu.I("submodel.submodel_identifier").Eq(goqu.I("history.identifier")))
-
-	return history.RecentRowsForVisibleIdentifiables(ctx, s.db, history.TableSubmodel, limit, cursor, createdFrom, updatedFrom, visibilityDS, collector)
-}
-
 // RecordCurrentSubmodelVersion appends a full snapshot of the current Submodel state.
 func (s *SubmodelDatabase) RecordCurrentSubmodelVersion(ctx context.Context, submodelIdentifier string, changeType string) error {
 	return common.ExecuteInTransaction(s.db, "SMREPO-HISTORY-STARTTX", "SMREPO-HISTORY-COMMIT", func(tx *sql.Tx) error {
@@ -261,11 +244,11 @@ func (s *SubmodelDatabase) QuerySubmodels(ctx context.Context, limit int32, curs
 	}
 
 	ctx = auth.MergeQueryFilter(ctx, queryWrapper.Query)
-	return s.GetSubmodels(ctx, limit, cursor, "")
+	return s.GetSubmodels(ctx, limit, cursor, "", "", time.Time{}, time.Time{})
 }
 
 //nolint:revive // cyclomatic complexity is acceptable for this function due to query/filter orchestration in one flow
-func (s *SubmodelDatabase) getSubmodelsWithOptionalSemanticIDFilter(ctx context.Context, limit int32, cursor string, submodelIdentifier string, semanticID string) ([]types.ISubmodel, string, error) {
+func (s *SubmodelDatabase) getSubmodelsWithOptionalFilters(ctx context.Context, limit int32, cursor string, submodelIdentifier string, idShort string, semanticID string, createdFrom time.Time, updatedFrom time.Time) ([]types.ISubmodel, string, error) {
 	var limitFilter *int32
 
 	if limit == 0 {
@@ -292,6 +275,10 @@ func (s *SubmodelDatabase) getSubmodelsWithOptionalSemanticIDFilter(ctx context.
 	if submodelIdentifier != "" {
 		submodelIdentifierFilter = &submodelIdentifier
 	}
+	var idShortFilter *string
+	if idShort != "" {
+		idShortFilter = &idShort
+	}
 	collector, collectorErr := grammar.NewResolvedFieldPathCollectorForRoot(grammar.CollectorRootSM)
 	if collectorErr != nil {
 		return nil, "", common.NewInternalServerError("SMREPO-GETSMS-BADCOLLECTOR " + collectorErr.Error())
@@ -311,7 +298,7 @@ func (s *SubmodelDatabase) getSubmodelsWithOptionalSemanticIDFilter(ctx context.
 		return nil, "", common.NewInternalServerError("SMREPO-GETSMS-MASKEXPR " + maskedExprErr.Error())
 	}
 
-	selectDS, err := submodelqueries.SelectSubmodelDataset(submodelIdentifierFilter, limitFilter, cursorFilter, maskRuntime.Projections())
+	selectDS, err := submodelqueries.SelectSubmodelDataset(submodelIdentifierFilter, idShortFilter, limitFilter, cursorFilter, createdFrom, updatedFrom, maskRuntime.Projections())
 	if err != nil {
 		return nil, "", err
 	}
@@ -334,7 +321,7 @@ func (s *SubmodelDatabase) getSubmodelsWithOptionalSemanticIDFilter(ctx context.
 		return nil, "", common.NewInternalServerError("SMREPO-GETSMS-BUILDSQL " + err.Error())
 	}
 
-	var identifier, idShort, category, descriptionJsonString, displayNameJsonString, administrativeInformationJsonString, embeddedDataSpecificationJsonString, supplementalSemanticIDsJsonString, extensionsJsonString, qualifiersJsonString, semanticIDJSONString sql.NullString
+	var identifier, rawIDShort, category, descriptionJsonString, displayNameJsonString, administrativeInformationJsonString, embeddedDataSpecificationJsonString, supplementalSemanticIDsJsonString, extensionsJsonString, qualifiersJsonString, semanticIDJSONString sql.NullString
 	var kind sql.NullInt64
 
 	rows, err := s.db.Query(query, args...)
@@ -353,7 +340,7 @@ func (s *SubmodelDatabase) getSubmodelsWithOptionalSemanticIDFilter(ctx context.
 	submodels := make([]types.ISubmodel, 0)
 	nextCursor := ""
 	for rows.Next() {
-		if err := rows.Scan(&identifier, &idShort, &category, &kind, &descriptionJsonString, &displayNameJsonString, &administrativeInformationJsonString, &embeddedDataSpecificationJsonString, &supplementalSemanticIDsJsonString, &extensionsJsonString, &qualifiersJsonString, &semanticIDJSONString); err != nil {
+		if err := rows.Scan(&identifier, &rawIDShort, &category, &kind, &descriptionJsonString, &displayNameJsonString, &administrativeInformationJsonString, &embeddedDataSpecificationJsonString, &supplementalSemanticIDsJsonString, &extensionsJsonString, &qualifiersJsonString, &semanticIDJSONString); err != nil {
 			return nil, "", err
 		}
 
@@ -364,8 +351,8 @@ func (s *SubmodelDatabase) getSubmodelsWithOptionalSemanticIDFilter(ctx context.
 
 		var submodel types.ISubmodel
 		submodel = types.NewSubmodel(identifier.String)
-		if idShort.Valid {
-			idShortValue := idShort.String
+		if rawIDShort.Valid {
+			idShortValue := rawIDShort.String
 			submodel.SetIDShort(&idShortValue)
 		}
 		if category.Valid {

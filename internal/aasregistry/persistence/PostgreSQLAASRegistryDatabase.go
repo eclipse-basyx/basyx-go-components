@@ -42,8 +42,6 @@ import (
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/descriptors"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/history"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
-	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
-	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -528,31 +526,6 @@ func (p *PostgreSQLAASRegistryDatabase) DeleteAssetAdministrationShellDescriptor
 	return -1, nil
 }
 
-// GetAssetAdministrationShellDescriptorRecentChanges returns descriptor history rows for recent-change APIs.
-func (p *PostgreSQLAASRegistryDatabase) GetAssetAdministrationShellDescriptorRecentChanges(ctx context.Context, limit int32, cursor string, createdFrom time.Time, updatedFrom time.Time) ([]history.Row, string, error) {
-	shouldEnforceFormula, enforceErr := auth.ShouldEnforceFormula(ctx)
-	if enforceErr != nil {
-		return nil, "", common.NewInternalServerError("AASREG-RECENT-SHOULDENFORCE " + enforceErr.Error())
-	}
-	if !shouldEnforceFormula {
-		return history.RecentRows(ctx, p.db, history.TableDescriptor, limit, cursor, createdFrom, updatedFrom)
-	}
-
-	collector, err := grammar.NewResolvedFieldPathCollectorForRoot(grammar.CollectorRootAASDesc)
-	if err != nil {
-		return nil, "", common.NewInternalServerError("AASREG-RECENT-BADCOLLECTOR " + err.Error())
-	}
-	visibilityDS := goqu.From(common.TDescriptor).
-		InnerJoin(
-			common.TAASDescriptor,
-			goqu.On(common.TAASDescriptor.Col(common.ColDescriptorID).Eq(common.TDescriptor.Col(common.ColID))),
-		).
-		Select(goqu.V(1)).
-		Where(common.TAASDescriptor.Col(common.ColAASID).Eq(goqu.I("history.identifier")))
-
-	return history.RecentRowsForVisibleIdentifiables(ctx, p.db, history.TableDescriptor, limit, cursor, createdFrom, updatedFrom, visibilityDS, collector)
-}
-
 // ListAssetAdministrationShellDescriptors lists AAS descriptors with optional
 // pagination and asset filtering, returning a next-page cursor when present.
 func (p *PostgreSQLAASRegistryDatabase) ListAssetAdministrationShellDescriptors(
@@ -561,8 +534,10 @@ func (p *PostgreSQLAASRegistryDatabase) ListAssetAdministrationShellDescriptors(
 	cursor string,
 	assetKind model.AssetKind,
 	assetType string,
+	createdFrom time.Time,
+	updatedFrom time.Time,
 ) ([]model.AssetAdministrationShellDescriptor, string, error) {
-	return descriptors.ListAssetAdministrationShellDescriptors(ctx, p.db, limit, cursor, assetKind, assetType, "")
+	return descriptors.ListAssetAdministrationShellDescriptors(ctx, p.db, limit, cursor, assetKind, assetType, "", createdFrom, updatedFrom)
 }
 
 // ListSubmodelDescriptorsForAAS lists submodel descriptors for a given AAS ID
@@ -610,6 +585,9 @@ func (p *PostgreSQLAASRegistryDatabase) ReplaceSubmodelDescriptorForAAS(
 ) (model.SubmodelDescriptor, error) {
 	var result model.SubmodelDescriptor
 	err := common.ExecuteInTransaction(p.db, "AASREG-REPLACESMDESCFORAAS-STARTTX", "AASREG-REPLACESMDESCFORAAS-COMMIT", func(tx *sql.Tx) error {
+		if _, err := descriptors.GetSubmodelDescriptorForAASByID(ctx, tx, aasID, submodel.Id); err != nil {
+			return err
+		}
 		if err := descriptors.DeleteSubmodelDescriptorForAASByIDTx(ctx, tx, aasID, submodel.Id); err != nil {
 			return err
 		}
