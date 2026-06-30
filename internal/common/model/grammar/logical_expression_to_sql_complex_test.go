@@ -62,7 +62,7 @@ func toPreparedSQLForDescriptor(t *testing.T, le LogicalExpression) (string, []i
 
 func TestLogicalExpression_ToSQL_ComplexCases(t *testing.T) {
 	kind := true
-	timeVal := TimeLiteralPattern("12:34")
+	timeVal := TimeLiteralPattern("12:34:00Z")
 	dt := time.Date(2025, 1, 2, 3, 4, 5, 0, time.UTC)
 	dtVal := DateTimeLiteralPattern(dt)
 

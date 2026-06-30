@@ -216,7 +216,7 @@ func TestLogicalExpression_SME_WithCasts(t *testing.T) {
 			{
 				Lt: ComparisonItems{
 					Value{TimeCast: valuePtr(field("$sme.temperature#value"))},
-					Value{TimeVal: timePtr("12:00")},
+					Value{TimeVal: timePtr("12:00:00Z")},
 				},
 			},
 		},
@@ -233,8 +233,8 @@ func TestLogicalExpression_SME_WithCasts(t *testing.T) {
 	if !strings.Contains(argsText, "10") {
 		t.Fatalf("expected args to contain %q, got: %v", "10", args)
 	}
-	if !strings.Contains(argsText, "12:00") {
-		t.Fatalf("expected args to contain %q, got: %v", "12:00", args)
+	if !strings.Contains(argsText, "12:00:00Z") {
+		t.Fatalf("expected args to contain %q, got: %v", "12:00:00Z", args)
 	}
 }
 

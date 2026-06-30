@@ -30,8 +30,11 @@
 package grammar
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
+
+	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 )
 
 // Value represents a value in the grammar model, which can be a literal value or a field reference.
@@ -52,10 +55,10 @@ type Value struct {
 	DateTimeVal *DateTimeLiteralPattern `json:"$dateTimeVal,omitempty" yaml:"$dateTimeVal,omitempty" mapstructure:"$dateTimeVal,omitempty"`
 
 	// DayOfMonth corresponds to the JSON schema field "$dayOfMonth".
-	DayOfMonth *DateTimeLiteralPattern `json:"$dayOfMonth,omitempty" yaml:"$dayOfMonth,omitempty" mapstructure:"$dayOfMonth,omitempty"`
+	DayOfMonth *Value `json:"$dayOfMonth,omitempty" yaml:"$dayOfMonth,omitempty" mapstructure:"$dayOfMonth,omitempty"`
 
 	// DayOfWeek corresponds to the JSON schema field "$dayOfWeek".
-	DayOfWeek *DateTimeLiteralPattern `json:"$dayOfWeek,omitempty" yaml:"$dayOfWeek,omitempty" mapstructure:"$dayOfWeek,omitempty"`
+	DayOfWeek *Value `json:"$dayOfWeek,omitempty" yaml:"$dayOfWeek,omitempty" mapstructure:"$dayOfWeek,omitempty"`
 
 	// Field corresponds to the JSON schema field "$field".
 	Field *ModelStringPattern `json:"$field,omitempty" yaml:"$field,omitempty" mapstructure:"$field,omitempty"`
@@ -67,7 +70,7 @@ type Value struct {
 	HexVal *HexLiteralPattern `json:"$hexVal,omitempty" yaml:"$hexVal,omitempty" mapstructure:"$hexVal,omitempty"`
 
 	// Month corresponds to the JSON schema field "$month".
-	Month *DateTimeLiteralPattern `json:"$month,omitempty" yaml:"$month,omitempty" mapstructure:"$month,omitempty"`
+	Month *Value `json:"$month,omitempty" yaml:"$month,omitempty" mapstructure:"$month,omitempty"`
 
 	// NumCast corresponds to the JSON schema field "$numCast".
 	NumCast *Value `json:"$numCast,omitempty" yaml:"$numCast,omitempty" mapstructure:"$numCast,omitempty"`
@@ -88,7 +91,31 @@ type Value struct {
 	TimeVal *TimeLiteralPattern `json:"$timeVal,omitempty" yaml:"$timeVal,omitempty" mapstructure:"$timeVal,omitempty"`
 
 	// Year corresponds to the JSON schema field "$year".
-	Year *DateTimeLiteralPattern `json:"$year,omitempty" yaml:"$year,omitempty" mapstructure:"$year,omitempty"`
+	Year *Value `json:"$year,omitempty" yaml:"$year,omitempty" mapstructure:"$year,omitempty"`
+}
+
+// UnmarshalJSON implements json.Unmarshaler for Value.
+func (v *Value) UnmarshalJSON(value []byte) error {
+	if _, err := singleJSONMember(value, "value"); err != nil {
+		return err
+	}
+
+	type Plain Value
+	var plain Plain
+	if err := common.UnmarshalAndDisallowUnknownFields(value, &plain); err != nil {
+		return err
+	}
+	if plain.Attribute != nil {
+		if err := validateAttributeValue(plain.Attribute); err != nil {
+			return err
+		}
+	}
+	if err := validateValueOperandShapes(Value(plain)); err != nil {
+		return err
+	}
+
+	*v = Value(plain)
+	return nil
 }
 
 // GetValueType returns the type of value stored in a Value struct
@@ -148,13 +175,13 @@ func (v *Value) GetValue() interface{} {
 	case "$timeVal":
 		return string(*v.TimeVal)
 	case "$dayOfWeek":
-		return *v.DayOfWeek
+		return v.DayOfWeek
 	case "$dayOfMonth":
-		return *v.DayOfMonth
+		return v.DayOfMonth
 	case "$month":
-		return *v.Month
+		return v.Month
 	case "$year":
-		return *v.Year
+		return v.Year
 	case "$boolean":
 		return *v.Boolean
 	case "$attribute":
@@ -391,6 +418,90 @@ func isNowGlobal(v string) bool {
 	}
 }
 
+func validateAttributeValue(attr AttributeValue) error {
+	raw, err := json.Marshal(attr)
+	if err != nil {
+		return fmt.Errorf("GRAMMAR-ATTRIBUTE-MARSHAL: %w", err)
+	}
+	var item AttributeItem
+	if err := common.UnmarshalAndDisallowUnknownFields(raw, &item); err != nil {
+		return err
+	}
+	return nil
+}
+
+func validateValueOperandShapes(v Value) error {
+	if v.DateTimeCast != nil && !isStringValueOperand(*v.DateTimeCast) {
+		return fmt.Errorf("GRAMMAR-VALUE-DATETIMECAST: $dateTimeCast requires a stringValue operand")
+	}
+	if v.TimeCast != nil && !isTimeCastOperand(*v.TimeCast) {
+		return fmt.Errorf("GRAMMAR-VALUE-TIMECAST: $timeCast requires a stringValue or dateTimeOperand")
+	}
+	if err := validateDatePartOperand("$dayOfWeek", v.DayOfWeek); err != nil {
+		return err
+	}
+	if err := validateDatePartOperand("$dayOfMonth", v.DayOfMonth); err != nil {
+		return err
+	}
+	if err := validateDatePartOperand("$month", v.Month); err != nil {
+		return err
+	}
+	if err := validateDatePartOperand("$year", v.Year); err != nil {
+		return err
+	}
+	return nil
+}
+
+func validateDatePartOperand(name string, operand *Value) error {
+	if operand == nil {
+		return nil
+	}
+	if !isDateTimeOperand(*operand) {
+		return fmt.Errorf("GRAMMAR-VALUE-DATEPART: %s requires a dateTimeOperand", name)
+	}
+	return nil
+}
+
+func isStringValueOperand(v Value) bool {
+	return v.Attribute != nil || v.Field != nil || v.StrCast != nil || v.StrVal != nil
+}
+
+func isFieldOperand(v Value) bool {
+	return v.Field != nil
+}
+
+func isNumericalOperand(v Value) bool {
+	return v.NumVal != nil || v.NumCast != nil || v.DayOfWeek != nil || v.DayOfMonth != nil || v.Month != nil || v.Year != nil
+}
+
+func isHexOperand(v Value) bool {
+	return v.HexVal != nil || v.HexCast != nil
+}
+
+func isBoolOperand(v Value) bool {
+	return v.Boolean != nil || v.BoolCast != nil
+}
+
+func isDateTimeOperand(v Value) bool {
+	return v.DateTimeCast != nil || v.DateTimeVal != nil || isDateTimeAttributeOperand(v)
+}
+
+func isDateTimeAttributeOperand(v Value) bool {
+	if v.Attribute == nil {
+		return false
+	}
+	global, ok := attributeGlobalValue(v.Attribute)
+	return ok && isNowGlobal(global)
+}
+
+func isTimeCastOperand(v Value) bool {
+	return isStringValueOperand(v) || isDateTimeOperand(v)
+}
+
+func isTimeOperand(v Value) bool {
+	return v.TimeVal != nil || v.TimeCast != nil
+}
+
 // AssertValueRequired checks if the required fields are not zero-ed
 func AssertValueRequired(obj Value) error {
 	if obj.StrCast != nil {
@@ -420,6 +531,26 @@ func AssertValueRequired(obj Value) error {
 	}
 	if obj.TimeCast != nil {
 		if err := AssertValueRequired(*obj.TimeCast); err != nil {
+			return err
+		}
+	}
+	if obj.DayOfWeek != nil {
+		if err := AssertValueRequired(*obj.DayOfWeek); err != nil {
+			return err
+		}
+	}
+	if obj.DayOfMonth != nil {
+		if err := AssertValueRequired(*obj.DayOfMonth); err != nil {
+			return err
+		}
+	}
+	if obj.Month != nil {
+		if err := AssertValueRequired(*obj.Month); err != nil {
+			return err
+		}
+	}
+	if obj.Year != nil {
+		if err := AssertValueRequired(*obj.Year); err != nil {
 			return err
 		}
 	}
@@ -455,6 +586,26 @@ func AssertValueConstraints(obj Value) error {
 	}
 	if obj.TimeCast != nil {
 		if err := AssertValueConstraints(*obj.TimeCast); err != nil {
+			return err
+		}
+	}
+	if obj.DayOfWeek != nil {
+		if err := AssertValueConstraints(*obj.DayOfWeek); err != nil {
+			return err
+		}
+	}
+	if obj.DayOfMonth != nil {
+		if err := AssertValueConstraints(*obj.DayOfMonth); err != nil {
+			return err
+		}
+	}
+	if obj.Month != nil {
+		if err := AssertValueConstraints(*obj.Month); err != nil {
+			return err
+		}
+	}
+	if obj.Year != nil {
+		if err := AssertValueConstraints(*obj.Year); err != nil {
 			return err
 		}
 	}

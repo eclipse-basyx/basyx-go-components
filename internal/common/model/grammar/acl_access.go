@@ -96,9 +96,9 @@ func (j *ACLACCESS) UnmarshalJSON(value []byte) error {
 // This custom unmarshaler validates that the ACL JSON object contains the required fields:
 //   - ACCESS: The access mode (ALLOW or DISABLED)
 //   - RIGHTS: The rights/permissions being granted or denied
-//   - Exactly one of ATTRIBUTES or USEATTRIBUTES
+//   - At least one of ATTRIBUTES or USEATTRIBUTES
 //
-// ACCESS and RIGHTS are mandatory, and exactly one of ATTRIBUTES/USEATTRIBUTES must be present.
+// ACCESS and RIGHTS are mandatory, and at least one of ATTRIBUTES/USEATTRIBUTES must be present.
 //
 // Parameters:
 //   - value: JSON byte slice containing the ACL object to unmarshal
@@ -119,11 +119,8 @@ func (j *ACL) UnmarshalJSON(value []byte) error {
 	}
 	_, hasAttributes := raw["ATTRIBUTES"]
 	_, hasUseAttributes := raw["USEATTRIBUTES"]
-	if hasAttributes == hasUseAttributes {
-		if hasAttributes {
-			return fmt.Errorf("ACL: only one of ATTRIBUTES or USEATTRIBUTES may be defined, not both")
-		}
-		return fmt.Errorf("ACL: exactly one of ATTRIBUTES or USEATTRIBUTES must be defined")
+	if !hasAttributes && !hasUseAttributes {
+		return fmt.Errorf("ACL: ATTRIBUTES or USEATTRIBUTES must be defined")
 	}
 	type Plain ACL
 	var plain Plain

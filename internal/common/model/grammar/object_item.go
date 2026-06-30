@@ -377,7 +377,7 @@ func parseIdentifiable(s string) (*IdentifiableValue, error) {
 }
 
 // REFERABLE <ws> "$sme" <IdentifierInstanceOrAll> "." <idShortPath>
-var reReferable = regexp.MustCompile(`^\s*(\$sme)\s*\(\s*"(\*|[^"]+)"\s*\)\s*\.\s*([A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*)\s*$`)
+var reReferable = regexp.MustCompile(`^\s*(\$sme)\s*\(\s*"(\*|[^"]+)"\s*\)\s*\.\s*(` + idShortPathPattern + `)\s*$`)
 
 func parseReferable(s string) (*ReferableValue, error) {
 	m := reReferable.FindStringSubmatch(s)
@@ -395,7 +395,7 @@ func parseReferable(s string) (*ReferableValue, error) {
 
 // FRAGMENT <ws> "$sme" <IdentifierInstanceOrAll> "." <idShortPath> ( <ws> <StringLiteral> )+
 // We expect: `$sme("id").path "frag1" "frag2" ...`
-var reFragmentHead = regexp.MustCompile(`^\s*(\$sme)\s*\(\s*"(\*|[^"]+)"\s*\)\s*\.\s*([A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*)`)
+var reFragmentHead = regexp.MustCompile(`^\s*(\$sme)\s*\(\s*"(\*|[^"]+)"\s*\)\s*\.\s*(` + idShortPathPattern + `)`)
 
 // capture trailing "..." segments
 var reStringLit = regexp.MustCompile(`\s*"([^"]+)"`)

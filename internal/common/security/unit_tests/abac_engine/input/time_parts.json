@@ -31,7 +31,7 @@
             {
               "$eq": [
                 {"$timeCast": {"$attribute": {"GLOBAL": "LOCALNOW"}}},
-                {"$timeVal": "01:00:00"}
+                {"$timeVal": "01:00:00Z"}
               ]
             }
           ]

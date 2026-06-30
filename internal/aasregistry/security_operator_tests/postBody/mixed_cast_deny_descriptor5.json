@@ -3,7 +3,7 @@
   "idShort": "mixedCastDeny5",
   "specificAssetIds": [
     { "name": "priority", "value": "150" },
-    { "name": "shiftTime", "value": "09:15:00" },
+    { "name": "shiftTime", "value": "09:15:00Z" },
     { "name": "commissionedYear", "value": "2024" }
   ],
   "endpoints": [

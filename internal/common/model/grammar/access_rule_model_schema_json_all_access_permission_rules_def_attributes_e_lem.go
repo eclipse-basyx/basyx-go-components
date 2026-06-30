@@ -44,7 +44,7 @@ import (
 //
 // An attribute definition consists of:
 //   - Name: A unique identifier for the attribute collection (required)
-//   - Attributes: An array of AttributeItem instances defining specific attributes (required)
+//   - Attributes: An array of AttributeItem instances and/or USEATTRIBUTES references
 //
 // Attributes can be of three types:
 //   - CLAIM: Attributes from authentication tokens (e.g., user roles, permissions)
@@ -63,17 +63,20 @@ import (
 //	}
 type AccessRuleModelSchemaJSONAllAccessPermissionRulesDEFATTRIBUTESElem struct {
 	// Attributes corresponds to the JSON schema field "attributes".
-	Attributes []AttributeItem `json:"attributes" yaml:"attributes" mapstructure:"attributes"`
+	Attributes []AttributeItem `json:"attributes,omitempty" yaml:"attributes,omitempty" mapstructure:"attributes,omitempty"`
 
 	// Name corresponds to the JSON schema field "name".
 	Name string `json:"name" yaml:"name" mapstructure:"name"`
+
+	// USEATTRIBUTES corresponds to the JSON schema field "USEATTRIBUTES".
+	USEATTRIBUTES []string `json:"USEATTRIBUTES,omitempty" yaml:"USEATTRIBUTES,omitempty" mapstructure:"USEATTRIBUTES,omitempty"`
 }
 
 // UnmarshalJSON implements the json.Unmarshaler interface for AccessRuleModelSchemaJsonAllAccessPermissionRulesDEFATTRIBUTESElem.
 //
-// This custom unmarshaler validates that both required fields are present in the JSON object:
-//   - "attributes": The array of AttributeItem instances (required)
+// This custom unmarshaler validates that required fields are present in the JSON object:
 //   - "name": The unique identifier for this attribute definition (required)
+//   - at least one of "attributes" or "USEATTRIBUTES"
 //
 // Both fields are mandatory to ensure that attribute collections are properly defined and can
 // be referenced by access permission rules.
@@ -89,11 +92,13 @@ func (j *AccessRuleModelSchemaJSONAllAccessPermissionRulesDEFATTRIBUTESElem) Unm
 	if err := common.UnmarshalAndDisallowUnknownFields(value, &raw); err != nil {
 		return err
 	}
-	if _, ok := raw["attributes"]; raw != nil && !ok {
-		return fmt.Errorf("field attributes in AccessRuleModelSchemaJsonAllAccessPermissionRulesDEFATTRIBUTESElem: required")
-	}
 	if _, ok := raw["name"]; raw != nil && !ok {
 		return fmt.Errorf("field name in AccessRuleModelSchemaJsonAllAccessPermissionRulesDEFATTRIBUTESElem: required")
+	}
+	_, hasAttributes := raw["attributes"]
+	_, hasUseAttributes := raw["USEATTRIBUTES"]
+	if !hasAttributes && !hasUseAttributes {
+		return fmt.Errorf("AccessRuleModelSchemaJsonAllAccessPermissionRulesDEFATTRIBUTESElem: attributes or USEATTRIBUTES must be defined")
 	}
 	type Plain AccessRuleModelSchemaJSONAllAccessPermissionRulesDEFATTRIBUTESElem
 	var plain Plain

@@ -1,0 +1,52 @@
+{
+  "AllAccessPermissionRules": {
+    "DEFATTRIBUTES": [
+      {
+        "name": "anonymous",
+        "attributes": [
+          {
+            "GLOBAL": "ANONYMOUS"
+          }
+        ]
+      }
+    ],
+    "DEFACLS": [
+      {
+        "name": "read",
+        "acl": {
+          "USEATTRIBUTES": "anonymous",
+          "RIGHTS": [
+            "READ"
+          ],
+          "ACCESS": "ALLOW"
+        }
+      }
+    ],
+    "DEFOBJECTS": [
+      {
+        "name": "all",
+        "objects": [
+          {
+            "ROUTE": "/*"
+          }
+        ]
+      }
+    ],
+    "rules": [
+      {
+        "USEACL": "read",
+        "OBJECTS": [
+          {
+            "ROUTE": "/shells"
+          }
+        ],
+        "USEOBJECTS": [
+          "all"
+        ],
+        "FORMULA": {
+          "$boolean": true
+        }
+      }
+    ]
+  }
+}
