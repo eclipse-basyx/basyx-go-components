@@ -86,6 +86,12 @@ var descriptorRouteMappings = []descriptorRouteMapping{
 	},
 	{
 		scope:       "$smdesc",
+		route:       "/query/submodel-descriptors",
+		filterField: "$smdesc#id",
+		hasWildcard: false,
+	},
+	{
+		scope:       "$smdesc",
 		route:       "/submodel-descriptors/%s",
 		filterField: "$smdesc#id",
 		hasWildcard: true,

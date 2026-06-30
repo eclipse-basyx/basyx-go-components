@@ -368,7 +368,7 @@ func collectSpecificAssetIDReferenceRows(
 		payloadRecord["semantic_id_payload"] = goqu.L("?::jsonb", string(payload))
 	}
 	rows.specificAssetIDPayload = append(rows.specificAssetIDPayload, payloadRecord)
-	for _, reference := range assetID.SupplementalSemanticIDs() {
+	for position, reference := range assetID.SupplementalSemanticIDs() {
 		if reference == nil {
 			continue
 		}
@@ -380,6 +380,7 @@ func collectSpecificAssetIDReferenceRows(
 			referenceID,
 			specificAssetID,
 			common.ColSpecificAssetIDID,
+			position,
 			reference,
 			&rows.specificSupplementalReference,
 			&rows.specificSupplementalPayload,
@@ -427,7 +428,7 @@ func collectSubmodelDescriptorRows(
 	); err != nil {
 		return err
 	}
-	for _, reference := range descriptor.SupplementalSemanticId {
+	for position, reference := range descriptor.SupplementalSemanticId {
 		if reference == nil {
 			continue
 		}
@@ -439,6 +440,7 @@ func collectSubmodelDescriptorRows(
 			referenceID,
 			descriptorID,
 			common.ColDescriptorID,
+			position,
 			reference,
 			&rows.submodelSupplementalReference,
 			&rows.submodelSupplementalPayload,
@@ -526,15 +528,17 @@ func collectGeneratedReferenceRows(
 	referenceID int64,
 	ownerID int64,
 	ownerColumn string,
+	position int,
 	reference types.IReference,
 	referenceRows *[]goqu.Record,
 	payloadRows *[]goqu.Record,
 	keyRows *[]goqu.Record,
 ) error {
 	*referenceRows = append(*referenceRows, goqu.Record{
-		common.ColID:   referenceID,
-		ownerColumn:    ownerID,
-		common.ColType: reference.Type(),
+		common.ColID:       referenceID,
+		ownerColumn:        ownerID,
+		common.ColPosition: position,
+		common.ColType:     reference.Type(),
 	})
 	return collectReferencePayloadAndKeys(referenceID, reference, payloadRows, keyRows)
 }

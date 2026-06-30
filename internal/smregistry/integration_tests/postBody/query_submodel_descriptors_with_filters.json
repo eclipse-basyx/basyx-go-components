@@ -1,0 +1,27 @@
+{
+  "$condition": {
+    "$eq": [
+      {
+        "$field": "$smdesc#supplementalSemanticIds"
+      },
+      {
+        "$strVal": "QUERY_ALLOWED"
+      }
+    ]
+  },
+  "$filters": [
+    {
+      "$fragment": "$smdesc#supplementalSemanticIds[]",
+      "$condition": {
+        "$eq": [
+          {
+            "$field": "$smdesc#supplementalSemanticIds[].keys[].value"
+          },
+          {
+            "$strVal": "FILTER_VISIBLE"
+          }
+        ]
+      }
+    }
+  ]
+}

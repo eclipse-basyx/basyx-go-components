@@ -30,6 +30,7 @@
 package grammar
 
 import (
+	"crypto/sha256"
 	"fmt"
 	"reflect"
 	"regexp"
@@ -297,7 +298,7 @@ func joinPlanConfigForAAS() JoinPlanConfig {
 func joinPlanConfigForSM() JoinPlanConfig {
 	return JoinPlanConfig{
 		PreferredBase: "s",
-		BaseAliases:   []string{"s", "semantic_id_reference", "semantic_id_reference_key", "submodel_element", "property_element", "multilanguage_property_value", "sme_semantic_id_reference", "sme_semantic_id_reference_key"},
+		BaseAliases:   []string{"semantic_id_reference", "sm_supplemental_semantic_id_reference", "submodel_element", "s"},
 		Rules: map[string]existsJoinRule{
 			"s": {
 				Alias: "s",
@@ -323,6 +324,26 @@ func joinPlanConfigForSM() JoinPlanConfig {
 					return ds.LeftJoin(
 						goqu.T("submodel_semantic_id_reference_key").As("semantic_id_reference_key"),
 						goqu.On(goqu.I("semantic_id_reference_key.reference_id").Eq(goqu.I("semantic_id_reference.id"))),
+					)
+				},
+			},
+			"sm_supplemental_semantic_id_reference": {
+				Alias: "sm_supplemental_semantic_id_reference",
+				Deps:  []string{"s"},
+				Apply: func(ds *goqu.SelectDataset) *goqu.SelectDataset {
+					return ds.LeftJoin(
+						goqu.T("submodel_supplemental_semantic_id_reference").As("sm_supplemental_semantic_id_reference"),
+						goqu.On(goqu.I("sm_supplemental_semantic_id_reference.submodel_id").Eq(goqu.I("s.id"))),
+					)
+				},
+			},
+			"sm_supplemental_semantic_id_reference_key": {
+				Alias: "sm_supplemental_semantic_id_reference_key",
+				Deps:  []string{"sm_supplemental_semantic_id_reference"},
+				Apply: func(ds *goqu.SelectDataset) *goqu.SelectDataset {
+					return ds.LeftJoin(
+						goqu.T("submodel_supplemental_semantic_id_reference_key").As("sm_supplemental_semantic_id_reference_key"),
+						goqu.On(goqu.I("sm_supplemental_semantic_id_reference_key.reference_id").Eq(goqu.I("sm_supplemental_semantic_id_reference.id"))),
 					)
 				},
 			},
@@ -376,6 +397,26 @@ func joinPlanConfigForSM() JoinPlanConfig {
 					)
 				},
 			},
+			"sme_supplemental_semantic_id_reference": {
+				Alias: "sme_supplemental_semantic_id_reference",
+				Deps:  []string{"submodel_element"},
+				Apply: func(ds *goqu.SelectDataset) *goqu.SelectDataset {
+					return ds.LeftJoin(
+						goqu.T("submodel_element_supplemental_semantic_id_reference").As("sme_supplemental_semantic_id_reference"),
+						goqu.On(goqu.I("sme_supplemental_semantic_id_reference.submodel_element_id").Eq(goqu.I("submodel_element.id"))),
+					)
+				},
+			},
+			"sme_supplemental_semantic_id_reference_key": {
+				Alias: "sme_supplemental_semantic_id_reference_key",
+				Deps:  []string{"sme_supplemental_semantic_id_reference"},
+				Apply: func(ds *goqu.SelectDataset) *goqu.SelectDataset {
+					return ds.LeftJoin(
+						goqu.T("submodel_element_supplemental_semantic_id_reference_key").As("sme_supplemental_semantic_id_reference_key"),
+						goqu.On(goqu.I("sme_supplemental_semantic_id_reference_key.reference_id").Eq(goqu.I("sme_supplemental_semantic_id_reference.id"))),
+					)
+				},
+			},
 		},
 		TableForAlias: func(alias string) (string, bool) {
 			switch alias {
@@ -385,6 +426,10 @@ func joinPlanConfigForSM() JoinPlanConfig {
 				return "submodel_semantic_id_reference", true
 			case "semantic_id_reference_key":
 				return "submodel_semantic_id_reference_key", true
+			case "sm_supplemental_semantic_id_reference":
+				return "submodel_supplemental_semantic_id_reference", true
+			case "sm_supplemental_semantic_id_reference_key":
+				return "submodel_supplemental_semantic_id_reference_key", true
 			case "submodel_element":
 				return "submodel_element", true
 			case "property_element":
@@ -395,13 +440,24 @@ func joinPlanConfigForSM() JoinPlanConfig {
 				return "submodel_element_semantic_id_reference", true
 			case "sme_semantic_id_reference_key":
 				return "submodel_element_semantic_id_reference_key", true
+			case "sme_supplemental_semantic_id_reference":
+				return "submodel_element_supplemental_semantic_id_reference", true
+			case "sme_supplemental_semantic_id_reference_key":
+				return "submodel_element_supplemental_semantic_id_reference_key", true
 			default:
 				return "", false
 			}
 		},
 		GroupKeyForBase: func(base string) (exp.IdentifierExpression, error) {
-			if base == "s" {
+			switch base {
+			case "s":
 				return goqu.I("s.id"), nil
+			case "semantic_id_reference":
+				return goqu.I("semantic_id_reference.id"), nil
+			case "sm_supplemental_semantic_id_reference":
+				return goqu.I("sm_supplemental_semantic_id_reference.submodel_id"), nil
+			case "submodel_element":
+				return goqu.I("submodel_element.submodel_id"), nil
 			}
 			return nil, fmt.Errorf("unsupported SM base alias %q", base)
 		},
@@ -415,7 +471,12 @@ func joinPlanConfigForSM() JoinPlanConfig {
 			return "id"
 		},
 		Correlatable: func(alias string) bool {
-			return alias == "s"
+			switch alias {
+			case "s", "semantic_id_reference", "sm_supplemental_semantic_id_reference", "submodel_element":
+				return true
+			default:
+				return false
+			}
 		},
 	}
 }
@@ -451,7 +512,7 @@ func joinPlanConfigForSMDesc() JoinPlanConfig {
 func joinPlanConfigForSME() JoinPlanConfig {
 	return JoinPlanConfig{
 		PreferredBase: "submodel_element",
-		BaseAliases:   []string{"submodel_element", "submodel", "property_element", "multilanguage_property_value", "semantic_id_reference", "semantic_id_reference_key", "sme_semantic_id_reference", "sme_semantic_id_reference_key"},
+		BaseAliases:   []string{"submodel_element", "submodel", "property_element", "multilanguage_property_value", "semantic_id_reference", "semantic_id_reference_key", "sm_supplemental_semantic_id_reference", "sm_supplemental_semantic_id_reference_key", "sme_semantic_id_reference", "sme_semantic_id_reference_key", "sme_supplemental_semantic_id_reference", "sme_supplemental_semantic_id_reference_key"},
 		Rules: map[string]existsJoinRule{
 			"submodel_element": {
 				Alias: "submodel_element",
@@ -510,6 +571,26 @@ func joinPlanConfigForSME() JoinPlanConfig {
 					)
 				},
 			},
+			"sm_supplemental_semantic_id_reference": {
+				Alias: "sm_supplemental_semantic_id_reference",
+				Deps:  []string{"submodel"},
+				Apply: func(ds *goqu.SelectDataset) *goqu.SelectDataset {
+					return ds.Join(
+						goqu.T("submodel_supplemental_semantic_id_reference").As("sm_supplemental_semantic_id_reference"),
+						goqu.On(goqu.I("sm_supplemental_semantic_id_reference.submodel_id").Eq(goqu.I("submodel.id"))),
+					)
+				},
+			},
+			"sm_supplemental_semantic_id_reference_key": {
+				Alias: "sm_supplemental_semantic_id_reference_key",
+				Deps:  []string{"sm_supplemental_semantic_id_reference"},
+				Apply: func(ds *goqu.SelectDataset) *goqu.SelectDataset {
+					return ds.Join(
+						goqu.T("submodel_supplemental_semantic_id_reference_key").As("sm_supplemental_semantic_id_reference_key"),
+						goqu.On(goqu.I("sm_supplemental_semantic_id_reference_key.reference_id").Eq(goqu.I("sm_supplemental_semantic_id_reference.id"))),
+					)
+				},
+			},
 			"sme_semantic_id_reference": {
 				Alias: "sme_semantic_id_reference",
 				Deps:  []string{"submodel_element"},
@@ -530,6 +611,26 @@ func joinPlanConfigForSME() JoinPlanConfig {
 					)
 				},
 			},
+			"sme_supplemental_semantic_id_reference": {
+				Alias: "sme_supplemental_semantic_id_reference",
+				Deps:  []string{"submodel_element"},
+				Apply: func(ds *goqu.SelectDataset) *goqu.SelectDataset {
+					return ds.Join(
+						goqu.T("submodel_element_supplemental_semantic_id_reference").As("sme_supplemental_semantic_id_reference"),
+						goqu.On(goqu.I("sme_supplemental_semantic_id_reference.submodel_element_id").Eq(goqu.I("submodel_element.id"))),
+					)
+				},
+			},
+			"sme_supplemental_semantic_id_reference_key": {
+				Alias: "sme_supplemental_semantic_id_reference_key",
+				Deps:  []string{"sme_supplemental_semantic_id_reference"},
+				Apply: func(ds *goqu.SelectDataset) *goqu.SelectDataset {
+					return ds.Join(
+						goqu.T("submodel_element_supplemental_semantic_id_reference_key").As("sme_supplemental_semantic_id_reference_key"),
+						goqu.On(goqu.I("sme_supplemental_semantic_id_reference_key.reference_id").Eq(goqu.I("sme_supplemental_semantic_id_reference.id"))),
+					)
+				},
+			},
 		},
 		TableForAlias: func(alias string) (string, bool) {
 			switch alias {
@@ -545,10 +646,18 @@ func joinPlanConfigForSME() JoinPlanConfig {
 				return "submodel_semantic_id_reference", true
 			case "semantic_id_reference_key":
 				return "submodel_semantic_id_reference_key", true
+			case "sm_supplemental_semantic_id_reference":
+				return "submodel_supplemental_semantic_id_reference", true
+			case "sm_supplemental_semantic_id_reference_key":
+				return "submodel_supplemental_semantic_id_reference_key", true
 			case "sme_semantic_id_reference":
 				return "submodel_element_semantic_id_reference", true
 			case "sme_semantic_id_reference_key":
 				return "submodel_element_semantic_id_reference_key", true
+			case "sme_supplemental_semantic_id_reference":
+				return "submodel_element_supplemental_semantic_id_reference", true
+			case "sme_supplemental_semantic_id_reference_key":
+				return "submodel_element_supplemental_semantic_id_reference_key", true
 			default:
 				return "", false
 			}
@@ -681,12 +790,74 @@ func joinPlanConfigForBD() JoinPlanConfig {
 
 // ResolvedFieldPathCollector carries join configuration for inline EXISTS evaluation.
 type ResolvedFieldPathCollector struct {
-	joinConfig *JoinPlanConfig
+	joinConfig    *JoinPlanConfig
+	inlineAliases map[string]struct{}
 }
 
 // NewResolvedFieldPathCollectorWithConfig creates a collector with the provided join config.
 func NewResolvedFieldPathCollectorWithConfig(config *JoinPlanConfig) *ResolvedFieldPathCollector {
 	return &ResolvedFieldPathCollector{joinConfig: config}
+}
+
+// AllowInlineAliases marks aliases that are already joined by the caller's
+// dataset and may therefore be evaluated row-locally.
+func (c *ResolvedFieldPathCollector) AllowInlineAliases(aliases ...string) {
+	if c == nil {
+		return
+	}
+	if c.inlineAliases == nil {
+		c.inlineAliases = make(map[string]struct{}, len(aliases))
+	}
+	for _, alias := range aliases {
+		alias = strings.TrimSpace(alias)
+		if alias != "" {
+			c.inlineAliases[alias] = struct{}{}
+		}
+	}
+}
+
+// SetRootJoinKey configures the outer alias and column used to correlate
+// generated EXISTS expressions with the caller's dataset.
+func (c *ResolvedFieldPathCollector) SetRootJoinKey(alias string, column string) {
+	if c == nil {
+		return
+	}
+	if c.joinConfig == nil {
+		cfg := defaultJoinPlanConfig()
+		c.joinConfig = &cfg
+	}
+	alias = strings.TrimSpace(alias)
+	column = strings.TrimSpace(column)
+	c.joinConfig.RootJoinKey = func() exp.IdentifierExpression {
+		return goqu.I(alias + "." + column)
+	}
+	c.joinConfig.RootJoinKeyAlias = func() string {
+		return alias
+	}
+	c.joinConfig.RootJoinKeyColumn = func() string {
+		return column
+	}
+}
+
+func (c *ResolvedFieldPathCollector) canEvaluateInline(resolved []ResolvedFieldPath) bool {
+	if c == nil || len(c.inlineAliases) == 0 {
+		return false
+	}
+	for _, path := range resolved {
+		if strings.TrimSpace(path.Column) != "" {
+			alias, ok := leadingAlias(path.Column)
+			if !ok {
+				return false
+			}
+			if _, ok := c.inlineAliases[alias]; !ok {
+				return false
+			}
+		}
+		if len(path.ArrayBindings) > 0 {
+			return false
+		}
+	}
+	return true
 }
 
 func buildInlineExistsExpression(resolved []ResolvedFieldPath, predicate exp.Expression, collector *ResolvedFieldPathCollector) (exp.Expression, error) {
@@ -783,8 +954,9 @@ func buildInlineExistsExpression(resolved []ResolvedFieldPath, predicate exp.Exp
 		if err != nil {
 			return nil, err
 		}
+		existsAliases := buildPostgresExistsAliases(plan.ExpandedAliases)
 		for _, a := range plan.ExpandedAliases {
-			mapped := a + "__exists"
+			mapped := existsAliases[a]
 			sql = strings.ReplaceAll(sql, "\""+a+"\".", "\""+mapped+"\".")
 			sql = strings.ReplaceAll(sql, " AS \""+a+"\"", " AS \""+mapped+"\"")
 
@@ -805,6 +977,34 @@ func buildInlineExistsExpression(resolved []ResolvedFieldPath, predicate exp.Exp
 	}
 
 	return goqu.L("EXISTS ?", ds), nil
+}
+
+const postgresIdentifierMaxBytes = 63
+
+func buildPostgresExistsAliases(aliases []string) map[string]string {
+	sortedAliases := append([]string(nil), aliases...)
+	sort.Strings(sortedAliases)
+
+	result := make(map[string]string, len(sortedAliases))
+	used := make(map[string]struct{}, len(sortedAliases))
+	for _, alias := range sortedAliases {
+		base := alias + "__exists"
+		candidate := base
+		for salt := 0; len(candidate) > postgresIdentifierMaxBytes || hasAlias(used, candidate); salt++ {
+			digest := sha256.Sum256([]byte(fmt.Sprintf("%s:%d", base, salt)))
+			suffix := fmt.Sprintf("_%x", digest[:6])
+			prefixLength := postgresIdentifierMaxBytes - len(suffix)
+			candidate = base[:min(len(base), prefixLength)] + suffix
+		}
+		result[alias] = candidate
+		used[candidate] = struct{}{}
+	}
+	return result
+}
+
+func hasAlias(aliases map[string]struct{}, alias string) bool {
+	_, exists := aliases[alias]
+	return exists
 }
 
 func defaultJoinPlanConfig() JoinPlanConfig {
@@ -1062,13 +1262,13 @@ func buildJoinPlanForResolvedWithConfig(resolved []ResolvedFieldPath, config Joi
 	// still need to include their dependency chain to reach a correlatable base.
 	base := ""
 	if config.PreferredBase != "" {
-		if _, ok := expanded[config.PreferredBase]; ok && len(expanded) > 1 {
+		if _, ok := required[config.PreferredBase]; ok && aliasCanCoverRequired(config.PreferredBase, required, config.Rules) {
 			base = config.PreferredBase
 		}
 	}
 	if base == "" {
 		for _, cand := range config.BaseAliases {
-			if _, ok := expanded[cand]; ok {
+			if _, ok := expanded[cand]; ok && isCorrelatableAlias(cand, config) && aliasCanCoverRequired(cand, required, config.Rules) {
 				base = cand
 				break
 			}
@@ -1076,7 +1276,7 @@ func buildJoinPlanForResolvedWithConfig(resolved []ResolvedFieldPath, config Joi
 	}
 	if base == "" && config.Correlatable != nil {
 		for a := range expanded {
-			if config.Correlatable(a) {
+			if config.Correlatable(a) && aliasCanCoverRequired(a, required, config.Rules) {
 				base = a
 				break
 			}
@@ -1096,11 +1296,7 @@ func buildJoinPlanForResolvedWithConfig(resolved []ResolvedFieldPath, config Joi
 		return existsJoinPlan{}, fmt.Errorf("cannot build join plan: no table mapping for alias %q", base)
 	}
 
-	expandedAliases := make([]string, 0, len(expanded))
-	for alias := range expanded {
-		expandedAliases = append(expandedAliases, alias)
-	}
-	sort.Strings(expandedAliases)
+	expandedAliases := expandedAliasesForBase(expanded, base, config.Rules)
 
 	return existsJoinPlan{
 		BaseAlias:       base,
@@ -1109,6 +1305,57 @@ func buildJoinPlanForResolvedWithConfig(resolved []ResolvedFieldPath, config Joi
 		ExpandedAliases: expandedAliases,
 		Rules:           config.Rules,
 	}, nil
+}
+
+func isCorrelatableAlias(alias string, config JoinPlanConfig) bool {
+	return config.Correlatable == nil || config.Correlatable(alias)
+}
+
+func expandedAliasesForBase(expanded map[string]struct{}, base string, rules map[string]existsJoinRule) []string {
+	aliases := make([]string, 0, len(expanded))
+	for alias := range expanded {
+		if aliasDependencyChainContains(alias, base, rules, map[string]struct{}{}) {
+			aliases = append(aliases, alias)
+		}
+	}
+	if len(aliases) == 0 {
+		for alias := range expanded {
+			aliases = append(aliases, alias)
+		}
+	}
+	sort.Strings(aliases)
+	return aliases
+}
+
+func aliasCanCoverRequired(candidate string, required map[string]struct{}, rules map[string]existsJoinRule) bool {
+	for alias := range required {
+		if !aliasDependencyChainContains(alias, candidate, rules, map[string]struct{}{}) {
+			return false
+		}
+	}
+	return true
+}
+
+func aliasDependencyChainContains(alias string, candidate string, rules map[string]existsJoinRule, visiting map[string]struct{}) bool {
+	if alias == candidate {
+		return true
+	}
+	if _, ok := visiting[alias]; ok {
+		return false
+	}
+	visiting[alias] = struct{}{}
+	defer delete(visiting, alias)
+
+	rule, ok := rules[alias]
+	if !ok {
+		return false
+	}
+	for _, dep := range rule.Deps {
+		if aliasDependencyChainContains(dep, candidate, rules, visiting) {
+			return true
+		}
+	}
+	return false
 }
 
 func andBindingsForResolvedFieldPaths(resolved []ResolvedFieldPath, predicate exp.Expression) exp.Expression {
@@ -1176,6 +1423,10 @@ func existsTableForAlias(alias string) (string, bool) {
 		return "submodel_descriptor_semantic_id_reference", true
 	case "aasdesc_submodel_descriptor_semantic_id_reference_key":
 		return "submodel_descriptor_semantic_id_reference_key", true
+	case "aasdesc_submodel_descriptor_supplemental_semantic_id_reference":
+		return "submodel_descriptor_supplemental_semantic_id_reference", true
+	case "aasdesc_submodel_descriptor_supplemental_semantic_id_reference_key":
+		return "submodel_descriptor_supplemental_semantic_id_reference_key", true
 	default:
 		return "", false
 	}
@@ -1276,6 +1527,26 @@ func existsJoinRulesForAASDescriptors() map[string]existsJoinRule {
 				return ds.Join(
 					goqu.T("submodel_descriptor_semantic_id_reference_key").As("aasdesc_submodel_descriptor_semantic_id_reference_key"),
 					goqu.On(goqu.I("aasdesc_submodel_descriptor_semantic_id_reference_key.reference_id").Eq(goqu.I("aasdesc_submodel_descriptor_semantic_id_reference.id"))),
+				)
+			},
+		},
+		"aasdesc_submodel_descriptor_supplemental_semantic_id_reference": {
+			Alias: "aasdesc_submodel_descriptor_supplemental_semantic_id_reference",
+			Deps:  []string{"submodel_descriptor"},
+			Apply: func(ds *goqu.SelectDataset) *goqu.SelectDataset {
+				return ds.Join(
+					goqu.T("submodel_descriptor_supplemental_semantic_id_reference").As("aasdesc_submodel_descriptor_supplemental_semantic_id_reference"),
+					goqu.On(goqu.I("aasdesc_submodel_descriptor_supplemental_semantic_id_reference.descriptor_id").Eq(goqu.I("submodel_descriptor.descriptor_id"))),
+				)
+			},
+		},
+		"aasdesc_submodel_descriptor_supplemental_semantic_id_reference_key": {
+			Alias: "aasdesc_submodel_descriptor_supplemental_semantic_id_reference_key",
+			Deps:  []string{"aasdesc_submodel_descriptor_supplemental_semantic_id_reference"},
+			Apply: func(ds *goqu.SelectDataset) *goqu.SelectDataset {
+				return ds.Join(
+					goqu.T("submodel_descriptor_supplemental_semantic_id_reference_key").As("aasdesc_submodel_descriptor_supplemental_semantic_id_reference_key"),
+					goqu.On(goqu.I("aasdesc_submodel_descriptor_supplemental_semantic_id_reference_key.reference_id").Eq(goqu.I("aasdesc_submodel_descriptor_supplemental_semantic_id_reference.id"))),
 				)
 			},
 		},
@@ -1459,6 +1730,9 @@ func handleBinaryOperationWithCollector(
 		return opExpr, nil, nil
 	}
 
+	if collector != nil && collector.canEvaluateInline(resolved) {
+		return andBindingsForResolvedFieldPaths(resolved, opExpr), resolved, nil
+	}
 	if collector != nil && resolvedNeedsCTE(resolved) {
 		existsExpr, err := buildInlineExistsExpression(resolved, opExpr, collector)
 		if err != nil {
@@ -1539,6 +1813,9 @@ func (le *LogicalExpression) EvaluateToExpression(collector *ResolvedFieldPathCo
 		if err != nil {
 			return nil, nil, err
 		}
+		if collector != nil && collector.canEvaluateInline(resolved) {
+			return andBindingsForResolvedFieldPaths(resolved, expr), resolved, nil
+		}
 		if collector != nil && resolvedNeedsCTE(resolved) {
 			existsExpr, err := buildInlineExistsExpression(resolved, expr, collector)
 			if err != nil {
@@ -1591,6 +1868,10 @@ func (le *LogicalExpression) EvaluateToExpression(collector *ResolvedFieldPathCo
 					break
 				}
 				if len(resolved) == 0 || !resolvedNeedsCTE(resolved) || anyResolvedHasBindings(resolved) {
+					canGroup = false
+					break
+				}
+				if collector.canEvaluateInline(resolved) {
 					canGroup = false
 					break
 				}
@@ -1926,6 +2207,21 @@ func normalizeSemanticShorthand(operand *Value) {
 	}
 
 	if strings.HasSuffix(suffix, "semanticId") || strings.HasSuffix(suffix, "externalSubjectId") {
+		suffix += ".keys[0].value"
+		*inner.Field = ModelStringPattern(prefix + "#" + suffix)
+		return
+	}
+
+	lastSegment := suffix
+	if separator := strings.LastIndex(lastSegment, "."); separator >= 0 {
+		lastSegment = lastSegment[separator+1:]
+	}
+	if lastSegment == "supplementalSemanticIds" {
+		suffix += "[].keys[0].value"
+		*inner.Field = ModelStringPattern(prefix + "#" + suffix)
+		return
+	}
+	if strings.HasPrefix(lastSegment, "supplementalSemanticIds[") && strings.HasSuffix(lastSegment, "]") {
 		suffix += ".keys[0].value"
 		*inner.Field = ModelStringPattern(prefix + "#" + suffix)
 	}

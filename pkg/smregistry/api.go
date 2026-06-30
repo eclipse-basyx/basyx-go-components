@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
 )
 
 // DescriptionAPIAPIRouter defines the required methods for binding the api requests to a responses for the DescriptionAPIAPI
@@ -35,6 +36,7 @@ type SubmodelRegistryAPIAPIRouter interface {
 	GetSubmodelDescriptorById(http.ResponseWriter, *http.Request)
 	PutSubmodelDescriptorById(http.ResponseWriter, *http.Request)
 	DeleteSubmodelDescriptorById(http.ResponseWriter, *http.Request)
+	QuerySubmodelDescriptors(http.ResponseWriter, *http.Request)
 }
 
 // DescriptionAPIAPIServicer defines the api actions for the DescriptionAPIAPI service
@@ -55,4 +57,5 @@ type SubmodelRegistryAPIAPIServicer interface {
 	GetSubmodelDescriptorById(context.Context, string) (model.ImplResponse, error)
 	PutSubmodelDescriptorById(context.Context, string, model.SubmodelDescriptor) (model.ImplResponse, error)
 	DeleteSubmodelDescriptorById(context.Context, string) (model.ImplResponse, error)
+	QuerySubmodelDescriptors(context.Context, int32, string, grammar.Query) (model.ImplResponse, error)
 }

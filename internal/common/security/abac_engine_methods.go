@@ -88,6 +88,7 @@ var mapMethodAndPatternToRightsData = []mapMethodAndPatternToRights{
 	{"POST", "/query/shell-descriptors", []grammar.RightsEnum{grammar.RightsEnumREAD}}, // query endpoint
 
 	// sm registry
+	{"POST", "/query/submodel-descriptors", []grammar.RightsEnum{grammar.RightsEnumREAD}}, // query endpoint
 	{"GET", "/submodel-descriptors/{submodelIdentifier}", []grammar.RightsEnum{grammar.RightsEnumREAD}},
 	{"PUT", "/submodel-descriptors/{submodelIdentifier}", []grammar.RightsEnum{grammar.RightsEnumCREATE, grammar.RightsEnumUPDATE}},
 	{"DELETE", "/submodel-descriptors/{submodelIdentifier}", []grammar.RightsEnum{grammar.RightsEnumDELETE}},

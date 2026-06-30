@@ -16,6 +16,39 @@
       "value": "test"
     }
   ],
+  "submodelDescriptors": [
+    {
+      "id": "https://example.org/C/SM",
+      "endpoints": [
+        {
+          "interface": "SUBMODEL-3.0",
+          "protocolInformation": {
+            "href": "https://example.org/C/SM"
+          }
+        }
+      ],
+      "supplementalSemanticIds": [
+        {
+          "type": "ExternalReference",
+          "keys": [
+            {
+              "type": "GlobalReference",
+              "value": "QUERY_ALLOWED"
+            }
+          ]
+        },
+        {
+          "type": "ExternalReference",
+          "keys": [
+            {
+              "type": "GlobalReference",
+              "value": "FILTER_HIDDEN"
+            }
+          ]
+        }
+      ]
+    }
+  ],
   "specificAssetIds": [
     {
       "name": "lul",

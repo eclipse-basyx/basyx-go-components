@@ -1,0 +1,12 @@
+{
+  "$condition": {
+    "$eq": [
+      {
+        "$field": "$sme.Filtered#supplementalSemanticIds"
+      },
+      {
+        "$strVal": "SME_QUERY_ALLOWED"
+      }
+    ]
+  }
+}

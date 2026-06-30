@@ -1,0 +1,74 @@
+{
+  "id": "urn:basyx:migration:shell-descriptor:1",
+  "idShort": "MigrationShellDescriptor",
+  "assetKind": "Instance",
+  "globalAssetId": "urn:basyx:migration:descriptor-asset:1",
+  "specificAssetIds": [
+    {
+      "name": "migrationAssetId",
+      "value": "migration-asset-value",
+      "supplementalSemanticIds": [
+        {
+          "type": "ExternalReference",
+          "keys": [
+            {
+              "type": "GlobalReference",
+              "value": "urn:basyx:migration:specific-asset:supplemental"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "submodelDescriptors": [
+    {
+      "id": "urn:basyx:migration:nested-submodel-descriptor:1",
+      "idShort": "NestedMigrationDescriptor",
+      "semanticId": {
+        "type": "ExternalReference",
+        "keys": [
+          {
+            "type": "GlobalReference",
+            "value": "urn:basyx:migration:nested:semantic"
+          }
+        ]
+      },
+      "supplementalSemanticIds": [
+        {
+          "type": "ExternalReference",
+          "keys": [
+            {
+              "type": "GlobalReference",
+              "value": "urn:basyx:migration:nested:supplemental:1"
+            }
+          ]
+        },
+        {
+          "type": "ExternalReference",
+          "keys": [
+            {
+              "type": "GlobalReference",
+              "value": "urn:basyx:migration:nested:supplemental:2"
+            }
+          ]
+        }
+      ],
+      "endpoints": [
+        {
+          "interface": "SUBMODEL-3.0",
+          "protocolInformation": {
+            "href": "http://example.invalid/submodels/nested"
+          }
+        }
+      ]
+    }
+  ],
+  "endpoints": [
+    {
+      "interface": "AAS-3.0",
+      "protocolInformation": {
+        "href": "http://example.invalid/shells/migration"
+      }
+    }
+  ]
+}

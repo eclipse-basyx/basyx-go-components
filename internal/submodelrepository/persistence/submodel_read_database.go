@@ -31,11 +31,14 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/FriedJannik/aas-go-sdk/jsonization"
 	"github.com/FriedJannik/aas-go-sdk/types"
+	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/descriptors"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/history"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
@@ -298,7 +301,12 @@ func (s *SubmodelDatabase) getSubmodelsWithOptionalFilters(ctx context.Context, 
 		return nil, "", common.NewInternalServerError("SMREPO-GETSMS-MASKEXPR " + maskedExprErr.Error())
 	}
 
-	selectDS, err := submodelqueries.SelectSubmodelDataset(submodelIdentifierFilter, idShortFilter, limitFilter, cursorFilter, createdFrom, updatedFrom, maskRuntime.Projections())
+	filterSupplementalSemanticIDs := hasFragmentFilterPrefix(ctx, "$sm#supplementalSemanticIds")
+	additionalProjections := maskRuntime.Projections()
+	if filterSupplementalSemanticIDs {
+		additionalProjections = append(additionalProjections, goqu.I("submodel.id").As("supplemental_owner_id"))
+	}
+	selectDS, err := submodelqueries.SelectSubmodelDataset(submodelIdentifierFilter, idShortFilter, limitFilter, cursorFilter, createdFrom, updatedFrom, additionalProjections)
 	if err != nil {
 		return nil, "", err
 	}
@@ -316,7 +324,12 @@ func (s *SubmodelDatabase) getSubmodelsWithOptionalFilters(ctx context.Context, 
 			return nil, "", common.NewInternalServerError("SMREPO-GETSMS-ABACFORMULA " + err.Error())
 		}
 	}
-	query, args, err := submodelqueries.BuildSubmodelListSQL(selectDS, dataAlias, maskedExpressions)
+	query, args, err := submodelqueries.BuildSubmodelListSQLWithSupplementalOwnerID(
+		selectDS,
+		dataAlias,
+		maskedExpressions,
+		filterSupplementalSemanticIDs,
+	)
 	if err != nil {
 		return nil, "", common.NewInternalServerError("SMREPO-GETSMS-BUILDSQL " + err.Error())
 	}
@@ -324,7 +337,7 @@ func (s *SubmodelDatabase) getSubmodelsWithOptionalFilters(ctx context.Context, 
 	var identifier, rawIDShort, category, descriptionJsonString, displayNameJsonString, administrativeInformationJsonString, embeddedDataSpecificationJsonString, supplementalSemanticIDsJsonString, extensionsJsonString, qualifiersJsonString, semanticIDJSONString sql.NullString
 	var kind sql.NullInt64
 
-	rows, err := s.db.Query(query, args...)
+	rows, err := s.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, "", err
 	}
@@ -338,9 +351,28 @@ func (s *SubmodelDatabase) getSubmodelsWithOptionalFilters(ctx context.Context, 
 	}
 
 	submodels := make([]types.ISubmodel, 0)
+	supplementalOwnerIDs := make([]int64, 0)
 	nextCursor := ""
 	for rows.Next() {
-		if err := rows.Scan(&identifier, &rawIDShort, &category, &kind, &descriptionJsonString, &displayNameJsonString, &administrativeInformationJsonString, &embeddedDataSpecificationJsonString, &supplementalSemanticIDsJsonString, &extensionsJsonString, &qualifiersJsonString, &semanticIDJSONString); err != nil {
+		scanTargets := []any{
+			&identifier,
+			&rawIDShort,
+			&category,
+			&kind,
+			&descriptionJsonString,
+			&displayNameJsonString,
+			&administrativeInformationJsonString,
+			&embeddedDataSpecificationJsonString,
+			&supplementalSemanticIDsJsonString,
+			&extensionsJsonString,
+			&qualifiersJsonString,
+			&semanticIDJSONString,
+		}
+		var supplementalOwnerID int64
+		if filterSupplementalSemanticIDs {
+			scanTargets = append(scanTargets, &supplementalOwnerID)
+		}
+		if err := rows.Scan(scanTargets...); err != nil {
 			return nil, "", err
 		}
 
@@ -380,13 +412,43 @@ func (s *SubmodelDatabase) getSubmodelsWithOptionalFilters(ctx context.Context, 
 		}
 
 		submodels = append(submodels, submodel)
+		if filterSupplementalSemanticIDs {
+			supplementalOwnerIDs = append(supplementalOwnerIDs, supplementalOwnerID)
+		}
 	}
 
 	if err := rows.Err(); err != nil {
 		return nil, "", err
 	}
 
+	if filterSupplementalSemanticIDs {
+		filteredReferences, readErr := descriptors.ReadSubmodelSupplementalSemanticReferencesBySubmodelIDs(
+			ctx,
+			s.db,
+			supplementalOwnerIDs,
+		)
+		if readErr != nil {
+			return nil, "", common.NewInternalServerError("SMREPO-GETSMS-READSUPPSEM " + readErr.Error())
+		}
+		for index, ownerID := range supplementalOwnerIDs {
+			submodels[index].SetSupplementalSemanticIDs(filteredReferences[ownerID])
+		}
+	}
+
 	return submodels, nextCursor, nil
+}
+
+func hasFragmentFilterPrefix(ctx context.Context, prefix string) bool {
+	queryFilter := auth.GetQueryFilter(ctx)
+	if queryFilter == nil {
+		return false
+	}
+	for fragment := range queryFilter.Filters {
+		if strings.HasPrefix(string(fragment), prefix) {
+			return true
+		}
+	}
+	return false
 }
 
 func (s *SubmodelDatabase) submodelCursorExists(ctx context.Context, cursor string) (bool, error) {

@@ -35,12 +35,14 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/FriedJannik/aas-go-sdk/jsonization"
 	"github.com/FriedJannik/aas-go-sdk/stringification"
 	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/doug-martin/goqu/v9"
 	"github.com/doug-martin/goqu/v9/exp"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	builders "github.com/eclipse-basyx/basyx-go-components/internal/common/builder"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/descriptors"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
@@ -1181,7 +1183,7 @@ func readSubmodelElementRowsByPath(ctx context.Context, db dbQueryer, submodelDa
 		return nil, common.NewInternalServerError("SMREPO-GETSMEBYPATH-BUILDQ " + toSQLErr.Error())
 	}
 
-	return executeLoadedSMERowQuery(db, sqlQuery, args, "SMREPO-GETSMEBYPATH")
+	return executeLoadedSMERowQuery(ctx, db, sqlQuery, args, "SMREPO-GETSMEBYPATH")
 }
 
 func readSubmodelElementRowsByRootIDs(ctx context.Context, db dbQueryer, submodelDatabaseID int64, rootIDs []int64, includeChildren bool, isGetSubmodelElements bool) ([]loadedSMERow, error) {
@@ -1314,11 +1316,17 @@ func readSubmodelElementRowsByRootIDs(ctx context.Context, db dbQueryer, submode
 		return nil, common.NewInternalServerError("SMREPO-GETSMES-BATCHREAD-BUILDQ " + toSQLErr.Error())
 	}
 
-	return executeLoadedSMERowQuery(db, sqlQuery, args, "SMREPO-GETSMES-BATCHREAD")
+	return executeLoadedSMERowQuery(ctx, db, sqlQuery, args, "SMREPO-GETSMES-BATCHREAD")
 }
 
-func executeLoadedSMERowQuery(db dbQueryer, sqlQuery string, args []interface{}, errorCodePrefix string) ([]loadedSMERow, error) {
-	rows, queryErr := db.Query(sqlQuery, args...)
+func executeLoadedSMERowQuery(
+	ctx context.Context,
+	db dbQueryer,
+	sqlQuery string,
+	args []interface{},
+	errorCodePrefix string,
+) ([]loadedSMERow, error) {
+	rows, queryErr := db.QueryContext(ctx, sqlQuery, args...)
 	if queryErr != nil {
 		return nil, common.NewInternalServerError(errorCodePrefix + "-EXECQ " + queryErr.Error())
 	}
@@ -1400,7 +1408,77 @@ func executeLoadedSMERowQuery(db dbQueryer, sqlQuery string, args []interface{},
 		return nil, common.NewInternalServerError(errorCodePrefix + "-ROWSERR " + rowsErr.Error())
 	}
 
+	if hasSMESupplementalSemanticIDFilter(ctx) {
+		if filterErr := applyFilteredSMESupplementalSemanticIDs(ctx, db, parsedRows); filterErr != nil {
+			return nil, common.NewInternalServerError(errorCodePrefix + "-FILTERSUPPSEM " + filterErr.Error())
+		}
+	}
+
 	return parsedRows, nil
+}
+
+func hasSMESupplementalSemanticIDFilter(ctx context.Context) bool {
+	queryFilter := auth.GetQueryFilter(ctx)
+	if queryFilter == nil {
+		return false
+	}
+	for fragment := range queryFilter.Filters {
+		value := string(fragment)
+		if strings.HasPrefix(value, "$sme") && strings.Contains(value, "#supplementalSemanticIds") {
+			return true
+		}
+	}
+	return false
+}
+
+func applyFilteredSMESupplementalSemanticIDs(
+	ctx context.Context,
+	db dbQueryer,
+	rows []loadedSMERow,
+) error {
+	ownerIDs := make([]int64, 0, len(rows))
+	for _, item := range rows {
+		if item.row.DbID.Valid {
+			ownerIDs = append(ownerIDs, item.row.DbID.Int64)
+		}
+	}
+
+	filteredReferences, err := descriptors.ReadSubmodelElementSupplementalSemanticReferencesByElementIDs(
+		ctx,
+		db,
+		ownerIDs,
+	)
+	if err != nil {
+		return err
+	}
+
+	for index := range rows {
+		if !rows[index].row.DbID.Valid {
+			continue
+		}
+		references := filteredReferences[rows[index].row.DbID.Int64]
+		if references == nil {
+			references = []types.IReference{}
+		}
+		payload, marshalErr := marshalReferences(references)
+		if marshalErr != nil {
+			return marshalErr
+		}
+		rows[index].row.SupplementalSemanticIDs = bytesToRawMessagePtr(payload)
+	}
+	return nil
+}
+
+func marshalReferences(references []types.IReference) ([]byte, error) {
+	jsonableReferences := make([]map[string]any, 0, len(references))
+	for _, reference := range references {
+		jsonableReference, err := jsonization.ToJsonable(reference)
+		if err != nil {
+			return nil, err
+		}
+		jsonableReferences = append(jsonableReferences, jsonableReference)
+	}
+	return json.Marshal(jsonableReferences)
 }
 
 type loadedSMENode struct {

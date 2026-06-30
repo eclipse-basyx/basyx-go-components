@@ -1,0 +1,12 @@
+{
+  "$condition": {
+    "$eq": [
+      {
+        "$field": "$sm#supplementalSemanticIds[1].keys[0].value"
+      },
+      {
+        "$strVal": "SM_SECOND"
+      }
+    ]
+  }
+}

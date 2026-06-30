@@ -168,5 +168,38 @@
     "endpoint": "http://127.0.0.1:6004/submodel-descriptors",
     "shouldMatch": "expected/empty_paged_result.json",
     "expectedStatus": 200
+  },
+  {
+    "context": "021 - Create Query Submodel Descriptor B - POST /submodel-descriptors",
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:6004/submodel-descriptors",
+    "data": "postBody/query_submodel_descriptor_b.json",
+    "expectedStatus": 201
+  },
+  {
+    "context": "022 - Create Query Submodel Descriptor C - POST /submodel-descriptors",
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:6004/submodel-descriptors",
+    "data": "postBody/query_submodel_descriptor_c.json",
+    "expectedStatus": 201
+  },
+  {
+    "context": "023 - Query Submodel Descriptors with Supplemental Semantic ID Filters - POST /query/submodel-descriptors",
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:6004/query/submodel-descriptors",
+    "data": "postBody/query_submodel_descriptors_with_filters.json",
+    "shouldMatch": "expected/query_submodel_descriptors_with_filters.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "024 - Cleanup Query Submodel Descriptors - ACTION DELETE_ALL_SUBMODEL_DESCRIPTORS",
+    "action": "DELETE_ALL_SUBMODEL_DESCRIPTORS"
+  },
+  {
+    "context": "025 - Verify Query Submodel Descriptors Empty - GET /submodel-descriptors",
+    "method": "GET",
+    "endpoint": "http://127.0.0.1:6004/submodel-descriptors",
+    "shouldMatch": "expected/empty_paged_result.json",
+    "expectedStatus": 200
   }
 ]

@@ -64,7 +64,8 @@ func main() {
 	schemInit.Register(sequences.NewSchemaPatch(execCtx, filepath.Join(patchBasePath, "1_1_3.sql"), "v1.1.3"))
 	schemInit.Register(sequences.NewSchemaPatch(execCtx, filepath.Join(patchBasePath, "1_1_4.sql"), "v1.1.4"))
 	schemInit.Register(sequences.NewSchemaPatch(execCtx, filepath.Join(patchBasePath, "1_1_5.sql"), "v1.1.5"))
-	schemInit.Register(sequences.NewSchemaPatch(execCtx, filepath.Join(patchBasePath, "1_1_6.sql"), common.CURRENT_DATABASE_VERSION))
+	schemInit.Register(sequences.NewSchemaPatch(execCtx, filepath.Join(patchBasePath, "1_1_6.sql"), "v1.1.6"))
+	schemInit.Register(sequences.NewSchemaPatch(execCtx, filepath.Join(patchBasePath, "1_1_7.sql"), common.CURRENT_DATABASE_VERSION))
 
 	if err := schemInit.Execute(); err != nil {
 		log.Printf("BASYXCFG-MAIN-EXECUTE: %v", err)

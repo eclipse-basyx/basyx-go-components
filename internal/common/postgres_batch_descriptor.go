@@ -109,13 +109,14 @@ func (b *PostgreSQLBatch) AppendContextReferences(
 	referenceTable string,
 	ownerColumn string,
 ) error {
-	for _, reference := range references {
+	for position, reference := range references {
 		if reference == nil {
 			continue
 		}
 		dialect := goqu.Dialect(Dialect)
 		if err := b.AppendDataset(dialect.Insert(referenceTable).Rows(goqu.Record{
 			ownerColumn: ownerID,
+			ColPosition: position,
 			ColType:     reference.Type(),
 		})); err != nil {
 			return err

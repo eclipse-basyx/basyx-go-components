@@ -1,0 +1,29 @@
+{
+  "paging_metadata": {},
+  "result": [
+    {
+      "id": "urn:example:submodel:nameplate",
+      "idShort": "PublicNameplate",
+      "modelType": "Submodel",
+      "submodelElements": [
+        {
+          "idShort": "ManufacturerName",
+          "modelType": "Property",
+          "value": "Example Corp",
+          "valueType": "xs:string"
+        }
+      ],
+      "supplementalSemanticIds": [
+        {
+          "keys": [
+            {
+              "type": "GlobalReference",
+              "value": "PUBLIC_READABLE"
+            }
+          ],
+          "type": "ExternalReference"
+        }
+      ]
+    }
+  ]
+}

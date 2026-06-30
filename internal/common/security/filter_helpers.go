@@ -54,6 +54,29 @@ func AddFilterQueryFromContext(
 	collector *grammar.ResolvedFieldPathCollector,
 ) (*goqu.SelectDataset, error) {
 	maskCondition, hasMask, err := buildFragmentMaskConditionWithOptions(ctx, fragment, collector, true)
+	return addFilterCondition(ds, maskCondition, hasMask, err)
+}
+
+// AddCorrelatedFilterQueryFromContext appends a fragment filter while keeping
+// the collector active for MATCH expressions. Readers use this when a filter
+// combines row-local fields with route-level fields that require correlated
+// EXISTS queries.
+func AddCorrelatedFilterQueryFromContext(
+	ctx context.Context,
+	ds *goqu.SelectDataset,
+	fragment grammar.FragmentStringPattern,
+	collector *grammar.ResolvedFieldPathCollector,
+) (*goqu.SelectDataset, error) {
+	maskCondition, hasMask, err := buildFragmentMaskConditionWithOptions(ctx, fragment, collector, false)
+	return addFilterCondition(ds, maskCondition, hasMask, err)
+}
+
+func addFilterCondition(
+	ds *goqu.SelectDataset,
+	maskCondition exp.Expression,
+	hasMask bool,
+	err error,
+) (*goqu.SelectDataset, error) {
 	if err != nil {
 		return nil, err
 	}
@@ -394,7 +417,7 @@ func buildFragmentMaskConditionWithOptions(
 	wcs := make([]exp.Expression, 0, len(filters))
 	for _, filter := range filters {
 		evalCollector := collector
-		if inlineArrayEndedFragments && filter.Match && fragmentEndsWithArraySegment(filter.Fragment) {
+		if inlineArrayEndedFragments && filter.Match && fragmentEndsWithWildcardArraySegment(filter.Fragment) {
 			// Array-ended fragments must be evaluated against the current row context
 			// instead of descriptor-wide EXISTS correlation.
 			evalCollector = nil
@@ -412,6 +435,15 @@ func buildFragmentMaskConditionWithOptions(
 		return wcs[0], true, nil
 	}
 	return goqu.And(wcs...), true, nil
+}
+
+func fragmentEndsWithWildcardArraySegment(fragment grammar.FragmentStringPattern) bool {
+	tokens := builder.TokenizeField(string(fragment))
+	if len(tokens) == 0 {
+		return false
+	}
+	arrayToken, isArray := tokens[len(tokens)-1].(builder.ArrayToken)
+	return isArray && arrayToken.Index < 0
 }
 
 func fragmentEndsWithArraySegment(fragment grammar.FragmentStringPattern) bool {

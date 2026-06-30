@@ -1,0 +1,97 @@
+{
+  "idShort": "ProductTwin",
+  "id": "urn:example:aas:product-001",
+  "description": [
+    {
+      "language": "en",
+      "text": "Public and partner-restricted submodel descriptors."
+    }
+  ],
+  "globalAssetId": "urn:example:asset:product-001",
+  "specificAssetIds": [
+    {
+      "name": "manufacturerPartId",
+      "value": "PART-001",
+      "externalSubjectId": {
+        "type": "ExternalReference",
+        "keys": [
+          {
+            "type": "GlobalReference",
+            "value": "PUBLIC_READABLE"
+          }
+        ]
+      }
+    },
+    {
+      "name": "customerPartId",
+      "value": "CUSTOMER-PART-001",
+      "externalSubjectId": {
+        "type": "ExternalReference",
+        "keys": [
+          {
+            "type": "GlobalReference",
+            "value": "BPN_COMPANY_001"
+          },
+          {
+            "type": "GlobalReference",
+            "value": "BPN_COMPANY_002"
+          }
+        ]
+      }
+    }
+  ],
+  "submodelDescriptors": [
+    {
+      "idShort": "PublicNameplate",
+      "id": "urn:example:submodel:nameplate",
+      "supplementalSemanticIds": [
+        {
+          "type": "ExternalReference",
+          "keys": [
+            {
+              "type": "GlobalReference",
+              "value": "PUBLIC_READABLE"
+            }
+          ]
+        }
+      ],
+      "endpoints": [
+        {
+          "interface": "SUBMODEL-3.0",
+          "protocolInformation": {
+            "href": "http://localhost:5005/submodels/dXJuOmV4YW1wbGU6c3VibW9kZWw6bmFtZXBsYXRl",
+            "endpointProtocol": "HTTP"
+          }
+        }
+      ]
+    },
+    {
+      "idShort": "RestrictedSerialPartTypization",
+      "id": "urn:example:submodel:serial-part-typization",
+      "supplementalSemanticIds": [
+        {
+          "type": "ExternalReference",
+          "keys": [
+            {
+              "type": "GlobalReference",
+              "value": "BPN_COMPANY_001"
+            },
+            {
+              "type": "GlobalReference",
+              "value": "BPN_COMPANY_002"
+            }
+          ]
+        }
+      ],
+      "endpoints": [
+        {
+          "interface": "SUBMODEL-3.0",
+          "protocolInformation": {
+            "href": "http://localhost:5005/submodels/dXJuOmV4YW1wbGU6c3VibW9kZWw6c2VyaWFsLXBhcnQtdHlwaXphdGlvbg",
+            "endpointProtocol": "HTTP"
+          }
+        }
+      ]
+    }
+  ]
+}

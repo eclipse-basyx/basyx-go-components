@@ -1,0 +1,73 @@
+services:
+  migration_db:
+    image: postgres:18
+    container_name: aasenvironment_migration_db
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: admin123
+      POSTGRES_DB: basyxMigrationTestDB
+    command: ["postgres", "-c", "listen_addresses=*"]
+    ports:
+      - "6434:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U admin -d basyxMigrationTestDB"]
+      interval: 2s
+      timeout: 5s
+      retries: 30
+
+  old_configuration:
+    image: eclipsebasyx/basyxconfigurationservice-go:1.0.0-rc.5
+    environment: &database_environment
+      POSTGRES_HOST: migration_db
+      POSTGRES_PORT: 5432
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: admin123
+      POSTGRES_DBNAME: basyxMigrationTestDB
+      POSTGRES_MAXOPENCONNECTIONS: 50
+      POSTGRES_MAXIDLECONNECTIONS: 50
+      POSTGRES_CONNMAXLIFETIMEMINUTES: 5
+    depends_on:
+      migration_db:
+        condition: service_healthy
+
+  old_aas_environment:
+    image: eclipsebasyx/aasenvironment-go:1.0.0-rc.5
+    environment:
+      <<: *database_environment
+      SERVER_PORT: 5004
+      SERVER_STRICTVERIFICATION: "off"
+      ABAC_ENABLED: "false"
+      GENERAL_AASREGISTRYINTEGRATION: "false"
+      GENERAL_SUBMODELREGISTRYINTEGRATION: "false"
+    ports:
+      - "6034:5004"
+    depends_on:
+      old_configuration:
+        condition: service_completed_successfully
+
+  new_configuration:
+    build:
+      context: ../../../..
+      dockerfile: ./cmd/basyxconfigurationservice/Dockerfile
+    environment:
+      <<: *database_environment
+    depends_on:
+      migration_db:
+        condition: service_healthy
+
+  new_aas_environment:
+    build:
+      context: ../../../..
+      dockerfile: ./cmd/aasenvironmentservice/Dockerfile
+    environment:
+      <<: *database_environment
+      SERVER_PORT: 5004
+      SERVER_STRICTVERIFICATION: "off"
+      ABAC_ENABLED: "false"
+      GENERAL_AASREGISTRYINTEGRATION: "false"
+      GENERAL_SUBMODELREGISTRYINTEGRATION: "false"
+    ports:
+      - "6034:5004"
+    depends_on:
+      new_configuration:
+        condition: service_completed_successfully

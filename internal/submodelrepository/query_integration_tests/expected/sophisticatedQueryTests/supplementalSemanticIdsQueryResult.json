@@ -1,0 +1,58 @@
+{
+  "paging_metadata": {},
+  "result": [
+    {
+      "id": "supplemental-query-sm",
+      "idShort": "SupplementalQuery",
+      "modelType": "Submodel",
+      "supplementalSemanticIds": [
+        {
+          "type": "ExternalReference",
+          "keys": [
+            {
+              "type": "GlobalReference",
+              "value": "SM_QUERY_ALLOWED"
+            }
+          ]
+        },
+        {
+          "type": "ExternalReference",
+          "keys": [
+            {
+              "type": "GlobalReference",
+              "value": "SM_SECOND"
+            }
+          ]
+        }
+      ],
+      "submodelElements": [
+        {
+          "idShort": "Filtered",
+          "modelType": "Property",
+          "supplementalSemanticIds": [
+            {
+              "type": "ExternalReference",
+              "keys": [
+                {
+                  "type": "GlobalReference",
+                  "value": "SME_QUERY_ALLOWED"
+                }
+              ]
+            },
+            {
+              "type": "ExternalReference",
+              "keys": [
+                {
+                  "type": "GlobalReference",
+                  "value": "SME_SECOND"
+                }
+              ]
+            }
+          ],
+          "value": "value",
+          "valueType": "xs:string"
+        }
+      ]
+    }
+  ]
+}

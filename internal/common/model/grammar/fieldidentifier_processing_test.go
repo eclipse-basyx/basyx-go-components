@@ -212,10 +212,58 @@ var fieldIdentifierProcessingCases = []fidTestCase{
 		WantScalar: &expectedScalar{Column: "aasdesc_submodel_descriptor_semantic_id_reference_key.value", Bindings: []expectedBinding{}},
 	},
 	{
+		Name:  "smdesc_supplementalSemanticIds_keys_value_indexed",
+		Kind:  "scalar",
+		Input: `$smdesc#supplementalSemanticIds[1].keys[2].value`,
+		WantScalar: &expectedScalar{
+			Column: "aasdesc_submodel_descriptor_supplemental_semantic_id_reference_key.value",
+			Bindings: []expectedBinding{
+				{Alias: "aasdesc_submodel_descriptor_supplemental_semantic_id_reference.position", Index: idx(1)},
+				{Alias: "aasdesc_submodel_descriptor_supplemental_semantic_id_reference_key.position", Index: idx(2)},
+			},
+		},
+	},
+	{
+		Name:  "aasdesc_submodelDescriptor_supplementalSemanticIds_type_indexed",
+		Kind:  "scalar",
+		Input: `$aasdesc#submodelDescriptors[3].supplementalSemanticIds[1].type`,
+		WantScalar: &expectedScalar{
+			Column: "aasdesc_submodel_descriptor_supplemental_semantic_id_reference.type",
+			Bindings: []expectedBinding{
+				{Alias: "submodel_descriptor.position", Index: idx(3)},
+				{Alias: "aasdesc_submodel_descriptor_supplemental_semantic_id_reference.position", Index: idx(1)},
+			},
+		},
+	},
+	{
 		Name:       "sm_semanticId_type_scalar",
 		Kind:       "scalar",
 		Input:      `$sm#semanticId.type`,
 		WantScalar: &expectedScalar{Column: "semantic_id_reference.type", Bindings: []expectedBinding{}},
+	},
+	{
+		Name:  "sm_supplementalSemanticIds_keys_value_indexed",
+		Kind:  "scalar",
+		Input: `$sm#supplementalSemanticIds[1].keys[2].value`,
+		WantScalar: &expectedScalar{
+			Column: "sm_supplemental_semantic_id_reference_key.value",
+			Bindings: []expectedBinding{
+				{Alias: "sm_supplemental_semantic_id_reference.position", Index: idx(1)},
+				{Alias: "sm_supplemental_semantic_id_reference_key.position", Index: idx(2)},
+			},
+		},
+	},
+	{
+		Name:  "sme_supplementalSemanticIds_type_indexed",
+		Kind:  "scalar",
+		Input: `$sme.InstanceId#supplementalSemanticIds[1].type`,
+		WantScalar: &expectedScalar{
+			Column: "sme_supplemental_semantic_id_reference.type",
+			Bindings: []expectedBinding{
+				{Alias: "submodel_element.idshort_path", Index: sidx("InstanceId")},
+				{Alias: "sme_supplemental_semantic_id_reference.position", Index: idx(1)},
+			},
+		},
 	},
 	{
 		Name:       "cd_id_scalar",
@@ -353,10 +401,35 @@ var fieldIdentifierProcessingCases = []fidTestCase{
 		WantFragment: &expectedFragment{Bindings: []expectedBinding{}},
 	},
 	{
+		Name:  "smdesc_supplementalSemanticIds_keys_fragment_indexed",
+		Kind:  "fragment",
+		Input: `$smdesc#supplementalSemanticIds[1].keys[2]`,
+		WantFragment: &expectedFragment{Bindings: []expectedBinding{
+			{Alias: "aasdesc_submodel_descriptor_supplemental_semantic_id_reference.position", Index: idx(1)},
+			{Alias: "aasdesc_submodel_descriptor_supplemental_semantic_id_reference_key.position", Index: idx(2)},
+		}},
+	},
+	{
 		Name:         "sm_semanticId_keys_fragment_indexed",
 		Kind:         "fragment",
 		Input:        `$sm#semanticId.keys[0]`,
 		WantFragment: &expectedFragment{Bindings: []expectedBinding{{Alias: "semantic_id_reference_key.position", Index: idx(0)}}},
+	},
+	{
+		Name:         "sm_supplementalSemanticIds_fragment_indexed",
+		Kind:         "fragment",
+		Input:        `$sm#supplementalSemanticIds[1]`,
+		WantFragment: &expectedFragment{Bindings: []expectedBinding{{Alias: "sm_supplemental_semantic_id_reference.position", Index: idx(1)}}},
+	},
+	{
+		Name:  "sme_supplementalSemanticIds_keys_fragment_indexed",
+		Kind:  "fragment",
+		Input: `$sme.InstanceId#supplementalSemanticIds[1].keys[0]`,
+		WantFragment: &expectedFragment{Bindings: []expectedBinding{
+			{Alias: "submodel_element.idshort_path", Index: sidx("InstanceId")},
+			{Alias: "sme_supplemental_semantic_id_reference.position", Index: idx(1)},
+			{Alias: "sme_supplemental_semantic_id_reference_key.position", Index: idx(0)},
+		}},
 	},
 	{
 		Name:         "aas_specificAssetIds_fragment_indexed",
