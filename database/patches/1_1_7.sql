@@ -288,7 +288,7 @@ CREATE INDEX IF NOT EXISTS ix_sme_supp_sem_refkey_type_val ON submodel_element_s
 CREATE INDEX IF NOT EXISTS ix_sme_supp_sem_refkey_val_trgm ON submodel_element_supplemental_semantic_id_reference_key USING GIN (value gin_trgm_ops);
 
 UPDATE basyxsystem
-SET schema_version = 'v1.1.6',
+SET schema_version = 'v1.1.7',
     state = 'clean'
 WHERE identifier = (
   SELECT identifier
