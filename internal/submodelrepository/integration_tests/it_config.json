@@ -239,7 +239,7 @@
     {
         "context": "GET Get Submodel by Id",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw",
+        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw?extent=withBlobValue",
         "shouldMatch": "expected/expectedGetSubmodelById.json",
         "expectedStatus": 200
     },
@@ -475,7 +475,7 @@
     {
         "context": "Get All Submodels ValueOnly",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/$value",
+        "endpoint": "http://localhost:6004/submodels/$value?extent=withBlobValue",
         "shouldMatch": "expected/expectedAllSubmodelsValueOnly.json",
         "expectedStatus": 200
     },
@@ -622,7 +622,7 @@
     {
         "context": "PATCH Blob ValueOnly - Verify ExampleBlob Update",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/ExampleSubmodelElementCollection.ExampleSubmodelElementCollection.ExampleBlob/$value",
+        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/ExampleSubmodelElementCollection.ExampleSubmodelElementCollection.ExampleBlob/$value?extent=withBlobValue",
         "shouldMatch": "expected/expectedBlobValueOnlyAfterPatch.json",
         "expectedStatus": 200
     },
@@ -664,7 +664,7 @@
     {
         "context": "PATCH SubmodelElementCollection ValueOnly - Verify ExampleSubmodelElementCollection Update",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/ExampleSubmodelElementCollection/$value",
+        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/ExampleSubmodelElementCollection/$value?extent=withBlobValue",
         "shouldMatch": "expected/expectedSubmodelElementCollectionValueOnlyAfterPatch.json",
         "expectedStatus": 200
     },
@@ -699,7 +699,7 @@
     {
         "context": "PATCH Submodel ValueOnly - Verify Patch Submodel",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/$value",
+        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/$value?extent=withBlobValue",
         "shouldMatch": "bodies/patch/patchSubmodelValueOnly.json",
         "expectedStatus": 200
     },
@@ -741,7 +741,7 @@
     {
         "context": "PATCH Submodel - Verify SubmodelElements are preserved",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/$value",
+        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/$value?extent=withBlobValue",
         "shouldMatch": "bodies/patch/patchSubmodelValueOnly.json",
         "expectedStatus": 200
     },
@@ -755,7 +755,7 @@
     {
         "context": "PUT Submodel - Verify updated Submodel",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw",
+        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw?extent=withBlobValue",
         "shouldMatch": "expected/expectedSubmodelAfterPutUpdate.json",
         "expectedStatus": 200
     },
@@ -769,7 +769,7 @@
     {
         "context": "PUT Submodel - Verify created Submodel",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/QmFTeXg",
+        "endpoint": "http://localhost:6004/submodels/QmFTeXg?extent=withBlobValue",
         "shouldMatch": "expected/expectedSubmodelAfterPutCreate.json",
         "expectedStatus": 200
     },
@@ -895,7 +895,7 @@
     {
         "context": "PUT SubmodelElementCollection - Verify Update",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/ExampleSubmodelElementCollection",
+        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/ExampleSubmodelElementCollection?extent=withBlobValue",
         "shouldMatch": "bodies/put/putCollection.json",
         "expectedStatus": 200
     },
@@ -923,7 +923,7 @@
     {
         "context": "GET - Verify Updated Blob",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/ExampleSubmodelElementCollection.ExampleSubmodelElementCollection.ExampleBlob",
+        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/ExampleSubmodelElementCollection.ExampleSubmodelElementCollection.ExampleBlob?extent=withBlobValue",
         "shouldMatch": "bodies/put/putBlob.json",
         "expectedStatus": 200
     },
@@ -1049,7 +1049,7 @@
     {
         "context": "GET - Verify Created Blob Element",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/NewTestBlob",
+        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/NewTestBlob?extent=withBlobValue",
         "shouldMatch": "bodies/post/postNewBlob.json",
         "expectedStatus": 200
     },
@@ -1567,7 +1567,7 @@
     {
         "context": "GET - Verify Blob in Collection",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.NestedBlob",
+        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.NestedBlob?extent=withBlobValue",
         "shouldMatch": "bodies/post/nested/postBlobInCollection.json",
         "expectedStatus": 200
     },
@@ -1581,7 +1581,7 @@
     {
         "context": "GET - Verify Blob in List",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.List[5]",
+        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.List[5]?extent=withBlobValue",
         "shouldMatch": "bodies/post/nested/postBlobInList.json",
         "expectedStatus": 200
     },

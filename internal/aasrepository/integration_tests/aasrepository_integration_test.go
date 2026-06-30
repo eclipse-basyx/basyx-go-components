@@ -1016,11 +1016,15 @@ func TestSubmodelSuperPathEndpointsAasRepository(t *testing.T) {
 
 	submodelID := fmt.Sprintf("https://example.com/ids/sm/superpath-%d", time.Now().UnixNano())
 	submodelIdentifier := base64.RawURLEncoding.EncodeToString([]byte(submodelID))
+	topBlobValue := base64.StdEncoding.EncodeToString([]byte("aas-superpath-top-blob"))
+	nestedBlobValue := base64.StdEncoding.EncodeToString([]byte("aas-superpath-nested-blob"))
 
 	submodelEndpoint := fmt.Sprintf("%s/shells/%s/submodels/%s", baseURL, aasIdentifier, submodelIdentifier)
 	body := fmt.Sprintf(
-		`{"id":"%s","idShort":"SuperpathSubmodel","modelType":"Submodel","kind":"Instance","submodelElements":[{"idShort":"TopProperty","modelType":"Property","valueType":"xs:string","value":"hello"},{"idShort":"MainCollection","modelType":"SubmodelElementCollection","value":[{"idShort":"NestedProperty","modelType":"Property","valueType":"xs:string","value":"nested"}]}]}`,
+		`{"id":"%s","idShort":"SuperpathSubmodel","modelType":"Submodel","kind":"Instance","submodelElements":[{"idShort":"TopProperty","modelType":"Property","valueType":"xs:string","value":"hello"},{"idShort":"TopBlob","modelType":"Blob","contentType":"text/plain","value":"%s"},{"idShort":"MainCollection","modelType":"SubmodelElementCollection","value":[{"idShort":"NestedProperty","modelType":"Property","valueType":"xs:string","value":"nested"},{"idShort":"NestedBlob","modelType":"Blob","contentType":"application/octet-stream","value":"%s"}]}]}`,
 		submodelID,
+		topBlobValue,
+		nestedBlobValue,
 	)
 
 	_, putStatusCode, _, putErr := putJSONResponse(submodelEndpoint, body)
@@ -1033,8 +1037,46 @@ func TestSubmodelSuperPathEndpointsAasRepository(t *testing.T) {
 		require.Equal(t, http.StatusOK, pathStatusCode, "Expected 200 OK for GET submodel $path")
 
 		assert.Contains(t, paths, "TopProperty")
+		assert.Contains(t, paths, "TopBlob")
 		assert.Contains(t, paths, "MainCollection")
 		assert.Contains(t, paths, "MainCollection.NestedProperty")
+		assert.Contains(t, paths, "MainCollection.NestedBlob")
+	})
+
+	t.Run("GetSubmodelByIdHonorsExtent", func(t *testing.T) {
+		payload, statusCode, err := getJSONResponse(submodelEndpoint)
+		require.NoError(t, err, "GET submodel request failed")
+		require.Equal(t, http.StatusOK, statusCode, "Expected 200 OK for GET submodel")
+		requireAASSubmodelBlobValueState(t, payload, "TopBlob", "text/plain", "", false)
+		requireAASSubmodelBlobValueState(t, payload, "NestedBlob", "application/octet-stream", "", false)
+
+		payload, statusCode, err = getJSONResponse(submodelEndpoint + "?extent=withBlobValue")
+		require.NoError(t, err, "GET submodel with extent request failed")
+		require.Equal(t, http.StatusOK, statusCode, "Expected 200 OK for GET submodel with extent")
+		requireAASSubmodelBlobValueState(t, payload, "TopBlob", "text/plain", topBlobValue, true)
+		requireAASSubmodelBlobValueState(t, payload, "NestedBlob", "application/octet-stream", nestedBlobValue, true)
+	})
+
+	t.Run("GetAllSubmodelElementsHonorsExtent", func(t *testing.T) {
+		payload, statusCode, err := getJSONResponse(submodelEndpoint + "/submodel-elements?level=deep&extent=withBlobValue")
+		require.NoError(t, err, "GET submodel elements request failed")
+		require.Equal(t, http.StatusOK, statusCode, "Expected 200 OK for GET submodel elements")
+		result, ok := payload["result"].([]any)
+		require.True(t, ok, "Expected result array")
+		requireAASBlobValueState(t, findAASSubmodelElementInList(t, result, "TopBlob"), "text/plain", topBlobValue, true)
+		requireAASBlobValueState(t, findAASSubmodelElementInList(t, result, "NestedBlob"), "application/octet-stream", nestedBlobValue, true)
+	})
+
+	t.Run("GetSubmodelElementByPathValueOnlyHonorsExtent", func(t *testing.T) {
+		payload, statusCode, err := getJSONResponse(submodelEndpoint + "/submodel-elements/TopBlob/$value")
+		require.NoError(t, err, "GET value-only blob request failed")
+		require.Equal(t, http.StatusOK, statusCode, "Expected 200 OK for GET value-only blob")
+		requireAASValueOnlyBlobValueState(t, payload, "text/plain", "", false)
+
+		payload, statusCode, err = getJSONResponse(submodelEndpoint + "/submodel-elements/TopBlob/$value?extent=withBlobValue")
+		require.NoError(t, err, "GET value-only blob with extent request failed")
+		require.Equal(t, http.StatusOK, statusCode, "Expected 200 OK for GET value-only blob with extent")
+		requireAASValueOnlyBlobValueState(t, payload, "text/plain", topBlobValue, true)
 	})
 
 	t.Run("GetSubmodelElementByPathPathCoreReturnsRequestedPath", func(t *testing.T) {
@@ -1057,6 +1099,69 @@ func TestSubmodelSuperPathEndpointsAasRepository(t *testing.T) {
 		require.NoError(t, getErr, "GET submodel $path with unlinked AAS request failed")
 		require.Equal(t, http.StatusNotFound, getStatusCode, "Expected 404 for submodel not referenced in selected AAS")
 	})
+}
+
+func requireAASSubmodelBlobValueState(t *testing.T, submodel map[string]any, idShort string, contentType string, expectedValue string, expectValue bool) {
+	t.Helper()
+	rawElements, ok := submodel["submodelElements"].([]any)
+	require.True(t, ok, "submodelElements must be an array")
+	requireAASBlobValueState(t, findAASSubmodelElementInList(t, rawElements, idShort), contentType, expectedValue, expectValue)
+}
+
+func requireAASBlobValueState(t *testing.T, element map[string]any, contentType string, expectedValue string, expectValue bool) {
+	t.Helper()
+	require.Equal(t, "Blob", element["modelType"])
+	require.Equal(t, contentType, element["contentType"])
+	actualValue, hasValue := element["value"]
+	require.Equal(t, expectValue, hasValue, "blob value presence mismatch in element: %#v", element)
+	if expectValue {
+		require.Equal(t, expectedValue, actualValue)
+	}
+}
+
+func requireAASValueOnlyBlobValueState(t *testing.T, blobValue map[string]any, contentType string, expectedValue string, expectValue bool) {
+	t.Helper()
+	require.Equal(t, contentType, blobValue["contentType"])
+	actualValue, hasValue := blobValue["value"]
+	require.Equal(t, expectValue, hasValue, "blob value presence mismatch in value-only payload: %#v", blobValue)
+	if expectValue {
+		require.Equal(t, expectedValue, actualValue)
+	}
+}
+
+func findAASSubmodelElementInList(t *testing.T, rawElements []any, idShort string) map[string]any {
+	t.Helper()
+	for _, rawElement := range rawElements {
+		element, ok := rawElement.(map[string]any)
+		require.True(t, ok, "submodel element must be an object: %#v", rawElement)
+		if element["idShort"] == idShort {
+			return element
+		}
+		if rawValue, ok := element["value"].([]any); ok {
+			if nested := findAASSubmodelElementInListOptional(t, rawValue, idShort); nested != nil {
+				return nested
+			}
+		}
+	}
+	t.Fatalf("expected submodel element idShort=%s in payload: %#v", idShort, rawElements)
+	return nil
+}
+
+func findAASSubmodelElementInListOptional(t *testing.T, rawElements []any, idShort string) map[string]any {
+	t.Helper()
+	for _, rawElement := range rawElements {
+		element, ok := rawElement.(map[string]any)
+		require.True(t, ok, "submodel element must be an object: %#v", rawElement)
+		if element["idShort"] == idShort {
+			return element
+		}
+		if rawValue, ok := element["value"].([]any); ok {
+			if nested := findAASSubmodelElementInListOptional(t, rawValue, idShort); nested != nil {
+				return nested
+			}
+		}
+	}
+	return nil
 }
 
 func TestDeleteSubmodelByIdAasRepositoryDeletesSubmodelAndReference(t *testing.T) {
