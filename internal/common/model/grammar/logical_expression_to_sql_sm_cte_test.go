@@ -309,6 +309,9 @@ func TestLogicalExpression_SM_SupplementalSemanticIDs(t *testing.T) {
 			if !strings.Contains(sql, "'"+testCase.value+"'") {
 				t.Fatalf("expected value %q, got: %s", testCase.value, sql)
 			}
+			if strings.Contains(sql, `FROM "submodel" AS "s"`) || strings.Contains(sql, `JOIN "submodel" AS "s"`) {
+				t.Fatalf("did not expect redundant submodel root join in supplemental semantic ID SQL, got: %s", sql)
+			}
 		})
 	}
 }

@@ -171,6 +171,14 @@ func TestLogicalExpression_SMDesc_SupplementalSemanticIdsWithCollector_BuildsCTE
 	if !strings.Contains(sql, `AS "`+referenceAlias+`"`) || !strings.Contains(sql, `AS "`+keyAlias+`"`) {
 		t.Fatalf("expected SQL to use collision-safe aliases %q and %q, got: %s", referenceAlias, keyAlias, sql)
 	}
+
+	aasdescSQL := supplementalSemanticIDSQL(t, CollectorRootAASDesc, "$aasdesc#submodelDescriptors[].supplementalSemanticIds[].keys[].value")
+	if !strings.Contains(aasdescSQL, `FROM "submodel_descriptor" AS "submodel_descriptor"`) {
+		t.Fatalf("expected AAS descriptor supplemental semantic ID SQL to use submodel_descriptor as EXISTS base, got: %s", aasdescSQL)
+	}
+	if strings.Contains(aasdescSQL, `FROM "aas_descriptor" AS "aas_descriptor"`) || strings.Contains(aasdescSQL, `JOIN "aas_descriptor" AS "aas_descriptor"`) {
+		t.Fatalf("did not expect redundant aas_descriptor root join in supplemental semantic ID SQL, got: %s", aasdescSQL)
+	}
 }
 
 func supplementalSemanticIDSQL(t *testing.T, root CollectorRoot, fieldPath string) string {

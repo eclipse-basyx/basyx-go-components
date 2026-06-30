@@ -298,7 +298,7 @@ func joinPlanConfigForAAS() JoinPlanConfig {
 func joinPlanConfigForSM() JoinPlanConfig {
 	return JoinPlanConfig{
 		PreferredBase: "s",
-		BaseAliases:   []string{"s", "semantic_id_reference", "semantic_id_reference_key", "sm_supplemental_semantic_id_reference", "sm_supplemental_semantic_id_reference_key", "submodel_element", "property_element", "multilanguage_property_value", "sme_semantic_id_reference", "sme_semantic_id_reference_key", "sme_supplemental_semantic_id_reference", "sme_supplemental_semantic_id_reference_key"},
+		BaseAliases:   []string{"semantic_id_reference", "sm_supplemental_semantic_id_reference", "submodel_element", "s"},
 		Rules: map[string]existsJoinRule{
 			"s": {
 				Alias: "s",
@@ -449,8 +449,15 @@ func joinPlanConfigForSM() JoinPlanConfig {
 			}
 		},
 		GroupKeyForBase: func(base string) (exp.IdentifierExpression, error) {
-			if base == "s" {
+			switch base {
+			case "s":
 				return goqu.I("s.id"), nil
+			case "semantic_id_reference":
+				return goqu.I("semantic_id_reference.id"), nil
+			case "sm_supplemental_semantic_id_reference":
+				return goqu.I("sm_supplemental_semantic_id_reference.submodel_id"), nil
+			case "submodel_element":
+				return goqu.I("submodel_element.submodel_id"), nil
 			}
 			return nil, fmt.Errorf("unsupported SM base alias %q", base)
 		},
@@ -464,7 +471,12 @@ func joinPlanConfigForSM() JoinPlanConfig {
 			return "id"
 		},
 		Correlatable: func(alias string) bool {
-			return alias == "s"
+			switch alias {
+			case "s", "semantic_id_reference", "sm_supplemental_semantic_id_reference", "submodel_element":
+				return true
+			default:
+				return false
+			}
 		},
 	}
 }
@@ -1250,13 +1262,13 @@ func buildJoinPlanForResolvedWithConfig(resolved []ResolvedFieldPath, config Joi
 	// still need to include their dependency chain to reach a correlatable base.
 	base := ""
 	if config.PreferredBase != "" {
-		if _, ok := expanded[config.PreferredBase]; ok && len(expanded) > 1 {
+		if _, ok := required[config.PreferredBase]; ok && aliasCanCoverRequired(config.PreferredBase, required, config.Rules) {
 			base = config.PreferredBase
 		}
 	}
 	if base == "" {
 		for _, cand := range config.BaseAliases {
-			if _, ok := expanded[cand]; ok {
+			if _, ok := expanded[cand]; ok && isCorrelatableAlias(cand, config) && aliasCanCoverRequired(cand, required, config.Rules) {
 				base = cand
 				break
 			}
@@ -1264,7 +1276,7 @@ func buildJoinPlanForResolvedWithConfig(resolved []ResolvedFieldPath, config Joi
 	}
 	if base == "" && config.Correlatable != nil {
 		for a := range expanded {
-			if config.Correlatable(a) {
+			if config.Correlatable(a) && aliasCanCoverRequired(a, required, config.Rules) {
 				base = a
 				break
 			}
@@ -1284,11 +1296,7 @@ func buildJoinPlanForResolvedWithConfig(resolved []ResolvedFieldPath, config Joi
 		return existsJoinPlan{}, fmt.Errorf("cannot build join plan: no table mapping for alias %q", base)
 	}
 
-	expandedAliases := make([]string, 0, len(expanded))
-	for alias := range expanded {
-		expandedAliases = append(expandedAliases, alias)
-	}
-	sort.Strings(expandedAliases)
+	expandedAliases := expandedAliasesForBase(expanded, base, config.Rules)
 
 	return existsJoinPlan{
 		BaseAlias:       base,
@@ -1297,6 +1305,57 @@ func buildJoinPlanForResolvedWithConfig(resolved []ResolvedFieldPath, config Joi
 		ExpandedAliases: expandedAliases,
 		Rules:           config.Rules,
 	}, nil
+}
+
+func isCorrelatableAlias(alias string, config JoinPlanConfig) bool {
+	return config.Correlatable == nil || config.Correlatable(alias)
+}
+
+func expandedAliasesForBase(expanded map[string]struct{}, base string, rules map[string]existsJoinRule) []string {
+	aliases := make([]string, 0, len(expanded))
+	for alias := range expanded {
+		if aliasDependencyChainContains(alias, base, rules, map[string]struct{}{}) {
+			aliases = append(aliases, alias)
+		}
+	}
+	if len(aliases) == 0 {
+		for alias := range expanded {
+			aliases = append(aliases, alias)
+		}
+	}
+	sort.Strings(aliases)
+	return aliases
+}
+
+func aliasCanCoverRequired(candidate string, required map[string]struct{}, rules map[string]existsJoinRule) bool {
+	for alias := range required {
+		if !aliasDependencyChainContains(alias, candidate, rules, map[string]struct{}{}) {
+			return false
+		}
+	}
+	return true
+}
+
+func aliasDependencyChainContains(alias string, candidate string, rules map[string]existsJoinRule, visiting map[string]struct{}) bool {
+	if alias == candidate {
+		return true
+	}
+	if _, ok := visiting[alias]; ok {
+		return false
+	}
+	visiting[alias] = struct{}{}
+	defer delete(visiting, alias)
+
+	rule, ok := rules[alias]
+	if !ok {
+		return false
+	}
+	for _, dep := range rule.Deps {
+		if aliasDependencyChainContains(dep, candidate, rules, visiting) {
+			return true
+		}
+	}
+	return false
 }
 
 func andBindingsForResolvedFieldPaths(resolved []ResolvedFieldPath, predicate exp.Expression) exp.Expression {
