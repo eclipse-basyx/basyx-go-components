@@ -200,7 +200,11 @@ func (c *SubmodelRegistryAPIAPIController) QuerySubmodelDescriptors(w http.Respo
 		c.errorHandler(w, r, err, &result)
 		return
 	}
-	_ = EncodeJSONResponse(result.Body, &result.Code, w)
+	if err := EncodeJSONResponse(result.Body, &result.Code, w); err != nil {
+		log.Printf("🧩 [%s] Error in QuerySubmodelDescriptors: encoding response failed: %v", componentName, err)
+		c.errorHandler(w, r, err, nil)
+		return
+	}
 }
 
 // GetAllSubmodelDescriptors - Returns all Submodel Descriptors

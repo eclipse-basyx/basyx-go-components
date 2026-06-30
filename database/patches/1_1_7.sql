@@ -183,7 +183,13 @@ SELECT
   key.value ->> 'value'
 FROM submodel_supplemental_semantic_id_reference AS reference
 JOIN submodel_payload AS payload ON payload.submodel_id = reference.submodel_id
-CROSS JOIN LATERAL jsonb_array_elements(payload.supplemental_semantic_ids_payload) WITH ORDINALITY AS source(value, ordinality)
+CROSS JOIN LATERAL jsonb_array_elements(
+  CASE
+    WHEN jsonb_typeof(payload.supplemental_semantic_ids_payload) = 'array'
+      THEN payload.supplemental_semantic_ids_payload
+    ELSE '[]'::jsonb
+  END
+) WITH ORDINALITY AS source(value, ordinality)
 CROSS JOIN LATERAL jsonb_array_elements(COALESCE(source.value -> 'keys', '[]'::jsonb)) WITH ORDINALITY AS key(value, ordinality)
 WHERE source.ordinality - 1 = reference.position
   AND key.value ? 'value'
@@ -265,7 +271,13 @@ SELECT
   key.value ->> 'value'
 FROM submodel_element_supplemental_semantic_id_reference AS reference
 JOIN submodel_element_payload AS payload ON payload.submodel_element_id = reference.submodel_element_id
-CROSS JOIN LATERAL jsonb_array_elements(payload.supplemental_semantic_ids_payload) WITH ORDINALITY AS source(value, ordinality)
+CROSS JOIN LATERAL jsonb_array_elements(
+  CASE
+    WHEN jsonb_typeof(payload.supplemental_semantic_ids_payload) = 'array'
+      THEN payload.supplemental_semantic_ids_payload
+    ELSE '[]'::jsonb
+  END
+) WITH ORDINALITY AS source(value, ordinality)
 CROSS JOIN LATERAL jsonb_array_elements(COALESCE(source.value -> 'keys', '[]'::jsonb)) WITH ORDINALITY AS key(value, ordinality)
 WHERE source.ordinality - 1 = reference.position
   AND key.value ? 'value'

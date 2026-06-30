@@ -42,7 +42,7 @@ import (
 
 	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/testenv"
-	_ "github.com/lib/pq"
+	_ "github.com/jackc/pgx/v5/stdlib"
 	"github.com/stretchr/testify/require"
 )
 
@@ -448,7 +448,7 @@ func tableRowCount(t *testing.T, tableName string) int64 {
 func openMigrationDatabase(t *testing.T) *sql.DB {
 	t.Helper()
 
-	db, err := sql.Open("postgres", migrationDSN)
+	db, err := sql.Open("pgx", migrationDSN)
 	require.NoError(t, err)
 	require.NoError(t, db.PingContext(t.Context()))
 	return db
