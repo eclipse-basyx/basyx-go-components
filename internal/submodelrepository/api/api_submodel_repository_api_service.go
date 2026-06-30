@@ -526,7 +526,7 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodels(
 	limit int32,
 	cursor string,
 	level string,
-	_ /*extent*/ string,
+	extent string,
 	createdFrom time.Time,
 	updatedFrom time.Time,
 ) (gen.ImplResponse, error) {
@@ -543,6 +543,10 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodels(
 
 	if !isLevelValid(level) {
 		return newAPIErrorResponse(errors.New("invalid level parameter"), http.StatusBadRequest, operation, "InvalidLevelParameter"), nil
+	}
+	normalizedExtent, extentErr := normalizeExtent(extent)
+	if extentErr != nil {
+		return newAPIErrorResponse(extentErr, http.StatusBadRequest, operation, "InvalidExtentParameter"), nil
 	}
 	decodedSemanticID := ""
 	if semanticID != "" {
@@ -571,6 +575,9 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodels(
 			}
 
 			sm.SetSubmodelElements(submodelElements)
+			if normalizedExtent == extentWithoutBlobValue {
+				stripBlobValuesFromSubmodel(sm)
+			}
 			return nil
 		})
 	}
@@ -623,7 +630,7 @@ func (s *SubmodelRepositoryAPIAPIService) GetSubmodelByID(
 	ctx context.Context,
 	id string,
 	level string,
-	_ /*extent*/ string,
+	extent string,
 ) (gen.ImplResponse, error) {
 	const operation = "GetSubmodelByID"
 
@@ -634,6 +641,10 @@ func (s *SubmodelRepositoryAPIAPIService) GetSubmodelByID(
 
 	if !isLevelValid(level) {
 		return newAPIErrorResponse(errors.New("invalid level parameter"), http.StatusBadRequest, operation, "InvalidLevelParameter"), nil
+	}
+	normalizedExtent, extentErr := normalizeExtent(extent)
+	if extentErr != nil {
+		return newAPIErrorResponse(extentErr, http.StatusBadRequest, operation, "InvalidExtentParameter"), nil
 	}
 
 	sm, err := s.submodelBackend.GetSubmodelByID(ctx, string(decodedSubmodelIdentifier), level, false)
@@ -646,6 +657,9 @@ func (s *SubmodelRepositoryAPIAPIService) GetSubmodelByID(
 		}
 		_, _ = fmt.Printf("[DEBUG] GetSubmodelByID: Error getting submodel '%s': %v\n", string(decodedSubmodelIdentifier), err)
 		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "GetSubmodelByID"), nil
+	}
+	if normalizedExtent == extentWithoutBlobValue {
+		stripBlobValuesFromSubmodel(sm)
 	}
 	jsonSubmodel, err := jsonization.ToJsonable(sm)
 	if err != nil {
@@ -750,7 +764,7 @@ func (s *SubmodelRepositoryAPIAPIService) GetSubmodelByIdAndDate(
 	ctx context.Context,
 	id string,
 	level string,
-	_ string,
+	extent string,
 	date time.Time,
 ) (gen.ImplResponse, error) {
 	const operation = "GetSubmodelByIdAndDate"
@@ -762,6 +776,10 @@ func (s *SubmodelRepositoryAPIAPIService) GetSubmodelByIdAndDate(
 	if !isLevelValid(level) {
 		return newAPIErrorResponse(errors.New("invalid level parameter"), http.StatusBadRequest, operation, "InvalidLevelParameter"), nil
 	}
+	normalizedExtent, extentErr := normalizeExtent(extent)
+	if extentErr != nil {
+		return newAPIErrorResponse(extentErr, http.StatusBadRequest, operation, "InvalidExtentParameter"), nil
+	}
 
 	sm, err := s.submodelBackend.GetSubmodelByIDAndDate(ctx, decodedSubmodelIdentifier, date)
 	if err != nil {
@@ -769,6 +787,12 @@ func (s *SubmodelRepositoryAPIAPIService) GetSubmodelByIdAndDate(
 			return newAPIErrorResponse(err, http.StatusNotFound, operation, "SubmodelNotFound"), nil
 		}
 		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "GetSubmodelByIDAndDate"), nil
+	}
+	if level == "core" {
+		pruneSubmodelToCore(sm)
+	}
+	if normalizedExtent == extentWithoutBlobValue {
+		stripBlobValuesFromSubmodel(sm)
 	}
 
 	jsonSubmodel, err := jsonization.ToJsonable(sm)
@@ -783,8 +807,6 @@ func (s *SubmodelRepositoryAPIAPIService) GetSubmodelByIdAndDate(
 func (s *SubmodelRepositoryAPIAPIService) GetSignedSubmodelByID(
 	ctx context.Context,
 	id string,
-	_ /*level*/ string,
-	_ /*extent*/ string,
 ) (gen.ImplResponse, error) {
 	const operation = "GetSignedSubmodelByID"
 
@@ -811,8 +833,6 @@ func (s *SubmodelRepositoryAPIAPIService) GetSignedSubmodelByID(
 func (s *SubmodelRepositoryAPIAPIService) GetSignedSubmodelByIDValueOnly(
 	ctx context.Context,
 	id string,
-	_ /*level*/ string,
-	_ /*extent*/ string,
 ) (gen.ImplResponse, error) {
 	const operation = "GetSignedSubmodelByIDValueOnly"
 
@@ -991,7 +1011,6 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelsMetadata(
 //
 //nolint:revive
 func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelsValueOnly(ctx context.Context, semanticID string, idShort string, limit int32, cursor string, level string, extent string) (gen.ImplResponse, error) {
-	_ = extent
 	const operation = "GetAllSubmodelsValueOnly"
 
 	decodedCursor := ""
@@ -1005,6 +1024,10 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelsValueOnly(ctx context.C
 
 	if !isLevelValid(level) {
 		return newAPIErrorResponse(errors.New("invalid level parameter"), http.StatusBadRequest, operation, "InvalidLevelParameter"), nil
+	}
+	normalizedExtent, extentErr := normalizeExtent(extent)
+	if extentErr != nil {
+		return newAPIErrorResponse(extentErr, http.StatusBadRequest, operation, "InvalidExtentParameter"), nil
 	}
 
 	decodedSemanticID := ""
@@ -1037,6 +1060,9 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelsValueOnly(ctx context.C
 			}
 
 			sm.SetSubmodelElements(submodelElements)
+			if normalizedExtent == extentWithoutBlobValue {
+				stripBlobValuesFromSubmodel(sm)
+			}
 
 			valueOnly, convErr := gen.SubmodelToValueOnly(sm)
 			if convErr != nil {
@@ -1074,7 +1100,6 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelsValueOnly(ctx context.C
 //
 //nolint:revive
 func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelsReference(ctx context.Context, semanticID string, idShort string, limit int32, cursor string, level string) (gen.ImplResponse, error) {
-	_ = ctx
 	_ = level
 	const operation = "GetAllSubmodelsReference"
 
@@ -1497,7 +1522,6 @@ func (s *SubmodelRepositoryAPIAPIService) PatchSubmodelByIDMetadata(ctx context.
 //
 //nolint:revive
 func (s *SubmodelRepositoryAPIAPIService) GetSubmodelByIDValueOnly(ctx context.Context, submodelIdentifier string, level string, extent string) (gen.ImplResponse, error) {
-	_ = extent
 	const operation = "GetSubmodelByIDValueOnly"
 
 	decodedSubmodelIdentifier, decodeErr := common.DecodeString(submodelIdentifier)
@@ -1508,6 +1532,10 @@ func (s *SubmodelRepositoryAPIAPIService) GetSubmodelByIDValueOnly(ctx context.C
 	if !isLevelValid(level) {
 		return newAPIErrorResponse(errors.New("invalid level parameter"), http.StatusBadRequest, operation, "InvalidLevelParameter"), nil
 	}
+	normalizedExtent, extentErr := normalizeExtent(extent)
+	if extentErr != nil {
+		return newAPIErrorResponse(extentErr, http.StatusBadRequest, operation, "InvalidExtentParameter"), nil
+	}
 
 	sm, err := s.submodelBackend.GetSubmodelByID(ctx, string(decodedSubmodelIdentifier), level, false)
 	if err != nil {
@@ -1515,6 +1543,9 @@ func (s *SubmodelRepositoryAPIAPIService) GetSubmodelByIDValueOnly(ctx context.C
 			return newAPIErrorResponse(err, http.StatusNotFound, operation, "SubmodelNotFound"), nil
 		}
 		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "GetSubmodelByID"), nil
+	}
+	if normalizedExtent == extentWithoutBlobValue {
+		stripBlobValuesFromSubmodel(sm)
 	}
 
 	valueOnly, convErr := gen.SubmodelToValueOnly(sm)
@@ -1624,7 +1655,7 @@ func (s *SubmodelRepositoryAPIAPIService) GetSubmodelByIDPath(ctx context.Contex
 // Returns:
 //   - gen.ImplResponse: Response containing submodel elements
 //   - error: Error if the operation fails
-func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelElements(ctx context.Context, submodelIdentifier string, limit int32, cursor string, level string, _ /*extent*/ string) (gen.ImplResponse, error) {
+func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelElements(ctx context.Context, submodelIdentifier string, limit int32, cursor string, level string, extent string) (gen.ImplResponse, error) {
 	const operation = "GetAllSubmodelElements"
 
 	decodedSubmodelIdentifier, decodeErr := common.DecodeString(submodelIdentifier)
@@ -1650,6 +1681,10 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelElements(ctx context.Con
 	if !isLevelValid(level) {
 		return newAPIErrorResponse(errors.New("invalid level parameter"), http.StatusBadRequest, operation, "InvalidLevelParameter"), nil
 	}
+	normalizedExtent, extentErr := normalizeExtent(extent)
+	if extentErr != nil {
+		return newAPIErrorResponse(extentErr, http.StatusBadRequest, operation, "InvalidExtentParameter"), nil
+	}
 
 	elements, nextCursor, err := s.submodelBackend.GetSubmodelElements(ctx, string(decodedSubmodelIdentifier), limitPtr, decodedCursor, false, level)
 	if err != nil {
@@ -1664,6 +1699,9 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelElements(ctx context.Con
 
 	converted := make([]map[string]any, 0, len(elements))
 	for _, element := range elements {
+		if normalizedExtent == extentWithoutBlobValue {
+			stripBlobValuesFromElement(element)
+		}
 		jsonSubmodelElement, convErr := jsonization.ToJsonable(element)
 		if convErr != nil {
 			return newAPIErrorResponse(convErr, http.StatusInternalServerError, operation, "ToJsonable"), nil
@@ -1776,13 +1814,18 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelElementsMetadataSubmodel
 //
 //nolint:revive
 func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelElementsValueOnlySubmodelRepo(ctx context.Context, submodelIdentifier string, limit int32, cursor string, level string, extent string) (gen.ImplResponse, error) {
-	_ = ctx
-	_ = extent
 	const operation = "GetAllSubmodelElementsValueOnlySubmodelRepo"
 
 	decodedSubmodelIdentifier, decodeErr := common.DecodeString(submodelIdentifier)
 	if decodeErr != nil {
 		return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "MalformedSubmodelIdentifier"), nil
+	}
+	if validateErr := validateLevel(level); validateErr != nil {
+		return newAPIErrorResponse(validateErr, http.StatusBadRequest, operation, "InvalidLevelParameter"), nil
+	}
+	normalizedExtent, extentErr := normalizeExtent(extent)
+	if extentErr != nil {
+		return newAPIErrorResponse(extentErr, http.StatusBadRequest, operation, "InvalidExtentParameter"), nil
 	}
 
 	decodedCursor := ""
@@ -1813,6 +1856,9 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelElementsValueOnlySubmode
 
 	valueOnlyResults := make([]gen.SubmodelElementValue, 0, len(elements))
 	for _, element := range elements {
+		if normalizedExtent == extentWithoutBlobValue {
+			stripBlobValuesFromElement(element)
+		}
 		valueOnly, convErr := gen.SubmodelElementToValueOnly(element)
 		if convErr != nil {
 			return newAPIErrorResponse(convErr, http.StatusInternalServerError, operation, "SubmodelElementToValueOnly"), nil
@@ -1848,7 +1894,6 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelElementsValueOnlySubmode
 //
 //nolint:revive
 func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelElementsReferenceSubmodelRepo(ctx context.Context, submodelIdentifier string, limit int32, cursor string, level string) (gen.ImplResponse, error) {
-	_ = ctx
 	_ = level
 	const operation = "GetAllSubmodelElementsReferenceSubmodelRepo"
 
@@ -1933,11 +1978,14 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelElementsPathSubmodelRepo
 //
 //nolint:revive
 func (s *SubmodelRepositoryAPIAPIService) GetSubmodelElementByPathSubmodelRepo(ctx context.Context, submodelIdentifier string, idShortPath string, level string, extent string) (gen.ImplResponse, error) {
-	_ = extent
 	const operation = "GetSubmodelElementByPathSubmodelRepo"
 
 	if !isLevelValid(level) {
 		return newAPIErrorResponse(errors.New("invalid level parameter"), http.StatusBadRequest, operation, "InvalidLevelParameter"), nil
+	}
+	normalizedExtent, extentErr := normalizeExtent(extent)
+	if extentErr != nil {
+		return newAPIErrorResponse(extentErr, http.StatusBadRequest, operation, "InvalidExtentParameter"), nil
 	}
 
 	decodedSubmodelIdentifier, decodeErr := common.DecodeString(submodelIdentifier)
@@ -1954,6 +2002,9 @@ func (s *SubmodelRepositoryAPIAPIService) GetSubmodelElementByPathSubmodelRepo(c
 			return newAPIErrorResponse(err, http.StatusBadRequest, operation, "BadRequest"), nil
 		}
 		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "GetSubmodelElement"), nil
+	}
+	if normalizedExtent == extentWithoutBlobValue {
+		stripBlobValuesFromElement(element)
 	}
 
 	converted, convErr := jsonization.ToJsonable(element)
@@ -2252,12 +2303,18 @@ func (s *SubmodelRepositoryAPIAPIService) PatchSubmodelElementByPathMetadataSubm
 //
 //nolint:revive
 func (s *SubmodelRepositoryAPIAPIService) GetSubmodelElementByPathValueOnlySubmodelRepo(ctx context.Context, submodelIdentifier string, idShortPath string, level string, extent string) (gen.ImplResponse, error) {
-	_ = extent
 	const operation = "GetSubmodelElementByPathValueOnlySubmodelRepo"
 
 	decodedSubmodelIdentifier, decodeErr := common.DecodeString(submodelIdentifier)
 	if decodeErr != nil {
 		return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "MalformedSubmodelIdentifier"), nil
+	}
+	if validateErr := validateLevel(level); validateErr != nil {
+		return newAPIErrorResponse(validateErr, http.StatusBadRequest, operation, "InvalidLevelParameter"), nil
+	}
+	normalizedExtent, extentErr := normalizeExtent(extent)
+	if extentErr != nil {
+		return newAPIErrorResponse(extentErr, http.StatusBadRequest, operation, "InvalidExtentParameter"), nil
 	}
 
 	element, err := s.submodelBackend.GetSubmodelElement(ctx, string(decodedSubmodelIdentifier), idShortPath, true, level)
@@ -2269,6 +2326,9 @@ func (s *SubmodelRepositoryAPIAPIService) GetSubmodelElementByPathValueOnlySubmo
 			return newAPIErrorResponse(err, http.StatusBadRequest, operation, "BadRequest"), nil
 		}
 		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "GetSubmodelElement"), nil
+	}
+	if normalizedExtent == extentWithoutBlobValue {
+		stripBlobValuesFromElement(element)
 	}
 
 	valueOnly, convErr := gen.SubmodelElementToValueOnly(element)

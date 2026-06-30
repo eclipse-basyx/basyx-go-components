@@ -746,35 +746,12 @@ func (c *SubmodelRepositoryAPIAPIController) GetSubmodelByID(w http.ResponseWrit
 
 // GetSignedSubmodelByID - Returns a specific Submodel
 func (c *SubmodelRepositoryAPIAPIController) GetSignedSubmodelByID(w http.ResponseWriter, r *http.Request) {
-	query, err := parseQuery(r.URL.RawQuery)
-	if err != nil {
-		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
-		return
-	}
 	submodelIdentifierParam := chi.URLParam(r, "submodelIdentifier")
 	if submodelIdentifierParam == "" {
 		c.errorHandler(w, r, &RequiredError{"submodelIdentifier"}, nil)
 		return
 	}
-	var levelParam string
-	if query.Has("level") {
-		param := query.Get("level")
-
-		levelParam = param
-	} else {
-		param := "deep"
-		levelParam = param
-	}
-	var extentParam string
-	if query.Has("extent") {
-		param := query.Get("extent")
-
-		extentParam = param
-	} else {
-		param := "withoutBlobValue"
-		extentParam = param
-	}
-	result, err := c.service.GetSignedSubmodelByID(r.Context(), submodelIdentifierParam, levelParam, extentParam)
+	result, err := c.service.GetSignedSubmodelByID(r.Context(), submodelIdentifierParam)
 	// If an error occurred, encode the error with the status code
 	if err != nil {
 		c.errorHandler(w, r, err, &result)
@@ -786,35 +763,12 @@ func (c *SubmodelRepositoryAPIAPIController) GetSignedSubmodelByID(w http.Respon
 
 // GetSignedSubmodelByIDValueOnly - Returns a specific Submodel in ValueOnly representation
 func (c *SubmodelRepositoryAPIAPIController) GetSignedSubmodelByIDValueOnly(w http.ResponseWriter, r *http.Request) {
-	query, err := parseQuery(r.URL.RawQuery)
-	if err != nil {
-		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
-		return
-	}
 	submodelIdentifierParam := chi.URLParam(r, "submodelIdentifier")
 	if submodelIdentifierParam == "" {
 		c.errorHandler(w, r, &RequiredError{"submodelIdentifier"}, nil)
 		return
 	}
-	var levelParam string
-	if query.Has("level") {
-		param := query.Get("level")
-
-		levelParam = param
-	} else {
-		param := "deep"
-		levelParam = param
-	}
-	var extentParam string
-	if query.Has("extent") {
-		param := query.Get("extent")
-
-		extentParam = param
-	} else {
-		param := "withoutBlobValue"
-		extentParam = param
-	}
-	result, err := c.service.GetSignedSubmodelByIDValueOnly(r.Context(), submodelIdentifierParam, levelParam, extentParam)
+	result, err := c.service.GetSignedSubmodelByIDValueOnly(r.Context(), submodelIdentifierParam)
 	// If an error occurred, encode the error with the status code
 	if err != nil {
 		c.errorHandler(w, r, err, &result)

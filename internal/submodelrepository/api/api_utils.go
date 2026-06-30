@@ -139,6 +139,116 @@ func isLevelValid(level string) bool {
 	return level == "core" || level == "" || level == "deep"
 }
 
+const (
+	extentWithBlobValue    = "withBlobValue"
+	extentWithoutBlobValue = "withoutBlobValue"
+)
+
+func validateLevel(level string) error {
+	if isLevelValid(level) {
+		return nil
+	}
+	return common.NewErrBadRequest("SMREPO-VALIDLEVEL-BADVALUE invalid level parameter")
+}
+
+func normalizeExtent(extent string) (string, error) {
+	if extent == "" || extent == extentWithoutBlobValue {
+		return extentWithoutBlobValue, nil
+	}
+	if extent == extentWithBlobValue {
+		return extentWithBlobValue, nil
+	}
+	return "", common.NewErrBadRequest("SMREPO-NORMEXT-BADVALUE invalid extent parameter")
+}
+
+func stripBlobValuesFromSubmodel(submodel types.ISubmodel) {
+	if submodel == nil {
+		return
+	}
+	stripBlobValuesFromElements(submodel.SubmodelElements())
+}
+
+func stripBlobValuesFromElements(elements []types.ISubmodelElement) {
+	for _, element := range elements {
+		stripBlobValuesFromElement(element)
+	}
+}
+
+func stripBlobValuesFromElement(element types.ISubmodelElement) {
+	if element == nil {
+		return
+	}
+
+	if blob, ok := element.(types.IBlob); ok {
+		blob.SetValue(nil)
+		return
+	}
+
+	switch typedElement := element.(type) {
+	case types.ISubmodelElementList:
+		stripBlobValuesFromElements(typedElement.Value())
+	case types.ISubmodelElementCollection:
+		stripBlobValuesFromElements(typedElement.Value())
+	case types.IEntity:
+		stripBlobValuesFromElements(typedElement.Statements())
+	case types.IAnnotatedRelationshipElement:
+		stripBlobValuesFromAnnotations(typedElement.Annotations())
+	case types.IOperation:
+		stripBlobValuesFromOperationVariables(typedElement.InputVariables())
+		stripBlobValuesFromOperationVariables(typedElement.OutputVariables())
+		stripBlobValuesFromOperationVariables(typedElement.InoutputVariables())
+	}
+}
+
+func stripBlobValuesFromAnnotations(annotations []types.IDataElement) {
+	for _, annotation := range annotations {
+		stripBlobValuesFromElement(annotation)
+	}
+}
+
+func stripBlobValuesFromOperationVariables(variables []types.IOperationVariable) {
+	for _, variable := range variables {
+		if variable == nil {
+			continue
+		}
+		stripBlobValuesFromElement(variable.Value())
+	}
+}
+
+func pruneSubmodelToCore(submodel types.ISubmodel) {
+	if submodel == nil {
+		return
+	}
+	pruneElementsToCore(submodel.SubmodelElements())
+}
+
+func pruneElementsToCore(elements []types.ISubmodelElement) {
+	for _, element := range elements {
+		pruneElementToCore(element)
+	}
+}
+
+func pruneElementToCore(element types.ISubmodelElement) {
+	if element == nil {
+		return
+	}
+
+	switch typedElement := element.(type) {
+	case types.ISubmodelElementList:
+		typedElement.SetValue(nil)
+	case types.ISubmodelElementCollection:
+		typedElement.SetValue(nil)
+	case types.IEntity:
+		typedElement.SetStatements(nil)
+	case types.IAnnotatedRelationshipElement:
+		typedElement.SetAnnotations(nil)
+	case types.IOperation:
+		typedElement.SetInputVariables(nil)
+		typedElement.SetOutputVariables(nil)
+		typedElement.SetInoutputVariables(nil)
+	}
+}
+
 func extractSubmodelIdentifierFromReference(reference types.IReference) (string, error) {
 	if reference == nil {
 		return "", common.NewInternalServerError("SMREPO-EXTRACTSMID-NILREFERENCE Submodel reference is nil")
