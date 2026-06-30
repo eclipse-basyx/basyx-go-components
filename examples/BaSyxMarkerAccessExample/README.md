@@ -39,6 +39,24 @@ protected requests and writes the shell descriptor plus both submodels. The
 remaining folders show the expected DTR and Submodel Repository results for
 admin, anonymous, regular-user, BPN1, BPN2, and unrelated BPN access.
 
+## Variant Data Script
+
+`post_marker_variants.py` posts generated variants using the same structure as
+the JSON files in `data/`. It creates unique shell and submodel IDs, cycles
+marker values through `BPN_COMPANY_001` to `BPN_COMPANY_020` plus
+`PUBLIC_READABLE`, and keeps each marker reference capped at two keys. Marker
+lists may contain two BPN markers. `PUBLIC_READABLE` is selected like the BPN
+markers, with about 20 percent of generated marker slots using it. The script
+uses hash-based IDs seeded by a generated run id, so repeated runs do not
+collide unless the same `--run-id` is passed intentionally. It fetches one admin
+token, refreshes it before expiry during long runs, uses persistent per-worker
+HTTP connections, generates compact JSON payloads directly, and posts with
+bounded parallelism.
+
+```powershell
+python .\post_marker_variants.py --count 20000 --max-parallel 64
+```
+
 ## DTR visibility
 
 Anonymous discovery returns the descriptor because it has a public asset
