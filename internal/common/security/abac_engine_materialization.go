@@ -43,7 +43,7 @@ const matchedRuleHashPrefixLength = 16
 // definitionIndex caches definitions for fast lookup during materialization.
 type definitionIndex struct {
 	acls     map[string]grammar.ACL
-	attrs    map[string][]grammar.AttributeItem
+	attrs    map[string]grammar.AccessRuleModelSchemaJSONAllAccessPermissionRulesDEFATTRIBUTESElem
 	formulas map[string]grammar.LogicalExpression
 	objects  map[string]grammar.AccessRuleModelSchemaJSONAllAccessPermissionRulesDEFOBJECTSElem
 }
@@ -316,7 +316,7 @@ func buildDefinitionIndex(all grammar.AccessRuleModelSchemaJSONAllAccessPermissi
 
 	index := definitionIndex{
 		acls:     make(map[string]grammar.ACL),
-		attrs:    make(map[string][]grammar.AttributeItem),
+		attrs:    make(map[string]grammar.AccessRuleModelSchemaJSONAllAccessPermissionRulesDEFATTRIBUTESElem),
 		formulas: make(map[string]grammar.LogicalExpression),
 		objects:  make(map[string]grammar.AccessRuleModelSchemaJSONAllAccessPermissionRulesDEFOBJECTSElem),
 	}
@@ -340,7 +340,7 @@ func buildDefinitionIndex(all grammar.AccessRuleModelSchemaJSONAllAccessPermissi
 		if _, exists := index.attrs[name]; exists {
 			return index, fmt.Errorf("DEFATTRIBUTES: duplicate name %q", name)
 		}
-		index.attrs[name] = d.Attributes
+		index.attrs[name] = d
 	}
 
 	for _, d := range all.DEFFORMULAS {
@@ -424,24 +424,22 @@ func materializeRule(index definitionIndex, r grammar.AccessPermissionRule) (mat
 		return mr, fmt.Errorf("ACL is required")
 	}
 
-	// Attributes: exactly one of inline or referenced.
-	switch {
-	case mr.acl.ATTRIBUTES != nil:
+	if mr.acl.ATTRIBUTES != nil {
 		mr.attrs = append(mr.attrs, mr.acl.ATTRIBUTES...)
-	case mr.acl.USEATTRIBUTES != nil:
+	}
+	if mr.acl.USEATTRIBUTES != nil {
 		name := strings.TrimSpace(*mr.acl.USEATTRIBUTES)
-		attrs, ok := index.attrs[name]
-		if !ok {
-			return mr, fmt.Errorf("USEATTRIBUTES %q not found", name)
+		attrs, err := resolveAttributes(index, []string{name}, map[string]bool{})
+		if err != nil {
+			return mr, err
 		}
 		mr.attrs = append(mr.attrs, attrs...)
 	}
 
-	// Objects: exactly one of inline or referenced.
-	switch {
-	case len(r.OBJECTS) > 0:
+	if len(r.OBJECTS) > 0 {
 		mr.objs = append(mr.objs, r.OBJECTS...)
-	case len(r.USEOBJECTS) > 0:
+	}
+	if len(r.USEOBJECTS) > 0 {
 		resolved, err := resolveObjects(index, r.USEOBJECTS, map[string]bool{})
 		if err != nil {
 			return mr, err
@@ -466,6 +464,40 @@ func materializeRule(index definitionIndex, r grammar.AccessPermissionRule) (mat
 	}
 
 	return mr, nil
+}
+
+func resolveAttributes(index definitionIndex, names []string, seen map[string]bool) ([]grammar.AttributeItem, error) {
+	var out []grammar.AttributeItem
+
+	for _, name := range names {
+		name = strings.TrimSpace(name)
+		if name == "" {
+			return nil, fmt.Errorf("USEATTRIBUTES reference must not be empty")
+		}
+
+		if seen[name] {
+			return nil, fmt.Errorf("circular USEATTRIBUTES reference involving %q", name)
+		}
+
+		def, ok := index.attrs[name]
+		if !ok {
+			return nil, fmt.Errorf("USEATTRIBUTES %q not found", name)
+		}
+
+		out = append(out, def.Attributes...)
+
+		if len(def.USEATTRIBUTES) > 0 {
+			seen[name] = true
+			nested, err := resolveAttributes(index, def.USEATTRIBUTES, seen)
+			delete(seen, name)
+			if err != nil {
+				return nil, err
+			}
+			out = append(out, nested...)
+		}
+	}
+
+	return out, nil
 }
 
 func resolveObjects(index definitionIndex, names []string, seen map[string]bool) ([]grammar.ObjectItem, error) {

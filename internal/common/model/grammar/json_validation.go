@@ -23,33 +23,26 @@
 * SPDX-License-Identifier: MIT
 ******************************************************************************/
 
-//nolint:all
 package grammar
 
 import (
+	"encoding/json"
 	"fmt"
-	"time"
-
-	"github.com/eclipse-basyx/basyx-go-components/internal/common"
+	"strings"
 )
 
-// UnmarshalJSON parses an RFC3339 timestamp into a DateTimeLiteralPattern.
-func (d *DateTimeLiteralPattern) UnmarshalJSON(value []byte) error {
-	var s string
-	if err := common.UnmarshalAndDisallowUnknownFields(value, &s); err != nil {
-		return err
+func singleJSONMember(value []byte, typeName string) (map[string]json.RawMessage, error) {
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal(value, &raw); err != nil {
+		return nil, err
 	}
-	t, err := time.Parse(time.RFC3339Nano, s)
-	if err != nil {
-		return fmt.Errorf("parse $dateTimeVal: %w", err)
+	if len(raw) != 1 {
+		return nil, fmt.Errorf("GRAMMAR-%s-ONEOF: expected exactly one member, got %d", strings.ToUpper(typeName), len(raw))
 	}
-	*d = DateTimeLiteralPattern(t)
-	return nil
-}
-
-// MarshalJSON renders the timestamp in RFC3339Nano format.
-func (d DateTimeLiteralPattern) MarshalJSON() ([]byte, error) {
-	t := time.Time(d)
-	// Format consistently even for zero values.
-	return []byte(fmt.Sprintf("%q", t.Format(time.RFC3339Nano))), nil
+	for field, rawValue := range raw {
+		if strings.TrimSpace(string(rawValue)) == "null" {
+			return nil, fmt.Errorf("GRAMMAR-%s-NULL: field %s must not be null", strings.ToUpper(typeName), field)
+		}
+	}
+	return raw, nil
 }

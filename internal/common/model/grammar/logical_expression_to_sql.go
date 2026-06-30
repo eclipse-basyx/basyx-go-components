@@ -1555,6 +1555,15 @@ func (le *LogicalExpression) EvaluateToExpression(collector *ResolvedFieldPathCo
 		return expr, resolved, nil
 	}
 
+	if le.BoolCast != nil {
+		boolOperand := Value{BoolCast: le.BoolCast}
+		sqlValue, err := toSQLComponent(&boolOperand, "$boolCast")
+		if err != nil {
+			return nil, nil, err
+		}
+		return goqu.L("COALESCE(?, FALSE)", sqlValue), nil, nil
+	}
+
 	// Handle logical operations
 	if len(le.And) > 0 {
 		var expressions []exp.Expression
@@ -1949,6 +1958,18 @@ func toSQLComponent(operand *Value, position string) (interface{}, error) {
 	if operand.HexCast != nil {
 		return castOperandToSQLType(operand.HexCast, position, "text")
 	}
+	if operand.Year != nil {
+		return datePartOperandToSQL(operand.Year, position, "YEAR")
+	}
+	if operand.Month != nil {
+		return datePartOperandToSQL(operand.Month, position, "MONTH")
+	}
+	if operand.DayOfMonth != nil {
+		return datePartOperandToSQL(operand.DayOfMonth, position, "DAY")
+	}
+	if operand.DayOfWeek != nil {
+		return datePartOperandToSQL(operand.DayOfWeek, position, "DOW")
+	}
 
 	if operand.IsField() {
 		if operand.Field == nil {
@@ -2010,7 +2031,7 @@ func safeCastSQLValue(sqlValue interface{}, targetType string) exp.Expression {
 	case "timestamptz":
 		return goqu.L("CASE WHEN ?::text ~ ? THEN (?::timestamptz) END", sqlValue, safeCastTimestampWithTimezoneRegex, sqlValue)
 	case "time":
-		return goqu.L("CASE WHEN ?::text ~ ? THEN (?::time) END", sqlValue, `^[0-9]{2}:[0-9]{2}(:[0-9]{2})?$`, sqlValue)
+		return goqu.L("CASE WHEN ?::text ~ ? THEN (?::time) END", sqlValue, `^(?:[01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9](?:\.[0-9]+)?(?:Z|[+-][0-9]{2}:[0-9]{2})$`, sqlValue)
 	case "double precision":
 		return goqu.L("CASE WHEN ?::text ~ ? THEN (?::double precision) END", sqlValue, `^\s*-?[0-9]+(\.[0-9]+)?\s*$`, sqlValue)
 	case "boolean":
@@ -2028,6 +2049,14 @@ func castOperandToSQLType(inner *Value, position string, targetType string) (exp
 		return nil, err
 	}
 	return safeCastSQLValue(sqlValue, targetType), nil
+}
+
+func datePartOperandToSQL(inner *Value, position string, part string) (exp.Expression, error) {
+	sqlValue, err := toSQLComponent(inner, position)
+	if err != nil {
+		return nil, err
+	}
+	return goqu.L("EXTRACT("+part+" FROM ?::timestamptz)", sqlValue), nil
 }
 
 // normalizeLiteralForSQL converts grammar literals to safe SQL encodable values.

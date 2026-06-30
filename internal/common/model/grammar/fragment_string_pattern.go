@@ -33,7 +33,21 @@ import (
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 )
 
-const filterpattern = `^(?:\$aas#(?:idShort|assetInformation\.assetType|assetInformation\.globalAssetId|assetInformation\.specificAssetIds\[[0-9]*\](?:\.externalSubjectId(?:\.keys\[[0-9]*\])?)?|submodels\[[0-9]*\](?:\.keys\[[0-9]*\])?)|\$sm#(?:semanticId(?:\.keys\[[0-9]*\])?|idShort|id)|\$sme(?:\.[A-Za-z](?:[A-Za-z0-9_-]*[A-Za-z0-9_])?(?:\[[0-9]*\])*(?:\.[A-Za-z](?:[A-Za-z0-9_-]*[A-Za-z0-9_])?(?:\[[0-9]*\])*)*)?(?:#(?:semanticId(?:\.keys\[[0-9]*\])?|idShort|value|valueType|language))?|\$cd#idShort|\$aasdesc#(?:idShort|description|displayName|extension|administration|assetKind|assetType|globalAssetId|specificAssetIds\[[0-9]*\](?:\.externalSubjectId(?:\.keys\[[0-9]*\])?)?|endpoints\[[0-9]*\]|submodelDescriptors\[[0-9]*\](?:\.(?:semanticId(?:\.keys\[[0-9]*\])?|idShort|endpoints\[[0-9]*\]))?)|\$smdesc#(?:semanticId(?:\.keys\[[0-9]*\])?|idShort|endpoints\[[0-9]*\]))$`
+const specificAssetIDFragmentPattern = `specificAssetIds` + arrayIndexPattern + `(?:\.externalSubjectId(?:\.keys` + arrayIndexPattern + `)?)?`
+const submodelReferenceFragmentPattern = `submodels` + arrayIndexPattern + `(?:\.keys` + arrayIndexPattern + `)?`
+const endpointFragmentPattern = `endpoints` + arrayIndexPattern
+const submodelDescriptorFragmentPattern = `submodelDescriptors` + arrayIndexPattern + `(?:\.(?:` + semanticIDFragmentPattern + `|` + supplementalSemanticIDFragmentPattern + `|idShort|` + endpointFragmentPattern + `))?`
+
+const filterpattern = `^(?:` +
+	`\$aas#(?:idShort|assetInformation\.assetType|assetInformation\.globalAssetId|assetInformation\.` + specificAssetIDFragmentPattern + `|` + submodelReferenceFragmentPattern + `)|` +
+	`\$sm#(?:` + semanticIDFragmentPattern + `|` + supplementalSemanticIDFragmentPattern + `|idShort|id)|` +
+	`\$sme(?:\.` + idShortPathPattern + `)?(?:#(?:` + semanticIDFragmentPattern + `|` + supplementalSemanticIDFragmentPattern + `|idShort|value|valueType|language))?|` +
+	`\$cd#idShort|` +
+	`\$aasdesc#(?:idShort|description|displayName|extension|administration|assetKind|assetType|globalAssetId|` + specificAssetIDFragmentPattern + `|` + endpointFragmentPattern + `|` + submodelDescriptorFragmentPattern + `)|` +
+	`\$smdesc#(?:` + semanticIDFragmentPattern + `|` + supplementalSemanticIDFragmentPattern + `|idShort|` + endpointFragmentPattern + `)` +
+	`)$`
+
+var fragmentPatternRegex = regexp.MustCompile(filterpattern)
 
 // FragmentStringPattern represents a string pattern for model references in the AAS grammar.
 //
@@ -77,7 +91,7 @@ func (j *FragmentStringPattern) UnmarshalJSON(value []byte) error {
 		return err
 	}
 
-	if matched, _ := regexp.MatchString(filterpattern, string(plain)); !matched {
+	if !fragmentPatternRegex.MatchString(string(plain)) {
 		return fmt.Errorf("field %s pattern match: must match %s", "", filterpattern)
 	}
 	*j = FragmentStringPattern(plain)

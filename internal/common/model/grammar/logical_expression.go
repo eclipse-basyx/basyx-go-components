@@ -67,6 +67,9 @@ type LogicalExpression struct {
 	// Boolean corresponds to the JSON schema field "$boolean".
 	Boolean *bool `json:"$boolean,omitempty" yaml:"$boolean,omitempty" mapstructure:"$boolean,omitempty"`
 
+	// BoolCast corresponds to the JSON schema field "$boolCast".
+	BoolCast *Value `json:"$boolCast,omitempty" yaml:"$boolCast,omitempty" mapstructure:"$boolCast,omitempty"`
+
 	// Contains corresponds to the JSON schema field "$contains".
 	Contains StringItems `json:"$contains,omitempty" yaml:"$contains,omitempty" mapstructure:"$contains,omitempty"`
 
@@ -124,6 +127,10 @@ type LogicalExpression struct {
 //   - error: An error if the JSON is invalid or if array constraints are violated.
 //     Returns nil on successful unmarshaling and validation.
 func (le *LogicalExpression) UnmarshalJSON(value []byte) error {
+	if _, err := singleJSONMember(value, "logical-expression"); err != nil {
+		return err
+	}
+
 	type Plain LogicalExpression
 	var plain Plain
 
@@ -139,6 +146,9 @@ func (le *LogicalExpression) UnmarshalJSON(value []byte) error {
 	if plain.Or != nil && len(plain.Or) < 2 {
 		return fmt.Errorf("field %s length: must be >= %d", "$or", 2)
 	}
+	if plain.BoolCast != nil && plain.BoolCast.EffectiveTypeWithCast() == KindUnknown {
+		return fmt.Errorf("GRAMMAR-LOGEXPR-BOOLCAST: $boolCast requires a valid value operand")
+	}
 
 	// Enforce matching operand types for comparison operators (when both are known)
 	if err := validateComparisonItems(plain.Eq, "$eq"); err != nil {
@@ -147,16 +157,28 @@ func (le *LogicalExpression) UnmarshalJSON(value []byte) error {
 	if err := validateComparisonItems(plain.Ne, "$ne"); err != nil {
 		return err
 	}
-	if err := validateComparisonItems(plain.Gt, "$gt"); err != nil {
+	if err := validateOrderedComparisonItems(plain.Gt, "$gt"); err != nil {
 		return err
 	}
-	if err := validateComparisonItems(plain.Ge, "$ge"); err != nil {
+	if err := validateOrderedComparisonItems(plain.Ge, "$ge"); err != nil {
 		return err
 	}
-	if err := validateComparisonItems(plain.Lt, "$lt"); err != nil {
+	if err := validateOrderedComparisonItems(plain.Lt, "$lt"); err != nil {
 		return err
 	}
-	if err := validateComparisonItems(plain.Le, "$le"); err != nil {
+	if err := validateOrderedComparisonItems(plain.Le, "$le"); err != nil {
+		return err
+	}
+	if err := validateStringItems(plain.Contains, "$contains"); err != nil {
+		return err
+	}
+	if err := validateStringItems(plain.StartsWith, "$starts-with"); err != nil {
+		return err
+	}
+	if err := validateStringItems(plain.EndsWith, "$ends-with"); err != nil {
+		return err
+	}
+	if err := validateStringItems(plain.Regex, "$regex"); err != nil {
 		return err
 	}
 	*le = LogicalExpression(plain)
@@ -174,6 +196,37 @@ func validateComparisonItems(items ComparisonItems, op string) error {
 	}
 	_, err := items[0].IsComparableTo(items[1])
 	return err
+}
+
+func validateOrderedComparisonItems(items ComparisonItems, op string) error {
+	if len(items) == 0 {
+		return nil
+	}
+	kind, err := validateComparisonKind(items, op)
+	if err != nil {
+		return err
+	}
+	if kind == KindBool {
+		return fmt.Errorf("GRAMMAR-LOGEXPR-CMPTYPE: %s does not support boolean operands", op)
+	}
+	return nil
+}
+
+func validateComparisonKind(items ComparisonItems, op string) (ComparisonKind, error) {
+	if len(items) != 2 {
+		return KindUnknown, fmt.Errorf("comparison %s requires exactly 2 operands, got %d", op, len(items))
+	}
+	return items[0].IsComparableTo(items[1])
+}
+
+func validateStringItems(items StringItems, op string) error {
+	if len(items) == 0 {
+		return nil
+	}
+	if len(items) != 2 {
+		return fmt.Errorf("GRAMMAR-LOGEXPR-STRINGITEMS: %s requires exactly 2 operands, got %d", op, len(items))
+	}
+	return nil
 }
 
 // AssertLogicalExpressionRequired checks if the required fields are not zero-ed
@@ -195,6 +248,11 @@ func AssertLogicalExpressionRequired(obj LogicalExpression) error {
 	}
 	if obj.Not != nil {
 		if err := AssertLogicalExpressionRequired(*obj.Not); err != nil {
+			return err
+		}
+	}
+	if obj.BoolCast != nil {
+		if err := AssertValueRequired(*obj.BoolCast); err != nil {
 			return err
 		}
 	}
@@ -270,6 +328,11 @@ func AssertLogicalExpressionConstraints(obj LogicalExpression) error {
 	}
 	if obj.Not != nil {
 		if err := AssertLogicalExpressionConstraints(*obj.Not); err != nil {
+			return err
+		}
+	}
+	if obj.BoolCast != nil {
+		if err := AssertValueConstraints(*obj.BoolCast); err != nil {
 			return err
 		}
 	}

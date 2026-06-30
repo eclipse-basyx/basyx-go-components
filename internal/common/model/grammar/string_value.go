@@ -29,6 +29,8 @@
 //nolint:all
 package grammar
 
+import "github.com/eclipse-basyx/basyx-go-components/internal/common"
+
 // StringValue represents a string value in the grammar model, which can be a literal string, a field reference, or a string cast.
 type StringValue struct {
 	// Attribute corresponds to the JSON schema field "$attribute".
@@ -42,6 +44,27 @@ type StringValue struct {
 
 	// StrVal corresponds to the JSON schema field "$strVal".
 	StrVal *StandardString `json:"$strVal,omitempty" yaml:"$strVal,omitempty" mapstructure:"$strVal,omitempty"`
+}
+
+// UnmarshalJSON implements json.Unmarshaler for StringValue.
+func (v *StringValue) UnmarshalJSON(value []byte) error {
+	if _, err := singleJSONMember(value, "string-value"); err != nil {
+		return err
+	}
+
+	type Plain StringValue
+	var plain Plain
+	if err := common.UnmarshalAndDisallowUnknownFields(value, &plain); err != nil {
+		return err
+	}
+	if plain.Attribute != nil {
+		if err := validateAttributeValue(plain.Attribute); err != nil {
+			return err
+		}
+	}
+
+	*v = StringValue(plain)
+	return nil
 }
 
 // AssertStringValueRequired checks if the required fields are not zero-ed

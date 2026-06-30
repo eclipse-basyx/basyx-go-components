@@ -145,6 +145,16 @@ func (le LogicalExpression) SimplifyForBackendFilterWithOptions(resolve Attribut
 		return le, decisionFromBool(*le.Boolean)
 	}
 
+	if le.BoolCast != nil {
+		if valueContainsField(*le.BoolCast) {
+			return le, SimplifyUndecided
+		}
+		if b, ok := resolveBoolValue(Value{BoolCast: le.BoolCast}, resolve); ok {
+			return LogicalExpression{Boolean: &b}, decisionFromBool(b)
+		}
+		return le, SimplifyUndecided
+	}
+
 	rle, rdec := handleComparison(le, resolve, opts)
 	if rle != nil {
 		return *rle, rdec
@@ -716,10 +726,14 @@ func valueChildren(v Value) []*Value {
 	return []*Value{
 		v.BoolCast,
 		v.DateTimeCast,
+		v.DayOfMonth,
+		v.DayOfWeek,
 		v.HexCast,
+		v.Month,
 		v.NumCast,
 		v.StrCast,
 		v.TimeCast,
+		v.Year,
 	}
 }
 
@@ -861,7 +875,7 @@ func valueToStringValue(v Value) StringValue {
 	return StringValue{StrVal: &s}
 }
 
-func resolveDateTimeLiteral(v Value) any {
+func resolveDateTimeLiteral(v Value, resolve AttributeResolver) any {
 	switch {
 	case v.DateTimeVal != nil:
 		return time.Time(*v.DateTimeVal)
@@ -869,13 +883,25 @@ func resolveDateTimeLiteral(v Value) any {
 		tv := TimeLiteralPattern(*v.TimeVal)
 		return tv
 	case v.Year != nil:
-		return float64(time.Time(*v.Year).Year())
+		if t, ok := resolveDateTimeValue(*v.Year, resolve); ok {
+			return float64(t.Year())
+		}
+		return nil
 	case v.Month != nil:
-		return float64(int(time.Time(*v.Month).Month()))
+		if t, ok := resolveDateTimeValue(*v.Month, resolve); ok {
+			return float64(int(t.Month()))
+		}
+		return nil
 	case v.DayOfMonth != nil:
-		return float64(time.Time(*v.DayOfMonth).Day())
+		if t, ok := resolveDateTimeValue(*v.DayOfMonth, resolve); ok {
+			return float64(t.Day())
+		}
+		return nil
 	case v.DayOfWeek != nil:
-		return float64(int(time.Time(*v.DayOfWeek).Weekday()))
+		if t, ok := resolveDateTimeValue(*v.DayOfWeek, resolve); ok {
+			return float64(int(t.Weekday()))
+		}
+		return nil
 	default:
 		return nil
 	}
@@ -901,7 +927,7 @@ func resolveCastValue(v Value, resolve AttributeResolver) any {
 	case v.TimeCast != nil:
 		inner := resolveValue(*v.TimeCast, resolve)
 		if t, ok := toDateTime(inner); ok {
-			return TimeLiteralPattern(t.Format("15:04:05"))
+			return TimeLiteralPattern(t.Format("15:04:05.999999999Z07:00"))
 		}
 		if s := fmt.Sprint(inner); s != "" {
 			if _, ok := toTimeOfDaySeconds(s); ok {
@@ -941,7 +967,7 @@ func resolveValue(v Value, resolve AttributeResolver) any {
 	}
 
 	if v.DateTimeVal != nil || v.TimeVal != nil || v.Year != nil || v.Month != nil || v.DayOfMonth != nil || v.DayOfWeek != nil {
-		return resolveDateTimeLiteral(v)
+		return resolveDateTimeLiteral(v, resolve)
 	}
 
 	if v.HexVal != nil {
@@ -1076,13 +1102,25 @@ func resolveNumberValue(v Value, resolve AttributeResolver) (float64, bool) {
 	case v.NumVal != nil:
 		return *v.NumVal, true
 	case v.Year != nil:
-		return float64(time.Time(*v.Year).Year()), true
+		if t, ok := resolveDateTimeValue(*v.Year, resolve); ok {
+			return float64(t.Year()), true
+		}
+		return 0, false
 	case v.Month != nil:
-		return float64(int(time.Time(*v.Month).Month())), true
+		if t, ok := resolveDateTimeValue(*v.Month, resolve); ok {
+			return float64(int(t.Month())), true
+		}
+		return 0, false
 	case v.DayOfMonth != nil:
-		return float64(time.Time(*v.DayOfMonth).Day()), true
+		if t, ok := resolveDateTimeValue(*v.DayOfMonth, resolve); ok {
+			return float64(t.Day()), true
+		}
+		return 0, false
 	case v.DayOfWeek != nil:
-		return float64(int(time.Time(*v.DayOfWeek).Weekday())), true
+		if t, ok := resolveDateTimeValue(*v.DayOfWeek, resolve); ok {
+			return float64(int(t.Weekday())), true
+		}
+		return 0, false
 	case v.NumCast != nil:
 		raw := resolveValue(*v.NumCast, resolve)
 		if f, ok := toFloat(raw); ok {
@@ -1279,13 +1317,25 @@ func stringValueFromDate(v Value) string {
 	case v.TimeVal != nil:
 		return string(*v.TimeVal)
 	case v.Year != nil:
-		return time.Time(*v.Year).Format("2006")
+		if t, ok := resolveDateTimeValue(*v.Year, func(AttributeValue) any { return nil }); ok {
+			return t.Format("2006")
+		}
+		return ""
 	case v.Month != nil:
-		return time.Time(*v.Month).Format("01")
+		if t, ok := resolveDateTimeValue(*v.Month, func(AttributeValue) any { return nil }); ok {
+			return t.Format("01")
+		}
+		return ""
 	case v.DayOfMonth != nil:
-		return time.Time(*v.DayOfMonth).Format("02")
+		if t, ok := resolveDateTimeValue(*v.DayOfMonth, func(AttributeValue) any { return nil }); ok {
+			return t.Format("02")
+		}
+		return ""
 	case v.DayOfWeek != nil:
-		return time.Time(*v.DayOfWeek).Weekday().String()
+		if t, ok := resolveDateTimeValue(*v.DayOfWeek, func(AttributeValue) any { return nil }); ok {
+			return t.Weekday().String()
+		}
+		return ""
 	default:
 		return ""
 	}
@@ -1316,24 +1366,11 @@ func toTimeOfDaySeconds(value interface{}) (int, bool) {
 	if s == "" {
 		return 0, false
 	}
-	parts := strings.Split(s, ":")
-	if len(parts) < 2 || len(parts) > 3 {
+	t, err := time.Parse("15:04:05.999999999Z07:00", s)
+	if err != nil {
 		return 0, false
 	}
-	h, errH := strconv.Atoi(parts[0])
-	m, errM := strconv.Atoi(parts[1])
-	sec := 0
-	var errS error
-	if len(parts) == 3 {
-		sec, errS = strconv.Atoi(parts[2])
-	}
-	if errH != nil || errM != nil || (len(parts) == 3 && errS != nil) {
-		return 0, false
-	}
-	if h < 0 || h > 23 || m < 0 || m > 59 || sec < 0 || sec > 59 {
-		return 0, false
-	}
-	return h*3600 + m*60 + sec, true
+	return t.Hour()*3600 + t.Minute()*60 + t.Second(), true
 }
 
 func toDateTime(value interface{}) (time.Time, bool) {
