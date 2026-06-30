@@ -41,7 +41,7 @@
                },
                {
                   "name": "shiftTime",
-                  "value": "09:15:00"
+                  "value": "09:15:00Z"
                },
                {
                   "name": "commissionedYear",
@@ -67,7 +67,7 @@
                },
                {
                   "name": "shiftTime",
-                  "value": "10:00:00"
+                  "value": "10:00:00Z"
                },
                {
                   "name": "commissionedYear",
@@ -93,7 +93,7 @@
                },
                {
                   "name": "shiftTime",
-                  "value": "08:01:00"
+                  "value": "08:01:00Z"
                },
                {
                   "name": "commissionedYear",
