@@ -185,8 +185,7 @@ func (le *LogicalExpression) UnmarshalJSON(value []byte) error {
 	return nil
 }
 
-// validateComparisonItems ensures that comparison operands have matching types when both are known.
-// It is intentionally lenient for dynamic operands (fields/attributes), as their runtime type is unknown.
+// validateComparisonItems mirrors the schema's equalityComparisonItems shape.
 func validateComparisonItems(items ComparisonItems, op string) error {
 	if len(items) == 0 {
 		return nil
@@ -194,29 +193,76 @@ func validateComparisonItems(items ComparisonItems, op string) error {
 	if len(items) != 2 {
 		return fmt.Errorf("comparison %s requires exactly 2 operands, got %d", op, len(items))
 	}
-	_, err := items[0].IsComparableTo(items[1])
-	return err
+	if countEqualityComparisonShapes(items) == 1 {
+		return nil
+	}
+	return fmt.Errorf("GRAMMAR-LOGEXPR-CMPTYPE: %s operands do not match equalityComparisonItems", op)
 }
 
 func validateOrderedComparisonItems(items ComparisonItems, op string) error {
 	if len(items) == 0 {
 		return nil
 	}
-	kind, err := validateComparisonKind(items, op)
-	if err != nil {
-		return err
+	if len(items) != 2 {
+		return fmt.Errorf("comparison %s requires exactly 2 operands, got %d", op, len(items))
 	}
-	if kind == KindBool {
-		return fmt.Errorf("GRAMMAR-LOGEXPR-CMPTYPE: %s does not support boolean operands", op)
+	if countOrderedComparisonShapes(items) == 1 {
+		return nil
 	}
-	return nil
+	return fmt.Errorf("GRAMMAR-LOGEXPR-CMPTYPE: %s operands do not match orderedComparisonItems", op)
 }
 
-func validateComparisonKind(items ComparisonItems, op string) (ComparisonKind, error) {
-	if len(items) != 2 {
-		return KindUnknown, fmt.Errorf("comparison %s requires exactly 2 operands, got %d", op, len(items))
+func countEqualityComparisonShapes(items ComparisonItems) int {
+	return countOrderedComparisonShapes(items) + boolToInt(isBoolComparisonShape(items))
+}
+
+func countOrderedComparisonShapes(items ComparisonItems) int {
+	return boolToInt(areBoth(items, isStringValueOperand)) +
+		boolToInt(isNumericalComparisonShape(items)) +
+		boolToInt(isHexComparisonShape(items)) +
+		boolToInt(isDateTimeComparisonShape(items)) +
+		boolToInt(isTimeComparisonShape(items))
+}
+
+func isNumericalComparisonShape(items ComparisonItems) bool {
+	return areBoth(items, isNumericalOperand) ||
+		(isNumericalOperand(items[0]) && isFieldOperand(items[1])) ||
+		(isFieldOperand(items[0]) && isNumericalOperand(items[1]))
+}
+
+func isHexComparisonShape(items ComparisonItems) bool {
+	return areBoth(items, isHexOperand) ||
+		(isHexOperand(items[0]) && isFieldOperand(items[1])) ||
+		(isFieldOperand(items[0]) && isHexOperand(items[1]))
+}
+
+func isBoolComparisonShape(items ComparisonItems) bool {
+	return areBoth(items, isBoolOperand) ||
+		(isBoolOperand(items[0]) && isFieldOperand(items[1])) ||
+		(isFieldOperand(items[0]) && isBoolOperand(items[1]))
+}
+
+func isDateTimeComparisonShape(items ComparisonItems) bool {
+	return areBoth(items, isDateTimeOperand) ||
+		(isDateTimeOperand(items[0]) && isFieldOperand(items[1])) ||
+		(isFieldOperand(items[0]) && isDateTimeOperand(items[1]))
+}
+
+func isTimeComparisonShape(items ComparisonItems) bool {
+	return areBoth(items, isTimeOperand) ||
+		(isTimeOperand(items[0]) && isFieldOperand(items[1])) ||
+		(isFieldOperand(items[0]) && isTimeOperand(items[1]))
+}
+
+func areBoth(items ComparisonItems, pred func(Value) bool) bool {
+	return len(items) == 2 && pred(items[0]) && pred(items[1])
+}
+
+func boolToInt(v bool) int {
+	if v {
+		return 1
 	}
-	return items[0].IsComparableTo(items[1])
+	return 0
 }
 
 func validateStringItems(items StringItems, op string) error {

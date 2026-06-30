@@ -431,15 +431,6 @@ func validateAttributeValue(attr AttributeValue) error {
 }
 
 func validateValueOperandShapes(v Value) error {
-	if v.NumCast != nil && !isStringValueOperand(*v.NumCast) {
-		return fmt.Errorf("GRAMMAR-VALUE-NUMCAST: $numCast requires a stringValue operand")
-	}
-	if v.HexCast != nil && !isStringValueOperand(*v.HexCast) {
-		return fmt.Errorf("GRAMMAR-VALUE-HEXCAST: $hexCast requires a stringValue operand")
-	}
-	if v.BoolCast != nil && !isStringValueOperand(*v.BoolCast) {
-		return fmt.Errorf("GRAMMAR-VALUE-BOOLCAST: $boolCast requires a stringValue operand")
-	}
 	if v.DateTimeCast != nil && !isStringValueOperand(*v.DateTimeCast) {
 		return fmt.Errorf("GRAMMAR-VALUE-DATETIMECAST: $dateTimeCast requires a stringValue operand")
 	}
@@ -475,12 +466,40 @@ func isStringValueOperand(v Value) bool {
 	return v.Attribute != nil || v.Field != nil || v.StrCast != nil || v.StrVal != nil
 }
 
+func isFieldOperand(v Value) bool {
+	return v.Field != nil
+}
+
+func isNumericalOperand(v Value) bool {
+	return v.NumVal != nil || v.NumCast != nil || v.DayOfWeek != nil || v.DayOfMonth != nil || v.Month != nil || v.Year != nil
+}
+
+func isHexOperand(v Value) bool {
+	return v.HexVal != nil || v.HexCast != nil
+}
+
+func isBoolOperand(v Value) bool {
+	return v.Boolean != nil || v.BoolCast != nil
+}
+
 func isDateTimeOperand(v Value) bool {
-	return v.DateTimeCast != nil || v.DateTimeVal != nil
+	return v.DateTimeCast != nil || v.DateTimeVal != nil || isDateTimeAttributeOperand(v)
+}
+
+func isDateTimeAttributeOperand(v Value) bool {
+	if v.Attribute == nil {
+		return false
+	}
+	global, ok := attributeGlobalValue(v.Attribute)
+	return ok && isNowGlobal(global)
 }
 
 func isTimeCastOperand(v Value) bool {
 	return isStringValueOperand(v) || isDateTimeOperand(v)
+}
+
+func isTimeOperand(v Value) bool {
+	return v.TimeVal != nil || v.TimeCast != nil
 }
 
 // AssertValueRequired checks if the required fields are not zero-ed

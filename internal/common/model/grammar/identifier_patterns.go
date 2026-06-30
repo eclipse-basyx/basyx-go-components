@@ -41,29 +41,26 @@ const referencePartFragmentPattern = `(?:keys` + arrayIndexPattern + `)?`
 const semanticIDValuePattern = `semanticId(?:\.(?:` + referencePartValuePattern + `))?`
 const semanticIDFragmentPattern = `semanticId(?:\.` + referencePartFragmentPattern + `)?`
 
-const supplementalSemanticIDValuePattern = `supplementalSemanticIds` + arrayIndexPattern + `\.(?:` + referencePartValuePattern + `)`
-const supplementalSemanticIDFragmentPattern = `supplementalSemanticIds` + arrayIndexPattern + `(?:\.` + referencePartFragmentPattern + `)?`
+const supplementalSemanticIDValuePattern = `supplementalSemanticIds(?:` + arrayIndexPattern + `)?(?:\.(?:` + referencePartValuePattern + `))?`
+const supplementalSemanticIDFragmentPattern = `supplementalSemanticIds(?:` + arrayIndexPattern + `)?(?:\.` + referencePartFragmentPattern + `)?`
 
-var referenceIdentifierInstancePattern = regexp.MustCompile(`^(\$(?:aas|sm|sme|cd|aasdesc|smdesc))\s*\(\s*"(\*|[^"]+)"\s*\)(.*)$`)
+const referenceIdentifierInstance = `\("[A-Za-z0-9/\*\[\]\(\) _@#\\+\-\.,:\$\^]+"\)`
+const referenceIdentifierPattern = `^(?:` +
+	`\$aas` + referenceIdentifierInstance + `#(?:idShort|id|assetInformation\.assetKind|assetInformation\.assetType|assetInformation\.globalAssetId|assetInformation\.` + specificAssetIDValuePattern + `|` + submodelReferenceValuePattern + `)|` +
+	`\$sm` + referenceIdentifierInstance + `#(?:` + semanticIDValuePattern + `|` + supplementalSemanticIDValuePattern + `|idShort|id)|` +
+	`\$cd` + referenceIdentifierInstance + `#(?:idShort|id)|` +
+	`\$sme` + referenceIdentifierInstance + `\.` + idShortPathPattern + `#(?:` + semanticIDValuePattern + `|` + supplementalSemanticIDValuePattern + `|idShort|value|valueType|language)` +
+	`)$`
+
+var referenceIdentifierRegex = regexp.MustCompile(referenceIdentifierPattern)
 
 // ValidateReferenceIdentifier validates an attribute REFERENCE identifier.
 //
 // Runtime resolution of REFERENCE attributes is intentionally separate from
-// grammar validation. This accepts the PR #88 quoted identifier form by removing
-// the identifier instance and validating the remaining field path.
+// grammar validation.
 func ValidateReferenceIdentifier(value string) error {
 	normalized := strings.TrimSpace(value)
-	if modelPatternRegex.MatchString(normalized) {
-		return nil
-	}
-
-	match := referenceIdentifierInstancePattern.FindStringSubmatch(normalized)
-	if match == nil {
-		return fmt.Errorf("GRAMMAR-REFERENCE-PATTERN: REFERENCE must be a valid ReferenceIdentifier")
-	}
-
-	fieldIdentifier := match[1] + match[3]
-	if modelPatternRegex.MatchString(fieldIdentifier) {
+	if referenceIdentifierRegex.MatchString(normalized) {
 		return nil
 	}
 

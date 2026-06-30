@@ -65,12 +65,49 @@ func TestModelStringPatternUnmarshalRejectsLeadingZeroIndex(t *testing.T) {
 func TestAttributeItemUnmarshalAcceptsReferenceIdentifier(t *testing.T) {
 	t.Parallel()
 
-	var attr AttributeItem
-	if err := json.Unmarshal([]byte(`{"REFERENCE":"$sme(\"SubmodelID-OperationalData\").machineState#value"}`), &attr); err != nil {
-		t.Fatalf("expected REFERENCE identifier to be valid: %v", err)
+	tests := []struct {
+		name      string
+		payload   string
+		wantError string
+	}{
+		{
+			name:    "sme instance reference",
+			payload: `{"REFERENCE":"$sme(\"SubmodelID-OperationalData\").machineState#value"}`,
+		},
+		{
+			name:    "sm instance reference",
+			payload: `{"REFERENCE":"$sm(\"SubmodelID-OperationalData\")#id"}`,
+		},
+		{
+			name:      "plain field identifier rejected",
+			payload:   `{"REFERENCE":"$sm#id"}`,
+			wantError: "ReferenceIdentifier",
+		},
+		{
+			name:      "descriptor instance reference rejected",
+			payload:   `{"REFERENCE":"$aasdesc(\"*\")#id"}`,
+			wantError: "ReferenceIdentifier",
+		},
 	}
-	if attr.Kind != ATTRREFERENCE {
-		t.Fatalf("expected REFERENCE kind, got %s", attr.Kind)
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			var attr AttributeItem
+			err := json.Unmarshal([]byte(tt.payload), &attr)
+			if tt.wantError == "" {
+				if err != nil {
+					t.Fatalf("unexpected error: %v", err)
+				}
+				if attr.Kind != ATTRREFERENCE {
+					t.Fatalf("expected REFERENCE kind, got %s", attr.Kind)
+				}
+				return
+			}
+			if err == nil || !strings.Contains(err.Error(), tt.wantError) {
+				t.Fatalf("expected error containing %q, got %v", tt.wantError, err)
+			}
+		})
 	}
 }
 
@@ -94,7 +131,48 @@ func TestLogicalExpressionUnmarshalPR88OperatorRules(t *testing.T) {
 		{
 			name:      "ordered bool comparison rejected",
 			payload:   `{"$gt":[{"$boolean":true},{"$boolean":false}]}`,
-			wantError: "boolean",
+			wantError: "orderedComparisonItems",
+		},
+		{
+			name:    "raw field string comparison allowed",
+			payload: `{"$eq":[{"$field":"$aasdesc#id"},{"$strVal":"urn:aas:demo"}]}`,
+		},
+		{
+			name:    "raw field numeric comparison allowed",
+			payload: `{"$ge":[{"$field":"$aasdesc#specificAssetIds[0].value"},{"$numVal":100}]}`,
+		},
+		{
+			name:    "raw field time comparison allowed",
+			payload: `{"$gt":[{"$field":"$aasdesc#specificAssetIds[1].value"},{"$timeVal":"08:00:00Z"}]}`,
+		},
+		{
+			name:    "time cast field comparison allowed",
+			payload: `{"$gt":[{"$timeCast":{"$field":"$aasdesc#specificAssetIds[1].value"}},{"$timeVal":"08:00:00Z"}]}`,
+		},
+		{
+			name:    "raw field datetime comparison allowed",
+			payload: `{"$gt":[{"$field":"$aasdesc#createdAt"},{"$dateTimeVal":"2025-01-01T00:00:00Z"}]}`,
+		},
+		{
+			name:    "datetime cast field comparison allowed",
+			payload: `{"$gt":[{"$dateTimeCast":{"$field":"$aasdesc#createdAt"}},{"$dateTimeVal":"2025-01-01T00:00:00Z"}]}`,
+		},
+		{
+			name:    "raw field hex equality allowed",
+			payload: `{"$eq":[{"$field":"$aasdesc#specificAssetIds[3].value"},{"$hexVal":"16#BEEF"}]}`,
+		},
+		{
+			name:    "raw field bool equality allowed",
+			payload: `{"$eq":[{"$field":"$aasdesc#id"},{"$boolean":true}]}`,
+		},
+		{
+			name:    "bool cast field equality allowed",
+			payload: `{"$eq":[{"$boolCast":{"$field":"$aasdesc#id"}},{"$boolean":true}]}`,
+		},
+		{
+			name:      "raw field bool ordered comparison rejected",
+			payload:   `{"$gt":[{"$field":"$aasdesc#id"},{"$boolean":true}]}`,
+			wantError: "orderedComparisonItems",
 		},
 	}
 
@@ -129,6 +207,20 @@ func TestValueUnmarshalPR88OperandRules(t *testing.T) {
 			payload: `{"$year":{"$dateTimeVal":"2025-01-01T00:00:00Z"}}`,
 		},
 		{
+			name:    "date part uses datetime global attribute",
+			payload: `{"$dayOfWeek":{"$attribute":{"GLOBAL":"UTCNOW"}}}`,
+		},
+		{
+			name:      "date part rejects non datetime global attribute",
+			payload:   `{"$dayOfWeek":{"$attribute":{"GLOBAL":"ANONYMOUS"}}}`,
+			wantError: "dateTimeOperand",
+		},
+		{
+			name:      "date part rejects claim attribute",
+			payload:   `{"$dayOfWeek":{"$attribute":{"CLAIM":"iat"}}}`,
+			wantError: "dateTimeOperand",
+		},
+		{
 			name:      "date part rejects direct literal",
 			payload:   `{"$year":"2025-01-01T00:00:00Z"}`,
 			wantError: "cannot unmarshal string",
@@ -141,6 +233,14 @@ func TestValueUnmarshalPR88OperandRules(t *testing.T) {
 			name:      "dateTimeCast rejects numeric operand",
 			payload:   `{"$dateTimeCast":{"$numVal":1}}`,
 			wantError: "$dateTimeCast requires a stringValue operand",
+		},
+		{
+			name:    "numCast accepts value operand",
+			payload: `{"$numCast":{"$boolean":true}}`,
+		},
+		{
+			name:    "boolCast accepts value operand",
+			payload: `{"$boolCast":{"$numVal":1}}`,
 		},
 		{
 			name:    "timeCast uses dateTimeOperand",
