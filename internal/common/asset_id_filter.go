@@ -34,7 +34,8 @@ import (
 	"github.com/FriedJannik/aas-go-sdk/types"
 )
 
-const globalAssetIDFilterName = "globalAssetId"
+// GlobalAssetIDAssetLinkName is the reserved asset-link name for globalAssetId lookup.
+const GlobalAssetIDAssetLinkName = "globalAssetId"
 
 // AssetIDFilter contains decoded SpecificAssetId query parameters.
 type AssetIDFilter struct {
@@ -59,7 +60,7 @@ func DecodeAssetIDFilter(encodedAssetIDs []string) (AssetIDFilter, error) {
 		if assetID.Name() == "" || assetID.Value() == "" {
 			return AssetIDFilter{}, NewErrBadRequest(fmt.Sprintf("COMMON-ASSETIDFILTER-EMPTY assetIds[%d]: name and value must not be empty", index))
 		}
-		if assetID.Name() == globalAssetIDFilterName {
+		if assetID.Name() == GlobalAssetIDAssetLinkName {
 			filter.globalAssetIDs[assetID.Value()] = struct{}{}
 			continue
 		}

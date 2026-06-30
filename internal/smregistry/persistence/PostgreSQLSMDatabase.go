@@ -37,8 +37,6 @@ import (
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/descriptors"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/history"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
-	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
-	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 )
 
 // PostgreSQLSMDatabase provides PostgreSQL-based persistence for the Submodel Registry Service.
@@ -95,8 +93,10 @@ func (p *PostgreSQLSMDatabase) ListSubmodelDescriptors(
 	ctx context.Context,
 	limit int32,
 	cursor string,
+	createdFrom time.Time,
+	updatedFrom time.Time,
 ) ([]model.SubmodelDescriptor, string, error) {
-	return descriptors.ListSubmodelDescriptors(ctx, p.db, limit, cursor)
+	return descriptors.ListSubmodelDescriptors(ctx, p.db, limit, cursor, createdFrom, updatedFrom)
 }
 
 func appendSubmodelDescriptorHistoryTx(ctx context.Context, tx *sql.Tx, descriptor model.SubmodelDescriptor, changeType string, deleted bool) error {
@@ -141,8 +141,23 @@ func (p *PostgreSQLSMDatabase) InsertSubmodelDescriptorInTransaction(
 	if tx == nil {
 		return model.SubmodelDescriptor{}, common.NewInternalServerError("SMREG-INSERTSMDESC-NILTX transaction must not be nil")
 	}
-	stored, err := descriptors.InsertSubmodelDescriptorTx(ctx, tx, submodel)
+	batch, err := descriptors.BuildSubmodelDescriptorsCreateBatch(ctx, tx, []model.SubmodelDescriptor{submodel})
 	if err != nil {
+		return model.SubmodelDescriptor{}, err
+	}
+	if err = common.ExecutePostgreSQLBatchInTransaction(ctx, tx, batch.Statements()); err != nil {
+		return model.SubmodelDescriptor{}, mapInsertSubmodelDescriptorError(err)
+	}
+
+	if descriptors.CanSkipCreateReadback(ctx) && history.ActiveConfig().Mode == history.ModeOff {
+		return submodel, nil
+	}
+
+	stored, err := descriptors.GetSubmodelDescriptorByID(ctx, tx, submodel.Id)
+	if err != nil {
+		if common.IsErrNotFound(err) {
+			return model.SubmodelDescriptor{}, common.NewErrDenied("Submodel Descriptor access not allowed")
+		}
 		return model.SubmodelDescriptor{}, err
 	}
 	if err = appendSubmodelDescriptorHistoryTx(ctx, tx, stored, history.ChangeCreated, false); err != nil {
@@ -203,6 +218,13 @@ func (p *PostgreSQLSMDatabase) InsertSubmodelDescriptorsInTransaction(
 	return -1, nil
 }
 
+func mapInsertSubmodelDescriptorError(err error) error {
+	if common.IsPostgresUniqueViolation(err) {
+		return common.NewErrConflict("SMREG-INSERTSMDESC-CONFLICT Submodel with given id already exists")
+	}
+	return err
+}
+
 func mapBulkInsertSubmodelDescriptorError(err error) error {
 	if common.IsPostgresUniqueViolation(err) {
 		return common.NewErrConflict("SMREG-BULKINSERT-CONFLICT Submodel with given id already exists")
@@ -217,6 +239,9 @@ func (p *PostgreSQLSMDatabase) ReplaceSubmodelDescriptor(
 ) (model.SubmodelDescriptor, error) {
 	var result model.SubmodelDescriptor
 	err := common.ExecuteInTransaction(p.db, "SMREG-REPLACESMDESC-STARTTX", "SMREG-REPLACESMDESC-COMMITTX", func(tx *sql.Tx) error {
+		if _, err := descriptors.GetSubmodelDescriptorByID(ctx, tx, submodel.Id); err != nil {
+			return err
+		}
 		if err := descriptors.DeleteSubmodelDescriptorByIDTx(ctx, tx, submodel.Id); err != nil {
 			return err
 		}
@@ -252,11 +277,18 @@ func (p *PostgreSQLSMDatabase) UpsertSubmodelDescriptorInTransaction(
 	}
 
 	created := false
+	_, err := descriptors.GetSubmodelDescriptorByID(ctx, tx, submodel.Id)
+	if err != nil && !common.IsErrNotFound(err) {
+		return err
+	}
+	if common.IsErrNotFound(err) {
+		created = true
+	}
+
 	if err := descriptors.DeleteSubmodelDescriptorByIDTx(ctx, tx, submodel.Id); err != nil {
 		if !common.IsErrNotFound(err) {
 			return err
 		}
-		created = true
 	}
 
 	stored, err := descriptors.InsertSubmodelDescriptorTx(ctx, tx, submodel)
@@ -462,30 +494,4 @@ func (p *PostgreSQLSMDatabase) ExistingSubmodelDescriptorIDsInTransaction(
 		_ = rows.Close()
 	}
 	return existing, nil
-}
-
-// GetSubmodelDescriptorRecentChanges returns submodel descriptor history rows for recent-change APIs.
-func (p *PostgreSQLSMDatabase) GetSubmodelDescriptorRecentChanges(ctx context.Context, limit int32, cursor string, createdFrom time.Time, updatedFrom time.Time) ([]history.Row, string, error) {
-	shouldEnforceFormula, enforceErr := auth.ShouldEnforceFormula(ctx)
-	if enforceErr != nil {
-		return nil, "", common.NewInternalServerError("SMREG-RECENT-SHOULDENFORCE " + enforceErr.Error())
-	}
-
-	var collector *grammar.ResolvedFieldPathCollector
-	if shouldEnforceFormula {
-		var err error
-		collector, err = grammar.NewResolvedFieldPathCollectorForRoot(grammar.CollectorRootSMDesc)
-		if err != nil {
-			return nil, "", common.NewInternalServerError("SMREG-RECENT-BADCOLLECTOR " + err.Error())
-		}
-	}
-	submodelDescriptor := goqu.T(common.TblSubmodelDescriptor).As("submodel_descriptor")
-	visibilityDS := goqu.From(submodelDescriptor).
-		Select(goqu.V(1)).
-		Where(
-			submodelDescriptor.Col(common.ColAASID).Eq(goqu.I("history.identifier")),
-			submodelDescriptor.Col(common.ColAASDescriptorID).IsNull(),
-		)
-
-	return history.RecentRowsForVisibleIdentifiables(ctx, p.db, history.TableSubmodelDescriptor, limit, cursor, createdFrom, updatedFrom, visibilityDS, collector)
 }

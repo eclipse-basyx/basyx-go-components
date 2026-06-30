@@ -375,7 +375,7 @@ func (s *SubmodelRegistryAPIAPIService) upsertDescriptorInTransaction(
 		return http.StatusInternalServerError, enforceErr
 	}
 
-	_, getErr := s.smRegistryBackend.GetSubmodelDescriptorByIDInTransaction(ctx, tx, descriptorID)
+	_, getErr := s.smRegistryBackend.GetSubmodelDescriptorByIDInTransaction(auth.WithoutQueryFilter(ctx), tx, descriptorID)
 	exists := getErr == nil
 	if getErr != nil && !common.IsErrNotFound(getErr) {
 		return http.StatusInternalServerError, getErr

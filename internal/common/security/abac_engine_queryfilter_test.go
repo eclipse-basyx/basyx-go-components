@@ -26,6 +26,7 @@
 package auth
 
 import (
+	"context"
 	"encoding/json"
 	"testing"
 
@@ -51,6 +52,21 @@ func TestQueryFilter_FilterExpressionsFor_ExactMatch(t *testing.T) {
 	jWantEntry, _ := json.Marshal(expr)
 	if string(jEntry) != string(jWantEntry) {
 		t.Fatalf("expected %s, got %s", string(jWantEntry), string(jEntry))
+	}
+}
+
+func TestWithoutQueryFilterRemovesStoredFilter(t *testing.T) {
+	b := true
+	ctx := WithQueryFilter(context.Background(), &QueryFilter{
+		Formula: &grammar.LogicalExpression{Boolean: &b},
+	})
+	if GetQueryFilter(ctx) == nil {
+		t.Fatal("expected query filter before stripping")
+	}
+
+	stripped := WithoutQueryFilter(ctx)
+	if got := GetQueryFilter(stripped); got != nil {
+		t.Fatalf("expected stripped query filter to be nil, got %#v", got)
 	}
 }
 

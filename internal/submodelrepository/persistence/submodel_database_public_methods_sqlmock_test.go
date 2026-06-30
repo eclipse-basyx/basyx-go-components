@@ -31,6 +31,7 @@ import (
 	"errors"
 	"os"
 	"testing"
+	"time"
 
 	sqlmock "github.com/DATA-DOG/go-sqlmock"
 	"github.com/FriedJannik/aas-go-sdk/jsonization"
@@ -64,7 +65,28 @@ func TestGetSubmodelsDatabaseQueryError(t *testing.T) {
 	mock.ExpectQuery(`SELECT .*FROM .*submodel`).
 		WillReturnError(errors.New("query failed"))
 
-	items, cursor, err := sut.GetSubmodels(contextWithABACDisabled(t), 10, "", "")
+	items, cursor, err := sut.GetSubmodels(contextWithABACDisabled(t), 10, "", "", "", time.Time{}, time.Time{})
+	require.Error(t, err)
+	require.Nil(t, items)
+	require.Empty(t, cursor)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestGetSubmodelsByListFiltersUsesIDShortColumn(t *testing.T) {
+	t.Parallel()
+
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer func() {
+		_ = db.Close()
+	}()
+
+	sut := &SubmodelDatabase{db: db}
+
+	mock.ExpectQuery(`"submodel"\."id_short" = 'FilterShort'`).
+		WillReturnError(errors.New("query stopped"))
+
+	items, cursor, err := sut.GetSubmodelsByListFilters(contextWithABACDisabled(t), 10, "", "FilterShort", "", time.Time{}, time.Time{})
 	require.Error(t, err)
 	require.Nil(t, items)
 	require.Empty(t, cursor)

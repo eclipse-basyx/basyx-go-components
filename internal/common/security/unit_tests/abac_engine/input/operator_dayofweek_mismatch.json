@@ -15,10 +15,14 @@
         "FORMULA": {
           "$eq": [
             {
-              "$dayOfWeek": "2025-01-01T00:00:00Z"
+              "$dayOfWeek": {
+                "$dateTimeVal": "2025-01-01T00:00:00Z"
+              }
             },
             {
-              "$dayOfWeek": "2025-01-02T00:00:00Z"
+              "$dayOfWeek": {
+                "$dateTimeVal": "2025-01-02T00:00:00Z"
+              }
             }
           ]
         }

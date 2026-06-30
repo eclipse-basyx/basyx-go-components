@@ -27,9 +27,11 @@ package descriptors
 
 import (
 	"context"
+	"regexp"
 	"testing"
 	"time"
 
+	sqlmock "github.com/DATA-DOG/go-sqlmock"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 )
@@ -97,6 +99,31 @@ func TestBuildAASDescriptorInsertRecord_DoesNotWriteCreatedAtWhenMissing(t *test
 	}
 }
 
+func TestBuildAASDescriptorUpdateRecord_DoesNotWriteCreatedAt(t *testing.T) {
+	t.Parallel()
+
+	incomingCreatedAt := time.Date(2030, time.January, 10, 15, 30, 0, 0, time.UTC)
+	ctx := WithAllowAASDescriptorCreatedAtOverride(context.Background())
+	record := buildAASDescriptorUpdateRecord(
+		ctx,
+		42,
+		model.AssetAdministrationShellDescriptor{
+			Id:        "aas-id",
+			CreatedAt: &incomingCreatedAt,
+		},
+	)
+
+	if _, ok := record[common.ColDescriptorID]; ok {
+		t.Fatalf("expected %q to be absent from update record", common.ColDescriptorID)
+	}
+	if _, ok := record[common.ColCreatedAt]; ok {
+		t.Fatalf("expected %q to be absent from update record", common.ColCreatedAt)
+	}
+	if got := record[common.ColAASID]; got != "aas-id" {
+		t.Fatalf("expected %q to be updated, got %#v", common.ColAASID, got)
+	}
+}
+
 func TestBuildAASDescriptorUpsertLockSQLUsesPostgresPlaceholders(t *testing.T) {
 	t.Parallel()
 
@@ -110,5 +137,44 @@ func TestBuildAASDescriptorUpsertLockSQLUsesPostgresPlaceholders(t *testing.T) {
 	}
 	if len(args) != 2 || args[0] != "aas_descriptor:aas-1" || args[1] != int64(0) {
 		t.Fatalf("unexpected args: %#v", args)
+	}
+}
+
+func TestGetAASDescriptorCreatedAtByIDTxLocksAndReturnsTimestamp(t *testing.T) {
+	t.Parallel()
+
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("failed to create sqlmock: %v", err)
+	}
+	defer func() {
+		_ = db.Close()
+	}()
+
+	createdAt := time.Date(2024, time.March, 1, 2, 3, 4, 0, time.UTC)
+	query := regexp.QuoteMeta(`SELECT "aas_descriptor"."created_at" FROM "aas_descriptor" WHERE ("aas_descriptor"."id" = 'aas-1') FOR UPDATE`)
+
+	mock.ExpectBegin()
+	mock.ExpectQuery(query).
+		WillReturnRows(sqlmock.NewRows([]string{common.ColCreatedAt}).AddRow(createdAt))
+	mock.ExpectRollback()
+
+	tx, err := db.Begin()
+	if err != nil {
+		t.Fatalf("failed to begin transaction: %v", err)
+	}
+
+	got, err := GetAASDescriptorCreatedAtByIDTx(context.Background(), tx, "aas-1")
+	if err != nil {
+		t.Fatalf("GetAASDescriptorCreatedAtByIDTx returned error: %v", err)
+	}
+	if !got.Equal(createdAt) {
+		t.Fatalf("expected createdAt %v, got %v", createdAt, got)
+	}
+	if err = tx.Rollback(); err != nil {
+		t.Fatalf("failed to roll back transaction: %v", err)
+	}
+	if err = mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("unmet sqlmock expectations: %v", err)
 	}
 }

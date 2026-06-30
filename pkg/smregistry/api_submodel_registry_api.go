@@ -5,7 +5,7 @@
  *
  * The Full Profile of the Submodel Registry Service Specification as part of the [Specification of the Asset Administration Shell: Part 2](https://industrialdigitaltwin.org/en/content-hub/aasspecifications).   Copyright: Industrial Digital Twin Association (IDTA) 2025
  *
- * API version: V3.1.1_SSP-001
+ * API version: V3.2.0
  * Contact: info@idtwin.org
  */
 
@@ -73,12 +73,6 @@ func (c *SubmodelRegistryAPIAPIController) Routes() Routes {
 			"/submodel-descriptors",
 			c.GetAllSubmodelDescriptors,
 		},
-		"GetAllSubmodelDescriptorsRecentChanges": Route{
-			"GetAllSubmodelDescriptorsRecentChanges",
-			strings.ToUpper("Get"),
-			"/submodel-descriptors/$recent-changes",
-			c.GetAllSubmodelDescriptorsRecentChanges,
-		},
 		"PostSubmodelDescriptor": Route{
 			"PostSubmodelDescriptor",
 			strings.ToUpper("Post"),
@@ -120,12 +114,6 @@ func (c *SubmodelRegistryAPIAPIController) OrderedRoutes() []Route {
 			strings.ToUpper("Get"),
 			"/submodel-descriptors",
 			c.GetAllSubmodelDescriptors,
-		},
-		Route{
-			"GetAllSubmodelDescriptorsRecentChanges",
-			strings.ToUpper("Get"),
-			"/submodel-descriptors/$recent-changes",
-			c.GetAllSubmodelDescriptorsRecentChanges,
 		},
 		Route{
 			"PostSubmodelDescriptor",
@@ -258,38 +246,11 @@ func (c *SubmodelRegistryAPIAPIController) GetAllSubmodelDescriptors(w http.Resp
 
 		cursorParam = param
 	}
-	result, err := c.service.GetAllSubmodelDescriptors(r.Context(), limitParam, cursorParam)
-	// If an error occurred, encode the error with the status code
-	if err != nil {
-		log.Printf("🧩 [%s] Error in GetAllSubmodelDescriptors: service failure (limit=%d cursor=%q): %v", componentName, limitParam, cursorParam, err)
-		c.errorHandler(w, r, err, &result)
-		return
-	}
-	// If no error, encode the body and the result code
-	_ = EncodeJSONResponse(result.Body, &result.Code, w)
-}
-
-// GetAllSubmodelDescriptorsRecentChanges - Returns all Submodel Descriptors that have been changed recently
-func (c *SubmodelRegistryAPIAPIController) GetAllSubmodelDescriptorsRecentChanges(w http.ResponseWriter, r *http.Request) {
-	query, err := parseQuery(r.URL.RawQuery)
-	if err != nil {
-		log.Printf("🧩 [%s] Error in GetAllSubmodelDescriptorsRecentChanges: parse query raw=%q: %v", componentName, r.URL.RawQuery, err)
-		result := common.NewErrorResponse(
-			err,
-			http.StatusBadRequest,
-			componentName,
-			"GetAllSubmodelDescriptorsRecentChanges",
-			"query",
-		)
-		_ = EncodeJSONResponse(result.Body, &result.Code, w)
-		return
-	}
-
 	var createdFromParam time.Time
 	if query.Has("createdFrom") {
 		createdFromParam, err = parseTime(query.Get("createdFrom"))
 		if err != nil {
-			result := common.NewErrorResponse(err, http.StatusBadRequest, componentName, "GetAllSubmodelDescriptorsRecentChanges", "createdFrom")
+			result := common.NewErrorResponse(err, http.StatusBadRequest, componentName, "GetAllSubmodelDescriptors", "createdFrom")
 			_ = EncodeJSONResponse(result.Body, &result.Code, w)
 			return
 		}
@@ -299,45 +260,19 @@ func (c *SubmodelRegistryAPIAPIController) GetAllSubmodelDescriptorsRecentChange
 	if query.Has("updatedFrom") {
 		updatedFromParam, err = parseTime(query.Get("updatedFrom"))
 		if err != nil {
-			result := common.NewErrorResponse(err, http.StatusBadRequest, componentName, "GetAllSubmodelDescriptorsRecentChanges", "updatedFrom")
+			result := common.NewErrorResponse(err, http.StatusBadRequest, componentName, "GetAllSubmodelDescriptors", "updatedFrom")
 			_ = EncodeJSONResponse(result.Body, &result.Code, w)
 			return
 		}
 	}
-
-	var limitParam int32
-	if query.Has("limit") {
-		param, err := parseNumericParameter[int32](
-			query.Get("limit"),
-			WithParse[int32](parseInt32),
-			WithMinimum[int32](1),
-		)
-		if err != nil {
-			result := common.NewErrorResponse(
-				err,
-				http.StatusBadRequest,
-				componentName,
-				"GetAllSubmodelDescriptorsRecentChanges",
-				"limit",
-			)
-			_ = EncodeJSONResponse(result.Body, &result.Code, w)
-			return
-		}
-		limitParam = param
-	}
-
-	result, err := c.service.GetAllSubmodelDescriptorsRecentChanges(
-		r.Context(),
-		createdFromParam,
-		updatedFromParam,
-		limitParam,
-		query.Get("cursor"),
-	)
+	result, err := c.service.GetAllSubmodelDescriptors(r.Context(), limitParam, cursorParam, createdFromParam, updatedFromParam)
+	// If an error occurred, encode the error with the status code
 	if err != nil {
-		log.Printf("🧩 [%s] Error in GetAllSubmodelDescriptorsRecentChanges: service failure (limit=%d cursor=%q): %v", componentName, limitParam, query.Get("cursor"), err)
+		log.Printf("🧩 [%s] Error in GetAllSubmodelDescriptors: service failure (limit=%d cursor=%q): %v", componentName, limitParam, cursorParam, err)
 		c.errorHandler(w, r, err, &result)
 		return
 	}
+	// If no error, encode the body and the result code
 	_ = EncodeJSONResponse(result.Body, &result.Code, w)
 }
 

@@ -1,6 +1,10 @@
 {
   "id": "urn:example:aas:viewer:key",
   "idShort": "ViewerViaKey",
+  "administration": {
+    "createdAt": "2030-01-03T03:04:05Z",
+    "updatedAt": "2030-01-03T03:04:06Z"
+  },
   "modelType": "AssetAdministrationShell",
   "assetInformation": {
     "assetKind": "Instance",

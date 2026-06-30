@@ -31,6 +31,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"time"
 
 	"github.com/FriedJannik/aas-go-sdk/jsonization"
 	"github.com/FriedJannik/aas-go-sdk/types"
@@ -117,19 +118,20 @@ func (s *CustomSubmodelRepositoryService) PostSubmodel(ctx context.Context, subm
 		return newSubmodelRepoErrorResponse(dependencyErr, http.StatusInternalServerError, operation, "ValidateDependencies"), nil
 	}
 
+	descriptor, descriptorErr := s.syncConfig.buildSubmodelDescriptor(submodel)
+	if descriptorErr != nil {
+		return newSubmodelRepoErrorResponse(descriptorErr, http.StatusBadRequest, operation, "InvalidSubmodelData"), nil
+	}
+
 	err := s.ExecuteInTransaction(func(tx *sql.Tx) error {
 		if createErr := s.persistence.SubmodelRepository.CreateSubmodelInTransaction(ctx, tx, submodel); createErr != nil {
 			return createErr
 		}
 
-		descriptor, descriptorErr := s.syncConfig.buildSubmodelDescriptor(submodel)
-		if descriptorErr != nil {
-			return descriptorErr
-		}
-		if upsertErr := s.persistence.SubmodelRegistry.UpsertSubmodelDescriptorInTransaction(
+		if _, insertErr := s.persistence.SubmodelRegistry.InsertSubmodelDescriptorInTransaction(
 			submodelRegistryAddAuditMetadataIfNotAvailable(ctx, submodelRegistrySyncUpsertOperation), tx, descriptor,
-		); upsertErr != nil {
-			return upsertErr
+		); insertErr != nil {
+			return insertErr
 		}
 
 		return s.syncReferencingAASDescriptorsInTransaction(ctx, tx, descriptor, nil, false)
@@ -290,7 +292,7 @@ func (s *CustomSubmodelRepositoryService) PatchSubmodelByID(ctx context.Context,
 	}
 
 	_, patchIncludesSubmodelElements := patchJSON["submodelElements"]
-	existingSubmodels, _, getErr := s.persistence.SubmodelRepository.GetSubmodels(ctx, 1, "", decodedIdentifier)
+	existingSubmodels, _, getErr := s.persistence.SubmodelRepository.GetSubmodels(ctx, 1, "", decodedIdentifier, "", time.Time{}, time.Time{})
 	if getErr != nil {
 		if common.IsErrNotFound(getErr) || errors.Is(getErr, sql.ErrNoRows) {
 			return newSubmodelRepoErrorResponse(getErr, http.StatusNotFound, operation, "SubmodelNotFound"), nil
@@ -386,7 +388,7 @@ func (s *CustomSubmodelRepositoryService) PatchSubmodelByIDMetadata(ctx context.
 	}
 	patchJSON["id"] = decodedIdentifier
 
-	existingSubmodels, _, getErr := s.persistence.SubmodelRepository.GetSubmodels(ctx, 1, "", decodedIdentifier)
+	existingSubmodels, _, getErr := s.persistence.SubmodelRepository.GetSubmodels(ctx, 1, "", decodedIdentifier, "", time.Time{}, time.Time{})
 	if getErr != nil {
 		if common.IsErrNotFound(getErr) || errors.Is(getErr, sql.ErrNoRows) {
 			return newSubmodelRepoErrorResponse(getErr, http.StatusNotFound, operation, "SubmodelNotFound"), nil

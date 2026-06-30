@@ -3,7 +3,7 @@
  *
  * The entire Submodel Repository Service Specification as part of the [Specification of the Asset Administration Shell: Part 2](http://industrialdigitaltwin.org/en/content-hub).   Publisher: Industrial Digital Twin Association (IDTA) 2023
  *
- * API version: V3.0.3_SSP-001
+ * API version: V3.2.0
  * Contact: info@idtwin.org
  */
 
@@ -16,7 +16,6 @@ import (
 	"io"
 	"log"
 	"net/http"
-	"os"
 	"strings"
 	"time"
 
@@ -108,10 +107,10 @@ func (c *SubmodelRepositoryAPIAPIController) Routes() Routes {
 			c.contextPath + "/submodels/$path",
 			c.GetAllSubmodelsPath,
 		},
-		"GetAllSubmodelRecentChanges": Route{
+		"GetAllSubmodelsRecentChanges": Route{
 			strings.ToUpper("Get"),
 			c.contextPath + "/submodels/$recent-changes",
-			c.GetAllSubmodelRecentChanges,
+			c.GetAllSubmodelsRecentChanges,
 		},
 		"GetSubmodelById": Route{
 			strings.ToUpper("Get"),
@@ -392,7 +391,23 @@ func (c *SubmodelRepositoryAPIAPIController) GetAllSubmodels(w http.ResponseWrit
 		param := "withoutBlobValue"
 		extentParam = param
 	}
-	result, err := c.service.GetAllSubmodels(r.Context(), semanticIDParam, idShortParam, limitParam, cursorParam, levelParam, extentParam)
+	var createdFromParam time.Time
+	if query.Has("createdFrom") {
+		createdFromParam, err = parseTime(query.Get("createdFrom"))
+		if err != nil {
+			c.errorHandler(w, r, &ParsingError{Param: "createdFrom", Err: err}, nil)
+			return
+		}
+	}
+	var updatedFromParam time.Time
+	if query.Has("updatedFrom") {
+		updatedFromParam, err = parseTime(query.Get("updatedFrom"))
+		if err != nil {
+			c.errorHandler(w, r, &ParsingError{Param: "updatedFrom", Err: err}, nil)
+			return
+		}
+	}
+	result, err := c.service.GetAllSubmodels(r.Context(), semanticIDParam, idShortParam, limitParam, cursorParam, levelParam, extentParam, createdFromParam, updatedFromParam)
 	// If an error occurred, encode the error with the status code
 	if err != nil {
 		c.errorHandler(w, r, err, &result)
@@ -809,8 +824,8 @@ func (c *SubmodelRepositoryAPIAPIController) GetSignedSubmodelByIDValueOnly(w ht
 	_ = EncodeJSONResponse(result.Body, &result.Code, w)
 }
 
-// GetAllSubmodelRecentChanges - Returns information about all Submodels that have been changed recently
-func (c *SubmodelRepositoryAPIAPIController) GetAllSubmodelRecentChanges(w http.ResponseWriter, r *http.Request) {
+// GetAllSubmodelsRecentChanges - Returns information about all Submodels that have been changed recently
+func (c *SubmodelRepositoryAPIAPIController) GetAllSubmodelsRecentChanges(w http.ResponseWriter, r *http.Request) {
 	query, err := parseQuery(r.URL.RawQuery)
 	if err != nil {
 		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
@@ -845,7 +860,7 @@ func (c *SubmodelRepositoryAPIAPIController) GetAllSubmodelRecentChanges(w http.
 		}
 	}
 
-	result, err := c.service.GetAllSubmodelRecentChanges(r.Context(), query.Get("semanticId"), createdFromParam, updatedFromParam, limitParam, query.Get("cursor"))
+	result, err := c.service.GetAllSubmodelsRecentChanges(r.Context(), query.Get("semanticId"), query.Get("idShort"), createdFromParam, updatedFromParam, limitParam, query.Get("cursor"))
 	if err != nil {
 		c.errorHandler(w, r, err, &result)
 		return
@@ -2044,17 +2059,8 @@ func (c *SubmodelRepositoryAPIAPIController) GetFileByPathSubmodelRepo(w http.Re
 
 // PutFileByPathSubmodelRepo - Uploads file content to an existing submodel element at a specified path within submodel elements hierarchy
 func (c *SubmodelRepositoryAPIAPIController) PutFileByPathSubmodelRepo(w http.ResponseWriter, r *http.Request) {
-	r.Body = http.MaxBytesReader(w, r.Body, uploadMaxSizeFromRequestContext(r))
-
-	if err := r.ParseMultipartForm(32 << 20); err != nil {
-		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
-		return
-	}
-	defer func() {
-		if r.MultipartForm != nil {
-			_ = r.MultipartForm.RemoveAll()
-		}
-	}()
+	maxUploadSizeBytes := uploadMaxSizeFromRequestContext(r)
+	r.Body = http.MaxBytesReader(w, r.Body, maxUploadSizeBytes)
 
 	submodelIdentifierParam := chi.URLParam(r, "submodelIdentifier")
 	if submodelIdentifierParam == "" {
@@ -2067,28 +2073,12 @@ func (c *SubmodelRepositoryAPIAPIController) PutFileByPathSubmodelRepo(w http.Re
 		return
 	}
 
-	fileNameParam := r.FormValue("fileName")
-	var fileParam *os.File
-	{
-		param, err := ReadFormFileToTempFile(r, "file")
-		if err != nil {
-			c.errorHandler(w, r, &ParsingError{Param: "file", Err: err}, nil)
-			return
-		}
-
-		fileParam = param
-	}
-	defer func() {
-		if fileParam != nil {
-			tempFilePath := fileParam.Name()
-			_ = fileParam.Close()
-			// #nosec G703 -- path comes from server-generated temporary file.
-			_ = os.Remove(tempFilePath)
-		}
-	}()
-
-	result, err := c.service.PutFileByPathSubmodelRepo(r.Context(), submodelIdentifierParam, idShortPathParam, fileNameParam, fileParam)
-	// If an error occurred, encode the error with the status code
+	var result model.ImplResponse
+	err := HandleMultipartFileStream(r, "file", "fileName", func(fileName string, file io.Reader) error {
+		var uploadErr error
+		result, uploadErr = c.service.PutFileByPathSubmodelRepo(r.Context(), submodelIdentifierParam, idShortPathParam, fileName, file)
+		return uploadErr
+	})
 	if err != nil {
 		c.errorHandler(w, r, err, &result)
 		return

@@ -39,7 +39,7 @@ import (
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 )
 
-const globalAssetIDSpecificAssetIDName = "globalAssetId"
+const globalAssetIDSpecificAssetIDName = common.GlobalAssetIDAssetLinkName
 
 type rowData struct {
 	descID               int64

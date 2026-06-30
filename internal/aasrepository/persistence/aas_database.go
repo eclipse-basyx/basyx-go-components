@@ -32,6 +32,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"io"
 	"os"
 	"strconv"
 	"strings"
@@ -254,27 +255,6 @@ func (s *AssetAdministrationShellDatabase) GetAssetAdministrationShellByIDAndDat
 		return nil, common.NewInternalServerError("AASREPO-HISTORY-FROMJSON " + err.Error())
 	}
 	return aas, nil
-}
-
-// GetAssetAdministrationShellRecentChanges returns AAS history rows for recent-change APIs.
-func (s *AssetAdministrationShellDatabase) GetAssetAdministrationShellRecentChanges(ctx context.Context, limit int32, cursor string, createdFrom time.Time, updatedFrom time.Time) ([]history.Row, string, error) {
-	shouldEnforce, enforceErr := shouldEnforceFormula(ctx, "AASREPO-RECENT-SHOULDENFORCE")
-	if enforceErr != nil {
-		return nil, "", enforceErr
-	}
-	if !shouldEnforce {
-		return history.RecentRows(ctx, s.db, history.TableAAS, limit, cursor, createdFrom, updatedFrom)
-	}
-
-	collector, err := buildAASCollector()
-	if err != nil {
-		return nil, "", err
-	}
-	visibilityDS := goqu.From(goqu.T("aas").As("aas")).
-		Select(goqu.V(1)).
-		Where(goqu.I("aas.aas_id").Eq(goqu.I("history.identifier")))
-
-	return history.RecentRowsForVisibleIdentifiables(ctx, s.db, history.TableAAS, limit, cursor, createdFrom, updatedFrom, visibilityDS, collector)
 }
 
 func buildAASCollector() (*grammar.ResolvedFieldPathCollector, error) {
@@ -734,7 +714,7 @@ func (s *AssetAdministrationShellDatabase) checkIfSubmodelReferenceExistsInAsset
 }
 
 // GetAssetAdministrationShells returns a paginated list of AAS objects and the next cursor.
-func (s *AssetAdministrationShellDatabase) GetAssetAdministrationShells(ctx context.Context, limit int32, cursor string, idShort string, specificAssetIDs []types.ISpecificAssetID) ([]types.IAssetAdministrationShell, string, error) {
+func (s *AssetAdministrationShellDatabase) GetAssetAdministrationShells(ctx context.Context, limit int32, cursor string, idShort string, specificAssetIDs []types.ISpecificAssetID, createdFrom time.Time, updatedFrom time.Time) ([]types.IAssetAdministrationShell, string, error) {
 	dialect := goqu.Dialect("postgres")
 
 	if limit < 0 {
@@ -750,7 +730,7 @@ func (s *AssetAdministrationShellDatabase) GetAssetAdministrationShells(ctx cont
 		}
 	}
 
-	selectDS, err := buildGetAssetAdministrationShellsDataset(&dialect, limit, cursor, idShort, specificAssetIDs)
+	selectDS, err := buildGetAssetAdministrationShellsDataset(&dialect, limit, cursor, idShort, specificAssetIDs, createdFrom, updatedFrom)
 	if err != nil {
 		return nil, "", common.NewInternalServerError("AASREPO-GETAASLIST-BUILDSQL " + err.Error())
 	}
@@ -1052,7 +1032,7 @@ func (s *AssetAdministrationShellDatabase) DeleteAssetAdministrationShellByIDInT
 
 // GetAssetAdministrationShellReferences returns paginated model references while preserving ABAC filters from ctx.
 func (s *AssetAdministrationShellDatabase) GetAssetAdministrationShellReferences(ctx context.Context, limit int32, cursor string, idShort string, specificAssetIDs []types.ISpecificAssetID) ([]types.IReference, string, error) {
-	aasList, nextCursor, err := s.GetAssetAdministrationShells(ctx, limit, cursor, idShort, specificAssetIDs)
+	aasList, nextCursor, err := s.GetAssetAdministrationShells(ctx, limit, cursor, idShort, specificAssetIDs, time.Time{}, time.Time{})
 	if err != nil {
 		return nil, "", err
 	}
@@ -1416,6 +1396,11 @@ func (s *AssetAdministrationShellDatabase) GetThumbnailByAASID(ctx context.Conte
 
 // PutThumbnailByAASID uploads or replaces the thumbnail and checks ABAC visibility.
 func (s *AssetAdministrationShellDatabase) PutThumbnailByAASID(ctx context.Context, aasIdentifier string, fileName string, file *os.File) error {
+	return s.PutThumbnailByAASIDReader(ctx, aasIdentifier, fileName, file)
+}
+
+// PutThumbnailByAASIDReader uploads or replaces the thumbnail and checks ABAC visibility.
+func (s *AssetAdministrationShellDatabase) PutThumbnailByAASIDReader(ctx context.Context, aasIdentifier string, fileName string, file io.Reader) error {
 	tx, cleanup, err := common.StartTransaction(s.db)
 	if err != nil {
 		return common.NewInternalServerError("AASREPO-PUTTHUMBNAIL-STARTTX " + err.Error())
@@ -1476,7 +1461,7 @@ func (s *AssetAdministrationShellDatabase) PutThumbnailByAASID(ctx context.Conte
 		return common.NewInternalServerError("AASREPO-PUTTHUMBNAIL-NEWHANDLER " + err.Error())
 	}
 
-	if uploadErr := thumbnailHandler.uploadThumbnailByAASIDInTransaction(tx, aasIdentifier, fileName, file); uploadErr != nil {
+	if uploadErr := thumbnailHandler.uploadThumbnailByAASIDReaderInTransaction(tx, aasIdentifier, fileName, file); uploadErr != nil {
 		return uploadErr
 	}
 

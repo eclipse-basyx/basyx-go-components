@@ -78,6 +78,7 @@ type AccessRuleModelSchemaJSONAllAccessPermissionRulesDEFOBJECTSElem struct {
 //
 // This custom unmarshaler validates that the required "name" field is present in the JSON object.
 // The name field is mandatory as it serves as the unique identifier for the object definition.
+// Exactly one of "objects" or "USEOBJECTS" must also be present.
 //
 // Parameters:
 //   - value: JSON byte slice containing the object definition element to unmarshal
@@ -92,6 +93,14 @@ func (j *AccessRuleModelSchemaJSONAllAccessPermissionRulesDEFOBJECTSElem) Unmars
 	}
 	if _, ok := raw["name"]; raw != nil && !ok {
 		return fmt.Errorf("field name in AccessRuleModelSchemaJsonAllAccessPermissionRulesDEFOBJECTSElem: required")
+	}
+	_, hasObjects := raw["objects"]
+	_, hasUseObjects := raw["USEOBJECTS"]
+	if hasObjects == hasUseObjects {
+		if hasObjects {
+			return fmt.Errorf("AccessRuleModelSchemaJsonAllAccessPermissionRulesDEFOBJECTSElem: only one of objects or USEOBJECTS may be defined")
+		}
+		return fmt.Errorf("AccessRuleModelSchemaJsonAllAccessPermissionRulesDEFOBJECTSElem: objects or USEOBJECTS must be defined")
 	}
 	type Plain AccessRuleModelSchemaJSONAllAccessPermissionRulesDEFOBJECTSElem
 	var plain Plain

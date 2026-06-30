@@ -271,6 +271,11 @@ func (p *PostgreSQLDiscoveryDatabase) SearchAASIDsByAssetLinks(
 	if len(uniqueLinks) > 0 {
 		sai := goqu.T(common.TblSpecificAssetID).As("sai")
 		for _, link := range uniqueLinks {
+			if link.Name == common.GlobalAssetIDAssetLinkName {
+				ds = ds.Where(ai.Col("aasid").In(globalAssetIDLookupDataset(d, link.Value)))
+				continue
+			}
+
 			existsSub := d.From(sai).
 				Select(goqu.V(1)).
 				Where(goqu.And(
@@ -347,6 +352,34 @@ func (p *PostgreSQLDiscoveryDatabase) SearchAASIDsByAssetLinks(
 	}
 
 	return buf, "", nil
+}
+
+func globalAssetIDLookupDataset(d goqu.DialectWrapper, value string) *goqu.SelectDataset {
+	ad := goqu.T(common.TblAASDescriptor).As("ad_global")
+	descriptorAAS := goqu.T("aas_identifier").As("ai_global_descriptor")
+	sai := goqu.T(common.TblSpecificAssetID).As("sai_global")
+	discoveryAAS := goqu.T("aas_identifier").As("ai_global_discovery")
+
+	descriptorMatches := d.From(ad).
+		Join(
+			descriptorAAS,
+			goqu.On(descriptorAAS.Col("aasid").Eq(ad.Col(common.ColAASID))),
+		).
+		Select(descriptorAAS.Col("aasid")).
+		Where(ad.Col(common.ColGlobalAssetID).Eq(value))
+
+	discoveryMatches := d.From(sai).
+		Join(
+			discoveryAAS,
+			goqu.On(discoveryAAS.Col(common.ColID).Eq(sai.Col(common.ColAASRef))),
+		).
+		Select(discoveryAAS.Col("aasid")).
+		Where(
+			sai.Col(common.ColName).Eq(common.GlobalAssetIDAssetLinkName),
+			sai.Col(common.ColValue).Eq(value),
+		)
+
+	return descriptorMatches.Union(discoveryMatches)
 }
 
 func uniqueAssetLinks(links []model.AssetLink) []model.AssetLink {

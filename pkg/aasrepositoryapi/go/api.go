@@ -5,7 +5,7 @@
  *
  * The Full Profile of the Asset Administration Shell Repository Service Specification as part of the [Specification of the Asset Administration Shell: Part 2](https://industrialdigitaltwin.org/en/content-hub/aasspecifications).   Copyright: Industrial Digital Twin Association (IDTA) 2025
  *
- * API version: V3.1.1_SSP-001
+ * API version: V3.2.0
  * Contact: info@idtwin.org
  */
 
@@ -13,8 +13,8 @@ package openapi
 
 import (
 	"context"
+	"io"
 	"net/http"
-	"os"
 	"time"
 
 	"github.com/FriedJannik/aas-go-sdk/types"
@@ -117,7 +117,7 @@ type SerializationAPIAPIRouter interface {
 // and updated with the logic required for the API.
 type AssetAdministrationShellRepositoryAPIAPIServicer interface {
 	QueryAssetAdministrationShells(context.Context, int32, string, grammar.Query) (model.ImplResponse, error)
-	GetAllAssetAdministrationShells(context.Context, []string, string, int32, string) (model.ImplResponse, error)
+	GetAllAssetAdministrationShells(context.Context, []string, string, int32, string, time.Time, time.Time) (model.ImplResponse, error)
 	PostAssetAdministrationShell(context.Context, AssetAdministrationShell) (model.ImplResponse, error)
 	GetAllAssetAdministrationShellsReference(context.Context, []string, string, int32, string) (model.ImplResponse, error)
 	GetAssetAdministrationShellById(context.Context, string) (model.ImplResponse, error)
@@ -127,7 +127,7 @@ type AssetAdministrationShellRepositoryAPIAPIServicer interface {
 	GetAssetInformationAasRepository(context.Context, string) (model.ImplResponse, error)
 	PutAssetInformationAasRepository(context.Context, string, AssetInformation) (model.ImplResponse, error)
 	GetThumbnailAasRepository(context.Context, string) (model.ImplResponse, error)
-	PutThumbnailAasRepository(context.Context, string, string, *os.File) (model.ImplResponse, error)
+	PutThumbnailAasRepository(context.Context, string, string, io.Reader) (model.ImplResponse, error)
 	DeleteThumbnailAasRepository(context.Context, string) (model.ImplResponse, error)
 	GetAllSubmodelReferencesAasRepository(context.Context, string, int32, string) (model.ImplResponse, error)
 	PostSubmodelReferenceAasRepository(context.Context, string, Reference) (model.ImplResponse, error)
@@ -160,7 +160,7 @@ type AssetAdministrationShellRepositoryAPIAPIServicer interface {
 	GetSubmodelElementByPathReferenceAasRepository(context.Context, string, string, string, string) (model.ImplResponse, error)
 	GetSubmodelElementByPathPathAasRepository(context.Context, string, string, string, string) (model.ImplResponse, error)
 	GetFileByPathAasRepository(context.Context, string, string, string) (model.ImplResponse, error)
-	PutFileByPathAasRepository(context.Context, string, string, string, string, *os.File) (model.ImplResponse, error)
+	PutFileByPathAasRepository(context.Context, string, string, string, string, io.Reader) (model.ImplResponse, error)
 	DeleteFileByPathAasRepository(context.Context, string, string, string) (model.ImplResponse, error)
 	InvokeOperationAasRepository(context.Context, string, string, string, OperationRequest) (model.ImplResponse, error)
 	InvokeOperationValueOnlyAasRepository(context.Context, string, string, string, OperationRequestValueOnly) (model.ImplResponse, error)
@@ -169,7 +169,7 @@ type AssetAdministrationShellRepositoryAPIAPIServicer interface {
 	GetOperationAsyncStatusAasRepository(context.Context, string, string, string, string) (model.ImplResponse, error)
 	GetOperationAsyncResultAasRepository(context.Context, string, string, string, string) (model.ImplResponse, error)
 	GetOperationAsyncResultValueOnlyAasRepository(context.Context, string, string, string, string) (model.ImplResponse, error)
-	GetAllAssetAdministrationShellsRecentChanges(context.Context, []string, time.Time, time.Time, int32, string) (model.ImplResponse, error)
+	GetAllAssetAdministrationShellsRecentChanges(context.Context, []string, string, time.Time, time.Time, int32, string) (model.ImplResponse, error)
 	GetAssetAdministrationShellByIdSigned(context.Context, string) (model.ImplResponse, error)
 	GetAssetAdministrationShellVersionByIdAndDate(context.Context, string, time.Time) (model.ImplResponse, error)
 }

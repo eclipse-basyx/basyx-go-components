@@ -38,10 +38,27 @@ import (
 
 type SubFilter struct {
 	// CONDITION corresponds to the JSON schema field "CONDITION".
-	Condition *LogicalExpression `json:"$condition,omitempty" yaml:"$condition,omitempty" mapstructure:"Condition,omitempty"`
+	Condition *LogicalExpression `json:"$condition,omitempty" yaml:"$condition,omitempty" mapstructure:"$condition,omitempty"`
 
 	// FRAGMENT corresponds to the JSON schema field "FRAGMENT".
 	Fragment *FragmentStringPattern `json:"$fragment,omitempty" yaml:"$fragment,omitempty" mapstructure:"$fragment,omitempty"`
+}
+
+// UnmarshalJSON implements json.Unmarshaler for SubFilter.
+func (j *SubFilter) UnmarshalJSON(value []byte) error {
+	type Plain SubFilter
+	var plain Plain
+	if err := common.UnmarshalAndDisallowUnknownFields(value, &plain); err != nil {
+		return err
+	}
+	if plain.Condition == nil {
+		return fmt.Errorf("SubFilter: $condition is required")
+	}
+	if plain.Fragment == nil {
+		return fmt.Errorf("SubFilter: $fragment is required")
+	}
+	*j = SubFilter(plain)
+	return nil
 }
 
 // Query represents a query structure with a condition field
@@ -50,6 +67,8 @@ type Query struct {
 	Condition *LogicalExpression `json:"$condition,omitempty" yaml:"$condition,omitempty" mapstructure:"$condition,omitempty"`
 
 	FilterConditions []SubFilter `json:"$filters,omitempty" yaml:"$filters,omitempty" mapstructure:"$filters,omitempty"`
+
+	Select []ModelStringPattern `json:"$select,omitempty" yaml:"$select,omitempty" mapstructure:"$select,omitempty"`
 }
 
 // QueryWrapper wraps a Query object
@@ -92,6 +111,13 @@ func AssertQueryRequired(obj Query) error {
 			return err
 		}
 	}
+	for _, el := range obj.FilterConditions {
+		if el.Condition != nil {
+			if err := AssertLogicalExpressionRequired(*el.Condition); err != nil {
+				return err
+			}
+		}
+	}
 	return nil
 }
 
@@ -100,6 +126,13 @@ func AssertQueryConstraints(obj Query) error {
 	if obj.Condition != nil {
 		if err := AssertLogicalExpressionConstraints(*obj.Condition); err != nil {
 			return err
+		}
+	}
+	for _, el := range obj.FilterConditions {
+		if el.Condition != nil {
+			if err := AssertLogicalExpressionConstraints(*el.Condition); err != nil {
+				return err
+			}
 		}
 	}
 	return nil

@@ -345,11 +345,11 @@
     "expectedStatus": 200
   },
   {
-    "context": "GET /shell-descriptors/$recent-changes - anonymous public filtered",
+    "context": "GET /shell-descriptors - anonymous public filtered",
     "action": "ASSERT_RECENT_CHANGE_IDS",
     "token": null,
     "method": "GET",
-    "endpoint": "http://localhost:6004/shell-descriptors/$recent-changes?limit=20",
+    "endpoint": "http://localhost:6004/shell-descriptors?limit=20",
     "shouldMatch": "expected/expectedRecentChangesAnonymousDescriptorIDs.json",
     "expectedStatus": 200
   },
@@ -362,11 +362,11 @@
     "expectedStatus": 200
   },
   {
-    "context": "GET /shell-descriptors/$recent-changes - user A filtered",
+    "context": "GET /shell-descriptors - user A filtered",
     "action": "ASSERT_RECENT_CHANGE_IDS",
     "token": { "user": "usera", "password": "pwd" },
     "method": "GET",
-    "endpoint": "http://localhost:6004/shell-descriptors/$recent-changes?limit=20",
+    "endpoint": "http://localhost:6004/shell-descriptors?limit=20",
     "shouldMatch": "expected/expectedRecentChangesUserADescriptorIDs.json",
     "expectedStatus": 200
   },
@@ -379,11 +379,11 @@
     "expectedStatus": 200
   },
   {
-    "context": "GET /shell-descriptors/$recent-changes - user B filtered",
+    "context": "GET /shell-descriptors - user B filtered",
     "action": "ASSERT_RECENT_CHANGE_IDS",
     "token": { "user": "userb", "password": "pwd" },
     "method": "GET",
-    "endpoint": "http://localhost:6004/shell-descriptors/$recent-changes?limit=20",
+    "endpoint": "http://localhost:6004/shell-descriptors?limit=20",
     "shouldMatch": "expected/expectedRecentChangesUserBDescriptorIDs.json",
     "expectedStatus": 200
   },
@@ -412,11 +412,11 @@
     "expectedStatus": 200
   },
   {
-    "context": "GET /shell-descriptors/$recent-changes - admin descriptor object filtered",
+    "context": "GET /shell-descriptors - admin descriptor object filtered",
     "action": "ASSERT_RECENT_CHANGE_IDS",
     "token": { "user": "admin", "password": "pwd" },
     "method": "GET",
-    "endpoint": "http://localhost:6004/shell-descriptors/$recent-changes?limit=20",
+    "endpoint": "http://localhost:6004/shell-descriptors?limit=20",
     "shouldMatch": "expected/expectedRecentChangesAdminDescriptorIDs.json",
     "expectedStatus": 200
   },

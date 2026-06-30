@@ -189,16 +189,27 @@ func insertBaseNodesDepthWise(tx *sql.Tx, dialect goqu.DialectWrapper, submodelD
 		return nil
 	}
 
+	if err := assignReservedNodeIDs(tx, nodes); err != nil {
+		return err
+	}
+
 	baseRows := make([]goqu.Record, 0, len(nodes))
 	for _, node := range nodes {
+		parentID, rootID, resolveErr := resolveNodeHierarchyIDs(nodes, node)
+		if resolveErr != nil {
+			return resolveErr
+		}
+
 		params := baseRecordParams{
 			SubmodelID:  submodelDatabaseID,
 			Element:     node.element,
 			IDShort:     node.idShort,
 			IDShortPath: node.idShortPath,
 			Position:    node.position,
-			ParentID:    0,
-			RootSmeID:   node.rootDBID,
+			ParentID:    parentID,
+			RootSmeID:   rootID,
+			Depth:       node.depth,
+			ID:          node.dbID,
 		}
 		record, recordErr := buildBaseSubmodelElementRecord(params)
 		if recordErr != nil {
@@ -208,111 +219,104 @@ func insertBaseNodesDepthWise(tx *sql.Tx, dialect goqu.DialectWrapper, submodelD
 		baseRows = append(baseRows, record)
 	}
 
-	insertedIDs, insertErr := insertRecordsReturningIDsChunked(
+	insertErr := executeRecordInsertChunked(
 		tx,
 		dialect,
 		"submodel_element",
-		[]string{"submodel_id", "parent_sme_id", "position", "id_short", "category", "model_type", "idshort_path", "root_sme_id"},
+		[]string{"id", "submodel_id", "parent_sme_id", "position", "id_short", "category", "model_type", "idshort_path", "root_sme_id", "depth"},
 		baseRows,
+		"SMREPO-INSSME-INSBASE",
 	)
 	if insertErr != nil {
-		return common.NewInternalServerError("SMREPO-INSSME-INSBASE-EXECQ " + insertErr.Error())
-	}
-
-	for idx := range nodes {
-		nodes[idx].dbID = insertedIDs[idx]
-	}
-
-	return updateHierarchyReferencesChunked(tx, dialect, nodes)
-}
-
-func updateHierarchyReferencesChunked(tx *sql.Tx, dialect goqu.DialectWrapper, nodes []*flattenedInsertNode) error {
-	if len(nodes) == 0 {
-		return nil
-	}
-
-	for start := 0; start < len(nodes); start += insertSubmodelElementsBatchSize {
-		end := start + insertSubmodelElementsBatchSize
-		if end > len(nodes) {
-			end = len(nodes)
-		}
-
-		chunk := nodes[start:end]
-		updateRows := make([]goqu.Record, 0, len(chunk))
-		for idx := range chunk {
-			node := chunk[idx]
-
-			var parentID interface{}
-			switch {
-			case node.parentIndex >= 0:
-				resolvedParentID := nodes[node.parentIndex].dbID
-				if resolvedParentID == 0 {
-					return common.NewInternalServerError("SMREPO-INSSME-UPDHIER-MISSINGPARENT Parent SME ID missing for path " + node.idShortPath)
-				}
-				parentID = resolvedParentID
-			case node.parentDBID > 0:
-				parentID = node.parentDBID
-			default:
-				parentID = nil
-			}
-
-			resolvedRootID := node.rootDBID
-			if resolvedRootID == 0 {
-				if node.rootNodeIndex >= 0 {
-					resolvedRootID = nodes[node.rootNodeIndex].dbID
-				} else {
-					resolvedRootID = node.dbID
-				}
-			}
-			if resolvedRootID == 0 {
-				return common.NewInternalServerError("SMREPO-INSSME-UPDHIER-MISSINGROOT Root SME ID missing for path " + node.idShortPath)
-			}
-
-			updateRows = append(updateRows, goqu.Record{
-				"id":            node.dbID,
-				"parent_sme_id": parentID,
-				"root_sme_id":   resolvedRootID,
-			})
-		}
-
-		if len(updateRows) == 0 {
-			continue
-		}
-
-		updatePayload, marshalErr := jsoniter.ConfigCompatibleWithStandardLibrary.Marshal(updateRows)
-		if marshalErr != nil {
-			return common.NewInternalServerError("SMREPO-INSSME-UPDHIER-MARSHALPAYLOAD " + marshalErr.Error())
-		}
-
-		updateQuery, updateArgs, buildErr := dialect.Update(goqu.T("submodel_element").As("sme")).
-			Set(goqu.Record{
-				"parent_sme_id": goqu.I("v.parent_sme_id"),
-				"root_sme_id":   goqu.I("v.root_sme_id"),
-			}).
-			From(goqu.L("jsonb_to_recordset(?::jsonb) AS v(id bigint, parent_sme_id bigint, root_sme_id bigint)", string(updatePayload))).
-			Where(goqu.I("sme.id").Eq(goqu.I("v.id"))).
-			ToSQL()
-		if buildErr != nil {
-			return common.NewInternalServerError("SMREPO-INSSME-UPDHIER-BUILDQ " + buildErr.Error())
-		}
-
-		if _, execErr := tx.Exec(updateQuery, updateArgs...); execErr != nil {
-			if mappedErr := mapConflictInsertError(execErr); mappedErr != nil {
-				return mappedErr
-			}
-			return common.NewInternalServerError("SMREPO-INSSME-UPDHIER-EXECQ " + execErr.Error())
-		}
+		return insertErr
 	}
 
 	return nil
 }
 
+func assignReservedNodeIDs(tx *sql.Tx, nodes []*flattenedInsertNode) error {
+	reservedIDs, err := reserveSubmodelElementIDs(tx, len(nodes))
+	if err != nil {
+		return err
+	}
+	if len(reservedIDs) != len(nodes) {
+		return common.NewInternalServerError("SMREPO-INSSME-RESERVEID-COUNTMISMATCH reserved IDs count does not match node count")
+	}
+
+	for idx := range nodes {
+		nodes[idx].dbID = reservedIDs[idx]
+	}
+
+	return nil
+}
+
+func reserveSubmodelElementIDs(tx *sql.Tx, count int) ([]int, error) {
+	if tx == nil {
+		return nil, common.NewInternalServerError("SMREPO-INSSME-RESERVEID-NILTX transaction must not be nil")
+	}
+
+	query, args, err := goqu.
+		From(goqu.Func("generate_series", 1, count)).
+		Select(goqu.Func("nextval", goqu.Func("pg_get_serial_sequence", "submodel_element", "id"))).
+		ToSQL()
+	if err != nil {
+		return nil, common.NewInternalServerError("SMREPO-INSSME-RESERVEID-BUILDSQL " + err.Error())
+	}
+
+	rows, err := tx.Query(query, args...)
+	if err != nil {
+		return nil, common.NewInternalServerError("SMREPO-INSSME-RESERVEID-EXECQUERY " + err.Error())
+	}
+	defer func() { _ = rows.Close() }()
+
+	ids := make([]int, 0, count)
+	for rows.Next() {
+		var id int
+		if scanErr := rows.Scan(&id); scanErr != nil {
+			return nil, common.NewInternalServerError("SMREPO-INSSME-RESERVEID-SCANID " + scanErr.Error())
+		}
+		ids = append(ids, id)
+	}
+	if rowsErr := rows.Err(); rowsErr != nil {
+		return nil, common.NewInternalServerError("SMREPO-INSSME-RESERVEID-ITERROWS " + rowsErr.Error())
+	}
+
+	return ids, nil
+}
+
+func resolveNodeHierarchyIDs(nodes []*flattenedInsertNode, node *flattenedInsertNode) (int, int, error) {
+	parentID := node.parentDBID
+	if node.parentIndex >= 0 {
+		parentID = nodes[node.parentIndex].dbID
+		if parentID == 0 {
+			return 0, 0, common.NewInternalServerError("SMREPO-INSSME-RESOLVEHIER-MISSINGPARENT Parent SME ID missing for path " + node.idShortPath)
+		}
+	}
+
+	rootID := node.rootDBID
+	if rootID == 0 {
+		if node.rootNodeIndex >= 0 {
+			rootID = nodes[node.rootNodeIndex].dbID
+		} else {
+			rootID = node.dbID
+		}
+	}
+	if rootID == 0 {
+		return 0, 0, common.NewInternalServerError("SMREPO-INSSME-RESOLVEHIER-MISSINGROOT Root SME ID missing for path " + node.idShortPath)
+	}
+
+	return parentID, rootID, nil
+}
+
 func insertPayloadAndSemanticReferences(tx *sql.Tx, dialect goqu.DialectWrapper, nodes []*flattenedInsertNode, jsonLib jsoniter.API) error {
 	payloadRows := make([]goqu.Record, 0, len(nodes))
 	for _, node := range nodes {
-		payloadRecord, payloadBuildErr := buildSubmodelElementPayloadRecord(int64(node.dbID), node.element, jsonLib)
+		payloadRecord, hasPayload, payloadBuildErr := buildSubmodelElementPayloadRecord(int64(node.dbID), node.element, jsonLib)
 		if payloadBuildErr != nil {
 			return payloadBuildErr
+		}
+		if !hasPayload {
+			continue
 		}
 		payloadRows = append(payloadRows, payloadRecord)
 	}
@@ -502,18 +506,18 @@ func insertMultiLanguagePropertyPayloadRows(tx *sql.Tx, dialect goqu.DialectWrap
 			continue
 		}
 
-		valueIDPayload := "[]"
-		if mlp.ValueID() != nil && !isEmptyReference(mlp.ValueID()) {
-			valueIDJSONString, serErr := serializeIClassSliceToJSON([]types.IClass{mlp.ValueID()}, "SMREPO-INSSME-MLP-VALREF")
-			if serErr != nil {
-				return serErr
-			}
-			valueIDPayload = valueIDJSONString
+		if mlp.ValueID() == nil || isEmptyReference(mlp.ValueID()) {
+			continue
+		}
+
+		valueIDJSONString, serErr := serializeIClassSliceToJSON([]types.IClass{mlp.ValueID()}, "SMREPO-INSSME-MLP-VALREF")
+		if serErr != nil {
+			return serErr
 		}
 
 		mlpPayloadRows = append(mlpPayloadRows, goqu.Record{
 			"submodel_element_id": node.dbID,
-			"value_id_payload":    goqu.L("?::jsonb", valueIDPayload),
+			"value_id_payload":    goqu.L("?::jsonb", valueIDJSONString),
 		})
 	}
 
@@ -543,18 +547,18 @@ func insertPropertyPayloadRows(tx *sql.Tx, dialect goqu.DialectWrapper, nodes []
 			continue
 		}
 
-		valueIDPayload := "[]"
-		if property.ValueID() != nil && !isEmptyReference(property.ValueID()) {
-			valueIDJSONString, serErr := serializeIClassSliceToJSON([]types.IClass{property.ValueID()}, "SMREPO-INSSME-PROP-VALREF")
-			if serErr != nil {
-				return serErr
-			}
-			valueIDPayload = valueIDJSONString
+		if property.ValueID() == nil || isEmptyReference(property.ValueID()) {
+			continue
+		}
+
+		valueIDJSONString, serErr := serializeIClassSliceToJSON([]types.IClass{property.ValueID()}, "SMREPO-INSSME-PROP-VALREF")
+		if serErr != nil {
+			return serErr
 		}
 
 		propertyPayloadRows = append(propertyPayloadRows, goqu.Record{
 			"property_element_id": node.dbID,
-			"value_id_payload":    goqu.L("?::jsonb", valueIDPayload),
+			"value_id_payload":    goqu.L("?::jsonb", valueIDJSONString),
 		})
 	}
 
@@ -570,76 +574,6 @@ func insertPropertyPayloadRows(tx *sql.Tx, dialect goqu.DialectWrapper, nodes []
 		propertyPayloadRows,
 		"SMREPO-INSSME-INSPROPPAYLOAD",
 	)
-}
-
-func insertRecordsReturningIDsChunked(tx *sql.Tx, dialect goqu.DialectWrapper, tableName string, cols []string, rows []goqu.Record) ([]int, error) {
-	if len(rows) == 0 {
-		return []int{}, nil
-	}
-
-	insertedIDs := make([]int, 0, len(rows))
-	for start := 0; start < len(rows); start += insertSubmodelElementsBatchSize {
-		end := start + insertSubmodelElementsBatchSize
-		if end > len(rows) {
-			end = len(rows)
-		}
-
-		chunk := rows[start:end]
-		chunkRows := make([]interface{}, len(chunk))
-		for i, row := range chunk {
-			chunkRows[i] = row
-		}
-
-		insert := dialect.Insert(tableName)
-		if len(cols) > 0 {
-			insertCols := make([]interface{}, 0, len(cols))
-			for _, col := range cols {
-				insertCols = append(insertCols, col)
-			}
-			insert = insert.Cols(insertCols...)
-		}
-		insert = insert.Rows(chunkRows...).Returning("id")
-		sqlQuery, args, buildErr := insert.ToSQL()
-		if buildErr != nil {
-			return nil, buildErr
-		}
-
-		resultRows, execErr := tx.Query(sqlQuery, args...)
-		if execErr != nil {
-			if mappedErr := mapConflictInsertError(execErr); mappedErr != nil {
-				return nil, mappedErr
-			}
-			return nil, execErr
-		}
-
-		chunkIDs := make([]int, 0, len(chunk))
-		for resultRows.Next() {
-			var id int
-			if scanErr := resultRows.Scan(&id); scanErr != nil {
-				_ = resultRows.Close()
-				return nil, scanErr
-			}
-			chunkIDs = append(chunkIDs, id)
-		}
-		if closeErr := resultRows.Close(); closeErr != nil {
-			return nil, closeErr
-		}
-		if rowErr := resultRows.Err(); rowErr != nil {
-			return nil, rowErr
-		}
-
-		if len(chunkIDs) != len(chunk) {
-			return nil, common.NewInternalServerError("SMREPO-INSSME-INSBASE-IDMISMATCH returned IDs count does not match input rows")
-		}
-
-		insertedIDs = append(insertedIDs, chunkIDs...)
-	}
-
-	if len(insertedIDs) != len(rows) {
-		return nil, common.NewInternalServerError("SMREPO-INSSME-INSBASE-IDCOUNTMISMATCH returned IDs count does not match all rows")
-	}
-
-	return insertedIDs, nil
 }
 
 func executeRecordInsertChunked(tx *sql.Tx, dialect goqu.DialectWrapper, tableName string, cols []string, rows []goqu.Record, errCode string) error {
@@ -726,6 +660,7 @@ func getChildElements(element types.ISubmodelElement) []types.ISubmodelElement {
 
 // baseRecordParams contains all parameters needed to build a base submodel_element record.
 type baseRecordParams struct {
+	ID          int
 	SubmodelID  int64
 	Element     types.ISubmodelElement
 	IDShort     string
@@ -733,6 +668,7 @@ type baseRecordParams struct {
 	Position    int
 	ParentID    int
 	RootSmeID   int
+	Depth       int
 }
 
 // buildBaseSubmodelElementRecord builds the base submodel_element record using pre-computed reference IDs.
@@ -745,7 +681,7 @@ func buildBaseSubmodelElementRecord(params baseRecordParams) (goqu.Record, error
 		parentDBId = sql.NullInt64{Int64: int64(params.ParentID), Valid: true}
 	}
 
-	// Build root_sme_id (will be updated later for top-level elements)
+	// Build root_sme_id from the precomputed hierarchy.
 	var rootDbID sql.NullInt64
 	if params.RootSmeID == 0 {
 		rootDbID = sql.NullInt64{}
@@ -754,6 +690,7 @@ func buildBaseSubmodelElementRecord(params baseRecordParams) (goqu.Record, error
 	}
 
 	return goqu.Record{
+		"id":            params.ID,
 		"submodel_id":   params.SubmodelID,
 		"parent_sme_id": parentDBId,
 		"position":      params.Position,
@@ -762,40 +699,52 @@ func buildBaseSubmodelElementRecord(params baseRecordParams) (goqu.Record, error
 		"model_type":    params.Element.ModelType(),
 		"idshort_path":  params.IDShortPath,
 		"root_sme_id":   rootDbID,
+		"depth":         params.Depth,
 	}, nil
 }
 
-func buildSubmodelElementPayloadRecord(submodelElementID int64, element types.ISubmodelElement, jsonLib jsoniter.API) (goqu.Record, error) {
+func buildSubmodelElementPayloadRecord(submodelElementID int64, element types.ISubmodelElement, jsonLib jsoniter.API) (goqu.Record, bool, error) {
 	_ = jsonLib
 
 	descriptionPayload, err := serializeIClassSliceToJSON(toIClassSlice(element.Description()), "SMREPO-SMEBATCH-PAYLOAD-DESC")
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 
 	displayNamePayload, err := serializeIClassSliceToJSON(toIClassSlice(element.DisplayName()), "SMREPO-SMEBATCH-PAYLOAD-DISPNAME")
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 
 	embeddedDataSpecificationPayload, err := serializeIClassSliceToJSON(toIClassSlice(element.EmbeddedDataSpecifications()), "SMREPO-SMEBATCH-PAYLOAD-EDS")
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 
 	supplementalSemanticIDsPayload, err := serializeIClassSliceToJSON(toIClassSlice(element.SupplementalSemanticIDs()), "SMREPO-SMEBATCH-PAYLOAD-SUPPLSEM")
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 
 	extensionsPayload, err := serializeIClassSliceToJSON(toIClassSlice(element.Extensions()), "SMREPO-SMEBATCH-PAYLOAD-EXT")
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 
 	qualifiersPayload, err := serializeIClassSliceToJSON(toIClassSlice(element.Qualifiers()), "SMREPO-SMEBATCH-PAYLOAD-QUAL")
 	if err != nil {
-		return nil, err
+		return nil, false, err
+	}
+
+	if allEmptyJSONArrays(
+		descriptionPayload,
+		displayNamePayload,
+		embeddedDataSpecificationPayload,
+		supplementalSemanticIDsPayload,
+		extensionsPayload,
+		qualifiersPayload,
+	) {
+		return nil, false, nil
 	}
 
 	return goqu.Record{
@@ -806,5 +755,14 @@ func buildSubmodelElementPayloadRecord(submodelElementID int64, element types.IS
 		"supplemental_semantic_ids_payload":   supplementalSemanticIDsPayload,
 		"extensions_payload":                  extensionsPayload,
 		"qualifiers_payload":                  qualifiersPayload,
-	}, nil
+	}, true, nil
+}
+
+func allEmptyJSONArrays(payloads ...string) bool {
+	for _, payload := range payloads {
+		if payload != "[]" {
+			return false
+		}
+	}
+	return true
 }

@@ -99,7 +99,9 @@ func (s *SubmodelDatabase) appendSubmodelMetadataHistoryTx(ctx context.Context, 
 }
 
 func (s *SubmodelDatabase) appendMutatedSubmodelHistoryTx(ctx context.Context, tx *sql.Tx, submodelID string, mutate history.SnapshotMutator) error {
-	err := history.AppendMutatedVersionTx(ctx, tx, history.TableSubmodel, submodelID, history.ChangeUpdated, mutate)
+	err := history.AppendMutatedVersionTx(ctx, tx, history.TableSubmodel, submodelID, history.ChangeUpdated, func(snapshot map[string]any) error {
+		return mutate(snapshot)
+	})
 	if err == nil || !common.IsErrNotFound(err) {
 		return err
 	}

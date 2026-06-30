@@ -89,9 +89,9 @@ paths:
           content:
             application/json:
               schema:
-                $ref: 'https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.2.0#/components/schemas/ServiceDescription'
+                $ref: '../Part2-API-Schemas/openapi.yaml#/components/schemas/ServiceDescription'
         default:
-          $ref: 'https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.2.0#/components/responses/default'
+          $ref: '../Part2-API-Schemas/openapi.yaml#/components/responses/default'
 
   # ---- AAS Registry Service ----
   /shell-descriptors:
@@ -104,25 +104,28 @@ paths:
         - https://admin-shell.io/aas/API/GetAllAssetAdministrationShellDescriptors/3/2
       parameters:
         - $ref: '#/components/parameters/EdcBpnHeader'
-        - $ref: 'https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.2.0#/components/parameters/Limit'
-        - $ref: 'https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.2.0#/components/parameters/Cursor'
-        - $ref: 'https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.2.0#/components/parameters/AssetKind'
-        - $ref: 'https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.2.0#/components/parameters/AssetType'
+        - $ref: '../Part2-API-Schemas/openapi.yaml#/components/parameters/Limit'
+        - $ref: '../Part2-API-Schemas/openapi.yaml#/components/parameters/Cursor'
+        - $ref: '../Part2-API-Schemas/openapi.yaml#/components/parameters/AssetKind'
+        - $ref: '../Part2-API-Schemas/openapi.yaml#/components/parameters/AssetType'
+        - $ref: '../Part2-API-Schemas/openapi.yaml#/components/parameters/AssetIds'
+        - $ref: '../Part2-API-Schemas/openapi.yaml#/components/parameters/CreatedFrom'
+        - $ref: '../Part2-API-Schemas/openapi.yaml#/components/parameters/UpdatedFrom'
       responses:
         '200':
           description: Requested Asset Administration Shell Descriptors
           content:
             application/json:
               schema:
-                $ref: 'https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.2.0#/components/schemas/GetAssetAdministrationShellDescriptorsResult'
+                $ref: '../Part2-API-Schemas/openapi.yaml#/components/schemas/GetAssetAdministrationShellDescriptorsResult'
         '400':
-          $ref: 'https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.2.0#/components/responses/bad-request'
+          $ref: '../Part2-API-Schemas/openapi.yaml#/components/responses/bad-request'
         '403':
-          $ref: 'https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.2.0#/components/responses/forbidden'
+          $ref: '../Part2-API-Schemas/openapi.yaml#/components/responses/forbidden'
         '500':
-          $ref: 'https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.2.0#/components/responses/internal-server-error'
+          $ref: '../Part2-API-Schemas/openapi.yaml#/components/responses/internal-server-error'
         default:
-          $ref: 'https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.2.0#/components/responses/default'
+          $ref: '../Part2-API-Schemas/openapi.yaml#/components/responses/default'
     post:
       tags:
         - Asset Administration Shell Registry API
@@ -140,7 +143,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: 'https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.2.0#/components/schemas/AssetAdministrationShellDescriptor'
+              $ref: '../Part2-API-Schemas/openapi.yaml#/components/schemas/AssetAdministrationShellDescriptor'
         required: true
       responses:
         '201':
@@ -153,15 +156,15 @@ paths:
           content:
             application/json:
               schema:
-                $ref: 'https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.2.0#/components/schemas/AssetAdministrationShellDescriptor'
+                $ref: '../Part2-API-Schemas/openapi.yaml#/components/schemas/AssetAdministrationShellDescriptor'
         '400':
-          $ref: 'https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.2.0#/components/responses/bad-request'
+          $ref: '../Part2-API-Schemas/openapi.yaml#/components/responses/bad-request'
         '403':
-          $ref: 'https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.2.0#/components/responses/forbidden'
+          $ref: '../Part2-API-Schemas/openapi.yaml#/components/responses/forbidden'
         '409':
-          $ref: 'https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.2.0#/components/responses/conflict'
+          $ref: '../Part2-API-Schemas/openapi.yaml#/components/responses/conflict'
         default:
-          $ref: 'https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.2.0#/components/responses/default'
+          $ref: '../Part2-API-Schemas/openapi.yaml#/components/responses/default'
 
   /bulk/shell-descriptors:
     post:
@@ -182,12 +185,12 @@ paths:
               type: array
               minItems: 1
               items:
-                $ref: 'https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.2.0#/components/schemas/AssetAdministrationShellDescriptor'
+                $ref: '../Part2-API-Schemas/openapi.yaml#/components/schemas/AssetAdministrationShellDescriptor'
       responses:
         '202':
-          $ref: 'https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.2.0#/components/responses/accepted'
+          $ref: '../Part2-API-Schemas/openapi.yaml#/components/responses/accepted'
         default:
-          $ref: 'https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.2.0#/components/responses/default'
+          $ref: '../Part2-API-Schemas/openapi.yaml#/components/responses/default'
     put:
       tags:
         - Async Bulk Asset Administration Shell Registry API
@@ -206,12 +209,12 @@ paths:
               type: array
               minItems: 1
               items:
-                $ref: 'https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.2.0#/components/schemas/AssetAdministrationShellDescriptor'
+                $ref: '../Part2-API-Schemas/openapi.yaml#/components/schemas/AssetAdministrationShellDescriptor'
       responses:
         '202':
-          $ref: 'https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.2.0#/components/responses/accepted'
+          $ref: '../Part2-API-Schemas/openapi.yaml#/components/responses/accepted'
         default:
-          $ref: 'https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.2.0#/components/responses/default'
+          $ref: '../Part2-API-Schemas/openapi.yaml#/components/responses/default'
     delete:
       tags:
         - Async Bulk Asset Administration Shell Registry API
@@ -233,9 +236,9 @@ paths:
                 type: string
       responses:
         '202':
-          $ref: 'https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.2.0#/components/responses/accepted'
+          $ref: '../Part2-API-Schemas/openapi.yaml#/components/responses/accepted'
         default:
-          $ref: 'https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.2.0#/components/responses/default'
+          $ref: '../Part2-API-Schemas/openapi.yaml#/components/responses/default'
 
   /bulk/status/{handleId}:
     get:
@@ -258,11 +261,11 @@ paths:
           content:
             application/json:
               schema:
-                $ref: 'https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.2.0#/components/schemas/BaseOperationResult'
+                $ref: '../Part2-API-Schemas/openapi.yaml#/components/schemas/BaseOperationResult'
         '302':
-          $ref: 'https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.2.0#/components/responses/found'
+          $ref: '../Part2-API-Schemas/openapi.yaml#/components/responses/found'
         default:
-          $ref: 'https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.2.0#/components/responses/default'
+          $ref: '../Part2-API-Schemas/openapi.yaml#/components/responses/default'
 
   /bulk/result/{handleId}:
     get:
@@ -293,40 +296,7 @@ paths:
               schema:
                 type: object
         default:
-          $ref: 'https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.2.0#/components/responses/default'
-
-  /shell-descriptors/$recent-changes:
-    get:
-      tags:
-        - Asset Administration Shell Registry API
-      summary: Returns all Asset Administration Shell Descriptors that have been recently changed
-      operationId: GetAllAssetAdministrationShellDescriptorsRecentChanges
-      x-semanticIds:
-        - https://admin-shell.io/aas/API/GetAllAssetAdministrationShellDescriptorsRecentChanges/3/2
-      parameters:
-        - $ref: '#/components/parameters/EdcBpnHeader'
-        - $ref: 'https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.2.0#/components/parameters/AssetKind'
-        - $ref: 'https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.2.0#/components/parameters/AssetType'
-        - $ref: 'https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.2.0#/components/parameters/AssetIds'
-        - $ref: 'https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.2.0#/components/parameters/CreatedFrom'
-        - $ref: 'https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.2.0#/components/parameters/UpdatedFrom'
-        - $ref: 'https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.2.0#/components/parameters/Limit'
-        - $ref: 'https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.2.0#/components/parameters/Cursor'
-      responses:
-        '200':
-          description: Requested Asset Administration Shell Descriptors that have been recently changed
-          content:
-            application/json:
-              schema:
-                $ref: 'https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.2.0#/components/schemas/GetAssetAdministrationShellDescriptorsResult'
-        '400':
-          $ref: 'https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.2.0#/components/responses/bad-request'
-        '403':
-          $ref: 'https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.2.0#/components/responses/forbidden'
-        '500':
-          $ref: 'https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.2.0#/components/responses/internal-server-error'
-        default:
-          $ref: 'https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.2.0#/components/responses/default'
+          $ref: '../Part2-API-Schemas/openapi.yaml#/components/responses/default'
 
   /shell-descriptors/{aasIdentifier}:
     get:
@@ -345,17 +315,17 @@ paths:
           content:
             application/json:
               schema:
-                $ref: 'https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.2.0#/components/schemas/AssetAdministrationShellDescriptor'
+                $ref: '../Part2-API-Schemas/openapi.yaml#/components/schemas/AssetAdministrationShellDescriptor'
         '400':
-          $ref: 'https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.2.0#/components/responses/bad-request'
+          $ref: '../Part2-API-Schemas/openapi.yaml#/components/responses/bad-request'
         '403':
-          $ref: 'https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.2.0#/components/responses/forbidden'
+          $ref: '../Part2-API-Schemas/openapi.yaml#/components/responses/forbidden'
         '404':
-          $ref: 'https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.2.0#/components/responses/not-found'
+          $ref: '../Part2-API-Schemas/openapi.yaml#/components/responses/not-found'
         '500':
-          $ref: 'https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.2.0#/components/responses/internal-server-error'
+          $ref: '../Part2-API-Schemas/openapi.yaml#/components/responses/internal-server-error'
         default:
-          $ref: 'https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.2.0#/components/responses/default'
+          $ref: '../Part2-API-Schemas/openapi.yaml#/components/responses/default'
     put:
       tags:
         - Asset Administration Shell Registry API
@@ -377,21 +347,21 @@ paths:
         content:
           application/json:
             schema:
-              $ref: 'https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.2.0#/components/schemas/AssetAdministrationShellDescriptor'
+              $ref: '../Part2-API-Schemas/openapi.yaml#/components/schemas/AssetAdministrationShellDescriptor'
         required: true
       responses:
         '204':
           description: Asset Administration Shell Descriptor updated successfully
         '400':
-          $ref: 'https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.2.0#/components/responses/bad-request'
+          $ref: '../Part2-API-Schemas/openapi.yaml#/components/responses/bad-request'
         '403':
-          $ref: 'https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.2.0#/components/responses/forbidden'
+          $ref: '../Part2-API-Schemas/openapi.yaml#/components/responses/forbidden'
         '404':
-          $ref: 'https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.2.0#/components/responses/not-found'
+          $ref: '../Part2-API-Schemas/openapi.yaml#/components/responses/not-found'
         '409':
-          $ref: 'https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.2.0#/components/responses/conflict'
+          $ref: '../Part2-API-Schemas/openapi.yaml#/components/responses/conflict'
         default:
-          $ref: 'https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.2.0#/components/responses/default'
+          $ref: '../Part2-API-Schemas/openapi.yaml#/components/responses/default'
     delete:
       tags:
         - Asset Administration Shell Registry API
@@ -406,13 +376,13 @@ paths:
         '204':
           description: Asset Administration Shell Descriptor deleted successfully
         '400':
-          $ref: 'https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.2.0#/components/responses/bad-request'
+          $ref: '../Part2-API-Schemas/openapi.yaml#/components/responses/bad-request'
         '403':
-          $ref: 'https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.2.0#/components/responses/forbidden'
+          $ref: '../Part2-API-Schemas/openapi.yaml#/components/responses/forbidden'
         '404':
-          $ref: 'https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.2.0#/components/responses/not-found'
+          $ref: '../Part2-API-Schemas/openapi.yaml#/components/responses/not-found'
         default:
-          $ref: 'https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.2.0#/components/responses/default'
+          $ref: '../Part2-API-Schemas/openapi.yaml#/components/responses/default'
 
   /shell-descriptors/{aasIdentifier}/submodel-descriptors:
     get:
@@ -425,8 +395,8 @@ paths:
       parameters:
         - $ref: '#/components/parameters/EdcBpnHeader'
         - $ref: '#/components/parameters/aasIdentifier'
-        - $ref: 'https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.2.0#/components/parameters/Limit'
-        - $ref: 'https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.2.0#/components/parameters/Cursor'
+        - $ref: '../Part2-API-Schemas/openapi.yaml#/components/parameters/Limit'
+        - $ref: '../Part2-API-Schemas/openapi.yaml#/components/parameters/Cursor'
       responses:
         '200':
           description: Requested Submodel Descriptors
@@ -434,15 +404,15 @@ paths:
             application/json:
               schema:
                 allOf:
-                  - $ref: 'https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.2.0#/components/schemas/PagedResult'
+                  - $ref: '../Part2-API-Schemas/openapi.yaml#/components/schemas/PagedResult'
                   - type: object
                     properties:
                       result:
                         type: array
                         items:
-                          $ref: 'https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.2.0#/components/schemas/SubmodelDescriptor'
+                          $ref: '../Part2-API-Schemas/openapi.yaml#/components/schemas/SubmodelDescriptor'
         default:
-          $ref: 'https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.2.0#/components/responses/default'
+          $ref: '../Part2-API-Schemas/openapi.yaml#/components/responses/default'
     post:
       tags:
         - Asset Administration Shell Registry API
@@ -458,7 +428,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: 'https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.2.0#/components/schemas/SubmodelDescriptor'
+              $ref: '../Part2-API-Schemas/openapi.yaml#/components/schemas/SubmodelDescriptor'
         required: true
       responses:
         '201':
@@ -471,9 +441,9 @@ paths:
           content:
             application/json:
               schema:
-                $ref: 'https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.2.0#/components/schemas/SubmodelDescriptor'
+                $ref: '../Part2-API-Schemas/openapi.yaml#/components/schemas/SubmodelDescriptor'
         default:
-          $ref: 'https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.2.0#/components/responses/default'
+          $ref: '../Part2-API-Schemas/openapi.yaml#/components/responses/default'
 
   /shell-descriptors/{aasIdentifier}/submodel-descriptors/{submodelIdentifier}:
     get:
@@ -493,9 +463,9 @@ paths:
           content:
             application/json:
               schema:
-                $ref: 'https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.2.0#/components/schemas/SubmodelDescriptor'
+                $ref: '../Part2-API-Schemas/openapi.yaml#/components/schemas/SubmodelDescriptor'
         default:
-          $ref: 'https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.2.0#/components/responses/default'
+          $ref: '../Part2-API-Schemas/openapi.yaml#/components/responses/default'
     put:
       tags:
         - Asset Administration Shell Registry API
@@ -515,13 +485,13 @@ paths:
         content:
           application/json:
             schema:
-              $ref: 'https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.2.0#/components/schemas/SubmodelDescriptor'
+              $ref: '../Part2-API-Schemas/openapi.yaml#/components/schemas/SubmodelDescriptor'
         required: true
       responses:
         '204':
           description: Submodel Descriptor updated successfully
         default:
-          $ref: 'https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.2.0#/components/responses/default'
+          $ref: '../Part2-API-Schemas/openapi.yaml#/components/responses/default'
     delete:
       tags:
         - Asset Administration Shell Registry API
@@ -537,7 +507,7 @@ paths:
         '204':
           description: Submodel Descriptor deleted successfully
         default:
-          $ref: 'https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.2.0#/components/responses/default'
+          $ref: '../Part2-API-Schemas/openapi.yaml#/components/responses/default'
 
   /query/shell-descriptors:
     post:
@@ -549,14 +519,14 @@ paths:
         - https://admin-shell.io/aas/API/QueryAssetAdministrationShellDescriptors/3/2
       parameters:
         - $ref: '#/components/parameters/EdcBpnHeader'
-        - $ref: 'https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.2.0#/components/parameters/Limit'
-        - $ref: 'https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.2.0#/components/parameters/Cursor'
+        - $ref: '../Part2-API-Schemas/openapi.yaml#/components/parameters/Limit'
+        - $ref: '../Part2-API-Schemas/openapi.yaml#/components/parameters/Cursor'
       requestBody:
         description: Query statement
         content:
           application/json:
             schema:
-              $ref: 'https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.2.0#/components/schemas/Query'
+              $ref: '../Part2-API-Schemas/openapi.yaml#/components/schemas/Query'
         required: true
       responses:
         '200':
@@ -565,15 +535,15 @@ paths:
             application/json:
               schema:
                 allOf:
-                  - $ref: 'https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.2.0#/components/schemas/PagedResult'
+                  - $ref: '../Part2-API-Schemas/openapi.yaml#/components/schemas/PagedResult'
                   - type: object
                     properties:
                       result:
                         type: array
                         items:
-                          $ref: 'https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.2.0#/components/schemas/AssetAdministrationShellDescriptor'
+                          $ref: '../Part2-API-Schemas/openapi.yaml#/components/schemas/AssetAdministrationShellDescriptor'
         default:
-          $ref: 'https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.2.0#/components/responses/default'
+          $ref: '../Part2-API-Schemas/openapi.yaml#/components/responses/default'
 
   # ---- Discovery Service ----
   /lookup/shells:
@@ -590,9 +560,9 @@ paths:
         - https://admin-shell.io/aas/API/GetAllAssetAdministrationShellIdsByAssetLink/3/2
       parameters:
         - $ref: '#/components/parameters/EdcBpnHeader'
-        - $ref: 'https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.2.0#/components/parameters/AssetIds'
-        - $ref: 'https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.2.0#/components/parameters/Limit'
-        - $ref: 'https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.2.0#/components/parameters/Cursor'
+        - $ref: '../Part2-API-Schemas/openapi.yaml#/components/parameters/AssetIds'
+        - $ref: '../Part2-API-Schemas/openapi.yaml#/components/parameters/Limit'
+        - $ref: '../Part2-API-Schemas/openapi.yaml#/components/parameters/Cursor'
       responses:
         '200':
           description: Requested Asset Administration Shell IDs
@@ -601,7 +571,7 @@ paths:
               schema:
                 oneOf:
                   - allOf:
-                      - $ref: 'https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.2.0#/components/schemas/PagedResult'
+                      - $ref: '../Part2-API-Schemas/openapi.yaml#/components/schemas/PagedResult'
                       - type: object
                         properties:
                           result:
@@ -612,7 +582,7 @@ paths:
                     description: DTR compatibility response for empty assetIds input.
                     additionalProperties: false
         default:
-          $ref: 'https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.2.0#/components/responses/default'
+          $ref: '../Part2-API-Schemas/openapi.yaml#/components/responses/default'
 
   /lookup/shellsByAssetLink:
     post:
@@ -630,8 +600,8 @@ paths:
         - https://admin-shell.io/aas/API/SearchAllAssetAdministrationShellIdsByAssetLink/3/2
       parameters:
         - $ref: '#/components/parameters/EdcBpnHeader'
-        - $ref: 'https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.2.0#/components/parameters/Limit'
-        - $ref: 'https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.2.0#/components/parameters/Cursor'
+        - $ref: '../Part2-API-Schemas/openapi.yaml#/components/parameters/Limit'
+        - $ref: '../Part2-API-Schemas/openapi.yaml#/components/parameters/Cursor'
         - name: createdAfter
           in: query
           description: >-
@@ -648,7 +618,7 @@ paths:
             schema:
               type: array
               items:
-                '$ref': 'https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.2.0#/components/schemas/AssetLink'
+                '$ref': '../Part2-API-Schemas/openapi.yaml#/components/schemas/AssetLink'
       responses:
         '200':
           description: Requested Asset Administration Shell IDs
@@ -657,7 +627,7 @@ paths:
               schema:
                 oneOf:
                   - allOf:
-                      - $ref: 'https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.2.0#/components/schemas/PagedResult'
+                      - $ref: '../Part2-API-Schemas/openapi.yaml#/components/schemas/PagedResult'
                       - type: object
                         properties:
                           result:
@@ -668,9 +638,9 @@ paths:
                     description: DTR compatibility response for empty assetLinks input.
                     additionalProperties: false
         '400':
-          $ref: 'https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.2.0#/components/responses/bad-request'
+          $ref: '../Part2-API-Schemas/openapi.yaml#/components/responses/bad-request'
         default:
-          $ref: 'https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.2.0#/components/responses/default'
+          $ref: '../Part2-API-Schemas/openapi.yaml#/components/responses/default'
 
   /lookup/shells/{aasIdentifier}:
     get:
@@ -691,9 +661,9 @@ paths:
               schema:
                 type: array
                 items:
-                  $ref: 'https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.2.0#/components/schemas/SpecificAssetId'
+                  $ref: '../Part2-API-Schemas/openapi.yaml#/components/schemas/SpecificAssetId'
         default:
-          $ref: 'https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.2.0#/components/responses/default'
+          $ref: '../Part2-API-Schemas/openapi.yaml#/components/responses/default'
     post:
       tags:
         - Asset Administration Shell Basic Discovery API
@@ -717,7 +687,7 @@ paths:
             schema:
               type: array
               items:
-                $ref: 'https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.2.0#/components/schemas/SpecificAssetId'
+                $ref: '../Part2-API-Schemas/openapi.yaml#/components/schemas/SpecificAssetId'
         required: true
       responses:
         '201':
@@ -727,11 +697,11 @@ paths:
               schema:
                 type: array
                 items:
-                  $ref: 'https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.2.0#/components/schemas/SpecificAssetId'
+                  $ref: '../Part2-API-Schemas/openapi.yaml#/components/schemas/SpecificAssetId'
         '404':
-          $ref: 'https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.2.0#/components/responses/not-found'
+          $ref: '../Part2-API-Schemas/openapi.yaml#/components/responses/not-found'
         default:
-          $ref: 'https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.2.0#/components/responses/default'
+          $ref: '../Part2-API-Schemas/openapi.yaml#/components/responses/default'
     delete:
       tags:
         - Asset Administration Shell Basic Discovery API
@@ -746,4 +716,4 @@ paths:
         '204':
           description: Asset Links deleted successfully
         default:
-          $ref: 'https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.2.0#/components/responses/default'
+          $ref: '../Part2-API-Schemas/openapi.yaml#/components/responses/default'

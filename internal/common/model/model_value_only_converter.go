@@ -3,7 +3,7 @@
  *
  * The entire Submodel Repository Service Specification as part of the [Specification of the Asset Administration Shell: Part 2](http://industrialdigitaltwin.org/en/content-hub).   Publisher: Industrial Digital Twin Association (IDTA) 2023
  *
- * API version: V3.0.3_SSP-001
+ * API version: V3.2.0
  * Contact: info@idtwin.org
  */
 //nolint:all
@@ -162,6 +162,13 @@ func ReferenceElementToValueOnly(re *types.ReferenceElement) ReferenceElementVal
 	refType, ok := stringification.ReferenceTypesToString(re.Value().Type())
 	if ok {
 		refElemVal.Type = refType
+	}
+
+	if referredSemanticID := re.Value().ReferredSemanticID(); referredSemanticID != nil {
+		referredSemanticIDJSON, err := jsonization.ToJsonable(referredSemanticID)
+		if err == nil {
+			refElemVal.ReferredSemanticId = referredSemanticIDJSON
+		}
 	}
 
 	var keys []map[string]any

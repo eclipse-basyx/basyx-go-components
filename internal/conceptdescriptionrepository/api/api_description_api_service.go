@@ -28,7 +28,7 @@
  *
  * The ConceptDescription Repository Service Specification as part of [Specification of the Asset Administration Shell: Part 2](https://industrialdigitaltwin.org/en/content-hub/aasspecifications).   Copyright: Industrial Digital Twin Association (IDTA) March 2023
  *
- * API version: V3.1.1_SSP-001
+ * API version: V3.2.0
  * Contact: info@idtwin.org
  */
 
@@ -56,8 +56,9 @@ func NewDescriptionAPIAPIService() *DescriptionAPIAPIService {
 func (s *DescriptionAPIAPIService) GetSelfDescription(_ context.Context) (model.ImplResponse, error) {
 	sd := model.ServiceDescription{
 		Profiles: []string{
-			"https://admin-shell.io/aas/API/3/1/ConceptDescriptionRepositoryServiceSpecification/SSP-001",
-			"https://basyx.org/aas/API/3/1/ConceptDescriptionRepositoryService/1.0",
+			"https://admin-shell.io/aas/API/3/2/ConceptDescriptionRepositoryServiceSpecification/SSP-001",
+			"https://admin-shell.io/aas/API/3/2/ConceptDescriptionRepositoryServiceSpecification/SSP-002",
+			"https://basyx.org/aas/API/3/2/ConceptDescriptionRepositoryService/1.0",
 		},
 	}
 	return model.Response(http.StatusOK, sd), nil

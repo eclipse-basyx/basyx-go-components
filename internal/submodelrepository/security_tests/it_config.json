@@ -18,8 +18,8 @@
     "token": { "user": "admin", "password": "pwd" },
     "method": "POST",
     "endpoint": "http://localhost:6004/submodels",
-    "data": "../integration_tests/bodies/post/postSubmodelWithAnnotatedRelationshipElement.json",
-    "shouldMatch": "../integration_tests/bodies/post/postSubmodelWithAnnotatedRelationshipElement.json",
+    "data": "bodies/postSubmodelWithAnnotatedRelationshipElementRecent.json",
+    "shouldMatch": "bodies/postSubmodelWithAnnotatedRelationshipElementRecent.json",
     "expectedStatus": 201
   },
   {
@@ -27,8 +27,8 @@
     "token": { "user": "admin", "password": "pwd" },
     "method": "POST",
     "endpoint": "http://localhost:6004/submodels",
-    "data": "../integration_tests/bodies/post/postSubmodelWithRelationshipElement.json",
-    "shouldMatch": "../integration_tests/bodies/post/postSubmodelWithRelationshipElement.json",
+    "data": "bodies/postSubmodelWithRelationshipElementRecent.json",
+    "shouldMatch": "bodies/postSubmodelWithRelationshipElementRecent.json",
     "expectedStatus": 201
   },
   {
@@ -81,7 +81,7 @@
     "token": { "user": "admin", "password": "pwd" },
     "method": "POST",
     "endpoint": "http://localhost:6004/submodels",
-    "data": "../integration_tests/bodies/post/postSubmodel.json",
+    "data": "bodies/postSubmodelRecent.json",
     "expectedStatus": 201
   },
   {
@@ -185,7 +185,7 @@
     "token": { "user": "usera", "password": "pwd" },
     "method": "GET",
     "endpoint": "http://localhost:6004/submodels/TWFyY3VzVGhpc0lzQU9ubHlBbm5vdGF0ZWRSZWxhdGlvbnNoaXBFbGVtZW50U3VibW9kZWw",
-    "shouldMatch": "../integration_tests/bodies/post/postSubmodelWithAnnotatedRelationshipElement.json",
+    "shouldMatch": "bodies/postSubmodelWithAnnotatedRelationshipElementRecent.json",
     "expectedStatus": 200
   },
   {
@@ -249,7 +249,7 @@
     "token": { "user": "userb", "password": "pwd" },
     "method": "GET",
     "endpoint": "http://localhost:6004/submodels/TWFyY3VzVGhpc0lzQU9ubHlBbm5vdGF0ZWRSZWxhdGlvbnNoaXBFbGVtZW50U3VibW9kZWw",
-    "shouldMatch": "../integration_tests/bodies/post/postSubmodelWithAnnotatedRelationshipElement.json",
+    "shouldMatch": "bodies/postSubmodelWithAnnotatedRelationshipElementRecent.json",
     "expectedStatus": 200
   },
   {
@@ -257,7 +257,7 @@
     "token": { "user": "userb", "password": "pwd" },
     "method": "GET",
     "endpoint": "http://localhost:6004/submodels/TWFyY3VzVGhpc0lzQU9ubHlSZWxhdGlvbnNoaXBFbGVtZW50U3VibW9kZWw",
-    "shouldMatch": "../integration_tests/bodies/post/postSubmodelWithRelationshipElement.json",
+    "shouldMatch": "bodies/postSubmodelWithRelationshipElementRecent.json",
     "expectedStatus": 200
   },
   {

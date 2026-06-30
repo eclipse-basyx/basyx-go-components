@@ -30,7 +30,7 @@
  *
  * The Full Profile of the Submodel Registry Service Specification as part of the [Specification of the Asset Administration Shell: Part 2](https://industrialdigitaltwin.org/en/content-hub/aasspecifications).   Copyright: Industrial Digital Twin Association (IDTA) 2025
  *
- * API version: V3.1.1_SSP-001
+ * API version: V3.2.0
  * Contact: info@idtwin.org
  */
 package smregistryapi
@@ -44,7 +44,6 @@ import (
 	"time"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
-	"github.com/eclipse-basyx/basyx-go-components/internal/common/history"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
@@ -70,13 +69,13 @@ func NewSubmodelRegistryAPIAPIService(databaseBackend smregistrypostgresql.Postg
 }
 
 // GetAllSubmodelDescriptors - Returns all Submodel Descriptors
-func (s *SubmodelRegistryAPIAPIService) GetAllSubmodelDescriptors(ctx context.Context, limit int32, cursor string) (model.ImplResponse, error) {
+func (s *SubmodelRegistryAPIAPIService) GetAllSubmodelDescriptors(ctx context.Context, limit int32, cursor string, createdFrom time.Time, updatedFrom time.Time) (model.ImplResponse, error) {
 	internalCursor, resp, err := decodeCursor(strings.TrimSpace(cursor), "GetAllSubmodelDescriptors")
 	if resp != nil || err != nil {
 		return *resp, err
 	}
 
-	smds, nextCursor, err := s.smRegistryBackend.ListSubmodelDescriptors(ctx, limit, internalCursor)
+	smds, nextCursor, err := s.smRegistryBackend.ListSubmodelDescriptors(ctx, limit, internalCursor, createdFrom, updatedFrom)
 	if err != nil {
 		log.Printf("[ERROR] [%s] Error in GetAllSubmodelDescriptors: list failed (limit=%d cursor=%q): %v", componentName, limit, internalCursor, err)
 		switch {
@@ -119,7 +118,7 @@ func (s *SubmodelRegistryAPIAPIService) QuerySubmodelDescriptors(
 	}
 
 	queryCtx := auth.MergeQueryFilter(ctx, query)
-	smds, nextCursor, err := s.smRegistryBackend.ListSubmodelDescriptors(queryCtx, limit, internalCursor)
+	smds, nextCursor, err := s.smRegistryBackend.ListSubmodelDescriptors(queryCtx, limit, internalCursor, time.Time{}, time.Time{})
 	if err != nil {
 		log.Printf("[ERROR] [%s] Error in QuerySubmodelDescriptors: list failed (limit=%d cursor=%q): %v", componentName, limit, internalCursor, err)
 		if common.IsErrBadRequest(err) {
@@ -145,46 +144,6 @@ func (s *SubmodelRegistryAPIAPIService) QuerySubmodelDescriptors(
 			), toJSONErr
 		}
 		jsonable = append(jsonable, item)
-	}
-
-	return pagedResponse(jsonable, nextCursor), nil
-}
-
-// GetAllSubmodelDescriptorsRecentChanges returns changed Submodel Descriptors.
-func (s *SubmodelRegistryAPIAPIService) GetAllSubmodelDescriptorsRecentChanges(
-	ctx context.Context,
-	createdFrom time.Time,
-	updatedFrom time.Time,
-	limit int32,
-	cursor string,
-) (model.ImplResponse, error) {
-	const operation = "GetAllSubmodelDescriptorsRecentChanges"
-
-	internalCursor, resp, err := decodeCursor(strings.TrimSpace(cursor), operation)
-	if resp != nil || err != nil {
-		return *resp, err
-	}
-
-	fetch := func(pageLimit int32, pageCursor string) ([]history.Row, string, error) {
-		return s.smRegistryBackend.GetSubmodelDescriptorRecentChanges(ctx, pageLimit, pageCursor, createdFrom, updatedFrom)
-	}
-	rows, nextCursor, err := history.FilterRecentRows(limit, internalCursor, fetch, func(row history.Row) (bool, error) {
-		return !row.Deleted, nil
-	})
-	if err != nil {
-		if common.IsErrBadRequest(err) {
-			return common.NewErrorResponse(
-				err, http.StatusBadRequest, componentName, operation, "BadRequest",
-			), nil
-		}
-		return common.NewErrorResponse(
-			err, http.StatusInternalServerError, componentName, operation, "InternalServerError",
-		), err
-	}
-
-	jsonable := make([]map[string]any, 0, len(rows))
-	for _, row := range rows {
-		jsonable = append(jsonable, row.Snapshot)
 	}
 
 	return pagedResponse(jsonable, nextCursor), nil
@@ -305,7 +264,7 @@ func (s *SubmodelRegistryAPIAPIService) PutSubmodelDescriptorById(ctx context.Co
 		), enforceErr
 	}
 
-	if exists, chkErr := s.smRegistryBackend.ExistsSubmodelByID(ctx, submodelDescriptor.Id); chkErr != nil {
+	if exists, chkErr := s.smRegistryBackend.ExistsSubmodelByID(auth.WithoutQueryFilter(ctx), submodelDescriptor.Id); chkErr != nil {
 		log.Printf("[ERROR] [%s] Error in PutSubmodelDescriptorById: existence check failed (submodelId=%q): %v", componentName, submodelDescriptor.Id, chkErr)
 		return common.NewErrorResponse(
 			chkErr, http.StatusInternalServerError, componentName, "PutSubmodelDescriptorById", "Unhandled-Precheck",
@@ -370,9 +329,10 @@ func (s *SubmodelRegistryAPIAPIService) PutSubmodelDescriptorById(ctx context.Co
 				err, http.StatusForbidden, componentName, "PutSubmodelDescriptorById", "Denied",
 			), nil
 		case common.IsErrNotFound(err):
-			log.Printf("[ERROR] [%s] Error in PutSubmodelDescriptorById: not found (submodelId=%q): %v", componentName, decoded, err)
+			deniedErr := common.NewErrDenied("Submodel Descriptor access not allowed")
+			log.Printf("[ERROR] [%s] Error in PutSubmodelDescriptorById: not allowed (submodelId=%q): %v", componentName, decoded, err)
 			return common.NewErrorResponse(
-				err, http.StatusNotFound, componentName, "PutSubmodelDescriptorById", "NotFound",
+				deniedErr, http.StatusForbidden, componentName, "PutSubmodelDescriptorById", "Denied",
 			), nil
 		default:
 			log.Printf("[ERROR] [%s] Error in PutSubmodelDescriptorById: internal (submodelId=%q): %v", componentName, decoded, err)

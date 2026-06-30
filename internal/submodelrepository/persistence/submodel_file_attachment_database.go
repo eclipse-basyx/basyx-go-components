@@ -30,6 +30,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"io"
 	"os"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
@@ -70,6 +71,16 @@ func (s *SubmodelDatabase) UploadFileAttachment(submodelID string, idShortPath s
 	return fileHandler.UploadFileAttachment(submodelID, idShortPath, file, fileName)
 }
 
+// UploadFileAttachmentReader uploads attachment content for a File submodel element from a reader.
+func (s *SubmodelDatabase) UploadFileAttachmentReader(submodelID string, idShortPath string, file io.Reader, fileName string) error {
+	fileHandler, err := submodelelements.NewPostgreSQLFileHandler(s.db)
+	if err != nil {
+		return err
+	}
+
+	return fileHandler.UploadFileAttachmentReader(submodelID, idShortPath, file, fileName)
+}
+
 // UploadFileAttachmentWithHistory uploads attachment content and appends the current Submodel snapshot atomically.
 func (s *SubmodelDatabase) UploadFileAttachmentWithHistory(ctx context.Context, submodelID string, idShortPath string, file *os.File, fileName string) error {
 	fileHandler, err := submodelelements.NewPostgreSQLFileHandler(s.db)
@@ -79,6 +90,24 @@ func (s *SubmodelDatabase) UploadFileAttachmentWithHistory(ctx context.Context, 
 
 	return common.ExecuteInTransaction(s.db, "SMREPO-UPLOADFILEHIST-STARTTX", "SMREPO-UPLOADFILEHIST-COMMIT", func(tx *sql.Tx) error {
 		if err := fileHandler.UploadFileAttachmentTx(tx, submodelID, idShortPath, file, fileName); err != nil {
+			return err
+		}
+		return s.appendChangedSubmodelElementHistoryTx(ctx, tx, submodelID, submodelElementRootMutation{
+			previousPath: idShortPath,
+			currentPath:  idShortPath,
+		})
+	})
+}
+
+// UploadFileAttachmentReaderWithHistory uploads attachment content from a reader and appends the current Submodel snapshot atomically.
+func (s *SubmodelDatabase) UploadFileAttachmentReaderWithHistory(ctx context.Context, submodelID string, idShortPath string, file io.Reader, fileName string) error {
+	fileHandler, err := submodelelements.NewPostgreSQLFileHandler(s.db)
+	if err != nil {
+		return err
+	}
+
+	return common.ExecuteInTransaction(s.db, "SMREPO-UPLOADFILEHIST-STARTTX", "SMREPO-UPLOADFILEHIST-COMMIT", func(tx *sql.Tx) error {
+		if err := fileHandler.UploadFileAttachmentReaderTx(tx, submodelID, idShortPath, file, fileName); err != nil {
 			return err
 		}
 		return s.appendChangedSubmodelElementHistoryTx(ctx, tx, submodelID, submodelElementRootMutation{

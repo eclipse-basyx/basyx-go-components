@@ -160,7 +160,7 @@ func TestLogicalExpression_SM_WithCasts(t *testing.T) {
 			{
 				Lt: ComparisonItems{
 					Value{TimeCast: valuePtr(field("$sm#idShort"))},
-					Value{TimeVal: timePtr("12:00")},
+					Value{TimeVal: timePtr("12:00:00Z")},
 				},
 			},
 		},
@@ -176,8 +176,8 @@ func TestLogicalExpression_SM_WithCasts(t *testing.T) {
 	if !strings.Contains(sql, " 5") {
 		t.Fatalf("expected SQL to contain %q, got: %s", " 5", sql)
 	}
-	if !strings.Contains(sql, "'12:00'") {
-		t.Fatalf("expected SQL to contain %q, got: %s", "'12:00'", sql)
+	if !strings.Contains(sql, "'12:00:00Z'") {
+		t.Fatalf("expected SQL to contain %q, got: %s", "'12:00:00Z'", sql)
 	}
 }
 
