@@ -38,10 +38,10 @@
       },
       { "name": "enforce_publicreadable_write_rule", "formula":
         {
-          "$or": 
+          "$or":
           [
             {
-              "$match": 
+              "$match":
               [
                 {
                   "$eq": [
@@ -58,7 +58,7 @@
               ]
             },
             {
-              "$match": 
+              "$match":
               [
                 {
                   "$eq": [
@@ -86,25 +86,25 @@
       { "name": "bpn_or_public", "formula":
        { "$or": [
           { "$eq": [ { "$attribute": { "CLAIM": "Edc-Bpn" } }, { "$field": "$aasdesc#specificAssetIds[].externalSubjectId.keys[].value" } ] },
-          { "$eq": [ { "$strVal": "PUBLIC_READABLE" }, { "$field": "$aasdesc#specificAssetIds[].externalSubjectId.keys[].value" } ] } 
+          { "$eq": [ { "$strVal": "PUBLIC_READABLE" }, { "$field": "$aasdesc#specificAssetIds[].externalSubjectId.keys[].value" } ] }
         ]
        }
       },
       { "name": "bpn_or_public_with_header", "formula":
        { "$or": [
           { "$eq": [ { "$attribute": { "CLAIM": "Edc-Bpn" } }, { "$field": "$aasdesc#specificAssetIds[].externalSubjectId.keys[].value" } ] },
-          { "$match": [
-            { "$eq": [ { "$strVal": "PUBLIC_READABLE" }, { "$field": "$aasdesc#specificAssetIds[].externalSubjectId.keys[].value" } ] }, 
+          { "$and": [
+            { "$eq": [ { "$strVal": "PUBLIC_READABLE" }, { "$field": "$aasdesc#specificAssetIds[].externalSubjectId.keys[].value" } ] },
             { "$ne": [ { "$attribute": { "CLAIM": "Edc-Bpn" } }, { "$strVal": "<nil>" } ] }
           ]}
         ]
        }
       },
-      { "name": "bpn_match", 
+      { "name": "bpn_match",
         "formula":
           { "$eq": [ { "$attribute": { "CLAIM": "Edc-Bpn" } }, { "$field": "$aasdesc#specificAssetIds[].externalSubjectId.keys[].value" } ] }
       }
-      
+
     ],
 
     "rules": [
@@ -112,8 +112,8 @@
       { "USEACL": "data_provider_create", "USEOBJECTS": ["all_shell_descriptors", "assetlinks", "shells"], "USEFORMULA": "data_provider_create_formula" },
       { "USEACL": "data_provider_update", "USEOBJECTS": ["all_shell_descriptors", "assetlinks", "shells"], "USEFORMULA": "data_provider_update_formula" },
       { "USEACL": "data_provider_delete", "USEOBJECTS": ["all_shell_descriptors", "assetlinks", "shells"], "USEFORMULA": "data_provider_delete_formula" },
-      { "USEACL": "read_anonymous", "USEOBJECTS": ["all_shell_descriptors"], "USEFORMULA": "bpn_or_public", 
-        "FILTERLIST": 
+      { "USEACL": "read_anonymous", "USEOBJECTS": ["all_shell_descriptors"], "USEFORMULA": "bpn_or_public",
+        "FILTERLIST":
         [
           {
             "FRAGMENT": "$aasdesc#administration",
@@ -153,7 +153,7 @@
             "USEFORMULA": "bpn_or_public_with_header",
             "MATCH": true
           }
-        ] 
+        ]
       },
       { "USEACL": "read_anonymous", "USEOBJECTS": ["assetlinks"], "USEFORMULA": "bpn_or_public"}
     ]

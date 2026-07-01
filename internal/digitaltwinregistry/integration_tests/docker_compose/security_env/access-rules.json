@@ -94,7 +94,7 @@
       { "name": "bpn_or_public_with_header", "formula":
        { "$or": [
           { "$eq": [ { "$attribute": { "CLAIM": "Edc-Bpn" } }, { "$field": "$aasdesc#specificAssetIds[].externalSubjectId.keys[].value" } ] },
-          { "$match": [
+          { "$and": [
             { "$eq": [ { "$strVal": "PUBLIC_READABLE" }, { "$field": "$aasdesc#specificAssetIds[].externalSubjectId.keys[].value" } ] },
             { "$ne": [ { "$attribute": { "CLAIM": "Edc-Bpn" } }, { "$strVal": "<nil>" } ] }
           ]}
