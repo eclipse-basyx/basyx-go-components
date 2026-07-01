@@ -20,7 +20,7 @@ def parse_args():
     parser.add_argument("--start-index", type=int, default=1)
     parser.add_argument("--dtr-base-url", default="http://localhost:5004/api/v3")
     parser.add_argument("--smrepo-base-url", default="http://localhost:5005")
-    parser.add_argument("--token-url", default="http://localhost:8080/realms/basyx/protocol/openid-connect/token")
+    parser.add_argument("--token-url", default="http://keycloak.localhost:8080/realms/basyx/protocol/openid-connect/token")
     parser.add_argument("--client-id", default="basyx-ui")
     parser.add_argument("--username", default="admin")
     parser.add_argument("--password", default="pwd")

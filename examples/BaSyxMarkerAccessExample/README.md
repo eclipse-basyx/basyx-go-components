@@ -4,7 +4,8 @@ This example builds the current repository code and runs:
 
 - a Digital Twin Registry on `http://localhost:5004/api/v3`;
 - a Submodel Repository on `http://localhost:5005`;
-- Keycloak on `http://localhost:8080`;
+- the BaSyx UI on `http://localhost:3000`;
+- Keycloak on `http://keycloak.localhost:8080`;
 - separate databases and configuration-service runs for DTR and Submodel Repository.
 
 The services use marker values to control visibility:
@@ -29,6 +30,9 @@ Run from this directory:
 ```bash
 docker compose up -d --build
 ```
+
+The BaSyx UI uses the `basyx-ui` OAuth2 auth-code client from the imported
+Keycloak realm and is configured through `basyx-infra.yml`.
 
 ## Postman Collection
 
