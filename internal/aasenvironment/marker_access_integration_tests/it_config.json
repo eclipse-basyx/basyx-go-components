@@ -277,10 +277,10 @@
     }
   },
   {
-    "context": "DTR assetIds BPN company 3 globalAssetId and customerPartId returns public markers",
+    "context": "DTR assetIds BPN company 3 globalAssetId and customerPartId returns empty",
     "method": "GET",
     "endpoint": "http://127.0.0.1:5004/api/v3/shell-descriptors?assetIds=eyJuYW1lIjoiZ2xvYmFsQXNzZXRJZCIsInZhbHVlIjoidXJuOmV4YW1wbGU6YXNzZXQ6cHJvZHVjdC0wMDEifQ&assetIds=eyJuYW1lIjoiY3VzdG9tZXJQYXJ0SWQiLCJ2YWx1ZSI6IkNVU1RPTUVSLVBBUlQtMDAxIn0",
-    "shouldMatch": "expected/dtr_unrelated.json",
+    "shouldMatch": "expected/empty_paged_result.json",
     "expectedStatus": 200,
     "token": {
       "user": "collection_viewer",
