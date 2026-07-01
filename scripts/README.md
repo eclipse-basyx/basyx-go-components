@@ -11,14 +11,11 @@ Generates Bruno OpenCollection YAML files for example API client workflows from
 the checked-in Postman collections.
 
 The script currently generates:
-- `examples/CatenaXample/bruno`
-- `examples/CatenaXample/CatenaXample.opencollection.yml`
+- `examples/CatenaXample/bruno_collection`
 
-The generated CatenaXample collection uses `bruno/opencollection.yml` as
+The generated CatenaXample collection uses `bruno_collection/opencollection.yml` as
 the collection root. Protected requests include Bruno-native pre-request
 scripts for the Keycloak password-grant token flow.
-The bundled `CatenaXample.opencollection.yml` file is a single-file
-reference export; use the `bruno/` directory for Bruno import.
 
 ### Usage
 

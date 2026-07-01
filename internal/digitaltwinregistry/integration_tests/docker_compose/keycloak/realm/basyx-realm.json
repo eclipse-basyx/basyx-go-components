@@ -485,6 +485,32 @@
     "notBefore" : 0,
     "groups" : [ ]
   }, {
+    "id" : "9ec4d708-f3aa-4bcf-ad2b-1e8a1bb949c2",
+    "username" : "no_bpn_viewer",
+    "firstName" : "No",
+    "lastName" : "BPN",
+    "email" : "no_bpn_viewer@mail.com",
+    "emailVerified" : false,
+    "attributes" : {
+      "role" : [ "user" ]
+    },
+    "createdTimestamp" : 1763553277239,
+    "enabled" : true,
+    "totp" : false,
+    "credentials" : [ {
+      "id" : "a7a9d338-f20f-48e0-b9d6-cb1ad0dfb0e8",
+      "type" : "password",
+      "userLabel" : "My password",
+      "createdDate" : 1763553410862,
+      "secretData" : "{\"value\":\"rILNeJ1Atdyg3V1eF7KDkw3kZgbXSmHP8z4g4MQVidU=\",\"salt\":\"qFkvnew602rmkafCjUueCg==\",\"additionalParameters\":{}}",
+      "credentialData" : "{\"hashIterations\":5,\"algorithm\":\"argon2\",\"additionalParameters\":{\"hashLength\":[\"32\"],\"memory\":[\"7168\"],\"type\":[\"id\"],\"version\":[\"1.3\"],\"parallelism\":[\"1\"]}}"
+    } ],
+    "disableableCredentialTypes" : [ ],
+    "requiredActions" : [ ],
+    "realmRoles" : [ "default-roles-basyx" ],
+    "notBefore" : 0,
+    "groups" : [ ]
+  }, {
     "id" : "803f798c-3e11-440e-ad66-26016efca76c",
     "username" : "userx",
     "firstName" : "Max",

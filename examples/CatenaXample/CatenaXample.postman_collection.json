@@ -27,15 +27,19 @@
           "    'Unrelated BPN Sees Public DTR Data With Public Markers',",
           "    'Regular Token Sees Public DTR Descriptor Only',",
           "    'Regular Token With BPN Company 1 Sees BPN1 DTR Data',",
-          "    'Anonymous Sees Public Submodel Only',",
           "    'BPN Company 1 Sees Public And BPN1 Submodels',",
           "    'BPN Company 2 Sees Public And BPN2 Submodels',",
           "    'Unrelated BPN Sees Public Submodel With Public Markers',",
           "    'Regular Token Sees Public Submodel Only',",
           "    'Regular Token With BPN Company 1 Sees BPN1 Submodels'",
           "];",
+          "const noBpnViewerRequestNames = [",
+          "    'Anonymous Sees Public DTR Descriptor Only',",
+          "    'Anonymous Sees Public Submodel Only'",
+          "];",
           "const needsAdminToken = authHeader.includes('{{adminAccessToken}}') || adminRequestNames.includes(pm.info.requestName);",
           "const needsUserToken = authHeader.includes('{{userAccessToken}}') || userRequestNames.includes(pm.info.requestName);",
+          "const needsNoBpnViewerToken = authHeader.includes('{{noBpnViewerAccessToken}}') || noBpnViewerRequestNames.includes(pm.info.requestName);",
           "const nowSeconds = Math.floor(Date.now() / 1000);",
           "",
           "function tokenIsFresh(expiresAtVariable) {",
@@ -84,6 +88,10 @@
           "",
           "if (needsUserToken) {",
           "    requestOAuth2Token('regularUsername', 'regularPassword', 'userAccessToken', 'userAccessTokenExpiresAt');",
+          "}",
+          "",
+          "if (needsNoBpnViewerToken) {",
+          "    requestOAuth2Token('noBpnViewerUsername', 'noBpnViewerPassword', 'noBpnViewerAccessToken', 'noBpnViewerAccessTokenExpiresAt');",
           "}"
         ]
       }
@@ -336,7 +344,12 @@
           ],
           "request": {
             "method": "GET",
-            "header": [],
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{noBpnViewerAccessToken}}"
+              }
+            ],
             "url": {
               "raw": "{{dtrBaseUrl}}/shell-descriptors",
               "host": [
@@ -1179,6 +1192,36 @@
             }
           },
           "response": []
+        },
+        {
+          "name": "Anonymous Without Token DTR Forbidden",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('DTR request without token is forbidden', function () {",
+                  "    pm.response.to.have.status(403);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{dtrBaseUrl}}/shell-descriptors",
+              "host": [
+                "{{dtrBaseUrl}}"
+              ],
+              "path": [
+                "shell-descriptors"
+              ]
+            }
+          },
+          "response": []
         }
       ]
     },
@@ -1288,7 +1331,7 @@
             "header": [
               {
                 "key": "Authorization",
-                "value": "Bearer {{userAccessToken}}"
+                "value": "Bearer {{noBpnViewerAccessToken}}"
               }
             ],
             "url": {
@@ -1509,6 +1552,36 @@
             }
           },
           "response": []
+        },
+        {
+          "name": "Anonymous Without Token Submodel Forbidden",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('submodel request without token is forbidden', function () {",
+                  "    pm.response.to.have.status(403);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{smRepoBaseUrl}}/submodels",
+              "host": [
+                "{{smRepoBaseUrl}}"
+              ],
+              "path": [
+                "submodels"
+              ]
+            }
+          },
+          "response": []
         }
       ]
     }
@@ -1547,6 +1620,14 @@
       "value": "pwd"
     },
     {
+      "key": "noBpnViewerUsername",
+      "value": "no_bpn_viewer"
+    },
+    {
+      "key": "noBpnViewerPassword",
+      "value": "pwd"
+    },
+    {
       "key": "adminAccessToken",
       "value": ""
     },
@@ -1560,6 +1641,14 @@
     },
     {
       "key": "userAccessTokenExpiresAt",
+      "value": "0"
+    },
+    {
+      "key": "noBpnViewerAccessToken",
+      "value": ""
+    },
+    {
+      "key": "noBpnViewerAccessTokenExpiresAt",
       "value": "0"
     },
     {

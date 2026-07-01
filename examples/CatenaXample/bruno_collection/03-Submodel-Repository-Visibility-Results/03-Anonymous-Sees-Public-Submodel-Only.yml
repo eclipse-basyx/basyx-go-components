@@ -13,8 +13,8 @@ runtime:
   scripts:
     - type: before-request
       code: |-
-        const tokenVariable = "userAccessToken";
-        const expiresAtVariable = "userAccessTokenExpiresAt";
+        const tokenVariable = "noBpnViewerAccessToken";
+        const expiresAtVariable = "noBpnViewerAccessTokenExpiresAt";
         const nowSeconds = Math.floor(Date.now() / 1000);
         
         function tokenIsFresh() {
@@ -42,7 +42,7 @@ runtime:
             data: formUrlEncode({
               grant_type: "password",
               client_id: "basyx-ui",
-              username: "collection_viewer",
+              username: "no_bpn_viewer",
               password: "pwd",
             }),
           });

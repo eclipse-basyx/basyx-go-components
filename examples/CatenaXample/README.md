@@ -91,13 +91,11 @@ The collection variables use:
 - `bpnCompany1`, `bpnCompany2`, `bpnCompany3`, and `unrelatedBpn` as test
   `Edc-Bpn` header values.
 
-The generated Bruno/OpenCollection variants are kept in sync with the Postman
-source:
+The generated Bruno collection is kept in sync with the Postman source:
 
-- Bruno folder collection: `bruno/`
-- single-file OpenCollection: `CatenaXample.opencollection.yml`
+- Bruno folder collection: `bruno_collection/`
 
-Regenerate them after changing the Postman source:
+Regenerate it after changing the Postman source:
 
 ```powershell
 node ..\..\scripts\generate_bruno_collections.js

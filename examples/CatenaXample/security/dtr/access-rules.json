@@ -321,7 +321,7 @@
         "USEFORMULA": "data_provider"
       },
       {
-        "USEACL": "public_read",
+        "USEACL": "read",
         "USEOBJECTS": [
           "all_shell_descriptors"
         ],

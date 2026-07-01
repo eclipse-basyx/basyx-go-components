@@ -3,8 +3,7 @@ const path = require("path");
 
 const collection = {
   source: "examples/CatenaXample/CatenaXample.postman_collection.json",
-  target: "examples/CatenaXample/bruno",
-  singleFileTarget: "examples/CatenaXample/CatenaXample.opencollection.yml",
+  target: "examples/CatenaXample/bruno_collection",
   name: "CatenaXample",
 };
 
@@ -76,14 +75,35 @@ function authType(headers) {
     return "user";
   }
 
+  if (authorization.value.includes("{{noBpnViewerAccessToken}}")) {
+    return "noBpnViewer";
+  }
+
   return "";
 }
 
 function tokenScript(type, variables) {
-  const username = type === "admin" ? variables.adminUsername : variables.regularUsername;
-  const password = type === "admin" ? variables.adminPassword : variables.regularPassword;
-  const tokenVariable = type === "admin" ? "adminAccessToken" : "userAccessToken";
-  const expiresAtVariable = type === "admin" ? "adminAccessTokenExpiresAt" : "userAccessTokenExpiresAt";
+  const tokenConfig = {
+    admin: {
+      username: variables.adminUsername,
+      password: variables.adminPassword,
+      tokenVariable: "adminAccessToken",
+      expiresAtVariable: "adminAccessTokenExpiresAt",
+    },
+    user: {
+      username: variables.regularUsername,
+      password: variables.regularPassword,
+      tokenVariable: "userAccessToken",
+      expiresAtVariable: "userAccessTokenExpiresAt",
+    },
+    noBpnViewer: {
+      username: variables.noBpnViewerUsername,
+      password: variables.noBpnViewerPassword,
+      tokenVariable: "noBpnViewerAccessToken",
+      expiresAtVariable: "noBpnViewerAccessTokenExpiresAt",
+    },
+  }[type];
+  const { username, password, tokenVariable, expiresAtVariable } = tokenConfig;
 
   return [
     `const tokenVariable = "${tokenVariable}";`,
@@ -391,4 +411,3 @@ function writeSingleFile(config) {
 }
 
 writeCollection(collection);
-writeSingleFile(collection);
