@@ -113,6 +113,28 @@ var tokenizeCases = []struct {
 			{Name: "href", IsArray: false},
 		},
 	},
+	{
+		name:  "$aasdesc#specificAssetIds]0[.value",
+		field: "$aasdesc#specificAssetIds]0[.value",
+		tokens: []expectedToken{
+			{Name: "specificAssetIds]0[", IsArray: false},
+			{Name: "value", IsArray: false},
+		},
+	},
+	{
+		name:  "$aasdesc#]keys[2]",
+		field: "$aasdesc#]keys[2]",
+		tokens: []expectedToken{
+			{Name: "]keys[2]", IsArray: false},
+		},
+	},
+	{
+		name:  "$aasdesc#keys[2",
+		field: "$aasdesc#keys[2",
+		tokens: []expectedToken{
+			{Name: "keys[2", IsArray: false},
+		},
+	},
 }
 
 func TestTokenizeFieldPaths(t *testing.T) {
