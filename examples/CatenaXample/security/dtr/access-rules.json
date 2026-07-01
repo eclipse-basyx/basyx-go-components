@@ -203,12 +203,26 @@
                   ]
                 },
                 {
-                  "$eq": [
+                  "$match": [
                     {
-                      "$strVal": "PUBLIC_READABLE"
+                      "$ne": [
+                        {
+                          "$field": "$aasdesc#specificAssetIds[].name"
+                        },
+                        {
+                          "$strVal": "globalAssetId"
+                        }
+                      ]
                     },
                     {
-                      "$field": "$aasdesc#specificAssetIds[].externalSubjectId.keys[].value"
+                      "$eq": [
+                        {
+                          "$strVal": "PUBLIC_READABLE"
+                        },
+                        {
+                          "$field": "$aasdesc#specificAssetIds[].externalSubjectId.keys[].value"
+                        }
+                      ]
                     }
                   ]
                 }
@@ -234,12 +248,26 @@
               ]
             },
             {
-              "$eq": [
+              "$match": [
                 {
-                  "$strVal": "PUBLIC_READABLE"
+                  "$ne": [
+                    {
+                      "$field": "$aasdesc#specificAssetIds[].name"
+                    },
+                    {
+                      "$strVal": "globalAssetId"
+                    }
+                  ]
                 },
                 {
-                  "$field": "$aasdesc#specificAssetIds[].externalSubjectId.keys[].value"
+                  "$eq": [
+                    {
+                      "$strVal": "PUBLIC_READABLE"
+                    },
+                    {
+                      "$field": "$aasdesc#specificAssetIds[].externalSubjectId.keys[].value"
+                    }
+                  ]
                 }
               ]
             }
@@ -325,7 +353,7 @@
         "USEOBJECTS": [
           "all_shell_descriptors"
         ],
-        "USEFORMULA": "aas_bpn_or_public",
+        "USEFORMULA": "authenticated_aas_bpn_or_public",
         "FILTERLIST": [
           {
             "FRAGMENT": "$aasdesc#administration",
@@ -387,7 +415,7 @@
         "USEOBJECTS": [
           "asset_links"
         ],
-        "USEFORMULA": "authenticated_aas_bpn_or_public"
+        "USEFORMULA": "aas_bpn_or_public"
       }
     ]
   }
