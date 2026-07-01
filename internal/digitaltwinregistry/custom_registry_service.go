@@ -28,7 +28,10 @@ package digitaltwinregistry
 
 import (
 	"context"
+	"encoding/json"
+	"log"
 	"net/http"
+	"strings"
 	"time"
 
 	registryapiinternal "github.com/eclipse-basyx/basyx-go-components/internal/aasregistry/api"
@@ -36,6 +39,7 @@ import (
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/asyncbulk"
 	descriptorsutil "github.com/eclipse-basyx/basyx-go-components/internal/common/descriptors"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 	discoveryapiinternal "github.com/eclipse-basyx/basyx-go-components/internal/discoveryservice/api"
 )
@@ -77,6 +81,23 @@ func (s *CustomRegistryService) GetAllAssetAdministrationShellDescriptors(
 	}
 	ctx = descriptorsutil.WithIncludeAASDescriptorCreatedAt(ctx)
 
+	if len(assetIds) > 0 {
+		links, resp, err := decodeRegistryAssetLinkQueryAssetIDs(assetIds)
+		if resp != nil || err != nil {
+			return *resp, err
+		}
+		return s.getAllAssetAdministrationShellDescriptorsByAssetLinks(
+			ctx,
+			limit,
+			cursor,
+			assetKind,
+			assetType,
+			links,
+			createdFrom,
+			updatedFrom,
+		)
+	}
+
 	return s.AssetAdministrationShellRegistryAPIAPIService.GetAllAssetAdministrationShellDescriptors(
 		ctx,
 		limit,
@@ -87,6 +108,193 @@ func (s *CustomRegistryService) GetAllAssetAdministrationShellDescriptors(
 		createdFrom,
 		updatedFrom,
 	)
+}
+
+func (s *CustomRegistryService) getAllAssetAdministrationShellDescriptorsByAssetLinks(
+	ctx context.Context,
+	limit int32,
+	cursor string,
+	assetKind model.AssetKind,
+	assetType string,
+	links []model.AssetLink,
+	createdFrom time.Time,
+	updatedFrom time.Time,
+) (model.ImplResponse, error) {
+	if len(links) == 0 {
+		return emptyDescriptorPage(), nil
+	}
+
+	lookupCtx, lookupErr := mergeAssetLinkLookupFilter(ctx, links)
+	if lookupErr != nil {
+		return common.NewErrorResponse(
+			lookupErr,
+			http.StatusInternalServerError,
+			customRegistryComponentName,
+			"GetAllAssetAdministrationShellDescriptors",
+			"AssetLinkFilter",
+		), lookupErr
+	}
+
+	lookupResp, lookupErr := s.discovery.SearchAllAssetAdministrationShellIdsByAssetLink(lookupCtx, limit, cursor, links)
+	if lookupErr != nil || lookupResp.Code != http.StatusOK {
+		return lookupResp, lookupErr
+	}
+
+	aasIDs, paging, extractErr := extractLookupAASIDs(lookupResp)
+	if extractErr != nil {
+		return common.NewErrorResponse(
+			extractErr,
+			http.StatusInternalServerError,
+			customRegistryComponentName,
+			"GetAllAssetAdministrationShellDescriptors",
+			"LookupResponse",
+		), extractErr
+	}
+	if len(aasIDs) == 0 {
+		return model.Response(http.StatusOK, map[string]any{
+			"paging_metadata": paging,
+		}), nil
+	}
+
+	descriptorQuery := buildAASIDQuery(aasIDs)
+	descriptorCtx := auth.MergeQueryFilter(ctx, descriptorQuery)
+	descriptorResp, descriptorErr := s.AssetAdministrationShellRegistryAPIAPIService.GetAllAssetAdministrationShellDescriptors(
+		descriptorCtx,
+		int32(len(aasIDs)),
+		"",
+		assetKind,
+		assetType,
+		nil,
+		createdFrom,
+		updatedFrom,
+	)
+	if descriptorErr != nil || descriptorResp.Code != http.StatusOK {
+		return descriptorResp, descriptorErr
+	}
+
+	return replaceDescriptorPagingMetadata(descriptorResp, paging)
+}
+
+func decodeRegistryAssetLinkQueryAssetIDs(encodedAssetIDs []string) ([]model.AssetLink, *model.ImplResponse, error) {
+	links := make([]model.AssetLink, 0, len(encodedAssetIDs))
+	for idx, encodedAssetID := range encodedAssetIDs {
+		if strings.TrimSpace(encodedAssetID) == "" {
+			continue
+		}
+
+		decoded, err := common.DecodeString(encodedAssetID)
+		if err != nil {
+			log.Printf("[%s] Error GetAllAssetAdministrationShellDescriptors: decode assetIds[%d]=%q failed: %v", customRegistryComponentName, idx, encodedAssetID, err)
+			resp := common.NewErrorResponse(
+				err,
+				http.StatusBadRequest,
+				customRegistryComponentName,
+				"GetAllAssetAdministrationShellDescriptors",
+				"BadRequest-DecodeAssetIds",
+			)
+			return nil, &resp, nil
+		}
+
+		var link model.AssetLink
+		if err := json.Unmarshal([]byte(decoded), &link); err != nil {
+			log.Printf("[%s] Error GetAllAssetAdministrationShellDescriptors: unmarshal assetIds[%d] decoded=%q failed: %v", customRegistryComponentName, idx, decoded, err)
+			resp := common.NewErrorResponse(
+				err,
+				http.StatusBadRequest,
+				customRegistryComponentName,
+				"GetAllAssetAdministrationShellDescriptors",
+				"BadRequest-UnmarshalAssetIds",
+			)
+			return nil, &resp, nil
+		}
+
+		links = append(links, link)
+	}
+
+	return links, nil, nil
+}
+
+func mergeAssetLinkLookupFilter(ctx context.Context, links []model.AssetLink) (context.Context, error) {
+	shouldEnforceFormula, enforceErr := auth.ShouldEnforceFormula(ctx)
+	if enforceErr != nil {
+		return ctx, enforceErr
+	}
+	if !shouldEnforceFormula {
+		return ctx, nil
+	}
+
+	assetLinkQuery := buildAssetLinkQuery(ctx, links)
+	if assetLinkQuery.Condition == nil && len(assetLinkQuery.FilterConditions) == 0 {
+		return ctx, nil
+	}
+
+	return discoveryapiinternal.WithAssetLinksAlreadyConstrained(auth.MergeQueryFilter(ctx, assetLinkQuery)), nil
+}
+
+func buildAASIDQuery(aasIDs []string) grammar.Query {
+	if len(aasIDs) == 0 {
+		return grammar.Query{}
+	}
+
+	aasIDField := grammar.ModelStringPattern("$aasdesc#id")
+	condition := grammar.LogicalExpression{Or: make([]grammar.LogicalExpression, 0, len(aasIDs))}
+	for _, aasID := range aasIDs {
+		aasIDValue := grammar.StandardString(aasID)
+		condition.Or = append(condition.Or, grammar.LogicalExpression{
+			Eq: grammar.ComparisonItems{
+				{Field: &aasIDField},
+				{StrVal: &aasIDValue},
+			},
+		})
+	}
+
+	return grammar.Query{Condition: &condition}
+}
+
+func extractLookupAASIDs(resp model.ImplResponse) ([]string, model.PagedResultPagingMetadata, error) {
+	switch body := resp.Body.(type) {
+	case model.GetAllAssetAdministrationShellIdsByAssetLink200Response:
+		return body.Result, body.PagingMetadata, nil
+	case *model.GetAllAssetAdministrationShellIdsByAssetLink200Response:
+		if body == nil {
+			return nil, model.PagedResultPagingMetadata{}, nil
+		}
+		return body.Result, body.PagingMetadata, nil
+	default:
+		payload, err := json.Marshal(body)
+		if err != nil {
+			return nil, model.PagedResultPagingMetadata{}, err
+		}
+		var decoded model.GetAllAssetAdministrationShellIdsByAssetLink200Response
+		if err = json.Unmarshal(payload, &decoded); err != nil {
+			return nil, model.PagedResultPagingMetadata{}, err
+		}
+		return decoded.Result, decoded.PagingMetadata, nil
+	}
+}
+
+func replaceDescriptorPagingMetadata(resp model.ImplResponse, paging model.PagedResultPagingMetadata) (model.ImplResponse, error) {
+	payload, err := json.Marshal(resp.Body)
+	if err != nil {
+		return model.ImplResponse{}, err
+	}
+	var decoded struct {
+		PagingMetadata model.PagedResultPagingMetadata `json:"paging_metadata"`
+		Result         []map[string]any                `json:"result"`
+	}
+	if err = json.Unmarshal(payload, &decoded); err != nil {
+		return model.ImplResponse{}, err
+	}
+	return model.Response(http.StatusOK, map[string]any{
+		"paging_metadata": paging,
+		"result":          decoded.Result,
+	}), nil
+}
+
+func emptyDescriptorPage() model.ImplResponse {
+	return model.Response(http.StatusOK, map[string]any{
+		"paging_metadata": model.PagedResultPagingMetadata{},
+	})
 }
 
 // GetAssetAdministrationShellDescriptorById - Returns a specific Asset Administration Shell Descriptor

@@ -31,6 +31,21 @@ const (
 	componentName = "AASR_VAL"
 )
 
+var (
+	getAllShellDescriptorsQueryParameters = allowedQueryParameters(
+		"limit",
+		"cursor",
+		"assetKind",
+		"assetType",
+		"assetIds",
+		"createdFrom",
+		"updatedFrom",
+		"createdAfter",
+	)
+	getAllSubmodelDescriptorsQueryParameters = allowedQueryParameters("limit", "cursor")
+	queryShellDescriptorsQueryParameters     = allowedQueryParameters("limit", "cursor")
+)
+
 // AssetAdministrationShellRegistryAPIAPIController binds http requests to an api service and writes the service results to the http response
 type AssetAdministrationShellRegistryAPIAPIController struct {
 	service      AssetAdministrationShellRegistryAPIAPIServicer
@@ -222,6 +237,18 @@ func (c *AssetAdministrationShellRegistryAPIAPIController) GetAllAssetAdministra
 		EncodeJSONResponse(result.Body, &result.Code, w)
 		return
 	}
+	if err := validateAllowedQueryParameters(query, getAllShellDescriptorsQueryParameters); err != nil {
+		log.Printf("🧩 [%s] Error in GetAllAssetAdministrationShellDescriptors: validate query raw=%q: %v", componentName, r.URL.RawQuery, err)
+		result := common.NewErrorResponse(
+			err,
+			http.StatusBadRequest,
+			componentName,
+			"GetAllAssetAdministrationShellDescriptors",
+			"query",
+		)
+		EncodeJSONResponse(result.Body, &result.Code, w)
+		return
+	}
 	var limitParam int32
 	if query.Has("limit") {
 		param, err := parseNumericParameter[int32](
@@ -256,7 +283,7 @@ func (c *AssetAdministrationShellRegistryAPIAPIController) GetAllAssetAdministra
 	if query.Has("assetType") {
 		assetTypeParam = query.Get("assetType")
 	}
-	assetIdsParam := query["assetIds"]
+	assetIdsParam := parseCSVQueryValues(query["assetIds"])
 	var createdFromParam time.Time
 	if query.Has("createdFrom") {
 		createdFromParam, err = parseTime(query.Get("createdFrom"))
@@ -297,6 +324,45 @@ func parseOptionalAssetKind(query url.Values, operation string) (model.AssetKind
 		return "", &result
 	}
 	return assetKind, nil
+}
+
+func parseCSVQueryValues(values []string) []string {
+	parsed := make([]string, 0, len(values))
+	for _, value := range values {
+		if value == "" {
+			continue
+		}
+		for _, part := range strings.Split(value, ",") {
+			part = strings.TrimSpace(part)
+			if part != "" {
+				parsed = append(parsed, part)
+			}
+		}
+	}
+	if len(values) > 0 && len(parsed) == 0 {
+		return []string{""}
+	}
+
+	return parsed
+}
+
+func allowedQueryParameters(names ...string) map[string]struct{} {
+	allowed := make(map[string]struct{}, len(names))
+	for _, name := range names {
+		allowed[name] = struct{}{}
+	}
+
+	return allowed
+}
+
+func validateAllowedQueryParameters(query url.Values, allowed map[string]struct{}) error {
+	for name := range query {
+		if _, ok := allowed[name]; !ok {
+			return common.NewErrBadRequest("AASR_VAL-VALIDATEQUERY-UNKNOWN unknown query parameter " + name)
+		}
+	}
+
+	return nil
 }
 
 // PostAssetAdministrationShellDescriptor - Creates a new Asset Administration Shell Descriptor, i.e. registers an AAS
@@ -479,6 +545,17 @@ func (c *AssetAdministrationShellRegistryAPIAPIController) DeleteAssetAdministra
 func (c *AssetAdministrationShellRegistryAPIAPIController) GetAllSubmodelDescriptorsThroughSuperpath(w http.ResponseWriter, r *http.Request) {
 	query, err := parseQuery(r.URL.RawQuery)
 	if err != nil {
+		result := common.NewErrorResponse(
+			err,
+			http.StatusBadRequest,
+			componentName,
+			"GetAllSubmodelDescriptorsThroughSuperpath",
+			"query",
+		)
+		EncodeJSONResponse(result.Body, &result.Code, w)
+		return
+	}
+	if err := validateAllowedQueryParameters(query, getAllSubmodelDescriptorsQueryParameters); err != nil {
 		result := common.NewErrorResponse(
 			err,
 			http.StatusBadRequest,
@@ -766,6 +843,18 @@ func (c *AssetAdministrationShellRegistryAPIAPIController) QueryAssetAdministrat
 	query, err := parseQuery(r.URL.RawQuery)
 	if err != nil {
 		log.Printf("🧩 [%s] Error in QueryAssetAdministrationShellDescriptors: parse query raw=%q: %v", componentName, r.URL.RawQuery, err)
+		result := common.NewErrorResponse(
+			err,
+			http.StatusBadRequest,
+			componentName,
+			"QueryAssetAdministrationShellDescriptors",
+			"query",
+		)
+		EncodeJSONResponse(result.Body, &result.Code, w)
+		return
+	}
+	if err := validateAllowedQueryParameters(query, queryShellDescriptorsQueryParameters); err != nil {
+		log.Printf("🧩 [%s] Error in QueryAssetAdministrationShellDescriptors: validate query raw=%q: %v", componentName, r.URL.RawQuery, err)
 		result := common.NewErrorResponse(
 			err,
 			http.StatusBadRequest,

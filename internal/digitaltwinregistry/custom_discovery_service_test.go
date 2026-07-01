@@ -29,6 +29,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
@@ -62,5 +63,73 @@ func TestBuildAssetLinkQuery_BuildsConditionWhenReadFormulaIsRestricted(t *testi
 	}
 	if len(query.Condition.And) == 0 {
 		t.Fatalf("expected AND conditions for asset-link query, got %#v", query.Condition)
+	}
+}
+
+func TestBuildAssetLinkDescriptorQuery_FiltersWhenReadFormulaIsUnrestricted(t *testing.T) {
+	t.Parallel()
+
+	b := true
+	ctx := auth.MergeQueryFilter(context.Background(), grammar.Query{
+		Condition: &grammar.LogicalExpression{Boolean: &b},
+	})
+
+	query := buildAssetLinkDescriptorQuery(ctx, []model.AssetLink{{Name: "name", Value: "value"}})
+	if query.Condition == nil {
+		t.Fatalf("expected asset-link condition for descriptor query")
+	}
+	if len(query.Condition.And) != 1 {
+		t.Fatalf("expected one AND condition for descriptor asset-link query, got %#v", query.Condition)
+	}
+	if len(query.Condition.And[0].Match) != 2 {
+		t.Fatalf("expected descriptor query to match name and value, got %#v", query.Condition.And[0].Match)
+	}
+}
+
+func TestBuildAssetLinkDescriptorQuery_UsesSecurityAwareQueryWhenReadFormulaIsRestricted(t *testing.T) {
+	t.Parallel()
+
+	b := false
+	ctx := auth.MergeQueryFilter(context.Background(), grammar.Query{
+		Condition: &grammar.LogicalExpression{Boolean: &b},
+	})
+
+	query := buildAssetLinkDescriptorQuery(ctx, []model.AssetLink{{Name: "name", Value: "value"}})
+	if query.Condition == nil {
+		t.Fatalf("expected security-aware asset-link condition")
+	}
+	if len(query.Condition.And) != 1 || len(query.Condition.And[0].Or) == 0 {
+		t.Fatalf("expected restricted descriptor query to include authorization alternatives, got %#v", query.Condition)
+	}
+}
+
+func TestDecodeRegistryAssetLinkQueryAssetIDs_DecodesAssetLink(t *testing.T) {
+	t.Parallel()
+
+	encoded := common.EncodeString(`{"name":"customerPartId","value":"part-1"}`)
+	links, resp, err := decodeRegistryAssetLinkQueryAssetIDs([]string{encoded})
+	if err != nil {
+		t.Fatalf("decodeRegistryAssetLinkQueryAssetIDs returned error: %v", err)
+	}
+	if resp != nil {
+		t.Fatalf("decodeRegistryAssetLinkQueryAssetIDs returned response: %#v", resp)
+	}
+	if len(links) != 1 || links[0].Name != "customerPartId" || links[0].Value != "part-1" {
+		t.Fatalf("unexpected decoded links: %#v", links)
+	}
+}
+
+func TestDecodeRegistryAssetLinkQueryAssetIDs_IgnoresBlankValues(t *testing.T) {
+	t.Parallel()
+
+	links, resp, err := decodeRegistryAssetLinkQueryAssetIDs([]string{"", "  "})
+	if err != nil {
+		t.Fatalf("decodeRegistryAssetLinkQueryAssetIDs returned error: %v", err)
+	}
+	if resp != nil {
+		t.Fatalf("decodeRegistryAssetLinkQueryAssetIDs returned response: %#v", resp)
+	}
+	if len(links) != 0 {
+		t.Fatalf("expected no decoded links, got %#v", links)
 	}
 }

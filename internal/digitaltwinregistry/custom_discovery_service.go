@@ -385,3 +385,45 @@ func buildAssetLinkQuery(ctx context.Context, assetLink []model.AssetLink) gramm
 		Condition: &assetLinkLe,
 	}
 }
+
+func buildUnrestrictedAssetLinkQuery(assetLink []model.AssetLink) grammar.Query {
+	if len(assetLink) == 0 {
+		return grammar.Query{}
+	}
+
+	assetLinkFieldValue := grammar.ModelStringPattern("$aasdesc#specificAssetIds[].value")
+	assetLinkFieldName := grammar.ModelStringPattern("$aasdesc#specificAssetIds[].name")
+	assetLinkLe := grammar.LogicalExpression{And: []grammar.LogicalExpression{}}
+	for _, link := range assetLink {
+		assetLinkValue := grammar.StandardString(link.Value)
+		assetLinkName := grammar.StandardString(link.Name)
+		assetLinkLe.And = append(assetLinkLe.And, grammar.LogicalExpression{
+			Match: []grammar.MatchExpression{
+				{
+					Eq: grammar.ComparisonItems{
+						{Field: &assetLinkFieldValue},
+						{StrVal: &assetLinkValue},
+					},
+				},
+				{
+					Eq: grammar.ComparisonItems{
+						{Field: &assetLinkFieldName},
+						{StrVal: &assetLinkName},
+					},
+				},
+			},
+		})
+	}
+
+	return grammar.Query{
+		Condition: &assetLinkLe,
+	}
+}
+
+func buildAssetLinkDescriptorQuery(ctx context.Context, assetLink []model.AssetLink) grammar.Query {
+	if auth.HasUnrestrictedFormulaForRight(ctx, grammar.RightsEnumREAD) {
+		return buildUnrestrictedAssetLinkQuery(assetLink)
+	}
+
+	return buildAssetLinkQuery(ctx, assetLink)
+}
