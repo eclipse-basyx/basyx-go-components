@@ -191,6 +191,7 @@ func int32Length(length int) (int32, error) {
 	if length > math.MaxInt32 {
 		return 0, fmt.Errorf("length %d exceeds int32 max %d", length, math.MaxInt32)
 	}
+	// #nosec G115 -- length is checked against math.MaxInt32 above.
 	return int32(length), nil
 }
 

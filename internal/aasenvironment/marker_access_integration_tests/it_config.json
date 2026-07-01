@@ -5,7 +5,10 @@
     "endpoint": "http://127.0.0.1:5004/api/v3/shell-descriptors",
     "data": "../../../examples/CatenaXample/data/shell-descriptor.json",
     "expectedStatus": 201,
-    "token": { "user": "admin", "password": "pwd" }
+    "token": {
+      "user": "admin",
+      "password": "pwd"
+    }
   },
   {
     "context": "Post public submodel as admin",
@@ -13,7 +16,10 @@
     "endpoint": "http://127.0.0.1:5005/submodels",
     "data": "../../../examples/CatenaXample/data/public-submodel.json",
     "expectedStatus": 201,
-    "token": { "user": "admin", "password": "pwd" }
+    "token": {
+      "user": "admin",
+      "password": "pwd"
+    }
   },
   {
     "context": "Post restricted submodel as admin",
@@ -21,7 +27,10 @@
     "endpoint": "http://127.0.0.1:5005/submodels",
     "data": "../../../examples/CatenaXample/data/restricted-submodel.json",
     "expectedStatus": 201,
-    "token": { "user": "admin", "password": "pwd" }
+    "token": {
+      "user": "admin",
+      "password": "pwd"
+    }
   },
   {
     "context": "DTR admin sees everything",
@@ -29,7 +38,10 @@
     "endpoint": "http://127.0.0.1:5004/api/v3/shell-descriptors",
     "shouldMatch": "expected/dtr_admin.json",
     "expectedStatus": 200,
-    "token": { "user": "admin", "password": "pwd" }
+    "token": {
+      "user": "admin",
+      "password": "pwd"
+    }
   },
   {
     "context": "DTR admin remains unrestricted with unrelated BPN header",
@@ -37,23 +49,31 @@
     "endpoint": "http://127.0.0.1:5004/api/v3/shell-descriptors",
     "shouldMatch": "expected/dtr_admin.json",
     "expectedStatus": 200,
-    "headers": { "Edc-Bpn": "BPN_COMPANY_999" },
-    "token": { "user": "admin", "password": "pwd" }
+    "headers": {
+      "Edc-Bpn": "BPN_COMPANY_999"
+    },
+    "token": {
+      "user": "admin",
+      "password": "pwd"
+    }
   },
   {
     "context": "DTR anonymous sees public data",
     "method": "GET",
     "endpoint": "http://127.0.0.1:5004/api/v3/shell-descriptors",
-    "shouldMatch": "expected/dtr_public.json",
+    "shouldMatch": "expected/dtr_unrelated.json",
     "expectedStatus": 200
   },
   {
     "context": "DTR regular token sees public data",
     "method": "GET",
     "endpoint": "http://127.0.0.1:5004/api/v3/shell-descriptors",
-    "shouldMatch": "expected/dtr_public.json",
+    "shouldMatch": "expected/dtr_unrelated.json",
     "expectedStatus": 200,
-    "token": { "user": "usera", "password": "pwd" }
+    "token": {
+      "user": "collection_viewer",
+      "password": "pwd"
+    }
   },
   {
     "context": "DTR BPN company 1 sees own markers",
@@ -61,7 +81,13 @@
     "endpoint": "http://127.0.0.1:5004/api/v3/shell-descriptors",
     "shouldMatch": "expected/dtr_bpn1.json",
     "expectedStatus": 200,
-    "headers": { "Edc-Bpn": "BPN_COMPANY_001" }
+    "headers": {
+      "Edc-Bpn": "BPN_COMPANY_001"
+    },
+    "token": {
+      "user": "collection_viewer",
+      "password": "pwd"
+    }
   },
   {
     "context": "DTR regular token with BPN company 1 sees own markers",
@@ -69,8 +95,13 @@
     "endpoint": "http://127.0.0.1:5004/api/v3/shell-descriptors",
     "shouldMatch": "expected/dtr_bpn1.json",
     "expectedStatus": 200,
-    "headers": { "Edc-Bpn": "BPN_COMPANY_001" },
-    "token": { "user": "usera", "password": "pwd" }
+    "headers": {
+      "Edc-Bpn": "BPN_COMPANY_001"
+    },
+    "token": {
+      "user": "collection_viewer",
+      "password": "pwd"
+    }
   },
   {
     "context": "DTR BPN company 2 sees own markers",
@@ -78,7 +109,13 @@
     "endpoint": "http://127.0.0.1:5004/api/v3/shell-descriptors",
     "shouldMatch": "expected/dtr_bpn2.json",
     "expectedStatus": 200,
-    "headers": { "Edc-Bpn": "BPN_COMPANY_002" }
+    "headers": {
+      "Edc-Bpn": "BPN_COMPANY_002"
+    },
+    "token": {
+      "user": "collection_viewer",
+      "password": "pwd"
+    }
   },
   {
     "context": "DTR unrelated BPN sees public data",
@@ -86,7 +123,172 @@
     "endpoint": "http://127.0.0.1:5004/api/v3/shell-descriptors",
     "shouldMatch": "expected/dtr_unrelated.json",
     "expectedStatus": 200,
-    "headers": { "Edc-Bpn": "BPN_COMPANY_999" }
+    "headers": {
+      "Edc-Bpn": "BPN_COMPANY_999"
+    },
+    "token": {
+      "user": "collection_viewer",
+      "password": "pwd"
+    }
+  },
+  {
+    "context": "DTR assetIds no BPN token globalAssetId returns public markers",
+    "method": "GET",
+    "endpoint": "http://127.0.0.1:5004/api/v3/shell-descriptors?assetIds=eyJuYW1lIjoiZ2xvYmFsQXNzZXRJZCIsInZhbHVlIjoidXJuOmV4YW1wbGU6YXNzZXQ6cHJvZHVjdC0wMDEifQ",
+    "shouldMatch": "expected/dtr_unrelated.json",
+    "expectedStatus": 200,
+    "token": {
+      "user": "collection_viewer",
+      "password": "pwd"
+    }
+  },
+  {
+    "context": "DTR assetIds no BPN token customerPartId returns empty",
+    "method": "GET",
+    "endpoint": "http://127.0.0.1:5004/api/v3/shell-descriptors?assetIds=eyJuYW1lIjoiY3VzdG9tZXJQYXJ0SWQiLCJ2YWx1ZSI6IkNVU1RPTUVSLVBBUlQtMDAxIn0",
+    "shouldMatch": "expected/empty_paged_result.json",
+    "expectedStatus": 200,
+    "token": {
+      "user": "collection_viewer",
+      "password": "pwd"
+    }
+  },
+  {
+    "context": "DTR assetIds no BPN token globalAssetId and customerPartId returns empty",
+    "method": "GET",
+    "endpoint": "http://127.0.0.1:5004/api/v3/shell-descriptors?assetIds=eyJuYW1lIjoiZ2xvYmFsQXNzZXRJZCIsInZhbHVlIjoidXJuOmV4YW1wbGU6YXNzZXQ6cHJvZHVjdC0wMDEifQ&assetIds=eyJuYW1lIjoiY3VzdG9tZXJQYXJ0SWQiLCJ2YWx1ZSI6IkNVU1RPTUVSLVBBUlQtMDAxIn0",
+    "shouldMatch": "expected/empty_paged_result.json",
+    "expectedStatus": 200,
+    "token": {
+      "user": "collection_viewer",
+      "password": "pwd"
+    }
+  },
+  {
+    "context": "DTR assetIds BPN company 1 globalAssetId returns BPN1 view",
+    "method": "GET",
+    "endpoint": "http://127.0.0.1:5004/api/v3/shell-descriptors?assetIds=eyJuYW1lIjoiZ2xvYmFsQXNzZXRJZCIsInZhbHVlIjoidXJuOmV4YW1wbGU6YXNzZXQ6cHJvZHVjdC0wMDEifQ",
+    "shouldMatch": "expected/dtr_bpn1.json",
+    "expectedStatus": 200,
+    "token": {
+      "user": "collection_viewer",
+      "password": "pwd"
+    },
+    "headers": {
+      "Edc-Bpn": "BPN_COMPANY_001"
+    }
+  },
+  {
+    "context": "DTR assetIds BPN company 1 customerPartId returns BPN1 view",
+    "method": "GET",
+    "endpoint": "http://127.0.0.1:5004/api/v3/shell-descriptors?assetIds=eyJuYW1lIjoiY3VzdG9tZXJQYXJ0SWQiLCJ2YWx1ZSI6IkNVU1RPTUVSLVBBUlQtMDAxIn0",
+    "shouldMatch": "expected/dtr_bpn1.json",
+    "expectedStatus": 200,
+    "token": {
+      "user": "collection_viewer",
+      "password": "pwd"
+    },
+    "headers": {
+      "Edc-Bpn": "BPN_COMPANY_001"
+    }
+  },
+  {
+    "context": "DTR assetIds BPN company 1 globalAssetId and customerPartId returns BPN1 view",
+    "method": "GET",
+    "endpoint": "http://127.0.0.1:5004/api/v3/shell-descriptors?assetIds=eyJuYW1lIjoiZ2xvYmFsQXNzZXRJZCIsInZhbHVlIjoidXJuOmV4YW1wbGU6YXNzZXQ6cHJvZHVjdC0wMDEifQ&assetIds=eyJuYW1lIjoiY3VzdG9tZXJQYXJ0SWQiLCJ2YWx1ZSI6IkNVU1RPTUVSLVBBUlQtMDAxIn0",
+    "shouldMatch": "expected/dtr_bpn1.json",
+    "expectedStatus": 200,
+    "token": {
+      "user": "collection_viewer",
+      "password": "pwd"
+    },
+    "headers": {
+      "Edc-Bpn": "BPN_COMPANY_001"
+    }
+  },
+  {
+    "context": "DTR assetIds BPN company 2 globalAssetId returns BPN2 view",
+    "method": "GET",
+    "endpoint": "http://127.0.0.1:5004/api/v3/shell-descriptors?assetIds=eyJuYW1lIjoiZ2xvYmFsQXNzZXRJZCIsInZhbHVlIjoidXJuOmV4YW1wbGU6YXNzZXQ6cHJvZHVjdC0wMDEifQ",
+    "shouldMatch": "expected/dtr_bpn2.json",
+    "expectedStatus": 200,
+    "token": {
+      "user": "collection_viewer",
+      "password": "pwd"
+    },
+    "headers": {
+      "Edc-Bpn": "BPN_COMPANY_002"
+    }
+  },
+  {
+    "context": "DTR assetIds BPN company 2 customerPartId returns BPN2 view",
+    "method": "GET",
+    "endpoint": "http://127.0.0.1:5004/api/v3/shell-descriptors?assetIds=eyJuYW1lIjoiY3VzdG9tZXJQYXJ0SWQiLCJ2YWx1ZSI6IkNVU1RPTUVSLVBBUlQtMDAxIn0",
+    "shouldMatch": "expected/dtr_bpn2.json",
+    "expectedStatus": 200,
+    "token": {
+      "user": "collection_viewer",
+      "password": "pwd"
+    },
+    "headers": {
+      "Edc-Bpn": "BPN_COMPANY_002"
+    }
+  },
+  {
+    "context": "DTR assetIds BPN company 2 globalAssetId and customerPartId returns BPN2 view",
+    "method": "GET",
+    "endpoint": "http://127.0.0.1:5004/api/v3/shell-descriptors?assetIds=eyJuYW1lIjoiZ2xvYmFsQXNzZXRJZCIsInZhbHVlIjoidXJuOmV4YW1wbGU6YXNzZXQ6cHJvZHVjdC0wMDEifQ&assetIds=eyJuYW1lIjoiY3VzdG9tZXJQYXJ0SWQiLCJ2YWx1ZSI6IkNVU1RPTUVSLVBBUlQtMDAxIn0",
+    "shouldMatch": "expected/dtr_bpn2.json",
+    "expectedStatus": 200,
+    "token": {
+      "user": "collection_viewer",
+      "password": "pwd"
+    },
+    "headers": {
+      "Edc-Bpn": "BPN_COMPANY_002"
+    }
+  },
+  {
+    "context": "DTR assetIds BPN company 3 globalAssetId returns public markers",
+    "method": "GET",
+    "endpoint": "http://127.0.0.1:5004/api/v3/shell-descriptors?assetIds=eyJuYW1lIjoiZ2xvYmFsQXNzZXRJZCIsInZhbHVlIjoidXJuOmV4YW1wbGU6YXNzZXQ6cHJvZHVjdC0wMDEifQ",
+    "shouldMatch": "expected/dtr_unrelated.json",
+    "expectedStatus": 200,
+    "token": {
+      "user": "collection_viewer",
+      "password": "pwd"
+    },
+    "headers": {
+      "Edc-Bpn": "BPN_COMPANY_003"
+    }
+  },
+  {
+    "context": "DTR assetIds BPN company 3 customerPartId returns empty",
+    "method": "GET",
+    "endpoint": "http://127.0.0.1:5004/api/v3/shell-descriptors?assetIds=eyJuYW1lIjoiY3VzdG9tZXJQYXJ0SWQiLCJ2YWx1ZSI6IkNVU1RPTUVSLVBBUlQtMDAxIn0",
+    "shouldMatch": "expected/empty_paged_result.json",
+    "expectedStatus": 200,
+    "token": {
+      "user": "collection_viewer",
+      "password": "pwd"
+    },
+    "headers": {
+      "Edc-Bpn": "BPN_COMPANY_003"
+    }
+  },
+  {
+    "context": "DTR assetIds BPN company 3 globalAssetId and customerPartId returns public markers",
+    "method": "GET",
+    "endpoint": "http://127.0.0.1:5004/api/v3/shell-descriptors?assetIds=eyJuYW1lIjoiZ2xvYmFsQXNzZXRJZCIsInZhbHVlIjoidXJuOmV4YW1wbGU6YXNzZXQ6cHJvZHVjdC0wMDEifQ&assetIds=eyJuYW1lIjoiY3VzdG9tZXJQYXJ0SWQiLCJ2YWx1ZSI6IkNVU1RPTUVSLVBBUlQtMDAxIn0",
+    "shouldMatch": "expected/dtr_unrelated.json",
+    "expectedStatus": 200,
+    "token": {
+      "user": "collection_viewer",
+      "password": "pwd"
+    },
+    "headers": {
+      "Edc-Bpn": "BPN_COMPANY_003"
+    }
   },
   {
     "context": "SM repository admin sees everything",
@@ -94,7 +296,10 @@
     "endpoint": "http://127.0.0.1:5005/submodels",
     "shouldMatch": "expected/sm_admin.json",
     "expectedStatus": 200,
-    "token": { "user": "admin", "password": "pwd" }
+    "token": {
+      "user": "admin",
+      "password": "pwd"
+    }
   },
   {
     "context": "SM repository admin remains unrestricted with unrelated BPN header",
@@ -102,23 +307,35 @@
     "endpoint": "http://127.0.0.1:5005/submodels",
     "shouldMatch": "expected/sm_admin.json",
     "expectedStatus": 200,
-    "headers": { "Edc-Bpn": "BPN_COMPANY_999" },
-    "token": { "user": "admin", "password": "pwd" }
+    "headers": {
+      "Edc-Bpn": "BPN_COMPANY_999"
+    },
+    "token": {
+      "user": "admin",
+      "password": "pwd"
+    }
   },
   {
     "context": "SM repository anonymous sees public data",
     "method": "GET",
     "endpoint": "http://127.0.0.1:5005/submodels",
-    "shouldMatch": "expected/sm_public.json",
-    "expectedStatus": 200
+    "shouldMatch": "expected/sm_unrelated.json",
+    "expectedStatus": 200,
+    "token": {
+      "user": "collection_viewer",
+      "password": "pwd"
+    }
   },
   {
     "context": "SM repository regular token sees public data",
     "method": "GET",
     "endpoint": "http://127.0.0.1:5005/submodels",
-    "shouldMatch": "expected/sm_public.json",
+    "shouldMatch": "expected/sm_unrelated.json",
     "expectedStatus": 200,
-    "token": { "user": "usera", "password": "pwd" }
+    "token": {
+      "user": "collection_viewer",
+      "password": "pwd"
+    }
   },
   {
     "context": "SM repository BPN company 1 sees own markers",
@@ -126,7 +343,13 @@
     "endpoint": "http://127.0.0.1:5005/submodels",
     "shouldMatch": "expected/sm_bpn1.json",
     "expectedStatus": 200,
-    "headers": { "Edc-Bpn": "BPN_COMPANY_001" }
+    "headers": {
+      "Edc-Bpn": "BPN_COMPANY_001"
+    },
+    "token": {
+      "user": "collection_viewer",
+      "password": "pwd"
+    }
   },
   {
     "context": "SM repository regular token with BPN company 1 sees own markers",
@@ -134,8 +357,13 @@
     "endpoint": "http://127.0.0.1:5005/submodels",
     "shouldMatch": "expected/sm_bpn1.json",
     "expectedStatus": 200,
-    "headers": { "Edc-Bpn": "BPN_COMPANY_001" },
-    "token": { "user": "usera", "password": "pwd" }
+    "headers": {
+      "Edc-Bpn": "BPN_COMPANY_001"
+    },
+    "token": {
+      "user": "collection_viewer",
+      "password": "pwd"
+    }
   },
   {
     "context": "SM repository BPN company 2 sees own markers",
@@ -143,7 +371,13 @@
     "endpoint": "http://127.0.0.1:5005/submodels",
     "shouldMatch": "expected/sm_bpn2.json",
     "expectedStatus": 200,
-    "headers": { "Edc-Bpn": "BPN_COMPANY_002" }
+    "headers": {
+      "Edc-Bpn": "BPN_COMPANY_002"
+    },
+    "token": {
+      "user": "collection_viewer",
+      "password": "pwd"
+    }
   },
   {
     "context": "SM repository unrelated BPN sees public data",
@@ -151,6 +385,12 @@
     "endpoint": "http://127.0.0.1:5005/submodels",
     "shouldMatch": "expected/sm_unrelated.json",
     "expectedStatus": 200,
-    "headers": { "Edc-Bpn": "BPN_COMPANY_999" }
+    "headers": {
+      "Edc-Bpn": "BPN_COMPANY_999"
+    },
+    "token": {
+      "user": "collection_viewer",
+      "password": "pwd"
+    }
   }
 ]
