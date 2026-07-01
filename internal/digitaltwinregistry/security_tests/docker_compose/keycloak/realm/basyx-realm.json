@@ -50,7 +50,7 @@
   "roles" : {
     "realm" : [ {
       "id" : "a83a65a8-0a55-4a8b-86b2-cf6e6484d70d",
-      "name" : "data_provider",
+      "name" : "admin",
       "description" : "",
       "composite" : false,
       "clientRole" : false,
@@ -271,7 +271,7 @@
       } ],
       "aas-env" : [ {
         "id" : "60882525-791b-48d2-b036-759aa6a81337",
-        "name" : "data_provider",
+        "name" : "admin",
         "description" : "",
         "composite" : false,
         "clientRole" : true,
@@ -405,7 +405,7 @@
   "webAuthnPolicyPasswordlessAcceptableAaguids" : [ ],
   "webAuthnPolicyPasswordlessExtraOrigins" : [ ],
   "users" : [ {
-    "id" : "32103f0d-1d0e-4d94-b720-bcd22e1c7709",
+    "id" : "b870121e-9ed9-4812-8d65-81dcc9fe7f07",
     "username" : "admin",
     "firstName" : "Max",
     "lastName" : "Mustermann",
@@ -413,7 +413,8 @@
     "emailVerified" : false,
     "attributes" : {
       "clear" : [ "20" ],
-      "role" : [ "data_provider" ]
+      "role" : [ "view_digital_twin, add_digital_twin, update_digital_twin, delete_digital_twin" ],
+      "preferred_username" : [ "admin" ]
     },
     "createdTimestamp" : 1763553349664,
     "enabled" : true,
@@ -430,7 +431,7 @@
     "requiredActions" : [ ],
     "realmRoles" : [ "default-roles-basyx" ],
     "clientRoles" : {
-      "aas-env" : [ "data_provider" ]
+      "aas-env" : [ "admin" ]
     },
     "notBefore" : 0,
     "groups" : [ ]
@@ -443,7 +444,7 @@
     "emailVerified" : false,
     "attributes" : {
       "clear" : [ "20" ],
-      "role" : [ "data_provider" ]
+      "role" : [ "admin" ]
     },
     "createdTimestamp" : 1764768925034,
     "enabled" : true,
@@ -454,7 +455,7 @@
     "requiredActions" : [ ],
     "realmRoles" : [ "default-roles-basyx" ],
     "clientRoles" : {
-      "aas-env" : [ "data_provider" ]
+      "aas-env" : [ "admin" ]
     },
     "notBefore" : 0,
     "groups" : [ ]
@@ -477,14 +478,13 @@
     "groups" : [ ]
   }, {
     "id" : "c4d04982-cd08-4dc7-ba30-75c49c62dc3a",
-    "username" : "company1_viewer",
-    "firstName" : "Company",
-    "lastName" : "One",
-    "email" : "company1_viewer@mail.com",
+    "username" : "usera",
+    "firstName" : "Max",
+    "lastName" : "Mustermann",
+    "email" : "usera@mail.com",
     "emailVerified" : false,
     "attributes" : {
-      "Edc-Bpn" : [ "BPN_COMPANY_001" ],
-      "role" : [ "edc_user" ]
+      "role" : [ "viewer" ]
     },
     "createdTimestamp" : 1763553182453,
     "enabled" : true,
@@ -504,15 +504,14 @@
     "groups" : [ ]
   }, {
     "id" : "0983a0fd-5e10-4121-81a1-bbae51750e42",
-    "username" : "company2_viewer",
-    "firstName" : "Company",
-    "lastName" : "Two",
-    "email" : "company2_viewer@mail.com",
+    "username" : "userb",
+    "firstName" : "Max",
+    "lastName" : "Mustermann",
+    "email" : "userb@mail.com",
     "emailVerified" : false,
     "attributes" : {
-      "Edc-Bpn" : [ "BPN_COMPANY_002" ],
       "clear" : [ "2" ],
-      "role" : [ "edc_user" ]
+      "role" : [ "martin" ]
     },
     "createdTimestamp" : 1763553224432,
     "enabled" : true,
@@ -531,42 +530,14 @@
     "notBefore" : 0,
     "groups" : [ ]
   }, {
-    "id" : "4971e2a2-c5a3-44f6-8e05-7c03e1e30c0f",
-    "username" : "company3_viewer",
-    "firstName" : "Company",
-    "lastName" : "Three",
-    "email" : "company3_viewer@mail.com",
-    "emailVerified" : false,
-    "attributes" : {
-      "Edc-Bpn" : [ "BPN_COMPANY_003" ],
-      "clear" : [ "2" ],
-      "role" : [ "edc_user" ]
-    },
-    "createdTimestamp" : 1763553234432,
-    "enabled" : true,
-    "totp" : false,
-    "credentials" : [ {
-      "id" : "a6b693d8-3f7e-4215-941a-91e6243c36eb",
-      "type" : "password",
-      "userLabel" : "My password",
-      "createdDate" : 1763553400313,
-      "secretData" : "{\"value\":\"ZuApULLLH22Nc4iB/pfgac/qJZhYUW23qCee0DDnTtI=\",\"salt\":\"yKgnRwIkF9ZubcS033Xxbg==\",\"additionalParameters\":{}}",
-      "credentialData" : "{\"hashIterations\":5,\"algorithm\":\"argon2\",\"additionalParameters\":{\"hashLength\":[\"32\"],\"memory\":[\"7168\"],\"type\":[\"id\"],\"version\":[\"1.3\"],\"parallelism\":[\"1\"]}}"
-    } ],
-    "disableableCredentialTypes" : [ ],
-    "requiredActions" : [ ],
-    "realmRoles" : [ "default-roles-basyx" ],
-    "notBefore" : 0,
-    "groups" : [ ]
-  }, {
     "id" : "803f798c-3e11-440e-ad66-26016efca76c",
-    "username" : "no_bpn_viewer",
-    "firstName" : "No",
-    "lastName" : "BPN",
-    "email" : "no_bpn_viewer@mail.com",
+    "username" : "userx",
+    "firstName" : "Max",
+    "lastName" : "Mustermann",
+    "email" : "userx@mail.com",
     "emailVerified" : false,
     "attributes" : {
-      "role" : [ "user" ]
+      "role" : [ "editor" ]
     },
     "createdTimestamp" : 1763553277239,
     "enabled" : true,
@@ -586,14 +557,14 @@
     "groups" : [ ]
   }, {
     "id" : "5d4e91f5-f48d-42e3-8f6f-c2d6e111f9de",
-    "username" : "collection_viewer",
-    "firstName" : "Collection",
-    "lastName" : "Viewer",
-    "email" : "collection_viewer@mail.com",
+    "username" : "usery",
+    "firstName" : "Max",
+    "lastName" : "Mustermann",
+    "email" : "usery@mail.com",
     "emailVerified" : false,
     "attributes" : {
       "clear" : [ "2" ],
-      "role" : [ "user" ]
+      "role" : [ "editor" ]
     },
     "createdTimestamp" : 1763553312697,
     "enabled" : true,
@@ -911,24 +882,6 @@
         "lightweight.claim" : "false",
         "access.token.claim" : "true",
         "claim.name" : "role",
-        "jsonType.label" : "String"
-      }
-    }, {
-      "id" : "f1eaaac4-4f5b-4c3f-96e9-c20b8f5cc001",
-      "name" : "Edc BPN Mapper",
-      "protocol" : "openid-connect",
-      "protocolMapper" : "oidc-usermodel-attribute-mapper",
-      "consentRequired" : false,
-      "config" : {
-        "aggregate.attrs" : "false",
-        "introspection.token.claim" : "true",
-        "multivalued" : "false",
-        "userinfo.token.claim" : "true",
-        "user.attribute" : "Edc-Bpn",
-        "id.token.claim" : "true",
-        "lightweight.claim" : "false",
-        "access.token.claim" : "true",
-        "claim.name" : "Edc-Bpn",
         "jsonType.label" : "String"
       }
     }, {
@@ -1304,7 +1257,6 @@
         "id.token.claim" : "true",
         "lightweight.claim" : "false",
         "access.token.claim" : "true",
-        "claim.name" : "role",
         "jsonType.label" : "String"
       }
     } ]
@@ -1910,7 +1862,7 @@
       "providerId" : "declarative-user-profile",
       "subComponents" : { },
       "config" : {
-        "kc.user.profile.config" : [ "{\"attributes\":[{\"name\":\"username\",\"displayName\":\"${username}\",\"validations\":{\"length\":{\"min\":3,\"max\":255},\"username-prohibited-characters\":{},\"up-username-not-idn-homograph\":{}},\"permissions\":{\"view\":[\"admin\",\"user\"],\"edit\":[\"admin\",\"user\"]},\"multivalued\":false},{\"name\":\"email\",\"displayName\":\"${email}\",\"validations\":{\"email\":{},\"length\":{\"max\":255}},\"required\":{\"roles\":[\"user\"]},\"permissions\":{\"view\":[\"admin\",\"user\"],\"edit\":[\"admin\",\"user\"]},\"multivalued\":false},{\"name\":\"firstName\",\"displayName\":\"${firstName}\",\"validations\":{\"length\":{\"max\":255},\"person-name-prohibited-characters\":{}},\"required\":{\"roles\":[\"user\"]},\"permissions\":{\"view\":[\"admin\",\"user\"],\"edit\":[\"admin\",\"user\"]},\"multivalued\":false},{\"name\":\"lastName\",\"displayName\":\"${lastName}\",\"validations\":{\"length\":{\"max\":255},\"person-name-prohibited-characters\":{}},\"required\":{\"roles\":[\"user\"]},\"permissions\":{\"view\":[\"admin\",\"user\"],\"edit\":[\"admin\",\"user\"]},\"multivalued\":false},{\"name\":\"role\",\"displayName\":\"Role\",\"validations\":{},\"annotations\":{},\"permissions\":{\"view\":[],\"edit\":[\"admin\"]},\"multivalued\":false},{\"name\":\"Edc-Bpn\",\"displayName\":\"EDC BPN\",\"validations\":{},\"annotations\":{},\"permissions\":{\"view\":[],\"edit\":[\"admin\"]},\"multivalued\":false},{\"name\":\"clear\",\"displayName\":\"Clearance\",\"validations\":{},\"annotations\":{},\"permissions\":{\"view\":[],\"edit\":[\"admin\"]},\"multivalued\":false}],\"groups\":[{\"name\":\"user-metadata\",\"displayHeader\":\"User metadata\",\"displayDescription\":\"Attributes, which refer to user metadata\"}]}" ]
+        "kc.user.profile.config" : [ "{\"attributes\":[{\"name\":\"username\",\"displayName\":\"${username}\",\"validations\":{\"length\":{\"min\":3,\"max\":255},\"username-prohibited-characters\":{},\"up-username-not-idn-homograph\":{}},\"permissions\":{\"view\":[\"admin\",\"user\"],\"edit\":[\"admin\",\"user\"]},\"multivalued\":false},{\"name\":\"email\",\"displayName\":\"${email}\",\"validations\":{\"email\":{},\"length\":{\"max\":255}},\"required\":{\"roles\":[\"user\"]},\"permissions\":{\"view\":[\"admin\",\"user\"],\"edit\":[\"admin\",\"user\"]},\"multivalued\":false},{\"name\":\"firstName\",\"displayName\":\"${firstName}\",\"validations\":{\"length\":{\"max\":255},\"person-name-prohibited-characters\":{}},\"required\":{\"roles\":[\"user\"]},\"permissions\":{\"view\":[\"admin\",\"user\"],\"edit\":[\"admin\",\"user\"]},\"multivalued\":false},{\"name\":\"lastName\",\"displayName\":\"${lastName}\",\"validations\":{\"length\":{\"max\":255},\"person-name-prohibited-characters\":{}},\"required\":{\"roles\":[\"user\"]},\"permissions\":{\"view\":[\"admin\",\"user\"],\"edit\":[\"admin\",\"user\"]},\"multivalued\":false},{\"name\":\"role\",\"displayName\":\"Role\",\"validations\":{},\"annotations\":{},\"permissions\":{\"view\":[],\"edit\":[\"admin\"]},\"multivalued\":false},{\"name\":\"clear\",\"displayName\":\"Clearance\",\"validations\":{},\"annotations\":{},\"permissions\":{\"view\":[],\"edit\":[\"admin\"]},\"multivalued\":false}],\"groups\":[{\"name\":\"user-metadata\",\"displayHeader\":\"User metadata\",\"displayDescription\":\"Attributes, which refer to user metadata\"}]}" ]
       }
     } ],
     "org.keycloak.keys.KeyProvider" : [ {

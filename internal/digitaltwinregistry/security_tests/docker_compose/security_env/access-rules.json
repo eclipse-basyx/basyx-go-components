@@ -2,33 +2,25 @@
   "AllAccessPermissionRules": {
     "DEFATTRIBUTES": [
       {
-        "name": "user",
-        "attributes": [
-          {
-            "CLAIM": "role"
-          }
-        ]
-      },
-      {
         "name": "anonymous",
         "attributes": [
           {
             "GLOBAL": "ANONYMOUS"
           }
         ]
+      },
+      {
+        "name": "sub_claim",
+        "attributes": [
+          {
+            "CLAIM": "preferred_username"
+          }
+        ]
       }
     ],
     "DEFOBJECTS": [
       {
-        "name": "all_routes",
-        "objects": [
-          {
-            "ROUTE": "*"
-          }
-        ]
-      },
-      {
-        "name": "description",
+        "name": "description_api",
         "objects": [
           {
             "ROUTE": "/description"
@@ -36,18 +28,27 @@
         ]
       },
       {
-        "name": "all_shell_descriptors",
+        "name": "aas_registry_api",
         "objects": [
           {
-            "DESCRIPTOR": "$aasdesc(\"*\")"
+            "ROUTE": "/shell-descriptors"
+          },
+          {
+            "ROUTE": "/shell-descriptors/*"
+          },
+          {
+            "ROUTE": "/query/shell-descriptors"
           }
         ]
       },
       {
-        "name": "asset_links",
+        "name": "discovery_api",
         "objects": [
           {
             "ROUTE": "/lookup/shells"
+          },
+          {
+            "ROUTE": "/lookup/shells/*"
           },
           {
             "ROUTE": "/lookup/shellsByAssetLink"
@@ -57,7 +58,7 @@
     ],
     "DEFACLS": [
       {
-        "name": "public_read",
+        "name": "anonymous_access",
         "acl": {
           "USEATTRIBUTES": "anonymous",
           "RIGHTS": [
@@ -67,24 +68,11 @@
         }
       },
       {
-        "name": "read",
-        "acl": {
-          "USEATTRIBUTES": "user",
-          "RIGHTS": [
-            "READ"
-          ],
-          "ACCESS": "ALLOW"
-        }
-      },
-      {
         "name": "full_access",
         "acl": {
-          "USEATTRIBUTES": "user",
+          "USEATTRIBUTES": "sub_claim",
           "RIGHTS": [
-            "READ",
-            "CREATE",
-            "UPDATE",
-            "DELETE"
+            "ALL"
           ],
           "ACCESS": "ALLOW"
         }
@@ -98,93 +86,18 @@
         }
       },
       {
-        "name": "data_provider",
+        "name": "match_client_and_bpn",
         "formula": {
-          "$contains": [
-            {
-              "$attribute": {
-                "CLAIM": "role"
-              }
-            },
-            {
-              "$strVal": "data_provider"
-            }
-          ]
-        }
-      },
-      {
-        "name": "aas_bpn_or_public",
-        "formula": {
-          "$or": [
+          "$and": [
             {
               "$eq": [
                 {
                   "$attribute": {
-                    "CLAIM": "Edc-Bpn"
+                    "CLAIM": "preferred_username"
                   }
                 },
                 {
-                  "$field": "$aasdesc#specificAssetIds[].externalSubjectId.keys[].value"
-                }
-              ]
-            },
-            {
-              "$eq": [
-                {
-                  "$strVal": "PUBLIC_READABLE"
-                },
-                {
-                  "$field": "$aasdesc#specificAssetIds[].externalSubjectId.keys[].value"
-                }
-              ]
-            }
-          ]
-        }
-      },
-      {
-        "name": "aas_bpn_match",
-        "formula": {
-          "$eq": [
-            {
-              "$attribute": {
-                "CLAIM": "Edc-Bpn"
-              }
-            },
-            {
-              "$field": "$aasdesc#specificAssetIds[].externalSubjectId.keys[].value"
-            }
-          ]
-        }
-      },
-      {
-        "name": "authenticated_aas_bpn_or_public",
-        "formula": {
-          "$and": [
-            {
-              "$or": [
-                {
-                  "$contains": [
-                    {
-                      "$attribute": {
-                        "CLAIM": "role"
-                      }
-                    },
-                    {
-                      "$strVal": "edc_user"
-                    }
-                  ]
-                },
-                {
-                  "$contains": [
-                    {
-                      "$attribute": {
-                        "CLAIM": "role"
-                      }
-                    },
-                    {
-                      "$strVal": "user"
-                    }
-                  ]
+                  "$strVal": "admin"
                 }
               ]
             },
@@ -216,178 +129,23 @@
             }
           ]
         }
-      },
-      {
-        "name": "aas_bpn_or_public_filter",
-        "formula": {
-          "$or": [
-            {
-              "$eq": [
-                {
-                  "$attribute": {
-                    "CLAIM": "Edc-Bpn"
-                  }
-                },
-                {
-                  "$field": "$aasdesc#specificAssetIds[].externalSubjectId.keys[].value"
-                }
-              ]
-            },
-            {
-              "$eq": [
-                {
-                  "$strVal": "PUBLIC_READABLE"
-                },
-                {
-                  "$field": "$aasdesc#specificAssetIds[].externalSubjectId.keys[].value"
-                }
-              ]
-            }
-          ]
-        }
-      },
-      {
-        "name": "submodel_descriptor_bpn_or_public",
-        "formula": {
-          "$or": [
-            {
-              "$eq": [
-                {
-                  "$attribute": {
-                    "CLAIM": "Edc-Bpn"
-                  }
-                },
-                {
-                  "$field": "$aasdesc#submodelDescriptors[].supplementalSemanticIds[].keys[].value"
-                }
-              ]
-            },
-            {
-              "$eq": [
-                {
-                  "$strVal": "PUBLIC_READABLE"
-                },
-                {
-                  "$field": "$aasdesc#submodelDescriptors[].supplementalSemanticIds[].keys[].value"
-                }
-              ]
-            }
-          ]
-        }
-      },
-      {
-        "name": "submodel_descriptor_bpn_or_public_filter",
-        "formula": {
-          "$or": [
-            {
-              "$eq": [
-                {
-                  "$attribute": {
-                    "CLAIM": "Edc-Bpn"
-                  }
-                },
-                {
-                  "$field": "$aasdesc#submodelDescriptors[].supplementalSemanticIds[].keys[].value"
-                }
-              ]
-            },
-            {
-              "$eq": [
-                {
-                  "$strVal": "PUBLIC_READABLE"
-                },
-                {
-                  "$field": "$aasdesc#submodelDescriptors[].supplementalSemanticIds[].keys[].value"
-                }
-              ]
-            }
-          ]
-        }
       }
     ],
     "rules": [
       {
-        "USEACL": "public_read",
+        "USEACL": "anonymous_access",
         "USEOBJECTS": [
-          "description"
+          "description_api"
         ],
         "USEFORMULA": "always_true"
       },
       {
         "USEACL": "full_access",
         "USEOBJECTS": [
-          "all_routes"
+          "aas_registry_api",
+          "discovery_api"
         ],
-        "USEFORMULA": "data_provider"
-      },
-      {
-        "USEACL": "public_read",
-        "USEOBJECTS": [
-          "all_shell_descriptors"
-        ],
-        "USEFORMULA": "aas_bpn_or_public",
-        "FILTERLIST": [
-          {
-            "FRAGMENT": "$aasdesc#administration",
-            "USEFORMULA": "aas_bpn_match"
-          },
-          {
-            "FRAGMENT": "$aasdesc#displayName",
-            "USEFORMULA": "aas_bpn_match"
-          },
-          {
-            "FRAGMENT": "$aasdesc#description",
-            "USEFORMULA": "aas_bpn_match"
-          },
-          {
-            "FRAGMENT": "$aasdesc#assetKind",
-            "USEFORMULA": "aas_bpn_match"
-          },
-          {
-            "FRAGMENT": "$aasdesc#assetType",
-            "USEFORMULA": "aas_bpn_match"
-          },
-          {
-            "FRAGMENT": "$aasdesc#globalAssetId",
-            "USEFORMULA": "aas_bpn_match"
-          },
-          {
-            "FRAGMENT": "$aasdesc#idShort",
-            "USEFORMULA": "aas_bpn_match"
-          },
-          {
-            "FRAGMENT": "$aasdesc#specificAssetIds[]",
-            "USEFORMULA": "aas_bpn_or_public_filter",
-            "MATCH": true
-          },
-          {
-            "FRAGMENT": "$aasdesc#specificAssetIds[].externalSubjectId.keys[]",
-            "USEFORMULA": "aas_bpn_or_public_filter",
-            "MATCH": true
-          },
-          {
-            "FRAGMENT": "$aasdesc#submodelDescriptors[]",
-            "USEFORMULA": "submodel_descriptor_bpn_or_public",
-            "MATCH": true
-          },
-          {
-            "FRAGMENT": "$aasdesc#submodelDescriptors[].supplementalSemanticIds[]",
-            "USEFORMULA": "submodel_descriptor_bpn_or_public_filter",
-            "MATCH": true
-          },
-          {
-            "FRAGMENT": "$aasdesc#submodelDescriptors[].supplementalSemanticIds[].keys[]",
-            "USEFORMULA": "submodel_descriptor_bpn_or_public_filter",
-            "MATCH": true
-          }
-        ]
-      },
-      {
-        "USEACL": "read",
-        "USEOBJECTS": [
-          "asset_links"
-        ],
-        "USEFORMULA": "authenticated_aas_bpn_or_public"
+        "USEFORMULA": "match_client_and_bpn"
       }
     ]
   }
