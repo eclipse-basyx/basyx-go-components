@@ -456,14 +456,6 @@ func buildAssetLinkDescriptorQueryWithAccess(ctx context.Context, assetLink []mo
 	return buildAssetLinkQuery(ctx, assetLink)
 }
 
-func buildAssetLinkQueryWithAccess(ctx context.Context, assetLink []model.AssetLink, readUnrestricted bool) grammar.Query {
-	if readUnrestricted {
-		return buildUnrestrictedAssetLinkQuery(assetLink)
-	}
-
-	return buildAssetLinkQuery(ctx, assetLink)
-}
-
 func mergeGlobalAssetIDLookupVisibility(ctx context.Context, globalAssetIDs []string) context.Context {
 	globalAssetIDQuery := buildBasicDiscoveryGlobalAssetIDQuery(globalAssetIDs)
 	if globalAssetIDQuery.Condition == nil {
