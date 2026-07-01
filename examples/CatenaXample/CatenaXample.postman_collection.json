@@ -2,7 +2,7 @@
   "info": {
     "_postman_id": "1d3fb989-0865-4b3c-9e9d-85d3e9a69d6a",
     "name": "BaSyx Marker Access Example",
-    "description": "Walkthrough scenarios for the marker-based DTR and Submodel Repository access example. Start the Docker Compose stack from examples/CatenaXample before running the collection. Run the setup folder first; the collection pre-request script fetches OAuth2 password-grant tokens for protected requests and the setup writes the example shell descriptor and submodels.",
+    "description": "Walkthrough scenarios for the Catena-X marker-based DTR and Submodel Repository access example. The folder name CatenaXample means Catena-X example. Start the Docker Compose stack from examples/CatenaXample before running the collection. Run the setup folder first; the collection pre-request script fetches OAuth2 password-grant tokens for protected requests and the setup writes the example shell descriptor and submodels.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "event": [

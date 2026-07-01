@@ -1,5 +1,10 @@
 # CatenaXample
 
+CatenaXample is a Catena-X example for marker-based access control in the
+Digital Twin Registry and Submodel Repository. The name combines "Catena-X"
+and "example"; the scenarios model Catena-X-style partner visibility with
+public markers and BPN-specific markers.
+
 This example builds the current repository code and runs:
 
 - a Digital Twin Registry on `http://localhost:5004/api/v3`;
