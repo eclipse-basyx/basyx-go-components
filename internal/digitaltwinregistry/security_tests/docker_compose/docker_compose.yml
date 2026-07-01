@@ -24,6 +24,7 @@ services:
       - OIDC_TRUSTLISTPATH=/security_env/trustlist.json
       - ABAC_ENABLED=true
       - ABAC_MODELPATH=/security_env/access-rules.json
+      - GENERAL_ENABLECUSTOMMIDDLEWAREHEADERINJECTION=true
     volumes:
       - ./security_env:/security_env:ro
     extra_hosts:

@@ -1,6 +1,6 @@
 [
   {
-    "name": "digitalTwinType",
-    "value": "ComponentInstanceX"
+    "name": "customerPartId",
+    "value": "CUSTOMER-PART-001"
   }
 ]

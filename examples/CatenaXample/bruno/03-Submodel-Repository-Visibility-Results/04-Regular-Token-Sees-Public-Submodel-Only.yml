@@ -42,7 +42,7 @@ runtime:
             data: formUrlEncode({
               grant_type: "password",
               client_id: "basyx-ui",
-              username: "usera",
+              username: "collection_viewer",
               password: "pwd",
             }),
           });
@@ -68,7 +68,7 @@ runtime:
             const submodels = res.body.result;
             expect(submodels).to.have.length(1);
             expect(submodels[0].idShort).to.eql('PublicNameplate');
-            expect(submodels[0]).to.not.have.property('supplementalSemanticIds');
+            expect(submodels[0].supplementalSemanticIds[0].keys.map((key) => key.value)).to.eql(['PUBLIC_READABLE']);
         });
 
 settings:

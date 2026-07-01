@@ -22,8 +22,15 @@
           "    'Admin With Unrelated BPN Still Sees All Submodels'",
           "];",
           "const userRequestNames = [",
+          "    'BPN Company 1 Sees Public And BPN1 DTR Data',",
+          "    'BPN Company 2 Sees Public And BPN2 DTR Data',",
+          "    'Unrelated BPN Sees Public DTR Data With Public Markers',",
           "    'Regular Token Sees Public DTR Descriptor Only',",
           "    'Regular Token With BPN Company 1 Sees BPN1 DTR Data',",
+          "    'Anonymous Sees Public Submodel Only',",
+          "    'BPN Company 1 Sees Public And BPN1 Submodels',",
+          "    'BPN Company 2 Sees Public And BPN2 Submodels',",
+          "    'Unrelated BPN Sees Public Submodel With Public Markers',",
           "    'Regular Token Sees Public Submodel Only',",
           "    'Regular Token With BPN Company 1 Sees BPN1 Submodels'",
           "];",
@@ -313,14 +320,15 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('anonymous result hides asset IDs and marker references', function () {",
+                  "pm.test('anonymous descriptor result shows public marker references only', function () {",
                   "    pm.response.to.have.status(200);",
                   "    const shell = pm.response.json().result[0];",
                   "    pm.expect(shell.id).to.eql('urn:example:aas:product-001');",
-                  "    pm.expect(shell).to.not.have.property('specificAssetIds');",
+                  "    pm.expect(shell.specificAssetIds).to.have.length(1);",
+                  "    pm.expect(shell.specificAssetIds[0].externalSubjectId.keys.map((key) => key.value)).to.eql(['PUBLIC_READABLE']);",
                   "    pm.expect(shell.submodelDescriptors).to.have.length(1);",
                   "    pm.expect(shell.submodelDescriptors[0].idShort).to.eql('PublicNameplate');",
-                  "    pm.expect(shell.submodelDescriptors[0]).to.not.have.property('supplementalSemanticId');",
+                  "    pm.expect(shell.submodelDescriptors[0].supplementalSemanticId[0].keys.map((key) => key.value)).to.eql(['PUBLIC_READABLE']);",
                   "});"
                 ]
               }
@@ -352,9 +360,11 @@
                   "pm.test('regular token without BPN is public-only', function () {",
                   "    pm.response.to.have.status(200);",
                   "    const shell = pm.response.json().result[0];",
-                  "    pm.expect(shell).to.not.have.property('specificAssetIds');",
+                  "    pm.expect(shell.specificAssetIds).to.have.length(1);",
+                  "    pm.expect(shell.specificAssetIds[0].externalSubjectId.keys.map((key) => key.value)).to.eql(['PUBLIC_READABLE']);",
                   "    pm.expect(shell.submodelDescriptors).to.have.length(1);",
                   "    pm.expect(shell.submodelDescriptors[0].idShort).to.eql('PublicNameplate');",
+                  "    pm.expect(shell.submodelDescriptors[0].supplementalSemanticId[0].keys.map((key) => key.value)).to.eql(['PUBLIC_READABLE']);",
                   "});"
                 ]
               }
@@ -405,6 +415,10 @@
           "request": {
             "method": "GET",
             "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{userAccessToken}}"
+              },
               {
                 "key": "Edc-Bpn",
                 "value": "{{bpnCompany1}}"
@@ -488,6 +502,10 @@
             "method": "GET",
             "header": [
               {
+                "key": "Authorization",
+                "value": "Bearer {{userAccessToken}}"
+              },
+              {
                 "key": "Edc-Bpn",
                 "value": "{{bpnCompany2}}"
               }
@@ -529,6 +547,10 @@
             "method": "GET",
             "header": [
               {
+                "key": "Authorization",
+                "value": "Bearer {{userAccessToken}}"
+              },
+              {
                 "key": "Edc-Bpn",
                 "value": "{{unrelatedBpn}}"
               }
@@ -540,6 +562,619 @@
               ],
               "path": [
                 "shell-descriptors"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "AssetIds No BPN Token Global Asset Id",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('assetIds query applies DTR access rules', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    const body = pm.response.json();",
+                  "    const result = body.result || [];",
+                  "    pm.expect(result).to.have.length(1);",
+                  "    const shell = result[0];",
+                  "    pm.expect(shell.id).to.eql('urn:example:aas:product-001');",
+                  "    pm.expect(shell.specificAssetIds.map((item) => item.name)).to.eql(['manufacturerPartId']);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{userAccessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{dtrBaseUrl}}/shell-descriptors?assetIds=eyJuYW1lIjoiZ2xvYmFsQXNzZXRJZCIsInZhbHVlIjoidXJuOmV4YW1wbGU6YXNzZXQ6cHJvZHVjdC0wMDEifQ",
+              "host": [
+                "{{dtrBaseUrl}}"
+              ],
+              "path": [
+                "shell-descriptors"
+              ],
+              "query": [
+                {
+                  "key": "assetIds",
+                  "value": "eyJuYW1lIjoiZ2xvYmFsQXNzZXRJZCIsInZhbHVlIjoidXJuOmV4YW1wbGU6YXNzZXQ6cHJvZHVjdC0wMDEifQ"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "AssetIds No BPN Token Customer Part Id",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('assetIds query applies DTR access rules', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    const body = pm.response.json();",
+                  "    const result = body.result || [];",
+                  "    pm.expect(result).to.have.length(0);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{userAccessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{dtrBaseUrl}}/shell-descriptors?assetIds=eyJuYW1lIjoiY3VzdG9tZXJQYXJ0SWQiLCJ2YWx1ZSI6IkNVU1RPTUVSLVBBUlQtMDAxIn0",
+              "host": [
+                "{{dtrBaseUrl}}"
+              ],
+              "path": [
+                "shell-descriptors"
+              ],
+              "query": [
+                {
+                  "key": "assetIds",
+                  "value": "eyJuYW1lIjoiY3VzdG9tZXJQYXJ0SWQiLCJ2YWx1ZSI6IkNVU1RPTUVSLVBBUlQtMDAxIn0"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "AssetIds No BPN Token Global And Customer Part Ids",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('assetIds query applies DTR access rules', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    const body = pm.response.json();",
+                  "    const result = body.result || [];",
+                  "    pm.expect(result).to.have.length(0);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{userAccessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{dtrBaseUrl}}/shell-descriptors?assetIds=eyJuYW1lIjoiZ2xvYmFsQXNzZXRJZCIsInZhbHVlIjoidXJuOmV4YW1wbGU6YXNzZXQ6cHJvZHVjdC0wMDEifQ&assetIds=eyJuYW1lIjoiY3VzdG9tZXJQYXJ0SWQiLCJ2YWx1ZSI6IkNVU1RPTUVSLVBBUlQtMDAxIn0",
+              "host": [
+                "{{dtrBaseUrl}}"
+              ],
+              "path": [
+                "shell-descriptors"
+              ],
+              "query": [
+                {
+                  "key": "assetIds",
+                  "value": "eyJuYW1lIjoiZ2xvYmFsQXNzZXRJZCIsInZhbHVlIjoidXJuOmV4YW1wbGU6YXNzZXQ6cHJvZHVjdC0wMDEifQ"
+                },
+                {
+                  "key": "assetIds",
+                  "value": "eyJuYW1lIjoiY3VzdG9tZXJQYXJ0SWQiLCJ2YWx1ZSI6IkNVU1RPTUVSLVBBUlQtMDAxIn0"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "AssetIds BPN Company 1 Global Asset Id",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('assetIds query applies DTR access rules', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    const body = pm.response.json();",
+                  "    const result = body.result || [];",
+                  "    pm.expect(result).to.have.length(1);",
+                  "    const shell = result[0];",
+                  "    pm.expect(shell.id).to.eql('urn:example:aas:product-001');",
+                  "    const customerPart = shell.specificAssetIds.find((item) => item.name === 'customerPartId');",
+                  "    pm.expect(customerPart.externalSubjectId.keys.map((key) => key.value)).to.eql(['BPN_COMPANY_001']);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{userAccessToken}}"
+              },
+              {
+                "key": "Edc-Bpn",
+                "value": "{{bpnCompany1}}"
+              }
+            ],
+            "url": {
+              "raw": "{{dtrBaseUrl}}/shell-descriptors?assetIds=eyJuYW1lIjoiZ2xvYmFsQXNzZXRJZCIsInZhbHVlIjoidXJuOmV4YW1wbGU6YXNzZXQ6cHJvZHVjdC0wMDEifQ",
+              "host": [
+                "{{dtrBaseUrl}}"
+              ],
+              "path": [
+                "shell-descriptors"
+              ],
+              "query": [
+                {
+                  "key": "assetIds",
+                  "value": "eyJuYW1lIjoiZ2xvYmFsQXNzZXRJZCIsInZhbHVlIjoidXJuOmV4YW1wbGU6YXNzZXQ6cHJvZHVjdC0wMDEifQ"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "AssetIds BPN Company 1 Customer Part Id",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('assetIds query applies DTR access rules', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    const body = pm.response.json();",
+                  "    const result = body.result || [];",
+                  "    pm.expect(result).to.have.length(1);",
+                  "    const shell = result[0];",
+                  "    pm.expect(shell.id).to.eql('urn:example:aas:product-001');",
+                  "    const customerPart = shell.specificAssetIds.find((item) => item.name === 'customerPartId');",
+                  "    pm.expect(customerPart.externalSubjectId.keys.map((key) => key.value)).to.eql(['BPN_COMPANY_001']);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{userAccessToken}}"
+              },
+              {
+                "key": "Edc-Bpn",
+                "value": "{{bpnCompany1}}"
+              }
+            ],
+            "url": {
+              "raw": "{{dtrBaseUrl}}/shell-descriptors?assetIds=eyJuYW1lIjoiY3VzdG9tZXJQYXJ0SWQiLCJ2YWx1ZSI6IkNVU1RPTUVSLVBBUlQtMDAxIn0",
+              "host": [
+                "{{dtrBaseUrl}}"
+              ],
+              "path": [
+                "shell-descriptors"
+              ],
+              "query": [
+                {
+                  "key": "assetIds",
+                  "value": "eyJuYW1lIjoiY3VzdG9tZXJQYXJ0SWQiLCJ2YWx1ZSI6IkNVU1RPTUVSLVBBUlQtMDAxIn0"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "AssetIds BPN Company 1 Global And Customer Part Ids",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('assetIds query applies DTR access rules', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    const body = pm.response.json();",
+                  "    const result = body.result || [];",
+                  "    pm.expect(result).to.have.length(1);",
+                  "    const shell = result[0];",
+                  "    pm.expect(shell.id).to.eql('urn:example:aas:product-001');",
+                  "    const customerPart = shell.specificAssetIds.find((item) => item.name === 'customerPartId');",
+                  "    pm.expect(customerPart.externalSubjectId.keys.map((key) => key.value)).to.eql(['BPN_COMPANY_001']);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{userAccessToken}}"
+              },
+              {
+                "key": "Edc-Bpn",
+                "value": "{{bpnCompany1}}"
+              }
+            ],
+            "url": {
+              "raw": "{{dtrBaseUrl}}/shell-descriptors?assetIds=eyJuYW1lIjoiZ2xvYmFsQXNzZXRJZCIsInZhbHVlIjoidXJuOmV4YW1wbGU6YXNzZXQ6cHJvZHVjdC0wMDEifQ&assetIds=eyJuYW1lIjoiY3VzdG9tZXJQYXJ0SWQiLCJ2YWx1ZSI6IkNVU1RPTUVSLVBBUlQtMDAxIn0",
+              "host": [
+                "{{dtrBaseUrl}}"
+              ],
+              "path": [
+                "shell-descriptors"
+              ],
+              "query": [
+                {
+                  "key": "assetIds",
+                  "value": "eyJuYW1lIjoiZ2xvYmFsQXNzZXRJZCIsInZhbHVlIjoidXJuOmV4YW1wbGU6YXNzZXQ6cHJvZHVjdC0wMDEifQ"
+                },
+                {
+                  "key": "assetIds",
+                  "value": "eyJuYW1lIjoiY3VzdG9tZXJQYXJ0SWQiLCJ2YWx1ZSI6IkNVU1RPTUVSLVBBUlQtMDAxIn0"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "AssetIds BPN Company 2 Global Asset Id",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('assetIds query applies DTR access rules', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    const body = pm.response.json();",
+                  "    const result = body.result || [];",
+                  "    pm.expect(result).to.have.length(1);",
+                  "    const shell = result[0];",
+                  "    pm.expect(shell.id).to.eql('urn:example:aas:product-001');",
+                  "    const customerPart = shell.specificAssetIds.find((item) => item.name === 'customerPartId');",
+                  "    pm.expect(customerPart.externalSubjectId.keys.map((key) => key.value)).to.eql(['BPN_COMPANY_002']);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{userAccessToken}}"
+              },
+              {
+                "key": "Edc-Bpn",
+                "value": "{{bpnCompany2}}"
+              }
+            ],
+            "url": {
+              "raw": "{{dtrBaseUrl}}/shell-descriptors?assetIds=eyJuYW1lIjoiZ2xvYmFsQXNzZXRJZCIsInZhbHVlIjoidXJuOmV4YW1wbGU6YXNzZXQ6cHJvZHVjdC0wMDEifQ",
+              "host": [
+                "{{dtrBaseUrl}}"
+              ],
+              "path": [
+                "shell-descriptors"
+              ],
+              "query": [
+                {
+                  "key": "assetIds",
+                  "value": "eyJuYW1lIjoiZ2xvYmFsQXNzZXRJZCIsInZhbHVlIjoidXJuOmV4YW1wbGU6YXNzZXQ6cHJvZHVjdC0wMDEifQ"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "AssetIds BPN Company 2 Customer Part Id",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('assetIds query applies DTR access rules', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    const body = pm.response.json();",
+                  "    const result = body.result || [];",
+                  "    pm.expect(result).to.have.length(1);",
+                  "    const shell = result[0];",
+                  "    pm.expect(shell.id).to.eql('urn:example:aas:product-001');",
+                  "    const customerPart = shell.specificAssetIds.find((item) => item.name === 'customerPartId');",
+                  "    pm.expect(customerPart.externalSubjectId.keys.map((key) => key.value)).to.eql(['BPN_COMPANY_002']);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{userAccessToken}}"
+              },
+              {
+                "key": "Edc-Bpn",
+                "value": "{{bpnCompany2}}"
+              }
+            ],
+            "url": {
+              "raw": "{{dtrBaseUrl}}/shell-descriptors?assetIds=eyJuYW1lIjoiY3VzdG9tZXJQYXJ0SWQiLCJ2YWx1ZSI6IkNVU1RPTUVSLVBBUlQtMDAxIn0",
+              "host": [
+                "{{dtrBaseUrl}}"
+              ],
+              "path": [
+                "shell-descriptors"
+              ],
+              "query": [
+                {
+                  "key": "assetIds",
+                  "value": "eyJuYW1lIjoiY3VzdG9tZXJQYXJ0SWQiLCJ2YWx1ZSI6IkNVU1RPTUVSLVBBUlQtMDAxIn0"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "AssetIds BPN Company 2 Global And Customer Part Ids",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('assetIds query applies DTR access rules', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    const body = pm.response.json();",
+                  "    const result = body.result || [];",
+                  "    pm.expect(result).to.have.length(1);",
+                  "    const shell = result[0];",
+                  "    pm.expect(shell.id).to.eql('urn:example:aas:product-001');",
+                  "    const customerPart = shell.specificAssetIds.find((item) => item.name === 'customerPartId');",
+                  "    pm.expect(customerPart.externalSubjectId.keys.map((key) => key.value)).to.eql(['BPN_COMPANY_002']);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{userAccessToken}}"
+              },
+              {
+                "key": "Edc-Bpn",
+                "value": "{{bpnCompany2}}"
+              }
+            ],
+            "url": {
+              "raw": "{{dtrBaseUrl}}/shell-descriptors?assetIds=eyJuYW1lIjoiZ2xvYmFsQXNzZXRJZCIsInZhbHVlIjoidXJuOmV4YW1wbGU6YXNzZXQ6cHJvZHVjdC0wMDEifQ&assetIds=eyJuYW1lIjoiY3VzdG9tZXJQYXJ0SWQiLCJ2YWx1ZSI6IkNVU1RPTUVSLVBBUlQtMDAxIn0",
+              "host": [
+                "{{dtrBaseUrl}}"
+              ],
+              "path": [
+                "shell-descriptors"
+              ],
+              "query": [
+                {
+                  "key": "assetIds",
+                  "value": "eyJuYW1lIjoiZ2xvYmFsQXNzZXRJZCIsInZhbHVlIjoidXJuOmV4YW1wbGU6YXNzZXQ6cHJvZHVjdC0wMDEifQ"
+                },
+                {
+                  "key": "assetIds",
+                  "value": "eyJuYW1lIjoiY3VzdG9tZXJQYXJ0SWQiLCJ2YWx1ZSI6IkNVU1RPTUVSLVBBUlQtMDAxIn0"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "AssetIds BPN Company 3 Global Asset Id",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('assetIds query applies DTR access rules', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    const body = pm.response.json();",
+                  "    const result = body.result || [];",
+                  "    pm.expect(result).to.have.length(1);",
+                  "    const shell = result[0];",
+                  "    pm.expect(shell.id).to.eql('urn:example:aas:product-001');",
+                  "    pm.expect(shell.specificAssetIds.map((item) => item.name)).to.eql(['manufacturerPartId']);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{userAccessToken}}"
+              },
+              {
+                "key": "Edc-Bpn",
+                "value": "{{bpnCompany3}}"
+              }
+            ],
+            "url": {
+              "raw": "{{dtrBaseUrl}}/shell-descriptors?assetIds=eyJuYW1lIjoiZ2xvYmFsQXNzZXRJZCIsInZhbHVlIjoidXJuOmV4YW1wbGU6YXNzZXQ6cHJvZHVjdC0wMDEifQ",
+              "host": [
+                "{{dtrBaseUrl}}"
+              ],
+              "path": [
+                "shell-descriptors"
+              ],
+              "query": [
+                {
+                  "key": "assetIds",
+                  "value": "eyJuYW1lIjoiZ2xvYmFsQXNzZXRJZCIsInZhbHVlIjoidXJuOmV4YW1wbGU6YXNzZXQ6cHJvZHVjdC0wMDEifQ"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "AssetIds BPN Company 3 Customer Part Id",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('assetIds query applies DTR access rules', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    const body = pm.response.json();",
+                  "    const result = body.result || [];",
+                  "    pm.expect(result).to.have.length(0);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{userAccessToken}}"
+              },
+              {
+                "key": "Edc-Bpn",
+                "value": "{{bpnCompany3}}"
+              }
+            ],
+            "url": {
+              "raw": "{{dtrBaseUrl}}/shell-descriptors?assetIds=eyJuYW1lIjoiY3VzdG9tZXJQYXJ0SWQiLCJ2YWx1ZSI6IkNVU1RPTUVSLVBBUlQtMDAxIn0",
+              "host": [
+                "{{dtrBaseUrl}}"
+              ],
+              "path": [
+                "shell-descriptors"
+              ],
+              "query": [
+                {
+                  "key": "assetIds",
+                  "value": "eyJuYW1lIjoiY3VzdG9tZXJQYXJ0SWQiLCJ2YWx1ZSI6IkNVU1RPTUVSLVBBUlQtMDAxIn0"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "AssetIds BPN Company 3 Global And Customer Part Ids",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('assetIds query applies DTR access rules', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    const body = pm.response.json();",
+                  "    const result = body.result || [];",
+                  "    pm.expect(result).to.have.length(1);",
+                  "    const shell = result[0];",
+                  "    pm.expect(shell.id).to.eql('urn:example:aas:product-001');",
+                  "    pm.expect(shell.specificAssetIds.map((item) => item.name)).to.eql(['manufacturerPartId']);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{userAccessToken}}"
+              },
+              {
+                "key": "Edc-Bpn",
+                "value": "{{bpnCompany3}}"
+              }
+            ],
+            "url": {
+              "raw": "{{dtrBaseUrl}}/shell-descriptors?assetIds=eyJuYW1lIjoiZ2xvYmFsQXNzZXRJZCIsInZhbHVlIjoidXJuOmV4YW1wbGU6YXNzZXQ6cHJvZHVjdC0wMDEifQ&assetIds=eyJuYW1lIjoiY3VzdG9tZXJQYXJ0SWQiLCJ2YWx1ZSI6IkNVU1RPTUVSLVBBUlQtMDAxIn0",
+              "host": [
+                "{{dtrBaseUrl}}"
+              ],
+              "path": [
+                "shell-descriptors"
+              ],
+              "query": [
+                {
+                  "key": "assetIds",
+                  "value": "eyJuYW1lIjoiZ2xvYmFsQXNzZXRJZCIsInZhbHVlIjoidXJuOmV4YW1wbGU6YXNzZXQ6cHJvZHVjdC0wMDEifQ"
+                },
+                {
+                  "key": "assetIds",
+                  "value": "eyJuYW1lIjoiY3VzdG9tZXJQYXJ0SWQiLCJ2YWx1ZSI6IkNVU1RPTUVSLVBBUlQtMDAxIn0"
+                }
               ]
             }
           },
@@ -637,12 +1272,12 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('anonymous result contains only the public submodel and hides markers', function () {",
+                  "pm.test('anonymous token result contains the public submodel with public marker references', function () {",
                   "    pm.response.to.have.status(200);",
                   "    const submodels = pm.response.json().result;",
                   "    pm.expect(submodels).to.have.length(1);",
                   "    pm.expect(submodels[0].idShort).to.eql('PublicNameplate');",
-                  "    pm.expect(submodels[0]).to.not.have.property('supplementalSemanticIds');",
+                  "    pm.expect(submodels[0].supplementalSemanticIds[0].keys.map((key) => key.value)).to.eql(['PUBLIC_READABLE']);",
                   "});"
                 ]
               }
@@ -650,7 +1285,12 @@
           ],
           "request": {
             "method": "GET",
-            "header": [],
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{userAccessToken}}"
+              }
+            ],
             "url": {
               "raw": "{{smRepoBaseUrl}}/submodels",
               "host": [
@@ -676,7 +1316,7 @@
                   "    const submodels = pm.response.json().result;",
                   "    pm.expect(submodels).to.have.length(1);",
                   "    pm.expect(submodels[0].idShort).to.eql('PublicNameplate');",
-                  "    pm.expect(submodels[0]).to.not.have.property('supplementalSemanticIds');",
+                  "    pm.expect(submodels[0].supplementalSemanticIds[0].keys.map((key) => key.value)).to.eql(['PUBLIC_READABLE']);",
                   "});"
                 ]
               }
@@ -724,6 +1364,10 @@
           "request": {
             "method": "GET",
             "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{userAccessToken}}"
+              },
               {
                 "key": "Edc-Bpn",
                 "value": "{{bpnCompany1}}"
@@ -803,6 +1447,10 @@
             "method": "GET",
             "header": [
               {
+                "key": "Authorization",
+                "value": "Bearer {{userAccessToken}}"
+              },
+              {
                 "key": "Edc-Bpn",
                 "value": "{{bpnCompany2}}"
               }
@@ -841,6 +1489,10 @@
           "request": {
             "method": "GET",
             "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{userAccessToken}}"
+              },
               {
                 "key": "Edc-Bpn",
                 "value": "{{unrelatedBpn}}"
@@ -888,7 +1540,7 @@
     },
     {
       "key": "regularUsername",
-      "value": "usera"
+      "value": "collection_viewer"
     },
     {
       "key": "regularPassword",
@@ -917,6 +1569,10 @@
     {
       "key": "bpnCompany2",
       "value": "BPN_COMPANY_002"
+    },
+    {
+      "key": "bpnCompany3",
+      "value": "BPN_COMPANY_003"
     },
     {
       "key": "unrelatedBpn",

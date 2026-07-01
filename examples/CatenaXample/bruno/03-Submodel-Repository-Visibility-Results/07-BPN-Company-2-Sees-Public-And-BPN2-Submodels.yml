@@ -14,6 +14,56 @@ http:
 
 runtime:
   scripts:
+    - type: before-request
+      code: |-
+        const tokenVariable = "userAccessToken";
+        const expiresAtVariable = "userAccessTokenExpiresAt";
+        const nowSeconds = Math.floor(Date.now() / 1000);
+        
+        function tokenIsFresh() {
+          const expiresAt = Number(bru.getVar(expiresAtVariable) || 0);
+          return expiresAt - 30 > nowSeconds;
+        }
+        
+        function formUrlEncode(fields) {
+          return Object.entries(fields)
+            .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(value)}`)
+            .join("&");
+        }
+        
+        async function requestOAuth2Token() {
+          if (tokenIsFresh()) {
+            return bru.getVar(tokenVariable);
+          }
+        
+          const response = await bru.sendRequest({
+            url: "http://keycloak.localhost:8080/realms/basyx/protocol/openid-connect/token",
+            method: "POST",
+            headers: {
+              "Content-Type": "application/x-www-form-urlencoded",
+            },
+            data: formUrlEncode({
+              grant_type: "password",
+              client_id: "basyx-ui",
+              username: "collection_viewer",
+              password: "pwd",
+            }),
+          });
+        
+          const status = response.status || response.statusCode || response.code;
+          if (status !== 200) {
+            throw new Error(`OAuth2 token request failed with status ${status}`);
+          }
+        
+          const tokenResponse = typeof response.data === "string" ? JSON.parse(response.data) : response.data;
+          bru.setVar(tokenVariable, tokenResponse.access_token);
+          bru.setVar(expiresAtVariable, String(nowSeconds + Number(tokenResponse.expires_in || 300)));
+        
+          return tokenResponse.access_token;
+        }
+        
+        const token = await requestOAuth2Token();
+        req.setHeader("Authorization", `Bearer ${token}`);
     - type: tests
       code: |-
         test('BPN2 result keeps only BPN2 restricted markers', function () {

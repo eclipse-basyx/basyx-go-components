@@ -13,14 +13,15 @@ runtime:
   scripts:
     - type: tests
       code: |-
-        test('anonymous result hides asset IDs and marker references', function () {
+        test('anonymous descriptor result shows public marker references only', function () {
             expect(res.status).to.equal(200);
             const shell = res.body.result[0];
             expect(shell.id).to.eql('urn:example:aas:product-001');
-            expect(shell).to.not.have.property('specificAssetIds');
+            expect(shell.specificAssetIds).to.have.length(1);
+            expect(shell.specificAssetIds[0].externalSubjectId.keys.map((key) => key.value)).to.eql(['PUBLIC_READABLE']);
             expect(shell.submodelDescriptors).to.have.length(1);
             expect(shell.submodelDescriptors[0].idShort).to.eql('PublicNameplate');
-            expect(shell.submodelDescriptors[0]).to.not.have.property('supplementalSemanticId');
+            expect(shell.submodelDescriptors[0].supplementalSemanticId[0].keys.map((key) => key.value)).to.eql(['PUBLIC_READABLE']);
         });
 
 settings:

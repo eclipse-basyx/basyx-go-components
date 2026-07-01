@@ -45,7 +45,7 @@ runtime:
             data: formUrlEncode({
               grant_type: "password",
               client_id: "basyx-ui",
-              username: "usera",
+              username: "collection_viewer",
               password: "pwd",
             }),
           });

@@ -1,0 +1,2540 @@
+info:
+  name: "CatenaXample"
+  type: collection
+  version: "1"
+items:
+  - info:
+      name: "Setup - Write Example Data"
+      type: folder
+      seq: 1
+    items:
+      - info:
+          name: "Write Shell Descriptor As Admin"
+          type: http
+          seq: 1
+        http:
+          method: POST
+          url: "http://localhost:5004/api/v3/shell-descriptors"
+          headers:
+            - name: "Content-Type"
+              value: "application/json"
+          body:
+            type: json
+            data: |-
+              {
+                "idShort": "ProductTwin",
+                "id": "urn:example:aas:product-001",
+                "description": [
+                  {
+                    "language": "en",
+                    "text": "Public and partner-restricted submodel descriptors."
+                  }
+                ],
+                "globalAssetId": "urn:example:asset:product-001",
+                "specificAssetIds": [
+                  {
+                    "name": "manufacturerPartId",
+                    "value": "PART-001",
+                    "externalSubjectId": {
+                      "type": "ExternalReference",
+                      "keys": [
+                        {
+                          "type": "GlobalReference",
+                          "value": "PUBLIC_READABLE"
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "name": "customerPartId",
+                    "value": "CUSTOMER-PART-001",
+                    "externalSubjectId": {
+                      "type": "ExternalReference",
+                      "keys": [
+                        {
+                          "type": "GlobalReference",
+                          "value": "BPN_COMPANY_001"
+                        },
+                        {
+                          "type": "GlobalReference",
+                          "value": "BPN_COMPANY_002"
+                        }
+                      ]
+                    }
+                  }
+                ],
+                "submodelDescriptors": [
+                  {
+                    "idShort": "PublicNameplate",
+                    "id": "urn:example:submodel:nameplate",
+                    "supplementalSemanticIds": [
+                      {
+                        "type": "ExternalReference",
+                        "keys": [
+                          {
+                            "type": "GlobalReference",
+                            "value": "PUBLIC_READABLE"
+                          }
+                        ]
+                      }
+                    ],
+                    "endpoints": [
+                      {
+                        "interface": "SUBMODEL-3.0",
+                        "protocolInformation": {
+                          "href": "http://localhost:5005/submodels/dXJuOmV4YW1wbGU6c3VibW9kZWw6bmFtZXBsYXRl",
+                          "endpointProtocol": "HTTP"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "idShort": "RestrictedSerialPartTypization",
+                    "id": "urn:example:submodel:serial-part-typization",
+                    "supplementalSemanticIds": [
+                      {
+                        "type": "ExternalReference",
+                        "keys": [
+                          {
+                            "type": "GlobalReference",
+                            "value": "BPN_COMPANY_001"
+                          },
+                          {
+                            "type": "GlobalReference",
+                            "value": "BPN_COMPANY_002"
+                          }
+                        ]
+                      }
+                    ],
+                    "endpoints": [
+                      {
+                        "interface": "SUBMODEL-3.0",
+                        "protocolInformation": {
+                          "href": "http://localhost:5005/submodels/dXJuOmV4YW1wbGU6c3VibW9kZWw6c2VyaWFsLXBhcnQtdHlwaXphdGlvbg",
+                          "endpointProtocol": "HTTP"
+                        }
+                      }
+                    ]
+                  }
+                ]
+              }
+          auth:
+            type: none
+        runtime:
+          scripts:
+          - type: before-request
+            code: |-
+              const tokenVariable = "adminAccessToken";
+              const expiresAtVariable = "adminAccessTokenExpiresAt";
+              const nowSeconds = Math.floor(Date.now() / 1000);
+              
+              function tokenIsFresh() {
+                const expiresAt = Number(bru.getVar(expiresAtVariable) || 0);
+                return expiresAt - 30 > nowSeconds;
+              }
+              
+              function formUrlEncode(fields) {
+                return Object.entries(fields)
+                  .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(value)}`)
+                  .join("&");
+              }
+              
+              async function requestOAuth2Token() {
+                if (tokenIsFresh()) {
+                  return bru.getVar(tokenVariable);
+                }
+              
+                const response = await bru.sendRequest({
+                  url: "http://keycloak.localhost:8080/realms/basyx/protocol/openid-connect/token",
+                  method: "POST",
+                  headers: {
+                    "Content-Type": "application/x-www-form-urlencoded",
+                  },
+                  data: formUrlEncode({
+                    grant_type: "password",
+                    client_id: "basyx-ui",
+                    username: "admin",
+                    password: "pwd",
+                  }),
+                });
+              
+                const status = response.status || response.statusCode || response.code;
+                if (status !== 200) {
+                  throw new Error(`OAuth2 token request failed with status ${status}`);
+                }
+              
+                const tokenResponse = typeof response.data === "string" ? JSON.parse(response.data) : response.data;
+                bru.setVar(tokenVariable, tokenResponse.access_token);
+                bru.setVar(expiresAtVariable, String(nowSeconds + Number(tokenResponse.expires_in || 300)));
+              
+                return tokenResponse.access_token;
+              }
+              
+              const token = await requestOAuth2Token();
+              req.setHeader("Authorization", `Bearer ${token}`);
+          - type: tests
+            code: |-
+              test('shell descriptor is created or already present', function () {
+                  expect([201, 409]).to.include(res.status);
+              });
+        settings:
+          encodeUrl: true
+          timeout: 0
+          followRedirects: true
+          maxRedirects: 5
+      - info:
+          name: "Write Public Submodel As Admin"
+          type: http
+          seq: 2
+        http:
+          method: POST
+          url: "http://localhost:5005/submodels"
+          headers:
+            - name: "Content-Type"
+              value: "application/json"
+          body:
+            type: json
+            data: |-
+              {
+                "id": "urn:example:submodel:nameplate",
+                "idShort": "PublicNameplate",
+                "modelType": "Submodel",
+                "supplementalSemanticIds": [
+                  {
+                    "type": "ExternalReference",
+                    "keys": [
+                      {
+                        "type": "GlobalReference",
+                        "value": "PUBLIC_READABLE"
+                      }
+                    ]
+                  }
+                ],
+                "submodelElements": [
+                  {
+                    "idShort": "ManufacturerName",
+                    "modelType": "Property",
+                    "valueType": "xs:string",
+                    "value": "Example Corp"
+                  }
+                ]
+              }
+          auth:
+            type: none
+        runtime:
+          scripts:
+          - type: before-request
+            code: |-
+              const tokenVariable = "adminAccessToken";
+              const expiresAtVariable = "adminAccessTokenExpiresAt";
+              const nowSeconds = Math.floor(Date.now() / 1000);
+              
+              function tokenIsFresh() {
+                const expiresAt = Number(bru.getVar(expiresAtVariable) || 0);
+                return expiresAt - 30 > nowSeconds;
+              }
+              
+              function formUrlEncode(fields) {
+                return Object.entries(fields)
+                  .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(value)}`)
+                  .join("&");
+              }
+              
+              async function requestOAuth2Token() {
+                if (tokenIsFresh()) {
+                  return bru.getVar(tokenVariable);
+                }
+              
+                const response = await bru.sendRequest({
+                  url: "http://keycloak.localhost:8080/realms/basyx/protocol/openid-connect/token",
+                  method: "POST",
+                  headers: {
+                    "Content-Type": "application/x-www-form-urlencoded",
+                  },
+                  data: formUrlEncode({
+                    grant_type: "password",
+                    client_id: "basyx-ui",
+                    username: "admin",
+                    password: "pwd",
+                  }),
+                });
+              
+                const status = response.status || response.statusCode || response.code;
+                if (status !== 200) {
+                  throw new Error(`OAuth2 token request failed with status ${status}`);
+                }
+              
+                const tokenResponse = typeof response.data === "string" ? JSON.parse(response.data) : response.data;
+                bru.setVar(tokenVariable, tokenResponse.access_token);
+                bru.setVar(expiresAtVariable, String(nowSeconds + Number(tokenResponse.expires_in || 300)));
+              
+                return tokenResponse.access_token;
+              }
+              
+              const token = await requestOAuth2Token();
+              req.setHeader("Authorization", `Bearer ${token}`);
+          - type: tests
+            code: |-
+              test('public submodel is created or already present', function () {
+                  expect([201, 409]).to.include(res.status);
+              });
+        settings:
+          encodeUrl: true
+          timeout: 0
+          followRedirects: true
+          maxRedirects: 5
+      - info:
+          name: "Write Restricted Submodel As Admin"
+          type: http
+          seq: 3
+        http:
+          method: POST
+          url: "http://localhost:5005/submodels"
+          headers:
+            - name: "Content-Type"
+              value: "application/json"
+          body:
+            type: json
+            data: |-
+              {
+                "id": "urn:example:submodel:serial-part-typization",
+                "idShort": "RestrictedSerialPartTypization",
+                "modelType": "Submodel",
+                "supplementalSemanticIds": [
+                  {
+                    "type": "ExternalReference",
+                    "keys": [
+                      {
+                        "type": "GlobalReference",
+                        "value": "BPN_COMPANY_001"
+                      },
+                      {
+                        "type": "GlobalReference",
+                        "value": "BPN_COMPANY_002"
+                      }
+                    ]
+                  }
+                ],
+                "submodelElements": [
+                  {
+                    "idShort": "PublicPartType",
+                    "modelType": "Property",
+                    "valueType": "xs:string",
+                    "value": "PUBLIC-TYPE"
+                  },
+                  {
+                    "idShort": "PartnerSerialNumber",
+                    "modelType": "Property",
+                    "valueType": "xs:string",
+                    "value": "SECRET-001"
+                  }
+                ]
+              }
+          auth:
+            type: none
+        runtime:
+          scripts:
+          - type: before-request
+            code: |-
+              const tokenVariable = "adminAccessToken";
+              const expiresAtVariable = "adminAccessTokenExpiresAt";
+              const nowSeconds = Math.floor(Date.now() / 1000);
+              
+              function tokenIsFresh() {
+                const expiresAt = Number(bru.getVar(expiresAtVariable) || 0);
+                return expiresAt - 30 > nowSeconds;
+              }
+              
+              function formUrlEncode(fields) {
+                return Object.entries(fields)
+                  .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(value)}`)
+                  .join("&");
+              }
+              
+              async function requestOAuth2Token() {
+                if (tokenIsFresh()) {
+                  return bru.getVar(tokenVariable);
+                }
+              
+                const response = await bru.sendRequest({
+                  url: "http://keycloak.localhost:8080/realms/basyx/protocol/openid-connect/token",
+                  method: "POST",
+                  headers: {
+                    "Content-Type": "application/x-www-form-urlencoded",
+                  },
+                  data: formUrlEncode({
+                    grant_type: "password",
+                    client_id: "basyx-ui",
+                    username: "admin",
+                    password: "pwd",
+                  }),
+                });
+              
+                const status = response.status || response.statusCode || response.code;
+                if (status !== 200) {
+                  throw new Error(`OAuth2 token request failed with status ${status}`);
+                }
+              
+                const tokenResponse = typeof response.data === "string" ? JSON.parse(response.data) : response.data;
+                bru.setVar(tokenVariable, tokenResponse.access_token);
+                bru.setVar(expiresAtVariable, String(nowSeconds + Number(tokenResponse.expires_in || 300)));
+              
+                return tokenResponse.access_token;
+              }
+              
+              const token = await requestOAuth2Token();
+              req.setHeader("Authorization", `Bearer ${token}`);
+          - type: tests
+            code: |-
+              test('restricted submodel is created or already present', function () {
+                  expect([201, 409]).to.include(res.status);
+              });
+        settings:
+          encodeUrl: true
+          timeout: 0
+          followRedirects: true
+          maxRedirects: 5
+  - info:
+      name: "DTR Visibility Results"
+      type: folder
+      seq: 2
+    items:
+      - info:
+          name: "Admin Sees All DTR Data"
+          type: http
+          seq: 1
+        http:
+          method: GET
+          url: "http://localhost:5004/api/v3/shell-descriptors"
+          auth:
+            type: none
+        runtime:
+          scripts:
+          - type: before-request
+            code: |-
+              const tokenVariable = "adminAccessToken";
+              const expiresAtVariable = "adminAccessTokenExpiresAt";
+              const nowSeconds = Math.floor(Date.now() / 1000);
+              
+              function tokenIsFresh() {
+                const expiresAt = Number(bru.getVar(expiresAtVariable) || 0);
+                return expiresAt - 30 > nowSeconds;
+              }
+              
+              function formUrlEncode(fields) {
+                return Object.entries(fields)
+                  .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(value)}`)
+                  .join("&");
+              }
+              
+              async function requestOAuth2Token() {
+                if (tokenIsFresh()) {
+                  return bru.getVar(tokenVariable);
+                }
+              
+                const response = await bru.sendRequest({
+                  url: "http://keycloak.localhost:8080/realms/basyx/protocol/openid-connect/token",
+                  method: "POST",
+                  headers: {
+                    "Content-Type": "application/x-www-form-urlencoded",
+                  },
+                  data: formUrlEncode({
+                    grant_type: "password",
+                    client_id: "basyx-ui",
+                    username: "admin",
+                    password: "pwd",
+                  }),
+                });
+              
+                const status = response.status || response.statusCode || response.code;
+                if (status !== 200) {
+                  throw new Error(`OAuth2 token request failed with status ${status}`);
+                }
+              
+                const tokenResponse = typeof response.data === "string" ? JSON.parse(response.data) : response.data;
+                bru.setVar(tokenVariable, tokenResponse.access_token);
+                bru.setVar(expiresAtVariable, String(nowSeconds + Number(tokenResponse.expires_in || 300)));
+              
+                return tokenResponse.access_token;
+              }
+              
+              const token = await requestOAuth2Token();
+              req.setHeader("Authorization", `Bearer ${token}`);
+          - type: tests
+            code: |-
+              test('admin sees all descriptors, asset IDs, and markers', function () {
+                  expect(res.status).to.equal(200);
+                  const shell = res.body.result[0];
+                  expect(shell.idShort).to.eql('ProductTwin');
+                  expect(shell.specificAssetIds).to.have.length(2);
+                  expect(shell.submodelDescriptors).to.have.length(2);
+                  const customerKeys = shell.specificAssetIds.find((item) => item.name === 'customerPartId').externalSubjectId.keys.map((key) => key.value);
+                  expect(customerKeys).to.eql(['BPN_COMPANY_001', 'BPN_COMPANY_002']);
+                  const restrictedKeys = shell.submodelDescriptors.find((item) => item.idShort === 'RestrictedSerialPartTypization').supplementalSemanticId[0].keys.map((key) => key.value);
+                  expect(restrictedKeys).to.eql(['BPN_COMPANY_001', 'BPN_COMPANY_002']);
+              });
+        settings:
+          encodeUrl: true
+          timeout: 0
+          followRedirects: true
+          maxRedirects: 5
+      - info:
+          name: "Admin With Unrelated BPN Still Sees All DTR Data"
+          type: http
+          seq: 2
+        http:
+          method: GET
+          url: "http://localhost:5004/api/v3/shell-descriptors"
+          headers:
+            - name: "Edc-Bpn"
+              value: "BPN_COMPANY_999"
+          auth:
+            type: none
+        runtime:
+          scripts:
+          - type: before-request
+            code: |-
+              const tokenVariable = "adminAccessToken";
+              const expiresAtVariable = "adminAccessTokenExpiresAt";
+              const nowSeconds = Math.floor(Date.now() / 1000);
+              
+              function tokenIsFresh() {
+                const expiresAt = Number(bru.getVar(expiresAtVariable) || 0);
+                return expiresAt - 30 > nowSeconds;
+              }
+              
+              function formUrlEncode(fields) {
+                return Object.entries(fields)
+                  .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(value)}`)
+                  .join("&");
+              }
+              
+              async function requestOAuth2Token() {
+                if (tokenIsFresh()) {
+                  return bru.getVar(tokenVariable);
+                }
+              
+                const response = await bru.sendRequest({
+                  url: "http://keycloak.localhost:8080/realms/basyx/protocol/openid-connect/token",
+                  method: "POST",
+                  headers: {
+                    "Content-Type": "application/x-www-form-urlencoded",
+                  },
+                  data: formUrlEncode({
+                    grant_type: "password",
+                    client_id: "basyx-ui",
+                    username: "admin",
+                    password: "pwd",
+                  }),
+                });
+              
+                const status = response.status || response.statusCode || response.code;
+                if (status !== 200) {
+                  throw new Error(`OAuth2 token request failed with status ${status}`);
+                }
+              
+                const tokenResponse = typeof response.data === "string" ? JSON.parse(response.data) : response.data;
+                bru.setVar(tokenVariable, tokenResponse.access_token);
+                bru.setVar(expiresAtVariable, String(nowSeconds + Number(tokenResponse.expires_in || 300)));
+              
+                return tokenResponse.access_token;
+              }
+              
+              const token = await requestOAuth2Token();
+              req.setHeader("Authorization", `Bearer ${token}`);
+          - type: tests
+            code: |-
+              test('admin role bypasses BPN filtering', function () {
+                  expect(res.status).to.equal(200);
+                  const shell = res.body.result[0];
+                  expect(shell.specificAssetIds).to.have.length(2);
+                  expect(shell.submodelDescriptors).to.have.length(2);
+              });
+        settings:
+          encodeUrl: true
+          timeout: 0
+          followRedirects: true
+          maxRedirects: 5
+      - info:
+          name: "Anonymous Sees Public DTR Descriptor Only"
+          type: http
+          seq: 3
+        http:
+          method: GET
+          url: "http://localhost:5004/api/v3/shell-descriptors"
+          auth:
+            type: none
+        runtime:
+          scripts:
+          - type: tests
+            code: |-
+              test('anonymous descriptor result shows public marker references only', function () {
+                  expect(res.status).to.equal(200);
+                  const shell = res.body.result[0];
+                  expect(shell.id).to.eql('urn:example:aas:product-001');
+                  expect(shell.specificAssetIds).to.have.length(1);
+                  expect(shell.specificAssetIds[0].externalSubjectId.keys.map((key) => key.value)).to.eql(['PUBLIC_READABLE']);
+                  expect(shell.submodelDescriptors).to.have.length(1);
+                  expect(shell.submodelDescriptors[0].idShort).to.eql('PublicNameplate');
+                  expect(shell.submodelDescriptors[0].supplementalSemanticId[0].keys.map((key) => key.value)).to.eql(['PUBLIC_READABLE']);
+              });
+        settings:
+          encodeUrl: true
+          timeout: 0
+          followRedirects: true
+          maxRedirects: 5
+      - info:
+          name: "Regular Token Sees Public DTR Descriptor Only"
+          type: http
+          seq: 4
+        http:
+          method: GET
+          url: "http://localhost:5004/api/v3/shell-descriptors"
+          auth:
+            type: none
+        runtime:
+          scripts:
+          - type: before-request
+            code: |-
+              const tokenVariable = "userAccessToken";
+              const expiresAtVariable = "userAccessTokenExpiresAt";
+              const nowSeconds = Math.floor(Date.now() / 1000);
+              
+              function tokenIsFresh() {
+                const expiresAt = Number(bru.getVar(expiresAtVariable) || 0);
+                return expiresAt - 30 > nowSeconds;
+              }
+              
+              function formUrlEncode(fields) {
+                return Object.entries(fields)
+                  .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(value)}`)
+                  .join("&");
+              }
+              
+              async function requestOAuth2Token() {
+                if (tokenIsFresh()) {
+                  return bru.getVar(tokenVariable);
+                }
+              
+                const response = await bru.sendRequest({
+                  url: "http://keycloak.localhost:8080/realms/basyx/protocol/openid-connect/token",
+                  method: "POST",
+                  headers: {
+                    "Content-Type": "application/x-www-form-urlencoded",
+                  },
+                  data: formUrlEncode({
+                    grant_type: "password",
+                    client_id: "basyx-ui",
+                    username: "collection_viewer",
+                    password: "pwd",
+                  }),
+                });
+              
+                const status = response.status || response.statusCode || response.code;
+                if (status !== 200) {
+                  throw new Error(`OAuth2 token request failed with status ${status}`);
+                }
+              
+                const tokenResponse = typeof response.data === "string" ? JSON.parse(response.data) : response.data;
+                bru.setVar(tokenVariable, tokenResponse.access_token);
+                bru.setVar(expiresAtVariable, String(nowSeconds + Number(tokenResponse.expires_in || 300)));
+              
+                return tokenResponse.access_token;
+              }
+              
+              const token = await requestOAuth2Token();
+              req.setHeader("Authorization", `Bearer ${token}`);
+          - type: tests
+            code: |-
+              test('regular token without BPN is public-only', function () {
+                  expect(res.status).to.equal(200);
+                  const shell = res.body.result[0];
+                  expect(shell.specificAssetIds).to.have.length(1);
+                  expect(shell.specificAssetIds[0].externalSubjectId.keys.map((key) => key.value)).to.eql(['PUBLIC_READABLE']);
+                  expect(shell.submodelDescriptors).to.have.length(1);
+                  expect(shell.submodelDescriptors[0].idShort).to.eql('PublicNameplate');
+                  expect(shell.submodelDescriptors[0].supplementalSemanticId[0].keys.map((key) => key.value)).to.eql(['PUBLIC_READABLE']);
+              });
+        settings:
+          encodeUrl: true
+          timeout: 0
+          followRedirects: true
+          maxRedirects: 5
+      - info:
+          name: "BPN Company 1 Sees Public And BPN1 DTR Data"
+          type: http
+          seq: 5
+        http:
+          method: GET
+          url: "http://localhost:5004/api/v3/shell-descriptors"
+          headers:
+            - name: "Edc-Bpn"
+              value: "BPN_COMPANY_001"
+          auth:
+            type: none
+        runtime:
+          scripts:
+          - type: before-request
+            code: |-
+              const tokenVariable = "userAccessToken";
+              const expiresAtVariable = "userAccessTokenExpiresAt";
+              const nowSeconds = Math.floor(Date.now() / 1000);
+              
+              function tokenIsFresh() {
+                const expiresAt = Number(bru.getVar(expiresAtVariable) || 0);
+                return expiresAt - 30 > nowSeconds;
+              }
+              
+              function formUrlEncode(fields) {
+                return Object.entries(fields)
+                  .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(value)}`)
+                  .join("&");
+              }
+              
+              async function requestOAuth2Token() {
+                if (tokenIsFresh()) {
+                  return bru.getVar(tokenVariable);
+                }
+              
+                const response = await bru.sendRequest({
+                  url: "http://keycloak.localhost:8080/realms/basyx/protocol/openid-connect/token",
+                  method: "POST",
+                  headers: {
+                    "Content-Type": "application/x-www-form-urlencoded",
+                  },
+                  data: formUrlEncode({
+                    grant_type: "password",
+                    client_id: "basyx-ui",
+                    username: "collection_viewer",
+                    password: "pwd",
+                  }),
+                });
+              
+                const status = response.status || response.statusCode || response.code;
+                if (status !== 200) {
+                  throw new Error(`OAuth2 token request failed with status ${status}`);
+                }
+              
+                const tokenResponse = typeof response.data === "string" ? JSON.parse(response.data) : response.data;
+                bru.setVar(tokenVariable, tokenResponse.access_token);
+                bru.setVar(expiresAtVariable, String(nowSeconds + Number(tokenResponse.expires_in || 300)));
+              
+                return tokenResponse.access_token;
+              }
+              
+              const token = await requestOAuth2Token();
+              req.setHeader("Authorization", `Bearer ${token}`);
+          - type: tests
+            code: |-
+              test('BPN1 result keeps BPN1 markers and removes BPN2 markers', function () {
+                  expect(res.status).to.equal(200);
+                  const shell = res.body.result[0];
+                  expect(shell.specificAssetIds).to.have.length(2);
+                  const customerKeys = shell.specificAssetIds.find((item) => item.name === 'customerPartId').externalSubjectId.keys.map((key) => key.value);
+                  expect(customerKeys).to.eql(['BPN_COMPANY_001']);
+                  expect(shell.submodelDescriptors).to.have.length(2);
+                  const restrictedKeys = shell.submodelDescriptors.find((item) => item.idShort === 'RestrictedSerialPartTypization').supplementalSemanticId[0].keys.map((key) => key.value);
+                  expect(restrictedKeys).to.eql(['BPN_COMPANY_001']);
+              });
+        settings:
+          encodeUrl: true
+          timeout: 0
+          followRedirects: true
+          maxRedirects: 5
+      - info:
+          name: "Regular Token With BPN Company 1 Sees BPN1 DTR Data"
+          type: http
+          seq: 6
+        http:
+          method: GET
+          url: "http://localhost:5004/api/v3/shell-descriptors"
+          headers:
+            - name: "Edc-Bpn"
+              value: "BPN_COMPANY_001"
+          auth:
+            type: none
+        runtime:
+          scripts:
+          - type: before-request
+            code: |-
+              const tokenVariable = "userAccessToken";
+              const expiresAtVariable = "userAccessTokenExpiresAt";
+              const nowSeconds = Math.floor(Date.now() / 1000);
+              
+              function tokenIsFresh() {
+                const expiresAt = Number(bru.getVar(expiresAtVariable) || 0);
+                return expiresAt - 30 > nowSeconds;
+              }
+              
+              function formUrlEncode(fields) {
+                return Object.entries(fields)
+                  .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(value)}`)
+                  .join("&");
+              }
+              
+              async function requestOAuth2Token() {
+                if (tokenIsFresh()) {
+                  return bru.getVar(tokenVariable);
+                }
+              
+                const response = await bru.sendRequest({
+                  url: "http://keycloak.localhost:8080/realms/basyx/protocol/openid-connect/token",
+                  method: "POST",
+                  headers: {
+                    "Content-Type": "application/x-www-form-urlencoded",
+                  },
+                  data: formUrlEncode({
+                    grant_type: "password",
+                    client_id: "basyx-ui",
+                    username: "collection_viewer",
+                    password: "pwd",
+                  }),
+                });
+              
+                const status = response.status || response.statusCode || response.code;
+                if (status !== 200) {
+                  throw new Error(`OAuth2 token request failed with status ${status}`);
+                }
+              
+                const tokenResponse = typeof response.data === "string" ? JSON.parse(response.data) : response.data;
+                bru.setVar(tokenVariable, tokenResponse.access_token);
+                bru.setVar(expiresAtVariable, String(nowSeconds + Number(tokenResponse.expires_in || 300)));
+              
+                return tokenResponse.access_token;
+              }
+              
+              const token = await requestOAuth2Token();
+              req.setHeader("Authorization", `Bearer ${token}`);
+          - type: tests
+            code: |-
+              test('regular token plus BPN1 header gets BPN1 view', function () {
+                  expect(res.status).to.equal(200);
+                  const shell = res.body.result[0];
+                  const restrictedKeys = shell.submodelDescriptors.find((item) => item.idShort === 'RestrictedSerialPartTypization').supplementalSemanticId[0].keys.map((key) => key.value);
+                  expect(restrictedKeys).to.eql(['BPN_COMPANY_001']);
+              });
+        settings:
+          encodeUrl: true
+          timeout: 0
+          followRedirects: true
+          maxRedirects: 5
+      - info:
+          name: "BPN Company 2 Sees Public And BPN2 DTR Data"
+          type: http
+          seq: 7
+        http:
+          method: GET
+          url: "http://localhost:5004/api/v3/shell-descriptors"
+          headers:
+            - name: "Edc-Bpn"
+              value: "BPN_COMPANY_002"
+          auth:
+            type: none
+        runtime:
+          scripts:
+          - type: before-request
+            code: |-
+              const tokenVariable = "userAccessToken";
+              const expiresAtVariable = "userAccessTokenExpiresAt";
+              const nowSeconds = Math.floor(Date.now() / 1000);
+              
+              function tokenIsFresh() {
+                const expiresAt = Number(bru.getVar(expiresAtVariable) || 0);
+                return expiresAt - 30 > nowSeconds;
+              }
+              
+              function formUrlEncode(fields) {
+                return Object.entries(fields)
+                  .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(value)}`)
+                  .join("&");
+              }
+              
+              async function requestOAuth2Token() {
+                if (tokenIsFresh()) {
+                  return bru.getVar(tokenVariable);
+                }
+              
+                const response = await bru.sendRequest({
+                  url: "http://keycloak.localhost:8080/realms/basyx/protocol/openid-connect/token",
+                  method: "POST",
+                  headers: {
+                    "Content-Type": "application/x-www-form-urlencoded",
+                  },
+                  data: formUrlEncode({
+                    grant_type: "password",
+                    client_id: "basyx-ui",
+                    username: "collection_viewer",
+                    password: "pwd",
+                  }),
+                });
+              
+                const status = response.status || response.statusCode || response.code;
+                if (status !== 200) {
+                  throw new Error(`OAuth2 token request failed with status ${status}`);
+                }
+              
+                const tokenResponse = typeof response.data === "string" ? JSON.parse(response.data) : response.data;
+                bru.setVar(tokenVariable, tokenResponse.access_token);
+                bru.setVar(expiresAtVariable, String(nowSeconds + Number(tokenResponse.expires_in || 300)));
+              
+                return tokenResponse.access_token;
+              }
+              
+              const token = await requestOAuth2Token();
+              req.setHeader("Authorization", `Bearer ${token}`);
+          - type: tests
+            code: |-
+              test('BPN2 result keeps BPN2 markers and removes BPN1 markers', function () {
+                  expect(res.status).to.equal(200);
+                  const shell = res.body.result[0];
+                  const customerKeys = shell.specificAssetIds.find((item) => item.name === 'customerPartId').externalSubjectId.keys.map((key) => key.value);
+                  expect(customerKeys).to.eql(['BPN_COMPANY_002']);
+                  const restrictedKeys = shell.submodelDescriptors.find((item) => item.idShort === 'RestrictedSerialPartTypization').supplementalSemanticId[0].keys.map((key) => key.value);
+                  expect(restrictedKeys).to.eql(['BPN_COMPANY_002']);
+              });
+        settings:
+          encodeUrl: true
+          timeout: 0
+          followRedirects: true
+          maxRedirects: 5
+      - info:
+          name: "Unrelated BPN Sees Public DTR Data With Public Markers"
+          type: http
+          seq: 8
+        http:
+          method: GET
+          url: "http://localhost:5004/api/v3/shell-descriptors"
+          headers:
+            - name: "Edc-Bpn"
+              value: "BPN_COMPANY_999"
+          auth:
+            type: none
+        runtime:
+          scripts:
+          - type: before-request
+            code: |-
+              const tokenVariable = "userAccessToken";
+              const expiresAtVariable = "userAccessTokenExpiresAt";
+              const nowSeconds = Math.floor(Date.now() / 1000);
+              
+              function tokenIsFresh() {
+                const expiresAt = Number(bru.getVar(expiresAtVariable) || 0);
+                return expiresAt - 30 > nowSeconds;
+              }
+              
+              function formUrlEncode(fields) {
+                return Object.entries(fields)
+                  .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(value)}`)
+                  .join("&");
+              }
+              
+              async function requestOAuth2Token() {
+                if (tokenIsFresh()) {
+                  return bru.getVar(tokenVariable);
+                }
+              
+                const response = await bru.sendRequest({
+                  url: "http://keycloak.localhost:8080/realms/basyx/protocol/openid-connect/token",
+                  method: "POST",
+                  headers: {
+                    "Content-Type": "application/x-www-form-urlencoded",
+                  },
+                  data: formUrlEncode({
+                    grant_type: "password",
+                    client_id: "basyx-ui",
+                    username: "collection_viewer",
+                    password: "pwd",
+                  }),
+                });
+              
+                const status = response.status || response.statusCode || response.code;
+                if (status !== 200) {
+                  throw new Error(`OAuth2 token request failed with status ${status}`);
+                }
+              
+                const tokenResponse = typeof response.data === "string" ? JSON.parse(response.data) : response.data;
+                bru.setVar(tokenVariable, tokenResponse.access_token);
+                bru.setVar(expiresAtVariable, String(nowSeconds + Number(tokenResponse.expires_in || 300)));
+              
+                return tokenResponse.access_token;
+              }
+              
+              const token = await requestOAuth2Token();
+              req.setHeader("Authorization", `Bearer ${token}`);
+          - type: tests
+            code: |-
+              test('unrelated BPN sees public markers but no partner data', function () {
+                  expect(res.status).to.equal(200);
+                  const shell = res.body.result[0];
+                  expect(shell.specificAssetIds).to.have.length(1);
+                  expect(shell.specificAssetIds[0].name).to.eql('manufacturerPartId');
+                  expect(shell.specificAssetIds[0].externalSubjectId.keys.map((key) => key.value)).to.eql(['PUBLIC_READABLE']);
+                  expect(shell.submodelDescriptors).to.have.length(1);
+                  expect(shell.submodelDescriptors[0].supplementalSemanticId[0].keys.map((key) => key.value)).to.eql(['PUBLIC_READABLE']);
+              });
+        settings:
+          encodeUrl: true
+          timeout: 0
+          followRedirects: true
+          maxRedirects: 5
+      - info:
+          name: "AssetIds No BPN Token Global Asset Id"
+          type: http
+          seq: 9
+        http:
+          method: GET
+          url: "http://localhost:5004/api/v3/shell-descriptors?assetIds=eyJuYW1lIjoiZ2xvYmFsQXNzZXRJZCIsInZhbHVlIjoidXJuOmV4YW1wbGU6YXNzZXQ6cHJvZHVjdC0wMDEifQ"
+          auth:
+            type: none
+        runtime:
+          scripts:
+          - type: before-request
+            code: |-
+              const tokenVariable = "userAccessToken";
+              const expiresAtVariable = "userAccessTokenExpiresAt";
+              const nowSeconds = Math.floor(Date.now() / 1000);
+              
+              function tokenIsFresh() {
+                const expiresAt = Number(bru.getVar(expiresAtVariable) || 0);
+                return expiresAt - 30 > nowSeconds;
+              }
+              
+              function formUrlEncode(fields) {
+                return Object.entries(fields)
+                  .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(value)}`)
+                  .join("&");
+              }
+              
+              async function requestOAuth2Token() {
+                if (tokenIsFresh()) {
+                  return bru.getVar(tokenVariable);
+                }
+              
+                const response = await bru.sendRequest({
+                  url: "http://keycloak.localhost:8080/realms/basyx/protocol/openid-connect/token",
+                  method: "POST",
+                  headers: {
+                    "Content-Type": "application/x-www-form-urlencoded",
+                  },
+                  data: formUrlEncode({
+                    grant_type: "password",
+                    client_id: "basyx-ui",
+                    username: "collection_viewer",
+                    password: "pwd",
+                  }),
+                });
+              
+                const status = response.status || response.statusCode || response.code;
+                if (status !== 200) {
+                  throw new Error(`OAuth2 token request failed with status ${status}`);
+                }
+              
+                const tokenResponse = typeof response.data === "string" ? JSON.parse(response.data) : response.data;
+                bru.setVar(tokenVariable, tokenResponse.access_token);
+                bru.setVar(expiresAtVariable, String(nowSeconds + Number(tokenResponse.expires_in || 300)));
+              
+                return tokenResponse.access_token;
+              }
+              
+              const token = await requestOAuth2Token();
+              req.setHeader("Authorization", `Bearer ${token}`);
+          - type: tests
+            code: |-
+              test('assetIds query applies DTR access rules', function () {
+                  expect(res.status).to.equal(200);
+                  const body = res.body;
+                  const result = body.result || [];
+                  expect(result).to.have.length(1);
+                  const shell = result[0];
+                  expect(shell.id).to.eql('urn:example:aas:product-001');
+                  expect(shell.specificAssetIds.map((item) => item.name)).to.eql(['manufacturerPartId']);
+              });
+        settings:
+          encodeUrl: true
+          timeout: 0
+          followRedirects: true
+          maxRedirects: 5
+      - info:
+          name: "AssetIds No BPN Token Customer Part Id"
+          type: http
+          seq: 10
+        http:
+          method: GET
+          url: "http://localhost:5004/api/v3/shell-descriptors?assetIds=eyJuYW1lIjoiY3VzdG9tZXJQYXJ0SWQiLCJ2YWx1ZSI6IkNVU1RPTUVSLVBBUlQtMDAxIn0"
+          auth:
+            type: none
+        runtime:
+          scripts:
+          - type: before-request
+            code: |-
+              const tokenVariable = "userAccessToken";
+              const expiresAtVariable = "userAccessTokenExpiresAt";
+              const nowSeconds = Math.floor(Date.now() / 1000);
+              
+              function tokenIsFresh() {
+                const expiresAt = Number(bru.getVar(expiresAtVariable) || 0);
+                return expiresAt - 30 > nowSeconds;
+              }
+              
+              function formUrlEncode(fields) {
+                return Object.entries(fields)
+                  .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(value)}`)
+                  .join("&");
+              }
+              
+              async function requestOAuth2Token() {
+                if (tokenIsFresh()) {
+                  return bru.getVar(tokenVariable);
+                }
+              
+                const response = await bru.sendRequest({
+                  url: "http://keycloak.localhost:8080/realms/basyx/protocol/openid-connect/token",
+                  method: "POST",
+                  headers: {
+                    "Content-Type": "application/x-www-form-urlencoded",
+                  },
+                  data: formUrlEncode({
+                    grant_type: "password",
+                    client_id: "basyx-ui",
+                    username: "collection_viewer",
+                    password: "pwd",
+                  }),
+                });
+              
+                const status = response.status || response.statusCode || response.code;
+                if (status !== 200) {
+                  throw new Error(`OAuth2 token request failed with status ${status}`);
+                }
+              
+                const tokenResponse = typeof response.data === "string" ? JSON.parse(response.data) : response.data;
+                bru.setVar(tokenVariable, tokenResponse.access_token);
+                bru.setVar(expiresAtVariable, String(nowSeconds + Number(tokenResponse.expires_in || 300)));
+              
+                return tokenResponse.access_token;
+              }
+              
+              const token = await requestOAuth2Token();
+              req.setHeader("Authorization", `Bearer ${token}`);
+          - type: tests
+            code: |-
+              test('assetIds query applies DTR access rules', function () {
+                  expect(res.status).to.equal(200);
+                  const body = res.body;
+                  const result = body.result || [];
+                  expect(result).to.have.length(0);
+              });
+        settings:
+          encodeUrl: true
+          timeout: 0
+          followRedirects: true
+          maxRedirects: 5
+      - info:
+          name: "AssetIds No BPN Token Global And Customer Part Ids"
+          type: http
+          seq: 11
+        http:
+          method: GET
+          url: "http://localhost:5004/api/v3/shell-descriptors?assetIds=eyJuYW1lIjoiZ2xvYmFsQXNzZXRJZCIsInZhbHVlIjoidXJuOmV4YW1wbGU6YXNzZXQ6cHJvZHVjdC0wMDEifQ&assetIds=eyJuYW1lIjoiY3VzdG9tZXJQYXJ0SWQiLCJ2YWx1ZSI6IkNVU1RPTUVSLVBBUlQtMDAxIn0"
+          auth:
+            type: none
+        runtime:
+          scripts:
+          - type: before-request
+            code: |-
+              const tokenVariable = "userAccessToken";
+              const expiresAtVariable = "userAccessTokenExpiresAt";
+              const nowSeconds = Math.floor(Date.now() / 1000);
+              
+              function tokenIsFresh() {
+                const expiresAt = Number(bru.getVar(expiresAtVariable) || 0);
+                return expiresAt - 30 > nowSeconds;
+              }
+              
+              function formUrlEncode(fields) {
+                return Object.entries(fields)
+                  .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(value)}`)
+                  .join("&");
+              }
+              
+              async function requestOAuth2Token() {
+                if (tokenIsFresh()) {
+                  return bru.getVar(tokenVariable);
+                }
+              
+                const response = await bru.sendRequest({
+                  url: "http://keycloak.localhost:8080/realms/basyx/protocol/openid-connect/token",
+                  method: "POST",
+                  headers: {
+                    "Content-Type": "application/x-www-form-urlencoded",
+                  },
+                  data: formUrlEncode({
+                    grant_type: "password",
+                    client_id: "basyx-ui",
+                    username: "collection_viewer",
+                    password: "pwd",
+                  }),
+                });
+              
+                const status = response.status || response.statusCode || response.code;
+                if (status !== 200) {
+                  throw new Error(`OAuth2 token request failed with status ${status}`);
+                }
+              
+                const tokenResponse = typeof response.data === "string" ? JSON.parse(response.data) : response.data;
+                bru.setVar(tokenVariable, tokenResponse.access_token);
+                bru.setVar(expiresAtVariable, String(nowSeconds + Number(tokenResponse.expires_in || 300)));
+              
+                return tokenResponse.access_token;
+              }
+              
+              const token = await requestOAuth2Token();
+              req.setHeader("Authorization", `Bearer ${token}`);
+          - type: tests
+            code: |-
+              test('assetIds query applies DTR access rules', function () {
+                  expect(res.status).to.equal(200);
+                  const body = res.body;
+                  const result = body.result || [];
+                  expect(result).to.have.length(0);
+              });
+        settings:
+          encodeUrl: true
+          timeout: 0
+          followRedirects: true
+          maxRedirects: 5
+      - info:
+          name: "AssetIds BPN Company 1 Global Asset Id"
+          type: http
+          seq: 12
+        http:
+          method: GET
+          url: "http://localhost:5004/api/v3/shell-descriptors?assetIds=eyJuYW1lIjoiZ2xvYmFsQXNzZXRJZCIsInZhbHVlIjoidXJuOmV4YW1wbGU6YXNzZXQ6cHJvZHVjdC0wMDEifQ"
+          headers:
+            - name: "Edc-Bpn"
+              value: "BPN_COMPANY_001"
+          auth:
+            type: none
+        runtime:
+          scripts:
+          - type: before-request
+            code: |-
+              const tokenVariable = "userAccessToken";
+              const expiresAtVariable = "userAccessTokenExpiresAt";
+              const nowSeconds = Math.floor(Date.now() / 1000);
+              
+              function tokenIsFresh() {
+                const expiresAt = Number(bru.getVar(expiresAtVariable) || 0);
+                return expiresAt - 30 > nowSeconds;
+              }
+              
+              function formUrlEncode(fields) {
+                return Object.entries(fields)
+                  .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(value)}`)
+                  .join("&");
+              }
+              
+              async function requestOAuth2Token() {
+                if (tokenIsFresh()) {
+                  return bru.getVar(tokenVariable);
+                }
+              
+                const response = await bru.sendRequest({
+                  url: "http://keycloak.localhost:8080/realms/basyx/protocol/openid-connect/token",
+                  method: "POST",
+                  headers: {
+                    "Content-Type": "application/x-www-form-urlencoded",
+                  },
+                  data: formUrlEncode({
+                    grant_type: "password",
+                    client_id: "basyx-ui",
+                    username: "collection_viewer",
+                    password: "pwd",
+                  }),
+                });
+              
+                const status = response.status || response.statusCode || response.code;
+                if (status !== 200) {
+                  throw new Error(`OAuth2 token request failed with status ${status}`);
+                }
+              
+                const tokenResponse = typeof response.data === "string" ? JSON.parse(response.data) : response.data;
+                bru.setVar(tokenVariable, tokenResponse.access_token);
+                bru.setVar(expiresAtVariable, String(nowSeconds + Number(tokenResponse.expires_in || 300)));
+              
+                return tokenResponse.access_token;
+              }
+              
+              const token = await requestOAuth2Token();
+              req.setHeader("Authorization", `Bearer ${token}`);
+          - type: tests
+            code: |-
+              test('assetIds query applies DTR access rules', function () {
+                  expect(res.status).to.equal(200);
+                  const body = res.body;
+                  const result = body.result || [];
+                  expect(result).to.have.length(1);
+                  const shell = result[0];
+                  expect(shell.id).to.eql('urn:example:aas:product-001');
+                  const customerPart = shell.specificAssetIds.find((item) => item.name === 'customerPartId');
+                  expect(customerPart.externalSubjectId.keys.map((key) => key.value)).to.eql(['BPN_COMPANY_001']);
+              });
+        settings:
+          encodeUrl: true
+          timeout: 0
+          followRedirects: true
+          maxRedirects: 5
+      - info:
+          name: "AssetIds BPN Company 1 Customer Part Id"
+          type: http
+          seq: 13
+        http:
+          method: GET
+          url: "http://localhost:5004/api/v3/shell-descriptors?assetIds=eyJuYW1lIjoiY3VzdG9tZXJQYXJ0SWQiLCJ2YWx1ZSI6IkNVU1RPTUVSLVBBUlQtMDAxIn0"
+          headers:
+            - name: "Edc-Bpn"
+              value: "BPN_COMPANY_001"
+          auth:
+            type: none
+        runtime:
+          scripts:
+          - type: before-request
+            code: |-
+              const tokenVariable = "userAccessToken";
+              const expiresAtVariable = "userAccessTokenExpiresAt";
+              const nowSeconds = Math.floor(Date.now() / 1000);
+              
+              function tokenIsFresh() {
+                const expiresAt = Number(bru.getVar(expiresAtVariable) || 0);
+                return expiresAt - 30 > nowSeconds;
+              }
+              
+              function formUrlEncode(fields) {
+                return Object.entries(fields)
+                  .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(value)}`)
+                  .join("&");
+              }
+              
+              async function requestOAuth2Token() {
+                if (tokenIsFresh()) {
+                  return bru.getVar(tokenVariable);
+                }
+              
+                const response = await bru.sendRequest({
+                  url: "http://keycloak.localhost:8080/realms/basyx/protocol/openid-connect/token",
+                  method: "POST",
+                  headers: {
+                    "Content-Type": "application/x-www-form-urlencoded",
+                  },
+                  data: formUrlEncode({
+                    grant_type: "password",
+                    client_id: "basyx-ui",
+                    username: "collection_viewer",
+                    password: "pwd",
+                  }),
+                });
+              
+                const status = response.status || response.statusCode || response.code;
+                if (status !== 200) {
+                  throw new Error(`OAuth2 token request failed with status ${status}`);
+                }
+              
+                const tokenResponse = typeof response.data === "string" ? JSON.parse(response.data) : response.data;
+                bru.setVar(tokenVariable, tokenResponse.access_token);
+                bru.setVar(expiresAtVariable, String(nowSeconds + Number(tokenResponse.expires_in || 300)));
+              
+                return tokenResponse.access_token;
+              }
+              
+              const token = await requestOAuth2Token();
+              req.setHeader("Authorization", `Bearer ${token}`);
+          - type: tests
+            code: |-
+              test('assetIds query applies DTR access rules', function () {
+                  expect(res.status).to.equal(200);
+                  const body = res.body;
+                  const result = body.result || [];
+                  expect(result).to.have.length(1);
+                  const shell = result[0];
+                  expect(shell.id).to.eql('urn:example:aas:product-001');
+                  const customerPart = shell.specificAssetIds.find((item) => item.name === 'customerPartId');
+                  expect(customerPart.externalSubjectId.keys.map((key) => key.value)).to.eql(['BPN_COMPANY_001']);
+              });
+        settings:
+          encodeUrl: true
+          timeout: 0
+          followRedirects: true
+          maxRedirects: 5
+      - info:
+          name: "AssetIds BPN Company 1 Global And Customer Part Ids"
+          type: http
+          seq: 14
+        http:
+          method: GET
+          url: "http://localhost:5004/api/v3/shell-descriptors?assetIds=eyJuYW1lIjoiZ2xvYmFsQXNzZXRJZCIsInZhbHVlIjoidXJuOmV4YW1wbGU6YXNzZXQ6cHJvZHVjdC0wMDEifQ&assetIds=eyJuYW1lIjoiY3VzdG9tZXJQYXJ0SWQiLCJ2YWx1ZSI6IkNVU1RPTUVSLVBBUlQtMDAxIn0"
+          headers:
+            - name: "Edc-Bpn"
+              value: "BPN_COMPANY_001"
+          auth:
+            type: none
+        runtime:
+          scripts:
+          - type: before-request
+            code: |-
+              const tokenVariable = "userAccessToken";
+              const expiresAtVariable = "userAccessTokenExpiresAt";
+              const nowSeconds = Math.floor(Date.now() / 1000);
+              
+              function tokenIsFresh() {
+                const expiresAt = Number(bru.getVar(expiresAtVariable) || 0);
+                return expiresAt - 30 > nowSeconds;
+              }
+              
+              function formUrlEncode(fields) {
+                return Object.entries(fields)
+                  .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(value)}`)
+                  .join("&");
+              }
+              
+              async function requestOAuth2Token() {
+                if (tokenIsFresh()) {
+                  return bru.getVar(tokenVariable);
+                }
+              
+                const response = await bru.sendRequest({
+                  url: "http://keycloak.localhost:8080/realms/basyx/protocol/openid-connect/token",
+                  method: "POST",
+                  headers: {
+                    "Content-Type": "application/x-www-form-urlencoded",
+                  },
+                  data: formUrlEncode({
+                    grant_type: "password",
+                    client_id: "basyx-ui",
+                    username: "collection_viewer",
+                    password: "pwd",
+                  }),
+                });
+              
+                const status = response.status || response.statusCode || response.code;
+                if (status !== 200) {
+                  throw new Error(`OAuth2 token request failed with status ${status}`);
+                }
+              
+                const tokenResponse = typeof response.data === "string" ? JSON.parse(response.data) : response.data;
+                bru.setVar(tokenVariable, tokenResponse.access_token);
+                bru.setVar(expiresAtVariable, String(nowSeconds + Number(tokenResponse.expires_in || 300)));
+              
+                return tokenResponse.access_token;
+              }
+              
+              const token = await requestOAuth2Token();
+              req.setHeader("Authorization", `Bearer ${token}`);
+          - type: tests
+            code: |-
+              test('assetIds query applies DTR access rules', function () {
+                  expect(res.status).to.equal(200);
+                  const body = res.body;
+                  const result = body.result || [];
+                  expect(result).to.have.length(1);
+                  const shell = result[0];
+                  expect(shell.id).to.eql('urn:example:aas:product-001');
+                  const customerPart = shell.specificAssetIds.find((item) => item.name === 'customerPartId');
+                  expect(customerPart.externalSubjectId.keys.map((key) => key.value)).to.eql(['BPN_COMPANY_001']);
+              });
+        settings:
+          encodeUrl: true
+          timeout: 0
+          followRedirects: true
+          maxRedirects: 5
+      - info:
+          name: "AssetIds BPN Company 2 Global Asset Id"
+          type: http
+          seq: 15
+        http:
+          method: GET
+          url: "http://localhost:5004/api/v3/shell-descriptors?assetIds=eyJuYW1lIjoiZ2xvYmFsQXNzZXRJZCIsInZhbHVlIjoidXJuOmV4YW1wbGU6YXNzZXQ6cHJvZHVjdC0wMDEifQ"
+          headers:
+            - name: "Edc-Bpn"
+              value: "BPN_COMPANY_002"
+          auth:
+            type: none
+        runtime:
+          scripts:
+          - type: before-request
+            code: |-
+              const tokenVariable = "userAccessToken";
+              const expiresAtVariable = "userAccessTokenExpiresAt";
+              const nowSeconds = Math.floor(Date.now() / 1000);
+              
+              function tokenIsFresh() {
+                const expiresAt = Number(bru.getVar(expiresAtVariable) || 0);
+                return expiresAt - 30 > nowSeconds;
+              }
+              
+              function formUrlEncode(fields) {
+                return Object.entries(fields)
+                  .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(value)}`)
+                  .join("&");
+              }
+              
+              async function requestOAuth2Token() {
+                if (tokenIsFresh()) {
+                  return bru.getVar(tokenVariable);
+                }
+              
+                const response = await bru.sendRequest({
+                  url: "http://keycloak.localhost:8080/realms/basyx/protocol/openid-connect/token",
+                  method: "POST",
+                  headers: {
+                    "Content-Type": "application/x-www-form-urlencoded",
+                  },
+                  data: formUrlEncode({
+                    grant_type: "password",
+                    client_id: "basyx-ui",
+                    username: "collection_viewer",
+                    password: "pwd",
+                  }),
+                });
+              
+                const status = response.status || response.statusCode || response.code;
+                if (status !== 200) {
+                  throw new Error(`OAuth2 token request failed with status ${status}`);
+                }
+              
+                const tokenResponse = typeof response.data === "string" ? JSON.parse(response.data) : response.data;
+                bru.setVar(tokenVariable, tokenResponse.access_token);
+                bru.setVar(expiresAtVariable, String(nowSeconds + Number(tokenResponse.expires_in || 300)));
+              
+                return tokenResponse.access_token;
+              }
+              
+              const token = await requestOAuth2Token();
+              req.setHeader("Authorization", `Bearer ${token}`);
+          - type: tests
+            code: |-
+              test('assetIds query applies DTR access rules', function () {
+                  expect(res.status).to.equal(200);
+                  const body = res.body;
+                  const result = body.result || [];
+                  expect(result).to.have.length(1);
+                  const shell = result[0];
+                  expect(shell.id).to.eql('urn:example:aas:product-001');
+                  const customerPart = shell.specificAssetIds.find((item) => item.name === 'customerPartId');
+                  expect(customerPart.externalSubjectId.keys.map((key) => key.value)).to.eql(['BPN_COMPANY_002']);
+              });
+        settings:
+          encodeUrl: true
+          timeout: 0
+          followRedirects: true
+          maxRedirects: 5
+      - info:
+          name: "AssetIds BPN Company 2 Customer Part Id"
+          type: http
+          seq: 16
+        http:
+          method: GET
+          url: "http://localhost:5004/api/v3/shell-descriptors?assetIds=eyJuYW1lIjoiY3VzdG9tZXJQYXJ0SWQiLCJ2YWx1ZSI6IkNVU1RPTUVSLVBBUlQtMDAxIn0"
+          headers:
+            - name: "Edc-Bpn"
+              value: "BPN_COMPANY_002"
+          auth:
+            type: none
+        runtime:
+          scripts:
+          - type: before-request
+            code: |-
+              const tokenVariable = "userAccessToken";
+              const expiresAtVariable = "userAccessTokenExpiresAt";
+              const nowSeconds = Math.floor(Date.now() / 1000);
+              
+              function tokenIsFresh() {
+                const expiresAt = Number(bru.getVar(expiresAtVariable) || 0);
+                return expiresAt - 30 > nowSeconds;
+              }
+              
+              function formUrlEncode(fields) {
+                return Object.entries(fields)
+                  .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(value)}`)
+                  .join("&");
+              }
+              
+              async function requestOAuth2Token() {
+                if (tokenIsFresh()) {
+                  return bru.getVar(tokenVariable);
+                }
+              
+                const response = await bru.sendRequest({
+                  url: "http://keycloak.localhost:8080/realms/basyx/protocol/openid-connect/token",
+                  method: "POST",
+                  headers: {
+                    "Content-Type": "application/x-www-form-urlencoded",
+                  },
+                  data: formUrlEncode({
+                    grant_type: "password",
+                    client_id: "basyx-ui",
+                    username: "collection_viewer",
+                    password: "pwd",
+                  }),
+                });
+              
+                const status = response.status || response.statusCode || response.code;
+                if (status !== 200) {
+                  throw new Error(`OAuth2 token request failed with status ${status}`);
+                }
+              
+                const tokenResponse = typeof response.data === "string" ? JSON.parse(response.data) : response.data;
+                bru.setVar(tokenVariable, tokenResponse.access_token);
+                bru.setVar(expiresAtVariable, String(nowSeconds + Number(tokenResponse.expires_in || 300)));
+              
+                return tokenResponse.access_token;
+              }
+              
+              const token = await requestOAuth2Token();
+              req.setHeader("Authorization", `Bearer ${token}`);
+          - type: tests
+            code: |-
+              test('assetIds query applies DTR access rules', function () {
+                  expect(res.status).to.equal(200);
+                  const body = res.body;
+                  const result = body.result || [];
+                  expect(result).to.have.length(1);
+                  const shell = result[0];
+                  expect(shell.id).to.eql('urn:example:aas:product-001');
+                  const customerPart = shell.specificAssetIds.find((item) => item.name === 'customerPartId');
+                  expect(customerPart.externalSubjectId.keys.map((key) => key.value)).to.eql(['BPN_COMPANY_002']);
+              });
+        settings:
+          encodeUrl: true
+          timeout: 0
+          followRedirects: true
+          maxRedirects: 5
+      - info:
+          name: "AssetIds BPN Company 2 Global And Customer Part Ids"
+          type: http
+          seq: 17
+        http:
+          method: GET
+          url: "http://localhost:5004/api/v3/shell-descriptors?assetIds=eyJuYW1lIjoiZ2xvYmFsQXNzZXRJZCIsInZhbHVlIjoidXJuOmV4YW1wbGU6YXNzZXQ6cHJvZHVjdC0wMDEifQ&assetIds=eyJuYW1lIjoiY3VzdG9tZXJQYXJ0SWQiLCJ2YWx1ZSI6IkNVU1RPTUVSLVBBUlQtMDAxIn0"
+          headers:
+            - name: "Edc-Bpn"
+              value: "BPN_COMPANY_002"
+          auth:
+            type: none
+        runtime:
+          scripts:
+          - type: before-request
+            code: |-
+              const tokenVariable = "userAccessToken";
+              const expiresAtVariable = "userAccessTokenExpiresAt";
+              const nowSeconds = Math.floor(Date.now() / 1000);
+              
+              function tokenIsFresh() {
+                const expiresAt = Number(bru.getVar(expiresAtVariable) || 0);
+                return expiresAt - 30 > nowSeconds;
+              }
+              
+              function formUrlEncode(fields) {
+                return Object.entries(fields)
+                  .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(value)}`)
+                  .join("&");
+              }
+              
+              async function requestOAuth2Token() {
+                if (tokenIsFresh()) {
+                  return bru.getVar(tokenVariable);
+                }
+              
+                const response = await bru.sendRequest({
+                  url: "http://keycloak.localhost:8080/realms/basyx/protocol/openid-connect/token",
+                  method: "POST",
+                  headers: {
+                    "Content-Type": "application/x-www-form-urlencoded",
+                  },
+                  data: formUrlEncode({
+                    grant_type: "password",
+                    client_id: "basyx-ui",
+                    username: "collection_viewer",
+                    password: "pwd",
+                  }),
+                });
+              
+                const status = response.status || response.statusCode || response.code;
+                if (status !== 200) {
+                  throw new Error(`OAuth2 token request failed with status ${status}`);
+                }
+              
+                const tokenResponse = typeof response.data === "string" ? JSON.parse(response.data) : response.data;
+                bru.setVar(tokenVariable, tokenResponse.access_token);
+                bru.setVar(expiresAtVariable, String(nowSeconds + Number(tokenResponse.expires_in || 300)));
+              
+                return tokenResponse.access_token;
+              }
+              
+              const token = await requestOAuth2Token();
+              req.setHeader("Authorization", `Bearer ${token}`);
+          - type: tests
+            code: |-
+              test('assetIds query applies DTR access rules', function () {
+                  expect(res.status).to.equal(200);
+                  const body = res.body;
+                  const result = body.result || [];
+                  expect(result).to.have.length(1);
+                  const shell = result[0];
+                  expect(shell.id).to.eql('urn:example:aas:product-001');
+                  const customerPart = shell.specificAssetIds.find((item) => item.name === 'customerPartId');
+                  expect(customerPart.externalSubjectId.keys.map((key) => key.value)).to.eql(['BPN_COMPANY_002']);
+              });
+        settings:
+          encodeUrl: true
+          timeout: 0
+          followRedirects: true
+          maxRedirects: 5
+      - info:
+          name: "AssetIds BPN Company 3 Global Asset Id"
+          type: http
+          seq: 18
+        http:
+          method: GET
+          url: "http://localhost:5004/api/v3/shell-descriptors?assetIds=eyJuYW1lIjoiZ2xvYmFsQXNzZXRJZCIsInZhbHVlIjoidXJuOmV4YW1wbGU6YXNzZXQ6cHJvZHVjdC0wMDEifQ"
+          headers:
+            - name: "Edc-Bpn"
+              value: "BPN_COMPANY_003"
+          auth:
+            type: none
+        runtime:
+          scripts:
+          - type: before-request
+            code: |-
+              const tokenVariable = "userAccessToken";
+              const expiresAtVariable = "userAccessTokenExpiresAt";
+              const nowSeconds = Math.floor(Date.now() / 1000);
+              
+              function tokenIsFresh() {
+                const expiresAt = Number(bru.getVar(expiresAtVariable) || 0);
+                return expiresAt - 30 > nowSeconds;
+              }
+              
+              function formUrlEncode(fields) {
+                return Object.entries(fields)
+                  .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(value)}`)
+                  .join("&");
+              }
+              
+              async function requestOAuth2Token() {
+                if (tokenIsFresh()) {
+                  return bru.getVar(tokenVariable);
+                }
+              
+                const response = await bru.sendRequest({
+                  url: "http://keycloak.localhost:8080/realms/basyx/protocol/openid-connect/token",
+                  method: "POST",
+                  headers: {
+                    "Content-Type": "application/x-www-form-urlencoded",
+                  },
+                  data: formUrlEncode({
+                    grant_type: "password",
+                    client_id: "basyx-ui",
+                    username: "collection_viewer",
+                    password: "pwd",
+                  }),
+                });
+              
+                const status = response.status || response.statusCode || response.code;
+                if (status !== 200) {
+                  throw new Error(`OAuth2 token request failed with status ${status}`);
+                }
+              
+                const tokenResponse = typeof response.data === "string" ? JSON.parse(response.data) : response.data;
+                bru.setVar(tokenVariable, tokenResponse.access_token);
+                bru.setVar(expiresAtVariable, String(nowSeconds + Number(tokenResponse.expires_in || 300)));
+              
+                return tokenResponse.access_token;
+              }
+              
+              const token = await requestOAuth2Token();
+              req.setHeader("Authorization", `Bearer ${token}`);
+          - type: tests
+            code: |-
+              test('assetIds query applies DTR access rules', function () {
+                  expect(res.status).to.equal(200);
+                  const body = res.body;
+                  const result = body.result || [];
+                  expect(result).to.have.length(1);
+                  const shell = result[0];
+                  expect(shell.id).to.eql('urn:example:aas:product-001');
+                  expect(shell.specificAssetIds.map((item) => item.name)).to.eql(['manufacturerPartId']);
+              });
+        settings:
+          encodeUrl: true
+          timeout: 0
+          followRedirects: true
+          maxRedirects: 5
+      - info:
+          name: "AssetIds BPN Company 3 Customer Part Id"
+          type: http
+          seq: 19
+        http:
+          method: GET
+          url: "http://localhost:5004/api/v3/shell-descriptors?assetIds=eyJuYW1lIjoiY3VzdG9tZXJQYXJ0SWQiLCJ2YWx1ZSI6IkNVU1RPTUVSLVBBUlQtMDAxIn0"
+          headers:
+            - name: "Edc-Bpn"
+              value: "BPN_COMPANY_003"
+          auth:
+            type: none
+        runtime:
+          scripts:
+          - type: before-request
+            code: |-
+              const tokenVariable = "userAccessToken";
+              const expiresAtVariable = "userAccessTokenExpiresAt";
+              const nowSeconds = Math.floor(Date.now() / 1000);
+              
+              function tokenIsFresh() {
+                const expiresAt = Number(bru.getVar(expiresAtVariable) || 0);
+                return expiresAt - 30 > nowSeconds;
+              }
+              
+              function formUrlEncode(fields) {
+                return Object.entries(fields)
+                  .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(value)}`)
+                  .join("&");
+              }
+              
+              async function requestOAuth2Token() {
+                if (tokenIsFresh()) {
+                  return bru.getVar(tokenVariable);
+                }
+              
+                const response = await bru.sendRequest({
+                  url: "http://keycloak.localhost:8080/realms/basyx/protocol/openid-connect/token",
+                  method: "POST",
+                  headers: {
+                    "Content-Type": "application/x-www-form-urlencoded",
+                  },
+                  data: formUrlEncode({
+                    grant_type: "password",
+                    client_id: "basyx-ui",
+                    username: "collection_viewer",
+                    password: "pwd",
+                  }),
+                });
+              
+                const status = response.status || response.statusCode || response.code;
+                if (status !== 200) {
+                  throw new Error(`OAuth2 token request failed with status ${status}`);
+                }
+              
+                const tokenResponse = typeof response.data === "string" ? JSON.parse(response.data) : response.data;
+                bru.setVar(tokenVariable, tokenResponse.access_token);
+                bru.setVar(expiresAtVariable, String(nowSeconds + Number(tokenResponse.expires_in || 300)));
+              
+                return tokenResponse.access_token;
+              }
+              
+              const token = await requestOAuth2Token();
+              req.setHeader("Authorization", `Bearer ${token}`);
+          - type: tests
+            code: |-
+              test('assetIds query applies DTR access rules', function () {
+                  expect(res.status).to.equal(200);
+                  const body = res.body;
+                  const result = body.result || [];
+                  expect(result).to.have.length(0);
+              });
+        settings:
+          encodeUrl: true
+          timeout: 0
+          followRedirects: true
+          maxRedirects: 5
+      - info:
+          name: "AssetIds BPN Company 3 Global And Customer Part Ids"
+          type: http
+          seq: 20
+        http:
+          method: GET
+          url: "http://localhost:5004/api/v3/shell-descriptors?assetIds=eyJuYW1lIjoiZ2xvYmFsQXNzZXRJZCIsInZhbHVlIjoidXJuOmV4YW1wbGU6YXNzZXQ6cHJvZHVjdC0wMDEifQ&assetIds=eyJuYW1lIjoiY3VzdG9tZXJQYXJ0SWQiLCJ2YWx1ZSI6IkNVU1RPTUVSLVBBUlQtMDAxIn0"
+          headers:
+            - name: "Edc-Bpn"
+              value: "BPN_COMPANY_003"
+          auth:
+            type: none
+        runtime:
+          scripts:
+          - type: before-request
+            code: |-
+              const tokenVariable = "userAccessToken";
+              const expiresAtVariable = "userAccessTokenExpiresAt";
+              const nowSeconds = Math.floor(Date.now() / 1000);
+              
+              function tokenIsFresh() {
+                const expiresAt = Number(bru.getVar(expiresAtVariable) || 0);
+                return expiresAt - 30 > nowSeconds;
+              }
+              
+              function formUrlEncode(fields) {
+                return Object.entries(fields)
+                  .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(value)}`)
+                  .join("&");
+              }
+              
+              async function requestOAuth2Token() {
+                if (tokenIsFresh()) {
+                  return bru.getVar(tokenVariable);
+                }
+              
+                const response = await bru.sendRequest({
+                  url: "http://keycloak.localhost:8080/realms/basyx/protocol/openid-connect/token",
+                  method: "POST",
+                  headers: {
+                    "Content-Type": "application/x-www-form-urlencoded",
+                  },
+                  data: formUrlEncode({
+                    grant_type: "password",
+                    client_id: "basyx-ui",
+                    username: "collection_viewer",
+                    password: "pwd",
+                  }),
+                });
+              
+                const status = response.status || response.statusCode || response.code;
+                if (status !== 200) {
+                  throw new Error(`OAuth2 token request failed with status ${status}`);
+                }
+              
+                const tokenResponse = typeof response.data === "string" ? JSON.parse(response.data) : response.data;
+                bru.setVar(tokenVariable, tokenResponse.access_token);
+                bru.setVar(expiresAtVariable, String(nowSeconds + Number(tokenResponse.expires_in || 300)));
+              
+                return tokenResponse.access_token;
+              }
+              
+              const token = await requestOAuth2Token();
+              req.setHeader("Authorization", `Bearer ${token}`);
+          - type: tests
+            code: |-
+              test('assetIds query applies DTR access rules', function () {
+                  expect(res.status).to.equal(200);
+                  const body = res.body;
+                  const result = body.result || [];
+                  expect(result).to.have.length(1);
+                  const shell = result[0];
+                  expect(shell.id).to.eql('urn:example:aas:product-001');
+                  expect(shell.specificAssetIds.map((item) => item.name)).to.eql(['manufacturerPartId']);
+              });
+        settings:
+          encodeUrl: true
+          timeout: 0
+          followRedirects: true
+          maxRedirects: 5
+  - info:
+      name: "Submodel Repository Visibility Results"
+      type: folder
+      seq: 3
+    items:
+      - info:
+          name: "Admin Sees All Submodels"
+          type: http
+          seq: 1
+        http:
+          method: GET
+          url: "http://localhost:5005/submodels"
+          auth:
+            type: none
+        runtime:
+          scripts:
+          - type: before-request
+            code: |-
+              const tokenVariable = "adminAccessToken";
+              const expiresAtVariable = "adminAccessTokenExpiresAt";
+              const nowSeconds = Math.floor(Date.now() / 1000);
+              
+              function tokenIsFresh() {
+                const expiresAt = Number(bru.getVar(expiresAtVariable) || 0);
+                return expiresAt - 30 > nowSeconds;
+              }
+              
+              function formUrlEncode(fields) {
+                return Object.entries(fields)
+                  .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(value)}`)
+                  .join("&");
+              }
+              
+              async function requestOAuth2Token() {
+                if (tokenIsFresh()) {
+                  return bru.getVar(tokenVariable);
+                }
+              
+                const response = await bru.sendRequest({
+                  url: "http://keycloak.localhost:8080/realms/basyx/protocol/openid-connect/token",
+                  method: "POST",
+                  headers: {
+                    "Content-Type": "application/x-www-form-urlencoded",
+                  },
+                  data: formUrlEncode({
+                    grant_type: "password",
+                    client_id: "basyx-ui",
+                    username: "admin",
+                    password: "pwd",
+                  }),
+                });
+              
+                const status = response.status || response.statusCode || response.code;
+                if (status !== 200) {
+                  throw new Error(`OAuth2 token request failed with status ${status}`);
+                }
+              
+                const tokenResponse = typeof response.data === "string" ? JSON.parse(response.data) : response.data;
+                bru.setVar(tokenVariable, tokenResponse.access_token);
+                bru.setVar(expiresAtVariable, String(nowSeconds + Number(tokenResponse.expires_in || 300)));
+              
+                return tokenResponse.access_token;
+              }
+              
+              const token = await requestOAuth2Token();
+              req.setHeader("Authorization", `Bearer ${token}`);
+          - type: tests
+            code: |-
+              test('admin sees public and restricted submodels with all markers', function () {
+                  expect(res.status).to.equal(200);
+                  const submodels = res.body.result;
+                  expect(submodels.map((item) => item.idShort)).to.have.members(['PublicNameplate', 'RestrictedSerialPartTypization']);
+                  const restricted = submodels.find((item) => item.idShort === 'RestrictedSerialPartTypization');
+                  expect(restricted.supplementalSemanticIds[0].keys.map((key) => key.value)).to.eql(['BPN_COMPANY_001', 'BPN_COMPANY_002']);
+              });
+        settings:
+          encodeUrl: true
+          timeout: 0
+          followRedirects: true
+          maxRedirects: 5
+      - info:
+          name: "Admin With Unrelated BPN Still Sees All Submodels"
+          type: http
+          seq: 2
+        http:
+          method: GET
+          url: "http://localhost:5005/submodels"
+          headers:
+            - name: "Edc-Bpn"
+              value: "BPN_COMPANY_999"
+          auth:
+            type: none
+        runtime:
+          scripts:
+          - type: before-request
+            code: |-
+              const tokenVariable = "adminAccessToken";
+              const expiresAtVariable = "adminAccessTokenExpiresAt";
+              const nowSeconds = Math.floor(Date.now() / 1000);
+              
+              function tokenIsFresh() {
+                const expiresAt = Number(bru.getVar(expiresAtVariable) || 0);
+                return expiresAt - 30 > nowSeconds;
+              }
+              
+              function formUrlEncode(fields) {
+                return Object.entries(fields)
+                  .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(value)}`)
+                  .join("&");
+              }
+              
+              async function requestOAuth2Token() {
+                if (tokenIsFresh()) {
+                  return bru.getVar(tokenVariable);
+                }
+              
+                const response = await bru.sendRequest({
+                  url: "http://keycloak.localhost:8080/realms/basyx/protocol/openid-connect/token",
+                  method: "POST",
+                  headers: {
+                    "Content-Type": "application/x-www-form-urlencoded",
+                  },
+                  data: formUrlEncode({
+                    grant_type: "password",
+                    client_id: "basyx-ui",
+                    username: "admin",
+                    password: "pwd",
+                  }),
+                });
+              
+                const status = response.status || response.statusCode || response.code;
+                if (status !== 200) {
+                  throw new Error(`OAuth2 token request failed with status ${status}`);
+                }
+              
+                const tokenResponse = typeof response.data === "string" ? JSON.parse(response.data) : response.data;
+                bru.setVar(tokenVariable, tokenResponse.access_token);
+                bru.setVar(expiresAtVariable, String(nowSeconds + Number(tokenResponse.expires_in || 300)));
+              
+                return tokenResponse.access_token;
+              }
+              
+              const token = await requestOAuth2Token();
+              req.setHeader("Authorization", `Bearer ${token}`);
+          - type: tests
+            code: |-
+              test('admin role bypasses submodel BPN filtering', function () {
+                  expect(res.status).to.equal(200);
+                  expect(res.body.result).to.have.length(2);
+              });
+        settings:
+          encodeUrl: true
+          timeout: 0
+          followRedirects: true
+          maxRedirects: 5
+      - info:
+          name: "Anonymous Sees Public Submodel Only"
+          type: http
+          seq: 3
+        http:
+          method: GET
+          url: "http://localhost:5005/submodels"
+          auth:
+            type: none
+        runtime:
+          scripts:
+          - type: before-request
+            code: |-
+              const tokenVariable = "userAccessToken";
+              const expiresAtVariable = "userAccessTokenExpiresAt";
+              const nowSeconds = Math.floor(Date.now() / 1000);
+              
+              function tokenIsFresh() {
+                const expiresAt = Number(bru.getVar(expiresAtVariable) || 0);
+                return expiresAt - 30 > nowSeconds;
+              }
+              
+              function formUrlEncode(fields) {
+                return Object.entries(fields)
+                  .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(value)}`)
+                  .join("&");
+              }
+              
+              async function requestOAuth2Token() {
+                if (tokenIsFresh()) {
+                  return bru.getVar(tokenVariable);
+                }
+              
+                const response = await bru.sendRequest({
+                  url: "http://keycloak.localhost:8080/realms/basyx/protocol/openid-connect/token",
+                  method: "POST",
+                  headers: {
+                    "Content-Type": "application/x-www-form-urlencoded",
+                  },
+                  data: formUrlEncode({
+                    grant_type: "password",
+                    client_id: "basyx-ui",
+                    username: "collection_viewer",
+                    password: "pwd",
+                  }),
+                });
+              
+                const status = response.status || response.statusCode || response.code;
+                if (status !== 200) {
+                  throw new Error(`OAuth2 token request failed with status ${status}`);
+                }
+              
+                const tokenResponse = typeof response.data === "string" ? JSON.parse(response.data) : response.data;
+                bru.setVar(tokenVariable, tokenResponse.access_token);
+                bru.setVar(expiresAtVariable, String(nowSeconds + Number(tokenResponse.expires_in || 300)));
+              
+                return tokenResponse.access_token;
+              }
+              
+              const token = await requestOAuth2Token();
+              req.setHeader("Authorization", `Bearer ${token}`);
+          - type: tests
+            code: |-
+              test('anonymous token result contains the public submodel with public marker references', function () {
+                  expect(res.status).to.equal(200);
+                  const submodels = res.body.result;
+                  expect(submodels).to.have.length(1);
+                  expect(submodels[0].idShort).to.eql('PublicNameplate');
+                  expect(submodels[0].supplementalSemanticIds[0].keys.map((key) => key.value)).to.eql(['PUBLIC_READABLE']);
+              });
+        settings:
+          encodeUrl: true
+          timeout: 0
+          followRedirects: true
+          maxRedirects: 5
+      - info:
+          name: "Regular Token Sees Public Submodel Only"
+          type: http
+          seq: 4
+        http:
+          method: GET
+          url: "http://localhost:5005/submodels"
+          auth:
+            type: none
+        runtime:
+          scripts:
+          - type: before-request
+            code: |-
+              const tokenVariable = "userAccessToken";
+              const expiresAtVariable = "userAccessTokenExpiresAt";
+              const nowSeconds = Math.floor(Date.now() / 1000);
+              
+              function tokenIsFresh() {
+                const expiresAt = Number(bru.getVar(expiresAtVariable) || 0);
+                return expiresAt - 30 > nowSeconds;
+              }
+              
+              function formUrlEncode(fields) {
+                return Object.entries(fields)
+                  .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(value)}`)
+                  .join("&");
+              }
+              
+              async function requestOAuth2Token() {
+                if (tokenIsFresh()) {
+                  return bru.getVar(tokenVariable);
+                }
+              
+                const response = await bru.sendRequest({
+                  url: "http://keycloak.localhost:8080/realms/basyx/protocol/openid-connect/token",
+                  method: "POST",
+                  headers: {
+                    "Content-Type": "application/x-www-form-urlencoded",
+                  },
+                  data: formUrlEncode({
+                    grant_type: "password",
+                    client_id: "basyx-ui",
+                    username: "collection_viewer",
+                    password: "pwd",
+                  }),
+                });
+              
+                const status = response.status || response.statusCode || response.code;
+                if (status !== 200) {
+                  throw new Error(`OAuth2 token request failed with status ${status}`);
+                }
+              
+                const tokenResponse = typeof response.data === "string" ? JSON.parse(response.data) : response.data;
+                bru.setVar(tokenVariable, tokenResponse.access_token);
+                bru.setVar(expiresAtVariable, String(nowSeconds + Number(tokenResponse.expires_in || 300)));
+              
+                return tokenResponse.access_token;
+              }
+              
+              const token = await requestOAuth2Token();
+              req.setHeader("Authorization", `Bearer ${token}`);
+          - type: tests
+            code: |-
+              test('regular token without BPN is public-only', function () {
+                  expect(res.status).to.equal(200);
+                  const submodels = res.body.result;
+                  expect(submodels).to.have.length(1);
+                  expect(submodels[0].idShort).to.eql('PublicNameplate');
+                  expect(submodels[0].supplementalSemanticIds[0].keys.map((key) => key.value)).to.eql(['PUBLIC_READABLE']);
+              });
+        settings:
+          encodeUrl: true
+          timeout: 0
+          followRedirects: true
+          maxRedirects: 5
+      - info:
+          name: "BPN Company 1 Sees Public And BPN1 Submodels"
+          type: http
+          seq: 5
+        http:
+          method: GET
+          url: "http://localhost:5005/submodels"
+          headers:
+            - name: "Edc-Bpn"
+              value: "BPN_COMPANY_001"
+          auth:
+            type: none
+        runtime:
+          scripts:
+          - type: before-request
+            code: |-
+              const tokenVariable = "userAccessToken";
+              const expiresAtVariable = "userAccessTokenExpiresAt";
+              const nowSeconds = Math.floor(Date.now() / 1000);
+              
+              function tokenIsFresh() {
+                const expiresAt = Number(bru.getVar(expiresAtVariable) || 0);
+                return expiresAt - 30 > nowSeconds;
+              }
+              
+              function formUrlEncode(fields) {
+                return Object.entries(fields)
+                  .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(value)}`)
+                  .join("&");
+              }
+              
+              async function requestOAuth2Token() {
+                if (tokenIsFresh()) {
+                  return bru.getVar(tokenVariable);
+                }
+              
+                const response = await bru.sendRequest({
+                  url: "http://keycloak.localhost:8080/realms/basyx/protocol/openid-connect/token",
+                  method: "POST",
+                  headers: {
+                    "Content-Type": "application/x-www-form-urlencoded",
+                  },
+                  data: formUrlEncode({
+                    grant_type: "password",
+                    client_id: "basyx-ui",
+                    username: "collection_viewer",
+                    password: "pwd",
+                  }),
+                });
+              
+                const status = response.status || response.statusCode || response.code;
+                if (status !== 200) {
+                  throw new Error(`OAuth2 token request failed with status ${status}`);
+                }
+              
+                const tokenResponse = typeof response.data === "string" ? JSON.parse(response.data) : response.data;
+                bru.setVar(tokenVariable, tokenResponse.access_token);
+                bru.setVar(expiresAtVariable, String(nowSeconds + Number(tokenResponse.expires_in || 300)));
+              
+                return tokenResponse.access_token;
+              }
+              
+              const token = await requestOAuth2Token();
+              req.setHeader("Authorization", `Bearer ${token}`);
+          - type: tests
+            code: |-
+              test('BPN1 result keeps only BPN1 restricted markers', function () {
+                  expect(res.status).to.equal(200);
+                  const submodels = res.body.result;
+                  expect(submodels).to.have.length(2);
+                  const restricted = submodels.find((item) => item.idShort === 'RestrictedSerialPartTypization');
+                  expect(restricted.supplementalSemanticIds[0].keys.map((key) => key.value)).to.eql(['BPN_COMPANY_001']);
+              });
+        settings:
+          encodeUrl: true
+          timeout: 0
+          followRedirects: true
+          maxRedirects: 5
+      - info:
+          name: "Regular Token With BPN Company 1 Sees BPN1 Submodels"
+          type: http
+          seq: 6
+        http:
+          method: GET
+          url: "http://localhost:5005/submodels"
+          headers:
+            - name: "Edc-Bpn"
+              value: "BPN_COMPANY_001"
+          auth:
+            type: none
+        runtime:
+          scripts:
+          - type: before-request
+            code: |-
+              const tokenVariable = "userAccessToken";
+              const expiresAtVariable = "userAccessTokenExpiresAt";
+              const nowSeconds = Math.floor(Date.now() / 1000);
+              
+              function tokenIsFresh() {
+                const expiresAt = Number(bru.getVar(expiresAtVariable) || 0);
+                return expiresAt - 30 > nowSeconds;
+              }
+              
+              function formUrlEncode(fields) {
+                return Object.entries(fields)
+                  .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(value)}`)
+                  .join("&");
+              }
+              
+              async function requestOAuth2Token() {
+                if (tokenIsFresh()) {
+                  return bru.getVar(tokenVariable);
+                }
+              
+                const response = await bru.sendRequest({
+                  url: "http://keycloak.localhost:8080/realms/basyx/protocol/openid-connect/token",
+                  method: "POST",
+                  headers: {
+                    "Content-Type": "application/x-www-form-urlencoded",
+                  },
+                  data: formUrlEncode({
+                    grant_type: "password",
+                    client_id: "basyx-ui",
+                    username: "collection_viewer",
+                    password: "pwd",
+                  }),
+                });
+              
+                const status = response.status || response.statusCode || response.code;
+                if (status !== 200) {
+                  throw new Error(`OAuth2 token request failed with status ${status}`);
+                }
+              
+                const tokenResponse = typeof response.data === "string" ? JSON.parse(response.data) : response.data;
+                bru.setVar(tokenVariable, tokenResponse.access_token);
+                bru.setVar(expiresAtVariable, String(nowSeconds + Number(tokenResponse.expires_in || 300)));
+              
+                return tokenResponse.access_token;
+              }
+              
+              const token = await requestOAuth2Token();
+              req.setHeader("Authorization", `Bearer ${token}`);
+          - type: tests
+            code: |-
+              test('regular token plus BPN1 header gets BPN1 submodel view', function () {
+                  expect(res.status).to.equal(200);
+                  const restricted = res.body.result.find((item) => item.idShort === 'RestrictedSerialPartTypization');
+                  expect(restricted.supplementalSemanticIds[0].keys.map((key) => key.value)).to.eql(['BPN_COMPANY_001']);
+              });
+        settings:
+          encodeUrl: true
+          timeout: 0
+          followRedirects: true
+          maxRedirects: 5
+      - info:
+          name: "BPN Company 2 Sees Public And BPN2 Submodels"
+          type: http
+          seq: 7
+        http:
+          method: GET
+          url: "http://localhost:5005/submodels"
+          headers:
+            - name: "Edc-Bpn"
+              value: "BPN_COMPANY_002"
+          auth:
+            type: none
+        runtime:
+          scripts:
+          - type: before-request
+            code: |-
+              const tokenVariable = "userAccessToken";
+              const expiresAtVariable = "userAccessTokenExpiresAt";
+              const nowSeconds = Math.floor(Date.now() / 1000);
+              
+              function tokenIsFresh() {
+                const expiresAt = Number(bru.getVar(expiresAtVariable) || 0);
+                return expiresAt - 30 > nowSeconds;
+              }
+              
+              function formUrlEncode(fields) {
+                return Object.entries(fields)
+                  .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(value)}`)
+                  .join("&");
+              }
+              
+              async function requestOAuth2Token() {
+                if (tokenIsFresh()) {
+                  return bru.getVar(tokenVariable);
+                }
+              
+                const response = await bru.sendRequest({
+                  url: "http://keycloak.localhost:8080/realms/basyx/protocol/openid-connect/token",
+                  method: "POST",
+                  headers: {
+                    "Content-Type": "application/x-www-form-urlencoded",
+                  },
+                  data: formUrlEncode({
+                    grant_type: "password",
+                    client_id: "basyx-ui",
+                    username: "collection_viewer",
+                    password: "pwd",
+                  }),
+                });
+              
+                const status = response.status || response.statusCode || response.code;
+                if (status !== 200) {
+                  throw new Error(`OAuth2 token request failed with status ${status}`);
+                }
+              
+                const tokenResponse = typeof response.data === "string" ? JSON.parse(response.data) : response.data;
+                bru.setVar(tokenVariable, tokenResponse.access_token);
+                bru.setVar(expiresAtVariable, String(nowSeconds + Number(tokenResponse.expires_in || 300)));
+              
+                return tokenResponse.access_token;
+              }
+              
+              const token = await requestOAuth2Token();
+              req.setHeader("Authorization", `Bearer ${token}`);
+          - type: tests
+            code: |-
+              test('BPN2 result keeps only BPN2 restricted markers', function () {
+                  expect(res.status).to.equal(200);
+                  const restricted = res.body.result.find((item) => item.idShort === 'RestrictedSerialPartTypization');
+                  expect(restricted.supplementalSemanticIds[0].keys.map((key) => key.value)).to.eql(['BPN_COMPANY_002']);
+              });
+        settings:
+          encodeUrl: true
+          timeout: 0
+          followRedirects: true
+          maxRedirects: 5
+      - info:
+          name: "Unrelated BPN Sees Public Submodel With Public Markers"
+          type: http
+          seq: 8
+        http:
+          method: GET
+          url: "http://localhost:5005/submodels"
+          headers:
+            - name: "Edc-Bpn"
+              value: "BPN_COMPANY_999"
+          auth:
+            type: none
+        runtime:
+          scripts:
+          - type: before-request
+            code: |-
+              const tokenVariable = "userAccessToken";
+              const expiresAtVariable = "userAccessTokenExpiresAt";
+              const nowSeconds = Math.floor(Date.now() / 1000);
+              
+              function tokenIsFresh() {
+                const expiresAt = Number(bru.getVar(expiresAtVariable) || 0);
+                return expiresAt - 30 > nowSeconds;
+              }
+              
+              function formUrlEncode(fields) {
+                return Object.entries(fields)
+                  .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(value)}`)
+                  .join("&");
+              }
+              
+              async function requestOAuth2Token() {
+                if (tokenIsFresh()) {
+                  return bru.getVar(tokenVariable);
+                }
+              
+                const response = await bru.sendRequest({
+                  url: "http://keycloak.localhost:8080/realms/basyx/protocol/openid-connect/token",
+                  method: "POST",
+                  headers: {
+                    "Content-Type": "application/x-www-form-urlencoded",
+                  },
+                  data: formUrlEncode({
+                    grant_type: "password",
+                    client_id: "basyx-ui",
+                    username: "collection_viewer",
+                    password: "pwd",
+                  }),
+                });
+              
+                const status = response.status || response.statusCode || response.code;
+                if (status !== 200) {
+                  throw new Error(`OAuth2 token request failed with status ${status}`);
+                }
+              
+                const tokenResponse = typeof response.data === "string" ? JSON.parse(response.data) : response.data;
+                bru.setVar(tokenVariable, tokenResponse.access_token);
+                bru.setVar(expiresAtVariable, String(nowSeconds + Number(tokenResponse.expires_in || 300)));
+              
+                return tokenResponse.access_token;
+              }
+              
+              const token = await requestOAuth2Token();
+              req.setHeader("Authorization", `Bearer ${token}`);
+          - type: tests
+            code: |-
+              test('unrelated BPN sees public marker rows but no restricted submodel', function () {
+                  expect(res.status).to.equal(200);
+                  const submodels = res.body.result;
+                  expect(submodels).to.have.length(1);
+                  expect(submodels[0].idShort).to.eql('PublicNameplate');
+                  expect(submodels[0].supplementalSemanticIds[0].keys.map((key) => key.value)).to.eql(['PUBLIC_READABLE']);
+              });
+        settings:
+          encodeUrl: true
+          timeout: 0
+          followRedirects: true
+          maxRedirects: 5

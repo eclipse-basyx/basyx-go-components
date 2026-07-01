@@ -15,13 +15,15 @@ The services use marker values to control visibility:
 - submodels: `supplementalSemanticIds[].keys[].value`;
 - submodel elements: `supplementalSemanticIds[].keys[].value`.
 
-Recognized example markers are `PUBLIC_READABLE`, `BPN_COMPANY_001`, and
-`BPN_COMPANY_002`.
+Recognized example markers are `PUBLIC_READABLE`, `BPN_COMPANY_001`,
+`BPN_COMPANY_002`, and `BPN_COMPANY_003`. The example descriptor grants its
+restricted customer-part and restricted submodel data to BPN1 and BPN2. BPN3 is
+included as a negative-access viewer.
 
 The Keycloak user `admin` with password `pwd` has the
-`view_digital_twin` data-provider role. Authenticated requests with its token
-bypass marker filtering and return all descriptors, submodels, elements, and
-supplemental semantic ID marker rows.
+`data_provider` role. Authenticated requests with its token bypass marker
+filtering and return all descriptors, submodels, elements, and supplemental
+semantic ID marker rows.
 
 ## Start
 
@@ -34,14 +36,67 @@ docker compose up -d --build
 The BaSyx UI uses the `basyx-ui` OAuth2 auth-code client from the imported
 Keycloak realm and is configured through `basyx-infra.yml`.
 
-## Postman Collection
+## UI Setup
+
+Open the UI at:
+
+```text
+http://localhost:3000
+```
+
+The UI authenticates against:
+
+```text
+http://keycloak.localhost:8080/realms/basyx
+```
+
+Use these example users. All passwords are `pwd`.
+
+| Username | Token role | Edc-Bpn | Purpose |
+| --- | --- | --- | --- |
+| `admin` | `data_provider` | none | Data-provider user with full access. |
+| `company1_viewer` | `edc_user` | `BPN_COMPANY_001` | BPN1 viewer, sees public and BPN1-restricted data. |
+| `company2_viewer` | `edc_user` | `BPN_COMPANY_002` | BPN2 viewer, sees public and BPN2-restricted data. |
+| `company3_viewer` | `edc_user` | `BPN_COMPANY_003` | BPN3 viewer, useful for negative-access checks. |
+| `no_bpn_viewer` | `user` | none | Authenticated viewer without an EDC BPN claim. |
+| `collection_viewer` | `user` | none | Generic collection user; collection scenarios set BPN headers explicitly. |
+
+Keycloak admin console access is available at:
+
+```text
+http://keycloak.localhost:8080
+```
+
+with `admin` / `admin`.
+
+## Collection Setup
 
 Import `CatenaXample.postman_collection.json` into Postman to run the
 example scenarios. Run the `Setup - Write Example Data` folder first; the
 collection automatically fetches OAuth2 password-grant tokens from Keycloak for
 protected requests and writes the shell descriptor plus both submodels. The
 remaining folders show the expected DTR and Submodel Repository results for
-admin, anonymous, regular-user, BPN1, BPN2, and unrelated BPN access.
+data-provider, public descriptor, authenticated no-BPN, BPN1, BPN2, BPN3, and
+unrelated-BPN access.
+
+The collection variables use:
+
+- `adminUsername = admin` for setup and data-provider requests;
+- `regularUsername = collection_viewer` for non-provider token requests;
+- `bpnCompany1`, `bpnCompany2`, `bpnCompany3`, and `unrelatedBpn` as test
+  `Edc-Bpn` header values.
+
+The generated Bruno/OpenCollection variants are kept in sync with the Postman
+source:
+
+- Bruno folder collection: `bruno/`
+- single-file OpenCollection: `CatenaXample.opencollection.yml`
+
+Regenerate them after changing the Postman source:
+
+```powershell
+node ..\..\scripts\generate_bruno_collections.js
+```
 
 ## Variant Data Script
 
@@ -63,9 +118,11 @@ python .\post_marker_variants.py --count 20000 --max-parallel 64
 
 ## DTR visibility
 
-Anonymous discovery returns the descriptor because it has a public asset
-marker. Public submodel descriptors remain visible, while restricted submodel
-descriptors and all `specificAssetIds` are removed.
+Anonymous DTR descriptor discovery returns the descriptor because it has a
+public asset marker. Public submodel descriptors remain visible, while
+restricted submodel descriptors and restricted `specificAssetIds` are removed.
+Lookup and `assetIds` queries require an authenticated non-provider token and
+then apply the same marker checks.
 
 An unknown BPN sees public asset identifiers and the public submodel descriptor.
 
@@ -86,8 +143,9 @@ allowed descriptor from leaking marker values belonging to another company.
 
 ## Submodel Repository visibility
 
-Anonymous callers can read only the public submodel. BPN1 and BPN2 can
-additionally read the restricted submodel.
+Submodel Repository data reads require an authenticated non-provider token.
+Tokens without an EDC BPN claim can read only the public submodel. BPN1 and
+BPN2 can additionally read the restricted submodel.
 
 Within a visible submodel, whole submodel elements are filtered through the
 `$sme` fragment. Their supplemental-semantic-ID references and key arrays are

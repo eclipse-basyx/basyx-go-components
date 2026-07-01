@@ -1,11 +1,14 @@
 info:
-  name: "Regular Token Sees Public DTR Descriptor Only"
+  name: "AssetIds BPN Company 1 Global Asset Id"
   type: http
-  seq: 4
+  seq: 12
 
 http:
   method: GET
-  url: "http://localhost:5004/api/v3/shell-descriptors"
+  url: "http://localhost:5004/api/v3/shell-descriptors?assetIds=eyJuYW1lIjoiZ2xvYmFsQXNzZXRJZCIsInZhbHVlIjoidXJuOmV4YW1wbGU6YXNzZXQ6cHJvZHVjdC0wMDEifQ"
+  headers:
+    - name: "Edc-Bpn"
+      value: "BPN_COMPANY_001"
   auth:
     type: none
 
@@ -63,14 +66,15 @@ runtime:
         req.setHeader("Authorization", `Bearer ${token}`);
     - type: tests
       code: |-
-        test('regular token without BPN is public-only', function () {
+        test('assetIds query applies DTR access rules', function () {
             expect(res.status).to.equal(200);
-            const shell = res.body.result[0];
-            expect(shell.specificAssetIds).to.have.length(1);
-            expect(shell.specificAssetIds[0].externalSubjectId.keys.map((key) => key.value)).to.eql(['PUBLIC_READABLE']);
-            expect(shell.submodelDescriptors).to.have.length(1);
-            expect(shell.submodelDescriptors[0].idShort).to.eql('PublicNameplate');
-            expect(shell.submodelDescriptors[0].supplementalSemanticId[0].keys.map((key) => key.value)).to.eql(['PUBLIC_READABLE']);
+            const body = res.body;
+            const result = body.result || [];
+            expect(result).to.have.length(1);
+            const shell = result[0];
+            expect(shell.id).to.eql('urn:example:aas:product-001');
+            const customerPart = shell.specificAssetIds.find((item) => item.name === 'customerPartId');
+            expect(customerPart.externalSubjectId.keys.map((key) => key.value)).to.eql(['BPN_COMPANY_001']);
         });
 
 settings:

@@ -35,10 +35,6 @@
               {
                 "type": "GlobalReference",
                 "value": "BPN_COMPANY_001"
-              },
-              {
-                "type": "GlobalReference",
-                "value": "BPN_COMPANY_002"
               }
             ]
           }
@@ -79,10 +75,6 @@
                 {
                   "type": "GlobalReference",
                   "value": "BPN_COMPANY_001"
-                },
-                {
-                  "type": "GlobalReference",
-                  "value": "BPN_COMPANY_002"
                 }
               ]
             }

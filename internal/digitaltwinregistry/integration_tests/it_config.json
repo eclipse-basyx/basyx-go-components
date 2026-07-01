@@ -145,7 +145,8 @@
   {
     "method": "GET",
     "endpoint": "http://127.0.0.1:6004/shell-descriptors?assetIds=eyJuYW1lIjoibWFudWZhY3R1cmVyUGFydElkIiwidmFsdWUiOiIyMzE5ODIifQ",
-    "expectedStatus": 200
+    "expectedStatus": 200,
+    "shouldMatch": "expected/public_paged_result.json"
   },
   {
     "method": "POST",
@@ -157,7 +158,8 @@
   {
     "method": "GET",
     "endpoint": "http://127.0.0.1:6004/shell-descriptors?assetIds=eyJuYW1lIjoiZ2xvYmFsQXNzZXRJZCIsInZhbHVlIjoidGVzdCJ9",
-    "expectedStatus": 200
+    "expectedStatus": 200,
+    "shouldMatch": "expected/public_paged_result.json"
   },
   {
     "method": "POST",
@@ -182,7 +184,8 @@
   {
     "method": "GET",
     "endpoint": "http://127.0.0.1:6004/shell-descriptors?assetIds=eyJuYW1lIjoiZ2xvYmFsQXNzZXRJZCIsInZhbHVlIjoidGVzdC1uby1wdWJsaWMtcmVhZGFibGUifQ",
-    "expectedStatus": 200
+    "expectedStatus": 200,
+    "shouldMatch": "expected/empty_paged_result.json"
   },
   {
     "method": "POST",
@@ -213,7 +216,8 @@
     "expectedStatus": 200,
     "headers": {
       "Edc-Bpn": "BPNL00000000015G"
-    }
+    },
+    "shouldMatch": "expected/bpnRandom_paged_result.json"
   },
   {
     "method": "POST",
@@ -250,7 +254,8 @@
     "expectedStatus": 200,
     "headers": {
       "Edc-Bpn": "BPNL00000000015G"
-    }
+    },
+    "shouldMatch": "expected/empty_paged_result.json"
   },
   {
     "method": "POST",
@@ -338,7 +343,8 @@
     "expectedStatus": 200,
     "headers": {
       "Edc-Bpn": "BPN_COMPANY_001"
-    }
+    },
+    "shouldMatch": "expected/bpn1_paged_result.json"
   },
   {
     "method": "POST",
@@ -356,7 +362,8 @@
     "expectedStatus": 200,
     "headers": {
       "Edc-Bpn": "BPN_COMPANY_001"
-    }
+    },
+    "shouldMatch": "expected/bpn1_both_paged_result.json"
   },
   {
     "method": "POST",
@@ -374,7 +381,8 @@
     "expectedStatus": 200,
     "headers": {
       "Edc-Bpn": "BPN_COMPANY_001"
-    }
+    },
+    "shouldMatch": "expected/bpn1_paged_result.json"
   },
   {
     "method": "POST",
@@ -392,7 +400,8 @@
     "expectedStatus": 200,
     "headers": {
       "Edc-Bpn": "BPN_COMPANY_001"
-    }
+    },
+    "shouldMatch": "expected/bpn1_paged_result.json"
   },
   {
     "method": "POST",
@@ -410,7 +419,8 @@
     "expectedStatus": 200,
     "headers": {
       "Edc-Bpn": "BPN_COMPANY_001"
-    }
+    },
+    "shouldMatch": "expected/bpn1_non_public_paged_result.json"
   },
   {
     "method": "POST",
@@ -428,7 +438,8 @@
     "expectedStatus": 200,
     "headers": {
       "Edc-Bpn": "BPN_COMPANY_001"
-    }
+    },
+    "shouldMatch": "expected/bpn1_paged_result.json"
   },
   {
     "method": "POST",
@@ -446,7 +457,8 @@
     "expectedStatus": 200,
     "headers": {
       "Edc-Bpn": "BPN_COMPANY_001"
-    }
+    },
+    "shouldMatch": "expected/bpn1_paged_result.json"
   },
   {
     "method": "POST",
@@ -521,7 +533,8 @@
     "expectedStatus": 200,
     "headers": {
       "Edc-Bpn": "BPN_COMPANY_002"
-    }
+    },
+    "shouldMatch": "expected/bpn2_both_paged_result.json"
   },
   {
     "method": "POST",
@@ -539,7 +552,8 @@
     "expectedStatus": 200,
     "headers": {
       "Edc-Bpn": "BPN_COMPANY_002"
-    }
+    },
+    "shouldMatch": "expected/bpn2_paged_result.json"
   },
   {
     "method": "POST",
@@ -595,7 +609,8 @@
     "expectedStatus": 200,
     "headers": {
       "Edc-Bpn": "BPN_COMPANY_002"
-    }
+    },
+    "shouldMatch": "expected/bpn2_paged_result.json"
   },
   {
     "method": "POST",
@@ -613,7 +628,8 @@
     "expectedStatus": 200,
     "headers": {
       "Edc-Bpn": "BPN_COMPANY_002"
-    }
+    },
+    "shouldMatch": "expected/bpn2_paged_result.json"
   },
   {
     "method": "POST",
@@ -654,7 +670,8 @@
     "token": {
       "user": "admin",
       "password": "pwd"
-    }
+    },
+    "shouldMatch": "expected/admin_public_paged_result.json"
   },
   {
     "method": "POST",
@@ -674,7 +691,8 @@
     "token": {
       "user": "admin",
       "password": "pwd"
-    }
+    },
+    "shouldMatch": "expected/admin_public_paged_result.json"
   },
   {
     "method": "POST",
@@ -694,7 +712,8 @@
     "token": {
       "user": "admin",
       "password": "pwd"
-    }
+    },
+    "shouldMatch": "expected/admin_both_paged_result.json"
   },
   {
     "method": "POST",
@@ -714,7 +733,8 @@
     "token": {
       "user": "admin",
       "password": "pwd"
-    }
+    },
+    "shouldMatch": "expected/empty_paged_result.json"
   },
   {
     "method": "POST",
@@ -734,7 +754,8 @@
     "token": {
       "user": "admin",
       "password": "pwd"
-    }
+    },
+    "shouldMatch": "expected/admin_public_paged_result.json"
   },
   {
     "method": "POST",
@@ -754,7 +775,8 @@
     "token": {
       "user": "admin",
       "password": "pwd"
-    }
+    },
+    "shouldMatch": "expected/admin_public_paged_result.json"
   },
   {
     "method": "POST",
@@ -774,7 +796,8 @@
     "token": {
       "user": "admin",
       "password": "pwd"
-    }
+    },
+    "shouldMatch": "expected/admin_non_public_paged_result.json"
   },
   {
     "method": "POST",
@@ -794,7 +817,8 @@
     "token": {
       "user": "admin",
       "password": "pwd"
-    }
+    },
+    "shouldMatch": "expected/admin_public_paged_result.json"
   },
   {
     "method": "POST",
@@ -847,7 +871,8 @@
     },
     "headers": {
       "Edc-Bpn": "BPNL00000000015G"
-    }
+    },
+    "shouldMatch": "expected/admin_public_paged_result.json"
   },
   {
     "method": "POST",
@@ -873,7 +898,8 @@
     },
     "headers": {
       "Edc-Bpn": "BPNL00000000015G"
-    }
+    },
+    "shouldMatch": "expected/admin_public_paged_result.json"
   },
   {
     "method": "POST",
@@ -899,7 +925,8 @@
     },
     "headers": {
       "Edc-Bpn": "BPNL00000000015G"
-    }
+    },
+    "shouldMatch": "expected/admin_both_paged_result.json"
   },
   {
     "method": "POST",
@@ -925,7 +952,8 @@
     },
     "headers": {
       "Edc-Bpn": "BPNL00000000015G"
-    }
+    },
+    "shouldMatch": "expected/empty_paged_result.json"
   },
   {
     "method": "POST",
@@ -951,7 +979,8 @@
     },
     "headers": {
       "Edc-Bpn": "BPNL00000000015G"
-    }
+    },
+    "shouldMatch": "expected/admin_public_paged_result.json"
   },
   {
     "method": "POST",
@@ -977,7 +1006,8 @@
     },
     "headers": {
       "Edc-Bpn": "BPNL00000000015G"
-    }
+    },
+    "shouldMatch": "expected/admin_non_public_paged_result.json"
   },
   {
     "method": "POST",
@@ -1003,7 +1033,8 @@
     },
     "headers": {
       "Edc-Bpn": "BPNL00000000015G"
-    }
+    },
+    "shouldMatch": "expected/admin_public_paged_result.json"
   },
   {
     "method": "GET",
