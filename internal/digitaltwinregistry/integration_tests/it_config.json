@@ -199,7 +199,7 @@
     "method": "GET",
     "endpoint": "http://127.0.0.1:6004/shell-descriptors?assetIds=eyJuYW1lIjoiZ2xvYmFsQXNzZXRJZCIsInZhbHVlIjoidGVzdC1uby1wdWJsaWMtcmVhZGFibGUifQ",
     "expectedStatus": 200,
-    "shouldMatch": "expected/non_public_global_asset_id_paged_result.json"
+    "shouldMatch": "expected/empty_paged_result.json"
   },
   {
     "method": "POST",
@@ -269,7 +269,7 @@
     "headers": {
       "Edc-Bpn": "BPNL00000000015G"
     },
-    "shouldMatch": "expected/non_public_global_asset_id_paged_result.json"
+    "shouldMatch": "expected/empty_paged_result.json"
   },
   {
     "method": "POST",

@@ -105,10 +105,8 @@
           { "$eq": [ { "$attribute": { "CLAIM": "Edc-Bpn" } }, { "$field": "$aasdesc#specificAssetIds[].externalSubjectId.keys[].value" } ] },
           { "$match": [
             { "$ne": [ { "$field": "$aasdesc#specificAssetIds[].name" }, { "$strVal": "globalAssetId" } ] },
-            { "$and": [
-              { "$eq": [ { "$strVal": "PUBLIC_READABLE" }, { "$field": "$aasdesc#specificAssetIds[].externalSubjectId.keys[].value" } ] }, 
-              { "$ne": [ { "$attribute": { "CLAIM": "Edc-Bpn" } }, { "$strVal": "<nil>" } ] }
-            ]}
+            { "$eq": [ { "$strVal": "PUBLIC_READABLE" }, { "$field": "$aasdesc#specificAssetIds[].externalSubjectId.keys[].value" } ] }, 
+            { "$ne": [ { "$attribute": { "CLAIM": "Edc-Bpn" } }, { "$strVal": "<nil>" } ] }
           ]}
         ]
        }
