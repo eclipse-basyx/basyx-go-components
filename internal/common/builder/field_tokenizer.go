@@ -39,14 +39,18 @@ import (
 // TokenizeField performs the following steps:
 //  1. Removes everything up to and including the first '#'.
 //  2. Splits the remaining expression on '.'.
-//  3. Converts each segment into either a SimpleToken (no brackets)
-//     or an ArrayToken (contains "[index]").
+//  3. Converts each segment into either a SimpleToken (no well-formed
+//     array selector) or an ArrayToken (contains "[index]").
 //     An empty index ("[]") is interpreted as a wildcard and stored as -1.
+//
+// Segments without a well-formed array selector (for example a ']'
+// appearing before the first '[') are kept as SimpleTokens instead of
+// causing a panic.
 //
 // Example:
 //
 //	input:  "$aasdesc#submodels[2].id"
-//	output: [ SimpleToken{"submodels"}, ArrayToken{"submodels", 2}, SimpleToken{"id"} ]
+//	output: [ ArrayToken{"submodels", 2}, SimpleToken{"id"} ]
 func TokenizeField(field string) []Token {
 	str := field
 
@@ -58,21 +62,15 @@ func TokenizeField(field string) []Token {
 
 	var tokens []Token
 	for _, t := range rawToken {
-		if strings.Contains(t, "[") && strings.Contains(t, "]") {
-			// nolint:gocritic // safe: guarded by Contains() above
-			name := t[:strings.Index(t, "[")]
-			indexStr := t[strings.Index(t, "[")+1 : strings.Index(t, "]")]
+		openIndex := strings.Index(t, "[")
+		closeIndex := strings.Index(t, "]")
+		if openIndex >= 0 && closeIndex > openIndex {
+			name := t[:openIndex]
+			indexStr := t[openIndex+1 : closeIndex]
 
-			var index int
-			if indexStr == "" {
-				index = -1 // wildcard index
-			} else {
-				i, err := strconv.Atoi(indexStr)
-				if err != nil {
-					index = -1 // malformed index → treat as wildcard
-				} else {
-					index = i
-				}
+			index := -1 // wildcard ("[]") or malformed index
+			if parsedIndex, err := strconv.Atoi(indexStr); err == nil {
+				index = parsedIndex
 			}
 
 			tokens = append(tokens, ArrayToken{Name: name, Index: index})
