@@ -203,26 +203,12 @@
                   ]
                 },
                 {
-                  "$match": [
+                  "$eq": [
                     {
-                      "$ne": [
-                        {
-                          "$field": "$aasdesc#specificAssetIds[].name"
-                        },
-                        {
-                          "$strVal": "globalAssetId"
-                        }
-                      ]
+                      "$strVal": "PUBLIC_READABLE"
                     },
                     {
-                      "$eq": [
-                        {
-                          "$strVal": "PUBLIC_READABLE"
-                        },
-                        {
-                          "$field": "$aasdesc#specificAssetIds[].externalSubjectId.keys[].value"
-                        }
-                      ]
+                      "$field": "$aasdesc#specificAssetIds[].externalSubjectId.keys[].value"
                     }
                   ]
                 }
@@ -248,26 +234,12 @@
               ]
             },
             {
-              "$match": [
+              "$eq": [
                 {
-                  "$ne": [
-                    {
-                      "$field": "$aasdesc#specificAssetIds[].name"
-                    },
-                    {
-                      "$strVal": "globalAssetId"
-                    }
-                  ]
+                  "$strVal": "PUBLIC_READABLE"
                 },
                 {
-                  "$eq": [
-                    {
-                      "$strVal": "PUBLIC_READABLE"
-                    },
-                    {
-                      "$field": "$aasdesc#specificAssetIds[].externalSubjectId.keys[].value"
-                    }
-                  ]
+                  "$field": "$aasdesc#specificAssetIds[].externalSubjectId.keys[].value"
                 }
               ]
             }

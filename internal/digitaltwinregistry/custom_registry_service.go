@@ -88,6 +88,20 @@ func (s *CustomRegistryService) GetAllAssetAdministrationShellDescriptors(
 		if resp != nil || err != nil {
 			return *resp, err
 		}
+		globalAssetIDs, assetLinks := splitGlobalAssetIDLinks(links)
+		if len(globalAssetIDs) > 0 {
+			return s.getAllAssetAdministrationShellDescriptorsByDescriptorQuery(
+				ctx,
+				limit,
+				cursor,
+				assetKind,
+				assetType,
+				globalAssetIDs,
+				assetLinks,
+				createdFrom,
+				updatedFrom,
+			)
+		}
 		return s.getAllAssetAdministrationShellDescriptorsByAssetLinks(
 			ctx,
 			limit,
@@ -110,6 +124,40 @@ func (s *CustomRegistryService) GetAllAssetAdministrationShellDescriptors(
 		createdFrom,
 		updatedFrom,
 	)
+}
+
+func (s *CustomRegistryService) getAllAssetAdministrationShellDescriptorsByDescriptorQuery(
+	ctx context.Context,
+	limit int32,
+	cursor string,
+	assetKind model.AssetKind,
+	assetType string,
+	globalAssetIDs []string,
+	assetLinks []model.AssetLink,
+	createdFrom time.Time,
+	updatedFrom time.Time,
+) (model.ImplResponse, error) {
+	readUnrestricted := auth.HasUnrestrictedFormulaForRight(ctx, grammar.RightsEnumREAD)
+	ctx = auth.MergeQueryFilter(ctx, buildGlobalAssetIDQuery(globalAssetIDs))
+	if len(assetLinks) > 0 {
+		ctx = auth.MergeQueryFilter(ctx, buildAssetLinkDescriptorQueryWithAccess(ctx, assetLinks, readUnrestricted))
+	}
+
+	resp, err := s.AssetAdministrationShellRegistryAPIAPIService.GetAllAssetAdministrationShellDescriptors(
+		ctx,
+		limit,
+		cursor,
+		assetKind,
+		assetType,
+		nil,
+		createdFrom,
+		updatedFrom,
+	)
+	if err != nil || resp.Code != http.StatusOK {
+		return resp, err
+	}
+
+	return omitEmptyDescriptorResultForDTR(resp), nil
 }
 
 func (s *CustomRegistryService) getAllAssetAdministrationShellDescriptorsByAssetLinks(
@@ -234,6 +282,47 @@ func decodeRegistryAssetLinkQueryAssetIDs(encodedAssetIDs []string) ([]model.Ass
 	return links, nil, nil
 }
 
+func splitGlobalAssetIDLinks(links []model.AssetLink) ([]string, []model.AssetLink) {
+	globalAssetIDs := make([]string, 0, len(links))
+	assetLinks := make([]model.AssetLink, 0, len(links))
+	for _, link := range links {
+		if link.Name == common.GlobalAssetIDAssetLinkName {
+			globalAssetIDs = append(globalAssetIDs, link.Value)
+			continue
+		}
+		assetLinks = append(assetLinks, link)
+	}
+	return globalAssetIDs, assetLinks
+}
+
+func buildGlobalAssetIDQuery(globalAssetIDs []string) grammar.Query {
+	return buildGlobalAssetIDQueryForField("$aasdesc#globalAssetId", globalAssetIDs)
+}
+
+func buildBasicDiscoveryGlobalAssetIDQuery(globalAssetIDs []string) grammar.Query {
+	return buildGlobalAssetIDQuery(globalAssetIDs)
+}
+
+func buildGlobalAssetIDQueryForField(field string, globalAssetIDs []string) grammar.Query {
+	if len(globalAssetIDs) == 0 {
+		return grammar.Query{}
+	}
+
+	globalAssetIDField := grammar.ModelStringPattern(field)
+	condition := grammar.LogicalExpression{And: make([]grammar.LogicalExpression, 0, len(globalAssetIDs))}
+	for _, globalAssetID := range globalAssetIDs {
+		globalAssetIDValue := grammar.StandardString(globalAssetID)
+		condition.And = append(condition.And, grammar.LogicalExpression{
+			Eq: grammar.ComparisonItems{
+				{Field: &globalAssetIDField},
+				{StrVal: &globalAssetIDValue},
+			},
+		})
+	}
+
+	return grammar.Query{Condition: &condition}
+}
+
 func mergeAssetLinkLookupFilter(ctx context.Context, links []model.AssetLink) (context.Context, error) {
 	shouldEnforceFormula, enforceErr := auth.ShouldEnforceFormula(ctx)
 	if enforceErr != nil {
@@ -309,6 +398,31 @@ func replaceDescriptorPagingMetadata(resp model.ImplResponse, paging model.Paged
 		"paging_metadata": paging,
 		"result":          decoded.Result,
 	}), nil
+}
+
+func omitEmptyDescriptorResultForDTR(res model.ImplResponse) model.ImplResponse {
+	if res.Code != http.StatusOK {
+		return res
+	}
+
+	payload, err := json.Marshal(res.Body)
+	if err != nil {
+		return res
+	}
+	var decoded struct {
+		PagingMetadata model.PagedResultPagingMetadata `json:"paging_metadata"`
+		Result         []json.RawMessage               `json:"result"`
+	}
+	if err = json.Unmarshal(payload, &decoded); err != nil {
+		return res
+	}
+	if decoded.Result == nil || len(decoded.Result) != 0 {
+		return res
+	}
+
+	return model.Response(http.StatusOK, map[string]any{
+		"paging_metadata": decoded.PagingMetadata,
+	})
 }
 
 func emptyDescriptorPage() model.ImplResponse {
@@ -436,8 +550,7 @@ func (s *CustomRegistryService) ExecuteBulkPutAtomic(
 
 func withDTRDescriptorWriteContext(ctx context.Context) context.Context {
 	ctx = descriptorsutil.WithAllowAASDescriptorCreatedAtOverride(ctx)
-	ctx = descriptorsutil.WithIncludeAASDescriptorCreatedAt(ctx)
-	return descriptorsutil.WithPublicReadableGlobalAssetIDExternalSubjectID(ctx)
+	return descriptorsutil.WithIncludeAASDescriptorCreatedAt(ctx)
 }
 
 func is2xx(code int) bool {

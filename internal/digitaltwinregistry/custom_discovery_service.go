@@ -94,9 +94,17 @@ func (s *CustomDiscoveryService) SearchAllAssetAdministrationShellIdsByAssetLink
 	}
 
 	if shouldEnforceFormula {
-		assetLinkQuery := buildAssetLinkQuery(ctx, assetLink)
+		globalAssetIDs, specificAssetLinks := splitGlobalAssetIDLinks(assetLink)
+		readUnrestricted := auth.HasUnrestrictedFormulaForRight(ctx, grammar.RightsEnumREAD)
+		if len(globalAssetIDs) > 0 && len(specificAssetLinks) == 0 {
+			ctx = mergeGlobalAssetIDLookupVisibility(ctx, globalAssetIDs)
+		}
+
+		assetLinkQuery := buildBasicDiscoveryAssetLinkQueryWithAccess(ctx, specificAssetLinks, readUnrestricted)
 		if assetLinkQuery.Condition != nil || len(assetLinkQuery.FilterConditions) > 0 {
 			ctx = auth.MergeQueryFilter(ctx, assetLinkQuery)
+		}
+		if len(globalAssetIDs) == 0 && (assetLinkQuery.Condition != nil || len(assetLinkQuery.FilterConditions) > 0) {
 			ctx = discoveryapiinternal.WithAssetLinksAlreadyConstrained(ctx)
 		}
 	}
@@ -307,6 +315,18 @@ func buildEdcBpnClaimEqualsHeaderExpression(t *time.Time, pattern string) gramma
 //   - exact link match + Edc-Bpn authorization (when Edc-Bpn claim exists), or
 //   - exact link match + PUBLIC_READABLE authorization.
 func buildAssetLinkQuery(ctx context.Context, assetLink []model.AssetLink) grammar.Query {
+	return buildAssetLinkQueryForRoot(ctx, assetLink, "$aasdesc")
+}
+
+func buildBasicDiscoveryAssetLinkQueryWithAccess(ctx context.Context, assetLink []model.AssetLink, readUnrestricted bool) grammar.Query {
+	if readUnrestricted {
+		return buildUnrestrictedAssetLinkQueryForRoot(assetLink, "$bd")
+	}
+
+	return buildAssetLinkQueryForRoot(ctx, assetLink, "$bd")
+}
+
+func buildAssetLinkQueryForRoot(ctx context.Context, assetLink []model.AssetLink, root string) grammar.Query {
 	if len(assetLink) == 0 {
 		return grammar.Query{}
 	}
@@ -315,9 +335,9 @@ func buildAssetLinkQuery(ctx context.Context, assetLink []model.AssetLink) gramm
 		return grammar.Query{}
 	}
 
-	assetLinkFieldPattern := grammar.ModelStringPattern("$aasdesc#specificAssetIds[].externalSubjectId.keys[].value")
-	assetLinkFieldValue := grammar.ModelStringPattern("$aasdesc#specificAssetIds[].value")
-	assetLinkFieldName := grammar.ModelStringPattern("$aasdesc#specificAssetIds[].name")
+	assetLinkFieldPattern := grammar.ModelStringPattern(root + "#specificAssetIds[].externalSubjectId.keys[].value")
+	assetLinkFieldValue := grammar.ModelStringPattern(root + "#specificAssetIds[].value")
+	assetLinkFieldName := grammar.ModelStringPattern(root + "#specificAssetIds[].name")
 	publicReadable := grammar.StandardString("PUBLIC_READABLE")
 
 	claims := auth.ClaimsFromContext(ctx)
@@ -387,12 +407,16 @@ func buildAssetLinkQuery(ctx context.Context, assetLink []model.AssetLink) gramm
 }
 
 func buildUnrestrictedAssetLinkQuery(assetLink []model.AssetLink) grammar.Query {
+	return buildUnrestrictedAssetLinkQueryForRoot(assetLink, "$aasdesc")
+}
+
+func buildUnrestrictedAssetLinkQueryForRoot(assetLink []model.AssetLink, root string) grammar.Query {
 	if len(assetLink) == 0 {
 		return grammar.Query{}
 	}
 
-	assetLinkFieldValue := grammar.ModelStringPattern("$aasdesc#specificAssetIds[].value")
-	assetLinkFieldName := grammar.ModelStringPattern("$aasdesc#specificAssetIds[].name")
+	assetLinkFieldValue := grammar.ModelStringPattern(root + "#specificAssetIds[].value")
+	assetLinkFieldName := grammar.ModelStringPattern(root + "#specificAssetIds[].name")
 	assetLinkLe := grammar.LogicalExpression{And: []grammar.LogicalExpression{}}
 	for _, link := range assetLink {
 		assetLinkValue := grammar.StandardString(link.Value)
@@ -421,9 +445,51 @@ func buildUnrestrictedAssetLinkQuery(assetLink []model.AssetLink) grammar.Query 
 }
 
 func buildAssetLinkDescriptorQuery(ctx context.Context, assetLink []model.AssetLink) grammar.Query {
-	if auth.HasUnrestrictedFormulaForRight(ctx, grammar.RightsEnumREAD) {
+	return buildAssetLinkDescriptorQueryWithAccess(ctx, assetLink, auth.HasUnrestrictedFormulaForRight(ctx, grammar.RightsEnumREAD))
+}
+
+func buildAssetLinkDescriptorQueryWithAccess(ctx context.Context, assetLink []model.AssetLink, readUnrestricted bool) grammar.Query {
+	if readUnrestricted {
 		return buildUnrestrictedAssetLinkQuery(assetLink)
 	}
 
 	return buildAssetLinkQuery(ctx, assetLink)
+}
+
+func buildAssetLinkQueryWithAccess(ctx context.Context, assetLink []model.AssetLink, readUnrestricted bool) grammar.Query {
+	if readUnrestricted {
+		return buildUnrestrictedAssetLinkQuery(assetLink)
+	}
+
+	return buildAssetLinkQuery(ctx, assetLink)
+}
+
+func mergeGlobalAssetIDLookupVisibility(ctx context.Context, globalAssetIDs []string) context.Context {
+	globalAssetIDQuery := buildBasicDiscoveryGlobalAssetIDQuery(globalAssetIDs)
+	if globalAssetIDQuery.Condition == nil {
+		return ctx
+	}
+
+	queryFilter := auth.GetQueryFilter(ctx)
+	if queryFilter == nil {
+		return auth.MergeQueryFilter(ctx, globalAssetIDQuery)
+	}
+
+	cloned, err := auth.CloneQueryFilter(queryFilter)
+	if err != nil {
+		log.Printf("%s-MERGEGLOBALASSETID-CLONE failed to clone query filter: %v", customDiscoveryComponentName, err)
+		failClosed := false
+		return auth.MergeQueryFilter(ctx, grammar.Query{Condition: &grammar.LogicalExpression{Boolean: &failClosed}})
+	}
+	if cloned == nil {
+		return auth.MergeQueryFilter(ctx, globalAssetIDQuery)
+	}
+
+	cloned.Formula = globalAssetIDQuery.Condition
+	if cloned.FormulasByRight == nil {
+		cloned.FormulasByRight = make(map[grammar.RightsEnum]grammar.LogicalExpression)
+	}
+	cloned.FormulasByRight[grammar.RightsEnumREAD] = *cloned.Formula
+
+	return auth.WithQueryFilter(ctx, cloned)
 }

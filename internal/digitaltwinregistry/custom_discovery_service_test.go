@@ -133,3 +133,71 @@ func TestDecodeRegistryAssetLinkQueryAssetIDs_IgnoresBlankValues(t *testing.T) {
 		t.Fatalf("expected no decoded links, got %#v", links)
 	}
 }
+
+func TestSplitGlobalAssetIDLinks(t *testing.T) {
+	t.Parallel()
+
+	globalAssetIDs, assetLinks := splitGlobalAssetIDLinks([]model.AssetLink{
+		{Name: "customerPartId", Value: "part-1"},
+		{Name: "globalAssetId", Value: "global-1"},
+		{Name: "manufacturerPartId", Value: "part-2"},
+	})
+
+	if len(globalAssetIDs) != 1 || globalAssetIDs[0] != "global-1" {
+		t.Fatalf("unexpected global asset IDs: %#v", globalAssetIDs)
+	}
+	if len(assetLinks) != 2 {
+		t.Fatalf("unexpected asset links: %#v", assetLinks)
+	}
+	if assetLinks[0].Name != "customerPartId" || assetLinks[1].Name != "manufacturerPartId" {
+		t.Fatalf("unexpected non-global links: %#v", assetLinks)
+	}
+}
+
+func TestBuildGlobalAssetIDQuery(t *testing.T) {
+	t.Parallel()
+
+	query := buildGlobalAssetIDQuery([]string{"global-1", "global-2"})
+	if query.Condition == nil {
+		t.Fatalf("expected global asset ID query condition")
+	}
+	if len(query.Condition.And) != 2 {
+		t.Fatalf("expected one AND condition per global asset ID, got %#v", query.Condition)
+	}
+	for _, condition := range query.Condition.And {
+		if len(condition.Eq) != 2 || condition.Eq[0].Field == nil || *condition.Eq[0].Field != "$aasdesc#globalAssetId" {
+			t.Fatalf("expected query to filter $aasdesc#globalAssetId, got %#v", condition)
+		}
+	}
+}
+
+func TestBuildBasicDiscoveryGlobalAssetIDQuery(t *testing.T) {
+	t.Parallel()
+
+	query := buildBasicDiscoveryGlobalAssetIDQuery([]string{"global-1"})
+	if query.Condition == nil || len(query.Condition.And) != 1 {
+		t.Fatalf("expected one basic-discovery global asset ID condition, got %#v", query.Condition)
+	}
+	condition := query.Condition.And[0]
+	if len(condition.Eq) != 2 || condition.Eq[0].Field == nil || *condition.Eq[0].Field != "$aasdesc#globalAssetId" {
+		t.Fatalf("expected query to filter $aasdesc#globalAssetId, got %#v", condition)
+	}
+}
+
+func TestBuildBasicDiscoveryAssetLinkQuery_UsesBDRoot(t *testing.T) {
+	t.Parallel()
+
+	b := false
+	ctx := auth.MergeQueryFilter(context.Background(), grammar.Query{
+		Condition: &grammar.LogicalExpression{Boolean: &b},
+	})
+
+	query := buildBasicDiscoveryAssetLinkQueryWithAccess(ctx, []model.AssetLink{{Name: "name", Value: "value"}}, false)
+	if query.Condition == nil || len(query.Condition.And) != 1 {
+		t.Fatalf("expected one basic-discovery asset-link condition, got %#v", query.Condition)
+	}
+	match := query.Condition.And[0].Or[0].Match
+	if len(match) == 0 || match[0].Eq[0].Field == nil || *match[0].Eq[0].Field != "$bd#specificAssetIds[].value" {
+		t.Fatalf("expected query to filter $bd#specificAssetIds[].value, got %#v", query.Condition)
+	}
+}
