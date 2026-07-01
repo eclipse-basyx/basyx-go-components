@@ -58,11 +58,15 @@
     }
   },
   {
-    "context": "DTR anonymous sees public data",
+    "context": "DTR no-BPN token sees public data",
     "method": "GET",
     "endpoint": "http://127.0.0.1:5004/api/v3/shell-descriptors",
     "shouldMatch": "expected/dtr_unrelated.json",
-    "expectedStatus": 200
+    "expectedStatus": 200,
+    "token": {
+      "user": "no_bpn_viewer",
+      "password": "pwd"
+    }
   },
   {
     "context": "DTR regular token sees public data",

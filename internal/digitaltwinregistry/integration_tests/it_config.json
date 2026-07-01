@@ -27,7 +27,8 @@
   {
     "method": "GET",
     "endpoint": "http://127.0.0.1:6004/shell-descriptors",
-    "expectedStatus": 403
+    "expectedStatus": 200,
+    "shouldMatch": "expected/public_paged_result.json"
   },
   {
     "method": "GET",
