@@ -27,7 +27,7 @@ func TestMarkerAccessIntegration(t *testing.T) {
 
 func TestMain(m *testing.M) {
 	os.Exit(testenv.RunComposeTestMain(m, testenv.ComposeTestMainOptions{
-		ComposeFile:     "../../../examples/BaSyxMarkerAccessExample/docker-compose.yml",
+		ComposeFile:     "../../../examples/CatenaXample/docker-compose.yml",
 		PreDownBeforeUp: true,
 		HealthURL:       "http://127.0.0.1:5004/api/v3/health",
 		WaitForReady: func() error {

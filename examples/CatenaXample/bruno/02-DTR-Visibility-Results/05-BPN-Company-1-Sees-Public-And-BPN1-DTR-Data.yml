@@ -1,0 +1,34 @@
+info:
+  name: "BPN Company 1 Sees Public And BPN1 DTR Data"
+  type: http
+  seq: 5
+
+http:
+  method: GET
+  url: "http://localhost:5004/api/v3/shell-descriptors"
+  headers:
+    - name: "Edc-Bpn"
+      value: "BPN_COMPANY_001"
+  auth:
+    type: none
+
+runtime:
+  scripts:
+    - type: tests
+      code: |-
+        test('BPN1 result keeps BPN1 markers and removes BPN2 markers', function () {
+            expect(res.status).to.equal(200);
+            const shell = res.body.result[0];
+            expect(shell.specificAssetIds).to.have.length(2);
+            const customerKeys = shell.specificAssetIds.find((item) => item.name === 'customerPartId').externalSubjectId.keys.map((key) => key.value);
+            expect(customerKeys).to.eql(['BPN_COMPANY_001']);
+            expect(shell.submodelDescriptors).to.have.length(2);
+            const restrictedKeys = shell.submodelDescriptors.find((item) => item.idShort === 'RestrictedSerialPartTypization').supplementalSemanticId[0].keys.map((key) => key.value);
+            expect(restrictedKeys).to.eql(['BPN_COMPANY_001']);
+        });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5

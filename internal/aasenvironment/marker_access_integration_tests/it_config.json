@@ -3,7 +3,7 @@
     "context": "Post shell descriptor as admin",
     "method": "POST",
     "endpoint": "http://127.0.0.1:5004/api/v3/shell-descriptors",
-    "data": "../../../examples/BaSyxMarkerAccessExample/data/shell-descriptor.json",
+    "data": "../../../examples/CatenaXample/data/shell-descriptor.json",
     "expectedStatus": 201,
     "token": { "user": "admin", "password": "pwd" }
   },
@@ -11,7 +11,7 @@
     "context": "Post public submodel as admin",
     "method": "POST",
     "endpoint": "http://127.0.0.1:5005/submodels",
-    "data": "../../../examples/BaSyxMarkerAccessExample/data/public-submodel.json",
+    "data": "../../../examples/CatenaXample/data/public-submodel.json",
     "expectedStatus": 201,
     "token": { "user": "admin", "password": "pwd" }
   },
@@ -19,7 +19,7 @@
     "context": "Post restricted submodel as admin",
     "method": "POST",
     "endpoint": "http://127.0.0.1:5005/submodels",
-    "data": "../../../examples/BaSyxMarkerAccessExample/data/restricted-submodel.json",
+    "data": "../../../examples/CatenaXample/data/restricted-submodel.json",
     "expectedStatus": 201,
     "token": { "user": "admin", "password": "pwd" }
   },

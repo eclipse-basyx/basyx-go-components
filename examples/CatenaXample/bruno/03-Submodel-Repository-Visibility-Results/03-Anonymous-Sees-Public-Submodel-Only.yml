@@ -1,0 +1,28 @@
+info:
+  name: "Anonymous Sees Public Submodel Only"
+  type: http
+  seq: 3
+
+http:
+  method: GET
+  url: "http://localhost:5005/submodels"
+  auth:
+    type: none
+
+runtime:
+  scripts:
+    - type: tests
+      code: |-
+        test('anonymous result contains only the public submodel and hides markers', function () {
+            expect(res.status).to.equal(200);
+            const submodels = res.body.result;
+            expect(submodels).to.have.length(1);
+            expect(submodels[0].idShort).to.eql('PublicNameplate');
+            expect(submodels[0]).to.not.have.property('supplementalSemanticIds');
+        });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5

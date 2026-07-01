@@ -1,4 +1,4 @@
-# Marker-Based DTR and Submodel Access Example
+# CatenaXample
 
 This example builds the current repository code and runs:
 
@@ -36,7 +36,7 @@ Keycloak realm and is configured through `basyx-infra.yml`.
 
 ## Postman Collection
 
-Import `BaSyx-Marker-Access.postman_collection.json` into Postman to run the
+Import `CatenaXample.postman_collection.json` into Postman to run the
 example scenarios. Run the `Setup - Write Example Data` folder first; the
 collection automatically fetches OAuth2 password-grant tokens from Keycloak for
 protected requests and writes the shell descriptor plus both submodels. The

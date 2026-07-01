@@ -2,6 +2,35 @@
 
 Utilities and scripts related to the basyx-go-components project.
 
+## Bruno Collection Generator
+
+Script: `generate_bruno_collections.js`
+
+### Purpose
+Generates Bruno OpenCollection YAML files for example API client workflows from
+the checked-in Postman collections.
+
+The script currently generates:
+- `examples/CatenaXample/bruno`
+- `examples/CatenaXample/CatenaXample.opencollection.yml`
+
+The generated CatenaXample collection uses `bruno/opencollection.yml` as
+the collection root. Protected requests include Bruno-native pre-request
+scripts for the Keycloak password-grant token flow.
+The bundled `CatenaXample.opencollection.yml` file is a single-file
+reference export; use the `bruno/` directory for Bruno import.
+
+### Usage
+
+From repository root:
+
+```bash
+node scripts/generate_bruno_collections.js
+```
+
+Generated Bruno folders are marked with `.generated-by-postman-to-bruno`. The
+script only overwrites folders with that marker.
+
 ## Reference Table Generator
 
 Script: `reference_table_generator.sh`
