@@ -872,7 +872,7 @@
     },
     {
       "key": "keycloakTokenUrl",
-      "value": "http://localhost:8080/realms/basyx/protocol/openid-connect/token"
+      "value": "http://keycloak.localhost:8080/realms/basyx/protocol/openid-connect/token"
     },
     {
       "key": "keycloakClientId",

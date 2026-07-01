@@ -20,6 +20,14 @@
         ]
       },
       {
+        "name": "description",
+        "objects": [
+          {
+            "ROUTE": "/description"
+          }
+        ]
+      },
+      {
         "name": "all_shell_descriptors",
         "objects": [
           {
@@ -64,6 +72,12 @@
       }
     ],
     "DEFFORMULAS": [
+      {
+        "name": "always_true",
+        "formula": {
+          "$boolean": true
+        }
+      },
       {
         "name": "data_provider_read",
         "formula": {
@@ -287,6 +301,13 @@
       }
     ],
     "rules": [
+      {
+        "USEACL": "read",
+        "USEOBJECTS": [
+          "description"
+        ],
+        "USEFORMULA": "always_true"
+      },
       {
         "USEACL": "read",
         "USEOBJECTS": [

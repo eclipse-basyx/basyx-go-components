@@ -20,6 +20,14 @@
         ]
       },
       {
+        "name": "description",
+        "objects": [
+          {
+            "ROUTE": "/description"
+          }
+        ]
+      },
+      {
         "name": "submodel_routes",
         "objects": [
           {
@@ -65,6 +73,12 @@
       }
     ],
     "DEFFORMULAS": [
+      {
+        "name": "always_true",
+        "formula": {
+          "$boolean": true
+        }
+      },
       {
         "name": "data_provider_read",
         "formula": {
@@ -199,6 +213,13 @@
       }
     ],
     "rules": [
+      {
+        "USEACL": "read",
+        "USEOBJECTS": [
+          "description"
+        ],
+        "USEFORMULA": "always_true"
+      },
       {
         "USEACL": "read",
         "USEOBJECTS": [
