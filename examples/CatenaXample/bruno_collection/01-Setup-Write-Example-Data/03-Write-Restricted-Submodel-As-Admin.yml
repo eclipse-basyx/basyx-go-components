@@ -1,0 +1,114 @@
+info:
+  name: "Write Restricted Submodel As Admin"
+  type: http
+  seq: 3
+
+http:
+  method: POST
+  url: "http://localhost:5005/submodels"
+  headers:
+    - name: "Content-Type"
+      value: "application/json"
+  body:
+    type: json
+    data: |-
+      {
+        "id": "urn:example:submodel:serial-part-typization",
+        "idShort": "RestrictedSerialPartTypization",
+        "modelType": "Submodel",
+        "supplementalSemanticIds": [
+          {
+            "type": "ExternalReference",
+            "keys": [
+              {
+                "type": "GlobalReference",
+                "value": "BPN_COMPANY_001"
+              },
+              {
+                "type": "GlobalReference",
+                "value": "BPN_COMPANY_002"
+              }
+            ]
+          }
+        ],
+        "submodelElements": [
+          {
+            "idShort": "PublicPartType",
+            "modelType": "Property",
+            "valueType": "xs:string",
+            "value": "PUBLIC-TYPE"
+          },
+          {
+            "idShort": "PartnerSerialNumber",
+            "modelType": "Property",
+            "valueType": "xs:string",
+            "value": "SECRET-001"
+          }
+        ]
+      }
+  auth:
+    type: none
+
+runtime:
+  scripts:
+    - type: before-request
+      code: |-
+        const tokenVariable = "adminAccessToken";
+        const expiresAtVariable = "adminAccessTokenExpiresAt";
+        const nowSeconds = Math.floor(Date.now() / 1000);
+        
+        function tokenIsFresh() {
+          const expiresAt = Number(bru.getVar(expiresAtVariable) || 0);
+          return expiresAt - 30 > nowSeconds;
+        }
+        
+        function formUrlEncode(fields) {
+          return Object.entries(fields)
+            .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(value)}`)
+            .join("&");
+        }
+        
+        async function requestOAuth2Token() {
+          if (tokenIsFresh()) {
+            return bru.getVar(tokenVariable);
+          }
+        
+          const response = await bru.sendRequest({
+            url: "http://keycloak.localhost:8080/realms/basyx/protocol/openid-connect/token",
+            method: "POST",
+            headers: {
+              "Content-Type": "application/x-www-form-urlencoded",
+            },
+            data: formUrlEncode({
+              grant_type: "password",
+              client_id: "basyx-ui",
+              username: "admin",
+              password: "pwd",
+            }),
+          });
+        
+          const status = response.status || response.statusCode || response.code;
+          if (status !== 200) {
+            throw new Error(`OAuth2 token request failed with status ${status}`);
+          }
+        
+          const tokenResponse = typeof response.data === "string" ? JSON.parse(response.data) : response.data;
+          bru.setVar(tokenVariable, tokenResponse.access_token);
+          bru.setVar(expiresAtVariable, String(nowSeconds + Number(tokenResponse.expires_in || 300)));
+        
+          return tokenResponse.access_token;
+        }
+        
+        const token = await requestOAuth2Token();
+        req.setHeader("Authorization", `Bearer ${token}`);
+    - type: tests
+      code: |-
+        test('restricted submodel is created or already present', function () {
+            expect([201, 409]).to.include(res.status);
+        });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5

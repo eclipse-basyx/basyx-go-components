@@ -2,6 +2,14 @@
   "AllAccessPermissionRules": {
     "DEFATTRIBUTES": [
       {
+        "name": "user",
+        "attributes": [
+          {
+            "CLAIM": "role"
+          }
+        ]
+      },
+      {
         "name": "anonymous",
         "attributes": [
           {
@@ -50,7 +58,7 @@
     ],
     "DEFACLS": [
       {
-        "name": "read",
+        "name": "public_read",
         "acl": {
           "USEATTRIBUTES": "anonymous",
           "RIGHTS": [
@@ -60,9 +68,19 @@
         }
       },
       {
+        "name": "read",
+        "acl": {
+          "USEATTRIBUTES": "user",
+          "RIGHTS": [
+            "READ"
+          ],
+          "ACCESS": "ALLOW"
+        }
+      },
+      {
         "name": "write",
         "acl": {
-          "USEATTRIBUTES": "anonymous",
+          "USEATTRIBUTES": "user",
           "RIGHTS": [
             "CREATE",
             "UPDATE",
@@ -80,7 +98,7 @@
         }
       },
       {
-        "name": "data_provider_read",
+        "name": "data_provider",
         "formula": {
           "$contains": [
             {
@@ -89,50 +107,7 @@
               }
             },
             {
-              "$strVal": "view_digital_twin"
-            }
-          ]
-        }
-      },
-      {
-        "name": "data_provider",
-        "formula": {
-          "$or": [
-            {
-              "$contains": [
-                {
-                  "$attribute": {
-                    "CLAIM": "role"
-                  }
-                },
-                {
-                  "$strVal": "add_digital_twin"
-                }
-              ]
-            },
-            {
-              "$contains": [
-                {
-                  "$attribute": {
-                    "CLAIM": "role"
-                  }
-                },
-                {
-                  "$strVal": "update_digital_twin"
-                }
-              ]
-            },
-            {
-              "$contains": [
-                {
-                  "$attribute": {
-                    "CLAIM": "role"
-                  }
-                },
-                {
-                  "$strVal": "delete_digital_twin"
-                }
-              ]
+              "$strVal": "data_provider"
             }
           ]
         }
@@ -167,7 +142,68 @@
         }
       },
       {
-        "name": "submodel_bpn_or_public_with_header",
+        "name": "authenticated_submodel_bpn_or_public",
+        "formula": {
+          "$and": [
+            {
+              "$or": [
+                {
+                  "$contains": [
+                    {
+                      "$attribute": {
+                        "CLAIM": "role"
+                      }
+                    },
+                    {
+                      "$strVal": "edc_user"
+                    }
+                  ]
+                },
+                {
+                  "$contains": [
+                    {
+                      "$attribute": {
+                        "CLAIM": "role"
+                      }
+                    },
+                    {
+                      "$strVal": "user"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "$or": [
+                {
+                  "$eq": [
+                    {
+                      "$attribute": {
+                        "CLAIM": "Edc-Bpn"
+                      }
+                    },
+                    {
+                      "$field": "$sm#supplementalSemanticIds[].keys[].value"
+                    }
+                  ]
+                },
+                {
+                  "$eq": [
+                    {
+                      "$strVal": "PUBLIC_READABLE"
+                    },
+                    {
+                      "$field": "$sm#supplementalSemanticIds[].keys[].value"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      },
+      {
+        "name": "submodel_bpn_or_public_filter",
         "formula": {
           "$or": [
             {
@@ -183,28 +219,12 @@
               ]
             },
             {
-              "$and": [
+              "$eq": [
                 {
-                  "$eq": [
-                    {
-                      "$strVal": "PUBLIC_READABLE"
-                    },
-                    {
-                      "$field": "$sm#supplementalSemanticIds[].keys[].value"
-                    }
-                  ]
+                  "$strVal": "PUBLIC_READABLE"
                 },
                 {
-                  "$ne": [
-                    {
-                      "$attribute": {
-                        "CLAIM": "Edc-Bpn"
-                      }
-                    },
-                    {
-                      "$strVal": "<nil>"
-                    }
-                  ]
+                  "$field": "$sm#supplementalSemanticIds[].keys[].value"
                 }
               ]
             }
@@ -214,7 +234,7 @@
     ],
     "rules": [
       {
-        "USEACL": "read",
+        "USEACL": "public_read",
         "USEOBJECTS": [
           "description"
         ],
@@ -225,7 +245,7 @@
         "USEOBJECTS": [
           "submodel_routes"
         ],
-        "USEFORMULA": "data_provider_read"
+        "USEFORMULA": "data_provider"
       },
       {
         "USEACL": "write",
@@ -239,16 +259,16 @@
         "USEOBJECTS": [
           "submodel_routes"
         ],
-        "USEFORMULA": "submodel_bpn_or_public",
+        "USEFORMULA": "authenticated_submodel_bpn_or_public",
         "FILTERLIST": [
           {
             "FRAGMENT": "$sm#supplementalSemanticIds[]",
-            "USEFORMULA": "submodel_bpn_or_public_with_header",
+            "USEFORMULA": "submodel_bpn_or_public_filter",
             "MATCH": true
           },
           {
             "FRAGMENT": "$sm#supplementalSemanticIds[].keys[]",
-            "USEFORMULA": "submodel_bpn_or_public_with_header",
+            "USEFORMULA": "submodel_bpn_or_public_filter",
             "MATCH": true
           }
         ]

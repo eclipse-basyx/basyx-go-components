@@ -1,0 +1,95 @@
+{
+  "paging_metadata": {},
+  "result": [
+    {
+      "idShort": "idShortNoPublicReadable",
+      "id": "e1eba3d7-91f0-4dac-a730-eaa1d35e035c-3",
+      "description": [
+        {
+          "language": "en",
+          "text": "Example of a digital twin without public readable specific asset ids."
+        }
+      ],
+      "globalAssetId": "test-no-public-readable",
+      "specificAssetIds": [
+        {
+          "name": "partInstanceId",
+          "value": "24975539203422"
+        },
+        {
+          "name": "customerPartId",
+          "value": "non-public-231982",
+          "externalSubjectId": {
+            "type": "ExternalReference",
+            "keys": [
+              {
+                "type": "GlobalReference",
+                "value": "BPN_COMPANY_001"
+              }
+            ]
+          }
+        },
+        {
+          "name": "manufacturerId",
+          "value": "123829238",
+          "externalSubjectId": {
+            "type": "ExternalReference",
+            "keys": [
+              {
+                "type": "GlobalReference",
+                "value": "BPN_COMPANY_001"
+              },
+              {
+                "type": "GlobalReference",
+                "value": "BPN_COMPANY_002"
+              }
+            ]
+          }
+        }
+      ],
+      "submodelDescriptors": [
+        {
+          "endpoints": [
+            {
+              "interface": "SUBMODEL-3.0",
+              "protocolInformation": {
+                "href": "https://edc.data.plane/mypath/submodel-no-public-readable",
+                "endpointProtocol": "HTTP",
+                "endpointProtocolVersion": [
+                  "1.1"
+                ],
+                "subprotocol": "DSP",
+                "subprotocolBody": "body with information required by subprotocol",
+                "subprotocolBodyEncoding": "plain",
+                "securityAttributes": [
+                  {
+                    "type": "NONE",
+                    "key": "NONE",
+                    "value": "NONE"
+                  }
+                ]
+              }
+            }
+          ],
+          "idShort": "idShortNoPublicReadable",
+          "id": "cd47615b-daf3-4036-8670-d2f89349d388-3",
+          "semanticId": {
+            "type": "ExternalReference",
+            "keys": [
+              {
+                "type": "Submodel",
+                "value": "urn:bamm:io.catenax.serial_part_typization:1.1.0#SerialPartTypization"
+              }
+            ]
+          },
+          "description": [
+            {
+              "language": "en",
+              "text": "Example submodel for a twin without public readable specific asset ids."
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
