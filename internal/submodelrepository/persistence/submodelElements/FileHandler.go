@@ -107,7 +107,7 @@ func (p PostgreSQLFileHandler) Update(submodelID string, idShortOrPath string, s
 
 	// Get the current file element ID and value
 	var elementID int64
-	var currentValue string
+	var currentValue sql.NullString
 	query, args, err := dialect.From("submodel_element").
 		InnerJoin(
 			goqu.T("file_element"),
@@ -129,7 +129,11 @@ func (p PostgreSQLFileHandler) Update(submodelID string, idShortOrPath string, s
 		return fmt.Errorf("failed to get current file element: %w", err)
 	}
 
-	hasFileValueChanged := currentValue != *file.Value()
+	newValue := ""
+	if file.Value() != nil {
+		newValue = *file.Value()
+	}
+	hasFileValueChanged := currentValue.String != newValue
 	if hasFileValueChanged {
 		// Check if there's an OID in file_data for this element
 		var oldOID sql.NullInt64
