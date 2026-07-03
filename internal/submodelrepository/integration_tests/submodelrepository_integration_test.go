@@ -45,6 +45,7 @@ import (
 	"time"
 
 	"github.com/FriedJannik/aas-go-sdk/types"
+	"github.com/doug-martin/goqu/v9"
 	aasregistrydb "github.com/eclipse-basyx/basyx-go-components/internal/aasregistry/persistence"
 	aasrepositorydb "github.com/eclipse-basyx/basyx-go-components/internal/aasrepository/persistence"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
@@ -2267,7 +2268,9 @@ func TestStandaloneSubmodelRepositorySyncUpdatesReferencingAASDescriptor(t *test
 	}
 
 	companionAASBaseURL := "http://localhost:6006"
+	companionAASExternalURL := "http://127.0.0.1:6006"
 	submodelSyncBaseURL := "http://localhost:6008"
+	submodelSyncExternalURL := "http://127.0.0.1:6008"
 
 	waitForServiceHealthy(t, companionAASBaseURL+"/health", 2*time.Minute)
 	waitForServiceHealthy(t, submodelSyncBaseURL+"/health", 2*time.Minute)
@@ -2348,6 +2351,50 @@ func TestStandaloneSubmodelRepositorySyncUpdatesReferencingAASDescriptor(t *test
 	descriptorAfterSync, err := aasRegistryPersistence.GetAssetAdministrationShellDescriptorByID(context.Background(), aasID)
 	require.NoError(t, err)
 	require.True(t, hasEmbeddedSubmodelDescriptor(descriptorAfterSync.SubmodelDescriptors, submodelID))
+
+	requireDescriptorEndpointInterface(
+		t,
+		db,
+		companionAASExternalURL+"/shells/"+encodedAASID,
+		"AAS-3.0",
+	)
+	requireDescriptorEndpointInterface(
+		t,
+		db,
+		submodelSyncExternalURL+"/submodels/"+encodedSubmodelID,
+		"SUBMODEL-3.0",
+	)
+}
+
+func requireDescriptorEndpointInterface(t *testing.T, db *sql.DB, href string, expectedInterface string) {
+	t.Helper()
+
+	endpointTable := common.TAASDescriptorEndpoint
+	query, args, err := goqu.
+		Dialect(common.Dialect).
+		From(endpointTable).
+		Select(endpointTable.Col(common.ColInterface)).
+		Where(endpointTable.Col(common.ColHref).Eq(href)).
+		Order(endpointTable.Col(common.ColID).Asc()).
+		Prepared(true).
+		ToSQL()
+	require.NoError(t, err)
+
+	rows, err := db.Query(query, args...)
+	require.NoError(t, err)
+	defer func() { _ = rows.Close() }()
+
+	interfaces := make([]string, 0, 2)
+	for rows.Next() {
+		var actualInterface string
+		require.NoError(t, rows.Scan(&actualInterface))
+		interfaces = append(interfaces, actualInterface)
+	}
+	require.NoError(t, rows.Err())
+	require.NotEmpty(t, interfaces, "expected persisted descriptor endpoint for href %s", href)
+	for _, actualInterface := range interfaces {
+		require.Equal(t, expectedInterface, actualInterface, "href=%s", href)
+	}
 }
 
 // TestMain handles setup and teardown
