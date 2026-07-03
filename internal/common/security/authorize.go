@@ -122,7 +122,11 @@ func ABACMiddleware(settings ABACSettings) func(http.Handler) http.Handler {
 				}, opts)
 				if !evaluation.Allowed {
 					if evaluation.Reason == DecisionRouteNotFound {
-						next.ServeHTTP(w, r)
+						if model.routeExistsForAnyMethod(r.URL.Path) {
+							http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+							return
+						}
+						http.NotFound(w, r)
 						return
 					}
 					if denyAsNotFound(settings, r.URL.Path) {
