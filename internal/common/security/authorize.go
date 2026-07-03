@@ -122,15 +122,16 @@ func ABACMiddleware(settings ABACSettings) func(http.Handler) http.Handler {
 				}, opts)
 				if !evaluation.Allowed {
 					if evaluation.Reason == DecisionRouteNotFound {
+						component := routerErrorComponent(model)
 						if model.routeExistsForAnyMethod(r.URL.Path) {
-							http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+							common.WriteRouterMethodNotAllowed(w, component)
 							return
 						}
-						http.NotFound(w, r)
+						common.WriteRouterNotFound(w, component)
 						return
 					}
 					if denyAsNotFound(settings, r.URL.Path) {
-						http.NotFound(w, r)
+						common.WriteRouterNotFound(w, routerErrorComponent(model))
 						return
 					}
 
@@ -186,6 +187,13 @@ func activeAccessModel(settings ABACSettings) *AccessModel {
 		return settings.ModelProvider.ActiveAccessModel()
 	}
 	return settings.Model
+}
+
+func routerErrorComponent(model *AccessModel) string {
+	if component := common.RouterErrorComponent(model.apiRouter); component != "" {
+		return component
+	}
+	return "Middleware"
 }
 
 // ContextWithAuthorizationDecision stores an evaluated ABAC decision in ctx.

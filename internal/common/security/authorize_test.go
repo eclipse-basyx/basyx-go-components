@@ -27,6 +27,7 @@ package auth
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -186,6 +187,7 @@ func TestABACMiddleware_UnknownRouteReturnsNotFound(t *testing.T) {
 	if notFoundCalled {
 		t.Fatal("router not found handler must not be called after ABAC route lookup fails")
 	}
+	assertRouterErrorBody(t, rec.Body.Bytes(), "resource not found", "MIDDLEWARE-ROUTER-NOTFOUND")
 }
 
 func TestABACMiddleware_MethodNotAllowedReturnsMethodNotAllowed(t *testing.T) {
@@ -221,6 +223,7 @@ func TestABACMiddleware_MethodNotAllowedReturnsMethodNotAllowed(t *testing.T) {
 	if methodNotAllowedCalled {
 		t.Fatal("router method-not-allowed handler must not be called after ABAC route lookup fails")
 	}
+	assertRouterErrorBody(t, rec.Body.Bytes(), "method not allowed", "MIDDLEWARE-ROUTER-METHODNOTALLOWED")
 }
 
 func TestABACMiddleware_KnownMappedRouteWithoutMatchingRuleReturnsForbidden(t *testing.T) {
@@ -281,6 +284,7 @@ func TestABACMiddleware_TrailingSlashCollectionRouteReturnsNotFound(t *testing.T
 	if handlerCalled {
 		t.Fatal("protected handler must not be called for trailing-slash route")
 	}
+	assertRouterErrorBody(t, rec.Body.Bytes(), "resource not found", "AASREGISTRYSERVICE-ROUTER-NOTFOUND")
 }
 
 func TestABACMiddleware_DeniedSensitivePrefixReturnsNotFound(t *testing.T) {
@@ -309,6 +313,7 @@ func TestABACMiddleware_DeniedSensitivePrefixReturnsNotFound(t *testing.T) {
 	if rec.Code != http.StatusNotFound {
 		t.Fatalf("expected status %d, got %d", http.StatusNotFound, rec.Code)
 	}
+	assertRouterErrorBody(t, rec.Body.Bytes(), "resource not found", "MIDDLEWARE-ROUTER-NOTFOUND")
 }
 
 func TestABACMiddleware_DeniedSensitivePrefixDoesNotHideOtherRoutes(t *testing.T) {
@@ -377,6 +382,24 @@ type emptyModelProvider struct{}
 
 func (emptyModelProvider) ActiveAccessModel() *AccessModel {
 	return nil
+}
+
+func assertRouterErrorBody(t *testing.T, responseBody []byte, expectedText string, expectedCorrelationID string) {
+	t.Helper()
+
+	var body []common.ErrorHandler
+	if err := json.Unmarshal(responseBody, &body); err != nil {
+		t.Fatalf("failed to decode response body: %v", err)
+	}
+	if len(body) != 1 {
+		t.Fatalf("expected 1 error entry, got %d", len(body))
+	}
+	if body[0].Text != expectedText {
+		t.Fatalf("expected error text %q, got %q", expectedText, body[0].Text)
+	}
+	if !strings.Contains(body[0].CorrelationID, expectedCorrelationID) {
+		t.Fatalf("expected correlation id to contain %q, got %q", expectedCorrelationID, body[0].CorrelationID)
+	}
 }
 
 func TestHasUnrestrictedFormulaForRight_ReturnsTrueForBooleanTrue(t *testing.T) {
