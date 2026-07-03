@@ -1,25 +1,33 @@
-# Stage 1: Build the application
-FROM golang:1.26.4-alpine AS builder
+# syntax=docker/dockerfile:1
 
-# Version argument for build-time injection
-ARG VERSION=dev
+# Stage 1: Build the application
+FROM --platform=$BUILDPLATFORM golang:1.26.4-alpine AS builder
+
+ARG TARGETOS
+ARG TARGETARCH
+ARG TARGETVARIANT
 
 RUN apk update && apk add --no-cache git ca-certificates && update-ca-certificates
 WORKDIR /app
 
 # Dependencies first (better layer caching)
 COPY go.mod go.sum ./
-RUN go mod download
+RUN --mount=type=cache,target=/go/pkg/mod \
+    go mod download
 
-# Copy full source
-COPY . .
+COPY cmd/discoveryservice ./cmd/discoveryservice
+COPY internal ./internal
+COPY pkg ./pkg
 
-# Build discoveryservice binary with version information
-RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo \
-    -ldflags "-X main.Version=${VERSION} -X main.BuildTime=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+# Build discoveryservice binary
+RUN --mount=type=cache,target=/go/pkg/mod \
+    --mount=type=cache,target=/root/.cache/go-build \
+    CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} GOARM=${TARGETVARIANT#v} go build -trimpath \
     -o discoveryservice ./cmd/discoveryservice
 
-RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo \
+RUN --mount=type=cache,target=/go/pkg/mod \
+    --mount=type=cache,target=/root/.cache/go-build \
+    CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} GOARM=${TARGETVARIANT#v} go build -trimpath \
     -o healthprobe ./internal/healthprobe
 
 # Stage 2: Distroless runtime image
