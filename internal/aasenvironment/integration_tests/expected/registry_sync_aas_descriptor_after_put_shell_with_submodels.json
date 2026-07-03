@@ -22,7 +22,7 @@
       "id": "urn:example:sm:registry-sync-post",
       "endpoints": [
         {
-          "interface": "AAS-3.0",
+          "interface": "SUBMODEL-3.0",
           "protocolInformation": {
             "href": "http://127.0.0.1:6004/submodels/dXJuOmV4YW1wbGU6c206cmVnaXN0cnktc3luYy1wb3N0",
             "endpointProtocol": "http"

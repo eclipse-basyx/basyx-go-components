@@ -121,12 +121,16 @@ func TestRegistrySyncConfigBuildsDeterministicEndpoints(t *testing.T) {
 
 	aasEndpoints := config.buildAASDescriptorEndpoints("urn:example:aas:001")
 	require.Len(t, aasEndpoints, 2)
+	require.Equal(t, "AAS-3.0", aasEndpoints[0].Interface)
+	require.Equal(t, "AAS-3.0", aasEndpoints[1].Interface)
 	require.Equal(t, "https://public.example/api/v3/shells/dXJuOmV4YW1wbGU6YWFzOjAwMQ", aasEndpoints[0].ProtocolInformation.Href)
 	require.Equal(t, "https://internal.example/api/v3/shells/dXJuOmV4YW1wbGU6YWFzOjAwMQ", aasEndpoints[1].ProtocolInformation.Href)
 	require.Equal(t, "https", aasEndpoints[0].ProtocolInformation.EndpointProtocol)
 
 	submodelEndpoints := config.buildSubmodelDescriptorEndpoints("urn:example:sm:001")
 	require.Len(t, submodelEndpoints, 2)
+	require.Equal(t, "SUBMODEL-3.0", submodelEndpoints[0].Interface)
+	require.Equal(t, "SUBMODEL-3.0", submodelEndpoints[1].Interface)
 	require.Equal(t, "https://public.example/api/v3/submodels/dXJuOmV4YW1wbGU6c206MDAx", submodelEndpoints[0].ProtocolInformation.Href)
 	require.Equal(t, "https://internal.example/api/v3/submodels/dXJuOmV4YW1wbGU6c206MDAx", submodelEndpoints[1].ProtocolInformation.Href)
 	require.Equal(t, "https", submodelEndpoints[0].ProtocolInformation.EndpointProtocol)
@@ -183,12 +187,14 @@ func TestBuildAASDescriptorDerivesFromIdentifiable(t *testing.T) {
 	require.Len(t, descriptor.SubmodelDescriptors, 1)
 	require.Equal(t, "urn:example:sm:derived-embedded", descriptor.SubmodelDescriptors[0].Id)
 	require.Len(t, descriptor.SubmodelDescriptors[0].Endpoints, 1)
+	require.Equal(t, "SUBMODEL-3.0", descriptor.SubmodelDescriptors[0].Endpoints[0].Interface)
 	require.Equal(
 		t,
 		"https://public.example/api/v3/submodels/"+common.EncodeString("urn:example:sm:derived-embedded"),
 		descriptor.SubmodelDescriptors[0].Endpoints[0].ProtocolInformation.Href,
 	)
 	require.Len(t, descriptor.Endpoints, 1)
+	require.Equal(t, "AAS-3.0", descriptor.Endpoints[0].Interface)
 	require.Equal(
 		t,
 		"https://public.example/api/v3/shells/"+common.EncodeString("urn:example:aas:derived"),
@@ -231,6 +237,7 @@ func TestBuildSubmodelDescriptorDerivesFromIdentifiable(t *testing.T) {
 	require.Equal(t, "8", *smAdminInfo.Revision())
 	require.NotNil(t, descriptor.SemanticId)
 	require.Len(t, descriptor.Endpoints, 1)
+	require.Equal(t, "SUBMODEL-3.0", descriptor.Endpoints[0].Interface)
 	require.Equal(
 		t,
 		"http://public.example/api/v3/submodels/"+common.EncodeString("urn:example:sm:derived"),
@@ -259,6 +266,7 @@ func TestBuildEmbeddedSubmodelDescriptorsSkipsNilReferencesAndKeys(t *testing.T)
 	require.Len(t, descriptors, 1)
 	require.Equal(t, "urn:example:sm:nil-guard", descriptors[0].Id)
 	require.Len(t, descriptors[0].Endpoints, 1)
+	require.Equal(t, "SUBMODEL-3.0", descriptors[0].Endpoints[0].Interface)
 	require.Equal(
 		t,
 		"https://public.example/api/v3/submodels/"+common.EncodeString("urn:example:sm:nil-guard"),
