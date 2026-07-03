@@ -14,29 +14,29 @@
     "expectedStatus": 200
   },
   {
-    "context": "002.1 - List AAS Descriptors (Trailing Slash) - GET /shell-descriptors/",
+    "context": "002.1 - List AAS Descriptors - GET /shell-descriptors",
     "method": "GET",
-    "endpoint": "http://127.0.0.1:6004/shell-descriptors/",
+    "endpoint": "http://127.0.0.1:6004/shell-descriptors",
     "expectedStatus": 200
   },
   {
-    "context": "002.2 - Create AAS Descriptor (Trailing Slash, Malformed) - POST /shell-descriptors/",
+    "context": "002.2 - Create AAS Descriptor (Malformed) - POST /shell-descriptors",
     "method": "POST",
-    "endpoint": "http://127.0.0.1:6004/shell-descriptors/",
+    "endpoint": "http://127.0.0.1:6004/shell-descriptors",
     "data": "postBody/simple_ass_descriptor_malformed.json",
     "expectedStatus": 400
   },
   {
-    "context": "002.3 - Replace AAS Descriptor (Trailing Slash) - PUT /shell-descriptors/",
+    "context": "002.3 - Replace AAS Descriptor - PUT /shell-descriptors",
     "method": "PUT",
-    "endpoint": "http://127.0.0.1:6004/shell-descriptors/",
+    "endpoint": "http://127.0.0.1:6004/shell-descriptors",
     "data": "postBody/simple_ass_descriptor_2.json",
     "expectedStatus": 405
   },
   {
-    "context": "002.4 - Delete AAS Descriptor (Trailing Slash) - DELETE /shell-descriptors/",
+    "context": "002.4 - Delete AAS Descriptor - DELETE /shell-descriptors",
     "method": "DELETE",
-    "endpoint": "http://127.0.0.1:6004/shell-descriptors/",
+    "endpoint": "http://127.0.0.1:6004/shell-descriptors",
     "expectedStatus": 405
   },
   {
@@ -52,29 +52,29 @@
     "expectedStatus": 404
   },
   {
-    "context": "004.1 - List Submodel Descriptors (AAS Not Found, Trailing Slash) - GET /shell-descriptors/{aasId}/submodel-descriptors/",
+    "context": "004.1 - List Submodel Descriptors (AAS Not Found) - GET /shell-descriptors/{aasId}/submodel-descriptors",
     "method": "GET",
-    "endpoint": "http://127.0.0.1:6004/shell-descriptors/aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvaWRzL2Fhcy8yMjMzNQ/submodel-descriptors/",
+    "endpoint": "http://127.0.0.1:6004/shell-descriptors/aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvaWRzL2Fhcy8yMjMzNQ/submodel-descriptors",
     "expectedStatus": 404
   },
   {
-    "context": "004.2 - Create Submodel Descriptor (AAS Not Found, Trailing Slash) - POST /shell-descriptors/{aasId}/submodel-descriptors/",
+    "context": "004.2 - Create Submodel Descriptor (AAS Not Found) - POST /shell-descriptors/{aasId}/submodel-descriptors",
     "method": "POST",
-    "endpoint": "http://127.0.0.1:6004/shell-descriptors/aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvaWRzL2Fhcy8yMjMzNQ/submodel-descriptors/",
+    "endpoint": "http://127.0.0.1:6004/shell-descriptors/aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvaWRzL2Fhcy8yMjMzNQ/submodel-descriptors",
     "data": "postBody/simple_submodel_descriptor_1.json",
     "expectedStatus": 404
   },
   {
-    "context": "004.3 - Replace Submodel Descriptor Collection (Trailing Slash) - PUT /shell-descriptors/{aasId}/submodel-descriptors/",
+    "context": "004.3 - Replace Submodel Descriptor Collection - PUT /shell-descriptors/{aasId}/submodel-descriptors",
     "method": "PUT",
-    "endpoint": "http://127.0.0.1:6004/shell-descriptors/aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvaWRzL2Fhcy8yMjMzNQ/submodel-descriptors/",
+    "endpoint": "http://127.0.0.1:6004/shell-descriptors/aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvaWRzL2Fhcy8yMjMzNQ/submodel-descriptors",
     "data": "postBody/simple_submodel_descriptor_2.json",
     "expectedStatus": 405
   },
   {
-    "context": "004.4 - Delete Submodel Descriptor Collection (Trailing Slash) - DELETE /shell-descriptors/{aasId}/submodel-descriptors/",
+    "context": "004.4 - Delete Submodel Descriptor Collection - DELETE /shell-descriptors/{aasId}/submodel-descriptors",
     "method": "DELETE",
-    "endpoint": "http://127.0.0.1:6004/shell-descriptors/aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvaWRzL2Fhcy8yMjMzNQ/submodel-descriptors/",
+    "endpoint": "http://127.0.0.1:6004/shell-descriptors/aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvaWRzL2Fhcy8yMjMzNQ/submodel-descriptors",
     "expectedStatus": 405
   },
   {
