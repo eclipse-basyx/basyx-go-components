@@ -162,13 +162,12 @@ jobs:
             ${{ matrix.service.image }}:SNAPSHOT
             ${{ matrix.service.image }}:${{ steps.meta.outputs.version }}
             ${{ matrix.service.image }}:${{ steps.meta.outputs.short_sha }}
-          build-args: |
-            VERSION=${{ steps.meta.outputs.version }}
           cache-from: |
-            type=gha,scope=${{ github.workflow }}-${{ matrix.service.name }}
+            type=gha,scope=basyx-docker-snapshot-${{ matrix.service.name }}
+            type=gha,scope=basyx-docker-release-${{ matrix.service.name }}
             type=registry,ref=${{ matrix.service.image }}:buildcache
           cache-to: |
-            type=gha,scope=${{ github.workflow }}-${{ matrix.service.name }},mode=max
+            type=gha,scope=basyx-docker-snapshot-${{ matrix.service.name }},mode=max
             type=registry,ref=${{ matrix.service.image }}:buildcache,mode=max
           platforms: linux/amd64,linux/arm64,linux/arm/v7
           provenance: mode=max
