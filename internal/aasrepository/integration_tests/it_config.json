@@ -39,6 +39,31 @@
 		"expectedStatus": 400
 	},
 	{
+		"context": "003.5 - GET /shells/ - route not found",
+		"method": "GET",
+		"endpoint": "http://127.0.0.1:6004/shells/",
+		"expectedStatus": 404
+	},
+	{
+		"context": "003.6 - PUT /shells/ - route not found",
+		"method": "PUT",
+		"endpoint": "http://127.0.0.1:6004/shells/",
+		"expectedStatus": 404
+	},
+	{
+		"context": "003.7 - DELETE /shells/ - route not found",
+		"method": "DELETE",
+		"endpoint": "http://127.0.0.1:6004/shells/",
+		"expectedStatus": 404
+	},
+	{
+		"context": "003.8 - POST /shells/ - route not found",
+		"method": "POST",
+		"endpoint": "http://127.0.0.1:6004/shells/",
+		"data": "bodies/invalid/malformedJson.txt",
+		"expectedStatus": 404
+	},
+	{
 		"context": "004.1 - GET /shells - empty",
 		"method": "GET",
 		"endpoint": "http://127.0.0.1:6004/shells",

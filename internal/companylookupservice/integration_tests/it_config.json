@@ -39,6 +39,31 @@
         "expectedStatus": 405
     },
     {
+        "context": "002.5 - List Company Descriptors - GET /companies/ route not found",
+        "method": "GET",
+        "endpoint": "http://127.0.0.1:6004/companies/",
+        "expectedStatus": 404
+    },
+    {
+        "context": "002.6 - Create Company Descriptor - POST /companies/ route not found",
+        "method": "POST",
+        "endpoint": "http://127.0.0.1:6004/companies/",
+        "data": "postBody/company_descriptor_malformed_missing_domain.json",
+        "expectedStatus": 404
+    },
+    {
+        "context": "002.7 - Replace Company Collection - PUT /companies/ route not found",
+        "method": "PUT",
+        "endpoint": "http://127.0.0.1:6004/companies/",
+        "expectedStatus": 404
+    },
+    {
+        "context": "002.8 - Delete Company Collection - DELETE /companies/ route not found",
+        "method": "DELETE",
+        "endpoint": "http://127.0.0.1:6004/companies/",
+        "expectedStatus": 404
+    },
+    {
         "context": "003 - Create Company Descriptor #1 - POST /companies",
         "method": "POST",
         "endpoint": "http://127.0.0.1:6004/companies",

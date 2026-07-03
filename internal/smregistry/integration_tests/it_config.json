@@ -40,6 +40,32 @@
     "expectedStatus": 405
   },
   {
+    "context": "002.5 - List Submodel Descriptors - GET /submodel-descriptors/ route not found",
+    "method": "GET",
+    "endpoint": "http://127.0.0.1:6004/submodel-descriptors/",
+    "expectedStatus": 404
+  },
+  {
+    "context": "002.6 - Create Submodel Descriptor - POST /submodel-descriptors/ route not found",
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:6004/submodel-descriptors/",
+    "data": "postBody/simple_submodel_descriptor_malformed.json",
+    "expectedStatus": 404
+  },
+  {
+    "context": "002.7 - Replace Submodel Descriptor - PUT /submodel-descriptors/ route not found",
+    "method": "PUT",
+    "endpoint": "http://127.0.0.1:6004/submodel-descriptors/",
+    "data": "postBody/simple_submodel_descriptor_2.json",
+    "expectedStatus": 404
+  },
+  {
+    "context": "002.8 - Delete Submodel Descriptor - DELETE /submodel-descriptors/ route not found",
+    "method": "DELETE",
+    "endpoint": "http://127.0.0.1:6004/submodel-descriptors/",
+    "expectedStatus": 404
+  },
+  {
     "context": "003 - Get Submodel Descriptor by ID (Not Found) - GET /submodel-descriptors/{submodelId}",
     "method": "GET",
     "endpoint": "http://127.0.0.1:6004/submodel-descriptors/dXJuOmV4YW1wbGU6c206MDAx",
