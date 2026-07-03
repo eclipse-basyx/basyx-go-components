@@ -13,6 +13,12 @@
     "expectedStatus": 200
   },
   {
+    "context": "002.1 - List empty AAS descriptors trailing slash",
+    "method": "GET",
+    "endpoint": "http://127.0.0.1:6004/shell-descriptors/",
+    "expectedStatus": 404
+  },
+  {
     "context": "003 - Create AAS via /shells",
     "method": "POST",
     "endpoint": "http://127.0.0.1:6004/shells",
@@ -33,6 +39,12 @@
     "endpoint": "http://127.0.0.1:6004/lookup/shells/dXJuOmV4YW1wbGU6YWFzOnJlZ2lzdHJ5LXN5bmMtcG9zdA",
     "shouldMatch": "expected/registry_sync_post_lookup_links.json",
     "expectedStatus": 200
+  },
+  {
+    "context": "005.1 - Lookup shells collection trailing slash",
+    "method": "GET",
+    "endpoint": "http://127.0.0.1:6004/lookup/shells/",
+    "expectedStatus": 404
   },
   {
     "context": "006 - Update asset information via /shells/{id}/asset-information",
@@ -62,6 +74,12 @@
     "endpoint": "http://127.0.0.1:6004/submodel-descriptors/dXJuOmV4YW1wbGU6c206cmVnaXN0cnktc3luYy1wb3N0",
     "shouldMatch": "expected/registry_sync_post_submodel_descriptor.json",
     "expectedStatus": 200
+  },
+  {
+    "context": "009.0 - List submodel descriptors trailing slash",
+    "method": "GET",
+    "endpoint": "http://127.0.0.1:6004/submodel-descriptors/",
+    "expectedStatus": 404
   },
   {
     "context": "009.1 - Verify posted /submodels entry is not reachable via superpath without reference",

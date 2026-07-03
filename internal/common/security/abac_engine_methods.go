@@ -27,6 +27,8 @@
 package auth
 
 import (
+	"net/http"
+
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
 	api "github.com/go-chi/chi/v5"
 )
@@ -242,6 +244,16 @@ var mapMethodAndPatternToRightsData = []mapMethodAndPatternToRights{
 	{"DELETE", "/lookup/shells/{aasIdentifier}", []grammar.RightsEnum{grammar.RightsEnumDELETE}},
 }
 
+var routeProbeMethods = []string{
+	http.MethodGet,
+	http.MethodHead,
+	http.MethodPost,
+	http.MethodPut,
+	http.MethodPatch,
+	http.MethodDelete,
+	http.MethodOptions,
+}
+
 // mapMethodAndPathToRights maps an incoming HTTP method+path to required rights.
 // It returns:
 //   - mapped=false, routeFound=false when the route does not exist
@@ -249,6 +261,10 @@ var mapMethodAndPatternToRightsData = []mapMethodAndPatternToRights{
 //   - mapped=true, routeFound=true with one or more rights alternatives
 func (m *AccessModel) mapMethodAndPathToRights(in EvalInput) ([][]grammar.RightsEnum, bool, bool) {
 	matchPath := stripBasePath(m.basePath, in.Path)
+	if isNonRootTrailingSlashPath(matchPath) {
+		return nil, false, false
+	}
+
 	rctx := api.NewRouteContext()
 	pattern := m.apiRouter.Find(rctx, in.Method, matchPath)
 	if pattern == "" {
@@ -273,4 +289,22 @@ func (m *AccessModel) mapMethodAndPathToRights(in EvalInput) ([][]grammar.Rights
 	}
 
 	return nil, false, true
+}
+
+func (m *AccessModel) routeExistsForAnyMethod(requestPath string) bool {
+	if m == nil || m.apiRouter == nil {
+		return false
+	}
+	matchPath := stripBasePath(m.basePath, requestPath)
+	if isNonRootTrailingSlashPath(matchPath) {
+		return false
+	}
+
+	for _, method := range routeProbeMethods {
+		rctx := api.NewRouteContext()
+		if pattern := m.apiRouter.Find(rctx, method, matchPath); pattern != "" {
+			return true
+		}
+	}
+	return false
 }

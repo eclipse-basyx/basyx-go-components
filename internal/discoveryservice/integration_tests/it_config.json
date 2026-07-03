@@ -1,21 +1,39 @@
 [
   {
-    "context": "000 - Lookup Collection (Trailing Slash) - GET /lookup/shells/",
+    "context": "000 - Lookup Collection - GET /lookup/shells",
     "method": "GET",
-    "endpoint": "http://127.0.0.1:6004/lookup/shells/",
+    "endpoint": "http://127.0.0.1:6004/lookup/shells",
     "expectedStatus": 200
   },
   {
-    "context": "000.1 - Lookup Collection (Trailing Slash) - POST /lookup/shells/",
+    "context": "000.1 - Lookup Collection - POST /lookup/shells",
     "method": "POST",
-    "endpoint": "http://127.0.0.1:6004/lookup/shells/",
+    "endpoint": "http://127.0.0.1:6004/lookup/shells",
     "expectedStatus": 405
   },
   {
-    "context": "000.2 - Lookup Collection (Trailing Slash) - DELETE /lookup/shells/",
+    "context": "000.2 - Lookup Collection - DELETE /lookup/shells",
+    "method": "DELETE",
+    "endpoint": "http://127.0.0.1:6004/lookup/shells",
+    "expectedStatus": 405
+  },
+  {
+    "context": "000.3 - Lookup Collection - GET /lookup/shells/ route not found",
+    "method": "GET",
+    "endpoint": "http://127.0.0.1:6004/lookup/shells/",
+    "expectedStatus": 404
+  },
+  {
+    "context": "000.4 - Lookup Collection - POST /lookup/shells/ route not found",
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:6004/lookup/shells/",
+    "expectedStatus": 404
+  },
+  {
+    "context": "000.5 - Lookup Collection - DELETE /lookup/shells/ route not found",
     "method": "DELETE",
     "endpoint": "http://127.0.0.1:6004/lookup/shells/",
-    "expectedStatus": 405
+    "expectedStatus": 404
   },
   {
     "context": "001 - Search empty dataset",

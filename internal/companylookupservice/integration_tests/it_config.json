@@ -14,29 +14,54 @@
         "expectedStatus": 200
     },
     {
-        "context": "002.1 - List Company Descriptors (Trailing Slash) - GET /companies/",
+        "context": "002.1 - List Company Descriptors - GET /companies",
         "method": "GET",
-        "endpoint": "http://127.0.0.1:6004/companies/",
+        "endpoint": "http://127.0.0.1:6004/companies",
         "expectedStatus": 200
     },
     {
-        "context": "002.2 - Create Company Descriptor (Trailing Slash, Malformed) - POST /companies/",
+        "context": "002.2 - Create Company Descriptor (Malformed) - POST /companies",
         "method": "POST",
-        "endpoint": "http://127.0.0.1:6004/companies/",
+        "endpoint": "http://127.0.0.1:6004/companies",
         "data": "postBody/company_descriptor_malformed_missing_domain.json",
         "expectedStatus": 400
     },
     {
-        "context": "002.3 - Replace Company Collection (Trailing Slash) - PUT /companies/",
+        "context": "002.3 - Replace Company Collection - PUT /companies",
         "method": "PUT",
-        "endpoint": "http://127.0.0.1:6004/companies/",
+        "endpoint": "http://127.0.0.1:6004/companies",
         "expectedStatus": 405
     },
     {
-        "context": "002.4 - Delete Company Collection (Trailing Slash) - DELETE /companies/",
+        "context": "002.4 - Delete Company Collection - DELETE /companies",
+        "method": "DELETE",
+        "endpoint": "http://127.0.0.1:6004/companies",
+        "expectedStatus": 405
+    },
+    {
+        "context": "002.5 - List Company Descriptors - GET /companies/ route not found",
+        "method": "GET",
+        "endpoint": "http://127.0.0.1:6004/companies/",
+        "expectedStatus": 404
+    },
+    {
+        "context": "002.6 - Create Company Descriptor - POST /companies/ route not found",
+        "method": "POST",
+        "endpoint": "http://127.0.0.1:6004/companies/",
+        "data": "postBody/company_descriptor_malformed_missing_domain.json",
+        "expectedStatus": 404
+    },
+    {
+        "context": "002.7 - Replace Company Collection - PUT /companies/ route not found",
+        "method": "PUT",
+        "endpoint": "http://127.0.0.1:6004/companies/",
+        "expectedStatus": 404
+    },
+    {
+        "context": "002.8 - Delete Company Collection - DELETE /companies/ route not found",
         "method": "DELETE",
         "endpoint": "http://127.0.0.1:6004/companies/",
-        "expectedStatus": 405
+        "expectedStatus": 404
     },
     {
         "context": "003 - Create Company Descriptor #1 - POST /companies",

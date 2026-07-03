@@ -22,6 +22,12 @@
     "expectedStatus": 200
   },
   {
+    "context": "003.1 - List AAS after upload trailing slash",
+    "method": "GET",
+    "endpoint": "http://127.0.0.1:6004/shells/",
+    "expectedStatus": 404
+  },
+  {
     "context": "004 - Verify uploaded file attachments",
     "action": "VERIFY_AASX_ATTACHMENTS",
     "endpoint": "http://127.0.0.1:6004",
@@ -48,11 +54,23 @@
     "expectedStatus": 200
   },
   {
+    "context": "006.1 - List Submodels after upload trailing slash",
+    "method": "GET",
+    "endpoint": "http://127.0.0.1:6004/submodels/",
+    "expectedStatus": 404
+  },
+  {
     "context": "007 - List ConceptDescriptions after upload",
     "action": "VERIFY_ENDPOINT_SNAPSHOT",
     "method": "GET",
     "endpoint": "http://127.0.0.1:6004/concept-descriptions",
     "data": "expected/iese_conceptdescriptions.json",
     "expectedStatus": 200
+  },
+  {
+    "context": "007.1 - List ConceptDescriptions after upload trailing slash",
+    "method": "GET",
+    "endpoint": "http://127.0.0.1:6004/concept-descriptions/",
+    "expectedStatus": 404
   }
 ]

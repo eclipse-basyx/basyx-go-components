@@ -13,30 +13,55 @@
         "expectedStatus": 200
     },
     {
-        "context": "Get All Submodels (Trailing Slash)",
+        "context": "Get All Submodels",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/",
+        "endpoint": "http://localhost:6004/submodels",
         "expectedStatus": 200
     },
     {
-        "context": "Replace Submodel (Trailing Slash)",
+        "context": "Replace Submodel",
         "method": "PUT",
-        "endpoint": "http://localhost:6004/submodels/",
+        "endpoint": "http://localhost:6004/submodels",
         "expectedStatus": 405
     },
     {
-        "context": "Delete Submodel (Trailing Slash)",
+        "context": "Delete Submodel",
         "method": "DELETE",
-        "endpoint": "http://localhost:6004/submodels/",
+        "endpoint": "http://localhost:6004/submodels",
         "expectedStatus": 405
     },
     {
-        "context": "Post Submodel (Trailing Slash)",
+        "context": "Post Submodel",
         "method": "POST",
-        "endpoint": "http://localhost:6004/submodels/",
+        "endpoint": "http://localhost:6004/submodels",
         "data": "bodies/post/postSubmodel.json",
         "shouldMatch": "bodies/post/postSubmodel.json",
         "expectedStatus": 201
+    },
+    {
+        "context": "Get All Submodels Trailing Slash",
+        "method": "GET",
+        "endpoint": "http://localhost:6004/submodels/",
+        "expectedStatus": 404
+    },
+    {
+        "context": "Replace Submodel Trailing Slash",
+        "method": "PUT",
+        "endpoint": "http://localhost:6004/submodels/",
+        "expectedStatus": 404
+    },
+    {
+        "context": "Delete Submodel Trailing Slash",
+        "method": "DELETE",
+        "endpoint": "http://localhost:6004/submodels/",
+        "expectedStatus": 404
+    },
+    {
+        "context": "Post Submodel Trailing Slash",
+        "method": "POST",
+        "endpoint": "http://localhost:6004/submodels/",
+        "data": "bodies/post/postSubmodel.json",
+        "expectedStatus": 404
     },
     {
         "context": "Get All Submodels (Nonexistent Cursor)",

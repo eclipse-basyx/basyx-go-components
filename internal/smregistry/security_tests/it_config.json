@@ -86,6 +86,13 @@
     "expectedStatus": 200
   },
   {
+    "context": "GET Submodel A trailing slash - ANON - NOT FOUND",
+    "token": null,
+    "method": "GET",
+    "endpoint": "http://localhost:6005/submodel-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9YL1NNLUE/",
+    "expectedStatus": 404
+  },
+  {
     "context": "GET Submodel B - ANON - DENIED",
     "token": null,
     "method": "GET",
@@ -140,6 +147,13 @@
     "expectedStatus": 200
   },
   {
+    "context": "GET ALL Submodels trailing slash - ANON - NOT FOUND",
+    "token": null,
+    "method": "GET",
+    "endpoint": "http://localhost:6005/submodel-descriptors/",
+    "expectedStatus": 404
+  },
+  {
     "context": "GET /submodel-descriptors - ANON - filtered",
     "action": "ASSERT_RECENT_CHANGE_IDS",
     "token": null,
@@ -147,6 +161,13 @@
     "endpoint": "http://localhost:6005/submodel-descriptors?limit=20",
     "shouldMatch": "expected/expectedRecentChangesAnonDescriptorIDs.json",
     "expectedStatus": 200
+  },
+  {
+    "context": "GET /submodel-descriptors/ - ANON - NOT FOUND",
+    "token": null,
+    "method": "GET",
+    "endpoint": "http://localhost:6005/submodel-descriptors/?limit=20",
+    "expectedStatus": 404
   },
   {
     "context": "GET ALL Submodels - User A - ALLOWED",

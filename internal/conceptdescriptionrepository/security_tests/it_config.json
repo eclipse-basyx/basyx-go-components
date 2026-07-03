@@ -109,6 +109,13 @@
     "expectedStatus": 200
   },
   {
+    "context": "GET concept descriptions trailing slash - viewer not found",
+    "token": { "user": "usera", "password": "pwd" },
+    "method": "GET",
+    "endpoint": "http://localhost:6004/concept-descriptions/",
+    "expectedStatus": 404
+  },
+  {
     "context": "GET /concept-descriptions/$recent-changes - viewer filtered",
     "action": "ASSERT_RECENT_CHANGE_IDS",
     "token": { "user": "usera", "password": "pwd" },
@@ -118,12 +125,26 @@
     "expectedStatus": 200
   },
   {
+    "context": "GET /concept-descriptions/$recent-changes/ - viewer not found",
+    "token": { "user": "usera", "password": "pwd" },
+    "method": "GET",
+    "endpoint": "http://localhost:6004/concept-descriptions/$recent-changes/?limit=20",
+    "expectedStatus": 404
+  },
+  {
     "context": "GET viewer-visible concept description - viewer",
     "token": { "user": "usera", "password": "pwd" },
     "method": "GET",
     "endpoint": "http://localhost:6004/concept-descriptions/dXJuOmV4YW1wbGU6Y2Q6dmlld2VyOmFsbG93ZWQ",
     "shouldMatch": "postBody/cdViewerAllowed.json",
     "expectedStatus": 200
+  },
+  {
+    "context": "GET viewer-visible concept description trailing slash - viewer not found",
+    "token": { "user": "usera", "password": "pwd" },
+    "method": "GET",
+    "endpoint": "http://localhost:6004/concept-descriptions/dXJuOmV4YW1wbGU6Y2Q6dmlld2VyOmFsbG93ZWQ/",
+    "expectedStatus": 404
   },
   {
     "context": "GET viewer-hidden concept description - viewer receives hidden 404",

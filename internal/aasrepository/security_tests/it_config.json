@@ -99,6 +99,13 @@
     "expectedStatus": 200
   },
   {
+    "context": "GET /shells/ - admin not found",
+    "token": { "user": "admin", "password": "pwd" },
+    "method": "GET",
+    "endpoint": "http://localhost:6004/shells/",
+    "expectedStatus": 404
+  },
+  {
     "context": "GET /shells - editor reduced to specific IDENTIFIABLE object",
     "token": { "user": "userx", "password": "pwd" },
     "method": "GET",
@@ -113,6 +120,13 @@
     "endpoint": "http://localhost:6004/shells/$reference",
     "shouldMatch": "expected/expectedShellRefsFullAdmin.json",
     "expectedStatus": 200
+  },
+  {
+    "context": "GET /shells/$reference/ - admin not found",
+    "token": { "user": "admin", "password": "pwd" },
+    "method": "GET",
+    "endpoint": "http://localhost:6004/shells/$reference/",
+    "expectedStatus": 404
   },
   {
     "context": "GET /shells/$reference - editor reduced to specific IDENTIFIABLE object",
@@ -132,6 +146,13 @@
     "expectedStatus": 200
   },
   {
+    "context": "GET /shells/$recent-changes/ - viewer not found",
+    "token": { "user": "usera", "password": "pwd" },
+    "method": "GET",
+    "endpoint": "http://localhost:6004/shells/$recent-changes/?limit=20",
+    "expectedStatus": 404
+  },
+  {
     "context": "GET /shells/$recent-changes - editor reduced to specific IDENTIFIABLE object",
     "action": "ASSERT_RECENT_CHANGE_IDS",
     "token": { "user": "userx", "password": "pwd" },
@@ -146,6 +167,13 @@
     "method": "GET",
     "endpoint": "http://localhost:6004/shells/dXJuOmV4YW1wbGU6YWFzOnZpZXdlcjphbGxvd2Vk",
     "expectedStatus": 200
+  },
+  {
+    "context": "GET viewer-visible aas trailing slash - viewer not found",
+    "token": { "user": "usera", "password": "pwd" },
+    "method": "GET",
+    "endpoint": "http://localhost:6004/shells/dXJuOmV4YW1wbGU6YWFzOnZpZXdlcjphbGxvd2Vk/",
+    "expectedStatus": 404
   },
   {
     "context": "GET viewer-by-key aas - viewer",

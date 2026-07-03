@@ -193,6 +193,13 @@
     "expectedStatus": 200
   },
   {
+    "context": "GET Descriptor A trailing slash - User ANONONYM - NOT FOUND",
+    "token": null,
+    "method": "GET",
+    "endpoint": "http://localhost:6004/shell-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9B/",
+    "expectedStatus": 404
+  },
+  {
     "context": "GET Descriptor B - User ANONONYM - DENIED",
     "token": null,
     "method": "GET",
@@ -345,6 +352,13 @@
     "expectedStatus": 200
   },
   {
+    "context": "GET ALL Descriptor trailing slash - User ANONONYM - NOT FOUND",
+    "token": null,
+    "method": "GET",
+    "endpoint": "http://localhost:6004/shell-descriptors/",
+    "expectedStatus": 404
+  },
+  {
     "context": "GET /shell-descriptors - anonymous public filtered",
     "action": "ASSERT_RECENT_CHANGE_IDS",
     "token": null,
@@ -354,12 +368,26 @@
     "expectedStatus": 200
   },
   {
+    "context": "GET /shell-descriptors/ - anonymous public filtered - NOT FOUND",
+    "token": null,
+    "method": "GET",
+    "endpoint": "http://localhost:6004/shell-descriptors/?limit=20",
+    "expectedStatus": 404
+  },
+  {
     "context": "GET ALL Descriptor - User A - ALLOWED",
     "token": { "user": "usera", "password": "pwd" },
     "method": "GET",
     "endpoint": "http://localhost:6004/shell-descriptors",
     "shouldMatch": "expected/expectedShellUserA.json",
     "expectedStatus": 200
+  },
+  {
+    "context": "GET ALL Descriptor trailing slash - User A - NOT FOUND",
+    "token": { "user": "usera", "password": "pwd" },
+    "method": "GET",
+    "endpoint": "http://localhost:6004/shell-descriptors/",
+    "expectedStatus": 404
   },
   {
     "context": "GET /shell-descriptors - user A filtered",
@@ -371,12 +399,26 @@
     "expectedStatus": 200
   },
   {
+    "context": "GET /shell-descriptors/ - user A filtered - NOT FOUND",
+    "token": { "user": "usera", "password": "pwd" },
+    "method": "GET",
+    "endpoint": "http://localhost:6004/shell-descriptors/?limit=20",
+    "expectedStatus": 404
+  },
+  {
     "context": "GET ALL Descriptor - User B - ALLOWED",
     "token": { "user": "userb", "password": "pwd" },
     "method": "GET",
     "endpoint": "http://localhost:6004/shell-descriptors",
     "shouldMatch": "expected/expectedShellUserB.json",
     "expectedStatus": 200
+  },
+  {
+    "context": "GET ALL Descriptor trailing slash - User B - NOT FOUND",
+    "token": { "user": "userb", "password": "pwd" },
+    "method": "GET",
+    "endpoint": "http://localhost:6004/shell-descriptors/",
+    "expectedStatus": 404
   },
   {
     "context": "GET /shell-descriptors - user B filtered",
@@ -388,12 +430,26 @@
     "expectedStatus": 200
   },
   {
+    "context": "GET /shell-descriptors/ - user B filtered - NOT FOUND",
+    "token": { "user": "userb", "password": "pwd" },
+    "method": "GET",
+    "endpoint": "http://localhost:6004/shell-descriptors/?limit=20",
+    "expectedStatus": 404
+  },
+  {
     "context": "GET ALL Descriptor - User X - ALLOWED",
     "token": { "user": "userx", "password": "pwd" },
     "method": "GET",
     "endpoint": "http://localhost:6004/shell-descriptors",
     "shouldMatch": "expected/expectedShellUserX.json",
     "expectedStatus": 200
+  },
+  {
+    "context": "GET ALL Descriptor trailing slash - User X - NOT FOUND",
+    "token": { "user": "userx", "password": "pwd" },
+    "method": "GET",
+    "endpoint": "http://localhost:6004/shell-descriptors/",
+    "expectedStatus": 404
   },
   {
     "context": "GET ALL Descriptor - User Y - ALLOWED",
@@ -404,12 +460,26 @@
     "expectedStatus": 200
   },
   {
+    "context": "GET ALL Descriptor trailing slash - User Y - NOT FOUND",
+    "token": { "user": "usery", "password": "pwd" },
+    "method": "GET",
+    "endpoint": "http://localhost:6004/shell-descriptors/",
+    "expectedStatus": 404
+  },
+  {
     "context": "GET ALL Descriptor - User Admin - ALLOWED",
     "token": { "user": "admin", "password": "pwd" },
     "method": "GET",
     "endpoint": "http://localhost:6004/shell-descriptors",
     "shouldMatch": "expected/expectedShellAdmin.json",
     "expectedStatus": 200
+  },
+  {
+    "context": "GET ALL Descriptor trailing slash - User Admin - NOT FOUND",
+    "token": { "user": "admin", "password": "pwd" },
+    "method": "GET",
+    "endpoint": "http://localhost:6004/shell-descriptors/",
+    "expectedStatus": 404
   },
   {
     "context": "GET /shell-descriptors - admin descriptor object filtered",
@@ -419,6 +489,13 @@
     "endpoint": "http://localhost:6004/shell-descriptors?limit=20",
     "shouldMatch": "expected/expectedRecentChangesAdminDescriptorIDs.json",
     "expectedStatus": 200
+  },
+  {
+    "context": "GET /shell-descriptors/ - admin descriptor object filtered - NOT FOUND",
+    "token": { "user": "admin", "password": "pwd" },
+    "method": "GET",
+    "endpoint": "http://localhost:6004/shell-descriptors/?limit=20",
+    "expectedStatus": 404
   },
   { "context": "POST Submodel A - ANON - DENIED", "token": null, "method": "POST", "endpoint": "http://localhost:6004/shell-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9Y/submodel-descriptors", "data": "postBody/simple_smd_a.json", "expectedStatus": 403 },
   { "context": "POST Submodel B - ANON - DENIED", "token": null, "method": "POST", "endpoint": "http://localhost:6004/shell-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9Y/submodel-descriptors", "data": "postBody/simple_smd_b.json", "expectedStatus": 403 },
@@ -445,6 +522,7 @@
   { "context": "POST Submodel X - ADMIN - ALLOWED", "token": { "user": "admin", "password": "pwd" }, "method": "POST", "endpoint": "http://localhost:6004/shell-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9Y/submodel-descriptors", "data": "postBody/simple_smd_x.json", "shouldMatch": "postBody/simple_smd_x.json", "expectedStatus": 201 },
 
   { "context": "GET Submodel A - ANON - ALLOWED", "token": null, "method": "GET", "endpoint": "http://localhost:6004/shell-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9Y/submodel-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9YL1NNLUE", "shouldMatch": "expected/expected_smd_a.json", "expectedStatus": 200 },
+  { "context": "GET Submodel A trailing slash - ANON - NOT FOUND", "token": null, "method": "GET", "endpoint": "http://localhost:6004/shell-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9Y/submodel-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9YL1NNLUE/", "expectedStatus": 404 },
   { "context": "GET Submodel B - ANON - DENIED", "token": null, "method": "GET", "endpoint": "http://localhost:6004/shell-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9Y/submodel-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9YL1NNLUI", "expectedStatus": 404 },
   { "context": "GET Submodel C - ANON - DENIED", "token": null, "method": "GET", "endpoint": "http://localhost:6004/shell-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9Y/submodel-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9YL1NNLUM", "expectedStatus": 404 },
   { "context": "GET Submodel D - ANON - DENIED", "token": null, "method": "GET", "endpoint": "http://localhost:6004/shell-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9Y/submodel-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9YL1NNLUQ", "expectedStatus": 404 },
@@ -469,6 +547,7 @@
   { "context": "GET Submodel X - ADMIN - ALLOWED", "token": { "user": "admin", "password": "pwd" }, "method": "GET", "endpoint": "http://localhost:6004/shell-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9Y/submodel-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9YL1NNLVg", "shouldMatch": "expected/expected_smd_x.json", "expectedStatus": 200 },
 
   { "context": "GET ALL Submodels - ANON - ALLOWED", "token": null, "method": "GET", "endpoint": "http://localhost:6004/shell-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9Y/submodel-descriptors", "shouldMatch": "expected/expectedSMDAnon.json", "expectedStatus": 200 },
+  { "context": "GET ALL Submodels trailing slash - ANON - NOT FOUND", "token": null, "method": "GET", "endpoint": "http://localhost:6004/shell-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9Y/submodel-descriptors/", "expectedStatus": 404 },
   { "context": "GET ALL Submodels - User A - ALLOWED", "token": { "user": "usera", "password": "pwd" }, "method": "GET", "endpoint": "http://localhost:6004/shell-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9Y/submodel-descriptors", "shouldMatch": "expected/expectedSMDUserA.json", "expectedStatus": 200 },
   { "context": "GET ALL Submodels - User B - ALLOWED", "token": { "user": "userb", "password": "pwd" }, "method": "GET", "endpoint": "http://localhost:6004/shell-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9Y/submodel-descriptors", "shouldMatch": "expected/expectedSMDUserB.json", "expectedStatus": 200 },
   { "context": "GET ALL Submodels - User X - ALLOWED", "token": { "user": "userx", "password": "pwd" }, "method": "GET", "endpoint": "http://localhost:6004/shell-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9Y/submodel-descriptors", "shouldMatch": "expected/expectedSMDUserX.json", "expectedStatus": 200 },
@@ -484,5 +563,5 @@
   { "context": "PUT Submodel update - Admin allowed with UPDATE", "token": { "user": "admin", "password": "pwd" }, "method": "PUT", "endpoint": "http://localhost:6004/shell-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9Y/submodel-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9YL1NNLVBVVC1Y", "data": "postBody/put_update_smd_userx.json", "expectedStatus": 204 },
 
   { "context": "GET Non Existing Endpoint - ANON - NOT FOUND", "token": null, "method": "GET", "endpoint": "http://localhost:6004/does-not-exist", "expectedStatus": 404 },
-  { "context": "PATCH Health Endpoint - ANON - METHOD NOT ALLOWED", "token": null, "method": "PATCH", "endpoint": "http://localhost:6004/health", "expectedStatus": 405 }
+  { "context": "PATCH Health Endpoint - ANON - NOT FOUND", "token": null, "method": "PATCH", "endpoint": "http://localhost:6004/health", "expectedStatus": 404 }
 ]

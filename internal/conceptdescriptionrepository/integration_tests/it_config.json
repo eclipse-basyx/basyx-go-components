@@ -13,27 +13,52 @@
         "shouldMatch": "expected/GetAllConceptDescriptionsEmpty.json"
     },
     {
-        "context": "001.1 - Get All Concept Descriptions (Trailing Slash)",
+        "context": "001.1 - Get All Concept Descriptions",
         "method": "GET",
-        "endpoint": "http://localhost:6004/concept-descriptions/",
+        "endpoint": "http://localhost:6004/concept-descriptions",
         "expectedStatus": 200
     },
     {
-        "context": "001.2 - Update Concept Descriptions Collection (Trailing Slash)",
+        "context": "001.2 - Update Concept Descriptions Collection",
+        "method": "PUT",
+        "endpoint": "http://localhost:6004/concept-descriptions",
+        "expectedStatus": 405
+    },
+    {
+        "context": "001.3 - Delete Concept Descriptions Collection",
+        "method": "DELETE",
+        "endpoint": "http://localhost:6004/concept-descriptions",
+        "expectedStatus": 405
+    },
+    {
+        "context": "001.4 - Get All Concept Descriptions Trailing Slash",
+        "method": "GET",
+        "endpoint": "http://localhost:6004/concept-descriptions/",
+        "expectedStatus": 404
+    },
+    {
+        "context": "001.5 - Update Concept Descriptions Collection Trailing Slash",
         "method": "PUT",
         "endpoint": "http://localhost:6004/concept-descriptions/",
-        "expectedStatus": 405
+        "expectedStatus": 404
     },
     {
-        "context": "001.3 - Delete Concept Descriptions Collection (Trailing Slash)",
+        "context": "001.6 - Delete Concept Descriptions Collection Trailing Slash",
         "method": "DELETE",
         "endpoint": "http://localhost:6004/concept-descriptions/",
-        "expectedStatus": 405
+        "expectedStatus": 404
     },
     {
-        "context": "002 - Create Concept Description A (Trailing Slash)",
+        "context": "001.7 - Create Concept Description Trailing Slash",
         "method": "POST",
         "endpoint": "http://localhost:6004/concept-descriptions/",
+        "expectedStatus": 404,
+        "data": "bodies/ConceptDescriptionA.json"
+    },
+    {
+        "context": "002 - Create Concept Description A",
+        "method": "POST",
+        "endpoint": "http://localhost:6004/concept-descriptions",
         "expectedStatus": 201,
         "data": "bodies/ConceptDescriptionA.json",
         "shouldMatch": "bodies/ConceptDescriptionA.json"

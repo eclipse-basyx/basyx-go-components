@@ -29,6 +29,20 @@
     "expectedStatus": 404
   },
   {
+    "context": "Shells collection GET trailing slash - viewer not found",
+    "token": { "user": "vieweruser", "password": "admin" },
+    "method": "GET",
+    "endpoint": "http://localhost:5004/lookup/shells/",
+    "expectedStatus": 404
+  },
+  {
+    "context": "Shells GET trailing slash - viewer not found",
+    "token": { "user": "vieweruser", "password": "admin" },
+    "method": "GET",
+    "endpoint": "http://localhost:5004/lookup/shells/MT/",
+    "expectedStatus": 404
+  },
+  {
     "context": "Shells GET - editor with clear=6 allowed",
     "token": { "user": "editoruser", "password": "admin" },
     "method": "GET",
@@ -88,6 +102,14 @@
     "method": "POST",
     "endpoint": "http://localhost:5004/lookup/shellsByAssetLink",
     "expectedStatus": 200
+  },
+  {
+    "context": "ShellsByAssetLink POST trailing slash - editor not found",
+    "token": { "user": "editoruser", "password": "admin" },
+    "data": "postBody/simple_specificAssetIds.json",
+    "method": "POST",
+    "endpoint": "http://localhost:5004/lookup/shellsByAssetLink/",
+    "expectedStatus": 404
   },
   {
     "context": "ShellsByAssetLink POST - admin allowed",
