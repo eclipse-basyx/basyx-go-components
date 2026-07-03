@@ -27,9 +27,12 @@
 package auth
 
 import (
+	"context"
 	"net/http"
+	"net/http/httptest"
 	"testing"
 
+	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
 	"github.com/go-chi/chi/v5"
 )
@@ -116,6 +119,140 @@ func TestMapMethodAndPathToRights_DPPAPIRoutes(t *testing.T) {
 				t.Fatalf("expected route %s %s to have ABAC mapping", tt.method, tt.path)
 			}
 			assertRightsAlternative(t, rights, tt.want)
+		})
+	}
+}
+
+func TestMapMethodAndPathToRights_DPPRejectsEmptyWildcardTrailingSlash(t *testing.T) {
+	t.Parallel()
+
+	router := chi.NewRouter()
+	registerDPPTestRoutes(router)
+	model := &AccessModel{apiRouter: router, basePath: ""}
+
+	tests := []struct {
+		name   string
+		method string
+	}{
+		{
+			name:   "read data element empty wildcard",
+			method: http.MethodGet,
+		},
+		{
+			name:   "patch data element empty wildcard",
+			method: http.MethodPatch,
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			rights, mapped, routeFound := model.mapMethodAndPathToRights(EvalInput{
+				Method: tt.method,
+				Path:   "/v1/dpps/demo/elements/",
+			})
+			if routeFound || mapped || len(rights) > 0 {
+				t.Fatalf("expected trailing-slash DPP element route to be rejected, got routeFound=%v mapped=%v rights=%v", routeFound, mapped, rights)
+			}
+		})
+	}
+}
+
+func TestABACMiddleware_DPPElementTrailingSlashReturnsNotFound(t *testing.T) {
+	router := chi.NewRouter()
+	common.ConfigureAPIRouter(router, "DPPAPIService")
+	model, err := ParseAccessModel([]byte(`{
+		"AllAccessPermissionRules": {
+			"DEFATTRIBUTES": [
+				{
+					"name": "sub_claim",
+					"attributes": [
+						{ "CLAIM": "sub" }
+					]
+				}
+			],
+			"DEFOBJECTS": [
+				{
+					"name": "dpp_api",
+					"objects": [
+						{ "ROUTE": "/v1/dpps/*" }
+					]
+				}
+			],
+			"DEFACLS": [
+				{
+					"name": "read_update",
+					"acl": {
+						"USEATTRIBUTES": "sub_claim",
+						"RIGHTS": [ "READ", "UPDATE" ],
+						"ACCESS": "ALLOW"
+					}
+				}
+			],
+			"DEFFORMULAS": [
+				{
+					"name": "always_true",
+					"formula": { "$boolean": true }
+				}
+			],
+			"rules": [
+				{
+					"USEACL": "read_update",
+					"USEOBJECTS": [ "dpp_api" ],
+					"USEFORMULA": "always_true"
+				}
+			]
+		}
+	}`), router, "")
+	if err != nil {
+		t.Fatalf("ParseAccessModel() error = %v", err)
+	}
+
+	router.Use(ABACMiddleware(ABACSettings{
+		Enabled: true,
+		Model:   model,
+	}))
+	handlerCalled := false
+	handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		handlerCalled = true
+		w.WriteHeader(http.StatusOK)
+	})
+	router.Method(http.MethodGet, "/v1/dpps/{dppId}/elements/*", handler)
+	router.Method(http.MethodPatch, "/v1/dpps/{dppId}/elements/*", handler)
+
+	tests := []struct {
+		name   string
+		method string
+	}{
+		{
+			name:   "get data element empty wildcard",
+			method: http.MethodGet,
+		},
+		{
+			name:   "patch data element empty wildcard",
+			method: http.MethodPatch,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			handlerCalled = false
+			req := httptest.NewRequest(tt.method, "/v1/dpps/demo/elements/", nil)
+			ctx := context.WithValue(req.Context(), ClaimsKey, Claims{"sub": "tester"})
+			req = req.WithContext(ctx)
+			rec := httptest.NewRecorder()
+
+			router.ServeHTTP(rec, req)
+
+			if rec.Code != http.StatusNotFound {
+				t.Fatalf("expected status %d, got %d", http.StatusNotFound, rec.Code)
+			}
+			if handlerCalled {
+				t.Fatal("protected DPP element handler must not be called for empty wildcard trailing-slash route")
+			}
+			assertRouterErrorBody(t, rec.Body.Bytes(), "resource not found", "DPPAPISERVICE-ROUTER-NOTFOUND")
 		})
 	}
 }
