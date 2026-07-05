@@ -899,14 +899,9 @@ func (s *AssetAdministrationShellDatabase) PutAssetAdministrationShellByIDInTran
 
 func (s *AssetAdministrationShellDatabase) putAssetAdministrationShellByIDInTransactionValidated(ctx context.Context, tx *sql.Tx, aasIdentifier string, aas types.IAssetAdministrationShell) (bool, error) {
 	dialect := goqu.Dialect("postgres")
-	selectSQL, selectArgs, buildErr := buildGetAssetAdministrationShellDBIDByIdentifierQuery(&dialect, aasIdentifier)
-	if buildErr != nil {
-		return false, common.NewInternalServerError("AASREPO-PUTAAS-BUILDSELECT " + buildErr.Error())
-	}
-
-	var existingID int64
 	isUpdate := true
-	if scanErr := tx.QueryRow(selectSQL, selectArgs...).Scan(&existingID); scanErr != nil {
+	existingID, scanErr := persistenceutils.GetAssetAdministrationShellDatabaseIDForUpdate(tx, aasIdentifier)
+	if scanErr != nil {
 		if scanErr != sql.ErrNoRows {
 			return false, common.NewInternalServerError("AASREPO-PUTAAS-EXECSELECT " + scanErr.Error())
 		}
@@ -935,6 +930,10 @@ func (s *AssetAdministrationShellDatabase) putAssetAdministrationShellByIDInTran
 	}
 
 	if isUpdate {
+		if cleanupErr := cleanupThumbnailLargeObjectsByAASDBID(tx, &dialect, existingID, "AASREPO-PUTAAS"); cleanupErr != nil {
+			return false, cleanupErr
+		}
+
 		deleteSQL, deleteArgs, deleteBuildErr := buildDeleteAssetAdministrationShellByDBIDQuery(&dialect, existingID)
 		if deleteBuildErr != nil {
 			return false, common.NewInternalServerError("AASREPO-PUTAAS-BUILDDELETE " + deleteBuildErr.Error())
@@ -1008,7 +1007,16 @@ func (s *AssetAdministrationShellDatabase) DeleteAssetAdministrationShellByIDInT
 	}
 
 	dialect := goqu.Dialect("postgres")
-	sqlQuery, args, buildErr := buildDeleteAssetAdministrationShellByIdentifierQuery(&dialect, aasIdentifier)
+	aasDBID, err := getAssetAdministrationShellDBIDForDelete(tx, aasIdentifier)
+	if err != nil {
+		return err
+	}
+
+	if err = cleanupThumbnailLargeObjectsByAASDBID(tx, &dialect, aasDBID, "AASREPO-DELAAS"); err != nil {
+		return err
+	}
+
+	sqlQuery, args, buildErr := buildDeleteAssetAdministrationShellByDBIDQuery(&dialect, aasDBID)
 	if buildErr != nil {
 		return common.NewInternalServerError("AASREPO-DELAAS-BUILDSQL " + buildErr.Error())
 	}
@@ -1028,6 +1036,30 @@ func (s *AssetAdministrationShellDatabase) DeleteAssetAdministrationShellByIDInT
 	}
 
 	return history.AppendVersionTx(ctx, tx, history.TableAAS, aasIdentifier, history.ChangeDeleted, map[string]any{"id": aasIdentifier}, true)
+}
+
+func getAssetAdministrationShellDBIDForDelete(tx *sql.Tx, aasIdentifier string) (int64, error) {
+	aasDBID, scanErr := persistenceutils.GetAssetAdministrationShellDatabaseIDForUpdate(tx, aasIdentifier)
+	if scanErr != nil {
+		if scanErr == sql.ErrNoRows {
+			return 0, common.NewErrNotFound("AASREPO-DELAAS-AASNOTFOUND Asset Administration Shell with ID '" + aasIdentifier + "' not found")
+		}
+		return 0, common.NewInternalServerError("AASREPO-DELAAS-EXECSELECT " + scanErr.Error())
+	}
+	return aasDBID, nil
+}
+
+func cleanupThumbnailLargeObjectsByAASDBID(tx *sql.Tx, dialect *goqu.DialectWrapper, aasDBID int64, errorPrefix string) error {
+	query, args, buildErr := buildCleanupThumbnailLargeObjectsByAASDBIDQuery(dialect, aasDBID)
+	if buildErr != nil {
+		return common.NewInternalServerError(errorPrefix + "-BUILDUNLINKLO " + buildErr.Error())
+	}
+
+	var unlinkedCount int64
+	if scanErr := tx.QueryRow(query, args...).Scan(&unlinkedCount); scanErr != nil {
+		return common.NewInternalServerError(errorPrefix + "-UNLINKLO " + scanErr.Error())
+	}
+	return nil
 }
 
 // GetAssetAdministrationShellReferences returns paginated model references while preserving ABAC filters from ctx.

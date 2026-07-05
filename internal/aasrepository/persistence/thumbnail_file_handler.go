@@ -182,7 +182,7 @@ func (h *PostgreSQLThumbnailFileHandler) UploadThumbnailByAASIDReader(aasIdentif
 
 // nolint:revive // cyclomatic complexity of 33
 func (h *PostgreSQLThumbnailFileHandler) uploadThumbnailByAASIDReaderInTransaction(tx *sql.Tx, aasIdentifier string, fileName string, file io.Reader) error {
-	aasDBID, err := persistenceutils.GetAssetAdministrationShellDatabaseID(tx, aasIdentifier)
+	aasDBID, err := persistenceutils.GetAssetAdministrationShellDatabaseIDForUpdate(tx, aasIdentifier)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return common.NewErrNotFound("AASREPO-PUTTHUMBNAIL-AASNOTFOUND Asset Administration Shell with ID '" + aasIdentifier + "' not found")
@@ -366,7 +366,7 @@ func (h *PostgreSQLThumbnailFileHandler) DeleteThumbnailByAASID(aasIdentifier st
 }
 
 func (h *PostgreSQLThumbnailFileHandler) deleteThumbnailByAASIDInTransaction(tx *sql.Tx, aasIdentifier string) error {
-	aasDBID, err := persistenceutils.GetAssetAdministrationShellDatabaseID(tx, aasIdentifier)
+	aasDBID, err := persistenceutils.GetAssetAdministrationShellDatabaseIDForUpdate(tx, aasIdentifier)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return common.NewErrNotFound("AASREPO-DELTHUMBNAIL-AASNOTFOUND Asset Administration Shell with ID '" + aasIdentifier + "' not found")

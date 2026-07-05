@@ -453,7 +453,7 @@ func reopenUploadedFile(file *os.File) (*os.File, error) {
 }
 
 func readFileElementUploadMetadata(tx *sql.Tx, dialect goqu.DialectWrapper, submodelID string, idShortPath string) (fileElementUploadMetadata, error) {
-	submodelDatabaseID, err := persistenceutils.GetSubmodelDatabaseID(tx, submodelID)
+	submodelDatabaseID, err := persistenceutils.GetSubmodelDatabaseIDForUpdate(tx, submodelID)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return fileElementUploadMetadata{}, common.NewErrNotFound("submodel not found")
@@ -761,7 +761,7 @@ func (p PostgreSQLFileHandler) DeleteFileAttachment(submodelID string, idShortPa
 func (p PostgreSQLFileHandler) DeleteFileAttachmentTx(tx *sql.Tx, submodelID string, idShortPath string) error {
 	dialect := goqu.Dialect("postgres")
 
-	submodelDatabaseID, err := persistenceutils.GetSubmodelDatabaseID(tx, submodelID)
+	submodelDatabaseID, err := persistenceutils.GetSubmodelDatabaseIDForUpdate(tx, submodelID)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return common.NewErrNotFound("submodel not found")
