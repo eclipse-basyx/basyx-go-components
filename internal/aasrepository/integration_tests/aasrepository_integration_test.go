@@ -1376,6 +1376,97 @@ func TestThumbnailAttachmentOperations(t *testing.T) {
 	})
 }
 
+func TestDeleteAssetAdministrationShellUnlinksThumbnailLargeObject(t *testing.T) {
+	baseURL := "http://localhost:6004"
+	aasID := fmt.Sprintf("https://example.com/ids/aas/thumbnail_delete_cleanup_%d", time.Now().UnixNano())
+	encodedAASID := base64.RawURLEncoding.EncodeToString([]byte(aasID))
+	aasEndpoint := fmt.Sprintf("%s/shells/%s", baseURL, encodedAASID)
+	thumbnailEndpoint := fmt.Sprintf("%s/asset-information/thumbnail", aasEndpoint)
+	baselineCount := countPostgresLargeObjects(t, integrationTestDSN)
+
+	createAASForLargeObjectCleanupTest(t, baseURL, aasID)
+	defer deleteAASForLargeObjectCleanupTest(t, aasEndpoint)
+
+	uploadStatus, uploadErr := uploadThumbnail(thumbnailEndpoint, "testFiles/marcus.gif", "marcus.gif")
+	require.NoError(t, uploadErr)
+	require.Equal(t, http.StatusNoContent, uploadStatus)
+	require.Greater(t, countPostgresLargeObjects(t, integrationTestDSN), baselineCount)
+
+	deleteStatus, deleteErr := deleteResponseStatus(aasEndpoint)
+	require.NoError(t, deleteErr)
+	require.Equal(t, http.StatusNoContent, deleteStatus)
+	require.Equal(t, baselineCount, countPostgresLargeObjects(t, integrationTestDSN))
+}
+
+func TestPutAssetAdministrationShellUnlinksReplacedThumbnailLargeObject(t *testing.T) {
+	baseURL := "http://localhost:6004"
+	aasID := fmt.Sprintf("https://example.com/ids/aas/thumbnail_put_cleanup_%d", time.Now().UnixNano())
+	encodedAASID := base64.RawURLEncoding.EncodeToString([]byte(aasID))
+	aasEndpoint := fmt.Sprintf("%s/shells/%s", baseURL, encodedAASID)
+	thumbnailEndpoint := fmt.Sprintf("%s/asset-information/thumbnail", aasEndpoint)
+	baselineCount := countPostgresLargeObjects(t, integrationTestDSN)
+
+	createAASForLargeObjectCleanupTest(t, baseURL, aasID)
+	defer deleteAASForLargeObjectCleanupTest(t, aasEndpoint)
+
+	uploadStatus, uploadErr := uploadThumbnail(thumbnailEndpoint, "testFiles/marcus.gif", "marcus.gif")
+	require.NoError(t, uploadErr)
+	require.Equal(t, http.StatusNoContent, uploadStatus)
+	require.Greater(t, countPostgresLargeObjects(t, integrationTestDSN), baselineCount)
+
+	_, putStatus, _, putErr := putJSONResponse(aasEndpoint, aasLargeObjectCleanupPayload(aasID))
+	require.NoError(t, putErr)
+	require.Equal(t, http.StatusNoContent, putStatus)
+	require.Equal(t, baselineCount, countPostgresLargeObjects(t, integrationTestDSN))
+}
+
+func createAASForLargeObjectCleanupTest(t *testing.T, baseURL string, aasID string) {
+	t.Helper()
+
+	statusCode, err := postResponseStatus(baseURL+"/shells", aasLargeObjectCleanupPayload(aasID))
+	require.NoError(t, err)
+	require.Equal(t, http.StatusCreated, statusCode)
+}
+
+func aasLargeObjectCleanupPayload(aasID string) string {
+	return fmt.Sprintf(
+		`{"id":"%s","modelType":"AssetAdministrationShell","assetInformation":{"assetKind":"Instance","globalAssetId":"%s-global-asset"}}`,
+		aasID,
+		aasID,
+	)
+}
+
+func deleteAASForLargeObjectCleanupTest(t *testing.T, aasEndpoint string) {
+	t.Helper()
+
+	statusCode, err := deleteResponseStatus(aasEndpoint)
+	if err != nil {
+		t.Logf("cleanup delete AAS failed: %v", err)
+		return
+	}
+	if statusCode != http.StatusNoContent && statusCode != http.StatusNotFound {
+		t.Logf("cleanup delete AAS returned status=%d", statusCode)
+	}
+}
+
+func countPostgresLargeObjects(t *testing.T, dsn string) int64 {
+	t.Helper()
+
+	db, err := sql.Open("pgx", dsn)
+	require.NoError(t, err)
+	defer func() { _ = db.Close() }()
+
+	query, args, err := goqu.Dialect("postgres").
+		From(goqu.T("pg_largeobject_metadata")).
+		Select(goqu.COUNT("*")).
+		ToSQL()
+	require.NoError(t, err)
+
+	var count int64
+	require.NoError(t, db.QueryRow(query, args...).Scan(&count))
+	return count
+}
+
 func TestContractThumbnailGetReturnsDetectedContentType(t *testing.T) {
 	baseURL := "http://localhost:6004"
 	aasID := fmt.Sprintf("https://example.com/ids/aas/thumbnail_contract_%d", time.Now().UnixNano())

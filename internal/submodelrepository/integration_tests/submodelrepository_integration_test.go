@@ -2034,6 +2034,130 @@ func TestFileAttachmentOperations(t *testing.T) {
 	})
 }
 
+func TestDeleteSubmodelElementByPathUnlinksFileAttachmentLargeObject(t *testing.T) {
+	baseURL := "http://localhost:6004"
+	submodelID := fmt.Sprintf("urn:basyx:integration:lo-delete-file-%d", time.Now().UnixNano())
+	encodedSubmodelID := common.EncodeString(submodelID)
+	filePath := "DeleteFile"
+	baselineCount := countPostgresLargeObjects(t, submodelRepositoryIntegrationTestDSN)
+
+	createSubmodelForLargeObjectCleanupTest(t, baseURL, submodelID, "LargeObjectDeleteFile", []any{
+		fileElementForLargeObjectCleanupTest(filePath),
+	})
+	defer deleteSubmodelForLargeObjectCleanupTest(t, baseURL, encodedSubmodelID)
+
+	attachmentEndpoint := fmt.Sprintf("%s/submodels/%s/submodel-elements/%s/attachment", baseURL, encodedSubmodelID, url.PathEscape(filePath))
+	statusCode, err := uploadFileAttachment(attachmentEndpoint, "testFiles/marcus.gif", "marcus.gif")
+	require.NoError(t, err)
+	require.Equal(t, http.StatusNoContent, statusCode)
+	require.Greater(t, countPostgresLargeObjects(t, submodelRepositoryIntegrationTestDSN), baselineCount)
+
+	deleteEndpoint := fmt.Sprintf("%s/submodels/%s/submodel-elements/%s", baseURL, encodedSubmodelID, url.PathEscape(filePath))
+	statusCode, body, err := requestJSON(http.MethodDelete, deleteEndpoint, nil)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusNoContent, statusCode, "response=%s", string(body))
+	require.Equal(t, baselineCount, countPostgresLargeObjects(t, submodelRepositoryIntegrationTestDSN))
+}
+
+func TestPutParentSubmodelElementUnlinksNestedFileAttachmentLargeObject(t *testing.T) {
+	baseURL := "http://localhost:6004"
+	submodelID := fmt.Sprintf("urn:basyx:integration:lo-replace-parent-%d", time.Now().UnixNano())
+	encodedSubmodelID := common.EncodeString(submodelID)
+	parentPath := "Container"
+	nestedFilePath := parentPath + ".NestedFile"
+	baselineCount := countPostgresLargeObjects(t, submodelRepositoryIntegrationTestDSN)
+
+	createSubmodelForLargeObjectCleanupTest(t, baseURL, submodelID, "LargeObjectReplaceParent", []any{
+		map[string]any{
+			"idShort":   parentPath,
+			"modelType": "SubmodelElementCollection",
+			"value": []any{
+				fileElementForLargeObjectCleanupTest("NestedFile"),
+			},
+		},
+	})
+	defer deleteSubmodelForLargeObjectCleanupTest(t, baseURL, encodedSubmodelID)
+
+	attachmentEndpoint := fmt.Sprintf("%s/submodels/%s/submodel-elements/%s/attachment", baseURL, encodedSubmodelID, url.PathEscape(nestedFilePath))
+	statusCode, err := uploadFileAttachment(attachmentEndpoint, "testFiles/marcus.gif", "marcus.gif")
+	require.NoError(t, err)
+	require.Equal(t, http.StatusNoContent, statusCode)
+	require.Greater(t, countPostgresLargeObjects(t, submodelRepositoryIntegrationTestDSN), baselineCount)
+
+	replacement := map[string]any{
+		"idShort":   parentPath,
+		"modelType": "SubmodelElementCollection",
+		"value": []any{
+			map[string]any{
+				"idShort":   "ReplacementProperty",
+				"modelType": "Property",
+				"value":     "replacement",
+				"valueType": "xs:string",
+			},
+		},
+	}
+	replaceEndpoint := fmt.Sprintf("%s/submodels/%s/submodel-elements/%s", baseURL, encodedSubmodelID, url.PathEscape(parentPath))
+	statusCode, body, err := requestJSON(http.MethodPut, replaceEndpoint, replacement)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusNoContent, statusCode, "response=%s", string(body))
+	require.Equal(t, baselineCount, countPostgresLargeObjects(t, submodelRepositoryIntegrationTestDSN))
+}
+
+func createSubmodelForLargeObjectCleanupTest(t *testing.T, baseURL string, submodelID string, idShort string, elements []any) {
+	t.Helper()
+
+	payload := map[string]any{
+		"id":               submodelID,
+		"idShort":          idShort,
+		"kind":             "Instance",
+		"modelType":        "Submodel",
+		"submodelElements": elements,
+	}
+	statusCode, body, err := requestJSON(http.MethodPost, baseURL+"/submodels", payload)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusCreated, statusCode, "response=%s", string(body))
+}
+
+func fileElementForLargeObjectCleanupTest(idShort string) map[string]any {
+	return map[string]any{
+		"idShort":     idShort,
+		"modelType":   "File",
+		"contentType": "image/gif",
+		"value":       "file:///" + idShort,
+	}
+}
+
+func deleteSubmodelForLargeObjectCleanupTest(t *testing.T, baseURL string, encodedSubmodelID string) {
+	t.Helper()
+
+	statusCode, body, err := requestJSON(http.MethodDelete, baseURL+"/submodels/"+encodedSubmodelID, nil)
+	if err != nil {
+		t.Logf("cleanup delete submodel failed: %v", err)
+		return
+	}
+	if statusCode != http.StatusNoContent && statusCode != http.StatusNotFound {
+		t.Logf("cleanup delete submodel returned status=%d response=%s", statusCode, string(body))
+	}
+}
+
+func countPostgresLargeObjects(t *testing.T, dsn string) int64 {
+	t.Helper()
+
+	db, err := sql.Open("pgx", dsn)
+	require.NoError(t, err)
+	defer func() { _ = db.Close() }()
+
+	query, args, err := goqu.Dialect("postgres").
+		From(goqu.T("pg_largeobject_metadata")).
+		Select(goqu.COUNT("*")).
+		ToSQL()
+	require.NoError(t, err)
+
+	var count int64
+	require.NoError(t, db.QueryRow(query, args...).Scan(&count))
+	return count
+}
+
 func TestUploadAttachmentToNonFileSubmodelElementReturnsMethodNotAllowed(t *testing.T) {
 	baseURL := "http://localhost:6004"
 	submodelID := fmt.Sprintf("urn:basyx:integration:non-file-attachment-%d", time.Now().UnixNano())

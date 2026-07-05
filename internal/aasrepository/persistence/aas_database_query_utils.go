@@ -229,11 +229,6 @@ func buildGetAssetAdministrationShellCursorByDBIDQuery(dialect *goqu.DialectWrap
 	return dialect.From("aas").Select("aas_id").Where(goqu.I("id").Eq(aasDBID)).ToSQL()
 }
 
-func buildGetAssetAdministrationShellDBIDByIdentifierQuery(dialect *goqu.DialectWrapper, aasIdentifier string) (string, []any, error) {
-	ds := buildGetAssetAdministrationShellDBIDByIdentifierDataset(dialect, aasIdentifier)
-	return ds.ToSQL()
-}
-
 func buildGetAssetAdministrationShellDBIDByIdentifierDataset(dialect *goqu.DialectWrapper, aasIdentifier string) *goqu.SelectDataset {
 	return dialect.From(goqu.T("aas").As("aas")).
 		Select(goqu.I("aas.id")).
@@ -245,8 +240,19 @@ func buildDeleteAssetAdministrationShellByDBIDQuery(dialect *goqu.DialectWrapper
 	return dialect.Delete("aas").Where(goqu.I("id").Eq(aasDBID)).ToSQL()
 }
 
-func buildDeleteAssetAdministrationShellByIdentifierQuery(dialect *goqu.DialectWrapper, aasIdentifier string) (string, []any, error) {
-	return dialect.Delete("aas").Where(goqu.I("aas_id").Eq(aasIdentifier)).ToSQL()
+func buildCleanupThumbnailLargeObjectsByAASDBIDQuery(dialect *goqu.DialectWrapper, aasDBID int64) (string, []any, error) {
+	unlinkSubquery := dialect.From(goqu.T("thumbnail_file_data").As("tfd")).
+		Prepared(true).
+		Select(goqu.Func("lo_unlink", goqu.I("tfd.file_oid")).As("unlink_result")).
+		Where(
+			goqu.I("tfd.id").Eq(aasDBID),
+			goqu.I("tfd.file_oid").IsNotNull(),
+		)
+
+	return dialect.From(unlinkSubquery.As("unlink_results")).
+		Prepared(true).
+		Select(goqu.COUNT("*")).
+		ToSQL()
 }
 
 func buildGetAssetInformationCurrentStateQuery(dialect *goqu.DialectWrapper, aasDBID int64) (string, []any, error) {

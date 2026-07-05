@@ -59,7 +59,7 @@ jobs:
       contents: read
       id-token: write
     strategy:
-      max-parallel: 3
+      max-parallel: 12
       matrix:
         service:
           - name: aasenvironmentservice
