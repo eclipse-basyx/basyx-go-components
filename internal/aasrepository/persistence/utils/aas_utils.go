@@ -44,9 +44,8 @@ func GetAssetAdministrationShellDatabaseIDForUpdate(tx *sql.Tx, aasId string) (i
 
 func getAssetAdministrationShellDatabaseID(tx *sql.Tx, aasId string, forUpdate bool) (int64, error) {
 	var databaseID int64
-	query := goqu.Dialect("postgres").
+	query := goqu.Select("id").
 		From("aas").
-		Select("id").
 		Where(goqu.I("aas_id").Eq(aasId))
 	if forUpdate {
 		query = query.ForUpdate(goqu.Wait)
