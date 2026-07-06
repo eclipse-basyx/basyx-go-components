@@ -315,7 +315,7 @@ func buildEdcBpnClaimEqualsHeaderExpression(t *time.Time, pattern string) gramma
 //   - exact link match + Edc-Bpn authorization (when Edc-Bpn claim exists), or
 //   - exact link match + PUBLIC_READABLE authorization.
 func buildAssetLinkQuery(ctx context.Context, assetLink []model.AssetLink) grammar.Query {
-	return buildAssetLinkQueryForRoot(ctx, assetLink, "$aasdesc")
+	return buildAssetLinkQueryForRoot(ctx, assetLink)
 }
 
 func buildBasicDiscoveryAssetLinkQueryWithAccess(ctx context.Context, assetLink []model.AssetLink, readUnrestricted bool) grammar.Query {
@@ -323,10 +323,10 @@ func buildBasicDiscoveryAssetLinkQueryWithAccess(ctx context.Context, assetLink 
 		return buildUnrestrictedAssetLinkQueryForRoot(assetLink, "$bd")
 	}
 
-	return buildAssetLinkQueryForRoot(ctx, assetLink, "$bd")
+	return buildAssetLinkQueryForRoot(ctx, assetLink)
 }
 
-func buildAssetLinkQueryForRoot(ctx context.Context, assetLink []model.AssetLink, root string) grammar.Query {
+func buildAssetLinkQueryForRoot(ctx context.Context, assetLink []model.AssetLink) grammar.Query {
 	if len(assetLink) == 0 {
 		return grammar.Query{}
 	}
@@ -335,9 +335,9 @@ func buildAssetLinkQueryForRoot(ctx context.Context, assetLink []model.AssetLink
 		return grammar.Query{}
 	}
 
-	assetLinkFieldPattern := grammar.ModelStringPattern(root + "#specificAssetIds[].externalSubjectId.keys[].value")
-	assetLinkFieldValue := grammar.ModelStringPattern(root + "#specificAssetIds[].value")
-	assetLinkFieldName := grammar.ModelStringPattern(root + "#specificAssetIds[].name")
+	assetLinkFieldPattern := grammar.ModelStringPattern("$aasdesc#specificAssetIds[].externalSubjectId.keys[].value")
+	assetLinkFieldValue := grammar.ModelStringPattern("$aasdesc#specificAssetIds[].value")
+	assetLinkFieldName := grammar.ModelStringPattern("$aasdesc#specificAssetIds[].name")
 	publicReadable := grammar.StandardString("PUBLIC_READABLE")
 
 	claims := auth.ClaimsFromContext(ctx)

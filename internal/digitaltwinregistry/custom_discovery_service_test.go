@@ -184,7 +184,7 @@ func TestBuildBasicDiscoveryGlobalAssetIDQuery(t *testing.T) {
 	}
 }
 
-func TestBuildBasicDiscoveryAssetLinkQuery_UsesBDRoot(t *testing.T) {
+func TestBuildBasicDiscoveryAssetLinkQuery_UsesBDRootAlias(t *testing.T) {
 	t.Parallel()
 
 	b := false
@@ -197,7 +197,7 @@ func TestBuildBasicDiscoveryAssetLinkQuery_UsesBDRoot(t *testing.T) {
 		t.Fatalf("expected one basic-discovery asset-link condition, got %#v", query.Condition)
 	}
 	match := query.Condition.And[0].Or[0].Match
-	if len(match) == 0 || match[0].Eq[0].Field == nil || *match[0].Eq[0].Field != "$bd#specificAssetIds[].value" {
-		t.Fatalf("expected query to filter $bd#specificAssetIds[].value, got %#v", query.Condition)
+	if len(match) == 0 || match[0].Eq[0].Field == nil || *match[0].Eq[0].Field != "$aasdesc#specificAssetIds[].value" {
+		t.Fatalf("expected query to filter $aasdesc#specificAssetIds[].value, got %#v", query.Condition)
 	}
 }
