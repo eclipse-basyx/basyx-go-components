@@ -195,6 +195,29 @@ func TestRunServerContextCancellationCancelsRequestContext(t *testing.T) {
 	}
 }
 
+func TestWaitReturnsQueuedServeErrorBeforeCanceledContext(t *testing.T) {
+	serveErr := make(chan error, 1)
+	serveErr <- fmt.Errorf("listener stopped")
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+	runner := &HTTPServerRunner{
+		server:      &http.Server{ReadHeaderTimeout: time.Second},
+		serviceCode: "TEST",
+		serveErr:    serveErr,
+	}
+
+	err := runner.Wait(ctx)
+	if err == nil {
+		t.Fatal("expected queued serve error")
+	}
+	if !strings.Contains(err.Error(), "TEST-RUNSERVER-LISTEN") {
+		t.Fatalf("expected TEST-RUNSERVER-LISTEN error, got %v", err)
+	}
+	if !strings.Contains(err.Error(), "listener stopped") {
+		t.Fatalf("expected queued serve error details, got %v", err)
+	}
+}
+
 func TestStartHTTPServerReturnsListenErrorBeforeServing(t *testing.T) {
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {

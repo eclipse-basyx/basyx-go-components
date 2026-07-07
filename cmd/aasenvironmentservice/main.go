@@ -286,7 +286,7 @@ func runServer(ctx context.Context, configPath string) error {
 
 	addr := common.ServerAddress(cfg.Server)
 	log.Printf("AAS Environment Service listening on %s (contextPath=%q)\n", addr, cfg.Server.ContextPath)
-	server, err := common.StartHTTPServer(ctx, "AASENV", cfg.Server, r)
+	runner, err := common.StartHTTPServer(ctx, "AASENV", cfg.Server, r)
 	if err != nil {
 		return err
 	}
@@ -304,7 +304,7 @@ func runServer(ctx context.Context, configPath string) error {
 		preconfigurationSummary.SkippedFileCount,
 	)
 
-	return server.Wait(ctx)
+	return runner.Wait(ctx)
 }
 
 func openSharedDatabase(ctx context.Context, cfg *common.Config, dsn string) (*sql.DB, error) {

@@ -149,6 +149,10 @@ func (runner *HTTPServerRunner) Wait(ctx context.Context) error {
 		return fmt.Errorf("%s-RUNSERVER-CONTEXT context must not be nil", runner.serviceCode)
 	}
 
+	if ok, err := runner.pollServeError(); ok {
+		return runner.listenError(err)
+	}
+
 	select {
 	case err := <-runner.serveErr:
 		return runner.listenError(err)
@@ -172,6 +176,12 @@ func (runner *HTTPServerRunner) shutdown(ctx context.Context) error {
 	defer cancel()
 
 	if err := runner.server.Shutdown(shutdownCtx); err != nil {
+		if ok, serveErr := runner.pollServeError(); ok {
+			return runner.listenError(serveErr)
+		}
+		if errors.Is(err, http.ErrServerClosed) {
+			return nil
+		}
 		return fmt.Errorf("%s-RUNSERVER-SHUTDOWN %w", runner.serviceCode, err)
 	}
 
@@ -180,6 +190,15 @@ func (runner *HTTPServerRunner) shutdown(ctx context.Context) error {
 		return runner.listenError(err)
 	case <-shutdownCtx.Done():
 		return fmt.Errorf("%s-RUNSERVER-SHUTDOWN %w", runner.serviceCode, shutdownCtx.Err())
+	}
+}
+
+func (runner *HTTPServerRunner) pollServeError() (bool, error) {
+	select {
+	case err := <-runner.serveErr:
+		return true, err
+	default:
+		return false, nil
 	}
 }
 
