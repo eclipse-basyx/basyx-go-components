@@ -1,13 +1,12 @@
 services:
   db-it:
     image: postgres:18
-    container_name: postgres_db
     environment:
       POSTGRES_USER: admin
       POSTGRES_PASSWORD: admin123
       POSTGRES_DB: basyxTestDB
     ports:
-      - "6432:5432"
+      - "127.0.0.1:${BASYX_IT_DB_PORT:-6432}:5432"
     command: ["postgres", "-c", "listen_addresses=*"]
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U admin -d basyxTestDB"]
@@ -16,7 +15,6 @@ services:
       retries: 5
 
   aas-registry-it:
-    container_name: aas-registry-it
     build:
       context: ../../../..
       dockerfile: ./cmd/aasregistryservice/Dockerfile
@@ -34,7 +32,7 @@ services:
       - BASYX_HISTORY_FULL_SNAPSHOT_INTERVAL=3
       - ABAC_ENABLED=false
     ports:
-      - "6004:5004"
+      - "127.0.0.1:${BASYX_IT_API_PORT:-6004}:5004"
     depends_on:
       basyx_configuration:
         condition: service_completed_successfully
@@ -44,7 +42,6 @@ services:
       - "localhost:host-gateway"
 
   basyx_configuration:
-    container_name: basyx_configuration
     build:
       context: ../../../..
       dockerfile: ./cmd/basyxconfigurationservice/Dockerfile

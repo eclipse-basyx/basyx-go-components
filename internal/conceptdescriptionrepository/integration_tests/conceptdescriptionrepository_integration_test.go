@@ -41,16 +41,14 @@ import (
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/testenv"
 )
 
-// #nosec G101 -- integration test DSN matches the local Docker Compose database credentials.
-const defaultConceptDescriptionRepositoryIntegrationTestDSN = "postgres://admin:admin123@127.0.0.1:6432/basyxTestDB?sslmode=disable"
-
+var conceptDescriptionRepositoryBaseURL = testenv.LocalURLFromEnv("BASYX_IT_API_PORT", 6004)
 var conceptDescriptionRepositoryIntegrationTestDSN = getConceptDescriptionRepositoryIntegrationTestDSN()
 
 func getConceptDescriptionRepositoryIntegrationTestDSN() string {
 	if dsn := os.Getenv("CONCEPTDESCRIPTIONREPOSITORY_INTEGRATION_TEST_DSN"); dsn != "" {
 		return dsn
 	}
-	return defaultConceptDescriptionRepositoryIntegrationTestDSN
+	return testenv.PostgresURLFromEnv("BASYX_IT_DB_PORT", 6432, "basyxTestDB")
 }
 
 func requestJSON(method string, endpoint string, payload any) (int, []byte, error) {
@@ -143,7 +141,7 @@ func assertLocationHeaderMatches(t *testing.T, expectedLocation string, actualLo
 }
 
 func TestLocationHeadersForCreateEndpointsConceptDescriptionRepository(t *testing.T) {
-	baseURL := "http://127.0.0.1:6004"
+	baseURL := conceptDescriptionRepositoryBaseURL
 	endpoint := baseURL + "/concept-descriptions"
 
 	t.Run("PostConceptDescriptionSetsLocation", func(t *testing.T) {
@@ -224,7 +222,7 @@ func TestIntegration(t *testing.T) {
 }
 
 func TestQueryConceptDescriptionFalseIDShortFragmentKeepsConceptDescription(t *testing.T) {
-	baseURL := "http://localhost:6004"
+	baseURL := conceptDescriptionRepositoryBaseURL
 	endpoint := baseURL + "/concept-descriptions"
 	conceptDescriptionID := fmt.Sprintf("https://example.com/ids/cd/query-fragment-%d", time.Now().UnixNano())
 	t.Cleanup(func() { cleanupConceptDescription(t, endpoint, conceptDescriptionID) })
@@ -291,7 +289,7 @@ func TestQueryConceptDescriptionFalseIDShortFragmentKeepsConceptDescription(t *t
 }
 
 func TestContractGetAllConceptDescriptionsAllowsNullableIDShort(t *testing.T) {
-	baseURL := "http://localhost:6004"
+	baseURL := conceptDescriptionRepositoryBaseURL
 	conceptDescriptionID := fmt.Sprintf("https://example.com/ids/cd/contract-null-idshort-%d", time.Now().UnixNano())
 
 	statusCode, responseBody, err := requestJSON(http.MethodPost, baseURL+"/concept-descriptions", map[string]any{
@@ -348,11 +346,20 @@ func TestMain(m *testing.M) {
 		os.Exit(m.Run())
 	}
 
+	runtime := testenv.NewComposeRuntimeOrExit("conceptdescriptionrepository-it", []testenv.PortBinding{
+		{Name: "api", EnvVar: "BASYX_IT_API_PORT"},
+		{Name: "db", EnvVar: "BASYX_IT_DB_PORT"},
+	})
+	conceptDescriptionRepositoryBaseURL = runtime.LocalURL("api")
+	conceptDescriptionRepositoryIntegrationTestDSN = runtime.PostgresURL("db", "basyxTestDB")
+
 	os.Exit(testenv.RunComposeTestMain(m, testenv.ComposeTestMainOptions{
 		ComposeFile:     "docker_compose/docker_compose.yml",
+		ProjectName:     runtime.ProjectName,
+		Env:             runtime.Env(),
 		UpArgs:          []string{"up", "-d", "--build", "--remove-orphans"},
 		PreDownBeforeUp: true,
-		HealthURL:       "http://localhost:6004/health",
+		HealthURL:       conceptDescriptionRepositoryBaseURL + "/health",
 		HealthTimeout:   150 * time.Second,
 	}))
 }

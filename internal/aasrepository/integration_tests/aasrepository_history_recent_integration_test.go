@@ -41,7 +41,7 @@ import (
 )
 
 func TestAASRepositoryHistoryRecentChangesAndBatchAssetKind(t *testing.T) {
-	baseURL := "http://localhost:6004"
+	baseURL := aasRepositoryBaseURL
 	aasID := fmt.Sprintf("https://example.com/ids/aas/history-batch-%d", time.Now().UnixNano())
 	encodedAASID := base64.RawURLEncoding.EncodeToString([]byte(aasID))
 	globalAssetID := "urn:example:asset:history-batch"
@@ -165,7 +165,7 @@ func TestAASRepositoryHistoryRecentChangesAndBatchAssetKind(t *testing.T) {
 }
 
 func TestAASRepositoryHistoryAllowsAddingIDShortAfterCreate(t *testing.T) {
-	baseURL := "http://localhost:6004"
+	baseURL := aasRepositoryBaseURL
 	aasID := fmt.Sprintf("https://example.com/ids/aas/history-add-idshort-%d", time.Now().UnixNano())
 	encodedAASID := base64.RawURLEncoding.EncodeToString([]byte(aasID))
 

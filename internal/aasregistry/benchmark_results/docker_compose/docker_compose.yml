@@ -1,13 +1,12 @@
 services:
   db:
     image: postgres:18
-    container_name: postgres_db
     environment:
       POSTGRES_USER: admin
       POSTGRES_PASSWORD: admin123
       POSTGRES_DB: basyxTestDB
     ports:
-      - "5432:5432"
+      - "127.0.0.1:${BASYX_IT_DB_PORT:-5432}:5432"
     command: ["postgres", "-c", "listen_addresses=*"]
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U admin -d basyxTestDB"]
@@ -30,13 +29,12 @@ services:
       - POSTGRES_MAXIDLECONNECTIONS=500
       - POSTGRES_CONNMAXLIFETIMEMINUTES=5
     ports:
-      - "5004:5004"
+      - "127.0.0.1:${BASYX_IT_API_PORT:-5004}:5004"
     depends_on:
       basyx_configuration:
         condition: service_completed_successfully
 
   basyx_configuration:
-    container_name: basyx_configuration
     build:
       context: ../../../..
       dockerfile: ./cmd/basyxconfigurationservice/Dockerfile

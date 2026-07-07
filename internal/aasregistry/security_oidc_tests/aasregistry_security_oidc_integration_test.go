@@ -46,11 +46,14 @@ import (
 const (
 	oidcTestAudience  = "basyx-api"
 	oidcTestKeyID     = "basyx-oidc-e2e-key"
-	scpRegistryURL    = "http://localhost:6104"
-	rolesRegistryURL  = "http://localhost:6204"
 	securityEnvVar    = "OIDC_TEST_SECURITY_ENV"
 	composeConfigPath = "docker_compose/docker_compose.yml"
 	readinessTimeout  = 5 * time.Minute
+)
+
+var (
+	scpRegistryURL   = testenv.LocalhostURLFromEnv("BASYX_IT_SCP_API_PORT", 6104)
+	rolesRegistryURL = testenv.LocalhostURLFromEnv("BASYX_IT_ROLES_API_PORT", 6204)
 )
 
 type testIssuer struct {
@@ -113,6 +116,13 @@ func TestOIDCSignedJWTProviders(t *testing.T) {
 var oidcIssuer *testIssuer
 
 func TestMain(m *testing.M) {
+	runtime := testenv.NewComposeRuntimeOrExit("aasregistry-security-oidc", []testenv.PortBinding{
+		{Name: "scp-api", EnvVar: "BASYX_IT_SCP_API_PORT"},
+		{Name: "roles-api", EnvVar: "BASYX_IT_ROLES_API_PORT"},
+	})
+	scpRegistryURL = runtime.LocalhostURL("scp-api")
+	rolesRegistryURL = runtime.LocalhostURL("roles-api")
+
 	issuer, err := startTestIssuer()
 	if err != nil {
 		_, _ = fmt.Fprintf(os.Stderr, "COMMON-OIDC-E2E-STARTISSUER failed to start OIDC issuer: %v\n", err)
@@ -135,6 +145,8 @@ func TestMain(m *testing.M) {
 
 	code := testenv.RunComposeTestMain(m, testenv.ComposeTestMainOptions{
 		ComposeFile:     composeConfigPath,
+		ProjectName:     runtime.ProjectName,
+		Env:             runtime.EnvWith(securityEnvVar + "=" + securityEnv),
 		PreDownBeforeUp: true,
 		DownArgs:        []string{"down", "--remove-orphans"},
 		WaitForReady: func() error {

@@ -1,13 +1,12 @@
 services:
   db:
     image: postgres:18
-    container_name: digitaltwinregistry_db
     environment:
       POSTGRES_USER: admin
       POSTGRES_PASSWORD: admin123
       POSTGRES_DB: basyxTestDB
     ports:
-      - "5432:5432"
+      - "127.0.0.1:${BASYX_IT_DB_PORT:-5432}:5432"
     command: ["postgres", "-c", "listen_addresses=*"]
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U admin -d basyxTestDB"]
@@ -16,7 +15,6 @@ services:
       retries: 5
 
   digitaltwinregistry:
-    container_name: digitaltwinregistry
     build:
       context: ../../../..
       dockerfile: ./cmd/digitaltwinregistryservice/Dockerfile
@@ -40,17 +38,16 @@ services:
       - ABAC_MODELPATH=/security_env/access-rules.json
       - OIDC_TRUSTLISTPATH=/security_env/trustlist.json
     ports:
-      - "5004:5004"
+      - "127.0.0.1:${BASYX_IT_API_PORT:-5004}:5004"
     depends_on:
       basyx_configuration:
         condition: service_completed_successfully
     volumes:
-      - ./security_env:/security_env:ro
+      - ${BASYX_IT_SECURITY_ENV:-./security_env}:/security_env:ro
     extra_hosts:
       - "localhost:host-gateway"
 
   basyx_configuration:
-    container_name: basyx_configuration
     build:
       context: ../../../..
       dockerfile: ./cmd/basyxconfigurationservice/Dockerfile

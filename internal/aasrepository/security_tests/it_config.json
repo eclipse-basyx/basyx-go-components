@@ -3,14 +3,14 @@
     "context": "Anonymous list denied",
     "token": null,
     "method": "GET",
-    "endpoint": "http://localhost:6004/shells",
+    "endpoint": "{{BASYX_IT_API_URL}}/shells",
     "expectedStatus": 403
   },
   {
     "context": "POST viewer-visible aas - admin",
     "token": { "user": "admin", "password": "pwd" },
     "method": "POST",
-    "endpoint": "http://localhost:6004/shells",
+    "endpoint": "{{BASYX_IT_API_URL}}/shells",
     "data": "bodies/post/viewerAllowed.json",
     "expectedStatus": 201
   },
@@ -18,7 +18,7 @@
     "context": "POST viewer-visible-by-key aas - admin",
     "token": { "user": "admin", "password": "pwd" },
     "method": "POST",
-    "endpoint": "http://localhost:6004/shells",
+    "endpoint": "{{BASYX_IT_API_URL}}/shells",
     "data": "bodies/post/viewerViaKey.json",
     "expectedStatus": 201
   },
@@ -26,7 +26,7 @@
     "context": "POST viewer-hidden aas - admin",
     "token": { "user": "admin", "password": "pwd" },
     "method": "POST",
-    "endpoint": "http://localhost:6004/shells",
+    "endpoint": "{{BASYX_IT_API_URL}}/shells",
     "data": "bodies/post/viewerHidden.json",
     "expectedStatus": 201
   },
@@ -34,7 +34,7 @@
     "context": "POST /query/shells - anonymous denied",
     "token": null,
     "method": "POST",
-    "endpoint": "http://localhost:6004/query/shells",
+    "endpoint": "{{BASYX_IT_API_URL}}/query/shells",
     "data": "bodies/query/queryViewerVisible.json",
     "expectedStatus": 403
   },
@@ -42,7 +42,7 @@
     "context": "POST /query/shells - admin query hidden asset type",
     "token": { "user": "admin", "password": "pwd" },
     "method": "POST",
-    "endpoint": "http://localhost:6004/query/shells",
+    "endpoint": "{{BASYX_IT_API_URL}}/query/shells",
     "data": "bodies/query/queryAssetTypeHidden.json",
     "shouldMatch": "expected/expectedQueryShellsHiddenAdmin.json",
     "expectedStatus": 200
@@ -51,7 +51,7 @@
     "context": "POST /query/shells - admin filter fragment hidden asset type",
     "token": { "user": "admin", "password": "pwd" },
     "method": "POST",
-    "endpoint": "http://localhost:6004/query/shells",
+    "endpoint": "{{BASYX_IT_API_URL}}/query/shells",
     "data": "bodies/query/queryFilterAssetTypeHidden.json",
     "shouldMatch": "expected/expectedQueryShellsAssetTypeFragmentHiddenAdmin.json",
     "expectedStatus": 200
@@ -60,7 +60,7 @@
     "context": "POST /query/shells - viewer query narrowed by ABAC",
     "token": { "user": "usera", "password": "pwd" },
     "method": "POST",
-    "endpoint": "http://localhost:6004/query/shells",
+    "endpoint": "{{BASYX_IT_API_URL}}/query/shells",
     "data": "bodies/query/queryAssetTypeHidden.json",
     "shouldMatch": "expected/expectedQueryShellsHiddenViewer.json",
     "expectedStatus": 200
@@ -69,7 +69,7 @@
     "context": "POST /query/shells - editor reduced to specific IDENTIFIABLE object",
     "token": { "user": "userx", "password": "pwd" },
     "method": "POST",
-    "endpoint": "http://localhost:6004/query/shells",
+    "endpoint": "{{BASYX_IT_API_URL}}/query/shells",
     "data": "bodies/query/queryViewerVisible.json",
     "shouldMatch": "expected/expectedShellsReducedEditorSpecificIdentifiable.json",
     "expectedStatus": 200
@@ -78,7 +78,7 @@
     "context": "POST /query/shells - empty query rejected",
     "token": { "user": "admin", "password": "pwd" },
     "method": "POST",
-    "endpoint": "http://localhost:6004/query/shells",
+    "endpoint": "{{BASYX_IT_API_URL}}/query/shells",
     "data": "bodies/query/queryEmpty.json",
     "expectedStatus": 400
   },
@@ -86,7 +86,7 @@
     "context": "POST /query/shells - malformed query rejected",
     "token": { "user": "admin", "password": "pwd" },
     "method": "POST",
-    "endpoint": "http://localhost:6004/query/shells",
+    "endpoint": "{{BASYX_IT_API_URL}}/query/shells",
     "data": "bodies/query/queryMalformed.json",
     "expectedStatus": 400
   },
@@ -94,7 +94,7 @@
     "context": "GET /shells - admin full access",
     "token": { "user": "admin", "password": "pwd" },
     "method": "GET",
-    "endpoint": "http://localhost:6004/shells",
+    "endpoint": "{{BASYX_IT_API_URL}}/shells",
     "shouldMatch": "expected/expectedShellsFullAdmin.json",
     "expectedStatus": 200
   },
@@ -102,14 +102,14 @@
     "context": "GET /shells/ - admin not found",
     "token": { "user": "admin", "password": "pwd" },
     "method": "GET",
-    "endpoint": "http://localhost:6004/shells/",
+    "endpoint": "{{BASYX_IT_API_URL}}/shells/",
     "expectedStatus": 404
   },
   {
     "context": "GET /shells - editor reduced to specific IDENTIFIABLE object",
     "token": { "user": "userx", "password": "pwd" },
     "method": "GET",
-    "endpoint": "http://localhost:6004/shells",
+    "endpoint": "{{BASYX_IT_API_URL}}/shells",
     "shouldMatch": "expected/expectedShellsReducedEditorSpecificIdentifiable.json",
     "expectedStatus": 200
   },
@@ -117,7 +117,7 @@
     "context": "GET /shells/$reference - admin full access",
     "token": { "user": "admin", "password": "pwd" },
     "method": "GET",
-    "endpoint": "http://localhost:6004/shells/$reference",
+    "endpoint": "{{BASYX_IT_API_URL}}/shells/$reference",
     "shouldMatch": "expected/expectedShellRefsFullAdmin.json",
     "expectedStatus": 200
   },
@@ -125,14 +125,14 @@
     "context": "GET /shells/$reference/ - admin not found",
     "token": { "user": "admin", "password": "pwd" },
     "method": "GET",
-    "endpoint": "http://localhost:6004/shells/$reference/",
+    "endpoint": "{{BASYX_IT_API_URL}}/shells/$reference/",
     "expectedStatus": 404
   },
   {
     "context": "GET /shells/$reference - editor reduced to specific IDENTIFIABLE object",
     "token": { "user": "userx", "password": "pwd" },
     "method": "GET",
-    "endpoint": "http://localhost:6004/shells/$reference",
+    "endpoint": "{{BASYX_IT_API_URL}}/shells/$reference",
     "shouldMatch": "expected/expectedShellRefsReducedEditorSpecificIdentifiable.json",
     "expectedStatus": 200
   },
@@ -141,7 +141,7 @@
     "action": "ASSERT_RECENT_CHANGE_IDS",
     "token": { "user": "usera", "password": "pwd" },
     "method": "GET",
-    "endpoint": "http://localhost:6004/shells/$recent-changes?limit=20",
+    "endpoint": "{{BASYX_IT_API_URL}}/shells/$recent-changes?limit=20",
     "shouldMatch": "expected/expectedRecentChangesViewerIDs.json",
     "expectedStatus": 200
   },
@@ -149,7 +149,7 @@
     "context": "GET /shells/$recent-changes/ - viewer not found",
     "token": { "user": "usera", "password": "pwd" },
     "method": "GET",
-    "endpoint": "http://localhost:6004/shells/$recent-changes/?limit=20",
+    "endpoint": "{{BASYX_IT_API_URL}}/shells/$recent-changes/?limit=20",
     "expectedStatus": 404
   },
   {
@@ -157,7 +157,7 @@
     "action": "ASSERT_RECENT_CHANGE_IDS",
     "token": { "user": "userx", "password": "pwd" },
     "method": "GET",
-    "endpoint": "http://localhost:6004/shells/$recent-changes?limit=20",
+    "endpoint": "{{BASYX_IT_API_URL}}/shells/$recent-changes?limit=20",
     "shouldMatch": "expected/expectedRecentChangesEditorSpecificIdentifiableIDs.json",
     "expectedStatus": 200
   },
@@ -165,35 +165,35 @@
     "context": "GET viewer-visible aas - viewer",
     "token": { "user": "usera", "password": "pwd" },
     "method": "GET",
-    "endpoint": "http://localhost:6004/shells/dXJuOmV4YW1wbGU6YWFzOnZpZXdlcjphbGxvd2Vk",
+    "endpoint": "{{BASYX_IT_API_URL}}/shells/dXJuOmV4YW1wbGU6YWFzOnZpZXdlcjphbGxvd2Vk",
     "expectedStatus": 200
   },
   {
     "context": "GET viewer-visible aas trailing slash - viewer not found",
     "token": { "user": "usera", "password": "pwd" },
     "method": "GET",
-    "endpoint": "http://localhost:6004/shells/dXJuOmV4YW1wbGU6YWFzOnZpZXdlcjphbGxvd2Vk/",
+    "endpoint": "{{BASYX_IT_API_URL}}/shells/dXJuOmV4YW1wbGU6YWFzOnZpZXdlcjphbGxvd2Vk/",
     "expectedStatus": 404
   },
   {
     "context": "GET viewer-by-key aas - viewer",
     "token": { "user": "usera", "password": "pwd" },
     "method": "GET",
-    "endpoint": "http://localhost:6004/shells/dXJuOmV4YW1wbGU6YWFzOnZpZXdlcjprZXk",
+    "endpoint": "{{BASYX_IT_API_URL}}/shells/dXJuOmV4YW1wbGU6YWFzOnZpZXdlcjprZXk",
     "expectedStatus": 200
   },
   {
     "context": "GET viewer-hidden aas - viewer receives hidden 404",
     "token": { "user": "usera", "password": "pwd" },
     "method": "GET",
-    "endpoint": "http://localhost:6004/shells/dXJuOmV4YW1wbGU6YWFzOnZpZXdlcjpoaWRkZW4",
+    "endpoint": "{{BASYX_IT_API_URL}}/shells/dXJuOmV4YW1wbGU6YWFzOnZpZXdlcjpoaWRkZW4",
     "expectedStatus": 404
   },
   {
     "context": "GET viewer-hidden aas - admin full access",
     "token": { "user": "admin", "password": "pwd" },
     "method": "GET",
-    "endpoint": "http://localhost:6004/shells/dXJuOmV4YW1wbGU6YWFzOnZpZXdlcjpoaWRkZW4",
+    "endpoint": "{{BASYX_IT_API_URL}}/shells/dXJuOmV4YW1wbGU6YWFzOnZpZXdlcjpoaWRkZW4",
     "shouldMatch": "bodies/post/viewerHidden.json",
     "expectedStatus": 200
   },
@@ -201,7 +201,7 @@
     "context": "GET viewer-visible aas - editor allowed by specific IDENTIFIABLE object",
     "token": { "user": "userx", "password": "pwd" },
     "method": "GET",
-    "endpoint": "http://localhost:6004/shells/dXJuOmV4YW1wbGU6YWFzOnZpZXdlcjphbGxvd2Vk",
+    "endpoint": "{{BASYX_IT_API_URL}}/shells/dXJuOmV4YW1wbGU6YWFzOnZpZXdlcjphbGxvd2Vk",
     "shouldMatch": "bodies/post/viewerAllowed.json",
     "expectedStatus": 200
   },
@@ -209,14 +209,14 @@
     "context": "GET viewer-by-key aas - editor denied outside specific IDENTIFIABLE object",
     "token": { "user": "userx", "password": "pwd" },
     "method": "GET",
-    "endpoint": "http://localhost:6004/shells/dXJuOmV4YW1wbGU6YWFzOnZpZXdlcjprZXk",
+    "endpoint": "{{BASYX_IT_API_URL}}/shells/dXJuOmV4YW1wbGU6YWFzOnZpZXdlcjprZXk",
     "expectedStatus": 403
   },
   {
     "context": "POST editor-allowed aas - editor",
     "token": { "user": "userx", "password": "pwd" },
     "method": "POST",
-    "endpoint": "http://localhost:6004/shells",
+    "endpoint": "{{BASYX_IT_API_URL}}/shells",
     "data": "bodies/post/editorAllowed.json",
     "expectedStatus": 201
   },
@@ -224,7 +224,7 @@
     "context": "POST editor-denied aas - editor",
     "token": { "user": "userx", "password": "pwd" },
     "method": "POST",
-    "endpoint": "http://localhost:6004/shells",
+    "endpoint": "{{BASYX_IT_API_URL}}/shells",
     "data": "bodies/post/editorDeniedPost.json",
     "expectedStatus": 403
   },
@@ -232,7 +232,7 @@
     "context": "POST hidden-existing aas for old-state checks - admin",
     "token": { "user": "admin", "password": "pwd" },
     "method": "POST",
-    "endpoint": "http://localhost:6004/shells",
+    "endpoint": "{{BASYX_IT_API_URL}}/shells",
     "data": "bodies/post/editorHiddenExisting.json",
     "expectedStatus": 201
   },
@@ -240,7 +240,7 @@
     "context": "PUT invisible existing aas - editor denied by old-state check",
     "token": { "user": "userx", "password": "pwd" },
     "method": "PUT",
-    "endpoint": "http://localhost:6004/shells/dXJuOmV4YW1wbGU6YWFzOmVkaXRvcjpoaWRkZW4tZXhpc3Rpbmc",
+    "endpoint": "{{BASYX_IT_API_URL}}/shells/dXJuOmV4YW1wbGU6YWFzOmVkaXRvcjpoaWRkZW4tZXhpc3Rpbmc",
     "data": "bodies/put/editorHiddenExistingUpdatedAllowed.json",
     "expectedStatus": 403
   },
@@ -248,7 +248,7 @@
     "context": "PUT visible aas to disallowed state - editor denied by new-state check",
     "token": { "user": "userx", "password": "pwd" },
     "method": "PUT",
-    "endpoint": "http://localhost:6004/shells/dXJuOmV4YW1wbGU6YWFzOmVkaXRvcjphbGxvd2Vk",
+    "endpoint": "{{BASYX_IT_API_URL}}/shells/dXJuOmV4YW1wbGU6YWFzOmVkaXRvcjphbGxvd2Vk",
     "data": "bodies/put/editorAllowedUpdatedDenied.json",
     "expectedStatus": 403
   },
@@ -256,42 +256,42 @@
     "context": "DELETE invisible existing aas - editor denied",
     "token": { "user": "userx", "password": "pwd" },
     "method": "DELETE",
-    "endpoint": "http://localhost:6004/shells/dXJuOmV4YW1wbGU6YWFzOmVkaXRvcjpoaWRkZW4tZXhpc3Rpbmc",
+    "endpoint": "{{BASYX_IT_API_URL}}/shells/dXJuOmV4YW1wbGU6YWFzOmVkaXRvcjpoaWRkZW4tZXhpc3Rpbmc",
     "expectedStatus": 403
   },
   {
     "context": "DELETE viewer-visible aas - admin",
     "token": { "user": "admin", "password": "pwd" },
     "method": "DELETE",
-    "endpoint": "http://localhost:6004/shells/dXJuOmV4YW1wbGU6YWFzOnZpZXdlcjphbGxvd2Vk",
+    "endpoint": "{{BASYX_IT_API_URL}}/shells/dXJuOmV4YW1wbGU6YWFzOnZpZXdlcjphbGxvd2Vk",
     "expectedStatus": 204
   },
   {
     "context": "DELETE viewer-by-key aas - admin",
     "token": { "user": "admin", "password": "pwd" },
     "method": "DELETE",
-    "endpoint": "http://localhost:6004/shells/dXJuOmV4YW1wbGU6YWFzOnZpZXdlcjprZXk",
+    "endpoint": "{{BASYX_IT_API_URL}}/shells/dXJuOmV4YW1wbGU6YWFzOnZpZXdlcjprZXk",
     "expectedStatus": 204
   },
   {
     "context": "DELETE viewer-hidden aas - admin",
     "token": { "user": "admin", "password": "pwd" },
     "method": "DELETE",
-    "endpoint": "http://localhost:6004/shells/dXJuOmV4YW1wbGU6YWFzOnZpZXdlcjpoaWRkZW4",
+    "endpoint": "{{BASYX_IT_API_URL}}/shells/dXJuOmV4YW1wbGU6YWFzOnZpZXdlcjpoaWRkZW4",
     "expectedStatus": 204
   },
   {
     "context": "DELETE editor-allowed aas - admin",
     "token": { "user": "admin", "password": "pwd" },
     "method": "DELETE",
-    "endpoint": "http://localhost:6004/shells/dXJuOmV4YW1wbGU6YWFzOmVkaXRvcjphbGxvd2Vk",
+    "endpoint": "{{BASYX_IT_API_URL}}/shells/dXJuOmV4YW1wbGU6YWFzOmVkaXRvcjphbGxvd2Vk",
     "expectedStatus": 204
   },
   {
     "context": "DELETE hidden-existing aas - admin",
     "token": { "user": "admin", "password": "pwd" },
     "method": "DELETE",
-    "endpoint": "http://localhost:6004/shells/dXJuOmV4YW1wbGU6YWFzOmVkaXRvcjpoaWRkZW4tZXhpc3Rpbmc",
+    "endpoint": "{{BASYX_IT_API_URL}}/shells/dXJuOmV4YW1wbGU6YWFzOmVkaXRvcjpoaWRkZW4tZXhpc3Rpbmc",
     "expectedStatus": 204
   }
 ]

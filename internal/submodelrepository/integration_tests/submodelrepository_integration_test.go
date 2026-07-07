@@ -71,8 +71,15 @@ var (
 	xsdGMonthDayPattern  = regexp.MustCompile(`^--(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])` + xsdTimezonePattern + `$`)
 )
 
-const submodelRepositoryIntegrationTestDSN = "postgres://admin:admin123@127.0.0.1:6432/basyxTestDB?sslmode=disable"
 const actionAssertSignedSubmodel = "ASSERT_SIGNED_SUBMODEL"
+
+var submodelRepositoryBaseURL = testenv.LocalURLFromEnv("BASYX_IT_API_PORT", 6004)
+var submodelRepositoryInvalidBaseURL = testenv.LocalhostURLFromEnv("BASYX_IT_INVALID_API_PORT", 6007)
+var submodelRepositoryAASBaseURL = testenv.LocalhostURLFromEnv("BASYX_IT_AAS_API_PORT", 6006)
+var submodelRepositoryAASExternalURL = testenv.LocalURLFromEnv("BASYX_IT_AAS_API_PORT", 6006)
+var submodelRepositorySyncBaseURL = testenv.LocalhostURLFromEnv("BASYX_IT_SYNC_API_PORT", 6008)
+var submodelRepositorySyncExternalURL = testenv.LocalURLFromEnv("BASYX_IT_SYNC_API_PORT", 6008)
+var submodelRepositoryIntegrationTestDSN = testenv.PostgresURLFromEnv("BASYX_IT_DB_PORT", 6432, "basyxTestDB")
 
 // uploadFileAttachment uploads a file to the attachment endpoint
 func uploadFileAttachment(endpoint string, filePath string, fileName string) (int, error) {
@@ -398,7 +405,7 @@ func assertXSDTimeLexical(t *testing.T, value string) {
 }
 
 func TestTemporalXSDRoundTripFormatting(t *testing.T) {
-	baseURL := "http://localhost:6004"
+	baseURL := submodelRepositoryBaseURL
 	submodelID := "urn:basyx:integration:temporal-format"
 	submodelIDEncoded := common.EncodeString(submodelID)
 	t.Run("Duration regex guards invalid lexicals", func(t *testing.T) {
@@ -547,7 +554,7 @@ func TestTemporalXSDRoundTripFormatting(t *testing.T) {
 }
 
 func TestTemporalPropertyUpdateRoundTrip(t *testing.T) {
-	baseURL := "http://localhost:6004"
+	baseURL := submodelRepositoryBaseURL
 	submodelID := fmt.Sprintf("urn:basyx:integration:temporal-update-%d", time.Now().UnixNano())
 	submodelIDEncoded := common.EncodeString(submodelID)
 	elementEndpoint := func(idShort string) string {
@@ -667,7 +674,7 @@ func TestTemporalPropertyUpdateRoundTrip(t *testing.T) {
 }
 
 func TestPropertyEmptyStringRoundTrip(t *testing.T) {
-	baseURL := "http://localhost:6004"
+	baseURL := submodelRepositoryBaseURL
 	submodelID := fmt.Sprintf("urn:basyx:integration:property-empty-string-%d", time.Now().UnixNano())
 	submodelIDEncoded := common.EncodeString(submodelID)
 
@@ -721,7 +728,7 @@ func TestPropertyEmptyStringRoundTrip(t *testing.T) {
 }
 
 func TestContractSubmodelRepository(t *testing.T) {
-	baseURL := "http://localhost:6004"
+	baseURL := submodelRepositoryBaseURL
 
 	createSubmodel := func(t *testing.T, submodelID string, submodelIDShort string) string {
 		t.Helper()
@@ -1444,7 +1451,7 @@ func TestContractSubmodelRepository(t *testing.T) {
 }
 
 func TestPathNotationEndpoints(t *testing.T) {
-	baseURL := "http://localhost:6004"
+	baseURL := submodelRepositoryBaseURL
 	submodelID := fmt.Sprintf("urn:basyx:integration:path-endpoints-%d", time.Now().UnixNano())
 	submodelIDEncoded := common.EncodeString(submodelID)
 
@@ -1916,7 +1923,7 @@ func expectedSignedSubmodelPayload(t *testing.T, expectedJWSPath string) []byte 
 
 // TestFileAttachmentOperations tests file upload, download, and deletion for File SME
 func TestFileAttachmentOperations(t *testing.T) {
-	baseURL := "http://localhost:6004"
+	baseURL := submodelRepositoryBaseURL
 	submodelID := "aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9Pbmx5RmlsZVN1Ym1vZGVsX1Rlc3Q" // base64 encoded: http://iese.fraunhofer.de/id/sm/OnlyFileSubmodel_Test
 	testFilePath := "testFiles/marcus.gif"
 	weakFileContent := []byte{0x00, 0x01, 0x02, 0x03}
@@ -2035,7 +2042,7 @@ func TestFileAttachmentOperations(t *testing.T) {
 }
 
 func TestDeleteSubmodelElementByPathUnlinksFileAttachmentLargeObject(t *testing.T) {
-	baseURL := "http://localhost:6004"
+	baseURL := submodelRepositoryBaseURL
 	submodelID := fmt.Sprintf("urn:basyx:integration:lo-delete-file-%d", time.Now().UnixNano())
 	encodedSubmodelID := common.EncodeString(submodelID)
 	filePath := "DeleteFile"
@@ -2060,7 +2067,7 @@ func TestDeleteSubmodelElementByPathUnlinksFileAttachmentLargeObject(t *testing.
 }
 
 func TestPutParentSubmodelElementUnlinksNestedFileAttachmentLargeObject(t *testing.T) {
-	baseURL := "http://localhost:6004"
+	baseURL := submodelRepositoryBaseURL
 	submodelID := fmt.Sprintf("urn:basyx:integration:lo-replace-parent-%d", time.Now().UnixNano())
 	encodedSubmodelID := common.EncodeString(submodelID)
 	parentPath := "Container"
@@ -2159,7 +2166,7 @@ func countPostgresLargeObjects(t *testing.T, dsn string) int64 {
 }
 
 func TestUploadAttachmentToNonFileSubmodelElementReturnsMethodNotAllowed(t *testing.T) {
-	baseURL := "http://localhost:6004"
+	baseURL := submodelRepositoryBaseURL
 	submodelID := fmt.Sprintf("urn:basyx:integration:non-file-attachment-%d", time.Now().UnixNano())
 	submodelIDEncoded := common.EncodeString(submodelID)
 	nonFileElementIDShort := "NonFileProperty"
@@ -2204,7 +2211,7 @@ func TestUploadAttachmentToNonFileSubmodelElementReturnsMethodNotAllowed(t *test
 }
 
 func TestLocationHeadersForCreateEndpoints(t *testing.T) {
-	baseURL := "http://localhost:6004"
+	baseURL := submodelRepositoryBaseURL
 
 	t.Run("PostSubmodelReturnsLocationHeader", func(t *testing.T) {
 		submodelID := fmt.Sprintf("urn:basyx:integration:post-location-submodel-%d", time.Now().UnixNano())
@@ -2322,7 +2329,7 @@ func TestLocationHeadersForCreateEndpoints(t *testing.T) {
 }
 
 func TestPutSubmodelElementByPathCreatesWhenMissing(t *testing.T) {
-	baseURL := "http://localhost:6004"
+	baseURL := submodelRepositoryBaseURL
 	submodelID := fmt.Sprintf("urn:basyx:integration:put-create-sme-%d", time.Now().UnixNano())
 	submodelIDEncoded := common.EncodeString(submodelID)
 	targetPath := "SMC"
@@ -2383,7 +2390,7 @@ func TestStandaloneStartupRejectsUnsupportedAASRegistryToggle(t *testing.T) {
 		t.Skip("requires bundled integration docker compose setup")
 	}
 
-	assertServiceNeverHealthy(t, "http://localhost:6007/health", 20*time.Second)
+	assertServiceNeverHealthy(t, submodelRepositoryInvalidBaseURL+"/health", 20*time.Second)
 }
 
 func TestStandaloneSubmodelRepositorySyncUpdatesReferencingAASDescriptor(t *testing.T) {
@@ -2391,10 +2398,10 @@ func TestStandaloneSubmodelRepositorySyncUpdatesReferencingAASDescriptor(t *test
 		t.Skip("requires bundled integration docker compose setup")
 	}
 
-	companionAASBaseURL := "http://localhost:6006"
-	companionAASExternalURL := "http://127.0.0.1:6006"
-	submodelSyncBaseURL := "http://localhost:6008"
-	submodelSyncExternalURL := "http://127.0.0.1:6008"
+	companionAASBaseURL := submodelRepositoryAASBaseURL
+	companionAASExternalURL := submodelRepositoryAASExternalURL
+	submodelSyncBaseURL := submodelRepositorySyncBaseURL
+	submodelSyncExternalURL := submodelRepositorySyncExternalURL
 
 	waitForServiceHealthy(t, companionAASBaseURL+"/health", 2*time.Minute)
 	waitForServiceHealthy(t, submodelSyncBaseURL+"/health", 2*time.Minute)
@@ -2527,10 +2534,27 @@ func TestMain(m *testing.M) {
 		os.Exit(m.Run())
 	}
 
+	runtime := testenv.NewComposeRuntimeOrExit("submodelrepository-it", []testenv.PortBinding{
+		{Name: "api", EnvVar: "BASYX_IT_API_PORT"},
+		{Name: "db", EnvVar: "BASYX_IT_DB_PORT"},
+		{Name: "aas-api", EnvVar: "BASYX_IT_AAS_API_PORT"},
+		{Name: "sync-api", EnvVar: "BASYX_IT_SYNC_API_PORT"},
+		{Name: "invalid-api", EnvVar: "BASYX_IT_INVALID_API_PORT"},
+	})
+	submodelRepositoryBaseURL = runtime.LocalURL("api")
+	submodelRepositoryAASBaseURL = runtime.LocalhostURL("aas-api")
+	submodelRepositoryAASExternalURL = runtime.LocalURL("aas-api")
+	submodelRepositorySyncBaseURL = runtime.LocalhostURL("sync-api")
+	submodelRepositorySyncExternalURL = runtime.LocalURL("sync-api")
+	submodelRepositoryInvalidBaseURL = runtime.LocalhostURL("invalid-api")
+	submodelRepositoryIntegrationTestDSN = runtime.PostgresURL("db", "basyxTestDB")
+
 	os.Exit(testenv.RunComposeTestMain(m, testenv.ComposeTestMainOptions{
 		ComposeFile:     "docker_compose/docker_compose.yml",
+		ProjectName:     runtime.ProjectName,
+		Env:             runtime.Env(),
 		PreDownBeforeUp: true,
-		HealthURL:       "http://localhost:6004/health",
+		HealthURL:       submodelRepositoryBaseURL + "/health",
 		HealthTimeout:   150 * time.Second,
 	}))
 }

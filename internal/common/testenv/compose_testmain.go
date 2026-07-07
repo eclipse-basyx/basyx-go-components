@@ -36,6 +36,8 @@ import (
 
 type ComposeTestMainOptions struct {
 	ComposeFile string
+	ProjectName string
+	Env         []string
 
 	UpArgs   []string
 	DownArgs []string
@@ -61,7 +63,7 @@ func RunComposeTestMain(m *testing.M, options ComposeTestMainOptions) int {
 	}
 
 	runWithLimit := func(timeout time.Duration, args ...string) error {
-		return runWithTimeout(engine, baseArgs, opts.ComposeFile, timeout, args...)
+		return runWithTimeout(engine, baseArgs, opts.ComposeFile, opts.ProjectName, opts.Env, timeout, args...)
 	}
 
 	if opts.PreDownBeforeUp {
@@ -105,7 +107,7 @@ func RunComposeTestMain(m *testing.M, options ComposeTestMainOptions) int {
 	return code
 }
 
-func runWithTimeout(engine string, baseArgs []string, composeFile string, timeout time.Duration, args ...string) error {
+func runWithTimeout(engine string, baseArgs []string, composeFile string, projectName string, env []string, timeout time.Duration, args ...string) error {
 	ctx := context.Background()
 	cancel := func() {}
 	if timeout > 0 {
@@ -115,21 +117,37 @@ func runWithTimeout(engine string, baseArgs []string, composeFile string, timeou
 	}
 	defer cancel()
 
+	cmdArgs := composeCommandArgs(baseArgs, composeFile, projectName, args...)
+	return RunComposeWithEnv(ctx, engine, env, cmdArgs...)
+}
+
+func composeCommandArgs(baseArgs []string, composeFile string, projectName string, args ...string) []string {
 	cmdArgs := append([]string{}, baseArgs...)
 	cmdArgs = append(cmdArgs, "-f", composeFile)
+	if projectName != "" {
+		cmdArgs = append(cmdArgs, "-p", projectName)
+	}
 	cmdArgs = append(cmdArgs, args...)
-	return RunCompose(ctx, engine, cmdArgs...)
+	return cmdArgs
 }
 
 func normalizeComposeTestMainOptions(options ComposeTestMainOptions) ComposeTestMainOptions {
 	if options.ComposeFile == "" {
 		options.ComposeFile = "docker_compose/docker_compose.yml"
 	}
+	if options.ProjectName == "" {
+		projectName, err := NewComposeProjectName(options.ComposeFile)
+		if err == nil {
+			options.ProjectName = projectName
+		}
+	}
 	if len(options.UpArgs) == 0 {
 		options.UpArgs = []string{"up", "-d", "--build"}
 	}
 	if len(options.DownArgs) == 0 {
-		options.DownArgs = []string{"down"}
+		options.DownArgs = []string{"down", "-v", "--remove-orphans"}
+	} else {
+		options.DownArgs = normalizeComposeDownArgs(options.DownArgs)
 	}
 	if options.UpTimeout <= 0 {
 		options.UpTimeout = 10 * time.Minute
@@ -141,4 +159,29 @@ func normalizeComposeTestMainOptions(options ComposeTestMainOptions) ComposeTest
 		options.HealthTimeout = 2 * time.Minute
 	}
 	return options
+}
+
+func normalizeComposeDownArgs(args []string) []string {
+	normalized := append([]string{}, args...)
+	if len(normalized) == 0 || normalized[0] != "down" {
+		return normalized
+	}
+	if !hasAnyArg(normalized, "-v", "--volumes") {
+		normalized = append(normalized, "-v")
+	}
+	if !hasAnyArg(normalized, "--remove-orphans") {
+		normalized = append(normalized, "--remove-orphans")
+	}
+	return normalized
+}
+
+func hasAnyArg(args []string, candidates ...string) bool {
+	for _, arg := range args {
+		for _, candidate := range candidates {
+			if arg == candidate {
+				return true
+			}
+		}
+	}
+	return false
 }

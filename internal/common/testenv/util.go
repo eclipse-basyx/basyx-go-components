@@ -59,7 +59,16 @@ func FindCompose() (bin string, args []string, err error) {
 // RunCompose executes a Docker Compose command with the given base command and arguments.
 // Streams stdout and stderr to the current process's output streams.
 func RunCompose(ctx context.Context, base string, args ...string) error {
+	return RunComposeWithEnv(ctx, base, nil, args...)
+}
+
+// RunComposeWithEnv executes a Docker Compose command with additional environment variables.
+// Streams stdout and stderr to the current process's output streams.
+func RunComposeWithEnv(ctx context.Context, base string, env []string, args ...string) error {
 	cmd := exec.CommandContext(ctx, base, args...)
+	if len(env) > 0 {
+		cmd.Env = append(os.Environ(), env...)
+	}
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	return cmd.Run()

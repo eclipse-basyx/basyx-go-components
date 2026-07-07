@@ -53,8 +53,6 @@ const actionUploadMultipart = "UPLOAD_MULTIPART"
 const actionVerifyAASXAttachments = "VERIFY_AASX_ATTACHMENTS"
 const actionVerifyAASXThumbnail = "VERIFY_AASX_THUMBNAIL"
 const actionVerifyEndpointSnapshot = "VERIFY_ENDPOINT_SNAPSHOT"
-const uploadIntegrationDSN = "host=127.0.0.1 port=6432 user=admin password=admin123 dbname=basyxTestDB sslmode=disable"
-const uploadSyncDisabledIntegrationDSN = "host=127.0.0.1 port=6433 user=admin password=admin123 dbname=basyxTestDBSyncOff sslmode=disable"
 const expectationRequired = "required"
 const expectationAbsent = "absent"
 const expectationOptional = "optional"
@@ -63,6 +61,10 @@ const uploadHeaderPartFileName = "X-Upload-Part-FileName"
 const uploadHeaderPartOmitFileName = "X-Upload-Part-OmitFileName"
 const uploadHeaderRequestFileName = "X-Upload-FileName"
 const uploadHeaderExpectedErrorContains = "X-Upload-Expected-Error-Contains"
+
+var uploadIntegrationDSN = testenv.PostgresKeywordDSNFromEnv("BASYX_IT_DB_PORT", 6432, "basyxTestDB")
+var uploadSyncDisabledIntegrationDSN = testenv.PostgresKeywordDSNFromEnv("BASYX_IT_SYNC_OFF_DB_PORT", 6433, "basyxTestDBSyncOff")
+
 const uploadHeaderExpectedErrorContainsSecondary = "X-Upload-Expected-Error-Contains-Secondary"
 
 var numericValuePattern = regexp.MustCompile(`^\d+$`)
@@ -101,7 +103,7 @@ func TestRegistrySyncIntegration(t *testing.T) {
 
 func TestRegistrySyncDisabledIntegration(t *testing.T) {
 	resetDatabaseForUploadIT(t, uploadSyncDisabledIntegrationDSN)
-	waitForIntegrationHealth(t, "http://127.0.0.1:6005/health", 2*time.Minute)
+	waitForIntegrationHealth(t, aasEnvSyncOffBaseURL+"/health", 2*time.Minute)
 	runUploadJSONSuite(t, "registry_sync_disabled_it_config.json")
 }
 

@@ -1,13 +1,12 @@
 services:
   db_it:
     image: postgres:18
-    container_name: postgres_db_it
     environment:
       POSTGRES_USER: admin
       POSTGRES_PASSWORD: admin123
       POSTGRES_DB: basyxTestDB
     ports:
-      - "6432:5432"
+      - "127.0.0.1:${BASYX_IT_DB_PORT:-6432}:5432"
     command: [ "postgres", "-c", "listen_addresses=*" ]
     healthcheck:
       test: [ "CMD-SHELL", "pg_isready -U admin -d basyxTestDB" ]
@@ -16,7 +15,6 @@ services:
       retries: 5
 
   company-lookup-it:
-    container_name: company-lookup-it
     build:
       context: ../../../..
       dockerfile: ./cmd/companylookupservice/Dockerfile
@@ -31,7 +29,7 @@ services:
       - POSTGRES_MAXIDLECONNECTIONS=500
       - POSTGRES_CONNMAXLIFETIMEMINUTES=5
     ports:
-      - "6004:5004"
+      - "127.0.0.1:${BASYX_IT_API_PORT:-6004}:5004"
     depends_on:
       basyx_configuration:
         condition: service_completed_successfully
@@ -41,7 +39,6 @@ services:
       - "localhost:host-gateway"
 
   basyx_configuration:
-    container_name: basyx_configuration
     build:
       context: ../../../..
       dockerfile: ./cmd/basyxconfigurationservice/Dockerfile

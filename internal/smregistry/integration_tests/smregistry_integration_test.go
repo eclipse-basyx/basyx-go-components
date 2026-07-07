@@ -42,10 +42,12 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+var smRegistryBaseURL = testenv.LocalURLFromEnv("BASYX_IT_API_PORT", 6004)
+
 func deleteAllSubmodelDescriptors(t *testing.T, runner *testenv.JSONSuiteRunner, stepNumber int) {
 	response, err := runner.RunStep(testenv.JSONSuiteStep{
 		Method:         http.MethodGet,
-		Endpoint:       "http://127.0.0.1:6004/submodel-descriptors",
+		Endpoint:       smRegistryBaseURL + "/submodel-descriptors",
 		ExpectedStatus: http.StatusOK,
 	}, stepNumber)
 	require.NoError(t, err)
@@ -61,7 +63,7 @@ func deleteAllSubmodelDescriptors(t *testing.T, runner *testenv.JSONSuiteRunner,
 		enc := base64.RawURLEncoding.EncodeToString([]byte(item.ID))
 		_, err := runner.RunStep(testenv.JSONSuiteStep{
 			Method:         http.MethodDelete,
-			Endpoint:       fmt.Sprintf("http://127.0.0.1:6004/submodel-descriptors/%s", enc),
+			Endpoint:       fmt.Sprintf("%s/submodel-descriptors/%s", smRegistryBaseURL, enc),
 			ExpectedStatus: http.StatusNoContent,
 		}, stepNumber)
 		require.NoError(t, err)
@@ -285,9 +287,17 @@ func TestMain(m *testing.M) {
 		os.Exit(m.Run())
 	}
 
+	runtime := testenv.NewComposeRuntimeOrExit("smregistry-it", []testenv.PortBinding{
+		{Name: "api", EnvVar: "BASYX_IT_API_PORT"},
+		{Name: "db", EnvVar: "BASYX_IT_DB_PORT"},
+	})
+	smRegistryBaseURL = runtime.LocalURL("api")
+
 	os.Exit(testenv.RunComposeTestMain(m, testenv.ComposeTestMainOptions{
 		ComposeFile:   "docker_compose/docker_compose.yml",
-		HealthURL:     "http://127.0.0.1:6004/health",
+		ProjectName:   runtime.ProjectName,
+		Env:           runtime.Env(),
+		HealthURL:     smRegistryBaseURL + "/health",
 		HealthTimeout: 2 * time.Minute,
 	}))
 }
