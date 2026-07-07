@@ -30,7 +30,6 @@ import (
 	"context"
 	"embed"
 	"flag"
-	"fmt"
 	"log"
 	"time"
 
@@ -74,19 +73,12 @@ func runServer(ctx context.Context, configPath string) error {
 		log.Printf("Warning: failed to load OpenAPI spec for Swagger UI: %v", err)
 	}
 
-	dsn := fmt.Sprintf("postgres://%s:%s@%s:%d/%s?sslmode=disable",
-		cfg.Postgres.User,
-		cfg.Postgres.Password,
-		cfg.Postgres.Host,
-		cfg.Postgres.Port,
-		cfg.Postgres.DBName,
-	)
+	dsn := common.BuildPostgresDSN(cfg.Postgres)
 	if err := common.ValidateSchemaVersionByDSN(dsn, common.CURRENT_DATABASE_VERSION); err != nil {
 		return err
 	}
 
-	log.Printf("🗄️  Connecting to Postgres with DSN: postgres://%s:****@%s:%d/%s?sslmode=disable",
-		cfg.Postgres.User, cfg.Postgres.Host, cfg.Postgres.Port, cfg.Postgres.DBName)
+	log.Println("Connecting to Postgres using configured connection settings")
 
 	sharedDB, err := common.NewDatabaseConnection(dsn)
 	if err != nil {
