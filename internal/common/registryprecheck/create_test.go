@@ -27,6 +27,7 @@ package registryprecheck
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
@@ -35,43 +36,13 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestEnsureVisibleCreateUsesReadScopedFormula(t *testing.T) {
+func TestEnsureVisibleCreateSkipsReadWithoutQueryFilter(t *testing.T) {
 	t.Parallel()
 
-	ctx := auth.WithQueryFilter(context.Background(), &auth.QueryFilter{
-		FormulasByRight: map[grammar.RightsEnum]grammar.LogicalExpression{
-			grammar.RightsEnumCREATE: booleanExpression(true),
-			grammar.RightsEnumREAD:   booleanExpression(false),
-		},
-	})
-
 	err := EnsureVisibleCreate(
-		ctx,
+		context.Background(),
 		existingDescriptor,
-		readUsingActiveFormula,
-		"descriptor already exists",
-		"descriptor access not allowed",
-	)
-
-	require.Error(t, err)
-	require.True(t, common.IsErrDenied(err))
-	require.False(t, common.IsErrConflict(err))
-}
-
-func TestEnsureVisibleCreateReturnsConflictWhenReadScopedFormulaAllowsDescriptor(t *testing.T) {
-	t.Parallel()
-
-	ctx := auth.WithQueryFilter(context.Background(), &auth.QueryFilter{
-		FormulasByRight: map[grammar.RightsEnum]grammar.LogicalExpression{
-			grammar.RightsEnumCREATE: booleanExpression(true),
-			grammar.RightsEnumREAD:   booleanExpression(true),
-		},
-	})
-
-	err := EnsureVisibleCreate(
-		ctx,
-		existingDescriptor,
-		readUsingActiveFormula,
+		readMustNotBeCalled,
 		"descriptor already exists",
 		"descriptor access not allowed",
 	)
@@ -80,10 +51,11 @@ func TestEnsureVisibleCreateReturnsConflictWhenReadScopedFormulaAllowsDescriptor
 	require.True(t, common.IsErrConflict(err))
 }
 
-func TestEnsureVisibleCreateFailsClosedWhenReadScopedFormulaIsMissing(t *testing.T) {
+func TestEnsureVisibleCreateSkipsReadWithUnrestrictedCreateFormula(t *testing.T) {
 	t.Parallel()
 
 	ctx := auth.WithQueryFilter(context.Background(), &auth.QueryFilter{
+		Formula: boolExpressionPtr(true),
 		FormulasByRight: map[grammar.RightsEnum]grammar.LogicalExpression{
 			grammar.RightsEnumCREATE: booleanExpression(true),
 		},
@@ -92,7 +64,41 @@ func TestEnsureVisibleCreateFailsClosedWhenReadScopedFormulaIsMissing(t *testing
 	err := EnsureVisibleCreate(
 		ctx,
 		existingDescriptor,
-		readUsingActiveFormula,
+		readMustNotBeCalled,
+		"descriptor already exists",
+		"descriptor access not allowed",
+	)
+
+	require.Error(t, err)
+	require.True(t, common.IsErrConflict(err))
+}
+
+func TestEnsureVisibleCreateReturnsConflictWhenFilteredReadAllowsDescriptor(t *testing.T) {
+	t.Parallel()
+
+	ctx := auth.WithQueryFilter(context.Background(), limitedCreateQueryFilter())
+
+	err := EnsureVisibleCreate(
+		ctx,
+		existingDescriptor,
+		func(context.Context) error { return nil },
+		"descriptor already exists",
+		"descriptor access not allowed",
+	)
+
+	require.Error(t, err)
+	require.True(t, common.IsErrConflict(err))
+}
+
+func TestEnsureVisibleCreateReturnsDeniedWhenFilteredReadHidesDescriptor(t *testing.T) {
+	t.Parallel()
+
+	ctx := auth.WithQueryFilter(context.Background(), limitedCreateQueryFilter())
+
+	err := EnsureVisibleCreate(
+		ctx,
+		existingDescriptor,
+		func(context.Context) error { return common.NewErrNotFound("hidden descriptor") },
 		"descriptor already exists",
 		"descriptor access not allowed",
 	)
@@ -102,19 +108,97 @@ func TestEnsureVisibleCreateFailsClosedWhenReadScopedFormulaIsMissing(t *testing
 	require.False(t, common.IsErrConflict(err))
 }
 
+func TestEnsureVisibleCreateAllowsMissingDescriptor(t *testing.T) {
+	t.Parallel()
+
+	err := EnsureVisibleCreate(
+		context.Background(),
+		func(context.Context) (bool, error) { return false, nil },
+		readMustNotBeCalled,
+		"descriptor already exists",
+		"descriptor access not allowed",
+	)
+
+	require.NoError(t, err)
+}
+
+func TestEnsureVisibleDuplicateAllowsMissingDescriptor(t *testing.T) {
+	t.Parallel()
+
+	err := EnsureVisibleDuplicate(
+		context.Background(),
+		false,
+		readMustNotBeCalled,
+		"descriptor already exists",
+		"descriptor access not allowed",
+	)
+
+	require.NoError(t, err)
+}
+
+func TestEnsureVisibleDuplicateReturnsDeniedWhenFilteredReadHidesDescriptor(t *testing.T) {
+	t.Parallel()
+
+	ctx := auth.WithQueryFilter(context.Background(), limitedCreateQueryFilter())
+
+	err := EnsureVisibleDuplicate(
+		ctx,
+		true,
+		func(context.Context) error { return common.NewErrDenied("hidden descriptor") },
+		"descriptor already exists",
+		"descriptor access not allowed",
+	)
+
+	require.Error(t, err)
+	require.True(t, common.IsErrDenied(err))
+	require.False(t, common.IsErrConflict(err))
+}
+
+func TestEnsureVisibleCreatePropagatesCallbackErrors(t *testing.T) {
+	t.Parallel()
+
+	rawErr := errors.New("raw existence failed")
+	err := EnsureVisibleCreate(
+		context.Background(),
+		func(context.Context) (bool, error) { return false, rawErr },
+		func(context.Context) error { return nil },
+		"descriptor already exists",
+		"descriptor access not allowed",
+	)
+	require.ErrorIs(t, err, rawErr)
+
+	filteredErr := errors.New("filtered read failed")
+	ctx := auth.WithQueryFilter(context.Background(), limitedCreateQueryFilter())
+	err = EnsureVisibleCreate(
+		ctx,
+		existingDescriptor,
+		func(context.Context) error { return filteredErr },
+		"descriptor already exists",
+		"descriptor access not allowed",
+	)
+	require.ErrorIs(t, err, filteredErr)
+}
+
 func existingDescriptor(context.Context) (bool, error) {
 	return true, nil
 }
 
-func readUsingActiveFormula(ctx context.Context) error {
-	queryFilter := auth.GetQueryFilter(ctx)
-	if queryFilter == nil || queryFilter.Formula == nil || queryFilter.Formula.Boolean == nil {
-		return nil
+func readMustNotBeCalled(context.Context) error {
+	return errors.New("read must not be called")
+}
+
+func limitedCreateQueryFilter() *auth.QueryFilter {
+	return &auth.QueryFilter{
+		Formula: boolExpressionPtr(false),
+		FormulasByRight: map[grammar.RightsEnum]grammar.LogicalExpression{
+			grammar.RightsEnumCREATE: booleanExpression(false),
+		},
 	}
-	if *queryFilter.Formula.Boolean {
-		return nil
-	}
-	return common.NewErrNotFound("descriptor hidden by read formula")
+}
+
+func boolExpressionPtr(value bool) *grammar.LogicalExpression {
+	expr := booleanExpression(value)
+	return &expr
 }
 
 func booleanExpression(value bool) grammar.LogicalExpression {

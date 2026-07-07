@@ -32,6 +32,7 @@ import (
 	"testing"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/registryprecheck"
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 	"github.com/stretchr/testify/require"
@@ -40,7 +41,7 @@ import (
 func TestRegistryCreateExistingUnauthorizedDescriptorDoesNotReturnConflict(t *testing.T) {
 	t.Parallel()
 
-	ctx := auth.WithQueryFilter(context.Background(), &auth.QueryFilter{})
+	ctx := auth.WithQueryFilter(context.Background(), limitedCreateQueryFilter())
 
 	err := registryprecheck.EnsureVisibleCreate(
 		ctx,
@@ -60,7 +61,7 @@ func TestRegistryCreateExistingUnauthorizedDescriptorDoesNotReturnConflict(t *te
 func TestRegistryCreatePrecheckReturnsConflictForVisibleDescriptor(t *testing.T) {
 	t.Parallel()
 
-	ctx := auth.WithQueryFilter(context.Background(), &auth.QueryFilter{})
+	ctx := auth.WithQueryFilter(context.Background(), limitedCreateQueryFilter())
 
 	err := registryprecheck.EnsureVisibleCreate(
 		ctx,
@@ -104,7 +105,7 @@ func TestRegistryCreatePrecheckPropagatesErrors(t *testing.T) {
 	require.ErrorIs(t, err, rawErr)
 
 	filteredErr := errors.New("filtered read failed")
-	ctx := auth.WithQueryFilter(context.Background(), &auth.QueryFilter{})
+	ctx := auth.WithQueryFilter(context.Background(), limitedCreateQueryFilter())
 	err = registryprecheck.EnsureVisibleCreate(
 		ctx,
 		func(context.Context) (bool, error) { return true, nil },
@@ -113,4 +114,18 @@ func TestRegistryCreatePrecheckPropagatesErrors(t *testing.T) {
 		"AAS Descriptor access not allowed",
 	)
 	require.ErrorIs(t, err, filteredErr)
+}
+
+func limitedCreateQueryFilter() *auth.QueryFilter {
+	falseExpression := grammar.LogicalExpression{Boolean: boolPtr(false)}
+	return &auth.QueryFilter{
+		Formula: &falseExpression,
+		FormulasByRight: map[grammar.RightsEnum]grammar.LogicalExpression{
+			grammar.RightsEnumCREATE: falseExpression,
+		},
+	}
+}
+
+func boolPtr(value bool) *bool {
+	return &value
 }

@@ -69,8 +69,6 @@ const (
 	filterKey ctxKey = "queryFilter"
 	// authorizationDecisionKey stores the ABAC decision made for the request.
 	authorizationDecisionKey ctxKey = "authorizationDecision"
-	// authorizationEvaluatorKey stores the request-scoped ABAC evaluator.
-	authorizationEvaluatorKey ctxKey = "authorizationEvaluator"
 )
 
 // ResolveResource extracts a Resource from an HTTP request.
@@ -81,11 +79,6 @@ type AuthorizationDecision struct {
 	Result        string
 	PolicyID      string
 	MatchedRuleID string
-}
-
-type authorizationEvaluator struct {
-	Model *AccessModel
-	Opts  grammar.SimplifyOptions
 }
 
 // AccessModelProvider supplies the currently active compiled ABAC model.
@@ -157,10 +150,6 @@ func ABACMiddleware(settings ABACSettings) func(http.Handler) http.Handler {
 					Result:        string(DecisionAllow),
 					PolicyID:      evaluation.PolicyID,
 					MatchedRuleID: evaluation.MatchedRuleID,
-				})
-				ctx = context.WithValue(ctx, authorizationEvaluatorKey, authorizationEvaluator{
-					Model: model,
-					Opts:  opts,
 				})
 				if evaluation.QueryFilter != nil {
 					ctx = context.WithValue(ctx, filterKey, evaluation.QueryFilter)
@@ -348,32 +337,6 @@ func SelectFormulaForRight(ctx context.Context, right grammar.RightsEnum) contex
 	qf.FormulasByRight[right] = fallback
 	qf.Formula = &fallback
 	return WithQueryFilter(ctx, qf)
-}
-
-// ContextWithAuthorizationFilterForRequest evaluates a request route with the
-// same ABAC model and claims as ctx, then replaces the active query filter.
-func ContextWithAuthorizationFilterForRequest(ctx context.Context, method, path string) (context.Context, bool) {
-	evaluator, ok := ctx.Value(authorizationEvaluatorKey).(authorizationEvaluator)
-	if !ok || evaluator.Model == nil {
-		return ctx, false
-	}
-	claims := ClaimsFromContext(ctx)
-	if claims == nil {
-		return ctx, false
-	}
-
-	evaluation := evaluator.Model.AuthorizeWithFilterWithOptions(EvalInput{
-		Method: method,
-		Path:   path,
-		Claims: claims,
-	}, evaluator.Opts)
-	if !evaluation.Allowed {
-		return WithQueryFilter(ctx, failClosedQueryFilter(grammar.RightsEnumREAD)), true
-	}
-	if evaluation.QueryFilter == nil {
-		return WithoutQueryFilter(ctx), true
-	}
-	return WithQueryFilter(ctx, evaluation.QueryFilter), true
 }
 
 // MergeQueryFilter combines an existing QueryFilter with a user query.

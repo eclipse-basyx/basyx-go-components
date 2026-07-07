@@ -176,7 +176,6 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) PostAssetAdministrationS
 			},
 			"AAS with given id already exists",
 			"AAS Descriptor access not allowed",
-			registryprecheck.WithReadRequest(http.MethodGet, "/shell-descriptors/"+common.EncodeString(assetAdministrationShellDescriptor.Id)),
 		)
 		if precheckErr != nil {
 			statusCode, step := registryprecheck.ResponseStatus(precheckErr)
@@ -480,7 +479,6 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) PostSubmodelDescriptorTh
 			},
 			"Submodel with given id already exists for this AAS",
 			"Submodel Descriptor access not allowed",
-			registryprecheck.WithReadRequest(http.MethodGet, "/shell-descriptors/"+aasIdentifier+"/submodel-descriptors/"+common.EncodeString(submodelDescriptor.Id)),
 		)
 		if precheckErr != nil {
 			statusCode, step := registryprecheck.ResponseStatus(precheckErr)

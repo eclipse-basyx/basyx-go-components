@@ -164,7 +164,6 @@ func (s *SubmodelRegistryAPIAPIService) PostSubmodelDescriptor(ctx context.Conte
 			},
 			"Submodel with given id already exists",
 			"Submodel Descriptor access not allowed",
-			registryprecheck.WithReadRequest(http.MethodGet, "/submodel-descriptors/"+common.EncodeString(submodelDescriptor.Id)),
 		)
 		if precheckErr != nil {
 			statusCode, step := registryprecheck.ResponseStatus(precheckErr)

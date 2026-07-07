@@ -28,10 +28,8 @@ package auth
 import (
 	"context"
 	"fmt"
-	"net/http"
 	"testing"
 
-	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
 	apis "github.com/eclipse-basyx/basyx-go-components/pkg/aasregistryapi"
 	"github.com/go-chi/chi/v5"
@@ -169,39 +167,6 @@ func TestSelectFormulaForRight_DefaultsToFalseIfMissing(t *testing.T) {
 	assertFormulaByRightBoolean(t, qf, grammar.RightsEnumREAD, false)
 }
 
-func TestContextWithAuthorizationFilterForRequest_ReevaluatesReadRoute(t *testing.T) {
-	t.Parallel()
-
-	model := mustParseCreateReadAccessModel(t)
-	createExpr := boolExpression(false)
-	ctx := context.WithValue(context.Background(), ClaimsKey, Claims{})
-	ctx = context.WithValue(ctx, authorizationEvaluatorKey, authorizationEvaluator{
-		Model: model,
-		Opts:  grammar.DefaultSimplifyOptions(),
-	})
-	ctx = WithQueryFilter(ctx, &QueryFilter{
-		Formula: &createExpr,
-		FormulasByRight: map[grammar.RightsEnum]grammar.LogicalExpression{
-			grammar.RightsEnumCREATE: createExpr,
-		},
-	})
-
-	readCtx, ok := ContextWithAuthorizationFilterForRequest(
-		ctx,
-		http.MethodGet,
-		"/shell-descriptors/"+common.EncodeString("https://example.org/A"),
-	)
-
-	if !ok {
-		t.Fatalf("expected request filter evaluation")
-	}
-	qf := GetQueryFilter(readCtx)
-	assertFormulaByRightBoolean(t, qf, grammar.RightsEnumREAD, true)
-	if qf.Formula != nil && qf.Formula.Boolean != nil && !*qf.Formula.Boolean {
-		t.Fatalf("expected read route to replace fail-closed create formula")
-	}
-}
-
 func TestMergeQueryFilter_FailsClosedOnCloneError(t *testing.T) {
 	t.Parallel()
 
@@ -246,45 +211,6 @@ func mustParsePUTAccessModelWithSingleRight(t *testing.T, right grammar.RightsEn
     ]
   }
 }`, right)
-
-	router := chi.NewRouter()
-	ctrl := apis.NewAssetAdministrationShellRegistryAPIAPIController(nil, "/*")
-	for _, rt := range ctrl.Routes() {
-		router.Method(rt.Method, rt.Pattern, rt.HandlerFunc)
-	}
-
-	model, err := ParseAccessModel([]byte(modelJSON), router, "")
-	if err != nil {
-		t.Fatalf("parse model failed: %v", err)
-	}
-	return model
-}
-
-func mustParseCreateReadAccessModel(t *testing.T) *AccessModel {
-	t.Helper()
-
-	modelJSON := `{
-  "AllAccessPermissionRules": {
-    "DEFATTRIBUTES": [
-      { "name": "anonymous", "attributes": [ { "GLOBAL": "ANONYMOUS" } ] }
-    ],
-    "DEFOBJECTS": [
-      { "name": "create_shells", "objects": [ { "ROUTE": "/shell-descriptors" } ] },
-      { "name": "read_shell", "objects": [ { "ROUTE": "/shell-descriptors/*" } ] }
-    ],
-    "DEFACLS": [
-      { "name": "create", "acl": { "USEATTRIBUTES": "anonymous", "RIGHTS": ["CREATE"], "ACCESS": "ALLOW" } },
-      { "name": "read", "acl": { "USEATTRIBUTES": "anonymous", "RIGHTS": ["READ"], "ACCESS": "ALLOW" } }
-    ],
-    "DEFFORMULAS": [
-      { "name": "always_true", "formula": { "$boolean": true } }
-    ],
-    "rules": [
-      { "USEACL": "create", "USEOBJECTS": ["create_shells"], "USEFORMULA": "always_true" },
-      { "USEACL": "read", "USEOBJECTS": ["read_shell"], "USEFORMULA": "always_true" }
-    ]
-  }
-}`
 
 	router := chi.NewRouter()
 	ctrl := apis.NewAssetAdministrationShellRegistryAPIAPIController(nil, "/*")

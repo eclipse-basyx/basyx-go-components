@@ -41,22 +41,6 @@ type ExistsFunc func(context.Context) (bool, error)
 // ReadFunc performs a visibility-aware descriptor read.
 type ReadFunc func(context.Context) error
 
-type createOptions struct {
-	readMethod string
-	readPath   string
-}
-
-// CreateOption configures create precheck behavior.
-type CreateOption func(*createOptions)
-
-// WithReadRequest evaluates duplicate visibility using the matching read route.
-func WithReadRequest(method, path string) CreateOption {
-	return func(options *createOptions) {
-		options.readMethod = method
-		options.readPath = path
-	}
-}
-
 // EnsureVisibleCreate verifies that a create request does not disclose hidden duplicates.
 func EnsureVisibleCreate(
 	ctx context.Context,
@@ -64,7 +48,6 @@ func EnsureVisibleCreate(
 	read ReadFunc,
 	conflictMessage string,
 	deniedMessage string,
-	options ...CreateOption,
 ) error {
 	if exists == nil {
 		return common.NewInternalServerError("REGPRECHECK-CREATE-EXISTSCALLBACK existence callback must not be nil")
@@ -77,15 +60,29 @@ func EnsureVisibleCreate(
 	if err != nil {
 		return err
 	}
+	return EnsureVisibleDuplicate(ctx, descriptorExists, read, conflictMessage, deniedMessage)
+}
+
+// EnsureVisibleDuplicate maps an existing descriptor to conflict or denied
+// without disclosing duplicates hidden by the active create formula.
+func EnsureVisibleDuplicate(
+	ctx context.Context,
+	descriptorExists bool,
+	read ReadFunc,
+	conflictMessage string,
+	deniedMessage string,
+) error {
 	if !descriptorExists {
 		return nil
 	}
-	if auth.GetQueryFilter(ctx) == nil {
+	if canSkipDuplicateVisibilityRead(ctx) {
 		return common.NewErrConflict(conflictMessage)
 	}
+	if read == nil {
+		return common.NewInternalServerError("REGPRECHECK-CREATE-READCALLBACK read callback must not be nil")
+	}
 
-	readCtx := duplicateReadContext(ctx, options)
-	if err = read(readCtx); err != nil {
+	if err := read(ctx); err != nil {
 		if common.IsErrNotFound(err) || common.IsErrDenied(err) {
 			return common.NewErrDenied(deniedMessage)
 		}
@@ -94,19 +91,21 @@ func EnsureVisibleCreate(
 	return common.NewErrConflict(conflictMessage)
 }
 
-func duplicateReadContext(ctx context.Context, optionFuncs []CreateOption) context.Context {
-	options := createOptions{}
-	for _, applyOption := range optionFuncs {
-		if applyOption != nil {
-			applyOption(&options)
-		}
+func canSkipDuplicateVisibilityRead(ctx context.Context) bool {
+	queryFilter := auth.GetQueryFilter(ctx)
+	if queryFilter == nil {
+		return true
 	}
-	if options.readMethod != "" && options.readPath != "" {
-		if readCtx, ok := auth.ContextWithAuthorizationFilterForRequest(ctx, options.readMethod, options.readPath); ok {
-			return readCtx
-		}
+	if len(queryFilter.FormulasByRight) > 0 {
+		return auth.HasUnrestrictedFormulaForRight(ctx, grammar.RightsEnumCREATE)
 	}
-	return auth.SelectFormulaForRight(ctx, grammar.RightsEnumREAD)
+	if queryFilter.Formula == nil {
+		return true
+	}
+	if queryFilter.Formula.Boolean != nil && *queryFilter.Formula.Boolean {
+		return true
+	}
+	return false
 }
 
 // ResponseStatus maps create precheck errors to an HTTP status and response step.

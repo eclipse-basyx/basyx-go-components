@@ -35,6 +35,7 @@ import (
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/asyncbulk"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/registryprecheck"
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 )
 
@@ -192,43 +193,39 @@ func (s *SubmodelRegistryAPIAPIService) ensureSubmodelDescriptorsDoNotExist(
 	identifiers []string,
 	failure *asyncbulk.ItemFailure,
 ) error {
-	if auth.GetQueryFilter(ctx) != nil {
-		return s.ensureVisibleSubmodelDescriptorsDoNotExist(ctx, tx, identifiers, failure)
-	}
-
 	existing, err := s.smRegistryBackend.ExistingSubmodelDescriptorIDsInTransaction(ctx, tx, identifiers)
 	if err != nil {
 		*failure = asyncbulk.ItemFailure{Index: 0, Identifier: firstIdentifier(identifiers), StatusCode: http.StatusInternalServerError, Message: err.Error()}
 		return err
 	}
-	for index, identifier := range identifiers {
-		if _, found := existing[identifier]; found {
-			err := common.NewErrConflict("Submodel with given id already exists")
-			*failure = asyncbulk.ItemFailure{Index: index, Identifier: identifier, StatusCode: http.StatusConflict, Message: err.Error()}
-			return err
-		}
-	}
-	return nil
+	return s.ensureVisibleSubmodelDescriptorDuplicates(ctx, tx, identifiers, existing, failure)
 }
 
-func (s *SubmodelRegistryAPIAPIService) ensureVisibleSubmodelDescriptorsDoNotExist(
+func (s *SubmodelRegistryAPIAPIService) ensureVisibleSubmodelDescriptorDuplicates(
 	ctx context.Context,
 	tx *sql.Tx,
 	identifiers []string,
+	existing map[string]struct{},
 	failure *asyncbulk.ItemFailure,
 ) error {
 	for index, identifier := range identifiers {
-		_, err := s.smRegistryBackend.GetSubmodelDescriptorByIDInTransaction(ctx, tx, identifier)
-		if err == nil {
-			err = common.NewErrConflict("Submodel with given id already exists")
-			*failure = asyncbulk.ItemFailure{Index: index, Identifier: identifier, StatusCode: http.StatusConflict, Message: err.Error()}
-			return err
-		}
-		if common.IsErrNotFound(err) {
+		if _, found := existing[identifier]; !found {
 			continue
 		}
-		*failure = asyncbulk.ItemFailure{Index: index, Identifier: identifier, StatusCode: smBulkCreateErrorStatusCode(err), Message: err.Error()}
-		return err
+		err := registryprecheck.EnsureVisibleDuplicate(
+			ctx,
+			true,
+			func(readCtx context.Context) error {
+				_, readErr := s.smRegistryBackend.GetSubmodelDescriptorByIDInTransaction(readCtx, tx, identifier)
+				return readErr
+			},
+			"Submodel with given id already exists",
+			"Submodel Descriptor access not allowed",
+		)
+		if err != nil {
+			*failure = asyncbulk.ItemFailure{Index: index, Identifier: identifier, StatusCode: smBulkCreateErrorStatusCode(err), Message: err.Error()}
+			return err
+		}
 	}
 	return nil
 }
