@@ -41,6 +41,22 @@ type ExistsFunc func(context.Context) (bool, error)
 // ReadFunc performs a visibility-aware descriptor read.
 type ReadFunc func(context.Context) error
 
+type createOptions struct {
+	readMethod string
+	readPath   string
+}
+
+// CreateOption configures create precheck behavior.
+type CreateOption func(*createOptions)
+
+// WithReadRequest evaluates duplicate visibility using the matching read route.
+func WithReadRequest(method, path string) CreateOption {
+	return func(options *createOptions) {
+		options.readMethod = method
+		options.readPath = path
+	}
+}
+
 // EnsureVisibleCreate verifies that a create request does not disclose hidden duplicates.
 func EnsureVisibleCreate(
 	ctx context.Context,
@@ -48,6 +64,7 @@ func EnsureVisibleCreate(
 	read ReadFunc,
 	conflictMessage string,
 	deniedMessage string,
+	options ...CreateOption,
 ) error {
 	if exists == nil {
 		return common.NewInternalServerError("REGPRECHECK-CREATE-EXISTSCALLBACK existence callback must not be nil")
@@ -67,7 +84,7 @@ func EnsureVisibleCreate(
 		return common.NewErrConflict(conflictMessage)
 	}
 
-	readCtx := auth.SelectFormulaForRight(ctx, grammar.RightsEnumREAD)
+	readCtx := duplicateReadContext(ctx, options)
 	if err = read(readCtx); err != nil {
 		if common.IsErrNotFound(err) || common.IsErrDenied(err) {
 			return common.NewErrDenied(deniedMessage)
@@ -75,6 +92,21 @@ func EnsureVisibleCreate(
 		return err
 	}
 	return common.NewErrConflict(conflictMessage)
+}
+
+func duplicateReadContext(ctx context.Context, optionFuncs []CreateOption) context.Context {
+	options := createOptions{}
+	for _, applyOption := range optionFuncs {
+		if applyOption != nil {
+			applyOption(&options)
+		}
+	}
+	if options.readMethod != "" && options.readPath != "" {
+		if readCtx, ok := auth.ContextWithAuthorizationFilterForRequest(ctx, options.readMethod, options.readPath); ok {
+			return readCtx
+		}
+	}
+	return auth.SelectFormulaForRight(ctx, grammar.RightsEnumREAD)
 }
 
 // ResponseStatus maps create precheck errors to an HTTP status and response step.

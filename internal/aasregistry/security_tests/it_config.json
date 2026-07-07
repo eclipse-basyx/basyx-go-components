@@ -128,12 +128,12 @@
     "expectedStatus": 201
   },
   {
-    "context": "POST Descriptor D - User B - ALLOWED",
+    "context": "POST Descriptor D - User B - DENIED",
     "token": { "user": "usery", "password": "pwd" },
     "method": "POST",
     "endpoint": "http://localhost:6004/shell-descriptors",
     "data": "postBody/simple_aas_D.json",
-    "expectedStatus": 409
+    "expectedStatus": 403
   },
   {
     "context": "POST Descriptor X - User B - DENIED",
@@ -512,7 +512,7 @@
   { "context": "POST Submodel A - User Y - CONFLICT", "token": { "user": "usery", "password": "pwd" }, "method": "POST", "endpoint": "http://localhost:6004/shell-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9Y/submodel-descriptors", "data": "postBody/simple_smd_a.json", "expectedStatus": 409 },
   { "context": "POST Submodel B - User Y - ALLOWED", "token": { "user": "usery", "password": "pwd" }, "method": "POST", "endpoint": "http://localhost:6004/shell-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9Y/submodel-descriptors", "data": "postBody/simple_smd_b.json", "shouldMatch": "postBody/simple_smd_b.json", "expectedStatus": 201 },
   { "context": "POST Submodel C - User Y - ALLOWED", "token": { "user": "usery", "password": "pwd" }, "method": "POST", "endpoint": "http://localhost:6004/shell-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9Y/submodel-descriptors", "data": "postBody/simple_smd_c.json", "shouldMatch": "postBody/simple_smd_c.json", "expectedStatus": 201 },
-  { "context": "POST Submodel D - User Y - DENIED", "token": { "user": "usery", "password": "pwd" }, "method": "POST", "endpoint": "http://localhost:6004/shell-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9Y/submodel-descriptors", "data": "postBody/simple_smd_d.json", "expectedStatus": 409 },
+  { "context": "POST Submodel D - User Y - DENIED", "token": { "user": "usery", "password": "pwd" }, "method": "POST", "endpoint": "http://localhost:6004/shell-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9Y/submodel-descriptors", "data": "postBody/simple_smd_d.json", "expectedStatus": 403 },
   { "context": "POST Submodel X - User Y - DENIED", "token": { "user": "usery", "password": "pwd" }, "method": "POST", "endpoint": "http://localhost:6004/shell-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9Y/submodel-descriptors", "data": "postBody/simple_smd_x.json", "expectedStatus": 403 },
 
   { "context": "POST Submodel A - ADMIN - CONFLICT", "token": { "user": "admin", "password": "pwd" }, "method": "POST", "endpoint": "http://localhost:6004/shell-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9Y/submodel-descriptors", "data": "postBody/simple_smd_a.json", "expectedStatus": 409 },
