@@ -10,6 +10,8 @@ For build and release supply-chain security (image signing, provenance attestati
 
 For PostgreSQL-backed ABAC policy versions, management API behavior, and ABAC policy evidence, see [ABAC_POLICY_REPOSITORY.md](ABAC_POLICY_REPOSITORY.md).
 
+For AAS Registry-specific `CREATE`, `UPDATE`, `READ`, `DELETE`, and status-code semantics, see [REGISTRY_SECURITY.md](REGISTRY_SECURITY.md).
+
 For history evidence deployment guidance and NIS2-relevant operator responsibilities, see [NIS2_HISTORY_EVIDENCE.md](NIS2_HISTORY_EVIDENCE.md).
 
 ## High-level architecture
@@ -282,6 +284,9 @@ Notes:
 Relevant code:
 - [internal/common/security/authorize.go](internal/common/security/authorize.go)
 - [internal/common/security/filter_helpers.go](internal/common/security/filter_helpers.go)
+
+Registry-specific operation semantics:
+- [docu/security/REGISTRY_SECURITY.md](REGISTRY_SECURITY.md)
 
 ## Claims enrichment
 
