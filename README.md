@@ -97,6 +97,13 @@ If a setup uses mutable tags and pulls images on every start or restart, include
 Configuration is managed via YAML files in `cmd/<service>/config.yaml` and environment variables. Key variables include database connection settings (see [docu/errors.md](docu/errors.md) for troubleshooting):
 
 ```yaml
+server:
+    readHeaderTimeoutSeconds: 15
+    readTimeoutSeconds: 300
+    writeTimeoutSeconds: 300
+    idleTimeoutSeconds: 60
+    shutdownTimeoutSeconds: 10
+
 postgres:
     # Either set dsn or the individual connection fields below. Do not mix them.
     # dsn: postgres://user:password@db:5432/basyx?sslmode=require
@@ -123,6 +130,12 @@ postgres:
 Or via `.env`:
 
 ```env
+SERVER_READ_HEADER_TIMEOUT_SECONDS=15
+SERVER_READ_TIMEOUT_SECONDS=300
+SERVER_WRITE_TIMEOUT_SECONDS=300
+SERVER_IDLE_TIMEOUT_SECONDS=60
+SERVER_SHUTDOWN_TIMEOUT_SECONDS=10
+
 # Either set POSTGRES_DSN or the individual connection variables below. Do not mix them.
 # POSTGRES_DSN=postgres://user:password@db:5432/basyx?sslmode=require
 POSTGRES_HOST=localhost
@@ -144,6 +157,8 @@ POSTGRES_MAXOPENCONNECTIONS=500
 POSTGRES_MAXIDLECONNECTIONS=500
 POSTGRES_CONNMAXLIFETIMEMINUTES=5
 ```
+
+All HTTP timeout values are in seconds and must be greater than zero. The legacy Viper-derived names such as `SERVER_READTIMEOUTSECONDS` still work; readable aliases with underscores and `BASYX_` prefixes, such as `BASYX_SERVER_READ_TIMEOUT_SECONDS`, are also supported.
 
 For `aasenvironmentservice`, `aasrepositoryservice`, and `submodelrepositoryservice`, uploads are additionally bounded by:
 

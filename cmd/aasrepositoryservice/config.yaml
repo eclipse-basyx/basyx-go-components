@@ -4,6 +4,11 @@ server:
   host: 0.0.0.0
   strictVerification: permissive  # Values: off|permissive|strict (default: permissive)
   verificationEndpointAvailable: true
+  readHeaderTimeoutSeconds: 15
+  readTimeoutSeconds: 300
+  writeTimeoutSeconds: 300
+  idleTimeoutSeconds: 60
+  shutdownTimeoutSeconds: 10
 
 postgres:
   # Choose exactly one connection variant:
