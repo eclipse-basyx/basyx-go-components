@@ -184,6 +184,44 @@ func TestBuildBasicDiscoveryGlobalAssetIDQuery(t *testing.T) {
 	}
 }
 
+func TestMergeGlobalAssetIDLookupVisibility_PreservesExistingFormula(t *testing.T) {
+	t.Parallel()
+
+	descriptorIDField := grammar.ModelStringPattern("$aasdesc#id")
+	descriptorIDValue := grammar.StandardString("allowed-aas")
+	existingFormula := grammar.LogicalExpression{
+		Eq: grammar.ComparisonItems{
+			{Field: &descriptorIDField},
+			{StrVal: &descriptorIDValue},
+		},
+	}
+	ctx := auth.MergeQueryFilter(context.Background(), grammar.Query{Condition: &existingFormula})
+
+	ctx = mergeGlobalAssetIDLookupVisibility(ctx, []string{"global-1"})
+
+	queryFilter := auth.GetQueryFilter(ctx)
+	if queryFilter == nil || queryFilter.Formula == nil {
+		t.Fatalf("expected merged query filter formula")
+	}
+	if !logicalExpressionHasEqField(*queryFilter.Formula, descriptorIDField) {
+		t.Fatalf("expected merged formula to preserve existing field %q, got %#v", descriptorIDField, queryFilter.Formula)
+	}
+	if !logicalExpressionHasEqField(*queryFilter.Formula, grammar.ModelStringPattern("$aasdesc#globalAssetId")) {
+		t.Fatalf("expected merged formula to include global asset ID condition, got %#v", queryFilter.Formula)
+	}
+
+	readFormula, ok := queryFilter.FormulasByRight[grammar.RightsEnumREAD]
+	if !ok {
+		t.Fatalf("expected READ formula in query filter")
+	}
+	if !logicalExpressionHasEqField(readFormula, descriptorIDField) {
+		t.Fatalf("expected READ formula to preserve existing field %q, got %#v", descriptorIDField, readFormula)
+	}
+	if !logicalExpressionHasEqField(readFormula, grammar.ModelStringPattern("$aasdesc#globalAssetId")) {
+		t.Fatalf("expected READ formula to include global asset ID condition, got %#v", readFormula)
+	}
+}
+
 func TestBuildBasicDiscoveryAssetLinkQuery_UsesBDRootAlias(t *testing.T) {
 	t.Parallel()
 
@@ -200,4 +238,53 @@ func TestBuildBasicDiscoveryAssetLinkQuery_UsesBDRootAlias(t *testing.T) {
 	if len(match) == 0 || match[0].Eq[0].Field == nil || *match[0].Eq[0].Field != "$aasdesc#specificAssetIds[].value" {
 		t.Fatalf("expected query to filter $aasdesc#specificAssetIds[].value, got %#v", query.Condition)
 	}
+}
+
+func logicalExpressionHasEqField(expr grammar.LogicalExpression, field grammar.ModelStringPattern) bool {
+	for _, value := range expr.Eq {
+		if valueHasField(value, field) {
+			return true
+		}
+	}
+
+	for _, child := range expr.And {
+		if logicalExpressionHasEqField(child, field) {
+			return true
+		}
+	}
+
+	for _, child := range expr.Or {
+		if logicalExpressionHasEqField(child, field) {
+			return true
+		}
+	}
+
+	if expr.Not != nil {
+		return logicalExpressionHasEqField(*expr.Not, field)
+	}
+
+	return false
+}
+
+func valueHasField(value grammar.Value, field grammar.ModelStringPattern) bool {
+	if value.Field != nil && *value.Field == field {
+		return true
+	}
+	if value.StrCast != nil {
+		return valueHasField(*value.StrCast, field)
+	}
+	if value.BoolCast != nil {
+		return valueHasField(*value.BoolCast, field)
+	}
+	if value.DateTimeCast != nil {
+		return valueHasField(*value.DateTimeCast, field)
+	}
+	if value.NumCast != nil {
+		return valueHasField(*value.NumCast, field)
+	}
+	if value.TimeCast != nil {
+		return valueHasField(*value.TimeCast, field)
+	}
+
+	return false
 }

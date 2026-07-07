@@ -462,26 +462,5 @@ func mergeGlobalAssetIDLookupVisibility(ctx context.Context, globalAssetIDs []st
 		return ctx
 	}
 
-	queryFilter := auth.GetQueryFilter(ctx)
-	if queryFilter == nil {
-		return auth.MergeQueryFilter(ctx, globalAssetIDQuery)
-	}
-
-	cloned, err := auth.CloneQueryFilter(queryFilter)
-	if err != nil {
-		log.Printf("%s-MERGEGLOBALASSETID-CLONE failed to clone query filter: %v", customDiscoveryComponentName, err)
-		failClosed := false
-		return auth.MergeQueryFilter(ctx, grammar.Query{Condition: &grammar.LogicalExpression{Boolean: &failClosed}})
-	}
-	if cloned == nil {
-		return auth.MergeQueryFilter(ctx, globalAssetIDQuery)
-	}
-
-	cloned.Formula = globalAssetIDQuery.Condition
-	if cloned.FormulasByRight == nil {
-		cloned.FormulasByRight = make(map[grammar.RightsEnum]grammar.LogicalExpression)
-	}
-	cloned.FormulasByRight[grammar.RightsEnumREAD] = *cloned.Formula
-
-	return auth.WithQueryFilter(ctx, cloned)
+	return auth.MergeQueryFilter(ctx, globalAssetIDQuery)
 }
