@@ -2531,6 +2531,12 @@ func requireDescriptorEndpointInterface(t *testing.T, db *sql.DB, href string, e
 // TestMain handles setup and teardown
 func TestMain(m *testing.M) {
 	if os.Getenv("BASYX_EXTERNAL_COMPOSE") == "1" {
+		testenv.SetEnvDefaultsOrExit(map[string]string{
+			"BASYX_IT_API_URL":         submodelRepositoryBaseURL,
+			"BASYX_IT_AAS_API_URL":     submodelRepositoryAASExternalURL,
+			"BASYX_IT_SYNC_API_URL":    submodelRepositorySyncExternalURL,
+			"BASYX_IT_INVALID_API_URL": submodelRepositoryInvalidBaseURL,
+		})
 		os.Exit(m.Run())
 	}
 

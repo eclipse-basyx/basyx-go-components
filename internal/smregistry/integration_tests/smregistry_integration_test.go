@@ -284,6 +284,9 @@ func TestIntegration(t *testing.T) {
 
 func TestMain(m *testing.M) {
 	if os.Getenv("BASYX_EXTERNAL_COMPOSE") == "1" {
+		testenv.SetEnvDefaultsOrExit(map[string]string{
+			"BASYX_IT_API_URL": smRegistryBaseURL,
+		})
 		os.Exit(m.Run())
 	}
 

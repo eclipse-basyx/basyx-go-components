@@ -30,6 +30,8 @@ package testenv
 import (
 	"context"
 	"fmt"
+	"os"
+	"strings"
 	"testing"
 	"time"
 )
@@ -55,10 +57,16 @@ type ComposeTestMainOptions struct {
 
 func RunComposeTestMain(m *testing.M, options ComposeTestMainOptions) int {
 	opts := normalizeComposeTestMainOptions(options)
+	if err := applyProcessEnv(opts.Env); err != nil {
+		fmt.Printf("Failed to apply Docker Compose test environment: %v\n", err)
+		ReleaseReservedLocalPorts()
+		return 1
+	}
 
 	engine, baseArgs, err := FindCompose()
 	if err != nil {
 		fmt.Println("compose engine not found:", err)
+		ReleaseReservedLocalPorts()
 		return 1
 	}
 
@@ -73,8 +81,13 @@ func RunComposeTestMain(m *testing.M, options ComposeTestMainOptions) int {
 	fmt.Println("Starting Docker Compose...")
 	if err := runWithLimit(opts.UpTimeout, opts.UpArgs...); err != nil {
 		fmt.Printf("Failed to start Docker Compose: %v\n", err)
+		if !opts.SkipDownAfterTests {
+			_ = runWithLimit(opts.DownTimeout, opts.DownArgs...)
+		}
+		ReleaseReservedLocalPorts()
 		return 1
 	}
+	ReleaseReservedLocalPorts()
 
 	if opts.WaitForReady != nil {
 		if err := opts.WaitForReady(); err != nil {
@@ -105,6 +118,19 @@ func RunComposeTestMain(m *testing.M, options ComposeTestMainOptions) int {
 	}
 
 	return code
+}
+
+func applyProcessEnv(env []string) error {
+	for _, entry := range env {
+		key, value, ok := strings.Cut(entry, "=")
+		if !ok || strings.TrimSpace(key) == "" {
+			continue
+		}
+		if err := os.Setenv(key, value); err != nil {
+			return fmt.Errorf("TESTENV-COMPOSEMAIN-SETENV: %w", err)
+		}
+	}
+	return nil
 }
 
 func runWithTimeout(engine string, baseArgs []string, composeFile string, projectName string, env []string, timeout time.Duration, args ...string) error {

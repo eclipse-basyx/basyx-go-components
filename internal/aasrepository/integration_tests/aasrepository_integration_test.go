@@ -1543,6 +1543,10 @@ func TestStandaloneStartupRejectsUnsupportedSubmodelRegistryToggle(t *testing.T)
 // TestMain handles setup and teardown
 func TestMain(m *testing.M) {
 	if os.Getenv("BASYX_EXTERNAL_COMPOSE") == "1" {
+		testenv.SetEnvDefaultsOrExit(map[string]string{
+			"BASYX_IT_API_URL":         aasRepositoryBaseURL,
+			"BASYX_IT_INVALID_API_URL": aasRepositoryInvalidBaseURL,
+		})
 		os.Exit(m.Run())
 	}
 

@@ -36,21 +36,33 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 	"unicode"
 )
 
+const composePortLockStaleAfter = 24 * time.Hour
+
+var reservedPortLocks struct {
+	sync.Mutex
+	locks []*portLock
+}
+
+// PortBinding declares one dynamically allocated host port for a compose test.
 type PortBinding struct {
 	Name   string
 	EnvVar string
 }
 
+// ComposeRuntime carries the per-test compose project name, ports, and env values.
 type ComposeRuntime struct {
 	ProjectName string
 	ports       map[string]int
 	env         []string
+	portLocks   []*portLock
 }
 
+// NewComposeRuntime creates a unique compose project name and locked host ports.
 func NewComposeRuntime(prefix string, ports []PortBinding) (*ComposeRuntime, error) {
 	projectName, err := NewComposeProjectName(prefix)
 	if err != nil {
@@ -63,17 +75,23 @@ func NewComposeRuntime(prefix string, ports []PortBinding) (*ComposeRuntime, err
 		env:         make([]string, 0, len(ports)),
 	}
 
+	usedPorts := make(map[int]struct{}, len(ports))
 	for _, port := range ports {
 		name := strings.TrimSpace(port.Name)
 		envVar := strings.TrimSpace(port.EnvVar)
 		if name == "" || envVar == "" {
+			runtime.Release()
 			return nil, fmt.Errorf("TESTENV-COMPOSERT-BADPORT binding name and env var must not be empty")
 		}
-		reservedPort, reserveErr := ReserveLocalPort()
+		reservedPort, lock, reserveErr := reserveLockedLocalPort(usedPorts)
 		if reserveErr != nil {
+			runtime.Release()
 			return nil, reserveErr
 		}
+		usedPorts[reservedPort] = struct{}{}
 		runtime.ports[name] = reservedPort
+		runtime.portLocks = append(runtime.portLocks, lock)
+		trackReservedPortLock(lock)
 		runtime.env = append(runtime.env, envVar+"="+strconv.Itoa(reservedPort))
 		runtime.env = append(runtime.env, composeURLVars(envVar, reservedPort)...)
 	}
@@ -81,6 +99,7 @@ func NewComposeRuntime(prefix string, ports []PortBinding) (*ComposeRuntime, err
 	return runtime, nil
 }
 
+// NewComposeRuntimeOrExit creates a compose runtime and exits the process on failure.
 func NewComposeRuntimeOrExit(prefix string, ports []PortBinding) *ComposeRuntime {
 	runtime, err := NewComposeRuntime(prefix, ports)
 	if err != nil {
@@ -94,6 +113,18 @@ func NewComposeRuntimeOrExit(prefix string, ports []PortBinding) *ComposeRuntime
 	return runtime
 }
 
+// Release frees host-port allocation locks held by this runtime.
+func (r *ComposeRuntime) Release() {
+	if r == nil {
+		return
+	}
+	for _, lock := range r.portLocks {
+		lock.Release()
+	}
+	r.portLocks = nil
+}
+
+// NewComposeProjectName returns a Docker Compose-compatible project name with a unique suffix.
 func NewComposeProjectName(prefix string) (string, error) {
 	sanitized := sanitizeComposeProjectName(prefix)
 	if sanitized == "" {
@@ -140,7 +171,35 @@ func sanitizeComposeProjectName(prefix string) string {
 	return result
 }
 
+// ReserveLocalPort returns a currently available localhost TCP port and locks it for this process.
 func ReserveLocalPort() (int, error) {
+	port, lock, err := reserveLockedLocalPort(nil)
+	if err != nil {
+		return 0, err
+	}
+
+	trackReservedPortLock(lock)
+	return port, nil
+}
+
+func trackReservedPortLock(lock *portLock) {
+	reservedPortLocks.Lock()
+	reservedPortLocks.locks = append(reservedPortLocks.locks, lock)
+	reservedPortLocks.Unlock()
+}
+
+// ReleaseReservedLocalPorts frees locks created for dynamic local port reservations.
+func ReleaseReservedLocalPorts() {
+	reservedPortLocks.Lock()
+	defer reservedPortLocks.Unlock()
+
+	for _, lock := range reservedPortLocks.locks {
+		lock.Release()
+	}
+	reservedPortLocks.locks = nil
+}
+
+func reserveAvailableLocalPort() (int, error) {
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		return 0, fmt.Errorf("TESTENV-COMPOSERT-RESERVEPORT: %w", err)
@@ -152,6 +211,80 @@ func ReserveLocalPort() (int, error) {
 		return 0, fmt.Errorf("TESTENV-COMPOSERT-PORTADDR unexpected listener address %T", listener.Addr())
 	}
 	return addr.Port, nil
+}
+
+func reserveLockedLocalPort(usedPorts map[int]struct{}) (int, *portLock, error) {
+	var lastErr error
+	for attempt := 0; attempt < 100; attempt++ {
+		port, err := reserveAvailableLocalPort()
+		if err != nil {
+			return 0, nil, err
+		}
+		if _, alreadyUsed := usedPorts[port]; alreadyUsed {
+			continue
+		}
+
+		lock, err := acquirePortLock(port)
+		if err == nil {
+			return port, lock, nil
+		}
+		lastErr = err
+	}
+
+	if lastErr != nil {
+		return 0, nil, fmt.Errorf("TESTENV-COMPOSERT-LOCKPORT: %w", lastErr)
+	}
+	return 0, nil, fmt.Errorf("TESTENV-COMPOSERT-LOCKPORT could not reserve a unique local port")
+}
+
+type portLock struct {
+	path string
+}
+
+func acquirePortLock(port int) (*portLock, error) {
+	lockRoot := filepath.Join(os.TempDir(), "basyx-compose-port-locks")
+	if err := os.MkdirAll(lockRoot, 0o700); err != nil {
+		return nil, fmt.Errorf("TESTENV-COMPOSERT-LOCKROOT: %w", err)
+	}
+
+	lockPath := filepath.Join(lockRoot, strconv.Itoa(port)+".lock")
+	if err := os.Mkdir(lockPath, 0o700); err != nil {
+		if os.IsExist(err) && removeStalePortLock(lockPath) == nil {
+			if retryErr := os.Mkdir(lockPath, 0o700); retryErr == nil {
+				return writePortLockOwner(lockPath)
+			}
+		}
+		return nil, fmt.Errorf("TESTENV-COMPOSERT-LOCKCREATE: %w", err)
+	}
+	return writePortLockOwner(lockPath)
+}
+
+func removeStalePortLock(lockPath string) error {
+	info, err := os.Stat(lockPath)
+	if err != nil {
+		return err
+	}
+	if time.Since(info.ModTime()) < composePortLockStaleAfter {
+		return fmt.Errorf("TESTENV-COMPOSERT-LOCKACTIVE %s", lockPath)
+	}
+	return os.RemoveAll(lockPath)
+}
+
+func writePortLockOwner(lockPath string) (*portLock, error) {
+	owner := fmt.Sprintf("pid=%d\ncreated=%s\n", os.Getpid(), time.Now().UTC().Format(time.RFC3339Nano))
+	if err := os.WriteFile(filepath.Join(lockPath, "owner"), []byte(owner), 0o600); err != nil {
+		_ = os.RemoveAll(lockPath)
+		return nil, fmt.Errorf("TESTENV-COMPOSERT-LOCKOWNER: %w", err)
+	}
+	return &portLock{path: lockPath}, nil
+}
+
+func (l *portLock) Release() {
+	if l == nil || l.path == "" {
+		return
+	}
+	_ = os.RemoveAll(l.path)
+	l.path = ""
 }
 
 func (r *ComposeRuntime) Env() []string {
@@ -170,16 +303,32 @@ func (r *ComposeRuntime) ApplyToProcess() error {
 	if r == nil {
 		return nil
 	}
-	for _, entry := range r.env {
-		key, value, ok := strings.Cut(entry, "=")
-		if !ok {
+	return applyProcessEnv(r.env)
+}
+
+// SetEnvDefaults sets process env vars only when they are not already present.
+func SetEnvDefaults(values map[string]string) error {
+	for key, value := range values {
+		key = strings.TrimSpace(key)
+		if key == "" {
+			continue
+		}
+		if _, exists := os.LookupEnv(key); exists {
 			continue
 		}
 		if err := os.Setenv(key, value); err != nil {
-			return fmt.Errorf("TESTENV-COMPOSERT-SETENV: %w", err)
+			return fmt.Errorf("TESTENV-ENVDEFAULTS-SETENV: %w", err)
 		}
 	}
 	return nil
+}
+
+// SetEnvDefaultsOrExit sets default env vars and exits the process on failure.
+func SetEnvDefaultsOrExit(values map[string]string) {
+	if err := SetEnvDefaults(values); err != nil {
+		_, _ = fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
 }
 
 func (r *ComposeRuntime) Port(name string) int {
@@ -254,7 +403,7 @@ func PrepareSecurityEnv(srcDir string, replacements map[string]string) (string, 
 		return "", fmt.Errorf("TESTENV-SECURITYENV-NOTDIR %s is not a directory", srcDir)
 	}
 
-	targetDir, err := os.MkdirTemp(".", ".basyx-security-env-*")
+	targetDir, err := os.MkdirTemp("", "basyx-security-env-*")
 	if err != nil {
 		return "", fmt.Errorf("TESTENV-SECURITYENV-MKDIR: %w", err)
 	}

@@ -57,7 +57,7 @@ func TestMain(m *testing.M) {
 	smSecurityEnv := testenv.PrepareSecurityEnvOrExit(filepath.Join(markerExamplePath, "security", "smrepo"), markerFixtureRewrites)
 	dataDir := testenv.PrepareSecurityEnvOrExit(filepath.Join(markerExamplePath, "data"), markerFixtureRewrites)
 	expectedDir := testenv.PrepareSecurityEnvOrExit("expected", markerFixtureRewrites)
-	infraDir, infraFile, err := prepareMarkerFile(filepath.Join(markerExamplePath, "basyx-infra.yml"), "basyx-infra.yml", markerFixtureRewrites)
+	infraDir, infraFile, err := prepareMarkerFile(filepath.Join(markerExamplePath, "basyx-infra.yml"), "basyx-infra.yml", markerFixtureRewrites, nil)
 	if err != nil {
 		_, _ = fmt.Fprintf(os.Stderr, "%v\n", err)
 		_ = os.RemoveAll(dtrSecurityEnv)
@@ -66,7 +66,13 @@ func TestMain(m *testing.M) {
 		_ = os.RemoveAll(expectedDir)
 		os.Exit(1)
 	}
-	composeDir, composeFile, err := prepareMarkerFile(filepath.Join(markerExamplePath, "docker-compose.yml"), "docker-compose.yml", markerComposeReplacements(runtime, dtrSecurityEnv, smSecurityEnv, infraFile))
+	composeReplacements, requiredComposeSnippets := markerComposeReplacements(runtime, dtrSecurityEnv, smSecurityEnv, infraFile)
+	composeDir, composeFile, err := prepareMarkerFile(
+		filepath.Join(markerExamplePath, "docker-compose.yml"),
+		"docker-compose.yml",
+		composeReplacements,
+		requiredComposeSnippets,
+	)
 	if err != nil {
 		_, _ = fmt.Fprintf(os.Stderr, "%v\n", err)
 		_ = os.RemoveAll(dtrSecurityEnv)
@@ -116,27 +122,49 @@ func markerReplacements(runtime *testenv.ComposeRuntime) map[string]string {
 	}
 }
 
-func markerComposeReplacements(runtime *testenv.ComposeRuntime, dtrSecurityEnv string, smSecurityEnv string, infraFile string) map[string]string {
+func markerComposeReplacements(
+	runtime *testenv.ComposeRuntime,
+	dtrSecurityEnv string,
+	smSecurityEnv string,
+	infraFile string,
+) (map[string]string, []string) {
 	absoluteExamplePath, err := filepath.Abs(markerExamplePath)
 	if err != nil {
 		absoluteExamplePath = markerExamplePath
 	}
 	repositoryRoot := filepath.Clean(filepath.Join(absoluteExamplePath, "..", ".."))
 	replacements := markerReplacements(runtime)
-	replacements["    container_name: marker-access-aas-web-ui\n"] = ""
-	replacements["context: ../.."] = fmt.Sprintf("context: %q", repositoryRoot)
-	replacements["- ./security/dtr:/security:ro"] = "- " + dtrSecurityEnv + ":/security:ro"
-	replacements["- ./security/smrepo:/security:ro"] = "- " + smSecurityEnv + ":/security:ro"
-	replacements["- ./basyx-infra.yml:/basyx-infra.yml:ro"] = "- " + infraFile + ":/basyx-infra.yml:ro"
-	replacements["- ./keycloak/realm:/opt/keycloak/data/import:ro"] = "- " + filepath.Join(absoluteExamplePath, "keycloak", "realm") + ":/opt/keycloak/data/import:ro"
-	replacements[`- "5004:5004"`] = fmt.Sprintf(`- "127.0.0.1:%d:5004"`, runtime.Port("dtr"))
-	replacements[`- "5005:5004"`] = fmt.Sprintf(`- "127.0.0.1:%d:5004"`, runtime.Port("sm"))
-	replacements[`- "3000:3000"`] = fmt.Sprintf(`- "127.0.0.1:%d:3000"`, runtime.Port("ui"))
-	replacements[`- "8080:8080"`] = fmt.Sprintf(`- "0.0.0.0:%d:8080"`, runtime.Port("keycloak"))
-	return replacements
+	required := []string{
+		"    container_name: marker-access-aas-web-ui\n",
+		"context: ../..",
+		"- ./security/dtr:/security:ro",
+		"- ./security/smrepo:/security:ro",
+		"- ./basyx-infra.yml:/basyx-infra.yml:ro",
+		"- ./keycloak/realm:/opt/keycloak/data/import:ro",
+		`- "5004:5004"`,
+		`- "5005:5004"`,
+		`- "3000:3000"`,
+		`- "8080:8080"`,
+	}
+	replacements[required[0]] = ""
+	replacements[required[1]] = fmt.Sprintf("context: %q", repositoryRoot)
+	replacements[required[2]] = "- " + dtrSecurityEnv + ":/security:ro"
+	replacements[required[3]] = "- " + smSecurityEnv + ":/security:ro"
+	replacements[required[4]] = "- " + infraFile + ":/basyx-infra.yml:ro"
+	replacements[required[5]] = "- " + filepath.Join(absoluteExamplePath, "keycloak", "realm") + ":/opt/keycloak/data/import:ro"
+	replacements[required[6]] = fmt.Sprintf(`- "127.0.0.1:%d:5004"`, runtime.Port("dtr"))
+	replacements[required[7]] = fmt.Sprintf(`- "127.0.0.1:%d:5004"`, runtime.Port("sm"))
+	replacements[required[8]] = fmt.Sprintf(`- "127.0.0.1:%d:3000"`, runtime.Port("ui"))
+	replacements[required[9]] = fmt.Sprintf(`- "0.0.0.0:%d:8080"`, runtime.Port("keycloak"))
+	return replacements, required
 }
 
-func prepareMarkerFile(sourcePath string, targetName string, replacements map[string]string) (string, string, error) {
+func prepareMarkerFile(
+	sourcePath string,
+	targetName string,
+	replacements map[string]string,
+	requiredSnippets []string,
+) (string, string, error) {
 	info, err := os.Stat(sourcePath)
 	if err != nil {
 		return "", "", fmt.Errorf("AASEMV-MARKER-FILESTAT: %w", err)
@@ -147,11 +175,14 @@ func prepareMarkerFile(sourcePath string, targetName string, replacements map[st
 		return "", "", fmt.Errorf("AASEMV-MARKER-FILEREAD: %w", err)
 	}
 	content := string(data)
+	if missing := missingMarkerSnippets(content, requiredSnippets); len(missing) > 0 {
+		return "", "", fmt.Errorf("AASEMV-MARKER-FILEREPLACE missing required snippets in %s: %s", sourcePath, strings.Join(missing, ", "))
+	}
 	for oldValue, newValue := range replacements {
 		content = strings.ReplaceAll(content, oldValue, newValue)
 	}
 
-	targetDir, err := os.MkdirTemp(".", ".basyx-marker-file-*")
+	targetDir, err := os.MkdirTemp("", "basyx-marker-file-*")
 	if err != nil {
 		return "", "", fmt.Errorf("AASEMV-MARKER-FILEDIR: %w", err)
 	}
@@ -171,4 +202,14 @@ func prepareMarkerFile(sourcePath string, targetName string, replacements map[st
 		return "", "", fmt.Errorf("AASEMV-MARKER-FILEWRITE: %w", err)
 	}
 	return targetDir, targetPath, nil
+}
+
+func missingMarkerSnippets(content string, requiredSnippets []string) []string {
+	missing := make([]string, 0)
+	for _, snippet := range requiredSnippets {
+		if !strings.Contains(content, snippet) {
+			missing = append(missing, snippet)
+		}
+	}
+	return missing
 }

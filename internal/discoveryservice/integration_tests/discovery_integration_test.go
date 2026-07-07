@@ -44,6 +44,9 @@ var discoveryBaseURL = testenv.LocalURLFromEnv("BASYX_IT_API_PORT", 6004)
 
 func TestMain(m *testing.M) {
 	if os.Getenv("BASYX_EXTERNAL_COMPOSE") == "1" {
+		testenv.SetEnvDefaultsOrExit(map[string]string{
+			"BASYX_IT_API_URL": discoveryBaseURL,
+		})
 		os.Exit(m.Run())
 	}
 
