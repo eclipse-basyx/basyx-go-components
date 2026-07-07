@@ -31,6 +31,7 @@ import (
 	"net/http"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 )
 
@@ -66,7 +67,8 @@ func EnsureVisibleCreate(
 		return common.NewErrConflict(conflictMessage)
 	}
 
-	if err = read(ctx); err != nil {
+	readCtx := auth.SelectFormulaForRight(ctx, grammar.RightsEnumREAD)
+	if err = read(readCtx); err != nil {
 		if common.IsErrNotFound(err) || common.IsErrDenied(err) {
 			return common.NewErrDenied(deniedMessage)
 		}
