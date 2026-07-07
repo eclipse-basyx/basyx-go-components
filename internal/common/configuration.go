@@ -49,11 +49,17 @@ const defaultServerStrictVerification = string(commonmodel.VerificationModePermi
 // DefaultConfig holds all default values for configuration options.
 // These values are also used to mark default values in the printed configuration.
 var DefaultConfig = struct {
+	ServerHost                          string
 	ServerPort                          int
 	ServerContextPath                   string
 	ServerCacheEnabled                  bool
 	ServerStrictVerification            string
 	ServerVerificationEndpointAvailable bool
+	ServerReadHeaderTimeoutSeconds      int
+	ServerReadTimeoutSeconds            int
+	ServerWriteTimeoutSeconds           int
+	ServerIdleTimeoutSeconds            int
+	ServerShutdownTimeoutSeconds        int
 	PgPort                              int
 	PgDBName                            string
 	PgSSLMode                           string
@@ -108,11 +114,17 @@ var DefaultConfig = struct {
 	EventingTopicPrefix                 string
 	SwaggerEnabled                      bool
 }{
+	ServerHost:                          "0.0.0.0",
 	ServerPort:                          5004,
 	ServerContextPath:                   "",
 	ServerCacheEnabled:                  false,
 	ServerStrictVerification:            defaultServerStrictVerification,
 	ServerVerificationEndpointAvailable: true,
+	ServerReadHeaderTimeoutSeconds:      15,
+	ServerReadTimeoutSeconds:            30,
+	ServerWriteTimeoutSeconds:           30,
+	ServerIdleTimeoutSeconds:            60,
+	ServerShutdownTimeoutSeconds:        10,
 	PgPort:                              5432,
 	PgDBName:                            "basyxTestDB",
 	PgSSLMode:                           "disable",
@@ -307,12 +319,17 @@ type SwaggerConfig struct {
 
 // ServerConfig contains HTTP server configuration parameters.
 type ServerConfig struct {
-	Host                          string `mapstructure:"host" yaml:"host"`                                                   // HTTP server host (default: 0.0.0.0)
-	Port                          int    `mapstructure:"port" yaml:"port"`                                                   // HTTP server port (default: 5004)
-	ContextPath                   string `mapstructure:"contextPath" yaml:"contextPath"`                                     // Base path for all endpoints
-	CacheEnabled                  bool   `mapstructure:"cacheEnabled" yaml:"cacheEnabled"`                                   // Enable/disable response caching
-	StrictVerification            string `mapstructure:"strictVerification" yaml:"strictVerification"`                       // Verification mode: off|permissive|strict (default: permissive)
-	VerificationEndpointAvailable bool   `mapstructure:"verificationEndpointAvailable" yaml:"verificationEndpointAvailable"` // Enable/disable verification endpoint
+	Host                          string `mapstructure:"host" yaml:"host"`                                                                         // HTTP server host (default: 0.0.0.0)
+	Port                          int    `mapstructure:"port" yaml:"port"`                                                                         // HTTP server port (default: 5004)
+	ContextPath                   string `mapstructure:"contextPath" yaml:"contextPath"`                                                           // Base path for all endpoints
+	CacheEnabled                  bool   `mapstructure:"cacheEnabled" yaml:"cacheEnabled"`                                                         // Enable/disable response caching
+	StrictVerification            string `mapstructure:"strictVerification" yaml:"strictVerification"`                                             // Verification mode: off|permissive|strict (default: permissive)
+	VerificationEndpointAvailable bool   `mapstructure:"verificationEndpointAvailable" yaml:"verificationEndpointAvailable"`                       // Enable/disable verification endpoint
+	ReadHeaderTimeoutSeconds      int    `mapstructure:"readHeaderTimeoutSeconds" yaml:"readHeaderTimeoutSeconds" json:"readHeaderTimeoutSeconds"` // Maximum time to read request headers
+	ReadTimeoutSeconds            int    `mapstructure:"readTimeoutSeconds" yaml:"readTimeoutSeconds" json:"readTimeoutSeconds"`                   // Maximum time to read an entire request
+	WriteTimeoutSeconds           int    `mapstructure:"writeTimeoutSeconds" yaml:"writeTimeoutSeconds" json:"writeTimeoutSeconds"`                // Maximum time before timing out response writes
+	IdleTimeoutSeconds            int    `mapstructure:"idleTimeoutSeconds" yaml:"idleTimeoutSeconds" json:"idleTimeoutSeconds"`                   // Maximum idle keep-alive connection time
+	ShutdownTimeoutSeconds        int    `mapstructure:"shutdownTimeoutSeconds" yaml:"shutdownTimeoutSeconds" json:"shutdownTimeoutSeconds"`       // Maximum graceful shutdown wait time
 }
 
 // PostgresConfig contains PostgreSQL database connection parameters.
@@ -473,6 +490,9 @@ func LoadConfig(configPath string, configMode ConfigMode) (*Config, error) {
 	if err = validatePostgresConfig(v, cfg.Postgres); err != nil {
 		return nil, err
 	}
+	if err = validateServerConfig(cfg.Server); err != nil {
+		return nil, err
+	}
 	applyABACEnvOverrides(cfg)
 	if err = validateGeneralConfig(cfg); err != nil {
 		return nil, err
@@ -510,6 +530,22 @@ func validateGeneralConfig(cfg *Config) error {
 	}
 	if cfg.General.BulkBatchLimit <= 0 {
 		return fmt.Errorf("CONFIG-GENERAL-BULKBATCHLIMIT general.bulkBatchLimit must be greater than 0")
+	}
+	return nil
+}
+
+func validateServerConfig(cfg ServerConfig) error {
+	timeouts := map[string]int{
+		"server.readHeaderTimeoutSeconds": cfg.ReadHeaderTimeoutSeconds,
+		"server.readTimeoutSeconds":       cfg.ReadTimeoutSeconds,
+		"server.writeTimeoutSeconds":      cfg.WriteTimeoutSeconds,
+		"server.idleTimeoutSeconds":       cfg.IdleTimeoutSeconds,
+		"server.shutdownTimeoutSeconds":   cfg.ShutdownTimeoutSeconds,
+	}
+	for key, value := range timeouts {
+		if value <= 0 {
+			return fmt.Errorf("CONFIG-SERVER-TIMEOUT %s must be greater than 0", key)
+		}
 	}
 	return nil
 }
@@ -976,12 +1012,17 @@ func normalizeAASPreconfigPaths(rawPaths []string) []string {
 //   - ABAC: Disabled by default
 func setDefaults(v *viper.Viper) {
 	// Server defaults
-	v.SetDefault("server.host", "0.0.0.0")
-	v.SetDefault("server.port", 5004)
+	v.SetDefault("server.host", DefaultConfig.ServerHost)
+	v.SetDefault("server.port", DefaultConfig.ServerPort)
 	v.SetDefault("server.contextPath", "")
 	v.SetDefault("server.cacheEnabled", false)
 	v.SetDefault("server.strictVerification", DefaultConfig.ServerStrictVerification)
-	v.SetDefault("server.verificationEndpointAvailable", true)
+	v.SetDefault("server.verificationEndpointAvailable", DefaultConfig.ServerVerificationEndpointAvailable)
+	v.SetDefault("server.readHeaderTimeoutSeconds", DefaultConfig.ServerReadHeaderTimeoutSeconds)
+	v.SetDefault("server.readTimeoutSeconds", DefaultConfig.ServerReadTimeoutSeconds)
+	v.SetDefault("server.writeTimeoutSeconds", DefaultConfig.ServerWriteTimeoutSeconds)
+	v.SetDefault("server.idleTimeoutSeconds", DefaultConfig.ServerIdleTimeoutSeconds)
+	v.SetDefault("server.shutdownTimeoutSeconds", DefaultConfig.ServerShutdownTimeoutSeconds)
 
 	// PostgreSQL defaults
 	v.SetDefault("postgres.host", "db")
@@ -1119,11 +1160,17 @@ func PrintConfiguration(cfg *Config) {
 
 	// Server
 	lines = append(lines, "🔹 Server:")
+	add("Host", cfg.Server.Host, DefaultConfig.ServerHost)
 	add("Port", cfg.Server.Port, DefaultConfig.ServerPort)
 	add("Context Path", cfg.Server.ContextPath, DefaultConfig.ServerContextPath)
 	add("Cache Enabled", cfg.Server.CacheEnabled, DefaultConfig.ServerCacheEnabled)
 	add("Verification Mode", cfg.Server.StrictVerification, DefaultConfig.ServerStrictVerification)
 	add("Verification Endpoint Available", cfg.Server.VerificationEndpointAvailable, DefaultConfig.ServerVerificationEndpointAvailable)
+	add("Read Header Timeout (s)", cfg.Server.ReadHeaderTimeoutSeconds, DefaultConfig.ServerReadHeaderTimeoutSeconds)
+	add("Read Timeout (s)", cfg.Server.ReadTimeoutSeconds, DefaultConfig.ServerReadTimeoutSeconds)
+	add("Write Timeout (s)", cfg.Server.WriteTimeoutSeconds, DefaultConfig.ServerWriteTimeoutSeconds)
+	add("Idle Timeout (s)", cfg.Server.IdleTimeoutSeconds, DefaultConfig.ServerIdleTimeoutSeconds)
+	add("Shutdown Timeout (s)", cfg.Server.ShutdownTimeoutSeconds, DefaultConfig.ServerShutdownTimeoutSeconds)
 
 	lines = append(lines, divider)
 

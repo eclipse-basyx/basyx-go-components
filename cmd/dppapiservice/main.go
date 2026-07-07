@@ -32,12 +32,7 @@ import (
 	"database/sql"
 	"embed"
 	"flag"
-	"fmt"
 	"log"
-	"net/http"
-	"os"
-	"os/signal"
-	"syscall"
 	"time"
 
 	aasrepositorydb "github.com/eclipse-basyx/basyx-go-components/internal/aasrepository/persistence"
@@ -61,7 +56,7 @@ func runServer(ctx context.Context, configPath string) error {
 		return err
 	}
 
-	addr := fmt.Sprintf("0.0.0.0:%d", cfg.Server.Port)
+	addr := common.ServerAddress(cfg.Server)
 
 	dsn := common.BuildPostgresDSN(cfg.Postgres)
 	sharedDB, err := openSharedDatabase(ctx, cfg, dsn)
@@ -84,30 +79,8 @@ func runServer(ctx context.Context, configPath string) error {
 		return err
 	}
 
-	server := &http.Server{
-		Addr:              addr,
-		Handler:           router,
-		ReadHeaderTimeout: 15 * time.Second,
-		ReadTimeout:       30 * time.Second,
-		WriteTimeout:      30 * time.Second,
-		IdleTimeout:       60 * time.Second,
-	}
-
 	log.Printf("Server started on %s", addr)
-	go func() {
-		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Printf("Server error: %v", err)
-		}
-	}()
-
-	<-ctx.Done()
-	log.Println("Shutting down server...")
-	shutdownCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
-	defer cancel()
-	if err := server.Shutdown(shutdownCtx); err != nil {
-		return fmt.Errorf("DPP-SRV-SHUTDOWN %w", err)
-	}
-	return nil
+	return common.RunHTTPServer(ctx, "DPP", cfg.Server, router)
 }
 
 func openSharedDatabase(ctx context.Context, cfg *common.Config, dsn string) (*sql.DB, error) {
@@ -138,7 +111,7 @@ func configurePostgresPool(db *sql.DB, cfg common.PostgresConfig) {
 }
 
 func main() {
-	ctx, stop := signal.NotifyContext(context.TODO(), os.Interrupt, syscall.SIGTERM)
+	ctx, stop := common.SignalContext()
 
 	configPath := ""
 	flag.StringVar(&configPath, "config", "", "Path to config file")
