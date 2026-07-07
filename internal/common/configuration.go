@@ -121,8 +121,8 @@ var DefaultConfig = struct {
 	ServerStrictVerification:            defaultServerStrictVerification,
 	ServerVerificationEndpointAvailable: true,
 	ServerReadHeaderTimeoutSeconds:      15,
-	ServerReadTimeoutSeconds:            30,
-	ServerWriteTimeoutSeconds:           30,
+	ServerReadTimeoutSeconds:            300,
+	ServerWriteTimeoutSeconds:           300,
 	ServerIdleTimeoutSeconds:            60,
 	ServerShutdownTimeoutSeconds:        10,
 	PgPort:                              5432,
@@ -486,6 +486,7 @@ func LoadConfig(configPath string, configMode ConfigMode) (*Config, error) {
 	}
 	cfg.Server.StrictVerification = string(verificationMode)
 	applyAASPreconfigPathOverrides(cfg)
+	applyServerEnvOverrides(cfg)
 	applyGeneralEnvOverrides(cfg)
 	if err = validatePostgresConfig(v, cfg.Postgres); err != nil {
 		return nil, err
@@ -522,6 +523,32 @@ func applyGeneralEnvOverrides(cfg *Config) {
 			cfg.General.BulkBatchLimit = parsed
 		}
 	}
+}
+
+func applyServerEnvOverrides(cfg *Config) {
+	if cfg == nil {
+		return
+	}
+	applyFirstIntEnv(func(value int) { cfg.Server.ReadHeaderTimeoutSeconds = value },
+		"SERVER_READ_HEADER_TIMEOUT_SECONDS",
+		"BASYX_SERVER_READ_HEADER_TIMEOUT_SECONDS",
+	)
+	applyFirstIntEnv(func(value int) { cfg.Server.ReadTimeoutSeconds = value },
+		"SERVER_READ_TIMEOUT_SECONDS",
+		"BASYX_SERVER_READ_TIMEOUT_SECONDS",
+	)
+	applyFirstIntEnv(func(value int) { cfg.Server.WriteTimeoutSeconds = value },
+		"SERVER_WRITE_TIMEOUT_SECONDS",
+		"BASYX_SERVER_WRITE_TIMEOUT_SECONDS",
+	)
+	applyFirstIntEnv(func(value int) { cfg.Server.IdleTimeoutSeconds = value },
+		"SERVER_IDLE_TIMEOUT_SECONDS",
+		"BASYX_SERVER_IDLE_TIMEOUT_SECONDS",
+	)
+	applyFirstIntEnv(func(value int) { cfg.Server.ShutdownTimeoutSeconds = value },
+		"SERVER_SHUTDOWN_TIMEOUT_SECONDS",
+		"BASYX_SERVER_SHUTDOWN_TIMEOUT_SECONDS",
+	)
 }
 
 func validateGeneralConfig(cfg *Config) error {
@@ -944,6 +971,17 @@ func applyIntEnv(key string, assign func(int)) {
 	}
 }
 
+func applyFirstIntEnv(assign func(int), keys ...string) {
+	value, ok := lookupFirstTrimmedEnv(keys...)
+	if !ok {
+		return
+	}
+	var parsed int
+	if _, err := fmt.Sscanf(value, "%d", &parsed); err == nil {
+		assign(parsed)
+	}
+}
+
 func parseCommaSeparated(rawValue string) []string {
 	parts := strings.Split(rawValue, ",")
 	values := make([]string, 0, len(parts))
@@ -1005,7 +1043,7 @@ func normalizeAASPreconfigPaths(rawPaths []string) []string {
 //   - v: Viper instance to configure with default values
 //
 // Default values include:
-//   - Server: Port 5004, no context path, caching disabled
+//   - Server: Port 5004, no context path, caching disabled, bounded HTTP timeouts
 //   - Database: Local PostgreSQL on port 5432 with test credentials
 //   - CORS: Permissive policy allowing all origins and common methods
 //   - OIDC: Local Keycloak realm configuration

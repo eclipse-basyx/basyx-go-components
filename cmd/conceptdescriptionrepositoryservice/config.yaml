@@ -5,8 +5,8 @@ server:
   strictVerification: permissive  # Values: off|permissive|strict (default: permissive)
   verificationEndpointAvailable: true
   readHeaderTimeoutSeconds: 15
-  readTimeoutSeconds: 30
-  writeTimeoutSeconds: 30
+  readTimeoutSeconds: 300
+  writeTimeoutSeconds: 300
   idleTimeoutSeconds: 60
   shutdownTimeoutSeconds: 10
 

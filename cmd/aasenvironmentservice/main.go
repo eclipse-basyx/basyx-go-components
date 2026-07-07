@@ -286,7 +286,10 @@ func runServer(ctx context.Context, configPath string) error {
 
 	addr := common.ServerAddress(cfg.Server)
 	log.Printf("AAS Environment Service listening on %s (contextPath=%q)\n", addr, cfg.Server.ContextPath)
-	server := common.StartHTTPServer("AASENV", cfg.Server, r)
+	server, err := common.StartHTTPServer(ctx, "AASENV", cfg.Server, r)
+	if err != nil {
+		return err
+	}
 
 	preconfigurationCtx := aasenvironment.ContextWithAASPreconfigurationAudit(common.ContextWithConfig(ctx, cfg))
 	preconfigurationSummary := aasenvironment.RunAASPreconfiguration(preconfigurationCtx, uploadService, cfg.General.AASPreconfigPaths)

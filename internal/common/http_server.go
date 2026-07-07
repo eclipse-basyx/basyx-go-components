@@ -48,12 +48,17 @@ type HTTPServerRunner struct {
 	serveErr        chan error
 }
 
-// SignalContext returns a context that is canceled on process interrupt or SIGTERM.
+// SignalContext returns a context that is canceled when the process receives
+// os.Interrupt or SIGTERM, plus the cancel function returned by
+// signal.NotifyContext. Callers should defer the cancel function in main so the
+// signal handler is released when the service exits.
 func SignalContext() (context.Context, context.CancelFunc) {
 	return signal.NotifyContext(context.TODO(), os.Interrupt, syscall.SIGTERM)
 }
 
-// ServerAddress returns the configured HTTP listen address.
+// ServerAddress returns the HTTP listen address from cfg.Host and cfg.Port.
+// Blank hosts are treated as the BaSyx default host, and the returned value is
+// formatted with net.JoinHostPort so IPv6 hosts are bracketed correctly.
 func ServerAddress(cfg ServerConfig) string {
 	host := strings.TrimSpace(cfg.Host)
 	if host == "" {
@@ -63,7 +68,15 @@ func ServerAddress(cfg ServerConfig) string {
 }
 
 // NewConfiguredHTTPServer creates an HTTP server with BaSyx timeout defaults.
-func NewConfiguredHTTPServer(cfg ServerConfig, handler http.Handler) *http.Server {
+// The ctx parameter becomes the base context for accepted connections, allowing
+// request handlers to observe service shutdown through r.Context(). The cfg
+// parameter supplies the listen address and timeout values; unset timeout values
+// use secure BaSyx defaults. The returned server is not started.
+func NewConfiguredHTTPServer(ctx context.Context, cfg ServerConfig, handler http.Handler) *http.Server {
+	baseCtx := ctx
+	if baseCtx == nil {
+		baseCtx = context.TODO()
+	}
 	return &http.Server{
 		Addr:              ServerAddress(cfg),
 		Handler:           handler,
@@ -71,27 +84,63 @@ func NewConfiguredHTTPServer(cfg ServerConfig, handler http.Handler) *http.Serve
 		ReadTimeout:       serverTimeout(cfg.ReadTimeoutSeconds, DefaultConfig.ServerReadTimeoutSeconds),
 		WriteTimeout:      serverTimeout(cfg.WriteTimeoutSeconds, DefaultConfig.ServerWriteTimeoutSeconds),
 		IdleTimeout:       serverTimeout(cfg.IdleTimeoutSeconds, DefaultConfig.ServerIdleTimeoutSeconds),
+		BaseContext: func(net.Listener) context.Context {
+			return baseCtx
+		},
 	}
 }
 
-// StartHTTPServer starts a configured HTTP server in a managed goroutine.
-func StartHTTPServer(serviceCode string, cfg ServerConfig, handler http.Handler) *HTTPServerRunner {
+// StartHTTPServer binds and starts a configured HTTP server in a managed
+// goroutine. The serviceCode parameter is normalized and used as the prefix for
+// coded RUNSERVER errors. The ctx parameter is propagated to request contexts
+// and is later passed to Wait to trigger graceful shutdown. The returned runner
+// has already bound its listener; startup failures are returned immediately.
+func StartHTTPServer(ctx context.Context, serviceCode string, cfg ServerConfig, handler http.Handler) (*HTTPServerRunner, error) {
+	normalizedServiceCode := normalizeServiceCode(serviceCode)
+	if ctx == nil {
+		return nil, fmt.Errorf("%s-RUNSERVER-CONTEXT context must not be nil", normalizedServiceCode)
+	}
+	server := NewConfiguredHTTPServer(ctx, cfg, handler)
+	listener, err := net.Listen("tcp", server.Addr)
+	if err != nil {
+		return nil, fmt.Errorf("%s-RUNSERVER-LISTEN %w", normalizedServiceCode, err)
+	}
+	server.Addr = listener.Addr().String()
 	runner := &HTTPServerRunner{
-		server:          NewConfiguredHTTPServer(cfg, handler),
-		serviceCode:     normalizeServiceCode(serviceCode),
+		server:          server,
+		serviceCode:     normalizedServiceCode,
 		shutdownTimeout: serverTimeout(cfg.ShutdownTimeoutSeconds, DefaultConfig.ServerShutdownTimeoutSeconds),
 		serveErr:        make(chan error, 1),
 	}
-	go runner.listenAndServe()
-	return runner
+	go runner.serve(listener)
+	return runner, nil
 }
 
-// RunHTTPServer starts a configured HTTP server and blocks until it stops.
+// RunHTTPServer starts a configured HTTP server and blocks until it stops. The
+// ctx parameter is used both as the server base context and as the cancellation
+// signal for graceful shutdown. The serviceCode parameter prefixes coded listen,
+// shutdown, and context errors. The cfg parameter controls address and timeout
+// values; the handler parameter serves all HTTP requests.
+//
+// Example:
+//
+//	ctx, stop := common.SignalContext()
+//	defer stop()
+//	if err := common.RunHTTPServer(ctx, "AASR", cfg.Server, router); err != nil {
+//		log.Fatal(err)
+//	}
 func RunHTTPServer(ctx context.Context, serviceCode string, cfg ServerConfig, handler http.Handler) error {
-	return StartHTTPServer(serviceCode, cfg, handler).Wait(ctx)
+	runner, err := StartHTTPServer(ctx, serviceCode, cfg, handler)
+	if err != nil {
+		return err
+	}
+	return runner.Wait(ctx)
 }
 
-// Wait blocks until the server fails to start, stops externally, or ctx is canceled.
+// Wait blocks until the server stops externally or ctx is canceled. A canceled
+// ctx starts graceful shutdown with the runner's configured shutdown timeout.
+// The returned error is nil on clean shutdown or includes the normalized service
+// code when listen, shutdown, or context handling fails.
 func (runner *HTTPServerRunner) Wait(ctx context.Context) error {
 	if runner == nil || runner.server == nil {
 		return fmt.Errorf("HTTP-RUNSERVER-CONTEXT server runner must not be nil")
@@ -109,8 +158,8 @@ func (runner *HTTPServerRunner) Wait(ctx context.Context) error {
 	}
 }
 
-func (runner *HTTPServerRunner) listenAndServe() {
-	err := runner.server.ListenAndServe()
+func (runner *HTTPServerRunner) serve(listener net.Listener) {
+	err := runner.server.Serve(listener)
 	if errors.Is(err, http.ErrServerClosed) {
 		runner.serveErr <- nil
 		return

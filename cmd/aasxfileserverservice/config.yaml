@@ -3,8 +3,8 @@ server:
   contextPath: ""
   host: 0.0.0.0
   readHeaderTimeoutSeconds: 15
-  readTimeoutSeconds: 30
-  writeTimeoutSeconds: 30
+  readTimeoutSeconds: 300
+  writeTimeoutSeconds: 300
   idleTimeoutSeconds: 60
   shutdownTimeoutSeconds: 10
 
