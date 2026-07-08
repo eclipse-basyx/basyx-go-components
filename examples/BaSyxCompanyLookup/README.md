@@ -4,6 +4,33 @@ The BaSyx Company Lookup is a component that can be used in dataspaces to find e
 
 It acts as a centralized directory where participants register Company Descriptors. Clients can then discover available endpoints by company domain, company name, and optional asset ID matching.
 
+## Start The Example
+
+Prerequisites:
+
+- Docker + Docker Compose
+- Free port `5080`
+
+From this folder:
+
+```bash
+docker compose up -d
+```
+
+The compose stack starts PostgreSQL, runs the BaSyx Configuration Service, starts Company Lookup on [http://localhost:5080](http://localhost:5080), and then runs the `data-init` sidecar. The sidecar executes `startup.sh` and preloads sample descriptors for Fraunhofer IESE and an example company.
+
+Stop containers:
+
+```bash
+docker compose down
+```
+
+Stop containers and remove volumes:
+
+```bash
+docker compose down -v
+```
+
 ## Example Usage of BaSyx Company Lookup
 
 ### GET

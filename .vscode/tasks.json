@@ -4,7 +4,7 @@
         {
             "label": "Run Linter",
             "type": "shell",
-            "command": ". ./scripts/lint.sh",
+            "command": "bash scripts/lint.sh",
             "group": {
                 "kind": "build",
                 "isDefault": false
@@ -20,7 +20,7 @@
         {
             "label": "Run AAS Registry Service",
             "type": "shell",
-            "command": "go run ./cmd/aasregistryservice -config ./cmd/aasregistryservice/config.priv.yaml -databaseSchema ./basyxschema.sql",
+            "command": "go run ./cmd/aasregistryservice -config ./cmd/aasregistryservice/config.priv.yaml",
             "group": {
                 "kind": "build",
                 "isDefault": false

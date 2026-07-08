@@ -109,27 +109,34 @@ sequenceDiagram
 
 ## Where security is wired
 
-- OIDC + ABAC middleware is applied in the service entrypoints.
-  - AAS Registry: [cmd/aasregistryservice/main.go](cmd/aasregistryservice/main.go)
-  - Discovery Service: [cmd/discoveryservice/main.go](cmd/discoveryservice/main.go)
-  - Digital Twin Registry: [cmd/digitaltwinregistryservice/main.go](cmd/digitaltwinregistryservice/main.go)
-- Core security logic lives in [internal/common/security](internal/common/security).
-  - OIDC: [internal/common/security/oidc.go](internal/common/security/oidc.go)
-  - ABAC engine: [internal/common/security/abac_engine.go](internal/common/security/abac_engine.go)
-  - Route->rights mapping: [internal/common/security/abac_engine_methods.go](internal/common/security/abac_engine_methods.go)
-  - Object/route matching: [internal/common/security/abac_engine_objects.go](internal/common/security/abac_engine_objects.go)
-  - Attributes handling: [internal/common/security/abac_engine_attributes.go](internal/common/security/abac_engine_attributes.go)
-  - Access model materialization: [internal/common/security/abac_engine_materialization.go](internal/common/security/abac_engine_materialization.go)
-  - QueryFilter helpers: [internal/common/security/authorize.go](internal/common/security/authorize.go) and [internal/common/security/filter_helpers.go](internal/common/security/filter_helpers.go)
+- OIDC + ABAC middleware is applied by service entrypoints through the shared ABAC policy setup. Examples include:
+  - AAS Environment: [cmd/aasenvironmentservice/main.go](../../cmd/aasenvironmentservice/main.go)
+  - AAS Repository: [cmd/aasrepositoryservice/main.go](../../cmd/aasrepositoryservice/main.go)
+  - Submodel Repository: [cmd/submodelrepositoryservice/main.go](../../cmd/submodelrepositoryservice/main.go)
+  - AAS Registry: [cmd/aasregistryservice/main.go](../../cmd/aasregistryservice/main.go)
+  - Submodel Registry: [cmd/submodelregistryservice/main.go](../../cmd/submodelregistryservice/main.go)
+  - Discovery Service: [cmd/discoveryservice/main.go](../../cmd/discoveryservice/main.go)
+  - Digital Twin Registry: [cmd/digitaltwinregistryservice/main.go](../../cmd/digitaltwinregistryservice/main.go)
+  - AASX File Server: [cmd/aasxfileserverservice/main.go](../../cmd/aasxfileserverservice/main.go)
+  - Concept Description Repository: [cmd/conceptdescriptionrepositoryservice/main.go](../../cmd/conceptdescriptionrepositoryservice/main.go)
+- Core security logic lives in [internal/common/security](../../internal/common/security).
+  - OIDC: [internal/common/security/oidc.go](../../internal/common/security/oidc.go)
+  - ABAC engine: [internal/common/security/abac_engine.go](../../internal/common/security/abac_engine.go)
+  - Route->rights mapping: [internal/common/security/abac_engine_methods.go](../../internal/common/security/abac_engine_methods.go)
+  - Object/route matching: [internal/common/security/abac_engine_objects.go](../../internal/common/security/abac_engine_objects.go)
+  - Attributes handling: [internal/common/security/abac_engine_attributes.go](../../internal/common/security/abac_engine_attributes.go)
+  - Access model materialization: [internal/common/security/abac_engine_materialization.go](../../internal/common/security/abac_engine_materialization.go)
+  - QueryFilter helpers: [internal/common/security/authorize.go](../../internal/common/security/authorize.go) and [internal/common/security/filter_helpers.go](../../internal/common/security/filter_helpers.go)
 
 ## Enablement rules
 
 - Security is only active when ABAC is enabled in config. If `abac.enabled` is false, no OIDC or ABAC middleware is applied.
-  - Example config: [cmd/aasregistryservice/config.yaml](cmd/aasregistryservice/config.yaml)
+  - Example config: [cmd/aasregistryservice/config.yaml](../../cmd/aasregistryservice/config.yaml)
 - OIDC uses the trustlist file to allow configured issuers and audiences.
-  - Example trustlist: [cmd/aasregistryservice/config/trustlist.json](cmd/aasregistryservice/config/trustlist.json)
+  - Example trustlist: [cmd/aasregistryservice/config/trustlist.json](../../cmd/aasregistryservice/config/trustlist.json)
 - Access rules are imported from the configured access model JSON into the PostgreSQL-backed ABAC policy repository when `abac.policyFileImport` requires it. Runtime authorization uses the active materialized DB policy.
-  - Example rules: [cmd/aasregistryservice/config/access_rules/access-rules.json](cmd/aasregistryservice/config/access_rules/access-rules.json)
+  - Example rules: [cmd/aasregistryservice/config/access_rules/access-rules.json](../../cmd/aasregistryservice/config/access_rules/access-rules.json)
+- For most services, the default startup file-import mode is `if_missing`: the JSON file is imported only when no active database-backed policy exists for the effective policy scope. If the JSON access-rule file should be the source of truth and overwrite existing policies on restart, set `abac.policyFileImport: always` or `ABAC_POLICY_FILE_IMPORT=always`. Digital Twin Registry is the current exception and defaults to `always`.
 - DB-backed policy rows are isolated by service scope by default. Set `abac.policyScope` only when a deployment must split same-service instances or deliberately share one policy namespace.
 - The protected ABAC management API under `/security/abac/**` is available only when `abac.enabled` and `abac.managementApi.enabled` are both true. Digital Twin Registry keeps this API disabled by default but can expose it through the same explicit opt-in. The OpenAPI/Swagger documentation follows the same condition.
 
@@ -148,12 +155,12 @@ sequenceDiagram
 - AllowAnonymous is currently enabled by default in `SetupSecurityWithClaimsMiddleware`.
 
 PostgreSQL-backed policy versions:
-- [docu/security/ABAC_POLICY_REPOSITORY.md](ABAC_POLICY_REPOSITORY.md)
-- [internal/common/security/abacpolicy](internal/common/security/abacpolicy)
+- [ABAC_POLICY_REPOSITORY.md](ABAC_POLICY_REPOSITORY.md)
+- [internal/common/security/abacpolicy](../../internal/common/security/abacpolicy)
 
 Relevant code:
-- [internal/common/security/oidc.go](internal/common/security/oidc.go)
-- [internal/common/security/security.go](internal/common/security/security.go)
+- [internal/common/security/oidc.go](../../internal/common/security/oidc.go)
+- [internal/common/security/security.go](../../internal/common/security/security.go)
 
 Example trustlist entry:
 
@@ -194,11 +201,11 @@ Outcomes:
 - Residual conditions -> allow + QueryFilter for downstream enforcement.
 
 Relevant code:
-- [internal/common/security/abac_engine.go](internal/common/security/abac_engine.go)
-- [internal/common/security/abac_engine_methods.go](internal/common/security/abac_engine_methods.go)
-- [internal/common/security/abac_engine_objects.go](internal/common/security/abac_engine_objects.go)
-- [internal/common/security/abac_engine_attributes.go](internal/common/security/abac_engine_attributes.go)
-- [internal/common/security/abac_engine_materialization.go](internal/common/security/abac_engine_materialization.go)
+- [internal/common/security/abac_engine.go](../../internal/common/security/abac_engine.go)
+- [internal/common/security/abac_engine_methods.go](../../internal/common/security/abac_engine_methods.go)
+- [internal/common/security/abac_engine_objects.go](../../internal/common/security/abac_engine_objects.go)
+- [internal/common/security/abac_engine_attributes.go](../../internal/common/security/abac_engine_attributes.go)
+- [internal/common/security/abac_engine_materialization.go](../../internal/common/security/abac_engine_materialization.go)
 
 ## RIGHT -> Operational Verb -> HTTP method mapping
 
@@ -286,13 +293,13 @@ Relevant code:
 - [internal/common/security/filter_helpers.go](../../internal/common/security/filter_helpers.go)
 
 Registry-specific operation semantics:
-- [docu/security/REGISTRY_SECURITY.md](REGISTRY_SECURITY.md)
+- [REGISTRY_SECURITY.md](REGISTRY_SECURITY.md)
 
 ## Claims enrichment
 
 - Digital Twin Registry injects the `Edc-Bpn` header into claims before ABAC.
-  - [internal/common/security/edc_bpn.go](internal/common/security/edc_bpn.go)
-  - [cmd/digitaltwinregistryservice/main.go](cmd/digitaltwinregistryservice/main.go)
+  - [internal/common/security/edc_bpn.go](../../internal/common/security/edc_bpn.go)
+  - [cmd/digitaltwinregistryservice/main.go](../../cmd/digitaltwinregistryservice/main.go)
 
 ## Access model structure (high level)
 
@@ -324,13 +331,13 @@ Validation invariants enforced by the current implementation:
   - object identifiers in `OBJECTS` use the strict `ObjectItem` grammar (ROUTE / IDENTIFIABLE / REFERABLE / FRAGMENT / DESCRIPTOR forms)
 
 Example file:
-- [cmd/aasregistryservice/config/access_rules/access-rules.json](cmd/aasregistryservice/config/access_rules/access-rules.json)
+- [cmd/aasregistryservice/config/access_rules/access-rules.json](../../cmd/aasregistryservice/config/access_rules/access-rules.json)
 
 ## Testing and security environments
 
 - Security-focused tests use dedicated access rules and identity-provider configs under the service-specific security test folders.
-  - Example: [internal/aasregistry/security_tests](internal/aasregistry/security_tests)
-  - Example: [internal/discoveryservice/security_tests](internal/discoveryservice/security_tests)
+  - Example: [internal/aasregistry/security_tests](../../internal/aasregistry/security_tests)
+  - Example: [internal/discoveryservice/security_tests](../../internal/discoveryservice/security_tests)
 - Tests that intentionally run without ABAC enforcement must provide explicit config context with ABAC disabled.
 - Production/runtime code must not inject ABAC-disabled fallback config to compensate for missing context.
 
@@ -340,7 +347,7 @@ Example file:
 - Configure the trustlist with issuer, audience, and required scopes. Treat an omitted audience as a legacy compatibility mode.
 - Confirm route-to-rights mapping covers all endpoints used by the service.
 - Validate the access rules against the intended claims and objects.
-- Choose `abac.policyFileImport` deliberately. Use `always` only when the file is the source of truth; use `if_missing` when the database-managed policy should survive restarts; use `never` when an active DB policy is mandatory.
+- Choose `abac.policyFileImport` deliberately. Use `always` when the JSON file is the source of truth and should overwrite the active DB policy at startup; use `if_missing` when the database-managed policy should survive restarts; use `never` when an active DB policy is mandatory.
 - Use `abac.policyScope` deliberately. Sharing a scope across services with different routes can make one service's policy incomplete or unsafe for another service.
 - Enable `abac.managementApi.enabled` only for services where runtime policy administration is required. For Digital Twin Registry, remember that startup file import defaults to `always`; if multiple DTRs share the default policy scope with different files, later startups can supersede earlier active policies. Protect `/security/abac/**` with admin-only ABAC rules.
 - Restarting is no longer the only update path when the management API is enabled; staged rule edits still require explicit activation before they affect authorization.

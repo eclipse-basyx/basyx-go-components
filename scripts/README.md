@@ -47,7 +47,7 @@ Custom output filename:
 ### Typical workflow
 1. Run the generator.
 2. Review the generated SQL file.
-3. Apply relevant parts to schema migration / `basyxschema.sql` as needed.
+3. Apply relevant parts to a versioned schema patch under `database/patches/`, then register the patch and update schema version metadata when it becomes the current schema.
 4. Run tests after schema changes.
 
 ### Failure behavior

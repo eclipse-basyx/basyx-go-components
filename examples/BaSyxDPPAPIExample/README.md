@@ -11,7 +11,10 @@ This example starts:
 ## Prerequisites
 
 - Docker + Docker Compose
-- Free ports: `3000`, `8080`, `8082`
+- Free ports for the default stack: `3000`, `8080`, `8082`
+- Free ports for the secured stack: `8080`, `8088`
+
+Run either the default stack or the secured stack at one time unless you change ports and container names.
 
 ## Start The Example
 
@@ -87,6 +90,17 @@ Import `BaSyx-DPP-API.postman_collection.json` into Postman to run the example s
 - Resolve a DPP by product ID
 - Read and update individual DPP elements
 - Delete the demo DPP when you are done
+
+No Postman environment file is currently committed. Create a local environment with these variables when you want to run the full collection:
+
+- `baseUrl`: `http://localhost:8080` for the default stack or `http://localhost:8088` for the secured stack
+- `bearerToken`: bearer token for secured requests
+- `dppId`, `dppIdEncoded`: demo DPP ID and its double-URL-encoded form
+- `productId`, `productIdEncoded`: demo product ID and its double-URL-encoded form
+- `elementPath`: DPP element path for the collection payload, such as `batteryPassport/energyCapacityKWh`
+- `representation`: `compressed` or `full`
+- `historicalDate`, `currentTimestamp`: ISO-8601 timestamps used by history requests
+- `limit`, `cursor`: pagination values
 
 ## Create A DPP
 

@@ -39,10 +39,7 @@ The important settings are:
 docker compose up -d
 ```
 
-This example is configured for local development:
-
-- `aas-environment` and `basyx_configuration` use local Docker `build` entries.
-- The published image lines are kept as comments so you can switch back quickly.
+This example is configured to use the published `SNAPSHOT` images. Switch the relevant service entries to local `build` directives only when you want to test locally built images.
 
 The configuration service initializes the current schema first. Keycloak imports the local `basyx` realm, the MinIO init sidecar creates a versioned object-lock bucket for local evidence tests, and the AAS Environment Service then enables the history guard switch at startup.
 The demo `basyx` realm sets `sslRequired=none`, and the Keycloak startup command relaxes the local `master` realm the same way so the admin console works over HTTP at [http://keycloak.localhost:8080](http://keycloak.localhost:8080). Do not carry those settings into a production Keycloak realm.

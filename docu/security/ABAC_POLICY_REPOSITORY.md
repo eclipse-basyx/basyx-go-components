@@ -26,8 +26,12 @@ Environment variables:
 - `ABAC_ENABLED=true`
 - `ABAC_MODELPATH=/security_env/access-rules.json`
 - `ABAC_POLICY_FILE_IMPORT=always|if_missing|never`
+- `BASYX_ABAC_POLICY_FILE_IMPORT=always|if_missing|never`
 - `ABAC_POLICY_SCOPE=aasregistryservice`
+- `BASYX_ABAC_POLICY_SCOPE=aasregistryservice`
 - `ABAC_MANAGEMENT_API_ENABLED=true|false`
+- `ABAC_MANAGEMENTAPI_ENABLED=true|false`
+- `BASYX_ABAC_MANAGEMENT_API_ENABLED=true|false`
 
 `abac.policyScope` controls the database namespace used for stored policy versions, rule rows, events, and activation evidence. When it is empty, the service uses its built-in scope, such as `digitaltwinregistryservice` or `aasregistryservice`, so existing deployments keep their current behavior.
 
@@ -47,6 +51,8 @@ Use the same scope only when the services are meant to share one active policy. 
 - `never`: do not import the file. ABAC startup fails closed unless an active database-backed policy already exists for the effective policy scope.
 
 When the value is empty, each service uses its default. Digital Twin Registry defaults to `always`; other ABAC-enabled services default to `if_missing`.
+
+With `if_missing`, edits to the JSON access-rule file are not imported on later restarts once an active policy already exists in PostgreSQL for the effective policy scope. Set `abac.policyFileImport: always` or `ABAC_POLICY_FILE_IMPORT=always` when the mounted JSON file should remain the source of truth and intentionally overwrite/supersede the active database-backed policy during startup.
 
 ## Startup Import
 
