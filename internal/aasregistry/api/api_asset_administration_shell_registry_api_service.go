@@ -45,6 +45,7 @@ import (
 
 	persistence_postgresql "github.com/eclipse-basyx/basyx-go-components/internal/aasregistry/persistence"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/createprecheck"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
@@ -163,20 +164,25 @@ func filterAssetAdministrationShellDescriptorPages(
 
 // PostAssetAdministrationShellDescriptor - Creates a new Asset Administration Shell Descriptor, i.e. registers an AAS
 func (s *AssetAdministrationShellRegistryAPIAPIService) PostAssetAdministrationShellDescriptor(ctx context.Context, assetAdministrationShellDescriptor model.AssetAdministrationShellDescriptor) (model.ImplResponse, error) {
-	// Existence check: AAS with same Id should not already exist (lightweight)
 	if strings.TrimSpace(assetAdministrationShellDescriptor.Id) != "" {
-		if exists, chkErr := s.aasRegistryBackend.ExistsAASByID(ctx, assetAdministrationShellDescriptor.Id); chkErr != nil {
-			log.Printf("🧩 [%s] Error in PostAssetAdministrationShellDescriptor: existence check failed (aasId=%q): %v", componentName, assetAdministrationShellDescriptor.Id, chkErr)
+		precheckErr := createprecheck.EnsureVisibleCreate(
+			ctx,
+			func(checkCtx context.Context) (bool, error) {
+				return s.aasRegistryBackend.ExistsAASByID(checkCtx, assetAdministrationShellDescriptor.Id)
+			},
+			func(readCtx context.Context) error {
+				_, readErr := s.aasRegistryBackend.GetAssetAdministrationShellDescriptorByID(readCtx, assetAdministrationShellDescriptor.Id)
+				return readErr
+			},
+			"AAS with given id already exists",
+			"AAS Descriptor access not allowed",
+		)
+		if precheckErr != nil {
+			statusCode, step := createprecheck.ResponseStatus(precheckErr)
+			log.Printf("🧩 [%s] Error in PostAssetAdministrationShellDescriptor: create precheck failed (aasId=%q): %v", componentName, assetAdministrationShellDescriptor.Id, precheckErr)
 			return common.NewErrorResponse(
-				chkErr, http.StatusInternalServerError, componentName, "PostAssetAdministrationShellDescriptor", "Unhandled-Precheck",
-			), chkErr
-		} else if exists {
-			// TODO: should return 403 if no access on existing shell. Currently user gets 409 even if he has no access rights.
-			e := common.NewErrConflict("AAS with given id already exists")
-			log.Printf("🧩 [%s] Error in PostAssetAdministrationShellDescriptor: conflict (aasId=%q): %v", componentName, assetAdministrationShellDescriptor.Id, e)
-			return common.NewErrorResponse(
-				e, http.StatusConflict, componentName, "PostAssetAdministrationShellDescriptor", "Conflict-Exists",
-			), nil
+				precheckErr, statusCode, componentName, "PostAssetAdministrationShellDescriptor", step,
+			), createprecheck.ReturnError(precheckErr)
 		}
 	}
 
@@ -461,20 +467,25 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) PostSubmodelDescriptorTh
 		return *resp, err
 	}
 
-	// Conflict check: lightweight existence for submodel under this AAS
 	if strings.TrimSpace(submodelDescriptor.Id) != "" {
-		if exists, chkErr := s.aasRegistryBackend.ExistsSubmodelForAAS(ctx, decodedAAS, submodelDescriptor.Id); chkErr != nil {
-			log.Printf("🧩 [%s] Error in PostSubmodelDescriptorThroughSuperpath: existence check failed (aasId=%q submodelId=%q): %v", componentName, decodedAAS, submodelDescriptor.Id, chkErr)
+		precheckErr := createprecheck.EnsureVisibleCreate(
+			ctx,
+			func(checkCtx context.Context) (bool, error) {
+				return s.aasRegistryBackend.ExistsSubmodelForAAS(checkCtx, decodedAAS, submodelDescriptor.Id)
+			},
+			func(readCtx context.Context) error {
+				_, readErr := s.aasRegistryBackend.GetSubmodelDescriptorForAASByID(readCtx, decodedAAS, submodelDescriptor.Id)
+				return readErr
+			},
+			"Submodel with given id already exists for this AAS",
+			"Submodel Descriptor access not allowed",
+		)
+		if precheckErr != nil {
+			statusCode, step := createprecheck.ResponseStatus(precheckErr)
+			log.Printf("🧩 [%s] Error in PostSubmodelDescriptorThroughSuperpath: create precheck failed (aasId=%q submodelId=%q): %v", componentName, decodedAAS, submodelDescriptor.Id, precheckErr)
 			return common.NewErrorResponse(
-				chkErr, http.StatusInternalServerError, componentName, "PostSubmodelDescriptorThroughSuperpath", "Unhandled-Precheck",
-			), chkErr
-		} else if exists {
-			// TODO: should return 403 if no access on existing submodel. Currently user gets 409 even if he has no access rights.
-			e := common.NewErrConflict("Submodel with given id already exists for this AAS")
-			log.Printf("🧩 [%s] Error in PostSubmodelDescriptorThroughSuperpath: conflict (aasId=%q submodelId=%q): %v", componentName, decodedAAS, submodelDescriptor.Id, e)
-			return common.NewErrorResponse(
-				e, http.StatusConflict, componentName, "PostSubmodelDescriptorThroughSuperpath", "Conflict-Exists",
-			), nil
+				precheckErr, statusCode, componentName, "PostSubmodelDescriptorThroughSuperpath", step,
+			), createprecheck.ReturnError(precheckErr)
 		}
 	}
 

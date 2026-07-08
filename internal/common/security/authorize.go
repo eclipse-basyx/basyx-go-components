@@ -304,6 +304,41 @@ func HasUnrestrictedFormulaForRight(ctx context.Context, right grammar.RightsEnu
 	return *expr.Boolean
 }
 
+// SelectFormulaForRight selects the active QueryFilter.Formula for the requested right.
+func SelectFormulaForRight(ctx context.Context, right grammar.RightsEnum) context.Context {
+	existing := GetQueryFilter(ctx)
+	if existing == nil {
+		return ctx
+	}
+
+	qf, cloneErr := CloneQueryFilter(existing)
+	if cloneErr != nil {
+		log.Printf("AUTH-SELECTQF-CLONEERR failed to clone query filter: %v", cloneErr)
+		return WithQueryFilter(ctx, failClosedQueryFilter(right))
+	}
+	if qf == nil {
+		return WithQueryFilter(ctx, failClosedQueryFilter(right))
+	}
+
+	if qf.FormulasByRight == nil {
+		qf.FormulasByRight = make(map[grammar.RightsEnum]grammar.LogicalExpression)
+		fallback := boolExpression(false)
+		qf.FormulasByRight[right] = fallback
+		qf.Formula = &fallback
+		return WithQueryFilter(ctx, qf)
+	}
+
+	if selected, ok := qf.FormulasByRight[right]; ok {
+		qf.Formula = &selected
+		return WithQueryFilter(ctx, qf)
+	}
+
+	fallback := boolExpression(false)
+	qf.FormulasByRight[right] = fallback
+	qf.Formula = &fallback
+	return WithQueryFilter(ctx, qf)
+}
+
 // MergeQueryFilter combines an existing QueryFilter with a user query.
 // It guards nils and merges conditions and filter fragments using logical AND.
 func MergeQueryFilter(ctx context.Context, query grammar.Query) context.Context {
@@ -376,41 +411,11 @@ func MergeQueryFilter(ctx context.Context, query grammar.Query) context.Context 
 // If the requested right-specific formula is unavailable, Formula is set to a
 // constant false expression.
 func SelectPutFormulaByExistence(ctx context.Context, dataExists bool) context.Context {
-	existing := GetQueryFilter(ctx)
-	if existing == nil {
-		return ctx
-	}
 	right := grammar.RightsEnumCREATE
 	if dataExists {
 		right = grammar.RightsEnumUPDATE
 	}
-
-	qf, cloneErr := CloneQueryFilter(existing)
-	if cloneErr != nil {
-		log.Printf("SMREPO-SELECTPUTQF-CLONEERR failed to clone query filter: %v", cloneErr)
-		return WithQueryFilter(ctx, failClosedQueryFilter(right))
-	}
-	if qf == nil {
-		return WithQueryFilter(ctx, failClosedQueryFilter(right))
-	}
-
-	if qf.FormulasByRight == nil {
-		qf.FormulasByRight = make(map[grammar.RightsEnum]grammar.LogicalExpression)
-		fallback := boolExpression(false)
-		qf.FormulasByRight[right] = fallback
-		qf.Formula = &fallback
-		return WithQueryFilter(ctx, qf)
-	}
-
-	if selected, ok := qf.FormulasByRight[right]; ok {
-		qf.Formula = &selected
-		return WithQueryFilter(ctx, qf)
-	}
-
-	fallback := boolExpression(false)
-	qf.FormulasByRight[right] = fallback
-	qf.Formula = &fallback
-	return WithQueryFilter(ctx, qf)
+	return SelectFormulaForRight(ctx, right)
 }
 
 func failClosedQueryFilter(rights ...grammar.RightsEnum) *QueryFilter {

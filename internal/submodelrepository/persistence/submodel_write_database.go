@@ -29,10 +29,12 @@ package persistence
 import (
 	"context"
 	"database/sql"
+	"errors"
 
 	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/FriedJannik/aas-go-sdk/verification"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/createprecheck"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/history"
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
@@ -86,6 +88,10 @@ func (s *SubmodelDatabase) CreateSubmodelInTransaction(ctx context.Context, tx *
 }
 
 func (s *SubmodelDatabase) createSubmodelInTransactionValidated(ctx context.Context, tx *sql.Tx, submodel types.ISubmodel) error {
+	if err := s.ensureVisibleSubmodelCreateDoesNotExist(ctx, tx, submodel.ID()); err != nil {
+		return err
+	}
+
 	err := s.createSubmodelInTransaction(tx, submodel)
 	if err != nil {
 		return err
@@ -108,6 +114,37 @@ func (s *SubmodelDatabase) createSubmodelInTransactionValidated(ctx context.Cont
 		}
 	}
 	return nil
+}
+
+func (s *SubmodelDatabase) ensureVisibleSubmodelCreateDoesNotExist(ctx context.Context, tx *sql.Tx, submodelID string) error {
+	return createprecheck.EnsureVisibleCreate(
+		ctx,
+		func(context.Context) (bool, error) {
+			_, err := persistenceutils.GetSubmodelDatabaseID(tx, submodelID)
+			if err == nil {
+				return true, nil
+			}
+			if errors.Is(err, sql.ErrNoRows) {
+				return false, nil
+			}
+			return false, common.NewInternalServerError("SMREPO-NEWSM-CHKDUP-GETSMDATABASEID " + err.Error())
+		},
+		func(readCtx context.Context) error {
+			exists, visible, err := s.checkSubmodelVisibilityInTx(readCtx, tx, submodelID)
+			if err != nil {
+				return err
+			}
+			if !exists {
+				return common.NewErrNotFound("SMREPO-NEWSM-CHKDUP-NOTFOUND existing submodel not found")
+			}
+			if !visible {
+				return common.NewErrDenied("SMREPO-NEWSM-CHKDUP-ABACDENIED existing submodel is not accessible under ABAC constraints")
+			}
+			return nil
+		},
+		"SMREPO-NEWSM-CREATE-CONFLICT submodel identifier already exists",
+		"SMREPO-NEWSM-CHKDUP-ABACDENIED existing submodel is not accessible under ABAC constraints",
+	)
 }
 
 func (s *SubmodelDatabase) createSubmodelInTransaction(tx *sql.Tx, submodel types.ISubmodel) error {

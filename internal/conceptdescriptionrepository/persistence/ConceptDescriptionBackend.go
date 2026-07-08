@@ -43,6 +43,7 @@ import (
 	"github.com/doug-martin/goqu/v9"
 	_ "github.com/doug-martin/goqu/v9/dialect/postgres" // Postgres Driver for Goqu
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/createprecheck"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/history"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
@@ -280,6 +281,30 @@ func (b *ConceptDescriptionBackend) checkConceptDescriptionVisibilityInTx(ctx co
 	return false, false, common.NewInternalServerError("CDREPO-ABACCHKCD-EXECSQL " + scanErr.Error())
 }
 
+func (b *ConceptDescriptionBackend) ensureVisibleConceptDescriptionCreateDoesNotExist(ctx context.Context, tx *sql.Tx, id string) error {
+	return createprecheck.EnsureVisibleCreate(
+		ctx,
+		func(checkCtx context.Context) (bool, error) {
+			return conceptDescriptionExistsInTx(checkCtx, tx, id)
+		},
+		func(readCtx context.Context) error {
+			exists, visible, err := b.checkConceptDescriptionVisibilityInTx(readCtx, tx, id)
+			if err != nil {
+				return err
+			}
+			if !exists {
+				return common.NewErrNotFound("CDREPO-CRTCD-CHKDUP-NOTFOUND existing concept description not found")
+			}
+			if !visible {
+				return common.NewErrDenied("CDREPO-CRTCD-CHKDUP-ABACDENIED existing concept description is not accessible under ABAC constraints")
+			}
+			return nil
+		},
+		"Concept description with the given ID already exists - use PUT for Replacement",
+		"CDREPO-CRTCD-CHKDUP-ABACDENIED existing concept description is not accessible under ABAC constraints",
+	)
+}
+
 // CreateConceptDescription inserts a new concept description into the database.
 func (b *ConceptDescriptionBackend) CreateConceptDescription(ctx context.Context, cd types.IConceptDescription) (err error) {
 	tx, cleanup, err := common.StartTransaction(b.db)
@@ -288,12 +313,8 @@ func (b *ConceptDescriptionBackend) CreateConceptDescription(ctx context.Context
 	}
 	defer cleanup(&err)
 
-	exists, err := conceptDescriptionExistsInTx(ctx, tx, cd.ID())
-	if err != nil {
+	if err = b.ensureVisibleConceptDescriptionCreateDoesNotExist(ctx, tx, cd.ID()); err != nil {
 		return err
-	}
-	if exists {
-		return common.NewErrConflict("Concept description with the given ID already exists - use PUT for Replacement")
 	}
 
 	if err = b.createConceptDescriptionInTx(ctx, tx, cd); err != nil {

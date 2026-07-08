@@ -128,7 +128,7 @@
     "expectedStatus": 201
   },
   {
-    "context": "POST Descriptor D - User B - ALLOWED",
+    "context": "POST Descriptor D - User B - CONFLICT",
     "token": { "user": "usery", "password": "pwd" },
     "method": "POST",
     "endpoint": "{{BASYX_IT_API_URL}}/shell-descriptors",
@@ -183,6 +183,222 @@
     "data": "postBody/simple_aas_X.json",
     "shouldMatch": "postBody/simple_aas_X.json",
     "expectedStatus": 201
+  },
+  {
+    "context": "DUPLICATE POST Descriptor A - User X - CONFLICT",
+    "token": { "user": "userx", "password": "pwd" },
+    "method": "POST",
+    "endpoint": "{{BASYX_IT_API_URL}}/shell-descriptors",
+    "data": "postBody/simple_aas_A.json",
+    "expectedStatus": 409
+  },
+  {
+    "context": "DUPLICATE POST Descriptor B - User X - FORBIDDEN",
+    "token": { "user": "userx", "password": "pwd" },
+    "method": "POST",
+    "endpoint": "{{BASYX_IT_API_URL}}/shell-descriptors",
+    "data": "postBody/simple_aas_B.json",
+    "expectedStatus": 403
+  },
+  {
+    "context": "DUPLICATE POST Descriptor C - User X - FORBIDDEN",
+    "token": { "user": "userx", "password": "pwd" },
+    "method": "POST",
+    "endpoint": "{{BASYX_IT_API_URL}}/shell-descriptors",
+    "data": "postBody/simple_aas_C.json",
+    "expectedStatus": 403
+  },
+  {
+    "context": "DUPLICATE POST Descriptor D - User X - CONFLICT",
+    "token": { "user": "userx", "password": "pwd" },
+    "method": "POST",
+    "endpoint": "{{BASYX_IT_API_URL}}/shell-descriptors",
+    "data": "postBody/simple_aas_D.json",
+    "expectedStatus": 409
+  },
+  {
+    "context": "DUPLICATE POST Descriptor X - User X - FORBIDDEN",
+    "token": { "user": "userx", "password": "pwd" },
+    "method": "POST",
+    "endpoint": "{{BASYX_IT_API_URL}}/shell-descriptors",
+    "data": "postBody/simple_aas_X.json",
+    "expectedStatus": 403
+  },
+  {
+    "context": "DUPLICATE POST Descriptor A - User Y - CONFLICT",
+    "token": { "user": "usery", "password": "pwd" },
+    "method": "POST",
+    "endpoint": "{{BASYX_IT_API_URL}}/shell-descriptors",
+    "data": "postBody/simple_aas_A.json",
+    "expectedStatus": 409
+  },
+  {
+    "context": "DUPLICATE POST Descriptor B - User Y - CONFLICT",
+    "token": { "user": "usery", "password": "pwd" },
+    "method": "POST",
+    "endpoint": "{{BASYX_IT_API_URL}}/shell-descriptors",
+    "data": "postBody/simple_aas_B.json",
+    "expectedStatus": 409
+  },
+  {
+    "context": "DUPLICATE POST Descriptor C - User Y - CONFLICT",
+    "token": { "user": "usery", "password": "pwd" },
+    "method": "POST",
+    "endpoint": "{{BASYX_IT_API_URL}}/shell-descriptors",
+    "data": "postBody/simple_aas_C.json",
+    "expectedStatus": 409
+  },
+  {
+    "context": "DUPLICATE POST Descriptor D - User Y - CONFLICT",
+    "token": { "user": "usery", "password": "pwd" },
+    "method": "POST",
+    "endpoint": "{{BASYX_IT_API_URL}}/shell-descriptors",
+    "data": "postBody/simple_aas_D.json",
+    "expectedStatus": 409
+  },
+  {
+    "context": "DUPLICATE POST Descriptor X - User Y - FORBIDDEN",
+    "token": { "user": "usery", "password": "pwd" },
+    "method": "POST",
+    "endpoint": "{{BASYX_IT_API_URL}}/shell-descriptors",
+    "data": "postBody/simple_aas_X.json",
+    "expectedStatus": 403
+  },
+  {
+    "context": "DUPLICATE POST Descriptor A - ADMIN - CONFLICT",
+    "token": { "user": "admin", "password": "pwd" },
+    "method": "POST",
+    "endpoint": "{{BASYX_IT_API_URL}}/shell-descriptors",
+    "data": "postBody/simple_aas_A.json",
+    "expectedStatus": 409
+  },
+  {
+    "context": "DUPLICATE POST Descriptor B - ADMIN - CONFLICT",
+    "token": { "user": "admin", "password": "pwd" },
+    "method": "POST",
+    "endpoint": "{{BASYX_IT_API_URL}}/shell-descriptors",
+    "data": "postBody/simple_aas_B.json",
+    "expectedStatus": 409
+  },
+  {
+    "context": "DUPLICATE POST Descriptor C - ADMIN - CONFLICT",
+    "token": { "user": "admin", "password": "pwd" },
+    "method": "POST",
+    "endpoint": "{{BASYX_IT_API_URL}}/shell-descriptors",
+    "data": "postBody/simple_aas_C.json",
+    "expectedStatus": 409
+  },
+  {
+    "context": "DUPLICATE POST Descriptor D - ADMIN - CONFLICT",
+    "token": { "user": "admin", "password": "pwd" },
+    "method": "POST",
+    "endpoint": "{{BASYX_IT_API_URL}}/shell-descriptors",
+    "data": "postBody/simple_aas_D.json",
+    "expectedStatus": 409
+  },
+  {
+    "context": "DUPLICATE POST Descriptor X - ADMIN - CONFLICT",
+    "token": { "user": "admin", "password": "pwd" },
+    "method": "POST",
+    "endpoint": "{{BASYX_IT_API_URL}}/shell-descriptors",
+    "data": "postBody/simple_aas_X.json",
+    "expectedStatus": 409
+  },
+  {
+    "context": "DUPLICATE BULK POST Descriptor A - User X - CONFLICT",
+    "action": "ASSERT_BULK_FAILURE",
+    "token": { "user": "userx", "password": "pwd" },
+    "method": "POST",
+    "endpoint": "{{BASYX_IT_API_URL}}/bulk/shell-descriptors",
+    "data": "postBody/bulk_create_aas_a.json",
+    "expectedStatus": 202,
+    "expectedBulkFailureStatus": 409,
+    "expectedBulkFailureIndex": 0,
+    "expectedBulkFailureIdentifier": "https://example.org/A"
+  },
+  {
+    "context": "DUPLICATE BULK POST Descriptor B - User X - FORBIDDEN",
+    "action": "ASSERT_BULK_FAILURE",
+    "token": { "user": "userx", "password": "pwd" },
+    "method": "POST",
+    "endpoint": "{{BASYX_IT_API_URL}}/bulk/shell-descriptors",
+    "data": "postBody/bulk_create_aas_b.json",
+    "expectedStatus": 202,
+    "expectedBulkFailureStatus": 403,
+    "expectedBulkFailureIndex": 0,
+    "expectedBulkFailureIdentifier": "https://example.org/B"
+  },
+  {
+    "context": "DUPLICATE BULK POST Descriptor C - User X - FORBIDDEN",
+    "action": "ASSERT_BULK_FAILURE",
+    "token": { "user": "userx", "password": "pwd" },
+    "method": "POST",
+    "endpoint": "{{BASYX_IT_API_URL}}/bulk/shell-descriptors",
+    "data": "postBody/bulk_create_aas_c.json",
+    "expectedStatus": 202,
+    "expectedBulkFailureStatus": 403,
+    "expectedBulkFailureIndex": 0,
+    "expectedBulkFailureIdentifier": "https://example.org/C"
+  },
+  {
+    "context": "DUPLICATE BULK POST Descriptor D - User X - CONFLICT",
+    "action": "ASSERT_BULK_FAILURE",
+    "token": { "user": "userx", "password": "pwd" },
+    "method": "POST",
+    "endpoint": "{{BASYX_IT_API_URL}}/bulk/shell-descriptors",
+    "data": "postBody/bulk_create_aas_d.json",
+    "expectedStatus": 202,
+    "expectedBulkFailureStatus": 409,
+    "expectedBulkFailureIndex": 0,
+    "expectedBulkFailureIdentifier": "https://example.org/D"
+  },
+  {
+    "context": "DUPLICATE BULK POST Descriptor X - User X - FORBIDDEN",
+    "action": "ASSERT_BULK_FAILURE",
+    "token": { "user": "userx", "password": "pwd" },
+    "method": "POST",
+    "endpoint": "{{BASYX_IT_API_URL}}/bulk/shell-descriptors",
+    "data": "postBody/bulk_create_aas_x.json",
+    "expectedStatus": 202,
+    "expectedBulkFailureStatus": 403,
+    "expectedBulkFailureIndex": 0,
+    "expectedBulkFailureIdentifier": "https://example.org/X"
+  },
+  {
+    "context": "DUPLICATE BULK POST Descriptor B - User Y - CONFLICT",
+    "action": "ASSERT_BULK_FAILURE",
+    "token": { "user": "usery", "password": "pwd" },
+    "method": "POST",
+    "endpoint": "{{BASYX_IT_API_URL}}/bulk/shell-descriptors",
+    "data": "postBody/bulk_create_aas_b.json",
+    "expectedStatus": 202,
+    "expectedBulkFailureStatus": 409,
+    "expectedBulkFailureIndex": 0,
+    "expectedBulkFailureIdentifier": "https://example.org/B"
+  },
+  {
+    "context": "DUPLICATE BULK POST Descriptor X - User Y - FORBIDDEN",
+    "action": "ASSERT_BULK_FAILURE",
+    "token": { "user": "usery", "password": "pwd" },
+    "method": "POST",
+    "endpoint": "{{BASYX_IT_API_URL}}/bulk/shell-descriptors",
+    "data": "postBody/bulk_create_aas_x.json",
+    "expectedStatus": 202,
+    "expectedBulkFailureStatus": 403,
+    "expectedBulkFailureIndex": 0,
+    "expectedBulkFailureIdentifier": "https://example.org/X"
+  },
+  {
+    "context": "DUPLICATE BULK POST Descriptor X - ADMIN - CONFLICT",
+    "action": "ASSERT_BULK_FAILURE",
+    "token": { "user": "admin", "password": "pwd" },
+    "method": "POST",
+    "endpoint": "{{BASYX_IT_API_URL}}/bulk/shell-descriptors",
+    "data": "postBody/bulk_create_aas_x.json",
+    "expectedStatus": 202,
+    "expectedBulkFailureStatus": 409,
+    "expectedBulkFailureIndex": 0,
+    "expectedBulkFailureIdentifier": "https://example.org/X"
   },
   {
     "context": "GET Descriptor A - User ANONONYM - ALLOWED",
@@ -512,7 +728,7 @@
   { "context": "POST Submodel A - User Y - CONFLICT", "token": { "user": "usery", "password": "pwd" }, "method": "POST", "endpoint": "{{BASYX_IT_API_URL}}/shell-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9Y/submodel-descriptors", "data": "postBody/simple_smd_a.json", "expectedStatus": 409 },
   { "context": "POST Submodel B - User Y - ALLOWED", "token": { "user": "usery", "password": "pwd" }, "method": "POST", "endpoint": "{{BASYX_IT_API_URL}}/shell-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9Y/submodel-descriptors", "data": "postBody/simple_smd_b.json", "shouldMatch": "postBody/simple_smd_b.json", "expectedStatus": 201 },
   { "context": "POST Submodel C - User Y - ALLOWED", "token": { "user": "usery", "password": "pwd" }, "method": "POST", "endpoint": "{{BASYX_IT_API_URL}}/shell-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9Y/submodel-descriptors", "data": "postBody/simple_smd_c.json", "shouldMatch": "postBody/simple_smd_c.json", "expectedStatus": 201 },
-  { "context": "POST Submodel D - User Y - DENIED", "token": { "user": "usery", "password": "pwd" }, "method": "POST", "endpoint": "{{BASYX_IT_API_URL}}/shell-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9Y/submodel-descriptors", "data": "postBody/simple_smd_d.json", "expectedStatus": 409 },
+  { "context": "POST Submodel D - User Y - CONFLICT", "token": { "user": "usery", "password": "pwd" }, "method": "POST", "endpoint": "{{BASYX_IT_API_URL}}/shell-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9Y/submodel-descriptors", "data": "postBody/simple_smd_d.json", "expectedStatus": 409 },
   { "context": "POST Submodel X - User Y - DENIED", "token": { "user": "usery", "password": "pwd" }, "method": "POST", "endpoint": "{{BASYX_IT_API_URL}}/shell-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9Y/submodel-descriptors", "data": "postBody/simple_smd_x.json", "expectedStatus": 403 },
 
   { "context": "POST Submodel A - ADMIN - CONFLICT", "token": { "user": "admin", "password": "pwd" }, "method": "POST", "endpoint": "{{BASYX_IT_API_URL}}/shell-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9Y/submodel-descriptors", "data": "postBody/simple_smd_a.json", "expectedStatus": 409 },
@@ -520,6 +736,24 @@
   { "context": "POST Submodel C - ADMIN - CONFLICT", "token": { "user": "admin", "password": "pwd" }, "method": "POST", "endpoint": "{{BASYX_IT_API_URL}}/shell-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9Y/submodel-descriptors", "data": "postBody/simple_smd_c.json", "expectedStatus": 409 },
   { "context": "POST Submodel D - ADMIN - CONFLICT", "token": { "user": "admin", "password": "pwd" }, "method": "POST", "endpoint": "{{BASYX_IT_API_URL}}/shell-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9Y/submodel-descriptors", "data": "postBody/simple_smd_d.json", "expectedStatus": 409 },
   { "context": "POST Submodel X - ADMIN - ALLOWED", "token": { "user": "admin", "password": "pwd" }, "method": "POST", "endpoint": "{{BASYX_IT_API_URL}}/shell-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9Y/submodel-descriptors", "data": "postBody/simple_smd_x.json", "shouldMatch": "postBody/simple_smd_x.json", "expectedStatus": 201 },
+
+  { "context": "DUPLICATE POST Submodel A - User X - CONFLICT", "token": { "user": "userx", "password": "pwd" }, "method": "POST", "endpoint": "{{BASYX_IT_API_URL}}/shell-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9Y/submodel-descriptors", "data": "postBody/simple_smd_a.json", "expectedStatus": 409 },
+  { "context": "DUPLICATE POST Submodel B - User X - FORBIDDEN", "token": { "user": "userx", "password": "pwd" }, "method": "POST", "endpoint": "{{BASYX_IT_API_URL}}/shell-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9Y/submodel-descriptors", "data": "postBody/simple_smd_b.json", "expectedStatus": 403 },
+  { "context": "DUPLICATE POST Submodel C - User X - FORBIDDEN", "token": { "user": "userx", "password": "pwd" }, "method": "POST", "endpoint": "{{BASYX_IT_API_URL}}/shell-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9Y/submodel-descriptors", "data": "postBody/simple_smd_c.json", "expectedStatus": 403 },
+  { "context": "DUPLICATE POST Submodel D - User X - CONFLICT", "token": { "user": "userx", "password": "pwd" }, "method": "POST", "endpoint": "{{BASYX_IT_API_URL}}/shell-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9Y/submodel-descriptors", "data": "postBody/simple_smd_d.json", "expectedStatus": 409 },
+  { "context": "DUPLICATE POST Submodel X - User X - FORBIDDEN", "token": { "user": "userx", "password": "pwd" }, "method": "POST", "endpoint": "{{BASYX_IT_API_URL}}/shell-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9Y/submodel-descriptors", "data": "postBody/simple_smd_x.json", "expectedStatus": 403 },
+
+  { "context": "DUPLICATE POST Submodel A - User Y - CONFLICT", "token": { "user": "usery", "password": "pwd" }, "method": "POST", "endpoint": "{{BASYX_IT_API_URL}}/shell-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9Y/submodel-descriptors", "data": "postBody/simple_smd_a.json", "expectedStatus": 409 },
+  { "context": "DUPLICATE POST Submodel B - User Y - CONFLICT", "token": { "user": "usery", "password": "pwd" }, "method": "POST", "endpoint": "{{BASYX_IT_API_URL}}/shell-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9Y/submodel-descriptors", "data": "postBody/simple_smd_b.json", "expectedStatus": 409 },
+  { "context": "DUPLICATE POST Submodel C - User Y - CONFLICT", "token": { "user": "usery", "password": "pwd" }, "method": "POST", "endpoint": "{{BASYX_IT_API_URL}}/shell-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9Y/submodel-descriptors", "data": "postBody/simple_smd_c.json", "expectedStatus": 409 },
+  { "context": "DUPLICATE POST Submodel D - User Y - CONFLICT", "token": { "user": "usery", "password": "pwd" }, "method": "POST", "endpoint": "{{BASYX_IT_API_URL}}/shell-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9Y/submodel-descriptors", "data": "postBody/simple_smd_d.json", "expectedStatus": 409 },
+  { "context": "DUPLICATE POST Submodel X - User Y - FORBIDDEN", "token": { "user": "usery", "password": "pwd" }, "method": "POST", "endpoint": "{{BASYX_IT_API_URL}}/shell-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9Y/submodel-descriptors", "data": "postBody/simple_smd_x.json", "expectedStatus": 403 },
+
+  { "context": "DUPLICATE POST Submodel A - ADMIN - CONFLICT", "token": { "user": "admin", "password": "pwd" }, "method": "POST", "endpoint": "{{BASYX_IT_API_URL}}/shell-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9Y/submodel-descriptors", "data": "postBody/simple_smd_a.json", "expectedStatus": 409 },
+  { "context": "DUPLICATE POST Submodel B - ADMIN - CONFLICT", "token": { "user": "admin", "password": "pwd" }, "method": "POST", "endpoint": "{{BASYX_IT_API_URL}}/shell-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9Y/submodel-descriptors", "data": "postBody/simple_smd_b.json", "expectedStatus": 409 },
+  { "context": "DUPLICATE POST Submodel C - ADMIN - CONFLICT", "token": { "user": "admin", "password": "pwd" }, "method": "POST", "endpoint": "{{BASYX_IT_API_URL}}/shell-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9Y/submodel-descriptors", "data": "postBody/simple_smd_c.json", "expectedStatus": 409 },
+  { "context": "DUPLICATE POST Submodel D - ADMIN - CONFLICT", "token": { "user": "admin", "password": "pwd" }, "method": "POST", "endpoint": "{{BASYX_IT_API_URL}}/shell-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9Y/submodel-descriptors", "data": "postBody/simple_smd_d.json", "expectedStatus": 409 },
+  { "context": "DUPLICATE POST Submodel X - ADMIN - CONFLICT", "token": { "user": "admin", "password": "pwd" }, "method": "POST", "endpoint": "{{BASYX_IT_API_URL}}/shell-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9Y/submodel-descriptors", "data": "postBody/simple_smd_x.json", "expectedStatus": 409 },
 
   { "context": "GET Submodel A - ANON - ALLOWED", "token": null, "method": "GET", "endpoint": "{{BASYX_IT_API_URL}}/shell-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9Y/submodel-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9YL1NNLUE", "shouldMatch": "expected/expected_smd_a.json", "expectedStatus": 200 },
   { "context": "GET Submodel A trailing slash - ANON - NOT FOUND", "token": null, "method": "GET", "endpoint": "{{BASYX_IT_API_URL}}/shell-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9Y/submodel-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9YL1NNLUE/", "expectedStatus": 404 },

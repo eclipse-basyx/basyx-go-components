@@ -34,6 +34,7 @@ import (
 
 	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/createprecheck"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/history"
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
@@ -43,7 +44,7 @@ import (
 	persistenceutils "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/utils"
 )
 
-func (s *SubmodelDatabase) addTopLevelSubmodelElementInTransaction(tx *sql.Tx, submodelID string, submodelElement types.ISubmodelElement) (string, error) {
+func (s *SubmodelDatabase) addTopLevelSubmodelElementInTransaction(ctx context.Context, tx *sql.Tx, submodelID string, submodelElement types.ISubmodelElement) (string, error) {
 	submodelDatabaseID, err := persistenceutils.GetSubmodelDatabaseID(tx, submodelID)
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -68,8 +69,17 @@ func (s *SubmodelDatabase) addTopLevelSubmodelElementInTransaction(tx *sql.Tx, s
 		startPosition = int(maxPosition.Int64) + 1
 	}
 
-	if isIDShortDuplicate(tx, submodelDatabaseID, nil, submodelElement) {
-		return "", common.NewErrConflict("SMREPO-ADDSME-COLLISION Duplicate submodel element idShort")
+	if err = s.ensureVisibleSubmodelElementCreateDoesNotExist(
+		ctx,
+		tx,
+		submodelID,
+		submodelDatabaseID,
+		nil,
+		submodelElement,
+		"SMREPO-ADDSME-COLLISION Duplicate submodel element idShort",
+		"SMREPO-ADDSME-CHKDUP-ABACDENIED existing submodel element is not accessible under ABAC constraints",
+	); err != nil {
+		return "", err
 	}
 
 	_, err = submodelelements.InsertSubmodelElements(
@@ -149,7 +159,7 @@ func (s *SubmodelDatabase) AddSubmodelElement(ctx context.Context, submodelID st
 	}
 	defer cleanup(&err)
 
-	insertedPath, err := s.addTopLevelSubmodelElementInTransaction(tx, submodelID, submodelElement)
+	insertedPath, err := s.addTopLevelSubmodelElementInTransaction(ctx, tx, submodelID, submodelElement)
 	if err != nil {
 		return err
 	}
@@ -214,8 +224,17 @@ func (s *SubmodelDatabase) addSubmodelElementWithPathInTransaction(ctx context.C
 		return err
 	}
 
-	if isIDShortDuplicate(tx, submodelDatabaseID, &parentElementID, submodelElement) {
-		return common.NewErrConflict("SMREPO-ADDSMEBYPATH-COLLISION Duplicate submodel element idShort")
+	if err = s.ensureVisibleSubmodelElementCreateDoesNotExist(
+		ctx,
+		tx,
+		submodelID,
+		submodelDatabaseID,
+		&parentElementID,
+		submodelElement,
+		"SMREPO-ADDSMEBYPATH-COLLISION Duplicate submodel element idShort",
+		"SMREPO-ADDSMEBYPATH-CHKDUP-ABACDENIED existing submodel element is not accessible under ABAC constraints",
+	); err != nil {
+		return err
 	}
 
 	_, err = submodelelements.InsertSubmodelElements(
@@ -441,7 +460,7 @@ func (s *SubmodelDatabase) createSubmodelElementForPut(
 	submodelElement.SetIDShort(&targetIDShort)
 
 	if isTopLevelPutCreate(parentPath) {
-		if _, err = s.addTopLevelSubmodelElementInTransaction(tx, submodelID, submodelElement); err != nil {
+		if _, err = s.addTopLevelSubmodelElementInTransaction(ctx, tx, submodelID, submodelElement); err != nil {
 			return submodelElementRootMutation{}, err
 		}
 		return submodelElementRootMutation{currentPath: idShortPath}, nil
@@ -682,23 +701,69 @@ func (s *SubmodelDatabase) UpdateSubmodelValueOnly(ctx context.Context, submodel
 	return tx.Commit()
 }
 
-func isIDShortDuplicate(tx *sql.Tx, submodelDatabaseID int, parentElementID *int, submodelElement types.ISubmodelElement) bool {
+func (s *SubmodelDatabase) ensureVisibleSubmodelElementCreateDoesNotExist(
+	ctx context.Context,
+	tx *sql.Tx,
+	submodelID string,
+	submodelDatabaseID int,
+	parentElementID *int,
+	submodelElement types.ISubmodelElement,
+	conflictMessage string,
+	deniedMessage string,
+) error {
 	idShortPtr := submodelElement.IDShort()
 	if idShortPtr == nil || *idShortPtr == "" {
-		return false
+		return nil
 	}
 
-	sqlQuery, args, err := submodelqueries.BuildSiblingIDShortCollisionSQL(submodelDatabaseID, parentElementID, *idShortPtr)
+	duplicatePath := ""
+	return createprecheck.EnsureVisibleCreate(
+		ctx,
+		func(context.Context) (bool, error) {
+			path, exists, err := siblingIDShortCollisionPathInTx(tx, submodelDatabaseID, parentElementID, *idShortPtr)
+			if err != nil {
+				return false, err
+			}
+			duplicatePath = path
+			return exists, nil
+		},
+		func(readCtx context.Context) error {
+			if duplicatePath == "" {
+				return common.NewInternalServerError("SMREPO-CHKSMEDUP-EMPTYPATH existing submodel element duplicate path is empty")
+			}
+			exists, visible, err := s.checkSubmodelElementVisibilityInTx(readCtx, tx, submodelID, duplicatePath)
+			if err != nil {
+				return err
+			}
+			if !exists {
+				return common.NewErrNotFound("SMREPO-CHKSMEDUP-NOTFOUND existing submodel element not found")
+			}
+			if !visible {
+				return common.NewErrDenied(deniedMessage)
+			}
+			return nil
+		},
+		conflictMessage,
+		deniedMessage,
+	)
+}
+
+func siblingIDShortCollisionPathInTx(tx *sql.Tx, submodelDatabaseID int, parentElementID *int, idShort string) (string, bool, error) {
+	query, args, err := submodelqueries.BuildSiblingIDShortCollisionPathSQL(submodelDatabaseID, parentElementID, idShort)
 	if err != nil {
-		return false
+		return "", false, common.NewInternalServerError("SMREPO-CHKSMEDUP-BUILDPATHQ " + err.Error())
 	}
 
-	var count int
-	if err = tx.QueryRow(sqlQuery, args...).Scan(&count); err != nil {
-		return false
+	var idShortPath string
+	err = tx.QueryRow(query, args...).Scan(&idShortPath)
+	if err == nil {
+		return idShortPath, true, nil
+	}
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", false, nil
 	}
 
-	return count > 0
+	return "", false, common.NewInternalServerError("SMREPO-CHKSMEDUP-EXECPATHQ " + err.Error())
 }
 
 func getSMEModelTypeByPathInTx(tx *sql.Tx, submodelID string, idShortOrPath string) (*types.ModelType, error) {
