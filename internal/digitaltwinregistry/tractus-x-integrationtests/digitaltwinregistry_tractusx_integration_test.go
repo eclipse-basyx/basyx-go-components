@@ -47,13 +47,14 @@ import (
 )
 
 const (
-	tractusBaseURL         = "http://127.0.0.1:5004"
 	tractusContextPath     = "/api/v3"
 	tractusComposeFilePath = "./docker_compose/docker_compose.yml"
 	tractusUseCasesRoot    = "./aas-registry-usecases"
 	edcBpnHeaderName       = "Edc-Bpn"
 	edcBpnTenantOne        = "TENANT_ONE"
 )
+
+var tractusBaseURL = testenv.LocalURLFromEnv("BASYX_IT_API_PORT", 5004)
 
 type tractusUseCase struct {
 	Name  string
@@ -91,8 +92,16 @@ type tractusStepExpectation struct {
 }
 
 func TestMain(m *testing.M) {
+	runtime := testenv.NewComposeRuntimeOrExit("digitaltwinregistry-tractus-it", []testenv.PortBinding{
+		{Name: "api", EnvVar: "BASYX_IT_API_PORT"},
+		{Name: "db", EnvVar: "BASYX_IT_DB_PORT"},
+	})
+	tractusBaseURL = runtime.LocalURL("api")
+
 	os.Exit(testenv.RunComposeTestMain(m, testenv.ComposeTestMainOptions{
 		ComposeFile: tractusComposeFilePath,
+		ProjectName: runtime.ProjectName,
+		Env:         runtime.Env(),
 		UpArgs:      []string{"up", "-d", "--build"},
 		HealthURL:   tractusBaseURL + tractusContextPath + "/health",
 	}))

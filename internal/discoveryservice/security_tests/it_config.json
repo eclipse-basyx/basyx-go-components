@@ -3,7 +3,7 @@
     "context": "Health endpoint - anonymous allowed",
     "token": null,
     "method": "GET",
-    "endpoint": "http://localhost:5004/health",
+    "endpoint": "{{BASYX_IT_API_URL}}/health",
     "shouldMatch": "expected/expectedHealthEndpoint.json",
     "expectedStatus": 200
   },
@@ -11,56 +11,56 @@
     "context": "Description endpoint - anonymous allowed",
     "token": null,
     "method": "GET",
-    "endpoint": "http://localhost:5004/description",
+    "endpoint": "{{BASYX_IT_API_URL}}/description",
     "expectedStatus": 200
   },
   {
     "context": "Description endpoint - viewer allowed",
     "token": { "user": "vieweruser", "password": "admin" },
     "method": "GET",
-    "endpoint": "http://localhost:5004/description",
+    "endpoint": "{{BASYX_IT_API_URL}}/description",
     "expectedStatus": 200
   },
   {
     "context": "Shells GET - viewer with clear=3 allowed",
     "token": { "user": "vieweruser", "password": "admin" },
     "method": "GET",
-    "endpoint": "http://localhost:5004/lookup/shells/MT",
+    "endpoint": "{{BASYX_IT_API_URL}}/lookup/shells/MT",
     "expectedStatus": 404
   },
   {
     "context": "Shells collection GET trailing slash - viewer not found",
     "token": { "user": "vieweruser", "password": "admin" },
     "method": "GET",
-    "endpoint": "http://localhost:5004/lookup/shells/",
+    "endpoint": "{{BASYX_IT_API_URL}}/lookup/shells/",
     "expectedStatus": 404
   },
   {
     "context": "Shells GET trailing slash - viewer not found",
     "token": { "user": "vieweruser", "password": "admin" },
     "method": "GET",
-    "endpoint": "http://localhost:5004/lookup/shells/MT/",
+    "endpoint": "{{BASYX_IT_API_URL}}/lookup/shells/MT/",
     "expectedStatus": 404
   },
   {
     "context": "Shells GET - editor with clear=6 allowed",
     "token": { "user": "editoruser", "password": "admin" },
     "method": "GET",
-    "endpoint": "http://localhost:5004/lookup/shells/MT",
+    "endpoint": "{{BASYX_IT_API_URL}}/lookup/shells/MT",
     "expectedStatus": 404
   },
   {
     "context": "Shells GET - anonymous denied",
     "token": null,
     "method": "GET",
-    "endpoint": "http://localhost:5004/lookup/shells/MT",
+    "endpoint": "{{BASYX_IT_API_URL}}/lookup/shells/MT",
     "expectedStatus": 403
   },
   {
     "context": "Shells POST - viewer denied",
     "token": { "user": "vieweruser", "password": "admin" },
     "method": "POST",
-    "endpoint": "http://localhost:5004/lookup/shells/MT",
+    "endpoint": "{{BASYX_IT_API_URL}}/lookup/shells/MT",
     "data": "postBody/simple_specificAssetIds.json",
     "expectedStatus": 403
   },
@@ -68,7 +68,7 @@
     "context": "Shells POST - editor with clear=6 allowed",
     "token": { "user": "editoruser", "password": "admin" },
     "method": "POST",
-    "endpoint": "http://localhost:5004/lookup/shells/MT",
+    "endpoint": "{{BASYX_IT_API_URL}}/lookup/shells/MT",
     "data": "postBody/simple_specificAssetIds.json",
     "expectedStatus": 201
   },
@@ -76,7 +76,7 @@
     "context": "Shells POST - admin allowed",
     "token": { "user": "adminuser", "password": "admin" },
     "method": "POST",
-    "endpoint": "http://localhost:5004/lookup/shells/MT",
+    "endpoint": "{{BASYX_IT_API_URL}}/lookup/shells/MT",
     "data": "postBody/simple_specificAssetIds.json",
     "expectedStatus": 201
   },
@@ -84,7 +84,7 @@
     "context": "Shells DELETE - admin allowed (clear=10)",
     "token": { "user": "adminuser", "password": "admin" },
     "method": "DELETE",
-    "endpoint": "http://localhost:5004/lookup/shells/MT",
+    "endpoint": "{{BASYX_IT_API_URL}}/lookup/shells/MT",
     "expectedStatus": 204
   },
   {
@@ -92,7 +92,7 @@
     "token": { "user": "vieweruser", "password": "admin" },
     "data": "postBody/simple_specificAssetIds.json",
     "method": "POST",
-    "endpoint": "http://localhost:5004/lookup/shellsByAssetLink",
+    "endpoint": "{{BASYX_IT_API_URL}}/lookup/shellsByAssetLink",
     "expectedStatus": 403
   },
   {
@@ -100,7 +100,7 @@
     "token": { "user": "editoruser", "password": "admin" },
     "data": "postBody/simple_specificAssetIds.json",
     "method": "POST",
-    "endpoint": "http://localhost:5004/lookup/shellsByAssetLink",
+    "endpoint": "{{BASYX_IT_API_URL}}/lookup/shellsByAssetLink",
     "expectedStatus": 200
   },
   {
@@ -108,7 +108,7 @@
     "token": { "user": "editoruser", "password": "admin" },
     "data": "postBody/simple_specificAssetIds.json",
     "method": "POST",
-    "endpoint": "http://localhost:5004/lookup/shellsByAssetLink/",
+    "endpoint": "{{BASYX_IT_API_URL}}/lookup/shellsByAssetLink/",
     "expectedStatus": 404
   },
   {
@@ -116,7 +116,7 @@
     "token": { "user": "adminuser", "password": "admin" },
     "data": "postBody/simple_specificAssetIds.json",
     "method": "POST",
-    "endpoint": "http://localhost:5004/lookup/shellsByAssetLink",
+    "endpoint": "{{BASYX_IT_API_URL}}/lookup/shellsByAssetLink",
     "expectedStatus": 200
   }
 ]

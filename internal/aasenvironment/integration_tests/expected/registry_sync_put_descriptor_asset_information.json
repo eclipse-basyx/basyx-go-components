@@ -21,7 +21,7 @@
     {
       "interface": "AAS-3.0",
       "protocolInformation": {
-        "href": "http://127.0.0.1:6004/shells/dXJuOmV4YW1wbGU6YWFzOnJlZ2lzdHJ5LXN5bmMtcG9zdA",
+        "href": "{{BASYX_IT_API_URL}}/shells/dXJuOmV4YW1wbGU6YWFzOnJlZ2lzdHJ5LXN5bmMtcG9zdA",
         "endpointProtocol": "http"
       }
     }

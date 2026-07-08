@@ -48,13 +48,15 @@ import (
 
 const (
 	migrationComposeFile = "./docker_compose/docker_compose.yml"
-	migrationBaseURL     = "http://127.0.0.1:6034"
-	migrationDSN         = "host=127.0.0.1 port=6434 user=admin password=admin123 dbname=basyxMigrationTestDB sslmode=disable"
 )
 
 var (
-	composeBinary string
-	composePrefix []string
+	migrationBaseURL  = testenv.LocalURLFromEnv("BASYX_IT_API_PORT", 6034)
+	migrationDSN      = testenv.PostgresKeywordDSNFromEnv("BASYX_IT_DB_PORT", 6434, "basyxMigrationTestDB")
+	composeBinary     string
+	composePrefix     []string
+	composeProject    string
+	composeRuntimeEnv []string
 )
 
 type migrationFixture struct {
@@ -64,6 +66,15 @@ type migrationFixture struct {
 }
 
 func TestMain(m *testing.M) {
+	runtime := testenv.NewComposeRuntimeOrExit("aasenvironment-migration", []testenv.PortBinding{
+		{Name: "api", EnvVar: "BASYX_IT_API_PORT"},
+		{Name: "db", EnvVar: "BASYX_IT_DB_PORT"},
+	})
+	migrationBaseURL = runtime.LocalURL("api")
+	migrationDSN = runtime.PostgresKeywordDSN("db", "basyxMigrationTestDB")
+	composeProject = runtime.ProjectName
+	composeRuntimeEnv = runtime.Env()
+
 	var err error
 	composeBinary, composePrefix, err = testenv.FindCompose()
 	if err != nil {
@@ -71,20 +82,20 @@ func TestMain(m *testing.M) {
 		os.Exit(1)
 	}
 
-	_ = runCompose("down", "--volumes", "--remove-orphans")
+	_ = runCompose("down", "-v", "--remove-orphans")
 	if err = runCompose("up", "-d", "migration_db", "old_configuration", "old_aas_environment"); err != nil {
 		fmt.Fprintf(os.Stderr, "AASEMV-MIGRATION-STARTOLD: %v\n", err)
-		_ = runCompose("down", "--volumes", "--remove-orphans")
+		_ = runCompose("down", "-v", "--remove-orphans")
 		os.Exit(1)
 	}
 	if err = testenv.WaitHealthyURL(migrationBaseURL+"/health", 5*time.Minute); err != nil {
 		fmt.Fprintf(os.Stderr, "AASEMV-MIGRATION-HEALTHOLD: %v\n", err)
-		_ = runCompose("down", "--volumes", "--remove-orphans")
+		_ = runCompose("down", "-v", "--remove-orphans")
 		os.Exit(1)
 	}
 
 	exitCode := m.Run()
-	if err = runCompose("down", "--volumes", "--remove-orphans"); err != nil && exitCode == 0 {
+	if err = runCompose("down", "-v", "--remove-orphans"); err != nil && exitCode == 0 {
 		fmt.Fprintf(os.Stderr, "AASEMV-MIGRATION-CLEANUP: %v\n", err)
 		exitCode = 1
 	}
@@ -124,9 +135,13 @@ func runCompose(args ...string) error {
 
 	commandArgs := append([]string{}, composePrefix...)
 	commandArgs = append(commandArgs, "-f", migrationComposeFile)
+	if composeProject != "" {
+		commandArgs = append(commandArgs, "-p", composeProject)
+	}
 	commandArgs = append(commandArgs, args...)
 
 	cmd := exec.CommandContext(ctx, composeBinary, commandArgs...)
+	cmd.Env = append(os.Environ(), composeRuntimeEnv...)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {

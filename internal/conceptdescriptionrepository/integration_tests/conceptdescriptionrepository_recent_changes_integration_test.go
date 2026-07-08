@@ -42,7 +42,7 @@ import (
 
 func TestConceptDescriptionRepositoryRecentChanges(t *testing.T) {
 	changedAfter := time.Now().Add(-1 * time.Minute).UTC().Format(time.RFC3339Nano)
-	baseURL := "http://localhost:6004"
+	baseURL := conceptDescriptionRepositoryBaseURL
 	conceptDescriptionID := fmt.Sprintf("urn:example:cd:recent:%d", time.Now().UnixNano())
 	encodedID := base64.RawURLEncoding.EncodeToString([]byte(conceptDescriptionID))
 	t.Cleanup(func() {

@@ -41,7 +41,7 @@ import (
 // failures that occurred when a File submodel element was PUT without the
 // optional value field (see PostgreSQLFileHandler.Update).
 func TestPutFileSubmodelElementWithoutValue(t *testing.T) {
-	baseURL := "http://localhost:6004"
+	baseURL := submodelRepositoryBaseURL
 	submodelID := fmt.Sprintf("urn:basyx:integration:file-put-no-value-%d", time.Now().UnixNano())
 	submodelIDEncoded := base64.RawURLEncoding.EncodeToString([]byte(submodelID))
 

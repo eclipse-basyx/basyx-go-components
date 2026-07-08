@@ -40,16 +40,25 @@ import (
 
 const (
 	preconfigurationComposeFilePath = "./docker_compose/docker_compose.yml"
-	preconfigurationBaseURL         = "http://127.0.0.1:6014"
 	observerStatusFilePath          = "./docker_compose/observer/health_observer_status.txt"
 )
+
+var preconfigurationBaseURL = testenv.LocalURLFromEnv("BASYX_IT_API_PORT", 6014)
 
 func TestMain(m *testing.M) {
 	_ = os.MkdirAll("./docker_compose/observer", 0o750)
 	_ = os.Remove(observerStatusFilePath)
 
+	runtime := testenv.NewComposeRuntimeOrExit("aasenvironment-preconfiguration", []testenv.PortBinding{
+		{Name: "api", EnvVar: "BASYX_IT_API_PORT"},
+		{Name: "db", EnvVar: "BASYX_IT_DB_PORT"},
+	})
+	preconfigurationBaseURL = runtime.LocalURL("api")
+
 	os.Exit(testenv.RunComposeTestMain(m, testenv.ComposeTestMainOptions{
 		ComposeFile:     preconfigurationComposeFilePath,
+		ProjectName:     runtime.ProjectName,
+		Env:             runtime.Env(),
 		PreDownBeforeUp: true,
 	}))
 }

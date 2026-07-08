@@ -26,6 +26,8 @@
 package testenv
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -52,4 +54,59 @@ func TestDefaultCheckDBIsEmptyExcludedTablesIncludesPersistentSchemaTables(t *te
 		_, ok := excluded[table]
 		require.Truef(t, ok, "expected %s to be excluded", table)
 	}
+}
+
+func TestApplyJSONSuiteTemplateValuesPreservesDollarPathTokens(t *testing.T) {
+	input := []byte(`[{"method":"GET","endpoint":"{{BASYX_IT_BASE_URL}}/submodels/$metadata/$path"}]`)
+
+	output := applyJSONSuiteTemplateValues(input, map[string]string{
+		"BASYX_IT_BASE_URL": "http://127.0.0.1:61234",
+	})
+
+	require.JSONEq(t,
+		`[{"method":"GET","endpoint":"http://127.0.0.1:61234/submodels/$metadata/$path"}]`,
+		string(output),
+	)
+}
+
+func TestJSONSuiteRunnerTemplatesBodyAndExpectedFiles(t *testing.T) {
+	tempDir := t.TempDir()
+	bodyPath := filepath.Join(tempDir, "body.json")
+	expectedPath := filepath.Join(tempDir, "expected.json")
+	require.NoError(t, os.WriteFile(bodyPath, []byte(`{"href":"{{BASYX_IT_BASE_URL}}/submodels/$reference"}`), 0o600))
+	require.NoError(t, os.WriteFile(expectedPath, []byte(`{"href":"{{BASYX_IT_BASE_URL}}/submodels/$metadata"}`), 0o600))
+
+	runner := &JSONSuiteRunner{
+		options: JSONSuiteOptions{
+			TemplateValues: map[string]string{
+				"BASYX_IT_BASE_URL": "http://127.0.0.1:61234",
+			},
+		},
+	}
+
+	body, err := runner.loadStepBody(JSONSuiteStep{Data: bodyPath})
+	require.NoError(t, err)
+	require.JSONEq(t, `{"href":"http://127.0.0.1:61234/submodels/$reference"}`, string(body))
+
+	runner.compareJSONResponse(t, JSONSuiteStep{ShouldMatch: expectedPath}, 1, `{"href":"http://127.0.0.1:61234/submodels/$metadata"}`)
+}
+
+func TestPrepareSecurityEnvCopiesAndRewritesIssuer(t *testing.T) {
+	sourceDir := t.TempDir()
+	require.NoError(t, os.WriteFile(
+		filepath.Join(sourceDir, "trustlist.json"),
+		[]byte(`[{"issuer":"http://localhost:8080/realms/basyx"}]`),
+		0o600,
+	))
+
+	targetDir, err := PrepareSecurityEnv(sourceDir, map[string]string{
+		"http://localhost:8080": "http://localhost:18080",
+	})
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = os.RemoveAll(targetDir) })
+
+	//nolint:gosec // The test reads a fixture path created under t.TempDir.
+	rewritten, err := os.ReadFile(filepath.Join(targetDir, "trustlist.json"))
+	require.NoError(t, err)
+	require.JSONEq(t, `[{"issuer":"http://localhost:18080/realms/basyx"}]`, string(rewritten))
 }

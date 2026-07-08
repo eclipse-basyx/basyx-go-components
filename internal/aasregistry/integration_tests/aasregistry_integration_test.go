@@ -43,21 +43,20 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-const defaultAASRegistryIntegrationTestDSN = "postgres://admin:admin123@127.0.0.1:6432/basyxTestDB?sslmode=disable"
-
+var aasRegistryBaseURL = testenv.LocalURLFromEnv("BASYX_IT_API_PORT", 6004)
 var aasRegistryIntegrationTestDSN = getAASRegistryIntegrationTestDSN()
 
 func getAASRegistryIntegrationTestDSN() string {
 	if dsn := os.Getenv("AASREGISTRY_INTEGRATION_TEST_DSN"); dsn != "" {
 		return dsn
 	}
-	return defaultAASRegistryIntegrationTestDSN
+	return testenv.PostgresURLFromEnv("BASYX_IT_DB_PORT", 6432, "basyxTestDB")
 }
 
 func deleteAllAASDescriptors(t *testing.T, runner *testenv.JSONSuiteRunner, stepNumber int) {
 	response, err := runner.RunStep(testenv.JSONSuiteStep{
 		Method:         http.MethodGet,
-		Endpoint:       "http://127.0.0.1:6004/shell-descriptors",
+		Endpoint:       aasRegistryBaseURL + "/shell-descriptors",
 		ExpectedStatus: http.StatusOK,
 	}, stepNumber)
 	require.NoError(t, err)
@@ -73,7 +72,7 @@ func deleteAllAASDescriptors(t *testing.T, runner *testenv.JSONSuiteRunner, step
 		enc := base64.RawURLEncoding.EncodeToString([]byte(item.ID))
 		_, err := runner.RunStep(testenv.JSONSuiteStep{
 			Method:         http.MethodDelete,
-			Endpoint:       fmt.Sprintf("http://127.0.0.1:6004/shell-descriptors/%s", enc),
+			Endpoint:       fmt.Sprintf("%s/shell-descriptors/%s", aasRegistryBaseURL, enc),
 			ExpectedStatus: http.StatusNoContent,
 		}, stepNumber)
 		require.NoError(t, err)
@@ -215,7 +214,7 @@ func assertLocationHeaderMatches(t *testing.T, expectedLocation string, actualLo
 }
 
 func TestLocationHeadersForCreateEndpointsAASRegistry(t *testing.T) {
-	baseURL := "http://127.0.0.1:6004"
+	baseURL := aasRegistryBaseURL
 
 	t.Run("PostAssetAdministrationShellDescriptorSetsLocation", func(t *testing.T) {
 		aasID := fmt.Sprintf("https://example.com/ids/aas/location-post-%d", time.Now().UnixNano())
@@ -323,11 +322,23 @@ func TestIntegration(t *testing.T) {
 
 func TestMain(m *testing.M) {
 	if os.Getenv("BASYX_EXTERNAL_COMPOSE") == "1" {
+		testenv.SetEnvDefaultsOrExit(map[string]string{
+			"BASYX_IT_API_URL": aasRegistryBaseURL,
+		})
 		os.Exit(m.Run())
 	}
 
+	runtime := testenv.NewComposeRuntimeOrExit("aasregistry-it", []testenv.PortBinding{
+		{Name: "api", EnvVar: "BASYX_IT_API_PORT"},
+		{Name: "db", EnvVar: "BASYX_IT_DB_PORT"},
+	})
+	aasRegistryBaseURL = runtime.LocalURL("api")
+	aasRegistryIntegrationTestDSN = runtime.PostgresURL("db", "basyxTestDB")
+
 	os.Exit(testenv.RunComposeTestMain(m, testenv.ComposeTestMainOptions{
 		ComposeFile: "docker_compose/docker_compose.yml",
-		HealthURL:   "http://localhost:6004/health",
+		ProjectName: runtime.ProjectName,
+		Env:         runtime.Env(),
+		HealthURL:   aasRegistryBaseURL + "/health",
 	}))
 }

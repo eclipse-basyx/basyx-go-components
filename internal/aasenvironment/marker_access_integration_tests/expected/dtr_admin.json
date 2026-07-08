@@ -49,7 +49,7 @@
             {
               "interface": "SUBMODEL-3.0",
               "protocolInformation": {
-                "href": "http://localhost:5005/submodels/dXJuOmV4YW1wbGU6c3VibW9kZWw6bmFtZXBsYXRl",
+                "href": "{{BASYX_MARKER_SM_LOCALHOST_URL}}/submodels/dXJuOmV4YW1wbGU6c3VibW9kZWw6bmFtZXBsYXRl",
                 "endpointProtocol": "HTTP"
               }
             }
@@ -73,7 +73,7 @@
             {
               "interface": "SUBMODEL-3.0",
               "protocolInformation": {
-                "href": "http://localhost:5005/submodels/dXJuOmV4YW1wbGU6c3VibW9kZWw6c2VyaWFsLXBhcnQtdHlwaXphdGlvbg",
+                "href": "{{BASYX_MARKER_SM_LOCALHOST_URL}}/submodels/dXJuOmV4YW1wbGU6c3VibW9kZWw6c2VyaWFsLXBhcnQtdHlwaXphdGlvbg",
                 "endpointProtocol": "HTTP"
               }
             }

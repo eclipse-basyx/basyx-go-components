@@ -2,14 +2,14 @@
   {
     "context": "001 - Health Check",
     "method": "GET",
-    "endpoint": "http://127.0.0.1:6004/health",
+    "endpoint": "{{BASYX_IT_API_URL}}/health",
     "expectedStatus": 200
   },
   {
     "context": "002 - Upload ProductionPlan AASX file",
     "action": "UPLOAD_AASX_MULTIPART",
     "method": "POST",
-    "endpoint": "http://127.0.0.1:6004/upload",
+    "endpoint": "{{BASYX_IT_API_URL}}/upload",
     "data": "testdata/ProductionPlanSFKL.aasx",
     "expectedStatus": 200
   },
@@ -17,20 +17,20 @@
     "context": "003 - List AAS after ProductionPlan upload",
     "action": "VERIFY_ENDPOINT_SNAPSHOT",
     "method": "GET",
-    "endpoint": "http://127.0.0.1:6004/shells",
+    "endpoint": "{{BASYX_IT_API_URL}}/shells",
     "data": "expected/productionplan_shells.json",
     "expectedStatus": 200
   },
   {
     "context": "003.1 - List AAS after ProductionPlan upload trailing slash",
     "method": "GET",
-    "endpoint": "http://127.0.0.1:6004/shells/",
+    "endpoint": "{{BASYX_IT_API_URL}}/shells/",
     "expectedStatus": 404
   },
   {
     "context": "004 - Verify uploaded file attachments",
     "action": "VERIFY_AASX_ATTACHMENTS",
-    "endpoint": "http://127.0.0.1:6004",
+    "endpoint": "{{BASYX_IT_API_URL}}",
     "headers": {
       "X-Attachments-Expectation": "absent"
     },
@@ -39,7 +39,7 @@
   {
     "context": "005 - Verify AAS thumbnails",
     "action": "VERIFY_AASX_THUMBNAIL",
-    "endpoint": "http://127.0.0.1:6004",
+    "endpoint": "{{BASYX_IT_API_URL}}",
     "headers": {
       "X-Thumbnail-Expectation": "absent"
     },
@@ -49,28 +49,28 @@
     "context": "006 - List Submodels after ProductionPlan upload",
     "action": "VERIFY_ENDPOINT_SNAPSHOT",
     "method": "GET",
-    "endpoint": "http://127.0.0.1:6004/submodels",
+    "endpoint": "{{BASYX_IT_API_URL}}/submodels",
     "data": "expected/productionplan_submodels.json",
     "expectedStatus": 200
   },
   {
     "context": "006.1 - List Submodels after ProductionPlan upload trailing slash",
     "method": "GET",
-    "endpoint": "http://127.0.0.1:6004/submodels/",
+    "endpoint": "{{BASYX_IT_API_URL}}/submodels/",
     "expectedStatus": 404
   },
   {
     "context": "007 - List ConceptDescriptions after ProductionPlan upload",
     "action": "VERIFY_ENDPOINT_SNAPSHOT",
     "method": "GET",
-    "endpoint": "http://127.0.0.1:6004/concept-descriptions",
+    "endpoint": "{{BASYX_IT_API_URL}}/concept-descriptions",
     "data": "expected/productionplan_conceptdescriptions.json",
     "expectedStatus": 200
   },
   {
     "context": "007.1 - List ConceptDescriptions after ProductionPlan upload trailing slash",
     "method": "GET",
-    "endpoint": "http://127.0.0.1:6004/concept-descriptions/",
+    "endpoint": "{{BASYX_IT_API_URL}}/concept-descriptions/",
     "expectedStatus": 404
   }
 ]

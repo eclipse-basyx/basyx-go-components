@@ -42,7 +42,7 @@ import (
 )
 
 func TestSubmodelRepositoryHistoryTracksSubmodelElementChangesAndRecentDeletes(t *testing.T) {
-	baseURL := "http://localhost:6004"
+	baseURL := submodelRepositoryBaseURL
 	uniqueSuffix := time.Now().UnixNano()
 	submodelID := fmt.Sprintf("urn:example:sm:history:%d", uniqueSuffix)
 	submodelIDShort := fmt.Sprintf("HistorySubmodel%d", uniqueSuffix)

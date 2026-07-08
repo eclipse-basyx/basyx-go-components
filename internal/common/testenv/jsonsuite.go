@@ -99,6 +99,8 @@ type JSONSuiteOptions struct {
 
 	EnableRequestLog bool
 	EnableRawDump    bool
+
+	TemplateValues map[string]string
 }
 
 type JSONSuiteRunner struct {
@@ -420,7 +422,7 @@ func RunJSONSuite(t *testing.T, options JSONSuiteOptions) {
 	t.Helper()
 
 	normalized := normalizeJSONSuiteOptions(options)
-	steps, err := loadJSONSuiteConfig(normalized.ConfigPath)
+	steps, err := loadJSONSuiteConfig(normalized.ConfigPath, normalized.TemplateValues)
 	require.NoError(t, err, "Failed to load test config")
 
 	err = os.Mkdir(normalized.LogsDir, 0o755)
@@ -467,7 +469,7 @@ func RunJSONSuite(t *testing.T, options JSONSuiteOptions) {
 }
 
 func (r *JSONSuiteRunner) RunStep(step JSONSuiteStep, stepNumber int) (JSONStepResult, error) {
-	bodyBytes, err := loadStepBody(step)
+	bodyBytes, err := r.loadStepBody(step)
 	if err != nil {
 		return JSONStepResult{}, err
 	}
@@ -505,7 +507,7 @@ func (r *JSONSuiteRunner) RunStep(step JSONSuiteStep, stepNumber int) (JSONStepR
 }
 
 func (r *JSONSuiteRunner) runRawStep(step JSONSuiteStep, stepNumber int) (string, int, error) {
-	bodyBytes, err := loadStepBody(step)
+	bodyBytes, err := r.loadStepBody(step)
 	if err != nil {
 		return "", 0, err
 	}
@@ -605,6 +607,7 @@ func (r *JSONSuiteRunner) compareJSONResponse(t *testing.T, step JSONSuiteStep, 
 
 	expectedRaw, err := os.ReadFile(step.ShouldMatch)
 	require.NoError(t, err, "Failed to read expected response file")
+	expectedRaw = applyJSONSuiteTemplateValues(expectedRaw, r.options.TemplateValues)
 
 	expectedJSON, err := normalizeJSON(expectedRaw)
 	require.NoError(t, err, "Failed to parse expected JSON")
@@ -640,21 +643,49 @@ func normalizeJSONSuiteOptions(options JSONSuiteOptions) JSONSuiteOptions {
 	return options
 }
 
-func loadJSONSuiteConfig(path string) ([]JSONSuiteStep, error) {
-	file, err := os.Open(path)
+func loadJSONSuiteConfig(path string, templateValues map[string]string) ([]JSONSuiteStep, error) {
+	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = file.Close() }()
+	data = applyJSONSuiteTemplateValues(data, templateValues)
 
 	var steps []JSONSuiteStep
-	if err := json.NewDecoder(file).Decode(&steps); err != nil {
+	if err := json.Unmarshal(data, &steps); err != nil {
 		return nil, err
 	}
 	return steps, nil
 }
 
-func loadStepBody(step JSONSuiteStep) ([]byte, error) {
+func applyJSONSuiteTemplateValues(data []byte, templateValues map[string]string) []byte {
+	values := jsonSuiteTemplateValuesFromEnv()
+	for key, value := range templateValues {
+		values[key] = value
+	}
+	if len(values) == 0 {
+		return data
+	}
+
+	result := string(data)
+	for key, value := range values {
+		result = strings.ReplaceAll(result, "{{"+key+"}}", value)
+	}
+	return []byte(result)
+}
+
+func jsonSuiteTemplateValuesFromEnv() map[string]string {
+	values := map[string]string{}
+	for _, entry := range os.Environ() {
+		key, value, ok := strings.Cut(entry, "=")
+		if !ok || !strings.HasPrefix(key, "BASYX_") {
+			continue
+		}
+		values[key] = value
+	}
+	return values
+}
+
+func (r *JSONSuiteRunner) loadStepBody(step JSONSuiteStep) ([]byte, error) {
 	if step.Data == "" {
 		return nil, nil
 	}
@@ -662,7 +693,7 @@ func loadStepBody(step JSONSuiteStep) ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to read data file: %w", err)
 	}
-	return data, nil
+	return applyJSONSuiteTemplateValues(data, r.options.TemplateValues), nil
 }
 
 func normalizeJSON(input []byte) (string, error) {

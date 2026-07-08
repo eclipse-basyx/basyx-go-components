@@ -38,7 +38,7 @@ import (
 )
 
 func TestSubmodelRepositoryExtentShapesBlobValues(t *testing.T) {
-	baseURL := "http://localhost:6004"
+	baseURL := submodelRepositoryBaseURL
 	submodelID := fmt.Sprintf("urn:basyx:integration:extent-%d", time.Now().UnixNano())
 	submodelIDEncoded := base64.RawURLEncoding.EncodeToString([]byte(submodelID))
 	topBlobValue := base64.StdEncoding.EncodeToString([]byte("top-blob-value"))
@@ -149,7 +149,7 @@ func TestSubmodelRepositoryExtentShapesBlobValues(t *testing.T) {
 }
 
 func TestSubmodelRepositoryHistoryExtentAndCoreLevel(t *testing.T) {
-	baseURL := "http://localhost:6004"
+	baseURL := submodelRepositoryBaseURL
 	submodelID := fmt.Sprintf("urn:basyx:integration:history-extent-%d", time.Now().UnixNano())
 	submodelIDEncoded := base64.RawURLEncoding.EncodeToString([]byte(submodelID))
 	topBlobValue := base64.StdEncoding.EncodeToString([]byte("history-top-blob-value"))

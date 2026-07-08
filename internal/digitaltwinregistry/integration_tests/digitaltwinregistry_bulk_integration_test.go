@@ -45,7 +45,6 @@ import (
 )
 
 const (
-	dtrTokenURL = "http://127.0.0.1:8080/realms/basyx/protocol/openid-connect/token"
 	dtrClientID = "basyx-ui"
 )
 
@@ -144,7 +143,7 @@ func fetchDTRToken(t *testing.T, user, password string) string {
 	form.Set("username", user)
 	form.Set("password", password)
 
-	req, err := http.NewRequest(http.MethodPost, dtrTokenURL, strings.NewReader(form.Encode()))
+	req, err := http.NewRequest(http.MethodPost, keycloakTokenURL, strings.NewReader(form.Encode()))
 	require.NoError(t, err)
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 

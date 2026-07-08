@@ -43,8 +43,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-const aasEnvBaseURL = "http://127.0.0.1:6004"
-
 var aasEnvNoRedirectClient = &http.Client{
 	Timeout: 10 * time.Second,
 	CheckRedirect: func(_ *http.Request, _ []*http.Request) error {

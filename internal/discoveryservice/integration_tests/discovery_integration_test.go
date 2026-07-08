@@ -37,17 +37,29 @@ import (
 )
 
 const composeFilePath = "./docker_compose/docker_compose.yml"
-const discoveryBaseURL = "http://127.0.0.1:6004"
 const actionShellsByAssetLinkMissingBody = "CHECK_SHELLSBYASSETLINK_MISSING_BODY"
 const actionLookupShellsNilBody = "CHECK_LOOKUPSHELLS_NIL_BODY"
 
+var discoveryBaseURL = testenv.LocalURLFromEnv("BASYX_IT_API_PORT", 6004)
+
 func TestMain(m *testing.M) {
 	if os.Getenv("BASYX_EXTERNAL_COMPOSE") == "1" {
+		testenv.SetEnvDefaultsOrExit(map[string]string{
+			"BASYX_IT_API_URL": discoveryBaseURL,
+		})
 		os.Exit(m.Run())
 	}
 
+	runtime := testenv.NewComposeRuntimeOrExit("discovery-it", []testenv.PortBinding{
+		{Name: "api", EnvVar: "BASYX_IT_API_PORT"},
+		{Name: "db", EnvVar: "BASYX_IT_DB_PORT"},
+	})
+	discoveryBaseURL = runtime.LocalURL("api")
+
 	os.Exit(testenv.RunComposeTestMain(m, testenv.ComposeTestMainOptions{
 		ComposeFile:   composeFilePath,
+		ProjectName:   runtime.ProjectName,
+		Env:           runtime.Env(),
 		HealthURL:     discoveryBaseURL + "/health",
 		HealthTimeout: 2 * time.Minute,
 	}))

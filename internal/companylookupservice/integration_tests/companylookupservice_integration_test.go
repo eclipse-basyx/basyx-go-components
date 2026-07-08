@@ -39,10 +39,13 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+var companyLookupBaseURL = testenv.LocalURLFromEnv("BASYX_IT_API_PORT", 6004)
+var companyLookupDSN = testenv.PostgresKeywordDSNFromEnv("BASYX_IT_DB_PORT", 6432, "basyxTestDB")
+
 func deleteAllCompanyDescriptors(t *testing.T, runner *testenv.JSONSuiteRunner, stepNumber int) {
 	response, err := runner.RunStep(testenv.JSONSuiteStep{
 		Method:         http.MethodGet,
-		Endpoint:       "http://127.0.0.1:6004/companies",
+		Endpoint:       companyLookupBaseURL + "/companies",
 		ExpectedStatus: http.StatusOK,
 	}, stepNumber)
 	require.NoError(t, err)
@@ -58,7 +61,7 @@ func deleteAllCompanyDescriptors(t *testing.T, runner *testenv.JSONSuiteRunner, 
 		enc := base64.RawURLEncoding.EncodeToString([]byte(item.Domain))
 		_, err := runner.RunStep(testenv.JSONSuiteStep{
 			Method:         http.MethodDelete,
-			Endpoint:       fmt.Sprintf("http://127.0.0.1:6004/companies/%s", enc),
+			Endpoint:       fmt.Sprintf("%s/companies/%s", companyLookupBaseURL, enc),
 			ExpectedStatus: http.StatusNoContent,
 		}, stepNumber)
 		require.NoError(t, err)
@@ -82,15 +85,24 @@ func TestIntegration(t *testing.T) {
 			},
 			testenv.ActionCheckDBIsEmpty: testenv.NewCheckDBIsEmptyAction(testenv.CheckDBIsEmptyOptions{
 				Driver: "pgx",
-				DSN:    "host=127.0.0.1 port=6432 user=admin password=admin123 dbname=basyxTestDB sslmode=disable",
+				DSN:    companyLookupDSN,
 			}),
 		},
 	})
 }
 
 func TestMain(m *testing.M) {
+	runtime := testenv.NewComposeRuntimeOrExit("company-lookup-it", []testenv.PortBinding{
+		{Name: "api", EnvVar: "BASYX_IT_API_PORT"},
+		{Name: "db", EnvVar: "BASYX_IT_DB_PORT"},
+	})
+	companyLookupBaseURL = runtime.LocalURL("api")
+	companyLookupDSN = runtime.PostgresKeywordDSN("db", "basyxTestDB")
+
 	os.Exit(testenv.RunComposeTestMain(m, testenv.ComposeTestMainOptions{
 		ComposeFile: "docker_compose/docker-compose.yml",
-		HealthURL:   "http://localhost:6004/health",
+		ProjectName: runtime.ProjectName,
+		Env:         runtime.Env(),
+		HealthURL:   companyLookupBaseURL + "/health",
 	}))
 }

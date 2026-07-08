@@ -1,13 +1,12 @@
 services:
   db-query:
     image: postgres:18
-    container_name: postgres_query_db
     environment:
       POSTGRES_USER: admin
       POSTGRES_PASSWORD: admin123
       POSTGRES_DB: basyxTestDB
     ports:
-      - "6433:5432"
+      - "127.0.0.1:${BASYX_IT_DB_PORT:-6433}:5432"
     command: ["postgres", "-c", "listen_addresses=*"]
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U admin -d basyxTestDB"]
@@ -16,7 +15,6 @@ services:
       retries: 5
 
   aas-registry-query:
-    container_name: aas-registry-query
     build:
       context: ../../../..
       dockerfile: ./cmd/aasregistryservice/Dockerfile
@@ -34,7 +32,7 @@ services:
       - ABAC_MODELPATH=/security_env/access-rules.json
       - OIDC_TRUSTLISTPATH=/security_env/trustlist.json
     ports:
-      - "6005:5004"
+      - "127.0.0.1:${BASYX_IT_API_PORT:-6005}:5004"
     depends_on:
       basyx_configuration:
         condition: service_completed_successfully
@@ -43,21 +41,20 @@ services:
       keycloak-query-healthcheck:
         condition: service_completed_successfully
     volumes:
-      - ../security_env:/security_env
+      - ${BASYX_IT_SECURITY_ENV:-../security_env}:/security_env
     extra_hosts:
       - "localhost:host-gateway"
 
   keycloak-query:
     image: keycloak/keycloak:26.0.6
-    container_name: keycloak-query
     environment:
       KC_DB: postgres
       KC_DB_URL: jdbc:postgresql://db-query:5432/basyxTestDB
       KC_DB_USERNAME: admin
       KC_DB_PASSWORD: admin123
       KC_HOSTNAME: localhost
-      KC_HOSTNAME_PORT: "8081"
-      KC_HOSTNAME_URL: "http://localhost:8081"
+      KC_HOSTNAME_PORT: "${BASYX_IT_KEYCLOAK_PORT:-8081}"
+      KC_HOSTNAME_URL: "http://localhost:${BASYX_IT_KEYCLOAK_PORT:-8081}"
       KEYCLOAK_ADMIN: admin
       KEYCLOAK_ADMIN_PASSWORD: admin
       KC_HTTP_ENABLED: "true"
@@ -69,13 +66,12 @@ services:
       KC_HTTP_MANAGEMENT_ENABLED: "true"
     command: ["start-dev", "--import-realm", "--health-enabled=true"]
     ports:
-      - "8081:8080"
+      - "0.0.0.0:${BASYX_IT_KEYCLOAK_PORT:-8081}:8080"
     volumes:
       - ../../security_filter_tests/docker_compose/keycloak/realm:/opt/keycloak/data/import
 
   keycloak-query-healthcheck:
     image: curlimages/curl:latest
-    container_name: keycloak-query-healthcheck
     command: >
       sh -c "
         echo 'Waiting for Keycloak to become ready...';
@@ -87,7 +83,6 @@ services:
       - keycloak-query
 
   basyx_configuration:
-    container_name: basyx_configuration
     build:
       context: ../../../..
       dockerfile: ./cmd/basyxconfigurationservice/Dockerfile
