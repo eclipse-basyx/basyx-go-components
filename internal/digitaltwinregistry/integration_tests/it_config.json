@@ -418,6 +418,15 @@
     "shouldMatch": "expected/bpn1_paged_result.json"
   },
   {
+    "method": "GET",
+    "endpoint": "{{BASYX_IT_API_URL}}/shell-descriptors?assetIds=eyJuYW1lIjoiZ2xvYmFsQXNzZXRJZCIsInZhbHVlIjoidGVzdCJ9&assetIds=eyJuYW1lIjoiY3VzdG9tZXJQYXJ0SWQiLCJ2YWx1ZSI6Im5vbi1wdWJsaWMtMjMxOTgyIn0",
+    "expectedStatus": 200,
+    "headers": {
+      "Edc-Bpn": "BPN_COMPANY_001"
+    },
+    "shouldMatch": "expected/empty_paged_result.json"
+  },
+  {
     "method": "POST",
     "endpoint": "{{BASYX_IT_API_URL}}/lookup/shellsByAssetLink",
     "data": "postBody/globalAssetIdNoPublicReadableAndCustomerPartIdAssetLink.json",

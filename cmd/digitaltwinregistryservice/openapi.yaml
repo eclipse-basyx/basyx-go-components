@@ -113,6 +113,7 @@ paths:
         DTR extension:
 
         - Supports assetIds query parameters for base64-url-encoded AssetLink values.
+          Multiple assetIds are matched with AND semantics, aligned with lookup.
         - Supports createdAfter query parameter (RFC3339) to apply additional filtering.
       operationId: GetAllAssetAdministrationShellDescriptors
       x-semanticIds:

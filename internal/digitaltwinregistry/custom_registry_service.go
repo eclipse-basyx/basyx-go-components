@@ -90,20 +90,6 @@ func (s *CustomRegistryService) GetAllAssetAdministrationShellDescriptors(
 			return emptyDescriptorPage(), nil
 		}
 
-		globalAssetIDs, assetLinks := splitGlobalAssetIDLinks(links)
-		if len(globalAssetIDs) > 0 {
-			return s.getAllAssetAdministrationShellDescriptorsByDescriptorQuery(
-				ctx,
-				limit,
-				cursor,
-				assetKind,
-				assetType,
-				globalAssetIDs,
-				assetLinks,
-				createdFrom,
-				updatedFrom,
-			)
-		}
 		return s.getAllAssetAdministrationShellDescriptorsByAssetLinks(
 			ctx,
 			limit,
@@ -136,55 +122,6 @@ func (s *CustomRegistryService) GetAssetAdministrationShellDescriptorById(
 ) (model.ImplResponse, error) {
 	ctx = descriptorsutil.WithIncludeAASDescriptorCreatedAt(ctx)
 	return s.AssetAdministrationShellRegistryAPIAPIService.GetAssetAdministrationShellDescriptorById(ctx, aasIdentifier)
-}
-
-func (s *CustomRegistryService) getAllAssetAdministrationShellDescriptorsByDescriptorQuery(
-	ctx context.Context,
-	limit int32,
-	cursor string,
-	assetKind model.AssetKind,
-	assetType string,
-	globalAssetIDs []string,
-	assetLinks []model.AssetLink,
-	createdFrom time.Time,
-	updatedFrom time.Time,
-) (model.ImplResponse, error) {
-	readUnrestricted, unrestrictedErr := globalAssetIDLookupReadUnrestricted(ctx)
-	if unrestrictedErr != nil {
-		return common.NewErrorResponse(
-			unrestrictedErr,
-			http.StatusInternalServerError,
-			customRegistryComponentName,
-			"GetAllAssetAdministrationShellDescriptors",
-			"ShouldEnforceFormula",
-		), unrestrictedErr
-	}
-	ctx = auth.MergeQueryFilter(ctx, buildGlobalAssetIDLookupQuery(ctx, globalAssetIDs, readUnrestricted))
-	if len(assetLinks) > 0 {
-		ctx = auth.MergeQueryFilter(ctx, buildAssetLinkDescriptorQueryWithAccess(ctx, assetLinks, readUnrestricted))
-	}
-
-	return s.AssetAdministrationShellRegistryAPIAPIService.GetAllAssetAdministrationShellDescriptors(
-		ctx,
-		limit,
-		cursor,
-		assetKind,
-		assetType,
-		nil,
-		createdFrom,
-		updatedFrom,
-	)
-}
-
-func globalAssetIDLookupReadUnrestricted(ctx context.Context) (bool, error) {
-	shouldEnforceFormula, enforceErr := auth.ShouldEnforceFormula(ctx)
-	if enforceErr != nil {
-		return false, enforceErr
-	}
-	if !shouldEnforceFormula {
-		return true, nil
-	}
-	return auth.HasUnrestrictedFormulaForRight(ctx, grammar.RightsEnumREAD), nil
 }
 
 func (s *CustomRegistryService) getAllAssetAdministrationShellDescriptorsByAssetLinks(
@@ -307,27 +244,21 @@ func buildGlobalAssetIDQuery(globalAssetIDs []string) grammar.Query {
 	return buildGlobalAssetIDQueryForField("$aasdesc#globalAssetId", globalAssetIDs)
 }
 
-func buildGlobalAssetIDLookupQuery(ctx context.Context, globalAssetIDs []string, readUnrestricted bool) grammar.Query {
-	globalAssetIDQuery := buildGlobalAssetIDQuery(globalAssetIDs)
-	if globalAssetIDQuery.Condition == nil || readUnrestricted {
-		return globalAssetIDQuery
-	}
+func buildBasicDiscoveryGlobalAssetIDQuery(globalAssetIDs []string) grammar.Query {
+	return buildGlobalAssetIDQuery(globalAssetIDs)
+}
 
-	condition := grammar.LogicalExpression{
-		And: []grammar.LogicalExpression{
-			*globalAssetIDQuery.Condition,
-			visibleNonGlobalAssetLinkExpression(ctx),
-		},
-	}
+func buildBasicDiscoveryGlobalAssetIDDescriptorVisibilityQuery(ctx context.Context) grammar.Query {
+	condition := visibleNonGlobalAssetLinkExpressionForRoot(ctx, "$bd")
 	return grammar.Query{Condition: &condition}
 }
 
-func visibleNonGlobalAssetLinkExpression(ctx context.Context) grammar.LogicalExpression {
+func visibleNonGlobalAssetLinkExpressionForRoot(ctx context.Context, root string) grammar.LogicalExpression {
 	expressions := []grammar.LogicalExpression{}
 	if edcBpn, ok := edcBpnClaimFromContext(ctx); ok {
-		expressions = append(expressions, visibleNonGlobalAssetLinkForSubject(edcBpn))
+		expressions = append(expressions, visibleNonGlobalAssetLinkForSubject(root, edcBpn))
 	}
-	expressions = append(expressions, visibleNonGlobalAssetLinkForSubject("PUBLIC_READABLE"))
+	expressions = append(expressions, visibleNonGlobalAssetLinkForSubject(root, "PUBLIC_READABLE"))
 
 	if len(expressions) == 1 {
 		return expressions[0]
@@ -335,9 +266,9 @@ func visibleNonGlobalAssetLinkExpression(ctx context.Context) grammar.LogicalExp
 	return grammar.LogicalExpression{Or: expressions}
 }
 
-func visibleNonGlobalAssetLinkForSubject(subject string) grammar.LogicalExpression {
-	nameField := grammar.ModelStringPattern("$aasdesc#specificAssetIds[].name")
-	subjectField := grammar.ModelStringPattern("$aasdesc#specificAssetIds[].externalSubjectId.keys[].value")
+func visibleNonGlobalAssetLinkForSubject(root string, subject string) grammar.LogicalExpression {
+	nameField := grammar.ModelStringPattern(root + "#specificAssetIds[].name")
+	subjectField := grammar.ModelStringPattern(root + "#specificAssetIds[].externalSubjectId.keys[].value")
 	globalAssetIDName := grammar.StandardString(common.GlobalAssetIDAssetLinkName)
 	subjectValue := grammar.StandardString(subject)
 
@@ -357,10 +288,6 @@ func visibleNonGlobalAssetLinkForSubject(subject string) grammar.LogicalExpressi
 			},
 		},
 	}
-}
-
-func buildBasicDiscoveryGlobalAssetIDQuery(globalAssetIDs []string) grammar.Query {
-	return buildGlobalAssetIDQuery(globalAssetIDs)
 }
 
 func buildGlobalAssetIDQueryForField(field string, globalAssetIDs []string) grammar.Query {
@@ -388,16 +315,36 @@ func mergeAssetLinkLookupFilter(ctx context.Context, links []model.AssetLink) (c
 	if enforceErr != nil {
 		return ctx, enforceErr
 	}
+
+	globalAssetIDs, specificAssetLinks := splitGlobalAssetIDLinks(links)
+	readUnrestricted := auth.HasUnrestrictedFormulaForRight(ctx, grammar.RightsEnumREAD)
+	if globalAssetIDDescriptorVisibilityRequired(ctx, globalAssetIDs, readUnrestricted) {
+		ctx = auth.MergeQueryFilter(ctx, buildBasicDiscoveryGlobalAssetIDDescriptorVisibilityQuery(ctx))
+	}
+
 	if !shouldEnforceFormula {
 		return ctx, nil
 	}
 
-	assetLinkQuery := buildAssetLinkQuery(ctx, links)
+	assetLinkQuery := buildBasicDiscoveryAssetLinkQueryWithAccess(ctx, specificAssetLinks, readUnrestricted)
 	if assetLinkQuery.Condition == nil && len(assetLinkQuery.FilterConditions) == 0 {
 		return ctx, nil
 	}
+	ctx = auth.MergeQueryFilter(ctx, assetLinkQuery)
+	if len(globalAssetIDs) > 0 {
+		return ctx, nil
+	}
 
-	return discoveryapiinternal.WithAssetLinksAlreadyConstrained(auth.MergeQueryFilter(ctx, assetLinkQuery)), nil
+	return discoveryapiinternal.WithAssetLinksAlreadyConstrained(ctx), nil
+}
+
+func globalAssetIDDescriptorVisibilityRequired(ctx context.Context, globalAssetIDs []string, readUnrestricted bool) bool {
+	if len(globalAssetIDs) == 0 || readUnrestricted {
+		return false
+	}
+
+	cfg, ok := common.ConfigFromContext(ctx)
+	return ok && cfg.ABAC.Enabled
 }
 
 func edcBpnClaimFromContext(ctx context.Context) (string, bool) {

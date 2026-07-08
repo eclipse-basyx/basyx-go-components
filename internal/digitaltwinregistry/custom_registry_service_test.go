@@ -30,54 +30,86 @@ import (
 	"testing"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
+	discoveryapiinternal "github.com/eclipse-basyx/basyx-go-components/internal/discoveryservice/api"
 )
 
-func TestGlobalAssetIDLookupReadUnrestrictedWithoutQueryFilter(t *testing.T) {
+func TestGlobalAssetIDDescriptorVisibilityRequiredOnlyWithABAC(t *testing.T) {
 	t.Parallel()
 
-	ctx := common.ContextWithConfig(context.Background(), &common.Config{})
+	globalAssetIDs := []string{"global-asset"}
 
-	readUnrestricted, err := globalAssetIDLookupReadUnrestricted(ctx)
-	if err != nil {
-		t.Fatalf("expected no error, got %v", err)
+	ctx := common.ContextWithConfig(context.Background(), &common.Config{})
+	if globalAssetIDDescriptorVisibilityRequired(ctx, globalAssetIDs, false) {
+		t.Fatalf("expected no extra globalAssetId visibility filter when ABAC is disabled")
 	}
-	if !readUnrestricted {
-		t.Fatalf("expected globalAssetId lookup to be unrestricted without query filter")
+
+	cfg := &common.Config{}
+	cfg.ABAC.Enabled = true
+	ctx = common.ContextWithConfig(context.Background(), cfg)
+	if !globalAssetIDDescriptorVisibilityRequired(ctx, globalAssetIDs, false) {
+		t.Fatalf("expected extra globalAssetId visibility filter when ABAC is enabled")
 	}
 }
 
-func TestGlobalAssetIDLookupReadUnrestrictedUsesActiveReadFormula(t *testing.T) {
+func TestGlobalAssetIDDescriptorVisibilityRequiredSkipsEmptyAndUnrestricted(t *testing.T) {
 	t.Parallel()
 
-	tests := []struct {
-		name string
-		read bool
-		want bool
-	}{
-		{name: "restricted", read: false, want: false},
-		{name: "unrestricted", read: true, want: true},
+	cfg := &common.Config{}
+	cfg.ABAC.Enabled = true
+	ctx := common.ContextWithConfig(context.Background(), cfg)
+
+	if globalAssetIDDescriptorVisibilityRequired(ctx, nil, false) {
+		t.Fatalf("expected no extra visibility filter without globalAssetId values")
+	}
+	if globalAssetIDDescriptorVisibilityRequired(ctx, []string{"global-asset"}, true) {
+		t.Fatalf("expected no extra visibility filter when READ is unrestricted")
+	}
+}
+
+func TestMergeAssetLinkLookupFilterKeepsDiscoveryMatchingForGlobalAssetIDs(t *testing.T) {
+	t.Parallel()
+
+	ctx := restrictedReadContext()
+	links := []model.AssetLink{
+		{Name: common.GlobalAssetIDAssetLinkName, Value: "global-asset"},
+		{Name: "customerPartId", Value: "customer-part"},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
-			ctx := common.ContextWithConfig(context.Background(), &common.Config{})
-			ctx = auth.WithQueryFilter(ctx, &auth.QueryFilter{
-				FormulasByRight: map[grammar.RightsEnum]grammar.LogicalExpression{
-					grammar.RightsEnumREAD: {Boolean: &tt.read},
-				},
-			})
-
-			readUnrestricted, err := globalAssetIDLookupReadUnrestricted(ctx)
-			if err != nil {
-				t.Fatalf("expected no error, got %v", err)
-			}
-			if readUnrestricted != tt.want {
-				t.Fatalf("expected readUnrestricted=%v, got %v", tt.want, readUnrestricted)
-			}
-		})
+	lookupCtx, err := mergeAssetLinkLookupFilter(ctx, links)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
 	}
+	if discoveryapiinternal.AssetLinksAlreadyConstrainedFromContext(lookupCtx) {
+		t.Fatalf("expected discovery to keep matching asset links when globalAssetId is present")
+	}
+}
+
+func TestMergeAssetLinkLookupFilterConstrainsSpecificOnlyAssetLinks(t *testing.T) {
+	t.Parallel()
+
+	ctx := restrictedReadContext()
+	links := []model.AssetLink{{Name: "customerPartId", Value: "customer-part"}}
+
+	lookupCtx, err := mergeAssetLinkLookupFilter(ctx, links)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if !discoveryapiinternal.AssetLinksAlreadyConstrainedFromContext(lookupCtx) {
+		t.Fatalf("expected specific-only asset links to be marked as constrained")
+	}
+}
+
+func restrictedReadContext() context.Context {
+	cfg := &common.Config{}
+	cfg.ABAC.Enabled = true
+	ctx := common.ContextWithConfig(context.Background(), cfg)
+	read := false
+	return auth.WithQueryFilter(ctx, &auth.QueryFilter{
+		FormulasByRight: map[grammar.RightsEnum]grammar.LogicalExpression{
+			grammar.RightsEnumREAD: {Boolean: &read},
+		},
+	})
 }
