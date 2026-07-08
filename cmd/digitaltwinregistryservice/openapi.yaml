@@ -73,6 +73,16 @@ components:
         because it is not derived from the token.
       schema:
         type: string
+    DTRCreatedAfter:
+      name: createdAfter
+      in: query
+      required: false
+      description: >-
+        DTR extension: filter results by creation timestamp (RFC3339).
+        Invalid values return HTTP 400.
+      schema:
+        type: string
+        format: date-time
 
 paths:
   /description:
@@ -99,6 +109,11 @@ paths:
       tags:
         - Asset Administration Shell Registry API
       summary: Returns all Asset Administration Shell Descriptors
+      description: |-
+        DTR extension:
+
+        - Supports assetIds query parameters for base64-url-encoded AssetLink values.
+        - Supports createdAfter query parameter (RFC3339) to apply additional filtering.
       operationId: GetAllAssetAdministrationShellDescriptors
       x-semanticIds:
         - https://admin-shell.io/aas/API/GetAllAssetAdministrationShellDescriptors/3/2
@@ -109,6 +124,7 @@ paths:
         - $ref: '../Part2-API-Schemas/openapi.yaml#/components/parameters/AssetKind'
         - $ref: '../Part2-API-Schemas/openapi.yaml#/components/parameters/AssetType'
         - $ref: '../Part2-API-Schemas/openapi.yaml#/components/parameters/AssetIds'
+        - $ref: '#/components/parameters/DTRCreatedAfter'
         - $ref: '../Part2-API-Schemas/openapi.yaml#/components/parameters/CreatedFrom'
         - $ref: '../Part2-API-Schemas/openapi.yaml#/components/parameters/UpdatedFrom'
       responses:
@@ -602,15 +618,7 @@ paths:
         - $ref: '#/components/parameters/EdcBpnHeader'
         - $ref: '../Part2-API-Schemas/openapi.yaml#/components/parameters/Limit'
         - $ref: '../Part2-API-Schemas/openapi.yaml#/components/parameters/Cursor'
-        - name: createdAfter
-          in: query
-          description: >-
-            DTR extension: filter results by creation timestamp (RFC3339).
-            Invalid values return HTTP 400.
-          required: false
-          schema:
-            type: string
-            format: date-time
+        - $ref: '#/components/parameters/DTRCreatedAfter'
       requestBody:
         description: A list of specific asset identifiers. Search for the global asset ID is supported by setting "name"  to "globalAssetId" (see Constraint AASd-116).
         content:

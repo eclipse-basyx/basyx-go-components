@@ -17,7 +17,7 @@ import (
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/testenv"
 )
 
-const markerExamplePath = "../../../examples/BaSyxMarkerAccessExample"
+const markerExamplePath = "../../../examples/CatenaXample"
 
 var (
 	markerDTRBaseURL      = testenv.LocalURLFromEnv("BASYX_MARKER_DTR_PORT", 5004) + "/api/v3"
@@ -86,8 +86,8 @@ func TestMain(m *testing.M) {
 	markerDataDir = dataDir
 	markerExpectedDir = expectedDir
 	markerTemplateValues = map[string]string{
-		"BASYX_MARKER_DATA_DIR":     markerDataDir,
-		"BASYX_MARKER_EXPECTED_DIR": markerExpectedDir,
+		"BASYX_MARKER_DATA_DIR":     filepath.ToSlash(markerDataDir),
+		"BASYX_MARKER_EXPECTED_DIR": filepath.ToSlash(markerExpectedDir),
 	}
 
 	code := testenv.RunComposeTestMain(m, testenv.ComposeTestMainOptions{

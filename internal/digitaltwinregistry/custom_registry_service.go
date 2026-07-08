@@ -29,9 +29,7 @@ package digitaltwinregistry
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"log"
-	"math"
 	"net/http"
 	"strings"
 	"time"
@@ -215,22 +213,11 @@ func (s *CustomRegistryService) getAllAssetAdministrationShellDescriptorsByAsset
 			"result":          []map[string]any{},
 		}), nil
 	}
-	descriptorLimit, limitErr := int32Length(len(aasIDs))
-	if limitErr != nil {
-		return common.NewErrorResponse(
-			limitErr,
-			http.StatusInternalServerError,
-			customRegistryComponentName,
-			"GetAllAssetAdministrationShellDescriptors",
-			"LookupResultLimit",
-		), limitErr
-	}
-
 	descriptorQuery := buildAASIDQuery(aasIDs)
 	descriptorCtx := auth.MergeQueryFilter(ctx, descriptorQuery)
 	descriptorResp, descriptorErr := s.AssetAdministrationShellRegistryAPIAPIService.GetAllAssetAdministrationShellDescriptors(
 		descriptorCtx,
-		descriptorLimit,
+		limit,
 		"",
 		assetKind,
 		assetType,
@@ -243,13 +230,6 @@ func (s *CustomRegistryService) getAllAssetAdministrationShellDescriptorsByAsset
 	}
 
 	return replaceDescriptorPagingMetadata(descriptorResp, paging)
-}
-
-func int32Length(length int) (int32, error) {
-	if length > math.MaxInt32 {
-		return 0, fmt.Errorf("length %d exceeds int32 max %d", length, math.MaxInt32)
-	}
-	return int32(length), nil
 }
 
 func decodeRegistryAssetLinkQueryAssetIDs(encodedAssetIDs []string) ([]model.AssetLink, *model.ImplResponse, error) {

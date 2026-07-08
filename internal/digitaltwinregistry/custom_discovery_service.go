@@ -444,10 +444,6 @@ func buildUnrestrictedAssetLinkQueryForRoot(assetLink []model.AssetLink, root st
 	}
 }
 
-func buildAssetLinkDescriptorQuery(ctx context.Context, assetLink []model.AssetLink) grammar.Query {
-	return buildAssetLinkDescriptorQueryWithAccess(ctx, assetLink, auth.HasUnrestrictedFormulaForRight(ctx, grammar.RightsEnumREAD))
-}
-
 func buildAssetLinkDescriptorQueryWithAccess(ctx context.Context, assetLink []model.AssetLink, readUnrestricted bool) grammar.Query {
 	if readUnrestricted {
 		return buildUnrestrictedAssetLinkQuery(assetLink)
