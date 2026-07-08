@@ -357,11 +357,17 @@ func BuildDeleteSubmodelSemanticIDSQL(submodelDatabaseID int) (string, []any, er
 		ToSQL()
 }
 
-// BuildSiblingIDShortCollisionSQL builds the sibling idShort collision query.
-func BuildSiblingIDShortCollisionSQL(submodelDatabaseID int, parentElementID *int, idShort string) (string, []any, error) {
+// BuildSiblingIDShortCollisionPathSQL builds the sibling idShort collision path query.
+func BuildSiblingIDShortCollisionPathSQL(submodelDatabaseID int, parentElementID *int, idShort string) (string, []any, error) {
+	return siblingIDShortCollisionDataset(submodelDatabaseID, parentElementID, idShort).
+		Select(goqu.C("idshort_path")).
+		Limit(1).
+		ToSQL()
+}
+
+func siblingIDShortCollisionDataset(submodelDatabaseID int, parentElementID *int, idShort string) *goqu.SelectDataset {
 	dialect := goqu.Dialect(common.Dialect)
-	query := dialect.From("submodel_element").
-		Select(goqu.COUNT("*"))
+	query := dialect.From("submodel_element")
 
 	whereExpressions := []goqu.Expression{
 		goqu.C("submodel_id").Eq(submodelDatabaseID),
@@ -374,7 +380,7 @@ func BuildSiblingIDShortCollisionSQL(submodelDatabaseID int, parentElementID *in
 		whereExpressions = append(whereExpressions, goqu.C("parent_sme_id").Eq(*parentElementID))
 	}
 
-	return query.Where(whereExpressions...).ToSQL()
+	return query.Where(whereExpressions...)
 }
 
 // BuildSubmodelElementModelTypeByPathSQL builds the model type lookup query for an element path.

@@ -23,8 +23,8 @@
 * SPDX-License-Identifier: MIT
 ******************************************************************************/
 
-// Package registryprecheck contains registry API precheck helpers.
-package registryprecheck
+// Package createprecheck contains helpers for create operations that must avoid hidden duplicate disclosure.
+package createprecheck
 
 import (
 	"context"
@@ -35,10 +35,10 @@ import (
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 )
 
-// ExistsFunc checks raw descriptor existence without visibility filtering.
+// ExistsFunc checks raw resource existence without visibility filtering.
 type ExistsFunc func(context.Context) (bool, error)
 
-// ReadFunc performs a visibility-aware descriptor read.
+// ReadFunc performs a visibility-aware resource read.
 type ReadFunc func(context.Context) error
 
 // EnsureVisibleCreate verifies that a create request does not disclose hidden duplicates.
@@ -50,36 +50,36 @@ func EnsureVisibleCreate(
 	deniedMessage string,
 ) error {
 	if exists == nil {
-		return common.NewInternalServerError("REGPRECHECK-CREATE-EXISTSCALLBACK existence callback must not be nil")
+		return common.NewInternalServerError("CREATEPRECHECK-CREATE-EXISTSCALLBACK existence callback must not be nil")
 	}
 	if read == nil {
-		return common.NewInternalServerError("REGPRECHECK-CREATE-READCALLBACK read callback must not be nil")
+		return common.NewInternalServerError("CREATEPRECHECK-CREATE-READCALLBACK read callback must not be nil")
 	}
 
-	descriptorExists, err := exists(auth.WithoutQueryFilter(ctx))
+	resourceExists, err := exists(auth.WithoutQueryFilter(ctx))
 	if err != nil {
 		return err
 	}
-	return EnsureVisibleDuplicate(ctx, descriptorExists, read, conflictMessage, deniedMessage)
+	return EnsureVisibleDuplicate(ctx, resourceExists, read, conflictMessage, deniedMessage)
 }
 
-// EnsureVisibleDuplicate maps an existing descriptor to conflict or denied
+// EnsureVisibleDuplicate maps an existing resource to conflict or denied
 // without disclosing duplicates hidden by the active create formula.
 func EnsureVisibleDuplicate(
 	ctx context.Context,
-	descriptorExists bool,
+	resourceExists bool,
 	read ReadFunc,
 	conflictMessage string,
 	deniedMessage string,
 ) error {
-	if !descriptorExists {
+	if !resourceExists {
 		return nil
 	}
 	if canSkipDuplicateVisibilityRead(ctx) {
 		return common.NewErrConflict(conflictMessage)
 	}
 	if read == nil {
-		return common.NewInternalServerError("REGPRECHECK-CREATE-READCALLBACK read callback must not be nil")
+		return common.NewInternalServerError("CREATEPRECHECK-CREATE-READCALLBACK read callback must not be nil")
 	}
 
 	if err := read(ctx); err != nil {

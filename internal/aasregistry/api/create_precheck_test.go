@@ -32,8 +32,8 @@ import (
 	"testing"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/createprecheck"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
-	"github.com/eclipse-basyx/basyx-go-components/internal/common/registryprecheck"
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 	"github.com/stretchr/testify/require"
 )
@@ -43,7 +43,7 @@ func TestRegistryCreateExistingUnauthorizedDescriptorDoesNotReturnConflict(t *te
 
 	ctx := auth.WithQueryFilter(context.Background(), limitedCreateQueryFilter())
 
-	err := registryprecheck.EnsureVisibleCreate(
+	err := createprecheck.EnsureVisibleCreate(
 		ctx,
 		func(context.Context) (bool, error) { return true, nil },
 		func(context.Context) error { return common.NewErrNotFound("hidden descriptor") },
@@ -54,7 +54,7 @@ func TestRegistryCreateExistingUnauthorizedDescriptorDoesNotReturnConflict(t *te
 	require.Error(t, err)
 	require.True(t, common.IsErrDenied(err))
 	require.False(t, common.IsErrConflict(err))
-	statusCode, _ := registryprecheck.ResponseStatus(err)
+	statusCode, _ := createprecheck.ResponseStatus(err)
 	require.Equal(t, http.StatusForbidden, statusCode)
 }
 
@@ -63,7 +63,7 @@ func TestRegistryCreatePrecheckReturnsConflictForVisibleDescriptor(t *testing.T)
 
 	ctx := auth.WithQueryFilter(context.Background(), limitedCreateQueryFilter())
 
-	err := registryprecheck.EnsureVisibleCreate(
+	err := createprecheck.EnsureVisibleCreate(
 		ctx,
 		func(context.Context) (bool, error) { return true, nil },
 		func(context.Context) error { return nil },
@@ -73,14 +73,14 @@ func TestRegistryCreatePrecheckReturnsConflictForVisibleDescriptor(t *testing.T)
 
 	require.Error(t, err)
 	require.True(t, common.IsErrConflict(err))
-	statusCode, _ := registryprecheck.ResponseStatus(err)
+	statusCode, _ := createprecheck.ResponseStatus(err)
 	require.Equal(t, http.StatusConflict, statusCode)
 }
 
 func TestRegistryCreatePrecheckAllowsMissingDescriptor(t *testing.T) {
 	t.Parallel()
 
-	err := registryprecheck.EnsureVisibleCreate(
+	err := createprecheck.EnsureVisibleCreate(
 		context.Background(),
 		func(context.Context) (bool, error) { return false, nil },
 		func(context.Context) error { return errors.New("read must not be called") },
@@ -95,7 +95,7 @@ func TestRegistryCreatePrecheckPropagatesErrors(t *testing.T) {
 	t.Parallel()
 
 	rawErr := errors.New("raw existence failed")
-	err := registryprecheck.EnsureVisibleCreate(
+	err := createprecheck.EnsureVisibleCreate(
 		context.Background(),
 		func(context.Context) (bool, error) { return false, rawErr },
 		func(context.Context) error { return nil },
@@ -106,7 +106,7 @@ func TestRegistryCreatePrecheckPropagatesErrors(t *testing.T) {
 
 	filteredErr := errors.New("filtered read failed")
 	ctx := auth.WithQueryFilter(context.Background(), limitedCreateQueryFilter())
-	err = registryprecheck.EnsureVisibleCreate(
+	err = createprecheck.EnsureVisibleCreate(
 		ctx,
 		func(context.Context) (bool, error) { return true, nil },
 		func(context.Context) error { return filteredErr },

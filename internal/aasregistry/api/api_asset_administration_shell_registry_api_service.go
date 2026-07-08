@@ -45,9 +45,9 @@ import (
 
 	persistence_postgresql "github.com/eclipse-basyx/basyx-go-components/internal/aasregistry/persistence"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/createprecheck"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
-	"github.com/eclipse-basyx/basyx-go-components/internal/common/registryprecheck"
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 )
 
@@ -165,7 +165,7 @@ func filterAssetAdministrationShellDescriptorPages(
 // PostAssetAdministrationShellDescriptor - Creates a new Asset Administration Shell Descriptor, i.e. registers an AAS
 func (s *AssetAdministrationShellRegistryAPIAPIService) PostAssetAdministrationShellDescriptor(ctx context.Context, assetAdministrationShellDescriptor model.AssetAdministrationShellDescriptor) (model.ImplResponse, error) {
 	if strings.TrimSpace(assetAdministrationShellDescriptor.Id) != "" {
-		precheckErr := registryprecheck.EnsureVisibleCreate(
+		precheckErr := createprecheck.EnsureVisibleCreate(
 			ctx,
 			func(checkCtx context.Context) (bool, error) {
 				return s.aasRegistryBackend.ExistsAASByID(checkCtx, assetAdministrationShellDescriptor.Id)
@@ -178,11 +178,11 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) PostAssetAdministrationS
 			"AAS Descriptor access not allowed",
 		)
 		if precheckErr != nil {
-			statusCode, step := registryprecheck.ResponseStatus(precheckErr)
+			statusCode, step := createprecheck.ResponseStatus(precheckErr)
 			log.Printf("🧩 [%s] Error in PostAssetAdministrationShellDescriptor: create precheck failed (aasId=%q): %v", componentName, assetAdministrationShellDescriptor.Id, precheckErr)
 			return common.NewErrorResponse(
 				precheckErr, statusCode, componentName, "PostAssetAdministrationShellDescriptor", step,
-			), registryprecheck.ReturnError(precheckErr)
+			), createprecheck.ReturnError(precheckErr)
 		}
 	}
 
@@ -468,7 +468,7 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) PostSubmodelDescriptorTh
 	}
 
 	if strings.TrimSpace(submodelDescriptor.Id) != "" {
-		precheckErr := registryprecheck.EnsureVisibleCreate(
+		precheckErr := createprecheck.EnsureVisibleCreate(
 			ctx,
 			func(checkCtx context.Context) (bool, error) {
 				return s.aasRegistryBackend.ExistsSubmodelForAAS(checkCtx, decodedAAS, submodelDescriptor.Id)
@@ -481,11 +481,11 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) PostSubmodelDescriptorTh
 			"Submodel Descriptor access not allowed",
 		)
 		if precheckErr != nil {
-			statusCode, step := registryprecheck.ResponseStatus(precheckErr)
+			statusCode, step := createprecheck.ResponseStatus(precheckErr)
 			log.Printf("🧩 [%s] Error in PostSubmodelDescriptorThroughSuperpath: create precheck failed (aasId=%q submodelId=%q): %v", componentName, decodedAAS, submodelDescriptor.Id, precheckErr)
 			return common.NewErrorResponse(
 				precheckErr, statusCode, componentName, "PostSubmodelDescriptorThroughSuperpath", step,
-			), registryprecheck.ReturnError(precheckErr)
+			), createprecheck.ReturnError(precheckErr)
 		}
 	}
 

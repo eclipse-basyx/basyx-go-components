@@ -44,9 +44,9 @@ import (
 	"time"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/createprecheck"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
-	"github.com/eclipse-basyx/basyx-go-components/internal/common/registryprecheck"
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 	smregistrypostgresql "github.com/eclipse-basyx/basyx-go-components/internal/smregistry/persistence"
 )
@@ -153,7 +153,7 @@ func (s *SubmodelRegistryAPIAPIService) QuerySubmodelDescriptors(
 // PostSubmodelDescriptor - Creates a new Submodel Descriptor, i.e. registers a submodel
 func (s *SubmodelRegistryAPIAPIService) PostSubmodelDescriptor(ctx context.Context, submodelDescriptor model.SubmodelDescriptor) (model.ImplResponse, error) {
 	if strings.TrimSpace(submodelDescriptor.Id) != "" {
-		precheckErr := registryprecheck.EnsureVisibleCreate(
+		precheckErr := createprecheck.EnsureVisibleCreate(
 			ctx,
 			func(checkCtx context.Context) (bool, error) {
 				return s.smRegistryBackend.ExistsSubmodelByID(checkCtx, submodelDescriptor.Id)
@@ -166,11 +166,11 @@ func (s *SubmodelRegistryAPIAPIService) PostSubmodelDescriptor(ctx context.Conte
 			"Submodel Descriptor access not allowed",
 		)
 		if precheckErr != nil {
-			statusCode, step := registryprecheck.ResponseStatus(precheckErr)
+			statusCode, step := createprecheck.ResponseStatus(precheckErr)
 			log.Printf("[ERROR] [%s] Error in PostSubmodelDescriptor: create precheck failed (submodelId=%q): %v", componentName, submodelDescriptor.Id, precheckErr)
 			return common.NewErrorResponse(
 				precheckErr, statusCode, componentName, "PostSubmodelDescriptor", step,
-			), registryprecheck.ReturnError(precheckErr)
+			), createprecheck.ReturnError(precheckErr)
 		}
 	}
 

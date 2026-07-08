@@ -34,8 +34,8 @@ import (
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/asyncbulk"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/createprecheck"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
-	"github.com/eclipse-basyx/basyx-go-components/internal/common/registryprecheck"
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 )
 
@@ -115,7 +115,7 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) ensureVisibleAASDescript
 		if _, found := existing[identifier]; !found {
 			continue
 		}
-		err := registryprecheck.EnsureVisibleDuplicate(
+		err := createprecheck.EnsureVisibleDuplicate(
 			ctx,
 			true,
 			func(readCtx context.Context) error {

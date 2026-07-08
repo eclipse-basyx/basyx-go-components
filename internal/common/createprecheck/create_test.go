@@ -23,7 +23,7 @@
 * SPDX-License-Identifier: MIT
 ******************************************************************************/
 
-package registryprecheck
+package createprecheck
 
 import (
 	"context"

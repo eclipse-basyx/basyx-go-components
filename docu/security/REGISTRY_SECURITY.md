@@ -307,7 +307,7 @@ flowchart TB
 - Route rights: `internal/common/security/abac_engine_methods.go`
 - ABAC middleware response mapping: `internal/common/security/authorize.go`
 - `CREATE`/`UPDATE` formula selection: `internal/common/security/authorize.go`
-- `CREATE` duplicate precheck: `internal/common/registryprecheck/create.go`
+- Shared `CREATE` duplicate precheck: `internal/common/createprecheck/create.go`
 - AAS Registry API mapping: `internal/aasregistry/api/api_asset_administration_shell_registry_api_service.go`
 - AAS Registry persistence: `internal/aasregistry/persistence/PostgreSQLAASRegistryDatabase.go`
 - Descriptor SQL filtering and readback: `internal/common/descriptors/AssetAdminShellDescriptorHandler.go`
