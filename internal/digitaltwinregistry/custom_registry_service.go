@@ -149,7 +149,16 @@ func (s *CustomRegistryService) getAllAssetAdministrationShellDescriptorsByDescr
 	createdFrom time.Time,
 	updatedFrom time.Time,
 ) (model.ImplResponse, error) {
-	readUnrestricted := auth.HasUnrestrictedFormulaForRight(ctx, grammar.RightsEnumREAD)
+	readUnrestricted, unrestrictedErr := globalAssetIDLookupReadUnrestricted(ctx)
+	if unrestrictedErr != nil {
+		return common.NewErrorResponse(
+			unrestrictedErr,
+			http.StatusInternalServerError,
+			customRegistryComponentName,
+			"GetAllAssetAdministrationShellDescriptors",
+			"ShouldEnforceFormula",
+		), unrestrictedErr
+	}
 	ctx = auth.MergeQueryFilter(ctx, buildGlobalAssetIDLookupQuery(ctx, globalAssetIDs, readUnrestricted))
 	if len(assetLinks) > 0 {
 		ctx = auth.MergeQueryFilter(ctx, buildAssetLinkDescriptorQueryWithAccess(ctx, assetLinks, readUnrestricted))
@@ -165,6 +174,17 @@ func (s *CustomRegistryService) getAllAssetAdministrationShellDescriptorsByDescr
 		createdFrom,
 		updatedFrom,
 	)
+}
+
+func globalAssetIDLookupReadUnrestricted(ctx context.Context) (bool, error) {
+	shouldEnforceFormula, enforceErr := auth.ShouldEnforceFormula(ctx)
+	if enforceErr != nil {
+		return false, enforceErr
+	}
+	if !shouldEnforceFormula {
+		return true, nil
+	}
+	return auth.HasUnrestrictedFormulaForRight(ctx, grammar.RightsEnumREAD), nil
 }
 
 func (s *CustomRegistryService) getAllAssetAdministrationShellDescriptorsByAssetLinks(
