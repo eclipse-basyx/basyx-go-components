@@ -7,6 +7,21 @@ updates:
     open-pull-requests-limit: 10
     cooldown:
       default-days: 1
+  - package-ecosystem: "docker"
+    directories:
+      - "/cmd/*"
+    schedule:
+      interval: "daily"
+    open-pull-requests-limit: 10
+    cooldown:
+      default-days: 1
+    groups:
+      golang-base-images:
+        patterns:
+          - "golang"
+      distroless-base-images:
+        patterns:
+          - "gcr.io/distroless/static"
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
