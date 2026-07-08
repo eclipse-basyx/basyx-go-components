@@ -107,7 +107,7 @@ func (p PostgreSQLFileHandler) Update(submodelID string, idShortOrPath string, s
 
 	// Get the current file element ID and value
 	var elementID int64
-	var currentValue string
+	var currentValue sql.NullString
 	query, args, err := dialect.From("submodel_element").
 		InnerJoin(
 			goqu.T("file_element"),
@@ -129,7 +129,11 @@ func (p PostgreSQLFileHandler) Update(submodelID string, idShortOrPath string, s
 		return fmt.Errorf("failed to get current file element: %w", err)
 	}
 
-	hasFileValueChanged := currentValue != *file.Value()
+	newValue := ""
+	if file.Value() != nil {
+		newValue = *file.Value()
+	}
+	hasFileValueChanged := currentValue.String != newValue
 	if hasFileValueChanged {
 		// Check if there's an OID in file_data for this element
 		var oldOID sql.NullInt64
@@ -449,7 +453,7 @@ func reopenUploadedFile(file *os.File) (*os.File, error) {
 }
 
 func readFileElementUploadMetadata(tx *sql.Tx, dialect goqu.DialectWrapper, submodelID string, idShortPath string) (fileElementUploadMetadata, error) {
-	submodelDatabaseID, err := persistenceutils.GetSubmodelDatabaseID(tx, submodelID)
+	submodelDatabaseID, err := persistenceutils.GetSubmodelDatabaseIDForUpdate(tx, submodelID)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return fileElementUploadMetadata{}, common.NewErrNotFound("submodel not found")
@@ -757,7 +761,7 @@ func (p PostgreSQLFileHandler) DeleteFileAttachment(submodelID string, idShortPa
 func (p PostgreSQLFileHandler) DeleteFileAttachmentTx(tx *sql.Tx, submodelID string, idShortPath string) error {
 	dialect := goqu.Dialect("postgres")
 
-	submodelDatabaseID, err := persistenceutils.GetSubmodelDatabaseID(tx, submodelID)
+	submodelDatabaseID, err := persistenceutils.GetSubmodelDatabaseIDForUpdate(tx, submodelID)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return common.NewErrNotFound("submodel not found")

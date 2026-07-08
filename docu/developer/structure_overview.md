@@ -4,9 +4,9 @@ This file provides a high-level map of the repository and links to in-depth docu
 
 ## Main Components
 
-- [cmd/](structure_cmd.md): Service entry points, configuration, and OpenAPI contracts (`cmd/*/openapi.yaml`; generated copies in `pkg/*/api/openapi.yaml`)
+- [cmd/](structure_cmd.md): Service entry points, configuration, and OpenAPI contracts (`cmd/*/openapi.yaml`)
 - [internal/](structure_internal.md): Core business logic, persistence, and tests
-- [pkg/](structure_pkg.md): Shared libraries and API clients
+- [pkg/](structure_pkg.md): Generated Go server stubs and reusable packages
 - [examples/](structure_examples.md): Sample setups and minimal examples
 - [docu/](structure_docu.md): Documentation and security notes
 - [AAS API v3.2 user guide](../user/aas_api_v3_2.md): User-visible v3.2 endpoints, history behavior, recent changes, signed reads, and operational notes
@@ -16,4 +16,4 @@ This file provides a high-level map of the repository and links to in-depth docu
 
 ---
 
-For onboarding, see [README.md](README.md). For GoDoc tips, see [godoc_tips.md](godoc_tips.md).
+For onboarding, see [README.md](../../README.md). For GoDoc tips, see [godoc_tips.md](godoc_tips.md).

@@ -1,13 +1,13 @@
 [
   {
     "method": "POST",
-    "endpoint": "http://127.0.0.1:6004/shell-descriptors",
+    "endpoint": "{{BASYX_IT_API_URL}}/shell-descriptors",
     "data": "postBody/aas_shell.json",
     "expectedStatus": 403
   },
   {
     "method": "POST",
-    "endpoint": "http://127.0.0.1:6004/shell-descriptors",
+    "endpoint": "{{BASYX_IT_API_URL}}/shell-descriptors",
     "data": "postBody/aas_shell.json",
     "expectedStatus": 403,
     "headers": {
@@ -16,7 +16,7 @@
   },
   {
     "method": "POST",
-    "endpoint": "http://127.0.0.1:6004/shell-descriptors",
+    "endpoint": "{{BASYX_IT_API_URL}}/shell-descriptors",
     "data": "postBody/aas_shell.json",
     "expectedStatus": 201,
     "token": {
@@ -26,13 +26,13 @@
   },
   {
     "method": "GET",
-    "endpoint": "http://127.0.0.1:6004/shell-descriptors",
+    "endpoint": "{{BASYX_IT_API_URL}}/shell-descriptors",
     "expectedStatus": 200,
     "shouldMatch": "expected/public_paged_result.json"
   },
   {
     "method": "GET",
-    "endpoint": "http://127.0.0.1:6004/shell-descriptors",
+    "endpoint": "{{BASYX_IT_API_URL}}/shell-descriptors",
     "expectedStatus": 200,
     "shouldMatch": "expected/public_paged_result.json",
     "token": {
@@ -42,7 +42,7 @@
   },
   {
     "method": "GET",
-    "endpoint": "http://127.0.0.1:6004/shell-descriptors/ZTFlYmEzZDctOTFmMC00ZGFjLWE3MzAtZWFhMWQzNWUwMzVjLTI",
+    "endpoint": "{{BASYX_IT_API_URL}}/shell-descriptors/ZTFlYmEzZDctOTFmMC00ZGFjLWE3MzAtZWFhMWQzNWUwMzVjLTI",
     "expectedStatus": 200,
     "shouldMatch": "expected/public_result.json",
     "token": {
@@ -52,7 +52,7 @@
   },
   {
     "method": "GET",
-    "endpoint": "http://127.0.0.1:6004/shell-descriptors/ZTFlYmEzZDctOTFmMC00ZGFjLWE3MzAtZWFhMWQzNWUwMzVjLTI",
+    "endpoint": "{{BASYX_IT_API_URL}}/shell-descriptors/ZTFlYmEzZDctOTFmMC00ZGFjLWE3MzAtZWFhMWQzNWUwMzVjLTI",
     "expectedStatus": 200,
     "shouldMatch": "postBody/aas_shell.json",
     "token": {
@@ -62,7 +62,7 @@
   },
   {
     "method": "GET",
-    "endpoint": "http://127.0.0.1:6004/shell-descriptors/ZTFlYmEzZDctOTFmMC00ZGFjLWE3MzAtZWFhMWQzNWUwMzVjLTI",
+    "endpoint": "{{BASYX_IT_API_URL}}/shell-descriptors/ZTFlYmEzZDctOTFmMC00ZGFjLWE3MzAtZWFhMWQzNWUwMzVjLTI",
     "expectedStatus": 200,
     "shouldMatch": "expected/bpnRandom.json",
     "headers": {
@@ -71,7 +71,7 @@
   },
   {
     "method": "GET",
-    "endpoint": "http://127.0.0.1:6004/shell-descriptors/ZTFlYmEzZDctOTFmMC00ZGFjLWE3MzAtZWFhMWQzNWUwMzVjLTI",
+    "endpoint": "{{BASYX_IT_API_URL}}/shell-descriptors/ZTFlYmEzZDctOTFmMC00ZGFjLWE3MzAtZWFhMWQzNWUwMzVjLTI",
     "expectedStatus": 200,
     "shouldMatch": "expected/bpn1.json",
     "headers": {
@@ -80,7 +80,7 @@
   },
   {
     "method": "GET",
-    "endpoint": "http://127.0.0.1:6004/shell-descriptors/ZTFlYmEzZDctOTFmMC00ZGFjLWE3MzAtZWFhMWQzNWUwMzVjLTI",
+    "endpoint": "{{BASYX_IT_API_URL}}/shell-descriptors/ZTFlYmEzZDctOTFmMC00ZGFjLWE3MzAtZWFhMWQzNWUwMzVjLTI",
     "expectedStatus": 200,
     "shouldMatch": "expected/bpn2.json",
     "headers": {
@@ -89,7 +89,7 @@
   },
   {
     "method": "POST",
-    "endpoint": "http://127.0.0.1:6004/shell-descriptors",
+    "endpoint": "{{BASYX_IT_API_URL}}/shell-descriptors",
     "data": "postBody/aas_shell_no_public_readable.json",
     "expectedStatus": 201,
     "token": {
@@ -99,124 +99,124 @@
   },
   {
     "method": "POST",
-    "endpoint": "http://127.0.0.1:6004/lookup/shellsByAssetLink",
+    "endpoint": "{{BASYX_IT_API_URL}}/lookup/shellsByAssetLink",
     "data": "postBody/emptyAssetLink.json",
     "shouldMatch": "expected/lookup/emptyId.json",
     "expectedStatus": 200
   },
   {
     "method": "GET",
-    "endpoint": "http://127.0.0.1:6004/shell-descriptors?assetIds=",
+    "endpoint": "{{BASYX_IT_API_URL}}/shell-descriptors?assetIds=",
     "expectedStatus": 200,
     "shouldMatch": "expected/empty_paged_result.json"
   },
   {
     "method": "POST",
-    "endpoint": "http://127.0.0.1:6004/lookup/shellsByAssetLink",
+    "endpoint": "{{BASYX_IT_API_URL}}/lookup/shellsByAssetLink",
     "data": "postBody/num1AssetLink.json",
     "shouldMatch": "expected/lookup/emptyId.json",
     "expectedStatus": 200
   },
   {
     "method": "GET",
-    "endpoint": "http://127.0.0.1:6004/shell-descriptors?assetIds=eyJuYW1lIjoicGFydEluc3RhbmNlSWQiLCJ2YWx1ZSI6IjI0OTc1NTM5MjAzNDIxIn0",
+    "endpoint": "{{BASYX_IT_API_URL}}/shell-descriptors?assetIds=eyJuYW1lIjoicGFydEluc3RhbmNlSWQiLCJ2YWx1ZSI6IjI0OTc1NTM5MjAzNDIxIn0",
     "expectedStatus": 200,
     "shouldMatch": "expected/empty_paged_result.json"
   },
   {
     "method": "POST",
-    "endpoint": "http://127.0.0.1:6004/lookup/shellsByAssetLink",
+    "endpoint": "{{BASYX_IT_API_URL}}/lookup/shellsByAssetLink",
     "data": "postBody/num2AssetLink.json",
     "shouldMatch": "expected/lookup/emptyId.json",
     "expectedStatus": 200
   },
   {
     "method": "GET",
-    "endpoint": "http://127.0.0.1:6004/shell-descriptors?assetIds=eyJuYW1lIjoiY3VzdG9tZXJQYXJ0SWQiLCJ2YWx1ZSI6IjIzMTk4MiJ9",
+    "endpoint": "{{BASYX_IT_API_URL}}/shell-descriptors?assetIds=eyJuYW1lIjoiY3VzdG9tZXJQYXJ0SWQiLCJ2YWx1ZSI6IjIzMTk4MiJ9",
     "expectedStatus": 200,
     "shouldMatch": "expected/empty_paged_result.json"
   },
   {
     "method": "POST",
-    "endpoint": "http://127.0.0.1:6004/lookup/shellsByAssetLink",
+    "endpoint": "{{BASYX_IT_API_URL}}/lookup/shellsByAssetLink",
     "data": "postBody/num3AssetLink.json",
     "shouldMatch": "expected/lookup/emptyId.json",
     "expectedStatus": 200
   },
   {
     "method": "GET",
-    "endpoint": "http://127.0.0.1:6004/shell-descriptors?assetIds=eyJuYW1lIjoibWFudWZhY3R1cmVySWQiLCJ2YWx1ZSI6IjEyMzgyOTIzOCJ9",
+    "endpoint": "{{BASYX_IT_API_URL}}/shell-descriptors?assetIds=eyJuYW1lIjoibWFudWZhY3R1cmVySWQiLCJ2YWx1ZSI6IjEyMzgyOTIzOCJ9",
     "expectedStatus": 200,
     "shouldMatch": "expected/empty_paged_result.json"
   },
   {
     "method": "POST",
-    "endpoint": "http://127.0.0.1:6004/lookup/shellsByAssetLink",
+    "endpoint": "{{BASYX_IT_API_URL}}/lookup/shellsByAssetLink",
     "data": "postBody/num4AssetLink.json",
     "shouldMatch": "expected/lookup/publicId.json",
     "expectedStatus": 200
   },
   {
     "method": "GET",
-    "endpoint": "http://127.0.0.1:6004/shell-descriptors?assetIds=eyJuYW1lIjoibWFudWZhY3R1cmVyUGFydElkIiwidmFsdWUiOiIyMzE5ODIifQ",
+    "endpoint": "{{BASYX_IT_API_URL}}/shell-descriptors?assetIds=eyJuYW1lIjoibWFudWZhY3R1cmVyUGFydElkIiwidmFsdWUiOiIyMzE5ODIifQ",
     "expectedStatus": 200,
     "shouldMatch": "expected/public_paged_result.json"
   },
   {
     "method": "POST",
-    "endpoint": "http://127.0.0.1:6004/lookup/shellsByAssetLink",
+    "endpoint": "{{BASYX_IT_API_URL}}/lookup/shellsByAssetLink",
     "data": "postBody/globalAssetIdAssetLink.json",
     "shouldMatch": "expected/lookup/publicId.json",
     "expectedStatus": 200
   },
   {
     "method": "GET",
-    "endpoint": "http://127.0.0.1:6004/shell-descriptors?assetIds=eyJuYW1lIjoiZ2xvYmFsQXNzZXRJZCIsInZhbHVlIjoidGVzdCJ9",
+    "endpoint": "{{BASYX_IT_API_URL}}/shell-descriptors?assetIds=eyJuYW1lIjoiZ2xvYmFsQXNzZXRJZCIsInZhbHVlIjoidGVzdCJ9",
     "expectedStatus": 200,
     "shouldMatch": "expected/public_paged_result.json"
   },
   {
     "method": "POST",
-    "endpoint": "http://127.0.0.1:6004/lookup/shellsByAssetLink",
+    "endpoint": "{{BASYX_IT_API_URL}}/lookup/shellsByAssetLink",
     "data": "postBody/globalAssetIdAndCustomerPartIdAssetLink.json",
     "shouldMatch": "expected/lookup/emptyId.json",
     "expectedStatus": 200
   },
   {
     "method": "GET",
-    "endpoint": "http://127.0.0.1:6004/shell-descriptors?assetIds=eyJuYW1lIjoiZ2xvYmFsQXNzZXRJZCIsInZhbHVlIjoidGVzdCJ9&assetIds=eyJuYW1lIjoiY3VzdG9tZXJQYXJ0SWQiLCJ2YWx1ZSI6IjIzMTk4MiJ9",
+    "endpoint": "{{BASYX_IT_API_URL}}/shell-descriptors?assetIds=eyJuYW1lIjoiZ2xvYmFsQXNzZXRJZCIsInZhbHVlIjoidGVzdCJ9&assetIds=eyJuYW1lIjoiY3VzdG9tZXJQYXJ0SWQiLCJ2YWx1ZSI6IjIzMTk4MiJ9",
     "expectedStatus": 200,
     "shouldMatch": "expected/empty_paged_result.json"
   },
   {
     "method": "POST",
-    "endpoint": "http://127.0.0.1:6004/lookup/shellsByAssetLink",
+    "endpoint": "{{BASYX_IT_API_URL}}/lookup/shellsByAssetLink",
     "data": "postBody/globalAssetIdNoPublicReadableAssetLink.json",
     "shouldMatch": "expected/lookup/nonPublicId.json",
     "expectedStatus": 200
   },
   {
     "method": "GET",
-    "endpoint": "http://127.0.0.1:6004/shell-descriptors?assetIds=eyJuYW1lIjoiZ2xvYmFsQXNzZXRJZCIsInZhbHVlIjoidGVzdC1uby1wdWJsaWMtcmVhZGFibGUifQ",
+    "endpoint": "{{BASYX_IT_API_URL}}/shell-descriptors?assetIds=eyJuYW1lIjoiZ2xvYmFsQXNzZXRJZCIsInZhbHVlIjoidGVzdC1uby1wdWJsaWMtcmVhZGFibGUifQ",
     "expectedStatus": 200,
     "shouldMatch": "expected/empty_paged_result.json"
   },
   {
     "method": "POST",
-    "endpoint": "http://127.0.0.1:6004/lookup/shellsByAssetLink",
+    "endpoint": "{{BASYX_IT_API_URL}}/lookup/shellsByAssetLink",
     "data": "postBody/globalAssetIdNoPublicReadableAndCustomerPartIdAssetLink.json",
     "shouldMatch": "expected/lookup/emptyId.json",
     "expectedStatus": 200
   },
   {
     "method": "GET",
-    "endpoint": "http://127.0.0.1:6004/shell-descriptors?assetIds=eyJuYW1lIjoiZ2xvYmFsQXNzZXRJZCIsInZhbHVlIjoidGVzdC1uby1wdWJsaWMtcmVhZGFibGUifQ&assetIds=eyJuYW1lIjoiY3VzdG9tZXJQYXJ0SWQiLCJ2YWx1ZSI6Im5vbi1wdWJsaWMtMjMxOTgyIn0",
+    "endpoint": "{{BASYX_IT_API_URL}}/shell-descriptors?assetIds=eyJuYW1lIjoiZ2xvYmFsQXNzZXRJZCIsInZhbHVlIjoidGVzdC1uby1wdWJsaWMtcmVhZGFibGUifQ&assetIds=eyJuYW1lIjoiY3VzdG9tZXJQYXJ0SWQiLCJ2YWx1ZSI6Im5vbi1wdWJsaWMtMjMxOTgyIn0",
     "expectedStatus": 200,
     "shouldMatch": "expected/empty_paged_result.json"
   },
   {
     "method": "POST",
-    "endpoint": "http://127.0.0.1:6004/lookup/shellsByAssetLink",
+    "endpoint": "{{BASYX_IT_API_URL}}/lookup/shellsByAssetLink",
     "data": "postBody/globalAssetIdAssetLink.json",
     "shouldMatch": "expected/lookup/publicId.json",
     "expectedStatus": 200,
@@ -226,7 +226,7 @@
   },
   {
     "method": "GET",
-    "endpoint": "http://127.0.0.1:6004/shell-descriptors?assetIds=eyJuYW1lIjoiZ2xvYmFsQXNzZXRJZCIsInZhbHVlIjoidGVzdCJ9",
+    "endpoint": "{{BASYX_IT_API_URL}}/shell-descriptors?assetIds=eyJuYW1lIjoiZ2xvYmFsQXNzZXRJZCIsInZhbHVlIjoidGVzdCJ9",
     "expectedStatus": 200,
     "headers": {
       "Edc-Bpn": "BPNL00000000015G"
@@ -235,7 +235,7 @@
   },
   {
     "method": "POST",
-    "endpoint": "http://127.0.0.1:6004/lookup/shellsByAssetLink",
+    "endpoint": "{{BASYX_IT_API_URL}}/lookup/shellsByAssetLink",
     "data": "postBody/globalAssetIdAndCustomerPartIdAssetLink.json",
     "shouldMatch": "expected/lookup/emptyId.json",
     "expectedStatus": 200,
@@ -245,7 +245,7 @@
   },
   {
     "method": "GET",
-    "endpoint": "http://127.0.0.1:6004/shell-descriptors?assetIds=eyJuYW1lIjoiZ2xvYmFsQXNzZXRJZCIsInZhbHVlIjoidGVzdCJ9&assetIds=eyJuYW1lIjoiY3VzdG9tZXJQYXJ0SWQiLCJ2YWx1ZSI6IjIzMTk4MiJ9",
+    "endpoint": "{{BASYX_IT_API_URL}}/shell-descriptors?assetIds=eyJuYW1lIjoiZ2xvYmFsQXNzZXRJZCIsInZhbHVlIjoidGVzdCJ9&assetIds=eyJuYW1lIjoiY3VzdG9tZXJQYXJ0SWQiLCJ2YWx1ZSI6IjIzMTk4MiJ9",
     "expectedStatus": 200,
     "shouldMatch": "expected/empty_paged_result.json",
     "headers": {
@@ -254,7 +254,7 @@
   },
   {
     "method": "POST",
-    "endpoint": "http://127.0.0.1:6004/lookup/shellsByAssetLink",
+    "endpoint": "{{BASYX_IT_API_URL}}/lookup/shellsByAssetLink",
     "data": "postBody/globalAssetIdNoPublicReadableAssetLink.json",
     "shouldMatch": "expected/lookup/nonPublicId.json",
     "expectedStatus": 200,
@@ -264,7 +264,7 @@
   },
   {
     "method": "GET",
-    "endpoint": "http://127.0.0.1:6004/shell-descriptors?assetIds=eyJuYW1lIjoiZ2xvYmFsQXNzZXRJZCIsInZhbHVlIjoidGVzdC1uby1wdWJsaWMtcmVhZGFibGUifQ",
+    "endpoint": "{{BASYX_IT_API_URL}}/shell-descriptors?assetIds=eyJuYW1lIjoiZ2xvYmFsQXNzZXRJZCIsInZhbHVlIjoidGVzdC1uby1wdWJsaWMtcmVhZGFibGUifQ",
     "expectedStatus": 200,
     "headers": {
       "Edc-Bpn": "BPNL00000000015G"
@@ -273,7 +273,7 @@
   },
   {
     "method": "POST",
-    "endpoint": "http://127.0.0.1:6004/lookup/shellsByAssetLink",
+    "endpoint": "{{BASYX_IT_API_URL}}/lookup/shellsByAssetLink",
     "data": "postBody/globalAssetIdNoPublicReadableAndCustomerPartIdAssetLink.json",
     "shouldMatch": "expected/lookup/emptyId.json",
     "expectedStatus": 200,
@@ -283,7 +283,7 @@
   },
   {
     "method": "GET",
-    "endpoint": "http://127.0.0.1:6004/shell-descriptors?assetIds=eyJuYW1lIjoiZ2xvYmFsQXNzZXRJZCIsInZhbHVlIjoidGVzdC1uby1wdWJsaWMtcmVhZGFibGUifQ&assetIds=eyJuYW1lIjoiY3VzdG9tZXJQYXJ0SWQiLCJ2YWx1ZSI6Im5vbi1wdWJsaWMtMjMxOTgyIn0",
+    "endpoint": "{{BASYX_IT_API_URL}}/shell-descriptors?assetIds=eyJuYW1lIjoiZ2xvYmFsQXNzZXRJZCIsInZhbHVlIjoidGVzdC1uby1wdWJsaWMtcmVhZGFibGUifQ&assetIds=eyJuYW1lIjoiY3VzdG9tZXJQYXJ0SWQiLCJ2YWx1ZSI6Im5vbi1wdWJsaWMtMjMxOTgyIn0",
     "expectedStatus": 200,
     "shouldMatch": "expected/empty_paged_result.json",
     "headers": {
@@ -292,20 +292,20 @@
   },
   {
     "method": "POST",
-    "endpoint": "http://127.0.0.1:6004/lookup/shellsByAssetLink",
+    "endpoint": "{{BASYX_IT_API_URL}}/lookup/shellsByAssetLink",
     "data": "postBody/num3and4AssetLink.json",
     "shouldMatch": "expected/lookup/emptyId.json",
     "expectedStatus": 200
   },
   {
     "method": "GET",
-    "endpoint": "http://127.0.0.1:6004/shell-descriptors?assetIds=eyJuYW1lIjoibWFudWZhY3R1cmVySWQiLCJ2YWx1ZSI6IjEyMzgyOTIzOCJ9&assetIds=eyJuYW1lIjoibWFudWZhY3R1cmVyUGFydElkIiwidmFsdWUiOiIyMzE5ODIifQ",
+    "endpoint": "{{BASYX_IT_API_URL}}/shell-descriptors?assetIds=eyJuYW1lIjoibWFudWZhY3R1cmVySWQiLCJ2YWx1ZSI6IjEyMzgyOTIzOCJ9&assetIds=eyJuYW1lIjoibWFudWZhY3R1cmVyUGFydElkIiwidmFsdWUiOiIyMzE5ODIifQ",
     "expectedStatus": 200,
     "shouldMatch": "expected/empty_paged_result.json"
   },
   {
     "method": "POST",
-    "endpoint": "http://127.0.0.1:6004/lookup/shellsByAssetLink",
+    "endpoint": "{{BASYX_IT_API_URL}}/lookup/shellsByAssetLink",
     "data": "postBody/emptyAssetLink.json",
     "shouldMatch": "expected/lookup/emptyId.json",
     "expectedStatus": 200,
@@ -315,7 +315,7 @@
   },
   {
     "method": "GET",
-    "endpoint": "http://127.0.0.1:6004/shell-descriptors?assetIds=",
+    "endpoint": "{{BASYX_IT_API_URL}}/shell-descriptors?assetIds=",
     "expectedStatus": 200,
     "shouldMatch": "expected/empty_paged_result.json",
     "headers": {
@@ -324,7 +324,7 @@
   },
   {
     "method": "POST",
-    "endpoint": "http://127.0.0.1:6004/lookup/shellsByAssetLink",
+    "endpoint": "{{BASYX_IT_API_URL}}/lookup/shellsByAssetLink",
     "data": "postBody/num1AssetLink.json",
     "shouldMatch": "expected/lookup/emptyId.json",
     "expectedStatus": 200,
@@ -334,7 +334,7 @@
   },
   {
     "method": "GET",
-    "endpoint": "http://127.0.0.1:6004/shell-descriptors?assetIds=eyJuYW1lIjoicGFydEluc3RhbmNlSWQiLCJ2YWx1ZSI6IjI0OTc1NTM5MjAzNDIxIn0",
+    "endpoint": "{{BASYX_IT_API_URL}}/shell-descriptors?assetIds=eyJuYW1lIjoicGFydEluc3RhbmNlSWQiLCJ2YWx1ZSI6IjI0OTc1NTM5MjAzNDIxIn0",
     "expectedStatus": 200,
     "shouldMatch": "expected/empty_paged_result.json",
     "headers": {
@@ -343,7 +343,7 @@
   },
   {
     "method": "POST",
-    "endpoint": "http://127.0.0.1:6004/lookup/shellsByAssetLink",
+    "endpoint": "{{BASYX_IT_API_URL}}/lookup/shellsByAssetLink",
     "data": "postBody/num2AssetLink.json",
     "shouldMatch": "expected/lookup/publicId.json",
     "expectedStatus": 200,
@@ -353,7 +353,7 @@
   },
   {
     "method": "GET",
-    "endpoint": "http://127.0.0.1:6004/shell-descriptors?assetIds=eyJuYW1lIjoiY3VzdG9tZXJQYXJ0SWQiLCJ2YWx1ZSI6IjIzMTk4MiJ9",
+    "endpoint": "{{BASYX_IT_API_URL}}/shell-descriptors?assetIds=eyJuYW1lIjoiY3VzdG9tZXJQYXJ0SWQiLCJ2YWx1ZSI6IjIzMTk4MiJ9",
     "expectedStatus": 200,
     "headers": {
       "Edc-Bpn": "BPN_COMPANY_001"
@@ -362,7 +362,7 @@
   },
   {
     "method": "POST",
-    "endpoint": "http://127.0.0.1:6004/lookup/shellsByAssetLink",
+    "endpoint": "{{BASYX_IT_API_URL}}/lookup/shellsByAssetLink",
     "data": "postBody/num3AssetLink.json",
     "shouldMatch": "expected/lookup/bothIds.json",
     "expectedStatus": 200,
@@ -372,7 +372,7 @@
   },
   {
     "method": "GET",
-    "endpoint": "http://127.0.0.1:6004/shell-descriptors?assetIds=eyJuYW1lIjoibWFudWZhY3R1cmVySWQiLCJ2YWx1ZSI6IjEyMzgyOTIzOCJ9",
+    "endpoint": "{{BASYX_IT_API_URL}}/shell-descriptors?assetIds=eyJuYW1lIjoibWFudWZhY3R1cmVySWQiLCJ2YWx1ZSI6IjEyMzgyOTIzOCJ9",
     "expectedStatus": 200,
     "headers": {
       "Edc-Bpn": "BPN_COMPANY_001"
@@ -381,7 +381,7 @@
   },
   {
     "method": "POST",
-    "endpoint": "http://127.0.0.1:6004/lookup/shellsByAssetLink",
+    "endpoint": "{{BASYX_IT_API_URL}}/lookup/shellsByAssetLink",
     "data": "postBody/globalAssetIdAssetLink.json",
     "shouldMatch": "expected/lookup/publicId.json",
     "expectedStatus": 200,
@@ -391,7 +391,7 @@
   },
   {
     "method": "GET",
-    "endpoint": "http://127.0.0.1:6004/shell-descriptors?assetIds=eyJuYW1lIjoiZ2xvYmFsQXNzZXRJZCIsInZhbHVlIjoidGVzdCJ9",
+    "endpoint": "{{BASYX_IT_API_URL}}/shell-descriptors?assetIds=eyJuYW1lIjoiZ2xvYmFsQXNzZXRJZCIsInZhbHVlIjoidGVzdCJ9",
     "expectedStatus": 200,
     "headers": {
       "Edc-Bpn": "BPN_COMPANY_001"
@@ -400,7 +400,7 @@
   },
   {
     "method": "POST",
-    "endpoint": "http://127.0.0.1:6004/lookup/shellsByAssetLink",
+    "endpoint": "{{BASYX_IT_API_URL}}/lookup/shellsByAssetLink",
     "data": "postBody/globalAssetIdAndCustomerPartIdAssetLink.json",
     "shouldMatch": "expected/lookup/publicId.json",
     "expectedStatus": 200,
@@ -410,7 +410,7 @@
   },
   {
     "method": "GET",
-    "endpoint": "http://127.0.0.1:6004/shell-descriptors?assetIds=eyJuYW1lIjoiZ2xvYmFsQXNzZXRJZCIsInZhbHVlIjoidGVzdCJ9&assetIds=eyJuYW1lIjoiY3VzdG9tZXJQYXJ0SWQiLCJ2YWx1ZSI6IjIzMTk4MiJ9",
+    "endpoint": "{{BASYX_IT_API_URL}}/shell-descriptors?assetIds=eyJuYW1lIjoiZ2xvYmFsQXNzZXRJZCIsInZhbHVlIjoidGVzdCJ9&assetIds=eyJuYW1lIjoiY3VzdG9tZXJQYXJ0SWQiLCJ2YWx1ZSI6IjIzMTk4MiJ9",
     "expectedStatus": 200,
     "headers": {
       "Edc-Bpn": "BPN_COMPANY_001"
@@ -419,7 +419,7 @@
   },
   {
     "method": "POST",
-    "endpoint": "http://127.0.0.1:6004/lookup/shellsByAssetLink",
+    "endpoint": "{{BASYX_IT_API_URL}}/lookup/shellsByAssetLink",
     "data": "postBody/globalAssetIdNoPublicReadableAndCustomerPartIdAssetLink.json",
     "shouldMatch": "expected/lookup/nonPublicId.json",
     "expectedStatus": 200,
@@ -429,7 +429,7 @@
   },
   {
     "method": "GET",
-    "endpoint": "http://127.0.0.1:6004/shell-descriptors?assetIds=eyJuYW1lIjoiZ2xvYmFsQXNzZXRJZCIsInZhbHVlIjoidGVzdC1uby1wdWJsaWMtcmVhZGFibGUifQ&assetIds=eyJuYW1lIjoiY3VzdG9tZXJQYXJ0SWQiLCJ2YWx1ZSI6Im5vbi1wdWJsaWMtMjMxOTgyIn0",
+    "endpoint": "{{BASYX_IT_API_URL}}/shell-descriptors?assetIds=eyJuYW1lIjoiZ2xvYmFsQXNzZXRJZCIsInZhbHVlIjoidGVzdC1uby1wdWJsaWMtcmVhZGFibGUifQ&assetIds=eyJuYW1lIjoiY3VzdG9tZXJQYXJ0SWQiLCJ2YWx1ZSI6Im5vbi1wdWJsaWMtMjMxOTgyIn0",
     "expectedStatus": 200,
     "headers": {
       "Edc-Bpn": "BPN_COMPANY_001"
@@ -438,7 +438,7 @@
   },
   {
     "method": "POST",
-    "endpoint": "http://127.0.0.1:6004/lookup/shellsByAssetLink",
+    "endpoint": "{{BASYX_IT_API_URL}}/lookup/shellsByAssetLink",
     "data": "postBody/num4AssetLink.json",
     "shouldMatch": "expected/lookup/publicId.json",
     "expectedStatus": 200,
@@ -448,7 +448,7 @@
   },
   {
     "method": "GET",
-    "endpoint": "http://127.0.0.1:6004/shell-descriptors?assetIds=eyJuYW1lIjoibWFudWZhY3R1cmVyUGFydElkIiwidmFsdWUiOiIyMzE5ODIifQ",
+    "endpoint": "{{BASYX_IT_API_URL}}/shell-descriptors?assetIds=eyJuYW1lIjoibWFudWZhY3R1cmVyUGFydElkIiwidmFsdWUiOiIyMzE5ODIifQ",
     "expectedStatus": 200,
     "headers": {
       "Edc-Bpn": "BPN_COMPANY_001"
@@ -457,7 +457,7 @@
   },
   {
     "method": "POST",
-    "endpoint": "http://127.0.0.1:6004/lookup/shellsByAssetLink",
+    "endpoint": "{{BASYX_IT_API_URL}}/lookup/shellsByAssetLink",
     "data": "postBody/num3and4AssetLink.json",
     "shouldMatch": "expected/lookup/publicId.json",
     "expectedStatus": 200,
@@ -467,7 +467,7 @@
   },
   {
     "method": "GET",
-    "endpoint": "http://127.0.0.1:6004/shell-descriptors?assetIds=eyJuYW1lIjoibWFudWZhY3R1cmVySWQiLCJ2YWx1ZSI6IjEyMzgyOTIzOCJ9&assetIds=eyJuYW1lIjoibWFudWZhY3R1cmVyUGFydElkIiwidmFsdWUiOiIyMzE5ODIifQ",
+    "endpoint": "{{BASYX_IT_API_URL}}/shell-descriptors?assetIds=eyJuYW1lIjoibWFudWZhY3R1cmVySWQiLCJ2YWx1ZSI6IjEyMzgyOTIzOCJ9&assetIds=eyJuYW1lIjoibWFudWZhY3R1cmVyUGFydElkIiwidmFsdWUiOiIyMzE5ODIifQ",
     "expectedStatus": 200,
     "headers": {
       "Edc-Bpn": "BPN_COMPANY_001"
@@ -476,7 +476,7 @@
   },
   {
     "method": "POST",
-    "endpoint": "http://127.0.0.1:6004/lookup/shellsByAssetLink",
+    "endpoint": "{{BASYX_IT_API_URL}}/lookup/shellsByAssetLink",
     "data": "postBody/emptyAssetLink.json",
     "shouldMatch": "expected/lookup/emptyId.json",
     "expectedStatus": 200,
@@ -486,7 +486,7 @@
   },
   {
     "method": "GET",
-    "endpoint": "http://127.0.0.1:6004/shell-descriptors?assetIds=",
+    "endpoint": "{{BASYX_IT_API_URL}}/shell-descriptors?assetIds=",
     "expectedStatus": 200,
     "shouldMatch": "expected/empty_paged_result.json",
     "headers": {
@@ -495,7 +495,7 @@
   },
   {
     "method": "POST",
-    "endpoint": "http://127.0.0.1:6004/lookup/shellsByAssetLink",
+    "endpoint": "{{BASYX_IT_API_URL}}/lookup/shellsByAssetLink",
     "data": "postBody/num1AssetLink.json",
     "shouldMatch": "expected/lookup/emptyId.json",
     "expectedStatus": 200,
@@ -505,7 +505,7 @@
   },
   {
     "method": "GET",
-    "endpoint": "http://127.0.0.1:6004/shell-descriptors?assetIds=eyJuYW1lIjoicGFydEluc3RhbmNlSWQiLCJ2YWx1ZSI6IjI0OTc1NTM5MjAzNDIxIn0",
+    "endpoint": "{{BASYX_IT_API_URL}}/shell-descriptors?assetIds=eyJuYW1lIjoicGFydEluc3RhbmNlSWQiLCJ2YWx1ZSI6IjI0OTc1NTM5MjAzNDIxIn0",
     "expectedStatus": 200,
     "shouldMatch": "expected/empty_paged_result.json",
     "headers": {
@@ -514,7 +514,7 @@
   },
   {
     "method": "POST",
-    "endpoint": "http://127.0.0.1:6004/lookup/shellsByAssetLink",
+    "endpoint": "{{BASYX_IT_API_URL}}/lookup/shellsByAssetLink",
     "data": "postBody/num2AssetLink.json",
     "shouldMatch": "expected/lookup/emptyId.json",
     "expectedStatus": 200,
@@ -524,7 +524,7 @@
   },
   {
     "method": "GET",
-    "endpoint": "http://127.0.0.1:6004/shell-descriptors?assetIds=eyJuYW1lIjoiY3VzdG9tZXJQYXJ0SWQiLCJ2YWx1ZSI6IjIzMTk4MiJ9",
+    "endpoint": "{{BASYX_IT_API_URL}}/shell-descriptors?assetIds=eyJuYW1lIjoiY3VzdG9tZXJQYXJ0SWQiLCJ2YWx1ZSI6IjIzMTk4MiJ9",
     "expectedStatus": 200,
     "shouldMatch": "expected/empty_paged_result.json",
     "headers": {
@@ -533,7 +533,7 @@
   },
   {
     "method": "POST",
-    "endpoint": "http://127.0.0.1:6004/lookup/shellsByAssetLink",
+    "endpoint": "{{BASYX_IT_API_URL}}/lookup/shellsByAssetLink",
     "data": "postBody/num3AssetLink.json",
     "shouldMatch": "expected/lookup/bothIds.json",
     "expectedStatus": 200,
@@ -543,7 +543,7 @@
   },
   {
     "method": "GET",
-    "endpoint": "http://127.0.0.1:6004/shell-descriptors?assetIds=eyJuYW1lIjoibWFudWZhY3R1cmVySWQiLCJ2YWx1ZSI6IjEyMzgyOTIzOCJ9",
+    "endpoint": "{{BASYX_IT_API_URL}}/shell-descriptors?assetIds=eyJuYW1lIjoibWFudWZhY3R1cmVySWQiLCJ2YWx1ZSI6IjEyMzgyOTIzOCJ9",
     "expectedStatus": 200,
     "headers": {
       "Edc-Bpn": "BPN_COMPANY_002"
@@ -552,7 +552,7 @@
   },
   {
     "method": "POST",
-    "endpoint": "http://127.0.0.1:6004/lookup/shellsByAssetLink",
+    "endpoint": "{{BASYX_IT_API_URL}}/lookup/shellsByAssetLink",
     "data": "postBody/globalAssetIdAssetLink.json",
     "shouldMatch": "expected/lookup/publicId.json",
     "expectedStatus": 200,
@@ -562,7 +562,7 @@
   },
   {
     "method": "GET",
-    "endpoint": "http://127.0.0.1:6004/shell-descriptors?assetIds=eyJuYW1lIjoiZ2xvYmFsQXNzZXRJZCIsInZhbHVlIjoidGVzdCJ9",
+    "endpoint": "{{BASYX_IT_API_URL}}/shell-descriptors?assetIds=eyJuYW1lIjoiZ2xvYmFsQXNzZXRJZCIsInZhbHVlIjoidGVzdCJ9",
     "expectedStatus": 200,
     "headers": {
       "Edc-Bpn": "BPN_COMPANY_002"
@@ -571,7 +571,7 @@
   },
   {
     "method": "POST",
-    "endpoint": "http://127.0.0.1:6004/lookup/shellsByAssetLink",
+    "endpoint": "{{BASYX_IT_API_URL}}/lookup/shellsByAssetLink",
     "data": "postBody/globalAssetIdAndCustomerPartIdAssetLink.json",
     "shouldMatch": "expected/lookup/emptyId.json",
     "expectedStatus": 200,
@@ -581,7 +581,7 @@
   },
   {
     "method": "GET",
-    "endpoint": "http://127.0.0.1:6004/shell-descriptors?assetIds=eyJuYW1lIjoiZ2xvYmFsQXNzZXRJZCIsInZhbHVlIjoidGVzdCJ9&assetIds=eyJuYW1lIjoiY3VzdG9tZXJQYXJ0SWQiLCJ2YWx1ZSI6IjIzMTk4MiJ9",
+    "endpoint": "{{BASYX_IT_API_URL}}/shell-descriptors?assetIds=eyJuYW1lIjoiZ2xvYmFsQXNzZXRJZCIsInZhbHVlIjoidGVzdCJ9&assetIds=eyJuYW1lIjoiY3VzdG9tZXJQYXJ0SWQiLCJ2YWx1ZSI6IjIzMTk4MiJ9",
     "expectedStatus": 200,
     "shouldMatch": "expected/empty_paged_result.json",
     "headers": {
@@ -590,7 +590,7 @@
   },
   {
     "method": "POST",
-    "endpoint": "http://127.0.0.1:6004/lookup/shellsByAssetLink",
+    "endpoint": "{{BASYX_IT_API_URL}}/lookup/shellsByAssetLink",
     "data": "postBody/globalAssetIdNoPublicReadableAndCustomerPartIdAssetLink.json",
     "shouldMatch": "expected/lookup/emptyId.json",
     "expectedStatus": 200,
@@ -600,7 +600,7 @@
   },
   {
     "method": "GET",
-    "endpoint": "http://127.0.0.1:6004/shell-descriptors?assetIds=eyJuYW1lIjoiZ2xvYmFsQXNzZXRJZCIsInZhbHVlIjoidGVzdC1uby1wdWJsaWMtcmVhZGFibGUifQ&assetIds=eyJuYW1lIjoiY3VzdG9tZXJQYXJ0SWQiLCJ2YWx1ZSI6Im5vbi1wdWJsaWMtMjMxOTgyIn0",
+    "endpoint": "{{BASYX_IT_API_URL}}/shell-descriptors?assetIds=eyJuYW1lIjoiZ2xvYmFsQXNzZXRJZCIsInZhbHVlIjoidGVzdC1uby1wdWJsaWMtcmVhZGFibGUifQ&assetIds=eyJuYW1lIjoiY3VzdG9tZXJQYXJ0SWQiLCJ2YWx1ZSI6Im5vbi1wdWJsaWMtMjMxOTgyIn0",
     "expectedStatus": 200,
     "shouldMatch": "expected/empty_paged_result.json",
     "headers": {
@@ -609,7 +609,7 @@
   },
   {
     "method": "POST",
-    "endpoint": "http://127.0.0.1:6004/lookup/shellsByAssetLink",
+    "endpoint": "{{BASYX_IT_API_URL}}/lookup/shellsByAssetLink",
     "data": "postBody/num4AssetLink.json",
     "shouldMatch": "expected/lookup/publicId.json",
     "expectedStatus": 200,
@@ -619,7 +619,7 @@
   },
   {
     "method": "GET",
-    "endpoint": "http://127.0.0.1:6004/shell-descriptors?assetIds=eyJuYW1lIjoibWFudWZhY3R1cmVyUGFydElkIiwidmFsdWUiOiIyMzE5ODIifQ",
+    "endpoint": "{{BASYX_IT_API_URL}}/shell-descriptors?assetIds=eyJuYW1lIjoibWFudWZhY3R1cmVyUGFydElkIiwidmFsdWUiOiIyMzE5ODIifQ",
     "expectedStatus": 200,
     "headers": {
       "Edc-Bpn": "BPN_COMPANY_002"
@@ -628,7 +628,7 @@
   },
   {
     "method": "POST",
-    "endpoint": "http://127.0.0.1:6004/lookup/shellsByAssetLink",
+    "endpoint": "{{BASYX_IT_API_URL}}/lookup/shellsByAssetLink",
     "data": "postBody/num3and4AssetLink.json",
     "shouldMatch": "expected/lookup/publicId.json",
     "expectedStatus": 200,
@@ -638,7 +638,7 @@
   },
   {
     "method": "GET",
-    "endpoint": "http://127.0.0.1:6004/shell-descriptors?assetIds=eyJuYW1lIjoibWFudWZhY3R1cmVySWQiLCJ2YWx1ZSI6IjEyMzgyOTIzOCJ9&assetIds=eyJuYW1lIjoibWFudWZhY3R1cmVyUGFydElkIiwidmFsdWUiOiIyMzE5ODIifQ",
+    "endpoint": "{{BASYX_IT_API_URL}}/shell-descriptors?assetIds=eyJuYW1lIjoibWFudWZhY3R1cmVySWQiLCJ2YWx1ZSI6IjEyMzgyOTIzOCJ9&assetIds=eyJuYW1lIjoibWFudWZhY3R1cmVyUGFydElkIiwidmFsdWUiOiIyMzE5ODIifQ",
     "expectedStatus": 200,
     "headers": {
       "Edc-Bpn": "BPN_COMPANY_002"
@@ -647,7 +647,7 @@
   },
   {
     "method": "POST",
-    "endpoint": "http://127.0.0.1:6004/lookup/shellsByAssetLink",
+    "endpoint": "{{BASYX_IT_API_URL}}/lookup/shellsByAssetLink",
     "data": "postBody/emptyAssetLink.json",
     "shouldMatch": "expected/lookup/emptyId.json",
     "expectedStatus": 200,
@@ -658,7 +658,7 @@
   },
   {
     "method": "GET",
-    "endpoint": "http://127.0.0.1:6004/shell-descriptors?assetIds=",
+    "endpoint": "{{BASYX_IT_API_URL}}/shell-descriptors?assetIds=",
     "expectedStatus": 200,
     "shouldMatch": "expected/empty_paged_result.json",
     "token": {
@@ -668,7 +668,7 @@
   },
   {
     "method": "POST",
-    "endpoint": "http://127.0.0.1:6004/lookup/shellsByAssetLink",
+    "endpoint": "{{BASYX_IT_API_URL}}/lookup/shellsByAssetLink",
     "data": "postBody/num1AssetLink.json",
     "shouldMatch": "expected/lookup/publicId.json",
     "expectedStatus": 200,
@@ -679,7 +679,7 @@
   },
   {
     "method": "GET",
-    "endpoint": "http://127.0.0.1:6004/shell-descriptors?assetIds=eyJuYW1lIjoicGFydEluc3RhbmNlSWQiLCJ2YWx1ZSI6IjI0OTc1NTM5MjAzNDIxIn0",
+    "endpoint": "{{BASYX_IT_API_URL}}/shell-descriptors?assetIds=eyJuYW1lIjoicGFydEluc3RhbmNlSWQiLCJ2YWx1ZSI6IjI0OTc1NTM5MjAzNDIxIn0",
     "expectedStatus": 200,
     "token": {
       "user": "admin",
@@ -689,7 +689,7 @@
   },
   {
     "method": "POST",
-    "endpoint": "http://127.0.0.1:6004/lookup/shellsByAssetLink",
+    "endpoint": "{{BASYX_IT_API_URL}}/lookup/shellsByAssetLink",
     "data": "postBody/num2AssetLink.json",
     "shouldMatch": "expected/lookup/publicId.json",
     "expectedStatus": 200,
@@ -700,7 +700,7 @@
   },
   {
     "method": "GET",
-    "endpoint": "http://127.0.0.1:6004/shell-descriptors?assetIds=eyJuYW1lIjoiY3VzdG9tZXJQYXJ0SWQiLCJ2YWx1ZSI6IjIzMTk4MiJ9",
+    "endpoint": "{{BASYX_IT_API_URL}}/shell-descriptors?assetIds=eyJuYW1lIjoiY3VzdG9tZXJQYXJ0SWQiLCJ2YWx1ZSI6IjIzMTk4MiJ9",
     "expectedStatus": 200,
     "token": {
       "user": "admin",
@@ -710,7 +710,7 @@
   },
   {
     "method": "POST",
-    "endpoint": "http://127.0.0.1:6004/lookup/shellsByAssetLink",
+    "endpoint": "{{BASYX_IT_API_URL}}/lookup/shellsByAssetLink",
     "data": "postBody/num3AssetLink.json",
     "shouldMatch": "expected/lookup/bothIds.json",
     "expectedStatus": 200,
@@ -721,7 +721,7 @@
   },
   {
     "method": "GET",
-    "endpoint": "http://127.0.0.1:6004/shell-descriptors?assetIds=eyJuYW1lIjoibWFudWZhY3R1cmVySWQiLCJ2YWx1ZSI6IjEyMzgyOTIzOCJ9",
+    "endpoint": "{{BASYX_IT_API_URL}}/shell-descriptors?assetIds=eyJuYW1lIjoibWFudWZhY3R1cmVySWQiLCJ2YWx1ZSI6IjEyMzgyOTIzOCJ9",
     "expectedStatus": 200,
     "token": {
       "user": "admin",
@@ -731,7 +731,7 @@
   },
   {
     "method": "POST",
-    "endpoint": "http://127.0.0.1:6004/lookup/shellsByAssetLink",
+    "endpoint": "{{BASYX_IT_API_URL}}/lookup/shellsByAssetLink",
     "data": "postBody/num4AssetLink.json",
     "shouldMatch": "expected/lookup/publicId.json",
     "expectedStatus": 200,
@@ -742,7 +742,7 @@
   },
   {
     "method": "GET",
-    "endpoint": "http://127.0.0.1:6004/shell-descriptors?assetIds=eyJuYW1lIjoibWFudWZhY3R1cmVyUGFydElkIiwidmFsdWUiOiIyMzE5ODIifQ",
+    "endpoint": "{{BASYX_IT_API_URL}}/shell-descriptors?assetIds=eyJuYW1lIjoibWFudWZhY3R1cmVyUGFydElkIiwidmFsdWUiOiIyMzE5ODIifQ",
     "expectedStatus": 200,
     "token": {
       "user": "admin",
@@ -752,7 +752,7 @@
   },
   {
     "method": "POST",
-    "endpoint": "http://127.0.0.1:6004/lookup/shellsByAssetLink",
+    "endpoint": "{{BASYX_IT_API_URL}}/lookup/shellsByAssetLink",
     "data": "postBody/globalAssetIdAssetLink.json",
     "shouldMatch": "expected/lookup/publicId.json",
     "expectedStatus": 200,
@@ -763,7 +763,7 @@
   },
   {
     "method": "GET",
-    "endpoint": "http://127.0.0.1:6004/shell-descriptors?assetIds=eyJuYW1lIjoiZ2xvYmFsQXNzZXRJZCIsInZhbHVlIjoidGVzdCJ9",
+    "endpoint": "{{BASYX_IT_API_URL}}/shell-descriptors?assetIds=eyJuYW1lIjoiZ2xvYmFsQXNzZXRJZCIsInZhbHVlIjoidGVzdCJ9",
     "expectedStatus": 200,
     "token": {
       "user": "admin",
@@ -773,7 +773,7 @@
   },
   {
     "method": "POST",
-    "endpoint": "http://127.0.0.1:6004/lookup/shellsByAssetLink",
+    "endpoint": "{{BASYX_IT_API_URL}}/lookup/shellsByAssetLink",
     "data": "postBody/globalAssetIdAndCustomerPartIdAssetLink.json",
     "shouldMatch": "expected/lookup/publicId.json",
     "expectedStatus": 200,
@@ -784,7 +784,7 @@
   },
   {
     "method": "GET",
-    "endpoint": "http://127.0.0.1:6004/shell-descriptors?assetIds=eyJuYW1lIjoiZ2xvYmFsQXNzZXRJZCIsInZhbHVlIjoidGVzdCJ9&assetIds=eyJuYW1lIjoiY3VzdG9tZXJQYXJ0SWQiLCJ2YWx1ZSI6IjIzMTk4MiJ9",
+    "endpoint": "{{BASYX_IT_API_URL}}/shell-descriptors?assetIds=eyJuYW1lIjoiZ2xvYmFsQXNzZXRJZCIsInZhbHVlIjoidGVzdCJ9&assetIds=eyJuYW1lIjoiY3VzdG9tZXJQYXJ0SWQiLCJ2YWx1ZSI6IjIzMTk4MiJ9",
     "expectedStatus": 200,
     "token": {
       "user": "admin",
@@ -794,7 +794,7 @@
   },
   {
     "method": "POST",
-    "endpoint": "http://127.0.0.1:6004/lookup/shellsByAssetLink",
+    "endpoint": "{{BASYX_IT_API_URL}}/lookup/shellsByAssetLink",
     "data": "postBody/globalAssetIdNoPublicReadableAndCustomerPartIdAssetLink.json",
     "shouldMatch": "expected/lookup/nonPublicId.json",
     "expectedStatus": 200,
@@ -805,7 +805,7 @@
   },
   {
     "method": "GET",
-    "endpoint": "http://127.0.0.1:6004/shell-descriptors?assetIds=eyJuYW1lIjoiZ2xvYmFsQXNzZXRJZCIsInZhbHVlIjoidGVzdC1uby1wdWJsaWMtcmVhZGFibGUifQ&assetIds=eyJuYW1lIjoiY3VzdG9tZXJQYXJ0SWQiLCJ2YWx1ZSI6Im5vbi1wdWJsaWMtMjMxOTgyIn0",
+    "endpoint": "{{BASYX_IT_API_URL}}/shell-descriptors?assetIds=eyJuYW1lIjoiZ2xvYmFsQXNzZXRJZCIsInZhbHVlIjoidGVzdC1uby1wdWJsaWMtcmVhZGFibGUifQ&assetIds=eyJuYW1lIjoiY3VzdG9tZXJQYXJ0SWQiLCJ2YWx1ZSI6Im5vbi1wdWJsaWMtMjMxOTgyIn0",
     "expectedStatus": 200,
     "token": {
       "user": "admin",
@@ -815,7 +815,7 @@
   },
   {
     "method": "POST",
-    "endpoint": "http://127.0.0.1:6004/lookup/shellsByAssetLink",
+    "endpoint": "{{BASYX_IT_API_URL}}/lookup/shellsByAssetLink",
     "data": "postBody/num3and4AssetLink.json",
     "shouldMatch": "expected/lookup/publicId.json",
     "expectedStatus": 200,
@@ -826,7 +826,7 @@
   },
   {
     "method": "GET",
-    "endpoint": "http://127.0.0.1:6004/shell-descriptors?assetIds=eyJuYW1lIjoibWFudWZhY3R1cmVySWQiLCJ2YWx1ZSI6IjEyMzgyOTIzOCJ9&assetIds=eyJuYW1lIjoibWFudWZhY3R1cmVyUGFydElkIiwidmFsdWUiOiIyMzE5ODIifQ",
+    "endpoint": "{{BASYX_IT_API_URL}}/shell-descriptors?assetIds=eyJuYW1lIjoibWFudWZhY3R1cmVySWQiLCJ2YWx1ZSI6IjEyMzgyOTIzOCJ9&assetIds=eyJuYW1lIjoibWFudWZhY3R1cmVyUGFydElkIiwidmFsdWUiOiIyMzE5ODIifQ",
     "expectedStatus": 200,
     "token": {
       "user": "admin",
@@ -836,7 +836,7 @@
   },
   {
     "method": "POST",
-    "endpoint": "http://127.0.0.1:6004/lookup/shellsByAssetLink",
+    "endpoint": "{{BASYX_IT_API_URL}}/lookup/shellsByAssetLink",
     "data": "postBody/emptyAssetLink.json",
     "shouldMatch": "expected/lookup/emptyId.json",
     "expectedStatus": 200,
@@ -850,7 +850,7 @@
   },
   {
     "method": "GET",
-    "endpoint": "http://127.0.0.1:6004/shell-descriptors?assetIds=",
+    "endpoint": "{{BASYX_IT_API_URL}}/shell-descriptors?assetIds=",
     "expectedStatus": 200,
     "shouldMatch": "expected/empty_paged_result.json",
     "token": {
@@ -863,7 +863,7 @@
   },
   {
     "method": "POST",
-    "endpoint": "http://127.0.0.1:6004/lookup/shellsByAssetLink",
+    "endpoint": "{{BASYX_IT_API_URL}}/lookup/shellsByAssetLink",
     "data": "postBody/num1AssetLink.json",
     "shouldMatch": "expected/lookup/publicId.json",
     "expectedStatus": 200,
@@ -877,7 +877,7 @@
   },
   {
     "method": "GET",
-    "endpoint": "http://127.0.0.1:6004/shell-descriptors?assetIds=eyJuYW1lIjoicGFydEluc3RhbmNlSWQiLCJ2YWx1ZSI6IjI0OTc1NTM5MjAzNDIxIn0",
+    "endpoint": "{{BASYX_IT_API_URL}}/shell-descriptors?assetIds=eyJuYW1lIjoicGFydEluc3RhbmNlSWQiLCJ2YWx1ZSI6IjI0OTc1NTM5MjAzNDIxIn0",
     "expectedStatus": 200,
     "token": {
       "user": "admin",
@@ -890,7 +890,7 @@
   },
   {
     "method": "POST",
-    "endpoint": "http://127.0.0.1:6004/lookup/shellsByAssetLink",
+    "endpoint": "{{BASYX_IT_API_URL}}/lookup/shellsByAssetLink",
     "data": "postBody/num2AssetLink.json",
     "shouldMatch": "expected/lookup/publicId.json",
     "expectedStatus": 200,
@@ -904,7 +904,7 @@
   },
   {
     "method": "GET",
-    "endpoint": "http://127.0.0.1:6004/shell-descriptors?assetIds=eyJuYW1lIjoiY3VzdG9tZXJQYXJ0SWQiLCJ2YWx1ZSI6IjIzMTk4MiJ9",
+    "endpoint": "{{BASYX_IT_API_URL}}/shell-descriptors?assetIds=eyJuYW1lIjoiY3VzdG9tZXJQYXJ0SWQiLCJ2YWx1ZSI6IjIzMTk4MiJ9",
     "expectedStatus": 200,
     "token": {
       "user": "admin",
@@ -917,7 +917,7 @@
   },
   {
     "method": "POST",
-    "endpoint": "http://127.0.0.1:6004/lookup/shellsByAssetLink",
+    "endpoint": "{{BASYX_IT_API_URL}}/lookup/shellsByAssetLink",
     "data": "postBody/num3AssetLink.json",
     "shouldMatch": "expected/lookup/bothIds.json",
     "expectedStatus": 200,
@@ -931,7 +931,7 @@
   },
   {
     "method": "GET",
-    "endpoint": "http://127.0.0.1:6004/shell-descriptors?assetIds=eyJuYW1lIjoibWFudWZhY3R1cmVySWQiLCJ2YWx1ZSI6IjEyMzgyOTIzOCJ9",
+    "endpoint": "{{BASYX_IT_API_URL}}/shell-descriptors?assetIds=eyJuYW1lIjoibWFudWZhY3R1cmVySWQiLCJ2YWx1ZSI6IjEyMzgyOTIzOCJ9",
     "expectedStatus": 200,
     "token": {
       "user": "admin",
@@ -944,7 +944,7 @@
   },
   {
     "method": "POST",
-    "endpoint": "http://127.0.0.1:6004/lookup/shellsByAssetLink",
+    "endpoint": "{{BASYX_IT_API_URL}}/lookup/shellsByAssetLink",
     "data": "postBody/num4AssetLink.json",
     "shouldMatch": "expected/lookup/publicId.json",
     "expectedStatus": 200,
@@ -958,7 +958,7 @@
   },
   {
     "method": "GET",
-    "endpoint": "http://127.0.0.1:6004/shell-descriptors?assetIds=eyJuYW1lIjoibWFudWZhY3R1cmVyUGFydElkIiwidmFsdWUiOiIyMzE5ODIifQ",
+    "endpoint": "{{BASYX_IT_API_URL}}/shell-descriptors?assetIds=eyJuYW1lIjoibWFudWZhY3R1cmVyUGFydElkIiwidmFsdWUiOiIyMzE5ODIifQ",
     "expectedStatus": 200,
     "token": {
       "user": "admin",
@@ -971,7 +971,7 @@
   },
   {
     "method": "POST",
-    "endpoint": "http://127.0.0.1:6004/lookup/shellsByAssetLink",
+    "endpoint": "{{BASYX_IT_API_URL}}/lookup/shellsByAssetLink",
     "data": "postBody/globalAssetIdAndCustomerPartIdAssetLink.json",
     "shouldMatch": "expected/lookup/publicId.json",
     "expectedStatus": 200,
@@ -985,7 +985,7 @@
   },
   {
     "method": "GET",
-    "endpoint": "http://127.0.0.1:6004/shell-descriptors?assetIds=eyJuYW1lIjoiZ2xvYmFsQXNzZXRJZCIsInZhbHVlIjoidGVzdCJ9&assetIds=eyJuYW1lIjoiY3VzdG9tZXJQYXJ0SWQiLCJ2YWx1ZSI6IjIzMTk4MiJ9",
+    "endpoint": "{{BASYX_IT_API_URL}}/shell-descriptors?assetIds=eyJuYW1lIjoiZ2xvYmFsQXNzZXRJZCIsInZhbHVlIjoidGVzdCJ9&assetIds=eyJuYW1lIjoiY3VzdG9tZXJQYXJ0SWQiLCJ2YWx1ZSI6IjIzMTk4MiJ9",
     "expectedStatus": 200,
     "token": {
       "user": "admin",
@@ -998,7 +998,7 @@
   },
   {
     "method": "POST",
-    "endpoint": "http://127.0.0.1:6004/lookup/shellsByAssetLink",
+    "endpoint": "{{BASYX_IT_API_URL}}/lookup/shellsByAssetLink",
     "data": "postBody/globalAssetIdNoPublicReadableAndCustomerPartIdAssetLink.json",
     "shouldMatch": "expected/lookup/nonPublicId.json",
     "expectedStatus": 200,
@@ -1012,7 +1012,7 @@
   },
   {
     "method": "GET",
-    "endpoint": "http://127.0.0.1:6004/shell-descriptors?assetIds=eyJuYW1lIjoiZ2xvYmFsQXNzZXRJZCIsInZhbHVlIjoidGVzdC1uby1wdWJsaWMtcmVhZGFibGUifQ&assetIds=eyJuYW1lIjoiY3VzdG9tZXJQYXJ0SWQiLCJ2YWx1ZSI6Im5vbi1wdWJsaWMtMjMxOTgyIn0",
+    "endpoint": "{{BASYX_IT_API_URL}}/shell-descriptors?assetIds=eyJuYW1lIjoiZ2xvYmFsQXNzZXRJZCIsInZhbHVlIjoidGVzdC1uby1wdWJsaWMtcmVhZGFibGUifQ&assetIds=eyJuYW1lIjoiY3VzdG9tZXJQYXJ0SWQiLCJ2YWx1ZSI6Im5vbi1wdWJsaWMtMjMxOTgyIn0",
     "expectedStatus": 200,
     "token": {
       "user": "admin",
@@ -1025,7 +1025,7 @@
   },
   {
     "method": "POST",
-    "endpoint": "http://127.0.0.1:6004/lookup/shellsByAssetLink",
+    "endpoint": "{{BASYX_IT_API_URL}}/lookup/shellsByAssetLink",
     "data": "postBody/num3and4AssetLink.json",
     "shouldMatch": "expected/lookup/publicId.json",
     "expectedStatus": 200,
@@ -1039,7 +1039,7 @@
   },
   {
     "method": "GET",
-    "endpoint": "http://127.0.0.1:6004/shell-descriptors?assetIds=eyJuYW1lIjoibWFudWZhY3R1cmVySWQiLCJ2YWx1ZSI6IjEyMzgyOTIzOCJ9&assetIds=eyJuYW1lIjoibWFudWZhY3R1cmVyUGFydElkIiwidmFsdWUiOiIyMzE5ODIifQ",
+    "endpoint": "{{BASYX_IT_API_URL}}/shell-descriptors?assetIds=eyJuYW1lIjoibWFudWZhY3R1cmVySWQiLCJ2YWx1ZSI6IjEyMzgyOTIzOCJ9&assetIds=eyJuYW1lIjoibWFudWZhY3R1cmVyUGFydElkIiwidmFsdWUiOiIyMzE5ODIifQ",
     "expectedStatus": 200,
     "token": {
       "user": "admin",
@@ -1052,12 +1052,12 @@
   },
   {
     "method": "GET",
-    "endpoint": "http://127.0.0.1:6004/lookup/shells/ZTFlYmEzZDctOTFmMC00ZGFjLWE3MzAtZWFhMWQzNWUwMzVjLTI",
+    "endpoint": "{{BASYX_IT_API_URL}}/lookup/shells/ZTFlYmEzZDctOTFmMC00ZGFjLWE3MzAtZWFhMWQzNWUwMzVjLTI",
     "expectedStatus": 200
   },
   {
     "method": "GET",
-    "endpoint": "http://127.0.0.1:6004/lookup/shells/ZTFlYmEzZDctOTFmMC00ZGFjLWE3MzAtZWFhMWQzNWUwMzVjLTI",
+    "endpoint": "{{BASYX_IT_API_URL}}/lookup/shells/ZTFlYmEzZDctOTFmMC00ZGFjLWE3MzAtZWFhMWQzNWUwMzVjLTI",
     "expectedStatus": 200,
     "headers": {
       "Edc-Bpn": "BPN_COMPANY_001"
@@ -1065,7 +1065,7 @@
   },
   {
     "method": "GET",
-    "endpoint": "http://127.0.0.1:6004/lookup/shells/ZTFlYmEzZDctOTFmMC00ZGFjLWE3MzAtZWFhMWQzNWUwMzVjLTI",
+    "endpoint": "{{BASYX_IT_API_URL}}/lookup/shells/ZTFlYmEzZDctOTFmMC00ZGFjLWE3MzAtZWFhMWQzNWUwMzVjLTI",
     "expectedStatus": 200,
     "token": {
       "user": "admin",

@@ -50,6 +50,7 @@ import (
 	aastypes "github.com/FriedJannik/aas-go-sdk/types"
 	aasxmlization "github.com/FriedJannik/aas-go-sdk/xmlization"
 	aasx "github.com/aas-core-works/aas-package3-golang"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/testenv"
 	"github.com/stretchr/testify/require"
 )
 
@@ -61,10 +62,10 @@ const (
 	serializationThreeAasxJsonAltDownloadPath          = "testdata_results/threeAASDuplicateFilesSerializationTest_downloaded_json_alt_from_xml_aasx_upload.aasx"
 	serializationThreeAasXmlDownloadFromXmlUploadPath  = "testdata_results/threeAASDuplicateFilesSerializationTest_downloaded_xml_from_xml_aasx_upload.xml"
 	serializationThreeAasJsonDownloadFromXmlUploadPath = "testdata_results/threeAASDuplicateFilesSerializationTest_downloaded_json_from_xml_aasx_upload.json"
-	serializationBaseURL                               = "http://127.0.0.1:6004"
-
-	serializationIntegrationDSN = "host=127.0.0.1 port=6432 user=admin password=admin123 dbname=basyxTestDB sslmode=disable"
 )
+
+var serializationBaseURL = testenv.LocalURLFromEnv("BASYX_IT_API_PORT", 6004)
+var serializationIntegrationDSN = testenv.PostgresKeywordDSNFromEnv("BASYX_IT_DB_PORT", 6432, "basyxTestDB")
 
 func TestSerializationDownloadAasXmlAfterThreeAasUpload(t *testing.T) {
 	skipSerializationTestsInCI(t)

@@ -144,6 +144,16 @@ func TestInvokeOperationValueOnlyReturnsBadRequest(t *testing.T) {
 	require.Equal(t, 400, response.Code)
 }
 
+func TestPostSubmodelElementByPathSubmodelRepoMapsDeniedToForbidden(t *testing.T) {
+	t.Parallel()
+
+	response := newPostSubmodelElementByPathErrorResponse(
+		common.NewErrDenied("SMREPO-ADDSMEBYPATH-CHKDUP-ABACDENIED existing submodel element is not accessible under ABAC constraints"),
+	)
+
+	require.Equal(t, http.StatusForbidden, response.Code)
+}
+
 func TestGetOperationAsyncStatusReturnsRedirectWithLocation(t *testing.T) {
 	sut := NewSubmodelRepositoryAPIAPIService(persistencepostgresql.SubmodelDatabase{})
 

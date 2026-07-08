@@ -35,7 +35,11 @@ import (
 	commonmodel "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 )
 
-const externalURLKey = "general.externalUrl"
+const (
+	externalURLKey              = "general.externalUrl"
+	aasDescriptorInterface      = "AAS-3.0"
+	submodelDescriptorInterface = "SUBMODEL-3.0"
+)
 
 // RegistrySyncConfig controls repository-to-registry synchronization behavior and endpoint generation.
 type RegistrySyncConfig struct {
@@ -154,12 +158,12 @@ func (c RegistrySyncConfig) buildSubmodelDescriptor(submodel types.ISubmodel) (c
 
 func (c RegistrySyncConfig) buildAASDescriptorEndpoints(aasID string) []commonmodel.Endpoint {
 	encodedID := common.EncodeString(aasID)
-	return c.buildEndpoints("/shells/" + encodedID)
+	return c.buildEndpoints("/shells/"+encodedID, aasDescriptorInterface)
 }
 
 func (c RegistrySyncConfig) buildSubmodelDescriptorEndpoints(submodelID string) []commonmodel.Endpoint {
 	encodedID := common.EncodeString(submodelID)
-	return c.buildEndpoints("/submodels/" + encodedID)
+	return c.buildEndpoints("/submodels/"+encodedID, submodelDescriptorInterface)
 }
 
 func (c RegistrySyncConfig) buildEmbeddedSubmodelDescriptors(references []types.IReference) []commonmodel.SubmodelDescriptor {
@@ -202,12 +206,12 @@ func (c RegistrySyncConfig) buildEmbeddedSubmodelDescriptors(references []types.
 	return result
 }
 
-func (c RegistrySyncConfig) buildEndpoints(resourcePath string) []commonmodel.Endpoint {
+func (c RegistrySyncConfig) buildEndpoints(resourcePath string, endpointInterface string) []commonmodel.Endpoint {
 	endpoints := make([]commonmodel.Endpoint, 0, len(c.ExternalBaseURLs))
 	for _, externalBaseURL := range c.ExternalBaseURLs {
 		endpointURL := strings.TrimRight(externalBaseURL, "/") + resourcePath
 		endpoints = append(endpoints, commonmodel.Endpoint{
-			Interface: "AAS-3.0",
+			Interface: endpointInterface,
 			ProtocolInformation: commonmodel.ProtocolInformation{
 				Href:             endpointURL,
 				EndpointProtocol: protocolFromURL(externalBaseURL),

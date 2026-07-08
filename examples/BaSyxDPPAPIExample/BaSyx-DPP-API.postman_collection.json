@@ -1,59 +1,285 @@
 {
   "info": {
-    "_postman_id": "a2ef7c80-c60d-4d1f-99af-80a1f2d6b6df",
-    "name": "BaSyx DPP API Example",
-    "description": "Walkthrough scenarios for the BaSyx DPP API example. Start the Docker Compose stack from examples/BaSyxDPPAPIExample before running the requests.",
-    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+    "_postman_id": "f8b591ca-b837-4965-b4ad-9804d29b7419",
+    "name": "BaSyx DPP API - Local",
+    "description": "Requests for the local Docker Compose setup. Create a local Postman environment with the variables documented in README.md, select it, start `docker compose up -d`, then run the lifecycle requests in order. Content sections are dynamic top-level DPP properties that are not header fields, for example `batteryPassport`, `carbonFootprint`, `materialComposition`, `circularity`, and `supplyChain`. The service stores each content section as its own content submodel.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "_exporter_id": "18591521"
   },
   "item": [
     {
-      "name": "Scenario 1 - Create And Read A DPP",
+      "name": "Lifecycle",
       "item": [
         {
-          "name": "Check DPP API Health",
+          "name": "Create DPP",
           "event": [
             {
               "listen": "test",
               "script": {
-                "type": "text/javascript",
                 "exec": [
-                  "pm.test('DPP API is healthy', function () {",
-                  "    pm.response.to.have.status(200);",
-                  "});"
-                ]
+                  "pm.test('created or already exists', function () {",
+                  "  pm.expect([201, 409]).to.include(pm.response.code);",
+                  "});",
+                  "if (pm.response.code === 201) {",
+                  "  const body = pm.response.json();",
+                  "  pm.environment.set('dppId', body.digitalProductPassportId);",
+                  "  pm.environment.set('dppIdEncoded', encodeURIComponent(encodeURIComponent(body.digitalProductPassportId)));",
+                  "  pm.environment.set('historicalDate', new Date().toISOString());",
+                  "}"
+                ],
+                "type": "text/javascript",
+                "packages": {},
+                "requests": {}
               }
             }
           ],
           "request": {
-            "method": "GET",
-            "header": [],
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"digitalProductPassportId\": \"{{dppId}}\",\n  \"uniqueProductIdentifier\": \"{{productId}}\",\n  \"granularity\": \"Item\",\n  \"dppSchemaVersion\": \"EN18222:2026-v1.0\",\n  \"dppStatus\": \"Active\",\n  \"lastUpdate\": \"{{currentTimestamp}}\",\n  \"economicOperatorId\": \"did:example:operator:voltfabrik-gmbh\",\n  \"facilityId\": \"urn:epc:id:sgln:4012345.00001.0\",\n  \"contentSpecificationIds\": [\n    \"batteryPassport - IDTA-02029-1-0\",\n    \"carbonFootprint - IDTA-02023-1-0\",\n    \"materialComposition - IDTA-02030-1-0\",\n    \"circularity - IDTA-02031-1-0\",\n    \"supplyChain - IDTA-02032-1-0\"\n  ],\n  \"batteryPassport\": {\n    \"objectType\": \"DataElementCollection\",\n    \"dictionaryReference\": \"batteryPassport - IDTA-02029-1-0\",\n    \"productName\": \"BPX 92 kWh traction battery pack\",\n    \"manufacturerName\": \"VoltFabrik GmbH\",\n    \"manufacturingDate\": \"2026-05-18\",\n    \"batchNumber\": \"BPX-2026-W20-B17\",\n    \"serialNumbers\": [\n      \"BPX-2026-000184-A\",\n      \"BPX-2026-000184-B\",\n      \"BPX-2026-000184-C\",\n      \"BPX-2026-000184-D\"\n    ],\n    \"energyCapacityKWh\": 92.4,\n    \"nominalVoltageV\": 820,\n    \"cellChemistry\": \"NMC 811\",\n    \"massKg\": 612.8,\n    \"stateOfHealthPercent\": 99.1,\n    \"warrantyMonths\": 96,\n    \"operatingTemperatureRangeC\": {\n      \"minimum\": -30,\n      \"maximum\": 55\n    },\n    \"dimensionsMm\": {\n      \"length\": 2140,\n      \"width\": 1480,\n      \"height\": 165\n    },\n    \"safetyCertifications\": [\n      \"UN 38.3\",\n      \"IEC 62619\",\n      \"ISO 26262 ASIL-C\"\n    ],\n    \"manual\": {\n      \"url\": \"https://manufacturer.example/docs/bpx-92-installation-manual.pdf\",\n      \"contentType\": \"application/pdf\"\n    },\n    \"technicalDatasheet\": {\n      \"url\": \"https://manufacturer.example/docs/bpx-92-datasheet.json\",\n      \"contentType\": \"application/json\"\n    }\n  },\n  \"carbonFootprint\": {\n    \"objectType\": \"DataElementCollection\",\n    \"dictionaryReference\": \"carbonFootprint - IDTA-02023-1-0\",\n    \"declaredUnit\": \"1 battery pack\",\n    \"totalCarbonFootprintKgCO2e\": 4180.75,\n    \"calculationStandard\": \"ISO 14067:2018\",\n    \"verificationStatus\": \"third-party verified\",\n    \"lifecycleStages\": [\n      {\n        \"stage\": \"raw material extraction\",\n        \"valueKgCO2e\": 1210.4,\n        \"dataQuality\": \"measured and supplier-specific\"\n      },\n      {\n        \"stage\": \"cell manufacturing\",\n        \"valueKgCO2e\": 2195.9,\n        \"dataQuality\": \"primary site energy data\"\n      },\n      {\n        \"stage\": \"pack assembly\",\n        \"valueKgCO2e\": 512.2,\n        \"dataQuality\": \"metered facility allocation\"\n      },\n      {\n        \"stage\": \"inbound logistics\",\n        \"valueKgCO2e\": 262.25,\n        \"dataQuality\": \"distance-based calculation\"\n      }\n    ],\n    \"electricityMix\": {\n      \"renewableSharePercent\": 76.5,\n      \"country\": \"DE\",\n      \"referenceYear\": 2025\n    },\n    \"verificationReport\": {\n      \"url\": \"https://manufacturer.example/reports/bpx-2026-000184-carbon-verification.pdf\",\n      \"contentType\": \"application/pdf\"\n    }\n  },\n  \"materialComposition\": {\n    \"objectType\": \"DataElementCollection\",\n    \"dictionaryReference\": \"materialComposition - IDTA-02030-1-0\",\n    \"hazardousSubstancesPresent\": false,\n    \"criticalRawMaterials\": [\n      \"lithium\",\n      \"nickel\",\n      \"cobalt\",\n      \"natural graphite\"\n    ],\n    \"materials\": [\n      {\n        \"name\": \"aluminium\",\n        \"massKg\": 142.6,\n        \"recycledContentPercent\": 48.2,\n        \"supplierCountry\": \"DE\"\n      },\n      {\n        \"name\": \"copper\",\n        \"massKg\": 63.4,\n        \"recycledContentPercent\": 21.7,\n        \"supplierCountry\": \"PL\"\n      },\n      {\n        \"name\": \"nickel sulphate equivalent\",\n        \"massKg\": 71.8,\n        \"recycledContentPercent\": 6.1,\n        \"supplierCountry\": \"FI\"\n      },\n      {\n        \"name\": \"lithium carbonate equivalent\",\n        \"massKg\": 11.9,\n        \"recycledContentPercent\": 3.4,\n        \"supplierCountry\": \"PT\"\n      },\n      {\n        \"name\": \"polymer housing and separators\",\n        \"massKg\": 38.5,\n        \"recycledContentPercent\": 12.0,\n        \"supplierCountry\": \"CZ\"\n      }\n    ],\n    \"substanceCompliance\": {\n      \"reachCompliant\": true,\n      \"rohsCompliant\": true,\n      \"svhcAboveThreshold\": false\n    }\n  },\n  \"circularity\": {\n    \"objectType\": \"DataElementCollection\",\n    \"dictionaryReference\": \"circularity - IDTA-02031-1-0\",\n    \"repairabilityScore\": 8.1,\n    \"dismantlingTimeMinutes\": 46,\n    \"sparePartsAvailableUntil\": \"2036-12-31\",\n    \"recycledContentPercent\": 29.4,\n    \"recyclabilityPercent\": 87.2,\n    \"recommendedEndOfLifeRoute\": \"certified battery recycling with second-life assessment first\",\n    \"serviceOperations\": [\n      \"cell module replacement\",\n      \"battery management system firmware update\",\n      \"cooling plate reseal\",\n      \"high-voltage connector replacement\"\n    ],\n    \"dismantlingInstructions\": {\n      \"url\": \"https://manufacturer.example/docs/bpx-92-dismantling-instructions.pdf\",\n      \"contentType\": \"application/pdf\"\n    }\n  },\n  \"supplyChain\": {\n    \"objectType\": \"DataElementCollection\",\n    \"dictionaryReference\": \"supplyChain - IDTA-02032-1-0\",\n    \"finalAssemblySite\": \"VoltFabrik Plant Leipzig\",\n    \"tierOneSuppliers\": [\n      {\n        \"supplierId\": \"did:example:supplier:cellworks-fi\",\n        \"name\": \"CellWorks Finland Oy\",\n        \"component\": \"battery cells\",\n        \"country\": \"FI\",\n        \"auditStatus\": \"approved\"\n      },\n      {\n        \"supplierId\": \"did:example:supplier:thermoplate-cz\",\n        \"name\": \"ThermoPlate s.r.o.\",\n        \"component\": \"cooling plates\",\n        \"country\": \"CZ\",\n        \"auditStatus\": \"approved with findings\"\n      },\n      {\n        \"supplierId\": \"did:example:supplier:bmslogic-de\",\n        \"name\": \"BMS Logic GmbH\",\n        \"component\": \"battery management system\",\n        \"country\": \"DE\",\n        \"auditStatus\": \"approved\"\n      }\n    ],\n    \"dueDiligence\": {\n      \"policyVersion\": \"2026.2\",\n      \"riskAssessmentDate\": \"2026-04-28\",\n      \"highRiskFindingsOpen\": 0,\n      \"traceabilityCoveragePercent\": 94.7\n    },\n    \"transportRoutes\": [\n      {\n        \"from\": \"Tampere, FI\",\n        \"to\": \"Leipzig, DE\",\n        \"mode\": \"rail\",\n        \"distanceKm\": 1790\n      },\n      {\n        \"from\": \"Brno, CZ\",\n        \"to\": \"Leipzig, DE\",\n        \"mode\": \"truck\",\n        \"distanceKm\": 430\n      }\n    ]\n  }\n}\n"
+            },
             "url": {
-              "raw": "{{dppApiBaseUrl}}/health",
+              "raw": "{{baseUrl}}/v1/dpps",
               "host": [
-                "{{dppApiBaseUrl}}"
+                "{{baseUrl}}"
               ],
               "path": [
-                "health"
+                "v1",
+                "dpps"
+              ]
+            },
+            "description": "Creates a DPP with multiple large content sections. Run this before the read/update examples."
+          },
+          "response": []
+        },
+        {
+          "name": "Read DPP by DPP ID",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/dpps/{{dppIdEncoded}}?representation={{representation}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "dpps",
+                "{{dppIdEncoded}}"
+              ],
+              "query": [
+                {
+                  "key": "representation",
+                  "value": "{{representation}}"
+                }
               ]
             }
           },
           "response": []
         },
         {
-          "name": "Create Demo DPP",
+          "name": "Read DPP by DPP ID - Full Representation",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/dpps/{{dppIdEncoded}}?representation=full",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "dpps",
+                "{{dppIdEncoded}}"
+              ],
+              "query": [
+                {
+                  "key": "representation",
+                  "value": "full"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Patch DPP",
           "event": [
             {
               "listen": "test",
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('DPP is created or already exists', function () {",
-                  "    pm.expect([201, 409]).to.include(pm.response.code);",
+                  "pm.test('patched', function () {",
+                  "  pm.response.to.have.status(200);",
                   "});",
-                  "",
-                  "if (pm.response.code === 201) {",
-                  "    const response = pm.response.json();",
-                  "    pm.collectionVariables.set('dppId', response.digitalProductPassportId);",
+                  "pm.environment.set('updatedTimestamp', new Date().toISOString());"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/merge-patch+json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"dppStatus\": \"Active - field updated\",\n  \"carbonFootprint\": {\n    \"totalCarbonFootprintKgCO2e\": 4098.3,\n    \"verificationStatus\": \"third-party verified after supplier update\",\n    \"electricityMix\": {\n      \"renewableSharePercent\": 81.2,\n      \"country\": \"DE\",\n      \"referenceYear\": 2026\n    }\n  },\n  \"circularity\": {\n    \"repairabilityScore\": 8.4,\n    \"serviceOperations\": [\n      \"cell module replacement\",\n      \"battery management system firmware update\",\n      \"cooling plate reseal\",\n      \"high-voltage connector replacement\",\n      \"state-of-health diagnostic refresh\"\n    ]\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/v1/dpps/{{dppIdEncoded}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "dpps",
+                "{{dppIdEncoded}}"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete DPP",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/dpps/{{dppIdEncoded}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "dpps",
+                "{{dppIdEncoded}}"
+              ]
+            },
+            "description": "Deletes the sample DPP. Run this last if you want to clean up the created resource."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Lookup",
+      "item": [
+        {
+          "name": "Read DPP by Product ID",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/dppsByProductId/{{productIdEncoded}}?representation={{representation}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "dppsByProductId",
+                "{{productIdEncoded}}"
+              ],
+              "query": [
+                {
+                  "key": "representation",
+                  "value": "{{representation}}"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Read Historical DPP Version",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/dppsByIdAndDate/{{dppIdEncoded}}?date={{historicalDate}}&representation={{representation}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "dppsByIdAndDate",
+                "{{dppIdEncoded}}"
+              ],
+              "query": [
+                {
+                  "key": "date",
+                  "value": "{{historicalDate}}"
+                },
+                {
+                  "key": "representation",
+                  "value": "{{representation}}"
+                }
+              ]
+            },
+            "description": "Uses `historicalDate`. The create request sets this to the creation time so this can be used before or after patch/delete."
+          },
+          "response": []
+        },
+        {
+          "name": "Resolve Product IDs to DPP IDs",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('resolved', function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});",
+                  "if (pm.response.code === 200) {",
+                  "  const body = pm.response.json();",
+                  "  if (body.cursor) {",
+                  "    pm.environment.set('cursor', body.cursor);",
+                  "  }",
                   "}"
                 ]
               }
@@ -65,171 +291,20 @@
               {
                 "key": "Content-Type",
                 "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"digitalProductPassportId\": \"https://example.org/dpp/demo-product-001\",\n  \"uniqueProductIdentifier\": \"https://example.org/products/demo-product-001\",\n  \"granularity\": \"item\",\n  \"dppSchemaVersion\": \"1.0.0\",\n  \"dppStatus\": \"active\",\n  \"lastUpdate\": \"2026-06-11T12:00:00Z\",\n  \"economicOperatorId\": \"operator-123\",\n  \"facilityId\": \"facility-456\",\n  \"contentSpecificationIds\": [\n    \"technicalData-specification\"\n  ],\n  \"technicalData\": {\n    \"manufacturerName\": \"Example Manufacturing GmbH\",\n    \"warrantyMonths\": 24,\n    \"energyClass\": \"A\",\n    \"serialNumbers\": [\n      \"SN-001\",\n      \"SN-002\"\n    ],\n    \"dimensions\": {\n      \"widthMm\": 120,\n      \"heightMm\": 80\n    },\n    \"manual\": {\n      \"url\": \"https://example.org/manuals/demo-product-001.pdf\",\n      \"contentType\": \"application/pdf\"\n    }\n  }\n}"
-            },
-            "url": {
-              "raw": "{{dppApiBaseUrl}}/v1/dpps",
-              "host": [
-                "{{dppApiBaseUrl}}"
-              ],
-              "path": [
-                "v1",
-                "dpps"
-              ]
-            }
-          },
-          "response": []
-        },
-        {
-          "name": "Read Demo DPP - Compressed",
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('DPP is returned', function () {",
-                  "    pm.response.to.have.status(200);",
-                  "    const response = pm.response.json();",
-                  "    pm.expect(response.digitalProductPassportId).to.eql(pm.collectionVariables.get('dppId'));",
-                  "    pm.expect(response.technicalData.manufacturerName).to.eql('Example Manufacturing GmbH');",
-                  "});"
-                ]
-              }
-            }
-          ],
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": {
-              "raw": "{{dppApiBaseUrl}}/v1/dpps/{{encodedDppId}}",
-              "host": [
-                "{{dppApiBaseUrl}}"
-              ],
-              "path": [
-                "v1",
-                "dpps",
-                "{{encodedDppId}}"
-              ]
-            }
-          },
-          "response": []
-        },
-        {
-          "name": "Read Demo DPP - Full Representation",
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('Full DPP representation is returned', function () {",
-                  "    pm.response.to.have.status(200);",
-                  "    pm.expect(pm.response.json().digitalProductPassportId).to.eql(pm.collectionVariables.get('dppId'));",
-                  "});"
-                ]
-              }
-            }
-          ],
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": {
-              "raw": "{{dppApiBaseUrl}}/v1/dpps/{{encodedDppId}}?representation=full",
-              "host": [
-                "{{dppApiBaseUrl}}"
-              ],
-              "path": [
-                "v1",
-                "dpps",
-                "{{encodedDppId}}"
-              ],
-              "query": [
-                {
-                  "key": "representation",
-                  "value": "full"
-                }
-              ]
-            }
-          },
-          "response": []
-        }
-      ]
-    },
-    {
-      "name": "Scenario 2 - Product Lookup And Element Updates",
-      "item": [
-        {
-          "name": "Read DPP By Product ID",
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('DPP is resolved by product ID', function () {",
-                  "    pm.response.to.have.status(200);",
-                  "    const response = pm.response.json();",
-                  "    pm.expect(response.uniqueProductIdentifier).to.eql(pm.collectionVariables.get('productId'));",
-                  "});"
-                ]
-              }
-            }
-          ],
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": {
-              "raw": "{{dppApiBaseUrl}}/v1/dppsByProductId/{{encodedProductId}}",
-              "host": [
-                "{{dppApiBaseUrl}}"
-              ],
-              "path": [
-                "v1",
-                "dppsByProductId",
-                "{{encodedProductId}}"
-              ]
-            }
-          },
-          "response": []
-        },
-        {
-          "name": "Resolve Product IDs To DPP IDs",
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('DPP ID is included in product lookup result', function () {",
-                  "    pm.response.to.have.status(200);",
-                  "    const response = pm.response.json();",
-                  "    pm.expect(response.items).to.include(pm.collectionVariables.get('dppId'));",
-                  "});"
-                ]
-              }
-            }
-          ],
-          "request": {
-            "method": "POST",
-            "header": [
+              },
               {
-                "key": "Content-Type",
+                "key": "Accept",
                 "value": "application/json"
               }
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"productIds\": [\n    \"{{productId}}\"\n  ]\n}"
+              "raw": "{\n  \"productIds\": [\n    \"{{productId}}\",\n    \"urn:epc:id:sgtin:4012345.077889.2026000185\",\n    \"urn:epc:id:sgtin:4012345.077889.2026000186\",\n    \"urn:epc:id:sgtin:4012345.077889.2026000187\",\n    \"urn:epc:id:sgtin:4012345.077889.2026000188\"\n  ]\n}"
             },
             "url": {
-              "raw": "{{dppApiBaseUrl}}/v1/dppsByProductIds?limit=10",
+              "raw": "{{baseUrl}}/v1/dppsByProductIds?limit={{limit}}&cursor={{cursor}}",
               "host": [
-                "{{dppApiBaseUrl}}"
+                "{{baseUrl}}"
               ],
               "path": [
                 "v1",
@@ -238,124 +313,12 @@
               "query": [
                 {
                   "key": "limit",
-                  "value": "10"
+                  "value": "{{limit}}"
+                },
+                {
+                  "key": "cursor",
+                  "value": "{{cursor}}"
                 }
-              ]
-            }
-          },
-          "response": []
-        },
-        {
-          "name": "Read Manufacturer Name Element",
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('Manufacturer element is returned', function () {",
-                  "    pm.response.to.have.status(200);",
-                  "    pm.expect(pm.response.json()).to.eql('Example Manufacturing GmbH');",
-                  "});"
-                ]
-              }
-            }
-          ],
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": {
-              "raw": "{{dppApiBaseUrl}}/v1/dpps/{{encodedDppId}}/elements/technicalData/manufacturerName",
-              "host": [
-                "{{dppApiBaseUrl}}"
-              ],
-              "path": [
-                "v1",
-                "dpps",
-                "{{encodedDppId}}",
-                "elements",
-                "technicalData",
-                "manufacturerName"
-              ]
-            }
-          },
-          "response": []
-        },
-        {
-          "name": "Update Energy Class Element",
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('Energy class is updated', function () {",
-                  "    pm.expect([200, 204]).to.include(pm.response.code);",
-                  "});"
-                ]
-              }
-            }
-          ],
-          "request": {
-            "method": "PATCH",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "\"{{updatedEnergyClass}}\""
-            },
-            "url": {
-              "raw": "{{dppApiBaseUrl}}/v1/dpps/{{encodedDppId}}/elements/technicalData/energyClass",
-              "host": [
-                "{{dppApiBaseUrl}}"
-              ],
-              "path": [
-                "v1",
-                "dpps",
-                "{{encodedDppId}}",
-                "elements",
-                "technicalData",
-                "energyClass"
-              ]
-            }
-          },
-          "response": []
-        },
-        {
-          "name": "Verify Energy Class Element",
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('Updated energy class is returned', function () {",
-                  "    pm.response.to.have.status(200);",
-                  "    pm.expect(pm.response.json()).to.eql(pm.collectionVariables.get('updatedEnergyClass'));",
-                  "});"
-                ]
-              }
-            }
-          ],
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": {
-              "raw": "{{dppApiBaseUrl}}/v1/dpps/{{encodedDppId}}/elements/technicalData/energyClass",
-              "host": [
-                "{{dppApiBaseUrl}}"
-              ],
-              "path": [
-                "v1",
-                "dpps",
-                "{{encodedDppId}}",
-                "elements",
-                "technicalData",
-                "energyClass"
               ]
             }
           },
@@ -364,73 +327,175 @@
       ]
     },
     {
-      "name": "Cleanup",
+      "name": "Fine Granular",
       "item": [
         {
-          "name": "Delete Demo DPP",
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('DPP is deleted or already absent', function () {",
-                  "    pm.expect([200, 204, 404]).to.include(pm.response.code);",
-                  "});"
-                ]
-              }
-            }
-          ],
+          "name": "Read Data Element",
           "request": {
-            "method": "DELETE",
-            "header": [],
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
             "url": {
-              "raw": "{{dppApiBaseUrl}}/v1/dpps/{{encodedDppId}}",
+              "raw": "{{baseUrl}}/v1/dpps/{{dppIdEncoded}}/elements/{{elementPath}}?representation={{representation}}",
               "host": [
-                "{{dppApiBaseUrl}}"
+                "{{baseUrl}}"
               ],
               "path": [
                 "v1",
                 "dpps",
-                "{{encodedDppId}}"
+                "{{dppIdEncoded}}",
+                "elements",
+                "{{elementPath}}"
+              ],
+              "query": [
+                {
+                  "key": "representation",
+                  "value": "{{representation}}"
+                }
               ]
-            }
+            },
+            "description": "Default element path reads `batteryPassport/energyCapacityKWh`. You can change `elementPath` to nested values such as `batteryPassport/dimensionsMm.length`."
+          },
+          "response": []
+        },
+        {
+          "name": "Update Data Element - Scalar",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "93.1"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/v1/dpps/{{dppIdEncoded}}/elements/batteryPassport/energyCapacityKWh",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "dpps",
+                "{{dppIdEncoded}}",
+                "elements",
+                "batteryPassport",
+                "energyCapacityKWh"
+              ]
+            },
+            "description": "The implementation accepts raw JSON values for element updates. This updates a scalar number."
+          },
+          "response": []
+        },
+        {
+          "name": "Update Data Element - Collection",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"minimum\": -35,\n  \"maximum\": 60,\n  \"testStandard\": \"IEC 60068-2\",\n  \"validatedAt\": \"{{currentTimestamp}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/v1/dpps/{{dppIdEncoded}}/elements/batteryPassport/operatingTemperatureRangeC",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "dpps",
+                "{{dppIdEncoded}}",
+                "elements",
+                "batteryPassport",
+                "operatingTemperatureRangeC"
+              ]
+            },
+            "description": "Updates a nested collection-style element with a larger JSON object."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Utility",
+      "item": [
+        {
+          "name": "OpenAPI YAML",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/yaml"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api-docs/openapi.yaml",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api-docs",
+                "openapi.yaml"
+              ]
+            },
+            "description": "Served by the local API container and useful for checking the active spec."
           },
           "response": []
         }
       ]
     }
   ],
-  "variable": [
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{bearerToken}}",
+        "type": "string"
+      }
+    ]
+  },
+  "event": [
     {
-      "key": "dppApiBaseUrl",
-      "value": "http://localhost:8080",
-      "type": "string"
-    },
-    {
-      "key": "dppId",
-      "value": "https://example.org/dpp/demo-product-001",
-      "type": "string"
-    },
-    {
-      "key": "encodedDppId",
-      "value": "https%253A%252F%252Fexample.org%252Fdpp%252Fdemo-product-001",
-      "type": "string"
-    },
-    {
-      "key": "productId",
-      "value": "https://example.org/products/demo-product-001",
-      "type": "string"
-    },
-    {
-      "key": "encodedProductId",
-      "value": "https%253A%252F%252Fexample.org%252Fproducts%252Fdemo-product-001",
-      "type": "string"
-    },
-    {
-      "key": "updatedEnergyClass",
-      "value": "B",
-      "type": "string"
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "const dppId = pm.environment.get('dppId');",
+          "const productId = pm.environment.get('productId');",
+          "if (dppId) {",
+          "  pm.environment.set('dppIdEncoded', encodeURIComponent(encodeURIComponent(dppId)));",
+          "}",
+          "if (productId) {",
+          "  pm.environment.set('productIdEncoded', encodeURIComponent(encodeURIComponent(productId)));",
+          "}",
+          "pm.environment.set('currentTimestamp', new Date().toISOString());",
+          "if (!pm.environment.get('historicalDate')) {",
+          "  pm.environment.set('historicalDate', new Date().toISOString());",
+          "}"
+        ]
+      }
     }
   ]
 }

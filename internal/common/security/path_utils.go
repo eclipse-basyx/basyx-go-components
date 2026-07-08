@@ -67,6 +67,11 @@ func stripBasePath(basePath, reqPath string) string {
 	return ensureLeadingSlash(reqPath)
 }
 
+func isNonRootTrailingSlashPath(p string) bool {
+	p = ensureLeadingSlash(p)
+	return p != "/" && strings.HasSuffix(p, "/")
+}
+
 func ensureLeadingSlash(p string) string {
 	if p == "" {
 		return "/"

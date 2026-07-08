@@ -3,7 +3,7 @@
     "context": "Health endpoint - anonymous allowed",
     "token": null,
     "method": "GET",
-    "endpoint": "http://localhost:6005/health",
+    "endpoint": "{{BASYX_IT_API_URL}}/health",
     "shouldMatch": "expected/expectedHealthEndpoint.json",
     "expectedStatus": 200
   },
@@ -12,7 +12,7 @@
     "context": "POST Submodel A - ANON - DENIED",
     "token": null,
     "method": "POST",
-    "endpoint": "http://localhost:6005/submodel-descriptors",
+    "endpoint": "{{BASYX_IT_API_URL}}/submodel-descriptors",
     "data": "postBody/simple_smd_a.json",
     "expectedStatus": 403
   },
@@ -20,7 +20,7 @@
     "context": "POST Submodel A - User X - ALLOWED",
     "token": { "user": "userx", "password": "pwd" },
     "method": "POST",
-    "endpoint": "http://localhost:6005/submodel-descriptors",
+    "endpoint": "{{BASYX_IT_API_URL}}/submodel-descriptors",
     "data": "postBody/simple_smd_a.json",
     "expectedStatus": 201
   },
@@ -28,7 +28,7 @@
     "context": "POST Submodel B - User X - DENIED",
     "token": { "user": "userx", "password": "pwd" },
     "method": "POST",
-    "endpoint": "http://localhost:6005/submodel-descriptors",
+    "endpoint": "{{BASYX_IT_API_URL}}/submodel-descriptors",
     "data": "postBody/simple_smd_b.json",
     "expectedStatus": 403
   },
@@ -37,7 +37,7 @@
     "action": "ASSERT_BULK_FAILURE",
     "token": { "user": "userx", "password": "pwd" },
     "method": "POST",
-    "endpoint": "http://localhost:6005/bulk/submodel-descriptors",
+    "endpoint": "{{BASYX_IT_API_URL}}/bulk/submodel-descriptors",
     "data": "postBody/bulk_create_smd_b.json",
     "expectedStatus": 202,
     "expectedBulkFailureStatus": 403,
@@ -48,7 +48,7 @@
     "context": "POST Submodel D - User X - ALLOWED",
     "token": { "user": "userx", "password": "pwd" },
     "method": "POST",
-    "endpoint": "http://localhost:6005/submodel-descriptors",
+    "endpoint": "{{BASYX_IT_API_URL}}/submodel-descriptors",
     "data": "postBody/simple_smd_d.json",
     "expectedStatus": 201
   },
@@ -56,7 +56,7 @@
     "context": "POST Submodel B - User Y - ALLOWED",
     "token": { "user": "usery", "password": "pwd" },
     "method": "POST",
-    "endpoint": "http://localhost:6005/submodel-descriptors",
+    "endpoint": "{{BASYX_IT_API_URL}}/submodel-descriptors",
     "data": "postBody/simple_smd_b.json",
     "expectedStatus": 201
   },
@@ -64,7 +64,7 @@
     "context": "POST Submodel C - User Y - ALLOWED",
     "token": { "user": "usery", "password": "pwd" },
     "method": "POST",
-    "endpoint": "http://localhost:6005/submodel-descriptors",
+    "endpoint": "{{BASYX_IT_API_URL}}/submodel-descriptors",
     "data": "postBody/simple_smd_c.json",
     "expectedStatus": 201
   },
@@ -72,7 +72,7 @@
     "context": "POST Submodel X - ADMIN - ALLOWED",
     "token": { "user": "admin", "password": "pwd" },
     "method": "POST",
-    "endpoint": "http://localhost:6005/submodel-descriptors",
+    "endpoint": "{{BASYX_IT_API_URL}}/submodel-descriptors",
     "data": "postBody/simple_smd_x.json",
     "expectedStatus": 201
   },
@@ -81,22 +81,29 @@
     "context": "GET Submodel A - ANON - ALLOWED",
     "token": null,
     "method": "GET",
-    "endpoint": "http://localhost:6005/submodel-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9YL1NNLUE",
+    "endpoint": "{{BASYX_IT_API_URL}}/submodel-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9YL1NNLUE",
     "shouldMatch": "expected/expected_smd_a.json",
     "expectedStatus": 200
+  },
+  {
+    "context": "GET Submodel A trailing slash - ANON - NOT FOUND",
+    "token": null,
+    "method": "GET",
+    "endpoint": "{{BASYX_IT_API_URL}}/submodel-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9YL1NNLUE/",
+    "expectedStatus": 404
   },
   {
     "context": "GET Submodel B - ANON - DENIED",
     "token": null,
     "method": "GET",
-    "endpoint": "http://localhost:6005/submodel-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9YL1NNLUI",
+    "endpoint": "{{BASYX_IT_API_URL}}/submodel-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9YL1NNLUI",
     "expectedStatus": 404
   },
   {
     "context": "GET Submodel B - User A - ALLOWED",
     "token": { "user": "usera", "password": "pwd" },
     "method": "GET",
-    "endpoint": "http://localhost:6005/submodel-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9YL1NNLUI",
+    "endpoint": "{{BASYX_IT_API_URL}}/submodel-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9YL1NNLUI",
     "shouldMatch": "expected/expected_smd_b.json",
     "expectedStatus": 200
   },
@@ -104,14 +111,14 @@
     "context": "GET Submodel C - User A - DENIED",
     "token": { "user": "usera", "password": "pwd" },
     "method": "GET",
-    "endpoint": "http://localhost:6005/submodel-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9YL1NNLUM",
+    "endpoint": "{{BASYX_IT_API_URL}}/submodel-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9YL1NNLUM",
     "expectedStatus": 404
   },
   {
     "context": "GET Submodel D - User B - ALLOWED",
     "token": { "user": "userb", "password": "pwd" },
     "method": "GET",
-    "endpoint": "http://localhost:6005/submodel-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9YL1NNLUQ",
+    "endpoint": "{{BASYX_IT_API_URL}}/submodel-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9YL1NNLUQ",
     "shouldMatch": "expected/expected_smd_d.json",
     "expectedStatus": 200
   },
@@ -119,14 +126,14 @@
     "context": "GET Submodel X - User B - DENIED",
     "token": { "user": "userb", "password": "pwd" },
     "method": "GET",
-    "endpoint": "http://localhost:6005/submodel-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9YL1NNLVg",
+    "endpoint": "{{BASYX_IT_API_URL}}/submodel-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9YL1NNLVg",
     "expectedStatus": 404
   },
   {
     "context": "GET Submodel X - ADMIN - ALLOWED",
     "token": { "user": "admin", "password": "pwd" },
     "method": "GET",
-    "endpoint": "http://localhost:6005/submodel-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9YL1NNLVg",
+    "endpoint": "{{BASYX_IT_API_URL}}/submodel-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9YL1NNLVg",
     "shouldMatch": "expected/expected_smd_x.json",
     "expectedStatus": 200
   },
@@ -135,24 +142,38 @@
     "context": "GET ALL Submodels - ANON - ALLOWED",
     "token": null,
     "method": "GET",
-    "endpoint": "http://localhost:6005/submodel-descriptors",
+    "endpoint": "{{BASYX_IT_API_URL}}/submodel-descriptors",
     "shouldMatch": "expected/expectedSMDAnon.json",
     "expectedStatus": 200
+  },
+  {
+    "context": "GET ALL Submodels trailing slash - ANON - NOT FOUND",
+    "token": null,
+    "method": "GET",
+    "endpoint": "{{BASYX_IT_API_URL}}/submodel-descriptors/",
+    "expectedStatus": 404
   },
   {
     "context": "GET /submodel-descriptors - ANON - filtered",
     "action": "ASSERT_RECENT_CHANGE_IDS",
     "token": null,
     "method": "GET",
-    "endpoint": "http://localhost:6005/submodel-descriptors?limit=20",
+    "endpoint": "{{BASYX_IT_API_URL}}/submodel-descriptors?limit=20",
     "shouldMatch": "expected/expectedRecentChangesAnonDescriptorIDs.json",
     "expectedStatus": 200
+  },
+  {
+    "context": "GET /submodel-descriptors/ - ANON - NOT FOUND",
+    "token": null,
+    "method": "GET",
+    "endpoint": "{{BASYX_IT_API_URL}}/submodel-descriptors/?limit=20",
+    "expectedStatus": 404
   },
   {
     "context": "GET ALL Submodels - User A - ALLOWED",
     "token": { "user": "usera", "password": "pwd" },
     "method": "GET",
-    "endpoint": "http://localhost:6005/submodel-descriptors",
+    "endpoint": "{{BASYX_IT_API_URL}}/submodel-descriptors",
     "shouldMatch": "expected/expectedSMDUserA.json",
     "expectedStatus": 200
   },
@@ -161,7 +182,7 @@
     "action": "ASSERT_RECENT_CHANGE_IDS",
     "token": { "user": "usera", "password": "pwd" },
     "method": "GET",
-    "endpoint": "http://localhost:6005/submodel-descriptors?limit=20",
+    "endpoint": "{{BASYX_IT_API_URL}}/submodel-descriptors?limit=20",
     "shouldMatch": "expected/expectedRecentChangesUserADescriptorIDs.json",
     "expectedStatus": 200
   },
@@ -169,7 +190,7 @@
     "context": "GET ALL Submodels - User B - ALLOWED",
     "token": { "user": "userb", "password": "pwd" },
     "method": "GET",
-    "endpoint": "http://localhost:6005/submodel-descriptors",
+    "endpoint": "{{BASYX_IT_API_URL}}/submodel-descriptors",
     "shouldMatch": "expected/expectedSMDUserB.json",
     "expectedStatus": 200
   },
@@ -178,7 +199,7 @@
     "action": "ASSERT_RECENT_CHANGE_IDS",
     "token": { "user": "userb", "password": "pwd" },
     "method": "GET",
-    "endpoint": "http://localhost:6005/submodel-descriptors?limit=20",
+    "endpoint": "{{BASYX_IT_API_URL}}/submodel-descriptors?limit=20",
     "shouldMatch": "expected/expectedRecentChangesUserBDescriptorIDs.json",
     "expectedStatus": 200
   },
@@ -186,7 +207,7 @@
     "context": "GET ALL Submodels - User X - ALLOWED",
     "token": { "user": "userx", "password": "pwd" },
     "method": "GET",
-    "endpoint": "http://localhost:6005/submodel-descriptors",
+    "endpoint": "{{BASYX_IT_API_URL}}/submodel-descriptors",
     "shouldMatch": "expected/expectedSMDUserX.json",
     "expectedStatus": 200
   },
@@ -194,7 +215,7 @@
     "context": "GET ALL Submodels - User Y - ALLOWED",
     "token": { "user": "usery", "password": "pwd" },
     "method": "GET",
-    "endpoint": "http://localhost:6005/submodel-descriptors",
+    "endpoint": "{{BASYX_IT_API_URL}}/submodel-descriptors",
     "shouldMatch": "expected/expectedSMDUserY.json",
     "expectedStatus": 200
   },
@@ -202,7 +223,7 @@
     "context": "GET ALL Submodels - ADMIN - ALLOWED",
     "token": { "user": "admin", "password": "pwd" },
     "method": "GET",
-    "endpoint": "http://localhost:6005/submodel-descriptors",
+    "endpoint": "{{BASYX_IT_API_URL}}/submodel-descriptors",
     "shouldMatch": "expected/expectedSMDAdmin.json",
     "expectedStatus": 200
   },
@@ -211,7 +232,7 @@
     "action": "ASSERT_RECENT_CHANGE_IDS",
     "token": { "user": "admin", "password": "pwd" },
     "method": "GET",
-    "endpoint": "http://localhost:6005/submodel-descriptors?limit=20",
+    "endpoint": "{{BASYX_IT_API_URL}}/submodel-descriptors?limit=20",
     "shouldMatch": "expected/expectedRecentChangesAdminDescriptorIDs.json",
     "expectedStatus": 200
   },
@@ -220,7 +241,7 @@
     "context": "PUT Submodel X - ADMIN - ALLOWED",
     "token": { "user": "admin", "password": "pwd" },
     "method": "PUT",
-    "endpoint": "http://localhost:6005/submodel-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9YL1NNLVg",
+    "endpoint": "{{BASYX_IT_API_URL}}/submodel-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9YL1NNLVg",
     "data": "postBody/simple_smd_x_updated.json",
     "expectedStatus": 204
   },
@@ -228,7 +249,7 @@
     "context": "GET Submodel X - ADMIN - Updated",
     "token": { "user": "admin", "password": "pwd" },
     "method": "GET",
-    "endpoint": "http://localhost:6005/submodel-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9YL1NNLVg",
+    "endpoint": "{{BASYX_IT_API_URL}}/submodel-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9YL1NNLVg",
     "shouldMatch": "postBody/simple_smd_x_updated.json",
     "expectedStatus": 200
   },
@@ -236,14 +257,14 @@
     "context": "DELETE Submodel X - ADMIN - ALLOWED",
     "token": { "user": "admin", "password": "pwd" },
     "method": "DELETE",
-    "endpoint": "http://localhost:6005/submodel-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9YL1NNLVg",
+    "endpoint": "{{BASYX_IT_API_URL}}/submodel-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9YL1NNLVg",
     "expectedStatus": 204
   },
   {
     "context": "GET Submodel X - ADMIN - After Delete",
     "token": { "user": "admin", "password": "pwd" },
     "method": "GET",
-    "endpoint": "http://localhost:6005/submodel-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9YL1NNLVg",
+    "endpoint": "{{BASYX_IT_API_URL}}/submodel-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9YL1NNLVg",
     "expectedStatus": 404
   }
 ]

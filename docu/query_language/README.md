@@ -51,17 +51,17 @@ OR with NOT fragment]
 ## Core components
 
 - Query model
-  - [internal/common/model/grammar/query.go](internal/common/model/grammar/query.go)
+  - [internal/common/model/grammar/query.go](../../internal/common/model/grammar/query.go)
 - Logical expression AST
-  - [internal/common/model/grammar/logical_expression.go](internal/common/model/grammar/logical_expression.go)
+  - [internal/common/model/grammar/logical_expression.go](../../internal/common/model/grammar/logical_expression.go)
 - Simplification (partial evaluation)
-  - [internal/common/model/grammar/logical_expression_simplify_backend.go](internal/common/model/grammar/logical_expression_simplify_backend.go)
+  - [internal/common/model/grammar/logical_expression_simplify_backend.go](../../internal/common/model/grammar/logical_expression_simplify_backend.go)
 - SQL conversion and fragment guards
-  - [internal/common/model/grammar/logical_expression_to_sql.go](internal/common/model/grammar/logical_expression_to_sql.go)
+  - [internal/common/model/grammar/logical_expression_to_sql.go](../../internal/common/model/grammar/logical_expression_to_sql.go)
 - Field and fragment resolution
-  - [internal/common/model/grammar/fieldidentifier_processing.go](internal/common/model/grammar/fieldidentifier_processing.go)
-  - [internal/common/model/grammar/field_column_mapping.go](internal/common/model/grammar/field_column_mapping.go)
-  - [internal/common/model/grammar/fragment_string_pattern.go](internal/common/model/grammar/fragment_string_pattern.go)
+  - [internal/common/model/grammar/fieldidentifier_processing.go](../../internal/common/model/grammar/fieldidentifier_processing.go)
+  - [internal/common/model/grammar/field_column_mapping.go](../../internal/common/model/grammar/field_column_mapping.go)
+  - [internal/common/model/grammar/fragment_string_pattern.go](../../internal/common/model/grammar/fragment_string_pattern.go)
 
 ## Step-by-step details
 
@@ -71,8 +71,8 @@ OR with NOT fragment]
 - Validation enforces operator structure (for example, $and and $or sizes, comparison operand counts).
 
 Key types:
-- QueryWrapper and Query in [internal/common/model/grammar/query.go](internal/common/model/grammar/query.go)
-- LogicalExpression in [internal/common/model/grammar/logical_expression.go](internal/common/model/grammar/logical_expression.go)
+- QueryWrapper and Query in [internal/common/model/grammar/query.go](../../internal/common/model/grammar/query.go)
+- LogicalExpression in [internal/common/model/grammar/logical_expression.go](../../internal/common/model/grammar/logical_expression.go)
 
 ### 2) Simplify the logical expression
 
@@ -88,8 +88,8 @@ Implicit casts:
 - When disabled, mismatched comparisons remain undecided or fail validation downstream.
 
 Key functions:
-- SimplifyForBackendFilterWithOptions in [internal/common/model/grammar/logical_expression_simplify_backend.go](internal/common/model/grammar/logical_expression_simplify_backend.go)
-- SimplifyForBackendFilterNoResolver in [internal/common/model/grammar/logical_expression_simplify_backend.go](internal/common/model/grammar/logical_expression_simplify_backend.go)
+- SimplifyForBackendFilterWithOptions in [internal/common/model/grammar/logical_expression_simplify_backend.go](../../internal/common/model/grammar/logical_expression_simplify_backend.go)
+- SimplifyForBackendFilterNoResolver in [internal/common/model/grammar/logical_expression_simplify_backend.go](../../internal/common/model/grammar/logical_expression_simplify_backend.go)
 
 ### 3) Resolve attributes
 
@@ -98,8 +98,8 @@ Key functions:
 - In ABAC, attributes are resolved from claims and time globals.
 
 Key references:
-- AttributeResolver usage in [internal/common/model/grammar/logical_expression_simplify_backend.go](internal/common/model/grammar/logical_expression_simplify_backend.go)
-- Claim and global resolution in [internal/common/security/abac_engine_attributes.go](internal/common/security/abac_engine_attributes.go)
+- AttributeResolver usage in [internal/common/model/grammar/logical_expression_simplify_backend.go](../../internal/common/model/grammar/logical_expression_simplify_backend.go)
+- Claim and global resolution in [internal/common/security/abac_engine_attributes.go](../../internal/common/security/abac_engine_attributes.go)
 
 ### 4) Resolve field identifiers
 
@@ -108,9 +108,9 @@ Key references:
 - Fragment identifiers resolve to bindings only, enabling fragment guards.
 
 Key functions:
-- ResolveScalarFieldToSQL in [internal/common/model/grammar/fieldidentifier_processing.go](internal/common/model/grammar/fieldidentifier_processing.go)
-- ResolveFragmentFieldToSQL in [internal/common/model/grammar/fieldidentifier_processing.go](internal/common/model/grammar/fieldidentifier_processing.go)
-- ResolveAASQLFieldToSQLColumn in [internal/common/model/grammar/field_column_mapping.go](internal/common/model/grammar/field_column_mapping.go)
+- ResolveScalarFieldToSQL in [internal/common/model/grammar/fieldidentifier_processing.go](../../internal/common/model/grammar/fieldidentifier_processing.go)
+- ResolveFragmentFieldToSQL in [internal/common/model/grammar/fieldidentifier_processing.go](../../internal/common/model/grammar/fieldidentifier_processing.go)
+- ResolveAASQLFieldToSQLColumn in [internal/common/model/grammar/field_column_mapping.go](../../internal/common/model/grammar/field_column_mapping.go)
 
 Beginner notes:
 - Think of a field identifier as a path inside a JSON-like object, but mapped to SQL columns.
@@ -129,8 +129,8 @@ Example mappings:
 - When no collector is provided, the expression is built with direct SQL conditions and bindings.
 
 Key functions:
-- EvaluateToExpression in [internal/common/model/grammar/logical_expression_to_sql.go](internal/common/model/grammar/logical_expression_to_sql.go)
-- EvaluateToExpressionWithNegatedFragments in [internal/common/model/grammar/logical_expression_to_sql.go](internal/common/model/grammar/logical_expression_to_sql.go)
+- EvaluateToExpression in [internal/common/model/grammar/logical_expression_to_sql.go](../../internal/common/model/grammar/logical_expression_to_sql.go)
+- EvaluateToExpressionWithNegatedFragments in [internal/common/model/grammar/logical_expression_to_sql.go](../../internal/common/model/grammar/logical_expression_to_sql.go)
 
 ### 6) Combine expressions and filters
 
@@ -139,8 +139,8 @@ Key functions:
 - When multiple filters target different fragments, each fragment gets its own logical expression tree.
 
 Key helpers:
-- QueryFilter merging in [internal/common/security/authorize.go](internal/common/security/authorize.go)
-- Fragment matching in [internal/common/security/abac_engine.go](internal/common/security/abac_engine.go)
+- QueryFilter merging in [internal/common/security/authorize.go](../../internal/common/security/authorize.go)
+- Fragment matching in [internal/common/security/abac_engine.go](../../internal/common/security/abac_engine.go)
 
 ## Combination formulas (detailed)
 
@@ -214,7 +214,7 @@ Normalized form (conceptual):
 If the field is stored as text, an implicit cast converts it to numeric before the comparison.
 
 This is controlled by `SimplifyOptions.EnableImplicitCasts` in
-[internal/common/model/grammar/logical_expression_simplify_backend.go](internal/common/model/grammar/logical_expression_simplify_backend.go).
+[internal/common/model/grammar/logical_expression_simplify_backend.go](../../internal/common/model/grammar/logical_expression_simplify_backend.go).
 
 ### Attribute resolution
 
@@ -276,7 +276,7 @@ where $x$ is a right (for example `CREATE` or `UPDATE`) and $R_x$ are matching
 rules that grant that right. Missing right-specific formulas default to
 `{ "$boolean": false }`.
 
-This logic is implemented in [internal/common/security/abac_engine.go](internal/common/security/abac_engine.go).
+This logic is implemented in [internal/common/security/abac_engine.go](../../internal/common/security/abac_engine.go).
 
 Example with two rules:
 
@@ -342,7 +342,7 @@ $$
 F'_{k} = F_{k} \land Q_{k}
 $$
 
-This logic is implemented in [internal/common/security/authorize.go](internal/common/security/authorize.go).
+This logic is implemented in [internal/common/security/authorize.go](../../internal/common/security/authorize.go).
 
 Example (merge):
 
@@ -425,13 +425,13 @@ Scope:
 - Mask flag projections keep collector-based translation behavior.
 
 Implementation reference:
-- AddFilterQueryFromContext in [internal/common/security/filter_helpers.go](internal/common/security/filter_helpers.go)
-- buildFragmentMaskConditionWithOptions in [internal/common/security/filter_helpers.go](internal/common/security/filter_helpers.go)
-- fragmentEndsWithArraySegment in [internal/common/security/filter_helpers.go](internal/common/security/filter_helpers.go)
+- AddFilterQueryFromContext in [internal/common/security/filter_helpers.go](../../internal/common/security/filter_helpers.go)
+- buildFragmentMaskConditionWithOptions in [internal/common/security/filter_helpers.go](../../internal/common/security/filter_helpers.go)
+- fragmentEndsWithArraySegment in [internal/common/security/filter_helpers.go](../../internal/common/security/filter_helpers.go)
 
 Implementation reference:
-- EvaluateToExpressionWithNegatedFragments in [internal/common/model/grammar/logical_expression_to_sql.go](internal/common/model/grammar/logical_expression_to_sql.go)
-- ResolveFragmentFieldToSQL in [internal/common/model/grammar/fieldidentifier_processing.go](internal/common/model/grammar/fieldidentifier_processing.go)
+- EvaluateToExpressionWithNegatedFragments in [internal/common/model/grammar/logical_expression_to_sql.go](../../internal/common/model/grammar/logical_expression_to_sql.go)
+- ResolveFragmentFieldToSQL in [internal/common/model/grammar/fieldidentifier_processing.go](../../internal/common/model/grammar/fieldidentifier_processing.go)
 
 Beginner notes:
 - A fragment identifies an array position, not a single scalar value.
@@ -469,6 +469,6 @@ If you add a fragment filter (example fragment: $aasdesc#specificAssetIds[2]):
 
 ## Related tests
 
-- SQL conversion tests in [internal/common/model/grammar](internal/common/model/grammar)
+- SQL conversion tests in [internal/common/model/grammar](../../internal/common/model/grammar)
   - logical_expression_to_sql_*_test.go
   - logical_expression_simplify_backend.go tests

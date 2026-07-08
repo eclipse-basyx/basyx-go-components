@@ -13,16 +13,10 @@ This document explains the structure and purpose of each major component in the 
 - **internal/**
   - Core business logic, persistence, and integration tests.
   - Organized by domain (e.g., `aasregistry`, `submodelrepository`, `discoveryservice`).
-  - Each domain contains:
-    - `api/`: Service layer, request/response handling, endpoint logic.
-    - `persistence/`: Database access, repositories, file handlers.
-    - `model/`: Data structures and types for the domain.
-    - `benchmark_results/`, `integration_tests/`: Performance and integration test suites.
-    - `security/`, `testenv/`: Security logic and test environments.
+  - Common package names include `api/`, `persistence/`, `model/`, `builder/`, `integration_tests/`, `query_integration_tests/`, `security_tests/`, and `migration_integration_tests/`.
 
 - **pkg/**
-  - Shared libraries and API clients for use across services.
-  - Contains reusable helpers, routers, and generated API code.
+  - Generated Go server stubs and reusable packages used by services.
 
 - **examples/**
   - Minimal working examples and sample setups, including Docker Compose files for quick local testing.
@@ -30,7 +24,7 @@ This document explains the structure and purpose of each major component in the 
 - **docu/**
   - Documentation, error explanations, and security notes.
 
-- **basyx-database-wiki/**
+- **docu/basyx-database-wiki/**
   - In-depth documentation of the database schema, relationships, and usage notes.
 
 - **sql_examples/**
@@ -52,7 +46,7 @@ This document explains the structure and purpose of each major component in the 
 - Uses OpenAPI specs for endpoint definitions.
 
 ### Model
-- Defined in `internal/*/model/` and `pkg/*/model.go`
+- Defined in component packages when needed and in shared model packages used by generated stubs.
 - Contains Go structs and types representing AAS, Submodels, File SME, Registry entries, etc.
 - Used for serialization/deserialization and type safety across the codebase.
 
@@ -67,7 +61,7 @@ This document explains the structure and purpose of each major component in the 
 - Used by services to expose REST APIs.
 
 ### Security
-- In `internal/*/security/` and `docu/security/`
+- In `internal/common/security/`, selected service setup code, and `docu/security/`
 - Implements authentication, authorization, and security best practices for API endpoints.
 
 ### Integration Tests
@@ -76,7 +70,7 @@ This document explains the structure and purpose of each major component in the 
 - Use Docker Compose for isolated test environments.
 
 ### Benchmarking
-- In `internal/*/benchmark_results/`
+- In package-specific benchmark folders, such as `internal/submodelrepository/benchmark/`.
 - Performance tests and results for critical operations.
 
 ---
@@ -102,8 +96,8 @@ This document explains the structure and purpose of each major component in the 
 ---
 
 ## Further Reading
-- See `DeveloperDocumentation/README.md` for onboarding and godoc usage.
-- Explore `basyx-database-wiki/` for database details.
-- Review OpenAPI specs in `cmd/*/openapi.yaml` and generated copies in `pkg/*/api/openapi.yaml` for endpoint documentation.
+- See [README.md](../../README.md) for onboarding and [godoc_tips.md](godoc_tips.md) for GoDoc usage.
+- Explore [docu/basyx-database-wiki/](../basyx-database-wiki/) for database details.
+- Review OpenAPI specs in `cmd/*/openapi.yaml` for endpoint documentation.
 
 For questions, open an issue or contact the maintainers.

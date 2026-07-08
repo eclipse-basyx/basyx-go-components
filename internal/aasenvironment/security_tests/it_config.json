@@ -4,16 +4,25 @@
     "action": "UPLOAD_MULTIPART",
     "token": { "user": "userx", "password": "pwd" },
     "method": "POST",
-    "endpoint": "http://localhost:6004/upload",
+    "endpoint": "{{BASYX_IT_API_URL}}/upload",
     "data": "../integration_tests/testdata/IESEDriveMotorDM3000.aasx",
     "expectedStatus": 403
+  },
+  {
+    "context": "POST upload trailing slash - update-only user not found",
+    "action": "UPLOAD_MULTIPART",
+    "token": { "user": "userx", "password": "pwd" },
+    "method": "POST",
+    "endpoint": "{{BASYX_IT_API_URL}}/upload/",
+    "data": "../integration_tests/testdata/IESEDriveMotorDM3000.aasx",
+    "expectedStatus": 404
   },
   {
     "context": "POST upload new AASX - create-only user allowed",
     "action": "UPLOAD_MULTIPART",
     "token": { "user": "usera", "password": "pwd" },
     "method": "POST",
-    "endpoint": "http://localhost:6004/upload",
+    "endpoint": "{{BASYX_IT_API_URL}}/upload",
     "data": "../integration_tests/testdata/IESEDriveMotorDM3000.aasx",
     "expectedStatus": 200
   },
@@ -22,7 +31,7 @@
     "action": "UPLOAD_MULTIPART",
     "token": { "user": "usera", "password": "pwd" },
     "method": "POST",
-    "endpoint": "http://localhost:6004/upload",
+    "endpoint": "{{BASYX_IT_API_URL}}/upload",
     "data": "../integration_tests/testdata/IESEDriveMotorDM3000.aasx",
     "expectedStatus": 403
   }

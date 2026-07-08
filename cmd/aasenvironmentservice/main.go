@@ -32,7 +32,6 @@ import (
 	"database/sql"
 	"embed"
 	"flag"
-	"fmt"
 	"log"
 	"net/http"
 	"sync/atomic"
@@ -285,21 +284,12 @@ func runServer(ctx context.Context, configPath string) error {
 	aasenvironment.RegisterUploadAPI(apiRouter, uploadService, cfg.General.UploadMaxSizeBytes)
 	aasenvironment.RegisterSerializationAPI(apiRouter, serializationService)
 
-	addr := fmt.Sprintf("0.0.0.0:%d", cfg.Server.Port)
+	addr := common.ServerAddress(cfg.Server)
 	log.Printf("AAS Environment Service listening on %s (contextPath=%q)\n", addr, cfg.Server.ContextPath)
-	server := &http.Server{
-		Addr:              addr,
-		Handler:           r,
-		ReadHeaderTimeout: 15 * time.Second,
-		ReadTimeout:       30 * time.Second,
-		WriteTimeout:      30 * time.Second,
-		IdleTimeout:       60 * time.Second,
+	runner, err := common.StartHTTPServer(ctx, "AASENV", cfg.Server, r)
+	if err != nil {
+		return err
 	}
-	go func() {
-		if serveErr := server.ListenAndServe(); serveErr != nil && serveErr != http.ErrServerClosed {
-			log.Printf("Server error: %v", serveErr)
-		}
-	}()
 
 	preconfigurationCtx := aasenvironment.ContextWithAASPreconfigurationAudit(common.ContextWithConfig(ctx, cfg))
 	preconfigurationSummary := aasenvironment.RunAASPreconfiguration(preconfigurationCtx, uploadService, cfg.General.AASPreconfigPaths)
@@ -314,14 +304,7 @@ func runServer(ctx context.Context, configPath string) error {
 		preconfigurationSummary.SkippedFileCount,
 	)
 
-	<-ctx.Done()
-	log.Println("Shutting down server...")
-	shutdownCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
-	defer cancel()
-	if err := server.Shutdown(shutdownCtx); err != nil {
-		return fmt.Errorf("AASENV-SRV-SHUTDOWN %w", err)
-	}
-	return nil
+	return runner.Wait(ctx)
 }
 
 func openSharedDatabase(ctx context.Context, cfg *common.Config, dsn string) (*sql.DB, error) {
@@ -349,13 +332,15 @@ func configurePostgresPool(db *sql.DB, cfg common.PostgresConfig) {
 }
 
 func main() {
-	ctx := context.TODO()
+	ctx, stop := common.SignalContext()
 	configPath := ""
 
 	flag.StringVar(&configPath, "config", "", "Path to config file")
 	flag.Parse()
 
 	if err := runServer(ctx, configPath); err != nil {
+		stop()
 		log.Fatalf("Server error: %v", err)
 	}
+	stop()
 }

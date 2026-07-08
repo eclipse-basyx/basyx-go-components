@@ -34,8 +34,24 @@ import (
 
 // GetAssetAdministrationShellDatabaseID returns the internal database ID for a given AAS identifier.
 func GetAssetAdministrationShellDatabaseID(tx *sql.Tx, aasId string) (int64, error) {
+	return getAssetAdministrationShellDatabaseID(tx, aasId, false)
+}
+
+// GetAssetAdministrationShellDatabaseIDForUpdate returns and locks the internal database ID for a given AAS identifier.
+func GetAssetAdministrationShellDatabaseIDForUpdate(tx *sql.Tx, aasId string) (int64, error) {
+	return getAssetAdministrationShellDatabaseID(tx, aasId, true)
+}
+
+func getAssetAdministrationShellDatabaseID(tx *sql.Tx, aasId string, forUpdate bool) (int64, error) {
 	var databaseID int64
-	sqlQuery, args, err := goqu.Select("id").From("aas").Where(goqu.I("aas_id").Eq(aasId)).ToSQL()
+	query := goqu.Select("id").
+		From("aas").
+		Where(goqu.I("aas_id").Eq(aasId))
+	if forUpdate {
+		query = query.ForUpdate(goqu.Wait)
+	}
+
+	sqlQuery, args, err := query.ToSQL()
 	if err != nil {
 		return 0, err
 	}

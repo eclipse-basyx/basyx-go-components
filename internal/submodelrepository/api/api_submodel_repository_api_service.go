@@ -76,6 +76,23 @@ func newAPIErrorResponse(err error, status int, operation string, info string) g
 	return common.NewErrorResponse(err, status, componentName, operation, info)
 }
 
+func newPostSubmodelElementByPathErrorResponse(err error) gen.ImplResponse {
+	const operation = "PostSubmodelElementByPathSubmodelRepo"
+
+	switch {
+	case common.IsErrDenied(err):
+		return newAPIErrorResponse(err, http.StatusForbidden, operation, "Denied")
+	case common.IsErrNotFound(err) || errors.Is(err, sql.ErrNoRows):
+		return newAPIErrorResponse(err, http.StatusNotFound, operation, "ParentOrSubmodelNotFound")
+	case common.IsErrConflict(err):
+		return newAPIErrorResponse(err, http.StatusConflict, operation, "Conflict")
+	case common.IsErrBadRequest(err):
+		return newAPIErrorResponse(err, http.StatusBadRequest, operation, "BadRequest")
+	default:
+		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "AddSubmodelElementWithPath")
+	}
+}
+
 func submodelValueToAnyMap(value gen.SubmodelValue) map[string]any {
 	result := make(map[string]any, len(value))
 	for key, val := range value {
@@ -2087,16 +2104,7 @@ func (s *SubmodelRepositoryAPIAPIService) PostSubmodelElementByPathSubmodelRepo(
 
 	err := s.submodelBackend.AddSubmodelElementWithPath(ctx, decodedSubmodelIdentifier, idShortPath, submodelElement)
 	if err != nil {
-		if common.IsErrNotFound(err) || errors.Is(err, sql.ErrNoRows) {
-			return newAPIErrorResponse(err, http.StatusNotFound, operation, "ParentOrSubmodelNotFound"), nil
-		}
-		if common.IsErrConflict(err) {
-			return newAPIErrorResponse(err, http.StatusConflict, operation, "Conflict"), nil
-		}
-		if common.IsErrBadRequest(err) {
-			return newAPIErrorResponse(err, http.StatusBadRequest, operation, "BadRequest"), nil
-		}
-		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "AddSubmodelElementWithPath"), nil
+		return newPostSubmodelElementByPathErrorResponse(err), nil
 	}
 
 	parsedElement, parseErr := jsonization.ToJsonable(submodelElement)

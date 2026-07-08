@@ -2,6 +2,11 @@ server:
   port: 5004
   contextPath: ""
   host: 0.0.0.0
+  readHeaderTimeoutSeconds: 15
+  readTimeoutSeconds: 300
+  writeTimeoutSeconds: 300
+  idleTimeoutSeconds: 60
+  shutdownTimeoutSeconds: 10
 
 postgres:
   # Choose exactly one connection variant:

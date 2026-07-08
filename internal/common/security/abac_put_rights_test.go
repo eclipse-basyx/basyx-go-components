@@ -130,6 +130,43 @@ func TestSelectPutFormulaByExistence_FailsClosedOnCloneError(t *testing.T) {
 	assertFormulaByRightBoolean(t, qf, grammar.RightsEnumUPDATE, false)
 }
 
+func TestSelectFormulaForRight_SelectsRequestedRight(t *testing.T) {
+	t.Parallel()
+
+	readExpr := boolExpression(false)
+	createExpr := boolExpression(true)
+	ctx := context.WithValue(context.Background(), filterKey, &QueryFilter{
+		FormulasByRight: map[grammar.RightsEnum]grammar.LogicalExpression{
+			grammar.RightsEnumCREATE: createExpr,
+			grammar.RightsEnumREAD:   readExpr,
+		},
+	})
+
+	readCtx := SelectFormulaForRight(ctx, grammar.RightsEnumREAD)
+	qf := GetQueryFilter(readCtx)
+
+	assertBooleanFormulaPointer(t, qf.Formula, false)
+	assertFormulaByRightBoolean(t, qf, grammar.RightsEnumCREATE, true)
+	assertFormulaByRightBoolean(t, qf, grammar.RightsEnumREAD, false)
+}
+
+func TestSelectFormulaForRight_DefaultsToFalseIfMissing(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.WithValue(context.Background(), filterKey, &QueryFilter{
+		FormulasByRight: map[grammar.RightsEnum]grammar.LogicalExpression{
+			grammar.RightsEnumCREATE: boolExpression(true),
+		},
+	})
+
+	readCtx := SelectFormulaForRight(ctx, grammar.RightsEnumREAD)
+	qf := GetQueryFilter(readCtx)
+
+	assertBooleanFormulaPointer(t, qf.Formula, false)
+	assertFormulaByRightBoolean(t, qf, grammar.RightsEnumCREATE, true)
+	assertFormulaByRightBoolean(t, qf, grammar.RightsEnumREAD, false)
+}
+
 func TestMergeQueryFilter_FailsClosedOnCloneError(t *testing.T) {
 	t.Parallel()
 

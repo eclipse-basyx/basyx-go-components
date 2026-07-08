@@ -1,11 +1,10 @@
 services:
   digitaltwinregistry:
-    container_name: digitaltwinregistry
     build:
       context: ../../../..
       dockerfile: ./cmd/digitaltwinregistryservice/Dockerfile
     ports:
-      - 8082:8080
+      - "127.0.0.1:${BASYX_IT_API_PORT:-8082}:8080"
     environment:
       - SERVER_PORT=8080
       - SERVER_CONTEXTPATH=/api/v3
@@ -25,7 +24,7 @@ services:
       - ABAC_ENABLED=true
       - ABAC_MODELPATH=/security_env/access-rules.json
     volumes:
-      - ./security_env:/security_env:ro
+      - ${BASYX_IT_SECURITY_ENV:-./security_env}:/security_env:ro
     extra_hosts:
       - "localhost:host-gateway"
     healthcheck:
@@ -41,7 +40,6 @@ services:
         condition: service_completed_successfully
 
   db:
-    container_name: postgres_db
     image: postgres:15
     environment:
       POSTGRES_USER: admin
@@ -56,15 +54,14 @@ services:
 
   keycloak:
     image: keycloak/keycloak:26.0.6
-    container_name: keycloak
     environment:
       KC_DB: postgres
       KC_DB_URL: jdbc:postgresql://db:5432/basyxTestDB
       KC_DB_USERNAME: admin
       KC_DB_PASSWORD: admin123
       KC_HOSTNAME: localhost
-      KC_HOSTNAME_PORT: "80"
-      KC_HOSTNAME_URL: "http://localhost:8080"
+      KC_HOSTNAME_PORT: "${BASYX_IT_KEYCLOAK_PORT:-8080}"
+      KC_HOSTNAME_URL: "http://localhost:${BASYX_IT_KEYCLOAK_PORT:-8080}"
       KEYCLOAK_ADMIN: admin
       KEYCLOAK_ADMIN_PASSWORD: admin
       KC_HTTP_ENABLED: "true"
@@ -76,7 +73,7 @@ services:
       KC_HTTP_MANAGEMENT_ENABLED: "true"
     command: ["start-dev", "--import-realm", "--health-enabled=true"]
     ports:
-      - 8080:8080
+      - "0.0.0.0:${BASYX_IT_KEYCLOAK_PORT:-8080}:8080"
     volumes:
       - ./keycloak/realm:/opt/keycloak/data/import
     depends_on:
@@ -85,7 +82,6 @@ services:
 
   keycloak-healthcheck:
     image: curlimages/curl:latest
-    container_name: keycloak-healthcheck
     command: >
       sh -c "
         echo 'Waiting for Keycloak to become ready...';
@@ -97,7 +93,6 @@ services:
       - keycloak
 
   basyx_configuration:
-    container_name: basyx_configuration
     build:
       context: ../../../..
       dockerfile: ./cmd/basyxconfigurationservice/Dockerfile

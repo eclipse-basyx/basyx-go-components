@@ -40,20 +40,36 @@ import (
 )
 
 const (
-	wenBaseURL              = "http://127.0.0.1:8082/api/v3"
 	wenComposeFilePath      = "docker_compose/docker_compose.yml"
 	deleteAllShellsActionID = "DELETE_ALL_SHELL_DESCRIPTORS"
 )
 
+var wenBaseURL = testenv.LocalURLFromEnv("BASYX_IT_API_PORT", 8082) + "/api/v3"
+var wenKeycloakTokenURL = testenv.LocalhostURLFromEnv("BASYX_IT_KEYCLOAK_PORT", 8080) + "/realms/basyx/protocol/openid-connect/token"
+
 func TestMain(m *testing.M) {
-	os.Exit(testenv.RunComposeTestMain(m, testenv.ComposeTestMainOptions{
+	runtime := testenv.NewComposeRuntimeOrExit("digitaltwinregistry-security-it", []testenv.PortBinding{
+		{Name: "api", EnvVar: "BASYX_IT_API_PORT"},
+		{Name: "keycloak", EnvVar: "BASYX_IT_KEYCLOAK_PORT"},
+	})
+	wenBaseURL = runtime.LocalURL("api") + "/api/v3"
+	wenKeycloakTokenURL = runtime.LocalhostURL("keycloak") + "/realms/basyx/protocol/openid-connect/token"
+	securityEnv := testenv.PrepareSecurityEnvOrExit("docker_compose/security_env", map[string]string{
+		"http://localhost:8080": runtime.LocalhostURL("keycloak"),
+	})
+
+	code := testenv.RunComposeTestMain(m, testenv.ComposeTestMainOptions{
 		ComposeFile:        wenComposeFilePath,
+		ProjectName:        runtime.ProjectName,
+		Env:                runtime.EnvWith("BASYX_IT_SECURITY_ENV=" + securityEnv),
 		PreDownBeforeUp:    true,
 		DownArgs:           []string{"down", "--remove-orphans"},
 		HealthURL:          wenBaseURL + "/health",
 		HealthTimeout:      3 * time.Minute,
 		SkipDownAfterTests: false,
-	}))
+	})
+	_ = os.RemoveAll(securityEnv)
+	os.Exit(code)
 }
 
 func TestIntegration(t *testing.T) {
@@ -63,7 +79,7 @@ func TestIntegration(t *testing.T) {
 			deleteAllShellsActionID: deleteAllDescriptors,
 		},
 		TokenProvider: testenv.NewPasswordGrantTokenProvider(
-			"http://localhost:8080/realms/basyx/protocol/openid-connect/token",
+			wenKeycloakTokenURL,
 			"basyx-ui",
 			15*time.Second,
 		),

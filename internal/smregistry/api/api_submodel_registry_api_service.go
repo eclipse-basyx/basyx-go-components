@@ -44,6 +44,7 @@ import (
 	"time"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/createprecheck"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
@@ -152,17 +153,24 @@ func (s *SubmodelRegistryAPIAPIService) QuerySubmodelDescriptors(
 // PostSubmodelDescriptor - Creates a new Submodel Descriptor, i.e. registers a submodel
 func (s *SubmodelRegistryAPIAPIService) PostSubmodelDescriptor(ctx context.Context, submodelDescriptor model.SubmodelDescriptor) (model.ImplResponse, error) {
 	if strings.TrimSpace(submodelDescriptor.Id) != "" {
-		if exists, chkErr := s.smRegistryBackend.ExistsSubmodelByID(ctx, submodelDescriptor.Id); chkErr != nil {
-			log.Printf("[ERROR] [%s] Error in PostSubmodelDescriptor: existence check failed (submodelId=%q): %v", componentName, submodelDescriptor.Id, chkErr)
+		precheckErr := createprecheck.EnsureVisibleCreate(
+			ctx,
+			func(checkCtx context.Context) (bool, error) {
+				return s.smRegistryBackend.ExistsSubmodelByID(checkCtx, submodelDescriptor.Id)
+			},
+			func(readCtx context.Context) error {
+				_, readErr := s.smRegistryBackend.GetSubmodelDescriptorByID(readCtx, submodelDescriptor.Id)
+				return readErr
+			},
+			"Submodel with given id already exists",
+			"Submodel Descriptor access not allowed",
+		)
+		if precheckErr != nil {
+			statusCode, step := createprecheck.ResponseStatus(precheckErr)
+			log.Printf("[ERROR] [%s] Error in PostSubmodelDescriptor: create precheck failed (submodelId=%q): %v", componentName, submodelDescriptor.Id, precheckErr)
 			return common.NewErrorResponse(
-				chkErr, http.StatusInternalServerError, componentName, "PostSubmodelDescriptor", "Unhandled-Precheck",
-			), chkErr
-		} else if exists {
-			e := common.NewErrConflict("Submodel with given id already exists")
-			log.Printf("[ERROR] [%s] Error in PostSubmodelDescriptor: conflict (submodelId=%q): %v", componentName, submodelDescriptor.Id, e)
-			return common.NewErrorResponse(
-				e, http.StatusConflict, componentName, "PostSubmodelDescriptor", "Conflict-Exists",
-			), nil
+				precheckErr, statusCode, componentName, "PostSubmodelDescriptor", step,
+			), createprecheck.ReturnError(precheckErr)
 		}
 	}
 

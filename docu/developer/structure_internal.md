@@ -1,25 +1,28 @@
 # structure_internal.md: Core Logic (internal/)
 
 ## Purpose
-Contains the main business logic, persistence, and integration tests for each domain (e.g., registry, submodel repository, discovery).
 
-## Subfolders
-- `api/`: Service layer, endpoint handlers, request/response logic
-- `persistence/`: Database access, repositories, file handlers
-- `model/`: Domain data structures and types
-- `builder/`: Object construction logic
-- `integration_tests/`: End-to-end and scenario tests
-- `security/`: Authentication and authorization logic
-- `benchmark_results/`: Performance test results
-- `testenv/`: Test environment setup
+`internal/` contains service implementations, shared runtime helpers, persistence, security, and test support that should not be imported by external modules.
+
+## Common Subfolders
+
+Component folders vary by service, but common patterns include:
+
+- `api/`: service-specific HTTP handlers and generated-interface implementations
+- `persistence/`: database access, repositories, descriptors, and file handlers
+- `model/`: component-local data structures when shared SDK types are not enough
+- `builder/`: construction and mapping logic for complex AAS objects
+- `integration_tests/`, `query_integration_tests/`, `security_tests/`, `migration_integration_tests/`: package-specific test suites
+- `benchmark/`: package-specific benchmark code and results where present
+
+Shared infrastructure lives mostly under `internal/common`, including `model`, `builder`, `history`, `jws`, `queries`, `security`, and `testenv`.
 
 ## Example: submodelrepository
-- `api/`: Handles REST requests, validates input, calls persistence
-- `persistence/Submodel/submodelElements/FileHandler.go`: Manages file attachments using PostgreSQL Large Objects
-- `model/`: Defines Go structs for submodels, files, etc.
-- `integration_tests/`: Tests upload/download/delete of file attachments
 
-## How to Extend
-- Add new domain folders for new features
-- Implement business logic in `api/` and `persistence/`
-- Add tests in `integration_tests/`
+- `api/`: handles REST requests, validates input, and calls persistence
+- `persistence/Submodel/submodelElements/FileHandler.go`: manages File SME metadata and PostgreSQL Large Object content
+- `integration_tests/`: covers upload, download, delete, query, and history behavior through the API
+
+## How To Extend
+
+Add new behavior in the component package that owns it, reuse `internal/common` helpers when a behavior is already shared, and add tests in the closest existing test package.

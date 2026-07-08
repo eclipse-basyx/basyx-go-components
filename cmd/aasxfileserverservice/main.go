@@ -30,9 +30,7 @@ import (
 	"context"
 	"embed"
 	"flag"
-	"fmt"
 	"log"
-	"net/http"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -75,19 +73,12 @@ func runServer(ctx context.Context, configPath string) error {
 		log.Printf("Warning: failed to load OpenAPI spec for Swagger UI: %v", err)
 	}
 
-	dsn := fmt.Sprintf("postgres://%s:%s@%s:%d/%s?sslmode=disable",
-		cfg.Postgres.User,
-		cfg.Postgres.Password,
-		cfg.Postgres.Host,
-		cfg.Postgres.Port,
-		cfg.Postgres.DBName,
-	)
+	dsn := common.BuildPostgresDSN(cfg.Postgres)
 	if err := common.ValidateSchemaVersionByDSN(dsn, common.CURRENT_DATABASE_VERSION); err != nil {
 		return err
 	}
 
-	log.Printf("🗄️  Connecting to Postgres with DSN: postgres://%s:****@%s:%d/%s?sslmode=disable",
-		cfg.Postgres.User, cfg.Postgres.Host, cfg.Postgres.Port, cfg.Postgres.DBName)
+	log.Println("Connecting to Postgres using configured connection settings")
 
 	sharedDB, err := common.NewDatabaseConnection(dsn)
 	if err != nil {
@@ -138,29 +129,22 @@ func runServer(ctx context.Context, configPath string) error {
 
 	r.Mount(base, apiRouter)
 
-	addr := "0.0.0.0:" + fmt.Sprintf("%d", cfg.Server.Port)
+	addr := common.ServerAddress(cfg.Server)
 	log.Printf("▶️  AASX File Server listening on %s (contextPath=%q)\n", addr, cfg.Server.ContextPath)
 
-	go func() {
-		//nolint:gosec // implementing this fix would cause errors.
-		if err := http.ListenAndServe(addr, r); err != http.ErrServerClosed {
-			log.Printf("Server error: %v", err)
-		}
-	}()
-
-	<-ctx.Done()
-	log.Println("Shutting down server...")
-	return nil
+	return common.RunHTTPServer(ctx, "AASX", cfg.Server, r)
 }
 
 func main() {
-	ctx := context.Background()
+	ctx, stop := common.SignalContext()
 	// load config path from flag
 	configPath := ""
 	flag.StringVar(&configPath, "config", "", "Path to config file")
 	flag.Parse()
 
 	if err := runServer(ctx, configPath); err != nil {
+		stop()
 		log.Fatalf("Server error: %v", err)
 	}
+	stop()
 }
