@@ -52,6 +52,8 @@ Use the same scope only when the services are meant to share one active policy. 
 
 When the value is empty, each service uses its default. Digital Twin Registry defaults to `always`; other ABAC-enabled services default to `if_missing`.
 
+With `if_missing`, edits to the JSON access-rule file are not imported on later restarts once an active policy already exists in PostgreSQL for the effective policy scope. Set `abac.policyFileImport: always` or `ABAC_POLICY_FILE_IMPORT=always` when the mounted JSON file should remain the source of truth and intentionally overwrite/supersede the active database-backed policy during startup.
+
 ## Startup Import
 
 Startup imports run under a synthetic system audit context:

@@ -124,6 +124,8 @@ This file defines three access levels:
 
 To change who can see or edit what, update [`security_env/access-rules.json`](security_env/access-rules.json) (ACLs, formulas, and object groups).
 
+By default, services import this file with `ABAC_POLICY_FILE_IMPORT=if_missing`: the file is used only when no active policy exists yet for the service scope. If you want the JSON file to stay the source of truth and overwrite the stored policy on every restart, set `ABAC_POLICY_FILE_IMPORT=always` for the affected service containers. For a local reset, `docker compose down -v` removes the persisted policy state.
+
 ## Stop / Clean Up
 
 Stop containers:

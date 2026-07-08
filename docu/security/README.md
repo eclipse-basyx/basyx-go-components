@@ -136,6 +136,7 @@ sequenceDiagram
   - Example trustlist: [cmd/aasregistryservice/config/trustlist.json](../../cmd/aasregistryservice/config/trustlist.json)
 - Access rules are imported from the configured access model JSON into the PostgreSQL-backed ABAC policy repository when `abac.policyFileImport` requires it. Runtime authorization uses the active materialized DB policy.
   - Example rules: [cmd/aasregistryservice/config/access_rules/access-rules.json](../../cmd/aasregistryservice/config/access_rules/access-rules.json)
+- For most services, the default startup file-import mode is `if_missing`: the JSON file is imported only when no active database-backed policy exists for the effective policy scope. If the JSON access-rule file should be the source of truth and overwrite existing policies on restart, set `abac.policyFileImport: always` or `ABAC_POLICY_FILE_IMPORT=always`. Digital Twin Registry is the current exception and defaults to `always`.
 - DB-backed policy rows are isolated by service scope by default. Set `abac.policyScope` only when a deployment must split same-service instances or deliberately share one policy namespace.
 - The protected ABAC management API under `/security/abac/**` is available only when `abac.enabled` and `abac.managementApi.enabled` are both true. Digital Twin Registry keeps this API disabled by default but can expose it through the same explicit opt-in. The OpenAPI/Swagger documentation follows the same condition.
 
@@ -346,7 +347,7 @@ Example file:
 - Configure the trustlist with issuer, audience, and required scopes. Treat an omitted audience as a legacy compatibility mode.
 - Confirm route-to-rights mapping covers all endpoints used by the service.
 - Validate the access rules against the intended claims and objects.
-- Choose `abac.policyFileImport` deliberately. Use `always` only when the file is the source of truth; use `if_missing` when the database-managed policy should survive restarts; use `never` when an active DB policy is mandatory.
+- Choose `abac.policyFileImport` deliberately. Use `always` when the JSON file is the source of truth and should overwrite the active DB policy at startup; use `if_missing` when the database-managed policy should survive restarts; use `never` when an active DB policy is mandatory.
 - Use `abac.policyScope` deliberately. Sharing a scope across services with different routes can make one service's policy incomplete or unsafe for another service.
 - Enable `abac.managementApi.enabled` only for services where runtime policy administration is required. For Digital Twin Registry, remember that startup file import defaults to `always`; if multiple DTRs share the default policy scope with different files, later startups can supersede earlier active policies. Protect `/security/abac/**` with admin-only ABAC rules.
 - Restarting is no longer the only update path when the management API is enabled; staged rule edits still require explicit activation before they affect authorization.
