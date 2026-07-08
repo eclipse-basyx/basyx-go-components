@@ -2,7 +2,7 @@
   "info": {
     "_postman_id": "f8b591ca-b837-4965-b4ad-9804d29b7419",
     "name": "BaSyx DPP API - Local",
-    "description": "Requests for the local Docker Compose setup. Import `dpp-api.local.postman_environment.json`, select the environment, start `docker compose up --build`, then run the lifecycle requests in order. Content sections are dynamic top-level DPP properties that are not header fields, for example `batteryPassport`, `carbonFootprint`, `materialComposition`, `circularity`, and `supplyChain`. The service stores each content section as its own content submodel.",
+    "description": "Requests for the local Docker Compose setup. Create a local Postman environment with the variables documented in README.md, select it, start `docker compose up -d`, then run the lifecycle requests in order. Content sections are dynamic top-level DPP properties that are not header fields, for example `batteryPassport`, `carbonFootprint`, `materialComposition`, `circularity`, and `supplyChain`. The service stores each content section as its own content submodel.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
     "_exporter_id": "18591521"
   },

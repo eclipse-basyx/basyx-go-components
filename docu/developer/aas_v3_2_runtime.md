@@ -49,6 +49,7 @@ Implemented history, recent-change, and signing runtime areas from the v3.2 Open
 - Migration `1_1_4.sql`: adds ABAC policy version, rule, and policy-event tables plus ABAC policy evidence artifact support.
 - Migration `1_1_5.sql`: adds dedicated Submodel Registry descriptor history metadata and payload tables.
 - Migration `1_1_6.sql`: repairs descriptor administrative timestamp synchronization for future writes by syncing timestamp columns when descriptor rows are inserted after their payload rows. It intentionally does not backfill existing descriptor rows.
+- Migration `1_1_7.sql`: normalizes supplemental semantic ID reference ownership and indexes for Submodels, Submodel Elements, Submodel Descriptors, and Specific Asset IDs.
 
 The current v3.2 Submodel Repository OpenAPI also defines `PUT`, `PATCH`, and `DELETE` on `/submodels/{submodelIdentifier}/$signed`. These operations use the normal Submodel request bodies and are routed to the same runtime behavior as `PUT`, `PATCH`, and `DELETE` on `/submodels/{submodelIdentifier}`.
 
@@ -232,7 +233,7 @@ Registry synchronization can append additional descriptor history entries when c
 
 ### Guarded PostgreSQL Mode
 
-Schema patch `1_1_1.sql` installs guard triggers on all four history metadata tables and all four payload tables. The triggers are disabled by default through the singleton `history_guard_config` row. Each history-aware DB-backed runtime service applies its expected guard state at startup.
+Schema patch `1_1_1.sql` installs guard triggers on the initial AAS, Submodel, Concept Description, and AAS descriptor history metadata/payload table pairs. Patch `1_1_5.sql` adds the same guard coverage for Submodel Descriptor history. The triggers are disabled by default through the singleton `history_guard_config` row. Each history-aware DB-backed runtime service applies its expected guard state at startup.
 
 ```mermaid
 flowchart TD
@@ -417,7 +418,7 @@ SET asset_kind = asset_kind + 1
 WHERE asset_kind >= 2;
 ```
 
-History storage is added by `1_1_1.sql`. The patch creates the metadata and payload tables, access-pattern indexes, guard switch, and mutation triggers. It does not backfill existing AAS, Submodels, Concept Descriptions, or descriptors.
+History storage starts with `1_1_1.sql`. The patch creates the initial metadata and payload tables, access-pattern indexes, guard switch, and mutation triggers. Patch `1_1_5.sql` adds Submodel Descriptor history. Existing AAS, Submodels, Concept Descriptions, or descriptors are not backfilled.
 
 After upgrade:
 

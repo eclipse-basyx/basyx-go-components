@@ -1,21 +1,38 @@
 # structure_cmd.md: Service Entry Points (cmd/)
 
 ## Purpose
-Contains the main entry points for each microservice in the BaSyx Go Components project. Each subfolder represents a service, e.g., `aasregistryservice`, `submodelrepositoryservice`.
+
+`cmd/` contains executable entry points, configs, Dockerfiles, OpenAPI contracts, and service-specific resources.
+
+## Runtime Services
+
+Current REST service entry points include:
+
+- `aasenvironmentservice`
+- `aasregistryservice`
+- `aasrepositoryservice`
+- `aasxfileserverservice`
+- `companylookupservice`
+- `conceptdescriptionrepositoryservice`
+- `digitaltwinregistryservice`
+- `discoveryservice`
+- `dppapiservice`
+- `submodelregistryservice`
+- `submodelrepositoryservice`
+
+## Tools
+
+- `basyxconfigurationservice`: initializes `database/base.sql`, applies `database/patches/`, and records schema state/version.
+- `historyevidenceverifier`: verifies stored history evidence artifacts and manifests.
 
 ## Typical Contents
-- `main.go`: Service startup and configuration
-- `config.yaml`: Service-specific configuration
-- `Dockerfile`: Containerization instructions
-- `HEALTHCHECK` in Dockerfile: Container health checks
-- `resources/`, `config/`: Additional service resources
 
-## Example: submodelrepositoryservice
-- Handles HTTP requests for submodel repository operations
-- Loads configuration from `config.yaml`
-- Exposes REST API as defined in `cmd/submodelrepositoryservice/openapi.yaml`
+- `main.go`: service startup, configuration loading, router setup, and graceful shutdown
+- `config.yaml`: service-specific defaults
+- `openapi.yaml`: API contract for generated stubs and Swagger/OpenAPI serving
+- `Dockerfile`: container build instructions and health checks
+- `resources/` or `config/`: service-specific static resources, trust lists, and access rules
 
-## How to Extend
-- Add new service folders for additional microservices
-- Implement new entry points in `main.go`
-- Update Dockerfile and configs as needed
+## How To Extend
+
+Add a new command only when the behavior is an independently deployable service or operational tool. Keep startup, logging, schema validation, security setup, and graceful shutdown aligned with equivalent services.

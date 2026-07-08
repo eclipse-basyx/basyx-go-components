@@ -26,8 +26,12 @@ Environment variables:
 - `ABAC_ENABLED=true`
 - `ABAC_MODELPATH=/security_env/access-rules.json`
 - `ABAC_POLICY_FILE_IMPORT=always|if_missing|never`
+- `BASYX_ABAC_POLICY_FILE_IMPORT=always|if_missing|never`
 - `ABAC_POLICY_SCOPE=aasregistryservice`
+- `BASYX_ABAC_POLICY_SCOPE=aasregistryservice`
 - `ABAC_MANAGEMENT_API_ENABLED=true|false`
+- `ABAC_MANAGEMENTAPI_ENABLED=true|false`
+- `BASYX_ABAC_MANAGEMENT_API_ENABLED=true|false`
 
 `abac.policyScope` controls the database namespace used for stored policy versions, rule rows, events, and activation evidence. When it is empty, the service uses its built-in scope, such as `digitaltwinregistryservice` or `aasregistryservice`, so existing deployments keep their current behavior.
 
