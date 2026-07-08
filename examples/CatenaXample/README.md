@@ -95,10 +95,10 @@ The generated Bruno collection is kept in sync with the Postman source:
 
 - Bruno folder collection: `bruno_collection/`
 
-Regenerate it after changing the Postman source:
+Regenerate it from the repository root after changing the Postman source:
 
 ```powershell
-node ..\..\scripts\generate_bruno_collections.js
+node scripts\generate_bruno_collections.js
 ```
 
 ## Variant Data Script

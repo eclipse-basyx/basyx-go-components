@@ -9,6 +9,12 @@ on:
       - '.github/workflows/go-tests.yml'
       - '**.sql'
       - 'internal/aasregistry/security_oidc_tests/**'
+      - 'cmd/digitaltwinregistryservice/**'
+      - 'examples/CatenaXample/**'
+      - 'internal/aasenvironment/marker_access_integration_tests/**'
+      - 'internal/digitaltwinregistry/integration_tests/**'
+      - 'internal/digitaltwinregistry/security_tests/**'
+      - 'internal/digitaltwinregistry/tractus-x-integrationtests/**'
   push:
     branches: [main]
     paths:
@@ -18,6 +24,12 @@ on:
       - '.github/workflows/go-tests.yml'
       - '**.sql'
       - 'internal/aasregistry/security_oidc_tests/**'
+      - 'cmd/digitaltwinregistryservice/**'
+      - 'examples/CatenaXample/**'
+      - 'internal/aasenvironment/marker_access_integration_tests/**'
+      - 'internal/digitaltwinregistry/integration_tests/**'
+      - 'internal/digitaltwinregistry/security_tests/**'
+      - 'internal/digitaltwinregistry/tractus-x-integrationtests/**'
 
 permissions:
   contents: read
@@ -412,7 +424,7 @@ jobs:
         run: go mod download
 
       - name: Run digital twin registry unit tests
-        run: go test -v ./internal/digitaltwinregistry
+        run: go test -v ./internal/digitaltwinregistry ./cmd/digitaltwinregistryservice
 
   aas-environment-unit-tests:
     name: AAS Environment Unit Tests

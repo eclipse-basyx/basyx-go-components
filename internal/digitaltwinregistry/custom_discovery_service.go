@@ -406,10 +406,6 @@ func buildAssetLinkQueryForRoot(ctx context.Context, assetLink []model.AssetLink
 	}
 }
 
-func buildUnrestrictedAssetLinkQuery(assetLink []model.AssetLink) grammar.Query {
-	return buildUnrestrictedAssetLinkQueryForRoot(assetLink, "$aasdesc")
-}
-
 func buildUnrestrictedAssetLinkQueryForRoot(assetLink []model.AssetLink, root string) grammar.Query {
 	if len(assetLink) == 0 {
 		return grammar.Query{}
@@ -442,14 +438,6 @@ func buildUnrestrictedAssetLinkQueryForRoot(assetLink []model.AssetLink, root st
 	return grammar.Query{
 		Condition: &assetLinkLe,
 	}
-}
-
-func buildAssetLinkDescriptorQueryWithAccess(ctx context.Context, assetLink []model.AssetLink, readUnrestricted bool) grammar.Query {
-	if readUnrestricted {
-		return buildUnrestrictedAssetLinkQuery(assetLink)
-	}
-
-	return buildAssetLinkQuery(ctx, assetLink)
 }
 
 func mergeGlobalAssetIDLookupVisibility(ctx context.Context, globalAssetIDs []string) context.Context {
