@@ -88,6 +88,10 @@ func (s *CustomRegistryService) GetAllAssetAdministrationShellDescriptors(
 		if resp != nil || err != nil {
 			return *resp, err
 		}
+		if len(links) == 0 {
+			return emptyDescriptorPage(), nil
+		}
+
 		globalAssetIDs, assetLinks := splitGlobalAssetIDLinks(links)
 		if len(globalAssetIDs) > 0 {
 			return s.getAllAssetAdministrationShellDescriptorsByDescriptorQuery(
@@ -126,6 +130,16 @@ func (s *CustomRegistryService) GetAllAssetAdministrationShellDescriptors(
 	)
 }
 
+// GetAssetAdministrationShellDescriptorById - Returns a specific Asset Administration Shell Descriptor
+// nolint:revive // defined by standard
+func (s *CustomRegistryService) GetAssetAdministrationShellDescriptorById(
+	ctx context.Context,
+	aasIdentifier string,
+) (model.ImplResponse, error) {
+	ctx = descriptorsutil.WithIncludeAASDescriptorCreatedAt(ctx)
+	return s.AssetAdministrationShellRegistryAPIAPIService.GetAssetAdministrationShellDescriptorById(ctx, aasIdentifier)
+}
+
 func (s *CustomRegistryService) getAllAssetAdministrationShellDescriptorsByDescriptorQuery(
 	ctx context.Context,
 	limit int32,
@@ -138,12 +152,12 @@ func (s *CustomRegistryService) getAllAssetAdministrationShellDescriptorsByDescr
 	updatedFrom time.Time,
 ) (model.ImplResponse, error) {
 	readUnrestricted := auth.HasUnrestrictedFormulaForRight(ctx, grammar.RightsEnumREAD)
-	ctx = auth.MergeQueryFilter(ctx, buildGlobalAssetIDQuery(globalAssetIDs))
+	ctx = auth.MergeQueryFilter(ctx, buildGlobalAssetIDLookupQuery(ctx, globalAssetIDs, readUnrestricted))
 	if len(assetLinks) > 0 {
 		ctx = auth.MergeQueryFilter(ctx, buildAssetLinkDescriptorQueryWithAccess(ctx, assetLinks, readUnrestricted))
 	}
 
-	resp, err := s.AssetAdministrationShellRegistryAPIAPIService.GetAllAssetAdministrationShellDescriptors(
+	return s.AssetAdministrationShellRegistryAPIAPIService.GetAllAssetAdministrationShellDescriptors(
 		ctx,
 		limit,
 		cursor,
@@ -153,11 +167,6 @@ func (s *CustomRegistryService) getAllAssetAdministrationShellDescriptorsByDescr
 		createdFrom,
 		updatedFrom,
 	)
-	if err != nil || resp.Code != http.StatusOK {
-		return resp, err
-	}
-
-	return omitEmptyDescriptorResultForDTR(resp), nil
 }
 
 func (s *CustomRegistryService) getAllAssetAdministrationShellDescriptorsByAssetLinks(
@@ -203,6 +212,7 @@ func (s *CustomRegistryService) getAllAssetAdministrationShellDescriptorsByAsset
 	if len(aasIDs) == 0 {
 		return model.Response(http.StatusOK, map[string]any{
 			"paging_metadata": paging,
+			"result":          []map[string]any{},
 		}), nil
 	}
 	descriptorLimit, limitErr := int32Length(len(aasIDs))
@@ -239,7 +249,6 @@ func int32Length(length int) (int32, error) {
 	if length > math.MaxInt32 {
 		return 0, fmt.Errorf("length %d exceeds int32 max %d", length, math.MaxInt32)
 	}
-	// #nosec G115 -- length is checked against math.MaxInt32 above.
 	return int32(length), nil
 }
 
@@ -275,7 +284,6 @@ func decodeRegistryAssetLinkQueryAssetIDs(encodedAssetIDs []string) ([]model.Ass
 			)
 			return nil, &resp, nil
 		}
-
 		links = append(links, link)
 	}
 
@@ -297,6 +305,58 @@ func splitGlobalAssetIDLinks(links []model.AssetLink) ([]string, []model.AssetLi
 
 func buildGlobalAssetIDQuery(globalAssetIDs []string) grammar.Query {
 	return buildGlobalAssetIDQueryForField("$aasdesc#globalAssetId", globalAssetIDs)
+}
+
+func buildGlobalAssetIDLookupQuery(ctx context.Context, globalAssetIDs []string, readUnrestricted bool) grammar.Query {
+	globalAssetIDQuery := buildGlobalAssetIDQuery(globalAssetIDs)
+	if globalAssetIDQuery.Condition == nil || readUnrestricted {
+		return globalAssetIDQuery
+	}
+
+	condition := grammar.LogicalExpression{
+		And: []grammar.LogicalExpression{
+			*globalAssetIDQuery.Condition,
+			visibleNonGlobalAssetLinkExpression(ctx),
+		},
+	}
+	return grammar.Query{Condition: &condition}
+}
+
+func visibleNonGlobalAssetLinkExpression(ctx context.Context) grammar.LogicalExpression {
+	expressions := []grammar.LogicalExpression{}
+	if edcBpn, ok := edcBpnClaimFromContext(ctx); ok {
+		expressions = append(expressions, visibleNonGlobalAssetLinkForSubject(edcBpn))
+	}
+	expressions = append(expressions, visibleNonGlobalAssetLinkForSubject("PUBLIC_READABLE"))
+
+	if len(expressions) == 1 {
+		return expressions[0]
+	}
+	return grammar.LogicalExpression{Or: expressions}
+}
+
+func visibleNonGlobalAssetLinkForSubject(subject string) grammar.LogicalExpression {
+	nameField := grammar.ModelStringPattern("$aasdesc#specificAssetIds[].name")
+	subjectField := grammar.ModelStringPattern("$aasdesc#specificAssetIds[].externalSubjectId.keys[].value")
+	globalAssetIDName := grammar.StandardString(common.GlobalAssetIDAssetLinkName)
+	subjectValue := grammar.StandardString(subject)
+
+	return grammar.LogicalExpression{
+		Match: []grammar.MatchExpression{
+			{
+				Ne: grammar.ComparisonItems{
+					{Field: &nameField},
+					{StrVal: &globalAssetIDName},
+				},
+			},
+			{
+				Eq: grammar.ComparisonItems{
+					{Field: &subjectField},
+					{StrVal: &subjectValue},
+				},
+			},
+		},
+	}
 }
 
 func buildBasicDiscoveryGlobalAssetIDQuery(globalAssetIDs []string) grammar.Query {
@@ -338,6 +398,13 @@ func mergeAssetLinkLookupFilter(ctx context.Context, links []model.AssetLink) (c
 	}
 
 	return discoveryapiinternal.WithAssetLinksAlreadyConstrained(auth.MergeQueryFilter(ctx, assetLinkQuery)), nil
+}
+
+func edcBpnClaimFromContext(ctx context.Context) (string, bool) {
+	claims := auth.ClaimsFromContext(ctx)
+	edcBpn, ok := claims.GetString("Edc-Bpn")
+	edcBpn = strings.TrimSpace(edcBpn)
+	return edcBpn, ok && edcBpn != ""
 }
 
 func buildAASIDQuery(aasIDs []string) grammar.Query {
@@ -400,45 +467,11 @@ func replaceDescriptorPagingMetadata(resp model.ImplResponse, paging model.Paged
 	}), nil
 }
 
-func omitEmptyDescriptorResultForDTR(res model.ImplResponse) model.ImplResponse {
-	if res.Code != http.StatusOK {
-		return res
-	}
-
-	payload, err := json.Marshal(res.Body)
-	if err != nil {
-		return res
-	}
-	var decoded struct {
-		PagingMetadata model.PagedResultPagingMetadata `json:"paging_metadata"`
-		Result         []json.RawMessage               `json:"result"`
-	}
-	if err = json.Unmarshal(payload, &decoded); err != nil {
-		return res
-	}
-	if decoded.Result == nil || len(decoded.Result) != 0 {
-		return res
-	}
-
-	return model.Response(http.StatusOK, map[string]any{
-		"paging_metadata": decoded.PagingMetadata,
-	})
-}
-
 func emptyDescriptorPage() model.ImplResponse {
 	return model.Response(http.StatusOK, map[string]any{
 		"paging_metadata": model.PagedResultPagingMetadata{},
+		"result":          []map[string]any{},
 	})
-}
-
-// GetAssetAdministrationShellDescriptorById - Returns a specific Asset Administration Shell Descriptor
-// nolint:revive // defined by standard
-func (s *CustomRegistryService) GetAssetAdministrationShellDescriptorById(
-	ctx context.Context,
-	aasIdentifier string,
-) (model.ImplResponse, error) {
-	ctx = descriptorsutil.WithIncludeAASDescriptorCreatedAt(ctx)
-	return s.AssetAdministrationShellRegistryAPIAPIService.GetAssetAdministrationShellDescriptorById(ctx, aasIdentifier)
 }
 
 // PostAssetAdministrationShellDescriptor executes default POST behavior.
@@ -550,7 +583,8 @@ func (s *CustomRegistryService) ExecuteBulkPutAtomic(
 
 func withDTRDescriptorWriteContext(ctx context.Context) context.Context {
 	ctx = descriptorsutil.WithAllowAASDescriptorCreatedAtOverride(ctx)
-	return descriptorsutil.WithIncludeAASDescriptorCreatedAt(ctx)
+	ctx = descriptorsutil.WithIncludeAASDescriptorCreatedAt(ctx)
+	return descriptorsutil.WithPublicReadableGlobalAssetIDExternalSubjectID(ctx)
 }
 
 func is2xx(code int) bool {
