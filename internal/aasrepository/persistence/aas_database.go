@@ -45,6 +45,7 @@ import (
 	"github.com/doug-martin/goqu/v9"
 	persistenceutils "github.com/eclipse-basyx/basyx-go-components/internal/aasrepository/persistence/utils"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/createprecheck"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/descriptors"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/history"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/jws"
@@ -359,6 +360,37 @@ func (s *AssetAdministrationShellDatabase) checkAASVisibilityInTx(ctx context.Co
 	return false, false, common.NewInternalServerError("AASREPO-ABACCHKAAS-EXECSQL " + scanErr.Error())
 }
 
+func (s *AssetAdministrationShellDatabase) ensureVisibleAASCreateDoesNotExist(ctx context.Context, tx *sql.Tx, aasIdentifier string) error {
+	return createprecheck.EnsureVisibleCreate(
+		ctx,
+		func(context.Context) (bool, error) {
+			_, err := persistenceutils.GetAssetAdministrationShellDatabaseID(tx, aasIdentifier)
+			if err == nil {
+				return true, nil
+			}
+			if errors.Is(err, sql.ErrNoRows) {
+				return false, nil
+			}
+			return false, common.NewInternalServerError("AASREPO-NEWAAS-CHKDUP-GETAASDBID " + err.Error())
+		},
+		func(readCtx context.Context) error {
+			exists, visible, err := s.checkAASVisibilityInTx(readCtx, tx, aasIdentifier)
+			if err != nil {
+				return err
+			}
+			if !exists {
+				return common.NewErrNotFound("AASREPO-NEWAAS-CHKDUP-NOTFOUND existing AAS not found")
+			}
+			if !visible {
+				return common.NewErrDenied("AASREPO-NEWAAS-CHKDUP-ABACDENIED existing AAS is not accessible under ABAC constraints")
+			}
+			return nil
+		},
+		"AASREPO-NEWAAS-CONFLICT AAS with given id already exists",
+		"AASREPO-NEWAAS-CHKDUP-ABACDENIED existing AAS is not accessible under ABAC constraints",
+	)
+}
+
 // CreateAssetAdministrationShell persists a new AAS and performs an ABAC re-check before commit when enabled.
 func (s *AssetAdministrationShellDatabase) CreateAssetAdministrationShell(ctx context.Context, aas types.IAssetAdministrationShell) error {
 	return common.ExecuteInTransaction(
@@ -378,6 +410,10 @@ func (s *AssetAdministrationShellDatabase) CreateAssetAdministrationShellInTrans
 	}
 
 	if err := s.verifyAssetAdministrationShell(aas, "AASREPO-NEWAAS-VERIFY"); err != nil {
+		return err
+	}
+
+	if err := s.ensureVisibleAASCreateDoesNotExist(ctx, tx, aas.ID()); err != nil {
 		return err
 	}
 
