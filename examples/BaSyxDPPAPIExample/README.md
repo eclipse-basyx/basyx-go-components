@@ -97,7 +97,7 @@ No Postman environment file is currently committed. Create a local environment w
 - `bearerToken`: bearer token for secured requests
 - `dppId`, `dppIdEncoded`: demo DPP ID and its double-URL-encoded form
 - `productId`, `productIdEncoded`: demo product ID and its double-URL-encoded form
-- `elementPath`: DPP element path such as `technicalData/manufacturerName`
+- `elementPath`: DPP element path for the collection payload, such as `batteryPassport/energyCapacityKWh`
 - `representation`: `compressed` or `full`
 - `historicalDate`, `currentTimestamp`: ISO-8601 timestamps used by history requests
 - `limit`, `cursor`: pagination values
