@@ -282,8 +282,8 @@ Notes:
 - Security-specific work should be scoped inside `if shouldEnforce { ... }` to avoid unnecessary overhead when formula checks are not required.
 
 Relevant code:
-- [internal/common/security/authorize.go](internal/common/security/authorize.go)
-- [internal/common/security/filter_helpers.go](internal/common/security/filter_helpers.go)
+- [internal/common/security/authorize.go](../../internal/common/security/authorize.go)
+- [internal/common/security/filter_helpers.go](../../internal/common/security/filter_helpers.go)
 
 Registry-specific operation semantics:
 - [docu/security/REGISTRY_SECURITY.md](REGISTRY_SECURITY.md)
