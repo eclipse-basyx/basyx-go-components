@@ -31,6 +31,7 @@ import (
 	"log"
 	"net/http"
 	"sync"
+	"time"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
@@ -175,7 +176,7 @@ func (s *CustomAASRepositoryService) reconcileDynamicAASDescriptors(ctx context.
 
 	cursor := ""
 	for {
-		aasList, nextCursor, getErr := s.persistence.AASRepository.GetAssetAdministrationShells(ctx, dynamicRegistryReconciliationPageSize, cursor, "", nil)
+		aasList, nextCursor, getErr := s.persistence.AASRepository.GetAssetAdministrationShells(ctx, dynamicRegistryReconciliationPageSize, cursor, "", nil, time.Time{}, time.Time{})
 		if getErr != nil {
 			return getErr
 		}
@@ -227,7 +228,7 @@ func (s *CustomSubmodelRepositoryService) reconcileDynamicSubmodelDescriptors(ct
 
 	cursor := ""
 	for {
-		submodels, nextCursor, getErr := s.persistence.SubmodelRepository.GetSubmodels(ctx, dynamicRegistryReconciliationPageSize, cursor, "")
+		submodels, nextCursor, getErr := s.persistence.SubmodelRepository.GetSubmodels(ctx, dynamicRegistryReconciliationPageSize, cursor, "", "", time.Time{}, time.Time{})
 		if getErr != nil {
 			return getErr
 		}

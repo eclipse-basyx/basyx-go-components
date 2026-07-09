@@ -41,7 +41,13 @@ func WithQueryFilter(ctx context.Context, queryFilter *QueryFilter) context.Cont
 
 // ContextWithoutQueryFilter masks any inherited query filter in ctx.
 func ContextWithoutQueryFilter(ctx context.Context) context.Context {
-	return context.WithValue(ctx, filterKey, (*QueryFilter)(nil))
+	return WithoutQueryFilter(ctx)
+}
+
+// WithoutQueryFilter returns a child context that keeps request metadata but
+// removes row-level ABAC filters for technical checks such as existence probes.
+func WithoutQueryFilter(ctx context.Context) context.Context {
+	return context.WithValue(ctx, filterKey, struct{}{})
 }
 
 // CloneQueryFilter returns a deep copy of the provided query filter.

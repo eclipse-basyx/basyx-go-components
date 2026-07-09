@@ -165,7 +165,7 @@ func (c RegistrySyncConfig) buildAASDescriptorEndpoints(aasID string) []commonmo
 
 func (c RegistrySyncConfig) buildAASDescriptorEndpointsForContext(ctx context.Context, aasID string) []commonmodel.Endpoint {
 	encodedID := common.EncodeString(aasID)
-	return c.buildEndpointsForContext(ctx, "/shells/"+encodedID)
+	return c.buildEndpointsForContext(ctx, "/shells/"+encodedID, aasDescriptorInterface)
 }
 
 func (c RegistrySyncConfig) buildSubmodelDescriptorEndpoints(submodelID string) []commonmodel.Endpoint {
@@ -174,7 +174,7 @@ func (c RegistrySyncConfig) buildSubmodelDescriptorEndpoints(submodelID string) 
 
 func (c RegistrySyncConfig) buildSubmodelDescriptorEndpointsForContext(ctx context.Context, submodelID string) []commonmodel.Endpoint {
 	encodedID := common.EncodeString(submodelID)
-	return c.buildEndpointsForContext(ctx, "/submodels/"+encodedID)
+	return c.buildEndpointsForContext(ctx, "/submodels/"+encodedID, submodelDescriptorInterface)
 }
 
 func (c RegistrySyncConfig) buildEmbeddedSubmodelDescriptors(references []types.IReference) []commonmodel.SubmodelDescriptor {
@@ -221,7 +221,7 @@ func (c RegistrySyncConfig) buildEmbeddedSubmodelDescriptorsForContext(ctx conte
 	return result
 }
 
-func (c RegistrySyncConfig) buildEndpointsForContext(ctx context.Context, resourcePath string) []commonmodel.Endpoint {
+func (c RegistrySyncConfig) buildEndpointsForContext(ctx context.Context, resourcePath string, endpointInterface string) []commonmodel.Endpoint {
 	externalBaseURLs := c.externalBaseURLsForContext(ctx)
 	endpoints := make([]commonmodel.Endpoint, 0, len(externalBaseURLs))
 	for _, externalBaseURL := range externalBaseURLs {
