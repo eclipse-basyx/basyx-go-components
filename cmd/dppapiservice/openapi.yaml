@@ -480,7 +480,7 @@ paths:
   /v1/dpps/{dppId}/elements/{elementIdPath}:
     get:
       description: |
-        Retrieves one DPP data element. The elementIdPath is an RFC 9535 Normalized Path selecting a single element inside the compressed DPP document and must be percent-encoded once as one path segment.
+        Retrieves one DPP data element. The elementIdPath is an RFC 9535 Normalized Path, the unique absolute path representation for one node, inside the compressed DPP document and must be percent-encoded once as one path segment. Query selectors that can address multiple nodes are not accepted.
       operationId: readDataElement
       parameters:
       - description: Percent-encoded Digital Product Passport identifier.
@@ -492,7 +492,7 @@ paths:
           minLength: 1
           type: string
         style: simple
-      - description: RFC 9535 Normalized Path selecting one DPP data element. Clients must percent-encode it once when placing it in a path segment.
+      - description: RFC 9535 Normalized Path, the unique absolute path representation selecting exactly one DPP data element. Multi-node query selectors are not accepted. Clients must percent-encode it once when placing it in a path segment.
         example: "$['https://admin-shell.io/idta/CarbonFootprint/CarbonFootprint/1/0']['ProductCarbonFootprints']"
         explode: false
         in: path
@@ -555,7 +555,7 @@ paths:
       - DPP Fine Granular
     patch:
       description: |
-        Updates one DPP data element using its compressed JSON value and updates lastUpdate. The elementIdPath is an RFC 9535 Normalized Path selecting a single element inside the compressed DPP document and must be percent-encoded once as one path segment. Full representation writes are not supported.
+        Updates one DPP data element using its compressed JSON value and updates lastUpdate. The elementIdPath is an RFC 9535 Normalized Path, the unique absolute path representation for one node, inside the compressed DPP document and must be percent-encoded once as one path segment. Query selectors that can address multiple nodes are not accepted. Full representation writes are not supported.
       operationId: updateDataElement
       parameters:
       - description: Percent-encoded Digital Product Passport identifier.
@@ -567,7 +567,7 @@ paths:
           minLength: 1
           type: string
         style: simple
-      - description: RFC 9535 Normalized Path selecting one DPP data element. Clients must percent-encode it once when placing it in a path segment.
+      - description: RFC 9535 Normalized Path, the unique absolute path representation selecting exactly one DPP data element. Multi-node query selectors are not accepted. Clients must percent-encode it once when placing it in a path segment.
         example: "$['https://admin-shell.io/idta/CarbonFootprint/CarbonFootprint/1/0']['ProductCarbonFootprints']"
         explode: false
         in: path
@@ -662,7 +662,7 @@ components:
         type: string
       style: simple
     ElementIdPath:
-      description: RFC 9535 Normalized Path selecting one DPP data element. Clients must percent-encode it once when placing it in a path segment.
+      description: RFC 9535 Normalized Path, the unique absolute path representation selecting exactly one DPP data element. Multi-node query selectors are not accepted. Clients must percent-encode it once when placing it in a path segment.
       example: "$['https://admin-shell.io/idta/CarbonFootprint/CarbonFootprint/1/0']['ProductCarbonFootprints']"
       explode: false
       in: path

@@ -167,9 +167,17 @@ func TestDPPLifecycleWithDockerCompose(t *testing.T) {
 	energyClassPath := encodedPathParam(dppElementJSONPath(lifecycleTechnicalDataSpec, "energyClass"))
 	updatedElementBody := doJSONAny(t, client, http.MethodPatch, baseURL+"/v1/dpps/"+encodedDPPID+"/elements/"+energyClassPath, "B", http.StatusOK)
 	assertScalarEquals(t, updatedElementBody, "B")
+	serialNumberPath := encodedPathParam(dppElementJSONPath(lifecycleTechnicalDataSpec, "serialNumbers") + "[0]")
+	serialNumberBody := doJSONAny(t, client, http.MethodGet, baseURL+"/v1/dpps/"+encodedDPPID+"/elements/"+serialNumberPath, nil, http.StatusOK)
+	assertScalarEquals(t, serialNumberBody, "SN-001")
+	fullSerialNumberBody := doJSONAny(t, client, http.MethodGet, baseURL+"/v1/dpps/"+encodedDPPID+"/elements/"+serialNumberPath+"?representation=full", nil, http.StatusOK)
+	assertDataElementObjectType(t, fullSerialNumberBody, "serialNumbers0", "SingleValuedDataElement")
+	updatedSerialNumberBody := doJSONAny(t, client, http.MethodPatch, baseURL+"/v1/dpps/"+encodedDPPID+"/elements/"+serialNumberPath, "SN-UPDATED", http.StatusOK)
+	assertScalarEquals(t, updatedSerialNumberBody, "SN-UPDATED")
 
 	readAfterElementUpdate := doJSON(t, client, http.MethodGet, baseURL+"/v1/dpps/"+encodedDPPID, nil, http.StatusOK)
 	assertDPPSectionPathEquals(t, readAfterElementUpdate, lifecycleTechnicalDataSpec, "energyClass", "B")
+	assertDPPSectionArrayValue(t, readAfterElementUpdate, lifecycleTechnicalDataSpec, "serialNumbers", 0, "SN-UPDATED")
 	assertDPPSectionPathEquals(t, readAfterElementUpdate, lifecycleCarbonFootprintSpec, "PcfCo2eq", "4200.5")
 
 	time.Sleep(30 * time.Millisecond)
@@ -433,6 +441,25 @@ func assertDPPSectionPathEquals(t *testing.T, body map[string]any, sectionName s
 	}
 	if value != expected {
 		t.Fatalf("%s.%s = %#v, want %q", sectionName, path, value, expected)
+	}
+}
+
+func assertDPPSectionArrayValue(t *testing.T, body map[string]any, sectionName string, path string, index int, expected string) {
+	t.Helper()
+	section, ok := body[sectionName].(map[string]any)
+	if !ok {
+		t.Fatalf("%s section = %#v, want object", sectionName, body[sectionName])
+	}
+	value, err := valueAtPath(section, path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	items, ok := value.([]any)
+	if !ok || index < 0 || index >= len(items) {
+		t.Fatalf("%s.%s = %#v, want array containing index %d", sectionName, path, value, index)
+	}
+	if items[index] != expected {
+		t.Fatalf("%s.%s[%d] = %#v, want %q", sectionName, path, index, items[index], expected)
 	}
 }
 

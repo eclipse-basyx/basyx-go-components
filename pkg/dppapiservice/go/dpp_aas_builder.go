@@ -38,22 +38,64 @@ func buildMetadataSubmodel(dppID string, header dppHeader) types.ISubmodel {
 	submodel.SetIDShort(&idShort)
 	submodel.SetSemanticID(globalReference(dppMetadataSemanticID))
 	elements := []types.ISubmodelElement{
-		stringProperty(headerDigitalProductPassportID, header.DigitalProductPassportID),
-		stringProperty(headerUniqueProductIdentifier, header.UniqueProductIdentifier),
-		stringProperty(headerGranularity, header.Granularity),
-		stringProperty(headerDppSchemaVersion, header.DppSchemaVersion),
-		stringProperty(headerDppStatus, header.DppStatus),
-		stringProperty(headerLastUpdate, header.LastUpdate.UTC().Format(time.RFC3339Nano)),
-		stringProperty(headerEconomicOperatorID, header.EconomicOperatorID),
+		metadataProperty(headerDigitalProductPassportID, dppIDSemanticID, header.DigitalProductPassportID, types.DataTypeDefXSDString),
+		metadataProperty(headerUniqueProductIdentifier, dppProductIDSemanticID, header.UniqueProductIdentifier, types.DataTypeDefXSDString),
+		metadataPropertyWithSupplementalSemanticID(headerGranularity, dppGranularitySemanticID, header.Granularity, types.DataTypeDefXSDString, dppGranularitySupplementalSemanticID),
+		metadataProperty(headerDppSchemaVersion, dppSchemaVersionSemanticID, header.DppSchemaVersion, types.DataTypeDefXSDString),
+		metadataProperty(headerDppStatus, dppStatusSemanticID, header.DppStatus, types.DataTypeDefXSDString),
+		metadataPropertyWithSupplementalSemanticID(headerLastUpdate, dppLastUpdateSemanticID, header.LastUpdate.UTC().Format(time.RFC3339Nano), types.DataTypeDefXSDDateTime, dppAdministrativeUpdateSupplementalSemanticID),
+		metadataProperty(headerEconomicOperatorID, dppEconomicOperatorIDSemanticID, header.EconomicOperatorID, types.DataTypeDefXSDString),
 	}
 	if header.FacilityID != "" {
-		elements = append(elements, stringProperty(headerFacilityID, header.FacilityID))
+		elements = append(elements, metadataProperty(headerFacilityID, dppFacilityIDSemanticID, header.FacilityID, types.DataTypeDefXSDString))
 	}
 	if len(header.ContentSpecificationIDs) > 0 {
-		elements = append(elements, stringList(headerContentSpecificationIDs, header.ContentSpecificationIDs))
+		elements = append(elements, metadataContentSpecificationIDs(header.ContentSpecificationIDs))
 	}
 	submodel.SetSubmodelElements(elements)
+	setNewDPPSubmodelAdministration(submodel, header.LastUpdate)
 	return submodel
+}
+
+func metadataProperty(idShort string, semanticID string, value string, valueType types.DataTypeDefXSD) types.ISubmodelElement {
+	property := scalarProperty(idShort, value, valueType)
+	property.SetSemanticID(globalReference(semanticID))
+	return property
+}
+
+func metadataPropertyWithSupplementalSemanticID(idShort string, semanticID string, value string, valueType types.DataTypeDefXSD, supplementalSemanticID string) types.ISubmodelElement {
+	property := metadataProperty(idShort, semanticID, value, valueType)
+	property.SetSupplementalSemanticIDs([]types.IReference{globalReference(supplementalSemanticID)})
+	return property
+}
+
+func metadataContentSpecificationIDs(values []string) types.ISubmodelElement {
+	list := types.NewSubmodelElementList(types.AASSubmodelElementsProperty)
+	idShort := headerContentSpecificationIDs
+	list.SetIDShort(&idShort)
+	list.SetSemanticID(globalReference(dppContentSpecificationIDsSemanticID))
+	list.SetSemanticIDListElement(globalReference(dppContentSpecificationIDSemanticID))
+	orderRelevant := false
+	list.SetOrderRelevant(&orderRelevant)
+	valueType := types.DataTypeDefXSDString
+	list.SetValueTypeListElement(&valueType)
+
+	items := make([]types.ISubmodelElement, 0, len(values))
+	for _, value := range values {
+		item := metadataProperty("", dppContentSpecificationIDSemanticID, value, types.DataTypeDefXSDString)
+		item.SetIDShort(nil)
+		items = append(items, item)
+	}
+	list.SetValue(items)
+	return list
+}
+
+func setNewDPPSubmodelAdministration(submodel types.ISubmodel, timestamp time.Time) {
+	formatted := timestamp.UTC().Format(time.RFC3339Nano)
+	administration := types.NewAdministrativeInformation()
+	administration.SetCreatedAt(&formatted)
+	administration.SetUpdatedAt(&formatted)
+	submodel.SetAdministration(administration)
 }
 
 func buildContentSubmodel(dppID string, sectionName string, semanticID string, value any) (types.ISubmodel, error) {

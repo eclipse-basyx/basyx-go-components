@@ -36,6 +36,7 @@ import (
 type dppElementPath struct {
 	sectionName string
 	idShortPath string
+	elementID   string
 }
 
 type dppJSONPathSegment struct {
@@ -56,7 +57,11 @@ func parseDPPJSONElementPath(elementIDPath string) (dppElementPath, error) {
 	if err != nil {
 		return dppElementPath{}, err
 	}
-	return dppElementPath{sectionName: segments[0].name, idShortPath: idShortPath}, nil
+	elementID, err := dppElementIDFromJSONPathSegments(segments[1:])
+	if err != nil {
+		return dppElementPath{}, err
+	}
+	return dppElementPath{sectionName: segments[0].name, idShortPath: idShortPath, elementID: elementID}, nil
 }
 
 func parseDPPJSONPathSegments(value string) ([]dppJSONPathSegment, error) {
@@ -215,6 +220,29 @@ func dppIDShortPathFromJSONPathSegments(segments []dppJSONPathSegment) (string, 
 		return "", invalidDPPElementIDPathError()
 	}
 	return strings.Join(parts, "."), nil
+}
+
+func dppElementIDFromJSONPathSegments(segments []dppJSONPathSegment) (string, error) {
+	if len(segments) == 0 {
+		return "", invalidDPPElementIDPathError()
+	}
+	last := len(segments) - 1
+	if !segments[last].isIndex {
+		return segments[last].name, nil
+	}
+	nameIndex := last
+	for nameIndex >= 0 && segments[nameIndex].isIndex {
+		nameIndex--
+	}
+	if nameIndex < 0 || segments[nameIndex].name == "" {
+		return "", invalidDPPElementIDPathError()
+	}
+	var elementID strings.Builder
+	elementID.WriteString(segments[nameIndex].name)
+	for index := nameIndex + 1; index <= last; index++ {
+		elementID.WriteString(strconv.Itoa(segments[index].index))
+	}
+	return elementID.String(), nil
 }
 
 func invalidDPPElementIDPathError() error {

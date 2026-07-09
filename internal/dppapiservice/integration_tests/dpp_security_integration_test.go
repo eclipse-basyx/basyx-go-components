@@ -80,7 +80,7 @@ func TestDPPSecurityWithDockerCompose(t *testing.T) {
 	viewerToken := passwordGrantToken(t, client, tokenEndpoint, "usera", "pwd")
 	editorToken := passwordGrantToken(t, client, tokenEndpoint, "userx", "pwd")
 
-	dppID := "https://www.example.org/dpp/security-" + strings.ReplaceAll(projectName, "-", "")
+	dppID := "https://www.example.org/dpp/security%2F" + strings.ReplaceAll(projectName, "-", "")
 	productID := "https://www.example.org/products/security-" + strings.ReplaceAll(projectName, "-", "")
 	encodedDPPID := encodedPathParam(dppID)
 	document := lifecycleDPPDocument(dppID, productID, time.Now().UTC())

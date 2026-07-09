@@ -120,12 +120,12 @@ func (c *DPPFineGranularAPIController) ReadDataElement(w http.ResponseWriter, r 
 		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
 		return
 	}
-	dppIdParam := decodePathParam(chi.URLParam(r, "dppId"))
+	dppIdParam := decodePathParam(r, chi.URLParam(r, "dppId"))
 	if dppIdParam == "" {
 		c.errorHandler(w, r, &RequiredError{"dppId"}, nil)
 		return
 	}
-	elementIdPathParam := decodePathParam(chi.URLParam(r, "elementIdPath"))
+	elementIdPathParam := decodePathParam(r, chi.URLParam(r, "elementIdPath"))
 	if elementIdPathParam == "" {
 		c.errorHandler(w, r, &RequiredError{"elementIdPath"}, nil)
 		return
@@ -149,12 +149,12 @@ func (c *DPPFineGranularAPIController) ReadDataElement(w http.ResponseWriter, r 
 
 // UpdateDataElement - Update single DPP data element
 func (c *DPPFineGranularAPIController) UpdateDataElement(w http.ResponseWriter, r *http.Request) {
-	dppIdParam := decodePathParam(chi.URLParam(r, "dppId"))
+	dppIdParam := decodePathParam(r, chi.URLParam(r, "dppId"))
 	if dppIdParam == "" {
 		c.errorHandler(w, r, &RequiredError{"dppId"}, nil)
 		return
 	}
-	elementIdPathParam := decodePathParam(chi.URLParam(r, "elementIdPath"))
+	elementIdPathParam := decodePathParam(r, chi.URLParam(r, "elementIdPath"))
 	if elementIdPathParam == "" {
 		c.errorHandler(w, r, &RequiredError{"elementIdPath"}, nil)
 		return

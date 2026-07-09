@@ -144,8 +144,12 @@ func (s *DPPRepositoryService) UpdateDPPFromJSON(ctx context.Context, dppID stri
 	if merged == nil {
 		return errorResponse(http.StatusBadRequest, errors.New("DPP-UPDDPP-MERGE merged DPP must be a JSON object")), nil
 	}
+	updatedAt, err := nextDPPUpdateTimestamp(time.Now().UTC(), current, currentContentSubmodels)
+	if err != nil {
+		return errorResponse(http.StatusInternalServerError, err), nil
+	}
 	merged[headerDigitalProductPassportID] = dppID
-	merged[headerLastUpdate] = time.Now().UTC().Format(time.RFC3339Nano)
+	merged[headerLastUpdate] = updatedAt.Format(time.RFC3339Nano)
 
 	raw, err := json.Marshal(merged)
 	if err != nil {
@@ -161,6 +165,7 @@ func (s *DPPRepositoryService) UpdateDPPFromJSON(ctx context.Context, dppID stri
 	if err != nil {
 		return errorResponse(http.StatusBadRequest, err), nil
 	}
+	applyDPPUpdateAdministration(submodels, currentResolved.metadata, currentContentSubmodels, header.LastUpdate)
 	refs = appendUnselectedContentSubmodelReferences(refs, currentResolved, currentContentSubmodels)
 	aas := buildAAS(header, refs)
 	staleSubmodelIDs := staleContentSubmodelIDs(currentContentSubmodels, submodels)
@@ -227,6 +232,72 @@ func appendUnselectedContentSubmodelReferences(refs []types.IReference, resolved
 		includedIDs[submodel.ID()] = struct{}{}
 	}
 	return refs
+}
+
+func applyDPPUpdateAdministration(replacements []types.ISubmodel, currentMetadata types.ISubmodel, currentContent []types.ISubmodel, timestamp time.Time) {
+	currentByID := make(map[string]types.ISubmodel, len(currentContent)+1)
+	currentByID[currentMetadata.ID()] = currentMetadata
+	currentBySemanticID := make(map[string]types.ISubmodel, len(currentContent))
+	for _, submodel := range currentContent {
+		currentByID[submodel.ID()] = submodel
+		if semanticID := referenceToString(submodel.SemanticID()); semanticID != "" {
+			currentBySemanticID[semanticID] = submodel
+		}
+	}
+
+	for _, replacement := range replacements {
+		current := currentByID[replacement.ID()]
+		if current == nil {
+			current = currentBySemanticID[referenceToString(replacement.SemanticID())]
+		}
+		replacement.SetAdministration(updatedDPPAdministration(current, timestamp))
+	}
+}
+
+func updatedDPPAdministration(current types.ISubmodel, timestamp time.Time) types.IAdministrativeInformation {
+	administration := types.NewAdministrativeInformation()
+	if current != nil && current.Administration() != nil {
+		existing := current.Administration()
+		administration.SetEmbeddedDataSpecifications(existing.EmbeddedDataSpecifications())
+		administration.SetVersion(existing.Version())
+		administration.SetRevision(existing.Revision())
+		administration.SetCreator(existing.Creator())
+		administration.SetCreatedAt(existing.CreatedAt())
+		administration.SetTemplateID(existing.TemplateID())
+	}
+
+	formatted := timestamp.UTC().Format(time.RFC3339Nano)
+	if administration.CreatedAt() == nil || strings.TrimSpace(*administration.CreatedAt()) == "" {
+		administration.SetCreatedAt(&formatted)
+	}
+	administration.SetUpdatedAt(&formatted)
+	return administration
+}
+
+func nextDPPUpdateTimestamp(now time.Time, current dppDocument, currentContent []types.ISubmodel) (time.Time, error) {
+	latest := now.UTC()
+	if rawLastUpdate, ok := current[headerLastUpdate].(string); ok && strings.TrimSpace(rawLastUpdate) != "" {
+		lastUpdate, err := common.ParseISO8601DateTime(rawLastUpdate)
+		if err != nil {
+			return time.Time{}, fmt.Errorf("DPP-UPDDPP-LASTUPDATE parse current lastUpdate: %w", err)
+		}
+		latest = timestampAfter(latest, lastUpdate)
+	}
+	for _, submodel := range currentContent {
+		contentTimestamp, err := dppContentSubmodelTimestamp(submodel)
+		if err != nil {
+			return time.Time{}, err
+		}
+		latest = timestampAfter(latest, contentTimestamp)
+	}
+	return latest, nil
+}
+
+func timestampAfter(candidate time.Time, current time.Time) time.Time {
+	if candidate.After(current) {
+		return candidate
+	}
+	return current.Add(time.Nanosecond)
 }
 
 func dppObjectFromAny(value any) map[string]any {
@@ -419,7 +490,7 @@ func (s *DPPRepositoryService) ReadDataElement(ctx context.Context, dppID string
 	if err != nil {
 		return mapPersistenceError(err, http.StatusNotFound), nil
 	}
-	body, err := elementResponse(element, normalizeRepresentation(representation))
+	body, err := elementResponse(element, normalizeRepresentation(representation), elementIDPath)
 	if err != nil {
 		return errorResponse(http.StatusInternalServerError, err), nil
 	}
@@ -831,6 +902,7 @@ func (s *DPPRepositoryService) buildSubmodels(header dppHeader, sections map[str
 		if err != nil {
 			return nil, nil, err
 		}
+		setNewDPPSubmodelAdministration(submodel, header.LastUpdate)
 		submodels = append(submodels, submodel)
 		refs = append(refs, submodelReference(submodel.ID()))
 	}
@@ -903,40 +975,42 @@ func (s *DPPRepositoryService) updatedMetadata(ctx context.Context, dppID string
 	if err != nil {
 		return nil, fmt.Errorf("DPP-TOUCHMETA-GET get metadata: %w", err)
 	}
+	header, err := composeHeader(metadata)
+	if err != nil {
+		return nil, fmt.Errorf("DPP-TOUCHMETA-COMPOSE compose current metadata: %w", err)
+	}
+	updatedAt, err := nextDPPUpdateTimestamp(time.Now().UTC(), header, []types.ISubmodel{metadata})
+	if err != nil {
+		return nil, fmt.Errorf("DPP-TOUCHMETA-TIMESTAMP determine next update timestamp: %w", err)
+	}
 	for _, element := range metadata.SubmodelElements() {
 		if element.IDShort() != nil && *element.IDShort() == headerLastUpdate {
-			value := time.Now().UTC().Format(time.RFC3339Nano)
+			value := updatedAt.Format(time.RFC3339Nano)
 			if property, ok := element.(*types.Property); ok {
 				property.SetValue(&value)
 			}
 		}
 	}
+	metadata.SetAdministration(updatedDPPAdministration(metadata, updatedAt))
 	return metadata, nil
 }
 
-func elementResponse(element types.ISubmodelElement, representation Representation) (any, error) {
+func elementResponse(element types.ISubmodelElement, representation Representation, elementIDPath string) (any, error) {
 	if representation == REPRESENTATION_FULL {
 		response, err := dppElementFromAAS(element)
 		if err != nil {
 			return nil, fmt.Errorf("DPP-ELEM-FULL convert element to DPP expanded representation: %w", err)
 		}
+		if response["elementId"] == "" {
+			parsed, err := parseDPPJSONElementPath(elementIDPath)
+			if err != nil {
+				return nil, err
+			}
+			response["elementId"] = parsed.elementID
+		}
 		return response, nil
 	}
-	idShort := element.IDShort()
-	if idShort == nil || *idShort == "" {
-		return nil, fmt.Errorf("DPP-ELEM-COMPRESSED element has no idShort")
-	}
-	submodel := types.NewSubmodel("dpp-element-response")
-	submodel.SetSubmodelElements([]types.ISubmodelElement{element})
-	content, err := compressedContent(submodel)
-	if err != nil {
-		return nil, err
-	}
-	object, ok := content.(map[string]any)
-	if !ok {
-		return nil, fmt.Errorf("DPP-ELEM-COMPRESSED compressed element response is not an object")
-	}
-	return object[*idShort], nil
+	return compressedElementValue(element)
 }
 
 func idShortOrID(submodel types.ISubmodel) string {

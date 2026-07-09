@@ -339,6 +339,61 @@ func TestAppendUnselectedContentSubmodelReferencesPreservesBaseSubmodelRefs(t *t
 	}
 }
 
+func TestDPPUpdateReplacementRemainsNewestForSharedSemanticID(t *testing.T) {
+	resolved := filteringResolvedDPP()
+	current := filteringContentSubmodel("currentNameplate", "CurrentNameplate", filteringNameplateSemantic, stringProperty("manufacturerName", "Current GmbH"))
+	older := filteringContentSubmodel("olderNameplate", "OlderNameplate", filteringNameplateSemantic, stringProperty("manufacturerName", "Older GmbH"))
+	setContentSubmodelUpdatedAt(current, "2026-07-10T12:00:00Z")
+	setContentSubmodelUpdatedAt(older, "2026-07-07T12:00:00Z")
+	resolved.submodels = []types.ISubmodel{resolved.metadata, current, older}
+
+	currentDocument, err := composeResolvedDPP(resolved, REPRESENTATION_COMPRESSED)
+	if err != nil {
+		t.Fatalf("composeResolvedDPP() error = %v", err)
+	}
+	updatedAt, err := nextDPPUpdateTimestamp(
+		time.Date(2026, time.July, 9, 12, 0, 0, 0, time.UTC),
+		currentDocument,
+		[]types.ISubmodel{current},
+	)
+	if err != nil {
+		t.Fatalf("nextDPPUpdateTimestamp() error = %v", err)
+	}
+	if !updatedAt.After(time.Date(2026, time.July, 10, 12, 0, 0, 0, time.UTC)) {
+		t.Fatalf("updatedAt = %s, want timestamp after current content", updatedAt)
+	}
+
+	replacement := filteringContentSubmodel("replacementNameplate", "ReplacementNameplate", filteringNameplateSemantic, stringProperty("manufacturerName", "Replacement GmbH"))
+	replacementMetadata := buildMetadataSubmodel(filteringDPPID, dppHeader{
+		DigitalProductPassportID: filteringDPPID,
+		UniqueProductIdentifier:  "https://example.org/products/filtering",
+		Granularity:              "Item",
+		DppSchemaVersion:         "1.0.0",
+		DppStatus:                "active",
+		LastUpdate:               updatedAt,
+		EconomicOperatorID:       "operator-123",
+		ContentSpecificationIDs:  []string{filteringNameplateSemantic},
+	})
+	applyDPPUpdateAdministration(
+		[]types.ISubmodel{replacementMetadata, replacement},
+		resolved.metadata,
+		[]types.ISubmodel{current},
+		updatedAt,
+	)
+
+	updated := resolvedDPP{
+		metadata:  replacementMetadata,
+		submodels: []types.ISubmodel{replacementMetadata, older, replacement},
+	}
+	selected, err := selectedResolvedContentSubmodels(updated)
+	if err != nil {
+		t.Fatalf("selectedResolvedContentSubmodels() error = %v", err)
+	}
+	if len(selected) != 1 || selected[0].ID() != replacement.ID() {
+		t.Fatalf("selected content = %#v, want replacement %q", selected, replacement.ID())
+	}
+}
+
 func filteringResolvedDPP() resolvedDPP {
 	header := dppHeader{
 		DigitalProductPassportID: filteringDPPID,
