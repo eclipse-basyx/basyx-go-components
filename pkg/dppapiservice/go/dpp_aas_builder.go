@@ -37,7 +37,7 @@ func buildMetadataSubmodel(dppID string, header dppHeader) types.ISubmodel {
 	idShort := dppMetadataIDShort
 	submodel.SetIDShort(&idShort)
 	submodel.SetSemanticID(globalReference(dppMetadataSemanticID))
-	submodel.SetSubmodelElements([]types.ISubmodelElement{
+	elements := []types.ISubmodelElement{
 		stringProperty(headerDigitalProductPassportID, header.DigitalProductPassportID),
 		stringProperty(headerUniqueProductIdentifier, header.UniqueProductIdentifier),
 		stringProperty(headerGranularity, header.Granularity),
@@ -45,15 +45,20 @@ func buildMetadataSubmodel(dppID string, header dppHeader) types.ISubmodel {
 		stringProperty(headerDppStatus, header.DppStatus),
 		stringProperty(headerLastUpdate, header.LastUpdate.UTC().Format(time.RFC3339Nano)),
 		stringProperty(headerEconomicOperatorID, header.EconomicOperatorID),
-		stringProperty(headerFacilityID, header.FacilityID),
-		stringList(headerContentSpecificationIDs, header.ContentSpecificationIDs),
-	})
+	}
+	if header.FacilityID != "" {
+		elements = append(elements, stringProperty(headerFacilityID, header.FacilityID))
+	}
+	if len(header.ContentSpecificationIDs) > 0 {
+		elements = append(elements, stringList(headerContentSpecificationIDs, header.ContentSpecificationIDs))
+	}
+	submodel.SetSubmodelElements(elements)
 	return submodel
 }
 
 func buildContentSubmodel(dppID string, sectionName string, semanticID string, value any) (types.ISubmodel, error) {
 	submodel := types.NewSubmodel(contentSubmodelID(dppID, sectionName))
-	idShort := upperFirst(sectionName)
+	idShort := contentSectionIDShort(sectionName)
 	submodel.SetIDShort(&idShort)
 	if semanticID != "" {
 		submodel.SetSemanticID(globalReference(semanticID))

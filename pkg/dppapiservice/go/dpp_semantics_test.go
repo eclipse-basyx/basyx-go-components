@@ -16,6 +16,8 @@ package dppapi
 import (
 	"strings"
 	"testing"
+
+	"github.com/FriedJannik/aas-go-sdk/verification"
 )
 
 func TestSemanticIDsForSectionsDoesNotInferFromSectionNames(t *testing.T) {
@@ -64,6 +66,65 @@ func TestSemanticIDsForSectionsUsesExpandedDictionaryReference(t *testing.T) {
 	}
 	if semanticIDs["technicalData"] != "urn:example:semantic:technical-data" {
 		t.Fatalf("technicalData semantic ID = %q", semanticIDs["technicalData"])
+	}
+}
+
+func TestSemanticIDsForSectionsUsesContentSpecificationIDSectionNames(t *testing.T) {
+	carbonFootprintSemanticID := "https://admin-shell.io/idta/CarbonFootprint/CarbonFootprint/1/0"
+	handoverDocumentationSemanticID := "https://admin-shell-io/idta/digitalproductpassport/HandoverDocumentation/2"
+	sections := map[string]any{
+		carbonFootprintSemanticID: map[string]any{
+			"ProductCarbonFootprints": []any{
+				map[string]any{"PcfCo2eq": "17.2"},
+			},
+		},
+		handoverDocumentationSemanticID: map[string]any{
+			"Documents": []any{
+				map[string]any{"Version": "V1.2"},
+			},
+		},
+	}
+
+	semanticIDs, err := semanticIDsForSections(sections, []string{
+		carbonFootprintSemanticID,
+		handoverDocumentationSemanticID,
+	})
+	if err != nil {
+		t.Fatalf("semanticIDsForSections() error = %v", err)
+	}
+	if semanticIDs[carbonFootprintSemanticID] != carbonFootprintSemanticID {
+		t.Fatalf("carbonFootprint semantic ID = %q", semanticIDs[carbonFootprintSemanticID])
+	}
+	if semanticIDs[handoverDocumentationSemanticID] != handoverDocumentationSemanticID {
+		t.Fatalf("handoverDocumentation semantic ID = %q", semanticIDs[handoverDocumentationSemanticID])
+	}
+}
+
+func TestBuildContentSubmodelUsesSafeIDShortForContentSpecificationIDSectionName(t *testing.T) {
+	semanticID := "https://admin-shell.io/idta/CarbonFootprint/CarbonFootprint/1/0"
+
+	submodel, err := buildContentSubmodel("dpp-1", semanticID, semanticID, map[string]any{
+		"PcfCo2eq": "17.2",
+	})
+	if err != nil {
+		t.Fatalf("buildContentSubmodel() error = %v", err)
+	}
+	if submodel.IDShort() == nil {
+		t.Fatal("submodel idShort = nil")
+	}
+	if *submodel.IDShort() != "CarbonFootprint" {
+		t.Fatalf("submodel idShort = %q, want CarbonFootprint", *submodel.IDShort())
+	}
+	if referenceToString(submodel.SemanticID()) != semanticID {
+		t.Fatalf("submodel semantic ID = %q, want %q", referenceToString(submodel.SemanticID()), semanticID)
+	}
+	verificationErrors := make([]string, 0)
+	verification.VerifySubmodel(submodel, func(err *verification.VerificationError) bool {
+		verificationErrors = append(verificationErrors, err.Error())
+		return false
+	})
+	if len(verificationErrors) != 0 {
+		t.Fatalf("VerifySubmodel() errors = %#v", verificationErrors)
 	}
 }
 

@@ -206,26 +206,26 @@ func (r *DPPRepositoryRouter) ReadDPPIdsByProductIds(w http.ResponseWriter, req 
 	r.write(w, response, err)
 }
 
-// ReadDataElement handles GET /v1/dpps/{dppId}/elements/{elementPath}.
+// ReadDataElement handles GET /v1/dpps/{dppId}/elements/{elementIdPath}.
 //
 // Parameters:
 //   - w: HTTP response writer used to encode the element response
-//   - req: HTTP request containing dppId, elementPath, and representation values
+//   - req: HTTP request containing dppId, elementIdPath, and representation values
 func (r *DPPRepositoryRouter) ReadDataElement(w http.ResponseWriter, req *http.Request) {
 	representation, invalid := queryRepresentation(req)
 	if invalid != nil {
 		r.write(w, *invalid, nil)
 		return
 	}
-	response, err := r.service.ReadDataElement(req.Context(), pathParam(req, "dppId"), elementPathParam(req), representation)
+	response, err := r.service.ReadDataElement(req.Context(), pathParam(req, "dppId"), elementIdPathParam(req), representation)
 	r.write(w, response, err)
 }
 
-// UpdateDataElement handles PATCH /v1/dpps/{dppId}/elements/{elementPath}.
+// UpdateDataElement handles PATCH /v1/dpps/{dppId}/elements/{elementIdPath}.
 //
 // Parameters:
 //   - w: HTTP response writer used to encode the element response
-//   - req: HTTP request containing dppId, elementPath, and replacement element body
+//   - req: HTTP request containing dppId, elementIdPath, and replacement element body
 func (r *DPPRepositoryRouter) UpdateDataElement(w http.ResponseWriter, req *http.Request) {
 	if invalid := queryCompressedWriteRepresentation(req, "UPDELEM"); invalid != nil {
 		r.write(w, *invalid, nil)
@@ -236,7 +236,7 @@ func (r *DPPRepositoryRouter) UpdateDataElement(w http.ResponseWriter, req *http
 		r.write(w, requestBodyErrorResponse("UPDELEM", err), nil)
 		return
 	}
-	response, err := r.service.UpdateDataElementFromJSON(req.Context(), pathParam(req, "dppId"), elementPathParam(req), body)
+	response, err := r.service.UpdateDataElementFromJSON(req.Context(), pathParam(req, "dppId"), elementIdPathParam(req), body)
 	r.write(w, response, err)
 }
 

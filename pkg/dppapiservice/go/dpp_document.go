@@ -136,7 +136,7 @@ func parseDPPHeader(doc dppDocument, requireHeaders bool) (dppHeader, error) {
 	if err != nil {
 		return header, err
 	}
-	header.FacilityID, err = stringField(doc, headerFacilityID, requireHeaders)
+	header.FacilityID, err = stringField(doc, headerFacilityID, false)
 	if err != nil {
 		return header, err
 	}
@@ -144,7 +144,7 @@ func parseDPPHeader(doc dppDocument, requireHeaders bool) (dppHeader, error) {
 	if err != nil {
 		return header, err
 	}
-	header.ContentSpecificationIDs, err = stringSliceField(doc, headerContentSpecificationIDs, requireHeaders)
+	header.ContentSpecificationIDs, err = stringSliceField(doc, headerContentSpecificationIDs, false)
 	if err != nil {
 		return header, err
 	}

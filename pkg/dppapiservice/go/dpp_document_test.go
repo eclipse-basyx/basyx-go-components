@@ -61,6 +61,92 @@ func TestDecodeDPPDocumentPreservesContentSections(t *testing.T) {
 	}
 }
 
+func TestDecodeDPPDocumentAcceptsOptionalHeaderFields(t *testing.T) {
+	tests := []struct {
+		name string
+		body string
+	}{
+		{
+			name: "omitted",
+			body: `{
+				"digitalProductPassportId":"dpp-1",
+				"uniqueProductIdentifier":"product-1",
+				"granularity":"Item",
+				"dppSchemaVersion":"EN18223:v1",
+				"dppStatus":"Active",
+				"lastUpdate":"2026-06-10T10:00:00Z",
+				"economicOperatorId":"operator-1"
+			}`,
+		},
+		{
+			name: "empty content specification IDs",
+			body: `{
+				"digitalProductPassportId":"dpp-1",
+				"uniqueProductIdentifier":"product-1",
+				"granularity":"Item",
+				"dppSchemaVersion":"EN18223:v1",
+				"dppStatus":"Active",
+				"lastUpdate":"2026-06-10T10:00:00Z",
+				"economicOperatorId":"operator-1",
+				"contentSpecificationIds":[]
+			}`,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			_, header, err := decodeDPPDocument([]byte(test.body), true)
+			if err != nil {
+				t.Fatalf("decodeDPPDocument() error = %v", err)
+			}
+			if header.FacilityID != "" {
+				t.Fatalf("facility ID = %q, want empty", header.FacilityID)
+			}
+			if len(header.ContentSpecificationIDs) != 0 {
+				t.Fatalf("content specification IDs = %#v, want none", header.ContentSpecificationIDs)
+			}
+
+			metadata := buildMetadataSubmodel(header.DigitalProductPassportID, header)
+			composed, err := composeHeader(metadata)
+			if err != nil {
+				t.Fatalf("composeHeader() error = %v", err)
+			}
+			if _, ok := composed[headerFacilityID]; ok {
+				t.Fatalf("composed header unexpectedly contains %s: %#v", headerFacilityID, composed)
+			}
+			if _, ok := composed[headerContentSpecificationIDs]; ok {
+				t.Fatalf("composed header unexpectedly contains %s: %#v", headerContentSpecificationIDs, composed)
+			}
+		})
+	}
+}
+
+func TestDecodeDPPDocumentRejectsInvalidOptionalHeaderValues(t *testing.T) {
+	validHeader := `{
+		"digitalProductPassportId":"dpp-1",
+		"uniqueProductIdentifier":"product-1",
+		"granularity":"Item",
+		"dppSchemaVersion":"EN18223:v1",
+		"dppStatus":"Active",
+		"lastUpdate":"2026-06-10T10:00:00Z",
+		"economicOperatorId":"operator-1"`
+	tests := []struct {
+		name  string
+		field string
+	}{
+		{name: "blank facility ID", field: `,"facilityId":""`},
+		{name: "blank content specification ID", field: `,"contentSpecificationIds":[""]`},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			_, _, err := decodeDPPDocument([]byte(validHeader+test.field+`}`), true)
+			if err == nil || !strings.Contains(err.Error(), "DPP-HEADER-INVALID") {
+				t.Fatalf("decodeDPPDocument() error = %v, want DPP-HEADER-INVALID", err)
+			}
+		})
+	}
+}
+
 func TestApplyMergePatchRemovesAndUpdatesFields(t *testing.T) {
 	target := map[string]any{
 		"dppStatus": "Active",

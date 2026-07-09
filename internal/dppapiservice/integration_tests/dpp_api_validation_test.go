@@ -53,6 +53,13 @@ func TestDPPAPIRejectsInvalidQueryParameters(t *testing.T) {
 			errorCode:  "DPP-REPRESENTATION-INVALID",
 		},
 		{
+			name:       "read by encoded URL id rejects invalid representation",
+			method:     http.MethodGet,
+			target:     "/v1/dpps/" + encodedPathParam("https://example.org/dpp/1") + "?representation=invalid",
+			statusCode: http.StatusBadRequest,
+			errorCode:  "DPP-REPRESENTATION-INVALID",
+		},
+		{
 			name:       "read by product id rejects invalid representation",
 			method:     http.MethodGet,
 			target:     "/v1/dppsByProductId/product-1?representation=invalid",
@@ -76,7 +83,7 @@ func TestDPPAPIRejectsInvalidQueryParameters(t *testing.T) {
 		{
 			name:       "element read rejects invalid representation",
 			method:     http.MethodGet,
-			target:     "/v1/dpps/dpp-1/elements/technicalData/manufacturerName?representation=invalid",
+			target:     "/v1/dpps/dpp-1/elements/" + encodedPathParam("$['technicalData']['manufacturerName']") + "?representation=invalid",
 			statusCode: http.StatusBadRequest,
 			errorCode:  "DPP-REPRESENTATION-INVALID",
 		},
@@ -105,7 +112,7 @@ func TestDPPAPIRejectsInvalidQueryParameters(t *testing.T) {
 		{
 			name:       "element update rejects full write representation",
 			method:     http.MethodPatch,
-			target:     "/v1/dpps/dpp-1/elements/technicalData/manufacturerName?representation=full",
+			target:     "/v1/dpps/dpp-1/elements/" + encodedPathParam("$['technicalData']['manufacturerName']") + "?representation=full",
 			statusCode: http.StatusNotImplemented,
 			errorCode:  "DPP-UPDELEM-FULLWRITE",
 		},
@@ -174,14 +181,6 @@ func TestDPPAPIRejectsInvalidPayloadsBeforePersistence(t *testing.T) {
 			body:       withDPPField("granularity", `"item"`),
 			statusCode: http.StatusBadRequest,
 			errorCode:  "DPP-HEADER-GRANULARITY",
-		},
-		{
-			name:       "create rejects empty contentSpecificationIds",
-			method:     http.MethodPost,
-			target:     "/v1/dpps",
-			body:       withDPPField("contentSpecificationIds", `[]`),
-			statusCode: http.StatusBadRequest,
-			errorCode:  "DPP-HEADER-MISSING",
 		},
 		{
 			name:       "create rejects content section scalar",
@@ -282,7 +281,7 @@ func TestDPPAPIRejectsInvalidPayloadsBeforePersistence(t *testing.T) {
 		{
 			name:       "element update rejects malformed json",
 			method:     http.MethodPatch,
-			target:     "/v1/dpps/dpp-1/elements/technicalData/manufacturerName",
+			target:     "/v1/dpps/dpp-1/elements/" + encodedPathParam("$['technicalData']['manufacturerName']"),
 			body:       `{"value":`,
 			statusCode: http.StatusBadRequest,
 			errorCode:  "DPP-UPDELEM-DECODE",
@@ -290,15 +289,15 @@ func TestDPPAPIRejectsInvalidPayloadsBeforePersistence(t *testing.T) {
 		{
 			name:       "element update rejects expanded object",
 			method:     http.MethodPatch,
-			target:     "/v1/dpps/dpp-1/elements/technicalData/manufacturerName",
+			target:     "/v1/dpps/dpp-1/elements/" + encodedPathParam("$['technicalData']['manufacturerName']"),
 			body:       `{"elementId":"manufacturerName","objectType":"SingleValuedDataElement","value":"Acme"}`,
 			statusCode: http.StatusBadRequest,
 			errorCode:  "DPP-COMPACT-FULLWRITE",
 		},
 		{
-			name:       "element read rejects invalid path",
+			name:       "element read rejects legacy section path",
 			method:     http.MethodGet,
-			target:     "/v1/dpps/dpp-1/elements/technicalData",
+			target:     "/v1/dpps/dpp-1/elements/technicalData/manufacturerName",
 			statusCode: http.StatusBadRequest,
 			errorCode:  "DPP-ELEMPATH-INVALID",
 		},
@@ -314,7 +313,7 @@ func TestDPPAPIRejectsInvalidPayloadsBeforePersistence(t *testing.T) {
 func TestDPPAPIUpdateDataElementDoesNotRegisterPUT(t *testing.T) {
 	service := dppapi.NewDPPRepositoryService(nil, nil)
 	router := dppapi.NewRouter(dppapi.NewDPPRepositoryRouter(service))
-	request := httptest.NewRequest(http.MethodPut, "/v1/dpps/dpp-1/elements/technicalData/manufacturerName", strings.NewReader(`"Acme"`))
+	request := httptest.NewRequest(http.MethodPut, "/v1/dpps/dpp-1/elements/"+encodedPathParam("$['technicalData']['manufacturerName']"), strings.NewReader(`"Acme"`))
 	response := httptest.NewRecorder()
 
 	router.ServeHTTP(response, request)

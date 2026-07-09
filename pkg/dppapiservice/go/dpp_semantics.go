@@ -57,6 +57,10 @@ func semanticIDsForSections(sections map[string]any, contentSpecificationIDs []s
 		contentSpecificationSet[id] = struct{}{}
 	}
 	for sectionName, section := range sections {
+		if _, ok := contentSpecificationSet[sectionName]; ok {
+			semanticIDs[sectionName] = sectionName
+			continue
+		}
 		semanticID, hasExplicitMapping, err := explicitSemanticIDForSection(sectionName, section)
 		if err != nil {
 			return nil, err

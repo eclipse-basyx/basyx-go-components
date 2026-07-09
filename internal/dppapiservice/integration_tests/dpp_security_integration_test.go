@@ -96,19 +96,20 @@ func TestDPPSecurityWithDockerCompose(t *testing.T) {
 	assertJSONPathEquals(t, readBody, "digitalProductPassportId", dppID)
 
 	doJSONAnyAuth(t, client, http.MethodPatch, baseURL+"/v1/dpps/"+encodedDPPID, viewerToken, map[string]any{
-		"technicalData": map[string]any{
+		lifecycleTechnicalDataSpec: map[string]any{
 			"manufacturerName": "Denied GmbH",
 		},
 	}, http.StatusForbidden)
 
 	patchBody := doJSONAuth(t, client, http.MethodPatch, baseURL+"/v1/dpps/"+encodedDPPID, editorToken, map[string]any{
-		"technicalData": map[string]any{
+		lifecycleTechnicalDataSpec: map[string]any{
 			"manufacturerName": "Secured Updated GmbH",
 		},
 	}, http.StatusOK)
-	assertJSONPathEquals(t, patchBody, "technicalData.manufacturerName", "Secured Updated GmbH")
+	assertDPPSectionPathEquals(t, patchBody, lifecycleTechnicalDataSpec, "manufacturerName", "Secured Updated GmbH")
 
-	elementBody := doJSONAnyAuth(t, client, http.MethodPatch, baseURL+"/v1/dpps/"+encodedDPPID+"/elements/technicalData/energyClass", editorToken, "B", http.StatusOK)
+	energyClassPath := encodedPathParam(dppElementJSONPath(lifecycleTechnicalDataSpec, "energyClass"))
+	elementBody := doJSONAnyAuth(t, client, http.MethodPatch, baseURL+"/v1/dpps/"+encodedDPPID+"/elements/"+energyClassPath, editorToken, "B", http.StatusOK)
 	assertScalarEquals(t, elementBody, "B")
 
 	doJSONAnyAuth(t, client, http.MethodDelete, baseURL+"/v1/dpps/"+encodedDPPID, editorToken, nil, http.StatusNoContent)

@@ -63,18 +63,14 @@ func pathParam(req *http.Request, name string) string {
 	return decodePathParam(chi.URLParam(req, name))
 }
 
-func elementPathParam(req *http.Request) string {
+func elementIdPathParam(req *http.Request) string {
 	return strings.TrimPrefix(decodePathParam(chi.URLParam(req, "*")), "/")
 }
 
 func decodePathParam(value string) string {
-	decoded := value
-	for range 3 {
-		next, err := url.PathUnescape(decoded)
-		if err != nil || next == decoded {
-			return decoded
-		}
-		decoded = next
+	decoded, err := url.PathUnescape(value)
+	if err != nil {
+		return value
 	}
 	return decoded
 }

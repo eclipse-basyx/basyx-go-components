@@ -29,9 +29,10 @@ package auth
 // EvalInput is the minimal set of request properties the ABAC engine needs to
 // evaluate a decision.
 type EvalInput struct {
-	Method string
-	Path   string
-	Claims Claims
+	Method    string
+	Path      string
+	RoutePath string
+	Claims    Claims
 }
 
 // Claims represents token claims extracted from a verified token.

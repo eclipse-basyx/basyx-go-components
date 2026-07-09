@@ -61,15 +61,15 @@ func NewDPPFineGranularAPIServiceWithDelegate(delegate DPPFineGranularAPIService
 // Parameters:
 //   - ctx: Request context used by the delegate
 //   - dppID: Identifier of the DPP that owns the element
-//   - elementPath: Content section and idShort path in <section>/<path> form
+//   - elementIDPath: RFC 9535 Normalized Path selecting a single DPP data element
 //   - representation: Requested compressed or full element representation
 //
 // Returns:
 //   - ImplResponse: Delegate response or not-configured response
 //   - error: Delegate error, if one is returned
-func (s *DPPFineGranularAPIService) ReadDataElement(ctx context.Context, dppID string, elementPath string, representation Representation) (ImplResponse, error) {
+func (s *DPPFineGranularAPIService) ReadDataElement(ctx context.Context, dppID string, elementIDPath string, representation Representation) (ImplResponse, error) {
 	if s.delegate != nil {
-		return s.delegate.ReadDataElement(ctx, dppID, elementPath, representation)
+		return s.delegate.ReadDataElement(ctx, dppID, elementIDPath, representation)
 	}
 	return serviceNotConfigured("ReadDataElement"), nil
 }
@@ -79,15 +79,15 @@ func (s *DPPFineGranularAPIService) ReadDataElement(ctx context.Context, dppID s
 // Parameters:
 //   - ctx: Request context used by the delegate
 //   - dppID: Identifier of the DPP that owns the element
-//   - elementPath: Content section and idShort path in <section>/<path> form
+//   - elementIDPath: RFC 9535 Normalized Path selecting a single DPP data element
 //   - dataElement: Generated DPP data element model used as replacement content
 //
 // Returns:
 //   - ImplResponse: Delegate response or not-configured response
 //   - error: Delegate error, if one is returned
-func (s *DPPFineGranularAPIService) UpdateDataElement(ctx context.Context, dppID string, elementPath string, dataElement DataElement) (ImplResponse, error) {
+func (s *DPPFineGranularAPIService) UpdateDataElement(ctx context.Context, dppID string, elementIDPath string, dataElement DataElement) (ImplResponse, error) {
 	if s.delegate != nil {
-		return s.delegate.UpdateDataElement(ctx, dppID, elementPath, dataElement)
+		return s.delegate.UpdateDataElement(ctx, dppID, elementIDPath, dataElement)
 	}
 	return serviceNotConfigured("UpdateDataElement"), nil
 }

@@ -42,7 +42,11 @@ import (
 	"time"
 )
 
-const dppComposeTestTimeout = 8 * time.Minute
+const (
+	dppComposeTestTimeout        = 8 * time.Minute
+	lifecycleTechnicalDataSpec   = "urn:example:semantic:technical-data"
+	lifecycleCarbonFootprintSpec = "https://admin-shell.io/idta/CarbonFootprint/CarbonFootprint/1/0"
+)
 
 func TestDPPLifecycleWithDockerCompose(t *testing.T) {
 	if testing.Short() {
@@ -78,29 +82,42 @@ func TestDPPLifecycleWithDockerCompose(t *testing.T) {
 	createBody := doJSON(t, client, http.MethodPost, baseURL+"/v1/dpps", document, http.StatusCreated)
 	assertJSONPathEquals(t, createBody, "digitalProductPassportId", dppID)
 
+	optionalDPPID := "https://www.example.org/dpp/optional/" + idSuffix
+	optionalDocument := lifecycleDPPDocument(optionalDPPID, "https://www.example.org/optional/"+idSuffix, now)
+	delete(optionalDocument, "facilityId")
+	delete(optionalDocument, "contentSpecificationIds")
+	optionalCreateBody := doJSON(t, client, http.MethodPost, baseURL+"/v1/dpps", optionalDocument, http.StatusCreated)
+	assertJSONPathEquals(t, optionalCreateBody, "digitalProductPassportId", optionalDPPID)
+	optionalReadBody := doJSON(t, client, http.MethodGet, baseURL+"/v1/dpps/"+encodedPathParam(optionalDPPID), nil, http.StatusOK)
+	assertJSONFieldMissing(t, optionalReadBody, "facilityId")
+	assertJSONFieldMissing(t, optionalReadBody, "contentSpecificationIds")
+
 	readBody := doJSON(t, client, http.MethodGet, baseURL+"/v1/dpps/"+encodedDPPID, nil, http.StatusOK)
 	assertJSONPathEquals(t, readBody, "digitalProductPassportId", dppID)
 	assertJSONPathEquals(t, readBody, "uniqueProductIdentifier", productID)
-	assertJSONPathEquals(t, readBody, "technicalData.manufacturerName", "Acme GmbH")
-	assertJSONPathEquals(t, readBody, "technicalData.manual.url", "https://example.test/manual.pdf")
-	assertJSONPathEquals(t, readBody, "technicalData.manual.resourceTitle", "User Manual")
+	assertDPPSectionPathEquals(t, readBody, lifecycleTechnicalDataSpec, "manufacturerName", "Acme GmbH")
+	assertDPPSectionPathEquals(t, readBody, lifecycleTechnicalDataSpec, "manual.url", "https://example.test/manual.pdf")
+	assertDPPSectionPathEquals(t, readBody, lifecycleTechnicalDataSpec, "manual.resourceTitle", "User Manual")
+	assertDPPSectionPathEquals(t, readBody, lifecycleCarbonFootprintSpec, "PcfCo2eq", "4180.75")
 
 	time.Sleep(30 * time.Millisecond)
 	createdVersionDate := time.Now().UTC()
 	time.Sleep(30 * time.Millisecond)
 	createdVersionBody := doJSON(t, client, http.MethodGet, historyURL(baseURL, encodedDPPID, createdVersionDate, "compressed"), nil, http.StatusOK)
-	assertJSONPathEquals(t, createdVersionBody, "technicalData.manufacturerName", "Acme GmbH")
+	assertDPPSectionPathEquals(t, createdVersionBody, lifecycleTechnicalDataSpec, "manufacturerName", "Acme GmbH")
 
 	fullBody := doJSON(t, client, http.MethodGet, baseURL+"/v1/dpps/"+encodedDPPID+"?representation=full", nil, http.StatusOK)
-	assertFullDPPSectionObjectType(t, fullBody, "technicalData", "DataElementCollection")
-	assertDPPElementObjectType(t, fullBody, "technicalData", "dimensions", "DataElementCollection")
-	assertDPPElementObjectType(t, fullBody, "technicalData", "manufacturerName", "SingleValuedDataElement")
-	assertDPPElementObjectType(t, fullBody, "technicalData", "manual", "RelatedResource")
-	assertDPPElementObjectType(t, fullBody, "technicalData", "productDescription", "MultiLanguageDataElement")
-	assertDPPElementObjectType(t, fullBody, "technicalData", "serialNumbers", "MultiValuedDataElement")
-	assertDPPElementValue(t, fullBody, "technicalData", "warrantyMonths", "valueDataType", "xsd:long")
-	assertDPPElementValue(t, fullBody, "technicalData", "manual", "resourceTitle", "User Manual")
-	assertDPPElementValue(t, fullBody, "technicalData", "manual", "language", "en-GB")
+	assertFullDPPSectionObjectType(t, fullBody, lifecycleTechnicalDataSpec, "DataElementCollection")
+	assertDPPElementObjectType(t, fullBody, lifecycleTechnicalDataSpec, "dimensions", "DataElementCollection")
+	assertDPPElementObjectType(t, fullBody, lifecycleTechnicalDataSpec, "manufacturerName", "SingleValuedDataElement")
+	assertDPPElementObjectType(t, fullBody, lifecycleTechnicalDataSpec, "manual", "RelatedResource")
+	assertDPPElementObjectType(t, fullBody, lifecycleTechnicalDataSpec, "productDescription", "MultiLanguageDataElement")
+	assertDPPElementObjectType(t, fullBody, lifecycleTechnicalDataSpec, "serialNumbers", "MultiValuedDataElement")
+	assertDPPElementValue(t, fullBody, lifecycleTechnicalDataSpec, "warrantyMonths", "valueDataType", "xsd:long")
+	assertDPPElementValue(t, fullBody, lifecycleTechnicalDataSpec, "manual", "resourceTitle", "User Manual")
+	assertDPPElementValue(t, fullBody, lifecycleTechnicalDataSpec, "manual", "language", "en-GB")
+	assertFullDPPSectionObjectType(t, fullBody, lifecycleCarbonFootprintSpec, "DataElementCollection")
+	assertDPPElementObjectType(t, fullBody, lifecycleCarbonFootprintSpec, "PcfCo2eq", "SingleValuedDataElement")
 
 	productBody := doJSON(t, client, http.MethodGet, baseURL+"/v1/dppsByProductId/"+encodedProductID, nil, http.StatusOK)
 	assertJSONPathEquals(t, productBody, "digitalProductPassportId", dppID)
@@ -114,48 +131,56 @@ func TestDPPLifecycleWithDockerCompose(t *testing.T) {
 	beforePatchDate := time.Now().UTC()
 	time.Sleep(30 * time.Millisecond)
 	patchBody := doJSON(t, client, http.MethodPatch, baseURL+"/v1/dpps/"+encodedDPPID, map[string]any{
-		"technicalData": map[string]any{
+		lifecycleTechnicalDataSpec: map[string]any{
 			"manufacturerName": "Acme Updated GmbH",
 			"warrantyMonths":   36,
 		},
 	}, http.StatusOK)
-	assertJSONPathEquals(t, patchBody, "technicalData.manufacturerName", "Acme Updated GmbH")
-	assertJSONPathEquals(t, patchBody, "technicalData.warrantyMonths", "36")
+	assertDPPSectionPathEquals(t, patchBody, lifecycleTechnicalDataSpec, "manufacturerName", "Acme Updated GmbH")
+	assertDPPSectionPathEquals(t, patchBody, lifecycleTechnicalDataSpec, "warrantyMonths", "36")
 
 	prePatchVersionBody := doJSON(t, client, http.MethodGet, historyURL(baseURL, encodedDPPID, beforePatchDate, "compressed"), nil, http.StatusOK)
-	assertJSONPathEquals(t, prePatchVersionBody, "technicalData.manufacturerName", "Acme GmbH")
+	assertDPPSectionPathEquals(t, prePatchVersionBody, lifecycleTechnicalDataSpec, "manufacturerName", "Acme GmbH")
 
 	time.Sleep(30 * time.Millisecond)
 	updatedVersionDate := time.Now().UTC()
 	time.Sleep(30 * time.Millisecond)
 	updatedVersionBody := doJSON(t, client, http.MethodGet, historyURL(baseURL, encodedDPPID, updatedVersionDate, "compressed"), nil, http.StatusOK)
-	assertJSONPathEquals(t, updatedVersionBody, "technicalData.manufacturerName", "Acme Updated GmbH")
+	assertDPPSectionPathEquals(t, updatedVersionBody, lifecycleTechnicalDataSpec, "manufacturerName", "Acme Updated GmbH")
 
 	fullVersionBody := doJSON(t, client, http.MethodGet, historyURL(baseURL, encodedDPPID, updatedVersionDate, "full"), nil, http.StatusOK)
-	assertFullDPPSectionObjectType(t, fullVersionBody, "technicalData", "DataElementCollection")
-	assertDPPElementObjectType(t, fullVersionBody, "technicalData", "dimensions", "DataElementCollection")
-	assertDPPElementObjectType(t, fullVersionBody, "technicalData", "manufacturerName", "SingleValuedDataElement")
+	assertFullDPPSectionObjectType(t, fullVersionBody, lifecycleTechnicalDataSpec, "DataElementCollection")
+	assertDPPElementObjectType(t, fullVersionBody, lifecycleTechnicalDataSpec, "dimensions", "DataElementCollection")
+	assertDPPElementObjectType(t, fullVersionBody, lifecycleTechnicalDataSpec, "manufacturerName", "SingleValuedDataElement")
 
-	elementBody := doJSONAny(t, client, http.MethodGet, baseURL+"/v1/dpps/"+encodedDPPID+"/elements/technicalData/manufacturerName", nil, http.StatusOK)
+	elementIDPath := encodedPathParam(dppElementJSONPath(lifecycleTechnicalDataSpec, "manufacturerName"))
+	elementBody := doJSONAny(t, client, http.MethodGet, baseURL+"/v1/dpps/"+encodedDPPID+"/elements/"+elementIDPath, nil, http.StatusOK)
 	assertScalarEquals(t, elementBody, "Acme Updated GmbH")
 
-	fullElementBody := doJSONAny(t, client, http.MethodGet, baseURL+"/v1/dpps/"+encodedDPPID+"/elements/technicalData/manufacturerName?representation=full", nil, http.StatusOK)
+	fullElementBody := doJSONAny(t, client, http.MethodGet, baseURL+"/v1/dpps/"+encodedDPPID+"/elements/"+elementIDPath+"?representation=full", nil, http.StatusOK)
 	assertDataElementObjectType(t, fullElementBody, "manufacturerName", "SingleValuedDataElement")
 
-	updatedElementBody := doJSONAny(t, client, http.MethodPatch, baseURL+"/v1/dpps/"+encodedDPPID+"/elements/technicalData/energyClass", "B", http.StatusOK)
+	carbonPath := encodedPathParam(dppElementJSONPath(lifecycleCarbonFootprintSpec, "PcfCo2eq"))
+	updatedCarbonBody := doJSONAny(t, client, http.MethodPatch, baseURL+"/v1/dpps/"+encodedDPPID+"/elements/"+carbonPath, 4200.5, http.StatusOK)
+	assertScalarEquals(t, updatedCarbonBody, "4200.5")
+
+	energyClassPath := encodedPathParam(dppElementJSONPath(lifecycleTechnicalDataSpec, "energyClass"))
+	updatedElementBody := doJSONAny(t, client, http.MethodPatch, baseURL+"/v1/dpps/"+encodedDPPID+"/elements/"+energyClassPath, "B", http.StatusOK)
 	assertScalarEquals(t, updatedElementBody, "B")
 
 	readAfterElementUpdate := doJSON(t, client, http.MethodGet, baseURL+"/v1/dpps/"+encodedDPPID, nil, http.StatusOK)
-	assertJSONPathEquals(t, readAfterElementUpdate, "technicalData.energyClass", "B")
+	assertDPPSectionPathEquals(t, readAfterElementUpdate, lifecycleTechnicalDataSpec, "energyClass", "B")
+	assertDPPSectionPathEquals(t, readAfterElementUpdate, lifecycleCarbonFootprintSpec, "PcfCo2eq", "4200.5")
 
 	time.Sleep(30 * time.Millisecond)
 	beforeDeleteDate := time.Now().UTC()
 	time.Sleep(30 * time.Millisecond)
 	doJSON(t, client, http.MethodDelete, baseURL+"/v1/dpps/"+encodedDPPID, nil, http.StatusNoContent)
 	preDeleteVersionBody := doJSON(t, client, http.MethodGet, historyURL(baseURL, encodedDPPID, beforeDeleteDate, "compressed"), nil, http.StatusOK)
-	assertJSONPathEquals(t, preDeleteVersionBody, "technicalData.energyClass", "B")
+	assertDPPSectionPathEquals(t, preDeleteVersionBody, lifecycleTechnicalDataSpec, "energyClass", "B")
 	doJSON(t, client, http.MethodGet, historyURL(baseURL, encodedDPPID, time.Now().UTC(), "compressed"), nil, http.StatusNotFound)
 	doJSON(t, client, http.MethodGet, baseURL+"/v1/dpps/"+encodedDPPID, nil, http.StatusNotFound)
+	doJSON(t, client, http.MethodDelete, baseURL+"/v1/dpps/"+encodedPathParam(optionalDPPID), nil, http.StatusNoContent)
 }
 
 func lifecycleDPPDocument(dppID string, productID string, now time.Time) map[string]any {
@@ -168,8 +193,8 @@ func lifecycleDPPDocument(dppID string, productID string, now time.Time) map[str
 		"lastUpdate":               now.Format(time.RFC3339Nano),
 		"economicOperatorId":       "operator-123",
 		"facilityId":               "facility-456",
-		"contentSpecificationIds":  []string{"technicalData-specification"},
-		"technicalData": map[string]any{
+		"contentSpecificationIds":  []string{lifecycleTechnicalDataSpec, lifecycleCarbonFootprintSpec},
+		lifecycleTechnicalDataSpec: map[string]any{
 			"manufacturerName": "Acme GmbH",
 			"warrantyMonths":   24,
 			"energyClass":      "A",
@@ -188,6 +213,11 @@ func lifecycleDPPDocument(dppID string, productID string, now time.Time) map[str
 				"language":      "en-GB",
 				"resourceTitle": "User Manual",
 			},
+		},
+		lifecycleCarbonFootprintSpec: map[string]any{
+			"PcfCo2eq":                          4180.75,
+			"ReferenceImpactUnitForCalculation": "kg CO2e",
+			"PcfCalculationMethods":             []string{"ISO 14067"},
 		},
 	}
 }
@@ -350,7 +380,21 @@ func encodeBody(body any) ([]byte, error) {
 }
 
 func encodedPathParam(value string) string {
-	return url.PathEscape(url.PathEscape(value))
+	return url.PathEscape(value)
+}
+
+func dppElementJSONPath(sectionName string, elementNames ...string) string {
+	var builder strings.Builder
+	builder.WriteString("$")
+	builder.WriteString(jsonPathMember(sectionName))
+	for _, elementName := range elementNames {
+		builder.WriteString(jsonPathMember(elementName))
+	}
+	return builder.String()
+}
+
+func jsonPathMember(value string) string {
+	return "['" + strings.ReplaceAll(value, "'", "\\'") + "']"
 }
 
 func historyURL(baseURL string, encodedDPPID string, date time.Time, representation string) string {
@@ -368,6 +412,28 @@ func assertJSONPathEquals(t *testing.T, body map[string]any, path string, expect
 	}
 	if value != expected {
 		t.Fatalf("%s = %#v, want %q", path, value, expected)
+	}
+}
+
+func assertJSONFieldMissing(t *testing.T, body map[string]any, field string) {
+	t.Helper()
+	if _, ok := body[field]; ok {
+		t.Fatalf("%s unexpectedly present in %#v", field, body)
+	}
+}
+
+func assertDPPSectionPathEquals(t *testing.T, body map[string]any, sectionName string, path string, expected string) {
+	t.Helper()
+	section, ok := body[sectionName].(map[string]any)
+	if !ok {
+		t.Fatalf("%s section = %#v, want object", sectionName, body[sectionName])
+	}
+	value, err := valueAtPath(section, path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if value != expected {
+		t.Fatalf("%s.%s = %#v, want %q", sectionName, path, value, expected)
 	}
 }
 
@@ -415,6 +481,9 @@ func fullDPPSection(t *testing.T, body map[string]any, sectionName string) map[s
 	if !ok {
 		t.Fatalf("elements = %#v, want array", body["elements"])
 	}
+	if section, ok := findFullElementByDictionaryReference(elements, sectionName); ok {
+		return section
+	}
 	if section, ok := findFullElement(elements, upperFirst(sectionName)); ok {
 		return section
 	}
@@ -429,6 +498,19 @@ func findFullElement(elements []any, elementID string) (map[string]any, bool) {
 			continue
 		}
 		if element["elementId"] == elementID {
+			return element, true
+		}
+	}
+	return nil, false
+}
+
+func findFullElementByDictionaryReference(elements []any, dictionaryReference string) (map[string]any, bool) {
+	for _, item := range elements {
+		element, ok := item.(map[string]any)
+		if !ok {
+			continue
+		}
+		if element["dictionaryReference"] == dictionaryReference {
 			return element, true
 		}
 	}
