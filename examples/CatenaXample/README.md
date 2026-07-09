@@ -5,7 +5,7 @@ Digital Twin Registry and Submodel Repository. The name combines "Catena-X"
 and "example"; the scenarios model Catena-X-style partner visibility with
 public markers and BPN-specific markers.
 
-This example builds the current repository code and runs:
+This example pulls the BaSyx `SNAPSHOT` images and runs:
 
 - a Digital Twin Registry on `http://localhost:5004/api/v3`;
 - a Submodel Repository on `http://localhost:5005`;
@@ -35,11 +35,15 @@ semantic ID marker rows.
 Run from this directory:
 
 ```bash
-docker compose up -d --build
+docker compose up -d
 ```
 
 The BaSyx UI uses the `basyx-ui` OAuth2 auth-code client from the imported
 Keycloak realm and is configured through `basyx-infra.yml`.
+
+To run locally built BaSyx service images instead, build the same `SNAPSHOT`
+tags from the repository root first and start this compose stack with
+`docker compose up -d --pull never`.
 
 ## UI Setup
 

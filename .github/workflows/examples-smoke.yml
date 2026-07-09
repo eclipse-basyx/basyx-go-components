@@ -67,6 +67,13 @@ jobs:
             image_builds: |
               eclipsebasyx/digitaltwinregistry-go:SNAPSHOT|./cmd/digitaltwinregistryservice/Dockerfile
               eclipsebasyx/basyxconfigurationservice-go:SNAPSHOT|./cmd/basyxconfigurationservice/Dockerfile
+          - target_name: CatenaXample
+            compose_files: |
+              examples/CatenaXample/docker-compose.yml
+            image_builds: |
+              eclipsebasyx/digitaltwinregistry-go:SNAPSHOT|./cmd/digitaltwinregistryservice/Dockerfile
+              eclipsebasyx/submodelrepository-go:SNAPSHOT|./cmd/submodelrepositoryservice/Dockerfile
+              eclipsebasyx/basyxconfigurationservice-go:SNAPSHOT|./cmd/basyxconfigurationservice/Dockerfile
           - target_name: Company Lookup Example
             compose_files: |
               examples/BaSyxCompanyLookup/docker-compose.yml
