@@ -384,13 +384,12 @@ func encodedPathParam(value string) string {
 }
 
 func dppElementJSONPath(sectionName string, elementNames ...string) string {
-	var builder strings.Builder
-	builder.WriteString("$")
-	builder.WriteString(jsonPathMember(sectionName))
+	parts := make([]string, 0, len(elementNames)+2)
+	parts = append(parts, "$", jsonPathMember(sectionName))
 	for _, elementName := range elementNames {
-		builder.WriteString(jsonPathMember(elementName))
+		parts = append(parts, jsonPathMember(elementName))
 	}
-	return builder.String()
+	return strings.Join(parts, "")
 }
 
 func jsonPathMember(value string) string {

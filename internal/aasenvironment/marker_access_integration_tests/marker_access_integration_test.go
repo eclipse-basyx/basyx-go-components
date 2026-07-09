@@ -134,9 +134,14 @@ func markerComposeReplacements(
 	}
 	repositoryRoot := filepath.Clean(filepath.Join(absoluteExamplePath, "..", ".."))
 	replacements := markerReplacements(runtime)
+	configurationImage := "    image: eclipsebasyx/basyxconfigurationservice-go:SNAPSHOT\n    pull_policy: always"
+	digitalTwinRegistryImage := "    image: eclipsebasyx/digitaltwinregistry-go:SNAPSHOT\n    pull_policy: always"
+	submodelRepositoryImage := "    image: eclipsebasyx/submodelrepository-go:SNAPSHOT\n    pull_policy: always"
 	required := []string{
 		"    container_name: marker-access-aas-web-ui\n",
-		"context: ../..",
+		configurationImage,
+		digitalTwinRegistryImage,
+		submodelRepositoryImage,
 		"- ./security/dtr:/security:ro",
 		"- ./security/smrepo:/security:ro",
 		"- ./basyx-infra.yml:/basyx-infra.yml:ro",
@@ -147,16 +152,22 @@ func markerComposeReplacements(
 		`- "8080:8080"`,
 	}
 	replacements[required[0]] = ""
-	replacements[required[1]] = fmt.Sprintf("context: %q", repositoryRoot)
-	replacements[required[2]] = "- " + dtrSecurityEnv + ":/security:ro"
-	replacements[required[3]] = "- " + smSecurityEnv + ":/security:ro"
-	replacements[required[4]] = "- " + infraFile + ":/basyx-infra.yml:ro"
-	replacements[required[5]] = "- " + filepath.Join(absoluteExamplePath, "keycloak", "realm") + ":/opt/keycloak/data/import:ro"
-	replacements[required[6]] = fmt.Sprintf(`- "127.0.0.1:%d:5004"`, runtime.Port("dtr"))
-	replacements[required[7]] = fmt.Sprintf(`- "127.0.0.1:%d:5004"`, runtime.Port("sm"))
-	replacements[required[8]] = fmt.Sprintf(`- "127.0.0.1:%d:3000"`, runtime.Port("ui"))
-	replacements[required[9]] = fmt.Sprintf(`- "0.0.0.0:%d:8080"`, runtime.Port("keycloak"))
+	replacements[required[1]] = markerLocalBuild(repositoryRoot, "./cmd/basyxconfigurationservice/Dockerfile")
+	replacements[required[2]] = markerLocalBuild(repositoryRoot, "./cmd/digitaltwinregistryservice/Dockerfile")
+	replacements[required[3]] = markerLocalBuild(repositoryRoot, "./cmd/submodelrepositoryservice/Dockerfile")
+	replacements[required[4]] = "- " + dtrSecurityEnv + ":/security:ro"
+	replacements[required[5]] = "- " + smSecurityEnv + ":/security:ro"
+	replacements[required[6]] = "- " + infraFile + ":/basyx-infra.yml:ro"
+	replacements[required[7]] = "- " + filepath.Join(absoluteExamplePath, "keycloak", "realm") + ":/opt/keycloak/data/import:ro"
+	replacements[required[8]] = fmt.Sprintf(`- "127.0.0.1:%d:5004"`, runtime.Port("dtr"))
+	replacements[required[9]] = fmt.Sprintf(`- "127.0.0.1:%d:5004"`, runtime.Port("sm"))
+	replacements[required[10]] = fmt.Sprintf(`- "127.0.0.1:%d:3000"`, runtime.Port("ui"))
+	replacements[required[11]] = fmt.Sprintf(`- "0.0.0.0:%d:8080"`, runtime.Port("keycloak"))
 	return replacements, required
+}
+
+func markerLocalBuild(repositoryRoot string, dockerfile string) string {
+	return fmt.Sprintf("    build:\n      context: %q\n      dockerfile: %s", repositoryRoot, dockerfile)
 }
 
 func prepareMarkerFile(

@@ -91,14 +91,14 @@ func parseDPPJSONPathBracketSegment(value string, index int) (dppJSONPathSegment
 func parseDPPJSONPathQuotedSegment(value string, index int) (dppJSONPathSegment, int, error) {
 	quote := value[index]
 	index++
-	var builder strings.Builder
+	name := make([]rune, 0)
 	for index < len(value) {
 		if value[index] == '\\' {
 			escaped, next, err := parseDPPJSONPathEscape(value, index)
 			if err != nil {
 				return dppJSONPathSegment{}, 0, err
 			}
-			builder.WriteRune(escaped)
+			name = append(name, escaped)
 			index = next
 			continue
 		}
@@ -106,17 +106,16 @@ func parseDPPJSONPathQuotedSegment(value string, index int) (dppJSONPathSegment,
 			if index+1 >= len(value) || value[index+1] != ']' {
 				return dppJSONPathSegment{}, 0, invalidDPPElementIDPathError()
 			}
-			name := builder.String()
-			if name == "" {
+			if len(name) == 0 {
 				return dppJSONPathSegment{}, 0, invalidDPPElementIDPathError()
 			}
-			return dppJSONPathSegment{name: name}, index + 2, nil
+			return dppJSONPathSegment{name: string(name)}, index + 2, nil
 		}
 		r, width := utf8.DecodeRuneInString(value[index:])
 		if r == utf8.RuneError && width == 1 || r < 0x20 {
 			return dppJSONPathSegment{}, 0, invalidDPPElementIDPathError()
 		}
-		builder.WriteRune(r)
+		name = append(name, r)
 		index += width
 	}
 	return dppJSONPathSegment{}, 0, invalidDPPElementIDPathError()
@@ -197,29 +196,25 @@ func parseDPPJSONPathIndexSegment(value string, index int) (dppJSONPathSegment, 
 }
 
 func dppIDShortPathFromJSONPathSegments(segments []dppJSONPathSegment) (string, error) {
-	var builder strings.Builder
+	parts := make([]string, 0, len(segments))
 	for _, segment := range segments {
 		if segment.isIndex {
-			if builder.Len() == 0 {
+			if len(parts) == 0 {
 				return "", invalidDPPElementIDPathError()
 			}
-			builder.WriteString("[")
-			builder.WriteString(strconv.Itoa(segment.index))
-			builder.WriteString("]")
+			last := len(parts) - 1
+			parts[last] += "[" + strconv.Itoa(segment.index) + "]"
 			continue
 		}
 		if segment.name == "" {
 			return "", invalidDPPElementIDPathError()
 		}
-		if builder.Len() > 0 {
-			builder.WriteString(".")
-		}
-		builder.WriteString(segment.name)
+		parts = append(parts, segment.name)
 	}
-	if builder.Len() == 0 {
+	if len(parts) == 0 {
 		return "", invalidDPPElementIDPathError()
 	}
-	return builder.String(), nil
+	return strings.Join(parts, "."), nil
 }
 
 func invalidDPPElementIDPathError() error {
