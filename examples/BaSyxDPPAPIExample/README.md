@@ -91,13 +91,13 @@ Import `BaSyx-DPP-API.postman_collection.json` into Postman to run the example s
 - Read and update individual DPP elements
 - Delete the demo DPP when you are done
 
-No Postman environment file is currently committed. Create a local environment with these variables when you want to run the full collection:
+The collection contains default collection variables, so a separate Postman environment is not required for the default stack. Adjust these variables in the collection when needed:
 
 - `baseUrl`: `http://localhost:8080` for the default stack or `http://localhost:8088` for the secured stack
 - `bearerToken`: bearer token for secured requests
-- `dppId`, `dppIdEncoded`: demo DPP ID and its double-URL-encoded form
-- `productId`, `productIdEncoded`: demo product ID and its double-URL-encoded form
-- `elementPath`: DPP element path for the collection payload, such as `batteryPassport/energyCapacityKWh`
+- `dppId`, `dppIdEncoded`: demo DPP ID and its percent-encoded form
+- `productId`, `productIdEncoded`: demo product ID and its percent-encoded form
+- `elementIdPath`, `elementIdPathEncoded`: RFC 9535 Normalized Path for the collection payload, such as `$['https://admin-shell.io/idta/CarbonFootprint/CarbonFootprint/1/0']['ProductCarbonFootprints']`
 - `representation`: `compressed` or `full`
 - `historicalDate`, `currentTimestamp`: ISO-8601 timestamps used by history requests
 - `limit`, `cursor`: pagination values
@@ -113,28 +113,28 @@ curl -i \
 
 ## Read The DPP
 
-The example DPP ID is `https://example.org/dpp/demo-product-001`.
+The example DPP ID is `https://www.example.org/batterypassport/1234545`.
 
 ```bash
-curl http://localhost:8080/v1/dpps/https%253A%252F%252Fexample.org%252Fdpp%252Fdemo-product-001
+curl http://localhost:8080/v1/dpps/https%3A%2F%2Fwww.example.org%2Fbatterypassport%2F1234545
 ```
 
 Read the full representation:
 
 ```bash
-curl "http://localhost:8080/v1/dpps/https%253A%252F%252Fexample.org%252Fdpp%252Fdemo-product-001?representation=full"
+curl "http://localhost:8080/v1/dpps/https%3A%2F%2Fwww.example.org%2Fbatterypassport%2F1234545?representation=full"
 ```
 
 Read by product ID:
 
 ```bash
-curl http://localhost:8080/v1/dppsByProductId/https%253A%252F%252Fexample.org%252Fproducts%252Fdemo-product-001
+curl http://localhost:8080/v1/dppsByProductId/https%3A%2F%2Fwww.example.org%2F1234545
 ```
 
 Read a single data element:
 
 ```bash
-curl http://localhost:8080/v1/dpps/https%253A%252F%252Fexample.org%252Fdpp%252Fdemo-product-001/elements/technicalData/manufacturerName
+curl http://localhost:8080/v1/dpps/https%3A%2F%2Fwww.example.org%2Fbatterypassport%2F1234545/elements/%24%5B%27https%3A%2F%2Fadmin-shell.io%2Fidta%2FCarbonFootprint%2FCarbonFootprint%2F1%2F0%27%5D%5B%27ProductCarbonFootprints%27%5D
 ```
 
 Update a single data element:
@@ -143,14 +143,14 @@ Update a single data element:
 curl -i \
   -X PATCH \
   -H "Content-Type: application/json" \
-  --data '"B"' \
-  http://localhost:8080/v1/dpps/https%253A%252F%252Fexample.org%252Fdpp%252Fdemo-product-001/elements/technicalData/energyClass
+  --data '"VoltFabrik GmbH - Curl Update"' \
+  http://localhost:8080/v1/dpps/https%3A%2F%2Fwww.example.org%2Fbatterypassport%2F1234545/elements/%24%5B%27https%3A%2F%2Fadmin-shell-io%2Fidta%2Fdigitalproductpassport%2FNameplate%2F1%27%5D%5B%27ManufacturerName%27%5D
 ```
 
 Read a historical DPP version:
 
 ```bash
-curl "http://localhost:8080/v1/dppsByIdAndDate/https%253A%252F%252Fexample.org%252Fdpp%252Fdemo-product-001?date=2026-06-11T12:00:00Z&representation=compressed"
+curl "http://localhost:8080/v1/dppsByIdAndDate/https%3A%2F%2Fwww.example.org%2Fbatterypassport%2F1234545?date=2026-06-11T12:00:00Z&representation=compressed"
 ```
 
 ## Service Endpoints
@@ -187,4 +187,6 @@ docker compose down -v
 - The DB schema is initialized by the BaSyx Configuration Service before the DPP API and AAS Environment start.
 - The DPP API and AAS Environment use the same PostgreSQL database, so DPP-created AAS and Submodels are visible through the AAS Environment APIs and UI.
 - The DPP API Service enables audit history internally, and the compose environment enables the same audit/history settings for both DPP API and AAS Environment.
-- Path parameters containing URLs must be URL-escaped twice for the generated router.
+- The sample uses compressed EN 18223-style content: top-level content keys are the `contentSpecificationIds`; full/expanded representation is available via `representation=full`.
+- Fine-grained element paths use RFC 9535 Normalized Path syntax, for example `$['<contentSpecificationId>']['<elementId>']`.
+- Path parameters containing URLs or Normalized Path expressions must be percent-encoded once so they stay one path segment.
