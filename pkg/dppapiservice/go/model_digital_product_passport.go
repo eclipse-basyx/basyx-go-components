@@ -40,13 +40,13 @@ import (
 	"time"
 )
 
-// DigitalProductPassport - A single DPP JSON document composed from the DppMetadata header and DPP content.
+// DigitalProductPassport - A single DPP JSON document composed from DPP header fields and content sections.
 type DigitalProductPassport struct {
 
-	// DPP identifier. Similar to, but not necessarily identical to, the AAS id.
+	// Digital Product Passport identifier.
 	DigitalProductPassportId string `json:"digitalProductPassportId"`
 
-	// Product identifier corresponding to the AAS AssetInformation globalAssetId.
+	// Unique product identifier associated with the DPP.
 	UniqueProductIdentifier string `json:"uniqueProductIdentifier"`
 
 	Granularity Granularity `json:"granularity"`
@@ -55,17 +55,17 @@ type DigitalProductPassport struct {
 
 	DppStatus string `json:"dppStatus"`
 
-	// Timestamp corresponding to AAS AdministrativeInformation updatedAt.
+	// Timestamp of the latest DPP update.
 	LastUpdate time.Time `json:"lastUpdate"`
 
 	// Economic operator identifier as specified by EN 18219.
 	EconomicOperatorId string `json:"economicOperatorId"`
 
 	// Facility identifier as specified by EN 18219.
-	FacilityId string `json:"facilityId"`
+	FacilityId string `json:"facilityId,omitempty"`
 
-	// Semantic identifiers of contributing content Submodels. The DPP document shall contain matching top-level content sections.
-	ContentSpecificationIds []string `json:"contentSpecificationIds"`
+	// Identifiers of content specifications contributing DPP content sections.
+	ContentSpecificationIds []string `json:"contentSpecificationIds,omitempty"`
 
 	// Expanded read-only DPP DataElements returned when representation=full.
 	Elements []DataElement `json:"elements,omitempty"`
@@ -81,8 +81,6 @@ func AssertDigitalProductPassportRequired(obj DigitalProductPassport) error {
 		"dppStatus":                obj.DppStatus,
 		"lastUpdate":               obj.LastUpdate,
 		"economicOperatorId":       obj.EconomicOperatorId,
-		"facilityId":               obj.FacilityId,
-		"contentSpecificationIds":  obj.ContentSpecificationIds,
 	}
 	for name, el := range elements {
 		if isZero := IsZeroValue(el); isZero {
