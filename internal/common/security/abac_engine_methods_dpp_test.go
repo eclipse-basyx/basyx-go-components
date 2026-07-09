@@ -57,6 +57,12 @@ func TestMapMethodAndPathToRights_DPPAPIRoutes(t *testing.T) {
 			want:   []grammar.RightsEnum{grammar.RightsEnumREAD},
 		},
 		{
+			name:   "read dpp by encoded URL id maps to read",
+			method: http.MethodGet,
+			path:   "/v1/dpps/https%3A%2F%2Fexample.org%2Fdpp%2F1",
+			want:   []grammar.RightsEnum{grammar.RightsEnumREAD},
+		},
+		{
 			name:   "delete dpp by id maps to delete",
 			method: http.MethodDelete,
 			path:   "/v1/dpps/demo",
@@ -104,6 +110,12 @@ func TestMapMethodAndPathToRights_DPPAPIRoutes(t *testing.T) {
 			path:   "/v1/dpps/demo/elements/technicalData/energyClass",
 			want:   []grammar.RightsEnum{grammar.RightsEnumUPDATE},
 		},
+		{
+			name:   "patch data element by encoded JSONPath maps to update",
+			method: http.MethodPatch,
+			path:   "/v1/dpps/https%3A%2F%2Fexample.org%2Fdpp%2F1/elements/%24%5B%27https%3A%2F%2Fexample.org%2Fspec%27%5D%5B%27energyClass%27%5D",
+			want:   []grammar.RightsEnum{grammar.RightsEnumUPDATE},
+		},
 	}
 
 	for _, tt := range tests {
@@ -121,6 +133,182 @@ func TestMapMethodAndPathToRights_DPPAPIRoutes(t *testing.T) {
 			assertRightsAlternative(t, rights, tt.want)
 		})
 	}
+}
+
+func TestABACMiddleware_DPPURLLikeIdentifierUsesEscapedPath(t *testing.T) {
+	router := chi.NewRouter()
+	common.ConfigureAPIRouter(router, "DPPAPIService")
+	model, err := ParseAccessModel([]byte(`{
+		"AllAccessPermissionRules": {
+			"DEFATTRIBUTES": [
+				{
+					"name": "sub_claim",
+					"attributes": [
+						{ "CLAIM": "sub" }
+					]
+				}
+			],
+			"DEFOBJECTS": [
+				{
+					"name": "dpp_api",
+					"objects": [
+						{ "ROUTE": "/v1/dpps/*" }
+					]
+				}
+			],
+			"DEFACLS": [
+				{
+					"name": "read",
+					"acl": {
+						"USEATTRIBUTES": "sub_claim",
+						"RIGHTS": [ "READ" ],
+						"ACCESS": "ALLOW"
+					}
+				}
+			],
+			"DEFFORMULAS": [
+				{
+					"name": "always_true",
+					"formula": { "$boolean": true }
+				}
+			],
+			"rules": [
+				{
+					"USEACL": "read",
+					"USEOBJECTS": [ "dpp_api" ],
+					"USEFORMULA": "always_true"
+				}
+			]
+		}
+	}`), router, "")
+	if err != nil {
+		t.Fatalf("ParseAccessModel() error = %v", err)
+	}
+
+	router.Use(ABACMiddleware(ABACSettings{
+		Enabled: true,
+		Model:   model,
+	}))
+	handlerCalled := false
+	router.Method(http.MethodGet, "/v1/dpps/{dppId}", http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		handlerCalled = true
+		w.WriteHeader(http.StatusNoContent)
+	}))
+
+	req := httptest.NewRequest(http.MethodGet, "/v1/dpps/https%3A%2F%2Fexample.org%2Fdpp%2F1", nil)
+	ctx := context.WithValue(req.Context(), ClaimsKey, Claims{"sub": "tester"})
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("expected status %d, got %d: %s", http.StatusNoContent, rec.Code, rec.Body.String())
+	}
+	if !handlerCalled {
+		t.Fatal("protected DPP handler was not called")
+	}
+}
+
+func TestABACMiddleware_EncodedSpaceUsesDecodedPathForPolicyMatching(t *testing.T) {
+	router := chi.NewRouter()
+	common.ConfigureAPIRouter(router, "DPPAPIService")
+	model, err := ParseAccessModel([]byte(`{
+		"AllAccessPermissionRules": {
+			"DEFATTRIBUTES": [
+				{
+					"name": "sub_claim",
+					"attributes": [
+						{ "CLAIM": "sub" }
+					]
+				}
+			],
+			"DEFOBJECTS": [
+				{
+					"name": "exact_dpp",
+					"objects": [
+						{ "ROUTE": "/v1/dpps/product one" }
+					]
+				}
+			],
+			"DEFACLS": [
+				{
+					"name": "read",
+					"acl": {
+						"USEATTRIBUTES": "sub_claim",
+						"RIGHTS": [ "READ" ],
+						"ACCESS": "ALLOW"
+					}
+				}
+			],
+			"DEFFORMULAS": [
+				{
+					"name": "always_true",
+					"formula": { "$boolean": true }
+				}
+			],
+			"rules": [
+				{
+					"USEACL": "read",
+					"USEOBJECTS": [ "exact_dpp" ],
+					"USEFORMULA": "always_true"
+				}
+			]
+		}
+	}`), router, "")
+	if err != nil {
+		t.Fatalf("ParseAccessModel() error = %v", err)
+	}
+
+	router.Use(ABACMiddleware(ABACSettings{
+		Enabled: true,
+		Model:   model,
+	}))
+	handlerCalled := false
+	router.Method(http.MethodGet, "/v1/dpps/{dppId}", http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		handlerCalled = true
+		w.WriteHeader(http.StatusNoContent)
+	}))
+
+	req := httptest.NewRequest(http.MethodGet, "/v1/dpps/product%20one", nil)
+	ctx := context.WithValue(req.Context(), ClaimsKey, Claims{"sub": "tester"})
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("expected status %d, got %d: %s", http.StatusNoContent, rec.Code, rec.Body.String())
+	}
+	if !handlerCalled {
+		t.Fatal("protected DPP handler was not called")
+	}
+}
+
+func TestABACMiddleware_DPPURLLikeIdentifierWrongMethodReturnsMethodNotAllowed(t *testing.T) {
+	router := chi.NewRouter()
+	common.ConfigureAPIRouter(router, "DPPAPIService")
+	model := &AccessModel{apiRouter: router, basePath: ""}
+
+	router.Use(ABACMiddleware(ABACSettings{
+		Enabled: true,
+		Model:   model,
+	}))
+	router.Method(http.MethodGet, "/v1/dpps/{dppId}", http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	}))
+
+	req := httptest.NewRequest(http.MethodPost, "/v1/dpps/https%3A%2F%2Fexample.org%2Fdpp%2F1", nil)
+	ctx := context.WithValue(req.Context(), ClaimsKey, Claims{"sub": "tester"})
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("expected status %d, got %d: %s", http.StatusMethodNotAllowed, rec.Code, rec.Body.String())
+	}
+	assertRouterErrorBody(t, rec.Body.Bytes(), "method not allowed", "DPPAPISERVICE-ROUTER-METHODNOTALLOWED")
 }
 
 func TestMapMethodAndPathToRights_DPPRejectsEmptyWildcardTrailingSlash(t *testing.T) {
