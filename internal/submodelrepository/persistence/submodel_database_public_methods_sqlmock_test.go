@@ -31,6 +31,7 @@ import (
 	"errors"
 	"os"
 	"testing"
+	"time"
 
 	sqlmock "github.com/DATA-DOG/go-sqlmock"
 	"github.com/FriedJannik/aas-go-sdk/jsonization"
@@ -64,7 +65,28 @@ func TestGetSubmodelsDatabaseQueryError(t *testing.T) {
 	mock.ExpectQuery(`SELECT .*FROM .*submodel`).
 		WillReturnError(errors.New("query failed"))
 
-	items, cursor, err := sut.GetSubmodels(contextWithABACDisabled(t), 10, "", "")
+	items, cursor, err := sut.GetSubmodels(contextWithABACDisabled(t), 10, "", "", "", time.Time{}, time.Time{})
+	require.Error(t, err)
+	require.Nil(t, items)
+	require.Empty(t, cursor)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestGetSubmodelsByListFiltersUsesIDShortColumn(t *testing.T) {
+	t.Parallel()
+
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer func() {
+		_ = db.Close()
+	}()
+
+	sut := &SubmodelDatabase{db: db}
+
+	mock.ExpectQuery(`"submodel"\."id_short" = 'FilterShort'`).
+		WillReturnError(errors.New("query stopped"))
+
+	items, cursor, err := sut.GetSubmodelsByListFilters(contextWithABACDisabled(t), 10, "", "FilterShort", "", time.Time{}, time.Time{})
 	require.Error(t, err)
 	require.Nil(t, items)
 	require.Empty(t, cursor)
@@ -107,6 +129,8 @@ func TestCreateSubmodelInsertFailureRollsBack(t *testing.T) {
 	submodel.SetIDShort(&idShort)
 
 	mock.ExpectBegin()
+	mock.ExpectQuery(`SELECT "id" FROM "submodel"`).
+		WillReturnRows(sqlmock.NewRows([]string{"id"}))
 	mock.ExpectQuery(`INSERT INTO .*submodel.*RETURNING`).
 		WillReturnError(errors.New("insert failed"))
 	mock.ExpectRollback()
@@ -133,6 +157,8 @@ func TestCreateSubmodelDuplicateIdentifierReturnsConflict(t *testing.T) {
 	submodel.SetIDShort(&idShort)
 
 	mock.ExpectBegin()
+	mock.ExpectQuery(`SELECT "id" FROM "submodel"`).
+		WillReturnRows(sqlmock.NewRows([]string{"id"}))
 	mock.ExpectQuery(`INSERT INTO .*submodel.*RETURNING`).
 		WillReturnError(&pgconn.PgError{Code: "23505"})
 	mock.ExpectRollback()
@@ -759,70 +785,6 @@ func TestQuerySubmodelsMissingConditionReturnsBadRequest(t *testing.T) {
 	require.Empty(t, cursor)
 	require.True(t, common.IsErrBadRequest(err))
 	require.Contains(t, err.Error(), "SMREPO-QUERYSMS-INVALIDQUERY")
-}
-
-func TestIsIDShortDuplicateEmptyIDShortReturnsFalse(t *testing.T) {
-	t.Parallel()
-
-	element := types.NewProperty(types.DataTypeDefXSDString)
-
-	collision := isIDShortDuplicate(nil, 1, nil, element)
-	require.False(t, collision)
-}
-
-func TestIsIDShortDuplicateTopLevelReturnsTrue(t *testing.T) {
-	t.Parallel()
-
-	db, mock, err := sqlmock.New()
-	require.NoError(t, err)
-	defer func() {
-		_ = db.Close()
-	}()
-
-	mock.ExpectBegin()
-	tx, err := db.Begin()
-	require.NoError(t, err)
-
-	idShort := "duplicate"
-	element := types.NewProperty(types.DataTypeDefXSDString)
-	element.SetIDShort(&idShort)
-
-	mock.ExpectQuery(`SELECT COUNT\(\*\) FROM "submodel_element"`).
-		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(1))
-	mock.ExpectRollback()
-
-	collision := isIDShortDuplicate(tx, 42, nil, element)
-	require.True(t, collision)
-	require.NoError(t, tx.Rollback())
-	require.NoError(t, mock.ExpectationsWereMet())
-}
-
-func TestIsIDShortDuplicateNestedReturnsFalse(t *testing.T) {
-	t.Parallel()
-
-	db, mock, err := sqlmock.New()
-	require.NoError(t, err)
-	defer func() {
-		_ = db.Close()
-	}()
-
-	mock.ExpectBegin()
-	tx, err := db.Begin()
-	require.NoError(t, err)
-
-	idShort := "nested"
-	element := types.NewProperty(types.DataTypeDefXSDString)
-	element.SetIDShort(&idShort)
-
-	parentID := 99
-	mock.ExpectQuery(`SELECT COUNT\(\*\) FROM "submodel_element"`).
-		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(0))
-	mock.ExpectRollback()
-
-	collision := isIDShortDuplicate(tx, 42, &parentID, element)
-	require.False(t, collision)
-	require.NoError(t, tx.Rollback())
-	require.NoError(t, mock.ExpectationsWereMet())
 }
 
 func TestGetSubmodelReferencesReturnsModelReferencesWithSingleSubmodelKey(t *testing.T) {

@@ -45,7 +45,7 @@ Compose engine is auto-detected via `FindCompose()` (`docker compose` first, the
 
 - `ComposeFile` default: `docker_compose/docker_compose.yml`
 - `UpArgs` default: `["up", "-d", "--build"]`
-- `DownArgs` default: `["down"]`
+- `DownArgs` default: `["down", "-v", "--remove-orphans"]`
 - `UpTimeout` default: `10m` (timeout for compose `up`)
 - `DownTimeout` default: `10m` (timeout for compose `down`)
 - `PreDownBeforeUp`: run `down` before `up`
@@ -53,6 +53,27 @@ Compose engine is auto-detected via `FindCompose()` (`docker compose` first, the
 - `HealthURL`: wait for HTTP 200 before running tests
 - `HealthTimeout`: timeout for `HealthURL` (default `2m` when set)
 - `WaitForReady`: optional custom readiness callback
+
+### Dynamic Ports
+
+Use `ComposeRuntime` when a test package needs unique project names and locked host ports:
+
+```go
+func TestMain(m *testing.M) {
+	runtime := testenv.NewComposeRuntimeOrExit("submodelrepository-it", []testenv.PortBinding{
+		{Name: "api", EnvVar: "BASYX_IT_API_PORT"},
+	})
+	defer runtime.Release()
+
+	os.Exit(testenv.RunComposeTestMain(m, testenv.ComposeTestMainOptions{
+		ComposeFile:     "docker_compose/docker_compose.yml",
+		ProjectName:     runtime.ProjectName,
+		Env:             runtime.Env(),
+		HealthURL:       runtime.LocalURL("api") + "/health",
+		PreDownBeforeUp: true,
+	}))
+}
+```
 
 Health check behavior:
 

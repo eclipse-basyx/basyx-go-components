@@ -1,0 +1,156 @@
+[
+  {
+    "context": "Post shell descriptor as admin",
+    "method": "POST",
+    "endpoint": "{{BASYX_MARKER_DTR_URL}}/api/v3/shell-descriptors",
+    "data": "{{BASYX_MARKER_DATA_DIR}}/shell-descriptor.json",
+    "expectedStatus": 201,
+    "token": { "user": "admin", "password": "pwd" }
+  },
+  {
+    "context": "Post public submodel as admin",
+    "method": "POST",
+    "endpoint": "{{BASYX_MARKER_SM_URL}}/submodels",
+    "data": "{{BASYX_MARKER_DATA_DIR}}/public-submodel.json",
+    "expectedStatus": 201,
+    "token": { "user": "admin", "password": "pwd" }
+  },
+  {
+    "context": "Post restricted submodel as admin",
+    "method": "POST",
+    "endpoint": "{{BASYX_MARKER_SM_URL}}/submodels",
+    "data": "{{BASYX_MARKER_DATA_DIR}}/restricted-submodel.json",
+    "expectedStatus": 201,
+    "token": { "user": "admin", "password": "pwd" }
+  },
+  {
+    "context": "DTR admin sees everything",
+    "method": "GET",
+    "endpoint": "{{BASYX_MARKER_DTR_URL}}/api/v3/shell-descriptors",
+    "shouldMatch": "{{BASYX_MARKER_EXPECTED_DIR}}/dtr_admin.json",
+    "expectedStatus": 200,
+    "token": { "user": "admin", "password": "pwd" }
+  },
+  {
+    "context": "DTR admin remains unrestricted with unrelated BPN header",
+    "method": "GET",
+    "endpoint": "{{BASYX_MARKER_DTR_URL}}/api/v3/shell-descriptors",
+    "shouldMatch": "{{BASYX_MARKER_EXPECTED_DIR}}/dtr_admin.json",
+    "expectedStatus": 200,
+    "headers": { "Edc-Bpn": "BPN_COMPANY_999" },
+    "token": { "user": "admin", "password": "pwd" }
+  },
+  {
+    "context": "DTR anonymous sees public data",
+    "method": "GET",
+    "endpoint": "{{BASYX_MARKER_DTR_URL}}/api/v3/shell-descriptors",
+    "shouldMatch": "{{BASYX_MARKER_EXPECTED_DIR}}/dtr_public.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "DTR regular token sees public data",
+    "method": "GET",
+    "endpoint": "{{BASYX_MARKER_DTR_URL}}/api/v3/shell-descriptors",
+    "shouldMatch": "{{BASYX_MARKER_EXPECTED_DIR}}/dtr_public.json",
+    "expectedStatus": 200,
+    "token": { "user": "usera", "password": "pwd" }
+  },
+  {
+    "context": "DTR BPN company 1 sees own markers",
+    "method": "GET",
+    "endpoint": "{{BASYX_MARKER_DTR_URL}}/api/v3/shell-descriptors",
+    "shouldMatch": "{{BASYX_MARKER_EXPECTED_DIR}}/dtr_bpn1.json",
+    "expectedStatus": 200,
+    "headers": { "Edc-Bpn": "BPN_COMPANY_001" }
+  },
+  {
+    "context": "DTR regular token with BPN company 1 sees own markers",
+    "method": "GET",
+    "endpoint": "{{BASYX_MARKER_DTR_URL}}/api/v3/shell-descriptors",
+    "shouldMatch": "{{BASYX_MARKER_EXPECTED_DIR}}/dtr_bpn1.json",
+    "expectedStatus": 200,
+    "headers": { "Edc-Bpn": "BPN_COMPANY_001" },
+    "token": { "user": "usera", "password": "pwd" }
+  },
+  {
+    "context": "DTR BPN company 2 sees own markers",
+    "method": "GET",
+    "endpoint": "{{BASYX_MARKER_DTR_URL}}/api/v3/shell-descriptors",
+    "shouldMatch": "{{BASYX_MARKER_EXPECTED_DIR}}/dtr_bpn2.json",
+    "expectedStatus": 200,
+    "headers": { "Edc-Bpn": "BPN_COMPANY_002" }
+  },
+  {
+    "context": "DTR unrelated BPN sees public data",
+    "method": "GET",
+    "endpoint": "{{BASYX_MARKER_DTR_URL}}/api/v3/shell-descriptors",
+    "shouldMatch": "{{BASYX_MARKER_EXPECTED_DIR}}/dtr_unrelated.json",
+    "expectedStatus": 200,
+    "headers": { "Edc-Bpn": "BPN_COMPANY_999" }
+  },
+  {
+    "context": "SM repository admin sees everything",
+    "method": "GET",
+    "endpoint": "{{BASYX_MARKER_SM_URL}}/submodels",
+    "shouldMatch": "{{BASYX_MARKER_EXPECTED_DIR}}/sm_admin.json",
+    "expectedStatus": 200,
+    "token": { "user": "admin", "password": "pwd" }
+  },
+  {
+    "context": "SM repository admin remains unrestricted with unrelated BPN header",
+    "method": "GET",
+    "endpoint": "{{BASYX_MARKER_SM_URL}}/submodels",
+    "shouldMatch": "{{BASYX_MARKER_EXPECTED_DIR}}/sm_admin.json",
+    "expectedStatus": 200,
+    "headers": { "Edc-Bpn": "BPN_COMPANY_999" },
+    "token": { "user": "admin", "password": "pwd" }
+  },
+  {
+    "context": "SM repository anonymous sees public data",
+    "method": "GET",
+    "endpoint": "{{BASYX_MARKER_SM_URL}}/submodels",
+    "shouldMatch": "{{BASYX_MARKER_EXPECTED_DIR}}/sm_public.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "SM repository regular token sees public data",
+    "method": "GET",
+    "endpoint": "{{BASYX_MARKER_SM_URL}}/submodels",
+    "shouldMatch": "{{BASYX_MARKER_EXPECTED_DIR}}/sm_public.json",
+    "expectedStatus": 200,
+    "token": { "user": "usera", "password": "pwd" }
+  },
+  {
+    "context": "SM repository BPN company 1 sees own markers",
+    "method": "GET",
+    "endpoint": "{{BASYX_MARKER_SM_URL}}/submodels",
+    "shouldMatch": "{{BASYX_MARKER_EXPECTED_DIR}}/sm_bpn1.json",
+    "expectedStatus": 200,
+    "headers": { "Edc-Bpn": "BPN_COMPANY_001" }
+  },
+  {
+    "context": "SM repository regular token with BPN company 1 sees own markers",
+    "method": "GET",
+    "endpoint": "{{BASYX_MARKER_SM_URL}}/submodels",
+    "shouldMatch": "{{BASYX_MARKER_EXPECTED_DIR}}/sm_bpn1.json",
+    "expectedStatus": 200,
+    "headers": { "Edc-Bpn": "BPN_COMPANY_001" },
+    "token": { "user": "usera", "password": "pwd" }
+  },
+  {
+    "context": "SM repository BPN company 2 sees own markers",
+    "method": "GET",
+    "endpoint": "{{BASYX_MARKER_SM_URL}}/submodels",
+    "shouldMatch": "{{BASYX_MARKER_EXPECTED_DIR}}/sm_bpn2.json",
+    "expectedStatus": 200,
+    "headers": { "Edc-Bpn": "BPN_COMPANY_002" }
+  },
+  {
+    "context": "SM repository unrelated BPN sees public data",
+    "method": "GET",
+    "endpoint": "{{BASYX_MARKER_SM_URL}}/submodels",
+    "shouldMatch": "{{BASYX_MARKER_EXPECTED_DIR}}/sm_unrelated.json",
+    "expectedStatus": 200,
+    "headers": { "Edc-Bpn": "BPN_COMPANY_999" }
+  }
+]

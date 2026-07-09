@@ -51,8 +51,9 @@ import (
 )
 
 const actionDeleteAllAAS = "DELETE_ALL_AAS"
-const defaultIntegrationTestDSN = "postgres://admin:admin123@127.0.0.1:6432/basyxTestDB?sslmode=disable"
 
+var aasRepositoryBaseURL = testenv.LocalURLFromEnv("BASYX_IT_API_PORT", 6004)
+var aasRepositoryInvalidBaseURL = testenv.LocalhostURLFromEnv("BASYX_IT_INVALID_API_PORT", 6006)
 var integrationTestDSN = getIntegrationTestDSN()
 
 func getIntegrationTestDSN() string {
@@ -60,14 +61,14 @@ func getIntegrationTestDSN() string {
 		return dsn
 	}
 
-	return defaultIntegrationTestDSN
+	return testenv.PostgresURLFromEnv("BASYX_IT_DB_PORT", 6432, "basyxTestDB")
 }
 
 func deleteAllAAS(t *testing.T, runner *testenv.JSONSuiteRunner, stepNumber int) {
 	for {
 		response, err := runner.RunStep(testenv.JSONSuiteStep{
 			Method:         http.MethodGet,
-			Endpoint:       "http://127.0.0.1:6004/shells",
+			Endpoint:       aasRepositoryBaseURL + "/shells",
 			ExpectedStatus: http.StatusOK,
 		}, stepNumber)
 		require.NoError(t, err)
@@ -87,7 +88,7 @@ func deleteAllAAS(t *testing.T, runner *testenv.JSONSuiteRunner, stepNumber int)
 			encodedIdentifier := base64.RawURLEncoding.EncodeToString([]byte(item.ID))
 			_, err = runner.RunStep(testenv.JSONSuiteStep{
 				Method:         http.MethodDelete,
-				Endpoint:       fmt.Sprintf("http://127.0.0.1:6004/shells/%s", encodedIdentifier),
+				Endpoint:       fmt.Sprintf("%s/shells/%s", aasRepositoryBaseURL, encodedIdentifier),
 				ExpectedStatus: http.StatusNoContent,
 			}, stepNumber)
 			require.NoError(t, err)
@@ -628,7 +629,7 @@ func shouldMatchImportedDescriptionResponseForAASEnvironment(step testenv.JSONSu
 }
 
 func TestQueryAssetAdministrationShellFalseFragmentFiltersKeepRootAAS(t *testing.T) {
-	baseURL := "http://localhost:6004"
+	baseURL := aasRepositoryBaseURL
 	aasID := fmt.Sprintf("https://example.com/ids/aas/query-fragments-%d", time.Now().UnixNano())
 	aasIdentifier := base64.RawURLEncoding.EncodeToString([]byte(aasID))
 
@@ -784,7 +785,7 @@ func requireFirstSpecificAssetID(t *testing.T, shell map[string]any) map[string]
 }
 
 func TestPostAssetAdministrationShellAcceptsNullSubmodels(t *testing.T) {
-	baseURL := "http://localhost:6004"
+	baseURL := aasRepositoryBaseURL
 	aasID := fmt.Sprintf("https://example.com/ids/aas/null-submodels-%d", time.Now().UnixNano())
 
 	requestBody := fmt.Sprintf(`{
@@ -818,7 +819,7 @@ func TestPostAssetAdministrationShellAcceptsNullSubmodels(t *testing.T) {
 }
 
 func TestPutSubmodelByIdAasRepositoryReturnsCreatedSubmodelAnd201(t *testing.T) {
-	baseURL := "http://localhost:6004"
+	baseURL := aasRepositoryBaseURL
 	aasID := fmt.Sprintf("https://example.com/ids/aas/put-submodel-create-%d", time.Now().UnixNano())
 	aasIdentifier := base64.RawURLEncoding.EncodeToString([]byte(aasID))
 
@@ -846,7 +847,7 @@ func TestPutSubmodelByIdAasRepositoryReturnsCreatedSubmodelAnd201(t *testing.T) 
 }
 
 func TestPutSubmodelByIdAasRepositoryReturnsNoContentOnUpdate(t *testing.T) {
-	baseURL := "http://localhost:6004"
+	baseURL := aasRepositoryBaseURL
 	aasID := fmt.Sprintf("https://example.com/ids/aas/put-submodel-update-%d", time.Now().UnixNano())
 	aasIdentifier := base64.RawURLEncoding.EncodeToString([]byte(aasID))
 
@@ -892,7 +893,7 @@ func TestPutSubmodelByIdAasRepositoryReturnsNoContentOnUpdate(t *testing.T) {
 }
 
 func TestLocationHeadersForSubmodelElementCreateEndpointsAasRepository(t *testing.T) {
-	baseURL := "http://localhost:6004"
+	baseURL := aasRepositoryBaseURL
 	aasID := fmt.Sprintf("https://example.com/ids/aas/location-headers-submodel-elements-%d", time.Now().UnixNano())
 	aasIdentifier := base64.RawURLEncoding.EncodeToString([]byte(aasID))
 
@@ -955,7 +956,7 @@ func TestLocationHeadersForSubmodelElementCreateEndpointsAasRepository(t *testin
 }
 
 func TestGetSubmodelByIdAasRepositoryReturnsSubmodel(t *testing.T) {
-	baseURL := "http://localhost:6004"
+	baseURL := aasRepositoryBaseURL
 	aasID := fmt.Sprintf("https://example.com/ids/aas/get-submodel-%d", time.Now().UnixNano())
 	aasIdentifier := base64.RawURLEncoding.EncodeToString([]byte(aasID))
 
@@ -984,7 +985,7 @@ func TestGetSubmodelByIdAasRepositoryReturnsSubmodel(t *testing.T) {
 }
 
 func TestPostSubmodelReferenceAasRepositoryReturnsConflictOnDuplicate(t *testing.T) {
-	baseURL := "http://localhost:6004"
+	baseURL := aasRepositoryBaseURL
 	aasID := fmt.Sprintf("https://example.com/ids/aas/submodel-ref-duplicate-%d", time.Now().UnixNano())
 	aasIdentifier := base64.RawURLEncoding.EncodeToString([]byte(aasID))
 
@@ -1006,7 +1007,7 @@ func TestPostSubmodelReferenceAasRepositoryReturnsConflictOnDuplicate(t *testing
 }
 
 func TestSubmodelSuperPathEndpointsAasRepository(t *testing.T) {
-	baseURL := "http://localhost:6004"
+	baseURL := aasRepositoryBaseURL
 	aasID := fmt.Sprintf("https://example.com/ids/aas/superpath-%d", time.Now().UnixNano())
 	aasIdentifier := base64.RawURLEncoding.EncodeToString([]byte(aasID))
 
@@ -1016,11 +1017,15 @@ func TestSubmodelSuperPathEndpointsAasRepository(t *testing.T) {
 
 	submodelID := fmt.Sprintf("https://example.com/ids/sm/superpath-%d", time.Now().UnixNano())
 	submodelIdentifier := base64.RawURLEncoding.EncodeToString([]byte(submodelID))
+	topBlobValue := base64.StdEncoding.EncodeToString([]byte("aas-superpath-top-blob"))
+	nestedBlobValue := base64.StdEncoding.EncodeToString([]byte("aas-superpath-nested-blob"))
 
 	submodelEndpoint := fmt.Sprintf("%s/shells/%s/submodels/%s", baseURL, aasIdentifier, submodelIdentifier)
 	body := fmt.Sprintf(
-		`{"id":"%s","idShort":"SuperpathSubmodel","modelType":"Submodel","kind":"Instance","submodelElements":[{"idShort":"TopProperty","modelType":"Property","valueType":"xs:string","value":"hello"},{"idShort":"MainCollection","modelType":"SubmodelElementCollection","value":[{"idShort":"NestedProperty","modelType":"Property","valueType":"xs:string","value":"nested"}]}]}`,
+		`{"id":"%s","idShort":"SuperpathSubmodel","modelType":"Submodel","kind":"Instance","submodelElements":[{"idShort":"TopProperty","modelType":"Property","valueType":"xs:string","value":"hello"},{"idShort":"TopBlob","modelType":"Blob","contentType":"text/plain","value":"%s"},{"idShort":"MainCollection","modelType":"SubmodelElementCollection","value":[{"idShort":"NestedProperty","modelType":"Property","valueType":"xs:string","value":"nested"},{"idShort":"NestedBlob","modelType":"Blob","contentType":"application/octet-stream","value":"%s"}]}]}`,
 		submodelID,
+		topBlobValue,
+		nestedBlobValue,
 	)
 
 	_, putStatusCode, _, putErr := putJSONResponse(submodelEndpoint, body)
@@ -1033,8 +1038,46 @@ func TestSubmodelSuperPathEndpointsAasRepository(t *testing.T) {
 		require.Equal(t, http.StatusOK, pathStatusCode, "Expected 200 OK for GET submodel $path")
 
 		assert.Contains(t, paths, "TopProperty")
+		assert.Contains(t, paths, "TopBlob")
 		assert.Contains(t, paths, "MainCollection")
 		assert.Contains(t, paths, "MainCollection.NestedProperty")
+		assert.Contains(t, paths, "MainCollection.NestedBlob")
+	})
+
+	t.Run("GetSubmodelByIdHonorsExtent", func(t *testing.T) {
+		payload, statusCode, err := getJSONResponse(submodelEndpoint)
+		require.NoError(t, err, "GET submodel request failed")
+		require.Equal(t, http.StatusOK, statusCode, "Expected 200 OK for GET submodel")
+		requireAASSubmodelBlobValueState(t, payload, "TopBlob", "text/plain", "", false)
+		requireAASSubmodelBlobValueState(t, payload, "NestedBlob", "application/octet-stream", "", false)
+
+		payload, statusCode, err = getJSONResponse(submodelEndpoint + "?extent=withBlobValue")
+		require.NoError(t, err, "GET submodel with extent request failed")
+		require.Equal(t, http.StatusOK, statusCode, "Expected 200 OK for GET submodel with extent")
+		requireAASSubmodelBlobValueState(t, payload, "TopBlob", "text/plain", topBlobValue, true)
+		requireAASSubmodelBlobValueState(t, payload, "NestedBlob", "application/octet-stream", nestedBlobValue, true)
+	})
+
+	t.Run("GetAllSubmodelElementsHonorsExtent", func(t *testing.T) {
+		payload, statusCode, err := getJSONResponse(submodelEndpoint + "/submodel-elements?level=deep&extent=withBlobValue")
+		require.NoError(t, err, "GET submodel elements request failed")
+		require.Equal(t, http.StatusOK, statusCode, "Expected 200 OK for GET submodel elements")
+		result, ok := payload["result"].([]any)
+		require.True(t, ok, "Expected result array")
+		requireAASBlobValueState(t, findAASSubmodelElementInList(t, result, "TopBlob"), "text/plain", topBlobValue, true)
+		requireAASBlobValueState(t, findAASSubmodelElementInList(t, result, "NestedBlob"), "application/octet-stream", nestedBlobValue, true)
+	})
+
+	t.Run("GetSubmodelElementByPathValueOnlyHonorsExtent", func(t *testing.T) {
+		payload, statusCode, err := getJSONResponse(submodelEndpoint + "/submodel-elements/TopBlob/$value")
+		require.NoError(t, err, "GET value-only blob request failed")
+		require.Equal(t, http.StatusOK, statusCode, "Expected 200 OK for GET value-only blob")
+		requireAASValueOnlyBlobValueState(t, payload, "text/plain", "", false)
+
+		payload, statusCode, err = getJSONResponse(submodelEndpoint + "/submodel-elements/TopBlob/$value?extent=withBlobValue")
+		require.NoError(t, err, "GET value-only blob with extent request failed")
+		require.Equal(t, http.StatusOK, statusCode, "Expected 200 OK for GET value-only blob with extent")
+		requireAASValueOnlyBlobValueState(t, payload, "text/plain", topBlobValue, true)
 	})
 
 	t.Run("GetSubmodelElementByPathPathCoreReturnsRequestedPath", func(t *testing.T) {
@@ -1059,8 +1102,71 @@ func TestSubmodelSuperPathEndpointsAasRepository(t *testing.T) {
 	})
 }
 
+func requireAASSubmodelBlobValueState(t *testing.T, submodel map[string]any, idShort string, contentType string, expectedValue string, expectValue bool) {
+	t.Helper()
+	rawElements, ok := submodel["submodelElements"].([]any)
+	require.True(t, ok, "submodelElements must be an array")
+	requireAASBlobValueState(t, findAASSubmodelElementInList(t, rawElements, idShort), contentType, expectedValue, expectValue)
+}
+
+func requireAASBlobValueState(t *testing.T, element map[string]any, contentType string, expectedValue string, expectValue bool) {
+	t.Helper()
+	require.Equal(t, "Blob", element["modelType"])
+	require.Equal(t, contentType, element["contentType"])
+	actualValue, hasValue := element["value"]
+	require.Equal(t, expectValue, hasValue, "blob value presence mismatch in element: %#v", element)
+	if expectValue {
+		require.Equal(t, expectedValue, actualValue)
+	}
+}
+
+func requireAASValueOnlyBlobValueState(t *testing.T, blobValue map[string]any, contentType string, expectedValue string, expectValue bool) {
+	t.Helper()
+	require.Equal(t, contentType, blobValue["contentType"])
+	actualValue, hasValue := blobValue["value"]
+	require.Equal(t, expectValue, hasValue, "blob value presence mismatch in value-only payload: %#v", blobValue)
+	if expectValue {
+		require.Equal(t, expectedValue, actualValue)
+	}
+}
+
+func findAASSubmodelElementInList(t *testing.T, rawElements []any, idShort string) map[string]any {
+	t.Helper()
+	for _, rawElement := range rawElements {
+		element, ok := rawElement.(map[string]any)
+		require.True(t, ok, "submodel element must be an object: %#v", rawElement)
+		if element["idShort"] == idShort {
+			return element
+		}
+		if rawValue, ok := element["value"].([]any); ok {
+			if nested := findAASSubmodelElementInListOptional(t, rawValue, idShort); nested != nil {
+				return nested
+			}
+		}
+	}
+	t.Fatalf("expected submodel element idShort=%s in payload: %#v", idShort, rawElements)
+	return nil
+}
+
+func findAASSubmodelElementInListOptional(t *testing.T, rawElements []any, idShort string) map[string]any {
+	t.Helper()
+	for _, rawElement := range rawElements {
+		element, ok := rawElement.(map[string]any)
+		require.True(t, ok, "submodel element must be an object: %#v", rawElement)
+		if element["idShort"] == idShort {
+			return element
+		}
+		if rawValue, ok := element["value"].([]any); ok {
+			if nested := findAASSubmodelElementInListOptional(t, rawValue, idShort); nested != nil {
+				return nested
+			}
+		}
+	}
+	return nil
+}
+
 func TestDeleteSubmodelByIdAasRepositoryDeletesSubmodelAndReference(t *testing.T) {
-	baseURL := "http://localhost:6004"
+	baseURL := aasRepositoryBaseURL
 	aasID := fmt.Sprintf("https://example.com/ids/aas/delete-submodel-%d", time.Now().UnixNano())
 	aasIdentifier := base64.RawURLEncoding.EncodeToString([]byte(aasID))
 
@@ -1097,7 +1203,7 @@ func TestDeleteSubmodelByIdAasRepositoryDeletesSubmodelAndReference(t *testing.T
 }
 
 func TestDeleteSubmodelByIdAasRepositoryRollsBackReferenceDeleteOnSubmodelDeleteFailure(t *testing.T) {
-	baseURL := "http://localhost:6004"
+	baseURL := aasRepositoryBaseURL
 	aasID := fmt.Sprintf("https://example.com/ids/aas/delete-submodel-tx-%d", time.Now().UnixNano())
 	aasIdentifier := base64.RawURLEncoding.EncodeToString([]byte(aasID))
 
@@ -1142,7 +1248,7 @@ func TestDeleteSubmodelByIdAasRepositoryRollsBackReferenceDeleteOnSubmodelDelete
 }
 
 func TestThumbnailAttachmentOperations(t *testing.T) {
-	baseURL := "http://localhost:6004"
+	baseURL := aasRepositoryBaseURL
 	aasID := fmt.Sprintf("https://example.com/ids/aas/thumbnail_test_%d", time.Now().UnixNano())
 	aasIdentifier := base64.RawURLEncoding.EncodeToString([]byte(aasID))
 	thumbnailEndpoint := fmt.Sprintf("%s/shells/%s/asset-information/thumbnail", baseURL, aasIdentifier)
@@ -1271,8 +1377,99 @@ func TestThumbnailAttachmentOperations(t *testing.T) {
 	})
 }
 
+func TestDeleteAssetAdministrationShellUnlinksThumbnailLargeObject(t *testing.T) {
+	baseURL := aasRepositoryBaseURL
+	aasID := fmt.Sprintf("https://example.com/ids/aas/thumbnail_delete_cleanup_%d", time.Now().UnixNano())
+	encodedAASID := base64.RawURLEncoding.EncodeToString([]byte(aasID))
+	aasEndpoint := fmt.Sprintf("%s/shells/%s", baseURL, encodedAASID)
+	thumbnailEndpoint := fmt.Sprintf("%s/asset-information/thumbnail", aasEndpoint)
+	baselineCount := countPostgresLargeObjects(t, integrationTestDSN)
+
+	createAASForLargeObjectCleanupTest(t, baseURL, aasID)
+	defer deleteAASForLargeObjectCleanupTest(t, aasEndpoint)
+
+	uploadStatus, uploadErr := uploadThumbnail(thumbnailEndpoint, "testFiles/marcus.gif", "marcus.gif")
+	require.NoError(t, uploadErr)
+	require.Equal(t, http.StatusNoContent, uploadStatus)
+	require.Greater(t, countPostgresLargeObjects(t, integrationTestDSN), baselineCount)
+
+	deleteStatus, deleteErr := deleteResponseStatus(aasEndpoint)
+	require.NoError(t, deleteErr)
+	require.Equal(t, http.StatusNoContent, deleteStatus)
+	require.Equal(t, baselineCount, countPostgresLargeObjects(t, integrationTestDSN))
+}
+
+func TestPutAssetAdministrationShellUnlinksReplacedThumbnailLargeObject(t *testing.T) {
+	baseURL := aasRepositoryBaseURL
+	aasID := fmt.Sprintf("https://example.com/ids/aas/thumbnail_put_cleanup_%d", time.Now().UnixNano())
+	encodedAASID := base64.RawURLEncoding.EncodeToString([]byte(aasID))
+	aasEndpoint := fmt.Sprintf("%s/shells/%s", baseURL, encodedAASID)
+	thumbnailEndpoint := fmt.Sprintf("%s/asset-information/thumbnail", aasEndpoint)
+	baselineCount := countPostgresLargeObjects(t, integrationTestDSN)
+
+	createAASForLargeObjectCleanupTest(t, baseURL, aasID)
+	defer deleteAASForLargeObjectCleanupTest(t, aasEndpoint)
+
+	uploadStatus, uploadErr := uploadThumbnail(thumbnailEndpoint, "testFiles/marcus.gif", "marcus.gif")
+	require.NoError(t, uploadErr)
+	require.Equal(t, http.StatusNoContent, uploadStatus)
+	require.Greater(t, countPostgresLargeObjects(t, integrationTestDSN), baselineCount)
+
+	_, putStatus, _, putErr := putJSONResponse(aasEndpoint, aasLargeObjectCleanupPayload(aasID))
+	require.NoError(t, putErr)
+	require.Equal(t, http.StatusNoContent, putStatus)
+	require.Equal(t, baselineCount, countPostgresLargeObjects(t, integrationTestDSN))
+}
+
+func createAASForLargeObjectCleanupTest(t *testing.T, baseURL string, aasID string) {
+	t.Helper()
+
+	statusCode, err := postResponseStatus(baseURL+"/shells", aasLargeObjectCleanupPayload(aasID))
+	require.NoError(t, err)
+	require.Equal(t, http.StatusCreated, statusCode)
+}
+
+func aasLargeObjectCleanupPayload(aasID string) string {
+	return fmt.Sprintf(
+		`{"id":"%s","modelType":"AssetAdministrationShell","assetInformation":{"assetKind":"Instance","globalAssetId":"%s-global-asset"}}`,
+		aasID,
+		aasID,
+	)
+}
+
+func deleteAASForLargeObjectCleanupTest(t *testing.T, aasEndpoint string) {
+	t.Helper()
+
+	statusCode, err := deleteResponseStatus(aasEndpoint)
+	if err != nil {
+		t.Logf("cleanup delete AAS failed: %v", err)
+		return
+	}
+	if statusCode != http.StatusNoContent && statusCode != http.StatusNotFound {
+		t.Logf("cleanup delete AAS returned status=%d", statusCode)
+	}
+}
+
+func countPostgresLargeObjects(t *testing.T, dsn string) int64 {
+	t.Helper()
+
+	db, err := sql.Open("pgx", dsn)
+	require.NoError(t, err)
+	defer func() { _ = db.Close() }()
+
+	query, args, err := goqu.Dialect("postgres").
+		From(goqu.T("pg_largeobject_metadata")).
+		Select(goqu.COUNT("*")).
+		ToSQL()
+	require.NoError(t, err)
+
+	var count int64
+	require.NoError(t, db.QueryRow(query, args...).Scan(&count))
+	return count
+}
+
 func TestContractThumbnailGetReturnsDetectedContentType(t *testing.T) {
-	baseURL := "http://localhost:6004"
+	baseURL := aasRepositoryBaseURL
 	aasID := fmt.Sprintf("https://example.com/ids/aas/thumbnail_contract_%d", time.Now().UnixNano())
 	aasIdentifier := base64.RawURLEncoding.EncodeToString([]byte(aasID))
 	thumbnailEndpoint := fmt.Sprintf("%s/shells/%s/asset-information/thumbnail", baseURL, aasIdentifier)
@@ -1298,7 +1495,7 @@ func TestContractThumbnailGetReturnsDetectedContentType(t *testing.T) {
 }
 
 func TestThumbnailUploadUsesDeclaredContentTypeFallback(t *testing.T) {
-	baseURL := "http://localhost:6004"
+	baseURL := aasRepositoryBaseURL
 	aasID := fmt.Sprintf("https://example.com/ids/aas/thumbnail_declared_fallback_%d", time.Now().UnixNano())
 	aasIdentifier := base64.RawURLEncoding.EncodeToString([]byte(aasID))
 	thumbnailEndpoint := fmt.Sprintf("%s/shells/%s/asset-information/thumbnail", baseURL, aasIdentifier)
@@ -1340,19 +1537,34 @@ func TestStandaloneStartupRejectsUnsupportedSubmodelRegistryToggle(t *testing.T)
 		t.Skip("requires bundled integration docker compose setup")
 	}
 
-	assertServiceNeverHealthy(t, "http://localhost:6006/health", 20*time.Second)
+	assertServiceNeverHealthy(t, aasRepositoryInvalidBaseURL+"/health", 20*time.Second)
 }
 
 // TestMain handles setup and teardown
 func TestMain(m *testing.M) {
 	if os.Getenv("BASYX_EXTERNAL_COMPOSE") == "1" {
+		testenv.SetEnvDefaultsOrExit(map[string]string{
+			"BASYX_IT_API_URL":         aasRepositoryBaseURL,
+			"BASYX_IT_INVALID_API_URL": aasRepositoryInvalidBaseURL,
+		})
 		os.Exit(m.Run())
 	}
 
+	runtime := testenv.NewComposeRuntimeOrExit("aasrepository-it", []testenv.PortBinding{
+		{Name: "api", EnvVar: "BASYX_IT_API_PORT"},
+		{Name: "db", EnvVar: "BASYX_IT_DB_PORT"},
+		{Name: "invalid-api", EnvVar: "BASYX_IT_INVALID_API_PORT"},
+	})
+	aasRepositoryBaseURL = runtime.LocalURL("api")
+	aasRepositoryInvalidBaseURL = runtime.LocalhostURL("invalid-api")
+	integrationTestDSN = runtime.PostgresURL("db", "basyxTestDB")
+
 	os.Exit(testenv.RunComposeTestMain(m, testenv.ComposeTestMainOptions{
 		ComposeFile:     "docker_compose/docker_compose.yml",
+		ProjectName:     runtime.ProjectName,
+		Env:             runtime.Env(),
 		PreDownBeforeUp: true,
-		HealthURL:       "http://localhost:6004/health",
+		HealthURL:       aasRepositoryBaseURL + "/health",
 		HealthTimeout:   150 * time.Second,
 	}))
 }

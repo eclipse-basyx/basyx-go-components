@@ -8,6 +8,7 @@
       "kind": "Instance",
       "administration": {
         "revision": "1",
+        "updatedAt": "2030-01-02T03:04:06Z",
         "version": "3"
       },
       "submodelElements": [

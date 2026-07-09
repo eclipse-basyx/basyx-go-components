@@ -34,6 +34,7 @@ import (
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/asyncbulk"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/createprecheck"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 )
@@ -95,43 +96,39 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) ensureAASDescriptorsDoNo
 	identifiers []string,
 	failure *asyncbulk.ItemFailure,
 ) error {
-	if auth.GetQueryFilter(ctx) != nil {
-		return s.ensureVisibleAASDescriptorsDoNotExist(ctx, tx, identifiers, failure)
-	}
-
 	existing, err := s.aasRegistryBackend.ExistingAASDescriptorIDsInTransaction(ctx, tx, identifiers)
 	if err != nil {
 		*failure = asyncbulk.ItemFailure{Index: 0, Identifier: firstIdentifier(identifiers), StatusCode: http.StatusInternalServerError, Message: err.Error()}
 		return err
 	}
-	for index, identifier := range identifiers {
-		if _, found := existing[identifier]; found {
-			err := common.NewErrConflict("AAS with given id already exists")
-			*failure = asyncbulk.ItemFailure{Index: index, Identifier: identifier, StatusCode: http.StatusConflict, Message: err.Error()}
-			return err
-		}
-	}
-	return nil
+	return s.ensureVisibleAASDescriptorDuplicates(ctx, tx, identifiers, existing, failure)
 }
 
-func (s *AssetAdministrationShellRegistryAPIAPIService) ensureVisibleAASDescriptorsDoNotExist(
+func (s *AssetAdministrationShellRegistryAPIAPIService) ensureVisibleAASDescriptorDuplicates(
 	ctx context.Context,
 	tx *sql.Tx,
 	identifiers []string,
+	existing map[string]struct{},
 	failure *asyncbulk.ItemFailure,
 ) error {
 	for index, identifier := range identifiers {
-		_, err := s.aasRegistryBackend.GetAssetAdministrationShellDescriptorByIDInTransaction(ctx, tx, identifier)
-		if err == nil {
-			err = common.NewErrConflict("AAS with given id already exists")
-			*failure = asyncbulk.ItemFailure{Index: index, Identifier: identifier, StatusCode: http.StatusConflict, Message: err.Error()}
-			return err
-		}
-		if common.IsErrNotFound(err) {
+		if _, found := existing[identifier]; !found {
 			continue
 		}
-		*failure = asyncbulk.ItemFailure{Index: index, Identifier: identifier, StatusCode: aasBulkCreateErrorStatusCode(err), Message: err.Error()}
-		return err
+		err := createprecheck.EnsureVisibleDuplicate(
+			ctx,
+			true,
+			func(readCtx context.Context) error {
+				_, readErr := s.aasRegistryBackend.GetAssetAdministrationShellDescriptorByIDInTransaction(readCtx, tx, identifier)
+				return readErr
+			},
+			"AAS with given id already exists",
+			"AAS Descriptor access not allowed",
+		)
+		if err != nil {
+			*failure = asyncbulk.ItemFailure{Index: index, Identifier: identifier, StatusCode: aasBulkCreateErrorStatusCode(err), Message: err.Error()}
+			return err
+		}
 	}
 	return nil
 }
@@ -345,7 +342,7 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) upsertDescriptorInTransa
 		return http.StatusInternalServerError, enforceErr
 	}
 
-	_, getErr := s.aasRegistryBackend.GetAssetAdministrationShellDescriptorByIDInTransaction(ctx, tx, descriptorID)
+	_, getErr := s.aasRegistryBackend.GetAssetAdministrationShellDescriptorByIDInTransaction(auth.WithoutQueryFilter(ctx), tx, descriptorID)
 	exists := getErr == nil
 	if getErr != nil && !common.IsErrNotFound(getErr) {
 		return http.StatusInternalServerError, getErr

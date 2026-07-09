@@ -3,7 +3,7 @@
  *
  * The entire Submodel Repository Service Specification as part of the [Specification of the Asset Administration Shell: Part 2](http://industrialdigitaltwin.org/en/content-hub).   Publisher: Industrial Digital Twin Association (IDTA) 2023
  *
- * API version: V3.0.3_SSP-001
+ * API version: V3.2.0
  * Contact: info@idtwin.org
  */
 
@@ -12,8 +12,8 @@ package openapi
 
 import (
 	"context"
+	"io"
 	"net/http"
-	"os"
 	"time"
 
 	"github.com/FriedJannik/aas-go-sdk/types"
@@ -46,7 +46,7 @@ type SubmodelRepositoryAPIAPIRouter interface {
 	GetAllSubmodelsValueOnly(http.ResponseWriter, *http.Request)
 	GetAllSubmodelsReference(http.ResponseWriter, *http.Request)
 	GetAllSubmodelsPath(http.ResponseWriter, *http.Request)
-	GetAllSubmodelRecentChanges(http.ResponseWriter, *http.Request)
+	GetAllSubmodelsRecentChanges(http.ResponseWriter, *http.Request)
 	GetSubmodelByID(http.ResponseWriter, *http.Request)
 	PutSubmodelByID(http.ResponseWriter, *http.Request)
 	DeleteSubmodelByID(http.ResponseWriter, *http.Request)
@@ -109,17 +109,17 @@ type SerializationAPIAPIServicer interface {
 // and updated with the logic required for the API.
 type SubmodelRepositoryAPIAPIServicer interface {
 	QuerySubmodels(context.Context, int32, string, grammar.Query) (model.ImplResponse, error)
-	GetAllSubmodels(context.Context, string, string, int32, string, string, string) (model.ImplResponse, error)
+	GetAllSubmodels(context.Context, string, string, int32, string, string, string, time.Time, time.Time) (model.ImplResponse, error)
 	PostSubmodel(context.Context, types.ISubmodel) (model.ImplResponse, error)
 	GetAllSubmodelsMetadata(context.Context, string, string, int32, string) (model.ImplResponse, error)
 	GetAllSubmodelsValueOnly(context.Context, string, string, int32, string, string, string) (model.ImplResponse, error)
 	GetAllSubmodelsReference(context.Context, string, string, int32, string, string) (model.ImplResponse, error)
 	GetAllSubmodelsPath(context.Context, string, string, int32, string, string) (model.ImplResponse, error)
 	GetSubmodelByID(context.Context, string, string, string) (model.ImplResponse, error)
-	GetSignedSubmodelByID(context.Context, string, string, string) (model.ImplResponse, error)
-	GetSignedSubmodelByIDValueOnly(context.Context, string, string, string) (model.ImplResponse, error)
+	GetSignedSubmodelByID(context.Context, string) (model.ImplResponse, error)
+	GetSignedSubmodelByIDValueOnly(context.Context, string) (model.ImplResponse, error)
 	GetSubmodelByIdAndDate(context.Context, string, string, string, time.Time) (model.ImplResponse, error)
-	GetAllSubmodelRecentChanges(context.Context, string, time.Time, time.Time, int32, string) (model.ImplResponse, error)
+	GetAllSubmodelsRecentChanges(context.Context, string, string, time.Time, time.Time, int32, string) (model.ImplResponse, error)
 	PutSubmodelByID(context.Context, string, types.ISubmodel) (model.ImplResponse, error)
 	DeleteSubmodelByID(context.Context, string) (model.ImplResponse, error)
 	PatchSubmodelByID(context.Context, string, types.ISubmodel, string) (model.ImplResponse, error)
@@ -147,7 +147,7 @@ type SubmodelRepositoryAPIAPIServicer interface {
 	GetSubmodelElementByPathReferenceSubmodelRepo(context.Context, string, string) (model.ImplResponse, error)
 	GetSubmodelElementByPathPathSubmodelRepo(context.Context, string, string, string) (model.ImplResponse, error)
 	GetFileByPathSubmodelRepo(context.Context, string, string) (model.ImplResponse, error)
-	PutFileByPathSubmodelRepo(context.Context, string, string, string, *os.File) (model.ImplResponse, error)
+	PutFileByPathSubmodelRepo(context.Context, string, string, string, io.Reader) (model.ImplResponse, error)
 	DeleteFileByPathSubmodelRepo(context.Context, string, string) (model.ImplResponse, error)
 	InvokeOperationSubmodelRepo(context.Context, string, string, model.OperationRequest, bool) (model.ImplResponse, error)
 	InvokeOperationValueOnly(context.Context, string, string, string, model.OperationRequestValueOnly, bool) (model.ImplResponse, error)

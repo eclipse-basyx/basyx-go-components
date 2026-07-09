@@ -1,46 +1,42 @@
 # Integration Tests
 
 ## Purpose
-Houses end-to-end and scenario tests that validate the complete functionality of the system, ensuring that all components work together as expected.
+
+Integration tests exercise a component through its HTTP API and the real database-backed persistence path. Most packages start an isolated compose stack in `TestMain` and then run Go tests against the service endpoints.
 
 ## Location
-- `internal/{COMPONENT_NAME}/integration_tests/`
-    - e.g., `internal/submodelrepository/integration_tests/`
 
-## How they Work
-- it_config.json: Configuration file defining test scenarios, endpoints, and expected results.
-- postBody/ and expectedResponse/ folders: Contain JSON files for request bodies and expected responses.
-- Test files (e.g., `integration_test.go`): Implement test logic using Go's testing framework.
-- Use Docker Compose to set up isolated test environments with necessary services (e.g., databases). docker_compose/ folder contains relevant files.
+- `internal/<component>/integration_tests/`
+- related packages such as `query_integration_tests`, `security_tests`, `security_*_tests`, `migration_integration_tests`, and `preconfiguration_integration_tests`
 
-## How to Run
-### Terminal
-1. Navigate to the integration_tests directory of the component you want to test:
-   ```sh
-   cd internal/{COMPONENT_NAME}/integration_tests/
-   ```
-2. Run the tests using Go's testing tool:
-   ```sh
-   go test -v .
-   ```
-### Action Plugin
-1. Ensure Docker is running on your machine.
-2. Click on the "Run Integration Tests" action in your IDE or CI/CD pipeline that is configured to execute the integration tests.
-### Task
-1. Ensure Docker is running on your machine.
-2. Open Command Palette (Ctrl+Shift+P or Cmd+Shift+P for Windows, F1 for macOS).
-3. Tasks: Run Task
-4. Select "Run Integration Tests" from the list.
+## Common Test Assets
 
-## For new Components
-When adding new components or features, create corresponding integration tests in the relevant `integration_tests/` folder to cover end-to-end scenarios.
+Packages choose the fixture names that fit their test runner. Current variants include:
 
-`Note: You may reuse the integration_test.go template found in existing integration test folders.`
+- `it_config.json`: JSON-suite step definitions for `internal/common/testenv.RunJSONSuite`
+- `postBody/`, `bodies/`, `expected/`, and `expectedResponse/`: request bodies and expected JSON responses
+- `testdata/`: package-specific files such as AASX, JSON, XML, or policy fixtures
+- `docker_compose/`: compose files for the package test stack
 
-You must always add an Action and Task to run the integration tests for the new component in the .vscode folder.
+## How To Run
 
-### Best Practices
-- Cover all Endpoints
-- Use realistic data in postBody/ files
-- Validate both success and error scenarios
-- Keep it_config.json up to date with new test cases as features are added
+From the repository root, run the package you are working on:
+
+```sh
+go test -v ./internal/<component>/integration_tests
+```
+
+The mandatory Submodel Repository integration suite is:
+
+```sh
+go clean -testcache
+go test -v ./internal/submodelrepository/integration_tests
+```
+
+Some VS Code tasks and action buttons exist for selected packages in `.vscode/tasks.json` and `.vscode/settings.json`; their names are package-specific, not one generic "Run Integration Tests" task.
+
+## Adding Tests
+
+When adding service behavior, add integration coverage in the relevant package. Prefer the shared helpers in `internal/common/testenv` for compose setup, dynamic ports, token retrieval, and JSON-suite execution.
+
+Keep fixtures realistic and deterministic, cover both success and error cases, and clean up state through the API or the package's existing test helper pattern.

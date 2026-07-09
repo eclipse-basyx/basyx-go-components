@@ -117,6 +117,11 @@ func (a *AttributeItem) UnmarshalJSON(b []byte) error {
 				return fmt.Errorf("AttributeItem: GLOBAL must be one of LOCALNOW, UTCNOW, CLIENTNOW, ANONYMOUS (got %q)", s)
 			}
 		}
+		if k == string(ATTRREFERENCE) {
+			if err := ValidateReferenceIdentifier(s); err != nil {
+				return err
+			}
+		}
 
 		a.Kind = ATTRTYPE(k)
 		a.Value = s

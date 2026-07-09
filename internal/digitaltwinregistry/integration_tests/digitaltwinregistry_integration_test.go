@@ -40,9 +40,11 @@ import (
 )
 
 const (
-	BaseURL         = "http://127.0.0.1:6004"
 	ComposeFilePath = "./docker_compose/docker_compose.yml"
 )
+
+var BaseURL = testenv.LocalURLFromEnv("BASYX_IT_API_PORT", 6004)
+var keycloakTokenURL = testenv.LocalhostURLFromEnv("BASYX_IT_KEYCLOAK_PORT", 8080) + "/realms/basyx/protocol/openid-connect/token"
 
 func TestMain(m *testing.M) {
 	upArgs := []string{"up", "-d", "--build"}
@@ -50,11 +52,25 @@ func TestMain(m *testing.M) {
 		upArgs = append(upArgs, "--build")
 	}
 
-	os.Exit(testenv.RunComposeTestMain(m, testenv.ComposeTestMainOptions{
+	runtime := testenv.NewComposeRuntimeOrExit("digitaltwinregistry-it", []testenv.PortBinding{
+		{Name: "api", EnvVar: "BASYX_IT_API_PORT"},
+		{Name: "keycloak", EnvVar: "BASYX_IT_KEYCLOAK_PORT"},
+	})
+	BaseURL = runtime.LocalURL("api")
+	keycloakTokenURL = runtime.LocalhostURL("keycloak") + "/realms/basyx/protocol/openid-connect/token"
+	securityEnv := testenv.PrepareSecurityEnvOrExit("docker_compose/security_env", map[string]string{
+		"http://localhost:8080": runtime.LocalhostURL("keycloak"),
+	})
+
+	code := testenv.RunComposeTestMain(m, testenv.ComposeTestMainOptions{
 		ComposeFile: ComposeFilePath,
+		ProjectName: runtime.ProjectName,
+		Env:         runtime.EnvWith("BASYX_IT_SECURITY_ENV=" + securityEnv),
 		UpArgs:      upArgs,
 		HealthURL:   BaseURL + "/health",
-	}))
+	})
+	_ = os.RemoveAll(securityEnv)
+	os.Exit(code)
 }
 
 func getenv(k string) string {
@@ -100,7 +116,7 @@ func TestIntegration(t *testing.T) {
 			},
 		},
 		TokenProvider: testenv.NewPasswordGrantTokenProvider(
-			"http://localhost:8080/realms/basyx/protocol/openid-connect/token",
+			keycloakTokenURL,
 			"basyx-ui",
 			10*time.Second,
 		),

@@ -1,0 +1,12 @@
+{
+  "$condition": {
+    "$eq": [
+      {
+        "$field": "$sme.Filtered#supplementalSemanticIds[1].keys[0].value"
+      },
+      {
+        "$strVal": "SME_SECOND"
+      }
+    ]
+  }
+}

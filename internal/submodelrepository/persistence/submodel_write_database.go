@@ -29,10 +29,12 @@ package persistence
 import (
 	"context"
 	"database/sql"
+	"errors"
 
 	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/FriedJannik/aas-go-sdk/verification"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/createprecheck"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/history"
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
@@ -86,6 +88,10 @@ func (s *SubmodelDatabase) CreateSubmodelInTransaction(ctx context.Context, tx *
 }
 
 func (s *SubmodelDatabase) createSubmodelInTransactionValidated(ctx context.Context, tx *sql.Tx, submodel types.ISubmodel) error {
+	if err := s.ensureVisibleSubmodelCreateDoesNotExist(ctx, tx, submodel.ID()); err != nil {
+		return err
+	}
+
 	err := s.createSubmodelInTransaction(tx, submodel)
 	if err != nil {
 		return err
@@ -108,6 +114,37 @@ func (s *SubmodelDatabase) createSubmodelInTransactionValidated(ctx context.Cont
 		}
 	}
 	return nil
+}
+
+func (s *SubmodelDatabase) ensureVisibleSubmodelCreateDoesNotExist(ctx context.Context, tx *sql.Tx, submodelID string) error {
+	return createprecheck.EnsureVisibleCreate(
+		ctx,
+		func(context.Context) (bool, error) {
+			_, err := persistenceutils.GetSubmodelDatabaseID(tx, submodelID)
+			if err == nil {
+				return true, nil
+			}
+			if errors.Is(err, sql.ErrNoRows) {
+				return false, nil
+			}
+			return false, common.NewInternalServerError("SMREPO-NEWSM-CHKDUP-GETSMDATABASEID " + err.Error())
+		},
+		func(readCtx context.Context) error {
+			exists, visible, err := s.checkSubmodelVisibilityInTx(readCtx, tx, submodelID)
+			if err != nil {
+				return err
+			}
+			if !exists {
+				return common.NewErrNotFound("SMREPO-NEWSM-CHKDUP-NOTFOUND existing submodel not found")
+			}
+			if !visible {
+				return common.NewErrDenied("SMREPO-NEWSM-CHKDUP-ABACDENIED existing submodel is not accessible under ABAC constraints")
+			}
+			return nil
+		},
+		"SMREPO-NEWSM-CREATE-CONFLICT submodel identifier already exists",
+		"SMREPO-NEWSM-CHKDUP-ABACDENIED existing submodel is not accessible under ABAC constraints",
+	)
 }
 
 func (s *SubmodelDatabase) createSubmodelInTransaction(tx *sql.Tx, submodel types.ISubmodel) error {
@@ -145,6 +182,16 @@ func (s *SubmodelDatabase) createSubmodelInTransaction(tx *sql.Tx, submodel type
 
 	if _, err := tx.Exec(ids, args...); err != nil {
 		return common.NewInternalServerError("SMREPO-NEWSM-CREATE-EXECPAYLOADSQL " + err.Error())
+	}
+
+	if err := common.CreateContextReferences1ToMany(
+		tx,
+		submodelDBID,
+		submodel.SupplementalSemanticIDs(),
+		common.TblSubmodelSuppSemantic,
+		common.ColSubmodelID,
+	); err != nil {
+		return common.NewInternalServerError("SMREPO-NEWSM-CREATE-SUPPSEM " + err.Error())
 	}
 
 	semanticID := submodel.SemanticID()
@@ -231,7 +278,7 @@ func (s *SubmodelDatabase) PatchSubmodel(ctx context.Context, submodelID string,
 	}
 	defer cleanup(&err)
 
-	if err = s.patchSubmodelInTransactionValidated(submodelID, tx, submodel); err != nil {
+	if err = s.patchSubmodelInTransactionValidated(ctx, submodelID, tx, submodel); err != nil {
 		return err
 	}
 
@@ -260,13 +307,13 @@ func (s *SubmodelDatabase) PatchSubmodelInTransaction(ctx context.Context, submo
 		return err
 	}
 
-	if err := s.patchSubmodelInTransactionValidated(submodelID, tx, submodel); err != nil {
+	if err := s.patchSubmodelInTransactionValidated(ctx, submodelID, tx, submodel); err != nil {
 		return err
 	}
 	return s.appendSubmodelHistoryTx(ctx, tx, submodel, history.ChangeUpdated, false)
 }
 
-func (s *SubmodelDatabase) patchSubmodelInTransactionValidated(submodelID string, tx *sql.Tx, submodel types.ISubmodel) error {
+func (s *SubmodelDatabase) patchSubmodelInTransactionValidated(_ context.Context, submodelID string, tx *sql.Tx, submodel types.ISubmodel) error {
 	_, err := s.replaceSubmodelInTransaction(tx, submodelID, submodel, true)
 	if err != nil {
 		return err
@@ -291,7 +338,7 @@ func (s *SubmodelDatabase) PatchSubmodelMetadata(ctx context.Context, submodelID
 	}
 	defer cleanup(&err)
 
-	if err = s.patchSubmodelMetadataInTransactionValidated(submodelID, tx, submodel); err != nil {
+	if err = s.patchSubmodelMetadataInTransactionValidated(ctx, submodelID, tx, submodel); err != nil {
 		return err
 	}
 
@@ -320,13 +367,13 @@ func (s *SubmodelDatabase) PatchSubmodelMetadataInTransaction(ctx context.Contex
 		return err
 	}
 
-	if err := s.patchSubmodelMetadataInTransactionValidated(submodelID, tx, submodel); err != nil {
+	if err := s.patchSubmodelMetadataInTransactionValidated(ctx, submodelID, tx, submodel); err != nil {
 		return err
 	}
 	return s.appendSubmodelMetadataHistoryTx(ctx, tx, submodelID, submodel)
 }
 
-func (s *SubmodelDatabase) patchSubmodelMetadataInTransactionValidated(submodelID string, tx *sql.Tx, submodel types.ISubmodel) error {
+func (s *SubmodelDatabase) patchSubmodelMetadataInTransactionValidated(_ context.Context, submodelID string, tx *sql.Tx, submodel types.ISubmodel) error {
 	return s.patchSubmodelMetadataInTransaction(tx, submodelID, submodel)
 }
 
@@ -472,7 +519,7 @@ func (s *SubmodelDatabase) deleteSubmodelInTransaction(ctx context.Context, tx *
 		}
 	}
 
-	submodelDatabaseID, err := persistenceutils.GetSubmodelDatabaseID(tx, submodelID)
+	submodelDatabaseID, err := persistenceutils.GetSubmodelDatabaseIDForUpdate(tx, submodelID)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return common.NewErrNotFound("SMREPO-DELSM-NOTFOUND Submodel with ID '" + submodelID + "' not found")
@@ -498,7 +545,7 @@ func (s *SubmodelDatabase) deleteSubmodelInTransaction(ctx context.Context, tx *
 }
 
 func (s *SubmodelDatabase) replaceSubmodelInTransaction(tx *sql.Tx, submodelID string, submodel types.ISubmodel, requireExisting bool) (bool, error) {
-	submodelDatabaseID, err := persistenceutils.GetSubmodelDatabaseID(tx, submodelID)
+	submodelDatabaseID, err := persistenceutils.GetSubmodelDatabaseIDForUpdate(tx, submodelID)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			if requireExisting {
@@ -572,6 +619,16 @@ func (s *SubmodelDatabase) patchSubmodelMetadataInTransaction(tx *sql.Tx, submod
 
 	if _, err = tx.Exec(upsertPayloadQuery, upsertPayloadArgs...); err != nil {
 		return common.NewInternalServerError("SMREPO-PATCHSMMETA-UPSERTPAYLOAD " + err.Error())
+	}
+
+	if err = common.ReplaceContextReferences1ToMany(
+		tx,
+		int64(submodelDatabaseID),
+		submodel.SupplementalSemanticIDs(),
+		common.TblSubmodelSuppSemantic,
+		common.ColSubmodelID,
+	); err != nil {
+		return common.NewInternalServerError("SMREPO-PATCHSMMETA-SUPPSEM " + err.Error())
 	}
 
 	deleteSemanticIDQuery, deleteSemanticIDArgs, err := submodelqueries.BuildDeleteSubmodelSemanticIDSQL(submodelDatabaseID)

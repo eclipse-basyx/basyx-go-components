@@ -1,0 +1,49 @@
+{
+  "paging_metadata": {},
+  "result": [
+    {
+      "id": "urn:example:aas:product-001",
+      "specificAssetIds": [
+        {
+          "externalSubjectId": {
+            "keys": [
+              {
+                "type": "GlobalReference",
+                "value": "PUBLIC_READABLE"
+              }
+            ],
+            "type": "ExternalReference"
+          },
+          "name": "manufacturerPartId",
+          "value": "PART-001"
+        }
+      ],
+      "submodelDescriptors": [
+        {
+          "endpoints": [
+            {
+              "interface": "SUBMODEL-3.0",
+              "protocolInformation": {
+                "href": "{{BASYX_MARKER_SM_LOCALHOST_URL}}/submodels/dXJuOmV4YW1wbGU6c3VibW9kZWw6bmFtZXBsYXRl",
+                "endpointProtocol": "HTTP"
+              }
+            }
+          ],
+          "id": "urn:example:submodel:nameplate",
+          "idShort": "PublicNameplate",
+          "supplementalSemanticId": [
+            {
+              "keys": [
+                {
+                  "type": "GlobalReference",
+                  "value": "PUBLIC_READABLE"
+                }
+              ],
+              "type": "ExternalReference"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

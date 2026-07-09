@@ -121,13 +121,14 @@ func CreateContextReferences1ToMany(
 	referenceKeyTable := referenceTable + "_key"
 	payloadTable := referenceTable + "_payload"
 
-	for _, reference := range references {
+	for referencePosition, reference := range references {
 		if reference == nil {
 			continue
 		}
 
 		sqlStr, args, err := d.Insert(referenceTable).Rows(goqu.Record{
 			ownerColumn: ownerID,
+			ColPosition: referencePosition,
 			ColType:     reference.Type(),
 		}).Returning(goqu.C(ColID)).ToSQL()
 		if err != nil {
@@ -176,6 +177,35 @@ func CreateContextReferences1ToMany(
 		if _, err = tx.Exec(sqlStr, args...); err != nil {
 			return err
 		}
+	}
+	return nil
+}
+
+// ReplaceContextReferences1ToMany replaces all references belonging to one owner.
+func ReplaceContextReferences1ToMany(
+	tx *sql.Tx,
+	ownerID int64,
+	references []types.IReference,
+	referenceTable string,
+	ownerColumn string,
+) error {
+	if tx == nil {
+		return fmt.Errorf("CTXREF-REPLACE-NILTX transaction is nil")
+	}
+
+	d := goqu.Dialect(Dialect)
+	deleteSQL, args, err := d.Delete(referenceTable).
+		Where(goqu.C(ownerColumn).Eq(ownerID)).
+		ToSQL()
+	if err != nil {
+		return fmt.Errorf("CTXREF-REPLACE-BUILDDELETE: %w", err)
+	}
+	if _, err = tx.Exec(deleteSQL, args...); err != nil {
+		return fmt.Errorf("CTXREF-REPLACE-EXECDELETE: %w", err)
+	}
+
+	if err = CreateContextReferences1ToMany(tx, ownerID, references, referenceTable, ownerColumn); err != nil {
+		return fmt.Errorf("CTXREF-REPLACE-CREATE: %w", err)
 	}
 	return nil
 }

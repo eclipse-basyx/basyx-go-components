@@ -45,6 +45,8 @@ const (
 	TblSpecificAssetID                = "specific_asset_id"
 	TblSpecificAssetIDPayload         = "specific_asset_id_payload"
 	TblSpecificAssetIDSuppSemantic    = "specific_asset_id_supplemental_semantic_id_reference"
+	TblSubmodelSuppSemantic           = "submodel_supplemental_semantic_id_reference"
+	TblSubmodelElementSuppSemantic    = "submodel_element_supplemental_semantic_id_reference"
 	TblSubmodelDescriptor             = "submodel_descriptor"
 	TblSubmodelDescriptorSuppSemantic = "submodel_descriptor_supplemental_semantic_id_reference"
 	TblDescriptorPayload              = "descriptor_payload"
@@ -118,6 +120,8 @@ const (
 
 	ColSpecificAssetIDID = "specific_asset_id_id"
 	ColSpecificAssetID   = "specific_asset_id"
+	ColSubmodelID        = "submodel_id"
+	ColSubmodelElementID = "submodel_element_id"
 	ColReferenceID       = "reference_id"
 
 	ColCompanyName   = "company_name"

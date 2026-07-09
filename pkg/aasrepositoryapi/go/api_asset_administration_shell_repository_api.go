@@ -3,7 +3,7 @@
  *
  * The Full Profile of the Asset Administration Shell Repository Service Specification as part of the [Specification of the Asset Administration Shell: Part 2](https://industrialdigitaltwin.org/en/content-hub/aasspecifications).   Copyright: Industrial Digital Twin Association (IDTA) 2025
  *
- * API version: V3.1.1_SSP-001
+ * API version: V3.2.0
  * Contact: info@idtwin.org
  */
 
@@ -17,7 +17,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -439,7 +438,27 @@ func (c *AssetAdministrationShellRepositoryAPIAPIController) GetAllAssetAdminist
 
 	cursorParam := query.Get("cursor")
 
-	result, err := c.service.GetAllAssetAdministrationShells(r.Context(), assetIdsParam, idShortParam, limitParam, cursorParam)
+	var createdFromParam time.Time
+	if query.Has("createdFrom") {
+		parsed, err := parseTime(query.Get("createdFrom"))
+		if err != nil {
+			c.errorHandler(w, r, &ParsingError{Param: "createdFrom", Err: err}, nil)
+			return
+		}
+		createdFromParam = parsed
+	}
+
+	var updatedFromParam time.Time
+	if query.Has("updatedFrom") {
+		parsed, err := parseTime(query.Get("updatedFrom"))
+		if err != nil {
+			c.errorHandler(w, r, &ParsingError{Param: "updatedFrom", Err: err}, nil)
+			return
+		}
+		updatedFromParam = parsed
+	}
+
+	result, err := c.service.GetAllAssetAdministrationShells(r.Context(), assetIdsParam, idShortParam, limitParam, cursorParam, createdFromParam, updatedFromParam)
 	if err != nil {
 		c.errorHandler(w, r, err, &result)
 		return
@@ -677,17 +696,8 @@ func (c *AssetAdministrationShellRepositoryAPIAPIController) GetThumbnailAasRepo
 
 // PutThumbnailAasRepository -
 func (c *AssetAdministrationShellRepositoryAPIAPIController) PutThumbnailAasRepository(w http.ResponseWriter, r *http.Request) {
-	r.Body = http.MaxBytesReader(w, r.Body, uploadMaxSizeFromRequestContext(r))
-
-	if err := r.ParseMultipartForm(32 << 20); err != nil {
-		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
-		return
-	}
-	defer func() {
-		if r.MultipartForm != nil {
-			_ = r.MultipartForm.RemoveAll()
-		}
-	}()
+	maxUploadSizeBytes := uploadMaxSizeFromRequestContext(r)
+	r.Body = http.MaxBytesReader(w, r.Body, maxUploadSizeBytes)
 
 	aasIdentifierParam := chi.URLParam(r, "aasIdentifier")
 	if aasIdentifierParam == "" {
@@ -695,22 +705,12 @@ func (c *AssetAdministrationShellRepositoryAPIAPIController) PutThumbnailAasRepo
 		return
 	}
 
-	fileNameParam := r.FormValue("fileName")
-	fileParam, fileErr := ReadFormFileToTempFile(r, "file")
-	if fileErr != nil {
-		c.errorHandler(w, r, &ParsingError{Param: "file", Err: fileErr}, nil)
-		return
-	}
-	defer func() {
-		if fileParam != nil {
-			tempFilePath := fileParam.Name()
-			_ = fileParam.Close()
-			// #nosec G703 -- path comes from server-generated temporary file.
-			_ = os.Remove(tempFilePath)
-		}
-	}()
-
-	result, err := c.service.PutThumbnailAasRepository(r.Context(), aasIdentifierParam, fileNameParam, fileParam)
+	var result model.ImplResponse
+	err := HandleMultipartFileStream(r, "file", "fileName", func(fileName string, file io.Reader) error {
+		var uploadErr error
+		result, uploadErr = c.service.PutThumbnailAasRepository(r.Context(), aasIdentifierParam, fileName, file)
+		return uploadErr
+	})
 	if err != nil {
 		c.errorHandler(w, r, err, &result)
 		return
@@ -2179,17 +2179,8 @@ func (c *AssetAdministrationShellRepositoryAPIAPIController) GetFileByPathAasRep
 // PutFileByPathAasRepository - Uploads file content to an existing submodel element at a specified path within submodel elements hierarchy
 // nolint:revive
 func (c *AssetAdministrationShellRepositoryAPIAPIController) PutFileByPathAasRepository(w http.ResponseWriter, r *http.Request) {
-	r.Body = http.MaxBytesReader(w, r.Body, uploadMaxSizeFromRequestContext(r))
-
-	if err := r.ParseMultipartForm(32 << 20); err != nil {
-		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
-		return
-	}
-	defer func() {
-		if r.MultipartForm != nil {
-			_ = r.MultipartForm.RemoveAll()
-		}
-	}()
+	maxUploadSizeBytes := uploadMaxSizeFromRequestContext(r)
+	r.Body = http.MaxBytesReader(w, r.Body, maxUploadSizeBytes)
 
 	aasIdentifierParam := chi.URLParam(r, "aasIdentifier")
 	if aasIdentifierParam == "" {
@@ -2209,33 +2200,19 @@ func (c *AssetAdministrationShellRepositoryAPIAPIController) PutFileByPathAasRep
 		return
 	}
 
-	fileNameParam := r.FormValue("fileName")
-	var fileParam *os.File
-	{
-		param, err := ReadFormFileToTempFile(r, "file")
-		if err != nil {
-			c.errorHandler(w, r, &ParsingError{Param: "file", Err: err}, nil)
-			return
-		}
-		fileParam = param
-	}
-	defer func() {
-		if fileParam != nil {
-			tempFilePath := fileParam.Name()
-			_ = fileParam.Close()
-			// #nosec G703 -- path comes from server-generated temporary file.
-			_ = os.Remove(tempFilePath)
-		}
-	}()
-
-	result, err := c.service.PutFileByPathAasRepository(
-		r.Context(),
-		aasIdentifierParam,
-		submodelIdentifierParam,
-		idShortPathParam,
-		fileNameParam,
-		fileParam,
-	)
+	var result model.ImplResponse
+	err := HandleMultipartFileStream(r, "file", "fileName", func(fileName string, file io.Reader) error {
+		var uploadErr error
+		result, uploadErr = c.service.PutFileByPathAasRepository(
+			r.Context(),
+			aasIdentifierParam,
+			submodelIdentifierParam,
+			idShortPathParam,
+			fileName,
+			file,
+		)
+		return uploadErr
+	})
 	if err != nil {
 		c.errorHandler(w, r, err, &result)
 		return
@@ -2604,6 +2581,7 @@ func (c *AssetAdministrationShellRepositoryAPIAPIController) GetAllAssetAdminist
 		return
 	}
 	assetIdsParam := query["assetIds"]
+	idShortParam := query.Get("idShort")
 
 	var createdFromParam time.Time
 	if query.Has("createdFrom") {
@@ -2639,6 +2617,7 @@ func (c *AssetAdministrationShellRepositoryAPIAPIController) GetAllAssetAdminist
 	result, err := c.service.GetAllAssetAdministrationShellsRecentChanges(
 		r.Context(),
 		assetIdsParam,
+		idShortParam,
 		createdFromParam,
 		updatedFromParam,
 		limitParam,

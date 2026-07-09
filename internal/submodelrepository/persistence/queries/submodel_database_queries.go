@@ -29,6 +29,7 @@ package queries
 
 import (
 	"strconv"
+	"time"
 
 	"github.com/FriedJannik/aas-go-sdk/jsonization"
 	"github.com/FriedJannik/aas-go-sdk/stringification"
@@ -117,8 +118,11 @@ func BuildInsertSubmodelSemanticIDReferencePayloadSQL(submodelDBID int64, semant
 // SelectSubmodelDataset builds the base submodel select dataset.
 func SelectSubmodelDataset(
 	submodelIdentifier *string,
+	idShort *string,
 	limit *int32,
 	cursor *string,
+	createdFrom time.Time,
+	updatedFrom time.Time,
 	additionalProjections []interface{},
 ) (*goqu.SelectDataset, error) {
 	dialect := goqu.Dialect(common.Dialect)
@@ -150,6 +154,10 @@ func SelectSubmodelDataset(
 		return selectDS, nil
 	}
 
+	if idShort != nil && *idShort != "" {
+		selectDS = selectDS.Where(goqu.Ex{"submodel.id_short": *idShort})
+	}
+
 	if cursor != nil && *cursor != "" {
 		cursorExistsDS := dialect.From(goqu.T("submodel").As("s2")).
 			Select(goqu.V(1)).
@@ -158,6 +166,17 @@ func SelectSubmodelDataset(
 		selectDS = selectDS.
 			Where(goqu.Func("EXISTS", cursorExistsDS)).
 			Where(goqu.I("submodel.submodel_identifier").Gte(*cursor))
+	}
+	switch {
+	case !createdFrom.IsZero() && !updatedFrom.IsZero():
+		selectDS = selectDS.Where(goqu.Or(
+			goqu.I("submodel.administration_created_at").Gte(createdFrom.UTC()),
+			goqu.I("submodel.administration_updated_at").Gte(updatedFrom.UTC()),
+		))
+	case !createdFrom.IsZero():
+		selectDS = selectDS.Where(goqu.I("submodel.administration_created_at").Gte(createdFrom.UTC()))
+	case !updatedFrom.IsZero():
+		selectDS = selectDS.Where(goqu.I("submodel.administration_updated_at").Gte(updatedFrom.UTC()))
 	}
 
 	if limit != nil && *limit > 0 {
@@ -188,22 +207,38 @@ func ApplySubmodelSemanticIDFilter(selectDS *goqu.SelectDataset, semanticID stri
 
 // BuildSubmodelListSQL builds the final SQL for a masked submodel list query.
 func BuildSubmodelListSQL(selectDS *goqu.SelectDataset, dataAlias string, maskedExpressions []exp.Expression) (string, []any, error) {
+	return BuildSubmodelListSQLWithSupplementalOwnerID(selectDS, dataAlias, maskedExpressions, false)
+}
+
+// BuildSubmodelListSQLWithSupplementalOwnerID builds the final SQL and
+// optionally exposes the database ID needed to reconstruct filtered references.
+func BuildSubmodelListSQLWithSupplementalOwnerID(
+	selectDS *goqu.SelectDataset,
+	dataAlias string,
+	maskedExpressions []exp.Expression,
+	includeSupplementalOwnerID bool,
+) (string, []any, error) {
 	dialect := goqu.Dialect(common.Dialect)
+	projections := []interface{}{
+		goqu.I(dataAlias + ".c0"),
+		maskedExpressions[0],
+		goqu.I(dataAlias + ".c2"),
+		goqu.I(dataAlias + ".c3"),
+		goqu.I(dataAlias + ".raw_description_payload"),
+		goqu.I(dataAlias + ".raw_displayname_payload"),
+		goqu.I(dataAlias + ".raw_administrative_information_payload"),
+		goqu.I(dataAlias + ".raw_embedded_data_specification_payload"),
+		goqu.I(dataAlias + ".raw_supplemental_semantic_ids_payload"),
+		goqu.I(dataAlias + ".raw_extensions_payload"),
+		goqu.I(dataAlias + ".raw_qualifiers_payload"),
+		maskedExpressions[1],
+	}
+	if includeSupplementalOwnerID {
+		projections = append(projections, goqu.I(dataAlias+".supplemental_owner_id"))
+	}
+
 	return dialect.From(selectDS.As(dataAlias)).
-		Select(
-			goqu.I(dataAlias+".c0"),
-			maskedExpressions[0],
-			goqu.I(dataAlias+".c2"),
-			goqu.I(dataAlias+".c3"),
-			goqu.I(dataAlias+".raw_description_payload"),
-			goqu.I(dataAlias+".raw_displayname_payload"),
-			goqu.I(dataAlias+".raw_administrative_information_payload"),
-			goqu.I(dataAlias+".raw_embedded_data_specification_payload"),
-			goqu.I(dataAlias+".raw_supplemental_semantic_ids_payload"),
-			goqu.I(dataAlias+".raw_extensions_payload"),
-			goqu.I(dataAlias+".raw_qualifiers_payload"),
-			maskedExpressions[1],
-		).
+		Select(projections...).
 		Order(goqu.I(dataAlias + ".sort_submodel_identifier").Asc()).
 		ToSQL()
 }
@@ -322,11 +357,17 @@ func BuildDeleteSubmodelSemanticIDSQL(submodelDatabaseID int) (string, []any, er
 		ToSQL()
 }
 
-// BuildSiblingIDShortCollisionSQL builds the sibling idShort collision query.
-func BuildSiblingIDShortCollisionSQL(submodelDatabaseID int, parentElementID *int, idShort string) (string, []any, error) {
+// BuildSiblingIDShortCollisionPathSQL builds the sibling idShort collision path query.
+func BuildSiblingIDShortCollisionPathSQL(submodelDatabaseID int, parentElementID *int, idShort string) (string, []any, error) {
+	return siblingIDShortCollisionDataset(submodelDatabaseID, parentElementID, idShort).
+		Select(goqu.C("idshort_path")).
+		Limit(1).
+		ToSQL()
+}
+
+func siblingIDShortCollisionDataset(submodelDatabaseID int, parentElementID *int, idShort string) *goqu.SelectDataset {
 	dialect := goqu.Dialect(common.Dialect)
-	query := dialect.From("submodel_element").
-		Select(goqu.COUNT("*"))
+	query := dialect.From("submodel_element")
 
 	whereExpressions := []goqu.Expression{
 		goqu.C("submodel_id").Eq(submodelDatabaseID),
@@ -339,7 +380,7 @@ func BuildSiblingIDShortCollisionSQL(submodelDatabaseID int, parentElementID *in
 		whereExpressions = append(whereExpressions, goqu.C("parent_sme_id").Eq(*parentElementID))
 	}
 
-	return query.Where(whereExpressions...).ToSQL()
+	return query.Where(whereExpressions...)
 }
 
 // BuildSubmodelElementModelTypeByPathSQL builds the model type lookup query for an element path.

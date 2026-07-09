@@ -45,24 +45,30 @@ import (
 func HTTPClient() *http.Client { return &http.Client{Timeout: 20 * time.Second} }
 
 // FindCompose searches for docker or podman on the PATH and returns the binary name and compose subcommand.
-// Returns an error if neither docker nor podman is found.
+// Returns an error if none of the supported compose engines is found.
 func FindCompose() (bin string, args []string, err error) {
 	if _, e := exec.LookPath("docker"); e == nil {
 		return "docker", []string{"compose"}, nil
 	}
-	if _, e := exec.LookPath("docker-compose"); e == nil {
-		return "docker-compose", []string{}, nil
-	}
 	if _, e := exec.LookPath("podman"); e == nil {
 		return "podman", []string{"compose"}, nil
 	}
-	return "", nil, errors.New("no compose engine found (docker, docker-compose, podman)")
+	return "", nil, errors.New("no compose engine found (docker compose, podman compose)")
 }
 
 // RunCompose executes a Docker Compose command with the given base command and arguments.
 // Streams stdout and stderr to the current process's output streams.
 func RunCompose(ctx context.Context, base string, args ...string) error {
+	return RunComposeWithEnv(ctx, base, nil, args...)
+}
+
+// RunComposeWithEnv executes a Docker Compose command with additional environment variables.
+// Streams stdout and stderr to the current process's output streams.
+func RunComposeWithEnv(ctx context.Context, base string, env []string, args ...string) error {
 	cmd := exec.CommandContext(ctx, base, args...)
+	if len(env) > 0 {
+		cmd.Env = append(os.Environ(), env...)
+	}
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	return cmd.Run()

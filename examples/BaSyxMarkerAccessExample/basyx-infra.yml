@@ -1,0 +1,18 @@
+infrastructures:
+  default: markerAccess
+
+  markerAccess:
+    name: Catena-X Example
+    template: catena-x
+    components:
+      digitalTwinRegistry:
+        baseUrl: "http://localhost:5004/api/v3"
+        hasDiscoveryIntegration: true
+      submodelService:
+        baseUrl: "http://localhost:5005"
+    security:
+      type: oauth2
+      config:
+        flow: auth_code
+        issuer: "http://keycloak.localhost:8080/realms/basyx"
+        clientId: "basyx-ui"

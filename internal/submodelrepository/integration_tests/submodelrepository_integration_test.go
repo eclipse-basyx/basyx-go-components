@@ -45,6 +45,7 @@ import (
 	"time"
 
 	"github.com/FriedJannik/aas-go-sdk/types"
+	"github.com/doug-martin/goqu/v9"
 	aasregistrydb "github.com/eclipse-basyx/basyx-go-components/internal/aasregistry/persistence"
 	aasrepositorydb "github.com/eclipse-basyx/basyx-go-components/internal/aasrepository/persistence"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
@@ -70,8 +71,15 @@ var (
 	xsdGMonthDayPattern  = regexp.MustCompile(`^--(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])` + xsdTimezonePattern + `$`)
 )
 
-const submodelRepositoryIntegrationTestDSN = "postgres://admin:admin123@127.0.0.1:6432/basyxTestDB?sslmode=disable"
 const actionAssertSignedSubmodel = "ASSERT_SIGNED_SUBMODEL"
+
+var submodelRepositoryBaseURL = testenv.LocalURLFromEnv("BASYX_IT_API_PORT", 6004)
+var submodelRepositoryInvalidBaseURL = testenv.LocalhostURLFromEnv("BASYX_IT_INVALID_API_PORT", 6007)
+var submodelRepositoryAASBaseURL = testenv.LocalhostURLFromEnv("BASYX_IT_AAS_API_PORT", 6006)
+var submodelRepositoryAASExternalURL = testenv.LocalURLFromEnv("BASYX_IT_AAS_API_PORT", 6006)
+var submodelRepositorySyncBaseURL = testenv.LocalhostURLFromEnv("BASYX_IT_SYNC_API_PORT", 6008)
+var submodelRepositorySyncExternalURL = testenv.LocalURLFromEnv("BASYX_IT_SYNC_API_PORT", 6008)
+var submodelRepositoryIntegrationTestDSN = testenv.PostgresURLFromEnv("BASYX_IT_DB_PORT", 6432, "basyxTestDB")
 
 // uploadFileAttachment uploads a file to the attachment endpoint
 func uploadFileAttachment(endpoint string, filePath string, fileName string) (int, error) {
@@ -397,7 +405,7 @@ func assertXSDTimeLexical(t *testing.T, value string) {
 }
 
 func TestTemporalXSDRoundTripFormatting(t *testing.T) {
-	baseURL := "http://localhost:6004"
+	baseURL := submodelRepositoryBaseURL
 	submodelID := "urn:basyx:integration:temporal-format"
 	submodelIDEncoded := common.EncodeString(submodelID)
 	t.Run("Duration regex guards invalid lexicals", func(t *testing.T) {
@@ -546,7 +554,7 @@ func TestTemporalXSDRoundTripFormatting(t *testing.T) {
 }
 
 func TestTemporalPropertyUpdateRoundTrip(t *testing.T) {
-	baseURL := "http://localhost:6004"
+	baseURL := submodelRepositoryBaseURL
 	submodelID := fmt.Sprintf("urn:basyx:integration:temporal-update-%d", time.Now().UnixNano())
 	submodelIDEncoded := common.EncodeString(submodelID)
 	elementEndpoint := func(idShort string) string {
@@ -666,7 +674,7 @@ func TestTemporalPropertyUpdateRoundTrip(t *testing.T) {
 }
 
 func TestPropertyEmptyStringRoundTrip(t *testing.T) {
-	baseURL := "http://localhost:6004"
+	baseURL := submodelRepositoryBaseURL
 	submodelID := fmt.Sprintf("urn:basyx:integration:property-empty-string-%d", time.Now().UnixNano())
 	submodelIDEncoded := common.EncodeString(submodelID)
 
@@ -720,7 +728,7 @@ func TestPropertyEmptyStringRoundTrip(t *testing.T) {
 }
 
 func TestContractSubmodelRepository(t *testing.T) {
-	baseURL := "http://localhost:6004"
+	baseURL := submodelRepositoryBaseURL
 
 	createSubmodel := func(t *testing.T, submodelID string, submodelIDShort string) string {
 		t.Helper()
@@ -775,6 +783,77 @@ func TestContractSubmodelRepository(t *testing.T) {
 		var metadata map[string]any
 		require.NoError(t, json.Unmarshal(body, &metadata), "response=%s", string(body))
 		assert.NotEmpty(t, metadata, "metadata response should not be empty")
+	})
+
+	t.Run("GetAllSubmodelsMetadataAndValueOnlyHonorSemanticIDFilter", func(t *testing.T) {
+		semanticMatch := fmt.Sprintf("urn:basyx:semantic:metadata-value-match-%d", time.Now().UnixNano())
+		semanticOther := fmt.Sprintf("urn:basyx:semantic:metadata-value-other-%d", time.Now().UnixNano())
+		matchingID := fmt.Sprintf("000-basyx-metadata-value-filter-match-%d", time.Now().UnixNano())
+		otherID := fmt.Sprintf("000-basyx-metadata-value-filter-other-%d", time.Now().UnixNano())
+
+		createSemanticSubmodel := func(id string, idShort string, semanticID string, propertyIDShort string, propertyValue string) string {
+			t.Helper()
+
+			statusCode, body, err := requestJSON(http.MethodPost, fmt.Sprintf("%s/submodels", baseURL), map[string]any{
+				"id":        id,
+				"idShort":   idShort,
+				"kind":      "Instance",
+				"modelType": "Submodel",
+				"semanticId": map[string]any{
+					"type": "ExternalReference",
+					"keys": []map[string]any{
+						{
+							"type":  "GlobalReference",
+							"value": semanticID,
+						},
+					},
+				},
+				"submodelElements": []map[string]any{
+					{
+						"idShort":   propertyIDShort,
+						"modelType": "Property",
+						"valueType": "xs:string",
+						"value":     propertyValue,
+					},
+				},
+			})
+			require.NoError(t, err)
+			require.Equal(t, http.StatusCreated, statusCode, "response=%s", string(body))
+
+			encodedID := common.EncodeString(id)
+			t.Cleanup(func() {
+				_, _, _ = requestJSON(http.MethodDelete, fmt.Sprintf("%s/submodels/%s", baseURL, encodedID), nil)
+			})
+			return encodedID
+		}
+
+		createSemanticSubmodel(matchingID, "MetadataValueFilterMatch", semanticMatch, "FilteredValueOnlyMatch", "match-value")
+		createSemanticSubmodel(otherID, "MetadataValueFilterOther", semanticOther, "FilteredValueOnlyOther", "other-value")
+
+		encodedSemanticMatch := common.EncodeString(semanticMatch)
+		statusCode, body, err := requestJSON(http.MethodGet, fmt.Sprintf("%s/submodels/$metadata?limit=10&semanticId=%s", baseURL, encodedSemanticMatch), nil)
+		require.NoError(t, err)
+		require.Equal(t, http.StatusOK, statusCode, "response=%s", string(body))
+
+		var metadataResponse struct {
+			Result []map[string]any `json:"result"`
+		}
+		require.NoError(t, json.Unmarshal(body, &metadataResponse), "response=%s", string(body))
+		require.Len(t, metadataResponse.Result, 1, "response=%s", string(body))
+		assert.Equal(t, matchingID, metadataResponse.Result[0]["id"])
+		assert.Equal(t, "MetadataValueFilterMatch", metadataResponse.Result[0]["idShort"])
+
+		statusCode, body, err = requestJSON(http.MethodGet, fmt.Sprintf("%s/submodels/$value?level=deep&limit=10&semanticId=%s", baseURL, encodedSemanticMatch), nil)
+		require.NoError(t, err)
+		require.Equal(t, http.StatusOK, statusCode, "response=%s", string(body))
+
+		var valueResponse struct {
+			Result []map[string]any `json:"result"`
+		}
+		require.NoError(t, json.Unmarshal(body, &valueResponse), "response=%s", string(body))
+		require.Len(t, valueResponse.Result, 1, "response=%s", string(body))
+		assert.Equal(t, "match-value", valueResponse.Result[0]["FilteredValueOnlyMatch"])
+		assert.NotContains(t, valueResponse.Result[0], "FilteredValueOnlyOther")
 	})
 
 	t.Run("PostSubmodelAcceptsNullSubmodelElements", func(t *testing.T) {
@@ -1372,7 +1451,7 @@ func TestContractSubmodelRepository(t *testing.T) {
 }
 
 func TestPathNotationEndpoints(t *testing.T) {
-	baseURL := "http://localhost:6004"
+	baseURL := submodelRepositoryBaseURL
 	submodelID := fmt.Sprintf("urn:basyx:integration:path-endpoints-%d", time.Now().UnixNano())
 	submodelIDEncoded := common.EncodeString(submodelID)
 
@@ -1844,7 +1923,7 @@ func expectedSignedSubmodelPayload(t *testing.T, expectedJWSPath string) []byte 
 
 // TestFileAttachmentOperations tests file upload, download, and deletion for File SME
 func TestFileAttachmentOperations(t *testing.T) {
-	baseURL := "http://localhost:6004"
+	baseURL := submodelRepositoryBaseURL
 	submodelID := "aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9Pbmx5RmlsZVN1Ym1vZGVsX1Rlc3Q" // base64 encoded: http://iese.fraunhofer.de/id/sm/OnlyFileSubmodel_Test
 	testFilePath := "testFiles/marcus.gif"
 	weakFileContent := []byte{0x00, 0x01, 0x02, 0x03}
@@ -1962,8 +2041,132 @@ func TestFileAttachmentOperations(t *testing.T) {
 	})
 }
 
+func TestDeleteSubmodelElementByPathUnlinksFileAttachmentLargeObject(t *testing.T) {
+	baseURL := submodelRepositoryBaseURL
+	submodelID := fmt.Sprintf("urn:basyx:integration:lo-delete-file-%d", time.Now().UnixNano())
+	encodedSubmodelID := common.EncodeString(submodelID)
+	filePath := "DeleteFile"
+	baselineCount := countPostgresLargeObjects(t, submodelRepositoryIntegrationTestDSN)
+
+	createSubmodelForLargeObjectCleanupTest(t, baseURL, submodelID, "LargeObjectDeleteFile", []any{
+		fileElementForLargeObjectCleanupTest(filePath),
+	})
+	defer deleteSubmodelForLargeObjectCleanupTest(t, baseURL, encodedSubmodelID)
+
+	attachmentEndpoint := fmt.Sprintf("%s/submodels/%s/submodel-elements/%s/attachment", baseURL, encodedSubmodelID, url.PathEscape(filePath))
+	statusCode, err := uploadFileAttachment(attachmentEndpoint, "testFiles/marcus.gif", "marcus.gif")
+	require.NoError(t, err)
+	require.Equal(t, http.StatusNoContent, statusCode)
+	require.Greater(t, countPostgresLargeObjects(t, submodelRepositoryIntegrationTestDSN), baselineCount)
+
+	deleteEndpoint := fmt.Sprintf("%s/submodels/%s/submodel-elements/%s", baseURL, encodedSubmodelID, url.PathEscape(filePath))
+	statusCode, body, err := requestJSON(http.MethodDelete, deleteEndpoint, nil)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusNoContent, statusCode, "response=%s", string(body))
+	require.Equal(t, baselineCount, countPostgresLargeObjects(t, submodelRepositoryIntegrationTestDSN))
+}
+
+func TestPutParentSubmodelElementUnlinksNestedFileAttachmentLargeObject(t *testing.T) {
+	baseURL := submodelRepositoryBaseURL
+	submodelID := fmt.Sprintf("urn:basyx:integration:lo-replace-parent-%d", time.Now().UnixNano())
+	encodedSubmodelID := common.EncodeString(submodelID)
+	parentPath := "Container"
+	nestedFilePath := parentPath + ".NestedFile"
+	baselineCount := countPostgresLargeObjects(t, submodelRepositoryIntegrationTestDSN)
+
+	createSubmodelForLargeObjectCleanupTest(t, baseURL, submodelID, "LargeObjectReplaceParent", []any{
+		map[string]any{
+			"idShort":   parentPath,
+			"modelType": "SubmodelElementCollection",
+			"value": []any{
+				fileElementForLargeObjectCleanupTest("NestedFile"),
+			},
+		},
+	})
+	defer deleteSubmodelForLargeObjectCleanupTest(t, baseURL, encodedSubmodelID)
+
+	attachmentEndpoint := fmt.Sprintf("%s/submodels/%s/submodel-elements/%s/attachment", baseURL, encodedSubmodelID, url.PathEscape(nestedFilePath))
+	statusCode, err := uploadFileAttachment(attachmentEndpoint, "testFiles/marcus.gif", "marcus.gif")
+	require.NoError(t, err)
+	require.Equal(t, http.StatusNoContent, statusCode)
+	require.Greater(t, countPostgresLargeObjects(t, submodelRepositoryIntegrationTestDSN), baselineCount)
+
+	replacement := map[string]any{
+		"idShort":   parentPath,
+		"modelType": "SubmodelElementCollection",
+		"value": []any{
+			map[string]any{
+				"idShort":   "ReplacementProperty",
+				"modelType": "Property",
+				"value":     "replacement",
+				"valueType": "xs:string",
+			},
+		},
+	}
+	replaceEndpoint := fmt.Sprintf("%s/submodels/%s/submodel-elements/%s", baseURL, encodedSubmodelID, url.PathEscape(parentPath))
+	statusCode, body, err := requestJSON(http.MethodPut, replaceEndpoint, replacement)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusNoContent, statusCode, "response=%s", string(body))
+	require.Equal(t, baselineCount, countPostgresLargeObjects(t, submodelRepositoryIntegrationTestDSN))
+}
+
+func createSubmodelForLargeObjectCleanupTest(t *testing.T, baseURL string, submodelID string, idShort string, elements []any) {
+	t.Helper()
+
+	payload := map[string]any{
+		"id":               submodelID,
+		"idShort":          idShort,
+		"kind":             "Instance",
+		"modelType":        "Submodel",
+		"submodelElements": elements,
+	}
+	statusCode, body, err := requestJSON(http.MethodPost, baseURL+"/submodels", payload)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusCreated, statusCode, "response=%s", string(body))
+}
+
+func fileElementForLargeObjectCleanupTest(idShort string) map[string]any {
+	return map[string]any{
+		"idShort":     idShort,
+		"modelType":   "File",
+		"contentType": "image/gif",
+		"value":       "file:///" + idShort,
+	}
+}
+
+func deleteSubmodelForLargeObjectCleanupTest(t *testing.T, baseURL string, encodedSubmodelID string) {
+	t.Helper()
+
+	statusCode, body, err := requestJSON(http.MethodDelete, baseURL+"/submodels/"+encodedSubmodelID, nil)
+	if err != nil {
+		t.Logf("cleanup delete submodel failed: %v", err)
+		return
+	}
+	if statusCode != http.StatusNoContent && statusCode != http.StatusNotFound {
+		t.Logf("cleanup delete submodel returned status=%d response=%s", statusCode, string(body))
+	}
+}
+
+func countPostgresLargeObjects(t *testing.T, dsn string) int64 {
+	t.Helper()
+
+	db, err := sql.Open("pgx", dsn)
+	require.NoError(t, err)
+	defer func() { _ = db.Close() }()
+
+	query, args, err := goqu.Dialect("postgres").
+		From(goqu.T("pg_largeobject_metadata")).
+		Select(goqu.COUNT("*")).
+		ToSQL()
+	require.NoError(t, err)
+
+	var count int64
+	require.NoError(t, db.QueryRow(query, args...).Scan(&count))
+	return count
+}
+
 func TestUploadAttachmentToNonFileSubmodelElementReturnsMethodNotAllowed(t *testing.T) {
-	baseURL := "http://localhost:6004"
+	baseURL := submodelRepositoryBaseURL
 	submodelID := fmt.Sprintf("urn:basyx:integration:non-file-attachment-%d", time.Now().UnixNano())
 	submodelIDEncoded := common.EncodeString(submodelID)
 	nonFileElementIDShort := "NonFileProperty"
@@ -2008,7 +2211,7 @@ func TestUploadAttachmentToNonFileSubmodelElementReturnsMethodNotAllowed(t *test
 }
 
 func TestLocationHeadersForCreateEndpoints(t *testing.T) {
-	baseURL := "http://localhost:6004"
+	baseURL := submodelRepositoryBaseURL
 
 	t.Run("PostSubmodelReturnsLocationHeader", func(t *testing.T) {
 		submodelID := fmt.Sprintf("urn:basyx:integration:post-location-submodel-%d", time.Now().UnixNano())
@@ -2126,7 +2329,7 @@ func TestLocationHeadersForCreateEndpoints(t *testing.T) {
 }
 
 func TestPutSubmodelElementByPathCreatesWhenMissing(t *testing.T) {
-	baseURL := "http://localhost:6004"
+	baseURL := submodelRepositoryBaseURL
 	submodelID := fmt.Sprintf("urn:basyx:integration:put-create-sme-%d", time.Now().UnixNano())
 	submodelIDEncoded := common.EncodeString(submodelID)
 	targetPath := "SMC"
@@ -2187,7 +2390,7 @@ func TestStandaloneStartupRejectsUnsupportedAASRegistryToggle(t *testing.T) {
 		t.Skip("requires bundled integration docker compose setup")
 	}
 
-	assertServiceNeverHealthy(t, "http://localhost:6007/health", 20*time.Second)
+	assertServiceNeverHealthy(t, submodelRepositoryInvalidBaseURL+"/health", 20*time.Second)
 }
 
 func TestStandaloneSubmodelRepositorySyncUpdatesReferencingAASDescriptor(t *testing.T) {
@@ -2195,8 +2398,10 @@ func TestStandaloneSubmodelRepositorySyncUpdatesReferencingAASDescriptor(t *test
 		t.Skip("requires bundled integration docker compose setup")
 	}
 
-	companionAASBaseURL := "http://localhost:6006"
-	submodelSyncBaseURL := "http://localhost:6008"
+	companionAASBaseURL := submodelRepositoryAASBaseURL
+	companionAASExternalURL := submodelRepositoryAASExternalURL
+	submodelSyncBaseURL := submodelRepositorySyncBaseURL
+	submodelSyncExternalURL := submodelRepositorySyncExternalURL
 
 	waitForServiceHealthy(t, companionAASBaseURL+"/health", 2*time.Minute)
 	waitForServiceHealthy(t, submodelSyncBaseURL+"/health", 2*time.Minute)
@@ -2277,18 +2482,85 @@ func TestStandaloneSubmodelRepositorySyncUpdatesReferencingAASDescriptor(t *test
 	descriptorAfterSync, err := aasRegistryPersistence.GetAssetAdministrationShellDescriptorByID(context.Background(), aasID)
 	require.NoError(t, err)
 	require.True(t, hasEmbeddedSubmodelDescriptor(descriptorAfterSync.SubmodelDescriptors, submodelID))
+
+	requireDescriptorEndpointInterface(
+		t,
+		db,
+		companionAASExternalURL+"/shells/"+encodedAASID,
+		"AAS-3.0",
+	)
+	requireDescriptorEndpointInterface(
+		t,
+		db,
+		submodelSyncExternalURL+"/submodels/"+encodedSubmodelID,
+		"SUBMODEL-3.0",
+	)
+}
+
+func requireDescriptorEndpointInterface(t *testing.T, db *sql.DB, href string, expectedInterface string) {
+	t.Helper()
+
+	endpointTable := common.TAASDescriptorEndpoint
+	query, args, err := goqu.
+		Dialect(common.Dialect).
+		From(endpointTable).
+		Select(endpointTable.Col(common.ColInterface)).
+		Where(endpointTable.Col(common.ColHref).Eq(href)).
+		Order(endpointTable.Col(common.ColID).Asc()).
+		Prepared(true).
+		ToSQL()
+	require.NoError(t, err)
+
+	rows, err := db.Query(query, args...)
+	require.NoError(t, err)
+	defer func() { _ = rows.Close() }()
+
+	interfaces := make([]string, 0, 2)
+	for rows.Next() {
+		var actualInterface string
+		require.NoError(t, rows.Scan(&actualInterface))
+		interfaces = append(interfaces, actualInterface)
+	}
+	require.NoError(t, rows.Err())
+	require.NotEmpty(t, interfaces, "expected persisted descriptor endpoint for href %s", href)
+	for _, actualInterface := range interfaces {
+		require.Equal(t, expectedInterface, actualInterface, "href=%s", href)
+	}
 }
 
 // TestMain handles setup and teardown
 func TestMain(m *testing.M) {
 	if os.Getenv("BASYX_EXTERNAL_COMPOSE") == "1" {
+		testenv.SetEnvDefaultsOrExit(map[string]string{
+			"BASYX_IT_API_URL":         submodelRepositoryBaseURL,
+			"BASYX_IT_AAS_API_URL":     submodelRepositoryAASExternalURL,
+			"BASYX_IT_SYNC_API_URL":    submodelRepositorySyncExternalURL,
+			"BASYX_IT_INVALID_API_URL": submodelRepositoryInvalidBaseURL,
+		})
 		os.Exit(m.Run())
 	}
 
+	runtime := testenv.NewComposeRuntimeOrExit("submodelrepository-it", []testenv.PortBinding{
+		{Name: "api", EnvVar: "BASYX_IT_API_PORT"},
+		{Name: "db", EnvVar: "BASYX_IT_DB_PORT"},
+		{Name: "aas-api", EnvVar: "BASYX_IT_AAS_API_PORT"},
+		{Name: "sync-api", EnvVar: "BASYX_IT_SYNC_API_PORT"},
+		{Name: "invalid-api", EnvVar: "BASYX_IT_INVALID_API_PORT"},
+	})
+	submodelRepositoryBaseURL = runtime.LocalURL("api")
+	submodelRepositoryAASBaseURL = runtime.LocalhostURL("aas-api")
+	submodelRepositoryAASExternalURL = runtime.LocalURL("aas-api")
+	submodelRepositorySyncBaseURL = runtime.LocalhostURL("sync-api")
+	submodelRepositorySyncExternalURL = runtime.LocalURL("sync-api")
+	submodelRepositoryInvalidBaseURL = runtime.LocalhostURL("invalid-api")
+	submodelRepositoryIntegrationTestDSN = runtime.PostgresURL("db", "basyxTestDB")
+
 	os.Exit(testenv.RunComposeTestMain(m, testenv.ComposeTestMainOptions{
 		ComposeFile:     "docker_compose/docker_compose.yml",
+		ProjectName:     runtime.ProjectName,
+		Env:             runtime.Env(),
 		PreDownBeforeUp: true,
-		HealthURL:       "http://localhost:6004/health",
+		HealthURL:       submodelRepositoryBaseURL + "/health",
 		HealthTimeout:   150 * time.Second,
 	}))
 }

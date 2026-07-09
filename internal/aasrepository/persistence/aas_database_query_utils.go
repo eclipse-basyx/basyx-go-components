@@ -28,6 +28,7 @@ package persistence
 import (
 	"fmt"
 	"strconv"
+	"time"
 
 	"github.com/FriedJannik/aas-go-sdk/jsonization"
 	"github.com/FriedJannik/aas-go-sdk/types"
@@ -149,7 +150,7 @@ func buildCheckAssetAdministrationShellSubmodelReferenceExistsQuery(dialect *goq
 		ToSQL()
 }
 
-func buildGetAssetAdministrationShellsDataset(dialect *goqu.DialectWrapper, limit int32, cursor string, idShort string, specificAssetIDs []types.ISpecificAssetID) (*goqu.SelectDataset, error) {
+func buildGetAssetAdministrationShellsDataset(dialect *goqu.DialectWrapper, limit int32, cursor string, idShort string, specificAssetIDs []types.ISpecificAssetID, createdFrom time.Time, updatedFrom time.Time) (*goqu.SelectDataset, error) {
 	ds := dialect.
 		From(goqu.T("aas").As("aas")).
 		LeftJoin(goqu.T("asset_information").As("asset_information"), goqu.On(goqu.I("asset_information.asset_information_id").Eq(goqu.I("aas.id")))).
@@ -171,6 +172,17 @@ func buildGetAssetAdministrationShellsDataset(dialect *goqu.DialectWrapper, limi
 
 	if idShort != "" {
 		ds = ds.Where(goqu.I("aas.id_short").Eq(idShort))
+	}
+	switch {
+	case !createdFrom.IsZero() && !updatedFrom.IsZero():
+		ds = ds.Where(goqu.Or(
+			goqu.I("aas.administration_created_at").Gte(createdFrom.UTC()),
+			goqu.I("aas.administration_updated_at").Gte(updatedFrom.UTC()),
+		))
+	case !createdFrom.IsZero():
+		ds = ds.Where(goqu.I("aas.administration_created_at").Gte(createdFrom.UTC()))
+	case !updatedFrom.IsZero():
+		ds = ds.Where(goqu.I("aas.administration_updated_at").Gte(updatedFrom.UTC()))
 	}
 
 	for _, specificAssetID := range uniqueSpecificAssetIDs(specificAssetIDs) {
@@ -217,11 +229,6 @@ func buildGetAssetAdministrationShellCursorByDBIDQuery(dialect *goqu.DialectWrap
 	return dialect.From("aas").Select("aas_id").Where(goqu.I("id").Eq(aasDBID)).ToSQL()
 }
 
-func buildGetAssetAdministrationShellDBIDByIdentifierQuery(dialect *goqu.DialectWrapper, aasIdentifier string) (string, []any, error) {
-	ds := buildGetAssetAdministrationShellDBIDByIdentifierDataset(dialect, aasIdentifier)
-	return ds.ToSQL()
-}
-
 func buildGetAssetAdministrationShellDBIDByIdentifierDataset(dialect *goqu.DialectWrapper, aasIdentifier string) *goqu.SelectDataset {
 	return dialect.From(goqu.T("aas").As("aas")).
 		Select(goqu.I("aas.id")).
@@ -233,8 +240,19 @@ func buildDeleteAssetAdministrationShellByDBIDQuery(dialect *goqu.DialectWrapper
 	return dialect.Delete("aas").Where(goqu.I("id").Eq(aasDBID)).ToSQL()
 }
 
-func buildDeleteAssetAdministrationShellByIdentifierQuery(dialect *goqu.DialectWrapper, aasIdentifier string) (string, []any, error) {
-	return dialect.Delete("aas").Where(goqu.I("aas_id").Eq(aasIdentifier)).ToSQL()
+func buildCleanupThumbnailLargeObjectsByAASDBIDQuery(dialect *goqu.DialectWrapper, aasDBID int64) (string, []any, error) {
+	unlinkSubquery := dialect.From(goqu.T("thumbnail_file_data").As("tfd")).
+		Prepared(true).
+		Select(goqu.Func("lo_unlink", goqu.I("tfd.file_oid")).As("unlink_result")).
+		Where(
+			goqu.I("tfd.id").Eq(aasDBID),
+			goqu.I("tfd.file_oid").IsNotNull(),
+		)
+
+	return dialect.From(unlinkSubquery.As("unlink_results")).
+		Prepared(true).
+		Select(goqu.COUNT("*")).
+		ToSQL()
 }
 
 func buildGetAssetInformationCurrentStateQuery(dialect *goqu.DialectWrapper, aasDBID int64) (string, []any, error) {

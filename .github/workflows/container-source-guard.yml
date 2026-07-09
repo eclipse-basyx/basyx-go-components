@@ -1,0 +1,43 @@
+name: Container Source Guard
+
+on:
+  pull_request:
+    paths:
+      - 'cmd/**/Dockerfile'
+      - 'internal/containerchecks/**'
+      - '.github/workflows/container-source-guard.yml'
+      - '.github/workflows/docker-release.yml'
+      - '.github/workflows/docker-snapshot.yml'
+      - 'go.mod'
+      - 'go.sum'
+  push:
+    branches: [main]
+    paths:
+      - 'cmd/**/Dockerfile'
+      - 'internal/containerchecks/**'
+      - '.github/workflows/container-source-guard.yml'
+      - '.github/workflows/docker-release.yml'
+      - '.github/workflows/docker-snapshot.yml'
+      - 'go.mod'
+      - 'go.sum'
+
+permissions:
+  contents: read
+
+jobs:
+  dockerfile-digest-pinning:
+    name: Dockerfile digest pinning
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+
+      - name: Set up Go
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Verify Dockerfile base image digest pinning
+        run: go test -v ./internal/containerchecks

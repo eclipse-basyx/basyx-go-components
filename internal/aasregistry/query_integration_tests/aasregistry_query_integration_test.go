@@ -36,11 +36,14 @@ import (
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/testenv"
 )
 
+var queryBaseURL = testenv.LocalhostURLFromEnv("BASYX_IT_API_PORT", 6005)
+var queryKeycloakTokenURL = testenv.LocalhostURLFromEnv("BASYX_IT_KEYCLOAK_PORT", 8081) + "/realms/basyx/protocol/openid-connect/token"
+
 func TestIntegration(t *testing.T) {
 	testenv.RunJSONSuite(t, testenv.JSONSuiteOptions{
 		DefaultExpectedStatus: http.StatusOK,
 		TokenProvider: testenv.NewPasswordGrantTokenProvider(
-			"http://localhost:8081/realms/basyx/protocol/openid-connect/token",
+			queryKeycloakTokenURL,
 			"basyx-ui",
 			10*time.Second,
 		),
@@ -48,8 +51,23 @@ func TestIntegration(t *testing.T) {
 }
 
 func TestMain(m *testing.M) {
-	os.Exit(testenv.RunComposeTestMain(m, testenv.ComposeTestMainOptions{
+	runtime := testenv.NewComposeRuntimeOrExit("aasregistry-query-it", []testenv.PortBinding{
+		{Name: "api", EnvVar: "BASYX_IT_API_PORT"},
+		{Name: "db", EnvVar: "BASYX_IT_DB_PORT"},
+		{Name: "keycloak", EnvVar: "BASYX_IT_KEYCLOAK_PORT"},
+	})
+	queryBaseURL = runtime.LocalhostURL("api")
+	queryKeycloakTokenURL = runtime.LocalhostURL("keycloak") + "/realms/basyx/protocol/openid-connect/token"
+	securityEnv := testenv.PrepareSecurityEnvOrExit("security_env", map[string]string{
+		"http://localhost:8081": runtime.LocalhostURL("keycloak"),
+	})
+
+	code := testenv.RunComposeTestMain(m, testenv.ComposeTestMainOptions{
 		ComposeFile: "docker_compose/docker_compose.yml",
-		HealthURL:   "http://localhost:6005/health",
-	}))
+		ProjectName: runtime.ProjectName,
+		Env:         runtime.EnvWith("BASYX_IT_SECURITY_ENV=" + securityEnv),
+		HealthURL:   queryBaseURL + "/health",
+	})
+	_ = os.RemoveAll(securityEnv)
+	os.Exit(code)
 }

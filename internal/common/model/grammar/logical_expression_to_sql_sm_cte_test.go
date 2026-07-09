@@ -160,7 +160,7 @@ func TestLogicalExpression_SM_WithCasts(t *testing.T) {
 			{
 				Lt: ComparisonItems{
 					Value{TimeCast: valuePtr(field("$sm#idShort"))},
-					Value{TimeVal: timePtr("12:00")},
+					Value{TimeVal: timePtr("12:00:00Z")},
 				},
 			},
 		},
@@ -176,8 +176,8 @@ func TestLogicalExpression_SM_WithCasts(t *testing.T) {
 	if !strings.Contains(sql, " 5") {
 		t.Fatalf("expected SQL to contain %q, got: %s", " 5", sql)
 	}
-	if !strings.Contains(sql, "'12:00'") {
-		t.Fatalf("expected SQL to contain %q, got: %s", "'12:00'", sql)
+	if !strings.Contains(sql, "'12:00:00Z'") {
+		t.Fatalf("expected SQL to contain %q, got: %s", "'12:00:00Z'", sql)
 	}
 }
 
@@ -266,5 +266,52 @@ func TestLogicalExpression_SM_SMEAnyPathSemanticValueUsesExistentialMatch(t *tes
 	}
 	if !strings.Contains(sql, "'ababa'") {
 		t.Fatalf("expected semantic-id value literal in SQL, got: %s", sql)
+	}
+}
+
+func TestLogicalExpression_SM_SupplementalSemanticIDs(t *testing.T) {
+	testCases := []struct {
+		name  string
+		field string
+		table string
+		value string
+	}{
+		{
+			name:  "submodel shorthand",
+			field: "$sm#supplementalSemanticIds",
+			table: "submodel_supplemental_semantic_id_reference_key",
+			value: "urn:sm:supplemental",
+		},
+		{
+			name:  "submodel element shorthand",
+			field: "$sme.InstanceId#supplementalSemanticIds",
+			table: "submodel_element_supplemental_semantic_id_reference_key",
+			value: "urn:sme:supplemental",
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			sql, _ := buildSMSQL(t, LogicalExpression{
+				Eq: ComparisonItems{
+					field(testCase.field),
+					strVal(testCase.value),
+				},
+			})
+			t.Logf("SQL: %s", sql)
+
+			if !strings.Contains(sql, "EXISTS") {
+				t.Fatalf("expected EXISTS query, got: %s", sql)
+			}
+			if !strings.Contains(sql, testCase.table) {
+				t.Fatalf("expected table %q, got: %s", testCase.table, sql)
+			}
+			if !strings.Contains(sql, "'"+testCase.value+"'") {
+				t.Fatalf("expected value %q, got: %s", testCase.value, sql)
+			}
+			if strings.Contains(sql, `FROM "submodel" AS "s"`) || strings.Contains(sql, `JOIN "submodel" AS "s"`) {
+				t.Fatalf("did not expect redundant submodel root join in supplemental semantic ID SQL, got: %s", sql)
+			}
+		})
 	}
 }

@@ -1,0 +1,188 @@
+services:
+  dtr-db:
+    image: postgres:18
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: admin123
+      POSTGRES_DB: dtr
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U admin -d dtr"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  smrepo-db:
+    image: postgres:18
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: admin123
+      POSTGRES_DB: smrepo
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U admin -d smrepo"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  keycloak-db:
+    image: postgres:18
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: admin123
+      POSTGRES_DB: keycloak
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U admin -d keycloak"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  dtr-configuration:
+    build:
+      context: ../..
+      dockerfile: ./cmd/basyxconfigurationservice/Dockerfile
+    environment:
+      POSTGRES_HOST: dtr-db
+      POSTGRES_PORT: 5432
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: admin123
+      POSTGRES_DBNAME: dtr
+    depends_on:
+      dtr-db:
+        condition: service_healthy
+
+  smrepo-configuration:
+    build:
+      context: ../..
+      dockerfile: ./cmd/basyxconfigurationservice/Dockerfile
+    environment:
+      POSTGRES_HOST: smrepo-db
+      POSTGRES_PORT: 5432
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: admin123
+      POSTGRES_DBNAME: smrepo
+    depends_on:
+      smrepo-db:
+        condition: service_healthy
+
+  digital-twin-registry:
+    build:
+      context: ../..
+      dockerfile: ./cmd/digitaltwinregistryservice/Dockerfile
+    environment:
+      SERVER_PORT: 5004
+      SERVER_CONTEXTPATH: /api/v3
+      SERVER_STRICTVERIFICATION: "off"
+      CORS_ALLOWEDORIGINS: "*"
+      CORS_ALLOWEDHEADERS: "*"
+      CORS_ALLOWEDCREDENTIALS: "true"
+      CORS_ALLOWEDMETHODS: GET,POST,PUT,PATCH,DELETE,OPTIONS
+      POSTGRES_HOST: dtr-db
+      POSTGRES_PORT: 5432
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: admin123
+      POSTGRES_DBNAME: dtr
+      ABAC_ENABLED: "true"
+      ABAC_MODELPATH: /security/access-rules.json
+      ABAC_POLICY_FILE_IMPORT: always
+      OIDC_TRUSTLISTPATH: /security/trustlist.json
+      GENERAL_ENABLECUSTOMMIDDLEWAREHEADERINJECTION: "true"
+      GENERAL_SUPPORTSSINGULARSUPPLEMENTALSEMANTICID: "true"
+    volumes:
+      - ./security/dtr:/security:ro
+    extra_hosts:
+      - "keycloak.localhost:host-gateway"
+    ports:
+      - "5004:5004"
+    depends_on:
+      dtr-configuration:
+        condition: service_completed_successfully
+      keycloak-healthcheck:
+        condition: service_completed_successfully
+
+  submodel-repository:
+    build:
+      context: ../..
+      dockerfile: ./cmd/submodelrepositoryservice/Dockerfile
+    environment:
+      SERVER_PORT: 5004
+      SERVER_STRICTVERIFICATION: "off"
+      CORS_ALLOWEDORIGINS: "*"
+      CORS_ALLOWEDHEADERS: "*"
+      CORS_ALLOWEDCREDENTIALS: "true"
+      CORS_ALLOWEDMETHODS: GET,POST,PUT,PATCH,DELETE,OPTIONS
+      POSTGRES_HOST: smrepo-db
+      POSTGRES_PORT: 5432
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: admin123
+      POSTGRES_DBNAME: smrepo
+      ABAC_ENABLED: "true"
+      ABAC_MODELPATH: /security/access-rules.json
+      ABAC_POLICY_FILE_IMPORT: always
+      OIDC_TRUSTLISTPATH: /security/trustlist.json
+      GENERAL_ENABLECUSTOMMIDDLEWAREHEADERINJECTION: "true"
+    volumes:
+      - ./security/smrepo:/security:ro
+    extra_hosts:
+      - "keycloak.localhost:host-gateway"
+    ports:
+      - "5005:5004"
+    depends_on:
+      smrepo-configuration:
+        condition: service_completed_successfully
+      keycloak-healthcheck:
+        condition: service_completed_successfully
+
+  aas-ui:
+    container_name: marker-access-aas-web-ui
+    image: eclipsebasyx/aas-gui:SNAPSHOT
+    pull_policy: always
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./basyx-infra.yml:/basyx-infra.yml:ro
+    environment:
+      START_PAGE_ROUTE_NAME: "CatenaXplorer"
+    extra_hosts:
+      - "keycloak.localhost:host-gateway"
+    depends_on:
+      digital-twin-registry:
+        condition: service_started
+      submodel-repository:
+        condition: service_started
+      keycloak-healthcheck:
+        condition: service_completed_successfully
+
+  keycloak:
+    image: keycloak/keycloak:26.0.6
+    environment:
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://keycloak-db:5432/keycloak
+      KC_DB_USERNAME: admin
+      KC_DB_PASSWORD: admin123
+      KC_HOSTNAME: keycloak.localhost
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: admin
+      KC_HTTP_ENABLED: "true"
+      KC_HTTPS_ENABLED: "false"
+      KC_HEALTH_ENABLED: "true"
+      KC_HOSTNAME_STRICT: "false"
+      KC_HOSTNAME_STRICT_BACKCHANNEL: "false"
+      KC_IMPORT: /opt/keycloak/data/import/
+      KC_HTTP_MANAGEMENT_ENABLED: "true"
+    command: ["start-dev", "--import-realm", "--health-enabled=true"]
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./keycloak/realm:/opt/keycloak/data/import:ro
+    depends_on:
+      keycloak-db:
+        condition: service_healthy
+
+  keycloak-healthcheck:
+    image: curlimages/curl:8.15.0
+    command:
+      - sh
+      - -c
+      - until curl -sf http://keycloak:9000/health/ready; do sleep 5; done
+    depends_on:
+      keycloak:
+        condition: service_started

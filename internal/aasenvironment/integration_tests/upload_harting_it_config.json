@@ -2,14 +2,14 @@
   {
     "context": "001 - Health Check",
     "method": "GET",
-    "endpoint": "http://127.0.0.1:6004/health",
+    "endpoint": "{{BASYX_IT_API_URL}}/health",
     "expectedStatus": 200
   },
   {
     "context": "002 - Upload HARTING AASX using backward-compatible namespace adaptation",
     "action": "UPLOAD_AASX_MULTIPART",
     "method": "POST",
-    "endpoint": "http://127.0.0.1:6004/upload",
+    "endpoint": "{{BASYX_IT_API_URL}}/upload",
     "data": "testdata/HARTING_AAS_09140009950.aasx",
     "expectedStatus": 200
   }

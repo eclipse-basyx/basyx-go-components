@@ -42,10 +42,12 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+var smRegistryBaseURL = testenv.LocalURLFromEnv("BASYX_IT_API_PORT", 6004)
+
 func deleteAllSubmodelDescriptors(t *testing.T, runner *testenv.JSONSuiteRunner, stepNumber int) {
 	response, err := runner.RunStep(testenv.JSONSuiteStep{
 		Method:         http.MethodGet,
-		Endpoint:       "http://127.0.0.1:6004/submodel-descriptors",
+		Endpoint:       smRegistryBaseURL + "/submodel-descriptors",
 		ExpectedStatus: http.StatusOK,
 	}, stepNumber)
 	require.NoError(t, err)
@@ -61,7 +63,7 @@ func deleteAllSubmodelDescriptors(t *testing.T, runner *testenv.JSONSuiteRunner,
 		enc := base64.RawURLEncoding.EncodeToString([]byte(item.ID))
 		_, err := runner.RunStep(testenv.JSONSuiteStep{
 			Method:         http.MethodDelete,
-			Endpoint:       fmt.Sprintf("http://127.0.0.1:6004/submodel-descriptors/%s", enc),
+			Endpoint:       fmt.Sprintf("%s/submodel-descriptors/%s", smRegistryBaseURL, enc),
 			ExpectedStatus: http.StatusNoContent,
 		}, stepNumber)
 		require.NoError(t, err)
@@ -79,8 +81,13 @@ func cleanupSubmodelDescriptorHTTP(t *testing.T, submodelID string) {
 }
 
 func buildSubmodelDescriptorPayload(submodelID string, tag string) map[string]any {
+	administrationTimestamp := time.Now().UTC().Format(time.RFC3339Nano)
 	return map[string]any{
 		"id": submodelID,
+		"administration": map[string]any{
+			"createdAt": administrationTimestamp,
+			"updatedAt": administrationTimestamp,
+		},
 		"endpoints": []any{
 			map[string]any{
 				"interface": "AAS-3.0",
@@ -130,9 +137,11 @@ func assertLocationHeaderMatches(t *testing.T, expectedLocation string, actualLo
 func TestSubmodelRegistryRecentChanges(t *testing.T) {
 	prefix := fmt.Sprintf("urn:example:sm:recent-%d", time.Now().UnixNano())
 	currentID := prefix + "-current"
+	secondID := prefix + "-second"
 	deletedID := prefix + "-deleted"
 	t.Cleanup(func() {
 		cleanupSubmodelDescriptorHTTP(t, currentID)
+		cleanupSubmodelDescriptorHTTP(t, secondID)
 		cleanupSubmodelDescriptorHTTP(t, deletedID)
 	})
 
@@ -147,65 +156,74 @@ func TestSubmodelRegistryRecentChanges(t *testing.T) {
 	statusCode, body, _ = doRequest(t, smNoRedirectClient, http.MethodPut, endpoint+"/"+currentIdentifier, buildSubmodelDescriptorPayload(currentID, "v2"))
 	require.Equal(t, http.StatusNoContent, statusCode, "response=%s", string(body))
 
+	statusCode, body, _ = doRequest(t, smNoRedirectClient, http.MethodPost, endpoint, buildSubmodelDescriptorPayload(secondID, "second"))
+	require.Equal(t, http.StatusCreated, statusCode, "response=%s", string(body))
+
 	statusCode, body, _ = doRequest(t, smNoRedirectClient, http.MethodPost, endpoint, buildSubmodelDescriptorPayload(deletedID, "deleted"))
 	require.Equal(t, http.StatusCreated, statusCode, "response=%s", string(body))
 	deletedIdentifier := base64.RawURLEncoding.EncodeToString([]byte(deletedID))
 	statusCode, body, _ = doRequest(t, smNoRedirectClient, http.MethodDelete, endpoint+"/"+deletedIdentifier, nil)
 	require.Equal(t, http.StatusNoContent, statusCode, "response=%s", string(body))
 
-	updatedPage := getRecentSubmodelDescriptorPage(t, url.Values{
+	updatedPage := getSubmodelDescriptorPage(t, url.Values{
 		"updatedFrom": []string{changedAfter.Format(time.RFC3339Nano)},
 		"limit":       []string{"10"},
 	})
-	require.ElementsMatch(t, []string{"v1", "v2"}, descriptorTagValues(updatedPage, currentID))
+	require.ElementsMatch(t, []string{"v2"}, descriptorTagValues(updatedPage, currentID))
+	require.ElementsMatch(t, []string{"second"}, descriptorTagValues(updatedPage, secondID))
 	require.Empty(t, descriptorTagValues(updatedPage, deletedID))
 
-	createdPage := getRecentSubmodelDescriptorPage(t, url.Values{
+	createdPage := getSubmodelDescriptorPage(t, url.Values{
 		"createdFrom": []string{changedAfter.Format(time.RFC3339Nano)},
 		"limit":       []string{"10"},
 	})
-	require.NotEmpty(t, descriptorTagValues(createdPage, currentID))
+	require.ElementsMatch(t, []string{"v2"}, descriptorTagValues(createdPage, currentID))
+	require.ElementsMatch(t, []string{"second"}, descriptorTagValues(createdPage, secondID))
 	require.Empty(t, descriptorTagValues(createdPage, deletedID))
 
-	firstPage := getRecentSubmodelDescriptorPage(t, url.Values{
+	firstPage := getSubmodelDescriptorPage(t, url.Values{
 		"updatedFrom": []string{changedAfter.Format(time.RFC3339Nano)},
 		"limit":       []string{"1"},
 	})
 	require.Len(t, firstPage.Result, 1)
 	require.NotEmpty(t, firstPage.PagingMetadata.Cursor)
+	firstPageID, _ := firstPage.Result[0]["id"].(string)
+	require.Contains(t, []string{currentID, secondID}, firstPageID)
 
-	secondPage := getRecentSubmodelDescriptorPage(t, url.Values{
+	secondPage := getSubmodelDescriptorPage(t, url.Values{
 		"updatedFrom": []string{changedAfter.Format(time.RFC3339Nano)},
 		"limit":       []string{"1"},
 		"cursor":      []string{firstPage.PagingMetadata.Cursor},
 	})
 	require.Len(t, secondPage.Result, 1)
-	require.Equal(t, currentID, secondPage.Result[0]["id"])
+	secondPageID, _ := secondPage.Result[0]["id"].(string)
+	require.Contains(t, []string{currentID, secondID}, secondPageID)
+	require.NotEqual(t, firstPageID, secondPageID)
 }
 
-type recentSubmodelDescriptorPage struct {
+type submodelDescriptorPage struct {
 	PagingMetadata struct {
 		Cursor string `json:"cursor"`
 	} `json:"paging_metadata"`
 	Result []map[string]any `json:"result"`
 }
 
-func getRecentSubmodelDescriptorPage(t *testing.T, query url.Values) recentSubmodelDescriptorPage {
+func getSubmodelDescriptorPage(t *testing.T, query url.Values) submodelDescriptorPage {
 	t.Helper()
 
-	endpoint := smRegistryBaseURL + "/submodel-descriptors/$recent-changes"
+	endpoint := smRegistryBaseURL + "/submodel-descriptors"
 	if len(query) > 0 {
 		endpoint += "?" + query.Encode()
 	}
 	statusCode, body, _ := doRequest(t, smNoRedirectClient, http.MethodGet, endpoint, nil)
 	require.Equal(t, http.StatusOK, statusCode, "response=%s", string(body))
 
-	var page recentSubmodelDescriptorPage
+	var page submodelDescriptorPage
 	require.NoError(t, json.Unmarshal(body, &page))
 	return page
 }
 
-func descriptorTagValues(page recentSubmodelDescriptorPage, descriptorID string) []string {
+func descriptorTagValues(page submodelDescriptorPage, descriptorID string) []string {
 	values := []string{}
 	for _, descriptor := range page.Result {
 		if descriptor["id"] != descriptorID {
@@ -266,12 +284,23 @@ func TestIntegration(t *testing.T) {
 
 func TestMain(m *testing.M) {
 	if os.Getenv("BASYX_EXTERNAL_COMPOSE") == "1" {
+		testenv.SetEnvDefaultsOrExit(map[string]string{
+			"BASYX_IT_API_URL": smRegistryBaseURL,
+		})
 		os.Exit(m.Run())
 	}
 
+	runtime := testenv.NewComposeRuntimeOrExit("smregistry-it", []testenv.PortBinding{
+		{Name: "api", EnvVar: "BASYX_IT_API_PORT"},
+		{Name: "db", EnvVar: "BASYX_IT_DB_PORT"},
+	})
+	smRegistryBaseURL = runtime.LocalURL("api")
+
 	os.Exit(testenv.RunComposeTestMain(m, testenv.ComposeTestMainOptions{
 		ComposeFile:   "docker_compose/docker_compose.yml",
-		HealthURL:     "http://127.0.0.1:6004/health",
+		ProjectName:   runtime.ProjectName,
+		Env:           runtime.Env(),
+		HealthURL:     smRegistryBaseURL + "/health",
 		HealthTimeout: 2 * time.Minute,
 	}))
 }

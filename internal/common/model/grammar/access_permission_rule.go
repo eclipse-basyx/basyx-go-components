@@ -50,15 +50,15 @@ import (
 //   - FORMULA/USEFORMULA: Specifies the logical condition for access (inline formula or reference)
 //     Exactly one must be specified.
 //
-//   - OBJECTS/USEOBJECTS: Identifies which AAS resources the rule applies to (inline or by reference)
-//     Exactly one must be specified.
+//   - OBJECTS/USEOBJECTS: Identifies which AAS resources the rule applies to (inline and/or by reference)
+//     At least one must be specified.
 //
 //   - FILTER: Optional filter to refine which resources match the rule based on additional criteria
 //
 // Mutual Exclusivity Rules:
 //   - Either ACL or USEACL must be defined (not both, not neither)
 //   - Either FORMULA or USEFORMULA must be defined (not both, not neither)
-//   - Either OBJECTS or USEOBJECTS must be defined (not both, not neither)
+//   - OBJECTS and USEOBJECTS may be combined, but at least one must be defined
 //
 // Example JSON (inline definition):
 //
@@ -124,7 +124,7 @@ type AccessPermissionRule struct {
 //     - FORMULA: Inline logical expression defining access conditions
 //     - USEFORMULA: Reference to a previously defined formula by name
 //
-//  3. OBJECTS Exclusivity: Exactly one of OBJECTS or USEOBJECTS must be defined (not both, not neither).
+//  3. OBJECTS presence: At least one of OBJECTS or USEOBJECTS must be defined.
 //     - OBJECTS: Inline object definitions
 //     - USEOBJECTS: References to named object definitions
 //
@@ -142,7 +142,6 @@ type AccessPermissionRule struct {
 //   - Neither ACL nor USEACL is defined
 //   - Both FORMULA and USEFORMULA are defined
 //   - Neither FORMULA nor USEFORMULA is defined
-//   - Both OBJECTS and USEOBJECTS are defined
 //   - Neither OBJECTS nor USEOBJECTS is defined
 //     Returns nil on successful unmarshaling and validation.
 func (j *AccessPermissionRule) UnmarshalJSON(value []byte) error {
@@ -183,11 +182,8 @@ func (j *AccessPermissionRule) UnmarshalJSON(value []byte) error {
 		return fmt.Errorf("AccessPermissionRule: exactly one of FORMULA or USEFORMULA must be defined")
 	}
 
-	if hasObjects == hasUseObjects {
-		if hasObjects {
-			return fmt.Errorf("AccessPermissionRule: only one of OBJECTS or USEOBJECTS may be defined, not both")
-		}
-		return fmt.Errorf("AccessPermissionRule: exactly one of OBJECTS or USEOBJECTS must be defined")
+	if !hasObjects && !hasUseObjects {
+		return fmt.Errorf("AccessPermissionRule: OBJECTS or USEOBJECTS must be defined")
 	}
 
 	*j = AccessPermissionRule(plain)

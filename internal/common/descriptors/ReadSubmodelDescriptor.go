@@ -239,13 +239,7 @@ func ReadSubmodelDescriptorsByAASDescriptorIDs(
 	d := goqu.Dialect(common.Dialect)
 	payloadAlias := common.TDescriptorPayload.As("smd_payload")
 	semanticRefAlias := goqu.T("submodel_descriptor_semantic_id_reference").As(common.AliasSubmodelDescriptorSemanticIDReference)
-	var root grammar.CollectorRoot
-	if isMain {
-		root = grammar.CollectorRootSMDesc
-	} else {
-		root = grammar.CollectorRootAASDesc
-	}
-	collector, err := grammar.NewResolvedFieldPathCollectorForRoot(root)
+	collector, err := grammar.NewResolvedFieldPathCollectorForRoot(grammar.CollectorRootSMDesc)
 	if err != nil {
 		return nil, err
 	}
@@ -298,7 +292,7 @@ func ReadSubmodelDescriptorsByAASDescriptorIDs(
 		submodelDescriptorAlias.Col(common.ColDescriptorID).Asc(),
 	)
 
-	inner, err = auth.AddFilterQueryFromContext(ctx, inner, "$aasdesc#submodelDescriptors[]", collector)
+	inner, err = auth.AddCorrelatedFilterQueryFromContext(ctx, inner, "$aasdesc#submodelDescriptors[]", collector)
 	if err != nil {
 		return nil, err
 	}

@@ -240,6 +240,9 @@ const (
 	ctxAASDescEndpoint
 	ctxSubmodelDescriptor
 	ctxSubmodelDescriptorEndpoint
+	ctxSubmodelDescriptorSupplementalSemanticID
+	ctxSubmodelSupplementalSemanticID
+	ctxSubmodelElementSupplementalSemanticID
 )
 
 type arraySegmentContextMapping struct {
@@ -291,6 +294,15 @@ var arraySegmentMappings = map[string]arraySegmentMapping{
 		},
 	},
 
+	"supplementalSemanticIds": {
+		ByContext: map[resolveContext]arraySegmentContextMapping{
+			ctxSM:                 {PositionAlias: "sm_supplemental_semantic_id_reference.position", NextContext: ctxSubmodelSupplementalSemanticID},
+			ctxSME:                {PositionAlias: "sme_supplemental_semantic_id_reference.position", NextContext: ctxSubmodelElementSupplementalSemanticID},
+			ctxSMDesc:             {PositionAlias: "aasdesc_submodel_descriptor_supplemental_semantic_id_reference.position", NextContext: ctxSubmodelDescriptorSupplementalSemanticID},
+			ctxSubmodelDescriptor: {PositionAlias: "aasdesc_submodel_descriptor_supplemental_semantic_id_reference.position", NextContext: ctxSubmodelDescriptorSupplementalSemanticID},
+		},
+	},
+
 	"keys": {
 		ByParent: map[string]map[resolveContext]arraySegmentContextMapping{
 			"submodels": {
@@ -304,6 +316,15 @@ var arraySegmentMappings = map[string]arraySegmentMapping{
 				ctxSME:                {PositionAlias: "sme_semantic_id_reference_key.position", NextContext: ctxSME},
 				ctxSMDesc:             {PositionAlias: "aasdesc_submodel_descriptor_semantic_id_reference_key.position", NextContext: ctxSMDesc},
 				ctxSubmodelDescriptor: {PositionAlias: "aasdesc_submodel_descriptor_semantic_id_reference_key.position", NextContext: ctxSubmodelDescriptor},
+			},
+			"supplementalSemanticIds": {
+				ctxSM:                                    {PositionAlias: "sm_supplemental_semantic_id_reference_key.position", NextContext: ctxSubmodelSupplementalSemanticID},
+				ctxSME:                                   {PositionAlias: "sme_supplemental_semantic_id_reference_key.position", NextContext: ctxSubmodelElementSupplementalSemanticID},
+				ctxSubmodelSupplementalSemanticID:        {PositionAlias: "sm_supplemental_semantic_id_reference_key.position", NextContext: ctxSubmodelSupplementalSemanticID},
+				ctxSubmodelElementSupplementalSemanticID: {PositionAlias: "sme_supplemental_semantic_id_reference_key.position", NextContext: ctxSubmodelElementSupplementalSemanticID},
+				ctxSMDesc:                                {PositionAlias: "aasdesc_submodel_descriptor_supplemental_semantic_id_reference_key.position", NextContext: ctxSubmodelDescriptorSupplementalSemanticID},
+				ctxSubmodelDescriptor:                    {PositionAlias: "aasdesc_submodel_descriptor_supplemental_semantic_id_reference_key.position", NextContext: ctxSubmodelDescriptorSupplementalSemanticID},
+				ctxSubmodelDescriptorSupplementalSemanticID: {PositionAlias: "aasdesc_submodel_descriptor_supplemental_semantic_id_reference_key.position", NextContext: ctxSubmodelDescriptorSupplementalSemanticID},
 			},
 		},
 	},

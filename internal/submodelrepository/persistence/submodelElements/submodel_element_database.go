@@ -42,6 +42,7 @@ import (
 	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/doug-martin/goqu/v9"
 	_ "github.com/doug-martin/goqu/v9/dialect/postgres" // Postgres Driver for Goqu
+	"github.com/doug-martin/goqu/v9/exp"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	persistenceutils "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/utils"
@@ -290,12 +291,17 @@ func getModelTypeByIdShortPathAndSubmodelID(queryer queryRower, submodelID strin
 //	// Delete a nested collection and all its children
 //	err := DeleteSubmodelElementByPath(tx, "submodel123", "properties.metadata")
 func DeleteSubmodelElementByPath(tx *sql.Tx, submodelID string, idShortOrPath string) error {
-	submodelDatabaseID, err := persistenceutils.GetSubmodelDatabaseID(tx, submodelID)
+	submodelDatabaseID, err := persistenceutils.GetSubmodelDatabaseIDForUpdate(tx, submodelID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return common.NewErrNotFound("SMREPO-DELSMEBPATH-SMNOTFOUND Submodel with ID '" + submodelID + "' not found")
 		}
 		return common.NewInternalServerError("SMREPO-DELSMEBPATH-GETSMDATABASEID Failed to resolve Submodel database ID: " + err.Error())
+	}
+
+	err = cleanupSubmodelElementTreeLargeObjects(tx, submodelDatabaseID, idShortOrPath, true, "SMREPO-DELSMEBPATH")
+	if err != nil {
+		return err
 	}
 
 	affectedRows, err := deleteSubmodelElementTree(tx, submodelDatabaseID, idShortOrPath)
@@ -318,16 +324,8 @@ func DeleteSubmodelElementByPath(tx *sql.Tx, submodelID string, idShortOrPath st
 }
 
 func deleteSubmodelElementTree(tx *sql.Tx, submodelDatabaseID int, idShortOrPath string) (int64, error) {
-	escapedPath := escapeSQLLikePattern(idShortOrPath)
 	del := goqu.Delete("submodel_element").Where(
-		goqu.And(
-			goqu.I("submodel_id").Eq(submodelDatabaseID),
-			goqu.Or(
-				goqu.I("idshort_path").Eq(idShortOrPath),
-				idShortPathLikeEscaped(goqu.I("idshort_path"), escapedPath+".%"),
-				idShortPathLikeEscaped(goqu.I("idshort_path"), escapedPath+"[%"),
-			),
-		),
+		submodelElementTreeWhere(submodelDatabaseID, idShortOrPath, true, ""),
 	)
 	sqlQuery, args, err := del.ToSQL()
 	if err != nil {
@@ -342,6 +340,63 @@ func deleteSubmodelElementTree(tx *sql.Tx, submodelDatabaseID int, idShortOrPath
 		return 0, common.NewInternalServerError("SMREPO-DELSMEBPATH-ROWSAFFECTED Failed to get affected rows: " + err.Error())
 	}
 	return affectedRows, nil
+}
+
+func cleanupSubmodelElementTreeLargeObjects(tx *sql.Tx, submodelDatabaseID int, idShortOrPath string, includeRoot bool, errorPrefix string) error {
+	query, args, err := buildCleanupSubmodelElementTreeLargeObjectsSQL(submodelDatabaseID, idShortOrPath, includeRoot)
+	if err != nil {
+		return common.NewInternalServerError(errorPrefix + "-BUILDUNLINKLO Failed to build large object cleanup query: " + err.Error())
+	}
+
+	var unlinkedCount int64
+	if err = tx.QueryRow(query, args...).Scan(&unlinkedCount); err != nil {
+		return common.NewInternalServerError(errorPrefix + "-UNLINKLO Failed to unlink large objects: " + err.Error())
+	}
+	return nil
+}
+
+func buildCleanupSubmodelElementTreeLargeObjectsSQL(submodelDatabaseID int, idShortOrPath string, includeRoot bool) (string, []any, error) {
+	dialect := goqu.Dialect("postgres")
+	unlinkSubquery := dialect.From(goqu.T("submodel_element").As("sme")).
+		Prepared(true).
+		Join(goqu.T("file_data").As("fd"), goqu.On(goqu.I("fd.id").Eq(goqu.I("sme.id")))).
+		Select(goqu.Func("lo_unlink", goqu.I("fd.file_oid")).As("unlink_result")).
+		Where(
+			submodelElementTreeWhere(submodelDatabaseID, idShortOrPath, includeRoot, "sme"),
+			goqu.I("fd.file_oid").IsNotNull(),
+		)
+
+	return dialect.From(unlinkSubquery.As("unlink_results")).
+		Prepared(true).
+		Select(goqu.COUNT("*")).
+		ToSQL()
+}
+
+func submodelElementTreeWhere(submodelDatabaseID int, idShortOrPath string, includeRoot bool, tableAlias string) goqu.Expression {
+	return goqu.And(
+		qualifiedSubmodelElementColumn(tableAlias, "submodel_id").Eq(submodelDatabaseID),
+		goqu.Or(submodelElementTreePathConditions(qualifiedSubmodelElementColumn(tableAlias, "idshort_path"), idShortOrPath, includeRoot)...),
+	)
+}
+
+func submodelElementTreePathConditions(idShortPath exp.IdentifierExpression, idShortOrPath string, includeRoot bool) []goqu.Expression {
+	escapedPath := escapeSQLLikePattern(idShortOrPath)
+	conditions := make([]goqu.Expression, 0, 3)
+	if includeRoot {
+		conditions = append(conditions, idShortPath.Eq(idShortOrPath))
+	}
+	return append(
+		conditions,
+		idShortPathLikeEscaped(idShortPath, escapedPath+".%"),
+		idShortPathLikeEscaped(idShortPath, escapedPath+"[%"),
+	)
+}
+
+func qualifiedSubmodelElementColumn(tableAlias string, column string) exp.IdentifierExpression {
+	if tableAlias == "" {
+		return goqu.I(column)
+	}
+	return goqu.I(tableAlias + "." + column)
 }
 
 func isListElementPath(idShortPath string) bool {
@@ -533,7 +588,7 @@ func DeleteAllChildren(db *sql.DB, submodelId string, idShortPath string, tx *sq
 		defer cu(&err)
 	}
 
-	submodelDatabaseID, err := persistenceutils.GetSubmodelDatabaseID(localTx, submodelId)
+	submodelDatabaseID, err := persistenceutils.GetSubmodelDatabaseIDForUpdate(localTx, submodelId)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return common.NewErrNotFound("SMREPO-DELALLCHILDREN-SMNOTFOUND Submodel with ID '" + submodelId + "' not found")
@@ -541,16 +596,13 @@ func DeleteAllChildren(db *sql.DB, submodelId string, idShortPath string, tx *sq
 		return common.NewInternalServerError("SMREPO-DELALLCHILDREN-GETSMDATABASEID Failed to resolve Submodel database ID: " + err.Error())
 	}
 
-	escapedPath := escapeSQLLikePattern(idShortPath)
+	err = cleanupSubmodelElementTreeLargeObjects(localTx, submodelDatabaseID, idShortPath, false, "SMREPO-DELALLCHILDREN")
+	if err != nil {
+		return err
+	}
 
 	del := goqu.Delete("submodel_element").Where(
-		goqu.And(
-			goqu.I("submodel_id").Eq(submodelDatabaseID),
-			goqu.Or(
-				idShortPathLikeEscaped(goqu.I("idshort_path"), escapedPath+".%"),
-				idShortPathLikeEscaped(goqu.I("idshort_path"), escapedPath+"[%"),
-			),
-		),
+		submodelElementTreeWhere(submodelDatabaseID, idShortPath, false, ""),
 	)
 	sqlQuery, args, err := del.ToSQL()
 	if err != nil {

@@ -1,14 +1,13 @@
 services:
   db_preconfig_it:
     image: postgres:18
-    container_name: postgres_db_preconfig_it
     environment:
       POSTGRES_USER: admin
       POSTGRES_PASSWORD: admin123
       POSTGRES_DB: basyxTestDB
     command: ["postgres", "-c", "listen_addresses=*"]
     ports:
-      - "6433:5432"
+      - "127.0.0.1:${BASYX_IT_DB_PORT:-6433}:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U admin -d basyxTestDB"]
       interval: 10s
@@ -37,7 +36,7 @@ services:
       - ../../integration_tests/testdata:/app/preconfiguration:ro
       - ../../../submodelrepository/integration_tests/docker_compose/rsa-key.pem:/app/rsa-key.pem:ro
     ports:
-      - "6014:5004"
+      - "127.0.0.1:${BASYX_IT_API_PORT:-6014}:5004"
     extra_hosts:
       - "localhost:host-gateway"
     depends_on:
@@ -97,7 +96,6 @@ services:
         fi
 
   basyx_configuration:
-    container_name: basyx_configuration
     build:
       context: ../../../..
       dockerfile: ./cmd/basyxconfigurationservice/Dockerfile

@@ -39,7 +39,7 @@ func (d *DateTimeLiteralPattern) UnmarshalJSON(value []byte) error {
 	if err := common.UnmarshalAndDisallowUnknownFields(value, &s); err != nil {
 		return err
 	}
-	t, err := time.Parse(time.RFC3339, s)
+	t, err := time.Parse(time.RFC3339Nano, s)
 	if err != nil {
 		return fmt.Errorf("parse $dateTimeVal: %w", err)
 	}
@@ -47,9 +47,9 @@ func (d *DateTimeLiteralPattern) UnmarshalJSON(value []byte) error {
 	return nil
 }
 
-// MarshalJSON renders the timestamp in RFC3339 format to preserve literal fidelity.
+// MarshalJSON renders the timestamp in RFC3339Nano format.
 func (d DateTimeLiteralPattern) MarshalJSON() ([]byte, error) {
 	t := time.Time(d)
 	// Format consistently even for zero values.
-	return []byte(fmt.Sprintf("%q", t.Format(time.RFC3339))), nil
+	return []byte(fmt.Sprintf("%q", t.Format(time.RFC3339Nano))), nil
 }

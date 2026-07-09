@@ -475,6 +475,27 @@ jobs:
           cd internal/aasenvironment/preconfiguration_integration_tests
           go test -v .
 
+  aas-environment-migration-integration-tests:
+    name: AAS Environment Migration Integration Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out code
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+
+      - name: Set up Go
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Get dependencies
+        run: go mod download
+
+      - name: Run aas environment migration integration tests
+        run: |
+          cd internal/aasenvironment/migration_integration_tests
+          go test -v .
+
   aas-environment-security-tests:
     name: AAS Environment Security Tests
     runs-on: ubuntu-latest

@@ -148,6 +148,10 @@ func CanSkipPostInsertReadback(ctx context.Context) bool {
 // and submodel descriptors). If any step fails, the error is returned and the
 // caller is responsible for rolling back the transaction.
 func InsertAdministrationShellDescriptorTx(ctx context.Context, tx *sql.Tx, aasd model.AssetAdministrationShellDescriptor) error {
+	return insertAdministrationShellDescriptorTx(ctx, tx, aasd)
+}
+
+func insertAdministrationShellDescriptorTx(ctx context.Context, tx *sql.Tx, aasd model.AssetAdministrationShellDescriptor) error {
 	d := goqu.Dialect(common.Dialect)
 
 	descTbl := goqu.T(common.TblDescriptor)
@@ -467,7 +471,7 @@ func buildAASDescriptorUpdateRecord(
 func GetAssetAdministrationShellDescriptorByID(
 	ctx context.Context, db *sql.DB, aasIdentifier string,
 ) (model.AssetAdministrationShellDescriptor, error) {
-	result, _, err := listAssetAdministrationShellDescriptors(ctx, db, 1, "", "", "", aasIdentifier, true)
+	result, _, err := listAssetAdministrationShellDescriptors(ctx, db, 1, "", "", "", aasIdentifier, time.Time{}, time.Time{}, true)
 	if err != nil {
 		return model.AssetAdministrationShellDescriptor{}, err
 	}
@@ -483,7 +487,7 @@ func GetAssetAdministrationShellDescriptorByID(
 func GetAssetAdministrationShellDescriptorByIDTx(
 	ctx context.Context, tx *sql.Tx, aasIdentifier string,
 ) (model.AssetAdministrationShellDescriptor, error) {
-	result, _, err := listAssetAdministrationShellDescriptors(ctx, tx, 1, "", "", "", aasIdentifier, false)
+	result, _, err := listAssetAdministrationShellDescriptors(ctx, tx, 1, "", "", "", aasIdentifier, time.Time{}, time.Time{}, false)
 	if err != nil {
 		return model.AssetAdministrationShellDescriptor{}, err
 	}
@@ -644,8 +648,7 @@ func ReplaceAdministrationShellDescriptor(ctx context.Context, db *sql.DB, aasd 
 	}()
 
 	// first check if user is allowed to replace
-	_, err = GetAssetAdministrationShellDescriptorByIDTx(ctx, tx, aasd.Id)
-	if err != nil {
+	if _, err = GetAssetAdministrationShellDescriptorByIDTx(ctx, tx, aasd.Id); err != nil {
 		return model.AssetAdministrationShellDescriptor{}, err
 	}
 	createdAt, err := GetAASDescriptorCreatedAtByIDTx(ctx, tx, aasd.Id)
@@ -680,13 +683,15 @@ func buildListAssetAdministrationShellDescriptorsQuery(
 	assetKind model.AssetKind,
 	assetType string,
 	identifiable string,
+	createdFrom time.Time,
+	updatedFrom time.Time,
 ) (*goqu.SelectDataset, error) {
 	d := goqu.Dialect(common.Dialect)
 	collector, err := grammar.NewResolvedFieldPathCollectorForRoot(grammar.CollectorRootAASDesc)
 	if err != nil {
 		return nil, err
 	}
-	pageDS, err := buildListAASDescriptorPageQuery(ctx, peekLimit, cursor, assetKind, assetType, identifiable, collector)
+	pageDS, err := buildListAASDescriptorPageQuery(ctx, peekLimit, cursor, assetKind, assetType, identifiable, createdFrom, updatedFrom, collector)
 	if err != nil {
 		return nil, err
 	}
@@ -779,6 +784,8 @@ func buildListAASDescriptorPageQuery(
 	assetKind model.AssetKind,
 	assetType string,
 	identifiable string,
+	createdFrom time.Time,
+	updatedFrom time.Time,
 	collector *grammar.ResolvedFieldPathCollector,
 ) (*goqu.SelectDataset, error) {
 	if peekLimit < 0 {
@@ -821,6 +828,17 @@ func buildListAASDescriptorPageQuery(
 	if identifiable != "" {
 		ds = ds.Where(common.TAASDescriptor.Col(common.ColID).Eq(identifiable))
 	}
+	switch {
+	case !createdFrom.IsZero() && !updatedFrom.IsZero():
+		ds = ds.Where(goqu.Or(
+			common.TAASDescriptor.Col("administration_created_at").Gte(createdFrom.UTC()),
+			common.TAASDescriptor.Col("administration_updated_at").Gte(updatedFrom.UTC()),
+		))
+	case !createdFrom.IsZero():
+		ds = ds.Where(common.TAASDescriptor.Col("administration_created_at").Gte(createdFrom.UTC()))
+	case !updatedFrom.IsZero():
+		ds = ds.Where(common.TAASDescriptor.Col("administration_updated_at").Gte(updatedFrom.UTC()))
+	}
 
 	ds = ds.
 		Order(common.TAASDescriptor.Col(common.ColAASID).Asc()).
@@ -847,13 +865,15 @@ func ListAssetAdministrationShellDescriptors(
 	assetKind model.AssetKind,
 	assetType string,
 	identifiable string,
+	createdFrom time.Time,
+	updatedFrom time.Time,
 ) ([]model.AssetAdministrationShellDescriptor, string, error) {
 	if debugEnabled(ctx) {
 		defer func(start time.Time) {
 			_, _ = fmt.Printf("ListAssetAdministrationShellDescriptors took %s\n", time.Since(start))
 		}(time.Now())
 	}
-	return listAssetAdministrationShellDescriptors(ctx, db, limit, cursor, assetKind, assetType, identifiable, true)
+	return listAssetAdministrationShellDescriptors(ctx, db, limit, cursor, assetKind, assetType, identifiable, createdFrom, updatedFrom, true)
 }
 
 //nolint:revive // has to be refactored later. i have no time
@@ -865,6 +885,8 @@ func listAssetAdministrationShellDescriptors(
 	assetKind model.AssetKind,
 	assetType string,
 	identifiable string,
+	createdFrom time.Time,
+	updatedFrom time.Time,
 	allowParallel bool,
 ) ([]model.AssetAdministrationShellDescriptor, string, error) {
 	db = withDescriptorDebugQueryer(ctx, db)
@@ -882,7 +904,7 @@ func listAssetAdministrationShellDescriptors(
 		}
 	}
 	peekLimit := limit + 1
-	ds, err := buildListAssetAdministrationShellDescriptorsQuery(ctx, peekLimit, cursor, assetKind, assetType, identifiable)
+	ds, err := buildListAssetAdministrationShellDescriptorsQuery(ctx, peekLimit, cursor, assetKind, assetType, identifiable, createdFrom, updatedFrom)
 	if err != nil {
 		return nil, "", err
 	}

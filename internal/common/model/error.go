@@ -28,7 +28,7 @@
  *
  * The schemas implementing the [Specification of the Asset Administration Shell: Part 1](https://industrialdigitaltwin.org/en/content-hub/aasspecifications).   Copyright: Industrial Digital Twin Association (IDTA) 2025
  *
- * API version: V3.1.1
+ * API version: V3.2.0
  * Contact: info@idtwin.org
  */
 //nolint:all

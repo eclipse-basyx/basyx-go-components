@@ -1,0 +1,94 @@
+{
+  "paging_metadata": {},
+  "result": [
+    {
+      "description": [
+        {
+          "language": "en",
+          "text": "Public and partner-restricted submodel descriptors."
+        }
+      ],
+      "globalAssetId": "urn:example:asset:product-001",
+      "id": "urn:example:aas:product-001",
+      "idShort": "ProductTwin",
+      "specificAssetIds": [
+        {
+          "externalSubjectId": {
+            "keys": [
+              {
+                "type": "GlobalReference",
+                "value": "PUBLIC_READABLE"
+              }
+            ],
+            "type": "ExternalReference"
+          },
+          "name": "manufacturerPartId",
+          "value": "PART-001"
+        },
+        {
+          "externalSubjectId": {
+            "keys": [
+              {
+                "type": "GlobalReference",
+                "value": "BPN_COMPANY_002"
+              }
+            ],
+            "type": "ExternalReference"
+          },
+          "name": "customerPartId",
+          "value": "CUSTOMER-PART-001"
+        }
+      ],
+      "submodelDescriptors": [
+        {
+          "endpoints": [
+            {
+              "interface": "SUBMODEL-3.0",
+              "protocolInformation": {
+                "href": "{{BASYX_MARKER_SM_LOCALHOST_URL}}/submodels/dXJuOmV4YW1wbGU6c3VibW9kZWw6bmFtZXBsYXRl",
+                "endpointProtocol": "HTTP"
+              }
+            }
+          ],
+          "id": "urn:example:submodel:nameplate",
+          "idShort": "PublicNameplate",
+          "supplementalSemanticId": [
+            {
+              "keys": [
+                {
+                  "type": "GlobalReference",
+                  "value": "PUBLIC_READABLE"
+                }
+              ],
+              "type": "ExternalReference"
+            }
+          ]
+        },
+        {
+          "endpoints": [
+            {
+              "interface": "SUBMODEL-3.0",
+              "protocolInformation": {
+                "href": "{{BASYX_MARKER_SM_LOCALHOST_URL}}/submodels/dXJuOmV4YW1wbGU6c3VibW9kZWw6c2VyaWFsLXBhcnQtdHlwaXphdGlvbg",
+                "endpointProtocol": "HTTP"
+              }
+            }
+          ],
+          "id": "urn:example:submodel:serial-part-typization",
+          "idShort": "RestrictedSerialPartTypization",
+          "supplementalSemanticId": [
+            {
+              "keys": [
+                {
+                  "type": "GlobalReference",
+                  "value": "BPN_COMPANY_002"
+                }
+              ],
+              "type": "ExternalReference"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

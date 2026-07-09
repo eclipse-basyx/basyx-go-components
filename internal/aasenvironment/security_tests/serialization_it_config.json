@@ -3,14 +3,14 @@
 		"context": "GET serialization - viewer-only user allowed",
 		"token": { "user": "usera", "password": "pwd" },
 		"method": "GET",
-		"endpoint": "http://localhost:6004/serialization",
+		"endpoint": "{{BASYX_IT_API_URL}}/serialization",
 		"expectedStatus": 200
 	},
 	{
 		"context": "GET serialization - editor-only user denied",
 		"token": { "user": "userx", "password": "pwd" },
 		"method": "GET",
-		"endpoint": "http://localhost:6004/serialization",
+		"endpoint": "{{BASYX_IT_API_URL}}/serialization",
 		"expectedStatus": 403
 	}
 ]

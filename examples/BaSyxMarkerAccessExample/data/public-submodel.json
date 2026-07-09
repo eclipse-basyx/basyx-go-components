@@ -1,0 +1,24 @@
+{
+  "id": "urn:example:submodel:nameplate",
+  "idShort": "PublicNameplate",
+  "modelType": "Submodel",
+  "supplementalSemanticIds": [
+    {
+      "type": "ExternalReference",
+      "keys": [
+        {
+          "type": "GlobalReference",
+          "value": "PUBLIC_READABLE"
+        }
+      ]
+    }
+  ],
+  "submodelElements": [
+    {
+      "idShort": "ManufacturerName",
+      "modelType": "Property",
+      "valueType": "xs:string",
+      "value": "Example Corp"
+    }
+  ]
+}

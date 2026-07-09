@@ -31,6 +31,7 @@ import (
 	"errors"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/FriedJannik/aas-go-sdk/jsonization"
 	"github.com/FriedJannik/aas-go-sdk/types"
@@ -766,7 +767,7 @@ func (s *CustomAASRepositoryService) decodeAndEnsureAASSubmodelReference(ctx con
 }
 
 func (s *CustomAASRepositoryService) buildMergedPatchedSubmodel(ctx context.Context, operation string, submodelID string, patchJSON map[string]any, metadataOnly bool) (types.ISubmodel, commonmodel.ImplResponse, bool) {
-	existingSubmodels, _, getErr := s.persistence.SubmodelRepository.GetSubmodels(ctx, 1, "", submodelID)
+	existingSubmodels, _, getErr := s.persistence.SubmodelRepository.GetSubmodels(ctx, 1, "", submodelID, "", time.Time{}, time.Time{})
 	if getErr != nil {
 		if common.IsErrNotFound(getErr) || errors.Is(getErr, sql.ErrNoRows) {
 			return nil, newAASRepoErrorResponse(getErr, http.StatusNotFound, operation, "SubmodelNotFound"), false

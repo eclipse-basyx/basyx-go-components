@@ -1,7 +1,6 @@
 services:
   db-scp:
     image: postgres:18
-    container_name: postgres_oidc_scp_test
     environment:
       POSTGRES_USER: admin
       POSTGRES_PASSWORD: admin123
@@ -15,7 +14,6 @@ services:
 
   db-roles:
     image: postgres:18
-    container_name: postgres_oidc_roles_test
     environment:
       POSTGRES_USER: admin
       POSTGRES_PASSWORD: admin123
@@ -28,7 +26,6 @@ services:
       retries: 5
 
   basyx-configuration-scp:
-    container_name: basyx_configuration_oidc_scp_test
     build:
       context: ../../../..
       dockerfile: ./cmd/basyxconfigurationservice/Dockerfile
@@ -46,7 +43,6 @@ services:
         condition: service_healthy
 
   basyx-configuration-roles:
-    container_name: basyx_configuration_oidc_roles_test
     build:
       context: ../../../..
       dockerfile: ./cmd/basyxconfigurationservice/Dockerfile
@@ -64,7 +60,6 @@ services:
         condition: service_healthy
 
   aas-registry-scp:
-    container_name: aas_registry_oidc_scp_test
     build:
       context: ../../../..
       dockerfile: ./cmd/aasregistryservice/Dockerfile
@@ -82,7 +77,7 @@ services:
       - ABAC_MODELPATH=/security_env/scp-access-rules.json
       - OIDC_TRUSTLISTPATH=/security_env/scp-trustlist.json
     ports:
-      - "6104:5004"
+      - "127.0.0.1:${BASYX_IT_SCP_API_PORT:-6104}:5004"
     depends_on:
       basyx-configuration-scp:
         condition: service_completed_successfully
@@ -92,7 +87,6 @@ services:
       - "localhost:host-gateway"
 
   aas-registry-roles:
-    container_name: aas_registry_oidc_roles_test
     build:
       context: ../../../..
       dockerfile: ./cmd/aasregistryservice/Dockerfile
@@ -110,7 +104,7 @@ services:
       - ABAC_MODELPATH=/security_env/roles-access-rules.json
       - OIDC_TRUSTLISTPATH=/security_env/roles-trustlist.json
     ports:
-      - "6204:5004"
+      - "127.0.0.1:${BASYX_IT_ROLES_API_PORT:-6204}:5004"
     depends_on:
       basyx-configuration-roles:
         condition: service_completed_successfully

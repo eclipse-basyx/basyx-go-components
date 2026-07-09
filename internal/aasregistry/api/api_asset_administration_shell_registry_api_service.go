@@ -29,7 +29,7 @@
  *
  * The Full Profile of the Asset Administration Shell Registry Service Specification as part of the [Specification of the Asset Administration Shell: Part 2](https://industrialdigitaltwin.org/en/content-hub/aasspecifications).   Copyright: Industrial Digital Twin Association (IDTA) 2025
  *
- * API version: V3.1.1_SSP-001
+ * API version: V3.2.0
  * Contact: info@idtwin.org
  */
 // Author: Martin Stemmer ( Fraunhofer IESE )
@@ -37,7 +37,6 @@ package aasregistryapi
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"log"
 	"net/http"
@@ -46,7 +45,7 @@ import (
 
 	persistence_postgresql "github.com/eclipse-basyx/basyx-go-components/internal/aasregistry/persistence"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
-	"github.com/eclipse-basyx/basyx-go-components/internal/common/history"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/createprecheck"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
@@ -71,7 +70,7 @@ func NewAssetAdministrationShellRegistryAPIAPIService(databaseBackend persistenc
 }
 
 // GetAllAssetAdministrationShellDescriptors - Returns all Asset Administration Shell Descriptors
-func (s *AssetAdministrationShellRegistryAPIAPIService) GetAllAssetAdministrationShellDescriptors(ctx context.Context, limit int32, cursor string, assetKind model.AssetKind, assetType string) (model.ImplResponse, error) {
+func (s *AssetAdministrationShellRegistryAPIAPIService) GetAllAssetAdministrationShellDescriptors(ctx context.Context, limit int32, cursor string, assetKind model.AssetKind, assetType string, assetIds []string, createdFrom time.Time, updatedFrom time.Time) (model.ImplResponse, error) {
 	internalCursor, resp, err := decodeCursor(strings.TrimSpace(cursor), "GetAllAssetAdministrationShellDescriptors")
 	if resp != nil || err != nil {
 		return *resp, err
@@ -80,7 +79,22 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) GetAllAssetAdministratio
 	if resp != nil || err != nil {
 		return *resp, err
 	}
-	aasds, nextCursor, err := s.aasRegistryBackend.ListAssetAdministrationShellDescriptors(ctx, limit, internalCursor, assetKind, decodedAssetType)
+	assetIDFilter, err := common.DecodeAssetIDFilter(assetIds)
+	if err != nil {
+		return common.NewErrorResponse(
+			err, http.StatusBadRequest, componentName, "GetAllAssetAdministrationShellDescriptors", "BadAssetIds",
+		), nil
+	}
+	fetch := func(pageLimit int32, pageCursor string) ([]model.AssetAdministrationShellDescriptor, string, error) {
+		return s.aasRegistryBackend.ListAssetAdministrationShellDescriptors(ctx, pageLimit, pageCursor, assetKind, decodedAssetType, createdFrom, updatedFrom)
+	}
+	var aasds []model.AssetAdministrationShellDescriptor
+	var nextCursor string
+	if assetIDFilter.IsEmpty() {
+		aasds, nextCursor, err = fetch(limit, internalCursor)
+	} else {
+		aasds, nextCursor, err = filterAssetAdministrationShellDescriptorPages(limit, internalCursor, fetch, assetIDFilter)
+	}
 	if err != nil {
 		log.Printf("🧩 [%s] Error in GetAllAssetAdministrationShellDescriptors: list failed (limit=%d cursor=%q assetKind=%q assetType=%q): %v", componentName, limit, internalCursor, string(assetKind), assetType, err)
 		switch {
@@ -109,89 +123,66 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) GetAllAssetAdministratio
 	return pagedResponse(jsonable, nextCursor), nil
 }
 
-// GetAllAssetAdministrationShellDescriptorsRecentChanges returns changed AAS descriptors.
-func (s *AssetAdministrationShellRegistryAPIAPIService) GetAllAssetAdministrationShellDescriptorsRecentChanges(ctx context.Context, assetKind model.AssetKind, assetType string, assetIds []string, createdFrom time.Time, updatedFrom time.Time, limit int32, cursor string) (model.ImplResponse, error) {
-	internalCursor, resp, err := decodeCursor(strings.TrimSpace(cursor), "GetAllAssetAdministrationShellDescriptorsRecentChanges")
-	if resp != nil || err != nil {
-		return *resp, err
-	}
-	decodedAssetType, resp, err := decodeOptionalQueryParam(assetType, "assetType", "GetAllAssetAdministrationShellDescriptorsRecentChanges", "BadAssetType")
-	if resp != nil || err != nil {
-		return *resp, err
-	}
-	assetIDFilter, err := common.DecodeAssetIDFilter(assetIds)
-	if err != nil {
-		return common.NewErrorResponse(
-			err, http.StatusBadRequest, componentName, "GetAllAssetAdministrationShellDescriptorsRecentChanges", "BadAssetIds",
-		), nil
-	}
+type assetAdministrationShellDescriptorFetcher func(limit int32, cursor string) ([]model.AssetAdministrationShellDescriptor, string, error)
 
-	fetch := func(pageLimit int32, pageCursor string) ([]history.Row, string, error) {
-		return s.aasRegistryBackend.GetAssetAdministrationShellDescriptorRecentChanges(ctx, pageLimit, pageCursor, createdFrom, updatedFrom)
+func filterAssetAdministrationShellDescriptorPages(
+	limit int32,
+	cursor string,
+	fetch assetAdministrationShellDescriptorFetcher,
+	filter common.AssetIDFilter,
+) ([]model.AssetAdministrationShellDescriptor, string, error) {
+	if limit <= 0 {
+		limit = 100
 	}
-	rows, nextCursor, err := history.FilterRecentRows(limit, internalCursor, fetch, func(row history.Row) (bool, error) {
-		if row.Deleted {
-			return false, nil
+	pageLimit := limit + 1
+	result := make([]model.AssetAdministrationShellDescriptor, 0, limit)
+	currentCursor := cursor
+	for {
+		page, nextCursor, err := fetch(pageLimit, currentCursor)
+		if err != nil {
+			return nil, "", err
 		}
-		return matchesDescriptorFilters(row.Snapshot, assetKind, decodedAssetType, assetIDFilter)
-	})
-	if err != nil {
-		if common.IsErrBadRequest(err) {
-			return common.NewErrorResponse(
-				err, http.StatusBadRequest, componentName, "GetAllAssetAdministrationShellDescriptorsRecentChanges", "BadRequest",
-			), nil
+		for _, descriptor := range page {
+			matches, matchErr := filter.Matches(descriptor.GlobalAssetId, descriptor.SpecificAssetIds)
+			if matchErr != nil {
+				return nil, "", matchErr
+			}
+			if !matches {
+				continue
+			}
+			if len(result) == int(limit) {
+				return result, descriptor.Id, nil
+			}
+			result = append(result, descriptor)
 		}
-		return common.NewErrorResponse(
-			err, http.StatusInternalServerError, componentName, "GetAllAssetAdministrationShellDescriptorsRecentChanges", "InternalServerError",
-		), err
+		if nextCursor == "" || nextCursor == currentCursor {
+			return result, "", nil
+		}
+		currentCursor = nextCursor
 	}
-
-	jsonable := make([]map[string]any, 0, len(rows))
-	for _, row := range rows {
-		jsonable = append(jsonable, row.Snapshot)
-	}
-
-	return pagedResponse(jsonable, nextCursor), nil
-}
-
-func matchesDescriptorFilters(snapshot map[string]any, assetKind model.AssetKind, assetType string, assetIDFilter common.AssetIDFilter) (bool, error) {
-	if assetKind != "" && snapshot["assetKind"] != string(assetKind) {
-		return false, nil
-	}
-	if assetType != "" && snapshot["assetType"] != assetType {
-		return false, nil
-	}
-	if assetIDFilter.IsEmpty() {
-		return true, nil
-	}
-
-	payload, err := json.Marshal(snapshot)
-	if err != nil {
-		return false, common.NewInternalServerError("AASR-RECENTCHANGES-MARSHALSNAPSHOT " + err.Error())
-	}
-	var descriptor model.AssetAdministrationShellDescriptor
-	if err = json.Unmarshal(payload, &descriptor); err != nil {
-		return false, common.NewInternalServerError("AASR-RECENTCHANGES-UNMARSHALSNAPSHOT " + err.Error())
-	}
-	return assetIDFilter.Matches(descriptor.GlobalAssetId, descriptor.SpecificAssetIds)
 }
 
 // PostAssetAdministrationShellDescriptor - Creates a new Asset Administration Shell Descriptor, i.e. registers an AAS
 func (s *AssetAdministrationShellRegistryAPIAPIService) PostAssetAdministrationShellDescriptor(ctx context.Context, assetAdministrationShellDescriptor model.AssetAdministrationShellDescriptor) (model.ImplResponse, error) {
-	// Existence check: AAS with same Id should not already exist (lightweight)
 	if strings.TrimSpace(assetAdministrationShellDescriptor.Id) != "" {
-		if exists, chkErr := s.aasRegistryBackend.ExistsAASByID(ctx, assetAdministrationShellDescriptor.Id); chkErr != nil {
-			log.Printf("🧩 [%s] Error in PostAssetAdministrationShellDescriptor: existence check failed (aasId=%q): %v", componentName, assetAdministrationShellDescriptor.Id, chkErr)
+		precheckErr := createprecheck.EnsureVisibleCreate(
+			ctx,
+			func(checkCtx context.Context) (bool, error) {
+				return s.aasRegistryBackend.ExistsAASByID(checkCtx, assetAdministrationShellDescriptor.Id)
+			},
+			func(readCtx context.Context) error {
+				_, readErr := s.aasRegistryBackend.GetAssetAdministrationShellDescriptorByID(readCtx, assetAdministrationShellDescriptor.Id)
+				return readErr
+			},
+			"AAS with given id already exists",
+			"AAS Descriptor access not allowed",
+		)
+		if precheckErr != nil {
+			statusCode, step := createprecheck.ResponseStatus(precheckErr)
+			log.Printf("🧩 [%s] Error in PostAssetAdministrationShellDescriptor: create precheck failed (aasId=%q): %v", componentName, assetAdministrationShellDescriptor.Id, precheckErr)
 			return common.NewErrorResponse(
-				chkErr, http.StatusInternalServerError, componentName, "PostAssetAdministrationShellDescriptor", "Unhandled-Precheck",
-			), chkErr
-		} else if exists {
-			// TODO: should return 403 if no access on existing shell. Currently user gets 409 even if he has no access rights.
-			e := common.NewErrConflict("AAS with given id already exists")
-			log.Printf("🧩 [%s] Error in PostAssetAdministrationShellDescriptor: conflict (aasId=%q): %v", componentName, assetAdministrationShellDescriptor.Id, e)
-			return common.NewErrorResponse(
-				e, http.StatusConflict, componentName, "PostAssetAdministrationShellDescriptor", "Conflict-Exists",
-			), nil
+				precheckErr, statusCode, componentName, "PostAssetAdministrationShellDescriptor", step,
+			), createprecheck.ReturnError(precheckErr)
 		}
 	}
 
@@ -297,7 +288,7 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) PutAssetAdministrationSh
 		), enforceErr
 	}
 
-	if exists, chkErr := s.aasRegistryBackend.ExistsAASByID(ctx, assetAdministrationShellDescriptor.Id); chkErr != nil {
+	if exists, chkErr := s.aasRegistryBackend.ExistsAASByID(auth.WithoutQueryFilter(ctx), assetAdministrationShellDescriptor.Id); chkErr != nil {
 		log.Printf("🧩 [%s] Error in PutAssetAdministrationShellDescriptorById: existence check failed (aasId=%q): %v", componentName, assetAdministrationShellDescriptor.Id, chkErr)
 		return common.NewErrorResponse(
 			chkErr, http.StatusInternalServerError, componentName, "PutAssetAdministrationShellDescriptorById", "Unhandled-Precheck",
@@ -476,20 +467,25 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) PostSubmodelDescriptorTh
 		return *resp, err
 	}
 
-	// Conflict check: lightweight existence for submodel under this AAS
 	if strings.TrimSpace(submodelDescriptor.Id) != "" {
-		if exists, chkErr := s.aasRegistryBackend.ExistsSubmodelForAAS(ctx, decodedAAS, submodelDescriptor.Id); chkErr != nil {
-			log.Printf("🧩 [%s] Error in PostSubmodelDescriptorThroughSuperpath: existence check failed (aasId=%q submodelId=%q): %v", componentName, decodedAAS, submodelDescriptor.Id, chkErr)
+		precheckErr := createprecheck.EnsureVisibleCreate(
+			ctx,
+			func(checkCtx context.Context) (bool, error) {
+				return s.aasRegistryBackend.ExistsSubmodelForAAS(checkCtx, decodedAAS, submodelDescriptor.Id)
+			},
+			func(readCtx context.Context) error {
+				_, readErr := s.aasRegistryBackend.GetSubmodelDescriptorForAASByID(readCtx, decodedAAS, submodelDescriptor.Id)
+				return readErr
+			},
+			"Submodel with given id already exists for this AAS",
+			"Submodel Descriptor access not allowed",
+		)
+		if precheckErr != nil {
+			statusCode, step := createprecheck.ResponseStatus(precheckErr)
+			log.Printf("🧩 [%s] Error in PostSubmodelDescriptorThroughSuperpath: create precheck failed (aasId=%q submodelId=%q): %v", componentName, decodedAAS, submodelDescriptor.Id, precheckErr)
 			return common.NewErrorResponse(
-				chkErr, http.StatusInternalServerError, componentName, "PostSubmodelDescriptorThroughSuperpath", "Unhandled-Precheck",
-			), chkErr
-		} else if exists {
-			// TODO: should return 403 if no access on existing submodel. Currently user gets 409 even if he has no access rights.
-			e := common.NewErrConflict("Submodel with given id already exists for this AAS")
-			log.Printf("🧩 [%s] Error in PostSubmodelDescriptorThroughSuperpath: conflict (aasId=%q submodelId=%q): %v", componentName, decodedAAS, submodelDescriptor.Id, e)
-			return common.NewErrorResponse(
-				e, http.StatusConflict, componentName, "PostSubmodelDescriptorThroughSuperpath", "Conflict-Exists",
-			), nil
+				precheckErr, statusCode, componentName, "PostSubmodelDescriptorThroughSuperpath", step,
+			), createprecheck.ReturnError(precheckErr)
 		}
 	}
 
@@ -608,7 +604,23 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) PutSubmodelDescriptorByI
 		), enforceErr
 	}
 
-	if exists, chkErr := s.aasRegistryBackend.ExistsSubmodelForAAS(ctx, decodedAAS, decodedSMD); chkErr != nil {
+	technicalCtx := auth.WithoutQueryFilter(ctx)
+	aasExists, chkErr := s.aasRegistryBackend.ExistsAASByID(technicalCtx, decodedAAS)
+	if chkErr != nil {
+		log.Printf("🧩 [%s] Error in PutSubmodelDescriptorByIdThroughSuperpath: AAS existence check failed (aasId=%q): %v", componentName, decodedAAS, chkErr)
+		return common.NewErrorResponse(
+			chkErr, http.StatusInternalServerError, componentName, "PutSubmodelDescriptorByIdThroughSuperpath", "Unhandled-AASPrecheck",
+		), chkErr
+	}
+	if !aasExists {
+		err := common.NewErrNotFound("AAS Descriptor not found")
+		log.Printf("🧩 [%s] Error in PutSubmodelDescriptorByIdThroughSuperpath: AAS not found (aasId=%q): %v", componentName, decodedAAS, err)
+		return common.NewErrorResponse(
+			err, http.StatusNotFound, componentName, "PutSubmodelDescriptorByIdThroughSuperpath", "AASNotFound",
+		), nil
+	}
+
+	if exists, chkErr := s.aasRegistryBackend.ExistsSubmodelForAAS(technicalCtx, decodedAAS, decodedSMD); chkErr != nil {
 		log.Printf("🧩 [%s] Error in PutSubmodelDescriptorByIdThroughSuperpath: existence check failed (aasId=%q): %v", componentName, decodedAAS, chkErr)
 		return common.NewErrorResponse(
 			chkErr, http.StatusInternalServerError, componentName, "PutSubmodelDescriptorByIdThroughSuperpath", "Unhandled-Precheck",
@@ -622,9 +634,10 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) PutSubmodelDescriptorByI
 		if err != nil {
 			switch {
 			case common.IsErrNotFound(err):
-				log.Printf("🧩 [%s] Error in PutSubmodelDescriptorByIdThroughSuperpath: not found (aasId=%q submodelId=%q): %v", componentName, decodedAAS, submodelDescriptor.Id, err)
+				deniedErr := common.NewErrDenied("Submodel Descriptor access not allowed")
+				log.Printf("🧩 [%s] Error in PutSubmodelDescriptorByIdThroughSuperpath: not allowed (aasId=%q submodelId=%q): %v", componentName, decodedAAS, submodelDescriptor.Id, err)
 				return common.NewErrorResponse(
-					err, http.StatusNotFound, componentName, "PutSubmodelDescriptorByIdThroughSuperpath", "NotFound",
+					deniedErr, http.StatusForbidden, componentName, "PutSubmodelDescriptorByIdThroughSuperpath", "Denied",
 				), nil
 			case common.IsErrDenied(err):
 				log.Printf("🧩 [%s] Error in PutSubmodelDescriptorByIdThroughSuperpath: denied (aasId=%q submodelId=%q): %v", componentName, decodedAAS, submodelDescriptor.Id, err)
@@ -667,15 +680,11 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) PutSubmodelDescriptorByI
 	_, err = s.aasRegistryBackend.ReplaceSubmodelDescriptorForAAS(ctx, decodedAAS, submodelDescriptor)
 	if err != nil {
 		switch {
-		case common.IsErrNotFound(err):
-			log.Printf("🧩 [%s] Error in PutSubmodelDescriptorByIdThroughSuperpath: not found (aasId=%q submodelId=%q): %v", componentName, decodedAAS, submodelDescriptor.Id, err)
+		case common.IsErrNotFound(err), common.IsErrDenied(err):
+			deniedErr := common.NewErrDenied("Submodel Descriptor access not allowed")
+			log.Printf("🧩 [%s] Error in PutSubmodelDescriptorByIdThroughSuperpath: not allowed (aasId=%q submodelId=%q): %v", componentName, decodedAAS, submodelDescriptor.Id, err)
 			return common.NewErrorResponse(
-				err, http.StatusNotFound, componentName, "PutSubmodelDescriptorByIdThroughSuperpath", "NotFound",
-			), nil
-		case common.IsErrDenied(err):
-			log.Printf("🧩 [%s] Error in PutSubmodelDescriptorByIdThroughSuperpath: denied (aasId=%q submodelId=%q): %v", componentName, decodedAAS, submodelDescriptor.Id, err)
-			return common.NewErrorResponse(
-				err, http.StatusForbidden, componentName, "PutSubmodelDescriptorByIdThroughSuperpath", "Denied",
+				deniedErr, http.StatusForbidden, componentName, "PutSubmodelDescriptorByIdThroughSuperpath", "Denied",
 			), nil
 		case common.IsErrBadRequest(err):
 			log.Printf("🧩 [%s] Error in PutSubmodelDescriptorByIdThroughSuperpath: bad request (aasId=%q submodelId=%q): %v", componentName, decodedAAS, submodelDescriptor.Id, err)
@@ -743,7 +752,7 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) DeleteSubmodelDescriptor
 func (s *AssetAdministrationShellRegistryAPIAPIService) QueryAssetAdministrationShellDescriptors(ctx context.Context, limit int32, cursor string, query grammar.Query) (model.ImplResponse, error) {
 	ctx = auth.MergeQueryFilter(ctx, query)
 
-	aasds, nextCursor, err := s.aasRegistryBackend.ListAssetAdministrationShellDescriptors(ctx, limit, cursor, "", "")
+	aasds, nextCursor, err := s.aasRegistryBackend.ListAssetAdministrationShellDescriptors(ctx, limit, cursor, "", "", time.Time{}, time.Time{})
 	if err != nil {
 		log.Printf("🧩 [%s] Error in QueryAssetAdministrationShellDescriptors: list failed (limit=%d cursor=%q ): %v", componentName, limit, cursor, err)
 		switch {

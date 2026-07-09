@@ -29,7 +29,6 @@ import (
 	"database/sql"
 	"io"
 	"log"
-	"net/http"
 	"os"
 	"strconv"
 	"strings"
@@ -157,13 +156,18 @@ func (h *PostgreSQLThumbnailFileHandler) DownloadThumbnailByAASID(aasIdentifier 
 // UploadThumbnailByAASID uploads thumbnail content for an AAS and persists metadata.
 // nolint:revive // cyclomatic complexity of 33
 func (h *PostgreSQLThumbnailFileHandler) UploadThumbnailByAASID(aasIdentifier string, fileName string, file *os.File) error {
+	return h.UploadThumbnailByAASIDReader(aasIdentifier, fileName, file)
+}
+
+// UploadThumbnailByAASIDReader uploads thumbnail content for an AAS from a reader and persists metadata.
+func (h *PostgreSQLThumbnailFileHandler) UploadThumbnailByAASIDReader(aasIdentifier string, fileName string, file io.Reader) error {
 	tx, cleanup, err := common.StartTransaction(h.db)
 	if err != nil {
 		return common.NewInternalServerError("AASREPO-PUTTHUMBNAIL-STARTTX " + err.Error())
 	}
 	defer cleanup(&err)
 
-	err = h.uploadThumbnailByAASIDInTransaction(tx, aasIdentifier, fileName, file)
+	err = h.uploadThumbnailByAASIDReaderInTransaction(tx, aasIdentifier, fileName, file)
 	if err != nil {
 		return err
 	}
@@ -177,8 +181,8 @@ func (h *PostgreSQLThumbnailFileHandler) UploadThumbnailByAASID(aasIdentifier st
 }
 
 // nolint:revive // cyclomatic complexity of 33
-func (h *PostgreSQLThumbnailFileHandler) uploadThumbnailByAASIDInTransaction(tx *sql.Tx, aasIdentifier string, fileName string, file *os.File) error {
-	aasDBID, err := persistenceutils.GetAssetAdministrationShellDatabaseID(tx, aasIdentifier)
+func (h *PostgreSQLThumbnailFileHandler) uploadThumbnailByAASIDReaderInTransaction(tx *sql.Tx, aasIdentifier string, fileName string, file io.Reader) error {
+	aasDBID, err := persistenceutils.GetAssetAdministrationShellDatabaseIDForUpdate(tx, aasIdentifier)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return common.NewErrNotFound("AASREPO-PUTTHUMBNAIL-AASNOTFOUND Asset Administration Shell with ID '" + aasIdentifier + "' not found")
@@ -208,18 +212,9 @@ func (h *PostgreSQLThumbnailFileHandler) uploadThumbnailByAASIDInTransaction(tx 
 		return common.NewInternalServerError("AASREPO-PUTTHUMBNAIL-EXECEXISTINGELEMENTSQL " + existingElementErr.Error())
 	}
 
-	if _, seekErr := file.Seek(0, 0); seekErr != nil {
-		return common.NewInternalServerError("AASREPO-PUTTHUMBNAIL-SEEKFILE " + seekErr.Error())
-	}
-
-	contentTypeBuffer := make([]byte, 512)
-	readBytes, readErr := file.Read(contentTypeBuffer)
-	if readErr != nil && readErr != io.EOF {
-		return common.NewInternalServerError("AASREPO-PUTTHUMBNAIL-READCONTENTTYPE " + readErr.Error())
-	}
-	detectedContentType := "application/octet-stream"
-	if readBytes > 0 {
-		detectedContentType = http.DetectContentType(contentTypeBuffer[:readBytes])
+	detectedContentType, uploadContent, sniffErr := common.SniffContentTypeReader(file)
+	if sniffErr != nil {
+		return common.NewInternalServerError("AASREPO-PUTTHUMBNAIL-READCONTENTTYPE " + sniffErr.Error())
 	}
 
 	resolvedFileName := strings.TrimSpace(fileName)
@@ -230,10 +225,6 @@ func (h *PostgreSQLThumbnailFileHandler) uploadThumbnailByAASIDInTransaction(tx 
 	resolvedContentType, mismatchDetectedVsDeclared := common.ResolveUploadedContentType(detectedContentType, existingContentType.String, resolvedFileName)
 	if mismatchDetectedVsDeclared {
 		log.Printf("[WARN] AASREPO-PUTTHUMBNAIL-RESOLVEMIME detected content type differs from declared content type; using detected content type")
-	}
-
-	if _, seekErr := file.Seek(0, 0); seekErr != nil {
-		return common.NewInternalServerError("AASREPO-PUTTHUMBNAIL-SEEKFILE " + seekErr.Error())
 	}
 
 	oldOIDQuery, oldOIDArgs, oldOIDBuildErr := dialect.
@@ -269,7 +260,7 @@ func (h *PostgreSQLThumbnailFileHandler) uploadThumbnailByAASIDInTransaction(tx 
 
 	buffer := make([]byte, 8192)
 	for {
-		readCount, chunkErr := file.Read(buffer)
+		readCount, chunkErr := uploadContent.Read(buffer)
 		if readCount > 0 {
 			if _, writeErr := tx.Exec(`SELECT lowrite($1, $2)`, loFD, buffer[:readCount]); writeErr != nil {
 				_, _ = tx.Exec(`SELECT lo_close($1)`, loFD)
@@ -375,7 +366,7 @@ func (h *PostgreSQLThumbnailFileHandler) DeleteThumbnailByAASID(aasIdentifier st
 }
 
 func (h *PostgreSQLThumbnailFileHandler) deleteThumbnailByAASIDInTransaction(tx *sql.Tx, aasIdentifier string) error {
-	aasDBID, err := persistenceutils.GetAssetAdministrationShellDatabaseID(tx, aasIdentifier)
+	aasDBID, err := persistenceutils.GetAssetAdministrationShellDatabaseIDForUpdate(tx, aasIdentifier)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return common.NewErrNotFound("AASREPO-DELTHUMBNAIL-AASNOTFOUND Asset Administration Shell with ID '" + aasIdentifier + "' not found")

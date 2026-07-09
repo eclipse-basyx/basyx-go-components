@@ -32,7 +32,8 @@ This guide summarizes the user-visible AAS API v3.2 changes in the BaSyx Go comp
 The most important additions are:
 
 - Historical reads for AAS and Submodels.
-- Recent-change feeds for AAS, Submodels, Concept Descriptions, AAS descriptors, and Submodel descriptors.
+- Recent-change feeds for AAS, Submodels, and Concept Descriptions.
+- Timestamp filters for AAS and Submodel descriptor list endpoints.
 - Signed AAS and Submodel reads.
 - The new `Batch` value for `AssetKind`.
 - Extended administrative timestamp fields used by recent-change filters.
@@ -50,9 +51,9 @@ Implemented history, recent-change, and signing endpoints:
 - Submodel Repository: `GET /submodels/{submodelIdentifier}/$history`
 - Submodel Repository: `GET /submodels/{submodelIdentifier}/$signed`
 - Concept Description Repository: `GET /concept-descriptions/$recent-changes`
-- AAS Registry and Digital Twin Registry: `GET /shell-descriptors/$recent-changes`
-- Submodel Registry: `GET /submodel-descriptors/$recent-changes`
-- AAS Environment: exposes the corresponding AAS, Submodel, Concept Description, and descriptor endpoints through the composed service.
+- AAS Registry and Digital Twin Registry: `createdFrom` and `updatedFrom` filters on `GET /shell-descriptors`
+- Submodel Registry: `createdFrom` and `updatedFrom` filters on `GET /submodel-descriptors`
+- AAS Environment: exposes the corresponding AAS, Submodel, Concept Description, and descriptor list endpoints through the composed service.
 
 Additional compatibility endpoint:
 
@@ -79,7 +80,7 @@ Environment variables:
 - `BASYX_HISTORY_EVIDENCE_ENABLED`: `true` enables fail-closed WORM history-event artifact writes. Requires `BASYX_HISTORY_MODE=api` or `audit`; mutating requests fail when the configured evidence artifact cannot be stored.
 - `BASYX_HISTORY_EVIDENCE_PROVIDER`: `s3` for the S3-compatible evidence backend.
 - `BASYX_HISTORY_EVIDENCE_BUCKET`, `BASYX_HISTORY_EVIDENCE_PREFIX`, `BASYX_HISTORY_EVIDENCE_REGION`, `BASYX_HISTORY_EVIDENCE_ENDPOINT`: object-store target settings. `endpoint` is useful for MinIO tests.
-- `BASYX_HISTORY_EVIDENCE_ACCESS_KEY_ID`, `BASYX_HISTORY_EVIDENCE_SECRET_ACCESS_KEY`, `BASYX_HISTORY_EVIDENCE_PATH_STYLE`: optional S3-compatible credentials and path-style addressing.
+- `BASYX_HISTORY_EVIDENCE_ACCESS_KEY_ID`, `BASYX_HISTORY_EVIDENCE_SECRET_ACCESS_KEY`, `BASYX_HISTORY_EVIDENCE_SECRET_KEY`, `BASYX_HISTORY_EVIDENCE_PATH_STYLE`: optional S3-compatible credentials and path-style addressing. `BASYX_HISTORY_EVIDENCE_SECRET_KEY` is a supported alias for the secret access key.
 - `BASYX_HISTORY_EVIDENCE_RETENTION_MODE`, `BASYX_HISTORY_EVIDENCE_RETENTION_DAYS`: required object-lock retention settings when evidence is enabled, such as `governance` plus a positive day count.
 - `BASYX_HISTORY_EVIDENCE_WRITE_TIMEOUT_SECONDS`: timeout for synchronous WORM writes while the PostgreSQL transaction is open. Default is `10`.
 - `BASYX_HISTORY_EVIDENCE_SIGNING_PRIVATE_KEY_PATH`: optional manifest signing key. When empty, evidence signing can use `jws.privateKeyPath`.
@@ -120,7 +121,7 @@ history:
 Mode semantics:
 
 - `off`: new history writes are skipped. Existing history rows remain readable.
-- `api`: functional AAS v3.2 history and recent-change behavior for API consumers.
+- `api`: functional AAS v3.2 history behavior for API consumers.
 - `audit`: the same runtime snapshot writes as `api`, intended for audit-oriented deployments where guarded storage is configured explicitly.
 
 Current implementation status:
@@ -198,7 +199,7 @@ The verifier and recovery modes print machine-readable JSON and exit non-zero wh
 
 When versioning is active, each supported identifiable create, update, or delete appends a new row to a dedicated history table. With `fullSnapshotInterval: 1`, every row stores a complete identifiable snapshot. With a larger interval, the runtime stores a full checkpoint followed by up to `N-1` RFC 6902 diffs against the previous reconstructed snapshot.
 
-For example, `history.fullSnapshotInterval: 3` stores at most two diffs after a checkpoint: `snapshot, diff, diff, snapshot...`. The runtime may insert an earlier full snapshot when the diff JSON would not be smaller than the full snapshot payload. Historical reads and recent-change feeds rebuild the full snapshot at query time from the nearest checkpoint and verify the stored payload/content hashes before returning it.
+For example, `history.fullSnapshotInterval: 3` stores at most two diffs after a checkpoint: `snapshot, diff, diff, snapshot...`. The runtime may insert an earlier full snapshot when the diff JSON would not be smaller than the full snapshot payload. Historical reads rebuild the full snapshot at query time from the nearest checkpoint and verify the stored payload/content hashes before returning it.
 
 ```mermaid
 flowchart LR
@@ -207,7 +208,7 @@ flowchart LR
     Mode -->|off| Done["No history append"]
     Mode -->|api or audit| Snapshot["Build complete identifiable snapshot"]
     Snapshot --> History["INSERT metadata and snapshot/diff payload row"]
-    History --> Read["$history and $recent-changes rebuild full snapshots"]
+    History --> Read["$history rebuilds full snapshots"]
 ```
 
 The owning identifiable depends on the write:
@@ -314,15 +315,13 @@ These routes delegate to the same Submodel behavior. An SME-only change appends 
 
 ## Recent Changes
 
-Recent-change endpoints return append-only, cursor-paged results from the history tables. Their result shape depends on the component:
+Recent-change endpoints return cursor-paged projections of the current repository rows that carry valid administrative timestamps. Their result shape depends on the component:
 
 | Component | Result fields |
 | --- | --- |
-| AAS Repository | `type`, `createdAt`, `updatedAt`, `id`, and optional `globalAssetId` and `specificAssetIds` |
-| Submodel Repository | `type`, `createdAt`, `updatedAt`, `id`, and optional `semanticId` and `supplementalSemanticIds` |
-| Concept Description Repository | `type`, `createdAt`, `updatedAt`, and `id` |
-| AAS Registry and DTR | Complete AAS descriptor snapshots |
-| Submodel Registry | Complete Submodel descriptor snapshots |
+| AAS Repository | `createdAt`, `updatedAt`, `id`, and optional `globalAssetId` and `specificAssetIds` |
+| Submodel Repository | `createdAt`, `updatedAt`, `id`, and optional `semanticId` and `supplementalSemanticIds` |
+| Concept Description Repository | `createdAt`, `updatedAt`, and `id` |
 
 Example:
 
@@ -336,7 +335,7 @@ curl 'http://localhost:6004/submodels/$recent-changes?limit=50&updatedFrom=2026-
 
 Common query parameters:
 
-- `limit`: maximum number of changes to return. The default is `100`; the maximum accepted value is `1000`.
+- `limit`: maximum number of changes to return. The default is `100`.
 - `cursor`: pagination cursor from the previous response.
 - `createdFrom`: lower bound for administrative creation timestamps.
 - `updatedFrom`: lower bound for administrative update timestamps.
@@ -345,10 +344,20 @@ Additional filters:
 
 - AAS recent changes support `assetIds`. Each value is a base64url-encoded `SpecificAssetId`.
 - Submodel recent changes support `semanticId`. Its semantic-reference value is base64url encoded.
-- AAS descriptor recent changes support `assetKind`, base64url-encoded UTF-8 `assetType`, and base64url-encoded `assetIds`.
-- Submodel descriptor recent changes intentionally support only the common `createdFrom`, `updatedFrom`, `limit`, and `cursor` parameters.
 
-For AAS, Submodels, and Concept Descriptions, deleted identifiables remain visible as tombstones with `id`, `type`, `createdAt`, and `updatedAt`. Optional resource metadata is absent from tombstones. Descriptor recent-change endpoints omit deleted descriptor rows because their response types do not model tombstones.
+Recent-change endpoints use the current repository rows and project them into the V3.2 recent-change response shape. The `createdFrom` and `updatedFrom` filters use the administrative timestamps supplied in the persisted resource payload. BaSyx does not generate or overwrite `administration.createdAt` or `administration.updatedAt`. Resources without valid administrative timestamps are not returned by public recent-change endpoints. Deleted resources do not appear in public recent-change results, while internal history rows remain available for historical reconstruction when history is enabled.
+
+Registry descriptor list endpoints use current descriptor rows and accept timestamp filters directly:
+
+```sh
+curl 'http://localhost:6003/shell-descriptors?limit=50&updatedFrom=2026-05-28T00:00:00Z'
+```
+
+```sh
+curl 'http://localhost:6002/submodel-descriptors?limit=50&createdFrom=2026-05-28T00:00:00Z'
+```
+
+Descriptor timestamp filters use the descriptor payload's persisted `administration.createdAt` and `administration.updatedAt` values. Descriptor writes do not generate or overwrite those fields.
 
 ## Signed Reads
 
@@ -382,7 +391,7 @@ The new history, recent-change, and signed endpoints are protected as read endpo
 
 Important operational note:
 
-- `$history` is route-authorized in this release. It does not apply current-table ABAC filters or logical-expression redaction to stored snapshots. `$recent-changes` applies current identifiable or descriptor ABAC filters.
+- `$history` is route-authorized in this release. It does not apply current-table ABAC filters or logical-expression redaction to stored snapshots. `$recent-changes` applies current identifiable ABAC filters.
 - Fine-grained snapshot field filtering is intentionally out of scope for history responses.
 
 ## Operational Considerations
@@ -397,7 +406,7 @@ Runtime overhead is reduced by:
 - Using cursor pagination for recent-change feeds.
 - Deriving partial-update snapshots from the latest history row when possible.
 - Reading only the affected top-level Submodel Element subtree for nested SME changes.
-- Storing compact delete tombstones where supported.
+- Storing compact internal delete tombstones where supported.
 - Hashing canonical JSON snapshots instead of signing or anchoring every row by default.
 
 For large installations, plan retention and monitoring:

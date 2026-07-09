@@ -42,15 +42,24 @@ import (
 )
 
 const composeFilePath = "./docker_compose/docker_compose.yml"
-const baseURL = "http://127.0.0.1:6004"
+
+var baseURL = testenv.LocalURLFromEnv("BASYX_IT_API_PORT", 6004)
 
 func TestMain(m *testing.M) {
 	if os.Getenv("BASYX_EXTERNAL_COMPOSE") == "1" {
 		os.Exit(m.Run())
 	}
 
+	runtime := testenv.NewComposeRuntimeOrExit("aasxfileserver-it", []testenv.PortBinding{
+		{Name: "api", EnvVar: "BASYX_IT_API_PORT"},
+		{Name: "db", EnvVar: "BASYX_IT_DB_PORT"},
+	})
+	baseURL = runtime.LocalURL("api")
+
 	os.Exit(testenv.RunComposeTestMain(m, testenv.ComposeTestMainOptions{
 		ComposeFile:     composeFilePath,
+		ProjectName:     runtime.ProjectName,
+		Env:             runtime.Env(),
 		PreDownBeforeUp: true,
 		HealthURL:       baseURL + "/health",
 		HealthTimeout:   2 * time.Minute,

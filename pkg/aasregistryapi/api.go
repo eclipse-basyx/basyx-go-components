@@ -5,7 +5,7 @@
  *
  * The Full Profile of the Asset Administration Shell Registry Service Specification as part of the [Specification of the Asset Administration Shell: Part 2](https://industrialdigitaltwin.org/en/content-hub/aasspecifications).   Copyright: Industrial Digital Twin Association (IDTA) 2025
  *
- * API version: V3.1.1_SSP-001
+ * API version: V3.2.0
  * Contact: info@idtwin.org
  */
 
@@ -25,7 +25,6 @@ import (
 // pass the data to a AssetAdministrationShellRegistryAPIAPIServicer to perform the required actions, then write the service results to the http response.
 type AssetAdministrationShellRegistryAPIAPIRouter interface {
 	GetAllAssetAdministrationShellDescriptors(http.ResponseWriter, *http.Request)
-	GetAllAssetAdministrationShellDescriptorsRecentChanges(http.ResponseWriter, *http.Request)
 	PostAssetAdministrationShellDescriptor(http.ResponseWriter, *http.Request)
 	GetAssetAdministrationShellDescriptorById(http.ResponseWriter, *http.Request)
 	PutAssetAdministrationShellDescriptorById(http.ResponseWriter, *http.Request)
@@ -50,8 +49,7 @@ type DescriptionAPIAPIRouter interface {
 // while the service implementation can be ignored with the .openapi-generator-ignore file
 // and updated with the logic required for the API.
 type AssetAdministrationShellRegistryAPIAPIServicer interface {
-	GetAllAssetAdministrationShellDescriptors(context.Context, int32, string, model.AssetKind, string) (model.ImplResponse, error)
-	GetAllAssetAdministrationShellDescriptorsRecentChanges(context.Context, model.AssetKind, string, []string, time.Time, time.Time, int32, string) (model.ImplResponse, error)
+	GetAllAssetAdministrationShellDescriptors(context.Context, int32, string, model.AssetKind, string, []string, time.Time, time.Time) (model.ImplResponse, error)
 	PostAssetAdministrationShellDescriptor(context.Context, model.AssetAdministrationShellDescriptor) (model.ImplResponse, error)
 	GetAssetAdministrationShellDescriptorById(context.Context, string) (model.ImplResponse, error)
 	PutAssetAdministrationShellDescriptorById(context.Context, string, model.AssetAdministrationShellDescriptor) (model.ImplResponse, error)

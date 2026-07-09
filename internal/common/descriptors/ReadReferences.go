@@ -30,6 +30,8 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"sort"
+	"strings"
 
 	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/doug-martin/goqu/v9"
@@ -103,6 +105,18 @@ func ReadSpecificAssetExternalSubjectReferencesBySpecificAssetIDs(
 		return out, nil
 	}
 
+	collector, err := grammar.NewResolvedFieldPathCollectorForRoot(grammar.CollectorRootAASDesc)
+	if err != nil {
+		return nil, fmt.Errorf("REFREAD-EXTSUBJECT-COLLECTOR: %w", err)
+	}
+	collector.AllowInlineAliases(
+		"descriptor",
+		"aas_descriptor",
+		common.AliasSpecificAssetID,
+		common.AliasExternalSubjectReference,
+		common.AliasExternalSubjectReferenceKey,
+	)
+
 	rows, err := queryReferenceRowsByOwnerIDs(
 		ctx,
 		db,
@@ -126,7 +140,7 @@ func ReadSpecificAssetExternalSubjectReferencesBySpecificAssetIDs(
 				},
 				{
 					fragment:  "$aasdesc#specificAssetIds[].externalSubjectId.keys[]",
-					collector: nil,
+					collector: collector,
 				},
 				{
 					fragment:  "$bd#specificAssetIds[].externalSubjectId.keys[]",
@@ -163,9 +177,11 @@ func ReadSpecificAssetSupplementalSemanticReferencesBySpecificAssetIDs(
 		ctx,
 		db,
 		specificAssetIDs,
-		common.TblSpecificAssetIDSuppSemantic,
-		common.ColSpecificAssetIDID,
-		"REFREAD-SUPPSPEC",
+		contextReferences1ToManyQuerySpec{
+			ownerIDColumn:  common.ColSpecificAssetIDID,
+			referenceTable: common.TblSpecificAssetIDSuppSemantic,
+			errPrefix:      "REFREAD-SUPPSPEC",
+		},
 	)
 }
 
@@ -177,14 +193,160 @@ func ReadSubmodelDescriptorSupplementalSemanticReferencesByDescriptorIDs(
 	db DBQueryer,
 	descriptorIDs []int64,
 ) (map[int64][]types.IReference, error) {
+	collector, err := grammar.NewResolvedFieldPathCollectorForRoot(grammar.CollectorRootSMDesc)
+	if err != nil {
+		return nil, fmt.Errorf("REFREAD-SUPPSMDESC-COLLECTOR: %w", err)
+	}
+	collector.AllowInlineAliases(
+		"submodel_descriptor",
+		"aasdesc_submodel_descriptor_supplemental_semantic_id_reference",
+		"aasdesc_submodel_descriptor_supplemental_semantic_id_reference_key",
+	)
+
 	return readContextReferences1ToManyByOwnerIDs(
 		ctx,
 		db,
 		descriptorIDs,
-		common.TblSubmodelDescriptorSuppSemantic,
-		common.ColDescriptorID,
-		"REFREAD-SUPPSMDESC",
+		contextReferences1ToManyQuerySpec{
+			ownerTable:        common.TblSubmodelDescriptor,
+			ownerIDColumn:     common.ColDescriptorID,
+			referenceTable:    common.TblSubmodelDescriptorSuppSemantic,
+			ownerAlias:        common.AliasSubmodelDescriptor,
+			referenceAlias:    "aasdesc_submodel_descriptor_supplemental_semantic_id_reference",
+			referenceKeyAlias: "aasdesc_submodel_descriptor_supplemental_semantic_id_reference_key",
+			filterSpecs: []referenceFilterSpec{
+				{
+					fragment:  "$aasdesc#submodelDescriptors[].supplementalSemanticIds[]",
+					collector: collector,
+				},
+				{
+					fragment:  "$aasdesc#submodelDescriptors[].supplementalSemanticIds[].keys[]",
+					collector: collector,
+				},
+				{
+					fragment:  "$smdesc#supplementalSemanticIds[]",
+					collector: collector,
+				},
+				{
+					fragment:  "$smdesc#supplementalSemanticIds[].keys[]",
+					collector: collector,
+				},
+			},
+			errPrefix: "REFREAD-SUPPSMDESC",
+		},
 	)
+}
+
+// ReadSubmodelSupplementalSemanticReferencesBySubmodelIDs loads filtered
+// supplemental semantic references for submodels keyed by database ID.
+func ReadSubmodelSupplementalSemanticReferencesBySubmodelIDs(
+	ctx context.Context,
+	db DBQueryer,
+	submodelIDs []int64,
+) (map[int64][]types.IReference, error) {
+	collector, err := grammar.NewResolvedFieldPathCollectorForRoot(grammar.CollectorRootSM)
+	if err != nil {
+		return nil, fmt.Errorf("REFREAD-SUPPSM-COLLECTOR: %w", err)
+	}
+	collector.AllowInlineAliases(
+		"s",
+		"sm_supplemental_semantic_id_reference",
+		"sm_supplemental_semantic_id_reference_key",
+	)
+	filterCtx, filterSpecs := supplementalSemanticIDFilterContext(ctx, "$sm#", collector)
+
+	return readContextReferences1ToManyByOwnerIDs(
+		filterCtx,
+		db,
+		submodelIDs,
+		contextReferences1ToManyQuerySpec{
+			ownerTable:        "submodel",
+			ownerJoinColumn:   common.ColID,
+			ownerIDColumn:     common.ColSubmodelID,
+			referenceTable:    common.TblSubmodelSuppSemantic,
+			ownerAlias:        "s",
+			referenceAlias:    "sm_supplemental_semantic_id_reference",
+			referenceKeyAlias: "sm_supplemental_semantic_id_reference_key",
+			filterSpecs:       filterSpecs,
+			errPrefix:         "REFREAD-SUPPSM",
+		},
+	)
+}
+
+// ReadSubmodelElementSupplementalSemanticReferencesByElementIDs loads filtered
+// supplemental semantic references for submodel elements keyed by database ID.
+func ReadSubmodelElementSupplementalSemanticReferencesByElementIDs(
+	ctx context.Context,
+	db DBQueryer,
+	submodelElementIDs []int64,
+) (map[int64][]types.IReference, error) {
+	collector, err := grammar.NewResolvedFieldPathCollectorForRoot(grammar.CollectorRootSME)
+	if err != nil {
+		return nil, fmt.Errorf("REFREAD-SUPPSME-COLLECTOR: %w", err)
+	}
+	collector.SetRootJoinKey("submodel_element", common.ColSubmodelID)
+	collector.AllowInlineAliases(
+		"submodel_element",
+		"sme_supplemental_semantic_id_reference",
+		"sme_supplemental_semantic_id_reference_key",
+	)
+	filterCtx, filterSpecs := supplementalSemanticIDFilterContext(ctx, "$sme", collector)
+
+	return readContextReferences1ToManyByOwnerIDs(
+		filterCtx,
+		db,
+		submodelElementIDs,
+		contextReferences1ToManyQuerySpec{
+			ownerTable:        "submodel_element",
+			ownerJoinColumn:   common.ColID,
+			ownerIDColumn:     common.ColSubmodelElementID,
+			referenceTable:    common.TblSubmodelElementSuppSemantic,
+			ownerAlias:        "submodel_element",
+			referenceAlias:    "sme_supplemental_semantic_id_reference",
+			referenceKeyAlias: "sme_supplemental_semantic_id_reference_key",
+			filterSpecs:       filterSpecs,
+			errPrefix:         "REFREAD-SUPPSME",
+		},
+	)
+}
+
+func supplementalSemanticIDFilterContext(
+	ctx context.Context,
+	prefix string,
+	collector *grammar.ResolvedFieldPathCollector,
+) (context.Context, []referenceFilterSpec) {
+	queryFilter := auth.GetQueryFilter(ctx)
+	if queryFilter == nil {
+		return ctx, nil
+	}
+
+	fragments := make([]grammar.FragmentStringPattern, 0)
+	for fragment := range queryFilter.Filters {
+		value := string(fragment)
+		if strings.HasPrefix(value, prefix) && strings.Contains(value, "#supplementalSemanticIds") {
+			fragments = append(fragments, fragment)
+		}
+	}
+	sort.Slice(fragments, func(i, j int) bool {
+		return fragments[i] < fragments[j]
+	})
+
+	specs := make([]referenceFilterSpec, 0, len(fragments))
+	filteredQueryFilter := &auth.QueryFilter{
+		Filters:     make(auth.FragmentFilters, len(fragments)),
+		FilterMatch: make(auth.FragmentMatchModes, len(fragments)),
+	}
+	for _, fragment := range fragments {
+		filteredQueryFilter.Filters[fragment] = queryFilter.Filters[fragment]
+		if queryFilter.FilterMatch != nil {
+			filteredQueryFilter.FilterMatch[fragment] = queryFilter.FilterMatch[fragment]
+		}
+		specs = append(specs, referenceFilterSpec{
+			fragment:  fragment,
+			collector: collector,
+		})
+	}
+	return auth.WithQueryFilter(ctx, filteredQueryFilter), specs
 }
 
 type contextReferenceRow struct {
@@ -210,6 +372,18 @@ type referenceQuerySpec struct {
 	referenceAlias    string
 	referenceKeyAlias string
 	filterSpecs       []referenceFilterSpec
+}
+
+type contextReferences1ToManyQuerySpec struct {
+	ownerTable        string
+	ownerJoinColumn   string
+	ownerIDColumn     string
+	referenceTable    string
+	ownerAlias        string
+	referenceAlias    string
+	referenceKeyAlias string
+	filterSpecs       []referenceFilterSpec
+	errPrefix         string
 }
 
 func queryReferenceRowsByOwnerIDs(
@@ -321,9 +495,7 @@ func readContextReferences1ToManyByOwnerIDs(
 	ctx context.Context,
 	db DBQueryer,
 	ownerIDs []int64,
-	referenceTable string,
-	ownerIDColumn string,
-	errPrefix string,
+	spec contextReferences1ToManyQuerySpec,
 ) (map[int64][]types.IReference, error) {
 	out := make(map[int64][]types.IReference, len(ownerIDs))
 	if len(ownerIDs) == 0 {
@@ -332,15 +504,18 @@ func readContextReferences1ToManyByOwnerIDs(
 
 	d := goqu.Dialect(common.Dialect)
 
-	rt := goqu.T(referenceTable).As("rt")
-	rkt := goqu.T(referenceTable + "_key").As("rkt")
-	rpt := goqu.T(referenceTable + "_payload").As("rpt")
+	referenceAlias := firstNonEmpty(spec.referenceAlias, "rt")
+	referenceKeyAlias := firstNonEmpty(spec.referenceKeyAlias, "rkt")
+
+	rt := goqu.T(spec.referenceTable).As(referenceAlias)
+	rkt := goqu.T(spec.referenceTable + "_key").As(referenceKeyAlias)
+	rpt := goqu.T(spec.referenceTable + "_payload").As("rpt")
 
 	ds := d.From(rt).
 		LeftJoin(rpt, goqu.On(rpt.Col(common.ColReferenceID).Eq(rt.Col(common.ColID)))).
 		LeftJoin(rkt, goqu.On(rkt.Col(common.ColReferenceID).Eq(rt.Col(common.ColID)))).
 		Select(
-			rt.Col(ownerIDColumn).As("owner_id"),
+			rt.Col(spec.ownerIDColumn).As("owner_id"),
 			rt.Col(common.ColID).As("ref_id"),
 			rt.Col(common.ColType).As("ref_type"),
 			rkt.Col(common.ColID).As("key_id"),
@@ -348,22 +523,39 @@ func readContextReferences1ToManyByOwnerIDs(
 			rkt.Col(common.ColValue).As("key_value"),
 			rpt.Col("parent_reference_payload").As("parent_reference_payload"),
 		).
-		Where(rt.Col(ownerIDColumn).In(ownerIDs)).
+		Where(rt.Col(spec.ownerIDColumn).In(ownerIDs)).
 		Order(
-			rt.Col(ownerIDColumn).Asc(),
-			rt.Col(common.ColID).Asc(),
+			rt.Col(spec.ownerIDColumn).Asc(),
+			rt.Col(common.ColPosition).Asc(),
 			rkt.Col(common.ColPosition).Asc(),
 			rkt.Col(common.ColID).Asc(),
 		)
 
+	if spec.ownerTable != "" && spec.ownerAlias != "" {
+		ot := goqu.T(spec.ownerTable).As(spec.ownerAlias)
+		ownerJoinColumn := firstNonEmpty(spec.ownerJoinColumn, spec.ownerIDColumn)
+		ds = ds.Join(
+			ot,
+			goqu.On(ot.Col(ownerJoinColumn).Eq(rt.Col(spec.ownerIDColumn))),
+		)
+	}
+
+	var err error
+	for _, filterSpec := range spec.filterSpecs {
+		ds, err = auth.AddCorrelatedFilterQueryFromContext(ctx, ds, filterSpec.fragment, filterSpec.collector)
+		if err != nil {
+			return nil, fmt.Errorf("%s-ADDFILTER: %w", spec.errPrefix, err)
+		}
+	}
+
 	sqlStr, args, err := ds.ToSQL()
 	if err != nil {
-		return nil, fmt.Errorf("%s-BUILDQUERY: %w", errPrefix, err)
+		return nil, fmt.Errorf("%s-BUILDQUERY: %w", spec.errPrefix, err)
 	}
 
 	rows, err := db.QueryContext(ctx, sqlStr, args...)
 	if err != nil {
-		return nil, fmt.Errorf("%s-QUERYDB: %w", errPrefix, err)
+		return nil, fmt.Errorf("%s-QUERYDB: %w", spec.errPrefix, err)
 	}
 	defer func() {
 		_ = rows.Close()
@@ -395,7 +587,7 @@ func readContextReferences1ToManyByOwnerIDs(
 			&row.keyVal,
 			&row.parentReferencePayload,
 		); err != nil {
-			return nil, fmt.Errorf("%s-SCANROW: %w", errPrefix, err)
+			return nil, fmt.Errorf("%s-SCANROW: %w", spec.errPrefix, err)
 		}
 
 		if !row.ownerID.Valid || !row.referenceID.Valid || !row.refType.Valid {
@@ -408,7 +600,7 @@ func readContextReferences1ToManyByOwnerIDs(
 			ref, rb := builder.NewReferenceBuilder(types.ReferenceTypes(row.refType.Int64), referenceID)
 			parentReference, err := parseReferencePayload(row.parentReferencePayload)
 			if err != nil {
-				return nil, fmt.Errorf("%s-PARSEPARENTPAYLOAD: %w", errPrefix, err)
+				return nil, fmt.Errorf("%s-PARSEPARENTPAYLOAD: %w", spec.errPrefix, err)
 			}
 			ref.SetReferredSemanticID(parentReference)
 			refBuilders[referenceID] = rb
@@ -432,7 +624,7 @@ func readContextReferences1ToManyByOwnerIDs(
 		}
 	}
 	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("%s-ITERATEROWS: %w", errPrefix, err)
+		return nil, fmt.Errorf("%s-ITERATEROWS: %w", spec.errPrefix, err)
 	}
 
 	for _, b := range refBuilders {
@@ -456,4 +648,13 @@ func readContextReferences1ToManyByOwnerIDs(
 	}
 
 	return out, nil
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		if value != "" {
+			return value
+		}
+	}
+	return ""
 }

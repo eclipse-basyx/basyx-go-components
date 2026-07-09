@@ -34,15 +34,16 @@ import (
 	"errors"
 	"fmt"
 	"hash/fnv"
+	"io"
 	"log"
 	"mime"
 	"net/http"
 	"net/url"
-	"os"
 	"path"
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/FriedJannik/aas-go-sdk/jsonization"
 	aastypes "github.com/FriedJannik/aas-go-sdk/types"
@@ -82,6 +83,91 @@ type serializationThumbnailPart struct {
 	URI         *url.URL
 	ContentType string
 	Content     []byte
+}
+
+type inMemoryReadWriteSeeker struct {
+	content []byte
+	offset  int64
+}
+
+func (s *inMemoryReadWriteSeeker) Read(target []byte) (int, error) {
+	if s.offset >= int64(len(s.content)) {
+		return 0, io.EOF
+	}
+
+	readCount := copy(target, s.content[s.offset:])
+	s.offset += int64(readCount)
+	return readCount, nil
+}
+
+func (s *inMemoryReadWriteSeeker) Write(source []byte) (int, error) {
+	if s.offset < 0 {
+		return 0, errors.New("negative stream offset")
+	}
+
+	maxInt := int64(int(^uint(0) >> 1))
+	if s.offset > maxInt-int64(len(source)) {
+		return 0, errors.New("stream size exceeds addressable memory")
+	}
+
+	requiredLength := int(s.offset) + len(source)
+	if requiredLength > len(s.content) {
+		s.grow(requiredLength, len(source))
+	}
+
+	copy(s.content[s.offset:], source)
+	s.offset += int64(len(source))
+	return len(source), nil
+}
+
+func (s *inMemoryReadWriteSeeker) grow(requiredLength int, sourceLength int) {
+	if requiredLength <= cap(s.content) {
+		s.content = s.content[:requiredLength]
+		return
+	}
+
+	maxInt := int(^uint(0) >> 1)
+	newCapacity := cap(s.content)
+	if newCapacity == 0 {
+		newCapacity = sourceLength
+		if newCapacity < 1024 {
+			newCapacity = 1024
+		}
+	}
+	for newCapacity < requiredLength {
+		if newCapacity > maxInt/2 {
+			newCapacity = requiredLength
+			break
+		}
+		newCapacity *= 2
+	}
+
+	grown := make([]byte, requiredLength, newCapacity)
+	copy(grown, s.content)
+	s.content = grown
+}
+
+func (s *inMemoryReadWriteSeeker) Seek(offset int64, whence int) (int64, error) {
+	nextOffset := offset
+	switch whence {
+	case io.SeekStart:
+	case io.SeekCurrent:
+		nextOffset = s.offset + offset
+	case io.SeekEnd:
+		nextOffset = int64(len(s.content)) + offset
+	default:
+		return 0, fmt.Errorf("unsupported seek mode %d", whence)
+	}
+	if nextOffset < 0 {
+		return 0, errors.New("negative stream offset")
+	}
+
+	s.offset = nextOffset
+	return s.offset, nil
+}
+
+func (s *inMemoryReadWriteSeeker) Bytes() []byte {
+	return s.content
 }
 
 // SerializationFileDownload defines a binary payload response for serialization downloads.
@@ -212,7 +298,7 @@ func (s *SerializationAPIService) loadAssetAdministrationShells(ctx context.Cont
 	result := make([]aastypes.IAssetAdministrationShell, 0)
 	cursor := ""
 	for {
-		aasPage, nextCursor, getErr := s.persistence.AASRepository.GetAssetAdministrationShells(ctx, defaultListPageSize, cursor, "", nil)
+		aasPage, nextCursor, getErr := s.persistence.AASRepository.GetAssetAdministrationShells(ctx, defaultListPageSize, cursor, "", nil, time.Time{}, time.Time{})
 		if getErr != nil {
 			return nil, getErr
 		}
@@ -248,7 +334,7 @@ func (s *SerializationAPIService) loadSubmodels(ctx context.Context, ids []strin
 	result := make([]aastypes.ISubmodel, 0)
 	cursor := ""
 	for {
-		submodelPage, nextCursor, getErr := s.persistence.SubmodelRepository.GetSubmodels(ctx, defaultListPageSize, cursor, "")
+		submodelPage, nextCursor, getErr := s.persistence.SubmodelRepository.GetSubmodels(ctx, defaultListPageSize, cursor, "", "", time.Time{}, time.Time{})
 		if getErr != nil {
 			return nil, getErr
 		}
@@ -295,7 +381,7 @@ func (s *SerializationAPIService) loadConceptDescriptions(ctx context.Context, i
 	result := make([]aastypes.IConceptDescription, 0)
 	cursor := ""
 	for {
-		conceptDescriptionPage, nextCursor, getErr := s.persistence.ConceptDescriptionRepository.GetConceptDescriptions(ctx, nil, nil, nil, uint(defaultListPageSize), &cursor)
+		conceptDescriptionPage, nextCursor, getErr := s.persistence.ConceptDescriptionRepository.GetConceptDescriptions(ctx, nil, nil, nil, uint(defaultListPageSize), &cursor, time.Time{}, time.Time{})
 		if getErr != nil {
 			return nil, getErr
 		}
@@ -429,24 +515,9 @@ func serializeEnvironmentToAASXPackage(
 	thumbnailParts []serializationThumbnailPart,
 	supplementaryParts []serializationSupplementaryPart,
 ) ([]byte, error) {
-	// temp file
-	tempFile, createTempFileErr := os.CreateTemp("", "basyx-environment-*.aasx")
-	if createTempFileErr != nil {
-		return nil, common.NewInternalServerError("AASENV-SERIALIZEAASX-CREATETEMPFILE " + createTempFileErr.Error())
-	}
-	tempFilePath := tempFile.Name()
-	if closeTempFileErr := tempFile.Close(); closeTempFileErr != nil {
-		return nil, common.NewInternalServerError("AASENV-SERIALIZEAASX-CLOSETEMPFILE " + closeTempFileErr.Error())
-	}
-	defer func() {
-		if removeErr := os.Remove(tempFilePath); removeErr != nil && !errors.Is(removeErr, os.ErrNotExist) {
-			log.Printf("[WARN] AASENV-SERIALIZEAASX-REMOVETEMPFILE %v", removeErr)
-		}
-	}()
-
-	// setup package
 	packaging := aasx.NewPackaging()
-	pkg, createPackageErr := packaging.Create(tempFilePath)
+	packageStream := &inMemoryReadWriteSeeker{}
+	pkg, createPackageErr := packaging.CreateInStream(packageStream)
 	if createPackageErr != nil {
 		return nil, common.NewInternalServerError("AASENV-SERIALIZEAASX-CREATEPACKAGE " + createPackageErr.Error())
 	}
@@ -504,14 +575,7 @@ func serializeEnvironmentToAASXPackage(
 		return nil, common.NewInternalServerError("AASENV-SERIALIZEAASX-FLUSHPKG " + flushErr.Error())
 	}
 
-	// return file
-	// #nosec G304,G703 -- tempFilePath is generated by os.CreateTemp and is not user-controlled.
-	payloadFile, readTempFileErr := os.ReadFile(tempFilePath)
-	if readTempFileErr != nil {
-		return nil, common.NewInternalServerError("AASENV-SERIALIZEAASX-READTEMPFILE " + readTempFileErr.Error())
-	}
-
-	return payloadFile, nil
+	return packageStream.Bytes(), nil
 }
 
 // resolveSerializationSupplementaryParts collects supplementary payload parts

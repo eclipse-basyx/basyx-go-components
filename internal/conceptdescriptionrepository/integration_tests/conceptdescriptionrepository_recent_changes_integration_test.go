@@ -41,8 +41,8 @@ import (
 )
 
 func TestConceptDescriptionRepositoryRecentChanges(t *testing.T) {
-	const changedAfter = "2029-01-01T00:00:00Z"
-	baseURL := "http://localhost:6004"
+	changedAfter := time.Now().Add(-1 * time.Minute).UTC().Format(time.RFC3339Nano)
+	baseURL := conceptDescriptionRepositoryBaseURL
 	conceptDescriptionID := fmt.Sprintf("urn:example:cd:recent:%d", time.Now().UnixNano())
 	encodedID := base64.RawURLEncoding.EncodeToString([]byte(conceptDescriptionID))
 	t.Cleanup(func() {
@@ -106,7 +106,7 @@ func TestConceptDescriptionRepositoryRecentChanges(t *testing.T) {
 	if err = json.Unmarshal(body, &payload); err != nil {
 		t.Fatalf("failed to decode recent changes: %v", err)
 	}
-	requireConceptDescriptionRecentChanges(t, payload, conceptDescriptionID, 6)
+	requireConceptDescriptionRecentChanges(t, payload, conceptDescriptionID, 1)
 }
 
 func conceptDescriptionRecentChangePayload(id string, idShort string, updatedAt string) map[string]any {
@@ -178,8 +178,11 @@ func requireConceptDescriptionRecentChanges(t *testing.T, payload map[string]any
 			continue
 		}
 		if item["id"] == id {
-			if len(item) != 4 || item["type"] == "" || item["createdAt"] == "" || item["updatedAt"] == "" {
+			if len(item) != 3 || item["createdAt"] == "" || item["updatedAt"] == "" {
 				t.Fatalf("expected concept description recent-change payload, got %#v", item)
+			}
+			if _, exists := item["type"]; exists {
+				t.Fatalf("expected concept description recent-change payload without type, got %#v", item)
 			}
 			count++
 		}

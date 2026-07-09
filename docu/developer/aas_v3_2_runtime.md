@@ -31,7 +31,7 @@ This document describes the runtime behavior added for AAS API v3.2 support. It 
 
 ## Scope
 
-The v3.2 OpenAPI update adds history and recent-change endpoints to repository and registry components, introduces the `Batch` value for `AssetKind`, extends administrative timestamps, and exposes composed endpoints through the AAS environment.
+The v3.2 OpenAPI update adds history and recent-change endpoints to repository components, introduces descriptor-list timestamp filters to registry components, adds the `Batch` value for `AssetKind`, extends administrative timestamps, and exposes composed endpoints through the AAS environment.
 
 Implemented history, recent-change, and signing runtime areas from the v3.2 OpenAPI files:
 
@@ -39,15 +39,17 @@ Implemented history, recent-change, and signing runtime areas from the v3.2 Open
 - Submodel Repository: `/submodels/$recent-changes`, `/submodels/{submodelIdentifier}/$history`, `/submodels/{submodelIdentifier}/$signed`.
 - Submodel Repository compatibility route: `/submodels/{submodelIdentifier}/$value/$signed` is exposed by the generated Go router and existing integration coverage, although it is not listed in the current local v3.2 OpenAPI file.
 - Concept Description Repository: `/concept-descriptions/$recent-changes`.
-- AAS Registry and Digital Twin Registry: `/shell-descriptors/$recent-changes`.
-- Submodel Registry: `/submodel-descriptors/$recent-changes`.
-- AAS Environment: `/serialization`, `/upload`, `/shell-descriptors/$recent-changes`, `/shells/$recent-changes`, `/shells/{aasIdentifier}/$history`, `/shells/{aasIdentifier}/$signed`, `/submodels/$recent-changes`, `/submodels/{submodelIdentifier}/$history`, `/submodels/{submodelIdentifier}/$signed`, `/submodels/{submodelIdentifier}/$value/$signed`, `/concept-descriptions/$recent-changes`, and the composed asynchronous operation result/status endpoints.
+- AAS Registry and Digital Twin Registry: `createdFrom` and `updatedFrom` filters on `/shell-descriptors`.
+- Submodel Registry: `createdFrom` and `updatedFrom` filters on `/submodel-descriptors`.
+- AAS Environment: `/serialization`, `/upload`, descriptor list timestamp filters, `/shells/$recent-changes`, `/shells/{aasIdentifier}/$history`, `/shells/{aasIdentifier}/$signed`, `/submodels/$recent-changes`, `/submodels/{submodelIdentifier}/$history`, `/submodels/{submodelIdentifier}/$signed`, `/submodels/{submodelIdentifier}/$value/$signed`, `/concept-descriptions/$recent-changes`, and the composed asynchronous operation result/status endpoints.
 - Migration `1_1_0.sql`: adds v3.2 timestamp columns and the enum migration for `Batch`.
 - Migration `1_1_1.sql`: adds history metadata and payload tables, indexes, and PostgreSQL mutation guards.
 - Migration `1_1_2.sql`: adds snapshot-checkpoint indexes for diff-backed restore.
 - Migration `1_1_3.sql`: adds WORM evidence manifest and artifact receipt catalogs.
 - Migration `1_1_4.sql`: adds ABAC policy version, rule, and policy-event tables plus ABAC policy evidence artifact support.
 - Migration `1_1_5.sql`: adds dedicated Submodel Registry descriptor history metadata and payload tables.
+- Migration `1_1_6.sql`: repairs descriptor administrative timestamp synchronization for future writes by syncing timestamp columns when descriptor rows are inserted after their payload rows. It intentionally does not backfill existing descriptor rows.
+- Migration `1_1_7.sql`: normalizes supplemental semantic ID reference ownership and indexes for Submodels, Submodel Elements, Submodel Descriptors, and Specific Asset IDs.
 
 The current v3.2 Submodel Repository OpenAPI also defines `PUT`, `PATCH`, and `DELETE` on `/submodels/{submodelIdentifier}/$signed`. These operations use the normal Submodel request bodies and are routed to the same runtime behavior as `PUT`, `PATCH`, and `DELETE` on `/submodels/{submodelIdentifier}`.
 
@@ -231,7 +233,7 @@ Registry synchronization can append additional descriptor history entries when c
 
 ### Guarded PostgreSQL Mode
 
-Schema patch `1_1_1.sql` installs guard triggers on all four history metadata tables and all four payload tables. The triggers are disabled by default through the singleton `history_guard_config` row. Each history-aware DB-backed runtime service applies its expected guard state at startup.
+Schema patch `1_1_1.sql` installs guard triggers on the initial AAS, Submodel, Concept Description, and AAS descriptor history metadata/payload table pairs. Patch `1_1_5.sql` adds the same guard coverage for Submodel Descriptor history. The triggers are disabled by default through the singleton `history_guard_config` row. Each history-aware DB-backed runtime service applies its expected guard state at startup.
 
 ```mermaid
 flowchart TD
@@ -366,41 +368,41 @@ Generated component routes are classified centrally by operation name during ser
 
 ## Recent Changes
 
-Recent-change endpoints read indexed metadata from the history tables, then restore the full snapshot for rows that are returned or need post-snapshot filtering. They are ordered by decreasing `history_id`, with cursor-based pagination from newest changes to older changes.
-The default page size is `100`; requests above `1000` are rejected.
+Recent-change endpoints are data-bound current-state reads. They use the same live repository queries as the matching `GET all` endpoints, including administrative timestamp filters, and only project the result into the V3.2 recent-change response shape. The default page size is `100`.
 
 ```mermaid
 flowchart LR
     Historical["GET .../{id}/$history?date=..."] --> Validity["identifier + valid_from index"]
     Validity --> Snapshot["Latest version at or before date"]
-    Recent["GET .../$recent-changes?cursor=..."] --> Cursor["descending history_id cursor + typed timestamp indexes"]
-    Cursor --> Page["Newest-first page plus next cursor"]
+    Recent["GET .../$recent-changes?cursor=..."] --> Current["current repository rows + admin timestamp indexes"]
+    Current --> Projection["V3.2 recent-change response projection"]
 ```
 
-Current filters:
+Repository recent-change filters:
 
 - `cursor`
 - `limit`
 - `createdFrom`
 - `updatedFrom`
-- AAS recent changes additionally apply asset-id filtering to non-deleted rows.
-- Submodel recent changes additionally apply semantic-id filtering to non-deleted rows.
-- AAS descriptor recent changes additionally apply `assetKind`, `assetType`, and asset-id filtering to non-deleted rows.
-- Submodel descriptor recent changes intentionally have no descriptor-specific filter; they support only `cursor`, `limit`, `createdFrom`, and `updatedFrom`.
+- AAS recent changes additionally apply `assetIds` and `idShort` to current AAS rows.
+- Submodel recent changes additionally apply `semanticId` and `idShort` to current Submodel rows.
+
+Registry descriptor list filters:
+
+- `createdFrom` and `updatedFrom` are supported on `GET /shell-descriptors` and `GET /submodel-descriptors`.
+- Existing AAS descriptor list filters such as `assetKind`, `assetType`, and `assetIds` are combined with the timestamp filter group.
 
 The published Part 2 OpenAPI schema is the source of truth for the response projection. The result shapes are intentionally component-specific:
 
-- AAS results contain the shared `type`, `createdAt`, and `updatedAt` fields plus `id`, `globalAssetId`, and `specificAssetIds`.
+- AAS results contain the shared `createdAt` and `updatedAt` fields plus `id`, `globalAssetId`, and `specificAssetIds`.
 - Submodel results contain the shared fields plus `id`, `semanticId`, and `supplementalSemanticIds`.
 - Concept Description results contain the shared fields plus `id`. This fills the missing shared-schema result type consistently with the other identifiable repositories.
-- AAS descriptor results contain complete AAS descriptor snapshots as required by the registry profile.
-- Submodel descriptor results contain complete Submodel descriptor snapshots as required by the registry profile.
 
-For AAS and Submodel reads, resource-specific metadata is projected from the restored history snapshot, never from current normalized tables. Deleted AAS, Submodel, and Concept Description rows remain id-based tombstones with the shared change metadata. Descriptor recent changes skip deleted descriptor rows because the registry result schemas do not model tombstones.
+For AAS, Submodel, and Concept Description recent changes, resource-specific metadata is projected from the current live entity. Deleted resources do not appear in public recent-change responses. Technical history and audit rows are still appended independently when history is enabled.
 
-The encoded query contract is applied consistently: `assetIds` contain base64url-encoded `SpecificAssetId` JSON objects, Submodel `semanticId` contains a base64url-encoded reference value, and AAS descriptor `assetType` is base64url-encoded UTF-8. Filtered feeds continue scanning history pages until the requested result limit is filled or the feed ends, so post-snapshot filtering does not underfill pages incorrectly.
+The encoded query contract is applied consistently: AAS recent-change `assetIds` contain base64url-encoded `SpecificAssetId` JSON objects, Submodel recent-change `semanticId` contains a base64url-encoded reference value, and AAS descriptor list `assetType` is base64url-encoded UTF-8.
 
-When a payload does not carry administrative timestamps, the recent-change projection uses the history operation timestamp. This keeps `createdAt` and `updatedAt` populated without re-reading current tables.
+BaSyx treats `administration.createdAt` and `administration.updatedAt` as user-provided model data. Create, update, replace, patch, and descriptor write operations persist the submitted administrative timestamp values without generating or overwriting them. Rows without administrative timestamps are not matched by timestamp-filtered recent changes or descriptor list filters until a later request explicitly persists those values.
 
 ## Migration Behavior
 
@@ -416,7 +418,7 @@ SET asset_kind = asset_kind + 1
 WHERE asset_kind >= 2;
 ```
 
-History storage is added by `1_1_1.sql`. The patch creates the metadata and payload tables, access-pattern indexes, guard switch, and mutation triggers. It does not backfill existing AAS, Submodels, Concept Descriptions, or descriptors.
+History storage starts with `1_1_1.sql`. The patch creates the initial metadata and payload tables, access-pattern indexes, guard switch, and mutation triggers. Patch `1_1_5.sql` adds Submodel Descriptor history. Existing AAS, Submodels, Concept Descriptions, or descriptors are not backfilled.
 
 After upgrade:
 
@@ -433,8 +435,8 @@ Current behavior:
 
 - Route-level authorization applies to history and recent-change endpoints.
 - Normal current-entity reads still use their established ABAC filtering paths.
-- Recent-change delete tombstones only expose identifiers and shared change metadata for AAS, Submodel, and Concept Description rows.
-- Descriptor recent-change feeds apply current descriptor visibility and omit deleted descriptors.
+- Public recent-change endpoints skip delete rows.
+- Descriptor list filters use current descriptor visibility and current descriptor rows.
 
 Intentional scope boundary for this release:
 
@@ -455,7 +457,7 @@ Yes, the database can still grow quickly. Every versioned write creates at least
 Safeguards already implemented:
 
 - History is stored separately from current tables, so normal GET/list endpoints continue to read current tables.
-- Recent changes use indexed metadata instead of scanning current domain tables.
+- Recent changes use current repository indexes, including indexed administrative timestamp columns, rather than restoring history snapshots.
 - JSONB snapshot/diff payloads live in one-to-one payload tables, keeping indexed event rows narrow.
 - History lookup is indexed by identifier and validity range.
 - Latest-version derivation is indexed by identifier and descending `history_id`.
@@ -466,7 +468,7 @@ Safeguards already implemented:
 - Transaction-level advisory locks serialize appends only for the same history table and identifier.
 - Guarded PostgreSQL mode blocks normal `UPDATE`, `DELETE`, and `TRUNCATE` operations on history tables when enabled.
 - Active history mode rejects unclassified HTTP mutations before their handlers run.
-- Delete rows are tombstones, not full copies, for AAS, Submodel, and Concept Description deletes.
+- Delete rows are stored internally as tombstones, not full copies, for AAS, Submodel, and Concept Description deletes.
 
 Scalability risks that remain:
 
@@ -498,11 +500,11 @@ Dates before deletion resolve to the previous snapshot. Dates after deletion ret
 
 ### Recent Changes After Delete
 
-AAS, Submodel, and Concept Description delete rows are returned as tombstones. They include the identifier and shared change metadata. Filtered recent-change queries skip tombstones when the filter requires data that the tombstone no longer contains.
+Delete rows are stored internally as compact tombstones where supported, but public recent-change endpoints read current rows and therefore do not return deleted resources.
 
 ### Existing Data After Migration
 
-Migration does not create history rows for existing data. The first complete write records the supplied snapshot. The first partial write falls back to a one-time complete current-state materialization if no prior history snapshot exists.
+Migration does not create history rows or backfill administrative timestamps for existing data. The first complete write records the supplied current snapshot without generating or overwriting administrative timestamps. The first partial write falls back to a one-time complete current-state materialization if no prior history snapshot exists.
 
 ### AAS Environment
 

@@ -319,6 +319,19 @@ func (p *PostgreSQLSMECrudHandler) Update(submodelID string, idShortOrPath strin
 		}
 	}
 
+	if isPut || submodelElement.SupplementalSemanticIDs() != nil {
+		err = common.ReplaceContextReferences1ToMany(
+			localTx,
+			int64(existingID),
+			submodelElement.SupplementalSemanticIDs(),
+			common.TblSubmodelElementSuppSemantic,
+			common.ColSubmodelElementID,
+		)
+		if err != nil {
+			return common.NewInternalServerError("SMREPO-SMEUPD-SUPPSEM " + err.Error())
+		}
+	}
+
 	semanticID := submodelElement.SemanticID()
 	if isPut || semanticID != nil {
 		if semanticID != nil && !isEmptyReference(semanticID) {

@@ -1,0 +1,20 @@
+{
+  "$condition": {
+    "$eq": [
+      {
+        "$field": "$sme#supplementalSemanticIds[].keys[].value"
+      },
+      {
+        "$strVal": "SME_QUERY_ALLOWED"
+      }
+    ]
+  },
+  "$filters": [
+    {
+      "$fragment": "$sm#supplementalSemanticIds[]",
+      "$condition": {
+        "$boolean": false
+      }
+    }
+  ]
+}

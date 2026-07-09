@@ -30,35 +30,67 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"sync"
 	"unicode"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	"github.com/go-chi/chi/v5"
-	"github.com/go-chi/chi/v5/middleware"
 )
 
+var routerErrorComponents sync.Map
+
 // ConfigureAPIRouter applies common API router behavior.
-// It normalizes trailing slashes without redirects and registers standardized 404/405 handlers.
+// It registers standardized 404/405 handlers.
 func ConfigureAPIRouter(r *chi.Mux, component string) {
-	r.Use(middleware.StripSlashes)
 	AddDefaultRouterErrorHandlers(r, component)
 }
 
 // AddDefaultRouterErrorHandlers attaches standardized 404/405 responses to the router.
 // The component name is used in correlation code generation.
 func AddDefaultRouterErrorHandlers(r *chi.Mux, component string) {
-	componentID := normalizeComponentID(component)
+	registerRouterErrorComponent(r, component)
 
 	r.NotFound(func(w http.ResponseWriter, _ *http.Request) {
-		writeRouterError(w, component, componentID, http.StatusNotFound, "resource not found", "NOTFOUND")
+		WriteRouterNotFound(w, component)
 	})
 
 	r.MethodNotAllowed(func(w http.ResponseWriter, _ *http.Request) {
-		writeRouterError(w, component, componentID, http.StatusMethodNotAllowed, "method not allowed", "METHODNOTALLOWED")
+		WriteRouterMethodNotAllowed(w, component)
 	})
 }
 
-func writeRouterError(w http.ResponseWriter, component, componentID string, status int, message, errorType string) {
+// RouterErrorComponent returns the component configured for standardized router errors.
+func RouterErrorComponent(r *chi.Mux) string {
+	if r == nil {
+		return ""
+	}
+	component, ok := routerErrorComponents.Load(r)
+	if !ok {
+		return ""
+	}
+	name, _ := component.(string)
+	return name
+}
+
+// WriteRouterNotFound writes the standardized JSON 404 response used by API routers.
+func WriteRouterNotFound(w http.ResponseWriter, component string) {
+	writeRouterError(w, component, http.StatusNotFound, "resource not found", "NOTFOUND")
+}
+
+// WriteRouterMethodNotAllowed writes the standardized JSON 405 response used by API routers.
+func WriteRouterMethodNotAllowed(w http.ResponseWriter, component string) {
+	writeRouterError(w, component, http.StatusMethodNotAllowed, "method not allowed", "METHODNOTALLOWED")
+}
+
+func registerRouterErrorComponent(r *chi.Mux, component string) {
+	if r == nil {
+		return
+	}
+	routerErrorComponents.Store(r, component)
+}
+
+func writeRouterError(w http.ResponseWriter, component string, status int, message, errorType string) {
+	componentID := normalizeComponentID(component)
 	resp := NewErrorResponse(
 		errors.New(message),
 		status,

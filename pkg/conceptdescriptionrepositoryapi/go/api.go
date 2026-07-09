@@ -5,7 +5,7 @@
  *
  * The ConceptDescription Repository Service Specification as part of [Specification of the Asset Administration Shell: Part 2](https://industrialdigitaltwin.org/en/content-hub/aasspecifications).   Copyright: Industrial Digital Twin Association (IDTA) March 2023
  *
- * API version: V3.1.1_SSP-001
+ * API version: V3.2.0
  * Contact: info@idtwin.org
  */
 
@@ -31,7 +31,7 @@ type ConceptDescriptionRepositoryAPIAPIRouter interface {
 	GetConceptDescriptionById(http.ResponseWriter, *http.Request)
 	PutConceptDescriptionById(http.ResponseWriter, *http.Request)
 	DeleteConceptDescriptionById(http.ResponseWriter, *http.Request)
-	GetAllConceptDescriptionRecentChanges(http.ResponseWriter, *http.Request)
+	GetAllConceptDescriptionsRecentChanges(http.ResponseWriter, *http.Request)
 }
 
 // DescriptionAPIAPIRouter defines the required methods for binding the api requests to a responses for the DescriptionAPIAPI
@@ -54,12 +54,12 @@ type SerializationAPIAPIRouter interface {
 // and updated with the logic required for the API.
 type ConceptDescriptionRepositoryAPIAPIServicer interface {
 	QueryConceptDescriptions(context.Context, int32, string, grammar.Query) (model.ImplResponse, error)
-	GetAllConceptDescriptions(context.Context, string, string, string, int32, string) (model.ImplResponse, error)
+	GetAllConceptDescriptions(context.Context, string, string, string, int32, string, time.Time, time.Time) (model.ImplResponse, error)
 	PostConceptDescription(context.Context, types.IConceptDescription) (model.ImplResponse, error)
 	GetConceptDescriptionById(context.Context, string) (model.ImplResponse, error)
 	PutConceptDescriptionById(context.Context, string, types.IConceptDescription) (model.ImplResponse, error)
 	DeleteConceptDescriptionById(context.Context, string) (model.ImplResponse, error)
-	GetAllConceptDescriptionRecentChanges(context.Context, time.Time, time.Time, int32, string) (model.ImplResponse, error)
+	GetAllConceptDescriptionsRecentChanges(context.Context, time.Time, time.Time, int32, string) (model.ImplResponse, error)
 }
 
 // DescriptionAPIAPIServicer defines the api actions for the DescriptionAPIAPI service

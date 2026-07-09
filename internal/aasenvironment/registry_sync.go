@@ -36,7 +36,11 @@ import (
 	commonmodel "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 )
 
-const externalURLKey = "general.externalUrl"
+const (
+	externalURLKey              = "general.externalUrl"
+	aasDescriptorInterface      = "AAS-3.0"
+	submodelDescriptorInterface = "SUBMODEL-3.0"
+)
 
 // RegistrySyncConfig controls repository-to-registry synchronization behavior and endpoint generation.
 type RegistrySyncConfig struct {
@@ -223,7 +227,7 @@ func (c RegistrySyncConfig) buildEndpointsForContext(ctx context.Context, resour
 	for _, externalBaseURL := range externalBaseURLs {
 		endpointURL := strings.TrimRight(externalBaseURL, "/") + resourcePath
 		endpoints = append(endpoints, commonmodel.Endpoint{
-			Interface: "AAS-3.0",
+			Interface: endpointInterface,
 			ProtocolInformation: commonmodel.ProtocolInformation{
 				Href:             endpointURL,
 				EndpointProtocol: protocolFromURL(externalBaseURL),

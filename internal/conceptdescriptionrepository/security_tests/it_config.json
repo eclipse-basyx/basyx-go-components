@@ -3,21 +3,21 @@
     "context": "Anonymous description allowed",
     "token": null,
     "method": "GET",
-    "endpoint": "http://localhost:6004/description",
+    "endpoint": "{{BASYX_IT_API_URL}}/description",
     "expectedStatus": 200
   },
   {
     "context": "Anonymous list denied",
     "token": null,
     "method": "GET",
-    "endpoint": "http://localhost:6004/concept-descriptions",
+    "endpoint": "{{BASYX_IT_API_URL}}/concept-descriptions",
     "expectedStatus": 403
   },
   {
     "context": "POST viewer-visible concept description - admin",
     "token": { "user": "admin", "password": "pwd" },
     "method": "POST",
-    "endpoint": "http://localhost:6004/concept-descriptions",
+    "endpoint": "{{BASYX_IT_API_URL}}/concept-descriptions",
     "data": "postBody/cdViewerAllowed.json",
     "shouldMatch": "postBody/cdViewerAllowed.json",
     "expectedStatus": 201
@@ -26,7 +26,7 @@
     "context": "POST viewer-hidden concept description - admin",
     "token": { "user": "admin", "password": "pwd" },
     "method": "POST",
-    "endpoint": "http://localhost:6004/concept-descriptions",
+    "endpoint": "{{BASYX_IT_API_URL}}/concept-descriptions",
     "data": "postBody/cdViewerHidden.json",
     "shouldMatch": "postBody/cdViewerHidden.json",
     "expectedStatus": 201
@@ -35,7 +35,7 @@
     "context": "POST /query/concept-descriptions - anonymous denied",
     "token": null,
     "method": "POST",
-    "endpoint": "http://localhost:6004/query/concept-descriptions",
+    "endpoint": "{{BASYX_IT_API_URL}}/query/concept-descriptions",
     "data": "postBody/queryViewerAllowed.json",
     "expectedStatus": 403
   },
@@ -43,7 +43,7 @@
     "context": "POST /query/concept-descriptions - admin query hidden idShort",
     "token": { "user": "admin", "password": "pwd" },
     "method": "POST",
-    "endpoint": "http://localhost:6004/query/concept-descriptions",
+    "endpoint": "{{BASYX_IT_API_URL}}/query/concept-descriptions",
     "data": "postBody/queryViewerHidden.json",
     "shouldMatch": "expected/expectedQueryHiddenAdmin.json",
     "expectedStatus": 200
@@ -52,7 +52,7 @@
     "context": "POST /query/concept-descriptions - admin filter fragment hidden idShort",
     "token": { "user": "admin", "password": "pwd" },
     "method": "POST",
-    "endpoint": "http://localhost:6004/query/concept-descriptions",
+    "endpoint": "{{BASYX_IT_API_URL}}/query/concept-descriptions",
     "data": "postBody/queryFilterViewerHidden.json",
     "shouldMatch": "expected/expectedQueryIDShortFragmentHiddenAdmin.json",
     "expectedStatus": 200
@@ -61,7 +61,7 @@
     "context": "POST /query/concept-descriptions - viewer query allowed idShort",
     "token": { "user": "usera", "password": "pwd" },
     "method": "POST",
-    "endpoint": "http://localhost:6004/query/concept-descriptions",
+    "endpoint": "{{BASYX_IT_API_URL}}/query/concept-descriptions",
     "data": "postBody/queryViewerAllowed.json",
     "shouldMatch": "expected/expectedViewerList.json",
     "expectedStatus": 200
@@ -70,7 +70,7 @@
     "context": "POST /query/concept-descriptions - viewer idShort masked by ABAC filter",
     "token": { "user": "userb", "password": "pwd" },
     "method": "POST",
-    "endpoint": "http://localhost:6004/query/concept-descriptions",
+    "endpoint": "{{BASYX_IT_API_URL}}/query/concept-descriptions",
     "data": "postBody/queryViewerAllowed.json",
     "shouldMatch": "expected/expectedViewerListMaskedIDShort.json",
     "expectedStatus": 200
@@ -79,7 +79,7 @@
     "context": "POST /query/concept-descriptions - viewer query narrowed by ABAC",
     "token": { "user": "usera", "password": "pwd" },
     "method": "POST",
-    "endpoint": "http://localhost:6004/query/concept-descriptions",
+    "endpoint": "{{BASYX_IT_API_URL}}/query/concept-descriptions",
     "data": "postBody/queryViewerHidden.json",
     "shouldMatch": "expected/expectedEmptyList.json",
     "expectedStatus": 200
@@ -88,7 +88,7 @@
     "context": "POST /query/concept-descriptions - empty query rejected",
     "token": { "user": "admin", "password": "pwd" },
     "method": "POST",
-    "endpoint": "http://localhost:6004/query/concept-descriptions",
+    "endpoint": "{{BASYX_IT_API_URL}}/query/concept-descriptions",
     "data": "postBody/queryEmpty.json",
     "expectedStatus": 400
   },
@@ -96,7 +96,7 @@
     "context": "POST /query/concept-descriptions - malformed query rejected",
     "token": { "user": "admin", "password": "pwd" },
     "method": "POST",
-    "endpoint": "http://localhost:6004/query/concept-descriptions",
+    "endpoint": "{{BASYX_IT_API_URL}}/query/concept-descriptions",
     "data": "postBody/queryMalformed.json",
     "expectedStatus": 400
   },
@@ -104,39 +104,60 @@
     "context": "GET concept descriptions - viewer filtered",
     "token": { "user": "usera", "password": "pwd" },
     "method": "GET",
-    "endpoint": "http://localhost:6004/concept-descriptions",
+    "endpoint": "{{BASYX_IT_API_URL}}/concept-descriptions",
     "shouldMatch": "expected/expectedViewerList.json",
     "expectedStatus": 200
+  },
+  {
+    "context": "GET concept descriptions trailing slash - viewer not found",
+    "token": { "user": "usera", "password": "pwd" },
+    "method": "GET",
+    "endpoint": "{{BASYX_IT_API_URL}}/concept-descriptions/",
+    "expectedStatus": 404
   },
   {
     "context": "GET /concept-descriptions/$recent-changes - viewer filtered",
     "action": "ASSERT_RECENT_CHANGE_IDS",
     "token": { "user": "usera", "password": "pwd" },
     "method": "GET",
-    "endpoint": "http://localhost:6004/concept-descriptions/$recent-changes?limit=20",
+    "endpoint": "{{BASYX_IT_API_URL}}/concept-descriptions/$recent-changes?limit=20",
     "shouldMatch": "expected/expectedRecentChangesViewerIDs.json",
     "expectedStatus": 200
+  },
+  {
+    "context": "GET /concept-descriptions/$recent-changes/ - viewer not found",
+    "token": { "user": "usera", "password": "pwd" },
+    "method": "GET",
+    "endpoint": "{{BASYX_IT_API_URL}}/concept-descriptions/$recent-changes/?limit=20",
+    "expectedStatus": 404
   },
   {
     "context": "GET viewer-visible concept description - viewer",
     "token": { "user": "usera", "password": "pwd" },
     "method": "GET",
-    "endpoint": "http://localhost:6004/concept-descriptions/dXJuOmV4YW1wbGU6Y2Q6dmlld2VyOmFsbG93ZWQ",
+    "endpoint": "{{BASYX_IT_API_URL}}/concept-descriptions/dXJuOmV4YW1wbGU6Y2Q6dmlld2VyOmFsbG93ZWQ",
     "shouldMatch": "postBody/cdViewerAllowed.json",
     "expectedStatus": 200
+  },
+  {
+    "context": "GET viewer-visible concept description trailing slash - viewer not found",
+    "token": { "user": "usera", "password": "pwd" },
+    "method": "GET",
+    "endpoint": "{{BASYX_IT_API_URL}}/concept-descriptions/dXJuOmV4YW1wbGU6Y2Q6dmlld2VyOmFsbG93ZWQ/",
+    "expectedStatus": 404
   },
   {
     "context": "GET viewer-hidden concept description - viewer receives hidden 404",
     "token": { "user": "usera", "password": "pwd" },
     "method": "GET",
-    "endpoint": "http://localhost:6004/concept-descriptions/dXJuOmV4YW1wbGU6Y2Q6dmlld2VyOmhpZGRlbg",
+    "endpoint": "{{BASYX_IT_API_URL}}/concept-descriptions/dXJuOmV4YW1wbGU6Y2Q6dmlld2VyOmhpZGRlbg",
     "expectedStatus": 404
   },
   {
     "context": "POST editor-allowed concept description - editor",
     "token": { "user": "userx", "password": "pwd" },
     "method": "POST",
-    "endpoint": "http://localhost:6004/concept-descriptions",
+    "endpoint": "{{BASYX_IT_API_URL}}/concept-descriptions",
     "data": "postBody/cdEditorAllowed.json",
     "shouldMatch": "postBody/cdEditorAllowed.json",
     "expectedStatus": 201
@@ -145,7 +166,7 @@
     "context": "POST editor-denied concept description - editor",
     "token": { "user": "userx", "password": "pwd" },
     "method": "POST",
-    "endpoint": "http://localhost:6004/concept-descriptions",
+    "endpoint": "{{BASYX_IT_API_URL}}/concept-descriptions",
     "data": "postBody/cdEditorDenied.json",
     "expectedStatus": 403
   },
@@ -153,7 +174,7 @@
     "context": "POST hidden-existing concept description for old-state checks - admin",
     "token": { "user": "admin", "password": "pwd" },
     "method": "POST",
-    "endpoint": "http://localhost:6004/concept-descriptions",
+    "endpoint": "{{BASYX_IT_API_URL}}/concept-descriptions",
     "data": "postBody/cdEditorHiddenExisting.json",
     "shouldMatch": "postBody/cdEditorHiddenExisting.json",
     "expectedStatus": 201
@@ -162,7 +183,7 @@
     "context": "PUT invisible existing concept description - editor denied by old-state check",
     "token": { "user": "userx", "password": "pwd" },
     "method": "PUT",
-    "endpoint": "http://localhost:6004/concept-descriptions/dXJuOmV4YW1wbGU6Y2Q6ZWRpdG9yOmhpZGRlbi1leGlzdGluZw",
+    "endpoint": "{{BASYX_IT_API_URL}}/concept-descriptions/dXJuOmV4YW1wbGU6Y2Q6ZWRpdG9yOmhpZGRlbi1leGlzdGluZw",
     "data": "postBody/cdEditorHiddenExistingUpdatedAllowed.json",
     "expectedStatus": 403
   },
@@ -170,7 +191,7 @@
     "context": "PUT visible concept description to disallowed state - editor denied by new-state check",
     "token": { "user": "userx", "password": "pwd" },
     "method": "PUT",
-    "endpoint": "http://localhost:6004/concept-descriptions/dXJuOmV4YW1wbGU6Y2Q6ZWRpdG9yOnBvc3QtYWxsb3dlZA",
+    "endpoint": "{{BASYX_IT_API_URL}}/concept-descriptions/dXJuOmV4YW1wbGU6Y2Q6ZWRpdG9yOnBvc3QtYWxsb3dlZA",
     "data": "postBody/cdEditorAllowedUpdatedDenied.json",
     "expectedStatus": 403
   },
@@ -178,42 +199,42 @@
     "context": "DELETE invisible concept description - editor denied",
     "token": { "user": "userx", "password": "pwd" },
     "method": "DELETE",
-    "endpoint": "http://localhost:6004/concept-descriptions/dXJuOmV4YW1wbGU6Y2Q6ZWRpdG9yOmhpZGRlbi1leGlzdGluZw",
+    "endpoint": "{{BASYX_IT_API_URL}}/concept-descriptions/dXJuOmV4YW1wbGU6Y2Q6ZWRpdG9yOmhpZGRlbi1leGlzdGluZw",
     "expectedStatus": 403
   },
   {
     "context": "DELETE viewer-visible concept description - admin",
     "token": { "user": "admin", "password": "pwd" },
     "method": "DELETE",
-    "endpoint": "http://localhost:6004/concept-descriptions/dXJuOmV4YW1wbGU6Y2Q6dmlld2VyOmFsbG93ZWQ",
+    "endpoint": "{{BASYX_IT_API_URL}}/concept-descriptions/dXJuOmV4YW1wbGU6Y2Q6dmlld2VyOmFsbG93ZWQ",
     "expectedStatus": 204
   },
   {
     "context": "DELETE viewer-hidden concept description - admin",
     "token": { "user": "admin", "password": "pwd" },
     "method": "DELETE",
-    "endpoint": "http://localhost:6004/concept-descriptions/dXJuOmV4YW1wbGU6Y2Q6dmlld2VyOmhpZGRlbg",
+    "endpoint": "{{BASYX_IT_API_URL}}/concept-descriptions/dXJuOmV4YW1wbGU6Y2Q6dmlld2VyOmhpZGRlbg",
     "expectedStatus": 204
   },
   {
     "context": "DELETE editor-allowed concept description - admin",
     "token": { "user": "admin", "password": "pwd" },
     "method": "DELETE",
-    "endpoint": "http://localhost:6004/concept-descriptions/dXJuOmV4YW1wbGU6Y2Q6ZWRpdG9yOnBvc3QtYWxsb3dlZA",
+    "endpoint": "{{BASYX_IT_API_URL}}/concept-descriptions/dXJuOmV4YW1wbGU6Y2Q6ZWRpdG9yOnBvc3QtYWxsb3dlZA",
     "expectedStatus": 204
   },
   {
     "context": "DELETE hidden-existing concept description - admin",
     "token": { "user": "admin", "password": "pwd" },
     "method": "DELETE",
-    "endpoint": "http://localhost:6004/concept-descriptions/dXJuOmV4YW1wbGU6Y2Q6ZWRpdG9yOmhpZGRlbi1leGlzdGluZw",
+    "endpoint": "{{BASYX_IT_API_URL}}/concept-descriptions/dXJuOmV4YW1wbGU6Y2Q6ZWRpdG9yOmhpZGRlbi1leGlzdGluZw",
     "expectedStatus": 204
   },
   {
     "context": "GET concept descriptions - admin cleanup check",
     "token": { "user": "admin", "password": "pwd" },
     "method": "GET",
-    "endpoint": "http://localhost:6004/concept-descriptions",
+    "endpoint": "{{BASYX_IT_API_URL}}/concept-descriptions",
     "shouldMatch": "expected/expectedEmptyList.json",
     "expectedStatus": 200
   }

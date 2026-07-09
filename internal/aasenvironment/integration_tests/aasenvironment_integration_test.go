@@ -40,7 +40,10 @@ import (
 )
 
 const composeFilePath = "./docker_compose/docker_compose.yml"
-const integrationTestDSN = "host=127.0.0.1 port=6432 user=admin password=admin123 dbname=basyxTestDB sslmode=disable"
+
+var aasEnvBaseURL = testenv.LocalURLFromEnv("BASYX_IT_API_PORT", 6004)
+var aasEnvSyncOffBaseURL = testenv.LocalURLFromEnv("BASYX_IT_SYNC_OFF_API_PORT", 6005)
+var integrationTestDSN = testenv.PostgresKeywordDSNFromEnv("BASYX_IT_DB_PORT", 6432, "basyxTestDB")
 
 var allowedIntegrationPackages = map[string]struct{}{
 	"github.com/eclipse-basyx/basyx-go-components/internal/aasregistry/integration_tests":                  {},
@@ -52,10 +55,26 @@ var allowedIntegrationPackages = map[string]struct{}{
 }
 
 func TestMain(m *testing.M) {
+	runtime := testenv.NewComposeRuntimeOrExit("aasenvironment-it", []testenv.PortBinding{
+		{Name: "api", EnvVar: "BASYX_IT_API_PORT"},
+		{Name: "db", EnvVar: "BASYX_IT_DB_PORT"},
+		{Name: "sync-off-api", EnvVar: "BASYX_IT_SYNC_OFF_API_PORT"},
+		{Name: "sync-off-db", EnvVar: "BASYX_IT_SYNC_OFF_DB_PORT"},
+	})
+	aasEnvBaseURL = runtime.LocalURL("api")
+	aasEnvSyncOffBaseURL = runtime.LocalURL("sync-off-api")
+	integrationTestDSN = runtime.PostgresKeywordDSN("db", "basyxTestDB")
+	serializationBaseURL = runtime.LocalURL("api")
+	serializationIntegrationDSN = runtime.PostgresKeywordDSN("db", "basyxTestDB")
+	uploadIntegrationDSN = runtime.PostgresKeywordDSN("db", "basyxTestDB")
+	uploadSyncDisabledIntegrationDSN = runtime.PostgresKeywordDSN("sync-off-db", "basyxTestDBSyncOff")
+
 	os.Exit(testenv.RunComposeTestMain(m, testenv.ComposeTestMainOptions{
 		ComposeFile:     composeFilePath,
+		ProjectName:     runtime.ProjectName,
+		Env:             runtime.Env(),
 		PreDownBeforeUp: true,
-		HealthURL:       "http://127.0.0.1:6004/health",
+		HealthURL:       aasEnvBaseURL + "/health",
 		HealthTimeout:   3 * time.Minute,
 	}))
 }

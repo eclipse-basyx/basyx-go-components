@@ -5,7 +5,7 @@
  *
  * The Full Profile of the Asset Administration Shell Repository Service Specification as part of the [Specification of the Asset Administration Shell: Part 2](https://industrialdigitaltwin.org/en/content-hub/aasspecifications).   Copyright: Industrial Digital Twin Association (IDTA) 2025
  *
- * API version: V3.1.1_SSP-001
+ * API version: V3.2.0
  * Contact: info@idtwin.org
  */
 
@@ -32,8 +32,8 @@ func NewDescriptionAPIAPIService() *DescriptionAPIAPIService {
 func (s *DescriptionAPIAPIService) GetSelfDescription(ctx context.Context) (model.ImplResponse, error) {
 	return model.Response(200, model.ServiceDescription{
 		Profiles: []string{
-			"https://admin-shell.io/aas/API/3/1/AssetAdministrationShellRepositoryServiceSpecification/SSP-001",
-			"https://basyx.org/aas/API/3/1/AssetAdministrationShellRepositoryServiceSpecification/SSP-001",
+			"https://admin-shell.io/aas/API/3/2/AssetAdministrationShellRepositoryServiceSpecification/SSP-001",
+			"https://basyx.org/aas/API/3/2/AssetAdministrationShellRepositoryServiceSpecification/SSP-001",
 		},
 	}), nil
 }

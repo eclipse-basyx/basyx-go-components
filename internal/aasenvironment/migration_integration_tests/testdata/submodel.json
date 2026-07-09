@@ -1,0 +1,53 @@
+{
+  "id": "urn:basyx:migration:submodel:1",
+  "idShort": "MigrationSubmodel",
+  "modelType": "Submodel",
+  "supplementalSemanticIds": [
+    {
+      "type": "ExternalReference",
+      "keys": [
+        {
+          "type": "GlobalReference",
+          "value": "urn:basyx:migration:submodel:supplemental:1"
+        }
+      ]
+    },
+    {
+      "type": "ExternalReference",
+      "keys": [
+        {
+          "type": "GlobalReference",
+          "value": "urn:basyx:migration:submodel:supplemental:2"
+        }
+      ]
+    }
+  ],
+  "submodelElements": [
+    {
+      "idShort": "MigratedProperty",
+      "modelType": "Property",
+      "valueType": "xs:string",
+      "value": "preserved-value",
+      "supplementalSemanticIds": [
+        {
+          "type": "ExternalReference",
+          "keys": [
+            {
+              "type": "GlobalReference",
+              "value": "urn:basyx:migration:sme:supplemental:1"
+            }
+          ]
+        },
+        {
+          "type": "ExternalReference",
+          "keys": [
+            {
+              "type": "GlobalReference",
+              "value": "urn:basyx:migration:sme:supplemental:2"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

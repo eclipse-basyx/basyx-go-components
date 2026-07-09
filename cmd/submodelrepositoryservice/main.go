@@ -31,7 +31,6 @@ import (
 	"crypto/rsa"
 	"embed"
 	"flag"
-	"fmt"
 	"log"
 	"net/http"
 	"time"
@@ -45,6 +44,7 @@ import (
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/history"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/jws"
 	commonmodel "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
+	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/security/abacpolicy"
 	smregistrydb "github.com/eclipse-basyx/basyx-go-components/internal/smregistry/persistence"
 	"github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/api"
@@ -196,7 +196,11 @@ func runServer(ctx context.Context, configPath string) error {
 	common.ConfigureAPIRouter(apiRouter, "SubmodelRepositoryService")
 
 	// Apply OIDC + ABAC once for all repository endpoints
-	abacRepo, err := abacpolicy.SetupSecurityWithABACRepository(ctx, cfg, apiRouter, sharedDB, "submodelrepositoryservice")
+	var claimsMiddleware []func(http.Handler) http.Handler
+	if cfg.General.EnableCustomMiddlewareHeaderInjection {
+		claimsMiddleware = append(claimsMiddleware, auth.EdcBpnHeaderMiddleware)
+	}
+	abacRepo, err := abacpolicy.SetupSecurityWithABACRepository(ctx, cfg, apiRouter, sharedDB, "submodelrepositoryservice", claimsMiddleware...)
 	if err != nil {
 		return err
 	}
@@ -222,32 +226,24 @@ func runServer(ctx context.Context, configPath string) error {
 	// Mount protected API under base path
 	r.Mount(base, apiRouter)
 
-	// Start the server
-	addr := "0.0.0.0:" + fmt.Sprintf("%d", cfg.Server.Port)
+	addr := common.ServerAddress(cfg.Server)
 	log.Printf("▶️  Submodel Repository listening on %s (contextPath=%q)\n", addr, cfg.Server.ContextPath)
-	// Start server in a goroutine
-	go func() {
-		//nolint:gosec // implementing this fix would cause errors.
-		if err := http.ListenAndServe(addr, r); err != http.ErrServerClosed {
-			log.Printf("Server error: %v", err)
-		}
-	}()
 
 	// submodelrepository.TestNewSubmodelHandler(smDatabase)
 
-	<-ctx.Done()
-	log.Println("Shutting down server...")
-	return nil
+	return common.RunHTTPServer(ctx, "SMREPO", cfg.Server, r)
 }
 
 func main() {
-	ctx := context.Background()
+	ctx, stop := common.SignalContext()
 	// load config path from flag
 	configPath := ""
 	flag.StringVar(&configPath, "config", "", "Path to config file")
 	flag.Parse()
 
 	if err := runServer(ctx, configPath); err != nil {
+		stop()
 		log.Fatalf("Server error: %v", err)
 	}
+	stop()
 }

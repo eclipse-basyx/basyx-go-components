@@ -62,12 +62,6 @@ var descriptorRouteMappings = []descriptorRouteMapping{
 	},
 	{
 		scope:       "$aasdesc",
-		route:       "/shell-descriptors/$recent-changes",
-		filterField: "$aasdesc#id",
-		hasWildcard: false,
-	},
-	{
-		scope:       "$aasdesc",
 		route:       "/shell-descriptors/%s",
 		filterField: "$aasdesc#id",
 		hasWildcard: true,
@@ -92,7 +86,7 @@ var descriptorRouteMappings = []descriptorRouteMapping{
 	},
 	{
 		scope:       "$smdesc",
-		route:       "/submodel-descriptors/$recent-changes",
+		route:       "/query/submodel-descriptors",
 		filterField: "$smdesc#id",
 		hasWildcard: false,
 	},

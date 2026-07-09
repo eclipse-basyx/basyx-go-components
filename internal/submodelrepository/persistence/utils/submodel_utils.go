@@ -54,8 +54,24 @@ import (
 //		return err
 //	}
 func GetSubmodelDatabaseID(tx *sql.Tx, submodelID string) (int, error) {
+	return getSubmodelDatabaseID(tx, submodelID, false)
+}
+
+// GetSubmodelDatabaseIDForUpdate resolves and locks the internal database ID of a Submodel by its identifier.
+func GetSubmodelDatabaseIDForUpdate(tx *sql.Tx, submodelID string) (int, error) {
+	return getSubmodelDatabaseID(tx, submodelID, true)
+}
+
+func getSubmodelDatabaseID(tx *sql.Tx, submodelID string, forUpdate bool) (int, error) {
 	var databaseID int
-	sqlQuery, args, err := goqu.Select("id").From("submodel").Where(goqu.I("submodel_identifier").Eq(submodelID)).ToSQL()
+	query := goqu.Select("id").
+		From("submodel").
+		Where(goqu.I("submodel_identifier").Eq(submodelID))
+	if forUpdate {
+		query = query.ForUpdate(goqu.Wait)
+	}
+
+	sqlQuery, args, err := query.ToSQL()
 	if err != nil {
 		return 0, err
 	}

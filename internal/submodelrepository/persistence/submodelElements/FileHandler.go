@@ -32,7 +32,6 @@ import (
 	"fmt"
 	"io"
 	"log"
-	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -108,7 +107,7 @@ func (p PostgreSQLFileHandler) Update(submodelID string, idShortOrPath string, s
 
 	// Get the current file element ID and value
 	var elementID int64
-	var currentValue string
+	var currentValue sql.NullString
 	query, args, err := dialect.From("submodel_element").
 		InnerJoin(
 			goqu.T("file_element"),
@@ -130,7 +129,11 @@ func (p PostgreSQLFileHandler) Update(submodelID string, idShortOrPath string, s
 		return fmt.Errorf("failed to get current file element: %w", err)
 	}
 
-	hasFileValueChanged := currentValue != *file.Value()
+	newValue := ""
+	if file.Value() != nil {
+		newValue = *file.Value()
+	}
+	hasFileValueChanged := currentValue.String != newValue
 	if hasFileValueChanged {
 		// Check if there's an OID in file_data for this element
 		var oldOID sql.NullInt64
@@ -344,6 +347,13 @@ func (p PostgreSQLFileHandler) GetInsertQueryPart(_ *sql.Tx, id int, element typ
 //
 //nolint:revive // cyclomatic complexity is acceptable for this function as the SQL process is complex and requires multiple steps, refactoring would not improve readability
 func (p PostgreSQLFileHandler) UploadFileAttachment(submodelID string, idShortPath string, file *os.File, fileName string) error {
+	return withReopenedUploadFile(file, func(uploadFile io.Reader) error {
+		return p.UploadFileAttachmentReader(submodelID, idShortPath, uploadFile, fileName)
+	})
+}
+
+// UploadFileAttachmentReader uploads attachment content from a reader.
+func (p PostgreSQLFileHandler) UploadFileAttachmentReader(submodelID string, idShortPath string, file io.Reader, fileName string) error {
 	tx, err := p.db.Begin()
 	if err != nil {
 		return fmt.Errorf("failed to begin transaction: %w", err)
@@ -355,7 +365,7 @@ func (p PostgreSQLFileHandler) UploadFileAttachment(submodelID string, idShortPa
 		}
 	}()
 
-	if err := p.UploadFileAttachmentTx(tx, submodelID, idShortPath, file, fileName); err != nil {
+	if err := p.UploadFileAttachmentReaderTx(tx, submodelID, idShortPath, file, fileName); err != nil {
 		return err
 	}
 	if err := tx.Commit(); err != nil {
@@ -367,21 +377,24 @@ func (p PostgreSQLFileHandler) UploadFileAttachment(submodelID string, idShortPa
 
 // UploadFileAttachmentTx uploads attachment content using the provided transaction.
 func (p PostgreSQLFileHandler) UploadFileAttachmentTx(tx *sql.Tx, submodelID string, idShortPath string, file *os.File, fileName string) error {
+	return withReopenedUploadFile(file, func(uploadFile io.Reader) error {
+		return p.UploadFileAttachmentReaderTx(tx, submodelID, idShortPath, uploadFile, fileName)
+	})
+}
+
+// UploadFileAttachmentReaderTx uploads attachment content from a reader using the provided transaction.
+func (p PostgreSQLFileHandler) UploadFileAttachmentReaderTx(tx *sql.Tx, submodelID string, idShortPath string, file io.Reader, fileName string) error {
 	dialect := goqu.Dialect("postgres")
-	reopenedFile, err := reopenUploadedFile(file)
-	if err != nil {
-		return err
+	if file == nil {
+		return common.NewErrBadRequest("SMREPO-UPLOADATTACHMENT-MISSINGFILE file payload is required")
 	}
-	defer func() {
-		_ = reopenedFile.Close()
-	}()
 
 	metadata, err := readFileElementUploadMetadata(tx, dialect, submodelID, idShortPath)
 	if err != nil {
 		return err
 	}
 
-	resolvedFileName, resolvedContentType, err := resolveUploadFileMetadata(reopenedFile, fileName, metadata)
+	resolvedFileName, resolvedContentType, uploadContent, err := resolveUploadFileMetadata(file, fileName, metadata)
 	if err != nil {
 		return err
 	}
@@ -397,7 +410,7 @@ func (p PostgreSQLFileHandler) UploadFileAttachmentTx(tx *sql.Tx, submodelID str
 		}
 	}
 
-	newOID, err := createAndWriteLargeObject(tx, reopenedFile)
+	newOID, err := createAndWriteLargeObject(tx, uploadContent)
 	if err != nil {
 		return err
 	}
@@ -413,9 +426,25 @@ type fileElementUploadMetadata struct {
 	existingFileName    sql.NullString
 }
 
+func withReopenedUploadFile(file *os.File, useFile func(io.Reader) error) error {
+	reopenedFile, err := reopenUploadedFile(file)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		_ = reopenedFile.Close()
+	}()
+
+	return useFile(reopenedFile)
+}
+
 func reopenUploadedFile(file *os.File) (*os.File, error) {
+	if file == nil {
+		return nil, common.NewErrBadRequest("SMREPO-UPLOADATTACHMENT-MISSINGFILE file payload is required")
+	}
+
 	filePath := filepath.Clean(file.Name())
-	// #nosec G703 -- path comes from server-created temporary file and is normalized with filepath.Clean
+	// #nosec G703 -- path comes from server-created temporary file and is normalized with filepath.Clean.
 	reopenedFile, err := os.Open(filePath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to reopen file: %w", err)
@@ -424,7 +453,7 @@ func reopenUploadedFile(file *os.File) (*os.File, error) {
 }
 
 func readFileElementUploadMetadata(tx *sql.Tx, dialect goqu.DialectWrapper, submodelID string, idShortPath string) (fileElementUploadMetadata, error) {
-	submodelDatabaseID, err := persistenceutils.GetSubmodelDatabaseID(tx, submodelID)
+	submodelDatabaseID, err := persistenceutils.GetSubmodelDatabaseIDForUpdate(tx, submodelID)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return fileElementUploadMetadata{}, common.NewErrNotFound("submodel not found")
@@ -455,10 +484,10 @@ func readFileElementUploadMetadata(tx *sql.Tx, dialect goqu.DialectWrapper, subm
 	return metadata, nil
 }
 
-func resolveUploadFileMetadata(file *os.File, fileName string, metadata fileElementUploadMetadata) (string, string, error) {
-	detectedContentType, err := detectContentType(file)
+func resolveUploadFileMetadata(file io.Reader, fileName string, metadata fileElementUploadMetadata) (string, string, io.Reader, error) {
+	detectedContentType, uploadContent, err := common.SniffContentTypeReader(file)
 	if err != nil {
-		return "", "", err
+		return "", "", nil, fmt.Errorf("failed to read file for content type detection: %w", err)
 	}
 
 	resolvedFileName := strings.TrimSpace(fileName)
@@ -471,22 +500,7 @@ func resolveUploadFileMetadata(file *os.File, fileName string, metadata fileElem
 		log.Printf("[WARN] SMREPO-UPLOADATTACHMENT-RESOLVEMIME detected content type differs from declared content type; using detected content type")
 	}
 
-	if _, err = file.Seek(0, 0); err != nil {
-		return "", "", fmt.Errorf("failed to seek file: %w", err)
-	}
-	return resolvedFileName, resolvedContentType, nil
-}
-
-func detectContentType(file *os.File) (string, error) {
-	contentTypeBuffer := make([]byte, 512)
-	n, err := file.Read(contentTypeBuffer)
-	if err != nil && err != io.EOF {
-		return "", fmt.Errorf("failed to read file for content type detection: %w", err)
-	}
-	if n == 0 {
-		return "application/octet-stream", nil
-	}
-	return http.DetectContentType(contentTypeBuffer[:n]), nil
+	return resolvedFileName, resolvedContentType, uploadContent, nil
 }
 
 func readExistingFileOID(tx *sql.Tx, dialect goqu.DialectWrapper, elementID int64) (sql.NullInt64, error) {
@@ -513,7 +527,7 @@ func unlinkLargeObject(tx *sql.Tx, oid int64) error {
 	return nil
 }
 
-func createAndWriteLargeObject(tx *sql.Tx, file *os.File) (int64, error) {
+func createAndWriteLargeObject(tx *sql.Tx, file io.Reader) (int64, error) {
 	var newOID int64
 	if err := tx.QueryRow(`SELECT lo_create(0)`).Scan(&newOID); err != nil {
 		return 0, fmt.Errorf("failed to create large object: %w", err)
@@ -529,7 +543,7 @@ func createAndWriteLargeObject(tx *sql.Tx, file *os.File) (int64, error) {
 	return newOID, nil
 }
 
-func writeLargeObject(tx *sql.Tx, file *os.File, loFD int) error {
+func writeLargeObject(tx *sql.Tx, file io.Reader, loFD int) error {
 	buffer := make([]byte, 8192)
 	for {
 		n, readErr := file.Read(buffer)
@@ -747,7 +761,7 @@ func (p PostgreSQLFileHandler) DeleteFileAttachment(submodelID string, idShortPa
 func (p PostgreSQLFileHandler) DeleteFileAttachmentTx(tx *sql.Tx, submodelID string, idShortPath string) error {
 	dialect := goqu.Dialect("postgres")
 
-	submodelDatabaseID, err := persistenceutils.GetSubmodelDatabaseID(tx, submodelID)
+	submodelDatabaseID, err := persistenceutils.GetSubmodelDatabaseIDForUpdate(tx, submodelID)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return common.NewErrNotFound("submodel not found")

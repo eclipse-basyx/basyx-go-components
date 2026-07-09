@@ -2,14 +2,14 @@
   {
     "context": "001 - Health Check",
     "method": "GET",
-    "endpoint": "http://127.0.0.1:6004/health",
+    "endpoint": "{{BASYX_IT_API_URL}}/health",
     "expectedStatus": 200
   },
   {
     "context": "002 - Upload JSON environment by content type",
     "action": "UPLOAD_MULTIPART",
     "method": "POST",
-    "endpoint": "http://127.0.0.1:6004/upload",
+    "endpoint": "{{BASYX_IT_API_URL}}/upload",
     "data": "testdata/environment_minimal.json",
     "headers": {
       "X-Upload-Part-ContentType": "application/json"
@@ -20,7 +20,7 @@
     "context": "003 - Upload XML environment by content type",
     "action": "UPLOAD_MULTIPART",
     "method": "POST",
-    "endpoint": "http://127.0.0.1:6004/upload",
+    "endpoint": "{{BASYX_IT_API_URL}}/upload",
     "data": "testdata/environment_minimal.xml",
     "headers": {
       "X-Upload-Part-ContentType": "application/xml"
@@ -31,7 +31,7 @@
     "context": "004 - MIME wins over misleading extension",
     "action": "UPLOAD_MULTIPART",
     "method": "POST",
-    "endpoint": "http://127.0.0.1:6004/upload",
+    "endpoint": "{{BASYX_IT_API_URL}}/upload",
     "data": "testdata/environment_minimal.json",
     "headers": {
       "X-Upload-Part-ContentType": "application/json",
@@ -44,7 +44,7 @@
     "context": "005 - Reject unsupported media type",
     "action": "UPLOAD_MULTIPART",
     "method": "POST",
-    "endpoint": "http://127.0.0.1:6004/upload",
+    "endpoint": "{{BASYX_IT_API_URL}}/upload",
     "data": "testdata/environment_minimal.json",
     "headers": {
       "X-Upload-Part-ContentType": "text/plain"
@@ -55,7 +55,7 @@
     "context": "006 - Reject malformed JSON body",
     "action": "UPLOAD_MULTIPART",
     "method": "POST",
-    "endpoint": "http://127.0.0.1:6004/upload",
+    "endpoint": "{{BASYX_IT_API_URL}}/upload",
     "data": "testdata/environment_malformed.json",
     "headers": {
       "X-Upload-Part-ContentType": "application/json"
@@ -66,7 +66,7 @@
     "context": "007 - Reject malformed XML body",
     "action": "UPLOAD_MULTIPART",
     "method": "POST",
-    "endpoint": "http://127.0.0.1:6004/upload",
+    "endpoint": "{{BASYX_IT_API_URL}}/upload",
     "data": "testdata/environment_malformed.xml",
     "headers": {
       "X-Upload-Part-ContentType": "application/xml"
@@ -77,7 +77,7 @@
     "context": "008 - Infer JSON without MIME and filename",
     "action": "UPLOAD_MULTIPART",
     "method": "POST",
-    "endpoint": "http://127.0.0.1:6004/upload",
+    "endpoint": "{{BASYX_IT_API_URL}}/upload",
     "data": "testdata/environment_minimal.json",
     "headers": {
       "X-Upload-Part-ContentType": "application/octet-stream",

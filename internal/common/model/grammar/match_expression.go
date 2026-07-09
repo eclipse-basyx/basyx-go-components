@@ -52,8 +52,9 @@ import (
 //   - Regex match: {"$regex": ["$aas#id", "^https://.*"]}
 //   - Nested match: {"$match": [{"$eq": [...]}, {"$gt": [...]}]}
 type MatchExpression struct {
-	// Boolean corresponds to the JSON schema field "$boolean".
-	Boolean *bool `json:"$boolean,omitempty" yaml:"$boolean,omitempty" mapstructure:"$boolean,omitempty"`
+	// Boolean is used internally by backend simplification. It is not part of
+	// the JSON matchExpression grammar.
+	Boolean *bool `json:"-" yaml:"-" mapstructure:"-"`
 
 	// Contains corresponds to the JSON schema field "$contains".
 	Contains StringItems `json:"$contains,omitempty" yaml:"$contains,omitempty" mapstructure:"$contains,omitempty"`
@@ -102,6 +103,10 @@ type MatchExpression struct {
 //   - error: An error if the JSON is invalid or if the Match array is present but empty.
 //     Returns nil on successful unmarshaling and validation.
 func (j *MatchExpression) UnmarshalJSON(value []byte) error {
+	if _, err := singleJSONMember(value, "match-expression"); err != nil {
+		return err
+	}
+
 	type Plain MatchExpression
 	var plain Plain
 
@@ -110,6 +115,36 @@ func (j *MatchExpression) UnmarshalJSON(value []byte) error {
 	}
 	if plain.Match != nil && len(plain.Match) < 1 {
 		return fmt.Errorf("field %s length: must be >= %d", "$match", 1)
+	}
+	if err := validateComparisonItems(plain.Eq, "$eq"); err != nil {
+		return err
+	}
+	if err := validateComparisonItems(plain.Ne, "$ne"); err != nil {
+		return err
+	}
+	if err := validateOrderedComparisonItems(plain.Gt, "$gt"); err != nil {
+		return err
+	}
+	if err := validateOrderedComparisonItems(plain.Ge, "$ge"); err != nil {
+		return err
+	}
+	if err := validateOrderedComparisonItems(plain.Lt, "$lt"); err != nil {
+		return err
+	}
+	if err := validateOrderedComparisonItems(plain.Le, "$le"); err != nil {
+		return err
+	}
+	if err := validateStringItems(plain.Contains, "$contains"); err != nil {
+		return err
+	}
+	if err := validateStringItems(plain.StartsWith, "$starts-with"); err != nil {
+		return err
+	}
+	if err := validateStringItems(plain.EndsWith, "$ends-with"); err != nil {
+		return err
+	}
+	if err := validateStringItems(plain.Regex, "$regex"); err != nil {
+		return err
 	}
 	*j = MatchExpression(plain)
 	return nil

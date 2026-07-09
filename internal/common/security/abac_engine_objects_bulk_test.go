@@ -66,6 +66,42 @@ func TestMapDescriptorValueToRoute_SpecificDescriptor_DoesNotGrantBulkHandleRout
 	}
 }
 
+func TestMatchRouteObjectsObjItem_SubmodelDescriptorQueryRoute(t *testing.T) {
+	t.Run("specific descriptor grants filtered query route", func(t *testing.T) {
+		objs := []grammar.ObjectItem{
+			{
+				Kind: grammar.Descriptor,
+				Descriptor: &grammar.DescriptorValue{
+					Scope: "$smdesc",
+					ID:    grammar.Identifier{ID: "urn:example:descriptor:1"},
+				},
+			},
+		}
+
+		access := matchRouteObjectsObjItem(objs, "/query/submodel-descriptors", "")
+
+		require.True(t, access.access)
+		require.NotNil(t, access.le)
+	})
+
+	t.Run("wildcard descriptor grants unfiltered query route", func(t *testing.T) {
+		objs := []grammar.ObjectItem{
+			{
+				Kind: grammar.Descriptor,
+				Descriptor: &grammar.DescriptorValue{
+					Scope: "$smdesc",
+					ID:    grammar.Identifier{IsAll: true},
+				},
+			},
+		}
+
+		access := matchRouteObjectsObjItem(objs, "/query/submodel-descriptors", "")
+
+		require.True(t, access.access)
+		require.Nil(t, access.le)
+	})
+}
+
 func TestMatchRouteObjectsObjItem_DescriptorSpecific_DoesNotMatchBulkHandleRoutes(t *testing.T) {
 	testCases := []struct {
 		name           string

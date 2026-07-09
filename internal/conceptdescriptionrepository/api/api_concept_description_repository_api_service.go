@@ -28,7 +28,7 @@
  *
  * The ConceptDescription Repository Service Specification as part of [Specification of the Asset Administration Shell: Part 2](https://industrialdigitaltwin.org/en/content-hub/aasspecifications).   Copyright: Industrial Digital Twin Association (IDTA) March 2023
  *
- * API version: V3.1.1_SSP-001
+ * API version: V3.2.0
  * Contact: info@idtwin.org
  */
 
@@ -121,7 +121,7 @@ func (s *ConceptDescriptionRepositoryAPIAPIService) QueryConceptDescriptions(ctx
 	}
 
 	queryCtx := auth.MergeQueryFilter(ctx, query)
-	cds, nextCursor, err := s.d.GetConceptDescriptions(queryCtx, nil, nil, nil, uint(uintLimit64), &decodedCursor)
+	cds, nextCursor, err := s.d.GetConceptDescriptions(queryCtx, nil, nil, nil, uint(uintLimit64), &decodedCursor, time.Time{}, time.Time{})
 	if err != nil {
 		switch {
 		case common.IsErrBadRequest(err):
@@ -146,7 +146,7 @@ func (s *ConceptDescriptionRepositoryAPIAPIService) QueryConceptDescriptions(ctx
 }
 
 // GetAllConceptDescriptions - Returns all Concept Descriptions
-func (s *ConceptDescriptionRepositoryAPIAPIService) GetAllConceptDescriptions(ctx context.Context, idShort string, isCaseOf string, dataSpecificationRef string, limit int32, cursor string) (model.ImplResponse, error) {
+func (s *ConceptDescriptionRepositoryAPIAPIService) GetAllConceptDescriptions(ctx context.Context, idShort string, isCaseOf string, dataSpecificationRef string, limit int32, cursor string, createdFrom time.Time, updatedFrom time.Time) (model.ImplResponse, error) {
 	decodedCursor := strings.TrimSpace(cursor)
 	if decodedCursor != "" {
 		var decodeErr error
@@ -167,7 +167,7 @@ func (s *ConceptDescriptionRepositoryAPIAPIService) GetAllConceptDescriptions(ct
 		return common.NewErrorResponse(err, http.StatusBadRequest, componentName, "GetAllConceptDescriptions", "BadLimit"), nil
 	}
 	uintLimit := uint(uintLimit64)
-	cds, nextCursor, err := s.d.GetConceptDescriptions(ctx, &idShort, &isCaseOf, &dataSpecificationRef, uintLimit, &decodedCursor)
+	cds, nextCursor, err := s.d.GetConceptDescriptions(ctx, &idShort, &isCaseOf, &dataSpecificationRef, uintLimit, &decodedCursor, createdFrom, updatedFrom)
 	if err != nil {
 		switch {
 		case common.IsErrBadRequest(err):
@@ -191,41 +191,69 @@ func (s *ConceptDescriptionRepositoryAPIAPIService) GetAllConceptDescriptions(ct
 	return pagedResponse(jsonable, nextCursor), nil
 }
 
-// GetAllConceptDescriptionRecentChanges returns changed Concept Descriptions.
-func (s *ConceptDescriptionRepositoryAPIAPIService) GetAllConceptDescriptionRecentChanges(ctx context.Context, createdFrom time.Time, updatedFrom time.Time, limit int32, cursor string) (model.ImplResponse, error) {
+// GetAllConceptDescriptionsRecentChanges returns changed Concept Descriptions.
+func (s *ConceptDescriptionRepositoryAPIAPIService) GetAllConceptDescriptionsRecentChanges(ctx context.Context, createdFrom time.Time, updatedFrom time.Time, limit int32, cursor string) (model.ImplResponse, error) {
 	decodedCursor := strings.TrimSpace(cursor)
 	if decodedCursor != "" {
 		var decodeErr error
 		decodedCursor, decodeErr = common.DecodeString(decodedCursor)
 		if decodeErr != nil {
-			return common.NewErrorResponse(decodeErr, http.StatusBadRequest, componentName, "GetAllConceptDescriptionRecentChanges", "BadCursor"), nil
+			return common.NewErrorResponse(decodeErr, http.StatusBadRequest, componentName, "GetAllConceptDescriptionsRecentChanges", "BadCursor"), nil
 		}
 	}
 
-	rows, nextCursor, err := s.d.GetConceptDescriptionRecentChanges(ctx, limit, decodedCursor, createdFrom, updatedFrom)
+	normalizedLimit, limitErr := common.NormalizeRecentChangesLimit(limit)
+	if limitErr != nil {
+		return common.NewErrorResponse(limitErr, http.StatusBadRequest, componentName, "GetAllConceptDescriptionsRecentChanges", "BadRequest"), nil
+	}
+
+	uintLimit64, convErr := strconv.ParseUint(strconv.FormatInt(int64(normalizedLimit), 10), 10, 64)
+	if convErr != nil {
+		err := common.NewErrBadRequest("invalid limit")
+		return common.NewErrorResponse(err, http.StatusBadRequest, componentName, "GetAllConceptDescriptionsRecentChanges", "BadLimit"), nil
+	}
+
+	cds, nextCursor, err := s.d.GetConceptDescriptions(ctx, nil, nil, nil, uint(uintLimit64), &decodedCursor, createdFrom, updatedFrom)
 	if err != nil {
 		switch {
 		case common.IsErrBadRequest(err):
-			return common.NewErrorResponse(err, http.StatusBadRequest, componentName, "GetAllConceptDescriptionRecentChanges", "BadRequest"), nil
+			return common.NewErrorResponse(err, http.StatusBadRequest, componentName, "GetAllConceptDescriptionsRecentChanges", "BadRequest"), nil
 		case common.IsErrDenied(err):
-			return common.NewErrorResponse(err, http.StatusForbidden, componentName, "GetAllConceptDescriptionRecentChanges", "Denied"), nil
+			return common.NewErrorResponse(err, http.StatusForbidden, componentName, "GetAllConceptDescriptionsRecentChanges", "Denied"), nil
 		default:
-			return common.NewErrorResponse(err, http.StatusInternalServerError, componentName, "GetAllConceptDescriptionRecentChanges", "Unhandled"), nil
+			return common.NewErrorResponse(err, http.StatusInternalServerError, componentName, "GetAllConceptDescriptionsRecentChanges", "Unhandled"), nil
 		}
 	}
 
-	changes := make([]model.ConceptDescriptionRecentChange, 0, len(rows))
-	for _, row := range rows {
+	changes := make([]model.ConceptDescriptionRecentChange, 0, len(cds))
+	seenIDs := make(map[string]struct{}, len(cds))
+	for _, cd := range cds {
+		if cd == nil {
+			err = common.NewInternalServerError("CDREPO-GETCDRECENT-NILCD loaded ConceptDescription is nil")
+			return common.NewErrorResponse(err, http.StatusInternalServerError, componentName, "GetAllConceptDescriptionsRecentChanges", "GetConceptDescriptions"), nil
+		}
+		if _, seen := seenIDs[cd.ID()]; seen {
+			continue
+		}
+		createdAt, updatedAt, ok := common.RecentChangeTimestamps(cd.Administration())
+		if !ok {
+			continue
+		}
+		seenIDs[cd.ID()] = struct{}{}
 		changes = append(changes, model.ConceptDescriptionRecentChange{
 			RecentChange: model.RecentChange{
-				Type:      row.ChangeType,
-				CreatedAt: row.CreatedAt,
-				UpdatedAt: row.UpdatedAt,
+				CreatedAt: createdAt,
+				UpdatedAt: updatedAt,
 			},
-			Id: row.Identifier,
+			Id: cd.ID(),
 		})
 	}
 	return pagedResponse(changes, nextCursor), nil
+}
+
+// GetAllConceptDescriptionRecentChanges is kept for compatibility with older generated code.
+func (s *ConceptDescriptionRepositoryAPIAPIService) GetAllConceptDescriptionRecentChanges(ctx context.Context, createdFrom time.Time, updatedFrom time.Time, limit int32, cursor string) (model.ImplResponse, error) {
+	return s.GetAllConceptDescriptionsRecentChanges(ctx, createdFrom, updatedFrom, limit, cursor)
 }
 
 // PostConceptDescription - Creates a new Concept Description
