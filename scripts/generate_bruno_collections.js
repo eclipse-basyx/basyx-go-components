@@ -44,7 +44,7 @@ function indent(text, spaces = 2) {
   const pad = " ".repeat(spaces);
   return text
     .split("\n")
-    .map((line) => pad + line)
+    .map((line) => (line === "" ? "" : pad + line))
     .join("\n");
 }
 

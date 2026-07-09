@@ -27,6 +27,8 @@ package digitaltwinregistry
 
 import (
 	"context"
+	"encoding/json"
+	"net/http"
 	"testing"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
@@ -35,6 +37,57 @@ import (
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 	discoveryapiinternal "github.com/eclipse-basyx/basyx-go-components/internal/discoveryservice/api"
 )
+
+func TestDecodeRegistryAssetLinkQueryAssetIDsSplitsCommaSeparatedValues(t *testing.T) {
+	t.Parallel()
+
+	globalAssetID := model.AssetLink{Name: common.GlobalAssetIDAssetLinkName, Value: "global-asset"}
+	customerPartID := model.AssetLink{Name: "customerPartId", Value: "customer-part"}
+
+	links, resp, err := decodeRegistryAssetLinkQueryAssetIDs([]string{
+		" " + encodeRegistryAssetLink(t, globalAssetID) + ", " + encodeRegistryAssetLink(t, customerPartID),
+	})
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if resp != nil {
+		t.Fatalf("expected no error response, got %v", resp)
+	}
+	if len(links) != 2 {
+		t.Fatalf("expected 2 links, got %d", len(links))
+	}
+	if links[0] != globalAssetID || links[1] != customerPartID {
+		t.Fatalf("decoded links = %#v, want %#v and %#v", links, globalAssetID, customerPartID)
+	}
+}
+
+func TestDecodeRegistryAssetLinkQueryAssetIDsRejectsMissingRequiredFields(t *testing.T) {
+	t.Parallel()
+
+	links, resp, err := decodeRegistryAssetLinkQueryAssetIDs([]string{common.EncodeString("{}")})
+	if err != nil {
+		t.Fatalf("expected no returned error, got %v", err)
+	}
+	if resp == nil {
+		t.Fatalf("expected bad request response")
+	}
+	if resp.Code != http.StatusBadRequest {
+		t.Fatalf("expected status %d, got %d", http.StatusBadRequest, resp.Code)
+	}
+	if len(links) != 0 {
+		t.Fatalf("expected no decoded links, got %#v", links)
+	}
+}
+
+func encodeRegistryAssetLink(t *testing.T, link model.AssetLink) string {
+	t.Helper()
+
+	data, err := json.Marshal(link)
+	if err != nil {
+		t.Fatalf("marshal asset link: %v", err)
+	}
+	return common.EncodeString(string(data))
+}
 
 func TestGlobalAssetIDDescriptorVisibilityRequiredOnlyWithABAC(t *testing.T) {
 	t.Parallel()

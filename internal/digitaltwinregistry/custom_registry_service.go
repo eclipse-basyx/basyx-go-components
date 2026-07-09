@@ -190,41 +190,72 @@ func (s *CustomRegistryService) getAllAssetAdministrationShellDescriptorsByAsset
 }
 
 func decodeRegistryAssetLinkQueryAssetIDs(encodedAssetIDs []string) ([]model.AssetLink, *model.ImplResponse, error) {
-	links := make([]model.AssetLink, 0, len(encodedAssetIDs))
-	for idx, encodedAssetID := range encodedAssetIDs {
-		if strings.TrimSpace(encodedAssetID) == "" {
-			continue
-		}
-
-		decoded, err := common.DecodeString(encodedAssetID)
-		if err != nil {
-			log.Printf("[%s] Error GetAllAssetAdministrationShellDescriptors: decode assetIds[%d]=%q failed: %v", customRegistryComponentName, idx, encodedAssetID, err)
-			resp := common.NewErrorResponse(
-				err,
-				http.StatusBadRequest,
-				customRegistryComponentName,
-				"GetAllAssetAdministrationShellDescriptors",
-				"BadRequest-DecodeAssetIds",
-			)
-			return nil, &resp, nil
-		}
-
-		var link model.AssetLink
-		if err := json.Unmarshal([]byte(decoded), &link); err != nil {
-			log.Printf("[%s] Error GetAllAssetAdministrationShellDescriptors: unmarshal assetIds[%d] decoded=%q failed: %v", customRegistryComponentName, idx, decoded, err)
-			resp := common.NewErrorResponse(
-				err,
-				http.StatusBadRequest,
-				customRegistryComponentName,
-				"GetAllAssetAdministrationShellDescriptors",
-				"BadRequest-UnmarshalAssetIds",
-			)
-			return nil, &resp, nil
+	normalizedAssetIDs := normalizeRegistryAssetLinkQueryAssetIDs(encodedAssetIDs)
+	links := make([]model.AssetLink, 0, len(normalizedAssetIDs))
+	for idx, encodedAssetID := range normalizedAssetIDs {
+		link, resp := decodeRegistryAssetLinkQueryAssetID(encodedAssetID, idx)
+		if resp != nil {
+			return nil, resp, nil
 		}
 		links = append(links, link)
 	}
 
 	return links, nil, nil
+}
+
+func normalizeRegistryAssetLinkQueryAssetIDs(encodedAssetIDs []string) []string {
+	normalizedAssetIDs := make([]string, 0, len(encodedAssetIDs))
+	for _, encodedAssetID := range encodedAssetIDs {
+		for _, part := range strings.Split(encodedAssetID, ",") {
+			trimmedPart := strings.TrimSpace(part)
+			if trimmedPart != "" {
+				normalizedAssetIDs = append(normalizedAssetIDs, trimmedPart)
+			}
+		}
+	}
+	return normalizedAssetIDs
+}
+
+func decodeRegistryAssetLinkQueryAssetID(encodedAssetID string, idx int) (model.AssetLink, *model.ImplResponse) {
+	decoded, err := common.DecodeString(encodedAssetID)
+	if err != nil {
+		log.Printf("[%s] Error GetAllAssetAdministrationShellDescriptors: decode assetIds[%d] failed: %v", customRegistryComponentName, idx, err)
+		resp := common.NewErrorResponse(
+			err,
+			http.StatusBadRequest,
+			customRegistryComponentName,
+			"GetAllAssetAdministrationShellDescriptors",
+			"BadRequest-DecodeAssetIds",
+		)
+		return model.AssetLink{}, &resp
+	}
+
+	var link model.AssetLink
+	if err = json.Unmarshal([]byte(decoded), &link); err != nil {
+		log.Printf("[%s] Error GetAllAssetAdministrationShellDescriptors: unmarshal assetIds[%d] failed: %v", customRegistryComponentName, idx, err)
+		resp := common.NewErrorResponse(
+			err,
+			http.StatusBadRequest,
+			customRegistryComponentName,
+			"GetAllAssetAdministrationShellDescriptors",
+			"BadRequest-UnmarshalAssetIds",
+		)
+		return model.AssetLink{}, &resp
+	}
+
+	if err = model.AssertAssetLinkRequired(link); err != nil {
+		log.Printf("[%s] Error GetAllAssetAdministrationShellDescriptors: validate assetIds[%d] failed: %v", customRegistryComponentName, idx, err)
+		resp := common.NewErrorResponse(
+			err,
+			http.StatusBadRequest,
+			customRegistryComponentName,
+			"GetAllAssetAdministrationShellDescriptors",
+			"BadRequest-ValidateAssetIds",
+		)
+		return model.AssetLink{}, &resp
+	}
+
+	return link, nil
 }
 
 func splitGlobalAssetIDLinks(links []model.AssetLink) ([]string, []model.AssetLink) {
