@@ -238,9 +238,9 @@ func dppElementIDFromJSONPathSegments(segments []dppJSONPathSegment) (string, er
 		return "", invalidDPPElementIDPathError()
 	}
 	var elementID strings.Builder
-	elementID.WriteString(segments[nameIndex].name)
+	_, _ = elementID.WriteString(segments[nameIndex].name)
 	for index := nameIndex + 1; index <= last; index++ {
-		elementID.WriteString(strconv.Itoa(segments[index].index))
+		_, _ = elementID.WriteString(strconv.Itoa(segments[index].index))
 	}
 	return elementID.String(), nil
 }
