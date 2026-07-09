@@ -8,13 +8,7 @@ on:
       - 'go.sum'
       - '.github/workflows/go-tests.yml'
       - '**.sql'
-      - 'internal/aasregistry/security_oidc_tests/**'
-      - 'cmd/digitaltwinregistryservice/**'
-      - 'examples/CatenaXample/**'
-      - 'internal/aasenvironment/marker_access_integration_tests/**'
-      - 'internal/digitaltwinregistry/integration_tests/**'
-      - 'internal/digitaltwinregistry/security_tests/**'
-      - 'internal/digitaltwinregistry/tractus-x-integrationtests/**'
+      - 'internal/**/*.json'
   push:
     branches: [main]
     paths:
@@ -23,13 +17,7 @@ on:
       - 'go.sum'
       - '.github/workflows/go-tests.yml'
       - '**.sql'
-      - 'internal/aasregistry/security_oidc_tests/**'
-      - 'cmd/digitaltwinregistryservice/**'
-      - 'examples/CatenaXample/**'
-      - 'internal/aasenvironment/marker_access_integration_tests/**'
-      - 'internal/digitaltwinregistry/integration_tests/**'
-      - 'internal/digitaltwinregistry/security_tests/**'
-      - 'internal/digitaltwinregistry/tractus-x-integrationtests/**'
+      - 'internal/**/*.json'
 
 permissions:
   contents: read
