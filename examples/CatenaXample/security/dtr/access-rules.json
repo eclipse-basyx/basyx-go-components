@@ -2,6 +2,14 @@
   "AllAccessPermissionRules": {
     "DEFATTRIBUTES": [
       {
+        "name": "user",
+        "attributes": [
+          {
+            "CLAIM": "role"
+          }
+        ]
+      },
+      {
         "name": "anonymous",
         "attributes": [
           {
@@ -49,7 +57,7 @@
     ],
     "DEFACLS": [
       {
-        "name": "read",
+        "name": "public_read",
         "acl": {
           "USEATTRIBUTES": "anonymous",
           "RIGHTS": [
@@ -59,10 +67,21 @@
         }
       },
       {
-        "name": "write",
+        "name": "read",
         "acl": {
-          "USEATTRIBUTES": "anonymous",
+          "USEATTRIBUTES": "user",
           "RIGHTS": [
+            "READ"
+          ],
+          "ACCESS": "ALLOW"
+        }
+      },
+      {
+        "name": "full_access",
+        "acl": {
+          "USEATTRIBUTES": "user",
+          "RIGHTS": [
+            "READ",
             "CREATE",
             "UPDATE",
             "DELETE"
@@ -79,7 +98,7 @@
         }
       },
       {
-        "name": "data_provider_read",
+        "name": "data_provider",
         "formula": {
           "$contains": [
             {
@@ -88,50 +107,7 @@
               }
             },
             {
-              "$strVal": "view_digital_twin"
-            }
-          ]
-        }
-      },
-      {
-        "name": "data_provider",
-        "formula": {
-          "$or": [
-            {
-              "$contains": [
-                {
-                  "$attribute": {
-                    "CLAIM": "role"
-                  }
-                },
-                {
-                  "$strVal": "add_digital_twin"
-                }
-              ]
-            },
-            {
-              "$contains": [
-                {
-                  "$attribute": {
-                    "CLAIM": "role"
-                  }
-                },
-                {
-                  "$strVal": "update_digital_twin"
-                }
-              ]
-            },
-            {
-              "$contains": [
-                {
-                  "$attribute": {
-                    "CLAIM": "role"
-                  }
-                },
-                {
-                  "$strVal": "delete_digital_twin"
-                }
-              ]
+              "$strVal": "data_provider"
             }
           ]
         }
@@ -181,7 +157,68 @@
         }
       },
       {
-        "name": "aas_bpn_or_public_with_header",
+        "name": "authenticated_aas_bpn_or_public",
+        "formula": {
+          "$and": [
+            {
+              "$or": [
+                {
+                  "$contains": [
+                    {
+                      "$attribute": {
+                        "CLAIM": "role"
+                      }
+                    },
+                    {
+                      "$strVal": "edc_user"
+                    }
+                  ]
+                },
+                {
+                  "$contains": [
+                    {
+                      "$attribute": {
+                        "CLAIM": "role"
+                      }
+                    },
+                    {
+                      "$strVal": "user"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "$or": [
+                {
+                  "$eq": [
+                    {
+                      "$attribute": {
+                        "CLAIM": "Edc-Bpn"
+                      }
+                    },
+                    {
+                      "$field": "$aasdesc#specificAssetIds[].externalSubjectId.keys[].value"
+                    }
+                  ]
+                },
+                {
+                  "$eq": [
+                    {
+                      "$strVal": "PUBLIC_READABLE"
+                    },
+                    {
+                      "$field": "$aasdesc#specificAssetIds[].externalSubjectId.keys[].value"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      },
+      {
+        "name": "aas_bpn_or_public_filter",
         "formula": {
           "$or": [
             {
@@ -197,28 +234,12 @@
               ]
             },
             {
-              "$and": [
+              "$eq": [
                 {
-                  "$eq": [
-                    {
-                      "$strVal": "PUBLIC_READABLE"
-                    },
-                    {
-                      "$field": "$aasdesc#specificAssetIds[].externalSubjectId.keys[].value"
-                    }
-                  ]
+                  "$strVal": "PUBLIC_READABLE"
                 },
                 {
-                  "$ne": [
-                    {
-                      "$attribute": {
-                        "CLAIM": "Edc-Bpn"
-                      }
-                    },
-                    {
-                      "$strVal": "<nil>"
-                    }
-                  ]
+                  "$field": "$aasdesc#specificAssetIds[].externalSubjectId.keys[].value"
                 }
               ]
             }
@@ -255,7 +276,7 @@
         }
       },
       {
-        "name": "submodel_descriptor_bpn_or_public_with_header",
+        "name": "submodel_descriptor_bpn_or_public_filter",
         "formula": {
           "$or": [
             {
@@ -271,28 +292,12 @@
               ]
             },
             {
-              "$and": [
+              "$eq": [
                 {
-                  "$eq": [
-                    {
-                      "$strVal": "PUBLIC_READABLE"
-                    },
-                    {
-                      "$field": "$aasdesc#submodelDescriptors[].supplementalSemanticIds[].keys[].value"
-                    }
-                  ]
+                  "$strVal": "PUBLIC_READABLE"
                 },
                 {
-                  "$ne": [
-                    {
-                      "$attribute": {
-                        "CLAIM": "Edc-Bpn"
-                      }
-                    },
-                    {
-                      "$strVal": "<nil>"
-                    }
-                  ]
+                  "$field": "$aasdesc#submodelDescriptors[].supplementalSemanticIds[].keys[].value"
                 }
               ]
             }
@@ -302,22 +307,14 @@
     ],
     "rules": [
       {
-        "USEACL": "read",
+        "USEACL": "public_read",
         "USEOBJECTS": [
           "description"
         ],
         "USEFORMULA": "always_true"
       },
       {
-        "USEACL": "read",
-        "USEOBJECTS": [
-          "all_shell_descriptors",
-          "asset_links"
-        ],
-        "USEFORMULA": "data_provider_read"
-      },
-      {
-        "USEACL": "write",
+        "USEACL": "full_access",
         "USEOBJECTS": [
           "all_routes"
         ],
@@ -328,7 +325,7 @@
         "USEOBJECTS": [
           "all_shell_descriptors"
         ],
-        "USEFORMULA": "aas_bpn_or_public",
+        "USEFORMULA": "authenticated_aas_bpn_or_public",
         "FILTERLIST": [
           {
             "FRAGMENT": "$aasdesc#administration",
@@ -360,12 +357,12 @@
           },
           {
             "FRAGMENT": "$aasdesc#specificAssetIds[]",
-            "USEFORMULA": "aas_bpn_or_public_with_header",
+            "USEFORMULA": "aas_bpn_or_public_filter",
             "MATCH": true
           },
           {
             "FRAGMENT": "$aasdesc#specificAssetIds[].externalSubjectId.keys[]",
-            "USEFORMULA": "aas_bpn_or_public_with_header",
+            "USEFORMULA": "aas_bpn_or_public_filter",
             "MATCH": true
           },
           {
@@ -375,12 +372,12 @@
           },
           {
             "FRAGMENT": "$aasdesc#submodelDescriptors[].supplementalSemanticIds[]",
-            "USEFORMULA": "submodel_descriptor_bpn_or_public_with_header",
+            "USEFORMULA": "submodel_descriptor_bpn_or_public_filter",
             "MATCH": true
           },
           {
             "FRAGMENT": "$aasdesc#submodelDescriptors[].supplementalSemanticIds[].keys[]",
-            "USEFORMULA": "submodel_descriptor_bpn_or_public_with_header",
+            "USEFORMULA": "submodel_descriptor_bpn_or_public_filter",
             "MATCH": true
           }
         ]

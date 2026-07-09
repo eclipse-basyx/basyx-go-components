@@ -8,6 +8,7 @@ on:
       - 'go.sum'
       - '.github/workflows/common-tests.yml'
       - '**.sql'
+      - 'internal/common/**/*.json'
   push:
     branches: [main]
     paths:
@@ -16,6 +17,7 @@ on:
       - 'go.sum'
       - '.github/workflows/common-tests.yml'
       - '**.sql'
+      - 'internal/common/**/*.json'
 
 permissions:
   contents: read

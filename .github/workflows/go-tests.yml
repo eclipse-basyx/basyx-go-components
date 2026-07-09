@@ -8,7 +8,7 @@ on:
       - 'go.sum'
       - '.github/workflows/go-tests.yml'
       - '**.sql'
-      - 'internal/aasregistry/security_oidc_tests/**'
+      - 'internal/**/*.json'
   push:
     branches: [main]
     paths:
@@ -17,7 +17,7 @@ on:
       - 'go.sum'
       - '.github/workflows/go-tests.yml'
       - '**.sql'
-      - 'internal/aasregistry/security_oidc_tests/**'
+      - 'internal/**/*.json'
 
 permissions:
   contents: read
@@ -412,7 +412,7 @@ jobs:
         run: go mod download
 
       - name: Run digital twin registry unit tests
-        run: go test -v ./internal/digitaltwinregistry
+        run: go test -v ./internal/digitaltwinregistry ./cmd/digitaltwinregistryservice
 
   aas-environment-unit-tests:
     name: AAS Environment Unit Tests
@@ -452,6 +452,27 @@ jobs:
       - name: Run aas environment integration tests
         run: |
           cd internal/aasenvironment/integration_tests
+          go test -v .
+
+  aas-environment-marker-access-integration-tests:
+    name: CatenaX Example Integration Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out code
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+
+      - name: Set up Go
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Get dependencies
+        run: go mod download
+
+      - name: Run aas environment marker access integration tests
+        run: |
+          cd internal/aasenvironment/marker_access_integration_tests
           go test -v .
 
   aas-environment-preconfiguration-integration-tests:

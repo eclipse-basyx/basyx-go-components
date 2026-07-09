@@ -1,0 +1,51 @@
+{
+  "paging_metadata": {},
+  "result": [
+    {
+      "id": "e1eba3d7-91f0-4dac-a730-eaa1d35e035c-3",
+      "submodelDescriptors": [
+        {
+          "description": [
+            {
+              "language": "en",
+              "text": "Example submodel for a twin without public readable specific asset ids."
+            }
+          ],
+          "endpoints": [
+            {
+              "interface": "SUBMODEL-3.0",
+              "protocolInformation": {
+                "endpointProtocol": "HTTP",
+                "endpointProtocolVersion": [
+                  "1.1"
+                ],
+                "href": "https://edc.data.plane/mypath/submodel-no-public-readable",
+                "securityAttributes": [
+                  {
+                    "key": "NONE",
+                    "type": "NONE",
+                    "value": "NONE"
+                  }
+                ],
+                "subprotocol": "DSP",
+                "subprotocolBody": "body with information required by subprotocol",
+                "subprotocolBodyEncoding": "plain"
+              }
+            }
+          ],
+          "id": "cd47615b-daf3-4036-8670-d2f89349d388-3",
+          "idShort": "idShortNoPublicReadable",
+          "semanticId": {
+            "keys": [
+              {
+                "type": "Submodel",
+                "value": "urn:bamm:io.catenax.serial_part_typization:1.1.0#SerialPartTypization"
+              }
+            ],
+            "type": "ExternalReference"
+          }
+        }
+      ]
+    }
+  ]
+}

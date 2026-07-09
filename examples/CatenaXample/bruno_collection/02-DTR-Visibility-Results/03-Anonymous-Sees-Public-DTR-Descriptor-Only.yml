@@ -1,0 +1,81 @@
+info:
+  name: "Anonymous Sees Public DTR Descriptor Only"
+  type: http
+  seq: 3
+
+http:
+  method: GET
+  url: "http://localhost:5004/api/v3/shell-descriptors"
+  auth:
+    type: none
+
+runtime:
+  scripts:
+    - type: before-request
+      code: |-
+        const tokenVariable = "noBpnViewerAccessToken";
+        const expiresAtVariable = "noBpnViewerAccessTokenExpiresAt";
+        const nowSeconds = Math.floor(Date.now() / 1000);
+
+        function tokenIsFresh() {
+          const expiresAt = Number(bru.getVar(expiresAtVariable) || 0);
+          return expiresAt - 30 > nowSeconds;
+        }
+
+        function formUrlEncode(fields) {
+          return Object.entries(fields)
+            .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(value)}`)
+            .join("&");
+        }
+
+        async function requestOAuth2Token() {
+          if (tokenIsFresh()) {
+            return bru.getVar(tokenVariable);
+          }
+
+          const response = await bru.sendRequest({
+            url: "http://keycloak.localhost:8080/realms/basyx/protocol/openid-connect/token",
+            method: "POST",
+            headers: {
+              "Content-Type": "application/x-www-form-urlencoded",
+            },
+            data: formUrlEncode({
+              grant_type: "password",
+              client_id: "basyx-ui",
+              username: "no_bpn_viewer",
+              password: "pwd",
+            }),
+          });
+
+          const status = response.status || response.statusCode || response.code;
+          if (status !== 200) {
+            throw new Error(`OAuth2 token request failed with status ${status}`);
+          }
+
+          const tokenResponse = typeof response.data === "string" ? JSON.parse(response.data) : response.data;
+          bru.setVar(tokenVariable, tokenResponse.access_token);
+          bru.setVar(expiresAtVariable, String(nowSeconds + Number(tokenResponse.expires_in || 300)));
+
+          return tokenResponse.access_token;
+        }
+
+        const token = await requestOAuth2Token();
+        req.setHeader("Authorization", `Bearer ${token}`);
+    - type: tests
+      code: |-
+        test('anonymous descriptor result shows public marker references only', function () {
+            expect(res.status).to.equal(200);
+            const shell = res.body.result[0];
+            expect(shell.id).to.eql('urn:example:aas:product-001');
+            expect(shell.specificAssetIds).to.have.length(1);
+            expect(shell.specificAssetIds[0].externalSubjectId.keys.map((key) => key.value)).to.eql(['PUBLIC_READABLE']);
+            expect(shell.submodelDescriptors).to.have.length(1);
+            expect(shell.submodelDescriptors[0].idShort).to.eql('PublicNameplate');
+            expect(shell.submodelDescriptors[0].supplementalSemanticId[0].keys.map((key) => key.value)).to.eql(['PUBLIC_READABLE']);
+        });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5

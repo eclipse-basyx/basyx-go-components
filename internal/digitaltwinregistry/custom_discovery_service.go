@@ -94,9 +94,17 @@ func (s *CustomDiscoveryService) SearchAllAssetAdministrationShellIdsByAssetLink
 	}
 
 	if shouldEnforceFormula {
-		assetLinkQuery := buildAssetLinkQuery(ctx, assetLink)
+		globalAssetIDs, specificAssetLinks := splitGlobalAssetIDLinks(assetLink)
+		readUnrestricted := auth.HasUnrestrictedFormulaForRight(ctx, grammar.RightsEnumREAD)
+		if len(globalAssetIDs) > 0 && len(specificAssetLinks) == 0 {
+			ctx = mergeGlobalAssetIDLookupVisibility(ctx, globalAssetIDs)
+		}
+
+		assetLinkQuery := buildBasicDiscoveryAssetLinkQueryWithAccess(ctx, specificAssetLinks, readUnrestricted)
 		if assetLinkQuery.Condition != nil || len(assetLinkQuery.FilterConditions) > 0 {
 			ctx = auth.MergeQueryFilter(ctx, assetLinkQuery)
+		}
+		if len(globalAssetIDs) == 0 && (assetLinkQuery.Condition != nil || len(assetLinkQuery.FilterConditions) > 0) {
 			ctx = discoveryapiinternal.WithAssetLinksAlreadyConstrained(ctx)
 		}
 	}
@@ -307,6 +315,18 @@ func buildEdcBpnClaimEqualsHeaderExpression(t *time.Time, pattern string) gramma
 //   - exact link match + Edc-Bpn authorization (when Edc-Bpn claim exists), or
 //   - exact link match + PUBLIC_READABLE authorization.
 func buildAssetLinkQuery(ctx context.Context, assetLink []model.AssetLink) grammar.Query {
+	return buildAssetLinkQueryForRoot(ctx, assetLink, "$aasdesc")
+}
+
+func buildBasicDiscoveryAssetLinkQueryWithAccess(ctx context.Context, assetLink []model.AssetLink, readUnrestricted bool) grammar.Query {
+	if readUnrestricted {
+		return buildUnrestrictedAssetLinkQueryForRoot(assetLink, "$bd")
+	}
+
+	return buildAssetLinkQueryForRoot(ctx, assetLink, "$bd")
+}
+
+func buildAssetLinkQueryForRoot(ctx context.Context, assetLink []model.AssetLink, root string) grammar.Query {
 	if len(assetLink) == 0 {
 		return grammar.Query{}
 	}
@@ -315,9 +335,9 @@ func buildAssetLinkQuery(ctx context.Context, assetLink []model.AssetLink) gramm
 		return grammar.Query{}
 	}
 
-	assetLinkFieldPattern := grammar.ModelStringPattern("$aasdesc#specificAssetIds[].externalSubjectId.keys[].value")
-	assetLinkFieldValue := grammar.ModelStringPattern("$aasdesc#specificAssetIds[].value")
-	assetLinkFieldName := grammar.ModelStringPattern("$aasdesc#specificAssetIds[].name")
+	assetLinkFieldPattern := grammar.ModelStringPattern(root + "#specificAssetIds[].externalSubjectId.keys[].value")
+	assetLinkFieldValue := grammar.ModelStringPattern(root + "#specificAssetIds[].value")
+	assetLinkFieldName := grammar.ModelStringPattern(root + "#specificAssetIds[].name")
 	publicReadable := grammar.StandardString("PUBLIC_READABLE")
 
 	claims := auth.ClaimsFromContext(ctx)
@@ -384,4 +404,47 @@ func buildAssetLinkQuery(ctx context.Context, assetLink []model.AssetLink) gramm
 	return grammar.Query{
 		Condition: &assetLinkLe,
 	}
+}
+
+func buildUnrestrictedAssetLinkQueryForRoot(assetLink []model.AssetLink, root string) grammar.Query {
+	if len(assetLink) == 0 {
+		return grammar.Query{}
+	}
+
+	assetLinkFieldValue := grammar.ModelStringPattern(root + "#specificAssetIds[].value")
+	assetLinkFieldName := grammar.ModelStringPattern(root + "#specificAssetIds[].name")
+	assetLinkLe := grammar.LogicalExpression{And: []grammar.LogicalExpression{}}
+	for _, link := range assetLink {
+		assetLinkValue := grammar.StandardString(link.Value)
+		assetLinkName := grammar.StandardString(link.Name)
+		assetLinkLe.And = append(assetLinkLe.And, grammar.LogicalExpression{
+			Match: []grammar.MatchExpression{
+				{
+					Eq: grammar.ComparisonItems{
+						{Field: &assetLinkFieldValue},
+						{StrVal: &assetLinkValue},
+					},
+				},
+				{
+					Eq: grammar.ComparisonItems{
+						{Field: &assetLinkFieldName},
+						{StrVal: &assetLinkName},
+					},
+				},
+			},
+		})
+	}
+
+	return grammar.Query{
+		Condition: &assetLinkLe,
+	}
+}
+
+func mergeGlobalAssetIDLookupVisibility(ctx context.Context, globalAssetIDs []string) context.Context {
+	globalAssetIDQuery := buildBasicDiscoveryGlobalAssetIDQuery(globalAssetIDs)
+	if globalAssetIDQuery.Condition == nil {
+		return ctx
+	}
+
+	return auth.MergeQueryFilter(ctx, globalAssetIDQuery)
 }
