@@ -17,11 +17,13 @@ updates:
       default-days: 1
     groups:
       golang-base-images:
+        group-by: dependency-name
         patterns:
           - "golang"
       distroless-base-images:
+        group-by: dependency-name
         patterns:
-          - "gcr.io/distroless/static"
+          - "distroless/static"
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
