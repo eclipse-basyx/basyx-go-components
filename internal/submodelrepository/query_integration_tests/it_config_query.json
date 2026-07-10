@@ -744,7 +744,7 @@
         "method":  "POST",
         "endpoint":  "{{BASYX_IT_API_URL}}/query/submodels",
         "data":  "bodies/query_tests/102.json",
-        "shouldMatch":  "expected/sophisticatedQueryTests/res102.json",
+        "shouldMatch":  "expected/sophisticatedQueryTests/empty_sme_response_2.json",
         "expectedStatus":  200,
         "token":  {
                       "user":  "admin",
@@ -997,4 +997,3 @@
                   }
     }
 ]
-

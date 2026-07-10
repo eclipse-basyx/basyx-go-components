@@ -164,7 +164,11 @@ func NewResolvedFieldPathCollectorForSMERow(rootAlias string) (*ResolvedFieldPat
 		return "id"
 	}
 
-	return NewResolvedFieldPathCollectorWithConfig(&cfg), nil
+	collector := NewResolvedFieldPathCollectorWithConfig(&cfg)
+	collector.fragmentBindingAliasRewrites = map[string]string{
+		"submodel_element": rootAlias,
+	}
+	return collector, nil
 }
 
 func joinPlanConfigForRoot(root CollectorRoot) (JoinPlanConfig, error) {
@@ -821,8 +825,9 @@ func joinPlanConfigForBD() JoinPlanConfig {
 
 // ResolvedFieldPathCollector carries join configuration for inline EXISTS evaluation.
 type ResolvedFieldPathCollector struct {
-	joinConfig    *JoinPlanConfig
-	inlineAliases map[string]struct{}
+	joinConfig                   *JoinPlanConfig
+	inlineAliases                map[string]struct{}
+	fragmentBindingAliasRewrites map[string]string
 }
 
 // NewResolvedFieldPathCollectorWithConfig creates a collector with the provided join config.
@@ -889,6 +894,25 @@ func (c *ResolvedFieldPathCollector) canEvaluateInline(resolved []ResolvedFieldP
 		}
 	}
 	return true
+}
+
+func (c *ResolvedFieldPathCollector) rewriteFragmentBindings(bindings []ArrayIndexBinding) []ArrayIndexBinding {
+	if c == nil || len(c.fragmentBindingAliasRewrites) == 0 || len(bindings) == 0 {
+		return bindings
+	}
+
+	rewritten := make([]ArrayIndexBinding, len(bindings))
+	copy(rewritten, bindings)
+	for index := range rewritten {
+		alias, column, found := strings.Cut(rewritten[index].Alias, ".")
+		if !found {
+			continue
+		}
+		if replacement, exists := c.fragmentBindingAliasRewrites[alias]; exists {
+			rewritten[index].Alias = replacement + "." + column
+		}
+	}
+	return rewritten
 }
 
 func buildInlineExistsExpression(resolved []ResolvedFieldPath, predicate exp.Expression, collector *ResolvedFieldPathCollector) (exp.Expression, error) {
@@ -1988,6 +2012,7 @@ func (le *LogicalExpression) EvaluateToExpressionWithNegatedFragments(
 		if err != nil {
 			return nil, nil, fmt.Errorf("error evaluating fragment at index %d: %w", i, err)
 		}
+		bindings = collector.rewriteFragmentBindings(bindings)
 		if len(bindings) == 0 {
 			continue
 		}

@@ -134,15 +134,78 @@ func TestBuildSMEMaskRuntimeGuardsPathSpecificFragment(t *testing.T) {
 
 	dataset := goqu.Dialect("postgres").
 		From(goqu.T("submodel_element").As("sme")).
-		InnerJoin(
-			goqu.T("submodel_element").As("submodel_element"),
-			goqu.On(goqu.I("submodel_element.id").Eq(goqu.I("sme.id"))),
-		).
 		Select(runtime.Projections()...)
 	sqlQuery, _, err := dataset.ToSQL()
 	require.NoError(t, err)
 
-	require.Contains(t, sqlQuery, `"submodel_element"."idshort_path"`)
+	require.Contains(t, sqlQuery, `"sme"."idshort_path"`)
+	require.NotContains(t, sqlQuery, `"submodel_element"."idshort_path"`)
 	require.Contains(t, sqlQuery, "ARestricted")
 	require.Contains(t, sqlQuery, "NOT")
+}
+
+func TestAddSMEVisibleTreeQueryFiltersAncestorsBeforeLimit(t *testing.T) {
+	t.Parallel()
+
+	deny := false
+	ctx := auth.WithQueryFilter(context.Background(), &auth.QueryFilter{
+		Filters: auth.FragmentFilters{
+			"$sme.ARestricted": {Boolean: &deny},
+		},
+	})
+	dataset := goqu.Dialect("postgres").
+		From(goqu.T("submodel_element").As("sme")).
+		Select(goqu.I("sme.idshort_path")).
+		Order(goqu.I("sme.idshort_path").Asc()).
+		Limit(2)
+
+	filtered, err := addSMEVisibleTreeQuery(ctx, dataset, 42)
+	require.NoError(t, err)
+	sqlQuery, _, err := filtered.ToSQL()
+	require.NoError(t, err)
+
+	require.Contains(t, sqlQuery, "WITH RECURSIVE visible_sme_ids(id)")
+	require.Contains(t, sqlQuery, `"visible_sme_child"."parent_sme_id" = "visible_sme_parent"."id"`)
+	require.Contains(t, sqlQuery, `"visible_sme_root"."idshort_path"`)
+	require.Contains(t, sqlQuery, `"visible_sme_child"."idshort_path"`)
+	require.Contains(t, sqlQuery, `"sme"."id" IN ((SELECT "id" FROM "visible_sme_ids"))`)
+	require.NotContains(t, sqlQuery, `"submodel_element"."idshort_path"`)
+	require.Contains(t, sqlQuery, "LIMIT 2")
+}
+
+func TestNormalizeSMERowFiltersIgnoresOtherStructuralRoots(t *testing.T) {
+	t.Parallel()
+
+	allow := true
+	ctx := auth.WithQueryFilter(context.Background(), &auth.QueryFilter{
+		Filters: auth.FragmentFilters{
+			"$sm":  {Boolean: &allow},
+			"$sme": {Boolean: &allow},
+		},
+	})
+
+	filterCtx, fragments, err := normalizeSMERowFilters(ctx)
+	require.NoError(t, err)
+	require.Equal(t, []grammar.FragmentStringPattern{"$sme#idShort"}, fragments)
+	require.Contains(t, auth.GetQueryFilter(filterCtx).Filters, grammar.FragmentStringPattern("$sm"))
+	require.NotContains(t, auth.GetQueryFilter(filterCtx).Filters, grammar.FragmentStringPattern("$sm#idShort"))
+}
+
+func TestNormalizeSMERowFiltersCombinesNormalizedCollision(t *testing.T) {
+	t.Parallel()
+
+	allow := true
+	deny := false
+	ctx := auth.WithQueryFilter(context.Background(), &auth.QueryFilter{
+		Filters: auth.FragmentFilters{
+			"$sme":         {Boolean: &allow},
+			"$sme#idShort": {Boolean: &deny},
+		},
+	})
+
+	filterCtx, fragments, err := normalizeSMERowFilters(ctx)
+	require.NoError(t, err)
+	require.Equal(t, []grammar.FragmentStringPattern{"$sme#idShort"}, fragments)
+	combined := auth.GetQueryFilter(filterCtx).Filters["$sme#idShort"]
+	require.Len(t, combined.And, 2)
 }

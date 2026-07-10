@@ -47,6 +47,36 @@
       "modelType": "Property",
       "valueType": "xs:string",
       "value": "restricted"
+    },
+    {
+      "idShort": "ZRestrictedContainer",
+      "modelType": "SubmodelElementCollection",
+      "semanticId": {
+        "type": "ExternalReference",
+        "keys": [
+          {
+            "type": "GlobalReference",
+            "value": "urn:example:semantic:restricted-container"
+          }
+        ]
+      },
+      "value": [
+        {
+          "idShort": "NestedManufacturerProductRoot",
+          "modelType": "Property",
+          "semanticId": {
+            "type": "ExternalReference",
+            "keys": [
+              {
+                "type": "GlobalReference",
+                "value": "0112/2///61360_7#AAS011#001"
+              }
+            ]
+          },
+          "valueType": "xs:string",
+          "value": "nested-visible-but-parent-hidden"
+        }
+      ]
     }
   ]
 }

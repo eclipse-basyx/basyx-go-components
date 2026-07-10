@@ -64,6 +64,18 @@
     "expectedStatus": 404
   },
   {
+    "context": "Nested matching SME is rejected when its parent is filtered",
+    "method": "GET",
+    "endpoint": "{{BASYX_IT_API_URL}}/submodels/dXJuOmV4YW1wbGU6c3VibW9kZWw6bmFtZXBsYXRlLWZpbHRlcg/submodel-elements/ZRestrictedContainer.NestedManufacturerProductRoot",
+    "expectedStatus": 404
+  },
+  {
+    "context": "Nested matching SME path response is rejected when its parent is filtered",
+    "method": "GET",
+    "endpoint": "{{BASYX_IT_API_URL}}/submodels/dXJuOmV4YW1wbGU6c3VibW9kZWw6bmFtZXBsYXRlLWZpbHRlcg/submodel-elements/ZRestrictedContainer.NestedManufacturerProductRoot/$path",
+    "expectedStatus": 404
+  },
+  {
     "context": "Value-only response contains only the matching SME",
     "method": "GET",
     "endpoint": "{{BASYX_IT_API_URL}}/submodels/dXJuOmV4YW1wbGU6c3VibW9kZWw6bmFtZXBsYXRlLWZpbHRlcg/submodel-elements/$value",
