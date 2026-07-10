@@ -136,6 +136,40 @@ func TestLogicalExpression_EvaluateToExpressionWithNegatedFragments_NoCollector_
 	}
 }
 
+func TestLogicalExpression_EvaluateToExpressionWithNegatedFragments_SMERowWildcardUsesRewrittenAlias(t *testing.T) {
+	deny := false
+	le := &LogicalExpression{Boolean: &deny}
+	collector, err := NewResolvedFieldPathCollectorForSMERow("sme")
+	if err != nil {
+		t.Fatalf("NewResolvedFieldPathCollectorForSMERow returned error: %v", err)
+	}
+
+	whereExpr, _, err := le.EvaluateToExpressionWithNegatedFragments(
+		collector,
+		[]FragmentStringPattern{"$sme.NewTestList[]#idShort"},
+	)
+	if err != nil {
+		t.Fatalf("EvaluateToExpressionWithNegatedFragments returned error: %v", err)
+	}
+
+	sqlStr, args, err := goqu.Dialect("postgres").
+		From(goqu.T("submodel_element").As("sme")).
+		Select(goqu.V(1)).
+		Where(whereExpr).
+		Prepared(true).
+		ToSQL()
+	if err != nil {
+		t.Fatalf("ToSQL returned error: %v", err)
+	}
+
+	if !strings.Contains(sqlStr, `"sme"."idshort_path" LIKE`) {
+		t.Fatalf("expected wildcard guard against the rewritten SME alias, got: %s", sqlStr)
+	}
+	if !argListContains(args, "NewTestList[%") {
+		t.Fatalf("expected wildcard path argument, got %#v", args)
+	}
+}
+
 func TestLogicalExpression_EvaluateToExpressionWithNegatedFragments_WithCollector_UsesFlagAndBuildsCTE(t *testing.T) {
 	le := &LogicalExpression{Eq: ComparisonItems{field("$aasdesc#idShort"), strVal("shell-short")}}
 
