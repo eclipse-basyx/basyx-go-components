@@ -23,6 +23,7 @@
 * SPDX-License-Identifier: MIT
 ******************************************************************************/
 
+// nolint:all Is only a test file
 package main
 
 import (

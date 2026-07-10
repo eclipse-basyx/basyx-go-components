@@ -242,22 +242,6 @@ func GetSubmodelElementPathsPageBySubmodelID(ctx context.Context, db *sql.DB, su
 	if level == "core" {
 		query = query.Where(goqu.I("sme.parent_sme_id").IsNull())
 	}
-	if cursor != "" {
-		cursorPath, cursorID, hasCursorID := parseRootCursor(cursor)
-		if hasCursorID {
-			query = query.Where(
-				goqu.Or(
-					goqu.I("sme.idshort_path").Gt(cursorPath),
-					goqu.And(
-						goqu.I("sme.idshort_path").Eq(cursorPath),
-						goqu.I("sme.id").Gt(cursorID),
-					),
-				),
-			)
-		} else {
-			query = query.Where(goqu.I("sme.idshort_path").Gt(cursorPath))
-		}
-	}
 
 	collector, collectorErr := grammar.NewResolvedFieldPathCollectorForRoot(grammar.CollectorRootSME)
 	if collectorErr != nil {
@@ -278,6 +262,16 @@ func GetSubmodelElementPathsPageBySubmodelID(ctx context.Context, db *sql.DB, su
 	query, rowFilterErr := addSMEVisibleTreeQuery(ctx, query, int64(submodelDatabaseID))
 	if rowFilterErr != nil {
 		return nil, "", common.NewInternalServerError("SMREPO-GETSMEPATHSPAGE-ABACFILTER " + rowFilterErr.Error())
+	}
+	if cursor != "" {
+		cursorExists, cursorErr := submodelElementCursorExists(ctx, db, query, cursor)
+		if cursorErr != nil {
+			return nil, "", cursorErr
+		}
+		if !cursorExists {
+			return []string{}, "", nil
+		}
+		query = addSMECursorBoundary(query, cursor)
 	}
 
 	query = query.
@@ -736,28 +730,6 @@ func getRootElementPage(ctx context.Context, db dbQueryer, submodelDatabaseID in
 
 	query = query.Order(goqu.I("sme.idshort_path").Asc(), goqu.I("sme.id").Asc())
 
-	if cursor != "" {
-		cursorPath, cursorID, hasCursorID := parseRootCursor(cursor)
-		if hasCursorID {
-			query = query.Where(
-				goqu.Or(
-					goqu.I("sme.idshort_path").Gt(cursorPath),
-					goqu.And(
-						goqu.I("sme.idshort_path").Eq(cursorPath),
-						goqu.I("sme.id").Gt(cursorID),
-					),
-				),
-			)
-		} else {
-			query = query.Where(goqu.I("sme.idshort_path").Gt(cursorPath))
-		}
-	}
-
-	if limit != nil && *limit > 0 {
-		//nolint:gosec // limit is validated to be > 0 before conversion
-		query = query.Limit(uint(*limit + 1))
-	}
-
 	collector, collectorErr := grammar.NewResolvedFieldPathCollectorForRoot(grammar.CollectorRootSME)
 	if collectorErr != nil {
 		return nil, "", common.NewInternalServerError("SMREPO-GETROOTPATHS-BADCOLLECTOR " + collectorErr.Error())
@@ -776,6 +748,20 @@ func getRootElementPage(ctx context.Context, db dbQueryer, submodelDatabaseID in
 	query, rowFilterErr := addSMERowFilterQueries(ctx, query)
 	if rowFilterErr != nil {
 		return nil, "", common.NewInternalServerError("SMREPO-GETROOTPATHS-ABACFILTER " + rowFilterErr.Error())
+	}
+	if cursor != "" {
+		cursorExists, cursorErr := submodelElementCursorExists(ctx, db, query, cursor)
+		if cursorErr != nil {
+			return nil, "", cursorErr
+		}
+		if !cursorExists {
+			return []rootElementCursorRow{}, "", nil
+		}
+		query = addSMECursorBoundary(query, cursor)
+	}
+	if limit != nil && *limit > 0 {
+		//nolint:gosec // limit is validated to be > 0 before conversion
+		query = query.Limit(uint(*limit + 1))
 	}
 
 	sqlQuery, args, toSQLErr := query.ToSQL()
@@ -842,6 +828,41 @@ func parseRootCursor(cursor string) (string, int64, bool) {
 
 func formatRootCursor(path string, id int64) string {
 	return path + "|" + strconv.FormatInt(id, 10)
+}
+
+func addSMECursorBoundary(query *goqu.SelectDataset, cursor string) *goqu.SelectDataset {
+	cursorPath, cursorID, hasCursorID := parseRootCursor(cursor)
+	if !hasCursorID {
+		return query.Where(goqu.I("sme.idshort_path").Gt(cursorPath))
+	}
+	return query.Where(
+		goqu.Or(
+			goqu.I("sme.idshort_path").Gt(cursorPath),
+			goqu.And(
+				goqu.I("sme.idshort_path").Eq(cursorPath),
+				goqu.I("sme.id").Gt(cursorID),
+			),
+		),
+	)
+}
+
+func submodelElementCursorExists(ctx context.Context, db dbQueryer, query *goqu.SelectDataset, cursor string) (bool, error) {
+	cursorPath, cursorID, hasCursorID := parseRootCursor(cursor)
+	cursorQuery := query.Where(goqu.I("sme.idshort_path").Eq(cursorPath))
+	if hasCursorID {
+		cursorQuery = cursorQuery.Where(goqu.I("sme.id").Eq(cursorID))
+	}
+	sqlQuery, args, buildErr := cursorQuery.Limit(1).ToSQL()
+	if buildErr != nil {
+		return false, common.NewInternalServerError("SMREPO-CHECKSMECURSOR-BUILDQ " + buildErr.Error())
+	}
+
+	rows, queryErr := db.QueryContext(ctx, sqlQuery, args...)
+	if queryErr != nil {
+		return false, common.NewInternalServerError("SMREPO-CHECKSMECURSOR-EXECQ " + queryErr.Error())
+	}
+	defer func() { _ = rows.Close() }()
+	return rows.Next(), rows.Err()
 }
 
 type loadedSMERow struct {
