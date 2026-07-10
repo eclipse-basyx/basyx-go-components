@@ -721,6 +721,11 @@ jobs:
           cd internal/submodelrepository/security_tests
           go test -v
 
+      - name: Run submodel repository security filter tests
+        run: |
+          cd internal/submodelrepository/security_filter_tests
+          go test -v
+
   aas-repository-unit-tests:
     name: Asset Administration Shell Repository Unit Tests
     runs-on: ubuntu-latest

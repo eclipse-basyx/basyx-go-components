@@ -483,6 +483,9 @@ func (q *QueryFilter) FilterExpressionEntriesFor(key grammar.FragmentStringPatte
 	keyTokens := builder.TokenizeField(string(key))
 
 	for k, expr := range q.Filters {
+		if !fragmentRootsEqual(k, key) {
+			continue
+		}
 		kTokens := builder.TokenizeField(string(k))
 
 		if len(kTokens) != len(keyTokens) {
@@ -519,4 +522,17 @@ func (q *QueryFilter) FilterExpressionEntriesFor(key grammar.FragmentStringPatte
 	}
 
 	return out
+}
+
+func fragmentRootsEqual(first grammar.FragmentStringPattern, second grammar.FragmentStringPattern) bool {
+	return fragmentRoot(first) == fragmentRoot(second)
+}
+
+func fragmentRoot(fragment grammar.FragmentStringPattern) string {
+	fragmentString := string(fragment)
+	fragmentSeparator := strings.IndexAny(fragmentString, ".[#")
+	if fragmentSeparator < 0 {
+		return fragmentString
+	}
+	return fragmentString[:fragmentSeparator]
 }

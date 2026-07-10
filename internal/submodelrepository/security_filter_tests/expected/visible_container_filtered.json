@@ -1,0 +1,13 @@
+{
+  "idShort": "VisibleContainer",
+  "modelType": "SubmodelElementCollection",
+  "semanticId": {
+    "type": "ExternalReference",
+    "keys": [
+      {
+        "type": "GlobalReference",
+        "value": "0112/2///61360_7#AAS011#001"
+      }
+    ]
+  }
+}

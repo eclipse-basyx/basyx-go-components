@@ -280,11 +280,10 @@ func ReadSubmodelElementSupplementalSemanticReferencesByElementIDs(
 	db DBQueryer,
 	submodelElementIDs []int64,
 ) (map[int64][]types.IReference, error) {
-	collector, err := grammar.NewResolvedFieldPathCollectorForRoot(grammar.CollectorRootSME)
+	collector, err := grammar.NewResolvedFieldPathCollectorForSMERow("submodel_element")
 	if err != nil {
 		return nil, fmt.Errorf("REFREAD-SUPPSME-COLLECTOR: %w", err)
 	}
-	collector.SetRootJoinKey("submodel_element", common.ColSubmodelID)
 	collector.AllowInlineAliases(
 		"submodel_element",
 		"sme_supplemental_semantic_id_reference",

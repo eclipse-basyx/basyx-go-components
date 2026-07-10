@@ -1,0 +1,143 @@
+[
+  {
+    "context": "Admin creates the nameplate fixture",
+    "token": { "user": "admin", "password": "pwd" },
+    "method": "POST",
+    "endpoint": "{{BASYX_IT_API_URL}}/submodels",
+    "data": "bodies/nameplate.json",
+    "expectedStatus": 201
+  },
+  {
+    "context": "Admin remains unfiltered",
+    "token": { "user": "admin", "password": "pwd" },
+    "method": "GET",
+    "endpoint": "{{BASYX_IT_API_URL}}/submodels/dXJuOmV4YW1wbGU6c3VibW9kZWw6bmFtZXBsYXRlLWZpbHRlcg",
+    "shouldMatch": "expected/nameplate_unfiltered.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "Anonymous direct submodel response contains only the matching SME",
+    "method": "GET",
+    "endpoint": "{{BASYX_IT_API_URL}}/submodels/dXJuOmV4YW1wbGU6c3VibW9kZWw6bmFtZXBsYXRlLWZpbHRlcg",
+    "shouldMatch": "expected/nameplate_filtered.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "Anonymous submodel list contains only the matching SME",
+    "method": "GET",
+    "endpoint": "{{BASYX_IT_API_URL}}/submodels",
+    "shouldMatch": "expected/nameplate_list_filtered.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "Anonymous query response contains only the matching SME",
+    "method": "POST",
+    "endpoint": "{{BASYX_IT_API_URL}}/query/submodels",
+    "data": "bodies/query_all.json",
+    "shouldMatch": "expected/nameplate_list_filtered.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "Anonymous query retains structurally visible SME when idShort is masked",
+    "method": "POST",
+    "endpoint": "{{BASYX_IT_API_URL}}/query/submodels",
+    "data": "bodies/query_mask_sme_idshort.json",
+    "shouldMatch": "expected/nameplate_list_idshort_masked.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "SME pagination filters before applying the limit",
+    "method": "GET",
+    "endpoint": "{{BASYX_IT_API_URL}}/submodels/dXJuOmV4YW1wbGU6c3VibW9kZWw6bmFtZXBsYXRlLWZpbHRlcg/submodel-elements?limit=1",
+    "shouldMatch": "expected/nameplate_elements_filtered.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "Exact SME read succeeds when a sibling satisfies the regular SME formula",
+    "token": { "user": "userx", "password": "pwd" },
+    "method": "GET",
+    "endpoint": "{{BASYX_IT_API_URL}}/submodels/dXJuOmV4YW1wbGU6c3VibW9kZWw6bmFtZXBsYXRlLWZpbHRlcg/submodel-elements/ManufacturerProductRoot",
+    "shouldMatch": "expected/manufacturer_product_root.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "Anonymous cannot read a nonmatching SME directly",
+    "method": "GET",
+    "endpoint": "{{BASYX_IT_API_URL}}/submodels/dXJuOmV4YW1wbGU6c3VibW9kZWw6bmFtZXBsYXRlLWZpbHRlcg/submodel-elements/ARestricted",
+    "expectedStatus": 404
+  },
+  {
+    "context": "Anonymous cannot read an SME without semantic ID directly",
+    "method": "GET",
+    "endpoint": "{{BASYX_IT_API_URL}}/submodels/dXJuOmV4YW1wbGU6c3VibW9kZWw6bmFtZXBsYXRlLWZpbHRlcg/submodel-elements/WithoutSemanticId",
+    "expectedStatus": 404
+  },
+  {
+    "context": "Nested matching SME is rejected when its parent is filtered",
+    "method": "GET",
+    "endpoint": "{{BASYX_IT_API_URL}}/submodels/dXJuOmV4YW1wbGU6c3VibW9kZWw6bmFtZXBsYXRlLWZpbHRlcg/submodel-elements/ZRestrictedContainer.NestedManufacturerProductRoot",
+    "expectedStatus": 404
+  },
+  {
+    "context": "Nested matching SME path response is rejected when its parent is filtered",
+    "method": "GET",
+    "endpoint": "{{BASYX_IT_API_URL}}/submodels/dXJuOmV4YW1wbGU6c3VibW9kZWw6bmFtZXBsYXRlLWZpbHRlcg/submodel-elements/ZRestrictedContainer.NestedManufacturerProductRoot/$path",
+    "expectedStatus": 404
+  },
+  {
+    "context": "Value-only response contains only the matching SME",
+    "method": "GET",
+    "endpoint": "{{BASYX_IT_API_URL}}/submodels/dXJuOmV4YW1wbGU6c3VibW9kZWw6bmFtZXBsYXRlLWZpbHRlcg/submodel-elements/$value",
+    "shouldMatch": "expected/nameplate_elements_value_filtered.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "Metadata response contains only the matching SME",
+    "method": "GET",
+    "endpoint": "{{BASYX_IT_API_URL}}/submodels/dXJuOmV4YW1wbGU6c3VibW9kZWw6bmFtZXBsYXRlLWZpbHRlcg/submodel-elements/$metadata",
+    "shouldMatch": "expected/nameplate_elements_metadata_filtered.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "Reference response does not expose nonmatching SMEs",
+    "method": "GET",
+    "endpoint": "{{BASYX_IT_API_URL}}/submodels/dXJuOmV4YW1wbGU6c3VibW9kZWw6bmFtZXBsYXRlLWZpbHRlcg/submodel-elements/$reference",
+    "shouldMatch": "expected/nameplate_elements_reference_filtered.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "Path response does not expose nonmatching SMEs",
+    "method": "GET",
+    "endpoint": "{{BASYX_IT_API_URL}}/submodels/dXJuOmV4YW1wbGU6c3VibW9kZWw6bmFtZXBsYXRlLWZpbHRlcg/submodel-elements/$path",
+    "shouldMatch": "expected/nameplate_elements_path_filtered.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "Path response rejects a nonmatching exact SME",
+    "method": "GET",
+    "endpoint": "{{BASYX_IT_API_URL}}/submodels/dXJuOmV4YW1wbGU6c3VibW9kZWw6bmFtZXBsYXRlLWZpbHRlcg/submodel-elements/ARestricted/$path",
+    "expectedStatus": 404
+  },
+  {
+    "context": "Admin creates the deep path filtering fixture",
+    "token": { "user": "admin", "password": "pwd" },
+    "method": "POST",
+    "endpoint": "{{BASYX_IT_API_URL}}/submodels",
+    "data": "bodies/deep_path_filter.json",
+    "expectedStatus": 201
+  },
+  {
+    "context": "Deep path response does not expose filtered descendants",
+    "method": "GET",
+    "endpoint": "{{BASYX_IT_API_URL}}/submodels/dXJuOmV4YW1wbGU6c3VibW9kZWw6ZGVlcC1wYXRoLWZpbHRlcg/submodel-elements/VisibleContainer/$path?level=deep",
+    "shouldMatch": "expected/visible_container_path_filtered.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "Exact deep SME response does not expose descendants below a filtered child",
+    "method": "GET",
+    "endpoint": "{{BASYX_IT_API_URL}}/submodels/dXJuOmV4YW1wbGU6c3VibW9kZWw6ZGVlcC1wYXRoLWZpbHRlcg/submodel-elements/VisibleContainer?level=deep",
+    "shouldMatch": "expected/visible_container_filtered.json",
+    "expectedStatus": 200
+  }
+]

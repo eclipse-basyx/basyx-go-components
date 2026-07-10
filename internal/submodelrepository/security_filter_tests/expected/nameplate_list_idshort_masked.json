@@ -1,0 +1,35 @@
+{
+  "paging_metadata": {},
+  "result": [
+    {
+      "id": "urn:example:submodel:nameplate-filter",
+      "idShort": "NameplateFilter",
+      "modelType": "Submodel",
+      "semanticId": {
+        "type": "ExternalReference",
+        "keys": [
+          {
+            "type": "GlobalReference",
+            "value": "https://admin-shell.io/idta/nameplate/3/0/Nameplate"
+          }
+        ]
+      },
+      "submodelElements": [
+        {
+          "modelType": "Property",
+          "semanticId": {
+            "type": "ExternalReference",
+            "keys": [
+              {
+                "type": "GlobalReference",
+                "value": "0112/2///61360_7#AAS011#001"
+              }
+            ]
+          },
+          "valueType": "xs:string",
+          "value": "visible"
+        }
+      ]
+    }
+  ]
+}

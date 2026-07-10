@@ -1,0 +1,147 @@
+{
+  "AllAccessPermissionRules": {
+    "DEFATTRIBUTES": [
+      {
+        "name": "anonymous_attr",
+        "attributes": [
+          { "GLOBAL": "ANONYMOUS" }
+        ]
+      },
+      {
+        "name": "role_attr",
+        "attributes": [
+          { "CLAIM": "role" }
+        ]
+      }
+    ],
+    "DEFOBJECTS": [
+      {
+        "name": "public_service_routes",
+        "objects": [
+          { "ROUTE": "/description" },
+          { "ROUTE": "/health" }
+        ]
+      },
+      {
+        "name": "nameplate_routes",
+        "objects": [
+          { "ROUTE": "/submodels" },
+          { "ROUTE": "/submodels/*" },
+          { "ROUTE": "/query/submodels" },
+          { "ROUTE": "/submodels/*/submodel-elements" },
+          { "ROUTE": "/submodels/*/submodel-elements/*" }
+        ]
+      },
+      {
+        "name": "all_routes",
+        "objects": [
+          { "ROUTE": "*" }
+        ]
+      }
+    ],
+    "DEFACLS": [
+      {
+        "name": "anonymous_read",
+        "acl": {
+          "USEATTRIBUTES": "anonymous_attr",
+          "RIGHTS": [ "READ" ],
+          "ACCESS": "ALLOW"
+        }
+      },
+      {
+        "name": "admin_all",
+        "acl": {
+          "USEATTRIBUTES": "role_attr",
+          "RIGHTS": [ "ALL" ],
+          "ACCESS": "ALLOW"
+        }
+      },
+      {
+        "name": "formula_reader",
+        "acl": {
+          "USEATTRIBUTES": "role_attr",
+          "RIGHTS": [ "READ" ],
+          "ACCESS": "ALLOW"
+        }
+      }
+    ],
+    "DEFFORMULAS": [
+      {
+        "name": "always_true",
+        "formula": { "$boolean": true }
+      },
+      {
+        "name": "is_admin",
+        "formula": {
+          "$eq": [
+            { "$attribute": { "CLAIM": "role" } },
+            { "$strVal": "admin" }
+          ]
+        }
+      },
+      {
+        "name": "is_nameplate",
+        "formula": {
+          "$eq": [
+            { "$field": "$sm#semanticId.keys[].value" },
+            { "$strVal": "https://admin-shell.io/idta/nameplate/3/0/Nameplate" }
+          ]
+        }
+      },
+      {
+        "name": "editor_with_formula_witness",
+        "formula": {
+          "$and": [
+            {
+              "$eq": [
+                { "$attribute": { "CLAIM": "role" } },
+                { "$strVal": "editor" }
+              ]
+            },
+            {
+              "$eq": [
+                { "$field": "$sme#semanticId.keys[].value" },
+                { "$strVal": "urn:example:semantic:formula-witness" }
+              ]
+            }
+          ]
+        }
+      },
+      {
+        "name": "is_manufacturer_product_root",
+        "formula": {
+          "$eq": [
+            { "$field": "$sme#semanticId.keys[].value" },
+            { "$strVal": "0112/2///61360_7#AAS011#001" }
+          ]
+        }
+      }
+    ],
+    "rules": [
+      {
+        "USEACL": "anonymous_read",
+        "USEOBJECTS": [ "public_service_routes" ],
+        "USEFORMULA": "always_true"
+      },
+      {
+        "USEACL": "anonymous_read",
+        "USEOBJECTS": [ "nameplate_routes" ],
+        "USEFORMULA": "is_nameplate",
+        "FILTER": {
+          "FRAGMENT": "$sme",
+          "USEFORMULA": "is_manufacturer_product_root"
+        }
+      },
+      {
+        "USEACL": "formula_reader",
+        "USEOBJECTS": [ "nameplate_routes" ],
+        "USEFORMULA": "editor_with_formula_witness"
+      },
+      {
+        "USEACL": "admin_all",
+        "USEOBJECTS": [ "all_routes" ],
+        "USEFORMULA": "is_admin"
+      }
+    ]
+  }
+}

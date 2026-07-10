@@ -55,6 +55,22 @@ func TestQueryFilter_FilterExpressionsFor_ExactMatch(t *testing.T) {
 	}
 }
 
+func TestQueryFilter_FilterExpressionEntriesFor_DoesNotMatchDifferentRoots(t *testing.T) {
+	allow := true
+	q := QueryFilter{Filters: FragmentFilters{
+		"$sm#idShort":  {Boolean: &allow},
+		"$sme#idShort": {Boolean: &allow},
+	}}
+
+	entries := q.FilterExpressionEntriesFor("$sm#idShort")
+	if len(entries) != 1 {
+		t.Fatalf("expected one $sm entry, got %d", len(entries))
+	}
+	if entries[0].Fragment != "$sm#idShort" {
+		t.Fatalf("expected $sm fragment, got %q", entries[0].Fragment)
+	}
+}
+
 func TestWithoutQueryFilterRemovesStoredFilter(t *testing.T) {
 	b := true
 	ctx := WithQueryFilter(context.Background(), &QueryFilter{
@@ -102,6 +118,23 @@ func TestQueryFilter_FilterExpressionEntriesFor_WildcardIncludesLiteralAndIndexe
 		if _, ok := fragments[want]; !ok {
 			t.Fatalf("expected fragment %q to be present", want)
 		}
+	}
+}
+
+func TestQueryFilter_FilterExpressionEntriesFor_SMEWildcardMatchesIndexedPath(t *testing.T) {
+	t.Parallel()
+
+	allow := true
+	q := QueryFilter{Filters: FragmentFilters{
+		"$sme.List[0]#value": {Boolean: &allow},
+	}}
+
+	entries := q.FilterExpressionEntriesFor("$sme.List[]#value")
+	if len(entries) != 1 {
+		t.Fatalf("expected indexed SME path to match wildcard, got %d entries", len(entries))
+	}
+	if entries[0].Fragment != "$sme.List[0]#value" {
+		t.Fatalf("expected indexed SME fragment, got %q", entries[0].Fragment)
 	}
 }
 

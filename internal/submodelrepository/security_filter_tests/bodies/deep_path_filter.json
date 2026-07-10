@@ -1,0 +1,61 @@
+{
+  "id": "urn:example:submodel:deep-path-filter",
+  "idShort": "DeepPathFilter",
+  "modelType": "Submodel",
+  "semanticId": {
+    "type": "ExternalReference",
+    "keys": [
+      {
+        "type": "GlobalReference",
+        "value": "https://admin-shell.io/idta/nameplate/3/0/Nameplate"
+      }
+    ]
+  },
+  "submodelElements": [
+    {
+      "idShort": "VisibleContainer",
+      "modelType": "SubmodelElementCollection",
+      "semanticId": {
+        "type": "ExternalReference",
+        "keys": [
+          {
+            "type": "GlobalReference",
+            "value": "0112/2///61360_7#AAS011#001"
+          }
+        ]
+      },
+      "value": [
+        {
+          "idShort": "HiddenChild",
+          "modelType": "SubmodelElementCollection",
+          "semanticId": {
+            "type": "ExternalReference",
+            "keys": [
+              {
+                "type": "GlobalReference",
+                "value": "urn:example:semantic:hidden"
+              }
+            ]
+          },
+          "value": [
+            {
+              "idShort": "VisibleGrandchild",
+              "modelType": "Property",
+              "semanticId": {
+                "type": "ExternalReference",
+                "keys": [
+                  {
+                    "type": "GlobalReference",
+                    "value": "0112/2///61360_7#AAS011#001"
+                  }
+                ]
+              },
+              "valueType": "xs:string",
+              "value": "must-not-leak-through-hidden-parent"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

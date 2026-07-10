@@ -136,6 +136,41 @@ func NewResolvedFieldPathCollectorForRoot(root CollectorRoot) (*ResolvedFieldPat
 	return NewResolvedFieldPathCollectorWithConfig(&cfg), nil
 }
 
+// NewResolvedFieldPathCollectorForSMERow creates an SME collector correlated
+// to the current submodel element instead of the containing submodel.
+// Fragment filters use this collector so their conditions are evaluated for
+// each SME row independently, while regular SME formulas retain existential
+// submodel-wide semantics through CollectorRootSME.
+func NewResolvedFieldPathCollectorForSMERow(rootAlias string) (*ResolvedFieldPathCollector, error) {
+	rootAlias = strings.TrimSpace(rootAlias)
+	if rootAlias == "" {
+		return nil, fmt.Errorf("GRAMMAR-SMEROWCOLLECTOR-EMPTYALIAS SME row collector root alias must not be empty")
+	}
+
+	cfg := joinPlanConfigForSME()
+	cfg.GroupKeyForBase = func(base string) (exp.IdentifierExpression, error) {
+		if base == "submodel_element" {
+			return goqu.I("submodel_element.id"), nil
+		}
+		return nil, fmt.Errorf("GRAMMAR-SMEROWCOLLECTOR-BADBASE unsupported SME row base alias %q", base)
+	}
+	cfg.RootJoinKey = func() exp.IdentifierExpression {
+		return goqu.I(rootAlias + ".id")
+	}
+	cfg.RootJoinKeyAlias = func() string {
+		return rootAlias
+	}
+	cfg.RootJoinKeyColumn = func() string {
+		return "id"
+	}
+
+	collector := NewResolvedFieldPathCollectorWithConfig(&cfg)
+	collector.fragmentBindingAliasRewrites = map[string]string{
+		"submodel_element": rootAlias,
+	}
+	return collector, nil
+}
+
 func joinPlanConfigForRoot(root CollectorRoot) (JoinPlanConfig, error) {
 	switch root {
 	case CollectorRootAAS:
@@ -790,8 +825,9 @@ func joinPlanConfigForBD() JoinPlanConfig {
 
 // ResolvedFieldPathCollector carries join configuration for inline EXISTS evaluation.
 type ResolvedFieldPathCollector struct {
-	joinConfig    *JoinPlanConfig
-	inlineAliases map[string]struct{}
+	joinConfig                   *JoinPlanConfig
+	inlineAliases                map[string]struct{}
+	fragmentBindingAliasRewrites map[string]string
 }
 
 // NewResolvedFieldPathCollectorWithConfig creates a collector with the provided join config.
@@ -858,6 +894,25 @@ func (c *ResolvedFieldPathCollector) canEvaluateInline(resolved []ResolvedFieldP
 		}
 	}
 	return true
+}
+
+func (c *ResolvedFieldPathCollector) rewriteFragmentBindings(bindings []ArrayIndexBinding) []ArrayIndexBinding {
+	if c == nil || len(c.fragmentBindingAliasRewrites) == 0 || len(bindings) == 0 {
+		return bindings
+	}
+
+	rewritten := make([]ArrayIndexBinding, len(bindings))
+	copy(rewritten, bindings)
+	for index := range rewritten {
+		alias, column, found := strings.Cut(rewritten[index].Alias, ".")
+		if !found {
+			continue
+		}
+		if replacement, exists := c.fragmentBindingAliasRewrites[alias]; exists {
+			rewritten[index].Alias = replacement + "." + column
+		}
+	}
+	return rewritten
 }
 
 func buildInlineExistsExpression(resolved []ResolvedFieldPath, predicate exp.Expression, collector *ResolvedFieldPathCollector) (exp.Expression, error) {
@@ -1369,7 +1424,7 @@ func andBindingsForResolvedFieldPaths(resolved []ResolvedFieldPath, predicate ex
 				where = append(where, goqu.I(b.Alias).Eq(*b.Index.intValue))
 			}
 			if b.Index.stringValue != nil {
-				if b.Alias == "submodel_element.idshort_path" && strings.HasSuffix(*b.Index.stringValue, "[]") {
+				if strings.HasSuffix(b.Alias, ".idshort_path") && strings.HasSuffix(*b.Index.stringValue, "[]") {
 					prefix := strings.TrimSuffix(*b.Index.stringValue, "[]")
 					where = append(where, goqu.L("? LIKE ? ESCAPE '!'", goqu.I(b.Alias), escapeSQLLikePattern(prefix)+"[%"))
 					continue
@@ -1957,6 +2012,7 @@ func (le *LogicalExpression) EvaluateToExpressionWithNegatedFragments(
 		if err != nil {
 			return nil, nil, fmt.Errorf("error evaluating fragment at index %d: %w", i, err)
 		}
+		bindings = collector.rewriteFragmentBindings(bindings)
 		if len(bindings) == 0 {
 			continue
 		}

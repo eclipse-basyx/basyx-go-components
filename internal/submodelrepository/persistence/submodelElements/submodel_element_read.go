@@ -106,10 +106,6 @@ func GetSubmodelElementByIDShortOrPathTx(ctx context.Context, tx *sql.Tx, submod
 }
 
 func getSubmodelElementByIDShortOrPathWithSubmodelDBID(ctx context.Context, db dbQueryer, submodelID string, submodelDatabaseID int64, idShortOrPath string, level string) (types.ISubmodelElement, error) {
-	if formulaCheckErr := ensureSubmodelElementPathMatchesFormula(ctx, db, submodelID, submodelDatabaseID, idShortOrPath); formulaCheckErr != nil {
-		return nil, formulaCheckErr
-	}
-
 	includeChildren := level != "core"
 	parsedRows, readRowsErr := readSubmodelElementRowsByPath(ctx, db, submodelDatabaseID, idShortOrPath, includeChildren)
 
@@ -170,6 +166,10 @@ func GetSubmodelElementPathsBySubmodelID(ctx context.Context, db *sql.DB, submod
 		if addFormulaErr != nil {
 			return nil, common.NewInternalServerError("SMREPO-GETSMEPATHS-ABACFORMULA " + addFormulaErr.Error())
 		}
+	}
+	query, rowFilterErr := addSMEVisibleTreeQueryForLevel(ctx, query, int64(submodelDatabaseID), level)
+	if rowFilterErr != nil {
+		return nil, common.NewInternalServerError("SMREPO-GETSMEPATHS-ABACFILTER " + rowFilterErr.Error())
 	}
 
 	query = query.Order(goqu.I("sme.idshort_path").Asc(), goqu.I("sme.id").Asc())
@@ -238,29 +238,6 @@ func GetSubmodelElementPathsPageBySubmodelID(ctx context.Context, db *sql.DB, su
 	if level == "core" {
 		query = query.Where(goqu.I("sme.parent_sme_id").IsNull())
 	}
-	if cursor != "" {
-		cursorExists, cursorErr := submodelElementCursorExists(ctx, db, int64(submodelDatabaseID), cursor)
-		if cursorErr != nil {
-			return nil, "", cursorErr
-		}
-		if !cursorExists {
-			return []string{}, "", nil
-		}
-		cursorPath, cursorID, hasCursorID := parseRootCursor(cursor)
-		if hasCursorID {
-			query = query.Where(
-				goqu.Or(
-					goqu.I("sme.idshort_path").Gt(cursorPath),
-					goqu.And(
-						goqu.I("sme.idshort_path").Eq(cursorPath),
-						goqu.I("sme.id").Gt(cursorID),
-					),
-				),
-			)
-		} else {
-			query = query.Where(goqu.I("sme.idshort_path").Gt(cursorPath))
-		}
-	}
 
 	collector, collectorErr := grammar.NewResolvedFieldPathCollectorForRoot(grammar.CollectorRootSME)
 	if collectorErr != nil {
@@ -277,6 +254,20 @@ func GetSubmodelElementPathsPageBySubmodelID(ctx context.Context, db *sql.DB, su
 		if addFormulaErr != nil {
 			return nil, "", common.NewInternalServerError("SMREPO-GETSMEPATHSPAGE-ABACFORMULA " + addFormulaErr.Error())
 		}
+	}
+	query, rowFilterErr := addSMEVisibleTreeQueryForLevel(ctx, query, int64(submodelDatabaseID), level)
+	if rowFilterErr != nil {
+		return nil, "", common.NewInternalServerError("SMREPO-GETSMEPATHSPAGE-ABACFILTER " + rowFilterErr.Error())
+	}
+	if cursor != "" {
+		cursorExists, cursorErr := submodelElementCursorExists(ctx, db, query, cursor)
+		if cursorErr != nil {
+			return nil, "", cursorErr
+		}
+		if !cursorExists {
+			return []string{}, "", nil
+		}
+		query = addSMECursorBoundary(query, cursor)
 	}
 
 	query = query.
@@ -344,10 +335,6 @@ func GetSubmodelElementPathsByPath(ctx context.Context, db *sql.DB, submodelID s
 		return nil, common.NewInternalServerError("SMREPO-GETSMEPATHSBYPATH-GETSMDATABASEID " + submodelIDErr.Error())
 	}
 
-	if formulaCheckErr := ensureSubmodelElementPathMatchesFormula(ctx, db, submodelID, int64(submodelDatabaseID), idShortPath); formulaCheckErr != nil {
-		return nil, formulaCheckErr
-	}
-
 	dialect := goqu.Dialect("postgres")
 	query := dialect.
 		From(goqu.T("submodel_element").As("sme")).
@@ -382,6 +369,14 @@ func GetSubmodelElementPathsByPath(ctx context.Context, db *sql.DB, submodelID s
 			return nil, common.NewInternalServerError("SMREPO-GETSMEPATHSBYPATH-ABACFORMULA " + addFormulaErr.Error())
 		}
 	}
+	query, ancestorVisibilityErr := addSMEPathAncestorVisibilityQuery(ctx, query, int64(submodelDatabaseID), idShortPath)
+	if ancestorVisibilityErr != nil {
+		return nil, common.NewInternalServerError("SMREPO-GETSMEPATHSBYPATH-ABACANCESTOR " + ancestorVisibilityErr.Error())
+	}
+	query, subtreeVisibilityErr := addSMEVisibleSubtreeQueryForLevel(ctx, query, int64(submodelDatabaseID), idShortPath, level)
+	if subtreeVisibilityErr != nil {
+		return nil, common.NewInternalServerError("SMREPO-GETSMEPATHSBYPATH-ABACSUBTREE " + subtreeVisibilityErr.Error())
+	}
 
 	query = query.Order(goqu.I("sme.idshort_path").Asc(), goqu.I("sme.id").Asc())
 
@@ -414,50 +409,6 @@ func GetSubmodelElementPathsByPath(ctx context.Context, db *sql.DB, submodelID s
 	}
 
 	return paths, nil
-}
-
-func ensureSubmodelElementPathMatchesFormula(ctx context.Context, db dbQueryer, submodelID string, submodelDatabaseID int64, idShortOrPath string) error {
-	dialect := goqu.Dialect("postgres")
-	query := dialect.
-		From(goqu.T("submodel_element").As("sme")).
-		Select(goqu.I("sme.id")).
-		Where(
-			goqu.I("sme.submodel_id").Eq(submodelDatabaseID),
-			goqu.I("sme.idshort_path").Eq(idShortOrPath),
-		).
-		Limit(1)
-
-	collector, collectorErr := grammar.NewResolvedFieldPathCollectorForRoot(grammar.CollectorRootSME)
-	if collectorErr != nil {
-		return common.NewInternalServerError("SMREPO-GETSMEBYPATH-BADCOLLECTOR " + collectorErr.Error())
-	}
-
-	shouldEnforceFormula, enforceErr := auth.ShouldEnforceFormula(ctx)
-	if enforceErr != nil {
-		return common.NewInternalServerError("SMREPO-GETSMEBYPATH-SHOULDENFORCE " + enforceErr.Error())
-	}
-	if shouldEnforceFormula {
-		var addFormulaErr error
-		query, addFormulaErr = auth.AddFormulaQueryFromContext(ctx, query, collector)
-		if addFormulaErr != nil {
-			return common.NewInternalServerError("SMREPO-GETSMEBYPATH-ABACFORMULA " + addFormulaErr.Error())
-		}
-	}
-
-	sqlQuery, args, toSQLErr := query.ToSQL()
-	if toSQLErr != nil {
-		return common.NewInternalServerError("SMREPO-GETSMEBYPATH-BUILDQ " + toSQLErr.Error())
-	}
-
-	var elementID int64
-	scanErr := db.QueryRowContext(ctx, sqlQuery, args...).Scan(&elementID)
-	if scanErr == nil {
-		return nil
-	}
-	if errors.Is(scanErr, sql.ErrNoRows) {
-		return common.NewErrNotFound("SubmodelElement with idShort or path '" + idShortOrPath + "' not found in submodel '" + submodelID + "'")
-	}
-	return common.NewInternalServerError("SMREPO-GETSMEBYPATH-EXECQ " + scanErr.Error())
 }
 
 // GetSubmodelElementsBySubmodelID loads top-level submodel elements and reconstructs
@@ -727,35 +678,6 @@ func getRootElementPage(ctx context.Context, db dbQueryer, submodelDatabaseID in
 
 	query = query.Order(goqu.I("sme.idshort_path").Asc(), goqu.I("sme.id").Asc())
 
-	if cursor != "" {
-		cursorExists, cursorErr := submodelElementCursorExists(ctx, db, submodelDatabaseID, cursor)
-		if cursorErr != nil {
-			return nil, "", cursorErr
-		}
-		if !cursorExists {
-			return []rootElementCursorRow{}, "", nil
-		}
-		cursorPath, cursorID, hasCursorID := parseRootCursor(cursor)
-		if hasCursorID {
-			query = query.Where(
-				goqu.Or(
-					goqu.I("sme.idshort_path").Gt(cursorPath),
-					goqu.And(
-						goqu.I("sme.idshort_path").Eq(cursorPath),
-						goqu.I("sme.id").Gt(cursorID),
-					),
-				),
-			)
-		} else {
-			query = query.Where(goqu.I("sme.idshort_path").Gt(cursorPath))
-		}
-	}
-
-	if limit != nil && *limit > 0 {
-		//nolint:gosec // limit is validated to be > 0 before conversion
-		query = query.Limit(uint(*limit + 1))
-	}
-
 	collector, collectorErr := grammar.NewResolvedFieldPathCollectorForRoot(grammar.CollectorRootSME)
 	if collectorErr != nil {
 		return nil, "", common.NewInternalServerError("SMREPO-GETROOTPATHS-BADCOLLECTOR " + collectorErr.Error())
@@ -770,6 +692,24 @@ func getRootElementPage(ctx context.Context, db dbQueryer, submodelDatabaseID in
 		if addFormulaErr != nil {
 			return nil, "", common.NewInternalServerError("SMREPO-GETROOTPATHS-ABACFORMULA " + addFormulaErr.Error())
 		}
+	}
+	query, rowFilterErr := addSMERowFilterQueries(ctx, query)
+	if rowFilterErr != nil {
+		return nil, "", common.NewInternalServerError("SMREPO-GETROOTPATHS-ABACFILTER " + rowFilterErr.Error())
+	}
+	if cursor != "" {
+		cursorExists, cursorErr := submodelElementCursorExists(ctx, db, query, cursor)
+		if cursorErr != nil {
+			return nil, "", cursorErr
+		}
+		if !cursorExists {
+			return []rootElementCursorRow{}, "", nil
+		}
+		query = addSMECursorBoundary(query, cursor)
+	}
+	if limit != nil && *limit > 0 {
+		//nolint:gosec // limit is validated to be > 0 before conversion
+		query = query.Limit(uint(*limit + 1))
 	}
 
 	sqlQuery, args, toSQLErr := query.ToSQL()
@@ -838,33 +778,43 @@ func formatRootCursor(path string, id int64) string {
 	return path + "|" + strconv.FormatInt(id, 10)
 }
 
-func submodelElementCursorExists(ctx context.Context, db dbQueryer, submodelDatabaseID int64, cursor string) (bool, error) {
+func addSMECursorBoundary(query *goqu.SelectDataset, cursor string) *goqu.SelectDataset {
 	cursorPath, cursorID, hasCursorID := parseRootCursor(cursor)
-
-	dialect := goqu.Dialect("postgres")
-	query := dialect.
-		From(goqu.T("submodel_element").As("sme")).
-		Select(goqu.V(1)).
-		Where(
-			goqu.I("sme.submodel_id").Eq(submodelDatabaseID),
-			goqu.I("sme.idshort_path").Eq(cursorPath),
-		)
-	if hasCursorID {
-		query = query.Where(goqu.I("sme.id").Eq(cursorID))
+	if !hasCursorID {
+		return query.Where(goqu.I("sme.idshort_path").Gt(cursorPath))
 	}
-	sqlQuery, args, buildErr := query.Limit(1).ToSQL()
+	return query.Where(
+		goqu.Or(
+			goqu.I("sme.idshort_path").Gt(cursorPath),
+			goqu.And(
+				goqu.I("sme.idshort_path").Eq(cursorPath),
+				goqu.I("sme.id").Gt(cursorID),
+			),
+		),
+	)
+}
+
+func submodelElementCursorExists(ctx context.Context, db dbQueryer, query *goqu.SelectDataset, cursor string) (bool, error) {
+	cursorPath, cursorID, hasCursorID := parseRootCursor(cursor)
+	cursorQuery := query.Where(goqu.I("sme.idshort_path").Eq(cursorPath))
+	if hasCursorID {
+		cursorQuery = cursorQuery.Where(goqu.I("sme.id").Eq(cursorID))
+	}
+	sqlQuery, args, buildErr := cursorQuery.Limit(1).ToSQL()
 	if buildErr != nil {
 		return false, common.NewInternalServerError("SMREPO-CHECKSMECURSOR-BUILDQ " + buildErr.Error())
 	}
 
-	var one int
-	if queryErr := db.QueryRowContext(ctx, sqlQuery, args...).Scan(&one); queryErr != nil {
-		if errors.Is(queryErr, sql.ErrNoRows) {
-			return false, nil
-		}
+	rows, queryErr := db.QueryContext(ctx, sqlQuery, args...)
+	if queryErr != nil {
 		return false, common.NewInternalServerError("SMREPO-CHECKSMECURSOR-EXECQ " + queryErr.Error())
 	}
-	return true, nil
+	defer func() { _ = rows.Close() }()
+	exists := rows.Next()
+	if rowsErr := rows.Err(); rowsErr != nil {
+		return false, common.NewInternalServerError("SMREPO-CHECKSMECURSOR-ROWSERR " + rowsErr.Error())
+	}
+	return exists, nil
 }
 
 type loadedSMERow struct {
@@ -876,14 +826,12 @@ type loadedSMERow struct {
 }
 
 type smeMaskFragmentGroups struct {
-	row      []grammar.FragmentStringPattern
 	idShort  []grammar.FragmentStringPattern
 	semantic []grammar.FragmentStringPattern
 	value    []grammar.FragmentStringPattern
 }
 
 func buildSMEMaskRuntime(ctx context.Context, collector *grammar.ResolvedFieldPathCollector) (*auth.SharedFragmentMaskRuntime, smeMaskFragmentGroups, error) {
-	rowFragments := map[grammar.FragmentStringPattern]struct{}{}
 	idShortFragments := map[grammar.FragmentStringPattern]struct{}{
 		"$sme#idShort": {},
 	}
@@ -896,33 +844,10 @@ func buildSMEMaskRuntime(ctx context.Context, collector *grammar.ResolvedFieldPa
 		"$sme#language":  {},
 	}
 
-	maskCtx := ctx
 	qf := auth.GetQueryFilter(ctx)
 	if qf != nil {
-		clonedQF, cloneErr := auth.CloneQueryFilter(qf)
-		if cloneErr != nil {
-			return nil, smeMaskFragmentGroups{}, cloneErr
-		}
-		if clonedQF == nil {
-			return nil, smeMaskFragmentGroups{}, errors.New("SMREPO-SMEMASK-NILQF cloned query filter is nil")
-		}
-		type normalizedFilter struct {
-			from  grammar.FragmentStringPattern
-			to    grammar.FragmentStringPattern
-			expr  grammar.LogicalExpression
-			match bool
-		}
-		normalizedFilters := make([]normalizedFilter, 0)
-		for fragment := range clonedQF.Filters {
+		for fragment := range qf.Filters {
 			if !strings.Contains(string(fragment), "#") {
-				normalizedFragment := normalizeSMERowFragment(fragment)
-				rowFragments[normalizedFragment] = struct{}{}
-				normalizedFilters = append(normalizedFilters, normalizedFilter{
-					from:  fragment,
-					to:    normalizedFragment,
-					expr:  clonedQF.Filters[fragment],
-					match: clonedQF.FilterMatch != nil && clonedQF.FilterMatch[fragment],
-				})
 				continue
 			}
 			suffix := fragmentSuffix(fragment)
@@ -939,36 +864,15 @@ func buildSMEMaskRuntime(ctx context.Context, collector *grammar.ResolvedFieldPa
 				}
 			}
 		}
-		for _, normalized := range normalizedFilters {
-			delete(clonedQF.Filters, normalized.from)
-			if _, exists := clonedQF.Filters[normalized.to]; !exists {
-				clonedQF.Filters[normalized.to] = normalized.expr
-			}
-			if clonedQF.FilterMatch != nil {
-				delete(clonedQF.FilterMatch, normalized.from)
-				if _, exists := clonedQF.FilterMatch[normalized.to]; !exists {
-					clonedQF.FilterMatch[normalized.to] = normalized.match
-				}
-			}
-		}
-		maskCtx = auth.WithQueryFilter(ctx, clonedQF)
 	}
 
 	groups := smeMaskFragmentGroups{
-		row:      sortedFragments(rowFragments),
 		idShort:  sortedFragments(idShortFragments),
 		semantic: sortedFragments(semanticFragments),
 		value:    sortedFragments(valueFragments),
 	}
 
-	maskedColumns := make([]auth.MaskedInnerColumnSpec, 0, len(groups.row)+len(groups.idShort)+len(groups.semantic)+len(groups.value))
-	for i, fragment := range groups.row {
-		maskedColumns = append(maskedColumns, auth.MaskedInnerColumnSpec{
-			Fragment:  fragment,
-			FlagAlias: "flag_row_" + strconv.Itoa(i+1),
-			RawAlias:  "c_id_short",
-		})
-	}
+	maskedColumns := make([]auth.MaskedInnerColumnSpec, 0, len(groups.idShort)+len(groups.semantic)+len(groups.value))
 	for i, fragment := range groups.idShort {
 		maskedColumns = append(maskedColumns, auth.MaskedInnerColumnSpec{
 			Fragment:  fragment,
@@ -991,12 +895,270 @@ func buildSMEMaskRuntime(ctx context.Context, collector *grammar.ResolvedFieldPa
 		})
 	}
 
-	runtime, err := auth.BuildSharedFragmentMaskRuntime(maskCtx, collector, maskedColumns)
+	runtime, err := auth.BuildSharedFragmentMaskRuntime(ctx, collector, maskedColumns)
 	if err != nil {
 		return nil, smeMaskFragmentGroups{}, err
 	}
 
 	return runtime, groups, nil
+}
+
+func normalizeSMERowFilters(ctx context.Context) (context.Context, []grammar.FragmentStringPattern, error) {
+	queryFilter := auth.GetQueryFilter(ctx)
+	if queryFilter == nil {
+		return ctx, nil, nil
+	}
+
+	rowFilters := make(auth.FragmentFilters)
+	rowFilterMatch := make(auth.FragmentMatchModes)
+	for fragment, expression := range queryFilter.Filters {
+		if strings.Contains(string(fragment), "#") || !isSMEStructuralFragment(fragment) {
+			continue
+		}
+		normalizedFragment := normalizeSMERowFragment(fragment)
+		if existing, exists := rowFilters[normalizedFragment]; exists {
+			rowFilters[normalizedFragment] = grammar.LogicalExpression{
+				And: []grammar.LogicalExpression{existing, expression},
+			}
+		} else {
+			rowFilters[normalizedFragment] = expression
+		}
+		if queryFilter.FilterMatch != nil && queryFilter.FilterMatch[fragment] {
+			rowFilterMatch[normalizedFragment] = true
+		}
+	}
+	if len(rowFilters) == 0 {
+		return ctx, nil, nil
+	}
+
+	rowQueryFilter := &auth.QueryFilter{Filters: rowFilters}
+	if len(rowFilterMatch) > 0 {
+		rowQueryFilter.FilterMatch = rowFilterMatch
+	}
+	fragments := make(map[grammar.FragmentStringPattern]struct{}, len(rowFilters))
+	for fragment := range rowFilters {
+		fragments[fragment] = struct{}{}
+	}
+
+	return auth.WithQueryFilter(ctx, rowQueryFilter), sortedFragments(fragments), nil
+}
+
+func isSMEStructuralFragment(fragment grammar.FragmentStringPattern) bool {
+	fragmentString := string(fragment)
+	return fragmentString == "$sme" ||
+		strings.HasPrefix(fragmentString, "$sme.") ||
+		strings.HasPrefix(fragmentString, "$sme[")
+}
+
+func addSMERowFilterQueries(ctx context.Context, query *goqu.SelectDataset) (*goqu.SelectDataset, error) {
+	return addSMERowFilterQueriesForAlias(ctx, query, "sme")
+}
+
+func addSMERowFilterQueriesForAlias(ctx context.Context, query *goqu.SelectDataset, alias string) (*goqu.SelectDataset, error) {
+	filterCtx, fragments, err := normalizeSMERowFilters(ctx)
+	if err != nil || len(fragments) == 0 {
+		return query, err
+	}
+	return addNormalizedSMERowFilterQueries(filterCtx, query, fragments, alias)
+}
+
+func addNormalizedSMERowFilterQueries(
+	ctx context.Context,
+	query *goqu.SelectDataset,
+	fragments []grammar.FragmentStringPattern,
+	alias string,
+) (*goqu.SelectDataset, error) {
+	collector, err := grammar.NewResolvedFieldPathCollectorForSMERow(alias)
+	if err != nil {
+		return nil, err
+	}
+	return auth.AddFilterQueriesFromContext(ctx, query, fragments, collector)
+}
+
+func addSMEVisibleTreeQuery(
+	ctx context.Context,
+	query *goqu.SelectDataset,
+	submodelDatabaseID int64,
+) (*goqu.SelectDataset, error) {
+	return addSMEVisibleTreeQueryFromPath(ctx, query, submodelDatabaseID, "")
+}
+
+func addSMEVisibleTreeQueryForLevel(
+	ctx context.Context,
+	query *goqu.SelectDataset,
+	submodelDatabaseID int64,
+	level string,
+) (*goqu.SelectDataset, error) {
+	if level == "core" {
+		return addSMERowFilterQueries(ctx, query)
+	}
+	return addSMEVisibleTreeQuery(ctx, query, submodelDatabaseID)
+}
+
+func addSMEVisibleSubtreeQuery(
+	ctx context.Context,
+	query *goqu.SelectDataset,
+	submodelDatabaseID int64,
+	targetPath string,
+) (*goqu.SelectDataset, error) {
+	return addSMEVisibleTreeQueryFromPath(ctx, query, submodelDatabaseID, targetPath)
+}
+
+func addSMEVisibleSubtreeQueryForLevel(
+	ctx context.Context,
+	query *goqu.SelectDataset,
+	submodelDatabaseID int64,
+	targetPath string,
+	level string,
+) (*goqu.SelectDataset, error) {
+	if level == "core" {
+		return query, nil
+	}
+	return addSMEVisibleSubtreeQuery(ctx, query, submodelDatabaseID, targetPath)
+}
+
+func addSMEVisibleTreeQueryFromPath(
+	ctx context.Context,
+	query *goqu.SelectDataset,
+	submodelDatabaseID int64,
+	targetPath string,
+) (*goqu.SelectDataset, error) {
+	filterCtx, fragments, err := normalizeSMERowFilters(ctx)
+	if err != nil || len(fragments) == 0 {
+		return query, err
+	}
+
+	visibleCTE := "visible_sme_ids"
+	rootAlias := "visible_sme_root"
+	childAlias := "visible_sme_child"
+	parentAlias := "visible_sme_parent"
+	const visibleIDCol = "id"
+	var rootCondition exp.Expression = goqu.I(rootAlias + ".parent_sme_id").IsNull()
+	if targetPath != "" {
+		visibleCTE = "visible_sme_subtree_ids"
+		rootAlias = "visible_sme_subtree_root"
+		childAlias = "visible_sme_subtree_child"
+		parentAlias = "visible_sme_subtree_parent"
+		rootCondition = goqu.I(rootAlias + ".idshort_path").Eq(targetPath)
+	}
+	dialect := goqu.Dialect("postgres")
+	rootQuery := dialect.
+		From(goqu.T("submodel_element").As(rootAlias)).
+		Select(goqu.I(rootAlias+".id")).
+		Where(
+			goqu.I(rootAlias+".submodel_id").Eq(submodelDatabaseID),
+			rootCondition,
+		)
+	rootQuery, err = addNormalizedSMERowFilterQueries(filterCtx, rootQuery, fragments, rootAlias)
+	if err != nil {
+		return nil, err
+	}
+
+	childQuery := dialect.
+		From(goqu.T("submodel_element").As(childAlias)).
+		InnerJoin(
+			goqu.T(visibleCTE).As(parentAlias),
+			goqu.On(goqu.I(childAlias+".parent_sme_id").Eq(goqu.I(parentAlias+"."+visibleIDCol))),
+		).
+		Select(goqu.I(childAlias + ".id")).
+		Where(goqu.I(childAlias + ".submodel_id").Eq(submodelDatabaseID))
+	childQuery, err = addNormalizedSMERowFilterQueries(filterCtx, childQuery, fragments, childAlias)
+	if err != nil {
+		return nil, err
+	}
+
+	visibleTree := rootQuery.UnionAll(childQuery)
+	visibleIDs := dialect.From(goqu.T(visibleCTE)).Select(goqu.I(visibleIDCol))
+	return query.
+		WithRecursive(visibleCTE+"("+visibleIDCol+")", visibleTree).
+		Where(goqu.I("sme.id").In(visibleIDs)), nil
+}
+
+func addSMEPathAncestorVisibilityQuery(
+	ctx context.Context,
+	query *goqu.SelectDataset,
+	submodelDatabaseID int64,
+	targetPath string,
+) (*goqu.SelectDataset, error) {
+	const (
+		ancestorCTE   = "visible_sme_path_ancestors"
+		targetAlias   = "visible_sme_target"
+		ancestorAlias = "visible_sme_ancestor"
+		childAlias    = "visible_sme_child"
+	)
+	dialect := goqu.Dialect("postgres")
+	targetQuery := dialect.
+		From(goqu.T("submodel_element").As(targetAlias)).
+		Select(goqu.I(targetAlias+".id"), goqu.I(targetAlias+".parent_sme_id")).
+		Where(
+			goqu.I(targetAlias+".submodel_id").Eq(submodelDatabaseID),
+			goqu.I(targetAlias+".idshort_path").Eq(targetPath),
+		)
+
+	targetQuery, rowFilterErr := addSMERowFilterQueriesForAlias(ctx, targetQuery, targetAlias)
+	if rowFilterErr != nil {
+		return nil, rowFilterErr
+	}
+
+	ancestorQuery := dialect.
+		From(goqu.T("submodel_element").As(ancestorAlias)).
+		InnerJoin(
+			goqu.T(ancestorCTE).As(childAlias),
+			goqu.On(goqu.I(ancestorAlias+".id").Eq(goqu.I(childAlias+".parent_sme_id"))),
+		).
+		Select(goqu.I(ancestorAlias+".id"), goqu.I(ancestorAlias+".parent_sme_id")).
+		Where(goqu.I(ancestorAlias + ".submodel_id").Eq(submodelDatabaseID))
+	ancestorQuery, rowFilterErr = addSMERowFilterQueriesForAlias(ctx, ancestorQuery, ancestorAlias)
+	if rowFilterErr != nil {
+		return nil, rowFilterErr
+	}
+
+	ancestors := targetQuery.UnionAll(ancestorQuery)
+	visibleRoot := dialect.
+		From(goqu.T(ancestorCTE)).
+		Select(goqu.V(1)).
+		Where(goqu.I(ancestorCTE + ".parent_sme_id").IsNull())
+	return query.
+		WithRecursive(ancestorCTE+"(id,parent_sme_id)", ancestors).
+		Where(goqu.L("EXISTS (?)", visibleRoot)), nil
+}
+
+func buildSMEPathAuthorizationQuery(
+	ctx context.Context,
+	submodelDatabaseID int64,
+	targetPath string,
+) (*goqu.SelectDataset, error) {
+	dialect := goqu.Dialect("postgres")
+	query := dialect.
+		From(goqu.T("submodel_element").As("sme")).
+		Select(goqu.V(1)).
+		Where(
+			goqu.I("sme.submodel_id").Eq(submodelDatabaseID),
+			goqu.I("sme.idshort_path").Eq(targetPath),
+		).
+		Limit(1)
+
+	formulaCollector, formulaCollectorErr := grammar.NewResolvedFieldPathCollectorForRoot(grammar.CollectorRootSME)
+	if formulaCollectorErr != nil {
+		return nil, common.NewInternalServerError("SMREPO-GETSMEBYPATH-BADCOLLECTOR " + formulaCollectorErr.Error())
+	}
+	shouldEnforceFormula, enforceErr := auth.ShouldEnforceFormula(ctx)
+	if enforceErr != nil {
+		return nil, common.NewInternalServerError("SMREPO-GETSMEBYPATH-SHOULDENFORCE " + enforceErr.Error())
+	}
+	if shouldEnforceFormula {
+		var formulaErr error
+		query, formulaErr = auth.AddFormulaQueryFromContext(ctx, query, formulaCollector)
+		if formulaErr != nil {
+			return nil, common.NewInternalServerError("SMREPO-GETSMEBYPATH-ABACFORMULA " + formulaErr.Error())
+		}
+	}
+
+	query, ancestorVisibilityErr := addSMEPathAncestorVisibilityQuery(ctx, query, submodelDatabaseID, targetPath)
+	if ancestorVisibilityErr != nil {
+		return nil, common.NewInternalServerError("SMREPO-GETSMEBYPATH-ABACANCESTOR " + ancestorVisibilityErr.Error())
+	}
+	return query, nil
 }
 
 func normalizeSMERowFragment(fragment grammar.FragmentStringPattern) grammar.FragmentStringPattern {
@@ -1062,11 +1224,11 @@ func buildMaskedSMEValuePayloadExpr(rawValueAlias string) exp.Expression {
 
 func readSubmodelElementRowsByPath(ctx context.Context, db dbQueryer, submodelDatabaseID int64, idShortOrPath string, includeChildren bool) ([]loadedSMERow, error) {
 	dialect := goqu.Dialect("postgres")
-	collector, collectorErr := grammar.NewResolvedFieldPathCollectorForRoot(grammar.CollectorRootSME)
+	rowCollector, collectorErr := grammar.NewResolvedFieldPathCollectorForSMERow("sme")
 	if collectorErr != nil {
 		return nil, common.NewInternalServerError("SMREPO-GETSMEBYPATH-BADCOLLECTOR " + collectorErr.Error())
 	}
-	maskRuntime, maskGroups, maskRuntimeErr := buildSMEMaskRuntime(ctx, collector)
+	maskRuntime, maskGroups, maskRuntimeErr := buildSMEMaskRuntime(ctx, rowCollector)
 	if maskRuntimeErr != nil {
 		return nil, common.NewInternalServerError("SMREPO-GETSMEBYPATH-MASKRUNTIME " + maskRuntimeErr.Error())
 	}
@@ -1084,18 +1246,9 @@ func readSubmodelElementRowsByPath(ctx context.Context, db dbQueryer, submodelDa
 	if valueVisibleErr != nil {
 		return nil, common.NewInternalServerError("SMREPO-GETSMEBYPATH-VALUEMASK " + valueVisibleErr.Error())
 	}
-	rowVisibleExpr, rowVisibleErr := buildSharedMaskVisibilityExpr(dataAlias, maskRuntime, maskGroups.row)
-	if rowVisibleErr != nil {
-		return nil, common.NewInternalServerError("SMREPO-GETSMEBYPATH-ROWMASK " + rowVisibleErr.Error())
-	}
-
 	valueExpr := getSMEValueExpressionForRead(dialect)
 	innerQuery := dialect.
 		From(goqu.T("submodel_element").As("sme")).
-		InnerJoin(
-			goqu.T("submodel_element").As("submodel_element"),
-			goqu.On(goqu.I("submodel_element.id").Eq(goqu.I("sme.id"))),
-		).
 		LeftJoin(
 			goqu.T("submodel_element_payload").As("sme_p"),
 			goqu.On(goqu.I("sme.id").Eq(goqu.I("sme_p.submodel_element_id"))),
@@ -1152,8 +1305,17 @@ func readSubmodelElementRowsByPath(ctx context.Context, db dbQueryer, submodelDa
 		)
 	}
 
+	authorizationQuery, authorizationErr := buildSMEPathAuthorizationQuery(ctx, submodelDatabaseID, idShortOrPath)
+	if authorizationErr != nil {
+		return nil, authorizationErr
+	}
+	innerQuery = innerQuery.Where(goqu.L("EXISTS (?)", authorizationQuery))
+	innerQuery, rowFilterErr := addSMERowFilterQueries(ctx, innerQuery)
+	if rowFilterErr != nil {
+		return nil, common.NewInternalServerError("SMREPO-GETSMEBYPATH-ROWFILTER " + rowFilterErr.Error())
+	}
+
 	query := dialect.From(innerQuery.As(dataAlias)).
-		Where(rowVisibleExpr).
 		Select(
 			goqu.I(dataAlias+".c_id"),
 			goqu.I(dataAlias+".c_parent_sme_id"),
@@ -1192,7 +1354,7 @@ func readSubmodelElementRowsByRootIDs(ctx context.Context, db dbQueryer, submode
 	}
 
 	dialect := goqu.Dialect("postgres")
-	collector, collectorErr := grammar.NewResolvedFieldPathCollectorForRoot(grammar.CollectorRootSME)
+	collector, collectorErr := grammar.NewResolvedFieldPathCollectorForSMERow("sme")
 	if collectorErr != nil {
 		return nil, common.NewInternalServerError("SMREPO-GETSMES-BATCHREAD-BADCOLLECTOR " + collectorErr.Error())
 	}
@@ -1214,11 +1376,6 @@ func readSubmodelElementRowsByRootIDs(ctx context.Context, db dbQueryer, submode
 	if valueVisibleErr != nil {
 		return nil, common.NewInternalServerError("SMREPO-GETSMES-BATCHREAD-VALUEMASK " + valueVisibleErr.Error())
 	}
-	rowVisibleExpr, rowVisibleErr := buildSharedMaskVisibilityExpr(dataAlias, maskRuntime, maskGroups.row)
-	if rowVisibleErr != nil {
-		return nil, common.NewInternalServerError("SMREPO-GETSMES-BATCHREAD-ROWMASK " + rowVisibleErr.Error())
-	}
-
 	rootOrderExpr := goqu.Case().
 		Value(goqu.L("COALESCE(sme.root_sme_id, sme.id)"))
 	for index, rootID := range rootIDs {
@@ -1240,10 +1397,6 @@ func readSubmodelElementRowsByRootIDs(ctx context.Context, db dbQueryer, submode
 	valueExpr := getSMEValueExpressionForRead(dialect)
 	innerQuery := dialect.
 		From(goqu.T("submodel_element").As("sme")).
-		InnerJoin(
-			goqu.T("submodel_element").As("submodel_element"),
-			goqu.On(goqu.I("submodel_element.id").Eq(goqu.I("sme.id"))),
-		).
 		LeftJoin(
 			goqu.T("submodel_element_payload").As("sme_p"),
 			goqu.On(goqu.I("sme.id").Eq(goqu.I("sme_p.submodel_element_id"))),
@@ -1279,9 +1432,12 @@ func readSubmodelElementRowsByRootIDs(ctx context.Context, db dbQueryer, submode
 			goqu.I("sme.submodel_id").Eq(submodelDatabaseID),
 			rootFilter,
 		)
+	innerQuery, rowFilterErr := addSMERowFilterQueries(ctx, innerQuery)
+	if rowFilterErr != nil {
+		return nil, common.NewInternalServerError("SMREPO-GETSMES-BATCHREAD-ROWFILTER " + rowFilterErr.Error())
+	}
 
 	query := dialect.From(innerQuery.As(dataAlias)).
-		Where(rowVisibleExpr).
 		Select(
 			goqu.I(dataAlias+".c_id"),
 			goqu.I(dataAlias+".c_parent_sme_id"),
