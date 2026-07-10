@@ -40,7 +40,7 @@ services:
       keycloak-healthcheck:
         condition: service_completed_successfully
     volumes:
-      - ${BASYX_IT_SECURITY_ENV:-../security_env}:/security_env:ro
+      - ${BASYX_IT_SECURITY_ENV:-../security_env}:/security_env
     extra_hosts:
       - "localhost:host-gateway"
 
@@ -65,7 +65,7 @@ services:
       KC_HTTP_MANAGEMENT_ENABLED: "true"
     command: ["start-dev", "--import-realm", "--health-enabled=true"]
     ports:
-      - "127.0.0.1:${BASYX_IT_KEYCLOAK_PORT:-8080}:8080"
+      - "0.0.0.0:${BASYX_IT_KEYCLOAK_PORT:-8080}:8080"
     volumes:
       - ../../../aasregistry/security_tests/docker_compose/keycloak/realm:/opt/keycloak/data/import
 
