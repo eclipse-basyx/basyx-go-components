@@ -120,6 +120,40 @@ func TestLogicalExpression_SME_WithCollector_BuildsCTE(t *testing.T) {
 	}
 }
 
+func TestLogicalExpression_SMERowCollectorUsesElementCorrelation(t *testing.T) {
+	expr := LogicalExpression{
+		Eq: ComparisonItems{
+			field("$sme#semanticId.keys[].value"),
+			strVal("0112/2///61360_7#AAS011#001"),
+		},
+	}
+
+	submodelSQL, _ := buildSMESQL(t, expr)
+	if !strings.Contains(submodelSQL, `"submodel_element"."submodel_id" = "sme"."submodel_id"`) {
+		t.Fatalf("expected regular SME collector to retain submodel correlation, got: %s", submodelSQL)
+	}
+
+	collector, err := NewResolvedFieldPathCollectorForSMERow("sme")
+	if err != nil {
+		t.Fatalf("NewResolvedFieldPathCollectorForSMERow returned error: %v", err)
+	}
+	whereExpr, _, err := expr.EvaluateToExpression(collector)
+	if err != nil {
+		t.Fatalf("EvaluateToExpression returned error: %v", err)
+	}
+	rowSQL, _, err := goqu.Dialect("postgres").
+		From(goqu.T("submodel_element").As("sme")).
+		Select(goqu.V(1)).
+		Where(whereExpr).
+		ToSQL()
+	if err != nil {
+		t.Fatalf("ToSQL returned error: %v", err)
+	}
+	if !strings.Contains(rowSQL, `"submodel_element"."id" = "sme"."id"`) {
+		t.Fatalf("expected SME row collector to correlate the current element, got: %s", rowSQL)
+	}
+}
+
 func TestLogicalExpression_SME_WithCollector_MultiConditions(t *testing.T) {
 	expr := LogicalExpression{
 		And: []LogicalExpression{

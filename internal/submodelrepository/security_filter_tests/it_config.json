@@ -1,0 +1,100 @@
+[
+  {
+    "context": "Admin creates the nameplate fixture",
+    "token": { "user": "admin", "password": "pwd" },
+    "method": "POST",
+    "endpoint": "{{BASYX_IT_API_URL}}/submodels",
+    "data": "bodies/nameplate.json",
+    "expectedStatus": 201
+  },
+  {
+    "context": "Admin remains unfiltered",
+    "token": { "user": "admin", "password": "pwd" },
+    "method": "GET",
+    "endpoint": "{{BASYX_IT_API_URL}}/submodels/dXJuOmV4YW1wbGU6c3VibW9kZWw6bmFtZXBsYXRlLWZpbHRlcg",
+    "shouldMatch": "expected/nameplate_unfiltered.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "Anonymous direct submodel response contains only the matching SME",
+    "method": "GET",
+    "endpoint": "{{BASYX_IT_API_URL}}/submodels/dXJuOmV4YW1wbGU6c3VibW9kZWw6bmFtZXBsYXRlLWZpbHRlcg",
+    "shouldMatch": "expected/nameplate_filtered.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "Anonymous submodel list contains only the matching SME",
+    "method": "GET",
+    "endpoint": "{{BASYX_IT_API_URL}}/submodels",
+    "shouldMatch": "expected/nameplate_list_filtered.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "Anonymous query response contains only the matching SME",
+    "method": "POST",
+    "endpoint": "{{BASYX_IT_API_URL}}/query/submodels",
+    "data": "bodies/query_all.json",
+    "shouldMatch": "expected/nameplate_list_filtered.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "SME pagination filters before applying the limit",
+    "method": "GET",
+    "endpoint": "{{BASYX_IT_API_URL}}/submodels/dXJuOmV4YW1wbGU6c3VibW9kZWw6bmFtZXBsYXRlLWZpbHRlcg/submodel-elements?limit=1",
+    "shouldMatch": "expected/nameplate_elements_filtered.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "Anonymous can read the matching SME directly",
+    "method": "GET",
+    "endpoint": "{{BASYX_IT_API_URL}}/submodels/dXJuOmV4YW1wbGU6c3VibW9kZWw6bmFtZXBsYXRlLWZpbHRlcg/submodel-elements/ManufacturerProductRoot",
+    "shouldMatch": "expected/manufacturer_product_root.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "Anonymous cannot read a nonmatching SME directly",
+    "method": "GET",
+    "endpoint": "{{BASYX_IT_API_URL}}/submodels/dXJuOmV4YW1wbGU6c3VibW9kZWw6bmFtZXBsYXRlLWZpbHRlcg/submodel-elements/ARestricted",
+    "expectedStatus": 404
+  },
+  {
+    "context": "Anonymous cannot read an SME without semantic ID directly",
+    "method": "GET",
+    "endpoint": "{{BASYX_IT_API_URL}}/submodels/dXJuOmV4YW1wbGU6c3VibW9kZWw6bmFtZXBsYXRlLWZpbHRlcg/submodel-elements/WithoutSemanticId",
+    "expectedStatus": 404
+  },
+  {
+    "context": "Value-only response contains only the matching SME",
+    "method": "GET",
+    "endpoint": "{{BASYX_IT_API_URL}}/submodels/dXJuOmV4YW1wbGU6c3VibW9kZWw6bmFtZXBsYXRlLWZpbHRlcg/submodel-elements/$value",
+    "shouldMatch": "expected/nameplate_elements_value_filtered.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "Metadata response contains only the matching SME",
+    "method": "GET",
+    "endpoint": "{{BASYX_IT_API_URL}}/submodels/dXJuOmV4YW1wbGU6c3VibW9kZWw6bmFtZXBsYXRlLWZpbHRlcg/submodel-elements/$metadata",
+    "shouldMatch": "expected/nameplate_elements_metadata_filtered.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "Reference response does not expose nonmatching SMEs",
+    "method": "GET",
+    "endpoint": "{{BASYX_IT_API_URL}}/submodels/dXJuOmV4YW1wbGU6c3VibW9kZWw6bmFtZXBsYXRlLWZpbHRlcg/submodel-elements/$reference",
+    "shouldMatch": "expected/nameplate_elements_reference_filtered.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "Path response does not expose nonmatching SMEs",
+    "method": "GET",
+    "endpoint": "{{BASYX_IT_API_URL}}/submodels/dXJuOmV4YW1wbGU6c3VibW9kZWw6bmFtZXBsYXRlLWZpbHRlcg/submodel-elements/$path",
+    "shouldMatch": "expected/nameplate_elements_path_filtered.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "Path response rejects a nonmatching exact SME",
+    "method": "GET",
+    "endpoint": "{{BASYX_IT_API_URL}}/submodels/dXJuOmV4YW1wbGU6c3VibW9kZWw6bmFtZXBsYXRlLWZpbHRlcg/submodel-elements/ARestricted/$path",
+    "expectedStatus": 404
+  }
+]

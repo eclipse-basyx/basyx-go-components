@@ -1,0 +1,18 @@
+{
+  "paging_metadata": {},
+  "result": [
+    {
+      "type": "ModelReference",
+      "keys": [
+        {
+          "type": "Submodel",
+          "value": "urn:example:submodel:nameplate-filter"
+        },
+        {
+          "type": "Property",
+          "value": "ManufacturerProductRoot"
+        }
+      ]
+    }
+  ]
+}

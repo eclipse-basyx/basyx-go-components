@@ -1,0 +1,15 @@
+{
+  "idShort": "ManufacturerProductRoot",
+  "modelType": "Property",
+  "semanticId": {
+    "type": "ExternalReference",
+    "keys": [
+      {
+        "type": "GlobalReference",
+        "value": "0112/2///61360_7#AAS011#001"
+      }
+    ]
+  },
+  "valueType": "xs:string",
+  "value": "visible"
+}

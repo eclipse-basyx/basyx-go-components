@@ -136,6 +136,37 @@ func NewResolvedFieldPathCollectorForRoot(root CollectorRoot) (*ResolvedFieldPat
 	return NewResolvedFieldPathCollectorWithConfig(&cfg), nil
 }
 
+// NewResolvedFieldPathCollectorForSMERow creates an SME collector correlated
+// to the current submodel element instead of the containing submodel.
+// Fragment filters use this collector so their conditions are evaluated for
+// each SME row independently, while regular SME formulas retain existential
+// submodel-wide semantics through CollectorRootSME.
+func NewResolvedFieldPathCollectorForSMERow(rootAlias string) (*ResolvedFieldPathCollector, error) {
+	rootAlias = strings.TrimSpace(rootAlias)
+	if rootAlias == "" {
+		return nil, fmt.Errorf("SME row collector root alias must not be empty")
+	}
+
+	cfg := joinPlanConfigForSME()
+	cfg.GroupKeyForBase = func(base string) (exp.IdentifierExpression, error) {
+		if base == "submodel_element" {
+			return goqu.I("submodel_element.id"), nil
+		}
+		return nil, fmt.Errorf("unsupported SME row base alias %q", base)
+	}
+	cfg.RootJoinKey = func() exp.IdentifierExpression {
+		return goqu.I(rootAlias + ".id")
+	}
+	cfg.RootJoinKeyAlias = func() string {
+		return rootAlias
+	}
+	cfg.RootJoinKeyColumn = func() string {
+		return "id"
+	}
+
+	return NewResolvedFieldPathCollectorWithConfig(&cfg), nil
+}
+
 func joinPlanConfigForRoot(root CollectorRoot) (JoinPlanConfig, error) {
 	switch root {
 	case CollectorRootAAS:

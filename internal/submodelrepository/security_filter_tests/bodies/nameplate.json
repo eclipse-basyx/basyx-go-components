@@ -1,0 +1,52 @@
+{
+  "id": "urn:example:submodel:nameplate-filter",
+  "idShort": "NameplateFilter",
+  "modelType": "Submodel",
+  "semanticId": {
+    "type": "ExternalReference",
+    "keys": [
+      {
+        "type": "GlobalReference",
+        "value": "https://admin-shell.io/idta/nameplate/3/0/Nameplate"
+      }
+    ]
+  },
+  "submodelElements": [
+    {
+      "idShort": "ARestricted",
+      "modelType": "Property",
+      "semanticId": {
+        "type": "ExternalReference",
+        "keys": [
+          {
+            "type": "GlobalReference",
+            "value": "urn:example:semantic:restricted"
+          }
+        ]
+      },
+      "valueType": "xs:string",
+      "value": "restricted"
+    },
+    {
+      "idShort": "ManufacturerProductRoot",
+      "modelType": "Property",
+      "semanticId": {
+        "type": "ExternalReference",
+        "keys": [
+          {
+            "type": "GlobalReference",
+            "value": "0112/2///61360_7#AAS011#001"
+          }
+        ]
+      },
+      "valueType": "xs:string",
+      "value": "visible"
+    },
+    {
+      "idShort": "WithoutSemanticId",
+      "modelType": "Property",
+      "valueType": "xs:string",
+      "value": "restricted"
+    }
+  ]
+}

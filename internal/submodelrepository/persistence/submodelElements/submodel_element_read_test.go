@@ -26,9 +26,15 @@
 package submodelelements
 
 import (
+	"context"
+	"encoding/json"
+	"strings"
 	"testing"
 
 	"github.com/FriedJannik/aas-go-sdk/types"
+	"github.com/doug-martin/goqu/v9"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
+	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 	"github.com/stretchr/testify/require"
 )
 
@@ -75,4 +81,68 @@ func TestEscapeSQLLikePatternEscapesWildcardCharacters(t *testing.T) {
 	require.Equal(t, "A!%B", escapeSQLLikePattern("A%B"))
 	require.Equal(t, "A!!B", escapeSQLLikePattern("A!B"))
 	require.Equal(t, "A!!B!_C!%", escapeSQLLikePattern("A!B_C%"))
+}
+
+func TestBuildSMEMaskRuntimeCorrelatesFragmentConditionToCurrentElement(t *testing.T) {
+	t.Parallel()
+
+	var condition grammar.LogicalExpression
+	err := json.Unmarshal([]byte(`{
+		"$eq": [
+			{"$field": "$sme#semanticId.keys[].value"},
+			{"$strVal": "0112/2///61360_7#AAS011#001"}
+		]
+	}`), &condition)
+	require.NoError(t, err)
+
+	ctx := auth.WithQueryFilter(context.Background(), &auth.QueryFilter{
+		Filters: auth.FragmentFilters{
+			"$sme": condition,
+		},
+	})
+	collector, err := grammar.NewResolvedFieldPathCollectorForSMERow("sme")
+	require.NoError(t, err)
+
+	runtime, _, err := buildSMEMaskRuntime(ctx, collector)
+	require.NoError(t, err)
+
+	dataset := goqu.Dialect("postgres").
+		From(goqu.T("submodel_element").As("sme")).
+		Select(runtime.Projections()...)
+	sqlQuery, _, err := dataset.ToSQL()
+	require.NoError(t, err)
+
+	normalizedSQL := strings.ReplaceAll(sqlQuery, " ", "")
+	require.Contains(t, normalizedSQL, `"submodel_element"."id"="sme"."id"`)
+	require.NotContains(t, normalizedSQL, `"submodel_element"."submodel_id"="sme"."submodel_id"`)
+}
+
+func TestBuildSMEMaskRuntimeGuardsPathSpecificFragment(t *testing.T) {
+	t.Parallel()
+
+	deny := false
+	ctx := auth.WithQueryFilter(context.Background(), &auth.QueryFilter{
+		Filters: auth.FragmentFilters{
+			"$sme.ARestricted": {Boolean: &deny},
+		},
+	})
+	collector, err := grammar.NewResolvedFieldPathCollectorForSMERow("sme")
+	require.NoError(t, err)
+
+	runtime, _, err := buildSMEMaskRuntime(ctx, collector)
+	require.NoError(t, err)
+
+	dataset := goqu.Dialect("postgres").
+		From(goqu.T("submodel_element").As("sme")).
+		InnerJoin(
+			goqu.T("submodel_element").As("submodel_element"),
+			goqu.On(goqu.I("submodel_element.id").Eq(goqu.I("sme.id"))),
+		).
+		Select(runtime.Projections()...)
+	sqlQuery, _, err := dataset.ToSQL()
+	require.NoError(t, err)
+
+	require.Contains(t, sqlQuery, `"submodel_element"."idshort_path"`)
+	require.Contains(t, sqlQuery, "ARestricted")
+	require.Contains(t, sqlQuery, "NOT")
 }
