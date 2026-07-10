@@ -144,7 +144,7 @@ func NewResolvedFieldPathCollectorForRoot(root CollectorRoot) (*ResolvedFieldPat
 func NewResolvedFieldPathCollectorForSMERow(rootAlias string) (*ResolvedFieldPathCollector, error) {
 	rootAlias = strings.TrimSpace(rootAlias)
 	if rootAlias == "" {
-		return nil, fmt.Errorf("SME row collector root alias must not be empty")
+		return nil, fmt.Errorf("GRAMMAR-SMEROWCOLLECTOR-EMPTYALIAS SME row collector root alias must not be empty")
 	}
 
 	cfg := joinPlanConfigForSME()
@@ -152,7 +152,7 @@ func NewResolvedFieldPathCollectorForSMERow(rootAlias string) (*ResolvedFieldPat
 		if base == "submodel_element" {
 			return goqu.I("submodel_element.id"), nil
 		}
-		return nil, fmt.Errorf("unsupported SME row base alias %q", base)
+		return nil, fmt.Errorf("GRAMMAR-SMEROWCOLLECTOR-BADBASE unsupported SME row base alias %q", base)
 	}
 	cfg.RootJoinKey = func() exp.IdentifierExpression {
 		return goqu.I(rootAlias + ".id")

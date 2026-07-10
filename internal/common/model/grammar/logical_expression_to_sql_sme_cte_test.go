@@ -154,6 +154,19 @@ func TestLogicalExpression_SMERowCollectorUsesElementCorrelation(t *testing.T) {
 	}
 }
 
+func TestNewResolvedFieldPathCollectorForSMERowRejectsEmptyAlias(t *testing.T) {
+	collector, err := NewResolvedFieldPathCollectorForSMERow("  ")
+	if collector != nil {
+		t.Fatalf("expected nil collector for empty alias")
+	}
+	if err == nil {
+		t.Fatal("expected empty alias error")
+	}
+	if !strings.Contains(err.Error(), "GRAMMAR-SMEROWCOLLECTOR-EMPTYALIAS") {
+		t.Fatalf("expected stable error prefix, got: %v", err)
+	}
+}
+
 func TestLogicalExpression_SME_WithCollector_MultiConditions(t *testing.T) {
 	expr := LogicalExpression{
 		And: []LogicalExpression{
