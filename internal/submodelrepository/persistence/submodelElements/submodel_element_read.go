@@ -106,10 +106,6 @@ func GetSubmodelElementByIDShortOrPathTx(ctx context.Context, tx *sql.Tx, submod
 }
 
 func getSubmodelElementByIDShortOrPathWithSubmodelDBID(ctx context.Context, db dbQueryer, submodelID string, submodelDatabaseID int64, idShortOrPath string, level string) (types.ISubmodelElement, error) {
-	if formulaCheckErr := ensureSubmodelElementPathMatchesFormula(ctx, db, submodelID, submodelDatabaseID, idShortOrPath); formulaCheckErr != nil {
-		return nil, formulaCheckErr
-	}
-
 	includeChildren := level != "core"
 	parsedRows, readRowsErr := readSubmodelElementRowsByPath(ctx, db, submodelDatabaseID, idShortOrPath, includeChildren)
 
@@ -171,7 +167,7 @@ func GetSubmodelElementPathsBySubmodelID(ctx context.Context, db *sql.DB, submod
 			return nil, common.NewInternalServerError("SMREPO-GETSMEPATHS-ABACFORMULA " + addFormulaErr.Error())
 		}
 	}
-	query, rowFilterErr := addSMEVisibleTreeQuery(ctx, query, int64(submodelDatabaseID))
+	query, rowFilterErr := addSMEVisibleTreeQueryForLevel(ctx, query, int64(submodelDatabaseID), level)
 	if rowFilterErr != nil {
 		return nil, common.NewInternalServerError("SMREPO-GETSMEPATHS-ABACFILTER " + rowFilterErr.Error())
 	}
@@ -259,7 +255,7 @@ func GetSubmodelElementPathsPageBySubmodelID(ctx context.Context, db *sql.DB, su
 			return nil, "", common.NewInternalServerError("SMREPO-GETSMEPATHSPAGE-ABACFORMULA " + addFormulaErr.Error())
 		}
 	}
-	query, rowFilterErr := addSMEVisibleTreeQuery(ctx, query, int64(submodelDatabaseID))
+	query, rowFilterErr := addSMEVisibleTreeQueryForLevel(ctx, query, int64(submodelDatabaseID), level)
 	if rowFilterErr != nil {
 		return nil, "", common.NewInternalServerError("SMREPO-GETSMEPATHSPAGE-ABACFILTER " + rowFilterErr.Error())
 	}
@@ -377,7 +373,7 @@ func GetSubmodelElementPathsByPath(ctx context.Context, db *sql.DB, submodelID s
 	if ancestorVisibilityErr != nil {
 		return nil, common.NewInternalServerError("SMREPO-GETSMEPATHSBYPATH-ABACANCESTOR " + ancestorVisibilityErr.Error())
 	}
-	query, subtreeVisibilityErr := addSMEVisibleSubtreeQuery(ctx, query, int64(submodelDatabaseID), idShortPath)
+	query, subtreeVisibilityErr := addSMEVisibleSubtreeQueryForLevel(ctx, query, int64(submodelDatabaseID), idShortPath, level)
 	if subtreeVisibilityErr != nil {
 		return nil, common.NewInternalServerError("SMREPO-GETSMEPATHSBYPATH-ABACSUBTREE " + subtreeVisibilityErr.Error())
 	}
@@ -413,54 +409,6 @@ func GetSubmodelElementPathsByPath(ctx context.Context, db *sql.DB, submodelID s
 	}
 
 	return paths, nil
-}
-
-func ensureSubmodelElementPathMatchesFormula(ctx context.Context, db dbQueryer, submodelID string, submodelDatabaseID int64, idShortOrPath string) error {
-	dialect := goqu.Dialect("postgres")
-	query := dialect.
-		From(goqu.T("submodel_element").As("sme")).
-		Select(goqu.I("sme.id")).
-		Where(
-			goqu.I("sme.submodel_id").Eq(submodelDatabaseID),
-			goqu.I("sme.idshort_path").Eq(idShortOrPath),
-		).
-		Limit(1)
-
-	collector, collectorErr := grammar.NewResolvedFieldPathCollectorForRoot(grammar.CollectorRootSME)
-	if collectorErr != nil {
-		return common.NewInternalServerError("SMREPO-GETSMEBYPATH-BADCOLLECTOR " + collectorErr.Error())
-	}
-	shouldEnforceFormula, enforceErr := auth.ShouldEnforceFormula(ctx)
-	if enforceErr != nil {
-		return common.NewInternalServerError("SMREPO-GETSMEBYPATH-SHOULDENFORCE " + enforceErr.Error())
-	}
-	if shouldEnforceFormula {
-		var formulaErr error
-		query, formulaErr = auth.AddFormulaQueryFromContext(ctx, query, collector)
-		if formulaErr != nil {
-			return common.NewInternalServerError("SMREPO-GETSMEBYPATH-ABACFORMULA " + formulaErr.Error())
-		}
-	}
-
-	query, ancestorVisibilityErr := addSMEPathAncestorVisibilityQuery(ctx, query, submodelDatabaseID, idShortOrPath)
-	if ancestorVisibilityErr != nil {
-		return common.NewInternalServerError("SMREPO-GETSMEBYPATH-ABACANCESTOR " + ancestorVisibilityErr.Error())
-	}
-
-	sqlQuery, args, toSQLErr := query.ToSQL()
-	if toSQLErr != nil {
-		return common.NewInternalServerError("SMREPO-GETSMEBYPATH-BUILDQ " + toSQLErr.Error())
-	}
-
-	var elementID int64
-	scanErr := db.QueryRowContext(ctx, sqlQuery, args...).Scan(&elementID)
-	if scanErr == nil {
-		return nil
-	}
-	if errors.Is(scanErr, sql.ErrNoRows) {
-		return common.NewErrNotFound("SubmodelElement with idShort or path '" + idShortOrPath + "' not found in submodel '" + submodelID + "'")
-	}
-	return common.NewInternalServerError("SMREPO-GETSMEBYPATH-EXECQ " + scanErr.Error())
 }
 
 // GetSubmodelElementsBySubmodelID loads top-level submodel elements and reconstructs
@@ -1035,6 +983,18 @@ func addSMEVisibleTreeQuery(
 	return addSMEVisibleTreeQueryFromPath(ctx, query, submodelDatabaseID, "")
 }
 
+func addSMEVisibleTreeQueryForLevel(
+	ctx context.Context,
+	query *goqu.SelectDataset,
+	submodelDatabaseID int64,
+	level string,
+) (*goqu.SelectDataset, error) {
+	if level == "core" {
+		return addSMERowFilterQueries(ctx, query)
+	}
+	return addSMEVisibleTreeQuery(ctx, query, submodelDatabaseID)
+}
+
 func addSMEVisibleSubtreeQuery(
 	ctx context.Context,
 	query *goqu.SelectDataset,
@@ -1042,6 +1002,19 @@ func addSMEVisibleSubtreeQuery(
 	targetPath string,
 ) (*goqu.SelectDataset, error) {
 	return addSMEVisibleTreeQueryFromPath(ctx, query, submodelDatabaseID, targetPath)
+}
+
+func addSMEVisibleSubtreeQueryForLevel(
+	ctx context.Context,
+	query *goqu.SelectDataset,
+	submodelDatabaseID int64,
+	targetPath string,
+	level string,
+) (*goqu.SelectDataset, error) {
+	if level == "core" {
+		return query, nil
+	}
+	return addSMEVisibleSubtreeQuery(ctx, query, submodelDatabaseID, targetPath)
 }
 
 func addSMEVisibleTreeQueryFromPath(
@@ -1150,6 +1123,44 @@ func addSMEPathAncestorVisibilityQuery(
 		Where(goqu.L("EXISTS (?)", visibleRoot)), nil
 }
 
+func buildSMEPathAuthorizationQuery(
+	ctx context.Context,
+	submodelDatabaseID int64,
+	targetPath string,
+) (*goqu.SelectDataset, error) {
+	dialect := goqu.Dialect("postgres")
+	query := dialect.
+		From(goqu.T("submodel_element").As("sme")).
+		Select(goqu.V(1)).
+		Where(
+			goqu.I("sme.submodel_id").Eq(submodelDatabaseID),
+			goqu.I("sme.idshort_path").Eq(targetPath),
+		).
+		Limit(1)
+
+	formulaCollector, formulaCollectorErr := grammar.NewResolvedFieldPathCollectorForRoot(grammar.CollectorRootSME)
+	if formulaCollectorErr != nil {
+		return nil, common.NewInternalServerError("SMREPO-GETSMEBYPATH-BADCOLLECTOR " + formulaCollectorErr.Error())
+	}
+	shouldEnforceFormula, enforceErr := auth.ShouldEnforceFormula(ctx)
+	if enforceErr != nil {
+		return nil, common.NewInternalServerError("SMREPO-GETSMEBYPATH-SHOULDENFORCE " + enforceErr.Error())
+	}
+	if shouldEnforceFormula {
+		var formulaErr error
+		query, formulaErr = auth.AddFormulaQueryFromContext(ctx, query, formulaCollector)
+		if formulaErr != nil {
+			return nil, common.NewInternalServerError("SMREPO-GETSMEBYPATH-ABACFORMULA " + formulaErr.Error())
+		}
+	}
+
+	query, ancestorVisibilityErr := addSMEPathAncestorVisibilityQuery(ctx, query, submodelDatabaseID, targetPath)
+	if ancestorVisibilityErr != nil {
+		return nil, common.NewInternalServerError("SMREPO-GETSMEBYPATH-ABACANCESTOR " + ancestorVisibilityErr.Error())
+	}
+	return query, nil
+}
+
 func normalizeSMERowFragment(fragment grammar.FragmentStringPattern) grammar.FragmentStringPattern {
 	fragmentStr := string(fragment)
 	if strings.Contains(fragmentStr, "#") {
@@ -1213,11 +1224,11 @@ func buildMaskedSMEValuePayloadExpr(rawValueAlias string) exp.Expression {
 
 func readSubmodelElementRowsByPath(ctx context.Context, db dbQueryer, submodelDatabaseID int64, idShortOrPath string, includeChildren bool) ([]loadedSMERow, error) {
 	dialect := goqu.Dialect("postgres")
-	collector, collectorErr := grammar.NewResolvedFieldPathCollectorForSMERow("sme")
+	rowCollector, collectorErr := grammar.NewResolvedFieldPathCollectorForSMERow("sme")
 	if collectorErr != nil {
 		return nil, common.NewInternalServerError("SMREPO-GETSMEBYPATH-BADCOLLECTOR " + collectorErr.Error())
 	}
-	maskRuntime, maskGroups, maskRuntimeErr := buildSMEMaskRuntime(ctx, collector)
+	maskRuntime, maskGroups, maskRuntimeErr := buildSMEMaskRuntime(ctx, rowCollector)
 	if maskRuntimeErr != nil {
 		return nil, common.NewInternalServerError("SMREPO-GETSMEBYPATH-MASKRUNTIME " + maskRuntimeErr.Error())
 	}
@@ -1293,6 +1304,12 @@ func readSubmodelElementRowsByPath(ctx context.Context, db dbQueryer, submodelDa
 			),
 		)
 	}
+
+	authorizationQuery, authorizationErr := buildSMEPathAuthorizationQuery(ctx, submodelDatabaseID, idShortOrPath)
+	if authorizationErr != nil {
+		return nil, authorizationErr
+	}
+	innerQuery = innerQuery.Where(goqu.L("EXISTS (?)", authorizationQuery))
 	innerQuery, rowFilterErr := addSMERowFilterQueries(ctx, innerQuery)
 	if rowFilterErr != nil {
 		return nil, common.NewInternalServerError("SMREPO-GETSMEBYPATH-ROWFILTER " + rowFilterErr.Error())

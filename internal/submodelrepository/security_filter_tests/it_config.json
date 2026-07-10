@@ -53,7 +53,8 @@
     "expectedStatus": 200
   },
   {
-    "context": "Anonymous can read the matching SME directly",
+    "context": "Exact SME read succeeds when a sibling satisfies the regular SME formula",
+    "token": { "user": "userx", "password": "pwd" },
     "method": "GET",
     "endpoint": "{{BASYX_IT_API_URL}}/submodels/dXJuOmV4YW1wbGU6c3VibW9kZWw6bmFtZXBsYXRlLWZpbHRlcg/submodel-elements/ManufacturerProductRoot",
     "shouldMatch": "expected/manufacturer_product_root.json",
@@ -130,6 +131,13 @@
     "method": "GET",
     "endpoint": "{{BASYX_IT_API_URL}}/submodels/dXJuOmV4YW1wbGU6c3VibW9kZWw6ZGVlcC1wYXRoLWZpbHRlcg/submodel-elements/VisibleContainer/$path?level=deep",
     "shouldMatch": "expected/visible_container_path_filtered.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "Exact deep SME response does not expose descendants below a filtered child",
+    "method": "GET",
+    "endpoint": "{{BASYX_IT_API_URL}}/submodels/dXJuOmV4YW1wbGU6c3VibW9kZWw6ZGVlcC1wYXRoLWZpbHRlcg/submodel-elements/VisibleContainer?level=deep",
+    "shouldMatch": "expected/visible_container_filtered.json",
     "expectedStatus": 200
   }
 ]

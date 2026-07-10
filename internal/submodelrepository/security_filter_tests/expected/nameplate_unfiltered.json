@@ -28,6 +28,21 @@
       "value": "restricted"
     },
     {
+      "idShort": "FormulaWitness",
+      "modelType": "Property",
+      "semanticId": {
+        "type": "ExternalReference",
+        "keys": [
+          {
+            "type": "GlobalReference",
+            "value": "urn:example:semantic:formula-witness"
+          }
+        ]
+      },
+      "valueType": "xs:string",
+      "value": "authorizes-the-submodel-not-the-target-row"
+    },
+    {
       "idShort": "ManufacturerProductRoot",
       "modelType": "Property",
       "semanticId": {

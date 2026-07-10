@@ -55,6 +55,14 @@
           "RIGHTS": [ "ALL" ],
           "ACCESS": "ALLOW"
         }
+      },
+      {
+        "name": "formula_reader",
+        "acl": {
+          "USEATTRIBUTES": "role_attr",
+          "RIGHTS": [ "READ" ],
+          "ACCESS": "ALLOW"
+        }
       }
     ],
     "DEFFORMULAS": [
@@ -77,6 +85,25 @@
           "$eq": [
             { "$field": "$sm#semanticId.keys[].value" },
             { "$strVal": "https://admin-shell.io/idta/nameplate/3/0/Nameplate" }
+          ]
+        }
+      },
+      {
+        "name": "editor_with_formula_witness",
+        "formula": {
+          "$and": [
+            {
+              "$eq": [
+                { "$attribute": { "CLAIM": "role" } },
+                { "$strVal": "editor" }
+              ]
+            },
+            {
+              "$eq": [
+                { "$field": "$sme#semanticId.keys[].value" },
+                { "$strVal": "urn:example:semantic:formula-witness" }
+              ]
+            }
           ]
         }
       },
@@ -104,6 +131,11 @@
           "FRAGMENT": "$sme",
           "USEFORMULA": "is_manufacturer_product_root"
         }
+      },
+      {
+        "USEACL": "formula_reader",
+        "USEOBJECTS": [ "nameplate_routes" ],
+        "USEFORMULA": "editor_with_formula_witness"
       },
       {
         "USEACL": "admin_all",

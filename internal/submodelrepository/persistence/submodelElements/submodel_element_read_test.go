@@ -171,6 +171,56 @@ func TestAddSMEVisibleTreeQueryFiltersAncestorsBeforeLimit(t *testing.T) {
 	require.Contains(t, sqlQuery, "LIMIT 2")
 }
 
+func TestAddSMEVisibleTreeQueryForLevelUsesRowFilterOnlyForCore(t *testing.T) {
+	t.Parallel()
+
+	deny := false
+	ctx := auth.WithQueryFilter(context.Background(), &auth.QueryFilter{
+		Filters: auth.FragmentFilters{
+			"$sme.ARestricted": {Boolean: &deny},
+		},
+	})
+	dataset := goqu.Dialect("postgres").
+		From(goqu.T("submodel_element").As("sme")).
+		Select(goqu.I("sme.idshort_path"))
+
+	filtered, err := addSMEVisibleTreeQueryForLevel(ctx, dataset, 42, "core")
+	require.NoError(t, err)
+	sqlQuery, _, err := filtered.ToSQL()
+	require.NoError(t, err)
+
+	require.NotContains(t, sqlQuery, "WITH RECURSIVE")
+	require.Contains(t, sqlQuery, `"sme"."idshort_path"`)
+	require.Contains(t, sqlQuery, "ARestricted")
+}
+
+func TestAddSMEVisibleSubtreeQueryForLevelRecursesOnlyForDeep(t *testing.T) {
+	t.Parallel()
+
+	allow := true
+	ctx := auth.WithQueryFilter(context.Background(), &auth.QueryFilter{
+		Filters: auth.FragmentFilters{
+			"$sme": {Boolean: &allow},
+		},
+	})
+	dataset := goqu.Dialect("postgres").
+		From(goqu.T("submodel_element").As("sme")).
+		Select(goqu.I("sme.idshort_path"))
+
+	coreQuery, err := addSMEVisibleSubtreeQueryForLevel(ctx, dataset, 42, "Target", "core")
+	require.NoError(t, err)
+	coreSQL, _, err := coreQuery.ToSQL()
+	require.NoError(t, err)
+	require.NotContains(t, coreSQL, "visible_sme_subtree_ids")
+
+	deepQuery, err := addSMEVisibleSubtreeQueryForLevel(ctx, dataset, 42, "Target", "deep")
+	require.NoError(t, err)
+	deepSQL, _, err := deepQuery.ToSQL()
+	require.NoError(t, err)
+	require.Contains(t, deepSQL, "WITH RECURSIVE visible_sme_subtree_ids(id)")
+	require.Contains(t, deepSQL, `"visible_sme_subtree_root"."idshort_path" = 'Target'`)
+}
+
 func TestAddSMEPathAncestorVisibilityQueryStartsAtTarget(t *testing.T) {
 	t.Parallel()
 
@@ -197,7 +247,7 @@ func TestAddSMEPathAncestorVisibilityQueryStartsAtTarget(t *testing.T) {
 	require.NotContains(t, sqlQuery, "visible_sme_ids")
 }
 
-func TestEnsureSubmodelElementPathMatchesFormulaUsesSubmodelWideSMEFormula(t *testing.T) {
+func TestGetSubmodelElementByPathCombinesAuthorizationAndPayloadQuery(t *testing.T) {
 	t.Parallel()
 
 	var formula grammar.LogicalExpression
@@ -212,10 +262,14 @@ func TestEnsureSubmodelElementPathMatchesFormulaUsesSubmodelWideSMEFormula(t *te
 	cfg := &common.Config{}
 	cfg.ABAC.Enabled = true
 	ctx := common.ContextWithConfig(context.Background(), cfg)
+	allow := true
 	ctx = auth.WithQueryFilter(ctx, &auth.QueryFilter{
 		Formula: &formula,
 		FormulasByRight: map[grammar.RightsEnum]grammar.LogicalExpression{
 			grammar.RightsEnumREAD: formula,
+		},
+		Filters: auth.FragmentFilters{
+			"$sme": {Boolean: &allow},
 		},
 	})
 
@@ -226,11 +280,15 @@ func TestEnsureSubmodelElementPathMatchesFormulaUsesSubmodelWideSMEFormula(t *te
 		require.NoError(t, db.Close())
 	})
 
-	mock.ExpectQuery(regexp.QuoteMeta(`"submodel_element"."submodel_id" = "sme"."submodel_id"`)).
-		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(1))
+	mock.ExpectQuery(
+		`WITH RECURSIVE visible_sme_path_ancestors.*` +
+			regexp.QuoteMeta(`"submodel_element"."submodel_id" = "sme"."submodel_id"`) +
+			`.*sme_path_data`,
+	).WillReturnRows(sqlmock.NewRows([]string{"id"}))
 
-	err = ensureSubmodelElementPathMatchesFormula(ctx, db, "submodel-id", 42, "Target")
-	require.NoError(t, err)
+	_, err = getSubmodelElementByIDShortOrPathWithSubmodelDBID(ctx, db, "submodel-id", 42, "Target", "deep")
+	require.Error(t, err)
+	require.Truef(t, common.IsErrNotFound(err), "expected not found, got %v", err)
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 

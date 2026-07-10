@@ -221,10 +221,7 @@ func TestGetSubmodelElementWithLevelCoreReturnsElementWithoutChildren(t *testing
 	mock.ExpectQuery(`SELECT .*FROM "submodel"`).
 		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(1))
 
-	mock.ExpectQuery(`SELECT .*"sme"\."id".*FROM "submodel_element" AS "sme".*"sme"\."idshort_path" =.*LIMIT 1`).
-		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(10))
-
-	mock.ExpectQuery(`SELECT .*FROM "submodel_element" AS "sme".*"sme"\."idshort_path" =`).
+	mock.ExpectQuery(`SELECT .*FROM \(SELECT .*FROM "submodel_element" AS "sme".*"sme"\."idshort_path" =.*EXISTS`).
 		WillReturnRows(sqlmock.NewRows(submodelElementReadColumns()).
 			AddRow(
 				10,
