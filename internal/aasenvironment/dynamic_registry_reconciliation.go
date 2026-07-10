@@ -92,41 +92,64 @@ func DynamicRegistryReconciliationMiddleware(reconcilers ...dynamicRegistryRecon
 }
 
 func (s *CustomAASRepositoryService) triggerDynamicRegistryReconciliation(ctx context.Context) {
+	triggerDynamicRegistryReconciliation(
+		ctx,
+		&s.dynamicReconciliationState,
+		s.dynamicExternalBaseURL,
+		s.reconcileDynamicRegistryDescriptors,
+		"AASENV-DYNREGRECON-AASERR",
+	)
+}
+
+func (s *CustomSubmodelRepositoryService) triggerDynamicRegistryReconciliation(ctx context.Context) {
+	triggerDynamicRegistryReconciliation(
+		ctx,
+		&s.dynamicReconciliationState,
+		s.dynamicExternalBaseURL,
+		s.reconcileDynamicRegistryDescriptors,
+		"AASENV-DYNREGRECON-SMERR",
+	)
+}
+
+func triggerDynamicRegistryReconciliation(
+	ctx context.Context,
+	state *dynamicRegistryReconciliationState,
+	dynamicExternalBaseURL func(context.Context) string,
+	reconcile func(context.Context) error,
+	errorCode string,
+) {
 	reconciliationCtx := dynamicRegistryReconciliationContext(ctx)
 	if reconciliationCtx == nil {
 		return
 	}
-	externalBaseURL := s.dynamicExternalBaseURL(reconciliationCtx)
-	if !s.dynamicReconciliationState.reserve(externalBaseURL) {
+	if state == nil || dynamicExternalBaseURL == nil || reconcile == nil {
+		return
+	}
+
+	externalBaseURL := dynamicExternalBaseURL(reconciliationCtx)
+	if !state.reserve(externalBaseURL) {
 		return
 	}
 
 	go func() {
-		err := s.reconcileDynamicRegistryDescriptors(reconciliationCtx)
-		s.dynamicReconciliationState.complete(externalBaseURL, err == nil)
+		timeout := dynamicRegistryReconciliationTimeout(reconciliationCtx)
+		reconciliationCtxWithTimeout, cancel := context.WithTimeout(reconciliationCtx, timeout)
+		defer cancel()
+
+		err := reconcile(reconciliationCtxWithTimeout)
+		state.complete(externalBaseURL, err == nil)
 		if err != nil {
-			log.Printf("AASENV-DYNREGRECON-AASERR dynamic registry reconciliation failed: %v", err)
+			log.Printf("%s dynamic registry reconciliation failed: %v", errorCode, err)
 		}
 	}()
 }
 
-func (s *CustomSubmodelRepositoryService) triggerDynamicRegistryReconciliation(ctx context.Context) {
-	reconciliationCtx := dynamicRegistryReconciliationContext(ctx)
-	if reconciliationCtx == nil {
-		return
+func dynamicRegistryReconciliationTimeout(ctx context.Context) time.Duration {
+	cfg, ok := common.ConfigFromContext(ctx)
+	if !ok || cfg == nil || cfg.General.DynamicRegistryReconciliationTimeoutSeconds <= 0 {
+		return time.Duration(common.DefaultConfig.GeneralDynamicRegistryReconciliationTimeoutSeconds) * time.Second
 	}
-	externalBaseURL := s.dynamicExternalBaseURL(reconciliationCtx)
-	if !s.dynamicReconciliationState.reserve(externalBaseURL) {
-		return
-	}
-
-	go func() {
-		err := s.reconcileDynamicRegistryDescriptors(reconciliationCtx)
-		s.dynamicReconciliationState.complete(externalBaseURL, err == nil)
-		if err != nil {
-			log.Printf("AASENV-DYNREGRECON-SMERR dynamic registry reconciliation failed: %v", err)
-		}
-	}()
+	return time.Duration(cfg.General.DynamicRegistryReconciliationTimeoutSeconds) * time.Second
 }
 
 func dynamicRegistryReconciliationContext(ctx context.Context) context.Context {
@@ -207,7 +230,7 @@ func (s *CustomAASRepositoryService) reconcileDynamicAASDescriptors(ctx context.
 
 func (s *CustomSubmodelRepositoryService) reconcileDynamicRegistryDescriptors(ctx context.Context) error {
 	externalBaseURL := s.dynamicExternalBaseURL(ctx)
-	if externalBaseURL == "" {
+	if externalBaseURL == "" || !s.syncConfig.SubmodelRegistryIntegration {
 		return nil
 	}
 

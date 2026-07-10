@@ -25,7 +25,7 @@ services:
       - GENERAL_AASREGISTRYINTEGRATION=true
       - GENERAL_SUBMODELREGISTRYINTEGRATION=true
       - GENERAL_DISCOVERYINTEGRATION=true
-      - GENERAL_TRUSTEDDYNAMICHOSTS=localhost
+      - GENERAL_TRUSTEDDYNAMICHOSTS=localhost:8082
       - GENERAL_AAS_PRECONFIG_PATHS=/app/preconfiguration
     volumes:
       - ./basyx/rsa-key.pem:/app/rsa-key.pem:ro

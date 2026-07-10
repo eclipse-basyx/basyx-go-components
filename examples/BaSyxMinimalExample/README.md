@@ -75,7 +75,7 @@ docker compose down -v
   - `GENERAL_DISCOVERYINTEGRATION=true`
   - `GENERAL_AASREGISTRYINTEGRATION=true`
   - `GENERAL_SUBMODELREGISTRYINTEGRATION=true`
-- Descriptor endpoints are derived dynamically in this local compose setup. Direct request hosts are accepted only when they match `GENERAL_TRUSTEDDYNAMICHOSTS=localhost`.
+- Descriptor endpoints are derived dynamically in this local compose setup. Direct request hosts are accepted only when they match `GENERAL_TRUSTEDDYNAMICHOSTS=localhost:8082`.
 - For production deployments with a stable public backend URL, prefer `GENERAL_EXTERNALURL=https://...`; comma-separated URLs are supported.
 - For generic deployments behind a reverse proxy where the final public host is not known in the compose file, leave `GENERAL_EXTERNALURL` blank and configure the backend to trust only that proxy:
   - `GENERAL_TRUSTPROXYHEADERS=true`

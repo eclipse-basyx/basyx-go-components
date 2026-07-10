@@ -30,6 +30,7 @@ import (
 	"database/sql"
 	"net/http"
 	"testing"
+	"time"
 
 	"github.com/FriedJannik/aas-go-sdk/jsonization"
 	"github.com/FriedJannik/aas-go-sdk/types"
@@ -207,6 +208,24 @@ func TestDynamicRegistryReconciliationStateSkipsDuplicateRuns(t *testing.T) {
 
 	state.complete("https://public.example/api/v3", true)
 	require.False(t, state.reserve("https://public.example/api/v3"))
+}
+
+func TestDynamicSubmodelRegistryReconciliationSkipsWhenIntegrationDisabled(t *testing.T) {
+	service := CustomSubmodelRepositoryService{
+		syncConfig: RegistrySyncConfig{},
+	}
+	ctx := common.ContextWithRequestExternalBaseURL(context.TODO(), "https://public.example/api/v3")
+
+	require.NoError(t, service.reconcileDynamicRegistryDescriptors(ctx))
+}
+
+func TestDynamicRegistryReconciliationTimeoutUsesConfig(t *testing.T) {
+	cfg := &common.Config{}
+	cfg.General.DynamicRegistryReconciliationTimeoutSeconds = 120
+	ctx := common.ContextWithConfig(context.TODO(), cfg)
+
+	require.Equal(t, 120*time.Second, dynamicRegistryReconciliationTimeout(ctx))
+	require.Equal(t, 30*time.Second, dynamicRegistryReconciliationTimeout(context.TODO()))
 }
 
 func TestBuildAASDescriptorDerivesFromIdentifiable(t *testing.T) {

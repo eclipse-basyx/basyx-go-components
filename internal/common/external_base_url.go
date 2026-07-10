@@ -55,7 +55,7 @@ func ExternalBaseURLFromContext(ctx context.Context) string {
 // ContextWithRequestExternalBaseURL returns a context containing a normalized request-derived external base URL.
 func ContextWithRequestExternalBaseURL(ctx context.Context, externalBaseURL string) context.Context {
 	if ctx == nil {
-		ctx = context.Background()
+		ctx = context.TODO()
 	}
 	return context.WithValue(ctx, requestExternalBaseURLKey{}, NormalizePrimaryExternalBaseURL(externalBaseURL))
 }
@@ -97,10 +97,7 @@ func ExternalBaseURLFromRequest(r *http.Request) string {
 }
 
 func requestExternalHost(r *http.Request, cfg *Config) string {
-	if cfg.General.TrustProxyHeaders {
-		if !remoteAddrInTrustedCIDRs(r.RemoteAddr, cfg.General.TrustedProxyCIDRs) {
-			return ""
-		}
+	if cfg.General.TrustProxyHeaders && remoteAddrInTrustedCIDRs(r.RemoteAddr, cfg.General.TrustedProxyCIDRs) {
 		return RequestHost(r)
 	}
 
@@ -112,7 +109,7 @@ func requestExternalHost(r *http.Request, cfg *Config) string {
 }
 
 func hostAllowed(host string, allowedHosts []string) bool {
-	hostOnly, hostPort, _ := canonicalHostForAllowlist(host)
+	hostOnly, hostPort, hostHasPort := canonicalHostForAllowlist(host)
 	if hostOnly == "" {
 		return false
 	}
@@ -122,8 +119,11 @@ func hostAllowed(host string, allowedHosts []string) bool {
 		if allowedOnly == "" {
 			continue
 		}
-		if allowedHasPort && hostPort == allowedHostPort {
-			return true
+		if hostHasPort {
+			if allowedHasPort && hostPort == allowedHostPort {
+				return true
+			}
+			continue
 		}
 		if !allowedHasPort && hostOnly == allowedOnly {
 			return true
@@ -134,7 +134,7 @@ func hostAllowed(host string, allowedHosts []string) bool {
 }
 
 func canonicalHostForAllowlist(host string) (string, string, bool) {
-	normalizedHost := strings.ToLower(strings.Trim(strings.TrimSpace(host), "[]"))
+	normalizedHost := strings.ToLower(strings.TrimSpace(host))
 	if normalizedHost == "" {
 		return "", "", false
 	}
@@ -144,7 +144,8 @@ func canonicalHostForAllowlist(host string) (string, string, bool) {
 		return hostOnly, net.JoinHostPort(hostOnly, parsedPort), true
 	}
 
-	return normalizedHost, normalizedHost, false
+	hostOnly := strings.Trim(normalizedHost, "[]")
+	return hostOnly, hostOnly, false
 }
 
 // NormalizePrimaryExternalBaseURL parses and normalizes the first external base URL from a config string.

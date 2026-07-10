@@ -84,6 +84,27 @@ func TestExternalBaseURLFromRequestRejectsUntrustedProxySource(t *testing.T) {
 	}
 }
 
+func TestExternalBaseURLFromRequestFallsBackToAllowedDirectHostForUntrustedProxySource(t *testing.T) {
+	cfg := &Config{Server: ServerConfig{ContextPath: "/api/v3"}}
+	cfg.General.TrustProxyHeaders = true
+	cfg.General.TrustedProxyCIDRs = []string{"10.10.10.0/24"}
+	cfg.General.TrustedDynamicHosts = []string{"service.local:8080"}
+
+	req, err := http.NewRequest(http.MethodGet, "http://service.local:8080/api/v3/shells", nil)
+	if err != nil {
+		t.Fatalf("create request: %v", err)
+	}
+	req.Host = "service.local:8080"
+	req.RemoteAddr = "192.0.2.10:12345"
+	req.Header.Set("Forwarded", "proto=https;host=evil.example")
+	req.Header.Set("X-Forwarded-Host", "evil.example")
+	req = req.WithContext(ContextWithConfig(context.Background(), cfg))
+
+	if got := ExternalBaseURLFromRequest(req); got != "http://service.local:8080/api/v3" {
+		t.Fatalf("expected allowed direct host external base URL, got %q", got)
+	}
+}
+
 func TestExternalBaseURLFromRequestUsesAllowedDirectHost(t *testing.T) {
 	cfg := &Config{Server: ServerConfig{ContextPath: "/api/v3"}}
 	cfg.General.TrustedDynamicHosts = []string{"service.local"}
@@ -97,6 +118,11 @@ func TestExternalBaseURLFromRequestUsesAllowedDirectHost(t *testing.T) {
 
 	if got := ExternalBaseURLFromRequest(req); got != "http://service.local/api/v3" {
 		t.Fatalf("expected allowed direct host external base URL, got %q", got)
+	}
+
+	req.Host = "service.local:8443"
+	if got := ExternalBaseURLFromRequest(req); got != "" {
+		t.Fatalf("expected direct host with explicit port to require an exact allowlist entry, got %q", got)
 	}
 }
 

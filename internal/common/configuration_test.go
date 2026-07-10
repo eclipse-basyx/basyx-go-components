@@ -174,6 +174,74 @@ func TestBulkBatchLimitRejectsNonPositiveValues(t *testing.T) {
 	}
 }
 
+func TestDynamicRegistryReconciliationTimeoutDefaultIsThirtySeconds(t *testing.T) {
+	for _, key := range []string{
+		"GENERAL_DYNAMICREGISTRYRECONCILIATIONTIMEOUTSECONDS",
+		"GENERAL_DYNAMIC_REGISTRY_RECONCILIATION_TIMEOUT_SECONDS",
+		"BASYX_GENERAL_DYNAMIC_REGISTRY_RECONCILIATION_TIMEOUT_SECONDS",
+	} {
+		withUnsetEnv(t, key)
+	}
+	captureLogOutput(t)
+
+	cfg, err := LoadConfig("", NORMAL)
+	if err != nil {
+		t.Fatalf("unexpected config load error: %v", err)
+	}
+
+	if cfg.General.DynamicRegistryReconciliationTimeoutSeconds != DefaultConfig.GeneralDynamicRegistryReconciliationTimeoutSeconds {
+		t.Fatalf(
+			"dynamicRegistryReconciliationTimeoutSeconds default mismatch: cfg=%d default=%d",
+			cfg.General.DynamicRegistryReconciliationTimeoutSeconds,
+			DefaultConfig.GeneralDynamicRegistryReconciliationTimeoutSeconds,
+		)
+	}
+	if cfg.General.DynamicRegistryReconciliationTimeoutSeconds != 30 {
+		t.Fatalf("expected dynamicRegistryReconciliationTimeoutSeconds default 30, got %d", cfg.General.DynamicRegistryReconciliationTimeoutSeconds)
+	}
+}
+
+func TestDynamicRegistryReconciliationTimeoutCanBeOverriddenByReadableEnvironmentVariable(t *testing.T) {
+	for _, key := range []string{
+		"GENERAL_DYNAMICREGISTRYRECONCILIATIONTIMEOUTSECONDS",
+		"GENERAL_DYNAMIC_REGISTRY_RECONCILIATION_TIMEOUT_SECONDS",
+		"BASYX_GENERAL_DYNAMIC_REGISTRY_RECONCILIATION_TIMEOUT_SECONDS",
+	} {
+		withUnsetEnv(t, key)
+	}
+	t.Setenv("GENERAL_DYNAMIC_REGISTRY_RECONCILIATION_TIMEOUT_SECONDS", "120")
+	captureLogOutput(t)
+
+	cfg, err := LoadConfig("", NORMAL)
+	if err != nil {
+		t.Fatalf("unexpected config load error: %v", err)
+	}
+
+	if cfg.General.DynamicRegistryReconciliationTimeoutSeconds != 120 {
+		t.Fatalf("expected env dynamicRegistryReconciliationTimeoutSeconds 120, got %d", cfg.General.DynamicRegistryReconciliationTimeoutSeconds)
+	}
+}
+
+func TestDynamicRegistryReconciliationTimeoutRejectsNonPositiveValues(t *testing.T) {
+	for _, key := range []string{
+		"GENERAL_DYNAMICREGISTRYRECONCILIATIONTIMEOUTSECONDS",
+		"GENERAL_DYNAMIC_REGISTRY_RECONCILIATION_TIMEOUT_SECONDS",
+		"BASYX_GENERAL_DYNAMIC_REGISTRY_RECONCILIATION_TIMEOUT_SECONDS",
+	} {
+		withUnsetEnv(t, key)
+	}
+	t.Setenv("GENERAL_DYNAMIC_REGISTRY_RECONCILIATION_TIMEOUT_SECONDS", "0")
+	captureLogOutput(t)
+
+	_, err := LoadConfig("", NORMAL)
+	if err == nil {
+		t.Fatal("expected config load error for non-positive dynamicRegistryReconciliationTimeoutSeconds")
+	}
+	if !strings.Contains(err.Error(), "CONFIG-GENERAL-DYNREGRECONTIMEOUT") {
+		t.Fatalf("expected CONFIG-GENERAL-DYNREGRECONTIMEOUT error, got %v", err)
+	}
+}
+
 func TestPrintConfigurationMarksPermissiveVerificationModeAsDefault(t *testing.T) {
 	output := captureLogOutput(t)
 	cfg := &Config{

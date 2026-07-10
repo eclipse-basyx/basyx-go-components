@@ -49,71 +49,72 @@ const defaultServerStrictVerification = string(commonmodel.VerificationModePermi
 // DefaultConfig holds all default values for configuration options.
 // These values are also used to mark default values in the printed configuration.
 var DefaultConfig = struct {
-	ServerHost                          string
-	ServerPort                          int
-	ServerContextPath                   string
-	ServerCacheEnabled                  bool
-	ServerStrictVerification            string
-	ServerVerificationEndpointAvailable bool
-	ServerReadHeaderTimeoutSeconds      int
-	ServerReadTimeoutSeconds            int
-	ServerWriteTimeoutSeconds           int
-	ServerIdleTimeoutSeconds            int
-	ServerShutdownTimeoutSeconds        int
-	PgPort                              int
-	PgDBName                            string
-	PgSSLMode                           string
-	PgMaxOpen                           int
-	PgMaxIdle                           int
-	PgConnLifetime                      int
-	AllowedOrigins                      []string
-	AllowedMethods                      []string
-	AllowedHeaders                      []string
-	AllowCredentials                    bool
-	OIDCTrustlistPath                   string
-	OIDCJWKSURL                         string
-	ABACEnabled                         bool
-	ABACModelPath                       string
-	ABACPolicyFileImport                string
-	ABACPolicyScope                     string
-	ABACManagementAPIEnabled            bool
-	GeneralImplicitCasts                bool
-	GeneralDescriptorDebug              bool
-	GeneralDiscoveryIntegration         bool
-	GeneralSupportsSingularSSID         bool
-	GeneralEnableCustomHeaderMW         bool
-	GeneralTrustProxyHeaders            bool
-	GeneralTrustedProxyCIDRs            []string
-	GeneralTrustedDynamicHosts          []string
-	GeneralAASPreconfigPaths            []string
-	GeneralBulkBatchLimit               int
-	HistoryConfigMode                   string
-	HistoryConfigRetentionDays          int
-	HistoryConfigFullSnapshotInterval   int
-	HistoryConfigImmutability           string
-	HistoryConfigAuditIdentityMode      string
-	HistoryEvidenceEnabled              bool
-	HistoryEvidenceProvider             string
-	HistoryEvidenceBucket               string
-	HistoryEvidencePrefix               string
-	HistoryEvidenceRegion               string
-	HistoryEvidenceEndpoint             string
-	HistoryEvidenceAccessKeyID          string
-	HistoryEvidenceSecretAccessKey      string
-	HistoryEvidenceUsePathStyle         bool
-	HistoryEvidenceRetentionMode        string
-	HistoryEvidenceRetentionDays        int
-	HistoryEvidenceWriteTimeoutSeconds  int
-	HistoryEvidenceSigningPrivateKey    string
-	HistoryEvidenceSigningPublicKey     string
-	HistoryEvidenceSigningRequired      bool
-	HistoryIntegrityAnchorProvider      string
-	EventingEnabled                     bool
-	EventingFormat                      string
-	EventingSinks                       []string
-	EventingOutboxEnabled               bool
-	EventingTopicPrefix                 string
-	SwaggerEnabled                      bool
+	ServerHost                                         string
+	ServerPort                                         int
+	ServerContextPath                                  string
+	ServerCacheEnabled                                 bool
+	ServerStrictVerification                           string
+	ServerVerificationEndpointAvailable                bool
+	ServerReadHeaderTimeoutSeconds                     int
+	ServerReadTimeoutSeconds                           int
+	ServerWriteTimeoutSeconds                          int
+	ServerIdleTimeoutSeconds                           int
+	ServerShutdownTimeoutSeconds                       int
+	PgPort                                             int
+	PgDBName                                           string
+	PgSSLMode                                          string
+	PgMaxOpen                                          int
+	PgMaxIdle                                          int
+	PgConnLifetime                                     int
+	AllowedOrigins                                     []string
+	AllowedMethods                                     []string
+	AllowedHeaders                                     []string
+	AllowCredentials                                   bool
+	OIDCTrustlistPath                                  string
+	OIDCJWKSURL                                        string
+	ABACEnabled                                        bool
+	ABACModelPath                                      string
+	ABACPolicyFileImport                               string
+	ABACPolicyScope                                    string
+	ABACManagementAPIEnabled                           bool
+	GeneralImplicitCasts                               bool
+	GeneralDescriptorDebug                             bool
+	GeneralDiscoveryIntegration                        bool
+	GeneralSupportsSingularSSID                        bool
+	GeneralEnableCustomHeaderMW                        bool
+	GeneralTrustProxyHeaders                           bool
+	GeneralTrustedProxyCIDRs                           []string
+	GeneralTrustedDynamicHosts                         []string
+	GeneralDynamicRegistryReconciliationTimeoutSeconds int
+	GeneralAASPreconfigPaths                           []string
+	GeneralBulkBatchLimit                              int
+	HistoryConfigMode                                  string
+	HistoryConfigRetentionDays                         int
+	HistoryConfigFullSnapshotInterval                  int
+	HistoryConfigImmutability                          string
+	HistoryConfigAuditIdentityMode                     string
+	HistoryEvidenceEnabled                             bool
+	HistoryEvidenceProvider                            string
+	HistoryEvidenceBucket                              string
+	HistoryEvidencePrefix                              string
+	HistoryEvidenceRegion                              string
+	HistoryEvidenceEndpoint                            string
+	HistoryEvidenceAccessKeyID                         string
+	HistoryEvidenceSecretAccessKey                     string
+	HistoryEvidenceUsePathStyle                        bool
+	HistoryEvidenceRetentionMode                       string
+	HistoryEvidenceRetentionDays                       int
+	HistoryEvidenceWriteTimeoutSeconds                 int
+	HistoryEvidenceSigningPrivateKey                   string
+	HistoryEvidenceSigningPublicKey                    string
+	HistoryEvidenceSigningRequired                     bool
+	HistoryIntegrityAnchorProvider                     string
+	EventingEnabled                                    bool
+	EventingFormat                                     string
+	EventingSinks                                      []string
+	EventingOutboxEnabled                              bool
+	EventingTopicPrefix                                string
+	SwaggerEnabled                                     bool
 }{
 	ServerHost:                          "0.0.0.0",
 	ServerPort:                          5004,
@@ -151,35 +152,36 @@ var DefaultConfig = struct {
 	GeneralTrustProxyHeaders:            false,
 	GeneralTrustedProxyCIDRs:            []string{},
 	GeneralTrustedDynamicHosts:          []string{},
-	GeneralAASPreconfigPaths:            []string{},
-	GeneralBulkBatchLimit:               1000,
-	HistoryConfigMode:                   "off",
-	HistoryConfigRetentionDays:          0,
-	HistoryConfigFullSnapshotInterval:   1,
-	HistoryConfigImmutability:           "none",
-	HistoryConfigAuditIdentityMode:      "none",
-	HistoryEvidenceEnabled:              false,
-	HistoryEvidenceProvider:             "none",
-	HistoryEvidenceBucket:               "",
-	HistoryEvidencePrefix:               "basyx-history-evidence",
-	HistoryEvidenceRegion:               "us-east-1",
-	HistoryEvidenceEndpoint:             "",
-	HistoryEvidenceAccessKeyID:          "",
-	HistoryEvidenceSecretAccessKey:      "",
-	HistoryEvidenceUsePathStyle:         false,
-	HistoryEvidenceRetentionMode:        "",
-	HistoryEvidenceRetentionDays:        0,
-	HistoryEvidenceWriteTimeoutSeconds:  10,
-	HistoryEvidenceSigningPrivateKey:    "",
-	HistoryEvidenceSigningPublicKey:     "",
-	HistoryEvidenceSigningRequired:      false,
-	HistoryIntegrityAnchorProvider:      "none",
-	EventingEnabled:                     false,
-	EventingFormat:                      "cloudevents",
-	EventingSinks:                       []string{},
-	EventingOutboxEnabled:               false,
-	EventingTopicPrefix:                 "basyx",
-	SwaggerEnabled:                      true,
+	GeneralDynamicRegistryReconciliationTimeoutSeconds: 30,
+	GeneralAASPreconfigPaths:                           []string{},
+	GeneralBulkBatchLimit:                              1000,
+	HistoryConfigMode:                                  "off",
+	HistoryConfigRetentionDays:                         0,
+	HistoryConfigFullSnapshotInterval:                  1,
+	HistoryConfigImmutability:                          "none",
+	HistoryConfigAuditIdentityMode:                     "none",
+	HistoryEvidenceEnabled:                             false,
+	HistoryEvidenceProvider:                            "none",
+	HistoryEvidenceBucket:                              "",
+	HistoryEvidencePrefix:                              "basyx-history-evidence",
+	HistoryEvidenceRegion:                              "us-east-1",
+	HistoryEvidenceEndpoint:                            "",
+	HistoryEvidenceAccessKeyID:                         "",
+	HistoryEvidenceSecretAccessKey:                     "",
+	HistoryEvidenceUsePathStyle:                        false,
+	HistoryEvidenceRetentionMode:                       "",
+	HistoryEvidenceRetentionDays:                       0,
+	HistoryEvidenceWriteTimeoutSeconds:                 10,
+	HistoryEvidenceSigningPrivateKey:                   "",
+	HistoryEvidenceSigningPublicKey:                    "",
+	HistoryEvidenceSigningRequired:                     false,
+	HistoryIntegrityAnchorProvider:                     "none",
+	EventingEnabled:                                    false,
+	EventingFormat:                                     "cloudevents",
+	EventingSinks:                                      []string{},
+	EventingOutboxEnabled:                              false,
+	EventingTopicPrefix:                                "basyx",
+	SwaggerEnabled:                                     true,
 }
 
 const (
@@ -368,20 +370,21 @@ type CorsConfig struct {
 
 // GeneralConfig contains non-domain-specific configuration.
 type GeneralConfig struct {
-	EnableImplicitCasts                    bool     `mapstructure:"enableImplicitCasts" yaml:"enableImplicitCasts" json:"enableImplicitCasts"`                                                          // Enable implicit casts during backend simplification
-	EnableDescriptorDebug                  bool     `mapstructure:"enableDescriptorDebug" yaml:"enableDescriptorDebug" json:"enableDescriptorDebug"`                                                    // Enable descriptor query debug output
-	DiscoveryIntegration                   bool     `mapstructure:"discoveryIntegration" yaml:"discoveryIntegration" json:"discoveryIntegration"`                                                       // Enable integration with discovery aas_identifier linking
-	EnableCustomMiddlewareHeaderInjection  bool     `mapstructure:"enableCustomMiddlewareHeaderInjection" yaml:"enableCustomMiddlewareHeaderInjection" json:"enableCustomMiddlewareHeaderInjection"`    // Enable custom security middleware header injections
-	SupportsSingularSupplementalSemanticId bool     `mapstructure:"supportsSingularSupplementalSemanticId" yaml:"supportsSingularSupplementalSemanticId" json:"supportsSingularSupplementalSemanticId"` // Use singular supplementalSemanticId for SubmodelDescriptor I/O
-	AASRegistryIntegration                 bool     `mapstructure:"aasRegistryIntegration" yaml:"aasRegistryIntegration" json:"aasRegistryIntegration"`                                                 // Enable AAS repository -> registry descriptor synchronization
-	SubmodelRegistryIntegration            bool     `mapstructure:"submodelRegistryIntegration" yaml:"submodelRegistryIntegration" json:"submodelRegistryIntegration"`                                  // Enable Submodel repository -> registry descriptor synchronization
-	ExternalURL                            string   `mapstructure:"externalUrl" yaml:"externalUrl" json:"externalUrl"`                                                                                  // Public base URL(s) used for registry synchronization endpoint generation
-	TrustProxyHeaders                      bool     `mapstructure:"trustProxyHeaders" yaml:"trustProxyHeaders" json:"trustProxyHeaders"`                                                                // Trust Forwarded/X-Forwarded-* headers when request source matches trustedProxyCIDRs
-	TrustedProxyCIDRs                      []string `mapstructure:"trustedProxyCIDRs" yaml:"trustedProxyCIDRs" json:"trustedProxyCIDRs"`                                                                // CIDR allowlist for proxy source addresses eligible to provide forwarded headers
-	TrustedDynamicHosts                    []string `mapstructure:"trustedDynamicHosts" yaml:"trustedDynamicHosts" json:"trustedDynamicHosts"`                                                          // Host allowlist for direct request-derived registry endpoint URLs when proxy headers are not trusted
-	UploadMaxSizeBytes                     int64    `mapstructure:"uploadMaxSizeBytes" yaml:"uploadMaxSizeBytes" json:"uploadMaxSizeBytes"`                                                             // Maximum allowed upload payload size in bytes
-	AASPreconfigPaths                      []string `mapstructure:"aasPreconfigPaths" yaml:"aasPreconfigPaths" json:"aasPreconfigPaths"`                                                                // Files/directories loaded at startup for AAS preconfiguration
-	BulkBatchLimit                         int      `mapstructure:"bulkBatchLimit" yaml:"bulkBatchLimit" json:"bulkBatchLimit"`                                                                         // Maximum row count per generated bulk SQL statement
+	EnableImplicitCasts                         bool     `mapstructure:"enableImplicitCasts" yaml:"enableImplicitCasts" json:"enableImplicitCasts"`                                                                         // Enable implicit casts during backend simplification
+	EnableDescriptorDebug                       bool     `mapstructure:"enableDescriptorDebug" yaml:"enableDescriptorDebug" json:"enableDescriptorDebug"`                                                                   // Enable descriptor query debug output
+	DiscoveryIntegration                        bool     `mapstructure:"discoveryIntegration" yaml:"discoveryIntegration" json:"discoveryIntegration"`                                                                      // Enable integration with discovery aas_identifier linking
+	EnableCustomMiddlewareHeaderInjection       bool     `mapstructure:"enableCustomMiddlewareHeaderInjection" yaml:"enableCustomMiddlewareHeaderInjection" json:"enableCustomMiddlewareHeaderInjection"`                   // Enable custom security middleware header injections
+	SupportsSingularSupplementalSemanticId      bool     `mapstructure:"supportsSingularSupplementalSemanticId" yaml:"supportsSingularSupplementalSemanticId" json:"supportsSingularSupplementalSemanticId"`                // Use singular supplementalSemanticId for SubmodelDescriptor I/O
+	AASRegistryIntegration                      bool     `mapstructure:"aasRegistryIntegration" yaml:"aasRegistryIntegration" json:"aasRegistryIntegration"`                                                                // Enable AAS repository -> registry descriptor synchronization
+	SubmodelRegistryIntegration                 bool     `mapstructure:"submodelRegistryIntegration" yaml:"submodelRegistryIntegration" json:"submodelRegistryIntegration"`                                                 // Enable Submodel repository -> registry descriptor synchronization
+	ExternalURL                                 string   `mapstructure:"externalUrl" yaml:"externalUrl" json:"externalUrl"`                                                                                                 // Public base URL(s) used for registry synchronization endpoint generation
+	TrustProxyHeaders                           bool     `mapstructure:"trustProxyHeaders" yaml:"trustProxyHeaders" json:"trustProxyHeaders"`                                                                               // Trust Forwarded/X-Forwarded-* headers when request source matches trustedProxyCIDRs
+	TrustedProxyCIDRs                           []string `mapstructure:"trustedProxyCIDRs" yaml:"trustedProxyCIDRs" json:"trustedProxyCIDRs"`                                                                               // CIDR allowlist for proxy source addresses eligible to provide forwarded headers
+	TrustedDynamicHosts                         []string `mapstructure:"trustedDynamicHosts" yaml:"trustedDynamicHosts" json:"trustedDynamicHosts"`                                                                         // Host allowlist for direct request-derived registry endpoint URLs when proxy headers are not trusted
+	DynamicRegistryReconciliationTimeoutSeconds int      `mapstructure:"dynamicRegistryReconciliationTimeoutSeconds" yaml:"dynamicRegistryReconciliationTimeoutSeconds" json:"dynamicRegistryReconciliationTimeoutSeconds"` // Maximum runtime for asynchronous dynamic registry descriptor reconciliation
+	UploadMaxSizeBytes                          int64    `mapstructure:"uploadMaxSizeBytes" yaml:"uploadMaxSizeBytes" json:"uploadMaxSizeBytes"`                                                                            // Maximum allowed upload payload size in bytes
+	AASPreconfigPaths                           []string `mapstructure:"aasPreconfigPaths" yaml:"aasPreconfigPaths" json:"aasPreconfigPaths"`                                                                               // Files/directories loaded at startup for AAS preconfiguration
+	BulkBatchLimit                              int      `mapstructure:"bulkBatchLimit" yaml:"bulkBatchLimit" json:"bulkBatchLimit"`                                                                                        // Maximum row count per generated bulk SQL statement
 }
 
 // OIDCProviderConfig contains OpenID Connect authentication provider settings.
@@ -526,6 +529,10 @@ func applyGeneralEnvOverrides(cfg *Config) {
 			cfg.General.BulkBatchLimit = parsed
 		}
 	}
+	applyFirstIntEnv(func(value int) { cfg.General.DynamicRegistryReconciliationTimeoutSeconds = value },
+		"GENERAL_DYNAMIC_REGISTRY_RECONCILIATION_TIMEOUT_SECONDS",
+		"BASYX_GENERAL_DYNAMIC_REGISTRY_RECONCILIATION_TIMEOUT_SECONDS",
+	)
 }
 
 func applyServerEnvOverrides(cfg *Config) {
@@ -560,6 +567,9 @@ func validateGeneralConfig(cfg *Config) error {
 	}
 	if cfg.General.BulkBatchLimit <= 0 {
 		return fmt.Errorf("CONFIG-GENERAL-BULKBATCHLIMIT general.bulkBatchLimit must be greater than 0")
+	}
+	if cfg.General.DynamicRegistryReconciliationTimeoutSeconds <= 0 {
+		return fmt.Errorf("CONFIG-GENERAL-DYNREGRECONTIMEOUT general.dynamicRegistryReconciliationTimeoutSeconds must be greater than 0")
 	}
 	return nil
 }
@@ -1153,6 +1163,7 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("general.trustProxyHeaders", DefaultConfig.GeneralTrustProxyHeaders)
 	v.SetDefault("general.trustedProxyCIDRs", DefaultConfig.GeneralTrustedProxyCIDRs)
 	v.SetDefault("general.trustedDynamicHosts", DefaultConfig.GeneralTrustedDynamicHosts)
+	v.SetDefault("general.dynamicRegistryReconciliationTimeoutSeconds", DefaultConfig.GeneralDynamicRegistryReconciliationTimeoutSeconds)
 	v.SetDefault("general.uploadMaxSizeBytes", int64(128<<20))
 	v.SetDefault("general.aasPreconfigPaths", []string{})
 	v.SetDefault("general.bulkBatchLimit", DefaultConfig.GeneralBulkBatchLimit)
@@ -1254,6 +1265,7 @@ func PrintConfiguration(cfg *Config) {
 	// General
 	lines = append(lines, "General:")
 	add("Bulk Batch Limit", cfg.General.BulkBatchLimit, DefaultConfig.GeneralBulkBatchLimit)
+	add("Dynamic Registry Reconciliation Timeout (s)", cfg.General.DynamicRegistryReconciliationTimeoutSeconds, DefaultConfig.GeneralDynamicRegistryReconciliationTimeoutSeconds)
 
 	lines = append(lines, divider)
 
