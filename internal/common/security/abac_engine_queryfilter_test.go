@@ -55,6 +55,22 @@ func TestQueryFilter_FilterExpressionsFor_ExactMatch(t *testing.T) {
 	}
 }
 
+func TestQueryFilter_FilterExpressionEntriesFor_DoesNotMatchDifferentRoots(t *testing.T) {
+	allow := true
+	q := QueryFilter{Filters: FragmentFilters{
+		"$sm#idShort":  {Boolean: &allow},
+		"$sme#idShort": {Boolean: &allow},
+	}}
+
+	entries := q.FilterExpressionEntriesFor("$sm#idShort")
+	if len(entries) != 1 {
+		t.Fatalf("expected one $sm entry, got %d", len(entries))
+	}
+	if entries[0].Fragment != "$sm#idShort" {
+		t.Fatalf("expected $sm fragment, got %q", entries[0].Fragment)
+	}
+}
+
 func TestWithoutQueryFilterRemovesStoredFilter(t *testing.T) {
 	b := true
 	ctx := WithQueryFilter(context.Background(), &QueryFilter{

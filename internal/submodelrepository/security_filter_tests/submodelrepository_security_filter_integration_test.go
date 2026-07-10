@@ -26,12 +26,14 @@
 package main
 
 import (
+	"encoding/json"
 	"net/http"
 	"os"
 	"testing"
 	"time"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/testenv"
+	"github.com/stretchr/testify/require"
 )
 
 var (
@@ -48,6 +50,41 @@ func TestIntegration(t *testing.T) {
 			10*time.Second,
 		),
 	})
+	t.Run("HiddenAndNonexistentSMECursorsAreIndistinguishable", func(t *testing.T) {
+		assertEqualCursorResponses(t, "/submodel-elements")
+		assertEqualCursorResponses(t, "/submodel-elements/$path")
+	})
+}
+
+func assertEqualCursorResponses(t *testing.T, suffix string) {
+	t.Helper()
+	const submodelIdentifier = "dXJuOmV4YW1wbGU6c3VibW9kZWw6bmFtZXBsYXRlLWZpbHRlcg"
+	const hiddenCursor = "QVJlc3RyaWN0ZWQ"
+	const nonexistentCursor = "Qk5vbmV4aXN0ZW50"
+
+	hiddenResponse := getAnonymousCursorResponse(t, submodelIdentifier, suffix, hiddenCursor)
+	nonexistentResponse := getAnonymousCursorResponse(t, submodelIdentifier, suffix, nonexistentCursor)
+	require.Equal(t, nonexistentResponse, hiddenResponse)
+}
+
+func getAnonymousCursorResponse(t *testing.T, submodelIdentifier string, suffix string, cursor string) any {
+	t.Helper()
+	request, requestErr := http.NewRequestWithContext(
+		t.Context(),
+		http.MethodGet,
+		securityFilterBaseURL+"/submodels/"+submodelIdentifier+suffix+"?cursor="+cursor,
+		nil,
+	)
+	require.NoError(t, requestErr)
+
+	response, responseErr := http.DefaultClient.Do(request)
+	require.NoError(t, responseErr)
+	defer func() { _ = response.Body.Close() }()
+	require.Equal(t, http.StatusOK, response.StatusCode)
+
+	var payload any
+	require.NoError(t, json.NewDecoder(response.Body).Decode(&payload))
+	return payload
 }
 
 func TestMain(m *testing.M) {

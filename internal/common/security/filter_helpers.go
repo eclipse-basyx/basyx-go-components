@@ -465,6 +465,9 @@ func matchesAnyFragmentPattern(fragment grammar.FragmentStringPattern, patterns 
 }
 
 func fragmentPathMatches(fragment grammar.FragmentStringPattern, pattern grammar.FragmentStringPattern) bool {
+	if !fragmentRootsEqual(fragment, pattern) {
+		return false
+	}
 	fragmentTokens := builder.TokenizeField(string(fragment))
 	patternTokens := builder.TokenizeField(string(pattern))
 	if len(fragmentTokens) != len(patternTokens) {

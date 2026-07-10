@@ -83,7 +83,7 @@ func TestEscapeSQLLikePatternEscapesWildcardCharacters(t *testing.T) {
 	require.Equal(t, "A!!B!_C!%", escapeSQLLikePattern("A!B_C%"))
 }
 
-func TestBuildSMEMaskRuntimeCorrelatesFragmentConditionToCurrentElement(t *testing.T) {
+func TestAddSMERowFilterQueriesCorrelatesStructuralConditionToCurrentElement(t *testing.T) {
 	t.Parallel()
 
 	var condition grammar.LogicalExpression
@@ -100,16 +100,12 @@ func TestBuildSMEMaskRuntimeCorrelatesFragmentConditionToCurrentElement(t *testi
 			"$sme": condition,
 		},
 	})
-	collector, err := grammar.NewResolvedFieldPathCollectorForSMERow("sme")
-	require.NoError(t, err)
-
-	runtime, _, err := buildSMEMaskRuntime(ctx, collector)
-	require.NoError(t, err)
-
 	dataset := goqu.Dialect("postgres").
 		From(goqu.T("submodel_element").As("sme")).
-		Select(runtime.Projections()...)
-	sqlQuery, _, err := dataset.ToSQL()
+		Select(goqu.I("sme.id"))
+	filtered, err := addSMERowFilterQueries(ctx, dataset)
+	require.NoError(t, err)
+	sqlQuery, _, err := filtered.ToSQL()
 	require.NoError(t, err)
 
 	normalizedSQL := strings.ReplaceAll(sqlQuery, " ", "")
@@ -117,7 +113,7 @@ func TestBuildSMEMaskRuntimeCorrelatesFragmentConditionToCurrentElement(t *testi
 	require.NotContains(t, normalizedSQL, `"submodel_element"."submodel_id"="sme"."submodel_id"`)
 }
 
-func TestBuildSMEMaskRuntimeGuardsPathSpecificFragment(t *testing.T) {
+func TestAddSMERowFilterQueriesGuardsPathSpecificStructuralFragment(t *testing.T) {
 	t.Parallel()
 
 	deny := false
@@ -126,16 +122,12 @@ func TestBuildSMEMaskRuntimeGuardsPathSpecificFragment(t *testing.T) {
 			"$sme.ARestricted": {Boolean: &deny},
 		},
 	})
-	collector, err := grammar.NewResolvedFieldPathCollectorForSMERow("sme")
-	require.NoError(t, err)
-
-	runtime, _, err := buildSMEMaskRuntime(ctx, collector)
-	require.NoError(t, err)
-
 	dataset := goqu.Dialect("postgres").
 		From(goqu.T("submodel_element").As("sme")).
-		Select(runtime.Projections()...)
-	sqlQuery, _, err := dataset.ToSQL()
+		Select(goqu.I("sme.id"))
+	filtered, err := addSMERowFilterQueries(ctx, dataset)
+	require.NoError(t, err)
+	sqlQuery, _, err := filtered.ToSQL()
 	require.NoError(t, err)
 
 	require.Contains(t, sqlQuery, `"sme"."idshort_path"`)
@@ -187,11 +179,11 @@ func TestNormalizeSMERowFiltersIgnoresOtherStructuralRoots(t *testing.T) {
 	filterCtx, fragments, err := normalizeSMERowFilters(ctx)
 	require.NoError(t, err)
 	require.Equal(t, []grammar.FragmentStringPattern{"$sme#idShort"}, fragments)
-	require.Contains(t, auth.GetQueryFilter(filterCtx).Filters, grammar.FragmentStringPattern("$sm"))
+	require.NotContains(t, auth.GetQueryFilter(filterCtx).Filters, grammar.FragmentStringPattern("$sm"))
 	require.NotContains(t, auth.GetQueryFilter(filterCtx).Filters, grammar.FragmentStringPattern("$sm#idShort"))
 }
 
-func TestNormalizeSMERowFiltersCombinesNormalizedCollision(t *testing.T) {
+func TestNormalizeSMERowFiltersDoesNotMergeFieldMasks(t *testing.T) {
 	t.Parallel()
 
 	allow := true
@@ -206,6 +198,7 @@ func TestNormalizeSMERowFiltersCombinesNormalizedCollision(t *testing.T) {
 	filterCtx, fragments, err := normalizeSMERowFilters(ctx)
 	require.NoError(t, err)
 	require.Equal(t, []grammar.FragmentStringPattern{"$sme#idShort"}, fragments)
-	combined := auth.GetQueryFilter(filterCtx).Filters["$sme#idShort"]
-	require.Len(t, combined.And, 2)
+	rowFilter := auth.GetQueryFilter(filterCtx).Filters["$sme#idShort"]
+	require.NotNil(t, rowFilter.Boolean)
+	require.True(t, *rowFilter.Boolean)
 }
