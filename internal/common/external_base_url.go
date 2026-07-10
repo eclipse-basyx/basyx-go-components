@@ -98,7 +98,11 @@ func ExternalBaseURLFromRequest(r *http.Request) string {
 
 func requestExternalHost(r *http.Request, cfg *Config) string {
 	if cfg.General.TrustProxyHeaders && remoteAddrInTrustedCIDRs(r.RemoteAddr, cfg.General.TrustedProxyCIDRs) {
-		return RequestHost(r)
+		host := RequestHost(r)
+		if len(cfg.General.TrustedDynamicHosts) == 0 || hostAllowed(host, cfg.General.TrustedDynamicHosts) {
+			return host
+		}
+		return ""
 	}
 
 	host := normalizeHostValue(r.Host)

@@ -364,9 +364,6 @@ func (s *CustomAASRepositoryService) DeleteSubmodelReferenceAasRepository(ctx co
 	if !s.syncConfig.AASRegistryIntegration {
 		return s.AssetAdministrationShellRepositoryAPIAPIService.DeleteSubmodelReferenceAasRepository(ctx, aasIdentifier, submodelIdentifier)
 	}
-	if !s.syncConfig.hasEndpointBaseURL(ctx) {
-		return s.AssetAdministrationShellRepositoryAPIAPIService.DeleteSubmodelReferenceAasRepository(ctx, aasIdentifier, submodelIdentifier)
-	}
 	if dependencyErr := s.validateSyncDependencies(true, false, false); dependencyErr != nil {
 		return newAASRepoErrorResponse(dependencyErr, http.StatusInternalServerError, operation, "ValidateDependencies"), nil
 	}
@@ -386,9 +383,12 @@ func (s *CustomAASRepositoryService) DeleteSubmodelReferenceAasRepository(ctx co
 			return deleteErr
 		}
 
-		aasDescriptor, _, descriptorErr := s.ensureAASDescriptorForSubmodelSyncInTransaction(ctx, tx, decodedAASIdentifier, "")
-		if descriptorErr != nil {
-			return descriptorErr
+		aasDescriptor, getDescriptorErr := s.persistence.AASRegistry.GetAssetAdministrationShellDescriptorByIDInTransaction(ctx, tx, decodedAASIdentifier)
+		if getDescriptorErr != nil {
+			if common.IsErrNotFound(getDescriptorErr) {
+				return nil
+			}
+			return getDescriptorErr
 		}
 
 		aasDescriptor.SubmodelDescriptors = removeEmbeddedSubmodelDescriptor(aasDescriptor.SubmodelDescriptors, decodedSubmodelIdentifier)
@@ -530,9 +530,6 @@ func (s *CustomAASRepositoryService) DeleteSubmodelByIdAasRepository(ctx context
 	if !s.syncConfig.AASRegistryIntegration && !s.syncConfig.SubmodelRegistryIntegration {
 		return s.AssetAdministrationShellRepositoryAPIAPIService.DeleteSubmodelByIdAasRepository(ctx, aasIdentifier, submodelIdentifier)
 	}
-	if !s.syncConfig.hasEndpointBaseURL(ctx) {
-		return s.AssetAdministrationShellRepositoryAPIAPIService.DeleteSubmodelByIdAasRepository(ctx, aasIdentifier, submodelIdentifier)
-	}
 	if dependencyErr := s.validateSyncDependencies(s.syncConfig.AASRegistryIntegration, true, s.syncConfig.SubmodelRegistryIntegration); dependencyErr != nil {
 		return newAASRepoErrorResponse(dependencyErr, http.StatusInternalServerError, operation, "ValidateDependencies"), nil
 	}
@@ -582,9 +579,12 @@ func (s *CustomAASRepositoryService) DeleteSubmodelByIdAasRepository(ctx context
 		}
 
 		if s.syncConfig.AASRegistryIntegration {
-			aasDescriptor, _, descriptorErr := s.ensureAASDescriptorForSubmodelSyncInTransaction(ctx, tx, decodedAASIdentifier, "")
-			if descriptorErr != nil {
-				return descriptorErr
+			aasDescriptor, getDescriptorErr := s.persistence.AASRegistry.GetAssetAdministrationShellDescriptorByIDInTransaction(ctx, tx, decodedAASIdentifier)
+			if getDescriptorErr != nil {
+				if common.IsErrNotFound(getDescriptorErr) {
+					return nil
+				}
+				return getDescriptorErr
 			}
 
 			aasDescriptor.SubmodelDescriptors = removeEmbeddedSubmodelDescriptor(aasDescriptor.SubmodelDescriptors, decodedSubmodelIdentifier)

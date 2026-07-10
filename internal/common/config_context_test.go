@@ -64,6 +64,30 @@ func TestExternalBaseURLFromRequestUsesTrustedForwardedHeaders(t *testing.T) {
 	}
 }
 
+func TestExternalBaseURLFromRequestValidatesTrustedProxyHostAllowlistWhenConfigured(t *testing.T) {
+	cfg := &Config{Server: ServerConfig{ContextPath: "/api/v3"}}
+	cfg.General.TrustProxyHeaders = true
+	cfg.General.TrustedProxyCIDRs = []string{"10.10.10.0/24"}
+	cfg.General.TrustedDynamicHosts = []string{"public.example:8443"}
+
+	req, err := http.NewRequest(http.MethodGet, "http://service.local/api/v3/shells", nil)
+	if err != nil {
+		t.Fatalf("create request: %v", err)
+	}
+	req.RemoteAddr = "10.10.10.10:12345"
+	req.Header.Set("Forwarded", "proto=https;host=public.example:8443")
+	req = req.WithContext(ContextWithConfig(context.Background(), cfg))
+
+	if got := ExternalBaseURLFromRequest(req); got != "https://public.example:8443/api/v3" {
+		t.Fatalf("expected allowed forwarded host external base URL, got %q", got)
+	}
+
+	req.Header.Set("Forwarded", "proto=https;host=evil.example:8443")
+	if got := ExternalBaseURLFromRequest(req); got != "" {
+		t.Fatalf("expected unlisted forwarded host to be rejected, got %q", got)
+	}
+}
+
 func TestExternalBaseURLFromRequestRejectsUntrustedProxySource(t *testing.T) {
 	cfg := &Config{Server: ServerConfig{ContextPath: "/api/v3"}}
 	cfg.General.TrustProxyHeaders = true

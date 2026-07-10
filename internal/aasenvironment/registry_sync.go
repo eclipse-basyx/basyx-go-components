@@ -98,7 +98,7 @@ func NewRegistrySyncConfig(
 }
 
 func (c RegistrySyncConfig) buildAASDescriptor(aas types.IAssetAdministrationShell) (commonmodel.AssetAdministrationShellDescriptor, error) {
-	return c.buildAASDescriptorForContext(context.Background(), aas)
+	return c.buildAASDescriptorForContext(context.TODO(), aas)
 }
 
 func (c RegistrySyncConfig) buildAASDescriptorForContext(ctx context.Context, aas types.IAssetAdministrationShell) (commonmodel.AssetAdministrationShellDescriptor, error) {
@@ -134,7 +134,7 @@ func (c RegistrySyncConfig) buildAASDescriptorForContext(ctx context.Context, aa
 }
 
 func (c RegistrySyncConfig) buildSubmodelDescriptor(submodel types.ISubmodel) (commonmodel.SubmodelDescriptor, error) {
-	return c.buildSubmodelDescriptorForContext(context.Background(), submodel)
+	return c.buildSubmodelDescriptorForContext(context.TODO(), submodel)
 }
 
 func (c RegistrySyncConfig) buildSubmodelDescriptorForContext(ctx context.Context, submodel types.ISubmodel) (commonmodel.SubmodelDescriptor, error) {
@@ -160,7 +160,7 @@ func (c RegistrySyncConfig) buildSubmodelDescriptorForContext(ctx context.Contex
 }
 
 func (c RegistrySyncConfig) buildAASDescriptorEndpoints(aasID string) []commonmodel.Endpoint {
-	return c.buildAASDescriptorEndpointsForContext(context.Background(), aasID)
+	return c.buildAASDescriptorEndpointsForContext(context.TODO(), aasID)
 }
 
 func (c RegistrySyncConfig) buildAASDescriptorEndpointsForContext(ctx context.Context, aasID string) []commonmodel.Endpoint {
@@ -169,7 +169,7 @@ func (c RegistrySyncConfig) buildAASDescriptorEndpointsForContext(ctx context.Co
 }
 
 func (c RegistrySyncConfig) buildSubmodelDescriptorEndpoints(submodelID string) []commonmodel.Endpoint {
-	return c.buildSubmodelDescriptorEndpointsForContext(context.Background(), submodelID)
+	return c.buildSubmodelDescriptorEndpointsForContext(context.TODO(), submodelID)
 }
 
 func (c RegistrySyncConfig) buildSubmodelDescriptorEndpointsForContext(ctx context.Context, submodelID string) []commonmodel.Endpoint {
@@ -178,7 +178,7 @@ func (c RegistrySyncConfig) buildSubmodelDescriptorEndpointsForContext(ctx conte
 }
 
 func (c RegistrySyncConfig) buildEmbeddedSubmodelDescriptors(references []types.IReference) []commonmodel.SubmodelDescriptor {
-	return c.buildEmbeddedSubmodelDescriptorsForContext(context.Background(), references)
+	return c.buildEmbeddedSubmodelDescriptorsForContext(context.TODO(), references)
 }
 
 func (c RegistrySyncConfig) buildEmbeddedSubmodelDescriptorsForContext(ctx context.Context, references []types.IReference) []commonmodel.SubmodelDescriptor {

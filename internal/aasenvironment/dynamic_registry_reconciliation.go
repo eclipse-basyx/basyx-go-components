@@ -82,11 +82,11 @@ type dynamicRegistryReconciler interface {
 	triggerDynamicRegistryReconciliation(ctx context.Context)
 }
 
-// DynamicRegistryReconciliationMiddleware triggers dynamic registry descriptor reconciliation after a trusted request base URL is known.
-func DynamicRegistryReconciliationMiddleware(reconcilers ...dynamicRegistryReconciler) func(http.Handler) http.Handler {
+// DynamicRegistryReconciliationMiddleware triggers dynamic registry descriptor reconciliation after startup work is complete and a trusted request base URL is known.
+func DynamicRegistryReconciliationMiddleware(reconciliationReady func() bool, reconcilers ...dynamicRegistryReconciler) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if common.RequestExternalBaseURLFromContext(r.Context()) != "" {
+			if reconciliationReady != nil && reconciliationReady() && common.RequestExternalBaseURLFromContext(r.Context()) != "" {
 				for _, reconciler := range reconcilers {
 					if reconciler != nil {
 						reconciler.triggerDynamicRegistryReconciliation(r.Context())

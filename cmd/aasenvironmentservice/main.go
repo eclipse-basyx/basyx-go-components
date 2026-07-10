@@ -236,7 +236,7 @@ func runServer(ctx context.Context, configPath string) error {
 	versioningGuard := history.NewMutationCoverageGuard(apiRouter)
 	apiRouter.Use(versioningGuard.Middleware)
 	apiRouter.Use(history.AuditContextMiddleware(cfg))
-	apiRouter.Use(aasenvironment.DynamicRegistryReconciliationMiddleware(customAASRepository, customSMRepository))
+	apiRouter.Use(aasenvironment.DynamicRegistryReconciliationMiddleware(preconfigurationCompleted.Load, customAASRepository, customSMRepository))
 	abacpolicy.ExemptManagementMutationRoutesIfEnabled(cfg, versioningGuard, "aasenvironmentservice")
 	abacpolicy.RegisterManagementRoutesIfEnabled(cfg, apiRouter, abacRepo, "aasenvironmentservice")
 

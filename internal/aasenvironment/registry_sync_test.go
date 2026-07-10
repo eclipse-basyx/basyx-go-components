@@ -29,6 +29,7 @@ import (
 	"context"
 	"database/sql"
 	"net/http"
+	"net/http/httptest"
 	"testing"
 	"time"
 
@@ -220,6 +221,33 @@ func TestDynamicRegistryReconciliationStateTracksConcurrentBases(t *testing.T) {
 	state.complete("https://public-a.example/api/v3", false)
 	require.True(t, state.reserve("https://public-a.example/api/v3"))
 	require.False(t, state.reserve("https://public-b.example/api/v3"))
+}
+
+func TestDynamicRegistryReconciliationMiddlewareWaitsUntilReady(t *testing.T) {
+	reconciler := &testDynamicRegistryReconciler{}
+	ready := false
+	handler := DynamicRegistryReconciliationMiddleware(
+		func() bool { return ready },
+		reconciler,
+	)(http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {}))
+
+	ctx := common.ContextWithRequestExternalBaseURL(context.TODO(), "https://public.example/api/v3")
+	req := httptest.NewRequest(http.MethodGet, "https://public.example/api/v3/shells", nil).WithContext(ctx)
+
+	handler.ServeHTTP(httptest.NewRecorder(), req)
+	require.Equal(t, 0, reconciler.calls)
+
+	ready = true
+	handler.ServeHTTP(httptest.NewRecorder(), req)
+	require.Equal(t, 1, reconciler.calls)
+}
+
+type testDynamicRegistryReconciler struct {
+	calls int
+}
+
+func (r *testDynamicRegistryReconciler) triggerDynamicRegistryReconciliation(context.Context) {
+	r.calls++
 }
 
 func TestDynamicSubmodelRegistryReconciliationSkipsWhenIntegrationDisabled(t *testing.T) {
