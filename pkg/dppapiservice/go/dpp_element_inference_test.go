@@ -92,6 +92,26 @@ func TestInferElementRejectsAmbiguousArrays(t *testing.T) {
 	}
 }
 
+func TestPreserveElementMetadataKeepsArrayItemIDShort(t *testing.T) {
+	list, err := inferElement("items", []any{map[string]any{"name": "old"}})
+	if err != nil {
+		t.Fatalf("inferElement() list error = %v", err)
+	}
+	existing := list.(*types.SubmodelElementList).Value()[0]
+	if existing.IDShort() == nil || *existing.IDShort() != "items0" {
+		t.Fatalf("existing list item idShort = %v, want items0", existing.IDShort())
+	}
+
+	replacement, err := inferElement("items[0]", map[string]any{"name": "new"})
+	if err != nil {
+		t.Fatalf("inferElement() replacement error = %v", err)
+	}
+	preserveElementMetadata(existing, replacement)
+	if replacement.IDShort() == nil || *replacement.IDShort() != "items0" {
+		t.Fatalf("replacement list item idShort = %v, want items0", replacement.IDShort())
+	}
+}
+
 func TestBuildAASMapsGranularityToAssetKind(t *testing.T) {
 	tests := []struct {
 		granularity string

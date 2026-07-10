@@ -38,12 +38,12 @@ package dppapi
 
 type DataElement struct {
 
-	// DPP element identifier mapped to AAS Referable/idShort.
+	// DPP element identifier.
 	ElementId string `json:"elementId"`
 
 	ObjectType string `json:"objectType"`
 
-	// DPP dictionary reference mapped to AAS semanticId.
+	// DPP dictionary reference.
 	DictionaryReference string `json:"dictionaryReference,omitempty"`
 
 	ValueDataType XsdValueDataType `json:"valueDataType,omitempty"`

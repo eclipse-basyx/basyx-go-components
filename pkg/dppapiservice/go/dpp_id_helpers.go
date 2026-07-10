@@ -27,7 +27,9 @@
 package dppapi
 
 import (
+	"hash/fnv"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/FriedJannik/aas-go-sdk/types"
@@ -38,7 +40,50 @@ func metadataSubmodelID(dppID string) string {
 }
 
 func contentSubmodelID(dppID string, sectionName string) string {
-	return dppID + "/submodels/" + upperFirst(sectionName)
+	idShort := contentSectionIDShort(sectionName)
+	if idShort == upperFirst(sectionName) {
+		return dppID + "/submodels/" + idShort
+	}
+	return dppID + "/submodels/" + idShort + "-" + contentSectionHash(sectionName)
+}
+
+func contentSectionIDShort(sectionName string) string {
+	if semanticName := semanticIDLocalName(sectionName); semanticName != "" {
+		return sanitizeIDShort(upperFirst(semanticName), "Content")
+	}
+	return sanitizeIDShort(upperFirst(sectionName), "Content")
+}
+
+func semanticIDLocalName(value string) string {
+	if !strings.Contains(value, "://") && !strings.HasPrefix(value, "urn:") {
+		return ""
+	}
+	parts := strings.FieldsFunc(value, func(r rune) bool {
+		return r == '/' || r == ':' || r == '#' || r == '?'
+	})
+	for index := len(parts) - 1; index >= 0; index-- {
+		part := strings.TrimSpace(parts[index])
+		if part == "" || !containsLetter(part) {
+			continue
+		}
+		return part
+	}
+	return ""
+}
+
+func containsLetter(value string) bool {
+	for _, r := range value {
+		if r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' {
+			return true
+		}
+	}
+	return false
+}
+
+func contentSectionHash(value string) string {
+	hash := fnv.New64a()
+	_, _ = hash.Write([]byte(value))
+	return strconv.FormatUint(hash.Sum64(), 16)
 }
 
 func submodelReference(submodelID string) types.IReference {

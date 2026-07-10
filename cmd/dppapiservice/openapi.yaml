@@ -12,15 +12,15 @@ servers:
 security:
 - bearerAuth: []
 tags:
-- description: EN 18222 Life Cycle API operations mapped to AAS services.
+- description: DPP life-cycle operations.
   name: DPP Life Cycle
-- description: EN 18222 fine-granular element-level DPP operations.
+- description: Element-level DPP operations.
   name: DPP Fine Granular
 paths:
   /v1/dpps/{dppId}:
     delete:
       description: |
-        Deletes the AAS and DPP metadata resources when deletion is legally permitted. Implementations must enforce archiving and deletion restrictions required by applicable regulation.
+        Deletes the DPP resource when deletion is legally permitted. Implementations must enforce archiving and deletion restrictions required by applicable regulation.
       operationId: deleteDPPById
       parameters:
       - description: Percent-encoded Digital Product Passport identifier.
@@ -77,7 +77,7 @@ paths:
       - DPP Life Cycle
     get:
       description: |
-        Retrieves an AAS and all DPP-relevant Submodels, then composes a single DigitalProductPassport document. Compressed responses use content section properties; full responses use the expanded read-only elements array.
+        Retrieves a DigitalProductPassport document. Compressed responses use content section properties; full responses use the expanded read-only elements array.
       operationId: readDPPById
       parameters:
       - description: Percent-encoded Digital Product Passport identifier.
@@ -140,7 +140,7 @@ paths:
       - DPP Life Cycle
     patch:
       description: |
-        Accepts a compressed partial DPP document using JSON Merge Patch (RFC 7396), decomposes changed header fields into the DppMetadata Submodel and changed content fields into the corresponding content Submodels, updates lastUpdate, and archives the change according to EN 18221. Full representation writes are not supported.
+        Applies a compressed partial DPP document using JSON Merge Patch (RFC 7396), updates lastUpdate, and archives the change according to EN 18221. Full representation writes are not supported.
       operationId: updateDPPById
       parameters:
       - description: Percent-encoded Digital Product Passport identifier.
@@ -217,7 +217,7 @@ paths:
   /v1/dpps:
     post:
       description: |
-        Decomposes the submitted compressed DPP into an AAS, one mandatory DppMetadata Submodel, and one or more content Submodels. Creation is atomic. Full representation writes are not supported.
+        Creates a DPP from the submitted compressed DPP document. Creation is atomic. Full representation writes are not supported.
       operationId: createDPP
       parameters:
       - description: |
@@ -279,7 +279,7 @@ paths:
   /v1/dppsByProductId/{productId}:
     get:
       description: |
-        Resolves the product identifier through the AAS globalAssetId or specificAssetId linkage and composes the corresponding DPP document.
+        Resolves the product identifier and returns the corresponding DPP document.
       operationId: readDPPByProductId
       parameters:
       - description: Percent-encoded product identifier as specified by EN 18219.
@@ -343,7 +343,7 @@ paths:
   /v1/dppsByIdAndDate/{dppId}:
     get:
       description: |
-        Retrieves the DPP version that was current at the provided ISO 8601 UTC timestamp by selecting AAS and Submodel versions whose updatedAt values are less than or equal to the requested date.
+        Retrieves the DPP version that was current at the provided ISO 8601 UTC timestamp.
       operationId: readDPPVersionByIdAndDate
       parameters:
       - description: Percent-encoded Digital Product Passport identifier.
@@ -477,10 +477,10 @@ paths:
       summary: Resolve product IDs to DPP IDs
       tags:
       - DPP Life Cycle
-  /v1/dpps/{dppId}/elements/{elementPath}:
+  /v1/dpps/{dppId}/elements/{elementIdPath}:
     get:
       description: |
-        Retrieves one data element by content section and AAS idShort-based SubmodelElement path. Use <contentSection>/<idShort.path>; slash-containing paths must be percent-encoded.
+        Retrieves one DPP data element. The elementIdPath is an RFC 9535 Normalized Path, the unique absolute path representation for one node, inside the compressed DPP document and must be percent-encoded once as one path segment. Query selectors that can address multiple nodes are not accepted.
       operationId: readDataElement
       parameters:
       - description: Percent-encoded Digital Product Passport identifier.
@@ -492,10 +492,11 @@ paths:
           minLength: 1
           type: string
         style: simple
-      - description: Percent-encoded <contentSection>/<idShort.path> DPP element path.
+      - description: RFC 9535 Normalized Path, the unique absolute path representation selecting exactly one DPP data element. Multi-node query selectors are not accepted. Clients must percent-encode it once when placing it in a path segment.
+        example: "$['https://admin-shell.io/idta/CarbonFootprint/CarbonFootprint/1/0']['ProductCarbonFootprints']"
         explode: false
         in: path
-        name: elementPath
+        name: elementIdPath
         required: true
         schema:
           minLength: 1
@@ -554,7 +555,7 @@ paths:
       - DPP Fine Granular
     patch:
       description: |
-        Updates one DPP data element within a content Submodel using its compressed JSON value and updates the lastUpdate field of the DppMetadata Submodel. Full representation writes are not supported.
+        Updates one DPP data element using its compressed JSON value and updates lastUpdate. The elementIdPath is an RFC 9535 Normalized Path, the unique absolute path representation for one node, inside the compressed DPP document and must be percent-encoded once as one path segment. Query selectors that can address multiple nodes are not accepted. Full representation writes are not supported.
       operationId: updateDataElement
       parameters:
       - description: Percent-encoded Digital Product Passport identifier.
@@ -566,10 +567,11 @@ paths:
           minLength: 1
           type: string
         style: simple
-      - description: Percent-encoded <contentSection>/<idShort.path> DPP element path.
+      - description: RFC 9535 Normalized Path, the unique absolute path representation selecting exactly one DPP data element. Multi-node query selectors are not accepted. Clients must percent-encode it once when placing it in a path segment.
+        example: "$['https://admin-shell.io/idta/CarbonFootprint/CarbonFootprint/1/0']['ProductCarbonFootprints']"
         explode: false
         in: path
-        name: elementPath
+        name: elementIdPath
         required: true
         schema:
           minLength: 1
@@ -659,12 +661,12 @@ components:
         minLength: 1
         type: string
       style: simple
-    ElementPath:
-      description: Percent-encoded DPP elementId / AAS idShort-based SubmodelElement
-        path.
+    ElementIdPath:
+      description: RFC 9535 Normalized Path, the unique absolute path representation selecting exactly one DPP data element. Multi-node query selectors are not accepted. Clients must percent-encode it once when placing it in a path segment.
+      example: "$['https://admin-shell.io/idta/CarbonFootprint/CarbonFootprint/1/0']['ProductCarbonFootprints']"
       explode: false
       in: path
-      name: elementPath
+      name: elementIdPath
       required: true
       schema:
         minLength: 1
@@ -758,7 +760,7 @@ components:
     DigitalProductPassport:
       additionalProperties: true
       description: |
-        A single DPP JSON document composed from the DppMetadata header and DPP content. Compressed write payloads use top-level content section properties whose names become contributing Submodel idShort values. Full read payloads use the expanded read-only elements array defined by EN 18223 Annex A.
+        A single DPP JSON document composed from DPP header fields and content sections. Compressed write payloads use top-level content section properties whose names match contentSpecificationIds entries. Full read payloads use the expanded read-only elements array defined by the DPP API annex.
       example:
         digitalProductPassportId: https://www.example.org/dpp/1234545
         uniqueProductIdentifier: https://www.example.org/1234545
@@ -769,17 +771,17 @@ components:
         economicOperatorId: gxx:ppp456789
         facilityId: gxx:xxx987654
         contentSpecificationIds:
-        - carbonFootprint - IDTA-02023-1-0
+        - https://admin-shell-io/idta/digitalproductpassport/Nameplate/1
+        https://admin-shell-io/idta/digitalproductpassport/Nameplate/1:
+          ManufacturerName: VoltFabrik GmbH
       properties:
         digitalProductPassportId:
-          description: "DPP identifier. Similar to, but not necessarily identical\
-            \ to, the AAS id."
+          description: Digital Product Passport identifier.
           example: https://www.example.org/dpp/1234545
           minLength: 1
           type: string
         uniqueProductIdentifier:
-          description: Product identifier corresponding to the AAS AssetInformation
-            globalAssetId.
+          description: Unique product identifier associated with the DPP.
           example: https://www.example.org/1234545
           minLength: 1
           type: string
@@ -794,7 +796,7 @@ components:
           minLength: 1
           type: string
         lastUpdate:
-          description: Timestamp corresponding to AAS AdministrativeInformation updatedAt.
+          description: Timestamp of the latest DPP update.
           example: 2025-08-22T03:12:00Z
           format: date-time
           type: string
@@ -810,13 +812,12 @@ components:
           type: string
         contentSpecificationIds:
           description: |
-            Semantic identifiers of contributing content Submodels. Compressed writes currently support unambiguous section-to-specification mapping; expanded DataElementCollection write payloads are rejected.
+            Optional identifiers of content specifications contributing DPP content sections. In compressed representation, a top-level content section named exactly like one of these identifiers contains data for that content specification. Expanded DataElementCollection write payloads are rejected.
           example:
-          - carbonFootprint - IDTA-02023-1-0
+          - https://admin-shell-io/idta/digitalproductpassport/Nameplate/1
           items:
             minLength: 1
             type: string
-          minItems: 1
           type: array
         elements:
           description: Expanded read-only DPP DataElements returned when representation=full.
@@ -824,12 +825,10 @@ components:
             $ref: "#/components/schemas/DataElement"
           type: array
       required:
-      - contentSpecificationIds
       - digitalProductPassportId
       - dppSchemaVersion
       - dppStatus
       - economicOperatorId
-      - facilityId
       - granularity
       - lastUpdate
       - uniqueProductIdentifier
@@ -874,7 +873,7 @@ components:
           type: array
       type: object
     Granularity:
-      description: EN 18223 DPP granularity value mapped to AAS AssetKind.
+      description: EN 18223 DPP granularity value.
       enum:
       - Item
       - Model
@@ -896,7 +895,7 @@ components:
       - $ref: "#/components/schemas/DataElementCollection"
       - $ref: "#/components/schemas/RelatedResource"
     CompressedDataElementValue:
-      description: Raw compressed DPP element value. The value may be a scalar, object, array, or null and is mapped to the target AAS SubmodelElement.
+      description: Raw compressed DPP element value. The value may be a scalar, object, array, or null.
       nullable: true
       oneOf:
       - type: string
@@ -917,7 +916,7 @@ components:
         value: ""
       properties:
         elementId:
-          description: DPP element identifier mapped to AAS Referable/idShort.
+          description: DPP element identifier.
           minLength: 1
           type: string
         objectType:
@@ -925,7 +924,7 @@ components:
           - SingleValuedDataElement
           type: string
         dictionaryReference:
-          description: DPP dictionary reference mapped to AAS semanticId.
+          description: DPP dictionary reference.
           type: string
         valueDataType:
           $ref: "#/components/schemas/XsdValueDataType"
@@ -941,7 +940,7 @@ components:
       additionalProperties: false
       properties:
         elementId:
-          description: DPP element identifier mapped to AAS Referable/idShort.
+          description: DPP element identifier.
           minLength: 1
           type: string
         objectType:
@@ -949,7 +948,7 @@ components:
           - MultiValuedDataElement
           type: string
         dictionaryReference:
-          description: DPP dictionary reference mapped to AAS semanticId.
+          description: DPP dictionary reference.
           type: string
         valueDataType:
           description: Scalar item datatype. Omitted for multi-valued elements whose children are collections, multilingual data, or related resources.
@@ -967,7 +966,7 @@ components:
       additionalProperties: false
       properties:
         elementId:
-          description: DPP element identifier mapped to AAS Referable/idShort.
+          description: DPP element identifier.
           minLength: 1
           type: string
         objectType:
@@ -975,7 +974,7 @@ components:
           - MultiLanguageDataElement
           type: string
         dictionaryReference:
-          description: DPP dictionary reference mapped to AAS semanticId.
+          description: DPP dictionary reference.
           type: string
         value:
           items:
@@ -991,7 +990,7 @@ components:
       additionalProperties: false
       properties:
         elementId:
-          description: DPP element identifier mapped to AAS Referable/idShort.
+          description: DPP element identifier.
           minLength: 1
           type: string
         objectType:
@@ -999,7 +998,7 @@ components:
           - DataElementCollection
           type: string
         dictionaryReference:
-          description: DPP dictionary reference mapped to AAS semanticId.
+          description: DPP dictionary reference.
           type: string
         elements:
           items:
@@ -1014,7 +1013,7 @@ components:
       additionalProperties: false
       properties:
         elementId:
-          description: DPP element identifier mapped to AAS Referable/idShort.
+          description: DPP element identifier.
           minLength: 1
           type: string
         objectType:
@@ -1022,7 +1021,7 @@ components:
           - RelatedResource
           type: string
         dictionaryReference:
-          description: DPP dictionary reference mapped to AAS semanticId.
+          description: DPP dictionary reference.
           type: string
         resourceTitle:
           type: string

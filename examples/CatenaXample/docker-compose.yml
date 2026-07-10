@@ -36,9 +36,8 @@ services:
       retries: 20
 
   dtr-configuration:
-    build:
-      context: ../..
-      dockerfile: ./cmd/basyxconfigurationservice/Dockerfile
+    image: eclipsebasyx/basyxconfigurationservice-go:SNAPSHOT
+    pull_policy: always
     environment:
       POSTGRES_HOST: dtr-db
       POSTGRES_PORT: 5432
@@ -50,9 +49,8 @@ services:
         condition: service_healthy
 
   smrepo-configuration:
-    build:
-      context: ../..
-      dockerfile: ./cmd/basyxconfigurationservice/Dockerfile
+    image: eclipsebasyx/basyxconfigurationservice-go:SNAPSHOT
+    pull_policy: always
     environment:
       POSTGRES_HOST: smrepo-db
       POSTGRES_PORT: 5432
@@ -64,9 +62,8 @@ services:
         condition: service_healthy
 
   digital-twin-registry:
-    build:
-      context: ../..
-      dockerfile: ./cmd/digitaltwinregistryservice/Dockerfile
+    image: eclipsebasyx/digitaltwinregistry-go:SNAPSHOT
+    pull_policy: always
     environment:
       SERVER_PORT: 5004
       SERVER_CONTEXTPATH: /api/v3
@@ -99,9 +96,8 @@ services:
         condition: service_completed_successfully
 
   submodel-repository:
-    build:
-      context: ../..
-      dockerfile: ./cmd/submodelrepositoryservice/Dockerfile
+    image: eclipsebasyx/submodelrepository-go:SNAPSHOT
+    pull_policy: always
     environment:
       SERVER_PORT: 5004
       SERVER_STRICTVERIFICATION: "off"

@@ -40,7 +40,7 @@ import (
 	"fmt"
 )
 
-// Granularity : EN 18223 DPP granularity value mapped to AAS AssetKind.
+// Granularity : EN 18223 DPP granularity value.
 type Granularity string
 
 // List of Granularity

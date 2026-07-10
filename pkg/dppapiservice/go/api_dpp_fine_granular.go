@@ -83,13 +83,13 @@ func (c *DPPFineGranularAPIController) Routes() Routes {
 		"ReadDataElement": Route{
 			"ReadDataElement",
 			strings.ToUpper("Get"),
-			"/v1/dpps/{dppId}/elements/{elementPath}",
+			"/v1/dpps/{dppId}/elements/{elementIdPath}",
 			c.ReadDataElement,
 		},
 		"UpdateDataElement": Route{
 			"UpdateDataElement",
 			strings.ToUpper("Patch"),
-			"/v1/dpps/{dppId}/elements/{elementPath}",
+			"/v1/dpps/{dppId}/elements/{elementIdPath}",
 			c.UpdateDataElement,
 		},
 	}
@@ -101,13 +101,13 @@ func (c *DPPFineGranularAPIController) OrderedRoutes() []Route {
 		Route{
 			"ReadDataElement",
 			strings.ToUpper("Get"),
-			"/v1/dpps/{dppId}/elements/{elementPath}",
+			"/v1/dpps/{dppId}/elements/{elementIdPath}",
 			c.ReadDataElement,
 		},
 		Route{
 			"UpdateDataElement",
 			strings.ToUpper("Patch"),
-			"/v1/dpps/{dppId}/elements/{elementPath}",
+			"/v1/dpps/{dppId}/elements/{elementIdPath}",
 			c.UpdateDataElement,
 		},
 	}
@@ -120,14 +120,14 @@ func (c *DPPFineGranularAPIController) ReadDataElement(w http.ResponseWriter, r 
 		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
 		return
 	}
-	dppIdParam := chi.URLParam(r, "dppId")
+	dppIdParam := decodePathParam(r, chi.URLParam(r, "dppId"))
 	if dppIdParam == "" {
 		c.errorHandler(w, r, &RequiredError{"dppId"}, nil)
 		return
 	}
-	elementPathParam := chi.URLParam(r, "elementPath")
-	if elementPathParam == "" {
-		c.errorHandler(w, r, &RequiredError{"elementPath"}, nil)
+	elementIdPathParam := decodePathParam(r, chi.URLParam(r, "elementIdPath"))
+	if elementIdPathParam == "" {
+		c.errorHandler(w, r, &RequiredError{"elementIdPath"}, nil)
 		return
 	}
 	var representationParam Representation
@@ -137,7 +137,7 @@ func (c *DPPFineGranularAPIController) ReadDataElement(w http.ResponseWriter, r 
 		representationParam = param
 	} else {
 	}
-	result, err := c.service.ReadDataElement(r.Context(), dppIdParam, elementPathParam, representationParam)
+	result, err := c.service.ReadDataElement(r.Context(), dppIdParam, elementIdPathParam, representationParam)
 	// If an error occurred, encode the error with the status code
 	if err != nil {
 		c.errorHandler(w, r, err, &result)
@@ -149,14 +149,14 @@ func (c *DPPFineGranularAPIController) ReadDataElement(w http.ResponseWriter, r 
 
 // UpdateDataElement - Update single DPP data element
 func (c *DPPFineGranularAPIController) UpdateDataElement(w http.ResponseWriter, r *http.Request) {
-	dppIdParam := chi.URLParam(r, "dppId")
+	dppIdParam := decodePathParam(r, chi.URLParam(r, "dppId"))
 	if dppIdParam == "" {
 		c.errorHandler(w, r, &RequiredError{"dppId"}, nil)
 		return
 	}
-	elementPathParam := chi.URLParam(r, "elementPath")
-	if elementPathParam == "" {
-		c.errorHandler(w, r, &RequiredError{"elementPath"}, nil)
+	elementIdPathParam := decodePathParam(r, chi.URLParam(r, "elementIdPath"))
+	if elementIdPathParam == "" {
+		c.errorHandler(w, r, &RequiredError{"elementIdPath"}, nil)
 		return
 	}
 	var dataElementParam DataElement
@@ -174,7 +174,7 @@ func (c *DPPFineGranularAPIController) UpdateDataElement(w http.ResponseWriter, 
 		c.errorHandler(w, r, err, nil)
 		return
 	}
-	result, err := c.service.UpdateDataElement(r.Context(), dppIdParam, elementPathParam, dataElementParam)
+	result, err := c.service.UpdateDataElement(r.Context(), dppIdParam, elementIdPathParam, dataElementParam)
 	// If an error occurred, encode the error with the status code
 	if err != nil {
 		c.errorHandler(w, r, err, &result)

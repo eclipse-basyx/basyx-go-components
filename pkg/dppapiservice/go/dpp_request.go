@@ -60,21 +60,20 @@ func isRequestBodyTooLarge(err error) bool {
 }
 
 func pathParam(req *http.Request, name string) string {
-	return decodePathParam(chi.URLParam(req, name))
+	return decodePathParam(req, chi.URLParam(req, name))
 }
 
-func elementPathParam(req *http.Request) string {
-	return strings.TrimPrefix(decodePathParam(chi.URLParam(req, "*")), "/")
+func elementIdPathParam(req *http.Request) string {
+	return strings.TrimPrefix(decodePathParam(req, chi.URLParam(req, "*")), "/")
 }
 
-func decodePathParam(value string) string {
-	decoded := value
-	for range 3 {
-		next, err := url.PathUnescape(decoded)
-		if err != nil || next == decoded {
-			return decoded
-		}
-		decoded = next
+func decodePathParam(req *http.Request, value string) string {
+	if req.URL.RawPath == "" {
+		return value
+	}
+	decoded, err := url.PathUnescape(value)
+	if err != nil {
+		return value
 	}
 	return decoded
 }

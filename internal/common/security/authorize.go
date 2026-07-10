@@ -113,24 +113,30 @@ func ABACMiddleware(settings ABACSettings) func(http.Handler) http.Handler {
 
 			model := activeAccessModel(settings)
 			if model != nil {
+				policyPath := r.URL.Path
+				routePath := r.URL.Path
+				if r.URL.RawPath != "" {
+					routePath = r.URL.RawPath
+				}
 				opts := grammar.DefaultSimplifyOptions()
 				opts.EnableImplicitCasts = settings.EnableImplicitCasts
 				evaluation := model.AuthorizeWithFilterWithOptions(EvalInput{
-					Method: r.Method,
-					Path:   r.URL.Path,
-					Claims: claims,
+					Method:    r.Method,
+					Path:      policyPath,
+					RoutePath: routePath,
+					Claims:    claims,
 				}, opts)
 				if !evaluation.Allowed {
 					if evaluation.Reason == DecisionRouteNotFound {
 						component := routerErrorComponent(model)
-						if model.routeExistsForAnyMethod(r.URL.Path) {
+						if model.routeExistsForAnyMethod(routePath) {
 							common.WriteRouterMethodNotAllowed(w, component)
 							return
 						}
 						common.WriteRouterNotFound(w, component)
 						return
 					}
-					if denyAsNotFound(settings, r.URL.Path) {
+					if denyAsNotFound(settings, policyPath) {
 						common.WriteRouterNotFound(w, routerErrorComponent(model))
 						return
 					}

@@ -69,6 +69,24 @@ func compressedContent(submodel types.ISubmodel) (any, error) {
 	return content, nil
 }
 
+func compressedElementValue(element types.ISubmodelElement) (any, error) {
+	valueOnly, err := basyxmodel.SubmodelElementToValueOnly(element)
+	if err != nil {
+		return nil, fmt.Errorf("DPP-ELEM-COMPRESSED convert element value-only: %w", err)
+	}
+	raw, err := json.Marshal(valueOnly)
+	if err != nil {
+		return nil, fmt.Errorf("DPP-ELEM-COMPRESSED-MARSHAL marshal element value-only: %w", err)
+	}
+	var content any
+	if err := json.Unmarshal(raw, &content); err != nil {
+		return nil, fmt.Errorf("DPP-ELEM-COMPRESSED-UNMARSHAL unmarshal element value-only: %w", err)
+	}
+	normalizeValueOnly(content)
+	enrichCompressedElementValue(content, element)
+	return content, nil
+}
+
 func fullContent(submodel types.ISubmodel) (any, error) {
 	content, err := dppCollectionFromSubmodel(submodel)
 	if err != nil {

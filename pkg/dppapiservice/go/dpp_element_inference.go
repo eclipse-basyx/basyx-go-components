@@ -185,15 +185,6 @@ func numberProperty(idShort string, value json.Number) types.ISubmodelElement {
 	return scalarProperty(idShort, value.String(), numberValueType(value))
 }
 
-func stringList(idShort string, values []string) types.ISubmodelElement {
-	items := make([]any, 0, len(values))
-	for _, value := range values {
-		items = append(items, value)
-	}
-	element, _ := listElement(idShort, items)
-	return element
-}
-
 func multiLanguageElement(idShort string, values []any) (types.ISubmodelElement, error) {
 	property := types.NewMultiLanguageProperty()
 	property.SetIDShort(&idShort)

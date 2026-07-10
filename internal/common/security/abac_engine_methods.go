@@ -260,7 +260,7 @@ var routeProbeMethods = []string{
 //   - mapped=false, routeFound=true when the route exists but has no rights mapping
 //   - mapped=true, routeFound=true with one or more rights alternatives
 func (m *AccessModel) mapMethodAndPathToRights(in EvalInput) ([][]grammar.RightsEnum, bool, bool) {
-	matchPath := stripBasePath(m.basePath, in.Path)
+	matchPath := stripBasePath(m.basePath, routePath(in))
 	if isNonRootTrailingSlashPath(matchPath) {
 		return nil, false, false
 	}
@@ -289,6 +289,13 @@ func (m *AccessModel) mapMethodAndPathToRights(in EvalInput) ([][]grammar.Rights
 	}
 
 	return nil, false, true
+}
+
+func routePath(in EvalInput) string {
+	if in.RoutePath != "" {
+		return in.RoutePath
+	}
+	return in.Path
 }
 
 func (m *AccessModel) routeExistsForAnyMethod(requestPath string) bool {

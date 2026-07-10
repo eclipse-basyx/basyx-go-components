@@ -1,30 +1,137 @@
 {
-  "digitalProductPassportId": "https://example.org/dpp/demo-product-001",
-  "uniqueProductIdentifier": "https://example.org/products/demo-product-001",
+  "digitalProductPassportId": "https://www.example.org/batterypassport/1234545",
+  "uniqueProductIdentifier": "https://www.example.org/1234545",
   "granularity": "Item",
-  "dppSchemaVersion": "1.0.0",
-  "dppStatus": "active",
+  "dppSchemaVersion": "ENXXX:v1.0",
+  "dppStatus": "Active",
   "lastUpdate": "2026-06-11T12:00:00Z",
-  "economicOperatorId": "operator-123",
-  "facilityId": "facility-456",
+  "economicOperatorId": "gxx:ppp456789",
+  "facilityId": "gxx:xxx987654",
   "contentSpecificationIds": [
-    "technicalData-specification"
+    "https://admin-shell-io/idta/digitalproductpassport/Nameplate/1",
+    "https://admin-shell.io/idta/CarbonFootprint/CarbonFootprint/1/0",
+    "https://admin-shell-io/idta/digitalproductpassport/HandoverDocumentation/2",
+    "https://admin-shell-io/idta/digitalproductpassport/Circularity/1"
   ],
-  "technicalData": {
-    "manufacturerName": "Example Manufacturing GmbH",
-    "warrantyMonths": 24,
-    "energyClass": "A",
-    "serialNumbers": [
-      "SN-001",
-      "SN-002"
+  "https://admin-shell-io/idta/digitalproductpassport/Nameplate/1": {
+    "ManufacturerName": "VoltFabrik GmbH",
+    "ProductName": [
+      {
+        "value": "BPX 92 kWh traction battery pack",
+        "language": "en-GB"
+      },
+      {
+        "value": "BPX 92 kWh Traktionsbatterie",
+        "language": "de-DE"
+      }
     ],
-    "dimensions": {
-      "widthMm": 120,
-      "heightMm": 80
-    },
-    "manual": {
-      "url": "https://example.org/manuals/demo-product-001.pdf",
-      "contentType": "application/pdf"
+    "ProductArticleNumber": "BPX-92-2026",
+    "SerialNumber": "BPX-2026-000184",
+    "ManufacturingDate": "2026-05-18"
+  },
+  "https://admin-shell.io/idta/CarbonFootprint/CarbonFootprint/1/0": {
+    "ProductCarbonFootprints": [
+      {
+        "QuantityOfMeasureForCalculation": 1.0,
+        "PcfCo2eq": 4180.75,
+        "ReferenceImpactUnitForCalculation": "kg CO2e",
+        "WebLinkToPublicCarbonFootprintStudy": [
+          "https://manufacturer.example/reports/bpx-2026-000184-carbon-footprint.pdf"
+        ],
+        "PcfCalculationMethods": [
+          "ISO 14067"
+        ],
+        "PerformanceClass": "third-party verified",
+        "LifeCyclePhases": [
+          "raw material extraction",
+          "cell manufacturing",
+          "pack assembly",
+          "inbound logistics"
+        ]
+      }
+    ]
+  },
+  "https://admin-shell-io/idta/digitalproductpassport/HandoverDocumentation/2": {
+    "Documents": [
+      {
+        "DocumentIds": [
+          {
+            "DocumentIdentifier": "XF90-884",
+            "DocumentIsPrimary": true,
+            "DocumentDomainId": "1213455566"
+          }
+        ],
+        "DocumentVersions": [
+          {
+            "DigitalFiles": [
+              {
+                "resourceTitle": "User Manual for BPX 92 kWh traction battery pack",
+                "contentType": "application/pdf",
+                "url": "https://manufacturer.example/docs/bpx-92-user-manual.pdf",
+                "language": "en-GB"
+              },
+              {
+                "resourceTitle": "Benutzerhandbuch BPX 92 kWh Traktionsbatterie",
+                "contentType": "application/pdf",
+                "url": "https://manufacturer.example/docs/bpx-92-benutzerhandbuch.pdf",
+                "language": "de-DE"
+              }
+            ],
+            "Title": [
+              {
+                "value": "User Manual for BPX 92 kWh traction battery pack",
+                "language": "en-GB"
+              },
+              {
+                "value": "Benutzerhandbuch BPX 92 kWh Traktionsbatterie",
+                "language": "de-DE"
+              }
+            ],
+            "Description": [
+              {
+                "value": "Installation, operation and service information for the battery pack.",
+                "language": "en-GB"
+              },
+              {
+                "value": "Installations-, Betriebs- und Serviceinformationen fuer das Batteriepack.",
+                "language": "de-DE"
+              }
+            ],
+            "Language": [
+              "en-GB",
+              "de-DE"
+            ],
+            "Version": "V1.2"
+          }
+        ],
+        "DocumentClassifications": [
+          {
+            "ClassName": [
+              {
+                "value": "Operation",
+                "language": "en-GB"
+              },
+              {
+                "value": "Bedienung",
+                "language": "de-DE"
+              }
+            ],
+            "ClassId": "03-02",
+            "ClassificationSystem": "VDI2770 Blatt 1:2020"
+          }
+        ]
+      }
+    ]
+  },
+  "https://admin-shell-io/idta/digitalproductpassport/Circularity/1": {
+    "RecycledContentPercent": 29.4,
+    "RecyclabilityPercent": 87.2,
+    "RecommendedEndOfLifeRoute": "certified battery recycling with second-life assessment first",
+    "DismantlingInstructions": {
+      "resourceTitle": "Dismantling instructions for BPX 92 kWh traction battery pack",
+      "contentType": "application/pdf",
+      "url": "https://manufacturer.example/docs/bpx-92-dismantling-instructions.pdf",
+      "language": "en-GB"
     }
   }
 }

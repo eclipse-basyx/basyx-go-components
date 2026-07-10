@@ -22,18 +22,38 @@
 *
 * SPDX-License-Identifier: MIT
 ******************************************************************************/
-// Author: Martin Stemmer ( Fraunhofer IESE )
+// Author: Aaron Zielstorff ( Fraunhofer IESE )
 
-package auth
+package dppapi
 
-// EvalInput is the minimal set of request properties the ABAC engine needs to
-// evaluate a decision.
-type EvalInput struct {
-	Method    string
-	Path      string
-	RoutePath string
-	Claims    Claims
+import (
+	"testing"
+
+	"github.com/FriedJannik/aas-go-sdk/types"
+)
+
+func TestElementResponseSupportsScalarSubmodelElementListItems(t *testing.T) {
+	item := scalarProperty("", "A", types.DataTypeDefXSDString)
+	item.SetIDShort(nil)
+	elementIDPath := "$['technicalData']['energyClasses'][0]"
+
+	compressed, err := elementResponse(item, REPRESENTATION_COMPRESSED, elementIDPath)
+	if err != nil {
+		t.Fatalf("elementResponse() compressed error = %v", err)
+	}
+	if compressed != "A" {
+		t.Fatalf("elementResponse() compressed = %#v, want A", compressed)
+	}
+
+	full, err := elementResponse(item, REPRESENTATION_FULL, elementIDPath)
+	if err != nil {
+		t.Fatalf("elementResponse() full error = %v", err)
+	}
+	fullElement, ok := full.(map[string]any)
+	if !ok {
+		t.Fatalf("elementResponse() full = %#v, want object", full)
+	}
+	if fullElement["elementId"] != "energyClasses0" {
+		t.Fatalf("elementResponse() full elementId = %#v, want energyClasses0", fullElement["elementId"])
+	}
 }
-
-// Claims represents token claims extracted from a verified token.
-type Claims map[string]any
