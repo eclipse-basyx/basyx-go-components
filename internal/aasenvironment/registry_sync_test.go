@@ -210,6 +210,18 @@ func TestDynamicRegistryReconciliationStateSkipsDuplicateRuns(t *testing.T) {
 	require.False(t, state.reserve("https://public.example/api/v3"))
 }
 
+func TestDynamicRegistryReconciliationStateTracksConcurrentBases(t *testing.T) {
+	var state dynamicRegistryReconciliationState
+
+	require.True(t, state.reserve("https://public-a.example/api/v3"))
+	require.True(t, state.reserve("https://public-b.example/api/v3"))
+	require.False(t, state.reserve("https://public-a.example/api/v3"))
+
+	state.complete("https://public-a.example/api/v3", false)
+	require.True(t, state.reserve("https://public-a.example/api/v3"))
+	require.False(t, state.reserve("https://public-b.example/api/v3"))
+}
+
 func TestDynamicSubmodelRegistryReconciliationSkipsWhenIntegrationDisabled(t *testing.T) {
 	service := CustomSubmodelRepositoryService{
 		syncConfig: RegistrySyncConfig{},

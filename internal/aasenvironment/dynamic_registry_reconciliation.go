@@ -40,9 +40,9 @@ import (
 const dynamicRegistryReconciliationPageSize int32 = 100
 
 type dynamicRegistryReconciliationState struct {
-	mu              sync.Mutex
-	reconcilingBase string
-	reconciledBase  string
+	mu               sync.Mutex
+	reconcilingBases map[string]struct{}
+	reconciledBases  map[string]struct{}
 }
 
 func (s *dynamicRegistryReconciliationState) reserve(externalBaseURL string) bool {
@@ -52,11 +52,17 @@ func (s *dynamicRegistryReconciliationState) reserve(externalBaseURL string) boo
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if s.reconciledBase == externalBaseURL || s.reconcilingBase == externalBaseURL {
+	if _, reconciled := s.reconciledBases[externalBaseURL]; reconciled {
+		return false
+	}
+	if _, reconciling := s.reconcilingBases[externalBaseURL]; reconciling {
 		return false
 	}
 
-	s.reconcilingBase = externalBaseURL
+	if s.reconcilingBases == nil {
+		s.reconcilingBases = make(map[string]struct{})
+	}
+	s.reconcilingBases[externalBaseURL] = struct{}{}
 	return true
 }
 
@@ -64,11 +70,12 @@ func (s *dynamicRegistryReconciliationState) complete(externalBaseURL string, su
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if succeeded {
-		s.reconciledBase = externalBaseURL
+		if s.reconciledBases == nil {
+			s.reconciledBases = make(map[string]struct{})
+		}
+		s.reconciledBases[externalBaseURL] = struct{}{}
 	}
-	if s.reconcilingBase == externalBaseURL {
-		s.reconcilingBase = ""
-	}
+	delete(s.reconcilingBases, externalBaseURL)
 }
 
 type dynamicRegistryReconciler interface {
