@@ -28,11 +28,14 @@ package submodelelements
 import (
 	"context"
 	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 
 	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/doug-martin/goqu/v9"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 	"github.com/stretchr/testify/require"
@@ -95,7 +98,7 @@ func TestAddSMERowFilterQueriesCorrelatesStructuralConditionToCurrentElement(t *
 	}`), &condition)
 	require.NoError(t, err)
 
-	ctx := auth.WithQueryFilter(context.Background(), &auth.QueryFilter{
+	ctx := auth.WithQueryFilter(contextWithABACDisabled(t), &auth.QueryFilter{
 		Filters: auth.FragmentFilters{
 			"$sme": condition,
 		},
@@ -163,6 +166,45 @@ func TestAddSMEVisibleTreeQueryFiltersAncestorsBeforeLimit(t *testing.T) {
 	require.Contains(t, sqlQuery, `"sme"."id" IN ((SELECT "id" FROM "visible_sme_ids"))`)
 	require.NotContains(t, sqlQuery, `"submodel_element"."idshort_path"`)
 	require.Contains(t, sqlQuery, "LIMIT 2")
+}
+
+func TestAddSMEPathAncestorVisibilityQueryStartsAtTarget(t *testing.T) {
+	t.Parallel()
+
+	allow := true
+	ctx := auth.WithQueryFilter(contextWithABACDisabled(t), &auth.QueryFilter{
+		Filters: auth.FragmentFilters{
+			"$sme": {Boolean: &allow},
+		},
+	})
+	dataset := goqu.Dialect("postgres").
+		From(goqu.T("submodel_element").As("sme")).
+		Select(goqu.I("sme.idshort_path")).
+		Where(goqu.I("sme.idshort_path").Eq("Target.Child"))
+
+	filtered, err := addSMEPathAncestorVisibilityQuery(ctx, dataset, 42, "Target.Child")
+	require.NoError(t, err)
+	sqlQuery, _, err := filtered.ToSQL()
+	require.NoError(t, err)
+
+	require.Contains(t, sqlQuery, "WITH RECURSIVE visible_sme_path_ancestors(id,parent_sme_id)")
+	require.Contains(t, sqlQuery, `"visible_sme_target"."idshort_path" = 'Target.Child'`)
+	require.Contains(t, sqlQuery, `"visible_sme_ancestor"."id" = "visible_sme_child"."parent_sme_id"`)
+	require.Contains(t, sqlQuery, `"visible_sme_path_ancestors"."parent_sme_id" IS NULL`)
+	require.NotContains(t, sqlQuery, "visible_sme_ids")
+}
+
+func contextWithABACDisabled(t *testing.T) context.Context {
+	t.Helper()
+
+	var cfgCtx context.Context
+	handler := common.ConfigMiddleware(&common.Config{})(http.HandlerFunc(func(_ http.ResponseWriter, request *http.Request) {
+		cfgCtx = request.Context()
+	}))
+	handler.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/", nil))
+
+	require.NotNil(t, cfgCtx)
+	return cfgCtx
 }
 
 func TestNormalizeSMERowFiltersIgnoresOtherStructuralRoots(t *testing.T) {
