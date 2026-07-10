@@ -121,6 +121,23 @@ func TestQueryFilter_FilterExpressionEntriesFor_WildcardIncludesLiteralAndIndexe
 	}
 }
 
+func TestQueryFilter_FilterExpressionEntriesFor_SMEWildcardMatchesIndexedPath(t *testing.T) {
+	t.Parallel()
+
+	allow := true
+	q := QueryFilter{Filters: FragmentFilters{
+		"$sme.List[0]#value": {Boolean: &allow},
+	}}
+
+	entries := q.FilterExpressionEntriesFor("$sme.List[]#value")
+	if len(entries) != 1 {
+		t.Fatalf("expected indexed SME path to match wildcard, got %d entries", len(entries))
+	}
+	if entries[0].Fragment != "$sme.List[0]#value" {
+		t.Fatalf("expected indexed SME fragment, got %q", entries[0].Fragment)
+	}
+}
+
 func TestQueryFilter_FilterExpressionsFor_WildcardMatchesIndexedAndSorted(t *testing.T) {
 	b1 := true
 	b3 := true

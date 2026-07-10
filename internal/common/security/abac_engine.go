@@ -530,7 +530,7 @@ func fragmentRootsEqual(first grammar.FragmentStringPattern, second grammar.Frag
 
 func fragmentRoot(fragment grammar.FragmentStringPattern) string {
 	fragmentString := string(fragment)
-	fragmentSeparator := strings.Index(fragmentString, "#")
+	fragmentSeparator := strings.IndexAny(fragmentString, ".[#")
 	if fragmentSeparator < 0 {
 		return fragmentString
 	}

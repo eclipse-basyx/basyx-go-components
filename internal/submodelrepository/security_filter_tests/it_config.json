@@ -116,5 +116,20 @@
     "method": "GET",
     "endpoint": "{{BASYX_IT_API_URL}}/submodels/dXJuOmV4YW1wbGU6c3VibW9kZWw6bmFtZXBsYXRlLWZpbHRlcg/submodel-elements/ARestricted/$path",
     "expectedStatus": 404
+  },
+  {
+    "context": "Admin creates the deep path filtering fixture",
+    "token": { "user": "admin", "password": "pwd" },
+    "method": "POST",
+    "endpoint": "{{BASYX_IT_API_URL}}/submodels",
+    "data": "bodies/deep_path_filter.json",
+    "expectedStatus": 201
+  },
+  {
+    "context": "Deep path response does not expose filtered descendants",
+    "method": "GET",
+    "endpoint": "{{BASYX_IT_API_URL}}/submodels/dXJuOmV4YW1wbGU6c3VibW9kZWw6ZGVlcC1wYXRoLWZpbHRlcg/submodel-elements/VisibleContainer/$path?level=deep",
+    "shouldMatch": "expected/visible_container_path_filtered.json",
+    "expectedStatus": 200
   }
 ]

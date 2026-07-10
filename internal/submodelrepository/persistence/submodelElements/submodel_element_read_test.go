@@ -28,11 +28,14 @@ package submodelelements
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
+	"regexp"
 	"strings"
 	"testing"
 
+	sqlmock "github.com/DATA-DOG/go-sqlmock"
 	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
@@ -192,6 +195,68 @@ func TestAddSMEPathAncestorVisibilityQueryStartsAtTarget(t *testing.T) {
 	require.Contains(t, sqlQuery, `"visible_sme_ancestor"."id" = "visible_sme_child"."parent_sme_id"`)
 	require.Contains(t, sqlQuery, `"visible_sme_path_ancestors"."parent_sme_id" IS NULL`)
 	require.NotContains(t, sqlQuery, "visible_sme_ids")
+}
+
+func TestEnsureSubmodelElementPathMatchesFormulaUsesSubmodelWideSMEFormula(t *testing.T) {
+	t.Parallel()
+
+	var formula grammar.LogicalExpression
+	err := json.Unmarshal([]byte(`{
+		"$eq": [
+			{"$field": "$sme#semanticId.keys[].value"},
+			{"$strVal": "0112/2///61360_7#AAS011#001"}
+		]
+	}`), &formula)
+	require.NoError(t, err)
+
+	cfg := &common.Config{}
+	cfg.ABAC.Enabled = true
+	ctx := common.ContextWithConfig(context.Background(), cfg)
+	ctx = auth.WithQueryFilter(ctx, &auth.QueryFilter{
+		Formula: &formula,
+		FormulasByRight: map[grammar.RightsEnum]grammar.LogicalExpression{
+			grammar.RightsEnumREAD: formula,
+		},
+	})
+
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		mock.ExpectClose()
+		require.NoError(t, db.Close())
+	})
+
+	mock.ExpectQuery(regexp.QuoteMeta(`"submodel_element"."submodel_id" = "sme"."submodel_id"`)).
+		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(1))
+
+	err = ensureSubmodelElementPathMatchesFormula(ctx, db, "submodel-id", 42, "Target")
+	require.NoError(t, err)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestSubmodelElementCursorExistsCodesRowsError(t *testing.T) {
+	t.Parallel()
+
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		mock.ExpectClose()
+		require.NoError(t, db.Close())
+	})
+
+	mock.ExpectQuery("SELECT").WillReturnRows(
+		sqlmock.NewRows([]string{"id"}).
+			AddRow(1).
+			RowError(0, errors.New("cursor row failure")),
+	)
+	dataset := goqu.Dialect("postgres").
+		From(goqu.T("submodel_element").As("sme")).
+		Select(goqu.I("sme.id"))
+
+	exists, err := submodelElementCursorExists(context.Background(), db, dataset, "Target|1")
+	require.False(t, exists)
+	require.ErrorContains(t, err, "SMREPO-CHECKSMECURSOR-ROWSERR")
+	require.NoError(t, mock.ExpectationsWereMet())
 }
 
 func contextWithABACDisabled(t *testing.T) context.Context {
