@@ -195,6 +195,8 @@ Each configured source can be a file or directory. Directories are scanned recur
 
 Upload and startup preconfiguration use the AAS 3.2 parsing stack. For backward compatibility, XML payloads with lower or equal AAS v3 namespace versions (for example `https://admin-shell.io/aas/3/0`) are adapted to the current namespace before parsing, and a warning is logged.
 
+For `aasenvironmentservice` registry synchronization, descriptor endpoint URLs can be configured statically with `general.externalUrl` or derived dynamically from trusted request context. See [Dynamic Registry Descriptor Endpoint URLs](docu/setup/dynamic-registry-endpoints.md) for exact configuration, trust rules, and reconciliation behavior.
+
 ## 5. Code Style & Conventions
 
 - Use Go modules (`go.mod`) for dependency management

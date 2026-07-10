@@ -82,4 +82,5 @@ docker compose down -v
   - `GENERAL_TRUSTEDPROXYCIDRS=<proxy CIDR>`
   - ensure the proxy sends `Forwarded` or `X-Forwarded-*` headers.
 - Do not use dynamic direct-host mode without `GENERAL_TRUSTEDDYNAMICHOSTS`; unlisted `Host` values are ignored for registry descriptor generation.
+- See [Dynamic Registry Descriptor Endpoint URLs](../../docu/setup/dynamic-registry-endpoints.md) for the exact static, direct-host, and reverse-proxy behavior.
 - The UI integration hints in `basyx-infra.yml` are aligned with this behavior (`hasDiscoveryIntegration: true`, `hasRegistryIntegration: true`).
