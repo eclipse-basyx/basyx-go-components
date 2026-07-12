@@ -17,6 +17,7 @@
         "objects": [
           { "ROUTE": "/description" },
           { "ROUTE": "/health" },
+          { "ROUTE": "/verify" },
           { "ROUTE": "/serialization" },
           { "ROUTE": "/upload" },
           { "ROUTE": "/lookup/shells" },

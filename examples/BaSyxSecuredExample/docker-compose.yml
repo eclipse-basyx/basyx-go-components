@@ -8,6 +8,7 @@ services:
       - 8082:5004
     environment:
       - SERVER_PORT=5004
+      - SERVER_VERIFICATIONENDPOINTAVAILABLE=true
       - CORS_ALLOWEDORIGINS=*
       - CORS_ALLOWEDHEADERS=*
       - CORS_ALLOWEDCREDENTIALS=true
@@ -41,6 +42,7 @@ services:
     command: ["/app/submodelregistryservice"]
     environment:
       - SERVER_PORT=5004
+      - SERVER_VERIFICATIONENDPOINTAVAILABLE=true
       - CORS_ALLOWEDORIGINS=*
       - CORS_ALLOWEDHEADERS=*
       - CORS_ALLOWEDCREDENTIALS=true
@@ -76,6 +78,7 @@ services:
     command: ["/app/discoveryservice"]
     environment:
       - SERVER_PORT=5004
+      - SERVER_VERIFICATIONENDPOINTAVAILABLE=true
       - CORS_ALLOWEDORIGINS=*
       - CORS_ALLOWEDHEADERS=*
       - CORS_ALLOWEDCREDENTIALS=true
@@ -125,6 +128,7 @@ services:
     command: ["/app/aasrepositoryservice"]
     environment:
       - SERVER_PORT=5004
+      - SERVER_VERIFICATIONENDPOINTAVAILABLE=true
       - CORS_ALLOWEDORIGINS=*
       - CORS_ALLOWEDHEADERS=*
       - CORS_ALLOWEDCREDENTIALS=true
@@ -160,6 +164,7 @@ services:
     command: ["/app/submodelrepositoryservice"]
     environment:
       - SERVER_PORT=5004
+      - SERVER_VERIFICATIONENDPOINTAVAILABLE=true
       - CORS_ALLOWEDORIGINS=*
       - CORS_ALLOWEDHEADERS=*
       - CORS_ALLOWEDCREDENTIALS=true
@@ -197,6 +202,7 @@ services:
     command: ["/app/conceptdescriptionrepositoryservice"]
     environment:
       - SERVER_PORT=5004
+      - SERVER_VERIFICATIONENDPOINTAVAILABLE=true
       - CORS_ALLOWEDORIGINS=*
       - CORS_ALLOWEDHEADERS=*
       - CORS_ALLOWEDCREDENTIALS=true

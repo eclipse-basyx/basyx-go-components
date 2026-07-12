@@ -120,9 +120,12 @@ func writeHealthResponse(w http.ResponseWriter, statusCode int, body map[string]
 	}
 }
 
-// AddVerificationEndpoint registers the POST /verify Endpoint that accepts a JSON, XML or AASX payload and verifies it against the AAS meta model regardless of the service and verification mode.
-func AddVerificationEndpoint(r *chi.Mux, config *Config) {
-	r.Post(config.Server.ContextPath+"/verify", func(w http.ResponseWriter, r *http.Request) {
+// AddVerificationEndpoint registers POST /verify relative to the provided API router.
+// The endpoint accepts JSON, XML, or AASX and verifies it against the AAS meta
+// model. Callers must provide the service API router so configured security
+// middleware applies before payload parsing.
+func AddVerificationEndpoint(r chi.Router, config *Config) {
+	r.Post("/verify", func(w http.ResponseWriter, r *http.Request) {
 		maxPayloadBytes := verificationMaxPayloadBytes(config)
 		r.Body = http.MaxBytesReader(w, r.Body, maxPayloadBytes)
 		r = r.WithContext(ContextWithConfig(r.Context(), config))

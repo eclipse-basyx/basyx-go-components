@@ -7,6 +7,31 @@
     "expectedStatus": 200
   },
   {
+    "context": "Anonymous verification denied",
+    "token": null,
+    "method": "POST",
+    "endpoint": "{{BASYX_IT_API_URL}}/verify",
+    "data": "bodies/verifyEnvironment.json",
+    "expectedStatus": 403
+  },
+  {
+    "context": "Verification denied without EXECUTE rule",
+    "token": { "user": "usera", "password": "pwd" },
+    "method": "POST",
+    "endpoint": "{{BASYX_IT_API_URL}}/verify",
+    "data": "bodies/verifyEnvironment.json",
+    "expectedStatus": 403
+  },
+  {
+    "context": "Verification allowed by editor EXECUTE rule",
+    "token": { "user": "userx", "password": "pwd" },
+    "method": "POST",
+    "endpoint": "{{BASYX_IT_API_URL}}/verify",
+    "data": "bodies/verifyEnvironment.json",
+    "shouldMatch": "expected/expectedVerificationResult.json",
+    "expectedStatus": 200
+  },
+  {
     "context": "Anonymous list denied",
     "token": null,
     "method": "GET",

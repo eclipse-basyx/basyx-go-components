@@ -390,6 +390,12 @@ func TestInjectVerifyEndpoint_ReflectsSupportedVerifyRequestFormats(t *testing.T
 	if !strings.Contains(injected, "application/aasx+json:") {
 		t.Fatal("expected injected /verify requestBody to document application/aasx+json")
 	}
+	if !strings.Contains(injected, "Authentication is required when security is enabled") {
+		t.Fatal("expected injected /verify responses to document authentication failures")
+	}
+	if !strings.Contains(injected, "not authorized to execute verification") {
+		t.Fatal("expected injected /verify responses to document authorization failures")
+	}
 }
 
 func TestInjectServerURL_DoesNotInheritServerBasePathFromSpec(t *testing.T) {

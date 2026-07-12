@@ -20,6 +20,7 @@ services:
       dockerfile: ./cmd/submodelrepositoryservice/Dockerfile
     environment:
       - SERVER_PORT=5004
+      - SERVER_VERIFICATIONENDPOINTAVAILABLE=true
       - POSTGRES_HOST=db
       - POSTGRES_PORT=5432
       - POSTGRES_USER=admin

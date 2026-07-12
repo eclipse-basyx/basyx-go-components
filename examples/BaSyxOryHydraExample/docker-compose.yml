@@ -8,6 +8,7 @@ services:
       - "8081:5004"
     environment:
       - SERVER_PORT=5004
+      - SERVER_VERIFICATIONENDPOINTAVAILABLE=true
       - CORS_ALLOWEDORIGINS=*
       - CORS_ALLOWEDHEADERS=*
       - CORS_ALLOWEDCREDENTIALS=true

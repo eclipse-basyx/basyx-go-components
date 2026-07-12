@@ -363,10 +363,10 @@ func TestVerifyPayload_ReturnsAllVerificationMessages(t *testing.T) {
 
 func TestAddVerificationEndpoint_ReturnsAllVerificationMessages(t *testing.T) {
 	router := chi.NewRouter()
-	cfg := &Config{Server: ServerConfig{ContextPath: "/api"}}
+	cfg := &Config{}
 	AddVerificationEndpoint(router, cfg)
 
-	req := httptest.NewRequest(http.MethodPost, "/api/verify", strings.NewReader(invalidPropertyWithMultipleVerificationIssuesPayload()))
+	req := httptest.NewRequest(http.MethodPost, "/verify", strings.NewReader(invalidPropertyWithMultipleVerificationIssuesPayload()))
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 
@@ -391,10 +391,10 @@ func TestAddVerificationEndpoint_ReturnsAllVerificationMessages(t *testing.T) {
 
 func TestAddVerificationEndpoint_RawJSON(t *testing.T) {
 	router := chi.NewRouter()
-	cfg := &Config{Server: ServerConfig{ContextPath: "/api"}}
+	cfg := &Config{}
 	AddVerificationEndpoint(router, cfg)
 
-	req := httptest.NewRequest(http.MethodPost, "/api/verify", strings.NewReader(`{"assetAdministrationShells":[],"submodels":[],"conceptDescriptions":[]}`))
+	req := httptest.NewRequest(http.MethodPost, "/verify", strings.NewReader(`{"assetAdministrationShells":[],"submodels":[],"conceptDescriptions":[]}`))
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 
@@ -416,6 +416,24 @@ func TestAddVerificationEndpoint_RawJSON(t *testing.T) {
 	}
 }
 
+func TestAddVerificationEndpointUsesMountedContextPath(t *testing.T) {
+	router := chi.NewRouter()
+	apiRouter := chi.NewRouter()
+	cfg := &Config{Server: ServerConfig{ContextPath: "/api"}}
+	AddVerificationEndpoint(apiRouter, cfg)
+	router.Mount(cfg.Server.ContextPath, apiRouter)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/verify", strings.NewReader(`{"assetAdministrationShells":[],"submodels":[],"conceptDescriptions":[]}`))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d body=%s", http.StatusOK, rec.Code, rec.Body.String())
+	}
+}
+
 func TestAddVerificationEndpoint_RejectsRawPayloadOverConfiguredLimit(t *testing.T) {
 	router := chi.NewRouter()
 	cfg := &Config{
@@ -424,7 +442,7 @@ func TestAddVerificationEndpoint_RejectsRawPayloadOverConfiguredLimit(t *testing
 	}
 	AddVerificationEndpoint(router, cfg)
 
-	req := httptest.NewRequest(http.MethodPost, "/api/verify", strings.NewReader(`{"assetAdministrationShells":[]}`))
+	req := httptest.NewRequest(http.MethodPost, "/verify", strings.NewReader(`{"assetAdministrationShells":[]}`))
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 
@@ -456,7 +474,7 @@ func TestAddVerificationEndpoint_RejectsMultipartPayloadOverConfiguredLimit(t *t
 		t.Fatalf("failed to close multipart writer: %v", err)
 	}
 
-	req := httptest.NewRequest(http.MethodPost, "/api/verify", &body)
+	req := httptest.NewRequest(http.MethodPost, "/verify", &body)
 	req.Header.Set("Content-Type", writer.FormDataContentType())
 	rec := httptest.NewRecorder()
 

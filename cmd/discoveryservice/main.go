@@ -65,9 +65,6 @@ func runServer(ctx context.Context, configPath string) error {
 	r.Use(common.ConfigMiddleware(cfg))
 
 	common.AddCors(r, cfg)
-	if cfg.Server.VerificationEndpointAvailable {
-		common.AddVerificationEndpoint(r, cfg)
-	}
 
 	// --- Health Endpoint (public) ---
 	common.AddHealthEndpoint(r, cfg)
@@ -127,6 +124,9 @@ func runServer(ctx context.Context, configPath string) error {
 		return err
 	}
 	abacpolicy.RegisterManagementRoutesIfEnabled(cfg, apiRouter, abacRepo, "discoveryservice")
+	if cfg.Server.VerificationEndpointAvailable {
+		common.AddVerificationEndpoint(apiRouter, cfg)
+	}
 
 	// Register all discovery routes (protected)
 	for _, rt := range smCtrl.Routes() {
