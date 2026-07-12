@@ -24,6 +24,7 @@
         "name": "all_api",
         "objects": [
           { "ROUTE": "/health" },
+          { "ROUTE": "/verify" },
           { "ROUTE": "/shell-descriptors" },
           { "ROUTE": "/shell-descriptors/*" },
           { "ROUTE": "/submodel-descriptors" },

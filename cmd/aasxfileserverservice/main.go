@@ -65,10 +65,6 @@ func runServer(ctx context.Context, configPath string) error {
 
 	common.AddHealthEndpoint(r, cfg)
 
-	if cfg.Server.VerificationEndpointAvailable {
-		common.AddVerificationEndpoint(r, cfg)
-	}
-
 	if err := common.AddSwaggerUIFromFS(r, openapiSpec, "openapi.yaml", "AASX File Server API", "/swagger", "/api-docs/openapi.yaml", cfg); err != nil {
 		log.Printf("Warning: failed to load OpenAPI spec for Swagger UI: %v", err)
 	}
@@ -118,6 +114,9 @@ func runServer(ctx context.Context, configPath string) error {
 		return err
 	}
 	abacpolicy.RegisterManagementRoutesIfEnabled(cfg, apiRouter, abacRepo, "aasxfileserverservice")
+	if cfg.Server.VerificationEndpointAvailable {
+		common.AddVerificationEndpoint(apiRouter, cfg)
+	}
 
 	for _, rt := range aasxCtrl.Routes() {
 		apiRouter.Method(rt.Method, rt.Pattern, rt.HandlerFunc)

@@ -120,7 +120,7 @@ This file defines three access levels:
 
    - ACL `admin_full` with `ALL` rights
    - Formula `is_admin` checks `role = admin`
-   - Object group `all_api` grants full CRUD access
+   - Object group `all_api` grants full CRUD access and access to the `/verify` endpoint
 
 To change who can see or edit what, update [`security_env/access-rules.json`](security_env/access-rules.json) (ACLs, formulas, and object groups).
 

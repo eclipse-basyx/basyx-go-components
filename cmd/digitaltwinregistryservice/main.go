@@ -85,9 +85,6 @@ func runServer(ctx context.Context, configPath string) error {
 	r.Use(common.ConfigMiddleware(cfg))
 	common.AddCors(r, cfg)
 	common.AddHealthEndpoint(r, cfg)
-	if cfg.Server.VerificationEndpointAvailable {
-		common.AddVerificationEndpoint(r, cfg)
-	}
 
 	// Add Swagger UI
 	if err := common.AddSwaggerUIFromFS(r, openapiSpec, "openapi.yaml", "Digital Twin Registry API", "/swagger", "/api-docs/openapi.yaml", cfg); err != nil {
@@ -167,10 +164,14 @@ func runServer(ctx context.Context, configPath string) error {
 		return err
 	}
 	versioningGuard := history.NewMutationCoverageGuard(apiRouter)
+	versioningGuard.Exempt(http.MethodPost, "/verify")
 	apiRouter.Use(versioningGuard.Middleware)
 	apiRouter.Use(history.AuditContextMiddleware(cfg))
 	abacpolicy.ExemptManagementMutationRoutesIfEnabled(cfg, versioningGuard, "digitaltwinregistryservice")
 	abacpolicy.RegisterManagementRoutesIfEnabled(cfg, apiRouter, abacRepo, "digitaltwinregistryservice")
+	if cfg.Server.VerificationEndpointAvailable {
+		common.AddVerificationEndpoint(apiRouter, cfg)
+	}
 
 	for operation, rt := range registryCtrl.Routes() {
 		versioningGuard.ClassifyRoute(operation, rt.Method, rt.Pattern)

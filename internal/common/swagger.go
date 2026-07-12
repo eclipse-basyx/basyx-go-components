@@ -238,6 +238,10 @@ func injectVerifyEndpoint(specContent []byte) []byte {
 		"                      type: string\n" +
 		"        '400':\n" +
 		"          description: Invalid payload or unsupported format\n" +
+		"        '401':\n" +
+		"          description: Authentication is required when security is enabled\n" +
+		"        '403':\n" +
+		"          description: The caller is not authorized to execute verification\n" +
 		"        '413':\n" +
 		"          description: Payload exceeds configured size limit\n" +
 		"        '500':\n" +

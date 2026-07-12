@@ -62,9 +62,6 @@ func runServer(ctx context.Context, configPath string) error {
 
 	// --- Health Endpoint (public) ---
 	common.AddHealthEndpoint(r, cfg)
-	if cfg.Server.VerificationEndpointAvailable {
-		common.AddVerificationEndpoint(r, cfg)
-	}
 
 	// Add Swagger UI
 	if err := common.AddSwaggerUIFromFS(r, openapiSpec, "openapi.yaml", "Company Lookup Service API", "/swagger", "/api-docs/openapi.yaml", cfg); err != nil {
@@ -106,6 +103,9 @@ func runServer(ctx context.Context, configPath string) error {
 	// === Protected API Subrouter ===
 	apiRouter := chi.NewRouter()
 	common.ConfigureAPIRouter(apiRouter, "CompanyLookupService")
+	if cfg.Server.VerificationEndpointAvailable {
+		common.AddVerificationEndpoint(apiRouter, cfg)
+	}
 
 	// Register all company lookup routes
 	for _, rt := range companyLookupCtrl.Routes() {

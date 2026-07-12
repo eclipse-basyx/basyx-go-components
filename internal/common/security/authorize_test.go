@@ -154,6 +154,34 @@ func TestSecurityMiddleware_RejectsAnonymousGetWhenACLRequiresSubClaim(t *testin
 	}
 }
 
+func TestVerifyEndpointRequiresAuthWhenABACEnabled(t *testing.T) {
+	router := api.NewRouter()
+	model := &AccessModel{
+		apiRouter: router,
+		basePath:  "",
+	}
+
+	router.Use(ABACMiddleware(ABACSettings{
+		Enabled: true,
+		Model:   model,
+	}))
+	common.AddVerificationEndpoint(router, &common.Config{})
+
+	req := httptest.NewRequest(
+		http.MethodPost,
+		"/verify",
+		strings.NewReader(`{"assetAdministrationShells":[],"submodels":[],"conceptDescriptions":[]}`),
+	)
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("expected status %d without authentication, got %d", http.StatusUnauthorized, rec.Code)
+	}
+}
+
 func TestABACMiddleware_UnknownRouteReturnsNotFound(t *testing.T) {
 	router := api.NewRouter()
 	model := &AccessModel{

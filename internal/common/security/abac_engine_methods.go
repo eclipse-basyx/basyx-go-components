@@ -40,6 +40,9 @@ type mapMethodAndPatternToRights struct {
 }
 
 var mapMethodAndPatternToRightsData = []mapMethodAndPatternToRights{
+	// verification endpoint
+	{"POST", "/verify", []grammar.RightsEnum{grammar.RightsEnumEXECUTE}},
+
 	// description endpoints
 	{"GET", "/description", []grammar.RightsEnum{grammar.RightsEnumREAD}},
 

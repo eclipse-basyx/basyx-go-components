@@ -1,0 +1,39 @@
+{
+  "assetAdministrationShells": [
+    {
+      "id": "urn:example:aas:verification",
+      "idShort": "VerificationAAS",
+      "assetInformation": {
+        "assetKind": "Instance",
+        "globalAssetId": "urn:example:asset:verification"
+      },
+      "submodels": [
+        {
+          "type": "ModelReference",
+          "keys": [
+            {
+              "type": "Submodel",
+              "value": "urn:example:submodel:verification"
+            }
+          ]
+        }
+      ],
+      "modelType": "AssetAdministrationShell"
+    }
+  ],
+  "submodels": [
+    {
+      "id": "urn:example:submodel:verification",
+      "idShort": "VerificationSubmodel",
+      "kind": "Instance",
+      "modelType": "Submodel"
+    }
+  ],
+  "conceptDescriptions": [
+    {
+      "id": "urn:example:concept-description:verification",
+      "idShort": "VerificationConcept",
+      "modelType": "ConceptDescription"
+    }
+  ]
+}

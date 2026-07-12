@@ -31,6 +31,7 @@ import (
 	"embed"
 	"flag"
 	"log"
+	"net/http"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -78,9 +79,6 @@ func runServer(ctx context.Context, configPath string) error {
 
 	common.AddCors(r, cfg)
 	common.AddHealthEndpoint(r, cfg)
-	if cfg.Server.VerificationEndpointAvailable {
-		common.AddVerificationEndpoint(r, cfg)
-	}
 
 	// Add Swagger UI
 	if err := common.AddSwaggerUIFromFS(r, openapiSpec, "openapi.yaml", "Concept Description Repository API", "/swagger", "/api-docs/openapi.yaml", cfg); err != nil {
@@ -137,10 +135,14 @@ func runServer(ctx context.Context, configPath string) error {
 		return err
 	}
 	versioningGuard := history.NewMutationCoverageGuard(apiRouter)
+	versioningGuard.Exempt(http.MethodPost, "/verify")
 	apiRouter.Use(versioningGuard.Middleware)
 	apiRouter.Use(history.AuditContextMiddleware(cfg))
 	abacpolicy.ExemptManagementMutationRoutesIfEnabled(cfg, versioningGuard, "conceptdescriptionrepositoryservice")
 	abacpolicy.RegisterManagementRoutesIfEnabled(cfg, apiRouter, abacRepo, "conceptdescriptionrepositoryservice")
+	if cfg.Server.VerificationEndpointAvailable {
+		common.AddVerificationEndpoint(apiRouter, cfg)
+	}
 
 	for operation, rt := range cdCtrl.Routes() {
 		versioningGuard.ClassifyRoute(operation, rt.Method, rt.Pattern)

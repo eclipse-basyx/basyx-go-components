@@ -44,6 +44,18 @@ func TestABACPolicyManagementValidateRequiresUpdateRight(t *testing.T) {
 	}
 }
 
+func TestVerificationEndpointRequiresExecuteRight(t *testing.T) {
+	t.Parallel()
+
+	rights, ok := rightsForMappedRoute(http.MethodPost, "/verify")
+	if !ok {
+		t.Fatal("expected verification endpoint to have an ABAC rights mapping")
+	}
+	if len(rights) != 1 || len(rights[0]) != 1 || rights[0][0] != grammar.RightsEnumEXECUTE {
+		t.Fatalf("expected verification endpoint to require EXECUTE, got %v", rights)
+	}
+}
+
 func rightsForMappedRoute(method string, pattern string) ([][]grammar.RightsEnum, bool) {
 	var matches [][]grammar.RightsEnum
 	for _, mapping := range mapMethodAndPatternToRightsData {

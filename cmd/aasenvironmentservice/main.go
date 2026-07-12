@@ -107,9 +107,6 @@ func runServer(ctx context.Context, configPath string) error {
 	r := chi.NewRouter()
 	r.Use(common.ConfigMiddleware(cfg))
 	common.AddCors(r, cfg)
-	if cfg.Server.VerificationEndpointAvailable {
-		common.AddVerificationEndpoint(r, cfg)
-	}
 
 	preconfigurationCompleted := atomic.Bool{}
 	common.AddHealthEndpointWithProbe(r, cfg, func() (bool, string) {
@@ -234,10 +231,14 @@ func runServer(ctx context.Context, configPath string) error {
 		return err
 	}
 	versioningGuard := history.NewMutationCoverageGuard(apiRouter)
+	versioningGuard.Exempt(http.MethodPost, "/verify")
 	apiRouter.Use(versioningGuard.Middleware)
 	apiRouter.Use(history.AuditContextMiddleware(cfg))
 	abacpolicy.ExemptManagementMutationRoutesIfEnabled(cfg, versioningGuard, "aasenvironmentservice")
 	abacpolicy.RegisterManagementRoutesIfEnabled(cfg, apiRouter, abacRepo, "aasenvironmentservice")
+	if cfg.Server.VerificationEndpointAvailable {
+		common.AddVerificationEndpoint(apiRouter, cfg)
+	}
 
 	for operation, rt := range aasRegistryCtrl.Routes() {
 		versioningGuard.ClassifyRoute(operation, rt.Method, rt.Pattern)

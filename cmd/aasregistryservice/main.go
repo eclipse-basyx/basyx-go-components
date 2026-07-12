@@ -79,9 +79,6 @@ func runServer(ctx context.Context, configPath string) error {
 
 	common.AddCors(r, cfg)
 	common.AddHealthEndpoint(r, cfg)
-	if cfg.Server.VerificationEndpointAvailable {
-		common.AddVerificationEndpoint(r, cfg)
-	}
 
 	// Add Swagger UI
 	if err := common.AddSwaggerUIFromFS(r, openapiSpec, "openapi.yaml", "AAS Registry Service API", "/swagger", "/api-docs/openapi.yaml", cfg); err != nil {
@@ -143,10 +140,14 @@ func runServer(ctx context.Context, configPath string) error {
 		return err
 	}
 	versioningGuard := history.NewMutationCoverageGuard(apiRouter)
+	versioningGuard.Exempt(http.MethodPost, "/verify")
 	apiRouter.Use(versioningGuard.Middleware)
 	apiRouter.Use(history.AuditContextMiddleware(cfg))
 	abacpolicy.ExemptManagementMutationRoutesIfEnabled(cfg, versioningGuard, "aasregistryservice")
 	abacpolicy.RegisterManagementRoutesIfEnabled(cfg, apiRouter, abacRepo, "aasregistryservice")
+	if cfg.Server.VerificationEndpointAvailable {
+		common.AddVerificationEndpoint(apiRouter, cfg)
+	}
 
 	// Register all registry routes (protected)
 	for operation, rt := range smCtrl.Routes() {
