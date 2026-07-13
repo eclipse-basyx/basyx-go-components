@@ -26,11 +26,13 @@
 package common
 
 import (
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	"github.com/go-chi/chi/v5"
 )
 
@@ -168,6 +170,37 @@ func TestAddSwaggerUIServesLocalPart1Schemas(t *testing.T) {
 	}
 	if !strings.Contains(part1Recorder.Body.String(), "referredSemanticId") {
 		t.Fatal("expected part1 schema response to contain Reference fields")
+	}
+}
+
+func TestAddSwaggerUIReturnsStandardizedErrorForUnknownSchemaVersions(t *testing.T) {
+	r := chi.NewRouter()
+	AddSwaggerUI(r, SwaggerUIConfig{
+		Title:       "test",
+		SpecURL:     "/api-docs/openapi.yaml",
+		UIPath:      "/swagger",
+		SpecPath:    "/api-docs/openapi.yaml",
+		SpecContent: []byte("openapi: 3.0.3\n"),
+		BasePath:    "/",
+	})
+
+	for _, schemaPath := range []string{
+		"/api-docs/part1-schemas/unknown/openapi.yaml",
+		"/api-docs/part2-schemas/unknown/openapi.yaml",
+	} {
+		recorder := httptest.NewRecorder()
+		r.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, schemaPath, nil))
+		if recorder.Code != http.StatusNotFound {
+			t.Fatalf("expected 404 for %s, got %d", schemaPath, recorder.Code)
+		}
+
+		var response []model.Message
+		if err := json.Unmarshal(recorder.Body.Bytes(), &response); err != nil {
+			t.Fatalf("expected standard error response for %s: %v", schemaPath, err)
+		}
+		if len(response) != 1 || response[0].Code != "404" || response[0].MessageType != "Error" {
+			t.Fatalf("unexpected standard error response for %s: %+v", schemaPath, response)
+		}
 	}
 }
 

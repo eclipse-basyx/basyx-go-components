@@ -33,9 +33,7 @@ package common
 
 import (
 	"errors"
-	"fmt"
 	"net/http"
-	"strconv"
 	"strings"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
@@ -80,13 +78,7 @@ func IsPostgresUniqueViolation(err error) bool {
 //
 // The struct is JSON-serializable and follows BaSyx error response format
 // for consistent API error reporting across all services.
-type ErrorHandler struct {
-	MessageType   string `json:"messageType"`             // Type of the message (e.g., "Error", "Warning")
-	Text          string `json:"text"`                    // Human-readable error description
-	Code          string `json:"code,omitempty"`          // HTTP status code as string
-	CorrelationID string `json:"correlationId,omitempty"` // Unique identifier for error tracking
-	Timestamp     string `json:"timestamp,omitempty"`     // RFC3339 formatted timestamp
-}
+type ErrorHandler = model.ErrorResponse
 
 // NewErrorHandler creates a new ErrorHandler instance with the provided parameters.
 //
@@ -364,16 +356,13 @@ func NewErrorResponse(err error, errorCode int, component string, function strin
 	if IsErrServiceUnavailable(err) {
 		errorCode = http.StatusServiceUnavailable
 	}
-	codeStr := strconv.Itoa(errorCode)
-	statusText := strings.ReplaceAll(http.StatusText(errorCode), " ", "")
-	internalCode := fmt.Sprintf("%s-%s-%s-%s-%s", component, codeStr, function, statusText, info)
+	return model.NewErrorResponse(err, errorCode, component, function, info)
+}
 
-	return model.Response(
-		errorCode,
-		[]ErrorHandler{
-			*NewErrorHandler("Error", err, codeStr, internalCode, string(GetCurrentTimestamp())),
-		},
-	)
+// WriteErrorResponse writes a standardized error response.
+func WriteErrorResponse(w http.ResponseWriter, err error, status int, component, function, info string) error {
+	response := NewErrorResponse(err, status, component, function, info)
+	return model.EncodeJSONResponse(response.Body, &response.Code, w)
 }
 
 // NewAccessDeniedResponse returns a standardized HTTP 403 Forbidden error response.

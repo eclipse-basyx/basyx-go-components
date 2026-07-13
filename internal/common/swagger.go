@@ -1521,14 +1521,14 @@ func AddSwaggerUI(r *chi.Mux, cfg SwaggerUIConfig) {
 	r.Get(part2SchemaPath, func(w http.ResponseWriter, req *http.Request) {
 		version := chi.URLParam(req, "version")
 		if version == "" {
-			http.NotFound(w, req)
+			writeSwaggerSchemaNotFound(w, "Part2", version)
 			return
 		}
 
 		schemaPath := path.Clean("swagger_part2_schemas/" + version + "/openapi.yaml")
 		schemaContent, err := fs.ReadFile(part2SchemasFS, schemaPath)
 		if err != nil {
-			http.NotFound(w, req)
+			writeSwaggerSchemaNotFound(w, "Part2", version)
 			return
 		}
 		schemaContent = localizePart1SchemaReferences(schemaContent, cfg.SpecPath)
@@ -1542,14 +1542,14 @@ func AddSwaggerUI(r *chi.Mux, cfg SwaggerUIConfig) {
 	r.Get(part1SchemaPath, func(w http.ResponseWriter, req *http.Request) {
 		version := chi.URLParam(req, "version")
 		if version == "" {
-			http.NotFound(w, req)
+			writeSwaggerSchemaNotFound(w, "Part1", version)
 			return
 		}
 
 		schemaPath := path.Clean("swagger_part1_schemas/" + version + "/openapi.yaml")
 		schemaContent, err := fs.ReadFile(part1SchemasFS, schemaPath)
 		if err != nil {
-			http.NotFound(w, req)
+			writeSwaggerSchemaNotFound(w, "Part1", version)
 			return
 		}
 
@@ -1586,6 +1586,17 @@ func AddSwaggerUI(r *chi.Mux, cfg SwaggerUIConfig) {
 
 	log.Printf("📖 Swagger UI available at %s", cfg.UIPath)
 	log.Printf("📄 OpenAPI spec available at %s", cfg.SpecPath)
+}
+
+func writeSwaggerSchemaNotFound(w http.ResponseWriter, part, version string) {
+	_ = WriteErrorResponse(
+		w,
+		fmt.Errorf("%s schema version %q was not found", part, version),
+		http.StatusNotFound,
+		"SWAGGER",
+		"ServeSchema",
+		"SchemaNotFound",
+	)
 }
 
 // AddSwaggerUIFromFS adds Swagger/OpenAPI documentation endpoints using a filesystem.

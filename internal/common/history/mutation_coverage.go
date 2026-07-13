@@ -27,10 +27,12 @@ package history
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"strings"
 	"sync"
 
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	"github.com/go-chi/chi/v5"
 )
 
@@ -275,7 +277,14 @@ func (g *MutationCoverageGuard) Middleware(next http.Handler) http.Handler {
 			next.ServeHTTP(w, r)
 			return
 		}
-		http.Error(w, unclassifiedMutationError, http.StatusInternalServerError)
+		_ = model.WriteErrorResponse(
+			w,
+			errors.New(unclassifiedMutationError),
+			http.StatusInternalServerError,
+			"HISTORY",
+			"MutationCoverageGuard",
+			"UnclassifiedMutation",
+		)
 	})
 }
 

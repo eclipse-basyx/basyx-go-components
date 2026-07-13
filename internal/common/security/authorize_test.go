@@ -404,6 +404,14 @@ func TestABACMiddleware_ModelProviderNilFailsClosed(t *testing.T) {
 	if rec.Code != http.StatusForbidden {
 		t.Fatalf("expected fail-closed status %d, got %d", http.StatusForbidden, rec.Code)
 	}
+
+	var body []common.ErrorHandler
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+		t.Fatalf("failed to decode standardized error response: %v", err)
+	}
+	if len(body) != 1 || body[0].MessageType != "Error" || body[0].Code != "403" {
+		t.Fatalf("expected standardized forbidden response, got %#v", body)
+	}
 }
 
 type emptyModelProvider struct{}

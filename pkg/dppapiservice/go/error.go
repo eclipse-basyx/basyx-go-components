@@ -40,6 +40,8 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 )
 
 var (
@@ -105,24 +107,22 @@ type ErrorHandler func(w http.ResponseWriter, r *http.Request, err error, result
 //   - err: Error returned while parsing or serving the request
 //   - result: Service response used to preserve status codes for non-parsing errors
 func DefaultErrorHandler(w http.ResponseWriter, _ *http.Request, err error, result *ImplResponse) {
+	status := http.StatusInternalServerError
+	info := "Service"
+
 	var parsingErr *ParsingError
 	if ok := errors.As(err, &parsingErr); ok {
-		// Handle parsing errors
-		_ = EncodeJSONResponse(err.Error(), func(i int) *int { return &i }(http.StatusBadRequest), w)
-		return
+		status = http.StatusBadRequest
+		info = "ParseRequest"
+	} else {
+		var requiredErr *RequiredError
+		if errors.As(err, &requiredErr) {
+			status = http.StatusUnprocessableEntity
+			info = "RequiredParameter"
+		} else if result != nil && result.Code != 0 {
+			status = result.Code
+		}
 	}
 
-	var requiredErr *RequiredError
-	if ok := errors.As(err, &requiredErr); ok {
-		// Handle missing required errors
-		_ = EncodeJSONResponse(err.Error(), func(i int) *int { return &i }(http.StatusUnprocessableEntity), w)
-		return
-	}
-
-	// Handle all other errors
-	status := http.StatusInternalServerError
-	if result != nil && result.Code != 0 {
-		status = result.Code
-	}
-	_ = EncodeJSONResponse(err.Error(), &status, w)
+	_ = model.WriteErrorResponse(w, err, status, "DPP", "DefaultErrorHandler", info)
 }

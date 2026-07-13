@@ -26,6 +26,7 @@
 package history
 
 import (
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -181,7 +182,7 @@ func TestMutationCoverageGuardRejectsUnclassifiedMutation(t *testing.T) {
 
 	require.False(t, handlerCalled)
 	require.Equal(t, http.StatusInternalServerError, recorder.Code)
-	require.Contains(t, recorder.Body.String(), "HISTORY-COVERAGE-UNCLASSIFIED")
+	assertMutationCoverageErrorResponse(t, recorder.Body.Bytes())
 }
 
 func TestMutationCoverageGuardPreservesRouterMethodNotAllowedResponse(t *testing.T) {
@@ -200,7 +201,22 @@ func TestMutationCoverageGuardPreservesRouterMethodNotAllowedResponse(t *testing
 	recorder = httptest.NewRecorder()
 	router.ServeHTTP(recorder, httptest.NewRequest(http.MethodPost, "/known-mutation", nil))
 	require.Equal(t, http.StatusInternalServerError, recorder.Code)
-	require.Contains(t, recorder.Body.String(), "HISTORY-COVERAGE-UNCLASSIFIED")
+	assertMutationCoverageErrorResponse(t, recorder.Body.Bytes())
+}
+
+func assertMutationCoverageErrorResponse(t *testing.T, responseBody []byte) {
+	t.Helper()
+
+	var body []struct {
+		MessageType string `json:"messageType"`
+		Text        string `json:"text"`
+		Code        string `json:"code"`
+	}
+	require.NoError(t, json.Unmarshal(responseBody, &body))
+	require.Len(t, body, 1)
+	require.Equal(t, "Error", body[0].MessageType)
+	require.Equal(t, "500", body[0].Code)
+	require.Contains(t, body[0].Text, "HISTORY-COVERAGE-UNCLASSIFIED")
 }
 
 func TestMutationCoverageGuardAllowsMutationWhenHistoryIsOff(t *testing.T) {

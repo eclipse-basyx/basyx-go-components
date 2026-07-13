@@ -702,7 +702,7 @@ func writeError(w http.ResponseWriter, err error) {
 	case common.IsErrServiceUnavailable(err):
 		status = http.StatusServiceUnavailable
 	}
-	writeJSON(w, map[string]any{"error": err.Error()}, status)
+	_ = common.WriteErrorResponse(w, err, status, "ABACPOLICY", "API", "Request")
 }
 
 func writeJSON(w http.ResponseWriter, body any, status int) {

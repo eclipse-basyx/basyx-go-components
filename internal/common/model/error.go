@@ -38,6 +38,9 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strconv"
+	"strings"
+	"time"
 )
 
 var (
@@ -72,6 +75,30 @@ func (e *RequiredError) Error() string {
 	return fmt.Sprintf("required field '%s' is zero value.", e.Field)
 }
 
+// ErrorResponse is the standardized BaSyx HTTP error payload.
+type ErrorResponse = Message
+
+// NewErrorResponse creates a standardized error response.
+func NewErrorResponse(err error, status int, component, function, info string) ImplResponse {
+	code := strconv.Itoa(status)
+	statusText := strings.ReplaceAll(http.StatusText(status), " ", "")
+	correlationID := fmt.Sprintf("%s-%s-%s-%s-%s", component, code, function, statusText, info)
+
+	return Response(status, []Message{{
+		MessageType:   "Error",
+		Text:          err.Error(),
+		Code:          code,
+		CorrelationID: correlationID,
+		Timestamp:     time.Now().Format(time.RFC3339),
+	}})
+}
+
+// WriteErrorResponse writes a standardized error response.
+func WriteErrorResponse(w http.ResponseWriter, err error, status int, component, function, info string) error {
+	response := NewErrorResponse(err, status, component, function, info)
+	return EncodeJSONResponse(response.Body, &response.Code, w)
+}
+
 // ErrorHandler defines the required method for handling error. You may implement it and inject this into a controller if
 // you would like errors to be handled differently from the DefaultErrorHandler
 type ErrorHandler func(w http.ResponseWriter, r *http.Request, err error, result *ImplResponse)
@@ -81,18 +108,19 @@ type ErrorHandler func(w http.ResponseWriter, r *http.Request, err error, result
 func DefaultErrorHandler(w http.ResponseWriter, _ *http.Request, err error, result *ImplResponse) {
 	var parsingErr *ParsingError
 	if ok := errors.As(err, &parsingErr); ok {
-		// Handle parsing errors
-		_ = EncodeJSONResponse(err.Error(), func(i int) *int { return &i }(http.StatusBadRequest), w)
+		_ = WriteErrorResponse(w, err, http.StatusBadRequest, "OPENAPI", "DefaultErrorHandler", "ParseRequest")
 		return
 	}
 
 	var requiredErr *RequiredError
 	if ok := errors.As(err, &requiredErr); ok {
-		// Handle missing required errors
-		_ = EncodeJSONResponse(err.Error(), func(i int) *int { return &i }(http.StatusUnprocessableEntity), w)
+		_ = WriteErrorResponse(w, err, http.StatusUnprocessableEntity, "OPENAPI", "DefaultErrorHandler", "RequiredParameter")
 		return
 	}
 
-	// Handle all other errors
-	_ = EncodeJSONResponse(err.Error(), &result.Code, w)
+	status := http.StatusInternalServerError
+	if result != nil && result.Code != 0 {
+		status = result.Code
+	}
+	_ = WriteErrorResponse(w, err, status, "OPENAPI", "DefaultErrorHandler", "Service")
 }
