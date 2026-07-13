@@ -56,26 +56,28 @@ type ErrorHandler func(w http.ResponseWriter, r *http.Request, err error, result
 // DefaultErrorHandler defines the default logic on how to handle errors from the controller. Any errors from parsing
 // request params will return a StatusBadRequest. Otherwise, the error code originating from the servicer will be used.
 func DefaultErrorHandler(w http.ResponseWriter, _ *http.Request, err error, result *model.ImplResponse) {
+	status := http.StatusInternalServerError
+	info := "Service"
+
 	var parsingErr *ParsingError
 	if ok := errors.As(err, &parsingErr); ok {
+		status = http.StatusBadRequest
+		info = "ParseRequest"
 		var maxBytesErr *http.MaxBytesError
 		if errors.As(parsingErr.Err, &maxBytesErr) {
-			_ = EncodeJSONResponse("request body too large", func(i int) *int { return &i }(http.StatusRequestEntityTooLarge), w)
-			return
+			status = http.StatusRequestEntityTooLarge
+			info = "RequestBodyTooLarge"
 		}
-
-		// Handle parsing errors
-		_ = EncodeJSONResponse(err.Error(), func(i int) *int { return &i }(http.StatusBadRequest), w)
-		return
+	} else {
+		var requiredErr *RequiredError
+		var modelRequiredErr *model.RequiredError
+		if errors.As(err, &requiredErr) || errors.As(err, &modelRequiredErr) {
+			status = http.StatusUnprocessableEntity
+			info = "RequiredParameter"
+		} else if result != nil && result.Code != 0 {
+			status = result.Code
+		}
 	}
 
-	var requiredErr *RequiredError
-	if ok := errors.As(err, &requiredErr); ok {
-		// Handle missing required errors
-		_ = EncodeJSONResponse(err.Error(), func(i int) *int { return &i }(http.StatusUnprocessableEntity), w)
-		return
-	}
-
-	// Handle all other errors
-	_ = EncodeJSONResponse(err.Error(), &result.Code, w)
+	_ = model.WriteErrorResponse(w, err, status, "SMREPO", "DefaultErrorHandler", info)
 }

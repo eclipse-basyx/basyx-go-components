@@ -109,7 +109,7 @@ func writeHealthResponse(w http.ResponseWriter, statusCode int, body map[string]
 	responsePayload, err := json.Marshal(body)
 	if err != nil {
 		log.Printf("COMMON-WRITEHEALTH-MARSHAL response marshal failed: %v", err)
-		http.Error(w, "Failed to write response", http.StatusInternalServerError)
+		_ = WriteErrorResponse(w, err, http.StatusInternalServerError, "COMMON", "WriteHealthResponse", "MarshalResponse")
 		return
 	}
 
@@ -135,19 +135,26 @@ func AddVerificationEndpoint(r chi.Router, config *Config) {
 			var maxBytesError *http.MaxBytesError
 			if errors.As(err, &maxBytesError) {
 				log.Printf("COMMON-VERIFY-PAYLOAD-MAXSIZE exceeded max payload size of %d bytes: %v", maxPayloadBytes, err)
-				http.Error(w, fmt.Sprintf("Payload exceeds max size of %d bytes", maxPayloadBytes), http.StatusRequestEntityTooLarge)
+				_ = WriteErrorResponse(
+					w,
+					fmt.Errorf("payload exceeds max size of %d bytes", maxPayloadBytes),
+					http.StatusRequestEntityTooLarge,
+					"COMMON",
+					"VerifyPayload",
+					"PayloadTooLarge",
+				)
 				return
 			}
 
 			log.Printf("COMMON-VERIFY-PAYLOAD failed to verify payload: %v", err)
-			http.Error(w, "Failed to verify payload: "+err.Error(), http.StatusBadRequest)
+			_ = WriteErrorResponse(w, err, http.StatusBadRequest, "COMMON", "VerifyPayload", "InvalidPayload")
 			return
 		}
 
 		responsePayload, err := json.Marshal(verificationResult)
 		if err != nil {
 			log.Printf("COMMON-VERIFY-PAYLOAD-MARSHAL failed to marshal verification result: %v", err)
-			http.Error(w, "Failed to write response", http.StatusInternalServerError)
+			_ = WriteErrorResponse(w, err, http.StatusInternalServerError, "COMMON", "VerifyPayload", "MarshalResponse")
 			return
 		}
 

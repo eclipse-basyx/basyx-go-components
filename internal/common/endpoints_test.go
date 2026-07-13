@@ -451,6 +451,7 @@ func TestAddVerificationEndpoint_RejectsRawPayloadOverConfiguredLimit(t *testing
 	if rec.Code != http.StatusRequestEntityTooLarge {
 		t.Fatalf("expected status %d, got %d body=%s", http.StatusRequestEntityTooLarge, rec.Code, rec.Body.String())
 	}
+	assertStandardErrorResponse(t, rec.Body.Bytes(), "413")
 }
 
 func TestAddVerificationEndpoint_RejectsMultipartPayloadOverConfiguredLimit(t *testing.T) {
@@ -482,5 +483,24 @@ func TestAddVerificationEndpoint_RejectsMultipartPayloadOverConfiguredLimit(t *t
 
 	if rec.Code != http.StatusRequestEntityTooLarge {
 		t.Fatalf("expected status %d, got %d body=%s", http.StatusRequestEntityTooLarge, rec.Code, rec.Body.String())
+	}
+	assertStandardErrorResponse(t, rec.Body.Bytes(), "413")
+}
+
+func assertStandardErrorResponse(t *testing.T, responseBody []byte, expectedCode string) {
+	t.Helper()
+
+	var body []ErrorHandler
+	if err := json.Unmarshal(responseBody, &body); err != nil {
+		t.Fatalf("failed to decode standardized error response: %v", err)
+	}
+	if len(body) != 1 {
+		t.Fatalf("expected one error entry, got %d", len(body))
+	}
+	if body[0].MessageType != "Error" || body[0].Code != expectedCode {
+		t.Fatalf("expected standardized error code %q, got %#v", expectedCode, body[0])
+	}
+	if body[0].CorrelationID == "" || body[0].Timestamp == "" {
+		t.Fatalf("expected correlation ID and timestamp, got %#v", body[0])
 	}
 }

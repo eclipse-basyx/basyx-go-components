@@ -35,7 +35,6 @@ import (
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
-	openapi "github.com/eclipse-basyx/basyx-go-components/pkg/discoveryapi"
 )
 
 // ABACSettings defines the configuration used to enable and control
@@ -107,7 +106,14 @@ func ABACMiddleware(settings ABACSettings) func(http.Handler) http.Handler {
 
 			claims := FromContext(r)
 			if claims == nil {
-				http.Error(w, "missing claims context", http.StatusUnauthorized)
+				_ = common.WriteErrorResponse(
+					w,
+					errors.New("missing claims context"),
+					http.StatusUnauthorized,
+					"Middleware",
+					"ABACMiddleware",
+					"MissingClaims",
+				)
 				return
 			}
 
@@ -143,11 +149,8 @@ func ABACMiddleware(settings ABACSettings) func(http.Handler) http.Handler {
 
 					log.Printf("❌ ABAC(model): %s", evaluation.Reason)
 
-					resp := common.NewErrorResponse(errors.New("access denied"), http.StatusForbidden, "Middleware", "Rules", "Denied")
-					err := openapi.EncodeJSONResponse(resp.Body, &resp.Code, w)
-					if err != nil {
+					if err := common.WriteErrorResponse(w, errors.New("access denied"), http.StatusForbidden, "Middleware", "Rules", "Denied"); err != nil {
 						log.Printf("❌ Failed to encode error response: %v", err)
-						http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 					}
 					return
 				}
@@ -165,7 +168,14 @@ func ABACMiddleware(settings ABACSettings) func(http.Handler) http.Handler {
 				return
 			}
 
-			http.Error(w, "resource resolution failed", http.StatusForbidden)
+			_ = common.WriteErrorResponse(
+				w,
+				errors.New("resource resolution failed"),
+				http.StatusForbidden,
+				"Middleware",
+				"ABACMiddleware",
+				"ResourceResolution",
+			)
 		})
 	}
 }

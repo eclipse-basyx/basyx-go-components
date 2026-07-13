@@ -14,6 +14,8 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 )
 
 var (
@@ -55,20 +57,22 @@ type ErrorHandler func(w http.ResponseWriter, r *http.Request, err error, result
 // DefaultErrorHandler defines the default logic on how to handle errors from the controller. Any errors from parsing
 // request params will return a StatusBadRequest. Otherwise, the error code originating from the servicer will be used.
 func DefaultErrorHandler(w http.ResponseWriter, _ *http.Request, err error, result *ImplResponse) {
+	status := http.StatusInternalServerError
+	info := "Service"
+
 	var parsingErr *ParsingError
 	if ok := errors.As(err, &parsingErr); ok {
-		// Handle parsing errors
-		_ = EncodeJSONResponse(err.Error(), func(i int) *int { return &i }(http.StatusBadRequest), w)
-		return
+		status = http.StatusBadRequest
+		info = "ParseRequest"
+	} else {
+		var requiredErr *RequiredError
+		if errors.As(err, &requiredErr) {
+			status = http.StatusUnprocessableEntity
+			info = "RequiredParameter"
+		} else if result != nil && result.Code != 0 {
+			status = result.Code
+		}
 	}
 
-	var requiredErr *RequiredError
-	if ok := errors.As(err, &requiredErr); ok {
-		// Handle missing required errors
-		_ = EncodeJSONResponse(err.Error(), func(i int) *int { return &i }(http.StatusUnprocessableEntity), w)
-		return
-	}
-
-	// Handle all other errors
-	_ = EncodeJSONResponse(err.Error(), &result.Code, w)
+	_ = model.WriteErrorResponse(w, err, status, "AASXFILES", "DefaultErrorHandler", info)
 }
