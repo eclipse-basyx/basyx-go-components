@@ -71,18 +71,32 @@ func (su *SchemaUpload) Execute(stepIndex int) (int, error) {
 		return 1, fmt.Errorf("BASYXCFG-SCHEMA-READFILE: %w", err)
 	}
 
-	if _, err = su.ctx.DB.Exec(string(schemaSQL)); err != nil {
-		if isRc01UpgradeError(err) {
-			if err = su.applyRc01Compatibility(schemaToLoad); err != nil {
-				return 1, err
-			}
-		}
-
-		return su.Execute(stepIndex)
+	if err = su.executeSchemaWithRc01Compatibility(schemaToLoad, string(schemaSQL)); err != nil {
+		return 1, err
 	}
 
 	_, _ = fmt.Printf("[Step %d] Schema upload completed\n", stepIndex)
 	return 0, nil
+}
+
+func (su *SchemaUpload) executeSchemaWithRc01Compatibility(schemaPath string, schemaSQL string) error {
+	err := su.executeSchema(schemaSQL)
+	if err == nil || !isRc01UpgradeError(err) {
+		return err
+	}
+
+	if err = su.applyRc01Compatibility(schemaPath); err != nil {
+		return err
+	}
+
+	return su.executeSchema(schemaSQL)
+}
+
+func (su *SchemaUpload) executeSchema(schemaSQL string) error {
+	if _, err := su.ctx.DB.Exec(schemaSQL); err != nil {
+		return fmt.Errorf("BASYXCFG-SCHEMA-EXECUTE: %w", err)
+	}
+	return nil
 }
 
 func (su *SchemaUpload) resolveSchemaPath() (string, error) {

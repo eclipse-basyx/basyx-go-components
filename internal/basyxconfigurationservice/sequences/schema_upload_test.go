@@ -26,7 +26,9 @@
 package sequences
 
 import (
+	"errors"
 	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"testing"
@@ -204,6 +206,95 @@ func TestSchemaUploadExecuteReturnsLockError(t *testing.T) {
 	}
 }
 
+func TestSchemaUploadExecuteReturnsSchemaExecutionError(t *testing.T) {
+	schema := "THIS IS NOT VALID SQL;"
+	step, mock := newSchemaUploadTestStep(t, writeTempSchema(t, schema))
+	schemaErr := errors.New("invalid schema")
+
+	expectSchemaAdvisoryLock(mock)
+	mock.ExpectExec(regexp.QuoteMeta(schema)).
+		WillReturnError(schemaErr)
+	expectSchemaAdvisoryUnlock(mock)
+
+	statusCode, execErr := step.Execute(3)
+	if execErr == nil {
+		t.Fatal("expected error, got nil")
+	}
+	if statusCode != 1 {
+		t.Fatalf("expected status code 1, got %d", statusCode)
+	}
+	if !strings.Contains(execErr.Error(), "BASYXCFG-SCHEMA-EXECUTE") {
+		t.Fatalf("unexpected error: %v", execErr)
+	}
+	if !errors.Is(execErr, schemaErr) {
+		t.Fatalf("expected schema execution cause, got: %v", execErr)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("unmet SQL expectations: %v", err)
+	}
+}
+
+func TestSchemaUploadExecuteAppliesRc01CompatibilityAndRetriesOnce(t *testing.T) {
+	schema := "CREATE TABLE IF NOT EXISTS test_table (id INT PRIMARY KEY);"
+	compatibilitySQL := "ALTER TABLE test_table ADD COLUMN db_created_at TIMESTAMPTZ;"
+	schemaPath := writeTempSchemaWithCompatibility(t, schema, compatibilitySQL)
+	step, mock := newSchemaUploadTestStep(t, schemaPath)
+
+	expectSchemaAdvisoryLock(mock)
+	mock.ExpectExec(regexp.QuoteMeta(schema)).
+		WillReturnError(newRc01PgError())
+	mock.ExpectExec(regexp.QuoteMeta(compatibilitySQL)).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectExec(regexp.QuoteMeta(schema)).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	expectSchemaAdvisoryUnlock(mock)
+
+	statusCode, execErr := step.Execute(3)
+	if execErr != nil {
+		t.Fatalf("unexpected error: %v", execErr)
+	}
+	if statusCode != 0 {
+		t.Fatalf("expected status code 0, got %d", statusCode)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("unmet SQL expectations: %v", err)
+	}
+}
+
+func TestSchemaUploadExecuteReturnsErrorAfterFailedRc01Retry(t *testing.T) {
+	schema := "CREATE TABLE IF NOT EXISTS test_table (id INT PRIMARY KEY);"
+	compatibilitySQL := "ALTER TABLE test_table ADD COLUMN db_created_at TIMESTAMPTZ;"
+	schemaPath := writeTempSchemaWithCompatibility(t, schema, compatibilitySQL)
+	step, mock := newSchemaUploadTestStep(t, schemaPath)
+	retryErr := newRc01PgError()
+
+	expectSchemaAdvisoryLock(mock)
+	mock.ExpectExec(regexp.QuoteMeta(schema)).
+		WillReturnError(newRc01PgError())
+	mock.ExpectExec(regexp.QuoteMeta(compatibilitySQL)).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectExec(regexp.QuoteMeta(schema)).
+		WillReturnError(retryErr)
+	expectSchemaAdvisoryUnlock(mock)
+
+	statusCode, execErr := step.Execute(3)
+	if execErr == nil {
+		t.Fatal("expected error, got nil")
+	}
+	if statusCode != 1 {
+		t.Fatalf("expected status code 1, got %d", statusCode)
+	}
+	if !strings.Contains(execErr.Error(), "BASYXCFG-SCHEMA-EXECUTE") {
+		t.Fatalf("unexpected error: %v", execErr)
+	}
+	if !errors.Is(execErr, retryErr) {
+		t.Fatalf("expected retry failure cause, got: %v", execErr)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("unmet SQL expectations: %v", err)
+	}
+}
+
 func writeTempSchema(t *testing.T, sql string) string {
 	t.Helper()
 	path := t.TempDir() + "/schema.sql"
@@ -211,4 +302,38 @@ func writeTempSchema(t *testing.T, sql string) string {
 		t.Fatalf("write schema file: %v", err)
 	}
 	return path
+}
+
+func writeTempSchemaWithCompatibility(t *testing.T, schemaSQL string, compatibilitySQL string) string {
+	t.Helper()
+	schemaPath := writeTempSchema(t, schemaSQL)
+	compatibilityPath := filepath.Join(filepath.Dir(schemaPath), rc01CompatibilitySchemaFileName)
+	if err := os.WriteFile(compatibilityPath, []byte(compatibilitySQL), 0o600); err != nil {
+		t.Fatalf("write compatibility schema: %v", err)
+	}
+	return schemaPath
+}
+
+func newSchemaUploadTestStep(t *testing.T, schemaPath string) (*SchemaUpload, sqlmock.Sqlmock) {
+	t.Helper()
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("sqlmock.New() failed: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = db.Close()
+	})
+	return NewSchemaUpload(&ExecutionContext{DB: db}, schemaPath), mock
+}
+
+func expectSchemaAdvisoryLock(mock sqlmock.Sqlmock) {
+	mock.ExpectExec(regexp.QuoteMeta("SELECT pg_advisory_lock($1)")).
+		WithArgs(schemaAdvisoryLockID).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+}
+
+func expectSchemaAdvisoryUnlock(mock sqlmock.Sqlmock) {
+	mock.ExpectExec(regexp.QuoteMeta("SELECT pg_advisory_unlock($1)")).
+		WithArgs(schemaAdvisoryLockID).
+		WillReturnResult(sqlmock.NewResult(0, 1))
 }

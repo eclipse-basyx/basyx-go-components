@@ -30,10 +30,14 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 )
 
 const (
 	errCaseRc01UpgradeFieldErr      = "pq: column \"db_created_at\" does not exist (42703)"
+	rc01MissingColumnMessage        = "column \"db_created_at\" does not exist"
+	rc01UndefinedColumnPostgresCode = "42703"
 	rc01CompatibilitySchemaFileName = "rc1_compatibility.sql"
 )
 
@@ -51,5 +55,14 @@ func (su *SchemaUpload) applyRc01Compatibility(schemaToLoad string) error {
 }
 
 func isRc01UpgradeError(err error) bool {
-	return strings.HasSuffix(err.Error(), errCaseRc01UpgradeFieldErr)
+	if err == nil {
+		return false
+	}
+
+	errorMessage := err.Error()
+	isLegacyError := strings.HasSuffix(errorMessage, errCaseRc01UpgradeFieldErr)
+	isUndefinedTimestampColumn := common.IsPostgresErrorCode(err, rc01UndefinedColumnPostgresCode) &&
+		strings.Contains(errorMessage, rc01MissingColumnMessage)
+
+	return isLegacyError || isUndefinedTimestampColumn
 }
