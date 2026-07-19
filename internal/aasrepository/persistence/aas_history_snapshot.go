@@ -137,6 +137,11 @@ func mergeAssetInformationSnapshot(current map[string]any, updated map[string]an
 	if assetInformation.SpecificAssetIDs() != nil {
 		current["specificAssetIds"] = updated["specificAssetIds"]
 	}
+	if assetInformation.DefaultThumbnail() == nil {
+		delete(current, aasDefaultThumbnailSnapshotField)
+	} else {
+		current[aasDefaultThumbnailSnapshotField] = updated[aasDefaultThumbnailSnapshotField]
+	}
 }
 
 func loadThumbnailSnapshotTx(ctx context.Context, tx *sql.Tx, aasIdentifier string) (map[string]any, error) {

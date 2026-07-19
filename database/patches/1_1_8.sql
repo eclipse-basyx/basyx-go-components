@@ -19,6 +19,7 @@ CREATE TABLE IF NOT EXISTS binary_content (
   sha256 CHAR(64) NOT NULL,
   size_bytes BIGINT NOT NULL CHECK (size_bytes >= 0),
   file_oid OID NOT NULL,
+  reference_count BIGINT NOT NULL DEFAULT 0 CHECK (reference_count >= 0),
   db_created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   UNIQUE (sha256, size_bytes),
   UNIQUE (file_oid)
@@ -134,152 +135,73 @@ CREATE TABLE IF NOT EXISTS binary_reference_evidence_artifacts (
   UNIQUE (mutation_artifact_id, model_path)
 );
 
-CREATE OR REPLACE FUNCTION cleanup_unreferenced_binary_content()
-RETURNS TRIGGER
+CREATE INDEX IF NOT EXISTS ix_binary_reference_evidence_content
+  ON binary_reference_evidence_artifacts(binary_content_id);
+
+CREATE OR REPLACE FUNCTION unlink_binary_content_when_unreferenced(content_id BIGINT)
+RETURNS VOID
 LANGUAGE plpgsql
 AS $$
 DECLARE
   orphaned_oid OID;
+  remaining_references BIGINT;
 BEGIN
-  IF EXISTS (
-    SELECT 1 FROM file_binary_reference WHERE binary_content_id = OLD.binary_content_id
-    UNION ALL
-    SELECT 1 FROM thumbnail_binary_reference WHERE binary_content_id = OLD.binary_content_id
-  ) THEN
-    RETURN OLD;
-  END IF;
+  UPDATE binary_content
+  SET reference_count = reference_count - 1
+  WHERE id = content_id
+  RETURNING reference_count INTO remaining_references;
 
-  DELETE FROM binary_content
-  WHERE id = OLD.binary_content_id
-  RETURNING file_oid INTO orphaned_oid;
+  IF remaining_references = 0 THEN
+    DELETE FROM binary_content
+    WHERE id = content_id
+    RETURNING file_oid INTO orphaned_oid;
+  END IF;
 
   IF orphaned_oid IS NOT NULL THEN
     PERFORM lo_unlink(orphaned_oid);
   END IF;
-  RETURN OLD;
+  RETURN;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION maintain_binary_content_reference_count()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  IF TG_OP = 'INSERT' THEN
+    UPDATE binary_content
+    SET reference_count = reference_count + 1
+    WHERE id = NEW.binary_content_id;
+    RETURN NEW;
+  END IF;
+
+  IF TG_OP = 'UPDATE' AND OLD.binary_content_id IS DISTINCT FROM NEW.binary_content_id THEN
+    UPDATE binary_content
+    SET reference_count = reference_count + 1
+    WHERE id = NEW.binary_content_id;
+    PERFORM unlink_binary_content_when_unreferenced(OLD.binary_content_id);
+    RETURN NEW;
+  END IF;
+
+  IF TG_OP = 'DELETE' THEN
+    PERFORM unlink_binary_content_when_unreferenced(OLD.binary_content_id);
+    RETURN OLD;
+  END IF;
+
+  RETURN NEW;
 END;
 $$;
 
 DROP TRIGGER IF EXISTS cleanup_file_binary_content ON file_binary_reference;
 CREATE TRIGGER cleanup_file_binary_content
-AFTER DELETE ON file_binary_reference
-FOR EACH ROW EXECUTE FUNCTION cleanup_unreferenced_binary_content();
+AFTER INSERT OR UPDATE OF binary_content_id OR DELETE ON file_binary_reference
+FOR EACH ROW EXECUTE FUNCTION maintain_binary_content_reference_count();
 
 DROP TRIGGER IF EXISTS cleanup_thumbnail_binary_content ON thumbnail_binary_reference;
 CREATE TRIGGER cleanup_thumbnail_binary_content
-AFTER DELETE ON thumbnail_binary_reference
-FOR EACH ROW EXECUTE FUNCTION cleanup_unreferenced_binary_content();
-
-CREATE EXTENSION IF NOT EXISTS pgcrypto;
-
-SELECT pg_advisory_xact_lock(hashtextextended('basyx-binary-content-v1.1.8', 0));
-
-CREATE TEMPORARY TABLE IF NOT EXISTS legacy_binary_conversion (
-  owner_type TEXT NOT NULL,
-  owner_id BIGINT NOT NULL,
-  file_oid OID NOT NULL,
-  sha256 CHAR(64) NOT NULL,
-  size_bytes BIGINT NOT NULL,
-  path_token VARCHAR(64) NOT NULL,
-  safe_file_name TEXT NOT NULL,
-  PRIMARY KEY (owner_type, owner_id)
-);
-
-TRUNCATE legacy_binary_conversion;
-
-INSERT INTO legacy_binary_conversion (
-  owner_type, owner_id, file_oid, sha256, size_bytes, path_token, safe_file_name
-)
-SELECT
-  'file', source.owner_id, source.file_oid,
-  encode(digest(source.payload, 'sha256'), 'hex'), octet_length(source.payload),
-  encode(gen_random_bytes(24), 'hex'),
-  CASE WHEN source.safe_file_name IN ('', '.', '..') THEN 'attachment' ELSE source.safe_file_name END
-FROM (
-  SELECT
-    data.id AS owner_id,
-    data.file_oid,
-    lo_get(data.file_oid) AS payload,
-    regexp_replace(COALESCE(NULLIF(BTRIM(element.file_name), ''), 'attachment'), '[^A-Za-z0-9._-]', '_', 'g') AS safe_file_name
-  FROM file_data AS data
-  JOIN file_element AS element ON element.id = data.id
-  WHERE data.file_oid IS NOT NULL
-) AS source
-ON CONFLICT (owner_type, owner_id) DO NOTHING;
-
-INSERT INTO legacy_binary_conversion (
-  owner_type, owner_id, file_oid, sha256, size_bytes, path_token, safe_file_name
-)
-SELECT
-  'thumbnail', source.owner_id, source.file_oid,
-  encode(digest(source.payload, 'sha256'), 'hex'), octet_length(source.payload),
-  encode(gen_random_bytes(24), 'hex'),
-  CASE WHEN source.safe_file_name IN ('', '.', '..') THEN 'thumbnail' ELSE source.safe_file_name END
-FROM (
-  SELECT
-    data.id AS owner_id,
-    data.file_oid,
-    lo_get(data.file_oid) AS payload,
-    regexp_replace(COALESCE(NULLIF(BTRIM(element.file_name), ''), 'thumbnail'), '[^A-Za-z0-9._-]', '_', 'g') AS safe_file_name
-  FROM thumbnail_file_data AS data
-  JOIN thumbnail_file_element AS element ON element.id = data.id
-  WHERE data.file_oid IS NOT NULL
-) AS source
-ON CONFLICT (owner_type, owner_id) DO NOTHING;
-
-INSERT INTO binary_content (sha256, size_bytes, file_oid)
-SELECT DISTINCT ON (sha256, size_bytes) sha256, size_bytes, file_oid
-FROM legacy_binary_conversion
-ORDER BY sha256, size_bytes, owner_type, owner_id
-ON CONFLICT (sha256, size_bytes) DO NOTHING;
-
-INSERT INTO file_binary_reference (
-  file_element_id, binary_content_id, path_token, safe_file_name
-)
-SELECT conversion.owner_id, content.id, conversion.path_token, conversion.safe_file_name
-FROM legacy_binary_conversion AS conversion
-JOIN binary_content AS content
-  ON content.sha256 = conversion.sha256 AND content.size_bytes = conversion.size_bytes
-WHERE conversion.owner_type = 'file'
-ON CONFLICT (file_element_id) DO NOTHING;
-
-INSERT INTO thumbnail_binary_reference (
-  thumbnail_element_id, binary_content_id, path_token, safe_file_name
-)
-SELECT conversion.owner_id, content.id, conversion.path_token, conversion.safe_file_name
-FROM legacy_binary_conversion AS conversion
-JOIN binary_content AS content
-  ON content.sha256 = conversion.sha256 AND content.size_bytes = conversion.size_bytes
-WHERE conversion.owner_type = 'thumbnail'
-ON CONFLICT (thumbnail_element_id) DO NOTHING;
-
-UPDATE file_element AS element
-SET value = '/aasx/files/' || reference.path_token || '/' || reference.safe_file_name,
-    file_name = COALESCE(NULLIF(BTRIM(element.file_name), ''), reference.safe_file_name),
-    db_updated_at = NOW()
-FROM file_binary_reference AS reference
-WHERE reference.file_element_id = element.id;
-
-UPDATE thumbnail_file_element AS element
-SET value = '/aasx/files/' || reference.path_token || '/' || reference.safe_file_name,
-    file_name = COALESCE(NULLIF(BTRIM(element.file_name), ''), reference.safe_file_name),
-    db_updated_at = NOW()
-FROM thumbnail_binary_reference AS reference
-WHERE reference.thumbnail_element_id = element.id;
-
-SELECT lo_unlink(duplicate.file_oid)
-FROM (
-  SELECT DISTINCT conversion.file_oid
-  FROM legacy_binary_conversion AS conversion
-  WHERE NOT EXISTS (
-    SELECT 1 FROM binary_content AS content WHERE content.file_oid = conversion.file_oid
-  )
-) AS duplicate;
-
-DELETE FROM file_data;
-DELETE FROM thumbnail_file_data;
-
-DROP TABLE legacy_binary_conversion;
+AFTER INSERT OR UPDATE OF binary_content_id OR DELETE ON thumbnail_binary_reference
+FOR EACH ROW EXECUTE FUNCTION maintain_binary_content_reference_count();
 
 UPDATE basyxsystem
 SET schema_version = 'v1.1.8',

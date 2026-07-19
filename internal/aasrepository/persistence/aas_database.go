@@ -496,7 +496,7 @@ func (s *AssetAdministrationShellDatabase) createAssetAdministrationShellInTrans
 		return common.NewInternalServerError("AASREPO-NEWAAS-CREATE-EXECASSETINFORMATIONSQL " + err.Error())
 	}
 
-	if err := upsertDefaultThumbnailForAssetInformation(tx, &dialect, aasDBID, aas.AssetInformation(), "AASREPO-NEWAAS-CREATE"); err != nil {
+	if err := upsertDefaultThumbnailForAssetInformation(tx, &dialect, aasDBID, aas.AssetInformation(), "AASREPO-NEWAAS-CREATE", false); err != nil {
 		return err
 	}
 
@@ -1335,7 +1335,7 @@ func updateAssetInformationRecord(
 		return common.NewErrNotFound("AASREPO-PUTASSETINFO-ASSETINFONOTFOUND Asset Information for Asset Administration Shell with ID '" + aasIdentifier + "' not found")
 	}
 
-	return upsertDefaultThumbnailForAssetInformation(tx, dialect, aasDBID, assetInformation, "AASREPO-PUTASSETINFO")
+	return upsertDefaultThumbnailForAssetInformation(tx, dialect, aasDBID, assetInformation, "AASREPO-PUTASSETINFO", true)
 }
 
 func upsertDefaultThumbnailForAssetInformation(
@@ -1344,13 +1344,27 @@ func upsertDefaultThumbnailForAssetInformation(
 	aasDBID int64,
 	assetInformation types.IAssetInformation,
 	errorPrefix string,
+	replaceExisting bool,
 ) error {
 	thumbnail, thumbnailPath := defaultThumbnailWithPath(assetInformation)
-	if thumbnail == nil {
-		return nil
+	if replaceExisting || thumbnail != nil {
+		if err := clearInternalThumbnailStorageTx(tx, aasDBID, errorPrefix); err != nil {
+			return err
+		}
 	}
-	if err := clearInternalThumbnailStorageTx(tx, aasDBID, errorPrefix); err != nil {
-		return err
+	if thumbnail == nil {
+		if !replaceExisting {
+			return nil
+		}
+		deleteSQL, deleteArgs, buildErr := dialect.Delete("thumbnail_file_element").
+			Where(goqu.C("id").Eq(aasDBID)).ToSQL()
+		if buildErr != nil {
+			return common.NewInternalServerError(errorPrefix + "-BUILDDELETETHUMBNAILSQL " + buildErr.Error())
+		}
+		if _, execErr := tx.Exec(deleteSQL, deleteArgs...); execErr != nil {
+			return common.NewInternalServerError(errorPrefix + "-EXECDELETETHUMBNAILSQL " + execErr.Error())
+		}
+		return nil
 	}
 
 	upsertSQL, upsertArgs, buildErr := buildUpsertDefaultThumbnailQuery(dialect, aasDBID, thumbnail, thumbnailPath)

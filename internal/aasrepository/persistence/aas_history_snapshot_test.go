@@ -32,7 +32,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestMergeAssetInformationSnapshotPreservesOmittedFieldsAndThumbnail(t *testing.T) {
+func TestMergeAssetInformationSnapshotClearsOmittedThumbnailOnReplacement(t *testing.T) {
 	current := map[string]any{
 		"assetKind":        "Type",
 		"globalAssetId":    "old-global",
@@ -53,7 +53,7 @@ func TestMergeAssetInformationSnapshotPreservesOmittedFieldsAndThumbnail(t *test
 	require.Equal(t, newGlobalID, current["globalAssetId"])
 	require.Equal(t, "old-type", current["assetType"])
 	require.Equal(t, []any{map[string]any{"name": "old"}}, current["specificAssetIds"])
-	require.Equal(t, map[string]any{"path": "thumbnail"}, current["defaultThumbnail"])
+	require.NotContains(t, current, "defaultThumbnail")
 }
 
 func TestSnapshotReferenceContainsKeyValue(t *testing.T) {

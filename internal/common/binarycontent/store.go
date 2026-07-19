@@ -43,6 +43,7 @@ import (
 
 	"github.com/doug-martin/goqu/v9"
 	_ "github.com/doug-martin/goqu/v9/dialect/postgres"
+	"github.com/doug-martin/goqu/v9/exp"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 )
 
@@ -232,7 +233,9 @@ func lockDigestTx(ctx context.Context, tx *sql.Tx, digest string, size int64) er
 func findContentTx(ctx context.Context, tx *sql.Tx, digest string, size int64) (Content, error) {
 	query, args, err := goqu.From(TableContent).
 		Select("id", "sha256", "size_bytes", "file_oid").
-		Where(goqu.Ex{"sha256": digest, "size_bytes": size}).ToSQL()
+		Where(goqu.Ex{"sha256": digest, "size_bytes": size}).
+		ForUpdate(exp.Wait).
+		ToSQL()
 	if err != nil {
 		return Content{}, common.NewInternalServerError("BINARYCONTENT-FIND-BUILD " + err.Error())
 	}
@@ -249,10 +252,6 @@ func UpsertReferenceTx(ctx context.Context, tx *sql.Tx, table string, ownerColum
 	if !validReferenceTable(table, ownerColumn) {
 		return common.NewInternalServerError("BINARYCONTENT-REFERENCE-TABLE unsupported binary reference table")
 	}
-	previousContentID, err := referenceContentIDTx(ctx, tx, table, ownerColumn, reference.OwnerID)
-	if err != nil && !errors.Is(err, sql.ErrNoRows) {
-		return err
-	}
 	record := goqu.Record{
 		ownerColumn: reference.OwnerID, "binary_content_id": reference.Content.ID,
 		"path_token": reference.PathToken, "safe_file_name": reference.SafeFileName,
@@ -267,9 +266,6 @@ func UpsertReferenceTx(ctx context.Context, tx *sql.Tx, table string, ownerColum
 	}
 	if _, err = tx.ExecContext(ctx, query, args...); err != nil {
 		return common.NewInternalServerError("BINARYCONTENT-REFERENCE-UPSERT " + err.Error())
-	}
-	if previousContentID > 0 && previousContentID != reference.Content.ID {
-		return CleanupUnreferencedTx(ctx, tx, previousContentID)
 	}
 	return nil
 }
@@ -305,13 +301,6 @@ func DeleteReferenceTx(ctx context.Context, tx *sql.Tx, table string, ownerColum
 	if !validReferenceTable(table, ownerColumn) {
 		return common.NewInternalServerError("BINARYCONTENT-REFERENCE-TABLE unsupported binary reference table")
 	}
-	contentID, err := referenceContentIDTx(ctx, tx, table, ownerColumn, ownerID)
-	if errors.Is(err, sql.ErrNoRows) {
-		return nil
-	}
-	if err != nil {
-		return err
-	}
 	query, args, err := goqu.Delete(table).Where(goqu.C(ownerColumn).Eq(ownerID)).ToSQL()
 	if err != nil {
 		return common.NewInternalServerError("BINARYCONTENT-REFERENCE-BUILDDELETE " + err.Error())
@@ -319,58 +308,7 @@ func DeleteReferenceTx(ctx context.Context, tx *sql.Tx, table string, ownerColum
 	if _, err = tx.ExecContext(ctx, query, args...); err != nil {
 		return common.NewInternalServerError("BINARYCONTENT-REFERENCE-DELETE " + err.Error())
 	}
-	return CleanupUnreferencedTx(ctx, tx, contentID)
-}
-
-func referenceContentIDTx(ctx context.Context, tx *sql.Tx, table string, ownerColumn string, ownerID int64) (int64, error) {
-	query, args, err := goqu.From(table).Select("binary_content_id").Where(goqu.C(ownerColumn).Eq(ownerID)).ToSQL()
-	if err != nil {
-		return 0, common.NewInternalServerError("BINARYCONTENT-REFERENCE-BUILDCONTENTID " + err.Error())
-	}
-	var contentID int64
-	if err = tx.QueryRowContext(ctx, query, args...).Scan(&contentID); err != nil {
-		return 0, err
-	}
-	return contentID, nil
-}
-
-// CleanupUnreferencedTx removes an unreferenced canonical row and large object.
-func CleanupUnreferencedTx(ctx context.Context, tx *sql.Tx, contentID int64) error {
-	fileCount, err := referenceCountTx(ctx, tx, TableFileReference, contentID)
-	if err != nil {
-		return err
-	}
-	thumbnailCount, err := referenceCountTx(ctx, tx, TableThumbnailReference, contentID)
-	if err != nil {
-		return err
-	}
-	if fileCount+thumbnailCount > 0 {
-		return nil
-	}
-	query, args, err := goqu.Delete(TableContent).Where(goqu.C("id").Eq(contentID)).Returning("file_oid").ToSQL()
-	if err != nil {
-		return common.NewInternalServerError("BINARYCONTENT-CLEANUP-BUILDDELETE " + err.Error())
-	}
-	var oid int64
-	if err = tx.QueryRowContext(ctx, query, args...).Scan(&oid); err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return nil
-		}
-		return common.NewInternalServerError("BINARYCONTENT-CLEANUP-DELETE " + err.Error())
-	}
-	return unlinkLargeObjectTx(ctx, tx, oid)
-}
-
-func referenceCountTx(ctx context.Context, tx *sql.Tx, table string, contentID int64) (int64, error) {
-	query, args, err := goqu.From(table).Select(goqu.COUNT("*")).Where(goqu.C("binary_content_id").Eq(contentID)).ToSQL()
-	if err != nil {
-		return 0, common.NewInternalServerError("BINARYCONTENT-CLEANUP-BUILDCOUNT " + err.Error())
-	}
-	var count int64
-	if err = tx.QueryRowContext(ctx, query, args...).Scan(&count); err != nil {
-		return 0, common.NewInternalServerError("BINARYCONTENT-CLEANUP-COUNT " + err.Error())
-	}
-	return count, nil
+	return nil
 }
 
 // ReadAllTx reads canonical content for the existing byte-oriented repository contracts.
