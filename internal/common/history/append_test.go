@@ -243,6 +243,52 @@ func TestMutationEvidenceContentDoesNotDependOnHistoryLink(t *testing.T) {
 	require.Equal(t, artifacts[0].Data, artifacts[1].Data)
 }
 
+func TestMutationEvidenceHashCommitsBinaryDescriptor(t *testing.T) {
+	fixedTime := time.Date(2026, 7, 19, 12, 0, 0, 0, time.UTC)
+	write := mutationEvidenceWrite{
+		table: TableSubmodel, identifier: "sm-1", changeType: ChangeUpdated,
+		snapshot: map[string]any{"id": "sm-1", "value": "/aasx/files/token/manual.pdf"},
+		payload: historyPayload{
+			payloadType: PayloadTypeSnapshot,
+			json:        []byte(`{"id":"sm-1","value":"/aasx/files/token/manual.pdf"}`),
+			hash:        strings.Repeat("p", 64),
+		},
+		sequence: 2, previousHash: strings.Repeat("e", 64), now: fixedTime,
+	}
+
+	artifacts := make([]EvidenceArtifact, 0, 2)
+	for _, digest := range []string{strings.Repeat("a", 64), strings.Repeat("b", 64)} {
+		store := &recordingEvidenceStore{}
+		cfg := Config{EvidenceEnabled: true, EvidenceStore: store, EvidenceWriteTimeout: time.Second}
+		db, mock, err := sqlmock.New()
+		require.NoError(t, err)
+		mock.ExpectBegin()
+		mock.ExpectQuery(`INSERT INTO "mutation_evidence_artifacts"`).
+			WillReturnRows(sqlmock.NewRows([]string{"artifact_id"}).AddRow(1))
+		mock.ExpectExec(`INSERT INTO "mutation_evidence_state"`).WillReturnResult(sqlmock.NewResult(0, 1))
+		mock.ExpectRollback()
+		tx, beginErr := db.Begin()
+		require.NoError(t, beginErr)
+		expectation := BinaryReferenceExpectation{
+			ModelPath: "/aasx/files/token/manual.pdf", SHA256: digest, SizeBytes: 12,
+			FileName: "manual.pdf", ContentType: "application/pdf",
+			BinaryReference: EvidenceReference{
+				Provider: EvidenceProviderS3, Bucket: "history-evidence",
+				ObjectKey: "binary-content/" + digest, VersionID: "version-1",
+			},
+		}
+		ctx := WithBinaryReferenceExpected(t.Context(), expectation)
+		_, err = publishMutationEvidenceTx(ctx, tx, cfg, write)
+		require.NoError(t, err)
+		require.NoError(t, tx.Rollback())
+		require.NoError(t, mock.ExpectationsWereMet())
+		artifacts = append(artifacts, store.artifacts[0])
+		_ = db.Close()
+	}
+
+	require.NotEqual(t, artifacts[0].Data, artifacts[1].Data)
+}
+
 func TestAppendVersionTxRollsBackWhenEvidenceStoreFails(t *testing.T) {
 	store := &recordingEvidenceStore{err: errors.New("object storage unavailable")}
 	t.Cleanup(func() {
@@ -775,11 +821,16 @@ func (store *recordingEvidenceStore) PutArtifact(_ context.Context, artifact Evi
 			ObjectKey: artifact.ObjectKey,
 			VersionID: "version-1",
 		},
-		SHA256:      SHA256Hex(artifact.Data),
-		SizeBytes:   int64(len(artifact.Data)),
-		ContentType: artifact.ContentType,
-		StoredAt:    time.Date(2026, 5, 28, 12, 0, 0, 0, time.UTC),
-		Metadata:    artifact.Metadata,
+		SHA256:        SHA256Hex(artifact.Data),
+		SizeBytes:     int64(len(artifact.Data)),
+		ContentType:   artifact.ContentType,
+		RetentionMode: "governance",
+		RetainUntil: func() *time.Time {
+			retainUntil := time.Now().UTC().Add(24 * time.Hour)
+			return &retainUntil
+		}(),
+		StoredAt: time.Date(2026, 5, 28, 12, 0, 0, 0, time.UTC),
+		Metadata: artifact.Metadata,
 	}, nil
 }
 

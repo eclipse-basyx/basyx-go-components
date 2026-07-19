@@ -28,10 +28,10 @@ package history
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
@@ -46,6 +46,11 @@ type MutationEvidenceVerificationReport struct {
 	LastSequence  int64                 `json:"last_sequence"`
 	EventCount    int64                 `json:"event_count"`
 	ContentHash   string                `json:"content_hash,omitempty"`
+	EventHash     string                `json:"event_hash,omitempty"`
+	ChangeType    string                `json:"change_type,omitempty"`
+	Deleted       bool                  `json:"deleted"`
+	OperationTime string                `json:"operation_time,omitempty"`
+	Audit         map[string]any        `json:"audit,omitempty"`
 	Snapshot      map[string]any        `json:"snapshot,omitempty"`
 	Findings      []VerificationFinding `json:"findings,omitempty"`
 }
@@ -62,19 +67,23 @@ type mutationVerificationRow struct {
 }
 
 type mutationVerificationDocument struct {
-	ArtifactVersion          string           `json:"artifact_version"`
-	HashContract             string           `json:"hash_contract"`
-	EntityType               string           `json:"entity_type"`
-	Identifier               string           `json:"identifier"`
-	EventSequence            int64            `json:"event_sequence"`
-	EventHash                string           `json:"event_hash"`
-	PreviousEventHash        string           `json:"previous_event_hash"`
-	PayloadType              string           `json:"payload_type"`
-	Payload                  any              `json:"payload"`
-	EffectiveDiff            []map[string]any `json:"effective_diff"`
-	ExpectedBinaryReferences []string         `json:"binary_references_expected"`
-	ContentHash              string           `json:"content_hash"`
-	PayloadHash              string           `json:"payload_hash"`
+	ArtifactVersion          string                       `json:"artifact_version"`
+	HashContract             string                       `json:"hash_contract"`
+	EntityType               string                       `json:"entity_type"`
+	Identifier               string                       `json:"identifier"`
+	EventSequence            int64                        `json:"event_sequence"`
+	EventHash                string                       `json:"event_hash"`
+	PreviousEventHash        string                       `json:"previous_event_hash"`
+	PayloadType              string                       `json:"payload_type"`
+	Payload                  any                          `json:"payload"`
+	EffectiveDiff            []map[string]any             `json:"effective_diff"`
+	ExpectedBinaryReferences []BinaryReferenceExpectation `json:"binary_references_expected"`
+	ContentHash              string                       `json:"content_hash"`
+	PayloadHash              string                       `json:"payload_hash"`
+	ChangeType               string                       `json:"change_type"`
+	Deleted                  bool                         `json:"deleted"`
+	OperationTime            string                       `json:"operation_time"`
+	Audit                    map[string]any               `json:"audit"`
 }
 
 // VerifyMutationEvidenceRange verifies and reconstructs v2 evidence without PostgreSQL history payloads.
@@ -102,6 +111,12 @@ func VerifyMutationEvidenceRange(ctx context.Context, db *sql.DB, store Evidence
 	if len(rows) == 0 {
 		report.addFinding("HISTORY-MUTATIONVERIFY-EMPTY", "no mutation evidence exists in the requested range", 0)
 		return report, nil
+	}
+	if rows[0].sequence != checkpoint {
+		report.addFinding("HISTORY-MUTATIONVERIFY-MISSINGCHECKPOINT", "the selected snapshot checkpoint is missing from the catalog range", checkpoint)
+	}
+	if rows[len(rows)-1].sequence != lastSequence {
+		report.addFinding("HISTORY-MUTATIONVERIFY-MISSINGTAIL", "the requested terminal mutation evidence is missing", lastSequence)
 	}
 	verifyMutationRows(ctx, db, store, rows, report)
 	report.Valid = len(report.Findings) == 0
@@ -188,6 +203,13 @@ func verifyMutationRows(ctx context.Context, db *sql.DB, store EvidenceStore, ro
 		if ok {
 			snapshot = applyVerifiedMutationPayload(snapshot, row, document, report)
 			verifyMutationBinaryReferences(ctx, db, store, row, document, report)
+			if row.sequence == report.LastSequence {
+				report.EventHash = document.EventHash
+				report.ChangeType = document.ChangeType
+				report.Deleted = document.Deleted
+				report.OperationTime = document.OperationTime
+				report.Audit = document.Audit
+			}
 		}
 		previousHash = row.eventHash
 		expectedSequence = row.sequence + 1
@@ -202,9 +224,6 @@ func verifyMutationRows(ctx context.Context, db *sql.DB, store EvidenceStore, ro
 }
 
 func verifyMutationObject(ctx context.Context, store EvidenceStore, row mutationVerificationRow, report *MutationEvidenceVerificationReport) (mutationVerificationDocument, bool) {
-	if row.receipt.RetentionMode == "" || row.receipt.RetainUntil == nil {
-		report.addFinding("HISTORY-MUTATIONVERIFY-RETENTION", "mutation receipt is missing WORM retention metadata", row.sequence)
-	}
 	if store == nil {
 		report.addFinding("HISTORY-MUTATIONVERIFY-NOSTORE", "evidence store is required to verify mutation objects", row.sequence)
 		return mutationVerificationDocument{}, false
@@ -240,6 +259,15 @@ func decodeAndValidateMutationDocument(data []byte, row mutationVerificationRow,
 	}
 	if document.EventHash != row.eventHash || document.ContentHash != row.contentHash || document.PayloadHash != row.payloadHash || document.PayloadType != row.payloadType {
 		return document, fmt.Errorf("artifact hashes or payload type differ from the catalog")
+	}
+	if document.ChangeType != ChangeCreated && document.ChangeType != ChangeUpdated && document.ChangeType != ChangeDeleted {
+		return document, fmt.Errorf("unsupported change type %q", document.ChangeType)
+	}
+	if (document.ChangeType == ChangeDeleted) != document.Deleted {
+		return document, fmt.Errorf("change type and deletion state are inconsistent")
+	}
+	if _, err := time.Parse(time.RFC3339Nano, document.OperationTime); err != nil {
+		return document, fmt.Errorf("operation time is invalid")
 	}
 	var body map[string]any
 	if err := decodeJSONPreservingNumbers(data, &body); err != nil {
@@ -283,8 +311,13 @@ func applyVerifiedMutationPayload(snapshot map[string]any, row mutationVerificat
 }
 
 func verifyReceiptRetention(ctx context.Context, store EvidenceStore, receipt EvidenceReceipt, report *MutationEvidenceVerificationReport, sequence int64) {
+	if receipt.RetentionMode == "" || receipt.RetainUntil == nil {
+		report.addFinding("HISTORY-MUTATIONVERIFY-RETENTION", "evidence receipt is missing WORM retention metadata", sequence)
+		return
+	}
 	verifier, ok := store.(EvidenceRetentionVerifier)
-	if !ok || receipt.RetentionMode == "" || receipt.RetainUntil == nil {
+	if !ok {
+		report.addFinding("HISTORY-MUTATIONVERIFY-RETENTIONVERIFIER", "evidence store cannot verify the current WORM retention state", sequence)
 		return
 	}
 	if err := verifier.VerifyArtifactRetention(ctx, receipt.Reference, receipt); err != nil {
@@ -306,13 +339,18 @@ type binaryReferenceVerificationRow struct {
 }
 
 func verifyMutationBinaryReferences(ctx context.Context, db *sql.DB, store EvidenceStore, row mutationVerificationRow, document mutationVerificationDocument, report *MutationEvidenceVerificationReport) {
-	expectedPaths := make(map[string]struct{}, len(document.ExpectedBinaryReferences))
-	for _, modelPath := range document.ExpectedBinaryReferences {
-		if strings.HasPrefix(modelPath, "/aasx/files/") {
-			expectedPaths[modelPath] = struct{}{}
+	expectedReferences := make(map[string]BinaryReferenceExpectation, len(document.ExpectedBinaryReferences))
+	for _, expectation := range document.ExpectedBinaryReferences {
+		if !validBinaryReferenceExpectation(expectation) {
+			report.addFinding("HISTORY-MUTATIONVERIFY-BINARYEXPECTATION", "mutation contains an invalid binary-reference descriptor", row.sequence)
+			continue
 		}
+		if _, exists := expectedReferences[expectation.ModelPath]; exists {
+			report.addFinding("HISTORY-MUTATIONVERIFY-BINARYEXPECTATION", "mutation contains duplicate binary-reference descriptors", row.sequence)
+		}
+		expectedReferences[expectation.ModelPath] = expectation
 	}
-	if len(expectedPaths) == 0 {
+	if len(expectedReferences) == 0 {
 		return
 	}
 	references, err := loadBinaryReferenceVerificationRows(ctx, db, row.artifactID)
@@ -324,13 +362,13 @@ func verifyMutationBinaryReferences(ctx context.Context, db *sql.DB, store Evide
 	for _, reference := range references {
 		byPath[reference.modelPath] = reference
 	}
-	for expectedPath := range expectedPaths {
+	for expectedPath, expectation := range expectedReferences {
 		reference, exists := byPath[expectedPath]
 		if !exists {
 			report.addFinding("HISTORY-MUTATIONVERIFY-BINARYREFMISSING", "binary-reference evidence is missing for "+expectedPath, row.sequence)
 			continue
 		}
-		verifyBinaryReferenceObject(ctx, db, store, row, reference, report)
+		verifyBinaryReferenceObject(ctx, db, store, row, reference, expectation, report)
 	}
 }
 
@@ -368,7 +406,7 @@ func loadBinaryReferenceVerificationRows(ctx context.Context, db *sql.DB, mutati
 	return result, rows.Err()
 }
 
-func verifyBinaryReferenceObject(ctx context.Context, db *sql.DB, store EvidenceStore, mutation mutationVerificationRow, reference binaryReferenceVerificationRow, report *MutationEvidenceVerificationReport) {
+func verifyBinaryReferenceObject(ctx context.Context, db *sql.DB, store EvidenceStore, mutation mutationVerificationRow, reference binaryReferenceVerificationRow, expected BinaryReferenceExpectation, report *MutationEvidenceVerificationReport) {
 	if store == nil {
 		return
 	}
@@ -381,66 +419,56 @@ func verifyBinaryReferenceObject(ctx context.Context, db *sql.DB, store Evidence
 		report.addFinding("HISTORY-MUTATIONVERIFY-BINARYREFSHA", "binary-reference object SHA-256 differs from its receipt", mutation.sequence)
 		return
 	}
-	var document map[string]any
+	var document binaryReferenceVerificationDocument
 	if err = decodeJSONPreservingNumbers(object.Data, &document); err != nil {
 		report.addFinding("HISTORY-MUTATIONVERIFY-BINARYREFDECODE", err.Error(), mutation.sequence)
 		return
 	}
-	if document["artifact_version"] != binaryReferenceVersion || document["event_hash"] != mutation.eventHash || document["model_path"] != reference.modelPath {
+	if document.ArtifactVersion != binaryReferenceVersion || document.EventHash != mutation.eventHash || document.ModelPath != reference.modelPath {
 		report.addFinding("HISTORY-MUTATIONVERIFY-BINARYREFMISMATCH", "binary-reference object does not match its mutation", mutation.sequence)
 	}
-	verifyReferencedBinaryObject(ctx, db, store, document, report, mutation.sequence)
+	actual := document.expectation()
+	if actual != expected {
+		report.addFinding("HISTORY-MUTATIONVERIFY-BINARYREFBINDING", "binary-reference object differs from the descriptor committed by the mutation", mutation.sequence)
+	}
+	verifyReferencedBinaryObject(ctx, db, store, actual, report, mutation.sequence)
 	verifyReceiptRetention(ctx, store, reference.receipt, report, mutation.sequence)
 }
 
-func verifyReferencedBinaryObject(ctx context.Context, db *sql.DB, store EvidenceStore, referenceDocument map[string]any, report *MutationEvidenceVerificationReport, sequence int64) {
-	binary, ok := referenceDocument["binary"].(map[string]any)
-	if !ok {
-		report.addFinding("HISTORY-MUTATIONVERIFY-BINARYDOCUMENT", "binary-reference object has no binary descriptor", sequence)
-		return
-	}
-	digest, _ := binary["sha256"].(string)
-	size, err := jsonNumberInt64(binary["size_bytes"])
-	if err != nil || len(digest) != 64 {
+func verifyReferencedBinaryObject(ctx context.Context, db *sql.DB, store EvidenceStore, expectation BinaryReferenceExpectation, report *MutationEvidenceVerificationReport, sequence int64) {
+	if !validSHA256(expectation.SHA256) || expectation.SizeBytes < 0 {
 		report.addFinding("HISTORY-MUTATIONVERIFY-BINARYDOCUMENT", "binary-reference digest or size is invalid", sequence)
 		return
 	}
-	receipt, err := loadBinaryEvidenceReceiptByDigest(ctx, db, digest, size)
+	receipt, err := loadBinaryEvidenceReceiptByDigest(ctx, db, expectation.SHA256, expectation.SizeBytes)
 	if err != nil {
 		report.addFinding("HISTORY-MUTATIONVERIFY-BINARYRECEIPT", err.Error(), sequence)
 		return
 	}
-	if !binaryReferenceMatchesReceipt(binary["reference"], receipt.Reference) {
+	if expectation.BinaryReference != receipt.Reference {
 		report.addFinding("HISTORY-MUTATIONVERIFY-BINARYRECEIPTMISMATCH", "binary-reference object does not match the immutable binary receipt", sequence)
 	}
-	if _, err = store.VerifyArtifact(ctx, receipt.Reference, digest); err != nil {
+	if _, err = store.VerifyArtifact(ctx, receipt.Reference, expectation.SHA256); err != nil {
 		report.addFinding("HISTORY-MUTATIONVERIFY-BINARYOBJECT", err.Error(), sequence)
 	}
 	verifyReceiptRetention(ctx, store, receipt, report, sequence)
 }
 
-func binaryReferenceMatchesReceipt(value any, expected EvidenceReference) bool {
-	reference, ok := value.(map[string]any)
-	if !ok {
-		return false
-	}
-	provider, _ := reference["provider"].(string)
-	bucket, _ := reference["bucket"].(string)
-	objectKey, _ := reference["object_key"].(string)
-	versionID, _ := reference["version_id"].(string)
-	return provider == expected.Provider && bucket == expected.Bucket && objectKey == expected.ObjectKey && versionID == expected.VersionID
+type binaryReferenceVerificationDocument struct {
+	ArtifactVersion string            `json:"artifact_version"`
+	EventHash       string            `json:"event_hash"`
+	ModelPath       string            `json:"model_path"`
+	SHA256          string            `json:"sha256"`
+	SizeBytes       int64             `json:"size_bytes"`
+	FileName        string            `json:"file_name"`
+	ContentType     string            `json:"content_type"`
+	BinaryReference EvidenceReference `json:"binary_reference"`
 }
 
-func jsonNumberInt64(value any) (int64, error) {
-	switch typed := value.(type) {
-	case json.Number:
-		return typed.Int64()
-	case int64:
-		return typed, nil
-	case float64:
-		return int64(typed), nil
-	default:
-		return 0, fmt.Errorf("unsupported number type %T", value)
+func (document binaryReferenceVerificationDocument) expectation() BinaryReferenceExpectation {
+	return BinaryReferenceExpectation{
+		ModelPath: document.ModelPath, SHA256: document.SHA256, SizeBytes: document.SizeBytes,
+		FileName: document.FileName, ContentType: document.ContentType, BinaryReference: document.BinaryReference,
 	}
 }
 

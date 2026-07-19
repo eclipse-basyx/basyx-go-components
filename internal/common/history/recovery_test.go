@@ -361,3 +361,7 @@ func (store *memoryEvidenceStore) VerifyArtifact(_ context.Context, ref Evidence
 	}
 	return &EvidenceReceipt{Reference: ref, SHA256: expectedHash}, nil
 }
+
+func (store *memoryEvidenceStore) VerifyArtifactRetention(_ context.Context, _ EvidenceReference, _ EvidenceReceipt) error {
+	return nil
+}

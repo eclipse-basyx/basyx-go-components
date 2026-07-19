@@ -26,6 +26,8 @@
 package history
 
 import (
+	"context"
+	"strings"
 	"testing"
 	"time"
 
@@ -66,6 +68,69 @@ func TestVerifyMutationEvidenceRangeReportsMissingBinaryReference(t *testing.T) 
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 
+func TestVerifyMutationEvidenceRangeReportsMissingRequestedTail(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer func() { _ = db.Close() }()
+	artifact := mutationVerificationTestArtifact(t, "")
+	store := newMemoryEvidenceStore()
+	store.put(artifact)
+	expectMutationVerificationRows(mock, artifact, nil)
+
+	report, err := VerifyMutationEvidenceRange(t.Context(), db, store, TableSubmodel, "sm-1", 1, 2)
+	require.NoError(t, err)
+	require.False(t, report.Valid)
+	require.Contains(t, mutationVerificationFindingCodes(report), "HISTORY-MUTATIONVERIFY-MISSINGTAIL")
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestVerifyMutationEvidenceRangeFailsWhenRetentionCannotBeChecked(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer func() { _ = db.Close() }()
+	artifact := mutationVerificationTestArtifact(t, "")
+	memoryStore := newMemoryEvidenceStore()
+	memoryStore.put(artifact)
+	store := &evidenceStoreWithoutRetentionVerifier{delegate: memoryStore}
+	expectMutationVerificationRows(mock, artifact, nil)
+
+	report, err := VerifyMutationEvidenceRange(t.Context(), db, store, TableSubmodel, "sm-1", 1, 1)
+	require.NoError(t, err)
+	require.False(t, report.Valid)
+	require.Contains(t, mutationVerificationFindingCodes(report), "HISTORY-MUTATIONVERIFY-RETENTIONVERIFIER")
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestVerifyMutationEvidenceRecoveryReportsDeletionState(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer func() { _ = db.Close() }()
+	artifact := mutationVerificationTestArtifact(t, "")
+	var body map[string]any
+	require.NoError(t, decodeJSONPreservingNumbers(artifact.Data, &body))
+	body["change_type"] = ChangeDeleted
+	body["deleted"] = true
+	delete(body, "event_hash")
+	eventHash, hashErr := CanonicalJSONHash(body)
+	require.NoError(t, hashErr)
+	body["event_hash"] = eventHash
+	artifact.Data, err = CanonicalJSON(body)
+	require.NoError(t, err)
+	artifact.Metadata["event_hash"] = eventHash
+	store := newMemoryEvidenceStore()
+	store.put(artifact)
+	expectMutationVerificationRows(mock, artifact, nil)
+
+	report, err := VerifyMutationEvidenceRange(t.Context(), db, store, TableSubmodel, "sm-1", 1, 1)
+	require.NoError(t, err)
+	require.True(t, report.Valid, report.Findings)
+	require.True(t, report.Deleted)
+	require.Equal(t, ChangeDeleted, report.ChangeType)
+	require.Equal(t, eventHash, report.EventHash)
+	require.Equal(t, "2026-07-19T12:00:00Z", report.OperationTime)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
 func mutationVerificationTestArtifact(t *testing.T, expectedBinaryPath string) EvidenceArtifact {
 	t.Helper()
 	snapshot := map[string]any{"id": "sm-1", "submodelElements": []any{}}
@@ -73,9 +138,16 @@ func mutationVerificationTestArtifact(t *testing.T, expectedBinaryPath string) E
 	require.NoError(t, err)
 	payloadHash, err := CanonicalJSONHash(snapshot)
 	require.NoError(t, err)
-	expectedBinaryReferences := []string{}
+	expectedBinaryReferences := []BinaryReferenceExpectation{}
 	if expectedBinaryPath != "" {
-		expectedBinaryReferences = append(expectedBinaryReferences, expectedBinaryPath)
+		expectedBinaryReferences = append(expectedBinaryReferences, BinaryReferenceExpectation{
+			ModelPath: expectedBinaryPath, SHA256: strings.Repeat("a", 64), SizeBytes: 12,
+			FileName: "manual.pdf", ContentType: "application/pdf",
+			BinaryReference: EvidenceReference{
+				Provider: EvidenceProviderS3, Bucket: "history-evidence",
+				ObjectKey: "binary-content/aa/" + strings.Repeat("a", 64), VersionID: "binary-version-1",
+			},
+		})
 	}
 	body := map[string]any{
 		"artifact_version": mutationEventArtifactVersion, "hash_contract": mutationEventHashContract,
@@ -125,4 +197,20 @@ func mutationVerificationFindingCodes(report *MutationEvidenceVerificationReport
 		codes = append(codes, finding.Code)
 	}
 	return codes
+}
+
+type evidenceStoreWithoutRetentionVerifier struct {
+	delegate *memoryEvidenceStore
+}
+
+func (store *evidenceStoreWithoutRetentionVerifier) PutArtifact(ctx context.Context, artifact EvidenceArtifact) (*EvidenceReceipt, error) {
+	return store.delegate.PutArtifact(ctx, artifact)
+}
+
+func (store *evidenceStoreWithoutRetentionVerifier) GetArtifact(ctx context.Context, ref EvidenceReference) (*EvidenceObject, error) {
+	return store.delegate.GetArtifact(ctx, ref)
+}
+
+func (store *evidenceStoreWithoutRetentionVerifier) VerifyArtifact(ctx context.Context, ref EvidenceReference, expectedHash string) (*EvidenceReceipt, error) {
+	return store.delegate.VerifyArtifact(ctx, ref, expectedHash)
 }

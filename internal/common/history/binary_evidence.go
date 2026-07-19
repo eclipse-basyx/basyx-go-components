@@ -32,6 +32,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"net/url"
 	"path"
 	"strings"
@@ -52,23 +53,57 @@ const (
 
 type binaryReferenceExpectationContextKey struct{}
 
+// BinaryReferenceExpectation commits the uploaded binary identity into the
+// mutation-event hash before its separate reference artifact is written.
+type BinaryReferenceExpectation struct {
+	ModelPath       string            `json:"model_path"`
+	SHA256          string            `json:"sha256"`
+	SizeBytes       int64             `json:"size_bytes"`
+	FileName        string            `json:"file_name"`
+	ContentType     string            `json:"content_type"`
+	BinaryReference EvidenceReference `json:"binary_reference"`
+}
+
+// NewBinaryReferenceExpectation builds the binary descriptor committed by a mutation event.
+func NewBinaryReferenceExpectation(content binarycontent.Content, modelPath string, fileName string, contentType string, receipt *EvidenceReceipt) (BinaryReferenceExpectation, error) {
+	if receipt == nil {
+		return BinaryReferenceExpectation{}, nil
+	}
+	expectation := BinaryReferenceExpectation{
+		ModelPath: strings.TrimSpace(modelPath), SHA256: strings.ToLower(content.SHA256),
+		SizeBytes: content.SizeBytes, FileName: strings.TrimSpace(fileName),
+		ContentType: strings.TrimSpace(contentType), BinaryReference: receipt.Reference,
+	}
+	if !validBinaryReferenceExpectation(expectation) {
+		return BinaryReferenceExpectation{}, common.NewInternalServerError("HISTORY-EVIDENCE-BINARYREF-EXPECTATION uploaded binary descriptor is incomplete")
+	}
+	return expectation, nil
+}
+
 // WithBinaryReferenceExpected marks a mutation that must commit matching binary-reference evidence.
-func WithBinaryReferenceExpected(ctx context.Context, modelPath string) context.Context {
-	modelPath = strings.TrimSpace(modelPath)
-	if modelPath == "" {
+func WithBinaryReferenceExpected(ctx context.Context, expectation BinaryReferenceExpectation) context.Context {
+	if expectation.ModelPath == "" {
 		return ctx
 	}
-	expected := append([]string(nil), binaryReferencesExpected(ctx)...)
-	expected = append(expected, modelPath)
+	expected := append([]BinaryReferenceExpectation(nil), binaryReferencesExpected(ctx)...)
+	expected = append(expected, expectation)
 	return context.WithValue(ctx, binaryReferenceExpectationContextKey{}, expected)
 }
 
-func binaryReferencesExpected(ctx context.Context) []string {
+func binaryReferencesExpected(ctx context.Context) []BinaryReferenceExpectation {
 	if ctx == nil {
 		return nil
 	}
-	values, _ := ctx.Value(binaryReferenceExpectationContextKey{}).([]string)
+	values, _ := ctx.Value(binaryReferenceExpectationContextKey{}).([]BinaryReferenceExpectation)
 	return values
+}
+
+func validBinaryReferenceExpectation(expectation BinaryReferenceExpectation) bool {
+	return strings.HasPrefix(expectation.ModelPath, "/aasx/files/") &&
+		validSHA256(expectation.SHA256) && expectation.SizeBytes >= 0 &&
+		strings.TrimSpace(expectation.FileName) != "" && strings.TrimSpace(expectation.ContentType) != "" &&
+		expectation.BinaryReference.Provider == EvidenceProviderS3 &&
+		strings.TrimSpace(expectation.BinaryReference.ObjectKey) != "" && strings.TrimSpace(expectation.BinaryReference.VersionID) != ""
 }
 
 // EnsureBinaryEvidenceTx writes canonical binary bytes once and reuses their
@@ -101,7 +136,8 @@ func EnsureBinaryEvidenceTx(ctx context.Context, tx *sql.Tx, content binaryconte
 		if extender, ok := cfg.EvidenceStore.(EvidenceRetentionExtender); ok {
 			extended, extendErr := extender.ExtendArtifactRetention(ctx, receipt.Reference, receipt, artifact)
 			if extendErr != nil {
-				return nil, common.NewErrServiceUnavailable("HISTORY-EVIDENCE-BINARY-EXTEND " + extendErr.Error())
+				log.Printf("HISTORY-EVIDENCE-BINARY-EXTEND immutable binary retention extension failed: %v", extendErr)
+				return nil, binaryEvidenceUnavailableError()
 			}
 			if extended != nil {
 				receipt = *extended
@@ -109,6 +145,10 @@ func EnsureBinaryEvidenceTx(ctx context.Context, tx *sql.Tx, content binaryconte
 					return nil, updateErr
 				}
 			}
+		}
+		if validationErr := validateCommittedEvidenceReceipt(receipt, content.SHA256, content.SizeBytes, time.Now()); validationErr != nil {
+			log.Printf("HISTORY-EVIDENCE-BINARY-RECEIPT reused immutable binary receipt is invalid: %v", validationErr)
+			return nil, binaryEvidenceUnavailableError()
 		}
 		return &receipt, nil
 	}
@@ -137,13 +177,18 @@ func EnsureBinaryEvidenceTx(ctx context.Context, tx *sql.Tx, content binaryconte
 		return putErr
 	})
 	if err != nil {
-		return nil, common.NewErrServiceUnavailable("HISTORY-EVIDENCE-BINARY-PUT " + err.Error())
+		log.Printf("HISTORY-EVIDENCE-BINARY-PUT immutable binary write failed: %v", err)
+		return nil, binaryEvidenceUnavailableError()
 	}
 	if storedReceipt == nil {
 		return nil, common.NewInternalServerError("HISTORY-EVIDENCE-BINARY-NILRECEIPT evidence store returned nil receipt")
 	}
 	if !strings.EqualFold(storedReceipt.SHA256, content.SHA256) || storedReceipt.SizeBytes != content.SizeBytes {
 		return nil, common.NewInternalServerError("HISTORY-EVIDENCE-BINARY-RECEIPT immutable binary receipt does not match canonical content")
+	}
+	if validationErr := validateCommittedEvidenceReceipt(*storedReceipt, content.SHA256, content.SizeBytes, time.Now()); validationErr != nil {
+		log.Printf("HISTORY-EVIDENCE-BINARY-RECEIPT immutable binary receipt is invalid: %v", validationErr)
+		return nil, binaryEvidenceUnavailableError()
 	}
 	if err = upsertBinaryEvidenceReceiptTx(ctx, tx, content.ID, *storedReceipt); err != nil {
 		return nil, err
@@ -153,8 +198,8 @@ func EnsureBinaryEvidenceTx(ctx context.Context, tx *sql.Tx, content binaryconte
 
 // RecordBinaryReferenceEvidenceTx binds per-upload metadata to the latest
 // mutation event for the owning entity.
-func RecordBinaryReferenceEvidenceTx(ctx context.Context, tx *sql.Tx, entityType string, identifier string, content binarycontent.Content, modelPath string, fileName string, contentType string, binaryReceipt *EvidenceReceipt) error {
-	if binaryReceipt == nil || !ActiveConfig().EvidenceEnabled {
+func RecordBinaryReferenceEvidenceTx(ctx context.Context, tx *sql.Tx, entityType string, identifier string, contentID int64, expectation BinaryReferenceExpectation) error {
+	if expectation.ModelPath == "" || !ActiveConfig().EvidenceEnabled {
 		return nil
 	}
 	mutationID, sequence, eventHash, err := latestMutationEvidenceIdentityTx(ctx, tx, entityType, identifier)
@@ -165,11 +210,9 @@ func RecordBinaryReferenceEvidenceTx(ctx context.Context, tx *sql.Tx, entityType
 		"artifact_version": binaryReferenceVersion,
 		"entity_type":      entityType, "identifier": identifier,
 		"event_sequence": sequence, "event_hash": eventHash,
-		"model_path": modelPath, "file_name": fileName, "content_type": contentType,
-		"binary": map[string]any{
-			"sha256": content.SHA256, "size_bytes": content.SizeBytes,
-			"reference": binaryReceipt.Reference,
-		},
+		"model_path": expectation.ModelPath, "file_name": expectation.FileName,
+		"content_type": expectation.ContentType, "sha256": expectation.SHA256,
+		"size_bytes": expectation.SizeBytes, "binary_reference": expectation.BinaryReference,
 	}
 	data, err := CanonicalJSON(document)
 	if err != nil {
@@ -181,7 +224,7 @@ func RecordBinaryReferenceEvidenceTx(ctx context.Context, tx *sql.Tx, entityType
 		ContentType:  manifestJSONContentType, Data: data,
 		Metadata: map[string]string{
 			"artifact_type": EvidenceArtifactBinaryRef, "entity_type": entityType,
-			"identifier": identifier, "event_hash": eventHash, "binary_sha256": content.SHA256,
+			"identifier": identifier, "event_hash": eventHash, "binary_sha256": expectation.SHA256,
 		},
 	}
 	cfg := ActiveConfig()
@@ -198,7 +241,14 @@ func RecordBinaryReferenceEvidenceTx(ctx context.Context, tx *sql.Tx, entityType
 	if receipt == nil {
 		return common.NewInternalServerError("HISTORY-EVIDENCE-BINARYREF-NILRECEIPT evidence store returned nil receipt")
 	}
-	return insertBinaryReferenceReceiptTx(ctx, tx, mutationID, content.ID, modelPath, *receipt)
+	if validationErr := validateCommittedEvidenceReceipt(*receipt, SHA256Hex(data), int64(len(data)), time.Now()); validationErr != nil {
+		return common.NewInternalServerError("HISTORY-EVIDENCE-BINARYREF-RECEIPT " + validationErr.Error())
+	}
+	return insertBinaryReferenceReceiptTx(ctx, tx, mutationID, contentID, expectation.ModelPath, *receipt)
+}
+
+func binaryEvidenceUnavailableError() error {
+	return common.NewErrServiceUnavailable("HISTORY-EVIDENCE-BINARY-STORE immutable binary evidence could not be stored")
 }
 
 func loadBinaryEvidenceReceiptTx(ctx context.Context, tx *sql.Tx, digest string, sizeBytes int64) (EvidenceReceipt, error) {

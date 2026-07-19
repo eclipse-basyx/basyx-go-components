@@ -120,7 +120,13 @@ func (s *SubmodelDatabase) recordFileUploadMutationTx(ctx context.Context, tx *s
 	if err != nil {
 		return err
 	}
-	mutationCtx := history.WithBinaryReferenceExpected(ctx, reference.ManagedPath())
+	expectation, err := history.NewBinaryReferenceExpectation(
+		reference.Content, reference.ManagedPath(), reference.SafeFileName, contentType, binaryReceipt,
+	)
+	if err != nil {
+		return err
+	}
+	mutationCtx := history.WithBinaryReferenceExpected(ctx, expectation)
 	if err = s.appendChangedSubmodelElementHistoryTx(mutationCtx, tx, submodelID, submodelElementRootMutation{
 		previousPath: idShortPath,
 		currentPath:  idShortPath,
@@ -128,8 +134,7 @@ func (s *SubmodelDatabase) recordFileUploadMutationTx(ctx context.Context, tx *s
 		return err
 	}
 	return history.RecordBinaryReferenceEvidenceTx(
-		mutationCtx, tx, history.TableSubmodel, submodelID, reference.Content,
-		reference.ManagedPath(), reference.SafeFileName, contentType, binaryReceipt,
+		mutationCtx, tx, history.TableSubmodel, submodelID, reference.Content.ID, expectation,
 	)
 }
 

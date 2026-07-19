@@ -224,6 +224,9 @@ func publishMutationEvidenceTx(ctx context.Context, tx *sql.Tx, cfg Config, writ
 	if receipt == nil {
 		return nil, common.NewInternalServerError("HISTORY-EVIDENCE-MUTATION-NILRECEIPT evidence store returned nil receipt")
 	}
+	if validationErr := validateCommittedEvidenceReceipt(*receipt, SHA256Hex(data), int64(len(data)), time.Now()); validationErr != nil {
+		return nil, common.NewInternalServerError("HISTORY-EVIDENCE-MUTATION-RECEIPT " + validationErr.Error())
+	}
 	artifactID, err := recordMutationEvidenceTx(ctx, tx, write, eventHash, contentHash, *receipt)
 	if err != nil {
 		return nil, err

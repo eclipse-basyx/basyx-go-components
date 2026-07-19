@@ -291,6 +291,24 @@ func TestS3EvidenceStorePutRequiresRetention(t *testing.T) {
 	require.ErrorContains(t, err, "HISTORY-EVIDENCE-S3-RETENTION")
 }
 
+func TestCommittedEvidenceReceiptRequiresImmutableRetention(t *testing.T) {
+	now := time.Now().UTC()
+	receipt := EvidenceReceipt{
+		Reference: EvidenceReference{
+			Provider: EvidenceProviderS3, ObjectKey: "mutation-events/1.json", VersionID: "version-1",
+		},
+		SHA256: strings.Repeat("a", 64), SizeBytes: 10,
+	}
+
+	err := validateCommittedEvidenceReceipt(receipt, receipt.SHA256, receipt.SizeBytes, now)
+	require.ErrorContains(t, err, "retention mode")
+
+	retainUntil := now.Add(time.Hour)
+	receipt.RetentionMode = "governance"
+	receipt.RetainUntil = &retainUntil
+	require.NoError(t, validateCommittedEvidenceReceipt(receipt, receipt.SHA256, receipt.SizeBytes, now))
+}
+
 func TestS3EvidenceStorePutRequiresVersionID(t *testing.T) {
 	client := s3.NewFromConfig(aws.Config{
 		Region:      "us-east-1",

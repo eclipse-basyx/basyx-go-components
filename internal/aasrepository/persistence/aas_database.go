@@ -1596,14 +1596,19 @@ func (s *AssetAdministrationShellDatabase) PutThumbnailByAASIDReader(ctx context
 	if err != nil {
 		return err
 	}
+	expectation, err := history.NewBinaryReferenceExpectation(
+		reference.Content, reference.ManagedPath(), reference.SafeFileName, contentType, binaryReceipt,
+	)
+	if err != nil {
+		return err
+	}
 
-	mutationCtx := history.WithBinaryReferenceExpected(ctx, reference.ManagedPath())
+	mutationCtx := history.WithBinaryReferenceExpected(ctx, expectation)
 	if err = s.appendUploadedThumbnailHistoryTx(mutationCtx, tx, aasIdentifier); err != nil {
 		return err
 	}
 	if err = history.RecordBinaryReferenceEvidenceTx(
-		mutationCtx, tx, history.TableAAS, aasIdentifier, reference.Content,
-		reference.ManagedPath(), reference.SafeFileName, contentType, binaryReceipt,
+		mutationCtx, tx, history.TableAAS, aasIdentifier, reference.Content.ID, expectation,
 	); err != nil {
 		return err
 	}
