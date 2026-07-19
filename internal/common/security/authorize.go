@@ -269,6 +269,14 @@ func GetQueryFilter(ctx context.Context) *QueryFilter {
 	return nil
 }
 
+// ContextWithoutQueryFilter preserves request cancellation and identity while
+// suppressing query projection for an internal state read. Callers must perform
+// authorization separately; the returned context must never be used for an
+// authorization decision or API response construction.
+func ContextWithoutQueryFilter(ctx context.Context) context.Context {
+	return context.WithValue(ctx, filterKey, (*QueryFilter)(nil))
+}
+
 // ShouldEnforceFormula determines whether formula-based query constraints must
 // run for the current request context.
 //

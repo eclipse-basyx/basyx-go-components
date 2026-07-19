@@ -33,12 +33,24 @@ import (
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/descriptors"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/history"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
+	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 )
 
 const descriptorSubmodelsSnapshotField = "submodelDescriptors"
 
-func (p *PostgreSQLAASRegistryDatabase) appendMutatedDescriptorHistoryTx(ctx context.Context, tx *sql.Tx, aasID string, mutate history.SnapshotMutator) error {
-	err := history.AppendMutatedVersionTx(ctx, tx, history.TableDescriptor, aasID, history.ChangeUpdated, mutate)
+func (p *PostgreSQLAASRegistryDatabase) appendMutatedDescriptorHistoryTx(ctx context.Context, tx *sql.Tx, aasID string, previousSnapshot map[string]any, mutate history.SnapshotMutator) error {
+	if history.ActiveConfig().EvidenceEnabled {
+		parent, err := descriptors.GetAssetAdministrationShellDescriptorByIDTx(auth.ContextWithoutQueryFilter(ctx), tx, aasID)
+		if err != nil {
+			return err
+		}
+		resultSnapshot, err := parent.ToJsonable()
+		if err != nil {
+			return common.NewInternalServerError("AASREG-HISTORY-TOJSONABLE " + err.Error())
+		}
+		return history.AppendVersionTx(ctx, tx, history.TableDescriptor, aasID, history.ChangeUpdated, previousSnapshot, resultSnapshot, false)
+	}
+	err := history.AppendMutatedVersionTx(ctx, tx, history.TableDescriptor, aasID, history.ChangeUpdated, previousSnapshot, mutate)
 	if err == nil || !common.IsErrNotFound(err) {
 		return err
 	}
@@ -47,31 +59,31 @@ func (p *PostgreSQLAASRegistryDatabase) appendMutatedDescriptorHistoryTx(ctx con
 	if err != nil {
 		return err
 	}
-	return appendDescriptorHistoryTx(ctx, tx, parent, history.ChangeUpdated, false)
+	return appendDescriptorHistoryTx(ctx, tx, parent, previousSnapshot, history.ChangeUpdated, false)
 }
 
-func (p *PostgreSQLAASRegistryDatabase) appendAddedSubmodelDescriptorHistoryTx(ctx context.Context, tx *sql.Tx, aasID string, submodel model.SubmodelDescriptor) error {
+func (p *PostgreSQLAASRegistryDatabase) appendAddedSubmodelDescriptorHistoryTx(ctx context.Context, tx *sql.Tx, aasID string, previousSnapshot map[string]any, submodel model.SubmodelDescriptor) error {
 	jsonable, err := submodel.ToJsonable()
 	if err != nil {
 		return common.NewInternalServerError("AASREG-HISTORY-SMDESC-TOJSONABLE " + err.Error())
 	}
-	return p.appendMutatedDescriptorHistoryTx(ctx, tx, aasID, func(snapshot map[string]any) error {
+	return p.appendMutatedDescriptorHistoryTx(ctx, tx, aasID, previousSnapshot, func(snapshot map[string]any) error {
 		return history.AppendSnapshotArrayItem(snapshot, descriptorSubmodelsSnapshotField, jsonable)
 	})
 }
 
-func (p *PostgreSQLAASRegistryDatabase) appendReplacedSubmodelDescriptorHistoryTx(ctx context.Context, tx *sql.Tx, aasID string, submodel model.SubmodelDescriptor) error {
+func (p *PostgreSQLAASRegistryDatabase) appendReplacedSubmodelDescriptorHistoryTx(ctx context.Context, tx *sql.Tx, aasID string, previousSnapshot map[string]any, submodel model.SubmodelDescriptor) error {
 	jsonable, err := submodel.ToJsonable()
 	if err != nil {
 		return common.NewInternalServerError("AASREG-HISTORY-SMDESC-TOJSONABLE " + err.Error())
 	}
-	return p.appendMutatedDescriptorHistoryTx(ctx, tx, aasID, func(snapshot map[string]any) error {
+	return p.appendMutatedDescriptorHistoryTx(ctx, tx, aasID, previousSnapshot, func(snapshot map[string]any) error {
 		return history.ReplaceSnapshotArrayItem(snapshot, descriptorSubmodelsSnapshotField, snapshotSubmodelDescriptorMatchesID(submodel.Id), jsonable)
 	})
 }
 
-func (p *PostgreSQLAASRegistryDatabase) appendRemovedSubmodelDescriptorHistoryTx(ctx context.Context, tx *sql.Tx, aasID string, submodelID string) error {
-	return p.appendMutatedDescriptorHistoryTx(ctx, tx, aasID, func(snapshot map[string]any) error {
+func (p *PostgreSQLAASRegistryDatabase) appendRemovedSubmodelDescriptorHistoryTx(ctx context.Context, tx *sql.Tx, aasID string, previousSnapshot map[string]any, submodelID string) error {
+	return p.appendMutatedDescriptorHistoryTx(ctx, tx, aasID, previousSnapshot, func(snapshot map[string]any) error {
 		return history.RemoveSnapshotArrayItem(snapshot, descriptorSubmodelsSnapshotField, snapshotSubmodelDescriptorMatchesID(submodelID))
 	})
 }

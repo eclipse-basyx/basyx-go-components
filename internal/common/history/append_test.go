@@ -64,7 +64,7 @@ func TestAppendVersionTxInsertsWithoutUpdatingPreviousRows(t *testing.T) {
 
 	tx, err := db.Begin()
 	require.NoError(t, err)
-	err = AppendVersionTx(context.Background(), tx, TableAAS, "aas-1", ChangeCreated, map[string]any{"id": "aas-1"}, false)
+	err = AppendVersionTx(context.Background(), tx, TableAAS, "aas-1", ChangeCreated, nil, map[string]any{"id": "aas-1"}, false)
 	require.NoError(t, err)
 	require.NoError(t, tx.Commit())
 	require.NoError(t, mock.ExpectationsWereMet())
@@ -95,7 +95,7 @@ func TestAppendVersionTxSnapshotIntervalOneUsesPreviousHashOnly(t *testing.T) {
 
 	tx, err := db.Begin()
 	require.NoError(t, err)
-	err = AppendVersionTx(context.Background(), tx, TableAAS, "aas-1", ChangeUpdated, map[string]any{"id": "aas-1", "counter": json.Number("9007199254740993")}, false)
+	err = AppendVersionTx(context.Background(), tx, TableAAS, "aas-1", ChangeUpdated, nil, map[string]any{"id": "aas-1", "counter": json.Number("9007199254740993")}, false)
 	require.NoError(t, err)
 	require.NoError(t, tx.Commit())
 	require.NoError(t, mock.ExpectationsWereMet())
@@ -146,7 +146,7 @@ func TestAppendVersionTxWritesEvidenceArtifactBeforeCommitWhenEnabled(t *testing
 		PolicyID:            "policy-1",
 		MatchedRuleID:       matchedRuleID,
 	})
-	err = AppendVersionTx(ctx, tx, TableAAS, "aas-1", ChangeCreated, map[string]any{"id": "aas-1"}, false)
+	err = AppendVersionTx(ctx, tx, TableAAS, "aas-1", ChangeCreated, nil, map[string]any{"id": "aas-1"}, false)
 	require.NoError(t, err)
 	require.NoError(t, tx.Commit())
 
@@ -200,10 +200,38 @@ func TestAppendVersionTxWritesEvidenceWhenHistoryIsOff(t *testing.T) {
 
 	tx, err := db.Begin()
 	require.NoError(t, err)
-	require.NoError(t, AppendVersionTx(t.Context(), tx, TableAAS, "aas-1", ChangeCreated, map[string]any{"id": "aas-1"}, false))
+	require.NoError(t, AppendVersionTx(t.Context(), tx, TableAAS, "aas-1", ChangeCreated, nil, map[string]any{"id": "aas-1"}, false))
 	require.NoError(t, tx.Commit())
 	require.Len(t, store.artifacts, 1)
 	require.Equal(t, EvidenceArtifactMutation, store.artifacts[0].ArtifactType)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestAppendVersionTxRequiresPreviousSnapshotForEvidenceUpdate(t *testing.T) {
+	store := &recordingEvidenceStore{}
+	t.Cleanup(func() {
+		Configure(Config{Mode: ModeOff, Immutability: ImmutabilityNone, AuditIdentityMode: AuditIdentityNone})
+	})
+	Configure(Config{
+		Mode: ModeOff, FullSnapshotInterval: 3, Immutability: ImmutabilityNone,
+		AuditIdentityMode: AuditIdentityNone, EvidenceEnabled: true,
+		EvidenceProvider: EvidenceProviderS3, EvidenceStore: store,
+	})
+
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer func() { _ = db.Close() }()
+	mock.ExpectBegin()
+	mock.ExpectExec(`SELECT pg_advisory_xact_lock`).WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectQuery(mutationEvidenceStateQuery).WillReturnError(sql.ErrNoRows)
+	mock.ExpectRollback()
+
+	tx, err := db.Begin()
+	require.NoError(t, err)
+	err = AppendVersionTx(t.Context(), tx, TableAAS, "aas-1", ChangeUpdated, nil, map[string]any{"id": "aas-1", "idShort": "after"}, false)
+	require.ErrorContains(t, err, "HISTORY-EVIDENCE-PREVIOUS-MISSING")
+	require.NoError(t, tx.Rollback())
+	require.Empty(t, store.artifacts)
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 
@@ -327,7 +355,7 @@ func TestAppendVersionTxRollsBackWhenEvidenceStoreFails(t *testing.T) {
 
 	tx, err := db.Begin()
 	require.NoError(t, err)
-	err = AppendVersionTx(context.Background(), tx, TableAAS, "aas-1", ChangeCreated, map[string]any{"id": "aas-1"}, false)
+	err = AppendVersionTx(context.Background(), tx, TableAAS, "aas-1", ChangeCreated, nil, map[string]any{"id": "aas-1"}, false)
 	require.ErrorContains(t, err, "HISTORY-EVIDENCE-MUTATION-STORE")
 	require.ErrorContains(t, err, "503 Service Unavailable")
 	require.NotContains(t, err.Error(), "worm.internal")
@@ -376,7 +404,7 @@ func TestAppendVersionTxRollsBackWhenEvidenceReceiptCatalogFails(t *testing.T) {
 
 	tx, err := db.Begin()
 	require.NoError(t, err)
-	err = AppendVersionTx(context.Background(), tx, TableAAS, "aas-1", ChangeCreated, map[string]any{"id": "aas-1"}, false)
+	err = AppendVersionTx(context.Background(), tx, TableAAS, "aas-1", ChangeCreated, nil, map[string]any{"id": "aas-1"}, false)
 	require.ErrorContains(t, err, "HISTORY-EVIDENCE-MUTATION-CATALOGINSERT")
 	require.NoError(t, tx.Rollback())
 	require.Len(t, store.artifacts, 1)
@@ -416,7 +444,7 @@ func TestAppendMutatedVersionTxUsesLatestSnapshotAndRowHash(t *testing.T) {
 
 	tx, err := db.Begin()
 	require.NoError(t, err)
-	err = AppendMutatedVersionTx(context.Background(), tx, TableSubmodel, "sm-1", ChangeUpdated, func(snapshot map[string]any) error {
+	err = AppendMutatedVersionTx(context.Background(), tx, TableSubmodel, "sm-1", ChangeUpdated, nil, func(snapshot map[string]any) error {
 		snapshot["idShort"] = "updated"
 		return nil
 	})
@@ -452,7 +480,7 @@ func TestAppendMutatedVersionTxStoresDiffFromOriginalSnapshot(t *testing.T) {
 
 	tx, err := db.Begin()
 	require.NoError(t, err)
-	err = AppendMutatedVersionTx(context.Background(), tx, TableSubmodel, "sm-1", ChangeUpdated, func(snapshot map[string]any) error {
+	err = AppendMutatedVersionTx(context.Background(), tx, TableSubmodel, "sm-1", ChangeUpdated, nil, func(snapshot map[string]any) error {
 		snapshot["idShort"] = "after"
 		return nil
 	})
@@ -488,7 +516,7 @@ func TestAppendVersionTxStoresDiffWhenIntervalAllows(t *testing.T) {
 
 	tx, err := db.Begin()
 	require.NoError(t, err)
-	err = AppendVersionTx(context.Background(), tx, TableAAS, "aas-1", ChangeUpdated, map[string]any{"id": "aas-1", "idShort": "after", "description": largeUnchangedValue}, false)
+	err = AppendVersionTx(context.Background(), tx, TableAAS, "aas-1", ChangeUpdated, nil, map[string]any{"id": "aas-1", "idShort": "after", "description": largeUnchangedValue}, false)
 	require.NoError(t, err)
 	require.NoError(t, tx.Commit())
 	require.NoError(t, mock.ExpectationsWereMet())
@@ -522,7 +550,7 @@ func TestAppendVersionTxWritesDiffEvidenceArtifactWhenDiffPayloadIsSelected(t *t
 	mock.ExpectBegin()
 	mock.ExpectExec(`SELECT pg_advisory_xact_lock`).
 		WillReturnResult(sqlmock.NewResult(0, 1))
-	expectMutationEvidenceState(mock, seed, 0, baseSnapshot)
+	expectMutationEvidenceState(mock, seed, 0)
 	expectLatestSnapshotRestore(mock, TableAAS, "aas_history_payload", "aas-1", 1, baseSnapshot, false)
 	mock.ExpectQuery(`INSERT INTO "aas_history".*RETURNING "history_id"`).
 		WillReturnRows(sqlmock.NewRows([]string{"history_id"}).AddRow(2))
@@ -535,7 +563,7 @@ func TestAppendVersionTxWritesDiffEvidenceArtifactWhenDiffPayloadIsSelected(t *t
 
 	tx, err := db.Begin()
 	require.NoError(t, err)
-	err = AppendVersionTx(context.Background(), tx, TableAAS, "aas-1", ChangeUpdated, map[string]any{"id": "aas-1", "idShort": "after", "description": largeUnchangedValue}, false)
+	err = AppendVersionTx(context.Background(), tx, TableAAS, "aas-1", ChangeUpdated, baseSnapshot, map[string]any{"id": "aas-1", "idShort": "after", "description": largeUnchangedValue}, false)
 	require.NoError(t, err)
 	require.NoError(t, tx.Commit())
 
@@ -582,7 +610,7 @@ func TestAppendVersionTxSnapshotEvidenceIncludesEffectiveDiffOnlyForChangedField
 	mock.ExpectBegin()
 	mock.ExpectExec(`SELECT pg_advisory_xact_lock`).
 		WillReturnResult(sqlmock.NewResult(0, 1))
-	expectMutationEvidenceState(mock, seed, 0, baseSnapshot)
+	expectMutationEvidenceState(mock, seed, 0)
 	expectLatestSnapshotRestore(mock, TableAAS, "aas_history_payload", "aas-1", 1, baseSnapshot, false)
 	mock.ExpectQuery(`INSERT INTO "aas_history".*RETURNING "history_id"`).
 		WillReturnRows(sqlmock.NewRows([]string{"history_id"}).AddRow(2))
@@ -595,7 +623,7 @@ func TestAppendVersionTxSnapshotEvidenceIncludesEffectiveDiffOnlyForChangedField
 
 	tx, err := db.Begin()
 	require.NoError(t, err)
-	err = AppendVersionTx(context.Background(), tx, TableAAS, "aas-1", ChangeUpdated, targetSnapshot, false)
+	err = AppendVersionTx(context.Background(), tx, TableAAS, "aas-1", ChangeUpdated, baseSnapshot, targetSnapshot, false)
 	require.NoError(t, err)
 	require.NoError(t, tx.Commit())
 
@@ -642,7 +670,7 @@ func TestAppendVersionTxStoresSnapshotWhenDiffWouldBeLarger(t *testing.T) {
 
 	tx, err := db.Begin()
 	require.NoError(t, err)
-	err = AppendVersionTx(context.Background(), tx, TableAAS, "aas-1", ChangeUpdated, targetSnapshot, false)
+	err = AppendVersionTx(context.Background(), tx, TableAAS, "aas-1", ChangeUpdated, nil, targetSnapshot, false)
 	require.NoError(t, err)
 	require.NoError(t, tx.Commit())
 	require.NoError(t, mock.ExpectationsWereMet())
@@ -727,7 +755,7 @@ func TestAppendVersionTxStoresScheduledSnapshotAtIntervalBoundary(t *testing.T) 
 
 	tx, err := db.Begin()
 	require.NoError(t, err)
-	err = AppendVersionTx(context.Background(), tx, TableAAS, "aas-1", ChangeUpdated, map[string]any{"id": "aas-1", "idShort": "v4"}, false)
+	err = AppendVersionTx(context.Background(), tx, TableAAS, "aas-1", ChangeUpdated, nil, map[string]any{"id": "aas-1", "idShort": "v4"}, false)
 	require.NoError(t, err)
 	require.NoError(t, tx.Commit())
 	require.NoError(t, mock.ExpectationsWereMet())
@@ -739,7 +767,7 @@ func TestAppendVersionTxSkipsWritesWhenHistoryModeOff(t *testing.T) {
 	})
 	Configure(Config{Mode: ModeOff, Immutability: ImmutabilityNone, AuditIdentityMode: AuditIdentityMinimal})
 
-	err := AppendVersionTx(context.Background(), nil, TableAAS, "aas-1", ChangeCreated, map[string]any{"id": "aas-1"}, false)
+	err := AppendVersionTx(context.Background(), nil, TableAAS, "aas-1", ChangeCreated, nil, map[string]any{"id": "aas-1"}, false)
 	require.NoError(t, err)
 }
 
@@ -759,7 +787,7 @@ type recordingEvidenceStore struct {
 	getCount  int
 }
 
-const mutationEvidenceStateQuery = `SELECT "last_sequence", "last_event_hash", "last_content_hash", "events_since_snapshot", "current_snapshot" FROM "mutation_evidence_state"`
+const mutationEvidenceStateQuery = `SELECT "last_sequence", "last_event_hash", "last_content_hash", "events_since_snapshot" FROM "mutation_evidence_state"`
 
 type seededMutationEvidence struct {
 	sequence    int64
@@ -794,14 +822,10 @@ func seedMutationEvidenceStore(t *testing.T, store *recordingEvidenceStore, tabl
 	return seededMutationEvidence{sequence: sequence, eventHash: eventHash, contentHash: contentHash, objectKey: objectKey, sha256: SHA256Hex(body)}
 }
 
-func expectMutationEvidenceState(mock sqlmock.Sqlmock, seed seededMutationEvidence, eventsSinceSnapshot int, snapshot map[string]any) {
-	snapshotJSON, err := CanonicalJSON(snapshot)
-	if err != nil {
-		panic(err)
-	}
+func expectMutationEvidenceState(mock sqlmock.Sqlmock, seed seededMutationEvidence, eventsSinceSnapshot int) {
 	mock.ExpectQuery(mutationEvidenceStateQuery).
-		WillReturnRows(sqlmock.NewRows([]string{"last_sequence", "last_event_hash", "last_content_hash", "events_since_snapshot", "current_snapshot"}).
-			AddRow(seed.sequence, seed.eventHash, seed.contentHash, eventsSinceSnapshot, snapshotJSON))
+		WillReturnRows(sqlmock.NewRows([]string{"last_sequence", "last_event_hash", "last_content_hash", "events_since_snapshot"}).
+			AddRow(seed.sequence, seed.eventHash, seed.contentHash, eventsSinceSnapshot))
 }
 
 func expectMutationEvidenceCatalogInsert(mock sqlmock.Sqlmock, artifactID int64, _ bool) {

@@ -30,6 +30,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"sort"
 	"strings"
 	"time"
 
@@ -53,6 +54,8 @@ import (
 //   - table: History table name, for example TableAAS or TableSubmodel.
 //   - identifier: Stable entity identifier stored in the history table.
 //   - changeType: ChangeCreated, ChangeUpdated, or ChangeDeleted.
+//   - previousSnapshot: Complete entity snapshot immediately before the mutation.
+//     It is required for updates and deletions when evidence is enabled.
 //   - snapshot: Complete entity snapshot after the mutation.
 //   - deleted: True when the row represents a deletion tombstone.
 //
@@ -64,11 +67,11 @@ import (
 // Example:
 //
 //	snapshot := map[string]any{"id": aasID, "modelType": "AssetAdministrationShell"}
-//	err := AppendVersionTx(ctx, tx, TableAAS, aasID, ChangeUpdated, snapshot, false)
+//	err := AppendVersionTx(ctx, tx, TableAAS, aasID, ChangeUpdated, previousSnapshot, snapshot, false)
 //	if err != nil {
 //		return err
 //	}
-func AppendVersionTx(ctx context.Context, tx *sql.Tx, table string, identifier string, changeType string, snapshot map[string]any, deleted bool) error {
+func AppendVersionTx(ctx context.Context, tx *sql.Tx, table string, identifier string, changeType string, previousSnapshot map[string]any, snapshot map[string]any, deleted bool) error {
 	cfg := ActiveConfig()
 	if cfg.Mode == ModeOff && !cfg.EvidenceEnabled {
 		return nil
@@ -82,7 +85,7 @@ func AppendVersionTx(ctx context.Context, tx *sql.Tx, table string, identifier s
 		return err
 	}
 	if cfg.EvidenceEnabled {
-		return appendVersionWithEvidenceTx(ctx, tx, table, identifier, changeType, snapshot, deleted, cfg)
+		return appendVersionWithEvidenceTx(ctx, tx, table, identifier, changeType, previousSnapshot, snapshot, deleted, cfg)
 	}
 	if cfg.FullSnapshotInterval == DefaultFullSnapshotInterval {
 		previousHash, hashErr := latestRowHashTx(ctx, tx, table, identifier)
@@ -101,12 +104,12 @@ func AppendVersionTx(ctx context.Context, tx *sql.Tx, table string, identifier s
 	return appendVersionWithLatestTx(ctx, tx, table, identifier, changeType, snapshot, deleted, &latest, cfg)
 }
 
-// AppendMutatedVersionTx restores the latest snapshot, applies mutate, and appends the result.
+// AppendMutatedVersionTx applies mutate to a complete previous snapshot and appends the result.
 //
 // Use this helper for scoped updates where the caller has changed only a nested
-// portion of an entity and needs history to reconstruct the full snapshot first.
-// mutate receives a mutable copy of the latest non-deleted snapshot. The derived
-// version is stored with the same snapshot-or-diff rules as AppendVersionTx.
+// portion of an entity. Evidence-enabled callers provide the complete live
+// pre-mutation snapshot; history-only callers may pass nil and restore the
+// latest stored version. The derived version uses the same rules as AppendVersionTx.
 //
 // Parameters:
 //   - ctx: Request context. Audit metadata stored with ContextWithAudit is
@@ -115,7 +118,8 @@ func AppendVersionTx(ctx context.Context, tx *sql.Tx, table string, identifier s
 //   - table: History table name, for example TableAAS or TableSubmodel.
 //   - identifier: Stable entity identifier whose latest snapshot is restored.
 //   - changeType: ChangeCreated, ChangeUpdated, or ChangeDeleted.
-//   - mutate: Function that mutates the restored snapshot in place.
+//   - previousSnapshot: Complete entity snapshot immediately before the mutation.
+//   - mutate: Function that mutates a copy of previousSnapshot in place.
 //
 // Returns:
 //   - error: nil when history is disabled or the row was appended; otherwise a
@@ -124,13 +128,13 @@ func AppendVersionTx(ctx context.Context, tx *sql.Tx, table string, identifier s
 //
 // Example:
 //
-//	err := AppendMutatedVersionTx(ctx, tx, TableSubmodel, submodelID, ChangeUpdated, func(snapshot map[string]any) error {
+//	err := AppendMutatedVersionTx(ctx, tx, TableSubmodel, submodelID, ChangeUpdated, previousSnapshot, func(snapshot map[string]any) error {
 //		return AppendSnapshotArrayItem(snapshot, "submodelElements", element)
 //	})
 //	if err != nil {
 //		return err
 //	}
-func AppendMutatedVersionTx(ctx context.Context, tx *sql.Tx, table string, identifier string, changeType string, mutate SnapshotMutator) error {
+func AppendMutatedVersionTx(ctx context.Context, tx *sql.Tx, table string, identifier string, changeType string, previousSnapshot map[string]any, mutate SnapshotMutator) error {
 	cfg := ActiveConfig()
 	if cfg.Mode == ModeOff && !cfg.EvidenceEnabled {
 		return nil
@@ -147,22 +151,21 @@ func AppendMutatedVersionTx(ctx context.Context, tx *sql.Tx, table string, ident
 		return err
 	}
 
-	var mutationBase *latestVersion
-	var evidenceState *mutationEvidenceState
 	if cfg.EvidenceEnabled {
-		var stateErr error
-		evidenceState, stateErr = loadMutationEvidenceStateTx(ctx, tx, table, identifier)
-		if stateErr != nil {
-			return stateErr
+		if previousSnapshot == nil {
+			return common.NewInternalServerError("HISTORY-EVIDENCE-PREVIOUS-MISSING complete pre-mutation snapshot is required")
 		}
-		if evidenceState != nil {
-			mutationBase = &latestVersion{
-				snapshot:          evidenceState.snapshot,
-				rowHash:           evidenceState.lastEventHash,
-				rowsSinceSnapshot: evidenceState.eventsSinceSnapshot,
-			}
+		currentSnapshot, cloneErr := cloneSnapshotMap(previousSnapshot)
+		if cloneErr != nil {
+			return cloneErr
 		}
+		if err = mutate(currentSnapshot); err != nil {
+			return err
+		}
+		return appendVersionWithEvidenceTx(ctx, tx, table, identifier, changeType, previousSnapshot, currentSnapshot, false, cfg)
 	}
+
+	var mutationBase *latestVersion
 	if mutationBase == nil && cfg.Mode != ModeOff {
 		latest, latestErr := latestVersionTx(ctx, tx, table, identifier)
 		if latestErr != nil {
@@ -183,34 +186,35 @@ func AppendMutatedVersionTx(ctx context.Context, tx *sql.Tx, table string, ident
 	if err = mutate(currentSnapshot); err != nil {
 		return err
 	}
-	if cfg.EvidenceEnabled {
-		return appendVersionWithEvidenceStateTx(ctx, tx, table, identifier, changeType, currentSnapshot, false, cfg, evidenceState)
-	}
 	return appendVersionWithLatestTx(ctx, tx, table, identifier, changeType, currentSnapshot, false, mutationBase, cfg)
 }
 
-func appendVersionWithEvidenceTx(ctx context.Context, tx *sql.Tx, table string, identifier string, changeType string, snapshot map[string]any, deleted bool, cfg Config) error {
+func appendVersionWithEvidenceTx(ctx context.Context, tx *sql.Tx, table string, identifier string, changeType string, previousSnapshot map[string]any, snapshot map[string]any, deleted bool, cfg Config) error {
 	evidenceState, err := loadMutationEvidenceStateTx(ctx, tx, table, identifier)
 	if err != nil {
 		return err
 	}
-	return appendVersionWithEvidenceStateTx(ctx, tx, table, identifier, changeType, snapshot, deleted, cfg, evidenceState)
+	return appendVersionWithEvidenceStateTx(ctx, tx, table, identifier, changeType, previousSnapshot, snapshot, deleted, cfg, evidenceState)
 }
 
-func appendVersionWithEvidenceStateTx(ctx context.Context, tx *sql.Tx, table string, identifier string, changeType string, snapshot map[string]any, deleted bool, cfg Config, evidenceState *mutationEvidenceState) error {
-	var evidenceLatest *latestVersion
-	sequence := int64(1)
-	previousEvidenceHash := ""
-	if evidenceState != nil {
-		evidenceLatest = &latestVersion{snapshot: evidenceState.snapshot, rowHash: evidenceState.lastEventHash, rowsSinceSnapshot: evidenceState.eventsSinceSnapshot}
-		sequence = evidenceState.lastSequence + 1
-		previousEvidenceHash = evidenceState.lastEventHash
-	}
-	evidencePayload, err := buildHistoryPayload(snapshot, evidenceLatest, cfg)
+func appendVersionWithEvidenceStateTx(ctx context.Context, tx *sql.Tx, table string, identifier string, changeType string, previousSnapshot map[string]any, snapshot map[string]any, deleted bool, cfg Config, evidenceState *mutationEvidenceState) error {
+	previousVersion, err := evidencePreviousVersion(previousSnapshot, changeType, evidenceState)
 	if err != nil {
 		return err
 	}
-	effectiveDiff, err := buildEffectiveDiff(snapshot, evidenceLatest)
+	var payloadPrevious *latestVersion
+	sequence := int64(1)
+	previousEvidenceHash := ""
+	if evidenceState != nil {
+		payloadPrevious = previousVersion
+		sequence = evidenceState.lastSequence + 1
+		previousEvidenceHash = evidenceState.lastEventHash
+	}
+	evidencePayload, err := buildHistoryPayload(snapshot, payloadPrevious, cfg)
+	if err != nil {
+		return err
+	}
+	effectiveDiff, err := buildEffectiveDiff(snapshot, previousVersion)
 	if err != nil {
 		return err
 	}
@@ -262,6 +266,29 @@ func appendVersionWithEvidenceStateTx(ctx context.Context, tx *sql.Tx, table str
 	return err
 }
 
+func evidencePreviousVersion(previousSnapshot map[string]any, changeType string, state *mutationEvidenceState) (*latestVersion, error) {
+	if changeType == ChangeCreated {
+		return nil, nil
+	}
+	if previousSnapshot == nil {
+		return nil, common.NewInternalServerError("HISTORY-EVIDENCE-PREVIOUS-MISSING complete pre-mutation snapshot is required")
+	}
+	previous := &latestVersion{snapshot: previousSnapshot}
+	if state == nil {
+		return previous, nil
+	}
+	previousHash, err := CanonicalJSONHash(previousSnapshot)
+	if err != nil {
+		return nil, common.NewInternalServerError("HISTORY-EVIDENCE-PREVIOUS-HASH " + err.Error())
+	}
+	if !strings.EqualFold(previousHash, state.lastContentHash) {
+		return nil, common.NewInternalServerError("HISTORY-EVIDENCE-PREVIOUS-MISMATCH pre-mutation snapshot does not match the committed evidence head")
+	}
+	previous.rowHash = state.lastEventHash
+	previous.rowsSinceSnapshot = state.eventsSinceSnapshot
+	return previous, nil
+}
+
 func latestHistoryIdentityTx(ctx context.Context, tx *sql.Tx, table string, identifier string) (int64, string, error) {
 	query, args, err := goqu.From(table).
 		Select("history_id", "row_hash").
@@ -287,6 +314,33 @@ func validateAppendInputs(tx *sql.Tx, identifier string) (string, error) {
 		return "", common.NewErrBadRequest("HISTORY-APPEND-EMPTYID identifier must not be empty")
 	}
 	return identifier, nil
+}
+
+// LockMutationTx serializes an evidence-enabled model mutation before its
+// pre-mutation snapshot is read. The transaction keeps the lock through the
+// live-model change and evidence append.
+func LockMutationTx(ctx context.Context, tx *sql.Tx, table string, identifier string) error {
+	cfg := ActiveConfig()
+	if !cfg.EvidenceEnabled {
+		return nil
+	}
+	identifier, err := validateAppendInputs(tx, identifier)
+	if err != nil {
+		return err
+	}
+	return lockIdentifierTx(ctx, tx, table, identifier)
+}
+
+// LockMutationsTx acquires entity locks in stable order for bulk mutations.
+func LockMutationsTx(ctx context.Context, tx *sql.Tx, table string, identifiers []string) error {
+	ordered := append([]string(nil), identifiers...)
+	sort.Strings(ordered)
+	for _, identifier := range ordered {
+		if err := LockMutationTx(ctx, tx, table, identifier); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func appendVersionWithLatestTx(ctx context.Context, tx *sql.Tx, table string, identifier string, changeType string, snapshot map[string]any, deleted bool, latest *latestVersion, cfg Config) error {

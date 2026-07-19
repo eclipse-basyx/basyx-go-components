@@ -59,7 +59,7 @@ func (s *SubmodelDatabase) CreateSubmodel(ctx context.Context, submodel types.IS
 		return err
 	}
 
-	if err = s.appendSubmodelHistoryTx(ctx, tx, submodel, history.ChangeCreated, false); err != nil {
+	if err = s.appendSubmodelHistoryTx(ctx, tx, submodel, nil, history.ChangeCreated, false); err != nil {
 		return err
 	}
 
@@ -84,10 +84,13 @@ func (s *SubmodelDatabase) CreateSubmodelInTransaction(ctx context.Context, tx *
 	if err := s.createSubmodelInTransactionValidated(ctx, tx, submodel); err != nil {
 		return err
 	}
-	return s.appendSubmodelHistoryTx(ctx, tx, submodel, history.ChangeCreated, false)
+	return s.appendSubmodelHistoryTx(ctx, tx, submodel, nil, history.ChangeCreated, false)
 }
 
 func (s *SubmodelDatabase) createSubmodelInTransactionValidated(ctx context.Context, tx *sql.Tx, submodel types.ISubmodel) error {
+	if err := history.LockMutationTx(ctx, tx, history.TableSubmodel, submodel.ID()); err != nil {
+		return err
+	}
 	if err := s.ensureVisibleSubmodelCreateDoesNotExist(ctx, tx, submodel.ID()); err != nil {
 		return err
 	}
@@ -277,12 +280,16 @@ func (s *SubmodelDatabase) PatchSubmodel(ctx context.Context, submodelID string,
 		return common.NewInternalServerError("SMREPO-PATCHSM-STARTTX " + err.Error())
 	}
 	defer cleanup(&err)
+	previousSnapshot, err := s.loadSubmodelHistorySnapshotBeforeMutationTx(ctx, tx, submodelID)
+	if err != nil {
+		return err
+	}
 
 	if err = s.patchSubmodelInTransactionValidated(ctx, submodelID, tx, submodel); err != nil {
 		return err
 	}
 
-	if err = s.appendSubmodelHistoryTx(ctx, tx, submodel, history.ChangeUpdated, false); err != nil {
+	if err = s.appendSubmodelHistoryTx(ctx, tx, submodel, previousSnapshot, history.ChangeUpdated, false); err != nil {
 		return err
 	}
 
@@ -306,11 +313,15 @@ func (s *SubmodelDatabase) PatchSubmodelInTransaction(ctx context.Context, submo
 	if err := s.verifySubmodel(submodel, "SMREPO-PATCHSM-VERIFY"); err != nil {
 		return err
 	}
-
-	if err := s.patchSubmodelInTransactionValidated(ctx, submodelID, tx, submodel); err != nil {
+	previousSnapshot, err := s.loadSubmodelHistorySnapshotBeforeMutationTx(ctx, tx, submodelID)
+	if err != nil {
 		return err
 	}
-	return s.appendSubmodelHistoryTx(ctx, tx, submodel, history.ChangeUpdated, false)
+
+	if err = s.patchSubmodelInTransactionValidated(ctx, submodelID, tx, submodel); err != nil {
+		return err
+	}
+	return s.appendSubmodelHistoryTx(ctx, tx, submodel, previousSnapshot, history.ChangeUpdated, false)
 }
 
 func (s *SubmodelDatabase) patchSubmodelInTransactionValidated(_ context.Context, submodelID string, tx *sql.Tx, submodel types.ISubmodel) error {
@@ -337,12 +348,16 @@ func (s *SubmodelDatabase) PatchSubmodelMetadata(ctx context.Context, submodelID
 		return common.NewInternalServerError("SMREPO-PATCHSMMETA-STARTTX " + err.Error())
 	}
 	defer cleanup(&err)
+	previousSnapshot, err := s.loadSubmodelHistorySnapshotBeforeMutationTx(ctx, tx, submodelID)
+	if err != nil {
+		return err
+	}
 
 	if err = s.patchSubmodelMetadataInTransactionValidated(ctx, submodelID, tx, submodel); err != nil {
 		return err
 	}
 
-	if err = s.appendSubmodelMetadataHistoryTx(ctx, tx, submodelID, submodel); err != nil {
+	if err = s.appendSubmodelMetadataHistoryTx(ctx, tx, submodelID, previousSnapshot, submodel); err != nil {
 		return err
 	}
 
@@ -366,11 +381,15 @@ func (s *SubmodelDatabase) PatchSubmodelMetadataInTransaction(ctx context.Contex
 	if err := s.verifySubmodel(submodel, "SMREPO-PATCHSMMETA-VERIFY"); err != nil {
 		return err
 	}
-
-	if err := s.patchSubmodelMetadataInTransactionValidated(ctx, submodelID, tx, submodel); err != nil {
+	previousSnapshot, err := s.loadSubmodelHistorySnapshotBeforeMutationTx(ctx, tx, submodelID)
+	if err != nil {
 		return err
 	}
-	return s.appendSubmodelMetadataHistoryTx(ctx, tx, submodelID, submodel)
+
+	if err = s.patchSubmodelMetadataInTransactionValidated(ctx, submodelID, tx, submodel); err != nil {
+		return err
+	}
+	return s.appendSubmodelMetadataHistoryTx(ctx, tx, submodelID, previousSnapshot, submodel)
 }
 
 func (s *SubmodelDatabase) patchSubmodelMetadataInTransactionValidated(_ context.Context, submodelID string, tx *sql.Tx, submodel types.ISubmodel) error {
@@ -441,6 +460,10 @@ func (s *SubmodelDatabase) putSubmodelInTransaction(ctx context.Context, tx *sql
 			return false, common.NewErrDenied("SMREPO-PUTSM-ABACDENIED Existing submodel is not accessible under ABAC constraints")
 		}
 	}
+	previousSnapshot, err := s.loadSubmodelHistorySnapshotBeforeMutationTx(ctx, tx, submodelID)
+	if err != nil && !common.IsErrNotFound(err) {
+		return false, err
+	}
 
 	isUpdate, err := s.replaceSubmodelInTransaction(tx, submodelID, submodel, false)
 	if err != nil {
@@ -464,7 +487,7 @@ func (s *SubmodelDatabase) putSubmodelInTransaction(ctx context.Context, tx *sql
 	if isUpdate {
 		changeType = history.ChangeUpdated
 	}
-	if err := s.appendSubmodelHistoryTx(ctx, tx, submodel, changeType, false); err != nil {
+	if err := s.appendSubmodelHistoryTx(ctx, tx, submodel, previousSnapshot, changeType, false); err != nil {
 		return false, err
 	}
 
@@ -502,6 +525,9 @@ func (s *SubmodelDatabase) DeleteSubmodelInTransaction(ctx context.Context, tx *
 }
 
 func (s *SubmodelDatabase) deleteSubmodelInTransaction(ctx context.Context, tx *sql.Tx, submodelID string) error {
+	if err := history.LockMutationTx(ctx, tx, history.TableSubmodel, submodelID); err != nil {
+		return err
+	}
 	shouldEnforce, enforceErr := shouldEnforceFormula(ctx, "SMREPO-DELSM-SHOULDENFORCE")
 	if enforceErr != nil {
 		return enforceErr
@@ -526,8 +552,12 @@ func (s *SubmodelDatabase) deleteSubmodelInTransaction(ctx context.Context, tx *
 		}
 		return common.NewInternalServerError("SMREPO-DELSM-GETSMDATABASEID " + err.Error())
 	}
+	previousSnapshot, err := s.loadSubmodelHistorySnapshotBeforeMutationTx(ctx, tx, submodelID)
+	if err != nil {
+		return err
+	}
 
-	if err := history.AppendVersionTx(ctx, tx, history.TableSubmodel, submodelID, history.ChangeDeleted, map[string]any{"id": submodelID}, true); err != nil {
+	if err := history.AppendVersionTx(ctx, tx, history.TableSubmodel, submodelID, history.ChangeDeleted, previousSnapshot, map[string]any{"id": submodelID}, true); err != nil {
 		return err
 	}
 

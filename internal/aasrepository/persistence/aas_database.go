@@ -185,15 +185,15 @@ func aasToHistorySnapshot(aas types.IAssetAdministrationShell) (map[string]any, 
 	return jsonable, nil
 }
 
-func (s *AssetAdministrationShellDatabase) appendAASHistoryTx(ctx context.Context, tx *sql.Tx, aas types.IAssetAdministrationShell, changeType string, deleted bool) error {
+func (s *AssetAdministrationShellDatabase) appendAASHistoryTx(ctx context.Context, tx *sql.Tx, aas types.IAssetAdministrationShell, previousSnapshot map[string]any, changeType string, deleted bool) error {
 	snapshot, err := aasToHistorySnapshot(aas)
 	if err != nil {
 		return err
 	}
-	return history.AppendVersionTx(ctx, tx, history.TableAAS, aas.ID(), changeType, snapshot, deleted)
+	return history.AppendVersionTx(ctx, tx, history.TableAAS, aas.ID(), changeType, previousSnapshot, snapshot, deleted)
 }
 
-func (s *AssetAdministrationShellDatabase) appendCurrentAASHistoryTx(ctx context.Context, tx *sql.Tx, aasIdentifier string, changeType string) error {
+func (s *AssetAdministrationShellDatabase) appendCurrentAASHistoryTx(ctx context.Context, tx *sql.Tx, aasIdentifier string, previousSnapshot map[string]any, changeType string) error {
 	aasDBID, err := persistenceutils.GetAssetAdministrationShellDatabaseID(tx, aasIdentifier)
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -202,11 +202,36 @@ func (s *AssetAdministrationShellDatabase) appendCurrentAASHistoryTx(ctx context
 		return common.NewInternalServerError("AASREPO-HISTORY-GETAASDBID " + err.Error())
 	}
 
-	aas, err := s.getAssetAdministrationShellMapByDBIDInTransaction(ctx, tx, aasDBID)
+	stateReadCtx := ctx
+	if history.ActiveConfig().EvidenceEnabled {
+		stateReadCtx = auth.ContextWithoutQueryFilter(ctx)
+	}
+	aas, err := s.getAssetAdministrationShellMapByDBIDInTransaction(stateReadCtx, tx, aasDBID)
 	if err != nil {
 		return err
 	}
-	return s.appendAASHistoryTx(ctx, tx, aas, changeType, false)
+	return s.appendAASHistoryTx(ctx, tx, aas, previousSnapshot, changeType, false)
+}
+
+func (s *AssetAdministrationShellDatabase) loadAASHistorySnapshotBeforeMutationTx(ctx context.Context, tx *sql.Tx, aasIdentifier string) (map[string]any, error) {
+	if !history.ActiveConfig().EvidenceEnabled {
+		return nil, nil
+	}
+	if err := history.LockMutationTx(ctx, tx, history.TableAAS, aasIdentifier); err != nil {
+		return nil, err
+	}
+	aasDBID, err := persistenceutils.GetAssetAdministrationShellDatabaseID(tx, aasIdentifier)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, common.NewErrNotFound("AASREPO-HISTORY-AASNOTFOUND Asset Administration Shell with ID '" + aasIdentifier + "' not found")
+		}
+		return nil, common.NewInternalServerError("AASREPO-HISTORY-GETAASDBID " + err.Error())
+	}
+	aas, err := s.getAssetAdministrationShellMapByDBIDInTransaction(auth.ContextWithoutQueryFilter(ctx), tx, aasDBID)
+	if err != nil {
+		return nil, err
+	}
+	return aasToHistorySnapshot(aas)
 }
 
 // GetSignedAssetAdministrationShell returns a compact JWS for the requested
@@ -413,6 +438,9 @@ func (s *AssetAdministrationShellDatabase) CreateAssetAdministrationShellInTrans
 	if err := s.verifyAssetAdministrationShell(aas, "AASREPO-NEWAAS-VERIFY"); err != nil {
 		return err
 	}
+	if err := history.LockMutationTx(ctx, tx, history.TableAAS, aas.ID()); err != nil {
+		return err
+	}
 
 	if err := s.ensureVisibleAASCreateDoesNotExist(ctx, tx, aas.ID()); err != nil {
 		return err
@@ -439,7 +467,7 @@ func (s *AssetAdministrationShellDatabase) CreateAssetAdministrationShellInTrans
 		}
 	}
 
-	return s.appendAASHistoryTx(ctx, tx, aas, history.ChangeCreated, false)
+	return s.appendAASHistoryTx(ctx, tx, aas, nil, history.ChangeCreated, false)
 }
 
 // createAssetAdministrationShellInTransaction creates an AAS and all dependent records within an existing transaction.
@@ -605,6 +633,10 @@ func (s *AssetAdministrationShellDatabase) createSubmodelReferenceInAssetAdminis
 			return common.NewErrDenied("AASREPO-NEWSMREFINAAS-ABACDENIED writing to this AAS is not allowed")
 		}
 	}
+	previousSnapshot, err := s.loadAASHistorySnapshotBeforeMutationTx(ctx, tx, aasIdentifier)
+	if err != nil {
+		return err
+	}
 
 	if err := s.createSubmodelReferenceInAssetAdministrationShellInTransaction(tx, aasIdentifier, submodelRef); err != nil {
 		return err
@@ -622,7 +654,7 @@ func (s *AssetAdministrationShellDatabase) createSubmodelReferenceInAssetAdminis
 			return common.NewErrDenied("AASREPO-NEWSMREFINAAS-ABACDENIED written AAS is not accessible under ABAC constraints")
 		}
 	}
-	return s.appendAddedSubmodelReferenceHistoryTx(ctx, tx, aasIdentifier, submodelRef)
+	return s.appendAddedSubmodelReferenceHistoryTx(ctx, tx, aasIdentifier, previousSnapshot, submodelRef)
 }
 
 func (s *AssetAdministrationShellDatabase) getNextSubmodelReferencePositionInTransaction(tx *sql.Tx, aasDBID int64) (int, error) {
@@ -936,6 +968,9 @@ func (s *AssetAdministrationShellDatabase) PutAssetAdministrationShellByIDInTran
 
 func (s *AssetAdministrationShellDatabase) putAssetAdministrationShellByIDInTransactionValidated(ctx context.Context, tx *sql.Tx, aasIdentifier string, aas types.IAssetAdministrationShell) (bool, error) {
 	dialect := goqu.Dialect("postgres")
+	if err := history.LockMutationTx(ctx, tx, history.TableAAS, aasIdentifier); err != nil {
+		return false, err
+	}
 	isUpdate := true
 	existingID, scanErr := persistenceutils.GetAssetAdministrationShellDatabaseIDForUpdate(tx, aasIdentifier)
 	if scanErr != nil {
@@ -963,6 +998,13 @@ func (s *AssetAdministrationShellDatabase) putAssetAdministrationShellByIDInTran
 		}
 		if !visible {
 			return false, common.NewErrDenied("AASREPO-PUTAAS-ABACDENIED existing AAS is not accessible under ABAC constraints")
+		}
+	}
+	var previousSnapshot map[string]any
+	if isUpdate {
+		previousSnapshot, scanErr = s.loadAASHistorySnapshotBeforeMutationTx(ctx, tx, aasIdentifier)
+		if scanErr != nil {
+			return false, scanErr
 		}
 	}
 
@@ -1001,7 +1043,7 @@ func (s *AssetAdministrationShellDatabase) putAssetAdministrationShellByIDInTran
 	if isUpdate {
 		changeType = history.ChangeUpdated
 	}
-	if err := s.appendAASHistoryTx(ctx, tx, aas, changeType, false); err != nil {
+	if err := s.appendAASHistoryTx(ctx, tx, aas, previousSnapshot, changeType, false); err != nil {
 		return false, err
 	}
 
@@ -1025,6 +1067,9 @@ func (s *AssetAdministrationShellDatabase) DeleteAssetAdministrationShellByIDInT
 	if tx == nil {
 		return common.NewInternalServerError("AASREPO-DELAAS-NILTX transaction must not be nil")
 	}
+	if err := history.LockMutationTx(ctx, tx, history.TableAAS, aasIdentifier); err != nil {
+		return err
+	}
 
 	shouldEnforce, enforceErr := shouldEnforceFormula(ctx, "AASREPO-DELAAS-SHOULDENFORCE")
 	if enforceErr != nil {
@@ -1045,6 +1090,10 @@ func (s *AssetAdministrationShellDatabase) DeleteAssetAdministrationShellByIDInT
 
 	dialect := goqu.Dialect("postgres")
 	aasDBID, err := getAssetAdministrationShellDBIDForDelete(tx, aasIdentifier)
+	if err != nil {
+		return err
+	}
+	previousSnapshot, err := s.loadAASHistorySnapshotBeforeMutationTx(ctx, tx, aasIdentifier)
 	if err != nil {
 		return err
 	}
@@ -1072,7 +1121,7 @@ func (s *AssetAdministrationShellDatabase) DeleteAssetAdministrationShellByIDInT
 		return common.NewErrNotFound("AASREPO-DELAAS-AASNOTFOUND Asset Administration Shell with ID '" + aasIdentifier + "' not found")
 	}
 
-	return history.AppendVersionTx(ctx, tx, history.TableAAS, aasIdentifier, history.ChangeDeleted, map[string]any{"id": aasIdentifier}, true)
+	return history.AppendVersionTx(ctx, tx, history.TableAAS, aasIdentifier, history.ChangeDeleted, previousSnapshot, map[string]any{"id": aasIdentifier}, true)
 }
 
 func getAssetAdministrationShellDBIDForDelete(tx *sql.Tx, aasIdentifier string) (int64, error) {
@@ -1209,6 +1258,10 @@ func (s *AssetAdministrationShellDatabase) PutAssetInformationByAASIDInTransacti
 	if err != nil {
 		return err
 	}
+	previousSnapshot, err := s.loadAASHistorySnapshotBeforeMutationTx(ctx, tx, aasIdentifier)
+	if err != nil {
+		return err
+	}
 
 	if err := updateAssetInformationRecord(tx, &dialect, aasDBID, aasIdentifier, assetInformation, currentState); err != nil {
 		return err
@@ -1222,7 +1275,7 @@ func (s *AssetAdministrationShellDatabase) PutAssetInformationByAASIDInTransacti
 		return err
 	}
 
-	return s.appendAssetInformationHistoryTx(ctx, tx, aasIdentifier, assetInformation)
+	return s.appendAssetInformationHistoryTx(ctx, tx, aasIdentifier, previousSnapshot, assetInformation)
 }
 
 type currentAssetInformationState struct {
@@ -1582,6 +1635,10 @@ func (s *AssetAdministrationShellDatabase) PutThumbnailByAASIDReader(ctx context
 			return common.NewErrDenied("AASREPO-PUTTHUMBNAIL-ABACDENIED updating this AAS is not allowed")
 		}
 	}
+	previousSnapshot, err := s.loadAASHistorySnapshotBeforeMutationTx(ctx, tx, aasIdentifier)
+	if err != nil {
+		return err
+	}
 
 	thumbnailHandler, err := NewPostgreSQLThumbnailFileHandler(s.db)
 	if err != nil {
@@ -1604,7 +1661,7 @@ func (s *AssetAdministrationShellDatabase) PutThumbnailByAASIDReader(ctx context
 	}
 
 	mutationCtx := history.WithBinaryReferenceExpected(ctx, expectation)
-	if err = s.appendUploadedThumbnailHistoryTx(mutationCtx, tx, aasIdentifier); err != nil {
+	if err = s.appendUploadedThumbnailHistoryTx(mutationCtx, tx, aasIdentifier, previousSnapshot); err != nil {
 		return err
 	}
 	if err = history.RecordBinaryReferenceEvidenceTx(
@@ -1645,6 +1702,10 @@ func (s *AssetAdministrationShellDatabase) DeleteThumbnailByAASID(ctx context.Co
 			return common.NewErrDenied("AASREPO-DELTHUMBNAIL-ABACDENIED deleting this thumbnail is not allowed")
 		}
 	}
+	previousSnapshot, err := s.loadAASHistorySnapshotBeforeMutationTx(ctx, tx, aasIdentifier)
+	if err != nil {
+		return err
+	}
 
 	thumbnailHandler, err := NewPostgreSQLThumbnailFileHandler(s.db)
 	if err != nil {
@@ -1655,7 +1716,7 @@ func (s *AssetAdministrationShellDatabase) DeleteThumbnailByAASID(ctx context.Co
 		return deleteErr
 	}
 
-	if err = s.appendDeletedThumbnailHistoryTx(ctx, tx, aasIdentifier); err != nil {
+	if err = s.appendDeletedThumbnailHistoryTx(ctx, tx, aasIdentifier, previousSnapshot); err != nil {
 		return err
 	}
 
@@ -1909,12 +1970,16 @@ func (s *AssetAdministrationShellDatabase) deleteSubmodelReferenceInAssetAdminis
 			return common.NewErrDenied("AASREPO-DELSMREF-ABACDENIED deleting this submodel reference is not allowed")
 		}
 	}
+	previousSnapshot, err := s.loadAASHistorySnapshotBeforeMutationTx(ctx, tx, aasIdentifier)
+	if err != nil {
+		return err
+	}
 
 	if err := s.deleteSubmodelReferenceInAssetAdministrationShellInTransaction(tx, aasIdentifier, submodelIdentifier); err != nil {
 		return err
 	}
 
-	return s.appendRemovedSubmodelReferenceHistoryTx(ctx, tx, aasIdentifier, submodelIdentifier)
+	return s.appendRemovedSubmodelReferenceHistoryTx(ctx, tx, aasIdentifier, previousSnapshot, submodelIdentifier)
 }
 
 // deleteSubmodelReferenceInAssetAdministrationShellInTransaction removes a submodel reference within an existing transaction.

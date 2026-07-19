@@ -305,7 +305,7 @@ func (g *MutationCoverageGuard) Middleware(next http.Handler) http.Handler {
 //
 //	coverage, ok := MutationCoverageFromContext(ctx)
 //	if ok && coverage.Versioned {
-//		return AppendVersionTx(ctx, tx, TableSubmodel, id, ChangeUpdated, snapshot, false)
+//		return AppendVersionTx(ctx, tx, TableSubmodel, id, ChangeUpdated, previousSnapshot, snapshot, false)
 //	}
 func MutationCoverageFromContext(ctx context.Context) (MutationCoverage, bool) {
 	if ctx == nil {

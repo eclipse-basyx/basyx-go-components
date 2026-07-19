@@ -72,7 +72,7 @@ CREATE TABLE IF NOT EXISTS binary_evidence_receipt (
 );
 
 -- Bounded chain head used when evidence is enabled independently of PostgreSQL
--- history. Only the current checkpoint is cached; prior states remain in WORM.
+-- history. Model snapshots remain in the live model and immutable evidence.
 CREATE TABLE IF NOT EXISTS mutation_evidence_state (
   entity_type TEXT NOT NULL,
   identifier TEXT NOT NULL,
@@ -80,7 +80,6 @@ CREATE TABLE IF NOT EXISTS mutation_evidence_state (
   last_event_hash CHAR(64),
   last_content_hash CHAR(64),
   events_since_snapshot INTEGER NOT NULL DEFAULT 0 CHECK (events_since_snapshot >= 0),
-  current_snapshot JSONB,
   db_updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   PRIMARY KEY (entity_type, identifier)
 );

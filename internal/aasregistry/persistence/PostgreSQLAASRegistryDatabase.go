@@ -42,6 +42,7 @@ import (
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/descriptors"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/history"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
+	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -103,13 +104,52 @@ func (p *PostgreSQLAASRegistryDatabase) ExecuteInTransaction(
 	return common.ExecuteInTransaction(p.db, startErrorCode, commitErrorCode, fn)
 }
 
-func appendDescriptorHistoryTx(ctx context.Context, tx *sql.Tx, descriptor model.AssetAdministrationShellDescriptor, changeType string, deleted bool) error {
-	snapshot, err := descriptor.ToJsonable()
+func appendDescriptorHistoryTx(ctx context.Context, tx *sql.Tx, descriptor model.AssetAdministrationShellDescriptor, previousSnapshot map[string]any, changeType string, deleted bool) error {
+	snapshot, err := descriptorHistoryResultSnapshotTx(ctx, tx, descriptor, previousSnapshot, deleted)
 	if err != nil {
-		return common.NewInternalServerError("AASREG-HISTORY-TOJSONABLE " + err.Error())
+		return err
 	}
 
-	return history.AppendVersionTx(ctx, tx, history.TableDescriptor, descriptor.Id, changeType, snapshot, deleted)
+	return history.AppendVersionTx(ctx, tx, history.TableDescriptor, descriptor.Id, changeType, previousSnapshot, snapshot, deleted)
+}
+
+func descriptorHistoryResultSnapshotTx(ctx context.Context, tx *sql.Tx, descriptor model.AssetAdministrationShellDescriptor, previousSnapshot map[string]any, deleted bool) (map[string]any, error) {
+	if history.ActiveConfig().EvidenceEnabled {
+		if deleted {
+			if previousSnapshot == nil {
+				return nil, common.NewInternalServerError("AASREG-HISTORY-PREVIOUS-MISSING complete pre-mutation descriptor is required")
+			}
+			return previousSnapshot, nil
+		}
+		complete, err := descriptors.GetAssetAdministrationShellDescriptorByIDTx(auth.ContextWithoutQueryFilter(ctx), tx, descriptor.Id)
+		if err != nil {
+			return nil, err
+		}
+		descriptor = complete
+	}
+	snapshot, err := descriptor.ToJsonable()
+	if err != nil {
+		return nil, common.NewInternalServerError("AASREG-HISTORY-TOJSONABLE " + err.Error())
+	}
+	return snapshot, nil
+}
+
+func loadDescriptorHistorySnapshotBeforeMutationTx(ctx context.Context, tx *sql.Tx, aasID string) (map[string]any, error) {
+	if !history.ActiveConfig().EvidenceEnabled {
+		return nil, nil
+	}
+	if err := history.LockMutationTx(ctx, tx, history.TableDescriptor, aasID); err != nil {
+		return nil, err
+	}
+	descriptor, err := descriptors.GetAssetAdministrationShellDescriptorByIDTx(auth.ContextWithoutQueryFilter(ctx), tx, aasID)
+	if err != nil {
+		return nil, err
+	}
+	snapshot, err := descriptor.ToJsonable()
+	if err != nil {
+		return nil, common.NewInternalServerError("AASREG-HISTORY-TOJSONABLE " + err.Error())
+	}
+	return snapshot, nil
 }
 
 // InsertAdministrationShellDescriptor inserts the provided AAS descriptor
@@ -131,6 +171,9 @@ func (p *PostgreSQLAASRegistryDatabase) InsertAdministrationShellDescriptor(
 
 	var result model.AssetAdministrationShellDescriptor
 	err = common.ExecuteInTransaction(p.db, "AASREG-INSERTAASDESC-STARTTX", "AASREG-INSERTAASDESC-COMMIT", func(tx *sql.Tx) error {
+		if lockErr := history.LockMutationTx(ctx, tx, history.TableDescriptor, aasd.Id); lockErr != nil {
+			return lockErr
+		}
 		if batchErr := common.ExecutePostgreSQLBatchInTransaction(ctx, tx, batch.Statements()); batchErr != nil {
 			return mapInsertAASDescriptorError(batchErr)
 		}
@@ -142,7 +185,7 @@ func (p *PostgreSQLAASRegistryDatabase) InsertAdministrationShellDescriptor(
 			}
 			return getErr
 		}
-		if historyErr := appendDescriptorHistoryTx(ctx, tx, stored, history.ChangeCreated, false); historyErr != nil {
+		if historyErr := appendDescriptorHistoryTx(ctx, tx, stored, nil, history.ChangeCreated, false); historyErr != nil {
 			return historyErr
 		}
 
@@ -213,6 +256,9 @@ func (p *PostgreSQLAASRegistryDatabase) InsertAdministrationShellDescriptorInTra
 	if tx == nil {
 		return common.NewInternalServerError("AASREG-INSERTAASDESC-NILTX transaction must not be nil")
 	}
+	if err := history.LockMutationTx(ctx, tx, history.TableDescriptor, aasd.Id); err != nil {
+		return err
+	}
 	batch, err := descriptors.BuildAdministrationShellDescriptorCreateBatch(ctx, aasd)
 	if err != nil {
 		return err
@@ -229,7 +275,7 @@ func (p *PostgreSQLAASRegistryDatabase) InsertAdministrationShellDescriptorInTra
 	if err != nil {
 		return err
 	}
-	return appendDescriptorHistoryTx(ctx, tx, stored, history.ChangeCreated, false)
+	return appendDescriptorHistoryTx(ctx, tx, stored, nil, history.ChangeCreated, false)
 }
 
 // InsertAdministrationShellDescriptorsInTransaction inserts multiple AAS descriptors.
@@ -256,6 +302,13 @@ func (p *PostgreSQLAASRegistryDatabase) InsertAdministrationShellDescriptorsInTr
 	if len(aasDescriptors) == 0 {
 		return -1, nil
 	}
+	identifiers := make([]string, 0, len(aasDescriptors))
+	for _, descriptor := range aasDescriptors {
+		identifiers = append(identifiers, descriptor.Id)
+	}
+	if err := history.LockMutationsTx(ctx, tx, history.TableDescriptor, identifiers); err != nil {
+		return 0, err
+	}
 
 	batch, err := descriptors.BuildAdministrationShellDescriptorsCreateBatch(ctx, tx, aasDescriptors)
 	if err != nil {
@@ -277,7 +330,7 @@ func (p *PostgreSQLAASRegistryDatabase) InsertAdministrationShellDescriptorsInTr
 			}
 			return index, getErr
 		}
-		if historyErr := appendDescriptorHistoryTx(ctx, tx, stored, history.ChangeCreated, false); historyErr != nil {
+		if historyErr := appendDescriptorHistoryTx(ctx, tx, stored, nil, history.ChangeCreated, false); historyErr != nil {
 			return index, historyErr
 		}
 	}
@@ -385,6 +438,10 @@ func (p *PostgreSQLAASRegistryDatabase) DeleteAssetAdministrationShellDescriptor
 	aasIdentifier string,
 ) error {
 	return common.ExecuteInTransaction(p.db, "AASREG-DELAASDESC-STARTTX", "AASREG-DELAASDESC-COMMIT", func(tx *sql.Tx) error {
+		previousSnapshot, err := loadDescriptorHistorySnapshotBeforeMutationTx(ctx, tx, aasIdentifier)
+		if err != nil {
+			return err
+		}
 		existing, err := descriptors.GetAssetAdministrationShellDescriptorByIDTx(ctx, tx, aasIdentifier)
 		if err != nil {
 			return err
@@ -392,7 +449,7 @@ func (p *PostgreSQLAASRegistryDatabase) DeleteAssetAdministrationShellDescriptor
 		if err := descriptors.DeleteAssetAdministrationShellDescriptorByIDTx(ctx, tx, aasIdentifier); err != nil {
 			return err
 		}
-		return appendDescriptorHistoryTx(ctx, tx, existing, history.ChangeDeleted, true)
+		return appendDescriptorHistoryTx(ctx, tx, existing, previousSnapshot, history.ChangeDeleted, true)
 	})
 }
 
@@ -404,6 +461,10 @@ func (p *PostgreSQLAASRegistryDatabase) ReplaceAdministrationShellDescriptor(
 ) (model.AssetAdministrationShellDescriptor, error) {
 	var result model.AssetAdministrationShellDescriptor
 	err := common.ExecuteInTransaction(p.db, "AASREG-REPLACEAASDESC-STARTTX", "AASREG-REPLACEAASDESC-COMMIT", func(tx *sql.Tx) error {
+		previousSnapshot, snapshotErr := loadDescriptorHistorySnapshotBeforeMutationTx(ctx, tx, aasd.Id)
+		if snapshotErr != nil {
+			return snapshotErr
+		}
 		if _, err := descriptors.GetAssetAdministrationShellDescriptorByIDTx(ctx, tx, aasd.Id); err != nil {
 			return err
 		}
@@ -422,7 +483,7 @@ func (p *PostgreSQLAASRegistryDatabase) ReplaceAdministrationShellDescriptor(
 		if err != nil {
 			return err
 		}
-		if err := appendDescriptorHistoryTx(ctx, tx, stored, history.ChangeUpdated, false); err != nil {
+		if err := appendDescriptorHistoryTx(ctx, tx, stored, previousSnapshot, history.ChangeUpdated, false); err != nil {
 			return err
 		}
 		result = stored
@@ -445,6 +506,10 @@ func (p *PostgreSQLAASRegistryDatabase) UpsertAdministrationShellDescriptorInTra
 		return common.NewInternalServerError("AASREG-UPSERTAASDESC-NILTX transaction must not be nil")
 	}
 
+	previousSnapshot, err := loadDescriptorHistorySnapshotBeforeMutationTx(ctx, tx, aasd.Id)
+	if err != nil && !common.IsErrNotFound(err) {
+		return err
+	}
 	created, err := descriptors.UpsertAdministrationShellDescriptorTx(ctx, tx, aasd)
 	if err != nil {
 		return err
@@ -455,9 +520,9 @@ func (p *PostgreSQLAASRegistryDatabase) UpsertAdministrationShellDescriptorInTra
 		return err
 	}
 	if created {
-		return appendDescriptorHistoryTx(ctx, tx, stored, history.ChangeCreated, false)
+		return appendDescriptorHistoryTx(ctx, tx, stored, nil, history.ChangeCreated, false)
 	}
-	return appendDescriptorHistoryTx(ctx, tx, stored, history.ChangeUpdated, false)
+	return appendDescriptorHistoryTx(ctx, tx, stored, previousSnapshot, history.ChangeUpdated, false)
 }
 
 // DeleteAssetAdministrationShellDescriptorByIDInTransaction deletes an AAS
@@ -471,6 +536,10 @@ func (p *PostgreSQLAASRegistryDatabase) DeleteAssetAdministrationShellDescriptor
 		return common.NewInternalServerError("AASREG-DELAASDESC-NILTX transaction must not be nil")
 	}
 
+	previousSnapshot, err := loadDescriptorHistorySnapshotBeforeMutationTx(ctx, tx, aasIdentifier)
+	if err != nil {
+		return err
+	}
 	existing, err := descriptors.GetAssetAdministrationShellDescriptorByIDTx(ctx, tx, aasIdentifier)
 	if err != nil {
 		return err
@@ -478,7 +547,7 @@ func (p *PostgreSQLAASRegistryDatabase) DeleteAssetAdministrationShellDescriptor
 	if err := descriptors.DeleteAssetAdministrationShellDescriptorByIDTx(ctx, tx, aasIdentifier); err != nil {
 		return err
 	}
-	return appendDescriptorHistoryTx(ctx, tx, existing, history.ChangeDeleted, true)
+	return appendDescriptorHistoryTx(ctx, tx, existing, previousSnapshot, history.ChangeDeleted, true)
 }
 
 // DeleteAssetAdministrationShellDescriptorsByIDsInTransaction deletes multiple AAS descriptors.
@@ -507,19 +576,25 @@ func (p *PostgreSQLAASRegistryDatabase) DeleteAssetAdministrationShellDescriptor
 	}
 
 	existingDescriptors := make([]model.AssetAdministrationShellDescriptor, len(aasIdentifiers))
+	previousSnapshots := make([]map[string]any, len(aasIdentifiers))
 	for index, identifier := range aasIdentifiers {
+		previousSnapshot, snapshotErr := loadDescriptorHistorySnapshotBeforeMutationTx(ctx, tx, identifier)
+		if snapshotErr != nil {
+			return index, snapshotErr
+		}
 		existing, err := descriptors.GetAssetAdministrationShellDescriptorByIDTx(ctx, tx, identifier)
 		if err != nil {
 			return index, err
 		}
 		existingDescriptors[index] = existing
+		previousSnapshots[index] = previousSnapshot
 	}
 
 	if err := descriptors.DeleteAssetAdministrationShellDescriptorsByIDsTx(ctx, tx, aasIdentifiers); err != nil {
 		return 0, err
 	}
 	for index, existing := range existingDescriptors {
-		if err := appendDescriptorHistoryTx(ctx, tx, existing, history.ChangeDeleted, true); err != nil {
+		if err := appendDescriptorHistoryTx(ctx, tx, existing, previousSnapshots[index], history.ChangeDeleted, true); err != nil {
 			return index, err
 		}
 	}
@@ -560,11 +635,15 @@ func (p *PostgreSQLAASRegistryDatabase) InsertSubmodelDescriptorForAAS(
 ) (model.SubmodelDescriptor, error) {
 	var result model.SubmodelDescriptor
 	err := common.ExecuteInTransaction(p.db, "AASREG-INSERTSMDESCFORAAS-STARTTX", "AASREG-INSERTSMDESCFORAAS-COMMIT", func(tx *sql.Tx) error {
+		previousSnapshot, snapshotErr := loadDescriptorHistorySnapshotBeforeMutationTx(ctx, tx, aasID)
+		if snapshotErr != nil {
+			return snapshotErr
+		}
 		stored, err := descriptors.InsertSubmodelDescriptorForAASTx(ctx, tx, aasID, submodel)
 		if err != nil {
 			return err
 		}
-		if err := p.appendAddedSubmodelDescriptorHistoryTx(ctx, tx, aasID, stored); err != nil {
+		if err := p.appendAddedSubmodelDescriptorHistoryTx(ctx, tx, aasID, previousSnapshot, stored); err != nil {
 			return err
 		}
 		result = stored
@@ -585,6 +664,10 @@ func (p *PostgreSQLAASRegistryDatabase) ReplaceSubmodelDescriptorForAAS(
 ) (model.SubmodelDescriptor, error) {
 	var result model.SubmodelDescriptor
 	err := common.ExecuteInTransaction(p.db, "AASREG-REPLACESMDESCFORAAS-STARTTX", "AASREG-REPLACESMDESCFORAAS-COMMIT", func(tx *sql.Tx) error {
+		previousSnapshot, snapshotErr := loadDescriptorHistorySnapshotBeforeMutationTx(ctx, tx, aasID)
+		if snapshotErr != nil {
+			return snapshotErr
+		}
 		if _, err := descriptors.GetSubmodelDescriptorForAASByID(ctx, tx, aasID, submodel.Id); err != nil {
 			return err
 		}
@@ -595,7 +678,7 @@ func (p *PostgreSQLAASRegistryDatabase) ReplaceSubmodelDescriptorForAAS(
 		if err != nil {
 			return err
 		}
-		if err := p.appendReplacedSubmodelDescriptorHistoryTx(ctx, tx, aasID, stored); err != nil {
+		if err := p.appendReplacedSubmodelDescriptorHistoryTx(ctx, tx, aasID, previousSnapshot, stored); err != nil {
 			return err
 		}
 		result = stored
@@ -625,13 +708,17 @@ func (p *PostgreSQLAASRegistryDatabase) DeleteSubmodelDescriptorForAASByID(
 	submodelID string,
 ) error {
 	return common.ExecuteInTransaction(p.db, "AASREG-DELSMDESCFORAAS-STARTTX", "AASREG-DELSMDESCFORAAS-COMMIT", func(tx *sql.Tx) error {
+		previousSnapshot, snapshotErr := loadDescriptorHistorySnapshotBeforeMutationTx(ctx, tx, aasID)
+		if snapshotErr != nil {
+			return snapshotErr
+		}
 		if _, err := descriptors.GetSubmodelDescriptorForAASByID(ctx, tx, aasID, submodelID); err != nil {
 			return err
 		}
 		if err := descriptors.DeleteSubmodelDescriptorForAASByIDTx(ctx, tx, aasID, submodelID); err != nil {
 			return err
 		}
-		return p.appendRemovedSubmodelDescriptorHistoryTx(ctx, tx, aasID, submodelID)
+		return p.appendRemovedSubmodelDescriptorHistoryTx(ctx, tx, aasID, previousSnapshot, submodelID)
 	})
 }
 

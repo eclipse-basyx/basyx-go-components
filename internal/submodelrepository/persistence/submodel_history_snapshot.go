@@ -34,6 +34,7 @@ import (
 	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/history"
+	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 	submodelpath "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/path"
 	submodelelements "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/submodelElements"
 )
@@ -49,9 +50,10 @@ func (s *SubmodelDatabase) appendChangedSubmodelElementHistoryTx(
 	ctx context.Context,
 	tx *sql.Tx,
 	submodelID string,
+	previousSnapshot map[string]any,
 	mutations ...submodelElementRootMutation,
 ) error {
-	return s.appendMutatedSubmodelHistoryTx(ctx, tx, submodelID, func(snapshot map[string]any) error {
+	return s.appendMutatedSubmodelHistoryTx(ctx, tx, submodelID, previousSnapshot, func(snapshot map[string]any) error {
 		for _, mutation := range mutations {
 			previousRoot, err := submodelElementRootPath(mutation.previousPath)
 			if err != nil {
@@ -78,14 +80,14 @@ func (s *SubmodelDatabase) appendChangedSubmodelElementHistoryTx(
 	})
 }
 
-func (s *SubmodelDatabase) appendSubmodelMetadataHistoryTx(ctx context.Context, tx *sql.Tx, submodelID string, submodel types.ISubmodel) error {
+func (s *SubmodelDatabase) appendSubmodelMetadataHistoryTx(ctx context.Context, tx *sql.Tx, submodelID string, previousSnapshot map[string]any, submodel types.ISubmodel) error {
 	metadata, err := submodelToHistorySnapshot(submodel)
 	if err != nil {
 		return err
 	}
 	delete(metadata, submodelElementsSnapshotField)
 
-	return s.appendMutatedSubmodelHistoryTx(ctx, tx, submodelID, func(snapshot map[string]any) error {
+	return s.appendMutatedSubmodelHistoryTx(ctx, tx, submodelID, previousSnapshot, func(snapshot map[string]any) error {
 		elements, hasElements := snapshot[submodelElementsSnapshotField]
 		clear(snapshot)
 		for key, value := range metadata {
@@ -98,18 +100,22 @@ func (s *SubmodelDatabase) appendSubmodelMetadataHistoryTx(ctx context.Context, 
 	})
 }
 
-func (s *SubmodelDatabase) appendMutatedSubmodelHistoryTx(ctx context.Context, tx *sql.Tx, submodelID string, mutate history.SnapshotMutator) error {
-	err := history.AppendMutatedVersionTx(ctx, tx, history.TableSubmodel, submodelID, history.ChangeUpdated, func(snapshot map[string]any) error {
+func (s *SubmodelDatabase) appendMutatedSubmodelHistoryTx(ctx context.Context, tx *sql.Tx, submodelID string, previousSnapshot map[string]any, mutate history.SnapshotMutator) error {
+	err := history.AppendMutatedVersionTx(ctx, tx, history.TableSubmodel, submodelID, history.ChangeUpdated, previousSnapshot, func(snapshot map[string]any) error {
 		return mutate(snapshot)
 	})
 	if err == nil || !common.IsErrNotFound(err) {
 		return err
 	}
-	return s.appendCurrentSubmodelHistoryTx(ctx, tx, submodelID, history.ChangeUpdated)
+	return s.appendCurrentSubmodelHistoryTx(ctx, tx, submodelID, previousSnapshot, history.ChangeUpdated)
 }
 
 func loadSubmodelElementRootSnapshotTx(ctx context.Context, tx *sql.Tx, submodelID string, rootPath string) (map[string]any, error) {
-	rootElement, err := submodelelements.GetSubmodelElementByIDShortOrPathTx(ctx, tx, submodelID, rootPath, "deep")
+	stateReadCtx := ctx
+	if history.ActiveConfig().EvidenceEnabled {
+		stateReadCtx = auth.ContextWithoutQueryFilter(ctx)
+	}
+	rootElement, err := submodelelements.GetSubmodelElementByIDShortOrPathTx(stateReadCtx, tx, submodelID, rootPath, "deep")
 	if err != nil {
 		return nil, err
 	}

@@ -335,11 +335,11 @@ The event describes the owning identifiable. An SME is nested content of a Submo
 
 **What happens for nested `idShortPath` values?**
 
-For nested paths such as `Measurements.temperature`, history still stores the complete Submodel snapshot. Internally, the implementation refreshes the affected top-level SME subtree, `Measurements` in this example, and combines it with the previous Submodel snapshot. This avoids reading the entire current Submodel after every nested change.
+For nested paths such as `Measurements.temperature`, history still represents the complete Submodel snapshot. With WORM evidence enabled, the persistence layer reads the complete Submodel before the change, refreshes the affected top-level SME subtree after the change, and combines both explicitly. The small PostgreSQL evidence-head row never contains the model snapshot. With PostgreSQL history only, the existing history reconstruction optimization remains available.
 
 **What happens if the Submodel has no earlier snapshot?**
 
-The first partial mutation falls back to reading the complete current Submodel once. Later partial mutations can derive the new snapshot from history.
+With WORM evidence enabled, every partial mutation reads the complete live pre-mutation Submodel while holding its evidence lock. This avoids depending on PostgreSQL history or rewriting a duplicate full-model checkpoint in the evidence catalog. With PostgreSQL history only, the first partial mutation reads the complete current Submodel and later mutations can derive the new snapshot from history.
 
 **Does deleting an SME container create a separate history entry for every nested SME?**
 

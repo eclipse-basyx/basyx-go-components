@@ -33,7 +33,6 @@ import (
 	"log"
 	"net/url"
 	"path"
-	"strings"
 	"time"
 
 	"github.com/doug-martin/goqu/v9"
@@ -56,7 +55,6 @@ type mutationEvidenceState struct {
 	lastEventHash       string
 	lastContentHash     string
 	eventsSinceSnapshot int
-	snapshot            map[string]any
 }
 
 // MutationEvidenceResult identifies a committed mutation artifact inside the
@@ -87,7 +85,7 @@ type mutationEvidenceWrite struct {
 
 func loadMutationEvidenceStateTx(ctx context.Context, tx *sql.Tx, table string, identifier string) (*mutationEvidenceState, error) {
 	query, args, err := goqu.From(TableMutationEvidenceState).
-		Select("last_sequence", "last_event_hash", "last_content_hash", "events_since_snapshot", "current_snapshot").
+		Select("last_sequence", "last_event_hash", "last_content_hash", "events_since_snapshot").
 		Where(goqu.Ex{"entity_type": table, "identifier": identifier}).
 		ToSQL()
 	if err != nil {
@@ -95,9 +93,8 @@ func loadMutationEvidenceStateTx(ctx context.Context, tx *sql.Tx, table string, 
 	}
 	var state mutationEvidenceState
 	var previousHash, contentHash sql.NullString
-	var snapshotJSON []byte
 	if err = tx.QueryRowContext(ctx, query, args...).Scan(
-		&state.lastSequence, &previousHash, &contentHash, &state.eventsSinceSnapshot, &snapshotJSON,
+		&state.lastSequence, &previousHash, &contentHash, &state.eventsSinceSnapshot,
 	); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, nil
@@ -106,15 +103,8 @@ func loadMutationEvidenceStateTx(ctx context.Context, tx *sql.Tx, table string, 
 	}
 	state.lastEventHash = previousHash.String
 	state.lastContentHash = contentHash.String
-	if len(snapshotJSON) == 0 || state.lastContentHash == "" {
-		return nil, common.NewInternalServerError("HISTORY-EVIDENCE-STATE-SNAPSHOT committed evidence state has no current snapshot")
-	}
-	if err = decodeJSONPreservingNumbers(snapshotJSON, &state.snapshot); err != nil {
-		return nil, common.NewInternalServerError("HISTORY-EVIDENCE-STATE-DECODE " + err.Error())
-	}
-	actualHash, hashErr := CanonicalJSONHash(state.snapshot)
-	if hashErr != nil || !strings.EqualFold(actualHash, state.lastContentHash) {
-		return nil, common.NewInternalServerError("HISTORY-EVIDENCE-STATE-HASH current snapshot does not match the committed content hash")
+	if state.lastEventHash == "" || state.lastContentHash == "" {
+		return nil, common.NewInternalServerError("HISTORY-EVIDENCE-STATE-HEAD committed evidence state has no chain head")
 	}
 	return &state, nil
 }
@@ -265,11 +255,6 @@ func recordMutationEvidenceTx(ctx context.Context, tx *sql.Tx, write mutationEvi
 		"last_event_hash": eventHash, "last_content_hash": contentHash,
 		"events_since_snapshot": write.eventsSinceSnapshot, "db_updated_at": time.Now().UTC(),
 	}
-	snapshotJSON, err := CanonicalJSON(write.snapshot)
-	if err != nil {
-		return 0, common.NewInternalServerError("HISTORY-EVIDENCE-MUTATION-STATESNAPSHOT " + err.Error())
-	}
-	stateRecord["current_snapshot"] = goqu.L("?::jsonb", string(snapshotJSON))
 	stateSQL, stateArgs, err := goqu.Insert(TableMutationEvidenceState).Rows(stateRecord).
 		OnConflict(goqu.DoUpdate("entity_type,identifier", stateRecord)).ToSQL()
 	if err != nil {

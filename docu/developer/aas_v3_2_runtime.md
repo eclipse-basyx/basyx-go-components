@@ -112,11 +112,11 @@ Each runtime-created row stores a deterministic SHA-256 hash of the reconstructe
 
 The shared implementation lives in `internal/common/history`.
 
-- `AppendVersionTx` receives a complete resulting snapshot supplied by the persistence layer. It selects a snapshot checkpoint or diff according to `history.fullSnapshotInterval` and payload size, then writes the enabled sinks.
-- `AppendMutatedVersionTx` restores the complete previous state from the bounded current checkpoint in `mutation_evidence_state`, applies the scoped persistence-layer mutation, and records the complete result. It does not read prior WORM objects or PostgreSQL history payloads during a write.
+- `AppendVersionTx` receives complete pre-mutation and resulting snapshots supplied by the persistence layer. It selects a snapshot checkpoint or diff according to `history.fullSnapshotInterval` and payload size, then writes the enabled sinks.
+- For scoped changes, the persistence adapter reads the complete live entity before changing it and passes that snapshot to `AppendMutatedVersionTx`. The helper applies the scoped mutation to a copy and records the complete result. Evidence-only writes never reconstruct model state from PostgreSQL history or prior WORM objects.
 - PostgreSQL history insertion remains a separate sink and uses the same resulting snapshot when history mode is `api` or `audit`.
-- The recorder acquires a transaction-level PostgreSQL advisory lock derived from the entity type and identifier. The lock serializes evidence sequences and predecessor hashes for the same identifiable while allowing unrelated identifiers to proceed independently.
-- `mutation_evidence_state` stores one current checkpoint per entity, not a growing history. Prior states remain exclusively in immutable evidence artifacts and, when enabled, PostgreSQL history.
+- Evidence-enabled persistence paths acquire a transaction-level PostgreSQL advisory lock derived from the entity type and identifier before reading the pre-mutation snapshot. The lock is held through the live change and evidence append, serializing snapshots, evidence sequences, and predecessor hashes for the same identifiable while allowing unrelated identifiers to proceed independently. Bulk paths acquire these locks in identifier order.
+- `mutation_evidence_state` stores only the bounded chain head: terminal sequence, event/content hashes, and the snapshot-interval counter. It stores no model snapshot or diff. Model states remain in the live model, immutable evidence artifacts, and, when enabled, PostgreSQL history.
 
 ```mermaid
 sequenceDiagram
@@ -125,10 +125,10 @@ sequenceDiagram
     participant Catalog as mutation_evidence catalog
     participant History as Optional PostgreSQL history
     participant Evidence as WORM EvidenceStore
+    API->>Catalog: Advisory lock(entity, identifier)
     API->>Live: Load complete previous snapshot
     API->>Live: Apply current-state mutation in transaction
-    API->>Live: Load complete resulting snapshot
-    API->>Catalog: Advisory lock(entity, identifier)
+    API->>Live: Load or construct complete result
     opt history.mode is api or audit
         API->>History: INSERT snapshot or RFC 6902 diff row
     end

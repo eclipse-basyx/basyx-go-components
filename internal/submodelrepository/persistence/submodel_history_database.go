@@ -34,22 +34,41 @@ import (
 	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/history"
+	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 )
 
-func (s *SubmodelDatabase) appendSubmodelHistoryTx(ctx context.Context, tx *sql.Tx, submodel types.ISubmodel, changeType string, deleted bool) error {
+func (s *SubmodelDatabase) appendSubmodelHistoryTx(ctx context.Context, tx *sql.Tx, submodel types.ISubmodel, previousSnapshot map[string]any, changeType string, deleted bool) error {
 	snapshot, err := submodelToHistorySnapshot(submodel)
 	if err != nil {
 		return err
 	}
-	return history.AppendVersionTx(ctx, tx, history.TableSubmodel, submodel.ID(), changeType, snapshot, deleted)
+	return history.AppendVersionTx(ctx, tx, history.TableSubmodel, submodel.ID(), changeType, previousSnapshot, snapshot, deleted)
 }
 
-func (s *SubmodelDatabase) appendCurrentSubmodelHistoryTx(ctx context.Context, tx *sql.Tx, submodelIdentifier string, changeType string) error {
-	submodel, err := s.getSubmodelByIDInTransaction(ctx, tx, submodelIdentifier, "deep", false)
+func (s *SubmodelDatabase) appendCurrentSubmodelHistoryTx(ctx context.Context, tx *sql.Tx, submodelIdentifier string, previousSnapshot map[string]any, changeType string) error {
+	stateReadCtx := ctx
+	if history.ActiveConfig().EvidenceEnabled {
+		stateReadCtx = auth.ContextWithoutQueryFilter(ctx)
+	}
+	submodel, err := s.getSubmodelByIDInTransaction(stateReadCtx, tx, submodelIdentifier, "deep", false)
 	if err != nil {
 		return err
 	}
-	return s.appendSubmodelHistoryTx(ctx, tx, submodel, changeType, false)
+	return s.appendSubmodelHistoryTx(ctx, tx, submodel, previousSnapshot, changeType, false)
+}
+
+func (s *SubmodelDatabase) loadSubmodelHistorySnapshotBeforeMutationTx(ctx context.Context, tx *sql.Tx, submodelIdentifier string) (map[string]any, error) {
+	if !history.ActiveConfig().EvidenceEnabled {
+		return nil, nil
+	}
+	if err := history.LockMutationTx(ctx, tx, history.TableSubmodel, submodelIdentifier); err != nil {
+		return nil, err
+	}
+	submodel, err := s.getSubmodelByIDInTransaction(auth.ContextWithoutQueryFilter(ctx), tx, submodelIdentifier, "deep", false)
+	if err != nil {
+		return nil, err
+	}
+	return submodelToHistorySnapshot(submodel)
 }
 
 func submodelToHistorySnapshot(submodel types.ISubmodel) (map[string]any, error) {

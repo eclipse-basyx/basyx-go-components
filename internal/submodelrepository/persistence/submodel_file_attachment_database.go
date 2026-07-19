@@ -91,11 +91,15 @@ func (s *SubmodelDatabase) UploadFileAttachmentWithHistory(ctx context.Context, 
 	}
 
 	return common.ExecuteInTransaction(s.db, "SMREPO-UPLOADFILEHIST-STARTTX", "SMREPO-UPLOADFILEHIST-COMMIT", func(tx *sql.Tx) error {
+		previousSnapshot, snapshotErr := s.loadSubmodelHistorySnapshotBeforeMutationTx(ctx, tx, submodelID)
+		if snapshotErr != nil {
+			return snapshotErr
+		}
 		reference, contentType, uploadErr := fileHandler.UploadManagedFileAttachmentTx(ctx, tx, submodelID, idShortPath, file, fileName)
 		if uploadErr != nil {
 			return uploadErr
 		}
-		return s.recordFileUploadMutationTx(ctx, tx, submodelID, idShortPath, reference, contentType)
+		return s.recordFileUploadMutationTx(ctx, tx, submodelID, idShortPath, previousSnapshot, reference, contentType)
 	})
 }
 
@@ -107,15 +111,19 @@ func (s *SubmodelDatabase) UploadFileAttachmentReaderWithHistory(ctx context.Con
 	}
 
 	return common.ExecuteInTransaction(s.db, "SMREPO-UPLOADFILEHIST-STARTTX", "SMREPO-UPLOADFILEHIST-COMMIT", func(tx *sql.Tx) error {
+		previousSnapshot, snapshotErr := s.loadSubmodelHistorySnapshotBeforeMutationTx(ctx, tx, submodelID)
+		if snapshotErr != nil {
+			return snapshotErr
+		}
 		reference, contentType, uploadErr := fileHandler.UploadManagedFileAttachmentReaderTx(ctx, tx, submodelID, idShortPath, file, fileName)
 		if uploadErr != nil {
 			return uploadErr
 		}
-		return s.recordFileUploadMutationTx(ctx, tx, submodelID, idShortPath, reference, contentType)
+		return s.recordFileUploadMutationTx(ctx, tx, submodelID, idShortPath, previousSnapshot, reference, contentType)
 	})
 }
 
-func (s *SubmodelDatabase) recordFileUploadMutationTx(ctx context.Context, tx *sql.Tx, submodelID string, idShortPath string, reference binarycontent.Reference, contentType string) error {
+func (s *SubmodelDatabase) recordFileUploadMutationTx(ctx context.Context, tx *sql.Tx, submodelID string, idShortPath string, previousSnapshot map[string]any, reference binarycontent.Reference, contentType string) error {
 	binaryReceipt, err := history.EnsureBinaryEvidenceTx(ctx, tx, reference.Content, contentType)
 	if err != nil {
 		return err
@@ -127,7 +135,7 @@ func (s *SubmodelDatabase) recordFileUploadMutationTx(ctx context.Context, tx *s
 		return err
 	}
 	mutationCtx := history.WithBinaryReferenceExpected(ctx, expectation)
-	if err = s.appendChangedSubmodelElementHistoryTx(mutationCtx, tx, submodelID, submodelElementRootMutation{
+	if err = s.appendChangedSubmodelElementHistoryTx(mutationCtx, tx, submodelID, previousSnapshot, submodelElementRootMutation{
 		previousPath: idShortPath,
 		currentPath:  idShortPath,
 	}); err != nil {
@@ -175,10 +183,14 @@ func (s *SubmodelDatabase) DeleteFileAttachmentWithHistory(ctx context.Context, 
 	}
 
 	return common.ExecuteInTransaction(s.db, "SMREPO-DELETEFILEHIST-STARTTX", "SMREPO-DELETEFILEHIST-COMMIT", func(tx *sql.Tx) error {
+		previousSnapshot, snapshotErr := s.loadSubmodelHistorySnapshotBeforeMutationTx(ctx, tx, submodelID)
+		if snapshotErr != nil {
+			return snapshotErr
+		}
 		if err := fileHandler.DeleteManagedFileAttachmentTx(ctx, tx, submodelID, idShortPath); err != nil {
 			return err
 		}
-		return s.appendChangedSubmodelElementHistoryTx(ctx, tx, submodelID, submodelElementRootMutation{
+		return s.appendChangedSubmodelElementHistoryTx(ctx, tx, submodelID, previousSnapshot, submodelElementRootMutation{
 			previousPath: idShortPath,
 			currentPath:  idShortPath,
 		})

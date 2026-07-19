@@ -37,6 +37,7 @@ import (
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/descriptors"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/history"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
+	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 )
 
 // PostgreSQLSMDatabase provides PostgreSQL-based persistence for the Submodel Registry Service.
@@ -99,13 +100,44 @@ func (p *PostgreSQLSMDatabase) ListSubmodelDescriptors(
 	return descriptors.ListSubmodelDescriptors(ctx, p.db, limit, cursor, createdFrom, updatedFrom)
 }
 
-func appendSubmodelDescriptorHistoryTx(ctx context.Context, tx *sql.Tx, descriptor model.SubmodelDescriptor, changeType string, deleted bool) error {
+func appendSubmodelDescriptorHistoryTx(ctx context.Context, tx *sql.Tx, descriptor model.SubmodelDescriptor, previousSnapshot map[string]any, changeType string, deleted bool) error {
+	if history.ActiveConfig().EvidenceEnabled {
+		if deleted {
+			if previousSnapshot == nil {
+				return common.NewInternalServerError("SMREG-HISTORY-PREVIOUS-MISSING complete pre-mutation descriptor is required")
+			}
+			return history.AppendVersionTx(ctx, tx, history.TableSubmodelDescriptor, descriptor.Id, changeType, previousSnapshot, previousSnapshot, true)
+		}
+		complete, err := descriptors.GetSubmodelDescriptorByID(auth.ContextWithoutQueryFilter(ctx), tx, descriptor.Id)
+		if err != nil {
+			return err
+		}
+		descriptor = complete
+	}
 	snapshot, err := descriptor.ToJsonable()
 	if err != nil {
 		return common.NewInternalServerError("SMREG-HISTORY-TOJSONABLE " + err.Error())
 	}
 
-	return history.AppendVersionTx(ctx, tx, history.TableSubmodelDescriptor, descriptor.Id, changeType, snapshot, deleted)
+	return history.AppendVersionTx(ctx, tx, history.TableSubmodelDescriptor, descriptor.Id, changeType, previousSnapshot, snapshot, deleted)
+}
+
+func loadSubmodelDescriptorHistorySnapshotBeforeMutationTx(ctx context.Context, tx *sql.Tx, submodelID string) (map[string]any, error) {
+	if !history.ActiveConfig().EvidenceEnabled {
+		return nil, nil
+	}
+	if err := history.LockMutationTx(ctx, tx, history.TableSubmodelDescriptor, submodelID); err != nil {
+		return nil, err
+	}
+	descriptor, err := descriptors.GetSubmodelDescriptorByID(auth.ContextWithoutQueryFilter(ctx), tx, submodelID)
+	if err != nil {
+		return nil, err
+	}
+	snapshot, err := descriptor.ToJsonable()
+	if err != nil {
+		return nil, common.NewInternalServerError("SMREG-HISTORY-TOJSONABLE " + err.Error())
+	}
+	return snapshot, nil
 }
 
 // InsertSubmodelDescriptor inserts a global Submodel Descriptor (no AAS association).
@@ -115,11 +147,14 @@ func (p *PostgreSQLSMDatabase) InsertSubmodelDescriptor(
 ) (model.SubmodelDescriptor, error) {
 	var result model.SubmodelDescriptor
 	err := common.ExecuteInTransaction(p.db, "SMREG-INSERTSMDESC-STARTTX", "SMREG-INSERTSMDESC-COMMITTX", func(tx *sql.Tx) error {
+		if lockErr := history.LockMutationTx(ctx, tx, history.TableSubmodelDescriptor, submodel.Id); lockErr != nil {
+			return lockErr
+		}
 		stored, err := descriptors.InsertSubmodelDescriptorTx(ctx, tx, submodel)
 		if err != nil {
 			return err
 		}
-		if err = appendSubmodelDescriptorHistoryTx(ctx, tx, stored, history.ChangeCreated, false); err != nil {
+		if err = appendSubmodelDescriptorHistoryTx(ctx, tx, stored, nil, history.ChangeCreated, false); err != nil {
 			return err
 		}
 		result = stored
@@ -141,6 +176,9 @@ func (p *PostgreSQLSMDatabase) InsertSubmodelDescriptorInTransaction(
 	if tx == nil {
 		return model.SubmodelDescriptor{}, common.NewInternalServerError("SMREG-INSERTSMDESC-NILTX transaction must not be nil")
 	}
+	if err := history.LockMutationTx(ctx, tx, history.TableSubmodelDescriptor, submodel.Id); err != nil {
+		return model.SubmodelDescriptor{}, err
+	}
 	batch, err := descriptors.BuildSubmodelDescriptorsCreateBatch(ctx, tx, []model.SubmodelDescriptor{submodel})
 	if err != nil {
 		return model.SubmodelDescriptor{}, err
@@ -160,7 +198,7 @@ func (p *PostgreSQLSMDatabase) InsertSubmodelDescriptorInTransaction(
 		}
 		return model.SubmodelDescriptor{}, err
 	}
-	if err = appendSubmodelDescriptorHistoryTx(ctx, tx, stored, history.ChangeCreated, false); err != nil {
+	if err = appendSubmodelDescriptorHistoryTx(ctx, tx, stored, nil, history.ChangeCreated, false); err != nil {
 		return model.SubmodelDescriptor{}, err
 	}
 	return stored, nil
@@ -190,6 +228,13 @@ func (p *PostgreSQLSMDatabase) InsertSubmodelDescriptorsInTransaction(
 	if len(submodels) == 0 {
 		return -1, nil
 	}
+	identifiers := make([]string, 0, len(submodels))
+	for _, descriptor := range submodels {
+		identifiers = append(identifiers, descriptor.Id)
+	}
+	if err := history.LockMutationsTx(ctx, tx, history.TableSubmodelDescriptor, identifiers); err != nil {
+		return 0, err
+	}
 
 	batch, err := descriptors.BuildSubmodelDescriptorsCreateBatch(ctx, tx, submodels)
 	if err != nil {
@@ -211,7 +256,7 @@ func (p *PostgreSQLSMDatabase) InsertSubmodelDescriptorsInTransaction(
 			}
 			return index, getErr
 		}
-		if historyErr := appendSubmodelDescriptorHistoryTx(ctx, tx, stored, history.ChangeCreated, false); historyErr != nil {
+		if historyErr := appendSubmodelDescriptorHistoryTx(ctx, tx, stored, nil, history.ChangeCreated, false); historyErr != nil {
 			return index, historyErr
 		}
 	}
@@ -239,6 +284,10 @@ func (p *PostgreSQLSMDatabase) ReplaceSubmodelDescriptor(
 ) (model.SubmodelDescriptor, error) {
 	var result model.SubmodelDescriptor
 	err := common.ExecuteInTransaction(p.db, "SMREG-REPLACESMDESC-STARTTX", "SMREG-REPLACESMDESC-COMMITTX", func(tx *sql.Tx) error {
+		previousSnapshot, snapshotErr := loadSubmodelDescriptorHistorySnapshotBeforeMutationTx(ctx, tx, submodel.Id)
+		if snapshotErr != nil {
+			return snapshotErr
+		}
 		if _, err := descriptors.GetSubmodelDescriptorByID(ctx, tx, submodel.Id); err != nil {
 			return err
 		}
@@ -249,7 +298,7 @@ func (p *PostgreSQLSMDatabase) ReplaceSubmodelDescriptor(
 		if err != nil {
 			return err
 		}
-		if err = appendSubmodelDescriptorHistoryTx(ctx, tx, stored, history.ChangeUpdated, false); err != nil {
+		if err = appendSubmodelDescriptorHistoryTx(ctx, tx, stored, previousSnapshot, history.ChangeUpdated, false); err != nil {
 			return err
 		}
 		result = stored
@@ -272,12 +321,16 @@ func (p *PostgreSQLSMDatabase) UpsertSubmodelDescriptorInTransaction(
 		return common.NewInternalServerError("SMREG-UPSERTSMDESC-NILTX transaction must not be nil")
 	}
 
+	previousSnapshot, err := loadSubmodelDescriptorHistorySnapshotBeforeMutationTx(ctx, tx, submodel.Id)
+	if err != nil && !common.IsErrNotFound(err) {
+		return err
+	}
 	if err := lockSubmodelDescriptorUpsertTx(ctx, tx, submodel.Id); err != nil {
 		return err
 	}
 
 	created := false
-	_, err := descriptors.GetSubmodelDescriptorByID(ctx, tx, submodel.Id)
+	_, err = descriptors.GetSubmodelDescriptorByID(ctx, tx, submodel.Id)
 	if err != nil && !common.IsErrNotFound(err) {
 		return err
 	}
@@ -299,7 +352,7 @@ func (p *PostgreSQLSMDatabase) UpsertSubmodelDescriptorInTransaction(
 	if created {
 		changeType = history.ChangeCreated
 	}
-	return appendSubmodelDescriptorHistoryTx(ctx, tx, stored, changeType, false)
+	return appendSubmodelDescriptorHistoryTx(ctx, tx, stored, previousSnapshot, changeType, false)
 }
 
 func lockSubmodelDescriptorUpsertTx(ctx context.Context, tx *sql.Tx, submodelID string) error {
@@ -349,6 +402,10 @@ func (p *PostgreSQLSMDatabase) DeleteSubmodelDescriptorByID(
 	submodelID string,
 ) error {
 	return common.ExecuteInTransaction(p.db, "SMREG-DELSMDESC-STARTTX", "SMREG-DELSMDESC-COMMITTX", func(tx *sql.Tx) error {
+		previousSnapshot, err := loadSubmodelDescriptorHistorySnapshotBeforeMutationTx(ctx, tx, submodelID)
+		if err != nil {
+			return err
+		}
 		existing, err := descriptors.GetSubmodelDescriptorByID(ctx, tx, submodelID)
 		if err != nil {
 			return err
@@ -356,7 +413,7 @@ func (p *PostgreSQLSMDatabase) DeleteSubmodelDescriptorByID(
 		if err = descriptors.DeleteSubmodelDescriptorByIDTx(ctx, tx, submodelID); err != nil {
 			return err
 		}
-		return appendSubmodelDescriptorHistoryTx(ctx, tx, existing, history.ChangeDeleted, true)
+		return appendSubmodelDescriptorHistoryTx(ctx, tx, existing, previousSnapshot, history.ChangeDeleted, true)
 	})
 }
 
@@ -370,6 +427,10 @@ func (p *PostgreSQLSMDatabase) DeleteSubmodelDescriptorByIDInTransaction(
 	if tx == nil {
 		return common.NewInternalServerError("SMREG-DELSMDESC-NILTX transaction must not be nil")
 	}
+	previousSnapshot, err := loadSubmodelDescriptorHistorySnapshotBeforeMutationTx(ctx, tx, submodelID)
+	if err != nil {
+		return err
+	}
 	existing, err := descriptors.GetSubmodelDescriptorByID(ctx, tx, submodelID)
 	if err != nil {
 		return err
@@ -377,7 +438,7 @@ func (p *PostgreSQLSMDatabase) DeleteSubmodelDescriptorByIDInTransaction(
 	if err = descriptors.DeleteSubmodelDescriptorByIDTx(ctx, tx, submodelID); err != nil {
 		return err
 	}
-	return appendSubmodelDescriptorHistoryTx(ctx, tx, existing, history.ChangeDeleted, true)
+	return appendSubmodelDescriptorHistoryTx(ctx, tx, existing, previousSnapshot, history.ChangeDeleted, true)
 }
 
 // DeleteSubmodelDescriptorsByIDsInTransaction deletes multiple global submodel descriptors.
@@ -406,19 +467,25 @@ func (p *PostgreSQLSMDatabase) DeleteSubmodelDescriptorsByIDsInTransaction(
 	}
 
 	existingDescriptors := make([]model.SubmodelDescriptor, len(submodelIDs))
+	previousSnapshots := make([]map[string]any, len(submodelIDs))
 	for index, identifier := range submodelIDs {
+		previousSnapshot, snapshotErr := loadSubmodelDescriptorHistorySnapshotBeforeMutationTx(ctx, tx, identifier)
+		if snapshotErr != nil {
+			return index, snapshotErr
+		}
 		existing, err := descriptors.GetSubmodelDescriptorByID(ctx, tx, identifier)
 		if err != nil {
 			return index, err
 		}
 		existingDescriptors[index] = existing
+		previousSnapshots[index] = previousSnapshot
 	}
 
 	if err := descriptors.DeleteSubmodelDescriptorsByIDsTx(ctx, tx, submodelIDs); err != nil {
 		return 0, err
 	}
 	for index, existing := range existingDescriptors {
-		if err := appendSubmodelDescriptorHistoryTx(ctx, tx, existing, history.ChangeDeleted, true); err != nil {
+		if err := appendSubmodelDescriptorHistoryTx(ctx, tx, existing, previousSnapshots[index], history.ChangeDeleted, true); err != nil {
 			return index, err
 		}
 	}

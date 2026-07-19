@@ -236,7 +236,11 @@ func (s *SubmodelDatabase) GetSubmodelByIDAndDate(ctx context.Context, submodelI
 // RecordCurrentSubmodelVersion appends a full snapshot of the current Submodel state.
 func (s *SubmodelDatabase) RecordCurrentSubmodelVersion(ctx context.Context, submodelIdentifier string, changeType string) error {
 	return common.ExecuteInTransaction(s.db, "SMREPO-HISTORY-STARTTX", "SMREPO-HISTORY-COMMIT", func(tx *sql.Tx) error {
-		return s.appendCurrentSubmodelHistoryTx(ctx, tx, submodelIdentifier, changeType)
+		previousSnapshot, err := s.loadSubmodelHistorySnapshotBeforeMutationTx(ctx, tx, submodelIdentifier)
+		if err != nil {
+			return err
+		}
+		return s.appendCurrentSubmodelHistoryTx(ctx, tx, submodelIdentifier, previousSnapshot, changeType)
 	})
 }
 
