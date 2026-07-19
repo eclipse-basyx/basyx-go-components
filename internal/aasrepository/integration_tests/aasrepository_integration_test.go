@@ -1292,7 +1292,8 @@ func TestThumbnailAttachmentOperations(t *testing.T) {
 
 		thumbnailPath, ok := thumbnail["path"].(string)
 		require.True(t, ok, "thumbnail.path should be a string")
-		assert.NotEmpty(t, thumbnailPath, "thumbnail.path should not be empty")
+		assert.True(t, strings.HasPrefix(thumbnailPath, "/aasx/files/"), "thumbnail.path should use a managed AASX part path")
+		assert.True(t, strings.HasSuffix(thumbnailPath, "/marcus.gif"), "thumbnail.path should preserve the safe filename")
 
 		thumbnailContentType, ok := thumbnail["contentType"].(string)
 		require.True(t, ok, "thumbnail.contentType should be a string")
@@ -1327,7 +1328,7 @@ func TestThumbnailAttachmentOperations(t *testing.T) {
 
 			thumbnailPath, ok := thumbnail["path"].(string)
 			require.True(t, ok, "thumbnail.path should be a string in listed AAS")
-			assert.NotEmpty(t, thumbnailPath, "thumbnail.path should not be empty in listed AAS")
+			assert.True(t, strings.HasPrefix(thumbnailPath, "/aasx/files/"), "listed thumbnail.path should use a managed AASX part path")
 
 			thumbnailContentType, ok := thumbnail["contentType"].(string)
 			require.True(t, ok, "thumbnail.contentType should be a string in listed AAS")

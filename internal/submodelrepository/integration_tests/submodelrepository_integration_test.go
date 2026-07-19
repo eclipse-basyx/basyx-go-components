@@ -1927,23 +1927,39 @@ func TestFileAttachmentOperations(t *testing.T) {
 	submodelID := "aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9Pbmx5RmlsZVN1Ym1vZGVsX1Rlc3Q" // base64 encoded: http://iese.fraunhofer.de/id/sm/OnlyFileSubmodel_Test
 	testFilePath := "testFiles/marcus.gif"
 	weakFileContent := []byte{0x00, 0x01, 0x02, 0x03}
+	fileElementEndpoint := fmt.Sprintf("%s/submodels/%s/submodel-elements/DemoFile", baseURL, submodelID)
+	attachmentEndpoint := fileElementEndpoint + "/attachment"
+	var firstManagedPath string
 
 	// Read the test file content for later comparison
 	originalFileContent, err := os.ReadFile(testFilePath)
 	require.NoError(t, err, "Failed to read test file")
 
 	t.Run("1_Upload_File_Attachment", func(t *testing.T) {
-		endpoint := fmt.Sprintf("%s/submodels/%s/submodel-elements/DemoFile/attachment", baseURL, submodelID)
-		statusCode, err := uploadFileAttachment(endpoint, testFilePath, "marcus.gif")
+		statusCode, err := uploadFileAttachment(attachmentEndpoint, testFilePath, "marcus.gif")
 		require.NoError(t, err, "File upload failed")
 		assert.Equal(t, http.StatusNoContent, statusCode, "Expected 204 No Content for file upload")
+		firstManagedPath = getFileElementValue(t, fileElementEndpoint)
+		assert.True(t, strings.HasPrefix(firstManagedPath, "/aasx/files/"), "File value should use a managed AASX part path")
+		assert.True(t, strings.HasSuffix(firstManagedPath, "/marcus.gif"), "File value should preserve the safe filename")
 	})
 
-	t.Run("2_Download_File_Attachment_And_Verify", func(t *testing.T) {
+	t.Run("2_Identical_Reupload_Reuses_Content_And_Rotates_Path", func(t *testing.T) {
+		largeObjectCount := countPostgresLargeObjects(t, submodelRepositoryIntegrationTestDSN)
+		statusCode, err := uploadFileAttachment(attachmentEndpoint, testFilePath, "marcus.gif")
+		require.NoError(t, err, "Identical file reupload failed")
+		require.Equal(t, http.StatusNoContent, statusCode, "Expected 204 No Content for identical reupload")
+		assert.Equal(t, largeObjectCount, countPostgresLargeObjects(t, submodelRepositoryIntegrationTestDSN), "Identical bytes should reuse the canonical Large Object")
+
+		reuploadedPath := getFileElementValue(t, fileElementEndpoint)
+		assert.True(t, strings.HasPrefix(reuploadedPath, "/aasx/files/"), "Reuploaded File value should use a managed AASX part path")
+		assert.NotEqual(t, firstManagedPath, reuploadedPath, "Every upload should receive a new opaque path token")
+	})
+
+	t.Run("3_Download_File_Attachment_And_Verify", func(t *testing.T) {
 		// Wait a moment to ensure the file is available
 		time.Sleep(2 * time.Second)
-		endpoint := fmt.Sprintf("%s/submodels/%s/submodel-elements/DemoFile/attachment", baseURL, submodelID)
-		content, contentType, statusCode, err := downloadFileAttachment(endpoint)
+		content, contentType, statusCode, err := downloadFileAttachment(attachmentEndpoint)
 		require.NoError(t, err, "File download failed")
 		assert.Equal(t, http.StatusOK, statusCode, "Expected 200 OK for file download")
 
@@ -1955,13 +1971,12 @@ func TestFileAttachmentOperations(t *testing.T) {
 		t.Logf("File content verified: %d bytes", len(content))
 	})
 
-	t.Run("3_Update_File_Element_Value_Should_Delete_LargeObject", func(t *testing.T) {
+	t.Run("4_Update_File_Element_Value_Should_Delete_LargeObject", func(t *testing.T) {
 		// Update the File SME value to an external URL (should trigger LO cleanup)
-		endpoint := fmt.Sprintf("%s/submodels/%s/submodel-elements/DemoFile", baseURL, submodelID)
 		updateData, err := os.ReadFile("bodies/updateFileElement.json")
 		require.NoError(t, err, "Failed to read update data")
 
-		req, err := http.NewRequest("PUT", endpoint, bytes.NewBuffer(updateData))
+		req, err := http.NewRequest("PUT", fileElementEndpoint, bytes.NewBuffer(updateData))
 		require.NoError(t, err, "Failed to create PUT request")
 		req.Header.Set("Content-Type", "application/json")
 
@@ -1973,10 +1988,9 @@ func TestFileAttachmentOperations(t *testing.T) {
 		assert.Equal(t, http.StatusNoContent, resp.StatusCode, "Expected 204 No Content for File SME update")
 	})
 
-	t.Run("4_Verify_File_Attachment_Removed_After_Value_Update", func(t *testing.T) {
+	t.Run("5_Verify_File_Attachment_Removed_After_Value_Update", func(t *testing.T) {
 		// Try to download - should fail since value is now an external URL
-		endpoint := fmt.Sprintf("%s/submodels/%s/submodel-elements/DemoFile/attachment", baseURL, submodelID)
-		statusCode, err := getStatusWithoutRedirect(endpoint)
+		statusCode, err := getStatusWithoutRedirect(attachmentEndpoint)
 		require.NoError(t, err, "File attachment check failed")
 
 		// Should return 404 or redirect to external URL (302)
@@ -1985,45 +1999,40 @@ func TestFileAttachmentOperations(t *testing.T) {
 			"Should redirect to external URL or return 404 after value update")
 	})
 
-	t.Run("5_Upload_Weak_File_Attachment_Uses_Declared_ContentType", func(t *testing.T) {
+	t.Run("6_Upload_Weak_File_Attachment_Uses_Declared_ContentType", func(t *testing.T) {
 		weakFilePath := createTemporaryBinaryTestFile(t, "weak-attachment", weakFileContent)
-		endpoint := fmt.Sprintf("%s/submodels/%s/submodel-elements/DemoFile/attachment", baseURL, submodelID)
-		statusCode, err := uploadFileAttachment(endpoint, weakFilePath, "")
+		statusCode, err := uploadFileAttachment(attachmentEndpoint, weakFilePath, "")
 		require.NoError(t, err, "Weak file upload failed")
 		assert.Equal(t, http.StatusNoContent, statusCode, "Expected 204 No Content for weak file upload")
 	})
 
-	t.Run("6_Verify_Weak_File_Attachment_Uses_Declared_ContentType", func(t *testing.T) {
+	t.Run("7_Verify_Weak_File_Attachment_Uses_Declared_ContentType", func(t *testing.T) {
 		time.Sleep(2 * time.Second)
-		endpoint := fmt.Sprintf("%s/submodels/%s/submodel-elements/DemoFile/attachment", baseURL, submodelID)
-		content, contentType, statusCode, err := downloadFileAttachment(endpoint)
+		content, contentType, statusCode, err := downloadFileAttachment(attachmentEndpoint)
 		require.NoError(t, err, "Weak file download failed")
 		assert.Equal(t, http.StatusOK, statusCode, "Expected 200 OK for weak file download")
 		assert.Equal(t, weakFileContent, content, "Weak file content should match uploaded payload")
 		assert.Equal(t, "image/png", contentType, "Weak MIME detection should fall back to declared File contentType")
 	})
 
-	t.Run("7_Reupload_File_Attachment", func(t *testing.T) {
-		endpoint := fmt.Sprintf("%s/submodels/%s/submodel-elements/DemoFile/attachment", baseURL, submodelID)
-		statusCode, err := uploadFileAttachment(endpoint, testFilePath, "test-image-reupload.png")
+	t.Run("8_Reupload_File_Attachment", func(t *testing.T) {
+		statusCode, err := uploadFileAttachment(attachmentEndpoint, testFilePath, "test-image-reupload.png")
 		require.NoError(t, err, "File reupload failed")
 		assert.Equal(t, http.StatusNoContent, statusCode, "Expected 204 No Content for file reupload")
 	})
 
-	t.Run("8_Verify_Reuploaded_File", func(t *testing.T) {
+	t.Run("9_Verify_Reuploaded_File", func(t *testing.T) {
 		// Wait a moment to ensure the file is available
 		time.Sleep(2 * time.Second)
-		endpoint := fmt.Sprintf("%s/submodels/%s/submodel-elements/DemoFile/attachment", baseURL, submodelID)
-		content, contentType, statusCode, err := downloadFileAttachment(endpoint)
+		content, contentType, statusCode, err := downloadFileAttachment(attachmentEndpoint)
 		require.NoError(t, err, "File download failed")
 		assert.Equal(t, http.StatusOK, statusCode, "Expected 200 OK for file download")
 		assert.Equal(t, "image/gif", contentType, "Content-Type should match detected MIME type for uploaded GIF")
 		assert.Equal(t, originalFileContent, content, "Reuploaded file content should match original")
 	})
 
-	t.Run("9_Delete_File_Attachment", func(t *testing.T) {
-		endpoint := fmt.Sprintf("%s/submodels/%s/submodel-elements/DemoFile/attachment", baseURL, submodelID)
-		req, err := http.NewRequest("DELETE", endpoint, nil)
+	t.Run("10_Delete_File_Attachment", func(t *testing.T) {
+		req, err := http.NewRequest("DELETE", attachmentEndpoint, nil)
 		require.NoError(t, err, "Failed to create DELETE request")
 
 		client := &http.Client{Timeout: 10 * time.Second}
@@ -2034,11 +2043,24 @@ func TestFileAttachmentOperations(t *testing.T) {
 		assert.Equal(t, http.StatusOK, resp.StatusCode, "Expected 200 OK for file deletion")
 	})
 
-	t.Run("10_Verify_File_Deleted", func(t *testing.T) {
-		endpoint := fmt.Sprintf("%s/submodels/%s/submodel-elements/DemoFile/attachment", baseURL, submodelID)
-		_, _, statusCode, _ := downloadFileAttachment(endpoint)
+	t.Run("11_Verify_File_Deleted", func(t *testing.T) {
+		_, _, statusCode, _ := downloadFileAttachment(attachmentEndpoint)
 		assert.Equal(t, http.StatusNotFound, statusCode, "Expected 404 Not Found after file deletion")
 	})
+}
+
+func getFileElementValue(t *testing.T, endpoint string) string {
+	t.Helper()
+
+	statusCode, body, err := requestJSON(http.MethodGet, endpoint, nil)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusOK, statusCode, "response=%s", string(body))
+
+	var fileElement map[string]any
+	require.NoError(t, json.Unmarshal(body, &fileElement))
+	value, ok := fileElement["value"].(string)
+	require.True(t, ok, "File value should be a string")
+	return value
 }
 
 func TestDeleteSubmodelElementByPathUnlinksFileAttachmentLargeObject(t *testing.T) {
