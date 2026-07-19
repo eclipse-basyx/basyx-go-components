@@ -49,7 +49,7 @@ jobs:
 
       - name: Upload SARIF report
         if: always() && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
-        uses: github/codeql-action/upload-sarif@99df26d4f13ea111d4ec1a7dddef6063f76b97e9
+        uses: github/codeql-action/upload-sarif@7188fc363630916deb702c7fdcf4e481b751f97a
         with:
           sarif_file: trivy-repo-results.sarif
           category: trivy-repo-fs
@@ -120,7 +120,7 @@ jobs:
 
       - name: Upload SARIF report
         if: always() && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
-        uses: github/codeql-action/upload-sarif@99df26d4f13ea111d4ec1a7dddef6063f76b97e9
+        uses: github/codeql-action/upload-sarif@7188fc363630916deb702c7fdcf4e481b751f97a
         with:
           sarif_file: trivy-image-${{ matrix.service.name }}.sarif
           category: trivy-image-${{ matrix.service.name }}
