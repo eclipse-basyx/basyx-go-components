@@ -69,6 +69,9 @@ func writeEvidence(ctx context.Context, cfg *common.Config, db *sql.DB, options 
 }
 
 func verifyEvidence(ctx context.Context, cfg *common.Config, db *sql.DB, options cliOptions, stdout io.Writer) error {
+	if options.mutationEvidence {
+		return verifyMutationEvidence(ctx, cfg, db, options, stdout)
+	}
 	verifyOptions, err := buildVerifyOptions(ctx, cfg, options)
 	if err != nil {
 		return err
@@ -82,6 +85,26 @@ func verifyEvidence(ctx context.Context, cfg *common.Config, db *sql.DB, options
 	}
 	if !report.Valid {
 		return fmt.Errorf("HISTORY-EVIDENCE-CLI-VERIFYFAILED verification report contains critical findings")
+	}
+	return nil
+}
+
+func verifyMutationEvidence(ctx context.Context, cfg *common.Config, db *sql.DB, options cliOptions, stdout io.Writer) error {
+	store, err := newS3EvidenceStore(ctx, cfg)
+	if err != nil {
+		return err
+	}
+	report, err := history.VerifyMutationEvidenceRange(
+		ctx, db, store, options.historyTable, options.identifier, options.firstHistoryID, options.lastHistoryID,
+	)
+	if err != nil {
+		return err
+	}
+	if err = writeJSONOutput(report, options.outputPath, stdout); err != nil {
+		return err
+	}
+	if !report.Valid {
+		return fmt.Errorf("HISTORY-EVIDENCE-CLI-MUTATIONVERIFYFAILED verification report contains critical findings")
 	}
 	return nil
 }
@@ -151,6 +174,9 @@ func exportRecoveryCatalog(ctx context.Context, db *sql.DB, options cliOptions, 
 }
 
 func recoverEvidence(ctx context.Context, cfg *common.Config, db *sql.DB, options cliOptions, stdout io.Writer) error {
+	if options.mutationEvidence {
+		return verifyMutationEvidence(ctx, cfg, db, options, stdout)
+	}
 	store, err := newS3EvidenceStore(ctx, cfg)
 	if err != nil {
 		return err

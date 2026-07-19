@@ -48,6 +48,27 @@ const (
 	binaryReferenceVersion       = "basyx-binary-reference-v1"
 )
 
+type binaryReferenceExpectationContextKey struct{}
+
+// WithBinaryReferenceExpected marks a mutation that must commit matching binary-reference evidence.
+func WithBinaryReferenceExpected(ctx context.Context, modelPath string) context.Context {
+	modelPath = strings.TrimSpace(modelPath)
+	if modelPath == "" {
+		return ctx
+	}
+	expected := append([]string(nil), binaryReferencesExpected(ctx)...)
+	expected = append(expected, modelPath)
+	return context.WithValue(ctx, binaryReferenceExpectationContextKey{}, expected)
+}
+
+func binaryReferencesExpected(ctx context.Context) []string {
+	if ctx == nil {
+		return nil
+	}
+	values, _ := ctx.Value(binaryReferenceExpectationContextKey{}).([]string)
+	return values
+}
+
 // EnsureBinaryEvidenceTx writes canonical binary bytes once and reuses their
 // immutable receipt across authorized logical references.
 func EnsureBinaryEvidenceTx(ctx context.Context, tx *sql.Tx, content binarycontent.Content, contentType string) (*EvidenceReceipt, error) {

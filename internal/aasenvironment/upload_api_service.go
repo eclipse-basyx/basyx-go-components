@@ -238,7 +238,7 @@ func (s *uploadAPIService) processAASXPackage(ctx context.Context, fileName stri
 		return err
 	}
 
-	return s.uploadSupplementaryFiles(packageReader, specPart, environment)
+	return s.uploadSupplementaryFiles(ctx, packageReader, specPart, environment)
 }
 
 func (s *uploadAPIService) processEnvironment(ctx context.Context, _ string, _ string, environment aastypes.IEnvironment) error {
@@ -717,6 +717,7 @@ type aasxFileLocation struct {
 }
 
 func (s *uploadAPIService) uploadSupplementaryFiles(
+	ctx context.Context,
 	packageReader *aasx.PackageRead,
 	specPart *aasx.Part,
 	environment aastypes.IEnvironment,
@@ -758,7 +759,7 @@ func (s *uploadAPIService) uploadSupplementaryFiles(
 				uploadName = "supplementary.bin"
 			}
 
-			uploadErr := s.persistence.SubmodelRepository.UploadFileAttachmentReader(location.SubmodelID, location.IDShortPath, bytes.NewReader(suppBytes), uploadName)
+			uploadErr := s.persistence.SubmodelRepository.UploadFileAttachmentReaderWithHistory(ctx, location.SubmodelID, location.IDShortPath, bytes.NewReader(suppBytes), uploadName)
 			if uploadErr != nil {
 				return fmt.Errorf(
 					"AASENV-UPLDSUPPL-UPLOAD failed to upload supplementary '%s' for submodel '%s' at path '%s': %w",

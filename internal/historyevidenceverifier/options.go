@@ -48,6 +48,7 @@ type cliOptions struct {
 	manifestSHA256        string
 	signerKeyID           string
 	requireSignedManifest bool
+	mutationEvidence      bool
 }
 
 func parseFlags(args []string, stderr io.Writer) (cliOptions, error) {
@@ -77,6 +78,7 @@ func bindFlags(flags *flag.FlagSet, options *cliOptions) {
 	flags.StringVar(&options.manifestSHA256, "manifest-sha256", "", "Expected SHA-256 for the stored manifest object")
 	flags.StringVar(&options.signerKeyID, "signer-key-id", "", "Optional manifest signer key id")
 	flags.BoolVar(&options.requireSignedManifest, "require-signed-manifest", false, "Reject unsigned manifests during verification")
+	flags.BoolVar(&options.mutationEvidence, "mutation", false, "Verify independent mutation evidence; -from and -to select event sequences")
 }
 
 func validateCLIOptions(options cliOptions) error {
@@ -85,6 +87,14 @@ func validateCLIOptions(options cliOptions) error {
 	}
 	if strings.TrimSpace(options.recoveryCatalogPath) != "" && !options.recover {
 		return fmt.Errorf("HISTORY-EVIDENCE-CLI-RECOVERYCATALOG -recovery-catalog is only valid with -recover")
+	}
+	if options.mutationEvidence {
+		if options.writeEvidence || options.catalogExport || strings.TrimSpace(options.recoveryCatalogPath) != "" {
+			return fmt.Errorf("HISTORY-EVIDENCE-CLI-MUTATIONMODE -mutation supports verification and direct recovery only")
+		}
+		if strings.TrimSpace(options.identifier) == "" {
+			return fmt.Errorf("HISTORY-EVIDENCE-CLI-MUTATIONIDENTIFIER -identifier is required with -mutation")
+		}
 	}
 	if !isCatalogRecovery(options) {
 		if err := validateHistoryRangeOptions(options); err != nil {

@@ -75,6 +75,22 @@ func TestValidateCLIOptionsAllowsCatalogOnlyRecovery(t *testing.T) {
 	require.NoError(t, err)
 }
 
+func TestValidateCLIOptionsAllowsIndependentMutationEvidence(t *testing.T) {
+	err := validateCLIOptions(cliOptions{
+		historyTable: "submodel_history", identifier: "sm-1",
+		firstHistoryID: 1, lastHistoryID: 10, mutationEvidence: true,
+	})
+	require.NoError(t, err)
+}
+
+func TestValidateCLIOptionsRequiresMutationIdentifier(t *testing.T) {
+	err := validateCLIOptions(cliOptions{
+		historyTable: "submodel_history", firstHistoryID: 1,
+		lastHistoryID: 10, mutationEvidence: true,
+	})
+	require.ErrorContains(t, err, "HISTORY-EVIDENCE-CLI-MUTATIONIDENTIFIER")
+}
+
 func TestValidateRecoveryCatalogSelectionRejectsMismatchedFlags(t *testing.T) {
 	catalog := history.EvidenceRecoveryCatalog{
 		HistoryTable:   "submodel_history",

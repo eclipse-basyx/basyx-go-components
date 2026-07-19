@@ -163,11 +163,12 @@ func (store *S3EvidenceStore) PutArtifactReader(ctx context.Context, artifact Ev
 		return nil, fmt.Errorf("HISTORY-EVIDENCE-S3-RETENTION retention mode and retain-until timestamp are required for evidence writes")
 	}
 	input := &s3.PutObjectInput{
-		Bucket:      aws.String(store.cfg.Bucket),
-		Key:         aws.String(objectKey),
-		Body:        reader,
-		ContentType: aws.String(artifact.ContentType),
-		Metadata:    cleanS3Metadata(receipt.Metadata),
+		Bucket:        aws.String(store.cfg.Bucket),
+		Key:           aws.String(objectKey),
+		Body:          reader,
+		ContentLength: aws.Int64(sizeBytes),
+		ContentType:   aws.String(artifact.ContentType),
+		Metadata:      cleanS3Metadata(receipt.Metadata),
 	}
 	applyS3Retention(input, receipt)
 	output, err := store.client.PutObject(ctx, input)
