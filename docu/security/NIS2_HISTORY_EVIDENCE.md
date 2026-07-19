@@ -23,6 +23,7 @@ BaSyx provides technical controls that can support NIS2-aligned integrity, audit
 - Monitor verifier findings and alert on critical drift or signature failures.
 - Retain verified mutation sequence/hash heads outside the BaSyx PostgreSQL database and advance them only after successful verification. Protect the first trust-on-first-use baseline through an operator-controlled process.
 - Manage vulnerability handling, patching, and dependency updates.
+- Use a controlled, quiesced v1.1.8 upgrade with a verified PostgreSQL backup that includes Large Objects. Do not mix v1.1.7 and v1.1.8 database writers or attempt a binary-only rollback.
 - Assess infrastructure and provider supply-chain security.
 - Train staff and maintain cyber hygiene practices.
 - Validate legal and regulatory compliance with the operator's security and legal teams.

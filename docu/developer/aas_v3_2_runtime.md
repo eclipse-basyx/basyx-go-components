@@ -283,6 +283,8 @@ Evidence-enabled uploads stream canonical bytes from PostgreSQL into content-add
 
 Patch `1_1_8.sql` only adds the canonical storage and evidence schema; it does not scan or rewrite legacy Large Objects and does not modify `base.sql`. Existing `file_data` and `thumbnail_file_data` rows and model values remain readable through the dual-read path until the owning file is replaced or removed. New uploads use canonical storage and managed paths. The upgrade intentionally emits neither history nor WORM backfill, so a preexisting binary may have no WORM receipt. AASX File Server package objects are not included.
 
+Treat v1.1.8 as a quiesced database upgrade. Stop all database-backed services, take a restorable backup including PostgreSQL Large Objects, run the configuration service alone, confirm clean v1.1.8 state, and then start only v1.1.8 processes. Exact startup validation prevents a newly started schema mismatch but does not continuously fence a v1.1.7 process that was already connected. Rolling or blue/green operation across this schema boundary is unsupported. Rollback requires a complete database restore before restarting v1.1.7; a binary-only rollback can leave the old process unable to resolve canonical binaries. Immutable WORM writes made after the restored backup remain rollback orphans unless a committed catalog receipt identifies them.
+
 Deduplication is global across attachment and thumbnail payloads. Authorization is checked through the owning model before canonical lookup, public responses never disclose hits, hashes, object identifiers, or receipts, and backend failures use the same client-facing storage error. A residual timing side channel between new and reused payloads remains; deployments that require stronger tenant isolation must isolate databases or service instances per security boundary.
 
 AASX export preserves managed File and thumbnail values byte-for-byte, creates package parts at those exact URIs, and relates them as supplementary/thumbnail parts through `aas-package3-golang`. Content is resolved through the owning model association rather than the opaque token. External URLs are skipped and are never fetched.
@@ -310,6 +312,8 @@ AASX export preserves managed File and thumbnail values byte-for-byte, creates p
 | Active eventing, configured event sinks, or enabled outbox processing | Fail fast until outbox publishing is implemented. |
 
 `AuditContext`, `ChangeEvent`, `EvidenceStore`, and `IntegrityAnchor` remain extension points. Runtime middleware now populates `AuditContext` when configured; no external ledger anchor client is invoked by the append path yet.
+
+Future mutation routes must acquire the entity evidence lock before reading the complete pre-mutation model and append evidence in the same database transaction as the live write. A future eventing implementation should consume the same committed change identity through a transactional outbox instead of adding delivery state to `mutation_evidence_state` or independently reconstructing a mutation after commit.
 
 Example verifier/publisher usage:
 

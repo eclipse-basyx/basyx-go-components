@@ -66,6 +66,12 @@ File SME metadata such as `content_type`, `file_name`, and path-like `value` liv
 
 Patch `1_1_8.sql` adds the shared representation without scanning or rewriting legacy Large Objects. Existing binaries remain readable in their original tables and receive no retroactive WORM receipt. Replacement uploads use canonical storage and remove the replaced legacy association in the same transaction.
 
+### v1.1.8 Upgrade And Rollback
+
+This patch requires a quiesced upgrade. Stop all database-backed BaSyx services, take a restorable backup including PostgreSQL Large Objects, run the configuration service alone, and confirm a clean v1.1.8 schema before starting v1.1.8 services. Exact startup schema validation rejects a newly started mismatched binary, but it cannot stop an older process that was already connected during the patch.
+
+Do not run v1.1.7 and v1.1.8 services against the upgraded database at the same time. Rollback means stopping v1.1.8, restoring the complete pre-upgrade database backup, and then restarting v1.1.7. A binary-only rollback is unsafe because v1.1.7 does not understand canonical binary references. WORM objects written after the backup may remain as immutable orphans after a restore; only objects with committed catalog receipts are valid evidence.
+
 ## Enums And Integer Codes
 
 The only PostgreSQL enum type currently created by `base.sql` is `security_type`. AAS model enums such as model type, value type, key type, modelling kind, asset kind, direction, and event state are stored as integer codes. The conversion rules are implemented in Go and the AAS SDK types used by the services.

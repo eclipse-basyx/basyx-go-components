@@ -235,6 +235,8 @@ Absolute `http://` and `https://` values remain external links. BaSyx does not f
 
 The v1.1.8 upgrade does not scan, rewrite, or WORM-backfill legacy `file_data` and `thumbnail_file_data` Large Objects. Existing files and their model values remain readable through the compatibility path. Replacing them uses canonical storage and assigns a new managed path; missing WORM evidence for the earlier bytes is accepted. Complete AASX File Server package files remain outside this deduplication scope.
 
+Apply v1.1.8 as a quiesced database upgrade, not as a rolling deployment. Stop every database-backed BaSyx service, back up the database including Large Objects, run the configuration service alone, and start only v1.1.8 services after the schema is clean. Startup version checks reject newly started mismatched services but cannot stop a v1.1.7 process that was already connected. Rollback requires restoring the complete pre-upgrade backup before v1.1.7 is restarted; changing only the service image is not supported.
+
 Global deduplication does not change authorization or API response content. A residual timing difference can exist between a new payload and a reused payload; deployments that require isolation against this side channel should use separate databases or service instances for separate security boundaries.
 
 ## What Activating Versioning Means
