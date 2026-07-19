@@ -71,14 +71,16 @@ CREATE TABLE IF NOT EXISTS binary_evidence_receipt (
   PRIMARY KEY (sha256, size_bytes)
 );
 
--- Small chain head used when evidence is enabled independently of PostgreSQL
--- history. Model payloads remain exclusively in WORM/history payload storage.
+-- Bounded chain head used when evidence is enabled independently of PostgreSQL
+-- history. Only the current checkpoint is cached; prior states remain in WORM.
 CREATE TABLE IF NOT EXISTS mutation_evidence_state (
   entity_type TEXT NOT NULL,
   identifier TEXT NOT NULL,
   last_sequence BIGINT NOT NULL CHECK (last_sequence >= 0),
   last_event_hash CHAR(64),
+  last_content_hash CHAR(64),
   events_since_snapshot INTEGER NOT NULL DEFAULT 0 CHECK (events_since_snapshot >= 0),
+  current_snapshot JSONB,
   db_updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   PRIMARY KEY (entity_type, identifier)
 );

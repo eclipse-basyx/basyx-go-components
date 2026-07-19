@@ -159,6 +159,13 @@ func ActiveConfig() Config {
 	return activeConfig
 }
 
+// MutationRecordingEnabled reports whether PostgreSQL history or independent
+// WORM mutation evidence must be recorded for acknowledged model changes.
+func MutationRecordingEnabled() bool {
+	cfg := ActiveConfig()
+	return cfg.Mode != ModeOff || cfg.EvidenceEnabled
+}
+
 func normalizeConfig(cfg Config) Config {
 	cfg.Mode = normalizeHistoryMode(cfg.Mode)
 	cfg.Immutability = normalizeImmutability(cfg.Immutability)

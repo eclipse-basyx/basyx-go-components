@@ -148,8 +148,10 @@ func AppendMutatedVersionTx(ctx context.Context, tx *sql.Tx, table string, ident
 	}
 
 	var mutationBase *latestVersion
+	var evidenceState *mutationEvidenceState
 	if cfg.EvidenceEnabled {
-		evidenceState, stateErr := loadMutationEvidenceStateTx(ctx, tx, cfg, table, identifier)
+		var stateErr error
+		evidenceState, stateErr = loadMutationEvidenceStateTx(ctx, tx, table, identifier)
 		if stateErr != nil {
 			return stateErr
 		}
@@ -182,16 +184,20 @@ func AppendMutatedVersionTx(ctx context.Context, tx *sql.Tx, table string, ident
 		return err
 	}
 	if cfg.EvidenceEnabled {
-		return appendVersionWithEvidenceTx(ctx, tx, table, identifier, changeType, currentSnapshot, false, cfg)
+		return appendVersionWithEvidenceStateTx(ctx, tx, table, identifier, changeType, currentSnapshot, false, cfg, evidenceState)
 	}
 	return appendVersionWithLatestTx(ctx, tx, table, identifier, changeType, currentSnapshot, false, mutationBase, cfg)
 }
 
 func appendVersionWithEvidenceTx(ctx context.Context, tx *sql.Tx, table string, identifier string, changeType string, snapshot map[string]any, deleted bool, cfg Config) error {
-	evidenceState, err := loadMutationEvidenceStateTx(ctx, tx, cfg, table, identifier)
+	evidenceState, err := loadMutationEvidenceStateTx(ctx, tx, table, identifier)
 	if err != nil {
 		return err
 	}
+	return appendVersionWithEvidenceStateTx(ctx, tx, table, identifier, changeType, snapshot, deleted, cfg, evidenceState)
+}
+
+func appendVersionWithEvidenceStateTx(ctx context.Context, tx *sql.Tx, table string, identifier string, changeType string, snapshot map[string]any, deleted bool, cfg Config, evidenceState *mutationEvidenceState) error {
 	var evidenceLatest *latestVersion
 	sequence := int64(1)
 	previousEvidenceHash := ""
@@ -242,11 +248,16 @@ func appendVersionWithEvidenceTx(ctx context.Context, tx *sql.Tx, table string, 
 			return err
 		}
 	}
+	eventsSinceSnapshot := 0
+	if evidencePayload.payloadType == PayloadTypeDiff && evidenceState != nil {
+		eventsSinceSnapshot = evidenceState.eventsSinceSnapshot + 1
+	}
 	_, err = publishMutationEvidenceTx(ctx, tx, cfg, mutationEvidenceWrite{
 		table: table, identifier: identifier, changeType: changeType, snapshot: snapshot,
 		deleted: deleted, payload: evidencePayload, effectiveDiff: effectiveDiff,
 		previousHash: previousEvidenceHash, sequence: sequence, now: now,
 		historyID: historyID, historyRowHash: historyRowHash,
+		eventsSinceSnapshot: eventsSinceSnapshot,
 	})
 	return err
 }

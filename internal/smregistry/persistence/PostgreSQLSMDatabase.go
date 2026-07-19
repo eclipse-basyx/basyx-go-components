@@ -149,7 +149,7 @@ func (p *PostgreSQLSMDatabase) InsertSubmodelDescriptorInTransaction(
 		return model.SubmodelDescriptor{}, mapInsertSubmodelDescriptorError(err)
 	}
 
-	if descriptors.CanSkipCreateReadback(ctx) && history.ActiveConfig().Mode == history.ModeOff {
+	if descriptors.CanSkipCreateReadback(ctx) && !history.MutationRecordingEnabled() {
 		return submodel, nil
 	}
 
@@ -199,7 +199,7 @@ func (p *PostgreSQLSMDatabase) InsertSubmodelDescriptorsInTransaction(
 		return 0, mapBulkInsertSubmodelDescriptorError(err)
 	}
 
-	if descriptors.CanSkipCreateReadback(ctx) && history.ActiveConfig().Mode == history.ModeOff {
+	if descriptors.CanSkipCreateReadback(ctx) && !history.MutationRecordingEnabled() {
 		return -1, nil
 	}
 

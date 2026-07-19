@@ -119,7 +119,7 @@ func (p *PostgreSQLAASRegistryDatabase) InsertAdministrationShellDescriptor(
 	aasd model.AssetAdministrationShellDescriptor,
 ) (model.AssetAdministrationShellDescriptor, error) {
 	if common.SupportsPostgreSQLBatch(p.db) &&
-		history.ActiveConfig().Mode == history.ModeOff &&
+		!history.MutationRecordingEnabled() &&
 		descriptors.CanSkipPostInsertReadback(ctx) {
 		return p.insertAdministrationShellDescriptorBatch(ctx, aasd)
 	}
@@ -221,7 +221,7 @@ func (p *PostgreSQLAASRegistryDatabase) InsertAdministrationShellDescriptorInTra
 		return mapInsertAASDescriptorError(err)
 	}
 
-	if descriptors.CanSkipCreateReadback(ctx) && history.ActiveConfig().Mode == history.ModeOff {
+	if descriptors.CanSkipCreateReadback(ctx) && !history.MutationRecordingEnabled() {
 		return nil
 	}
 
@@ -265,7 +265,7 @@ func (p *PostgreSQLAASRegistryDatabase) InsertAdministrationShellDescriptorsInTr
 		return 0, mapInsertAASDescriptorError(err)
 	}
 
-	if descriptors.CanSkipCreateReadback(ctx) && history.ActiveConfig().Mode == history.ModeOff {
+	if descriptors.CanSkipCreateReadback(ctx) && !history.MutationRecordingEnabled() {
 		return -1, nil
 	}
 

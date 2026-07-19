@@ -53,6 +53,7 @@ const (
 type mutationEvidenceState struct {
 	lastSequence        int64
 	lastEventHash       string
+	lastContentHash     string
 	eventsSinceSnapshot int
 	snapshot            map[string]any
 }
@@ -68,158 +69,53 @@ type MutationEvidenceResult struct {
 }
 
 type mutationEvidenceWrite struct {
-	table          string
-	identifier     string
-	changeType     string
-	snapshot       map[string]any
-	deleted        bool
-	payload        historyPayload
-	effectiveDiff  []map[string]any
-	previousHash   string
-	sequence       int64
-	now            time.Time
-	historyID      int64
-	historyRowHash string
+	table               string
+	identifier          string
+	changeType          string
+	snapshot            map[string]any
+	deleted             bool
+	payload             historyPayload
+	effectiveDiff       []map[string]any
+	previousHash        string
+	sequence            int64
+	now                 time.Time
+	historyID           int64
+	historyRowHash      string
+	eventsSinceSnapshot int
 }
 
-func loadMutationEvidenceStateTx(ctx context.Context, tx *sql.Tx, cfg Config, table string, identifier string) (*mutationEvidenceState, error) {
+func loadMutationEvidenceStateTx(ctx context.Context, tx *sql.Tx, table string, identifier string) (*mutationEvidenceState, error) {
 	query, args, err := goqu.From(TableMutationEvidenceState).
-		Select("last_sequence", "last_event_hash", "events_since_snapshot").
+		Select("last_sequence", "last_event_hash", "last_content_hash", "events_since_snapshot", "current_snapshot").
 		Where(goqu.Ex{"entity_type": table, "identifier": identifier}).
 		ToSQL()
 	if err != nil {
 		return nil, common.NewInternalServerError("HISTORY-EVIDENCE-STATE-BUILD " + err.Error())
 	}
 	var state mutationEvidenceState
-	var previousHash sql.NullString
-	if err = tx.QueryRowContext(ctx, query, args...).Scan(&state.lastSequence, &previousHash, &state.eventsSinceSnapshot); err != nil {
+	var previousHash, contentHash sql.NullString
+	var snapshotJSON []byte
+	if err = tx.QueryRowContext(ctx, query, args...).Scan(
+		&state.lastSequence, &previousHash, &contentHash, &state.eventsSinceSnapshot, &snapshotJSON,
+	); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, nil
 		}
 		return nil, common.NewInternalServerError("HISTORY-EVIDENCE-STATE-QUERY " + err.Error())
 	}
 	state.lastEventHash = previousHash.String
-	state.snapshot, err = restoreMutationEvidenceSnapshotTx(ctx, tx, cfg, table, identifier, state)
-	if err != nil {
-		return nil, err
+	state.lastContentHash = contentHash.String
+	if len(snapshotJSON) == 0 || state.lastContentHash == "" {
+		return nil, common.NewInternalServerError("HISTORY-EVIDENCE-STATE-SNAPSHOT committed evidence state has no current snapshot")
+	}
+	if err = decodeJSONPreservingNumbers(snapshotJSON, &state.snapshot); err != nil {
+		return nil, common.NewInternalServerError("HISTORY-EVIDENCE-STATE-DECODE " + err.Error())
+	}
+	actualHash, hashErr := CanonicalJSONHash(state.snapshot)
+	if hashErr != nil || !strings.EqualFold(actualHash, state.lastContentHash) {
+		return nil, common.NewInternalServerError("HISTORY-EVIDENCE-STATE-HASH current snapshot does not match the committed content hash")
 	}
 	return &state, nil
-}
-
-type mutationEvidenceCatalogArtifact struct {
-	sequence     int64
-	payloadType  string
-	contentHash  string
-	eventHash    string
-	previousHash string
-	sha256       string
-	reference    EvidenceReference
-}
-
-func restoreMutationEvidenceSnapshotTx(ctx context.Context, tx *sql.Tx, cfg Config, table string, identifier string, state mutationEvidenceState) (map[string]any, error) {
-	limit := state.eventsSinceSnapshot + 1
-	if limit <= 0 {
-		return nil, common.NewInternalServerError("HISTORY-EVIDENCE-RESTORE-LIMIT invalid evidence checkpoint distance")
-	}
-	query, args, err := goqu.From(TableMutationEvidenceEvents).
-		Select("event_sequence", "payload_type", "content_hash", "event_hash", "previous_event_hash", "sha256", "provider", "bucket", "object_key", "object_version_id").
-		Where(goqu.Ex{"entity_type": table, "identifier": identifier}).
-		Order(goqu.C("event_sequence").Desc()).
-		// #nosec G115 -- limit is a validated positive int, so conversion to the same-width unsigned type is safe.
-		Limit(uint(limit)).
-		ToSQL()
-	if err != nil {
-		return nil, common.NewInternalServerError("HISTORY-EVIDENCE-RESTORE-BUILD " + err.Error())
-	}
-	rows, err := tx.QueryContext(ctx, query, args...)
-	if err != nil {
-		return nil, common.NewInternalServerError("HISTORY-EVIDENCE-RESTORE-QUERY " + err.Error())
-	}
-	defer func() { _ = rows.Close() }()
-	artifacts := make([]mutationEvidenceCatalogArtifact, 0, limit)
-	for rows.Next() {
-		var artifact mutationEvidenceCatalogArtifact
-		var bucket, version, previousHash sql.NullString
-		if err = rows.Scan(&artifact.sequence, &artifact.payloadType, &artifact.contentHash, &artifact.eventHash, &previousHash, &artifact.sha256, &artifact.reference.Provider, &bucket, &artifact.reference.ObjectKey, &version); err != nil {
-			return nil, common.NewInternalServerError("HISTORY-EVIDENCE-RESTORE-SCAN " + err.Error())
-		}
-		artifact.reference.Bucket = bucket.String
-		artifact.reference.VersionID = version.String
-		artifact.previousHash = previousHash.String
-		artifacts = append(artifacts, artifact)
-	}
-	if err = rows.Err(); err != nil {
-		return nil, common.NewInternalServerError("HISTORY-EVIDENCE-RESTORE-ROWS " + err.Error())
-	}
-	if len(artifacts) != limit || artifacts[len(artifacts)-1].payloadType != PayloadTypeSnapshot {
-		return nil, common.NewInternalServerError("HISTORY-EVIDENCE-RESTORE-CHECKPOINT evidence checkpoint chain is incomplete")
-	}
-	if cfg.EvidenceStore == nil {
-		return nil, common.NewInternalServerError("HISTORY-EVIDENCE-RESTORE-NILSTORE evidence store is not initialized")
-	}
-	var snapshot map[string]any
-	expectedPreviousHash := ""
-	for index := len(artifacts) - 1; index >= 0; index-- {
-		artifact := artifacts[index]
-		object, getErr := cfg.EvidenceStore.GetArtifact(ctx, artifact.reference)
-		if getErr != nil {
-			return nil, common.NewErrServiceUnavailable("HISTORY-EVIDENCE-RESTORE-GET " + getErr.Error())
-		}
-		if !strings.EqualFold(SHA256Hex(object.Data), artifact.sha256) {
-			return nil, common.NewInternalServerError("HISTORY-EVIDENCE-RESTORE-ARTIFACTHASH mutation artifact hash does not match its catalog receipt")
-		}
-		document, decodeErr := decodeMutationEvidenceDocument(object.Data)
-		if decodeErr != nil {
-			return nil, decodeErr
-		}
-		if document.EventSequence != artifact.sequence || !strings.EqualFold(document.EventHash, artifact.eventHash) || document.PreviousEventHash != artifact.previousHash || artifact.previousHash != expectedPreviousHash {
-			return nil, common.NewInternalServerError("HISTORY-EVIDENCE-RESTORE-CHAIN mutation evidence chain does not match its catalog")
-		}
-		switch artifact.payloadType {
-		case PayloadTypeSnapshot:
-			snapshot, decodeErr = mutationSnapshotPayload(document.Payload)
-		case PayloadTypeDiff:
-			var patch []map[string]any
-			patch, decodeErr = mutationDiffPayload(document.Payload)
-			if decodeErr == nil {
-				snapshot, decodeErr = ApplyJSONPatch(snapshot, patch)
-			}
-		default:
-			decodeErr = fmt.Errorf("unsupported payload type %q", artifact.payloadType)
-		}
-		if decodeErr != nil {
-			return nil, common.NewInternalServerError("HISTORY-EVIDENCE-RESTORE-PAYLOAD " + decodeErr.Error())
-		}
-		actualHash, hashErr := CanonicalJSONHash(snapshot)
-		if hashErr != nil || !strings.EqualFold(actualHash, artifact.contentHash) {
-			return nil, common.NewInternalServerError("HISTORY-EVIDENCE-RESTORE-HASH restored evidence content hash does not match")
-		}
-		expectedPreviousHash = artifact.eventHash
-	}
-	if !strings.EqualFold(expectedPreviousHash, state.lastEventHash) {
-		return nil, common.NewInternalServerError("HISTORY-EVIDENCE-RESTORE-HEAD restored evidence chain does not match its state head")
-	}
-	return snapshot, nil
-}
-
-type mutationEvidenceDocument struct {
-	ArtifactVersion   string `json:"artifact_version"`
-	EventSequence     int64  `json:"event_sequence"`
-	EventHash         string `json:"event_hash"`
-	PreviousEventHash string `json:"previous_event_hash"`
-	PayloadType       string `json:"payload_type"`
-	Payload           any    `json:"payload"`
-}
-
-func decodeMutationEvidenceDocument(data []byte) (mutationEvidenceDocument, error) {
-	var document mutationEvidenceDocument
-	if err := decodeJSONPreservingNumbers(data, &document); err != nil {
-		return mutationEvidenceDocument{}, common.NewInternalServerError("HISTORY-EVIDENCE-RESTORE-DECODE " + err.Error())
-	}
-	if document.ArtifactVersion != mutationEventArtifactVersion {
-		return mutationEvidenceDocument{}, common.NewInternalServerError("HISTORY-EVIDENCE-RESTORE-VERSION unsupported mutation artifact version")
-	}
-	return document, nil
 }
 
 func mutationSnapshotPayload(value any) (map[string]any, error) {
@@ -359,25 +255,16 @@ func recordMutationEvidenceTx(ctx context.Context, tx *sql.Tx, write mutationEvi
 	if err = tx.QueryRowContext(ctx, query, args...).Scan(&artifactID); err != nil {
 		return 0, common.NewInternalServerError("HISTORY-EVIDENCE-MUTATION-CATALOGINSERT " + err.Error())
 	}
-	eventsSinceSnapshot := 0
-	if write.payload.payloadType == PayloadTypeDiff {
-		eventsSinceSnapshot = int(write.sequence)
-		stateQuery, stateArgs, stateErr := goqu.From(TableMutationEvidenceState).
-			Select("events_since_snapshot").Where(goqu.Ex{"entity_type": write.table, "identifier": write.identifier}).ToSQL()
-		if stateErr != nil {
-			return 0, common.NewInternalServerError("HISTORY-EVIDENCE-MUTATION-STATEBUILD " + stateErr.Error())
-		}
-		var previousCount int
-		if stateErr = tx.QueryRowContext(ctx, stateQuery, stateArgs...).Scan(&previousCount); stateErr == nil {
-			eventsSinceSnapshot = previousCount + 1
-		} else if !errors.Is(stateErr, sql.ErrNoRows) {
-			return 0, common.NewInternalServerError("HISTORY-EVIDENCE-MUTATION-STATEQUERY " + stateErr.Error())
-		}
-	}
 	stateRecord := goqu.Record{
 		"entity_type": write.table, "identifier": write.identifier, "last_sequence": write.sequence,
-		"last_event_hash": eventHash, "events_since_snapshot": eventsSinceSnapshot, "db_updated_at": time.Now().UTC(),
+		"last_event_hash": eventHash, "last_content_hash": contentHash,
+		"events_since_snapshot": write.eventsSinceSnapshot, "db_updated_at": time.Now().UTC(),
 	}
+	snapshotJSON, err := CanonicalJSON(write.snapshot)
+	if err != nil {
+		return 0, common.NewInternalServerError("HISTORY-EVIDENCE-MUTATION-STATESNAPSHOT " + err.Error())
+	}
+	stateRecord["current_snapshot"] = goqu.L("?::jsonb", string(snapshotJSON))
 	stateSQL, stateArgs, err := goqu.Insert(TableMutationEvidenceState).Rows(stateRecord).
 		OnConflict(goqu.DoUpdate("entity_type,identifier", stateRecord)).ToSQL()
 	if err != nil {
