@@ -43,7 +43,9 @@ import (
 )
 
 const (
-	TableBinaryEvidenceReceipt   = "binary_evidence_receipt"
+	// TableBinaryEvidenceReceipt catalogs immutable canonical binary objects.
+	TableBinaryEvidenceReceipt = "binary_evidence_receipt"
+	// TableBinaryReferenceEvidence catalogs owner-scoped binary reference artifacts.
 	TableBinaryReferenceEvidence = "binary_reference_evidence_artifacts"
 	binaryReferenceVersion       = "basyx-binary-reference-v1"
 )

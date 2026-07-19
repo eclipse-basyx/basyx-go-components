@@ -1545,7 +1545,7 @@ func (s *AssetAdministrationShellDatabase) PutThumbnailByAASIDReader(ctx context
 			return common.NewInternalServerError("AASREPO-PUTTHUMBNAIL-BUILDEXISTSQL " + fileBuildErr.Error())
 		}
 
-		thumbnailExists := true
+		thumbnailExists := false
 		var attachmentMarker sql.NullInt64
 		if scanErr := tx.QueryRow(fileQuery, fileArgs...).Scan(&attachmentMarker); scanErr != nil {
 			if scanErr != sql.ErrNoRows {

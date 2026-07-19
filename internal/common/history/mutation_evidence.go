@@ -42,9 +42,12 @@ import (
 const (
 	mutationEventArtifactVersion = "basyx-mutation-event-v2"
 	mutationEventHashContract    = "basyx-mutation-event-v1"
-	TableMutationEvidenceState   = "mutation_evidence_state"
-	TableMutationEvidenceEvents  = "mutation_evidence_artifacts"
-	EvidenceArtifactMutation     = "mutation_event"
+	// TableMutationEvidenceState stores the committed head of each independent evidence chain.
+	TableMutationEvidenceState = "mutation_evidence_state"
+	// TableMutationEvidenceEvents catalogs committed mutation artifacts.
+	TableMutationEvidenceEvents = "mutation_evidence_artifacts"
+	// EvidenceArtifactMutation identifies canonical independent mutation artifacts.
+	EvidenceArtifactMutation = "mutation_event"
 )
 
 type mutationEvidenceState struct {
@@ -115,10 +118,14 @@ type mutationEvidenceCatalogArtifact struct {
 
 func restoreMutationEvidenceSnapshotTx(ctx context.Context, tx *sql.Tx, cfg Config, table string, identifier string, state mutationEvidenceState) (map[string]any, error) {
 	limit := state.eventsSinceSnapshot + 1
+	if limit <= 0 {
+		return nil, common.NewInternalServerError("HISTORY-EVIDENCE-RESTORE-LIMIT invalid evidence checkpoint distance")
+	}
 	query, args, err := goqu.From(TableMutationEvidenceEvents).
 		Select("event_sequence", "payload_type", "content_hash", "event_hash", "previous_event_hash", "sha256", "provider", "bucket", "object_key", "object_version_id").
 		Where(goqu.Ex{"entity_type": table, "identifier": identifier}).
 		Order(goqu.C("event_sequence").Desc()).
+		// #nosec G115 -- limit is a validated positive int, so conversion to the same-width unsigned type is safe.
 		Limit(uint(limit)).
 		ToSQL()
 	if err != nil {

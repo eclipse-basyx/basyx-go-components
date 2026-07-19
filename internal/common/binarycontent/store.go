@@ -23,6 +23,7 @@
 * SPDX-License-Identifier: MIT
 ******************************************************************************/
 
+// Package binarycontent stores owner-scoped references to deduplicated binary payloads.
 package binarycontent
 
 import (
@@ -45,8 +46,11 @@ import (
 )
 
 const (
-	TableContent            = "binary_content"
-	TableFileReference      = "file_binary_reference"
+	// TableContent stores canonical binary payload metadata.
+	TableContent = "binary_content"
+	// TableFileReference associates File elements with canonical content.
+	TableFileReference = "file_binary_reference"
+	// TableThumbnailReference associates AAS thumbnails with canonical content.
 	TableThumbnailReference = "thumbnail_binary_reference"
 	managedPathPrefix       = "/aasx/files"
 	largeObjectReadMode     = 0x00040000
