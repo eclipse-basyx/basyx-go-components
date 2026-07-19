@@ -296,14 +296,19 @@ func BuildFileAttachmentExistsSQL(submodelID string, idShortPath string) (string
 	sme := goqu.T("submodel_element").As("sme")
 	fe := goqu.T("file_element").As("fe")
 	fd := goqu.T("file_data").As("fd")
+	fr := goqu.T("file_binary_reference").As("fr")
 
 	return dialect.From(sm).
 		Join(sme, goqu.On(goqu.I("sme.submodel_id").Eq(goqu.I("sm.id")))).
 		LeftJoin(fe, goqu.On(goqu.I("fe.id").Eq(goqu.I("sme.id")))).
 		LeftJoin(fd, goqu.On(goqu.I("fd.id").Eq(goqu.I("sme.id")))).
+		LeftJoin(fr, goqu.On(goqu.I("fr.file_element_id").Eq(goqu.I("sme.id")))).
 		Select(
 			goqu.I("fe.id").As("file_element_id"),
-			goqu.I("fd.file_oid").As("file_oid"),
+			goqu.Case().When(
+				goqu.Or(goqu.I("fr.binary_content_id").IsNotNull(), goqu.I("fd.file_oid").IsNotNull()),
+				1,
+			).As("file_oid"),
 		).
 		Where(
 			goqu.I("sm.submodel_identifier").Eq(submodelID),

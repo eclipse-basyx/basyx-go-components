@@ -28,7 +28,9 @@
 package submodelelements
 
 import (
+	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -39,6 +41,7 @@ import (
 	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/binarycontent"
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	persistenceutils "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/utils"
 )
@@ -135,6 +138,9 @@ func (p PostgreSQLFileHandler) Update(submodelID string, idShortOrPath string, s
 	}
 	hasFileValueChanged := currentValue.String != newValue
 	if hasFileValueChanged {
+		if err = deleteManagedFileReference(localTx, elementID); err != nil {
+			return err
+		}
 		// Check if there's an OID in file_data for this element
 		var oldOID sql.NullInt64
 		fileDataQuery, fileDataArgs, err := dialect.From("file_data").
@@ -272,6 +278,9 @@ func (p PostgreSQLFileHandler) UpdateValueOnly(submodelID string, idShortOrPath 
 		if err != nil {
 			return fmt.Errorf("failed to delete file_data: %w", err)
 		}
+	}
+	if err = deleteManagedFileReference(tx, int64(elementID)); err != nil {
+		return err
 	}
 
 	// Build the update query
@@ -418,6 +427,52 @@ func (p PostgreSQLFileHandler) UploadFileAttachmentReaderTx(tx *sql.Tx, submodel
 		return err
 	}
 	return updateFileElementAttachment(tx, dialect, metadata.elementID, newOID, resolvedFileName, resolvedContentType)
+}
+
+// UploadManagedFileAttachmentReaderTx stores a deduplicated internal attachment.
+func (p PostgreSQLFileHandler) UploadManagedFileAttachmentReaderTx(ctx context.Context, tx *sql.Tx, submodelID string, idShortPath string, file io.Reader, fileName string) (binarycontent.Reference, string, error) {
+	if file == nil {
+		return binarycontent.Reference{}, "", common.NewErrBadRequest("SMREPO-UPLOADATTACHMENT-MISSINGFILE file payload is required")
+	}
+	dialect := goqu.Dialect("postgres")
+	metadata, err := readFileElementUploadMetadata(tx, dialect, submodelID, idShortPath)
+	if err != nil {
+		return binarycontent.Reference{}, "", err
+	}
+	resolvedFileName, resolvedContentType, uploadContent, err := resolveUploadFileMetadata(file, fileName, metadata)
+	if err != nil {
+		return binarycontent.Reference{}, "", err
+	}
+	content, err := binarycontent.StoreTx(ctx, tx, uploadContent)
+	if err != nil {
+		return binarycontent.Reference{}, "", err
+	}
+	reference, err := binarycontent.NewReference(metadata.elementID, content, resolvedFileName)
+	if err != nil {
+		return binarycontent.Reference{}, "", err
+	}
+	if err = binarycontent.UpsertReferenceTx(ctx, tx, binarycontent.TableFileReference, "file_element_id", reference); err != nil {
+		return binarycontent.Reference{}, "", err
+	}
+	if err = deleteLegacyFileData(tx, dialect, metadata.elementID); err != nil {
+		return binarycontent.Reference{}, "", err
+	}
+	if err = updateManagedFileElementAttachment(tx, dialect, reference, resolvedContentType); err != nil {
+		return binarycontent.Reference{}, "", err
+	}
+	return reference, resolvedContentType, nil
+}
+
+// UploadManagedFileAttachmentTx stores a deduplicated attachment from a file.
+func (p PostgreSQLFileHandler) UploadManagedFileAttachmentTx(ctx context.Context, tx *sql.Tx, submodelID string, idShortPath string, file *os.File, fileName string) (binarycontent.Reference, string, error) {
+	var reference binarycontent.Reference
+	var contentType string
+	err := withReopenedUploadFile(file, func(uploadFile io.Reader) error {
+		var uploadErr error
+		reference, contentType, uploadErr = p.UploadManagedFileAttachmentReaderTx(ctx, tx, submodelID, idShortPath, uploadFile, fileName)
+		return uploadErr
+	})
+	return reference, contentType, err
 }
 
 type fileElementUploadMetadata struct {
@@ -612,6 +667,42 @@ func updateFileElementAttachment(tx *sql.Tx, dialect goqu.DialectWrapper, elemen
 	return nil
 }
 
+func updateManagedFileElementAttachment(tx *sql.Tx, dialect goqu.DialectWrapper, reference binarycontent.Reference, contentType string) error {
+	query, args, err := dialect.Update("file_element").Set(goqu.Record{
+		"value": reference.ManagedPath(), "file_name": reference.SafeFileName, "content_type": contentType,
+	}).Where(goqu.C("id").Eq(reference.OwnerID)).ToSQL()
+	if err != nil {
+		return common.NewInternalServerError("SMREPO-UPLOADATTACHMENT-BUILDUPDATE " + err.Error())
+	}
+	if _, err = tx.Exec(query, args...); err != nil {
+		return common.NewInternalServerError("SMREPO-UPLOADATTACHMENT-UPDATE " + err.Error())
+	}
+	return nil
+}
+
+func deleteLegacyFileData(tx *sql.Tx, dialect goqu.DialectWrapper, elementID int64) error {
+	oldOID, err := readExistingFileOID(tx, dialect, elementID)
+	if err != nil {
+		return err
+	}
+	if !oldOID.Valid {
+		return nil
+	}
+	return removeLOFile(tx, oldOID, dialect, elementID)
+}
+
+func deleteManagedFileReference(tx *sql.Tx, elementID int64) error {
+	query, args, err := goqu.Delete(binarycontent.TableFileReference).
+		Where(goqu.C("file_element_id").Eq(elementID)).ToSQL()
+	if err != nil {
+		return common.NewInternalServerError("SMREPO-FILEREFERENCE-BUILDDELETE " + err.Error())
+	}
+	if _, err = tx.Exec(query, args...); err != nil {
+		return common.NewInternalServerError("SMREPO-FILEREFERENCE-DELETE " + err.Error())
+	}
+	return nil
+}
+
 // DownloadFileAttachment retrieves a file from PostgreSQL's Large Object system.
 // This method reads the file content based on the OID stored in file_data.
 //
@@ -724,6 +815,125 @@ func (p PostgreSQLFileHandler) DownloadFileAttachment(submodelID string, idShort
 	}
 
 	return fileContent, contentType, fileName, nil
+}
+
+// DownloadManagedFileAttachment reads canonical content through its owning File SME.
+func (p PostgreSQLFileHandler) DownloadManagedFileAttachment(ctx context.Context, submodelID string, idShortPath string) ([]byte, string, string, error) {
+	tx, err := p.db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, "", "", common.NewInternalServerError("SMREPO-DOWNLOADATTACHMENT-STARTTX " + err.Error())
+	}
+	committed := false
+	defer func() {
+		if !committed {
+			_ = tx.Rollback()
+		}
+	}()
+
+	metadata, err := readDownloadFileMetadata(ctx, tx, submodelID, idShortPath)
+	if err != nil {
+		return nil, "", "", err
+	}
+	reference, err := binarycontent.LoadReferenceTx(ctx, tx, binarycontent.TableFileReference, "file_element_id", metadata.elementID)
+	if err == nil {
+		content, readErr := binarycontent.ReadAllTx(ctx, tx, reference.Content)
+		if readErr != nil {
+			return nil, "", "", readErr
+		}
+		if err = tx.Commit(); err != nil {
+			return nil, "", "", common.NewInternalServerError("SMREPO-DOWNLOADATTACHMENT-COMMIT " + err.Error())
+		}
+		committed = true
+		return content, metadata.contentType, metadata.fileName, nil
+	}
+	if !errors.Is(err, sql.ErrNoRows) {
+		return nil, "", "", err
+	}
+	content, err := readLegacyFileContent(ctx, tx, metadata.elementID)
+	if err != nil {
+		return nil, "", "", err
+	}
+	if err = tx.Commit(); err != nil {
+		return nil, "", "", common.NewInternalServerError("SMREPO-DOWNLOADATTACHMENT-COMMIT " + err.Error())
+	}
+	committed = true
+	return content, metadata.contentType, metadata.fileName, nil
+}
+
+type downloadFileMetadata struct {
+	elementID   int64
+	contentType string
+	fileName    string
+}
+
+func readDownloadFileMetadata(ctx context.Context, tx *sql.Tx, submodelID string, idShortPath string) (downloadFileMetadata, error) {
+	dialect := goqu.Dialect("postgres")
+	query, args, err := dialect.From(goqu.T("submodel").As("sm")).
+		Join(goqu.T("submodel_element").As("sme"), goqu.On(goqu.I("sme.submodel_id").Eq(goqu.I("sm.id")))).
+		Join(goqu.T("file_element").As("fe"), goqu.On(goqu.I("fe.id").Eq(goqu.I("sme.id")))).
+		Select(goqu.I("sme.id"), goqu.I("fe.content_type"), goqu.I("fe.file_name")).
+		Where(goqu.I("sm.submodel_identifier").Eq(submodelID), goqu.I("sme.idshort_path").Eq(idShortPath)).ToSQL()
+	if err != nil {
+		return downloadFileMetadata{}, common.NewInternalServerError("SMREPO-DOWNLOADATTACHMENT-BUILDMETADATA " + err.Error())
+	}
+	var metadata downloadFileMetadata
+	if err = tx.QueryRowContext(ctx, query, args...).Scan(&metadata.elementID, &metadata.contentType, &metadata.fileName); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return downloadFileMetadata{}, common.NewErrNotFound("SMREPO-DOWNLOADATTACHMENT-NOTFOUND File SME not found")
+		}
+		return downloadFileMetadata{}, common.NewInternalServerError("SMREPO-DOWNLOADATTACHMENT-METADATA " + err.Error())
+	}
+	return metadata, nil
+}
+
+func readLegacyFileContent(ctx context.Context, tx *sql.Tx, elementID int64) ([]byte, error) {
+	dialect := goqu.Dialect("postgres")
+	query, args, err := dialect.From("file_data").Select("file_oid").Where(goqu.C("id").Eq(elementID)).ToSQL()
+	if err != nil {
+		return nil, common.NewInternalServerError("SMREPO-DOWNLOADATTACHMENT-BUILDLEGACY " + err.Error())
+	}
+	var oid int64
+	if err = tx.QueryRowContext(ctx, query, args...).Scan(&oid); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, common.NewErrNotFound("SMREPO-DOWNLOADATTACHMENT-NODATA attachment content not found")
+		}
+		return nil, common.NewInternalServerError("SMREPO-DOWNLOADATTACHMENT-LEGACY " + err.Error())
+	}
+	return readLegacyLargeObject(ctx, tx, oid)
+}
+
+func readLegacyLargeObject(ctx context.Context, tx *sql.Tx, oid int64) ([]byte, error) {
+	openQuery, openArgs, err := goqu.Select(goqu.Func("lo_open", oid, 0x00040000)).ToSQL()
+	if err != nil {
+		return nil, common.NewInternalServerError("SMREPO-DOWNLOADATTACHMENT-BUILDOPEN " + err.Error())
+	}
+	var descriptor int
+	if err = tx.QueryRowContext(ctx, openQuery, openArgs...).Scan(&descriptor); err != nil {
+		return nil, common.NewInternalServerError("SMREPO-DOWNLOADATTACHMENT-OPEN " + err.Error())
+	}
+	var content []byte
+	for {
+		readQuery, readArgs, buildErr := goqu.Select(goqu.Func("loread", descriptor, 32*1024)).ToSQL()
+		if buildErr != nil {
+			return nil, common.NewInternalServerError("SMREPO-DOWNLOADATTACHMENT-BUILDREAD " + buildErr.Error())
+		}
+		var chunk []byte
+		if err = tx.QueryRowContext(ctx, readQuery, readArgs...).Scan(&chunk); err != nil {
+			return nil, common.NewInternalServerError("SMREPO-DOWNLOADATTACHMENT-READ " + err.Error())
+		}
+		if len(chunk) == 0 {
+			break
+		}
+		content = append(content, chunk...)
+	}
+	closeQuery, closeArgs, err := goqu.Select(goqu.Func("lo_close", descriptor)).ToSQL()
+	if err != nil {
+		return nil, common.NewInternalServerError("SMREPO-DOWNLOADATTACHMENT-BUILDCLOSE " + err.Error())
+	}
+	if _, err = tx.ExecContext(ctx, closeQuery, closeArgs...); err != nil {
+		return nil, common.NewInternalServerError("SMREPO-DOWNLOADATTACHMENT-CLOSE " + err.Error())
+	}
+	return content, nil
 }
 
 // DeleteFileAttachment deletes a file from PostgreSQL's Large Object system.
@@ -840,6 +1050,30 @@ func (p PostgreSQLFileHandler) DeleteFileAttachmentTx(tx *sql.Tx, submodelID str
 		return fmt.Errorf("failed to update file_element: %w", err)
 	}
 
+	return nil
+}
+
+// DeleteManagedFileAttachmentTx removes canonical and legacy attachment associations.
+func (p PostgreSQLFileHandler) DeleteManagedFileAttachmentTx(ctx context.Context, tx *sql.Tx, submodelID string, idShortPath string) error {
+	dialect := goqu.Dialect("postgres")
+	metadata, err := readFileElementUploadMetadata(tx, dialect, submodelID, idShortPath)
+	if err != nil {
+		return err
+	}
+	if err = binarycontent.DeleteReferenceTx(ctx, tx, binarycontent.TableFileReference, "file_element_id", metadata.elementID); err != nil {
+		return err
+	}
+	if err = deleteLegacyFileData(tx, dialect, metadata.elementID); err != nil {
+		return err
+	}
+	query, args, err := dialect.Update("file_element").Set(goqu.Record{"value": "", "file_name": nil}).
+		Where(goqu.C("id").Eq(metadata.elementID)).ToSQL()
+	if err != nil {
+		return common.NewInternalServerError("SMREPO-DELETEATTACHMENT-BUILDUPDATE " + err.Error())
+	}
+	if _, err = tx.ExecContext(ctx, query, args...); err != nil {
+		return common.NewInternalServerError("SMREPO-DELETEATTACHMENT-UPDATE " + err.Error())
+	}
 	return nil
 }
 

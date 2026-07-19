@@ -34,6 +34,8 @@ import (
 	"os"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/binarycontent"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/history"
 	submodelqueries "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/queries"
 	submodelelements "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/submodelElements"
 )
@@ -89,13 +91,11 @@ func (s *SubmodelDatabase) UploadFileAttachmentWithHistory(ctx context.Context, 
 	}
 
 	return common.ExecuteInTransaction(s.db, "SMREPO-UPLOADFILEHIST-STARTTX", "SMREPO-UPLOADFILEHIST-COMMIT", func(tx *sql.Tx) error {
-		if err := fileHandler.UploadFileAttachmentTx(tx, submodelID, idShortPath, file, fileName); err != nil {
-			return err
+		reference, contentType, uploadErr := fileHandler.UploadManagedFileAttachmentTx(ctx, tx, submodelID, idShortPath, file, fileName)
+		if uploadErr != nil {
+			return uploadErr
 		}
-		return s.appendChangedSubmodelElementHistoryTx(ctx, tx, submodelID, submodelElementRootMutation{
-			previousPath: idShortPath,
-			currentPath:  idShortPath,
-		})
+		return s.recordFileUploadMutationTx(ctx, tx, submodelID, idShortPath, reference, contentType)
 	})
 }
 
@@ -107,14 +107,29 @@ func (s *SubmodelDatabase) UploadFileAttachmentReaderWithHistory(ctx context.Con
 	}
 
 	return common.ExecuteInTransaction(s.db, "SMREPO-UPLOADFILEHIST-STARTTX", "SMREPO-UPLOADFILEHIST-COMMIT", func(tx *sql.Tx) error {
-		if err := fileHandler.UploadFileAttachmentReaderTx(tx, submodelID, idShortPath, file, fileName); err != nil {
-			return err
+		reference, contentType, uploadErr := fileHandler.UploadManagedFileAttachmentReaderTx(ctx, tx, submodelID, idShortPath, file, fileName)
+		if uploadErr != nil {
+			return uploadErr
 		}
-		return s.appendChangedSubmodelElementHistoryTx(ctx, tx, submodelID, submodelElementRootMutation{
-			previousPath: idShortPath,
-			currentPath:  idShortPath,
-		})
+		return s.recordFileUploadMutationTx(ctx, tx, submodelID, idShortPath, reference, contentType)
 	})
+}
+
+func (s *SubmodelDatabase) recordFileUploadMutationTx(ctx context.Context, tx *sql.Tx, submodelID string, idShortPath string, reference binarycontent.Reference, contentType string) error {
+	binaryReceipt, err := history.EnsureBinaryEvidenceTx(ctx, tx, reference.Content, contentType)
+	if err != nil {
+		return err
+	}
+	if err = s.appendChangedSubmodelElementHistoryTx(ctx, tx, submodelID, submodelElementRootMutation{
+		previousPath: idShortPath,
+		currentPath:  idShortPath,
+	}); err != nil {
+		return err
+	}
+	return history.RecordBinaryReferenceEvidenceTx(
+		ctx, tx, history.TableSubmodel, submodelID, reference.Content,
+		reference.ManagedPath(), reference.SafeFileName, contentType, binaryReceipt,
+	)
 }
 
 // DownloadFileAttachment downloads attachment content for a File submodel element.
@@ -125,6 +140,15 @@ func (s *SubmodelDatabase) DownloadFileAttachment(submodelID string, idShortPath
 	}
 
 	return fileHandler.DownloadFileAttachment(submodelID, idShortPath)
+}
+
+// DownloadFileAttachmentWithContext resolves canonical content through the owning File SME.
+func (s *SubmodelDatabase) DownloadFileAttachmentWithContext(ctx context.Context, submodelID string, idShortPath string) ([]byte, string, string, error) {
+	fileHandler, err := submodelelements.NewPostgreSQLFileHandler(s.db)
+	if err != nil {
+		return nil, "", "", err
+	}
+	return fileHandler.DownloadManagedFileAttachment(ctx, submodelID, idShortPath)
 }
 
 // DeleteFileAttachment deletes attachment content of a File submodel element.
@@ -145,7 +169,7 @@ func (s *SubmodelDatabase) DeleteFileAttachmentWithHistory(ctx context.Context, 
 	}
 
 	return common.ExecuteInTransaction(s.db, "SMREPO-DELETEFILEHIST-STARTTX", "SMREPO-DELETEFILEHIST-COMMIT", func(tx *sql.Tx) error {
-		if err := fileHandler.DeleteFileAttachmentTx(tx, submodelID, idShortPath); err != nil {
+		if err := fileHandler.DeleteManagedFileAttachmentTx(ctx, tx, submodelID, idShortPath); err != nil {
 			return err
 		}
 		return s.appendChangedSubmodelElementHistoryTx(ctx, tx, submodelID, submodelElementRootMutation{

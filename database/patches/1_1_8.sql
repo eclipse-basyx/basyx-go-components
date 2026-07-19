@@ -180,6 +180,117 @@ CREATE TRIGGER cleanup_thumbnail_binary_content
 AFTER DELETE ON thumbnail_binary_reference
 FOR EACH ROW EXECUTE FUNCTION cleanup_unreferenced_binary_content();
 
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
+
+SELECT pg_advisory_xact_lock(hashtextextended('basyx-binary-content-v1.1.8', 0));
+
+CREATE TEMPORARY TABLE IF NOT EXISTS legacy_binary_conversion (
+  owner_type TEXT NOT NULL,
+  owner_id BIGINT NOT NULL,
+  file_oid OID NOT NULL,
+  sha256 CHAR(64) NOT NULL,
+  size_bytes BIGINT NOT NULL,
+  path_token VARCHAR(64) NOT NULL,
+  safe_file_name TEXT NOT NULL,
+  PRIMARY KEY (owner_type, owner_id)
+);
+
+TRUNCATE legacy_binary_conversion;
+
+INSERT INTO legacy_binary_conversion (
+  owner_type, owner_id, file_oid, sha256, size_bytes, path_token, safe_file_name
+)
+SELECT
+  'file', source.owner_id, source.file_oid,
+  encode(digest(source.payload, 'sha256'), 'hex'), octet_length(source.payload),
+  encode(gen_random_bytes(24), 'hex'),
+  CASE WHEN source.safe_file_name IN ('', '.', '..') THEN 'attachment' ELSE source.safe_file_name END
+FROM (
+  SELECT
+    data.id AS owner_id,
+    data.file_oid,
+    lo_get(data.file_oid) AS payload,
+    regexp_replace(COALESCE(NULLIF(BTRIM(element.file_name), ''), 'attachment'), '[^A-Za-z0-9._-]', '_', 'g') AS safe_file_name
+  FROM file_data AS data
+  JOIN file_element AS element ON element.id = data.id
+  WHERE data.file_oid IS NOT NULL
+) AS source
+ON CONFLICT (owner_type, owner_id) DO NOTHING;
+
+INSERT INTO legacy_binary_conversion (
+  owner_type, owner_id, file_oid, sha256, size_bytes, path_token, safe_file_name
+)
+SELECT
+  'thumbnail', source.owner_id, source.file_oid,
+  encode(digest(source.payload, 'sha256'), 'hex'), octet_length(source.payload),
+  encode(gen_random_bytes(24), 'hex'),
+  CASE WHEN source.safe_file_name IN ('', '.', '..') THEN 'thumbnail' ELSE source.safe_file_name END
+FROM (
+  SELECT
+    data.id AS owner_id,
+    data.file_oid,
+    lo_get(data.file_oid) AS payload,
+    regexp_replace(COALESCE(NULLIF(BTRIM(element.file_name), ''), 'thumbnail'), '[^A-Za-z0-9._-]', '_', 'g') AS safe_file_name
+  FROM thumbnail_file_data AS data
+  JOIN thumbnail_file_element AS element ON element.id = data.id
+  WHERE data.file_oid IS NOT NULL
+) AS source
+ON CONFLICT (owner_type, owner_id) DO NOTHING;
+
+INSERT INTO binary_content (sha256, size_bytes, file_oid)
+SELECT DISTINCT ON (sha256, size_bytes) sha256, size_bytes, file_oid
+FROM legacy_binary_conversion
+ORDER BY sha256, size_bytes, owner_type, owner_id
+ON CONFLICT (sha256, size_bytes) DO NOTHING;
+
+INSERT INTO file_binary_reference (
+  file_element_id, binary_content_id, path_token, safe_file_name
+)
+SELECT conversion.owner_id, content.id, conversion.path_token, conversion.safe_file_name
+FROM legacy_binary_conversion AS conversion
+JOIN binary_content AS content
+  ON content.sha256 = conversion.sha256 AND content.size_bytes = conversion.size_bytes
+WHERE conversion.owner_type = 'file'
+ON CONFLICT (file_element_id) DO NOTHING;
+
+INSERT INTO thumbnail_binary_reference (
+  thumbnail_element_id, binary_content_id, path_token, safe_file_name
+)
+SELECT conversion.owner_id, content.id, conversion.path_token, conversion.safe_file_name
+FROM legacy_binary_conversion AS conversion
+JOIN binary_content AS content
+  ON content.sha256 = conversion.sha256 AND content.size_bytes = conversion.size_bytes
+WHERE conversion.owner_type = 'thumbnail'
+ON CONFLICT (thumbnail_element_id) DO NOTHING;
+
+UPDATE file_element AS element
+SET value = '/aasx/files/' || reference.path_token || '/' || reference.safe_file_name,
+    file_name = COALESCE(NULLIF(BTRIM(element.file_name), ''), reference.safe_file_name),
+    db_updated_at = NOW()
+FROM file_binary_reference AS reference
+WHERE reference.file_element_id = element.id;
+
+UPDATE thumbnail_file_element AS element
+SET value = '/aasx/files/' || reference.path_token || '/' || reference.safe_file_name,
+    file_name = COALESCE(NULLIF(BTRIM(element.file_name), ''), reference.safe_file_name),
+    db_updated_at = NOW()
+FROM thumbnail_binary_reference AS reference
+WHERE reference.thumbnail_element_id = element.id;
+
+SELECT lo_unlink(duplicate.file_oid)
+FROM (
+  SELECT DISTINCT conversion.file_oid
+  FROM legacy_binary_conversion AS conversion
+  WHERE NOT EXISTS (
+    SELECT 1 FROM binary_content AS content WHERE content.file_oid = conversion.file_oid
+  )
+) AS duplicate;
+
+DELETE FROM file_data;
+DELETE FROM thumbnail_file_data;
+
+DROP TABLE legacy_binary_conversion;
+
 UPDATE basyxsystem
 SET schema_version = 'v1.1.8',
     state = 'clean'

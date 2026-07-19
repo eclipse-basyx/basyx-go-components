@@ -629,7 +629,7 @@ func (s *SerializationAPIService) resolveSerializationSupplementaryParts(
 			continue
 		}
 
-		attachmentContent, attachmentContentType, attachmentFileName, downloadAttachmentErr := s.persistence.SubmodelRepository.DownloadFileAttachment(fileLocation.SubmodelID, fileLocation.IDShortPath)
+		attachmentContent, attachmentContentType, attachmentFileName, downloadAttachmentErr := s.persistence.SubmodelRepository.DownloadFileAttachmentWithContext(ctx, fileLocation.SubmodelID, fileLocation.IDShortPath)
 		if downloadAttachmentErr != nil {
 			if common.IsErrNotFound(downloadAttachmentErr) {
 				// #nosec G706 -- values are escaped by sanitizeLogValue to prevent control-character log injection.

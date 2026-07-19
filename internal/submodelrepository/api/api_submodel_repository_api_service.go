@@ -2519,7 +2519,7 @@ func (s *SubmodelRepositoryAPIAPIService) GetFileByPathSubmodelRepo(ctx context.
 		return gen.Response(http.StatusFound, openapi.Redirect{Location: *fileURL}), nil
 	}
 
-	fileContent, contentType, fileName, err := s.submodelBackend.DownloadFileAttachment(decodedSubmodelIdentifier, idShortPath)
+	fileContent, contentType, fileName, err := s.submodelBackend.DownloadFileAttachmentWithContext(ctx, decodedSubmodelIdentifier, idShortPath)
 	if err != nil {
 		if common.IsErrNotFound(err) || errors.Is(err, sql.ErrNoRows) {
 			return newAPIErrorResponse(err, http.StatusNotFound, operation, "FileNotFound"), nil
