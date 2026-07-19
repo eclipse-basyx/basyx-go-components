@@ -1,0 +1,264 @@
+/*******************************************************************************
+* Copyright (C) 2026 the Eclipse BaSyx Authors and Fraunhofer IESE
+*
+* Permission is hereby granted, free of charge, to any person obtaining
+* a copy of this software and associated documentation files (the
+* "Software"), to deal in the Software without restriction, including
+* without limitation the rights to use, copy, modify, merge, publish,
+* distribute, sublicense, and/or sell copies of the Software, and to
+* permit persons to whom the Software is furnished to do so, subject to
+* the following conditions:
+*
+* The above copyright notice and this permission notice shall be
+* included in all copies or substantial portions of the Software.
+*
+* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+* NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
+* LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+* OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
+* WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+*
+* SPDX-License-Identifier: MIT
+******************************************************************************/
+
+package history
+
+import (
+	"context"
+	"database/sql"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
+	"net/url"
+	"path"
+	"strings"
+	"time"
+
+	"github.com/doug-martin/goqu/v9"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/binarycontent"
+)
+
+const (
+	TableBinaryEvidenceReceipt   = "binary_evidence_receipt"
+	TableBinaryReferenceEvidence = "binary_reference_evidence_artifacts"
+	binaryReferenceVersion       = "basyx-binary-reference-v1"
+)
+
+// EnsureBinaryEvidenceTx writes canonical binary bytes once and reuses their
+// immutable receipt across authorized logical references.
+func EnsureBinaryEvidenceTx(ctx context.Context, tx *sql.Tx, content binarycontent.Content, contentType string) (*EvidenceReceipt, error) {
+	cfg := ActiveConfig()
+	if !cfg.EvidenceEnabled {
+		return nil, nil
+	}
+	if len(content.SHA256) != 64 {
+		return nil, common.NewInternalServerError("HISTORY-EVIDENCE-BINARY-DIGEST canonical binary digest is invalid")
+	}
+	if cfg.EvidenceStore == nil {
+		return nil, common.NewInternalServerError("HISTORY-EVIDENCE-BINARY-NILSTORE evidence store is not initialized")
+	}
+	receipt, err := loadBinaryEvidenceReceiptTx(ctx, tx, content.SHA256, content.SizeBytes)
+	artifact := EvidenceArtifact{
+		ArtifactType: EvidenceArtifactBinary,
+		ObjectKey:    path.Join("binary-content", content.SHA256[:2], content.SHA256),
+		ContentType:  strings.TrimSpace(contentType),
+		Metadata: map[string]string{
+			"artifact_type": EvidenceArtifactBinary, "sha256": content.SHA256,
+			"size_bytes": fmt.Sprintf("%d", content.SizeBytes),
+		},
+	}
+	if artifact.ContentType == "" {
+		artifact.ContentType = "application/octet-stream"
+	}
+	if err == nil {
+		if extender, ok := cfg.EvidenceStore.(EvidenceRetentionExtender); ok {
+			extended, extendErr := extender.ExtendArtifactRetention(ctx, receipt.Reference, receipt, artifact)
+			if extendErr != nil {
+				return nil, common.NewErrServiceUnavailable("HISTORY-EVIDENCE-BINARY-EXTEND " + extendErr.Error())
+			}
+			if extended != nil {
+				receipt = *extended
+				if updateErr := upsertBinaryEvidenceReceiptTx(ctx, tx, content.ID, receipt); updateErr != nil {
+					return nil, updateErr
+				}
+			}
+		}
+		return &receipt, nil
+	}
+	if !errors.Is(err, sql.ErrNoRows) {
+		return nil, err
+	}
+	writeCtx := ctx
+	cancel := func() {}
+	if cfg.EvidenceWriteTimeout > 0 {
+		writeCtx, cancel = context.WithTimeout(ctx, cfg.EvidenceWriteTimeout)
+	}
+	defer cancel()
+	var storedReceipt *EvidenceReceipt
+	err = binarycontent.StreamTx(writeCtx, tx, content, func(reader io.Reader) error {
+		var putErr error
+		if streamingStore, ok := cfg.EvidenceStore.(EvidenceStreamStore); ok {
+			storedReceipt, putErr = streamingStore.PutArtifactReader(writeCtx, artifact, reader, content.SizeBytes, content.SHA256)
+			return putErr
+		}
+		data, readErr := io.ReadAll(reader)
+		if readErr != nil {
+			return readErr
+		}
+		artifact.Data = data
+		storedReceipt, putErr = cfg.EvidenceStore.PutArtifact(writeCtx, artifact)
+		return putErr
+	})
+	if err != nil {
+		return nil, common.NewErrServiceUnavailable("HISTORY-EVIDENCE-BINARY-PUT " + err.Error())
+	}
+	if storedReceipt == nil {
+		return nil, common.NewInternalServerError("HISTORY-EVIDENCE-BINARY-NILRECEIPT evidence store returned nil receipt")
+	}
+	if !strings.EqualFold(storedReceipt.SHA256, content.SHA256) || storedReceipt.SizeBytes != content.SizeBytes {
+		return nil, common.NewInternalServerError("HISTORY-EVIDENCE-BINARY-RECEIPT immutable binary receipt does not match canonical content")
+	}
+	if err = upsertBinaryEvidenceReceiptTx(ctx, tx, content.ID, *storedReceipt); err != nil {
+		return nil, err
+	}
+	return storedReceipt, nil
+}
+
+// RecordBinaryReferenceEvidenceTx binds per-upload metadata to the latest
+// mutation event for the owning entity.
+func RecordBinaryReferenceEvidenceTx(ctx context.Context, tx *sql.Tx, entityType string, identifier string, content binarycontent.Content, modelPath string, fileName string, contentType string, binaryReceipt *EvidenceReceipt) error {
+	if binaryReceipt == nil || !ActiveConfig().EvidenceEnabled {
+		return nil
+	}
+	mutationID, sequence, eventHash, err := latestMutationEvidenceIdentityTx(ctx, tx, entityType, identifier)
+	if err != nil {
+		return err
+	}
+	document := map[string]any{
+		"artifact_version": binaryReferenceVersion,
+		"entity_type":      entityType, "identifier": identifier,
+		"event_sequence": sequence, "event_hash": eventHash,
+		"model_path": modelPath, "file_name": fileName, "content_type": contentType,
+		"binary": map[string]any{
+			"sha256": content.SHA256, "size_bytes": content.SizeBytes,
+			"reference": binaryReceipt.Reference,
+		},
+	}
+	data, err := CanonicalJSON(document)
+	if err != nil {
+		return common.NewInternalServerError("HISTORY-EVIDENCE-BINARYREF-CANONICAL " + err.Error())
+	}
+	artifact := EvidenceArtifact{
+		ArtifactType: EvidenceArtifactBinaryRef,
+		ObjectKey:    path.Join("binary-references", url.PathEscape(entityType), url.PathEscape(identifier), fmt.Sprintf("%d-%s.json", sequence, eventHash)),
+		ContentType:  manifestJSONContentType, Data: data,
+		Metadata: map[string]string{
+			"artifact_type": EvidenceArtifactBinaryRef, "entity_type": entityType,
+			"identifier": identifier, "event_hash": eventHash, "binary_sha256": content.SHA256,
+		},
+	}
+	cfg := ActiveConfig()
+	writeCtx := ctx
+	cancel := func() {}
+	if cfg.EvidenceWriteTimeout > 0 {
+		writeCtx, cancel = context.WithTimeout(ctx, cfg.EvidenceWriteTimeout)
+	}
+	defer cancel()
+	receipt, err := cfg.EvidenceStore.PutArtifact(writeCtx, artifact)
+	if err != nil {
+		return common.NewErrServiceUnavailable("HISTORY-EVIDENCE-BINARYREF-PUT " + err.Error())
+	}
+	if receipt == nil {
+		return common.NewInternalServerError("HISTORY-EVIDENCE-BINARYREF-NILRECEIPT evidence store returned nil receipt")
+	}
+	return insertBinaryReferenceReceiptTx(ctx, tx, mutationID, content.ID, modelPath, *receipt)
+}
+
+func loadBinaryEvidenceReceiptTx(ctx context.Context, tx *sql.Tx, digest string, sizeBytes int64) (EvidenceReceipt, error) {
+	query, args, err := goqu.From(TableBinaryEvidenceReceipt).
+		Select("provider", "bucket", "object_key", "object_version_id", "sha256", "size_bytes", "content_type", "retention_mode", "retain_until", "legal_hold", "artifact_metadata", "db_created_at").
+		Where(goqu.Ex{"sha256": digest, "size_bytes": sizeBytes}).ToSQL()
+	if err != nil {
+		return EvidenceReceipt{}, common.NewInternalServerError("HISTORY-EVIDENCE-BINARY-BUILDLOAD " + err.Error())
+	}
+	var receipt EvidenceReceipt
+	var bucket, version, retention sql.NullString
+	var retainUntil sql.NullTime
+	var metadata []byte
+	if err = tx.QueryRowContext(ctx, query, args...).Scan(
+		&receipt.Reference.Provider, &bucket, &receipt.Reference.ObjectKey, &version,
+		&receipt.SHA256, &receipt.SizeBytes, &receipt.ContentType, &retention, &retainUntil,
+		&receipt.LegalHold, &metadata, &receipt.StoredAt,
+	); err != nil {
+		return EvidenceReceipt{}, err
+	}
+	receipt.Reference.Bucket = bucket.String
+	receipt.Reference.VersionID = version.String
+	receipt.RetentionMode = retention.String
+	if retainUntil.Valid {
+		receipt.RetainUntil = &retainUntil.Time
+	}
+	if len(metadata) > 0 {
+		_ = json.Unmarshal(metadata, &receipt.Metadata)
+	}
+	return receipt, nil
+}
+
+func upsertBinaryEvidenceReceiptTx(ctx context.Context, tx *sql.Tx, contentID int64, receipt EvidenceReceipt) error {
+	record := goqu.Record{
+		"binary_content_id": contentID, "provider": receipt.Reference.Provider,
+		"bucket": nullableText(receipt.Reference.Bucket), "object_key": receipt.Reference.ObjectKey,
+		"object_version_id": nullableText(receipt.Reference.VersionID), "sha256": receipt.SHA256,
+		"size_bytes": receipt.SizeBytes, "content_type": receipt.ContentType,
+		"retention_mode": nullableText(receipt.RetentionMode), "retain_until": nullableTime(receipt.RetainUntil),
+		"legal_hold": receipt.LegalHold, "artifact_metadata": jsonbMetadata(receipt.Metadata), "db_updated_at": time.Now().UTC(),
+	}
+	query, args, err := goqu.Insert(TableBinaryEvidenceReceipt).Rows(record).
+		OnConflict(goqu.DoUpdate("sha256,size_bytes", record)).ToSQL()
+	if err != nil {
+		return common.NewInternalServerError("HISTORY-EVIDENCE-BINARY-BUILDUPSERT " + err.Error())
+	}
+	if _, err = tx.ExecContext(ctx, query, args...); err != nil {
+		return common.NewInternalServerError("HISTORY-EVIDENCE-BINARY-UPSERT " + err.Error())
+	}
+	return nil
+}
+
+func latestMutationEvidenceIdentityTx(ctx context.Context, tx *sql.Tx, entityType string, identifier string) (int64, int64, string, error) {
+	query, args, err := goqu.From(TableMutationEvidenceEvents).
+		Select("artifact_id", "event_sequence", "event_hash").
+		Where(goqu.Ex{"entity_type": entityType, "identifier": identifier}).
+		Order(goqu.C("event_sequence").Desc()).Limit(1).ToSQL()
+	if err != nil {
+		return 0, 0, "", common.NewInternalServerError("HISTORY-EVIDENCE-BINARYREF-BUILDMUTATION " + err.Error())
+	}
+	var artifactID, sequence int64
+	var eventHash string
+	if err = tx.QueryRowContext(ctx, query, args...).Scan(&artifactID, &sequence, &eventHash); err != nil {
+		return 0, 0, "", common.NewInternalServerError("HISTORY-EVIDENCE-BINARYREF-MUTATION " + err.Error())
+	}
+	return artifactID, sequence, eventHash, nil
+}
+
+func insertBinaryReferenceReceiptTx(ctx context.Context, tx *sql.Tx, mutationID int64, contentID int64, modelPath string, receipt EvidenceReceipt) error {
+	record := goqu.Record{
+		"mutation_artifact_id": mutationID, "binary_content_id": contentID, "model_path": modelPath,
+		"provider": receipt.Reference.Provider, "bucket": nullableText(receipt.Reference.Bucket),
+		"object_key": receipt.Reference.ObjectKey, "object_version_id": nullableText(receipt.Reference.VersionID),
+		"sha256": receipt.SHA256, "size_bytes": receipt.SizeBytes, "content_type": receipt.ContentType,
+		"retention_mode": nullableText(receipt.RetentionMode), "retain_until": nullableTime(receipt.RetainUntil),
+		"legal_hold": receipt.LegalHold, "artifact_metadata": jsonbMetadata(receipt.Metadata),
+	}
+	query, args, err := goqu.Insert(TableBinaryReferenceEvidence).Rows(record).ToSQL()
+	if err != nil {
+		return common.NewInternalServerError("HISTORY-EVIDENCE-BINARYREF-BUILDINSERT " + err.Error())
+	}
+	if _, err = tx.ExecContext(ctx, query, args...); err != nil {
+		return common.NewInternalServerError("HISTORY-EVIDENCE-BINARYREF-INSERT " + err.Error())
+	}
+	return nil
+}

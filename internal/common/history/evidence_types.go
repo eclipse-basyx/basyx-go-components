@@ -28,6 +28,7 @@ package history
 import (
 	"context"
 	"fmt"
+	"io"
 	"time"
 )
 
@@ -42,6 +43,8 @@ const (
 	EvidenceArtifactSnapshot     = "snapshot"
 	EvidenceArtifactHistoryEvent = "history_event"
 	EvidenceArtifactABACPolicy   = "abac_policy_version"
+	EvidenceArtifactBinary       = "binary_content"
+	EvidenceArtifactBinaryRef    = "binary_reference"
 
 	SignatureStateUnsigned = "unsigned"
 	SignatureStateSigned   = "signed"
@@ -55,6 +58,17 @@ type EvidenceStore interface {
 	PutArtifact(ctx context.Context, artifact EvidenceArtifact) (*EvidenceReceipt, error)
 	GetArtifact(ctx context.Context, ref EvidenceReference) (*EvidenceObject, error)
 	VerifyArtifact(ctx context.Context, ref EvidenceReference, expectedHash string) (*EvidenceReceipt, error)
+}
+
+// EvidenceStreamStore writes large immutable objects without materializing
+// their complete payload in process memory.
+type EvidenceStreamStore interface {
+	PutArtifactReader(ctx context.Context, artifact EvidenceArtifact, reader io.Reader, sizeBytes int64, sha256 string) (*EvidenceReceipt, error)
+}
+
+// EvidenceRetentionExtender lengthens retention on a reused immutable object.
+type EvidenceRetentionExtender interface {
+	ExtendArtifactRetention(ctx context.Context, ref EvidenceReference, current EvidenceReceipt, artifact EvidenceArtifact) (*EvidenceReceipt, error)
 }
 
 // EvidenceRetentionVerifier verifies WORM retention state from the evidence backend.
