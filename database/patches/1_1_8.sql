@@ -29,7 +29,7 @@ CREATE TABLE IF NOT EXISTS file_binary_reference (
   file_element_id BIGINT PRIMARY KEY REFERENCES file_element(id) ON DELETE CASCADE,
   binary_content_id BIGINT NOT NULL REFERENCES binary_content(id),
   path_token VARCHAR(64) NOT NULL,
-  safe_file_name TEXT NOT NULL,
+  safe_file_name TEXT NOT NULL CHECK (OCTET_LENGTH(safe_file_name) BETWEEN 1 AND 255),
   db_created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   db_updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   UNIQUE (path_token)
@@ -42,7 +42,7 @@ CREATE TABLE IF NOT EXISTS thumbnail_binary_reference (
   thumbnail_element_id BIGINT PRIMARY KEY REFERENCES thumbnail_file_element(id) ON DELETE CASCADE,
   binary_content_id BIGINT NOT NULL REFERENCES binary_content(id),
   path_token VARCHAR(64) NOT NULL,
-  safe_file_name TEXT NOT NULL,
+  safe_file_name TEXT NOT NULL CHECK (OCTET_LENGTH(safe_file_name) BETWEEN 1 AND 255),
   db_created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   db_updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   UNIQUE (path_token)
@@ -120,7 +120,6 @@ CREATE INDEX IF NOT EXISTS ix_mutation_evidence_artifacts_history
 CREATE TABLE IF NOT EXISTS binary_reference_evidence_artifacts (
   artifact_id BIGSERIAL PRIMARY KEY,
   mutation_artifact_id BIGINT NOT NULL REFERENCES mutation_evidence_artifacts(artifact_id) ON DELETE CASCADE,
-  binary_content_id BIGINT REFERENCES binary_content(id) ON DELETE SET NULL,
   model_path TEXT NOT NULL,
   provider TEXT NOT NULL,
   bucket TEXT,
@@ -136,9 +135,6 @@ CREATE TABLE IF NOT EXISTS binary_reference_evidence_artifacts (
   db_created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   UNIQUE (mutation_artifact_id, model_path)
 );
-
-CREATE INDEX IF NOT EXISTS ix_binary_reference_evidence_content
-  ON binary_reference_evidence_artifacts(binary_content_id);
 
 CREATE OR REPLACE FUNCTION unlink_binary_content_when_unreferenced(content_id BIGINT)
 RETURNS VOID
@@ -172,6 +168,11 @@ LANGUAGE plpgsql
 AS $$
 BEGIN
   IF TG_OP = 'INSERT' THEN
+    PERFORM id
+    FROM binary_content
+    WHERE id = NEW.binary_content_id
+    FOR NO KEY UPDATE;
+
     UPDATE binary_content
     SET reference_count = reference_count + 1
     WHERE id = NEW.binary_content_id;
@@ -179,6 +180,12 @@ BEGIN
   END IF;
 
   IF TG_OP = 'UPDATE' AND OLD.binary_content_id IS DISTINCT FROM NEW.binary_content_id THEN
+    PERFORM id
+    FROM binary_content
+    WHERE id IN (OLD.binary_content_id, NEW.binary_content_id)
+    ORDER BY id
+    FOR NO KEY UPDATE;
+
     UPDATE binary_content
     SET reference_count = reference_count + 1
     WHERE id = NEW.binary_content_id;
@@ -187,6 +194,11 @@ BEGIN
   END IF;
 
   IF TG_OP = 'DELETE' THEN
+    PERFORM id
+    FROM binary_content
+    WHERE id = OLD.binary_content_id
+    FOR NO KEY UPDATE;
+
     PERFORM unlink_binary_content_when_unreferenced(OLD.binary_content_id);
     RETURN OLD;
   END IF;

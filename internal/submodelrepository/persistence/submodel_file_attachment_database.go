@@ -134,7 +134,7 @@ func (s *SubmodelDatabase) recordFileUploadMutationTx(ctx context.Context, tx *s
 		return err
 	}
 	return history.RecordBinaryReferenceEvidenceTx(
-		mutationCtx, tx, history.TableSubmodel, submodelID, reference.Content.ID, expectation,
+		mutationCtx, tx, history.TableSubmodel, submodelID, expectation,
 	)
 }
 

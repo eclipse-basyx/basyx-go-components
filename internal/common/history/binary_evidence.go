@@ -198,7 +198,7 @@ func EnsureBinaryEvidenceTx(ctx context.Context, tx *sql.Tx, content binaryconte
 
 // RecordBinaryReferenceEvidenceTx binds per-upload metadata to the latest
 // mutation event for the owning entity.
-func RecordBinaryReferenceEvidenceTx(ctx context.Context, tx *sql.Tx, entityType string, identifier string, contentID int64, expectation BinaryReferenceExpectation) error {
+func RecordBinaryReferenceEvidenceTx(ctx context.Context, tx *sql.Tx, entityType string, identifier string, expectation BinaryReferenceExpectation) error {
 	if expectation.ModelPath == "" || !ActiveConfig().EvidenceEnabled {
 		return nil
 	}
@@ -244,7 +244,7 @@ func RecordBinaryReferenceEvidenceTx(ctx context.Context, tx *sql.Tx, entityType
 	if validationErr := validateCommittedEvidenceReceipt(*receipt, SHA256Hex(data), int64(len(data)), time.Now()); validationErr != nil {
 		return common.NewInternalServerError("HISTORY-EVIDENCE-BINARYREF-RECEIPT " + validationErr.Error())
 	}
-	return insertBinaryReferenceReceiptTx(ctx, tx, mutationID, contentID, expectation.ModelPath, *receipt)
+	return insertBinaryReferenceReceiptTx(ctx, tx, mutationID, expectation.ModelPath, *receipt)
 }
 
 func binaryEvidenceUnavailableError() error {
@@ -317,9 +317,9 @@ func latestMutationEvidenceIdentityTx(ctx context.Context, tx *sql.Tx, entityTyp
 	return artifactID, sequence, eventHash, nil
 }
 
-func insertBinaryReferenceReceiptTx(ctx context.Context, tx *sql.Tx, mutationID int64, contentID int64, modelPath string, receipt EvidenceReceipt) error {
+func insertBinaryReferenceReceiptTx(ctx context.Context, tx *sql.Tx, mutationID int64, modelPath string, receipt EvidenceReceipt) error {
 	record := goqu.Record{
-		"mutation_artifact_id": mutationID, "binary_content_id": contentID, "model_path": modelPath,
+		"mutation_artifact_id": mutationID, "model_path": modelPath,
 		"provider": receipt.Reference.Provider, "bucket": nullableText(receipt.Reference.Bucket),
 		"object_key": receipt.Reference.ObjectKey, "object_version_id": nullableText(receipt.Reference.VersionID),
 		"sha256": receipt.SHA256, "size_bytes": receipt.SizeBytes, "content_type": receipt.ContentType,

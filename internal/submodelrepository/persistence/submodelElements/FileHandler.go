@@ -416,15 +416,10 @@ func (p PostgreSQLFileHandler) UploadManagedFileAttachmentReaderTx(ctx context.C
 	if err != nil {
 		return binarycontent.Reference{}, "", err
 	}
-	content, err := binarycontent.StoreTx(ctx, tx, uploadContent)
+	reference, err := binarycontent.StoreReferenceTx(
+		ctx, tx, uploadContent, binarycontent.TableFileReference, "file_element_id", metadata.elementID, resolvedFileName,
+	)
 	if err != nil {
-		return binarycontent.Reference{}, "", err
-	}
-	reference, err := binarycontent.NewReference(metadata.elementID, content, resolvedFileName)
-	if err != nil {
-		return binarycontent.Reference{}, "", err
-	}
-	if err = binarycontent.UpsertReferenceTx(ctx, tx, binarycontent.TableFileReference, "file_element_id", reference); err != nil {
 		return binarycontent.Reference{}, "", err
 	}
 	if err = deleteLegacyFileData(tx, dialect, metadata.elementID); err != nil {

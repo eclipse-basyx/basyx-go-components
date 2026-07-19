@@ -1608,7 +1608,7 @@ func (s *AssetAdministrationShellDatabase) PutThumbnailByAASIDReader(ctx context
 		return err
 	}
 	if err = history.RecordBinaryReferenceEvidenceTx(
-		mutationCtx, tx, history.TableAAS, aasIdentifier, reference.Content.ID, expectation,
+		mutationCtx, tx, history.TableAAS, aasIdentifier, expectation,
 	); err != nil {
 		return err
 	}

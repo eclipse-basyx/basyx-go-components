@@ -39,6 +39,7 @@ import (
 	"log"
 	"net/url"
 	"path"
+	"sort"
 	"strings"
 	"unicode"
 
@@ -58,6 +59,7 @@ const (
 	managedPathPrefix       = "/aasx/files"
 	largeObjectReadMode     = 0x00040000
 	largeObjectWriteMode    = 0x00020000
+	maxSafeFileNameBytes    = 255
 )
 
 // Content identifies one canonical PostgreSQL large object.
@@ -110,6 +112,9 @@ func SafeFileName(fileName string) (string, error) {
 	if decoded != fileName || strings.ContainsAny(fileName, `/\\`) || path.Base(fileName) != fileName || fileName == "." || fileName == ".." {
 		return "", common.NewErrBadRequest("BINARYCONTENT-FILENAME-PATH filename must contain one safe path segment")
 	}
+	if len([]byte(fileName)) > maxSafeFileNameBytes {
+		return "", common.NewErrBadRequest(fmt.Sprintf("BINARYCONTENT-FILENAME-TOOLONG filename must not exceed %d UTF-8 bytes", maxSafeFileNameBytes))
+	}
 	for _, character := range fileName {
 		if unicode.IsControl(character) || character == 0 {
 			return "", common.NewErrBadRequest("BINARYCONTENT-FILENAME-CONTROL filename contains control characters")
@@ -118,31 +123,55 @@ func SafeFileName(fileName string) (string, error) {
 	return fileName, nil
 }
 
-// StoreTx streams an upload into PostgreSQL and reuses a canonical large object
-// when its SHA-256 and byte length already exist.
-func StoreTx(ctx context.Context, tx *sql.Tx, reader io.Reader) (Content, error) {
+// StoreReferenceTx streams an upload, reuses canonical content, and replaces
+// one owner association while locking old and new content in deterministic order.
+func StoreReferenceTx(ctx context.Context, tx *sql.Tx, reader io.Reader, table string, ownerColumn string, ownerID int64, fileName string) (Reference, error) {
 	if tx == nil {
-		return Content{}, common.NewInternalServerError("BINARYCONTENT-STORE-NILTX transaction must not be nil")
+		return Reference{}, common.NewInternalServerError("BINARYCONTENT-STORE-NILTX transaction must not be nil")
 	}
 	if reader == nil {
-		return Content{}, common.NewErrBadRequest("BINARYCONTENT-STORE-NILREADER file payload is required")
+		return Reference{}, common.NewErrBadRequest("BINARYCONTENT-STORE-NILREADER file payload is required")
+	}
+	if !validReferenceTable(table, ownerColumn) {
+		return Reference{}, common.NewInternalServerError("BINARYCONTENT-REFERENCE-TABLE unsupported binary reference table")
+	}
+	if _, err := SafeFileName(fileName); err != nil {
+		return Reference{}, err
 	}
 	oid, digest, size, err := writeTransientLargeObjectTx(ctx, tx, reader, common.UploadMaxSizeBytesFromContext(ctx))
 	if err != nil {
-		return Content{}, err
+		return Reference{}, err
 	}
-	content, err := storeCanonicalContentTx(ctx, tx, oid, digest, size)
-	if err == nil {
-		return content, nil
+	if err = lockDigestTx(ctx, tx, digest, size); err != nil {
+		return Reference{}, err
 	}
-	log.Printf("BINARYCONTENT-STORE-PERSIST canonical binary storage failed: %v", err)
-	return Content{}, common.NewInternalServerError("BINARYCONTENT-STORE-PERSIST canonical binary could not be stored")
+	oldContentID, err := referenceContentIDForUpdateTx(ctx, tx, table, ownerColumn, ownerID)
+	if err != nil {
+		return Reference{}, err
+	}
+	existing, err := findContentTx(ctx, tx, digest, size)
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return Reference{}, err
+	}
+	if err = lockContentRowsTx(ctx, tx, oldContentID, existing.ID); err != nil {
+		return Reference{}, err
+	}
+	content, err := reuseOrInsertCanonicalContentTx(ctx, tx, oid, digest, size)
+	if err != nil {
+		log.Printf("BINARYCONTENT-STORE-PERSIST canonical binary storage failed: %v", err)
+		return Reference{}, common.NewInternalServerError("BINARYCONTENT-STORE-PERSIST canonical binary could not be stored")
+	}
+	reference, err := NewReference(ownerID, content, fileName)
+	if err != nil {
+		return Reference{}, err
+	}
+	if err = upsertReferenceTx(ctx, tx, table, ownerColumn, reference); err != nil {
+		return Reference{}, err
+	}
+	return reference, nil
 }
 
-func storeCanonicalContentTx(ctx context.Context, tx *sql.Tx, oid int64, digest string, size int64) (Content, error) {
-	if err := lockDigestTx(ctx, tx, digest, size); err != nil {
-		return Content{}, err
-	}
+func reuseOrInsertCanonicalContentTx(ctx context.Context, tx *sql.Tx, oid int64, digest string, size int64) (Content, error) {
 	existing, err := findContentTx(ctx, tx, digest, size)
 	if err == nil {
 		if unlinkErr := unlinkLargeObjectTx(ctx, tx, oid); unlinkErr != nil {
@@ -164,6 +193,59 @@ func storeCanonicalContentTx(ctx context.Context, tx *sql.Tx, oid int64, digest 
 		return Content{}, common.NewInternalServerError("BINARYCONTENT-STORE-INSERT " + err.Error())
 	}
 	return Content{ID: contentID, SHA256: digest, SizeBytes: size, OID: oid}, nil
+}
+
+func referenceContentIDForUpdateTx(ctx context.Context, tx *sql.Tx, table string, ownerColumn string, ownerID int64) (int64, error) {
+	query, args, err := goqu.From(table).Select("binary_content_id").
+		Where(goqu.C(ownerColumn).Eq(ownerID)).ForUpdate(exp.Wait).ToSQL()
+	if err != nil {
+		return 0, common.NewInternalServerError("BINARYCONTENT-REFERENCE-BUILDLOCK " + err.Error())
+	}
+	var contentID int64
+	if err = tx.QueryRowContext(ctx, query, args...).Scan(&contentID); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return 0, nil
+		}
+		return 0, common.NewInternalServerError("BINARYCONTENT-REFERENCE-LOCK " + err.Error())
+	}
+	return contentID, nil
+}
+
+func lockContentRowsTx(ctx context.Context, tx *sql.Tx, contentIDs ...int64) error {
+	unique := make(map[int64]struct{}, len(contentIDs))
+	for _, contentID := range contentIDs {
+		if contentID > 0 {
+			unique[contentID] = struct{}{}
+		}
+	}
+	ordered := make([]int64, 0, len(unique))
+	for contentID := range unique {
+		ordered = append(ordered, contentID)
+	}
+	if len(ordered) == 0 {
+		return nil
+	}
+	sort.Slice(ordered, func(left int, right int) bool { return ordered[left] < ordered[right] })
+	query, args, err := goqu.From(TableContent).Select("id").
+		Where(goqu.C("id").In(ordered)).Order(goqu.C("id").Asc()).ForUpdate(exp.Wait).ToSQL()
+	if err != nil {
+		return common.NewInternalServerError("BINARYCONTENT-REFERENCE-BUILDCONTENTLOCK " + err.Error())
+	}
+	rows, err := tx.QueryContext(ctx, query, args...)
+	if err != nil {
+		return common.NewInternalServerError("BINARYCONTENT-REFERENCE-CONTENTLOCK " + err.Error())
+	}
+	defer func() { _ = rows.Close() }()
+	for rows.Next() {
+		var ignored int64
+		if err = rows.Scan(&ignored); err != nil {
+			return common.NewInternalServerError("BINARYCONTENT-REFERENCE-SCANCONTENTLOCK " + err.Error())
+		}
+	}
+	if err = rows.Err(); err != nil {
+		return common.NewInternalServerError("BINARYCONTENT-REFERENCE-CONTENTLOCKROWS " + err.Error())
+	}
+	return nil
 }
 
 func writeTransientLargeObjectTx(ctx context.Context, tx *sql.Tx, reader io.Reader, maxSizeBytes int64) (int64, string, int64, error) {
@@ -247,7 +329,6 @@ func findContentTx(ctx context.Context, tx *sql.Tx, digest string, size int64) (
 	query, args, err := goqu.From(TableContent).
 		Select("id", "sha256", "size_bytes", "file_oid").
 		Where(goqu.Ex{"sha256": digest, "size_bytes": size}).
-		ForUpdate(exp.Wait).
 		ToSQL()
 	if err != nil {
 		return Content{}, common.NewInternalServerError("BINARYCONTENT-FIND-BUILD " + err.Error())
@@ -259,9 +340,7 @@ func findContentTx(ctx context.Context, tx *sql.Tx, digest string, size int64) (
 	return content, nil
 }
 
-// UpsertReferenceTx replaces one logical reference and cleans its prior
-// canonical payload when it no longer has any owners.
-func UpsertReferenceTx(ctx context.Context, tx *sql.Tx, table string, ownerColumn string, reference Reference) error {
+func upsertReferenceTx(ctx context.Context, tx *sql.Tx, table string, ownerColumn string, reference Reference) error {
 	if !validReferenceTable(table, ownerColumn) {
 		return common.NewInternalServerError("BINARYCONTENT-REFERENCE-TABLE unsupported binary reference table")
 	}

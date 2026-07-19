@@ -469,24 +469,34 @@ func (h *PostgreSQLThumbnailFileHandler) uploadManagedThumbnailTx(ctx context.Co
 	if mismatch {
 		log.Printf("[WARN] AASREPO-PUTTHUMBNAIL-RESOLVEMIME detected content type differs from declared content type; using detected content type")
 	}
-	content, err := binarycontent.StoreTx(ctx, tx, uploadContent)
-	if err != nil {
+	if err = ensureManagedThumbnailElement(ctx, tx, metadata.aasDBID); err != nil {
 		return binarycontent.Reference{}, "", err
 	}
-	reference, err := binarycontent.NewReference(metadata.aasDBID, content, resolvedFileName)
+	reference, err := binarycontent.StoreReferenceTx(
+		ctx, tx, uploadContent, binarycontent.TableThumbnailReference, "thumbnail_element_id", metadata.aasDBID, resolvedFileName,
+	)
 	if err != nil {
 		return binarycontent.Reference{}, "", err
 	}
 	if err = upsertManagedThumbnailElement(ctx, tx, reference, resolvedContentType); err != nil {
 		return binarycontent.Reference{}, "", err
 	}
-	if err = binarycontent.UpsertReferenceTx(ctx, tx, binarycontent.TableThumbnailReference, "thumbnail_element_id", reference); err != nil {
-		return binarycontent.Reference{}, "", err
-	}
 	if err = deleteLegacyThumbnailData(ctx, tx, metadata.aasDBID); err != nil {
 		return binarycontent.Reference{}, "", err
 	}
 	return reference, resolvedContentType, nil
+}
+
+func ensureManagedThumbnailElement(ctx context.Context, tx *sql.Tx, aasDBID int64) error {
+	query, args, err := goqu.Insert("thumbnail_file_element").Rows(goqu.Record{"id": aasDBID}).
+		OnConflict(goqu.DoNothing()).ToSQL()
+	if err != nil {
+		return common.NewInternalServerError("AASREPO-PUTTHUMBNAIL-BUILDENSUREELEMENT " + err.Error())
+	}
+	if _, err = tx.ExecContext(ctx, query, args...); err != nil {
+		return common.NewInternalServerError("AASREPO-PUTTHUMBNAIL-ENSUREELEMENT " + err.Error())
+	}
+	return nil
 }
 
 func (h *PostgreSQLThumbnailFileHandler) downloadManagedThumbnail(ctx context.Context, aasIdentifier string) ([]byte, string, string, string, error) {

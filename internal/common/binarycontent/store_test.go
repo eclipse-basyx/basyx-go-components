@@ -51,6 +51,9 @@ func TestSafeFileName(t *testing.T) {
 		{name: "backslash", fileName: `folder\report.txt`, wantError: true},
 		{name: "encoded slash", fileName: "folder%2freport.txt", wantError: true},
 		{name: "control", fileName: "report\n.txt", wantError: true},
+		{name: "maximum bytes", fileName: strings.Repeat("a", maxSafeFileNameBytes), expected: strings.Repeat("a", maxSafeFileNameBytes)},
+		{name: "too many bytes", fileName: strings.Repeat("a", maxSafeFileNameBytes+1), wantError: true},
+		{name: "unicode byte limit", fileName: strings.Repeat("ü", 128), wantError: true},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -93,9 +96,26 @@ func TestStoreTxRejectsContentAboveConfiguredLimitBeforeWriting(t *testing.T) {
 	cfg.General.UploadMaxSizeBytes = 3
 	ctx := common.ContextWithConfig(context.Background(), cfg)
 
-	_, err = StoreTx(ctx, tx, strings.NewReader("four"))
+	_, _, _, err = writeTransientLargeObjectTx(ctx, tx, strings.NewReader("four"), common.UploadMaxSizeBytesFromContext(ctx))
 	require.ErrorContains(t, err, "BINARYCONTENT-STORE-TOOLARGE")
 	require.True(t, common.IsErrBadRequest(err))
+	require.NoError(t, tx.Rollback())
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestLockContentRowsUsesDeterministicOrder(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer func() { _ = db.Close() }()
+
+	mock.ExpectBegin()
+	mock.ExpectQuery(`SELECT "id" FROM "binary_content" WHERE \("id" IN \(1, 2\)\) ORDER BY "id" ASC FOR UPDATE`).
+		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(1).AddRow(2))
+	mock.ExpectRollback()
+
+	tx, err := db.Begin()
+	require.NoError(t, err)
+	require.NoError(t, lockContentRowsTx(t.Context(), tx, 2, 1, 2))
 	require.NoError(t, tx.Rollback())
 	require.NoError(t, mock.ExpectationsWereMet())
 }
