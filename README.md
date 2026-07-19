@@ -312,8 +312,9 @@ See [basyx-database-wiki](docu/basyx-database-wiki/) and [sql_examples](sql_exam
 
 **Q: How do I handle file attachments?**
 
-- Use the File SME logic in `internal/submodelrepository/persistence/Submodel/submodelElements/FileHandler.go`
-- See integration tests for upload/download examples
+- Use the standardized File SME attachment and asset-information thumbnail endpoints.
+- Internal uploads store `/aasx/files/<opaque-token>/<safe-filename>` in the model. This is an AASX package-part path, not a new HTTP endpoint.
+- See the repository integration tests for upload/download examples.
 
 **Q: Where do I find API documentation?**
 

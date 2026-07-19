@@ -112,35 +112,35 @@ Each runtime-created row stores a deterministic SHA-256 hash of the reconstructe
 
 The shared implementation lives in `internal/common/history`.
 
-- `AppendVersionTx` receives a complete snapshot supplied by the persistence layer and stores it as either a snapshot checkpoint or a diff payload according to `history.fullSnapshotInterval` and payload size.
-- `AppendMutatedVersionTx` loads the latest reconstructed snapshot for the identifier, applies a scoped mutation, and stores the resulting version with the same interval and payload-size logic.
-- Both functions acquire a transaction-level PostgreSQL advisory lock derived from `<history-table>:<identifier>`.
-- The lock serializes hash-chain appends for the same identifiable while allowing unrelated identifiers to proceed independently.
-- Both functions append with `INSERT`; they never modify an existing history row.
+- `AppendVersionTx` receives a complete resulting snapshot supplied by the persistence layer. It selects a snapshot checkpoint or diff according to `history.fullSnapshotInterval` and payload size, then writes the enabled sinks.
+- `AppendMutatedVersionTx` restores the complete previous state from the independent mutation chain when evidence is enabled, applies the scoped persistence-layer mutation, and records the complete result. In evidence-only mode it never reads PostgreSQL history payloads.
+- PostgreSQL history insertion remains a separate sink and uses the same resulting snapshot when history mode is `api` or `audit`.
+- The recorder acquires a transaction-level PostgreSQL advisory lock derived from the entity type and identifier. The lock serializes evidence sequences and predecessor hashes for the same identifiable while allowing unrelated identifiers to proceed independently.
+- Evidence-only reconstruction uses `mutation_evidence_state` and never reads PostgreSQL history payloads.
 
 ```mermaid
 sequenceDiagram
     participant API as Persistence write path
     participant Live as Current normalized tables
-    participant Metadata as *_history table
-    participant Payload as *_history_payload table
+    participant Catalog as mutation_evidence catalog
+    participant History as Optional PostgreSQL history
     participant Evidence as WORM EvidenceStore
-    API->>Live: Apply typical current-state mutation in transaction
-    API->>Metadata: Advisory lock(table, identifier)
-    Metadata-->>API: Latest history row
-    Payload-->>API: Restore nearest snapshot checkpoint plus diffs when required
-    API->>API: Apply scoped snapshot mutation
-    API->>Metadata: INSERT event metadata with previous_hash
-    API->>Payload: INSERT snapshot or RFC 6902 diff payload
+    API->>Live: Load complete previous snapshot
+    API->>Live: Apply current-state mutation in transaction
+    API->>Live: Load complete resulting snapshot
+    API->>Catalog: Advisory lock(entity, identifier)
+    opt history.mode is api or audit
+        API->>History: INSERT snapshot or RFC 6902 diff row
+    end
     opt history.evidence.enabled
-        API->>Evidence: PUT history-event artifact before commit
+        API->>Evidence: PUT canonical mutation-event artifact
         Evidence-->>API: Evidence receipt
-        API->>Metadata: INSERT evidence artifact receipt
+        API->>Catalog: INSERT committed sequence/hash/receipt
     end
     API->>Live: Commit transaction
 ```
 
-This reduces reads against the normalized backend for partial updates and bounds restore work to the configured interval.
+Complete snapshots in the independent chain keep partial-update evidence independent from PostgreSQL history. The configured interval bounds reconstruction work for both sinks.
 
 `history.fullSnapshotInterval: 1` preserves the full-snapshot behavior. Values greater than `1` allow at most `N-1` diff rows after each full checkpoint. A full snapshot can appear earlier when the diff payload would be equal to or larger than the snapshot payload.
 
@@ -246,17 +246,17 @@ flowchart TD
 
 The guard is enabled when history is active and `history.immutability` is `postgres_guarded`. It blocks direct maintenance mutations as well as accidental application mutations. Enabling is monotonic during normal service startup: a runtime service can enable the database-wide guard, but it cannot disable an enabled guard. A service configured as unguarded fails fast when it encounters an already-enabled database guard. Services sharing one database can start concurrently when their configuration is consistent. Disabling guarded mode requires an explicit operator maintenance action. The guard is not equivalent to WORM storage: sufficiently privileged PostgreSQL operators can alter schema objects.
 
-### WORM Evidence Manifests
+### WORM Mutation Evidence And Legacy Manifests
 
 The default stronger-integrity architecture is:
 
 ```text
-PostgreSQL history tables -> hash chain -> synchronous history-event artifact -> signed manifest -> S3-compatible WORM object storage
+Current model mutation -> independent evidence chain -> synchronous mutation artifact -> S3-compatible WORM object storage
 ```
 
-The HTTP APIs are unchanged. When `history.evidence.enabled` is active, `history.mode` must be `api` or `audit`. The history append path writes one WORM `history_event` artifact synchronously before the surrounding PostgreSQL transaction can commit. The artifact stores the same history payload selected for PostgreSQL: either a full snapshot or an RFC 6902 diff according to `history.fullSnapshotInterval`. It also stores `effective_diff`, an RFC 6902 JSON Patch from the previous reconstructed version to the current version. If the WORM write fails, the history append returns an error and the caller rolls back the PostgreSQL transaction.
+The HTTP APIs are unchanged. `history.evidence.enabled` works with `history.mode: off`, `api`, or `audit`. Every covered mutation writes one canonical `mutation_event` artifact before the surrounding PostgreSQL transaction can commit. The artifact format is identical with history enabled or disabled and contains either a full snapshot or an RFC 6902 diff according to `history.fullSnapshotInterval`, plus `effective_diff`, evidence sequence, and predecessor/event hashes. When history is active, its row is inserted separately and linked through receipt-catalog metadata. Evidence-only state reconstruction never reads PostgreSQL history payloads.
 
-The `cmd/historyevidenceverifier` tool can additionally publish signed range manifests, backfill per-row `history_event` artifacts for existing rows, publish checkpoint artifacts, export recovery catalogs, recover verified JSON from WORM history-event artifacts, and run cron-friendly drift checks using the shared `EvidenceStore` interface. The current implementation includes an S3-compatible `EvidenceStore`; MinIO can be used for local or CI-style object-lock testing, while production deployments should use an S3-compatible WORM service with versioning/object lock configured by operations.
+`cmd/historyevidenceverifier -mutation` verifies the independent chain, reconstructs snapshots, validates retention, and checks required binary-reference and immutable-binary receipts. The existing manifest, v1 `history_event`, catalog-export, and recovery paths remain available for legacy evidence. The S3-compatible `EvidenceStore` supports MinIO for local testing; production deployments should use an operated WORM service with versioning and object lock.
 
 For a selected history range, evidence publication:
 
@@ -269,15 +269,27 @@ For a selected history range, evidence publication:
 
 Signed manifests are verified with a configured RSA public key when `history.evidence.signing.publicKeyPath` or `BASYX_HISTORY_EVIDENCE_SIGNING_PUBLIC_KEY_PATH` is set. When signing is required, unsigned or unverifiable manifests are reported as critical findings.
 
-Per-row `history_event` artifacts provide recovery evidence for every acknowledged write while evidence is enabled. With `history.fullSnapshotInterval: 5`, recovery from WORM replays up to four WORM-stored diff payloads after the latest WORM-stored snapshot event. Use `history.fullSnapshotInterval: 1` when each individual WORM event must be recoverable without replaying diffs. The `effective_diff` field is the attribution trail: for snapshot checkpoint rows it prevents a full recovery snapshot from being mistaken for the set of fields changed by the actor. Recovery exports verified JSON only; PostgreSQL restore is intentionally left as an operator-controlled procedure.
+Independent `mutation_event` artifacts provide recovery evidence for every acknowledged write while evidence is enabled. With `history.fullSnapshotInterval: 5`, recovery from WORM replays up to four WORM-stored diff payloads after the latest WORM-stored snapshot event. Use `history.fullSnapshotInterval: 1` when each individual WORM event must be recoverable without replaying diffs. The `effective_diff` field is the attribution trail: for snapshot checkpoint events it prevents a full recovery snapshot from being mistaken for the set of fields changed by the actor. Recovery exports verified JSON only; PostgreSQL restore is intentionally left as an operator-controlled procedure.
 
-Verification can compare PostgreSQL rows against the hash chain, verify every per-row `history_event` receipt and object hash, compare a stored manifest against the live range digest, verify compact JWS signatures, and verify object-store retention metadata where the provider supports it. The CLI emits JSON and exits non-zero on critical findings, so it is suitable for cron or Kubernetes CronJob drift detection.
+Independent verification checks the evidence hash chain, reconstructs snapshots, validates binary correlations, and verifies object hashes and retention. The legacy v1 workflow can still compare PostgreSQL rows against their hash chain, verify per-row `history_event` receipts, compare a stored manifest against a live range digest, and verify compact JWS signatures. The CLI emits JSON and exits non-zero on critical findings, so it is suitable for cron or Kubernetes CronJob drift detection.
+
+### Attachment And Thumbnail Storage
+
+File attachments and thumbnails share `binary_content`, keyed by SHA-256 and byte length, with one PostgreSQL Large Object per canonical payload. `file_binary_reference` and `thumbnail_binary_reference` remain owner-scoped and carry a fresh 192-bit path token plus a safe filename. Access never resolves globally by token or digest. The stored model value is `/aasx/files/<token>/<filename>`; it is an AASX part URI, not an HTTP route.
+
+Uploads stream into a transient Large Object while hashing. A digest-scoped advisory transaction lock and the `(sha256, size_bytes)` uniqueness constraint serialize identical concurrent uploads. A duplicate transient object is unlinked, while the logical reference receives a new token. Delete triggers handle parent and bulk cascades and unlink canonical content only after both reference tables are empty.
+
+Evidence-enabled uploads stream canonical bytes from PostgreSQL into content-addressed WORM storage. `binary_evidence_receipt` survives removal of the live PostgreSQL payload, allowing later identical uploads to reuse the immutable object and extend—but never shorten—retention. `binary_reference_evidence_artifacts` binds model path and binary receipt to the exact mutation artifact. A missing or modified reference/binary object is a critical `-mutation` verifier finding.
+
+Patch `1_1_8.sql` performs the advisory-locked legacy conversion without modifying `base.sql`. It deduplicates `file_data` and `thumbnail_file_data`, assigns managed paths, removes duplicate legacy Large Objects, and empties both legacy tables. The runtime retains dual-read fallback for interrupted or externally restored legacy data. Conversion intentionally emits neither history nor WORM backfill; AASX File Server package objects are not included.
+
+AASX export preserves managed File and thumbnail values byte-for-byte, creates package parts at those exact URIs, and relates them as supplementary/thumbnail parts through `aas-package3-golang`. Content is resolved through the owning model association rather than the opaque token. External URLs are skipped and are never fetched.
 
 ### Configuration Status
 
 | Setting | Current runtime behavior |
 | --- | --- |
-| `history.mode: off` | Skip new snapshot writes. Existing rows remain readable. This is the default. |
+| `history.mode: off` | Skip PostgreSQL history rows. Existing rows remain readable. Independent WORM mutation evidence still runs when enabled. |
 | `history.mode: api` | Append history rows. |
 | `history.mode: audit` | Append the same runtime history rows as `api`; intended for audit-oriented deployments with explicit storage controls. |
 | `history.retentionDays` | Must remain `0`. Non-zero values fail fast until cleanup is implemented. |
@@ -285,7 +297,7 @@ Verification can compare PostgreSQL rows against the hash chain, verify every pe
 | `history.immutability: none` | Keep PostgreSQL mutation guards disabled. |
 | `history.immutability: postgres_guarded` | Enable PostgreSQL mutation guards at service startup. |
 | `history.immutability: external_anchor` | Reserved for a future `IntegrityAnchor` backend and still fails fast unless a real provider is implemented. |
-| `history.evidence.enabled` | Enables fail-closed WORM history-event artifact writes. It does not change HTTP response shapes, but mutating requests fail if the evidence artifact cannot be stored. |
+| `history.evidence.enabled` | Enables fail-closed, history-independent WORM mutation artifacts. It does not change HTTP response shapes, but mutations fail if required evidence cannot be stored. |
 | `history.evidence.provider: s3` | Configures the S3-compatible `EvidenceStore`. Requires bucket, region, retention mode, and positive retention days. Endpoint override and path-style mode support MinIO-style tests. |
 | `history.evidence.writeTimeoutSeconds` | Bounds synchronous WORM writes while the PostgreSQL transaction is open. Default is `10`. |
 | `history.evidence.signing.privateKeyPath` | Optional RS256 manifest signing key. Falls back to `jws.privateKeyPath` when empty. |
@@ -358,7 +370,7 @@ Diff-backed rows use the existing `payload_type`, `payload_hash`, and nullable `
 
 ### Fail-Closed Mutation Coverage
 
-History-aware HTTP services install a shared mutation-coverage middleware. Every `POST`, `PUT`, `PATCH`, or `DELETE` request must match an explicitly classified route whenever history is active:
+Version-aware HTTP services install a shared mutation-coverage middleware. Every `POST`, `PUT`, `PATCH`, or `DELETE` request must match an explicitly classified route whenever PostgreSQL history or WORM evidence is active:
 
 - Versioned routes are allowed and carry a `MutationCoverage` context value with `Versioned: true`.
 - Deliberately non-versioned writes, such as query, invocation, and discovery-link routes, are explicit exemptions with `Versioned: false`.

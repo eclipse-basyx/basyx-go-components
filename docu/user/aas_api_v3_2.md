@@ -74,10 +74,10 @@ Environment variables:
 
 - `BASYX_HISTORY_MODE`: `off`, `api`, or `audit`. Default is `off`.
 - `BASYX_HISTORY_RETENTION_DAYS`: must remain `0`. Automatic cleanup is not implemented yet.
-- `BASYX_HISTORY_FULL_SNAPSHOT_INTERVAL`: `1` stores every history row as a complete snapshot. Values greater than `1` store one full checkpoint followed by up to `N-1` RFC 6902 diff rows, with earlier checkpoints when the diff payload is not smaller than the snapshot payload.
+- `BASYX_HISTORY_FULL_SNAPSHOT_INTERVAL`: `1` stores every PostgreSQL history row and WORM mutation event as a complete snapshot when its sink is enabled. Values greater than `1` store one full checkpoint followed by up to `N-1` RFC 6902 diffs, with earlier checkpoints when a diff is not smaller than its snapshot.
 - `BASYX_HISTORY_IMMUTABILITY`: `none` or `postgres_guarded`. Default is `none`.
 - `BASYX_AUDIT_IDENTITY_MODE`: `none`, `minimal`, or `extended`. `minimal` stores request/correlation headers, authenticated OIDC subject/issuer/client id when available, ABAC allow metadata, operation, endpoint, and method. `extended` also stores trusted source IP, user agent, policy hash, and deterministic rule ids where available.
-- `BASYX_HISTORY_EVIDENCE_ENABLED`: `true` enables fail-closed WORM history-event artifact writes. Requires `BASYX_HISTORY_MODE=api` or `audit`; mutating requests fail when the configured evidence artifact cannot be stored.
+- `BASYX_HISTORY_EVIDENCE_ENABLED`: `true` enables fail-closed WORM mutation evidence. It may be combined with any history mode, including `off`; mutating requests fail when required evidence cannot be stored.
 - `BASYX_HISTORY_EVIDENCE_PROVIDER`: `s3` for the S3-compatible evidence backend.
 - `BASYX_HISTORY_EVIDENCE_BUCKET`, `BASYX_HISTORY_EVIDENCE_PREFIX`, `BASYX_HISTORY_EVIDENCE_REGION`, `BASYX_HISTORY_EVIDENCE_ENDPOINT`: object-store target settings. `endpoint` is useful for MinIO tests.
 - `BASYX_HISTORY_EVIDENCE_ACCESS_KEY_ID`, `BASYX_HISTORY_EVIDENCE_SECRET_ACCESS_KEY`, `BASYX_HISTORY_EVIDENCE_SECRET_KEY`, `BASYX_HISTORY_EVIDENCE_PATH_STYLE`: optional S3-compatible credentials and path-style addressing. `BASYX_HISTORY_EVIDENCE_SECRET_KEY` is a supported alias for the secret access key.
@@ -124,19 +124,30 @@ Mode semantics:
 - `api`: functional AAS v3.2 history behavior for API consumers.
 - `audit`: the same runtime snapshot writes as `api`, intended for audit-oriented deployments where guarded storage is configured explicitly.
 
+Evidence is independent from PostgreSQL history:
+
+| `history.mode` | `history.evidence.enabled` | Result |
+| --- | --- | --- |
+| `off` | `false` | Current state only. |
+| `api` or `audit` | `false` | PostgreSQL history only. |
+| `off` | `true` | Canonical WORM mutation chain only; PostgreSQL history payload tables do not grow. |
+| `api` or `audit` | `true` | One PostgreSQL history row and the same canonical WORM mutation artifact. |
+
+`history.fullSnapshotInterval` controls WORM checkpoints in every evidence-enabled combination. A diff is replaced by a snapshot when its canonical representation would not be smaller.
+
 Current implementation status:
 
 - Runtime history rows are append-only, hash-chained event rows in `api` and `audit` mode.
 - Schema migration installs PostgreSQL guard triggers. `postgres_guarded` enables them at service startup. When enabled, `UPDATE`, `DELETE`, and `TRUNCATE` on history metadata and payload tables fail with `history tables are append-only`.
-- When WORM evidence is enabled, each acknowledged history append synchronously stores a `history_event` artifact in S3-compatible object storage. The artifact contains the same snapshot or diff payload that PostgreSQL stores plus an `effective_diff` that records what changed compared with the previous reconstructed version.
-- WORM evidence manifests, backfilled `history_event` artifacts, additional snapshot checkpoint artifacts, recovery catalogs, and verified recovery exports can be produced with `cmd/historyevidenceverifier`.
+- When WORM evidence is enabled, each acknowledged mutation synchronously stores a history-independent `mutation_event` artifact in S3-compatible object storage. It contains a snapshot or diff, `effective_diff`, a per-entity evidence sequence, and an evidence hash chain. PostgreSQL history identifiers and row hashes are linked only in the receipt catalog when history is also enabled.
+- `cmd/historyevidenceverifier -mutation` verifies and reconstructs the independent chain, including required binary-reference and immutable-binary receipts. Existing v1 `history_event` manifests and recovery catalogs remain supported for previously stored evidence.
 - `external_anchor`, non-zero `retentionDays`, and non-`none` integrity anchor providers currently fail fast during configuration loading. External anchoring remains future-compatible and optional.
 - Audit metadata is populated when `history.auditIdentityMode` is `minimal` or `extended` and request/OIDC/ABAC metadata is available. Clients, API gateways, or reverse proxies should set `X-Request-ID` and `X-Correlation-ID` for traceable HTTP history rows; BaSyx copies these headers when present and leaves the audit fields empty when they are missing. Anonymous/local requests remain valid with empty identity fields.
 - BaSyx provides technical controls that can support NIS2-aligned integrity, auditability, traceability, recovery, and tamper-detection requirements when deployed and operated correctly. Enabling the feature does not by itself make an operator NIS2 compliant.
 
-Guarded PostgreSQL mode protects against normal accidental or unauthorized mutations through the application database user. PostgreSQL superusers or operators with permissions to alter triggers/functions can still bypass or remove this protection. Stronger tamper evidence and recovery evidence are provided by storing per-row history-event artifacts and signed history manifests in S3-compatible WORM storage such as AWS S3 Object Lock. MinIO Object Lock is useful for tests and local examples, but production deployments should use an operated WORM-capable object store with versioning and retention policy controls.
+Guarded PostgreSQL mode protects against normal accidental or unauthorized mutations through the application database user. PostgreSQL superusers or operators with permissions to alter triggers/functions can still bypass or remove this protection. Stronger tamper and recovery evidence comes from independent mutation artifacts in S3-compatible WORM storage such as AWS S3 Object Lock. Signed PostgreSQL history manifests remain available for legacy v1 evidence. MinIO Object Lock is useful for tests and local examples, but production deployments should use an operated WORM-capable object store with versioning and retention policy controls.
 
-WORM history-event artifacts provide recoverability for acknowledged writes while evidence is enabled. With `fullSnapshotInterval: 5`, for example, recovery from WORM starts from the latest WORM-stored snapshot event and replays up to four WORM-stored diff payloads. Use `fullSnapshotInterval: 1` when every acknowledged history row must be recoverable as a full WORM snapshot without diff replay. Even when the stored payload is a full snapshot checkpoint, `effective_diff` records the actual JSON Patch relative to the previous version so audit analysis can distinguish recovery checkpoints from fields changed by the actor. The current recovery path exports verified JSON; PostgreSQL restore remains an operator-controlled action outside the tool.
+WORM mutation artifacts provide recoverability for acknowledged writes while evidence is enabled. With `fullSnapshotInterval: 5`, recovery starts from the latest WORM snapshot and replays up to four WORM diffs. Use `fullSnapshotInterval: 1` when each mutation must be independently recoverable as a full snapshot. `effective_diff` remains the attribution trail even when the stored payload is a checkpoint. Recovery exports verified JSON; PostgreSQL restore remains an operator-controlled action.
 
 The guard switch is database-wide. Configure all BaSyx services that share one database with the same history immutability mode. Runtime services may enable guarded mode, but normal service startup cannot disable an enabled database guard. A service configured as unguarded fails during startup when it encounters an already-enabled database guard. Disabling guarded mode is an explicit operator maintenance action.
 
@@ -195,6 +206,32 @@ go run ./cmd/historyevidenceverifier \
 
 The verifier and recovery modes print machine-readable JSON and exit non-zero when critical findings are present, which makes them suitable for cron jobs, Kubernetes CronJobs, or alerting wrappers. See [NIS2 history evidence guidance](../security/NIS2_HISTORY_EVIDENCE.md) for deployment responsibilities.
 
+Independent evidence verification or reconstruction uses evidence sequences rather than PostgreSQL `history_id` values:
+
+```sh
+go run ./cmd/historyevidenceverifier \
+  -config ./config.yaml \
+  -mutation \
+  -table submodel_history \
+  -identifier 'https://example.com/submodels/1' \
+  -from 1 \
+  -to 25
+```
+
+Add `-recover` to include the reconstructed terminal snapshot in the report.
+
+## Internal Attachments And Thumbnails
+
+Internal File SME attachments and default thumbnails use model values of the form `/aasx/files/<opaque-token>/<safe-filename>`. This is a logical AASX package-part path, not an HTTP endpoint. Upload, download, replacement, and deletion continue to use the standardized attachment and thumbnail endpoints; no `/aasx/files/...` route is exposed.
+
+Every successful upload receives a new opaque token, including same-name replacements. Payloads are deduplicated globally by SHA-256 plus byte length across attachments and thumbnails, while authorization always resolves through the owning AAS, thumbnail, or File SME. Tokens, hashes, PostgreSQL OIDs, WORM object keys, versions, and deduplication outcomes are never lookup authorities or public API metadata.
+
+When evidence is enabled, canonical bytes are streamed once to content-addressed WORM storage. Each upload also writes a small binary-reference artifact cryptographically tied to the owning mutation event. Reusing identical content reuses the PostgreSQL Large Object and immutable WORM object and only extends retention when required. Replacing or deleting the final live reference removes the PostgreSQL Large Object, but immutable WORM bytes and reference evidence remain retained.
+
+Absolute `http://` and `https://` values remain external links. BaSyx does not fetch, deduplicate, or copy their content. AASX serialization writes each associated internal binary at its exact `/aasx/files/...` URI and preserves that value in the serialized model.
+
+The v1.1.8 upgrade converts legacy `file_data` and `thumbnail_file_data` Large Objects into canonical storage and assigns managed paths. It does not create historical mutations or retroactively copy preexisting bytes to WORM. A migrated binary receives its first WORM receipt only if a later evidence-enabled upload reuses it. Complete AASX File Server package files remain outside this deduplication scope.
+
 ## What Activating Versioning Means
 
 When versioning is active, each supported identifiable create, update, or delete appends a new row to a dedicated history table. With `fullSnapshotInterval: 1`, every row stores a complete identifiable snapshot. With a larger interval, the runtime stores a full checkpoint followed by up to `N-1` RFC 6902 diffs against the previous reconstructed snapshot.
@@ -230,7 +267,7 @@ This has operational consequences:
 - Snapshot and diff JSON are stored in one-to-one payload tables so indexed history metadata rows stay narrow.
 - Schema migration does not backfill existing entities. Historical state from before activation is unavailable.
 - If an existing entity has no history row yet, its first partial update falls back to materializing the current complete identifiable once. Later partial updates can derive snapshots from history.
-- While history is active, an unclassified write endpoint is rejected before its handler runs with `HISTORY-COVERAGE-UNCLASSIFIED`. This prevents a newly added endpoint from silently changing current state without appending its required version.
+- While PostgreSQL history or WORM evidence is active, an unclassified write endpoint is rejected before its handler runs with `HISTORY-COVERAGE-UNCLASSIFIED`. This prevents a newly added endpoint from silently changing current state without recording its required mutation.
 
 Eventing placeholders:
 
