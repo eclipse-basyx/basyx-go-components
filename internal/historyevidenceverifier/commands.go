@@ -95,7 +95,7 @@ func verifyMutationEvidence(ctx context.Context, cfg *common.Config, db *sql.DB,
 		return err
 	}
 	report, err := history.VerifyMutationEvidenceRange(
-		ctx, db, store, options.historyTable, options.identifier, options.firstHistoryID, options.lastHistoryID,
+		ctx, db, store, options.historyTable, options.identifier, options.firstHistoryID, options.lastHistoryID, options.expectedHeadHash,
 	)
 	if err != nil {
 		return err

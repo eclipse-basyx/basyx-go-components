@@ -181,7 +181,7 @@ docker compose exec db psql -U admin -d basyxTestDB -c \
   "SELECT entity_type, identifier, event_sequence, event_hash, object_key, sha256 FROM mutation_evidence_artifacts ORDER BY artifact_id"
 ```
 
-Verify and reconstruct the independent mutation chain. `-from` and `-to` select evidence sequence numbers:
+Verify and reconstruct the independent mutation chain. `-from` and `-to` select evidence sequence numbers, and the expected terminal hash must come from a sequence/hash head retained outside this PostgreSQL database:
 
 ```bash
 POSTGRES_HOST=localhost \
@@ -201,8 +201,11 @@ go run ./cmd/historyevidenceverifier \
   -table submodel_history \
   -identifier '<submodel-identifier>' \
   -from 1 \
-  -to 5
+  -to 5 \
+  -expected-head-hash '<independently-retained-event-hash-for-sequence-5>'
 ```
+
+For a first local demonstration, the corresponding `event_hash` from the receipt query above can establish a trust-on-first-use baseline. Production verification must preserve that baseline in a protected monitoring, SIEM, or evidence-preservation system, reuse it for the next check, and advance it only after the newer head verifies successfully. Fetching the expected hash from the same database during every check would not detect removal of a matching database tail.
 
 Inspect the ABAC policy-version evidence receipt written during startup access-rule activation:
 

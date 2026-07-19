@@ -86,15 +86,17 @@ type mutationVerificationDocument struct {
 	Audit                    map[string]any               `json:"audit"`
 }
 
-// VerifyMutationEvidenceRange verifies and reconstructs v2 evidence without PostgreSQL history payloads.
-func VerifyMutationEvidenceRange(ctx context.Context, db *sql.DB, store EvidenceStore, entityType string, identifier string, firstSequence int64, lastSequence int64) (*MutationEvidenceVerificationReport, error) {
+// VerifyMutationEvidenceRange verifies and reconstructs v2 evidence against an
+// independently retained expected terminal event hash.
+func VerifyMutationEvidenceRange(ctx context.Context, db *sql.DB, store EvidenceStore, entityType string, identifier string, firstSequence int64, lastSequence int64, expectedHeadHash string) (*MutationEvidenceVerificationReport, error) {
 	if db == nil {
 		return nil, common.NewErrBadRequest("HISTORY-MUTATIONVERIFY-NILDB database handle must not be nil")
 	}
 	entityType = strings.TrimSpace(entityType)
 	identifier = strings.TrimSpace(identifier)
-	if entityType == "" || identifier == "" || firstSequence < 1 || lastSequence < firstSequence {
-		return nil, common.NewErrBadRequest("HISTORY-MUTATIONVERIFY-RANGE entity type, identifier, and a valid sequence range are required")
+	expectedHeadHash = strings.ToLower(strings.TrimSpace(expectedHeadHash))
+	if entityType == "" || identifier == "" || firstSequence < 1 || lastSequence < firstSequence || !validSHA256(expectedHeadHash) {
+		return nil, common.NewErrBadRequest("HISTORY-MUTATIONVERIFY-RANGE entity type, identifier, a valid sequence range, and an expected head hash are required")
 	}
 	checkpoint, err := mutationCheckpointSequence(ctx, db, entityType, identifier, firstSequence)
 	if err != nil {
@@ -117,6 +119,8 @@ func VerifyMutationEvidenceRange(ctx context.Context, db *sql.DB, store Evidence
 	}
 	if rows[len(rows)-1].sequence != lastSequence {
 		report.addFinding("HISTORY-MUTATIONVERIFY-MISSINGTAIL", "the requested terminal mutation evidence is missing", lastSequence)
+	} else if !strings.EqualFold(rows[len(rows)-1].eventHash, expectedHeadHash) {
+		report.addFinding("HISTORY-MUTATIONVERIFY-HEADMISMATCH", "the terminal event hash differs from the independently retained expected head", lastSequence)
 	}
 	verifyMutationRows(ctx, db, store, rows, report)
 	report.Valid = len(report.Findings) == 0

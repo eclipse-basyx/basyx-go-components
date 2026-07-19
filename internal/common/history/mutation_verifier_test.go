@@ -44,7 +44,7 @@ func TestVerifyMutationEvidenceRangeRestoresSnapshot(t *testing.T) {
 	store.put(artifact)
 	expectMutationVerificationRows(mock, artifact, nil)
 
-	report, err := VerifyMutationEvidenceRange(t.Context(), db, store, TableSubmodel, "sm-1", 1, 1)
+	report, err := VerifyMutationEvidenceRange(t.Context(), db, store, TableSubmodel, "sm-1", 1, 1, artifact.Metadata["event_hash"])
 	require.NoError(t, err)
 	require.True(t, report.Valid, report.Findings)
 	require.Equal(t, "sm-1", report.Snapshot["id"])
@@ -61,7 +61,7 @@ func TestVerifyMutationEvidenceRangeReportsMissingBinaryReference(t *testing.T) 
 	store.put(artifact)
 	expectMutationVerificationRows(mock, artifact, []string{})
 
-	report, err := VerifyMutationEvidenceRange(t.Context(), db, store, TableSubmodel, "sm-1", 1, 1)
+	report, err := VerifyMutationEvidenceRange(t.Context(), db, store, TableSubmodel, "sm-1", 1, 1, artifact.Metadata["event_hash"])
 	require.NoError(t, err)
 	require.False(t, report.Valid)
 	require.Contains(t, mutationVerificationFindingCodes(report), "HISTORY-MUTATIONVERIFY-BINARYREFMISSING")
@@ -77,7 +77,7 @@ func TestVerifyMutationEvidenceRangeReportsMissingRequestedTail(t *testing.T) {
 	store.put(artifact)
 	expectMutationVerificationRows(mock, artifact, nil)
 
-	report, err := VerifyMutationEvidenceRange(t.Context(), db, store, TableSubmodel, "sm-1", 1, 2)
+	report, err := VerifyMutationEvidenceRange(t.Context(), db, store, TableSubmodel, "sm-1", 1, 2, artifact.Metadata["event_hash"])
 	require.NoError(t, err)
 	require.False(t, report.Valid)
 	require.Contains(t, mutationVerificationFindingCodes(report), "HISTORY-MUTATIONVERIFY-MISSINGTAIL")
@@ -94,7 +94,7 @@ func TestVerifyMutationEvidenceRangeFailsWhenRetentionCannotBeChecked(t *testing
 	store := &evidenceStoreWithoutRetentionVerifier{delegate: memoryStore}
 	expectMutationVerificationRows(mock, artifact, nil)
 
-	report, err := VerifyMutationEvidenceRange(t.Context(), db, store, TableSubmodel, "sm-1", 1, 1)
+	report, err := VerifyMutationEvidenceRange(t.Context(), db, store, TableSubmodel, "sm-1", 1, 1, artifact.Metadata["event_hash"])
 	require.NoError(t, err)
 	require.False(t, report.Valid)
 	require.Contains(t, mutationVerificationFindingCodes(report), "HISTORY-MUTATIONVERIFY-RETENTIONVERIFIER")
@@ -121,13 +121,29 @@ func TestVerifyMutationEvidenceRecoveryReportsDeletionState(t *testing.T) {
 	store.put(artifact)
 	expectMutationVerificationRows(mock, artifact, nil)
 
-	report, err := VerifyMutationEvidenceRange(t.Context(), db, store, TableSubmodel, "sm-1", 1, 1)
+	report, err := VerifyMutationEvidenceRange(t.Context(), db, store, TableSubmodel, "sm-1", 1, 1, eventHash)
 	require.NoError(t, err)
 	require.True(t, report.Valid, report.Findings)
 	require.True(t, report.Deleted)
 	require.Equal(t, ChangeDeleted, report.ChangeType)
 	require.Equal(t, eventHash, report.EventHash)
 	require.Equal(t, "2026-07-19T12:00:00Z", report.OperationTime)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestVerifyMutationEvidenceRangeRejectsUnexpectedHead(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer func() { _ = db.Close() }()
+	artifact := mutationVerificationTestArtifact(t, "")
+	store := newMemoryEvidenceStore()
+	store.put(artifact)
+	expectMutationVerificationRows(mock, artifact, nil)
+
+	report, err := VerifyMutationEvidenceRange(t.Context(), db, store, TableSubmodel, "sm-1", 1, 1, strings.Repeat("f", 64))
+	require.NoError(t, err)
+	require.False(t, report.Valid)
+	require.Contains(t, mutationVerificationFindingCodes(report), "HISTORY-MUTATIONVERIFY-HEADMISMATCH")
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 

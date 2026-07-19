@@ -134,7 +134,13 @@ func EnsureBinaryEvidenceTx(ctx context.Context, tx *sql.Tx, content binaryconte
 	}
 	if err == nil {
 		if extender, ok := cfg.EvidenceStore.(EvidenceRetentionExtender); ok {
-			extended, extendErr := extender.ExtendArtifactRetention(ctx, receipt.Reference, receipt, artifact)
+			extendCtx := ctx
+			cancelExtend := func() {}
+			if cfg.EvidenceWriteTimeout > 0 {
+				extendCtx, cancelExtend = context.WithTimeout(ctx, cfg.EvidenceWriteTimeout)
+			}
+			extended, extendErr := extender.ExtendArtifactRetention(extendCtx, receipt.Reference, receipt, artifact)
+			cancelExtend()
 			if extendErr != nil {
 				log.Printf("HISTORY-EVIDENCE-BINARY-EXTEND immutable binary retention extension failed: %v", extendErr)
 				return nil, binaryEvidenceUnavailableError()
@@ -236,7 +242,8 @@ func RecordBinaryReferenceEvidenceTx(ctx context.Context, tx *sql.Tx, entityType
 	defer cancel()
 	receipt, err := cfg.EvidenceStore.PutArtifact(writeCtx, artifact)
 	if err != nil {
-		return common.NewErrServiceUnavailable("HISTORY-EVIDENCE-BINARYREF-PUT " + err.Error())
+		log.Printf("HISTORY-EVIDENCE-BINARYREF-PUT evidence store write failed: %v", err)
+		return common.NewErrServiceUnavailable("HISTORY-EVIDENCE-BINARYREF-STORE binary reference evidence could not be stored")
 	}
 	if receipt == nil {
 		return common.NewInternalServerError("HISTORY-EVIDENCE-BINARYREF-NILRECEIPT evidence store returned nil receipt")

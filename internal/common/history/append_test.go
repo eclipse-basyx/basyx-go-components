@@ -290,7 +290,7 @@ func TestMutationEvidenceHashCommitsBinaryDescriptor(t *testing.T) {
 }
 
 func TestAppendVersionTxRollsBackWhenEvidenceStoreFails(t *testing.T) {
-	store := &recordingEvidenceStore{err: errors.New("object storage unavailable")}
+	store := &recordingEvidenceStore{err: errors.New("https://worm.internal/private-bucket/object request-id=secret")}
 	t.Cleanup(func() {
 		Configure(Config{Mode: ModeOff, Immutability: ImmutabilityNone, AuditIdentityMode: AuditIdentityNone})
 	})
@@ -328,8 +328,10 @@ func TestAppendVersionTxRollsBackWhenEvidenceStoreFails(t *testing.T) {
 	tx, err := db.Begin()
 	require.NoError(t, err)
 	err = AppendVersionTx(context.Background(), tx, TableAAS, "aas-1", ChangeCreated, map[string]any{"id": "aas-1"}, false)
-	require.ErrorContains(t, err, "HISTORY-EVIDENCE-MUTATION-PUT")
+	require.ErrorContains(t, err, "HISTORY-EVIDENCE-MUTATION-STORE")
 	require.ErrorContains(t, err, "503 Service Unavailable")
+	require.NotContains(t, err.Error(), "worm.internal")
+	require.NotContains(t, err.Error(), "request-id")
 	require.NoError(t, tx.Rollback())
 	require.NoError(t, mock.ExpectationsWereMet())
 }

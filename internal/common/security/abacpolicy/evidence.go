@@ -30,6 +30,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/url"
 	"path"
 	"time"
@@ -85,7 +86,8 @@ func writeActivationEvidenceTx(ctx context.Context, tx *sql.Tx, version PolicyVe
 	defer cancel()
 	receipt, err := cfg.EvidenceStore.PutArtifact(writeCtx, artifact)
 	if err != nil {
-		return nil, common.NewErrServiceUnavailable("ABACPOLICY-EVIDENCE-PUT " + err.Error())
+		log.Printf("ABACPOLICY-EVIDENCE-PUT evidence store write failed: %v", err)
+		return nil, common.NewErrServiceUnavailable("ABACPOLICY-EVIDENCE-STORE policy evidence could not be stored")
 	}
 	if receipt == nil {
 		return nil, common.NewInternalServerError("ABACPOLICY-EVIDENCE-NILRECEIPT evidence store returned nil receipt")

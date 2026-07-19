@@ -49,6 +49,7 @@ type cliOptions struct {
 	signerKeyID           string
 	requireSignedManifest bool
 	mutationEvidence      bool
+	expectedHeadHash      string
 }
 
 func parseFlags(args []string, stderr io.Writer) (cliOptions, error) {
@@ -79,6 +80,7 @@ func bindFlags(flags *flag.FlagSet, options *cliOptions) {
 	flags.StringVar(&options.signerKeyID, "signer-key-id", "", "Optional manifest signer key id")
 	flags.BoolVar(&options.requireSignedManifest, "require-signed-manifest", false, "Reject unsigned manifests during verification")
 	flags.BoolVar(&options.mutationEvidence, "mutation", false, "Verify independent mutation evidence; -from and -to select event sequences")
+	flags.StringVar(&options.expectedHeadHash, "expected-head-hash", "", "Independently retained terminal event hash required for mutation verification")
 }
 
 func validateCLIOptions(options cliOptions) error {
@@ -95,6 +97,11 @@ func validateCLIOptions(options cliOptions) error {
 		if strings.TrimSpace(options.identifier) == "" {
 			return fmt.Errorf("HISTORY-EVIDENCE-CLI-MUTATIONIDENTIFIER -identifier is required with -mutation")
 		}
+		if !validExpectedHeadHash(options.expectedHeadHash) {
+			return fmt.Errorf("HISTORY-EVIDENCE-CLI-MUTATIONHEAD -expected-head-hash must be a 64-character SHA-256 value")
+		}
+	} else if strings.TrimSpace(options.expectedHeadHash) != "" {
+		return fmt.Errorf("HISTORY-EVIDENCE-CLI-MUTATIONHEADMODE -expected-head-hash is only valid with -mutation")
 	}
 	if !isCatalogRecovery(options) {
 		if err := validateHistoryRangeOptions(options); err != nil {
@@ -102,6 +109,19 @@ func validateCLIOptions(options cliOptions) error {
 		}
 	}
 	return validateManifestReferenceOptions(options)
+}
+
+func validExpectedHeadHash(value string) bool {
+	value = strings.TrimSpace(value)
+	if len(value) != 64 {
+		return false
+	}
+	for _, character := range value {
+		if !strings.ContainsRune("0123456789abcdefABCDEF", character) {
+			return false
+		}
+	}
+	return true
 }
 
 func enabledModeCount(options cliOptions) int {

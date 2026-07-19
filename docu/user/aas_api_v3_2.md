@@ -140,7 +140,7 @@ Current implementation status:
 - Runtime history rows are append-only, hash-chained event rows in `api` and `audit` mode.
 - Schema migration installs PostgreSQL guard triggers. `postgres_guarded` enables them at service startup. When enabled, `UPDATE`, `DELETE`, and `TRUNCATE` on history metadata and payload tables fail with `history tables are append-only`.
 - When WORM evidence is enabled, each acknowledged mutation synchronously stores a history-independent `mutation_event` artifact in S3-compatible object storage. It contains a snapshot or diff, `effective_diff`, a per-entity evidence sequence, and an evidence hash chain. PostgreSQL history identifiers and row hashes are linked only in the receipt catalog when history is also enabled.
-- `cmd/historyevidenceverifier -mutation` verifies and reconstructs the independent chain, including required binary-reference and immutable-binary receipts. Existing v1 `history_event` manifests and recovery catalogs remain supported for previously stored evidence.
+- `cmd/historyevidenceverifier -mutation` verifies and reconstructs the independent chain against an independently retained terminal event hash, including required binary-reference and immutable-binary receipts. Existing v1 `history_event` manifests and recovery catalogs remain supported for previously stored evidence.
 - `external_anchor`, non-zero `retentionDays`, and non-`none` integrity anchor providers currently fail fast during configuration loading. External anchoring remains future-compatible and optional.
 - Audit metadata is populated when `history.auditIdentityMode` is `minimal` or `extended` and request/OIDC/ABAC metadata is available. Clients, API gateways, or reverse proxies should set `X-Request-ID` and `X-Correlation-ID` for traceable HTTP history rows; BaSyx copies these headers when present and leaves the audit fields empty when they are missing. Anonymous/local requests remain valid with empty identity fields.
 - BaSyx provides technical controls that can support NIS2-aligned integrity, auditability, traceability, recovery, and tamper-detection requirements when deployed and operated correctly. Enabling the feature does not by itself make an operator NIS2 compliant.
@@ -215,10 +215,13 @@ go run ./cmd/historyevidenceverifier \
   -table submodel_history \
   -identifier 'https://example.com/submodels/1' \
   -from 1 \
-  -to 25
+  -to 25 \
+  -expected-head-hash '<independently-retained-event-hash-for-sequence-25>'
 ```
 
-Add `-recover` to include the reconstructed terminal snapshot in the report. The terminal event hash, change type, deletion state, operation time, and audit context make deleted-state recovery explicit. Verification fails if the requested terminal sequence or live WORM retention check is unavailable.
+Add `-recover` to include the reconstructed terminal snapshot in the report. The terminal event hash, change type, deletion state, operation time, and audit context make deleted-state recovery explicit. Verification fails if the requested terminal sequence, its event hash, or live WORM retention check does not match the independently retained expectation.
+
+The expected pair of terminal evidence sequence and event hash is a trust anchor. Export it after a successful verification and retain it outside the BaSyx PostgreSQL database, for example in a protected monitoring, SIEM, or evidence-preservation system. Later checks must use the previously retained value before advancing that value to a newer successfully verified head. Reading the expected hash from the database being verified cannot detect a database attacker who removed the same tail from both catalog tables. The first retained value is a trust-on-first-use baseline and must be established through an operator-controlled process.
 
 ## Internal Attachments And Thumbnails
 

@@ -30,6 +30,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"log"
 	"net/url"
 	"path"
 	"strings"
@@ -219,7 +220,8 @@ func publishMutationEvidenceTx(ctx context.Context, tx *sql.Tx, cfg Config, writ
 	defer cancel()
 	receipt, err := cfg.EvidenceStore.PutArtifact(writeCtx, artifact)
 	if err != nil {
-		return nil, common.NewErrServiceUnavailable("HISTORY-EVIDENCE-MUTATION-PUT " + err.Error())
+		log.Printf("HISTORY-EVIDENCE-MUTATION-PUT evidence store write failed: %v", err)
+		return nil, common.NewErrServiceUnavailable("HISTORY-EVIDENCE-MUTATION-STORE mutation evidence could not be stored")
 	}
 	if receipt == nil {
 		return nil, common.NewInternalServerError("HISTORY-EVIDENCE-MUTATION-NILRECEIPT evidence store returned nil receipt")
