@@ -850,9 +850,6 @@ func validateHistoryEvidenceConfig(cfg *Config) error {
 	if !evidence.Enabled {
 		return nil
 	}
-	if strings.EqualFold(strings.TrimSpace(cfg.History.Mode), "off") {
-		return fmt.Errorf("CONFIG-HISTORY-EVIDENCE-MODE history.evidence.enabled requires history.mode api or audit")
-	}
 	if provider == "none" {
 		return fmt.Errorf("CONFIG-HISTORY-EVIDENCE-PROVIDER history.evidence.enabled requires history.evidence.provider")
 	}
