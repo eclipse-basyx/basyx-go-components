@@ -26,9 +26,12 @@
 package binarycontent
 
 import (
+	"context"
 	"strings"
 	"testing"
 
+	sqlmock "github.com/DATA-DOG/go-sqlmock"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/stretchr/testify/require"
 )
 
@@ -72,4 +75,27 @@ func TestNewReferenceUsesFreshOpaqueManagedPath(t *testing.T) {
 	require.NotEqual(t, first.PathToken, second.PathToken)
 	require.Len(t, first.PathToken, 32)
 	require.Equal(t, "/aasx/files/"+first.PathToken+"/manual.pdf", first.ManagedPath())
+}
+
+func TestStoreTxRejectsContentAboveConfiguredLimitBeforeWriting(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer func() { _ = db.Close() }()
+
+	mock.ExpectBegin()
+	mock.ExpectQuery(`SELECT lo_create`).WillReturnRows(sqlmock.NewRows([]string{"lo_create"}).AddRow(17))
+	mock.ExpectQuery(`SELECT lo_open`).WillReturnRows(sqlmock.NewRows([]string{"lo_open"}).AddRow(23))
+	mock.ExpectRollback()
+
+	tx, err := db.Begin()
+	require.NoError(t, err)
+	cfg := &common.Config{}
+	cfg.General.UploadMaxSizeBytes = 3
+	ctx := common.ContextWithConfig(context.Background(), cfg)
+
+	_, err = StoreTx(ctx, tx, strings.NewReader("four"))
+	require.ErrorContains(t, err, "BINARYCONTENT-STORE-TOOLARGE")
+	require.True(t, common.IsErrBadRequest(err))
+	require.NoError(t, tx.Rollback())
+	require.NoError(t, mock.ExpectationsWereMet())
 }

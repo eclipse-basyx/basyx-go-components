@@ -170,10 +170,11 @@ general:
     uploadMaxSizeBytes: 134217728
 ```
 
-This value limits the maximum accepted request body size for upload endpoints:
+This value limits the accepted request body and provides a second streamed-content limit before attachment or thumbnail bytes are written to PostgreSQL. Multipart overhead counts toward the HTTP request limit.
 
 - `POST /upload`
-- `PUT /shells/{aasIdentifier}/thumbnail`
+- `PUT /shells/{aasIdentifier}/asset-information/thumbnail`
+- `PUT /shells/{aasIdentifier}/submodels/{submodelIdentifier}/submodel-elements/{idShortPath}/attachment`
 - `PUT /submodels/{submodelIdentifier}/submodel-elements/{idShortPath}/attachment`
 
 For `aasenvironmentservice`, startup preconfiguration can import AAS files automatically:

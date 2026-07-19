@@ -77,3 +77,12 @@ func BulkBatchLimitFromContext(ctx context.Context) int {
 	}
 	return cfg.General.BulkBatchLimit
 }
+
+// UploadMaxSizeBytesFromContext returns the configured maximum upload size.
+func UploadMaxSizeBytesFromContext(ctx context.Context) int64 {
+	cfg, ok := ConfigFromContext(ctx)
+	if !ok || cfg == nil || cfg.General.UploadMaxSizeBytes <= 0 {
+		return DefaultConfig.GeneralUploadMaxSizeBytes
+	}
+	return cfg.General.UploadMaxSizeBytes
+}

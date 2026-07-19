@@ -7,10 +7,10 @@ BaSyx provides technical controls that can support NIS2-aligned integrity, audit
 - Canonical `content_hash`, `payload_hash`, `previous_hash`, and `row_hash` values protect history row integrity.
 - Append-only PostgreSQL history rows and optional guarded PostgreSQL mode support traceability.
 - History-independent WORM `mutation_event` chains provide tamper-evident recovery material for acknowledged writes while evidence storage is enabled, including when PostgreSQL history is off.
-- Internal attachment and thumbnail uploads add content-addressed immutable binary evidence plus an owner-scoped reference artifact tied to the corresponding mutation event.
+- Internal attachment and thumbnail uploads add content-addressed immutable binary evidence. The corresponding mutation hash commits the digest, size, filename, content type, managed path, and immutable object version before the owner-scoped reference artifact is written.
 - Activation-time WORM `abac_policy_version` artifacts preserve the configured and materialized access-rule version that produced audited `policy_id` and `matched_rule_id` values.
 - Signed manifests and range digests support independent verification of selected history ranges.
-- CLI verification and recovery export detect missing, modified, reordered, conflicting, or unverifiable evidence.
+- CLI verification and recovery export detect missing tails, modified, reordered, conflicting, retention-unverifiable, or binary-mismatched evidence and identify the terminal deletion/change state.
 - Audit context fields record request, OIDC, ABAC, route, and trusted proxy metadata when configured and available.
 
 ## Operator Responsibilities
@@ -32,7 +32,7 @@ BaSyx provides technical controls that can support NIS2-aligned integrity, audit
 - Run `cmd/historyevidenceverifier` from cron, Kubernetes CronJobs, or an equivalent scheduler. Treat non-zero exits and `severity: error` findings as alert conditions.
 - Use `history.fullSnapshotInterval: 1` when each mutation must be recoverable as a full WORM snapshot without diff replay.
 - With `history.fullSnapshotInterval: N`, recovery starts from the nearest WORM snapshot and replays WORM diff artifacts up to the requested evidence sequence.
-- Recovery is bounded by the retention period and by the mutations for which evidence storage was enabled. Existing binaries are not retroactively copied to WORM during the v1.1.8 compatibility conversion.
+- Recovery is bounded by the retention period and by the mutations for which evidence storage was enabled. The v1.1.8 upgrade does not convert or retroactively copy existing binaries to WORM; those files remain available through compatibility reads without historical receipts.
 - The built-in recovery command exports verified JSON only. PostgreSQL restore should be performed through an operator-approved disaster-recovery procedure.
 
 Avoid describing a deployment as "NIS2 compliant" based only on BaSyx configuration. The accurate statement is that BaSyx supplies technical controls that may support NIS2-aligned operation when combined with the required organisational and operational measures.

@@ -62,9 +62,9 @@ Type-specific SME data is stored in child tables:
 - `basic_event_element`
 - `capability_element`
 
-File SME metadata such as `content_type`, `file_name`, and path-like `value` lives in `file_element`. Internal File and thumbnail payloads share one canonical PostgreSQL Large Object per SHA-256 and byte-length pair in `binary_content`. Owner-scoped references carry fresh opaque path tokens and preserve authorization boundaries even when bytes are deduplicated. Managed model values use `/aasx/files/<token>/<safe-filename>` as an AASX package-part path; it is not an HTTP endpoint. The legacy `file_data` and `thumbnail_file_data` tables remain available only for interrupted-upgrade compatibility reads.
+File SME metadata such as `content_type`, `file_name`, and path-like `value` lives in `file_element`. Internal File and thumbnail payloads share one canonical PostgreSQL Large Object per SHA-256 and byte-length pair in `binary_content`. Owner-scoped references carry fresh opaque path tokens and preserve authorization boundaries even when bytes are deduplicated. Managed model values use `/aasx/files/<token>/<safe-filename>` as an AASX package-part path; it is not an HTTP endpoint. The legacy `file_data` and `thumbnail_file_data` tables remain available for existing installations and dual-read compatibility.
 
-Patch `1_1_8.sql` converts legacy File and thumbnail Large Objects to the shared representation without generating history rows or WORM evidence. Existing binaries therefore remain readable after upgrade but receive no retroactive WORM receipt.
+Patch `1_1_8.sql` adds the shared representation without scanning or rewriting legacy Large Objects. Existing binaries remain readable in their original tables and receive no retroactive WORM receipt. Replacement uploads use canonical storage and remove the replaced legacy association in the same transaction.
 
 ## Enums And Integer Codes
 

@@ -86,6 +86,7 @@ var DefaultConfig = struct {
 	GeneralTrustedProxyCIDRs            []string
 	GeneralAASPreconfigPaths            []string
 	GeneralBulkBatchLimit               int
+	GeneralUploadMaxSizeBytes           int64
 	HistoryConfigMode                   string
 	HistoryConfigRetentionDays          int
 	HistoryConfigFullSnapshotInterval   int
@@ -151,6 +152,7 @@ var DefaultConfig = struct {
 	GeneralTrustedProxyCIDRs:            []string{},
 	GeneralAASPreconfigPaths:            []string{},
 	GeneralBulkBatchLimit:               1000,
+	GeneralUploadMaxSizeBytes:           128 << 20,
 	HistoryConfigMode:                   "off",
 	HistoryConfigRetentionDays:          0,
 	HistoryConfigFullSnapshotInterval:   1,
@@ -1146,7 +1148,7 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("general.externalUrl", "")
 	v.SetDefault("general.trustProxyHeaders", DefaultConfig.GeneralTrustProxyHeaders)
 	v.SetDefault("general.trustedProxyCIDRs", DefaultConfig.GeneralTrustedProxyCIDRs)
-	v.SetDefault("general.uploadMaxSizeBytes", int64(128<<20))
+	v.SetDefault("general.uploadMaxSizeBytes", DefaultConfig.GeneralUploadMaxSizeBytes)
 	v.SetDefault("general.aasPreconfigPaths", []string{})
 	v.SetDefault("general.bulkBatchLimit", DefaultConfig.GeneralBulkBatchLimit)
 
@@ -1247,6 +1249,7 @@ func PrintConfiguration(cfg *Config) {
 	// General
 	lines = append(lines, "General:")
 	add("Bulk Batch Limit", cfg.General.BulkBatchLimit, DefaultConfig.GeneralBulkBatchLimit)
+	add("Upload Max Size (bytes)", cfg.General.UploadMaxSizeBytes, DefaultConfig.GeneralUploadMaxSizeBytes)
 
 	lines = append(lines, divider)
 

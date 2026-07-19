@@ -218,19 +218,21 @@ go run ./cmd/historyevidenceverifier \
   -to 25
 ```
 
-Add `-recover` to include the reconstructed terminal snapshot in the report.
+Add `-recover` to include the reconstructed terminal snapshot in the report. The terminal event hash, change type, deletion state, operation time, and audit context make deleted-state recovery explicit. Verification fails if the requested terminal sequence or live WORM retention check is unavailable.
 
 ## Internal Attachments And Thumbnails
 
 Internal File SME attachments and default thumbnails use model values of the form `/aasx/files/<opaque-token>/<safe-filename>`. This is a logical AASX package-part path, not an HTTP endpoint. Upload, download, replacement, and deletion continue to use the standardized attachment and thumbnail endpoints; no `/aasx/files/...` route is exposed.
 
-Every successful upload receives a new opaque token, including same-name replacements. Payloads are deduplicated globally by SHA-256 plus byte length across attachments and thumbnails, while authorization always resolves through the owning AAS, thumbnail, or File SME. Tokens, hashes, PostgreSQL OIDs, WORM object keys, versions, and deduplication outcomes are never lookup authorities or public API metadata.
+Every successful upload receives a new opaque token, including same-name replacements. Payloads are deduplicated globally by SHA-256 plus byte length across attachments and thumbnails, while authorization always resolves through the owning AAS, thumbnail, or File SME. Tokens, hashes, PostgreSQL OIDs, WORM object keys, versions, and deduplication outcomes are never lookup authorities or public API metadata. `general.uploadMaxSizeBytes` bounds both the HTTP request and the streamed binary content written to PostgreSQL.
 
-When evidence is enabled, canonical bytes are streamed once to content-addressed WORM storage. Each upload also writes a small binary-reference artifact cryptographically tied to the owning mutation event. Reusing identical content reuses the PostgreSQL Large Object and immutable WORM object and only extends retention when required. Replacing or deleting the final live reference removes the PostgreSQL Large Object, but immutable WORM bytes and reference evidence remain retained.
+When evidence is enabled, canonical bytes are streamed once to content-addressed WORM storage. The owning mutation hash commits the binary digest, size, filename, content type, managed path, and immutable object version; each upload then writes the matching binary-reference artifact. Reusing identical content reuses the PostgreSQL Large Object and immutable WORM object and only extends retention when required. Replacing or deleting the final live reference removes the PostgreSQL Large Object, but immutable WORM bytes and reference evidence remain retained.
 
 Absolute `http://` and `https://` values remain external links. BaSyx does not fetch, deduplicate, or copy their content. AASX serialization writes each associated internal binary at its exact `/aasx/files/...` URI and preserves that value in the serialized model.
 
-The v1.1.8 upgrade converts legacy `file_data` and `thumbnail_file_data` Large Objects into canonical storage and assigns managed paths. It does not create historical mutations or retroactively copy preexisting bytes to WORM. A migrated binary receives its first WORM receipt only if a later evidence-enabled upload reuses it. Complete AASX File Server package files remain outside this deduplication scope.
+The v1.1.8 upgrade does not scan, rewrite, or WORM-backfill legacy `file_data` and `thumbnail_file_data` Large Objects. Existing files and their model values remain readable through the compatibility path. Replacing them uses canonical storage and assigns a new managed path; missing WORM evidence for the earlier bytes is accepted. Complete AASX File Server package files remain outside this deduplication scope.
+
+Global deduplication does not change authorization or API response content. A residual timing difference can exist between a new payload and a reused payload; deployments that require isolation against this side channel should use separate databases or service instances for separate security boundaries.
 
 ## What Activating Versioning Means
 

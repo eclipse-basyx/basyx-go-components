@@ -36,6 +36,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"net/url"
 	"path"
 	"strings"
@@ -126,11 +127,20 @@ func StoreTx(ctx context.Context, tx *sql.Tx, reader io.Reader) (Content, error)
 	if reader == nil {
 		return Content{}, common.NewErrBadRequest("BINARYCONTENT-STORE-NILREADER file payload is required")
 	}
-	oid, digest, size, err := writeTransientLargeObjectTx(ctx, tx, reader)
+	oid, digest, size, err := writeTransientLargeObjectTx(ctx, tx, reader, common.UploadMaxSizeBytesFromContext(ctx))
 	if err != nil {
 		return Content{}, err
 	}
-	if err = lockDigestTx(ctx, tx, digest, size); err != nil {
+	content, err := storeCanonicalContentTx(ctx, tx, oid, digest, size)
+	if err == nil {
+		return content, nil
+	}
+	log.Printf("BINARYCONTENT-STORE-PERSIST canonical binary storage failed: %v", err)
+	return Content{}, common.NewInternalServerError("BINARYCONTENT-STORE-PERSIST canonical binary could not be stored")
+}
+
+func storeCanonicalContentTx(ctx context.Context, tx *sql.Tx, oid int64, digest string, size int64) (Content, error) {
+	if err := lockDigestTx(ctx, tx, digest, size); err != nil {
 		return Content{}, err
 	}
 	existing, err := findContentTx(ctx, tx, digest, size)
@@ -156,7 +166,7 @@ func StoreTx(ctx context.Context, tx *sql.Tx, reader io.Reader) (Content, error)
 	return Content{ID: contentID, SHA256: digest, SizeBytes: size, OID: oid}, nil
 }
 
-func writeTransientLargeObjectTx(ctx context.Context, tx *sql.Tx, reader io.Reader) (int64, string, int64, error) {
+func writeTransientLargeObjectTx(ctx context.Context, tx *sql.Tx, reader io.Reader, maxSizeBytes int64) (int64, string, int64, error) {
 	query, args, err := goqu.Select(goqu.Func("lo_create", 0)).ToSQL()
 	if err != nil {
 		return 0, "", 0, common.NewInternalServerError("BINARYCONTENT-STORE-BUILDCREATELO " + err.Error())
@@ -179,6 +189,9 @@ func writeTransientLargeObjectTx(ctx context.Context, tx *sql.Tx, reader io.Read
 	for {
 		count, readErr := reader.Read(buffer)
 		if count > 0 {
+			if maxSizeBytes > 0 && int64(count) > maxSizeBytes-size {
+				return 0, "", 0, common.NewErrBadRequest(fmt.Sprintf("BINARYCONTENT-STORE-TOOLARGE upload exceeds configured maximum of %d bytes", maxSizeBytes))
+			}
 			chunk := buffer[:count]
 			if _, err = hash.Write(chunk); err != nil {
 				return 0, "", 0, common.NewInternalServerError("BINARYCONTENT-STORE-HASH " + err.Error())

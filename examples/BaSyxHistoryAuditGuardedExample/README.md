@@ -267,7 +267,7 @@ go run ./cmd/historyevidenceverifier \
   -manifest-sha256 '<sha256-from-write-output>'
 ```
 
-The independent mutation chain provides recovery evidence for new acknowledged writes. With `BASYX_HISTORY_FULL_SNAPSHOT_INTERVAL=5`, recovery starts from the latest WORM-stored snapshot event and replays up to four WORM-stored diff payloads. Use `BASYX_HISTORY_FULL_SNAPSHOT_INTERVAL=1` when every mutation must be recoverable as a full WORM snapshot without diff replay. For audit attribution, inspect `effective_diff`: a full snapshot event can be a recovery checkpoint, while `effective_diff` shows what the request actually changed.
+The independent mutation chain provides recovery evidence for new acknowledged writes. With `BASYX_HISTORY_FULL_SNAPSHOT_INTERVAL=5`, recovery starts from the latest WORM-stored snapshot event and replays up to four WORM-stored diff payloads. Use `BASYX_HISTORY_FULL_SNAPSHOT_INTERVAL=1` when every mutation must be recoverable as a full WORM snapshot without diff replay. For audit attribution, inspect `effective_diff`: a full snapshot event can be a recovery checkpoint, while `effective_diff` shows what the request actually changed. Mutation recovery also reports the terminal event hash, change type, deletion state, operation time, and audit context, and it fails when the requested tail or retention state cannot be verified.
 
 The catalog-export workflow below applies to legacy v1 history-event evidence. Use `-mutation -recover` for direct recovery from the independent mutation chain.
 
