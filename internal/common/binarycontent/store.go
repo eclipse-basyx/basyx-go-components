@@ -360,8 +360,13 @@ func referenceCountTx(ctx context.Context, tx *sql.Tx, table string, contentID i
 
 // ReadAllTx reads canonical content for the existing byte-oriented repository contracts.
 func ReadAllTx(ctx context.Context, tx *sql.Tx, content Content) ([]byte, error) {
+	return ReadOIDTx(ctx, tx, content.OID)
+}
+
+// ReadOIDTx reads a legacy or canonical PostgreSQL large object.
+func ReadOIDTx(ctx context.Context, tx *sql.Tx, oid int64) ([]byte, error) {
 	var result []byte
-	err := StreamTx(ctx, tx, content, func(reader io.Reader) error {
+	err := streamOIDTx(ctx, tx, oid, func(reader io.Reader) error {
 		var readErr error
 		result, readErr = io.ReadAll(reader)
 		return readErr
@@ -372,10 +377,14 @@ func ReadAllTx(ctx context.Context, tx *sql.Tx, content Content) ([]byte, error)
 // StreamTx opens canonical content and supplies a bounded-memory reader to the
 // callback while the caller's transaction remains open.
 func StreamTx(ctx context.Context, tx *sql.Tx, content Content, consume func(io.Reader) error) error {
+	return streamOIDTx(ctx, tx, content.OID, consume)
+}
+
+func streamOIDTx(ctx context.Context, tx *sql.Tx, oid int64, consume func(io.Reader) error) error {
 	if consume == nil {
 		return common.NewInternalServerError("BINARYCONTENT-STREAM-NILCONSUMER stream consumer is required")
 	}
-	query, args, err := goqu.Select(goqu.Func("lo_open", content.OID, largeObjectReadMode)).ToSQL()
+	query, args, err := goqu.Select(goqu.Func("lo_open", oid, largeObjectReadMode)).ToSQL()
 	if err != nil {
 		return common.NewInternalServerError("BINARYCONTENT-READ-BUILDOPEN " + err.Error())
 	}

@@ -226,12 +226,13 @@ func (p PostgreSQLFileHandler) UpdateValueOnly(submodelID string, idShortOrPath 
 	dialect := goqu.Dialect("postgres")
 
 	var elementID int
+	var currentValue sql.NullString
 	query, args, err := dialect.From("submodel_element").
 		InnerJoin(
 			goqu.T("file_element"),
 			goqu.On(goqu.I("submodel_element.id").Eq(goqu.I("file_element.id"))),
 		).
-		Select("submodel_element.id").
+		Select("submodel_element.id", "file_element.value").
 		Where(
 			goqu.C("idshort_path").Eq(idShortOrPath),
 			goqu.C("submodel_id").Eq(submodelDatabaseID),
@@ -241,46 +242,18 @@ func (p PostgreSQLFileHandler) UpdateValueOnly(submodelID string, idShortOrPath 
 		return err
 	}
 
-	err = tx.QueryRow(query, args...).Scan(&elementID)
+	err = tx.QueryRow(query, args...).Scan(&elementID, &currentValue)
 	if err != nil {
 		return err
 	}
 
-	// Check for existing file_data and delete old Large Object if it exists
-	var oldOID sql.NullInt64
-	fileDataQuery, fileDataArgs, err := dialect.From("file_data").
-		Select("file_oid").
-		Where(goqu.C("id").Eq(elementID)).
-		ToSQL()
-	if err != nil {
-		return fmt.Errorf("failed to build file_data query: %w", err)
-	}
-	err = tx.QueryRow(fileDataQuery, fileDataArgs...).Scan(&oldOID)
-	if err != nil && err != sql.ErrNoRows {
-		return fmt.Errorf("failed to check existing file data: %w", err)
-	}
-	// Delete old Large Object if it exists
-	if oldOID.Valid {
-		_, err = tx.Exec(`SELECT lo_unlink($1)`, oldOID.Int64)
-		if err != nil {
-			return fmt.Errorf("failed to delete large object: %w", err)
+	if currentValue.String != fileValueOnly.Value {
+		if err = deleteLegacyFileData(tx, dialect, int64(elementID)); err != nil {
+			return err
 		}
-
-		// Delete the file_data entry
-		deleteQuery, deleteArgs, err := dialect.Delete("file_data").
-			Where(goqu.C("id").Eq(elementID)).
-			ToSQL()
-		if err != nil {
-			return fmt.Errorf("failed to build delete query: %w", err)
+		if err = deleteManagedFileReference(tx, int64(elementID)); err != nil {
+			return err
 		}
-
-		_, err = tx.Exec(deleteQuery, deleteArgs...)
-		if err != nil {
-			return fmt.Errorf("failed to delete file_data: %w", err)
-		}
-	}
-	if err = deleteManagedFileReference(tx, int64(elementID)); err != nil {
-		return err
 	}
 
 	// Build the update query
@@ -899,41 +872,7 @@ func readLegacyFileContent(ctx context.Context, tx *sql.Tx, elementID int64) ([]
 		}
 		return nil, common.NewInternalServerError("SMREPO-DOWNLOADATTACHMENT-LEGACY " + err.Error())
 	}
-	return readLegacyLargeObject(ctx, tx, oid)
-}
-
-func readLegacyLargeObject(ctx context.Context, tx *sql.Tx, oid int64) ([]byte, error) {
-	openQuery, openArgs, err := goqu.Select(goqu.Func("lo_open", oid, 0x00040000)).ToSQL()
-	if err != nil {
-		return nil, common.NewInternalServerError("SMREPO-DOWNLOADATTACHMENT-BUILDOPEN " + err.Error())
-	}
-	var descriptor int
-	if err = tx.QueryRowContext(ctx, openQuery, openArgs...).Scan(&descriptor); err != nil {
-		return nil, common.NewInternalServerError("SMREPO-DOWNLOADATTACHMENT-OPEN " + err.Error())
-	}
-	var content []byte
-	for {
-		readQuery, readArgs, buildErr := goqu.Select(goqu.Func("loread", descriptor, 32*1024)).ToSQL()
-		if buildErr != nil {
-			return nil, common.NewInternalServerError("SMREPO-DOWNLOADATTACHMENT-BUILDREAD " + buildErr.Error())
-		}
-		var chunk []byte
-		if err = tx.QueryRowContext(ctx, readQuery, readArgs...).Scan(&chunk); err != nil {
-			return nil, common.NewInternalServerError("SMREPO-DOWNLOADATTACHMENT-READ " + err.Error())
-		}
-		if len(chunk) == 0 {
-			break
-		}
-		content = append(content, chunk...)
-	}
-	closeQuery, closeArgs, err := goqu.Select(goqu.Func("lo_close", descriptor)).ToSQL()
-	if err != nil {
-		return nil, common.NewInternalServerError("SMREPO-DOWNLOADATTACHMENT-BUILDCLOSE " + err.Error())
-	}
-	if _, err = tx.ExecContext(ctx, closeQuery, closeArgs...); err != nil {
-		return nil, common.NewInternalServerError("SMREPO-DOWNLOADATTACHMENT-CLOSE " + err.Error())
-	}
-	return content, nil
+	return binarycontent.ReadOIDTx(ctx, tx, oid)
 }
 
 // DeleteFileAttachment deletes a file from PostgreSQL's Large Object system.

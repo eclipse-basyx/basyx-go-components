@@ -45,6 +45,7 @@ import (
 	"github.com/doug-martin/goqu/v9"
 	persistenceutils "github.com/eclipse-basyx/basyx-go-components/internal/aasrepository/persistence/utils"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/binarycontent"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/createprecheck"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/descriptors"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/history"
@@ -1348,6 +1349,9 @@ func upsertDefaultThumbnailForAssetInformation(
 	if thumbnail == nil {
 		return nil
 	}
+	if err := clearInternalThumbnailStorageTx(tx, aasDBID, errorPrefix); err != nil {
+		return err
+	}
 
 	upsertSQL, upsertArgs, buildErr := buildUpsertDefaultThumbnailQuery(dialect, aasDBID, thumbnail, thumbnailPath)
 	if buildErr != nil {
@@ -1358,6 +1362,44 @@ func upsertDefaultThumbnailForAssetInformation(
 		return common.NewInternalServerError(errorPrefix + "-EXECTHUMBNAILSQL " + execErr.Error())
 	}
 
+	return nil
+}
+
+func clearInternalThumbnailStorageTx(tx *sql.Tx, aasDBID int64, errorPrefix string) error {
+	deleteReferenceSQL, deleteReferenceArgs, err := goqu.Delete(binarycontent.TableThumbnailReference).
+		Where(goqu.C("thumbnail_element_id").Eq(aasDBID)).ToSQL()
+	if err != nil {
+		return common.NewInternalServerError(errorPrefix + "-BUILDDELETETHUMBREF " + err.Error())
+	}
+	if _, err = tx.Exec(deleteReferenceSQL, deleteReferenceArgs...); err != nil {
+		return common.NewInternalServerError(errorPrefix + "-EXECDELETETHUMBREF " + err.Error())
+	}
+
+	selectLegacySQL, selectLegacyArgs, err := goqu.From("thumbnail_file_data").Select("file_oid").
+		Where(goqu.C("id").Eq(aasDBID)).ToSQL()
+	if err != nil {
+		return common.NewInternalServerError(errorPrefix + "-BUILDGETTHUMBLO " + err.Error())
+	}
+	var oid sql.NullInt64
+	if err = tx.QueryRow(selectLegacySQL, selectLegacyArgs...).Scan(&oid); err != nil && err != sql.ErrNoRows {
+		return common.NewInternalServerError(errorPrefix + "-EXECGETTHUMBLO " + err.Error())
+	}
+	if oid.Valid {
+		unlinkSQL, unlinkArgs, buildErr := goqu.Select(goqu.Func("lo_unlink", oid.Int64)).ToSQL()
+		if buildErr != nil {
+			return common.NewInternalServerError(errorPrefix + "-BUILDUNLINKTHUMBLO " + buildErr.Error())
+		}
+		if _, err = tx.Exec(unlinkSQL, unlinkArgs...); err != nil {
+			return common.NewInternalServerError(errorPrefix + "-EXECUNLINKTHUMBLO " + err.Error())
+		}
+	}
+	deleteLegacySQL, deleteLegacyArgs, err := goqu.Delete("thumbnail_file_data").Where(goqu.C("id").Eq(aasDBID)).ToSQL()
+	if err != nil {
+		return common.NewInternalServerError(errorPrefix + "-BUILDDELETETHUMBLO " + err.Error())
+	}
+	if _, err = tx.Exec(deleteLegacySQL, deleteLegacyArgs...); err != nil {
+		return common.NewInternalServerError(errorPrefix + "-EXECDELETETHUMBLO " + err.Error())
+	}
 	return nil
 }
 
@@ -1459,7 +1501,7 @@ func (s *AssetAdministrationShellDatabase) GetThumbnailByAASID(ctx context.Conte
 		return nil, "", "", "", common.NewInternalServerError("AASREPO-GETTHUMBNAIL-NEWHANDLER " + err.Error())
 	}
 
-	return thumbnailHandler.DownloadThumbnailByAASID(aasIdentifier)
+	return thumbnailHandler.downloadManagedThumbnail(ctx, aasIdentifier)
 }
 
 // PutThumbnailByAASID uploads or replaces the thumbnail and checks ABAC visibility.
@@ -1490,12 +1532,13 @@ func (s *AssetAdministrationShellDatabase) PutThumbnailByAASIDReader(ctx context
 
 		dialect := goqu.Dialect("postgres")
 		fileQuery, fileArgs, fileBuildErr := dialect.
-			From("thumbnail_file_data").
-			Select("file_oid").
-			Where(
-				goqu.C("id").Eq(aasDBID),
-				goqu.C("file_oid").IsNotNull(),
-			).
+			From(goqu.T("thumbnail_file_element").As("element")).
+			LeftJoin(goqu.T("thumbnail_file_data").As("legacy"), goqu.On(goqu.I("legacy.id").Eq(goqu.I("element.id")))).
+			LeftJoin(goqu.T(binarycontent.TableThumbnailReference).As("reference"), goqu.On(goqu.I("reference.thumbnail_element_id").Eq(goqu.I("element.id")))).
+			Select(goqu.Case().When(
+				goqu.Or(goqu.I("legacy.file_oid").IsNotNull(), goqu.I("reference.binary_content_id").IsNotNull()), 1,
+			)).
+			Where(goqu.I("element.id").Eq(aasDBID)).
 			Limit(1).
 			ToSQL()
 		if fileBuildErr != nil {
@@ -1503,12 +1546,14 @@ func (s *AssetAdministrationShellDatabase) PutThumbnailByAASIDReader(ctx context
 		}
 
 		thumbnailExists := true
-		var fileOID int64
-		if scanErr := tx.QueryRow(fileQuery, fileArgs...).Scan(&fileOID); scanErr != nil {
+		var attachmentMarker sql.NullInt64
+		if scanErr := tx.QueryRow(fileQuery, fileArgs...).Scan(&attachmentMarker); scanErr != nil {
 			if scanErr != sql.ErrNoRows {
 				return common.NewInternalServerError("AASREPO-PUTTHUMBNAIL-EXECEXISTSQL " + scanErr.Error())
 			}
 			thumbnailExists = false
+		} else {
+			thumbnailExists = attachmentMarker.Valid
 		}
 
 		ctx = auth.SelectPutFormulaByExistence(ctx, thumbnailExists)
@@ -1529,11 +1574,22 @@ func (s *AssetAdministrationShellDatabase) PutThumbnailByAASIDReader(ctx context
 		return common.NewInternalServerError("AASREPO-PUTTHUMBNAIL-NEWHANDLER " + err.Error())
 	}
 
-	if uploadErr := thumbnailHandler.uploadThumbnailByAASIDReaderInTransaction(tx, aasIdentifier, fileName, file); uploadErr != nil {
+	reference, contentType, uploadErr := thumbnailHandler.uploadManagedThumbnailTx(ctx, tx, aasIdentifier, fileName, file)
+	if uploadErr != nil {
 		return uploadErr
+	}
+	binaryReceipt, err := history.EnsureBinaryEvidenceTx(ctx, tx, reference.Content, contentType)
+	if err != nil {
+		return err
 	}
 
 	if err = s.appendUploadedThumbnailHistoryTx(ctx, tx, aasIdentifier); err != nil {
+		return err
+	}
+	if err = history.RecordBinaryReferenceEvidenceTx(
+		ctx, tx, history.TableAAS, aasIdentifier, reference.Content,
+		reference.ManagedPath(), reference.SafeFileName, contentType, binaryReceipt,
+	); err != nil {
 		return err
 	}
 
@@ -1575,7 +1631,7 @@ func (s *AssetAdministrationShellDatabase) DeleteThumbnailByAASID(ctx context.Co
 		return common.NewInternalServerError("AASREPO-DELTHUMBNAIL-NEWHANDLER " + err.Error())
 	}
 
-	if deleteErr := thumbnailHandler.deleteThumbnailByAASIDInTransaction(tx, aasIdentifier); deleteErr != nil {
+	if deleteErr := thumbnailHandler.deleteManagedThumbnailTx(ctx, tx, aasIdentifier); deleteErr != nil {
 		return deleteErr
 	}
 

@@ -27,6 +27,7 @@ package aasenvironment
 
 import (
 	"bytes"
+	"net/url"
 	"os"
 	"path/filepath"
 	"testing"
@@ -130,4 +131,40 @@ func TestSerializeEnvironmentToAASXPackageDoesNotRequireWritableTempDirectory(t 
 	require.NoError(t, err)
 	require.Len(t, specs, 1)
 	require.Equal(t, serializationAASXJSONSpecURI, normalizePartURI(specs[0].URI))
+}
+
+func TestSerializeEnvironmentToAASXPackagePreservesManagedPaths(t *testing.T) {
+	managedSupplementaryPath := "/aasx/files/file-token/service%20manual.pdf"
+	managedThumbnailPath := "/aasx/files/thumbnail-token/preview%20image.png"
+	supplementaryURI, err := url.Parse(managedSupplementaryPath)
+	require.NoError(t, err)
+	thumbnailPart, err := buildSerializationThumbnailPart(
+		"aas-id", "preview image.png", "image/png", managedThumbnailPath, []byte("thumbnail"),
+	)
+	require.NoError(t, err)
+	require.Equal(t, managedThumbnailPath, thumbnailPart.URI.String())
+
+	payload, err := serializeEnvironmentToAASXPackage(
+		[]byte(`{"assetAdministrationShells":[],"submodels":[],"conceptDescriptions":[]}`),
+		"application/json",
+		serializationAASXJSONSpecURI,
+		[]serializationThumbnailPart{thumbnailPart},
+		[]serializationSupplementaryPart{{
+			URI: supplementaryURI, ContentType: "application/pdf", Content: []byte("manual"),
+		}},
+	)
+	require.NoError(t, err)
+
+	packageReader, err := aasx.NewPackaging().OpenReadFromStream(bytes.NewReader(payload))
+	require.NoError(t, err)
+	defer func() { _ = packageReader.Close() }()
+	relationships, err := packageReader.SupplementaryRelationships()
+	require.NoError(t, err)
+	require.Len(t, relationships, 2)
+	paths := make(map[string]struct{}, len(relationships))
+	for _, relationship := range relationships {
+		paths[relationship.Supplementary.URI.String()] = struct{}{}
+	}
+	require.Contains(t, paths, managedSupplementaryPath)
+	require.Contains(t, paths, managedThumbnailPath)
 }
