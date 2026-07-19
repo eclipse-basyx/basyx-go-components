@@ -35,6 +35,7 @@
 - When modifying code, consider the impact on related modules and ensure that changes are consistent across the codebase.
 - Always run integration tests after making changes to ensure that the modifications do not break existing functionality. Important: Clean Testcache before running tests to avoid false positives/negatives.
 - When adding queryable columns to the schema, you must never add them to a *_payload table.
+- Never skip questions in plan mode and wait until the user has answered
 
 ## Post-Task Steps:
 - Run linter and formatter on the modified files to ensure code quality and consistency.
