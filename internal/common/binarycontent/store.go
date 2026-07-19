@@ -42,6 +42,7 @@ import (
 	"unicode"
 
 	"github.com/doug-martin/goqu/v9"
+	_ "github.com/doug-martin/goqu/v9/dialect/postgres"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 )
 
@@ -181,12 +182,19 @@ func writeTransientLargeObjectTx(ctx context.Context, tx *sql.Tx, reader io.Read
 			if _, err = hash.Write(chunk); err != nil {
 				return 0, "", 0, common.NewInternalServerError("BINARYCONTENT-STORE-HASH " + err.Error())
 			}
-			writeQuery, writeArgs, buildErr := goqu.Select(goqu.Func("lowrite", descriptor, chunk)).ToSQL()
+			writeQuery, writeArgs, buildErr := goqu.Dialect("postgres").
+				Select(goqu.Func("lowrite", descriptor, chunk)).
+				Prepared(true).
+				ToSQL()
 			if buildErr != nil {
 				return 0, "", 0, common.NewInternalServerError("BINARYCONTENT-STORE-BUILDWRITELO " + buildErr.Error())
 			}
-			if _, err = tx.ExecContext(ctx, writeQuery, writeArgs...); err != nil {
+			var written int
+			if err = tx.QueryRowContext(ctx, writeQuery, writeArgs...).Scan(&written); err != nil {
 				return 0, "", 0, common.NewInternalServerError("BINARYCONTENT-STORE-WRITELO " + err.Error())
+			}
+			if written != count {
+				return 0, "", 0, common.NewInternalServerError("BINARYCONTENT-STORE-SHORTWRITE PostgreSQL wrote an incomplete large object chunk")
 			}
 			size += int64(count)
 		}
@@ -208,7 +216,10 @@ func writeTransientLargeObjectTx(ctx context.Context, tx *sql.Tx, reader io.Read
 
 func lockDigestTx(ctx context.Context, tx *sql.Tx, digest string, size int64) error {
 	lockKey := fmt.Sprintf("binary-content:%s:%d", digest, size)
-	query, args, err := goqu.Select(goqu.Func("pg_advisory_xact_lock", goqu.Func("hashtextextended", lockKey, int64(0)))).Prepared(true).ToSQL()
+	query, args, err := goqu.Dialect("postgres").
+		Select(goqu.Func("pg_advisory_xact_lock", goqu.Func("hashtextextended", lockKey, int64(0)))).
+		Prepared(true).
+		ToSQL()
 	if err != nil {
 		return common.NewInternalServerError("BINARYCONTENT-LOCK-BUILD " + err.Error())
 	}
