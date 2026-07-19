@@ -30,6 +30,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -125,14 +126,17 @@ func TestAppendVersionTxWritesEvidenceArtifactBeforeCommitWhenEnabled(t *testing
 	mock.ExpectBegin()
 	mock.ExpectExec(`SELECT pg_advisory_xact_lock`).
 		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectQuery(`SELECT "last_sequence", "last_event_hash", "events_since_snapshot" FROM "mutation_evidence_state"`).
+		WillReturnError(sql.ErrNoRows)
 	mock.ExpectQuery(`SELECT "history_id" FROM "aas_history"`).
 		WillReturnError(sql.ErrNoRows)
 	mock.ExpectQuery(`INSERT INTO "aas_history".*"matched_rule_id".*RETURNING "history_id"`).
 		WillReturnRows(sqlmock.NewRows([]string{"history_id"}).AddRow(1))
 	mock.ExpectExec(`INSERT INTO "aas_history_payload".*"snapshot"`).
 		WillReturnResult(sqlmock.NewResult(0, 1))
-	mock.ExpectExec(`INSERT INTO "history_evidence_artifacts"`).
-		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectQuery(`SELECT "history_id", "row_hash" FROM "aas_history"`).
+		WillReturnRows(sqlmock.NewRows([]string{"history_id", "row_hash"}).AddRow(1, "history-row-hash"))
+	expectMutationEvidenceCatalogInsert(mock, 1, false)
 	mock.ExpectCommit()
 
 	tx, err := db.Begin()
@@ -148,12 +152,14 @@ func TestAppendVersionTxWritesEvidenceArtifactBeforeCommitWhenEnabled(t *testing
 
 	require.Len(t, store.artifacts, 1)
 	artifact := store.artifacts[0]
-	require.Equal(t, EvidenceArtifactHistoryEvent, artifact.ArtifactType)
-	require.Contains(t, artifact.ObjectKey, "history-events/aas_history/aas-1/1-")
+	require.Equal(t, EvidenceArtifactMutation, artifact.ArtifactType)
+	require.Contains(t, artifact.ObjectKey, "mutation-events/aas_history/aas-1/1-")
 	var artifactPayload map[string]any
 	require.NoError(t, decodeJSONPreservingNumbers(artifact.Data, &artifactPayload))
 	require.Equal(t, PayloadTypeSnapshot, artifactPayload["payload_type"])
 	require.Equal(t, "aas-1", artifactPayload["identifier"])
+	require.Equal(t, json.Number("1"), artifactPayload["event_sequence"])
+	require.Equal(t, mutationEventArtifactVersion, artifactPayload["artifact_version"])
 	payload, ok := artifactPayload["payload"].(map[string]any)
 	require.True(t, ok)
 	require.Equal(t, "aas-1", payload["id"])
@@ -169,6 +175,72 @@ func TestAppendVersionTxWritesEvidenceArtifactBeforeCommitWhenEnabled(t *testing
 	require.True(t, ok)
 	require.Equal(t, matchedRuleID, audit["matched_rule_id"])
 	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestAppendVersionTxWritesEvidenceWhenHistoryIsOff(t *testing.T) {
+	store := &recordingEvidenceStore{}
+	t.Cleanup(func() {
+		Configure(Config{Mode: ModeOff, Immutability: ImmutabilityNone, AuditIdentityMode: AuditIdentityNone})
+	})
+	Configure(Config{
+		Mode: ModeOff, FullSnapshotInterval: 3, Immutability: ImmutabilityNone,
+		AuditIdentityMode: AuditIdentityNone, EvidenceEnabled: true,
+		EvidenceProvider: EvidenceProviderS3, EvidenceStore: store,
+	})
+
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer func() { _ = db.Close() }()
+	mock.ExpectBegin()
+	mock.ExpectExec(`SELECT pg_advisory_xact_lock`).WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectQuery(`SELECT "last_sequence", "last_event_hash", "events_since_snapshot" FROM "mutation_evidence_state"`).
+		WillReturnError(sql.ErrNoRows)
+	expectMutationEvidenceCatalogInsert(mock, 1, false)
+	mock.ExpectCommit()
+
+	tx, err := db.Begin()
+	require.NoError(t, err)
+	require.NoError(t, AppendVersionTx(t.Context(), tx, TableAAS, "aas-1", ChangeCreated, map[string]any{"id": "aas-1"}, false))
+	require.NoError(t, tx.Commit())
+	require.Len(t, store.artifacts, 1)
+	require.Equal(t, EvidenceArtifactMutation, store.artifacts[0].ArtifactType)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestMutationEvidenceContentDoesNotDependOnHistoryLink(t *testing.T) {
+	fixedTime := time.Date(2026, 7, 19, 12, 0, 0, 0, time.UTC)
+	baseWrite := mutationEvidenceWrite{
+		table: TableAAS, identifier: "aas-1", changeType: ChangeUpdated,
+		snapshot:      map[string]any{"id": "aas-1", "idShort": "updated"},
+		payload:       historyPayload{payloadType: PayloadTypeSnapshot, json: []byte(`{"id":"aas-1","idShort":"updated"}`), hash: strings.Repeat("p", 64)},
+		effectiveDiff: []map[string]any{{"op": "replace", "path": "/idShort", "value": "updated"}},
+		previousHash:  strings.Repeat("e", 64), sequence: 2, now: fixedTime,
+	}
+
+	artifacts := make([]EvidenceArtifact, 0, 2)
+	for _, historyID := range []int64{0, 42} {
+		store := &recordingEvidenceStore{}
+		cfg := Config{EvidenceEnabled: true, EvidenceStore: store, EvidenceWriteTimeout: time.Second}
+		db, mock, err := sqlmock.New()
+		require.NoError(t, err)
+		mock.ExpectBegin()
+		mock.ExpectQuery(`INSERT INTO "mutation_evidence_artifacts"`).
+			WillReturnRows(sqlmock.NewRows([]string{"artifact_id"}).AddRow(1))
+		mock.ExpectExec(`INSERT INTO "mutation_evidence_state"`).WillReturnResult(sqlmock.NewResult(0, 1))
+		mock.ExpectRollback()
+		tx, beginErr := db.Begin()
+		require.NoError(t, beginErr)
+		write := baseWrite
+		write.historyID = historyID
+		write.historyRowHash = strings.Repeat("h", 64)
+		_, err = publishMutationEvidenceTx(t.Context(), tx, cfg, write)
+		require.NoError(t, err)
+		require.NoError(t, tx.Rollback())
+		require.NoError(t, mock.ExpectationsWereMet())
+		artifacts = append(artifacts, store.artifacts[0])
+		_ = db.Close()
+	}
+	require.Equal(t, artifacts[0].Data, artifacts[1].Data)
 }
 
 func TestAppendVersionTxRollsBackWhenEvidenceStoreFails(t *testing.T) {
@@ -195,18 +267,22 @@ func TestAppendVersionTxRollsBackWhenEvidenceStoreFails(t *testing.T) {
 	mock.ExpectBegin()
 	mock.ExpectExec(`SELECT pg_advisory_xact_lock`).
 		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectQuery(`SELECT "last_sequence", "last_event_hash", "events_since_snapshot" FROM "mutation_evidence_state"`).
+		WillReturnError(sql.ErrNoRows)
 	mock.ExpectQuery(`SELECT "history_id" FROM "aas_history"`).
 		WillReturnError(sql.ErrNoRows)
 	mock.ExpectQuery(`INSERT INTO "aas_history".*RETURNING "history_id"`).
 		WillReturnRows(sqlmock.NewRows([]string{"history_id"}).AddRow(1))
 	mock.ExpectExec(`INSERT INTO "aas_history_payload".*"snapshot"`).
 		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectQuery(`SELECT "history_id", "row_hash" FROM "aas_history"`).
+		WillReturnRows(sqlmock.NewRows([]string{"history_id", "row_hash"}).AddRow(1, "history-row-hash"))
 	mock.ExpectRollback()
 
 	tx, err := db.Begin()
 	require.NoError(t, err)
 	err = AppendVersionTx(context.Background(), tx, TableAAS, "aas-1", ChangeCreated, map[string]any{"id": "aas-1"}, false)
-	require.ErrorContains(t, err, "HISTORY-EVIDENCE-APPEND-PUTARTIFACT")
+	require.ErrorContains(t, err, "HISTORY-EVIDENCE-MUTATION-PUT")
 	require.ErrorContains(t, err, "503 Service Unavailable")
 	require.NoError(t, tx.Rollback())
 	require.NoError(t, mock.ExpectationsWereMet())
@@ -236,20 +312,24 @@ func TestAppendVersionTxRollsBackWhenEvidenceReceiptCatalogFails(t *testing.T) {
 	mock.ExpectBegin()
 	mock.ExpectExec(`SELECT pg_advisory_xact_lock`).
 		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectQuery(`SELECT "last_sequence", "last_event_hash", "events_since_snapshot" FROM "mutation_evidence_state"`).
+		WillReturnError(sql.ErrNoRows)
 	mock.ExpectQuery(`SELECT "history_id" FROM "aas_history"`).
 		WillReturnError(sql.ErrNoRows)
 	mock.ExpectQuery(`INSERT INTO "aas_history".*RETURNING "history_id"`).
 		WillReturnRows(sqlmock.NewRows([]string{"history_id"}).AddRow(1))
 	mock.ExpectExec(`INSERT INTO "aas_history_payload".*"snapshot"`).
 		WillReturnResult(sqlmock.NewResult(0, 1))
-	mock.ExpectExec(`INSERT INTO "history_evidence_artifacts"`).
+	mock.ExpectQuery(`SELECT "history_id", "row_hash" FROM "aas_history"`).
+		WillReturnRows(sqlmock.NewRows([]string{"history_id", "row_hash"}).AddRow(1, "history-row-hash"))
+	mock.ExpectQuery(`INSERT INTO "mutation_evidence_artifacts"`).
 		WillReturnError(errors.New("catalog insert failed"))
 	mock.ExpectRollback()
 
 	tx, err := db.Begin()
 	require.NoError(t, err)
 	err = AppendVersionTx(context.Background(), tx, TableAAS, "aas-1", ChangeCreated, map[string]any{"id": "aas-1"}, false)
-	require.ErrorContains(t, err, "HISTORY-EVIDENCE-EVENTCATALOG-INSERT")
+	require.ErrorContains(t, err, "HISTORY-EVIDENCE-MUTATION-CATALOGINSERT")
 	require.NoError(t, tx.Rollback())
 	require.Len(t, store.artifacts, 1)
 	require.NoError(t, mock.ExpectationsWereMet())
@@ -389,17 +469,20 @@ func TestAppendVersionTxWritesDiffEvidenceArtifactWhenDiffPayloadIsSelected(t *t
 
 	largeUnchangedValue := strings.Repeat("unchanged-", 40)
 	baseSnapshot := map[string]any{"id": "aas-1", "idShort": "before", "description": largeUnchangedValue}
+	seed := seedMutationEvidenceStore(t, store, TableAAS, "aas-1", 1, baseSnapshot)
 
 	mock.ExpectBegin()
 	mock.ExpectExec(`SELECT pg_advisory_xact_lock`).
 		WillReturnResult(sqlmock.NewResult(0, 1))
+	expectMutationEvidenceRestore(mock, seed, 0)
 	expectLatestSnapshotRestore(mock, TableAAS, "aas_history_payload", "aas-1", 1, baseSnapshot, false)
 	mock.ExpectQuery(`INSERT INTO "aas_history".*RETURNING "history_id"`).
 		WillReturnRows(sqlmock.NewRows([]string{"history_id"}).AddRow(2))
 	mock.ExpectExec(`INSERT INTO "aas_history_payload".*"diff"`).
 		WillReturnResult(sqlmock.NewResult(1, 1))
-	mock.ExpectExec(`INSERT INTO "history_evidence_artifacts"`).
-		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectQuery(`SELECT "history_id", "row_hash" FROM "aas_history"`).
+		WillReturnRows(sqlmock.NewRows([]string{"history_id", "row_hash"}).AddRow(2, "history-row-hash-2"))
+	expectMutationEvidenceCatalogInsert(mock, 2, true)
 	mock.ExpectCommit()
 
 	tx, err := db.Begin()
@@ -408,9 +491,9 @@ func TestAppendVersionTxWritesDiffEvidenceArtifactWhenDiffPayloadIsSelected(t *t
 	require.NoError(t, err)
 	require.NoError(t, tx.Commit())
 
-	require.Len(t, store.artifacts, 1)
+	require.Len(t, store.artifacts, 2)
 	var artifactPayload map[string]any
-	require.NoError(t, decodeJSONPreservingNumbers(store.artifacts[0].Data, &artifactPayload))
+	require.NoError(t, decodeJSONPreservingNumbers(store.artifacts[1].Data, &artifactPayload))
 	require.Equal(t, PayloadTypeDiff, artifactPayload["payload_type"])
 	diff, ok := artifactPayload["payload"].([]any)
 	require.True(t, ok)
@@ -445,17 +528,20 @@ func TestAppendVersionTxSnapshotEvidenceIncludesEffectiveDiffOnlyForChangedField
 	largeUnchangedValue := strings.Repeat("unchanged-", 40)
 	baseSnapshot := map[string]any{"id": "aas-1", "idShort": "before", "description": largeUnchangedValue}
 	targetSnapshot := map[string]any{"id": "aas-1", "idShort": "after", "description": largeUnchangedValue}
+	seed := seedMutationEvidenceStore(t, store, TableAAS, "aas-1", 1, baseSnapshot)
 
 	mock.ExpectBegin()
 	mock.ExpectExec(`SELECT pg_advisory_xact_lock`).
 		WillReturnResult(sqlmock.NewResult(0, 1))
+	expectMutationEvidenceRestore(mock, seed, 0)
 	expectLatestSnapshotRestore(mock, TableAAS, "aas_history_payload", "aas-1", 1, baseSnapshot, false)
 	mock.ExpectQuery(`INSERT INTO "aas_history".*RETURNING "history_id"`).
 		WillReturnRows(sqlmock.NewRows([]string{"history_id"}).AddRow(2))
 	mock.ExpectExec(`INSERT INTO "aas_history_payload".*"snapshot"`).
 		WillReturnResult(sqlmock.NewResult(1, 1))
-	mock.ExpectExec(`INSERT INTO "history_evidence_artifacts"`).
-		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectQuery(`SELECT "history_id", "row_hash" FROM "aas_history"`).
+		WillReturnRows(sqlmock.NewRows([]string{"history_id", "row_hash"}).AddRow(2, "history-row-hash-2"))
+	expectMutationEvidenceCatalogInsert(mock, 2, false)
 	mock.ExpectCommit()
 
 	tx, err := db.Begin()
@@ -464,9 +550,9 @@ func TestAppendVersionTxSnapshotEvidenceIncludesEffectiveDiffOnlyForChangedField
 	require.NoError(t, err)
 	require.NoError(t, tx.Commit())
 
-	require.Len(t, store.artifacts, 1)
+	require.Len(t, store.artifacts, 2)
 	var artifactPayload map[string]any
-	require.NoError(t, decodeJSONPreservingNumbers(store.artifacts[0].Data, &artifactPayload))
+	require.NoError(t, decodeJSONPreservingNumbers(store.artifacts[1].Data, &artifactPayload))
 	require.Equal(t, PayloadTypeSnapshot, artifactPayload["payload_type"])
 	effectiveDiff, ok := artifactPayload["effective_diff"].([]any)
 	require.True(t, ok)
@@ -622,6 +708,59 @@ type recordingEvidenceStore struct {
 	artifacts []EvidenceArtifact
 }
 
+type seededMutationEvidence struct {
+	sequence    int64
+	eventHash   string
+	contentHash string
+	objectKey   string
+	sha256      string
+}
+
+func seedMutationEvidenceStore(t *testing.T, store *recordingEvidenceStore, table string, identifier string, sequence int64, snapshot map[string]any) seededMutationEvidence {
+	t.Helper()
+	contentHash, err := CanonicalJSONHash(snapshot)
+	require.NoError(t, err)
+	eventHash := strings.Repeat("e", 64)
+	body, err := CanonicalJSON(map[string]any{
+		"artifact_version":    mutationEventArtifactVersion,
+		"event_sequence":      sequence,
+		"previous_event_hash": "",
+		"payload_type":        PayloadTypeSnapshot,
+		"payload":             snapshot,
+		"content_hash":        contentHash,
+		"event_hash":          eventHash,
+	})
+	require.NoError(t, err)
+	objectKey := fmt.Sprintf("mutation-events/%s/%s/%d-%s.json", table, identifier, sequence, eventHash)
+	store.artifacts = append(store.artifacts, EvidenceArtifact{
+		ArtifactType: EvidenceArtifactMutation,
+		ObjectKey:    objectKey,
+		ContentType:  manifestJSONContentType,
+		Data:         body,
+	})
+	return seededMutationEvidence{sequence: sequence, eventHash: eventHash, contentHash: contentHash, objectKey: objectKey, sha256: SHA256Hex(body)}
+}
+
+func expectMutationEvidenceRestore(mock sqlmock.Sqlmock, seed seededMutationEvidence, eventsSinceSnapshot int) {
+	mock.ExpectQuery(`SELECT "last_sequence", "last_event_hash", "events_since_snapshot" FROM "mutation_evidence_state"`).
+		WillReturnRows(sqlmock.NewRows([]string{"last_sequence", "last_event_hash", "events_since_snapshot"}).
+			AddRow(seed.sequence, seed.eventHash, eventsSinceSnapshot))
+	mock.ExpectQuery(`SELECT "event_sequence", "payload_type", "content_hash", "event_hash", "previous_event_hash", "sha256", "provider", "bucket", "object_key", "object_version_id" FROM "mutation_evidence_artifacts"`).
+		WillReturnRows(sqlmock.NewRows([]string{"event_sequence", "payload_type", "content_hash", "event_hash", "previous_event_hash", "sha256", "provider", "bucket", "object_key", "object_version_id"}).
+			AddRow(seed.sequence, PayloadTypeSnapshot, seed.contentHash, seed.eventHash, nil, seed.sha256, EvidenceProviderS3, "history-evidence", seed.objectKey, "version-1"))
+}
+
+func expectMutationEvidenceCatalogInsert(mock sqlmock.Sqlmock, artifactID int64, diff bool) {
+	mock.ExpectQuery(`INSERT INTO "mutation_evidence_artifacts"`).
+		WillReturnRows(sqlmock.NewRows([]string{"artifact_id"}).AddRow(artifactID))
+	if diff {
+		mock.ExpectQuery(`SELECT "events_since_snapshot" FROM "mutation_evidence_state"`).
+			WillReturnRows(sqlmock.NewRows([]string{"events_since_snapshot"}).AddRow(0))
+	}
+	mock.ExpectExec(`INSERT INTO "mutation_evidence_state"`).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+}
+
 func (store *recordingEvidenceStore) PutArtifact(_ context.Context, artifact EvidenceArtifact) (*EvidenceReceipt, error) {
 	if store.err != nil {
 		return nil, store.err
@@ -642,8 +781,13 @@ func (store *recordingEvidenceStore) PutArtifact(_ context.Context, artifact Evi
 	}, nil
 }
 
-func (store *recordingEvidenceStore) GetArtifact(_ context.Context, _ EvidenceReference) (*EvidenceObject, error) {
-	return nil, errors.New("not implemented")
+func (store *recordingEvidenceStore) GetArtifact(_ context.Context, ref EvidenceReference) (*EvidenceObject, error) {
+	for _, artifact := range store.artifacts {
+		if artifact.ObjectKey == ref.ObjectKey {
+			return &EvidenceObject{Reference: ref, Data: artifact.Data, ContentType: artifact.ContentType, Metadata: artifact.Metadata}, nil
+		}
+	}
+	return nil, errors.New("artifact not found")
 }
 
 func (store *recordingEvidenceStore) VerifyArtifact(_ context.Context, _ EvidenceReference, _ string) (*EvidenceReceipt, error) {
