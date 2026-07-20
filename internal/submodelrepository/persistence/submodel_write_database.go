@@ -619,15 +619,7 @@ func (s *SubmodelDatabase) replaceSubmodelInTransaction(tx *sql.Tx, submodelID s
 	return true, nil
 }
 
-type managedFileReferenceForReplacement struct {
-	idShortPath  string
-	managedPath  string
-	contentID    int64
-	pathToken    string
-	safeFileName string
-}
-
-func loadManagedFileReferencesForReplacementTx(tx *sql.Tx, submodelDatabaseID int64) ([]managedFileReferenceForReplacement, error) {
+func loadManagedFileReferencesForReplacementTx(tx *sql.Tx, submodelDatabaseID int64) ([]gen.ManagedFileReferenceForReplacement, error) {
 	query, args, err := goqu.From(goqu.T("submodel_element").As("sme")).
 		Join(goqu.T("file_element").As("fe"), goqu.On(goqu.I("fe.id").Eq(goqu.I("sme.id")))).
 		Join(goqu.T(binarycontent.TableFileReference).As("fr"), goqu.On(goqu.I("fr.file_element_id").Eq(goqu.I("sme.id")))).
@@ -643,10 +635,10 @@ func loadManagedFileReferencesForReplacementTx(tx *sql.Tx, submodelDatabaseID in
 		return nil, common.NewInternalServerError("SMREPO-UPDSM-QUERYMANAGEDFILES " + err.Error())
 	}
 	defer func() { _ = rows.Close() }()
-	references := make([]managedFileReferenceForReplacement, 0)
+	references := make([]gen.ManagedFileReferenceForReplacement, 0)
 	for rows.Next() {
-		var reference managedFileReferenceForReplacement
-		if err = rows.Scan(&reference.idShortPath, &reference.managedPath, &reference.contentID, &reference.pathToken, &reference.safeFileName); err != nil {
+		var reference gen.ManagedFileReferenceForReplacement
+		if err = rows.Scan(&reference.IDShortPath, &reference.ManagedPath, &reference.ContentID, &reference.PathToken, &reference.SafeFileName); err != nil {
 			return nil, common.NewInternalServerError("SMREPO-UPDSM-SCANMANAGEDFILES " + err.Error())
 		}
 		references = append(references, reference)
@@ -657,7 +649,7 @@ func loadManagedFileReferencesForReplacementTx(tx *sql.Tx, submodelDatabaseID in
 	return references, nil
 }
 
-func restoreManagedFileReferencesAfterReplacementTx(tx *sql.Tx, submodelID string, references []managedFileReferenceForReplacement) error {
+func restoreManagedFileReferencesAfterReplacementTx(tx *sql.Tx, submodelID string, references []gen.ManagedFileReferenceForReplacement) error {
 	if len(references) == 0 {
 		return nil
 	}
@@ -665,11 +657,11 @@ func restoreManagedFileReferencesAfterReplacementTx(tx *sql.Tx, submodelID strin
 	if err != nil {
 		return common.NewInternalServerError("SMREPO-UPDSM-GETNEWSMDATABASEID " + err.Error())
 	}
-	byPath := make(map[string]managedFileReferenceForReplacement, len(references))
+	byPath := make(map[string]gen.ManagedFileReferenceForReplacement, len(references))
 	ownedManagedPaths := make(map[string]struct{}, len(references))
 	for _, reference := range references {
-		byPath[reference.idShortPath] = reference
-		ownedManagedPaths[reference.managedPath] = struct{}{}
+		byPath[reference.IDShortPath] = reference
+		ownedManagedPaths[reference.ManagedPath] = struct{}{}
 	}
 	query, args, err := goqu.From(goqu.T("submodel_element").As("sme")).
 		Join(goqu.T("file_element").As("fe"), goqu.On(goqu.I("fe.id").Eq(goqu.I("sme.id")))).
@@ -702,7 +694,7 @@ func restoreManagedFileReferencesAfterReplacementTx(tx *sql.Tx, submodelID strin
 	}
 	for _, file := range files {
 		reference, sameOwner := byPath[file.idShortPath]
-		if sameOwner && file.value.Valid && file.value.String == reference.managedPath {
+		if sameOwner && file.value.Valid && file.value.String == reference.ManagedPath {
 			if err = insertRestoredManagedFileReferenceTx(tx, file.id, reference); err != nil {
 				return err
 			}
@@ -719,10 +711,10 @@ func restoreManagedFileReferencesAfterReplacementTx(tx *sql.Tx, submodelID strin
 	return nil
 }
 
-func insertRestoredManagedFileReferenceTx(tx *sql.Tx, fileElementID int64, reference managedFileReferenceForReplacement) error {
+func insertRestoredManagedFileReferenceTx(tx *sql.Tx, fileElementID int64, reference gen.ManagedFileReferenceForReplacement) error {
 	query, args, err := goqu.Insert(binarycontent.TableFileReference).Rows(goqu.Record{
-		"file_element_id": fileElementID, "binary_content_id": reference.contentID,
-		"path_token": reference.pathToken, "safe_file_name": reference.safeFileName,
+		"file_element_id": fileElementID, "binary_content_id": reference.ContentID,
+		"path_token": reference.PathToken, "safe_file_name": reference.SafeFileName,
 	}).ToSQL()
 	if err != nil {
 		return common.NewInternalServerError("SMREPO-UPDSM-BUILDRESTOREFILE " + err.Error())
@@ -730,7 +722,7 @@ func insertRestoredManagedFileReferenceTx(tx *sql.Tx, fileElementID int64, refer
 	if _, err = tx.Exec(query, args...); err != nil {
 		return common.NewInternalServerError("SMREPO-UPDSM-EXECRESTOREFILE " + err.Error())
 	}
-	query, args, err = goqu.Update("file_element").Set(goqu.Record{"file_name": reference.safeFileName}).
+	query, args, err = goqu.Update("file_element").Set(goqu.Record{"file_name": reference.SafeFileName}).
 		Where(goqu.C("id").Eq(fileElementID)).ToSQL()
 	if err != nil {
 		return common.NewInternalServerError("SMREPO-UPDSM-BUILDRESTOREFILENAME " + err.Error())

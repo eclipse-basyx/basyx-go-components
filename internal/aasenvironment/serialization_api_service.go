@@ -622,9 +622,9 @@ func (s *SerializationAPIService) resolveSerializationSupplementaryParts(
 			continue
 		}
 
-		managedReference := strings.HasPrefix(fileLocation.FileValue, serializationAASXSupplementaryRoot+"/")
+		isManagedReference := strings.HasPrefix(fileLocation.FileValue, serializationAASXSupplementaryRoot+"/")
 		resolvedReference := fileLocation.FileValue
-		if !managedReference {
+		if !isManagedReference {
 			resolvedReference = ResolveAASXReferenceAgainstSpec(fileLocation.FileValue, specURI)
 		}
 		if resolvedReference == "" {
@@ -657,7 +657,7 @@ func (s *SerializationAPIService) resolveSerializationSupplementaryParts(
 			resolvedContentType = "application/octet-stream"
 		}
 
-		if !managedReference {
+		if !isManagedReference {
 			resolvedReference = ensureSupplementaryReferenceFileExtension(
 				resolvedReference,
 				attachmentFileName,

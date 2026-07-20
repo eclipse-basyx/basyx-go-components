@@ -1004,7 +1004,7 @@ func (s *AssetAdministrationShellDatabase) putAssetAdministrationShellByIDInTran
 		}
 	}
 	var previousSnapshot map[string]any
-	var managedThumbnail *managedThumbnailForReplacement
+	var managedThumbnail *commonmodel.ManagedThumbnailForReplacement
 	if isUpdate {
 		previousSnapshot, scanErr = s.loadAASHistorySnapshotBeforeMutationTx(ctx, tx, aasIdentifier)
 		if scanErr != nil {
@@ -1067,15 +1067,7 @@ func (s *AssetAdministrationShellDatabase) putAssetAdministrationShellByIDInTran
 	return isUpdate, nil
 }
 
-type managedThumbnailForReplacement struct {
-	managedPath  string
-	contentType  sql.NullString
-	contentID    int64
-	pathToken    string
-	safeFileName string
-}
-
-func loadManagedThumbnailForReplacementTx(tx *sql.Tx, aasDatabaseID int64) (*managedThumbnailForReplacement, error) {
+func loadManagedThumbnailForReplacementTx(tx *sql.Tx, aasDatabaseID int64) (*commonmodel.ManagedThumbnailForReplacement, error) {
 	query, args, err := goqu.From(goqu.T("thumbnail_file_element").As("thumbnail")).
 		Join(goqu.T(binarycontent.TableThumbnailReference).As("reference"), goqu.On(
 			goqu.I("reference.thumbnail_element_id").Eq(goqu.I("thumbnail.id")),
@@ -1085,9 +1077,9 @@ func loadManagedThumbnailForReplacementTx(tx *sql.Tx, aasDatabaseID int64) (*man
 	if err != nil {
 		return nil, common.NewInternalServerError("AASREPO-PUTAAS-BUILDMANAGEDTHUMBNAIL " + err.Error())
 	}
-	var thumbnail managedThumbnailForReplacement
+	var thumbnail commonmodel.ManagedThumbnailForReplacement
 	if err = tx.QueryRow(query, args...).Scan(
-		&thumbnail.managedPath, &thumbnail.contentType, &thumbnail.contentID, &thumbnail.pathToken, &thumbnail.safeFileName,
+		&thumbnail.ManagedPath, &thumbnail.ContentType, &thumbnail.ContentID, &thumbnail.PathToken, &thumbnail.SafeFileName,
 	); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, nil
@@ -1097,17 +1089,17 @@ func loadManagedThumbnailForReplacementTx(tx *sql.Tx, aasDatabaseID int64) (*man
 	return &thumbnail, nil
 }
 
-func restoreManagedThumbnailAfterReplacementTx(tx *sql.Tx, aasDatabaseID int64, assetInformation types.IAssetInformation, thumbnail managedThumbnailForReplacement) error {
-	if assetInformation == nil || assetInformation.DefaultThumbnail() == nil || assetInformation.DefaultThumbnail().Path() != thumbnail.managedPath {
+func restoreManagedThumbnailAfterReplacementTx(tx *sql.Tx, aasDatabaseID int64, assetInformation types.IAssetInformation, thumbnail commonmodel.ManagedThumbnailForReplacement) error {
+	if assetInformation == nil || assetInformation.DefaultThumbnail() == nil || assetInformation.DefaultThumbnail().Path() != thumbnail.ManagedPath {
 		return nil
 	}
-	contentType := thumbnail.contentType
+	contentType := thumbnail.ContentType
 	if updatedContentType := assetInformation.DefaultThumbnail().ContentType(); updatedContentType != nil {
 		contentType = sql.NullString{String: *updatedContentType, Valid: true}
 	}
 	thumbnailQuery, thumbnailArgs, err := goqu.Insert("thumbnail_file_element").Rows(goqu.Record{
 		"id": aasDatabaseID, "content_type": nullableStringValue(contentType),
-		"file_name": thumbnail.safeFileName, "value": thumbnail.managedPath,
+		"file_name": thumbnail.SafeFileName, "value": thumbnail.ManagedPath,
 	}).ToSQL()
 	if err != nil {
 		return common.NewInternalServerError("AASREPO-PUTAAS-BUILDRESTORETHUMBNAIL " + err.Error())
@@ -1116,8 +1108,8 @@ func restoreManagedThumbnailAfterReplacementTx(tx *sql.Tx, aasDatabaseID int64, 
 		return common.NewInternalServerError("AASREPO-PUTAAS-EXECRESTORETHUMBNAIL " + err.Error())
 	}
 	referenceQuery, referenceArgs, err := goqu.Insert(binarycontent.TableThumbnailReference).Rows(goqu.Record{
-		"thumbnail_element_id": aasDatabaseID, "binary_content_id": thumbnail.contentID,
-		"path_token": thumbnail.pathToken, "safe_file_name": thumbnail.safeFileName,
+		"thumbnail_element_id": aasDatabaseID, "binary_content_id": thumbnail.ContentID,
+		"path_token": thumbnail.PathToken, "safe_file_name": thumbnail.SafeFileName,
 	}).ToSQL()
 	if err != nil {
 		return common.NewInternalServerError("AASREPO-PUTAAS-BUILDRESTORETHUMBREF " + err.Error())

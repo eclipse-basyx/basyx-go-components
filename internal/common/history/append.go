@@ -36,6 +36,7 @@ import (
 
 	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
+	commonmodel "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 )
 
 // AppendVersionTx appends a versioned history row for identifier inside tx.
@@ -197,7 +198,7 @@ func appendVersionWithEvidenceTx(ctx context.Context, tx *sql.Tx, table string, 
 	return appendVersionWithEvidenceStateTx(ctx, tx, table, identifier, changeType, previousSnapshot, snapshot, deleted, cfg, evidenceState)
 }
 
-func appendVersionWithEvidenceStateTx(ctx context.Context, tx *sql.Tx, table string, identifier string, changeType string, previousSnapshot map[string]any, snapshot map[string]any, deleted bool, cfg Config, evidenceState *mutationEvidenceState) error {
+func appendVersionWithEvidenceStateTx(ctx context.Context, tx *sql.Tx, table string, identifier string, changeType string, previousSnapshot map[string]any, snapshot map[string]any, deleted bool, cfg Config, evidenceState *commonmodel.MutationEvidenceState) error {
 	previousVersion, err := evidencePreviousVersion(previousSnapshot, changeType, evidenceState)
 	if err != nil {
 		return err
@@ -207,8 +208,8 @@ func appendVersionWithEvidenceStateTx(ctx context.Context, tx *sql.Tx, table str
 	previousEvidenceHash := ""
 	if evidenceState != nil {
 		payloadPrevious = previousVersion
-		sequence = evidenceState.lastSequence + 1
-		previousEvidenceHash = evidenceState.lastEventHash
+		sequence = evidenceState.LastSequence + 1
+		previousEvidenceHash = evidenceState.LastEventHash
 	}
 	evidencePayload, err := buildHistoryPayload(snapshot, payloadPrevious, cfg)
 	if err != nil {
@@ -254,7 +255,7 @@ func appendVersionWithEvidenceStateTx(ctx context.Context, tx *sql.Tx, table str
 	}
 	eventsSinceSnapshot := 0
 	if evidencePayload.payloadType == PayloadTypeDiff && evidenceState != nil {
-		eventsSinceSnapshot = evidenceState.eventsSinceSnapshot + 1
+		eventsSinceSnapshot = evidenceState.EventsSinceSnapshot + 1
 	}
 	_, err = publishMutationEvidenceTx(ctx, tx, cfg, mutationEvidenceWrite{
 		table: table, identifier: identifier, changeType: changeType, snapshot: snapshot,
@@ -266,7 +267,7 @@ func appendVersionWithEvidenceStateTx(ctx context.Context, tx *sql.Tx, table str
 	return err
 }
 
-func evidencePreviousVersion(previousSnapshot map[string]any, changeType string, state *mutationEvidenceState) (*latestVersion, error) {
+func evidencePreviousVersion(previousSnapshot map[string]any, changeType string, state *commonmodel.MutationEvidenceState) (*latestVersion, error) {
 	if changeType == ChangeCreated {
 		return nil, nil
 	}
@@ -281,11 +282,11 @@ func evidencePreviousVersion(previousSnapshot map[string]any, changeType string,
 	if err != nil {
 		return nil, common.NewInternalServerError("HISTORY-EVIDENCE-PREVIOUS-HASH " + err.Error())
 	}
-	if !strings.EqualFold(previousHash, state.lastContentHash) {
+	if !strings.EqualFold(previousHash, state.LastContentHash) {
 		return nil, common.NewInternalServerError("HISTORY-EVIDENCE-PREVIOUS-MISMATCH pre-mutation snapshot does not match the committed evidence head")
 	}
-	previous.rowHash = state.lastEventHash
-	previous.rowsSinceSnapshot = state.eventsSinceSnapshot
+	previous.rowHash = state.LastEventHash
+	previous.rowsSinceSnapshot = state.EventsSinceSnapshot
 	return previous, nil
 }
 

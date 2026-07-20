@@ -37,6 +37,7 @@ import (
 
 	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
+	commonmodel "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 )
 
 const (
@@ -49,13 +50,6 @@ const (
 	// EvidenceArtifactMutation identifies canonical independent mutation artifacts.
 	EvidenceArtifactMutation = "mutation_event"
 )
-
-type mutationEvidenceState struct {
-	lastSequence        int64
-	lastEventHash       string
-	lastContentHash     string
-	eventsSinceSnapshot int
-}
 
 // MutationEvidenceResult identifies a committed mutation artifact inside the
 // caller's still-open transaction. Binary reference evidence can use this to
@@ -83,7 +77,7 @@ type mutationEvidenceWrite struct {
 	eventsSinceSnapshot int
 }
 
-func loadMutationEvidenceStateTx(ctx context.Context, tx *sql.Tx, table string, identifier string) (*mutationEvidenceState, error) {
+func loadMutationEvidenceStateTx(ctx context.Context, tx *sql.Tx, table string, identifier string) (*commonmodel.MutationEvidenceState, error) {
 	digest := mutationIdentifierDigest(identifier)
 	query, args, err := goqu.From(TableMutationEvidenceState).
 		Select("identifier", "last_sequence", "last_event_hash", "last_content_hash", "events_since_snapshot").
@@ -92,11 +86,11 @@ func loadMutationEvidenceStateTx(ctx context.Context, tx *sql.Tx, table string, 
 	if err != nil {
 		return nil, common.NewInternalServerError("HISTORY-EVIDENCE-STATE-BUILD " + err.Error())
 	}
-	var state mutationEvidenceState
+	var state commonmodel.MutationEvidenceState
 	var storedIdentifier string
 	var previousHash, contentHash sql.NullString
 	if err = tx.QueryRowContext(ctx, query, args...).Scan(
-		&storedIdentifier, &state.lastSequence, &previousHash, &contentHash, &state.eventsSinceSnapshot,
+		&storedIdentifier, &state.LastSequence, &previousHash, &contentHash, &state.EventsSinceSnapshot,
 	); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, nil
@@ -106,9 +100,9 @@ func loadMutationEvidenceStateTx(ctx context.Context, tx *sql.Tx, table string, 
 	if storedIdentifier != identifier {
 		return nil, common.NewInternalServerError("HISTORY-EVIDENCE-STATE-DIGESTCOLLISION identifier digest collision detected")
 	}
-	state.lastEventHash = previousHash.String
-	state.lastContentHash = contentHash.String
-	if state.lastEventHash == "" || state.lastContentHash == "" {
+	state.LastEventHash = previousHash.String
+	state.LastContentHash = contentHash.String
+	if state.LastEventHash == "" || state.LastContentHash == "" {
 		return nil, common.NewInternalServerError("HISTORY-EVIDENCE-STATE-HEAD committed evidence state has no chain head")
 	}
 	return &state, nil

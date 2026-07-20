@@ -25,7 +25,7 @@ BaSyx provides technical controls that can support NIS2-aligned integrity, audit
 - Back up and restore the PostgreSQL evidence catalog with the database. The built-in mutation verifier uses it to locate committed WORM objects and their immutable versions.
 - Configure object-store lifecycle deletion separately when required. Object Lock retention expiry permits deletion but does not perform it; keep lifecycle periods aligned with legal and operational verification windows.
 - Manage vulnerability handling, patching, and dependency updates.
-- Use a controlled, quiesced v1.1.8 upgrade with a verified PostgreSQL backup that includes Large Objects. Do not mix v1.1.7 and v1.1.8 database writers or attempt a binary-only rollback.
+- Use a controlled, quiesced v1.1.8 upgrade with a verified PostgreSQL backup that includes Large Objects.
 - Assess infrastructure and provider supply-chain security.
 - Train staff and maintain cyber hygiene practices.
 - Validate legal and regulatory compliance with the operator's security and legal teams.
