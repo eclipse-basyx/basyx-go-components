@@ -43,51 +43,36 @@ const (
 	aasSubmodelsSnapshotField        = "submodels"
 )
 
-func (s *AssetAdministrationShellDatabase) appendMutatedAASHistoryTx(ctx context.Context, tx *sql.Tx, aasIdentifier string, mutate history.SnapshotMutator) error {
-	err := history.AppendMutatedVersionTx(ctx, tx, history.TableAAS, aasIdentifier, history.ChangeUpdated, func(snapshot map[string]any) error {
+func (s *AssetAdministrationShellDatabase) appendMutatedAASHistoryTx(ctx context.Context, tx *sql.Tx, aasIdentifier string, previousSnapshot map[string]any, mutate history.SnapshotMutator) error {
+	err := history.AppendMutatedVersionTx(ctx, tx, history.TableAAS, aasIdentifier, history.ChangeUpdated, previousSnapshot, func(snapshot map[string]any) error {
 		return mutate(snapshot)
 	})
 	if err == nil || !common.IsErrNotFound(err) {
 		return err
 	}
-	return s.appendCurrentAASHistoryTx(ctx, tx, aasIdentifier, history.ChangeUpdated)
+	return s.appendCurrentAASHistoryTx(ctx, tx, aasIdentifier, previousSnapshot, history.ChangeUpdated)
 }
 
-func (s *AssetAdministrationShellDatabase) appendAddedSubmodelReferenceHistoryTx(ctx context.Context, tx *sql.Tx, aasIdentifier string, reference types.IReference) error {
+func (s *AssetAdministrationShellDatabase) appendAddedSubmodelReferenceHistoryTx(ctx context.Context, tx *sql.Tx, aasIdentifier string, previousSnapshot map[string]any, reference types.IReference) error {
 	jsonable, err := jsonization.ToJsonable(reference)
 	if err != nil {
 		return common.NewInternalServerError("AASREPO-HISTORY-SMREF-TOJSONABLE " + err.Error())
 	}
-	return s.appendMutatedAASHistoryTx(ctx, tx, aasIdentifier, func(snapshot map[string]any) error {
+	return s.appendMutatedAASHistoryTx(ctx, tx, aasIdentifier, previousSnapshot, func(snapshot map[string]any) error {
 		return history.AppendSnapshotArrayItem(snapshot, aasSubmodelsSnapshotField, jsonable)
 	})
 }
 
-func (s *AssetAdministrationShellDatabase) appendRemovedSubmodelReferenceHistoryTx(ctx context.Context, tx *sql.Tx, aasIdentifier string, submodelIdentifier string) error {
-	return s.appendMutatedAASHistoryTx(ctx, tx, aasIdentifier, func(snapshot map[string]any) error {
+func (s *AssetAdministrationShellDatabase) appendRemovedSubmodelReferenceHistoryTx(ctx context.Context, tx *sql.Tx, aasIdentifier string, previousSnapshot map[string]any, submodelIdentifier string) error {
+	return s.appendMutatedAASHistoryTx(ctx, tx, aasIdentifier, previousSnapshot, func(snapshot map[string]any) error {
 		return history.RemoveSnapshotArrayItem(snapshot, aasSubmodelsSnapshotField, func(reference map[string]any) bool {
 			return snapshotReferenceContainsKeyValue(reference, submodelIdentifier)
 		})
 	})
 }
 
-func (s *AssetAdministrationShellDatabase) appendAssetInformationHistoryTx(ctx context.Context, tx *sql.Tx, aasIdentifier string, assetInformation types.IAssetInformation) error {
-	jsonable, err := jsonization.ToJsonable(assetInformation)
-	if err != nil {
-		return common.NewInternalServerError("AASREPO-HISTORY-ASSETINFO-TOJSONABLE " + err.Error())
-	}
-	return s.appendMutatedAASHistoryTx(ctx, tx, aasIdentifier, func(snapshot map[string]any) error {
-		current, currentErr := aasAssetInformationSnapshot(snapshot)
-		if currentErr != nil {
-			return currentErr
-		}
-		mergeAssetInformationSnapshot(current, jsonable, assetInformation)
-		return nil
-	})
-}
-
-func (s *AssetAdministrationShellDatabase) appendUploadedThumbnailHistoryTx(ctx context.Context, tx *sql.Tx, aasIdentifier string) error {
-	return s.appendMutatedAASHistoryTx(ctx, tx, aasIdentifier, func(snapshot map[string]any) error {
+func (s *AssetAdministrationShellDatabase) appendUploadedThumbnailHistoryTx(ctx context.Context, tx *sql.Tx, aasIdentifier string, previousSnapshot map[string]any) error {
+	return s.appendMutatedAASHistoryTx(ctx, tx, aasIdentifier, previousSnapshot, func(snapshot map[string]any) error {
 		thumbnail, err := loadThumbnailSnapshotTx(ctx, tx, aasIdentifier)
 		if err != nil {
 			return err
@@ -101,8 +86,8 @@ func (s *AssetAdministrationShellDatabase) appendUploadedThumbnailHistoryTx(ctx 
 	})
 }
 
-func (s *AssetAdministrationShellDatabase) appendDeletedThumbnailHistoryTx(ctx context.Context, tx *sql.Tx, aasIdentifier string) error {
-	return s.appendMutatedAASHistoryTx(ctx, tx, aasIdentifier, func(snapshot map[string]any) error {
+func (s *AssetAdministrationShellDatabase) appendDeletedThumbnailHistoryTx(ctx context.Context, tx *sql.Tx, aasIdentifier string, previousSnapshot map[string]any) error {
+	return s.appendMutatedAASHistoryTx(ctx, tx, aasIdentifier, previousSnapshot, func(snapshot map[string]any) error {
 		assetInformation, err := aasAssetInformationSnapshot(snapshot)
 		if err != nil {
 			return err
@@ -122,21 +107,6 @@ func aasAssetInformationSnapshot(snapshot map[string]any) (map[string]any, error
 		return nil, common.NewInternalServerError("AASREPO-HISTORY-ASSETINFO-INVALID assetInformation snapshot must be an object")
 	}
 	return assetInformation, nil
-}
-
-func mergeAssetInformationSnapshot(current map[string]any, updated map[string]any, assetInformation types.IAssetInformation) {
-	if assetInformation.AssetKind() != 0 {
-		current["assetKind"] = updated["assetKind"]
-	}
-	if assetInformation.GlobalAssetID() != nil {
-		current["globalAssetId"] = updated["globalAssetId"]
-	}
-	if assetInformation.AssetType() != nil {
-		current["assetType"] = updated["assetType"]
-	}
-	if assetInformation.SpecificAssetIDs() != nil {
-		current["specificAssetIds"] = updated["specificAssetIds"]
-	}
 }
 
 func loadThumbnailSnapshotTx(ctx context.Context, tx *sql.Tx, aasIdentifier string) (map[string]any, error) {

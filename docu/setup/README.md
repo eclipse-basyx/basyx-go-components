@@ -47,6 +47,12 @@ A DB-backed repository service should follow the existing entrypoint pattern:
 
 Use the existing `cmd/aasrepositoryservice/main.go` and `cmd/submodelrepositoryservice/main.go` as references for repository-like services.
 
+## Database Upgrade Safety
+
+The v1.1.8 database upgrade must be performed while all database-backed BaSyx services are stopped. Runtime services validate the exact schema version when they start, but that check cannot fence a v1.1.7 process that was already running when the database was upgraded. Mixing those processes with v1.1.8 can make new canonical attachment or thumbnail data invisible to the older process.
+
+Before applying the patch, take a restorable PostgreSQL backup that includes Large Objects. Run the configuration service by itself, verify that the schema reaches clean v1.1.8 state, and then start only v1.1.8 services. Rollback requires restoring the pre-upgrade database backup before restarting v1.1.7 services; rolling back only the application binaries is not supported.
+
 ## Verify Changes
 
 ```bash

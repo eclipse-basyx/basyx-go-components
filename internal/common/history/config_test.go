@@ -40,3 +40,21 @@ func TestConfigureDefaultsFullSnapshotInterval(t *testing.T) {
 
 	require.Equal(t, DefaultFullSnapshotInterval, ActiveConfig().FullSnapshotInterval)
 }
+
+func TestMutationRecordingEnabledForEvidenceWithoutHistory(t *testing.T) {
+	previousConfig := ActiveConfig()
+	t.Cleanup(func() {
+		Configure(previousConfig)
+	})
+
+	Configure(Config{
+		Mode:              ModeOff,
+		Immutability:      ImmutabilityNone,
+		AuditIdentityMode: AuditIdentityNone,
+		EvidenceEnabled:   true,
+		EvidenceProvider:  EvidenceProviderS3,
+		EvidenceStore:     &recordingEvidenceStore{},
+	})
+
+	require.True(t, MutationRecordingEnabled())
+}

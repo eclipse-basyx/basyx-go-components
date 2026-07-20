@@ -158,6 +158,10 @@ func (s *SubmodelDatabase) AddSubmodelElement(ctx context.Context, submodelID st
 		return err
 	}
 	defer cleanup(&err)
+	previousSnapshot, err := s.loadSubmodelHistorySnapshotBeforeMutationTx(ctx, tx, submodelID)
+	if err != nil {
+		return err
+	}
 
 	insertedPath, err := s.addTopLevelSubmodelElementInTransaction(ctx, tx, submodelID, submodelElement)
 	if err != nil {
@@ -175,9 +179,9 @@ func (s *SubmodelDatabase) AddSubmodelElement(ctx context.Context, submodelID st
 	}
 
 	if insertedPath == "" {
-		err = s.appendCurrentSubmodelHistoryTx(ctx, tx, submodelID, history.ChangeUpdated)
+		err = s.appendCurrentSubmodelHistoryTx(ctx, tx, submodelID, previousSnapshot, history.ChangeUpdated)
 	} else {
-		err = s.appendChangedSubmodelElementHistoryTx(ctx, tx, submodelID, submodelElementRootMutation{
+		err = s.appendChangedSubmodelElementHistoryTx(ctx, tx, submodelID, previousSnapshot, submodelElementRootMutation{
 			currentPath: insertedPath,
 		})
 	}
@@ -273,13 +277,17 @@ func (s *SubmodelDatabase) AddSubmodelElementWithPath(ctx context.Context, submo
 		}
 		return err
 	}
+	previousSnapshot, err := s.loadSubmodelHistorySnapshotBeforeMutationTx(ctx, tx, submodelID)
+	if err != nil {
+		return err
+	}
 
 	err = s.addSubmodelElementWithPathInTransaction(ctx, tx, submodelID, submodelDatabaseID, parentPath, submodelElement)
 	if err != nil {
 		return err
 	}
 
-	if err = s.appendChangedSubmodelElementHistoryTx(ctx, tx, submodelID, submodelElementRootMutation{
+	if err = s.appendChangedSubmodelElementHistoryTx(ctx, tx, submodelID, previousSnapshot, submodelElementRootMutation{
 		previousPath: parentPath,
 		currentPath:  parentPath,
 	}); err != nil {
@@ -342,6 +350,10 @@ func (s *SubmodelDatabase) PutSubmodelElementInTransaction(
 	if err != nil {
 		return false, err
 	}
+	previousSnapshot, err := s.loadSubmodelHistorySnapshotBeforeMutationTx(ctx, tx, submodelID)
+	if err != nil {
+		return false, err
+	}
 
 	if elementExists {
 		historyMutation, err = s.replaceSubmodelElementForPut(tx, submodelID, idShortPath, submodelElement)
@@ -361,7 +373,7 @@ func (s *SubmodelDatabase) PutSubmodelElementInTransaction(
 		}
 	}
 
-	if err = s.appendChangedSubmodelElementHistoryTx(ctx, tx, submodelID, historyMutation); err != nil {
+	if err = s.appendChangedSubmodelElementHistoryTx(ctx, tx, submodelID, previousSnapshot, historyMutation); err != nil {
 		return false, err
 	}
 
@@ -531,6 +543,10 @@ func (s *SubmodelDatabase) DeleteSubmodelElementByPath(ctx context.Context, subm
 	if err != nil {
 		return err
 	}
+	previousSnapshot, err := s.loadSubmodelHistorySnapshotBeforeMutationTx(ctx, tx, submodelID)
+	if err != nil {
+		return err
+	}
 
 	err = submodelelements.DeleteSubmodelElementByPath(tx, submodelID, idShortPath)
 	if err != nil {
@@ -541,7 +557,7 @@ func (s *SubmodelDatabase) DeleteSubmodelElementByPath(ctx context.Context, subm
 	if deletedRootPath == idShortPath {
 		currentRootPath = ""
 	}
-	if err = s.appendChangedSubmodelElementHistoryTx(ctx, tx, submodelID, submodelElementRootMutation{
+	if err = s.appendChangedSubmodelElementHistoryTx(ctx, tx, submodelID, previousSnapshot, submodelElementRootMutation{
 		previousPath: deletedRootPath,
 		currentPath:  currentRootPath,
 	}); err != nil {
@@ -583,6 +599,10 @@ func (s *SubmodelDatabase) UpdateSubmodelElement(ctx context.Context, submodelID
 			return err
 		}
 	}
+	previousSnapshot, err := s.loadSubmodelHistorySnapshotBeforeMutationTx(ctx, tx, submodelID)
+	if err != nil {
+		return err
+	}
 
 	err = s.updateSubmodelElementInTransaction(tx, submodelID, idShortOrPath, submodelElement, isPut)
 	if err != nil {
@@ -595,7 +615,7 @@ func (s *SubmodelDatabase) UpdateSubmodelElement(ctx context.Context, submodelID
 		}
 	}
 
-	if err = s.appendChangedSubmodelElementHistoryTx(ctx, tx, submodelID, submodelElementRootMutation{
+	if err = s.appendChangedSubmodelElementHistoryTx(ctx, tx, submodelID, previousSnapshot, submodelElementRootMutation{
 		previousPath: idShortOrPath,
 		currentPath:  submodelelements.ResolveUpdatedPath(idShortOrPath, submodelElement, isPut),
 	}); err != nil {
@@ -644,11 +664,15 @@ func (s *SubmodelDatabase) UpdateSubmodelElementValueOnly(ctx context.Context, s
 		return err
 	}
 	defer cleanup(&err)
+	previousSnapshot, err := s.loadSubmodelHistorySnapshotBeforeMutationTx(ctx, tx, submodelID)
+	if err != nil {
+		return err
+	}
 
 	if err = s.updateSubmodelElementValueOnly(tx, submodelID, idShortOrPath, valueOnly); err != nil {
 		return err
 	}
-	if err = s.appendChangedSubmodelElementHistoryTx(ctx, tx, submodelID, submodelElementRootMutation{
+	if err = s.appendChangedSubmodelElementHistoryTx(ctx, tx, submodelID, previousSnapshot, submodelElementRootMutation{
 		previousPath: idShortOrPath,
 		currentPath:  idShortOrPath,
 	}); err != nil {
@@ -683,6 +707,10 @@ func (s *SubmodelDatabase) UpdateSubmodelValueOnly(ctx context.Context, submodel
 		return err
 	}
 	defer cleanup(&err)
+	previousSnapshot, err := s.loadSubmodelHistorySnapshotBeforeMutationTx(ctx, tx, submodelID)
+	if err != nil {
+		return err
+	}
 
 	mutations := make([]submodelElementRootMutation, 0, len(valueOnly))
 	for idShort, elementValue := range valueOnly {
@@ -695,7 +723,7 @@ func (s *SubmodelDatabase) UpdateSubmodelValueOnly(ctx context.Context, submodel
 		})
 	}
 
-	if err = s.appendChangedSubmodelElementHistoryTx(ctx, tx, submodelID, mutations...); err != nil {
+	if err = s.appendChangedSubmodelElementHistoryTx(ctx, tx, submodelID, previousSnapshot, mutations...); err != nil {
 		return err
 	}
 	return tx.Commit()

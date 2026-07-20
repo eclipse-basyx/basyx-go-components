@@ -590,3 +590,37 @@ type CompanyDescriptorRow struct {
 	DisplayNamePayload        json.RawMessage
 	DescriptionPayload        json.RawMessage
 }
+
+// ManagedThumbnailForReplacement carries a managed thumbnail association across an AAS replacement transaction.
+type ManagedThumbnailForReplacement struct {
+	ManagedPath  string
+	ContentType  sql.NullString
+	ContentID    int64
+	PathToken    string
+	SafeFileName string
+}
+
+// ManagedThumbnailMetadata represents thumbnail owner and model metadata loaded inside a transaction.
+type ManagedThumbnailMetadata struct {
+	AASDBID             int64
+	ExistingContentType sql.NullString
+	ExistingFileName    sql.NullString
+	Path                sql.NullString
+}
+
+// ManagedFileReferenceForReplacement carries a managed File association across a Submodel replacement transaction.
+type ManagedFileReferenceForReplacement struct {
+	IDShortPath  string
+	ManagedPath  string
+	ContentID    int64
+	PathToken    string
+	SafeFileName string
+}
+
+// MutationEvidenceState represents the committed database state of an independent evidence chain.
+type MutationEvidenceState struct {
+	LastSequence        int64
+	LastEventHash       string
+	LastContentHash     string
+	EventsSinceSnapshot int
+}

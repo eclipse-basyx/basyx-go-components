@@ -91,6 +91,7 @@ func TestPatchSubmodelSuccessReplacesSubmodel(t *testing.T) {
 	mock.ExpectBegin()
 	mock.ExpectQuery(`SELECT .*FROM .*submodel`).
 		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(100))
+	expectNoManagedFileReferences(mock)
 	mock.ExpectQuery(`SELECT .*file_oid.*FROM .*submodel_element.*file_data`).
 		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(int64(0)))
 	mock.ExpectExec(`DELETE FROM .*submodel`).
@@ -99,7 +100,7 @@ func TestPatchSubmodelSuccessReplacesSubmodel(t *testing.T) {
 		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(200))
 	mock.ExpectExec(`INSERT INTO .*submodel_payload`).
 		WillReturnResult(sqlmock.NewResult(0, 1))
-	expectSubmodelHistoryAppend(mock)
+	expectCurrentSubmodelSnapshotLoad(mock, "sm-1", "sm1")
 	mock.ExpectCommit()
 
 	err = sut.PatchSubmodel(contextWithABACDisabled(t), "sm-1", submodel)
@@ -125,6 +126,7 @@ func TestPatchSubmodelInTransactionAppendsHistory(t *testing.T) {
 
 	mock.ExpectQuery(`SELECT .*FROM .*submodel`).
 		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(100))
+	expectNoManagedFileReferences(mock)
 	mock.ExpectQuery(`SELECT .*file_oid.*FROM .*submodel_element.*file_data`).
 		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(int64(0)))
 	mock.ExpectExec(`DELETE FROM .*submodel`).
@@ -133,7 +135,7 @@ func TestPatchSubmodelInTransactionAppendsHistory(t *testing.T) {
 		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(200))
 	mock.ExpectExec(`INSERT INTO .*submodel_payload`).
 		WillReturnResult(sqlmock.NewResult(0, 1))
-	expectSubmodelHistoryAppend(mock)
+	expectCurrentSubmodelSnapshotLoad(mock, "sm-1", "sm1")
 	mock.ExpectRollback()
 
 	err = sut.PatchSubmodelInTransaction(contextWithABACDisabled(t), "sm-1", tx, submodel)
@@ -219,7 +221,7 @@ func TestPutSubmodelCreatePathReturnsFalse(t *testing.T) {
 		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(300))
 	mock.ExpectExec(`INSERT INTO .*submodel_payload`).
 		WillReturnResult(sqlmock.NewResult(0, 1))
-	expectSubmodelHistoryAppend(mock)
+	expectCurrentSubmodelSnapshotLoad(mock, "sm-new", "smnew")
 	mock.ExpectCommit()
 
 	isUpdate, err := sut.PutSubmodel(contextWithABACDisabled(t), "sm-new", submodel)
@@ -243,6 +245,7 @@ func TestPutSubmodelUpdatePathReturnsTrue(t *testing.T) {
 	mock.ExpectBegin()
 	mock.ExpectQuery(`SELECT .*FROM .*submodel`).
 		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(400))
+	expectNoManagedFileReferences(mock)
 	mock.ExpectQuery(`SELECT .*file_oid.*FROM .*submodel_element.*file_data`).
 		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(int64(0)))
 	mock.ExpectExec(`DELETE FROM .*submodel`).
@@ -251,7 +254,7 @@ func TestPutSubmodelUpdatePathReturnsTrue(t *testing.T) {
 		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(401))
 	mock.ExpectExec(`INSERT INTO .*submodel_payload`).
 		WillReturnResult(sqlmock.NewResult(0, 1))
-	expectSubmodelHistoryAppend(mock)
+	expectCurrentSubmodelSnapshotLoad(mock, "sm-existing", "smexisting")
 	mock.ExpectCommit()
 
 	isUpdate, err := sut.PutSubmodel(contextWithABACDisabled(t), "sm-existing", submodel)
@@ -269,6 +272,11 @@ func expectSubmodelHistoryAppend(mock sqlmock.Sqlmock) {
 		WillReturnRows(sqlmock.NewRows([]string{"history_id"}).AddRow(1))
 	mock.ExpectExec(`INSERT INTO "submodel_history_payload"`).
 		WillReturnResult(sqlmock.NewResult(0, 1))
+}
+
+func expectNoManagedFileReferences(mock sqlmock.Sqlmock) {
+	mock.ExpectQuery(`SELECT .*fr.*binary_content_id.*FROM "submodel_element" AS "sme".*file_binary_reference`).
+		WillReturnRows(sqlmock.NewRows([]string{"idshort_path", "value", "binary_content_id", "path_token", "safe_file_name"}))
 }
 
 func expectMissingSubmodelHistory(mock sqlmock.Sqlmock) {
@@ -408,7 +416,8 @@ func expectCurrentSubmodelSnapshotLoad(mock sqlmock.Sqlmock, submodelID string, 
 			"extensions_payload",
 			"qualifiers_payload",
 			"semantic_id_payload",
-		}).AddRow(submodelID, idShort, nil, nil, "[]", "[]", "{}", "[]", "[]", "[]", "[]", "{}"))
+			"sort_submodel_identifier",
+		}).AddRow(submodelID, idShort, nil, nil, "[]", "[]", "{}", "[]", "[]", "[]", "[]", "{}", submodelID))
 	mock.ExpectQuery(`SELECT .*FROM "submodel"`).
 		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(100))
 	mock.ExpectQuery(`SELECT .*FROM "submodel_element"`).

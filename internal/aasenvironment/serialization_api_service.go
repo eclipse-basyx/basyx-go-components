@@ -622,14 +622,18 @@ func (s *SerializationAPIService) resolveSerializationSupplementaryParts(
 			continue
 		}
 
-		resolvedReference := ResolveAASXReferenceAgainstSpec(fileLocation.FileValue, specURI)
+		isManagedReference := strings.HasPrefix(fileLocation.FileValue, serializationAASXSupplementaryRoot+"/")
+		resolvedReference := fileLocation.FileValue
+		if !isManagedReference {
+			resolvedReference = ResolveAASXReferenceAgainstSpec(fileLocation.FileValue, specURI)
+		}
 		if resolvedReference == "" {
 			// #nosec G706 -- values are escaped by sanitizeLogValue to prevent control-character log injection.
 			log.Printf("[WARN] AASENV-SERIALIZESUPPL-SKIPUNRESOLVED skipping unresolved file reference for submodel '%s' at path '%s'", sanitizeLogValue(fileLocation.SubmodelID), sanitizeLogValue(fileLocation.IDShortPath))
 			continue
 		}
 
-		attachmentContent, attachmentContentType, attachmentFileName, downloadAttachmentErr := s.persistence.SubmodelRepository.DownloadFileAttachment(fileLocation.SubmodelID, fileLocation.IDShortPath)
+		attachmentContent, attachmentContentType, attachmentFileName, downloadAttachmentErr := s.persistence.SubmodelRepository.DownloadFileAttachmentWithContext(ctx, fileLocation.SubmodelID, fileLocation.IDShortPath)
 		if downloadAttachmentErr != nil {
 			if common.IsErrNotFound(downloadAttachmentErr) {
 				// #nosec G706 -- values are escaped by sanitizeLogValue to prevent control-character log injection.
@@ -653,14 +657,16 @@ func (s *SerializationAPIService) resolveSerializationSupplementaryParts(
 			resolvedContentType = "application/octet-stream"
 		}
 
-		resolvedReference = ensureSupplementaryReferenceFileExtension(
-			resolvedReference,
-			attachmentFileName,
-			resolvedContentType,
-			fileLocation.SubmodelID,
-			fileLocation.IDShortPath,
-		)
-		resolvedReference = ResolveAASXSerializationSupplementaryPath(resolvedReference, specURI, serializationAASXSupplementaryRoot)
+		if !isManagedReference {
+			resolvedReference = ensureSupplementaryReferenceFileExtension(
+				resolvedReference,
+				attachmentFileName,
+				resolvedContentType,
+				fileLocation.SubmodelID,
+				fileLocation.IDShortPath,
+			)
+			resolvedReference = ResolveAASXSerializationSupplementaryPath(resolvedReference, specURI, serializationAASXSupplementaryRoot)
+		}
 		if resolvedReference == "" {
 			// #nosec G706 -- values are escaped by sanitizeLogValue to prevent control-character log injection.
 			log.Printf("[WARN] AASENV-SERIALIZESUPPL-SKIPINVALIDTARGET skipping unresolved supplementary target for submodel '%s' at path '%s'", sanitizeLogValue(fileLocation.SubmodelID), sanitizeLogValue(fileLocation.IDShortPath))
@@ -932,7 +938,7 @@ func (s *SerializationAPIService) resolveSerializationThumbnailParts(
 	seenThumbnailURIs := make(map[string]struct{}, len(resolvedAASIDs))
 
 	for _, aasID := range resolvedAASIDs {
-		thumbnailContent, thumbnailContentType, thumbnailFileName, foundThumbnail, thumbnailErr := s.loadSerializationThumbnailByAASID(ctx, aasID)
+		thumbnailContent, thumbnailContentType, thumbnailFileName, thumbnailPath, foundThumbnail, thumbnailErr := s.loadSerializationThumbnailByAASID(ctx, aasID)
 		if thumbnailErr != nil {
 			return nil, thumbnailErr
 		}
@@ -940,12 +946,15 @@ func (s *SerializationAPIService) resolveSerializationThumbnailParts(
 			continue
 		}
 
-		thumbnailPart, buildPartErr := buildSerializationThumbnailPart(aasID, thumbnailFileName, thumbnailContentType, thumbnailContent)
+		thumbnailPart, buildPartErr := buildSerializationThumbnailPart(aasID, thumbnailFileName, thumbnailContentType, thumbnailPath, thumbnailContent)
 		if buildPartErr != nil {
 			return nil, common.NewInternalServerError("AASENV-SERIALIZETHUMB-BUILDPART " + buildPartErr.Error())
 		}
 
-		resolvedThumbnailURI := NormalizeAASXPartURI(thumbnailPart.URI)
+		resolvedThumbnailURI := thumbnailPart.URI.String()
+		if !strings.HasPrefix(resolvedThumbnailURI, serializationAASXSupplementaryRoot+"/") {
+			resolvedThumbnailURI = NormalizeAASXPartURI(thumbnailPart.URI)
+		}
 		if resolvedThumbnailURI == "" {
 			// #nosec G706 -- values are escaped by sanitizeLogValue to prevent control-character log injection.
 			log.Printf("[WARN] AASENV-SERIALIZETHUMB-SKIPINVALIDURI skipping invalid thumbnail URI for AAS '%s'", sanitizeLogValue(aasID))
@@ -1028,25 +1037,25 @@ func deduplicateTrimmedIdentifiers(values []string) []string {
 //
 // Not found and empty-content cases are treated as "not available" without an
 // error.
-func (s *SerializationAPIService) loadSerializationThumbnailByAASID(ctx context.Context, aasID string) ([]byte, string, string, bool, error) {
-	thumbnailContent, thumbnailContentType, thumbnailFileName, _, thumbnailErr := s.persistence.AASRepository.GetThumbnailByAASID(ctx, aasID)
+func (s *SerializationAPIService) loadSerializationThumbnailByAASID(ctx context.Context, aasID string) ([]byte, string, string, string, bool, error) {
+	thumbnailContent, thumbnailContentType, thumbnailFileName, thumbnailPath, thumbnailErr := s.persistence.AASRepository.GetThumbnailByAASID(ctx, aasID)
 	if thumbnailErr != nil {
 		if common.IsErrNotFound(thumbnailErr) {
-			return nil, "", "", false, nil
+			return nil, "", "", "", false, nil
 		}
-		return nil, "", "", false, thumbnailErr
+		return nil, "", "", "", false, thumbnailErr
 	}
 
 	if len(thumbnailContent) == 0 {
-		return nil, "", "", false, nil
+		return nil, "", "", "", false, nil
 	}
 
-	return thumbnailContent, strings.TrimSpace(thumbnailContentType), strings.TrimSpace(thumbnailFileName), true, nil
+	return thumbnailContent, strings.TrimSpace(thumbnailContentType), strings.TrimSpace(thumbnailFileName), thumbnailPath, true, nil
 }
 
 // buildSerializationThumbnailPart creates one thumbnail package part with a
 // normalized URI and resolved content type.
-func buildSerializationThumbnailPart(aasID, thumbnailFileName, thumbnailContentType string, thumbnailContent []byte) (serializationThumbnailPart, error) {
+func buildSerializationThumbnailPart(aasID, thumbnailFileName, thumbnailContentType, thumbnailPath string, thumbnailContent []byte) (serializationThumbnailPart, error) {
 	resolvedThumbnailContentType := strings.TrimSpace(thumbnailContentType)
 	if resolvedThumbnailContentType == "" {
 		resolvedThumbnailContentType = strings.TrimSpace(http.DetectContentType(thumbnailContent))
@@ -1055,10 +1064,11 @@ func buildSerializationThumbnailPart(aasID, thumbnailFileName, thumbnailContentT
 		resolvedThumbnailContentType = "application/octet-stream"
 	}
 
-	thumbnailURI, resolveThumbnailURIErr := url.Parse(path.Join(
-		serializationAASXThumbnailRootPath,
-		thumbnailExportFileName(thumbnailFileName, resolvedThumbnailContentType, aasID),
-	))
+	partPath := strings.TrimSpace(thumbnailPath)
+	if !strings.HasPrefix(partPath, serializationAASXSupplementaryRoot+"/") {
+		partPath = path.Join(serializationAASXThumbnailRootPath, thumbnailExportFileName(thumbnailFileName, resolvedThumbnailContentType, aasID))
+	}
+	thumbnailURI, resolveThumbnailURIErr := url.Parse(partPath)
 	if resolveThumbnailURIErr != nil {
 		return serializationThumbnailPart{}, resolveThumbnailURIErr
 	}

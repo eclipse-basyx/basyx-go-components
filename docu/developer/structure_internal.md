@@ -20,7 +20,7 @@ Shared infrastructure lives mostly under `internal/common`, including `model`, `
 ## Example: submodelrepository
 
 - `api/`: handles REST requests, validates input, and calls persistence
-- `persistence/Submodel/submodelElements/FileHandler.go`: manages File SME metadata and PostgreSQL Large Object content
+- `persistence/submodelElements/FileHandler.go`: manages File SME metadata while `internal/common/binarycontent` provides owner-scoped, deduplicated PostgreSQL Large Object storage shared with thumbnails
 - `integration_tests/`: covers upload, download, delete, query, and history behavior through the API
 
 ## How To Extend

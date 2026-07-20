@@ -104,7 +104,7 @@ func Configure(cfg Config) {
 //
 // Returns:
 //   - error: Error when evidence is enabled with an unsupported provider,
-//     incomplete S3 settings, disabled history mode, or an invalid write timeout.
+//     incomplete S3 settings, or an invalid write timeout.
 func ConfigureEvidence(ctx context.Context, cfg common.HistoryEvidenceConfig) error {
 	provider := normalizeEvidenceProvider(cfg.Provider)
 	if !cfg.Enabled {
@@ -113,9 +113,6 @@ func ConfigureEvidence(ctx context.Context, cfg common.HistoryEvidenceConfig) er
 	}
 	if provider == EvidenceProviderNone {
 		return fmt.Errorf("HISTORY-EVIDENCE-CONFIG-PROVIDER history.evidence.enabled requires an evidence provider")
-	}
-	if ActiveConfig().Mode == ModeOff {
-		return fmt.Errorf("HISTORY-EVIDENCE-CONFIG-MODE history.evidence.enabled requires history.mode api or audit")
 	}
 	if provider != EvidenceProviderS3 {
 		return fmt.Errorf("HISTORY-EVIDENCE-CONFIG-PROVIDER unsupported evidence provider %q", cfg.Provider)
@@ -160,6 +157,13 @@ func ActiveConfig() Config {
 	configMu.RLock()
 	defer configMu.RUnlock()
 	return activeConfig
+}
+
+// MutationRecordingEnabled reports whether PostgreSQL history or independent
+// WORM mutation evidence must be recorded for acknowledged model changes.
+func MutationRecordingEnabled() bool {
+	cfg := ActiveConfig()
+	return cfg.Mode != ModeOff || cfg.EvidenceEnabled
 }
 
 func normalizeConfig(cfg Config) Config {

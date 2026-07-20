@@ -26,6 +26,7 @@
 package historyevidenceverifier
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/history"
@@ -73,6 +74,39 @@ func TestValidateCLIOptionsAllowsCatalogOnlyRecovery(t *testing.T) {
 	})
 
 	require.NoError(t, err)
+}
+
+func TestValidateCLIOptionsAllowsIndependentMutationEvidence(t *testing.T) {
+	err := validateCLIOptions(cliOptions{
+		historyTable: "submodel_history", identifier: "sm-1",
+		firstHistoryID: 1, lastHistoryID: 10, mutationEvidence: true,
+		expectedHeadHash: strings.Repeat("a", 64),
+	})
+	require.NoError(t, err)
+}
+
+func TestValidateCLIOptionsRequiresMutationIdentifier(t *testing.T) {
+	err := validateCLIOptions(cliOptions{
+		historyTable: "submodel_history", firstHistoryID: 1,
+		lastHistoryID: 10, mutationEvidence: true, expectedHeadHash: strings.Repeat("a", 64),
+	})
+	require.ErrorContains(t, err, "HISTORY-EVIDENCE-CLI-MUTATIONIDENTIFIER")
+}
+
+func TestValidateCLIOptionsRequiresIndependentMutationHead(t *testing.T) {
+	err := validateCLIOptions(cliOptions{
+		historyTable: "submodel_history", identifier: "sm-1",
+		firstHistoryID: 1, lastHistoryID: 10, mutationEvidence: true,
+	})
+	require.ErrorContains(t, err, "HISTORY-EVIDENCE-CLI-MUTATIONHEAD")
+}
+
+func TestValidateCLIOptionsRejectsMutationHeadOutsideMutationMode(t *testing.T) {
+	err := validateCLIOptions(cliOptions{
+		historyTable: "submodel_history", firstHistoryID: 1, lastHistoryID: 10,
+		expectedHeadHash: strings.Repeat("a", 64),
+	})
+	require.ErrorContains(t, err, "HISTORY-EVIDENCE-CLI-MUTATIONHEADMODE")
 }
 
 func TestValidateRecoveryCatalogSelectionRejectsMismatchedFlags(t *testing.T) {

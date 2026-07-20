@@ -170,10 +170,11 @@ general:
     uploadMaxSizeBytes: 134217728
 ```
 
-This value limits the maximum accepted request body size for upload endpoints:
+This value limits the accepted request body and provides a second streamed-content limit before attachment or thumbnail bytes are written to PostgreSQL. Multipart overhead counts toward the HTTP request limit.
 
 - `POST /upload`
-- `PUT /shells/{aasIdentifier}/thumbnail`
+- `PUT /shells/{aasIdentifier}/asset-information/thumbnail`
+- `PUT /shells/{aasIdentifier}/submodels/{submodelIdentifier}/submodel-elements/{idShortPath}/attachment`
 - `PUT /submodels/{submodelIdentifier}/submodel-elements/{idShortPath}/attachment`
 
 For `aasenvironmentservice`, startup preconfiguration can import AAS files automatically:
@@ -312,8 +313,9 @@ See [basyx-database-wiki](docu/basyx-database-wiki/) and [sql_examples](sql_exam
 
 **Q: How do I handle file attachments?**
 
-- Use the File SME logic in `internal/submodelrepository/persistence/Submodel/submodelElements/FileHandler.go`
-- See integration tests for upload/download examples
+- Use the standardized File SME attachment and asset-information thumbnail endpoints.
+- Internal uploads store `/aasx/files/<opaque-token>/<safe-filename>` in the model. This is an AASX package-part path, not a new HTTP endpoint.
+- See the repository integration tests for upload/download examples.
 
 **Q: Where do I find API documentation?**
 

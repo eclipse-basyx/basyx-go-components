@@ -46,7 +46,7 @@ The demo `basyx` realm sets `sslRequired=none`, and the Keycloak startup command
 The `keycloak-healthcheck` container is a one-shot readiness gate and exits after Keycloak is ready and the local master realm reports `sslRequired=none`; the `keycloak` service itself should keep running.
 
 `BASYX_HISTORY_RETENTION_DAYS=0` is accepted as configuration, but automatic retention cleanup is not implemented yet. `BASYX_HISTORY_FULL_SNAPSHOT_INTERVAL=5` stores periodic full checkpoints with RFC 6902 diff rows between them.
-When evidence is enabled, history mode must be `api` or `audit`. Each successful history append writes a WORM `history_event` artifact to MinIO before PostgreSQL commits. The artifact stores the recovery payload plus `effective_diff`, which records the actual JSON Patch relative to the previous version for audit attribution. The startup ABAC access-rule import also writes an `abac_policy_version` artifact when the policy version is activated. If MinIO is unavailable or rejects a required object write, the API mutation or ABAC policy activation fails and the PostgreSQL transaction rolls back.
+Evidence can also be enabled with `BASYX_HISTORY_MODE=off`; this example keeps `audit` so both PostgreSQL history and WORM evidence are visible. Each successful mutation writes the same canonical WORM `mutation_event` artifact regardless of history mode. The artifact stores a snapshot or diff plus `effective_diff`, evidence sequence, and hash-chain data. Internal attachments and thumbnails additionally write deduplicated immutable binary content and a reference artifact tied to the mutation. The startup ABAC access-rule import still writes an `abac_policy_version` artifact when the policy version is activated. If MinIO is unavailable or rejects a required object write, the API mutation or policy activation fails and the PostgreSQL transaction rolls back.
 
 `ABAC_POLICY_FILE_IMPORT=if_missing` imports `security_env/access-rules.json` only when no active database-backed policy exists for the AAS Environment Service scope. This keeps the first startup file import auditable and avoids replacing later database-managed policy versions on every restart. `ABAC_MANAGEMENT_API_ENABLED=true` opts this example into the protected `/security/abac/**` management API, including `/security/abac/active-policy`, and makes the same endpoints visible in Swagger UI.
 
@@ -174,12 +174,38 @@ docker compose exec db psql -U admin -d basyxTestDB -c \
   "SELECT history_id, identifier, payload_type, row_hash FROM submodel_history ORDER BY history_id"
 ```
 
-Inspect the automatic WORM history-event receipts. These are written during the API transaction and exist independently from later manifest publication:
+Inspect the automatic history-independent mutation receipts. These are written during the API transaction and exist independently from PostgreSQL history and later legacy manifest publication:
 
 ```bash
 docker compose exec db psql -U admin -d basyxTestDB -c \
-  "SELECT artifact_type, history_table, identifier, history_id, object_key, sha256 FROM history_evidence_artifacts WHERE artifact_type = 'history_event' ORDER BY artifact_id"
+  "SELECT entity_type, identifier, event_sequence, event_hash, object_key, sha256 FROM mutation_evidence_artifacts ORDER BY artifact_id"
 ```
+
+Verify and reconstruct the independent mutation chain. `-from` and `-to` select evidence sequence numbers, and the expected terminal hash must come from a sequence/hash head retained outside this PostgreSQL database:
+
+```bash
+POSTGRES_HOST=localhost \
+POSTGRES_PORT=5432 \
+POSTGRES_USER=admin \
+POSTGRES_PASSWORD=admin123 \
+POSTGRES_DBNAME=basyxTestDB \
+BASYX_HISTORY_EVIDENCE_PROVIDER=s3 \
+BASYX_HISTORY_EVIDENCE_BUCKET=basyx-history-evidence \
+BASYX_HISTORY_EVIDENCE_REGION=us-east-1 \
+BASYX_HISTORY_EVIDENCE_ENDPOINT=http://localhost:9000 \
+BASYX_HISTORY_EVIDENCE_ACCESS_KEY_ID=minioadmin \
+BASYX_HISTORY_EVIDENCE_SECRET_ACCESS_KEY=minioadmin \
+BASYX_HISTORY_EVIDENCE_PATH_STYLE=true \
+go run ./cmd/historyevidenceverifier \
+  -mutation \
+  -table submodel_history \
+  -identifier '<submodel-identifier>' \
+  -from 1 \
+  -to 5 \
+  -expected-head-hash '<independently-retained-event-hash-for-sequence-5>'
+```
+
+For a first local demonstration, the corresponding `event_hash` from the receipt query above can establish a trust-on-first-use baseline. Production verification must preserve that baseline in a protected monitoring, SIEM, or evidence-preservation system, reuse it for the next check, and advance it only after the newer head verifies successfully. Fetching the expected hash from the same database during every check would not detect removal of a matching database tail.
 
 Inspect the ABAC policy-version evidence receipt written during startup access-rule activation:
 
@@ -188,7 +214,7 @@ docker compose exec db psql -U admin -d basyxTestDB -c \
   "SELECT artifact_type, history_table, identifier, history_id, object_key, sha256 FROM history_evidence_artifacts WHERE artifact_type = 'abac_policy_version' ORDER BY artifact_id"
 ```
 
-Publish a signed or unsigned manifest for a Submodel history range from the repository root. This verifies the PostgreSQL hash chain, writes range manifest/checkpoint artifacts, and records their receipts. Adjust `-identifier`, `-from`, and `-to` to values from the query above:
+The following manifest workflow remains available for PostgreSQL history ranges and legacy v1 evidence. Publish a signed or unsigned manifest from the repository root to verify the PostgreSQL hash chain, write range manifest/checkpoint artifacts, and record their receipts. Adjust `-identifier`, `-from`, and `-to` to values from the history query above:
 
 ```bash
 POSTGRES_HOST=localhost \
@@ -218,9 +244,9 @@ go run ./cmd/historyevidenceverifier \
   -write
 ```
 
-The command prints the manifest, object-store receipt, per-row history-event receipts, snapshot checkpoint receipts, and PostgreSQL catalog id. The same object receipts are also stored in `history_evidence_manifests` and `history_evidence_artifacts`.
+The command prints the legacy manifest, object-store receipt, per-row v1 history-event receipts, snapshot checkpoint receipts, and PostgreSQL catalog id. The same object receipts are also stored in `history_evidence_manifests` and `history_evidence_artifacts`.
 
-Verify PostgreSQL against the per-row WORM history-event artifacts and, when supplied, a stored manifest:
+Verify PostgreSQL against the per-row v1 WORM history-event artifacts and, when supplied, a stored manifest:
 
 ```bash
 POSTGRES_HOST=localhost \
@@ -244,7 +270,9 @@ go run ./cmd/historyevidenceverifier \
   -manifest-sha256 '<sha256-from-write-output>'
 ```
 
-History-event artifacts provide recovery evidence for acknowledged writes while evidence is enabled. With `BASYX_HISTORY_FULL_SNAPSHOT_INTERVAL=5`, recovery from WORM starts from the latest WORM-stored snapshot event and replays up to four WORM-stored diff payloads. Use `BASYX_HISTORY_FULL_SNAPSHOT_INTERVAL=1` when every history row must be recoverable as a full WORM snapshot without diff replay. For audit attribution, inspect `effective_diff`: a full snapshot event can be a recovery checkpoint, while `effective_diff` shows what the request actually changed.
+The independent mutation chain provides recovery evidence for new acknowledged writes. With `BASYX_HISTORY_FULL_SNAPSHOT_INTERVAL=5`, recovery starts from the latest WORM-stored snapshot event and replays up to four WORM-stored diff payloads. Use `BASYX_HISTORY_FULL_SNAPSHOT_INTERVAL=1` when every mutation must be recoverable as a full WORM snapshot without diff replay. For audit attribution, inspect `effective_diff`: a full snapshot event can be a recovery checkpoint, while `effective_diff` shows what the request actually changed. Mutation recovery also reports the terminal event hash, change type, deletion state, operation time, and audit context, and it fails when the requested tail or retention state cannot be verified.
+
+The catalog-export workflow below applies to legacy v1 history-event evidence. Use `-mutation -recover` for direct recovery from the independent mutation chain.
 
 Export a recovery catalog and recover verified JSON from WORM artifacts:
 
@@ -283,7 +311,7 @@ go run ./cmd/historyevidenceverifier \
 
 The recovery command exports verified JSON only. Restoring rows into PostgreSQL remains an operator-controlled disaster-recovery procedure.
 
-To inspect audit metadata recovered from WORM `history_event` artifacts, run:
+To inspect audit metadata recovered from legacy WORM `history_event` artifacts, run:
 
 ```bash
 jq '.recovered_rows[] | {history_id, audit}' ./recovered-history.json

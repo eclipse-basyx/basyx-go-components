@@ -1,0 +1,17 @@
+{
+  "id": "urn:basyx:migration:binary-submodel:1",
+  "idShort": "MigrationBinarySubmodel",
+  "modelType": "Submodel",
+  "submodelElements": [
+    {
+      "idShort": "LegacyFile",
+      "modelType": "File",
+      "contentType": "text/plain"
+    },
+    {
+      "idShort": "LegacyFileUntouched",
+      "modelType": "File",
+      "contentType": "text/plain"
+    }
+  ]
+}

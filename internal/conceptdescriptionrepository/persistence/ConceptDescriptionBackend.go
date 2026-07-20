@@ -159,12 +159,43 @@ func conceptDescriptionToHistorySnapshot(cd types.IConceptDescription) (map[stri
 	return jsonable, nil
 }
 
-func (b *ConceptDescriptionBackend) appendConceptDescriptionHistoryTx(ctx context.Context, tx *sql.Tx, cd types.IConceptDescription, changeType string, deleted bool) error {
+func (b *ConceptDescriptionBackend) appendConceptDescriptionHistoryTx(ctx context.Context, tx *sql.Tx, cd types.IConceptDescription, previousSnapshot map[string]any, changeType string, deleted bool) error {
 	snapshot, err := conceptDescriptionToHistorySnapshot(cd)
 	if err != nil {
 		return err
 	}
-	return history.AppendVersionTx(ctx, tx, history.TableConcept, cd.ID(), changeType, snapshot, deleted)
+	return history.AppendVersionTx(ctx, tx, history.TableConcept, cd.ID(), changeType, previousSnapshot, snapshot, deleted)
+}
+
+func loadConceptDescriptionHistorySnapshotBeforeMutationTx(ctx context.Context, tx *sql.Tx, id string) (map[string]any, error) {
+	if !history.ActiveConfig().EvidenceEnabled {
+		return nil, nil
+	}
+	if err := history.LockMutationTx(ctx, tx, history.TableConcept, id); err != nil {
+		return nil, err
+	}
+	query, args, err := goqu.From("concept_description").
+		Select("id_short", "data").
+		Where(goqu.C("id").Eq(id)).
+		Limit(1).
+		ToSQL()
+	if err != nil {
+		return nil, common.NewInternalServerError("CDREPO-HISTORY-BUILDLOAD " + err.Error())
+	}
+	var idShort sql.NullString
+	var data string
+	if err = tx.QueryRowContext(ctx, query, args...).Scan(&idShort, &data); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, common.NewErrNotFound("CDREPO-HISTORY-NOTFOUND Concept description with the given ID does not exist")
+		}
+		return nil, common.NewInternalServerError("CDREPO-HISTORY-EXECLOAD " + err.Error())
+	}
+	var snapshot map[string]any
+	if err = json.Unmarshal([]byte(data), &snapshot); err != nil {
+		return nil, common.NewInternalServerError("CDREPO-HISTORY-UNMARSHAL " + err.Error())
+	}
+	applyConceptDescriptionIDShortMask(snapshot, idShort)
+	return snapshot, nil
 }
 
 func (b *ConceptDescriptionBackend) createConceptDescriptionInTx(ctx context.Context, tx *sql.Tx, cd types.IConceptDescription) error {
@@ -312,6 +343,9 @@ func (b *ConceptDescriptionBackend) CreateConceptDescription(ctx context.Context
 		return common.NewInternalServerError("CDREPO-CRTCD-STARTTX " + err.Error())
 	}
 	defer cleanup(&err)
+	if err = history.LockMutationTx(ctx, tx, history.TableConcept, cd.ID()); err != nil {
+		return err
+	}
 
 	if err = b.ensureVisibleConceptDescriptionCreateDoesNotExist(ctx, tx, cd.ID()); err != nil {
 		return err
@@ -338,7 +372,7 @@ func (b *ConceptDescriptionBackend) CreateConceptDescription(ctx context.Context
 		}
 	}
 
-	if err = b.appendConceptDescriptionHistoryTx(ctx, tx, cd, history.ChangeCreated, false); err != nil {
+	if err = b.appendConceptDescriptionHistoryTx(ctx, tx, cd, nil, history.ChangeCreated, false); err != nil {
 		return err
 	}
 
@@ -570,6 +604,9 @@ func (b *ConceptDescriptionBackend) PutConceptDescription(ctx context.Context, i
 		return false, common.NewInternalServerError("CDREPO-PUTCD-STARTTX " + err.Error())
 	}
 	defer cleanup(&err)
+	if err = history.LockMutationTx(ctx, tx, history.TableConcept, id); err != nil {
+		return false, err
+	}
 
 	existingExists, existsErr := conceptDescriptionExistsInTx(ctx, tx, id)
 	if existsErr != nil {
@@ -590,6 +627,13 @@ func (b *ConceptDescriptionBackend) PutConceptDescription(ctx context.Context, i
 			if !visible {
 				return false, common.NewErrDenied("CDREPO-PUTCD-ABACDENIED existing concept description is not accessible under ABAC constraints")
 			}
+		}
+	}
+	var previousSnapshot map[string]any
+	if existingExists {
+		previousSnapshot, err = loadConceptDescriptionHistorySnapshotBeforeMutationTx(ctx, tx, id)
+		if err != nil {
+			return false, err
 		}
 	}
 
@@ -621,7 +665,7 @@ func (b *ConceptDescriptionBackend) PutConceptDescription(ctx context.Context, i
 	if isUpdate {
 		changeType = history.ChangeUpdated
 	}
-	if err = b.appendConceptDescriptionHistoryTx(ctx, tx, cd, changeType, false); err != nil {
+	if err = b.appendConceptDescriptionHistoryTx(ctx, tx, cd, previousSnapshot, changeType, false); err != nil {
 		return false, err
 	}
 
@@ -639,6 +683,9 @@ func (b *ConceptDescriptionBackend) DeleteConceptDescription(ctx context.Context
 		return common.NewInternalServerError("CDREPO-DELCD-STARTTX " + err.Error())
 	}
 	defer cleanup(&err)
+	if err = history.LockMutationTx(ctx, tx, history.TableConcept, id); err != nil {
+		return err
+	}
 
 	shouldEnforceFormula, enforceErr := auth.ShouldEnforceFormula(ctx)
 	if enforceErr != nil {
@@ -653,6 +700,10 @@ func (b *ConceptDescriptionBackend) DeleteConceptDescription(ctx context.Context
 			return common.NewErrDenied("CDREPO-DELCD-ABACDENIED deleting this concept description is not allowed")
 		}
 	}
+	previousSnapshot, err := loadConceptDescriptionHistorySnapshotBeforeMutationTx(ctx, tx, id)
+	if err != nil {
+		return err
+	}
 
 	deleted, err := b.deleteConceptDescriptionInTx(ctx, tx, id)
 	if err != nil {
@@ -661,7 +712,7 @@ func (b *ConceptDescriptionBackend) DeleteConceptDescription(ctx context.Context
 	if !deleted {
 		return common.NewErrNotFound("CDREPO-DELCD-NOTFOUND Concept description with the given ID does not exist")
 	}
-	if err = history.AppendVersionTx(ctx, tx, history.TableConcept, id, history.ChangeDeleted, map[string]any{"id": id}, true); err != nil {
+	if err = history.AppendVersionTx(ctx, tx, history.TableConcept, id, history.ChangeDeleted, previousSnapshot, map[string]any{"id": id}, true); err != nil {
 		return err
 	}
 

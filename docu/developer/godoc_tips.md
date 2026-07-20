@@ -40,4 +40,4 @@ type PostgreSQLFileHandler struct {
 - [GoDoc Guidelines](https://blog.golang.org/godoc)
 
 ---
-For more examples, see the comments in `internal/submodelrepository/persistence/Submodel/submodelElements/FileHandler.go` and other core files.
+For more examples, see the comments in `internal/submodelrepository/persistence/submodelElements/FileHandler.go` and other core files.

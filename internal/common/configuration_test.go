@@ -702,6 +702,28 @@ func TestValidateHistoryAndEventingConfigAcceptsCompleteS3EvidenceConfig(t *test
 	}
 }
 
+func TestValidateHistoryAndEventingConfigAcceptsEvidenceWithHistoryOff(t *testing.T) {
+	cfg := Config{History: HistoryConfig{
+		Mode:                 "off",
+		FullSnapshotInterval: 5,
+		Immutability:         "none",
+		AuditIdentityMode:    "none",
+		Evidence: HistoryEvidenceConfig{
+			Enabled:         true,
+			Provider:        "s3",
+			Bucket:          "history-evidence",
+			Region:          "us-east-1",
+			RetentionMode:   "governance",
+			RetentionDays:   1,
+			WriteTimeoutSec: 10,
+		},
+	}}
+
+	if err := validateHistoryAndEventingConfig(&cfg); err != nil {
+		t.Fatalf("expected evidence-only configuration to be accepted, got %v", err)
+	}
+}
+
 func TestValidateHistoryAndEventingConfigRejectsUnsupportedFeatures(t *testing.T) {
 	tests := []struct {
 		name   string
@@ -727,16 +749,6 @@ func TestValidateHistoryAndEventingConfigRejectsUnsupportedFeatures(t *testing.T
 				Immutability:         "none",
 				AuditIdentityMode:    "none",
 				Evidence:             HistoryEvidenceConfig{Enabled: true, Provider: "s3", Region: "us-east-1"},
-			}},
-		},
-		{
-			name: "evidence with history off",
-			config: Config{History: HistoryConfig{
-				Mode:                 "off",
-				FullSnapshotInterval: 1,
-				Immutability:         "none",
-				AuditIdentityMode:    "none",
-				Evidence:             HistoryEvidenceConfig{Enabled: true, Provider: "s3", Bucket: "history-evidence", Region: "us-east-1"},
 			}},
 		},
 		{

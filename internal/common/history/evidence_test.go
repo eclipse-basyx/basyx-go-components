@@ -44,6 +44,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/binarycontent"
 	"github.com/stretchr/testify/require"
 )
 
@@ -289,6 +290,24 @@ func TestS3EvidenceStorePutRequiresRetention(t *testing.T) {
 	_, err := store.PutArtifact(t.Context(), EvidenceArtifact{ArtifactType: EvidenceArtifactHistoryEvent, ObjectKey: "events/one.json", ContentType: manifestJSONContentType, Data: []byte(`{}`)})
 
 	require.ErrorContains(t, err, "HISTORY-EVIDENCE-S3-RETENTION")
+}
+
+func TestCommittedEvidenceReceiptRequiresImmutableRetention(t *testing.T) {
+	now := time.Now().UTC()
+	receipt := EvidenceReceipt{
+		Reference: EvidenceReference{
+			Provider: EvidenceProviderS3, ObjectKey: "mutation-events/1.json", VersionID: "version-1",
+		},
+		SHA256: strings.Repeat("a", 64), SizeBytes: 10,
+	}
+
+	err := validateCommittedEvidenceReceipt(receipt, receipt.SHA256, receipt.SizeBytes, now)
+	require.ErrorContains(t, err, "retention mode")
+
+	retainUntil := now.Add(time.Hour)
+	receipt.RetentionMode = "governance"
+	receipt.RetainUntil = &retainUntil
+	require.NoError(t, validateCommittedEvidenceReceipt(receipt, receipt.SHA256, receipt.SizeBytes, now))
 }
 
 func TestS3EvidenceStorePutRequiresVersionID(t *testing.T) {
@@ -611,6 +630,49 @@ func verificationFindingCodes(report *HistoryEvidenceVerificationReport) []strin
 	return codes
 }
 
+func TestEnsureBinaryEvidenceBoundsRetentionExtension(t *testing.T) {
+	store := &deadlineCheckingEvidenceStore{}
+	t.Cleanup(func() {
+		Configure(Config{Mode: ModeOff, Immutability: ImmutabilityNone, AuditIdentityMode: AuditIdentityNone})
+	})
+	Configure(Config{
+		Mode:                 ModeOff,
+		Immutability:         ImmutabilityNone,
+		AuditIdentityMode:    AuditIdentityNone,
+		EvidenceEnabled:      true,
+		EvidenceProvider:     EvidenceProviderS3,
+		EvidenceStore:        store,
+		EvidenceWriteTimeout: time.Second,
+	})
+
+	database, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer func() {
+		_ = database.Close()
+	}()
+	retainUntil := time.Now().UTC().Add(time.Hour)
+	digest := strings.Repeat("a", 64)
+	mock.ExpectBegin()
+	mock.ExpectQuery(`SELECT .* FROM "binary_evidence_receipt"`).
+		WillReturnRows(sqlmock.NewRows([]string{
+			"provider", "bucket", "object_key", "object_version_id", "sha256", "size_bytes",
+			"content_type", "retention_mode", "retain_until", "legal_hold", "artifact_metadata", "db_created_at",
+		}).AddRow(
+			EvidenceProviderS3, "evidence", "binary-content/aa/"+digest, "version-1", digest, int64(5),
+			"application/octet-stream", "governance", retainUntil, false, []byte(`{}`), time.Now().UTC(),
+		))
+	mock.ExpectRollback()
+
+	tx, err := database.Begin()
+	require.NoError(t, err)
+	receipt, err := EnsureBinaryEvidenceTx(t.Context(), tx, binarycontent.Content{ID: 1, SHA256: digest, SizeBytes: 5}, "application/octet-stream")
+	require.NoError(t, err)
+	require.NotNil(t, receipt)
+	require.True(t, store.deadlinePresent)
+	require.NoError(t, tx.Rollback())
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
 type nilReceiptEvidenceStore struct{}
 
 func (nilReceiptEvidenceStore) PutArtifact(_ context.Context, _ EvidenceArtifact) (*EvidenceReceipt, error) {
@@ -627,6 +689,27 @@ func (nilReceiptEvidenceStore) VerifyArtifact(_ context.Context, _ EvidenceRefer
 
 type retentionCheckingEvidenceStore struct {
 	retentionErr error
+}
+
+type deadlineCheckingEvidenceStore struct {
+	deadlinePresent bool
+}
+
+func (store *deadlineCheckingEvidenceStore) PutArtifact(_ context.Context, _ EvidenceArtifact) (*EvidenceReceipt, error) {
+	return nil, nil
+}
+
+func (store *deadlineCheckingEvidenceStore) GetArtifact(_ context.Context, _ EvidenceReference) (*EvidenceObject, error) {
+	return nil, nil
+}
+
+func (store *deadlineCheckingEvidenceStore) VerifyArtifact(_ context.Context, _ EvidenceReference, _ string) (*EvidenceReceipt, error) {
+	return nil, nil
+}
+
+func (store *deadlineCheckingEvidenceStore) ExtendArtifactRetention(ctx context.Context, _ EvidenceReference, _ EvidenceReceipt, _ EvidenceArtifact) (*EvidenceReceipt, error) {
+	_, store.deadlinePresent = ctx.Deadline()
+	return nil, nil
 }
 
 func (store *retentionCheckingEvidenceStore) PutArtifact(_ context.Context, _ EvidenceArtifact) (*EvidenceReceipt, error) {

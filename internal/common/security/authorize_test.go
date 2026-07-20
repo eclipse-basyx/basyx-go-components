@@ -475,6 +475,21 @@ func TestHasUnrestrictedFormulaForRight_ReturnsFalseWhenMissingOrFalse(t *testin
 	}
 }
 
+func TestContextWithoutQueryFilterKeepsOriginalContextUnchanged(t *testing.T) {
+	t.Parallel()
+
+	queryExpr := boolExpression(true)
+	original := WithQueryFilter(t.Context(), &QueryFilter{Formula: &queryExpr})
+	internalRead := ContextWithoutQueryFilter(original)
+
+	if GetQueryFilter(internalRead) != nil {
+		t.Fatal("expected internal state read to suppress the query filter")
+	}
+	if GetQueryFilter(original) == nil {
+		t.Fatal("expected the request context query filter to remain unchanged")
+	}
+}
+
 func TestShouldEnforceFormula_AppliesMergedQueryWhenABACDisabled(t *testing.T) {
 	t.Parallel()
 

@@ -23,21 +23,36 @@
 * SPDX-License-Identifier: MIT
 ******************************************************************************/
 
-package persistence
+package history
 
 import (
-	"testing"
-
-	"github.com/stretchr/testify/require"
+	"encoding/hex"
+	"fmt"
+	"strings"
+	"time"
 )
 
-func TestSnapshotReferenceContainsKeyValue(t *testing.T) {
-	reference := map[string]any{
-		"keys": []any{
-			map[string]any{"type": "Submodel", "value": "sm-1"},
-		},
+func validateCommittedEvidenceReceipt(receipt EvidenceReceipt, expectedSHA256 string, expectedSize int64, now time.Time) error {
+	if receipt.Reference.Provider != EvidenceProviderS3 || strings.TrimSpace(receipt.Reference.ObjectKey) == "" || strings.TrimSpace(receipt.Reference.VersionID) == "" {
+		return fmt.Errorf("provider, object key, and immutable object version are required")
 	}
+	if !validSHA256(receipt.SHA256) || !strings.EqualFold(receipt.SHA256, expectedSHA256) || receipt.SizeBytes != expectedSize {
+		return fmt.Errorf("receipt digest or size does not match the stored artifact")
+	}
+	mode := strings.ToLower(strings.TrimSpace(receipt.RetentionMode))
+	if mode != "governance" && mode != "compliance" {
+		return fmt.Errorf("WORM retention mode is missing or unsupported")
+	}
+	if receipt.RetainUntil == nil || !receipt.RetainUntil.After(now.UTC()) {
+		return fmt.Errorf("WORM retain-until timestamp is missing or not in the future")
+	}
+	return nil
+}
 
-	require.True(t, snapshotReferenceContainsKeyValue(reference, "sm-1"))
-	require.False(t, snapshotReferenceContainsKeyValue(reference, "sm-2"))
+func validSHA256(value string) bool {
+	if len(value) != 64 {
+		return false
+	}
+	_, err := hex.DecodeString(value)
+	return err == nil
 }

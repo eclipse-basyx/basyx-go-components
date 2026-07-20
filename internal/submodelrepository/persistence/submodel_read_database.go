@@ -236,7 +236,11 @@ func (s *SubmodelDatabase) GetSubmodelByIDAndDate(ctx context.Context, submodelI
 // RecordCurrentSubmodelVersion appends a full snapshot of the current Submodel state.
 func (s *SubmodelDatabase) RecordCurrentSubmodelVersion(ctx context.Context, submodelIdentifier string, changeType string) error {
 	return common.ExecuteInTransaction(s.db, "SMREPO-HISTORY-STARTTX", "SMREPO-HISTORY-COMMIT", func(tx *sql.Tx) error {
-		return s.appendCurrentSubmodelHistoryTx(ctx, tx, submodelIdentifier, changeType)
+		previousSnapshot, err := s.loadSubmodelHistorySnapshotBeforeMutationTx(ctx, tx, submodelIdentifier)
+		if err != nil {
+			return err
+		}
+		return s.appendCurrentSubmodelHistoryTx(ctx, tx, submodelIdentifier, previousSnapshot, changeType)
 	})
 }
 
@@ -480,10 +484,10 @@ func buildSubmodelModelReference(submodelIdentifier string) (types.IReference, e
 }
 
 func scanSubmodelMetadataRow(rows *sql.Rows) (types.ISubmodel, error) {
-	var identifier, idShort, category, descriptionJSON, displayNameJSON, administrationJSON, edsJSON, supplementalSemanticIDsJSON, extensionsJSON, qualifiersJSON, semanticIDJSON sql.NullString
+	var identifier, idShort, category, descriptionJSON, displayNameJSON, administrationJSON, edsJSON, supplementalSemanticIDsJSON, extensionsJSON, qualifiersJSON, semanticIDJSON, sortIdentifier sql.NullString
 	var kind sql.NullInt64
 
-	if err := rows.Scan(&identifier, &idShort, &category, &kind, &descriptionJSON, &displayNameJSON, &administrationJSON, &edsJSON, &supplementalSemanticIDsJSON, &extensionsJSON, &qualifiersJSON, &semanticIDJSON); err != nil {
+	if err := rows.Scan(&identifier, &idShort, &category, &kind, &descriptionJSON, &displayNameJSON, &administrationJSON, &edsJSON, &supplementalSemanticIDsJSON, &extensionsJSON, &qualifiersJSON, &semanticIDJSON, &sortIdentifier); err != nil {
 		return nil, common.NewInternalServerError("SMREPO-GETSMBYIDTX-SCAN " + err.Error())
 	}
 

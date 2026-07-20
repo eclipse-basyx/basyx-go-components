@@ -42,3 +42,15 @@ func TestContextWithConfig_RoundTrip(t *testing.T) {
 		t.Fatalf("expected same config pointer from context")
 	}
 }
+
+func TestUploadMaxSizeBytesFromContext(t *testing.T) {
+	if actual := UploadMaxSizeBytesFromContext(t.Context()); actual != DefaultConfig.GeneralUploadMaxSizeBytes {
+		t.Fatalf("expected default upload limit %d, got %d", DefaultConfig.GeneralUploadMaxSizeBytes, actual)
+	}
+
+	cfg := &Config{}
+	cfg.General.UploadMaxSizeBytes = 4096
+	if actual := UploadMaxSizeBytesFromContext(ContextWithConfig(t.Context(), cfg)); actual != 4096 {
+		t.Fatalf("expected configured upload limit 4096, got %d", actual)
+	}
+}

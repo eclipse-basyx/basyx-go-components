@@ -1,0 +1,83 @@
+services:
+  db:
+    image: postgres:18
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: admin123
+      POSTGRES_DB: basyxBenchmarkDB
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U admin -d basyxBenchmarkDB"]
+      interval: 2s
+      timeout: 5s
+      retries: 30
+
+  basyx-configuration:
+    build:
+      context: ../../..
+      dockerfile: ./cmd/basyxconfigurationservice/Dockerfile
+    environment:
+      POSTGRES_HOST: db
+      POSTGRES_PORT: 5432
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: admin123
+      POSTGRES_DBNAME: basyxBenchmarkDB
+    depends_on:
+      db:
+        condition: service_healthy
+
+  minio:
+    image: quay.io/minio/minio:latest
+    command: ["server", "/data"]
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+
+  minio-init:
+    image: quay.io/minio/mc:latest
+    depends_on:
+      minio:
+        condition: service_started
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        until mc alias set local http://minio:9000 minioadmin minioadmin; do sleep 2; done
+        mc mb --ignore-existing --with-lock local/basyx-history-evidence
+        mc version enable local/basyx-history-evidence
+        mc retention set --default compliance 7d local/basyx-history-evidence
+
+  submodel-repository:
+    build:
+      context: ../../..
+      dockerfile: ./cmd/submodelrepositoryservice/Dockerfile
+    ports:
+      - "127.0.0.1:${BASYX_BENCH_PORT:-5004}:5004"
+    environment:
+      POSTGRES_HOST: db
+      POSTGRES_PORT: 5432
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: admin123
+      POSTGRES_DBNAME: basyxBenchmarkDB
+      SERVER_PORT: 5004
+      ABAC_ENABLED: "false"
+      GENERAL_AASREGISTRYINTEGRATION: "false"
+      GENERAL_SUBMODELREGISTRYINTEGRATION: "false"
+      BASYX_HISTORY_MODE: "off"
+      BASYX_HISTORY_FULL_SNAPSHOT_INTERVAL: ${BASYX_BENCH_FULL_SNAPSHOT_INTERVAL:-5}
+      BASYX_HISTORY_EVIDENCE_ENABLED: ${BASYX_BENCH_EVIDENCE_ENABLED:-false}
+      BASYX_HISTORY_EVIDENCE_PROVIDER: s3
+      BASYX_HISTORY_EVIDENCE_BUCKET: basyx-history-evidence
+      BASYX_HISTORY_EVIDENCE_PREFIX: benchmark
+      BASYX_HISTORY_EVIDENCE_REGION: us-east-1
+      BASYX_HISTORY_EVIDENCE_ENDPOINT: http://minio:9000
+      BASYX_HISTORY_EVIDENCE_ACCESS_KEY_ID: minioadmin
+      BASYX_HISTORY_EVIDENCE_SECRET_ACCESS_KEY: minioadmin
+      BASYX_HISTORY_EVIDENCE_PATH_STYLE: "true"
+      BASYX_HISTORY_EVIDENCE_RETENTION_MODE: compliance
+      BASYX_HISTORY_EVIDENCE_RETENTION_DAYS: 7
+      BASYX_HISTORY_EVIDENCE_WRITE_TIMEOUT_SECONDS: 30
+    depends_on:
+      basyx-configuration:
+        condition: service_completed_successfully
+      minio-init:
+        condition: service_completed_successfully

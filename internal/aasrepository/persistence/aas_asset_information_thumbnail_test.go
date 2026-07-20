@@ -53,6 +53,7 @@ func TestCreateAssetAdministrationShellPersistsDefaultThumbnail(t *testing.T) {
 		WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectExec(`INSERT INTO "asset_information"`).
 		WillReturnResult(sqlmock.NewResult(0, 1))
+	expectInternalThumbnailCleanup(mock)
 	mock.ExpectExec(`INSERT INTO "thumbnail_file_element"`).
 		WillReturnResult(sqlmock.NewResult(0, 1))
 
@@ -72,6 +73,7 @@ func TestUpdateAssetInformationRecordPersistsDefaultThumbnail(t *testing.T) {
 
 	mock.ExpectExec(`UPDATE "asset_information"`).
 		WillReturnResult(sqlmock.NewResult(0, 1))
+	expectInternalThumbnailCleanup(mock)
 	mock.ExpectExec(`INSERT INTO "thumbnail_file_element"`).
 		WillReturnResult(sqlmock.NewResult(0, 1))
 
@@ -84,6 +86,15 @@ func TestUpdateAssetInformationRecordPersistsDefaultThumbnail(t *testing.T) {
 		currentAssetInformationState{},
 	))
 	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func expectInternalThumbnailCleanup(mock sqlmock.Sqlmock) {
+	mock.ExpectExec(`DELETE FROM "thumbnail_binary_reference"`).
+		WillReturnResult(sqlmock.NewResult(0, 0))
+	mock.ExpectQuery(`SELECT "file_oid" FROM "thumbnail_file_data"`).
+		WillReturnError(sql.ErrNoRows)
+	mock.ExpectExec(`DELETE FROM "thumbnail_file_data"`).
+		WillReturnResult(sqlmock.NewResult(0, 0))
 }
 
 func TestBuildUpsertDefaultThumbnailQueryPreservesExistingContentTypeWhenUnset(t *testing.T) {

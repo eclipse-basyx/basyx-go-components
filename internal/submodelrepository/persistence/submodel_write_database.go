@@ -30,10 +30,13 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"strings"
 
 	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/FriedJannik/aas-go-sdk/verification"
+	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/binarycontent"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/createprecheck"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/history"
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
@@ -59,7 +62,7 @@ func (s *SubmodelDatabase) CreateSubmodel(ctx context.Context, submodel types.IS
 		return err
 	}
 
-	if err = s.appendSubmodelHistoryTx(ctx, tx, submodel, history.ChangeCreated, false); err != nil {
+	if err = s.appendCreatedSubmodelHistoryTx(ctx, tx, submodel); err != nil {
 		return err
 	}
 
@@ -84,10 +87,13 @@ func (s *SubmodelDatabase) CreateSubmodelInTransaction(ctx context.Context, tx *
 	if err := s.createSubmodelInTransactionValidated(ctx, tx, submodel); err != nil {
 		return err
 	}
-	return s.appendSubmodelHistoryTx(ctx, tx, submodel, history.ChangeCreated, false)
+	return s.appendCreatedSubmodelHistoryTx(ctx, tx, submodel)
 }
 
 func (s *SubmodelDatabase) createSubmodelInTransactionValidated(ctx context.Context, tx *sql.Tx, submodel types.ISubmodel) error {
+	if err := history.LockMutationTx(ctx, tx, history.TableSubmodel, submodel.ID()); err != nil {
+		return err
+	}
 	if err := s.ensureVisibleSubmodelCreateDoesNotExist(ctx, tx, submodel.ID()); err != nil {
 		return err
 	}
@@ -277,12 +283,16 @@ func (s *SubmodelDatabase) PatchSubmodel(ctx context.Context, submodelID string,
 		return common.NewInternalServerError("SMREPO-PATCHSM-STARTTX " + err.Error())
 	}
 	defer cleanup(&err)
+	previousSnapshot, err := s.loadSubmodelHistorySnapshotBeforeMutationTx(ctx, tx, submodelID)
+	if err != nil {
+		return err
+	}
 
 	if err = s.patchSubmodelInTransactionValidated(ctx, submodelID, tx, submodel); err != nil {
 		return err
 	}
 
-	if err = s.appendSubmodelHistoryTx(ctx, tx, submodel, history.ChangeUpdated, false); err != nil {
+	if err = s.appendCurrentSubmodelHistoryTx(ctx, tx, submodelID, previousSnapshot, history.ChangeUpdated); err != nil {
 		return err
 	}
 
@@ -306,11 +316,15 @@ func (s *SubmodelDatabase) PatchSubmodelInTransaction(ctx context.Context, submo
 	if err := s.verifySubmodel(submodel, "SMREPO-PATCHSM-VERIFY"); err != nil {
 		return err
 	}
-
-	if err := s.patchSubmodelInTransactionValidated(ctx, submodelID, tx, submodel); err != nil {
+	previousSnapshot, err := s.loadSubmodelHistorySnapshotBeforeMutationTx(ctx, tx, submodelID)
+	if err != nil {
 		return err
 	}
-	return s.appendSubmodelHistoryTx(ctx, tx, submodel, history.ChangeUpdated, false)
+
+	if err = s.patchSubmodelInTransactionValidated(ctx, submodelID, tx, submodel); err != nil {
+		return err
+	}
+	return s.appendCurrentSubmodelHistoryTx(ctx, tx, submodelID, previousSnapshot, history.ChangeUpdated)
 }
 
 func (s *SubmodelDatabase) patchSubmodelInTransactionValidated(_ context.Context, submodelID string, tx *sql.Tx, submodel types.ISubmodel) error {
@@ -337,12 +351,16 @@ func (s *SubmodelDatabase) PatchSubmodelMetadata(ctx context.Context, submodelID
 		return common.NewInternalServerError("SMREPO-PATCHSMMETA-STARTTX " + err.Error())
 	}
 	defer cleanup(&err)
+	previousSnapshot, err := s.loadSubmodelHistorySnapshotBeforeMutationTx(ctx, tx, submodelID)
+	if err != nil {
+		return err
+	}
 
 	if err = s.patchSubmodelMetadataInTransactionValidated(ctx, submodelID, tx, submodel); err != nil {
 		return err
 	}
 
-	if err = s.appendSubmodelMetadataHistoryTx(ctx, tx, submodelID, submodel); err != nil {
+	if err = s.appendSubmodelMetadataHistoryTx(ctx, tx, submodelID, previousSnapshot, submodel); err != nil {
 		return err
 	}
 
@@ -366,11 +384,15 @@ func (s *SubmodelDatabase) PatchSubmodelMetadataInTransaction(ctx context.Contex
 	if err := s.verifySubmodel(submodel, "SMREPO-PATCHSMMETA-VERIFY"); err != nil {
 		return err
 	}
-
-	if err := s.patchSubmodelMetadataInTransactionValidated(ctx, submodelID, tx, submodel); err != nil {
+	previousSnapshot, err := s.loadSubmodelHistorySnapshotBeforeMutationTx(ctx, tx, submodelID)
+	if err != nil {
 		return err
 	}
-	return s.appendSubmodelMetadataHistoryTx(ctx, tx, submodelID, submodel)
+
+	if err = s.patchSubmodelMetadataInTransactionValidated(ctx, submodelID, tx, submodel); err != nil {
+		return err
+	}
+	return s.appendSubmodelMetadataHistoryTx(ctx, tx, submodelID, previousSnapshot, submodel)
 }
 
 func (s *SubmodelDatabase) patchSubmodelMetadataInTransactionValidated(_ context.Context, submodelID string, tx *sql.Tx, submodel types.ISubmodel) error {
@@ -441,6 +463,10 @@ func (s *SubmodelDatabase) putSubmodelInTransaction(ctx context.Context, tx *sql
 			return false, common.NewErrDenied("SMREPO-PUTSM-ABACDENIED Existing submodel is not accessible under ABAC constraints")
 		}
 	}
+	previousSnapshot, err := s.loadSubmodelHistorySnapshotBeforeMutationTx(ctx, tx, submodelID)
+	if err != nil && !common.IsErrNotFound(err) {
+		return false, err
+	}
 
 	isUpdate, err := s.replaceSubmodelInTransaction(tx, submodelID, submodel, false)
 	if err != nil {
@@ -464,7 +490,7 @@ func (s *SubmodelDatabase) putSubmodelInTransaction(ctx context.Context, tx *sql
 	if isUpdate {
 		changeType = history.ChangeUpdated
 	}
-	if err := s.appendSubmodelHistoryTx(ctx, tx, submodel, changeType, false); err != nil {
+	if err := s.appendCurrentSubmodelHistoryTx(ctx, tx, submodelID, previousSnapshot, changeType); err != nil {
 		return false, err
 	}
 
@@ -502,6 +528,9 @@ func (s *SubmodelDatabase) DeleteSubmodelInTransaction(ctx context.Context, tx *
 }
 
 func (s *SubmodelDatabase) deleteSubmodelInTransaction(ctx context.Context, tx *sql.Tx, submodelID string) error {
+	if err := history.LockMutationTx(ctx, tx, history.TableSubmodel, submodelID); err != nil {
+		return err
+	}
 	shouldEnforce, enforceErr := shouldEnforceFormula(ctx, "SMREPO-DELSM-SHOULDENFORCE")
 	if enforceErr != nil {
 		return enforceErr
@@ -526,8 +555,12 @@ func (s *SubmodelDatabase) deleteSubmodelInTransaction(ctx context.Context, tx *
 		}
 		return common.NewInternalServerError("SMREPO-DELSM-GETSMDATABASEID " + err.Error())
 	}
+	previousSnapshot, err := s.loadSubmodelHistorySnapshotBeforeMutationTx(ctx, tx, submodelID)
+	if err != nil {
+		return err
+	}
 
-	if err := history.AppendVersionTx(ctx, tx, history.TableSubmodel, submodelID, history.ChangeDeleted, map[string]any{"id": submodelID}, true); err != nil {
+	if err := history.AppendVersionTx(ctx, tx, history.TableSubmodel, submodelID, history.ChangeDeleted, previousSnapshot, map[string]any{"id": submodelID}, true); err != nil {
 		return err
 	}
 
@@ -560,6 +593,10 @@ func (s *SubmodelDatabase) replaceSubmodelInTransaction(tx *sql.Tx, submodelID s
 
 		return false, common.NewInternalServerError("SMREPO-UPDSM-GETSMDATABASEID " + err.Error())
 	}
+	managedReferences, err := loadManagedFileReferencesForReplacementTx(tx, int64(submodelDatabaseID))
+	if err != nil {
+		return false, err
+	}
 
 	err = cleanupSubmodelLargeObjects(tx, int64(submodelDatabaseID))
 	if err != nil {
@@ -575,8 +612,137 @@ func (s *SubmodelDatabase) replaceSubmodelInTransaction(tx *sql.Tx, submodelID s
 	if err != nil {
 		return false, err
 	}
+	if err = restoreManagedFileReferencesAfterReplacementTx(tx, submodelID, managedReferences); err != nil {
+		return false, err
+	}
 
 	return true, nil
+}
+
+func loadManagedFileReferencesForReplacementTx(tx *sql.Tx, submodelDatabaseID int64) ([]gen.ManagedFileReferenceForReplacement, error) {
+	query, args, err := goqu.From(goqu.T("submodel_element").As("sme")).
+		Join(goqu.T("file_element").As("fe"), goqu.On(goqu.I("fe.id").Eq(goqu.I("sme.id")))).
+		Join(goqu.T(binarycontent.TableFileReference).As("fr"), goqu.On(goqu.I("fr.file_element_id").Eq(goqu.I("sme.id")))).
+		Select("sme.idshort_path", "fe.value", "fr.binary_content_id", "fr.path_token", "fr.safe_file_name").
+		Where(goqu.I("sme.submodel_id").Eq(submodelDatabaseID)).
+		Order(goqu.I("fr.binary_content_id").Asc(), goqu.I("sme.idshort_path").Asc()).
+		ToSQL()
+	if err != nil {
+		return nil, common.NewInternalServerError("SMREPO-UPDSM-BUILDMANAGEDFILES " + err.Error())
+	}
+	rows, err := tx.Query(query, args...)
+	if err != nil {
+		return nil, common.NewInternalServerError("SMREPO-UPDSM-QUERYMANAGEDFILES " + err.Error())
+	}
+	defer func() { _ = rows.Close() }()
+	references := make([]gen.ManagedFileReferenceForReplacement, 0)
+	for rows.Next() {
+		var reference gen.ManagedFileReferenceForReplacement
+		if err = rows.Scan(&reference.IDShortPath, &reference.ManagedPath, &reference.ContentID, &reference.PathToken, &reference.SafeFileName); err != nil {
+			return nil, common.NewInternalServerError("SMREPO-UPDSM-SCANMANAGEDFILES " + err.Error())
+		}
+		references = append(references, reference)
+	}
+	if err = rows.Err(); err != nil {
+		return nil, common.NewInternalServerError("SMREPO-UPDSM-ITERATEMANAGEDFILES " + err.Error())
+	}
+	return references, nil
+}
+
+func restoreManagedFileReferencesAfterReplacementTx(tx *sql.Tx, submodelID string, references []gen.ManagedFileReferenceForReplacement) error {
+	if len(references) == 0 {
+		return nil
+	}
+	submodelDatabaseID, err := persistenceutils.GetSubmodelDatabaseID(tx, submodelID)
+	if err != nil {
+		return common.NewInternalServerError("SMREPO-UPDSM-GETNEWSMDATABASEID " + err.Error())
+	}
+	byPath := make(map[string]gen.ManagedFileReferenceForReplacement, len(references))
+	ownedManagedPaths := make(map[string]struct{}, len(references))
+	for _, reference := range references {
+		byPath[reference.IDShortPath] = reference
+		ownedManagedPaths[reference.ManagedPath] = struct{}{}
+	}
+	query, args, err := goqu.From(goqu.T("submodel_element").As("sme")).
+		Join(goqu.T("file_element").As("fe"), goqu.On(goqu.I("fe.id").Eq(goqu.I("sme.id")))).
+		Select("sme.id", "sme.idshort_path", "fe.value").
+		Where(goqu.I("sme.submodel_id").Eq(submodelDatabaseID)).
+		Order(goqu.I("sme.idshort_path").Asc()).ToSQL()
+	if err != nil {
+		return common.NewInternalServerError("SMREPO-UPDSM-BUILDNEWFILES " + err.Error())
+	}
+	rows, err := tx.Query(query, args...)
+	if err != nil {
+		return common.NewInternalServerError("SMREPO-UPDSM-QUERYNEWFILES " + err.Error())
+	}
+	type newFileElement struct {
+		id          int64
+		idShortPath string
+		value       sql.NullString
+	}
+	files := make([]newFileElement, 0)
+	for rows.Next() {
+		var file newFileElement
+		if err = rows.Scan(&file.id, &file.idShortPath, &file.value); err != nil {
+			_ = rows.Close()
+			return common.NewInternalServerError("SMREPO-UPDSM-SCANNEWFILES " + err.Error())
+		}
+		files = append(files, file)
+	}
+	if err = rows.Close(); err != nil {
+		return common.NewInternalServerError("SMREPO-UPDSM-CLOSENEWFILES " + err.Error())
+	}
+	for _, file := range files {
+		reference, sameOwner := byPath[file.idShortPath]
+		if sameOwner && file.value.Valid && file.value.String == reference.ManagedPath {
+			if err = insertRestoredManagedFileReferenceTx(tx, file.id, reference); err != nil {
+				return err
+			}
+			continue
+		}
+		if file.value.Valid {
+			if _, wasOwned := ownedManagedPaths[file.value.String]; wasOwned && strings.HasPrefix(file.value.String, "/aasx/files/") {
+				if err = clearReassignedManagedFilePathTx(tx, file.id); err != nil {
+					return err
+				}
+			}
+		}
+	}
+	return nil
+}
+
+func insertRestoredManagedFileReferenceTx(tx *sql.Tx, fileElementID int64, reference gen.ManagedFileReferenceForReplacement) error {
+	query, args, err := goqu.Insert(binarycontent.TableFileReference).Rows(goqu.Record{
+		"file_element_id": fileElementID, "binary_content_id": reference.ContentID,
+		"path_token": reference.PathToken, "safe_file_name": reference.SafeFileName,
+	}).ToSQL()
+	if err != nil {
+		return common.NewInternalServerError("SMREPO-UPDSM-BUILDRESTOREFILE " + err.Error())
+	}
+	if _, err = tx.Exec(query, args...); err != nil {
+		return common.NewInternalServerError("SMREPO-UPDSM-EXECRESTOREFILE " + err.Error())
+	}
+	query, args, err = goqu.Update("file_element").Set(goqu.Record{"file_name": reference.SafeFileName}).
+		Where(goqu.C("id").Eq(fileElementID)).ToSQL()
+	if err != nil {
+		return common.NewInternalServerError("SMREPO-UPDSM-BUILDRESTOREFILENAME " + err.Error())
+	}
+	if _, err = tx.Exec(query, args...); err != nil {
+		return common.NewInternalServerError("SMREPO-UPDSM-EXECRESTOREFILENAME " + err.Error())
+	}
+	return nil
+}
+
+func clearReassignedManagedFilePathTx(tx *sql.Tx, fileElementID int64) error {
+	query, args, err := goqu.Update("file_element").Set(goqu.Record{"value": nil, "file_name": nil}).
+		Where(goqu.C("id").Eq(fileElementID)).ToSQL()
+	if err != nil {
+		return common.NewInternalServerError("SMREPO-UPDSM-BUILDCLEARFILEPATH " + err.Error())
+	}
+	if _, err = tx.Exec(query, args...); err != nil {
+		return common.NewInternalServerError("SMREPO-UPDSM-EXECCLEARFILEPATH " + err.Error())
+	}
+	return nil
 }
 
 func (s *SubmodelDatabase) patchSubmodelMetadataInTransaction(tx *sql.Tx, submodelID string, submodel types.ISubmodel) error {

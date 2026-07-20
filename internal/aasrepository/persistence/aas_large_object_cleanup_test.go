@@ -27,6 +27,7 @@ package persistence
 
 import (
 	"context"
+	"database/sql"
 	"testing"
 
 	sqlmock "github.com/DATA-DOG/go-sqlmock"
@@ -73,6 +74,8 @@ func TestPutAssetAdministrationShellReplacementCleansThumbnailLargeObjectBeforeD
 
 	mock.ExpectQuery(`SELECT .*FROM "aas".*FOR UPDATE`).
 		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(int64(42)))
+	mock.ExpectQuery(`SELECT .*thumbnail.*value.*FROM "thumbnail_file_element" AS "thumbnail"`).
+		WillReturnError(sql.ErrNoRows)
 	mock.ExpectQuery(`SELECT COUNT\(\*\).*lo_unlink.*thumbnail_file_data`).
 		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(int64(1)))
 	mock.ExpectExec(`DELETE FROM "aas"`).

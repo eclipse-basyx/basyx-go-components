@@ -43,6 +43,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/testenv"
 	_ "github.com/jackc/pgx/v5/stdlib"
 	"github.com/stretchr/testify/require"
@@ -67,7 +68,7 @@ var uploadSyncDisabledIntegrationDSN = testenv.PostgresKeywordDSNFromEnv("BASYX_
 
 const uploadHeaderExpectedErrorContainsSecondary = "X-Upload-Expected-Error-Contains-Secondary"
 
-var numericValuePattern = regexp.MustCompile(`^\d+$`)
+var dynamicBinaryReferencePattern = regexp.MustCompile(`^(?:\d+|/aasx/files/[A-Za-z0-9_-]{32}/[^/]+)$`)
 
 type storedAttachment struct {
 	SubmodelIdentifier string
@@ -373,23 +374,22 @@ func readStoredAttachmentsFromDB(t *testing.T) []storedAttachment {
 	require.NoError(t, err)
 	defer func() { _ = db.Close() }()
 
-	query := `
-SELECT
-    sm.submodel_identifier,
-    sme.idshort_path,
-    fe.value,
-    fe.content_type
-FROM submodel sm
-JOIN submodel_element sme
-    ON sme.submodel_id = sm.id
-JOIN file_element fe
-    ON fe.id = sme.id
-JOIN file_data fd
-    ON fd.id = fe.id
-ORDER BY sm.submodel_identifier, sme.idshort_path
-`
+	query, args, err := goqu.From(goqu.T("submodel").As("sm")).
+		Select(
+			goqu.I("sm.submodel_identifier"),
+			goqu.I("sme.idshort_path"),
+			goqu.I("fe.value"),
+			goqu.I("fe.content_type"),
+		).
+		Join(goqu.T("submodel_element").As("sme"), goqu.On(goqu.I("sme.submodel_id").Eq(goqu.I("sm.id")))).
+		Join(goqu.T("file_element").As("fe"), goqu.On(goqu.I("fe.id").Eq(goqu.I("sme.id")))).
+		Join(goqu.T("file_binary_reference").As("fbr"), goqu.On(goqu.I("fbr.file_element_id").Eq(goqu.I("fe.id")))).
+		Join(goqu.T("binary_content").As("bc"), goqu.On(goqu.I("bc.id").Eq(goqu.I("fbr.binary_content_id")))).
+		Order(goqu.I("sm.submodel_identifier").Asc(), goqu.I("sme.idshort_path").Asc()).
+		ToSQL()
+	require.NoError(t, err)
 
-	rows, err := db.Query(query)
+	rows, err := db.Query(query, args...)
 	require.NoError(t, err)
 	defer func() { _ = rows.Close() }()
 
@@ -546,13 +546,13 @@ func normalizeVolatileSnapshotFields(node any) {
 	switch typed := node.(type) {
 	case map[string]any:
 		if modelType, ok := typed["modelType"].(string); ok && modelType == "File" {
-			if value, ok := typed["value"].(string); ok && numericValuePattern.MatchString(value) {
+			if value, ok := typed["value"].(string); ok && dynamicBinaryReferencePattern.MatchString(value) {
 				typed["value"] = "<dynamic-file-reference>"
 			}
 		}
 
 		if defaultThumbnail, ok := typed["defaultThumbnail"].(map[string]any); ok {
-			if path, ok := defaultThumbnail["path"].(string); ok && numericValuePattern.MatchString(path) {
+			if path, ok := defaultThumbnail["path"].(string); ok && dynamicBinaryReferencePattern.MatchString(path) {
 				defaultThumbnail["path"] = "<dynamic-thumbnail-reference>"
 			}
 		}

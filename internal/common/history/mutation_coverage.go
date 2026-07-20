@@ -260,7 +260,8 @@ func (g *MutationCoverageGuard) exemptRoute(method string, pattern string, opera
 //	apiRouter.Use(guard.Middleware)
 func (g *MutationCoverageGuard) Middleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if ActiveConfig().Mode == ModeOff || !isMutationMethod(r.Method) {
+		cfg := ActiveConfig()
+		if (cfg.Mode == ModeOff && !cfg.EvidenceEnabled) || !isMutationMethod(r.Method) {
 			next.ServeHTTP(w, r)
 			return
 		}
@@ -304,7 +305,7 @@ func (g *MutationCoverageGuard) Middleware(next http.Handler) http.Handler {
 //
 //	coverage, ok := MutationCoverageFromContext(ctx)
 //	if ok && coverage.Versioned {
-//		return AppendVersionTx(ctx, tx, TableSubmodel, id, ChangeUpdated, snapshot, false)
+//		return AppendVersionTx(ctx, tx, TableSubmodel, id, ChangeUpdated, previousSnapshot, snapshot, false)
 //	}
 func MutationCoverageFromContext(ctx context.Context) (MutationCoverage, bool) {
 	if ctx == nil {

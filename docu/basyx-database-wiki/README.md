@@ -13,13 +13,14 @@ Runtime services expect the schema state in `basyxsystem` to be `clean` and the 
 
 ## Main Storage Areas
 
-- AAS Repository: `aas`, `aas_payload`, `asset_information`, AAS submodel-reference tables, and thumbnail file tables
+- AAS Repository: `aas`, `aas_payload`, `asset_information`, AAS submodel-reference tables, and owner-scoped thumbnail references
 - Submodel Repository: `submodel`, `submodel_payload`, `submodel_element`, type-specific SME tables, qualifier tables, and file/blob storage
 - Registries and Discovery: descriptor tables, AAS identifiers, specific asset IDs, endpoint rows, and descriptor payload tables
 - Concept Description Repository: `concept_description`
 - Company Lookup: `company_descriptor`, `company_descriptor_name_option`, and `company_descriptor_asset_id_regex`
 - AASX File Server: `aasx_package` and `aasx_package_aas_id`
-- History and evidence: `*_history`, `*_history_payload`, `history_guard_config`, `history_evidence_manifests`, and `history_evidence_artifacts`
+- Shared binary storage: `binary_content`, `file_binary_reference`, `thumbnail_binary_reference`, and `binary_evidence_receipt`
+- History and evidence: `*_history`, `*_history_payload`, `history_guard_config`, `mutation_evidence_state`, `mutation_evidence_artifacts`, `binary_reference_evidence_artifacts`, and the legacy manifest/artifact catalogs
 - ABAC policy repository: `abac_policy_versions`, `abac_policy_rules`, and `abac_policy_events`
 
 ## Payload Tables
@@ -61,7 +62,15 @@ Type-specific SME data is stored in child tables:
 - `basic_event_element`
 - `capability_element`
 
-File SME metadata such as `content_type`, `file_name`, and path-like `value` lives in `file_element`. Binary file content lives in PostgreSQL Large Objects referenced by `file_data.file_oid`.
+File SME metadata such as `content_type`, `file_name`, and path-like `value` lives in `file_element`. Internal File and thumbnail payloads share one canonical PostgreSQL Large Object per SHA-256 and byte-length pair in `binary_content`. Owner-scoped references carry fresh opaque path tokens and preserve authorization boundaries even when bytes are deduplicated. Managed model values use `/aasx/files/<token>/<safe-filename>` as an AASX package-part path; it is not an HTTP endpoint. The legacy `file_data` and `thumbnail_file_data` tables remain available for existing installations and dual-read compatibility.
+
+Patch `1_1_8.sql` adds the shared representation without scanning or rewriting legacy Large Objects. Existing binaries remain readable in their original tables and receive no retroactive WORM receipt. Replacement uploads use canonical storage and remove the replaced legacy association in the same transaction.
+
+### v1.1.8 Upgrade And Rollback
+
+This patch requires a quiesced upgrade. Stop all database-backed BaSyx services, take a restorable backup including PostgreSQL Large Objects, run the configuration service alone, and confirm a clean v1.1.8 schema before starting v1.1.8 services. Exact startup schema validation rejects a newly started mismatched binary, but it cannot stop an older process that was already connected during the patch.
+
+Do not run v1.1.7 and v1.1.8 services against the upgraded database at the same time. Rollback means stopping v1.1.8, restoring the complete pre-upgrade database backup, and then restarting v1.1.7. A binary-only rollback is unsafe because v1.1.7 does not understand canonical binary references. WORM objects written after the backup may remain as immutable orphans after a restore; only objects with committed catalog receipts are valid evidence.
 
 ## Enums And Integer Codes
 

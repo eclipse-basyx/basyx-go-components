@@ -2519,7 +2519,7 @@ func (s *SubmodelRepositoryAPIAPIService) GetFileByPathSubmodelRepo(ctx context.
 		return gen.Response(http.StatusFound, openapi.Redirect{Location: *fileURL}), nil
 	}
 
-	fileContent, contentType, fileName, err := s.submodelBackend.DownloadFileAttachment(decodedSubmodelIdentifier, idShortPath)
+	fileContent, contentType, fileName, err := s.submodelBackend.DownloadFileAttachmentWithContext(ctx, decodedSubmodelIdentifier, idShortPath)
 	if err != nil {
 		if common.IsErrNotFound(err) || errors.Is(err, sql.ErrNoRows) {
 			return newAPIErrorResponse(err, http.StatusNotFound, operation, "FileNotFound"), nil
@@ -2549,22 +2549,9 @@ func (s *SubmodelRepositoryAPIAPIService) PutFileByPathSubmodelRepo(ctx context.
 		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "ShouldEnforceFormula"), nil
 	}
 
-	hasAttachment, err := s.submodelBackend.FileAttachmentExists(decodedSubmodelIdentifier, idShortPath)
-	if err != nil {
-		if common.IsErrNotFound(err) || errors.Is(err, sql.ErrNoRows) {
-			return newAPIErrorResponse(err, http.StatusNotFound, operation, "SubmodelElementNotFound"), nil
-		}
-		if common.IsErrMethodNotAllowed(err) {
-			return newAPIErrorResponse(err, http.StatusMethodNotAllowed, operation, "MethodNotAllowed"), nil
-		}
-		if common.IsErrBadRequest(err) {
-			return newAPIErrorResponse(err, http.StatusBadRequest, operation, "BadRequest"), nil
-		}
-		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "ShouldEnforceFormula"), nil
-	}
+	hasAttachment, attachmentErr := s.submodelBackend.FileAttachmentExists(decodedSubmodelIdentifier, idShortPath)
 
 	if shouldEnforceExtraSecurityCheck {
-
 		ctx = auth.SelectPutFormulaByExistence(ctx, hasAttachment)
 		_, err = s.submodelBackend.GetSubmodelElement(ctx, decodedSubmodelIdentifier, idShortPath, false, "")
 		if err != nil {
@@ -2578,9 +2565,24 @@ func (s *SubmodelRepositoryAPIAPIService) PutFileByPathSubmodelRepo(ctx context.
 			return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "ShouldEnforceFormula"), nil
 		}
 	}
+	if attachmentErr != nil {
+		if common.IsErrNotFound(attachmentErr) || errors.Is(attachmentErr, sql.ErrNoRows) {
+			return newAPIErrorResponse(attachmentErr, http.StatusNotFound, operation, "SubmodelElementNotFound"), nil
+		}
+		if common.IsErrMethodNotAllowed(attachmentErr) {
+			return newAPIErrorResponse(attachmentErr, http.StatusMethodNotAllowed, operation, "MethodNotAllowed"), nil
+		}
+		if common.IsErrBadRequest(attachmentErr) {
+			return newAPIErrorResponse(attachmentErr, http.StatusBadRequest, operation, "BadRequest"), nil
+		}
+		return newAPIErrorResponse(attachmentErr, http.StatusInternalServerError, operation, "FileAttachmentExists"), nil
+	}
 
 	err = s.submodelBackend.UploadFileAttachmentReaderWithHistory(ctx, decodedSubmodelIdentifier, idShortPath, file, fileName)
 	if err != nil {
+		if common.IsErrDenied(err) {
+			return newAPIErrorResponse(err, http.StatusForbidden, operation, "Denied"), nil
+		}
 		if common.IsErrNotFound(err) || errors.Is(err, sql.ErrNoRows) {
 			return newAPIErrorResponse(err, http.StatusNotFound, operation, "SubmodelElementNotFound"), nil
 		}
@@ -2606,6 +2608,9 @@ func (s *SubmodelRepositoryAPIAPIService) DeleteFileByPathSubmodelRepo(ctx conte
 
 	err := s.submodelBackend.DeleteFileAttachmentWithHistory(ctx, decodedSubmodelIdentifier, idShortPath)
 	if err != nil {
+		if common.IsErrDenied(err) {
+			return newAPIErrorResponse(err, http.StatusForbidden, operation, "Denied"), nil
+		}
 		if common.IsErrNotFound(err) || errors.Is(err, sql.ErrNoRows) {
 			return newAPIErrorResponse(err, http.StatusNotFound, operation, "SubmodelElementNotFound"), nil
 		}

@@ -146,6 +146,11 @@ func normalizeS3EvidenceStoreConfig(cfg S3EvidenceStoreConfig) (S3EvidenceStoreC
 //   - error: Error when the store is uninitialized, retention is missing, or S3
 //     rejects the write.
 func (store *S3EvidenceStore) PutArtifact(ctx context.Context, artifact EvidenceArtifact) (*EvidenceReceipt, error) {
+	return store.PutArtifactReader(ctx, artifact, bytes.NewReader(artifact.Data), int64(len(artifact.Data)), SHA256Hex(artifact.Data))
+}
+
+// PutArtifactReader streams one immutable evidence object to S3.
+func (store *S3EvidenceStore) PutArtifactReader(ctx context.Context, artifact EvidenceArtifact, reader io.Reader, sizeBytes int64, sha256 string) (*EvidenceReceipt, error) {
 	if store == nil || store.client == nil {
 		return nil, fmt.Errorf("HISTORY-EVIDENCE-S3-NILSTORE evidence store is not initialized")
 	}
@@ -153,16 +158,17 @@ func (store *S3EvidenceStore) PutArtifact(ctx context.Context, artifact Evidence
 	if objectKey == "" {
 		return nil, fmt.Errorf("HISTORY-EVIDENCE-S3-EMPTYKEY artifact object key is required")
 	}
-	receipt := store.receiptForArtifact(objectKey, artifact)
+	receipt := store.receiptForReader(objectKey, artifact, sizeBytes, sha256)
 	if receipt.RetentionMode == "" || receipt.RetainUntil == nil {
 		return nil, fmt.Errorf("HISTORY-EVIDENCE-S3-RETENTION retention mode and retain-until timestamp are required for evidence writes")
 	}
 	input := &s3.PutObjectInput{
-		Bucket:      aws.String(store.cfg.Bucket),
-		Key:         aws.String(objectKey),
-		Body:        bytes.NewReader(artifact.Data),
-		ContentType: aws.String(artifact.ContentType),
-		Metadata:    cleanS3Metadata(receipt.Metadata),
+		Bucket:        aws.String(store.cfg.Bucket),
+		Key:           aws.String(objectKey),
+		Body:          reader,
+		ContentLength: aws.Int64(sizeBytes),
+		ContentType:   aws.String(artifact.ContentType),
+		Metadata:      cleanS3Metadata(receipt.Metadata),
 	}
 	applyS3Retention(input, receipt)
 	output, err := store.client.PutObject(ctx, input)
@@ -178,6 +184,35 @@ func (store *S3EvidenceStore) PutArtifact(ctx context.Context, artifact Evidence
 	}
 	receipt.Reference.VersionID = versionID
 	return receipt, nil
+}
+
+// ExtendArtifactRetention lengthens retention for an already deduplicated object version.
+func (store *S3EvidenceStore) ExtendArtifactRetention(ctx context.Context, ref EvidenceReference, current EvidenceReceipt, artifact EvidenceArtifact) (*EvidenceReceipt, error) {
+	if store == nil || store.client == nil {
+		return nil, fmt.Errorf("HISTORY-EVIDENCE-S3-NILSTORE evidence store is not initialized")
+	}
+	mode, retainUntil := store.retention(artifact)
+	if retainUntil == nil || mode == "" || (current.RetainUntil != nil && !retainUntil.After(*current.RetainUntil)) {
+		return &current, nil
+	}
+	versionID := strings.TrimSpace(ref.VersionID)
+	if versionID == "" {
+		return nil, fmt.Errorf("HISTORY-EVIDENCE-S3-EXTENDVERSION object version ID is required")
+	}
+	retentionMode := types.ObjectLockRetentionModeGovernance
+	if mode == "compliance" {
+		retentionMode = types.ObjectLockRetentionModeCompliance
+	}
+	_, err := store.client.PutObjectRetention(ctx, &s3.PutObjectRetentionInput{
+		Bucket: aws.String(store.cfg.Bucket), Key: aws.String(strings.TrimSpace(ref.ObjectKey)), VersionId: aws.String(versionID),
+		Retention: &types.ObjectLockRetention{Mode: retentionMode, RetainUntilDate: retainUntil},
+	})
+	if err != nil {
+		return nil, fmt.Errorf("HISTORY-EVIDENCE-S3-EXTENDRETENTION %w", err)
+	}
+	current.RetentionMode = mode
+	current.RetainUntil = retainUntil
+	return &current, nil
 }
 
 // GetArtifact reads an evidence artifact from S3.
@@ -357,9 +392,13 @@ func (store *S3EvidenceStore) objectKey(rawKey string) string {
 }
 
 func (store *S3EvidenceStore) receiptForArtifact(objectKey string, artifact EvidenceArtifact) *EvidenceReceipt {
+	return store.receiptForReader(objectKey, artifact, int64(len(artifact.Data)), SHA256Hex(artifact.Data))
+}
+
+func (store *S3EvidenceStore) receiptForReader(objectKey string, artifact EvidenceArtifact, sizeBytes int64, sha256 string) *EvidenceReceipt {
 	retentionMode, retainUntil := store.retention(artifact)
 	metadata := copyStringMap(artifact.Metadata)
-	metadata["sha256"] = SHA256Hex(artifact.Data)
+	metadata["sha256"] = strings.ToLower(strings.TrimSpace(sha256))
 	metadata["artifact_type"] = strings.TrimSpace(artifact.ArtifactType)
 	return &EvidenceReceipt{
 		Reference: EvidenceReference{
@@ -368,7 +407,7 @@ func (store *S3EvidenceStore) receiptForArtifact(objectKey string, artifact Evid
 			ObjectKey: objectKey,
 		},
 		SHA256:        metadata["sha256"],
-		SizeBytes:     int64(len(artifact.Data)),
+		SizeBytes:     sizeBytes,
 		ContentType:   strings.TrimSpace(artifact.ContentType),
 		RetentionMode: retentionMode,
 		RetainUntil:   retainUntil,
