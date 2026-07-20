@@ -84,22 +84,27 @@ type mutationEvidenceWrite struct {
 }
 
 func loadMutationEvidenceStateTx(ctx context.Context, tx *sql.Tx, table string, identifier string) (*mutationEvidenceState, error) {
+	digest := mutationIdentifierDigest(identifier)
 	query, args, err := goqu.From(TableMutationEvidenceState).
-		Select("last_sequence", "last_event_hash", "last_content_hash", "events_since_snapshot").
-		Where(goqu.Ex{"entity_type": table, "identifier": identifier}).
+		Select("identifier", "last_sequence", "last_event_hash", "last_content_hash", "events_since_snapshot").
+		Where(goqu.Ex{"entity_type": table, "identifier_digest": digest}).
 		ToSQL()
 	if err != nil {
 		return nil, common.NewInternalServerError("HISTORY-EVIDENCE-STATE-BUILD " + err.Error())
 	}
 	var state mutationEvidenceState
+	var storedIdentifier string
 	var previousHash, contentHash sql.NullString
 	if err = tx.QueryRowContext(ctx, query, args...).Scan(
-		&state.lastSequence, &previousHash, &contentHash, &state.eventsSinceSnapshot,
+		&storedIdentifier, &state.lastSequence, &previousHash, &contentHash, &state.eventsSinceSnapshot,
 	); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, nil
 		}
 		return nil, common.NewInternalServerError("HISTORY-EVIDENCE-STATE-QUERY " + err.Error())
+	}
+	if storedIdentifier != identifier {
+		return nil, common.NewInternalServerError("HISTORY-EVIDENCE-STATE-DIGESTCOLLISION identifier digest collision detected")
 	}
 	state.lastEventHash = previousHash.String
 	state.lastContentHash = contentHash.String
@@ -227,8 +232,9 @@ func publishMutationEvidenceTx(ctx context.Context, tx *sql.Tx, cfg Config, writ
 }
 
 func recordMutationEvidenceTx(ctx context.Context, tx *sql.Tx, write mutationEvidenceWrite, eventHash string, contentHash string, receipt EvidenceReceipt) (int64, error) {
+	identifierDigest := mutationIdentifierDigest(write.identifier)
 	record := goqu.Record{
-		"entity_type": write.table, "identifier": write.identifier, "event_sequence": write.sequence,
+		"entity_type": write.table, "identifier": write.identifier, "identifier_digest": identifierDigest, "event_sequence": write.sequence,
 		"event_hash": eventHash, "previous_event_hash": nullableText(write.previousHash),
 		"content_hash": contentHash, "payload_hash": write.payload.hash, "payload_type": write.payload.payloadType,
 		"history_table": nullableText(write.table), "history_id": nil, "history_row_hash": nil,
@@ -251,12 +257,12 @@ func recordMutationEvidenceTx(ctx context.Context, tx *sql.Tx, write mutationEvi
 		return 0, common.NewInternalServerError("HISTORY-EVIDENCE-MUTATION-CATALOGINSERT " + err.Error())
 	}
 	stateRecord := goqu.Record{
-		"entity_type": write.table, "identifier": write.identifier, "last_sequence": write.sequence,
+		"entity_type": write.table, "identifier": write.identifier, "identifier_digest": identifierDigest, "last_sequence": write.sequence,
 		"last_event_hash": eventHash, "last_content_hash": contentHash,
 		"events_since_snapshot": write.eventsSinceSnapshot, "db_updated_at": time.Now().UTC(),
 	}
 	stateSQL, stateArgs, err := goqu.Insert(TableMutationEvidenceState).Rows(stateRecord).
-		OnConflict(goqu.DoUpdate("entity_type,identifier", stateRecord)).ToSQL()
+		OnConflict(goqu.DoUpdate("entity_type,identifier_digest", stateRecord)).ToSQL()
 	if err != nil {
 		return 0, common.NewInternalServerError("HISTORY-EVIDENCE-MUTATION-STATEUPSERTBUILD " + err.Error())
 	}
@@ -264,4 +270,8 @@ func recordMutationEvidenceTx(ctx context.Context, tx *sql.Tx, write mutationEvi
 		return 0, common.NewInternalServerError("HISTORY-EVIDENCE-MUTATION-STATEUPSERT " + err.Error())
 	}
 	return artifactID, nil
+}
+
+func mutationIdentifierDigest(identifier string) string {
+	return SHA256Hex([]byte(identifier))
 }

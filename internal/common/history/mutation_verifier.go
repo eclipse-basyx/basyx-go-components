@@ -129,7 +129,7 @@ func VerifyMutationEvidenceRange(ctx context.Context, db *sql.DB, store Evidence
 
 func mutationCheckpointSequence(ctx context.Context, db *sql.DB, entityType string, identifier string, firstSequence int64) (int64, error) {
 	query, args, err := goqu.From(TableMutationEvidenceEvents).Select("event_sequence").
-		Where(goqu.Ex{"entity_type": entityType, "identifier": identifier, "payload_type": PayloadTypeSnapshot}, goqu.C("event_sequence").Lte(firstSequence)).
+		Where(goqu.Ex{"entity_type": entityType, "identifier_digest": mutationIdentifierDigest(identifier), "identifier": identifier, "payload_type": PayloadTypeSnapshot}, goqu.C("event_sequence").Lte(firstSequence)).
 		Order(goqu.C("event_sequence").Desc()).Limit(1).ToSQL()
 	if err != nil {
 		return 0, common.NewInternalServerError("HISTORY-MUTATIONVERIFY-BUILDCHECKPOINT " + err.Error())
@@ -149,7 +149,7 @@ func loadMutationVerificationRows(ctx context.Context, db *sql.DB, entityType st
 		"artifact_id", "event_sequence", "event_hash", "previous_event_hash", "content_hash", "payload_hash", "payload_type",
 		"provider", "bucket", "object_key", "object_version_id", "sha256", "size_bytes", "content_type", "retention_mode", "retain_until", "legal_hold",
 	).Where(
-		goqu.Ex{"entity_type": entityType, "identifier": identifier},
+		goqu.Ex{"entity_type": entityType, "identifier_digest": mutationIdentifierDigest(identifier), "identifier": identifier},
 		goqu.C("event_sequence").Gte(firstSequence), goqu.C("event_sequence").Lte(lastSequence),
 	).Order(goqu.C("event_sequence").Asc()).ToSQL()
 	if err != nil {

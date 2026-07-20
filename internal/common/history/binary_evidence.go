@@ -311,7 +311,7 @@ func upsertBinaryEvidenceReceiptTx(ctx context.Context, tx *sql.Tx, contentID in
 func latestMutationEvidenceIdentityTx(ctx context.Context, tx *sql.Tx, entityType string, identifier string) (int64, int64, string, error) {
 	query, args, err := goqu.From(TableMutationEvidenceEvents).
 		Select("artifact_id", "event_sequence", "event_hash").
-		Where(goqu.Ex{"entity_type": entityType, "identifier": identifier}).
+		Where(goqu.Ex{"entity_type": entityType, "identifier_digest": mutationIdentifierDigest(identifier), "identifier": identifier}).
 		Order(goqu.C("event_sequence").Desc()).Limit(1).ToSQL()
 	if err != nil {
 		return 0, 0, "", common.NewInternalServerError("HISTORY-EVIDENCE-BINARYREF-BUILDMUTATION " + err.Error())

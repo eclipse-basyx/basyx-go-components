@@ -29,8 +29,10 @@ package migrationintegrationtests
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"database/sql"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -119,6 +121,7 @@ func TestMain(m *testing.M) {
 }
 
 func TestMigrationFromReleaseCandidate5PreservesEnvironmentData(t *testing.T) {
+	longIdentifier := variedCJKIdentifier(880)
 	fixtures := []migrationFixture{
 		{endpoint: "/submodels", path: "testdata/submodel.json", id: "urn:basyx:migration:submodel:1"},
 		{endpoint: "/submodels", path: "testdata/binary_submodel.json", id: "urn:basyx:migration:binary-submodel:1"},
@@ -133,6 +136,7 @@ func TestMigrationFromReleaseCandidate5PreservesEnvironmentData(t *testing.T) {
 	for _, fixture := range fixtures {
 		postFixture(t, fixture)
 	}
+	postGeneratedSubmodel(t, longIdentifier)
 	assertCollectionsContainFixtures(t, fixtures)
 
 	endpoints := binaryMigrationEndpoints()
@@ -157,6 +161,7 @@ func TestMigrationFromReleaseCandidate5PreservesEnvironmentData(t *testing.T) {
 
 	assertCollectionsContainFixtures(t, fixtures)
 	assertSchemaVersion(t, "v1.1.8")
+	assertLongIdentifierEvidenceCatalogAccepts(t, longIdentifier)
 	assertLegacyBinaryStateUnchanged(t, legacyFile, readLegacyFileState(t, "LegacyFile"))
 	assertLegacyBinaryStateUnchanged(t, legacyUntouched, readLegacyFileState(t, "LegacyFileUntouched"))
 	assertLegacyBinaryStateUnchanged(t, legacyThumbnail, readLegacyThumbnailState(t))
@@ -180,6 +185,56 @@ func TestMigrationFromReleaseCandidate5PreservesEnvironmentData(t *testing.T) {
 	require.Equal(t, int64(2), tableRowCount(t, "submodel_supplemental_semantic_id_reference"))
 	require.Equal(t, int64(2), tableRowCount(t, "submodel_element_supplemental_semantic_id_reference"))
 	assertMigratedSupplementalSemanticIDsAreQueryable(t)
+}
+
+func variedCJKIdentifier(length int) string {
+	identifier := make([]rune, length)
+	for index := range identifier {
+		identifier[index] = rune(0x4e00 + index%2000)
+	}
+	return string(identifier)
+}
+
+func postGeneratedSubmodel(t *testing.T, identifier string) {
+	t.Helper()
+	payload, err := json.Marshal(map[string]any{
+		"id": identifier, "idShort": "LongIdentifier", "kind": "Instance", "modelType": "Submodel",
+	})
+	require.NoError(t, err)
+	req, err := http.NewRequestWithContext(t.Context(), http.MethodPost, migrationBaseURL+"/submodels", bytes.NewReader(payload))
+	require.NoError(t, err)
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := testenv.HTTPClient().Do(req)
+	require.NoError(t, err)
+	defer func() { _ = resp.Body.Close() }()
+	responseBody, err := io.ReadAll(resp.Body)
+	require.NoError(t, err)
+	require.Equalf(t, http.StatusCreated, resp.StatusCode, "long-identifier submodel creation failed: %s", string(responseBody))
+}
+
+func assertLongIdentifierEvidenceCatalogAccepts(t *testing.T, identifier string) {
+	t.Helper()
+	db := openMigrationDatabase(t)
+	defer func() { _ = db.Close() }()
+	digestBytes := sha256.Sum256([]byte(identifier))
+	digest := hex.EncodeToString(digestBytes[:])
+	stateQuery, stateArgs, err := goqu.Insert("mutation_evidence_state").Rows(goqu.Record{
+		"entity_type": "submodel_history", "identifier": identifier, "identifier_digest": digest,
+		"last_sequence": 1, "last_event_hash": strings.Repeat("a", 64), "last_content_hash": strings.Repeat("b", 64),
+	}).ToSQL()
+	require.NoError(t, err)
+	_, err = db.ExecContext(t.Context(), stateQuery, stateArgs...)
+	require.NoError(t, err)
+	artifactQuery, artifactArgs, err := goqu.Insert("mutation_evidence_artifacts").Rows(goqu.Record{
+		"entity_type": "submodel_history", "identifier": identifier, "identifier_digest": digest,
+		"event_sequence": 1, "event_hash": strings.Repeat("a", 64), "content_hash": strings.Repeat("b", 64),
+		"payload_hash": strings.Repeat("c", 64), "payload_type": "snapshot", "provider": "s3",
+		"object_key": "migration-test/long-identifier", "sha256": strings.Repeat("d", 64),
+		"size_bytes": 1, "content_type": "application/json",
+	}).ToSQL()
+	require.NoError(t, err)
+	_, err = db.ExecContext(t.Context(), artifactQuery, artifactArgs...)
+	require.NoError(t, err)
 }
 
 func binaryMigrationEndpoints() migrationBinaryEndpoints {

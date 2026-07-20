@@ -574,6 +574,9 @@ func (p *PostgreSQLAASRegistryDatabase) DeleteAssetAdministrationShellDescriptor
 	if len(aasIdentifiers) == 0 {
 		return -1, nil
 	}
+	if err := history.LockMutationsTx(ctx, tx, history.TableDescriptor, aasIdentifiers); err != nil {
+		return 0, err
+	}
 
 	existingDescriptors := make([]model.AssetAdministrationShellDescriptor, len(aasIdentifiers))
 	previousSnapshots := make([]map[string]any, len(aasIdentifiers))

@@ -70,6 +70,42 @@ func TestAppendVersionTxInsertsWithoutUpdatingPreviousRows(t *testing.T) {
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 
+func TestLockMutationsTxAcquiresIdentifiersInStableOrder(t *testing.T) {
+	t.Cleanup(func() {
+		Configure(Config{Mode: ModeOff, Immutability: ImmutabilityNone, AuditIdentityMode: AuditIdentityNone})
+	})
+	Configure(Config{Mode: ModeOff, EvidenceEnabled: true, EvidenceStore: &recordingEvidenceStore{}})
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer func() { _ = db.Close() }()
+	mock.ExpectBegin()
+	mock.ExpectExec(`SELECT pg_advisory_xact_lock`).WithArgs(TableDescriptor+":a", int64(0)).WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectExec(`SELECT pg_advisory_xact_lock`).WithArgs(TableDescriptor+":b", int64(0)).WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectRollback()
+	tx, err := db.Begin()
+	require.NoError(t, err)
+	require.NoError(t, LockMutationsTx(t.Context(), tx, TableDescriptor, []string{"b", "a"}))
+	require.NoError(t, tx.Rollback())
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestLoadMutationEvidenceStateRejectsIdentifierDigestCollision(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer func() { _ = db.Close() }()
+	mock.ExpectBegin()
+	mock.ExpectQuery(mutationEvidenceStateQuery).
+		WillReturnRows(sqlmock.NewRows([]string{"identifier", "last_sequence", "last_event_hash", "last_content_hash", "events_since_snapshot"}).
+			AddRow("different-identifier", 1, strings.Repeat("a", 64), strings.Repeat("b", 64), 0))
+	mock.ExpectRollback()
+	tx, err := db.Begin()
+	require.NoError(t, err)
+	_, err = loadMutationEvidenceStateTx(t.Context(), tx, TableAAS, "aas-1")
+	require.ErrorContains(t, err, "HISTORY-EVIDENCE-STATE-DIGESTCOLLISION")
+	require.NoError(t, tx.Rollback())
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
 func TestAppendVersionTxSnapshotIntervalOneUsesPreviousHashOnly(t *testing.T) {
 	t.Cleanup(func() {
 		Configure(Config{Mode: ModeOff, Immutability: ImmutabilityNone, AuditIdentityMode: AuditIdentityNone})
@@ -787,7 +823,7 @@ type recordingEvidenceStore struct {
 	getCount  int
 }
 
-const mutationEvidenceStateQuery = `SELECT "last_sequence", "last_event_hash", "last_content_hash", "events_since_snapshot" FROM "mutation_evidence_state"`
+const mutationEvidenceStateQuery = `SELECT "identifier", "last_sequence", "last_event_hash", "last_content_hash", "events_since_snapshot" FROM "mutation_evidence_state"`
 
 type seededMutationEvidence struct {
 	sequence    int64
@@ -824,8 +860,8 @@ func seedMutationEvidenceStore(t *testing.T, store *recordingEvidenceStore, tabl
 
 func expectMutationEvidenceState(mock sqlmock.Sqlmock, seed seededMutationEvidence, eventsSinceSnapshot int) {
 	mock.ExpectQuery(mutationEvidenceStateQuery).
-		WillReturnRows(sqlmock.NewRows([]string{"last_sequence", "last_event_hash", "last_content_hash", "events_since_snapshot"}).
-			AddRow(seed.sequence, seed.eventHash, seed.contentHash, eventsSinceSnapshot))
+		WillReturnRows(sqlmock.NewRows([]string{"identifier", "last_sequence", "last_event_hash", "last_content_hash", "events_since_snapshot"}).
+			AddRow("aas-1", seed.sequence, seed.eventHash, seed.contentHash, eventsSinceSnapshot))
 }
 
 func expectMutationEvidenceCatalogInsert(mock sqlmock.Sqlmock, artifactID int64, _ bool) {

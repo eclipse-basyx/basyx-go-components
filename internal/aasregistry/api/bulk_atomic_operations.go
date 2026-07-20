@@ -35,6 +35,7 @@ import (
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/asyncbulk"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/createprecheck"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/history"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 )
@@ -169,6 +170,9 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) executeAtomicAASDescript
 ) asyncbulk.OperationResult {
 	failure := asyncbulk.ItemFailure{}
 	err := s.aasRegistryBackend.ExecuteInTransaction(startErrorCode, commitErrorCode, func(tx *sql.Tx) error {
+		if lockErr := history.LockMutationsTx(ctx, tx, history.TableDescriptor, descriptorIDsFromAASDescriptors(descriptors)); lockErr != nil {
+			return lockErr
+		}
 		for idx, descriptor := range descriptors {
 			statusCode, descriptorErr := execute(ctx, tx, descriptor)
 			if descriptorErr != nil {

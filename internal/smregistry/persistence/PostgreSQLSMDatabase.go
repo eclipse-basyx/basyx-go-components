@@ -465,6 +465,9 @@ func (p *PostgreSQLSMDatabase) DeleteSubmodelDescriptorsByIDsInTransaction(
 	if len(submodelIDs) == 0 {
 		return -1, nil
 	}
+	if err := history.LockMutationsTx(ctx, tx, history.TableSubmodelDescriptor, submodelIDs); err != nil {
+		return 0, err
+	}
 
 	existingDescriptors := make([]model.SubmodelDescriptor, len(submodelIDs))
 	previousSnapshots := make([]map[string]any, len(submodelIDs))
