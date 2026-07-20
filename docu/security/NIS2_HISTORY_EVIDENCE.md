@@ -22,6 +22,8 @@ BaSyx provides technical controls that can support NIS2-aligned integrity, audit
 - Generate, rotate, back up, and distribute signing and verification keys through controlled trust processes.
 - Monitor verifier findings and alert on critical drift or signature failures.
 - Retain verified mutation sequence/hash heads outside the BaSyx PostgreSQL database and advance them only after successful verification. Protect the first trust-on-first-use baseline through an operator-controlled process.
+- Back up and restore the PostgreSQL evidence catalog with the database. The built-in mutation verifier uses it to locate committed WORM objects and their immutable versions.
+- Configure object-store lifecycle deletion separately when required. Object Lock retention expiry permits deletion but does not perform it; keep lifecycle periods aligned with legal and operational verification windows.
 - Manage vulnerability handling, patching, and dependency updates.
 - Use a controlled, quiesced v1.1.8 upgrade with a verified PostgreSQL backup that includes Large Objects. Do not mix v1.1.7 and v1.1.8 database writers or attempt a binary-only rollback.
 - Assess infrastructure and provider supply-chain security.
@@ -37,6 +39,7 @@ BaSyx provides technical controls that can support NIS2-aligned integrity, audit
 - With `history.fullSnapshotInterval: N`, recovery starts from the nearest WORM snapshot and replays WORM diff artifacts up to the requested evidence sequence.
 - Recovery is bounded by the retention period and by the mutations for which evidence storage was enabled. The v1.1.8 upgrade does not convert or retroactively copy existing binaries to WORM; those files remain available through compatibility reads without historical receipts.
 - The built-in recovery command exports verified JSON only. PostgreSQL restore should be performed through an operator-approved disaster-recovery procedure.
+- Evidence-only PostgreSQL storage contains bounded per-entity chain heads and per-event receipt metadata, not model snapshots or diffs. Receipt rows and WORM mutation/reference artifacts still grow linearly with writes; unique binary payloads are deduplicated.
 
 ## Production WORM Smoke Test
 

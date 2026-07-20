@@ -256,7 +256,7 @@ Current model mutation -> independent evidence chain -> synchronous mutation art
 
 The HTTP APIs are unchanged. `history.evidence.enabled` works with `history.mode: off`, `api`, or `audit`. Every covered mutation writes one canonical `mutation_event` artifact before the surrounding PostgreSQL transaction can commit. The artifact format is identical with history enabled or disabled and contains either a full snapshot or an RFC 6902 diff according to `history.fullSnapshotInterval`, plus `effective_diff`, evidence sequence, and predecessor/event hashes. When history is active, its row is inserted separately and linked through receipt-catalog metadata. Evidence-only state reconstruction never reads PostgreSQL history payloads.
 
-`cmd/historyevidenceverifier -mutation` verifies the independent chain against a required, independently retained terminal event hash, reconstructs snapshots, rejects incomplete or divergent requested ranges, validates live retention state, and checks required binary-reference and immutable-binary receipts. Recovery output identifies the terminal event hash, change type, deletion state, operation time, and audit context. The existing manifest, v1 `history_event`, catalog-export, and recovery paths remain available for legacy evidence. The S3-compatible `EvidenceStore` supports MinIO for local testing; production deployments should use an operated WORM service with versioning and object lock.
+`cmd/historyevidenceverifier -mutation` verifies the WORM chain against a required, independently retained terminal event hash, reconstructs snapshots, rejects incomplete or divergent requested ranges, validates live retention state, and checks required binary-reference and immutable-binary receipts. It discovers committed object keys and versions through the PostgreSQL evidence catalog, so database backup and recovery procedures must preserve that catalog. Recovery output identifies the terminal event hash, change type, deletion state, operation time, and audit context. The existing manifest, v1 `history_event`, catalog-export, and recovery paths remain available for legacy evidence. The S3-compatible `EvidenceStore` supports MinIO for local testing; production deployments should use an operated WORM service with versioning and object lock.
 
 For a selected history range, evidence publication:
 
@@ -497,6 +497,9 @@ Scalability risks that remain:
 - The first partial update for a pre-existing identifiable without history still requires a complete live-table materialization.
 - JSONB snapshots are flexible but can be more expensive than narrow relational history for some queries.
 - PostgreSQL guards are not equivalent to WORM storage; privileged database operators can still alter or remove them.
+- Evidence-only mode avoids PostgreSQL model payloads, but the receipt catalog still adds one row per mutation and one reference row per internal upload.
+- WORM stores one mutation artifact per acknowledged mutation and one reference artifact per internal upload. Binary payloads are content-deduplicated, but mutation and reference evidence is intentionally not.
+- Object Lock retention expiry does not delete objects automatically. Eventual deletion requires an operator-configured lifecycle policy, and BaSyx does not currently prune matching receipt rows.
 
 Recommended follow-up options:
 

@@ -216,6 +216,7 @@ class BenchmarkRunner:
         create_failures = []
         update_failures = []
         payload_bytes = 0
+        update_payload_bytes = 0
         for iteration in range(self.args.iterations):
             identifier = f"urn:basyx:benchmark:model:{element_count}:{uuid.uuid4()}"
             payload = build_submodel(identifier, element_count)
@@ -233,6 +234,7 @@ class BenchmarkRunner:
                 continue
             update_url = self.submodel_url(identifier) + "/submodel-elements/Property00000"
             updated_property = property_element(0, f"updated-{iteration}")
+            update_payload_bytes = len(json.dumps(updated_property, separators=(",", ":")).encode("utf-8"))
             response, duration, error = timed_request(
                 "PUT",
                 update_url,
@@ -242,7 +244,7 @@ class BenchmarkRunner:
             )
             self.collect(response, duration, error, update_durations, update_failures)
         self.results.append(summarize(f"create_{element_count}_elements", create_durations, payload_bytes, create_failures))
-        self.results.append(summarize(f"small_update_{element_count}_elements", update_durations, payload_bytes, update_failures))
+        self.results.append(summarize(f"small_update_{element_count}_elements", update_durations, update_payload_bytes, update_failures))
 
     def run_binary_scenario(self, size_mib):
         first_durations = []
