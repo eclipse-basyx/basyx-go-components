@@ -45,6 +45,13 @@ func (s *SubmodelDatabase) appendSubmodelHistoryTx(ctx context.Context, tx *sql.
 	return history.AppendVersionTx(ctx, tx, history.TableSubmodel, submodel.ID(), changeType, previousSnapshot, snapshot, deleted)
 }
 
+func (s *SubmodelDatabase) appendCreatedSubmodelHistoryTx(ctx context.Context, tx *sql.Tx, submodel types.ISubmodel) error {
+	if history.ActiveConfig().EvidenceEnabled {
+		return s.appendCurrentSubmodelHistoryTx(ctx, tx, submodel.ID(), nil, history.ChangeCreated)
+	}
+	return s.appendSubmodelHistoryTx(ctx, tx, submodel, nil, history.ChangeCreated, false)
+}
+
 func (s *SubmodelDatabase) appendCurrentSubmodelHistoryTx(ctx context.Context, tx *sql.Tx, submodelIdentifier string, previousSnapshot map[string]any, changeType string) error {
 	stateReadCtx := ctx
 	if history.ActiveConfig().EvidenceEnabled {

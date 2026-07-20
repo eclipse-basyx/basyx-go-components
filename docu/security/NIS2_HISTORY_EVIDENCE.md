@@ -38,4 +38,29 @@ BaSyx provides technical controls that can support NIS2-aligned integrity, audit
 - Recovery is bounded by the retention period and by the mutations for which evidence storage was enabled. The v1.1.8 upgrade does not convert or retroactively copy existing binaries to WORM; those files remain available through compatibility reads without historical receipts.
 - The built-in recovery command exports verified JSON only. PostgreSQL restore should be performed through an operator-approved disaster-recovery procedure.
 
+## Production WORM Smoke Test
+
+Run this check after provisioning or materially changing the production WORM configuration, using a dedicated test AAS or Submodel that the operator is authorized to mutate:
+
+1. Perform a model mutation and upload a new internal attachment or thumbnail, then upload the same bytes again. Both requests must succeed; each upload must produce a distinct managed model path.
+2. Read the latest `event_sequence` and `event_hash` for the test entity from `mutation_evidence_artifacts`. Store that pair in a protected monitoring, SIEM, or evidence-preservation system outside the BaSyx database.
+3. Run the existing mutation verifier with the real production object-store configuration and the externally retained hash:
+
+   ```sh
+   go run ./cmd/historyevidenceverifier \
+     -config ./config.yaml \
+     -mutation \
+     -table submodel_history \
+     -identifier '<test-submodel-identifier>' \
+     -from 1 \
+     -to '<retained-event-sequence>' \
+     -expected-head-hash '<externally-retained-event-hash>'
+   ```
+
+4. Require a zero exit status and no `severity: error` findings. This verifies the mutation chain, required binary-reference and immutable-binary receipts, object bytes, and live retention state. Preserve the verified head and advance it only after the next newer head passes the same check.
+
+Use an equivalent `aas_history` command for a thumbnail test. This procedure uses ordinary evidence writes and verification; it does not require startup bucket-inspection permissions or permanent probe objects.
+
+Global binary deduplication can expose a noisy new-content-versus-reused-content timing signal to an already-authorized uploader. Deployments with a genuine cross-tenant timing-isolation requirement should use separate databases or service instances for those security boundaries.
+
 Avoid describing a deployment as "NIS2 compliant" based only on BaSyx configuration. The accurate statement is that BaSyx supplies technical controls that may support NIS2-aligned operation when combined with the required organisational and operational measures.

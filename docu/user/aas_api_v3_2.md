@@ -1,30 +1,3 @@
-<!--
-/*******************************************************************************
-* Copyright (C) 2026 the Eclipse BaSyx Authors and Fraunhofer IESE
-*
-* Permission is hereby granted, free of charge, to any person obtaining
-* a copy of this software and associated documentation files (the
-* "Software"), to deal in the Software without restriction, including
-* without limitation the rights to use, copy, modify, merge, publish,
-* distribute, sublicense, and/or sell copies of the Software, and to
-* permit persons to whom the Software is furnished to do so, subject to
-* the following conditions:
-*
-* The above copyright notice and this permission notice shall be
-* included in all copies or substantial portions of the Software.
-*
-* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
-* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
-* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
-* NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
-* LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
-* OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
-* WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-*
-* SPDX-License-Identifier: MIT
-******************************************************************************/
--->
-
 # AAS API v3.2 User Guide
 
 This guide summarizes the user-visible AAS API v3.2 changes in the BaSyx Go components.
@@ -225,7 +198,7 @@ The expected pair of terminal evidence sequence and event hash is a trust anchor
 
 ## Internal Attachments And Thumbnails
 
-Internal File SME attachments and default thumbnails use model values of the form `/aasx/files/<opaque-token>/<safe-filename>`. This is a logical AASX package-part path, not an HTTP endpoint. Upload, download, replacement, and deletion continue to use the standardized attachment and thumbnail endpoints; no `/aasx/files/...` route is exposed.
+Internal File SME attachments and default thumbnails use model values of the form `/aasx/files/<opaque-token>/<safe-filename>`. This is a logical AASX package-part path, not an HTTP endpoint. Upload, download, replacement, and deletion continue to use the standardized attachment and thumbnail endpoints; no `/aasx/files/...` route is exposed. Upload filenames must be one safe path segment and may contain at most 255 UTF-8 bytes. This is a byte limit, so a filename containing multibyte characters may contain fewer than 255 characters.
 
 Every successful upload receives a new opaque token, including same-name replacements. Payloads are deduplicated globally by SHA-256 plus byte length across attachments and thumbnails, while authorization always resolves through the owning AAS, thumbnail, or File SME. Tokens, hashes, PostgreSQL OIDs, WORM object keys, versions, and deduplication outcomes are never lookup authorities or public API metadata. `general.uploadMaxSizeBytes` bounds both the HTTP request and the streamed binary content written to PostgreSQL.
 
@@ -237,7 +210,7 @@ The v1.1.8 upgrade does not scan, rewrite, or WORM-backfill legacy `file_data` a
 
 Apply v1.1.8 as a quiesced database upgrade, not as a rolling deployment. Stop every database-backed BaSyx service, back up the database including Large Objects, run the configuration service alone, and start only v1.1.8 services after the schema is clean. Startup version checks reject newly started mismatched services but cannot stop a v1.1.7 process that was already connected. Rollback requires restoring the complete pre-upgrade backup before v1.1.7 is restarted; changing only the service image is not supported.
 
-Global deduplication does not change authorization or API response content. A residual timing difference can exist between a new payload and a reused payload; deployments that require isolation against this side channel should use separate databases or service instances for separate security boundaries.
+Global deduplication does not change authorization or API response content. An already-authorized uploader may observe a noisy timing difference between storing a new payload and reusing an existing payload, but receives no owner or content metadata about another reference. Deployments with a genuine cross-tenant timing-isolation requirement should use separate databases or service instances for those security boundaries.
 
 ## What Activating Versioning Means
 

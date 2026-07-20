@@ -27,6 +27,7 @@ package binarycontent
 
 import (
 	"context"
+	"io"
 	"strings"
 	"testing"
 
@@ -52,6 +53,7 @@ func TestSafeFileName(t *testing.T) {
 		{name: "encoded slash", fileName: "folder%2freport.txt", wantError: true},
 		{name: "control", fileName: "report\n.txt", wantError: true},
 		{name: "maximum bytes", fileName: strings.Repeat("a", maxSafeFileNameBytes), expected: strings.Repeat("a", maxSafeFileNameBytes)},
+		{name: "maximum multibyte bytes", fileName: strings.Repeat("ü", 127) + "a", expected: strings.Repeat("ü", 127) + "a"},
 		{name: "too many bytes", fileName: strings.Repeat("a", maxSafeFileNameBytes+1), wantError: true},
 		{name: "unicode byte limit", fileName: strings.Repeat("ü", 128), wantError: true},
 	}
@@ -66,6 +68,39 @@ func TestSafeFileName(t *testing.T) {
 			require.Equal(t, test.expected, actual)
 		})
 	}
+}
+
+func TestLargeObjectReaderSeekResetsBufferedState(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer func() { _ = db.Close() }()
+
+	mock.ExpectBegin()
+	mock.ExpectQuery(`SELECT lo_lseek64`).
+		WillReturnRows(sqlmock.NewRows([]string{"lo_lseek64"}).AddRow(int64(0)))
+	mock.ExpectQuery(`SELECT lo_lseek64\(23, -8, 1\)`).
+		WillReturnRows(sqlmock.NewRows([]string{"lo_lseek64"}).AddRow(int64(24)))
+	mock.ExpectRollback()
+
+	tx, err := db.Begin()
+	require.NoError(t, err)
+	reader := &largeObjectReader{
+		ctx: t.Context(), tx: tx, descriptor: 23, pending: []byte("buffered"), done: true,
+	}
+
+	position, err := reader.Seek(0, io.SeekStart)
+	require.NoError(t, err)
+	require.Zero(t, position)
+	require.Empty(t, reader.pending)
+	require.False(t, reader.done)
+
+	reader.pending = []byte("buffered")
+	position, err = reader.Seek(0, io.SeekCurrent)
+	require.NoError(t, err)
+	require.Equal(t, int64(24), position)
+	require.Empty(t, reader.pending)
+	require.NoError(t, tx.Rollback())
+	require.NoError(t, mock.ExpectationsWereMet())
 }
 
 func TestNewReferenceUsesFreshOpaqueManagedPath(t *testing.T) {

@@ -484,10 +484,10 @@ func buildSubmodelModelReference(submodelIdentifier string) (types.IReference, e
 }
 
 func scanSubmodelMetadataRow(rows *sql.Rows) (types.ISubmodel, error) {
-	var identifier, idShort, category, descriptionJSON, displayNameJSON, administrationJSON, edsJSON, supplementalSemanticIDsJSON, extensionsJSON, qualifiersJSON, semanticIDJSON sql.NullString
+	var identifier, idShort, category, descriptionJSON, displayNameJSON, administrationJSON, edsJSON, supplementalSemanticIDsJSON, extensionsJSON, qualifiersJSON, semanticIDJSON, sortIdentifier sql.NullString
 	var kind sql.NullInt64
 
-	if err := rows.Scan(&identifier, &idShort, &category, &kind, &descriptionJSON, &displayNameJSON, &administrationJSON, &edsJSON, &supplementalSemanticIDsJSON, &extensionsJSON, &qualifiersJSON, &semanticIDJSON); err != nil {
+	if err := rows.Scan(&identifier, &idShort, &category, &kind, &descriptionJSON, &displayNameJSON, &administrationJSON, &edsJSON, &supplementalSemanticIDsJSON, &extensionsJSON, &qualifiersJSON, &semanticIDJSON, &sortIdentifier); err != nil {
 		return nil, common.NewInternalServerError("SMREPO-GETSMBYIDTX-SCAN " + err.Error())
 	}
 

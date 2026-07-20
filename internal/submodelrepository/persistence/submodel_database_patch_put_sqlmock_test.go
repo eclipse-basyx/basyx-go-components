@@ -408,7 +408,8 @@ func expectCurrentSubmodelSnapshotLoad(mock sqlmock.Sqlmock, submodelID string, 
 			"extensions_payload",
 			"qualifiers_payload",
 			"semantic_id_payload",
-		}).AddRow(submodelID, idShort, nil, nil, "[]", "[]", "{}", "[]", "[]", "[]", "[]", "{}"))
+			"sort_submodel_identifier",
+		}).AddRow(submodelID, idShort, nil, nil, "[]", "[]", "{}", "[]", "[]", "[]", "[]", "{}", submodelID))
 	mock.ExpectQuery(`SELECT .*FROM "submodel"`).
 		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(100))
 	mock.ExpectQuery(`SELECT .*FROM "submodel_element"`).

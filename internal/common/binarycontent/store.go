@@ -476,6 +476,26 @@ func (reader *largeObjectReader) Read(destination []byte) (int, error) {
 	return count, nil
 }
 
+func (reader *largeObjectReader) Seek(offset int64, whence int) (int64, error) {
+	if whence != io.SeekStart && whence != io.SeekCurrent && whence != io.SeekEnd {
+		return 0, common.NewInternalServerError("BINARYCONTENT-READ-SEEKWHENCE invalid seek origin")
+	}
+	if whence == io.SeekCurrent {
+		offset -= int64(len(reader.pending))
+	}
+	query, args, err := goqu.Select(goqu.Func("lo_lseek64", reader.descriptor, offset, whence)).ToSQL()
+	if err != nil {
+		return 0, common.NewInternalServerError("BINARYCONTENT-READ-BUILDSEEK " + err.Error())
+	}
+	var position int64
+	if err = reader.tx.QueryRowContext(reader.ctx, query, args...).Scan(&position); err != nil {
+		return 0, common.NewInternalServerError("BINARYCONTENT-READ-SEEK " + err.Error())
+	}
+	reader.pending = nil
+	reader.done = false
+	return position, nil
+}
+
 func closeLargeObjectTx(ctx context.Context, tx *sql.Tx, descriptor int) error {
 	query, args, err := goqu.Select(goqu.Func("lo_close", descriptor)).ToSQL()
 	if err != nil {

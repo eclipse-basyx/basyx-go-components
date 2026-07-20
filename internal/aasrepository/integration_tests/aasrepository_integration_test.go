@@ -1261,6 +1261,22 @@ func TestThumbnailAttachmentOperations(t *testing.T) {
 	originalContent, err := os.ReadFile(testFilePath)
 	require.NoError(t, err, "Failed to read thumbnail test file")
 
+	t.Run("0_Filename_UTF8_Byte_Boundaries", func(t *testing.T) {
+		maximumASCIIName := strings.Repeat("a", 255)
+		uploadStatus, uploadErr := uploadThumbnail(thumbnailEndpoint, testFilePath, maximumASCIIName)
+		require.NoError(t, uploadErr, "255-byte thumbnail filename upload failed")
+		require.Equal(t, http.StatusNoContent, uploadStatus, "Expected a 255-byte thumbnail filename to be accepted")
+
+		uploadStatus, uploadErr = uploadThumbnail(thumbnailEndpoint, testFilePath, strings.Repeat("a", 256))
+		require.NoError(t, uploadErr, "256-byte thumbnail filename request failed")
+		require.Equal(t, http.StatusBadRequest, uploadStatus, "Expected a 256-byte thumbnail filename to be rejected")
+
+		maximumMultibyteName := strings.Repeat("ü", 127) + "a"
+		uploadStatus, uploadErr = uploadThumbnail(thumbnailEndpoint, testFilePath, maximumMultibyteName)
+		require.NoError(t, uploadErr, "255-byte multibyte thumbnail filename upload failed")
+		require.Equal(t, http.StatusNoContent, uploadStatus, "Expected a 255-byte multibyte thumbnail filename to be accepted")
+	})
+
 	t.Run("1_Upload_Thumbnail", func(t *testing.T) {
 		uploadStatus, uploadErr := uploadThumbnail(thumbnailEndpoint, testFilePath, "marcus.gif")
 		require.NoError(t, uploadErr, "Thumbnail upload failed")

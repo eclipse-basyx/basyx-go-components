@@ -59,7 +59,7 @@ func (s *SubmodelDatabase) CreateSubmodel(ctx context.Context, submodel types.IS
 		return err
 	}
 
-	if err = s.appendSubmodelHistoryTx(ctx, tx, submodel, nil, history.ChangeCreated, false); err != nil {
+	if err = s.appendCreatedSubmodelHistoryTx(ctx, tx, submodel); err != nil {
 		return err
 	}
 
@@ -84,7 +84,7 @@ func (s *SubmodelDatabase) CreateSubmodelInTransaction(ctx context.Context, tx *
 	if err := s.createSubmodelInTransactionValidated(ctx, tx, submodel); err != nil {
 		return err
 	}
-	return s.appendSubmodelHistoryTx(ctx, tx, submodel, nil, history.ChangeCreated, false)
+	return s.appendCreatedSubmodelHistoryTx(ctx, tx, submodel)
 }
 
 func (s *SubmodelDatabase) createSubmodelInTransactionValidated(ctx context.Context, tx *sql.Tx, submodel types.ISubmodel) error {

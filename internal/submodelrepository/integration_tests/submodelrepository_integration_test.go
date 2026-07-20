@@ -1935,6 +1935,22 @@ func TestFileAttachmentOperations(t *testing.T) {
 	originalFileContent, err := os.ReadFile(testFilePath)
 	require.NoError(t, err, "Failed to read test file")
 
+	t.Run("0_Filename_UTF8_Byte_Boundaries", func(t *testing.T) {
+		maximumASCIIName := strings.Repeat("a", 255)
+		statusCode, uploadErr := uploadFileAttachment(attachmentEndpoint, testFilePath, maximumASCIIName)
+		require.NoError(t, uploadErr, "255-byte filename upload failed")
+		require.Equal(t, http.StatusNoContent, statusCode, "Expected a 255-byte filename to be accepted")
+
+		statusCode, uploadErr = uploadFileAttachment(attachmentEndpoint, testFilePath, strings.Repeat("a", 256))
+		require.NoError(t, uploadErr, "256-byte filename request failed")
+		require.Equal(t, http.StatusBadRequest, statusCode, "Expected a 256-byte filename to be rejected")
+
+		maximumMultibyteName := strings.Repeat("ü", 127) + "a"
+		statusCode, uploadErr = uploadFileAttachment(attachmentEndpoint, testFilePath, maximumMultibyteName)
+		require.NoError(t, uploadErr, "255-byte multibyte filename upload failed")
+		require.Equal(t, http.StatusNoContent, statusCode, "Expected a 255-byte multibyte filename to be accepted")
+	})
+
 	t.Run("1_Upload_File_Attachment", func(t *testing.T) {
 		statusCode, err := uploadFileAttachment(attachmentEndpoint, testFilePath, "marcus.gif")
 		require.NoError(t, err, "File upload failed")
