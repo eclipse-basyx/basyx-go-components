@@ -71,21 +71,6 @@ func (s *AssetAdministrationShellDatabase) appendRemovedSubmodelReferenceHistory
 	})
 }
 
-func (s *AssetAdministrationShellDatabase) appendAssetInformationHistoryTx(ctx context.Context, tx *sql.Tx, aasIdentifier string, previousSnapshot map[string]any, assetInformation types.IAssetInformation) error {
-	jsonable, err := jsonization.ToJsonable(assetInformation)
-	if err != nil {
-		return common.NewInternalServerError("AASREPO-HISTORY-ASSETINFO-TOJSONABLE " + err.Error())
-	}
-	return s.appendMutatedAASHistoryTx(ctx, tx, aasIdentifier, previousSnapshot, func(snapshot map[string]any) error {
-		current, currentErr := aasAssetInformationSnapshot(snapshot)
-		if currentErr != nil {
-			return currentErr
-		}
-		mergeAssetInformationSnapshot(current, jsonable, assetInformation)
-		return nil
-	})
-}
-
 func (s *AssetAdministrationShellDatabase) appendUploadedThumbnailHistoryTx(ctx context.Context, tx *sql.Tx, aasIdentifier string, previousSnapshot map[string]any) error {
 	return s.appendMutatedAASHistoryTx(ctx, tx, aasIdentifier, previousSnapshot, func(snapshot map[string]any) error {
 		thumbnail, err := loadThumbnailSnapshotTx(ctx, tx, aasIdentifier)
@@ -122,26 +107,6 @@ func aasAssetInformationSnapshot(snapshot map[string]any) (map[string]any, error
 		return nil, common.NewInternalServerError("AASREPO-HISTORY-ASSETINFO-INVALID assetInformation snapshot must be an object")
 	}
 	return assetInformation, nil
-}
-
-func mergeAssetInformationSnapshot(current map[string]any, updated map[string]any, assetInformation types.IAssetInformation) {
-	if assetInformation.AssetKind() != 0 {
-		current["assetKind"] = updated["assetKind"]
-	}
-	if assetInformation.GlobalAssetID() != nil {
-		current["globalAssetId"] = updated["globalAssetId"]
-	}
-	if assetInformation.AssetType() != nil {
-		current["assetType"] = updated["assetType"]
-	}
-	if assetInformation.SpecificAssetIDs() != nil {
-		current["specificAssetIds"] = updated["specificAssetIds"]
-	}
-	if assetInformation.DefaultThumbnail() == nil {
-		delete(current, aasDefaultThumbnailSnapshotField)
-	} else {
-		current[aasDefaultThumbnailSnapshotField] = updated[aasDefaultThumbnailSnapshotField]
-	}
 }
 
 func loadThumbnailSnapshotTx(ctx context.Context, tx *sql.Tx, aasIdentifier string) (map[string]any, error) {

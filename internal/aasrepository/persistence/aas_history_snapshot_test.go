@@ -28,33 +28,8 @@ package persistence
 import (
 	"testing"
 
-	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/stretchr/testify/require"
 )
-
-func TestMergeAssetInformationSnapshotClearsOmittedThumbnailOnReplacement(t *testing.T) {
-	current := map[string]any{
-		"assetKind":        "Type",
-		"globalAssetId":    "old-global",
-		"assetType":        "old-type",
-		"specificAssetIds": []any{map[string]any{"name": "old"}},
-		"defaultThumbnail": map[string]any{"path": "thumbnail"},
-	}
-	assetInformation := types.NewAssetInformation(types.AssetKindInstance)
-	newGlobalID := "new-global"
-	assetInformation.SetGlobalAssetID(&newGlobalID)
-
-	mergeAssetInformationSnapshot(current, map[string]any{
-		"assetKind":     "Instance",
-		"globalAssetId": newGlobalID,
-	}, assetInformation)
-
-	require.Equal(t, "Instance", current["assetKind"])
-	require.Equal(t, newGlobalID, current["globalAssetId"])
-	require.Equal(t, "old-type", current["assetType"])
-	require.Equal(t, []any{map[string]any{"name": "old"}}, current["specificAssetIds"])
-	require.NotContains(t, current, "defaultThumbnail")
-}
 
 func TestSnapshotReferenceContainsKeyValue(t *testing.T) {
 	reference := map[string]any{

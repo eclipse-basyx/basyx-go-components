@@ -53,6 +53,9 @@ func (s *SubmodelDatabase) appendCreatedSubmodelHistoryTx(ctx context.Context, t
 }
 
 func (s *SubmodelDatabase) appendCurrentSubmodelHistoryTx(ctx context.Context, tx *sql.Tx, submodelIdentifier string, previousSnapshot map[string]any, changeType string) error {
+	if !history.MutationRecordingEnabled() {
+		return nil
+	}
 	stateReadCtx := ctx
 	if history.ActiveConfig().EvidenceEnabled {
 		stateReadCtx = auth.ContextWithoutQueryFilter(ctx)

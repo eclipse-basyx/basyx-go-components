@@ -194,6 +194,9 @@ func (s *AssetAdministrationShellDatabase) appendAASHistoryTx(ctx context.Contex
 }
 
 func (s *AssetAdministrationShellDatabase) appendCurrentAASHistoryTx(ctx context.Context, tx *sql.Tx, aasIdentifier string, previousSnapshot map[string]any, changeType string) error {
+	if !history.MutationRecordingEnabled() {
+		return nil
+	}
 	aasDBID, err := persistenceutils.GetAssetAdministrationShellDatabaseID(tx, aasIdentifier)
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -467,7 +470,7 @@ func (s *AssetAdministrationShellDatabase) CreateAssetAdministrationShellInTrans
 		}
 	}
 
-	return s.appendAASHistoryTx(ctx, tx, aas, nil, history.ChangeCreated, false)
+	return s.appendCurrentAASHistoryTx(ctx, tx, aas.ID(), nil, history.ChangeCreated)
 }
 
 // createAssetAdministrationShellInTransaction creates an AAS and all dependent records within an existing transaction.
@@ -1001,8 +1004,13 @@ func (s *AssetAdministrationShellDatabase) putAssetAdministrationShellByIDInTran
 		}
 	}
 	var previousSnapshot map[string]any
+	var managedThumbnail *managedThumbnailForReplacement
 	if isUpdate {
 		previousSnapshot, scanErr = s.loadAASHistorySnapshotBeforeMutationTx(ctx, tx, aasIdentifier)
+		if scanErr != nil {
+			return false, scanErr
+		}
+		managedThumbnail, scanErr = loadManagedThumbnailForReplacementTx(tx, existingID)
 		if scanErr != nil {
 			return false, scanErr
 		}
@@ -1025,6 +1033,15 @@ func (s *AssetAdministrationShellDatabase) putAssetAdministrationShellByIDInTran
 	if err := s.createAssetAdministrationShellInTransaction(tx, aas); err != nil {
 		return false, err
 	}
+	if managedThumbnail != nil {
+		newAASID, idErr := persistenceutils.GetAssetAdministrationShellDatabaseID(tx, aasIdentifier)
+		if idErr != nil {
+			return false, common.NewInternalServerError("AASREPO-PUTAAS-GETNEWAASID " + idErr.Error())
+		}
+		if restoreErr := restoreManagedThumbnailAfterReplacementTx(tx, newAASID, aas.AssetInformation(), *managedThumbnail); restoreErr != nil {
+			return false, restoreErr
+		}
+	}
 
 	if shouldEnforce {
 		exists, visible, visErr := s.checkAASVisibilityInTx(ctx, tx, aasIdentifier)
@@ -1043,11 +1060,79 @@ func (s *AssetAdministrationShellDatabase) putAssetAdministrationShellByIDInTran
 	if isUpdate {
 		changeType = history.ChangeUpdated
 	}
-	if err := s.appendAASHistoryTx(ctx, tx, aas, previousSnapshot, changeType, false); err != nil {
+	if err := s.appendCurrentAASHistoryTx(ctx, tx, aasIdentifier, previousSnapshot, changeType); err != nil {
 		return false, err
 	}
 
 	return isUpdate, nil
+}
+
+type managedThumbnailForReplacement struct {
+	managedPath  string
+	contentType  sql.NullString
+	contentID    int64
+	pathToken    string
+	safeFileName string
+}
+
+func loadManagedThumbnailForReplacementTx(tx *sql.Tx, aasDatabaseID int64) (*managedThumbnailForReplacement, error) {
+	query, args, err := goqu.From(goqu.T("thumbnail_file_element").As("thumbnail")).
+		Join(goqu.T(binarycontent.TableThumbnailReference).As("reference"), goqu.On(
+			goqu.I("reference.thumbnail_element_id").Eq(goqu.I("thumbnail.id")),
+		)).
+		Select("thumbnail.value", "thumbnail.content_type", "reference.binary_content_id", "reference.path_token", "reference.safe_file_name").
+		Where(goqu.I("thumbnail.id").Eq(aasDatabaseID)).ToSQL()
+	if err != nil {
+		return nil, common.NewInternalServerError("AASREPO-PUTAAS-BUILDMANAGEDTHUMBNAIL " + err.Error())
+	}
+	var thumbnail managedThumbnailForReplacement
+	if err = tx.QueryRow(query, args...).Scan(
+		&thumbnail.managedPath, &thumbnail.contentType, &thumbnail.contentID, &thumbnail.pathToken, &thumbnail.safeFileName,
+	); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, nil
+		}
+		return nil, common.NewInternalServerError("AASREPO-PUTAAS-QUERYMANAGEDTHUMBNAIL " + err.Error())
+	}
+	return &thumbnail, nil
+}
+
+func restoreManagedThumbnailAfterReplacementTx(tx *sql.Tx, aasDatabaseID int64, assetInformation types.IAssetInformation, thumbnail managedThumbnailForReplacement) error {
+	if assetInformation == nil || assetInformation.DefaultThumbnail() == nil || assetInformation.DefaultThumbnail().Path() != thumbnail.managedPath {
+		return nil
+	}
+	contentType := thumbnail.contentType
+	if updatedContentType := assetInformation.DefaultThumbnail().ContentType(); updatedContentType != nil {
+		contentType = sql.NullString{String: *updatedContentType, Valid: true}
+	}
+	thumbnailQuery, thumbnailArgs, err := goqu.Insert("thumbnail_file_element").Rows(goqu.Record{
+		"id": aasDatabaseID, "content_type": nullableStringValue(contentType),
+		"file_name": thumbnail.safeFileName, "value": thumbnail.managedPath,
+	}).ToSQL()
+	if err != nil {
+		return common.NewInternalServerError("AASREPO-PUTAAS-BUILDRESTORETHUMBNAIL " + err.Error())
+	}
+	if _, err = tx.Exec(thumbnailQuery, thumbnailArgs...); err != nil {
+		return common.NewInternalServerError("AASREPO-PUTAAS-EXECRESTORETHUMBNAIL " + err.Error())
+	}
+	referenceQuery, referenceArgs, err := goqu.Insert(binarycontent.TableThumbnailReference).Rows(goqu.Record{
+		"thumbnail_element_id": aasDatabaseID, "binary_content_id": thumbnail.contentID,
+		"path_token": thumbnail.pathToken, "safe_file_name": thumbnail.safeFileName,
+	}).ToSQL()
+	if err != nil {
+		return common.NewInternalServerError("AASREPO-PUTAAS-BUILDRESTORETHUMBREF " + err.Error())
+	}
+	if _, err = tx.Exec(referenceQuery, referenceArgs...); err != nil {
+		return common.NewInternalServerError("AASREPO-PUTAAS-EXECRESTORETHUMBREF " + err.Error())
+	}
+	return nil
+}
+
+func nullableStringValue(value sql.NullString) any {
+	if value.Valid {
+		return value.String
+	}
+	return nil
 }
 
 // DeleteAssetAdministrationShellByID removes an AAS and checks ABAC visibility before deletion.
@@ -1275,7 +1360,7 @@ func (s *AssetAdministrationShellDatabase) PutAssetInformationByAASIDInTransacti
 		return err
 	}
 
-	return s.appendAssetInformationHistoryTx(ctx, tx, aasIdentifier, previousSnapshot, assetInformation)
+	return s.appendCurrentAASHistoryTx(ctx, tx, aasIdentifier, previousSnapshot, history.ChangeUpdated)
 }
 
 type currentAssetInformationState struct {

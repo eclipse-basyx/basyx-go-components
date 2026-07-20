@@ -1438,6 +1438,52 @@ func TestPutAssetAdministrationShellUnlinksReplacedThumbnailLargeObject(t *testi
 	require.Equal(t, baselineCount, countPostgresLargeObjects(t, integrationTestDSN))
 }
 
+func TestFullAssetAdministrationShellPutPreservesOwnedManagedThumbnail(t *testing.T) {
+	baseURL := aasRepositoryBaseURL
+	aasID := fmt.Sprintf("https://example.com/ids/aas/thumbnail_put_preserve_%d", time.Now().UnixNano())
+	encodedAASID := base64.RawURLEncoding.EncodeToString([]byte(aasID))
+	aasEndpoint := fmt.Sprintf("%s/shells/%s", baseURL, encodedAASID)
+	thumbnailEndpoint := fmt.Sprintf("%s/asset-information/thumbnail", aasEndpoint)
+
+	createAASForLargeObjectCleanupTest(t, baseURL, aasID)
+	defer deleteAASForLargeObjectCleanupTest(t, aasEndpoint)
+	uploadStatus, uploadErr := uploadThumbnail(thumbnailEndpoint, "testFiles/marcus.gif", "marcus.gif")
+	require.NoError(t, uploadErr)
+	require.Equal(t, http.StatusNoContent, uploadStatus)
+
+	shell, getStatus, getErr := getJSONResponse(aasEndpoint)
+	require.NoError(t, getErr)
+	require.Equal(t, http.StatusOK, getStatus)
+	managedPath := requireThumbnailPath(t, shell)
+	shellBody, marshalErr := json.Marshal(shell)
+	require.NoError(t, marshalErr)
+	_, putStatus, _, putErr := putJSONResponse(aasEndpoint, string(shellBody))
+	require.NoError(t, putErr)
+	require.Equal(t, http.StatusNoContent, putStatus)
+
+	content, _, downloadStatus, downloadErr := downloadThumbnail(thumbnailEndpoint)
+	require.NoError(t, downloadErr)
+	require.Equal(t, http.StatusOK, downloadStatus)
+	expectedContent, readErr := os.ReadFile("testFiles/marcus.gif")
+	require.NoError(t, readErr)
+	require.Equal(t, expectedContent, content)
+	updatedShell, updatedStatus, updatedErr := getJSONResponse(aasEndpoint)
+	require.NoError(t, updatedErr)
+	require.Equal(t, http.StatusOK, updatedStatus)
+	require.Equal(t, managedPath, requireThumbnailPath(t, updatedShell))
+}
+
+func requireThumbnailPath(t *testing.T, shell map[string]any) string {
+	t.Helper()
+	assetInformation, ok := shell["assetInformation"].(map[string]any)
+	require.True(t, ok)
+	thumbnail, ok := assetInformation["defaultThumbnail"].(map[string]any)
+	require.True(t, ok)
+	path, ok := thumbnail["path"].(string)
+	require.True(t, ok)
+	return path
+}
+
 func createAASForLargeObjectCleanupTest(t *testing.T, baseURL string, aasID string) {
 	t.Helper()
 
