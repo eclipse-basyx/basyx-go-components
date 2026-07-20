@@ -91,6 +91,9 @@ func (s *SubmodelDatabase) UploadFileAttachmentWithHistory(ctx context.Context, 
 	}
 
 	return common.ExecuteInTransaction(s.db, "SMREPO-UPLOADFILEHIST-STARTTX", "SMREPO-UPLOADFILEHIST-COMMIT", func(tx *sql.Tx) error {
+		if visibilityErr := s.ensureFileAttachmentMutationVisible(ctx, tx, submodelID, idShortPath, "SMREPO-UPLOADFILEHIST"); visibilityErr != nil {
+			return visibilityErr
+		}
 		previousSnapshot, snapshotErr := s.loadSubmodelHistorySnapshotBeforeMutationTx(ctx, tx, submodelID)
 		if snapshotErr != nil {
 			return snapshotErr
@@ -111,6 +114,9 @@ func (s *SubmodelDatabase) UploadFileAttachmentReaderWithHistory(ctx context.Con
 	}
 
 	return common.ExecuteInTransaction(s.db, "SMREPO-UPLOADFILEHIST-STARTTX", "SMREPO-UPLOADFILEHIST-COMMIT", func(tx *sql.Tx) error {
+		if visibilityErr := s.ensureFileAttachmentMutationVisible(ctx, tx, submodelID, idShortPath, "SMREPO-UPLOADFILEHIST"); visibilityErr != nil {
+			return visibilityErr
+		}
 		previousSnapshot, snapshotErr := s.loadSubmodelHistorySnapshotBeforeMutationTx(ctx, tx, submodelID)
 		if snapshotErr != nil {
 			return snapshotErr
@@ -183,6 +189,9 @@ func (s *SubmodelDatabase) DeleteFileAttachmentWithHistory(ctx context.Context, 
 	}
 
 	return common.ExecuteInTransaction(s.db, "SMREPO-DELETEFILEHIST-STARTTX", "SMREPO-DELETEFILEHIST-COMMIT", func(tx *sql.Tx) error {
+		if visibilityErr := s.ensureFileAttachmentMutationVisible(ctx, tx, submodelID, idShortPath, "SMREPO-DELETEFILEHIST"); visibilityErr != nil {
+			return visibilityErr
+		}
 		previousSnapshot, snapshotErr := s.loadSubmodelHistorySnapshotBeforeMutationTx(ctx, tx, submodelID)
 		if snapshotErr != nil {
 			return snapshotErr
@@ -195,4 +204,22 @@ func (s *SubmodelDatabase) DeleteFileAttachmentWithHistory(ctx context.Context, 
 			currentPath:  idShortPath,
 		})
 	})
+}
+
+func (s *SubmodelDatabase) ensureFileAttachmentMutationVisible(ctx context.Context, tx *sql.Tx, submodelID string, idShortPath string, errorPrefix string) error {
+	shouldEnforce, err := shouldEnforceFormula(ctx, errorPrefix+"-SHOULDENFORCE")
+	if err != nil || !shouldEnforce {
+		return err
+	}
+	exists, visible, err := s.checkSubmodelElementVisibilityInTx(ctx, tx, submodelID, idShortPath)
+	if err != nil {
+		return err
+	}
+	if !exists {
+		return common.NewErrNotFound(errorPrefix + "-NOTFOUND Submodel element not found")
+	}
+	if !visible {
+		return common.NewErrDenied(errorPrefix + "-ABACDENIED Mutating this file attachment is not allowed")
+	}
+	return nil
 }

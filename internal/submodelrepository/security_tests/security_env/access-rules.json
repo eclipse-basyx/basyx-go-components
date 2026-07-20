@@ -62,6 +62,9 @@
       ]},
       { "name": "demo_file_attachment_route", "objects": [
         { "ROUTE": "/submodels/*/submodel-elements/DemoFile/attachment" }
+      ]},
+      { "name": "hidden_non_file_attachment_route", "objects": [
+        { "ROUTE": "/submodels/*/submodel-elements/SecurityDeniedProperty/attachment" }
       ]}
     ],
 
@@ -206,6 +209,8 @@
       { "USEACL": "update_role", "USEOBJECTS": [ "demo_security_allowed_property_route" ], "USEFORMULA": "editor_update_security_allowed_requires_old_and_new_value" },
       { "USEACL": "update_member", "USEOBJECTS": [ "demo_security_update_check_property_route" ], "USEFORMULA": "editor_member_update_security_check_requires_old_and_new_value" },
       { "USEACL": "update_role", "USEOBJECTS": [ "demo_file_attachment_route" ], "USEFORMULA": "editor_only" },
+      { "USEACL": "update_role", "USEOBJECTS": [ "hidden_non_file_attachment_route" ], "USEFORMULA": "editor_any_sme_nonexistent_semanticid" },
+      { "USEACL": "delete_role", "USEOBJECTS": [ "demo_file_attachment_route" ], "USEFORMULA": "editor_any_sme_nonexistent_semanticid" },
 
       { "USEACL": "delete_role", "USEOBJECTS": [ "relationship_referable" ], "USEFORMULA": "editor_only" }
     ]

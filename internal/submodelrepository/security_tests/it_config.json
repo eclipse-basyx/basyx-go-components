@@ -436,6 +436,24 @@
     "expectedStatus": 201
   },
   {
+    "context": "POST hidden non-File attachment target - admin",
+    "token": { "user": "admin", "password": "pwd" },
+    "method": "POST",
+    "endpoint": "{{BASYX_IT_API_URL}}/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9Pbmx5RmlsZVN1Ym1vZGVsX1Rlc3Q/submodel-elements",
+    "data": "bodies/post/writeDeniedProperty.json",
+    "expectedStatus": 201
+  },
+  {
+    "context": "PUT attachment-shaped request - userx cannot distinguish a hidden non-File target",
+    "action": "UPLOAD_ATTACHMENT_MULTIPART",
+    "token": { "user": "userx", "password": "pwd" },
+    "method": "PUT",
+    "endpoint": "{{BASYX_IT_API_URL}}/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9Pbmx5RmlsZVN1Ym1vZGVsX1Rlc3Q/submodel-elements/SecurityDeniedProperty/attachment",
+    "data": "../integration_tests/testFiles/marcus.gif",
+    "headers": { "X-Upload-FileName": "hidden-probe.gif" },
+    "expectedStatus": 403
+  },
+  {
     "context": "PUT file attachment - userx denied on create (UPDATE only)",
     "action": "UPLOAD_ATTACHMENT_MULTIPART",
     "token": { "user": "userx", "password": "pwd" },
@@ -454,6 +472,13 @@
     "data": "../integration_tests/testFiles/marcus.gif",
     "headers": { "X-Upload-FileName": "admin-create.gif" },
     "expectedStatus": 204
+  },
+  {
+    "context": "DELETE file attachment - userx denied when target is excluded by formula",
+    "token": { "user": "userx", "password": "pwd" },
+    "method": "DELETE",
+    "endpoint": "{{BASYX_IT_API_URL}}/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9Pbmx5RmlsZVN1Ym1vZGVsX1Rlc3Q/submodel-elements/DemoFile/attachment",
+    "expectedStatus": 403
   },
   {
     "context": "PUT file attachment - userx allowed on update",
