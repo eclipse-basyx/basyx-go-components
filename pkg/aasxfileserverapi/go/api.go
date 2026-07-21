@@ -13,7 +13,8 @@ package openapi
 import (
 	"context"
 	"net/http"
-	"os"
+
+	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 )
 
 // AASXFileServerAPIAPIRouter defines the required methods for binding the api requests to a responses for the AASXFileServerAPIAPI
@@ -40,9 +41,9 @@ type DescriptionAPIAPIRouter interface {
 // and updated with the logic required for the API.
 type AASXFileServerAPIAPIServicer interface {
 	GetAllAASXPackageIds(context.Context, string, int32, string) (ImplResponse, error)
-	PostAASXPackage(context.Context, *os.File, []string, string) (ImplResponse, error)
+	PostAASXPackage(context.Context, common.StagedUpload, []string, string) (ImplResponse, error)
 	GetAASXByPackageId(context.Context, string) (ImplResponse, error)
-	PutAASXByPackageId(context.Context, string, *os.File, []string, string) (ImplResponse, error)
+	PutAASXByPackageId(context.Context, string, common.StagedUpload, []string, string) (ImplResponse, error)
 	DeleteAASXByPackageId(context.Context, string) (ImplResponse, error)
 }
 

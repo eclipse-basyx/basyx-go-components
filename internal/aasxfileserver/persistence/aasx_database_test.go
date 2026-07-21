@@ -30,6 +30,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/stretchr/testify/require"
 )
 
@@ -61,14 +62,8 @@ func TestNormalizeAASIDs(t *testing.T) {
 func TestNormalizeFileName(t *testing.T) {
 	t.Parallel()
 
-	tempFile, err := os.CreateTemp("", "upload-file.aasx.*")
-	require.NoError(t, err)
-	// #nosec G703 -- tempFile.Name() is provided by os.CreateTemp in this test.
-	defer func() { _ = os.Remove(tempFile.Name()) }()
-	defer func() { _ = tempFile.Close() }()
-
-	require.Equal(t, "provided.aasx", normalizeFileName("  provided.aasx ", tempFile))
-	require.Equal(t, "upload-file.aasx", normalizeFileName("", tempFile))
+	require.Equal(t, "provided.aasx", normalizeFileName("  provided.aasx ", "upload-file.aasx"))
+	require.Equal(t, "upload-file.aasx", normalizeFileName("", "upload-file.aasx"))
 }
 
 func TestDetectAASXEnvironmentContentType(t *testing.T) {
@@ -101,7 +96,7 @@ func TestDetectAASXEnvironmentContentType(t *testing.T) {
 			require.NoError(t, err)
 			defer func() { _ = tempFile.Close() }()
 
-			resolved, err := detectAASXEnvironmentContentType(tempFile)
+			resolved, err := detectAASXEnvironmentContentType(tempFile, common.AASXLimitsFromConfig(nil))
 			require.NoError(t, err)
 			require.Equal(t, tt.expected, resolved)
 		})

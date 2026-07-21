@@ -38,6 +38,7 @@ import (
 	aasxapi "github.com/eclipse-basyx/basyx-go-components/internal/aasxfileserver/api"
 	aasxpersistence "github.com/eclipse-basyx/basyx-go-components/internal/aasxfileserver/persistence"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/binarycontent"
 	commonmodel "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/security/abacpolicy"
 	openapi "github.com/eclipse-basyx/basyx-go-components/pkg/aasxfileserverapi/go"
@@ -99,7 +100,11 @@ func runServer(ctx context.Context, configPath string) error {
 	log.Println("✅ Postgres connection established")
 
 	aasxSvc := aasxapi.NewAASXFileServerAPIAPIService(aasxDatabase)
-	aasxCtrl := openapi.NewAASXFileServerAPIAPIController(aasxSvc, "")
+	aasxCtrl := openapi.NewAASXFileServerAPIAPIController(
+		aasxSvc,
+		"",
+		openapi.WithAASXFileServerUploadStager(binarycontent.NewStager(sharedDB), cfg.General.UploadMaxSizeBytes),
+	)
 
 	descSvc := aasxapi.NewDescriptionAPIAPIService()
 	descCtrl := openapi.NewDescriptionAPIAPIController(descSvc, "")

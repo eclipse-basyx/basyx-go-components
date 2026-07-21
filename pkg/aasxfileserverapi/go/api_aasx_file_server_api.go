@@ -13,17 +13,19 @@ package openapi
 import (
 	"net/http"
 	"net/url"
-	"os"
 	"strings"
 
+	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/go-chi/chi/v5"
 )
 
 // AASXFileServerAPIAPIController binds http requests to an api service and writes the service results to the http response
 type AASXFileServerAPIAPIController struct {
-	service      AASXFileServerAPIAPIServicer
-	errorHandler ErrorHandler
-	contextPath  string
+	service            AASXFileServerAPIAPIServicer
+	errorHandler       ErrorHandler
+	contextPath        string
+	uploadStager       common.UploadStager
+	maxUploadSizeBytes int64
 }
 
 // AASXFileServerAPIAPIOption for how the controller is set up.
@@ -33,6 +35,21 @@ type AASXFileServerAPIAPIOption func(*AASXFileServerAPIAPIController)
 func WithAASXFileServerAPIAPIErrorHandler(h ErrorHandler) AASXFileServerAPIAPIOption {
 	return func(c *AASXFileServerAPIAPIController) {
 		c.errorHandler = h
+	}
+}
+
+// WithAASXFileServerUploadStager configures bounded seekable upload storage.
+//
+// Parameters:
+//   - stager: External storage provider used for multipart file parts.
+//   - maxUploadSizeBytes: Maximum complete multipart request size.
+//
+// Returns:
+//   - AASXFileServerAPIAPIOption: Controller option applying the upload settings.
+func WithAASXFileServerUploadStager(stager common.UploadStager, maxUploadSizeBytes int64) AASXFileServerAPIAPIOption {
+	return func(c *AASXFileServerAPIAPIController) {
+		c.uploadStager = stager
+		c.maxUploadSizeBytes = maxUploadSizeBytes
 	}
 }
 
@@ -148,25 +165,13 @@ func (c *AASXFileServerAPIAPIController) GetAllAASXPackageIds(w http.ResponseWri
 
 // PostAASXPackage - Stores the AASX package at the server
 func (c *AASXFileServerAPIAPIController) PostAASXPackage(w http.ResponseWriter, r *http.Request) {
-	if err := r.ParseMultipartForm(32 << 20); err != nil {
-		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
+	upload, err := c.readPackageUpload(w, r)
+	if err != nil {
+		c.errorHandler(w, r, &ParsingError{Param: "file", Err: err}, nil)
 		return
 	}
-	var fileParam *os.File
-	{
-		param, err := ReadFormFileToTempFile(r, "file")
-		if err != nil {
-			c.errorHandler(w, r, &ParsingError{Param: "file", Err: err}, nil)
-			return
-		}
-
-		fileParam = param
-	}
-
-	aasIdsParam := strings.Split(r.FormValue("aasIds"), ",")
-
-	fileNameParam := r.FormValue("fileName")
-	result, err := c.service.PostAASXPackage(r.Context(), fileParam, aasIdsParam, fileNameParam)
+	defer func() { _ = upload.Close() }()
+	result, err := c.service.PostAASXPackage(r.Context(), upload.File, uploadAASIDs(upload), uploadFileName(upload))
 	// If an error occurred, encode the error with the status code
 	if err != nil {
 		c.errorHandler(w, r, err, &result)
@@ -200,30 +205,18 @@ func (c *AASXFileServerAPIAPIController) GetAASXByPackageId(w http.ResponseWrite
 
 // PutAASXByPackageId - Creates or updates the AASX package at the server
 func (c *AASXFileServerAPIAPIController) PutAASXByPackageId(w http.ResponseWriter, r *http.Request) {
-	if err := r.ParseMultipartForm(32 << 20); err != nil {
-		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
-		return
-	}
 	packageIdParam := chi.URLParam(r, "packageId")
 	if packageIdParam == "" {
 		c.errorHandler(w, r, &RequiredError{"packageId"}, nil)
 		return
 	}
-	var fileParam *os.File
-	{
-		param, err := ReadFormFileToTempFile(r, "file")
-		if err != nil {
-			c.errorHandler(w, r, &ParsingError{Param: "file", Err: err}, nil)
-			return
-		}
-
-		fileParam = param
+	upload, err := c.readPackageUpload(w, r)
+	if err != nil {
+		c.errorHandler(w, r, &ParsingError{Param: "file", Err: err}, nil)
+		return
 	}
-
-	aasIdsParam := strings.Split(r.FormValue("aasIds"), ",")
-
-	fileNameParam := r.FormValue("fileName")
-	result, err := c.service.PutAASXByPackageId(r.Context(), packageIdParam, fileParam, aasIdsParam, fileNameParam)
+	defer func() { _ = upload.Close() }()
+	result, err := c.service.PutAASXByPackageId(r.Context(), packageIdParam, upload.File, uploadAASIDs(upload), uploadFileName(upload))
 	// If an error occurred, encode the error with the status code
 	if err != nil {
 		c.errorHandler(w, r, err, &result)
@@ -236,6 +229,30 @@ func (c *AASXFileServerAPIAPIController) PutAASXByPackageId(w http.ResponseWrite
 	}
 	// If no error, encode the body and the result code
 	_ = EncodeJSONResponse(result.Body, &result.Code, w)
+}
+
+func (c *AASXFileServerAPIAPIController) readPackageUpload(w http.ResponseWriter, r *http.Request) (*common.MultipartUpload, error) {
+	if c.uploadStager == nil {
+		return nil, common.NewInternalServerError("AASXFILES-UPLOAD-NOSTAGER upload stager is not configured")
+	}
+	return common.ReadMultipartUpload(w, r, c.maxUploadSizeBytes, "file", c.uploadStager)
+}
+
+func uploadFileName(upload *common.MultipartUpload) string {
+	fileName := strings.TrimSpace(upload.FirstField("fileName"))
+	if fileName == "" {
+		fileName = upload.MultipartFileName
+	}
+	return fileName
+}
+
+func uploadAASIDs(upload *common.MultipartUpload) []string {
+	values := upload.Fields["aasIds"]
+	result := make([]string, 0, len(values))
+	for _, value := range values {
+		result = append(result, strings.Split(value, ",")...)
+	}
+	return result
 }
 
 // DeleteAASXByPackageId - Deletes a specific AASX package from the server

@@ -15,6 +15,7 @@ import (
 	"fmt"
 	"net/http"
 
+	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 )
 
@@ -60,17 +61,22 @@ func DefaultErrorHandler(w http.ResponseWriter, _ *http.Request, err error, resu
 	status := http.StatusInternalServerError
 	info := "Service"
 
-	var parsingErr *ParsingError
-	if ok := errors.As(err, &parsingErr); ok {
-		status = http.StatusBadRequest
-		info = "ParseRequest"
+	if common.IsErrPayloadTooLarge(err) {
+		status = http.StatusRequestEntityTooLarge
+		info = "PayloadTooLarge"
 	} else {
-		var requiredErr *RequiredError
-		if errors.As(err, &requiredErr) {
-			status = http.StatusUnprocessableEntity
-			info = "RequiredParameter"
-		} else if result != nil && result.Code != 0 {
-			status = result.Code
+		var parsingErr *ParsingError
+		if ok := errors.As(err, &parsingErr); ok {
+			status = http.StatusBadRequest
+			info = "ParseRequest"
+		} else {
+			var requiredErr *RequiredError
+			if errors.As(err, &requiredErr) {
+				status = http.StatusUnprocessableEntity
+				info = "RequiredParameter"
+			} else if result != nil && result.Code != 0 {
+				status = result.Code
+			}
 		}
 	}
 
