@@ -26,6 +26,7 @@
 package persistence
 
 import (
+	"bytes"
 	"os"
 	"path/filepath"
 	"testing"
@@ -50,6 +51,18 @@ func TestParseCursorID(t *testing.T) {
 
 	_, err = ParseCursorID("abc")
 	require.Error(t, err)
+}
+
+func TestResolvePackageContentTypeRejectsMalformedAASX(t *testing.T) {
+	t.Parallel()
+
+	_, err := resolvePackageContentTypeForUpload(
+		bytes.NewReader([]byte("not an AASX package")),
+		"invalid.aasx",
+		common.AASXLimitsFromConfig(nil),
+	)
+	require.Error(t, err)
+	require.True(t, common.IsErrBadRequest(err), "expected bad request, got %v", err)
 }
 
 func TestNormalizeAASIDs(t *testing.T) {

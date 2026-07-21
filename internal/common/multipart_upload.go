@@ -35,7 +35,11 @@ import (
 	"strings"
 )
 
-const maxMultipartMetadataBytes int64 = 1 << 20
+const (
+	maxMultipartMetadataBytes      int64 = 1 << 20
+	maxMultipartTotalMetadataBytes int64 = 2 << 20
+	maxMultipartPartCount                = 256
+)
 
 type multipartFileStager func(context.Context, string, string, io.Reader, int64) (StagedUpload, error)
 
@@ -157,6 +161,8 @@ func readMultipartUploadFields(
 		acceptedFileFields[field] = struct{}{}
 	}
 	result := &MultipartUpload{Fields: make(map[string][]string)}
+	partCount := 0
+	var metadataBytes int64
 	cleanup := true
 	defer func() {
 		if cleanup {
@@ -171,6 +177,11 @@ func readMultipartUploadFields(
 		}
 		if nextErr != nil {
 			return nil, normalizeMultipartReadError(nextErr, maxRequestBytes)
+		}
+		partCount++
+		if partCount > maxMultipartPartCount {
+			_ = part.Close()
+			return nil, NewErrPayloadTooLarge(fmt.Sprintf("COMMON-MULTIPART-PARTCOUNT request contains more than %d parts", maxMultipartPartCount))
 		}
 
 		name := part.FormName()
@@ -191,6 +202,10 @@ func readMultipartUploadFields(
 			}
 			continue
 		}
+		if strings.TrimSpace(part.FileName()) != "" {
+			_ = part.Close()
+			return nil, NewErrBadRequest(fmt.Sprintf("COMMON-MULTIPART-UNEXPECTEDFILE file part %q is not supported", name))
+		}
 
 		value, readErr := io.ReadAll(io.LimitReader(part, maxMultipartMetadataBytes+1))
 		closeErr := part.Close()
@@ -203,6 +218,10 @@ func readMultipartUploadFields(
 		if int64(len(value)) > maxMultipartMetadataBytes {
 			return nil, NewErrPayloadTooLarge(fmt.Sprintf("COMMON-MULTIPART-METADATA field %q exceeds %d bytes", name, maxMultipartMetadataBytes))
 		}
+		metadataBytes += int64(len(value))
+		if metadataBytes > maxMultipartTotalMetadataBytes {
+			return nil, NewErrPayloadTooLarge(fmt.Sprintf("COMMON-MULTIPART-METADATATOTAL metadata exceeds %d bytes", maxMultipartTotalMetadataBytes))
+		}
 		result.Fields[name] = append(result.Fields[name], string(value))
 	}
 
@@ -214,7 +233,7 @@ func readMultipartUploadFields(
 }
 
 func normalizeMultipartReadError(err error, maximum int64) error {
-	if IsErrPayloadTooLarge(err) {
+	if IsErrPayloadTooLarge(err) || IsInternalServerError(err) || IsErrServiceUnavailable(err) {
 		return err
 	}
 	var maxBytesError *http.MaxBytesError

@@ -183,3 +183,101 @@ func TestReadMultipartUploadRejectsOversizedRequest(t *testing.T) {
 		t.Fatalf("expected payload-too-large error, got %v", err)
 	}
 }
+
+func TestReadMultipartUploadPreservesStagingErrors(t *testing.T) {
+	var body bytes.Buffer
+	writer := multipart.NewWriter(&body)
+	part, err := writer.CreateFormFile("file", "package.aasx")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = part.Write([]byte("package")); err != nil {
+		t.Fatal(err)
+	}
+	if err = writer.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	request := httptest.NewRequest(http.MethodPost, "/packages", &body)
+	request.Header.Set("Content-Type", writer.FormDataContentType())
+	stagingErr := NewInternalServerError("COMMON-MULTIPARTTEST-STAGE database unavailable")
+	_, err = ReadMultipartUpload(httptest.NewRecorder(), request, 4096, "file", func(context.Context, io.Reader, int64) (StagedUpload, error) {
+		return nil, stagingErr
+	})
+	if !IsInternalServerError(err) {
+		t.Fatalf("expected internal staging error, got %v", err)
+	}
+}
+
+func TestReadMultipartUploadRejectsExcessivePartCount(t *testing.T) {
+	var body bytes.Buffer
+	writer := multipart.NewWriter(&body)
+	for index := 0; index < maxMultipartPartCount; index++ {
+		if err := writer.WriteField("metadata", ""); err != nil {
+			t.Fatal(err)
+		}
+	}
+	part, err := writer.CreateFormFile("file", "package.aasx")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = part.Write([]byte("package")); err != nil {
+		t.Fatal(err)
+	}
+	if err = writer.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	request := httptest.NewRequest(http.MethodPost, "/packages", &body)
+	request.Header.Set("Content-Type", writer.FormDataContentType())
+	if _, err = ReadMultipartUpload(httptest.NewRecorder(), request, 1<<20, "file", multipartMemoryStager); !IsErrPayloadTooLarge(err) {
+		t.Fatalf("expected part-count limit error, got %v", err)
+	}
+}
+
+func TestReadMultipartUploadRejectsExcessiveMetadata(t *testing.T) {
+	var body bytes.Buffer
+	writer := multipart.NewWriter(&body)
+	for index := 0; index < 3; index++ {
+		if err := writer.WriteField("metadata", string(bytes.Repeat([]byte("x"), 700<<10))); err != nil {
+			t.Fatal(err)
+		}
+	}
+	part, err := writer.CreateFormFile("file", "package.aasx")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = part.Write([]byte("package")); err != nil {
+		t.Fatal(err)
+	}
+	if err = writer.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	request := httptest.NewRequest(http.MethodPost, "/packages", &body)
+	request.Header.Set("Content-Type", writer.FormDataContentType())
+	if _, err = ReadMultipartUpload(httptest.NewRecorder(), request, 4<<20, "file", multipartMemoryStager); !IsErrPayloadTooLarge(err) {
+		t.Fatalf("expected cumulative metadata limit error, got %v", err)
+	}
+}
+
+func TestReadMultipartUploadRejectsUnexpectedFilePart(t *testing.T) {
+	var body bytes.Buffer
+	writer := multipart.NewWriter(&body)
+	part, err := writer.CreateFormFile("other", "unexpected.bin")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = part.Write([]byte("content")); err != nil {
+		t.Fatal(err)
+	}
+	if err = writer.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	request := httptest.NewRequest(http.MethodPost, "/packages", &body)
+	request.Header.Set("Content-Type", writer.FormDataContentType())
+	if _, err = ReadMultipartUpload(httptest.NewRecorder(), request, 4096, "file", multipartMemoryStager); !IsErrBadRequest(err) {
+		t.Fatalf("expected bad request for unexpected file part, got %v", err)
+	}
+}

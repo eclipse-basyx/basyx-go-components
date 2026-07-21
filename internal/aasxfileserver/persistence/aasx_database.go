@@ -315,6 +315,7 @@ func (p *AASXFileServerDatabase) GetPackageByID(ctx context.Context, packageID s
 	query, args, err := dialect.From("aasx_package").
 		Select("id", "file_oid", "file_name", "content_type").
 		Where(goqu.C("package_id").Eq(packageID)).
+		ForShare(exp.Wait).
 		ToSQL()
 	if err != nil {
 		return nil, common.NewInternalServerError("AASXFS-GETPACKAGE-BUILDSQL " + err.Error())
@@ -371,6 +372,7 @@ func (p *AASXFileServerDatabase) DeletePackageByID(ctx context.Context, packageI
 	selectSQL, selectArgs, err := dialect.From("aasx_package").
 		Select("id", "file_oid").
 		Where(goqu.C("package_id").Eq(packageID)).
+		ForUpdate(exp.Wait).
 		ToSQL()
 	if err != nil {
 		return common.NewInternalServerError("AASXFS-DELETEPACKAGE-BUILDSELECT " + err.Error())
@@ -508,7 +510,10 @@ func resolvePackageContentTypeForUpload(file io.ReadSeeker, fileName string, lim
 	if errors.Is(aasxErr, aasx.ErrReaderLimitExceeded) {
 		return "", common.NewErrPayloadTooLarge("AASXFS-RESOLVEMIME-AASXLIMIT " + aasxErr.Error())
 	}
-	if aasxErr == nil && aasxContentType != "" {
+	if aasxErr != nil {
+		return "", common.NewErrBadRequest("AASXFS-RESOLVEMIME-INVALIDAASX " + aasxErr.Error())
+	}
+	if aasxContentType != "" {
 		resolvedContentType = aasxContentType
 	}
 

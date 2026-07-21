@@ -120,7 +120,7 @@ func (s *AASXFileServerAPIAPIService) GetAllAASXPackageIds(ctx context.Context, 
 // Returns:
 //   - openapi.ImplResponse: Created package description or mapped API error.
 //   - error: Reserved for failures not represented by an API response.
-func (s *AASXFileServerAPIAPIService) PostAASXPackage(ctx context.Context, file common.StagedUpload, aasIDs []string, fileName string) (openapi.ImplResponse, error) {
+func (s *AASXFileServerAPIAPIService) PostAASXPackage(ctx context.Context, file openapi.StagedUpload, aasIDs []string, fileName string) (openapi.ImplResponse, error) {
 	const operation = "PostAASXPackage"
 
 	if file == nil {
@@ -195,7 +195,7 @@ func (s *AASXFileServerAPIAPIService) GetAASXByPackageId(ctx context.Context, pa
 // Returns:
 //   - openapi.ImplResponse: HTTP 204 for replacement, HTTP 201 for creation, or a mapped API error.
 //   - error: Reserved for failures not represented by an API response.
-func (s *AASXFileServerAPIAPIService) PutAASXByPackageId(ctx context.Context, packageID string, file common.StagedUpload, aasIDs []string, fileName string) (openapi.ImplResponse, error) {
+func (s *AASXFileServerAPIAPIService) PutAASXByPackageId(ctx context.Context, packageID string, file openapi.StagedUpload, aasIDs []string, fileName string) (openapi.ImplResponse, error) {
 	const operation = "PutAASXByPackageId"
 
 	if file == nil {

@@ -11,6 +11,7 @@
 package openapi
 
 import (
+	"log"
 	"net/http"
 	"net/url"
 	"strings"
@@ -200,7 +201,9 @@ func (c *AASXFileServerAPIAPIController) GetAASXByPackageId(w http.ResponseWrite
 		return
 	}
 	// If no error, encode the body and the result code
-	_ = EncodeJSONResponse(result.Body, &result.Code, w)
+	if encodeErr := EncodeJSONResponse(result.Body, &result.Code, w); encodeErr != nil {
+		log.Printf("AASXFILES-GETPACKAGE-STREAM response stream failed: %v", encodeErr)
+	}
 }
 
 // PutAASXByPackageId - Creates or updates the AASX package at the server

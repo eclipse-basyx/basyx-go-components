@@ -64,6 +64,12 @@ func DefaultErrorHandler(w http.ResponseWriter, _ *http.Request, err error, resu
 	if common.IsErrPayloadTooLarge(err) {
 		status = http.StatusRequestEntityTooLarge
 		info = "PayloadTooLarge"
+	} else if common.IsErrServiceUnavailable(err) {
+		status = http.StatusServiceUnavailable
+		info = "ServiceUnavailable"
+	} else if common.IsInternalServerError(err) {
+		status = http.StatusInternalServerError
+		info = "InternalServerError"
 	} else {
 		var parsingErr *ParsingError
 		if ok := errors.As(err, &parsingErr); ok {

@@ -23,12 +23,14 @@
 * SPDX-License-Identifier: MIT
 ******************************************************************************/
 
+// Package openapi tests the generated AASX File Server transport adapters.
 package openapi
 
 import (
 	"bytes"
 	"context"
 	"database/sql"
+	"errors"
 	"io"
 	"mime/multipart"
 	"net/http"
@@ -68,6 +70,20 @@ type trackingReadCloser struct {
 	closed bool
 }
 
+type failingResponseWriter struct {
+	header http.Header
+}
+
+func (writer *failingResponseWriter) Header() http.Header {
+	return writer.header
+}
+
+func (*failingResponseWriter) Write([]byte) (int, error) {
+	return 0, errors.New("client disconnected")
+}
+
+func (*failingResponseWriter) WriteHeader(int) {}
+
 func (reader *trackingReadCloser) Close() error {
 	reader.closed = true
 	return nil
@@ -77,7 +93,7 @@ func (service *captureAASXFileServerService) GetAllAASXPackageIds(context.Contex
 	return Response(http.StatusOK, nil), nil
 }
 
-func (service *captureAASXFileServerService) PostAASXPackage(_ context.Context, file common.StagedUpload, aasIDs []string, fileName string) (ImplResponse, error) {
+func (service *captureAASXFileServerService) PostAASXPackage(_ context.Context, file StagedUpload, aasIDs []string, fileName string) (ImplResponse, error) {
 	content, err := io.ReadAll(file)
 	if err != nil {
 		return ImplResponse{}, err
@@ -90,7 +106,7 @@ func (service *captureAASXFileServerService) GetAASXByPackageId(context.Context,
 	return Response(http.StatusNotFound, nil), nil
 }
 
-func (service *captureAASXFileServerService) PutAASXByPackageId(context.Context, string, common.StagedUpload, []string, string) (ImplResponse, error) {
+func (service *captureAASXFileServerService) PutAASXByPackageId(context.Context, string, StagedUpload, []string, string) (ImplResponse, error) {
 	return Response(http.StatusNoContent, nil), nil
 }
 
@@ -157,6 +173,32 @@ func TestPostAASXPackageRejectsOversizedRequest(t *testing.T) {
 	}
 }
 
+func TestPostAASXPackageReportsStagingFailureAsInternalError(t *testing.T) {
+	var body bytes.Buffer
+	writer := multipart.NewWriter(&body)
+	part, err := writer.CreateFormFile("file", "package.aasx")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = part.Write([]byte("package")); err != nil {
+		t.Fatal(err)
+	}
+	if err = writer.Close(); err != nil {
+		t.Fatal(err)
+	}
+	failedStager := func(context.Context, io.Reader, int64) (common.StagedUpload, error) {
+		return nil, common.NewInternalServerError("AASXFILES-TESTSTAGE-DATABASE unavailable")
+	}
+	controller := NewAASXFileServerAPIAPIController(&captureAASXFileServerService{}, "", WithAASXFileServerUploadStager(failedStager, 4096))
+	request := httptest.NewRequest(http.MethodPost, "/packages", &body)
+	request.Header.Set("Content-Type", writer.FormDataContentType())
+	response := httptest.NewRecorder()
+	controller.PostAASXPackage(response, request)
+	if response.Code != http.StatusInternalServerError {
+		t.Fatalf("expected status 500, got %d: %s", response.Code, response.Body.String())
+	}
+}
+
 func TestEncodeJSONResponseStreamsAndClosesDownload(t *testing.T) {
 	stream := &trackingReadCloser{Reader: bytes.NewReader(bytes.Repeat([]byte("chunk"), 20000))}
 	response := httptest.NewRecorder()
@@ -171,5 +213,19 @@ func TestEncodeJSONResponseStreamsAndClosesDownload(t *testing.T) {
 	}
 	if response.Body.Len() != len("chunk")*20000 {
 		t.Fatalf("unexpected streamed byte count: %d", response.Body.Len())
+	}
+}
+
+func TestEncodeJSONResponseClosesDownloadAfterCopyFailure(t *testing.T) {
+	stream := &trackingReadCloser{Reader: bytes.NewReader([]byte("package"))}
+	status := http.StatusOK
+	err := EncodeJSONResponse(FileDownload{
+		Content: stream, ContentType: "application/aasx+json", Filename: "package.aasx",
+	}, &status, &failingResponseWriter{header: make(http.Header)})
+	if err == nil {
+		t.Fatal("expected response copy error")
+	}
+	if !stream.closed {
+		t.Fatal("expected download stream to be closed after copy failure")
 	}
 }
