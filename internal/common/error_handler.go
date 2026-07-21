@@ -43,6 +43,14 @@ type sqlStateError interface {
 	SQLState() string
 }
 
+type payloadTooLargeError struct {
+	message string
+}
+
+func (err *payloadTooLargeError) Error() string {
+	return "413 Payload Too Large: " + err.message
+}
+
 // IsPostgresErrorCode reports whether an error has a PostgreSQL SQLSTATE.
 //
 // The function unwraps err and checks any error that exposes SQLState().
@@ -136,6 +144,22 @@ func NewErrNotFound(elementID string) error {
 //	// Returns error: "400 Bad Request: invalid JSON format"
 func NewErrBadRequest(message string) error {
 	return errors.New("400 Bad Request: " + message)
+}
+
+// NewErrPayloadTooLarge creates a standardized "413 Payload Too Large" error.
+//
+// Parameters:
+//   - message: Description of which configured payload limit was exceeded
+//
+// Returns:
+//   - error: An error with message format "413 Payload Too Large: <message>"
+//
+// Example:
+//
+//	err := NewErrPayloadTooLarge("upload exceeds configured maximum")
+//	// Returns error: "413 Payload Too Large: upload exceeds configured maximum"
+func NewErrPayloadTooLarge(message string) error {
+	return &payloadTooLargeError{message: message}
 }
 
 // NewInternalServerError creates a standardized "500 Internal Server Error" error.
@@ -249,6 +273,25 @@ func IsErrBadRequest(err error) bool {
 	return hasErrorPrefix(err, "400 Bad Request: ")
 }
 
+// IsErrPayloadTooLarge checks if the given error is a "413 Payload Too Large" error.
+//
+// Parameters:
+//   - err: Error to inspect
+//
+// Returns:
+//   - bool: true if the error is a 413 Payload Too Large error, false otherwise
+//
+// Example:
+//
+//	err := NewErrPayloadTooLarge("request too large")
+//	if IsErrPayloadTooLarge(err) {
+//	    // Handle the exceeded payload limit.
+//	}
+func IsErrPayloadTooLarge(err error) bool {
+	var typedError *payloadTooLargeError
+	return errors.As(err, &typedError) || hasErrorPrefix(err, "413 Payload Too Large: ")
+}
+
 // IsInternalServerError checks if the given error is a "500 Internal Server Error" error.
 //
 // Parameters:
@@ -356,10 +399,27 @@ func NewErrorResponse(err error, errorCode int, component string, function strin
 	if IsErrServiceUnavailable(err) {
 		errorCode = http.StatusServiceUnavailable
 	}
+	if IsErrPayloadTooLarge(err) {
+		errorCode = http.StatusRequestEntityTooLarge
+	}
 	return model.NewErrorResponse(err, errorCode, component, function, info)
 }
 
-// WriteErrorResponse writes a standardized error response.
+// WriteErrorResponse writes a standardized JSON error response.
+//
+// Typed common errors may override status; for example, a payload-limit error
+// is always emitted as HTTP 413.
+//
+// Parameters:
+//   - w: Destination response writer.
+//   - err: Error exposed in the structured response.
+//   - status: Fallback HTTP status code.
+//   - component: Component name used in the correlation code.
+//   - function: Operation name used in the correlation code.
+//   - info: Step name used in the correlation code.
+//
+// Returns:
+//   - error: JSON encoding or response-write error.
 func WriteErrorResponse(w http.ResponseWriter, err error, status int, component, function, info string) error {
 	response := NewErrorResponse(err, status, component, function, info)
 	return model.EncodeJSONResponse(response.Body, &response.Code, w)

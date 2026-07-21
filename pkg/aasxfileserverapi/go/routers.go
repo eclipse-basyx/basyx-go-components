@@ -14,10 +14,8 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
-	"mime/multipart"
 	"net/http"
 	"net/url"
-	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -48,9 +46,11 @@ const errMsgRequiredMissing = "required parameter is missing"
 const errMsgMinValueConstraint = "provided parameter is not respecting minimum value constraint"
 const errMsgMaxValueConstraint = "provided parameter is not respecting maximum value constraint"
 
-// FileDownload is a helper payload type for file downloads with custom headers.
+// FileDownload describes a streamed binary response with custom headers.
+// Content owns its backing resources and is closed by EncodeJSONResponse after
+// the copy completes or fails.
 type FileDownload struct {
-	Content     []byte
+	Content     io.ReadCloser
 	ContentType string
 	Filename    string
 	Headers     map[string]string
@@ -70,62 +70,32 @@ func NewRouter(routers ...Router) chi.Router {
 	return router
 }
 
-// EncodeJSONResponse uses the json encoder to write an interface to the http response with an optional status code
+// EncodeJSONResponse writes a streamed download or JSON API response.
+//
+// FileDownload bodies are copied without materializing them and are always
+// closed before this function returns.
+//
+// Parameters:
+//   - i: FileDownload or JSON-serializable response body.
+//   - status: Optional HTTP status; nil defaults to HTTP 200.
+//   - w: Destination response writer.
+//
+// Returns:
+//   - error: Stream-copy or JSON-encoding error.
 func EncodeJSONResponse(i interface{}, status *int, w http.ResponseWriter) error {
 	wHeader := w.Header()
 
 	if i != nil {
 		switch d := i.(type) {
 		case FileDownload:
-			model.SetSafeDownloadHeaders(wHeader, d.Filename, d.ContentType)
-			for key, value := range d.Headers {
-				if strings.TrimSpace(key) == "" {
-					continue
-				}
-				wHeader.Set(key, value)
-			}
-			if status != nil {
-				w.WriteHeader(*status)
-			} else {
-				w.WriteHeader(http.StatusOK)
-			}
-			_, err := w.Write(d.Content)
-			return err
+			return writeFileDownload(w, status, d)
 		case *FileDownload:
 			if d != nil {
-				model.SetSafeDownloadHeaders(wHeader, d.Filename, d.ContentType)
-				for key, value := range d.Headers {
-					if strings.TrimSpace(key) == "" {
-						continue
-					}
-					wHeader.Set(key, value)
-				}
-				if status != nil {
-					w.WriteHeader(*status)
-				} else {
-					w.WriteHeader(http.StatusOK)
-				}
-				_, err := w.Write(d.Content)
-				return err
+				return writeFileDownload(w, status, *d)
 			}
 		}
 	}
 
-	f, ok := i.(*os.File)
-	if ok {
-		data, err := io.ReadAll(f)
-		if err != nil {
-			return err
-		}
-		model.SetSafeDownloadHeaders(wHeader, f.Name(), http.DetectContentType(data))
-		if status != nil {
-			w.WriteHeader(*status)
-		} else {
-			w.WriteHeader(http.StatusOK)
-		}
-		_, err = w.Write(data)
-		return err
-	}
 	wHeader.Set("Content-Type", "application/json; charset=UTF-8")
 
 	if status != nil {
@@ -141,60 +111,24 @@ func EncodeJSONResponse(i interface{}, status *int, w http.ResponseWriter) error
 	return nil
 }
 
-// ReadFormFileToTempFile reads file data from a request form and writes it to a temporary file
-func ReadFormFileToTempFile(r *http.Request, key string) (*os.File, error) {
-	_, fileHeader, err := r.FormFile(key)
-	if err != nil {
-		return nil, err
+func writeFileDownload(w http.ResponseWriter, status *int, download FileDownload) error {
+	if download.Content == nil {
+		return errors.New("AASXFILES-DOWNLOAD-NILCONTENT download stream is required")
 	}
-
-	return readFileHeaderToTempFile(fileHeader)
-}
-
-// ReadFormFilesToTempFiles reads files array data from a request form and writes it to a temporary files
-func ReadFormFilesToTempFiles(r *http.Request, key string) ([]*os.File, error) {
-	if err := r.ParseMultipartForm(32 << 20); err != nil {
-		return nil, err
-	}
-
-	files := make([]*os.File, 0, len(r.MultipartForm.File[key]))
-
-	for _, fileHeader := range r.MultipartForm.File[key] {
-		file, err := readFileHeaderToTempFile(fileHeader)
-		if err != nil {
-			return nil, err
+	defer func() { _ = download.Content.Close() }()
+	model.SetSafeDownloadHeaders(w.Header(), download.Filename, download.ContentType)
+	for key, value := range download.Headers {
+		if strings.TrimSpace(key) != "" {
+			w.Header().Set(key, value)
 		}
-
-		files = append(files, file)
 	}
-
-	return files, nil
-}
-
-// readFileHeaderToTempFile reads multipart.FileHeader and writes it to a temporary file
-func readFileHeaderToTempFile(fileHeader *multipart.FileHeader) (*os.File, error) {
-	formFile, err := fileHeader.Open()
-	if err != nil {
-		return nil, err
+	responseStatus := http.StatusOK
+	if status != nil {
+		responseStatus = *status
 	}
-
-	defer formFile.Close()
-
-	// Use .* as suffix, because the asterisk is a placeholder for the random value,
-	// and the period allows consumers of this file to remove the suffix to obtain the original file name
-	file, err := os.CreateTemp("", fileHeader.Filename+".*")
-	if err != nil {
-		return nil, err
-	}
-
-	defer file.Close()
-
-	_, err = io.Copy(file, formFile)
-	if err != nil {
-		return nil, err
-	}
-
-	return file, nil
+	w.WriteHeader(responseStatus)
+	_, err := io.Copy(w, download.Content)
+	return err
 }
 
 func parseTimes(param string) ([]time.Time, error) {

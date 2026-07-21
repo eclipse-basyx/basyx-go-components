@@ -31,7 +31,6 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -48,7 +47,13 @@ type AASXFileServerAPIAPIService struct {
 	backend *persistence.AASXFileServerDatabase
 }
 
-// NewAASXFileServerAPIAPIService constructs an API service backed by a Postgres persistence layer.
+// NewAASXFileServerAPIAPIService constructs an AASX file server service.
+//
+// Parameters:
+//   - backend: PostgreSQL persistence backend used by all service operations.
+//
+// Returns:
+//   - *AASXFileServerAPIAPIService: Configured service instance.
 func NewAASXFileServerAPIAPIService(backend *persistence.AASXFileServerDatabase) *AASXFileServerAPIAPIService {
 	return &AASXFileServerAPIAPIService{backend: backend}
 }
@@ -104,8 +109,18 @@ func (s *AASXFileServerAPIAPIService) GetAllAASXPackageIds(ctx context.Context, 
 	}), nil
 }
 
-// PostAASXPackage stores a new package with a server-generated package identifier.
-func (s *AASXFileServerAPIAPIService) PostAASXPackage(ctx context.Context, file *os.File, aasIDs []string, fileName string) (openapi.ImplResponse, error) {
+// PostAASXPackage stores a staged package under a server-generated identifier.
+//
+// Parameters:
+//   - ctx: Request context containing cancellation and configured AASX limits.
+//   - file: Seekable staged package owned by the HTTP request.
+//   - aasIDs: AAS identifiers associated with the package.
+//   - fileName: Preferred download filename.
+//
+// Returns:
+//   - openapi.ImplResponse: Created package description or mapped API error.
+//   - error: Reserved for failures not represented by an API response.
+func (s *AASXFileServerAPIAPIService) PostAASXPackage(ctx context.Context, file openapi.StagedUpload, aasIDs []string, fileName string) (openapi.ImplResponse, error) {
 	const operation = "PostAASXPackage"
 
 	if file == nil {
@@ -115,6 +130,9 @@ func (s *AASXFileServerAPIAPIService) PostAASXPackage(ctx context.Context, file 
 	rawPackageID := generatePackageID()
 	record, err := s.backend.CreatePackage(ctx, rawPackageID, file, aasIDs, fileName)
 	if err != nil {
+		if common.IsErrPayloadTooLarge(err) {
+			return newAPIErrorResponse(err, http.StatusRequestEntityTooLarge, operation, "PayloadTooLarge"), nil
+		}
 		if common.IsErrConflict(err) {
 			return newAPIErrorResponse(err, http.StatusConflict, operation, "PackageIdConflict"), nil
 		}
@@ -127,7 +145,15 @@ func (s *AASXFileServerAPIAPIService) PostAASXPackage(ctx context.Context, file 
 	return openapi.Response(http.StatusCreated, toPackageDescription(*record)), nil
 }
 
-// GetAASXByPackageId returns the binary payload and metadata headers for one package.
+// GetAASXByPackageId returns a streamed package and its download metadata.
+//
+// Parameters:
+//   - ctx: Request context used for lookup, streaming, and cancellation.
+//   - packageID: Base64URL-encoded package identifier from the request path.
+//
+// Returns:
+//   - openapi.ImplResponse: FileDownload owning the response stream, or a mapped API error.
+//   - error: Reserved for failures not represented by an API response.
 func (s *AASXFileServerAPIAPIService) GetAASXByPackageId(ctx context.Context, packageID string) (openapi.ImplResponse, error) {
 	const operation = "GetAASXByPackageId"
 
@@ -157,8 +183,19 @@ func (s *AASXFileServerAPIAPIService) GetAASXByPackageId(ctx context.Context, pa
 	}), nil
 }
 
-// PutAASXByPackageId creates or updates a package addressed by the path package identifier.
-func (s *AASXFileServerAPIAPIService) PutAASXByPackageId(ctx context.Context, packageID string, file *os.File, aasIDs []string, fileName string) (openapi.ImplResponse, error) {
+// PutAASXByPackageId creates or replaces a staged package.
+//
+// Parameters:
+//   - ctx: Request context containing cancellation and configured AASX limits.
+//   - packageID: Base64URL-encoded package identifier from the request path.
+//   - file: Seekable staged replacement package owned by the HTTP request.
+//   - aasIDs: Replacement AAS identifiers associated with the package.
+//   - fileName: Preferred replacement download filename.
+//
+// Returns:
+//   - openapi.ImplResponse: HTTP 204 for replacement, HTTP 201 for creation, or a mapped API error.
+//   - error: Reserved for failures not represented by an API response.
+func (s *AASXFileServerAPIAPIService) PutAASXByPackageId(ctx context.Context, packageID string, file openapi.StagedUpload, aasIDs []string, fileName string) (openapi.ImplResponse, error) {
 	const operation = "PutAASXByPackageId"
 
 	if file == nil {
@@ -172,6 +209,9 @@ func (s *AASXFileServerAPIAPIService) PutAASXByPackageId(ctx context.Context, pa
 
 	updated, record, err := s.backend.PutPackage(ctx, decodedPackageID, file, aasIDs, fileName)
 	if err != nil {
+		if common.IsErrPayloadTooLarge(err) {
+			return newAPIErrorResponse(err, http.StatusRequestEntityTooLarge, operation, "PayloadTooLarge"), nil
+		}
 		if common.IsErrConflict(err) {
 			return newAPIErrorResponse(err, http.StatusConflict, operation, "PackageIdConflict"), nil
 		}

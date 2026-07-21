@@ -163,14 +163,21 @@ POSTGRES_CONNMAXLIFETIMEMINUTES=5
 
 All HTTP timeout values are in seconds and must be greater than zero. The legacy Viper-derived names such as `SERVER_READTIMEOUTSECONDS` still work; readable aliases with underscores and `BASYX_` prefixes, such as `BASYX_SERVER_READ_TIMEOUT_SECONDS`, are also supported.
 
-For `aasenvironmentservice`, `aasrepositoryservice`, and `submodelrepositoryservice`, uploads are additionally bounded by:
+Binary uploads and AASX package expansion are bounded independently:
 
 ```yaml
 general:
     uploadMaxSizeBytes: 134217728
+    aasxMaxPartCount: 10000
+    aasxMaxOPCMetadataSizeBytes: 16777216
+    aasxMaxPartExpandedSizeBytes: 134217728
+    aasxMaxTotalExpandedSizeBytes: 134217728
+    aasxMaxThumbnailSizeBytes: 16777216
 ```
 
-This value limits the accepted request body and provides a second streamed-content limit before attachment or thumbnail bytes are written to PostgreSQL. Multipart overhead counts toward the HTTP request limit.
+`uploadMaxSizeBytes` limits the compressed HTTP request, including multipart overhead. The AASX limits constrain entry count, expanded OPC metadata, each expanded part, all expanded payload parts combined, and thumbnails respectively. All limits must be positive, and the total expanded limit must be greater than or equal to the per-part limit, which must be greater than or equal to the thumbnail limit.
+
+The AASX File Server uses transaction-scoped PostgreSQL large objects for seekable upload staging, so it does not require a writable local temporary directory. Package downloads are streamed from PostgreSQL instead of being materialized in process memory.
 
 - `POST /upload`
 - `PUT /shells/{aasIdentifier}/asset-information/thumbnail`

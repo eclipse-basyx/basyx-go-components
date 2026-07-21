@@ -49,137 +49,147 @@ const defaultServerStrictVerification = string(commonmodel.VerificationModePermi
 // DefaultConfig holds all default values for configuration options.
 // These values are also used to mark default values in the printed configuration.
 var DefaultConfig = struct {
-	ServerHost                          string
-	ServerPort                          int
-	ServerContextPath                   string
-	ServerCacheEnabled                  bool
-	ServerStrictVerification            string
-	ServerVerificationEndpointAvailable bool
-	ServerReadHeaderTimeoutSeconds      int
-	ServerReadTimeoutSeconds            int
-	ServerWriteTimeoutSeconds           int
-	ServerIdleTimeoutSeconds            int
-	ServerShutdownTimeoutSeconds        int
-	PgPort                              int
-	PgDBName                            string
-	PgSSLMode                           string
-	PgMaxOpen                           int
-	PgMaxIdle                           int
-	PgConnLifetime                      int
-	AllowedOrigins                      []string
-	AllowedMethods                      []string
-	AllowedHeaders                      []string
-	AllowCredentials                    bool
-	OIDCTrustlistPath                   string
-	OIDCJWKSURL                         string
-	ABACEnabled                         bool
-	ABACModelPath                       string
-	ABACPolicyFileImport                string
-	ABACPolicyScope                     string
-	ABACManagementAPIEnabled            bool
-	GeneralImplicitCasts                bool
-	GeneralDescriptorDebug              bool
-	GeneralDiscoveryIntegration         bool
-	GeneralSupportsSingularSSID         bool
-	GeneralEnableCustomHeaderMW         bool
-	GeneralTrustProxyHeaders            bool
-	GeneralTrustedProxyCIDRs            []string
-	GeneralAASPreconfigPaths            []string
-	GeneralBulkBatchLimit               int
-	GeneralUploadMaxSizeBytes           int64
-	HistoryConfigMode                   string
-	HistoryConfigRetentionDays          int
-	HistoryConfigFullSnapshotInterval   int
-	HistoryConfigImmutability           string
-	HistoryConfigAuditIdentityMode      string
-	HistoryEvidenceEnabled              bool
-	HistoryEvidenceProvider             string
-	HistoryEvidenceBucket               string
-	HistoryEvidencePrefix               string
-	HistoryEvidenceRegion               string
-	HistoryEvidenceEndpoint             string
-	HistoryEvidenceAccessKeyID          string
-	HistoryEvidenceSecretAccessKey      string
-	HistoryEvidenceUsePathStyle         bool
-	HistoryEvidenceRetentionMode        string
-	HistoryEvidenceRetentionDays        int
-	HistoryEvidenceWriteTimeoutSeconds  int
-	HistoryEvidenceSigningPrivateKey    string
-	HistoryEvidenceSigningPublicKey     string
-	HistoryEvidenceSigningRequired      bool
-	HistoryIntegrityAnchorProvider      string
-	EventingEnabled                     bool
-	EventingFormat                      string
-	EventingSinks                       []string
-	EventingOutboxEnabled               bool
-	EventingTopicPrefix                 string
-	SwaggerEnabled                      bool
+	ServerHost                           string
+	ServerPort                           int
+	ServerContextPath                    string
+	ServerCacheEnabled                   bool
+	ServerStrictVerification             string
+	ServerVerificationEndpointAvailable  bool
+	ServerReadHeaderTimeoutSeconds       int
+	ServerReadTimeoutSeconds             int
+	ServerWriteTimeoutSeconds            int
+	ServerIdleTimeoutSeconds             int
+	ServerShutdownTimeoutSeconds         int
+	PgPort                               int
+	PgDBName                             string
+	PgSSLMode                            string
+	PgMaxOpen                            int
+	PgMaxIdle                            int
+	PgConnLifetime                       int
+	AllowedOrigins                       []string
+	AllowedMethods                       []string
+	AllowedHeaders                       []string
+	AllowCredentials                     bool
+	OIDCTrustlistPath                    string
+	OIDCJWKSURL                          string
+	ABACEnabled                          bool
+	ABACModelPath                        string
+	ABACPolicyFileImport                 string
+	ABACPolicyScope                      string
+	ABACManagementAPIEnabled             bool
+	GeneralImplicitCasts                 bool
+	GeneralDescriptorDebug               bool
+	GeneralDiscoveryIntegration          bool
+	GeneralSupportsSingularSSID          bool
+	GeneralEnableCustomHeaderMW          bool
+	GeneralTrustProxyHeaders             bool
+	GeneralTrustedProxyCIDRs             []string
+	GeneralAASPreconfigPaths             []string
+	GeneralBulkBatchLimit                int
+	GeneralUploadMaxSizeBytes            int64
+	GeneralAASXMaxPartCount              int
+	GeneralAASXMaxOPCMetadataSizeBytes   int64
+	GeneralAASXMaxPartExpandedSizeBytes  int64
+	GeneralAASXMaxTotalExpandedSizeBytes int64
+	GeneralAASXMaxThumbnailSizeBytes     int64
+	HistoryConfigMode                    string
+	HistoryConfigRetentionDays           int
+	HistoryConfigFullSnapshotInterval    int
+	HistoryConfigImmutability            string
+	HistoryConfigAuditIdentityMode       string
+	HistoryEvidenceEnabled               bool
+	HistoryEvidenceProvider              string
+	HistoryEvidenceBucket                string
+	HistoryEvidencePrefix                string
+	HistoryEvidenceRegion                string
+	HistoryEvidenceEndpoint              string
+	HistoryEvidenceAccessKeyID           string
+	HistoryEvidenceSecretAccessKey       string
+	HistoryEvidenceUsePathStyle          bool
+	HistoryEvidenceRetentionMode         string
+	HistoryEvidenceRetentionDays         int
+	HistoryEvidenceWriteTimeoutSeconds   int
+	HistoryEvidenceSigningPrivateKey     string
+	HistoryEvidenceSigningPublicKey      string
+	HistoryEvidenceSigningRequired       bool
+	HistoryIntegrityAnchorProvider       string
+	EventingEnabled                      bool
+	EventingFormat                       string
+	EventingSinks                        []string
+	EventingOutboxEnabled                bool
+	EventingTopicPrefix                  string
+	SwaggerEnabled                       bool
 }{
-	ServerHost:                          "0.0.0.0",
-	ServerPort:                          5004,
-	ServerContextPath:                   "",
-	ServerCacheEnabled:                  false,
-	ServerStrictVerification:            defaultServerStrictVerification,
-	ServerVerificationEndpointAvailable: true,
-	ServerReadHeaderTimeoutSeconds:      15,
-	ServerReadTimeoutSeconds:            300,
-	ServerWriteTimeoutSeconds:           300,
-	ServerIdleTimeoutSeconds:            60,
-	ServerShutdownTimeoutSeconds:        10,
-	PgPort:                              5432,
-	PgDBName:                            "basyxTestDB",
-	PgSSLMode:                           "disable",
-	PgMaxOpen:                           50,
-	PgMaxIdle:                           50,
-	PgConnLifetime:                      5,
-	AllowedOrigins:                      []string{},
-	AllowedMethods:                      []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
-	AllowedHeaders:                      []string{},
-	AllowCredentials:                    false,
-	OIDCTrustlistPath:                   "config/trustlist.json",
-	OIDCJWKSURL:                         "",
-	ABACEnabled:                         false,
-	ABACModelPath:                       "config/access_rules/access-rules.json",
-	ABACPolicyFileImport:                "",
-	ABACPolicyScope:                     "",
-	ABACManagementAPIEnabled:            false,
-	GeneralImplicitCasts:                true,
-	GeneralDescriptorDebug:              false,
-	GeneralDiscoveryIntegration:         false,
-	GeneralSupportsSingularSSID:         false,
-	GeneralEnableCustomHeaderMW:         false,
-	GeneralTrustProxyHeaders:            false,
-	GeneralTrustedProxyCIDRs:            []string{},
-	GeneralAASPreconfigPaths:            []string{},
-	GeneralBulkBatchLimit:               1000,
-	GeneralUploadMaxSizeBytes:           128 << 20,
-	HistoryConfigMode:                   "off",
-	HistoryConfigRetentionDays:          0,
-	HistoryConfigFullSnapshotInterval:   1,
-	HistoryConfigImmutability:           "none",
-	HistoryConfigAuditIdentityMode:      "none",
-	HistoryEvidenceEnabled:              false,
-	HistoryEvidenceProvider:             "none",
-	HistoryEvidenceBucket:               "",
-	HistoryEvidencePrefix:               "basyx-history-evidence",
-	HistoryEvidenceRegion:               "us-east-1",
-	HistoryEvidenceEndpoint:             "",
-	HistoryEvidenceAccessKeyID:          "",
-	HistoryEvidenceSecretAccessKey:      "",
-	HistoryEvidenceUsePathStyle:         false,
-	HistoryEvidenceRetentionMode:        "",
-	HistoryEvidenceRetentionDays:        0,
-	HistoryEvidenceWriteTimeoutSeconds:  10,
-	HistoryEvidenceSigningPrivateKey:    "",
-	HistoryEvidenceSigningPublicKey:     "",
-	HistoryEvidenceSigningRequired:      false,
-	HistoryIntegrityAnchorProvider:      "none",
-	EventingEnabled:                     false,
-	EventingFormat:                      "cloudevents",
-	EventingSinks:                       []string{},
-	EventingOutboxEnabled:               false,
-	EventingTopicPrefix:                 "basyx",
-	SwaggerEnabled:                      true,
+	ServerHost:                           "0.0.0.0",
+	ServerPort:                           5004,
+	ServerContextPath:                    "",
+	ServerCacheEnabled:                   false,
+	ServerStrictVerification:             defaultServerStrictVerification,
+	ServerVerificationEndpointAvailable:  true,
+	ServerReadHeaderTimeoutSeconds:       15,
+	ServerReadTimeoutSeconds:             300,
+	ServerWriteTimeoutSeconds:            300,
+	ServerIdleTimeoutSeconds:             60,
+	ServerShutdownTimeoutSeconds:         10,
+	PgPort:                               5432,
+	PgDBName:                             "basyxTestDB",
+	PgSSLMode:                            "disable",
+	PgMaxOpen:                            50,
+	PgMaxIdle:                            50,
+	PgConnLifetime:                       5,
+	AllowedOrigins:                       []string{},
+	AllowedMethods:                       []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
+	AllowedHeaders:                       []string{},
+	AllowCredentials:                     false,
+	OIDCTrustlistPath:                    "config/trustlist.json",
+	OIDCJWKSURL:                          "",
+	ABACEnabled:                          false,
+	ABACModelPath:                        "config/access_rules/access-rules.json",
+	ABACPolicyFileImport:                 "",
+	ABACPolicyScope:                      "",
+	ABACManagementAPIEnabled:             false,
+	GeneralImplicitCasts:                 true,
+	GeneralDescriptorDebug:               false,
+	GeneralDiscoveryIntegration:          false,
+	GeneralSupportsSingularSSID:          false,
+	GeneralEnableCustomHeaderMW:          false,
+	GeneralTrustProxyHeaders:             false,
+	GeneralTrustedProxyCIDRs:             []string{},
+	GeneralAASPreconfigPaths:             []string{},
+	GeneralBulkBatchLimit:                1000,
+	GeneralUploadMaxSizeBytes:            128 << 20,
+	GeneralAASXMaxPartCount:              defaultAASXMaxPartCount,
+	GeneralAASXMaxOPCMetadataSizeBytes:   defaultAASXMaxOPCMetadataSizeBytes,
+	GeneralAASXMaxPartExpandedSizeBytes:  defaultAASXMaxPartExpandedSizeBytes,
+	GeneralAASXMaxTotalExpandedSizeBytes: defaultAASXMaxTotalExpandedSizeBytes,
+	GeneralAASXMaxThumbnailSizeBytes:     defaultAASXMaxThumbnailSizeBytes,
+	HistoryConfigMode:                    "off",
+	HistoryConfigRetentionDays:           0,
+	HistoryConfigFullSnapshotInterval:    1,
+	HistoryConfigImmutability:            "none",
+	HistoryConfigAuditIdentityMode:       "none",
+	HistoryEvidenceEnabled:               false,
+	HistoryEvidenceProvider:              "none",
+	HistoryEvidenceBucket:                "",
+	HistoryEvidencePrefix:                "basyx-history-evidence",
+	HistoryEvidenceRegion:                "us-east-1",
+	HistoryEvidenceEndpoint:              "",
+	HistoryEvidenceAccessKeyID:           "",
+	HistoryEvidenceSecretAccessKey:       "",
+	HistoryEvidenceUsePathStyle:          false,
+	HistoryEvidenceRetentionMode:         "",
+	HistoryEvidenceRetentionDays:         0,
+	HistoryEvidenceWriteTimeoutSeconds:   10,
+	HistoryEvidenceSigningPrivateKey:     "",
+	HistoryEvidenceSigningPublicKey:      "",
+	HistoryEvidenceSigningRequired:       false,
+	HistoryIntegrityAnchorProvider:       "none",
+	EventingEnabled:                      false,
+	EventingFormat:                       "cloudevents",
+	EventingSinks:                        []string{},
+	EventingOutboxEnabled:                false,
+	EventingTopicPrefix:                  "basyx",
+	SwaggerEnabled:                       true,
 }
 
 const (
@@ -379,6 +389,11 @@ type GeneralConfig struct {
 	TrustProxyHeaders                      bool     `mapstructure:"trustProxyHeaders" yaml:"trustProxyHeaders" json:"trustProxyHeaders"`                                                                // Trust Forwarded/X-Forwarded-* headers when request source matches trustedProxyCIDRs
 	TrustedProxyCIDRs                      []string `mapstructure:"trustedProxyCIDRs" yaml:"trustedProxyCIDRs" json:"trustedProxyCIDRs"`                                                                // CIDR allowlist for proxy source addresses eligible to provide forwarded headers
 	UploadMaxSizeBytes                     int64    `mapstructure:"uploadMaxSizeBytes" yaml:"uploadMaxSizeBytes" json:"uploadMaxSizeBytes"`                                                             // Maximum allowed upload payload size in bytes
+	AASXMaxPartCount                       int      `mapstructure:"aasxMaxPartCount" yaml:"aasxMaxPartCount" json:"aasxMaxPartCount"`                                                                   // Maximum non-directory entries in an AASX package
+	AASXMaxOPCMetadataSizeBytes            int64    `mapstructure:"aasxMaxOPCMetadataSizeBytes" yaml:"aasxMaxOPCMetadataSizeBytes" json:"aasxMaxOPCMetadataSizeBytes"`                                  // Maximum combined expanded OPC metadata size
+	AASXMaxPartExpandedSizeBytes           int64    `mapstructure:"aasxMaxPartExpandedSizeBytes" yaml:"aasxMaxPartExpandedSizeBytes" json:"aasxMaxPartExpandedSizeBytes"`                               // Maximum expanded size of one AASX payload part
+	AASXMaxTotalExpandedSizeBytes          int64    `mapstructure:"aasxMaxTotalExpandedSizeBytes" yaml:"aasxMaxTotalExpandedSizeBytes" json:"aasxMaxTotalExpandedSizeBytes"`                            // Maximum combined expanded AASX payload size
+	AASXMaxThumbnailSizeBytes              int64    `mapstructure:"aasxMaxThumbnailSizeBytes" yaml:"aasxMaxThumbnailSizeBytes" json:"aasxMaxThumbnailSizeBytes"`                                        // Maximum expanded size of an AASX thumbnail
 	AASPreconfigPaths                      []string `mapstructure:"aasPreconfigPaths" yaml:"aasPreconfigPaths" json:"aasPreconfigPaths"`                                                                // Files/directories loaded at startup for AAS preconfiguration
 	BulkBatchLimit                         int      `mapstructure:"bulkBatchLimit" yaml:"bulkBatchLimit" json:"bulkBatchLimit"`                                                                         // Maximum row count per generated bulk SQL statement
 }
@@ -559,6 +574,24 @@ func validateGeneralConfig(cfg *Config) error {
 	}
 	if cfg.General.BulkBatchLimit <= 0 {
 		return fmt.Errorf("CONFIG-GENERAL-BULKBATCHLIMIT general.bulkBatchLimit must be greater than 0")
+	}
+	if cfg.General.UploadMaxSizeBytes <= 0 {
+		return fmt.Errorf("CONFIG-GENERAL-UPLOADMAXSIZE general.uploadMaxSizeBytes must be greater than 0")
+	}
+	if cfg.General.AASXMaxPartCount <= 0 {
+		return fmt.Errorf("CONFIG-GENERAL-AASXPARTCOUNT general.aasxMaxPartCount must be greater than 0")
+	}
+	if cfg.General.AASXMaxOPCMetadataSizeBytes <= 0 {
+		return fmt.Errorf("CONFIG-GENERAL-AASXOPCMETADATA general.aasxMaxOPCMetadataSizeBytes must be greater than 0")
+	}
+	if cfg.General.AASXMaxPartExpandedSizeBytes <= 0 {
+		return fmt.Errorf("CONFIG-GENERAL-AASXPARTSIZE general.aasxMaxPartExpandedSizeBytes must be greater than 0")
+	}
+	if cfg.General.AASXMaxTotalExpandedSizeBytes < cfg.General.AASXMaxPartExpandedSizeBytes {
+		return fmt.Errorf("CONFIG-GENERAL-AASXTOTALSIZE general.aasxMaxTotalExpandedSizeBytes must be greater than or equal to general.aasxMaxPartExpandedSizeBytes")
+	}
+	if cfg.General.AASXMaxThumbnailSizeBytes <= 0 || cfg.General.AASXMaxThumbnailSizeBytes > cfg.General.AASXMaxPartExpandedSizeBytes {
+		return fmt.Errorf("CONFIG-GENERAL-AASXTHUMBNAILSIZE general.aasxMaxThumbnailSizeBytes must be greater than 0 and no greater than general.aasxMaxPartExpandedSizeBytes")
 	}
 	return nil
 }
@@ -1149,6 +1182,11 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("general.trustProxyHeaders", DefaultConfig.GeneralTrustProxyHeaders)
 	v.SetDefault("general.trustedProxyCIDRs", DefaultConfig.GeneralTrustedProxyCIDRs)
 	v.SetDefault("general.uploadMaxSizeBytes", DefaultConfig.GeneralUploadMaxSizeBytes)
+	v.SetDefault("general.aasxMaxPartCount", DefaultConfig.GeneralAASXMaxPartCount)
+	v.SetDefault("general.aasxMaxOPCMetadataSizeBytes", DefaultConfig.GeneralAASXMaxOPCMetadataSizeBytes)
+	v.SetDefault("general.aasxMaxPartExpandedSizeBytes", DefaultConfig.GeneralAASXMaxPartExpandedSizeBytes)
+	v.SetDefault("general.aasxMaxTotalExpandedSizeBytes", DefaultConfig.GeneralAASXMaxTotalExpandedSizeBytes)
+	v.SetDefault("general.aasxMaxThumbnailSizeBytes", DefaultConfig.GeneralAASXMaxThumbnailSizeBytes)
 	v.SetDefault("general.aasPreconfigPaths", []string{})
 	v.SetDefault("general.bulkBatchLimit", DefaultConfig.GeneralBulkBatchLimit)
 
@@ -1250,6 +1288,11 @@ func PrintConfiguration(cfg *Config) {
 	lines = append(lines, "General:")
 	add("Bulk Batch Limit", cfg.General.BulkBatchLimit, DefaultConfig.GeneralBulkBatchLimit)
 	add("Upload Max Size (bytes)", cfg.General.UploadMaxSizeBytes, DefaultConfig.GeneralUploadMaxSizeBytes)
+	add("AASX Max Part Count", cfg.General.AASXMaxPartCount, DefaultConfig.GeneralAASXMaxPartCount)
+	add("AASX Max OPC Metadata Size (bytes)", cfg.General.AASXMaxOPCMetadataSizeBytes, DefaultConfig.GeneralAASXMaxOPCMetadataSizeBytes)
+	add("AASX Max Part Expanded Size (bytes)", cfg.General.AASXMaxPartExpandedSizeBytes, DefaultConfig.GeneralAASXMaxPartExpandedSizeBytes)
+	add("AASX Max Total Expanded Size (bytes)", cfg.General.AASXMaxTotalExpandedSizeBytes, DefaultConfig.GeneralAASXMaxTotalExpandedSizeBytes)
+	add("AASX Max Thumbnail Size (bytes)", cfg.General.AASXMaxThumbnailSizeBytes, DefaultConfig.GeneralAASXMaxThumbnailSizeBytes)
 
 	lines = append(lines, divider)
 

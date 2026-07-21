@@ -43,7 +43,7 @@ import (
 	aastypes "github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/FriedJannik/aas-go-sdk/verification"
 	aasxmlization "github.com/FriedJannik/aas-go-sdk/xmlization"
-	aasx "github.com/aas-core-works/aas-package3-golang"
+	aasx "github.com/aas-core-works/aas-package3-golang/v2"
 	"github.com/go-chi/chi/v5"
 )
 

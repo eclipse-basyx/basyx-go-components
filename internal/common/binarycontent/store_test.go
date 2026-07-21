@@ -133,7 +133,7 @@ func TestStoreTxRejectsContentAboveConfiguredLimitBeforeWriting(t *testing.T) {
 
 	_, _, _, err = writeTransientLargeObjectTx(ctx, tx, strings.NewReader("four"), common.UploadMaxSizeBytesFromContext(ctx))
 	require.ErrorContains(t, err, "BINARYCONTENT-STORE-TOOLARGE")
-	require.True(t, common.IsErrBadRequest(err))
+	require.True(t, common.IsErrPayloadTooLarge(err))
 	require.NoError(t, tx.Rollback())
 	require.NoError(t, mock.ExpectationsWereMet())
 }

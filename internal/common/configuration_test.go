@@ -675,6 +675,41 @@ func TestValidateHistoryAndEventingConfigAcceptsDiffBackedSnapshotInterval(t *te
 	}
 }
 
+func TestValidateGeneralConfigAASXLimits(t *testing.T) {
+	valid := GeneralConfig{
+		BulkBatchLimit:                1000,
+		UploadMaxSizeBytes:            128 << 20,
+		AASXMaxPartCount:              10000,
+		AASXMaxOPCMetadataSizeBytes:   16 << 20,
+		AASXMaxPartExpandedSizeBytes:  128 << 20,
+		AASXMaxTotalExpandedSizeBytes: 128 << 20,
+		AASXMaxThumbnailSizeBytes:     16 << 20,
+	}
+	if err := validateGeneralConfig(&Config{General: valid}); err != nil {
+		t.Fatalf("expected valid AASX limits, got %v", err)
+	}
+
+	tests := []struct {
+		name   string
+		mutate func(*GeneralConfig)
+	}{
+		{name: "part count", mutate: func(cfg *GeneralConfig) { cfg.AASXMaxPartCount = 0 }},
+		{name: "OPC metadata", mutate: func(cfg *GeneralConfig) { cfg.AASXMaxOPCMetadataSizeBytes = 0 }},
+		{name: "part size", mutate: func(cfg *GeneralConfig) { cfg.AASXMaxPartExpandedSizeBytes = 0 }},
+		{name: "total below part", mutate: func(cfg *GeneralConfig) { cfg.AASXMaxTotalExpandedSizeBytes = cfg.AASXMaxPartExpandedSizeBytes - 1 }},
+		{name: "thumbnail above part", mutate: func(cfg *GeneralConfig) { cfg.AASXMaxThumbnailSizeBytes = cfg.AASXMaxPartExpandedSizeBytes + 1 }},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			candidate := valid
+			test.mutate(&candidate)
+			if err := validateGeneralConfig(&Config{General: candidate}); err == nil {
+				t.Fatal("expected invalid AASX limits to be rejected")
+			}
+		})
+	}
+}
+
 func TestValidateHistoryAndEventingConfigAcceptsCompleteS3EvidenceConfig(t *testing.T) {
 	cfg := Config{
 		JWS: JWSConfig{PrivateKeyPath: "fallback-key.pem"},
