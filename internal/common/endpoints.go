@@ -27,7 +27,10 @@
 package common
 
 import (
+	"bufio"
 	"bytes"
+	"context"
+	"database/sql"
 	"encoding/json"
 	"encoding/xml"
 	"errors"
@@ -124,16 +127,27 @@ func writeHealthResponse(w http.ResponseWriter, statusCode int, body map[string]
 // The endpoint accepts JSON, XML, or AASX and verifies it against the AAS meta
 // model. Callers must provide the service API router so configured security
 // middleware applies before payload parsing.
-func AddVerificationEndpoint(r chi.Router, config *Config) {
+//
+// Parameters:
+//   - r: Protected API router receiving POST /verify.
+//   - config: Process configuration providing upload and AASX expansion limits.
+//   - stagers: Optional external seekable-storage provider for bounded AASX verification.
+func AddVerificationEndpoint(r chi.Router, config *Config, stagers ...UploadStager) {
 	r.Post("/verify", func(w http.ResponseWriter, r *http.Request) {
 		maxPayloadBytes := verificationMaxPayloadBytes(config)
 		r.Body = http.MaxBytesReader(w, r.Body, maxPayloadBytes)
 		r = r.WithContext(ContextWithConfig(r.Context(), config))
 
-		verificationResult, err := VerifyPayload(r)
+		var verificationResult map[string]interface{}
+		var err error
+		if len(stagers) > 0 && stagers[0] != nil {
+			verificationResult, err = verifyStagedRequest(w, r, stagers[0], maxPayloadBytes)
+		} else {
+			verificationResult, err = VerifyPayload(r)
+		}
 		if err != nil {
 			var maxBytesError *http.MaxBytesError
-			if errors.As(err, &maxBytesError) {
+			if errors.As(err, &maxBytesError) || IsErrPayloadTooLarge(err) || errors.Is(err, aasx.ErrReaderLimitExceeded) {
 				log.Printf("COMMON-VERIFY-PAYLOAD-MAXSIZE exceeded max payload size of %d bytes: %v", maxPayloadBytes, err)
 				_ = WriteErrorResponse(
 					w,
@@ -143,6 +157,14 @@ func AddVerificationEndpoint(r chi.Router, config *Config) {
 					"VerifyPayload",
 					"PayloadTooLarge",
 				)
+				return
+			}
+			if IsErrServiceUnavailable(err) {
+				_ = WriteErrorResponse(w, err, http.StatusServiceUnavailable, "COMMON", "VerifyPayload", "ServiceUnavailable")
+				return
+			}
+			if IsInternalServerError(err) {
+				_ = WriteErrorResponse(w, err, http.StatusInternalServerError, "COMMON", "VerifyPayload", "InternalServerError")
 				return
 			}
 
@@ -164,6 +186,126 @@ func AddVerificationEndpoint(r chi.Router, config *Config) {
 			log.Printf("COMMON-VERIFY-PAYLOAD-WRITE response write failed: %v", err)
 		}
 	})
+}
+
+func verifyStagedRequest(w http.ResponseWriter, r *http.Request, stager UploadStager, maximum int64) (map[string]interface{}, error) {
+	var staged StagedUpload
+	fileName := ""
+	contentType := strings.TrimSpace(r.Header.Get("Content-Type"))
+	if strings.HasPrefix(strings.ToLower(contentType), "multipart/form-data") {
+		upload, err := readMultipartUploadFields(w, r, maximum, func(ctx context.Context, partFileName string, partContentType string, input io.Reader, partMaximum int64) (StagedUpload, error) {
+			return stageVerificationPayload(ctx, input, partFileName, partContentType, stager, partMaximum)
+		}, verifyMultipartFileField, verifyMultipartPayloadField)
+		if err != nil {
+			return nil, err
+		}
+		defer func() { _ = upload.Close() }()
+		staged = upload.File
+		fileName = upload.MultipartFileName
+		contentType = upload.FileContentType
+	} else {
+		var err error
+		staged, err = stageVerificationPayload(r.Context(), r.Body, fileName, contentType, stager, maximum)
+		if err != nil {
+			return nil, err
+		}
+		defer func() { _ = staged.Close() }()
+	}
+	return verifyStagedPayload(r.Context(), staged, fileName, contentType, maximum)
+}
+
+type verificationMemoryStage struct {
+	*bytes.Reader
+	content []byte
+}
+
+func (stage *verificationMemoryStage) Size() int64 {
+	return stage.Reader.Size()
+}
+
+func (stage *verificationMemoryStage) Close() error {
+	return nil
+}
+
+func (stage *verificationMemoryStage) Promote(context.Context, func(context.Context, *sql.Tx, int64, int64) error) error {
+	return NewInternalServerError("COMMON-VERIFYMEMORY-PROMOTE verification payloads cannot be promoted")
+}
+
+func stageVerificationPayload(ctx context.Context, input io.Reader, fileName string, contentType string, stager UploadStager, maximum int64) (StagedUpload, error) {
+	buffered := bufio.NewReader(input)
+	signature, peekErr := buffered.Peek(512)
+	if peekErr != nil && !errors.Is(peekErr, io.EOF) && !errors.Is(peekErr, bufio.ErrBufferFull) {
+		return nil, fmt.Errorf("COMMON-VERIFYSTAGE-READSIGNATURE %w", peekErr)
+	}
+	format, err := detectVerificationFormat(fileName, contentType, signature)
+	if err != nil {
+		return nil, fmt.Errorf("COMMON-VERIFYSTAGE-DETECTFORMAT %w", err)
+	}
+	if format == "aasx" {
+		return stager(ctx, buffered, maximum)
+	}
+	content, err := io.ReadAll(io.LimitReader(buffered, maximum+1))
+	if err != nil {
+		return nil, fmt.Errorf("COMMON-VERIFYSTAGE-READPAYLOAD %w", err)
+	}
+	if int64(len(content)) > maximum {
+		return nil, NewErrPayloadTooLarge(fmt.Sprintf("COMMON-VERIFYSTAGE-TOOLARGE payload exceeds configured maximum of %d bytes", maximum))
+	}
+	return &verificationMemoryStage{Reader: bytes.NewReader(content), content: content}, nil
+}
+
+func verifyStagedPayload(ctx context.Context, payload io.ReadSeeker, fileName string, contentType string, maximum int64) (map[string]interface{}, error) {
+	signature := make([]byte, 512)
+	count, err := payload.Read(signature)
+	if err != nil && !errors.Is(err, io.EOF) {
+		return nil, fmt.Errorf("COMMON-VERIFYSTAGED-READSIGNATURE %w", err)
+	}
+	if _, err = payload.Seek(0, io.SeekStart); err != nil {
+		return nil, fmt.Errorf("COMMON-VERIFYSTAGED-SEEK %w", err)
+	}
+	format, err := detectVerificationFormat(fileName, contentType, signature[:count])
+	if err != nil {
+		return nil, fmt.Errorf("COMMON-VERIFYSTAGED-DETECTFORMAT %w", err)
+	}
+	var target aastypes.IClass
+	if format == "aasx" {
+		target, err = parseVerificationAASXEnvironmentStream(ctx, payload)
+	} else {
+		content, readErr := readVerificationStagedContent(payload, maximum)
+		if readErr != nil {
+			return nil, readErr
+		}
+		if int64(len(content)) > maximum {
+			return nil, NewErrPayloadTooLarge(fmt.Sprintf("COMMON-VERIFYSTAGED-TOOLARGE payload exceeds configured maximum of %d bytes", maximum))
+		}
+		target, err = parseVerificationTarget(format, content)
+	}
+	if err != nil {
+		return nil, fmt.Errorf("COMMON-VERIFYSTAGED-PARSE %w", err)
+	}
+	return verificationResult(target, format), nil
+}
+
+func readVerificationStagedContent(payload io.ReadSeeker, maximum int64) ([]byte, error) {
+	if memoryPayload, ok := payload.(*verificationMemoryStage); ok {
+		return memoryPayload.content, nil
+	}
+	content, err := io.ReadAll(io.LimitReader(payload, maximum+1))
+	if err != nil {
+		return nil, fmt.Errorf("COMMON-VERIFYSTAGED-READPAYLOAD %w", err)
+	}
+	return content, nil
+}
+
+func verificationResult(target aastypes.IClass, format string) map[string]interface{} {
+	messages := collectVerificationMessages(target)
+	aasCount, submodelCount, conceptDescriptionCount := verificationCounts(target)
+	return map[string]interface{}{
+		"valid": len(messages) == 0, "format": format,
+		"assetAdministrationShellCount": aasCount,
+		"submodelCount":                 submodelCount, "conceptDescriptionCount": conceptDescriptionCount,
+		"messages": messages,
+	}
 }
 
 func verificationMaxPayloadBytes(config *Config) int64 {
@@ -540,8 +682,16 @@ func sanitizeVerificationXMLRootAttributes(content []byte) ([]byte, error) {
 }
 
 func parseVerificationAASXEnvironment(payload []byte) (aastypes.IEnvironment, error) {
+	return parseVerificationAASXEnvironmentWithLimits(bytes.NewReader(payload), AASXLimitsFromConfig(nil))
+}
+
+func parseVerificationAASXEnvironmentStream(ctx context.Context, payload io.ReadSeeker) (aastypes.IEnvironment, error) {
+	return parseVerificationAASXEnvironmentWithLimits(payload, AASXLimitsFromContext(ctx))
+}
+
+func parseVerificationAASXEnvironmentWithLimits(payload io.ReadSeeker, limits AASXLimits) (aastypes.IEnvironment, error) {
 	packaging := aasx.NewPackaging()
-	packageReader, err := packaging.OpenReadFromStream(bytes.NewReader(payload))
+	packageReader, err := packaging.OpenReadFromStream(payload, limits.ReaderOptions()...)
 	if err != nil {
 		return nil, err
 	}
@@ -576,29 +726,70 @@ func parseVerificationAASXEnvironment(payload []byte) (aastypes.IEnvironment, er
 		return nil, fmt.Errorf("multiple supported AASX specs found")
 	}
 
-	specContent, err := supportedSpecs[0].ReadAllBytes()
-	if err != nil {
-		return nil, err
-	}
+	return parseVerificationAASXSpecification(supportedSpecs[0])
+}
 
-	uri := ""
-	if supportedSpecs[0].URI != nil {
-		uri = strings.ToLower(strings.TrimSpace(supportedSpecs[0].URI.String()))
+func parseVerificationAASXSpecification(spec *aasx.Part) (aastypes.IEnvironment, error) {
+	stream, err := spec.Stream()
+	if err != nil {
+		return nil, fmt.Errorf("COMMON-VERIFYAASX-OPENSPEC %w", err)
 	}
-	specContentType := strings.ToLower(strings.TrimSpace(supportedSpecs[0].ContentType))
+	uri := ""
+	if spec.URI != nil {
+		uri = strings.ToLower(strings.TrimSpace(spec.URI.String()))
+	}
+	specContentType := strings.ToLower(strings.TrimSpace(spec.ContentType))
 	if strings.HasSuffix(uri, ".json") || strings.Contains(specContentType, "json") {
-		target, parseErr := parseVerificationJSONTarget(specContent)
+		environment, parseErr := parseVerificationJSONEnvironmentReader(stream)
+		closeErr := stream.Close()
 		if parseErr != nil {
 			return nil, parseErr
 		}
-		environment, ok := target.(aastypes.IEnvironment)
-		if !ok {
-			return nil, fmt.Errorf("AASX spec JSON root is %T, expected AAS Environment", target)
+		if closeErr != nil {
+			return nil, fmt.Errorf("COMMON-VERIFYAASX-CLOSEJSONSPEC %w", closeErr)
 		}
 		return environment, nil
 	}
 
+	environment, parseErr := parseVerificationXMLEnvironmentReader(stream)
+	closeErr := stream.Close()
+	if parseErr == nil {
+		if closeErr != nil {
+			return nil, fmt.Errorf("COMMON-VERIFYAASX-CLOSEXMLSPEC %w", closeErr)
+		}
+		return environment, nil
+	}
+
+	specContent, readErr := spec.ReadAllBytes()
+	if readErr != nil {
+		return nil, fmt.Errorf("COMMON-VERIFYAASX-READXMLFALLBACK %w", readErr)
+	}
 	return parseVerificationXMLEnvironment(specContent)
+}
+
+func parseVerificationJSONEnvironmentReader(reader io.Reader) (aastypes.IEnvironment, error) {
+	var jsonable any
+	if err := json.NewDecoder(reader).Decode(&jsonable); err != nil {
+		return nil, fmt.Errorf("COMMON-VERIFYAASX-DECODEJSON %w", err)
+	}
+	environment, err := aasjsonization.EnvironmentFromJsonable(jsonable)
+	if err != nil {
+		return nil, fmt.Errorf("COMMON-VERIFYAASX-PARSEJSONENV %w", err)
+	}
+	return environment, nil
+
+}
+
+func parseVerificationXMLEnvironmentReader(reader io.Reader) (aastypes.IEnvironment, error) {
+	target, err := aasxmlization.Unmarshal(xml.NewDecoder(reader))
+	if err != nil {
+		return nil, fmt.Errorf("COMMON-VERIFYAASX-DECODEXML %w", err)
+	}
+	environment, ok := target.(aastypes.IEnvironment)
+	if !ok {
+		return nil, fmt.Errorf("COMMON-VERIFYAASX-XMLROOT root is %T, expected AAS Environment", target)
+	}
+	return environment, nil
 }
 
 func collectVerificationMessages(target aastypes.IClass) []string {

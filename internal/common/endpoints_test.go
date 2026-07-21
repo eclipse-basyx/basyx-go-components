@@ -27,7 +27,9 @@ package common
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
+	"io"
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
@@ -416,6 +418,61 @@ func TestAddVerificationEndpoint_RawJSON(t *testing.T) {
 	}
 }
 
+func TestAddVerificationEndpointDoesNotStageJSONInPostgreSQL(t *testing.T) {
+	const payload = `{"assetAdministrationShells":[],"submodels":[],"conceptDescriptions":[]}`
+	neverStage := func(context.Context, io.Reader, int64) (StagedUpload, error) {
+		t.Fatal("JSON verification must not use the PostgreSQL stager")
+		return nil, nil
+	}
+
+	tests := []struct {
+		name    string
+		request func() *http.Request
+	}{
+		{
+			name: "raw",
+			request: func() *http.Request {
+				request := httptest.NewRequest(http.MethodPost, "/verify", strings.NewReader(payload))
+				request.Header.Set("Content-Type", "application/json")
+				return request
+			},
+		},
+		{
+			name: "multipart",
+			request: func() *http.Request {
+				var body bytes.Buffer
+				writer := multipart.NewWriter(&body)
+				part, err := writer.CreateFormFile("file", "environment.json")
+				if err != nil {
+					t.Fatal(err)
+				}
+				if _, err = io.WriteString(part, payload); err != nil {
+					t.Fatal(err)
+				}
+				if err = writer.Close(); err != nil {
+					t.Fatal(err)
+				}
+				request := httptest.NewRequest(http.MethodPost, "/verify", &body)
+				request.Header.Set("Content-Type", writer.FormDataContentType())
+				return request
+			},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			router := chi.NewRouter()
+			cfg := &Config{General: GeneralConfig{UploadMaxSizeBytes: 4096}}
+			AddVerificationEndpoint(router, cfg, neverStage)
+			response := httptest.NewRecorder()
+			router.ServeHTTP(response, test.request())
+			if response.Code != http.StatusOK {
+				t.Fatalf("expected status 200, got %d: %s", response.Code, response.Body.String())
+			}
+		})
+	}
+}
+
 func TestAddVerificationEndpointUsesMountedContextPath(t *testing.T) {
 	router := chi.NewRouter()
 	apiRouter := chi.NewRouter()
@@ -485,6 +542,63 @@ func TestAddVerificationEndpoint_RejectsMultipartPayloadOverConfiguredLimit(t *t
 		t.Fatalf("expected status %d, got %d body=%s", http.StatusRequestEntityTooLarge, rec.Code, rec.Body.String())
 	}
 	assertStandardErrorResponse(t, rec.Body.Bytes(), "413")
+}
+
+func TestAddVerificationEndpointRejectsExpandedAASXLimitWithStaging(t *testing.T) {
+	aasxPath := filepath.Join("..", "aasenvironment", "integration_tests", "testdata", "ProductionPlanSFKL.aasx")
+	// #nosec G304 -- the path resolves to a repository-owned test fixture.
+	aasxBytes, err := os.ReadFile(aasxPath)
+	if err != nil {
+		t.Fatalf("failed to read AASX fixture: %v", err)
+	}
+	cfg := &Config{General: GeneralConfig{
+		UploadMaxSizeBytes:            int64(len(aasxBytes)) + 1024,
+		AASXMaxPartCount:              1,
+		AASXMaxOPCMetadataSizeBytes:   16 << 20,
+		AASXMaxPartExpandedSizeBytes:  128 << 20,
+		AASXMaxTotalExpandedSizeBytes: 128 << 20,
+		AASXMaxThumbnailSizeBytes:     16 << 20,
+	}}
+	router := chi.NewRouter()
+	AddVerificationEndpoint(router, cfg, multipartMemoryStager)
+	request := httptest.NewRequest(http.MethodPost, "/verify", bytes.NewReader(aasxBytes))
+	request.Header.Set("Content-Type", "application/aasx+json")
+	response := httptest.NewRecorder()
+
+	router.ServeHTTP(response, request)
+
+	if response.Code != http.StatusRequestEntityTooLarge {
+		t.Fatalf("expected status 413, got %d: %s", response.Code, response.Body.String())
+	}
+}
+
+func TestAddVerificationEndpointPreservesStagingErrorStatus(t *testing.T) {
+	tests := []struct {
+		name       string
+		stagingErr error
+		status     int
+	}{
+		{name: "service unavailable", stagingErr: NewErrServiceUnavailable("TEST-VERIFY-STAGEUNAVAILABLE"), status: http.StatusServiceUnavailable},
+		{name: "internal error", stagingErr: NewInternalServerError("TEST-VERIFY-STAGEFAILED"), status: http.StatusInternalServerError},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			stager := func(context.Context, io.Reader, int64) (StagedUpload, error) {
+				return nil, test.stagingErr
+			}
+			router := chi.NewRouter()
+			AddVerificationEndpoint(router, &Config{General: GeneralConfig{UploadMaxSizeBytes: 1024}}, stager)
+			request := httptest.NewRequest(http.MethodPost, "/verify", bytes.NewReader([]byte{'P', 'K', 3, 4}))
+			response := httptest.NewRecorder()
+
+			router.ServeHTTP(response, request)
+
+			if response.Code != test.status {
+				t.Fatalf("expected status %d, got %d: %s", test.status, response.Code, response.Body.String())
+			}
+		})
+	}
 }
 
 func assertStandardErrorResponse(t *testing.T, responseBody []byte, expectedCode string) {

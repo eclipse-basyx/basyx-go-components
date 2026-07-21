@@ -30,6 +30,7 @@ import (
 	"database/sql"
 	"fmt"
 	"io"
+	"sync"
 )
 
 // StagedUpload is seekable request content held outside process memory.
@@ -56,6 +57,73 @@ type StagedUpload interface {
 //   - StagedUpload: Seekable staged content owned by the caller.
 //   - error: A coded staging or payload-limit error.
 type UploadStager func(context.Context, io.Reader, int64) (StagedUpload, error)
+
+// NewConnectionReservedUploadStager limits transaction-owned uploads so that
+// repository work can still acquire connections from the same database pool.
+//
+// Parameters:
+//   - stager: Storage implementation that owns one database connection per staged upload.
+//   - maximumOpenConnections: Configured database connection-pool maximum; zero means unlimited.
+//   - reservedConnections: Connections kept available for work performed while a stage is open.
+//
+// Returns:
+//   - UploadStager: A stager that releases its admission slot on promotion or close.
+func NewConnectionReservedUploadStager(stager UploadStager, maximumOpenConnections, reservedConnections int) UploadStager {
+	if stager == nil {
+		return func(context.Context, io.Reader, int64) (StagedUpload, error) {
+			return nil, NewInternalServerError("COMMON-STAGERESERVE-NILSTAGER upload stager is required")
+		}
+	}
+	if maximumOpenConnections == 0 {
+		return stager
+	}
+	capacity := maximumOpenConnections - reservedConnections
+	if capacity <= 0 {
+		return func(context.Context, io.Reader, int64) (StagedUpload, error) {
+			return nil, NewErrServiceUnavailable("COMMON-STAGERESERVE-NOCAPACITY database pool has no connection available for staged uploads")
+		}
+	}
+
+	admission := make(chan struct{}, capacity)
+	return func(ctx context.Context, input io.Reader, maximum int64) (StagedUpload, error) {
+		select {
+		case admission <- struct{}{}:
+		case <-ctx.Done():
+			return nil, NewErrServiceUnavailable("COMMON-STAGERESERVE-WAIT " + ctx.Err().Error())
+		}
+
+		staged, err := stager(ctx, input, maximum)
+		if err != nil {
+			<-admission
+			return nil, err
+		}
+		return &admittedStagedUpload{StagedUpload: staged, releaseAdmission: func() { <-admission }}, nil
+	}
+}
+
+type admittedStagedUpload struct {
+	StagedUpload
+	releaseAdmission func()
+	releaseOnce      sync.Once
+}
+
+func (upload *admittedStagedUpload) Promote(ctx context.Context, persist func(context.Context, *sql.Tx, int64, int64) error) error {
+	err := upload.StagedUpload.Promote(ctx, persist)
+	if err == nil {
+		upload.release()
+	}
+	return err
+}
+
+func (upload *admittedStagedUpload) Close() error {
+	err := upload.StagedUpload.Close()
+	upload.release()
+	return err
+}
+
+func (upload *admittedStagedUpload) release() {
+	upload.releaseOnce.Do(upload.releaseAdmission)
+}
 
 type payloadLimitReader struct {
 	reader    io.Reader

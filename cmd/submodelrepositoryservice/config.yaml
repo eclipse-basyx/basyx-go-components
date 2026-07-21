@@ -47,6 +47,11 @@ general:
   submodelRegistryIntegration: false
   externalUrl: ""
   uploadMaxSizeBytes: 134217728
+  aasxMaxPartCount: 10000
+  aasxMaxOPCMetadataSizeBytes: 16777216
+  aasxMaxPartExpandedSizeBytes: 134217728
+  aasxMaxTotalExpandedSizeBytes: 134217728
+  aasxMaxThumbnailSizeBytes: 16777216
 
 # jws:
 #   privateKeyPath: "./rsa-key.pem"

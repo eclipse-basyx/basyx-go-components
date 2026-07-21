@@ -35,48 +35,68 @@ package companylookuppostgresql
 import (
 	"context"
 	"database/sql"
+	"time"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/descriptors"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 )
 
-// PostgreSQLCompanyLookupDatabase provides PostgreSQL-based persistence for the Company Lookup Service.
-//
-// It manages company descriptors in a PostgreSQL database, using connection pooling for efficient
-// database access. The database schema is automatically initialized on startup from the
-// CompanyLookupSchema.sql file.
+// PostgreSQLCompanyLookupDatabase provides PostgreSQL-backed persistence for
+// the Company Lookup Service. The database pool remains owned by the caller.
 type PostgreSQLCompanyLookupDatabase struct {
 	db           *sql.DB
 	cacheEnabled bool
 }
 
-// NewPostgreSQLCompanyLookupBackend creates and initializes a new PostgreSQL company lookup database backend.
+// NewPostgreSQLCompanyLookupBackend creates a Company Lookup backend with its
+// own PostgreSQL connection pool.
 //
-// This function establishes a connection pool to the PostgreSQL database using the provided DSN
-// (Data Source Name), configures connection pool settings, and initializes the database schema
-// by executing the schema file from the resources/sql directory.
+// Positive pool limits are applied to the new pool. Non-positive values retain
+// database/sql defaults. The backend retains the pool for its service lifetime.
 //
 // Parameters:
-//   - dsn: PostgreSQL connection string (e.g., "postgres://user:pass@localhost:5432/dbname")
-//   - maxConns: Maximum number of connections in the pool
+//   - dsn: PostgreSQL connection string.
+//   - maxOpenConns: Maximum number of open connections.
+//   - maxIdleConns: Maximum number of idle connections.
+//   - connMaxLifetimeMinutes: Maximum connection lifetime in minutes.
+//   - cacheEnabled: Whether descriptor lookup caching is enabled.
 //
 // Returns:
-//   - *PostgreSQLCompanyLookupDatabase: Initialized database instance
-//   - error: Configuration, connection, or schema initialization error
-//
-// The connection pool is configured with:
-//   - MaxConns: Set to the provided maxConns parameter
-//   - MaxConnLifetime: 5 minutes to ensure connection freshness
-//
-// The function reads and executes the schema file from the current working directory's
-// resources/sql subdirectory to set up the required database tables.
-func NewPostgreSQLCompanyLookupBackend(dsn string, _ int32 /* maxOpenConns */, _ /* maxIdleConns */ int, _ /* connMaxLifetimeMinutes */ int, cacheEnabled bool) (*PostgreSQLCompanyLookupDatabase, error) {
+//   - *PostgreSQLCompanyLookupDatabase: Backend using the newly created pool.
+//   - error: Connection or backend validation error.
+func NewPostgreSQLCompanyLookupBackend(dsn string, maxOpenConns int32, maxIdleConns int, connMaxLifetimeMinutes int, cacheEnabled bool) (*PostgreSQLCompanyLookupDatabase, error) {
 	db, err := common.NewDatabaseConnection(dsn)
 	if err != nil {
 		return nil, err
 	}
+	if maxOpenConns > 0 {
+		db.SetMaxOpenConns(int(maxOpenConns))
+	}
+	if maxIdleConns > 0 {
+		db.SetMaxIdleConns(maxIdleConns)
+	}
+	if connMaxLifetimeMinutes > 0 {
+		db.SetConnMaxLifetime(time.Duration(connMaxLifetimeMinutes) * time.Minute)
+	}
 
+	return NewPostgreSQLCompanyLookupBackendFromDB(db, cacheEnabled)
+}
+
+// NewPostgreSQLCompanyLookupBackendFromDB creates a backend using an existing
+// PostgreSQL pool. The caller retains ownership of db and must close it.
+//
+// Parameters:
+//   - db: Shared PostgreSQL connection pool.
+//   - cacheEnabled: Whether descriptor lookup caching is enabled.
+//
+// Returns:
+//   - *PostgreSQLCompanyLookupDatabase: Backend sharing the caller-owned pool.
+//   - error: Validation error when db is nil.
+func NewPostgreSQLCompanyLookupBackendFromDB(db *sql.DB, cacheEnabled bool) (*PostgreSQLCompanyLookupDatabase, error) {
+	if db == nil {
+		return nil, common.NewErrBadRequest("COMPANYLOOKUP-NEWFROMDB-NILDB database handle must not be nil")
+	}
 	return &PostgreSQLCompanyLookupDatabase{db: db, cacheEnabled: cacheEnabled}, nil
 }
 

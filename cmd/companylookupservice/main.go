@@ -31,8 +31,10 @@ import (
 	"embed"
 	"flag"
 	"log"
+	"time"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/binarycontent"
 	commonmodel "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	"github.com/eclipse-basyx/basyx-go-components/internal/companylookupservice/api"
 	companylookuppostgresql "github.com/eclipse-basyx/basyx-go-components/internal/companylookupservice/persistence"
@@ -57,6 +59,7 @@ func runServer(ctx context.Context, configPath string) error {
 
 	// === Main Router ===
 	r := chi.NewRouter()
+	r.Use(common.ConfigMiddleware(cfg))
 
 	common.AddCors(r, cfg)
 
@@ -68,23 +71,29 @@ func runServer(ctx context.Context, configPath string) error {
 		log.Printf("Warning: failed to load OpenAPI spec for Swagger UI: %v", err)
 	}
 
-	log.Printf("🗄️  Connecting to Postgres with DSN: postgres://%s:****@%s:%d/%s?sslmode=disable",
-		cfg.Postgres.User, cfg.Postgres.Host, cfg.Postgres.Port, cfg.Postgres.DBName)
-
 	dsn := common.BuildPostgresDSN(cfg.Postgres)
 
 	if err := common.ValidateSchemaVersionByDSN(dsn, common.CURRENT_DATABASE_VERSION); err != nil {
 		return err
 	}
+	log.Println("Connecting to Postgres using configured connection settings")
 
-	companyLookupDatabase, err := companylookuppostgresql.NewPostgreSQLCompanyLookupBackend(
-		dsn,
-		//nolint:gosec // configured value is bounded by deployment configuration
-		int32(cfg.Postgres.MaxOpenConnections),
-		cfg.Postgres.MaxIdleConnections,
-		cfg.Postgres.ConnMaxLifetimeMinutes,
-		cfg.Server.CacheEnabled,
-	)
+	sharedDB, err := common.NewDatabaseConnection(dsn)
+	if err != nil {
+		log.Printf("❌ DB connect failed: %v", err)
+		return err
+	}
+	defer func() { _ = sharedDB.Close() }()
+	if cfg.Postgres.MaxOpenConnections > 0 {
+		sharedDB.SetMaxOpenConns(cfg.Postgres.MaxOpenConnections)
+	}
+	if cfg.Postgres.MaxIdleConnections > 0 {
+		sharedDB.SetMaxIdleConns(cfg.Postgres.MaxIdleConnections)
+	}
+	if cfg.Postgres.ConnMaxLifetimeMinutes > 0 {
+		sharedDB.SetConnMaxLifetime(time.Duration(cfg.Postgres.ConnMaxLifetimeMinutes) * time.Minute)
+	}
+	companyLookupDatabase, err := companylookuppostgresql.NewPostgreSQLCompanyLookupBackendFromDB(sharedDB, cfg.Server.CacheEnabled)
 	if err != nil {
 		log.Printf("❌ DB connect failed: %v", err)
 		return err
@@ -104,7 +113,7 @@ func runServer(ctx context.Context, configPath string) error {
 	apiRouter := chi.NewRouter()
 	common.ConfigureAPIRouter(apiRouter, "CompanyLookupService")
 	if cfg.Server.VerificationEndpointAvailable {
-		common.AddVerificationEndpoint(apiRouter, cfg)
+		common.AddVerificationEndpoint(apiRouter, cfg, binarycontent.NewStager(sharedDB))
 	}
 
 	// Register all company lookup routes

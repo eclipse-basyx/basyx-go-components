@@ -26,12 +26,16 @@
 package aasenvironment
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"os"
 	"path/filepath"
 	"testing"
 
+	aasjsonization "github.com/FriedJannik/aas-go-sdk/jsonization"
+	aastypes "github.com/FriedJannik/aas-go-sdk/types"
 	aasx "github.com/aas-core-works/aas-package3-golang/v2"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 )
@@ -138,5 +142,52 @@ func TestParseAASXMLInstance_AdaptsLegacyNamespace(t *testing.T) {
 	}
 	if instance == nil {
 		t.Fatal("expected parsed XML instance, got nil")
+	}
+}
+
+func TestValidateAASXThumbnailLimitsRejectsOversizedThumbnailBeforeImport(t *testing.T) {
+	const thumbnailPath = "/aasx/files/thumbnail.png"
+	assetInformation := aastypes.NewAssetInformation(aastypes.AssetKindInstance)
+	thumbnail := aastypes.NewResource(thumbnailPath)
+	contentType := "image/png"
+	thumbnail.SetContentType(&contentType)
+	assetInformation.SetDefaultThumbnail(thumbnail)
+	aas := aastypes.NewAssetAdministrationShell("aas-id", assetInformation)
+	environment := aastypes.NewEnvironment()
+	environment.SetAssetAdministrationShells([]aastypes.IAssetAdministrationShell{aas})
+	jsonable, err := aasjsonization.ToJsonable(environment)
+	if err != nil {
+		t.Fatalf("failed to convert environment to JSON: %v", err)
+	}
+	specification, err := json.Marshal(jsonable)
+	if err != nil {
+		t.Fatalf("failed to marshal environment: %v", err)
+	}
+	thumbnailPart, err := buildSerializationThumbnailPart("aas-id", "thumbnail.png", contentType, thumbnailPath, []byte("oversized"))
+	if err != nil {
+		t.Fatalf("failed to build thumbnail part: %v", err)
+	}
+	payload, err := serializeEnvironmentToAASXPackage(
+		specification, "application/json", serializationAASXJSONSpecURI,
+		[]serializationThumbnailPart{thumbnailPart}, nil,
+	)
+	if err != nil {
+		t.Fatalf("failed to build AASX package: %v", err)
+	}
+	packageReader, err := aasx.NewPackaging().OpenReadFromStream(bytes.NewReader(payload))
+	if err != nil {
+		t.Fatalf("failed to open AASX package: %v", err)
+	}
+	defer func() { _ = packageReader.Close() }()
+	specPart, parsedEnvironment, err := readEnvironmentFromAASXSpec(packageReader, "environment.aasx")
+	if err != nil {
+		t.Fatalf("failed to parse AASX environment: %v", err)
+	}
+	ctx := common.ContextWithConfig(t.Context(), &common.Config{General: common.GeneralConfig{AASXMaxThumbnailSizeBytes: 4}})
+
+	err = validateAASXThumbnailLimits(ctx, packageReader, specPart, parsedEnvironment)
+
+	if !common.IsErrPayloadTooLarge(err) {
+		t.Fatalf("expected payload-too-large error, got %v", err)
 	}
 }

@@ -28,6 +28,7 @@ package aasenvironment
 import (
 	"bytes"
 	"context"
+	"database/sql"
 	"io"
 	"mime/multipart"
 	"net/http"
@@ -36,6 +37,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	commonmodel "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	"github.com/go-chi/chi/v5"
 )
@@ -44,6 +46,27 @@ type captureUploadService struct {
 	fileName    string
 	contentType string
 	content     []byte
+}
+
+type memoryStagedUpload struct {
+	*bytes.Reader
+}
+
+func (upload *memoryStagedUpload) Size() int64  { return upload.Reader.Size() }
+func (upload *memoryStagedUpload) Close() error { return nil }
+func (upload *memoryStagedUpload) Promote(context.Context, func(context.Context, *sql.Tx, int64, int64) error) error {
+	return nil
+}
+
+func memoryUploadStager(_ context.Context, input io.Reader, maximum int64) (common.StagedUpload, error) {
+	content, err := io.ReadAll(io.LimitReader(input, maximum+1))
+	if err != nil {
+		return nil, err
+	}
+	if int64(len(content)) > maximum {
+		return nil, common.NewErrPayloadTooLarge("TEST-UPLOAD-TOOLARGE")
+	}
+	return &memoryStagedUpload{Reader: bytes.NewReader(content)}, nil
 }
 
 func (s *captureUploadService) HandleUpload(_ context.Context, fileName string, contentType string, file io.ReadSeeker) (commonmodel.ImplResponse, error) {
@@ -89,7 +112,7 @@ func TestUploadDoesNotRequireWritableTempDirectory(t *testing.T) {
 
 	service := &captureUploadService{}
 	router := chi.NewRouter()
-	RegisterUploadAPI(router, service, 1024)
+	RegisterUploadAPI(router, service, 1024, memoryUploadStager)
 
 	request := httptest.NewRequest(http.MethodPost, "/upload", &body)
 	request.Header.Set("Content-Type", writer.FormDataContentType())
@@ -108,5 +131,23 @@ func TestUploadDoesNotRequireWritableTempDirectory(t *testing.T) {
 	}
 	if !bytes.Contains(service.content, []byte(`"assetAdministrationShells"`)) {
 		t.Fatalf("expected service to receive uploaded content, got %q", string(service.content))
+	}
+}
+
+func TestUploadErrorStatusPreservesStagingFailures(t *testing.T) {
+	tests := []struct {
+		err    error
+		status int
+	}{
+		{err: common.NewErrPayloadTooLarge("TEST-UPLOAD-TOOLARGE"), status: http.StatusRequestEntityTooLarge},
+		{err: common.NewErrServiceUnavailable("TEST-UPLOAD-UNAVAILABLE"), status: http.StatusServiceUnavailable},
+		{err: common.NewInternalServerError("TEST-UPLOAD-STAGEFAILED"), status: http.StatusInternalServerError},
+		{err: common.NewErrBadRequest("TEST-UPLOAD-BADREQUEST"), status: http.StatusBadRequest},
+	}
+
+	for _, test := range tests {
+		if status := uploadErrorStatus(test.err); status != test.status {
+			t.Fatalf("expected status %d for %v, got %d", test.status, test.err, status)
+		}
 	}
 }

@@ -120,7 +120,7 @@ func runServer(ctx context.Context, configPath string) error {
 	}
 	abacpolicy.RegisterManagementRoutesIfEnabled(cfg, apiRouter, abacRepo, "aasxfileserverservice")
 	if cfg.Server.VerificationEndpointAvailable {
-		common.AddVerificationEndpoint(apiRouter, cfg)
+		common.AddVerificationEndpoint(apiRouter, cfg, binarycontent.NewStager(sharedDB))
 	}
 
 	for _, rt := range aasxCtrl.Routes() {

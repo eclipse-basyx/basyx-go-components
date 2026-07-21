@@ -124,8 +124,12 @@ func (s *uploadAPIService) handleAASXUpload(ctx context.Context, fileName string
 	}
 
 	packaging := aasx.NewPackaging()
-	packageReader, err := packaging.OpenReadFromStream(file)
+	limits := common.AASXLimitsFromContext(ctx)
+	packageReader, err := packaging.OpenReadFromStream(file, limits.ReaderOptions()...)
 	if err != nil {
+		if errors.Is(err, aasx.ErrReaderLimitExceeded) {
+			return newUploadErrorResponse(http.StatusRequestEntityTooLarge, "AASENV-HANDLEUPLOAD-AASXLIMIT", common.NewErrPayloadTooLarge(err.Error()))
+		}
 		return newUploadErrorResponse(http.StatusBadRequest, "AASENV-HANDLEUPLOAD-PARSEAASX", err)
 	}
 	defer func() {
@@ -229,6 +233,9 @@ func (s *uploadAPIService) processAASXPackage(ctx context.Context, fileName stri
 	if err != nil {
 		return err
 	}
+	if err = validateAASXThumbnailLimits(ctx, packageReader, specPart, environment); err != nil {
+		return err
+	}
 
 	if err = s.processEnvironment(ctx, "", "", environment); err != nil {
 		return err
@@ -328,22 +335,40 @@ func readEnvironmentFromAASXSpec(packageReader *aasx.PackageRead, uploadSource s
 
 	specPart := supportedSpecs[0]
 
-	specContent, err := specPart.ReadAllBytes()
-	if err != nil {
-		return nil, nil, fmt.Errorf("AASENV-PARSEAASX-READSPEC failed to read AASX spec content: %w", err)
-	}
-
 	if isLikelyJSONSpec(specPart) {
-		environment, parseErr := parseAASJSONEnvironment(specContent)
+		stream, streamErr := specPart.Stream()
+		if streamErr != nil {
+			return nil, nil, fmt.Errorf("AASENV-PARSEAASX-OPENJSONSPEC failed to open AASX spec content: %w", streamErr)
+		}
+		environment, parseErr := parseAASJSONEnvironmentReader(stream)
+		closeErr := stream.Close()
 		if parseErr != nil {
 			return nil, nil, common.NewErrBadRequest(
 				fmt.Sprintf("AASENV-PARSEAASX-UNMARSHALJSON failed to parse JSON spec: %v", parseErr),
 			)
 		}
+		if closeErr != nil {
+			return nil, nil, fmt.Errorf("AASENV-PARSEAASX-CLOSEJSONSPEC failed to close AASX spec content: %w", closeErr)
+		}
 		return specPart, environment, nil
 	}
 
-	instance, err := parseAASXMLInstance(specContent, buildAASXSpecSourceLabel(uploadSource, specPart))
+	stream, streamErr := specPart.Stream()
+	if streamErr != nil {
+		return nil, nil, fmt.Errorf("AASENV-PARSEAASX-OPENXMLSPEC failed to open AASX spec content: %w", streamErr)
+	}
+	instance, err := aasxmlization.Unmarshal(xml.NewDecoder(stream))
+	closeErr := stream.Close()
+	if err == nil && closeErr != nil {
+		return nil, nil, fmt.Errorf("AASENV-PARSEAASX-CLOSEXMLSPEC failed to close AASX spec content: %w", closeErr)
+	}
+	if err != nil {
+		specContent, readErr := specPart.ReadAllBytes()
+		if readErr != nil {
+			return nil, nil, fmt.Errorf("AASENV-PARSEAASX-READXMLFALLBACK failed to read AASX spec content: %w", readErr)
+		}
+		instance, err = parseAASXMLInstance(specContent, buildAASXSpecSourceLabel(uploadSource, specPart))
+	}
 	if err != nil {
 		return nil, nil, common.NewErrBadRequest(
 			fmt.Sprintf("AASENV-PARSEAASX-UNMARSHALXML failed to parse XML spec: %v", err),
@@ -375,9 +400,9 @@ func isLikelyXMLSpec(specPart *aasx.Part) bool {
 	return strings.HasSuffix(normalized, ".xml") || strings.Contains(contentType, "xml")
 }
 
-func parseAASJSONEnvironment(specContent []byte) (aastypes.IEnvironment, error) {
+func parseAASJSONEnvironmentReader(reader io.Reader) (aastypes.IEnvironment, error) {
 	var jsonable any
-	if err := json.Unmarshal(specContent, &jsonable); err != nil {
+	if err := json.NewDecoder(reader).Decode(&jsonable); err != nil {
 		return nil, err
 	}
 
@@ -716,6 +741,25 @@ type aasxFileLocation struct {
 	FileValue   string
 }
 
+type limitedAASXPartStream struct {
+	io.Reader
+	io.Closer
+}
+
+func openLimitedAASXPart(part *aasx.Part, maximum uint64, label string) (io.ReadCloser, error) {
+	if part == nil {
+		return nil, common.NewErrBadRequest("AASENV-AASXPART-NIL package part is required")
+	}
+	stream, err := part.Stream()
+	if err != nil {
+		return nil, err
+	}
+	return &limitedAASXPartStream{
+		Reader: common.NewPayloadLimitReader(stream, maximum, label),
+		Closer: stream,
+	}, nil
+}
+
 func (s *uploadAPIService) uploadSupplementaryFiles(
 	ctx context.Context,
 	packageReader *aasx.PackageRead,
@@ -740,11 +784,6 @@ func (s *uploadAPIService) uploadSupplementaryFiles(
 			continue
 		}
 
-		suppBytes, readErr := relationship.Supplementary.ReadAllBytes()
-		if readErr != nil {
-			return fmt.Errorf("AASENV-UPLDSUPPL-READBYTES failed to read supplementary '%s': %w", normalizePartURI(relationship.Supplementary.URI), readErr)
-		}
-
 		matched := false
 		for _, location := range fileLocations {
 			if !matchesSupplementaryTarget(location.FileValue, relationship.Spec.URI, relationship.Supplementary.URI) {
@@ -759,7 +798,12 @@ func (s *uploadAPIService) uploadSupplementaryFiles(
 				uploadName = "supplementary.bin"
 			}
 
-			uploadErr := s.persistence.SubmodelRepository.UploadFileAttachmentReaderWithHistory(ctx, location.SubmodelID, location.IDShortPath, bytes.NewReader(suppBytes), uploadName)
+			partStream, streamErr := openLimitedAASXPart(relationship.Supplementary, common.AASXLimitsFromContext(ctx).MaxPartExpandedSizeBytes, "supplementary")
+			if streamErr != nil {
+				return fmt.Errorf("AASENV-UPLDSUPPL-OPENSTREAM failed to open supplementary '%s': %w", normalizePartURI(relationship.Supplementary.URI), streamErr)
+			}
+			uploadErr := s.persistence.SubmodelRepository.UploadFileAttachmentReaderWithHistory(ctx, location.SubmodelID, location.IDShortPath, partStream, uploadName)
+			closeErr := partStream.Close()
 			if uploadErr != nil {
 				return fmt.Errorf(
 					"AASENV-UPLDSUPPL-UPLOAD failed to upload supplementary '%s' for submodel '%s' at path '%s': %w",
@@ -768,6 +812,9 @@ func (s *uploadAPIService) uploadSupplementaryFiles(
 					location.IDShortPath,
 					uploadErr,
 				)
+			}
+			if closeErr != nil {
+				return fmt.Errorf("AASENV-UPLDSUPPL-CLOSESTREAM failed to close supplementary '%s': %w", uploadName, closeErr)
 			}
 
 			matched = true
@@ -813,28 +860,79 @@ func (s *uploadAPIService) storeAASXThumbnail(ctx context.Context, packageReader
 			continue
 		}
 
-		thumbnailBytes, readErr := thumbnailPart.ReadAllBytes()
-		if readErr != nil {
-			return fmt.Errorf("AASENV-UPLDTHUMB-READBYTES failed to read thumbnail bytes for AAS '%s': %w", aas.ID(), readErr)
-		}
-		if len(thumbnailBytes) == 0 {
-			continue
-		}
-
 		thumbnailName := filepath.Base(resolvedThumbnailURI)
 		if strings.TrimSpace(thumbnailName) == "" || thumbnailName == "." || thumbnailName == "/" {
 			thumbnailName = "thumbnail.bin"
 		}
 
-		uploadErr := s.persistence.AASRepository.PutThumbnailByAASIDReader(ctx, aas.ID(), thumbnailName, bytes.NewReader(thumbnailBytes))
+		partStream, streamErr := openLimitedAASXPart(thumbnailPart, common.AASXLimitsFromContext(ctx).MaxThumbnailSizeBytes, "thumbnail")
+		if streamErr != nil {
+			return fmt.Errorf("AASENV-UPLDTHUMB-OPENSTREAM failed to open thumbnail for AAS '%s': %w", aas.ID(), streamErr)
+		}
+		uploadErr := s.persistence.AASRepository.PutThumbnailByAASIDReader(ctx, aas.ID(), thumbnailName, partStream)
+		closeErr := partStream.Close()
 		if uploadErr != nil {
 			return fmt.Errorf("AASENV-UPLDTHUMB-UPLOAD failed to store thumbnail for AAS '%s': %w", aas.ID(), uploadErr)
+		}
+		if closeErr != nil {
+			return fmt.Errorf("AASENV-UPLDTHUMB-CLOSESTREAM failed to close thumbnail for AAS '%s': %w", aas.ID(), closeErr)
 		}
 
 		uploaded++
 	}
 
 	log.Printf("AASENV-UPLDTHUMB stored thumbnail for %d AAS object(s)", uploaded)
+	return nil
+}
+
+func validateAASXThumbnailLimits(ctx context.Context, packageReader *aasx.PackageRead, specPart *aasx.Part, environment aastypes.IEnvironment) error {
+	if environment == nil {
+		return nil
+	}
+	thumbnailPartsByURI, packageThumbnail, err := resolveAASXThumbnailParts(packageReader, specPart)
+	if err != nil {
+		return err
+	}
+
+	var specURI *url.URL
+	if specPart != nil {
+		specURI = specPart.URI
+	}
+	validated := make(map[string]struct{})
+	maximum := common.AASXLimitsFromContext(ctx).MaxThumbnailSizeBytes
+	for _, aas := range environment.AssetAdministrationShells() {
+		thumbnailPart, thumbnailURI := resolveAASXThumbnailPartForAAS(aas, packageReader, specURI, thumbnailPartsByURI, packageThumbnail)
+		if thumbnailPart == nil {
+			continue
+		}
+		key := normalizePartURI(thumbnailPart.URI)
+		if key == "" {
+			key = thumbnailURI
+		}
+		if _, exists := validated[key]; exists {
+			continue
+		}
+		if err = validateAASXThumbnailPart(thumbnailPart, maximum); err != nil {
+			return fmt.Errorf("AASENV-VALIDATETHUMB-LIMIT thumbnail %q for AAS %q is invalid: %w", thumbnailURI, aas.ID(), err)
+		}
+		validated[key] = struct{}{}
+	}
+	return nil
+}
+
+func validateAASXThumbnailPart(thumbnailPart *aasx.Part, maximum uint64) error {
+	stream, err := openLimitedAASXPart(thumbnailPart, maximum, "thumbnail")
+	if err != nil {
+		return err
+	}
+	_, copyErr := io.Copy(io.Discard, stream)
+	closeErr := stream.Close()
+	if copyErr != nil {
+		return copyErr
+	}
+	if closeErr != nil {
+		return common.NewInternalServerError("AASENV-VALIDATETHUMB-CLOSESTREAM " + closeErr.Error())
+	}
 	return nil
 }
 
@@ -1163,6 +1261,8 @@ func normalizeUploadContentType(contentType string) string {
 
 func uploadProcessingStatus(err error) int {
 	switch {
+	case common.IsErrPayloadTooLarge(err), errors.Is(err, aasx.ErrReaderLimitExceeded):
+		return http.StatusRequestEntityTooLarge
 	case common.IsErrBadRequest(err):
 		return http.StatusBadRequest
 	case common.IsErrMethodNotAllowed(err):

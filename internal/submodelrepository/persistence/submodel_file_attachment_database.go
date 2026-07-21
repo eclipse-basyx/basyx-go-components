@@ -73,7 +73,17 @@ func (s *SubmodelDatabase) UploadFileAttachment(submodelID string, idShortPath s
 	return fileHandler.UploadFileAttachment(submodelID, idShortPath, file, fileName)
 }
 
-// UploadFileAttachmentReader uploads attachment content for a File submodel element from a reader.
+// UploadFileAttachmentReader streams attachment content from a reader into a
+// File submodel element.
+//
+// Parameters:
+//   - submodelID: Identifier of the attachment's parent submodel.
+//   - idShortPath: Path of the target File submodel element.
+//   - file: Attachment source consumed before the method returns.
+//   - fileName: Original attachment filename.
+//
+// Returns:
+//   - error: Handler construction, validation, transaction, or persistence error.
 func (s *SubmodelDatabase) UploadFileAttachmentReader(submodelID string, idShortPath string, file io.Reader, fileName string) error {
 	fileHandler, err := submodelelements.NewPostgreSQLFileHandler(s.db)
 	if err != nil {
@@ -106,7 +116,18 @@ func (s *SubmodelDatabase) UploadFileAttachmentWithHistory(ctx context.Context, 
 	})
 }
 
-// UploadFileAttachmentReaderWithHistory uploads attachment content from a reader and appends the current Submodel snapshot atomically.
+// UploadFileAttachmentReaderWithHistory streams attachment content and appends
+// the current Submodel snapshot in the same transaction.
+//
+// Parameters:
+//   - ctx: Request context preserving authorization, history, and cancellation data.
+//   - submodelID: Identifier of the attachment's parent submodel.
+//   - idShortPath: Path of the target File submodel element.
+//   - file: Attachment source consumed before the method returns.
+//   - fileName: Original attachment filename.
+//
+// Returns:
+//   - error: Visibility, history, validation, transaction, or persistence error.
 func (s *SubmodelDatabase) UploadFileAttachmentReaderWithHistory(ctx context.Context, submodelID string, idShortPath string, file io.Reader, fileName string) error {
 	fileHandler, err := submodelelements.NewPostgreSQLFileHandler(s.db)
 	if err != nil {
@@ -169,6 +190,55 @@ func (s *SubmodelDatabase) DownloadFileAttachmentWithContext(ctx context.Context
 		return nil, "", "", err
 	}
 	return fileHandler.DownloadManagedFileAttachment(ctx, submodelID, idShortPath)
+}
+
+// StreamFileAttachmentWithContext streams an attachment while preserving ABAC visibility from ctx.
+//
+// Parameters:
+//   - ctx: Request context preserving authorization and cancellation.
+//   - submodelID: Identifier of the attachment's parent submodel.
+//   - idShortPath: Path of the File submodel element.
+//   - consume: Callback receiving content type, filename, known size, and a scoped reader.
+//
+// Returns:
+//   - error: Handler construction, lookup, consumer, stream, or transaction error.
+func (s *SubmodelDatabase) StreamFileAttachmentWithContext(ctx context.Context, submodelID string, idShortPath string, consume func(string, string, int64, io.Reader) error) error {
+	fileHandler, err := submodelelements.NewPostgreSQLFileHandler(s.db)
+	if err != nil {
+		return err
+	}
+	tx, err := s.db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelRepeatableRead, ReadOnly: true})
+	if err != nil {
+		return common.NewInternalServerError("SMREPO-STREAMATTACHMENT-STARTTX " + err.Error())
+	}
+	committed := false
+	defer func() {
+		if !committed {
+			_ = tx.Rollback()
+		}
+	}()
+	if err = s.ensureFileAttachmentReadVisible(ctx, tx, submodelID, idShortPath); err != nil {
+		return err
+	}
+	if err = fileHandler.StreamManagedFileAttachmentTx(ctx, tx, submodelID, idShortPath, consume); err != nil {
+		return err
+	}
+	if err = tx.Commit(); err != nil {
+		return common.NewInternalServerError("SMREPO-STREAMATTACHMENT-COMMIT " + err.Error())
+	}
+	committed = true
+	return nil
+}
+
+func (s *SubmodelDatabase) ensureFileAttachmentReadVisible(ctx context.Context, tx *sql.Tx, submodelID string, idShortPath string) error {
+	exists, visible, err := s.checkSubmodelElementVisibilityInTx(ctx, tx, submodelID, idShortPath)
+	if err != nil {
+		return err
+	}
+	if !exists || !visible {
+		return common.NewErrNotFound("SMREPO-STREAMATTACHMENT-NOTVISIBLE File SME not found")
+	}
+	return nil
 }
 
 // DeleteFileAttachment deletes attachment content of a File submodel element.

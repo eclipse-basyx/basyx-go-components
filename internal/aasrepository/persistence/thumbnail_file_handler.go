@@ -164,7 +164,16 @@ func (h *PostgreSQLThumbnailFileHandler) UploadThumbnailByAASID(aasIdentifier st
 	return h.UploadThumbnailByAASIDReader(aasIdentifier, fileName, file)
 }
 
-// UploadThumbnailByAASIDReader uploads thumbnail content for an AAS from a reader and persists metadata.
+// UploadThumbnailByAASIDReader streams thumbnail content from a reader and
+// persists its metadata atomically.
+//
+// Parameters:
+//   - aasIdentifier: Identifier of the thumbnail's Asset Administration Shell.
+//   - fileName: Original filename used to derive content metadata.
+//   - file: Thumbnail source consumed before the method returns.
+//
+// Returns:
+//   - error: Transaction, metadata, content, or persistence error.
 func (h *PostgreSQLThumbnailFileHandler) UploadThumbnailByAASIDReader(aasIdentifier string, fileName string, file io.Reader) error {
 	tx, cleanup, err := common.StartTransaction(h.db)
 	if err != nil {
@@ -533,6 +542,43 @@ func (h *PostgreSQLThumbnailFileHandler) downloadManagedThumbnail(ctx context.Co
 	return content, metadata.ExistingContentType.String, metadata.ExistingFileName.String, thumbnailPath, nil
 }
 
+func (h *PostgreSQLThumbnailFileHandler) streamManagedThumbnailTx(
+	ctx context.Context,
+	tx *sql.Tx,
+	aasIdentifier string,
+	consume func(string, string, string, int64, io.Reader) error,
+) error {
+	if tx == nil || consume == nil {
+		return common.NewInternalServerError("AASREPO-STREAMTHUMBNAILTX-INVALID transaction and stream consumer are required")
+	}
+	metadata, err := loadManagedThumbnailMetadata(ctx, tx, aasIdentifier, false)
+	if err != nil {
+		return err
+	}
+	thumbnailPath := metadata.Path.String
+	if strings.HasPrefix(thumbnailPath, "http://") || strings.HasPrefix(thumbnailPath, "https://") {
+		return common.NewErrNotFound("AASREPO-STREAMTHUMBNAIL-EXTERNAL external thumbnail has no managed content")
+	}
+	reference, err := binarycontent.LoadReferenceTx(ctx, tx, binarycontent.TableThumbnailReference, "thumbnail_element_id", metadata.AASDBID)
+	if err == nil {
+		err = binarycontent.StreamTx(ctx, tx, reference.Content, func(reader io.Reader) error {
+			return consume(metadata.ExistingContentType.String, metadata.ExistingFileName.String, thumbnailPath, reference.Content.SizeBytes, reader)
+		})
+	} else if errors.Is(err, sql.ErrNoRows) {
+		var oid int64
+		oid, err = readLegacyThumbnailOID(ctx, tx, metadata.AASDBID)
+		if err == nil {
+			err = binarycontent.StreamOIDTx(ctx, tx, oid, func(reader io.Reader) error {
+				return consume(metadata.ExistingContentType.String, metadata.ExistingFileName.String, thumbnailPath, 0, reader)
+			})
+		}
+	}
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 func loadManagedThumbnailMetadata(ctx context.Context, tx *sql.Tx, aasIdentifier string, forUpdate bool) (commonmodel.ManagedThumbnailMetadata, error) {
 	dialect := goqu.Dialect("postgres")
 	dataset := dialect.From(goqu.T("aas").As("aas")).
@@ -578,18 +624,26 @@ func upsertManagedThumbnailElement(ctx context.Context, tx *sql.Tx, reference bi
 }
 
 func readLegacyThumbnailContent(ctx context.Context, tx *sql.Tx, aasDBID int64) ([]byte, error) {
+	oid, err := readLegacyThumbnailOID(ctx, tx, aasDBID)
+	if err != nil {
+		return nil, err
+	}
+	return binarycontent.ReadOIDTx(ctx, tx, oid)
+}
+
+func readLegacyThumbnailOID(ctx context.Context, tx *sql.Tx, aasDBID int64) (int64, error) {
 	query, args, err := goqu.From("thumbnail_file_data").Select("file_oid").Where(goqu.C("id").Eq(aasDBID)).ToSQL()
 	if err != nil {
-		return nil, common.NewInternalServerError("AASREPO-GETTHUMBNAIL-BUILDLEGACY " + err.Error())
+		return 0, common.NewInternalServerError("AASREPO-GETTHUMBNAIL-BUILDLEGACY " + err.Error())
 	}
 	var oid int64
 	if err = tx.QueryRowContext(ctx, query, args...).Scan(&oid); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return nil, common.NewErrNotFound("AASREPO-GETTHUMBNAIL-DATANOTFOUND Thumbnail data not found")
+			return 0, common.NewErrNotFound("AASREPO-GETTHUMBNAIL-DATANOTFOUND Thumbnail data not found")
 		}
-		return nil, common.NewInternalServerError("AASREPO-GETTHUMBNAIL-LEGACY " + err.Error())
+		return 0, common.NewInternalServerError("AASREPO-GETTHUMBNAIL-LEGACY " + err.Error())
 	}
-	return binarycontent.ReadOIDTx(ctx, tx, oid)
+	return oid, nil
 }
 
 func deleteLegacyThumbnailData(ctx context.Context, tx *sql.Tx, aasDBID int64) error {
