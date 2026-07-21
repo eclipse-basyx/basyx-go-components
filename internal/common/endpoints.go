@@ -159,6 +159,14 @@ func AddVerificationEndpoint(r chi.Router, config *Config, stagers ...UploadStag
 				)
 				return
 			}
+			if IsErrServiceUnavailable(err) {
+				_ = WriteErrorResponse(w, err, http.StatusServiceUnavailable, "COMMON", "VerifyPayload", "ServiceUnavailable")
+				return
+			}
+			if IsInternalServerError(err) {
+				_ = WriteErrorResponse(w, err, http.StatusInternalServerError, "COMMON", "VerifyPayload", "InternalServerError")
+				return
+			}
 
 			log.Printf("COMMON-VERIFY-PAYLOAD failed to verify payload: %v", err)
 			_ = WriteErrorResponse(w, err, http.StatusBadRequest, "COMMON", "VerifyPayload", "InvalidPayload")

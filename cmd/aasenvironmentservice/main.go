@@ -208,7 +208,10 @@ func runServer(ctx context.Context, configPath string) error {
 		discoveryapi.NewAssetAdministrationShellBasicDiscoveryAPIAPIService(*discoveryPersistence),
 		persistence,
 	)
-	serializationService := aasenvironment.NewSerializationAPIService(persistence)
+	environmentStager := common.NewConnectionReservedUploadStager(
+		binarycontent.NewStager(sharedDB), sharedDB.Stats().MaxOpenConnections, 1,
+	)
+	serializationService := aasenvironment.NewSerializationAPIService(persistence, environmentStager)
 	sharedBulkManager := asyncbulk.NewManager("AASENV-BULK", 0)
 	aasBulkSvc := aasregistryapi.NewBulkService(customAASRegistry, sharedBulkManager)
 	smBulkSvc := smregistryapi.NewBulkService(customSMRegistry, sharedBulkManager)
@@ -238,7 +241,7 @@ func runServer(ctx context.Context, configPath string) error {
 	abacpolicy.ExemptManagementMutationRoutesIfEnabled(cfg, versioningGuard, "aasenvironmentservice")
 	abacpolicy.RegisterManagementRoutesIfEnabled(cfg, apiRouter, abacRepo, "aasenvironmentservice")
 	if cfg.Server.VerificationEndpointAvailable {
-		common.AddVerificationEndpoint(apiRouter, cfg, binarycontent.NewStager(sharedDB))
+		common.AddVerificationEndpoint(apiRouter, cfg, environmentStager)
 	}
 
 	for operation, rt := range aasRegistryCtrl.Routes() {
@@ -283,7 +286,7 @@ func runServer(ctx context.Context, configPath string) error {
 	// Register /upload endpoint
 	uploadService := aasenvironment.NewUploadAPIService(persistence, customAASRepository, customSMRepository)
 	versioningGuard.Cover(http.MethodPost, "/upload")
-	aasenvironment.RegisterUploadAPI(apiRouter, uploadService, cfg.General.UploadMaxSizeBytes, binarycontent.NewStager(sharedDB))
+	aasenvironment.RegisterUploadAPI(apiRouter, uploadService, cfg.General.UploadMaxSizeBytes, environmentStager)
 	aasenvironment.RegisterSerializationAPI(apiRouter, serializationService)
 
 	addr := common.ServerAddress(cfg.Server)

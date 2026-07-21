@@ -207,7 +207,38 @@ func (s *SubmodelDatabase) StreamFileAttachmentWithContext(ctx context.Context, 
 	if err != nil {
 		return err
 	}
-	return fileHandler.StreamManagedFileAttachment(ctx, submodelID, idShortPath, consume)
+	tx, err := s.db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelRepeatableRead, ReadOnly: true})
+	if err != nil {
+		return common.NewInternalServerError("SMREPO-STREAMATTACHMENT-STARTTX " + err.Error())
+	}
+	committed := false
+	defer func() {
+		if !committed {
+			_ = tx.Rollback()
+		}
+	}()
+	if err = s.ensureFileAttachmentReadVisible(ctx, tx, submodelID, idShortPath); err != nil {
+		return err
+	}
+	if err = fileHandler.StreamManagedFileAttachmentTx(ctx, tx, submodelID, idShortPath, consume); err != nil {
+		return err
+	}
+	if err = tx.Commit(); err != nil {
+		return common.NewInternalServerError("SMREPO-STREAMATTACHMENT-COMMIT " + err.Error())
+	}
+	committed = true
+	return nil
+}
+
+func (s *SubmodelDatabase) ensureFileAttachmentReadVisible(ctx context.Context, tx *sql.Tx, submodelID string, idShortPath string) error {
+	exists, visible, err := s.checkSubmodelElementVisibilityInTx(ctx, tx, submodelID, idShortPath)
+	if err != nil {
+		return err
+	}
+	if !exists || !visible {
+		return common.NewErrNotFound("SMREPO-STREAMATTACHMENT-NOTVISIBLE File SME not found")
+	}
+	return nil
 }
 
 // DeleteFileAttachment deletes attachment content of a File submodel element.

@@ -857,6 +857,38 @@ func (p PostgreSQLFileHandler) StreamManagedFileAttachment(
 			_ = tx.Rollback()
 		}
 	}()
+	if err = p.StreamManagedFileAttachmentTx(ctx, tx, submodelID, idShortPath, consume); err != nil {
+		return err
+	}
+	if err = tx.Commit(); err != nil {
+		return common.NewInternalServerError("SMREPO-STREAMATTACHMENT-COMMIT " + err.Error())
+	}
+	committed = true
+	return nil
+}
+
+// StreamManagedFileAttachmentTx supplies attachment metadata and a
+// bounded-memory reader using the caller-owned transaction.
+//
+// Parameters:
+//   - ctx: Request context preserving authorization and cancellation.
+//   - tx: Transaction used for metadata lookup and the complete stream lifetime.
+//   - submodelID: Identifier of the attachment's parent submodel.
+//   - idShortPath: Path of the File submodel element.
+//   - consume: Callback receiving content type, filename, known size, and a scoped reader.
+//
+// Returns:
+//   - error: Lookup, consumer, or stream error; transaction ownership remains with the caller.
+func (p PostgreSQLFileHandler) StreamManagedFileAttachmentTx(
+	ctx context.Context,
+	tx *sql.Tx,
+	submodelID string,
+	idShortPath string,
+	consume func(string, string, int64, io.Reader) error,
+) error {
+	if tx == nil || consume == nil {
+		return common.NewInternalServerError("SMREPO-STREAMATTACHMENTTX-INVALID transaction and stream consumer are required")
+	}
 	metadata, err := readDownloadFileMetadata(ctx, tx, submodelID, idShortPath)
 	if err != nil {
 		return err
@@ -878,10 +910,6 @@ func (p PostgreSQLFileHandler) StreamManagedFileAttachment(
 	if err != nil {
 		return err
 	}
-	if err = tx.Commit(); err != nil {
-		return common.NewInternalServerError("SMREPO-STREAMATTACHMENT-COMMIT " + err.Error())
-	}
-	committed = true
 	return nil
 }
 

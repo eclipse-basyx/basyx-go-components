@@ -572,6 +572,35 @@ func TestAddVerificationEndpointRejectsExpandedAASXLimitWithStaging(t *testing.T
 	}
 }
 
+func TestAddVerificationEndpointPreservesStagingErrorStatus(t *testing.T) {
+	tests := []struct {
+		name       string
+		stagingErr error
+		status     int
+	}{
+		{name: "service unavailable", stagingErr: NewErrServiceUnavailable("TEST-VERIFY-STAGEUNAVAILABLE"), status: http.StatusServiceUnavailable},
+		{name: "internal error", stagingErr: NewInternalServerError("TEST-VERIFY-STAGEFAILED"), status: http.StatusInternalServerError},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			stager := func(context.Context, io.Reader, int64) (StagedUpload, error) {
+				return nil, test.stagingErr
+			}
+			router := chi.NewRouter()
+			AddVerificationEndpoint(router, &Config{General: GeneralConfig{UploadMaxSizeBytes: 1024}}, stager)
+			request := httptest.NewRequest(http.MethodPost, "/verify", bytes.NewReader([]byte{'P', 'K', 3, 4}))
+			response := httptest.NewRecorder()
+
+			router.ServeHTTP(response, request)
+
+			if response.Code != test.status {
+				t.Fatalf("expected status %d, got %d: %s", test.status, response.Code, response.Body.String())
+			}
+		})
+	}
+}
+
 func assertStandardErrorResponse(t *testing.T, responseBody []byte, expectedCode string) {
 	t.Helper()
 

@@ -1658,14 +1658,35 @@ func (s *AssetAdministrationShellDatabase) GetThumbnailByAASID(ctx context.Conte
 // Returns:
 //   - error: Visibility, lookup, consumer, stream, or transaction error.
 func (s *AssetAdministrationShellDatabase) StreamThumbnailByAASID(ctx context.Context, aasIdentifier string, consume func(string, string, string, int64, io.Reader) error) error {
-	if _, err := s.GetAssetAdministrationShellByID(ctx, aasIdentifier); err != nil {
-		return err
-	}
 	thumbnailHandler, err := NewPostgreSQLThumbnailFileHandler(s.db)
 	if err != nil {
 		return common.NewInternalServerError("AASREPO-STREAMTHUMBNAIL-NEWHANDLER " + err.Error())
 	}
-	return thumbnailHandler.streamManagedThumbnail(ctx, aasIdentifier, consume)
+	tx, err := s.db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelRepeatableRead, ReadOnly: true})
+	if err != nil {
+		return common.NewInternalServerError("AASREPO-STREAMTHUMBNAIL-STARTTX " + err.Error())
+	}
+	committed := false
+	defer func() {
+		if !committed {
+			_ = tx.Rollback()
+		}
+	}()
+	exists, visible, err := s.checkAASVisibilityInTx(ctx, tx, aasIdentifier)
+	if err != nil {
+		return err
+	}
+	if !exists || !visible {
+		return common.NewErrNotFound("AASREPO-STREAMTHUMBNAIL-NOTVISIBLE AAS not found")
+	}
+	if err = thumbnailHandler.streamManagedThumbnailTx(ctx, tx, aasIdentifier, consume); err != nil {
+		return err
+	}
+	if err = tx.Commit(); err != nil {
+		return common.NewInternalServerError("AASREPO-STREAMTHUMBNAIL-COMMIT " + err.Error())
+	}
+	committed = true
+	return nil
 }
 
 // PutThumbnailByAASID uploads or replaces the thumbnail and checks ABAC visibility.

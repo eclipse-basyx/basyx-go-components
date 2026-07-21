@@ -133,3 +133,21 @@ func TestUploadDoesNotRequireWritableTempDirectory(t *testing.T) {
 		t.Fatalf("expected service to receive uploaded content, got %q", string(service.content))
 	}
 }
+
+func TestUploadErrorStatusPreservesStagingFailures(t *testing.T) {
+	tests := []struct {
+		err    error
+		status int
+	}{
+		{err: common.NewErrPayloadTooLarge("TEST-UPLOAD-TOOLARGE"), status: http.StatusRequestEntityTooLarge},
+		{err: common.NewErrServiceUnavailable("TEST-UPLOAD-UNAVAILABLE"), status: http.StatusServiceUnavailable},
+		{err: common.NewInternalServerError("TEST-UPLOAD-STAGEFAILED"), status: http.StatusInternalServerError},
+		{err: common.NewErrBadRequest("TEST-UPLOAD-BADREQUEST"), status: http.StatusBadRequest},
+	}
+
+	for _, test := range tests {
+		if status := uploadErrorStatus(test.err); status != test.status {
+			t.Fatalf("expected status %d for %v, got %d", test.status, test.err, status)
+		}
+	}
+}

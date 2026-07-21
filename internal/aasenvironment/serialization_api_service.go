@@ -51,7 +51,6 @@ import (
 	aasxmlization "github.com/FriedJannik/aas-go-sdk/xmlization"
 	aasx "github.com/aas-core-works/aas-package3-golang/v2"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
-	"github.com/eclipse-basyx/basyx-go-components/internal/common/binarycontent"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 )
 
@@ -108,6 +107,7 @@ type SerializationFileDownload struct {
 // SerializationAPIService implements SerializationAPIAPIServicer.
 type SerializationAPIService struct {
 	persistence *Persistence
+	stager      common.UploadStager
 }
 
 // NewSerializationAPIService creates a serialization service bound to the
@@ -118,11 +118,12 @@ type SerializationAPIService struct {
 //
 // Parameters:
 //   - persistence: Repository facade used to load model and binary content.
+//   - stager: Seekable storage used for the generated AASX specification part.
 //
 // Returns:
 //   - *SerializationAPIService: Configured service instance.
-func NewSerializationAPIService(persistence *Persistence) *SerializationAPIService {
-	return &SerializationAPIService{persistence: persistence}
+func NewSerializationAPIService(persistence *Persistence, stager common.UploadStager) *SerializationAPIService {
+	return &SerializationAPIService{persistence: persistence, stager: stager}
 }
 
 // GenerateSerializationByIds builds an environment from the requested AAS and
@@ -175,7 +176,8 @@ func (s *SerializationAPIService) GenerateSerializationByIds(ctx context.Context
 			_ = specContent.Close()
 			return errorResponseForOperation(sizeErr, operation, "ReadStagedSpecificationSize"), nil
 		}
-		if limitErr := validateAASXSerializationSizeLimits(common.AASXLimitsFromContext(ctx), specificationSize, thumbnailParts, supplementaryParts); limitErr != nil {
+		limits := common.AASXLimitsFromContext(ctx)
+		if limitErr := validateAASXSerializationSizeLimits(limits, specificationSize, thumbnailParts, supplementaryParts); limitErr != nil {
 			_ = specContent.Close()
 			return errorResponseForOperation(limitErr, operation, "ValidateAASXLimits"), nil
 		}
@@ -184,7 +186,7 @@ func (s *SerializationAPIService) GenerateSerializationByIds(ctx context.Context
 				if _, err := specContent.Seek(0, io.SeekStart); err != nil {
 					return common.NewInternalServerError("AASENV-SERIALIZEAASX-SEEKSTAGEDSPEC " + err.Error())
 				}
-				return writeAASXPackageFromReader(destination, specContent, specContentType, specURI, thumbnailParts, supplementaryParts)
+				return writeAASXPackageFromReader(destination, specContent, specContentType, specURI, thumbnailParts, supplementaryParts, limits)
 			},
 			Close:       specContent.Close,
 			ContentType: serializationContentType,
@@ -205,8 +207,8 @@ func (s *SerializationAPIService) GenerateSerializationByIds(ctx context.Context
 }
 
 func (s *SerializationAPIService) stageAASXSpecification(ctx context.Context, environment aastypes.IEnvironment, requestedContentType string) (common.StagedUpload, string, string, error) {
-	if s == nil || s.persistence == nil || s.persistence.DB == nil {
-		return nil, "", "", common.NewInternalServerError("AASENV-STAGEAASXSPEC-NILDB shared database is required")
+	if s == nil || s.persistence == nil || s.stager == nil {
+		return nil, "", "", common.NewInternalServerError("AASENV-STAGEAASXSPEC-NILSTAGER upload stager is required")
 	}
 	contentType := ""
 	uri := ""
@@ -250,7 +252,7 @@ func (s *SerializationAPIService) stageAASXSpecification(ctx context.Context, en
 		<-encodeResult
 		return nil, "", "", limitErr
 	}
-	staged, stageErr := binarycontent.Stage(ctx, s.persistence.DB, reader, maximum)
+	staged, stageErr := s.stager(ctx, reader, maximum)
 	_ = reader.Close()
 	encodeErr := <-encodeResult
 	if stageErr != nil {
@@ -629,7 +631,10 @@ func writeAASXPackage(
 	thumbnailParts []serializationThumbnailPart,
 	supplementaryParts []serializationSupplementaryPart,
 ) error {
-	return writeAASXPackageFromReader(destination, bytes.NewReader(specContent), specContentType, specURIPath, thumbnailParts, supplementaryParts)
+	return writeAASXPackageFromReader(
+		destination, bytes.NewReader(specContent), specContentType, specURIPath,
+		thumbnailParts, supplementaryParts, common.AASXLimitsFromConfig(nil),
+	)
 }
 
 func writeAASXPackageFromReader(
@@ -639,6 +644,7 @@ func writeAASXPackageFromReader(
 	specURIPath string,
 	thumbnailParts []serializationThumbnailPart,
 	supplementaryParts []serializationSupplementaryPart,
+	limits common.AASXLimits,
 ) error {
 	packaging := aasx.NewPackaging()
 	pkg, createPackageErr := packaging.CreateWriter(destination)
@@ -651,10 +657,12 @@ func writeAASXPackageFromReader(
 		_ = pkg.Close()
 		return common.NewInternalServerError("AASENV-SERIALIZEAASX-PARSEURL " + urlParsingErr.Error())
 	}
-	spec, putSpecPartErr := pkg.PutPartFromStream(specURI, specContentType, specContent)
+	budget := &aasxExpandedBudget{remaining: limits.MaxTotalExpandedSizeBytes, maximum: limits.MaxTotalExpandedSizeBytes}
+	limitedSpec := budget.wrap(common.NewPayloadLimitReader(specContent, limits.MaxPartExpandedSizeBytes, "specification"))
+	spec, putSpecPartErr := pkg.PutPartFromStream(specURI, specContentType, limitedSpec)
 	if putSpecPartErr != nil {
 		_ = pkg.Close()
-		return common.NewInternalServerError("AASENV-SERIALIZEAASX-PUTSPECPART " + putSpecPartErr.Error())
+		return aasxPackageWriteError("AASENV-SERIALIZEAASX-PUTSPECPART", putSpecPartErr)
 	}
 	if makeSpecErr := pkg.MakeSpec(spec); makeSpecErr != nil {
 		_ = pkg.Close()
@@ -666,12 +674,13 @@ func writeAASXPackageFromReader(
 		var supplementary *aasx.Part
 		putSupplementaryPartErr := consumeSerializationPart(supplementaryPart.Content, supplementaryPart.Consume, func(reader io.Reader) error {
 			var putErr error
-			supplementary, putErr = pkg.PutPartFromStream(writerURI, supplementaryPart.ContentType, reader)
+			limited := budget.wrap(common.NewPayloadLimitReader(reader, limits.MaxPartExpandedSizeBytes, "supplementary"))
+			supplementary, putErr = pkg.PutPartFromStream(writerURI, supplementaryPart.ContentType, limited)
 			return putErr
 		})
 		if putSupplementaryPartErr != nil {
 			_ = pkg.Close()
-			return common.NewInternalServerError("AASENV-SERIALIZEAASX-PUTSUPPLPART " + putSupplementaryPartErr.Error())
+			return aasxPackageWriteError("AASENV-SERIALIZEAASX-PUTSUPPLPART", putSupplementaryPartErr)
 		}
 
 		if relateSupplementaryErr := pkg.RelateSupplementaryToSpec(supplementary, spec); relateSupplementaryErr != nil {
@@ -685,12 +694,13 @@ func writeAASXPackageFromReader(
 		var thumb *aasx.Part
 		putThumbPartErr := consumeSerializationPart(thumbnailPart.Content, thumbnailPart.Consume, func(reader io.Reader) error {
 			var putErr error
-			thumb, putErr = pkg.PutPartFromStream(writerURI, thumbnailPart.ContentType, reader)
+			limited := budget.wrap(common.NewPayloadLimitReader(reader, limits.MaxThumbnailSizeBytes, "thumbnail"))
+			thumb, putErr = pkg.PutPartFromStream(writerURI, thumbnailPart.ContentType, limited)
 			return putErr
 		})
 		if putThumbPartErr != nil {
 			_ = pkg.Close()
-			return common.NewInternalServerError("AASENV-SERIALIZEAASX-PUTTHUMBPART " + putThumbPartErr.Error())
+			return aasxPackageWriteError("AASENV-SERIALIZEAASX-PUTTHUMBPART", putThumbPartErr)
 		}
 
 		if relateThumbnailErr := pkg.RelateSupplementaryToSpec(thumb, spec); relateThumbnailErr != nil {
@@ -710,6 +720,53 @@ func writeAASXPackageFromReader(
 		return common.NewInternalServerError("AASENV-SERIALIZEAASX-CLOSEPACKAGE " + closeErr.Error())
 	}
 	return nil
+}
+
+type aasxExpandedBudget struct {
+	remaining uint64
+	maximum   uint64
+}
+
+func (budget *aasxExpandedBudget) wrap(reader io.Reader) io.Reader {
+	return &aasxExpandedBudgetReader{reader: reader, budget: budget}
+}
+
+type aasxExpandedBudgetReader struct {
+	reader io.Reader
+	budget *aasxExpandedBudget
+}
+
+func (reader *aasxExpandedBudgetReader) Read(destination []byte) (int, error) {
+	if len(destination) == 0 {
+		return 0, nil
+	}
+	if reader.budget.remaining > 0 {
+		if uint64(len(destination)) > reader.budget.remaining {
+			destination = destination[:reader.budget.remaining]
+		}
+		count, err := reader.reader.Read(destination)
+		if count < 0 || count > len(destination) {
+			return 0, common.NewInternalServerError("AASENV-SERIALIZEAASX-INVALIDREAD package stream returned an invalid byte count")
+		}
+		// #nosec G115 -- count is validated as non-negative and bounded by the destination length.
+		reader.budget.remaining -= uint64(count)
+		return count, err
+	}
+	var probe [1]byte
+	count, err := reader.reader.Read(probe[:])
+	if count > 0 {
+		return 0, common.NewErrPayloadTooLarge(fmt.Sprintf(
+			"AASENV-SERIALIZEAASX-TOTALEXPANDED package content exceeds configured maximum of %d bytes", reader.budget.maximum,
+		))
+	}
+	return 0, err
+}
+
+func aasxPackageWriteError(code string, err error) error {
+	if common.IsErrPayloadTooLarge(err) {
+		return err
+	}
+	return common.NewInternalServerError(code + " " + err.Error())
 }
 
 func aasxWriterPartURI(uri *url.URL) *url.URL {
@@ -771,122 +828,153 @@ func (s *SerializationAPIService) resolveSerializationSupplementaryParts(
 	seenSupplementaries := make(map[string]struct{}, len(fileLocations))
 
 	for _, fileLocation := range fileLocations {
-		if IsExternalAASXReference(fileLocation.FileValue) {
-			// #nosec G706 -- values are escaped by sanitizeLogValue to prevent control-character log injection.
-			log.Printf("[WARN] AASENV-SERIALIZESUPPL-SKIPEXTERNAL skipping external file reference for submodel '%s' at path '%s'", sanitizeLogValue(fileLocation.SubmodelID), sanitizeLogValue(fileLocation.IDShortPath))
+		part, resolvedReference, resolveErr := s.resolveSerializationSupplementaryPart(ctx, specURI, fileLocation)
+		if resolveErr != nil {
+			return nil, resolveErr
+		}
+		if part == nil {
 			continue
 		}
-
-		isManagedReference := strings.HasPrefix(fileLocation.FileValue, serializationAASXSupplementaryRoot+"/")
-		resolvedReference := fileLocation.FileValue
-		if !isManagedReference {
-			resolvedReference = ResolveAASXReferenceAgainstSpec(fileLocation.FileValue, specURI)
-		}
-		if resolvedReference == "" {
-			// #nosec G706 -- values are escaped by sanitizeLogValue to prevent control-character log injection.
-			log.Printf("[WARN] AASENV-SERIALIZESUPPL-SKIPUNRESOLVED skipping unresolved file reference for submodel '%s' at path '%s'", sanitizeLogValue(fileLocation.SubmodelID), sanitizeLogValue(fileLocation.IDShortPath))
-			continue
-		}
-
-		var attachmentContentType string
-		var attachmentFileName string
-		var attachmentSize int64
-		var attachmentPreview []byte
-		downloadAttachmentErr := s.persistence.SubmodelRepository.StreamFileAttachmentWithContext(
-			ctx,
-			fileLocation.SubmodelID,
-			fileLocation.IDShortPath,
-			func(contentType string, fileName string, knownSize int64, reader io.Reader) error {
-				attachmentContentType = contentType
-				attachmentFileName = fileName
-				attachmentSize = knownSize
-				if strings.TrimSpace(contentType) == "" || knownSize == 0 {
-					var previewErr error
-					attachmentPreview, previewErr = io.ReadAll(io.LimitReader(reader, 512))
-					if previewErr != nil {
-						return previewErr
-					}
-				}
-				if knownSize == 0 {
-					remaining, countErr := io.Copy(io.Discard, reader)
-					attachmentSize = int64(len(attachmentPreview)) + remaining
-					return countErr
-				}
-				return nil
-			},
-		)
-		if downloadAttachmentErr != nil {
-			if common.IsErrNotFound(downloadAttachmentErr) {
-				// #nosec G706 -- values are escaped by sanitizeLogValue to prevent control-character log injection.
-				log.Printf("[WARN] AASENV-SERIALIZESUPPL-SKIPMISSING attachment not found for submodel '%s' at path '%s'", sanitizeLogValue(fileLocation.SubmodelID), sanitizeLogValue(fileLocation.IDShortPath))
-				continue
-			}
-			return nil, common.NewInternalServerError("AASENV-SERIALIZESUPPL-DOWNLOAD " + downloadAttachmentErr.Error())
-		}
-
-		if attachmentSize == 0 {
-			// #nosec G706 -- values are escaped by sanitizeLogValue to prevent control-character log injection.
-			log.Printf("[WARN] AASENV-SERIALIZESUPPL-SKIPEMPTY empty attachment for submodel '%s' at path '%s'", sanitizeLogValue(fileLocation.SubmodelID), sanitizeLogValue(fileLocation.IDShortPath))
-			continue
-		}
-
-		resolvedContentType := strings.TrimSpace(attachmentContentType)
-		if resolvedContentType == "" {
-			resolvedContentType = strings.TrimSpace(http.DetectContentType(attachmentPreview))
-		}
-		if resolvedContentType == "" {
-			resolvedContentType = "application/octet-stream"
-		}
-
-		if !isManagedReference {
-			resolvedReference = ensureSupplementaryReferenceFileExtension(
-				resolvedReference,
-				attachmentFileName,
-				resolvedContentType,
-				fileLocation.SubmodelID,
-				fileLocation.IDShortPath,
-			)
-			resolvedReference = ResolveAASXSerializationSupplementaryPath(resolvedReference, specURI, serializationAASXSupplementaryRoot)
-		}
-		if resolvedReference == "" {
-			// #nosec G706 -- values are escaped by sanitizeLogValue to prevent control-character log injection.
-			log.Printf("[WARN] AASENV-SERIALIZESUPPL-SKIPINVALIDTARGET skipping unresolved supplementary target for submodel '%s' at path '%s'", sanitizeLogValue(fileLocation.SubmodelID), sanitizeLogValue(fileLocation.IDShortPath))
-			continue
-		}
-
-		if fileLocation.FileElement != nil {
-			rewrittenReference := resolvedReference
-			fileLocation.FileElement.SetValue(&rewrittenReference)
-		}
-
 		if _, seen := seenSupplementaries[resolvedReference]; seen {
 			// #nosec G706 -- values are escaped by sanitizeLogValue to prevent control-character log injection.
 			log.Printf("[WARN] AASENV-SERIALIZESUPPL-SKIPDUPLICATE duplicate supplementary URI '%s' for submodel '%s' at path '%s'", sanitizeLogValue(resolvedReference), sanitizeLogValue(fileLocation.SubmodelID), sanitizeLogValue(fileLocation.IDShortPath))
 			continue
 		}
-
-		supplementaryURI, parseSupplementaryURIErr := url.Parse(resolvedReference)
-		if parseSupplementaryURIErr != nil {
-			return nil, common.NewInternalServerError("AASENV-SERIALIZESUPPL-PARSEURI " + parseSupplementaryURIErr.Error())
-		}
-
 		seenSupplementaries[resolvedReference] = struct{}{}
-		submodelID := fileLocation.SubmodelID
-		idShortPath := fileLocation.IDShortPath
-		maximum := common.AASXLimitsFromContext(ctx).MaxPartExpandedSizeBytes
-		supplementaryParts = append(supplementaryParts, serializationSupplementaryPart{
-			URI:         supplementaryURI,
-			ContentType: resolvedContentType,
-			SizeBytes:   attachmentSize,
-			Consume: func(use func(io.Reader) error) error {
-				return s.persistence.SubmodelRepository.StreamFileAttachmentWithContext(ctx, submodelID, idShortPath, func(_ string, _ string, _ int64, reader io.Reader) error {
-					return use(common.NewPayloadLimitReader(reader, maximum, "supplementary"))
-				})
-			},
-		})
+		supplementaryParts = append(supplementaryParts, *part)
 	}
 
 	return supplementaryParts, nil
+}
+
+type serializationAttachmentMetadata struct {
+	contentType string
+	fileName    string
+	size        int64
+	preview     []byte
+}
+
+func (s *SerializationAPIService) resolveSerializationSupplementaryPart(
+	ctx context.Context,
+	specURI *url.URL,
+	location AASXFileElementLocation,
+) (*serializationSupplementaryPart, string, error) {
+	resolvedReference, managed, ok := resolveInitialSupplementaryReference(location, specURI)
+	if !ok {
+		return nil, "", nil
+	}
+	metadata, found, err := s.loadSerializationAttachmentMetadata(ctx, location)
+	if err != nil || !found {
+		return nil, "", err
+	}
+	resolvedReference, contentType, ok := finalizeSupplementaryReference(resolvedReference, managed, metadata, location, specURI)
+	if !ok {
+		return nil, "", nil
+	}
+	if location.FileElement != nil {
+		location.FileElement.SetValue(&resolvedReference)
+	}
+	part, err := s.buildStreamingSupplementaryPart(ctx, resolvedReference, contentType, metadata.size, location)
+	return part, resolvedReference, err
+}
+
+func resolveInitialSupplementaryReference(location AASXFileElementLocation, specURI *url.URL) (string, bool, bool) {
+	if IsExternalAASXReference(location.FileValue) {
+		// #nosec G706 -- values are escaped by sanitizeLogValue to prevent control-character log injection.
+		log.Printf("[WARN] AASENV-SERIALIZESUPPL-SKIPEXTERNAL skipping external file reference for submodel '%s' at path '%s'", sanitizeLogValue(location.SubmodelID), sanitizeLogValue(location.IDShortPath))
+		return "", false, false
+	}
+	managed := strings.HasPrefix(location.FileValue, serializationAASXSupplementaryRoot+"/")
+	resolved := location.FileValue
+	if !managed {
+		resolved = ResolveAASXReferenceAgainstSpec(location.FileValue, specURI)
+	}
+	if resolved == "" {
+		// #nosec G706 -- values are escaped by sanitizeLogValue to prevent control-character log injection.
+		log.Printf("[WARN] AASENV-SERIALIZESUPPL-SKIPUNRESOLVED skipping unresolved file reference for submodel '%s' at path '%s'", sanitizeLogValue(location.SubmodelID), sanitizeLogValue(location.IDShortPath))
+		return "", false, false
+	}
+	return resolved, managed, true
+}
+
+func (s *SerializationAPIService) loadSerializationAttachmentMetadata(ctx context.Context, location AASXFileElementLocation) (serializationAttachmentMetadata, bool, error) {
+	metadata := serializationAttachmentMetadata{}
+	maximum := common.AASXLimitsFromContext(ctx).MaxPartExpandedSizeBytes
+	err := s.persistence.SubmodelRepository.StreamFileAttachmentWithContext(ctx, location.SubmodelID, location.IDShortPath, func(contentType, fileName string, knownSize int64, reader io.Reader) error {
+		metadata.contentType = contentType
+		metadata.fileName = fileName
+		metadata.size = knownSize
+		return inspectSerializationAttachment(common.NewPayloadLimitReader(reader, maximum, "supplementary"), &metadata)
+	})
+	if common.IsErrNotFound(err) {
+		// #nosec G706 -- values are escaped by sanitizeLogValue to prevent control-character log injection.
+		log.Printf("[WARN] AASENV-SERIALIZESUPPL-SKIPMISSING attachment not found for submodel '%s' at path '%s'", sanitizeLogValue(location.SubmodelID), sanitizeLogValue(location.IDShortPath))
+		return metadata, false, nil
+	}
+	if err != nil {
+		if common.IsErrPayloadTooLarge(err) {
+			return metadata, false, err
+		}
+		return metadata, false, common.NewInternalServerError("AASENV-SERIALIZESUPPL-DOWNLOAD " + err.Error())
+	}
+	if metadata.size == 0 {
+		// #nosec G706 -- values are escaped by sanitizeLogValue to prevent control-character log injection.
+		log.Printf("[WARN] AASENV-SERIALIZESUPPL-SKIPEMPTY empty attachment for submodel '%s' at path '%s'", sanitizeLogValue(location.SubmodelID), sanitizeLogValue(location.IDShortPath))
+		return metadata, false, nil
+	}
+	return metadata, true, nil
+}
+
+func inspectSerializationAttachment(reader io.Reader, metadata *serializationAttachmentMetadata) error {
+	if strings.TrimSpace(metadata.contentType) == "" || metadata.size == 0 {
+		preview, err := io.ReadAll(io.LimitReader(reader, 512))
+		if err != nil {
+			return err
+		}
+		metadata.preview = preview
+	}
+	if metadata.size == 0 {
+		remaining, err := io.Copy(io.Discard, reader)
+		metadata.size = int64(len(metadata.preview)) + remaining
+		return err
+	}
+	return nil
+}
+
+func finalizeSupplementaryReference(resolved string, managed bool, metadata serializationAttachmentMetadata, location AASXFileElementLocation, specURI *url.URL) (string, string, bool) {
+	contentType := strings.TrimSpace(metadata.contentType)
+	if contentType == "" {
+		contentType = strings.TrimSpace(http.DetectContentType(metadata.preview))
+	}
+	if contentType == "" {
+		contentType = "application/octet-stream"
+	}
+	if !managed {
+		resolved = ensureSupplementaryReferenceFileExtension(resolved, metadata.fileName, contentType, location.SubmodelID, location.IDShortPath)
+		resolved = ResolveAASXSerializationSupplementaryPath(resolved, specURI, serializationAASXSupplementaryRoot)
+	}
+	if resolved == "" {
+		// #nosec G706 -- values are escaped by sanitizeLogValue to prevent control-character log injection.
+		log.Printf("[WARN] AASENV-SERIALIZESUPPL-SKIPINVALIDTARGET skipping unresolved supplementary target for submodel '%s' at path '%s'", sanitizeLogValue(location.SubmodelID), sanitizeLogValue(location.IDShortPath))
+		return "", "", false
+	}
+	return resolved, contentType, true
+}
+
+func (s *SerializationAPIService) buildStreamingSupplementaryPart(ctx context.Context, resolvedReference, contentType string, size int64, location AASXFileElementLocation) (*serializationSupplementaryPart, error) {
+	uri, err := url.Parse(resolvedReference)
+	if err != nil {
+		return nil, common.NewInternalServerError("AASENV-SERIALIZESUPPL-PARSEURI " + err.Error())
+	}
+	maximum := common.AASXLimitsFromContext(ctx).MaxPartExpandedSizeBytes
+	return &serializationSupplementaryPart{
+		URI: uri, ContentType: contentType, SizeBytes: size,
+		Consume: func(use func(io.Reader) error) error {
+			return s.persistence.SubmodelRepository.StreamFileAttachmentWithContext(ctx, location.SubmodelID, location.IDShortPath, func(_ string, _ string, _ int64, reader io.Reader) error {
+				return use(common.NewPayloadLimitReader(reader, maximum, "supplementary"))
+			})
+		},
+	}, nil
 }
 
 // resolveAASXSpecURIByContentType selects the canonical AASX spec part path
@@ -1125,55 +1213,13 @@ func (s *SerializationAPIService) resolveSerializationThumbnailParts(
 	seenThumbnailURIs := make(map[string]struct{}, len(resolvedAASIDs))
 
 	for _, aasID := range resolvedAASIDs {
-		var thumbnailContentType string
-		var thumbnailFileName string
-		var thumbnailPath string
-		var thumbnailSize int64
-		var thumbnailPreview []byte
-		thumbnailErr := s.persistence.AASRepository.StreamThumbnailByAASID(ctx, aasID, func(contentType string, fileName string, path string, knownSize int64, reader io.Reader) error {
-			thumbnailContentType = contentType
-			thumbnailFileName = fileName
-			thumbnailPath = path
-			thumbnailSize = knownSize
-			if strings.TrimSpace(contentType) == "" || knownSize == 0 {
-				var previewErr error
-				thumbnailPreview, previewErr = io.ReadAll(io.LimitReader(reader, 512))
-				if previewErr != nil {
-					return previewErr
-				}
-			}
-			if knownSize == 0 {
-				remaining, countErr := io.Copy(io.Discard, reader)
-				thumbnailSize = int64(len(thumbnailPreview)) + remaining
-				return countErr
-			}
-			return nil
-		})
-		if thumbnailErr != nil {
-			if common.IsErrNotFound(thumbnailErr) {
-				continue
-			}
-			return nil, thumbnailErr
+		thumbnailPart, resolvedThumbnailURI, resolveErr := s.resolveSerializationThumbnailPart(ctx, aasID)
+		if resolveErr != nil {
+			return nil, resolveErr
 		}
-		if thumbnailSize == 0 {
+		if thumbnailPart == nil {
 			continue
 		}
-
-		thumbnailPart, buildPartErr := buildSerializationThumbnailPart(aasID, thumbnailFileName, thumbnailContentType, thumbnailPath, thumbnailPreview)
-		if buildPartErr != nil {
-			return nil, common.NewInternalServerError("AASENV-SERIALIZETHUMB-BUILDPART " + buildPartErr.Error())
-		}
-
-		resolvedThumbnailURI := thumbnailPart.URI.String()
-		if !strings.HasPrefix(resolvedThumbnailURI, serializationAASXSupplementaryRoot+"/") {
-			resolvedThumbnailURI = NormalizeAASXPartURI(thumbnailPart.URI)
-		}
-		if resolvedThumbnailURI == "" {
-			// #nosec G706 -- values are escaped by sanitizeLogValue to prevent control-character log injection.
-			log.Printf("[WARN] AASENV-SERIALIZETHUMB-SKIPINVALIDURI skipping invalid thumbnail URI for AAS '%s'", sanitizeLogValue(aasID))
-			continue
-		}
-
 		if _, seen := seenThumbnailURIs[resolvedThumbnailURI]; seen {
 			// #nosec G706 -- values are escaped by sanitizeLogValue to prevent control-character log injection.
 			log.Printf("[WARN] AASENV-SERIALIZETHUMB-SKIPDUPLICATE skipping duplicate thumbnail URI '%s' for AAS '%s'", sanitizeLogValue(resolvedThumbnailURI), sanitizeLogValue(aasID))
@@ -1182,19 +1228,63 @@ func (s *SerializationAPIService) resolveSerializationThumbnailParts(
 		seenThumbnailURIs[resolvedThumbnailURI] = struct{}{}
 
 		rewriteSerializationThumbnailReference(environment, aasID, resolvedThumbnailURI, thumbnailPart.ContentType)
-		streamAASID := aasID
-		maximum := common.AASXLimitsFromContext(ctx).MaxThumbnailSizeBytes
-		thumbnailPart.Content = nil
-		thumbnailPart.SizeBytes = thumbnailSize
-		thumbnailPart.Consume = func(use func(io.Reader) error) error {
-			return s.persistence.AASRepository.StreamThumbnailByAASID(ctx, streamAASID, func(_ string, _ string, _ string, _ int64, reader io.Reader) error {
-				return use(common.NewPayloadLimitReader(reader, maximum, "thumbnail"))
-			})
-		}
-		thumbnailParts = append(thumbnailParts, thumbnailPart)
+		thumbnailParts = append(thumbnailParts, *thumbnailPart)
 	}
 
 	return thumbnailParts, nil
+}
+
+type serializationThumbnailMetadata struct {
+	serializationAttachmentMetadata
+	path string
+}
+
+func (s *SerializationAPIService) resolveSerializationThumbnailPart(ctx context.Context, aasID string) (*serializationThumbnailPart, string, error) {
+	metadata, found, err := s.loadSerializationThumbnailMetadata(ctx, aasID)
+	if err != nil || !found {
+		return nil, "", err
+	}
+	part, err := buildSerializationThumbnailPart(aasID, metadata.fileName, metadata.contentType, metadata.path, metadata.preview)
+	if err != nil {
+		return nil, "", common.NewInternalServerError("AASENV-SERIALIZETHUMB-BUILDPART " + err.Error())
+	}
+	resolvedURI := part.URI.String()
+	if !strings.HasPrefix(resolvedURI, serializationAASXSupplementaryRoot+"/") {
+		resolvedURI = NormalizeAASXPartURI(part.URI)
+	}
+	if resolvedURI == "" {
+		// #nosec G706 -- values are escaped by sanitizeLogValue to prevent control-character log injection.
+		log.Printf("[WARN] AASENV-SERIALIZETHUMB-SKIPINVALIDURI skipping invalid thumbnail URI for AAS '%s'", sanitizeLogValue(aasID))
+		return nil, "", nil
+	}
+	maximum := common.AASXLimitsFromContext(ctx).MaxThumbnailSizeBytes
+	part.Content = nil
+	part.SizeBytes = metadata.size
+	part.Consume = func(use func(io.Reader) error) error {
+		return s.persistence.AASRepository.StreamThumbnailByAASID(ctx, aasID, func(_ string, _ string, _ string, _ int64, reader io.Reader) error {
+			return use(common.NewPayloadLimitReader(reader, maximum, "thumbnail"))
+		})
+	}
+	return &part, resolvedURI, nil
+}
+
+func (s *SerializationAPIService) loadSerializationThumbnailMetadata(ctx context.Context, aasID string) (serializationThumbnailMetadata, bool, error) {
+	metadata := serializationThumbnailMetadata{}
+	maximum := common.AASXLimitsFromContext(ctx).MaxThumbnailSizeBytes
+	err := s.persistence.AASRepository.StreamThumbnailByAASID(ctx, aasID, func(contentType, fileName, path string, knownSize int64, reader io.Reader) error {
+		metadata.contentType = contentType
+		metadata.fileName = fileName
+		metadata.path = path
+		metadata.size = knownSize
+		return inspectSerializationAttachment(common.NewPayloadLimitReader(reader, maximum, "thumbnail"), &metadata.serializationAttachmentMetadata)
+	})
+	if common.IsErrNotFound(err) {
+		return metadata, false, nil
+	}
+	if err != nil {
+		return metadata, false, err
+	}
+	return metadata, metadata.size > 0, nil
 }
 
 // resolveSerializationThumbnailAASIDs determines which AAS identifiers should

@@ -542,24 +542,15 @@ func (h *PostgreSQLThumbnailFileHandler) downloadManagedThumbnail(ctx context.Co
 	return content, metadata.ExistingContentType.String, metadata.ExistingFileName.String, thumbnailPath, nil
 }
 
-func (h *PostgreSQLThumbnailFileHandler) streamManagedThumbnail(
+func (h *PostgreSQLThumbnailFileHandler) streamManagedThumbnailTx(
 	ctx context.Context,
+	tx *sql.Tx,
 	aasIdentifier string,
 	consume func(string, string, string, int64, io.Reader) error,
 ) error {
-	if consume == nil {
-		return common.NewInternalServerError("AASREPO-STREAMTHUMBNAIL-NILCONSUMER stream consumer is required")
+	if tx == nil || consume == nil {
+		return common.NewInternalServerError("AASREPO-STREAMTHUMBNAILTX-INVALID transaction and stream consumer are required")
 	}
-	tx, err := h.db.BeginTx(ctx, nil)
-	if err != nil {
-		return common.NewInternalServerError("AASREPO-STREAMTHUMBNAIL-STARTTX " + err.Error())
-	}
-	committed := false
-	defer func() {
-		if !committed {
-			_ = tx.Rollback()
-		}
-	}()
 	metadata, err := loadManagedThumbnailMetadata(ctx, tx, aasIdentifier, false)
 	if err != nil {
 		return err
@@ -585,10 +576,6 @@ func (h *PostgreSQLThumbnailFileHandler) streamManagedThumbnail(
 	if err != nil {
 		return err
 	}
-	if err = tx.Commit(); err != nil {
-		return common.NewInternalServerError("AASREPO-STREAMTHUMBNAIL-COMMIT " + err.Error())
-	}
-	committed = true
 	return nil
 }
 

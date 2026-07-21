@@ -233,6 +233,9 @@ func (s *uploadAPIService) processAASXPackage(ctx context.Context, fileName stri
 	if err != nil {
 		return err
 	}
+	if err = validateAASXThumbnailLimits(ctx, packageReader, specPart, environment); err != nil {
+		return err
+	}
 
 	if err = s.processEnvironment(ctx, "", "", environment); err != nil {
 		return err
@@ -739,9 +742,8 @@ type aasxFileLocation struct {
 }
 
 type limitedAASXPartStream struct {
-	stream    io.ReadCloser
-	remaining uint64
-	label     string
+	io.Reader
+	io.Closer
 }
 
 func openLimitedAASXPart(part *aasx.Part, maximum uint64, label string) (io.ReadCloser, error) {
@@ -752,34 +754,10 @@ func openLimitedAASXPart(part *aasx.Part, maximum uint64, label string) (io.Read
 	if err != nil {
 		return nil, err
 	}
-	return &limitedAASXPartStream{stream: stream, remaining: maximum, label: label}, nil
-}
-
-func (stream *limitedAASXPartStream) Read(destination []byte) (int, error) {
-	if len(destination) == 0 {
-		return 0, nil
-	}
-	if stream.remaining == 0 {
-		var probe [1]byte
-		count, err := stream.stream.Read(probe[:])
-		if count > 0 {
-			return 0, common.NewErrPayloadTooLarge(fmt.Sprintf("AASENV-AASXPART-TOOLARGE %s exceeds configured expanded-size limit", stream.label))
-		}
-		return 0, err
-	}
-	if uint64(len(destination)) > stream.remaining {
-		destination = destination[:stream.remaining]
-	}
-	count, err := stream.stream.Read(destination)
-	if count < 0 {
-		return 0, common.NewInternalServerError("AASENV-AASXPART-NEGATIVEREAD package stream returned a negative byte count")
-	}
-	stream.remaining -= uint64(count)
-	return count, err
-}
-
-func (stream *limitedAASXPartStream) Close() error {
-	return stream.stream.Close()
+	return &limitedAASXPartStream{
+		Reader: common.NewPayloadLimitReader(stream, maximum, label),
+		Closer: stream,
+	}, nil
 }
 
 func (s *uploadAPIService) uploadSupplementaryFiles(
@@ -904,6 +882,57 @@ func (s *uploadAPIService) storeAASXThumbnail(ctx context.Context, packageReader
 	}
 
 	log.Printf("AASENV-UPLDTHUMB stored thumbnail for %d AAS object(s)", uploaded)
+	return nil
+}
+
+func validateAASXThumbnailLimits(ctx context.Context, packageReader *aasx.PackageRead, specPart *aasx.Part, environment aastypes.IEnvironment) error {
+	if environment == nil {
+		return nil
+	}
+	thumbnailPartsByURI, packageThumbnail, err := resolveAASXThumbnailParts(packageReader, specPart)
+	if err != nil {
+		return err
+	}
+
+	var specURI *url.URL
+	if specPart != nil {
+		specURI = specPart.URI
+	}
+	validated := make(map[string]struct{})
+	maximum := common.AASXLimitsFromContext(ctx).MaxThumbnailSizeBytes
+	for _, aas := range environment.AssetAdministrationShells() {
+		thumbnailPart, thumbnailURI := resolveAASXThumbnailPartForAAS(aas, packageReader, specURI, thumbnailPartsByURI, packageThumbnail)
+		if thumbnailPart == nil {
+			continue
+		}
+		key := normalizePartURI(thumbnailPart.URI)
+		if key == "" {
+			key = thumbnailURI
+		}
+		if _, exists := validated[key]; exists {
+			continue
+		}
+		if err = validateAASXThumbnailPart(thumbnailPart, maximum); err != nil {
+			return fmt.Errorf("AASENV-VALIDATETHUMB-LIMIT thumbnail %q for AAS %q is invalid: %w", thumbnailURI, aas.ID(), err)
+		}
+		validated[key] = struct{}{}
+	}
+	return nil
+}
+
+func validateAASXThumbnailPart(thumbnailPart *aasx.Part, maximum uint64) error {
+	stream, err := openLimitedAASXPart(thumbnailPart, maximum, "thumbnail")
+	if err != nil {
+		return err
+	}
+	_, copyErr := io.Copy(io.Discard, stream)
+	closeErr := stream.Close()
+	if copyErr != nil {
+		return copyErr
+	}
+	if closeErr != nil {
+		return common.NewInternalServerError("AASENV-VALIDATETHUMB-CLOSESTREAM " + closeErr.Error())
+	}
 	return nil
 }
 

@@ -69,10 +69,7 @@ type uploadAPI struct {
 func (a *uploadAPI) HandleUpload(w http.ResponseWriter, r *http.Request) {
 	upload, err := common.ReadMultipartUpload(w, r, a.maxUploadSizeBytes, "file", a.stager)
 	if err != nil {
-		status := http.StatusBadRequest
-		if common.IsErrPayloadTooLarge(err) {
-			status = http.StatusRequestEntityTooLarge
-		}
+		status := uploadErrorStatus(err)
 		writeUploadError(w, status, err, "AASENV-UPLOAD-PARSEMULTIPART")
 		return
 	}
@@ -94,6 +91,19 @@ func (a *uploadAPI) HandleUpload(w http.ResponseWriter, r *http.Request) {
 
 	if encErr := commonmodel.EncodeJSONResponse(result.Body, &result.Code, w); encErr != nil {
 		writeUploadError(w, http.StatusInternalServerError, encErr, "AASENV-UPLOAD-ENCODERESPONSE")
+	}
+}
+
+func uploadErrorStatus(err error) int {
+	switch {
+	case common.IsErrPayloadTooLarge(err):
+		return http.StatusRequestEntityTooLarge
+	case common.IsErrServiceUnavailable(err):
+		return http.StatusServiceUnavailable
+	case common.IsInternalServerError(err):
+		return http.StatusInternalServerError
+	default:
+		return http.StatusBadRequest
 	}
 }
 

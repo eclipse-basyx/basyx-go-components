@@ -27,6 +27,7 @@ package aasenvironment
 
 import (
 	"bytes"
+	"io"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -167,4 +168,32 @@ func TestSerializeEnvironmentToAASXPackagePreservesManagedPaths(t *testing.T) {
 	}
 	require.Contains(t, paths, managedSupplementaryPath)
 	require.Contains(t, paths, managedThumbnailPath)
+}
+
+func TestWriteAASXPackageEnforcesActualCumulativeExpandedSize(t *testing.T) {
+	supplementaryURI, err := url.Parse("/aasx/files/manual.txt")
+	require.NoError(t, err)
+	supplementary := serializationSupplementaryPart{
+		URI:         supplementaryURI,
+		ContentType: "text/plain",
+		SizeBytes:   1,
+		Consume: func(use func(io.Reader) error) error {
+			return use(bytes.NewReader([]byte("actual-content")))
+		},
+	}
+	limits := common.AASXLimits{
+		MaxPartCount:              100,
+		MaxOPCMetadataSizeBytes:   1024,
+		MaxPartExpandedSizeBytes:  1024,
+		MaxTotalExpandedSizeBytes: 8,
+		MaxThumbnailSizeBytes:     128,
+	}
+
+	err = writeAASXPackageFromReader(
+		io.Discard, bytes.NewReader([]byte("{}")), "application/json", serializationAASXJSONSpecURI,
+		nil, []serializationSupplementaryPart{supplementary}, limits,
+	)
+
+	require.Error(t, err)
+	require.True(t, common.IsErrPayloadTooLarge(err), "unexpected error: %v", err)
 }
