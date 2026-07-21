@@ -49,7 +49,7 @@ import (
 	aasjsonization "github.com/FriedJannik/aas-go-sdk/jsonization"
 	aastypes "github.com/FriedJannik/aas-go-sdk/types"
 	aasxmlization "github.com/FriedJannik/aas-go-sdk/xmlization"
-	aasx "github.com/aas-core-works/aas-package3-golang"
+	aasx "github.com/aas-core-works/aas-package3-golang/v2"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/testenv"
 	"github.com/stretchr/testify/require"
 )
@@ -237,14 +237,16 @@ func TestSerializationDownloadAASXXMLAfterThreeAASUploadRequestedAcceptFormat(t 
 
 			switch testCase.expectedFormat {
 			case "aasx-xml":
-				downloadedSpecParts := readAASXSpecPartsFromPayload(t, downloadPayload)
+				downloadedSpecParts, closePackage := readAASXSpecPartsFromPayload(t, downloadPayload)
+				defer closePackage()
 				require.NotEmptyf(t, downloadedSpecParts, "AASX payload for Accept %q has no spec parts", testCase.accept)
 				for _, specPart := range downloadedSpecParts {
 					require.Truef(t, isXMLSpecPart(specPart), "AASX spec part for Accept %q must be XML", testCase.accept)
 				}
 
 			case "aasx-json":
-				downloadedSpecParts := readAASXSpecPartsFromPayload(t, downloadPayload)
+				downloadedSpecParts, closePackage := readAASXSpecPartsFromPayload(t, downloadPayload)
+				defer closePackage()
 				require.NotEmptyf(t, downloadedSpecParts, "AASX payload for Accept %q has no spec parts", testCase.accept)
 				for _, specPart := range downloadedSpecParts {
 					require.Truef(t, isJSONSpecPart(specPart), "AASX spec part for Accept %q must be JSON", testCase.accept)
@@ -289,7 +291,8 @@ func TestSerializationDownloadAASXWithoutUploadContainsSameIds(t *testing.T) {
 			payload := downloadAASXSerializationFullEnvironment(t, testCase.accept, true)
 			require.NotEmpty(t, payload)
 
-			specParts := readAASXSpecPartsFromPayload(t, payload)
+			specParts, closePackage := readAASXSpecPartsFromPayload(t, payload)
+			defer closePackage()
 			require.NotEmptyf(t, specParts, "serialization payload without upload must contain at least one AASX spec part for Accept %q", testCase.accept)
 
 			environment, transformToEnvErr := environmentFromAASXSpecParts(specParts)
@@ -338,7 +341,8 @@ func TestSerializationDownloadAASXWithoutUploadContainsSubsetIds(t *testing.T) {
 			)
 			require.NotEmpty(t, payload)
 
-			specParts := readAASXSpecPartsFromPayload(t, payload)
+			specParts, closePackage := readAASXSpecPartsFromPayload(t, payload)
+			defer closePackage()
 			require.NotEmptyf(t, specParts, "filtered serialization payload must contain at least one AASX spec part for Accept %q", testCase.accept)
 
 			environment, transformToEnvErr := environmentFromAASXSpecParts(specParts)
@@ -835,21 +839,19 @@ func humanReadableSupplementaryName(uri string) string {
 	return baseName
 }
 
-func readAASXSpecPartsFromPayload(t *testing.T, payload []byte) []*aasx.Part {
+func readAASXSpecPartsFromPayload(t *testing.T, payload []byte) ([]*aasx.Part, func()) {
 	t.Helper()
 
-	tempPath := filepath.Join(t.TempDir(), "serialization_result.aasx")
-	require.NoError(t, os.WriteFile(tempPath, payload, 0o600))
-
 	packaging := aasx.NewPackaging()
-	packageReader, err := packaging.OpenRead(tempPath)
-	require.NoErrorf(t, err, "failed to open serialization payload as AASX package from %q", tempPath)
-	defer func() { _ = packageReader.Close() }()
+	packageReader, err := packaging.OpenReadFromStream(bytes.NewReader(payload))
+	require.NoError(t, err, "failed to open serialization payload as AASX package")
 
 	specParts, err := packageReader.Specs()
 	require.NoError(t, err)
 
-	return specParts
+	return specParts, func() {
+		require.NoError(t, packageReader.Close())
+	}
 }
 
 // environmentFromAASXSpecParts converts AASX XML/JSON spec parts into an AAS

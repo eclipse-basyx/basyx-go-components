@@ -32,7 +32,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	aasx "github.com/aas-core-works/aas-package3-golang"
+	aasx "github.com/aas-core-works/aas-package3-golang/v2"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 )
 
