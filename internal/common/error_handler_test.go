@@ -51,6 +51,11 @@ func TestErrorClassifiers_RecognizeWrappedErrors(t *testing.T) {
 			assert: IsErrBadRequest,
 		},
 		{
+			name:   "payload too large",
+			err:    fmt.Errorf("outer: %w", NewErrPayloadTooLarge("x")),
+			assert: IsErrPayloadTooLarge,
+		},
+		{
 			name:   "internal server",
 			err:    fmt.Errorf("outer: %w", NewInternalServerError("x")),
 			assert: IsInternalServerError,

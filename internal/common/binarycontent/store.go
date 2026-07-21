@@ -37,6 +37,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"net/http"
 	"net/url"
 	"path"
 	"sort"
@@ -272,7 +273,7 @@ func writeTransientLargeObjectTx(ctx context.Context, tx *sql.Tx, reader io.Read
 		count, readErr := reader.Read(buffer)
 		if count > 0 {
 			if maxSizeBytes > 0 && int64(count) > maxSizeBytes-size {
-				return 0, "", 0, common.NewErrBadRequest(fmt.Sprintf("BINARYCONTENT-STORE-TOOLARGE upload exceeds configured maximum of %d bytes", maxSizeBytes))
+				return 0, "", 0, common.NewErrPayloadTooLarge(fmt.Sprintf("BINARYCONTENT-STORE-TOOLARGE upload exceeds configured maximum of %d bytes", maxSizeBytes))
 			}
 			chunk := buffer[:count]
 			if _, err = hash.Write(chunk); err != nil {
@@ -297,6 +298,13 @@ func writeTransientLargeObjectTx(ctx context.Context, tx *sql.Tx, reader io.Read
 		if readErr != nil {
 			if errors.Is(readErr, io.EOF) {
 				break
+			}
+			if common.IsErrPayloadTooLarge(readErr) {
+				return 0, "", 0, readErr
+			}
+			var maxBytesError *http.MaxBytesError
+			if errors.As(readErr, &maxBytesError) {
+				return 0, "", 0, common.NewErrPayloadTooLarge(fmt.Sprintf("BINARYCONTENT-STORE-TOOLARGE upload exceeds configured maximum of %d bytes", maxSizeBytes))
 			}
 			return 0, "", 0, common.NewInternalServerError("BINARYCONTENT-STORE-READ " + readErr.Error())
 		}
@@ -423,6 +431,20 @@ func ReadOIDTx(ctx context.Context, tx *sql.Tx, oid int64) ([]byte, error) {
 // callback while the caller's transaction remains open.
 func StreamTx(ctx context.Context, tx *sql.Tx, content Content, consume func(io.Reader) error) error {
 	return streamOIDTx(ctx, tx, content.OID, consume)
+}
+
+// StreamOIDTx streams a PostgreSQL large object in the caller's transaction.
+//
+// Parameters:
+//   - ctx: Request context used for reads and cancellation.
+//   - tx: Existing transaction containing the large object.
+//   - oid: PostgreSQL large-object identifier.
+//   - consume: Callback that must consume the reader before returning.
+//
+// Returns:
+//   - error: Consumer, descriptor-close, query, or context error.
+func StreamOIDTx(ctx context.Context, tx *sql.Tx, oid int64, consume func(io.Reader) error) error {
+	return streamOIDTx(ctx, tx, oid, consume)
 }
 
 func streamOIDTx(ctx context.Context, tx *sql.Tx, oid int64, consume func(io.Reader) error) error {
