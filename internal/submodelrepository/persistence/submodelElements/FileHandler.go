@@ -828,6 +828,63 @@ func (p PostgreSQLFileHandler) DownloadManagedFileAttachment(ctx context.Context
 	return content, metadata.contentType, metadata.fileName, nil
 }
 
+// StreamManagedFileAttachment supplies attachment metadata and a bounded-memory reader.
+//
+// Parameters:
+//   - ctx: Request context preserving authorization and cancellation.
+//   - submodelID: Identifier of the attachment's parent submodel.
+//   - idShortPath: Path of the File submodel element.
+//   - consume: Callback receiving content type, filename, known size, and a scoped reader.
+//
+// Returns:
+//   - error: Lookup, consumer, stream, or transaction error.
+func (p PostgreSQLFileHandler) StreamManagedFileAttachment(
+	ctx context.Context,
+	submodelID string,
+	idShortPath string,
+	consume func(string, string, int64, io.Reader) error,
+) error {
+	if consume == nil {
+		return common.NewInternalServerError("SMREPO-STREAMATTACHMENT-NILCONSUMER stream consumer is required")
+	}
+	tx, err := p.db.BeginTx(ctx, nil)
+	if err != nil {
+		return common.NewInternalServerError("SMREPO-STREAMATTACHMENT-STARTTX " + err.Error())
+	}
+	committed := false
+	defer func() {
+		if !committed {
+			_ = tx.Rollback()
+		}
+	}()
+	metadata, err := readDownloadFileMetadata(ctx, tx, submodelID, idShortPath)
+	if err != nil {
+		return err
+	}
+	reference, err := binarycontent.LoadReferenceTx(ctx, tx, binarycontent.TableFileReference, "file_element_id", metadata.elementID)
+	if err == nil {
+		err = binarycontent.StreamTx(ctx, tx, reference.Content, func(reader io.Reader) error {
+			return consume(metadata.contentType, metadata.fileName, reference.Content.SizeBytes, reader)
+		})
+	} else if errors.Is(err, sql.ErrNoRows) {
+		var oid int64
+		oid, err = readLegacyFileOID(ctx, tx, metadata.elementID)
+		if err == nil {
+			err = binarycontent.StreamOIDTx(ctx, tx, oid, func(reader io.Reader) error {
+				return consume(metadata.contentType, metadata.fileName, 0, reader)
+			})
+		}
+	}
+	if err != nil {
+		return err
+	}
+	if err = tx.Commit(); err != nil {
+		return common.NewInternalServerError("SMREPO-STREAMATTACHMENT-COMMIT " + err.Error())
+	}
+	committed = true
+	return nil
+}
+
 type downloadFileMetadata struct {
 	elementID   int64
 	contentType string
@@ -855,19 +912,27 @@ func readDownloadFileMetadata(ctx context.Context, tx *sql.Tx, submodelID string
 }
 
 func readLegacyFileContent(ctx context.Context, tx *sql.Tx, elementID int64) ([]byte, error) {
+	oid, err := readLegacyFileOID(ctx, tx, elementID)
+	if err != nil {
+		return nil, err
+	}
+	return binarycontent.ReadOIDTx(ctx, tx, oid)
+}
+
+func readLegacyFileOID(ctx context.Context, tx *sql.Tx, elementID int64) (int64, error) {
 	dialect := goqu.Dialect("postgres")
 	query, args, err := dialect.From("file_data").Select("file_oid").Where(goqu.C("id").Eq(elementID)).ToSQL()
 	if err != nil {
-		return nil, common.NewInternalServerError("SMREPO-DOWNLOADATTACHMENT-BUILDLEGACY " + err.Error())
+		return 0, common.NewInternalServerError("SMREPO-DOWNLOADATTACHMENT-BUILDLEGACY " + err.Error())
 	}
 	var oid int64
 	if err = tx.QueryRowContext(ctx, query, args...).Scan(&oid); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return nil, common.NewErrNotFound("SMREPO-DOWNLOADATTACHMENT-NODATA attachment content not found")
+			return 0, common.NewErrNotFound("SMREPO-DOWNLOADATTACHMENT-NODATA attachment content not found")
 		}
-		return nil, common.NewInternalServerError("SMREPO-DOWNLOADATTACHMENT-LEGACY " + err.Error())
+		return 0, common.NewInternalServerError("SMREPO-DOWNLOADATTACHMENT-LEGACY " + err.Error())
 	}
-	return binarycontent.ReadOIDTx(ctx, tx, oid)
+	return oid, nil
 }
 
 // DeleteFileAttachment deletes a file from PostgreSQL's Large Object system.

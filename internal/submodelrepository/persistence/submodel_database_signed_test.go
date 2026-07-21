@@ -90,6 +90,7 @@ func TestGetSignedSubmodelPropagatesSubmodelLookupError(t *testing.T) {
 
 	sut := &SubmodelDatabase{db: db, privateKey: privateKey}
 	mock.ExpectQuery(`SELECT .*`).WillReturnError(errors.New("lookup failed"))
+	mock.ExpectQuery(`SELECT .*`).WillReturnError(errors.New("lookup failed"))
 
 	jws, err := sut.GetSignedSubmodel(contextWithABACDisabled(t), "sm")
 	require.Error(t, err)

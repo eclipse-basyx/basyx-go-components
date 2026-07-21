@@ -1648,12 +1648,42 @@ func (s *AssetAdministrationShellDatabase) GetThumbnailByAASID(ctx context.Conte
 	return thumbnailHandler.downloadManagedThumbnail(ctx, aasIdentifier)
 }
 
+// StreamThumbnailByAASID streams thumbnail content while preserving ABAC visibility from ctx.
+//
+// Parameters:
+//   - ctx: Request context preserving authorization and cancellation.
+//   - aasIdentifier: Identifier of the thumbnail's Asset Administration Shell.
+//   - consume: Callback receiving content type, filename, path, known size, and a scoped reader.
+//
+// Returns:
+//   - error: Visibility, lookup, consumer, stream, or transaction error.
+func (s *AssetAdministrationShellDatabase) StreamThumbnailByAASID(ctx context.Context, aasIdentifier string, consume func(string, string, string, int64, io.Reader) error) error {
+	if _, err := s.GetAssetAdministrationShellByID(ctx, aasIdentifier); err != nil {
+		return err
+	}
+	thumbnailHandler, err := NewPostgreSQLThumbnailFileHandler(s.db)
+	if err != nil {
+		return common.NewInternalServerError("AASREPO-STREAMTHUMBNAIL-NEWHANDLER " + err.Error())
+	}
+	return thumbnailHandler.streamManagedThumbnail(ctx, aasIdentifier, consume)
+}
+
 // PutThumbnailByAASID uploads or replaces the thumbnail and checks ABAC visibility.
 func (s *AssetAdministrationShellDatabase) PutThumbnailByAASID(ctx context.Context, aasIdentifier string, fileName string, file *os.File) error {
 	return s.PutThumbnailByAASIDReader(ctx, aasIdentifier, fileName, file)
 }
 
-// PutThumbnailByAASIDReader uploads or replaces the thumbnail and checks ABAC visibility.
+// PutThumbnailByAASIDReader streams a thumbnail into persistence after checking
+// the request's ABAC visibility.
+//
+// Parameters:
+//   - ctx: Request context preserving authorization and cancellation.
+//   - aasIdentifier: Identifier of the thumbnail's Asset Administration Shell.
+//   - fileName: Original filename used to derive content metadata.
+//   - file: Thumbnail source consumed before the method returns.
+//
+// Returns:
+//   - error: Visibility, validation, transaction, or persistence error.
 func (s *AssetAdministrationShellDatabase) PutThumbnailByAASIDReader(ctx context.Context, aasIdentifier string, fileName string, file io.Reader) error {
 	tx, cleanup, err := common.StartTransaction(s.db)
 	if err != nil {
