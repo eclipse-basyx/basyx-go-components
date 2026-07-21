@@ -27,10 +27,7 @@ package aasenvironment
 
 import (
 	"context"
-	"errors"
-	"fmt"
 	"io"
-	"mime/multipart"
 	"net/http"
 	"strings"
 
@@ -42,13 +39,19 @@ import (
 
 const defaultUploadMaxSizeBytes int64 = 128 << 20
 
-// RegisterUploadAPI registers the upload endpoint to the router
-func RegisterUploadAPI(r chi.Router, service UploadService, maxUploadSizeBytes int64) {
+// RegisterUploadAPI registers the bounded multipart upload endpoint.
+//
+// Parameters:
+//   - r: Router receiving POST /upload.
+//   - service: Upload business logic invoked with seekable staged content.
+//   - maxUploadSizeBytes: Maximum complete multipart request size.
+//   - stager: External storage provider used instead of process memory or local files.
+func RegisterUploadAPI(r chi.Router, service UploadService, maxUploadSizeBytes int64, stager common.UploadStager) {
 	if maxUploadSizeBytes <= 0 {
 		maxUploadSizeBytes = defaultUploadMaxSizeBytes
 	}
 
-	api := &uploadAPI{service: service, maxUploadSizeBytes: maxUploadSizeBytes}
+	api := &uploadAPI{service: service, maxUploadSizeBytes: maxUploadSizeBytes, stager: stager}
 	r.Post("/upload", api.HandleUpload)
 }
 
@@ -60,56 +63,30 @@ type UploadService interface {
 type uploadAPI struct {
 	service            UploadService
 	maxUploadSizeBytes int64
+	stager             common.UploadStager
 }
 
 func (a *uploadAPI) HandleUpload(w http.ResponseWriter, r *http.Request) {
-	r.Body = http.MaxBytesReader(w, r.Body, a.maxUploadSizeBytes)
-
-	if err := r.ParseMultipartForm(a.maxUploadSizeBytes); err != nil {
-		var maxBytesError *http.MaxBytesError
-		if errors.As(err, &maxBytesError) {
-			writeUploadError(
-				w,
-				http.StatusRequestEntityTooLarge,
-				fmt.Errorf("request body exceeds upload limit of %d bytes", a.maxUploadSizeBytes),
-				"AASENV-UPLOAD-MAXSIZEEXCEEDED",
-			)
-			return
-		}
-
-		writeUploadError(w, http.StatusBadRequest, err, "AASENV-UPLOAD-PARSEMULTIPART")
-		return
-	}
-	defer func() {
-		if r.MultipartForm != nil {
-			_ = r.MultipartForm.RemoveAll()
-		}
-	}()
-
-	fileHeader, err := readMultipartFileHeader(r, "file")
+	upload, err := common.ReadMultipartUpload(w, r, a.maxUploadSizeBytes, "file", a.stager)
 	if err != nil {
-		writeUploadError(w, http.StatusBadRequest, err, "AASENV-UPLOAD-READFILEHEADER")
+		status := http.StatusBadRequest
+		if common.IsErrPayloadTooLarge(err) {
+			status = http.StatusRequestEntityTooLarge
+		}
+		writeUploadError(w, status, err, "AASENV-UPLOAD-PARSEMULTIPART")
 		return
 	}
+	defer func() { _ = upload.Close() }()
 
-	contentType := strings.TrimSpace(fileHeader.Header.Get("Content-Type"))
+	contentType := upload.FileContentType
 
-	fileName := strings.TrimSpace(r.FormValue("fileName"))
+	fileName := strings.TrimSpace(upload.FirstField("fileName"))
 	if fileName == "" {
-		fileName = fileHeader.Filename
+		fileName = upload.MultipartFileName
 	}
 	fileName = sanitizeUploadFileName(fileName)
 
-	file, err := openMultipartFile(fileHeader)
-	if err != nil {
-		writeUploadError(w, http.StatusBadRequest, err, "AASENV-UPLOAD-READFILE")
-		return
-	}
-	defer func() {
-		_ = file.Close()
-	}()
-
-	result, err := a.service.HandleUpload(r.Context(), fileName, contentType, file)
+	result, err := a.service.HandleUpload(r.Context(), fileName, contentType, upload.File)
 	if err != nil {
 		writeUploadError(w, http.StatusInternalServerError, err, "AASENV-UPLOAD-HANDLER")
 		return
@@ -120,32 +97,11 @@ func (a *uploadAPI) HandleUpload(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func openMultipartFile(fileHeader *multipart.FileHeader) (multipart.File, error) {
-	formFile, err := fileHeader.Open()
-	if err != nil {
-		return nil, err
-	}
-	return formFile, nil
-}
-
 func writeUploadError(w http.ResponseWriter, status int, err error, info string) {
 	resp := common.NewErrorResponse(err, status, "AASENV", "UploadAPI", info)
 	if encErr := commonmodel.EncodeJSONResponse(resp.Body, &resp.Code, w); encErr != nil {
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 	}
-}
-
-func readMultipartFileHeader(r *http.Request, key string) (*multipart.FileHeader, error) {
-	if r.MultipartForm == nil || r.MultipartForm.File == nil {
-		return nil, errors.New("multipart form is missing")
-	}
-
-	fileHeaders, ok := r.MultipartForm.File[key]
-	if !ok || len(fileHeaders) == 0 || fileHeaders[0] == nil {
-		return nil, fmt.Errorf("multipart file field %q is required", key)
-	}
-
-	return fileHeaders[0], nil
 }
 
 func sanitizeUploadFileName(fileName string) string {

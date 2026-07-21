@@ -41,6 +41,14 @@ abac:
   enabled: false
   modelPath: "config/access_rules/access-rules.json"
 
+general:
+  uploadMaxSizeBytes: 134217728
+  aasxMaxPartCount: 10000
+  aasxMaxOPCMetadataSizeBytes: 16777216
+  aasxMaxPartExpandedSizeBytes: 134217728
+  aasxMaxTotalExpandedSizeBytes: 134217728
+  aasxMaxThumbnailSizeBytes: 16777216
+
 # swagger:
 #   enabled: true
 #   contactName: "Eclipse BaSyx"

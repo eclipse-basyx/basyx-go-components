@@ -44,6 +44,7 @@ import (
 	aasrepositorydb "github.com/eclipse-basyx/basyx-go-components/internal/aasrepository/persistence"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/asyncbulk"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/binarycontent"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/history"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/jws"
 	commonmodel "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
@@ -237,7 +238,7 @@ func runServer(ctx context.Context, configPath string) error {
 	abacpolicy.ExemptManagementMutationRoutesIfEnabled(cfg, versioningGuard, "aasenvironmentservice")
 	abacpolicy.RegisterManagementRoutesIfEnabled(cfg, apiRouter, abacRepo, "aasenvironmentservice")
 	if cfg.Server.VerificationEndpointAvailable {
-		common.AddVerificationEndpoint(apiRouter, cfg)
+		common.AddVerificationEndpoint(apiRouter, cfg, binarycontent.NewStager(sharedDB))
 	}
 
 	for operation, rt := range aasRegistryCtrl.Routes() {
@@ -282,7 +283,7 @@ func runServer(ctx context.Context, configPath string) error {
 	// Register /upload endpoint
 	uploadService := aasenvironment.NewUploadAPIService(persistence, customAASRepository, customSMRepository)
 	versioningGuard.Cover(http.MethodPost, "/upload")
-	aasenvironment.RegisterUploadAPI(apiRouter, uploadService, cfg.General.UploadMaxSizeBytes)
+	aasenvironment.RegisterUploadAPI(apiRouter, uploadService, cfg.General.UploadMaxSizeBytes, binarycontent.NewStager(sharedDB))
 	aasenvironment.RegisterSerializationAPI(apiRouter, serializationService)
 
 	addr := common.ServerAddress(cfg.Server)

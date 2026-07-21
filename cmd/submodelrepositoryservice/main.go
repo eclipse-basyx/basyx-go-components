@@ -41,6 +41,7 @@ import (
 	aasregistrydb "github.com/eclipse-basyx/basyx-go-components/internal/aasregistry/persistence"
 	aasrepositorydb "github.com/eclipse-basyx/basyx-go-components/internal/aasrepository/persistence"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/binarycontent"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/history"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/jws"
 	commonmodel "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
@@ -208,7 +209,7 @@ func runServer(ctx context.Context, configPath string) error {
 	abacpolicy.ExemptManagementMutationRoutesIfEnabled(cfg, versioningGuard, "submodelrepositoryservice")
 	abacpolicy.RegisterManagementRoutesIfEnabled(cfg, apiRouter, abacRepo, "submodelrepositoryservice")
 	if cfg.Server.VerificationEndpointAvailable {
-		common.AddVerificationEndpoint(apiRouter, cfg)
+		common.AddVerificationEndpoint(apiRouter, cfg, binarycontent.NewStager(sharedDB))
 	}
 
 	for operation, rt := range smCtrl.Routes() {

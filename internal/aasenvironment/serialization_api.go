@@ -28,6 +28,7 @@ package aasenvironment
 import (
 	"context"
 	"errors"
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -37,7 +38,11 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
-// RegisterSerializationAPI registers the serialization endpoint to the router.
+// RegisterSerializationAPI registers GET /serialization on the supplied router.
+//
+// Parameters:
+//   - r: Router receiving the serialization route.
+//   - service: Business service used to build serialized environment responses.
 func RegisterSerializationAPI(r chi.Router, service SerializationService) {
 	api := &serializationAPI{service: service}
 	r.Get("/serialization", api.GenerateSerializationByIDs)
@@ -96,11 +101,24 @@ func (a *serializationAPI) GenerateSerializationByIDs(w http.ResponseWriter, r *
 }
 
 func writeSerializationFileDownload(w http.ResponseWriter, status int, payload SerializationFileDownload) {
+	if payload.Close != nil {
+		defer func() {
+			if err := payload.Close(); err != nil {
+				log.Printf("AASENV-SERIALIZATIONAPI-CLOSE response cleanup failed: %v", err)
+			}
+		}()
+	}
 	commonmodel.SetSafeDownloadHeaders(w.Header(), payload.Filename, payload.ContentType)
 	if status <= 0 {
 		status = http.StatusOK
 	}
 	w.WriteHeader(status)
+	if payload.WriteTo != nil {
+		if err := payload.WriteTo(w); err != nil {
+			log.Printf("AASENV-SERIALIZATIONAPI-STREAM response stream failed: %v", err)
+		}
+		return
+	}
 	// #nosec G705 -- writing binary attachment payload with Content-Disposition attachment and nosniff header
 	_, _ = w.Write(payload.Content)
 }

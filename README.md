@@ -177,7 +177,7 @@ general:
 
 `uploadMaxSizeBytes` limits the compressed HTTP request, including multipart overhead. The AASX limits constrain entry count, expanded OPC metadata, each expanded part, all expanded payload parts combined, and thumbnails respectively. All limits must be positive, and the total expanded limit must be greater than or equal to the per-part limit, which must be greater than or equal to the thumbnail limit.
 
-The AASX File Server uses transaction-scoped PostgreSQL large objects for seekable upload staging, so it does not require a writable local temporary directory. Package downloads are streamed from PostgreSQL instead of being materialized in process memory.
+AASX request bodies and generated specification parts use transaction-scoped PostgreSQL large objects for seekable staging; no writable local temporary directory is required. Package parts, attachments, thumbnails, and generated AASX output are streamed. The parsed AAS object model remains in memory because the current AAS SDK requires an in-memory model representation.
 
 - `POST /upload`
 - `PUT /shells/{aasIdentifier}/asset-information/thumbnail`
