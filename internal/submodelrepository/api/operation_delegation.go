@@ -222,7 +222,7 @@ func serializeDelegatedOperationPayload(payload []types.IOperationVariable) ([]b
 	return requestBody, nil
 }
 
-func toDelegatedOperationResultPayload(outputArguments []types.IOperationVariable, inoutputArguments []types.IOperationVariable) map[string]any {
+func toDelegatedOperationResultPayload(outputArguments []any, inoutputArguments []any) map[string]any {
 	return map[string]any{
 		"executionState":    "Completed",
 		"success":           true,
@@ -231,53 +231,65 @@ func toDelegatedOperationResultPayload(outputArguments []types.IOperationVariabl
 	}
 }
 
-func toOperationVariables(payload any) ([]types.IOperationVariable, bool) {
-	if payload == nil {
+func toJsonableOperationVariable(item any) (any, bool) {
+	operationVariable, err := jsonization.OperationVariableFromJsonable(item)
+	if err != nil {
 		return nil, false
 	}
-
-	if alreadyTyped, ok := payload.([]types.IOperationVariable); ok {
-		return alreadyTyped, true
+	jsonableOperationVariable, err := jsonization.ToJsonable(operationVariable)
+	if err != nil {
+		return nil, false
 	}
+	return jsonableOperationVariable, true
+}
 
+func jsonableOperationVariablesFromArray(payload any) ([]any, bool) {
 	switch typedPayload := payload.(type) {
+	case []types.IOperationVariable:
+		return jsonableOperationVariablesFromTyped(typedPayload)
 	case []any:
-		return operationVariablesFromItems(typedPayload)
+		return jsonableOperationVariablesFromItems(typedPayload)
 	case []map[string]any:
 		items := make([]any, 0, len(typedPayload))
 		for _, item := range typedPayload {
 			items = append(items, item)
 		}
-		return operationVariablesFromItems(items)
-	case map[string]any:
-		if _, hasValue := typedPayload["value"]; !hasValue {
-			return nil, false
-		}
-		operationVariable, err := jsonization.OperationVariableFromJsonable(typedPayload)
-		if err != nil {
-			return nil, false
-		}
-		return []types.IOperationVariable{operationVariable}, true
+		return jsonableOperationVariablesFromItems(items)
 	default:
 		return nil, false
 	}
 }
 
-func operationVariablesFromItems(items []any) ([]types.IOperationVariable, bool) {
-	operationVariables := make([]types.IOperationVariable, 0, len(items))
-	for _, item := range items {
-		operationVariable, err := jsonization.OperationVariableFromJsonable(item)
+func jsonableOperationVariablesFromTyped(payload []types.IOperationVariable) ([]any, bool) {
+	jsonables := make([]any, 0, len(payload))
+	for _, operationVariable := range payload {
+		if operationVariable == nil {
+			continue
+		}
+		jsonable, err := jsonization.ToJsonable(operationVariable)
 		if err != nil {
 			return nil, false
 		}
-		operationVariables = append(operationVariables, operationVariable)
+		jsonables = append(jsonables, jsonable)
 	}
-	return operationVariables, true
+	return jsonables, true
+}
+
+func jsonableOperationVariablesFromItems(items []any) ([]any, bool) {
+	jsonables := make([]any, 0, len(items))
+	for _, item := range items {
+		jsonable, ok := toJsonableOperationVariable(item)
+		if !ok {
+			return nil, false
+		}
+		jsonables = append(jsonables, jsonable)
+	}
+	return jsonables, true
 }
 
 func toDelegatedOperationResultPayloadFromBody(delegatedBody any) (map[string]any, bool) {
-	if delegatedOutput, ok := delegatedBody.([]types.IOperationVariable); ok {
-		return toDelegatedOperationResultPayload(delegatedOutput, []types.IOperationVariable{}), true
+	if outputArguments, ok := jsonableOperationVariablesFromArray(delegatedBody); ok {
+		return toDelegatedOperationResultPayload(outputArguments, []any{}), true
 	}
 
 	delegatedBodyMap, ok := delegatedBody.(map[string]any)
@@ -285,17 +297,17 @@ func toDelegatedOperationResultPayloadFromBody(delegatedBody any) (map[string]an
 		return nil, false
 	}
 
-	outputArguments, outputOK := toOperationVariables(delegatedBodyMap["outputArguments"])
-	inoutputArguments, inoutputOK := toOperationVariables(delegatedBodyMap["inoutputArguments"])
+	outputArguments, outputOK := jsonableOperationVariablesFromArray(delegatedBodyMap["outputArguments"])
+	inoutputArguments, inoutputOK := jsonableOperationVariablesFromArray(delegatedBodyMap["inoutputArguments"])
 	if !outputOK && !inoutputOK {
 		return nil, false
 	}
 
 	if !outputOK {
-		outputArguments = []types.IOperationVariable{}
+		outputArguments = []any{}
 	}
 	if !inoutputOK {
-		inoutputArguments = []types.IOperationVariable{}
+		inoutputArguments = []any{}
 	}
 
 	return toDelegatedOperationResultPayload(outputArguments, inoutputArguments), true
@@ -373,18 +385,13 @@ func readDelegatedOperationResponse(response *http.Response) (int, any, error) {
 	}
 
 	if len(responseBytes) == 0 {
-		return response.StatusCode, []types.IOperationVariable{}, nil
+		return response.StatusCode, []any{}, nil
 	}
 
-	var delegatedOutput []types.IOperationVariable
-	if unmarshalErr := json.Unmarshal(responseBytes, &delegatedOutput); unmarshalErr == nil {
-		return response.StatusCode, delegatedOutput, nil
+	var responseBody any
+	if unmarshalErr := json.Unmarshal(responseBytes, &responseBody); unmarshalErr != nil {
+		return response.StatusCode, map[string]any{"message": string(responseBytes)}, nil
 	}
 
-	var passthroughBody any
-	if unmarshalErr := json.Unmarshal(responseBytes, &passthroughBody); unmarshalErr != nil {
-		passthroughBody = map[string]any{"message": string(responseBytes)}
-	}
-
-	return response.StatusCode, passthroughBody, nil
+	return response.StatusCode, responseBody, nil
 }
