@@ -122,13 +122,13 @@ func (s *SubmodelDatabase) updateSubmodelElementInTransaction(tx *sql.Tx, submod
 }
 
 // GetSubmodelElement retrieves a submodel element by path and applies optional ABAC formula filters from ctx.
-func (s *SubmodelDatabase) GetSubmodelElement(ctx context.Context, submodelID string, idShortOrPath string, _ bool, level string) (types.ISubmodelElement, error) {
-	return submodelelements.GetSubmodelElementByIDShortOrPath(ctx, s.db, submodelID, idShortOrPath, level)
+func (s *SubmodelDatabase) GetSubmodelElement(ctx context.Context, submodelID string, idShortOrPath string, includeBlobValue bool, level string) (types.ISubmodelElement, error) {
+	return submodelelements.GetSubmodelElementByIDShortOrPath(ctx, s.db, submodelID, idShortOrPath, includeBlobValue, level)
 }
 
 // GetSubmodelElements retrieves submodel elements and applies optional ABAC formula filters from ctx.
-func (s *SubmodelDatabase) GetSubmodelElements(ctx context.Context, submodelID string, limit *int, cursor string, _ bool, level string) ([]types.ISubmodelElement, string, error) {
-	return submodelelements.GetSubmodelElementsBySubmodelID(ctx, s.db, submodelID, limit, cursor, level)
+func (s *SubmodelDatabase) GetSubmodelElements(ctx context.Context, submodelID string, limit *int, cursor string, includeBlobValue bool, level string) ([]types.ISubmodelElement, string, error) {
+	return submodelelements.GetSubmodelElementsBySubmodelID(ctx, s.db, submodelID, limit, cursor, includeBlobValue, level)
 }
 
 // GetSubmodelElementPaths retrieves submodel element paths directly from persisted idshort_path values.
@@ -208,7 +208,7 @@ func (s *SubmodelDatabase) addSubmodelElementWithPathInTransaction(ctx context.C
 		return err
 	}
 
-	parentElement, err := submodelelements.GetSubmodelElementByIDShortOrPath(ctx, s.db, submodelID, parentPath, "")
+	parentElement, err := submodelelements.GetSubmodelElementByIDShortOrPath(ctx, s.db, submodelID, parentPath, true, "")
 	if err != nil {
 		return err
 	}

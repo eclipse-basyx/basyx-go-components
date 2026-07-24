@@ -755,10 +755,13 @@ func buildBlob(smeRow model.SubmodelElementRow) (types.ISubmodelElement, error) 
 		return nil, err
 	}
 
+	blob := types.NewBlob()
+	blob.SetContentType(&valueRow.ContentType)
+
 	// Postgres bytea is commonly returned as: \x<hex>
 	raw := strings.TrimSpace(valueRow.Value)
 	if raw == "" {
-		return nil, fmt.Errorf("blob value is empty")
+		return blob, nil
 	}
 
 	var decoded []byte
@@ -783,8 +786,6 @@ func buildBlob(smeRow model.SubmodelElementRow) (types.ISubmodelElement, error) 
 		_, _ = fmt.Println("WARNING: Error while decoding Base64 - falling back to HEX Decoded Value as a fallback.")
 	}
 
-	blob := types.NewBlob()
-	blob.SetContentType(&valueRow.ContentType)
 	if string(decoded) != "" {
 		blob.SetValue(decoded)
 	}
