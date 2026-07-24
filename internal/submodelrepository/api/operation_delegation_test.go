@@ -86,7 +86,15 @@ func TestResolveDelegationURLReadsInvocationDelegationQualifier(t *testing.T) {
 func TestToDelegatedOperationResultPayloadFromBodyForArrayKeepsInoutputEmpty(t *testing.T) {
 	t.Parallel()
 
-	delegatedBody := []types.IOperationVariable{&types.OperationVariable{}}
+	property := &types.Property{}
+	property.SetIDShort(stringPointer("out"))
+	property.SetValueType(types.DataTypeDefXSDString)
+	property.SetValue(stringPointer("output"))
+
+	operationVariable := &types.OperationVariable{}
+	operationVariable.SetValue(property)
+
+	delegatedBody := []types.IOperationVariable{operationVariable}
 	resultPayload, ok := toDelegatedOperationResultPayloadFromBody(delegatedBody)
 	require.True(t, ok)
 	resultPayloadBytes, err := json.Marshal(resultPayload)
@@ -98,6 +106,12 @@ func TestToDelegatedOperationResultPayloadFromBodyForArrayKeepsInoutputEmpty(t *
 	outputArguments, outputOK := resultPayloadJSON["outputArguments"].([]any)
 	require.True(t, outputOK)
 	require.Len(t, outputArguments, 1)
+
+	firstOutput, firstOutputOK := outputArguments[0].(map[string]any)
+	require.True(t, firstOutputOK)
+	outputValue, outputValueOK := firstOutput["value"].(map[string]any)
+	require.True(t, outputValueOK)
+	require.Equal(t, "output", outputValue["value"])
 
 	inoutputArguments, inoutputOK := resultPayloadJSON["inoutputArguments"].([]any)
 	require.True(t, inoutputOK)
@@ -128,9 +142,66 @@ func TestToDelegatedOperationResultPayloadFromBodyForMapSeparatesOutputAndInoutp
 	require.True(t, outputOK)
 	require.Len(t, outputArguments, 1)
 
+	firstOutput, firstOutputOK := outputArguments[0].(map[string]any)
+	require.True(t, firstOutputOK)
+	outputValue, outputValueOK := firstOutput["value"].(map[string]any)
+	require.True(t, outputValueOK)
+	require.Equal(t, "output", outputValue["value"])
+
 	inoutputArguments, inoutputOK := resultPayloadJSON["inoutputArguments"].([]any)
 	require.True(t, inoutputOK)
 	require.Len(t, inoutputArguments, 1)
+
+	firstInoutput, firstInoutputOK := inoutputArguments[0].(map[string]any)
+	require.True(t, firstInoutputOK)
+	inoutputValue, inoutputValueOK := firstInoutput["value"].(map[string]any)
+	require.True(t, inoutputValueOK)
+	require.Equal(t, "inoutput", inoutputValue["value"])
+}
+
+func TestToDelegatedOperationResultPayloadFromBodyForAnySliceUsesJsonization(t *testing.T) {
+	t.Parallel()
+
+	delegatedBody := []any{
+		map[string]any{
+			"value": map[string]any{"modelType": "Property", "idShort": "sum", "valueType": "xs:int", "value": "8"},
+		},
+		map[string]any{
+			"value": map[string]any{"modelType": "Property", "idShort": "diff", "valueType": "xs:int", "value": "2"},
+		},
+	}
+
+	resultPayload, ok := toDelegatedOperationResultPayloadFromBody(delegatedBody)
+	require.True(t, ok)
+	resultPayloadBytes, err := json.Marshal(resultPayload)
+	require.NoError(t, err)
+
+	resultPayloadJSON := map[string]any{}
+	require.NoError(t, json.Unmarshal(resultPayloadBytes, &resultPayloadJSON))
+
+	outputArguments, outputOK := resultPayloadJSON["outputArguments"].([]any)
+	require.True(t, outputOK)
+	require.Len(t, outputArguments, 2)
+
+	firstOutput, firstOutputOK := outputArguments[0].(map[string]any)
+	require.True(t, firstOutputOK)
+	firstValue, firstValueOK := firstOutput["value"].(map[string]any)
+	require.True(t, firstValueOK)
+	require.Equal(t, "8", firstValue["value"])
+
+	secondOutput, secondOutputOK := outputArguments[1].(map[string]any)
+	require.True(t, secondOutputOK)
+	secondValue, secondValueOK := secondOutput["value"].(map[string]any)
+	require.True(t, secondValueOK)
+	require.Equal(t, "2", secondValue["value"])
+
+	inoutputArguments, inoutputOK := resultPayloadJSON["inoutputArguments"].([]any)
+	require.True(t, inoutputOK)
+	require.Len(t, inoutputArguments, 0)
+}
+
+func stringPointer(value string) *string {
+	return &value
 }
 
 func TestDelegationAuthorityRejectsImplicitLocalAndInternalTrust(t *testing.T) {
