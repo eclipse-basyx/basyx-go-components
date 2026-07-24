@@ -51,3 +51,24 @@ func TestGetSMEValueExpressionForReadProjectsBlobValueOnlyWhenRequested(t *testi
 	require.Contains(t, withBlobValueSQL, `"be"."content_type"`)
 	require.Contains(t, withBlobValueSQL, `"be"."value"`)
 }
+
+func TestGetSMEValueExpressionForReadSanitizesOperationVariableBlobs(t *testing.T) {
+	t.Parallel()
+
+	dialect := goqu.Dialect("postgres")
+
+	withoutBlobValueSQL, _, err := dialect.
+		Select(getSMEValueExpressionForRead(dialect, false)).
+		ToSQL()
+	require.NoError(t, err)
+	require.Contains(t, withoutBlobValueSQL, "WITH RECURSIVE operation_json_nodes")
+	require.Contains(t, withoutBlobValueSQL, `"current"."payload" #- "target"."path"`)
+	require.Contains(t, withoutBlobValueSQL, `"operation_json_nodes"."node" ->> 'modelType' = 'Blob'`)
+
+	withBlobValueSQL, _, err := dialect.
+		Select(getSMEValueExpressionForRead(dialect, true)).
+		ToSQL()
+	require.NoError(t, err)
+	require.NotContains(t, withBlobValueSQL, "WITH RECURSIVE operation_json_nodes")
+	require.NotContains(t, withBlobValueSQL, `"current"."payload" #- "target"."path"`)
+}

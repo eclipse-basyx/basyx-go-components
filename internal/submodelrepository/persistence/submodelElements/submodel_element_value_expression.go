@@ -36,6 +36,109 @@ func temporalColumnAsText(column exp.IdentifierExpression) exp.LiteralExpression
 	return goqu.L(`trim(both '"' from to_json(?)::text)`, column)
 }
 
+func operationValueExpressionForRead(dialect goqu.DialectWrapper, includeBlobValue bool) exp.Expression {
+	var payload exp.Expression = goqu.Func("jsonb_build_object",
+		goqu.V("input_variables"), goqu.I("oe.input_variables"),
+		goqu.V("output_variables"), goqu.I("oe.output_variables"),
+		goqu.V("inoutput_variables"), goqu.I("oe.inoutput_variables"),
+	)
+	if !includeBlobValue {
+		payload = withoutEmbeddedBlobValues(dialect, payload)
+	}
+
+	return dialect.From(goqu.T("operation_element").As("oe")).
+		Select(payload).
+		Where(goqu.I("oe.id").Eq(goqu.I("sme.id"))).
+		Limit(1)
+}
+
+func withoutEmbeddedBlobValues(dialect goqu.DialectWrapper, payload exp.Expression) exp.Expression {
+	node := goqu.I("parent.node")
+	objectNode := goqu.Case().
+		When(goqu.Func("jsonb_typeof", node).Eq("object"), node).
+		Else(goqu.L("'{}'::jsonb"))
+	arrayNode := goqu.Case().
+		When(goqu.Func("jsonb_typeof", node).Eq("array"), node).
+		Else(goqu.L("'[]'::jsonb"))
+
+	objectChildren := dialect.
+		From(goqu.Func("jsonb_each", objectNode).As("object_child")).
+		Select(
+			goqu.I("object_child.key"),
+			goqu.I("object_child.value"),
+		)
+	arrayIndex := goqu.I("array_child.array_index")
+	arrayChildren := dialect.
+		From(goqu.L(
+			"? AS array_child(array_index)",
+			goqu.Func(
+				"generate_series",
+				0,
+				goqu.L("? - 1", goqu.Func("jsonb_array_length", arrayNode)),
+			),
+		)).
+		Select(
+			goqu.Cast(arrayIndex, "text"),
+			goqu.L("? -> ?", node, arrayIndex),
+		)
+	children := objectChildren.UnionAll(arrayChildren).As("child")
+
+	jsonNodes := dialect.
+		Select(
+			goqu.L("ARRAY[]::text[]"),
+			payload,
+		).
+		UnionAll(
+			dialect.
+				From(
+					goqu.T("operation_json_nodes").As("parent"),
+					goqu.Lateral(children),
+				).
+				Select(
+					goqu.L("? || ARRAY[?]", goqu.I("parent.path"), goqu.I("child.key")),
+					goqu.I("child.value"),
+				),
+		)
+	blobValuePaths := dialect.
+		From("operation_json_nodes").
+		Select(
+			goqu.ROW_NUMBER().Over(goqu.W().OrderBy(goqu.I("operation_json_nodes.path").Asc())),
+			goqu.L("? || ARRAY[?]", goqu.I("operation_json_nodes.path"), goqu.V("value")),
+		).
+		Where(goqu.L(
+			"? ->> ? = ?",
+			goqu.I("operation_json_nodes.node"),
+			goqu.V("modelType"),
+			goqu.V("Blob"),
+		))
+	strippedPayload := dialect.
+		Select(
+			goqu.L("0::bigint"),
+			payload,
+		).
+		UnionAll(
+			dialect.
+				From(goqu.T("stripped_operation_payload").As("current")).
+				Join(
+					goqu.T("blob_value_paths").As("target"),
+					goqu.On(goqu.I("target.position").Eq(goqu.L("? + 1", goqu.I("current.position")))),
+				).
+				Select(
+					goqu.L("? + 1", goqu.I("current.position")),
+					goqu.L("? #- ?", goqu.I("current.payload"), goqu.I("target.path")),
+				),
+		)
+
+	return dialect.
+		From("stripped_operation_payload").
+		Select("payload").
+		WithRecursive("operation_json_nodes(path, node)", jsonNodes).
+		With("blob_value_paths(position, path)", blobValuePaths).
+		With("stripped_operation_payload(position, payload)", strippedPayload).
+		Order(goqu.I("position").Desc()).
+		Limit(1)
+}
+
 func getSMEValueExpressionForRead(dialect goqu.DialectWrapper, includeBlobValue bool) exp.CaseExpression {
 	blobPayload := []interface{}{
 		goqu.V("content_type"), goqu.I("be.content_type"),
@@ -134,14 +237,7 @@ func getSMEValueExpressionForRead(dialect goqu.DialectWrapper, includeBlobValue 
 		).
 		When(
 			goqu.I("sme.model_type").Eq(types.ModelTypeOperation),
-			dialect.From(goqu.T("operation_element").As("oe")).
-				Select(goqu.Func("jsonb_build_object",
-					goqu.V("input_variables"), goqu.I("oe.input_variables"),
-					goqu.V("output_variables"), goqu.I("oe.output_variables"),
-					goqu.V("inoutput_variables"), goqu.I("oe.inoutput_variables"),
-				)).
-				Where(goqu.I("oe.id").Eq(goqu.I("sme.id"))).
-				Limit(1),
+			operationValueExpressionForRead(dialect, includeBlobValue),
 		).
 		When(
 			goqu.I("sme.model_type").Eq(types.ModelTypeProperty),
