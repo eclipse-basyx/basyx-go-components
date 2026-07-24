@@ -62,7 +62,7 @@ func (s *SubmodelDatabase) GetSignedSubmodel(ctx context.Context, submodelID str
 		return "", errors.New("JWS signing not configured: private key not loaded")
 	}
 
-	submodel, err := s.GetSubmodelByID(ctx, submodelID, "deep", false)
+	submodel, err := s.GetSubmodelByID(ctx, submodelID, "deep", false, true)
 	if err != nil {
 		return "", err
 	}
@@ -103,7 +103,7 @@ func (s *SubmodelDatabase) GetSignedSubmodelValueOnly(ctx context.Context, submo
 		return "", errors.New("JWS signing not configured: private key not loaded")
 	}
 
-	submodel, err := s.GetSubmodelByID(ctx, submodelID, "deep", false)
+	submodel, err := s.GetSubmodelByID(ctx, submodelID, "deep", false, true)
 	if err != nil {
 		return "", err
 	}

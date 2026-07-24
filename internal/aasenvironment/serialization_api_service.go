@@ -373,7 +373,7 @@ func (s *SerializationAPIService) loadSubmodels(ctx context.Context, ids []strin
 	if len(ids) > 0 {
 		result := make([]aastypes.ISubmodel, 0, len(ids))
 		for _, id := range ids {
-			submodel, getErr := s.persistence.SubmodelRepository.GetSubmodelByID(ctx, id, "deep", false)
+			submodel, getErr := s.persistence.SubmodelRepository.GetSubmodelByID(ctx, id, "deep", false, true)
 			if getErr != nil {
 				return nil, getErr
 			}
@@ -401,7 +401,7 @@ func (s *SerializationAPIService) loadSubmodels(ctx context.Context, ids []strin
 			}
 
 			unlimited := -1
-			submodelElements, _, getElementsErr := s.persistence.SubmodelRepository.GetSubmodelElements(ctx, submodelID, &unlimited, "", false, "deep")
+			submodelElements, _, getElementsErr := s.persistence.SubmodelRepository.GetSubmodelElements(ctx, submodelID, &unlimited, "", true, "deep")
 			if getElementsErr != nil {
 				return nil, getElementsErr
 			}

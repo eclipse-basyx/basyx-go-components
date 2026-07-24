@@ -115,7 +115,7 @@ func loadSubmodelElementRootSnapshotTx(ctx context.Context, tx *sql.Tx, submodel
 	if history.ActiveConfig().EvidenceEnabled {
 		stateReadCtx = auth.ContextWithoutQueryFilter(ctx)
 	}
-	rootElement, err := submodelelements.GetSubmodelElementByIDShortOrPathTx(stateReadCtx, tx, submodelID, rootPath, "deep")
+	rootElement, err := submodelelements.GetSubmodelElementByIDShortOrPathTx(stateReadCtx, tx, submodelID, rootPath, true, "deep")
 	if err != nil {
 		return nil, err
 	}

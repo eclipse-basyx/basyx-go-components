@@ -70,3 +70,22 @@ func TestBuildAnnotatedRelationshipElementAllowsNullOptionalReferences(t *testin
 	require.Nil(t, relationship.First())
 	require.Nil(t, relationship.Second())
 }
+
+func TestBuildBlobAllowsOmittedValue(t *testing.T) {
+	t.Parallel()
+
+	value := json.RawMessage(`{"content_type":"text/plain"}`)
+	element, err := buildBlob(model.SubmodelElementRow{
+		IDShort:   sql.NullString{String: "BlobWithoutValue", Valid: true},
+		ModelType: int64(types.ModelTypeBlob),
+		Value:     &value,
+	})
+
+	require.NoError(t, err)
+
+	blob, ok := element.(*types.Blob)
+	require.True(t, ok)
+	require.NotNil(t, blob.ContentType())
+	require.Equal(t, "text/plain", *blob.ContentType())
+	require.Nil(t, blob.Value())
+}

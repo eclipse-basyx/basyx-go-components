@@ -36,7 +36,14 @@ func temporalColumnAsText(column exp.IdentifierExpression) exp.LiteralExpression
 	return goqu.L(`trim(both '"' from to_json(?)::text)`, column)
 }
 
-func getSMEValueExpressionForRead(dialect goqu.DialectWrapper) exp.CaseExpression {
+func getSMEValueExpressionForRead(dialect goqu.DialectWrapper, includeBlobValue bool) exp.CaseExpression {
+	blobPayload := []interface{}{
+		goqu.V("content_type"), goqu.I("be.content_type"),
+	}
+	if includeBlobValue {
+		blobPayload = append(blobPayload, goqu.V("value"), goqu.I("be.value"))
+	}
+
 	return goqu.Case().
 		When(
 			goqu.I("sme.model_type").Eq(types.ModelTypeAnnotatedRelationshipElement),
@@ -67,10 +74,7 @@ func getSMEValueExpressionForRead(dialect goqu.DialectWrapper) exp.CaseExpressio
 		When(
 			goqu.I("sme.model_type").Eq(types.ModelTypeBlob),
 			dialect.From(goqu.T("blob_element").As("be")).
-				Select(goqu.Func("jsonb_build_object",
-					goqu.V("content_type"), goqu.I("be.content_type"),
-					goqu.V("value"), goqu.I("be.value"),
-				)).
+				Select(goqu.Func("jsonb_build_object", blobPayload...)).
 				Where(goqu.I("be.id").Eq(goqu.I("sme.id"))).
 				Limit(1),
 		).

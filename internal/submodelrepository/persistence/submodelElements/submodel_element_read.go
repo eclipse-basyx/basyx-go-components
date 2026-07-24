@@ -57,7 +57,7 @@ type dbQueryer interface {
 }
 
 // GetSubmodelElementByIDShortOrPath loads a submodel element by path and applies optional ABAC formula filters from ctx.
-func GetSubmodelElementByIDShortOrPath(ctx context.Context, db *sql.DB, submodelID string, idShortOrPath string, level string) (types.ISubmodelElement, error) {
+func GetSubmodelElementByIDShortOrPath(ctx context.Context, db *sql.DB, submodelID string, idShortOrPath string, includeBlobValue bool, level string) (types.ISubmodelElement, error) {
 	if submodelID == "" {
 		return nil, common.NewErrBadRequest("SMREPO-GETSMEBYPATH-EMPTYSMID Submodel id must not be empty")
 	}
@@ -76,11 +76,11 @@ func GetSubmodelElementByIDShortOrPath(ctx context.Context, db *sql.DB, submodel
 		return nil, common.NewInternalServerError("SMREPO-GETSMEBYPATH-GETSMDATABASEID " + submodelIDErr.Error())
 	}
 
-	return getSubmodelElementByIDShortOrPathWithSubmodelDBID(ctx, db, submodelID, int64(submodelDatabaseID), idShortOrPath, level)
+	return getSubmodelElementByIDShortOrPathWithSubmodelDBID(ctx, db, submodelID, int64(submodelDatabaseID), idShortOrPath, level, includeBlobValue)
 }
 
 // GetSubmodelElementByIDShortOrPathTx loads a submodel element by path from an existing transaction.
-func GetSubmodelElementByIDShortOrPathTx(ctx context.Context, tx *sql.Tx, submodelID string, idShortOrPath string, level string) (types.ISubmodelElement, error) {
+func GetSubmodelElementByIDShortOrPathTx(ctx context.Context, tx *sql.Tx, submodelID string, idShortOrPath string, includeBlobValue bool, level string) (types.ISubmodelElement, error) {
 	if tx == nil {
 		return nil, common.NewInternalServerError("SMREPO-GETSMEBYPATHTX-NILTX transaction must not be nil")
 	}
@@ -102,12 +102,12 @@ func GetSubmodelElementByIDShortOrPathTx(ctx context.Context, tx *sql.Tx, submod
 		return nil, common.NewInternalServerError("SMREPO-GETSMEBYPATHTX-GETSMDATABASEID " + submodelIDErr.Error())
 	}
 
-	return getSubmodelElementByIDShortOrPathWithSubmodelDBID(ctx, tx, submodelID, int64(submodelDatabaseID), idShortOrPath, level)
+	return getSubmodelElementByIDShortOrPathWithSubmodelDBID(ctx, tx, submodelID, int64(submodelDatabaseID), idShortOrPath, level, includeBlobValue)
 }
 
-func getSubmodelElementByIDShortOrPathWithSubmodelDBID(ctx context.Context, db dbQueryer, submodelID string, submodelDatabaseID int64, idShortOrPath string, level string) (types.ISubmodelElement, error) {
+func getSubmodelElementByIDShortOrPathWithSubmodelDBID(ctx context.Context, db dbQueryer, submodelID string, submodelDatabaseID int64, idShortOrPath string, level string, includeBlobValue bool) (types.ISubmodelElement, error) {
 	includeChildren := level != "core"
-	parsedRows, readRowsErr := readSubmodelElementRowsByPath(ctx, db, submodelDatabaseID, idShortOrPath, includeChildren)
+	parsedRows, readRowsErr := readSubmodelElementRowsByPath(ctx, db, submodelDatabaseID, idShortOrPath, includeChildren, includeBlobValue)
 
 	if readRowsErr != nil {
 		return nil, readRowsErr
@@ -413,7 +413,7 @@ func GetSubmodelElementPathsByPath(ctx context.Context, db *sql.DB, submodelID s
 
 // GetSubmodelElementsBySubmodelID loads top-level submodel elements and reconstructs
 // each complete subtree in original hierarchy.
-func GetSubmodelElementsBySubmodelID(ctx context.Context, db *sql.DB, submodelID string, limit *int, cursor string, level string) ([]types.ISubmodelElement, string, error) {
+func GetSubmodelElementsBySubmodelID(ctx context.Context, db *sql.DB, submodelID string, limit *int, cursor string, includeBlobValue bool, level string) ([]types.ISubmodelElement, string, error) {
 	if submodelID == "" {
 		return nil, "", common.NewErrBadRequest("SMREPO-GETSMES-EMPTYSMID Submodel id must not be empty")
 	}
@@ -434,11 +434,11 @@ func GetSubmodelElementsBySubmodelID(ctx context.Context, db *sql.DB, submodelID
 		return nil, "", common.NewInternalServerError("SMREPO-GETSMES-GETSMDATABASEID " + submodelIDErr.Error())
 	}
 
-	return getSubmodelElementsByDatabaseID(ctx, db, int64(submodelDatabaseID), limit, cursor, level)
+	return getSubmodelElementsByDatabaseID(ctx, db, int64(submodelDatabaseID), limit, cursor, level, includeBlobValue)
 }
 
 // GetSubmodelElementsBySubmodelIDTx loads top-level submodel elements from an existing transaction.
-func GetSubmodelElementsBySubmodelIDTx(ctx context.Context, tx *sql.Tx, submodelID string, limit *int, cursor string, level string) ([]types.ISubmodelElement, string, error) {
+func GetSubmodelElementsBySubmodelIDTx(ctx context.Context, tx *sql.Tx, submodelID string, limit *int, cursor string, includeBlobValue bool, level string) ([]types.ISubmodelElement, string, error) {
 	if tx == nil {
 		return nil, "", common.NewInternalServerError("SMREPO-GETSMES-NILTX transaction must not be nil")
 	}
@@ -460,10 +460,10 @@ func GetSubmodelElementsBySubmodelIDTx(ctx context.Context, tx *sql.Tx, submodel
 		return nil, "", common.NewInternalServerError("SMREPO-GETSMES-GETSMDATABASEID " + submodelIDErr.Error())
 	}
 
-	return getSubmodelElementsByDatabaseID(ctx, tx, int64(submodelDatabaseID), limit, cursor, level)
+	return getSubmodelElementsByDatabaseID(ctx, tx, int64(submodelDatabaseID), limit, cursor, level, includeBlobValue)
 }
 
-func getSubmodelElementsByDatabaseID(ctx context.Context, db dbQueryer, submodelDatabaseID int64, limit *int, cursor string, level string) ([]types.ISubmodelElement, string, error) {
+func getSubmodelElementsByDatabaseID(ctx context.Context, db dbQueryer, submodelDatabaseID int64, limit *int, cursor string, level string, includeBlobValue bool) ([]types.ISubmodelElement, string, error) {
 	rootElements, nextCursor, rootPathErr := getRootElementPage(ctx, db, submodelDatabaseID, limit, cursor)
 	if rootPathErr != nil {
 		return nil, "", rootPathErr
@@ -479,7 +479,7 @@ func getSubmodelElementsByDatabaseID(ctx context.Context, db dbQueryer, submodel
 
 	includeChildren := level != "core"
 	isGetSubmodelElements := true
-	parsedRows, readRowsErr := readSubmodelElementRowsByRootIDs(ctx, db, submodelDatabaseID, rootIDs, includeChildren, isGetSubmodelElements)
+	parsedRows, readRowsErr := readSubmodelElementRowsByRootIDs(ctx, db, submodelDatabaseID, rootIDs, includeChildren, isGetSubmodelElements, includeBlobValue)
 	if readRowsErr != nil {
 		return nil, "", readRowsErr
 	}
@@ -1222,7 +1222,7 @@ func buildMaskedSMEValuePayloadExpr(rawValueAlias string) exp.Expression {
 	return goqu.L("(COALESCE(?::jsonb, '{}'::jsonb) - 'value')", goqu.I(rawValueAlias))
 }
 
-func readSubmodelElementRowsByPath(ctx context.Context, db dbQueryer, submodelDatabaseID int64, idShortOrPath string, includeChildren bool) ([]loadedSMERow, error) {
+func readSubmodelElementRowsByPath(ctx context.Context, db dbQueryer, submodelDatabaseID int64, idShortOrPath string, includeChildren bool, includeBlobValue bool) ([]loadedSMERow, error) {
 	dialect := goqu.Dialect("postgres")
 	rowCollector, collectorErr := grammar.NewResolvedFieldPathCollectorForSMERow("sme")
 	if collectorErr != nil {
@@ -1246,7 +1246,7 @@ func readSubmodelElementRowsByPath(ctx context.Context, db dbQueryer, submodelDa
 	if valueVisibleErr != nil {
 		return nil, common.NewInternalServerError("SMREPO-GETSMEBYPATH-VALUEMASK " + valueVisibleErr.Error())
 	}
-	valueExpr := getSMEValueExpressionForRead(dialect)
+	valueExpr := getSMEValueExpressionForRead(dialect, includeBlobValue)
 	innerQuery := dialect.
 		From(goqu.T("submodel_element").As("sme")).
 		LeftJoin(
@@ -1348,7 +1348,7 @@ func readSubmodelElementRowsByPath(ctx context.Context, db dbQueryer, submodelDa
 	return executeLoadedSMERowQuery(ctx, db, sqlQuery, args, "SMREPO-GETSMEBYPATH")
 }
 
-func readSubmodelElementRowsByRootIDs(ctx context.Context, db dbQueryer, submodelDatabaseID int64, rootIDs []int64, includeChildren bool, isGetSubmodelElements bool) ([]loadedSMERow, error) {
+func readSubmodelElementRowsByRootIDs(ctx context.Context, db dbQueryer, submodelDatabaseID int64, rootIDs []int64, includeChildren bool, isGetSubmodelElements bool, includeBlobValue bool) ([]loadedSMERow, error) {
 	if len(rootIDs) == 0 {
 		return []loadedSMERow{}, nil
 	}
@@ -1394,7 +1394,7 @@ func readSubmodelElementRowsByRootIDs(ctx context.Context, db dbQueryer, submode
 		)
 	}
 
-	valueExpr := getSMEValueExpressionForRead(dialect)
+	valueExpr := getSMEValueExpressionForRead(dialect, includeBlobValue)
 	innerQuery := dialect.
 		From(goqu.T("submodel_element").As("sme")).
 		LeftJoin(

@@ -48,7 +48,7 @@ import (
 )
 
 // GetSubmodelByID retrieves a submodel by identifier and applies optional ABAC formula filters from ctx.
-func (s *SubmodelDatabase) GetSubmodelByID(ctx context.Context, submodelIdentifier string, level string, metadataOnly bool) (types.ISubmodel, error) {
+func (s *SubmodelDatabase) GetSubmodelByID(ctx context.Context, submodelIdentifier string, level string, metadataOnly bool, includeBlobValue bool) (types.ISubmodel, error) {
 	eg := errgroup.Group{}
 	var submodels []types.ISubmodel
 	eg.Go(func() error {
@@ -69,7 +69,7 @@ func (s *SubmodelDatabase) GetSubmodelByID(ctx context.Context, submodelIdentifi
 	if !metadataOnly {
 		eg.Go(func() error {
 			unlimited := -1
-			smes, _, err := s.GetSubmodelElements(ctx, submodelIdentifier, &unlimited, "", false, level)
+			smes, _, err := s.GetSubmodelElements(ctx, submodelIdentifier, &unlimited, "", includeBlobValue, level)
 			if err != nil {
 				return err
 			}
@@ -166,7 +166,7 @@ func (s *SubmodelDatabase) getSubmodelByIDInTransaction(ctx context.Context, tx 
 	}
 
 	unlimited := -1
-	submodelElements, _, err := submodelelements.GetSubmodelElementsBySubmodelIDTx(ctx, tx, submodelIdentifier, &unlimited, "", level)
+	submodelElements, _, err := submodelelements.GetSubmodelElementsBySubmodelIDTx(ctx, tx, submodelIdentifier, &unlimited, "", true, level)
 	if err != nil {
 		return nil, err
 	}
