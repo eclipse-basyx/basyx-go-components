@@ -27,19 +27,34 @@
 package dppapi
 
 import (
+	"log"
 	"net/http"
 	"strings"
 	"time"
 )
 
 func errorResponse(status int, err error) ImplResponse {
+	code := firstErrorCode(err.Error())
 	return Response(status, Result{Messages: []Message{{
 		MessageType:   "Error",
-		Text:          err.Error(),
-		Code:          firstErrorCode(err.Error()),
+		Text:          clientSafeErrorText(err, status, code),
+		Code:          code,
 		CorrelationId: "",
 		Timestamp:     time.Now().UTC(),
 	}}})
+}
+
+func clientSafeErrorText(err error, status int, code string) string {
+	if status < http.StatusInternalServerError {
+		return err.Error()
+	}
+
+	log.Printf("❌ %s: %v", code, err)
+
+	if statusText := http.StatusText(status); statusText != "" {
+		return statusText
+	}
+	return http.StatusText(http.StatusInternalServerError)
 }
 
 func mapPersistenceError(err error, fallbackStatus int) ImplResponse {

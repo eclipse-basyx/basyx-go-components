@@ -37,6 +37,7 @@ package model
 import (
 	"errors"
 	"fmt"
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -79,6 +80,12 @@ func (e *RequiredError) Error() string {
 type ErrorResponse = Message
 
 // NewErrorResponse creates a standardized error response.
+//
+// Server-side failures (HTTP 5xx) are written to the service log together with
+// their correlation ID and reported to the caller as the generic status text,
+// so database, object-store and other infrastructure detail stays inside the
+// deployment. Client errors (HTTP 4xx) keep their message because it is
+// actionable for the caller.
 func NewErrorResponse(err error, status int, component, function, info string) ImplResponse {
 	code := strconv.Itoa(status)
 	statusText := strings.ReplaceAll(http.StatusText(status), " ", "")
@@ -86,11 +93,24 @@ func NewErrorResponse(err error, status int, component, function, info string) I
 
 	return Response(status, []Message{{
 		MessageType:   "Error",
-		Text:          err.Error(),
+		Text:          clientSafeErrorText(err, status, correlationID),
 		Code:          code,
 		CorrelationID: correlationID,
 		Timestamp:     time.Now().Format(time.RFC3339),
 	}})
+}
+
+func clientSafeErrorText(err error, status int, correlationID string) string {
+	if status < http.StatusInternalServerError {
+		return err.Error()
+	}
+
+	log.Printf("❌ %s: %v", correlationID, err)
+
+	if statusText := http.StatusText(status); statusText != "" {
+		return statusText
+	}
+	return http.StatusText(http.StatusInternalServerError)
 }
 
 // WriteErrorResponse writes a standardized error response.
