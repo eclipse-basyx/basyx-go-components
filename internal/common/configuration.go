@@ -481,7 +481,6 @@ func LoadConfig(configPath string) (*Config, error) {
 	}
 
 	// Override config with environment variables
-	v.AllowEmptyEnv(true)
 	v.AutomaticEnv()
 	v.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
 
@@ -489,6 +488,7 @@ func LoadConfig(configPath string) (*Config, error) {
 	if err := v.Unmarshal(cfg); err != nil {
 		return nil, fmt.Errorf("unmarshal config: %w", err)
 	}
+	applyLoggingEnvOverrides(cfg)
 
 	normalizedLogging, err := commonlogging.Normalize(cfg.Logging)
 	if err != nil {
@@ -523,6 +523,18 @@ func LoadConfig(configPath string) (*Config, error) {
 		return nil, err
 	}
 	return cfg, nil
+}
+
+func applyLoggingEnvOverrides(cfg *Config) {
+	if cfg == nil {
+		return
+	}
+	if value, exists := os.LookupEnv("LOGGING_FORMAT"); exists {
+		cfg.Logging.Format = value
+	}
+	if value, exists := os.LookupEnv("LOGGING_LEVEL"); exists {
+		cfg.Logging.Level = value
+	}
 }
 
 func applyGeneralEnvOverrides(cfg *Config) {

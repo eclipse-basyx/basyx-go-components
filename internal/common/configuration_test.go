@@ -84,6 +84,20 @@ func captureLogOutput(t *testing.T) *bytes.Buffer {
 	return &output
 }
 
+func preserveGlobalLoggerState(t *testing.T) {
+	t.Helper()
+	previousLogger := slog.Default()
+	previousWriter := log.Writer()
+	previousFlags := log.Flags()
+	previousPrefix := log.Prefix()
+	t.Cleanup(func() {
+		slog.SetDefault(previousLogger)
+		log.SetOutput(previousWriter)
+		log.SetFlags(previousFlags)
+		log.SetPrefix(previousPrefix)
+	})
+}
+
 func TestServerStrictVerificationDefaultIsPermissive(t *testing.T) {
 	withUnsetEnv(t, "SERVER_STRICTVERIFICATION")
 	captureLogOutput(t)
@@ -178,10 +192,7 @@ func TestBulkBatchLimitRejectsNonPositiveValues(t *testing.T) {
 
 func TestLogConfigurationExcludesSecrets(t *testing.T) {
 	var output bytes.Buffer
-	previousLogger := slog.Default()
-	t.Cleanup(func() {
-		slog.SetDefault(previousLogger)
-	})
+	preserveGlobalLoggerState(t)
 	if _, err := commonlogging.Configure(
 		commonlogging.Config{Format: commonlogging.FormatJSON, Level: commonlogging.LevelInfo},
 		"testservice",
@@ -241,10 +252,7 @@ func TestLogConfigurationExcludesSecrets(t *testing.T) {
 }
 
 func TestConfigureLoggingShowsSplashOnlyInTextMode(t *testing.T) {
-	previousLogger := slog.Default()
-	t.Cleanup(func() {
-		slog.SetDefault(previousLogger)
-	})
+	preserveGlobalLoggerState(t)
 
 	for _, test := range []struct {
 		format     string
@@ -310,6 +318,20 @@ func TestLoadConfigLoggingEnvironmentOverridesYAML(t *testing.T) {
 	}
 	if cfg.Logging.Format != commonlogging.FormatJSON || cfg.Logging.Level != commonlogging.LevelError {
 		t.Fatalf("unexpected logging env override: %#v", cfg.Logging)
+	}
+}
+
+func TestLoadConfigIgnoresEmptyNonLoggingEnvironmentValue(t *testing.T) {
+	withUnsetEnv(t, "LOGGING_FORMAT")
+	withUnsetEnv(t, "LOGGING_LEVEL")
+	t.Setenv("SERVER_READTIMEOUTSECONDS", "")
+
+	cfg, err := LoadConfig("")
+	if err != nil {
+		t.Fatalf("unexpected config load error: %v", err)
+	}
+	if cfg.Server.ReadTimeoutSeconds != DefaultConfig.ServerReadTimeoutSeconds {
+		t.Fatalf("read timeout = %d, want default %d", cfg.Server.ReadTimeoutSeconds, DefaultConfig.ServerReadTimeoutSeconds)
 	}
 }
 

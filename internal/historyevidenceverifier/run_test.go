@@ -29,6 +29,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"log"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -38,8 +39,14 @@ import (
 
 func TestRunKeepsDiagnosticJSONOnStderr(t *testing.T) {
 	previousLogger := slog.Default()
+	previousWriter := log.Writer()
+	previousFlags := log.Flags()
+	previousPrefix := log.Prefix()
 	t.Cleanup(func() {
 		slog.SetDefault(previousLogger)
+		log.SetOutput(previousWriter)
+		log.SetFlags(previousFlags)
+		log.SetPrefix(previousPrefix)
 	})
 
 	configPath := filepath.Join(t.TempDir(), "config.yaml")
