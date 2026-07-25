@@ -31,7 +31,8 @@ import (
 	"context"
 	"embed"
 	"flag"
-	"log"
+	"log/slog"
+	"os"
 	"time"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
@@ -48,11 +49,11 @@ import (
 var openapiSpec embed.FS
 
 func runServer(ctx context.Context, configPath string) error {
-	log.Default().Println("Loading Discovery Service...")
-	log.Default().Println("Config Path:", configPath)
-
-	cfg, err := common.LoadConfig(configPath, common.NORMAL)
+	cfg, err := common.LoadConfig(configPath)
 	if err != nil {
+		return err
+	}
+	if _, err = common.ConfigureLogging(cfg, "discoveryservice", configPath, os.Stderr); err != nil {
 		return err
 	}
 	if err := commonmodel.SetVerificationMode(cfg.Server.StrictVerification); err != nil {
@@ -72,7 +73,7 @@ func runServer(ctx context.Context, configPath string) error {
 
 	// Add Swagger UI
 	if err := common.AddSwaggerUIFromFS(r, openapiSpec, "openapi.yaml", "Discovery Service API", "/swagger", "/api-docs/openapi.yaml", cfg); err != nil {
-		log.Printf("Warning: failed to load OpenAPI spec for Swagger UI: %v", err)
+		slog.WarnContext(ctx, "Swagger UI unavailable", "error.code", "DISCOVERY-SWAGGER-INIT", "error", err)
 	}
 
 	// === Database ===
@@ -82,12 +83,11 @@ func runServer(ctx context.Context, configPath string) error {
 		return err
 	}
 
-	log.Printf("🗄️  Connecting to Postgres with DSN: postgres://%s:****@%s:%d/%s?sslmode=disable",
-		cfg.Postgres.User, cfg.Postgres.Host, cfg.Postgres.Port, cfg.Postgres.DBName)
+	slog.InfoContext(ctx, "connecting to PostgreSQL")
 
 	sharedDB, err := common.NewDatabaseConnection(dsn)
 	if err != nil {
-		log.Printf("❌ DB connect failed: %v", err)
+		slog.ErrorContext(ctx, "database connection failed", "error.code", "DISCOVERY-DB-CONNECT", "error", err)
 		return err
 	}
 	if cfg.Postgres.MaxOpenConnections > 0 {
@@ -101,10 +101,10 @@ func runServer(ctx context.Context, configPath string) error {
 	}
 	smDatabase, err := persistencepostgresql.NewPostgreSQLDiscoveryBackendFromDB(sharedDB)
 	if err != nil {
-		log.Printf("❌ DB init failed: %v", err)
+		slog.ErrorContext(ctx, "discovery persistence initialization failed", "error.code", "DISCOVERY-DB-INIT", "error", err)
 		return err
 	}
-	log.Println("✅ Postgres connection established")
+	slog.InfoContext(ctx, "PostgreSQL connection established")
 
 	smSvc := api.NewAssetAdministrationShellBasicDiscoveryAPIAPIService(*smDatabase)
 	smCtrl := openapi.NewAssetAdministrationShellBasicDiscoveryAPIAPIController(smSvc)
@@ -143,7 +143,7 @@ func runServer(ctx context.Context, configPath string) error {
 	r.Mount(base, apiRouter)
 
 	addr := common.ServerAddress(cfg.Server)
-	log.Printf("▶️ AAS Discovery listening on %s (contextPath=%q)\n", addr, cfg.Server.ContextPath)
+	slog.InfoContext(ctx, "HTTP server starting", "address", addr, "context_path", cfg.Server.ContextPath)
 
 	return common.RunHTTPServer(ctx, "DISCOVERY", cfg.Server, r)
 }
@@ -155,8 +155,9 @@ func main() {
 	flag.Parse()
 
 	if err := runServer(ctx, configPath); err != nil {
+		slog.ErrorContext(ctx, "server stopped", "error.code", "DISCOVERY-MAIN-RUNSERVER", "error", err)
 		stop()
-		log.Fatalf("Server error: %v", err)
+		os.Exit(1)
 	}
 	stop()
 }

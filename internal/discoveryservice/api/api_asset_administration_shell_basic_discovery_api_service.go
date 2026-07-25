@@ -15,7 +15,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
 	"strings"
 
@@ -54,14 +54,14 @@ func (s *AssetAdministrationShellBasicDiscoveryAPIAPIService) GetAllAssetAdminis
 		}
 		dec, err := common.DecodeString(enc)
 		if err != nil {
-			log.Printf("🧭 [%s] Error GetAllAssetAdministrationShellIdsByAssetLink: decode assetIds[%d]=%q failed: %v", componentName, idx, enc, err)
+			slog.ErrorContext(ctx, "Error GetAllAssetAdministrationShellIdsByAssetLink: decode assetIds failed", "error.code", "API-GETALLASSETADMINISTRATIONSHELLIDSBYASSETLINK-DECODE", "error", err, "component", componentName, "idx", idx, "enc", enc)
 			return common.NewErrorResponse(
 				err, http.StatusBadRequest, componentName, "GetAllAssetAdministrationShellIdsByAssetLink", "assetIds",
 			), nil
 		}
 		var al model.AssetLink
 		if err := json.Unmarshal([]byte(dec), &al); err != nil {
-			log.Printf("🧭 [%s] Error GetAllAssetAdministrationShellIdsByAssetLink: unmarshal assetIds[%d] decoded=%q failed: %v", componentName, idx, dec, err)
+			slog.ErrorContext(ctx, "Error GetAllAssetAdministrationShellIdsByAssetLink: unmarshal assetIds decoded failed", "error.code", "API-GETALLASSETADMINISTRATIONSHELLIDSBYASSETLINK-UNMARSHAL", "error", err, "component", componentName, "idx", idx, "dec", dec)
 			return common.NewErrorResponse(
 				err, http.StatusBadRequest, componentName, "GetAllAssetAdministrationShellIdsByAssetLink", "assetIds",
 			), nil
@@ -93,7 +93,7 @@ func (s *AssetAdministrationShellBasicDiscoveryAPIAPIService) SearchAllAssetAdmi
 	if strings.TrimSpace(cursor) != "" {
 		dec, decErr := common.DecodeString(cursor)
 		if decErr != nil {
-			log.Printf("🧭 [%s] Error SearchAllAssetAdministrationShellIdsByAssetLink: decode cursor=%q limit=%d links=%d failed: %v", componentName, cursor, limit, len(assetLink), decErr)
+			slog.ErrorContext(ctx, "Error SearchAllAssetAdministrationShellIdsByAssetLink: decode cursor limit links failed", "error.code", "API-SEARCHALLASSETADMINISTRATIONSHELLIDSBYASSETLINK-DECODE", "error", decErr, "component", componentName, "cursor", cursor, "limit", limit, "asset_link_count", len(assetLink))
 			return common.NewErrorResponse(
 				decErr, http.StatusBadRequest, componentName, "SearchAllAssetAdministrationShellIdsByAssetLink", "BadCursor",
 			), nil
@@ -108,7 +108,7 @@ func (s *AssetAdministrationShellBasicDiscoveryAPIAPIService) SearchAllAssetAdmi
 
 	ids, nextCursor, err := s.discoveryBackend.SearchAASIDsByAssetLinks(ctx, lookupLinks, limit, internalCursor)
 	if err != nil {
-		log.Printf("🧭 [%s] Error SearchAllAssetAdministrationShellIdsByAssetLink: backend search failed (limit=%d cursor=%q links=%d): %v", componentName, limit, internalCursor, len(assetLink), err)
+		slog.ErrorContext(ctx, "Error SearchAllAssetAdministrationShellIdsByAssetLink: backend search failed", "error.code", "API-SEARCHALLASSETADMINISTRATIONSHELLIDSBYASSETLINK-EXECUTE", "error", err, "component", componentName, "limit", limit, "internal_cursor", internalCursor, "asset_link_count", len(assetLink))
 		if common.IsErrBadRequest(err) {
 			return common.NewErrorResponse(
 				err, http.StatusBadRequest, componentName, "SearchAllAssetAdministrationShellIdsByAssetLink", "BadRequest",
@@ -140,7 +140,7 @@ func (s *AssetAdministrationShellBasicDiscoveryAPIAPIService) GetAllAssetLinksBy
 ) (model.ImplResponse, error) {
 	decoded, decodeErr := common.DecodeString(aasIdentifier)
 	if decodeErr != nil {
-		log.Printf("🧭 [%s] Error GetAllAssetLinksById: decode aasIdentifier=%q failed: %v", componentName, aasIdentifier, decodeErr)
+		slog.ErrorContext(ctx, "Error GetAllAssetLinksById: decode aasIdentifier failed", "error.code", "API-GETALLASSETLINKSBYID-DECODE", "error", decodeErr, "component", componentName, "aas_identifier", aasIdentifier)
 		return common.NewErrorResponse(
 			decodeErr, http.StatusBadRequest, componentName, "GetAllAssetLinksById", "BadRequest-Decode",
 		), nil
@@ -150,17 +150,17 @@ func (s *AssetAdministrationShellBasicDiscoveryAPIAPIService) GetAllAssetLinksBy
 	if err != nil {
 		switch {
 		case common.IsErrNotFound(err):
-			log.Printf("🧭 [%s] Error GetAllAssetLinksById: not found (aasId=%q): %v", componentName, string(decoded), err)
+			slog.ErrorContext(ctx, "Error GetAllAssetLinksById: not found", "error.code", "API-GETALLASSETLINKSBYID-FIND", "error", err, "component", componentName, "decoded", string(decoded))
 			return common.NewErrorResponse(
 				err, http.StatusNotFound, componentName, "GetAllAssetLinksById", "NotFound",
 			), nil
 		case common.IsErrBadRequest(err):
-			log.Printf("🧭 [%s] Error GetAllAssetLinksById: bad request (aasId=%q): %v", componentName, string(decoded), err)
+			slog.ErrorContext(ctx, "Error GetAllAssetLinksById: bad request", "error.code", "API-GETALLASSETLINKSBYID-VALIDATE", "error", err, "component", componentName, "decoded", string(decoded))
 			return common.NewErrorResponse(
 				err, http.StatusBadRequest, componentName, "GetAllAssetLinksById", "BadRequest",
 			), nil
 		default:
-			log.Printf("🧭 [%s] Error GetAllAssetLinksById: internal (aasId=%q): %v", componentName, string(decoded), err)
+			slog.ErrorContext(ctx, "Error GetAllAssetLinksById: internal", "error.code", "API-GETALLASSETLINKSBYID-EXECUTE", "error", err, "component", componentName, "decoded", string(decoded))
 			return common.NewErrorResponse(
 				err, http.StatusInternalServerError, componentName, "GetAllAssetLinksById", "Unhandled",
 			), err
@@ -172,7 +172,7 @@ func (s *AssetAdministrationShellBasicDiscoveryAPIAPIService) GetAllAssetLinksBy
 	for _, link := range links {
 		jsonableLink, err := jsonization.ToJsonable(link)
 		if err != nil {
-			log.Printf("🧭 [%s] Error GetAllAssetLinksById: failed to convert link to jsonable (aasId=%q): %v", componentName, string(decoded), err)
+			slog.ErrorContext(ctx, "Error GetAllAssetLinksById: failed to convert link to jsonable", "error.code", "API-GETALLASSETLINKSBYID-SERIALIZERESPONSE", "error", err, "component", componentName, "decoded", string(decoded))
 			return common.NewErrorResponse(
 				err, http.StatusInternalServerError, componentName, "GetAllAssetLinksById", "JsonConversion",
 			), err
@@ -191,14 +191,14 @@ func (s *AssetAdministrationShellBasicDiscoveryAPIAPIService) PostAllAssetLinksB
 ) (model.ImplResponse, error) {
 	decodeDiscoveryIdentifier, decodeError := common.DecodeString(aasIdentifier)
 	if decodeError != nil {
-		log.Printf("🧭 [%s] Error PostAllAssetLinksById: decode aasIdentifier=%q failed: %v", componentName, aasIdentifier, decodeError)
+		slog.ErrorContext(ctx, "Error PostAllAssetLinksById: decode aasIdentifier failed", "error.code", "API-POSTALLASSETLINKSBYID-DECODE", "error", decodeError, "component", componentName, "aas_identifier", aasIdentifier)
 		return common.NewErrorResponse(
 			decodeError, http.StatusBadRequest, componentName, "PostAllAssetLinksById", "BadRequest-Decode",
 		), nil
 	}
 
 	if err := validateSpecificAssetIDsRequired("POSTASSETLINKS", specificAssetID); err != nil {
-		log.Printf("🧭 [%s] Error PostAllAssetLinksById: invalid specific asset IDs: %v", componentName, err)
+		slog.ErrorContext(ctx, "Error PostAllAssetLinksById: invalid specific asset IDs", "error.code", "API-POSTALLASSETLINKSBYID-VALIDATE", "error", err, "component", componentName)
 		return common.NewErrorResponse(
 			err, http.StatusBadRequest, componentName, "PostAllAssetLinksById", "specificAssetId",
 		), nil
@@ -208,12 +208,12 @@ func (s *AssetAdministrationShellBasicDiscoveryAPIAPIService) PostAllAssetLinksB
 	if err != nil {
 		switch {
 		case common.IsErrBadRequest(err):
-			log.Printf("🧭 [%s] Error PostAllAssetLinksById: bad request (aasId=%q): %v", componentName, string(decodeDiscoveryIdentifier), err)
+			slog.ErrorContext(ctx, "Error PostAllAssetLinksById: bad request", "error.code", "API-POSTALLASSETLINKSBYID-VALIDATE", "error", err, "component", componentName, "decode_discovery_identifier", string(decodeDiscoveryIdentifier))
 			return common.NewErrorResponse(
 				err, http.StatusBadRequest, componentName, "PostAllAssetLinksById", "BadRequest",
 			), nil
 		default:
-			log.Printf("🧭 [%s] Error PostAllAssetLinksById: internal (aasId=%q): %v", componentName, string(decodeDiscoveryIdentifier), err)
+			slog.ErrorContext(ctx, "Error PostAllAssetLinksById: internal", "error.code", "API-POSTALLASSETLINKSBYID-EXECUTE", "error", err, "component", componentName, "decode_discovery_identifier", string(decodeDiscoveryIdentifier))
 			return common.NewErrorResponse(
 				err, http.StatusInternalServerError, componentName, "PostAllAssetLinksById", "Unhandled",
 			), err
@@ -225,7 +225,7 @@ func (s *AssetAdministrationShellBasicDiscoveryAPIAPIService) PostAllAssetLinksB
 	for _, link := range specificAssetID {
 		jsonableLink, err := jsonization.ToJsonable(link)
 		if err != nil {
-			log.Printf("🧭 [%s] Error PostAllAssetLinksById: failed to convert link to jsonable (aasId=%q): %v", componentName, string(decodeDiscoveryIdentifier), err)
+			slog.ErrorContext(ctx, "Error PostAllAssetLinksById: failed to convert link to jsonable", "error.code", "API-POSTALLASSETLINKSBYID-SERIALIZERESPONSE", "error", err, "component", componentName, "decode_discovery_identifier", string(decodeDiscoveryIdentifier))
 			return common.NewErrorResponse(
 				err, http.StatusInternalServerError, componentName, "PostAllAssetLinksById", "JsonConversion",
 			), err
@@ -250,14 +250,14 @@ func (s *AssetAdministrationShellBasicDiscoveryAPIAPIService) AddAllAssetLinksBy
 ) (model.ImplResponse, error) {
 	decodeDiscoveryIdentifier, decodeError := common.DecodeString(aasIdentifier)
 	if decodeError != nil {
-		log.Printf("🧭 [%s] Error AddAllAssetLinksById: decode aasIdentifier=%q failed: %v", componentName, aasIdentifier, decodeError)
+		slog.ErrorContext(ctx, "Error AddAllAssetLinksById: decode aasIdentifier failed", "error.code", "API-ADDALLASSETLINKSBYID-DECODE", "error", decodeError, "component", componentName, "aas_identifier", aasIdentifier)
 		return common.NewErrorResponse(
 			decodeError, http.StatusBadRequest, componentName, "AddAllAssetLinksById", "BadRequest-Decode",
 		), nil
 	}
 
 	if err := validateSpecificAssetIDsRequired("ADDASSETLINKS", specificAssetID); err != nil {
-		log.Printf("🧭 [%s] Error AddAllAssetLinksById: invalid specific asset IDs: %v", componentName, err)
+		slog.ErrorContext(ctx, "Error AddAllAssetLinksById: invalid specific asset IDs", "error.code", "API-ADDALLASSETLINKSBYID-VALIDATE", "error", err, "component", componentName)
 		return common.NewErrorResponse(
 			err, http.StatusBadRequest, componentName, "AddAllAssetLinksById", "specificAssetId",
 		), nil
@@ -267,12 +267,12 @@ func (s *AssetAdministrationShellBasicDiscoveryAPIAPIService) AddAllAssetLinksBy
 	if err != nil {
 		switch {
 		case common.IsErrBadRequest(err):
-			log.Printf("🧭 [%s] Error AddAllAssetLinksById: bad request (aasId=%q): %v", componentName, string(decodeDiscoveryIdentifier), err)
+			slog.ErrorContext(ctx, "Error AddAllAssetLinksById: bad request", "error.code", "API-ADDALLASSETLINKSBYID-VALIDATE", "error", err, "component", componentName, "decode_discovery_identifier", string(decodeDiscoveryIdentifier))
 			return common.NewErrorResponse(
 				err, http.StatusBadRequest, componentName, "AddAllAssetLinksById", "BadRequest",
 			), nil
 		default:
-			log.Printf("🧭 [%s] Error AddAllAssetLinksById: internal (aasId=%q): %v", componentName, string(decodeDiscoveryIdentifier), err)
+			slog.ErrorContext(ctx, "Error AddAllAssetLinksById: internal", "error.code", "API-ADDALLASSETLINKSBYID-EXECUTE", "error", err, "component", componentName, "decode_discovery_identifier", string(decodeDiscoveryIdentifier))
 			return common.NewErrorResponse(
 				err, http.StatusInternalServerError, componentName, "AddAllAssetLinksById", "Unhandled",
 			), err
@@ -283,7 +283,7 @@ func (s *AssetAdministrationShellBasicDiscoveryAPIAPIService) AddAllAssetLinksBy
 	for _, link := range specificAssetID {
 		jsonableLink, err := jsonization.ToJsonable(link)
 		if err != nil {
-			log.Printf("🧭 [%s] Error AddAllAssetLinksById: failed to convert link to jsonable (aasId=%q): %v", componentName, string(decodeDiscoveryIdentifier), err)
+			slog.ErrorContext(ctx, "Error AddAllAssetLinksById: failed to convert link to jsonable", "error.code", "API-ADDALLASSETLINKSBYID-SERIALIZERESPONSE", "error", err, "component", componentName, "decode_discovery_identifier", string(decodeDiscoveryIdentifier))
 			return common.NewErrorResponse(
 				err, http.StatusInternalServerError, componentName, "AddAllAssetLinksById", "JsonConversion",
 			), err
@@ -318,7 +318,7 @@ func (s *AssetAdministrationShellBasicDiscoveryAPIAPIService) DeleteAllAssetLink
 ) (model.ImplResponse, error) {
 	decoded, decodeErr := common.DecodeString(aasIdentifier)
 	if decodeErr != nil {
-		log.Printf("🧭 [%s] Error DeleteAllAssetLinksById: decode aasIdentifier=%q failed: %v", componentName, aasIdentifier, decodeErr)
+		slog.ErrorContext(ctx, "Error DeleteAllAssetLinksById: decode aasIdentifier failed", "error.code", "API-DELETEALLASSETLINKSBYID-DECODE", "error", decodeErr, "component", componentName, "aas_identifier", aasIdentifier)
 		return common.NewErrorResponse(
 			decodeErr, http.StatusBadRequest, componentName, "DeleteAllAssetLinksById", "BadRequest-Decode",
 		), nil
@@ -328,12 +328,12 @@ func (s *AssetAdministrationShellBasicDiscoveryAPIAPIService) DeleteAllAssetLink
 	if err != nil {
 		switch {
 		case common.IsErrNotFound(err):
-			log.Printf("🧭 [%s] Error DeleteAllAssetLinksById: not found (aasId=%q): %v", componentName, string(decoded), err)
+			slog.ErrorContext(ctx, "Error DeleteAllAssetLinksById: not found", "error.code", "API-DELETEALLASSETLINKSBYID-FIND", "error", err, "component", componentName, "decoded", string(decoded))
 			return common.NewErrorResponse(
 				err, http.StatusNotFound, componentName, "DeleteAllAssetLinksById", "NotFound",
 			), nil
 		default:
-			log.Printf("🧭 [%s] Error DeleteAllAssetLinksById: internal (aasId=%q): %v", componentName, string(decoded), err)
+			slog.ErrorContext(ctx, "Error DeleteAllAssetLinksById: internal", "error.code", "API-DELETEALLASSETLINKSBYID-EXECUTE", "error", err, "component", componentName, "decoded", string(decoded))
 			return common.NewErrorResponse(
 				err, http.StatusInternalServerError, componentName, "DeleteAllAssetLinksById", "InternalServerError",
 			), err

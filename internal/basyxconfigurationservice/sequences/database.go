@@ -28,6 +28,7 @@ package sequences
 
 import (
 	"fmt"
+	"log/slog"
 	"time"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
@@ -35,22 +36,21 @@ import (
 
 // DatabaseConnection Step for connecting to the PGSQL DB.
 type DatabaseConnection struct {
-	ctx        *ExecutionContext
-	configPath string
+	ctx *ExecutionContext
 }
 
 // NewDatabaseConnection initializes the Database Connection step.
-func NewDatabaseConnection(ctx *ExecutionContext, configPath string) *DatabaseConnection {
-	return &DatabaseConnection{ctx: ctx, configPath: configPath}
+func NewDatabaseConnection(ctx *ExecutionContext) *DatabaseConnection {
+	return &DatabaseConnection{ctx: ctx}
 }
 
 // Execute performs the action the step is assigned to.
 func (dbc *DatabaseConnection) Execute(stepIndex int) (int, error) {
-	cfg, err := common.LoadConfig(dbc.configPath, common.QUIET)
-	if err != nil {
-		return 1, fmt.Errorf("BASYXCFG-DB-LOADCONFIG: %w", err)
+	if dbc.ctx == nil || dbc.ctx.Config == nil {
+		return 1, fmt.Errorf("BASYXCFG-DB-NOCONFIG execution context configuration is required")
 	}
 
+	cfg := dbc.ctx.Config
 	dsn := common.BuildPostgresDSN(cfg.Postgres)
 	db, err := common.NewDatabaseConnection(dsn)
 	if err != nil {
@@ -67,9 +67,8 @@ func (dbc *DatabaseConnection) Execute(stepIndex int) (int, error) {
 		db.SetConnMaxLifetime(time.Duration(cfg.Postgres.ConnMaxLifetimeMinutes) * time.Minute)
 	}
 
-	dbc.ctx.Config = cfg
 	dbc.ctx.DB = db
-	_, _ = fmt.Printf("[Step %d] Database connection established\n", stepIndex)
+	slog.Info("database connection established", "step", stepIndex)
 
 	return 0, nil
 }

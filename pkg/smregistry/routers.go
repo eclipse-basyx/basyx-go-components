@@ -15,7 +15,6 @@ import (
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
 )
 
@@ -39,7 +38,6 @@ type Router interface {
 // NewRouter creates a new router for any number of api routers
 func NewRouter(routers ...Router) chi.Router {
 	router := chi.NewRouter()
-	router.Use(middleware.Logger)
 	router.Use(cors.Handler(cors.Options{}))
 	for _, api := range routers {
 		for _, route := range api.OrderedRoutes() {

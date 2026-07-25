@@ -28,8 +28,7 @@ package transaction
 
 import (
 	"database/sql"
-
-	"github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/logger"
+	"log/slog"
 )
 
 // TxScope provides a consistent pattern for managing database transactions.
@@ -89,7 +88,7 @@ func (s *TxScope) Commit() error {
 func (s *TxScope) Rollback() {
 	if s.owned && !s.committed {
 		if err := s.tx.Rollback(); err != nil {
-			logger.LogError("rolling back transaction", err)
+			slog.Error("transaction rollback failed", "error.code", "SMREPO-TRANSACTION-ROLLBACK", "error", err)
 		}
 	}
 }

@@ -30,7 +30,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"log"
+	"log/slog"
 	"net/url"
 	"path"
 	"strings"
@@ -173,7 +173,7 @@ func publishHistoryEventEvidenceTx(ctx context.Context, tx *sql.Tx, cfg Config, 
 	defer cancel()
 	receipt, err := cfg.EvidenceStore.PutArtifact(writeCtx, artifact)
 	if err != nil {
-		log.Printf("HISTORY-EVIDENCE-APPEND-PUTARTIFACT evidence store write failed: %v", err)
+		slog.ErrorContext(ctx, "evidence store write failed", "error.code", "HISTORY-EVIDENCE-APPEND-PUTARTIFACT", "error", err)
 		return common.NewErrServiceUnavailable("HISTORY-EVIDENCE-APPEND-STORE history evidence could not be stored")
 	}
 	if receipt == nil {

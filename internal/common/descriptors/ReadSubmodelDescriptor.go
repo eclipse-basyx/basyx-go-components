@@ -29,7 +29,7 @@ package descriptors
 import (
 	"context"
 	"database/sql"
-	"fmt"
+	"log/slog"
 	"time"
 
 	"github.com/FriedJannik/aas-go-sdk/types"
@@ -81,7 +81,7 @@ func ReadSubmodelDescriptorsByDescriptorIDs(
 ) (map[int64][]model.SubmodelDescriptor, error) {
 	if debugEnabled(ctx) {
 		defer func(start time.Time) {
-			_, _ = fmt.Printf("ReadSubmodelDescriptorsByDescriptorIDs took %s\n", time.Since(start))
+			slog.DebugContext(ctx, "submodel descriptor read completed", "duration", time.Since(start))
 		}(time.Now())
 	}
 	if len(descriptorIDs) == 0 {
@@ -222,7 +222,7 @@ func ReadSubmodelDescriptorsByAASDescriptorIDs(
 ) (map[int64][]model.SubmodelDescriptor, error) {
 	if debugEnabled(ctx) {
 		defer func(start time.Time) {
-			_, _ = fmt.Printf("ReadSubmodelDescriptorsByAASDescriptorIDs took %s\n", time.Since(start))
+			slog.DebugContext(ctx, "AAS submodel descriptor read completed", "duration", time.Since(start))
 		}(time.Now())
 	}
 	out := make(map[int64][]model.SubmodelDescriptor, len(aasDescriptorIDs))
@@ -522,7 +522,7 @@ func readSubmodelDescriptorRows(
 		return nil, nil, err
 	}
 	if debugEnabled(ctx) {
-		_, _ = fmt.Println(sqlStr)
+		slog.DebugContext(ctx, "submodel descriptor database query prepared")
 	}
 	rows, err := db.QueryContext(ctx, sqlStr, args...)
 	if err != nil {

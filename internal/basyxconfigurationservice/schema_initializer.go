@@ -28,7 +28,7 @@ package basyxconfigurationservice
 
 import (
 	"fmt"
-	"log"
+	"log/slog"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/basyxconfigurationservice/sequences"
 )
@@ -60,11 +60,11 @@ func (sr *SchemaInitializer) Execute() error {
 }
 
 func (sr *SchemaInitializer) executeSequence(step sequences.Sequence, sequenceIndex int) error {
-	log.Println(step.GetDescription(sequenceIndex))
+	slog.Info("initialization step started", "step", sequenceIndex, "description", step.GetDescription(sequenceIndex))
 	statusCode, err := step.Execute(sequenceIndex)
 	if err != nil {
 		return fmt.Errorf("BASYXCFG-INIT-EXECSTEP: step %d failed with status %d: %w", sequenceIndex, statusCode, err)
 	}
-	log.Printf("[Step %d] completed with status %d\n", sequenceIndex, statusCode)
+	slog.Info("initialization step completed", "step", sequenceIndex, "status", statusCode)
 	return nil
 }

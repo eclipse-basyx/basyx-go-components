@@ -32,7 +32,7 @@ package submodelelements
 
 import (
 	"database/sql"
-	"fmt"
+	"log/slog"
 
 	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/doug-martin/goqu/v9"
@@ -100,7 +100,7 @@ func (p PostgreSQLRangeHandler) Update(submodelID string, idShortOrPath string, 
 
 	smDbID, err := persistenceutils.GetSubmodelDatabaseID(localTx, submodelID)
 	if err != nil {
-		_, _ = fmt.Println(err)
+		slog.Error("submodel database ID lookup failed", "error.code", "SMREPO-SMEUPDATE-GETSMDBID", "error", err)
 		return common.NewInternalServerError("Failed to execute PostgreSQL Query - no changes applied - see console for details.")
 	}
 	elementID, err := p.decorated.GetDatabaseIDWithTx(localTx, smDbID, effectivePath)

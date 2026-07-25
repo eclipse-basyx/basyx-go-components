@@ -33,7 +33,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -520,7 +520,7 @@ func resolveUploadFileMetadata(file io.Reader, fileName string, metadata fileEle
 
 	resolvedContentType, mismatchDetectedVsDeclared := common.ResolveUploadedContentType(detectedContentType, metadata.existingContentType.String, resolvedFileName)
 	if mismatchDetectedVsDeclared {
-		log.Printf("[WARN] SMREPO-UPLOADATTACHMENT-RESOLVEMIME detected content type differs from declared content type; using detected content type")
+		slog.Warn("detected attachment content type differs from declared content type; using detected content type", "error.code", "SMREPO-UPLOADATTACHMENT-RESOLVEMIME")
 	}
 
 	return resolvedFileName, resolvedContentType, uploadContent, nil

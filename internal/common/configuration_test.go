@@ -29,10 +29,12 @@ import (
 	"bytes"
 	"context"
 	"log"
+	"log/slog"
 	"os"
 	"strings"
 	"testing"
 
+	commonlogging "github.com/eclipse-basyx/basyx-go-components/internal/common/logging"
 	"github.com/spf13/viper"
 )
 
@@ -82,11 +84,25 @@ func captureLogOutput(t *testing.T) *bytes.Buffer {
 	return &output
 }
 
+func preserveGlobalLoggerState(t *testing.T) {
+	t.Helper()
+	previousLogger := slog.Default()
+	previousWriter := log.Writer()
+	previousFlags := log.Flags()
+	previousPrefix := log.Prefix()
+	t.Cleanup(func() {
+		slog.SetDefault(previousLogger)
+		log.SetOutput(previousWriter)
+		log.SetFlags(previousFlags)
+		log.SetPrefix(previousPrefix)
+	})
+}
+
 func TestServerStrictVerificationDefaultIsPermissive(t *testing.T) {
 	withUnsetEnv(t, "SERVER_STRICTVERIFICATION")
 	captureLogOutput(t)
 
-	cfg, err := LoadConfig("", NORMAL)
+	cfg, err := LoadConfig("")
 	if err != nil {
 		t.Fatalf("unexpected config load error: %v", err)
 	}
@@ -125,7 +141,7 @@ func TestBulkBatchLimitDefaultIsOneThousand(t *testing.T) {
 	}
 	captureLogOutput(t)
 
-	cfg, err := LoadConfig("", NORMAL)
+	cfg, err := LoadConfig("")
 	if err != nil {
 		t.Fatalf("unexpected config load error: %v", err)
 	}
@@ -148,7 +164,7 @@ func TestBulkBatchLimitCanBeOverriddenByReadableEnvironmentVariable(t *testing.T
 	t.Setenv("GENERAL_BULK_BATCH_LIMIT", "17")
 	captureLogOutput(t)
 
-	cfg, err := LoadConfig("", NORMAL)
+	cfg, err := LoadConfig("")
 	if err != nil {
 		t.Fatalf("unexpected config load error: %v", err)
 	}
@@ -165,7 +181,7 @@ func TestBulkBatchLimitRejectsNonPositiveValues(t *testing.T) {
 	t.Setenv("GENERAL_BULK_BATCH_LIMIT", "0")
 	captureLogOutput(t)
 
-	_, err := LoadConfig("", NORMAL)
+	_, err := LoadConfig("")
 	if err == nil {
 		t.Fatal("expected config load error for non-positive bulkBatchLimit")
 	}
@@ -174,10 +190,20 @@ func TestBulkBatchLimitRejectsNonPositiveValues(t *testing.T) {
 	}
 }
 
-func TestPrintConfigurationMarksPermissiveVerificationModeAsDefault(t *testing.T) {
-	output := captureLogOutput(t)
+func TestLogConfigurationExcludesSecrets(t *testing.T) {
+	var output bytes.Buffer
+	preserveGlobalLoggerState(t)
+	if _, err := commonlogging.Configure(
+		commonlogging.Config{Format: commonlogging.FormatJSON, Level: commonlogging.LevelInfo},
+		"testservice",
+		&output,
+	); err != nil {
+		t.Fatalf("configure logger: %v", err)
+	}
 	cfg := &Config{
+		Logging: commonlogging.Config{Format: commonlogging.FormatJSON, Level: commonlogging.LevelInfo},
 		Server: ServerConfig{
+			Host:                          "127.0.0.1",
 			Port:                          DefaultConfig.ServerPort,
 			ContextPath:                   DefaultConfig.ServerContextPath,
 			CacheEnabled:                  DefaultConfig.ServerCacheEnabled,
@@ -185,6 +211,10 @@ func TestPrintConfigurationMarksPermissiveVerificationModeAsDefault(t *testing.T
 			VerificationEndpointAvailable: DefaultConfig.ServerVerificationEndpointAvailable,
 		},
 		Postgres: PostgresConfig{
+			Host:                   "secret-db-host",
+			User:                   "secret-user",
+			Password:               "secret-password",
+			DSN:                    "postgres://secret-dsn",
 			Port:                   DefaultConfig.PgPort,
 			DBName:                 DefaultConfig.PgDBName,
 			SSLMode:                DefaultConfig.PgSSLMode,
@@ -204,15 +234,151 @@ func TestPrintConfigurationMarksPermissiveVerificationModeAsDefault(t *testing.T
 		Swagger: SwaggerConfig{
 			Enabled: DefaultConfig.SwaggerEnabled,
 		},
+		JWS: JWSConfig{PrivateKeyPath: "/secret/private-key.pem"},
 	}
 
-	PrintConfiguration(cfg)
+	LogConfiguration(cfg, "/config/service.yaml")
 
-	if !strings.Contains(output.String(), "Verification Mode: permissive (default)") {
-		t.Fatalf("printed configuration did not mark permissive verification mode as default:\n%s", output.String())
+	for _, expected := range []string{`"msg":"configuration loaded"`, `"service.name":"testservice"`, `"verification_mode":"permissive"`} {
+		if !strings.Contains(output.String(), expected) {
+			t.Fatalf("configuration record does not contain %q: %s", expected, output.String())
+		}
 	}
-	if !strings.Contains(output.String(), "Enabled: true (default)") {
-		t.Fatalf("printed configuration did not mark Swagger enabled as default:\n%s", output.String())
+	for _, secret := range []string{"secret-db-host", "secret-user", "secret-password", "secret-dsn", "private-key.pem"} {
+		if strings.Contains(output.String(), secret) {
+			t.Fatalf("configuration record contains secret %q: %s", secret, output.String())
+		}
+	}
+}
+
+func TestConfigureLoggingShowsSplashOnlyInTextMode(t *testing.T) {
+	preserveGlobalLoggerState(t)
+
+	for _, test := range []struct {
+		format     string
+		wantSplash bool
+	}{
+		{format: commonlogging.FormatText, wantSplash: true},
+		{format: commonlogging.FormatJSON, wantSplash: false},
+	} {
+		t.Run(test.format, func(t *testing.T) {
+			var output bytes.Buffer
+			cfg := &Config{
+				Logging: commonlogging.Config{Format: test.format, Level: commonlogging.LevelInfo},
+			}
+			if _, err := ConfigureLogging(cfg, "testservice", "", &output); err != nil {
+				t.Fatalf("configure logging: %v", err)
+			}
+			hasSplash := strings.Contains(output.String(), "██████╗")
+			if hasSplash != test.wantSplash {
+				t.Fatalf("splash presence = %t, want %t: %q", hasSplash, test.wantSplash, output.String())
+			}
+			if !strings.Contains(output.String(), "configuration loaded") {
+				t.Fatalf("configuration event missing from %q", output.String())
+			}
+		})
+	}
+}
+
+func TestLoadConfigAppliesLoggingDefaults(t *testing.T) {
+	withUnsetEnv(t, "LOGGING_FORMAT")
+	withUnsetEnv(t, "LOGGING_LEVEL")
+
+	cfg, err := LoadConfig("")
+	if err != nil {
+		t.Fatalf("unexpected config load error: %v", err)
+	}
+	if cfg.Logging.Format != commonlogging.FormatText || cfg.Logging.Level != commonlogging.LevelInfo {
+		t.Fatalf("unexpected logging defaults: %#v", cfg.Logging)
+	}
+}
+
+func TestLoadConfigNormalizesLoggingYAML(t *testing.T) {
+	withUnsetEnv(t, "LOGGING_FORMAT")
+	withUnsetEnv(t, "LOGGING_LEVEL")
+	path := writeTempConfig(t, "logging:\n  format: JSON\n  level: WaRn\n")
+
+	cfg, err := LoadConfig(path)
+	if err != nil {
+		t.Fatalf("unexpected config load error: %v", err)
+	}
+	if cfg.Logging.Format != commonlogging.FormatJSON || cfg.Logging.Level != commonlogging.LevelWarn {
+		t.Fatalf("unexpected normalized logging config: %#v", cfg.Logging)
+	}
+}
+
+func TestLoadConfigLoggingEnvironmentOverridesYAML(t *testing.T) {
+	t.Setenv("LOGGING_FORMAT", "JSON")
+	t.Setenv("LOGGING_LEVEL", "ERROR")
+	path := writeTempConfig(t, "logging:\n  format: text\n  level: debug\n")
+
+	cfg, err := LoadConfig(path)
+	if err != nil {
+		t.Fatalf("unexpected config load error: %v", err)
+	}
+	if cfg.Logging.Format != commonlogging.FormatJSON || cfg.Logging.Level != commonlogging.LevelError {
+		t.Fatalf("unexpected logging env override: %#v", cfg.Logging)
+	}
+}
+
+func TestLoadConfigIgnoresEmptyNonLoggingEnvironmentValue(t *testing.T) {
+	withUnsetEnv(t, "LOGGING_FORMAT")
+	withUnsetEnv(t, "LOGGING_LEVEL")
+	t.Setenv("SERVER_READTIMEOUTSECONDS", "")
+
+	cfg, err := LoadConfig("")
+	if err != nil {
+		t.Fatalf("unexpected config load error: %v", err)
+	}
+	if cfg.Server.ReadTimeoutSeconds != DefaultConfig.ServerReadTimeoutSeconds {
+		t.Fatalf("read timeout = %d, want default %d", cfg.Server.ReadTimeoutSeconds, DefaultConfig.ServerReadTimeoutSeconds)
+	}
+}
+
+func TestLoadConfigRejectsInvalidLoggingValues(t *testing.T) {
+	for _, test := range []struct {
+		name    string
+		content string
+		code    string
+	}{
+		{name: "format", content: "logging:\n  format: yaml\n  level: info\n", code: "CONFIG-LOGGING-FORMAT"},
+		{name: "level", content: "logging:\n  format: text\n  level: trace\n", code: "CONFIG-LOGGING-LEVEL"},
+		{name: "empty format", content: "logging:\n  format: \"\"\n  level: info\n", code: "CONFIG-LOGGING-FORMAT"},
+		{name: "empty level", content: "logging:\n  format: text\n  level: \"\"\n", code: "CONFIG-LOGGING-LEVEL"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			withUnsetEnv(t, "LOGGING_FORMAT")
+			withUnsetEnv(t, "LOGGING_LEVEL")
+			_, err := LoadConfig(writeTempConfig(t, test.content))
+			if err == nil || !strings.Contains(err.Error(), test.code) {
+				t.Fatalf("expected %s error, got %v", test.code, err)
+			}
+		})
+	}
+}
+
+func TestLoadConfigRejectsInvalidLoggingEnvironmentValues(t *testing.T) {
+	for _, test := range []struct {
+		name  string
+		key   string
+		value string
+		code  string
+	}{
+		{name: "format", key: "LOGGING_FORMAT", value: "yaml", code: "CONFIG-LOGGING-FORMAT"},
+		{name: "empty format", key: "LOGGING_FORMAT", value: "", code: "CONFIG-LOGGING-FORMAT"},
+		{name: "level", key: "LOGGING_LEVEL", value: "trace", code: "CONFIG-LOGGING-LEVEL"},
+		{name: "empty level", key: "LOGGING_LEVEL", value: "", code: "CONFIG-LOGGING-LEVEL"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			withUnsetEnv(t, "LOGGING_FORMAT")
+			withUnsetEnv(t, "LOGGING_LEVEL")
+			t.Setenv(test.key, test.value)
+
+			_, err := LoadConfig("")
+			if err == nil || !strings.Contains(err.Error(), test.code) {
+				t.Fatalf("expected %s error, got %v", test.code, err)
+			}
+		})
 	}
 }
 
@@ -221,7 +387,7 @@ func TestLoadConfigWithoutStrictVerificationUsesPermissiveDefault(t *testing.T) 
 	captureLogOutput(t)
 	path := writeTempConfig(t, "server:\n  port: 5004\n")
 
-	cfg, err := LoadConfig(path, NORMAL)
+	cfg, err := LoadConfig(path)
 	if err != nil {
 		t.Fatalf("unexpected config load error: %v", err)
 	}
@@ -235,7 +401,7 @@ func TestLoadConfigRejectsBooleanStrictVerification(t *testing.T) {
 	captureLogOutput(t)
 	path := writeTempConfig(t, "server:\n  strictVerification: true\n")
 
-	_, err := LoadConfig(path, NORMAL)
+	_, err := LoadConfig(path)
 	if err == nil {
 		t.Fatal("expected invalid strictVerification mode error")
 	}
@@ -249,7 +415,7 @@ func TestLoadConfigAcceptsPermissiveStrictVerification(t *testing.T) {
 	captureLogOutput(t)
 	path := writeTempConfig(t, "server:\n  strictVerification: permissive\n")
 
-	cfg, err := LoadConfig(path, NORMAL)
+	cfg, err := LoadConfig(path)
 	if err != nil {
 		t.Fatalf("unexpected config load error: %v", err)
 	}
@@ -262,7 +428,7 @@ func TestLoadConfigAppliesSwaggerEnabled(t *testing.T) {
 	withUnsetEnv(t, "SWAGGER_ENABLED")
 	captureLogOutput(t)
 
-	cfg, err := LoadConfig("", NORMAL)
+	cfg, err := LoadConfig("")
 	if err != nil {
 		t.Fatalf("unexpected config load error: %v", err)
 	}
@@ -271,7 +437,7 @@ func TestLoadConfigAppliesSwaggerEnabled(t *testing.T) {
 	}
 
 	path := writeTempConfig(t, "swagger:\n  enabled: false\n")
-	cfg, err = LoadConfig(path, NORMAL)
+	cfg, err = LoadConfig(path)
 	if err != nil {
 		t.Fatalf("unexpected config load error: %v", err)
 	}
@@ -295,7 +461,7 @@ func TestLoadConfigAppliesPostgresConnectionParameters(t *testing.T) {
   timezone: Europe/Berlin
 `)
 
-	cfg, err := LoadConfig(path, NORMAL)
+	cfg, err := LoadConfig(path)
 	if err != nil {
 		t.Fatalf("unexpected config load error: %v", err)
 	}
@@ -327,7 +493,7 @@ func TestLoadConfigAppliesPostgresEnvironmentOverrides(t *testing.T) {
 	t.Setenv("POSTGRES_TIMEZONE", "UTC")
 	captureLogOutput(t)
 
-	cfg, err := LoadConfig("", NORMAL)
+	cfg, err := LoadConfig("")
 	if err != nil {
 		t.Fatalf("unexpected config load error: %v", err)
 	}
@@ -353,7 +519,7 @@ func TestLoadConfigAppliesPostgresDSN(t *testing.T) {
   maxOpenConnections: 100
 `)
 
-	cfg, err := LoadConfig(path, NORMAL)
+	cfg, err := LoadConfig(path)
 	if err != nil {
 		t.Fatalf("unexpected config load error: %v", err)
 	}
@@ -370,7 +536,7 @@ func TestLoadConfigAppliesPostgresDSNEnvironmentOverride(t *testing.T) {
 	t.Setenv("POSTGRES_DSN", "postgres://postgres.example:5432/basyx?sslmode=require")
 	captureLogOutput(t)
 
-	cfg, err := LoadConfig("", NORMAL)
+	cfg, err := LoadConfig("")
 	if err != nil {
 		t.Fatalf("unexpected config load error: %v", err)
 	}
@@ -387,7 +553,7 @@ func TestLoadConfigRejectsPostgresDSNWithConnectionField(t *testing.T) {
   host: db
 `)
 
-	_, err := LoadConfig(path, NORMAL)
+	_, err := LoadConfig(path)
 	if err == nil {
 		t.Fatal("expected postgres dsn conflict error")
 	}
@@ -402,7 +568,7 @@ func TestLoadConfigRejectsPostgresDSNWithConnectionFieldEnv(t *testing.T) {
 	t.Setenv("POSTGRES_SSLMODE", "disable")
 	captureLogOutput(t)
 
-	_, err := LoadConfig("", NORMAL)
+	_, err := LoadConfig("")
 	if err == nil {
 		t.Fatal("expected postgres dsn conflict error")
 	}
@@ -416,7 +582,7 @@ func TestLoadConfigRejectsUnsupportedPostgresSSLMode(t *testing.T) {
 	captureLogOutput(t)
 	path := writeTempConfig(t, "postgres:\n  sslmode: invalid\n")
 
-	_, err := LoadConfig(path, NORMAL)
+	_, err := LoadConfig(path)
 	if err == nil {
 		t.Fatal("expected unsupported postgres sslmode error")
 	}
@@ -429,7 +595,7 @@ func TestLoadConfigRejectsNegativePostgresConnectTimeout(t *testing.T) {
 	captureLogOutput(t)
 	path := writeTempConfig(t, "postgres:\n  connectTimeoutSeconds: -1\n")
 
-	_, err := LoadConfig(path, NORMAL)
+	_, err := LoadConfig(path)
 	if err == nil {
 		t.Fatal("expected negative postgres connect timeout error")
 	}
@@ -464,7 +630,7 @@ func TestLoadConfigAppliesHistoryAndEventingDefaults(t *testing.T) {
 	withUnsetEnv(t, "BASYX_EVENTING_TOPIC_PREFIX")
 	captureLogOutput(t)
 
-	cfg, err := LoadConfig("", NORMAL)
+	cfg, err := LoadConfig("")
 	if err != nil {
 		t.Fatalf("unexpected config load error: %v", err)
 	}
@@ -498,7 +664,7 @@ func TestLoadConfigAppliesABACPolicyRepositoryEnvOverrides(t *testing.T) {
 	t.Setenv("ABAC_MANAGEMENT_API_ENABLED", "true")
 	captureLogOutput(t)
 
-	cfg, err := LoadConfig("", NORMAL)
+	cfg, err := LoadConfig("")
 	if err != nil {
 		t.Fatalf("unexpected config load error: %v", err)
 	}
@@ -523,7 +689,7 @@ abac:
 `)
 	captureLogOutput(t)
 
-	cfg, err := LoadConfig(path, NORMAL)
+	cfg, err := LoadConfig(path)
 	if err != nil {
 		t.Fatalf("unexpected config load error: %v", err)
 	}
@@ -538,7 +704,7 @@ func TestLoadConfigAppliesABACPolicyScopeBasyxEnvOverride(t *testing.T) {
 	t.Setenv("BASYX_ABAC_POLICY_SCOPE", "shared.scope")
 	captureLogOutput(t)
 
-	cfg, err := LoadConfig("", NORMAL)
+	cfg, err := LoadConfig("")
 	if err != nil {
 		t.Fatalf("unexpected config load error: %v", err)
 	}
@@ -578,7 +744,7 @@ func TestLoadConfigRejectsInvalidABACPolicyScope(t *testing.T) {
 	t.Setenv("ABAC_POLICY_SCOPE", "aasregistry/internal")
 	captureLogOutput(t)
 
-	_, err := LoadConfig("", NORMAL)
+	_, err := LoadConfig("")
 	if err == nil {
 		t.Fatal("expected invalid ABAC policy scope error")
 	}
@@ -591,7 +757,7 @@ func TestLoadConfigRejectsTooLongABACPolicyScope(t *testing.T) {
 	t.Setenv("ABAC_POLICY_SCOPE", strings.Repeat("a", maxABACPolicyScopeLength+1))
 	captureLogOutput(t)
 
-	_, err := LoadConfig("", NORMAL)
+	_, err := LoadConfig("")
 	if err == nil {
 		t.Fatal("expected too long ABAC policy scope error")
 	}
@@ -604,7 +770,7 @@ func TestLoadConfigRejectsUnsupportedABACPolicyFileImport(t *testing.T) {
 	t.Setenv("ABAC_POLICY_FILE_IMPORT", "sometimes")
 	captureLogOutput(t)
 
-	_, err := LoadConfig("", NORMAL)
+	_, err := LoadConfig("")
 	if err == nil {
 		t.Fatal("expected unsupported ABAC policy file import error")
 	}
@@ -621,7 +787,7 @@ func TestLoadConfigAppliesSupportedBasyxHistoryEnvOverrides(t *testing.T) {
 	t.Setenv("BASYX_AUDIT_IDENTITY_MODE", "none")
 	captureLogOutput(t)
 
-	cfg, err := LoadConfig("", NORMAL)
+	cfg, err := LoadConfig("")
 	if err != nil {
 		t.Fatalf("unexpected config load error: %v", err)
 	}
@@ -651,7 +817,7 @@ func TestLoadConfigAppliesHistoryEvidenceEnvOverrides(t *testing.T) {
 	t.Setenv("BASYX_HISTORY_INTEGRITY_ANCHOR_PROVIDER", "none")
 	captureLogOutput(t)
 
-	cfg, err := LoadConfig("", NORMAL)
+	cfg, err := LoadConfig("")
 	if err != nil {
 		t.Fatalf("unexpected config load error: %v", err)
 	}

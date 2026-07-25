@@ -27,7 +27,7 @@
 package aasregistryapi
 
 import (
-	"log"
+	"log/slog"
 	"net/http"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
@@ -38,7 +38,7 @@ import (
 func decodePathParam(raw, paramName, operation, errorDetail string) (string, *model.ImplResponse, error) {
 	decoded, err := common.DecodeString(raw)
 	if err != nil {
-		log.Printf("🧩 [%s] Error in %s: decode %s=%q: %v", componentName, operation, paramName, raw, err)
+		slog.Error("path parameter decoding failed", "error.code", "API-DECODEPATHPARAM-DECODE", "error", err, "component", componentName, "operation", operation, "param_name", paramName, "raw", raw)
 		resp := common.NewErrorResponse(
 			err, http.StatusBadRequest, componentName, operation, errorDetail,
 		)

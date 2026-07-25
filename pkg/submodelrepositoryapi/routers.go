@@ -23,7 +23,6 @@ import (
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	"github.com/go-chi/chi/v5"
-	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
 )
 
@@ -67,7 +66,6 @@ const errMsgMaxValueConstraint = "provided parameter is not respecting maximum v
 //   - chi.Router: A configured chi router with all registered routes
 func NewRouter(routers ...Router) chi.Router {
 	router := chi.NewRouter()
-	router.Use(middleware.Logger)
 	router.Use(cors.Handler(cors.Options{}))
 	for _, api := range routers {
 		for _, route := range api.Routes() {
