@@ -1274,11 +1274,33 @@ func ConfigureLogging(cfg *Config, serviceName string, configPath string, output
 //	AddCors(router, config)
 //	// Router now accepts cross-origin requests according to config
 func AddCors(r *chi.Mux, config *Config) {
+	requestMetadataHeaders := []string{
+		commonlogging.RequestIDHeader,
+		commonlogging.CorrelationIDHeader,
+	}
 	c := cors.New(cors.Options{
 		AllowedOrigins:   config.CorsConfig.AllowedOrigins,
 		AllowedMethods:   config.CorsConfig.AllowedMethods,
-		AllowedHeaders:   config.CorsConfig.AllowedHeaders,
+		AllowedHeaders:   appendUniqueHeaders(config.CorsConfig.AllowedHeaders, requestMetadataHeaders...),
+		ExposedHeaders:   requestMetadataHeaders,
 		AllowCredentials: config.CorsConfig.AllowCredentials,
 	})
 	r.Use(c.Handler)
+}
+
+func appendUniqueHeaders(headers []string, additional ...string) []string {
+	result := append([]string(nil), headers...)
+	for _, candidate := range additional {
+		found := false
+		for _, existing := range result {
+			if strings.EqualFold(existing, candidate) {
+				found = true
+				break
+			}
+		}
+		if !found {
+			result = append(result, candidate)
+		}
+	}
+	return result
 }

@@ -31,6 +31,7 @@ import (
 	"strings"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
+	commonlogging "github.com/eclipse-basyx/basyx-go-components/internal/common/logging"
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 )
 
@@ -88,8 +89,8 @@ func auditPolicyID(cfg *common.Config, mode string) string {
 
 func buildRequestAuditContext(r *http.Request, mode string, policyID string) AuditContext {
 	audit := AuditContext{
-		RequestID:     firstHeaderValue(r, "X-Request-ID", "X-Request-Id", "Request-ID"),
-		CorrelationID: firstHeaderValue(r, "X-Correlation-ID", "X-Correlation-Id", "Correlation-ID"),
+		RequestID:     requestIDForAudit(r),
+		CorrelationID: correlationIDForAudit(r),
 		HTTPMethod:    strings.ToUpper(strings.TrimSpace(r.Method)),
 	}
 	populateAuditIdentity(r, &audit)
@@ -100,6 +101,20 @@ func buildRequestAuditContext(r *http.Request, mode string, policyID string) Aud
 		audit.UserAgent = r.UserAgent()
 	}
 	return audit
+}
+
+func requestIDForAudit(r *http.Request) string {
+	if requestID := commonlogging.RequestIDFromContext(r.Context()); requestID != "" {
+		return requestID
+	}
+	return firstHeaderValue(r, commonlogging.RequestIDHeader, "X-Request-Id", commonlogging.LegacyRequestIDHeader)
+}
+
+func correlationIDForAudit(r *http.Request) string {
+	if correlationID := commonlogging.CorrelationIDFromContext(r.Context()); correlationID != "" {
+		return correlationID
+	}
+	return firstHeaderValue(r, commonlogging.CorrelationIDHeader, "X-Correlation-Id", commonlogging.LegacyCorrelationIDHeader)
 }
 
 func populateAuditIdentity(r *http.Request, audit *AuditContext) {

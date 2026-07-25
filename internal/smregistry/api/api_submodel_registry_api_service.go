@@ -71,7 +71,7 @@ func NewSubmodelRegistryAPIAPIService(databaseBackend smregistrypostgresql.Postg
 
 // GetAllSubmodelDescriptors - Returns all Submodel Descriptors
 func (s *SubmodelRegistryAPIAPIService) GetAllSubmodelDescriptors(ctx context.Context, limit int32, cursor string, createdFrom time.Time, updatedFrom time.Time) (model.ImplResponse, error) {
-	internalCursor, resp, err := decodeCursor(strings.TrimSpace(cursor), "GetAllSubmodelDescriptors")
+	internalCursor, resp, err := decodeCursor(ctx, strings.TrimSpace(cursor), "GetAllSubmodelDescriptors")
 	if resp != nil || err != nil {
 		return *resp, err
 	}
@@ -113,7 +113,7 @@ func (s *SubmodelRegistryAPIAPIService) QuerySubmodelDescriptors(
 	cursor string,
 	query grammar.Query,
 ) (model.ImplResponse, error) {
-	internalCursor, resp, err := decodeCursor(strings.TrimSpace(cursor), "QuerySubmodelDescriptors")
+	internalCursor, resp, err := decodeCursor(ctx, strings.TrimSpace(cursor), "QuerySubmodelDescriptors")
 	if resp != nil || err != nil {
 		return *resp, err
 	}
@@ -213,7 +213,7 @@ func (s *SubmodelRegistryAPIAPIService) PostSubmodelDescriptor(ctx context.Conte
 
 // GetSubmodelDescriptorById - Returns a specific Submodel Descriptor
 func (s *SubmodelRegistryAPIAPIService) GetSubmodelDescriptorById(ctx context.Context, submodelIdentifier string) (model.ImplResponse, error) {
-	decoded, resp, err := decodePathParam(submodelIdentifier, "submodelIdentifier", "GetSubmodelDescriptorById", "BadRequest-Decode")
+	decoded, resp, err := decodePathParam(ctx, submodelIdentifier, "submodelIdentifier", "GetSubmodelDescriptorById", "BadRequest-Decode")
 	if resp != nil || err != nil {
 		return *resp, err
 	}
@@ -251,7 +251,7 @@ func (s *SubmodelRegistryAPIAPIService) GetSubmodelDescriptorById(ctx context.Co
 
 // PutSubmodelDescriptorById - Creates or updates an existing Submodel Descriptor
 func (s *SubmodelRegistryAPIAPIService) PutSubmodelDescriptorById(ctx context.Context, submodelIdentifier string, submodelDescriptor model.SubmodelDescriptor) (model.ImplResponse, error) {
-	decoded, resp, err := decodePathParam(submodelIdentifier, "submodelIdentifier", "PutSubmodelDescriptorById", "BadRequest-Decode")
+	decoded, resp, err := decodePathParam(ctx, submodelIdentifier, "submodelIdentifier", "PutSubmodelDescriptorById", "BadRequest-Decode")
 	if resp != nil || err != nil {
 		return *resp, err
 	}
@@ -355,7 +355,7 @@ func (s *SubmodelRegistryAPIAPIService) PutSubmodelDescriptorById(ctx context.Co
 
 // DeleteSubmodelDescriptorById - Deletes a Submodel Descriptor, i.e. de-registers a submodel
 func (s *SubmodelRegistryAPIAPIService) DeleteSubmodelDescriptorById(ctx context.Context, submodelIdentifier string) (model.ImplResponse, error) {
-	decoded, resp, err := decodePathParam(submodelIdentifier, "submodelIdentifier", "DeleteSubmodelDescriptorById", "BadRequest-Decode")
+	decoded, resp, err := decodePathParam(ctx, submodelIdentifier, "submodelIdentifier", "DeleteSubmodelDescriptorById", "BadRequest-Decode")
 	if resp != nil || err != nil {
 		return *resp, err
 	}
