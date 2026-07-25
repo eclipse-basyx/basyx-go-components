@@ -43,6 +43,53 @@ Configuration records contain only a curated subset. Passwords, DSNs, access
 tokens, object-store credentials, private-key material, and request bodies are
 not logged.
 
+## HTTP Request Logging
+
+Every HTTP service emits one `HTTP request completed` event after a request is
+handled. Request logs include:
+
+- `request.id`
+- `correlation.id`
+- `http.request.method`
+- `url.path`
+- `http.route` when the router resolved a route pattern
+- `http.response.status_code`
+- `http.response.body.size`
+- `duration_ms`
+
+`url.path` never contains the query string. Request and response bodies,
+headers, tokens, user agents, and client IP addresses are not included.
+
+Clients may supply `X-Request-ID` and `X-Correlation-ID`. The legacy
+`Request-ID` and `Correlation-ID` names are accepted as input aliases. An
+accepted value contains 1 to 128 ASCII letters, digits, or the characters
+`._:/-`. BaSyx replaces missing or invalid request IDs with a value such as
+`req-0123456789abcdef0123456789abcdef`. A missing or invalid correlation ID
+defaults to the request ID. The canonical `X-Request-ID` and
+`X-Correlation-ID` headers are added to the request context and response.
+Cross-origin clients may send and read both canonical headers without adding
+them to the CORS configuration.
+
+These identifiers correlate records within one incoming request. They are not
+authenticated identity data, and BaSyx does not yet propagate them to outbound
+requests. OpenTelemetry trace and span correlation remains future work.
+
+An access event in JSON format looks like:
+
+```json
+{"time":"2026-07-25T10:00:01Z","level":"INFO","msg":"HTTP request completed","service.name":"aasregistryservice","request.id":"request-42","correlation.id":"workflow-7","http.request.method":"GET","url.path":"/shell-descriptors/example","http.route":"/shell-descriptors/{aasIdentifier}","http.response.status_code":200,"http.response.body.size":421,"duration_ms":3.725}
+```
+
+The same event in text format is:
+
+```text
+time=2026-07-25T10:00:01.000Z level=INFO msg="HTTP request completed" service.name=aasregistryservice request.id=request-42 correlation.id=workflow-7 http.request.method=GET url.path=/shell-descriptors/example http.route=/shell-descriptors/{aasIdentifier} http.response.status_code=200 http.response.body.size=421 duration_ms=3.725
+```
+
+Normal requests are logged at `info`. `GET` health-probe requests are logged at
+`debug`, so the default `info` level suppresses routine probe traffic. The
+existing `logging.level` setting controls both request and application logs.
+
 ## Following Logs
 
 The supported runtime sink is standard error. Container runtimes and service
@@ -60,5 +107,5 @@ stream into the platform collector of your choice. For example, Grafana Alloy,
 Fluent Bit, or an OpenTelemetry Collector can forward container or journal logs
 to Loki without coupling the BaSyx process to that backend.
 
-OpenTelemetry trace correlation and OTLP export are intentionally outside this
-logging foundation.
+OpenTelemetry trace correlation and OTLP export are intentionally outside the
+current logging implementation.
