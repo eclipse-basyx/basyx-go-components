@@ -27,7 +27,8 @@ package model
 
 import (
 	"errors"
-	"log"
+	"fmt"
+	"log/slog"
 	"strings"
 
 	"github.com/FriedJannik/aas-go-sdk/verification"
@@ -54,7 +55,7 @@ func ValidateWithMode(mode VerificationMode, warningContext string, verify func(
 
 	joined := strings.Join(validationErrors, "; ")
 	if normalizedMode == VerificationModePermissive {
-		log.Printf("WARN: %s: %s", warningContext, joined)
+		slog.Warn(fmt.Sprintf("WARN: %s: %s", warningContext, joined), "error.code", "MODEL-VALIDATEWITHMODE-LOG")
 		return nil
 	}
 

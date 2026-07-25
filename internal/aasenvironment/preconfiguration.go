@@ -28,7 +28,7 @@ package aasenvironment
 import (
 	"context"
 	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -76,7 +76,7 @@ func RunAASPreconfiguration(ctx context.Context, uploadService UploadService, co
 
 	if uploadService == nil {
 		summary.FailedFileCount = len(configuredSources)
-		log.Printf("%s-%s-NILUPLOADSERVICE upload service is required", preconfigurationComponent, preconfigurationOperation)
+		slog.ErrorContext(ctx, "preconfiguration upload service is unavailable", "error.code", "AASENV-PRECONFIG-NILUPLOADSERVICE")
 		return summary
 	}
 
@@ -89,33 +89,27 @@ func RunAASPreconfiguration(ctx context.Context, uploadService UploadService, co
 		if ctx != nil {
 			select {
 			case <-ctx.Done():
-				log.Printf("%s-%s-CONTEXTDONE preconfiguration interrupted: %v", preconfigurationComponent, preconfigurationOperation, ctx.Err())
+				slog.WarnContext(ctx, "AAS preconfiguration interrupted", "error.code", "AASENV-PRECONFIG-CONTEXTDONE", "error", ctx.Err())
 				return summary
 			default:
 			}
 		}
 
-		log.Printf(
-			"%s-%s-IMPORTSTART importing preconfiguration file '%s'",
-			preconfigurationComponent,
-			preconfigurationOperation,
-			sanitizeLogValue(filePath),
-		)
+		slog.InfoContext(ctx, "importing AAS preconfiguration file", "file", sanitizeLogValue(filePath))
 
 		if err := importPreconfigurationFile(ctx, uploadService, filePath, &summary); err != nil {
-			log.Printf("%s-%s-IMPORTFILE failed to import '%s': %v", preconfigurationComponent, preconfigurationOperation, sanitizeLogValue(filePath), err)
+			slog.ErrorContext(ctx, "AAS preconfiguration file import failed", "error.code", "AASENV-PRECONFIG-IMPORTFILE", "file", sanitizeLogValue(filePath), "error", err)
 		}
 	}
 
-	log.Printf(
-		"%s-%s-COMPLETED configured=%d resolved=%d imported=%d failed=%d skipped=%d",
-		preconfigurationComponent,
-		preconfigurationOperation,
-		summary.ConfiguredSourceCount,
-		summary.ResolvedFileCount,
-		summary.ImportedFileCount,
-		summary.FailedFileCount,
-		summary.SkippedFileCount,
+	slog.InfoContext(
+		ctx,
+		"AAS preconfiguration completed",
+		"configured", summary.ConfiguredSourceCount,
+		"resolved", summary.ResolvedFileCount,
+		"imported", summary.ImportedFileCount,
+		"failed", summary.FailedFileCount,
+		"skipped", summary.SkippedFileCount,
 	)
 	return summary
 }
@@ -199,7 +193,7 @@ func resolvePreconfigurationFiles(configuredSources []string) ([]string, int, in
 		sourceInfo, statErr := os.Stat(sourcePath)
 		if statErr != nil {
 			failedCount++
-			log.Printf("%s-%s-INVALIDSOURCE source '%s' cannot be accessed: %v", preconfigurationComponent, preconfigurationOperation, sanitizeLogValue(sourcePath), statErr)
+			slog.Error(fmt.Sprintf("%s-%s-INVALIDSOURCE source '%s' cannot be accessed: %v", preconfigurationComponent, preconfigurationOperation, sanitizeLogValue(sourcePath), statErr), "error.code", "AASENVIRONMENT-RESOLVEPRECONFIGURATIONFILES-LOG", "error", statErr)
 			continue
 		}
 
@@ -212,7 +206,7 @@ func resolvePreconfigurationFiles(configuredSources []string) ([]string, int, in
 
 		if !isSupportedAASPreconfigurationFile(sourcePath) {
 			skippedCount++
-			log.Printf("%s-%s-SKIPUNSUPPORTED skipped unsupported file '%s'", preconfigurationComponent, preconfigurationOperation, sanitizeLogValue(sourcePath))
+			slog.Warn(fmt.Sprintf("%s-%s-SKIPUNSUPPORTED skipped unsupported file '%s'", preconfigurationComponent, preconfigurationOperation, sanitizeLogValue(sourcePath)), "error.code", "AASENVIRONMENT-RESOLVEPRECONFIGURATIONFILES-LOG")
 			continue
 		}
 
@@ -235,7 +229,7 @@ func collectPreconfigurationFilesFromDirectory(dirPath string, resolvedSet map[s
 	walkErr := filepath.WalkDir(dirPath, func(path string, entry os.DirEntry, walkEntryErr error) error {
 		if walkEntryErr != nil {
 			failedCount++
-			log.Printf("%s-%s-WALKDIR failed while reading '%s': %v", preconfigurationComponent, preconfigurationOperation, sanitizeLogValue(path), walkEntryErr)
+			slog.Error(fmt.Sprintf("%s-%s-WALKDIR failed while reading '%s': %v", preconfigurationComponent, preconfigurationOperation, sanitizeLogValue(path), walkEntryErr), "error.code", "AASENVIRONMENT-COLLECTPRECONFIGURATIONFILESFROMDIRECTORY-LOG", "error", walkEntryErr)
 			return nil
 		}
 		if entry.IsDir() {
@@ -251,7 +245,7 @@ func collectPreconfigurationFilesFromDirectory(dirPath string, resolvedSet map[s
 	})
 	if walkErr != nil {
 		failedCount++
-		log.Printf("%s-%s-WALKDIRFAILED unable to traverse '%s': %v", preconfigurationComponent, preconfigurationOperation, sanitizeLogValue(dirPath), walkErr)
+		slog.Error(fmt.Sprintf("%s-%s-WALKDIRFAILED unable to traverse '%s': %v", preconfigurationComponent, preconfigurationOperation, sanitizeLogValue(dirPath), walkErr), "error.code", "AASENVIRONMENT-COLLECTPRECONFIGURATIONFILESFROMDIRECTORY-LOG", "error", walkErr)
 	}
 
 	return skippedCount, failedCount

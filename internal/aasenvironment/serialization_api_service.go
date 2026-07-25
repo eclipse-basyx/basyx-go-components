@@ -35,7 +35,7 @@ import (
 	"fmt"
 	"hash/fnv"
 	"io"
-	"log"
+	"log/slog"
 	"math"
 	"mime"
 	"net/http"
@@ -837,7 +837,7 @@ func (s *SerializationAPIService) resolveSerializationSupplementaryParts(
 		}
 		if _, seen := seenSupplementaries[resolvedReference]; seen {
 			// #nosec G706 -- values are escaped by sanitizeLogValue to prevent control-character log injection.
-			log.Printf("[WARN] AASENV-SERIALIZESUPPL-SKIPDUPLICATE duplicate supplementary URI '%s' for submodel '%s' at path '%s'", sanitizeLogValue(resolvedReference), sanitizeLogValue(fileLocation.SubmodelID), sanitizeLogValue(fileLocation.IDShortPath))
+			slog.WarnContext(ctx, fmt.Sprintf("[WARN] AASENV-SERIALIZESUPPL-SKIPDUPLICATE duplicate supplementary URI '%s' for submodel '%s' at path '%s'", sanitizeLogValue(resolvedReference), sanitizeLogValue(fileLocation.SubmodelID), sanitizeLogValue(fileLocation.IDShortPath)), "error.code", "AASENV-SERIALIZESUPPL-SKIPDUPLICATE")
 			continue
 		}
 		seenSupplementaries[resolvedReference] = struct{}{}
@@ -881,7 +881,7 @@ func (s *SerializationAPIService) resolveSerializationSupplementaryPart(
 func resolveInitialSupplementaryReference(location AASXFileElementLocation, specURI *url.URL) (string, bool, bool) {
 	if IsExternalAASXReference(location.FileValue) {
 		// #nosec G706 -- values are escaped by sanitizeLogValue to prevent control-character log injection.
-		log.Printf("[WARN] AASENV-SERIALIZESUPPL-SKIPEXTERNAL skipping external file reference for submodel '%s' at path '%s'", sanitizeLogValue(location.SubmodelID), sanitizeLogValue(location.IDShortPath))
+		slog.Warn(fmt.Sprintf("[WARN] AASENV-SERIALIZESUPPL-SKIPEXTERNAL skipping external file reference for submodel '%s' at path '%s'", sanitizeLogValue(location.SubmodelID), sanitizeLogValue(location.IDShortPath)), "error.code", "AASENV-SERIALIZESUPPL-SKIPEXTERNAL")
 		return "", false, false
 	}
 	managed := strings.HasPrefix(location.FileValue, serializationAASXSupplementaryRoot+"/")
@@ -891,7 +891,7 @@ func resolveInitialSupplementaryReference(location AASXFileElementLocation, spec
 	}
 	if resolved == "" {
 		// #nosec G706 -- values are escaped by sanitizeLogValue to prevent control-character log injection.
-		log.Printf("[WARN] AASENV-SERIALIZESUPPL-SKIPUNRESOLVED skipping unresolved file reference for submodel '%s' at path '%s'", sanitizeLogValue(location.SubmodelID), sanitizeLogValue(location.IDShortPath))
+		slog.Warn(fmt.Sprintf("[WARN] AASENV-SERIALIZESUPPL-SKIPUNRESOLVED skipping unresolved file reference for submodel '%s' at path '%s'", sanitizeLogValue(location.SubmodelID), sanitizeLogValue(location.IDShortPath)), "error.code", "AASENV-SERIALIZESUPPL-SKIPUNRESOLVED")
 		return "", false, false
 	}
 	return resolved, managed, true
@@ -908,7 +908,7 @@ func (s *SerializationAPIService) loadSerializationAttachmentMetadata(ctx contex
 	})
 	if common.IsErrNotFound(err) {
 		// #nosec G706 -- values are escaped by sanitizeLogValue to prevent control-character log injection.
-		log.Printf("[WARN] AASENV-SERIALIZESUPPL-SKIPMISSING attachment not found for submodel '%s' at path '%s'", sanitizeLogValue(location.SubmodelID), sanitizeLogValue(location.IDShortPath))
+		slog.WarnContext(ctx, fmt.Sprintf("[WARN] AASENV-SERIALIZESUPPL-SKIPMISSING attachment not found for submodel '%s' at path '%s'", sanitizeLogValue(location.SubmodelID), sanitizeLogValue(location.IDShortPath)), "error.code", "AASENV-SERIALIZESUPPL-SKIPMISSING")
 		return metadata, false, nil
 	}
 	if err != nil {
@@ -919,7 +919,7 @@ func (s *SerializationAPIService) loadSerializationAttachmentMetadata(ctx contex
 	}
 	if metadata.size == 0 {
 		// #nosec G706 -- values are escaped by sanitizeLogValue to prevent control-character log injection.
-		log.Printf("[WARN] AASENV-SERIALIZESUPPL-SKIPEMPTY empty attachment for submodel '%s' at path '%s'", sanitizeLogValue(location.SubmodelID), sanitizeLogValue(location.IDShortPath))
+		slog.WarnContext(ctx, fmt.Sprintf("[WARN] AASENV-SERIALIZESUPPL-SKIPEMPTY empty attachment for submodel '%s' at path '%s'", sanitizeLogValue(location.SubmodelID), sanitizeLogValue(location.IDShortPath)), "error.code", "AASENV-SERIALIZESUPPL-SKIPEMPTY")
 		return metadata, false, nil
 	}
 	return metadata, true, nil
@@ -955,7 +955,7 @@ func finalizeSupplementaryReference(resolved string, managed bool, metadata seri
 	}
 	if resolved == "" {
 		// #nosec G706 -- values are escaped by sanitizeLogValue to prevent control-character log injection.
-		log.Printf("[WARN] AASENV-SERIALIZESUPPL-SKIPINVALIDTARGET skipping unresolved supplementary target for submodel '%s' at path '%s'", sanitizeLogValue(location.SubmodelID), sanitizeLogValue(location.IDShortPath))
+		slog.Warn(fmt.Sprintf("[WARN] AASENV-SERIALIZESUPPL-SKIPINVALIDTARGET skipping unresolved supplementary target for submodel '%s' at path '%s'", sanitizeLogValue(location.SubmodelID), sanitizeLogValue(location.IDShortPath)), "error.code", "AASENV-SERIALIZESUPPL-SKIPINVALIDTARGET")
 		return "", "", false
 	}
 	return resolved, contentType, true
@@ -1222,7 +1222,7 @@ func (s *SerializationAPIService) resolveSerializationThumbnailParts(
 		}
 		if _, seen := seenThumbnailURIs[resolvedThumbnailURI]; seen {
 			// #nosec G706 -- values are escaped by sanitizeLogValue to prevent control-character log injection.
-			log.Printf("[WARN] AASENV-SERIALIZETHUMB-SKIPDUPLICATE skipping duplicate thumbnail URI '%s' for AAS '%s'", sanitizeLogValue(resolvedThumbnailURI), sanitizeLogValue(aasID))
+			slog.WarnContext(ctx, fmt.Sprintf("[WARN] AASENV-SERIALIZETHUMB-SKIPDUPLICATE skipping duplicate thumbnail URI '%s' for AAS '%s'", sanitizeLogValue(resolvedThumbnailURI), sanitizeLogValue(aasID)), "error.code", "AASENV-SERIALIZETHUMB-SKIPDUPLICATE")
 			continue
 		}
 		seenThumbnailURIs[resolvedThumbnailURI] = struct{}{}
@@ -1254,7 +1254,7 @@ func (s *SerializationAPIService) resolveSerializationThumbnailPart(ctx context.
 	}
 	if resolvedURI == "" {
 		// #nosec G706 -- values are escaped by sanitizeLogValue to prevent control-character log injection.
-		log.Printf("[WARN] AASENV-SERIALIZETHUMB-SKIPINVALIDURI skipping invalid thumbnail URI for AAS '%s'", sanitizeLogValue(aasID))
+		slog.WarnContext(ctx, fmt.Sprintf("[WARN] AASENV-SERIALIZETHUMB-SKIPINVALIDURI skipping invalid thumbnail URI for AAS '%s'", sanitizeLogValue(aasID)), "error.code", "AASENV-SERIALIZETHUMB-SKIPINVALIDURI")
 		return nil, "", nil
 	}
 	maximum := common.AASXLimitsFromContext(ctx).MaxThumbnailSizeBytes

@@ -14,7 +14,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
+	"log/slog"
 	"net/http"
 	"strings"
 	"time"
@@ -2342,7 +2342,7 @@ const componentName = "SubmodelRepository"
 func (c *SubmodelRepositoryAPIAPIController) QuerySubmodels(w http.ResponseWriter, r *http.Request) {
 	query, err := parseQuery(r.URL.RawQuery)
 	if err != nil {
-		log.Printf("🧩 [%s] Error in QuerySubmodels: parse query failed", componentName)
+		slog.ErrorContext(r.Context(), fmt.Sprintf("🧩 [%s] Error in QuerySubmodels: parse query failed", componentName), "error.code", "SUBMODELREPOSITORYAPI-QUERYSUBMODELS-LOG")
 		result := common.NewErrorResponse(
 			err,
 			http.StatusBadRequest,
@@ -2364,7 +2364,7 @@ func (c *SubmodelRepositoryAPIAPIController) QuerySubmodels(w http.ResponseWrite
 			WithMinimum[int32](1),
 		)
 		if err != nil {
-			log.Printf("🧩 [%s] Error in QuerySubmodels: parse limit failed", componentName)
+			slog.ErrorContext(r.Context(), fmt.Sprintf("🧩 [%s] Error in QuerySubmodels: parse limit failed", componentName), "error.code", "SUBMODELREPOSITORYAPI-QUERYSUBMODELS-LOG")
 			result := common.NewErrorResponse(
 				err,
 				http.StatusBadRequest,
@@ -2389,7 +2389,7 @@ func (c *SubmodelRepositoryAPIAPIController) QuerySubmodels(w http.ResponseWrite
 	d := json.NewDecoder(r.Body)
 	d.DisallowUnknownFields()
 	if err := d.Decode(&queryParam); err != nil && !errors.Is(err, io.EOF) {
-		log.Printf("🧩 [%s] Error in QuerySubmodels: decode body: %v", componentName, err)
+		slog.ErrorContext(r.Context(), fmt.Sprintf("🧩 [%s] Error in QuerySubmodels: decode body: %v", componentName, err), "error.code", "SUBMODELREPOSITORYAPI-QUERYSUBMODELS-LOG", "error", err)
 		result := common.NewErrorResponse(
 			err,
 			http.StatusBadRequest,
@@ -2404,7 +2404,7 @@ func (c *SubmodelRepositoryAPIAPIController) QuerySubmodels(w http.ResponseWrite
 		return
 	}
 	if err := grammar.AssertQueryRequired(queryParam); err != nil {
-		log.Printf("🧩 [%s] Error in QuerySubmodels: required validation failed: %v", componentName, err)
+		slog.ErrorContext(r.Context(), fmt.Sprintf("🧩 [%s] Error in QuerySubmodels: required validation failed: %v", componentName, err), "error.code", "SUBMODELREPOSITORYAPI-QUERYSUBMODELS-LOG", "error", err)
 		result := common.NewErrorResponse(
 			err,
 			http.StatusBadRequest,
@@ -2419,7 +2419,7 @@ func (c *SubmodelRepositoryAPIAPIController) QuerySubmodels(w http.ResponseWrite
 		return
 	}
 	if err := grammar.AssertQueryConstraints(queryParam); err != nil {
-		log.Printf("🧩 [%s] Error in QuerySubmodels: constraints validation failed: %v", componentName, err)
+		slog.ErrorContext(r.Context(), fmt.Sprintf("🧩 [%s] Error in QuerySubmodels: constraints validation failed: %v", componentName, err), "error.code", "SUBMODELREPOSITORYAPI-QUERYSUBMODELS-LOG", "error", err)
 		result := common.NewErrorResponse(
 			err,
 			http.StatusBadRequest,
@@ -2436,14 +2436,14 @@ func (c *SubmodelRepositoryAPIAPIController) QuerySubmodels(w http.ResponseWrite
 	result, err := c.service.QuerySubmodels(r.Context(), limitParam, cursorParam, queryParam)
 	// If an error occurred, encode the error with the status code
 	if err != nil {
-		log.Printf("🧩 [%s] Error in QuerySubmodels: service failure", componentName)
+		slog.ErrorContext(r.Context(), fmt.Sprintf("🧩 [%s] Error in QuerySubmodels: service failure", componentName), "error.code", "SUBMODELREPOSITORYAPI-QUERYSUBMODELS-LOG")
 		c.errorHandler(w, r, err, &result)
 		return
 	}
 	// If no error, encode the body and the result code
 	err = EncodeJSONResponse(result.Body, &result.Code, w)
 	if err != nil {
-		log.Printf("🧩 [%s] Error in QuerySubmodels: encoding response failed", componentName)
+		slog.ErrorContext(r.Context(), fmt.Sprintf("🧩 [%s] Error in QuerySubmodels: encoding response failed", componentName), "error.code", "SUBMODELREPOSITORYAPI-QUERYSUBMODELS-LOG")
 		c.errorHandler(w, r, err, nil)
 		return
 	}

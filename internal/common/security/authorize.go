@@ -29,7 +29,8 @@ package auth
 import (
 	"context"
 	"errors"
-	"log"
+	"fmt"
+	"log/slog"
 	"net/http"
 	"strings"
 
@@ -147,10 +148,15 @@ func ABACMiddleware(settings ABACSettings) func(http.Handler) http.Handler {
 						return
 					}
 
-					log.Printf("❌ ABAC(model): %s", evaluation.Reason)
+					slog.ErrorContext(
+						r.Context(),
+						"ABAC access denied",
+						"error.code", "SECURITY-ABACMIDDLEWARE-DENIED",
+						"reason", evaluation.Reason,
+					)
 
 					if err := common.WriteErrorResponse(w, errors.New("access denied"), http.StatusForbidden, "Middleware", "Rules", "Denied"); err != nil {
-						log.Printf("❌ Failed to encode error response: %v", err)
+						slog.ErrorContext(r.Context(), "access denial response encoding failed", "error.code", "SECURITY-ABACMIDDLEWARE-ENCODERESPONSE", "error", err)
 					}
 					return
 				}
@@ -337,7 +343,7 @@ func SelectFormulaForRight(ctx context.Context, right grammar.RightsEnum) contex
 
 	qf, cloneErr := CloneQueryFilter(existing)
 	if cloneErr != nil {
-		log.Printf("AUTH-SELECTQF-CLONEERR failed to clone query filter: %v", cloneErr)
+		slog.ErrorContext(ctx, fmt.Sprintf("AUTH-SELECTQF-CLONEERR failed to clone query filter: %v", cloneErr), "error.code", "AUTH-SELECTQF-CLONEERR", "error", cloneErr)
 		return WithQueryFilter(ctx, failClosedQueryFilter(right))
 	}
 	if qf == nil {
@@ -371,7 +377,7 @@ func MergeQueryFilter(ctx context.Context, query grammar.Query) context.Context 
 	if existing != nil {
 		cloned, err := CloneQueryFilter(existing)
 		if err != nil {
-			log.Printf("SMREPO-MERGEQF-CLONEERR failed to clone query filter: %v", err)
+			slog.ErrorContext(ctx, fmt.Sprintf("SMREPO-MERGEQF-CLONEERR failed to clone query filter: %v", err), "error.code", "SMREPO-MERGEQF-CLONEERR", "error", err)
 			return WithQueryFilter(ctx, failClosedQueryFilter(grammar.RightsEnumREAD))
 		}
 		if cloned != nil {

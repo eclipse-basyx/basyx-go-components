@@ -28,7 +28,8 @@ package aasenvironment
 import (
 	"context"
 	"errors"
-	"log"
+	"fmt"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
@@ -104,7 +105,7 @@ func writeSerializationFileDownload(w http.ResponseWriter, status int, payload S
 	if payload.Close != nil {
 		defer func() {
 			if err := payload.Close(); err != nil {
-				log.Printf("AASENV-SERIALIZATIONAPI-CLOSE response cleanup failed: %v", err)
+				slog.Error(fmt.Sprintf("AASENV-SERIALIZATIONAPI-CLOSE response cleanup failed: %v", err), "error.code", "AASENV-SERIALIZATIONAPI-CLOSE", "error", err)
 			}
 		}()
 	}
@@ -115,7 +116,7 @@ func writeSerializationFileDownload(w http.ResponseWriter, status int, payload S
 	w.WriteHeader(status)
 	if payload.WriteTo != nil {
 		if err := payload.WriteTo(w); err != nil {
-			log.Printf("AASENV-SERIALIZATIONAPI-STREAM response stream failed: %v", err)
+			slog.Error(fmt.Sprintf("AASENV-SERIALIZATIONAPI-STREAM response stream failed: %v", err), "error.code", "AASENV-SERIALIZATIONAPI-STREAM", "error", err)
 		}
 		return
 	}

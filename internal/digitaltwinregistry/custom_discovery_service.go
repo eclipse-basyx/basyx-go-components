@@ -31,7 +31,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
 	"strings"
 	"time"
@@ -83,7 +83,7 @@ func (s *CustomDiscoveryService) SearchAllAssetAdministrationShellIdsByAssetLink
 
 	shouldEnforceFormula, enforceErr := auth.ShouldEnforceFormula(ctx)
 	if enforceErr != nil {
-		log.Printf("🧭 [%s] Error SearchAllAssetAdministrationShellIdsByAssetLink: should-enforce-formula failed: %v", customDiscoveryComponentName, enforceErr)
+		slog.ErrorContext(ctx, fmt.Sprintf("🧭 [%s] Error SearchAllAssetAdministrationShellIdsByAssetLink: should-enforce-formula failed: %v", customDiscoveryComponentName, enforceErr), "error.code", "DIGITALTWINREGISTRY-SEARCHALLASSETADMINISTRATIONSHELLIDSBYASSETLINK-LOG", "error", enforceErr)
 		return common.NewErrorResponse(
 			enforceErr,
 			http.StatusInternalServerError,
@@ -138,7 +138,7 @@ func (s *CustomDiscoveryService) GetAllAssetAdministrationShellIdsByAssetLink(
 
 		dec, err := common.DecodeString(enc)
 		if err != nil {
-			log.Printf("🧭 [%s] Error GetAllAssetAdministrationShellIdsByAssetLink: decode assetIds[%d]=%q failed: %v", customDiscoveryComponentName, idx, enc, err)
+			slog.ErrorContext(ctx, fmt.Sprintf("🧭 [%s] Error GetAllAssetAdministrationShellIdsByAssetLink: decode assetIds[%d]=%q failed: %v", customDiscoveryComponentName, idx, enc, err), "error.code", "DIGITALTWINREGISTRY-GETALLASSETADMINISTRATIONSHELLIDSBYASSETLINK-LOG", "error", err)
 			return common.NewErrorResponse(
 				err,
 				http.StatusBadRequest,
@@ -150,7 +150,7 @@ func (s *CustomDiscoveryService) GetAllAssetAdministrationShellIdsByAssetLink(
 
 		var al model.AssetLink
 		if err := json.Unmarshal([]byte(dec), &al); err != nil {
-			log.Printf("🧭 [%s] Error GetAllAssetAdministrationShellIdsByAssetLink: unmarshal assetIds[%d] decoded=%q failed: %v", customDiscoveryComponentName, idx, dec, err)
+			slog.ErrorContext(ctx, fmt.Sprintf("🧭 [%s] Error GetAllAssetAdministrationShellIdsByAssetLink: unmarshal assetIds[%d] decoded=%q failed: %v", customDiscoveryComponentName, idx, dec, err), "error.code", "DIGITALTWINREGISTRY-GETALLASSETADMINISTRATIONSHELLIDSBYASSETLINK-LOG", "error", err)
 			return common.NewErrorResponse(
 				err,
 				http.StatusBadRequest,
@@ -219,7 +219,7 @@ func (s *CustomDiscoveryService) PostAllAssetLinksByID(
 ) (model.ImplResponse, error) {
 	decoded, decodeErr := common.DecodeString(aasIdentifier)
 	if decodeErr != nil {
-		log.Printf("🧭 [%s] Error PostAllAssetLinksById: decode aasIdentifier=%q failed: %v", customDiscoveryComponentName, aasIdentifier, decodeErr)
+		slog.ErrorContext(ctx, fmt.Sprintf("🧭 [%s] Error PostAllAssetLinksById: decode aasIdentifier=%q failed: %v", customDiscoveryComponentName, aasIdentifier, decodeErr), "error.code", "DIGITALTWINREGISTRY-POSTALLASSETLINKSBYID-LOG", "error", decodeErr)
 		return common.NewErrorResponse(
 			decodeErr,
 			http.StatusBadRequest,
@@ -232,7 +232,7 @@ func (s *CustomDiscoveryService) PostAllAssetLinksByID(
 	aasID := string(decoded)
 	exists, existsErr := s.aasChecker.ExistsAASByID(ctx, aasID)
 	if existsErr != nil {
-		log.Printf("🧭 [%s] Error PostAllAssetLinksById: existence check failed (aasId=%q): %v", customDiscoveryComponentName, aasID, existsErr)
+		slog.ErrorContext(ctx, fmt.Sprintf("🧭 [%s] Error PostAllAssetLinksById: existence check failed (aasId=%q): %v", customDiscoveryComponentName, aasID, existsErr), "error.code", "DIGITALTWINREGISTRY-POSTALLASSETLINKSBYID-LOG", "error", existsErr)
 		return common.NewErrorResponse(
 			existsErr,
 			http.StatusInternalServerError,
@@ -262,7 +262,7 @@ func (s *CustomDiscoveryService) PostAllAssetLinksByID(
 
 	jsonableIncoming, convErr := specificAssetIDsToJSONable(specificAssetID)
 	if convErr != nil {
-		log.Printf("🧭 [%s] Error PostAllAssetLinksById: convert incoming links failed (aasId=%q): %v", customDiscoveryComponentName, aasID, convErr)
+		slog.ErrorContext(ctx, fmt.Sprintf("🧭 [%s] Error PostAllAssetLinksById: convert incoming links failed (aasId=%q): %v", customDiscoveryComponentName, aasID, convErr), "error.code", "DIGITALTWINREGISTRY-POSTALLASSETLINKSBYID-LOG", "error", convErr)
 		return common.NewErrorResponse(
 			convErr,
 			http.StatusInternalServerError,

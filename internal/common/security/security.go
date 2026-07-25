@@ -79,7 +79,7 @@ const abacManagementDeniedAsNotFoundPath = "/security/abac"
 //	}
 //	err := SetupSecurity(context.Background(), config, router)
 //	if err != nil {
-//	  log.Fatal("Security setup failed:", err)
+//	  return err
 //	}
 //
 // Security Flow:

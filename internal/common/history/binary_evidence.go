@@ -32,7 +32,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
+	"log/slog"
 	"net/url"
 	"path"
 	"strings"
@@ -142,7 +142,7 @@ func EnsureBinaryEvidenceTx(ctx context.Context, tx *sql.Tx, content binaryconte
 			extended, extendErr := extender.ExtendArtifactRetention(extendCtx, receipt.Reference, receipt, artifact)
 			cancelExtend()
 			if extendErr != nil {
-				log.Printf("HISTORY-EVIDENCE-BINARY-EXTEND immutable binary retention extension failed: %v", extendErr)
+				slog.ErrorContext(ctx, fmt.Sprintf("HISTORY-EVIDENCE-BINARY-EXTEND immutable binary retention extension failed: %v", extendErr), "error.code", "HISTORY-EVIDENCE-BINARY-EXTEND", "error", extendErr)
 				return nil, binaryEvidenceUnavailableError()
 			}
 			if extended != nil {
@@ -153,7 +153,7 @@ func EnsureBinaryEvidenceTx(ctx context.Context, tx *sql.Tx, content binaryconte
 			}
 		}
 		if validationErr := validateCommittedEvidenceReceipt(receipt, content.SHA256, content.SizeBytes, time.Now()); validationErr != nil {
-			log.Printf("HISTORY-EVIDENCE-BINARY-RECEIPT reused immutable binary receipt is invalid: %v", validationErr)
+			slog.ErrorContext(ctx, fmt.Sprintf("HISTORY-EVIDENCE-BINARY-RECEIPT reused immutable binary receipt is invalid: %v", validationErr), "error.code", "HISTORY-EVIDENCE-BINARY-RECEIPT", "error", validationErr)
 			return nil, binaryEvidenceUnavailableError()
 		}
 		return &receipt, nil
@@ -183,7 +183,7 @@ func EnsureBinaryEvidenceTx(ctx context.Context, tx *sql.Tx, content binaryconte
 		return putErr
 	})
 	if err != nil {
-		log.Printf("HISTORY-EVIDENCE-BINARY-PUT immutable binary write failed: %v", err)
+		slog.ErrorContext(ctx, fmt.Sprintf("HISTORY-EVIDENCE-BINARY-PUT immutable binary write failed: %v", err), "error.code", "HISTORY-EVIDENCE-BINARY-PUT", "error", err)
 		return nil, binaryEvidenceUnavailableError()
 	}
 	if storedReceipt == nil {
@@ -193,7 +193,7 @@ func EnsureBinaryEvidenceTx(ctx context.Context, tx *sql.Tx, content binaryconte
 		return nil, common.NewInternalServerError("HISTORY-EVIDENCE-BINARY-RECEIPT immutable binary receipt does not match canonical content")
 	}
 	if validationErr := validateCommittedEvidenceReceipt(*storedReceipt, content.SHA256, content.SizeBytes, time.Now()); validationErr != nil {
-		log.Printf("HISTORY-EVIDENCE-BINARY-RECEIPT immutable binary receipt is invalid: %v", validationErr)
+		slog.ErrorContext(ctx, fmt.Sprintf("HISTORY-EVIDENCE-BINARY-RECEIPT immutable binary receipt is invalid: %v", validationErr), "error.code", "HISTORY-EVIDENCE-BINARY-RECEIPT", "error", validationErr)
 		return nil, binaryEvidenceUnavailableError()
 	}
 	if err = upsertBinaryEvidenceReceiptTx(ctx, tx, content.ID, *storedReceipt); err != nil {
@@ -242,7 +242,7 @@ func RecordBinaryReferenceEvidenceTx(ctx context.Context, tx *sql.Tx, entityType
 	defer cancel()
 	receipt, err := cfg.EvidenceStore.PutArtifact(writeCtx, artifact)
 	if err != nil {
-		log.Printf("HISTORY-EVIDENCE-BINARYREF-PUT evidence store write failed: %v", err)
+		slog.ErrorContext(ctx, fmt.Sprintf("HISTORY-EVIDENCE-BINARYREF-PUT evidence store write failed: %v", err), "error.code", "HISTORY-EVIDENCE-BINARYREF-PUT", "error", err)
 		return common.NewErrServiceUnavailable("HISTORY-EVIDENCE-BINARYREF-STORE binary reference evidence could not be stored")
 	}
 	if receipt == nil {

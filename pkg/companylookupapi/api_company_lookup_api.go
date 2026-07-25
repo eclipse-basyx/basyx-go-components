@@ -4,7 +4,8 @@ package companylookupapi
 
 import (
 	"encoding/json"
-	"log"
+	"fmt"
+	"log/slog"
 	"net/http"
 	"strings"
 
@@ -82,7 +83,7 @@ func (c *CompanyLookupAPIAPIController) Routes() Routes {
 func (c *CompanyLookupAPIAPIController) GetAllCompanyDescriptors(w http.ResponseWriter, r *http.Request) {
 	query, err := parseQuery(r.URL.RawQuery)
 	if err != nil {
-		log.Printf("📍 [%s] Error in GetAllCompanyDescriptors: parse query raw=%q: %v", componentName, r.URL.RawQuery, err)
+		slog.ErrorContext(r.Context(), fmt.Sprintf("📍 [%s] Error in GetAllCompanyDescriptors: parse query raw=%q: %v", componentName, r.URL.RawQuery, err), "error.code", "COMPANYLOOKUPAPI-GETALLCOMPANYDESCRIPTORS-LOG", "error", err)
 		result := common.NewErrorResponse(
 			err,
 			http.StatusBadRequest,
@@ -101,7 +102,7 @@ func (c *CompanyLookupAPIAPIController) GetAllCompanyDescriptors(w http.Response
 			WithMinimum[int32](1),
 		)
 		if err != nil {
-			log.Printf("📍 [%s] Error in GetAllCompanyDescriptors: parse limit=%q: %v", componentName, query.Get("limit"), err)
+			slog.ErrorContext(r.Context(), fmt.Sprintf("📍 [%s] Error in GetAllCompanyDescriptors: parse limit=%q: %v", componentName, query.Get("limit"), err), "error.code", "COMPANYLOOKUPAPI-GETALLCOMPANYDESCRIPTORS-LOG", "error", err)
 			result := common.NewErrorResponse(
 				err,
 				http.StatusBadRequest,
@@ -129,7 +130,7 @@ func (c *CompanyLookupAPIAPIController) GetAllCompanyDescriptors(w http.Response
 
 	result, err := c.service.GetAllCompanyDescriptors(r.Context(), limitParam, cursorParam, nameParam, assetIdParam)
 	if err != nil {
-		log.Printf("📍 [%s] Error in GetAllCompanyDescriptors: service failure (limit=%d cursor=%q name=%q assetId=%q): %v", componentName, limitParam, cursorParam, nameParam, assetIdParam, err)
+		slog.ErrorContext(r.Context(), fmt.Sprintf("📍 [%s] Error in GetAllCompanyDescriptors: service failure (limit=%d cursor=%q name=%q assetId=%q): %v", componentName, limitParam, cursorParam, nameParam, assetIdParam, err), "error.code", "COMPANYLOOKUPAPI-GETALLCOMPANYDESCRIPTORS-LOG", "error", err)
 		c.errorHandler(w, r, err, &result)
 		return
 	}
@@ -143,7 +144,7 @@ func (c *CompanyLookupAPIAPIController) PostCompanyDescriptor(w http.ResponseWri
 	d.DisallowUnknownFields()
 	err := d.Decode(&companyDescriptorParam)
 	if err != nil {
-		log.Printf("📍 [%s] Error in PostCompanyDescriptor: decode body: %v", componentName, err)
+		slog.ErrorContext(r.Context(), fmt.Sprintf("📍 [%s] Error in PostCompanyDescriptor: decode body: %v", componentName, err), "error.code", "COMPANYLOOKUPAPI-POSTCOMPANYDESCRIPTOR-LOG", "error", err)
 		result := common.NewErrorResponse(
 			err,
 			http.StatusBadRequest,
@@ -156,7 +157,7 @@ func (c *CompanyLookupAPIAPIController) PostCompanyDescriptor(w http.ResponseWri
 	}
 
 	if err := model.AssertCompanyDescriptorRequired(companyDescriptorParam); err != nil {
-		log.Printf("📍 [%s] Error in PostCompanyDescriptor: required validation failed: %v", componentName, err)
+		slog.ErrorContext(r.Context(), fmt.Sprintf("📍 [%s] Error in PostCompanyDescriptor: required validation failed: %v", componentName, err), "error.code", "COMPANYLOOKUPAPI-POSTCOMPANYDESCRIPTOR-LOG", "error", err)
 		result := common.NewErrorResponse(
 			err,
 			http.StatusBadRequest,
@@ -169,7 +170,7 @@ func (c *CompanyLookupAPIAPIController) PostCompanyDescriptor(w http.ResponseWri
 	}
 	if !model.IsStrictCompanyDomain(companyDescriptorParam.Domain) {
 		invalidDomainErr := common.NewErrBadRequest("COMLOOKUP-POSTCOMPANYDESCRIPTOR-VALIDATEDOMAIN provided domain is not a syntactically valid domain")
-		log.Printf("📍 [%s] Error in PostCompanyDescriptor: invalid domain syntax in body (companyDomain=%q)", componentName, companyDescriptorParam.Domain)
+		slog.ErrorContext(r.Context(), fmt.Sprintf("📍 [%s] Error in PostCompanyDescriptor: invalid domain syntax in body (companyDomain=%q)", componentName, companyDescriptorParam.Domain), "error.code", "COMPANYLOOKUPAPI-POSTCOMPANYDESCRIPTOR-LOG")
 		result := common.NewErrorResponse(
 			invalidDomainErr,
 			http.StatusBadRequest,
@@ -181,7 +182,7 @@ func (c *CompanyLookupAPIAPIController) PostCompanyDescriptor(w http.ResponseWri
 		return
 	}
 	if err := model.AssertCompanyDescriptorConstraints(companyDescriptorParam); err != nil {
-		log.Printf("📍 [%s] Error in PostCompanyDescriptor: constraints validation failed: %v", componentName, err)
+		slog.ErrorContext(r.Context(), fmt.Sprintf("📍 [%s] Error in PostCompanyDescriptor: constraints validation failed: %v", componentName, err), "error.code", "COMPANYLOOKUPAPI-POSTCOMPANYDESCRIPTOR-LOG", "error", err)
 		result := common.NewErrorResponse(
 			err,
 			http.StatusBadRequest,
@@ -194,7 +195,7 @@ func (c *CompanyLookupAPIAPIController) PostCompanyDescriptor(w http.ResponseWri
 	}
 	result, err := c.service.PostCompanyDescriptor(r.Context(), companyDescriptorParam)
 	if err != nil {
-		log.Printf("📍 [%s] Error in PostCompanyDescriptor: service failure (bodyDomain=%q): %v", componentName, companyDescriptorParam.Domain, err)
+		slog.ErrorContext(r.Context(), fmt.Sprintf("📍 [%s] Error in PostCompanyDescriptor: service failure (bodyDomain=%q): %v", componentName, companyDescriptorParam.Domain, err), "error.code", "COMPANYLOOKUPAPI-POSTCOMPANYDESCRIPTOR-LOG", "error", err)
 		c.errorHandler(w, r, err, &result)
 		return
 	}
@@ -206,7 +207,7 @@ func (c *CompanyLookupAPIAPIController) GetCompanyDescriptorById(w http.Response
 
 	companyIdentifierParam := chi.URLParam(r, "companyIdentifier")
 	if companyIdentifierParam == "" {
-		log.Printf("📍 [%s] Error in GetCompanyDescriptorById: missing path parameter companyIdentifier", componentName)
+		slog.ErrorContext(r.Context(), fmt.Sprintf("📍 [%s] Error in GetCompanyDescriptorById: missing path parameter companyIdentifier", componentName), "error.code", "COMPANYLOOKUPAPI-GETCOMPANYDESCRIPTORBYID-LOG")
 		result := common.NewErrorResponse(
 			common.NewErrBadRequest("Missing path parameter 'companyIdentifier'"),
 			http.StatusBadRequest,
@@ -219,7 +220,7 @@ func (c *CompanyLookupAPIAPIController) GetCompanyDescriptorById(w http.Response
 	}
 	result, err := c.service.GetCompanyDescriptorById(r.Context(), companyIdentifierParam)
 	if err != nil {
-		log.Printf("📍 [%s] Error in GetCompanyDescriptorById: service failure (companyIdentifier=%q): %v", componentName, companyIdentifierParam, err)
+		slog.ErrorContext(r.Context(), fmt.Sprintf("📍 [%s] Error in GetCompanyDescriptorById: service failure (companyIdentifier=%q): %v", componentName, companyIdentifierParam, err), "error.code", "COMPANYLOOKUPAPI-GETCOMPANYDESCRIPTORBYID-LOG", "error", err)
 		c.errorHandler(w, r, err, &result)
 		return
 	}
@@ -230,7 +231,7 @@ func (c *CompanyLookupAPIAPIController) GetCompanyDescriptorById(w http.Response
 func (c *CompanyLookupAPIAPIController) PutCompanyDescriptorById(w http.ResponseWriter, r *http.Request) {
 	companyIdentifierParam := chi.URLParam(r, "companyIdentifier")
 	if companyIdentifierParam == "" {
-		log.Printf("📍 [%s] Error in PutCompanyDescriptorById: missing path parameter companyIdentifier", componentName)
+		slog.ErrorContext(r.Context(), fmt.Sprintf("📍 [%s] Error in PutCompanyDescriptorById: missing path parameter companyIdentifier", componentName), "error.code", "COMPANYLOOKUPAPI-PUTCOMPANYDESCRIPTORBYID-LOG")
 		result := common.NewErrorResponse(
 			common.NewErrBadRequest("Missing path parameter 'companyIdentifier'"),
 			http.StatusBadRequest,
@@ -246,7 +247,7 @@ func (c *CompanyLookupAPIAPIController) PutCompanyDescriptorById(w http.Response
 	d.DisallowUnknownFields()
 	err := d.Decode(&companyDescriptorParam)
 	if err != nil {
-		log.Printf("📍 [%s] Error in PutCompanyDescriptorById: decode body: %v", componentName, err)
+		slog.ErrorContext(r.Context(), fmt.Sprintf("📍 [%s] Error in PutCompanyDescriptorById: decode body: %v", componentName, err), "error.code", "COMPANYLOOKUPAPI-PUTCOMPANYDESCRIPTORBYID-LOG", "error", err)
 		result := common.NewErrorResponse(
 			err,
 			http.StatusBadRequest,
@@ -258,7 +259,7 @@ func (c *CompanyLookupAPIAPIController) PutCompanyDescriptorById(w http.Response
 		return
 	}
 	if err := model.AssertCompanyDescriptorRequired(companyDescriptorParam); err != nil {
-		log.Printf("📍 [%s] Error in PutCompanyDescriptorById: required validation failed: %v", componentName, err)
+		slog.ErrorContext(r.Context(), fmt.Sprintf("📍 [%s] Error in PutCompanyDescriptorById: required validation failed: %v", componentName, err), "error.code", "COMPANYLOOKUPAPI-PUTCOMPANYDESCRIPTORBYID-LOG", "error", err)
 		result := common.NewErrorResponse(
 			err,
 			http.StatusBadRequest,
@@ -270,7 +271,7 @@ func (c *CompanyLookupAPIAPIController) PutCompanyDescriptorById(w http.Response
 		return
 	}
 	if err := model.AssertCompanyDescriptorConstraints(companyDescriptorParam); err != nil {
-		log.Printf("📍 [%s] Error in PutCompanyDescriptorById: constraints validation failed: %v", componentName, err)
+		slog.ErrorContext(r.Context(), fmt.Sprintf("📍 [%s] Error in PutCompanyDescriptorById: constraints validation failed: %v", componentName, err), "error.code", "COMPANYLOOKUPAPI-PUTCOMPANYDESCRIPTORBYID-LOG", "error", err)
 		result := common.NewErrorResponse(
 			err,
 			http.StatusBadRequest,
@@ -283,7 +284,7 @@ func (c *CompanyLookupAPIAPIController) PutCompanyDescriptorById(w http.Response
 	}
 	result, err := c.service.PutCompanyDescriptorById(r.Context(), companyIdentifierParam, companyDescriptorParam)
 	if err != nil {
-		log.Printf("📍 [%s] Error in PutCompanyDescriptorById: service failure (companyIdentifier=%q bodyDomain=%q): %v", componentName, companyIdentifierParam, companyDescriptorParam.Domain, err)
+		slog.ErrorContext(r.Context(), fmt.Sprintf("📍 [%s] Error in PutCompanyDescriptorById: service failure (companyIdentifier=%q bodyDomain=%q): %v", componentName, companyIdentifierParam, companyDescriptorParam.Domain, err), "error.code", "COMPANYLOOKUPAPI-PUTCOMPANYDESCRIPTORBYID-LOG", "error", err)
 		c.errorHandler(w, r, err, &result)
 		return
 	}
@@ -294,7 +295,7 @@ func (c *CompanyLookupAPIAPIController) PutCompanyDescriptorById(w http.Response
 func (c *CompanyLookupAPIAPIController) DeleteCompanyDescriptorById(w http.ResponseWriter, r *http.Request) {
 	companyIdentifierParam := chi.URLParam(r, "companyIdentifier")
 	if companyIdentifierParam == "" {
-		log.Printf("📍 [%s] Error in DeleteCompanyDescriptorById: missing path parameter companyIdentifier", componentName)
+		slog.ErrorContext(r.Context(), fmt.Sprintf("📍 [%s] Error in DeleteCompanyDescriptorById: missing path parameter companyIdentifier", componentName), "error.code", "COMPANYLOOKUPAPI-DELETECOMPANYDESCRIPTORBYID-LOG")
 		result := common.NewErrorResponse(
 			common.NewErrBadRequest("Missing path parameter 'companyIdentifier'"),
 			http.StatusBadRequest,
@@ -307,7 +308,7 @@ func (c *CompanyLookupAPIAPIController) DeleteCompanyDescriptorById(w http.Respo
 	}
 	result, err := c.service.DeleteCompanyDescriptorById(r.Context(), companyIdentifierParam)
 	if err != nil {
-		log.Printf("📍 [%s] Error in DeleteCompanyDescriptorById: service failure (companyIdentifier=%q): %v", componentName, companyIdentifierParam, err)
+		slog.ErrorContext(r.Context(), fmt.Sprintf("📍 [%s] Error in DeleteCompanyDescriptorById: service failure (companyIdentifier=%q): %v", componentName, companyIdentifierParam, err), "error.code", "COMPANYLOOKUPAPI-DELETECOMPANYDESCRIPTORBYID-LOG", "error", err)
 		c.errorHandler(w, r, err, &result)
 		return
 	}

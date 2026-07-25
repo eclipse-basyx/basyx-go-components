@@ -28,7 +28,8 @@
 package smregistryapi
 
 import (
-	"log"
+	"fmt"
+	"log/slog"
 	"net/http"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
@@ -39,7 +40,7 @@ import (
 func decodePathParam(raw, paramName, operation, errorDetail string) (string, *model.ImplResponse, error) {
 	decoded, err := common.DecodeString(raw)
 	if err != nil {
-		log.Printf("[ERROR] [%s] Error in %s: decode %s=%q: %v", componentName, operation, paramName, raw, err)
+		slog.Error(fmt.Sprintf("[ERROR] [%s] Error in %s: decode %s=%q: %v", componentName, operation, paramName, raw, err), "error.code", "API-DECODEPATHPARAM-LOG", "error", err)
 		resp := common.NewErrorResponse(
 			err, http.StatusBadRequest, componentName, operation, errorDetail,
 		)

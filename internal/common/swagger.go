@@ -32,7 +32,7 @@ import (
 	"fmt"
 	"html/template"
 	"io/fs"
-	"log"
+	"log/slog"
 	"net/http"
 	"path"
 	"regexp"
@@ -1478,7 +1478,7 @@ func AddSwaggerUI(r *chi.Mux, cfg SwaggerUIConfig) {
 		enabled = *cfg.Enabled
 	}
 	if !enabled {
-		log.Printf("📖 Swagger disabled")
+		slog.Info("Swagger disabled")
 		return
 	}
 
@@ -1584,8 +1584,8 @@ func AddSwaggerUI(r *chi.Mux, cfg SwaggerUIConfig) {
 		}
 	}
 
-	log.Printf("📖 Swagger UI available at %s", cfg.UIPath)
-	log.Printf("📄 OpenAPI spec available at %s", cfg.SpecPath)
+	slog.Info("Swagger UI available", "path", cfg.UIPath)
+	slog.Info("OpenAPI specification available", "path", cfg.SpecPath)
 }
 
 func writeSwaggerSchemaNotFound(w http.ResponseWriter, part, version string) {
@@ -1612,7 +1612,7 @@ func writeSwaggerSchemaNotFound(w http.ResponseWriter, part, version string) {
 //   - serverConfig: Server configuration for building the server URL
 func AddSwaggerUIFromFS(r *chi.Mux, specFS fs.FS, specFile string, title string, uiPath string, specPath string, serverConfig *Config) error {
 	if serverConfig != nil && !serverConfig.Swagger.Enabled {
-		log.Printf("📖 Swagger disabled")
+		slog.Info("Swagger disabled")
 		return nil
 	}
 

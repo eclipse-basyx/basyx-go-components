@@ -32,7 +32,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
 	"strings"
 	"time"
@@ -87,7 +87,7 @@ type OIDCClaimMappingSettings struct {
 
 // NewOIDC initializes an OIDC verifier from the given settings.
 func NewOIDC(ctx context.Context, s OIDCSettings) (*OIDC, error) {
-	log.Printf("🔐 Initializing OIDC verifier…")
+	slog.InfoContext(ctx, "initializing OIDC verifier")
 
 	verifiers := make(map[string]issuerVerifier, len(s.Providers))
 	for _, p := range s.Providers {
@@ -128,9 +128,9 @@ func NewOIDC(ctx context.Context, s OIDCSettings) (*OIDC, error) {
 			claimMappings: claimMappings,
 		}
 		if verifierCfg.SkipClientIDCheck {
-			log.Printf("⚠️ OIDC verifier created without audience validation. Issuer=%s", issuer)
+			slog.WarnContext(ctx, "OIDC verifier initialized without audience validation", "error.code", "COMMON-OIDC-NOAUDIENCE", "issuer", issuer)
 		} else {
-			log.Printf("✅ OIDC verifier created. Issuer=%s Audience=%s", issuer, verifierCfg.ClientID)
+			slog.InfoContext(ctx, "OIDC verifier initialized", "issuer", issuer, "audience", verifierCfg.ClientID)
 		}
 	}
 
@@ -201,33 +201,33 @@ func (o *OIDC) Middleware(next http.Handler) http.Handler {
 
 		issuer, err := extractIssuer(raw)
 		if err != nil {
-			log.Printf("❌ Failed to read token issuer: %v", err)
+			slog.ErrorContext(r.Context(), "token issuer extraction failed", "error.code", "SECURITY-OIDC-EXTRACTISSUER", "error", err)
 			respondOIDCError(w)
 			return
 		}
 
 		verifier, ok := o.verifiers[issuer]
 		if !ok {
-			log.Printf("❌ unknown token issuer")
+			slog.ErrorContext(r.Context(), "token issuer rejected", "error.code", "SECURITY-OIDC-UNKNOWNISSUER")
 			respondOIDCError(w)
 			return
 		}
 
 		c, err := verifier.verifier.Verify(r.Context(), raw)
 		if err != nil {
-			log.Printf("❌ Token verification failed: %v", err)
+			slog.ErrorContext(r.Context(), "token verification failed", "error.code", "SECURITY-OIDC-VERIFYTOKEN", "error", err)
 			respondOIDCError(w)
 			return
 		}
 
 		if err := normalizeVerifiedClaims(c, verifier.scopeClaims, verifier.claimMappings); err != nil {
-			log.Printf("❌ Failed to normalize token claims: %v", err)
+			slog.ErrorContext(r.Context(), "token claim normalization failed", "error.code", "SECURITY-OIDC-NORMALIZECLAIMS", "error", err)
 			respondOIDCError(w)
 			return
 		}
 
 		if !hasAllScopes(c, verifier.scopes) {
-			log.Printf("❌ missing required scopes: %v", verifier.scopes)
+			slog.ErrorContext(r.Context(), "token rejected due to missing required scopes", "error.code", "SECURITY-OIDC-MISSINGSCOPES")
 			respondOIDCStatus(w, http.StatusForbidden)
 			return
 		}
@@ -268,7 +268,7 @@ func respondOIDCStatus(w http.ResponseWriter, status int) {
 	resp := common.NewErrorResponse(errors.New("access denied"), status, "Middleware", "Rules", "Denied")
 	err := openapi.EncodeJSONResponse(resp.Body, &resp.Code, w)
 	if err != nil {
-		log.Printf("❌ Failed to encode error response: %v", err)
+		slog.Error(fmt.Sprintf("❌ Failed to encode error response: %v", err), "error.code", "SECURITY-RESPONDOIDCSTATUS-LOG", "error", err)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 	}
 }

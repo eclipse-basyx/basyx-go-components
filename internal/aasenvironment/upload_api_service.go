@@ -33,7 +33,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
+	"log/slog"
 	"mime"
 	"net/http"
 	"net/url"
@@ -441,11 +441,7 @@ func parseAASXMLInstance(specContent []byte, sourceLabel string) (aastypes.IClas
 			sanitizedSourceLabel = "unknown"
 		}
 		// #nosec G706 -- source label is sanitized to strip CR/LF before logging.
-		log.Printf(
-			"[WARN] AASENV-PARSEAASX-NAMESPACEADAPTED source='%s' adapted legacy AAS namespace to '%s' for backward compatibility",
-			sanitizedSourceLabel,
-			sanitizeUploadLogValue(currentAASNamespace),
-		)
+		slog.Warn(fmt.Sprintf("[WARN] AASENV-PARSEAASX-NAMESPACEADAPTED source='%s' adapted legacy AAS namespace to '%s' for backward compatibility", sanitizedSourceLabel, sanitizeUploadLogValue(currentAASNamespace)), "error.code", "AASENV-PARSEAASX-NAMESPACEADAPTED")
 		adaptedRetried, adaptedRetryErr := aasxmlization.Unmarshal(xml.NewDecoder(bytes.NewReader(adaptedContent)))
 		if adaptedRetryErr == nil {
 			return adaptedRetried, nil
@@ -824,11 +820,11 @@ func (s *uploadAPIService) uploadSupplementaryFiles(
 		if !matched {
 			supplementaryURIForLog := sanitizeUploadLogValue(normalizePartURI(relationship.Supplementary.URI))
 			// #nosec G706 -- value is sanitized to strip CR/LF control characters before logging.
-			log.Printf("[WARN] AASENV-UPLDSUPPL-NOMATCH no File element path matched supplementary %q", supplementaryURIForLog)
+			slog.WarnContext(ctx, fmt.Sprintf("[WARN] AASENV-UPLDSUPPL-NOMATCH no File element path matched supplementary %q", supplementaryURIForLog), "error.code", "AASENV-UPLDSUPPL-NOMATCH")
 		}
 	}
 
-	log.Printf("AASENV-UPLDSUPPL uploaded %d supplementary file attachment(s)", uploaded)
+	slog.InfoContext(ctx, fmt.Sprintf("AASENV-UPLDSUPPL uploaded %d supplementary file attachment(s)", uploaded))
 	return nil
 }
 
@@ -881,7 +877,7 @@ func (s *uploadAPIService) storeAASXThumbnail(ctx context.Context, packageReader
 		uploaded++
 	}
 
-	log.Printf("AASENV-UPLDTHUMB stored thumbnail for %d AAS object(s)", uploaded)
+	slog.InfoContext(ctx, fmt.Sprintf("AASENV-UPLDTHUMB stored thumbnail for %d AAS object(s)", uploaded))
 	return nil
 }
 

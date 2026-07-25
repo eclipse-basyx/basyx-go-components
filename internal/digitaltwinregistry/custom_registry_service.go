@@ -29,7 +29,8 @@ package digitaltwinregistry
 import (
 	"context"
 	"encoding/json"
-	"log"
+	"fmt"
+	"log/slog"
 	"net/http"
 	"strings"
 	"time"
@@ -219,7 +220,7 @@ func normalizeRegistryAssetLinkQueryAssetIDs(encodedAssetIDs []string) []string 
 func decodeRegistryAssetLinkQueryAssetID(encodedAssetID string, idx int) (model.AssetLink, *model.ImplResponse) {
 	decoded, err := common.DecodeString(encodedAssetID)
 	if err != nil {
-		log.Printf("[%s] Error GetAllAssetAdministrationShellDescriptors: decode assetIds[%d] failed: %v", customRegistryComponentName, idx, err)
+		slog.Error(fmt.Sprintf("[%s] Error GetAllAssetAdministrationShellDescriptors: decode assetIds[%d] failed: %v", customRegistryComponentName, idx, err), "error.code", "DIGITALTWINREGISTRY-DECODEREGISTRYASSETLINKQUERYASSETID-LOG", "error", err)
 		resp := common.NewErrorResponse(
 			err,
 			http.StatusBadRequest,
@@ -232,7 +233,7 @@ func decodeRegistryAssetLinkQueryAssetID(encodedAssetID string, idx int) (model.
 
 	var link model.AssetLink
 	if err = json.Unmarshal([]byte(decoded), &link); err != nil {
-		log.Printf("[%s] Error GetAllAssetAdministrationShellDescriptors: unmarshal assetIds[%d] failed: %v", customRegistryComponentName, idx, err)
+		slog.Error(fmt.Sprintf("[%s] Error GetAllAssetAdministrationShellDescriptors: unmarshal assetIds[%d] failed: %v", customRegistryComponentName, idx, err), "error.code", "DIGITALTWINREGISTRY-DECODEREGISTRYASSETLINKQUERYASSETID-LOG", "error", err)
 		resp := common.NewErrorResponse(
 			err,
 			http.StatusBadRequest,
@@ -244,7 +245,7 @@ func decodeRegistryAssetLinkQueryAssetID(encodedAssetID string, idx int) (model.
 	}
 
 	if err = model.AssertAssetLinkRequired(link); err != nil {
-		log.Printf("[%s] Error GetAllAssetAdministrationShellDescriptors: validate assetIds[%d] failed: %v", customRegistryComponentName, idx, err)
+		slog.Error(fmt.Sprintf("[%s] Error GetAllAssetAdministrationShellDescriptors: validate assetIds[%d] failed: %v", customRegistryComponentName, idx, err), "error.code", "DIGITALTWINREGISTRY-DECODEREGISTRYASSETLINKQUERYASSETID-LOG", "error", err)
 		resp := common.NewErrorResponse(
 			err,
 			http.StatusBadRequest,

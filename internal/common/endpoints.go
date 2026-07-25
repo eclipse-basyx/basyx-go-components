@@ -36,7 +36,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
+	"log/slog"
 	"mime"
 	"net/http"
 	"path/filepath"
@@ -111,7 +111,7 @@ func AddHealthEndpointWithProbe(r *chi.Mux, config *Config, probe HealthProbe) {
 func writeHealthResponse(w http.ResponseWriter, statusCode int, body map[string]string) {
 	responsePayload, err := json.Marshal(body)
 	if err != nil {
-		log.Printf("COMMON-WRITEHEALTH-MARSHAL response marshal failed: %v", err)
+		slog.Error(fmt.Sprintf("COMMON-WRITEHEALTH-MARSHAL response marshal failed: %v", err), "error.code", "COMMON-WRITEHEALTH-MARSHAL", "error", err)
 		_ = WriteErrorResponse(w, err, http.StatusInternalServerError, "COMMON", "WriteHealthResponse", "MarshalResponse")
 		return
 	}
@@ -119,7 +119,7 @@ func writeHealthResponse(w http.ResponseWriter, statusCode int, body map[string]
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(statusCode)
 	if _, err = w.Write(responsePayload); err != nil {
-		log.Printf("COMMON-WRITEHEALTH-WRITE response write failed: %v", err)
+		slog.Error(fmt.Sprintf("COMMON-WRITEHEALTH-WRITE response write failed: %v", err), "error.code", "COMMON-WRITEHEALTH-WRITE", "error", err)
 	}
 }
 
@@ -148,7 +148,13 @@ func AddVerificationEndpoint(r chi.Router, config *Config, stagers ...UploadStag
 		if err != nil {
 			var maxBytesError *http.MaxBytesError
 			if errors.As(err, &maxBytesError) || IsErrPayloadTooLarge(err) || errors.Is(err, aasx.ErrReaderLimitExceeded) {
-				log.Printf("COMMON-VERIFY-PAYLOAD-MAXSIZE exceeded max payload size of %d bytes: %v", maxPayloadBytes, err)
+				slog.WarnContext(
+					r.Context(),
+					"verification payload exceeds configured size limit",
+					"error.code", "COMMON-VERIFY-PAYLOAD-MAXSIZE",
+					"limit.bytes", maxPayloadBytes,
+					"error", err,
+				)
 				_ = WriteErrorResponse(
 					w,
 					fmt.Errorf("payload exceeds max size of %d bytes", maxPayloadBytes),
@@ -168,14 +174,14 @@ func AddVerificationEndpoint(r chi.Router, config *Config, stagers ...UploadStag
 				return
 			}
 
-			log.Printf("COMMON-VERIFY-PAYLOAD failed to verify payload: %v", err)
+			slog.ErrorContext(r.Context(), fmt.Sprintf("COMMON-VERIFY-PAYLOAD failed to verify payload: %v", err), "error.code", "COMMON-VERIFY-PAYLOAD", "error", err)
 			_ = WriteErrorResponse(w, err, http.StatusBadRequest, "COMMON", "VerifyPayload", "InvalidPayload")
 			return
 		}
 
 		responsePayload, err := json.Marshal(verificationResult)
 		if err != nil {
-			log.Printf("COMMON-VERIFY-PAYLOAD-MARSHAL failed to marshal verification result: %v", err)
+			slog.ErrorContext(r.Context(), fmt.Sprintf("COMMON-VERIFY-PAYLOAD-MARSHAL failed to marshal verification result: %v", err), "error.code", "COMMON-VERIFY-PAYLOAD-MARSHAL", "error", err)
 			_ = WriteErrorResponse(w, err, http.StatusInternalServerError, "COMMON", "VerifyPayload", "MarshalResponse")
 			return
 		}
@@ -183,7 +189,7 @@ func AddVerificationEndpoint(r chi.Router, config *Config, stagers ...UploadStag
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		if _, err = w.Write(responsePayload); err != nil {
-			log.Printf("COMMON-VERIFY-PAYLOAD-WRITE response write failed: %v", err)
+			slog.ErrorContext(r.Context(), fmt.Sprintf("COMMON-VERIFY-PAYLOAD-WRITE response write failed: %v", err), "error.code", "COMMON-VERIFY-PAYLOAD-WRITE", "error", err)
 		}
 	})
 }

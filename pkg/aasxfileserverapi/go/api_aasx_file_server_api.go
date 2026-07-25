@@ -11,7 +11,8 @@
 package openapi
 
 import (
-	"log"
+	"fmt"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"strings"
@@ -202,7 +203,7 @@ func (c *AASXFileServerAPIAPIController) GetAASXByPackageId(w http.ResponseWrite
 	}
 	// If no error, encode the body and the result code
 	if encodeErr := EncodeJSONResponse(result.Body, &result.Code, w); encodeErr != nil {
-		log.Printf("AASXFILES-GETPACKAGE-STREAM response stream failed: %v", encodeErr)
+		slog.ErrorContext(r.Context(), fmt.Sprintf("AASXFILES-GETPACKAGE-STREAM response stream failed: %v", encodeErr), "error.code", "AASXFILES-GETPACKAGE-STREAM", "error", encodeErr)
 	}
 }
 

@@ -13,7 +13,8 @@ package openapi
 
 import (
 	"encoding/json"
-	"log"
+	"fmt"
+	"log/slog"
 	"net/http"
 	"strings"
 
@@ -94,7 +95,7 @@ func (c *AssetAdministrationShellBasicDiscoveryAPIAPIController) Routes() Routes
 func (c *AssetAdministrationShellBasicDiscoveryAPIAPIController) GetAllAssetAdministrationShellIdsByAssetLink(w http.ResponseWriter, r *http.Request) {
 	query, err := parseQuery(r.URL.RawQuery)
 	if err != nil {
-		log.Printf("🧭 [%s] Error in GetAllAssetAdministrationShellIdsByAssetLink: parse query raw=%q: %v", componentName, r.URL.RawQuery, err)
+		slog.ErrorContext(r.Context(), fmt.Sprintf("🧭 [%s] Error in GetAllAssetAdministrationShellIdsByAssetLink: parse query raw=%q: %v", componentName, r.URL.RawQuery, err), "error.code", "DISCOVERYAPI-GETALLASSETADMINISTRATIONSHELLIDSBYASSETLINK-LOG", "error", err)
 		result := common.NewErrorResponse(
 			common.NewErrBadRequest("Invalid query parameters"),
 			http.StatusBadRequest,
@@ -130,7 +131,7 @@ func (c *AssetAdministrationShellBasicDiscoveryAPIAPIController) GetAllAssetAdmi
 			WithMinimum[int32](1),
 		)
 		if err != nil {
-			log.Printf("🧭 [%s] Error in GetAllAssetAdministrationShellIdsByAssetLink: invalid limit=%q: %v", componentName, query.Get("limit"), err)
+			slog.ErrorContext(r.Context(), fmt.Sprintf("🧭 [%s] Error in GetAllAssetAdministrationShellIdsByAssetLink: invalid limit=%q: %v", componentName, query.Get("limit"), err), "error.code", "DISCOVERYAPI-GETALLASSETADMINISTRATIONSHELLIDSBYASSETLINK-LOG", "error", err)
 			result := common.NewErrorResponse(
 				common.NewErrBadRequest("Invalid 'limit' parameter"),
 				http.StatusBadRequest,
@@ -164,7 +165,7 @@ func (c *AssetAdministrationShellBasicDiscoveryAPIAPIController) SearchAllAssetA
 	// parse query (limit, cursor)
 	query, err := parseQuery(r.URL.RawQuery)
 	if err != nil {
-		log.Printf("🧭 [%s] Error in SearchAllAssetAdministrationShellIdsByAssetLink: parse query raw=%q: %v", componentName, r.URL.RawQuery, err)
+		slog.ErrorContext(r.Context(), fmt.Sprintf("🧭 [%s] Error in SearchAllAssetAdministrationShellIdsByAssetLink: parse query raw=%q: %v", componentName, r.URL.RawQuery, err), "error.code", "DISCOVERYAPI-SEARCHALLASSETADMINISTRATIONSHELLIDSBYASSETLINK-LOG", "error", err)
 		result := common.NewErrorResponse(
 			common.NewErrBadRequest("Invalid query parameters"),
 			http.StatusBadRequest,
@@ -184,7 +185,7 @@ func (c *AssetAdministrationShellBasicDiscoveryAPIAPIController) SearchAllAssetA
 			WithMinimum[int32](1),
 		)
 		if err != nil {
-			log.Printf("🧭 [%s] Error in SearchAllAssetAdministrationShellIdsByAssetLink: invalid limit=%q: %v", componentName, query.Get("limit"), err)
+			slog.ErrorContext(r.Context(), fmt.Sprintf("🧭 [%s] Error in SearchAllAssetAdministrationShellIdsByAssetLink: invalid limit=%q: %v", componentName, query.Get("limit"), err), "error.code", "DISCOVERYAPI-SEARCHALLASSETADMINISTRATIONSHELLIDSBYASSETLINK-LOG", "error", err)
 			result := common.NewErrorResponse(
 				common.NewErrBadRequest("Invalid 'limit' parameter"),
 				http.StatusBadRequest,
@@ -208,7 +209,7 @@ func (c *AssetAdministrationShellBasicDiscoveryAPIAPIController) SearchAllAssetA
 	dec := json.NewDecoder(r.Body)
 	dec.DisallowUnknownFields()
 	if err := dec.Decode(&assetLinksParam); err != nil {
-		log.Printf("🧭 [%s] Error in SearchAllAssetAdministrationShellIdsByAssetLink: decode request body failed: %v", componentName, err)
+		slog.ErrorContext(r.Context(), fmt.Sprintf("🧭 [%s] Error in SearchAllAssetAdministrationShellIdsByAssetLink: decode request body failed: %v", componentName, err), "error.code", "DISCOVERYAPI-SEARCHALLASSETADMINISTRATIONSHELLIDSBYASSETLINK-LOG", "error", err)
 		result := common.NewErrorResponse(
 			common.NewErrBadRequest("Incorrect RequestBody - 01"),
 			http.StatusBadRequest,
@@ -223,7 +224,7 @@ func (c *AssetAdministrationShellBasicDiscoveryAPIAPIController) SearchAllAssetA
 	// Validate each element
 	for _, al := range assetLinksParam {
 		if err := model.AssertAssetLinkRequired(al); err != nil {
-			log.Printf("🧭 [%s] Error in SearchAllAssetAdministrationShellIdsByAssetLink: invalid asset link element: %+v err=%v", componentName, al, err)
+			slog.ErrorContext(r.Context(), fmt.Sprintf("🧭 [%s] Error in SearchAllAssetAdministrationShellIdsByAssetLink: invalid asset link element: %+v err=%v", componentName, al, err), "error.code", "DISCOVERYAPI-SEARCHALLASSETADMINISTRATIONSHELLIDSBYASSETLINK-LOG", "error", err)
 			result := common.NewErrorResponse(
 				common.NewErrBadRequest("Invalid asset link element"),
 				http.StatusBadRequest,
@@ -255,7 +256,7 @@ func (c *AssetAdministrationShellBasicDiscoveryAPIAPIController) SearchAllAssetA
 func (c *AssetAdministrationShellBasicDiscoveryAPIAPIController) GetAllAssetLinksByID(w http.ResponseWriter, r *http.Request) {
 	aasIdentifierParam := chi.URLParam(r, "aasIdentifier")
 	if aasIdentifierParam == "" {
-		log.Printf("🧭 [%s] Error in GetAllAssetLinksById: missing path parameter 'aasIdentifier'", componentName)
+		slog.ErrorContext(r.Context(), fmt.Sprintf("🧭 [%s] Error in GetAllAssetLinksById: missing path parameter 'aasIdentifier'", componentName), "error.code", "DISCOVERYAPI-GETALLASSETLINKSBYID-LOG")
 		result := common.NewErrorResponse(
 			common.NewErrBadRequest("Missing path parameter 'aasIdentifier'"),
 			http.StatusBadRequest,
@@ -281,7 +282,7 @@ func (c *AssetAdministrationShellBasicDiscoveryAPIAPIController) GetAllAssetLink
 func (c *AssetAdministrationShellBasicDiscoveryAPIAPIController) PostAllAssetLinksByID(w http.ResponseWriter, r *http.Request) {
 	aasIdentifierParam := chi.URLParam(r, "aasIdentifier")
 	if aasIdentifierParam == "" {
-		log.Printf("🧭 [%s] Error in PostAllAssetLinksById: missing path parameter 'aasIdentifier'", componentName)
+		slog.ErrorContext(r.Context(), fmt.Sprintf("🧭 [%s] Error in PostAllAssetLinksById: missing path parameter 'aasIdentifier'", componentName), "error.code", "DISCOVERYAPI-POSTALLASSETLINKSBYID-LOG")
 		result := common.NewErrorResponse(
 			common.NewErrBadRequest("Missing path parameter 'aasIdentifier'"),
 			http.StatusBadRequest,
@@ -296,8 +297,7 @@ func (c *AssetAdministrationShellBasicDiscoveryAPIAPIController) PostAllAssetLin
 	var specificAssetIDPayload any
 	d := json.NewDecoder(r.Body)
 	if err := d.Decode(&specificAssetIDPayload); err != nil {
-		log.Printf("%+v", specificAssetIDPayload)
-		log.Printf("🧭 [%s] Error in PostAllAssetLinksById: decode request body failed: %v", componentName, err)
+		slog.ErrorContext(r.Context(), fmt.Sprintf("🧭 [%s] Error in PostAllAssetLinksById: decode request body failed: %v", componentName, err), "error.code", "DISCOVERYAPI-POSTALLASSETLINKSBYID-LOG", "error", err)
 		result := common.NewErrorResponse(
 			common.NewErrBadRequest("Incorrect RequestBody - 02"),
 			http.StatusBadRequest,
@@ -313,7 +313,7 @@ func (c *AssetAdministrationShellBasicDiscoveryAPIAPIController) PostAllAssetLin
 
 	specificAssetIDItems, ok := specificAssetIDPayload.([]any)
 	if !ok {
-		log.Printf("🧭 [%s] Error in PostAllAssetLinksById: payload is not an array", componentName)
+		slog.ErrorContext(r.Context(), fmt.Sprintf("🧭 [%s] Error in PostAllAssetLinksById: payload is not an array", componentName), "error.code", "DISCOVERYAPI-POSTALLASSETLINKSBYID-LOG")
 		result := common.NewErrorResponse(
 			common.NewErrBadRequest("Incorrect RequestBody - 02"),
 			http.StatusBadRequest,
@@ -329,7 +329,7 @@ func (c *AssetAdministrationShellBasicDiscoveryAPIAPIController) PostAllAssetLin
 	for _, rawItem := range specificAssetIDItems {
 		item, ok := rawItem.(map[string]any)
 		if !ok {
-			log.Printf("🧭 [%s] Error in PostAllAssetLinksById: specific asset id entry is not an object", componentName)
+			slog.ErrorContext(r.Context(), fmt.Sprintf("🧭 [%s] Error in PostAllAssetLinksById: specific asset id entry is not an object", componentName), "error.code", "DISCOVERYAPI-POSTALLASSETLINKSBYID-LOG")
 			result := common.NewErrorResponse(
 				common.NewErrBadRequest("Invalid specific asset id element"),
 				http.StatusBadRequest,
@@ -343,7 +343,7 @@ func (c *AssetAdministrationShellBasicDiscoveryAPIAPIController) PostAllAssetLin
 
 		saID, err := jsonization.SpecificAssetIDFromJsonable(item)
 		if err != nil {
-			log.Printf("🧭 [%s] Error in PostAllAssetLinksById: failed to parse specific asset id: %v", componentName, err)
+			slog.ErrorContext(r.Context(), fmt.Sprintf("🧭 [%s] Error in PostAllAssetLinksById: failed to parse specific asset id: %v", componentName, err), "error.code", "DISCOVERYAPI-POSTALLASSETLINKSBYID-LOG", "error", err)
 			result := common.NewErrorResponse(
 				common.NewErrBadRequest("Invalid specific asset id element"),
 				http.StatusBadRequest,
@@ -370,7 +370,7 @@ func (c *AssetAdministrationShellBasicDiscoveryAPIAPIController) PostAllAssetLin
 				return common.NewErrBadRequest("Invalid specific asset id element: " + message)
 			},
 		); err != nil {
-			log.Printf("🧭 [%s] Error in PostAllAssetLinksById: invalid specific asset id element: %+v err=%v", componentName, specificAssetID, err)
+			slog.ErrorContext(r.Context(), fmt.Sprintf("🧭 [%s] Error in PostAllAssetLinksById: invalid specific asset id element: %+v err=%v", componentName, specificAssetID, err), "error.code", "DISCOVERYAPI-POSTALLASSETLINKSBYID-LOG", "error", err)
 			result := common.NewErrorResponse(
 				err,
 				http.StatusBadRequest,
@@ -397,7 +397,7 @@ func (c *AssetAdministrationShellBasicDiscoveryAPIAPIController) PostAllAssetLin
 func (c *AssetAdministrationShellBasicDiscoveryAPIAPIController) DeleteAllAssetLinksByID(w http.ResponseWriter, r *http.Request) {
 	aasIdentifierParam := chi.URLParam(r, "aasIdentifier")
 	if aasIdentifierParam == "" {
-		log.Printf("🧭 [%s] Error in DeleteAllAssetLinksById: missing path parameter 'aasIdentifier'", componentName)
+		slog.ErrorContext(r.Context(), fmt.Sprintf("🧭 [%s] Error in DeleteAllAssetLinksById: missing path parameter 'aasIdentifier'", componentName), "error.code", "DISCOVERYAPI-DELETEALLASSETLINKSBYID-LOG")
 		result := common.NewErrorResponse(
 			common.NewErrBadRequest("Missing path parameter 'aasIdentifier'"),
 			http.StatusBadRequest,

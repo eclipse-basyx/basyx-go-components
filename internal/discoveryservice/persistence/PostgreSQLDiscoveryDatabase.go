@@ -37,6 +37,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"log/slog"
 	"time"
 
 	"github.com/FriedJannik/aas-go-sdk/types"
@@ -151,7 +152,7 @@ func (p *PostgreSQLDiscoveryDatabase) DeleteAllAssetLinks(ctx context.Context, a
 		Where(goqu.C("aasid").Eq(aasID)).
 		ToSQL()
 	if err != nil {
-		_, _ = fmt.Println("DeleteAllAssetLinks: build error:", err)
+		slog.ErrorContext(ctx, "delete query construction failed", "error.code", "DISCOVERY-DELETE-BUILDQUERY", "error", err)
 		return common.NewInternalServerError("Failed to delete AAS identifier. See console for information.")
 	}
 	result, err := p.db.ExecContext(ctx, sqlStr, args...)
@@ -293,23 +294,23 @@ func (p *PostgreSQLDiscoveryDatabase) SearchAASIDsByAssetLinks(
 
 	collector, err := grammar.NewResolvedFieldPathCollectorForRoot(grammar.CollectorRootBD)
 	if err != nil {
-		_, _ = fmt.Println("SearchAASIDsByAssetLinks: collector error:", err)
+		slog.ErrorContext(ctx, "query field collector creation failed", "error.code", "DISCOVERY-SEARCH-CREATECOLLECTOR", "error", err)
 		return nil, "", common.NewInternalServerError("Failed to build query filters. See server logs for details.")
 	}
 
 	ds, err = auth.AddFormulaQueryFromContext(ctx, ds, collector)
 	if err != nil {
-		_, _ = fmt.Println("SearchAASIDsByAssetLinks: filter error:", err)
+		slog.ErrorContext(ctx, "authorization filter creation failed", "error.code", "DISCOVERY-SEARCH-ADDFILTER", "error", err)
 		return nil, "", common.NewInternalServerError("Failed to build query filters. See server logs for details.")
 	}
 
 	sqlStr, args, err := ds.ToSQL()
 	debugEnabled := common.DebugEnabled(ctx)
 	if debugEnabled {
-		_, _ = fmt.Println(sqlStr)
+		slog.DebugContext(ctx, "discovery database query", "query", sqlStr)
 	}
 	if err != nil {
-		_, _ = fmt.Println("SearchAASIDsByAssetLinks: sql build error:", err)
+		slog.ErrorContext(ctx, "database query construction failed", "error.code", "DISCOVERY-SEARCH-BUILDQUERY", "error", err)
 		return nil, "", common.NewInternalServerError("Failed to query AAS IDs. See server logs for details.")
 	}
 
@@ -317,17 +318,17 @@ func (p *PostgreSQLDiscoveryDatabase) SearchAASIDsByAssetLinks(
 	if debugEnabled {
 		start := time.Now()
 		rows, err = p.db.QueryContext(ctx, sqlStr, args...)
-		_, _ = fmt.Printf("SearchAASIDsByAssetLinks query took %s\n", time.Since(start))
+		slog.DebugContext(ctx, "discovery database query completed", "duration", time.Since(start))
 	} else {
 		rows, err = p.db.QueryContext(ctx, sqlStr, args...)
 	}
 	if err != nil {
-		_, _ = fmt.Println("SearchAASIDsByAssetLinks: query error:", err)
+		slog.ErrorContext(ctx, "database query failed", "error.code", "DISCOVERY-SEARCH-EXECQUERY", "error", err)
 		return nil, "", common.NewInternalServerError("Failed to query AAS IDs. See server logs for details.")
 	}
 	defer func() {
 		if closeErr := rows.Close(); closeErr != nil {
-			_, _ = fmt.Println("SearchAASIDsByAssetLinks: rows close error:", closeErr)
+			slog.ErrorContext(ctx, "database row cleanup failed", "error.code", "DISCOVERY-SEARCH-CLOSEROWS", "error", closeErr)
 		}
 	}()
 
@@ -335,13 +336,13 @@ func (p *PostgreSQLDiscoveryDatabase) SearchAASIDsByAssetLinks(
 	for rows.Next() {
 		var id string
 		if err := rows.Scan(&id); err != nil {
-			_, _ = fmt.Println("SearchAASIDsByAssetLinks: scan error:", err)
+			slog.ErrorContext(ctx, "database row scan failed", "error.code", "DISCOVERY-SEARCH-SCANROW", "error", err)
 			return nil, "", common.NewInternalServerError("Failed to scan AAS ID. See server logs for details.")
 		}
 		buf = append(buf, id)
 	}
 	if rows.Err() != nil {
-		_, _ = fmt.Println("SearchAASIDsByAssetLinks: rows error:", rows.Err())
+		slog.ErrorContext(ctx, "database row iteration failed", "error.code", "DISCOVERY-SEARCH-ITERATEROWS", "error", rows.Err())
 		return nil, "", common.NewInternalServerError("Failed to iterate AAS IDs. See server logs for details.")
 	}
 

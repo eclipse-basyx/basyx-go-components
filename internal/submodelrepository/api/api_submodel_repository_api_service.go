@@ -18,6 +18,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"reflect"
@@ -669,12 +670,12 @@ func (s *SubmodelRepositoryAPIAPIService) GetSubmodelByID(
 		if common.IsErrNotFound(err) {
 			return newAPIErrorResponse(err, http.StatusNotFound, operation, "SubmodelNotFound"), nil
 		}
-		_, _ = fmt.Printf("[DEBUG] GetSubmodelByID: Error getting submodel '%s': %v\n", string(decodedSubmodelIdentifier), err)
+		slog.ErrorContext(ctx, "submodel retrieval failed", "error.code", "SMREPO-GETSUBMODEL-GETBYID", "error", err)
 		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "GetSubmodelByID"), nil
 	}
 	jsonSubmodel, err := jsonization.ToJsonable(sm)
 	if err != nil {
-		_, _ = fmt.Printf("[DEBUG] GetSubmodelByID: Error converting submodel '%s' to JSON: %v\n", string(decodedSubmodelIdentifier), err)
+		slog.ErrorContext(ctx, "submodel response conversion failed", "error.code", "SMREPO-GETSUBMODEL-TOJSONABLE", "error", err)
 		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "ToJsonable"), nil
 	}
 	deleteSubmodelElementsIfEmpty(jsonSubmodel)
@@ -934,7 +935,7 @@ func (s *SubmodelRepositoryAPIAPIService) PostSubmodel(
 			return newAPIErrorResponse(err, http.StatusBadRequest, operation, "InvalidSubmodelData"), nil
 		}
 
-		_, _ = fmt.Println("Error creating submodel: " + err.Error())
+		slog.ErrorContext(ctx, "submodel creation failed", "error.code", "SMREPO-POSTSUBMODEL-CREATE", "error", err)
 
 		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "CreateSubmodel"), nil
 	}
@@ -1580,7 +1581,7 @@ func (s *SubmodelRepositoryAPIAPIService) PatchSubmodelByIDValueOnly(ctx context
 		if common.IsErrNotFound(err) {
 			return newAPIErrorResponse(err, http.StatusNotFound, operation, fmt.Sprintf("SubmodelOrSubmodelElementNotFound-%s", decodedIdentifier)), nil
 		}
-		_, _ = fmt.Println(err)
+		slog.ErrorContext(ctx, "submodel value update failed", "error.code", "SMREPO-PATCHVALUE-UPDATE", "error", err)
 		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "InternalServerError"), nil
 	}
 	return gen.Response(http.StatusNoContent, nil), nil

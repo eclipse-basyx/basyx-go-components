@@ -30,6 +30,7 @@ package builder
 import (
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"sort"
 
 	"github.com/FriedJannik/aas-go-sdk/stringification"
@@ -115,7 +116,7 @@ func (b *ExtensionsBuilder) AddExtension(extensionDbID int64, name string, value
 			position:  position,
 		}
 	} else {
-		_, _ = fmt.Printf("[Warning] Extension with id '%d' already exists - skipping.", extensionDbID)
+		slog.Warn(fmt.Sprintf("[Warning] Extension with id '%d' already exists - skipping.", extensionDbID), "error.code", "BUILDER-ADDEXTENSION-LOG")
 	}
 	return b, nil
 }

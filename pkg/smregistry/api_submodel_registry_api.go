@@ -14,8 +14,9 @@ package smregistryopenapi
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
-	"log"
+	"log/slog"
 	"net/http"
 	"strings"
 	"time"
@@ -201,7 +202,7 @@ func (c *SubmodelRegistryAPIAPIController) QuerySubmodelDescriptors(w http.Respo
 		return
 	}
 	if err := EncodeJSONResponse(result.Body, &result.Code, w); err != nil {
-		log.Printf("🧩 [%s] Error in QuerySubmodelDescriptors: encoding response failed: %v", componentName, err)
+		slog.ErrorContext(r.Context(), fmt.Sprintf("🧩 [%s] Error in QuerySubmodelDescriptors: encoding response failed: %v", componentName, err), "error.code", "SMREGISTRY-QUERYSUBMODELDESCRIPTORS-LOG", "error", err)
 		c.errorHandler(w, r, err, nil)
 		return
 	}
@@ -211,7 +212,7 @@ func (c *SubmodelRegistryAPIAPIController) QuerySubmodelDescriptors(w http.Respo
 func (c *SubmodelRegistryAPIAPIController) GetAllSubmodelDescriptors(w http.ResponseWriter, r *http.Request) {
 	query, err := parseQuery(r.URL.RawQuery)
 	if err != nil {
-		log.Printf("🧩 [%s] Error in GetAllSubmodelDescriptors: parse query raw=%q: %v", componentName, r.URL.RawQuery, err)
+		slog.ErrorContext(r.Context(), fmt.Sprintf("🧩 [%s] Error in GetAllSubmodelDescriptors: parse query raw=%q: %v", componentName, r.URL.RawQuery, err), "error.code", "SMREGISTRY-GETALLSUBMODELDESCRIPTORS-LOG", "error", err)
 		result := common.NewErrorResponse(
 			err,
 			http.StatusBadRequest,
@@ -230,7 +231,7 @@ func (c *SubmodelRegistryAPIAPIController) GetAllSubmodelDescriptors(w http.Resp
 			WithMinimum[int32](1),
 		)
 		if err != nil {
-			log.Printf("🧩 [%s] Error in GetAllSubmodelDescriptors: parse limit=%q: %v", componentName, query.Get("limit"), err)
+			slog.ErrorContext(r.Context(), fmt.Sprintf("🧩 [%s] Error in GetAllSubmodelDescriptors: parse limit=%q: %v", componentName, query.Get("limit"), err), "error.code", "SMREGISTRY-GETALLSUBMODELDESCRIPTORS-LOG", "error", err)
 			result := common.NewErrorResponse(
 				err,
 				http.StatusBadRequest,
@@ -272,7 +273,7 @@ func (c *SubmodelRegistryAPIAPIController) GetAllSubmodelDescriptors(w http.Resp
 	result, err := c.service.GetAllSubmodelDescriptors(r.Context(), limitParam, cursorParam, createdFromParam, updatedFromParam)
 	// If an error occurred, encode the error with the status code
 	if err != nil {
-		log.Printf("🧩 [%s] Error in GetAllSubmodelDescriptors: service failure (limit=%d cursor=%q): %v", componentName, limitParam, cursorParam, err)
+		slog.ErrorContext(r.Context(), fmt.Sprintf("🧩 [%s] Error in GetAllSubmodelDescriptors: service failure (limit=%d cursor=%q): %v", componentName, limitParam, cursorParam, err), "error.code", "SMREGISTRY-GETALLSUBMODELDESCRIPTORS-LOG", "error", err)
 		c.errorHandler(w, r, err, &result)
 		return
 	}
@@ -286,7 +287,7 @@ func (c *SubmodelRegistryAPIAPIController) PostSubmodelDescriptor(w http.Respons
 	d := json.NewDecoder(r.Body)
 	d.DisallowUnknownFields()
 	if err := d.Decode(&submodelDescriptorParam); err != nil {
-		log.Printf("🧩 [%s] Error in PostSubmodelDescriptor: decode body: %v", componentName, err)
+		slog.ErrorContext(r.Context(), fmt.Sprintf("🧩 [%s] Error in PostSubmodelDescriptor: decode body: %v", componentName, err), "error.code", "SMREGISTRY-POSTSUBMODELDESCRIPTOR-LOG", "error", err)
 		result := common.NewErrorResponse(
 			err,
 			http.StatusBadRequest,
@@ -298,7 +299,7 @@ func (c *SubmodelRegistryAPIAPIController) PostSubmodelDescriptor(w http.Respons
 		return
 	}
 	if err := model.AssertSubmodelDescriptorRequired(submodelDescriptorParam); err != nil {
-		log.Printf("🧩 [%s] Error in PostSubmodelDescriptor: required validation failed: %v", componentName, err)
+		slog.ErrorContext(r.Context(), fmt.Sprintf("🧩 [%s] Error in PostSubmodelDescriptor: required validation failed: %v", componentName, err), "error.code", "SMREGISTRY-POSTSUBMODELDESCRIPTOR-LOG", "error", err)
 		result := common.NewErrorResponse(
 			err,
 			http.StatusBadRequest,
@@ -310,7 +311,7 @@ func (c *SubmodelRegistryAPIAPIController) PostSubmodelDescriptor(w http.Respons
 		return
 	}
 	if err := model.AssertSubmodelDescriptorConstraints(submodelDescriptorParam); err != nil {
-		log.Printf("🧩 [%s] Error in PostSubmodelDescriptor: constraints validation failed: %v", componentName, err)
+		slog.ErrorContext(r.Context(), fmt.Sprintf("🧩 [%s] Error in PostSubmodelDescriptor: constraints validation failed: %v", componentName, err), "error.code", "SMREGISTRY-POSTSUBMODELDESCRIPTOR-LOG", "error", err)
 		result := common.NewErrorResponse(
 			err,
 			http.StatusBadRequest,
@@ -324,7 +325,7 @@ func (c *SubmodelRegistryAPIAPIController) PostSubmodelDescriptor(w http.Respons
 	result, err := c.service.PostSubmodelDescriptor(r.Context(), submodelDescriptorParam)
 	// If an error occurred, encode the error with the status code
 	if err != nil {
-		log.Printf("🧩 [%s] Error in PostSubmodelDescriptor: service failure (bodyId=%q): %v", componentName, submodelDescriptorParam.Id, err)
+		slog.ErrorContext(r.Context(), fmt.Sprintf("🧩 [%s] Error in PostSubmodelDescriptor: service failure (bodyId=%q): %v", componentName, submodelDescriptorParam.Id, err), "error.code", "SMREGISTRY-POSTSUBMODELDESCRIPTOR-LOG", "error", err)
 		c.errorHandler(w, r, err, &result)
 		return
 	}
@@ -342,7 +343,7 @@ func (c *SubmodelRegistryAPIAPIController) PostSubmodelDescriptor(w http.Respons
 func (c *SubmodelRegistryAPIAPIController) GetSubmodelDescriptorById(w http.ResponseWriter, r *http.Request) {
 	submodelIdentifierParam := chi.URLParam(r, "submodelIdentifier")
 	if submodelIdentifierParam == "" {
-		log.Printf("🧩 [%s] Error in GetSubmodelDescriptorById: missing path parameter submodelIdentifier", componentName)
+		slog.ErrorContext(r.Context(), fmt.Sprintf("🧩 [%s] Error in GetSubmodelDescriptorById: missing path parameter submodelIdentifier", componentName), "error.code", "SMREGISTRY-GETSUBMODELDESCRIPTORBYID-LOG")
 		result := common.NewErrorResponse(
 			common.NewErrBadRequest("Missing path parameter 'submodelIdentifier'"),
 			http.StatusBadRequest,
@@ -356,7 +357,7 @@ func (c *SubmodelRegistryAPIAPIController) GetSubmodelDescriptorById(w http.Resp
 	result, err := c.service.GetSubmodelDescriptorById(r.Context(), submodelIdentifierParam)
 	// If an error occurred, encode the error with the status code
 	if err != nil {
-		log.Printf("🧩 [%s] Error in GetSubmodelDescriptorById: service failure (submodelIdentifier=%q): %v", componentName, submodelIdentifierParam, err)
+		slog.ErrorContext(r.Context(), fmt.Sprintf("🧩 [%s] Error in GetSubmodelDescriptorById: service failure (submodelIdentifier=%q): %v", componentName, submodelIdentifierParam, err), "error.code", "SMREGISTRY-GETSUBMODELDESCRIPTORBYID-LOG", "error", err)
 		c.errorHandler(w, r, err, &result)
 		return
 	}
@@ -368,7 +369,7 @@ func (c *SubmodelRegistryAPIAPIController) GetSubmodelDescriptorById(w http.Resp
 func (c *SubmodelRegistryAPIAPIController) PutSubmodelDescriptorById(w http.ResponseWriter, r *http.Request) {
 	submodelIdentifierParam := chi.URLParam(r, "submodelIdentifier")
 	if submodelIdentifierParam == "" {
-		log.Printf("🧩 [%s] Error in PutSubmodelDescriptorById: missing path parameter submodelIdentifier", componentName)
+		slog.ErrorContext(r.Context(), fmt.Sprintf("🧩 [%s] Error in PutSubmodelDescriptorById: missing path parameter submodelIdentifier", componentName), "error.code", "SMREGISTRY-PUTSUBMODELDESCRIPTORBYID-LOG")
 		result := common.NewErrorResponse(
 			common.NewErrBadRequest("Missing path parameter 'submodelIdentifier'"),
 			http.StatusBadRequest,
@@ -383,7 +384,7 @@ func (c *SubmodelRegistryAPIAPIController) PutSubmodelDescriptorById(w http.Resp
 	d := json.NewDecoder(r.Body)
 	d.DisallowUnknownFields()
 	if err := d.Decode(&submodelDescriptorParam); err != nil {
-		log.Printf("🧩 [%s] Error in PutSubmodelDescriptorById: decode body: %v", componentName, err)
+		slog.ErrorContext(r.Context(), fmt.Sprintf("🧩 [%s] Error in PutSubmodelDescriptorById: decode body: %v", componentName, err), "error.code", "SMREGISTRY-PUTSUBMODELDESCRIPTORBYID-LOG", "error", err)
 		result := common.NewErrorResponse(
 			err,
 			http.StatusBadRequest,
@@ -395,7 +396,7 @@ func (c *SubmodelRegistryAPIAPIController) PutSubmodelDescriptorById(w http.Resp
 		return
 	}
 	if err := model.AssertSubmodelDescriptorRequired(submodelDescriptorParam); err != nil {
-		log.Printf("🧩 [%s] Error in PutSubmodelDescriptorById: required validation failed: %v", componentName, err)
+		slog.ErrorContext(r.Context(), fmt.Sprintf("🧩 [%s] Error in PutSubmodelDescriptorById: required validation failed: %v", componentName, err), "error.code", "SMREGISTRY-PUTSUBMODELDESCRIPTORBYID-LOG", "error", err)
 		result := common.NewErrorResponse(
 			err,
 			http.StatusBadRequest,
@@ -407,7 +408,7 @@ func (c *SubmodelRegistryAPIAPIController) PutSubmodelDescriptorById(w http.Resp
 		return
 	}
 	if err := model.AssertSubmodelDescriptorConstraints(submodelDescriptorParam); err != nil {
-		log.Printf("🧩 [%s] Error in PutSubmodelDescriptorById: constraints validation failed: %v", componentName, err)
+		slog.ErrorContext(r.Context(), fmt.Sprintf("🧩 [%s] Error in PutSubmodelDescriptorById: constraints validation failed: %v", componentName, err), "error.code", "SMREGISTRY-PUTSUBMODELDESCRIPTORBYID-LOG", "error", err)
 		result := common.NewErrorResponse(
 			err,
 			http.StatusBadRequest,
@@ -421,7 +422,7 @@ func (c *SubmodelRegistryAPIAPIController) PutSubmodelDescriptorById(w http.Resp
 	result, err := c.service.PutSubmodelDescriptorById(r.Context(), submodelIdentifierParam, submodelDescriptorParam)
 	// If an error occurred, encode the error with the status code
 	if err != nil {
-		log.Printf("🧩 [%s] Error in PutSubmodelDescriptorById: service failure (submodelIdentifier=%q bodyId=%q): %v", componentName, submodelIdentifierParam, submodelDescriptorParam.Id, err)
+		slog.ErrorContext(r.Context(), fmt.Sprintf("🧩 [%s] Error in PutSubmodelDescriptorById: service failure (submodelIdentifier=%q bodyId=%q): %v", componentName, submodelIdentifierParam, submodelDescriptorParam.Id, err), "error.code", "SMREGISTRY-PUTSUBMODELDESCRIPTORBYID-LOG", "error", err)
 		c.errorHandler(w, r, err, &result)
 		return
 	}
@@ -439,7 +440,7 @@ func (c *SubmodelRegistryAPIAPIController) PutSubmodelDescriptorById(w http.Resp
 func (c *SubmodelRegistryAPIAPIController) DeleteSubmodelDescriptorById(w http.ResponseWriter, r *http.Request) {
 	submodelIdentifierParam := chi.URLParam(r, "submodelIdentifier")
 	if submodelIdentifierParam == "" {
-		log.Printf("🧩 [%s] Error in DeleteSubmodelDescriptorById: missing path parameter submodelIdentifier", componentName)
+		slog.ErrorContext(r.Context(), fmt.Sprintf("🧩 [%s] Error in DeleteSubmodelDescriptorById: missing path parameter submodelIdentifier", componentName), "error.code", "SMREGISTRY-DELETESUBMODELDESCRIPTORBYID-LOG")
 		result := common.NewErrorResponse(
 			common.NewErrBadRequest("Missing path parameter 'submodelIdentifier'"),
 			http.StatusBadRequest,
@@ -453,7 +454,7 @@ func (c *SubmodelRegistryAPIAPIController) DeleteSubmodelDescriptorById(w http.R
 	result, err := c.service.DeleteSubmodelDescriptorById(r.Context(), submodelIdentifierParam)
 	// If an error occurred, encode the error with the status code
 	if err != nil {
-		log.Printf("🧩 [%s] Error in DeleteSubmodelDescriptorById: service failure (submodelIdentifier=%q): %v", componentName, submodelIdentifierParam, err)
+		slog.ErrorContext(r.Context(), fmt.Sprintf("🧩 [%s] Error in DeleteSubmodelDescriptorById: service failure (submodelIdentifier=%q): %v", componentName, submodelIdentifierParam, err), "error.code", "SMREGISTRY-DELETESUBMODELDESCRIPTORBYID-LOG", "error", err)
 		c.errorHandler(w, r, err, &result)
 		return
 	}

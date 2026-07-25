@@ -11,7 +11,7 @@
 package openapi
 
 import (
-	"log"
+	"log/slog"
 	"net/http"
 	"time"
 )
@@ -22,12 +22,13 @@ func Logger(inner http.Handler, name string) http.Handler {
 
 		inner.ServeHTTP(w, r)
 
-		log.Printf(
-			"%s %s %s %s",
-			r.Method,
-			r.RequestURI,
-			name,
-			time.Since(start),
+		slog.InfoContext(
+			r.Context(),
+			"HTTP request completed",
+			"http.request.method", r.Method,
+			"url.path", r.URL.Path,
+			"handler.name", name,
+			"duration", time.Since(start),
 		)
 	})
 }

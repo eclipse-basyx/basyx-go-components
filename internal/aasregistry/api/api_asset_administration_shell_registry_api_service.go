@@ -38,7 +38,8 @@ package aasregistryapi
 import (
 	"context"
 	"errors"
-	"log"
+	"fmt"
+	"log/slog"
 	"net/http"
 	"strings"
 	"time"
@@ -96,7 +97,7 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) GetAllAssetAdministratio
 		aasds, nextCursor, err = filterAssetAdministrationShellDescriptorPages(limit, internalCursor, fetch, assetIDFilter)
 	}
 	if err != nil {
-		log.Printf("🧩 [%s] Error in GetAllAssetAdministrationShellDescriptors: list failed (limit=%d cursor=%q assetKind=%q assetType=%q): %v", componentName, limit, internalCursor, string(assetKind), assetType, err)
+		slog.ErrorContext(ctx, fmt.Sprintf("🧩 [%s] Error in GetAllAssetAdministrationShellDescriptors: list failed (limit=%d cursor=%q assetKind=%q assetType=%q): %v", componentName, limit, internalCursor, string(assetKind), assetType, err), "error.code", "API-GETALLASSETADMINISTRATIONSHELLDESCRIPTORS-LOG", "error", err)
 		switch {
 		case common.IsErrBadRequest(err):
 			return common.NewErrorResponse(
@@ -112,7 +113,7 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) GetAllAssetAdministratio
 	for _, aasd := range aasds {
 		j, toJsonErr := aasd.ToJsonable()
 		if toJsonErr != nil {
-			log.Printf("🧩 [%s] Error in GetAllAssetAdministrationShellDescriptors: ToJsonable failed (aasId=%q): %v", componentName, aasd.Id, toJsonErr)
+			slog.ErrorContext(ctx, fmt.Sprintf("🧩 [%s] Error in GetAllAssetAdministrationShellDescriptors: ToJsonable failed (aasId=%q): %v", componentName, aasd.Id, toJsonErr), "error.code", "API-GETALLASSETADMINISTRATIONSHELLDESCRIPTORS-LOG", "error", toJsonErr)
 			return common.NewErrorResponse(
 				toJsonErr, http.StatusInternalServerError, componentName, "GetAllAssetAdministrationShellDescriptors", "Unhandled-ToJsonable",
 			), toJsonErr
@@ -179,7 +180,7 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) PostAssetAdministrationS
 		)
 		if precheckErr != nil {
 			statusCode, step := createprecheck.ResponseStatus(precheckErr)
-			log.Printf("🧩 [%s] Error in PostAssetAdministrationShellDescriptor: create precheck failed (aasId=%q): %v", componentName, assetAdministrationShellDescriptor.Id, precheckErr)
+			slog.ErrorContext(ctx, fmt.Sprintf("🧩 [%s] Error in PostAssetAdministrationShellDescriptor: create precheck failed (aasId=%q): %v", componentName, assetAdministrationShellDescriptor.Id, precheckErr), "error.code", "API-POSTASSETADMINISTRATIONSHELLDESCRIPTOR-LOG", "error", precheckErr)
 			return common.NewErrorResponse(
 				precheckErr, statusCode, componentName, "PostAssetAdministrationShellDescriptor", step,
 			), createprecheck.ReturnError(precheckErr)
@@ -190,23 +191,23 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) PostAssetAdministrationS
 	if err != nil {
 		switch {
 		case common.IsErrBadRequest(err):
-			log.Printf("🧩 [%s] Error in InsertAdministrationShellDescriptor: bad request (aasId=%q): %v", componentName, assetAdministrationShellDescriptor.Id, err)
+			slog.ErrorContext(ctx, fmt.Sprintf("🧩 [%s] Error in InsertAdministrationShellDescriptor: bad request (aasId=%q): %v", componentName, assetAdministrationShellDescriptor.Id, err), "error.code", "API-POSTASSETADMINISTRATIONSHELLDESCRIPTOR-LOG", "error", err)
 			return common.NewErrorResponse(
 				err, http.StatusBadRequest, componentName, "InsertAdministrationShellDescriptor", "BadRequest",
 			), nil
 		case common.IsErrConflict(err):
-			log.Printf("🧩 [%s] Error in InsertAdministrationShellDescriptor: conflict (aasId=%q): %v", componentName, assetAdministrationShellDescriptor.Id, err)
+			slog.ErrorContext(ctx, fmt.Sprintf("🧩 [%s] Error in InsertAdministrationShellDescriptor: conflict (aasId=%q): %v", componentName, assetAdministrationShellDescriptor.Id, err), "error.code", "API-POSTASSETADMINISTRATIONSHELLDESCRIPTOR-LOG", "error", err)
 			return common.NewErrorResponse(
 				err, http.StatusConflict, componentName, "InsertAdministrationShellDescriptor", "Conflict",
 			), nil
 		case common.IsErrNotFound(err), common.IsErrDenied(err):
 			deniedErr := common.NewErrDenied("AAS Descriptor access not allowed")
-			log.Printf("🧩 [%s] Error in InsertAdministrationShellDescriptor: not allowed (aasId=%q): %v", componentName, assetAdministrationShellDescriptor.Id, err)
+			slog.ErrorContext(ctx, fmt.Sprintf("🧩 [%s] Error in InsertAdministrationShellDescriptor: not allowed (aasId=%q): %v", componentName, assetAdministrationShellDescriptor.Id, err), "error.code", "API-POSTASSETADMINISTRATIONSHELLDESCRIPTOR-LOG", "error", err)
 			return common.NewErrorResponse(
 				deniedErr, http.StatusForbidden, componentName, "InsertAdministrationShellDescriptor", "DENIED",
 			), nil
 		default:
-			log.Printf("🧩 [%s] Error in InsertAdministrationShellDescriptor: internal (aasId=%q): %v", componentName, assetAdministrationShellDescriptor.Id, err)
+			slog.ErrorContext(ctx, fmt.Sprintf("🧩 [%s] Error in InsertAdministrationShellDescriptor: internal (aasId=%q): %v", componentName, assetAdministrationShellDescriptor.Id, err), "error.code", "API-POSTASSETADMINISTRATIONSHELLDESCRIPTOR-LOG", "error", err)
 			return common.NewErrorResponse(
 				err, http.StatusInternalServerError, componentName, "InsertAdministrationShellDescriptor", "Unhandled",
 			), err
@@ -215,7 +216,7 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) PostAssetAdministrationS
 
 	j, toJsonErr := result.ToJsonable()
 	if toJsonErr != nil {
-		log.Printf("🧩 [%s] Error in PostAssetAdministrationShellDescriptor: ToJsonable failed (aasId=%q): %v", componentName, result.Id, toJsonErr)
+		slog.ErrorContext(ctx, fmt.Sprintf("🧩 [%s] Error in PostAssetAdministrationShellDescriptor: ToJsonable failed (aasId=%q): %v", componentName, result.Id, toJsonErr), "error.code", "API-POSTASSETADMINISTRATIONSHELLDESCRIPTOR-LOG", "error", toJsonErr)
 		return common.NewErrorResponse(
 			toJsonErr, http.StatusInternalServerError, componentName, "PostAssetAdministrationShellDescriptor", "Unhandled-ToJsonable",
 		), toJsonErr
@@ -236,17 +237,17 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) GetAssetAdministrationSh
 	if err != nil {
 		switch {
 		case common.IsErrBadRequest(err):
-			log.Printf("🧩 [%s] Error in GetAssetAdministrationShellDescriptorById: bad request (aasId=%q): %v", componentName, decoded, err)
+			slog.ErrorContext(ctx, fmt.Sprintf("🧩 [%s] Error in GetAssetAdministrationShellDescriptorById: bad request (aasId=%q): %v", componentName, decoded, err), "error.code", "API-GETASSETADMINISTRATIONSHELLDESCRIPTORBYID-LOG", "error", err)
 			return common.NewErrorResponse(
 				err, http.StatusBadRequest, componentName, "GetAssetAdministrationShellDescriptorById", "BadRequest",
 			), nil
 		case common.IsErrNotFound(err):
-			log.Printf("🧩 [%s] Error in GetAssetAdministrationShellDescriptorById: not found (aasId=%q): %v", componentName, decoded, err)
+			slog.ErrorContext(ctx, fmt.Sprintf("🧩 [%s] Error in GetAssetAdministrationShellDescriptorById: not found (aasId=%q): %v", componentName, decoded, err), "error.code", "API-GETASSETADMINISTRATIONSHELLDESCRIPTORBYID-LOG", "error", err)
 			return common.NewErrorResponse(
 				err, http.StatusNotFound, componentName, "GetAssetAdministrationShellDescriptorById", "NotFound",
 			), nil
 		default:
-			log.Printf("🧩 [%s] Error in GetAssetAdministrationShellDescriptorById: internal (aasId=%q): %v", componentName, decoded, err)
+			slog.ErrorContext(ctx, fmt.Sprintf("🧩 [%s] Error in GetAssetAdministrationShellDescriptorById: internal (aasId=%q): %v", componentName, decoded, err), "error.code", "API-GETASSETADMINISTRATIONSHELLDESCRIPTORBYID-LOG", "error", err)
 			return common.NewErrorResponse(
 				err, http.StatusInternalServerError, componentName, "GetAssetAdministrationShellDescriptorById", "Unhandled",
 			), err
@@ -275,7 +276,7 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) PutAssetAdministrationSh
 
 	// Enforce id consistency with path
 	if strings.TrimSpace(assetAdministrationShellDescriptor.Id) == "" || assetAdministrationShellDescriptor.Id != decodedAAS {
-		log.Printf("🧩 [%s] Error in PutAssetAdministrationShellDescriptorById: body id is empty or does not match path id (body=%q path=%q)", componentName, assetAdministrationShellDescriptor.Id, decodedAAS)
+		slog.ErrorContext(ctx, fmt.Sprintf("🧩 [%s] Error in PutAssetAdministrationShellDescriptorById: body id is empty or does not match path id (body=%q path=%q)", componentName, assetAdministrationShellDescriptor.Id, decodedAAS), "error.code", "API-PUTASSETADMINISTRATIONSHELLDESCRIPTORBYID-LOG")
 		return common.NewErrorResponse(
 			errors.New("body id is empty or does not match path id"), http.StatusBadRequest, componentName, "PutAssetAdministrationShellDescriptorById", "BadRequest-IdMismatch",
 		), nil
@@ -289,7 +290,7 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) PutAssetAdministrationSh
 	}
 
 	if exists, chkErr := s.aasRegistryBackend.ExistsAASByID(auth.WithoutQueryFilter(ctx), assetAdministrationShellDescriptor.Id); chkErr != nil {
-		log.Printf("🧩 [%s] Error in PutAssetAdministrationShellDescriptorById: existence check failed (aasId=%q): %v", componentName, assetAdministrationShellDescriptor.Id, chkErr)
+		slog.ErrorContext(ctx, fmt.Sprintf("🧩 [%s] Error in PutAssetAdministrationShellDescriptorById: existence check failed (aasId=%q): %v", componentName, assetAdministrationShellDescriptor.Id, chkErr), "error.code", "API-PUTASSETADMINISTRATIONSHELLDESCRIPTORBYID-LOG", "error", chkErr)
 		return common.NewErrorResponse(
 			chkErr, http.StatusInternalServerError, componentName, "PutAssetAdministrationShellDescriptorById", "Unhandled-Precheck",
 		), chkErr
@@ -302,23 +303,23 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) PutAssetAdministrationSh
 		if err != nil {
 			switch {
 			case common.IsErrBadRequest(err):
-				log.Printf("🧩 [%s] Error in InsertAdministrationShellDescriptor: bad request (aasId=%q): %v", componentName, assetAdministrationShellDescriptor.Id, err)
+				slog.ErrorContext(ctx, fmt.Sprintf("🧩 [%s] Error in InsertAdministrationShellDescriptor: bad request (aasId=%q): %v", componentName, assetAdministrationShellDescriptor.Id, err), "error.code", "API-PUTASSETADMINISTRATIONSHELLDESCRIPTORBYID-LOG", "error", err)
 				return common.NewErrorResponse(
 					err, http.StatusBadRequest, componentName, "InsertAdministrationShellDescriptor", "BadRequest",
 				), nil
 			case common.IsErrConflict(err):
-				log.Printf("🧩 [%s] Error in InsertAdministrationShellDescriptor: conflict (aasId=%q): %v", componentName, assetAdministrationShellDescriptor.Id, err)
+				slog.ErrorContext(ctx, fmt.Sprintf("🧩 [%s] Error in InsertAdministrationShellDescriptor: conflict (aasId=%q): %v", componentName, assetAdministrationShellDescriptor.Id, err), "error.code", "API-PUTASSETADMINISTRATIONSHELLDESCRIPTORBYID-LOG", "error", err)
 				return common.NewErrorResponse(
 					err, http.StatusConflict, componentName, "InsertAdministrationShellDescriptor", "Conflict",
 				), nil
 			case common.IsErrNotFound(err), common.IsErrDenied(err):
 				deniedErr := common.NewErrDenied("AAS Descriptor access not allowed")
-				log.Printf("🧩 [%s] Error in InsertAdministrationShellDescriptor: not allowed (aasId=%q): %v", componentName, assetAdministrationShellDescriptor.Id, err)
+				slog.ErrorContext(ctx, fmt.Sprintf("🧩 [%s] Error in InsertAdministrationShellDescriptor: not allowed (aasId=%q): %v", componentName, assetAdministrationShellDescriptor.Id, err), "error.code", "API-PUTASSETADMINISTRATIONSHELLDESCRIPTORBYID-LOG", "error", err)
 				return common.NewErrorResponse(
 					deniedErr, http.StatusForbidden, componentName, "InsertAdministrationShellDescriptor", "DENIED",
 				), nil
 			default:
-				log.Printf("🧩 [%s] Error in InsertAdministrationShellDescriptor: internal (aasId=%q): %v", componentName, assetAdministrationShellDescriptor.Id, err)
+				slog.ErrorContext(ctx, fmt.Sprintf("🧩 [%s] Error in InsertAdministrationShellDescriptor: internal (aasId=%q): %v", componentName, assetAdministrationShellDescriptor.Id, err), "error.code", "API-PUTASSETADMINISTRATIONSHELLDESCRIPTORBYID-LOG", "error", err)
 				return common.NewErrorResponse(
 					err, http.StatusInternalServerError, componentName, "InsertAdministrationShellDescriptor", "Unhandled",
 				), err
@@ -326,7 +327,7 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) PutAssetAdministrationSh
 		}
 		j, toJsonErr := result.ToJsonable()
 		if toJsonErr != nil {
-			log.Printf("🧩 [%s] Error in PostAssetAdministrationShellDescriptor: ToJsonable failed (aasId=%q): %v", componentName, result.Id, toJsonErr)
+			slog.ErrorContext(ctx, fmt.Sprintf("🧩 [%s] Error in PostAssetAdministrationShellDescriptor: ToJsonable failed (aasId=%q): %v", componentName, result.Id, toJsonErr), "error.code", "API-PUTASSETADMINISTRATIONSHELLDESCRIPTORBYID-LOG", "error", toJsonErr)
 			return common.NewErrorResponse(
 				toJsonErr, http.StatusInternalServerError, componentName, "PostAssetAdministrationShellDescriptor", "Unhandled-ToJsonable",
 			), toJsonErr
@@ -343,23 +344,23 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) PutAssetAdministrationSh
 	if err != nil {
 		switch {
 		case common.IsErrBadRequest(err):
-			log.Printf("🧩 [%s] Error in PutAssetAdministrationShellDescriptorById: bad request (aasId=%q): %v", componentName, decodedAAS, err)
+			slog.ErrorContext(ctx, fmt.Sprintf("🧩 [%s] Error in PutAssetAdministrationShellDescriptorById: bad request (aasId=%q): %v", componentName, decodedAAS, err), "error.code", "API-PUTASSETADMINISTRATIONSHELLDESCRIPTORBYID-LOG", "error", err)
 			return common.NewErrorResponse(
 				err, http.StatusBadRequest, componentName, "PutAssetAdministrationShellDescriptorById", "BadRequest",
 			), nil
 		case common.IsErrConflict(err):
-			log.Printf("🧩 [%s] Error in PutAssetAdministrationShellDescriptorById: conflict (aasId=%q): %v", componentName, decodedAAS, err)
+			slog.ErrorContext(ctx, fmt.Sprintf("🧩 [%s] Error in PutAssetAdministrationShellDescriptorById: conflict (aasId=%q): %v", componentName, decodedAAS, err), "error.code", "API-PUTASSETADMINISTRATIONSHELLDESCRIPTORBYID-LOG", "error", err)
 			return common.NewErrorResponse(
 				err, http.StatusConflict, componentName, "PutAssetAdministrationShellDescriptorById", "Conflict",
 			), nil
 		case common.IsErrNotFound(err):
 			deniedErr := common.NewErrDenied("AAS Descriptor access not allowed")
-			log.Printf("🧩 [%s] Error in PutAssetAdministrationShellDescriptorById: not allowed (aasId=%q): %v", componentName, assetAdministrationShellDescriptor.Id, err)
+			slog.ErrorContext(ctx, fmt.Sprintf("🧩 [%s] Error in PutAssetAdministrationShellDescriptorById: not allowed (aasId=%q): %v", componentName, assetAdministrationShellDescriptor.Id, err), "error.code", "API-PUTASSETADMINISTRATIONSHELLDESCRIPTORBYID-LOG", "error", err)
 			return common.NewErrorResponse(
 				deniedErr, http.StatusForbidden, componentName, "PutAssetAdministrationShellDescriptorById", "DENIED",
 			), nil
 		default:
-			log.Printf("🧩 [%s] Error in PutAssetAdministrationShellDescriptorById: internal (aasId=%q): %v", componentName, decodedAAS, err)
+			slog.ErrorContext(ctx, fmt.Sprintf("🧩 [%s] Error in PutAssetAdministrationShellDescriptorById: internal (aasId=%q): %v", componentName, decodedAAS, err), "error.code", "API-PUTASSETADMINISTRATIONSHELLDESCRIPTORBYID-LOG", "error", err)
 			return common.NewErrorResponse(
 				err, http.StatusInternalServerError, componentName, "PutAssetAdministrationShellDescriptorById", "Unhandled-Replace",
 			), err
@@ -382,17 +383,17 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) DeleteAssetAdministratio
 	if err := s.aasRegistryBackend.DeleteAssetAdministrationShellDescriptorByID(ctx, decoded); err != nil {
 		switch {
 		case common.IsErrNotFound(err):
-			log.Printf("🧩 [%s] Error in DeleteAssetAdministrationShellDescriptorById: not found (aasId=%q): %v", componentName, decoded, err)
+			slog.ErrorContext(ctx, fmt.Sprintf("🧩 [%s] Error in DeleteAssetAdministrationShellDescriptorById: not found (aasId=%q): %v", componentName, decoded, err), "error.code", "API-DELETEASSETADMINISTRATIONSHELLDESCRIPTORBYID-LOG", "error", err)
 			return common.NewErrorResponse(
 				err, http.StatusNotFound, componentName, "DeleteAssetAdministrationShellDescriptorById", "NotFound",
 			), nil
 		case common.IsErrBadRequest(err):
-			log.Printf("🧩 [%s] Error in DeleteAssetAdministrationShellDescriptorById: bad request (aasId=%q): %v", componentName, decoded, err)
+			slog.ErrorContext(ctx, fmt.Sprintf("🧩 [%s] Error in DeleteAssetAdministrationShellDescriptorById: bad request (aasId=%q): %v", componentName, decoded, err), "error.code", "API-DELETEASSETADMINISTRATIONSHELLDESCRIPTORBYID-LOG", "error", err)
 			return common.NewErrorResponse(
 				err, http.StatusBadRequest, componentName, "DeleteAssetAdministrationShellDescriptorById", "BadRequest",
 			), nil
 		default:
-			log.Printf("🧩 [%s] Error in DeleteAssetAdministrationShellDescriptorById: internal (aasId=%q): %v", componentName, decoded, err)
+			slog.ErrorContext(ctx, fmt.Sprintf("🧩 [%s] Error in DeleteAssetAdministrationShellDescriptorById: internal (aasId=%q): %v", componentName, decoded, err), "error.code", "API-DELETEASSETADMINISTRATIONSHELLDESCRIPTORBYID-LOG", "error", err)
 			return common.NewErrorResponse(
 				err, http.StatusInternalServerError, componentName, "DeleteAssetAdministrationShellDescriptorById", "Unhandled",
 			), err
@@ -412,13 +413,13 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) GetAllSubmodelDescriptor
 
 	// Check AAS existence
 	if exists, chkErr := s.aasRegistryBackend.ExistsAASByID(ctx, decodedAAS); chkErr != nil {
-		log.Printf("🧩 [%s] Error in GetAllSubmodelDescriptorsThroughSuperpath: existence check failed (aasId=%q): %v", componentName, decodedAAS, chkErr)
+		slog.ErrorContext(ctx, fmt.Sprintf("🧩 [%s] Error in GetAllSubmodelDescriptorsThroughSuperpath: existence check failed (aasId=%q): %v", componentName, decodedAAS, chkErr), "error.code", "API-GETALLSUBMODELDESCRIPTORSTHROUGHSUPERPATH-LOG", "error", chkErr)
 		return common.NewErrorResponse(
 			chkErr, http.StatusInternalServerError, componentName, "GetAllSubmodelDescriptorsThroughSuperpath", "Unhandled-ExistenceCheck",
 		), chkErr
 	} else if !exists {
 		e := common.NewErrNotFound("AAS not found")
-		log.Printf("🧩 [%s] Error in GetAllSubmodelDescriptorsThroughSuperpath: not found (aasId=%q): %v", componentName, decodedAAS, e)
+		slog.ErrorContext(ctx, fmt.Sprintf("🧩 [%s] Error in GetAllSubmodelDescriptorsThroughSuperpath: not found (aasId=%q): %v", componentName, decodedAAS, e), "error.code", "API-GETALLSUBMODELDESCRIPTORSTHROUGHSUPERPATH-LOG")
 		return common.NewErrorResponse(
 			e, http.StatusNotFound, componentName, "GetAllSubmodelDescriptorsThroughSuperpath", "NotFound",
 		), nil
@@ -433,7 +434,7 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) GetAllSubmodelDescriptor
 	// Read submodel descriptors via persistence layer
 	smds, nextCursor, err := s.aasRegistryBackend.ListSubmodelDescriptorsForAAS(ctx, decodedAAS, limit, internalCursor)
 	if err != nil {
-		log.Printf("🧩 [%s] Error in GetAllSubmodelDescriptorsThroughSuperpath: list failed (aasId=%q limit=%d cursor=%q): %v", componentName, decodedAAS, limit, internalCursor, err)
+		slog.ErrorContext(ctx, fmt.Sprintf("🧩 [%s] Error in GetAllSubmodelDescriptorsThroughSuperpath: list failed (aasId=%q limit=%d cursor=%q): %v", componentName, decodedAAS, limit, internalCursor, err), "error.code", "API-GETALLSUBMODELDESCRIPTORSTHROUGHSUPERPATH-LOG", "error", err)
 		if common.IsErrBadRequest(err) {
 			return common.NewErrorResponse(
 				err, http.StatusBadRequest, componentName, "GetAllSubmodelDescriptorsThroughSuperpath", "BadRequest",
@@ -448,7 +449,7 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) GetAllSubmodelDescriptor
 	for _, smd := range smds {
 		j, toJsonErr := smd.ToJsonable()
 		if toJsonErr != nil {
-			log.Printf("🧩 [%s] Error in GetAllSubmodelDescriptorsThroughSuperpath: ToJsonable failed (aasId=%q submodelId=%q): %v", componentName, decodedAAS, smd.Id, toJsonErr)
+			slog.ErrorContext(ctx, fmt.Sprintf("🧩 [%s] Error in GetAllSubmodelDescriptorsThroughSuperpath: ToJsonable failed (aasId=%q submodelId=%q): %v", componentName, decodedAAS, smd.Id, toJsonErr), "error.code", "API-GETALLSUBMODELDESCRIPTORSTHROUGHSUPERPATH-LOG", "error", toJsonErr)
 			return common.NewErrorResponse(
 				toJsonErr, http.StatusInternalServerError, componentName, "GetAllSubmodelDescriptorsThroughSuperpath", "Unhandled-ToJsonable",
 			), toJsonErr
@@ -482,7 +483,7 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) PostSubmodelDescriptorTh
 		)
 		if precheckErr != nil {
 			statusCode, step := createprecheck.ResponseStatus(precheckErr)
-			log.Printf("🧩 [%s] Error in PostSubmodelDescriptorThroughSuperpath: create precheck failed (aasId=%q submodelId=%q): %v", componentName, decodedAAS, submodelDescriptor.Id, precheckErr)
+			slog.ErrorContext(ctx, fmt.Sprintf("🧩 [%s] Error in PostSubmodelDescriptorThroughSuperpath: create precheck failed (aasId=%q submodelId=%q): %v", componentName, decodedAAS, submodelDescriptor.Id, precheckErr), "error.code", "API-POSTSUBMODELDESCRIPTORTHROUGHSUPERPATH-LOG", "error", precheckErr)
 			return common.NewErrorResponse(
 				precheckErr, statusCode, componentName, "PostSubmodelDescriptorThroughSuperpath", step,
 			), createprecheck.ReturnError(precheckErr)
@@ -494,27 +495,27 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) PostSubmodelDescriptorTh
 	if err != nil {
 		switch {
 		case common.IsErrNotFound(err):
-			log.Printf("🧩 [%s] Error in PostSubmodelDescriptorThroughSuperpath: not found (aasId=%q submodelId=%q): %v", componentName, decodedAAS, submodelDescriptor.Id, err)
+			slog.ErrorContext(ctx, fmt.Sprintf("🧩 [%s] Error in PostSubmodelDescriptorThroughSuperpath: not found (aasId=%q submodelId=%q): %v", componentName, decodedAAS, submodelDescriptor.Id, err), "error.code", "API-POSTSUBMODELDESCRIPTORTHROUGHSUPERPATH-LOG", "error", err)
 			return common.NewErrorResponse(
 				err, http.StatusNotFound, componentName, "PostSubmodelDescriptorThroughSuperpath", "NotFound",
 			), nil
 		case common.IsErrDenied(err):
-			log.Printf("🧩 [%s] Error in PostSubmodelDescriptorThroughSuperpath: denied (aasId=%q submodelId=%q): %v", componentName, decodedAAS, submodelDescriptor.Id, err)
+			slog.ErrorContext(ctx, fmt.Sprintf("🧩 [%s] Error in PostSubmodelDescriptorThroughSuperpath: denied (aasId=%q submodelId=%q): %v", componentName, decodedAAS, submodelDescriptor.Id, err), "error.code", "API-POSTSUBMODELDESCRIPTORTHROUGHSUPERPATH-LOG", "error", err)
 			return common.NewErrorResponse(
 				err, http.StatusForbidden, componentName, "PostSubmodelDescriptorThroughSuperpath", "Denied",
 			), nil
 		case common.IsErrBadRequest(err):
-			log.Printf("🧩 [%s] Error in PostSubmodelDescriptorThroughSuperpath: bad request (aasId=%q submodelId=%q): %v", componentName, decodedAAS, submodelDescriptor.Id, err)
+			slog.ErrorContext(ctx, fmt.Sprintf("🧩 [%s] Error in PostSubmodelDescriptorThroughSuperpath: bad request (aasId=%q submodelId=%q): %v", componentName, decodedAAS, submodelDescriptor.Id, err), "error.code", "API-POSTSUBMODELDESCRIPTORTHROUGHSUPERPATH-LOG", "error", err)
 			return common.NewErrorResponse(
 				err, http.StatusBadRequest, componentName, "PostSubmodelDescriptorThroughSuperpath", "BadRequest",
 			), nil
 		case common.IsErrConflict(err):
-			log.Printf("🧩 [%s] Error in PostSubmodelDescriptorThroughSuperpath: conflict (aasId=%q submodelId=%q): %v", componentName, decodedAAS, submodelDescriptor.Id, err)
+			slog.ErrorContext(ctx, fmt.Sprintf("🧩 [%s] Error in PostSubmodelDescriptorThroughSuperpath: conflict (aasId=%q submodelId=%q): %v", componentName, decodedAAS, submodelDescriptor.Id, err), "error.code", "API-POSTSUBMODELDESCRIPTORTHROUGHSUPERPATH-LOG", "error", err)
 			return common.NewErrorResponse(
 				err, http.StatusConflict, componentName, "PostSubmodelDescriptorThroughSuperpath", "Conflict",
 			), nil
 		default:
-			log.Printf("🧩 [%s] Error in PostSubmodelDescriptorThroughSuperpath: internal (aasId=%q submodelId=%q): %v", componentName, decodedAAS, submodelDescriptor.Id, err)
+			slog.ErrorContext(ctx, fmt.Sprintf("🧩 [%s] Error in PostSubmodelDescriptorThroughSuperpath: internal (aasId=%q submodelId=%q): %v", componentName, decodedAAS, submodelDescriptor.Id, err), "error.code", "API-POSTSUBMODELDESCRIPTORTHROUGHSUPERPATH-LOG", "error", err)
 			return common.NewErrorResponse(
 				err, http.StatusInternalServerError, componentName, "PostSubmodelDescriptorThroughSuperpath", "Unhandled",
 			), err
@@ -523,7 +524,7 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) PostSubmodelDescriptorTh
 
 	jsonable, toJsonErr := result.ToJsonable()
 	if toJsonErr != nil {
-		log.Printf("🧩 [%s] Error in PostSubmodelDescriptorThroughSuperpath: ToJsonable failed (aasId=%q submodelId=%q): %v", componentName, decodedAAS, result.Id, toJsonErr)
+		slog.ErrorContext(ctx, fmt.Sprintf("🧩 [%s] Error in PostSubmodelDescriptorThroughSuperpath: ToJsonable failed (aasId=%q submodelId=%q): %v", componentName, decodedAAS, result.Id, toJsonErr), "error.code", "API-POSTSUBMODELDESCRIPTORTHROUGHSUPERPATH-LOG", "error", toJsonErr)
 
 		return common.NewErrorResponse(
 			toJsonErr, http.StatusInternalServerError, componentName, "PostSubmodelDescriptorThroughSuperpath", "Unhandled-ToJsonable",
@@ -551,12 +552,12 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) GetSubmodelDescriptorByI
 	if err != nil {
 		switch {
 		case common.IsErrNotFound(err):
-			log.Printf("🧩 [%s] Error in GetSubmodelDescriptorByIdThroughSuperpath: not found (aasId=%q submodelId=%q): %v", componentName, decodedAAS, decodedSMD, err)
+			slog.ErrorContext(ctx, fmt.Sprintf("🧩 [%s] Error in GetSubmodelDescriptorByIdThroughSuperpath: not found (aasId=%q submodelId=%q): %v", componentName, decodedAAS, decodedSMD, err), "error.code", "API-GETSUBMODELDESCRIPTORBYIDTHROUGHSUPERPATH-LOG", "error", err)
 			return common.NewErrorResponse(
 				err, http.StatusNotFound, componentName, "GetSubmodelDescriptorByIdThroughSuperpath", "NotFound",
 			), nil
 		default:
-			log.Printf("🧩 [%s] Error in GetSubmodelDescriptorByIdThroughSuperpath: internal (aasId=%q submodelId=%q): %v", componentName, decodedAAS, decodedSMD, err)
+			slog.ErrorContext(ctx, fmt.Sprintf("🧩 [%s] Error in GetSubmodelDescriptorByIdThroughSuperpath: internal (aasId=%q submodelId=%q): %v", componentName, decodedAAS, decodedSMD, err), "error.code", "API-GETSUBMODELDESCRIPTORBYIDTHROUGHSUPERPATH-LOG", "error", err)
 			return common.NewErrorResponse(
 				err, http.StatusInternalServerError, componentName, "GetSubmodelDescriptorByIdThroughSuperpath", "Unhandled",
 			), err
@@ -565,7 +566,7 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) GetSubmodelDescriptorByI
 
 	jsonable, toJsonErr := smd.ToJsonable()
 	if toJsonErr != nil {
-		log.Printf("🧩 [%s] Error in GetSubmodelDescriptorByIdThroughSuperpath: ToJsonable failed (aasId=%q submodelId=%q): %v", componentName, decodedAAS, smd.Id, toJsonErr)
+		slog.ErrorContext(ctx, fmt.Sprintf("🧩 [%s] Error in GetSubmodelDescriptorByIdThroughSuperpath: ToJsonable failed (aasId=%q submodelId=%q): %v", componentName, decodedAAS, smd.Id, toJsonErr), "error.code", "API-GETSUBMODELDESCRIPTORBYIDTHROUGHSUPERPATH-LOG", "error", toJsonErr)
 
 		return common.NewErrorResponse(
 			toJsonErr, http.StatusInternalServerError, componentName, "GetSubmodelDescriptorByIdThroughSuperpath", "Unhandled-ToJsonable",
@@ -591,7 +592,7 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) PutSubmodelDescriptorByI
 
 	// Enforce id consistency
 	if strings.TrimSpace(submodelDescriptor.Id) == "" || submodelDescriptor.Id != decodedSMD {
-		log.Printf("🧩 [%s] Error in PutSubmodelDescriptorByIdThroughSuperpath: body id is empty or does not match path id (body=%q path=%q)", componentName, submodelDescriptor.Id, decodedSMD)
+		slog.ErrorContext(ctx, fmt.Sprintf("🧩 [%s] Error in PutSubmodelDescriptorByIdThroughSuperpath: body id is empty or does not match path id (body=%q path=%q)", componentName, submodelDescriptor.Id, decodedSMD), "error.code", "API-PUTSUBMODELDESCRIPTORBYIDTHROUGHSUPERPATH-LOG")
 		return common.NewErrorResponse(
 			errors.New("body id is empty or does not match path id"), http.StatusBadRequest, componentName, "PutSubmodelDescriptorByIdThroughSuperpath", "BadRequest-IdMismatch",
 		), nil
@@ -607,21 +608,21 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) PutSubmodelDescriptorByI
 	technicalCtx := auth.WithoutQueryFilter(ctx)
 	aasExists, chkErr := s.aasRegistryBackend.ExistsAASByID(technicalCtx, decodedAAS)
 	if chkErr != nil {
-		log.Printf("🧩 [%s] Error in PutSubmodelDescriptorByIdThroughSuperpath: AAS existence check failed (aasId=%q): %v", componentName, decodedAAS, chkErr)
+		slog.ErrorContext(ctx, fmt.Sprintf("🧩 [%s] Error in PutSubmodelDescriptorByIdThroughSuperpath: AAS existence check failed (aasId=%q): %v", componentName, decodedAAS, chkErr), "error.code", "API-PUTSUBMODELDESCRIPTORBYIDTHROUGHSUPERPATH-LOG", "error", chkErr)
 		return common.NewErrorResponse(
 			chkErr, http.StatusInternalServerError, componentName, "PutSubmodelDescriptorByIdThroughSuperpath", "Unhandled-AASPrecheck",
 		), chkErr
 	}
 	if !aasExists {
 		err := common.NewErrNotFound("AAS Descriptor not found")
-		log.Printf("🧩 [%s] Error in PutSubmodelDescriptorByIdThroughSuperpath: AAS not found (aasId=%q): %v", componentName, decodedAAS, err)
+		slog.ErrorContext(ctx, fmt.Sprintf("🧩 [%s] Error in PutSubmodelDescriptorByIdThroughSuperpath: AAS not found (aasId=%q): %v", componentName, decodedAAS, err), "error.code", "API-PUTSUBMODELDESCRIPTORBYIDTHROUGHSUPERPATH-LOG", "error", err)
 		return common.NewErrorResponse(
 			err, http.StatusNotFound, componentName, "PutSubmodelDescriptorByIdThroughSuperpath", "AASNotFound",
 		), nil
 	}
 
 	if exists, chkErr := s.aasRegistryBackend.ExistsSubmodelForAAS(technicalCtx, decodedAAS, decodedSMD); chkErr != nil {
-		log.Printf("🧩 [%s] Error in PutSubmodelDescriptorByIdThroughSuperpath: existence check failed (aasId=%q): %v", componentName, decodedAAS, chkErr)
+		slog.ErrorContext(ctx, fmt.Sprintf("🧩 [%s] Error in PutSubmodelDescriptorByIdThroughSuperpath: existence check failed (aasId=%q): %v", componentName, decodedAAS, chkErr), "error.code", "API-PUTSUBMODELDESCRIPTORBYIDTHROUGHSUPERPATH-LOG", "error", chkErr)
 		return common.NewErrorResponse(
 			chkErr, http.StatusInternalServerError, componentName, "PutSubmodelDescriptorByIdThroughSuperpath", "Unhandled-Precheck",
 		), chkErr
@@ -635,27 +636,27 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) PutSubmodelDescriptorByI
 			switch {
 			case common.IsErrNotFound(err):
 				deniedErr := common.NewErrDenied("Submodel Descriptor access not allowed")
-				log.Printf("🧩 [%s] Error in PutSubmodelDescriptorByIdThroughSuperpath: not allowed (aasId=%q submodelId=%q): %v", componentName, decodedAAS, submodelDescriptor.Id, err)
+				slog.ErrorContext(ctx, fmt.Sprintf("🧩 [%s] Error in PutSubmodelDescriptorByIdThroughSuperpath: not allowed (aasId=%q submodelId=%q): %v", componentName, decodedAAS, submodelDescriptor.Id, err), "error.code", "API-PUTSUBMODELDESCRIPTORBYIDTHROUGHSUPERPATH-LOG", "error", err)
 				return common.NewErrorResponse(
 					deniedErr, http.StatusForbidden, componentName, "PutSubmodelDescriptorByIdThroughSuperpath", "Denied",
 				), nil
 			case common.IsErrDenied(err):
-				log.Printf("🧩 [%s] Error in PutSubmodelDescriptorByIdThroughSuperpath: denied (aasId=%q submodelId=%q): %v", componentName, decodedAAS, submodelDescriptor.Id, err)
+				slog.ErrorContext(ctx, fmt.Sprintf("🧩 [%s] Error in PutSubmodelDescriptorByIdThroughSuperpath: denied (aasId=%q submodelId=%q): %v", componentName, decodedAAS, submodelDescriptor.Id, err), "error.code", "API-PUTSUBMODELDESCRIPTORBYIDTHROUGHSUPERPATH-LOG", "error", err)
 				return common.NewErrorResponse(
 					err, http.StatusForbidden, componentName, "PutSubmodelDescriptorByIdThroughSuperpath", "Denied",
 				), nil
 			case common.IsErrBadRequest(err):
-				log.Printf("🧩 [%s] Error in PutSubmodelDescriptorByIdThroughSuperpath: bad request (aasId=%q submodelId=%q): %v", componentName, decodedAAS, submodelDescriptor.Id, err)
+				slog.ErrorContext(ctx, fmt.Sprintf("🧩 [%s] Error in PutSubmodelDescriptorByIdThroughSuperpath: bad request (aasId=%q submodelId=%q): %v", componentName, decodedAAS, submodelDescriptor.Id, err), "error.code", "API-PUTSUBMODELDESCRIPTORBYIDTHROUGHSUPERPATH-LOG", "error", err)
 				return common.NewErrorResponse(
 					err, http.StatusBadRequest, componentName, "PutSubmodelDescriptorByIdThroughSuperpath", "BadRequest",
 				), nil
 			case common.IsErrConflict(err):
-				log.Printf("🧩 [%s] Error in PutSubmodelDescriptorByIdThroughSuperpath: conflict (aasId=%q submodelId=%q): %v", componentName, decodedAAS, submodelDescriptor.Id, err)
+				slog.ErrorContext(ctx, fmt.Sprintf("🧩 [%s] Error in PutSubmodelDescriptorByIdThroughSuperpath: conflict (aasId=%q submodelId=%q): %v", componentName, decodedAAS, submodelDescriptor.Id, err), "error.code", "API-PUTSUBMODELDESCRIPTORBYIDTHROUGHSUPERPATH-LOG", "error", err)
 				return common.NewErrorResponse(
 					err, http.StatusConflict, componentName, "PutSubmodelDescriptorByIdThroughSuperpath", "Conflict",
 				), nil
 			default:
-				log.Printf("🧩 [%s] Error in PutSubmodelDescriptorByIdThroughSuperpath: internal (aasId=%q submodelId=%q): %v", componentName, decodedAAS, submodelDescriptor.Id, err)
+				slog.ErrorContext(ctx, fmt.Sprintf("🧩 [%s] Error in PutSubmodelDescriptorByIdThroughSuperpath: internal (aasId=%q submodelId=%q): %v", componentName, decodedAAS, submodelDescriptor.Id, err), "error.code", "API-PUTSUBMODELDESCRIPTORBYIDTHROUGHSUPERPATH-LOG", "error", err)
 				return common.NewErrorResponse(
 					err, http.StatusInternalServerError, componentName, "PutSubmodelDescriptorByIdThroughSuperpath", "Unhandled",
 				), err
@@ -663,7 +664,7 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) PutSubmodelDescriptorByI
 		}
 		jsonable, toJsonErr := result.ToJsonable()
 		if toJsonErr != nil {
-			log.Printf("🧩 [%s] Error in PutSubmodelDescriptorByIdThroughSuperpath: ToJsonable failed (aasId=%q submodelId=%q): %v", componentName, decodedAAS, submodelDescriptor.Id, toJsonErr)
+			slog.ErrorContext(ctx, fmt.Sprintf("🧩 [%s] Error in PutSubmodelDescriptorByIdThroughSuperpath: ToJsonable failed (aasId=%q submodelId=%q): %v", componentName, decodedAAS, submodelDescriptor.Id, toJsonErr), "error.code", "API-PUTSUBMODELDESCRIPTORBYIDTHROUGHSUPERPATH-LOG", "error", toJsonErr)
 
 			return common.NewErrorResponse(
 				toJsonErr, http.StatusInternalServerError, componentName, "PutSubmodelDescriptorByIdThroughSuperpath", "Unhandled-ToJsonable",
@@ -682,22 +683,22 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) PutSubmodelDescriptorByI
 		switch {
 		case common.IsErrNotFound(err), common.IsErrDenied(err):
 			deniedErr := common.NewErrDenied("Submodel Descriptor access not allowed")
-			log.Printf("🧩 [%s] Error in PutSubmodelDescriptorByIdThroughSuperpath: not allowed (aasId=%q submodelId=%q): %v", componentName, decodedAAS, submodelDescriptor.Id, err)
+			slog.ErrorContext(ctx, fmt.Sprintf("🧩 [%s] Error in PutSubmodelDescriptorByIdThroughSuperpath: not allowed (aasId=%q submodelId=%q): %v", componentName, decodedAAS, submodelDescriptor.Id, err), "error.code", "API-PUTSUBMODELDESCRIPTORBYIDTHROUGHSUPERPATH-LOG", "error", err)
 			return common.NewErrorResponse(
 				deniedErr, http.StatusForbidden, componentName, "PutSubmodelDescriptorByIdThroughSuperpath", "Denied",
 			), nil
 		case common.IsErrBadRequest(err):
-			log.Printf("🧩 [%s] Error in PutSubmodelDescriptorByIdThroughSuperpath: bad request (aasId=%q submodelId=%q): %v", componentName, decodedAAS, submodelDescriptor.Id, err)
+			slog.ErrorContext(ctx, fmt.Sprintf("🧩 [%s] Error in PutSubmodelDescriptorByIdThroughSuperpath: bad request (aasId=%q submodelId=%q): %v", componentName, decodedAAS, submodelDescriptor.Id, err), "error.code", "API-PUTSUBMODELDESCRIPTORBYIDTHROUGHSUPERPATH-LOG", "error", err)
 			return common.NewErrorResponse(
 				err, http.StatusBadRequest, componentName, "PutSubmodelDescriptorByIdThroughSuperpath", "BadRequest",
 			), nil
 		case common.IsErrConflict(err):
-			log.Printf("🧩 [%s] Error in PutSubmodelDescriptorByIdThroughSuperpath: conflict (aasId=%q submodelId=%q): %v", componentName, decodedAAS, submodelDescriptor.Id, err)
+			slog.ErrorContext(ctx, fmt.Sprintf("🧩 [%s] Error in PutSubmodelDescriptorByIdThroughSuperpath: conflict (aasId=%q submodelId=%q): %v", componentName, decodedAAS, submodelDescriptor.Id, err), "error.code", "API-PUTSUBMODELDESCRIPTORBYIDTHROUGHSUPERPATH-LOG", "error", err)
 			return common.NewErrorResponse(
 				err, http.StatusConflict, componentName, "PutSubmodelDescriptorByIdThroughSuperpath", "Conflict",
 			), nil
 		default:
-			log.Printf("🧩 [%s] Error in PutSubmodelDescriptorByIdThroughSuperpath: internal (aasId=%q submodelId=%q): %v", componentName, decodedAAS, submodelDescriptor.Id, err)
+			slog.ErrorContext(ctx, fmt.Sprintf("🧩 [%s] Error in PutSubmodelDescriptorByIdThroughSuperpath: internal (aasId=%q submodelId=%q): %v", componentName, decodedAAS, submodelDescriptor.Id, err), "error.code", "API-PUTSUBMODELDESCRIPTORBYIDTHROUGHSUPERPATH-LOG", "error", err)
 			return common.NewErrorResponse(
 				err, http.StatusInternalServerError, componentName, "PutSubmodelDescriptorByIdThroughSuperpath", "Unhandled-Replace",
 			), err
@@ -722,22 +723,22 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) DeleteSubmodelDescriptor
 	if err := s.aasRegistryBackend.DeleteSubmodelDescriptorForAASByID(ctx, decodedAAS, decodedSMD); err != nil {
 		switch {
 		case common.IsErrNotFound(err):
-			log.Printf("🧩 [%s] Error in DeleteSubmodelDescriptorByIdThroughSuperpath: not found (aasId=%q submodelId=%q): %v", componentName, decodedAAS, decodedSMD, err)
+			slog.ErrorContext(ctx, fmt.Sprintf("🧩 [%s] Error in DeleteSubmodelDescriptorByIdThroughSuperpath: not found (aasId=%q submodelId=%q): %v", componentName, decodedAAS, decodedSMD, err), "error.code", "API-DELETESUBMODELDESCRIPTORBYIDTHROUGHSUPERPATH-LOG", "error", err)
 			return common.NewErrorResponse(
 				err, http.StatusNotFound, componentName, "DeleteSubmodelDescriptorByIdThroughSuperpath", "NotFound",
 			), nil
 		case common.IsErrDenied(err):
-			log.Printf("🧩 [%s] Error in DeleteSubmodelDescriptorByIdThroughSuperpath: denied (aasId=%q submodelId=%q): %v", componentName, decodedAAS, decodedSMD, err)
+			slog.ErrorContext(ctx, fmt.Sprintf("🧩 [%s] Error in DeleteSubmodelDescriptorByIdThroughSuperpath: denied (aasId=%q submodelId=%q): %v", componentName, decodedAAS, decodedSMD, err), "error.code", "API-DELETESUBMODELDESCRIPTORBYIDTHROUGHSUPERPATH-LOG", "error", err)
 			return common.NewErrorResponse(
 				err, http.StatusForbidden, componentName, "DeleteSubmodelDescriptorByIdThroughSuperpath", "Denied",
 			), nil
 		case common.IsErrBadRequest(err):
-			log.Printf("🧩 [%s] Error in DeleteSubmodelDescriptorByIdThroughSuperpath: bad request (aasId=%q submodelId=%q): %v", componentName, decodedAAS, decodedSMD, err)
+			slog.ErrorContext(ctx, fmt.Sprintf("🧩 [%s] Error in DeleteSubmodelDescriptorByIdThroughSuperpath: bad request (aasId=%q submodelId=%q): %v", componentName, decodedAAS, decodedSMD, err), "error.code", "API-DELETESUBMODELDESCRIPTORBYIDTHROUGHSUPERPATH-LOG", "error", err)
 			return common.NewErrorResponse(
 				err, http.StatusBadRequest, componentName, "DeleteSubmodelDescriptorByIdThroughSuperpath", "BadRequest",
 			), nil
 		default:
-			log.Printf("🧩 [%s] Error in DeleteSubmodelDescriptorByIdThroughSuperpath: internal (aasId=%q submodelId=%q): %v", componentName, decodedAAS, decodedSMD, err)
+			slog.ErrorContext(ctx, fmt.Sprintf("🧩 [%s] Error in DeleteSubmodelDescriptorByIdThroughSuperpath: internal (aasId=%q submodelId=%q): %v", componentName, decodedAAS, decodedSMD, err), "error.code", "API-DELETESUBMODELDESCRIPTORBYIDTHROUGHSUPERPATH-LOG", "error", err)
 			return common.NewErrorResponse(
 				err, http.StatusInternalServerError, componentName, "DeleteSubmodelDescriptorByIdThroughSuperpath", "Unhandled",
 			), err
@@ -754,7 +755,7 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) QueryAssetAdministration
 
 	aasds, nextCursor, err := s.aasRegistryBackend.ListAssetAdministrationShellDescriptors(ctx, limit, cursor, "", "", time.Time{}, time.Time{})
 	if err != nil {
-		log.Printf("🧩 [%s] Error in QueryAssetAdministrationShellDescriptors: list failed (limit=%d cursor=%q ): %v", componentName, limit, cursor, err)
+		slog.ErrorContext(ctx, fmt.Sprintf("🧩 [%s] Error in QueryAssetAdministrationShellDescriptors: list failed (limit=%d cursor=%q ): %v", componentName, limit, cursor, err), "error.code", "API-QUERYASSETADMINISTRATIONSHELLDESCRIPTORS-LOG", "error", err)
 		switch {
 		case common.IsErrBadRequest(err):
 			return common.NewErrorResponse(
@@ -771,7 +772,7 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) QueryAssetAdministration
 	for _, aasd := range aasds {
 		j, toJsonErr := aasd.ToJsonable()
 		if toJsonErr != nil {
-			log.Printf("🧩 [%s] Error in QueryAssetAdministrationShellDescriptors: ToJsonable failed (aasId=%q): %v", componentName, aasd.Id, toJsonErr)
+			slog.ErrorContext(ctx, fmt.Sprintf("🧩 [%s] Error in QueryAssetAdministrationShellDescriptors: ToJsonable failed (aasId=%q): %v", componentName, aasd.Id, toJsonErr), "error.code", "API-QUERYASSETADMINISTRATIONSHELLDESCRIPTORS-LOG", "error", toJsonErr)
 			return common.NewErrorResponse(
 				toJsonErr, http.StatusInternalServerError, componentName, "QueryAssetAdministrationShellDescriptors", "Unhandled-ToJsonable",
 			), toJsonErr

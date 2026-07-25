@@ -29,7 +29,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
+	"log/slog"
 	"net"
 	"net/http"
 	"os"
@@ -127,7 +127,7 @@ func StartHTTPServer(ctx context.Context, serviceCode string, cfg ServerConfig, 
 //	ctx, stop := common.SignalContext()
 //	defer stop()
 //	if err := common.RunHTTPServer(ctx, "AASR", cfg.Server, router); err != nil {
-//		log.Fatal(err)
+//		return err
 //	}
 func RunHTTPServer(ctx context.Context, serviceCode string, cfg ServerConfig, handler http.Handler) error {
 	runner, err := StartHTTPServer(ctx, serviceCode, cfg, handler)
@@ -157,7 +157,7 @@ func (runner *HTTPServerRunner) Wait(ctx context.Context) error {
 	case err := <-runner.serveErr:
 		return runner.listenError(err)
 	case <-ctx.Done():
-		log.Println("Shutting down server...")
+		slog.InfoContext(ctx, "HTTP server shutdown requested")
 		return runner.shutdown(ctx)
 	}
 }
