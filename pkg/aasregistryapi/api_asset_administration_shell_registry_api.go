@@ -12,6 +12,7 @@
 package apis
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 
@@ -248,7 +249,7 @@ func (c *AssetAdministrationShellRegistryAPIAPIController) GetAllAssetAdministra
 	if query.Has("cursor") {
 		cursorParam = query.Get("cursor")
 	}
-	assetKindParam, assetKindErrResponse := parseOptionalAssetKind(query, "GetAllAssetAdministrationShellDescriptors")
+	assetKindParam, assetKindErrResponse := parseOptionalAssetKind(r.Context(), query, "GetAllAssetAdministrationShellDescriptors")
 	if assetKindErrResponse != nil {
 		EncodeJSONResponse(assetKindErrResponse.Body, &assetKindErrResponse.Code, w)
 		return
@@ -287,13 +288,13 @@ func (c *AssetAdministrationShellRegistryAPIAPIController) GetAllAssetAdministra
 	_ = EncodeJSONResponse(result.Body, &result.Code, w)
 }
 
-func parseOptionalAssetKind(query url.Values, operation string) (model.AssetKind, *model.ImplResponse) {
+func parseOptionalAssetKind(ctx context.Context, query url.Values, operation string) (model.AssetKind, *model.ImplResponse) {
 	if !query.Has("assetKind") {
 		return "", nil
 	}
 	assetKind := model.AssetKind(query.Get("assetKind"))
 	if err := model.AssertAssetKindConstraints(assetKind); err != nil {
-		slog.Error("Error in operation: invalid assetKind", "error.code", "AASREGISTRYAPI-PARSEOPTIONALASSETKIND-VALIDATE", "error", err, "component", componentName, "operation", operation, "asset_kind", string(assetKind))
+		slog.ErrorContext(ctx, "Error in operation: invalid assetKind", "error.code", "AASREGISTRYAPI-PARSEOPTIONALASSETKIND-VALIDATE", "error", err, "component", componentName, "operation", operation, "asset_kind", string(assetKind))
 		result := common.NewErrorResponse(err, http.StatusBadRequest, componentName, operation, "InvalidAssetKind")
 		return "", &result
 	}

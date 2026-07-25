@@ -75,6 +75,9 @@ func assertNoLegacyLogger(t *testing.T, path string) {
 			t.Errorf("%s:%d imports the legacy standard log package; use log/slog", path, position.Line)
 		}
 	}
+	if filepath.Base(path) == "logger.go" && strings.Contains(path, string(filepath.Separator)+"pkg"+string(filepath.Separator)) {
+		assertGeneratedLoggerIsNoOp(t, fileset, file, path)
+	}
 
 	ast.Inspect(file, func(node ast.Node) bool {
 		call, ok := node.(*ast.CallExpr)
@@ -120,8 +123,45 @@ func assertNoLegacyLogger(t *testing.T, path string) {
 			position := fileset.Position(call.Pos())
 			t.Errorf("%s:%d uses a generic -LOG error code", path, position.Line)
 		}
+		if identifier.Name == "slog" &&
+			hasStringArgument(call, "HTTP request completed") &&
+			!strings.HasSuffix(path, filepath.Join("internal", "common", "logging", "http_middleware.go")) {
+			position := fileset.Position(call.Pos())
+			t.Errorf("%s:%d emits an independent HTTP access event", path, position.Line)
+		}
 		return true
 	})
+}
+
+func assertGeneratedLoggerIsNoOp(t *testing.T, fileset *token.FileSet, file *ast.File, path string) {
+	t.Helper()
+	for _, declaration := range file.Decls {
+		function, ok := declaration.(*ast.FuncDecl)
+		if !ok || function.Name.Name != "Logger" {
+			continue
+		}
+		if generatedLoggerReturnsHandler(function) {
+			return
+		}
+		position := fileset.Position(function.Pos())
+		t.Errorf("%s:%d generated Logger must remain a compatibility no-op", path, position.Line)
+	}
+}
+
+func generatedLoggerReturnsHandler(function *ast.FuncDecl) bool {
+	if function.Type.Params == nil ||
+		len(function.Type.Params.List) == 0 ||
+		len(function.Type.Params.List[0].Names) == 0 ||
+		function.Body == nil ||
+		len(function.Body.List) != 1 {
+		return false
+	}
+	result, ok := function.Body.List[0].(*ast.ReturnStmt)
+	if !ok || len(result.Results) != 1 {
+		return false
+	}
+	identifier, ok := result.Results[0].(*ast.Ident)
+	return ok && identifier.Name == function.Type.Params.List[0].Names[0].Name
 }
 
 func containsSensitiveLogExpression(call *ast.CallExpr) bool {

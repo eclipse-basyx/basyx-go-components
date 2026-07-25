@@ -120,6 +120,74 @@ func TestConfigureBridgesStandardLogAtInfo(t *testing.T) {
 	}
 }
 
+func TestConfigureEnrichesContextualLogsWithRequestMetadata(t *testing.T) {
+	output := configureForTest(t, Config{Format: FormatJSON, Level: LevelInfo})
+	ctx := contextWithRequestMetadata(t.Context(), requestMetadata{
+		requestID:     "request-1",
+		correlationID: "correlation-1",
+	})
+
+	slog.InfoContext(ctx, "request operation completed")
+
+	record := decodeSingleRecord(t, output)
+	if record["request.id"] != "request-1" {
+		t.Fatalf("unexpected request.id: %#v", record)
+	}
+	if record["correlation.id"] != "correlation-1" {
+		t.Fatalf("unexpected correlation.id: %#v", record)
+	}
+}
+
+func TestConfigureDoesNotAddRequestMetadataToBackgroundLogs(t *testing.T) {
+	output := configureForTest(t, Config{Format: FormatJSON, Level: LevelInfo})
+
+	slog.Info("background operation completed")
+
+	record := decodeSingleRecord(t, output)
+	if _, ok := record["request.id"]; ok {
+		t.Fatalf("background record contains request.id: %#v", record)
+	}
+	if _, ok := record["correlation.id"]; ok {
+		t.Fatalf("background record contains correlation.id: %#v", record)
+	}
+}
+
+func TestContextHandlerPreservesAttributesAndGroups(t *testing.T) {
+	output := configureForTest(t, Config{Format: FormatJSON, Level: LevelInfo})
+	ctx := contextWithRequestMetadata(t.Context(), requestMetadata{
+		requestID:     "request-1",
+		correlationID: "correlation-1",
+	})
+	logger := slog.Default().With("component", "test").WithGroup("details")
+
+	logger.InfoContext(ctx, "grouped event", "attempt", 2)
+
+	record := decodeSingleRecord(t, output)
+	if record["request.id"] != "request-1" || record["correlation.id"] != "correlation-1" {
+		t.Fatalf("request metadata is not at the record root: %#v", record)
+	}
+	if record["component"] != "test" {
+		t.Fatalf("preformatted attribute missing: %#v", record)
+	}
+	details, ok := record["details"].(map[string]any)
+	if !ok || details["attempt"] != float64(2) {
+		t.Fatalf("grouped event attribute missing: %#v", record)
+	}
+}
+
+func TestRequestMetadataContextAccessors(t *testing.T) {
+	ctx := contextWithRequestMetadata(t.Context(), requestMetadata{
+		requestID:     "request-1",
+		correlationID: "correlation-1",
+	})
+	if RequestIDFromContext(ctx) != "request-1" {
+		t.Fatalf("unexpected request ID %q", RequestIDFromContext(ctx))
+	}
+	if CorrelationIDFromContext(ctx) != "correlation-1" {
+		t.Fatalf("unexpected correlation ID %q", CorrelationIDFromContext(ctx))
+	}
+}
+
 func TestStandardLogBridgeHonorsInfoThreshold(t *testing.T) {
 	output := configureForTest(t, Config{Format: FormatJSON, Level: LevelWarn})
 
@@ -195,4 +263,17 @@ func nonEmptyLines(value string) []string {
 		}
 	}
 	return lines
+}
+
+func decodeSingleRecord(t *testing.T, output *bytes.Buffer) map[string]any {
+	t.Helper()
+	lines := nonEmptyLines(output.String())
+	if len(lines) != 1 {
+		t.Fatalf("expected one JSON object, got %d lines: %q", len(lines), output.String())
+	}
+	var record map[string]any
+	if err := json.Unmarshal([]byte(lines[0]), &record); err != nil {
+		t.Fatalf("unmarshal log record: %v", err)
+	}
+	return record
 }

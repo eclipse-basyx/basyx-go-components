@@ -30,11 +30,14 @@ import (
 	"context"
 	"log"
 	"log/slog"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"strings"
 	"testing"
 
 	commonlogging "github.com/eclipse-basyx/basyx-go-components/internal/common/logging"
+	"github.com/go-chi/chi/v5"
 	"github.com/spf13/viper"
 )
 
@@ -247,6 +250,56 @@ func TestLogConfigurationExcludesSecrets(t *testing.T) {
 	for _, secret := range []string{"secret-db-host", "secret-user", "secret-password", "secret-dsn", "private-key.pem"} {
 		if strings.Contains(output.String(), secret) {
 			t.Fatalf("configuration record contains secret %q: %s", secret, output.String())
+		}
+	}
+}
+
+func TestAddCorsAllowsAndExposesRequestMetadataHeaders(t *testing.T) {
+	cfg := &Config{CorsConfig: CorsConfig{
+		AllowedOrigins: []string{"https://client.example"},
+		AllowedMethods: []string{http.MethodGet},
+		AllowedHeaders: []string{"Content-Type"},
+	}}
+	router := chi.NewRouter()
+	AddCors(router, cfg)
+	router.Get("/resource", func(writer http.ResponseWriter, _ *http.Request) {
+		writer.WriteHeader(http.StatusNoContent)
+	})
+
+	preflight := httptest.NewRequest(http.MethodOptions, "/resource", nil)
+	preflight.Header.Set("Origin", "https://client.example")
+	preflight.Header.Set("Access-Control-Request-Method", http.MethodGet)
+	preflight.Header.Set(
+		"Access-Control-Request-Headers",
+		commonlogging.RequestIDHeader+", "+commonlogging.CorrelationIDHeader,
+	)
+	preflightResponse := httptest.NewRecorder()
+	router.ServeHTTP(preflightResponse, preflight)
+
+	allowedHeaders := preflightResponse.Header().Get("Access-Control-Allow-Headers")
+	requireHeaderValues(t, allowedHeaders, commonlogging.RequestIDHeader, commonlogging.CorrelationIDHeader)
+
+	request := httptest.NewRequest(http.MethodGet, "/resource", nil)
+	request.Header.Set("Origin", "https://client.example")
+	response := httptest.NewRecorder()
+	router.ServeHTTP(response, request)
+
+	exposedHeaders := response.Header().Get("Access-Control-Expose-Headers")
+	requireHeaderValues(t, exposedHeaders, commonlogging.RequestIDHeader, commonlogging.CorrelationIDHeader)
+	if len(cfg.CorsConfig.AllowedHeaders) != 1 {
+		t.Fatalf("CORS setup mutated configured headers: %#v", cfg.CorsConfig.AllowedHeaders)
+	}
+}
+
+func requireHeaderValues(t *testing.T, actual string, expected ...string) {
+	t.Helper()
+	values := make(map[string]bool)
+	for _, value := range strings.Split(actual, ",") {
+		values[strings.ToLower(strings.TrimSpace(value))] = true
+	}
+	for _, value := range expected {
+		if !values[strings.ToLower(value)] {
+			t.Errorf("header %q does not contain %q", actual, value)
 		}
 	}
 }
