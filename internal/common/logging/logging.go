@@ -101,7 +101,8 @@ func Configure(cfg Config, serviceName string, output io.Writer) (*slog.Logger, 
 		handler = slog.NewTextHandler(output, options)
 	}
 
-	logger := slog.New(handler).With("service.name", serviceName)
+	handler = handler.WithAttrs([]slog.Attr{slog.String("service.name", serviceName)})
+	logger := slog.New(newContextHandler(handler))
 	slog.SetDefault(logger)
 	return logger, nil
 }
