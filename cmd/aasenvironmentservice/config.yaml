@@ -1,3 +1,7 @@
+logging:
+  format: text
+  level: info
+
 server:
   port: 5004
   contextPath: ""

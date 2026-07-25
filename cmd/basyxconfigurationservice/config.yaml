@@ -1,3 +1,7 @@
+logging:
+  format: text
+  level: info
+
 postgres:
   # Choose exactly one connection variant:
   # 1) individual fields below, or 2) dsn. Do not mix dsn with host/port/user/password/dbname/ssl settings.
