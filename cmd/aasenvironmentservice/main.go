@@ -298,18 +298,8 @@ func runServer(ctx context.Context, configPath string) error {
 	}
 
 	preconfigurationCtx := aasenvironment.ContextWithAASPreconfigurationAudit(common.ContextWithConfig(ctx, cfg))
-	preconfigurationSummary := aasenvironment.RunAASPreconfiguration(preconfigurationCtx, uploadService, cfg.General.AASPreconfigPaths)
+	aasenvironment.RunAASPreconfiguration(preconfigurationCtx, uploadService, cfg.General.AASPreconfigPaths)
 	preconfigurationCompleted.Store(true)
-	//nolint:gosec // summary fields are internal integer counters and cannot carry log-control characters.
-	slog.InfoContext(
-		ctx,
-		"AAS preconfiguration completed",
-		"configured", preconfigurationSummary.ConfiguredSourceCount,
-		"resolved", preconfigurationSummary.ResolvedFileCount,
-		"imported", preconfigurationSummary.ImportedFileCount,
-		"failed", preconfigurationSummary.FailedFileCount,
-		"skipped", preconfigurationSummary.SkippedFileCount,
-	)
 
 	return runner.Wait(ctx)
 }
