@@ -111,7 +111,7 @@ func AddHealthEndpointWithProbe(r *chi.Mux, config *Config, probe HealthProbe) {
 func writeHealthResponse(w http.ResponseWriter, statusCode int, body map[string]string) {
 	responsePayload, err := json.Marshal(body)
 	if err != nil {
-		slog.Error("COMMON-WRITEHEALTH-MARSHAL response marshal failed", "error.code", "COMMON-WRITEHEALTH-MARSHAL", "error", err)
+		slog.Error("health response marshaling failed", "error.code", "COMMON-WRITEHEALTH-MARSHAL", "error", err)
 		_ = WriteErrorResponse(w, err, http.StatusInternalServerError, "COMMON", "WriteHealthResponse", "MarshalResponse")
 		return
 	}
@@ -119,7 +119,7 @@ func writeHealthResponse(w http.ResponseWriter, statusCode int, body map[string]
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(statusCode)
 	if _, err = w.Write(responsePayload); err != nil {
-		slog.Error("COMMON-WRITEHEALTH-WRITE response write failed", "error.code", "COMMON-WRITEHEALTH-WRITE", "error", err)
+		slog.Error("health response write failed", "error.code", "COMMON-WRITEHEALTH-WRITE", "error", err)
 	}
 }
 
@@ -174,14 +174,14 @@ func AddVerificationEndpoint(r chi.Router, config *Config, stagers ...UploadStag
 				return
 			}
 
-			slog.ErrorContext(r.Context(), "COMMON-VERIFY-PAYLOAD failed to verify payload", "error.code", "COMMON-VERIFY-PAYLOAD", "error", err)
+			slog.ErrorContext(r.Context(), "payload verification failed", "error.code", "COMMON-VERIFY-PAYLOAD", "error", err)
 			_ = WriteErrorResponse(w, err, http.StatusBadRequest, "COMMON", "VerifyPayload", "InvalidPayload")
 			return
 		}
 
 		responsePayload, err := json.Marshal(verificationResult)
 		if err != nil {
-			slog.ErrorContext(r.Context(), "COMMON-VERIFY-PAYLOAD-MARSHAL failed to marshal verification result", "error.code", "COMMON-VERIFY-PAYLOAD-MARSHAL", "error", err)
+			slog.ErrorContext(r.Context(), "verification result marshaling failed", "error.code", "COMMON-VERIFY-PAYLOAD-MARSHAL", "error", err)
 			_ = WriteErrorResponse(w, err, http.StatusInternalServerError, "COMMON", "VerifyPayload", "MarshalResponse")
 			return
 		}
@@ -189,7 +189,7 @@ func AddVerificationEndpoint(r chi.Router, config *Config, stagers ...UploadStag
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		if _, err = w.Write(responsePayload); err != nil {
-			slog.ErrorContext(r.Context(), "COMMON-VERIFY-PAYLOAD-WRITE response write failed", "error.code", "COMMON-VERIFY-PAYLOAD-WRITE", "error", err)
+			slog.ErrorContext(r.Context(), "verification response write failed", "error.code", "COMMON-VERIFY-PAYLOAD-WRITE", "error", err)
 		}
 	})
 }

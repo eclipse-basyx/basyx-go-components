@@ -86,7 +86,7 @@ func writeActivationEvidenceTx(ctx context.Context, tx *sql.Tx, version PolicyVe
 	defer cancel()
 	receipt, err := cfg.EvidenceStore.PutArtifact(writeCtx, artifact)
 	if err != nil {
-		slog.ErrorContext(ctx, "ABACPOLICY-EVIDENCE-PUT evidence store write failed", "error.code", "ABACPOLICY-EVIDENCE-PUT", "error", err)
+		slog.ErrorContext(ctx, "evidence store write failed", "error.code", "ABACPOLICY-EVIDENCE-PUT", "error", err)
 		return nil, common.NewErrServiceUnavailable("ABACPOLICY-EVIDENCE-STORE policy evidence could not be stored")
 	}
 	if receipt == nil {

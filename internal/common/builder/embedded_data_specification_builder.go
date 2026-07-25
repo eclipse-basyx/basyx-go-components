@@ -209,7 +209,7 @@ func (edsb *EmbeddedDataSpecificationsBuilder) BuildContentsIec61360(iecRows jso
 		}
 
 		if len(preferredName) == 0 {
-			slog.Info("empty embedded data specification content")
+			slog.Debug("embedded data specification preferred name is empty", "iec_id", data.IecID, "eds_id", data.EdsID)
 		}
 
 		shortName, err := ParseLangStringShortNameTypeIec61360(data.ShortName)

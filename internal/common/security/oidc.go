@@ -268,7 +268,7 @@ func respondOIDCStatus(w http.ResponseWriter, status int) {
 	resp := common.NewErrorResponse(errors.New("access denied"), status, "Middleware", "Rules", "Denied")
 	err := openapi.EncodeJSONResponse(resp.Body, &resp.Code, w)
 	if err != nil {
-		slog.Error("❌ Failed to encode error response", "error.code", "SECURITY-RESPONDOIDCSTATUS-EXECUTE", "error", err)
+		slog.Error("error response encoding failed", "error.code", "SECURITY-RESPONDOIDCSTATUS-EXECUTE", "error", err)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 	}
 }

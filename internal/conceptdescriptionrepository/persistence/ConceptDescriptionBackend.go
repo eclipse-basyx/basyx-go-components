@@ -94,7 +94,7 @@ func NewConceptDescriptionBackendFromDB(db *sql.DB) (*ConceptDescriptionBackend,
 
 	healthy, err := testDBConnection(db)
 	if !healthy {
-		slog.Error("CDREPO-TESTDBCON-FAIL Failed to connect to database", "error.code", "CDREPO-TESTDBCON-FAIL", "error", err)
+		slog.Error("database connection failed", "error.code", "CDREPO-TESTDBCON-FAIL", "error", err)
 		return nil, err
 	}
 
@@ -477,7 +477,7 @@ func (b *ConceptDescriptionBackend) GetConceptDescriptions(ctx context.Context, 
 	}
 	defer func() {
 		if closeErr := rows.Close(); closeErr != nil {
-			slog.Error("CDREPO-GCDS-CLOSEROWS failed to close rows", "error.code", "CDREPO-GCDS-CLOSEROWS", "error", closeErr)
+			slog.Error("database row cleanup failed", "error.code", "CDREPO-GCDS-CLOSEROWS", "error", closeErr)
 		}
 	}()
 

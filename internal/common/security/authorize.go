@@ -342,7 +342,7 @@ func SelectFormulaForRight(ctx context.Context, right grammar.RightsEnum) contex
 
 	qf, cloneErr := CloneQueryFilter(existing)
 	if cloneErr != nil {
-		slog.ErrorContext(ctx, "AUTH-SELECTQF-CLONEERR failed to clone query filter", "error.code", "AUTH-SELECTQF-CLONEERR", "error", cloneErr)
+		slog.ErrorContext(ctx, "query filter clone failed", "error.code", "AUTH-SELECTQF-CLONEERR", "error", cloneErr)
 		return WithQueryFilter(ctx, failClosedQueryFilter(right))
 	}
 	if qf == nil {
@@ -376,7 +376,7 @@ func MergeQueryFilter(ctx context.Context, query grammar.Query) context.Context 
 	if existing != nil {
 		cloned, err := CloneQueryFilter(existing)
 		if err != nil {
-			slog.ErrorContext(ctx, "SMREPO-MERGEQF-CLONEERR failed to clone query filter", "error.code", "SMREPO-MERGEQF-CLONEERR", "error", err)
+			slog.ErrorContext(ctx, "query filter clone failed", "error.code", "SMREPO-MERGEQF-CLONEERR", "error", err)
 			return WithQueryFilter(ctx, failClosedQueryFilter(grammar.RightsEnumREAD))
 		}
 		if cloned != nil {

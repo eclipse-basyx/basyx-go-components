@@ -104,7 +104,7 @@ func writeSerializationFileDownload(w http.ResponseWriter, status int, payload S
 	if payload.Close != nil {
 		defer func() {
 			if err := payload.Close(); err != nil {
-				slog.Error("AASENV-SERIALIZATIONAPI-CLOSE response cleanup failed", "error.code", "AASENV-SERIALIZATIONAPI-CLOSE", "error", err)
+				slog.Error("response cleanup failed", "error.code", "AASENV-SERIALIZATIONAPI-CLOSE", "error", err)
 			}
 		}()
 	}
@@ -115,7 +115,7 @@ func writeSerializationFileDownload(w http.ResponseWriter, status int, payload S
 	w.WriteHeader(status)
 	if payload.WriteTo != nil {
 		if err := payload.WriteTo(w); err != nil {
-			slog.Error("AASENV-SERIALIZATIONAPI-STREAM response stream failed", "error.code", "AASENV-SERIALIZATIONAPI-STREAM", "error", err)
+			slog.Error("response stream failed", "error.code", "AASENV-SERIALIZATIONAPI-STREAM", "error", err)
 		}
 		return
 	}

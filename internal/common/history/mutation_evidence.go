@@ -209,7 +209,7 @@ func publishMutationEvidenceTx(ctx context.Context, tx *sql.Tx, cfg Config, writ
 	defer cancel()
 	receipt, err := cfg.EvidenceStore.PutArtifact(writeCtx, artifact)
 	if err != nil {
-		slog.ErrorContext(ctx, "HISTORY-EVIDENCE-MUTATION-PUT evidence store write failed", "error.code", "HISTORY-EVIDENCE-MUTATION-PUT", "error", err)
+		slog.ErrorContext(ctx, "evidence store write failed", "error.code", "HISTORY-EVIDENCE-MUTATION-PUT", "error", err)
 		return nil, common.NewErrServiceUnavailable("HISTORY-EVIDENCE-MUTATION-STORE mutation evidence could not be stored")
 	}
 	if receipt == nil {

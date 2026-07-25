@@ -39,7 +39,7 @@ import (
 func decodePathParam(raw, paramName, operation, errorDetail string) (string, *model.ImplResponse, error) {
 	decoded, err := common.DecodeString(raw)
 	if err != nil {
-		slog.Error("[ERROR] Error in operation: decode =", "error.code", "API-DECODEPATHPARAM-DECODE", "error", err, "component", componentName, "operation", operation, "param_name", paramName, "raw", raw)
+		slog.Error("path parameter decoding failed", "error.code", "API-DECODEPATHPARAM-DECODE", "error", err, "component", componentName, "operation", operation, "param_name", paramName, "raw", raw)
 		resp := common.NewErrorResponse(
 			err, http.StatusBadRequest, componentName, operation, errorDetail,
 		)
