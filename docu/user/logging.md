@@ -57,8 +57,8 @@ journalctl -f -u <unit>
 BaSyx does not provide a `/logs` endpoint, application log files, file
 rotation, retention management, or direct Loki integration. Feed the process
 stream into the platform collector of your choice. For example, Grafana Alloy,
-Promtail, Fluent Bit, or an OpenTelemetry Collector can forward container or
-journal logs to Loki without coupling the BaSyx process to that backend.
+Fluent Bit, or an OpenTelemetry Collector can forward container or journal logs
+to Loki without coupling the BaSyx process to that backend.
 
 OpenTelemetry trace correlation and OTLP export are intentionally outside this
 logging foundation.

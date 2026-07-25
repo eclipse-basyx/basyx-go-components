@@ -223,8 +223,8 @@ func main() {
 	flag.Parse()
 
 	if err := runServer(ctx, configPath); err != nil {
-		stop()
 		slog.ErrorContext(ctx, "server stopped", "error.code", "AASREPOSITORY-MAIN-RUNSERVER", "error", err)
+		stop()
 		os.Exit(1)
 	}
 	stop()
