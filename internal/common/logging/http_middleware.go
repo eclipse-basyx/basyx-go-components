@@ -190,15 +190,8 @@ func logHTTPRequest(request *http.Request, response middleware.WrapResponseWrite
 		attributes = append(attributes, "http.route", route)
 	}
 	level := slog.LevelInfo
-	if request.Method == http.MethodGet && strings.HasSuffix(requestRouteOrPath(route, request.URL.Path), "/health") {
+	if request.Method == http.MethodGet && route != "" && strings.HasSuffix(route, "/health") {
 		level = slog.LevelDebug
 	}
 	slog.Log(request.Context(), level, accessLogMessage, attributes...)
-}
-
-func requestRouteOrPath(route string, path string) string {
-	if route != "" {
-		return route
-	}
-	return path
 }

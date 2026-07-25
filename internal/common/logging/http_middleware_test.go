@@ -260,6 +260,26 @@ func TestHTTPMiddlewareLogsHealthChecksAtDebug(t *testing.T) {
 	}
 }
 
+func TestHTTPMiddlewareLogsUnmatchedHealthSuffixAtInfo(t *testing.T) {
+	output := configureForTest(t, Config{Format: FormatJSON, Level: LevelInfo})
+	router := chi.NewRouter()
+	router.Get("/health", func(writer http.ResponseWriter, _ *http.Request) {
+		writer.WriteHeader(http.StatusOK)
+	})
+	handler := HTTPMiddleware(router)
+
+	handler.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/missing/health", nil))
+
+	record := decodeSingleRecord(t, output)
+	if record["level"] != "INFO" ||
+		record["http.response.status_code"] != float64(http.StatusNotFound) {
+		t.Fatalf("unexpected unmatched health-suffix record: %#v", record)
+	}
+	if _, ok := record["http.route"]; ok {
+		t.Fatalf("unmatched health-suffix record contains http.route: %#v", record)
+	}
+}
+
 func TestHTTPMiddlewareLogsPanicsAndRepanics(t *testing.T) {
 	output := configureForTest(t, Config{Format: FormatJSON, Level: LevelInfo})
 	handler := HTTPMiddleware(http.HandlerFunc(func(writer http.ResponseWriter, _ *http.Request) {
