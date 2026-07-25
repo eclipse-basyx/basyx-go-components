@@ -31,8 +31,9 @@ import (
 	"crypto/rsa"
 	"embed"
 	"flag"
-	"log"
+	"log/slog"
 	"net/http"
+	"os"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -55,11 +56,11 @@ import (
 var openapiSpec embed.FS
 
 func runServer(ctx context.Context, configPath string) error {
-	log.Default().Println("Loading Asset Administration Shell Repository Service...")
-	log.Default().Println("Config Path:", configPath)
-
-	cfg, err := common.LoadConfig(configPath, common.NORMAL)
+	cfg, err := common.LoadConfig(configPath)
 	if err != nil {
+		return err
+	}
+	if _, err = common.ConfigureLogging(cfg, "aasrepositoryservice", configPath, os.Stderr); err != nil {
 		return err
 	}
 
@@ -97,21 +98,21 @@ func runServer(ctx context.Context, configPath string) error {
 	common.AddHealthEndpoint(r, cfg)
 
 	if err := common.AddSwaggerUIFromFS(r, openapiSpec, "openapi.yaml", "Asset Administration Shell Repository API", "/swagger", "/api-docs/openapi.yaml", cfg); err != nil {
-		log.Printf("Warning: failed to load OpenAPI spec for Swagger UI: %v", err)
+		slog.WarnContext(ctx, "Swagger UI unavailable", "error.code", "AASREPOSITORY-SWAGGER-INIT", "error", err)
 	}
 
 	var privateKey *rsa.PrivateKey
 	if cfg.JWS.PrivateKeyPath != "" {
 		privateKey, err = jws.LoadPrivateKey(cfg.JWS.PrivateKeyPath)
 		if err != nil {
-			log.Printf("Warning: failed to load JWS private key: %v - /$signed Endpoints will be unavailable", err)
+			slog.WarnContext(ctx, "JWS private key unavailable; signed endpoints are disabled", "error.code", "AASREPOSITORY-JWS-LOADKEY", "error", err)
 		} else {
-			log.Println("JWS private key loaded successfully")
+			slog.InfoContext(ctx, "JWS private key loaded")
 		}
 	}
 	signingOptions, err := jws.LoadSigningOptions(cfg.JWS.CertificateChainPath)
 	if err != nil {
-		log.Printf("Warning: failed to load JWS certificate chain: %v - x5c header will be omitted", err)
+		slog.WarnContext(ctx, "JWS certificate chain unavailable; x5c headers are disabled", "error.code", "AASREPOSITORY-JWS-LOADCHAIN", "error", err)
 	}
 
 	dsn := common.BuildPostgresDSN(cfg.Postgres)
@@ -120,12 +121,11 @@ func runServer(ctx context.Context, configPath string) error {
 		return err
 	}
 
-	log.Printf("🗄️  Connecting to Postgres with DSN: postgres://%s:****@%s:%d/%s?sslmode=disable",
-		cfg.Postgres.User, cfg.Postgres.Host, cfg.Postgres.Port, cfg.Postgres.DBName)
+	slog.InfoContext(ctx, "connecting to PostgreSQL")
 
 	sharedDB, err := common.NewDatabaseConnection(dsn)
 	if err != nil {
-		log.Printf("❌ DB connect failed: %v", err)
+		slog.ErrorContext(ctx, "database connection failed", "error.code", "AASREPOSITORY-DB-CONNECT", "error", err)
 		return err
 	}
 	if cfg.Postgres.MaxOpenConnections > 0 {
@@ -143,7 +143,7 @@ func runServer(ctx context.Context, configPath string) error {
 
 	aasDatabase, err := persistencepostgresql.NewAssetAdministrationShellDatabaseFromDB(sharedDB, cfg.Server.StrictVerification)
 	if err != nil {
-		log.Printf("❌ AAS DB init failed: %v", err)
+		slog.ErrorContext(ctx, "AAS repository persistence initialization failed", "error.code", "AASREPOSITORY-DB-INIT", "error", err)
 		return err
 	}
 	aasDatabase.SetJWSPrivateKey(privateKey)
@@ -151,16 +151,16 @@ func runServer(ctx context.Context, configPath string) error {
 
 	aasRegistryPersistence, err := aasregistrydb.NewPostgreSQLAASRegistryDatabaseFromDB(sharedDB, cfg.Server.CacheEnabled)
 	if err != nil {
-		log.Printf("AAS Registry DB init failed: %v", err)
+		slog.ErrorContext(ctx, "AAS registry persistence initialization failed", "error.code", "AASREPOSITORY-AASREGISTRY-INIT", "error", err)
 		return err
 	}
 
 	submodelDatabase, err := submodelrepositorydb.NewSubmodelDatabaseFromDB(sharedDB, nil, cfg.Server.StrictVerification)
 	if err != nil {
-		log.Printf("❌ Submodel DB connect failed: %v", err)
+		slog.ErrorContext(ctx, "submodel persistence initialization failed", "error.code", "AASREPOSITORY-SMREPOSITORY-INIT", "error", err)
 		return err
 	}
-	log.Println("✅ Postgres connection established")
+	slog.InfoContext(ctx, "PostgreSQL connection established")
 
 	persistence := &aasenvironment.Persistence{
 		DB:                 sharedDB,
@@ -210,7 +210,7 @@ func runServer(ctx context.Context, configPath string) error {
 	r.Mount(base, apiRouter)
 
 	addr := common.ServerAddress(cfg.Server)
-	log.Printf("▶️  Asset Administration Shell Repository listening on %s (contextPath=%q)\n", addr, cfg.Server.ContextPath)
+	slog.InfoContext(ctx, "HTTP server starting", "address", addr, "context_path", cfg.Server.ContextPath)
 
 	return common.RunHTTPServer(ctx, "AASREPO", cfg.Server, r)
 }
@@ -224,7 +224,8 @@ func main() {
 
 	if err := runServer(ctx, configPath); err != nil {
 		stop()
-		log.Fatalf("Server error: %v", err)
+		slog.ErrorContext(ctx, "server stopped", "error.code", "AASREPOSITORY-MAIN-RUNSERVER", "error", err)
+		os.Exit(1)
 	}
 	stop()
 }

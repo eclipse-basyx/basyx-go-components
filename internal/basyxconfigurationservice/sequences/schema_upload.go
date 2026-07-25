@@ -27,6 +27,7 @@ package sequences
 
 import (
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 )
@@ -75,7 +76,7 @@ func (su *SchemaUpload) Execute(stepIndex int) (int, error) {
 		return 1, err
 	}
 
-	_, _ = fmt.Printf("[Step %d] Schema upload completed\n", stepIndex)
+	slog.Info("schema upload completed", "step", stepIndex)
 	return 0, nil
 }
 

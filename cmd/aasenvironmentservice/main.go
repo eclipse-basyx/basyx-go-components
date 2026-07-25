@@ -32,8 +32,9 @@ import (
 	"database/sql"
 	"embed"
 	"flag"
-	"log"
+	"log/slog"
 	"net/http"
+	"os"
 	"sync/atomic"
 	"time"
 
@@ -70,11 +71,11 @@ import (
 var openapiSpec embed.FS
 
 func runServer(ctx context.Context, configPath string) error {
-	log.Default().Println("Loading AAS Environment Service...")
-	log.Default().Println("Config Path:", configPath)
-
-	cfg, err := common.LoadConfig(configPath, common.NORMAL)
+	cfg, err := common.LoadConfig(configPath)
 	if err != nil {
+		return err
+	}
+	if _, err = common.ConfigureLogging(cfg, "aasenvironmentservice", configPath, os.Stderr); err != nil {
 		return err
 	}
 
@@ -118,7 +119,7 @@ func runServer(ctx context.Context, configPath string) error {
 	})
 
 	if err = common.AddSwaggerUIFromFS(r, openapiSpec, "openapi.yaml", "AAS Environment Service API", "/swagger", "/api-docs/openapi.yaml", cfg); err != nil {
-		log.Printf("Warning: failed to load OpenAPI spec for Swagger UI: %v", err)
+		slog.WarnContext(ctx, "Swagger UI unavailable", "error.code", "AASENV-SWAGGER-INIT", "error", err)
 	}
 
 	dsn := common.BuildPostgresDSN(cfg.Postgres)
@@ -141,7 +142,7 @@ func runServer(ctx context.Context, configPath string) error {
 	}
 	signingOptions, err := jws.LoadSigningOptions(cfg.JWS.CertificateChainPath)
 	if err != nil {
-		log.Printf("Warning: failed to load JWS certificate chain: %v - x5c header will be omitted", err)
+		slog.WarnContext(ctx, "JWS certificate chain unavailable; x5c headers are disabled", "error.code", "AASENV-JWS-LOADCHAIN", "error", err)
 	}
 
 	aasRegistryPersistence, err := aasregistrydb.NewPostgreSQLAASRegistryDatabaseFromDB(sharedDB, cfg.Server.CacheEnabled)
@@ -290,7 +291,7 @@ func runServer(ctx context.Context, configPath string) error {
 	aasenvironment.RegisterSerializationAPI(apiRouter, serializationService)
 
 	addr := common.ServerAddress(cfg.Server)
-	log.Printf("AAS Environment Service listening on %s (contextPath=%q)\n", addr, cfg.Server.ContextPath)
+	slog.InfoContext(ctx, "HTTP server starting", "address", addr, "context_path", cfg.Server.ContextPath)
 	runner, err := common.StartHTTPServer(ctx, "AASENV", cfg.Server, r)
 	if err != nil {
 		return err
@@ -300,13 +301,14 @@ func runServer(ctx context.Context, configPath string) error {
 	preconfigurationSummary := aasenvironment.RunAASPreconfiguration(preconfigurationCtx, uploadService, cfg.General.AASPreconfigPaths)
 	preconfigurationCompleted.Store(true)
 	//nolint:gosec // summary fields are internal integer counters and cannot carry log-control characters.
-	log.Printf(
-		"AASENV-SRV-PRECONFIGDONE configured=%d resolved=%d imported=%d failed=%d skipped=%d",
-		preconfigurationSummary.ConfiguredSourceCount,
-		preconfigurationSummary.ResolvedFileCount,
-		preconfigurationSummary.ImportedFileCount,
-		preconfigurationSummary.FailedFileCount,
-		preconfigurationSummary.SkippedFileCount,
+	slog.InfoContext(
+		ctx,
+		"AAS preconfiguration completed",
+		"configured", preconfigurationSummary.ConfiguredSourceCount,
+		"resolved", preconfigurationSummary.ResolvedFileCount,
+		"imported", preconfigurationSummary.ImportedFileCount,
+		"failed", preconfigurationSummary.FailedFileCount,
+		"skipped", preconfigurationSummary.SkippedFileCount,
 	)
 
 	return runner.Wait(ctx)
@@ -345,7 +347,8 @@ func main() {
 
 	if err := runServer(ctx, configPath); err != nil {
 		stop()
-		log.Fatalf("Server error: %v", err)
+		slog.ErrorContext(ctx, "server stopped", "error.code", "AASENV-MAIN-RUNSERVER", "error", err)
+		os.Exit(1)
 	}
 	stop()
 }

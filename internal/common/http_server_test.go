@@ -250,7 +250,7 @@ func TestLoadConfigAppliesServerTimeoutConfig(t *testing.T) {
   shutdownTimeoutSeconds: 12
 `)
 
-	cfg, err := LoadConfig(path, QUIET)
+	cfg, err := LoadConfig(path)
 	if err != nil {
 		t.Fatalf("unexpected config load error: %v", err)
 	}
@@ -266,7 +266,7 @@ func TestLoadConfigAppliesReadableServerTimeoutEnvironmentOverrides(t *testing.T
 	t.Setenv("BASYX_SERVER_IDLE_TIMEOUT_SECONDS", "62")
 	t.Setenv("SERVER_SHUTDOWN_TIMEOUT_SECONDS", "13")
 
-	cfg, err := LoadConfig("", QUIET)
+	cfg, err := LoadConfig("")
 	if err != nil {
 		t.Fatalf("unexpected config load error: %v", err)
 	}
@@ -290,7 +290,7 @@ func TestLoadConfigRejectsNonPositiveServerTimeouts(t *testing.T) {
 			unsetServerTimeoutEnv(t)
 			path := writeTempConfig(t, fmt.Sprintf("server:\n  %s: %d\n", tc.yamlKey, tc.value))
 
-			_, err := LoadConfig(path, QUIET)
+			_, err := LoadConfig(path)
 			if err == nil {
 				t.Fatal("expected config load error for non-positive server timeout")
 			}

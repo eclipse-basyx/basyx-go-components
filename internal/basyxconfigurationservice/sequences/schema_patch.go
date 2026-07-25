@@ -29,6 +29,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"strconv"
 	"strings"
@@ -79,7 +80,12 @@ func (sp *SchemaPatch) Execute(stepIndex int) (int, error) {
 	}
 
 	if compareResult >= 0 {
-		_, _ = fmt.Printf("[Step %d] Patch %s skipped (DB version is %s)\n", stepIndex, sp.targetVersion, currentVersion)
+		slog.Info(
+			"schema patch skipped",
+			"step", stepIndex,
+			"patch.version", sp.targetVersion,
+			"database.version", currentVersion,
+		)
 		return 0, nil
 	}
 
@@ -115,7 +121,7 @@ func (sp *SchemaPatch) Execute(stepIndex int) (int, error) {
 		return sp.failPatchDirty("BASYXCFG-PATCH-COMMIT", err)
 	}
 
-	_, _ = fmt.Printf("[Step %d] Patch %s applied successfully\n", stepIndex, sp.targetVersion)
+	slog.Info("schema patch applied", "step", stepIndex, "patch.version", sp.targetVersion)
 	return 0, nil
 }
 

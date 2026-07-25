@@ -29,6 +29,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"log/slog"
 
 	"github.com/doug-martin/goqu/v9"
 	_ "github.com/doug-martin/goqu/v9/dialect/postgres"
@@ -90,7 +91,7 @@ func (st *SystemTable) Execute(stepIndex int) (int, error) {
 		return 1, fmt.Errorf("BASYXCFG-SYSTEM-SEEDVERSION: %w", err)
 	}
 
-	_, _ = fmt.Printf("[Step %d] System table initialized\n", stepIndex)
+	slog.Info("system table initialized", "step", stepIndex)
 	return 0, nil
 }
 

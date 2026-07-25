@@ -30,7 +30,8 @@ import (
 	"context"
 	"embed"
 	"flag"
-	"log"
+	"log/slog"
+	"os"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -48,11 +49,11 @@ import (
 var openapiSpec embed.FS
 
 func runServer(ctx context.Context, configPath string) error {
-	log.Default().Println("Loading AASX File Server Service...")
-	log.Default().Println("Config Path:", configPath)
-
-	cfg, err := common.LoadConfig(configPath, common.NORMAL)
+	cfg, err := common.LoadConfig(configPath)
 	if err != nil {
+		return err
+	}
+	if _, err = common.ConfigureLogging(cfg, "aasxfileserverservice", configPath, os.Stderr); err != nil {
 		return err
 	}
 	if err := commonmodel.SetVerificationMode(cfg.Server.StrictVerification); err != nil {
@@ -67,7 +68,7 @@ func runServer(ctx context.Context, configPath string) error {
 	common.AddHealthEndpoint(r, cfg)
 
 	if err := common.AddSwaggerUIFromFS(r, openapiSpec, "openapi.yaml", "AASX File Server API", "/swagger", "/api-docs/openapi.yaml", cfg); err != nil {
-		log.Printf("Warning: failed to load OpenAPI spec for Swagger UI: %v", err)
+		slog.WarnContext(ctx, "Swagger UI unavailable", "error.code", "AASXFILES-SWAGGER-INIT", "error", err)
 	}
 
 	dsn := common.BuildPostgresDSN(cfg.Postgres)
@@ -75,11 +76,11 @@ func runServer(ctx context.Context, configPath string) error {
 		return err
 	}
 
-	log.Println("Connecting to Postgres using configured connection settings")
+	slog.InfoContext(ctx, "connecting to PostgreSQL")
 
 	sharedDB, err := common.NewDatabaseConnection(dsn)
 	if err != nil {
-		log.Printf("❌ DB connect failed: %v", err)
+		slog.ErrorContext(ctx, "database connection failed", "error.code", "AASXFILES-DB-CONNECT", "error", err)
 		return err
 	}
 	if cfg.Postgres.MaxOpenConnections > 0 {
@@ -94,10 +95,10 @@ func runServer(ctx context.Context, configPath string) error {
 
 	aasxDatabase, err := aasxpersistence.NewAASXFileServerDatabaseFromDB(sharedDB)
 	if err != nil {
-		log.Printf("❌ AASX DB init failed: %v", err)
+		slog.ErrorContext(ctx, "AASX persistence initialization failed", "error.code", "AASXFILES-DB-INIT", "error", err)
 		return err
 	}
-	log.Println("✅ Postgres connection established")
+	slog.InfoContext(ctx, "PostgreSQL connection established")
 
 	aasxSvc := aasxapi.NewAASXFileServerAPIAPIService(aasxDatabase)
 	aasxCtrl := openapi.NewAASXFileServerAPIAPIController(
@@ -134,7 +135,7 @@ func runServer(ctx context.Context, configPath string) error {
 	r.Mount(base, apiRouter)
 
 	addr := common.ServerAddress(cfg.Server)
-	log.Printf("▶️  AASX File Server listening on %s (contextPath=%q)\n", addr, cfg.Server.ContextPath)
+	slog.InfoContext(ctx, "HTTP server starting", "address", addr, "context_path", cfg.Server.ContextPath)
 
 	return common.RunHTTPServer(ctx, "AASX", cfg.Server, r)
 }
@@ -148,7 +149,8 @@ func main() {
 
 	if err := runServer(ctx, configPath); err != nil {
 		stop()
-		log.Fatalf("Server error: %v", err)
+		slog.ErrorContext(ctx, "server stopped", "error.code", "AASXFILES-MAIN-RUNSERVER", "error", err)
+		os.Exit(1)
 	}
 	stop()
 }
