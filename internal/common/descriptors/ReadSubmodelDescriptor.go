@@ -522,7 +522,7 @@ func readSubmodelDescriptorRows(
 		return nil, nil, err
 	}
 	if debugEnabled(ctx) {
-		slog.DebugContext(ctx, "submodel descriptor database query", "query", sqlStr)
+		slog.DebugContext(ctx, "submodel descriptor database query prepared")
 	}
 	rows, err := db.QueryContext(ctx, sqlStr, args...)
 	if err != nil {

@@ -790,7 +790,7 @@ func buildBlob(smeRow model.SubmodelElementRow) (types.ISubmodelElement, error) 
 	decoded, err = common.Decode(string(decoded))
 	if err != nil {
 		decoded = decodedHex // Fallback to hex decoded value
-		slog.Warn("base64 decoding failed; falling back to hexadecimal decoding", "error.code", "BUILDER-BUILDBLOB-LOG")
+		slog.Warn("base64 decoding failed; falling back to hexadecimal decoding", "error.code", "BUILDER-BUILDBLOB-FALLBACKHEX")
 	}
 
 	if string(decoded) != "" {

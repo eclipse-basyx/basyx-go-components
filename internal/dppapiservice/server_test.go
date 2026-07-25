@@ -34,6 +34,7 @@ import (
 	"testing/fstest"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
+	"github.com/go-chi/chi/v5/middleware"
 )
 
 var testOpenAPISpec = fstest.MapFS{
@@ -69,5 +70,36 @@ func TestNewHTTPHandlerDoesNotShowVerifyEndpointInSwagger(t *testing.T) {
 	}
 	if !cfg.Server.VerificationEndpointAvailable {
 		t.Fatal("expected DPP Swagger setup to not mutate runtime config")
+	}
+}
+
+func TestNewHTTPHandlerDoesNotInstallChiAccessLogger(t *testing.T) {
+	previousLogger := middleware.DefaultLogger
+	loggerCalled := false
+	middleware.DefaultLogger = func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			loggerCalled = true
+			next.ServeHTTP(w, r)
+		})
+	}
+	t.Cleanup(func() {
+		middleware.DefaultLogger = previousLogger
+	})
+
+	cfg := &common.Config{
+		Server: common.ServerConfig{
+			Host: "0.0.0.0",
+			Port: 8080,
+		},
+	}
+	handler, err := NewHTTPHandler(context.TODO(), cfg, testOpenAPISpec, nil, nil)
+	if err != nil {
+		t.Fatalf("unexpected NewHTTPHandler error: %v", err)
+	}
+
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/unknown?access_token=sentinel-secret", nil))
+	if loggerCalled {
+		t.Fatal("DPP handler installed Chi's independent stdout access logger")
 	}
 }

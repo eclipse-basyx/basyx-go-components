@@ -52,7 +52,7 @@ func withDescriptorDebugQueryer(ctx context.Context, db DBQueryer) DBQueryer {
 
 func (d *descriptorDebugQueryer) QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error) {
 	if debugEnabled(ctx) || debugEnabled(d.ctx) {
-		slog.DebugContext(ctx, "descriptor database query", "query", query)
+		slog.DebugContext(ctx, "descriptor database query started")
 	}
 	start := time.Now()
 	rows, err := d.db.QueryContext(ctx, query, args...)
@@ -67,14 +67,14 @@ func (d *descriptorDebugQueryer) QueryContext(ctx context.Context, query string,
 
 func (d *descriptorDebugQueryer) QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row {
 	if debugEnabled(ctx) || debugEnabled(d.ctx) {
-		slog.DebugContext(ctx, "descriptor database row query", "query", query)
+		slog.DebugContext(ctx, "descriptor database row query started")
 	}
 	return d.db.QueryRowContext(ctx, query, args...)
 }
 
 func (d *descriptorDebugQueryer) Query(query string, args ...any) (*sql.Rows, error) {
 	if debugEnabled(d.ctx) {
-		slog.DebugContext(d.ctx, "descriptor database query", "query", query)
+		slog.DebugContext(d.ctx, "descriptor database query started")
 	}
 	start := time.Now()
 	rows, err := d.db.Query(query, args...)

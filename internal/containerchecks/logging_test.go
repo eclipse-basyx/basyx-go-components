@@ -96,12 +96,104 @@ func assertNoLegacyLogger(t *testing.T, path string) {
 				t.Errorf("%s:%d uses log.%s; use log/slog", path, position.Line, selector.Sel.Name)
 			}
 		}
+		if identifier.Name == "middleware" && selector.Sel.Name == "Logger" {
+			position := fileset.Position(call.Pos())
+			t.Errorf("%s:%d uses Chi's independent stdout logger", path, position.Line)
+		}
 		if identifier.Name == "slog" && (selector.Sel.Name == "Error" || selector.Sel.Name == "ErrorContext") && !hasStringArgument(call, "error.code") {
 			position := fileset.Position(call.Pos())
 			t.Errorf("%s:%d uses slog.%s without error.code", path, position.Line, selector.Sel.Name)
 		}
+		if identifier.Name == "slog" && containsSensitiveLogExpression(call) {
+			position := fileset.Position(call.Pos())
+			t.Errorf("%s:%d includes request data or SQL in a slog call", path, position.Line)
+		}
+		if identifier.Name == "slog" && containsFormattedLogMessage(call) {
+			position := fileset.Position(call.Pos())
+			t.Errorf("%s:%d formats dynamic values into a slog message; use attributes", path, position.Line)
+		}
+		if identifier.Name == "slog" && containsTemplateLogMessage(selector.Sel.Name, call) {
+			position := fileset.Position(call.Pos())
+			t.Errorf("%s:%d contains template markers in a slog message; use attributes", path, position.Line)
+		}
+		if identifier.Name == "slog" && hasGenericLogErrorCode(call) {
+			position := fileset.Position(call.Pos())
+			t.Errorf("%s:%d uses a generic -LOG error code", path, position.Line)
+		}
 		return true
 	})
+}
+
+func containsSensitiveLogExpression(call *ast.CallExpr) bool {
+	sensitive := false
+	ast.Inspect(call, func(node ast.Node) bool {
+		switch value := node.(type) {
+		case *ast.SelectorExpr:
+			if value.Sel.Name == "RawQuery" {
+				sensitive = true
+			}
+		case *ast.BasicLit:
+			if value.Kind != token.STRING {
+				return true
+			}
+			text, err := strconv.Unquote(value.Value)
+			if err == nil && (strings.Contains(text, "%+v") || text == "query") {
+				sensitive = true
+			}
+		}
+		return !sensitive
+	})
+	return sensitive
+}
+
+func containsFormattedLogMessage(call *ast.CallExpr) bool {
+	formatted := false
+	ast.Inspect(call, func(node ast.Node) bool {
+		selector, ok := node.(*ast.SelectorExpr)
+		if !ok {
+			return true
+		}
+		identifier, ok := selector.X.(*ast.Ident)
+		if ok && identifier.Name == "fmt" && (selector.Sel.Name == "Sprintf" || selector.Sel.Name == "Sprint") {
+			formatted = true
+			return false
+		}
+		return true
+	})
+	return formatted
+}
+
+func containsTemplateLogMessage(method string, call *ast.CallExpr) bool {
+	messageIndex := 0
+	if strings.HasSuffix(method, "Context") {
+		messageIndex = 1
+	}
+	if messageIndex >= len(call.Args) {
+		return false
+	}
+	message, ok := stringArgument(call.Args[messageIndex])
+	return ok && strings.Contains(message, "{") && strings.Contains(message, "}")
+}
+
+func hasGenericLogErrorCode(call *ast.CallExpr) bool {
+	for index, argument := range call.Args {
+		value, ok := stringArgument(argument)
+		if !ok || value != "error.code" || index+1 >= len(call.Args) {
+			continue
+		}
+		code, ok := stringArgument(call.Args[index+1])
+		return ok && strings.HasSuffix(code, "-LOG")
+	}
+	return false
+}
+
+func stringArgument(argument ast.Expr) (string, bool) {
+	literal, ok := argument.(*ast.BasicLit)
+	if !ok || literal.Kind != token.STRING {
+		return "", false
+	}
+	value, err := strconv.Unquote(literal.Value)
+	return value, err == nil
 }
 
 func hasStringArgument(call *ast.CallExpr, expected string) bool {

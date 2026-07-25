@@ -37,17 +37,12 @@
 package dppapi
 
 import (
-	"github.com/go-chi/chi/v5/middleware"
 	"net/http"
 )
 
-// Logger wraps an HTTP handler with chi request logging middleware.
+// Logger preserves the generated middleware hook for compatibility.
 //
-// Parameters:
-//   - inner: HTTP handler to wrap
-//
-// Returns:
-//   - http.Handler: Handler wrapped with request logging middleware
+// Access logging is configured by the hosting application.
 func Logger(inner http.Handler) http.Handler {
-	return middleware.Logger(inner)
+	return inner
 }

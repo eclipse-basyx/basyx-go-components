@@ -47,7 +47,6 @@ package api
 import (
 	"context"
 	"errors"
-	"fmt"
 	"log/slog"
 	"net/http"
 	"strings"
@@ -81,7 +80,7 @@ func (s *CompanyLookupAPIService) GetAllCompanyDescriptors(ctx context.Context, 
 	if strings.TrimSpace(cursor) != "" {
 		dec, decErr := common.DecodeString(cursor)
 		if decErr != nil {
-			slog.ErrorContext(ctx, fmt.Sprintf("📍 [%s] Error in GetAllCompanyDescriptors: decode cursor=%q limit=%d name=%q assetId=%q: %v", componentName, cursor, limit, name, assetId, decErr), "error.code", "API-GETALLCOMPANYDESCRIPTORS-LOG", "error", decErr)
+			slog.ErrorContext(ctx, "Error in GetAllCompanyDescriptors: decode cursor limit name assetId", "error.code", "API-GETALLCOMPANYDESCRIPTORS-DECODE", "error", decErr, "component", componentName, "cursor", cursor, "limit", limit, "name", name, "asset_id", assetId)
 			return common.NewErrorResponse(
 				decErr, http.StatusBadRequest, componentName, "GetAllCompanyDescriptors", "BadCursor",
 			), nil
@@ -93,7 +92,7 @@ func (s *CompanyLookupAPIService) GetAllCompanyDescriptors(ctx context.Context, 
 	if strings.TrimSpace(name) != "" {
 		dec, decErr := common.DecodeString(name)
 		if decErr != nil {
-			slog.ErrorContext(ctx, fmt.Sprintf("📍 [%s] Error in GetAllCompanyDescriptors: decode name=%q limit=%d cursor=%q assetId=%q: %v", componentName, name, limit, internalCursor, assetId, decErr), "error.code", "API-GETALLCOMPANYDESCRIPTORS-LOG", "error", decErr)
+			slog.ErrorContext(ctx, "Error in GetAllCompanyDescriptors: decode name limit cursor assetId", "error.code", "API-GETALLCOMPANYDESCRIPTORS-EXECUTE", "error", decErr, "component", componentName, "name", name, "limit", limit, "internal_cursor", internalCursor, "asset_id", assetId)
 			return common.NewErrorResponse(
 				decErr, http.StatusBadRequest, componentName, "GetAllCompanyDescriptors", "BadName",
 			), nil
@@ -105,7 +104,7 @@ func (s *CompanyLookupAPIService) GetAllCompanyDescriptors(ctx context.Context, 
 	if strings.TrimSpace(assetId) != "" {
 		dec, decErr := common.DecodeString(assetId)
 		if decErr != nil {
-			slog.ErrorContext(ctx, fmt.Sprintf("📍 [%s] Error in GetAllCompanyDescriptors: decode assetId=%q limit=%d cursor=%q name=%q: %v", componentName, assetId, limit, internalCursor, internalName, decErr), "error.code", "API-GETALLCOMPANYDESCRIPTORS-LOG", "error", decErr)
+			slog.ErrorContext(ctx, "Error in GetAllCompanyDescriptors: decode assetId limit cursor name", "error.code", "API-GETALLCOMPANYDESCRIPTORS-EXECUTE", "error", decErr, "component", componentName, "asset_id", assetId, "limit", limit, "internal_cursor", internalCursor, "internal_name", internalName)
 			return common.NewErrorResponse(
 				decErr, http.StatusBadRequest, componentName, "GetAllCompanyDescriptors", "BadAssetId",
 			), nil
@@ -115,7 +114,7 @@ func (s *CompanyLookupAPIService) GetAllCompanyDescriptors(ctx context.Context, 
 
 	companyDescriptors, nextCursor, err := s.companyLookupBackend.ListCompanyDescriptors(ctx, limit, internalCursor, internalName, internalAssetID)
 	if err != nil {
-		slog.ErrorContext(ctx, fmt.Sprintf("📍 [%s] Error in GetAllCompanyDescriptors: list failed (limit=%d cursor=%q name=%q assetId=%q): %v", componentName, limit, internalCursor, internalName, internalAssetID, err), "error.code", "API-GETALLCOMPANYDESCRIPTORS-LOG", "error", err)
+		slog.ErrorContext(ctx, "Error in GetAllCompanyDescriptors: list failed", "error.code", "API-GETALLCOMPANYDESCRIPTORS-EXECUTE", "error", err, "component", componentName, "limit", limit, "internal_cursor", internalCursor, "internal_name", internalName, "internal_asset_id", internalAssetID)
 		switch {
 		case common.IsErrBadRequest(err):
 			return common.NewErrorResponse(
@@ -132,7 +131,7 @@ func (s *CompanyLookupAPIService) GetAllCompanyDescriptors(ctx context.Context, 
 	for _, companyDescriptor := range companyDescriptors {
 		j, toJsonErr := companyDescriptor.ToJsonable()
 		if toJsonErr != nil {
-			slog.ErrorContext(ctx, fmt.Sprintf("📍 [%s] Error in GetAllCompanyDescriptors: ToJsonable failed (companyDomain=%q): %v", componentName, companyDescriptor.Domain, toJsonErr), "error.code", "API-GETALLCOMPANYDESCRIPTORS-LOG", "error", toJsonErr)
+			slog.ErrorContext(ctx, "Error in GetAllCompanyDescriptors: ToJsonable failed", "error.code", "API-GETALLCOMPANYDESCRIPTORS-SERIALIZERESPONSE", "error", toJsonErr, "component", componentName)
 			return common.NewErrorResponse(
 				toJsonErr, http.StatusInternalServerError, componentName, "GetAllCompanyDescriptors", "Unhandled-ToJsonable",
 			), toJsonErr
@@ -160,7 +159,7 @@ func (s *CompanyLookupAPIService) GetAllCompanyDescriptors(ctx context.Context, 
 func (s *CompanyLookupAPIService) PostCompanyDescriptor(ctx context.Context, companyDescriptor model.CompanyDescriptor) (model.ImplResponse, error) {
 	if strings.TrimSpace(companyDescriptor.Domain) != "" && !model.IsStrictCompanyDomain(companyDescriptor.Domain) {
 		invalidDomainErr := common.NewErrBadRequest("COMLOOKUP-POSTCOMPANYDESCRIPTOR-VALIDATEDOMAIN provided domain is not a syntactically valid domain")
-		slog.ErrorContext(ctx, fmt.Sprintf("📍 [%s] Error in PostCompanyDescriptor: invalid domain syntax in body (companyDomain=%q)", componentName, companyDescriptor.Domain), "error.code", "API-POSTCOMPANYDESCRIPTOR-LOG")
+		slog.ErrorContext(ctx, "Error in PostCompanyDescriptor: invalid domain syntax in body", "error.code", "API-POSTCOMPANYDESCRIPTOR-VALIDATE", "component", componentName)
 		return common.NewErrorResponse(
 			invalidDomainErr, http.StatusBadRequest, componentName, "PostCompanyDescriptor", "BadRequest-InvalidDomainSyntax",
 		), nil
@@ -170,17 +169,17 @@ func (s *CompanyLookupAPIService) PostCompanyDescriptor(ctx context.Context, com
 	if err != nil {
 		switch {
 		case common.IsErrBadRequest(err):
-			slog.ErrorContext(ctx, fmt.Sprintf("📍 [%s] Error in InsertCompanyDescriptor: bad request (companyDomain=%q): %v", componentName, companyDescriptor.Domain, err), "error.code", "API-POSTCOMPANYDESCRIPTOR-LOG", "error", err)
+			slog.ErrorContext(ctx, "Error in InsertCompanyDescriptor: bad request", "error.code", "API-POSTCOMPANYDESCRIPTOR-VALIDATE", "error", err, "component", componentName)
 			return common.NewErrorResponse(
 				err, http.StatusBadRequest, componentName, "InsertCompanyDescriptor", "BadRequest",
 			), nil
 		case common.IsErrConflict(err):
-			slog.ErrorContext(ctx, fmt.Sprintf("📍 [%s] Error in InsertCompanyDescriptor: conflict (companyDomain=%q): %v", componentName, companyDescriptor.Domain, err), "error.code", "API-POSTCOMPANYDESCRIPTOR-LOG", "error", err)
+			slog.ErrorContext(ctx, "Error in InsertCompanyDescriptor: conflict", "error.code", "API-POSTCOMPANYDESCRIPTOR-CHECKCONFLICT", "error", err, "component", componentName)
 			return common.NewErrorResponse(
 				err, http.StatusConflict, componentName, "InsertCompanyDescriptor", "Conflict",
 			), nil
 		default:
-			slog.ErrorContext(ctx, fmt.Sprintf("📍 [%s] Error in InsertCompanyDescriptor: internal (companyDomain=%q): %v", componentName, companyDescriptor.Domain, err), "error.code", "API-POSTCOMPANYDESCRIPTOR-LOG", "error", err)
+			slog.ErrorContext(ctx, "Error in InsertCompanyDescriptor: internal", "error.code", "API-POSTCOMPANYDESCRIPTOR-EXECUTE", "error", err, "component", componentName)
 			return common.NewErrorResponse(
 				err, http.StatusInternalServerError, componentName, "InsertCompanyDescriptor", "Unhandled",
 			), err
@@ -189,7 +188,7 @@ func (s *CompanyLookupAPIService) PostCompanyDescriptor(ctx context.Context, com
 
 	jsonable, toJsonErr := result.ToJsonable()
 	if toJsonErr != nil {
-		slog.ErrorContext(ctx, fmt.Sprintf("📍 [%s] Error in PostCompanyDescriptor: ToJsonable failed (companyDomain=%q): %v", componentName, result.Domain, toJsonErr), "error.code", "API-POSTCOMPANYDESCRIPTOR-LOG", "error", toJsonErr)
+		slog.ErrorContext(ctx, "Error in PostCompanyDescriptor: ToJsonable failed", "error.code", "API-POSTCOMPANYDESCRIPTOR-SERIALIZERESPONSE", "error", toJsonErr, "component", componentName, "result_domain", result.Domain)
 		return common.NewErrorResponse(
 			toJsonErr, http.StatusInternalServerError, componentName, "PostCompanyDescriptor", "Unhandled-ToJsonable",
 		), toJsonErr
@@ -202,14 +201,14 @@ func (s *CompanyLookupAPIService) PostCompanyDescriptor(ctx context.Context, com
 func (s *CompanyLookupAPIService) GetCompanyDescriptorById(ctx context.Context, companyIdentifier string) (model.ImplResponse, error) {
 	decoded, decodeErr := common.DecodeString(companyIdentifier)
 	if decodeErr != nil {
-		slog.ErrorContext(ctx, fmt.Sprintf("📍 [%s] Error in GetCompanyDescriptorById: decode companyIdentifier=%q: %v", componentName, companyIdentifier, decodeErr), "error.code", "API-GETCOMPANYDESCRIPTORBYID-LOG", "error", decodeErr)
+		slog.ErrorContext(ctx, "Error in GetCompanyDescriptorById: decode companyIdentifier", "error.code", "API-GETCOMPANYDESCRIPTORBYID-DECODE", "error", decodeErr, "component", componentName, "company_identifier", companyIdentifier)
 		return common.NewErrorResponse(
 			decodeErr, http.StatusBadRequest, componentName, "GetCompanyDescriptorById", "BadRequest-Decode",
 		), nil
 	}
 	if !model.IsStrictCompanyDomain(decoded) {
 		invalidDomainErr := common.NewErrBadRequest("COMLOOKUP-GETCOMPANYDESCRIPTORBYID-VALIDATEDOMAIN decoded identifier is not a syntactically valid domain")
-		slog.ErrorContext(ctx, fmt.Sprintf("📍 [%s] Error in GetCompanyDescriptorById: invalid decoded domain syntax (companyIdentifier=%q decoded=%q)", componentName, companyIdentifier, decoded), "error.code", "API-GETCOMPANYDESCRIPTORBYID-LOG")
+		slog.ErrorContext(ctx, "Error in GetCompanyDescriptorById: invalid decoded domain syntax", "error.code", "API-GETCOMPANYDESCRIPTORBYID-VALIDATE", "component", componentName, "company_identifier", companyIdentifier, "decoded", decoded)
 		return common.NewErrorResponse(
 			invalidDomainErr, http.StatusBadRequest, componentName, "GetCompanyDescriptorById", "BadRequest-InvalidDomainSyntax",
 		), nil
@@ -220,17 +219,17 @@ func (s *CompanyLookupAPIService) GetCompanyDescriptorById(ctx context.Context, 
 	if err != nil {
 		switch {
 		case common.IsErrBadRequest(err):
-			slog.ErrorContext(ctx, fmt.Sprintf("📍 [%s] Error in GetCompanyDescriptorById: bad request (companyId=%q): %v", componentName, string(decoded), err), "error.code", "API-GETCOMPANYDESCRIPTORBYID-LOG", "error", err)
+			slog.ErrorContext(ctx, "Error in GetCompanyDescriptorById: bad request", "error.code", "API-GETCOMPANYDESCRIPTORBYID-VALIDATE", "error", err, "component", componentName, "decoded", string(decoded))
 			return common.NewErrorResponse(
 				err, http.StatusBadRequest, componentName, "GetCompanyDescriptorById", "BadRequest",
 			), nil
 		case common.IsErrNotFound(err):
-			slog.ErrorContext(ctx, fmt.Sprintf("📍 [%s] Error in GetCompanyDescriptorById: not found (companyId=%q): %v", componentName, string(decoded), err), "error.code", "API-GETCOMPANYDESCRIPTORBYID-LOG", "error", err)
+			slog.ErrorContext(ctx, "Error in GetCompanyDescriptorById: not found", "error.code", "API-GETCOMPANYDESCRIPTORBYID-FIND", "error", err, "component", componentName, "decoded", string(decoded))
 			return common.NewErrorResponse(
 				err, http.StatusNotFound, componentName, "GetCompanyDescriptorById", "NotFound",
 			), nil
 		default:
-			slog.ErrorContext(ctx, fmt.Sprintf("📍 [%s] Error in GetCompanyDescriptorById: internal (companyId=%q): %v", componentName, string(decoded), err), "error.code", "API-GETCOMPANYDESCRIPTORBYID-LOG", "error", err)
+			slog.ErrorContext(ctx, "Error in GetCompanyDescriptorById: internal", "error.code", "API-GETCOMPANYDESCRIPTORBYID-EXECUTE", "error", err, "component", componentName, "decoded", string(decoded))
 			return common.NewErrorResponse(
 				err, http.StatusInternalServerError, componentName, "GetCompanyDescriptorById", "Unhandled",
 			), err
@@ -252,14 +251,14 @@ func (s *CompanyLookupAPIService) PutCompanyDescriptorById(ctx context.Context, 
 	// Decode path AAS id
 	decodedCompany, decErr := common.DecodeString(companyIdentifier)
 	if decErr != nil {
-		slog.ErrorContext(ctx, fmt.Sprintf("📍 [%s] Error in PutCompanyDescriptorById: decode companyIdentifier=%q: %v", componentName, companyIdentifier, decErr), "error.code", "API-PUTCOMPANYDESCRIPTORBYID-LOG", "error", decErr)
+		slog.ErrorContext(ctx, "Error in PutCompanyDescriptorById: decode companyIdentifier", "error.code", "API-PUTCOMPANYDESCRIPTORBYID-DECODE", "error", decErr, "component", componentName, "company_identifier", companyIdentifier)
 		return common.NewErrorResponse(
 			decErr, http.StatusBadRequest, componentName, "PutCompanyDescriptorById", "BadRequest-Decode",
 		), nil
 	}
 	if !model.IsStrictCompanyDomain(decodedCompany) {
 		invalidDomainErr := common.NewErrBadRequest("COMLOOKUP-PUTCOMPANYDESCRIPTORBYID-VALIDATEDOMAIN decoded identifier is not a syntactically valid domain")
-		slog.ErrorContext(ctx, fmt.Sprintf("📍 [%s] Error in PutCompanyDescriptorById: invalid decoded domain syntax (companyIdentifier=%q decoded=%q)", componentName, companyIdentifier, decodedCompany), "error.code", "API-PUTCOMPANYDESCRIPTORBYID-LOG")
+		slog.ErrorContext(ctx, "Error in PutCompanyDescriptorById: invalid decoded domain syntax", "error.code", "API-PUTCOMPANYDESCRIPTORBYID-VALIDATE", "component", componentName, "company_identifier", companyIdentifier, "decoded_company", decodedCompany)
 		return common.NewErrorResponse(
 			invalidDomainErr, http.StatusBadRequest, componentName, "PutCompanyDescriptorById", "BadRequest-InvalidDomainSyntax",
 		), nil
@@ -269,20 +268,20 @@ func (s *CompanyLookupAPIService) PutCompanyDescriptorById(ctx context.Context, 
 	if strings.TrimSpace(companyDescriptor.Domain) == "" {
 		companyDescriptor.Domain = decodedCompany
 	} else if companyDescriptor.Domain != decodedCompany {
-		slog.ErrorContext(ctx, fmt.Sprintf("📍 [%s] Error in PutCompanyDescriptorById: body domain does not match path domain (body=%q path=%q)", componentName, companyDescriptor.Domain, decodedCompany), "error.code", "API-PUTCOMPANYDESCRIPTORBYID-LOG")
+		slog.ErrorContext(ctx, "Error in PutCompanyDescriptorById: body domain does not match path domain", "error.code", "API-PUTCOMPANYDESCRIPTORBYID-VALIDATEBODY", "component", componentName, "decoded_company", decodedCompany)
 		return common.NewErrorResponse(
 			errors.New("body domain does not match path domain"), http.StatusBadRequest, componentName, "PutCompanyDescriptorById", "BadRequest-DomainMismatch",
 		), nil
 	}
 
 	if exists, chkErr := s.companyLookupBackend.ExistsCompanyDescriptorByID(ctx, companyDescriptor.Domain); chkErr != nil {
-		slog.ErrorContext(ctx, fmt.Sprintf("📍 [%s] Error in PutCompanyDescriptorById: existence check failed (companyDomain=%q): %v", componentName, companyDescriptor.Domain, chkErr), "error.code", "API-PUTCOMPANYDESCRIPTORBYID-LOG", "error", chkErr)
+		slog.ErrorContext(ctx, "Error in PutCompanyDescriptorById: existence check failed", "error.code", "API-PUTCOMPANYDESCRIPTORBYID-CHECKEXISTS", "error", chkErr, "component", componentName)
 		return common.NewErrorResponse(
 			chkErr, http.StatusInternalServerError, componentName, "PutCompanyDescriptorById", "Unhandled-Precheck",
 		), chkErr
 	} else if !exists {
 		notFoundErr := common.NewErrNotFound("Company Descriptor not found")
-		slog.ErrorContext(ctx, fmt.Sprintf("📍 [%s] Error in PutCompanyDescriptorById: not found (companyDomain=%q)", componentName, companyDescriptor.Domain), "error.code", "API-PUTCOMPANYDESCRIPTORBYID-LOG")
+		slog.ErrorContext(ctx, "Error in PutCompanyDescriptorById: not found", "error.code", "API-PUTCOMPANYDESCRIPTORBYID-FIND", "component", componentName)
 		return common.NewErrorResponse(
 			notFoundErr, http.StatusNotFound, componentName, "PutCompanyDescriptorById", "NotFound",
 		), nil
@@ -292,17 +291,17 @@ func (s *CompanyLookupAPIService) PutCompanyDescriptorById(ctx context.Context, 
 	if err != nil {
 		switch {
 		case common.IsErrBadRequest(err):
-			slog.ErrorContext(ctx, fmt.Sprintf("📍 [%s] Error in PutCompanyDescriptorById: bad request (companyId=%q): %v", componentName, decodedCompany, err), "error.code", "API-PUTCOMPANYDESCRIPTORBYID-LOG", "error", err)
+			slog.ErrorContext(ctx, "Error in PutCompanyDescriptorById: bad request", "error.code", "API-PUTCOMPANYDESCRIPTORBYID-VALIDATE", "error", err, "component", componentName, "decoded_company", decodedCompany)
 			return common.NewErrorResponse(
 				err, http.StatusBadRequest, componentName, "PutCompanyDescriptorById", "BadRequest",
 			), nil
 		case common.IsErrConflict(err):
-			slog.ErrorContext(ctx, fmt.Sprintf("📍 [%s] Error in PutCompanyDescriptorById: conflict (companyId=%q): %v", componentName, decodedCompany, err), "error.code", "API-PUTCOMPANYDESCRIPTORBYID-LOG", "error", err)
+			slog.ErrorContext(ctx, "Error in PutCompanyDescriptorById: conflict", "error.code", "API-PUTCOMPANYDESCRIPTORBYID-CHECKCONFLICT", "error", err, "component", componentName, "decoded_company", decodedCompany)
 			return common.NewErrorResponse(
 				err, http.StatusConflict, componentName, "PutCompanyDescriptorById", "Conflict",
 			), nil
 		default:
-			slog.ErrorContext(ctx, fmt.Sprintf("📍 [%s] Error in PutCompanyDescriptorById: internal (companyId=%q): %v", componentName, decodedCompany, err), "error.code", "API-PUTCOMPANYDESCRIPTORBYID-LOG", "error", err)
+			slog.ErrorContext(ctx, "Error in PutCompanyDescriptorById: internal", "error.code", "API-PUTCOMPANYDESCRIPTORBYID-EXECUTE", "error", err, "component", componentName, "decoded_company", decodedCompany)
 			return common.NewErrorResponse(
 				err, http.StatusInternalServerError, componentName, "PutCompanyDescriptorById", "Unhandled-Insert",
 			), err
@@ -311,7 +310,7 @@ func (s *CompanyLookupAPIService) PutCompanyDescriptorById(ctx context.Context, 
 
 	jsonable, toJsonErr := result.ToJsonable()
 	if toJsonErr != nil {
-		slog.ErrorContext(ctx, fmt.Sprintf("📍 [%s] Error in PutCompanyDescriptorById: ToJsonable failed (companyDomain=%q): %v", componentName, result.Domain, toJsonErr), "error.code", "API-PUTCOMPANYDESCRIPTORBYID-LOG", "error", toJsonErr)
+		slog.ErrorContext(ctx, "Error in PutCompanyDescriptorById: ToJsonable failed", "error.code", "API-PUTCOMPANYDESCRIPTORBYID-SERIALIZERESPONSE", "error", toJsonErr, "component", componentName, "result_domain", result.Domain)
 		return common.NewErrorResponse(
 			toJsonErr, http.StatusInternalServerError, componentName, "PutCompanyDescriptorById", "Unhandled-ToJsonable",
 		), toJsonErr
@@ -324,14 +323,14 @@ func (s *CompanyLookupAPIService) PutCompanyDescriptorById(ctx context.Context, 
 func (s *CompanyLookupAPIService) DeleteCompanyDescriptorById(ctx context.Context, companyIdentifier string) (model.ImplResponse, error) {
 	decoded, decodeErr := common.DecodeString(companyIdentifier)
 	if decodeErr != nil {
-		slog.ErrorContext(ctx, fmt.Sprintf("📍 [%s] Error DeleteCompanyDescriptorById: decode companyIdentifier=%q failed: %v", componentName, companyIdentifier, decodeErr), "error.code", "API-DELETECOMPANYDESCRIPTORBYID-LOG", "error", decodeErr)
+		slog.ErrorContext(ctx, "Error DeleteCompanyDescriptorById: decode companyIdentifier failed", "error.code", "API-DELETECOMPANYDESCRIPTORBYID-DECODE", "error", decodeErr, "component", componentName, "company_identifier", companyIdentifier)
 		return common.NewErrorResponse(
 			decodeErr, http.StatusBadRequest, componentName, "DeleteCompanyDescriptorById", "BadRequest-Decode",
 		), nil
 	}
 	if !model.IsStrictCompanyDomain(decoded) {
 		invalidDomainErr := common.NewErrBadRequest("COMLOOKUP-DELETECOMPANYDESCRIPTORBYID-VALIDATEDOMAIN decoded identifier is not a syntactically valid domain")
-		slog.ErrorContext(ctx, fmt.Sprintf("📍 [%s] Error in DeleteCompanyDescriptorById: invalid decoded domain syntax (companyIdentifier=%q decoded=%q)", componentName, companyIdentifier, decoded), "error.code", "API-DELETECOMPANYDESCRIPTORBYID-LOG")
+		slog.ErrorContext(ctx, "Error in DeleteCompanyDescriptorById: invalid decoded domain syntax", "error.code", "API-DELETECOMPANYDESCRIPTORBYID-VALIDATE", "component", componentName, "company_identifier", companyIdentifier, "decoded", decoded)
 		return common.NewErrorResponse(
 			invalidDomainErr, http.StatusBadRequest, componentName, "DeleteCompanyDescriptorById", "BadRequest-InvalidDomainSyntax",
 		), nil
@@ -340,17 +339,17 @@ func (s *CompanyLookupAPIService) DeleteCompanyDescriptorById(ctx context.Contex
 	if err := s.companyLookupBackend.DeleteCompanyDescriptorByID(ctx, decoded); err != nil {
 		switch {
 		case common.IsErrNotFound(err):
-			slog.ErrorContext(ctx, fmt.Sprintf("📍 [%s] Error in DeleteCompanyDescriptorById: not found (companyId=%q): %v", componentName, decoded, err), "error.code", "API-DELETECOMPANYDESCRIPTORBYID-LOG", "error", err)
+			slog.ErrorContext(ctx, "Error in DeleteCompanyDescriptorById: not found", "error.code", "API-DELETECOMPANYDESCRIPTORBYID-FIND", "error", err, "component", componentName, "decoded", decoded)
 			return common.NewErrorResponse(
 				err, http.StatusNotFound, componentName, "DeleteCompanyDescriptorById", "NotFound",
 			), nil
 		case common.IsErrBadRequest(err):
-			slog.ErrorContext(ctx, fmt.Sprintf("📍 [%s] Error in DeleteCompanyDescriptorById: bad request (companyId=%q): %v", componentName, decoded, err), "error.code", "API-DELETECOMPANYDESCRIPTORBYID-LOG", "error", err)
+			slog.ErrorContext(ctx, "Error in DeleteCompanyDescriptorById: bad request", "error.code", "API-DELETECOMPANYDESCRIPTORBYID-VALIDATE", "error", err, "component", componentName, "decoded", decoded)
 			return common.NewErrorResponse(
 				err, http.StatusBadRequest, componentName, "DeleteCompanyDescriptorById", "BadRequest",
 			), nil
 		default:
-			slog.ErrorContext(ctx, fmt.Sprintf("📍 [%s] Error in DeleteCompanyDescriptorById: internal (companyId=%q): %v", componentName, decoded, err), "error.code", "API-DELETECOMPANYDESCRIPTORBYID-LOG", "error", err)
+			slog.ErrorContext(ctx, "Error in DeleteCompanyDescriptorById: internal", "error.code", "API-DELETECOMPANYDESCRIPTORBYID-EXECUTE", "error", err, "component", componentName, "decoded", decoded)
 			return common.NewErrorResponse(
 				err, http.StatusInternalServerError, componentName, "DeleteCompanyDescriptorById", "Unhandled",
 			), err

@@ -29,7 +29,6 @@ package auth
 import (
 	"context"
 	"errors"
-	"fmt"
 	"log/slog"
 	"net/http"
 	"strings"
@@ -343,7 +342,7 @@ func SelectFormulaForRight(ctx context.Context, right grammar.RightsEnum) contex
 
 	qf, cloneErr := CloneQueryFilter(existing)
 	if cloneErr != nil {
-		slog.ErrorContext(ctx, fmt.Sprintf("AUTH-SELECTQF-CLONEERR failed to clone query filter: %v", cloneErr), "error.code", "AUTH-SELECTQF-CLONEERR", "error", cloneErr)
+		slog.ErrorContext(ctx, "AUTH-SELECTQF-CLONEERR failed to clone query filter", "error.code", "AUTH-SELECTQF-CLONEERR", "error", cloneErr)
 		return WithQueryFilter(ctx, failClosedQueryFilter(right))
 	}
 	if qf == nil {
@@ -377,7 +376,7 @@ func MergeQueryFilter(ctx context.Context, query grammar.Query) context.Context 
 	if existing != nil {
 		cloned, err := CloneQueryFilter(existing)
 		if err != nil {
-			slog.ErrorContext(ctx, fmt.Sprintf("SMREPO-MERGEQF-CLONEERR failed to clone query filter: %v", err), "error.code", "SMREPO-MERGEQF-CLONEERR", "error", err)
+			slog.ErrorContext(ctx, "SMREPO-MERGEQF-CLONEERR failed to clone query filter", "error.code", "SMREPO-MERGEQF-CLONEERR", "error", err)
 			return WithQueryFilter(ctx, failClosedQueryFilter(grammar.RightsEnumREAD))
 		}
 		if cloned != nil {

@@ -112,7 +112,7 @@ func (b *QualifiersBuilder) AddQualifier(qualifierDbID int64, qType string, valu
 			b.qualifiers[qualifierDbID].qualifier.SetKind(&qKind)
 		}
 	} else {
-		slog.Warn(fmt.Sprintf("[Warning] qualifier with id '%d' already exists - skipping.", qualifierDbID), "error.code", "BUILDER-ADDQUALIFIER-LOG")
+		slog.Warn("duplicate qualifier skipped", "error.code", "BUILDER-ADDQUALIFIER-SKIPDUPLICATE", "qualifier.id", qualifierDbID)
 	}
 
 	return b, nil

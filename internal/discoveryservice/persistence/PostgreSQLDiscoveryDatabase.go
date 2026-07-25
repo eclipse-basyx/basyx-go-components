@@ -307,7 +307,7 @@ func (p *PostgreSQLDiscoveryDatabase) SearchAASIDsByAssetLinks(
 	sqlStr, args, err := ds.ToSQL()
 	debugEnabled := common.DebugEnabled(ctx)
 	if debugEnabled {
-		slog.DebugContext(ctx, "discovery database query", "query", sqlStr)
+		slog.DebugContext(ctx, "discovery database query prepared")
 	}
 	if err != nil {
 		slog.ErrorContext(ctx, "database query construction failed", "error.code", "DISCOVERY-SEARCH-BUILDQUERY", "error", err)

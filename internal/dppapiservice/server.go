@@ -29,7 +29,6 @@ package dppapiservice
 
 import (
 	"context"
-	"fmt"
 	"io/fs"
 	"log/slog"
 	"net/http"
@@ -65,7 +64,7 @@ func NewHTTPHandler(ctx context.Context, cfg *common.Config, openapiSpec fs.FS, 
 	common.AddCors(rootRouter, cfg)
 	common.AddHealthEndpoint(rootRouter, cfg)
 	if err := common.AddSwaggerUIFromFS(rootRouter, openapiSpec, "openapi.yaml", "Digital Product Passport API", "/swagger", "/api-docs/openapi.yaml", dppSwaggerConfig(cfg)); err != nil {
-		slog.WarnContext(ctx, fmt.Sprintf("Warning: failed to load OpenAPI spec for Swagger UI: %v", err), "error.code", "DPPAPISERVICE-NEWHTTPHANDLER-LOG", "error", err)
+		slog.WarnContext(ctx, "Swagger UI unavailable", "error.code", "DPPAPISERVICE-NEWHTTPHANDLER-LOADSWAGGER", "error", err)
 	}
 	rootRouter.Get(rootRedirectPath(contextPath), func(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, swaggerRedirectPath(contextPath), http.StatusFound)
@@ -73,7 +72,6 @@ func NewHTTPHandler(ctx context.Context, cfg *common.Config, openapiSpec fs.FS, 
 
 	apiRouter := chi.NewRouter()
 	common.ConfigureAPIRouter(apiRouter, "DPPAPIService")
-	apiRouter.Use(dppapi.Logger)
 	if err := auth.SetupSecurity(ctx, cfg, apiRouter); err != nil {
 		return nil, err
 	}

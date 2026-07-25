@@ -28,7 +28,6 @@
 package builder
 
 import (
-	"fmt"
 	"log/slog"
 	"slices"
 
@@ -182,7 +181,7 @@ func (rb *ReferenceBuilder) CreateReferredSemanticID(referredSemanticIDDbID int6
 func (rb *ReferenceBuilder) CreateReferredSemanticIDKey(referredSemanticIDDbID int64, keyID int64, keyType types.KeyTypes, keyValue string) error {
 	builder, exists := rb.referredSemanticIDBuilders[referredSemanticIDDbID]
 	if !exists {
-		slog.Error(fmt.Sprintf("[ReferenceBuilder:CreateReferredSemanticIDKey] Failed to find Referred SemanticID Builder for Referred SemanticID with Database ID '%d' and Key Database id '%d'", referredSemanticIDDbID, keyID), "error.code", "BUILDER-CREATEREFERREDSEMANTICIDKEY-LOG")
+		slog.Error("[ReferenceBuilder:CreateReferredSemanticIDKey] Failed to find Referred SemanticID Builder for Referred SemanticID with Database ID '' and Key Database id ''", "error.code", "BUILDER-CREATEREFERREDSEMANTICIDKEY-EXECUTE", "referred_semantic_id_db_id", referredSemanticIDDbID, "key_id", keyID)
 		return common.NewInternalServerError("Error during ReferredSemanticID creation. See console for details.")
 	}
 	builder.CreateKey(keyID, keyType, keyValue)

@@ -910,7 +910,7 @@ func listAssetAdministrationShellDescriptors(
 	}
 	sqlStr, args, err := ds.ToSQL()
 	if debugEnabled(ctx) {
-		slog.DebugContext(ctx, "AAS descriptor database query", "query", sqlStr)
+		slog.DebugContext(ctx, "AAS descriptor database query prepared")
 	}
 
 	if err != nil {

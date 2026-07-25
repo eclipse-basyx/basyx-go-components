@@ -159,7 +159,7 @@ func StoreReferenceTx(ctx context.Context, tx *sql.Tx, reader io.Reader, table s
 	}
 	content, err := reuseOrInsertCanonicalContentTx(ctx, tx, oid, digest, size)
 	if err != nil {
-		slog.ErrorContext(ctx, fmt.Sprintf("BINARYCONTENT-STORE-PERSIST canonical binary storage failed: %v", err), "error.code", "BINARYCONTENT-STORE-PERSIST", "error", err)
+		slog.ErrorContext(ctx, "BINARYCONTENT-STORE-PERSIST canonical binary storage failed", "error.code", "BINARYCONTENT-STORE-PERSIST", "error", err)
 		return Reference{}, common.NewInternalServerError("BINARYCONTENT-STORE-PERSIST canonical binary could not be stored")
 	}
 	reference, err := NewReference(ownerID, content, fileName)

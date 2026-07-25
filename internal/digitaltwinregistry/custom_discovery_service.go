@@ -83,7 +83,7 @@ func (s *CustomDiscoveryService) SearchAllAssetAdministrationShellIdsByAssetLink
 
 	shouldEnforceFormula, enforceErr := auth.ShouldEnforceFormula(ctx)
 	if enforceErr != nil {
-		slog.ErrorContext(ctx, fmt.Sprintf("🧭 [%s] Error SearchAllAssetAdministrationShellIdsByAssetLink: should-enforce-formula failed: %v", customDiscoveryComponentName, enforceErr), "error.code", "DIGITALTWINREGISTRY-SEARCHALLASSETADMINISTRATIONSHELLIDSBYASSETLINK-LOG", "error", enforceErr)
+		slog.ErrorContext(ctx, "Error SearchAllAssetAdministrationShellIdsByAssetLink: should-enforce-formula failed", "error.code", "DIGITALTWINREGISTRY-SEARCHALLASSETADMINISTRATIONSHELLIDSBYASSETLINK-EXECUTE", "error", enforceErr, "custom_discovery_component_name", customDiscoveryComponentName)
 		return common.NewErrorResponse(
 			enforceErr,
 			http.StatusInternalServerError,
@@ -138,7 +138,7 @@ func (s *CustomDiscoveryService) GetAllAssetAdministrationShellIdsByAssetLink(
 
 		dec, err := common.DecodeString(enc)
 		if err != nil {
-			slog.ErrorContext(ctx, fmt.Sprintf("🧭 [%s] Error GetAllAssetAdministrationShellIdsByAssetLink: decode assetIds[%d]=%q failed: %v", customDiscoveryComponentName, idx, enc, err), "error.code", "DIGITALTWINREGISTRY-GETALLASSETADMINISTRATIONSHELLIDSBYASSETLINK-LOG", "error", err)
+			slog.ErrorContext(ctx, "Error GetAllAssetAdministrationShellIdsByAssetLink: decode assetIds failed", "error.code", "DIGITALTWINREGISTRY-GETALLASSETADMINISTRATIONSHELLIDSBYASSETLINK-DECODE", "error", err, "custom_discovery_component_name", customDiscoveryComponentName, "idx", idx, "enc", enc)
 			return common.NewErrorResponse(
 				err,
 				http.StatusBadRequest,
@@ -150,7 +150,7 @@ func (s *CustomDiscoveryService) GetAllAssetAdministrationShellIdsByAssetLink(
 
 		var al model.AssetLink
 		if err := json.Unmarshal([]byte(dec), &al); err != nil {
-			slog.ErrorContext(ctx, fmt.Sprintf("🧭 [%s] Error GetAllAssetAdministrationShellIdsByAssetLink: unmarshal assetIds[%d] decoded=%q failed: %v", customDiscoveryComponentName, idx, dec, err), "error.code", "DIGITALTWINREGISTRY-GETALLASSETADMINISTRATIONSHELLIDSBYASSETLINK-LOG", "error", err)
+			slog.ErrorContext(ctx, "Error GetAllAssetAdministrationShellIdsByAssetLink: unmarshal assetIds decoded failed", "error.code", "DIGITALTWINREGISTRY-GETALLASSETADMINISTRATIONSHELLIDSBYASSETLINK-UNMARSHAL", "error", err, "custom_discovery_component_name", customDiscoveryComponentName, "idx", idx, "dec", dec)
 			return common.NewErrorResponse(
 				err,
 				http.StatusBadRequest,
@@ -219,7 +219,7 @@ func (s *CustomDiscoveryService) PostAllAssetLinksByID(
 ) (model.ImplResponse, error) {
 	decoded, decodeErr := common.DecodeString(aasIdentifier)
 	if decodeErr != nil {
-		slog.ErrorContext(ctx, fmt.Sprintf("🧭 [%s] Error PostAllAssetLinksById: decode aasIdentifier=%q failed: %v", customDiscoveryComponentName, aasIdentifier, decodeErr), "error.code", "DIGITALTWINREGISTRY-POSTALLASSETLINKSBYID-LOG", "error", decodeErr)
+		slog.ErrorContext(ctx, "Error PostAllAssetLinksById: decode aasIdentifier failed", "error.code", "DIGITALTWINREGISTRY-POSTALLASSETLINKSBYID-DECODE", "error", decodeErr, "custom_discovery_component_name", customDiscoveryComponentName, "aas_identifier", aasIdentifier)
 		return common.NewErrorResponse(
 			decodeErr,
 			http.StatusBadRequest,
@@ -232,7 +232,7 @@ func (s *CustomDiscoveryService) PostAllAssetLinksByID(
 	aasID := string(decoded)
 	exists, existsErr := s.aasChecker.ExistsAASByID(ctx, aasID)
 	if existsErr != nil {
-		slog.ErrorContext(ctx, fmt.Sprintf("🧭 [%s] Error PostAllAssetLinksById: existence check failed (aasId=%q): %v", customDiscoveryComponentName, aasID, existsErr), "error.code", "DIGITALTWINREGISTRY-POSTALLASSETLINKSBYID-LOG", "error", existsErr)
+		slog.ErrorContext(ctx, "Error PostAllAssetLinksById: existence check failed", "error.code", "DIGITALTWINREGISTRY-POSTALLASSETLINKSBYID-CHECKEXISTS", "error", existsErr, "custom_discovery_component_name", customDiscoveryComponentName, "aas_id", aasID)
 		return common.NewErrorResponse(
 			existsErr,
 			http.StatusInternalServerError,
@@ -262,7 +262,7 @@ func (s *CustomDiscoveryService) PostAllAssetLinksByID(
 
 	jsonableIncoming, convErr := specificAssetIDsToJSONable(specificAssetID)
 	if convErr != nil {
-		slog.ErrorContext(ctx, fmt.Sprintf("🧭 [%s] Error PostAllAssetLinksById: convert incoming links failed (aasId=%q): %v", customDiscoveryComponentName, aasID, convErr), "error.code", "DIGITALTWINREGISTRY-POSTALLASSETLINKSBYID-LOG", "error", convErr)
+		slog.ErrorContext(ctx, "Error PostAllAssetLinksById: convert incoming links failed", "error.code", "DIGITALTWINREGISTRY-POSTALLASSETLINKSBYID-EXECUTE", "error", convErr, "custom_discovery_component_name", customDiscoveryComponentName, "aas_id", aasID)
 		return common.NewErrorResponse(
 			convErr,
 			http.StatusInternalServerError,

@@ -159,7 +159,7 @@ func ReadSpecificAssetIDsByAASRef(
 		return nil, err
 	}
 	if debugEnabled(ctx) {
-		slog.DebugContext(ctx, "specific asset ID discovery query", "query", sqlStr)
+		slog.DebugContext(ctx, "specific asset ID discovery query prepared")
 	}
 
 	rows, err := db.QueryContext(ctx, sqlStr, args...)

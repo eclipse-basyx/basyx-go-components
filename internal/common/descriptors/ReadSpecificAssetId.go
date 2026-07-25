@@ -192,7 +192,7 @@ func ReadSpecificAssetIDsByDescriptorIDs(
 		return nil, err
 	}
 	if debugEnabled(ctx) {
-		slog.DebugContext(ctx, "specific asset ID database query", "query", sqlStr)
+		slog.DebugContext(ctx, "specific asset ID database query prepared")
 	}
 
 	rows, err := db.QueryContext(ctx, sqlStr, args...)

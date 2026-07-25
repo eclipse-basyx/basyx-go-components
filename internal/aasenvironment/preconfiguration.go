@@ -193,7 +193,7 @@ func resolvePreconfigurationFiles(configuredSources []string) ([]string, int, in
 		sourceInfo, statErr := os.Stat(sourcePath)
 		if statErr != nil {
 			failedCount++
-			slog.Error(fmt.Sprintf("%s-%s-INVALIDSOURCE source '%s' cannot be accessed: %v", preconfigurationComponent, preconfigurationOperation, sanitizeLogValue(sourcePath), statErr), "error.code", "AASENVIRONMENT-RESOLVEPRECONFIGURATIONFILES-LOG", "error", statErr)
+			slog.Error("preconfiguration source cannot be accessed", "error.code", "AASENVIRONMENT-RESOLVEPRECONFIGURATIONFILES-VALIDATE", "error", statErr, "component", preconfigurationComponent, "operation", preconfigurationOperation, "source", sanitizeLogValue(sourcePath))
 			continue
 		}
 
@@ -206,7 +206,7 @@ func resolvePreconfigurationFiles(configuredSources []string) ([]string, int, in
 
 		if !isSupportedAASPreconfigurationFile(sourcePath) {
 			skippedCount++
-			slog.Warn(fmt.Sprintf("%s-%s-SKIPUNSUPPORTED skipped unsupported file '%s'", preconfigurationComponent, preconfigurationOperation, sanitizeLogValue(sourcePath)), "error.code", "AASENVIRONMENT-RESOLVEPRECONFIGURATIONFILES-LOG")
+			slog.Warn("unsupported preconfiguration file skipped", "error.code", "AASENVIRONMENT-RESOLVEPRECONFIGURATIONFILES-SKIPUNSUPPORTED", "component", preconfigurationComponent, "operation", preconfigurationOperation, "source", sanitizeLogValue(sourcePath))
 			continue
 		}
 
@@ -229,7 +229,7 @@ func collectPreconfigurationFilesFromDirectory(dirPath string, resolvedSet map[s
 	walkErr := filepath.WalkDir(dirPath, func(path string, entry os.DirEntry, walkEntryErr error) error {
 		if walkEntryErr != nil {
 			failedCount++
-			slog.Error(fmt.Sprintf("%s-%s-WALKDIR failed while reading '%s': %v", preconfigurationComponent, preconfigurationOperation, sanitizeLogValue(path), walkEntryErr), "error.code", "AASENVIRONMENT-COLLECTPRECONFIGURATIONFILESFROMDIRECTORY-LOG", "error", walkEntryErr)
+			slog.Error("preconfiguration directory entry cannot be read", "error.code", "AASENVIRONMENT-COLLECTPRECONFIGURATIONFILESFROMDIRECTORY-READENTRY", "error", walkEntryErr, "component", preconfigurationComponent, "operation", preconfigurationOperation, "path", sanitizeLogValue(path))
 			return nil
 		}
 		if entry.IsDir() {
@@ -245,7 +245,7 @@ func collectPreconfigurationFilesFromDirectory(dirPath string, resolvedSet map[s
 	})
 	if walkErr != nil {
 		failedCount++
-		slog.Error(fmt.Sprintf("%s-%s-WALKDIRFAILED unable to traverse '%s': %v", preconfigurationComponent, preconfigurationOperation, sanitizeLogValue(dirPath), walkErr), "error.code", "AASENVIRONMENT-COLLECTPRECONFIGURATIONFILESFROMDIRECTORY-LOG", "error", walkErr)
+		slog.Error("preconfiguration directory traversal failed", "error.code", "AASENVIRONMENT-COLLECTPRECONFIGURATIONFILESFROMDIRECTORY-WALK", "error", walkErr, "component", preconfigurationComponent, "operation", preconfigurationOperation, "path", sanitizeLogValue(dirPath))
 	}
 
 	return skippedCount, failedCount

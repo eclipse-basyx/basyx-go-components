@@ -116,7 +116,7 @@ func (b *ExtensionsBuilder) AddExtension(extensionDbID int64, name string, value
 			position:  position,
 		}
 	} else {
-		slog.Warn(fmt.Sprintf("[Warning] Extension with id '%d' already exists - skipping.", extensionDbID), "error.code", "BUILDER-ADDEXTENSION-LOG")
+		slog.Warn("duplicate extension skipped", "error.code", "BUILDER-ADDEXTENSION-SKIPDUPLICATE", "extension.id", extensionDbID)
 	}
 	return b, nil
 }

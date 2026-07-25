@@ -29,7 +29,6 @@ package digitaltwinregistry
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"log/slog"
 	"net/http"
 	"strings"
@@ -220,7 +219,7 @@ func normalizeRegistryAssetLinkQueryAssetIDs(encodedAssetIDs []string) []string 
 func decodeRegistryAssetLinkQueryAssetID(encodedAssetID string, idx int) (model.AssetLink, *model.ImplResponse) {
 	decoded, err := common.DecodeString(encodedAssetID)
 	if err != nil {
-		slog.Error(fmt.Sprintf("[%s] Error GetAllAssetAdministrationShellDescriptors: decode assetIds[%d] failed: %v", customRegistryComponentName, idx, err), "error.code", "DIGITALTWINREGISTRY-DECODEREGISTRYASSETLINKQUERYASSETID-LOG", "error", err)
+		slog.Error("Error GetAllAssetAdministrationShellDescriptors: decode assetIds failed", "error.code", "DIGITALTWINREGISTRY-DECODEREGISTRYASSETLINKQUERYASSETID-DECODE", "error", err, "custom_registry_component_name", customRegistryComponentName, "idx", idx)
 		resp := common.NewErrorResponse(
 			err,
 			http.StatusBadRequest,
@@ -233,7 +232,7 @@ func decodeRegistryAssetLinkQueryAssetID(encodedAssetID string, idx int) (model.
 
 	var link model.AssetLink
 	if err = json.Unmarshal([]byte(decoded), &link); err != nil {
-		slog.Error(fmt.Sprintf("[%s] Error GetAllAssetAdministrationShellDescriptors: unmarshal assetIds[%d] failed: %v", customRegistryComponentName, idx, err), "error.code", "DIGITALTWINREGISTRY-DECODEREGISTRYASSETLINKQUERYASSETID-LOG", "error", err)
+		slog.Error("Error GetAllAssetAdministrationShellDescriptors: unmarshal assetIds failed", "error.code", "DIGITALTWINREGISTRY-DECODEREGISTRYASSETLINKQUERYASSETID-UNMARSHAL", "error", err, "custom_registry_component_name", customRegistryComponentName, "idx", idx)
 		resp := common.NewErrorResponse(
 			err,
 			http.StatusBadRequest,
@@ -245,7 +244,7 @@ func decodeRegistryAssetLinkQueryAssetID(encodedAssetID string, idx int) (model.
 	}
 
 	if err = model.AssertAssetLinkRequired(link); err != nil {
-		slog.Error(fmt.Sprintf("[%s] Error GetAllAssetAdministrationShellDescriptors: validate assetIds[%d] failed: %v", customRegistryComponentName, idx, err), "error.code", "DIGITALTWINREGISTRY-DECODEREGISTRYASSETLINKQUERYASSETID-LOG", "error", err)
+		slog.Error("Error GetAllAssetAdministrationShellDescriptors: validate assetIds failed", "error.code", "DIGITALTWINREGISTRY-DECODEREGISTRYASSETLINKQUERYASSETID-EXECUTE", "error", err, "custom_registry_component_name", customRegistryComponentName, "idx", idx)
 		resp := common.NewErrorResponse(
 			err,
 			http.StatusBadRequest,

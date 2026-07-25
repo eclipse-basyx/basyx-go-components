@@ -27,7 +27,6 @@ package model
 
 import (
 	"errors"
-	"fmt"
 	"log/slog"
 	"strings"
 
@@ -55,7 +54,7 @@ func ValidateWithMode(mode VerificationMode, warningContext string, verify func(
 
 	joined := strings.Join(validationErrors, "; ")
 	if normalizedMode == VerificationModePermissive {
-		slog.Warn(fmt.Sprintf("WARN: %s: %s", warningContext, joined), "error.code", "MODEL-VALIDATEWITHMODE-LOG")
+		slog.Warn("semantic verification warning", "error.code", "MODEL-VALIDATEWITHMODE-WARN", "verification.context", warningContext, "warning", joined)
 		return nil
 	}
 
