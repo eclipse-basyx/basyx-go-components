@@ -34,6 +34,7 @@ import (
 	"log/slog"
 	"net/http"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -60,6 +61,12 @@ var fallbackRequestIDCounter atomic.Uint64
 // HTTPMiddleware assigns request metadata and emits one structured access event
 // after the wrapped handler completes.
 func HTTPMiddleware(next http.Handler) http.Handler {
+	routeContexts := &sync.Pool{
+		New: func() any {
+			return chi.NewRouteContext()
+		},
+	}
+
 	return http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		metadata := requestMetadataFromHeaders(request)
 		request.Header.Set(RequestIDHeader, metadata.requestID)
@@ -67,11 +74,14 @@ func HTTPMiddleware(next http.Handler) http.Handler {
 		writer.Header().Set(RequestIDHeader, metadata.requestID)
 		writer.Header().Set(CorrelationIDHeader, metadata.correlationID)
 
-		ctx := requestContext(request.Context(), next, metadata)
+		ctx, routeContext := requestContext(request.Context(), next, metadata, routeContexts)
 		request = request.WithContext(ctx)
 		response := middleware.NewWrapResponseWriter(writer, request.ProtoMajor)
 		started := time.Now()
 
+		if routeContext != nil {
+			defer releaseRouteContext(routeContexts, routeContext)
+		}
 		defer func() {
 			recovered := recover()
 			status := response.Status()
@@ -102,18 +112,29 @@ func requestMetadataFromHeaders(request *http.Request) requestMetadata {
 	return requestMetadata{requestID: requestID, correlationID: correlationID}
 }
 
-func requestContext(ctx context.Context, next http.Handler, metadata requestMetadata) context.Context {
+func requestContext(
+	ctx context.Context,
+	next http.Handler,
+	metadata requestMetadata,
+	routeContexts *sync.Pool,
+) (context.Context, *chi.Context) {
 	ctx = contextWithRequestMetadata(ctx, metadata)
 	if chi.RouteContext(ctx) != nil {
-		return ctx
+		return ctx, nil
 	}
 	routes, ok := next.(chi.Routes)
 	if !ok {
-		return ctx
+		return ctx, nil
 	}
-	routeContext := chi.NewRouteContext()
+	routeContext := routeContexts.Get().(*chi.Context)
+	routeContext.Reset()
 	routeContext.Routes = routes
-	return context.WithValue(ctx, chi.RouteCtxKey, routeContext)
+	return context.WithValue(ctx, chi.RouteCtxKey, routeContext), routeContext
+}
+
+func releaseRouteContext(routeContexts *sync.Pool, routeContext *chi.Context) {
+	routeContext.Reset()
+	routeContexts.Put(routeContext)
 }
 
 func firstRequestHeader(request *http.Request, names ...string) string {

@@ -35,6 +35,7 @@ import (
 	"net/http/httptest"
 	"regexp"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/go-chi/chi/v5"
@@ -209,6 +210,32 @@ func TestHTTPMiddlewareRecordsImplicitAndMissingRoutes(t *testing.T) {
 	}
 	if _, ok := record["http.route"]; ok {
 		t.Fatalf("missing route contains http.route: %#v", record)
+	}
+}
+
+func TestReleaseRouteContextResetsBeforePooling(t *testing.T) {
+	routeContexts := &sync.Pool{
+		New: func() any {
+			return chi.NewRouteContext()
+		},
+	}
+	routeContext := routeContexts.Get().(*chi.Context)
+	routeContext.Routes = chi.NewRouter()
+	routeContext.RoutePath = "/stale"
+	routeContext.RouteMethod = http.MethodPost
+	routeContext.RoutePatterns = append(routeContext.RoutePatterns, "/stale/{id}")
+	routeContext.URLParams.Keys = append(routeContext.URLParams.Keys, "id")
+	routeContext.URLParams.Values = append(routeContext.URLParams.Values, "42")
+
+	releaseRouteContext(routeContexts, routeContext)
+
+	if routeContext.Routes != nil ||
+		routeContext.RoutePath != "" ||
+		routeContext.RouteMethod != "" ||
+		len(routeContext.RoutePatterns) != 0 ||
+		len(routeContext.URLParams.Keys) != 0 ||
+		len(routeContext.URLParams.Values) != 0 {
+		t.Fatalf("route context retained request data after release: %#v", routeContext)
 	}
 }
 
