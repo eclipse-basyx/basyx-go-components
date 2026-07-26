@@ -45,6 +45,7 @@ import (
 	commonmodel "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/security/abacpolicy"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/telemetry"
 	"github.com/eclipse-basyx/basyx-go-components/internal/digitaltwinregistry"
 	discoveryapiinternal "github.com/eclipse-basyx/basyx-go-components/internal/discoveryservice/api"
 	discoverydb "github.com/eclipse-basyx/basyx-go-components/internal/discoveryservice/persistence"
@@ -64,6 +65,11 @@ func runServer(ctx context.Context, configPath string) error {
 	if _, err = common.ConfigureLogging(cfg, "digitaltwinregistryservice", configPath, os.Stderr); err != nil {
 		return err
 	}
+	telemetryRuntime, err := telemetry.Configure(ctx, "digitaltwinregistryservice")
+	if err != nil {
+		return err
+	}
+	defer telemetryRuntime.Shutdown(ctx)
 	if err := commonmodel.SetVerificationMode(cfg.Server.StrictVerification); err != nil {
 		return err
 	}

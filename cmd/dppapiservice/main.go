@@ -39,6 +39,7 @@ import (
 	aasrepositorydb "github.com/eclipse-basyx/basyx-go-components/internal/aasrepository/persistence"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/history"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/telemetry"
 	"github.com/eclipse-basyx/basyx-go-components/internal/dppapiservice"
 	submodelrepositorydb "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence"
 )
@@ -54,6 +55,11 @@ func runServer(ctx context.Context, configPath string) error {
 	if _, err = common.ConfigureLogging(cfg, "dppapiservice", configPath, os.Stderr); err != nil {
 		return err
 	}
+	telemetryRuntime, err := telemetry.Configure(ctx, "dppapiservice")
+	if err != nil {
+		return err
+	}
+	defer telemetryRuntime.Shutdown(ctx)
 
 	dppapiservice.ConfigureHistory(cfg.History)
 	if err = history.ConfigureEvidence(ctx, cfg.History.Evidence); err != nil {

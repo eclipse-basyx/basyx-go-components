@@ -48,6 +48,7 @@ import (
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/jws"
 	commonmodel "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/security/abacpolicy"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/telemetry"
 	submodelrepositorydb "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence"
 	openapi "github.com/eclipse-basyx/basyx-go-components/pkg/aasrepositoryapi/go"
 )
@@ -63,6 +64,11 @@ func runServer(ctx context.Context, configPath string) error {
 	if _, err = common.ConfigureLogging(cfg, "aasrepositoryservice", configPath, os.Stderr); err != nil {
 		return err
 	}
+	telemetryRuntime, err := telemetry.Configure(ctx, "aasrepositoryservice")
+	if err != nil {
+		return err
+	}
+	defer telemetryRuntime.Shutdown(ctx)
 
 	if err := commonmodel.SetVerificationMode(cfg.Server.StrictVerification); err != nil {
 		return err

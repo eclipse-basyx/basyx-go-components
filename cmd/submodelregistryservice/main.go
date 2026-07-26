@@ -42,6 +42,7 @@ import (
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/history"
 	commonmodel "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/security/abacpolicy"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/telemetry"
 	smregistryapi "github.com/eclipse-basyx/basyx-go-components/internal/smregistry/api"
 	smregistrypostgresql "github.com/eclipse-basyx/basyx-go-components/internal/smregistry/persistence"
 	smregistryopenapi "github.com/eclipse-basyx/basyx-go-components/pkg/smregistry"
@@ -59,6 +60,11 @@ func runServer(ctx context.Context, configPath string) error {
 	if _, err = common.ConfigureLogging(cfg, "submodelregistryservice", configPath, os.Stderr); err != nil {
 		return err
 	}
+	telemetryRuntime, err := telemetry.Configure(ctx, "submodelregistryservice")
+	if err != nil {
+		return err
+	}
+	defer telemetryRuntime.Shutdown(ctx)
 	if err := commonmodel.SetVerificationMode(cfg.Server.StrictVerification); err != nil {
 		return err
 	}

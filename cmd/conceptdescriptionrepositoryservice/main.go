@@ -42,6 +42,7 @@ import (
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/history"
 	commonmodel "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/security/abacpolicy"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/telemetry"
 	"github.com/eclipse-basyx/basyx-go-components/internal/conceptdescriptionrepository/api"
 	"github.com/eclipse-basyx/basyx-go-components/internal/conceptdescriptionrepository/persistence"
 	openapi "github.com/eclipse-basyx/basyx-go-components/pkg/conceptdescriptionrepositoryapi/go"
@@ -59,6 +60,11 @@ func runServer(ctx context.Context, configPath string) error {
 	if _, err = common.ConfigureLogging(cfg, "conceptdescriptionrepositoryservice", configPath, os.Stderr); err != nil {
 		return err
 	}
+	telemetryRuntime, err := telemetry.Configure(ctx, "conceptdescriptionrepositoryservice")
+	if err != nil {
+		return err
+	}
+	defer telemetryRuntime.Shutdown(ctx)
 	if err := commonmodel.SetVerificationMode(cfg.Server.StrictVerification); err != nil {
 		return err
 	}
