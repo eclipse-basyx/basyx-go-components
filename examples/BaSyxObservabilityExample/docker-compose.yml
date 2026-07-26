@@ -1,0 +1,128 @@
+services:
+  aas-environment:
+    build:
+      context: ../..
+      dockerfile: cmd/aasenvironmentservice/Dockerfile
+    image: eclipsebasyx/aasenvironment-go:SNAPSHOT
+    pull_policy: never
+    ports:
+      - "127.0.0.1:8083:8082"
+    environment:
+      SERVER_PORT: "8082"
+      POSTGRES_HOST: db
+      POSTGRES_PORT: "5432"
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: admin123
+      POSTGRES_DBNAME: basyxObservability
+      ABAC_ENABLED: "false"
+      LOGGING_FORMAT: json
+      LOGGING_LEVEL: info
+      OTEL_TRACES_EXPORTER: otlp
+      OTEL_EXPORTER_OTLP_PROTOCOL: http/protobuf
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
+      OTEL_SERVICE_NAME: aasenvironmentservice
+      OTEL_RESOURCE_ATTRIBUTES: deployment.environment.name=observability-example
+    labels:
+      com.eclipse.basyx.observability.logs: "true"
+      com.eclipse.basyx.service_name: aasenvironmentservice
+    depends_on:
+      basyx-configuration:
+        condition: service_completed_successfully
+      otel-collector:
+        condition: service_started
+    restart: unless-stopped
+
+  basyx-configuration:
+    build:
+      context: ../..
+      dockerfile: cmd/basyxconfigurationservice/Dockerfile
+    image: eclipsebasyx/basyxconfigurationservice-go:SNAPSHOT
+    pull_policy: never
+    environment:
+      POSTGRES_HOST: db
+      POSTGRES_PORT: "5432"
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: admin123
+      POSTGRES_DBNAME: basyxObservability
+      LOGGING_FORMAT: json
+      LOGGING_LEVEL: info
+    labels:
+      com.eclipse.basyx.observability.logs: "true"
+      com.eclipse.basyx.service_name: basyxconfigurationservice
+    depends_on:
+      db:
+        condition: service_healthy
+
+  db:
+    image: postgres:18
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: admin123
+      POSTGRES_DB: basyxObservability
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U admin -d basyxObservability"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.157.0
+    command: ["--config=/etc/otelcol-contrib/config.yaml"]
+    volumes:
+      - ./otel-collector.yaml:/etc/otelcol-contrib/config.yaml:ro
+    depends_on:
+      jaeger:
+        condition: service_started
+    restart: unless-stopped
+
+  jaeger:
+    image: jaegertracing/jaeger:2.20.0
+    ports:
+      - "127.0.0.1:16686:16686"
+    restart: unless-stopped
+
+  loki:
+    image: grafana/loki:3.7.4
+    command: ["-config.file=/etc/loki/local-config.yaml"]
+    ports:
+      - "127.0.0.1:3100:3100"
+    volumes:
+      - ./loki.yaml:/etc/loki/local-config.yaml:ro
+    restart: unless-stopped
+
+  alloy:
+    image: grafana/alloy:v1.18.0
+    command:
+      - run
+      - --server.http.listen-addr=0.0.0.0:12345
+      - --storage.path=/var/lib/alloy
+      - /etc/alloy/config.alloy
+    volumes:
+      - ./alloy/config.alloy:/etc/alloy/config.alloy:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - alloy-data:/var/lib/alloy
+    depends_on:
+      loki:
+        condition: service_started
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:13.1.1
+    ports:
+      - "127.0.0.1:3001:3000"
+    environment:
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+      GF_AUTH_DISABLE_LOGIN_FORM: "true"
+    volumes:
+      - ./grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro
+    depends_on:
+      jaeger:
+        condition: service_started
+      loki:
+        condition: service_started
+    restart: unless-stopped
+
+volumes:
+  alloy-data:
