@@ -33,6 +33,8 @@ import (
 	"log/slog"
 	"strings"
 	"testing"
+
+	"go.opentelemetry.io/otel/trace"
 )
 
 func TestConfigureJSONProducesOneStructuredObject(t *testing.T) {
@@ -138,6 +140,60 @@ func TestConfigureEnrichesContextualLogsWithRequestMetadata(t *testing.T) {
 	}
 }
 
+func TestConfigureEnrichesContextualLogsWithTraceMetadata(t *testing.T) {
+	output := configureForTest(t, Config{Format: FormatJSON, Level: LevelInfo})
+	traceID, err := trace.TraceIDFromHex("4bf92f3577b34da6a3ce929d0e0e4736")
+	if err != nil {
+		t.Fatalf("parse trace ID: %v", err)
+	}
+	spanID, err := trace.SpanIDFromHex("00f067aa0ba902b7")
+	if err != nil {
+		t.Fatalf("parse span ID: %v", err)
+	}
+	spanContext := trace.NewSpanContext(trace.SpanContextConfig{
+		TraceID:    traceID,
+		SpanID:     spanID,
+		TraceFlags: trace.FlagsSampled,
+	})
+	ctx := trace.ContextWithSpanContext(t.Context(), spanContext)
+
+	slog.InfoContext(ctx, "traced operation completed")
+
+	record := decodeSingleRecord(t, output)
+	if record["trace_id"] != traceID.String() {
+		t.Fatalf("unexpected trace_id: %#v", record)
+	}
+	if record["span_id"] != spanID.String() {
+		t.Fatalf("unexpected span_id: %#v", record)
+	}
+	if record["trace_flags"] != "01" {
+		t.Fatalf("unexpected trace_flags: %#v", record)
+	}
+}
+
+func TestConfigureIncludesUnsampledTraceMetadata(t *testing.T) {
+	output := configureForTest(t, Config{Format: FormatText, Level: LevelInfo})
+	traceID, _ := trace.TraceIDFromHex("4bf92f3577b34da6a3ce929d0e0e4736")
+	spanID, _ := trace.SpanIDFromHex("00f067aa0ba902b7")
+	ctx := trace.ContextWithSpanContext(t.Context(), trace.NewSpanContext(trace.SpanContextConfig{
+		TraceID: traceID,
+		SpanID:  spanID,
+	}))
+
+	slog.InfoContext(ctx, "unsampled operation")
+
+	line := output.String()
+	for _, expected := range []string{
+		"trace_id=" + traceID.String(),
+		"span_id=" + spanID.String(),
+		"trace_flags=00",
+	} {
+		if !strings.Contains(line, expected) {
+			t.Errorf("expected %q in %q", expected, line)
+		}
+	}
+}
+
 func TestConfigureDoesNotAddRequestMetadataToBackgroundLogs(t *testing.T) {
 	output := configureForTest(t, Config{Format: FormatJSON, Level: LevelInfo})
 
@@ -150,6 +206,11 @@ func TestConfigureDoesNotAddRequestMetadataToBackgroundLogs(t *testing.T) {
 	if _, ok := record["correlation.id"]; ok {
 		t.Fatalf("background record contains correlation.id: %#v", record)
 	}
+	for _, key := range []string{"trace_id", "span_id", "trace_flags"} {
+		if _, ok := record[key]; ok {
+			t.Fatalf("background record contains %s: %#v", key, record)
+		}
+	}
 }
 
 func TestContextHandlerPreservesAttributesAndGroups(t *testing.T) {
@@ -158,6 +219,12 @@ func TestContextHandlerPreservesAttributesAndGroups(t *testing.T) {
 		requestID:     "request-1",
 		correlationID: "correlation-1",
 	})
+	traceID, _ := trace.TraceIDFromHex("4bf92f3577b34da6a3ce929d0e0e4736")
+	spanID, _ := trace.SpanIDFromHex("00f067aa0ba902b7")
+	ctx = trace.ContextWithSpanContext(ctx, trace.NewSpanContext(trace.SpanContextConfig{
+		TraceID: traceID,
+		SpanID:  spanID,
+	}))
 	logger := slog.Default().With("component", "test").WithGroup("details")
 
 	logger.InfoContext(ctx, "grouped event", "attempt", 2)
@@ -165,6 +232,9 @@ func TestContextHandlerPreservesAttributesAndGroups(t *testing.T) {
 	record := decodeSingleRecord(t, output)
 	if record["request.id"] != "request-1" || record["correlation.id"] != "correlation-1" {
 		t.Fatalf("request metadata is not at the record root: %#v", record)
+	}
+	if record["trace_id"] != traceID.String() || record["span_id"] != spanID.String() {
+		t.Fatalf("trace metadata is not at the record root: %#v", record)
 	}
 	if record["component"] != "test" {
 		t.Fatalf("preformatted attribute missing: %#v", record)

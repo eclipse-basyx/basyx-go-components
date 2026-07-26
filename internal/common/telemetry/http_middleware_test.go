@@ -26,6 +26,10 @@
 package telemetry
 
 import (
+	"bytes"
+	"encoding/json"
+	"log"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -101,6 +105,52 @@ func TestHTTPMiddlewareRecordsServerSpanWithInboundContext(t *testing.T) {
 		if strings.Contains(serialized, secret) {
 			t.Errorf("span contains %q: %s", secret, serialized)
 		}
+	}
+}
+
+func TestHTTPMiddlewareCorrelatesAccessLogWithServerSpan(t *testing.T) {
+	var output bytes.Buffer
+	previousLogger := slog.Default()
+	previousWriter := log.Writer()
+	previousFlags := log.Flags()
+	previousPrefix := log.Prefix()
+	t.Cleanup(func() {
+		slog.SetDefault(previousLogger)
+		log.SetOutput(previousWriter)
+		log.SetFlags(previousFlags)
+		log.SetPrefix(previousPrefix)
+	})
+	if _, err := commonlogging.Configure(
+		commonlogging.Config{Format: commonlogging.FormatJSON, Level: commonlogging.LevelInfo},
+		"testservice",
+		&output,
+	); err != nil {
+		t.Fatalf("configure logging: %v", err)
+	}
+
+	router := chi.NewRouter()
+	router.Get("/items/{itemID}", func(writer http.ResponseWriter, _ *http.Request) {
+		writer.WriteHeader(http.StatusOK)
+	})
+	handler, recorder := tracingTestHandler(commonlogging.HTTPMiddleware(router))
+	request := httptest.NewRequest(http.MethodGet, "/items/42", nil)
+	request.Header.Set(commonlogging.RequestIDHeader, "request-1")
+
+	handler.ServeHTTP(httptest.NewRecorder(), request)
+
+	span := singleEndedSpan(t, recorder)
+	var record map[string]any
+	if err := json.Unmarshal(bytes.TrimSpace(output.Bytes()), &record); err != nil {
+		t.Fatalf("decode access log: %v", err)
+	}
+	if record["trace_id"] != span.SpanContext().TraceID().String() {
+		t.Fatalf("access log trace ID does not match span: %#v", record)
+	}
+	if record["span_id"] != span.SpanContext().SpanID().String() {
+		t.Fatalf("access log span ID does not match span: %#v", record)
+	}
+	if record["trace_flags"] != "01" {
+		t.Fatalf("unexpected access log trace flags: %#v", record)
 	}
 }
 
