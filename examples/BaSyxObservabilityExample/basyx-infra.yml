@@ -1,0 +1,23 @@
+infrastructures:
+  default: observability
+
+  observability:
+    name: BaSyx Observability
+    components:
+      aasDiscovery:
+        baseUrl: "http://localhost:8083/lookup/shells"
+      aasRegistry:
+        baseUrl: "http://localhost:8083/shell-descriptors"
+        hasDiscoveryIntegration: true
+      submodelRegistry:
+        baseUrl: "http://localhost:8083/submodel-descriptors"
+      aasRepository:
+        baseUrl: "http://localhost:8083/shells"
+        hasRegistryIntegration: true
+      submodelRepository:
+        baseUrl: "http://localhost:8083/submodels"
+        hasRegistryIntegration: true
+      conceptDescriptionRepository:
+        baseUrl: "http://localhost:8083/concept-descriptions"
+    security:
+      type: none

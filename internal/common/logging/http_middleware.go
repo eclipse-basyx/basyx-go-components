@@ -58,46 +58,83 @@ const (
 
 var fallbackRequestIDCounter atomic.Uint64
 
+type httpLoggingMiddleware struct {
+	next          http.Handler
+	routeContexts sync.Pool
+}
+
 // HTTPMiddleware assigns request metadata and emits one structured access event
 // after the wrapped handler completes.
 func HTTPMiddleware(next http.Handler) http.Handler {
-	routeContexts := &sync.Pool{
-		New: func() any {
-			return chi.NewRouteContext()
-		},
+	loggingMiddleware := &httpLoggingMiddleware{next: next}
+	loggingMiddleware.routeContexts.New = func() any {
+		return chi.NewRouteContext()
 	}
+	return loggingMiddleware
+}
 
-	return http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
-		metadata := requestMetadataFromHeaders(request)
-		request.Header.Set(RequestIDHeader, metadata.requestID)
-		request.Header.Set(CorrelationIDHeader, metadata.correlationID)
-		writer.Header().Set(RequestIDHeader, metadata.requestID)
-		writer.Header().Set(CorrelationIDHeader, metadata.correlationID)
+func (loggingMiddleware *httpLoggingMiddleware) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
+	ctx := EnsureRequestMetadata(request.Context(), request)
+	metadata := requestMetadata{
+		requestID:     RequestIDFromContext(ctx),
+		correlationID: CorrelationIDFromContext(ctx),
+	}
+	request.Header.Set(RequestIDHeader, metadata.requestID)
+	request.Header.Set(CorrelationIDHeader, metadata.correlationID)
+	writer.Header().Set(RequestIDHeader, metadata.requestID)
+	writer.Header().Set(CorrelationIDHeader, metadata.correlationID)
 
-		ctx, routeContext := requestContext(request.Context(), next, metadata, routeContexts)
-		request = request.WithContext(ctx)
-		response := middleware.NewWrapResponseWriter(writer, request.ProtoMajor)
-		started := time.Now()
+	ctx, routeContext := requestContext(ctx, loggingMiddleware.next, &loggingMiddleware.routeContexts)
+	request = request.WithContext(ctx)
+	response := middleware.NewWrapResponseWriter(writer, request.ProtoMajor)
+	started := time.Now()
 
-		if routeContext != nil {
-			defer releaseRouteContext(routeContexts, routeContext)
+	if routeContext != nil {
+		defer releaseRouteContext(&loggingMiddleware.routeContexts, routeContext)
+	}
+	defer func() {
+		recovered := recover()
+		status := response.Status()
+		if recovered != nil {
+			status = http.StatusInternalServerError
+		} else if status == 0 {
+			status = http.StatusOK
 		}
-		defer func() {
-			recovered := recover()
-			status := response.Status()
-			if recovered != nil {
-				status = http.StatusInternalServerError
-			} else if status == 0 {
-				status = http.StatusOK
-			}
-			logHTTPRequest(request, response, status, time.Since(started))
-			if recovered != nil {
-				panic(recovered)
-			}
-		}()
+		logHTTPRequest(request, response, status, time.Since(started))
+		if recovered != nil {
+			panic(recovered)
+		}
+	}()
 
-		next.ServeHTTP(response, request)
-	})
+	loggingMiddleware.next.ServeHTTP(response, request)
+}
+
+func (loggingMiddleware *httpLoggingMiddleware) Routes() []chi.Route {
+	if routes, ok := loggingMiddleware.next.(chi.Routes); ok {
+		return routes.Routes()
+	}
+	return nil
+}
+
+func (loggingMiddleware *httpLoggingMiddleware) Middlewares() chi.Middlewares {
+	if routes, ok := loggingMiddleware.next.(chi.Routes); ok {
+		return routes.Middlewares()
+	}
+	return nil
+}
+
+func (loggingMiddleware *httpLoggingMiddleware) Match(routeContext *chi.Context, method string, path string) bool {
+	if routes, ok := loggingMiddleware.next.(chi.Routes); ok {
+		return routes.Match(routeContext, method, path)
+	}
+	return false
+}
+
+func (loggingMiddleware *httpLoggingMiddleware) Find(routeContext *chi.Context, method string, path string) string {
+	if routes, ok := loggingMiddleware.next.(chi.Routes); ok {
+		return routes.Find(routeContext, method, path)
+	}
+	return ""
 }
 
 func requestMetadataFromHeaders(request *http.Request) requestMetadata {
@@ -115,10 +152,8 @@ func requestMetadataFromHeaders(request *http.Request) requestMetadata {
 func requestContext(
 	ctx context.Context,
 	next http.Handler,
-	metadata requestMetadata,
 	routeContexts *sync.Pool,
 ) (context.Context, *chi.Context) {
-	ctx = contextWithRequestMetadata(ctx, metadata)
 	if chi.RouteContext(ctx) != nil {
 		return ctx, nil
 	}

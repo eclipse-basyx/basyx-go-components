@@ -71,24 +71,35 @@ Cross-origin clients may send and read both canonical headers without adding
 them to the CORS configuration.
 
 These identifiers correlate records within one incoming request. They are not
-authenticated identity data, and BaSyx does not yet propagate them to outbound
-requests. OpenTelemetry trace and span correlation remains future work.
+authenticated identity data, and BaSyx does not propagate them as W3C trace
+context. OpenTelemetry trace context is handled separately.
 
 An access event in JSON format looks like:
 
 ```json
-{"time":"2026-07-25T10:00:01Z","level":"INFO","msg":"HTTP request completed","service.name":"aasregistryservice","request.id":"request-42","correlation.id":"workflow-7","http.request.method":"GET","url.path":"/shell-descriptors/example","http.route":"/shell-descriptors/{aasIdentifier}","http.response.status_code":200,"http.response.body.size":421,"duration_ms":3.725}
+{"time":"2026-07-25T10:00:01Z","level":"INFO","msg":"HTTP request completed","service.name":"aasregistryservice","request.id":"request-42","correlation.id":"workflow-7","trace_id":"4bf92f3577b34da6a3ce929d0e0e4736","span_id":"00f067aa0ba902b7","trace_flags":"01","http.request.method":"GET","url.path":"/shell-descriptors/example","http.route":"/shell-descriptors/{aasIdentifier}","http.response.status_code":200,"http.response.body.size":421,"duration_ms":3.725}
 ```
 
 The same event in text format is:
 
 ```text
-time=2026-07-25T10:00:01.000Z level=INFO msg="HTTP request completed" service.name=aasregistryservice request.id=request-42 correlation.id=workflow-7 http.request.method=GET url.path=/shell-descriptors/example http.route=/shell-descriptors/{aasIdentifier} http.response.status_code=200 http.response.body.size=421 duration_ms=3.725
+time=2026-07-25T10:00:01.000Z level=INFO msg="HTTP request completed" service.name=aasregistryservice request.id=request-42 correlation.id=workflow-7 trace_id=4bf92f3577b34da6a3ce929d0e0e4736 span_id=00f067aa0ba902b7 trace_flags=01 http.request.method=GET url.path=/shell-descriptors/example http.route=/shell-descriptors/{aasIdentifier} http.response.status_code=200 http.response.body.size=421 duration_ms=3.725
 ```
 
 Normal requests are logged at `info`. `GET` health-probe requests are logged at
 `debug`, so the default `info` level suppresses routine probe traffic. The
 existing `logging.level` setting controls both request and application logs.
+
+## Trace Correlation
+
+When OpenTelemetry tracing is enabled, every contextual log emitted with a
+valid span contains top-level `trace_id`, `span_id`, and `trace_flags` fields.
+Valid unsampled contexts are included with `trace_flags=00`; background logs
+without a span remain unchanged. The access event is emitted before its server
+span ends, so the identifiers match.
+
+See the [OpenTelemetry tracing guide](telemetry.md) for activation, propagation,
+sampling, lifecycle, and privacy details.
 
 ## Following Logs
 
@@ -102,10 +113,10 @@ journalctl -f -u <unit>
 ```
 
 BaSyx does not provide a `/logs` endpoint, application log files, file
-rotation, retention management, or direct Loki integration. Feed the process
-stream into the platform collector of your choice. For example, Grafana Alloy,
-Fluent Bit, or an OpenTelemetry Collector can forward container or journal logs
-to Loki without coupling the BaSyx process to that backend.
-
-OpenTelemetry trace correlation and OTLP export are intentionally outside the
-current logging implementation.
+rotation, retention management, direct Loki integration, or direct OTLP log
+export. Feed the process stream into the platform collector of your choice. For
+example, Grafana Alloy, Fluent Bit, or an OpenTelemetry Collector can forward
+container or journal logs to Loki without coupling the BaSyx process to that
+backend. The [observability
+example](../../examples/BaSyxObservabilityExample/README.md) demonstrates Alloy
+and Loki collection while traces use OTLP.

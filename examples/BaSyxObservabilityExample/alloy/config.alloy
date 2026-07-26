@@ -1,0 +1,67 @@
+discovery.docker "local" {
+  host             = "unix:///var/run/docker.sock"
+  refresh_interval = "2s"
+}
+
+discovery.relabel "basyx_logs" {
+  targets = discovery.docker.local.targets
+
+  rule {
+    source_labels = ["__meta_docker_container_label_com_eclipse_basyx_observability_logs"]
+    regex         = "true"
+    action        = "keep"
+  }
+
+  rule {
+    source_labels = ["__meta_docker_container_label_com_eclipse_basyx_service_name"]
+    target_label  = "service_name"
+  }
+
+  rule {
+    source_labels = ["__meta_docker_container_name"]
+    regex         = "/(.*)"
+    replacement   = "$1"
+    target_label  = "container"
+  }
+}
+
+loki.source.docker "basyx" {
+  host             = "unix:///var/run/docker.sock"
+  targets          = discovery.relabel.basyx_logs.output
+  forward_to       = [loki.process.basyx.receiver]
+  refresh_interval = "2s"
+}
+
+loki.process "basyx" {
+  stage.json {
+    expressions = {
+      timestamp      = "time",
+      trace_id       = "",
+      span_id        = "",
+      request_id     = "\"request.id\"",
+      correlation_id = "\"correlation.id\"",
+    }
+  }
+
+  stage.timestamp {
+    source = "timestamp"
+    format = "RFC3339Nano"
+  }
+
+  stage.structured_metadata {
+    values = {
+      trace_id       = "",
+      span_id        = "",
+      request_id     = "",
+      correlation_id = "",
+    }
+  }
+
+  forward_to = [loki.write.local.receiver]
+}
+
+loki.write "local" {
+  endpoint {
+    url = "http://loki:3100/loki/api/v1/push"
+  }
+}

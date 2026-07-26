@@ -28,6 +28,8 @@ package logging
 import (
 	"context"
 	"log/slog"
+
+	"go.opentelemetry.io/otel/trace"
 )
 
 type handlerOperation struct {
@@ -50,7 +52,7 @@ func (handler *contextHandler) Enabled(ctx context.Context, level slog.Level) bo
 
 func (handler *contextHandler) Handle(ctx context.Context, record slog.Record) error {
 	target := handler.base
-	if attributes := requestContextAttributes(ctx); len(attributes) > 0 {
+	if attributes := contextAttributes(ctx); len(attributes) > 0 {
 		target = target.WithAttrs(attributes)
 	}
 	for _, operation := range handler.operations {
@@ -81,18 +83,30 @@ func (handler *contextHandler) WithGroup(name string) slog.Handler {
 	return &contextHandler{base: handler.base, operations: operations}
 }
 
-func requestContextAttributes(ctx context.Context) []slog.Attr {
+func contextAttributes(ctx context.Context) []slog.Attr {
 	requestID := RequestIDFromContext(ctx)
 	correlationID := CorrelationIDFromContext(ctx)
-	if requestID == "" && correlationID == "" {
+	spanContext := trace.SpanContext{}
+	if ctx != nil {
+		spanContext = trace.SpanContextFromContext(ctx)
+	}
+	if requestID == "" && correlationID == "" && !spanContext.IsValid() {
 		return nil
 	}
-	attributes := make([]slog.Attr, 0, 2)
+	attributes := make([]slog.Attr, 0, 5)
 	if requestID != "" {
 		attributes = append(attributes, slog.String("request.id", requestID))
 	}
 	if correlationID != "" {
 		attributes = append(attributes, slog.String("correlation.id", correlationID))
+	}
+	if spanContext.IsValid() {
+		attributes = append(
+			attributes,
+			slog.String("trace_id", spanContext.TraceID().String()),
+			slog.String("span_id", spanContext.SpanID().String()),
+			slog.String("trace_flags", spanContext.TraceFlags().String()),
+		)
 	}
 	return attributes
 }

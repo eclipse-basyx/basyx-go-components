@@ -40,6 +40,7 @@ import (
 	"time"
 
 	commonlogging "github.com/eclipse-basyx/basyx-go-components/internal/common/logging"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/telemetry"
 )
 
 // HTTPServerRunner manages one configured HTTP server instance.
@@ -102,7 +103,8 @@ func StartHTTPServer(ctx context.Context, serviceCode string, cfg ServerConfig, 
 	if ctx == nil {
 		return nil, fmt.Errorf("%s-RUNSERVER-CONTEXT context must not be nil", normalizedServiceCode)
 	}
-	server := NewConfiguredHTTPServer(ctx, cfg, commonlogging.HTTPMiddleware(handler))
+	loggedHandler := commonlogging.HTTPMiddleware(handler)
+	server := NewConfiguredHTTPServer(ctx, cfg, telemetry.HTTPMiddleware(loggedHandler))
 	listener, err := net.Listen("tcp", server.Addr)
 	if err != nil {
 		return nil, fmt.Errorf("%s-RUNSERVER-LISTEN %w", normalizedServiceCode, err)
