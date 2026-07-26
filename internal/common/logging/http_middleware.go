@@ -66,11 +66,11 @@ type httpLoggingMiddleware struct {
 // HTTPMiddleware assigns request metadata and emits one structured access event
 // after the wrapped handler completes.
 func HTTPMiddleware(next http.Handler) http.Handler {
-	middleware := &httpLoggingMiddleware{next: next}
-	middleware.routeContexts.New = func() any {
+	loggingMiddleware := &httpLoggingMiddleware{next: next}
+	loggingMiddleware.routeContexts.New = func() any {
 		return chi.NewRouteContext()
 	}
-	return middleware
+	return loggingMiddleware
 }
 
 func (loggingMiddleware *httpLoggingMiddleware) ServeHTTP(writer http.ResponseWriter, request *http.Request) {

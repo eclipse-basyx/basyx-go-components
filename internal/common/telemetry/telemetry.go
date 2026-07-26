@@ -31,6 +31,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"reflect"
 	"strconv"
 	"strings"
 	"sync"
@@ -83,6 +84,7 @@ type Runtime struct {
 	provider           *sdktrace.TracerProvider
 	previousProvider   trace.TracerProvider
 	previousPropagator propagation.TextMapPropagator
+	previousError      otel.ErrorHandler
 	shutdownOnce       sync.Once
 }
 
@@ -127,7 +129,7 @@ func Configure(ctx context.Context, serviceName string) (*Runtime, error) {
 	}
 	exporter, err := autoexport.NewSpanExporter(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("OTEL-CONFIG-EXPORTER %w", err)
+		return nil, fmt.Errorf("OTEL-CONFIG-EXPORTER invalid exporter configuration (%s)", telemetryErrorType(err))
 	}
 
 	runtime := &Runtime{
@@ -135,6 +137,7 @@ func Configure(ctx context.Context, serviceName string) (*Runtime, error) {
 		serviceName:        resourceServiceName(res, serviceName),
 		previousProvider:   otel.GetTracerProvider(),
 		previousPropagator: otel.GetTextMapPropagator(),
+		previousError:      otel.GetErrorHandler(),
 	}
 	restoreSamplerEnvironment := unsetEmptyEnvironment("OTEL_TRACES_SAMPLER")
 	defer restoreSamplerEnvironment()
@@ -185,6 +188,7 @@ func (runtime *Runtime) Shutdown(ctx context.Context) {
 		}
 		otel.SetTracerProvider(runtime.previousProvider)
 		otel.SetTextMapPropagator(runtime.previousPropagator)
+		otel.SetErrorHandler(runtime.previousError)
 		activeRuntime.CompareAndSwap(runtime, nil)
 	})
 }
@@ -231,7 +235,7 @@ func telemetryResource(ctx context.Context, serviceName string) (*resource.Resou
 		resource.WithTelemetrySDK(),
 	)
 	if err != nil {
-		return nil, fmt.Errorf("OTEL-CONFIG-RESOURCE %w", err)
+		return nil, fmt.Errorf("OTEL-CONFIG-RESOURCE invalid resource configuration (%s)", telemetryErrorType(err))
 	}
 	return res, nil
 }
@@ -380,8 +384,15 @@ func logRuntimeWarning(message string, code string, err error) {
 	slog.Warn(
 		message,
 		"error.code", code,
-		"error.type", fmt.Sprintf("%T", err),
+		"error.type", telemetryErrorType(err),
 	)
+}
+
+func telemetryErrorType(err error) string {
+	if err == nil {
+		return "<nil>"
+	}
+	return reflect.TypeOf(err).String()
 }
 
 func unsetEmptyEnvironment(key string) func() {

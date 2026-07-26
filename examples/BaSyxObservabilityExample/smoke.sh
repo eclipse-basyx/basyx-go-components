@@ -68,6 +68,8 @@ for stream in payload.get("data", {}).get("result", []):
             and record.get("trace_id") == "4bf92f3577b34da6a3ce929d0e0e4736"
             and record.get("request.id") == "observability-request-1"
             and record.get("correlation.id") == "observability-correlation-1"
+            and record.get("url.path") == "/shells"
+            and "limit" not in record
         ):
             raise SystemExit(0)
 raise SystemExit(1)

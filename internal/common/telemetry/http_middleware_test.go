@@ -287,7 +287,7 @@ func assertErrorSpan(t *testing.T, span sdktrace.ReadOnlySpan, expectedStatus in
 			hasPanicEvent = true
 		}
 		for _, item := range event.Attributes {
-			if strings.Contains(item.Value.Emit(), "private panic value") {
+			if strings.Contains(item.Value.String(), "private panic value") {
 				t.Fatalf("panic event leaked the panic value: %#v", event)
 			}
 		}

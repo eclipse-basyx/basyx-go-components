@@ -27,6 +27,7 @@ Welcome to the BaSyx Go project! This guide is designed to help new developers o
   - [4. Environment Variables \& Configuration](#4-environment-variables--configuration)
     - [Database Initialization](#database-initialization)
     - [Logging](#logging)
+    - [OpenTelemetry Tracing](#opentelemetry-tracing)
   - [5. Code Style \& Conventions](#5-code-style--conventions)
   - [6. Module Structure](#6-module-structure)
   - [7. Common Workflows](#7-common-workflows)
@@ -105,6 +106,15 @@ All commands support `logging.format` (`text` or `json`) and `logging.level`
 `LOGGING_LEVEL` environment overrides. Diagnostic records are written to
 stderr. See the [logging guide](docu/user/logging.md) for the output contract
 and Docker, Kubernetes, systemd, and Loki collection guidance.
+
+### OpenTelemetry Tracing
+
+All HTTP services support optional environment-driven OpenTelemetry tracing,
+W3C context extraction, delegated-operation propagation, and structured-log
+correlation. Tracing is disabled by default. See the [telemetry
+guide](docu/user/telemetry.md) for configuration and the [locally built
+observability example](examples/BaSyxObservabilityExample/README.md) for a
+Collector, Jaeger, Alloy, Loki, and Grafana setup.
 
 Configuration is managed via YAML files in `cmd/<service>/config.yaml` and environment variables. Key variables include database connection settings (see [docu/errors.md](docu/errors.md) for troubleshooting):
 

@@ -88,8 +88,10 @@ func TestConfigureEnablesConsoleExporterAndRestoresGlobals(t *testing.T) {
 	t.Setenv("OTEL_TRACES_EXPORTER", "console")
 	previousProvider := nooptrace.NewTracerProvider()
 	previousPropagator := propagation.NewCompositeTextMapPropagator(propagation.Baggage{})
+	previousErrorHandler := &testErrorHandler{}
 	otel.SetTracerProvider(previousProvider)
 	otel.SetTextMapPropagator(previousPropagator)
+	otel.SetErrorHandler(previousErrorHandler)
 	t.Cleanup(func() {
 		otel.SetTracerProvider(nooptrace.NewTracerProvider())
 		otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator())
@@ -114,6 +116,25 @@ func TestConfigureEnablesConsoleExporterAndRestoresGlobals(t *testing.T) {
 	if got, want := otel.GetTextMapPropagator().Fields(), previousPropagator.Fields(); strings.Join(got, ",") != strings.Join(want, ",") {
 		t.Fatalf("propagator was not restored: got %v want %v", got, want)
 	}
+	if otel.GetErrorHandler() != previousErrorHandler {
+		t.Fatal("error handler was not restored")
+	}
+}
+
+func TestConfigureEnablesOTLPExporter(t *testing.T) {
+	clearTelemetryEnvironment(t)
+	t.Setenv("OTEL_TRACES_EXPORTER", "otlp")
+	t.Setenv("OTEL_EXPORTER_OTLP_PROTOCOL", "http/protobuf")
+	t.Setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://127.0.0.1:4318")
+
+	runtime, err := Configure(t.Context(), "testservice")
+	if err != nil {
+		t.Fatalf("configure telemetry: %v", err)
+	}
+	t.Cleanup(func() { runtime.Shutdown(t.Context()) })
+	if !runtime.Enabled() {
+		t.Fatal("OTLP telemetry was not enabled")
+	}
 }
 
 func TestConfigureHonorsResourceAndSamplingEnvironment(t *testing.T) {
@@ -132,6 +153,14 @@ func TestConfigureHonorsResourceAndSamplingEnvironment(t *testing.T) {
 	if runtime.ServiceName() != "operator-service" {
 		t.Fatalf("unexpected service name %q", runtime.ServiceName())
 	}
+	res, err := telemetryResource(t.Context(), "testservice")
+	if err != nil {
+		t.Fatalf("create telemetry resource: %v", err)
+	}
+	deploymentEnvironment, ok := res.Set().Value("deployment.environment.name")
+	if !ok || deploymentEnvironment.AsString() != "test" {
+		t.Fatalf("resource attribute was not applied: %v", deploymentEnvironment)
+	}
 	_, span := otel.Tracer("test").Start(t.Context(), "operation")
 	defer span.End()
 	if span.SpanContext().IsSampled() {
@@ -149,7 +178,7 @@ func TestConfigureRejectsInvalidExplicitConfiguration(t *testing.T) {
 		{name: "SDK disabled", key: "OTEL_SDK_DISABLED", value: "sometimes", code: "OTEL-CONFIG-SDKDISABLED"},
 		{name: "exporter", key: "OTEL_TRACES_EXPORTER", value: "zipkin", code: "OTEL-CONFIG-EXPORTER"},
 		{name: "protocol", key: "OTEL_EXPORTER_OTLP_TRACES_PROTOCOL", value: "json", code: "OTEL-CONFIG-EXPORTER"},
-		{name: "resource", key: "OTEL_RESOURCE_ATTRIBUTES", value: "invalid", code: "OTEL-CONFIG-RESOURCE"},
+		{name: "resource", key: "OTEL_RESOURCE_ATTRIBUTES", value: "private-token", code: "OTEL-CONFIG-RESOURCE"},
 		{name: "sampler", key: "OTEL_TRACES_SAMPLER", value: "custom", code: "OTEL-CONFIG-SAMPLER"},
 		{name: "sampler argument", key: "OTEL_TRACES_SAMPLER_ARG", value: "2", code: "OTEL-CONFIG-SAMPLER"},
 		{name: "propagator", key: "OTEL_PROPAGATORS", value: "jaeger", code: "OTEL-CONFIG-PROPAGATOR"},
@@ -172,6 +201,9 @@ func TestConfigureRejectsInvalidExplicitConfiguration(t *testing.T) {
 			}
 			if err == nil || !strings.Contains(err.Error(), test.code) {
 				t.Fatalf("expected %s error, got %v", test.code, err)
+			}
+			if strings.Contains(err.Error(), "private-token") {
+				t.Fatalf("configuration error disclosed an operator-provided value: %v", err)
 			}
 		})
 	}
@@ -205,3 +237,7 @@ func clearTelemetryEnvironment(t *testing.T) {
 		t.Setenv(key, "")
 	}
 }
+
+type testErrorHandler struct{}
+
+func (*testErrorHandler) Handle(error) {}

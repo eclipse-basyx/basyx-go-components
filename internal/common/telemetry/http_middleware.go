@@ -94,7 +94,9 @@ func (middleware *httpTracingMiddleware) ServeHTTP(writer http.ResponseWriter, r
 	}
 
 	response := chimiddleware.NewWrapResponseWriter(writer, request.ProtoMajor)
-	defer middleware.finishRequest(span, request, response)
+	defer func() {
+		middleware.finishRequest(span, request, response, recover())
+	}()
 	middleware.next.ServeHTTP(response, request)
 }
 
@@ -102,8 +104,8 @@ func (middleware *httpTracingMiddleware) finishRequest(
 	span trace.Span,
 	request *http.Request,
 	response chimiddleware.WrapResponseWriter,
+	recovered any,
 ) {
-	recovered := recover()
 	status := response.Status()
 	if recovered != nil {
 		status = http.StatusInternalServerError
