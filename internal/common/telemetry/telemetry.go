@@ -34,6 +34,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"go.opentelemetry.io/contrib/exporters/autoexport"
@@ -72,6 +73,8 @@ var telemetryEnvironmentKeys = []string{
 	"OTEL_BSP_MAX_EXPORT_BATCH_SIZE",
 	"OTEL_PROPAGATORS",
 }
+
+var activeRuntime atomic.Pointer[Runtime]
 
 // Runtime owns the global tracing state installed by Configure.
 type Runtime struct {
@@ -143,6 +146,7 @@ func Configure(ctx context.Context, serviceName string) (*Runtime, error) {
 	otel.SetErrorHandler(otel.ErrorHandlerFunc(handleRuntimeError))
 	otel.SetTextMapPropagator(propagator)
 	otel.SetTracerProvider(runtime.provider)
+	activeRuntime.Store(runtime)
 	return runtime, nil
 }
 
@@ -181,6 +185,7 @@ func (runtime *Runtime) Shutdown(ctx context.Context) {
 		}
 		otel.SetTracerProvider(runtime.previousProvider)
 		otel.SetTextMapPropagator(runtime.previousPropagator)
+		activeRuntime.CompareAndSwap(runtime, nil)
 	})
 }
 
