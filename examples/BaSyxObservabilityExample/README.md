@@ -4,6 +4,7 @@ This development example builds BaSyx from the current checkout and connects
 request traces and structured logs to a local observability stack:
 
 - AAS Environment Service and BaSyx Configuration Service
+- BaSyx Web UI `SNAPSHOT-20260724-064425-2b74f32`
 - PostgreSQL
 - OpenTelemetry Collector `0.157.0`
 - Jaeger `2.20.0` with in-memory trace storage
@@ -22,7 +23,7 @@ Grafana provisions both data sources and trace-to-log/log-to-trace links.
 - Docker with Docker Compose
 - `curl`
 - Python 3 for the smoke verifier
-- Free loopback ports `3001`, `3100`, `8083`, and `16686`
+- Free loopback ports `3000`, `3001`, `3100`, `8083`, and `16686`
 
 ## Start
 
@@ -32,8 +33,13 @@ From this directory:
 docker compose up -d --build
 ```
 
-The two BaSyx images are built locally from `../..`. Compose pulls only the
-external infrastructure and base images.
+The two BaSyx Go images are built locally from `../..`. Compose pulls the BaSyx
+Web UI and the external infrastructure and base images.
+
+The AAS Environment automatically imports
+[`IESEDriveMotorDM3000.aasx`](aas/IESEDriveMotorDM3000.aasx). Open the Web UI,
+select **IESEDriveMotorDM3000**, and browse its submodels to generate realistic
+request traces and correlated access logs.
 
 ## Verify
 
@@ -46,9 +52,11 @@ Run the bounded end-to-end verifier:
 It sends a request with known W3C trace, request, and correlation IDs, then
 confirms:
 
-1. BaSyx returns the canonical request and correlation headers.
-2. Jaeger contains the trace.
-3. Loki contains the matching structured `HTTP request completed` record.
+1. The BaSyx Web UI is reachable.
+2. The preconfigured `IESEDriveMotorDM3000` AAS is available.
+3. BaSyx returns the canonical request and correlation headers.
+4. Jaeger contains the trace.
+5. Loki contains the matching structured `HTTP request completed` record.
 
 The optional outage check also stops the Collector briefly and verifies that
 BaSyx continues serving requests:
@@ -59,6 +67,7 @@ BaSyx continues serving requests:
 
 ## Open the UIs
 
+- BaSyx Web UI: [http://127.0.0.1:3000](http://127.0.0.1:3000)
 - Grafana: [http://127.0.0.1:3001](http://127.0.0.1:3001)
 - Jaeger: [http://127.0.0.1:16686](http://127.0.0.1:16686)
 - AAS Environment: [http://127.0.0.1:8083](http://127.0.0.1:8083)
@@ -66,7 +75,8 @@ BaSyx continues serving requests:
 Grafana allows anonymous viewer access in this example. In Explore, select
 Loki to inspect structured logs or Jaeger to inspect traces. Log records with a
 `trace_id` include a Jaeger link, and trace views offer a Loki query for the
-same service, time range, and trace ID.
+same service, time range, and trace ID. Requests made while browsing the
+preconfigured AAS in the BaSyx Web UI appear in both data sources.
 
 ## Stop
 
@@ -86,6 +96,7 @@ This stack is not a production deployment reference:
 
 - All published ports bind to loopback.
 - Grafana anonymous access is enabled.
+- The BaSyx Web UI and AAS Environment are unsecured.
 - The AAS Environment has ABAC disabled.
 - Jaeger stores traces only in memory.
 - Loki uses local container filesystem storage.

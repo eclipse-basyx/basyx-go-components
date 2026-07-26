@@ -6,15 +6,23 @@ services:
     image: eclipsebasyx/aasenvironment-go:SNAPSHOT
     pull_policy: never
     ports:
-      - "127.0.0.1:8083:8082"
+      - "127.0.0.1:8083:8083"
     environment:
-      SERVER_PORT: "8082"
+      SERVER_PORT: "8083"
+      CORS_ALLOWEDORIGINS: "*"
+      CORS_ALLOWEDHEADERS: "*"
+      CORS_ALLOWEDMETHODS: GET,POST,PUT,PATCH,DELETE,OPTIONS
       POSTGRES_HOST: db
       POSTGRES_PORT: "5432"
       POSTGRES_USER: admin
       POSTGRES_PASSWORD: admin123
       POSTGRES_DBNAME: basyxObservability
       ABAC_ENABLED: "false"
+      GENERAL_AASREGISTRYINTEGRATION: "true"
+      GENERAL_SUBMODELREGISTRYINTEGRATION: "true"
+      GENERAL_DISCOVERYINTEGRATION: "true"
+      GENERAL_EXTERNALURL: http://localhost:8083
+      GENERAL_AAS_PRECONFIG_PATHS: /app/preconfiguration
       LOGGING_FORMAT: json
       LOGGING_LEVEL: info
       OTEL_TRACES_EXPORTER: otlp
@@ -25,11 +33,27 @@ services:
     labels:
       com.eclipse.basyx.observability.logs: "true"
       com.eclipse.basyx.service_name: aasenvironmentservice
+    volumes:
+      - ./aas/IESEDriveMotorDM3000.aasx:/app/preconfiguration/IESEDriveMotorDM3000.aasx:ro
     depends_on:
       basyx-configuration:
         condition: service_completed_successfully
       otel-collector:
         condition: service_started
+    restart: unless-stopped
+
+  aas-ui:
+    image: eclipsebasyx/aas-gui:SNAPSHOT-20260724-064425-2b74f32
+    pull_policy: always
+    ports:
+      - "127.0.0.1:3000:3000"
+    volumes:
+      - ./basyx-infra.yml:/basyx-infra.yml:ro
+    environment:
+      ENDPOINT_CONFIG_AVAILABLE: "false"
+    depends_on:
+      aas-environment:
+        condition: service_healthy
     restart: unless-stopped
 
   basyx-configuration:

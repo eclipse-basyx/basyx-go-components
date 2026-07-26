@@ -16,6 +16,18 @@ cleanup() {
 }
 trap cleanup EXIT
 
+wait_for_ui() {
+  local attempts=40
+  for ((attempt = 1; attempt <= attempts; attempt++)); do
+    if curl --fail --silent --output /dev/null "http://127.0.0.1:3000"; then
+      return 0
+    fi
+    sleep 1
+  done
+  echo "BaSyx Web UI was not reachable" >&2
+  return 1
+}
+
 request_basyx() {
   curl --fail --silent --show-error \
     --dump-header "${response_headers}" \
@@ -26,6 +38,15 @@ request_basyx() {
     "http://127.0.0.1:8083/shells?limit=1"
   grep -qi "^X-Request-ID: ${request_id}" "${response_headers}"
   grep -qi "^X-Correlation-ID: ${correlation_id}" "${response_headers}"
+  python3 -c '
+import json
+import sys
+
+payload = json.load(sys.stdin)
+shells = payload.get("result", [])
+if not any(shell.get("idShort") == "IESEDriveMotorDM3000" for shell in shells):
+    raise SystemExit("preconfigured IESEDriveMotorDM3000 AAS was not found")
+' <"${response_body}"
 }
 
 wait_for_trace() {
@@ -82,6 +103,7 @@ raise SystemExit(1)
   return 1
 }
 
+wait_for_ui
 request_basyx
 wait_for_trace
 wait_for_log
