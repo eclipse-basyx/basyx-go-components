@@ -53,10 +53,11 @@ It sends a request with known W3C trace, request, and correlation IDs, then
 confirms:
 
 1. The BaSyx Web UI is reachable.
-2. The preconfigured `IESEDriveMotorDM3000` AAS is available.
-3. BaSyx returns the canonical request and correlation headers.
-4. Jaeger contains the trace.
-5. Loki contains the matching structured `HTTP request completed` record.
+2. Grafana Explore is available to the anonymous development user.
+3. The preconfigured `IESEDriveMotorDM3000` AAS is available.
+4. BaSyx returns the canonical request and correlation headers.
+5. Jaeger contains the trace.
+6. Loki contains the matching structured `HTTP request completed` record.
 
 The optional outage check also stops the Collector briefly and verifies that
 BaSyx continues serving requests:
@@ -72,7 +73,8 @@ BaSyx continues serving requests:
 - Jaeger: [http://127.0.0.1:16686](http://127.0.0.1:16686)
 - AAS Environment: [http://127.0.0.1:8083](http://127.0.0.1:8083)
 
-Grafana allows anonymous viewer access in this example. In Explore, select
+Grafana allows anonymous editor access in this example so Explore is available
+without a login. In Explore, select
 Loki to inspect structured logs or Jaeger to inspect traces. Log records with a
 `trace_id` include a Jaeger link, and trace views offer a Loki query for the
 same service, time range, and trace ID. Requests made while browsing the
@@ -95,7 +97,9 @@ docker compose down -v
 This stack is not a production deployment reference:
 
 - All published ports bind to loopback.
-- Grafana anonymous access is enabled.
+- Grafana anonymous Editor access is enabled so users can query data through
+  Explore. Anonymous users can also modify Grafana resources in this
+  development stack.
 - The BaSyx Web UI and AAS Environment are unsecured.
 - The AAS Environment has ABAC disabled.
 - Jaeger stores traces only in memory.

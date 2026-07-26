@@ -137,7 +137,7 @@ services:
       - "127.0.0.1:3001:3000"
     environment:
       GF_AUTH_ANONYMOUS_ENABLED: "true"
-      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Editor
       GF_AUTH_DISABLE_LOGIN_FORM: "true"
     volumes:
       - ./grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro

@@ -28,6 +28,21 @@ wait_for_ui() {
   return 1
 }
 
+wait_for_grafana_explore() {
+  local attempts=40
+  local status
+  for ((attempt = 1; attempt <= attempts; attempt++)); do
+    status=$(curl --silent --output /dev/null --write-out "%{http_code}" \
+      "http://127.0.0.1:3001/explore" || true)
+    if [[ "${status}" == "200" ]]; then
+      return 0
+    fi
+    sleep 1
+  done
+  echo "Grafana Explore was not available to the anonymous user" >&2
+  return 1
+}
+
 request_basyx() {
   curl --fail --silent --show-error \
     --dump-header "${response_headers}" \
@@ -104,6 +119,7 @@ raise SystemExit(1)
 }
 
 wait_for_ui
+wait_for_grafana_explore
 request_basyx
 wait_for_trace
 wait_for_log
