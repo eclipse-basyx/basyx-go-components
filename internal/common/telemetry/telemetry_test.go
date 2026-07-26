@@ -26,12 +26,17 @@
 package telemetry
 
 import (
+	"bytes"
 	"context"
+	"log"
 	"strings"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/propagation"
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	nooptrace "go.opentelemetry.io/otel/trace/noop"
 )
 
@@ -86,6 +91,9 @@ func TestConfigureDisablesTelemetryForNoneAndSDKDisabled(t *testing.T) {
 func TestConfigureEnablesConsoleExporterAndRestoresGlobals(t *testing.T) {
 	clearTelemetryEnvironment(t)
 	t.Setenv("OTEL_TRACES_EXPORTER", "console")
+	originalProvider := otel.GetTracerProvider()
+	originalPropagator := otel.GetTextMapPropagator()
+	originalErrorHandler := otel.GetErrorHandler()
 	previousProvider := nooptrace.NewTracerProvider()
 	previousPropagator := propagation.NewCompositeTextMapPropagator(propagation.Baggage{})
 	previousErrorHandler := &testErrorHandler{}
@@ -93,8 +101,9 @@ func TestConfigureEnablesConsoleExporterAndRestoresGlobals(t *testing.T) {
 	otel.SetTextMapPropagator(previousPropagator)
 	otel.SetErrorHandler(previousErrorHandler)
 	t.Cleanup(func() {
-		otel.SetTracerProvider(nooptrace.NewTracerProvider())
-		otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator())
+		otel.SetTracerProvider(originalProvider)
+		otel.SetTextMapPropagator(originalPropagator)
+		otel.SetErrorHandler(originalErrorHandler)
 	})
 
 	runtime, err := Configure(t.Context(), "testservice")
@@ -170,23 +179,34 @@ func TestConfigureHonorsResourceAndSamplingEnvironment(t *testing.T) {
 
 func TestConfigureRejectsInvalidExplicitConfiguration(t *testing.T) {
 	for _, test := range []struct {
-		name  string
-		key   string
-		value string
-		code  string
+		name     string
+		exporter string
+		key      string
+		value    string
+		code     string
 	}{
 		{name: "SDK disabled", key: "OTEL_SDK_DISABLED", value: "sometimes", code: "OTEL-CONFIG-SDKDISABLED"},
 		{name: "exporter", key: "OTEL_TRACES_EXPORTER", value: "zipkin", code: "OTEL-CONFIG-EXPORTER"},
 		{name: "protocol", key: "OTEL_EXPORTER_OTLP_TRACES_PROTOCOL", value: "json", code: "OTEL-CONFIG-EXPORTER"},
 		{name: "resource", key: "OTEL_RESOURCE_ATTRIBUTES", value: "private-token", code: "OTEL-CONFIG-RESOURCE"},
+		{name: "escaped resource", key: "OTEL_RESOURCE_ATTRIBUTES", value: "secret=private-token%ZZ", code: "OTEL-CONFIG-RESOURCE"},
+		{name: "generic endpoint", exporter: "otlp", key: "OTEL_EXPORTER_OTLP_ENDPOINT", value: "http://private-token@%zz", code: "OTEL-CONFIG-EXPORTER"},
+		{name: "trace endpoint", exporter: "otlp", key: "OTEL_EXPORTER_OTLP_TRACES_ENDPOINT", value: "http://private-token@%zz", code: "OTEL-CONFIG-EXPORTER"},
+		{name: "generic headers", exporter: "otlp", key: "OTEL_EXPORTER_OTLP_HEADERS", value: "Authorization=private-token%ZZ", code: "OTEL-CONFIG-EXPORTER"},
+		{name: "trace headers", exporter: "otlp", key: "OTEL_EXPORTER_OTLP_TRACES_HEADERS", value: "Authorization=private-token%ZZ", code: "OTEL-CONFIG-EXPORTER"},
 		{name: "sampler", key: "OTEL_TRACES_SAMPLER", value: "custom", code: "OTEL-CONFIG-SAMPLER"},
 		{name: "sampler argument", key: "OTEL_TRACES_SAMPLER_ARG", value: "2", code: "OTEL-CONFIG-SAMPLER"},
+		{name: "NaN sampler argument", key: "OTEL_TRACES_SAMPLER_ARG", value: "NaN", code: "OTEL-CONFIG-SAMPLER"},
 		{name: "propagator", key: "OTEL_PROPAGATORS", value: "jaeger", code: "OTEL-CONFIG-PROPAGATOR"},
 		{name: "batch queue", key: "OTEL_BSP_MAX_QUEUE_SIZE", value: "zero", code: "OTEL-CONFIG-BATCH"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			clearTelemetryEnvironment(t)
-			t.Setenv("OTEL_TRACES_EXPORTER", "console")
+			exporter := test.exporter
+			if exporter == "" {
+				exporter = "console"
+			}
+			t.Setenv("OTEL_TRACES_EXPORTER", exporter)
 			if test.key == "OTEL_SDK_DISABLED" || test.key == "OTEL_TRACES_EXPORTER" {
 				t.Setenv("OTEL_TRACES_EXPORTER", "console")
 			}
@@ -206,6 +226,64 @@ func TestConfigureRejectsInvalidExplicitConfiguration(t *testing.T) {
 				t.Fatalf("configuration error disclosed an operator-provided value: %v", err)
 			}
 		})
+	}
+}
+
+func TestConfigureDoesNotLogInvalidSensitiveExporterValues(t *testing.T) {
+	clearTelemetryEnvironment(t)
+	t.Setenv("OTEL_TRACES_EXPORTER", "otlp")
+	t.Setenv("OTEL_EXPORTER_OTLP_PROTOCOL", "http/protobuf")
+	t.Setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://127.0.0.1:4318")
+	t.Setenv("OTEL_EXPORTER_OTLP_HEADERS", "Authorization=private-token%ZZ")
+
+	var output bytes.Buffer
+	previousWriter := log.Writer()
+	log.SetOutput(&output)
+	t.Cleanup(func() {
+		log.SetOutput(previousWriter)
+	})
+
+	runtime, err := Configure(t.Context(), "testservice")
+	if runtime != nil {
+		runtime.Shutdown(t.Context())
+	}
+	if err == nil || !strings.Contains(err.Error(), "OTEL-CONFIG-EXPORTER") {
+		t.Fatalf("expected exporter configuration error, got %v", err)
+	}
+	if strings.Contains(err.Error(), "private-token") || strings.Contains(output.String(), "private-token") {
+		t.Fatalf("invalid exporter configuration disclosed a sensitive value: error=%v log=%q", err, output.String())
+	}
+}
+
+func TestShutdownUsesFreshContextForProviderCleanup(t *testing.T) {
+	processor := &blockingFlushProcessor{}
+	provider := sdktrace.NewTracerProvider(sdktrace.WithSpanProcessor(processor))
+	originalProvider := otel.GetTracerProvider()
+	originalPropagator := otel.GetTextMapPropagator()
+	originalErrorHandler := otel.GetErrorHandler()
+	previousProvider := nooptrace.NewTracerProvider()
+	previousPropagator := propagation.NewCompositeTextMapPropagator(propagation.Baggage{})
+	previousErrorHandler := &testErrorHandler{}
+	otel.SetTracerProvider(provider)
+	otel.SetTextMapPropagator(propagation.TraceContext{})
+	otel.SetErrorHandler(&testErrorHandler{})
+	t.Cleanup(func() {
+		otel.SetTracerProvider(originalProvider)
+		otel.SetTextMapPropagator(originalPropagator)
+		otel.SetErrorHandler(originalErrorHandler)
+	})
+	runtime := &Runtime{
+		enabled:            true,
+		provider:           provider,
+		previousProvider:   previousProvider,
+		previousPropagator: previousPropagator,
+		previousError:      previousErrorHandler,
+	}
+
+	runtime.shutdown(t.Context(), time.Millisecond)
+
+	if !processor.shutdownCalled.Load() {
+		t.Fatal("provider cleanup did not run after force flush timed out")
 	}
 }
 
@@ -241,3 +319,21 @@ func clearTelemetryEnvironment(t *testing.T) {
 type testErrorHandler struct{}
 
 func (*testErrorHandler) Handle(error) {}
+
+type blockingFlushProcessor struct {
+	shutdownCalled atomic.Bool
+}
+
+func (*blockingFlushProcessor) OnStart(context.Context, sdktrace.ReadWriteSpan) {}
+
+func (*blockingFlushProcessor) OnEnd(sdktrace.ReadOnlySpan) {}
+
+func (*blockingFlushProcessor) ForceFlush(ctx context.Context) error {
+	<-ctx.Done()
+	return ctx.Err()
+}
+
+func (processor *blockingFlushProcessor) Shutdown(context.Context) error {
+	processor.shutdownCalled.Store(true)
+	return nil
+}

@@ -13,8 +13,9 @@ request traces and structured logs to a local observability stack:
 
 BaSyx sends OTLP/HTTP traces to the Collector, which batches and forwards them
 to Jaeger. BaSyx JSON logs remain on stderr; Alloy reads the explicitly labelled
-BaSyx containers and sends their records to Loki. Grafana provisions both data
-sources and trace-to-log/log-to-trace links.
+BaSyx containers, parses their JSON timestamps, attaches trace and request
+identifiers as non-indexed structured metadata, and sends the records to Loki.
+Grafana provisions both data sources and trace-to-log/log-to-trace links.
 
 ## Prerequisites
 

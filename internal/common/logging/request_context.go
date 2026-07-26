@@ -25,13 +25,25 @@
 
 package logging
 
-import "context"
+import (
+	"context"
+	"net/http"
+)
 
 type requestMetadataKey struct{}
 
 type requestMetadata struct {
 	requestID     string
 	correlationID string
+}
+
+// EnsureRequestMetadata returns a context containing valid request metadata,
+// preserving metadata that an outer HTTP middleware already initialized.
+func EnsureRequestMetadata(ctx context.Context, request *http.Request) context.Context {
+	if RequestIDFromContext(ctx) != "" && CorrelationIDFromContext(ctx) != "" {
+		return ctx
+	}
+	return contextWithRequestMetadata(ctx, requestMetadataFromHeaders(request))
 }
 
 func contextWithRequestMetadata(ctx context.Context, metadata requestMetadata) context.Context {

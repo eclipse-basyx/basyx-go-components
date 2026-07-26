@@ -77,6 +77,7 @@ func newHTTPMiddleware(
 
 func (middleware *httpTracingMiddleware) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
 	ctx := middleware.propagator.Extract(request.Context(), propagation.HeaderCarrier(request.Header))
+	ctx = commonlogging.EnsureRequestMetadata(ctx, request)
 	ctx, span := middleware.tracer.Start(
 		ctx,
 		request.Method,
@@ -122,10 +123,10 @@ func (middleware *httpTracingMiddleware) finishRequest(
 		attribute.Int("http.response.status_code", status),
 		attribute.Int64("http.response.body.size", int64(response.BytesWritten())),
 	)
-	if requestID := response.Header().Get(commonlogging.RequestIDHeader); requestID != "" {
+	if requestID := commonlogging.RequestIDFromContext(request.Context()); requestID != "" {
 		span.SetAttributes(attribute.String("request.id", requestID))
 	}
-	if correlationID := response.Header().Get(commonlogging.CorrelationIDHeader); correlationID != "" {
+	if correlationID := commonlogging.CorrelationIDFromContext(request.Context()); correlationID != "" {
 		span.SetAttributes(attribute.String("correlation.id", correlationID))
 	}
 	if status >= http.StatusInternalServerError {

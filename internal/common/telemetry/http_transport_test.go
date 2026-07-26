@@ -143,9 +143,9 @@ func TestHTTPClientTransportDoesNotFabricateTraceContext(t *testing.T) {
 func attributesToString(attributes map[string]any) string {
 	var serialized strings.Builder
 	for key, value := range attributes {
-		serialized.WriteString(key)
+		_, _ = serialized.WriteString(key)
 		if text, ok := value.(string); ok {
-			serialized.WriteString(text)
+			_, _ = serialized.WriteString(text)
 		}
 	}
 	return serialized.String()

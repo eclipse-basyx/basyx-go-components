@@ -30,6 +30,9 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"math"
+	"net/textproto"
+	"net/url"
 	"os"
 	"reflect"
 	"strconv"
@@ -169,6 +172,10 @@ func (runtime *Runtime) ServiceName() string {
 // Shutdown flushes pending spans, shuts down the provider, and restores the
 // process-wide OpenTelemetry state that Configure replaced.
 func (runtime *Runtime) Shutdown(ctx context.Context) {
+	runtime.shutdown(ctx, shutdownTimeout)
+}
+
+func (runtime *Runtime) shutdown(ctx context.Context, timeout time.Duration) {
 	if runtime == nil || !runtime.enabled {
 		return
 	}
@@ -177,15 +184,19 @@ func (runtime *Runtime) Shutdown(ctx context.Context) {
 		if ctx != nil {
 			shutdownParent = context.WithoutCancel(ctx)
 		}
-		shutdownCtx, cancel := context.WithTimeout(shutdownParent, shutdownTimeout)
-		defer cancel()
 
-		if err := runtime.provider.ForceFlush(shutdownCtx); err != nil {
+		flushCtx, cancelFlush := context.WithTimeout(shutdownParent, timeout)
+		if err := runtime.provider.ForceFlush(flushCtx); err != nil {
 			logRuntimeWarning("OpenTelemetry flush failed", "OTEL-RUNTIME-FLUSH", err)
 		}
+		cancelFlush()
+
+		shutdownCtx, cancelShutdown := context.WithTimeout(shutdownParent, timeout)
 		if err := runtime.provider.Shutdown(shutdownCtx); err != nil {
 			logRuntimeWarning("OpenTelemetry shutdown failed", "OTEL-RUNTIME-SHUTDOWN", err)
 		}
+		cancelShutdown()
+
 		otel.SetTracerProvider(runtime.previousProvider)
 		otel.SetTextMapPropagator(runtime.previousPropagator)
 		otel.SetErrorHandler(runtime.previousError)
@@ -207,6 +218,16 @@ func sdkDisabled() (bool, error) {
 }
 
 func validateExporterEnvironment() error {
+	for _, key := range []string{"OTEL_EXPORTER_OTLP_ENDPOINT", "OTEL_EXPORTER_OTLP_TRACES_ENDPOINT"} {
+		if err := validateEndpointEnvironment(key); err != nil {
+			return err
+		}
+	}
+	for _, key := range []string{"OTEL_EXPORTER_OTLP_HEADERS", "OTEL_EXPORTER_OTLP_TRACES_HEADERS"} {
+		if err := validateHeaderEnvironment(key); err != nil {
+			return err
+		}
+	}
 	for _, key := range []string{"OTEL_EXPORTER_OTLP_PROTOCOL", "OTEL_EXPORTER_OTLP_TRACES_PROTOCOL"} {
 		value := strings.ToLower(strings.TrimSpace(os.Getenv(key)))
 		if value != "" && value != "grpc" && value != "http/protobuf" {
@@ -227,7 +248,51 @@ func validateExporterEnvironment() error {
 	return nil
 }
 
+func validateEndpointEnvironment(key string) error {
+	value := strings.TrimSpace(os.Getenv(key))
+	if value == "" {
+		return nil
+	}
+	endpoint, err := url.Parse(value)
+	if err != nil || endpoint.Host == "" || (endpoint.Scheme != "http" && endpoint.Scheme != "https") {
+		return fmt.Errorf("OTEL-CONFIG-EXPORTER invalid %s", key)
+	}
+	return nil
+}
+
+func validateHeaderEnvironment(key string) error {
+	value := strings.TrimSpace(os.Getenv(key))
+	if value == "" {
+		return nil
+	}
+	for _, header := range strings.Split(value, ",") {
+		name, encodedValue, found := strings.Cut(header, "=")
+		if !found || textproto.CanonicalMIMEHeaderKey(strings.TrimSpace(name)) == "" {
+			return fmt.Errorf("OTEL-CONFIG-EXPORTER invalid %s", key)
+		}
+		decodedValue, err := url.PathUnescape(encodedValue)
+		if err != nil || !validHeaderValue(decodedValue) {
+			return fmt.Errorf("OTEL-CONFIG-EXPORTER invalid %s", key)
+		}
+	}
+	return nil
+}
+
+func validHeaderValue(value string) bool {
+	for index := 0; index < len(value); index++ {
+		character := value[index]
+		if character == '\t' || character >= ' ' && character != 0x7f {
+			continue
+		}
+		return false
+	}
+	return true
+}
+
 func telemetryResource(ctx context.Context, serviceName string) (*resource.Resource, error) {
+	if err := validateResourceEnvironment(); err != nil {
+		return nil, err
+	}
 	res, err := resource.New(
 		ctx,
 		resource.WithAttributes(semconv.ServiceName(serviceName)),
@@ -238,6 +303,23 @@ func telemetryResource(ctx context.Context, serviceName string) (*resource.Resou
 		return nil, fmt.Errorf("OTEL-CONFIG-RESOURCE invalid resource configuration (%s)", telemetryErrorType(err))
 	}
 	return res, nil
+}
+
+func validateResourceEnvironment() error {
+	value := strings.TrimSpace(os.Getenv("OTEL_RESOURCE_ATTRIBUTES"))
+	if value == "" {
+		return nil
+	}
+	for _, item := range strings.Split(value, ",") {
+		key, encodedValue, found := strings.Cut(item, "=")
+		if !found || strings.TrimSpace(key) == "" {
+			return fmt.Errorf("OTEL-CONFIG-RESOURCE invalid OTEL_RESOURCE_ATTRIBUTES")
+		}
+		if _, err := url.PathUnescape(strings.TrimSpace(encodedValue)); err != nil {
+			return fmt.Errorf("OTEL-CONFIG-RESOURCE invalid OTEL_RESOURCE_ATTRIBUTES")
+		}
+	}
+	return nil
 }
 
 func resourceServiceName(res *resource.Resource, fallback string) string {
@@ -280,7 +362,7 @@ func traceRatio(argument string) (float64, error) {
 		return 1, nil
 	}
 	ratio, err := strconv.ParseFloat(argument, 64)
-	if err != nil || ratio < 0 || ratio > 1 {
+	if err != nil || math.IsNaN(ratio) || math.IsInf(ratio, 0) || ratio < 0 || ratio > 1 {
 		return 0, fmt.Errorf("OTEL-CONFIG-SAMPLER invalid OTEL_TRACES_SAMPLER_ARG %q", argument)
 	}
 	return ratio, nil

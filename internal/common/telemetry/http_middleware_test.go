@@ -108,6 +108,29 @@ func TestHTTPMiddlewareRecordsServerSpanWithInboundContext(t *testing.T) {
 	}
 }
 
+func TestHTTPMiddlewareUsesContextMetadataWhenResponseHeadersChange(t *testing.T) {
+	router := chi.NewRouter()
+	router.Get("/items", func(writer http.ResponseWriter, _ *http.Request) {
+		writer.Header().Set(commonlogging.RequestIDHeader, "changed-request")
+		writer.Header().Del(commonlogging.CorrelationIDHeader)
+		writer.WriteHeader(http.StatusOK)
+	})
+	handler, recorder := tracingTestHandler(commonlogging.HTTPMiddleware(router))
+	request := httptest.NewRequest(http.MethodGet, "/items", nil)
+	request.Header.Set(commonlogging.RequestIDHeader, "request-1")
+	request.Header.Set(commonlogging.CorrelationIDHeader, "correlation-1")
+
+	handler.ServeHTTP(httptest.NewRecorder(), request)
+
+	attributes := spanAttributes(singleEndedSpan(t, recorder))
+	if attributes["request.id"] != "request-1" {
+		t.Fatalf("span used mutable response request ID: %#v", attributes)
+	}
+	if attributes["correlation.id"] != "correlation-1" {
+		t.Fatalf("span used mutable response correlation ID: %#v", attributes)
+	}
+}
+
 func TestHTTPMiddlewareCorrelatesAccessLogWithServerSpan(t *testing.T) {
 	var output bytes.Buffer
 	previousLogger := slog.Default()

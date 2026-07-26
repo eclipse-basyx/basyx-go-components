@@ -74,13 +74,17 @@ func HTTPMiddleware(next http.Handler) http.Handler {
 }
 
 func (loggingMiddleware *httpLoggingMiddleware) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
-	metadata := requestMetadataFromHeaders(request)
+	ctx := EnsureRequestMetadata(request.Context(), request)
+	metadata := requestMetadata{
+		requestID:     RequestIDFromContext(ctx),
+		correlationID: CorrelationIDFromContext(ctx),
+	}
 	request.Header.Set(RequestIDHeader, metadata.requestID)
 	request.Header.Set(CorrelationIDHeader, metadata.correlationID)
 	writer.Header().Set(RequestIDHeader, metadata.requestID)
 	writer.Header().Set(CorrelationIDHeader, metadata.correlationID)
 
-	ctx, routeContext := requestContext(request.Context(), loggingMiddleware.next, metadata, &loggingMiddleware.routeContexts)
+	ctx, routeContext := requestContext(ctx, loggingMiddleware.next, &loggingMiddleware.routeContexts)
 	request = request.WithContext(ctx)
 	response := middleware.NewWrapResponseWriter(writer, request.ProtoMajor)
 	started := time.Now()
@@ -148,10 +152,8 @@ func requestMetadataFromHeaders(request *http.Request) requestMetadata {
 func requestContext(
 	ctx context.Context,
 	next http.Handler,
-	metadata requestMetadata,
 	routeContexts *sync.Pool,
 ) (context.Context, *chi.Context) {
-	ctx = contextWithRequestMetadata(ctx, metadata)
 	if chi.RouteContext(ctx) != nil {
 		return ctx, nil
 	}
