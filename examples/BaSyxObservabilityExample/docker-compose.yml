@@ -1,10 +1,7 @@
 services:
   aas-environment:
-    build:
-      context: ../..
-      dockerfile: cmd/aasenvironmentservice/Dockerfile
     image: eclipsebasyx/aasenvironment-go:SNAPSHOT
-    pull_policy: never
+    pull_policy: always
     ports:
       - "127.0.0.1:8083:8083"
     environment:
@@ -57,11 +54,8 @@ services:
     restart: unless-stopped
 
   basyx-configuration:
-    build:
-      context: ../..
-      dockerfile: cmd/basyxconfigurationservice/Dockerfile
     image: eclipsebasyx/basyxconfigurationservice-go:SNAPSHOT
-    pull_policy: never
+    pull_policy: always
     environment:
       POSTGRES_HOST: db
       POSTGRES_PORT: "5432"
@@ -96,14 +90,18 @@ services:
     volumes:
       - ./otel-collector.yaml:/etc/otelcol-contrib/config.yaml:ro
     depends_on:
-      jaeger:
+      tempo:
         condition: service_started
     restart: unless-stopped
 
-  jaeger:
-    image: jaegertracing/jaeger:2.20.0
+  tempo:
+    image: grafana/tempo:3.0.2
+    command: ["-target=all", "-config.file=/etc/tempo.yaml"]
     ports:
-      - "127.0.0.1:16686:16686"
+      - "127.0.0.1:3200:3200"
+    volumes:
+      - ./tempo.yaml:/etc/tempo.yaml:ro
+      - tempo-data:/var/tempo
     restart: unless-stopped
 
   loki:
@@ -142,7 +140,7 @@ services:
     volumes:
       - ./grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro
     depends_on:
-      jaeger:
+      tempo:
         condition: service_started
       loki:
         condition: service_started
@@ -150,3 +148,4 @@ services:
 
 volumes:
   alloy-data:
+  tempo-data:

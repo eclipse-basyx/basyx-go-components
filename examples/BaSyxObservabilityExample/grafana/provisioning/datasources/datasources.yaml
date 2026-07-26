@@ -10,16 +10,18 @@ datasources:
       derivedFields:
         - name: TraceID
           matcherRegex: '"trace_id":"([a-f0-9]{32})"'
-          datasourceUid: jaeger
+          datasourceUid: tempo
           url: '$${__value.raw}'
           urlDisplayLabel: View trace
 
-  - name: Jaeger
-    type: jaeger
-    uid: jaeger
+  - name: Tempo
+    type: tempo
+    uid: tempo
     access: proxy
-    url: http://jaeger:16686
+    url: http://tempo:3200
+    isDefault: true
     jsonData:
+      httpMethod: GET
       tracesToLogsV2:
         datasourceUid: loki
         spanStartTimeShift: -5m
@@ -31,5 +33,6 @@ datasources:
         filterBySpanID: false
       nodeGraph:
         enabled: true
-      traceIdTimeParams:
-        enabled: true
+      streamingEnabled:
+        search: true
+        metrics: true

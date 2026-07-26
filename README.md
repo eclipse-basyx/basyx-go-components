@@ -112,9 +112,9 @@ and Docker, Kubernetes, systemd, and Loki collection guidance.
 All HTTP services support optional environment-driven OpenTelemetry tracing,
 W3C context extraction, delegated-operation propagation, and structured-log
 correlation. Tracing is disabled by default. See the [telemetry
-guide](docu/user/telemetry.md) for configuration and the [locally built
-observability example](examples/BaSyxObservabilityExample/README.md) for a
-Collector, Jaeger, Alloy, Loki, and Grafana setup.
+guide](docu/user/telemetry.md) for configuration and the [observability
+example](examples/BaSyxObservabilityExample/README.md) for a Collector, Tempo,
+Alloy, Loki, and Grafana setup.
 
 Configuration is managed via YAML files in `cmd/<service>/config.yaml` and environment variables. Key variables include database connection settings (see [docu/errors.md](docu/errors.md) for troubleshooting):
 

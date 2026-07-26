@@ -43,6 +43,28 @@ wait_for_grafana_explore() {
   return 1
 }
 
+wait_for_grafana_tempo() {
+  local attempts=40
+  local payload
+  for ((attempt = 1; attempt <= attempts; attempt++)); do
+    if payload=$(curl --fail --silent \
+      "http://127.0.0.1:3001/api/datasources/uid/tempo" 2>/dev/null) &&
+      python3 -c '
+import json
+import sys
+
+data_source = json.load(sys.stdin)
+if data_source.get("type") != "tempo" or data_source.get("url") != "http://tempo:3200":
+    raise SystemExit(1)
+' <<<"${payload}"; then
+      return 0
+    fi
+    sleep 1
+  done
+  echo "Grafana Tempo data source was not available" >&2
+  return 1
+}
+
 request_basyx() {
   curl --fail --silent --show-error \
     --dump-header "${response_headers}" \
@@ -65,16 +87,41 @@ if not any(shell.get("idShort") == "IESEDriveMotorDM3000" for shell in shells):
 }
 
 wait_for_trace() {
-  local attempts=40
-  local payload
+  local attempts=60
   for ((attempt = 1; attempt <= attempts; attempt++)); do
-    if payload=$(curl --fail --silent "http://127.0.0.1:16686/api/traces/${trace_id}" 2>/dev/null) &&
-      python3 -c 'import json,sys; data=json.load(sys.stdin).get("data", []); raise SystemExit(0 if data else 1)' <<<"${payload}"; then
+    if curl --fail --silent --output /dev/null \
+      "http://127.0.0.1:3200/api/traces/${trace_id}" 2>/dev/null; then
       return 0
     fi
     sleep 1
   done
-  echo "Trace ${trace_id} was not found in Jaeger" >&2
+  echo "Trace ${trace_id} was not found in Tempo" >&2
+  return 1
+}
+
+wait_for_traceql_metrics() {
+  local attempts=60
+  local payload
+  local query='{ resource.service.name = "aasenvironmentservice" } | count_over_time()'
+  for ((attempt = 1; attempt <= attempts; attempt++)); do
+    if payload=$(curl --get --fail --silent \
+      "http://127.0.0.1:3200/api/metrics/query_range" \
+      --data-urlencode "q=${query}" \
+      --data-urlencode "since=5m" \
+      --data-urlencode "step=5s" 2>/dev/null) &&
+      python3 -c '
+import json
+import sys
+
+payload = json.load(sys.stdin)
+if not payload.get("series"):
+    raise SystemExit(1)
+' <<<"${payload}"; then
+      return 0
+    fi
+    sleep 1
+  done
+  echo "Tempo TraceQL metrics did not return the BaSyx service" >&2
   return 1
 }
 
@@ -120,8 +167,10 @@ raise SystemExit(1)
 
 wait_for_ui
 wait_for_grafana_explore
+wait_for_grafana_tempo
 request_basyx
 wait_for_trace
+wait_for_traceql_metrics
 wait_for_log
 
 if [[ "${1:-}" == "--check-collector-outage" ]]; then
