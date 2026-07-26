@@ -86,6 +86,9 @@ func (transport *tracingRoundTripper) RoundTrip(request *http.Request) (*http.Re
 
 	tracedRequest := request.Clone(ctx)
 	tracedRequest.Header = request.Header.Clone()
+	if tracedRequest.Header == nil {
+		tracedRequest.Header = make(http.Header)
+	}
 	transport.propagator.Inject(ctx, propagation.HeaderCarrier(tracedRequest.Header))
 	response, err := transport.base.RoundTrip(tracedRequest)
 	if err != nil {

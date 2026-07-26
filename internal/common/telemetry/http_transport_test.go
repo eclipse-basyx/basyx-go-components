@@ -104,6 +104,45 @@ func TestHTTPClientTransportCreatesParentedSpanAndInjectsContext(t *testing.T) {
 	parent.End()
 }
 
+func TestHTTPClientTransportInjectsContextWithNilRequestHeaders(t *testing.T) {
+	provider := sdktrace.NewTracerProvider(sdktrace.WithSampler(sdktrace.AlwaysSample()))
+	var capturedRequest *http.Request
+	base := roundTripperFunc(func(request *http.Request) (*http.Response, error) {
+		capturedRequest = request
+		return &http.Response{
+			StatusCode: http.StatusOK,
+			Header:     make(http.Header),
+			Body:       io.NopCloser(strings.NewReader("")),
+			Request:    request,
+		}, nil
+	})
+	transport := newHTTPClientTransport(
+		base,
+		provider.Tracer(instrumentationName),
+		propagation.TraceContext{},
+	)
+	ctx, parent := provider.Tracer("test").Start(t.Context(), "parent")
+	defer parent.End()
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, "https://example.com/items", nil)
+	if err != nil {
+		t.Fatalf("create request: %v", err)
+	}
+	request.Header = nil
+
+	response, err := transport.RoundTrip(request)
+	if err != nil {
+		t.Fatalf("round trip: %v", err)
+	}
+	_ = response.Body.Close()
+
+	if capturedRequest.Header.Get("traceparent") == "" {
+		t.Fatal("trace context was not injected")
+	}
+	if request.Header != nil {
+		t.Fatal("original request headers were mutated")
+	}
+}
+
 func TestHTTPClientTransportDoesNotFabricateTraceContext(t *testing.T) {
 	recorder := tracetest.NewSpanRecorder()
 	provider := sdktrace.NewTracerProvider(sdktrace.WithSpanProcessor(recorder))
