@@ -198,12 +198,12 @@ func runServer(ctx context.Context, configPath string) error {
 		persistence,
 	)
 	customAASRepository := aasenvironment.NewCustomAASRepositoryService(
-		aasrepositoryapi.NewAssetAdministrationShellRepositoryAPIAPIService(aasRepositoryPersistence, submodelRepositoryPersistence),
+		aasrepositoryapi.NewAssetAdministrationShellRepositoryAPIAPIService(ctx, aasRepositoryPersistence, submodelRepositoryPersistence),
 		persistence,
 		registrySyncConfig,
 	)
 	customSMRepository := aasenvironment.NewCustomSubmodelRepositoryService(
-		submodelrepositoryapi.NewSubmodelRepositoryAPIAPIService(*submodelRepositoryPersistence),
+		submodelrepositoryapi.NewSubmodelRepositoryAPIAPIService(ctx, *submodelRepositoryPersistence),
 		persistence,
 		registrySyncConfig,
 	)

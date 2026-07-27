@@ -38,6 +38,14 @@ import (
 	"time"
 )
 
+const (
+	maxRequestBodyBytes = 1 << 20
+	readHeaderTimeout   = 5 * time.Second
+	readTimeout         = 10 * time.Second
+	writeTimeout        = 15 * time.Second
+	idleTimeout         = 60 * time.Second
+)
+
 type operationVariable struct {
 	Value propertyValue `json:"value"`
 }
@@ -66,8 +74,20 @@ func main() {
 
 	address := ":" + port
 	log.Printf("delegated operation service listening on %s", address)
-	if err := http.ListenAndServe(address, mux); err != nil {
+	server := newHTTPServer(address, mux)
+	if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		log.Fatalf("delegate service startup failed: %v", err)
+	}
+}
+
+func newHTTPServer(address string, handler http.Handler) *http.Server {
+	return &http.Server{
+		Addr:              address,
+		Handler:           handler,
+		ReadHeaderTimeout: readHeaderTimeout,
+		ReadTimeout:       readTimeout,
+		WriteTimeout:      writeTimeout,
+		IdleTimeout:       idleTimeout,
 	}
 }
 
@@ -90,9 +110,15 @@ func handleAdd(writer http.ResponseWriter, request *http.Request, delay time.Dur
 		return
 	}
 
+	request.Body = http.MaxBytesReader(writer, request.Body, maxRequestBodyBytes)
 	inputVariables, err := parseInput(request)
 	if err != nil {
-		writeError(writer, err.Error(), http.StatusBadRequest)
+		statusCode := http.StatusBadRequest
+		var maxBytesError *http.MaxBytesError
+		if errors.As(err, &maxBytesError) {
+			statusCode = http.StatusRequestEntityTooLarge
+		}
+		writeError(writer, err.Error(), statusCode)
 		return
 	}
 

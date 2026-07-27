@@ -182,7 +182,7 @@ func runServer(ctx context.Context, configPath string) error {
 	}
 	enableReferencingAASDescriptorEmbeddingSync := registrySyncConfig.SubmodelRegistryIntegration
 	smSvc := aasenvironment.NewCustomSubmodelRepositoryServiceWithAASDescriptorEmbeddingSync(
-		api.NewSubmodelRepositoryAPIAPIService(*smDatabase),
+		api.NewSubmodelRepositoryAPIAPIService(ctx, *smDatabase),
 		persistence,
 		registrySyncConfig,
 		enableReferencingAASDescriptorEmbeddingSync,

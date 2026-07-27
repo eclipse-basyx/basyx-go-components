@@ -1,4 +1,5 @@
 {
+  "clientTimeoutDuration": "PT10S",
   "inputArguments": [
     {
       "value": {

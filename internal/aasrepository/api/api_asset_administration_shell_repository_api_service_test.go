@@ -33,6 +33,9 @@ import (
 	"time"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
+	aasopenapi "github.com/eclipse-basyx/basyx-go-components/pkg/aasrepositoryapi/go"
+	submodelopenapi "github.com/eclipse-basyx/basyx-go-components/pkg/submodelrepositoryapi"
 	"github.com/stretchr/testify/require"
 )
 
@@ -57,7 +60,7 @@ func TestGetAllAssetAdministrationShellsRejectsInvalidCursorWithStandardErrorBod
 	_, expectedDecodeErr := common.DecodeString(invalidCursor)
 	require.Error(t, expectedDecodeErr)
 
-	sut := NewAssetAdministrationShellRepositoryAPIAPIService(nil, nil)
+	sut := NewAssetAdministrationShellRepositoryAPIAPIService(t.Context(), nil, nil)
 	response, err := sut.GetAllAssetAdministrationShells(contextWithABACDisabled(t), nil, "", 1, invalidCursor, time.Time{}, time.Time{})
 
 	require.NoError(t, err)
@@ -71,4 +74,32 @@ func TestGetAllAssetAdministrationShellsRejectsInvalidCursorWithStandardErrorBod
 	require.Equal(t, "400", handlers[0].Code)
 	require.Equal(t, "AASREPO-400-GetAllAssetAdministrationShells-BadRequest-BadCursor", handlers[0].CorrelationID)
 	require.NotEmpty(t, handlers[0].Timestamp)
+}
+
+func TestToAASOperationRedirectRewritesSubmodelNamespace(t *testing.T) {
+	t.Parallel()
+
+	response := model.Response(http.StatusAccepted, submodelopenapi.Redirect{
+		Location: "/submodels/c20/submodel-elements/Ops.Add/operation-status/handle-1",
+	})
+
+	translated := toAASOperationRedirect(response, "YWFz", "c20", "Ops.Add", "operation-status")
+
+	require.Equal(t, http.StatusAccepted, translated.Code)
+	redirect, ok := translated.Body.(aasopenapi.Redirect)
+	require.True(t, ok)
+	require.Equal(
+		t,
+		"/shells/YWFz/submodels/c20/submodel-elements/Ops.Add/operation-status/handle-1",
+		redirect.Location,
+	)
+}
+
+func TestInvokeOperationAsyncAasRepositoryRequiresClientTimeoutDuration(t *testing.T) {
+	t.Parallel()
+
+	sut := NewAssetAdministrationShellRepositoryAPIAPIService(t.Context(), nil, nil)
+	response, err := sut.InvokeOperationAsyncAasRepository(contextWithABACDisabled(t), "", "", "", model.OperationRequest{})
+	require.NoError(t, err)
+	require.Equal(t, http.StatusBadRequest, response.Code)
 }

@@ -33,7 +33,9 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"path"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -211,7 +213,9 @@ func TestDelegationOperation(t *testing.T) {
 		}
 	})
 
-	invokeRequestBody, err := json.Marshal(map[string]any{})
+	invokeRequestBody, err := json.Marshal(map[string]any{
+		"clientTimeoutDuration": "PT10S",
+	})
 	require.NoError(t, err)
 
 	invokeRequest, err := http.NewRequest(
@@ -229,26 +233,83 @@ func TestDelegationOperation(t *testing.T) {
 	invokeResponseBody, err := io.ReadAll(invokeResponse.Body)
 	require.NoError(t, err)
 	require.Equalf(t, http.StatusOK, invokeResponse.StatusCode, "invoke response body: %s", string(invokeResponseBody))
+	assertDelegatedAdditionResult(t, invokeResponseBody)
 
-	var invokeResultObject map[string]any
-	if err := json.Unmarshal(invokeResponseBody, &invokeResultObject); err == nil {
-		outputArguments, ok := invokeResultObject["outputArguments"].([]any)
-		require.True(t, ok)
-		require.Len(t, outputArguments, 1)
+	asyncInvokeRequest, err := http.NewRequest(
+		http.MethodPost,
+		baseURL+"/submodels/"+encodedSubmodelID+"/submodel-elements/AddNumbers/invoke-async",
+		bytes.NewReader(invokeRequestBody),
+	)
+	require.NoError(t, err)
+	asyncInvokeRequest.Header.Set("Content-Type", "application/json")
 
-		outputOperationVariable, ok := outputArguments[0].(map[string]any)
-		require.True(t, ok)
-		outputValue, ok := outputOperationVariable["value"].(map[string]any)
-		require.True(t, ok)
-		require.Equal(t, "8", fmt.Sprint(outputValue["value"]))
-		return
+	noRedirectClient := &http.Client{
+		Timeout: 15 * time.Second,
+		CheckRedirect: func(_ *http.Request, _ []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
+	}
+	// #nosec G704 -- integration test calls fixed local repository endpoint.
+	asyncInvokeResponse, err := noRedirectClient.Do(asyncInvokeRequest)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusAccepted, asyncInvokeResponse.StatusCode)
+	asyncInvokeResponseBody, err := io.ReadAll(asyncInvokeResponse.Body)
+	require.NoError(t, err)
+	require.Empty(t, asyncInvokeResponseBody)
+	statusLocation := asyncInvokeResponse.Header.Get("Location")
+	require.NoError(t, asyncInvokeResponse.Body.Close())
+	assertLocationHeaderMatches(
+		t,
+		baseURL+"/submodels/"+encodedSubmodelID+"/submodel-elements/AddNumbers/operation-status/",
+		strings.TrimSuffix(statusLocation, path.Base(statusLocation)),
+	)
+
+	resultLocation := waitForDelegatedOperationResultLocation(t, noRedirectClient, statusLocation)
+	// #nosec G704 -- resultLocation is issued by the fixed local repository endpoint.
+	asyncResultResponse, err := noRedirectClient.Get(resultLocation)
+	require.NoError(t, err)
+	defer func() { _ = asyncResultResponse.Body.Close() }()
+	asyncResultBody, err := io.ReadAll(asyncResultResponse.Body)
+	require.NoError(t, err)
+	require.Equalf(t, http.StatusOK, asyncResultResponse.StatusCode, "async result response body: %s", string(asyncResultBody))
+	assertDelegatedAdditionResult(t, asyncResultBody)
+}
+
+func waitForDelegatedOperationResultLocation(t *testing.T, client *http.Client, statusLocation string) string {
+	t.Helper()
+
+	deadline := time.Now().Add(10 * time.Second)
+	for time.Now().Before(deadline) {
+		// #nosec G704 -- statusLocation is issued by the fixed local repository endpoint.
+		statusResponse, err := client.Get(statusLocation)
+		require.NoError(t, err)
+		_ = statusResponse.Body.Close()
+		if statusResponse.StatusCode == http.StatusFound {
+			resultLocation := statusResponse.Header.Get("Location")
+			require.NotEmpty(t, resultLocation)
+			return resultLocation
+		}
+		require.Equal(t, http.StatusOK, statusResponse.StatusCode)
+		time.Sleep(25 * time.Millisecond)
 	}
 
-	var invokeResultArray []any
-	require.NoError(t, json.Unmarshal(invokeResponseBody, &invokeResultArray))
-	require.Len(t, invokeResultArray, 1)
+	t.Fatal("delegated async operation did not complete before timeout")
+	return ""
+}
 
-	outputOperationVariable, ok := invokeResultArray[0].(map[string]any)
+func assertDelegatedAdditionResult(t *testing.T, resultBody []byte) {
+	t.Helper()
+
+	var resultObject map[string]any
+	require.NoError(t, json.Unmarshal(resultBody, &resultObject))
+	require.Equal(t, "Completed", resultObject["executionState"])
+	require.Equal(t, true, resultObject["success"])
+
+	outputArguments, ok := resultObject["outputArguments"].([]any)
+	require.True(t, ok)
+	require.Len(t, outputArguments, 1)
+
+	outputOperationVariable, ok := outputArguments[0].(map[string]any)
 	require.True(t, ok)
 	outputValue, ok := outputOperationVariable["value"].(map[string]any)
 	require.True(t, ok)
