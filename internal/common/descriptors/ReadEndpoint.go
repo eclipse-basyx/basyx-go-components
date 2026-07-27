@@ -106,6 +106,8 @@ func ReadEndpointsByDescriptorIDs(
 
 	ds := d.From(common.TDescriptor)
 	var joinOn exp.AliasedExpression
+	var collector *grammar.ResolvedFieldPathCollector
+	var filterFragments []grammar.FragmentStringPattern
 	switch joinOnMainTable {
 	case "aas":
 		joinOn = aasDescriptorEndpointAlias
@@ -117,6 +119,17 @@ func ReadEndpointsByDescriptorIDs(
 			aasDescriptorEndpointAlias,
 			goqu.On(aasDescriptorEndpointAlias.Col(common.ColDescriptorID).Eq(common.TDescriptor.Col(common.ColID))),
 		)
+		var collectorErr error
+		collector, collectorErr = grammar.NewResolvedFieldPathCollectorForRoot(grammar.CollectorRootAASDesc)
+		if collectorErr != nil {
+			return nil, collectorErr
+		}
+		collector.AllowInlineAliases(
+			common.TblDescriptor,
+			common.TblAASDescriptor,
+			common.AliasAASDescriptorEndpoint,
+		)
+		filterFragments = []grammar.FragmentStringPattern{"$aasdesc#endpoints[]"}
 	case "submodel":
 		joinOn = submodelDescriptorEndpointAlias
 		ds = ds.InnerJoin(
@@ -126,6 +139,20 @@ func ReadEndpointsByDescriptorIDs(
 			submodelDescriptorEndpointAlias,
 			goqu.On(submodelDescriptorEndpointAlias.Col(common.ColDescriptorID).Eq(submodelDescriptorAlias.Col(common.ColDescriptorID))),
 		)
+		var collectorErr error
+		collector, collectorErr = grammar.NewResolvedFieldPathCollectorForRoot(grammar.CollectorRootSMDesc)
+		if collectorErr != nil {
+			return nil, collectorErr
+		}
+		collector.AllowInlineAliases(
+			common.TblDescriptor,
+			common.AliasSubmodelDescriptor,
+			common.AliasSubmodelDescriptorEndpoint,
+		)
+		filterFragments = []grammar.FragmentStringPattern{
+			"$aasdesc#submodelDescriptors[].endpoints[]",
+			"$smdesc#endpoints[]",
+		}
 	case "company":
 		joinOn = companyDescriptorEndpointAlias
 		ds = ds.InnerJoin(
@@ -157,13 +184,12 @@ func ReadEndpointsByDescriptorIDs(
 		).
 		Prepared(true)
 
-	collector, err := grammar.NewResolvedFieldPathCollectorForRoot(grammar.CollectorRootAASDesc)
-	if err != nil {
-		return nil, err
-	}
-	ds, err = auth.AddFilterQueryFromContext(ctx, ds, "$aasdesc#endpoints[]", collector)
-	if err != nil {
-		return nil, err
+	if collector != nil {
+		var filterErr error
+		ds, filterErr = auth.AddFilterQueriesFromContext(ctx, ds, filterFragments, collector)
+		if filterErr != nil {
+			return nil, filterErr
+		}
 	}
 
 	sqlStr, args, err := ds.ToSQL()

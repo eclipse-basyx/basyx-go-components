@@ -263,13 +263,11 @@
         "FILTERLIST": [
           {
             "FRAGMENT": "$sm#supplementalSemanticIds[]",
-            "USEFORMULA": "submodel_bpn_or_public_filter",
-            "MATCH": true
+            "USEFORMULA": "submodel_bpn_or_public_filter"
           },
           {
             "FRAGMENT": "$sm#supplementalSemanticIds[].keys[]",
-            "USEFORMULA": "submodel_bpn_or_public_filter",
-            "MATCH": true
+            "USEFORMULA": "submodel_bpn_or_public_filter"
           }
         ]
       }

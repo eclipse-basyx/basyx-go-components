@@ -81,7 +81,7 @@ func TestAutomaticArrayFragmentRowMatchingThroughProductionRepositories(t *testi
 
 			unfilteredResource := querySingleRowMatchingResource(t, tt, false)
 			actualCandidateValues := collectStringValues(unfilteredResource, tt.resultPath)
-			expectedCandidateValues := append([]string(nil), tt.expectedCandidateValues...)
+			expectedCandidateValues := append([]string{}, tt.expectedCandidateValues...)
 			sort.Strings(actualCandidateValues)
 			sort.Strings(expectedCandidateValues)
 			t.Logf("unfiltered candidates: %v", actualCandidateValues)
@@ -97,7 +97,7 @@ func TestAutomaticArrayFragmentRowMatchingThroughProductionRepositories(t *testi
 
 			resource := querySingleRowMatchingResource(t, tt, true)
 			actualValues := collectStringValues(resource, tt.resultPath)
-			expectedValues := append([]string(nil), tt.expectedValues...)
+			expectedValues := append([]string{}, tt.expectedValues...)
 			sort.Strings(actualValues)
 			sort.Strings(expectedValues)
 			t.Logf("filtered result: %v", actualValues)

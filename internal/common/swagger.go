@@ -1249,14 +1249,11 @@ const abacManagementSchemasYAML = `    ABACPolicyVersion:
         FRAGMENT:
           type: string
           example: $sm#submodelElements[]
-        MATCH:
-          type: boolean
-          default: false
         CONDITION:
           $ref: '#/components/schemas/ABACLogicalExpression'
         USEFORMULA:
           type: string
-      description: Exactly one of CONDITION or USEFORMULA must be set.
+      description: Exactly one of CONDITION or USEFORMULA must be set. A fragment ending exactly in [] automatically filters individual array rows. The obsolete MATCH property is rejected.
     ABACLogicalExpression:
       type: object
       description: ABAC logical expression tree using Part 4 style operators such as $and, $or, $eq, $attribute, $field, $strVal, and $boolean.

@@ -104,10 +104,6 @@ func ParseAccessModel(b []byte, apiRouter *api.Mux, basePath string) (*AccessMod
 // the subset relevant to the resource they are processing.
 type FragmentFilters map[grammar.FragmentStringPattern]grammar.LogicalExpression
 
-// FragmentMatchModes stores per-fragment row-local match mode.
-// true means fragment filters for that fragment should be evaluated row-local.
-type FragmentMatchModes map[grammar.FragmentStringPattern]bool
-
 // QueryFilter captures optional, fine-grained restrictions produced by a rule
 // even when ACCESS=ALLOW. Controllers can use it to restrict rows, constrain
 // mutations, or redact fields. The Discovery Service currently does not require
@@ -116,7 +112,6 @@ type QueryFilter struct {
 	Formula         *grammar.LogicalExpression                       `json:"Formula,omitempty" yaml:"Formula,omitempty" mapstructure:"Formula,omitempty"`
 	FormulasByRight map[grammar.RightsEnum]grammar.LogicalExpression `json:"FormulasByRight,omitempty" yaml:"FormulasByRight,omitempty" mapstructure:"FormulasByRight,omitempty"`
 	Filters         FragmentFilters                                  `json:"Filters,omitempty" yaml:"Filters,omitempty" mapstructure:"Filters,omitempty"`
-	FilterMatch     FragmentMatchModes                               `json:"FilterMatch,omitempty" yaml:"FilterMatch,omitempty" mapstructure:"FilterMatch,omitempty"`
 }
 
 // FragmentExpression pairs a concrete fragment key with its logical expression.
@@ -125,7 +120,7 @@ type QueryFilter struct {
 type FragmentExpression struct {
 	Fragment   grammar.FragmentStringPattern
 	Expression grammar.LogicalExpression
-	Match      bool
+	RowLocal   bool
 }
 
 // DecisionCode represents the result of an authorization check.
@@ -281,15 +276,8 @@ func (m *AccessModel) AuthorizeWithFilterWithOptions(in EvalInput, opts grammar.
 			matchedRuleIDs = append(matchedRuleIDs, r.id)
 		}
 		fragments := make(map[grammar.FragmentStringPattern]grammar.LogicalExpression)
-		fragmentMatch := make(map[grammar.FragmentStringPattern]bool)
 		for _, filter := range r.filterList {
 			fragment := *filter.FRAGMENT
-			matchMode := filter.MATCH != nil && *filter.MATCH
-			if existing, ok := fragmentMatch[fragment]; ok {
-				fragmentMatch[fragment] = existing || matchMode
-			} else {
-				fragmentMatch[fragment] = matchMode
-			}
 
 			if existing, ok := fragments[fragment]; ok {
 				existing.And = append(existing.And, *filter.CONDITION)
@@ -320,9 +308,8 @@ func (m *AccessModel) AuthorizeWithFilterWithOptions(in EvalInput, opts grammar.
 		}
 
 		ruleExprs = append(ruleExprs, QueryFilter{
-			Formula:     &adapted,
-			Filters:     fragments,
-			FilterMatch: fragmentMatch,
+			Formula: &adapted,
+			Filters: fragments,
 		})
 	}
 
@@ -332,7 +319,6 @@ func (m *AccessModel) AuthorizeWithFilterWithOptions(in EvalInput, opts grammar.
 
 	combined := grammar.LogicalExpression{Or: []grammar.LogicalExpression{}}
 	combinedFragments := make(map[grammar.FragmentStringPattern]grammar.LogicalExpression)
-	combinedFragmentMatch := make(map[grammar.FragmentStringPattern]bool)
 	for _, qfr := range ruleExprs {
 		combined.Or = append(combined.Or, *qfr.Formula)
 
@@ -343,9 +329,6 @@ func (m *AccessModel) AuthorizeWithFilterWithOptions(in EvalInput, opts grammar.
 				cur.Or = append(cur.Or, existing)
 			} else {
 				cur.Or = append(cur.Or, *qfr.Formula)
-			}
-			if qfr.FilterMatch != nil && qfr.FilterMatch[fragment] {
-				combinedFragmentMatch[fragment] = true
 			}
 			combinedFragments[fragment] = cur
 		}
@@ -411,9 +394,6 @@ func (m *AccessModel) AuthorizeWithFilterWithOptions(in EvalInput, opts grammar.
 		}
 		if len(combinedFragments) > 0 {
 			qf.Filters = combinedFragments
-			if len(combinedFragmentMatch) > 0 {
-				qf.FilterMatch = combinedFragmentMatch
-			}
 		}
 	}
 
@@ -509,14 +489,10 @@ func (q *QueryFilter) FilterExpressionEntriesFor(key grammar.FragmentStringPatte
 		}
 
 		if matches {
-			matchMode := false
-			if q.FilterMatch != nil {
-				matchMode = q.FilterMatch[k]
-			}
 			out = append(out, FragmentExpression{
 				Fragment:   k,
 				Expression: expr,
-				Match:      matchMode,
+				RowLocal:   fragmentEndsWithWildcardArraySegment(k),
 			})
 		}
 	}

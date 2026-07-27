@@ -210,24 +210,19 @@ func TestQueryFilter_FilterExpressionFor_WildcardCombinesOr(t *testing.T) {
 	}
 }
 
-func TestQueryFilter_FilterExpressionEntriesFor_PropagatesMatchFlag(t *testing.T) {
+func TestQueryFilter_FilterExpressionEntriesFor_InfersAutomaticRowScope(t *testing.T) {
 	b := true
 	expr := grammar.LogicalExpression{Boolean: &b}
 
-	q := QueryFilter{
-		Filters: FragmentFilters{
-			"$aasdesc#specificAssetIds[]": expr,
-		},
-		FilterMatch: FragmentMatchModes{
-			"$aasdesc#specificAssetIds[]": true,
-		},
-	}
+	q := QueryFilter{Filters: FragmentFilters{
+		"$aasdesc#specificAssetIds[]": expr,
+	}}
 
 	entries := q.FilterExpressionEntriesFor("$aasdesc#specificAssetIds[]")
 	if len(entries) != 1 {
 		t.Fatalf("expected 1 entry, got %d", len(entries))
 	}
-	if !entries[0].Match {
-		t.Fatalf("expected Match=true for fragment entry")
+	if !entries[0].RowLocal {
+		t.Fatalf("expected RowLocal=true for wildcard-array fragment entry")
 	}
 }

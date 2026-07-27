@@ -41,6 +41,63 @@ import (
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 )
 
+// ReadAASSubmodelReferencesByAASIDs loads submodel references keyed by the AAS
+// database ID and applies reference[] and keys[] filters at their respective
+// row scopes.
+func ReadAASSubmodelReferencesByAASIDs(
+	ctx context.Context,
+	db DBQueryer,
+	aasIDs []int64,
+) (map[int64][]types.IReference, error) {
+	collector, err := grammar.NewResolvedFieldPathCollectorForRoot(grammar.CollectorRootAAS)
+	if err != nil {
+		return nil, fmt.Errorf("REFREAD-AASSUBMODELS-COLLECTOR: %w", err)
+	}
+	collector.AllowInlineAliases(
+		"aas",
+		"aas_submodel_reference",
+		"aas_submodel_reference_key",
+	)
+	referenceCollector, err := collector.WithRowLocalCorrelation(
+		"aas_submodel_reference",
+		common.ColID,
+		"aas_submodel_reference",
+		common.ColID,
+		"aas",
+		"aas_submodel_reference",
+	)
+	if err != nil {
+		return nil, fmt.Errorf("REFREAD-AASSUBMODELS-ROWSCOPE: %w", err)
+	}
+
+	return readContextReferences1ToManyByOwnerIDs(
+		ctx,
+		db,
+		aasIDs,
+		contextReferences1ToManyQuerySpec{
+			ownerTable:                   "aas",
+			ownerJoinColumn:              common.ColID,
+			ownerIDColumn:                "aas_id",
+			referenceTable:               "aas_submodel_reference",
+			ownerAlias:                   "aas",
+			referenceAlias:               "aas_submodel_reference",
+			referenceKeyAlias:            "aas_submodel_reference_key",
+			payloadContainsFullReference: true,
+			filterSpecs: []referenceFilterSpec{
+				{
+					fragment:  "$aas#submodels[]",
+					collector: referenceCollector,
+				},
+				{
+					fragment:  "$aas#submodels[].keys[]",
+					collector: collector,
+				},
+			},
+			errPrefix: "REFREAD-AASSUBMODELS",
+		},
+	)
+}
+
 // ReadSubmodelDescriptorSemanticReferencesByDescriptorIDs loads semantic
 // references for submodel descriptors keyed by descriptor ID.
 func ReadSubmodelDescriptorSemanticReferencesByDescriptorIDs(
@@ -52,6 +109,16 @@ func ReadSubmodelDescriptorSemanticReferencesByDescriptorIDs(
 	if len(descriptorIDs) == 0 {
 		return out, nil
 	}
+
+	collector, err := grammar.NewResolvedFieldPathCollectorForRoot(grammar.CollectorRootSMDesc)
+	if err != nil {
+		return nil, fmt.Errorf("REFREAD-SEMSMDESC-COLLECTOR: %w", err)
+	}
+	collector.AllowInlineAliases(
+		common.AliasSubmodelDescriptor,
+		common.AliasSubmodelDescriptorSemanticIDReference,
+		common.AliasSubmodelDescriptorSemanticIDReferenceKey,
+	)
 
 	rows, err := queryReferenceRowsByOwnerIDs(
 		ctx,
@@ -68,11 +135,11 @@ func ReadSubmodelDescriptorSemanticReferencesByDescriptorIDs(
 			filterSpecs: []referenceFilterSpec{
 				{
 					fragment:  "$aasdesc#submodelDescriptors[].semanticId.keys[]",
-					collector: nil,
+					collector: collector,
 				},
 				{
 					fragment:  "$smdesc#semanticId.keys[]",
-					collector: nil,
+					collector: collector,
 				},
 			},
 		},
@@ -93,6 +160,107 @@ func ReadSubmodelDescriptorSemanticReferencesByDescriptorIDs(
 	return out, nil
 }
 
+// ReadSubmodelSemanticReferencesBySubmodelIDs loads semantic references for
+// submodels while applying terminal keys[] fragment filters to individual key
+// rows.
+func ReadSubmodelSemanticReferencesBySubmodelIDs(
+	ctx context.Context,
+	db DBQueryer,
+	submodelIDs []int64,
+) (map[int64]types.IReference, error) {
+	out := make(map[int64]types.IReference, len(submodelIDs))
+	if len(submodelIDs) == 0 {
+		return out, nil
+	}
+
+	collector, err := grammar.NewResolvedFieldPathCollectorForRoot(grammar.CollectorRootSM)
+	if err != nil {
+		return nil, fmt.Errorf("REFREAD-SEMSM-COLLECTOR: %w", err)
+	}
+	collector.SetRootJoinKey("s", common.ColID)
+	collector.AllowInlineAliases(
+		"s",
+		"semantic_id_reference",
+		"semantic_id_reference_key",
+	)
+
+	rows, err := queryReferenceRowsByOwnerIDs(
+		ctx,
+		db,
+		submodelIDs,
+		referenceQuerySpec{
+			ownerTable:        "submodel",
+			ownerIDColumn:     common.ColID,
+			referenceTable:    "submodel_semantic_id_reference",
+			referenceKeyTable: "submodel_semantic_id_reference_key",
+			ownerAlias:        "s",
+			referenceAlias:    "semantic_id_reference",
+			referenceKeyAlias: "semantic_id_reference_key",
+			filterSpecs: []referenceFilterSpec{
+				{
+					fragment:  "$sm#semanticId.keys[]",
+					collector: collector,
+				},
+			},
+		},
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, id := range submodelIDs {
+		out[id] = rows[id]
+	}
+	return out, nil
+}
+
+// ReadSubmodelElementSemanticReferencesByElementIDs loads semantic references
+// for submodel elements while applying path-specific terminal keys[] filters.
+func ReadSubmodelElementSemanticReferencesByElementIDs(
+	ctx context.Context,
+	db DBQueryer,
+	submodelElementIDs []int64,
+) (map[int64]types.IReference, error) {
+	out := make(map[int64]types.IReference, len(submodelElementIDs))
+	if len(submodelElementIDs) == 0 {
+		return out, nil
+	}
+
+	collector, err := grammar.NewResolvedFieldPathCollectorForSMERow("submodel_element")
+	if err != nil {
+		return nil, fmt.Errorf("REFREAD-SEMSME-COLLECTOR: %w", err)
+	}
+	collector.AllowInlineAliases(
+		"submodel_element",
+		"sme_semantic_id_reference",
+		"sme_semantic_id_reference_key",
+	)
+
+	rows, err := queryReferenceRowsByOwnerIDs(
+		ctx,
+		db,
+		submodelElementIDs,
+		referenceQuerySpec{
+			ownerTable:        "submodel_element",
+			ownerIDColumn:     common.ColID,
+			referenceTable:    "submodel_element_semantic_id_reference",
+			referenceKeyTable: "submodel_element_semantic_id_reference_key",
+			ownerAlias:        "submodel_element",
+			referenceAlias:    "sme_semantic_id_reference",
+			referenceKeyAlias: "sme_semantic_id_reference_key",
+			filterSpecs:       smeSemanticIDKeyFilterSpecs(ctx, collector),
+		},
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, id := range submodelElementIDs {
+		out[id] = rows[id]
+	}
+	return out, nil
+}
+
 // ReadSpecificAssetExternalSubjectReferencesBySpecificAssetIDs loads external
 // subject references for specific asset IDs keyed by specific asset ID.
 func ReadSpecificAssetExternalSubjectReferencesBySpecificAssetIDs(
@@ -105,13 +273,23 @@ func ReadSpecificAssetExternalSubjectReferencesBySpecificAssetIDs(
 		return out, nil
 	}
 
-	collector, err := grammar.NewResolvedFieldPathCollectorForRoot(grammar.CollectorRootAASDesc)
+	aasCollector, err := grammar.NewResolvedFieldPathCollectorForRoot(grammar.CollectorRootAAS)
+	if err != nil {
+		return nil, fmt.Errorf("REFREAD-EXTSUBJECT-AASCOLLECTOR: %w", err)
+	}
+	aasCollector.SetRootJoinKey(common.AliasSpecificAssetID, common.ColAssetInformationID)
+	aasCollector.AllowInlineAliases(
+		common.AliasSpecificAssetID,
+		common.AliasExternalSubjectReference,
+		common.AliasExternalSubjectReferenceKey,
+	)
+
+	descriptorCollector, err := grammar.NewResolvedFieldPathCollectorForRoot(grammar.CollectorRootAASDesc)
 	if err != nil {
 		return nil, fmt.Errorf("REFREAD-EXTSUBJECT-COLLECTOR: %w", err)
 	}
-	collector.AllowInlineAliases(
-		"descriptor",
-		"aas_descriptor",
+	descriptorCollector.SetRootJoinKey(common.AliasSpecificAssetID, common.ColDescriptorID)
+	descriptorCollector.AllowInlineAliases(
 		common.AliasSpecificAssetID,
 		common.AliasExternalSubjectReference,
 		common.AliasExternalSubjectReferenceKey,
@@ -132,15 +310,15 @@ func ReadSpecificAssetExternalSubjectReferencesBySpecificAssetIDs(
 			filterSpecs: []referenceFilterSpec{
 				{
 					fragment:  "$aas#assetInformation.specificAssetIds[].externalSubjectId",
-					collector: nil,
+					collector: aasCollector,
 				},
 				{
 					fragment:  "$aas#assetInformation.specificAssetIds[].externalSubjectId.keys[]",
-					collector: nil,
+					collector: aasCollector,
 				},
 				{
 					fragment:  "$aasdesc#specificAssetIds[].externalSubjectId.keys[]",
-					collector: collector,
+					collector: descriptorCollector,
 				},
 				{
 					fragment:  "$bd#specificAssetIds[].externalSubjectId.keys[]",
@@ -202,6 +380,17 @@ func ReadSubmodelDescriptorSupplementalSemanticReferencesByDescriptorIDs(
 		"aasdesc_submodel_descriptor_supplemental_semantic_id_reference",
 		"aasdesc_submodel_descriptor_supplemental_semantic_id_reference_key",
 	)
+	referenceCollector, err := collector.WithRowLocalCorrelation(
+		"aasdesc_submodel_descriptor_supplemental_semantic_id_reference",
+		common.ColID,
+		"aasdesc_submodel_descriptor_supplemental_semantic_id_reference",
+		common.ColID,
+		"submodel_descriptor",
+		"aasdesc_submodel_descriptor_supplemental_semantic_id_reference",
+	)
+	if err != nil {
+		return nil, fmt.Errorf("REFREAD-SUPPSMDESC-ROWSCOPE: %w", err)
+	}
 
 	return readContextReferences1ToManyByOwnerIDs(
 		ctx,
@@ -217,7 +406,7 @@ func ReadSubmodelDescriptorSupplementalSemanticReferencesByDescriptorIDs(
 			filterSpecs: []referenceFilterSpec{
 				{
 					fragment:  "$aasdesc#submodelDescriptors[].supplementalSemanticIds[]",
-					collector: collector,
+					collector: referenceCollector,
 				},
 				{
 					fragment:  "$aasdesc#submodelDescriptors[].supplementalSemanticIds[].keys[]",
@@ -225,7 +414,7 @@ func ReadSubmodelDescriptorSupplementalSemanticReferencesByDescriptorIDs(
 				},
 				{
 					fragment:  "$smdesc#supplementalSemanticIds[]",
-					collector: collector,
+					collector: referenceCollector,
 				},
 				{
 					fragment:  "$smdesc#supplementalSemanticIds[].keys[]",
@@ -253,7 +442,19 @@ func ReadSubmodelSupplementalSemanticReferencesBySubmodelIDs(
 		"sm_supplemental_semantic_id_reference",
 		"sm_supplemental_semantic_id_reference_key",
 	)
-	filterCtx, filterSpecs := supplementalSemanticIDFilterContext(ctx, "$sm#", collector)
+	collector.SetRootJoinKey("s", common.ColID)
+	referenceCollector, err := collector.WithRowLocalCorrelation(
+		"sm_supplemental_semantic_id_reference",
+		common.ColID,
+		"sm_supplemental_semantic_id_reference",
+		common.ColID,
+		"s",
+		"sm_supplemental_semantic_id_reference",
+	)
+	if err != nil {
+		return nil, fmt.Errorf("REFREAD-SUPPSM-ROWSCOPE: %w", err)
+	}
+	filterCtx, filterSpecs := supplementalSemanticIDFilterContext(ctx, "$sm#", collector, referenceCollector)
 
 	return readContextReferences1ToManyByOwnerIDs(
 		filterCtx,
@@ -289,7 +490,18 @@ func ReadSubmodelElementSupplementalSemanticReferencesByElementIDs(
 		"sme_supplemental_semantic_id_reference",
 		"sme_supplemental_semantic_id_reference_key",
 	)
-	filterCtx, filterSpecs := supplementalSemanticIDFilterContext(ctx, "$sme", collector)
+	referenceCollector, err := collector.WithRowLocalCorrelation(
+		"sme_supplemental_semantic_id_reference",
+		common.ColID,
+		"sme_supplemental_semantic_id_reference",
+		common.ColID,
+		"submodel_element",
+		"sme_supplemental_semantic_id_reference",
+	)
+	if err != nil {
+		return nil, fmt.Errorf("REFREAD-SUPPSME-ROWSCOPE: %w", err)
+	}
+	filterCtx, filterSpecs := supplementalSemanticIDFilterContext(ctx, "$sme", collector, referenceCollector)
 
 	return readContextReferences1ToManyByOwnerIDs(
 		filterCtx,
@@ -313,6 +525,7 @@ func supplementalSemanticIDFilterContext(
 	ctx context.Context,
 	prefix string,
 	collector *grammar.ResolvedFieldPathCollector,
+	referenceCollector *grammar.ResolvedFieldPathCollector,
 ) (context.Context, []referenceFilterSpec) {
 	queryFilter := auth.GetQueryFilter(ctx)
 	if queryFilter == nil {
@@ -332,20 +545,44 @@ func supplementalSemanticIDFilterContext(
 
 	specs := make([]referenceFilterSpec, 0, len(fragments))
 	filteredQueryFilter := &auth.QueryFilter{
-		Filters:     make(auth.FragmentFilters, len(fragments)),
-		FilterMatch: make(auth.FragmentMatchModes, len(fragments)),
+		Filters: make(auth.FragmentFilters, len(fragments)),
 	}
 	for _, fragment := range fragments {
 		filteredQueryFilter.Filters[fragment] = queryFilter.Filters[fragment]
-		if queryFilter.FilterMatch != nil {
-			filteredQueryFilter.FilterMatch[fragment] = queryFilter.FilterMatch[fragment]
+		fragmentCollector := collector
+		if strings.HasSuffix(string(fragment), "supplementalSemanticIds[]") {
+			fragmentCollector = referenceCollector
 		}
-		specs = append(specs, referenceFilterSpec{
-			fragment:  fragment,
-			collector: collector,
-		})
+		specs = append(specs, referenceFilterSpec{fragment: fragment, collector: fragmentCollector})
 	}
 	return auth.WithQueryFilter(ctx, filteredQueryFilter), specs
+}
+
+func smeSemanticIDKeyFilterSpecs(
+	ctx context.Context,
+	collector *grammar.ResolvedFieldPathCollector,
+) []referenceFilterSpec {
+	queryFilter := auth.GetQueryFilter(ctx)
+	if queryFilter == nil {
+		return nil
+	}
+
+	fragments := make([]grammar.FragmentStringPattern, 0)
+	for fragment := range queryFilter.Filters {
+		value := string(fragment)
+		if strings.HasPrefix(value, "$sme") && strings.Contains(value, "#semanticId.keys") {
+			fragments = append(fragments, fragment)
+		}
+	}
+	sort.Slice(fragments, func(i, j int) bool {
+		return fragments[i] < fragments[j]
+	})
+
+	specs := make([]referenceFilterSpec, 0, len(fragments))
+	for _, fragment := range fragments {
+		specs = append(specs, referenceFilterSpec{fragment: fragment, collector: collector})
+	}
+	return specs
 }
 
 type contextReferenceRow struct {
@@ -374,15 +611,16 @@ type referenceQuerySpec struct {
 }
 
 type contextReferences1ToManyQuerySpec struct {
-	ownerTable        string
-	ownerJoinColumn   string
-	ownerIDColumn     string
-	referenceTable    string
-	ownerAlias        string
-	referenceAlias    string
-	referenceKeyAlias string
-	filterSpecs       []referenceFilterSpec
-	errPrefix         string
+	ownerTable                   string
+	ownerJoinColumn              string
+	ownerIDColumn                string
+	referenceTable               string
+	ownerAlias                   string
+	referenceAlias               string
+	referenceKeyAlias            string
+	payloadContainsFullReference bool
+	filterSpecs                  []referenceFilterSpec
+	errPrefix                    string
 }
 
 func queryReferenceRowsByOwnerIDs(
@@ -600,6 +838,9 @@ func readContextReferences1ToManyByOwnerIDs(
 			parentReference, err := parseReferencePayload(row.parentReferencePayload)
 			if err != nil {
 				return nil, fmt.Errorf("%s-PARSEPARENTPAYLOAD: %w", spec.errPrefix, err)
+			}
+			if spec.payloadContainsFullReference && parentReference != nil {
+				parentReference = parentReference.ReferredSemanticID()
 			}
 			ref.SetReferredSemanticID(parentReference)
 			refBuilders[referenceID] = rb

@@ -104,14 +104,9 @@ func containsIntArg(args []interface{}, want int) bool {
 
 func TestAddFilterQueryFromContext_ArrayEndedFragment_UsesInlinePredicate(t *testing.T) {
 	expr := mustParseLogicalExpression(t, `{"$or":[{"$eq":[{"$strVal":"BPN_A"},{"$field":"$aasdesc#specificAssetIds[].externalSubjectId.keys[].value"}]},{"$eq":[{"$strVal":"PUBLIC_READABLE"},{"$field":"$aasdesc#specificAssetIds[].externalSubjectId.keys[].value"}]}]}`)
-	match := true
-
 	qf := &QueryFilter{
 		Filters: FragmentFilters{
 			"$aasdesc#specificAssetIds[]": expr,
-		},
-		FilterMatch: FragmentMatchModes{
-			"$aasdesc#specificAssetIds[]": match,
 		},
 	}
 	ctx := context.WithValue(context.Background(), filterKey, qf)
@@ -120,6 +115,11 @@ func TestAddFilterQueryFromContext_ArrayEndedFragment_UsesInlinePredicate(t *tes
 	if err != nil {
 		t.Fatalf("NewResolvedFieldPathCollectorForRoot returned error: %v", err)
 	}
+	collector.AllowInlineAliases(
+		common.AliasSpecificAssetID,
+		common.AliasExternalSubjectReference,
+		common.AliasExternalSubjectReferenceKey,
+	)
 
 	d := goqu.Dialect("postgres")
 	ds := d.From(goqu.T(common.TblDescriptor).As("descriptor")).
@@ -201,14 +201,10 @@ func TestAddFilterQueryFromContext_ArrayEndedFragment_DefaultBehavior_UsesExists
 
 func TestAddFilterQueryFromContext_IndexedFragment_UsesExists(t *testing.T) {
 	expr := mustParseLogicalExpression(t, `{"$eq":[{"$field":"$aasdesc#specificAssetIds[1].name"},{"$strVal":"Banane2"}]}`)
-	match := true
 	fragment := grammar.FragmentStringPattern("$aasdesc#specificAssetIds[0]")
 	ctx := context.WithValue(context.Background(), filterKey, &QueryFilter{
 		Filters: FragmentFilters{
 			fragment: expr,
-		},
-		FilterMatch: FragmentMatchModes{
-			fragment: match,
 		},
 	})
 
@@ -250,14 +246,10 @@ func TestAddFilterQueryFromContext_IndexedFragment_UsesExists(t *testing.T) {
 
 func TestAddCorrelatedFilterQueryFromContext_MixedAliasesUseInlineAndExists(t *testing.T) {
 	expr := mustParseLogicalExpression(t, `{"$and":[{"$eq":[{"$strVal":"PUBLIC_READABLE"},{"$field":"$aasdesc#specificAssetIds[].externalSubjectId.keys[].value"}]},{"$eq":[{"$strVal":"BPN_A"},{"$field":"$aasdesc#submodelDescriptors[].supplementalSemanticIds[].keys[].value"}]}]}`)
-	match := true
 	fragment := grammar.FragmentStringPattern("$aasdesc#submodelDescriptors[]")
 	ctx := context.WithValue(context.Background(), filterKey, &QueryFilter{
 		Filters: FragmentFilters{
 			fragment: expr,
-		},
-		FilterMatch: FragmentMatchModes{
-			fragment: match,
 		},
 	})
 

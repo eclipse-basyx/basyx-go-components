@@ -378,6 +378,12 @@ func materializeRule(index definitionIndex, r grammar.AccessPermissionRule) (mat
 	}
 	resolvedFilters := make([]grammar.AccessPermissionRuleFILTER, 0, len(filterList))
 	for i, filter := range filterList {
+		if filter.MATCH != nil {
+			return materializedRule{}, fmt.Errorf(
+				"ABAC-MATERIALIZERULE-MATCHUNSUPPORTED FILTERLIST[%d]: MATCH is unsupported; row matching is inferred automatically from a FRAGMENT ending in []",
+				i+1,
+			)
+		}
 		if filter.FRAGMENT == nil {
 			return materializedRule{}, fmt.Errorf("FILTERLIST[%d]: FRAGMENT is required", i+1)
 		}

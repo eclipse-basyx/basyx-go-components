@@ -321,7 +321,8 @@ Validation invariants enforced by the current implementation:
   - `FILTER` (single) and `FILTERLIST` (multiple) are both supported
   - each filter entry must define `FRAGMENT`
   - each filter entry must define exactly one of `CONDITION` or `USEFORMULA`
-  - optional `MATCH` boolean defaults to `false`; when `true` on array-ended fragments, filter evaluation is row-local
+  - a `FRAGMENT` ending exactly in wildcard `[]` is evaluated row by row automatically
+  - the obsolete `MATCH` field is rejected, whether its value is `true` or `false`
 - Reference resolution:
   - `USEACL`, `USEATTRIBUTES`, `USEFORMULA`, and `USEOBJECTS` are resolved during model materialization at startup
   - unknown references fail fast (`... not found`)

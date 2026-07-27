@@ -147,28 +147,45 @@ func NewResolvedFieldPathCollectorForSMERow(rootAlias string) (*ResolvedFieldPat
 		return nil, fmt.Errorf("GRAMMAR-SMEROWCOLLECTOR-EMPTYALIAS SME row collector root alias must not be empty")
 	}
 
-	cfg := joinPlanConfigForSME()
-	cfg.GroupKeyForBase = func(base string) (exp.IdentifierExpression, error) {
+	rowConfig := joinPlanConfigForSME()
+	rowConfig.GroupKeyForBase = func(base string) (exp.IdentifierExpression, error) {
 		if base == "submodel_element" {
 			return goqu.I("submodel_element.id"), nil
 		}
 		return nil, fmt.Errorf("GRAMMAR-SMEROWCOLLECTOR-BADBASE unsupported SME row base alias %q", base)
 	}
-	cfg.RootJoinKey = func() exp.IdentifierExpression {
+	rowConfig.RootJoinKey = func() exp.IdentifierExpression {
 		return goqu.I(rootAlias + ".id")
 	}
-	cfg.RootJoinKeyAlias = func() string {
+	rowConfig.RootJoinKeyAlias = func() string {
 		return rootAlias
 	}
-	cfg.RootJoinKeyColumn = func() string {
+	rowConfig.RootJoinKeyColumn = func() string {
 		return "id"
 	}
 
-	collector := NewResolvedFieldPathCollectorWithConfig(&cfg)
-	collector.fragmentBindingAliasRewrites = map[string]string{
+	rowCollector := NewResolvedFieldPathCollectorWithConfig(&rowConfig)
+	rowCollector.fragmentBindingAliasRewrites = map[string]string{
 		"submodel_element": rootAlias,
 	}
-	return collector, nil
+
+	parentConfig := joinPlanConfigForSME()
+	parentConfig.RootJoinKey = func() exp.IdentifierExpression {
+		return goqu.I(rootAlias + ".submodel_id")
+	}
+	parentConfig.RootJoinKeyAlias = func() string {
+		return rootAlias
+	}
+	parentConfig.RootJoinKeyColumn = func() string {
+		return "submodel_id"
+	}
+
+	parentCollector := NewResolvedFieldPathCollectorWithConfig(&parentConfig)
+	parentCollector.fragmentBindingAliasRewrites = map[string]string{
+		"submodel_element": rootAlias,
+	}
+	rowCollector.rowParentCollector = parentCollector
+	return rowCollector, nil
 }
 
 func joinPlanConfigForRoot(root CollectorRoot) (JoinPlanConfig, error) {
@@ -828,11 +845,175 @@ type ResolvedFieldPathCollector struct {
 	joinConfig                   *JoinPlanConfig
 	inlineAliases                map[string]struct{}
 	fragmentBindingAliasRewrites map[string]string
+	rowFragment                  *FragmentStringPattern
+	rowLocalCollector            *ResolvedFieldPathCollector
+	rowParentCollector           *ResolvedFieldPathCollector
+	forceCorrelated              bool
 }
 
 // NewResolvedFieldPathCollectorWithConfig creates a collector with the provided join config.
 func NewResolvedFieldPathCollectorWithConfig(config *JoinPlanConfig) *ResolvedFieldPathCollector {
 	return &ResolvedFieldPathCollector{joinConfig: config}
+}
+
+// ForRowFragment returns an evaluation collector that treats fields below the
+// supplied terminal array fragment as local to the current candidate row.
+// Fields outside that fragment continue to use the receiver's parent
+// correlation scope.
+func (c *ResolvedFieldPathCollector) ForRowFragment(fragment FragmentStringPattern) *ResolvedFieldPathCollector {
+	if c == nil {
+		return nil
+	}
+
+	scoped := c.ForParentScope()
+	local := c.cloneWithoutRowScope()
+	scopedFragment := fragment
+	scoped.rowFragment = &scopedFragment
+	if c.rowLocalCollector != nil {
+		scoped.rowLocalCollector = c.rowLocalCollector.cloneWithoutRowScope()
+	} else {
+		scoped.rowLocalCollector = local
+	}
+	return scoped
+}
+
+// ForParentScope returns a collector that evaluates every field through the
+// configured parent correlation key. It is used for fragments that do not end
+// in a wildcard array and therefore must not select individual child rows.
+func (c *ResolvedFieldPathCollector) ForParentScope() *ResolvedFieldPathCollector {
+	if c == nil {
+		return nil
+	}
+
+	source := c
+	if c.rowParentCollector != nil {
+		source = c.rowParentCollector
+	}
+	scoped := source.cloneWithoutRowScope()
+	scoped.inlineAliases = nil
+	scoped.forceCorrelated = true
+	return scoped
+}
+
+// WithRowLocalCorrelation returns a collector whose terminal-array row scope
+// is correlated through the supplied SQL row. Descendant fields that are not
+// available inline are evaluated in an EXISTS rooted at that row.
+func (c *ResolvedFieldPathCollector) WithRowLocalCorrelation(
+	baseAlias string,
+	baseColumn string,
+	outerAlias string,
+	outerColumn string,
+	inlineAliases ...string,
+) (*ResolvedFieldPathCollector, error) {
+	if c == nil {
+		return nil, fmt.Errorf("GRAMMAR-ROWLOCALSCOPE-NILCOLLECTOR row-local scope requires a collector")
+	}
+	baseAlias = strings.TrimSpace(baseAlias)
+	baseColumn = strings.TrimSpace(baseColumn)
+	outerAlias = strings.TrimSpace(outerAlias)
+	outerColumn = strings.TrimSpace(outerColumn)
+	if baseAlias == "" || baseColumn == "" || outerAlias == "" || outerColumn == "" {
+		return nil, fmt.Errorf("GRAMMAR-ROWLOCALSCOPE-EMPTYKEY row-local base and outer aliases and columns must not be empty")
+	}
+
+	cfg := c.effectiveJoinConfig()
+	if _, exists := cfg.Rules[baseAlias]; !exists {
+		return nil, fmt.Errorf("GRAMMAR-ROWLOCALSCOPE-UNKNOWNBASE row-local base alias %q is not registered", baseAlias)
+	}
+	parentGroupKey := cfg.GroupKeyForBase
+	cfg.GroupKeyForBase = func(base string) (exp.IdentifierExpression, error) {
+		if base == baseAlias {
+			return goqu.I(baseAlias + "." + baseColumn), nil
+		}
+		return parentGroupKey(base)
+	}
+	cfg.BaseAliases = prependUniqueAlias(cfg.BaseAliases, baseAlias)
+	cfg.Correlatable = func(alias string) bool {
+		return alias == baseAlias
+	}
+	cfg.RootJoinKey = func() exp.IdentifierExpression {
+		return goqu.I(outerAlias + "." + outerColumn)
+	}
+	cfg.RootJoinKeyAlias = func() string {
+		return outerAlias
+	}
+	cfg.RootJoinKeyColumn = func() string {
+		return outerColumn
+	}
+
+	scoped := c.cloneWithoutRowScope()
+	if c.rowParentCollector != nil {
+		scoped.rowParentCollector = c.rowParentCollector.cloneWithoutRowScope()
+	}
+	local := NewResolvedFieldPathCollectorWithConfig(&cfg)
+	local.AllowInlineAliases(inlineAliases...)
+	if len(c.fragmentBindingAliasRewrites) > 0 {
+		local.fragmentBindingAliasRewrites = make(map[string]string, len(c.fragmentBindingAliasRewrites))
+		for alias, replacement := range c.fragmentBindingAliasRewrites {
+			local.fragmentBindingAliasRewrites[alias] = replacement
+		}
+	}
+	scoped.rowLocalCollector = local
+	return scoped, nil
+}
+
+func prependUniqueAlias(aliases []string, alias string) []string {
+	result := make([]string, 0, len(aliases)+1)
+	result = append(result, alias)
+	for _, candidate := range aliases {
+		if candidate != alias {
+			result = append(result, candidate)
+		}
+	}
+	return result
+}
+
+func (c *ResolvedFieldPathCollector) cloneWithoutRowScope() *ResolvedFieldPathCollector {
+	if c == nil {
+		return nil
+	}
+
+	cloned := &ResolvedFieldPathCollector{
+		joinConfig:      c.joinConfig,
+		forceCorrelated: c.forceCorrelated,
+	}
+	if len(c.inlineAliases) > 0 {
+		cloned.inlineAliases = make(map[string]struct{}, len(c.inlineAliases))
+		for alias := range c.inlineAliases {
+			cloned.inlineAliases[alias] = struct{}{}
+		}
+	}
+	if len(c.fragmentBindingAliasRewrites) > 0 {
+		cloned.fragmentBindingAliasRewrites = make(map[string]string, len(c.fragmentBindingAliasRewrites))
+		for alias, replacement := range c.fragmentBindingAliasRewrites {
+			cloned.fragmentBindingAliasRewrites[alias] = replacement
+		}
+	}
+	return cloned
+}
+
+func (c *ResolvedFieldPathCollector) collectorForField(field *Value) *ResolvedFieldPathCollector {
+	if c == nil || c.rowFragment == nil || field == nil || field.Field == nil {
+		return c
+	}
+	if fieldIsBelowRowFragment(*field.Field, *c.rowFragment) {
+		return c.rowLocalCollector
+	}
+	return c
+}
+
+func fieldIsBelowRowFragment(field ModelStringPattern, fragment FragmentStringPattern) bool {
+	fragmentPath := string(fragment)
+	if strings.HasPrefix(fragmentPath, "$sme") && strings.HasSuffix(fragmentPath, "#idShort") {
+		smePath := strings.TrimSuffix(fragmentPath, "#idShort")
+		if strings.HasSuffix(smePath, "[]") {
+			fragmentPath = smePath
+		}
+	}
+
+	fieldPath := string(field)
+	return strings.HasPrefix(fieldPath, fragmentPath+".") ||
+		strings.HasPrefix(fieldPath, fragmentPath+"#")
 }
 
 // AllowInlineAliases marks aliases that are already joined by the caller's
@@ -926,7 +1107,7 @@ func buildInlineExistsExpression(resolved []ResolvedFieldPath, predicate exp.Exp
 	}
 
 	d := goqu.Dialect("postgres")
-	ds := d.From(goqu.T(plan.BaseTable).As(plan.BaseAlias)).Select(goqu.V(1))
+	ds := d.From(goqu.T(plan.BaseTable).As(plan.BaseAlias)).Select(goqu.L("1"))
 
 	applied := map[string]struct{}{plan.BaseAlias: {}}
 	visiting := map[string]struct{}{}
@@ -1424,9 +1605,15 @@ func andBindingsForResolvedFieldPaths(resolved []ResolvedFieldPath, predicate ex
 				where = append(where, goqu.I(b.Alias).Eq(*b.Index.intValue))
 			}
 			if b.Index.stringValue != nil {
-				if strings.HasSuffix(b.Alias, ".idshort_path") && strings.HasSuffix(*b.Index.stringValue, "[]") {
-					prefix := strings.TrimSuffix(*b.Index.stringValue, "[]")
-					where = append(where, goqu.L("? LIKE ? ESCAPE '!'", goqu.I(b.Alias), escapeSQLLikePattern(prefix)+"[%"))
+				if strings.HasSuffix(b.Alias, ".idshort_path") && strings.Contains(*b.Index.stringValue, "[]") {
+					if strings.Count(*b.Index.stringValue, "[]") == 1 && strings.HasSuffix(*b.Index.stringValue, "[]") {
+						prefix := strings.TrimSuffix(*b.Index.stringValue, "[]")
+						where = append(where, goqu.L("? LIKE ? ESCAPE '!'", goqu.I(b.Alias), escapeSQLLikePattern(prefix)+"[%"))
+						continue
+					}
+					pathPattern := "^" + regexp.QuoteMeta(*b.Index.stringValue) + "$"
+					pathPattern = strings.ReplaceAll(pathPattern, `\[\]`, `\[[0-9]+\]`)
+					where = append(where, goqu.L("? ~ ?", goqu.I(b.Alias), pathPattern))
 					continue
 				}
 				where = append(where, goqu.I(b.Alias).Eq(*b.Index.stringValue))
@@ -1505,6 +1692,13 @@ func existsCorrelationForAlias(base string) exp.Expression {
 
 func existsJoinRulesForAASDescriptors() map[string]existsJoinRule {
 	return map[string]existsJoinRule{
+		"aas_descriptor": {
+			Alias: "aas_descriptor",
+			Deps:  nil,
+			Apply: func(ds *goqu.SelectDataset) *goqu.SelectDataset {
+				return ds
+			},
+		},
 		"specific_asset_id": {
 			Alias: "specific_asset_id",
 			Deps:  []string{"aas_descriptor"},
@@ -1739,6 +1933,12 @@ func handleBinaryOperationWithCollector(
 	if leftField != nil && rightField != nil {
 		return nil, nil, fieldToFieldErr
 	}
+	fieldCollector := collector
+	if leftField != nil {
+		fieldCollector = collector.collectorForField(leftField)
+	} else if rightField != nil {
+		fieldCollector = collector.collectorForField(rightField)
+	}
 
 	// Fast-path: both are values (no FieldIdentifiers involved).
 	if leftField == nil && rightField == nil {
@@ -1785,17 +1985,17 @@ func handleBinaryOperationWithCollector(
 		return opExpr, nil, nil
 	}
 
-	if collector != nil && collector.canEvaluateInline(resolved) {
+	if fieldCollector != nil && fieldCollector.canEvaluateInline(resolved) {
 		return andBindingsForResolvedFieldPaths(resolved, opExpr), resolved, nil
 	}
-	if collector != nil && resolvedNeedsCTE(resolved) {
-		existsExpr, err := buildInlineExistsExpression(resolved, opExpr, collector)
+	if fieldCollector != nil && (fieldCollector.forceCorrelated || resolvedNeedsCTE(resolved)) {
+		existsExpr, err := buildInlineExistsExpression(resolved, opExpr, fieldCollector)
 		if err != nil {
 			return nil, nil, err
 		}
 		return existsExpr, resolved, nil
 	}
-	if collector != nil {
+	if fieldCollector != nil {
 		return opExpr, resolved, nil
 	}
 	if anyResolvedHasBindings(resolved) {
@@ -1912,7 +2112,7 @@ func (le *LogicalExpression) EvaluateToExpression(collector *ResolvedFieldPathCo
 	}
 
 	if len(le.Or) > 0 {
-		if collector != nil {
+		if collector != nil && collector.rowFragment == nil {
 			var combined []exp.Expression
 			var sharedResolved []ResolvedFieldPath
 			canGroup := true

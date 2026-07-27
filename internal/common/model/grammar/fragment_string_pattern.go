@@ -33,10 +33,10 @@ import (
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 )
 
-const specificAssetIDFragmentPattern = `specificAssetIds` + arrayIndexPattern + `(?:\.externalSubjectId(?:\.keys` + arrayIndexPattern + `)?)?`
-const submodelReferenceFragmentPattern = `submodels` + arrayIndexPattern + `(?:\.keys` + arrayIndexPattern + `)?`
-const endpointFragmentPattern = `endpoints` + arrayIndexPattern
-const submodelDescriptorFragmentPattern = `submodelDescriptors` + arrayIndexPattern + `(?:\.(?:` + semanticIDFragmentPattern + `|` + supplementalSemanticIDFragmentPattern + `|idShort|` + endpointFragmentPattern + `))?`
+const specificAssetIDFragmentPattern = `specificAssetIds(?:` + arrayIndexPattern + `(?:\.externalSubjectId(?:\.keys` + arrayIndexPattern + `)?)?)?`
+const submodelReferenceFragmentPattern = `submodels(?:` + arrayIndexPattern + `(?:\.keys` + arrayIndexPattern + `)?)?`
+const endpointFragmentPattern = `endpoints(?:` + arrayIndexPattern + `)?`
+const submodelDescriptorFragmentPattern = `submodelDescriptors(?:` + arrayIndexPattern + `(?:\.(?:` + semanticIDFragmentPattern + `|` + supplementalSemanticIDFragmentPattern + `|idShort|` + endpointFragmentPattern + `))?)?`
 
 const filterpattern = `^(?:` +
 	`\$aas#(?:idShort|assetInformation\.assetType|assetInformation\.globalAssetId|assetInformation\.` + specificAssetIDFragmentPattern + `|` + submodelReferenceFragmentPattern + `)|` +

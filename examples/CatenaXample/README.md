@@ -136,8 +136,8 @@ An unknown BPN sees public asset identifiers and the public submodel descriptor.
 BPN1 sees public and BPN1 data. BPN2 marker values are removed from returned
 marker arrays. BPN2 receives the equivalent BPN2 view.
 
-The DTR policy extends the existing DTR rules with row-local `MATCH` filters
-for:
+The DTR policy extends the existing DTR rules with automatically row-local
+array fragments:
 
 ```text
 $aasdesc#submodelDescriptors[]

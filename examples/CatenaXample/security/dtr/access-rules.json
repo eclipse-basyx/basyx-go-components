@@ -357,28 +357,23 @@
           },
           {
             "FRAGMENT": "$aasdesc#specificAssetIds[]",
-            "USEFORMULA": "aas_bpn_or_public_filter",
-            "MATCH": true
+            "USEFORMULA": "aas_bpn_or_public_filter"
           },
           {
             "FRAGMENT": "$aasdesc#specificAssetIds[].externalSubjectId.keys[]",
-            "USEFORMULA": "aas_bpn_or_public_filter",
-            "MATCH": true
+            "USEFORMULA": "aas_bpn_or_public_filter"
           },
           {
             "FRAGMENT": "$aasdesc#submodelDescriptors[]",
-            "USEFORMULA": "submodel_descriptor_bpn_or_public",
-            "MATCH": true
+            "USEFORMULA": "submodel_descriptor_bpn_or_public"
           },
           {
             "FRAGMENT": "$aasdesc#submodelDescriptors[].supplementalSemanticIds[]",
-            "USEFORMULA": "submodel_descriptor_bpn_or_public_filter",
-            "MATCH": true
+            "USEFORMULA": "submodel_descriptor_bpn_or_public_filter"
           },
           {
             "FRAGMENT": "$aasdesc#submodelDescriptors[].supplementalSemanticIds[].keys[]",
-            "USEFORMULA": "submodel_descriptor_bpn_or_public_filter",
-            "MATCH": true
+            "USEFORMULA": "submodel_descriptor_bpn_or_public_filter"
           }
         ]
       },

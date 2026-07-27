@@ -30,6 +30,7 @@
 package grammar
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -81,10 +82,8 @@ type AccessPermissionRuleFILTER struct {
 	// FRAGMENT corresponds to the JSON schema field "FRAGMENT".
 	FRAGMENT *FragmentStringPattern `json:"FRAGMENT,omitempty" yaml:"FRAGMENT,omitempty" mapstructure:"FRAGMENT,omitempty"`
 
-	// MATCH corresponds to the JSON schema field "MATCH".
-	//
-	// Optional flag controlling row-local matching behavior for fragment filters.
-	// Default is false when omitted.
+	// MATCH is retained only so non-JSON materialization paths can reject the
+	// obsolete field with the same explicit validation error.
 	MATCH *bool `json:"MATCH,omitempty" yaml:"MATCH,omitempty" mapstructure:"MATCH,omitempty"`
 
 	// USEFORMULA corresponds to the JSON schema field "USEFORMULA".
@@ -97,6 +96,14 @@ type AccessPermissionRuleFILTER struct {
 //   - FRAGMENT is required
 //   - exactly one of CONDITION or USEFORMULA must be defined
 func (j *AccessPermissionRuleFILTER) UnmarshalJSON(value []byte) error {
+	var members map[string]json.RawMessage
+	if err := common.UnmarshalAndDisallowUnknownFields(value, &members); err != nil {
+		return err
+	}
+	if _, present := members["MATCH"]; present {
+		return fmt.Errorf("GRAMMAR-ACCESSFILTER-MATCHUNSUPPORTED MATCH is unsupported; row matching is inferred automatically from a FRAGMENT ending in []")
+	}
+
 	type Plain AccessPermissionRuleFILTER
 	var plain Plain
 

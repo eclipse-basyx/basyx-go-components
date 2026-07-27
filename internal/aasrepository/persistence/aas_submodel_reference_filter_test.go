@@ -31,78 +31,81 @@ import (
 	"testing"
 
 	sqlmock "github.com/DATA-DOG/go-sqlmock"
+	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 	"github.com/stretchr/testify/require"
 )
 
-func TestReadSubmodelReferencePayloadsAppliesSubmodelReferenceFilterMatchModes(t *testing.T) {
-	tests := []struct {
-		name           string
-		match          bool
-		payloads       []string
-		containsExists bool
-		aasIDColumn    string
-	}{
-		{
-			name:           "match true filters the current reference row",
-			match:          true,
-			payloads:       []string{referencePayload("urn:example:submodel:visible")},
-			containsExists: false,
-			aasIDColumn:    `"aas"."aas_id"`,
-		},
-		{
-			name:           "without match uses the AAS scoped predicate",
-			payloads:       []string{referencePayload("urn:example:submodel:visible"), referencePayload("urn:example:submodel:hidden")},
-			containsExists: true,
-			aasIDColumn:    `"aas__exists"."aas_id"`,
-		},
-	}
+func TestReadSubmodelReferencePayloadsAppliesAutomaticRowMatching(t *testing.T) {
+	var actualSQL string
+	db, mock, err := sqlmock.New(sqlmock.QueryMatcherOption(sqlmock.QueryMatcherFunc(func(_ string, actual string) error {
+		actualSQL = actual
+		return nil
+	})))
+	require.NoError(t, err)
+	defer func() {
+		_ = db.Close()
+	}()
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			var actualSQL string
-			db, mock, err := sqlmock.New(sqlmock.QueryMatcherOption(sqlmock.QueryMatcherFunc(func(_ string, actual string) error {
-				actualSQL = actual
-				return nil
-			})))
-			require.NoError(t, err)
-			defer func() {
-				_ = db.Close()
-			}()
-
-			rows := sqlmock.NewRows([]string{"aas_id", "parent_reference_payload"})
-			for _, payload := range tt.payloads {
-				rows.AddRow(int64(42), payload)
+	rows := sqlmock.NewRows([]string{
+		"owner_id",
+		"ref_id",
+		"ref_type",
+		"key_id",
+		"key_type",
+		"key_value",
+		"parent_reference_payload",
+	}).AddRow(
+		int64(42),
+		int64(100),
+		int64(types.ReferenceTypesModelReference),
+		int64(101),
+		int64(types.KeyTypesSubmodel),
+		"urn:example:submodel:visible",
+		[]byte(`{
+			"type": "ModelReference",
+			"keys": [
+				{"type": "Submodel", "value": "urn:example:submodel:visible"},
+				{"type": "Submodel", "value": "urn:example:submodel:hidden"}
+			],
+			"referredSemanticId": {
+				"type": "ExternalReference",
+				"keys": [
+					{"type": "GlobalReference", "value": "urn:example:semantic:submodel"}
+				]
 			}
-			mock.ExpectQuery("read filtered submodel references").WillReturnRows(rows)
+		}`),
+	)
+	mock.ExpectQuery("read filtered submodel references").WillReturnRows(rows)
 
-			sut := &AssetAdministrationShellDatabase{}
-			referencesByAASID, readErr := sut.readSubmodelReferencePayloadsByAASDBIDs(submodelReferenceFilterContext(t, tt.match), db, []int64{42})
-			require.NoError(t, readErr)
-			require.Len(t, referencesByAASID[42], len(tt.payloads))
-			require.Contains(t, actualSQL, `FROM "aas_submodel_reference" AS "aas_submodel_reference"`)
-			require.Contains(t, actualSQL, `INNER JOIN "aas" AS "aas"`)
-			require.Contains(t, actualSQL, tt.aasIDColumn)
-			require.Contains(t, actualSQL, `aas_submodel_reference_key`)
-			if tt.containsExists {
-				require.Contains(t, strings.ToUpper(actualSQL), "EXISTS")
-			} else {
-				require.NotContains(t, strings.ToUpper(actualSQL), "EXISTS")
-			}
-			require.NoError(t, mock.ExpectationsWereMet())
-		})
-	}
+	sut := &AssetAdministrationShellDatabase{}
+	referencesByAASID, readErr := sut.readSubmodelReferencePayloadsByAASDBIDs(submodelReferenceFilterContext(t), db, []int64{42})
+	require.NoError(t, readErr)
+	require.Len(t, referencesByAASID[42], 1)
+	filteredReference := referencesByAASID[42][0]
+	require.Len(t, filteredReference.Keys(), 1)
+	require.Equal(t, "urn:example:submodel:visible", filteredReference.Keys()[0].Value())
+	require.NotNil(t, filteredReference.ReferredSemanticID())
+	require.Len(t, filteredReference.ReferredSemanticID().Keys(), 1)
+	require.Equal(t, "urn:example:semantic:submodel", filteredReference.ReferredSemanticID().Keys()[0].Value())
+	require.Contains(t, actualSQL, `FROM "aas_submodel_reference" AS "aas_submodel_reference"`)
+	require.Contains(t, actualSQL, `JOIN "aas" AS "aas"`)
+	require.Contains(t, actualSQL, `aas_submodel_reference_key`)
+	require.Contains(t, strings.ToUpper(actualSQL), "EXISTS")
+	require.Contains(t, actualSQL, `"aas_submodel_reference"."id"`)
+	require.Contains(t, actualSQL, `"aas__exists"."aas_id"`)
+	require.NoError(t, mock.ExpectationsWereMet())
 }
 
-func submodelReferenceFilterContext(t *testing.T, match bool) context.Context {
+func submodelReferenceFilterContext(t *testing.T) context.Context {
 	t.Helper()
 
 	aasIdentifier := grammar.StandardString("urn:example:aas:public")
 	visibleReference := grammar.StandardString("urn:example:submodel:visible")
 	aasIDField := grammar.ModelStringPattern("$aas#id")
 	submodelReferenceKeyValueField := grammar.ModelStringPattern("$aas#submodels[].keys[].value")
-	queryFilter := &auth.QueryFilter{
+	return auth.WithQueryFilter(aasSigningTestContext(t), &auth.QueryFilter{
 		Filters: auth.FragmentFilters{
 			"$aas#submodels[]": {
 				And: []grammar.LogicalExpression{
@@ -111,14 +114,5 @@ func submodelReferenceFilterContext(t *testing.T, match bool) context.Context {
 				},
 			},
 		},
-	}
-	if match {
-		queryFilter.FilterMatch = auth.FragmentMatchModes{"$aas#submodels[]": true}
-	}
-
-	return auth.WithQueryFilter(aasSigningTestContext(t), queryFilter)
-}
-
-func referencePayload(identifier string) string {
-	return `{"type":"ModelReference","keys":[{"type":"Submodel","value":"` + identifier + `"}]}`
+	})
 }

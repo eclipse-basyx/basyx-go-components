@@ -63,9 +63,6 @@ func TestReadSubmodelDescriptorSupplementalSemanticReferencesAppliesFragmentFilt
 		Filters: auth.FragmentFilters{
 			fragment: condition,
 		},
-		FilterMatch: auth.FragmentMatchModes{
-			fragment: true,
-		},
 	})
 
 	db, mock, err := sqlmock.New(sqlmock.QueryMatcherOption(sqlmock.QueryMatcherFunc(func(_ string, actual string) error {
@@ -178,9 +175,6 @@ func TestReadRepositorySupplementalSemanticReferencesAppliesFragmentFilter(t *te
 					unrelatedFragment: {
 						Boolean: boolPointer(false),
 					},
-				},
-				FilterMatch: auth.FragmentMatchModes{
-					test.fragment: true,
 				},
 			})
 

@@ -404,30 +404,31 @@ Why this matters:
 
 ### Array-ended fragment filters are row-local
 
-For fragment filters whose fragment identifier ends in an array segment (for example, $aasdesc#specificAssetIds[] or $aasdesc#endpoints[]), row-local evaluation can be enabled explicitly with:
+Fragment filters whose fragment identifier ends exactly in a wildcard array
+segment, such as `$aasdesc#specificAssetIds[]` or
+`$aasdesc#endpoints[]`, are evaluated automatically for each candidate row:
 
 ```json
 {
   "FRAGMENT": "$aasdesc#specificAssetIds[]",
-  "MATCH": true,
   "USEFORMULA": "bpn_or_public"
 }
 ```
 
-Default behavior is unchanged (`MATCH` omitted or `false`): legacy descriptor-level fragment guard behavior is used.
+The condition may reference the candidate row, a field below that row, an
+ancestor, or another model path. Candidate-local branches use the current SQL
+row; unrelated branches use a correlated `EXISTS` at the containing-resource
+scope.
 
-Practical effect:
-- Before this behavior, a condition on one array element could make the whole array fragment appear as matched for the parent descriptor.
-- With `MATCH: true`, each array item is included or excluded based on that item's own data.
+Fragments ending in an object, scalar, or fixed index such as `[0]` do not
+remove individual array rows. An earlier `[]` in the path does not change this.
 
-Scope:
-- This applies to fragment filter WHERE evaluation when `MATCH: true`.
-- Mask flag projections keep collector-based translation behavior.
+`MATCH` is obsolete and rejected when present, including `MATCH: false`.
 
 Implementation reference:
 - AddFilterQueryFromContext in [internal/common/security/filter_helpers.go](../../internal/common/security/filter_helpers.go)
-- buildFragmentMaskConditionWithOptions in [internal/common/security/filter_helpers.go](../../internal/common/security/filter_helpers.go)
-- fragmentEndsWithArraySegment in [internal/common/security/filter_helpers.go](../../internal/common/security/filter_helpers.go)
+- buildFragmentMaskCondition in [internal/common/security/filter_helpers.go](../../internal/common/security/filter_helpers.go)
+- fragmentEndsWithWildcardArraySegment in [internal/common/security/filter_helpers.go](../../internal/common/security/filter_helpers.go)
 
 Implementation reference:
 - EvaluateToExpressionWithNegatedFragments in [internal/common/model/grammar/logical_expression_to_sql.go](../../internal/common/model/grammar/logical_expression_to_sql.go)
