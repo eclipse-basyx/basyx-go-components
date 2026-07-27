@@ -6,6 +6,6 @@ infrastructures:
     template: mono-all
     components:
       aasEnvironment:
-        baseUrl: "http://localhost:8091"
+        baseUrl: "http://localhost:8090"
     security:
       type: none

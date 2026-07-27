@@ -45,6 +45,8 @@ import (
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 )
 
+const maximumDelegatedOperationResponseBytes int64 = 1024 * 1024
+
 func parseDelegationTimeout(clientTimeoutDuration string) (time.Duration, error) {
 	if strings.TrimSpace(clientTimeoutDuration) == "" {
 		return defaultDelegationTimeout, nil
@@ -231,19 +233,23 @@ func toDelegatedOperationResultPayload(outputArguments []any, inoutputArguments 
 	}
 }
 
-func toJsonableOperationVariable(item any) (any, bool) {
+func toJsonableOperationVariable(item any) (any, error) {
+	if item == nil {
+		return nil, errors.New("SMREPO-NORMDELRES-NILOPVAR operation variable must not be null")
+	}
+
 	operationVariable, err := jsonization.OperationVariableFromJsonable(item)
 	if err != nil {
-		return nil, false
+		return nil, fmt.Errorf("SMREPO-NORMDELRES-PARSEOPVAR %w", err)
 	}
 	jsonableOperationVariable, err := jsonization.ToJsonable(operationVariable)
 	if err != nil {
-		return nil, false
+		return nil, fmt.Errorf("SMREPO-NORMDELRES-SEROPVAR %w", err)
 	}
-	return jsonableOperationVariable, true
+	return jsonableOperationVariable, nil
 }
 
-func jsonableOperationVariablesFromArray(payload any) ([]any, bool) {
+func jsonableOperationVariablesFromArray(payload any) ([]any, error) {
 	switch typedPayload := payload.(type) {
 	case []types.IOperationVariable:
 		return jsonableOperationVariablesFromTyped(typedPayload)
@@ -256,61 +262,131 @@ func jsonableOperationVariablesFromArray(payload any) ([]any, bool) {
 		}
 		return jsonableOperationVariablesFromItems(items)
 	default:
-		return nil, false
+		return nil, fmt.Errorf("SMREPO-NORMDELRES-INVALIDOPVARGROUP expected an operation variable array, got %T", payload)
 	}
 }
 
-func jsonableOperationVariablesFromTyped(payload []types.IOperationVariable) ([]any, bool) {
+func jsonableOperationVariablesFromTyped(payload []types.IOperationVariable) ([]any, error) {
 	jsonables := make([]any, 0, len(payload))
-	for _, operationVariable := range payload {
+	for index, operationVariable := range payload {
 		if operationVariable == nil {
-			continue
+			return nil, fmt.Errorf("SMREPO-NORMDELRES-NILOPVAR-%d operation variable must not be nil", index)
 		}
 		jsonable, err := jsonization.ToJsonable(operationVariable)
 		if err != nil {
-			return nil, false
+			return nil, fmt.Errorf("SMREPO-NORMDELRES-SEROPVAR-%d %w", index, err)
 		}
 		jsonables = append(jsonables, jsonable)
 	}
-	return jsonables, true
+	return jsonables, nil
 }
 
-func jsonableOperationVariablesFromItems(items []any) ([]any, bool) {
+func jsonableOperationVariablesFromItems(items []any) ([]any, error) {
 	jsonables := make([]any, 0, len(items))
-	for _, item := range items {
-		jsonable, ok := toJsonableOperationVariable(item)
-		if !ok {
-			return nil, false
+	for index, item := range items {
+		jsonable, err := toJsonableOperationVariable(item)
+		if err != nil {
+			return nil, fmt.Errorf("SMREPO-NORMDELRES-OPVAR-%d %w", index, err)
 		}
 		jsonables = append(jsonables, jsonable)
 	}
-	return jsonables, true
+	return jsonables, nil
 }
 
-func toDelegatedOperationResultPayloadFromBody(delegatedBody any) (map[string]any, bool) {
-	if outputArguments, ok := jsonableOperationVariablesFromArray(delegatedBody); ok {
-		return toDelegatedOperationResultPayload(outputArguments, []any{}), true
+func toDelegatedOperationResultPayloadFromBody(delegatedBody any) (map[string]any, error) {
+	switch delegatedBody.(type) {
+	case []types.IOperationVariable, []any, []map[string]any:
+		outputArguments, err := jsonableOperationVariablesFromArray(delegatedBody)
+		if err != nil {
+			return nil, err
+		}
+		return toDelegatedOperationResultPayload(outputArguments, []any{}), nil
 	}
 
 	delegatedBodyMap, ok := delegatedBody.(map[string]any)
 	if !ok {
-		return nil, false
+		return nil, fmt.Errorf("SMREPO-NORMDELRES-INVALIDBODY expected an operation result object or output argument array, got %T", delegatedBody)
 	}
 
-	outputArguments, outputOK := jsonableOperationVariablesFromArray(delegatedBodyMap["outputArguments"])
-	inoutputArguments, inoutputOK := jsonableOperationVariablesFromArray(delegatedBodyMap["inoutputArguments"])
-	if !outputOK && !inoutputOK {
-		return nil, false
+	resultPayload := make(map[string]any, len(delegatedBodyMap)+2)
+	for key, value := range delegatedBodyMap {
+		resultPayload[key] = value
 	}
 
-	if !outputOK {
-		outputArguments = []any{}
-	}
-	if !inoutputOK {
-		inoutputArguments = []any{}
+	hasOperationArguments := false
+	for _, field := range []string{"outputArguments", "inoutputArguments"} {
+		rawArguments, present := delegatedBodyMap[field]
+		if !present {
+			continue
+		}
+
+		arguments, err := jsonableOperationVariablesFromArray(rawArguments)
+		if err != nil {
+			return nil, fmt.Errorf("SMREPO-NORMDELRES-%s %w", strings.ToUpper(field), err)
+		}
+		resultPayload[field] = arguments
+		hasOperationArguments = true
 	}
 
-	return toDelegatedOperationResultPayload(outputArguments, inoutputArguments), true
+	hasResultEnvelope := hasOperationArguments
+	for _, field := range []string{"executionState", "success", "messages"} {
+		if _, present := delegatedBodyMap[field]; present {
+			hasResultEnvelope = true
+		}
+	}
+	if !hasResultEnvelope {
+		return nil, errors.New("SMREPO-NORMDELRES-MISSINGFIELDS delegated response is not an operation result")
+	}
+
+	if !hasOperationResultStateTypes(delegatedBodyMap) {
+		return nil, errors.New("SMREPO-NORMDELRES-INVALIDSTATE operation result executionState or success has an invalid type or value")
+	}
+
+	if !hasOperationResultBaseFields(delegatedBodyMap) {
+		resultPayload["executionState"] = "Completed"
+		resultPayload["success"] = true
+	}
+
+	return resultPayload, nil
+}
+
+func hasOperationResultBaseFields(payload map[string]any) bool {
+	_, hasExecutionState := payload["executionState"]
+	_, hasSuccess := payload["success"]
+	_, hasMessages := payload["messages"]
+	return hasExecutionState || hasSuccess || hasMessages
+}
+
+func hasOperationResultStateTypes(payload map[string]any) bool {
+	if rawExecutionState, present := payload["executionState"]; present {
+		executionState, ok := rawExecutionState.(string)
+		if !ok || !isValidExecutionState(executionState) {
+			return false
+		}
+	}
+
+	if rawSuccess, present := payload["success"]; present {
+		if _, ok := rawSuccess.(bool); !ok {
+			return false
+		}
+	}
+
+	if rawMessages, present := payload["messages"]; present {
+		if _, ok := rawMessages.([]any); !ok {
+			return false
+		}
+	}
+
+	return true
+}
+
+func isValidExecutionState(executionState string) bool {
+	switch executionState {
+	case "Initiated", "Running", "Completed", "Canceled", "Failed", "Timeout":
+		return true
+	default:
+		return false
+	}
 }
 
 func parseDelegationAsyncTTL() time.Duration {
@@ -379,9 +455,23 @@ func doTrustedDelegatedOperationCall(
 }
 
 func readDelegatedOperationResponse(response *http.Response) (int, any, error) {
-	responseBytes, readErr := io.ReadAll(response.Body)
+	if response.ContentLength > maximumDelegatedOperationResponseBytes {
+		return 0, nil, fmt.Errorf(
+			"SMREPO-DOOPDELG-RESPTOOLARGE delegated response Content-Length %d exceeds limit %d",
+			response.ContentLength,
+			maximumDelegatedOperationResponseBytes,
+		)
+	}
+
+	responseBytes, readErr := io.ReadAll(io.LimitReader(response.Body, maximumDelegatedOperationResponseBytes+1))
 	if readErr != nil {
 		return 0, nil, fmt.Errorf("SMREPO-DOOPDELG-READRESP %w", readErr)
+	}
+	if int64(len(responseBytes)) > maximumDelegatedOperationResponseBytes {
+		return 0, nil, fmt.Errorf(
+			"SMREPO-DOOPDELG-RESPTOOLARGE delegated response exceeds limit %d",
+			maximumDelegatedOperationResponseBytes,
+		)
 	}
 
 	if len(responseBytes) == 0 {

@@ -29,6 +29,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -98,7 +99,7 @@ func TestToDelegatedOperationResultPayloadFromBodyForArrayKeepsInoutputEmpty(t *
 
 	delegatedBody := []types.IOperationVariable{operationVariable}
 	resultPayload, ok := toDelegatedOperationResultPayloadFromBody(delegatedBody)
-	require.True(t, ok)
+	require.NoError(t, ok)
 	resultPayloadBytes, err := json.Marshal(resultPayload)
 	require.NoError(t, err)
 
@@ -133,7 +134,7 @@ func TestToDelegatedOperationResultPayloadFromBodyForMapSeparatesOutputAndInoutp
 	}
 
 	resultPayload, ok := toDelegatedOperationResultPayloadFromBody(delegatedBody)
-	require.True(t, ok)
+	require.NoError(t, ok)
 	resultPayloadBytes, err := json.Marshal(resultPayload)
 	require.NoError(t, err)
 
@@ -174,7 +175,7 @@ func TestToDelegatedOperationResultPayloadFromBodyForAnySliceUsesJsonization(t *
 	}
 
 	resultPayload, ok := toDelegatedOperationResultPayloadFromBody(delegatedBody)
-	require.True(t, ok)
+	require.NoError(t, ok)
 	resultPayloadBytes, err := json.Marshal(resultPayload)
 	require.NoError(t, err)
 
@@ -200,6 +201,78 @@ func TestToDelegatedOperationResultPayloadFromBodyForAnySliceUsesJsonization(t *
 	inoutputArguments, inoutputOK := resultPayloadJSON["inoutputArguments"].([]any)
 	require.True(t, inoutputOK)
 	require.Len(t, inoutputArguments, 0)
+}
+
+func TestDelegatedOperationResultPreservesFailureEnvelopeAndMessages(t *testing.T) {
+	t.Parallel()
+
+	delegatedBody := map[string]any{
+		"executionState": "Failed",
+		"success":        false,
+		"messages": []any{
+			map[string]any{"code": "DELEGATE-FAILED", "messageType": "Error", "text": "calculation failed"},
+		},
+		"outputArguments": []any{},
+	}
+
+	resultPayload, err := toDelegatedOperationResultPayloadFromBody(delegatedBody)
+	require.NoError(t, err)
+	require.Equal(t, "Failed", resultPayload["executionState"])
+	require.Equal(t, false, resultPayload["success"])
+	require.Equal(t, delegatedBody["messages"], resultPayload["messages"])
+}
+
+func TestDelegatedOperationResultRejectsMalformedPresentArgumentGroup(t *testing.T) {
+	t.Parallel()
+
+	delegatedBody := map[string]any{
+		"executionState":    "Completed",
+		"success":           true,
+		"outputArguments":   "not-an-array",
+		"inoutputArguments": []any{},
+	}
+
+	_, err := toDelegatedOperationResultPayloadFromBody(delegatedBody)
+	require.ErrorContains(t, err, "SMREPO-NORMDELRES-OUTPUTARGUMENTS")
+}
+
+func TestDelegatedOperationResultRejectsPartialOperationVariable(t *testing.T) {
+	t.Parallel()
+
+	delegatedBody := map[string]any{
+		"outputArguments": []any{
+			map[string]any{"value": map[string]any{"modelType": "Property", "idShort": "missingValueType"}},
+		},
+	}
+
+	_, err := toDelegatedOperationResultPayloadFromBody(delegatedBody)
+	require.ErrorContains(t, err, "SMREPO-NORMDELRES-OPVAR-0")
+}
+
+func TestReadDelegatedOperationResponseRejectsFixedOversizedBody(t *testing.T) {
+	t.Parallel()
+
+	response := &http.Response{
+		StatusCode:    http.StatusOK,
+		ContentLength: maximumDelegatedOperationResponseBytes + 1,
+		Body:          io.NopCloser(strings.NewReader("{}")),
+	}
+
+	_, _, err := readDelegatedOperationResponse(response)
+	require.ErrorContains(t, err, "SMREPO-DOOPDELG-RESPTOOLARGE")
+}
+
+func TestReadDelegatedOperationResponseRejectsChunkedOversizedBody(t *testing.T) {
+	t.Parallel()
+
+	response := &http.Response{
+		StatusCode:    http.StatusOK,
+		ContentLength: -1,
+		Body:          io.NopCloser(io.LimitReader(strings.NewReader(strings.Repeat("x", int(maximumDelegatedOperationResponseBytes)+1)), maximumDelegatedOperationResponseBytes+1)),
+	}
+
+	_, _, err := readDelegatedOperationResponse(response)
+	require.ErrorContains(t, err, "SMREPO-DOOPDELG-RESPTOOLARGE")
 }
 
 func stringPointer(value string) *string {

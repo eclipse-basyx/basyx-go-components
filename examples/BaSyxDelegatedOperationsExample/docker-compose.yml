@@ -8,10 +8,10 @@ services:
     volumes:
       - ./basyx-infra.yml:/basyx-infra.yml:ro
     environment:
-      ENDPOINT_CONFIG_AVAILABLE: "false"
+      ENDPOINT_CONFIG_AVAILABLE: "true"
     depends_on:
-      aas_environment:
-        condition: service_started
+      data-init:
+        condition: service_completed_successfully
     restart: unless-stopped
 
   aas_environment:
@@ -35,7 +35,7 @@ services:
       - POSTGRES_CONNMAXLIFETIMEMINUTES=5
       - JWS_PRIVATEKEYPATH=/app/rsa-key.pem
       - ABAC_ENABLED=false
-      - GENERAL_EXTERNALURL=http://localhost:8091
+      - GENERAL_EXTERNALURL=http://localhost:8090
       - GENERAL_AASREGISTRYINTEGRATION=true
       - GENERAL_SUBMODELREGISTRYINTEGRATION=true
       - GENERAL_DISCOVERYINTEGRATION=true
@@ -43,14 +43,14 @@ services:
     volumes:
       - ./basyx/rsa-key.pem:/app/rsa-key.pem:ro
     ports:
-      - "8091:5004"
+      - "8090:5004"
     depends_on:
       basyx_configuration:
         condition: service_completed_successfully
     restart: unless-stopped
 
   delegated-operation-service:
-    container_name: delegated-operation-service
+    container_name: delegated-operations-delegated-service
     build:
       context: ./delegated-operation-service
       dockerfile: Dockerfile
@@ -90,8 +90,9 @@ services:
     restart: unless-stopped
 
   basyx_configuration:
-    container_name: basyx_configuration
+    container_name: delegated-operations-basyx-configuration
     image: eclipsebasyx/basyxconfigurationservice-go:SNAPSHOT
+    pull_policy: always
     environment:
       - POSTGRES_HOST=db
       - POSTGRES_PORT=5432

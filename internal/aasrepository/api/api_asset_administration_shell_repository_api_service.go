@@ -17,8 +17,11 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
+	"net/url"
+	"path"
 	"strings"
 	"time"
 
@@ -32,6 +35,7 @@ import (
 	submodelapi "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/api"
 	submodelpersistence "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence"
 	openapi "github.com/eclipse-basyx/basyx-go-components/pkg/aasrepositoryapi/go"
+	submodelopenapi "github.com/eclipse-basyx/basyx-go-components/pkg/submodelrepositoryapi"
 )
 
 // AssetAdministrationShellRepositoryAPIAPIService is a service that implements the logic for the AssetAdministrationShellRepositoryAPIAPIServicer
@@ -966,6 +970,43 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) ensureSubmodelBackend(
 	return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "InternalServerError"), nil, false
 }
 
+func toAASOperationRedirect(
+	response gen.ImplResponse,
+	aasIdentifier string,
+	submodelIdentifier string,
+	idShortPath string,
+	targetSegment string,
+) gen.ImplResponse {
+	location := ""
+	switch redirect := response.Body.(type) {
+	case submodelopenapi.Redirect:
+		location = redirect.Location
+	case gen.Redirect:
+		location = redirect.Location
+	default:
+		return response
+	}
+
+	parsedLocation, err := url.Parse(location)
+	if err != nil {
+		return response
+	}
+	handleID := path.Base(parsedLocation.Path)
+	if handleID == "" || handleID == "." || handleID == "/" {
+		return response
+	}
+
+	response.Body = openapi.Redirect{Location: fmt.Sprintf(
+		"/shells/%s/submodels/%s/submodel-elements/%s/%s/%s",
+		url.PathEscape(aasIdentifier),
+		url.PathEscape(submodelIdentifier),
+		url.PathEscape(idShortPath),
+		targetSegment,
+		url.PathEscape(handleID),
+	)}
+	return response
+}
+
 func decodeAASAndSubmodelIdentifiers(aasIdentifier string, submodelIdentifier string, operation string) (string, string, gen.ImplResponse, bool) {
 	decodedAASIdentifier, decodeAASErr := common.DecodeString(aasIdentifier)
 	if decodeAASErr != nil {
@@ -1603,7 +1644,11 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) InvokeOperationAsyncAa
 		return response, ensureErr
 	}
 
-	return s.submodelAPI.InvokeOperationSubmodelRepo(ctx, submodelIdentifier, idShortPath, operationRequest, true)
+	response, invokeErr := s.submodelAPI.InvokeOperationAsync(ctx, submodelIdentifier, idShortPath, operationRequest)
+	if invokeErr != nil {
+		return response, invokeErr
+	}
+	return toAASOperationRedirect(response, aasIdentifier, submodelIdentifier, idShortPath, "operation-status"), nil
 }
 
 // InvokeOperationAsyncValueOnlyAasRepository - Asynchronously invokes an Operation at a specified path
@@ -1641,7 +1686,11 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) GetOperationAsyncStatu
 		return response, ensureErr
 	}
 
-	return s.submodelAPI.GetOperationAsyncStatus(ctx, submodelIdentifier, idShortPath, handleId)
+	response, statusErr := s.submodelAPI.GetOperationAsyncStatus(ctx, submodelIdentifier, idShortPath, handleId)
+	if statusErr != nil {
+		return response, statusErr
+	}
+	return toAASOperationRedirect(response, aasIdentifier, submodelIdentifier, idShortPath, "operation-results"), nil
 }
 
 // GetOperationAsyncResultAasRepository - Returns the Operation result of an asynchronous invoked Operation

@@ -2632,18 +2632,21 @@ func (s *SubmodelRepositoryAPIAPIService) InvokeOperationSubmodelRepo(ctx contex
 
 	statusCode, delegatedBody, delegateErr := doDelegatedOperationCall(ctx, delegationURL, buildDelegatedOperationInput(operationRequest), timeout)
 	if delegateErr != nil {
-		return newAPIErrorResponse(delegateErr, http.StatusInternalServerError, operation, "DelegateOperationCall"), nil
+		slog.ErrorContext(ctx, "delegated operation invocation failed", "error.code", "SMREPO-INVOKEOP-DELEGATE", "error", delegateErr)
+		return newAPIErrorResponse(delegateErr, http.StatusBadGateway, operation, "DelegateOperationCall"), nil
 	}
 
 	if statusCode < http.StatusOK || statusCode >= http.StatusMultipleChoices {
 		return gen.Response(statusCode, delegatedBody), nil
 	}
 
-	if resultPayload, ok := toDelegatedOperationResultPayloadFromBody(delegatedBody); ok {
-		return gen.Response(http.StatusOK, resultPayload), nil
+	resultPayload, resultErr := toDelegatedOperationResultPayloadFromBody(delegatedBody)
+	if resultErr != nil {
+		slog.ErrorContext(ctx, "delegated operation returned an invalid result", "error.code", "SMREPO-INVOKEOP-INVALIDRESULT", "error", resultErr)
+		return newAPIErrorResponse(resultErr, http.StatusBadGateway, operation, "InvalidDelegatedOperationResult"), nil
 	}
 
-	return gen.Response(http.StatusOK, delegatedBody), nil
+	return gen.Response(http.StatusOK, resultPayload), nil
 }
 
 // InvokeOperationValueOnly - Synchronously or asynchronously invokes an Operation at a specified path
@@ -2702,21 +2705,36 @@ func (s *SubmodelRepositoryAPIAPIService) InvokeOperationAsync(ctx context.Conte
 		return record
 	})
 
+	delegationCtx := context.WithoutCancel(ctx)
+	delegatedInput := buildDelegatedOperationInput(operationRequest)
 	go func() {
-		delegationCtx := context.WithoutCancel(ctx)
-
-		statusCode, delegatedBody, delegateErr := doDelegatedOperationCall(delegationCtx, delegationURL, buildDelegatedOperationInput(operationRequest), timeout)
+		statusCode, delegatedBody, delegateErr := doDelegatedOperationCall(delegationCtx, delegationURL, delegatedInput, timeout)
 		if delegateErr != nil {
+			slog.ErrorContext(
+				delegationCtx,
+				"asynchronous delegated operation invocation failed",
+				"error.code", "SMREPO-INVOKEOPASY-DELEGATE",
+				"operation.handle_id", handleID,
+				"error", delegateErr,
+			)
+			errorResponse := newAPIErrorResponse(delegateErr, http.StatusBadGateway, operation, "DelegateOperationCall")
 			s.asyncManager.Update(handleID, func(record asyncbulk.Record) asyncbulk.Record {
 				record.ExecutionState = "Failed"
-				record.ErrorStatus = http.StatusInternalServerError
-				record.ErrorBody = map[string]any{"message": delegateErr.Error()}
+				record.ErrorStatus = errorResponse.Code
+				record.ErrorBody = errorResponse.Body
 				return record
 			})
 			return
 		}
 
 		if statusCode < http.StatusOK || statusCode >= http.StatusMultipleChoices {
+			slog.WarnContext(
+				delegationCtx,
+				"asynchronous delegated operation returned an unsuccessful status",
+				"error.code", "SMREPO-INVOKEOPASY-STATUS",
+				"operation.handle_id", handleID,
+				"http.response.status_code", statusCode,
+			)
 			s.asyncManager.Update(handleID, func(record asyncbulk.Record) asyncbulk.Record {
 				record.ExecutionState = "Failed"
 				record.ErrorStatus = statusCode
@@ -2726,9 +2744,23 @@ func (s *SubmodelRepositoryAPIAPIService) InvokeOperationAsync(ctx context.Conte
 			return
 		}
 
-		finalResult := delegatedBody
-		if resultPayload, resultOK := toDelegatedOperationResultPayloadFromBody(delegatedBody); resultOK {
-			finalResult = resultPayload
+		finalResult, resultErr := toDelegatedOperationResultPayloadFromBody(delegatedBody)
+		if resultErr != nil {
+			slog.ErrorContext(
+				delegationCtx,
+				"asynchronous delegated operation returned an invalid result",
+				"error.code", "SMREPO-INVOKEOPASY-INVALIDRESULT",
+				"operation.handle_id", handleID,
+				"error", resultErr,
+			)
+			errorResponse := newAPIErrorResponse(resultErr, http.StatusBadGateway, operation, "InvalidDelegatedOperationResult")
+			s.asyncManager.Update(handleID, func(record asyncbulk.Record) asyncbulk.Record {
+				record.ExecutionState = "Failed"
+				record.ErrorStatus = errorResponse.Code
+				record.ErrorBody = errorResponse.Body
+				return record
+			})
+			return
 		}
 
 		s.asyncManager.Update(handleID, func(record asyncbulk.Record) asyncbulk.Record {
@@ -2740,7 +2772,14 @@ func (s *SubmodelRepositoryAPIAPIService) InvokeOperationAsync(ctx context.Conte
 		})
 	}()
 
-	return gen.Response(http.StatusAccepted, map[string]any{"handleId": handleID}), nil
+	location := fmt.Sprintf(
+		"/submodels/%s/submodel-elements/%s/operation-status/%s",
+		url.PathEscape(submodelIdentifier),
+		url.PathEscape(idShortPath),
+		url.PathEscape(handleID),
+	)
+
+	return gen.Response(http.StatusAccepted, openapi.Redirect{Location: location}), nil
 }
 
 // InvokeOperationAsyncValueOnly - Asynchronously invokes an Operation at a specified path

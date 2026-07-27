@@ -2125,6 +2125,7 @@ func (c *SubmodelRepositoryAPIAPIController) InvokeOperationSubmodelRepo(w http.
 		return
 	}
 	// If no error, encode the body and the result code
+	result.Body = c.contextualizeOperationRedirect(r, result.Body)
 	_ = EncodeJSONResponse(result.Body, &result.Code, w)
 }
 
@@ -2214,6 +2215,7 @@ func (c *SubmodelRepositoryAPIAPIController) InvokeOperationAsync(w http.Respons
 		return
 	}
 	// If no error, encode the body and the result code
+	result.Body = c.contextualizeOperationRedirect(r, result.Body)
 	_ = EncodeJSONResponse(result.Body, &result.Code, w)
 }
 
@@ -2279,6 +2281,7 @@ func (c *SubmodelRepositoryAPIAPIController) GetOperationAsyncStatus(w http.Resp
 		return
 	}
 	// If no error, encode the body and the result code
+	result.Body = c.contextualizeOperationRedirect(r, result.Body)
 	_ = EncodeJSONResponse(result.Body, &result.Code, w)
 }
 

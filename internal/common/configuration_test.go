@@ -254,15 +254,17 @@ func TestLogConfigurationExcludesSecrets(t *testing.T) {
 	}
 }
 
-func TestAddCorsAllowsAndExposesRequestMetadataHeaders(t *testing.T) {
+func TestAddCorsAllowsRequestMetadataHeadersAndExposesResponseHeaders(t *testing.T) {
+	allowedHeadersBacking := []string{"Content-Type", "must-not-be-overwritten"}
 	cfg := &Config{CorsConfig: CorsConfig{
 		AllowedOrigins: []string{"https://client.example"},
 		AllowedMethods: []string{http.MethodGet},
-		AllowedHeaders: []string{"Content-Type"},
+		AllowedHeaders: allowedHeadersBacking[:1],
 	}}
 	router := chi.NewRouter()
 	AddCors(router, cfg)
 	router.Get("/resource", func(writer http.ResponseWriter, _ *http.Request) {
+		writer.Header().Set("Location", "/resource/result")
 		writer.WriteHeader(http.StatusNoContent)
 	})
 
@@ -285,9 +287,12 @@ func TestAddCorsAllowsAndExposesRequestMetadataHeaders(t *testing.T) {
 	router.ServeHTTP(response, request)
 
 	exposedHeaders := response.Header().Get("Access-Control-Expose-Headers")
-	requireHeaderValues(t, exposedHeaders, commonlogging.RequestIDHeader, commonlogging.CorrelationIDHeader)
-	if len(cfg.CorsConfig.AllowedHeaders) != 1 {
+	requireHeaderValues(t, exposedHeaders, commonlogging.RequestIDHeader, commonlogging.CorrelationIDHeader, "Location")
+	if len(cfg.CorsConfig.AllowedHeaders) != 1 || cfg.CorsConfig.AllowedHeaders[0] != "Content-Type" {
 		t.Fatalf("CORS setup mutated configured headers: %#v", cfg.CorsConfig.AllowedHeaders)
+	}
+	if allowedHeadersBacking[1] != "must-not-be-overwritten" {
+		t.Fatalf("CORS setup mutated configured headers' backing array: %#v", allowedHeadersBacking)
 	}
 }
 
