@@ -177,6 +177,39 @@ func TestLogicalExpression_ExistsSQL_DoesNotIncludeLimitOne(t *testing.T) {
 	}
 }
 
+func TestLogicalExpression_MatchUsesOneExistsForSameArrayRow(t *testing.T) {
+	expr := LogicalExpression{
+		Match: []MatchExpression{
+			{
+				Eq: ComparisonItems{
+					field("$aasdesc#specificAssetIds[].name"),
+					strVal("Banane"),
+				},
+			},
+			{
+				Eq: ComparisonItems{
+					field("$aasdesc#specificAssetIds[].value"),
+					strVal("248795"),
+				},
+			},
+		},
+	}
+
+	sql, args := toPreparedSQLForDescriptor(t, expr)
+	if count := strings.Count(sql, "EXISTS"); count != 1 {
+		t.Fatalf("expected one EXISTS so all $match predicates use the same array row, got %d: %s", count, sql)
+	}
+	if !strings.Contains(sql, `"specific_asset_id"."name"`) {
+		t.Fatalf("expected name predicate in shared EXISTS: %s", sql)
+	}
+	if !strings.Contains(sql, `"specific_asset_id"."value"`) {
+		t.Fatalf("expected value predicate in shared EXISTS: %s", sql)
+	}
+	if !argListContains(args, "Banane") || !argListContains(args, "248795") {
+		t.Fatalf("expected both $match values in SQL args, got %#v", args)
+	}
+}
+
 func TestHandleComparison_BuildsExistsForSpecificAssetExternalSubjectKeyValue_WildcardsNoBindings(t *testing.T) {
 	field := ModelStringPattern("$aasdesc#specificAssetIds[].externalSubjectId.keys[].value")
 	lit := StandardString("WRITTEN_BY_X")

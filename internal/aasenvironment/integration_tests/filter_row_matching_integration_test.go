@@ -240,15 +240,38 @@ func descriptorRowMatchingIntegrationCases(fixture rowMatchingIntegrationFixture
 		withRowMatchingRoot(root, rowMatchingIntegrationCase{
 			name:     "AAS descriptor match filters only the matching specificAssetId row",
 			fragment: "$aasdesc#specificAssetIds[]",
-			condition: map[string]any{
-				"$match": []any{
-					equalStringCondition("$aasdesc#specificAssetIds[].name", "public-id"),
-				},
-			},
+			condition: matchCondition(
+				equalStringCondition("$aasdesc#specificAssetIds[].name", "public-id"),
+				equalStringCondition("$aasdesc#specificAssetIds[].value", "true"),
+			),
 			resultPath:              "specificAssetIds[].name",
 			expectedCandidateValues: []string{"private-id", "public-id"},
 			expectedValues:          []string{"public-id"},
-			explanation:             "A matching sibling must not make the $match expression true for every specificAssetId row.",
+			explanation:             "Both $match clauses are true on the public row, so only that current specificAssetId must remain.",
+		}),
+		withRowMatchingRoot(root, rowMatchingIntegrationCase{
+			name:     "AAS descriptor match cannot combine different specificAssetId rows",
+			fragment: "$aasdesc#specificAssetIds[]",
+			condition: matchCondition(
+				equalStringCondition("$aasdesc#specificAssetIds[].name", "public-id"),
+				equalStringCondition("$aasdesc#specificAssetIds[].value", "false"),
+			),
+			resultPath:              "specificAssetIds[].name",
+			expectedCandidateValues: []string{"private-id", "public-id"},
+			expectedValues:          []string{},
+			explanation:             "The public name and false value exist, but on different rows; no current specificAssetId satisfies the complete $match.",
+		}),
+		withRowMatchingRoot(root, rowMatchingIntegrationCase{
+			name:     "AAS descriptor match combines current row and nested key conditions",
+			fragment: "$aasdesc#specificAssetIds[]",
+			condition: matchCondition(
+				equalStringCondition("$aasdesc#specificAssetIds[].name", "public-id"),
+				equalStringCondition("$aasdesc#specificAssetIds[].externalSubjectId.keys[].value", "PUBLIC"),
+			),
+			resultPath:              "specificAssetIds[].name",
+			expectedCandidateValues: []string{"private-id", "public-id"},
+			expectedValues:          []string{"public-id"},
+			explanation:             "The nested PUBLIC key belongs to the public current row and must not be borrowed by the private row.",
 		}),
 		withRowMatchingRoot(root, rowMatchingIntegrationCase{
 			name:       "AAS descriptor boolCast filters only the true specificAssetId row",
@@ -529,9 +552,28 @@ func smeRowMatchingIntegrationCases(fixture rowMatchingIntegrationFixture) []row
 			fragment:                "$sme.a[]",
 			condition:               equalStringCondition("$sme.a[].b[]#value", "visible"),
 			resultPath:              "submodelElements[].value[].idShort",
-			expectedCandidateValues: []string{"without-visible-child", "with-visible-child"},
-			expectedValues:          []string{"with-visible-child"},
-			explanation:             "The first a[] row owns the visible b[] child; the second a[] row must not borrow that descendant match.",
+			expectedCandidateValues: []string{"split-match-children", "without-visible-child", "with-visible-child"},
+			expectedValues:          []string{"split-match-children", "with-visible-child"},
+			explanation:             "Only a[] rows that own a visible b[] child remain; the blocked-only row must not borrow another candidate's descendant.",
+		},
+		{
+			name:      "SME a[] match requires one b[] descendant to satisfy every clause",
+			endpoint:  "/query/submodels",
+			rootField: "$sm#id",
+			rootValue: fixture.nestedSMEsubmodelID,
+			fragment:  "$sme.a[]",
+			condition: matchCondition(
+				equalStringCondition("$sme.a[].b[]#value", "visible"),
+				equalStringCondition("$sme.a[].b[]#semanticId.keys[].value", "semantic-public"),
+			),
+			resultPath: "submodelElements[].value[].idShort",
+			expectedCandidateValues: []string{
+				"split-match-children",
+				"without-visible-child",
+				"with-visible-child",
+			},
+			expectedValues: []string{"with-visible-child"},
+			explanation:    "The split candidate has visible and semantic-public on different b[] rows, so it must not satisfy the combined $match.",
 		},
 		{
 			name:                    "SME a[].b[] filters nested list items by their own values",
@@ -541,8 +583,8 @@ func smeRowMatchingIntegrationCases(fixture rowMatchingIntegrationFixture) []row
 			fragment:                "$sme.a[].b[]",
 			condition:               equalStringCondition("$sme.a[].b[]#value", "visible"),
 			resultPath:              "submodelElements[].value[].value[].value[].value",
-			expectedCandidateValues: []string{"blocked", "hidden", "visible"},
-			expectedValues:          []string{"visible"},
+			expectedCandidateValues: []string{"blocked", "hidden", "public-marker", "visible", "visible"},
+			expectedValues:          []string{"visible", "visible"},
 			explanation:             "The final b[] must identify the row being filtered despite the earlier a[].",
 		},
 		{
@@ -874,6 +916,22 @@ func rowMatchingNestedSMEPayload(fixture rowMatchingIntegrationFixture) map[stri
 							},
 						},
 					},
+					map[string]any{
+						"idShort":   "split-match-children",
+						"modelType": "SubmodelElementCollection",
+						"value": []any{
+							map[string]any{
+								"idShort":              "b",
+								"modelType":            "SubmodelElementList",
+								"typeValueListElement": "Property",
+								"valueTypeListElement": "xs:string",
+								"value": []any{
+									rowMatchingPropertyPayload("visible", "semantic-internal"),
+									rowMatchingPropertyPayload("public-marker", "semantic-public"),
+								},
+							},
+						},
+					},
 				},
 			},
 		},
@@ -1012,6 +1070,14 @@ func equalStringCondition(field string, value string) map[string]any {
 			map[string]any{"$strVal": value},
 		},
 	}
+}
+
+func matchCondition(conditions ...map[string]any) map[string]any {
+	items := make([]any, 0, len(conditions))
+	for _, condition := range conditions {
+		items = append(items, condition)
+	}
+	return map[string]any{"$match": items}
 }
 
 func andCondition(conditions ...map[string]any) map[string]any {

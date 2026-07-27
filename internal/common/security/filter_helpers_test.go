@@ -208,6 +208,55 @@ func TestAddFilterQueryFromContext_ArrayEndedFragment_UsesInlinePredicate(t *tes
 	}
 }
 
+func TestAddFilterQueryFromContext_ArrayEndedFragmentMatchUsesCurrentRow(t *testing.T) {
+	fragment := grammar.FragmentStringPattern("$aasdesc#specificAssetIds[]")
+	expr := mustParseLogicalExpression(t, `{
+		"$match": [
+			{"$eq": [
+				{"$field": "$aasdesc#specificAssetIds[].name"},
+				{"$strVal": "public-id"}
+			]},
+			{"$eq": [
+				{"$field": "$aasdesc#specificAssetIds[].value"},
+				{"$strVal": "true"}
+			]}
+		]
+	}`)
+	ctx := context.WithValue(context.Background(), filterKey, &QueryFilter{
+		Filters: FragmentFilters{
+			fragment: expr,
+		},
+	})
+
+	collector, err := grammar.NewResolvedFieldPathCollectorForRoot(grammar.CollectorRootAASDesc)
+	if err != nil {
+		t.Fatalf("NewResolvedFieldPathCollectorForRoot returned error: %v", err)
+	}
+	collector.AllowInlineAliases(common.AliasSpecificAssetID)
+
+	ds := goqu.Dialect("postgres").
+		From(goqu.T(common.TblSpecificAssetID).As(common.AliasSpecificAssetID)).
+		Select(goqu.I(common.AliasSpecificAssetID + ".id")).
+		Prepared(true)
+
+	filteredDS, err := AddFilterQueryFromContext(ctx, ds, fragment, collector)
+	if err != nil {
+		t.Fatalf("AddFilterQueryFromContext returned error: %v", err)
+	}
+	sqlStr, _, err := filteredDS.ToSQL()
+	if err != nil {
+		t.Fatalf("ToSQL returned error: %v", err)
+	}
+
+	if strings.Contains(sqlStr, "EXISTS") {
+		t.Fatalf("expected terminal-array $match to use the current inline row: %s", sqlStr)
+	}
+	if !strings.Contains(sqlStr, `"specific_asset_id"."name"`) ||
+		!strings.Contains(sqlStr, `"specific_asset_id"."value"`) {
+		t.Fatalf("expected both $match predicates on the current specificAssetId row: %s", sqlStr)
+	}
+}
+
 func TestAddFilterQueryFromContext_ArrayEndedFragment_DefaultBehavior_UsesExists(t *testing.T) {
 	expr := mustParseLogicalExpression(t, `{"$or":[{"$eq":[{"$strVal":"BPN_A"},{"$field":"$aasdesc#specificAssetIds[].externalSubjectId.keys[].value"}]},{"$eq":[{"$strVal":"PUBLIC_READABLE"},{"$field":"$aasdesc#specificAssetIds[].externalSubjectId.keys[].value"}]}]}`)
 
@@ -287,6 +336,91 @@ func TestAddFilterQueryFromContext_ExactSMEUsesCurrentElement(t *testing.T) {
 	}
 	if strings.Contains(normalizedSQL, `"submodel_element"."submodel_id"="candidate_sme"."submodel_id"`) {
 		t.Fatalf("did not expect exact $sme filter to use parent submodel correlation: %s", sqlStr)
+	}
+}
+
+func TestAddFilterQueryFromContext_ExactSMEDoesNotBorrowDescendantMatch(t *testing.T) {
+	t.Parallel()
+
+	fragment := grammar.FragmentStringPattern("$sme")
+	expr := mustParseLogicalExpression(t, `{
+		"$eq": [
+			{"$field": "$sme.NewTestList[0]#value"},
+			{"$strVal": "listValue1_8"}
+		]
+	}`)
+	ctx := context.WithValue(context.Background(), filterKey, &QueryFilter{
+		Filters: FragmentFilters{
+			fragment: expr,
+		},
+	})
+
+	collector, err := grammar.NewResolvedFieldPathCollectorForSMERow("candidate_sme")
+	if err != nil {
+		t.Fatalf("NewResolvedFieldPathCollectorForSMERow returned error: %v", err)
+	}
+	ds := goqu.Dialect("postgres").
+		From(goqu.T("submodel_element").As("candidate_sme")).
+		Select(goqu.I("candidate_sme.id")).
+		Prepared(true)
+
+	filteredDS, err := AddFilterQueryFromContext(ctx, ds, fragment, collector)
+	if err != nil {
+		t.Fatalf("AddFilterQueryFromContext returned error: %v", err)
+	}
+	sqlStr, _, err := filteredDS.ToSQL()
+	if err != nil {
+		t.Fatalf("ToSQL returned error: %v", err)
+	}
+
+	normalizedSQL := strings.ReplaceAll(sqlStr, " ", "")
+	if !strings.Contains(normalizedSQL, `"submodel_element"."id"="candidate_sme"."id"`) {
+		t.Fatalf("expected exact $sme to evaluate the condition against the current element: %s", sqlStr)
+	}
+	if strings.Contains(normalizedSQL, `"submodel_element"."submodel_id"="candidate_sme"."submodel_id"`) ||
+		strings.Contains(sqlStr, "LEFT(") {
+		t.Fatalf("exact $sme must not qualify a parent through a matching descendant: %s", sqlStr)
+	}
+}
+
+func TestAddFilterQueryFromContext_SMEArrayFragmentCorrelatesDescendantMatch(t *testing.T) {
+	t.Parallel()
+
+	fragment := grammar.FragmentStringPattern("$sme.a[]")
+	expr := mustParseLogicalExpression(t, `{
+		"$eq": [
+			{"$field": "$sme.a[].b[]#value"},
+			{"$strVal": "visible"}
+		]
+	}`)
+	ctx := context.WithValue(context.Background(), filterKey, &QueryFilter{
+		Filters: FragmentFilters{
+			fragment: expr,
+		},
+	})
+
+	collector, err := grammar.NewResolvedFieldPathCollectorForSMERow("candidate_sme")
+	if err != nil {
+		t.Fatalf("NewResolvedFieldPathCollectorForSMERow returned error: %v", err)
+	}
+	ds := goqu.Dialect("postgres").
+		From(goqu.T("submodel_element").As("candidate_sme")).
+		Select(goqu.I("candidate_sme.id")).
+		Prepared(true)
+
+	filteredDS, err := AddFilterQueryFromContext(ctx, ds, fragment, collector)
+	if err != nil {
+		t.Fatalf("AddFilterQueryFromContext returned error: %v", err)
+	}
+	sqlStr, _, err := filteredDS.ToSQL()
+	if err != nil {
+		t.Fatalf("ToSQL returned error: %v", err)
+	}
+
+	normalizedSQL := strings.ReplaceAll(sqlStr, " ", "")
+	if !strings.Contains(normalizedSQL, `"submodel_element"."submodel_id"="candidate_sme"."submodel_id"`) ||
+		!strings.Contains(sqlStr, "LEFT(") {
+		t.Fatalf("expected terminal SME array fragment to correlate matching descendants to its current row: %s", sqlStr)
 	}
 }
 

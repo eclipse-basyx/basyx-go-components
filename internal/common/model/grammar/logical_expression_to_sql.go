@@ -1033,6 +1033,7 @@ func (c *ResolvedFieldPathCollector) collectorForField(field *Value) *ResolvedFi
 func fieldIsSMEDescendantOfRowFragment(field ModelStringPattern, fragment FragmentStringPattern) bool {
 	fragmentPath := normalizedRowFragmentPath(fragment)
 	return strings.HasPrefix(fragmentPath, "$sme") &&
+		strings.HasSuffix(fragmentPath, "[]") &&
 		!strings.Contains(fragmentPath, "#") &&
 		strings.HasPrefix(string(field), fragmentPath+".")
 }
@@ -2292,26 +2293,76 @@ func (le *LogicalExpression) EvaluateToExpressionWithNegatedFragments(
 	return goqu.Or(mainExpr, fragmentGuard), resolved, nil
 }
 
+type matchPredicateGroup struct {
+	collector   *ResolvedFieldPathCollector
+	expressions []exp.Expression
+	resolved    []ResolvedFieldPath
+}
+
 func evaluateMatchExpressions(match []MatchExpression, collector *ResolvedFieldPathCollector) (exp.Expression, []ResolvedFieldPath, error) {
 	if len(match) == 0 {
 		return nil, nil, fmt.Errorf("match expression list is empty")
 	}
-	var expressions []exp.Expression
-	var resolved []ResolvedFieldPath
+
+	groups := make([]matchPredicateGroup, 0, len(match))
+	groupIndexes := make(map[*ResolvedFieldPathCollector]int, len(match))
 	for i, m := range match {
-		expr, childResolved, err := evaluateMatchExpressionSQL(m, collector)
-		if err != nil {
+		if err := appendMatchPredicateGroups(m, collector, &groups, groupIndexes); err != nil {
 			return nil, nil, fmt.Errorf("error evaluating match expression at index %d: %w", i, err)
 		}
-		expressions = append(expressions, expr)
-		resolved = append(resolved, childResolved...)
+	}
+
+	expressions := make([]exp.Expression, 0, len(groups))
+	var resolved []ResolvedFieldPath
+	for _, group := range groups {
+		predicate := goqu.And(group.expressions...)
+		scoped, groupResolved, err := applyCollectorScopeToPredicate(predicate, group.resolved, group.collector)
+		if err != nil {
+			return nil, nil, err
+		}
+		expressions = append(expressions, scoped)
+		resolved = append(resolved, groupResolved...)
 	}
 	return goqu.And(expressions...), resolved, nil
 }
 
-func evaluateMatchExpressionSQL(me MatchExpression, collector *ResolvedFieldPathCollector) (exp.Expression, []ResolvedFieldPath, error) {
+func appendMatchPredicateGroups(
+	me MatchExpression,
+	collector *ResolvedFieldPathCollector,
+	groups *[]matchPredicateGroup,
+	groupIndexes map[*ResolvedFieldPathCollector]int,
+) error {
+	if len(me.Match) > 0 {
+		for i, nested := range me.Match {
+			if err := appendMatchPredicateGroups(nested, collector, groups, groupIndexes); err != nil {
+				return fmt.Errorf("error evaluating nested match expression at index %d: %w", i, err)
+			}
+		}
+		return nil
+	}
+
+	expr, resolved, predicateCollector, err := evaluateMatchExpressionSQL(me, collector)
+	if err != nil {
+		return err
+	}
+	groupIndex, exists := groupIndexes[predicateCollector]
+	if !exists {
+		groupIndex = len(*groups)
+		groupIndexes[predicateCollector] = groupIndex
+		*groups = append(*groups, matchPredicateGroup{collector: predicateCollector})
+	}
+	group := &(*groups)[groupIndex]
+	group.expressions = append(group.expressions, expr)
+	group.resolved = append(group.resolved, resolved...)
+	return nil
+}
+
+func evaluateMatchExpressionSQL(
+	me MatchExpression,
+	collector *ResolvedFieldPathCollector,
+) (exp.Expression, []ResolvedFieldPath, *ResolvedFieldPathCollector, error) {
 	if me.Boolean != nil {
-		return goqu.L("?", *me.Boolean), nil, nil
+		return goqu.L("?", *me.Boolean), nil, collector, nil
 	}
 	if len(me.Eq) > 0 {
 		return evaluateMatchComparison(me.Eq, "$eq", collector)
@@ -2343,28 +2394,70 @@ func evaluateMatchExpressionSQL(me MatchExpression, collector *ResolvedFieldPath
 	if len(me.Regex) > 0 {
 		return evaluateMatchStringOperation(me.Regex, "$regex", collector)
 	}
-	if len(me.Match) > 0 {
-		return evaluateMatchExpressions(me.Match, collector)
-	}
-	return nil, nil, fmt.Errorf("match expression has no valid operation")
+	return nil, nil, nil, fmt.Errorf("match expression has no valid operation")
 }
 
-func evaluateMatchComparison(operands []Value, operation string, collector *ResolvedFieldPathCollector) (exp.Expression, []ResolvedFieldPath, error) {
+func evaluateMatchComparison(
+	operands []Value,
+	operation string,
+	collector *ResolvedFieldPathCollector,
+) (exp.Expression, []ResolvedFieldPath, *ResolvedFieldPathCollector, error) {
 	if len(operands) != 2 {
-		return nil, nil, fmt.Errorf("comparison operation %s requires exactly 2 operands, got %d", operation, len(operands))
+		return nil, nil, nil, fmt.Errorf("comparison operation %s requires exactly 2 operands, got %d", operation, len(operands))
 	}
 	leftOperand := &operands[0]
 	rightOperand := &operands[1]
-	return HandleComparisonWithCollector(leftOperand, rightOperand, operation, collector)
+	validate := func(leftOperand, rightOperand *Value) error {
+		_, err := leftOperand.IsComparableTo(*rightOperand)
+		return err
+	}
+	expr, resolved, err := handleBinaryOperationWithoutCollector(
+		leftOperand,
+		rightOperand,
+		operation,
+		fmt.Errorf("field-to-field comparisons are not supported"),
+		buildComparisonExpression,
+		validate,
+	)
+	return expr, resolved, collectorForMatchOperands(collector, leftOperand, rightOperand), err
 }
 
-func evaluateMatchStringOperation(items []StringValue, operation string, collector *ResolvedFieldPathCollector) (exp.Expression, []ResolvedFieldPath, error) {
+func evaluateMatchStringOperation(
+	items []StringValue,
+	operation string,
+	collector *ResolvedFieldPathCollector,
+) (exp.Expression, []ResolvedFieldPath, *ResolvedFieldPathCollector, error) {
 	if len(items) != 2 {
-		return nil, nil, fmt.Errorf("string operation %s requires exactly 2 operands, got %d", operation, len(items))
+		return nil, nil, nil, fmt.Errorf("string operation %s requires exactly 2 operands, got %d", operation, len(items))
 	}
 	leftOperand := stringValueToValue(items[0])
 	rightOperand := stringValueToValue(items[1])
-	return HandleStringOperationWithCollector(&leftOperand, &rightOperand, operation, collector)
+	expr, resolved, err := handleBinaryOperationWithoutCollector(
+		&leftOperand,
+		&rightOperand,
+		operation,
+		fmt.Errorf("field-to-field string operations are not supported"),
+		buildStringOperationExpression,
+		nil,
+	)
+	return expr, resolved, collectorForMatchOperands(collector, &leftOperand, &rightOperand), err
+}
+
+func collectorForMatchOperands(
+	collector *ResolvedFieldPathCollector,
+	leftOperand *Value,
+	rightOperand *Value,
+) *ResolvedFieldPathCollector {
+	if collector == nil {
+		return nil
+	}
+	if field, _ := extractFieldOperandAndCast(leftOperand); field != nil {
+		return collector.collectorForField(field)
+	}
+	if field, _ := extractFieldOperandAndCast(rightOperand); field != nil {
+		return collector.collectorForField(field)
+	}
+	return collector
 }
 
 // evaluateStringOperationSQL builds SQL expressions for string operators like $contains, $starts-with, $ends-with, and $regex.
