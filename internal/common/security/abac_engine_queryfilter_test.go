@@ -211,18 +211,51 @@ func TestQueryFilter_FilterExpressionFor_WildcardCombinesOr(t *testing.T) {
 }
 
 func TestQueryFilter_FilterExpressionEntriesFor_InfersAutomaticRowScope(t *testing.T) {
-	b := true
-	expr := grammar.LogicalExpression{Boolean: &b}
+	t.Parallel()
 
-	q := QueryFilter{Filters: FragmentFilters{
-		"$aasdesc#specificAssetIds[]": expr,
-	}}
-
-	entries := q.FilterExpressionEntriesFor("$aasdesc#specificAssetIds[]")
-	if len(entries) != 1 {
-		t.Fatalf("expected 1 entry, got %d", len(entries))
+	tests := []struct {
+		name     string
+		fragment grammar.FragmentStringPattern
+		rowLocal bool
+	}{
+		{
+			name:     "terminal wildcard array",
+			fragment: "$aasdesc#specificAssetIds[]",
+			rowLocal: true,
+		},
+		{
+			name:     "exact SME root is element local",
+			fragment: "$sme",
+			rowLocal: true,
+		},
+		{
+			name:     "SME object path is parent scoped",
+			fragment: "$sme.Collection",
+			rowLocal: false,
+		},
+		{
+			name:     "SME array path is row local",
+			fragment: "$sme.Collection[]",
+			rowLocal: true,
+		},
 	}
-	if !entries[0].RowLocal {
-		t.Fatalf("expected RowLocal=true for wildcard-array fragment entry")
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			allow := true
+			q := QueryFilter{Filters: FragmentFilters{
+				tt.fragment: {Boolean: &allow},
+			}}
+
+			entries := q.FilterExpressionEntriesFor(tt.fragment)
+			if len(entries) != 1 {
+				t.Fatalf("expected 1 entry for %s, got %d", tt.fragment, len(entries))
+			}
+			if entries[0].RowLocal != tt.rowLocal {
+				t.Fatalf("expected RowLocal=%t for %s, got %t", tt.rowLocal, tt.fragment, entries[0].RowLocal)
+			}
+		})
 	}
 }

@@ -44,7 +44,23 @@
                         ],
                         "type": "ExternalReference"
                     },
-                    "typeValueListElement": "SubmodelElement"
+                    "typeValueListElement": "SubmodelElement",
+                    "value": [
+                        {
+                            "category": "CONSTANT",
+                            "idShort": "ListProperty1",
+                            "modelType": "Property",
+                            "value": "listValue1",
+                            "valueType": "xs:string"
+                        },
+                        {
+                            "category": "CONSTANT",
+                            "idShort": "ListProperty2",
+                            "modelType": "Property",
+                            "value": "2",
+                            "valueType": "xs:double"
+                        }
+                    ]
                 }
             ]
         }

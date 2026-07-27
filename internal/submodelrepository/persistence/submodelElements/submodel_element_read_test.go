@@ -171,6 +171,39 @@ func TestAddSMEVisibleTreeQueryFiltersAncestorsBeforeLimit(t *testing.T) {
 	require.Contains(t, sqlQuery, "LIMIT 2")
 }
 
+func TestAddSMEVisibleTreeQueryEvaluatesExactSMEForEveryNestedElement(t *testing.T) {
+	t.Parallel()
+
+	var condition grammar.LogicalExpression
+	err := json.Unmarshal([]byte(`{
+		"$eq": [
+			{"$field": "$sme#semanticId.keys[].value"},
+			{"$strVal": "semantic-visible"}
+		]
+	}`), &condition)
+	require.NoError(t, err)
+
+	ctx := auth.WithQueryFilter(contextWithABACDisabled(t), &auth.QueryFilter{
+		Filters: auth.FragmentFilters{
+			"$sme": condition,
+		},
+	})
+	dataset := goqu.Dialect("postgres").
+		From(goqu.T("submodel_element").As("sme")).
+		Select(goqu.I("sme.id"))
+
+	filtered, err := addSMEVisibleTreeQuery(ctx, dataset, 42)
+	require.NoError(t, err)
+	sqlQuery, _, err := filtered.ToSQL()
+	require.NoError(t, err)
+
+	normalizedSQL := strings.ReplaceAll(sqlQuery, " ", "")
+	require.Contains(t, normalizedSQL, `"submodel_element"."id"="visible_sme_root"."id"`)
+	require.Contains(t, normalizedSQL, `"submodel_element"."id"="visible_sme_child"."id"`)
+	require.NotContains(t, normalizedSQL, `"submodel_element"."submodel_id"="visible_sme_root"."submodel_id"`)
+	require.NotContains(t, normalizedSQL, `"submodel_element"."submodel_id"="visible_sme_child"."submodel_id"`)
+}
+
 func TestAddSMEVisibleTreeQueryForLevelUsesRowFilterOnlyForCore(t *testing.T) {
 	t.Parallel()
 
@@ -343,7 +376,7 @@ func TestNormalizeSMERowFiltersIgnoresOtherStructuralRoots(t *testing.T) {
 
 	filterCtx, fragments, err := normalizeSMERowFilters(ctx)
 	require.NoError(t, err)
-	require.Equal(t, []grammar.FragmentStringPattern{"$sme#idShort"}, fragments)
+	require.Equal(t, []grammar.FragmentStringPattern{"$sme"}, fragments)
 	require.NotContains(t, auth.GetQueryFilter(filterCtx).Filters, grammar.FragmentStringPattern("$sm"))
 	require.NotContains(t, auth.GetQueryFilter(filterCtx).Filters, grammar.FragmentStringPattern("$sm#idShort"))
 }
@@ -362,8 +395,8 @@ func TestNormalizeSMERowFiltersDoesNotMergeFieldMasks(t *testing.T) {
 
 	filterCtx, fragments, err := normalizeSMERowFilters(ctx)
 	require.NoError(t, err)
-	require.Equal(t, []grammar.FragmentStringPattern{"$sme#idShort"}, fragments)
-	rowFilter := auth.GetQueryFilter(filterCtx).Filters["$sme#idShort"]
+	require.Equal(t, []grammar.FragmentStringPattern{"$sme"}, fragments)
+	rowFilter := auth.GetQueryFilter(filterCtx).Filters["$sme"]
 	require.NotNil(t, rowFilter.Boolean)
 	require.True(t, *rowFilter.Boolean)
 }

@@ -199,6 +199,49 @@ func TestAddFilterQueryFromContext_ArrayEndedFragment_DefaultBehavior_UsesExists
 	}
 }
 
+func TestAddFilterQueryFromContext_ExactSMEUsesCurrentElement(t *testing.T) {
+	t.Parallel()
+
+	fragment := grammar.FragmentStringPattern("$sme")
+	expr := mustParseLogicalExpression(t, `{
+		"$eq": [
+			{"$field": "$sme#semanticId.keys[].value"},
+			{"$strVal": "semantic-visible"}
+		]
+	}`)
+	ctx := context.WithValue(context.Background(), filterKey, &QueryFilter{
+		Filters: FragmentFilters{
+			fragment: expr,
+		},
+	})
+
+	collector, err := grammar.NewResolvedFieldPathCollectorForSMERow("candidate_sme")
+	if err != nil {
+		t.Fatalf("NewResolvedFieldPathCollectorForSMERow returned error: %v", err)
+	}
+	ds := goqu.Dialect("postgres").
+		From(goqu.T("submodel_element").As("candidate_sme")).
+		Select(goqu.I("candidate_sme.id")).
+		Prepared(true)
+
+	filteredDS, err := AddFilterQueryFromContext(ctx, ds, fragment, collector)
+	if err != nil {
+		t.Fatalf("AddFilterQueryFromContext returned error: %v", err)
+	}
+	sqlStr, _, err := filteredDS.ToSQL()
+	if err != nil {
+		t.Fatalf("ToSQL returned error: %v", err)
+	}
+
+	normalizedSQL := strings.ReplaceAll(sqlStr, " ", "")
+	if !strings.Contains(normalizedSQL, `"submodel_element"."id"="candidate_sme"."id"`) {
+		t.Fatalf("expected exact $sme filter to correlate to the current element: %s", sqlStr)
+	}
+	if strings.Contains(normalizedSQL, `"submodel_element"."submodel_id"="candidate_sme"."submodel_id"`) {
+		t.Fatalf("did not expect exact $sme filter to use parent submodel correlation: %s", sqlStr)
+	}
+}
+
 func TestAddFilterQueryFromContext_IndexedFragment_UsesExists(t *testing.T) {
 	expr := mustParseLogicalExpression(t, `{"$eq":[{"$field":"$aasdesc#specificAssetIds[1].name"},{"$strVal":"Banane2"}]}`)
 	fragment := grammar.FragmentStringPattern("$aasdesc#specificAssetIds[0]")

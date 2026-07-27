@@ -208,11 +208,10 @@ func ResolveFragmentFieldToSQL(field *FragmentStringPattern) ([]ArrayIndexBindin
 
 	fieldStr := string(*field)
 	if !strings.Contains(fieldStr, "#") {
-		if strings.HasPrefix(fieldStr, "$sme") {
-			fieldStr += "#idShort"
-		} else {
+		if !strings.HasPrefix(fieldStr, "$sme") {
 			return nil, fmt.Errorf("invalid field identifier (missing '#'): %q", fieldStr)
 		}
+		fieldStr += "#idShort"
 	}
 
 	tokens := builder.TokenizeField(fieldStr)

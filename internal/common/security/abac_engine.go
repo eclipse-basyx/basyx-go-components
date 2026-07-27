@@ -492,7 +492,7 @@ func (q *QueryFilter) FilterExpressionEntriesFor(key grammar.FragmentStringPatte
 			out = append(out, FragmentExpression{
 				Fragment:   k,
 				Expression: expr,
-				RowLocal:   fragmentEndsWithWildcardArraySegment(k),
+				RowLocal:   fragmentUsesAutomaticRowScope(k),
 			})
 		}
 	}

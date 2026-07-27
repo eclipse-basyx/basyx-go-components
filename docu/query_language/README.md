@@ -422,13 +422,15 @@ scope.
 
 Fragments ending in an object, scalar, or fixed index such as `[0]` do not
 remove individual array rows. An earlier `[]` in the path does not change this.
+The exact `$sme` fragment is a special case: it evaluates each submodel element
+in its own context, including elements reached during recursive traversal.
 
 `MATCH` is obsolete and rejected when present, including `MATCH: false`.
 
 Implementation reference:
 - AddFilterQueryFromContext in [internal/common/security/filter_helpers.go](../../internal/common/security/filter_helpers.go)
 - buildFragmentMaskCondition in [internal/common/security/filter_helpers.go](../../internal/common/security/filter_helpers.go)
-- fragmentEndsWithWildcardArraySegment in [internal/common/security/filter_helpers.go](../../internal/common/security/filter_helpers.go)
+- fragmentUsesAutomaticRowScope in [internal/common/security/filter_helpers.go](../../internal/common/security/filter_helpers.go)
 
 Implementation reference:
 - EvaluateToExpressionWithNegatedFragments in [internal/common/model/grammar/logical_expression_to_sql.go](../../internal/common/model/grammar/logical_expression_to_sql.go)

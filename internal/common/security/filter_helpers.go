@@ -447,6 +447,10 @@ func fragmentEndsWithWildcardArraySegment(fragment grammar.FragmentStringPattern
 	return isArray && arrayToken.Index < 0
 }
 
+func fragmentUsesAutomaticRowScope(fragment grammar.FragmentStringPattern) bool {
+	return fragment == "$sme" || fragmentEndsWithWildcardArraySegment(fragment)
+}
+
 func matchesAnyFragmentPattern(fragment grammar.FragmentStringPattern, patterns []grammar.FragmentStringPattern) bool {
 	for _, pattern := range patterns {
 		if fragmentPathMatches(fragment, pattern) {

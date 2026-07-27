@@ -370,39 +370,6 @@ func buildGetAssetAdministrationShellMapsByDBIDsQueryWithSelect(dialect *goqu.Di
 		ToSQL()
 }
 
-func buildGetSubmodelReferencePayloadsByAASIDsDataset(dialect *goqu.DialectWrapper, aasDBIDs []int64) *goqu.SelectDataset {
-	return dialect.
-		From(goqu.T("aas_submodel_reference").As("aas_submodel_reference")).
-		InnerJoin(
-			goqu.T("aas").As("aas"),
-			goqu.On(goqu.I("aas.id").Eq(goqu.I("aas_submodel_reference.aas_id"))),
-		).
-		InnerJoin(
-			goqu.T("aas_submodel_reference_payload").As("rp"),
-			goqu.On(goqu.I("rp.reference_id").Eq(goqu.I("aas_submodel_reference.id"))),
-		).
-		LeftJoin(
-			goqu.T("aas_submodel_reference_key").As("aas_submodel_reference_key"),
-			goqu.On(goqu.I("aas_submodel_reference_key.reference_id").Eq(goqu.I("aas_submodel_reference.id"))),
-		).
-		Select(
-			goqu.I("aas_submodel_reference.aas_id"),
-			goqu.I("rp.parent_reference_payload"),
-		).
-		Where(goqu.I("aas_submodel_reference.aas_id").In(aasDBIDs)).
-		GroupBy(
-			goqu.I("aas_submodel_reference.id"),
-			goqu.I("aas_submodel_reference.aas_id"),
-			goqu.I("aas_submodel_reference.position"),
-			goqu.I("rp.parent_reference_payload"),
-		).
-		Order(
-			goqu.I("aas_submodel_reference.aas_id").Asc(),
-			goqu.I("aas_submodel_reference.position").Asc(),
-			goqu.I("aas_submodel_reference.id").Asc(),
-		)
-}
-
 func buildReadSpecificAssetIDsByAssetInformationIDDataset(dialect *goqu.DialectWrapper, assetInformationID int64) *goqu.SelectDataset {
 	return buildSpecificAssetIDReadDataset(dialect).
 		Select(
