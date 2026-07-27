@@ -37,6 +37,12 @@
         ]
       },
       {
+        "name": "row_filtered_aas",
+        "objects": [
+          { "IDENTIFIABLE": "$aas(\"urn:test:aas:abac-row-filter\")" }
+        ]
+      },
+      {
         "name": "abac_policy_management",
         "objects": [
           { "ROUTE": "/security/abac" },
@@ -105,6 +111,15 @@
             { "$strVal": "admin" }
           ]
         }
+      },
+      {
+        "name": "is_visible_submodel_reference",
+        "formula": {
+          "$eq": [
+            { "$field": "$aas#submodels[].keys[].value" },
+            { "$strVal": "urn:test:submodel:abac-visible" }
+          ]
+        }
       }
     ],
     "rules": [
@@ -122,6 +137,17 @@
         "USEACL": "read_role",
         "USEOBJECTS": ["serialization_route"],
         "USEFORMULA": "role_is_viewer"
+      },
+      {
+        "USEACL": "read_role",
+        "USEOBJECTS": ["row_filtered_aas"],
+        "USEFORMULA": "role_is_editor",
+        "FILTERLIST": [
+          {
+            "FRAGMENT": "$aas#submodels[]",
+            "USEFORMULA": "is_visible_submodel_reference"
+          }
+        ]
       },
       {
         "USEACL": "admin_all",

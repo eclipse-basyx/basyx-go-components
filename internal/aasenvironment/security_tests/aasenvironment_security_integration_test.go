@@ -165,6 +165,60 @@ func TestSuperpathEndpointsSecurity(t *testing.T) {
 	}
 }
 
+func TestABACAASSubmodelReferenceFilterReturnsOnlyMatchingProductionRows(t *testing.T) {
+	tokenProvider := testenv.NewPasswordGrantTokenProvider(
+		testKeycloakTokenURL,
+		"basyx-ui",
+		10*time.Second,
+	)
+	adminToken, err := tokenProvider.GetAccessToken(&testenv.TokenCredentials{
+		User:     "admin",
+		Password: "pwd",
+	})
+	require.NoError(t, err)
+	editorToken, err := tokenProvider.GetAccessToken(&testenv.TokenCredentials{
+		User:     "userx",
+		Password: "pwd",
+	})
+	require.NoError(t, err)
+
+	const aasID = "urn:test:aas:abac-row-filter"
+	const visibleSubmodelID = "urn:test:submodel:abac-visible"
+	encodedAASID := base64.RawURLEncoding.EncodeToString([]byte(aasID))
+	aasURL := testBaseURL + "/shells/" + encodedAASID
+	payload := fmt.Sprintf(`{
+		"id": %q,
+		"idShort": "ABACRowFilterShell",
+		"modelType": "AssetAdministrationShell",
+		"assetInformation": {"assetKind": "Instance"},
+		"submodels": [
+			{"type": "ModelReference", "keys": [{"type": "Submodel", "value": %q}]},
+			{"type": "ModelReference", "keys": [{"type": "Submodel", "value": "urn:test:submodel:abac-hidden"}]}
+		]
+	}`, aasID, visibleSubmodelID)
+
+	status, body := doAuthorizedRequest(t, http.MethodPost, testBaseURL+"/shells", payload, adminToken)
+	require.Equalf(t, http.StatusCreated, status, "create filtered AAS failed: %s", body)
+	t.Cleanup(func() {
+		_, _ = doAuthorizedRequest(t, http.MethodDelete, aasURL, "", adminToken)
+	})
+
+	status, body = doAuthorizedRequest(t, http.MethodGet, aasURL, "", editorToken)
+	require.Equalf(t, http.StatusOK, status, "ABAC-filtered AAS read failed: %s", body)
+
+	var shell struct {
+		Submodels []struct {
+			Keys []struct {
+				Value string `json:"value"`
+			} `json:"keys"`
+		} `json:"submodels"`
+	}
+	require.NoError(t, json.Unmarshal([]byte(body), &shell))
+	require.Len(t, shell.Submodels, 1, "only the matching production submodel-reference row must remain")
+	require.Len(t, shell.Submodels[0].Keys, 1)
+	require.Equal(t, visibleSubmodelID, shell.Submodels[0].Keys[0].Value)
+}
+
 func TestABACPolicyManagementRuleLifecycleStories(t *testing.T) {
 	tokenProvider := testenv.NewPasswordGrantTokenProvider(
 		testKeycloakTokenURL,
