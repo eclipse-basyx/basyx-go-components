@@ -52,8 +52,7 @@ jobs:
             compose_files: |
               examples/BaSyxDelegatedOperationsExample/docker-compose.yml
             image_builds: |
-              eclipsebasyx/aasrepository-go:SNAPSHOT|./cmd/aasrepositoryservice/Dockerfile
-              eclipsebasyx/submodelrepository-go:SNAPSHOT|./cmd/submodelrepositoryservice/Dockerfile
+              eclipsebasyx/aasenvironment-go:SNAPSHOT|./cmd/aasenvironmentservice/Dockerfile
               eclipsebasyx/basyxconfigurationservice-go:SNAPSHOT|./cmd/basyxconfigurationservice/Dockerfile
           - target_name: Submodel Repository Example
             compose_files: |

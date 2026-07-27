@@ -1,10 +1,9 @@
 # BaSyx Delegated Operations Example (Sync + Async)
 
-This example provides a complete docker-compose setup for delegated operation invocation using the Go Submodel Repository.
+This example provides a complete docker-compose setup for delegated operation invocation using the Go AAS Environment.
 
 It includes:
-- AAS Repository (`http://localhost:8090`)
-- Submodel Repository (`http://localhost:8091`)
+- AAS Environment (`http://localhost:8091`)
 - Delegated microservice (`http://localhost:8099`) implemented in Go
 - AAS Web UI (`http://localhost:3000`)
 - PostgreSQL
@@ -97,12 +96,17 @@ Open:
 - `http://localhost:3000`
 
 The UI is configured to use:
-- `AAS_REPO_PATH=http://localhost:8090/shells`
-- `SUBMODEL_REPO_PATH=http://localhost:8091/submodels`
+
+- the `mono-all` infrastructure template
+- AAS Environment `http://localhost:8091`
+
+The infrastructure is preconfigured in `basyx-infra.yml` and mounted read-only
+into the UI container.
 
 ## Files
 
 - `docker-compose.yml` - complete stack
+- `basyx-infra.yml` - AAS Web UI infrastructure configuration
 - `startup.sh` - waits for services and preloads AAS/Submodel data
 - `data/aas-shell.json` - preloaded AAS payload
 - `data/submodel-delegated-operations.json` - preloaded submodel with delegated operations
