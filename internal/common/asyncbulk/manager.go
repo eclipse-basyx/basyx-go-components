@@ -170,6 +170,11 @@ func (m *Manager) GetForOwner(handleID string, ownerKey string) (Record, bool) {
 
 // Update mutates an existing record by handle id.
 func (m *Manager) Update(handleID string, updateFn func(record Record) Record) bool {
+	return m.UpdateWithExpiry(handleID, time.Time{}, updateFn)
+}
+
+// UpdateWithExpiry mutates an existing record and optionally replaces its expiry.
+func (m *Manager) UpdateWithExpiry(handleID string, expiresAt time.Time, updateFn func(record Record) Record) bool {
 	now := time.Now().UTC()
 
 	m.Lock()
@@ -184,7 +189,11 @@ func (m *Manager) Update(handleID string, updateFn func(record Record) Record) b
 	updatedRecord := updateFn(record)
 	updatedRecord.OwnerKey = record.OwnerKey
 	updatedRecord.CreatedAt = record.CreatedAt
-	updatedRecord.ExpiresAt = record.ExpiresAt
+	if expiresAt.IsZero() {
+		updatedRecord.ExpiresAt = record.ExpiresAt
+	} else {
+		updatedRecord.ExpiresAt = expiresAt
+	}
 	m.records[handleID] = updatedRecord
 	m.Unlock()
 

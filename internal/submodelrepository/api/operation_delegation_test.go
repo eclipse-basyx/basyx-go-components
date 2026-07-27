@@ -69,6 +69,28 @@ func TestParseDelegationTimeoutRejectsUnsupportedYears(t *testing.T) {
 	require.Error(t, err)
 }
 
+func TestParseDelegationTimeoutAcceptsMaximum(t *testing.T) {
+	t.Parallel()
+
+	duration, err := parseDelegationTimeout("PT15M")
+	require.NoError(t, err)
+	require.Equal(t, maximumDelegationTimeout, duration)
+}
+
+func TestParseDelegationTimeoutRejectsDurationAboveMaximum(t *testing.T) {
+	t.Parallel()
+
+	_, err := parseDelegationTimeout("PT15M0.001S")
+	require.ErrorContains(t, err, "SMREPO-PARSETO-TOOLARGE")
+}
+
+func TestParseDelegationTimeoutRejectsOverflow(t *testing.T) {
+	t.Parallel()
+
+	_, err := parseDelegationTimeout("P9223372036854775807D")
+	require.ErrorContains(t, err, "SMREPO-PARSETO-OVERFLOW")
+}
+
 func TestResolveDelegationURLReadsInvocationDelegationQualifier(t *testing.T) {
 	t.Parallel()
 
@@ -219,6 +241,24 @@ func TestDelegatedOperationResultPreservesFailureEnvelopeAndMessages(t *testing.
 	require.NoError(t, err)
 	require.Equal(t, "Failed", resultPayload["executionState"])
 	require.Equal(t, false, resultPayload["success"])
+	require.Equal(t, delegatedBody["messages"], resultPayload["messages"])
+}
+
+func TestDelegatedOperationResultCompletesPartialSuccessEnvelope(t *testing.T) {
+	t.Parallel()
+
+	delegatedBody := map[string]any{
+		"success": true,
+		"messages": []any{
+			map[string]any{"code": "DELEGATE-OK", "messageType": "Info", "text": "calculation completed"},
+		},
+		"outputArguments": []any{},
+	}
+
+	resultPayload, err := toDelegatedOperationResultPayloadFromBody(delegatedBody)
+	require.NoError(t, err)
+	require.Equal(t, "Completed", resultPayload["executionState"])
+	require.Equal(t, true, resultPayload["success"])
 	require.Equal(t, delegatedBody["messages"], resultPayload["messages"])
 }
 

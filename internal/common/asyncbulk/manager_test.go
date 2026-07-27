@@ -54,3 +54,22 @@ func TestGetForOwnerHidesForeignHandle(t *testing.T) {
 	_, found = manager.GetForOwner(handleID, "owner-a")
 	require.True(t, found)
 }
+
+func TestUpdateWithExpiryReplacesRecordExpiry(t *testing.T) {
+	manager := NewManager("ASYNC-TEST", time.Minute)
+
+	handleID, err := manager.Start("owner-a")
+	require.NoError(t, err)
+	expectedExpiry := time.Now().UTC().Add(5 * time.Minute)
+
+	updated := manager.UpdateWithExpiry(handleID, expectedExpiry, func(record Record) Record {
+		record.ExecutionState = "Completed"
+		return record
+	})
+	require.True(t, updated)
+
+	record, found := manager.Get(handleID)
+	require.True(t, found)
+	require.Equal(t, "Completed", record.ExecutionState)
+	require.Equal(t, expectedExpiry, record.ExpiresAt)
+}

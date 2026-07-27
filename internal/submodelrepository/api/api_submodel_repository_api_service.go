@@ -42,8 +42,11 @@ import (
 // This service should implement the business logic for every endpoint for the SubmodelRepositoryAPIAPI API.
 // Include any external packages or services that will be required by this service.
 type SubmodelRepositoryAPIAPIService struct {
-	submodelBackend persistencepostgresql.SubmodelDatabase
-	asyncManager    *asyncbulk.Manager
+	submodelBackend       persistencepostgresql.SubmodelDatabase
+	asyncManager          *asyncbulk.Manager
+	asyncLifecycleContext context.Context
+	asyncResultRetention  time.Duration
+	asyncDelegationSlots  chan struct{}
 }
 
 const componentName = "SMREPO"
@@ -51,7 +54,9 @@ const componentName = "SMREPO"
 const (
 	invocationDelegationQualifierType = "invocationDelegation"
 	defaultDelegationTimeout          = 30 * time.Second
+	maximumDelegationTimeout          = 15 * time.Minute
 	defaultDelegationAsyncTTL         = 15 * time.Minute
+	maximumConcurrentDelegations      = 64
 	delegationAsyncTTLKey             = "SMREPO_DELEGATION_ASYNC_TTL"
 	delegationTrustedHostsKey         = "SMREPO_DELEGATION_TRUSTED_HOSTS"
 )
@@ -62,11 +67,48 @@ const (
 )
 
 // NewSubmodelRepositoryAPIAPIService creates a default api service
-func NewSubmodelRepositoryAPIAPIService(databaseBackend persistencepostgresql.SubmodelDatabase) *SubmodelRepositoryAPIAPIService {
+func NewSubmodelRepositoryAPIAPIService(ctx context.Context, databaseBackend persistencepostgresql.SubmodelDatabase) *SubmodelRepositoryAPIAPIService {
+	asyncResultRetention := parseDelegationAsyncTTL()
 	return &SubmodelRepositoryAPIAPIService{
-		submodelBackend: databaseBackend,
-		asyncManager:    asyncbulk.NewManager("SMREPO-ASYNC", parseDelegationAsyncTTL()),
+		submodelBackend:       databaseBackend,
+		asyncManager:          asyncbulk.NewManager("SMREPO-ASYNC", asyncResultRetention),
+		asyncLifecycleContext: ctx,
+		asyncResultRetention:  asyncResultRetention,
+		asyncDelegationSlots:  make(chan struct{}, maximumConcurrentDelegations),
 	}
+}
+
+func (s *SubmodelRepositoryAPIAPIService) tryAcquireAsyncDelegationSlot() bool {
+	select {
+	case s.asyncDelegationSlots <- struct{}{}:
+		return true
+	default:
+		return false
+	}
+}
+
+func (s *SubmodelRepositoryAPIAPIService) releaseAsyncDelegationSlot() {
+	<-s.asyncDelegationSlots
+}
+
+func (s *SubmodelRepositoryAPIAPIService) newAsyncDelegationContext(
+	requestContext context.Context,
+	timeout time.Duration,
+) (context.Context, context.CancelFunc) {
+	delegationContext, cancel := context.WithTimeout(context.WithoutCancel(requestContext), timeout)
+	stopLifecycleCancellation := context.AfterFunc(s.asyncLifecycleContext, cancel)
+	return delegationContext, func() {
+		stopLifecycleCancellation()
+		cancel()
+	}
+}
+
+func (s *SubmodelRepositoryAPIAPIService) updateTerminalAsyncRecord(
+	handleID string,
+	update func(record asyncbulk.Record) asyncbulk.Record,
+) {
+	expiresAt := time.Now().UTC().Add(s.asyncResultRetention)
+	s.asyncManager.UpdateWithExpiry(handleID, expiresAt, update)
 }
 
 func newAPIErrorResponse(err error, status int, operation string, info string) gen.ImplResponse {
@@ -2604,7 +2646,7 @@ func (s *SubmodelRepositoryAPIAPIService) InvokeOperationSubmodelRepo(ctx contex
 	const operation = "InvokeOperationSubmodelRepo"
 
 	if async {
-		return s.InvokeOperationAsync(ctx, submodelIdentifier, idShortPath, operationRequest)
+		return s.invokeOperationAsync(ctx, submodelIdentifier, idShortPath, operationRequest)
 	}
 
 	decodedSubmodelIdentifier, response, ok := decodeSubmodelIdentifierOrAPIError(submodelIdentifier, operation)
@@ -2670,6 +2712,17 @@ func (s *SubmodelRepositoryAPIAPIService) InvokeOperationValueOnly(ctx context.C
 func (s *SubmodelRepositoryAPIAPIService) InvokeOperationAsync(ctx context.Context, submodelIdentifier string, idShortPath string, operationRequest gen.OperationRequest) (gen.ImplResponse, error) {
 	const operation = "InvokeOperationAsync"
 
+	if strings.TrimSpace(operationRequest.ClientTimeoutDuration) == "" {
+		timeoutRequiredErr := errors.New("SMREPO-INVOKEOPASY-MISSINGTIMEOUT clientTimeoutDuration is required")
+		return newAPIErrorResponse(timeoutRequiredErr, http.StatusBadRequest, operation, "MissingClientTimeoutDuration"), nil
+	}
+
+	return s.invokeOperationAsync(ctx, submodelIdentifier, idShortPath, operationRequest)
+}
+
+func (s *SubmodelRepositoryAPIAPIService) invokeOperationAsync(ctx context.Context, submodelIdentifier string, idShortPath string, operationRequest gen.OperationRequest) (gen.ImplResponse, error) {
+	const operation = "InvokeOperationAsync"
+
 	decodedSubmodelIdentifier, response, ok := decodeSubmodelIdentifierOrAPIError(submodelIdentifier, operation)
 	if !ok {
 		return response, nil
@@ -2693,11 +2746,18 @@ func (s *SubmodelRepositoryAPIAPIService) InvokeOperationAsync(ctx context.Conte
 		return newAPIErrorResponse(timeoutErr, http.StatusBadRequest, operation, "InvalidClientTimeoutDuration"), nil
 	}
 
+	if !s.tryAcquireAsyncDelegationSlot() {
+		capacityErr := errors.New("SMREPO-INVOKEOPASY-CAPACITY asynchronous delegation capacity is exhausted")
+		return newAPIErrorResponse(capacityErr, http.StatusTooManyRequests, operation, "DelegationCapacityExhausted"), nil
+	}
+
 	handleID, handleErr := s.asyncManager.Start(auth.OwnerKeyFromContext(ctx))
 	if handleErr != nil {
+		s.releaseAsyncDelegationSlot()
 		return newAPIErrorResponse(handleErr, http.StatusInternalServerError, operation, "CreateAsyncHandle"), nil
 	}
-	s.asyncManager.Update(handleID, func(record asyncbulk.Record) asyncbulk.Record {
+	runningExpiresAt := time.Now().UTC().Add(timeout).Add(s.asyncResultRetention)
+	s.asyncManager.UpdateWithExpiry(handleID, runningExpiresAt, func(record asyncbulk.Record) asyncbulk.Record {
 		record.Metadata = map[string]string{
 			delegatedAsyncSubmodelIdentifierMetadataKey: decodedSubmodelIdentifier,
 			delegatedAsyncIDShortPathMetadataKey:        idShortPath,
@@ -2705,9 +2765,12 @@ func (s *SubmodelRepositoryAPIAPIService) InvokeOperationAsync(ctx context.Conte
 		return record
 	})
 
-	delegationCtx := context.WithoutCancel(ctx)
 	delegatedInput := buildDelegatedOperationInput(operationRequest)
 	go func() {
+		defer s.releaseAsyncDelegationSlot()
+		delegationCtx, cancelDelegation := s.newAsyncDelegationContext(ctx, timeout)
+		defer cancelDelegation()
+
 		statusCode, delegatedBody, delegateErr := doDelegatedOperationCall(delegationCtx, delegationURL, delegatedInput, timeout)
 		if delegateErr != nil {
 			slog.ErrorContext(
@@ -2718,7 +2781,7 @@ func (s *SubmodelRepositoryAPIAPIService) InvokeOperationAsync(ctx context.Conte
 				"error", delegateErr,
 			)
 			errorResponse := newAPIErrorResponse(delegateErr, http.StatusBadGateway, operation, "DelegateOperationCall")
-			s.asyncManager.Update(handleID, func(record asyncbulk.Record) asyncbulk.Record {
+			s.updateTerminalAsyncRecord(handleID, func(record asyncbulk.Record) asyncbulk.Record {
 				record.ExecutionState = "Failed"
 				record.ErrorStatus = errorResponse.Code
 				record.ErrorBody = errorResponse.Body
@@ -2735,7 +2798,7 @@ func (s *SubmodelRepositoryAPIAPIService) InvokeOperationAsync(ctx context.Conte
 				"operation.handle_id", handleID,
 				"http.response.status_code", statusCode,
 			)
-			s.asyncManager.Update(handleID, func(record asyncbulk.Record) asyncbulk.Record {
+			s.updateTerminalAsyncRecord(handleID, func(record asyncbulk.Record) asyncbulk.Record {
 				record.ExecutionState = "Failed"
 				record.ErrorStatus = statusCode
 				record.ErrorBody = delegatedBody
@@ -2754,7 +2817,7 @@ func (s *SubmodelRepositoryAPIAPIService) InvokeOperationAsync(ctx context.Conte
 				"error", resultErr,
 			)
 			errorResponse := newAPIErrorResponse(resultErr, http.StatusBadGateway, operation, "InvalidDelegatedOperationResult")
-			s.asyncManager.Update(handleID, func(record asyncbulk.Record) asyncbulk.Record {
+			s.updateTerminalAsyncRecord(handleID, func(record asyncbulk.Record) asyncbulk.Record {
 				record.ExecutionState = "Failed"
 				record.ErrorStatus = errorResponse.Code
 				record.ErrorBody = errorResponse.Body
@@ -2763,7 +2826,7 @@ func (s *SubmodelRepositoryAPIAPIService) InvokeOperationAsync(ctx context.Conte
 			return
 		}
 
-		s.asyncManager.Update(handleID, func(record asyncbulk.Record) asyncbulk.Record {
+		s.updateTerminalAsyncRecord(handleID, func(record asyncbulk.Record) asyncbulk.Record {
 			record.ExecutionState = "Completed"
 			record.Payload = finalResult
 			record.ErrorStatus = 0

@@ -112,7 +112,7 @@ func TestAASOperationStatusUsesExternalURLForResultLocation(t *testing.T) {
 func aasOperationAsyncRequest(t *testing.T, requestURL string) *http.Request {
 	t.Helper()
 
-	request := httptest.NewRequest(http.MethodPost, requestURL, bytes.NewBufferString(`{}`))
+	request := httptest.NewRequest(http.MethodPost, requestURL, bytes.NewBufferString(`{"clientTimeoutDuration":"PT5S"}`))
 	request.Header.Set("Content-Type", "application/json")
 	addAASOperationRouteParams(request)
 	return request

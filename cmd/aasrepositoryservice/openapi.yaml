@@ -1650,7 +1650,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '../Part2-API-Schemas/openapi.yaml#/components/schemas/OperationRequest'
+              $ref: '../Part2-API-Schemas/openapi.yaml#/components/schemas/OperationRequestAsync'
         required: true
       responses:
         '202':

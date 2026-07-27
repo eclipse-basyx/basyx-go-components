@@ -45,24 +45,27 @@ type AssetAdministrationShellRepositoryAPIAPIService struct {
 	assetAdministrationShellBackend *persistencepostgresql.AssetAdministrationShellDatabase
 	submodelBackend                 *submodelpersistence.SubmodelDatabase
 	submodelAPI                     *submodelapi.SubmodelRepositoryAPIAPIService
+	lifecycleContext                context.Context
 }
 
 const componentName = "AASREPO"
 
 // NewAssetAdministrationShellRepositoryAPIAPIService creates a default api service
 func NewAssetAdministrationShellRepositoryAPIAPIService(
+	ctx context.Context,
 	databaseBackendAssetAdministrationShell *persistencepostgresql.AssetAdministrationShellDatabase,
 	submodelBackend *submodelpersistence.SubmodelDatabase,
 ) *AssetAdministrationShellRepositoryAPIAPIService {
 	var submodelService *submodelapi.SubmodelRepositoryAPIAPIService
 	if submodelBackend != nil {
-		submodelService = submodelapi.NewSubmodelRepositoryAPIAPIService(*submodelBackend)
+		submodelService = submodelapi.NewSubmodelRepositoryAPIAPIService(ctx, *submodelBackend)
 	}
 
 	return &AssetAdministrationShellRepositoryAPIAPIService{
 		assetAdministrationShellBackend: databaseBackendAssetAdministrationShell,
 		submodelBackend:                 submodelBackend,
 		submodelAPI:                     submodelService,
+		lifecycleContext:                ctx,
 	}
 }
 
@@ -962,7 +965,7 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) ensureSubmodelBackend(
 		return gen.ImplResponse{}, nil, true
 	}
 	if s.submodelBackend != nil {
-		s.submodelAPI = submodelapi.NewSubmodelRepositoryAPIAPIService(*s.submodelBackend)
+		s.submodelAPI = submodelapi.NewSubmodelRepositoryAPIAPIService(s.lifecycleContext, *s.submodelBackend)
 		return gen.ImplResponse{}, nil, true
 	}
 
@@ -1631,6 +1634,11 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) InvokeOperationValueOn
 // InvokeOperationAsyncAasRepository - Asynchronously invokes an Operation at a specified path
 func (s *AssetAdministrationShellRepositoryAPIAPIService) InvokeOperationAsyncAasRepository(ctx context.Context, aasIdentifier string, submodelIdentifier string, idShortPath string, operationRequest gen.OperationRequest) (gen.ImplResponse, error) {
 	const operation = "InvokeOperationAsyncAasRepository"
+
+	if strings.TrimSpace(operationRequest.ClientTimeoutDuration) == "" {
+		timeoutRequiredErr := errors.New("AASREPO-INVOKEOPASY-MISSINGTIMEOUT clientTimeoutDuration is required")
+		return newAPIErrorResponse(timeoutRequiredErr, http.StatusBadRequest, operation, "MissingClientTimeoutDuration"), nil
+	}
 
 	if response, err, ok := s.ensureSubmodelBackend(operation); !ok {
 		return response, err

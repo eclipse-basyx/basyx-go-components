@@ -32,6 +32,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"net/url"
 	"os"
@@ -57,10 +58,8 @@ func parseDelegationTimeout(clientTimeoutDuration string) (time.Duration, error)
 		return 0, fmt.Errorf("SMREPO-PARSETO-INVALID clientTimeoutDuration '%s' is not an ISO8601 duration", clientTimeoutDuration)
 	}
 
-	sign := 1.0
 	if strings.HasPrefix(trimmed, "-P") {
-		sign = -1.0
-		trimmed = strings.TrimPrefix(trimmed, "-")
+		return 0, errors.New("SMREPO-PARSETO-NONPOSITIVE clientTimeoutDuration must resolve to a positive duration")
 	}
 
 	trimmed = strings.TrimPrefix(trimmed, "P")
@@ -84,14 +83,22 @@ func parseDelegationTimeout(clientTimeoutDuration string) (time.Duration, error)
 	if err != nil {
 		return 0, err
 	}
-	totalDuration += timeDuration
-
-	computedDuration := time.Duration(float64(totalDuration) * sign)
-	if computedDuration <= 0 {
-		return 0, errors.New("SMREPO-PARSETO-NONPOSITIVE clientTimeoutDuration must resolve to a positive duration")
+	totalDuration, err = checkedAddDelegationDuration(totalDuration, timeDuration)
+	if err != nil {
+		return 0, err
 	}
 
-	return computedDuration, nil
+	if totalDuration <= 0 {
+		return 0, errors.New("SMREPO-PARSETO-NONPOSITIVE clientTimeoutDuration must resolve to a positive duration")
+	}
+	if totalDuration > maximumDelegationTimeout {
+		return 0, fmt.Errorf(
+			"SMREPO-PARSETO-TOOLARGE clientTimeoutDuration must not exceed %s",
+			maximumDelegationTimeout,
+		)
+	}
+
+	return totalDuration, nil
 }
 
 func parseDelegationDateDuration(datePart string) (time.Duration, error) {
@@ -99,11 +106,15 @@ func parseDelegationDateDuration(datePart string) (time.Duration, error) {
 	var totalDuration time.Duration
 	if strings.Contains(remainingDate, "D") {
 		dayParts := strings.SplitN(remainingDate, "D", 2)
-		days, err := strconv.Atoi(dayParts[0])
+		days, err := strconv.ParseInt(dayParts[0], 10, 64)
 		if err != nil {
 			return 0, fmt.Errorf("SMREPO-PARSETO-PARSEDAYS %w", err)
 		}
-		totalDuration += time.Duration(days) * 24 * time.Hour
+		dayDuration, multiplyErr := checkedMultiplyDelegationDuration(days, 24*time.Hour)
+		if multiplyErr != nil {
+			return 0, multiplyErr
+		}
+		totalDuration = dayDuration
 		remainingDate = dayParts[1]
 	}
 
@@ -122,21 +133,30 @@ func parseDelegationTimeDuration(timePart string) (time.Duration, error) {
 	if err != nil {
 		return 0, err
 	}
-	totalDuration += hourDuration
+	totalDuration, err = checkedAddDelegationDuration(totalDuration, hourDuration)
+	if err != nil {
+		return 0, err
+	}
 	remainingTime = rest
 
 	minuteDuration, rest, err := parseDelegationIntTimePart(remainingTime, "M", time.Minute, "SMREPO-PARSETO-PARSEMINUTES")
 	if err != nil {
 		return 0, err
 	}
-	totalDuration += minuteDuration
+	totalDuration, err = checkedAddDelegationDuration(totalDuration, minuteDuration)
+	if err != nil {
+		return 0, err
+	}
 	remainingTime = rest
 
 	secondDuration, rest, err := parseDelegationSecondsPart(remainingTime)
 	if err != nil {
 		return 0, err
 	}
-	totalDuration += secondDuration
+	totalDuration, err = checkedAddDelegationDuration(totalDuration, secondDuration)
+	if err != nil {
+		return 0, err
+	}
 	remainingTime = rest
 
 	if strings.TrimSpace(remainingTime) != "" {
@@ -152,12 +172,16 @@ func parseDelegationIntTimePart(remainingTime string, suffix string, unit time.D
 	}
 
 	parts := strings.SplitN(remainingTime, suffix, 2)
-	value, err := strconv.Atoi(parts[0])
+	value, err := strconv.ParseInt(parts[0], 10, 64)
 	if err != nil {
 		return 0, "", fmt.Errorf("%s %w", code, err)
 	}
 
-	return time.Duration(value) * unit, parts[1], nil
+	duration, err := checkedMultiplyDelegationDuration(value, unit)
+	if err != nil {
+		return 0, "", err
+	}
+	return duration, parts[1], nil
 }
 
 func parseDelegationSecondsPart(remainingTime string) (time.Duration, string, error) {
@@ -170,8 +194,25 @@ func parseDelegationSecondsPart(remainingTime string) (time.Duration, string, er
 	if err != nil {
 		return 0, "", fmt.Errorf("SMREPO-PARSETO-PARSESECONDS %w", err)
 	}
+	if math.IsInf(seconds, 0) || math.IsNaN(seconds) || seconds > float64(math.MaxInt64)/float64(time.Second) {
+		return 0, "", errors.New("SMREPO-PARSETO-OVERFLOW clientTimeoutDuration exceeds supported duration range")
+	}
 
 	return time.Duration(seconds * float64(time.Second)), secondsParts[1], nil
+}
+
+func checkedMultiplyDelegationDuration(value int64, unit time.Duration) (time.Duration, error) {
+	if value < 0 || (value > 0 && value > math.MaxInt64/int64(unit)) {
+		return 0, errors.New("SMREPO-PARSETO-OVERFLOW clientTimeoutDuration exceeds supported duration range")
+	}
+	return time.Duration(value) * unit, nil
+}
+
+func checkedAddDelegationDuration(left time.Duration, right time.Duration) (time.Duration, error) {
+	if left < 0 || right < 0 || left > time.Duration(math.MaxInt64)-right {
+		return 0, errors.New("SMREPO-PARSETO-OVERFLOW clientTimeoutDuration exceeds supported duration range")
+	}
+	return left + right, nil
 }
 
 func resolveDelegationURL(element types.ISubmodelElement) (string, error) {
@@ -342,19 +383,14 @@ func toDelegatedOperationResultPayloadFromBody(delegatedBody any) (map[string]an
 		return nil, errors.New("SMREPO-NORMDELRES-INVALIDSTATE operation result executionState or success has an invalid type or value")
 	}
 
-	if !hasOperationResultBaseFields(delegatedBodyMap) {
+	if _, present := delegatedBodyMap["executionState"]; !present {
 		resultPayload["executionState"] = "Completed"
+	}
+	if _, present := delegatedBodyMap["success"]; !present {
 		resultPayload["success"] = true
 	}
 
 	return resultPayload, nil
-}
-
-func hasOperationResultBaseFields(payload map[string]any) bool {
-	_, hasExecutionState := payload["executionState"]
-	_, hasSuccess := payload["success"]
-	_, hasMessages := payload["messages"]
-	return hasExecutionState || hasSuccess || hasMessages
 }
 
 func hasOperationResultStateTypes(payload map[string]any) bool {

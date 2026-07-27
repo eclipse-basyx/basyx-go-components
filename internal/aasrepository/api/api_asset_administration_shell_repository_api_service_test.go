@@ -60,7 +60,7 @@ func TestGetAllAssetAdministrationShellsRejectsInvalidCursorWithStandardErrorBod
 	_, expectedDecodeErr := common.DecodeString(invalidCursor)
 	require.Error(t, expectedDecodeErr)
 
-	sut := NewAssetAdministrationShellRepositoryAPIAPIService(nil, nil)
+	sut := NewAssetAdministrationShellRepositoryAPIAPIService(t.Context(), nil, nil)
 	response, err := sut.GetAllAssetAdministrationShells(contextWithABACDisabled(t), nil, "", 1, invalidCursor, time.Time{}, time.Time{})
 
 	require.NoError(t, err)
@@ -93,4 +93,13 @@ func TestToAASOperationRedirectRewritesSubmodelNamespace(t *testing.T) {
 		"/shells/YWFz/submodels/c20/submodel-elements/Ops.Add/operation-status/handle-1",
 		redirect.Location,
 	)
+}
+
+func TestInvokeOperationAsyncAasRepositoryRequiresClientTimeoutDuration(t *testing.T) {
+	t.Parallel()
+
+	sut := NewAssetAdministrationShellRepositoryAPIAPIService(t.Context(), nil, nil)
+	response, err := sut.InvokeOperationAsyncAasRepository(contextWithABACDisabled(t), "", "", "", model.OperationRequest{})
+	require.NoError(t, err)
+	require.Equal(t, http.StatusBadRequest, response.Code)
 }

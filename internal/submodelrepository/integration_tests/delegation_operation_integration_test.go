@@ -213,7 +213,9 @@ func TestDelegationOperation(t *testing.T) {
 		}
 	})
 
-	invokeRequestBody, err := json.Marshal(map[string]any{})
+	invokeRequestBody, err := json.Marshal(map[string]any{
+		"clientTimeoutDuration": "PT10S",
+	})
 	require.NoError(t, err)
 
 	invokeRequest, err := http.NewRequest(

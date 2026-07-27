@@ -158,7 +158,7 @@ func TestInvokeOperationAsyncUsesAASEnvironmentExternalURL(t *testing.T) {
 func operationAsyncRequest(t *testing.T, requestURL string) *http.Request {
 	t.Helper()
 
-	request := httptest.NewRequest(http.MethodPost, "http://example.com"+requestURL, bytes.NewBufferString(`{}`))
+	request := httptest.NewRequest(http.MethodPost, "http://example.com"+requestURL, bytes.NewBufferString(`{"clientTimeoutDuration":"PT5S"}`))
 	request.Header.Set("Content-Type", "application/json")
 	addRouteParam(request, "submodelIdentifier", "c20")
 	addRouteParam(request, "idShortPath", "Ops.Add")
