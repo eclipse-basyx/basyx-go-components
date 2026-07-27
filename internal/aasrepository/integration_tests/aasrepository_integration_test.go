@@ -729,6 +729,66 @@ func TestQueryAssetAdministrationShellFalseFragmentFiltersKeepRootAAS(t *testing
 	}
 }
 
+func TestQueryAssetAdministrationShellFiltersSubmodelReferencesRowWise(t *testing.T) {
+	baseURL := aasRepositoryBaseURL
+	aasID := fmt.Sprintf("https://example.com/ids/aas/query-submodel-references-%d", time.Now().UnixNano())
+	aasIdentifier := base64.RawURLEncoding.EncodeToString([]byte(aasID))
+	visibleReference := "urn:example:submodel:visible"
+	hiddenReference := "urn:example:submodel:hidden"
+	requestBody := fmt.Sprintf(`{
+		"id": %q,
+		"modelType": "AssetAdministrationShell",
+		"assetInformation": {"assetKind": "Instance"},
+		"submodels": [
+			{"type": "ModelReference", "keys": [{"type": "Submodel", "value": %q}]},
+			{"type": "ModelReference", "keys": [{"type": "Submodel", "value": %q}]}
+		]
+	}`, aasID, visibleReference, hiddenReference)
+
+	statusCode, err := postResponseStatus(baseURL+"/shells", requestBody)
+	require.NoError(t, err, "AAS creation failed")
+	require.Equal(t, http.StatusCreated, statusCode, "Expected 201 Created for AAS creation")
+	t.Cleanup(func() {
+		_, _ = deleteResponseStatus(fmt.Sprintf("%s/shells/%s", baseURL, aasIdentifier))
+	})
+
+	query := map[string]any{
+		"$condition": map[string]any{
+			"$eq": []any{
+				map[string]any{"$field": "$aas#id"},
+				map[string]any{"$strVal": aasID},
+			},
+		},
+		"$filters": []any{
+			map[string]any{
+				"$fragment": "$aas#submodels[]",
+				"$condition": map[string]any{
+					"$eq": []any{
+						map[string]any{"$field": "$aas#submodels[].keys[].value"},
+						map[string]any{"$strVal": visibleReference},
+					},
+				},
+			},
+		},
+	}
+
+	body, err := json.Marshal(query)
+	require.NoError(t, err, "failed to build query body")
+	payload, statusCode, _, postErr := postJSONResponse(baseURL+"/query/shells", string(body))
+	require.NoError(t, postErr, "query request failed")
+	require.Equal(t, http.StatusOK, statusCode, "Expected 200 OK for query")
+
+	result, ok := payload["result"].([]any)
+	require.True(t, ok, "query result should be an array")
+	require.Len(t, result, 1, "query should return exactly the created AAS")
+	shell, ok := result[0].(map[string]any)
+	require.True(t, ok, "query result item should be an object")
+	submodels, ok := shell["submodels"].([]any)
+	require.True(t, ok, "submodels should be present")
+	require.Len(t, submodels, 1, "only the matching submodel reference should remain")
+	require.Equal(t, visibleReference, submodelReferenceKeyValue(t, submodels[0]))
+}
+
 func querySingleAASWithFalseFragment(t *testing.T, baseURL string, aasID string, fragment string) map[string]any {
 	t.Helper()
 
@@ -782,6 +842,21 @@ func requireFirstSpecificAssetID(t *testing.T, shell map[string]any) map[string]
 	specificAssetID, ok := specificAssetIDs[0].(map[string]any)
 	require.True(t, ok, "specificAssetId should be an object")
 	return specificAssetID
+}
+
+func submodelReferenceKeyValue(t *testing.T, reference any) string {
+	t.Helper()
+
+	referenceMap, ok := reference.(map[string]any)
+	require.True(t, ok, "submodel reference should be an object")
+	keys, ok := referenceMap["keys"].([]any)
+	require.True(t, ok, "submodel reference keys should be an array")
+	require.NotEmpty(t, keys, "submodel reference should contain a key")
+	key, ok := keys[0].(map[string]any)
+	require.True(t, ok, "submodel reference key should be an object")
+	value, ok := key["value"].(string)
+	require.True(t, ok, "submodel reference key value should be a string")
+	return value
 }
 
 func TestPostAssetAdministrationShellAcceptsNullSubmodels(t *testing.T) {

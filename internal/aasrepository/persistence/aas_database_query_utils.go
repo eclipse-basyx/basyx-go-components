@@ -374,6 +374,10 @@ func buildGetSubmodelReferencePayloadsByAASIDsDataset(dialect *goqu.DialectWrapp
 	return dialect.
 		From(goqu.T("aas_submodel_reference").As("aas_submodel_reference")).
 		InnerJoin(
+			goqu.T("aas").As("aas"),
+			goqu.On(goqu.I("aas.id").Eq(goqu.I("aas_submodel_reference.aas_id"))),
+		).
+		InnerJoin(
 			goqu.T("aas_submodel_reference_payload").As("rp"),
 			goqu.On(goqu.I("rp.reference_id").Eq(goqu.I("aas_submodel_reference.id"))),
 		).
