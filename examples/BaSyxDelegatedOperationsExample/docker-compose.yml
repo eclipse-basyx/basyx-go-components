@@ -63,6 +63,7 @@ services:
       - POSTGRES_CONNMAXLIFETIMEMINUTES=5
       - JWS_PRIVATEKEYPATH=/app/rsa-key.pem
       - ABAC_ENABLED=false
+      - SMREPO_DELEGATION_TRUSTED_HOSTS=delegated-operation-service:8080,172.28.0.10:8080
     volumes:
       - ./basyx/rsa-key.pem:/app/rsa-key.pem:ro
     ports:
@@ -79,6 +80,9 @@ services:
       dockerfile: Dockerfile
     environment:
       - PORT=8080
+    networks:
+      default:
+        ipv4_address: 172.28.0.10
     ports:
       - "8099:8080"
     restart: unless-stopped
@@ -126,3 +130,9 @@ services:
     depends_on:
       db:
         condition: service_healthy
+
+networks:
+  default:
+    ipam:
+      config:
+        - subnet: 172.28.0.0/24
