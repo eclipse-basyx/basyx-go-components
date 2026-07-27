@@ -33,7 +33,7 @@ package submodelelements
 import (
 	"database/sql"
 	"encoding/json"
-	"fmt"
+	"log/slog"
 	"reflect"
 	"strconv"
 	"strings"
@@ -193,7 +193,7 @@ func (p *PostgreSQLSMECrudHandler) Update(submodelID string, idShortOrPath strin
 	dialect := goqu.Dialect("postgres")
 	submodelDatabaseID, err := persistenceutils.GetSubmodelDatabaseID(localTx, submodelID)
 	if err != nil {
-		_, _ = fmt.Println("SMREPO-SMEUPD-GETSMDATABASEID " + err.Error())
+		slog.Error("submodel database ID lookup failed", "error.code", "SMREPO-SMEUPD-GETSMDATABASEID", "error", err)
 		return common.NewInternalServerError("Failed to resolve Submodel database id - see console for details")
 	}
 
@@ -337,7 +337,7 @@ func (p *PostgreSQLSMECrudHandler) Update(submodelID string, idShortOrPath strin
 		if semanticID != nil && !isEmptyReference(semanticID) {
 			_, err = CreateContextReferenceByOwnerID(localTx, int64(existingID), "submodel_element_semantic_id", semanticID)
 			if err != nil {
-				_, _ = fmt.Println("SMREPO-SMEUPD-CRSEMREF " + err.Error())
+				slog.Error("semantic ID reference creation failed", "error.code", "SMREPO-SMEUPD-CRSEMREF", "error", err)
 				return common.NewInternalServerError("Failed to update SemanticID - see console for details")
 			}
 		} else {

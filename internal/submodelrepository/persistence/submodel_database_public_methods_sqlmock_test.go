@@ -108,7 +108,7 @@ func TestGetSubmodelByIDReturnsErrorWhenParallelReadsFail(t *testing.T) {
 
 	mock.ExpectQuery(`SELECT .*`).WillReturnError(errors.New("read failed"))
 
-	item, err := sut.GetSubmodelByID(contextWithABACDisabled(t), "", "", false)
+	item, err := sut.GetSubmodelByID(contextWithABACDisabled(t), "", "", false, true)
 	require.Error(t, err)
 	require.Nil(t, item)
 	require.NoError(t, mock.ExpectationsWereMet())
@@ -181,7 +181,7 @@ func TestGetSubmodelElementEmptyPathReturnsBadRequest(t *testing.T) {
 
 	sut := &SubmodelDatabase{db: db}
 
-	elem, err := sut.GetSubmodelElement(contextWithABACDisabled(t), "sm", "", false, "")
+	elem, err := sut.GetSubmodelElement(contextWithABACDisabled(t), "sm", "", true, "")
 	require.Error(t, err)
 	require.Nil(t, elem)
 	require.True(t, common.IsErrBadRequest(err))
@@ -199,7 +199,7 @@ func TestGetSubmodelElementWithLevelInvalidLevelReturnsBadRequest(t *testing.T) 
 
 	sut := &SubmodelDatabase{db: db}
 
-	elem, err := sut.GetSubmodelElement(contextWithABACDisabled(t), "sm", "root", false, "invalid")
+	elem, err := sut.GetSubmodelElement(contextWithABACDisabled(t), "sm", "root", true, "invalid")
 	require.Error(t, err)
 	require.Nil(t, elem)
 	require.True(t, common.IsErrBadRequest(err))
@@ -247,7 +247,7 @@ func TestGetSubmodelElementWithLevelCoreReturnsElementWithoutChildren(t *testing
 			),
 		)
 
-	elem, err := sut.GetSubmodelElement(contextWithABACDisabled(t), "sm-core", "RootCollection", false, "core")
+	elem, err := sut.GetSubmodelElement(contextWithABACDisabled(t), "sm-core", "RootCollection", true, "core")
 	require.NoError(t, err)
 	require.NotNil(t, elem)
 
@@ -269,7 +269,7 @@ func TestGetSubmodelElementsEmptySubmodelIDReturnsBadRequest(t *testing.T) {
 
 	sut := &SubmodelDatabase{db: db}
 
-	elems, cursor, err := sut.GetSubmodelElements(contextWithABACDisabled(t), "", nil, "", false, "")
+	elems, cursor, err := sut.GetSubmodelElements(contextWithABACDisabled(t), "", nil, "", true, "")
 	require.Error(t, err)
 	require.Nil(t, elems)
 	require.Empty(t, cursor)
@@ -320,7 +320,7 @@ func TestGetSubmodelElementsCoreReturnsOnlyRootElements(t *testing.T) {
 			),
 		)
 
-	elems, cursor, err := sut.GetSubmodelElements(contextWithABACDisabled(t), "sm-core", nil, "", false, "core")
+	elems, cursor, err := sut.GetSubmodelElements(contextWithABACDisabled(t), "sm-core", nil, "", true, "core")
 	require.NoError(t, err)
 	require.Empty(t, cursor)
 	require.Len(t, elems, 1)
@@ -397,7 +397,7 @@ func TestGetSubmodelElementsDeepReturnsRootWithChildren(t *testing.T) {
 			),
 		)
 
-	elems, cursor, err := sut.GetSubmodelElements(contextWithABACDisabled(t), "sm-deep", nil, "", false, "deep")
+	elems, cursor, err := sut.GetSubmodelElements(contextWithABACDisabled(t), "sm-deep", nil, "", true, "deep")
 	require.NoError(t, err)
 	require.Empty(t, cursor)
 	require.Len(t, elems, 1)

@@ -29,7 +29,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
+	"log/slog"
 	"net"
 	"net/http"
 	"os"
@@ -38,6 +38,9 @@ import (
 	"strings"
 	"syscall"
 	"time"
+
+	commonlogging "github.com/eclipse-basyx/basyx-go-components/internal/common/logging"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/telemetry"
 )
 
 // HTTPServerRunner manages one configured HTTP server instance.
@@ -100,7 +103,8 @@ func StartHTTPServer(ctx context.Context, serviceCode string, cfg ServerConfig, 
 	if ctx == nil {
 		return nil, fmt.Errorf("%s-RUNSERVER-CONTEXT context must not be nil", normalizedServiceCode)
 	}
-	server := NewConfiguredHTTPServer(ctx, cfg, handler)
+	loggedHandler := commonlogging.HTTPMiddleware(handler)
+	server := NewConfiguredHTTPServer(ctx, cfg, telemetry.HTTPMiddleware(loggedHandler))
 	listener, err := net.Listen("tcp", server.Addr)
 	if err != nil {
 		return nil, fmt.Errorf("%s-RUNSERVER-LISTEN %w", normalizedServiceCode, err)
@@ -127,7 +131,7 @@ func StartHTTPServer(ctx context.Context, serviceCode string, cfg ServerConfig, 
 //	ctx, stop := common.SignalContext()
 //	defer stop()
 //	if err := common.RunHTTPServer(ctx, "AASR", cfg.Server, router); err != nil {
-//		log.Fatal(err)
+//		return err
 //	}
 func RunHTTPServer(ctx context.Context, serviceCode string, cfg ServerConfig, handler http.Handler) error {
 	runner, err := StartHTTPServer(ctx, serviceCode, cfg, handler)
@@ -157,7 +161,7 @@ func (runner *HTTPServerRunner) Wait(ctx context.Context) error {
 	case err := <-runner.serveErr:
 		return runner.listenError(err)
 	case <-ctx.Done():
-		log.Println("Shutting down server...")
+		slog.InfoContext(ctx, "HTTP server shutdown requested")
 		return runner.shutdown(ctx)
 	}
 }

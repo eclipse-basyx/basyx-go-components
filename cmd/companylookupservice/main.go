@@ -30,12 +30,14 @@ import (
 	"context"
 	"embed"
 	"flag"
-	"log"
+	"log/slog"
+	"os"
 	"time"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/binarycontent"
 	commonmodel "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/telemetry"
 	"github.com/eclipse-basyx/basyx-go-components/internal/companylookupservice/api"
 	companylookuppostgresql "github.com/eclipse-basyx/basyx-go-components/internal/companylookupservice/persistence"
 	"github.com/eclipse-basyx/basyx-go-components/pkg/companylookupapi"
@@ -46,13 +48,18 @@ import (
 var openapiSpec embed.FS
 
 func runServer(ctx context.Context, configPath string) error {
-	log.Default().Println("Loading Company Lookup Service...")
-	log.Default().Println("Config Path:", configPath)
-
-	cfg, err := common.LoadConfig(configPath, common.NORMAL)
+	cfg, err := common.LoadConfig(configPath)
 	if err != nil {
 		return err
 	}
+	if _, err = common.ConfigureLogging(cfg, "companylookupservice", configPath, os.Stderr); err != nil {
+		return err
+	}
+	telemetryRuntime, err := telemetry.Configure(ctx, "companylookupservice")
+	if err != nil {
+		return err
+	}
+	defer telemetryRuntime.Shutdown(ctx)
 	if err := commonmodel.SetVerificationMode(cfg.Server.StrictVerification); err != nil {
 		return err
 	}
@@ -68,7 +75,7 @@ func runServer(ctx context.Context, configPath string) error {
 
 	// Add Swagger UI
 	if err := common.AddSwaggerUIFromFS(r, openapiSpec, "openapi.yaml", "Company Lookup Service API", "/swagger", "/api-docs/openapi.yaml", cfg); err != nil {
-		log.Printf("Warning: failed to load OpenAPI spec for Swagger UI: %v", err)
+		slog.WarnContext(ctx, "Swagger UI unavailable", "error.code", "COMPANYLOOKUP-SWAGGER-INIT", "error", err)
 	}
 
 	dsn := common.BuildPostgresDSN(cfg.Postgres)
@@ -76,11 +83,11 @@ func runServer(ctx context.Context, configPath string) error {
 	if err := common.ValidateSchemaVersionByDSN(dsn, common.CURRENT_DATABASE_VERSION); err != nil {
 		return err
 	}
-	log.Println("Connecting to Postgres using configured connection settings")
+	slog.InfoContext(ctx, "connecting to PostgreSQL")
 
 	sharedDB, err := common.NewDatabaseConnection(dsn)
 	if err != nil {
-		log.Printf("❌ DB connect failed: %v", err)
+		slog.ErrorContext(ctx, "database connection failed", "error.code", "COMPANYLOOKUP-DB-CONNECT", "error", err)
 		return err
 	}
 	defer func() { _ = sharedDB.Close() }()
@@ -95,10 +102,10 @@ func runServer(ctx context.Context, configPath string) error {
 	}
 	companyLookupDatabase, err := companylookuppostgresql.NewPostgreSQLCompanyLookupBackendFromDB(sharedDB, cfg.Server.CacheEnabled)
 	if err != nil {
-		log.Printf("❌ DB connect failed: %v", err)
+		slog.ErrorContext(ctx, "company lookup persistence initialization failed", "error.code", "COMPANYLOOKUP-DB-INIT", "error", err)
 		return err
 	}
-	log.Println("✅ Postgres connection established")
+	slog.InfoContext(ctx, "PostgreSQL connection established")
 
 	companyLookupSvc := api.NewCompanyLookupAPIService(*companyLookupDatabase)
 	companyLookupCtrl := companylookupapi.NewCompanyLookupAPIAPIController(companyLookupSvc)
@@ -130,7 +137,7 @@ func runServer(ctx context.Context, configPath string) error {
 	r.Mount(base, apiRouter)
 
 	addr := common.ServerAddress(cfg.Server)
-	log.Printf("▶️ Company Lookup listening on %s (contextPath=%q)\n", addr, cfg.Server.ContextPath)
+	slog.InfoContext(ctx, "HTTP server starting", "address", addr, "context_path", cfg.Server.ContextPath)
 
 	return common.RunHTTPServer(ctx, "COMPANYLOOKUP", cfg.Server, r)
 }
@@ -143,8 +150,9 @@ func main() {
 	flag.Parse()
 
 	if err := runServer(ctx, configPath); err != nil {
+		slog.ErrorContext(ctx, "server stopped", "error.code", "COMPANYLOOKUP-MAIN-RUNSERVER", "error", err)
 		stop()
-		log.Fatalf("Server error: %v", err)
+		os.Exit(1)
 	}
 	stop()
 }

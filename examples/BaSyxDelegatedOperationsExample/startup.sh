@@ -50,21 +50,20 @@ post_json_if_missing() {
   echo "${object_name} created"
 }
 
-wait_for_service "AAS Repository" "http://aas_repository:5004/health"
-wait_for_service "Submodel Repository" "http://submodel_repository:5004/health"
+wait_for_service "AAS Environment" "http://aas_environment:5004/health"
 
 encoded_submodel_id="aHR0cHM6Ly9leGFtcGxlLmNvbS9pZHMvc20vZGVsZWdhdGVkLW9wZXJhdGlvbnM"
 encoded_aas_id="aHR0cHM6Ly9leGFtcGxlLmNvbS9pZHMvYWFzL2RlbGVnYXRlZC1vcGVyYXRpb25zLWV4YW1wbGU"
 
 post_json_if_missing \
-  "http://submodel_repository:5004/submodels/${encoded_submodel_id}" \
-  "http://submodel_repository:5004/submodels" \
+  "http://aas_environment:5004/submodels/${encoded_submodel_id}" \
+  "http://aas_environment:5004/submodels" \
   "/data/submodel-delegated-operations.json" \
   "submodel"
 
 post_json_if_missing \
-  "http://aas_repository:5004/shells/${encoded_aas_id}" \
-  "http://aas_repository:5004/shells" \
+  "http://aas_environment:5004/shells/${encoded_aas_id}" \
+  "http://aas_environment:5004/shells" \
   "/data/aas-shell.json" \
   "aas"
 

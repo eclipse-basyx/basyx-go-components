@@ -29,7 +29,7 @@ package descriptors
 import (
 	"context"
 	"encoding/json"
-	"fmt"
+	"log/slog"
 	"time"
 
 	"github.com/doug-martin/goqu/v9"
@@ -94,7 +94,7 @@ func ReadEndpointsByDescriptorIDs(
 ) (map[int64][]model.Endpoint, error) {
 	if debugEnabled(ctx) {
 		defer func(start time.Time) {
-			_, _ = fmt.Printf("ReadEndpointsByDescriptorIDs took %s\n", time.Since(start))
+			slog.DebugContext(ctx, "descriptor endpoint read completed", "duration", time.Since(start))
 		}(time.Now())
 	}
 	out := make(map[int64][]model.Endpoint, len(descriptorIDs))

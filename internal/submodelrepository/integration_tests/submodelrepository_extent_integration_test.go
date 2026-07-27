@@ -43,8 +43,9 @@ func TestSubmodelRepositoryExtentShapesBlobValues(t *testing.T) {
 	submodelIDEncoded := base64.RawURLEncoding.EncodeToString([]byte(submodelID))
 	topBlobValue := base64.StdEncoding.EncodeToString([]byte("top-blob-value"))
 	nestedBlobValue := base64.StdEncoding.EncodeToString([]byte("nested-blob-value"))
+	operationBlobValue := base64.StdEncoding.EncodeToString([]byte("operation-blob-value"))
 
-	payload := extentTestSubmodelPayload(submodelID, topBlobValue, nestedBlobValue)
+	payload := extentTestSubmodelPayload(submodelID, topBlobValue, nestedBlobValue, operationBlobValue)
 	statusCode, body, err := requestJSON(http.MethodPost, baseURL+"/submodels", payload)
 	require.NoError(t, err)
 	require.Equal(t, http.StatusCreated, statusCode, "response=%s", string(body))
@@ -67,6 +68,9 @@ func TestSubmodelRepositoryExtentShapesBlobValues(t *testing.T) {
 			require.Equal(t, http.StatusOK, status, "response=%s", string(responseBody))
 			requireSubmodelBlobValueState(t, decodeMap(t, responseBody), "TopBlob", "text/plain", "", false)
 			requireSubmodelBlobValueState(t, decodeMap(t, responseBody), "NestedBlob", "application/octet-stream", "", false)
+			requireOperationVariableBlobValueState(t, decodeMap(t, responseBody), "inputVariables", "OperationInputBlob", "", false)
+			requireOperationVariableBlobValueState(t, decodeMap(t, responseBody), "outputVariables", "OperationOutputBlob", "", false)
+			requireOperationVariableBlobValueState(t, decodeMap(t, responseBody), "inoutputVariables", "OperationInoutputBlob", "", false)
 		}
 	})
 
@@ -77,6 +81,9 @@ func TestSubmodelRepositoryExtentShapesBlobValues(t *testing.T) {
 		payload := decodeMap(t, responseBody)
 		requireSubmodelBlobValueState(t, payload, "TopBlob", "text/plain", topBlobValue, true)
 		requireSubmodelBlobValueState(t, payload, "NestedBlob", "application/octet-stream", nestedBlobValue, true)
+		requireOperationVariableBlobValueState(t, payload, "inputVariables", "OperationInputBlob", operationBlobValue, true)
+		requireOperationVariableBlobValueState(t, payload, "outputVariables", "OperationOutputBlob", operationBlobValue, true)
+		requireOperationVariableBlobValueState(t, payload, "inoutputVariables", "OperationInoutputBlob", operationBlobValue, true)
 	})
 
 	t.Run("value-only submodel honors extent", func(t *testing.T) {
@@ -110,6 +117,31 @@ func TestSubmodelRepositoryExtentShapesBlobValues(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, http.StatusOK, status, "response=%s", string(responseBody))
 		requireElementBlobValueState(t, decodeMap(t, responseBody), "text/plain", topBlobValue, true)
+
+		status, responseBody, err = requestJSON(http.MethodGet, baseURL+"/submodels/"+submodelIDEncoded+"/submodel-elements/TestOperation", nil)
+		require.NoError(t, err)
+		require.Equal(t, http.StatusOK, status, "response=%s", string(responseBody))
+		requireOperationBlobValueState(t, decodeMap(t, responseBody), "inputVariables", "OperationInputBlob", "", false)
+		requireOperationBlobValueState(t, decodeMap(t, responseBody), "outputVariables", "OperationOutputBlob", "", false)
+		requireOperationBlobValueState(t, decodeMap(t, responseBody), "inoutputVariables", "OperationInoutputBlob", "", false)
+
+		status, responseBody, err = requestJSON(http.MethodGet, baseURL+"/submodels/"+submodelIDEncoded+"/submodel-elements/TestOperation?extent=withBlobValue", nil)
+		require.NoError(t, err)
+		require.Equal(t, http.StatusOK, status, "response=%s", string(responseBody))
+		requireOperationBlobValueState(t, decodeMap(t, responseBody), "inputVariables", "OperationInputBlob", operationBlobValue, true)
+		requireOperationBlobValueState(t, decodeMap(t, responseBody), "outputVariables", "OperationOutputBlob", operationBlobValue, true)
+		requireOperationBlobValueState(t, decodeMap(t, responseBody), "inoutputVariables", "OperationInoutputBlob", operationBlobValue, true)
+	})
+
+	t.Run("metadata and reference reads do not require blob values", func(t *testing.T) {
+		status, responseBody, err := requestJSON(http.MethodGet, baseURL+"/submodels/"+submodelIDEncoded+"/submodel-elements/TopBlob/$metadata", nil)
+		require.NoError(t, err)
+		require.Equal(t, http.StatusOK, status, "response=%s", string(responseBody))
+		requireElementBlobValueState(t, decodeMap(t, responseBody), "text/plain", "", false)
+
+		status, responseBody, err = requestJSON(http.MethodGet, baseURL+"/submodels/"+submodelIDEncoded+"/submodel-elements/MainCollection.NestedBlob/$reference", nil)
+		require.NoError(t, err)
+		require.Equal(t, http.StatusOK, status, "response=%s", string(responseBody))
 	})
 
 	t.Run("value-only submodel element reads honor extent", func(t *testing.T) {
@@ -154,8 +186,9 @@ func TestSubmodelRepositoryHistoryExtentAndCoreLevel(t *testing.T) {
 	submodelIDEncoded := base64.RawURLEncoding.EncodeToString([]byte(submodelID))
 	topBlobValue := base64.StdEncoding.EncodeToString([]byte("history-top-blob-value"))
 	nestedBlobValue := base64.StdEncoding.EncodeToString([]byte("history-nested-blob-value"))
+	operationBlobValue := base64.StdEncoding.EncodeToString([]byte("history-operation-blob-value"))
 
-	statusCode, body, err := requestJSON(http.MethodPost, baseURL+"/submodels", extentTestSubmodelPayload(submodelID, topBlobValue, nestedBlobValue))
+	statusCode, body, err := requestJSON(http.MethodPost, baseURL+"/submodels", extentTestSubmodelPayload(submodelID, topBlobValue, nestedBlobValue, operationBlobValue))
 	require.NoError(t, err)
 	require.Equal(t, http.StatusCreated, statusCode, "response=%s", string(body))
 
@@ -171,12 +204,14 @@ func TestSubmodelRepositoryHistoryExtentAndCoreLevel(t *testing.T) {
 	require.Equal(t, http.StatusOK, status, "response=%s", string(responseBody))
 	requireSubmodelBlobValueState(t, decodeMap(t, responseBody), "TopBlob", "text/plain", topBlobValue, true)
 	requireSubmodelBlobValueState(t, decodeMap(t, responseBody), "NestedBlob", "application/octet-stream", nestedBlobValue, true)
+	requireOperationVariableBlobValueState(t, decodeMap(t, responseBody), "inputVariables", "OperationInputBlob", operationBlobValue, true)
 
 	status, responseBody, err = requestJSON(http.MethodGet, fmt.Sprintf("%s/submodels/%s/$history?date=%s&level=deep&extent=withoutBlobValue", baseURL, submodelIDEncoded, historyDate), nil)
 	require.NoError(t, err)
 	require.Equal(t, http.StatusOK, status, "response=%s", string(responseBody))
 	requireSubmodelBlobValueState(t, decodeMap(t, responseBody), "TopBlob", "text/plain", "", false)
 	requireSubmodelBlobValueState(t, decodeMap(t, responseBody), "NestedBlob", "application/octet-stream", "", false)
+	requireOperationVariableBlobValueState(t, decodeMap(t, responseBody), "inputVariables", "OperationInputBlob", "", false)
 
 	status, responseBody, err = requestJSON(http.MethodGet, fmt.Sprintf("%s/submodels/%s/$history?date=%s&level=core&extent=withBlobValue", baseURL, submodelIDEncoded, historyDate), nil)
 	require.NoError(t, err)
@@ -188,7 +223,7 @@ func TestSubmodelRepositoryHistoryExtentAndCoreLevel(t *testing.T) {
 	require.False(t, hasNestedValue, "core historical collection must not include nested value payload")
 }
 
-func extentTestSubmodelPayload(submodelID string, topBlobValue string, nestedBlobValue string) map[string]any {
+func extentTestSubmodelPayload(submodelID string, topBlobValue string, nestedBlobValue string, operationBlobValue string) map[string]any {
 	return map[string]any{
 		"id":        submodelID,
 		"idShort":   "ExtentSubmodel",
@@ -216,6 +251,46 @@ func extentTestSubmodelPayload(submodelID string, topBlobValue string, nestedBlo
 						"modelType": "Property",
 						"valueType": "xs:string",
 						"value":     "nested",
+					},
+				},
+			},
+			map[string]any{
+				"idShort":   "TestOperation",
+				"modelType": "Operation",
+				"inputVariables": []any{
+					map[string]any{
+						"value": map[string]any{
+							"idShort":     "OperationInputBlob",
+							"modelType":   "Blob",
+							"contentType": "application/octet-stream",
+							"value":       operationBlobValue,
+						},
+					},
+				},
+				"outputVariables": []any{
+					map[string]any{
+						"value": map[string]any{
+							"idShort":   "OperationOutputCollection",
+							"modelType": "SubmodelElementCollection",
+							"value": []any{
+								map[string]any{
+									"idShort":     "OperationOutputBlob",
+									"modelType":   "Blob",
+									"contentType": "application/octet-stream",
+									"value":       operationBlobValue,
+								},
+							},
+						},
+					},
+				},
+				"inoutputVariables": []any{
+					map[string]any{
+						"value": map[string]any{
+							"idShort":     "OperationInoutputBlob",
+							"modelType":   "Blob",
+							"contentType": "application/octet-stream",
+							"value":       operationBlobValue,
+						},
 					},
 				},
 			},
@@ -251,6 +326,28 @@ func requireValueOnlyBlobValueState(t *testing.T, raw any, contentType string, e
 	if expectValue {
 		require.Equal(t, expectedValue, actualValue)
 	}
+}
+
+func requireOperationVariableBlobValueState(t *testing.T, submodel map[string]any, variableField string, idShort string, expectedValue string, expectValue bool) {
+	t.Helper()
+	rawElements, ok := submodel["submodelElements"].([]any)
+	require.True(t, ok, "submodelElements must be an array")
+	requireOperationBlobValueState(t, findSubmodelElementInList(t, rawElements, "TestOperation"), variableField, idShort, expectedValue, expectValue)
+}
+
+func requireOperationBlobValueState(t *testing.T, operation map[string]any, variableField string, idShort string, expectedValue string, expectValue bool) {
+	t.Helper()
+	rawVariables, ok := operation[variableField].([]any)
+	require.True(t, ok, "%s must be an array: %#v", variableField, operation[variableField])
+
+	variableValues := make([]any, 0, len(rawVariables))
+	for _, rawVariable := range rawVariables {
+		variable, variableOK := rawVariable.(map[string]any)
+		require.True(t, variableOK, "operation variable must be an object: %#v", rawVariable)
+		variableValues = append(variableValues, variable["value"])
+	}
+
+	requireElementBlobValueState(t, findSubmodelElementInList(t, variableValues, idShort), "application/octet-stream", expectedValue, expectValue)
 }
 
 func findSubmodelElementInList(t *testing.T, rawElements []any, idShort string) map[string]any {

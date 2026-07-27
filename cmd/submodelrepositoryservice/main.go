@@ -31,8 +31,9 @@ import (
 	"crypto/rsa"
 	"embed"
 	"flag"
-	"log"
+	"log/slog"
 	"net/http"
+	"os"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -47,6 +48,7 @@ import (
 	commonmodel "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/security/abacpolicy"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/telemetry"
 	smregistrydb "github.com/eclipse-basyx/basyx-go-components/internal/smregistry/persistence"
 	"github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/api"
 	persistencepostgresql "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence"
@@ -57,13 +59,19 @@ import (
 var openapiSpec embed.FS
 
 func runServer(ctx context.Context, configPath string) error {
-	log.Default().Println("Loading Submodel Repository Service...")
-	log.Default().Println("Config Path:", configPath)
 	// Load configuration
-	cfg, err := common.LoadConfig(configPath, common.NORMAL)
+	cfg, err := common.LoadConfig(configPath)
 	if err != nil {
 		return err
 	}
+	if _, err = common.ConfigureLogging(cfg, "submodelrepositoryservice", configPath, os.Stderr); err != nil {
+		return err
+	}
+	telemetryRuntime, err := telemetry.Configure(ctx, "submodelrepositoryservice")
+	if err != nil {
+		return err
+	}
+	defer telemetryRuntime.Shutdown(ctx)
 
 	if err := commonmodel.SetVerificationMode(cfg.Server.StrictVerification); err != nil {
 		return err
@@ -102,7 +110,7 @@ func runServer(ctx context.Context, configPath string) error {
 
 	// Add Swagger UI
 	if err := common.AddSwaggerUIFromFS(r, openapiSpec, "openapi.yaml", "Submodel Repository API", "/swagger", "/api-docs/openapi.yaml", cfg); err != nil {
-		log.Printf("Warning: failed to load OpenAPI spec for Swagger UI: %v", err)
+		slog.WarnContext(ctx, "Swagger UI unavailable", "error.code", "SMREPOSITORY-SWAGGER-INIT", "error", err)
 	}
 
 	// Instantiate generated services & controllers
@@ -113,14 +121,14 @@ func runServer(ctx context.Context, configPath string) error {
 	if cfg.JWS.PrivateKeyPath != "" {
 		privateKey, err = jws.LoadPrivateKey(cfg.JWS.PrivateKeyPath)
 		if err != nil {
-			log.Printf("Warning: failed to load JWS private key: %v - /$signed Endpoints will be unavailable", err)
+			slog.WarnContext(ctx, "JWS private key unavailable; signed endpoints are disabled", "error.code", "SMREPOSITORY-JWS-LOADKEY", "error", err)
 		} else {
-			log.Println("JWS private key loaded successfully")
+			slog.InfoContext(ctx, "JWS private key loaded")
 		}
 	}
 	signingOptions, err := jws.LoadSigningOptions(cfg.JWS.CertificateChainPath)
 	if err != nil {
-		log.Printf("Warning: failed to load JWS certificate chain: %v - x5c header will be omitted", err)
+		slog.WarnContext(ctx, "JWS certificate chain unavailable; x5c headers are disabled", "error.code", "SMREPOSITORY-JWS-LOADCHAIN", "error", err)
 	}
 
 	dsn := common.BuildPostgresDSN(cfg.Postgres)
@@ -229,7 +237,7 @@ func runServer(ctx context.Context, configPath string) error {
 	r.Mount(base, apiRouter)
 
 	addr := common.ServerAddress(cfg.Server)
-	log.Printf("▶️  Submodel Repository listening on %s (contextPath=%q)\n", addr, cfg.Server.ContextPath)
+	slog.InfoContext(ctx, "HTTP server starting", "address", addr, "context_path", cfg.Server.ContextPath)
 
 	// submodelrepository.TestNewSubmodelHandler(smDatabase)
 
@@ -244,8 +252,9 @@ func main() {
 	flag.Parse()
 
 	if err := runServer(ctx, configPath); err != nil {
+		slog.ErrorContext(ctx, "server stopped", "error.code", "SMREPOSITORY-MAIN-RUNSERVER", "error", err)
 		stop()
-		log.Fatalf("Server error: %v", err)
+		os.Exit(1)
 	}
 	stop()
 }

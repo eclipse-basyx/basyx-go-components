@@ -286,7 +286,7 @@ func TestGetSubmodelElementByPathCombinesAuthorizationAndPayloadQuery(t *testing
 			`.*sme_path_data`,
 	).WillReturnRows(sqlmock.NewRows([]string{"id"}))
 
-	_, err = getSubmodelElementByIDShortOrPathWithSubmodelDBID(ctx, db, "submodel-id", 42, "Target", "deep")
+	_, err = getSubmodelElementByIDShortOrPathWithSubmodelDBID(ctx, db, "submodel-id", 42, "Target", "deep", true)
 	require.Error(t, err)
 	require.Truef(t, common.IsErrNotFound(err), "expected not found, got %v", err)
 	require.NoError(t, mock.ExpectationsWereMet())

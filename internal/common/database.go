@@ -30,6 +30,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"log/slog"
 	"strings"
 	"time"
 
@@ -66,7 +67,7 @@ const (
 //	dsn := "postgres://admin:password@localhost:5432/basyx_db?sslmode=disable"
 //	db, err := NewDatabaseConnection(dsn)
 //	if err != nil {
-//	    log.Fatal("Database connection failed:", err)
+//	    return err
 //	}
 //	defer db.Close()
 func NewDatabaseConnection(dsn string) (*sql.DB, error) {
@@ -115,8 +116,8 @@ func ValidateSchemaVersion(db *sql.DB, expectedVersion string) error {
 		if errors.Is(err, sql.ErrNoRows) {
 			return fmt.Errorf("DB-CHECKVER-NOVERSIONROW basyxsystem has no version row")
 		}
-		_, _ = fmt.Println("[ERROR] It seems that the BaSyx Configuration Service is missing or was not started before. Please see the wiki (User Documentation) on how to integrate it into your setup")
-		_, _ = fmt.Println("[ERROR] If the BaSyx Configuration Service was started before - check the database connection of the service and make sure it exited successfully")
+		slog.Error("BaSyx Configuration Service schema metadata unavailable", "error.code", "COMMON-VALIDATESCHEMAVERSION-READMETADATA")
+		slog.Error("verify that the configuration service completed successfully and uses the same database", "error.code", "COMMON-VALIDATESCHEMAVERSION-CHECKCONFIGSERVICE")
 		return fmt.Errorf("DB-CHECKVER-READFAIL failed to read schema version: %w", err)
 	}
 

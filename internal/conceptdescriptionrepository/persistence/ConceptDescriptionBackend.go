@@ -35,6 +35,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"strings"
 	"time"
 
@@ -93,7 +94,7 @@ func NewConceptDescriptionBackendFromDB(db *sql.DB) (*ConceptDescriptionBackend,
 
 	healthy, err := testDBConnection(db)
 	if !healthy {
-		_, _ = fmt.Printf("CDREPO-TESTDBCON-FAIL Failed to connect to database: %v\n", err)
+		slog.Error("database connection failed", "error.code", "CDREPO-TESTDBCON-FAIL", "error", err)
 		return nil, err
 	}
 
@@ -476,7 +477,7 @@ func (b *ConceptDescriptionBackend) GetConceptDescriptions(ctx context.Context, 
 	}
 	defer func() {
 		if closeErr := rows.Close(); closeErr != nil {
-			_, _ = fmt.Printf("CDREPO-GCDS-CLOSEROWS failed to close rows: %v\n", closeErr)
+			slog.Error("database row cleanup failed", "error.code", "CDREPO-GCDS-CLOSEROWS", "error", closeErr)
 		}
 	}()
 

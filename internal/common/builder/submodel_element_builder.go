@@ -30,6 +30,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"strings"
 	"sync"
 
@@ -83,7 +84,13 @@ func BuildSubmodelElement(smeRow model.SubmodelElementRow, db *sql.DB) (types.IS
 	var refMutex sync.RWMutex
 	specificSME, err := getSubmodelElementObjectBasedOnModelType(smeRow, refBuilderMap, &refMutex)
 	if err != nil {
-		_, _ = fmt.Printf("[DEBUG] BuildSubmodelElement: Error building SME type, idShort=%s, modelType=%d, error: %v\n", smeRow.IDShort.String, smeRow.ModelType, err)
+		slog.Error(
+			"submodel element construction failed",
+			"error.code", "COMMON-BUILDSME-CREATETYPE",
+			"id_short", smeRow.IDShort.String,
+			"model_type", smeRow.ModelType,
+			"error", err,
+		)
 		return nil, nil, err
 	}
 	if smeRow.IDShort.Valid && smeRow.IDShort.String != "" {
@@ -151,7 +158,7 @@ func BuildSubmodelElement(smeRow model.SubmodelElementRow, db *sql.DB) (types.IS
 				if err != nil {
 					// Log the problematic JSON for debugging
 					jsonBytes, _ := json.Marshal(jsonable)
-					_, _ = fmt.Printf("[DEBUG] SME EmbeddedDataSpec: idShort=%s, index=%d, JSON: %s, Error: %v\n", smeRow.IDShort.String, i, string(jsonBytes), err)
+					slog.Error("embedded data specification conversion failed", "error.code", "COMMON-BUILDSME-CONVERTEDS", "id_short", smeRow.IDShort.String, "index", i, "error", err)
 					return fmt.Errorf("error converting jsonable to EmbeddedDataSpecification (idShort=%s, index=%d, data: %s): %w", smeRow.IDShort.String, i, string(jsonBytes), err)
 				}
 				specs = append(specs, eds)
@@ -181,7 +188,7 @@ func BuildSubmodelElement(smeRow model.SubmodelElementRow, db *sql.DB) (types.IS
 				if err != nil {
 					// Log the problematic JSON for debugging
 					jsonBytes, _ := json.Marshal(jsonable)
-					_, _ = fmt.Printf("[DEBUG] SME SupplementalSemanticIDs: idShort=%s, index=%d, JSON: %s, Error: %v\n", smeRow.IDShort.String, i, string(jsonBytes), err)
+					slog.Error("supplemental semantic ID conversion failed", "error.code", "COMMON-BUILDSME-CONVERTSUPPLEMENTALID", "id_short", smeRow.IDShort.String, "index", i, "error", err)
 					return fmt.Errorf("error converting jsonable to Reference (idShort=%s, index=%d, data: %s): %w", smeRow.IDShort.String, i, string(jsonBytes), err)
 				}
 				supplementalSemanticIDs = append(supplementalSemanticIDs, *ref.(*types.Reference))
@@ -209,7 +216,7 @@ func BuildSubmodelElement(smeRow model.SubmodelElementRow, db *sql.DB) (types.IS
 				if err != nil {
 					// Log the problematic JSON for debugging
 					jsonBytes, _ := json.Marshal(jsonable)
-					_, _ = fmt.Printf("[DEBUG] SME Extensions: idShort=%s, index=%d, JSON: %s, Error: %v\n", smeRow.IDShort.String, i, string(jsonBytes), err)
+					slog.Error("extension conversion failed", "error.code", "COMMON-BUILDSME-CONVERTEXTENSION", "id_short", smeRow.IDShort.String, "index", i, "error", err)
 					return fmt.Errorf("error converting jsonable to Extension (idShort=%s, index=%d, data: %s): %w", smeRow.IDShort.String, i, string(jsonBytes), err)
 				}
 				extensions = append(extensions, ext)
@@ -490,7 +497,7 @@ func buildOperation(smeRow model.SubmodelElementRow) (types.ISubmodelElement, er
 		for i, jsonable := range inputVarsJsonable {
 			varOp, err := jsonization.OperationVariableFromJsonable(jsonable)
 			if err != nil {
-				_, _ = fmt.Printf("[DEBUG] buildOperation InputVariable[%d]: JSON: %v, Error: %v\n", i, jsonable, err)
+				slog.Error("operation input variable conversion failed", "error.code", "COMMON-BUILDOP-CONVERTINPUT", "index", i, "error", err)
 				return nil, err
 			}
 			inputVars = append(inputVars, varOp)
@@ -505,7 +512,7 @@ func buildOperation(smeRow model.SubmodelElementRow) (types.ISubmodelElement, er
 		for i, jsonable := range outputVarsJsonable {
 			varOp, err := jsonization.OperationVariableFromJsonable(jsonable)
 			if err != nil {
-				_, _ = fmt.Printf("[DEBUG] buildOperation OutputVariable[%d]: JSON: %v, Error: %v\n", i, jsonable, err)
+				slog.Error("operation output variable conversion failed", "error.code", "COMMON-BUILDOP-CONVERTOUTPUT", "index", i, "error", err)
 				return nil, err
 			}
 			outputVars = append(outputVars, varOp)
@@ -520,7 +527,7 @@ func buildOperation(smeRow model.SubmodelElementRow) (types.ISubmodelElement, er
 		for i, jsonable := range inoutputVarsJsonable {
 			varOp, err := jsonization.OperationVariableFromJsonable(jsonable)
 			if err != nil {
-				_, _ = fmt.Printf("[DEBUG] buildOperation InoutputVariable[%d]: JSON: %v, Error: %v\n", i, jsonable, err)
+				slog.Error("operation in-output variable conversion failed", "error.code", "COMMON-BUILDOP-CONVERTINOUTPUT", "index", i, "error", err)
 				return nil, err
 			}
 			inoutputVars = append(inoutputVars, varOp)
@@ -631,7 +638,7 @@ func buildEntity(smeRow model.SubmodelElementRow) (types.ISubmodelElement, error
 		for i, j := range jsonable {
 			said, err := jsonization.SpecificAssetIDFromJsonable(j)
 			if err != nil {
-				_, _ = fmt.Printf("[DEBUG] buildEntity SpecificAssetID[%d]: JSON: %v, Error: %v\n", i, j, err)
+				slog.Error("specific asset ID conversion failed", "error.code", "COMMON-BUILDENTITY-CONVERTASSETID", "index", i, "error", err)
 				return nil, err
 			}
 			specificAssetIDs = append(specificAssetIDs, said)
@@ -705,7 +712,7 @@ func buildMultiLanguageProperty(smeRow model.SubmodelElementRow, refBuilderMap m
 			delete(val, "id")
 			valueSDK, err := jsonization.LangStringTextTypeFromJsonable(val)
 			if err != nil {
-				_, _ = fmt.Printf("[DEBUG] buildMultiLanguageProperty Value: JSON: %v, Error: %v\n", val, err)
+				slog.Error("multi-language property value conversion failed", "error.code", "COMMON-BUILDMLP-CONVERTVALUE", "error", err)
 				return nil, err
 			}
 			textTypes = append(textTypes, valueSDK)
@@ -755,10 +762,13 @@ func buildBlob(smeRow model.SubmodelElementRow) (types.ISubmodelElement, error) 
 		return nil, err
 	}
 
+	blob := types.NewBlob()
+	blob.SetContentType(&valueRow.ContentType)
+
 	// Postgres bytea is commonly returned as: \x<hex>
 	raw := strings.TrimSpace(valueRow.Value)
 	if raw == "" {
-		return nil, fmt.Errorf("blob value is empty")
+		return blob, nil
 	}
 
 	var decoded []byte
@@ -780,11 +790,9 @@ func buildBlob(smeRow model.SubmodelElementRow) (types.ISubmodelElement, error) 
 	decoded, err = common.Decode(string(decoded))
 	if err != nil {
 		decoded = decodedHex // Fallback to hex decoded value
-		_, _ = fmt.Println("WARNING: Error while decoding Base64 - falling back to HEX Decoded Value as a fallback.")
+		slog.Warn("base64 decoding failed; falling back to hexadecimal decoding", "error.code", "BUILDER-BUILDBLOB-FALLBACKHEX")
 	}
 
-	blob := types.NewBlob()
-	blob.SetContentType(&valueRow.ContentType)
 	if string(decoded) != "" {
 		blob.SetValue(decoded)
 	}
@@ -841,7 +849,7 @@ func buildReferenceElement(smeRow model.SubmodelElementRow) (types.ISubmodelElem
 		if len(refJsonable) > 0 {
 			refSDK, err = jsonization.ReferenceFromJsonable(refJsonable)
 			if err != nil {
-				_, _ = fmt.Printf("[DEBUG] buildReferenceElement: JSON: %v, Error: %v\n", refJsonable, err)
+				slog.Error("reference element conversion failed", "error.code", "COMMON-BUILDREFERENCE-CONVERTVALUE", "error", err)
 				return nil, fmt.Errorf("error converting reference jsonable to Reference: %w", err)
 			}
 		}
@@ -911,7 +919,7 @@ func buildSubmodelElementList(smeRow model.SubmodelElementRow) (types.ISubmodelE
 		if len(jsonable) > 0 {
 			semIDLe, err := jsonization.ReferenceFromJsonable(jsonable)
 			if err != nil {
-				_, _ = fmt.Printf("[DEBUG] buildSubmodelElementList SemanticIDListElement: JSON: %v, Error: %v\n", jsonable, err)
+				slog.Error("submodel element list semantic ID conversion failed", "error.code", "COMMON-BUILDSMELIST-CONVERTSEMANTICID", "error", err)
 				return nil, fmt.Errorf("error converting SemanticIDListElement jsonable to Reference: %w", err)
 			}
 			smeList.SetSemanticIDListElement(semIDLe)
@@ -964,7 +972,7 @@ func buildOptionalReference(raw []byte, fieldName string) (types.IReference, err
 
 	ref, err := jsonization.ReferenceFromJsonable(jsonable)
 	if err != nil {
-		_, _ = fmt.Printf("[DEBUG] buildOptionalReference %s: JSON: %v, Error: %v\n", fieldName, jsonable, err)
+		slog.Error("optional reference conversion failed", "error.code", "COMMON-BUILDREFERENCE-CONVERTOPTIONAL", "field", fieldName, "error", err)
 		return nil, fmt.Errorf("error converting %s jsonable to Reference: %w", fieldName, err)
 	}
 	return ref, nil

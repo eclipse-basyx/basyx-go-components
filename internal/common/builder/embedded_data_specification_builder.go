@@ -30,6 +30,7 @@ package builder
 import (
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"sort"
 
 	"github.com/FriedJannik/aas-go-sdk/types"
@@ -116,7 +117,7 @@ func NewEmbeddedDataSpecificationsBuilder() *EmbeddedDataSpecificationsBuilder {
 //	builder := NewEmbeddedDataSpecificationsBuilder()
 //	err := builder.BuildReferences(refJSON, referredRefJSON)
 //	if err != nil {
-//	    log.Printf("Failed to build references: %v", err)
+//	    return err
 //	}
 func (edsb *EmbeddedDataSpecificationsBuilder) BuildReferences(edsReferenceRows json.RawMessage, edsReferredReferenceRows json.RawMessage) error {
 	var edsRefRow []model.EdsReferenceRow
@@ -189,7 +190,7 @@ func (edsb *EmbeddedDataSpecificationsBuilder) BuildReferences(edsReferenceRows 
 //	builder.BuildReferences(refJSON, referredRefJSON)
 //	err := builder.BuildContentsIec61360(iecJSON)
 //	if err != nil {
-//	    log.Printf("Failed to build IEC 61360 content: %v", err)
+//	    return err
 //	}
 func (edsb *EmbeddedDataSpecificationsBuilder) BuildContentsIec61360(iecRows json.RawMessage) error {
 	var iecContents []model.EdsContentIec61360Row
@@ -208,7 +209,7 @@ func (edsb *EmbeddedDataSpecificationsBuilder) BuildContentsIec61360(iecRows jso
 		}
 
 		if len(preferredName) == 0 {
-			_, _ = fmt.Print("Empty")
+			slog.Debug("embedded data specification preferred name is empty", "iec_id", data.IecID, "eds_id", data.EdsID)
 		}
 
 		shortName, err := ParseLangStringShortNameTypeIec61360(data.ShortName)

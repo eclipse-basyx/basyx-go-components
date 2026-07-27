@@ -52,8 +52,7 @@ jobs:
             compose_files: |
               examples/BaSyxDelegatedOperationsExample/docker-compose.yml
             image_builds: |
-              eclipsebasyx/aasrepository-go:SNAPSHOT|./cmd/aasrepositoryservice/Dockerfile
-              eclipsebasyx/submodelrepository-go:SNAPSHOT|./cmd/submodelrepositoryservice/Dockerfile
+              eclipsebasyx/aasenvironment-go:SNAPSHOT|./cmd/aasenvironmentservice/Dockerfile
               eclipsebasyx/basyxconfigurationservice-go:SNAPSHOT|./cmd/basyxconfigurationservice/Dockerfile
           - target_name: Submodel Repository Example
             compose_files: |
@@ -93,6 +92,13 @@ jobs:
               eclipsebasyx/dppapi-go:SNAPSHOT|./cmd/dppapiservice/Dockerfile
               eclipsebasyx/aasenvironment-go:SNAPSHOT|./cmd/aasenvironmentservice/Dockerfile
               eclipsebasyx/basyxconfigurationservice-go:SNAPSHOT|./cmd/basyxconfigurationservice/Dockerfile
+          - target_name: Observability Example
+            compose_files: |
+              examples/BaSyxObservabilityExample/docker-compose.yml
+            image_builds: |
+              eclipsebasyx/aasenvironment-go:SNAPSHOT|./cmd/aasenvironmentservice/Dockerfile
+              eclipsebasyx/basyxconfigurationservice-go:SNAPSHOT|./cmd/basyxconfigurationservice/Dockerfile
+            smoke_script: examples/BaSyxObservabilityExample/smoke.sh --check-collector-outage
 
     steps:
       - name: Checkout code
@@ -114,6 +120,8 @@ jobs:
           done <<< "${{ matrix.image_builds }}"
 
       - name: Start target examples and verify startup state
+        env:
+          SMOKE_SCRIPT: ${{ matrix.smoke_script }}
         run: |
           set -euo pipefail
 
@@ -238,5 +246,15 @@ jobs:
             fi
 
             docker compose -f "$compose_file" ps
+
+            if [ -n "${SMOKE_SCRIPT}" ]; then
+              if ! bash -c "${SMOKE_SCRIPT}"; then
+                echo "Example smoke verification failed: $compose_file"
+                docker compose -f "$compose_file" logs --no-color || true
+                cleanup_stack "$compose_file"
+                exit 1
+              fi
+            fi
+
             cleanup_stack "$compose_file"
           done <<< "${{ matrix.compose_files }}"

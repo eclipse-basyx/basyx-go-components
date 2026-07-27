@@ -28,7 +28,7 @@ package descriptors
 import (
 	"context"
 	"database/sql"
-	"fmt"
+	"log/slog"
 	"time"
 )
 
@@ -52,14 +52,14 @@ func withDescriptorDebugQueryer(ctx context.Context, db DBQueryer) DBQueryer {
 
 func (d *descriptorDebugQueryer) QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error) {
 	if debugEnabled(ctx) || debugEnabled(d.ctx) {
-		_, _ = fmt.Println(query)
+		slog.DebugContext(ctx, "descriptor database query started")
 	}
 	start := time.Now()
 	rows, err := d.db.QueryContext(ctx, query, args...)
 	if debugEnabled(ctx) || debugEnabled(d.ctx) {
-		_, _ = fmt.Printf("DescriptorQueryContext took %s\n", time.Since(start))
+		slog.DebugContext(ctx, "descriptor database query completed", "duration", time.Since(start))
 		if err != nil {
-			_, _ = fmt.Printf("DescriptorQueryContext error: %v\n", err)
+			slog.ErrorContext(ctx, "descriptor database query failed", "error.code", "DESCRIPTORS-QUERYCONTEXT-EXECUTE", "error", err)
 		}
 	}
 	return rows, err
@@ -67,21 +67,21 @@ func (d *descriptorDebugQueryer) QueryContext(ctx context.Context, query string,
 
 func (d *descriptorDebugQueryer) QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row {
 	if debugEnabled(ctx) || debugEnabled(d.ctx) {
-		_, _ = fmt.Println(query)
+		slog.DebugContext(ctx, "descriptor database row query started")
 	}
 	return d.db.QueryRowContext(ctx, query, args...)
 }
 
 func (d *descriptorDebugQueryer) Query(query string, args ...any) (*sql.Rows, error) {
 	if debugEnabled(d.ctx) {
-		_, _ = fmt.Println(query)
+		slog.DebugContext(d.ctx, "descriptor database query started")
 	}
 	start := time.Now()
 	rows, err := d.db.Query(query, args...)
 	if debugEnabled(d.ctx) {
-		_, _ = fmt.Printf("DescriptorQuery took %s\n", time.Since(start))
+		slog.DebugContext(d.ctx, "descriptor database query completed", "duration", time.Since(start))
 		if err != nil {
-			_, _ = fmt.Printf("DescriptorQuery error: %v\n", err)
+			slog.ErrorContext(d.ctx, "descriptor database query failed", "error.code", "DESCRIPTORS-QUERY-EXECUTE", "error", err)
 		}
 	}
 	return rows, err

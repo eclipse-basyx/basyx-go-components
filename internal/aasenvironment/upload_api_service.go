@@ -33,7 +33,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
+	"log/slog"
 	"mime"
 	"net/http"
 	"net/url"
@@ -441,11 +441,7 @@ func parseAASXMLInstance(specContent []byte, sourceLabel string) (aastypes.IClas
 			sanitizedSourceLabel = "unknown"
 		}
 		// #nosec G706 -- source label is sanitized to strip CR/LF before logging.
-		log.Printf(
-			"[WARN] AASENV-PARSEAASX-NAMESPACEADAPTED source='%s' adapted legacy AAS namespace to '%s' for backward compatibility",
-			sanitizedSourceLabel,
-			sanitizeUploadLogValue(currentAASNamespace),
-		)
+		slog.Warn("legacy AAS namespace adapted for backward compatibility", "error.code", "AASENV-PARSEAASX-NAMESPACEADAPTED", "source", sanitizedSourceLabel, "namespace", sanitizeUploadLogValue(currentAASNamespace))
 		adaptedRetried, adaptedRetryErr := aasxmlization.Unmarshal(xml.NewDecoder(bytes.NewReader(adaptedContent)))
 		if adaptedRetryErr == nil {
 			return adaptedRetried, nil
@@ -824,11 +820,11 @@ func (s *uploadAPIService) uploadSupplementaryFiles(
 		if !matched {
 			supplementaryURIForLog := sanitizeUploadLogValue(normalizePartURI(relationship.Supplementary.URI))
 			// #nosec G706 -- value is sanitized to strip CR/LF control characters before logging.
-			log.Printf("[WARN] AASENV-UPLDSUPPL-NOMATCH no File element path matched supplementary %q", supplementaryURIForLog)
+			slog.WarnContext(ctx, "no File element path matched supplementary attachment", "error.code", "AASENV-UPLDSUPPL-NOMATCH", "supplementary_uri", supplementaryURIForLog)
 		}
 	}
 
-	log.Printf("AASENV-UPLDSUPPL uploaded %d supplementary file attachment(s)", uploaded)
+	slog.InfoContext(ctx, "supplementary file attachments uploaded", "attachment_count", uploaded)
 	return nil
 }
 
@@ -881,7 +877,7 @@ func (s *uploadAPIService) storeAASXThumbnail(ctx context.Context, packageReader
 		uploaded++
 	}
 
-	log.Printf("AASENV-UPLDTHUMB stored thumbnail for %d AAS object(s)", uploaded)
+	slog.InfoContext(ctx, "AAS thumbnails stored", "aas_count", uploaded)
 	return nil
 }
 

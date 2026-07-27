@@ -26,6 +26,8 @@ Welcome to the BaSyx Go project! This guide is designed to help new developers o
     - [Steps](#steps)
   - [4. Environment Variables \& Configuration](#4-environment-variables--configuration)
     - [Database Initialization](#database-initialization)
+    - [Logging](#logging)
+    - [OpenTelemetry Tracing](#opentelemetry-tracing)
   - [5. Code Style \& Conventions](#5-code-style--conventions)
   - [6. Module Structure](#6-module-structure)
   - [7. Common Workflows](#7-common-workflows)
@@ -97,9 +99,30 @@ The `basyxconfigurationservice` image should use the same BaSyx version or build
 
 If a setup uses mutable tags and pulls images on every start or restart, include `basyxconfigurationservice` in the deployment and run it before the DB-backed components. Otherwise a freshly pulled runtime component may expect a newer schema version than the database currently contains, causing startup validation to fail.
 
+### Logging
+
+All commands support `logging.format` (`text` or `json`) and `logging.level`
+(`debug`, `info`, `warn`, or `error`), with `LOGGING_FORMAT` and
+`LOGGING_LEVEL` environment overrides. Diagnostic records are written to
+stderr. See the [logging guide](docu/user/logging.md) for the output contract
+and Docker, Kubernetes, systemd, and Loki collection guidance.
+
+### OpenTelemetry Tracing
+
+All HTTP services support optional environment-driven OpenTelemetry tracing,
+W3C context extraction, delegated-operation propagation, and structured-log
+correlation. Tracing is disabled by default. See the [telemetry
+guide](docu/user/telemetry.md) for configuration and the [observability
+example](examples/BaSyxObservabilityExample/README.md) for a Collector, Tempo,
+Alloy, Loki, and Grafana setup.
+
 Configuration is managed via YAML files in `cmd/<service>/config.yaml` and environment variables. Key variables include database connection settings (see [docu/errors.md](docu/errors.md) for troubleshooting):
 
 ```yaml
+logging:
+    format: text
+    level: info
+
 server:
     readHeaderTimeoutSeconds: 15
     readTimeoutSeconds: 300

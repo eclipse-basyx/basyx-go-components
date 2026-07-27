@@ -28,7 +28,7 @@
 package builder
 
 import (
-	"log"
+	"log/slog"
 
 	"github.com/FriedJannik/aas-go-sdk/jsonization"
 	"github.com/FriedJannik/aas-go-sdk/types"
@@ -57,7 +57,7 @@ import (
 //
 //	admin, err := BuildAdministration(adminRow)
 //	if err != nil {
-//	    log.Printf("Failed to build administration: %v", err)
+//	    return err
 //	}
 func BuildAdministration(adminRow model.AdministrationRow) (*types.AdministrativeInformation, error) {
 	administration := &types.AdministrativeInformation{}
@@ -92,19 +92,19 @@ func BuildAdministration(adminRow model.AdministrationRow) (*types.Administrativ
 		var jsonable []map[string]any
 		err := json.Unmarshal(adminRow.EmbeddedDataSpecification, &jsonable)
 		if err != nil {
-			log.Printf("Failed to unmarshal embedded data specifications: %v", err)
+			slog.Error("Failed to unmarshal embedded data specifications", "error.code", "BUILDER-BUILDADMINISTRATION-UNMARSHAL", "error", err)
 		} else {
 			for _, obj := range jsonable {
 				eds, err := jsonization.EmbeddedDataSpecificationFromJsonable(obj)
 				if err != nil {
-					log.Printf("Failed to convert jsonable to EmbeddedDataSpecification: %v", err)
+					slog.Error("Failed to convert jsonable to EmbeddedDataSpecification", "error.code", "BUILDER-BUILDADMINISTRATION-EXECUTE", "error", err)
 					continue
 				}
 				edsList = append(edsList, eds)
 			}
 		}
 		if err != nil {
-			log.Printf("Failed to build embedded data specifications: %v", err)
+			slog.Error("Failed to build embedded data specifications", "error.code", "BUILDER-BUILDADMINISTRATION-EXECUTE", "error", err)
 		} else {
 			administration.SetEmbeddedDataSpecifications(edsList)
 		}

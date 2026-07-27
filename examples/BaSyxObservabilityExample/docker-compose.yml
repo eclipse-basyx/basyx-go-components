@@ -1,0 +1,151 @@
+services:
+  aas-environment:
+    image: eclipsebasyx/aasenvironment-go:SNAPSHOT
+    pull_policy: always
+    ports:
+      - "127.0.0.1:8083:8083"
+    environment:
+      SERVER_PORT: "8083"
+      CORS_ALLOWEDORIGINS: "*"
+      CORS_ALLOWEDHEADERS: "*"
+      CORS_ALLOWEDMETHODS: GET,POST,PUT,PATCH,DELETE,OPTIONS
+      POSTGRES_HOST: db
+      POSTGRES_PORT: "5432"
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: admin123
+      POSTGRES_DBNAME: basyxObservability
+      ABAC_ENABLED: "false"
+      GENERAL_AASREGISTRYINTEGRATION: "true"
+      GENERAL_SUBMODELREGISTRYINTEGRATION: "true"
+      GENERAL_DISCOVERYINTEGRATION: "true"
+      GENERAL_EXTERNALURL: http://localhost:8083
+      GENERAL_AAS_PRECONFIG_PATHS: /app/preconfiguration
+      LOGGING_FORMAT: json
+      LOGGING_LEVEL: info
+      OTEL_TRACES_EXPORTER: otlp
+      OTEL_EXPORTER_OTLP_PROTOCOL: http/protobuf
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
+      OTEL_SERVICE_NAME: aasenvironmentservice
+      OTEL_RESOURCE_ATTRIBUTES: deployment.environment.name=observability-example
+    labels:
+      com.eclipse.basyx.observability.logs: "true"
+      com.eclipse.basyx.service_name: aasenvironmentservice
+    volumes:
+      - ./aas/IESEDriveMotorDM3000.aasx:/app/preconfiguration/IESEDriveMotorDM3000.aasx:ro
+    depends_on:
+      basyx-configuration:
+        condition: service_completed_successfully
+      otel-collector:
+        condition: service_started
+    restart: unless-stopped
+
+  aas-ui:
+    image: eclipsebasyx/aas-gui:SNAPSHOT-20260724-064425-2b74f32
+    pull_policy: always
+    ports:
+      - "127.0.0.1:3000:3000"
+    volumes:
+      - ./basyx-infra.yml:/basyx-infra.yml:ro
+    environment:
+      ENDPOINT_CONFIG_AVAILABLE: "false"
+    depends_on:
+      aas-environment:
+        condition: service_healthy
+    restart: unless-stopped
+
+  basyx-configuration:
+    image: eclipsebasyx/basyxconfigurationservice-go:SNAPSHOT
+    pull_policy: always
+    environment:
+      POSTGRES_HOST: db
+      POSTGRES_PORT: "5432"
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: admin123
+      POSTGRES_DBNAME: basyxObservability
+      LOGGING_FORMAT: json
+      LOGGING_LEVEL: info
+    labels:
+      com.eclipse.basyx.observability.logs: "true"
+      com.eclipse.basyx.service_name: basyxconfigurationservice
+    depends_on:
+      db:
+        condition: service_healthy
+
+  db:
+    image: postgres:18
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: admin123
+      POSTGRES_DB: basyxObservability
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U admin -d basyxObservability"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.157.0
+    command: ["--config=/etc/otelcol-contrib/config.yaml"]
+    volumes:
+      - ./otel-collector.yaml:/etc/otelcol-contrib/config.yaml:ro
+    depends_on:
+      tempo:
+        condition: service_started
+    restart: unless-stopped
+
+  tempo:
+    image: grafana/tempo:3.0.2
+    command: ["-target=all", "-config.file=/etc/tempo.yaml"]
+    ports:
+      - "127.0.0.1:3200:3200"
+    volumes:
+      - ./tempo.yaml:/etc/tempo.yaml:ro
+      - tempo-data:/var/tempo
+    restart: unless-stopped
+
+  loki:
+    image: grafana/loki:3.7.4
+    command: ["-config.file=/etc/loki/local-config.yaml"]
+    ports:
+      - "127.0.0.1:3100:3100"
+    volumes:
+      - ./loki.yaml:/etc/loki/local-config.yaml:ro
+    restart: unless-stopped
+
+  alloy:
+    image: grafana/alloy:v1.18.0
+    command:
+      - run
+      - --server.http.listen-addr=0.0.0.0:12345
+      - --storage.path=/var/lib/alloy
+      - /etc/alloy/config.alloy
+    volumes:
+      - ./alloy/config.alloy:/etc/alloy/config.alloy:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - alloy-data:/var/lib/alloy
+    depends_on:
+      loki:
+        condition: service_started
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:13.1.1
+    ports:
+      - "127.0.0.1:3001:3000"
+    environment:
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Editor
+      GF_AUTH_DISABLE_LOGIN_FORM: "true"
+    volumes:
+      - ./grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro
+    depends_on:
+      tempo:
+        condition: service_started
+      loki:
+        condition: service_started
+    restart: unless-stopped
+
+volumes:
+  alloy-data:
+  tempo-data:

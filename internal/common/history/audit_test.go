@@ -36,6 +36,7 @@ import (
 	"time"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
+	commonlogging "github.com/eclipse-basyx/basyx-go-components/internal/common/logging"
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 	"github.com/stretchr/testify/require"
 )
@@ -144,6 +145,40 @@ func TestAuditContextMiddlewarePopulatesAuthenticatedMinimalFields(t *testing.T)
 	require.Empty(t, captured.MatchedRuleID)
 	require.Empty(t, captured.SourceIP)
 	require.Empty(t, captured.UserAgent)
+}
+
+func TestAuditContextMiddlewareUsesGeneratedRequestMetadata(t *testing.T) {
+	cfg := &common.Config{History: common.HistoryConfig{AuditIdentityMode: AuditIdentityMinimal}}
+	var captured AuditContext
+	handler := commonlogging.HTTPMiddleware(AuditContextMiddleware(cfg)(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+		captured = FromContext(r.Context())
+	})))
+
+	handler.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodPost, "/shells", nil))
+
+	require.Regexp(t, `^req-[0-9a-f]{32}$`, captured.RequestID)
+	require.Equal(t, captured.RequestID, captured.CorrelationID)
+}
+
+func TestAuditContextMiddlewarePrefersContextualRequestMetadata(t *testing.T) {
+	cfg := &common.Config{History: common.HistoryConfig{AuditIdentityMode: AuditIdentityMinimal}}
+	var captured AuditContext
+	auditHandler := AuditContextMiddleware(cfg)(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+		captured = FromContext(r.Context())
+	}))
+	handler := commonlogging.HTTPMiddleware(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		request.Header.Set(commonlogging.RequestIDHeader, "request-header")
+		request.Header.Set(commonlogging.CorrelationIDHeader, "correlation-header")
+		auditHandler.ServeHTTP(writer, request)
+	}))
+	request := httptest.NewRequest(http.MethodPost, "/shells", nil)
+	request.Header.Set(commonlogging.RequestIDHeader, "request-context")
+	request.Header.Set(commonlogging.CorrelationIDHeader, "correlation-context")
+
+	handler.ServeHTTP(httptest.NewRecorder(), request)
+
+	require.Equal(t, "request-context", captured.RequestID)
+	require.Equal(t, "correlation-context", captured.CorrelationID)
 }
 
 func TestAuditContextMiddlewarePopulatesExtendedAuthorizationFields(t *testing.T) {

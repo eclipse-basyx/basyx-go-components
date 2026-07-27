@@ -486,7 +486,7 @@ func (s *DPPRepositoryService) ReadDataElement(ctx context.Context, dppID string
 	if err != nil {
 		return errorResponse(http.StatusBadRequest, err), nil
 	}
-	element, err := s.submodelRepo.GetSubmodelElement(ctx, submodelID, idShortPath, false, "deep")
+	element, err := s.submodelRepo.GetSubmodelElement(ctx, submodelID, idShortPath, true, "deep")
 	if err != nil {
 		return mapPersistenceError(err, http.StatusNotFound), nil
 	}
@@ -522,7 +522,7 @@ func (s *DPPRepositoryService) UpdateDataElementFromJSON(ctx context.Context, dp
 	if err != nil {
 		return errorResponse(http.StatusBadRequest, err), nil
 	}
-	existing, err := s.submodelRepo.GetSubmodelElement(ctx, submodelID, idShortPath, false, "deep")
+	existing, err := s.submodelRepo.GetSubmodelElement(ctx, submodelID, idShortPath, true, "deep")
 	if err != nil {
 		return mapPersistenceError(err, http.StatusNotFound), nil
 	}
@@ -721,7 +721,7 @@ func (s *DPPRepositoryService) resolveSubmodels(ctx context.Context, dppID strin
 		}
 		var submodel types.ISubmodel
 		if at.IsZero() {
-			submodel, err = s.submodelRepo.GetSubmodelByID(ctx, submodelID, "deep", false)
+			submodel, err = s.submodelRepo.GetSubmodelByID(ctx, submodelID, "deep", false, true)
 		} else {
 			submodel, err = s.submodelRepo.GetSubmodelByIDAndDate(ctx, submodelID, at)
 		}
@@ -971,7 +971,7 @@ func compressedContentSectionName(submodel types.ISubmodel, specificationSet map
 }
 
 func (s *DPPRepositoryService) updatedMetadata(ctx context.Context, dppID string) (types.ISubmodel, error) {
-	metadata, err := s.submodelRepo.GetSubmodelByID(ctx, metadataSubmodelID(dppID), "deep", false)
+	metadata, err := s.submodelRepo.GetSubmodelByID(ctx, metadataSubmodelID(dppID), "deep", false, true)
 	if err != nil {
 		return nil, fmt.Errorf("DPP-TOUCHMETA-GET get metadata: %w", err)
 	}

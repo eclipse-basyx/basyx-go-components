@@ -36,11 +36,11 @@ package model
 
 import (
 	"net/http"
-
-	"github.com/go-chi/chi/v5/middleware"
 )
 
-// Logger is a middleware that logs the start and end of each request, along with some useful data about what was requested and how long it took.
+// Logger preserves the generated middleware hook for compatibility.
+//
+// Access logging is configured by the hosting application.
 func Logger(inner http.Handler) http.Handler {
-	return middleware.Logger(inner)
+	return inner
 }

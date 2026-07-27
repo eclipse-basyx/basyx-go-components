@@ -32,12 +32,14 @@ import (
 	"database/sql"
 	"embed"
 	"flag"
-	"log"
+	"log/slog"
+	"os"
 	"time"
 
 	aasrepositorydb "github.com/eclipse-basyx/basyx-go-components/internal/aasrepository/persistence"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/history"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/telemetry"
 	"github.com/eclipse-basyx/basyx-go-components/internal/dppapiservice"
 	submodelrepositorydb "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence"
 )
@@ -46,10 +48,18 @@ import (
 var openapiSpec embed.FS
 
 func runServer(ctx context.Context, configPath string) error {
-	cfg, err := common.LoadConfig(configPath, common.NORMAL)
+	cfg, err := common.LoadConfig(configPath)
 	if err != nil {
 		return err
 	}
+	if _, err = common.ConfigureLogging(cfg, "dppapiservice", configPath, os.Stderr); err != nil {
+		return err
+	}
+	telemetryRuntime, err := telemetry.Configure(ctx, "dppapiservice")
+	if err != nil {
+		return err
+	}
+	defer telemetryRuntime.Shutdown(ctx)
 
 	dppapiservice.ConfigureHistory(cfg.History)
 	if err = history.ConfigureEvidence(ctx, cfg.History.Evidence); err != nil {
@@ -79,7 +89,7 @@ func runServer(ctx context.Context, configPath string) error {
 		return err
 	}
 
-	log.Printf("Server started on %s", addr)
+	slog.InfoContext(ctx, "HTTP server starting", "address", addr, "context_path", cfg.Server.ContextPath)
 	return common.RunHTTPServer(ctx, "DPP", cfg.Server, router)
 }
 
@@ -118,8 +128,9 @@ func main() {
 	flag.Parse()
 
 	if err := runServer(ctx, configPath); err != nil {
+		slog.ErrorContext(ctx, "server stopped", "error.code", "DPP-MAIN-RUNSERVER", "error", err)
 		stop()
-		log.Fatalf("Server error: %v", err)
+		os.Exit(1)
 	}
 	stop()
 }

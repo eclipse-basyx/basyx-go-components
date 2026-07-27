@@ -29,11 +29,11 @@ package submodelelements
 import (
 	"database/sql"
 	"fmt"
+	"log/slog"
 
 	"github.com/FriedJannik/aas-go-sdk/stringification"
 	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
-	"github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/logger"
 )
 
 // HandlerFactory is a function type that creates a PostgreSQLSMECrudInterface for a given database connection.
@@ -108,11 +108,16 @@ func GetHandlerFromRegistry(modelType types.ModelType, db *sql.DB) (PostgreSQLSM
 
 	handler, err := factory(db)
 	if err != nil {
-		logger.LogHandlerCreationError(modelType, err)
 		stringModelType, ok := stringification.ModelTypeToString(modelType)
 		if !ok {
 			stringModelType = "unknown"
 		}
+		slog.Error(
+			"submodel element handler creation failed",
+			"error.code", "SMREPO-HANDLERREGISTRY-CREATE",
+			"handler.type", stringModelType,
+			"error", err,
+		)
 		return nil, common.NewInternalServerError(fmt.Sprintf("Failed to create %s handler. See console for details.", stringModelType))
 	}
 	return handler, nil

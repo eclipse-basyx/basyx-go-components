@@ -31,8 +31,9 @@ import (
 	"context"
 	"embed"
 	"flag"
-	"log"
+	"log/slog"
 	"net/http"
+	"os"
 	"time"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
@@ -41,6 +42,7 @@ import (
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/history"
 	commonmodel "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/security/abacpolicy"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/telemetry"
 	smregistryapi "github.com/eclipse-basyx/basyx-go-components/internal/smregistry/api"
 	smregistrypostgresql "github.com/eclipse-basyx/basyx-go-components/internal/smregistry/persistence"
 	smregistryopenapi "github.com/eclipse-basyx/basyx-go-components/pkg/smregistry"
@@ -51,13 +53,18 @@ import (
 var openapiSpec embed.FS
 
 func runServer(ctx context.Context, configPath string) error {
-	log.Default().Println("Loading Submodel Registry Service...")
-	log.Default().Println("Config Path:", configPath)
-
-	cfg, err := common.LoadConfig(configPath, common.NORMAL)
+	cfg, err := common.LoadConfig(configPath)
 	if err != nil {
 		return err
 	}
+	if _, err = common.ConfigureLogging(cfg, "submodelregistryservice", configPath, os.Stderr); err != nil {
+		return err
+	}
+	telemetryRuntime, err := telemetry.Configure(ctx, "submodelregistryservice")
+	if err != nil {
+		return err
+	}
+	defer telemetryRuntime.Shutdown(ctx)
 	if err := commonmodel.SetVerificationMode(cfg.Server.StrictVerification); err != nil {
 		return err
 	}
@@ -83,7 +90,7 @@ func runServer(ctx context.Context, configPath string) error {
 
 	// Add Swagger UI
 	if err := common.AddSwaggerUIFromFS(r, openapiSpec, "openapi.yaml", "Submodel Registry Service API", "/swagger", "/api-docs/openapi.yaml", cfg); err != nil {
-		log.Printf("Warning: failed to load OpenAPI spec for Swagger UI: %v", err)
+		slog.WarnContext(ctx, "Swagger UI unavailable", "error.code", "SMREGISTRY-SWAGGER-INIT", "error", err)
 	}
 
 	dsn := common.BuildPostgresDSN(cfg.Postgres)
@@ -92,12 +99,11 @@ func runServer(ctx context.Context, configPath string) error {
 		return err
 	}
 
-	log.Printf("🗄️  Connecting to Postgres with DSN: postgres://%s:****@%s:%d/%s?sslmode=disable",
-		cfg.Postgres.User, cfg.Postgres.Host, cfg.Postgres.Port, cfg.Postgres.DBName)
+	slog.InfoContext(ctx, "connecting to PostgreSQL")
 
 	sharedDB, err := common.NewDatabaseConnection(dsn)
 	if err != nil {
-		log.Printf("❌ DB connect failed: %v", err)
+		slog.ErrorContext(ctx, "database connection failed", "error.code", "SMREGISTRY-DB-CONNECT", "error", err)
 		return err
 	}
 	if cfg.Postgres.MaxOpenConnections > 0 {
@@ -114,10 +120,10 @@ func runServer(ctx context.Context, configPath string) error {
 	}
 	smDatabase, err := smregistrypostgresql.NewPostgreSQLSMBackendFromDB(sharedDB)
 	if err != nil {
-		log.Printf("❌ DB init failed: %v", err)
+		slog.ErrorContext(ctx, "submodel registry persistence initialization failed", "error.code", "SMREGISTRY-DB-INIT", "error", err)
 		return err
 	}
-	log.Println("✅ Postgres connection established")
+	slog.InfoContext(ctx, "PostgreSQL connection established")
 
 	smSvc := smregistryapi.NewSubmodelRegistryAPIAPIService(*smDatabase)
 	smCtrl := smregistryopenapi.NewSubmodelRegistryAPIAPIController(smSvc, cfg.Server.ContextPath)
@@ -169,7 +175,7 @@ func runServer(ctx context.Context, configPath string) error {
 	r.Mount(base, apiRouter)
 
 	addr := common.ServerAddress(cfg.Server)
-	log.Printf("▶️ Submodel Registry listening on %s (contextPath=%q)\n", addr, cfg.Server.ContextPath)
+	slog.InfoContext(ctx, "HTTP server starting", "address", addr, "context_path", cfg.Server.ContextPath)
 
 	return common.RunHTTPServer(ctx, "SMR", cfg.Server, r)
 }
@@ -182,8 +188,9 @@ func main() {
 	flag.Parse()
 
 	if err := runServer(ctx, configPath); err != nil {
+		slog.ErrorContext(ctx, "server stopped", "error.code", "SMREGISTRY-MAIN-RUNSERVER", "error", err)
 		stop()
-		log.Fatalf("Server error: %v", err)
+		os.Exit(1)
 	}
 	stop()
 }

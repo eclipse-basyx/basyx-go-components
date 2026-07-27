@@ -38,7 +38,7 @@ package smregistryapi
 import (
 	"context"
 	"errors"
-	"log"
+	"log/slog"
 	"net/http"
 	"strings"
 	"time"
@@ -71,14 +71,14 @@ func NewSubmodelRegistryAPIAPIService(databaseBackend smregistrypostgresql.Postg
 
 // GetAllSubmodelDescriptors - Returns all Submodel Descriptors
 func (s *SubmodelRegistryAPIAPIService) GetAllSubmodelDescriptors(ctx context.Context, limit int32, cursor string, createdFrom time.Time, updatedFrom time.Time) (model.ImplResponse, error) {
-	internalCursor, resp, err := decodeCursor(strings.TrimSpace(cursor), "GetAllSubmodelDescriptors")
+	internalCursor, resp, err := decodeCursor(ctx, strings.TrimSpace(cursor), "GetAllSubmodelDescriptors")
 	if resp != nil || err != nil {
 		return *resp, err
 	}
 
 	smds, nextCursor, err := s.smRegistryBackend.ListSubmodelDescriptors(ctx, limit, internalCursor, createdFrom, updatedFrom)
 	if err != nil {
-		log.Printf("[ERROR] [%s] Error in GetAllSubmodelDescriptors: list failed (limit=%d cursor=%q): %v", componentName, limit, internalCursor, err)
+		slog.ErrorContext(ctx, "submodel descriptor listing failed", "error.code", "API-GETALLSUBMODELDESCRIPTORS-EXECUTE", "error", err, "component", componentName, "limit", limit, "internal_cursor", internalCursor)
 		switch {
 		case common.IsErrBadRequest(err):
 			return common.NewErrorResponse(
@@ -95,7 +95,7 @@ func (s *SubmodelRegistryAPIAPIService) GetAllSubmodelDescriptors(ctx context.Co
 	for _, smd := range smds {
 		j, toJsonErr := smd.ToJsonable()
 		if toJsonErr != nil {
-			log.Printf("[ERROR] [%s] Error in GetAllSubmodelDescriptors: ToJsonable failed (submodelId=%q): %v", componentName, smd.Id, toJsonErr)
+			slog.ErrorContext(ctx, "submodel descriptor serialization failed", "error.code", "API-GETALLSUBMODELDESCRIPTORS-SERIALIZERESPONSE", "error", toJsonErr, "component", componentName, "smd_id", smd.Id)
 			return common.NewErrorResponse(
 				toJsonErr, http.StatusInternalServerError, componentName, "GetAllSubmodelDescriptors", "Unhandled-ToJsonable",
 			), toJsonErr
@@ -113,7 +113,7 @@ func (s *SubmodelRegistryAPIAPIService) QuerySubmodelDescriptors(
 	cursor string,
 	query grammar.Query,
 ) (model.ImplResponse, error) {
-	internalCursor, resp, err := decodeCursor(strings.TrimSpace(cursor), "QuerySubmodelDescriptors")
+	internalCursor, resp, err := decodeCursor(ctx, strings.TrimSpace(cursor), "QuerySubmodelDescriptors")
 	if resp != nil || err != nil {
 		return *resp, err
 	}
@@ -121,7 +121,7 @@ func (s *SubmodelRegistryAPIAPIService) QuerySubmodelDescriptors(
 	queryCtx := auth.MergeQueryFilter(ctx, query)
 	smds, nextCursor, err := s.smRegistryBackend.ListSubmodelDescriptors(queryCtx, limit, internalCursor, time.Time{}, time.Time{})
 	if err != nil {
-		log.Printf("[ERROR] [%s] Error in QuerySubmodelDescriptors: list failed (limit=%d cursor=%q): %v", componentName, limit, internalCursor, err)
+		slog.ErrorContext(ctx, "submodel descriptor query failed", "error.code", "API-QUERYSUBMODELDESCRIPTORS-EXECUTE", "error", err, "component", componentName, "limit", limit, "internal_cursor", internalCursor)
 		if common.IsErrBadRequest(err) {
 			return common.NewErrorResponse(
 				err, http.StatusBadRequest, componentName, "QuerySubmodelDescriptors", "BadRequest",
@@ -167,7 +167,7 @@ func (s *SubmodelRegistryAPIAPIService) PostSubmodelDescriptor(ctx context.Conte
 		)
 		if precheckErr != nil {
 			statusCode, step := createprecheck.ResponseStatus(precheckErr)
-			log.Printf("[ERROR] [%s] Error in PostSubmodelDescriptor: create precheck failed (submodelId=%q): %v", componentName, submodelDescriptor.Id, precheckErr)
+			slog.ErrorContext(ctx, "submodel descriptor creation precheck failed", "error.code", "API-POSTSUBMODELDESCRIPTOR-PRECHECK", "error", precheckErr, "component", componentName)
 			return common.NewErrorResponse(
 				precheckErr, statusCode, componentName, "PostSubmodelDescriptor", step,
 			), createprecheck.ReturnError(precheckErr)
@@ -178,22 +178,22 @@ func (s *SubmodelRegistryAPIAPIService) PostSubmodelDescriptor(ctx context.Conte
 	if err != nil {
 		switch {
 		case common.IsErrBadRequest(err):
-			log.Printf("[ERROR] [%s] Error in InsertSubmodelDescriptor: bad request (submodelId=%q): %v", componentName, submodelDescriptor.Id, err)
+			slog.ErrorContext(ctx, "submodel descriptor validation failed", "error.code", "API-POSTSUBMODELDESCRIPTOR-VALIDATE", "error", err, "component", componentName)
 			return common.NewErrorResponse(
 				err, http.StatusBadRequest, componentName, "InsertSubmodelDescriptor", "BadRequest",
 			), nil
 		case common.IsErrConflict(err):
-			log.Printf("[ERROR] [%s] Error in InsertSubmodelDescriptor: conflict (submodelId=%q): %v", componentName, submodelDescriptor.Id, err)
+			slog.ErrorContext(ctx, "submodel descriptor creation conflict", "error.code", "API-POSTSUBMODELDESCRIPTOR-CHECKCONFLICT", "error", err, "component", componentName)
 			return common.NewErrorResponse(
 				err, http.StatusConflict, componentName, "InsertSubmodelDescriptor", "Conflict",
 			), nil
 		case common.IsErrDenied(err):
-			log.Printf("[ERROR] [%s] Error in InsertSubmodelDescriptor: denied (submodelId=%q): %v", componentName, submodelDescriptor.Id, err)
+			slog.ErrorContext(ctx, "submodel descriptor creation denied", "error.code", "API-POSTSUBMODELDESCRIPTOR-AUTHORIZE", "error", err, "component", componentName)
 			return common.NewErrorResponse(
 				err, http.StatusForbidden, componentName, "InsertSubmodelDescriptor", "Denied",
 			), nil
 		default:
-			log.Printf("[ERROR] [%s] Error in InsertSubmodelDescriptor: internal (submodelId=%q): %v", componentName, submodelDescriptor.Id, err)
+			slog.ErrorContext(ctx, "submodel descriptor creation failed", "error.code", "API-POSTSUBMODELDESCRIPTOR-EXECUTE", "error", err, "component", componentName)
 			return common.NewErrorResponse(
 				err, http.StatusInternalServerError, componentName, "InsertSubmodelDescriptor", "Unhandled",
 			), err
@@ -202,7 +202,7 @@ func (s *SubmodelRegistryAPIAPIService) PostSubmodelDescriptor(ctx context.Conte
 
 	j, toJsonErr := result.ToJsonable()
 	if toJsonErr != nil {
-		log.Printf("[ERROR] [%s] Error in PostSubmodelDescriptor: ToJsonable failed (submodelId=%q): %v", componentName, result.Id, toJsonErr)
+		slog.ErrorContext(ctx, "submodel descriptor serialization failed", "error.code", "API-POSTSUBMODELDESCRIPTOR-SERIALIZERESPONSE", "error", toJsonErr, "component", componentName, "result_id", result.Id)
 		return common.NewErrorResponse(
 			toJsonErr, http.StatusInternalServerError, componentName, "PostSubmodelDescriptor", "Unhandled-ToJsonable",
 		), toJsonErr
@@ -213,7 +213,7 @@ func (s *SubmodelRegistryAPIAPIService) PostSubmodelDescriptor(ctx context.Conte
 
 // GetSubmodelDescriptorById - Returns a specific Submodel Descriptor
 func (s *SubmodelRegistryAPIAPIService) GetSubmodelDescriptorById(ctx context.Context, submodelIdentifier string) (model.ImplResponse, error) {
-	decoded, resp, err := decodePathParam(submodelIdentifier, "submodelIdentifier", "GetSubmodelDescriptorById", "BadRequest-Decode")
+	decoded, resp, err := decodePathParam(ctx, submodelIdentifier, "submodelIdentifier", "GetSubmodelDescriptorById", "BadRequest-Decode")
 	if resp != nil || err != nil {
 		return *resp, err
 	}
@@ -222,17 +222,17 @@ func (s *SubmodelRegistryAPIAPIService) GetSubmodelDescriptorById(ctx context.Co
 	if err != nil {
 		switch {
 		case common.IsErrBadRequest(err):
-			log.Printf("[ERROR] [%s] Error in GetSubmodelDescriptorById: bad request (submodelId=%q): %v", componentName, decoded, err)
+			slog.ErrorContext(ctx, "submodel descriptor lookup validation failed", "error.code", "API-GETSUBMODELDESCRIPTORBYID-VALIDATE", "error", err, "component", componentName, "decoded", decoded)
 			return common.NewErrorResponse(
 				err, http.StatusBadRequest, componentName, "GetSubmodelDescriptorById", "BadRequest",
 			), nil
 		case common.IsErrNotFound(err):
-			log.Printf("[ERROR] [%s] Error in GetSubmodelDescriptorById: not found (submodelId=%q): %v", componentName, decoded, err)
+			slog.ErrorContext(ctx, "submodel descriptor not found", "error.code", "API-GETSUBMODELDESCRIPTORBYID-FIND", "error", err, "component", componentName, "decoded", decoded)
 			return common.NewErrorResponse(
 				err, http.StatusNotFound, componentName, "GetSubmodelDescriptorById", "NotFound",
 			), nil
 		default:
-			log.Printf("[ERROR] [%s] Error in GetSubmodelDescriptorById: internal (submodelId=%q): %v", componentName, decoded, err)
+			slog.ErrorContext(ctx, "submodel descriptor lookup failed", "error.code", "API-GETSUBMODELDESCRIPTORBYID-EXECUTE", "error", err, "component", componentName, "decoded", decoded)
 			return common.NewErrorResponse(
 				err, http.StatusInternalServerError, componentName, "GetSubmodelDescriptorById", "Unhandled",
 			), err
@@ -251,13 +251,13 @@ func (s *SubmodelRegistryAPIAPIService) GetSubmodelDescriptorById(ctx context.Co
 
 // PutSubmodelDescriptorById - Creates or updates an existing Submodel Descriptor
 func (s *SubmodelRegistryAPIAPIService) PutSubmodelDescriptorById(ctx context.Context, submodelIdentifier string, submodelDescriptor model.SubmodelDescriptor) (model.ImplResponse, error) {
-	decoded, resp, err := decodePathParam(submodelIdentifier, "submodelIdentifier", "PutSubmodelDescriptorById", "BadRequest-Decode")
+	decoded, resp, err := decodePathParam(ctx, submodelIdentifier, "submodelIdentifier", "PutSubmodelDescriptorById", "BadRequest-Decode")
 	if resp != nil || err != nil {
 		return *resp, err
 	}
 
 	if strings.TrimSpace(submodelDescriptor.Id) == "" || submodelDescriptor.Id != decoded {
-		log.Printf("[ERROR] [%s] Error in PutSubmodelDescriptorById: body id is empty or does not match path id (body=%q path=%q)", componentName, submodelDescriptor.Id, decoded)
+		slog.ErrorContext(ctx, "submodel descriptor body ID does not match path ID", "error.code", "API-PUTSUBMODELDESCRIPTORBYID-VALIDATEBODY", "component", componentName, "decoded", decoded)
 		return common.NewErrorResponse(
 			errors.New("body id is empty or does not match path id"), http.StatusBadRequest, componentName, "PutSubmodelDescriptorById", "BadRequest-IdMismatch",
 		), nil
@@ -266,14 +266,14 @@ func (s *SubmodelRegistryAPIAPIService) PutSubmodelDescriptorById(ctx context.Co
 
 	shouldEnforceFormula, enforceErr := auth.ShouldEnforceFormula(ctx)
 	if enforceErr != nil {
-		log.Printf("[ERROR] [%s] Error in PutSubmodelDescriptorById: should enforce check failed (submodelId=%q): %v", componentName, submodelDescriptor.Id, enforceErr)
+		slog.ErrorContext(ctx, "authorization enforcement check failed", "error.code", "API-PUTSUBMODELDESCRIPTORBYID-CHECKENFORCEMENT", "error", enforceErr, "component", componentName)
 		return common.NewErrorResponse(
 			enforceErr, http.StatusInternalServerError, componentName, "PutSubmodelDescriptorById", "ShouldEnforceFormula",
 		), enforceErr
 	}
 
 	if exists, chkErr := s.smRegistryBackend.ExistsSubmodelByID(auth.WithoutQueryFilter(ctx), submodelDescriptor.Id); chkErr != nil {
-		log.Printf("[ERROR] [%s] Error in PutSubmodelDescriptorById: existence check failed (submodelId=%q): %v", componentName, submodelDescriptor.Id, chkErr)
+		slog.ErrorContext(ctx, "submodel descriptor existence check failed", "error.code", "API-PUTSUBMODELDESCRIPTORBYID-CHECKEXISTS", "error", chkErr, "component", componentName)
 		return common.NewErrorResponse(
 			chkErr, http.StatusInternalServerError, componentName, "PutSubmodelDescriptorById", "Unhandled-Precheck",
 		), chkErr
@@ -286,22 +286,22 @@ func (s *SubmodelRegistryAPIAPIService) PutSubmodelDescriptorById(ctx context.Co
 			if err != nil {
 				switch {
 				case common.IsErrBadRequest(err):
-					log.Printf("[ERROR] [%s] Error in InsertSubmodelDescriptor: bad request (submodelId=%q): %v", componentName, submodelDescriptor.Id, err)
+					slog.ErrorContext(ctx, "submodel descriptor validation failed", "error.code", "API-PUTSUBMODELDESCRIPTORBYID-VALIDATE", "error", err, "component", componentName)
 					return common.NewErrorResponse(
 						err, http.StatusBadRequest, componentName, "InsertSubmodelDescriptor", "BadRequest",
 					), nil
 				case common.IsErrConflict(err):
-					log.Printf("[ERROR] [%s] Error in InsertSubmodelDescriptor: conflict (submodelId=%q): %v", componentName, submodelDescriptor.Id, err)
+					slog.ErrorContext(ctx, "submodel descriptor creation conflict", "error.code", "API-PUTSUBMODELDESCRIPTORBYID-CHECKCONFLICT", "error", err, "component", componentName)
 					return common.NewErrorResponse(
 						err, http.StatusConflict, componentName, "InsertSubmodelDescriptor", "Conflict",
 					), nil
 				case common.IsErrDenied(err):
-					log.Printf("[ERROR] [%s] Error in InsertSubmodelDescriptor: denied (submodelId=%q): %v", componentName, submodelDescriptor.Id, err)
+					slog.ErrorContext(ctx, "submodel descriptor creation denied", "error.code", "API-PUTSUBMODELDESCRIPTORBYID-AUTHORIZE", "error", err, "component", componentName)
 					return common.NewErrorResponse(
 						err, http.StatusForbidden, componentName, "InsertSubmodelDescriptor", "Denied",
 					), nil
 				default:
-					log.Printf("[ERROR] [%s] Error in InsertSubmodelDescriptor: internal (submodelId=%q): %v", componentName, submodelDescriptor.Id, err)
+					slog.ErrorContext(ctx, "submodel descriptor creation failed", "error.code", "API-PUTSUBMODELDESCRIPTORBYID-EXECUTE", "error", err, "component", componentName)
 					return common.NewErrorResponse(
 						err, http.StatusInternalServerError, componentName, "InsertSubmodelDescriptor", "Unhandled",
 					), err
@@ -309,7 +309,7 @@ func (s *SubmodelRegistryAPIAPIService) PutSubmodelDescriptorById(ctx context.Co
 			}
 			j, toJsonErr := result.ToJsonable()
 			if toJsonErr != nil {
-				log.Printf("[ERROR] [%s] Error in PutSubmodelDescriptorById: ToJsonable failed (submodelId=%q): %v", componentName, result.Id, toJsonErr)
+				slog.ErrorContext(ctx, "submodel descriptor serialization failed", "error.code", "API-PUTSUBMODELDESCRIPTORBYID-SERIALIZERESPONSE", "error", toJsonErr, "component", componentName, "result_id", result.Id)
 				return common.NewErrorResponse(
 					toJsonErr, http.StatusInternalServerError, componentName, "PutSubmodelDescriptorById", "Unhandled-ToJsonable",
 				), toJsonErr
@@ -322,28 +322,28 @@ func (s *SubmodelRegistryAPIAPIService) PutSubmodelDescriptorById(ctx context.Co
 	if err != nil {
 		switch {
 		case common.IsErrBadRequest(err):
-			log.Printf("[ERROR] [%s] Error in PutSubmodelDescriptorById: bad request (submodelId=%q): %v", componentName, decoded, err)
+			slog.ErrorContext(ctx, "submodel descriptor replacement validation failed", "error.code", "API-PUTSUBMODELDESCRIPTORBYID-VALIDATE", "error", err, "component", componentName, "decoded", decoded)
 			return common.NewErrorResponse(
 				err, http.StatusBadRequest, componentName, "PutSubmodelDescriptorById", "BadRequest",
 			), nil
 		case common.IsErrConflict(err):
-			log.Printf("[ERROR] [%s] Error in PutSubmodelDescriptorById: conflict (submodelId=%q): %v", componentName, decoded, err)
+			slog.ErrorContext(ctx, "submodel descriptor replacement conflict", "error.code", "API-PUTSUBMODELDESCRIPTORBYID-CHECKCONFLICT", "error", err, "component", componentName, "decoded", decoded)
 			return common.NewErrorResponse(
 				err, http.StatusConflict, componentName, "PutSubmodelDescriptorById", "Conflict",
 			), nil
 		case common.IsErrDenied(err):
-			log.Printf("[ERROR] [%s] Error in PutSubmodelDescriptorById: denied (submodelId=%q): %v", componentName, decoded, err)
+			slog.ErrorContext(ctx, "submodel descriptor replacement denied", "error.code", "API-PUTSUBMODELDESCRIPTORBYID-AUTHORIZE", "error", err, "component", componentName, "decoded", decoded)
 			return common.NewErrorResponse(
 				err, http.StatusForbidden, componentName, "PutSubmodelDescriptorById", "Denied",
 			), nil
 		case common.IsErrNotFound(err):
 			deniedErr := common.NewErrDenied("Submodel Descriptor access not allowed")
-			log.Printf("[ERROR] [%s] Error in PutSubmodelDescriptorById: not allowed (submodelId=%q): %v", componentName, decoded, err)
+			slog.ErrorContext(ctx, "submodel descriptor replacement denied", "error.code", "API-PUTSUBMODELDESCRIPTORBYID-AUTHORIZE", "error", err, "component", componentName, "decoded", decoded)
 			return common.NewErrorResponse(
 				deniedErr, http.StatusForbidden, componentName, "PutSubmodelDescriptorById", "Denied",
 			), nil
 		default:
-			log.Printf("[ERROR] [%s] Error in PutSubmodelDescriptorById: internal (submodelId=%q): %v", componentName, decoded, err)
+			slog.ErrorContext(ctx, "submodel descriptor replacement failed", "error.code", "API-PUTSUBMODELDESCRIPTORBYID-EXECUTE", "error", err, "component", componentName, "decoded", decoded)
 			return common.NewErrorResponse(
 				err, http.StatusInternalServerError, componentName, "PutSubmodelDescriptorById", "Unhandled-Replace",
 			), err
@@ -355,7 +355,7 @@ func (s *SubmodelRegistryAPIAPIService) PutSubmodelDescriptorById(ctx context.Co
 
 // DeleteSubmodelDescriptorById - Deletes a Submodel Descriptor, i.e. de-registers a submodel
 func (s *SubmodelRegistryAPIAPIService) DeleteSubmodelDescriptorById(ctx context.Context, submodelIdentifier string) (model.ImplResponse, error) {
-	decoded, resp, err := decodePathParam(submodelIdentifier, "submodelIdentifier", "DeleteSubmodelDescriptorById", "BadRequest-Decode")
+	decoded, resp, err := decodePathParam(ctx, submodelIdentifier, "submodelIdentifier", "DeleteSubmodelDescriptorById", "BadRequest-Decode")
 	if resp != nil || err != nil {
 		return *resp, err
 	}
@@ -363,22 +363,22 @@ func (s *SubmodelRegistryAPIAPIService) DeleteSubmodelDescriptorById(ctx context
 	if err := s.smRegistryBackend.DeleteSubmodelDescriptorByID(ctx, decoded); err != nil {
 		switch {
 		case common.IsErrNotFound(err):
-			log.Printf("[ERROR] [%s] Error in DeleteSubmodelDescriptorById: not found (submodelId=%q): %v", componentName, decoded, err)
+			slog.ErrorContext(ctx, "submodel descriptor deletion target not found", "error.code", "API-DELETESUBMODELDESCRIPTORBYID-FIND", "error", err, "component", componentName, "decoded", decoded)
 			return common.NewErrorResponse(
 				err, http.StatusNotFound, componentName, "DeleteSubmodelDescriptorById", "NotFound",
 			), nil
 		case common.IsErrDenied(err):
-			log.Printf("[ERROR] [%s] Error in DeleteSubmodelDescriptorById: denied (submodelId=%q): %v", componentName, decoded, err)
+			slog.ErrorContext(ctx, "submodel descriptor deletion denied", "error.code", "API-DELETESUBMODELDESCRIPTORBYID-AUTHORIZE", "error", err, "component", componentName, "decoded", decoded)
 			return common.NewErrorResponse(
 				err, http.StatusForbidden, componentName, "DeleteSubmodelDescriptorById", "Denied",
 			), nil
 		case common.IsErrBadRequest(err):
-			log.Printf("[ERROR] [%s] Error in DeleteSubmodelDescriptorById: bad request (submodelId=%q): %v", componentName, decoded, err)
+			slog.ErrorContext(ctx, "submodel descriptor deletion validation failed", "error.code", "API-DELETESUBMODELDESCRIPTORBYID-VALIDATE", "error", err, "component", componentName, "decoded", decoded)
 			return common.NewErrorResponse(
 				err, http.StatusBadRequest, componentName, "DeleteSubmodelDescriptorById", "BadRequest",
 			), nil
 		default:
-			log.Printf("[ERROR] [%s] Error in DeleteSubmodelDescriptorById: internal (submodelId=%q): %v", componentName, decoded, err)
+			slog.ErrorContext(ctx, "submodel descriptor deletion failed", "error.code", "API-DELETESUBMODELDESCRIPTORBYID-EXECUTE", "error", err, "component", componentName, "decoded", decoded)
 			return common.NewErrorResponse(
 				err, http.StatusInternalServerError, componentName, "DeleteSubmodelDescriptorById", "Unhandled",
 			), err

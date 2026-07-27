@@ -28,7 +28,7 @@
 package builder
 
 import (
-	"fmt"
+	"log/slog"
 	"slices"
 
 	"github.com/FriedJannik/aas-go-sdk/types"
@@ -181,7 +181,7 @@ func (rb *ReferenceBuilder) CreateReferredSemanticID(referredSemanticIDDbID int6
 func (rb *ReferenceBuilder) CreateReferredSemanticIDKey(referredSemanticIDDbID int64, keyID int64, keyType types.KeyTypes, keyValue string) error {
 	builder, exists := rb.referredSemanticIDBuilders[referredSemanticIDDbID]
 	if !exists {
-		_, _ = fmt.Printf("[ReferenceBuilder:CreateReferredSemanticIDKey] Failed to find Referred SemanticID Builder for Referred SemanticID with Database ID '%d' and Key Database id '%d'", referredSemanticIDDbID, keyID)
+		slog.Error("referred semantic ID builder not found", "error.code", "BUILDER-CREATEREFERREDSEMANTICIDKEY-EXECUTE", "referred_semantic_id_db_id", referredSemanticIDDbID, "key_id", keyID)
 		return common.NewInternalServerError("Error during ReferredSemanticID creation. See console for details.")
 	}
 	builder.CreateKey(keyID, keyType, keyValue)

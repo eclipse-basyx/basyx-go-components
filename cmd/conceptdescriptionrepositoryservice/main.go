@@ -30,8 +30,9 @@ import (
 	"context"
 	"embed"
 	"flag"
-	"log"
+	"log/slog"
 	"net/http"
+	"os"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -41,6 +42,7 @@ import (
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/history"
 	commonmodel "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/security/abacpolicy"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/telemetry"
 	"github.com/eclipse-basyx/basyx-go-components/internal/conceptdescriptionrepository/api"
 	"github.com/eclipse-basyx/basyx-go-components/internal/conceptdescriptionrepository/persistence"
 	openapi "github.com/eclipse-basyx/basyx-go-components/pkg/conceptdescriptionrepositoryapi/go"
@@ -50,13 +52,19 @@ import (
 var openapiSpec embed.FS
 
 func runServer(ctx context.Context, configPath string) error {
-	log.Default().Println("Loading Concept Description Repository Service...")
-	log.Default().Println("Config Path:", configPath)
 	// Load configuration
-	cfg, err := common.LoadConfig(configPath, common.NORMAL)
+	cfg, err := common.LoadConfig(configPath)
 	if err != nil {
 		return err
 	}
+	if _, err = common.ConfigureLogging(cfg, "conceptdescriptionrepositoryservice", configPath, os.Stderr); err != nil {
+		return err
+	}
+	telemetryRuntime, err := telemetry.Configure(ctx, "conceptdescriptionrepositoryservice")
+	if err != nil {
+		return err
+	}
+	defer telemetryRuntime.Shutdown(ctx)
 	if err := commonmodel.SetVerificationMode(cfg.Server.StrictVerification); err != nil {
 		return err
 	}
@@ -83,7 +91,7 @@ func runServer(ctx context.Context, configPath string) error {
 
 	// Add Swagger UI
 	if err := common.AddSwaggerUIFromFS(r, openapiSpec, "openapi.yaml", "Concept Description Repository API", "/swagger", "/api-docs/openapi.yaml", cfg); err != nil {
-		log.Printf("Warning: failed to load OpenAPI spec for Swagger UI: %v", err)
+		slog.WarnContext(ctx, "Swagger UI unavailable", "error.code", "CDREPOSITORY-SWAGGER-INIT", "error", err)
 	}
 
 	// Instantiate generated services & controllers
@@ -158,7 +166,7 @@ func runServer(ctx context.Context, configPath string) error {
 	r.Mount(base, apiRouter)
 
 	addr := common.ServerAddress(cfg.Server)
-	log.Printf("▶️  Concept Description Repository listening on %s (contextPath=%q)\n", addr, cfg.Server.ContextPath)
+	slog.InfoContext(ctx, "HTTP server starting", "address", addr, "context_path", cfg.Server.ContextPath)
 
 	return common.RunHTTPServer(ctx, "CDREPO", cfg.Server, r)
 }
@@ -171,8 +179,9 @@ func main() {
 	flag.Parse()
 
 	if err := runServer(ctx, configPath); err != nil {
+		slog.ErrorContext(ctx, "server stopped", "error.code", "CDREPOSITORY-MAIN-RUNSERVER", "error", err)
 		stop()
-		log.Fatalf("Server error: %v", err)
+		os.Exit(1)
 	}
 	stop()
 }

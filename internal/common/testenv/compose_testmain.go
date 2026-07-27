@@ -30,6 +30,7 @@ package testenv
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"os"
 	"strings"
 	"testing"
@@ -58,14 +59,14 @@ type ComposeTestMainOptions struct {
 func RunComposeTestMain(m *testing.M, options ComposeTestMainOptions) int {
 	opts := normalizeComposeTestMainOptions(options)
 	if err := applyProcessEnv(opts.Env); err != nil {
-		fmt.Printf("Failed to apply Docker Compose test environment: %v\n", err)
+		slog.Error("Failed to apply Docker Compose test environment", "error.code", "TESTENV-RUNCOMPOSETESTMAIN-EXECUTE", "error", err)
 		ReleaseReservedLocalPorts()
 		return 1
 	}
 
 	engine, baseArgs, err := FindCompose()
 	if err != nil {
-		fmt.Println("compose engine not found:", err)
+		slog.Error("compose engine not found", "error.code", "TESTENV-RUNCOMPOSETESTMAIN-FINDENGINE", "error", err)
 		ReleaseReservedLocalPorts()
 		return 1
 	}
@@ -78,9 +79,9 @@ func RunComposeTestMain(m *testing.M, options ComposeTestMainOptions) int {
 		_ = runWithLimit(opts.DownTimeout, opts.DownArgs...)
 	}
 
-	fmt.Println("Starting Docker Compose...")
+	slog.Info("starting Docker Compose")
 	if err := runWithLimit(opts.UpTimeout, opts.UpArgs...); err != nil {
-		fmt.Printf("Failed to start Docker Compose: %v\n", err)
+		slog.Error("Failed to start Docker Compose", "error.code", "TESTENV-RUNCOMPOSETESTMAIN-EXECUTE", "error", err)
 		if !opts.SkipDownAfterTests {
 			_ = runWithLimit(opts.DownTimeout, opts.DownArgs...)
 		}
@@ -91,7 +92,7 @@ func RunComposeTestMain(m *testing.M, options ComposeTestMainOptions) int {
 
 	if opts.WaitForReady != nil {
 		if err := opts.WaitForReady(); err != nil {
-			fmt.Printf("Service readiness check failed: %v\n", err)
+			slog.Error("Service readiness check failed", "error.code", "TESTENV-RUNCOMPOSETESTMAIN-EXECUTE", "error", err)
 			if !opts.SkipDownAfterTests {
 				_ = runWithLimit(opts.DownTimeout, opts.DownArgs...)
 			}
@@ -100,7 +101,7 @@ func RunComposeTestMain(m *testing.M, options ComposeTestMainOptions) int {
 	}
 	if opts.HealthURL != "" {
 		if err := WaitHealthyURL(opts.HealthURL, opts.HealthTimeout); err != nil {
-			fmt.Printf("Health check failed: %v\n", err)
+			slog.Error("Health check failed", "error.code", "TESTENV-RUNCOMPOSETESTMAIN-EXECUTE", "error", err)
 			if !opts.SkipDownAfterTests {
 				_ = runWithLimit(opts.DownTimeout, opts.DownArgs...)
 			}
@@ -111,9 +112,9 @@ func RunComposeTestMain(m *testing.M, options ComposeTestMainOptions) int {
 	code := m.Run()
 
 	if !opts.SkipDownAfterTests {
-		fmt.Println("Stopping Docker Compose...")
+		slog.Info("stopping Docker Compose")
 		if err := runWithLimit(opts.DownTimeout, opts.DownArgs...); err != nil {
-			fmt.Printf("Failed to stop Docker Compose: %v\n", err)
+			slog.Error("Failed to stop Docker Compose", "error.code", "TESTENV-RUNCOMPOSETESTMAIN-EXECUTE", "error", err)
 		}
 	}
 

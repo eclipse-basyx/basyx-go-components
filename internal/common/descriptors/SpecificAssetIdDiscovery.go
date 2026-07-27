@@ -29,7 +29,7 @@ package descriptors
 import (
 	"context"
 	"database/sql"
-	"fmt"
+	"log/slog"
 	"time"
 
 	"github.com/FriedJannik/aas-go-sdk/types"
@@ -95,7 +95,7 @@ func ReadSpecificAssetIDsByAASRef(
 ) ([]types.ISpecificAssetID, error) {
 	if debugEnabled(ctx) {
 		defer func(start time.Time) {
-			_, _ = fmt.Printf("ReadSpecificAssetIDsByAASRef took %s\n", time.Since(start))
+			slog.DebugContext(ctx, "AAS specific asset ID read completed", "duration", time.Since(start))
 		}(time.Now())
 	}
 
@@ -159,7 +159,7 @@ func ReadSpecificAssetIDsByAASRef(
 		return nil, err
 	}
 	if debugEnabled(ctx) {
-		_, _ = fmt.Println(sqlStr)
+		slog.DebugContext(ctx, "specific asset ID discovery query prepared")
 	}
 
 	rows, err := db.QueryContext(ctx, sqlStr, args...)

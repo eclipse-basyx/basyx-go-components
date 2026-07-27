@@ -46,7 +46,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"fmt"
+	"log/slog"
 	"time"
 
 	"github.com/FriedJannik/aas-go-sdk/stringification"
@@ -870,7 +870,7 @@ func ListAssetAdministrationShellDescriptors(
 ) ([]model.AssetAdministrationShellDescriptor, string, error) {
 	if debugEnabled(ctx) {
 		defer func(start time.Time) {
-			_, _ = fmt.Printf("ListAssetAdministrationShellDescriptors took %s\n", time.Since(start))
+			slog.DebugContext(ctx, "AAS descriptor list completed", "duration", time.Since(start))
 		}(time.Now())
 	}
 	return listAssetAdministrationShellDescriptors(ctx, db, limit, cursor, assetKind, assetType, identifiable, createdFrom, updatedFrom, true)
@@ -910,7 +910,7 @@ func listAssetAdministrationShellDescriptors(
 	}
 	sqlStr, args, err := ds.ToSQL()
 	if debugEnabled(ctx) {
-		_, _ = fmt.Println(sqlStr)
+		slog.DebugContext(ctx, "AAS descriptor database query prepared")
 	}
 
 	if err != nil {

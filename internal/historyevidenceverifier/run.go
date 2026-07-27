@@ -33,6 +33,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"log/slog"
 	"strings"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
@@ -73,18 +74,28 @@ func Run(ctx context.Context, args []string, stdout io.Writer, stderr io.Writer)
 		_, _ = fmt.Fprintln(stderr, err)
 		return exitFailure
 	}
-	if err = run(ctx, options, stdout); err != nil {
+	cfg, err := common.LoadConfig(options.configPath)
+	if err != nil {
 		_, _ = fmt.Fprintln(stderr, err)
+		return exitFailure
+	}
+	if _, err = common.ConfigureLogging(cfg, "historyevidenceverifier", options.configPath, stderr); err != nil {
+		_, _ = fmt.Fprintln(stderr, err)
+		return exitFailure
+	}
+	if err = run(ctx, cfg, options, stdout); err != nil {
+		slog.ErrorContext(
+			ctx,
+			"history evidence operation failed",
+			"error.code", "HISTORYVERIFY-RUN-EXECUTE",
+			"error", err,
+		)
 		return exitFailure
 	}
 	return exitSuccess
 }
 
-func run(ctx context.Context, options cliOptions, stdout io.Writer) error {
-	cfg, err := common.LoadConfig(options.configPath, common.QUIET)
-	if err != nil {
-		return err
-	}
+func run(ctx context.Context, cfg *common.Config, options cliOptions, stdout io.Writer) error {
 	if options.recover && strings.TrimSpace(options.recoveryCatalogPath) != "" {
 		return recoverEvidence(ctx, cfg, nil, options, stdout)
 	}

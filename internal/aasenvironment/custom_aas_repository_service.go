@@ -833,7 +833,7 @@ func (s *CustomAASRepositoryService) buildSubmodelDescriptorForReference(ctx con
 		return commonmodel.SubmodelDescriptor{}, false, nil
 	}
 
-	submodel, getSubmodelErr := s.persistence.SubmodelRepository.GetSubmodelByID(ctx, submodelID, "core", true)
+	submodel, getSubmodelErr := s.persistence.SubmodelRepository.GetSubmodelByID(ctx, submodelID, "core", true, true)
 	if getSubmodelErr == nil {
 		descriptor, descriptorErr := s.syncConfig.buildSubmodelDescriptor(submodel)
 		return descriptor, true, descriptorErr

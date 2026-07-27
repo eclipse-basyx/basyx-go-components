@@ -28,7 +28,7 @@ package main
 
 import (
 	"flag"
-	"log"
+	"log/slog"
 	"os"
 	"path/filepath"
 
@@ -46,14 +46,34 @@ func main() {
 	flag.StringVar(&customPatchPath, "customPatchPath", "", "Path to Database Schema Patch files")
 	flag.Parse()
 
+	cfg, err := common.LoadConfig(configPath)
+	if err != nil {
+		slog.Error(
+			"failed to load configuration",
+			"service.name", "basyxconfigurationservice",
+			"error.code", "BASYXCFG-MAIN-LOADCONFIG",
+			"error", err,
+		)
+		os.Exit(1)
+	}
+	if _, err = common.ConfigureLogging(cfg, "basyxconfigurationservice", configPath, os.Stderr); err != nil {
+		slog.Error(
+			"failed to configure logging",
+			"service.name", "basyxconfigurationservice",
+			"error.code", "BASYXCFG-MAIN-CONFIGLOGGING",
+			"error", err,
+		)
+		os.Exit(1)
+	}
+
 	patchBasePath := "/app/patches"
 	if customPatchPath != "" {
 		patchBasePath = customPatchPath
 	}
 
-	execCtx := &sequences.ExecutionContext{}
+	execCtx := &sequences.ExecutionContext{Config: cfg}
 	schemInit := basyxconfigurationservice.NewSchemaInitializer()
-	schemInit.Register(sequences.NewDatabaseConnection(execCtx, configPath))
+	schemInit.Register(sequences.NewDatabaseConnection(execCtx))
 	schemInit.Register(sequences.NewSystemTable(execCtx))
 	schemInit.Register(sequences.NewSchemaUpload(execCtx, databaseSchema))
 	schemInit.Register(sequences.NewSchemaPatch(execCtx, filepath.Join(patchBasePath, "1_0_1.sql"), "v1.0.1"))
@@ -68,8 +88,8 @@ func main() {
 	schemInit.Register(sequences.NewSchemaPatch(execCtx, filepath.Join(patchBasePath, "1_1_7.sql"), "v1.1.7"))
 	schemInit.Register(sequences.NewSchemaPatch(execCtx, filepath.Join(patchBasePath, "1_1_8.sql"), common.CURRENT_DATABASE_VERSION))
 
-	if err := schemInit.Execute(); err != nil {
-		log.Printf("BASYXCFG-MAIN-EXECUTE: %v", err)
+	if err = schemInit.Execute(); err != nil {
+		slog.Error("configuration failed", "error.code", "BASYXCFG-MAIN-EXECUTE", "error", err)
 		os.Exit(1)
 	}
 
@@ -77,5 +97,5 @@ func main() {
 		_ = execCtx.DB.Close()
 	}
 
-	log.Println("BaSyx configuration completed successfully")
+	slog.Info("BaSyx configuration completed successfully")
 }

@@ -1,10 +1,9 @@
 # BaSyx Delegated Operations Example (Sync + Async)
 
-This example provides a complete docker-compose setup for delegated operation invocation using the Go Submodel Repository.
+This example provides a complete docker-compose setup for delegated operation invocation using the Go AAS Environment.
 
 It includes:
-- AAS Repository (`http://localhost:8090`)
-- Submodel Repository (`http://localhost:8091`)
+- AAS Environment (`http://localhost:8091`)
 - Delegated microservice (`http://localhost:8099`) implemented in Go
 - AAS Web UI (`http://localhost:3000`)
 - PostgreSQL
@@ -17,6 +16,18 @@ Run from this folder:
 ```bash
 docker compose up --build
 ```
+
+## Delegation Trust
+
+To protect against DNS rebinding and server-side request forgery, the Submodel
+Repository validates both the configured delegation hostname and the IP address
+to which it resolves. This example therefore assigns
+`delegated-operation-service` the stable address `172.28.0.10` and allowlists
+both `delegated-operation-service:8080` and `172.28.0.10:8080`.
+
+If the `172.28.0.0/24` subnet conflicts with an existing Docker network, change
+the configured subnet, the delegated service address, and the corresponding IP
+entry in `SMREPO_DELEGATION_TRUSTED_HOSTS` together.
 
 ## Preloaded IDs
 
@@ -85,12 +96,17 @@ Open:
 - `http://localhost:3000`
 
 The UI is configured to use:
-- `AAS_REPO_PATH=http://localhost:8090/shells`
-- `SUBMODEL_REPO_PATH=http://localhost:8091/submodels`
+
+- the `mono-all` infrastructure template
+- AAS Environment `http://localhost:8091`
+
+The infrastructure is preconfigured in `basyx-infra.yml` and mounted read-only
+into the UI container.
 
 ## Files
 
 - `docker-compose.yml` - complete stack
+- `basyx-infra.yml` - AAS Web UI infrastructure configuration
 - `startup.sh` - waits for services and preloads AAS/Submodel data
 - `data/aas-shell.json` - preloaded AAS payload
 - `data/submodel-delegated-operations.json` - preloaded submodel with delegated operations

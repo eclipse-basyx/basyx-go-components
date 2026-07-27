@@ -40,7 +40,9 @@ import (
 
 	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/telemetry"
 	"github.com/stretchr/testify/require"
+	"go.opentelemetry.io/otel"
 )
 
 func mustParseDelegationTestURL(t *testing.T, rawURL string) *url.URL {
@@ -372,6 +374,39 @@ func TestDelegatedOperationForwardsAuthorizationAfterStrictTrust(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, http.StatusOK, statusCode)
 	require.Equal(t, "Bearer delegated", capturedAuthorization)
+}
+
+func TestDelegatedOperationPropagatesActiveTraceContext(t *testing.T) {
+	t.Setenv("OTEL_SDK_DISABLED", "false")
+	t.Setenv("OTEL_TRACES_EXPORTER", "console")
+	t.Setenv("OTEL_TRACES_SAMPLER", "always_on")
+	t.Setenv("OTEL_PROPAGATORS", "tracecontext")
+	t.Setenv("OTEL_SERVICE_NAME", "")
+	t.Setenv("OTEL_RESOURCE_ATTRIBUTES", "")
+
+	runtime, err := telemetry.Configure(t.Context(), "testservice")
+	require.NoError(t, err)
+	defer runtime.Shutdown(t.Context())
+
+	capturedTraceParent := ""
+	delegationServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		capturedTraceParent = r.Header.Get("traceparent")
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("[]"))
+	}))
+	defer delegationServer.Close()
+
+	serverURL := mustParseDelegationTestURL(t, delegationServer.URL)
+	t.Setenv(delegationTrustedHostsKey, serverURL.Host)
+	ctx, parent := otel.Tracer("test").Start(contextWithABACDisabled(t), "parent")
+	defer parent.End()
+
+	statusCode, _, err := doDelegatedOperationCall(ctx, delegationServer.URL, []types.IOperationVariable{}, time.Second)
+
+	require.NoError(t, err)
+	require.Equal(t, http.StatusOK, statusCode)
+	require.Contains(t, capturedTraceParent, parent.SpanContext().TraceID().String())
 }
 
 func TestDelegatedOperationRejectsUntrustedTargetBeforeForwardingAuthorization(t *testing.T) {

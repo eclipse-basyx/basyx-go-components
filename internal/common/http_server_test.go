@@ -33,6 +33,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	commonlogging "github.com/eclipse-basyx/basyx-go-components/internal/common/logging"
 )
 
 func TestServerAddressUsesConfiguredHostAndPort(t *testing.T) {
@@ -131,6 +133,61 @@ func TestRunServerContextCancellationShutsDownHTTPServer(t *testing.T) {
 		}
 	case <-time.After(2 * time.Second):
 		t.Fatal("server did not shut down after context cancellation")
+	}
+}
+
+func TestStartHTTPServerInstallsRequestLoggingMiddleware(t *testing.T) {
+	requestID := make(chan string, 1)
+	handler := http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		requestID <- commonlogging.RequestIDFromContext(request.Context())
+		writer.WriteHeader(http.StatusNoContent)
+	})
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+
+	runner, err := StartHTTPServer(ctx, "test", ServerConfig{Host: "127.0.0.1"}, handler)
+	if err != nil {
+		t.Fatalf("unexpected start error: %v", err)
+	}
+	waitErr := make(chan error, 1)
+	go func() {
+		waitErr <- runner.Wait(ctx)
+	}()
+
+	request, err := http.NewRequestWithContext(t.Context(), http.MethodGet, fmt.Sprintf("http://%s/resource", runner.server.Addr), nil)
+	if err != nil {
+		t.Fatalf("create request: %v", err)
+	}
+	request.Header.Set(commonlogging.RequestIDHeader, "request-1")
+	response, err := http.DefaultClient.Do(request) // #nosec G704 -- the test server is bound to the loopback interface.
+	if err != nil {
+		t.Fatalf("send request: %v", err)
+	}
+	_ = response.Body.Close()
+
+	if response.Header.Get(commonlogging.RequestIDHeader) != "request-1" {
+		t.Fatalf("unexpected response request ID %q", response.Header.Get(commonlogging.RequestIDHeader))
+	}
+	if response.Header.Get(commonlogging.CorrelationIDHeader) != "request-1" {
+		t.Fatalf("unexpected response correlation ID %q", response.Header.Get(commonlogging.CorrelationIDHeader))
+	}
+	select {
+	case actual := <-requestID:
+		if actual != "request-1" {
+			t.Fatalf("unexpected contextual request ID %q", actual)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("server did not provide request metadata")
+	}
+
+	cancel()
+	select {
+	case err := <-waitErr:
+		if err != nil {
+			t.Fatalf("unexpected wait error: %v", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("server did not shut down")
 	}
 }
 
@@ -250,7 +307,7 @@ func TestLoadConfigAppliesServerTimeoutConfig(t *testing.T) {
   shutdownTimeoutSeconds: 12
 `)
 
-	cfg, err := LoadConfig(path, QUIET)
+	cfg, err := LoadConfig(path)
 	if err != nil {
 		t.Fatalf("unexpected config load error: %v", err)
 	}
@@ -266,7 +323,7 @@ func TestLoadConfigAppliesReadableServerTimeoutEnvironmentOverrides(t *testing.T
 	t.Setenv("BASYX_SERVER_IDLE_TIMEOUT_SECONDS", "62")
 	t.Setenv("SERVER_SHUTDOWN_TIMEOUT_SECONDS", "13")
 
-	cfg, err := LoadConfig("", QUIET)
+	cfg, err := LoadConfig("")
 	if err != nil {
 		t.Fatalf("unexpected config load error: %v", err)
 	}
@@ -290,7 +347,7 @@ func TestLoadConfigRejectsNonPositiveServerTimeouts(t *testing.T) {
 			unsetServerTimeoutEnv(t)
 			path := writeTempConfig(t, fmt.Sprintf("server:\n  %s: %d\n", tc.yamlKey, tc.value))
 
-			_, err := LoadConfig(path, QUIET)
+			_, err := LoadConfig(path)
 			if err == nil {
 				t.Fatal("expected config load error for non-positive server timeout")
 			}

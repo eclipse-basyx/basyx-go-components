@@ -37,6 +37,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/telemetry"
 )
 
 type delegationAuthoritySet map[string]struct{}
@@ -341,7 +343,7 @@ func (g delegationAddressGuard) dialTrustedTargets(ctx context.Context, network 
 func newDelegationHTTPClient(timeout time.Duration, guard delegationAddressGuard) *http.Client {
 	return &http.Client{
 		Timeout:   timeout,
-		Transport: newDelegationHTTPTransport(guard),
+		Transport: telemetry.HTTPClientTransport(newDelegationHTTPTransport(guard)),
 	}
 }
 

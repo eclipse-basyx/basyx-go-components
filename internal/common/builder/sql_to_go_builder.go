@@ -34,6 +34,7 @@ package builder
 import (
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"sync"
 
 	"github.com/FriedJannik/aas-go-sdk/types"
@@ -64,7 +65,7 @@ import (
 func ParseReferredReferencesFromRows(semanticIDData []model.ReferredReferenceRow, referenceBuilderRefs map[int64]*ReferenceBuilder, mu *sync.RWMutex) error {
 	for _, ref := range semanticIDData {
 		if ref.RootReference == nil {
-			_, _ = fmt.Println("[WARNING - ParseReferredReferencesFromRows] RootReference was nil - skipping Reference Creation.")
+			slog.Warn("root reference is nil; skipping reference creation", "error.code", "BUILDER-PARSEREFERREDREFERENCESFROMROWS-SKIPNILROOT")
 			continue
 		}
 
@@ -81,15 +82,15 @@ func ParseReferredReferencesFromRows(semanticIDData []model.ReferredReferenceRow
 			return fmt.Errorf("parent reference with id %d not found for referred reference with id %d", ref.ParentReference, ref.ReferenceID)
 		}
 		if ref.ReferenceID == nil || ref.ParentReference == nil {
-			_, _ = fmt.Println("[WARNING - ParseReferredReferencesFromRows] ReferenceID or ParentReference was nil - skipping Reference Creation.")
+			slog.Warn("reference ID or parent reference is nil; skipping reference creation", "error.code", "BUILDER-PARSEREFERREDREFERENCESFROMROWS-SKIPNILREFERENCE")
 			continue
 		}
 		if ref.ReferenceType == nil {
-			_, _ = fmt.Println("[WARNING - ParseReferredReferencesFromRows] ReferenceType was nil - skipping Reference Creation for Reference with Reference ID", *ref.ReferenceID)
+			slog.Warn("reference type is nil; skipping reference creation", "error.code", "BUILDER-PARSEREFERREDREFERENCESFROMROWS-SKIPNILTYPE", "reference.id", *ref.ReferenceID)
 			continue
 		}
 		if ref.KeyID == nil || ref.KeyType == nil || ref.KeyValue == nil {
-			_, _ = fmt.Println("[WARNING - ParseReferredReferencesFromRows] KeyID, KeyType or KeyValue was nil - skipping Reference Creation for Reference with Reference ID", *ref.ReferenceID)
+			slog.Warn("reference key is incomplete; skipping reference creation", "error.code", "BUILDER-PARSEREFERREDREFERENCESFROMROWS-SKIPINCOMPLETEKEY", "reference.id", *ref.ReferenceID)
 			continue
 		}
 		referenceType := types.ReferenceTypes(*ref.ReferenceType)
@@ -194,7 +195,7 @@ func ParseReferencesFromRows(semanticIDData []model.ReferenceRow, referenceBuild
 		}
 
 		if ref.KeyID == nil || ref.KeyType == nil || ref.KeyValue == nil {
-			_, _ = fmt.Println("[WARNING - ParseReferencesFromRows] KeyID, KeyType or KeyValue was nil - skipping Key Creation for Reference with Reference ID", ref.ReferenceID)
+			slog.Warn("reference key is incomplete; skipping key creation", "error.code", "BUILDER-PARSEREFERENCESFROMROWS-SKIPINCOMPLETEKEY", "reference.id", ref.ReferenceID)
 			continue
 		}
 		keyType := types.KeyTypes(*ref.KeyType)
@@ -259,12 +260,12 @@ func ParseLangStringNameType(displayNames json.RawMessage) ([]types.ILangStringN
 	var temp []map[string]any
 	var jsonMarshaller = jsoniter.ConfigCompatibleWithStandardLibrary
 	if err := jsonMarshaller.Unmarshal(displayNames, &temp); err != nil {
-		_, _ = fmt.Printf("Error unmarshalling display names: %v\n", err)
+		slog.Error("Error unmarshalling display names", "error.code", "BUILDER-PARSELANGSTRINGNAMETYPE-UNMARSHAL", "error", err)
 		return nil, err
 	}
 	defer func() {
 		if r := recover(); r != nil {
-			_, _ = fmt.Printf("Error parsing display names: %v\n", r)
+			slog.Error("Error parsing display names", "error.code", "BUILDER-PARSELANGSTRINGNAMETYPE-EXECUTE", "error", fmt.Errorf("panic: %v", r))
 		}
 	}()
 
@@ -316,12 +317,12 @@ func ParseLangStringTextType(descriptions json.RawMessage) ([]types.ILangStringT
 	}
 	var jsonMarshaller = jsoniter.ConfigCompatibleWithStandardLibrary
 	if err := jsonMarshaller.Unmarshal(descriptions, &temp); err != nil {
-		_, _ = fmt.Printf("Error unmarshalling descriptions: %v\n", err)
+		slog.Error("Error unmarshalling descriptions", "error.code", "BUILDER-PARSELANGSTRINGTEXTTYPE-UNMARSHAL", "error", err)
 		return nil, err
 	}
 	defer func() {
 		if r := recover(); r != nil {
-			_, _ = fmt.Printf("Error parsing descriptions: %v\n", r)
+			slog.Error("Error parsing descriptions", "error.code", "BUILDER-PARSELANGSTRINGTEXTTYPE-EXECUTE", "error", fmt.Errorf("panic: %v", r))
 		}
 	}()
 
@@ -367,12 +368,12 @@ func ParseLangStringPreferredNameTypeIec61360(descriptions json.RawMessage) ([]t
 	}
 	var jsonMarshaller = jsoniter.ConfigCompatibleWithStandardLibrary
 	if err := jsonMarshaller.Unmarshal(descriptions, &temp); err != nil {
-		_, _ = fmt.Printf("Error unmarshalling descriptions: %v\n", err)
+		slog.Error("Error unmarshalling descriptions", "error.code", "BUILDER-PARSELANGSTRINGPREFERREDNAMETYPEIEC61360-UNMARSHAL", "error", err)
 		return nil, err
 	}
 	defer func() {
 		if r := recover(); r != nil {
-			_, _ = fmt.Printf("Error parsing descriptions: %v\n", r)
+			slog.Error("Error parsing descriptions", "error.code", "BUILDER-PARSELANGSTRINGPREFERREDNAMETYPEIEC61360-EXECUTE", "error", fmt.Errorf("panic: %v", r))
 		}
 	}()
 
@@ -415,12 +416,12 @@ func ParseLangStringShortNameTypeIec61360(descriptions json.RawMessage) ([]types
 	}
 	var jsonMarshaller = jsoniter.ConfigCompatibleWithStandardLibrary
 	if err := jsonMarshaller.Unmarshal(descriptions, &temp); err != nil {
-		_, _ = fmt.Printf("Error unmarshalling descriptions: %v\n", err)
+		slog.Error("Error unmarshalling descriptions", "error.code", "BUILDER-PARSELANGSTRINGSHORTNAMETYPEIEC61360-UNMARSHAL", "error", err)
 		return nil, err
 	}
 	defer func() {
 		if r := recover(); r != nil {
-			_, _ = fmt.Printf("Error parsing descriptions: %v\n", r)
+			slog.Error("Error parsing descriptions", "error.code", "BUILDER-PARSELANGSTRINGSHORTNAMETYPEIEC61360-EXECUTE", "error", fmt.Errorf("panic: %v", r))
 		}
 	}()
 
@@ -463,12 +464,12 @@ func ParseLangStringDefinitionTypeIec61360(descriptions json.RawMessage) ([]type
 	}
 	var jsonMarshaller = jsoniter.ConfigCompatibleWithStandardLibrary
 	if err := jsonMarshaller.Unmarshal(descriptions, &temp); err != nil {
-		_, _ = fmt.Printf("Error unmarshalling descriptions: %v\n", err)
+		slog.Error("Error unmarshalling descriptions", "error.code", "BUILDER-PARSELANGSTRINGDEFINITIONTYPEIEC61360-UNMARSHAL", "error", err)
 		return nil, err
 	}
 	defer func() {
 		if r := recover(); r != nil {
-			_, _ = fmt.Printf("Error parsing descriptions: %v\n", r)
+			slog.Error("Error parsing descriptions", "error.code", "BUILDER-PARSELANGSTRINGDEFINITIONTYPEIEC61360-EXECUTE", "error", fmt.Errorf("panic: %v", r))
 		}
 	}()
 

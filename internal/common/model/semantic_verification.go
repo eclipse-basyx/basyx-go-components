@@ -27,7 +27,7 @@ package model
 
 import (
 	"errors"
-	"log"
+	"log/slog"
 	"strings"
 
 	"github.com/FriedJannik/aas-go-sdk/verification"
@@ -54,7 +54,7 @@ func ValidateWithMode(mode VerificationMode, warningContext string, verify func(
 
 	joined := strings.Join(validationErrors, "; ")
 	if normalizedMode == VerificationModePermissive {
-		log.Printf("WARN: %s: %s", warningContext, joined)
+		slog.Warn("semantic verification warning", "error.code", "MODEL-VALIDATEWITHMODE-WARN", "verification.context", warningContext, "warning", joined)
 		return nil
 	}
 

@@ -161,7 +161,7 @@ func normalizeExtent(extent string) (string, error) {
 	return "", common.NewErrBadRequest("SMREPO-NORMEXT-BADVALUE invalid extent parameter")
 }
 
-func stripBlobValuesFromSubmodel(submodel types.ISubmodel) {
+func stripBlobValuesFromHistoricalSubmodel(submodel types.ISubmodel) {
 	if submodel == nil {
 		return
 	}

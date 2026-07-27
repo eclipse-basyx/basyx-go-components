@@ -33,11 +33,12 @@ package common
 
 import (
 	"fmt"
-	"log"
+	"io"
+	"log/slog"
 	"os"
-	"reflect"
 	"strings"
 
+	commonlogging "github.com/eclipse-basyx/basyx-go-components/internal/common/logging"
 	commonmodel "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/cors"
@@ -47,8 +48,9 @@ import (
 const defaultServerStrictVerification = string(commonmodel.VerificationModePermissive)
 
 // DefaultConfig holds all default values for configuration options.
-// These values are also used to mark default values in the printed configuration.
 var DefaultConfig = struct {
+	LoggingFormat                        string
+	LoggingLevel                         string
 	ServerHost                           string
 	ServerPort                           int
 	ServerContextPath                    string
@@ -120,6 +122,8 @@ var DefaultConfig = struct {
 	EventingTopicPrefix                  string
 	SwaggerEnabled                       bool
 }{
+	LoggingFormat:                        commonlogging.FormatText,
+	LoggingLevel:                         commonlogging.LevelInfo,
 	ServerHost:                           "0.0.0.0",
 	ServerPort:                           5004,
 	ServerContextPath:                    "",
@@ -203,11 +207,12 @@ const (
 	maxABACPolicyScopeLength = 255
 )
 
-// PrintSplash displays the BaSyx Go API ASCII art logo to the console.
-// This function is typically called during application startup to provide
-// visual branding and confirm the service is starting.
-func PrintSplash() {
-	log.Printf(`
+// PrintSplash writes the BaSyx Go API ASCII art logo to the supplied writer.
+func PrintSplash(output io.Writer) error {
+	if output == nil {
+		return fmt.Errorf("COMMON-SPLASH-OUTPUT output must not be nil")
+	}
+	_, err := fmt.Fprint(output, `
 
                                    ###########
                                ###################
@@ -247,15 +252,20 @@ func PrintSplash() {
 		██████╔╝██║  ██║███████║   ██║   ██╔╝ ██╗    ╚██████╔╝╚██████╔╝
 		╚═════╝ ╚═╝  ╚═╝╚══════╝   ╚═╝   ╚═╝  ╚═╝     ╚═════╝  ╚═════╝
 	`)
+	if err != nil {
+		return fmt.Errorf("COMMON-SPLASH-WRITE: %w", err)
+	}
+	return nil
 }
 
 // Config represents the complete configuration structure for BaSyx services.
 // It combines server settings, database configuration, CORS policy,
 // OIDC authentication, and ABAC authorization settings.
 type Config struct {
-	Server     ServerConfig   `mapstructure:"server" yaml:"server"`     // HTTP server configuration
-	Postgres   PostgresConfig `mapstructure:"postgres" yaml:"postgres"` // PostgreSQL database settings
-	CorsConfig CorsConfig     `mapstructure:"cors" yaml:"cors"`         // CORS policy configuration
+	Logging    commonlogging.Config `mapstructure:"logging" yaml:"logging"`   // Process logging configuration
+	Server     ServerConfig         `mapstructure:"server" yaml:"server"`     // HTTP server configuration
+	Postgres   PostgresConfig       `mapstructure:"postgres" yaml:"postgres"` // PostgreSQL database settings
+	CorsConfig CorsConfig           `mapstructure:"cors" yaml:"cors"`         // CORS policy configuration
 
 	General  GeneralConfig  `mapstructure:"general" yaml:"general"`   // General configuration
 	OIDC     OIDCConfig     `mapstructure:"oidc" yaml:"oidc"`         // OpenID Connect authentication
@@ -434,13 +444,6 @@ type ABACManagementAPIConfig struct {
 	Enabled bool `mapstructure:"enabled" yaml:"enabled" json:"enabled"`
 }
 
-type ConfigMode int
-
-const (
-	QUIET ConfigMode = iota
-	NORMAL
-)
-
 // LoadConfig loads the configuration from YAML files and environment variables.
 //
 // The function supports multiple configuration sources with the following precedence:
@@ -453,7 +456,6 @@ const (
 // Parameters:
 //   - configPath: Path to the YAML configuration file. If empty, only environment
 //     variables and defaults will be used.
-//   - configMode: QUIET = No Output, NORMAL = Normal Logging
 //
 // Returns:
 //   - *Config: Loaded configuration structure
@@ -461,30 +463,20 @@ const (
 //
 // Example:
 //
-//	config, err := LoadConfig("config/app.yaml", NORMAL)
+//	config, err := LoadConfig("config/app.yaml")
 //	if err != nil {
-//	    log.Fatal("Failed to load config:", err)
+//	    return err
 //	}
-func LoadConfig(configPath string, configMode ConfigMode) (*Config, error) {
-	if configMode == NORMAL {
-		PrintSplash()
-	}
+func LoadConfig(configPath string) (*Config, error) {
 	v := viper.New()
 
 	// Set default values
 	setDefaults(v)
 
 	if configPath != "" {
-		if configMode == NORMAL {
-			log.Printf("📁 Loading config from file: %s", configPath)
-		}
 		v.SetConfigFile(configPath)
 		if err := v.ReadInConfig(); err != nil {
 			return nil, fmt.Errorf("read config: %w", err)
-		}
-	} else {
-		if configMode == NORMAL {
-			log.Println("📁 No config file provided — loading from environment variables only")
 		}
 	}
 
@@ -496,6 +488,13 @@ func LoadConfig(configPath string, configMode ConfigMode) (*Config, error) {
 	if err := v.Unmarshal(cfg); err != nil {
 		return nil, fmt.Errorf("unmarshal config: %w", err)
 	}
+	applyLoggingEnvOverrides(cfg)
+
+	normalizedLogging, err := commonlogging.Normalize(cfg.Logging)
+	if err != nil {
+		return nil, err
+	}
+	cfg.Logging = normalizedLogging
 
 	verificationMode, err := commonmodel.ParseVerificationMode(cfg.Server.StrictVerification)
 	if err != nil {
@@ -523,11 +522,19 @@ func LoadConfig(configPath string, configMode ConfigMode) (*Config, error) {
 	if err = validateHistoryAndEventingConfig(cfg); err != nil {
 		return nil, err
 	}
-	if configMode == NORMAL {
-		log.Println("✅ Configuration loaded successfully")
-		PrintConfiguration(cfg)
-	}
 	return cfg, nil
+}
+
+func applyLoggingEnvOverrides(cfg *Config) {
+	if cfg == nil {
+		return
+	}
+	if value, exists := os.LookupEnv("LOGGING_FORMAT"); exists {
+		cfg.Logging.Format = value
+	}
+	if value, exists := os.LookupEnv("LOGGING_LEVEL"); exists {
+		cfg.Logging.Level = value
+	}
 }
 
 func applyGeneralEnvOverrides(cfg *Config) {
@@ -1081,6 +1088,9 @@ func normalizeAASPreconfigPaths(rawPaths []string) []string {
 //   - OIDC: Local Keycloak realm configuration
 //   - ABAC: Disabled by default
 func setDefaults(v *viper.Viper) {
+	v.SetDefault("logging.format", DefaultConfig.LoggingFormat)
+	v.SetDefault("logging.level", DefaultConfig.LoggingLevel)
+
 	// Server defaults
 	v.SetDefault("server.host", DefaultConfig.ServerHost)
 	v.SetDefault("server.port", DefaultConfig.ServerPort)
@@ -1192,192 +1202,55 @@ func setDefaults(v *viper.Viper) {
 
 }
 
-// PrintConfiguration prints the current configuration to the console with sensitive data redacted.
-//
-// This function is useful for debugging and verifying configuration during startup.
-// Sensitive information such as database credentials is masked to prevent accidental
-// exposure in logs.
-//
-// Parameters:
-//   - cfg: Configuration structure to print
-//
-// The output is formatted as pretty-printed JSON with the following redactions:
-//   - Database host, username, and password are replaced with "****"
-//
-// Example output:
-//
-//	{
-//	  "server": {
-//	    "port": 5004,
-//	    "contextPath": "/api/v1"
-//	  },
-//	  "postgres": {
-//	    "host": "****",
-//	    "user": "****",
-//	    "password": "****"
-//	  }
-//	}
-func PrintConfiguration(cfg *Config) {
-	divider := "---------------------"
-	var lines []string
-
-	add := func(label string, value any, def any) {
-		suffix := ""
-		if reflect.DeepEqual(value, def) {
-			suffix = " (default)"
-		}
-		lines = append(lines, fmt.Sprintf("  %s: %v%s", label, value, suffix))
+// LogConfiguration emits a curated, non-sensitive configuration summary.
+func LogConfiguration(cfg *Config, configPath string) {
+	if cfg == nil {
+		slog.Error("configuration unavailable", "error.code", "CONFIG-LOGGING-NIL")
+		return
 	}
-
-	// Header
-	lines = append(lines, "📜 Loaded configuration:")
-	lines = append(lines, divider)
-
-	// Server
-	lines = append(lines, "🔹 Server:")
-	add("Host", cfg.Server.Host, DefaultConfig.ServerHost)
-	add("Port", cfg.Server.Port, DefaultConfig.ServerPort)
-	add("Context Path", cfg.Server.ContextPath, DefaultConfig.ServerContextPath)
-	add("Cache Enabled", cfg.Server.CacheEnabled, DefaultConfig.ServerCacheEnabled)
-	add("Verification Mode", cfg.Server.StrictVerification, DefaultConfig.ServerStrictVerification)
-	add("Verification Endpoint Available", cfg.Server.VerificationEndpointAvailable, DefaultConfig.ServerVerificationEndpointAvailable)
-	add("Read Header Timeout (s)", cfg.Server.ReadHeaderTimeoutSeconds, DefaultConfig.ServerReadHeaderTimeoutSeconds)
-	add("Read Timeout (s)", cfg.Server.ReadTimeoutSeconds, DefaultConfig.ServerReadTimeoutSeconds)
-	add("Write Timeout (s)", cfg.Server.WriteTimeoutSeconds, DefaultConfig.ServerWriteTimeoutSeconds)
-	add("Idle Timeout (s)", cfg.Server.IdleTimeoutSeconds, DefaultConfig.ServerIdleTimeoutSeconds)
-	add("Shutdown Timeout (s)", cfg.Server.ShutdownTimeoutSeconds, DefaultConfig.ServerShutdownTimeoutSeconds)
-
-	lines = append(lines, divider)
-
-	// Postgres
-	lines = append(lines, "🔹 Postgres:")
-	add("Port", cfg.Postgres.Port, DefaultConfig.PgPort)
-	add("DB Name", cfg.Postgres.DBName, DefaultConfig.PgDBName)
-	add("SSL Mode", cfg.Postgres.SSLMode, DefaultConfig.PgSSLMode)
-	add("Max Open Connections", cfg.Postgres.MaxOpenConnections, DefaultConfig.PgMaxOpen)
-	add("Max Idle Connections", cfg.Postgres.MaxIdleConnections, DefaultConfig.PgMaxIdle)
-	add("Conn Max Lifetime (min)", cfg.Postgres.ConnMaxLifetimeMinutes, DefaultConfig.PgConnLifetime)
-
-	lines = append(lines, divider)
-
-	// CORS
-	lines = append(lines, "🔹 CORS:")
-	add("Allowed Origins", cfg.CorsConfig.AllowedOrigins, DefaultConfig.AllowedOrigins)
-	add("Allowed Methods", cfg.CorsConfig.AllowedMethods, DefaultConfig.AllowedMethods)
-	add("Allowed Headers", cfg.CorsConfig.AllowedHeaders, DefaultConfig.AllowedHeaders)
-	add("Allow Credentials", cfg.CorsConfig.AllowCredentials, DefaultConfig.AllowCredentials)
-
-	lines = append(lines, divider)
-
-	// ABAC
-	lines = append(lines, "🔹 ABAC:")
-	add("Enabled", cfg.ABAC.Enabled, DefaultConfig.ABACEnabled)
-	if cfg.ABAC.Enabled {
-		add("Model Path", cfg.ABAC.ModelPath, DefaultConfig.ABACModelPath)
-		add("Policy File Import", cfg.ABAC.PolicyFileImport, DefaultConfig.ABACPolicyFileImport)
-		add("Policy Scope", cfg.ABAC.PolicyScope, DefaultConfig.ABACPolicyScope)
-		add("Management API Enabled", cfg.ABAC.ManagementAPI.Enabled, DefaultConfig.ABACManagementAPIEnabled)
-
-		lines = append(lines, "🔹 OIDC:")
-		add("Trustlist Path", cfg.OIDC.TrustlistPath, DefaultConfig.OIDCTrustlistPath)
+	source := "environment"
+	if configPath != "" {
+		source = configPath
 	}
+	slog.Info(
+		"configuration loaded",
+		"configuration.source", source,
+		"logging.format", cfg.Logging.Format,
+		"logging.level", cfg.Logging.Level,
+		slog.Group(
+			"server",
+			"host", cfg.Server.Host,
+			"port", cfg.Server.Port,
+			"context_path", cfg.Server.ContextPath,
+			"cache_enabled", cfg.Server.CacheEnabled,
+			"verification_mode", cfg.Server.StrictVerification,
+		),
+		slog.Group(
+			"features",
+			"abac_enabled", cfg.ABAC.Enabled,
+			"swagger_enabled", cfg.Swagger.Enabled,
+			"history_mode", cfg.History.Mode,
+			"eventing_enabled", cfg.Eventing.Enabled,
+		),
+	)
+}
 
-	lines = append(lines, divider)
-
-	// General
-	lines = append(lines, "General:")
-	add("Bulk Batch Limit", cfg.General.BulkBatchLimit, DefaultConfig.GeneralBulkBatchLimit)
-	add("Upload Max Size (bytes)", cfg.General.UploadMaxSizeBytes, DefaultConfig.GeneralUploadMaxSizeBytes)
-	add("AASX Max Part Count", cfg.General.AASXMaxPartCount, DefaultConfig.GeneralAASXMaxPartCount)
-	add("AASX Max OPC Metadata Size (bytes)", cfg.General.AASXMaxOPCMetadataSizeBytes, DefaultConfig.GeneralAASXMaxOPCMetadataSizeBytes)
-	add("AASX Max Part Expanded Size (bytes)", cfg.General.AASXMaxPartExpandedSizeBytes, DefaultConfig.GeneralAASXMaxPartExpandedSizeBytes)
-	add("AASX Max Total Expanded Size (bytes)", cfg.General.AASXMaxTotalExpandedSizeBytes, DefaultConfig.GeneralAASXMaxTotalExpandedSizeBytes)
-	add("AASX Max Thumbnail Size (bytes)", cfg.General.AASXMaxThumbnailSizeBytes, DefaultConfig.GeneralAASXMaxThumbnailSizeBytes)
-
-	lines = append(lines, divider)
-
-	// JWS
-	lines = append(lines, "🔹 JWS:")
-	if cfg.JWS.PrivateKeyPath != "" {
-		lines = append(lines, fmt.Sprintf("  Private Key Path: %s", cfg.JWS.PrivateKeyPath))
-		// Check if file exists
-		if _, err := os.Stat(cfg.JWS.PrivateKeyPath); err == nil {
-			lines = append(lines, "  Private Key Mounted: true ✅")
-		} else {
-			lines = append(lines, "  Private Key Mounted: false ❌")
-		}
-	} else {
-		lines = append(lines, "  Private Key Path: (not configured)")
-		lines = append(lines, "  Private Key Mounted: false")
+// ConfigureLogging installs structured logging and emits the startup presentation.
+func ConfigureLogging(cfg *Config, serviceName string, configPath string, output io.Writer) (*slog.Logger, error) {
+	if cfg == nil {
+		return nil, fmt.Errorf("CONFIG-LOGGING-NIL configuration must not be nil")
 	}
-	if cfg.JWS.CertificateChainPath != "" {
-		lines = append(lines, fmt.Sprintf("  Certificate Chain Path: %s", cfg.JWS.CertificateChainPath))
-		if _, err := os.Stat(cfg.JWS.CertificateChainPath); err == nil {
-			lines = append(lines, "  Certificate Chain Mounted: true ✅")
-		} else {
-			lines = append(lines, "  Certificate Chain Mounted: false ❌")
+	logger, err := commonlogging.Configure(cfg.Logging, serviceName, output)
+	if err != nil {
+		return nil, err
+	}
+	if cfg.Logging.Format == commonlogging.FormatText {
+		if err = PrintSplash(output); err != nil {
+			return nil, err
 		}
 	}
-
-	lines = append(lines, divider)
-
-	lines = append(lines, "🔹 Swagger:")
-	add("Enabled", cfg.Swagger.Enabled, DefaultConfig.SwaggerEnabled)
-
-	lines = append(lines, divider)
-
-	// History
-	lines = append(lines, "🔹 History/Audit:")
-	add("Mode", cfg.History.Mode, DefaultConfig.HistoryConfigMode)
-	add("Retention Days", cfg.History.RetentionDays, DefaultConfig.HistoryConfigRetentionDays)
-	add("Full Snapshot Interval", cfg.History.FullSnapshotInterval, DefaultConfig.HistoryConfigFullSnapshotInterval)
-	add("Immutability", cfg.History.Immutability, DefaultConfig.HistoryConfigImmutability)
-	add("Audit Identity Mode", cfg.History.AuditIdentityMode, DefaultConfig.HistoryConfigAuditIdentityMode)
-	add("Evidence Enabled", cfg.History.Evidence.Enabled, DefaultConfig.HistoryEvidenceEnabled)
-	add("Evidence Provider", cfg.History.Evidence.Provider, DefaultConfig.HistoryEvidenceProvider)
-	if cfg.History.Evidence.Enabled {
-		add("Evidence Bucket", cfg.History.Evidence.Bucket, DefaultConfig.HistoryEvidenceBucket)
-		add("Evidence Prefix", cfg.History.Evidence.Prefix, DefaultConfig.HistoryEvidencePrefix)
-		add("Evidence Region", cfg.History.Evidence.Region, DefaultConfig.HistoryEvidenceRegion)
-		add("Evidence Endpoint", cfg.History.Evidence.Endpoint, DefaultConfig.HistoryEvidenceEndpoint)
-		add("Evidence Path Style", cfg.History.Evidence.UsePathStyle, DefaultConfig.HistoryEvidenceUsePathStyle)
-		add("Evidence Retention Mode", cfg.History.Evidence.RetentionMode, DefaultConfig.HistoryEvidenceRetentionMode)
-		add("Evidence Retention Days", cfg.History.Evidence.RetentionDays, DefaultConfig.HistoryEvidenceRetentionDays)
-		add("Evidence Write Timeout Seconds", cfg.History.Evidence.WriteTimeoutSec, DefaultConfig.HistoryEvidenceWriteTimeoutSeconds)
-		add("Evidence Signing Public Key Path", cfg.History.Evidence.Signing.PublicKeyPath, DefaultConfig.HistoryEvidenceSigningPublicKey)
-		add("Evidence Signing Required", cfg.History.Evidence.Signing.Required, DefaultConfig.HistoryEvidenceSigningRequired)
-	}
-	add("Integrity Anchor Provider", cfg.History.IntegrityAnchor.Provider, DefaultConfig.HistoryIntegrityAnchorProvider)
-
-	// Eventing
-	lines = append(lines, "🔹 Eventing:")
-	add("Enabled", cfg.Eventing.Enabled, DefaultConfig.EventingEnabled)
-	if cfg.Eventing.Enabled {
-		add("Format", cfg.Eventing.Format, DefaultConfig.EventingFormat)
-		add("Sinks", cfg.Eventing.Sinks, DefaultConfig.EventingSinks)
-		add("Outbox Enabled", cfg.Eventing.OutboxEnabled, DefaultConfig.EventingOutboxEnabled)
-		add("Topic Prefix", cfg.Eventing.TopicPrefix, DefaultConfig.EventingTopicPrefix)
-	}
-
-	lines = append(lines, divider)
-
-	// Find max width
-	maxLen := 0
-	for _, l := range lines {
-		if len(l) > maxLen {
-			maxLen = len(l)
-		}
-	}
-
-	boxTop := "╔" + strings.Repeat("═", maxLen+2) + "╗"
-	boxBottom := "╚" + strings.Repeat("═", maxLen+2) + "╝"
-
-	log.Print(boxTop)
-	for _, l := range lines {
-		trimmed := strings.TrimLeft(l, " ")
-		log.Print("║  " + trimmed + strings.Repeat(" ", maxLen-len(trimmed)) + " ║")
-	}
-	log.Print(boxBottom)
+	LogConfiguration(cfg, configPath)
+	return logger, nil
 }
 
 // AddCors configures Cross-Origin Resource Sharing (CORS) middleware for the router.
@@ -1401,11 +1274,33 @@ func PrintConfiguration(cfg *Config) {
 //	AddCors(router, config)
 //	// Router now accepts cross-origin requests according to config
 func AddCors(r *chi.Mux, config *Config) {
+	requestMetadataHeaders := []string{
+		commonlogging.RequestIDHeader,
+		commonlogging.CorrelationIDHeader,
+	}
 	c := cors.New(cors.Options{
 		AllowedOrigins:   config.CorsConfig.AllowedOrigins,
 		AllowedMethods:   config.CorsConfig.AllowedMethods,
-		AllowedHeaders:   config.CorsConfig.AllowedHeaders,
+		AllowedHeaders:   appendUniqueHeaders(config.CorsConfig.AllowedHeaders, requestMetadataHeaders...),
+		ExposedHeaders:   requestMetadataHeaders,
 		AllowCredentials: config.CorsConfig.AllowCredentials,
 	})
 	r.Use(c.Handler)
+}
+
+func appendUniqueHeaders(headers []string, additional ...string) []string {
+	result := append([]string(nil), headers...)
+	for _, candidate := range additional {
+		found := false
+		for _, existing := range result {
+			if strings.EqualFold(existing, candidate) {
+				found = true
+				break
+			}
+		}
+		if !found {
+			result = append(result, candidate)
+		}
+	}
+	return result
 }

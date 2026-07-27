@@ -30,6 +30,7 @@ package builder
 import (
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"sort"
 
 	"github.com/FriedJannik/aas-go-sdk/types"
@@ -111,7 +112,7 @@ func (b *QualifiersBuilder) AddQualifier(qualifierDbID int64, qType string, valu
 			b.qualifiers[qualifierDbID].qualifier.SetKind(&qKind)
 		}
 	} else {
-		_, _ = fmt.Printf("[Warning] qualifier with id '%d' already exists - skipping.", qualifierDbID)
+		slog.Warn("duplicate qualifier skipped", "error.code", "BUILDER-ADDQUALIFIER-SKIPDUPLICATE", "qualifier.id", qualifierDbID)
 	}
 
 	return b, nil
