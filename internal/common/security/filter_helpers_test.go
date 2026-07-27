@@ -77,6 +77,54 @@ func TestAddFilterQueriesFromContext_DeduplicatesEquivalentSignatures(t *testing
 	}
 }
 
+func TestBuildSharedFragmentMaskRuntime_DoesNotShareFlagsAcrossDifferentRowScopes(t *testing.T) {
+	expr := mustParseLogicalExpression(
+		t,
+		`{"$eq":[{"$field":"$smdesc#endpoints[].protocolinformation.href"},{"$strVal":"https://public.example/submodel"}]}`,
+	)
+	nestedFragment := grammar.FragmentStringPattern("$aasdesc#submodelDescriptors[].endpoints[]")
+	standaloneFragment := grammar.FragmentStringPattern("$smdesc#endpoints[]")
+	ctx := context.WithValue(context.Background(), filterKey, &QueryFilter{
+		Filters: FragmentFilters{
+			nestedFragment:     expr,
+			standaloneFragment: expr,
+		},
+	})
+
+	collector, err := grammar.NewResolvedFieldPathCollectorForRoot(grammar.CollectorRootSMDesc)
+	if err != nil {
+		t.Fatalf("NewResolvedFieldPathCollectorForRoot returned error: %v", err)
+	}
+	collector.AllowInlineAliases(common.AliasSubmodelDescriptorEndpoint)
+
+	runtime, err := BuildSharedFragmentMaskRuntime(
+		ctx,
+		collector,
+		[]MaskedInnerColumnSpec{
+			{Fragment: nestedFragment, FlagAlias: "nested_endpoint_visible", RawAlias: "nested_endpoint"},
+			{Fragment: standaloneFragment, FlagAlias: "standalone_endpoint_visible", RawAlias: "standalone_endpoint"},
+		},
+	)
+	if err != nil {
+		t.Fatalf("BuildSharedFragmentMaskRuntime returned error: %v", err)
+	}
+
+	if got := len(runtime.Projections()); got != 2 {
+		t.Fatalf("expected two independently scoped mask projections, got %d", got)
+	}
+	nestedAlias, err := runtime.FlagAlias(nestedFragment)
+	if err != nil {
+		t.Fatalf("FlagAlias returned error for nested fragment: %v", err)
+	}
+	standaloneAlias, err := runtime.FlagAlias(standaloneFragment)
+	if err != nil {
+		t.Fatalf("FlagAlias returned error for standalone fragment: %v", err)
+	}
+	if nestedAlias == standaloneAlias {
+		t.Fatalf("different row scopes must not share mask alias %q", nestedAlias)
+	}
+}
+
 func mustParseLogicalExpression(t *testing.T, raw string) grammar.LogicalExpression {
 	t.Helper()
 	var expr grammar.LogicalExpression

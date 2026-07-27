@@ -103,7 +103,7 @@ func TestBuildListAssetAdministrationShellDescriptorsQuery_UsesPagedInnerQueryAn
 	}
 }
 
-func TestBuildListAssetAdministrationShellDescriptorsQuery_ReusesSameMaskConditionAcrossFragments(t *testing.T) {
+func TestBuildListAssetAdministrationShellDescriptorsQuery_KeepsSameConditionIndependentAcrossFragments(t *testing.T) {
 	field := grammar.ModelStringPattern("$aasdesc#specificAssetIds[].externalSubjectId.keys[].value")
 	lit := grammar.StandardString("PUBLIC_READABLE")
 	cond := grammar.LogicalExpression{
@@ -134,7 +134,7 @@ func TestBuildListAssetAdministrationShellDescriptorsQuery_ReusesSameMaskConditi
 		t.Fatalf("ToSQL returned error: %v", err)
 	}
 
-	if got := strings.Count(sql, "EXISTS ("); got != 1 {
-		t.Fatalf("expected exactly 1 EXISTS for shared fragment condition, got %d: %s", got, sql)
+	if got := strings.Count(sql, "EXISTS ("); got != 3 {
+		t.Fatalf("expected one independently scoped EXISTS per concrete fragment, got %d: %s", got, sql)
 	}
 }

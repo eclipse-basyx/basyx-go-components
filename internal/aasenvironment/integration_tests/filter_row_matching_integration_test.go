@@ -116,6 +116,51 @@ func TestAutomaticArrayFragmentRowMatchingThroughProductionRepositories(t *testi
 	}
 }
 
+func TestNestedAndStandaloneEndpointFiltersRemainIndependent(t *testing.T) {
+	resetDatabase(t)
+	fixture := createRowMatchingIntegrationFixture(t)
+
+	testCase := rowMatchingIntegrationCase{
+		endpoint:   "/query/submodel-descriptors",
+		rootField:  "$smdesc#idShort",
+		rootValue:  fixture.submodelDescriptorName,
+		resultPath: "endpoints[].protocolInformation.href",
+		expectedCandidateValues: []string{
+			"https://admin.example/standalone-submodel",
+			"https://public.example/standalone-submodel",
+		},
+	}
+	unfilteredResource := querySingleRowMatchingResource(t, testCase, false)
+	require.ElementsMatch(
+		t,
+		testCase.expectedCandidateValues,
+		collectStringValues(unfilteredResource, testCase.resultPath),
+		"the fixture must contain one public and one internal endpoint",
+	)
+
+	condition := equalStringCondition(
+		"$smdesc#endpoints[].protocolinformation.href",
+		"https://public.example/standalone-submodel",
+	)
+	resource := querySingleRowMatchingResourceWithFilters(t, testCase, []any{
+		map[string]any{
+			"$fragment":  "$aasdesc#submodelDescriptors[].endpoints[]",
+			"$condition": condition,
+		},
+		map[string]any{
+			"$fragment":  "$smdesc#endpoints[]",
+			"$condition": condition,
+		},
+	})
+
+	require.ElementsMatch(
+		t,
+		[]string{"https://public.example/standalone-submodel"},
+		collectStringValues(resource, testCase.resultPath),
+		"the standalone row filter must not be deduplicated with the differently scoped nested fragment filter",
+	)
+}
+
 func aasRowMatchingIntegrationCases(fixture rowMatchingIntegrationFixture) []rowMatchingIntegrationCase {
 	return []rowMatchingIntegrationCase{
 		{
@@ -191,6 +236,31 @@ func descriptorRowMatchingIntegrationCases(fixture rowMatchingIntegrationFixture
 			expectedCandidateValues: []string{"private-id", "public-id"},
 			expectedValues:          []string{"public-id"},
 			explanation:             "Only the descriptor specificAssetId whose own name is public must remain.",
+		}),
+		withRowMatchingRoot(root, rowMatchingIntegrationCase{
+			name:     "AAS descriptor match filters only the matching specificAssetId row",
+			fragment: "$aasdesc#specificAssetIds[]",
+			condition: map[string]any{
+				"$match": []any{
+					equalStringCondition("$aasdesc#specificAssetIds[].name", "public-id"),
+				},
+			},
+			resultPath:              "specificAssetIds[].name",
+			expectedCandidateValues: []string{"private-id", "public-id"},
+			expectedValues:          []string{"public-id"},
+			explanation:             "A matching sibling must not make the $match expression true for every specificAssetId row.",
+		}),
+		withRowMatchingRoot(root, rowMatchingIntegrationCase{
+			name:       "AAS descriptor boolCast filters only the true specificAssetId row",
+			fragment:   "$aasdesc#specificAssetIds[]",
+			condition:  map[string]any{"$boolCast": map[string]any{"$field": "$aasdesc#specificAssetIds[].value"}},
+			resultPath: "specificAssetIds[].name",
+			expectedCandidateValues: []string{
+				"private-id",
+				"public-id",
+			},
+			expectedValues: []string{"public-id"},
+			explanation:    "The standalone $boolCast must resolve the field against each current candidate row.",
 		}),
 		withRowMatchingRoot(root, rowMatchingIntegrationCase{
 			name:                    "AAS descriptor condition below specificAssetIds[] stays on owner row",
@@ -452,6 +522,18 @@ func smeRowMatchingIntegrationCases(fixture rowMatchingIntegrationFixture) []row
 			explanation:             "The production SME reader must remove the hidden a[] property item.",
 		},
 		{
+			name:                    "SME a[] keeps only candidates with a matching b[] descendant",
+			endpoint:                "/query/submodels",
+			rootField:               "$sm#id",
+			rootValue:               fixture.nestedSMEsubmodelID,
+			fragment:                "$sme.a[]",
+			condition:               equalStringCondition("$sme.a[].b[]#value", "visible"),
+			resultPath:              "submodelElements[].value[].idShort",
+			expectedCandidateValues: []string{"without-visible-child", "with-visible-child"},
+			expectedValues:          []string{"with-visible-child"},
+			explanation:             "The first a[] row owns the visible b[] child; the second a[] row must not borrow that descendant match.",
+		},
+		{
 			name:                    "SME a[].b[] filters nested list items by their own values",
 			endpoint:                "/query/submodels",
 			rootField:               "$sm#id",
@@ -459,7 +541,7 @@ func smeRowMatchingIntegrationCases(fixture rowMatchingIntegrationFixture) []row
 			fragment:                "$sme.a[].b[]",
 			condition:               equalStringCondition("$sme.a[].b[]#value", "visible"),
 			resultPath:              "submodelElements[].value[].value[].value[].value",
-			expectedCandidateValues: []string{"hidden", "visible"},
+			expectedCandidateValues: []string{"blocked", "hidden", "visible"},
 			expectedValues:          []string{"visible"},
 			explanation:             "The final b[] must identify the row being filtered despite the earlier a[].",
 		},
@@ -628,8 +710,8 @@ func rowMatchingAASPayload(fixture rowMatchingIntegrationFixture) map[string]any
 		"assetInformation": map[string]any{
 			"assetKind": "Instance",
 			"specificAssetIds": []any{
-				specificAssetIDPayload("public-id", "public-value", "PUBLIC"),
-				specificAssetIDPayload("private-id", "private-value", "PRIVATE"),
+				specificAssetIDPayload("public-id", "true", "PUBLIC"),
+				specificAssetIDPayload("private-id", "false", "PRIVATE"),
 			},
 		},
 		"submodels": []any{
@@ -646,8 +728,8 @@ func rowMatchingAASDescriptorPayload(fixture rowMatchingIntegrationFixture) map[
 		"assetKind":     "Instance",
 		"globalAssetId": "urn:test:row-match:global-asset",
 		"specificAssetIds": []any{
-			specificAssetIDPayload("public-id", "public-value", "PUBLIC"),
-			specificAssetIDPayload("private-id", "private-value", "PRIVATE"),
+			specificAssetIDPayload("public-id", "true", "PUBLIC"),
+			specificAssetIDPayload("private-id", "false", "PRIVATE"),
 		},
 		"endpoints": []any{
 			endpointPayload("AAS-3.0", "https://public.example/shell"),
@@ -762,6 +844,7 @@ func rowMatchingNestedSMEPayload(fixture rowMatchingIntegrationFixture) map[stri
 				"typeValueListElement": "SubmodelElementCollection",
 				"value": []any{
 					map[string]any{
+						"idShort":   "with-visible-child",
 						"modelType": "SubmodelElementCollection",
 						"value": []any{
 							map[string]any{
@@ -772,6 +855,21 @@ func rowMatchingNestedSMEPayload(fixture rowMatchingIntegrationFixture) map[stri
 								"value": []any{
 									rowMatchingPropertyPayload("visible", "semantic-public"),
 									rowMatchingPropertyPayload("hidden", "semantic-internal"),
+								},
+							},
+						},
+					},
+					map[string]any{
+						"idShort":   "without-visible-child",
+						"modelType": "SubmodelElementCollection",
+						"value": []any{
+							map[string]any{
+								"idShort":              "b",
+								"modelType":            "SubmodelElementList",
+								"typeValueListElement": "Property",
+								"valueTypeListElement": "xs:string",
+								"value": []any{
+									rowMatchingPropertyPayload("blocked", "semantic-internal"),
 								},
 							},
 						},
@@ -876,6 +974,34 @@ func querySingleRowMatchingResource(
 		"%s query must select exactly the seeded root resource",
 		queryDescription,
 	)
+	return response.Result[0]
+}
+
+func querySingleRowMatchingResourceWithFilters(
+	t *testing.T,
+	testCase rowMatchingIntegrationCase,
+	filters []any,
+) map[string]any {
+	t.Helper()
+
+	query := map[string]any{
+		"$condition": equalStringCondition(testCase.rootField, testCase.rootValue),
+		"$filters":   filters,
+	}
+	status, body, _ := doAASEnvRequest(
+		t,
+		aasEnvNoRedirectClient,
+		http.MethodPost,
+		aasEnvBaseURL+testCase.endpoint,
+		query,
+	)
+	require.Equalf(t, http.StatusOK, status, "filtered production query failed: %s", string(body))
+
+	var response struct {
+		Result []map[string]any `json:"result"`
+	}
+	require.NoError(t, json.Unmarshal(body, &response))
+	require.Len(t, response.Result, 1, "filtered production query must select exactly the seeded root resource")
 	return response.Result[0]
 }
 

@@ -67,15 +67,16 @@ type existsJoinPlan struct {
 }
 
 type JoinPlanConfig struct {
-	PreferredBase     string
-	BaseAliases       []string
-	Rules             map[string]existsJoinRule
-	TableForAlias     func(string) (string, bool)
-	GroupKeyForBase   func(string) (exp.IdentifierExpression, error)
-	RootJoinKey       func() exp.IdentifierExpression
-	RootJoinKeyAlias  func() string
-	RootJoinKeyColumn func() string
-	Correlatable      func(string) bool
+	PreferredBase      string
+	BaseAliases        []string
+	Rules              map[string]existsJoinRule
+	TableForAlias      func(string) (string, bool)
+	GroupKeyForBase    func(string) (exp.IdentifierExpression, error)
+	RootJoinKey        func() exp.IdentifierExpression
+	RootJoinKeyAlias   func() string
+	RootJoinKeyColumn  func() string
+	Correlatable       func(string) bool
+	CorrelationForBase func(baseAlias string, rootAlias string) (exp.Expression, error)
 }
 
 // CollectorRoot defines the supported collector roots.
@@ -185,6 +186,26 @@ func NewResolvedFieldPathCollectorForSMERow(rootAlias string) (*ResolvedFieldPat
 		"submodel_element": rootAlias,
 	}
 	rowCollector.rowParentCollector = parentCollector
+
+	descendantConfig := rowConfig
+	descendantConfig.CorrelationForBase = func(baseAlias string, correlatedRootAlias string) (exp.Expression, error) {
+		if baseAlias != "submodel_element" {
+			return nil, fmt.Errorf(
+				"GRAMMAR-SMEDESCENDANTCOLLECTOR-BADBASE unsupported SME descendant base alias %q",
+				baseAlias,
+			)
+		}
+		descendantPath := goqu.I(baseAlias + ".idshort_path")
+		candidatePath := goqu.I(correlatedRootAlias + ".idshort_path")
+		return goqu.And(
+			goqu.I(baseAlias+".submodel_id").Eq(goqu.I(correlatedRootAlias+".submodel_id")),
+			goqu.Or(
+				goqu.L("LEFT(?, LENGTH(?) + 1) = ? || '.'", descendantPath, candidatePath, candidatePath),
+				goqu.L("LEFT(?, LENGTH(?) + 1) = ? || '['", descendantPath, candidatePath, candidatePath),
+			),
+		), nil
+	}
+	rowCollector.rowDescendantCollector = NewResolvedFieldPathCollectorWithConfig(&descendantConfig)
 	return rowCollector, nil
 }
 
@@ -847,6 +868,7 @@ type ResolvedFieldPathCollector struct {
 	fragmentBindingAliasRewrites map[string]string
 	rowFragment                  *FragmentStringPattern
 	rowLocalCollector            *ResolvedFieldPathCollector
+	rowDescendantCollector       *ResolvedFieldPathCollector
 	rowParentCollector           *ResolvedFieldPathCollector
 	forceCorrelated              bool
 }
@@ -873,6 +895,9 @@ func (c *ResolvedFieldPathCollector) ForRowFragment(fragment FragmentStringPatte
 		scoped.rowLocalCollector = c.rowLocalCollector.cloneWithoutRowScope()
 	} else {
 		scoped.rowLocalCollector = local
+	}
+	if c.rowDescendantCollector != nil {
+		scoped.rowDescendantCollector = c.rowDescendantCollector.cloneWithoutRowScope()
 	}
 	return scoped
 }
@@ -996,24 +1021,39 @@ func (c *ResolvedFieldPathCollector) collectorForField(field *Value) *ResolvedFi
 	if c == nil || c.rowFragment == nil || field == nil || field.Field == nil {
 		return c
 	}
+	if fieldIsSMEDescendantOfRowFragment(*field.Field, *c.rowFragment) && c.rowDescendantCollector != nil {
+		return c.rowDescendantCollector
+	}
 	if fieldIsBelowRowFragment(*field.Field, *c.rowFragment) {
 		return c.rowLocalCollector
 	}
 	return c
 }
 
-func fieldIsBelowRowFragment(field ModelStringPattern, fragment FragmentStringPattern) bool {
-	fragmentPath := string(fragment)
-	if strings.HasPrefix(fragmentPath, "$sme") && strings.HasSuffix(fragmentPath, "#idShort") {
-		smePath := strings.TrimSuffix(fragmentPath, "#idShort")
-		if strings.HasSuffix(smePath, "[]") {
-			fragmentPath = smePath
-		}
-	}
+func fieldIsSMEDescendantOfRowFragment(field ModelStringPattern, fragment FragmentStringPattern) bool {
+	fragmentPath := normalizedRowFragmentPath(fragment)
+	return strings.HasPrefix(fragmentPath, "$sme") &&
+		!strings.Contains(fragmentPath, "#") &&
+		strings.HasPrefix(string(field), fragmentPath+".")
+}
 
+func fieldIsBelowRowFragment(field ModelStringPattern, fragment FragmentStringPattern) bool {
+	fragmentPath := normalizedRowFragmentPath(fragment)
 	fieldPath := string(field)
 	return strings.HasPrefix(fieldPath, fragmentPath+".") ||
 		strings.HasPrefix(fieldPath, fragmentPath+"#")
+}
+
+func normalizedRowFragmentPath(fragment FragmentStringPattern) string {
+	fragmentPath := string(fragment)
+	if !strings.HasPrefix(fragmentPath, "$sme") || !strings.HasSuffix(fragmentPath, "#idShort") {
+		return fragmentPath
+	}
+	smePath := strings.TrimSuffix(fragmentPath, "#idShort")
+	if strings.HasSuffix(smePath, "[]") {
+		return smePath
+	}
+	return fragmentPath
 }
 
 // AllowInlineAliases marks aliases that are already joined by the caller's
@@ -1148,14 +1188,6 @@ func buildInlineExistsExpression(resolved []ResolvedFieldPath, predicate exp.Exp
 		}
 	}
 
-	groupKey, err := cfg.GroupKeyForBase(plan.BaseAlias)
-	if err != nil {
-		return nil, err
-	}
-	if cfg.RootJoinKey == nil {
-		return nil, fmt.Errorf("missing root join key for EXISTS")
-	}
-	rootKey := cfg.RootJoinKey()
 	rootAlias := ""
 	rootColumn := ""
 	if cfg.RootJoinKeyAlias != nil {
@@ -1175,10 +1207,9 @@ func buildInlineExistsExpression(resolved []ResolvedFieldPath, predicate exp.Exp
 	}
 
 	whereExpr := andBindingsForResolvedFieldPaths(resolved, predicate)
-	var correlation exp.Expression = groupKey.Eq(rootKey)
-	if aliasCollision && rootAlias != "" && rootColumn != "" {
-		outerPlaceholder := "__outer__"
-		correlation = groupKey.Eq(goqu.I(outerPlaceholder + "." + rootColumn))
+	correlation, err := buildExistsCorrelation(cfg, plan.BaseAlias, rootAlias, rootColumn, aliasCollision)
+	if err != nil {
+		return nil, err
 	}
 	if whereExpr != nil {
 		correlation = goqu.And(correlation, whereExpr)
@@ -1213,6 +1244,34 @@ func buildInlineExistsExpression(resolved []ResolvedFieldPath, predicate exp.Exp
 	}
 
 	return goqu.L("EXISTS ?", ds), nil
+}
+
+func buildExistsCorrelation(
+	cfg JoinPlanConfig,
+	baseAlias string,
+	rootAlias string,
+	rootColumn string,
+	aliasCollision bool,
+) (exp.Expression, error) {
+	correlatedRootAlias := rootAlias
+	if aliasCollision && rootAlias != "" && rootColumn != "" {
+		correlatedRootAlias = "__outer__"
+	}
+	if cfg.CorrelationForBase != nil {
+		return cfg.CorrelationForBase(baseAlias, correlatedRootAlias)
+	}
+
+	groupKey, err := cfg.GroupKeyForBase(baseAlias)
+	if err != nil {
+		return nil, err
+	}
+	if cfg.RootJoinKey == nil {
+		return nil, fmt.Errorf("missing root join key for EXISTS")
+	}
+	if correlatedRootAlias == "__outer__" {
+		return groupKey.Eq(goqu.I(correlatedRootAlias + "." + rootColumn)), nil
+	}
+	return groupKey.Eq(cfg.RootJoinKey()), nil
 }
 
 const postgresIdentifierMaxBytes = 63
@@ -1980,28 +2039,59 @@ func handleBinaryOperationWithCollector(
 	}
 
 	resolved := collectResolvedFieldPaths(leftResolved, rightResolved)
-	// No resolved fields (should not happen due to earlier fast-path), fall back.
-	if len(resolved) == 0 {
-		return opExpr, nil, nil
+	return applyCollectorScopeToPredicate(opExpr, resolved, fieldCollector)
+}
+
+func evaluateBoolCastWithCollector(
+	operand *Value,
+	collector *ResolvedFieldPathCollector,
+) (exp.Expression, []ResolvedFieldPath, error) {
+	boolOperand := Value{BoolCast: operand}
+	fieldOperand, castType := extractFieldOperandAndCast(&boolOperand)
+	if fieldOperand == nil {
+		sqlValue, err := toSQLComponent(&boolOperand, "$boolCast")
+		if err != nil {
+			return nil, nil, err
+		}
+		return goqu.L("COALESCE(?, FALSE)", sqlValue), nil, nil
 	}
 
-	if fieldCollector != nil && fieldCollector.canEvaluateInline(resolved) {
-		return andBindingsForResolvedFieldPaths(resolved, opExpr), resolved, nil
+	fieldCollector := collector.collectorForField(fieldOperand)
+	sqlValue, resolvedField, err := toSQLResolvedFieldOrValue(&boolOperand, castType, "$boolCast")
+	if err != nil {
+		return nil, nil, err
 	}
-	if fieldCollector != nil && (fieldCollector.forceCorrelated || resolvedNeedsCTE(resolved)) {
-		existsExpr, err := buildInlineExistsExpression(resolved, opExpr, fieldCollector)
+	predicate := goqu.L("COALESCE(?, FALSE)", sqlValue)
+	resolved := collectResolvedFieldPaths(resolvedField, nil)
+	return applyCollectorScopeToPredicate(predicate, resolved, fieldCollector)
+}
+
+func applyCollectorScopeToPredicate(
+	predicate exp.Expression,
+	resolved []ResolvedFieldPath,
+	collector *ResolvedFieldPathCollector,
+) (exp.Expression, []ResolvedFieldPath, error) {
+	if len(resolved) == 0 {
+		return predicate, nil, nil
+	}
+
+	if collector != nil && collector.canEvaluateInline(resolved) {
+		return andBindingsForResolvedFieldPaths(resolved, predicate), resolved, nil
+	}
+	if collector != nil && (collector.forceCorrelated || resolvedNeedsCTE(resolved)) {
+		existsExpr, err := buildInlineExistsExpression(resolved, predicate, collector)
 		if err != nil {
 			return nil, nil, err
 		}
 		return existsExpr, resolved, nil
 	}
-	if fieldCollector != nil {
-		return opExpr, resolved, nil
+	if collector != nil {
+		return predicate, resolved, nil
 	}
 	if anyResolvedHasBindings(resolved) {
-		return andBindingsForResolvedFieldPaths(resolved, opExpr), resolved, nil
+		return andBindingsForResolvedFieldPaths(resolved, predicate), resolved, nil
 	}
-	return opExpr, resolved, nil
+	return predicate, resolved, nil
 }
 
 // EvaluateToExpression converts the logical expression tree into a goqu SQL expression.
@@ -2064,36 +2154,11 @@ func (le *LogicalExpression) EvaluateToExpression(collector *ResolvedFieldPathCo
 	}
 
 	if len(le.Match) > 0 {
-		expr, resolved, err := evaluateMatchExpressions(le.Match)
-		if err != nil {
-			return nil, nil, err
-		}
-		if collector != nil && collector.canEvaluateInline(resolved) {
-			return andBindingsForResolvedFieldPaths(resolved, expr), resolved, nil
-		}
-		if collector != nil && resolvedNeedsCTE(resolved) {
-			existsExpr, err := buildInlineExistsExpression(resolved, expr, collector)
-			if err != nil {
-				return nil, nil, err
-			}
-			return existsExpr, resolved, nil
-		}
-		if collector != nil {
-			return expr, resolved, nil
-		}
-		if anyResolvedHasBindings(resolved) {
-			return andBindingsForResolvedFieldPaths(resolved, expr), resolved, nil
-		}
-		return expr, resolved, nil
+		return evaluateMatchExpressions(le.Match, collector)
 	}
 
 	if le.BoolCast != nil {
-		boolOperand := Value{BoolCast: le.BoolCast}
-		sqlValue, err := toSQLComponent(&boolOperand, "$boolCast")
-		if err != nil {
-			return nil, nil, err
-		}
-		return goqu.L("COALESCE(?, FALSE)", sqlValue), nil, nil
+		return evaluateBoolCastWithCollector(le.BoolCast, collector)
 	}
 
 	// Handle logical operations
@@ -2227,14 +2292,14 @@ func (le *LogicalExpression) EvaluateToExpressionWithNegatedFragments(
 	return goqu.Or(mainExpr, fragmentGuard), resolved, nil
 }
 
-func evaluateMatchExpressions(match []MatchExpression) (exp.Expression, []ResolvedFieldPath, error) {
+func evaluateMatchExpressions(match []MatchExpression, collector *ResolvedFieldPathCollector) (exp.Expression, []ResolvedFieldPath, error) {
 	if len(match) == 0 {
 		return nil, nil, fmt.Errorf("match expression list is empty")
 	}
 	var expressions []exp.Expression
 	var resolved []ResolvedFieldPath
 	for i, m := range match {
-		expr, childResolved, err := evaluateMatchExpressionSQL(m)
+		expr, childResolved, err := evaluateMatchExpressionSQL(m, collector)
 		if err != nil {
 			return nil, nil, fmt.Errorf("error evaluating match expression at index %d: %w", i, err)
 		}
@@ -2244,80 +2309,62 @@ func evaluateMatchExpressions(match []MatchExpression) (exp.Expression, []Resolv
 	return goqu.And(expressions...), resolved, nil
 }
 
-func evaluateMatchExpressionSQL(me MatchExpression) (exp.Expression, []ResolvedFieldPath, error) {
+func evaluateMatchExpressionSQL(me MatchExpression, collector *ResolvedFieldPathCollector) (exp.Expression, []ResolvedFieldPath, error) {
 	if me.Boolean != nil {
 		return goqu.L("?", *me.Boolean), nil, nil
 	}
 	if len(me.Eq) > 0 {
-		return evaluateMatchComparison(me.Eq, "$eq")
+		return evaluateMatchComparison(me.Eq, "$eq", collector)
 	}
 	if len(me.Ne) > 0 {
-		return evaluateMatchComparison(me.Ne, "$ne")
+		return evaluateMatchComparison(me.Ne, "$ne", collector)
 	}
 	if len(me.Gt) > 0 {
-		return evaluateMatchComparison(me.Gt, "$gt")
+		return evaluateMatchComparison(me.Gt, "$gt", collector)
 	}
 	if len(me.Ge) > 0 {
-		return evaluateMatchComparison(me.Ge, "$ge")
+		return evaluateMatchComparison(me.Ge, "$ge", collector)
 	}
 	if len(me.Lt) > 0 {
-		return evaluateMatchComparison(me.Lt, "$lt")
+		return evaluateMatchComparison(me.Lt, "$lt", collector)
 	}
 	if len(me.Le) > 0 {
-		return evaluateMatchComparison(me.Le, "$le")
+		return evaluateMatchComparison(me.Le, "$le", collector)
 	}
 	if len(me.Contains) > 0 {
-		return evaluateMatchStringOperation(me.Contains, "$contains")
+		return evaluateMatchStringOperation(me.Contains, "$contains", collector)
 	}
 	if len(me.StartsWith) > 0 {
-		return evaluateMatchStringOperation(me.StartsWith, "$starts-with")
+		return evaluateMatchStringOperation(me.StartsWith, "$starts-with", collector)
 	}
 	if len(me.EndsWith) > 0 {
-		return evaluateMatchStringOperation(me.EndsWith, "$ends-with")
+		return evaluateMatchStringOperation(me.EndsWith, "$ends-with", collector)
 	}
 	if len(me.Regex) > 0 {
-		return evaluateMatchStringOperation(me.Regex, "$regex")
+		return evaluateMatchStringOperation(me.Regex, "$regex", collector)
 	}
 	if len(me.Match) > 0 {
-		return evaluateMatchExpressions(me.Match)
+		return evaluateMatchExpressions(me.Match, collector)
 	}
 	return nil, nil, fmt.Errorf("match expression has no valid operation")
 }
 
-func evaluateMatchComparison(operands []Value, operation string) (exp.Expression, []ResolvedFieldPath, error) {
+func evaluateMatchComparison(operands []Value, operation string, collector *ResolvedFieldPathCollector) (exp.Expression, []ResolvedFieldPath, error) {
 	if len(operands) != 2 {
 		return nil, nil, fmt.Errorf("comparison operation %s requires exactly 2 operands, got %d", operation, len(operands))
 	}
 	leftOperand := &operands[0]
 	rightOperand := &operands[1]
-	validate := func(leftOperand, rightOperand *Value) error {
-		_, err := leftOperand.IsComparableTo(*rightOperand)
-		return err
-	}
-	return handleBinaryOperationWithoutCollector(
-		leftOperand,
-		rightOperand,
-		operation,
-		fmt.Errorf("field-to-field comparisons are not supported"),
-		buildComparisonExpression,
-		validate,
-	)
+	return HandleComparisonWithCollector(leftOperand, rightOperand, operation, collector)
 }
 
-func evaluateMatchStringOperation(items []StringValue, operation string) (exp.Expression, []ResolvedFieldPath, error) {
+func evaluateMatchStringOperation(items []StringValue, operation string, collector *ResolvedFieldPathCollector) (exp.Expression, []ResolvedFieldPath, error) {
 	if len(items) != 2 {
 		return nil, nil, fmt.Errorf("string operation %s requires exactly 2 operands, got %d", operation, len(items))
 	}
 	leftOperand := stringValueToValue(items[0])
 	rightOperand := stringValueToValue(items[1])
-	return handleBinaryOperationWithoutCollector(
-		&leftOperand,
-		&rightOperand,
-		operation,
-		fmt.Errorf("field-to-field string operations are not supported"),
-		buildStringOperationExpression,
-		nil,
-	)
+	return HandleStringOperationWithCollector(&leftOperand, &rightOperand, operation, collector)
 }
 
 // evaluateStringOperationSQL builds SQL expressions for string operators like $contains, $starts-with, $ends-with, and $regex.

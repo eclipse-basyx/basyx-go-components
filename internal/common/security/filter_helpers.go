@@ -506,7 +506,10 @@ func buildFragmentMaskSignature(ctx context.Context, fragment grammar.FragmentSt
 		if err != nil {
 			return "", err
 		}
-		parts = append(parts, string(exprJSON)+"|"+string(bindingsJSON))
+		parts = append(
+			parts,
+			fmt.Sprintf("%s|%t|%s|%s", filter.Fragment, filter.RowLocal, exprJSON, bindingsJSON),
+		)
 	}
 	sort.Strings(parts)
 	return strings.Join(parts, "&&"), nil
