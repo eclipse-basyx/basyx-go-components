@@ -125,10 +125,20 @@ func (s *SubmodelDatabase) UploadFileAttachmentWithHistory(ctx context.Context, 
 //   - idShortPath: Path of the target File submodel element.
 //   - file: Attachment source consumed before the method returns.
 //   - fileName: Original attachment filename.
+//   - contentType: Primary content type declared by the upload source.
+//   - fallbackContentType: Secondary content type declaration used after the primary source.
 //
 // Returns:
 //   - error: Visibility, history, validation, transaction, or persistence error.
-func (s *SubmodelDatabase) UploadFileAttachmentReaderWithHistory(ctx context.Context, submodelID string, idShortPath string, file io.Reader, fileName string) error {
+func (s *SubmodelDatabase) UploadFileAttachmentReaderWithHistory(
+	ctx context.Context,
+	submodelID string,
+	idShortPath string,
+	file io.Reader,
+	fileName string,
+	contentType string,
+	fallbackContentType string,
+) error {
 	fileHandler, err := submodelelements.NewPostgreSQLFileHandler(s.db)
 	if err != nil {
 		return err
@@ -142,11 +152,20 @@ func (s *SubmodelDatabase) UploadFileAttachmentReaderWithHistory(ctx context.Con
 		if snapshotErr != nil {
 			return snapshotErr
 		}
-		reference, contentType, uploadErr := fileHandler.UploadManagedFileAttachmentReaderTx(ctx, tx, submodelID, idShortPath, file, fileName)
+		reference, resolvedContentType, uploadErr := fileHandler.UploadManagedFileAttachmentReaderTx(
+			ctx,
+			tx,
+			submodelID,
+			idShortPath,
+			file,
+			fileName,
+			contentType,
+			fallbackContentType,
+		)
 		if uploadErr != nil {
 			return uploadErr
 		}
-		return s.recordFileUploadMutationTx(ctx, tx, submodelID, idShortPath, previousSnapshot, reference, contentType)
+		return s.recordFileUploadMutationTx(ctx, tx, submodelID, idShortPath, previousSnapshot, reference, resolvedContentType)
 	})
 }
 

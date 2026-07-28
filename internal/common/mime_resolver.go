@@ -40,29 +40,54 @@ const fallbackBinaryContentType = "application/octet-stream"
 // ResolveUploadedContentType resolves a stable content type for uploaded files.
 //
 // Precedence:
-//  1. Detected content type when it is specific (not empty and not fallback binary)
-//  2. Declared content type
+//  1. First specific declared content type
+//  2. Detected content type when it is specific
 //  3. Filename extension mapping
-//  4. application/octet-stream
+//  4. First generic declared content type
+//  5. application/octet-stream
 //
-// mismatchDetectedVsDeclared is true if both detected and declared are specific and differ.
-func ResolveUploadedContentType(detectedContentType, declaredContentType, fileName string) (resolved string, mismatchDetectedVsDeclared bool) {
+// Declared content types are evaluated in caller-provided priority order.
+// mismatchDetectedVsDeclared is true if a selected specific declaration differs
+// from a valid detected content type, including a generic detection result.
+func ResolveUploadedContentType(detectedContentType, fileName string, declaredContentTypes ...string) (resolved string, mismatchDetectedVsDeclared bool) {
 	normalizedDetected := normalizeContentType(detectedContentType)
-	normalizedDeclared := normalizeContentType(declaredContentType)
+	genericDeclared := ""
 
-	if isSpecificContentType(normalizedDetected) {
-		return normalizedDetected, isSpecificContentType(normalizedDeclared) && normalizedDetected != normalizedDeclared
+	for _, declaredContentType := range declaredContentTypes {
+		normalizedDeclared := normalizeContentType(declaredContentType)
+		if isSpecificDeclaredContentType(normalizedDeclared) {
+			return normalizedDeclared, normalizedDetected != "" && normalizedDetected != normalizedDeclared
+		}
+		if normalizedDeclared != "" && normalizedDeclared != fallbackBinaryContentType && genericDeclared == "" {
+			genericDeclared = normalizedDeclared
+		}
 	}
 
-	if normalizedDeclared != "" {
-		return normalizedDeclared, false
+	if isSpecificDetectedContentType(normalizedDetected) {
+		return normalizedDetected, false
 	}
 
-	if extensionContentType := contentTypeFromExtension(fileName); extensionContentType != "" {
+	if extensionContentType := contentTypeFromExtension(fileName); extensionContentType != "" && extensionContentType != fallbackBinaryContentType {
 		return extensionContentType, false
 	}
 
+	if genericDeclared != "" {
+		return genericDeclared, false
+	}
+
 	return fallbackBinaryContentType, false
+}
+
+// HasAuthoritativeContentTypeDeclaration reports whether declarations contain
+// a valid content type other than the binary placeholder.
+func HasAuthoritativeContentTypeDeclaration(declaredContentTypes ...string) bool {
+	for _, declaredContentType := range declaredContentTypes {
+		normalizedDeclared := normalizeContentType(declaredContentType)
+		if normalizedDeclared != "" && normalizedDeclared != fallbackBinaryContentType {
+			return true
+		}
+	}
+	return false
 }
 
 // SniffContentTypeReader detects a stream's content type and returns a reader
@@ -100,8 +125,25 @@ func normalizeContentType(rawContentType string) string {
 	return strings.ToLower(strings.TrimSpace(mediaType))
 }
 
-func isSpecificContentType(contentType string) bool {
-	return contentType != "" && contentType != fallbackBinaryContentType
+func isSpecificDeclaredContentType(contentType string) bool {
+	return contentType != "" && !isGenericDeclaredContentType(contentType)
+}
+
+func isSpecificDetectedContentType(contentType string) bool {
+	return contentType != "" && !isGenericDetectedContentType(contentType)
+}
+
+func isGenericDeclaredContentType(contentType string) bool {
+	switch contentType {
+	case fallbackBinaryContentType, "application/xml", "text/plain", "text/xml":
+		return true
+	default:
+		return false
+	}
+}
+
+func isGenericDetectedContentType(contentType string) bool {
+	return contentType == "application/zip" || isGenericDeclaredContentType(contentType)
 }
 
 func contentTypeFromExtension(fileName string) string {

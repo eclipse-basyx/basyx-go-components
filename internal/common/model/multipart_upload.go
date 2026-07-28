@@ -38,6 +38,24 @@ const maxMultipartMetadataFieldBytes int64 = 1 << 20
 
 // HandleMultipartFileStream streams a multipart file part without staging it on disk.
 func HandleMultipartFileStream(r *http.Request, fileKey string, fileNameKey string, handleFile func(fileName string, file io.Reader) error) error {
+	return HandleMultipartFileStreamWithContentType(
+		r,
+		fileKey,
+		fileNameKey,
+		func(fileName string, _ string, file io.Reader) error {
+			return handleFile(fileName, file)
+		},
+	)
+}
+
+// HandleMultipartFileStreamWithContentType streams a multipart file part and
+// supplies its declared content type without staging it on disk.
+func HandleMultipartFileStreamWithContentType(
+	r *http.Request,
+	fileKey string,
+	fileNameKey string,
+	handleFile func(fileName string, contentType string, file io.Reader) error,
+) error {
 	reader, err := r.MultipartReader()
 	if err != nil {
 		return &ParsingError{Err: err}
@@ -57,7 +75,7 @@ type multipartFileStreamHandler struct {
 	fileName     string
 	bufferedFile *bufferedMultipartFile
 	completed    bool
-	handleFile   func(fileName string, file io.Reader) error
+	handleFile   func(fileName string, contentType string, file io.Reader) error
 }
 
 func (h *multipartFileStreamHandler) handleParts(reader *multipart.Reader) error {
@@ -138,17 +156,23 @@ func (h *multipartFileStreamHandler) handleBufferedMultipartFile() error {
 	if resolvedFileName == "" {
 		resolvedFileName = h.bufferedFile.fileName
 	}
-	return h.handleFile(resolvedFileName, bytes.NewReader(h.bufferedFile.content))
+	return h.handleFile(resolvedFileName, h.bufferedFile.contentType, bytes.NewReader(h.bufferedFile.content))
 }
 
 type bufferedMultipartFile struct {
-	fileName string
-	content  []byte
+	fileName    string
+	contentType string
+	content     []byte
 }
 
-func handleStreamingMultipartFile(part *multipart.Part, fileKey string, fileName string, handleFile func(fileName string, file io.Reader) error) error {
+func handleStreamingMultipartFile(
+	part *multipart.Part,
+	fileKey string,
+	fileName string,
+	handleFile func(fileName string, contentType string, file io.Reader) error,
+) error {
 	fileReader := &maxBytesTrackingReader{reader: part}
-	handleErr := handleFile(fileName, fileReader)
+	handleErr := handleFile(fileName, strings.TrimSpace(part.Header.Get("Content-Type")), fileReader)
 	closeErr := part.Close()
 	if maxBytesErr := fileReader.MaxBytesError(); maxBytesErr != nil {
 		return &ParsingError{Param: fileKey, Err: maxBytesErr}
@@ -177,8 +201,9 @@ func bufferMultipartFilePart(part *multipart.Part, fileKey string) (*bufferedMul
 		return nil, multipartCloseError(fileKey, closeErr)
 	}
 	return &bufferedMultipartFile{
-		fileName: strings.TrimSpace(part.FileName()),
-		content:  buffer.Bytes(),
+		fileName:    strings.TrimSpace(part.FileName()),
+		contentType: strings.TrimSpace(part.Header.Get("Content-Type")),
+		content:     buffer.Bytes(),
 	}, nil
 }
 

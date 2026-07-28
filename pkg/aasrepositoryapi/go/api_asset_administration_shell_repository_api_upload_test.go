@@ -7,6 +7,7 @@ import (
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
+	"net/textproto"
 	"path/filepath"
 	"testing"
 
@@ -17,16 +18,26 @@ import (
 
 type captureAASUploadService struct {
 	AssetAdministrationShellRepositoryAPIAPIServicer
-	fileName string
-	content  []byte
-	readErr  error
+	fileName    string
+	contentType string
+	content     []byte
+	readErr     error
 }
 
 func (s *captureAASUploadService) PutThumbnailAasRepository(_ context.Context, _ string, fileName string, file io.Reader) (commonmodel.ImplResponse, error) {
 	return s.capture(fileName, file)
 }
 
-func (s *captureAASUploadService) PutFileByPathAasRepository(_ context.Context, _ string, _ string, _ string, fileName string, file io.Reader) (commonmodel.ImplResponse, error) {
+func (s *captureAASUploadService) PutFileByPathAasRepository(
+	_ context.Context,
+	_ string,
+	_ string,
+	_ string,
+	fileName string,
+	contentType string,
+	file io.Reader,
+) (commonmodel.ImplResponse, error) {
+	s.contentType = contentType
 	return s.capture(fileName, file)
 }
 
@@ -75,6 +86,9 @@ func TestPutFileByPathAasRepositoryDoesNotRequireTempDirectory(t *testing.T) {
 	controller.PutFileByPathAasRepository(response, request)
 
 	assertCapturedUpload(t, response, service, "attachment.txt", payload)
+	if service.contentType != "application/x-step" {
+		t.Fatalf("expected content type application/x-step, got %q", service.contentType)
+	}
 }
 
 func TestPutThumbnailAasRepositoryReturnsPayloadTooLargeForOversizedStream(t *testing.T) {
@@ -142,6 +156,34 @@ func TestPutThumbnailAasRepositoryUsesFileNameFieldWhenItFollowsFile(t *testing.
 	assertCapturedUpload(t, response, service, "metadata-thumbnail.bin", payload)
 }
 
+func TestPutFileByPathAasRepositoryUsesFileNameFieldWhenItFollowsFile(t *testing.T) {
+	t.Setenv("TMPDIR", filepath.Join(t.TempDir(), "missing"))
+
+	payload := []byte("aas-scoped attachment payload")
+	request := newMultipartUploadRequestWithFileNameOrder(
+		t,
+		"/shells/aas/submodels/sm/submodel-elements/file/attachment",
+		"metadata-name.ifc",
+		"part-name.ifc",
+		payload,
+		false,
+	)
+	addRouteParam(request, "aasIdentifier", "aas")
+	addRouteParam(request, "submodelIdentifier", "sm")
+	addRouteParam(request, "idShortPath", "file")
+
+	service := &captureAASUploadService{}
+	controller := NewAssetAdministrationShellRepositoryAPIAPIController(service, "", "")
+	response := httptest.NewRecorder()
+
+	controller.PutFileByPathAasRepository(response, request)
+
+	assertCapturedUpload(t, response, service, "metadata-name.ifc", payload)
+	if service.contentType != "application/x-step" {
+		t.Fatalf("expected content type application/x-step, got %q", service.contentType)
+	}
+}
+
 func assertCapturedUpload(t *testing.T, response *httptest.ResponseRecorder, service *captureAASUploadService, expectedFileName string, expectedPayload []byte) {
 	t.Helper()
 
@@ -178,7 +220,10 @@ func newMultipartUploadRequestWithFileNameOrder(
 	if fileNameBeforeFile {
 		writeFileNameField(t, writer, fieldFileName)
 	}
-	part, err := writer.CreateFormFile("file", partFileName)
+	partHeader := textproto.MIMEHeader{}
+	partHeader.Set("Content-Disposition", `form-data; name="file"; filename="`+partFileName+`"`)
+	partHeader.Set("Content-Type", "application/x-step")
+	part, err := writer.CreatePart(partHeader)
 	if err != nil {
 		t.Fatalf("failed to create multipart file: %v", err)
 	}

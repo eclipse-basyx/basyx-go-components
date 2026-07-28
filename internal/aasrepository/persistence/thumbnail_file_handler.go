@@ -236,9 +236,9 @@ func (h *PostgreSQLThumbnailFileHandler) uploadThumbnailByAASIDReaderInTransacti
 		resolvedFileName = existingFileName.String
 	}
 
-	resolvedContentType, mismatchDetectedVsDeclared := common.ResolveUploadedContentType(detectedContentType, existingContentType.String, resolvedFileName)
+	resolvedContentType, mismatchDetectedVsDeclared := common.ResolveUploadedContentType(detectedContentType, resolvedFileName, existingContentType.String)
 	if mismatchDetectedVsDeclared {
-		slog.Warn("detected thumbnail content type differs from declared content type; using detected content type", "error.code", "AASREPO-PUTTHUMBNAIL-RESOLVEMIME")
+		slog.Warn("detected thumbnail content type differs from declared content type; preserving declared content type", "error.code", "AASREPO-PUTTHUMBNAIL-RESOLVEMIME")
 	}
 
 	oldOIDQuery, oldOIDArgs, oldOIDBuildErr := dialect.
@@ -468,9 +468,9 @@ func (h *PostgreSQLThumbnailFileHandler) uploadManagedThumbnailTx(ctx context.Co
 	if resolvedFileName == "" && metadata.ExistingFileName.Valid {
 		resolvedFileName = metadata.ExistingFileName.String
 	}
-	resolvedContentType, mismatch := common.ResolveUploadedContentType(detectedContentType, metadata.ExistingContentType.String, resolvedFileName)
+	resolvedContentType, mismatch := common.ResolveUploadedContentType(detectedContentType, resolvedFileName, metadata.ExistingContentType.String)
 	if mismatch {
-		slog.WarnContext(ctx, "detected thumbnail content type differs from declared content type; using detected content type", "error.code", "AASREPO-PUTTHUMBNAIL-RESOLVEMIME")
+		slog.WarnContext(ctx, "detected thumbnail content type differs from declared content type; preserving declared content type", "error.code", "AASREPO-PUTTHUMBNAIL-RESOLVEMIME")
 	}
 	if err = ensureManagedThumbnailElement(ctx, tx, metadata.AASDBID); err != nil {
 		return binarycontent.Reference{}, "", err

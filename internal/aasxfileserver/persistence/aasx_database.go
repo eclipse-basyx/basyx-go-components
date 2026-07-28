@@ -504,7 +504,7 @@ func resolvePackageContentTypeForUpload(file io.ReadSeeker, fileName string, lim
 		detectedContentType = strings.TrimSpace(http.DetectContentType(signature[:readBytes]))
 	}
 
-	resolvedContentType, _ := common.ResolveUploadedContentType(detectedContentType, "", fileName)
+	resolvedContentType, _ := common.ResolveUploadedContentType(detectedContentType, fileName)
 
 	aasxContentType, aasxErr := detectAASXEnvironmentContentType(file, limits)
 	if errors.Is(aasxErr, aasx.ErrReaderLimitExceeded) {

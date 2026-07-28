@@ -2711,7 +2711,7 @@
           ]
         },
         {
-          "contentType": "text/xml",
+          "contentType": "image/svg+xml",
           "idShort": "CompanyLogo",
           "modelType": "File",
           "semanticId": {
@@ -3018,7 +3018,7 @@
                   "valueType": "xs:string"
                 },
                 {
-                  "contentType": "text/xml",
+                  "contentType": "image/svg+xml",
                   "idShort": "MarkingFile",
                   "modelType": "File",
                   "semanticId": {
@@ -3289,7 +3289,7 @@
               "valueType": "xs:string"
             },
             {
-              "contentType": "text/xml",
+              "contentType": "image/svg+xml",
               "idShort": "CompanyLogo",
               "modelType": "File",
               "semanticId": {

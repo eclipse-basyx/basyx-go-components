@@ -2553,7 +2553,14 @@ func (s *SubmodelRepositoryAPIAPIService) GetFileByPathSubmodelRepo(ctx context.
 // PutFileByPathSubmodelRepo - Uploads file content to an existing submodel element at a specified path within submodel elements hierarchy
 //
 //nolint:revive
-func (s *SubmodelRepositoryAPIAPIService) PutFileByPathSubmodelRepo(ctx context.Context, submodelIdentifier string, idShortPath string, fileName string, file io.Reader) (gen.ImplResponse, error) {
+func (s *SubmodelRepositoryAPIAPIService) PutFileByPathSubmodelRepo(
+	ctx context.Context,
+	submodelIdentifier string,
+	idShortPath string,
+	fileName string,
+	contentType string,
+	file io.Reader,
+) (gen.ImplResponse, error) {
 	const operation = "PutFileByPathSubmodelRepo"
 
 	decodedSubmodelIdentifier, decodeErr := common.DecodeString(submodelIdentifier)
@@ -2594,7 +2601,7 @@ func (s *SubmodelRepositoryAPIAPIService) PutFileByPathSubmodelRepo(ctx context.
 		return newAPIErrorResponse(attachmentErr, http.StatusInternalServerError, operation, "FileAttachmentExists"), nil
 	}
 
-	err = s.submodelBackend.UploadFileAttachmentReaderWithHistory(ctx, decodedSubmodelIdentifier, idShortPath, file, fileName)
+	err = s.submodelBackend.UploadFileAttachmentReaderWithHistory(ctx, decodedSubmodelIdentifier, idShortPath, file, fileName, contentType, "")
 	if err != nil {
 		if common.IsErrDenied(err) {
 			return newAPIErrorResponse(err, http.StatusForbidden, operation, "Denied"), nil

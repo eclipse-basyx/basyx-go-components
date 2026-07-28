@@ -45,6 +45,7 @@ import (
 )
 
 const actionUploadMultipart = "UPLOAD_MULTIPART"
+const securityUploadMaxSizeBytes = 4 << 20
 
 var testBaseURL = testenv.LocalhostURLFromEnv("BASYX_IT_API_PORT", 6004)
 var testKeycloakTokenURL = testenv.LocalhostURLFromEnv("BASYX_IT_KEYCLOAK_PORT", 18080) + "/realms/basyx/protocol/openid-connect/token"
@@ -163,6 +164,113 @@ func TestSuperpathEndpointsSecurity(t *testing.T) {
 			require.Equalf(t, http.StatusForbidden, userStatus, "userx must be forbidden for %s %s; body=%s", tc.method, tc.path, userBody)
 		})
 	}
+}
+
+func TestDeniedAttachmentUploadsRejectBeforeMultipartValidationAndSizeEnforcement(t *testing.T) {
+	tokenProvider := testenv.NewPasswordGrantTokenProvider(
+		testKeycloakTokenURL,
+		"basyx-ui",
+		10*time.Second,
+	)
+
+	adminToken, err := tokenProvider.GetAccessToken(&testenv.TokenCredentials{
+		User:     "admin",
+		Password: "pwd",
+	})
+	require.NoError(t, err)
+	userXToken, err := tokenProvider.GetAccessToken(&testenv.TokenCredentials{
+		User:     "userx",
+		Password: "pwd",
+	})
+	require.NoError(t, err)
+
+	encodedAAS := base64.RawURLEncoding.EncodeToString([]byte("urn:test:aas:security:missing"))
+	encodedSubmodel := base64.RawURLEncoding.EncodeToString([]byte("urn:test:submodel:security:missing"))
+	attachmentPaths := []string{
+		"/submodels/" + encodedSubmodel + "/submodel-elements/NoSuchElement/attachment",
+		"/shells/" + encodedAAS + "/submodels/" + encodedSubmodel + "/submodel-elements/NoSuchElement/attachment",
+	}
+
+	oversizedPayload, oversizedContentType := buildAttachmentMultipart(
+		t,
+		bytes.Repeat([]byte("x"), securityUploadMaxSizeBytes+1),
+	)
+
+	for _, attachmentPath := range attachmentPaths {
+		attachmentPath := attachmentPath
+		t.Run(attachmentPath, func(t *testing.T) {
+			assertAuthorizedUploadStatus(
+				t,
+				attachmentPath,
+				[]byte("not multipart"),
+				"application/json",
+				adminToken,
+				http.StatusBadRequest,
+			)
+			assertAuthorizedUploadStatus(
+				t,
+				attachmentPath,
+				[]byte("not multipart"),
+				"application/json",
+				userXToken,
+				http.StatusForbidden,
+			)
+			assertAuthorizedUploadStatus(
+				t,
+				attachmentPath,
+				oversizedPayload,
+				oversizedContentType,
+				adminToken,
+				http.StatusRequestEntityTooLarge,
+			)
+			assertAuthorizedUploadStatus(
+				t,
+				attachmentPath,
+				oversizedPayload,
+				oversizedContentType,
+				userXToken,
+				http.StatusForbidden,
+			)
+		})
+	}
+}
+
+func buildAttachmentMultipart(t *testing.T, content []byte) ([]byte, string) {
+	t.Helper()
+
+	payload := &bytes.Buffer{}
+	writer := multipart.NewWriter(payload)
+	filePart, err := writer.CreateFormFile("file", "attachment.bin")
+	require.NoError(t, err)
+	_, err = filePart.Write(content)
+	require.NoError(t, err)
+	require.NoError(t, writer.Close())
+	return payload.Bytes(), writer.FormDataContentType()
+}
+
+func assertAuthorizedUploadStatus(
+	t *testing.T,
+	path string,
+	body []byte,
+	contentType string,
+	bearerToken string,
+	expectedStatus int,
+) {
+	t.Helper()
+
+	req, err := http.NewRequest(http.MethodPut, testBaseURL+path, bytes.NewReader(body))
+	require.NoError(t, err)
+	req.Header.Set("Authorization", "Bearer "+bearerToken)
+	req.Header.Set("Content-Type", contentType)
+
+	client := &http.Client{Timeout: 30 * time.Second}
+	resp, err := client.Do(req)
+	require.NoError(t, err)
+	defer func() { _ = resp.Body.Close() }()
+
+	responseBody, err := io.ReadAll(resp.Body)
+	require.NoError(t, err)
+	require.Equalf(t, expectedStatus, resp.StatusCode, "unexpected upload response: %s", string(responseBody))
 }
 
 func TestABACPolicyManagementRuleLifecycleStories(t *testing.T) {
