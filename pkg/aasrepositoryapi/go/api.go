@@ -160,7 +160,7 @@ type AssetAdministrationShellRepositoryAPIAPIServicer interface {
 	GetSubmodelElementByPathReferenceAasRepository(context.Context, string, string, string, string) (model.ImplResponse, error)
 	GetSubmodelElementByPathPathAasRepository(context.Context, string, string, string, string) (model.ImplResponse, error)
 	GetFileByPathAasRepository(context.Context, string, string, string) (model.ImplResponse, error)
-	PutFileByPathAasRepository(context.Context, string, string, string, string, io.Reader) (model.ImplResponse, error)
+	PutFileByPathAasRepository(context.Context, string, string, string, string, string, io.Reader) (model.ImplResponse, error)
 	DeleteFileByPathAasRepository(context.Context, string, string, string) (model.ImplResponse, error)
 	InvokeOperationAasRepository(context.Context, string, string, string, OperationRequest) (model.ImplResponse, error)
 	InvokeOperationValueOnlyAasRepository(context.Context, string, string, string, OperationRequestValueOnly) (model.ImplResponse, error)

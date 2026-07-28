@@ -229,7 +229,7 @@ func (s *uploadAPIService) handleXMLUpload(ctx context.Context, fileName string,
 }
 
 func (s *uploadAPIService) processAASXPackage(ctx context.Context, fileName string, _ string, packageReader *aasx.PackageRead) error {
-	specPart, environment, err := readEnvironmentFromAASXSpec(packageReader, fileName)
+	specPart, environment, err := ReadEnvironmentFromAASXSpec(packageReader, fileName)
 	if err != nil {
 		return err
 	}
@@ -301,7 +301,16 @@ func (s *uploadAPIService) processEnvironment(ctx context.Context, _ string, _ s
 	return nil
 }
 
-func readEnvironmentFromAASXSpec(packageReader *aasx.PackageRead, uploadSource string) (*aasx.Part, aastypes.IEnvironment, error) {
+// ReadEnvironmentFromAASXSpec parses the single supported XML or JSON spec in
+// an AASX package using the same compatibility handling as environment upload.
+//
+// Parameters:
+//   - packageReader: Open AASX package reader owned by the caller.
+//   - uploadSource: Source label used in compatibility diagnostics.
+//
+// Returns the selected spec part, parsed AAS environment, and any package or
+// validation error.
+func ReadEnvironmentFromAASXSpec(packageReader *aasx.PackageRead, uploadSource string) (*aasx.Part, aastypes.IEnvironment, error) {
 	if packageReader == nil {
 		return nil, nil, common.NewErrBadRequest("AASENV-PARSEAASX-NILREADER package reader is required")
 	}
@@ -731,12 +740,6 @@ func firstXMLStartElementIndex(content []byte) int {
 	return -1
 }
 
-type aasxFileLocation struct {
-	SubmodelID  string
-	IDShortPath string
-	FileValue   string
-}
-
 type limitedAASXPartStream struct {
 	io.Reader
 	io.Closer
@@ -772,7 +775,7 @@ func (s *uploadAPIService) uploadSupplementaryFiles(
 	}
 
 	specURI := normalizePartURI(specPart.URI)
-	fileLocations := collectFileLocations(environment)
+	fileLocations := CollectAASXFileElementLocations(environment)
 	uploaded := 0
 
 	for _, relationship := range supplementaries {
@@ -798,7 +801,19 @@ func (s *uploadAPIService) uploadSupplementaryFiles(
 			if streamErr != nil {
 				return fmt.Errorf("AASENV-UPLDSUPPL-OPENSTREAM failed to open supplementary '%s': %w", normalizePartURI(relationship.Supplementary.URI), streamErr)
 			}
-			uploadErr := s.persistence.SubmodelRepository.UploadFileAttachmentReaderWithHistory(ctx, location.SubmodelID, location.IDShortPath, partStream, uploadName)
+			fileElementContentType := ""
+			if contentType := location.FileElement.ContentType(); contentType != nil {
+				fileElementContentType = *contentType
+			}
+			uploadErr := s.persistence.SubmodelRepository.UploadFileAttachmentReaderWithHistory(
+				ctx,
+				location.SubmodelID,
+				location.IDShortPath,
+				partStream,
+				uploadName,
+				fileElementContentType,
+				relationship.Supplementary.ContentType,
+			)
 			closeErr := partStream.Close()
 			if uploadErr != nil {
 				return fmt.Errorf(
@@ -1022,98 +1037,6 @@ func resolveAASXThumbnailPartForAAS(
 		packageThumbnailURI = resolvedThumbnailURI
 	}
 	return packageThumbnail, packageThumbnailURI
-}
-
-func collectFileLocations(environment aastypes.IEnvironment) []aasxFileLocation {
-	locations := make([]aasxFileLocation, 0)
-	for _, submodel := range environment.Submodels() {
-		walkFileElements(submodel.ID(), submodel.SubmodelElements(), "", false, &locations)
-	}
-	return locations
-}
-
-func walkFileElements(
-	submodelID string,
-	elements []aastypes.ISubmodelElement,
-	parentPath string,
-	isFromList bool,
-	locations *[]aasxFileLocation,
-) {
-	for position, element := range elements {
-		idShort := ""
-		if element.IDShort() != nil {
-			idShort = *element.IDShort()
-		}
-
-		idShortPath := buildUploadIDShortPath(parentPath, isFromList, position, idShort)
-		if element.ModelType() == aastypes.ModelTypeFile {
-			if fileElement, ok := element.(*aastypes.File); ok && fileElement.Value() != nil && strings.TrimSpace(*fileElement.Value()) != "" && idShortPath != "" {
-				*locations = append(*locations, aasxFileLocation{
-					SubmodelID:  submodelID,
-					IDShortPath: idShortPath,
-					FileValue:   *fileElement.Value(),
-				})
-			}
-		}
-
-		children := extractSubmodelElementChildren(element)
-		if len(children) == 0 {
-			continue
-		}
-
-		walkFileElements(
-			submodelID,
-			children,
-			idShortPath,
-			element.ModelType() == aastypes.ModelTypeSubmodelElementList,
-			locations,
-		)
-	}
-}
-
-func extractSubmodelElementChildren(element aastypes.ISubmodelElement) []aastypes.ISubmodelElement {
-	switch element.ModelType() {
-	case aastypes.ModelTypeSubmodelElementCollection:
-		if collection, ok := element.(*aastypes.SubmodelElementCollection); ok {
-			return collection.Value()
-		}
-	case aastypes.ModelTypeSubmodelElementList:
-		if list, ok := element.(*aastypes.SubmodelElementList); ok {
-			return list.Value()
-		}
-	case aastypes.ModelTypeAnnotatedRelationshipElement:
-		if annotated, ok := element.(*aastypes.AnnotatedRelationshipElement); ok {
-			children := make([]aastypes.ISubmodelElement, 0, len(annotated.Annotations()))
-			for _, annotation := range annotated.Annotations() {
-				children = append(children, annotation)
-			}
-			return children
-		}
-	case aastypes.ModelTypeEntity:
-		if entity, ok := element.(*aastypes.Entity); ok {
-			return entity.Statements()
-		}
-	}
-	return nil
-}
-
-func buildUploadIDShortPath(parentPath string, isFromList bool, position int, idShort string) string {
-	if parentPath == "" {
-		if isFromList {
-			return "[" + fmt.Sprintf("%d", position) + "]"
-		}
-		if strings.TrimSpace(idShort) == "" {
-			return ""
-		}
-		return idShort
-	}
-	if isFromList {
-		return parentPath + "[" + fmt.Sprintf("%d", position) + "]"
-	}
-	if strings.TrimSpace(idShort) == "" {
-		return parentPath
-	}
-	return parentPath + "." + idShort
 }
 
 func matchesSupplementaryTarget(fileValue string, specURI *url.URL, supplementaryURI *url.URL) bool {

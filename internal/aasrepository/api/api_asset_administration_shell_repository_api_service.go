@@ -1554,7 +1554,15 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) GetFileByPathAasReposi
 }
 
 // PutFileByPathAasRepository - Uploads file content to an existing submodel element at a specified path within submodel elements hierarchy
-func (s *AssetAdministrationShellRepositoryAPIAPIService) PutFileByPathAasRepository(ctx context.Context, aasIdentifier string, submodelIdentifier string, idShortPath string, fileName string, file io.Reader) (gen.ImplResponse, error) {
+func (s *AssetAdministrationShellRepositoryAPIAPIService) PutFileByPathAasRepository(
+	ctx context.Context,
+	aasIdentifier string,
+	submodelIdentifier string,
+	idShortPath string,
+	fileName string,
+	contentType string,
+	file io.Reader,
+) (gen.ImplResponse, error) {
 	const operation = "PutFileByPathAasRepository"
 
 	if response, err, ok := s.ensureSubmodelBackend(operation); !ok {
@@ -1570,7 +1578,7 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) PutFileByPathAasReposi
 		return response, ensureErr
 	}
 
-	return s.submodelAPI.PutFileByPathSubmodelRepo(ctx, submodelIdentifier, idShortPath, fileName, file)
+	return s.submodelAPI.PutFileByPathSubmodelRepo(ctx, submodelIdentifier, idShortPath, fileName, contentType, file)
 }
 
 // DeleteFileByPathAasRepository - Deletes file content of an existing submodel element at a specified path within submodel elements hierarchy

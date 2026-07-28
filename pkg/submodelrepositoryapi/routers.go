@@ -185,6 +185,22 @@ func EncodeJSONResponse(i interface{}, status *int, w http.ResponseWriter) error
 // HandleMultipartFileStream streams a multipart file part without staging it on disk.
 func HandleMultipartFileStream(r *http.Request, fileKey string, fileNameKey string, handleFile func(fileName string, file io.Reader) error) error {
 	err := model.HandleMultipartFileStream(r, fileKey, fileNameKey, handleFile)
+	return normalizeMultipartFileStreamError(err)
+}
+
+// HandleMultipartFileStreamWithContentType streams a multipart file part and
+// supplies its declared content type without staging it on disk.
+func HandleMultipartFileStreamWithContentType(
+	r *http.Request,
+	fileKey string,
+	fileNameKey string,
+	handleFile func(fileName string, contentType string, file io.Reader) error,
+) error {
+	err := model.HandleMultipartFileStreamWithContentType(r, fileKey, fileNameKey, handleFile)
+	return normalizeMultipartFileStreamError(err)
+}
+
+func normalizeMultipartFileStreamError(err error) error {
 	if err == nil {
 		return nil
 	}

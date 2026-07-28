@@ -36,6 +36,7 @@ import (
 	"io"
 	"mime/multipart"
 	"net/http"
+	"net/textproto"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -92,8 +93,21 @@ func uploadFileAttachment(endpoint string, filePath string, fileName string) (in
 	body := &bytes.Buffer{}
 	writer := multipart.NewWriter(body)
 
-	// Add the file field
-	part, err := writer.CreateFormFile("file", filepath.Base(filePath))
+	signature := make([]byte, 512)
+	readBytes, readErr := file.Read(signature)
+	if readErr != nil && readErr != io.EOF {
+		return 0, fmt.Errorf("failed to inspect file content type: %v", readErr)
+	}
+	if _, err = file.Seek(0, io.SeekStart); err != nil {
+		return 0, fmt.Errorf("failed to rewind file: %v", err)
+	}
+
+	partHeader := textproto.MIMEHeader{}
+	partHeader.Set("Content-Disposition", fmt.Sprintf(`form-data; name="file"; filename="%s"`, filepath.Base(filePath)))
+	if readBytes > 0 {
+		partHeader.Set("Content-Type", http.DetectContentType(signature[:readBytes]))
+	}
+	part, err := writer.CreatePart(partHeader)
 	if err != nil {
 		return 0, fmt.Errorf("failed to create form file: %v", err)
 	}
