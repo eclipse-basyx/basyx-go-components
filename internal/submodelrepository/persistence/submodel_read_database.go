@@ -96,36 +96,17 @@ func (s *SubmodelDatabase) GetSubmodelByID(ctx context.Context, submodelIdentifi
 
 // GetSubmodels retrieves submodels and applies optional ABAC formula filters from ctx.
 func (s *SubmodelDatabase) GetSubmodels(ctx context.Context, limit int32, cursor string, submodelIdentifier string, semanticID string, createdFrom time.Time, updatedFrom time.Time) ([]types.ISubmodel, string, error) {
-	return s.getSubmodelsWithOptionalFilters(ctx, limit, cursor, submodelIdentifier, "", semanticID, createdFrom, updatedFrom, nil)
+	return s.getSubmodelsWithOptionalFilters(ctx, limit, cursor, submodelIdentifier, "", semanticID, createdFrom, updatedFrom)
 }
 
 // GetSubmodelsByListFilters retrieves submodels using public list filters.
 func (s *SubmodelDatabase) GetSubmodelsByListFilters(ctx context.Context, limit int32, cursor string, idShort string, semanticID string, createdFrom time.Time, updatedFrom time.Time) ([]types.ISubmodel, string, error) {
-	return s.getSubmodelsWithOptionalFilters(ctx, limit, cursor, "", idShort, semanticID, createdFrom, updatedFrom, nil)
-}
-
-// GetSubmodelsByIDs retrieves metadata for the provided submodel identifiers and applies ABAC filters from ctx.
-func (s *SubmodelDatabase) GetSubmodelsByIDs(ctx context.Context, submodelIdentifiers []string) ([]types.ISubmodel, error) {
-	if len(submodelIdentifiers) == 0 {
-		return []types.ISubmodel{}, nil
-	}
-	submodels, _, err := s.getSubmodelsWithOptionalFilters(
-		ctx,
-		-1,
-		"",
-		"",
-		"",
-		"",
-		time.Time{},
-		time.Time{},
-		submodelIdentifiers,
-	)
-	return submodels, err
+	return s.getSubmodelsWithOptionalFilters(ctx, limit, cursor, "", idShort, semanticID, createdFrom, updatedFrom)
 }
 
 // GetSubmodelReferences retrieves references and applies optional ABAC formula filters from ctx.
 func (s *SubmodelDatabase) GetSubmodelReferences(ctx context.Context, limit int32, cursor string, idShort string, semanticID string) ([]types.IReference, string, error) {
-	submodels, nextCursor, err := s.getSubmodelsWithOptionalFilters(ctx, limit, cursor, "", idShort, semanticID, time.Time{}, time.Time{}, nil)
+	submodels, nextCursor, err := s.getSubmodelsWithOptionalFilters(ctx, limit, cursor, "", idShort, semanticID, time.Time{}, time.Time{})
 	if err != nil {
 		return nil, "", err
 	}
@@ -274,7 +255,7 @@ func (s *SubmodelDatabase) QuerySubmodels(ctx context.Context, limit int32, curs
 }
 
 //nolint:revive // cyclomatic complexity is acceptable for this function due to query/filter orchestration in one flow
-func (s *SubmodelDatabase) getSubmodelsWithOptionalFilters(ctx context.Context, limit int32, cursor string, submodelIdentifier string, idShort string, semanticID string, createdFrom time.Time, updatedFrom time.Time, submodelIdentifiers []string) ([]types.ISubmodel, string, error) {
+func (s *SubmodelDatabase) getSubmodelsWithOptionalFilters(ctx context.Context, limit int32, cursor string, submodelIdentifier string, idShort string, semanticID string, createdFrom time.Time, updatedFrom time.Time) ([]types.ISubmodel, string, error) {
 	var limitFilter *int32
 
 	if limit == 0 {
@@ -334,7 +315,6 @@ func (s *SubmodelDatabase) getSubmodelsWithOptionalFilters(ctx context.Context, 
 		return nil, "", err
 	}
 	selectDS = submodelqueries.ApplySubmodelSemanticIDFilter(selectDS, semanticID)
-	selectDS = submodelqueries.ApplySubmodelIdentifiersFilter(selectDS, submodelIdentifiers)
 
 	queryFilter := auth.GetQueryFilter(ctx)
 	hasFormulaInContext := queryFilter != nil && queryFilter.Formula != nil

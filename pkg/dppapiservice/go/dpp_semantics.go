@@ -38,6 +38,10 @@ var dppMetadataSemanticIDs = map[string]struct{}{
 	dppMetadataSemanticURN: {},
 }
 
+func dppMetadataSemanticIDValues() []string {
+	return []string{dppMetadataSemanticID, dppMetadataSemanticURN}
+}
+
 func hasDPPMetadataSemanticID(submodel types.ISubmodel) bool {
 	if submodel == nil || submodel.SemanticID() == nil {
 		return false

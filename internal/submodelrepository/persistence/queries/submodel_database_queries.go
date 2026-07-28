@@ -205,14 +205,6 @@ func ApplySubmodelSemanticIDFilter(selectDS *goqu.SelectDataset, semanticID stri
 	return selectDS.Where(goqu.Func("EXISTS", semanticIDFilterDS))
 }
 
-// ApplySubmodelIdentifiersFilter restricts a submodel dataset to the provided identifiers.
-func ApplySubmodelIdentifiersFilter(selectDS *goqu.SelectDataset, submodelIdentifiers []string) *goqu.SelectDataset {
-	if len(submodelIdentifiers) == 0 {
-		return selectDS
-	}
-	return selectDS.Where(goqu.I("submodel.submodel_identifier").In(submodelIdentifiers))
-}
-
 // BuildSubmodelListSQL builds the final SQL for a masked submodel list query.
 func BuildSubmodelListSQL(selectDS *goqu.SelectDataset, dataAlias string, maskedExpressions []exp.Expression) (string, []any, error) {
 	return BuildSubmodelListSQLWithSupplementalOwnerID(selectDS, dataAlias, maskedExpressions, false)

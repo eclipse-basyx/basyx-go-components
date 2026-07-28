@@ -72,46 +72,6 @@ func TestGetSubmodelsDatabaseQueryError(t *testing.T) {
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 
-func TestGetSubmodelsByIDsUsesSingleQuery(t *testing.T) {
-	t.Parallel()
-
-	db, mock, err := sqlmock.New()
-	require.NoError(t, err)
-	defer func() {
-		_ = db.Close()
-	}()
-
-	sut := &SubmodelDatabase{db: db}
-	semanticID := `{"type":"ExternalReference","keys":[{"type":"GlobalReference","value":"urn:example:metadata"}]}`
-	rows := sqlmock.NewRows([]string{
-		"submodel_identifier",
-		"id_short",
-		"category",
-		"kind",
-		"description",
-		"display_name",
-		"administrative_information",
-		"embedded_data_specification",
-		"supplemental_semantic_ids",
-		"extensions",
-		"qualifiers",
-		"semantic_id",
-	}).
-		AddRow("sm-1", "First", nil, nil, nil, nil, nil, nil, nil, nil, nil, semanticID).
-		AddRow("sm-2", "Second", nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
-
-	mock.ExpectQuery(`"submodel"\."submodel_identifier" IN \('sm-1', 'sm-2'\)`).
-		WillReturnRows(rows)
-
-	submodels, err := sut.GetSubmodelsByIDs(contextWithABACDisabled(t), []string{"sm-1", "sm-2"})
-	require.NoError(t, err)
-	require.Len(t, submodels, 2)
-	require.NotNil(t, submodels[0].SemanticID())
-	require.Len(t, submodels[0].SemanticID().Keys(), 1)
-	require.Equal(t, "urn:example:metadata", submodels[0].SemanticID().Keys()[0].Value())
-	require.NoError(t, mock.ExpectationsWereMet())
-}
-
 func TestGetSubmodelsByListFiltersUsesIDShortColumn(t *testing.T) {
 	t.Parallel()
 

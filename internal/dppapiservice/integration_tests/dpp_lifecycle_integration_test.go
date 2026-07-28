@@ -91,7 +91,8 @@ func TestDPPLifecycleWithDockerCompose(t *testing.T) {
 	renameSubmodel(t, databasePort, generatedMetadataID, importedMetadataID)
 
 	optionalDPPID := "https://www.example.org/dpp/optional/" + idSuffix
-	optionalDocument := lifecycleDPPDocument(optionalDPPID, "https://www.example.org/optional/"+idSuffix, now)
+	optionalProductID := "https://www.example.org/optional/" + idSuffix
+	optionalDocument := lifecycleDPPDocument(optionalDPPID, optionalProductID, now)
 	delete(optionalDocument, "facilityId")
 	delete(optionalDocument, "contentSpecificationIds")
 	optionalCreateBody := doJSON(t, client, http.MethodPost, baseURL+"/v1/dpps", optionalDocument, http.StatusCreated)
@@ -131,9 +132,17 @@ func TestDPPLifecycleWithDockerCompose(t *testing.T) {
 	assertJSONPathEquals(t, productBody, "digitalProductPassportId", dppID)
 
 	searchBody := doJSON(t, client, http.MethodPost, baseURL+"/v1/dppsByProductIds?limit=1", map[string]any{
-		"productIds": []string{productID},
+		"productIds": []string{productID, optionalProductID},
 	}, http.StatusOK)
 	assertStringSliceContains(t, searchBody["items"], dppID)
+	searchCursor, ok := searchBody["cursor"].(string)
+	if !ok || searchCursor == "" {
+		t.Fatalf("search cursor = %#v, want non-empty string", searchBody["cursor"])
+	}
+	nextSearchBody := doJSON(t, client, http.MethodPost, baseURL+"/v1/dppsByProductIds?limit=1&cursor="+url.QueryEscape(searchCursor), map[string]any{
+		"productIds": []string{productID, optionalProductID},
+	}, http.StatusOK)
+	assertStringSliceContains(t, nextSearchBody["items"], optionalDPPID)
 
 	dimensionWidthPath := encodedPathParam(dppElementJSONPath(lifecycleTechnicalDataSpec, "dimensions", "widthMm"))
 	updatedDimensionWidth := doJSONAny(t, client, http.MethodPatch, baseURL+"/v1/dpps/"+encodedDPPID+"/elements/"+dimensionWidthPath, 121, http.StatusOK)
