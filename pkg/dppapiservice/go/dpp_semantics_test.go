@@ -17,6 +17,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/FriedJannik/aas-go-sdk/verification"
 )
 
@@ -66,6 +67,27 @@ func TestSemanticIDsForSectionsUsesExpandedDictionaryReference(t *testing.T) {
 	}
 	if semanticIDs["technicalData"] != "urn:example:semantic:technical-data" {
 		t.Fatalf("technicalData semantic ID = %q", semanticIDs["technicalData"])
+	}
+}
+
+func TestHasDPPMetadataSemanticIDDoesNotDependOnSubmodelIdentifier(t *testing.T) {
+	submodel := types.NewSubmodel("https://example.test/unrelated/submodel/id")
+	idShort := "Unrelated"
+	submodel.SetIDShort(&idShort)
+	submodel.SetSemanticID(globalReference(dppMetadataSemanticID))
+
+	if !hasDPPMetadataSemanticID(submodel) {
+		t.Fatal("hasDPPMetadataSemanticID() = false, want true for standardized semantic ID")
+	}
+}
+
+func TestHasDPPMetadataSemanticIDRejectsMatchingIdentifierWithoutSemanticID(t *testing.T) {
+	submodel := types.NewSubmodel("https://example.test/dpp/submodels/DppMetadata")
+	idShort := dppMetadataIDShort
+	submodel.SetIDShort(&idShort)
+
+	if hasDPPMetadataSemanticID(submodel) {
+		t.Fatal("hasDPPMetadataSemanticID() = true without standardized semantic ID")
 	}
 }
 

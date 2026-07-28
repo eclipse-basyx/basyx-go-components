@@ -29,6 +29,7 @@ package integration_tests
 import (
 	"bytes"
 	"context"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -40,6 +41,9 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/doug-martin/goqu/v9"
+	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
 const (
@@ -55,7 +59,8 @@ func TestDPPLifecycleWithDockerCompose(t *testing.T) {
 	requireDockerCompose(t)
 
 	port := reserveLocalPort(t)
-	composeEnv := dppComposeEnvironment{apiPort: port}
+	databasePort := reserveLocalPort(t)
+	composeEnv := dppComposeEnvironment{apiPort: port, databasePort: databasePort}
 	projectName := fmt.Sprintf("dpp-lifecycle-it-%d", time.Now().UnixNano())
 	composeFile := "docker-compose.yml"
 	ctx, cancel := context.WithTimeout(context.TODO(), dppComposeTestTimeout)
@@ -81,6 +86,9 @@ func TestDPPLifecycleWithDockerCompose(t *testing.T) {
 
 	createBody := doJSON(t, client, http.MethodPost, baseURL+"/v1/dpps", document, http.StatusCreated)
 	assertJSONPathEquals(t, createBody, "digitalProductPassportId", dppID)
+	generatedMetadataID := dppID + "/submodels/DppMetadata"
+	importedMetadataID := "https://www.example.org/submodels/dpp-metadata/" + idSuffix
+	renameSubmodel(t, databasePort, generatedMetadataID, importedMetadataID)
 
 	optionalDPPID := "https://www.example.org/dpp/optional/" + idSuffix
 	optionalDocument := lifecycleDPPDocument(optionalDPPID, "https://www.example.org/optional/"+idSuffix, now)
@@ -127,6 +135,10 @@ func TestDPPLifecycleWithDockerCompose(t *testing.T) {
 	}, http.StatusOK)
 	assertStringSliceContains(t, searchBody["items"], dppID)
 
+	dimensionWidthPath := encodedPathParam(dppElementJSONPath(lifecycleTechnicalDataSpec, "dimensions", "widthMm"))
+	updatedDimensionWidth := doJSONAny(t, client, http.MethodPatch, baseURL+"/v1/dpps/"+encodedDPPID+"/elements/"+dimensionWidthPath, 121, http.StatusOK)
+	assertScalarEquals(t, updatedDimensionWidth, "121")
+
 	time.Sleep(30 * time.Millisecond)
 	beforePatchDate := time.Now().UTC()
 	time.Sleep(30 * time.Millisecond)
@@ -138,6 +150,8 @@ func TestDPPLifecycleWithDockerCompose(t *testing.T) {
 	}, http.StatusOK)
 	assertDPPSectionPathEquals(t, patchBody, lifecycleTechnicalDataSpec, "manufacturerName", "Acme Updated GmbH")
 	assertDPPSectionPathEquals(t, patchBody, lifecycleTechnicalDataSpec, "warrantyMonths", "36")
+	assertSubmodelIdentifierExists(t, databasePort, importedMetadataID, true)
+	assertSubmodelIdentifierExists(t, databasePort, generatedMetadataID, false)
 
 	prePatchVersionBody := doJSON(t, client, http.MethodGet, historyURL(baseURL, encodedDPPID, beforePatchDate, "compressed"), nil, http.StatusOK)
 	assertDPPSectionPathEquals(t, prePatchVersionBody, lifecycleTechnicalDataSpec, "manufacturerName", "Acme GmbH")
@@ -242,6 +256,7 @@ func requireDockerCompose(t *testing.T) {
 //nolint:revive
 type dppComposeEnvironment struct {
 	apiPort       int
+	databasePort  int
 	keycloakPort  int
 	securityEnv   string
 	keycloakRealm string
@@ -249,6 +264,9 @@ type dppComposeEnvironment struct {
 
 func (environment dppComposeEnvironment) values() []string {
 	values := []string{fmt.Sprintf("DPP_IT_PORT=%d", environment.apiPort)}
+	if environment.databasePort != 0 {
+		values = append(values, fmt.Sprintf("DPP_IT_DB_PORT=%d", environment.databasePort))
+	}
 	if environment.keycloakPort != 0 {
 		values = append(values, fmt.Sprintf("DPP_IT_KEYCLOAK_PORT=%d", environment.keycloakPort))
 	}
@@ -259,6 +277,148 @@ func (environment dppComposeEnvironment) values() []string {
 		values = append(values, "DPP_IT_KEYCLOAK_REALM="+environment.keycloakRealm)
 	}
 	return values
+}
+
+func renameSubmodel(t *testing.T, databasePort int, currentID string, replacementID string) {
+	t.Helper()
+	db := openDPPIntegrationDatabase(t, databasePort)
+	defer func() {
+		_ = db.Close()
+	}()
+
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
+	defer cancel()
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		t.Fatalf("begin metadata submodel rename: %v", err)
+	}
+	defer func() {
+		_ = tx.Rollback()
+	}()
+
+	dialect := goqu.Dialect("postgres")
+	selectQuery, selectArgs, err := dialect.
+		From(goqu.T("aas_submodel_reference_key").As("reference_key")).
+		Join(
+			goqu.T("aas_submodel_reference_payload").As("reference_payload"),
+			goqu.On(goqu.I("reference_payload.reference_id").Eq(goqu.I("reference_key.reference_id"))),
+		).
+		Select(goqu.I("reference_key.reference_id"), goqu.I("reference_payload.parent_reference_payload")).
+		Where(goqu.I("reference_key.value").Eq(currentID)).
+		ToSQL()
+	if err != nil {
+		t.Fatalf("build metadata reference query: %v", err)
+	}
+
+	var referenceID int64
+	var referencePayload []byte
+	if err := tx.QueryRowContext(ctx, selectQuery, selectArgs...).Scan(&referenceID, &referencePayload); err != nil {
+		t.Fatalf("read metadata reference: %v", err)
+	}
+
+	var payload any
+	if err := json.Unmarshal(referencePayload, &payload); err != nil {
+		t.Fatalf("decode metadata reference payload: %v", err)
+	}
+	if !replaceStringValue(payload, currentID, replacementID) {
+		t.Fatalf("metadata reference payload does not contain %q", currentID)
+	}
+	updatedPayload, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatalf("encode metadata reference payload: %v", err)
+	}
+
+	executeGoquUpdate(ctx, t, tx, dialect.Update("submodel").
+		Set(goqu.Record{"submodel_identifier": replacementID}).
+		Where(goqu.I("submodel_identifier").Eq(currentID)))
+	executeGoquUpdate(ctx, t, tx, dialect.Update("aas_submodel_reference_key").
+		Set(goqu.Record{"value": replacementID}).
+		Where(goqu.I("reference_id").Eq(referenceID), goqu.I("value").Eq(currentID)))
+	executeGoquUpdate(ctx, t, tx, dialect.Update("aas_submodel_reference_payload").
+		Set(goqu.Record{"parent_reference_payload": goqu.L("?::jsonb", string(updatedPayload))}).
+		Where(goqu.I("reference_id").Eq(referenceID)))
+
+	if err := tx.Commit(); err != nil {
+		t.Fatalf("commit metadata submodel rename: %v", err)
+	}
+}
+
+func executeGoquUpdate(ctx context.Context, t *testing.T, tx *sql.Tx, dataset *goqu.UpdateDataset) {
+	t.Helper()
+	query, args, err := dataset.ToSQL()
+	if err != nil {
+		t.Fatalf("build integration test update: %v", err)
+	}
+	result, err := tx.ExecContext(ctx, query, args...)
+	if err != nil {
+		t.Fatalf("execute integration test update: %v", err)
+	}
+	affected, err := result.RowsAffected()
+	if err != nil {
+		t.Fatalf("read integration test update result: %v", err)
+	}
+	if affected != 1 {
+		t.Fatalf("integration test update affected %d rows, want 1", affected)
+	}
+}
+
+func replaceStringValue(value any, current string, replacement string) bool {
+	replaced := false
+	switch typed := value.(type) {
+	case map[string]any:
+		for key, child := range typed {
+			if text, ok := child.(string); ok && text == current {
+				typed[key] = replacement
+				replaced = true
+				continue
+			}
+			replaced = replaceStringValue(child, current, replacement) || replaced
+		}
+	case []any:
+		for index, child := range typed {
+			if text, ok := child.(string); ok && text == current {
+				typed[index] = replacement
+				replaced = true
+				continue
+			}
+			replaced = replaceStringValue(child, current, replacement) || replaced
+		}
+	}
+	return replaced
+}
+
+func assertSubmodelIdentifierExists(t *testing.T, databasePort int, submodelID string, expected bool) {
+	t.Helper()
+	db := openDPPIntegrationDatabase(t, databasePort)
+	defer func() {
+		_ = db.Close()
+	}()
+
+	query, args, err := goqu.Dialect("postgres").
+		From("submodel").
+		Select(goqu.COUNT("*")).
+		Where(goqu.I("submodel_identifier").Eq(submodelID)).
+		ToSQL()
+	if err != nil {
+		t.Fatalf("build submodel identifier query: %v", err)
+	}
+	var count int
+	if err := db.QueryRowContext(t.Context(), query, args...).Scan(&count); err != nil {
+		t.Fatalf("query submodel identifier %q: %v", submodelID, err)
+	}
+	if (count == 1) != expected {
+		t.Fatalf("submodel identifier %q exists = %t, want %t", submodelID, count == 1, expected)
+	}
+}
+
+func openDPPIntegrationDatabase(t *testing.T, databasePort int) *sql.DB {
+	t.Helper()
+	dsn := fmt.Sprintf("postgres://admin:admin123@127.0.0.1:%d/basyxDppLifecycleIT?sslmode=disable", databasePort)
+	db, err := sql.Open("pgx", dsn)
+	if err != nil {
+		t.Fatalf("open DPP integration database: %v", err)
+	}
+	return db
 }
 
 func composeUp(ctx context.Context, t *testing.T, composeFile string, projectName string, environment dppComposeEnvironment) {
