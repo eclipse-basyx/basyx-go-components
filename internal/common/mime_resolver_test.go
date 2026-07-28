@@ -45,6 +45,14 @@ func TestResolveUploadedContentType(t *testing.T) {
 			expectedMismatch:    true,
 		},
 		{
+			name:                "binary fallback detection does not report mismatch",
+			detected:            "application/octet-stream",
+			fileName:            "demo.bin",
+			declared:            []string{"image/png"},
+			expectedContentType: "image/png",
+			expectedMismatch:    false,
+		},
+		{
 			name:                "declared ZIP is specific",
 			detected:            "application/zip",
 			fileName:            "archive.bin",

@@ -56,7 +56,10 @@ func ResolveUploadedContentType(detectedContentType, fileName string, declaredCo
 	for _, declaredContentType := range declaredContentTypes {
 		normalizedDeclared := normalizeContentType(declaredContentType)
 		if isSpecificDeclaredContentType(normalizedDeclared) {
-			return normalizedDeclared, normalizedDetected != "" && normalizedDetected != normalizedDeclared
+			return normalizedDeclared,
+				normalizedDetected != "" &&
+					normalizedDetected != fallbackBinaryContentType &&
+					normalizedDetected != normalizedDeclared
 		}
 		if normalizedDeclared != "" && normalizedDeclared != fallbackBinaryContentType && genericDeclared == "" {
 			genericDeclared = normalizedDeclared
