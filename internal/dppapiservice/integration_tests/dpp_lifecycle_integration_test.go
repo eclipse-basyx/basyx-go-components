@@ -402,8 +402,10 @@ func assertSubmodelIdentifierExists(t *testing.T, databasePort int, submodelID s
 	if err != nil {
 		t.Fatalf("build submodel identifier query: %v", err)
 	}
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
+	defer cancel()
 	var count int
-	if err := db.QueryRowContext(t.Context(), query, args...).Scan(&count); err != nil {
+	if err := db.QueryRowContext(ctx, query, args...).Scan(&count); err != nil {
 		t.Fatalf("query submodel identifier %q: %v", submodelID, err)
 	}
 	if (count == 1) != expected {

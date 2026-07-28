@@ -27,6 +27,8 @@
 package dppapi
 
 import (
+	"context"
+	"fmt"
 	"testing"
 
 	"github.com/FriedJannik/aas-go-sdk/types"
@@ -55,5 +57,44 @@ func TestElementResponseSupportsScalarSubmodelElementListItems(t *testing.T) {
 	}
 	if fullElement["elementId"] != "energyClasses0" {
 		t.Fatalf("elementResponse() full elementId = %#v, want energyClasses0", fullElement["elementId"])
+	}
+}
+
+func TestDPPMetadataSubmodelIDsBatchesReferencedSubmodels(t *testing.T) {
+	references := make([]types.IReference, 0, dppSubmodelLookupBatchSize+1)
+	for index := 0; index <= dppSubmodelLookupBatchSize; index++ {
+		references = append(references, submodelReference(fmt.Sprintf("submodel-%04d", index)))
+	}
+	assetInformation := types.NewAssetInformation(types.AssetKindInstance)
+	shell := types.NewAssetAdministrationShell("aas-1", assetInformation)
+	shell.SetSubmodels(references)
+
+	metadataID := fmt.Sprintf("submodel-%04d", dppSubmodelLookupBatchSize)
+	lookupCalls := 0
+	loader := func(_ context.Context, identifiers []string) ([]types.ISubmodel, error) {
+		lookupCalls++
+		if len(identifiers) > dppSubmodelLookupBatchSize {
+			t.Fatalf("lookup batch size = %d, want at most %d", len(identifiers), dppSubmodelLookupBatchSize)
+		}
+		submodels := make([]types.ISubmodel, 0, len(identifiers))
+		for _, identifier := range identifiers {
+			submodel := types.NewSubmodel(identifier)
+			if identifier == metadataID {
+				submodel.SetSemanticID(globalReference(dppMetadataSemanticID))
+			}
+			submodels = append(submodels, submodel)
+		}
+		return submodels, nil
+	}
+
+	metadataIDs, err := dppMetadataSubmodelIDs(t.Context(), []types.IAssetAdministrationShell{shell}, loader)
+	if err != nil {
+		t.Fatalf("dppMetadataSubmodelIDs() error = %v", err)
+	}
+	if lookupCalls != 2 {
+		t.Fatalf("lookup calls = %d, want 2", lookupCalls)
+	}
+	if _, ok := metadataIDs[metadataID]; !ok {
+		t.Fatalf("metadata submodel IDs = %#v, want %q", metadataIDs, metadataID)
 	}
 }

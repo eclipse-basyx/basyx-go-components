@@ -46,6 +46,7 @@ import (
 const (
 	defaultDPPPageLimit        int32 = 100
 	dppProductIDSearchPageSize int32 = 500
+	dppSubmodelLookupBatchSize       = 1000
 	maxDPPProductIDSearchItems       = 100
 	maxDPPRequestBodyBytes     int64 = 10 << 20
 )
@@ -373,8 +374,8 @@ func (s *DPPRepositoryService) DeleteDPPById(ctx context.Context, dppID string) 
 //   - error: Unexpected service error, if one occurs outside normal response mapping
 func (s *DPPRepositoryService) ReadDPPByProductId(ctx context.Context, productID string, representation Representation) (ImplResponse, error) {
 	ids := make([]string, 0)
-	seen := make(map[string]struct{})
-	if err := s.collectDPPIDsForProduct(ctx, productID, seen, &ids); err != nil {
+	inspectedShells := make(map[string]struct{})
+	if err := s.collectDPPIDsForProduct(ctx, productID, inspectedShells, &ids); err != nil {
 		return mapPersistenceError(err, http.StatusNotFound), nil
 	}
 	if len(ids) == 0 {
@@ -422,9 +423,14 @@ func (s *DPPRepositoryService) ReadDPPVersionByIdAndDate(ctx context.Context, dp
 //   - error: Unexpected service error, if one occurs outside normal response mapping
 func (s *DPPRepositoryService) ReadDPPIdsByProductIds(ctx context.Context, request ReadDppIdsByProductIdsRequest, limit int32, cursor string) (ImplResponse, error) {
 	ids := make([]string, 0)
-	seen := make(map[string]struct{})
+	inspectedShells := make(map[string]struct{})
+	seenProductIDs := make(map[string]struct{}, len(request.ProductIds))
 	for _, productID := range request.ProductIds {
-		if err := s.collectDPPIDsForProduct(ctx, productID, seen, &ids); err != nil {
+		if _, ok := seenProductIDs[productID]; ok {
+			continue
+		}
+		seenProductIDs[productID] = struct{}{}
+		if err := s.collectDPPIDsForProduct(ctx, productID, inspectedShells, &ids); err != nil {
 			return mapPersistenceError(err, http.StatusInternalServerError), nil
 		}
 	}
@@ -433,7 +439,7 @@ func (s *DPPRepositoryService) ReadDPPIdsByProductIds(ctx context.Context, reque
 	return Response(http.StatusOK, DppidSearchResult{Items: paged, Cursor: nextCursor}), nil
 }
 
-func (s *DPPRepositoryService) collectDPPIDsForProduct(ctx context.Context, productID string, seen map[string]struct{}, ids *[]string) error {
+func (s *DPPRepositoryService) collectDPPIDsForProduct(ctx context.Context, productID string, inspectedShells map[string]struct{}, ids *[]string) error {
 	cursor := ""
 	specificAssetIDs := []types.ISpecificAssetID{types.NewSpecificAssetID("globalAssetId", productID)}
 	for {
@@ -441,18 +447,21 @@ func (s *DPPRepositoryService) collectDPPIDsForProduct(ctx context.Context, prod
 		if err != nil {
 			return fmt.Errorf("DPP-READIDS-GETAAS get AAS for product %s: %w", productID, err)
 		}
+		unseenShells := make([]types.IAssetAdministrationShell, 0, len(shells))
 		for _, shell := range shells {
-			if _, ok := seen[shell.ID()]; ok {
+			if _, ok := inspectedShells[shell.ID()]; !ok {
+				unseenShells = append(unseenShells, shell)
+			}
+		}
+		metadataSubmodelIDs, err := dppMetadataSubmodelIDs(ctx, unseenShells, s.submodelRepo.GetSubmodelsByIDs)
+		if err != nil {
+			return err
+		}
+		for _, shell := range unseenShells {
+			inspectedShells[shell.ID()] = struct{}{}
+			if !shellReferencesDPPMetadata(shell, metadataSubmodelIDs) {
 				continue
 			}
-			isDPP, err := s.isDPPShell(ctx, shell)
-			if err != nil {
-				return fmt.Errorf("DPP-READIDS-IDENTIFY identify AAS %s: %w", shell.ID(), err)
-			}
-			if !isDPP {
-				continue
-			}
-			seen[shell.ID()] = struct{}{}
 			*ids = append(*ids, shell.ID())
 		}
 		if nextCursor == "" {
@@ -465,24 +474,46 @@ func (s *DPPRepositoryService) collectDPPIDsForProduct(ctx context.Context, prod
 	}
 }
 
-func (s *DPPRepositoryService) isDPPShell(ctx context.Context, shell types.IAssetAdministrationShell) (bool, error) {
-	for _, ref := range shell.Submodels() {
-		submodelID := referenceLastValue(ref)
-		if submodelID == "" {
-			continue
-		}
-		submodel, err := s.submodelRepo.GetSubmodelByID(ctx, submodelID, "core", true, false)
-		if common.IsErrNotFound(err) {
-			continue
-		}
-		if err != nil {
-			return false, fmt.Errorf("DPP-IDENTIFY-GETSUBMODEL get submodel %s: %w", submodelID, err)
-		}
-		if hasDPPMetadataSemanticID(submodel) {
-			return true, nil
+type submodelMetadataLoader func(context.Context, []string) ([]types.ISubmodel, error)
+
+func dppMetadataSubmodelIDs(ctx context.Context, shells []types.IAssetAdministrationShell, loadSubmodels submodelMetadataLoader) (map[string]struct{}, error) {
+	uniqueIDs := make(map[string]struct{})
+	for _, shell := range shells {
+		for _, ref := range shell.Submodels() {
+			if submodelID := referenceLastValue(ref); submodelID != "" {
+				uniqueIDs[submodelID] = struct{}{}
+			}
 		}
 	}
-	return false, nil
+	identifiers := make([]string, 0, len(uniqueIDs))
+	for identifier := range uniqueIDs {
+		identifiers = append(identifiers, identifier)
+	}
+	sort.Strings(identifiers)
+
+	metadataIDs := make(map[string]struct{})
+	for start := 0; start < len(identifiers); start += dppSubmodelLookupBatchSize {
+		end := min(start+dppSubmodelLookupBatchSize, len(identifiers))
+		submodels, err := loadSubmodels(ctx, identifiers[start:end])
+		if err != nil {
+			return nil, fmt.Errorf("DPP-IDENTIFY-GETSUBMODELS get referenced submodels: %w", err)
+		}
+		for _, submodel := range submodels {
+			if hasDPPMetadataSemanticID(submodel) {
+				metadataIDs[submodel.ID()] = struct{}{}
+			}
+		}
+	}
+	return metadataIDs, nil
+}
+
+func shellReferencesDPPMetadata(shell types.IAssetAdministrationShell, metadataSubmodelIDs map[string]struct{}) bool {
+	for _, ref := range shell.Submodels() {
+		if _, ok := metadataSubmodelIDs[referenceLastValue(ref)]; ok {
+			return true
+		}
+	}
+	return false
 }
 
 // ReadDataElement reads one DPP data element by elementIdPath.
