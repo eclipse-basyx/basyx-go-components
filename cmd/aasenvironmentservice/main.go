@@ -37,7 +37,6 @@ import (
 	"net/http"
 	"os"
 	"sync/atomic"
-	"time"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/aasenvironment"
 	aasregistryapi "github.com/eclipse-basyx/basyx-go-components/internal/aasregistry/api"
@@ -129,13 +128,7 @@ func runServer(ctx context.Context, configPath string) error {
 		slog.WarnContext(ctx, "Swagger UI unavailable", "error.code", "AASENV-SWAGGER-INIT", "error", err)
 	}
 
-	dsn := common.BuildPostgresDSN(cfg.Postgres)
-
-	if err := common.ValidateSchemaVersionByDSN(dsn, common.CURRENT_DATABASE_VERSION); err != nil {
-		return err
-	}
-
-	sharedDB, asyncJobManager, sharedBulkManager, err := openSharedDatabase(ctx, cfg, dsn)
+	sharedDB, asyncJobManager, sharedBulkManager, err := openSharedDatabase(ctx, cfg)
 	if err != nil {
 		return err
 	}
@@ -312,13 +305,11 @@ func runServer(ctx context.Context, configPath string) error {
 func openSharedDatabase(
 	ctx context.Context,
 	cfg *common.Config,
-	dsn string,
 ) (*sql.DB, *asyncjob.Manager, *asyncjob.Manager, error) {
-	db, err := common.NewDatabaseConnection(dsn)
+	db, err := common.OpenPostgresWithSchemaValidation(ctx, cfg.Postgres, "aasenvironmentservice", common.CURRENT_DATABASE_VERSION)
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	configurePostgresPool(db, cfg.Postgres)
 	if err = history.ApplyPostgresGuardConfig(ctx, db); err != nil {
 		return nil, nil, nil, err
 	}
@@ -331,18 +322,6 @@ func openSharedDatabase(
 		return nil, nil, nil, fmt.Errorf("AASENV-ASYNCJOB-INIT %w", err)
 	}
 	return db, asyncJobManager, bulkManager, nil
-}
-
-func configurePostgresPool(db *sql.DB, cfg common.PostgresConfig) {
-	if cfg.MaxOpenConnections > 0 {
-		db.SetMaxOpenConns(cfg.MaxOpenConnections)
-	}
-	if cfg.MaxIdleConnections > 0 {
-		db.SetMaxIdleConns(cfg.MaxIdleConnections)
-	}
-	if cfg.ConnMaxLifetimeMinutes > 0 {
-		db.SetConnMaxLifetime(time.Duration(cfg.ConnMaxLifetimeMinutes) * time.Minute)
-	}
 }
 
 func main() {

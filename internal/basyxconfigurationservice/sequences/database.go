@@ -29,7 +29,6 @@ package sequences
 import (
 	"fmt"
 	"log/slog"
-	"time"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 )
@@ -51,20 +50,9 @@ func (dbc *DatabaseConnection) Execute(stepIndex int) (int, error) {
 	}
 
 	cfg := dbc.ctx.Config
-	dsn := common.BuildPostgresDSN(cfg.Postgres)
-	db, err := common.NewDatabaseConnection(dsn)
+	db, err := common.OpenPostgres(dbc.ctx.Context, cfg.Postgres, "basyxconfigurationservice")
 	if err != nil {
 		return 1, fmt.Errorf("BASYXCFG-DB-CONNECT: %w", err)
-	}
-
-	if cfg.Postgres.MaxOpenConnections > 0 {
-		db.SetMaxOpenConns(cfg.Postgres.MaxOpenConnections)
-	}
-	if cfg.Postgres.MaxIdleConnections > 0 {
-		db.SetMaxIdleConns(cfg.Postgres.MaxIdleConnections)
-	}
-	if cfg.Postgres.ConnMaxLifetimeMinutes > 0 {
-		db.SetConnMaxLifetime(time.Duration(cfg.Postgres.ConnMaxLifetimeMinutes) * time.Minute)
 	}
 
 	dbc.ctx.DB = db

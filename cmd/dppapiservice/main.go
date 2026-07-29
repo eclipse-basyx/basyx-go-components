@@ -34,7 +34,6 @@ import (
 	"flag"
 	"log/slog"
 	"os"
-	"time"
 
 	aasrepositorydb "github.com/eclipse-basyx/basyx-go-components/internal/aasrepository/persistence"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
@@ -68,8 +67,7 @@ func runServer(ctx context.Context, configPath string) error {
 
 	addr := common.ServerAddress(cfg.Server)
 
-	dsn := common.BuildPostgresDSN(cfg.Postgres)
-	sharedDB, err := openSharedDatabase(ctx, cfg, dsn)
+	sharedDB, err := openSharedDatabase(ctx, cfg)
 	if err != nil {
 		return err
 	}
@@ -93,31 +91,15 @@ func runServer(ctx context.Context, configPath string) error {
 	return common.RunHTTPServer(ctx, "DPP", cfg.Server, router)
 }
 
-func openSharedDatabase(ctx context.Context, cfg *common.Config, dsn string) (*sql.DB, error) {
-	if err := common.ValidateSchemaVersionByDSN(dsn, common.CURRENT_DATABASE_VERSION); err != nil {
-		return nil, err
-	}
-	db, err := common.NewDatabaseConnection(dsn)
+func openSharedDatabase(ctx context.Context, cfg *common.Config) (*sql.DB, error) {
+	db, err := common.OpenPostgresWithSchemaValidation(ctx, cfg.Postgres, "dppapiservice", common.CURRENT_DATABASE_VERSION)
 	if err != nil {
 		return nil, err
 	}
-	configurePostgresPool(db, cfg.Postgres)
 	if err = history.ApplyPostgresGuardConfig(ctx, db); err != nil {
 		return nil, err
 	}
 	return db, nil
-}
-
-func configurePostgresPool(db *sql.DB, cfg common.PostgresConfig) {
-	if cfg.MaxOpenConnections > 0 {
-		db.SetMaxOpenConns(cfg.MaxOpenConnections)
-	}
-	if cfg.MaxIdleConnections > 0 {
-		db.SetMaxIdleConns(cfg.MaxIdleConnections)
-	}
-	if cfg.ConnMaxLifetimeMinutes > 0 {
-		db.SetConnMaxLifetime(time.Duration(cfg.ConnMaxLifetimeMinutes) * time.Minute)
-	}
 }
 
 func main() {

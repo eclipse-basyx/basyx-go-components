@@ -69,18 +69,13 @@ type ConceptDescriptionBackend struct {
 // - A pointer to a ConceptDescriptionBackend instance if the connection is successful.
 // - An error if the connection fails or if there is an issue with the database configuration.
 func NewConceptDescriptionBackend(dsn string, maxOpenConnections int32, maxIdleConnections int, connMaxLifetimeMinutes int) (*ConceptDescriptionBackend, error) {
-	db, err := common.NewDatabaseConnection(dsn)
+	db, err := common.NewDatabaseConnectionWithConfig(dsn, common.PostgresConfig{
+		MaxOpenConnections:     int(maxOpenConnections),
+		MaxIdleConnections:     maxIdleConnections,
+		ConnMaxLifetimeMinutes: connMaxLifetimeMinutes,
+	})
 	if err != nil {
 		return nil, err
-	}
-	if maxOpenConnections > 0 {
-		db.SetMaxOpenConns(int(maxOpenConnections))
-	}
-	if maxIdleConnections > 0 {
-		db.SetMaxIdleConns(maxIdleConnections)
-	}
-	if connMaxLifetimeMinutes > 0 {
-		db.SetConnMaxLifetime(time.Duration(connMaxLifetimeMinutes) * time.Minute)
 	}
 
 	return NewConceptDescriptionBackendFromDB(db)

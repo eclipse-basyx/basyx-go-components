@@ -100,19 +100,13 @@ func (s *AssetAdministrationShellDatabase) ExecuteInTransaction(startErrorCode s
 
 // NewAssetAdministrationShellDatabase creates a new instance of AssetAdministrationShellDatabase with the provided database connection.
 func NewAssetAdministrationShellDatabase(dsn string, maxOpenConnections int, maxIdleConnections int, connMaxLifetimeMinutes int, strictVerification string) (*AssetAdministrationShellDatabase, error) {
-	db, err := common.NewDatabaseConnection(dsn)
+	db, err := common.NewDatabaseConnectionWithConfig(dsn, common.PostgresConfig{
+		MaxOpenConnections:     maxOpenConnections,
+		MaxIdleConnections:     maxIdleConnections,
+		ConnMaxLifetimeMinutes: connMaxLifetimeMinutes,
+	})
 	if err != nil {
 		return nil, err
-	}
-
-	if maxOpenConnections > 0 {
-		db.SetMaxOpenConns(int(maxOpenConnections))
-	}
-	if maxIdleConnections > 0 {
-		db.SetMaxIdleConns(maxIdleConnections)
-	}
-	if connMaxLifetimeMinutes > 0 {
-		db.SetConnMaxLifetime(time.Duration(connMaxLifetimeMinutes) * time.Minute)
 	}
 
 	return NewAssetAdministrationShellDatabaseFromDB(db, strictVerification)

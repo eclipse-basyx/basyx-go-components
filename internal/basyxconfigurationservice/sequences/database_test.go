@@ -56,7 +56,7 @@ func TestDatabaseConnectionExecuteRequiresPreloadedConfig(t *testing.T) {
 
 func TestDatabaseConnectionRetainsPreloadedConfigWhenConnectionFails(t *testing.T) {
 	cfg := &common.Config{}
-	ctx := &ExecutionContext{Config: cfg}
+	ctx := &ExecutionContext{Context: t.Context(), Config: cfg}
 	step := NewDatabaseConnection(ctx)
 
 	statusCode, err := step.Execute(1)
@@ -65,6 +65,9 @@ func TestDatabaseConnectionRetainsPreloadedConfigWhenConnectionFails(t *testing.
 	}
 	if statusCode != 1 {
 		t.Fatalf("expected status code 1, got %d", statusCode)
+	}
+	if !strings.Contains(err.Error(), "COMMON-OPENPOSTGRES-PING") {
+		t.Fatalf("expected database connection error, got %v", err)
 	}
 	if ctx.Config != cfg {
 		t.Fatal("expected the preloaded configuration to remain in the execution context")

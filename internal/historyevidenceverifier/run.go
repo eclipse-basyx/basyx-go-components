@@ -99,7 +99,7 @@ func run(ctx context.Context, cfg *common.Config, options cliOptions, stdout io.
 	if options.recover && strings.TrimSpace(options.recoveryCatalogPath) != "" {
 		return recoverEvidence(ctx, cfg, nil, options, stdout)
 	}
-	db, err := openDatabase(cfg)
+	db, err := openDatabase(ctx, cfg)
 	if err != nil {
 		return err
 	}

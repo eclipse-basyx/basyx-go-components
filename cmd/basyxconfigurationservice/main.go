@@ -38,6 +38,8 @@ import (
 )
 
 func main() {
+	ctx, stop := common.SignalContext()
+
 	configPath := ""
 	databaseSchema := ""
 	customPatchPath := ""
@@ -54,6 +56,7 @@ func main() {
 			"error.code", "BASYXCFG-MAIN-LOADCONFIG",
 			"error", err,
 		)
+		stop()
 		os.Exit(1)
 	}
 	if _, err = common.ConfigureLogging(cfg, "basyxconfigurationservice", configPath, os.Stderr); err != nil {
@@ -63,6 +66,7 @@ func main() {
 			"error.code", "BASYXCFG-MAIN-CONFIGLOGGING",
 			"error", err,
 		)
+		stop()
 		os.Exit(1)
 	}
 
@@ -71,7 +75,7 @@ func main() {
 		patchBasePath = customPatchPath
 	}
 
-	execCtx := &sequences.ExecutionContext{Config: cfg}
+	execCtx := &sequences.ExecutionContext{Context: ctx, Config: cfg}
 	schemInit := basyxconfigurationservice.NewSchemaInitializer()
 	schemInit.Register(sequences.NewDatabaseConnection(execCtx))
 	schemInit.Register(sequences.NewSystemTable(execCtx))
@@ -92,6 +96,7 @@ func main() {
 
 	if err = schemInit.Execute(); err != nil {
 		slog.Error("configuration failed", "error.code", "BASYXCFG-MAIN-EXECUTE", "error", err)
+		stop()
 		os.Exit(1)
 	}
 
@@ -100,4 +105,5 @@ func main() {
 	}
 
 	slog.Info("BaSyx configuration completed successfully")
+	stop()
 }

@@ -26,10 +26,127 @@
 package common
 
 import (
+	"context"
+	"strings"
 	"testing"
 
 	sqlmock "github.com/DATA-DOG/go-sqlmock"
 )
+
+func TestResolvePostgresPoolSettings(t *testing.T) {
+	tests := []struct {
+		name    string
+		cfg     PostgresConfig
+		want    PostgresPoolSettings
+		errCode string
+	}{
+		{
+			name: "uses common defaults for zero values",
+			want: PostgresPoolSettings{
+				MaxOpenConnections:     50,
+				MaxIdleConnections:     25,
+				ConnMaxLifetimeMinutes: 5,
+				ConnMaxIdleTimeMinutes: 0,
+			},
+		},
+		{
+			name: "uses explicit settings",
+			cfg: PostgresConfig{
+				MaxOpenConnections:     12,
+				MaxIdleConnections:     4,
+				ConnMaxLifetimeMinutes: 30,
+				ConnMaxIdleTimeMinutes: 7,
+			},
+			want: PostgresPoolSettings{
+				MaxOpenConnections:     12,
+				MaxIdleConnections:     4,
+				ConnMaxLifetimeMinutes: 30,
+				ConnMaxIdleTimeMinutes: 7,
+			},
+		},
+		{
+			name: "caps default max idle at explicit max open",
+			cfg: PostgresConfig{
+				MaxOpenConnections: 10,
+			},
+			want: PostgresPoolSettings{
+				MaxOpenConnections:     10,
+				MaxIdleConnections:     10,
+				ConnMaxLifetimeMinutes: 5,
+				ConnMaxIdleTimeMinutes: 0,
+			},
+		},
+		{
+			name:    "rejects negative max open",
+			cfg:     PostgresConfig{MaxOpenConnections: -1},
+			errCode: "CONFIG-POSTGRES-MAXOPEN",
+		},
+		{
+			name:    "rejects negative max idle",
+			cfg:     PostgresConfig{MaxIdleConnections: -1},
+			errCode: "CONFIG-POSTGRES-MAXIDLE",
+		},
+		{
+			name:    "rejects negative max lifetime",
+			cfg:     PostgresConfig{ConnMaxLifetimeMinutes: -1},
+			errCode: "CONFIG-POSTGRES-CONNMAXLIFETIME",
+		},
+		{
+			name:    "rejects negative max idle time",
+			cfg:     PostgresConfig{ConnMaxIdleTimeMinutes: -1},
+			errCode: "CONFIG-POSTGRES-CONNMAXIDLETIME",
+		},
+		{
+			name: "rejects max idle above max open",
+			cfg: PostgresConfig{
+				MaxOpenConnections: 5,
+				MaxIdleConnections: 6,
+			},
+			errCode: "CONFIG-POSTGRES-IDLEEXCEEDSOPEN",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			got, err := ResolvePostgresPoolSettings(test.cfg)
+			if test.errCode != "" {
+				if err == nil || !strings.Contains(err.Error(), test.errCode) {
+					t.Fatalf("expected %s error, got %v", test.errCode, err)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("ResolvePostgresPoolSettings() failed: %v", err)
+			}
+			if got != test.want {
+				t.Fatalf("ResolvePostgresPoolSettings() = %+v, want %+v", got, test.want)
+			}
+		})
+	}
+}
+
+func TestConfigurePostgresPool(t *testing.T) {
+	db, _, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("sqlmock.New() failed: %v", err)
+	}
+	defer func() {
+		_ = db.Close()
+	}()
+
+	settings, err := ConfigurePostgresPool(db, PostgresConfig{
+		MaxOpenConnections:     12,
+		MaxIdleConnections:     4,
+		ConnMaxLifetimeMinutes: 30,
+		ConnMaxIdleTimeMinutes: 7,
+	})
+	if err != nil {
+		t.Fatalf("ConfigurePostgresPool() failed: %v", err)
+	}
+	if got := db.Stats().MaxOpenConnections; got != settings.MaxOpenConnections {
+		t.Fatalf("MaxOpenConnections = %d, want %d", got, settings.MaxOpenConnections)
+	}
+}
 
 func TestValidateSchemaVersion(t *testing.T) {
 	t.Run("matches expected version", func(t *testing.T) {
@@ -117,4 +234,26 @@ func TestValidateSchemaVersion(t *testing.T) {
 			t.Fatalf("unmet SQL expectations: %v", err)
 		}
 	})
+}
+
+func TestValidateSchemaVersionContext(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("sqlmock.New() failed: %v", err)
+	}
+	defer func() {
+		_ = db.Close()
+	}()
+
+	mock.ExpectQuery(`SELECT "schema_version", "state" FROM "basyxsystem"`).
+		WillReturnRows(sqlmock.NewRows([]string{"schema_version", "state"}).AddRow(CURRENT_DATABASE_VERSION, cleanSchemaState))
+
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	if err = ValidateSchemaVersionContext(ctx, db, CURRENT_DATABASE_VERSION); err != nil {
+		t.Fatalf("ValidateSchemaVersionContext() failed: %v", err)
+	}
+	if err = mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("unmet SQL expectations: %v", err)
+	}
 }
