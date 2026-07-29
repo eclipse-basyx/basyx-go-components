@@ -37,7 +37,7 @@ import (
 	"time"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
-	"github.com/eclipse-basyx/basyx-go-components/internal/common/asyncbulk"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/asyncjob"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/binarycontent"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/history"
 	commonmodel "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
@@ -127,7 +127,11 @@ func runServer(ctx context.Context, configPath string) error {
 
 	smSvc := smregistryapi.NewSubmodelRegistryAPIAPIService(*smDatabase)
 	smCtrl := smregistryopenapi.NewSubmodelRegistryAPIAPIController(smSvc, cfg.Server.ContextPath)
-	bulkManager := asyncbulk.NewManager("SMR-BULK", 0)
+	bulkManager, err := asyncjob.NewPostgresManager(ctx, sharedDB, "SMR-BULK", 0)
+	if err != nil {
+		slog.ErrorContext(ctx, "async job persistence initialization failed", "error.code", "SMREGISTRY-ASYNCJOB-INIT", "error", err)
+		return err
+	}
 	bulkSvc := smregistryapi.NewBulkService(smSvc, bulkManager)
 	bulkHandler := smregistryapi.NewBulkHTTPHandler(bulkSvc)
 

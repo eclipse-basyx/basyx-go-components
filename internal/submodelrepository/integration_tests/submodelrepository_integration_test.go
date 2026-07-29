@@ -75,6 +75,7 @@ var (
 const actionAssertSignedSubmodel = "ASSERT_SIGNED_SUBMODEL"
 
 var submodelRepositoryBaseURL = testenv.LocalURLFromEnv("BASYX_IT_API_PORT", 6004)
+var submodelRepositoryReplicaBaseURL = testenv.LocalURLFromEnv("BASYX_IT_REPLICA_API_PORT", 6014)
 var submodelRepositoryInvalidBaseURL = testenv.LocalhostURLFromEnv("BASYX_IT_INVALID_API_PORT", 6007)
 var submodelRepositoryAASBaseURL = testenv.LocalhostURLFromEnv("BASYX_IT_AAS_API_PORT", 6006)
 var submodelRepositoryAASExternalURL = testenv.LocalURLFromEnv("BASYX_IT_AAS_API_PORT", 6006)
@@ -2585,6 +2586,7 @@ func TestMain(m *testing.M) {
 	if os.Getenv("BASYX_EXTERNAL_COMPOSE") == "1" {
 		testenv.SetEnvDefaultsOrExit(map[string]string{
 			"BASYX_IT_API_URL":         submodelRepositoryBaseURL,
+			"BASYX_IT_REPLICA_API_URL": submodelRepositoryReplicaBaseURL,
 			"BASYX_IT_AAS_API_URL":     submodelRepositoryAASExternalURL,
 			"BASYX_IT_SYNC_API_URL":    submodelRepositorySyncExternalURL,
 			"BASYX_IT_INVALID_API_URL": submodelRepositoryInvalidBaseURL,
@@ -2594,12 +2596,14 @@ func TestMain(m *testing.M) {
 
 	runtime := testenv.NewComposeRuntimeOrExit("submodelrepository-it", []testenv.PortBinding{
 		{Name: "api", EnvVar: "BASYX_IT_API_PORT"},
+		{Name: "replica-api", EnvVar: "BASYX_IT_REPLICA_API_PORT"},
 		{Name: "db", EnvVar: "BASYX_IT_DB_PORT"},
 		{Name: "aas-api", EnvVar: "BASYX_IT_AAS_API_PORT"},
 		{Name: "sync-api", EnvVar: "BASYX_IT_SYNC_API_PORT"},
 		{Name: "invalid-api", EnvVar: "BASYX_IT_INVALID_API_PORT"},
 	})
 	submodelRepositoryBaseURL = runtime.LocalURL("api")
+	submodelRepositoryReplicaBaseURL = runtime.LocalURL("replica-api")
 	submodelRepositoryAASBaseURL = runtime.LocalhostURL("aas-api")
 	submodelRepositoryAASExternalURL = runtime.LocalURL("aas-api")
 	submodelRepositorySyncBaseURL = runtime.LocalhostURL("sync-api")
@@ -2614,5 +2618,8 @@ func TestMain(m *testing.M) {
 		PreDownBeforeUp: true,
 		HealthURL:       submodelRepositoryBaseURL + "/health",
 		HealthTimeout:   150 * time.Second,
+		WaitForReady: func() error {
+			return testenv.WaitHealthyURL(submodelRepositoryReplicaBaseURL+"/health", 150*time.Second)
+		},
 	}))
 }

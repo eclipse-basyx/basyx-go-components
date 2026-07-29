@@ -33,20 +33,20 @@ import (
 	"testing"
 	"time"
 
-	"github.com/eclipse-basyx/basyx-go-components/internal/common/asyncbulk"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/asyncjob"
 	"github.com/go-chi/chi/v5"
 	"github.com/stretchr/testify/require"
 )
 
-func TestGetAsyncBulkStatus_MapsRetryAfterToHeader(t *testing.T) {
-	manager := asyncbulk.NewManager("AASR-BULK-TEST", time.Minute)
+func TestGetBulkJobStatus_MapsRetryAfterToHeader(t *testing.T) {
+	manager := asyncjob.NewManager("AASR-BULK-TEST", time.Minute)
 	service := NewBulkService(aasBulkServiceStub{}, manager)
 	handler := NewBulkHTTPHandler(service)
 
 	router := chi.NewRouter()
 	handler.RegisterRoutes(router, true)
 
-	handleID, err := manager.Start("anonymous")
+	handleID, err := manager.Start(t.Context(), "anonymous", asyncjob.StartOptions{JobKind: "test"})
 	require.NoError(t, err)
 
 	req := httptest.NewRequest(http.MethodGet, "/bulk/status/"+handleID, nil)

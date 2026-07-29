@@ -159,6 +159,11 @@ func runServer(ctx context.Context, configPath string) error {
 		return err
 	}
 	smDatabase.SetJWSCertificateChain(signingOptions.CertificateChain)
+	asyncJobManager, err := api.NewAsyncJobManager(ctx, sharedDB)
+	if err != nil {
+		slog.ErrorContext(ctx, "async job persistence initialization failed", "error.code", "SMREPOSITORY-ASYNCJOB-INIT", "error", err)
+		return err
+	}
 	smRegistryPersistence, err := smregistrydb.NewPostgreSQLSMBackendFromDB(sharedDB)
 	if err != nil {
 		return err
@@ -182,7 +187,7 @@ func runServer(ctx context.Context, configPath string) error {
 	}
 	enableReferencingAASDescriptorEmbeddingSync := registrySyncConfig.SubmodelRegistryIntegration
 	smSvc := aasenvironment.NewCustomSubmodelRepositoryServiceWithAASDescriptorEmbeddingSync(
-		api.NewSubmodelRepositoryAPIAPIService(ctx, *smDatabase),
+		api.NewSubmodelRepositoryAPIAPIService(ctx, *smDatabase, asyncJobManager),
 		persistence,
 		registrySyncConfig,
 		enableReferencingAASDescriptorEmbeddingSync,
