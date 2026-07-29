@@ -14,6 +14,7 @@
 - Code Readability: Ensure the code is easy to read and understand, with proper indentation and spacing
 - Ensure that the Cognitive Complexity of functions does not exceed 15. Refactor complex functions into smaller, manageable pieces.
 - MANDATORY: Use GOQU for SQL Queries in go. No Plain Text.
+- Every new source file must use the repository's complete license header for its file type. Shortened headers containing only copyright and SPDX lines are not allowed; copy the full header from a neighboring file.
 - Try to implement scalable and performant code - no prototyping.
 
 ## Pre-Task Steps:
