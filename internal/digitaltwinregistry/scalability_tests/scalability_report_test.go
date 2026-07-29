@@ -84,14 +84,14 @@ func (r *scalabilityReport) write(exitCode int) (string, error) {
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
 
-	if err := os.MkdirAll(scalabilityResultsDirectory, 0o755); err != nil {
+	if err := os.MkdirAll(scalabilityResultsDirectory, 0o750); err != nil {
 		return "", fmt.Errorf("DTRSCALE-REPORT-WRITE-CREATEDIRECTORY: %w", err)
 	}
 	createdAt := time.Now().UTC()
 	fileName := fmt.Sprintf("scalability-%s-%d.md", createdAt.Format("20060102T150405.000000000Z"), os.Getpid())
 	path := filepath.Join(scalabilityResultsDirectory, fileName)
 	content := r.markdown(createdAt, exitCode)
-	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
 		return "", fmt.Errorf("DTRSCALE-REPORT-WRITE-FILE: %w", err)
 	}
 	return path, nil
@@ -104,37 +104,41 @@ func (r *scalabilityReport) markdown(createdAt time.Time, exitCode int) string {
 	}
 
 	var builder strings.Builder
-	builder.WriteString("# DTR scalability result\n\n")
-	fmt.Fprintf(&builder, "- Started: `%s`\n", r.startedAt.UTC().Format(time.RFC3339Nano))
-	fmt.Fprintf(&builder, "- Report created: `%s`\n", createdAt.Format(time.RFC3339Nano))
-	fmt.Fprintf(&builder, "- Result: **%s** (exit code `%d`)\n", result, exitCode)
-	fmt.Fprintf(&builder, "- Request timeout: `%s`\n", requestTimeout)
-	fmt.Fprintf(&builder, "- Page limit: `%d`\n", r.pageLimit)
-	fmt.Fprintf(&builder, "- Repetitions per scenario: `%d`\n", r.repetitions)
-	fmt.Fprintf(&builder, "- Maximum concurrent requests per scenario: `%d`\n", r.concurrency)
-	fmt.Fprintf(&builder, "- Users: `%s`\n", strings.Join(r.users, ", "))
+	writeMarkdown(&builder, "# DTR scalability result\n\n")
+	writeMarkdown(&builder, "- Started: `%s`\n", r.startedAt.UTC().Format(time.RFC3339Nano))
+	writeMarkdown(&builder, "- Report created: `%s`\n", createdAt.Format(time.RFC3339Nano))
+	writeMarkdown(&builder, "- Result: **%s** (exit code `%d`)\n", result, exitCode)
+	writeMarkdown(&builder, "- Request timeout: `%s`\n", requestTimeout)
+	writeMarkdown(&builder, "- Page limit: `%d`\n", r.pageLimit)
+	writeMarkdown(&builder, "- Repetitions per scenario: `%d`\n", r.repetitions)
+	writeMarkdown(&builder, "- Maximum concurrent requests per scenario: `%d`\n", r.concurrency)
+	writeMarkdown(&builder, "- Users: `%s`\n", strings.Join(r.users, ", "))
 
-	builder.WriteString("\n## Fixtures\n\n")
-	builder.WriteString("| # | AAS ID | Submodel ID |\n| --- | --- | --- |\n")
+	writeMarkdown(&builder, "\n## Fixtures\n\n")
+	writeMarkdown(&builder, "| # | AAS ID | Submodel ID |\n| --- | --- | --- |\n")
 	for index, item := range r.fixtures {
-		fmt.Fprintf(&builder, "| %d | `%s` | `%s` |\n", index+1, item.aasID, item.submodelID)
+		writeMarkdown(&builder, "| %d | `%s` | `%s` |\n", index+1, item.aasID, item.submodelID)
 	}
 
-	builder.WriteString("\n## Scenario results\n\n")
-	builder.WriteString("| Fixture | User | Scenario | Requests | HTTP statuses | Total response bytes | Avg. response bytes | p50 | p95 | Max |\n| --- | --- | --- | ---: | --- | ---: | ---: | --- | --- | --- |\n")
+	writeMarkdown(&builder, "\n## Scenario results\n\n")
+	writeMarkdown(&builder, "| Fixture | User | Scenario | Requests | HTTP statuses | Total response bytes | Avg. response bytes | p50 | p95 | Max |\n| --- | --- | --- | ---: | --- | ---: | ---: | --- | --- | --- |\n")
 	for _, row := range r.rows {
 		averageBodyBytes := int64(0)
 		if row.requests > 0 {
 			averageBodyBytes = row.bodyBytes / int64(row.requests)
 		}
-		fmt.Fprintf(&builder, "| %d | `%s` | `%s` | %d | `%s` | %d | %d | `%s` | `%s` | `%s` |\n", row.context.fixtureIndex, row.context.user, row.scenario, row.requests, row.statusCounts, row.bodyBytes, averageBodyBytes, row.p50, row.p95, row.maximum)
+		writeMarkdown(&builder, "| %d | `%s` | `%s` | %d | `%s` | %d | %d | `%s` | `%s` | `%s` |\n", row.context.fixtureIndex, row.context.user, row.scenario, row.requests, row.statusCounts, row.bodyBytes, averageBodyBytes, row.p50, row.p95, row.maximum)
 	}
 
 	if len(r.failures) > 0 {
-		builder.WriteString("\n## Failures\n\n")
+		writeMarkdown(&builder, "\n## Failures\n\n")
 		for _, failure := range r.failures {
-			fmt.Fprintf(&builder, "- %s\n", failure)
+			writeMarkdown(&builder, "- %s\n", failure)
 		}
 	}
 	return builder.String()
+}
+
+func writeMarkdown(builder *strings.Builder, format string, arguments ...any) {
+	_, _ = fmt.Fprintf(builder, format, arguments...)
 }

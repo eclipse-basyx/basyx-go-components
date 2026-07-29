@@ -29,6 +29,7 @@ const (
 	defaultRepetitions = 5
 	defaultConcurrency = 2
 	anonymousUserName  = "anonymous"
+	environmentFile    = ".env"
 )
 
 var (
@@ -75,8 +76,8 @@ type responseMetadata struct {
 
 func TestMain(m *testing.M) {
 	scalabilityResultReport = newScalabilityReport(time.Now())
-	if err := loadEnvironmentFile(".env"); err != nil {
-		exitWithScalabilityReport("DTRSCALE-TESTMAIN-LOADENV: %v", err)
+	if err := loadEnvironmentFile(); err != nil {
+		os.Exit(failScalabilityTestMain("DTRSCALE-TESTMAIN-LOADENV: %v", err))
 	}
 
 	runtime, err := testenv.NewComposeRuntime("dtr-scalability", []testenv.PortBinding{
@@ -84,11 +85,11 @@ func TestMain(m *testing.M) {
 		{Name: "keycloak", EnvVar: "BASYX_IT_KEYCLOAK_PORT"},
 	})
 	if err != nil {
-		exitWithScalabilityReport("DTRSCALE-TESTMAIN-COMPOSERUNTIME: %v", err)
+		os.Exit(failScalabilityTestMain("DTRSCALE-TESTMAIN-COMPOSERUNTIME: %v", err))
 	}
 	if err := runtime.ApplyToProcess(); err != nil {
 		runtime.Release()
-		exitWithScalabilityReport("DTRSCALE-TESTMAIN-APPLYRUNTIME: %v", err)
+		os.Exit(failScalabilityTestMain("DTRSCALE-TESTMAIN-APPLYRUNTIME: %v", err))
 	}
 	dtrBaseURL = runtime.LocalURL("api") + "/api/v3"
 	keycloakTokenURL = runtime.LocalhostURL("keycloak") + "/realms/basyx/protocol/openid-connect/token"
@@ -97,7 +98,7 @@ func TestMain(m *testing.M) {
 	})
 	if err != nil {
 		runtime.Release()
-		exitWithScalabilityReport("DTRSCALE-TESTMAIN-SECURITYENV: %v", err)
+		os.Exit(failScalabilityTestMain("DTRSCALE-TESTMAIN-SECURITYENV: %v", err))
 	}
 
 	code := testenv.RunComposeTestMain(m, testenv.ComposeTestMainOptions{
@@ -116,12 +117,12 @@ func TestMain(m *testing.M) {
 	os.Exit(code)
 }
 
-func exitWithScalabilityReport(format string, arguments ...any) {
+func failScalabilityTestMain(format string, arguments ...any) int {
 	message := fmt.Sprintf(format, arguments...)
 	_, _ = fmt.Fprintln(os.Stderr, message)
 	scalabilityResultReport.addFailure(message)
 	writeScalabilityReport(1)
-	os.Exit(1)
+	return 1
 }
 
 func writeScalabilityReport(exitCode int) {
@@ -214,6 +215,7 @@ func requestRunner(client *http.Client, token, method, endpoint string, payload 
 			request.Header.Set("Content-Type", "application/json")
 		}
 
+		// #nosec G704 -- Scalability tests call only the loopback DTR URL allocated by the test runtime.
 		response, err := client.Do(request)
 		if err != nil {
 			return responseMetadata{}, fmt.Errorf("DTRSCALE-REQUEST-EXECUTE: %w", err)
@@ -266,6 +268,7 @@ func loadAssetLinks(t *testing.T, client *http.Client, token, aasID string) ([]a
 		return nil, 0, fmt.Errorf("DTRSCALE-LOOKUP-BUILD: %w", err)
 	}
 	request.Header.Set("Authorization", "Bearer "+token)
+	// #nosec G704 -- The request target is the loopback DTR URL allocated by the test runtime.
 	response, err := client.Do(request)
 	if err != nil {
 		return nil, 0, fmt.Errorf("DTRSCALE-LOOKUP-EXECUTE: %w", err)
@@ -291,6 +294,7 @@ func loadGlobalAssetLink(t *testing.T, client *http.Client, token, aasID string)
 		return assetLink{}, 0, fmt.Errorf("DTRSCALE-GLOBAL-BUILD: %w", err)
 	}
 	request.Header.Set("Authorization", "Bearer "+token)
+	// #nosec G704 -- The request target is the loopback DTR URL allocated by the test runtime.
 	response, err := client.Do(request)
 	if err != nil {
 		return assetLink{}, 0, fmt.Errorf("DTRSCALE-GLOBAL-EXECUTE: %w", err)
@@ -585,8 +589,8 @@ func envValue(key, fallback string) string {
 	return fallback
 }
 
-func loadEnvironmentFile(path string) error {
-	contents, err := os.ReadFile(path)
+func loadEnvironmentFile() error {
+	contents, err := os.ReadFile(environmentFile)
 	if err != nil {
 		return err
 	}
