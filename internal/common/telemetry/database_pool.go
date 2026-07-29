@@ -70,8 +70,11 @@ type databasePoolRegistry struct {
 	closed        bool
 }
 
-// RegisterDatabasePool registers db with the active metric runtime. Calling it
-// while metrics are disabled is a no-op.
+// RegisterDatabasePool registers db as the service's writer or reader pool.
+// Re-registering the same database and role is idempotent, while assigning
+// another database to an occupied role or changing a database's role returns an
+// error. Registration is a no-op while metrics are disabled. An error is also
+// returned for a nil database, an unsupported role, or a shutting-down runtime.
 func RegisterDatabasePool(db *sql.DB, role DatabasePoolRole) error {
 	if db == nil {
 		return fmt.Errorf("OTEL-DBPOOL-NILDB database handle is nil")
@@ -85,6 +88,21 @@ func RegisterDatabasePool(db *sql.DB, role DatabasePoolRole) error {
 		return nil
 	}
 	return runtime.databasePools.register(db, role, db.Stats)
+}
+
+// UnregisterDatabasePool removes db from the active metric runtime. It is
+// idempotent and is a no-op while metrics are disabled or db is not registered.
+// An error is returned for a nil database or when callback removal fails.
+func UnregisterDatabasePool(db *sql.DB) error {
+	if db == nil {
+		return fmt.Errorf("OTEL-DBPOOL-NILDB database handle is nil")
+	}
+
+	runtime := activeRuntime.Load()
+	if runtime == nil || !runtime.metricsEnabled {
+		return nil
+	}
+	return runtime.databasePools.unregisterPool(db)
 }
 
 func (registry *databasePoolRegistry) initialize(meter metric.Meter) error {
@@ -195,6 +213,22 @@ func (registry *databasePoolRegistry) registerCallback(
 		return nil, fmt.Errorf("OTEL-DBPOOL-REGISTER register database pool callback: %w", err)
 	}
 	return registration, nil
+}
+
+func (registry *databasePoolRegistry) unregisterPool(db *sql.DB) error {
+	registry.mu.Lock()
+	defer registry.mu.Unlock()
+
+	registeredPool, ok := registry.registrations[db]
+	if !ok {
+		return nil
+	}
+	if err := registeredPool.registration.Unregister(); err != nil {
+		return fmt.Errorf("OTEL-DBPOOL-UNREGISTER unregister database pool callback: %w", err)
+	}
+	delete(registry.registrations, db)
+	delete(registry.roles, registeredPool.role)
+	return nil
 }
 
 func observeDatabasePool(

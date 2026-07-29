@@ -299,10 +299,21 @@ func OpenPostgresWithSchemaValidation(
 		return nil, err
 	}
 	if err = ValidateSchemaVersionContext(ctx, db, expectedVersion); err != nil {
-		_ = db.Close()
-		return nil, err
+		return nil, closePostgresAfterSchemaValidationFailure(db, err)
 	}
 	return db, nil
+}
+
+func closePostgresAfterSchemaValidationFailure(db *sql.DB, validationErr error) error {
+	unregisterErr := telemetry.UnregisterDatabasePool(db)
+	_ = db.Close()
+	if unregisterErr == nil {
+		return validationErr
+	}
+	return fmt.Errorf(
+		"COMMON-OPENPOSTGRES-METRICS failed to unregister PostgreSQL connection pool after schema validation failure: %w",
+		errors.Join(validationErr, unregisterErr),
+	)
 }
 
 // ValidateSchemaVersionByDSN opens a temporary database connection and validates the schema version.

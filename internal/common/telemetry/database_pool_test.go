@@ -152,6 +152,58 @@ func TestRegisterDatabasePoolDoesNothingWhenMetricsAreDisabled(t *testing.T) {
 	if err := RegisterDatabasePool(new(sql.DB), DatabasePoolRoleWriter); err != nil {
 		t.Fatalf("disabled metric registration: %v", err)
 	}
+	if err := UnregisterDatabasePool(new(sql.DB)); err != nil {
+		t.Fatalf("disabled metric unregistration: %v", err)
+	}
+}
+
+func TestRegisterDatabasePoolUsesActiveRuntime(t *testing.T) {
+	runtime, reader := installDatabasePoolTestRuntime(t)
+	db := new(sql.DB)
+	db.SetMaxOpenConns(24)
+
+	if err := RegisterDatabasePool(db, DatabasePoolRoleWriter); err != nil {
+		t.Fatalf("register database pool: %v", err)
+	}
+	if got := len(runtime.databasePools.registrations); got != 1 {
+		t.Fatalf("active runtime contains %d registrations, want 1", got)
+	}
+
+	var collected metricdata.ResourceMetrics
+	if err := reader.Collect(t.Context(), &collected); err != nil {
+		t.Fatalf("collect database pool metrics: %v", err)
+	}
+	assertSingleInt64Point(t, collected, "db.client.connection.max", 24)
+}
+
+func TestUnregisterDatabasePoolAllowsRoleReplacement(t *testing.T) {
+	runtime, reader := installDatabasePoolTestRuntime(t)
+	firstDB := new(sql.DB)
+	firstDB.SetMaxOpenConns(12)
+	if err := RegisterDatabasePool(firstDB, DatabasePoolRoleWriter); err != nil {
+		t.Fatalf("register first database pool: %v", err)
+	}
+	if err := UnregisterDatabasePool(firstDB); err != nil {
+		t.Fatalf("unregister first database pool: %v", err)
+	}
+	if err := UnregisterDatabasePool(firstDB); err != nil {
+		t.Fatalf("repeat database pool unregistration: %v", err)
+	}
+
+	replacementDB := new(sql.DB)
+	replacementDB.SetMaxOpenConns(36)
+	if err := RegisterDatabasePool(replacementDB, DatabasePoolRoleWriter); err != nil {
+		t.Fatalf("register replacement database pool: %v", err)
+	}
+	if got := len(runtime.databasePools.registrations); got != 1 {
+		t.Fatalf("active runtime contains %d registrations, want 1", got)
+	}
+
+	var collected metricdata.ResourceMetrics
+	if err := reader.Collect(t.Context(), &collected); err != nil {
+		t.Fatalf("collect replacement database pool metrics: %v", err)
+	}
+	assertSingleInt64Point(t, collected, "db.client.connection.max", 36)
 }
 
 func TestRegisterDatabasePoolRejectsInvalidInputs(t *testing.T) {
@@ -161,6 +213,30 @@ func TestRegisterDatabasePoolRejectsInvalidInputs(t *testing.T) {
 	if err := RegisterDatabasePool(new(sql.DB), "tenant-123"); err == nil || !strings.Contains(err.Error(), "OTEL-DBPOOL-ROLE") {
 		t.Fatalf("expected invalid role error, got %v", err)
 	}
+	if err := UnregisterDatabasePool(nil); err == nil || !strings.Contains(err.Error(), "OTEL-DBPOOL-NILDB") {
+		t.Fatalf("expected nil database error, got %v", err)
+	}
+}
+
+func installDatabasePoolTestRuntime(t *testing.T) (*Runtime, *metric.ManualReader) {
+	t.Helper()
+	reader := metric.NewManualReader()
+	provider := metric.NewMeterProvider(metric.WithReader(reader))
+	runtime := &Runtime{
+		enabled:        true,
+		metricsEnabled: true,
+		metricProvider: provider,
+	}
+	if err := runtime.databasePools.initialize(provider.Meter(instrumentationName)); err != nil {
+		t.Fatalf("initialize database pool metrics: %v", err)
+	}
+	previousRuntime := activeRuntime.Swap(runtime)
+	t.Cleanup(func() {
+		activeRuntime.Store(previousRuntime)
+		runtime.databasePools.unregister()
+		_ = provider.Shutdown(t.Context())
+	})
+	return runtime, reader
 }
 
 func int64Points(t *testing.T, collected metricdata.ResourceMetrics, name string) []metricdata.DataPoint[int64] {
