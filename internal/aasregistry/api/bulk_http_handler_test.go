@@ -38,7 +38,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestGetAsyncBulkStatus_MapsRetryAfterToHeader(t *testing.T) {
+func TestGetBulkJobStatus_MapsRetryAfterToHeader(t *testing.T) {
 	manager := asyncjob.NewManager("AASR-BULK-TEST", time.Minute)
 	service := NewBulkService(aasBulkServiceStub{}, manager)
 	handler := NewBulkHTTPHandler(service)

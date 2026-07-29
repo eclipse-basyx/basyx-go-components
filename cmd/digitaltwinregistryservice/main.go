@@ -154,7 +154,7 @@ func runServer(ctx context.Context, configPath string) error {
 	registryCtrl := registryapi.NewAssetAdministrationShellRegistryAPIAPIController(registrySvc, cfg.Server.ContextPath)
 	bulkManager, err := asyncjob.NewPostgresManager(ctx, sharedDB, "DTR-BULK", 0)
 	if err != nil {
-		slog.ErrorContext(ctx, "async bulk persistence initialization failed", "error.code", "DTR-ASYNCJOB-INIT", "error", err)
+		slog.ErrorContext(ctx, "async job persistence initialization failed", "error.code", "DTR-ASYNCJOB-INIT", "error", err)
 		return err
 	}
 	bulkSvc := registryapiinternal.NewBulkService(registrySvc, bulkManager)

@@ -129,7 +129,7 @@ func runServer(ctx context.Context, configPath string) error {
 	smCtrl := smregistryopenapi.NewSubmodelRegistryAPIAPIController(smSvc, cfg.Server.ContextPath)
 	bulkManager, err := asyncjob.NewPostgresManager(ctx, sharedDB, "SMR-BULK", 0)
 	if err != nil {
-		slog.ErrorContext(ctx, "async bulk persistence initialization failed", "error.code", "SMREGISTRY-ASYNCJOB-INIT", "error", err)
+		slog.ErrorContext(ctx, "async job persistence initialization failed", "error.code", "SMREGISTRY-ASYNCJOB-INIT", "error", err)
 		return err
 	}
 	bulkSvc := smregistryapi.NewBulkService(smSvc, bulkManager)

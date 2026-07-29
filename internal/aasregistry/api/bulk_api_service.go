@@ -41,7 +41,7 @@ import (
 )
 
 const (
-	bulkOperationRetryAfterSeconds = 2
+	bulkJobRetryAfterSeconds = 2
 )
 
 type aasBulkDescriptorService interface {
@@ -50,7 +50,7 @@ type aasBulkDescriptorService interface {
 	ExecuteBulkDeleteAtomic(ctx context.Context, aasIdentifiers []string) asyncjob.BulkResult
 }
 
-// BulkService provides SSP-003 async bulk operations for AAS descriptors.
+// BulkService provides SSP-003 bulk jobs for AAS descriptors.
 type BulkService struct {
 	descriptorService aasBulkDescriptorService
 	manager           *asyncjob.Manager
@@ -67,7 +67,7 @@ func NewBulkService(descriptorService aasBulkDescriptorService, manager *asyncjo
 	}
 }
 
-// StartCreate starts an async bulk create operation.
+// StartCreate starts a bulk create job.
 func (s *BulkService) StartCreate(ctx context.Context, descriptors []model.AssetAdministrationShellDescriptor) model.ImplResponse {
 	handleID, handleErr := s.manager.Start(ctx, auth.OwnerKeyFromContext(ctx), asyncjob.StartOptions{
 		JobKind: "aas-registry.bulk.create",
@@ -81,7 +81,7 @@ func (s *BulkService) StartCreate(ctx context.Context, descriptors []model.Asset
 		stopHeartbeat := s.manager.KeepAlive(asyncCtx, handleID)
 		defer stopHeartbeat()
 		if err := s.manager.Complete(asyncCtx, handleID, s.descriptorService.ExecuteBulkCreateAtomic(asyncCtx, descriptors)); err != nil {
-			slog.ErrorContext(asyncCtx, "async AAS registry bulk completion failed", "error.code", "AASR-BULK-CREATE-COMPLETE", "error", err, "async_job.handle_id", handleID)
+			slog.ErrorContext(asyncCtx, "AAS registry bulk job completion failed", "error.code", "AASR-BULK-CREATE-COMPLETE", "error", err, "async_job.handle_id", handleID)
 		}
 	}()
 
@@ -90,7 +90,7 @@ func (s *BulkService) StartCreate(ctx context.Context, descriptors []model.Asset
 	})
 }
 
-// StartPut starts an async bulk upsert operation.
+// StartPut starts a bulk upsert job.
 func (s *BulkService) StartPut(ctx context.Context, descriptors []model.AssetAdministrationShellDescriptor) model.ImplResponse {
 	handleID, handleErr := s.manager.Start(ctx, auth.OwnerKeyFromContext(ctx), asyncjob.StartOptions{
 		JobKind: "aas-registry.bulk.put",
@@ -104,7 +104,7 @@ func (s *BulkService) StartPut(ctx context.Context, descriptors []model.AssetAdm
 		stopHeartbeat := s.manager.KeepAlive(asyncCtx, handleID)
 		defer stopHeartbeat()
 		if err := s.manager.Complete(asyncCtx, handleID, s.descriptorService.ExecuteBulkPutAtomic(asyncCtx, descriptors)); err != nil {
-			slog.ErrorContext(asyncCtx, "async AAS registry bulk completion failed", "error.code", "AASR-BULK-PUT-COMPLETE", "error", err, "async_job.handle_id", handleID)
+			slog.ErrorContext(asyncCtx, "AAS registry bulk job completion failed", "error.code", "AASR-BULK-PUT-COMPLETE", "error", err, "async_job.handle_id", handleID)
 		}
 	}()
 
@@ -113,7 +113,7 @@ func (s *BulkService) StartPut(ctx context.Context, descriptors []model.AssetAdm
 	})
 }
 
-// StartDelete starts an async bulk delete operation.
+// StartDelete starts a bulk delete job.
 func (s *BulkService) StartDelete(ctx context.Context, aasIdentifiers []string) model.ImplResponse {
 	handleID, handleErr := s.manager.Start(ctx, auth.OwnerKeyFromContext(ctx), asyncjob.StartOptions{
 		JobKind: "aas-registry.bulk.delete",
@@ -127,7 +127,7 @@ func (s *BulkService) StartDelete(ctx context.Context, aasIdentifiers []string) 
 		stopHeartbeat := s.manager.KeepAlive(asyncCtx, handleID)
 		defer stopHeartbeat()
 		if err := s.manager.Complete(asyncCtx, handleID, s.descriptorService.ExecuteBulkDeleteAtomic(asyncCtx, aasIdentifiers)); err != nil {
-			slog.ErrorContext(asyncCtx, "async AAS registry bulk completion failed", "error.code", "AASR-BULK-DELETE-COMPLETE", "error", err, "async_job.handle_id", handleID)
+			slog.ErrorContext(asyncCtx, "AAS registry bulk job completion failed", "error.code", "AASR-BULK-DELETE-COMPLETE", "error", err, "async_job.handle_id", handleID)
 		}
 	}()
 
@@ -136,21 +136,21 @@ func (s *BulkService) StartDelete(ctx context.Context, aasIdentifiers []string) 
 	})
 }
 
-// GetStatus returns async bulk execution status by handle id.
+// GetStatus returns bulk job execution status by handle id.
 func (s *BulkService) GetStatus(ctx context.Context, handleID string) model.ImplResponse {
 	record, found, err := s.manager.GetForOwner(ctx, handleID, auth.OwnerKeyFromContext(ctx))
 	if err != nil {
-		return common.NewErrorResponse(err, http.StatusInternalServerError, componentName, "GetAsyncBulkStatus", "ReadHandle")
+		return common.NewErrorResponse(err, http.StatusInternalServerError, componentName, "GetBulkJobStatus", "ReadHandle")
 	}
 	if !found {
-		return common.NewErrorResponse(common.NewErrNotFound(handleID), http.StatusNotFound, componentName, "GetAsyncBulkStatus", "HandleNotFound")
+		return common.NewErrorResponse(common.NewErrNotFound(handleID), http.StatusNotFound, componentName, "GetBulkJobStatus", "HandleNotFound")
 	}
 
 	if record.ExecutionState == "Running" {
 		return model.Response(http.StatusOK, map[string]any{
 			"executionState": "Running",
 			"success":        true,
-			"retryAfter":     bulkOperationRetryAfterSeconds,
+			"retryAfter":     bulkJobRetryAfterSeconds,
 		})
 	}
 
@@ -158,23 +158,23 @@ func (s *BulkService) GetStatus(ctx context.Context, handleID string) model.Impl
 	return model.ResponseWithHeaders(http.StatusFound, nil, map[string]string{"Location": location})
 }
 
-// GetResult returns async bulk result by handle id.
+// GetResult returns a bulk job result by handle id.
 func (s *BulkService) GetResult(ctx context.Context, handleID string) model.ImplResponse {
 	record, found, err := s.manager.GetForOwner(ctx, handleID, auth.OwnerKeyFromContext(ctx))
 	if err != nil {
-		return common.NewErrorResponse(err, http.StatusInternalServerError, componentName, "GetBulkAsyncResult", "ReadHandle")
+		return common.NewErrorResponse(err, http.StatusInternalServerError, componentName, "GetBulkJobResult", "ReadHandle")
 	}
 	if !found {
-		return common.NewErrorResponse(common.NewErrNotFound(handleID), http.StatusNotFound, componentName, "GetBulkAsyncResult", "HandleNotFound")
+		return common.NewErrorResponse(common.NewErrNotFound(handleID), http.StatusNotFound, componentName, "GetBulkJobResult", "HandleNotFound")
 	}
 
 	if record.ExecutionState == "Running" {
-		runningErr := errors.New("AASR-BULK-GETRESULT-RUNNING bulk operation is still running")
-		return common.NewErrorResponse(runningErr, http.StatusBadRequest, componentName, "GetBulkAsyncResult", "OperationStillRunning")
+		runningErr := errors.New("AASR-BULK-GETRESULT-RUNNING bulk job is still running")
+		return common.NewErrorResponse(runningErr, http.StatusBadRequest, componentName, "GetBulkJobResult", "JobStillRunning")
 	}
 
 	if err := s.manager.Delete(ctx, handleID); err != nil {
-		return common.NewErrorResponse(err, http.StatusInternalServerError, componentName, "GetBulkAsyncResult", "DeleteHandle")
+		return common.NewErrorResponse(err, http.StatusInternalServerError, componentName, "GetBulkJobResult", "DeleteHandle")
 	}
 
 	if record.ExecutionState == "Failed" {

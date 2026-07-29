@@ -280,9 +280,9 @@ func NewCheckSubmodelAbsentAction(options CheckSubmodelAbsentOptions) JSONStepAc
 	}
 }
 
-// AssertBulkFailureAction asserts an asynchronous bulk operation failure.
+// AssertBulkFailureAction asserts a bulk job failure.
 //
-// The helper starts the bulk step, follows the returned operation handle, and
+// The helper starts the bulk step, follows the returned job handle, and
 // compares the completed failure status and message with the expected values
 // from the JSON suite step.
 //

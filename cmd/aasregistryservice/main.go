@@ -130,7 +130,7 @@ func runServer(ctx context.Context, configPath string) error {
 	smCtrl := apis.NewAssetAdministrationShellRegistryAPIAPIController(smSvc, cfg.Server.ContextPath)
 	bulkManager, err := asyncjob.NewPostgresManager(ctx, sharedDB, "AASR-BULK", 0)
 	if err != nil {
-		slog.ErrorContext(ctx, "async bulk persistence initialization failed", "error.code", "AASREGISTRY-ASYNCJOB-INIT", "error", err)
+		slog.ErrorContext(ctx, "async job persistence initialization failed", "error.code", "AASREGISTRY-ASYNCJOB-INIT", "error", err)
 		return err
 	}
 	bulkSvc := aasregistryapi.NewBulkService(smSvc, bulkManager)
