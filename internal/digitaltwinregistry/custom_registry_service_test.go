@@ -70,6 +70,7 @@ func TestDecodeRegistryAssetLinkQueryAssetIDsRejectsMissingRequiredFields(t *tes
 	}
 	if resp == nil {
 		t.Fatalf("expected bad request response")
+		return
 	}
 	if resp.Code != http.StatusBadRequest {
 		t.Fatalf("expected status %d, got %d", http.StatusBadRequest, resp.Code)
