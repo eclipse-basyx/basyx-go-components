@@ -2,7 +2,9 @@
 
 This suite starts a local Keycloak and local Keycloak PostgreSQL database, runs the BaSyx configuration service from `eclipsebasyx/basyxconfigurationservice-go:SNAPSHOT`, and builds the DTR from the current repository code. The configuration service and DTR both use the external PostgreSQL database configured in `.env`.
 
-The test is read-only after configuration-service schema initialization. It obtains specific asset-link values through `GET /lookup/shells/{aasIdentifier}` and the global asset ID through `GET /shell-descriptors/{aasIdentifier}`; neither is hard-coded.
+The default workload is read-only after configuration-service schema initialization. It obtains specific asset-link values through `GET /lookup/shells/{aasIdentifier}` and the global asset ID through `GET /shell-descriptors/{aasIdentifier}`; neither is hard-coded.
+
+The optional async bulk workload is not read-only. Enable it only for a scalability database by setting `DTR_SCALE_ASYNC_BULK_ENABLED=true`. It creates uniquely identified temporary shell descriptors and removes the current descriptor rows after each sample. Descriptor history and audit records created by these operations are permanent, and an interrupted process can leave temporary descriptors behind. Do not enable this workload against a production database. The reference user must be allowed to create, update, delete, and read bulk operation status and results.
 
 ## Configure and sample fixtures
 
@@ -22,13 +24,15 @@ The fixture script samples shell/submodel pairs with indexed primary-key range p
 go test -v .\internal\digitaltwinregistry\scalability_tests
 ```
 
-Each request has a strict 10-second context timeout. Configure `DTR_SCALE_REQUEST_REPETITIONS` and `DTR_SCALE_REQUEST_CONCURRENCY` in `.env` to control load. The test logs the returned status distribution, total response-body bytes, average response-body bytes, p50, p95, and maximum duration for each endpoint, fixture, and user.
+Each regular request has a strict 10-second context timeout. Configure `DTR_SCALE_REQUEST_REPETITIONS` and `DTR_SCALE_REQUEST_CONCURRENCY` in `.env` to control load. The test logs the returned status distribution, total response-body bytes, average response-body bytes, p50, p95, and maximum duration for each endpoint, fixture, and user.
 
-The Compose setup reuses the DTR integration-test Keycloak realm and access rules, with a rewritten local issuer URL. `DTR_SCALE_KEYCLOAK_USERS` therefore defaults to `admin`, `usera`, `userb`, `no_bpn_viewer`, `userx`, and `usery`. `DTR_SCALE_INCLUDE_ANONYMOUS` defaults to `true`, adding an unauthenticated `anonymous` workload user that sends no Authorization header. All HTTP responses below 500, including permission-filtered `403` and `404` responses, are reported as scalability results. A request timeout, transport error, or HTTP 5xx response fails the test.
+Async bulk scenarios use `DTR_SCALE_ASYNC_BULK_TIMEOUT_SECONDS` as the lifecycle timeout and `DTR_SCALE_ASYNC_BULK_POLL_INTERVAL_MILLISECONDS` between running-status polls. `DTR_SCALE_ASYNC_BULK_SIZE` controls the number of descriptors in each atomic operation. Each measured sample starts with the mutation request and ends after the terminal result has been retrieved; preparation and cleanup are excluded. The response-byte count includes the initial `202`, all status responses, and the result response.
+
+The Compose setup reuses the DTR integration-test Keycloak realm and access rules, with a rewritten local issuer URL. `DTR_SCALE_KEYCLOAK_USERS` therefore defaults to `admin`, `usera`, `userb`, `no_bpn_viewer`, `userx`, and `usery`. `DTR_SCALE_INCLUDE_ANONYMOUS` defaults to `true`, adding an unauthenticated `anonymous` workload user that sends no Authorization header. For the regular read scenarios, all HTTP responses below 500, including permission-filtered `403` and `404` responses, are reported as scalability results. Async bulk scenarios require a successful terminal `204`. A request timeout, transport error, or HTTP 5xx response fails the test.
 
 ## Result document
 
-Every run writes a timestamped Markdown document to `results/`, for example `results/scalability-20260729T114535.123456789Z-32232.md`. The directory is ignored by Git. A result document contains the run timestamps and outcome, workload configuration, fixture AAS/submodel IDs, and one row per fixture/user/scenario with HTTP status counts, p50, p95, and maximum duration. It is also written when Compose startup fails, so the developer has a dated record of unsuccessful runs.
+Every run writes a timestamped Markdown document to `results/`, for example `results/scalability-20260729T114535.123456789Z-32232.md`. The directory is ignored by Git. A result document contains the run timestamps and outcome, workload configuration, fixture AAS/submodel IDs, and one row per fixture/user/scenario with HTTP status counts, p50, p95, and maximum duration. Async bulk rows use `-` in the fixture column because that workload does not depend on sampled records. The report is also written when Compose startup fails, so the developer has a dated record of unsuccessful runs.
 
 ## Exact request sequence and data used
 
@@ -102,6 +106,28 @@ The following logical scenario sequence is then executed for every configured us
 
 Each scenario is repeated `DTR_SCALE_REQUEST_REPETITIONS` times with at most `DTR_SCALE_REQUEST_CONCURRENCY` simultaneous requests. Therefore, the scenarios above start in the listed order, but requests repeated within one scenario do not have a deterministic network order.
 
+When `DTR_SCALE_ASYNC_BULK_ENABLED=true`, three additional scenarios run once per configured repetition for the reference user. Their batch size is `DTR_SCALE_ASYNC_BULK_SIZE`:
+
+```text
+16. POST /api/v3/bulk/shell-descriptors
+    Poll GET /api/v3/bulk/status/{handleId} until 302.
+    GET /api/v3/bulk/result/{handleId}
+    Remove the temporary descriptors outside the measured interval.
+
+17. Create temporary descriptors outside the measured interval.
+    PUT /api/v3/bulk/shell-descriptors with updated versions
+    Poll GET /api/v3/bulk/status/{handleId} until 302.
+    GET /api/v3/bulk/result/{handleId}
+    Remove the temporary descriptors outside the measured interval.
+
+18. Create temporary descriptors outside the measured interval.
+    DELETE /api/v3/bulk/shell-descriptors with their identifiers
+    Poll GET /api/v3/bulk/status/{handleId} until 302.
+    GET /api/v3/bulk/result/{handleId}
+```
+
+All descriptors use IDs beginning with `urn:basyx:dtr-scalability:async-bulk:`. Successful lifecycle scenarios report the terminal result status, normally `204`. Setup or cleanup failures fail the suite.
+
 ## Covered endpoints
 
 - `GET /shell-descriptors?limit=...`
@@ -112,5 +138,10 @@ Each scenario is repeated `DTR_SCALE_REQUEST_REPETITIONS` times with at most `DT
 - `POST /lookup/shellsByAssetLink` with a specific and a global link
 - `GET /shell-descriptors/{aasIdentifier}/submodel-descriptors?limit=...`
 - `GET /shell-descriptors/{aasIdentifier}/submodel-descriptors/{submodelIdentifier}`
+- `POST /bulk/shell-descriptors` with temporary descriptors
+- `PUT /bulk/shell-descriptors` with temporary descriptors
+- `DELETE /bulk/shell-descriptors` with temporary descriptor IDs
+- `GET /bulk/status/{handleId}`
+- `GET /bulk/result/{handleId}`
 
-The local Keycloak database is destroyed when the test ends. The external database is never dropped or reset; use a database account that is permitted to run the BaSyx schema configuration service.
+The local Keycloak database is destroyed when the test ends. The external database is never dropped or reset; use a database account that is permitted to run the BaSyx schema configuration service and, when enabled, the async bulk mutations.

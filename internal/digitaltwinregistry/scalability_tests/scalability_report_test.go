@@ -1,3 +1,29 @@
+/*******************************************************************************
+* Copyright (C) 2026 the Eclipse BaSyx Authors and Fraunhofer IESE
+*
+* Permission is hereby granted, free of charge, to any person obtaining
+* a copy of this software and associated documentation files (the
+* "Software"), to deal in the Software without restriction, including
+* without limitation the rights to use, copy, modify, merge, publish,
+* distribute, sublicense, and/or sell copies of the Software, and to
+* permit persons to whom the Software is furnished to do so, subject to
+* the following conditions:
+*
+* The above copyright notice and this permission notice shall be
+* included in all copies or substantial portions of the Software.
+*
+* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+* NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
+* LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+* OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
+* WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+*
+* SPDX-License-Identifier: MIT
+******************************************************************************/
+// Author: Aaron Zielstorff ( Fraunhofer IESE )
+
 package scalability_tests
 
 import (
@@ -35,6 +61,7 @@ type scalabilityReport struct {
 	pageLimit   int
 	repetitions int
 	concurrency int
+	asyncBulk   asyncBulkConfig
 	rows        []scenarioReportRow
 	failures    []string
 }
@@ -43,7 +70,12 @@ func newScalabilityReport(startedAt time.Time) *scalabilityReport {
 	return &scalabilityReport{startedAt: startedAt}
 }
 
-func (r *scalabilityReport) configure(fixtures []fixture, users []testUser, pageLimit, repetitions, concurrency int) {
+func (r *scalabilityReport) configure(
+	fixtures []fixture,
+	users []testUser,
+	pageLimit, repetitions, concurrency int,
+	asyncBulk asyncBulkConfig,
+) {
 	if r == nil {
 		return
 	}
@@ -57,6 +89,7 @@ func (r *scalabilityReport) configure(fixtures []fixture, users []testUser, page
 	r.pageLimit = pageLimit
 	r.repetitions = repetitions
 	r.concurrency = concurrency
+	r.asyncBulk = asyncBulk
 }
 
 func (r *scalabilityReport) addRow(row scenarioReportRow) {
@@ -113,6 +146,12 @@ func (r *scalabilityReport) markdown(createdAt time.Time, exitCode int) string {
 	writeMarkdown(&builder, "- Repetitions per scenario: `%d`\n", r.repetitions)
 	writeMarkdown(&builder, "- Maximum concurrent requests per scenario: `%d`\n", r.concurrency)
 	writeMarkdown(&builder, "- Users: `%s`\n", strings.Join(r.users, ", "))
+	writeMarkdown(&builder, "- Async bulk enabled: `%t`\n", r.asyncBulk.enabled)
+	if r.asyncBulk.enabled {
+		writeMarkdown(&builder, "- Async bulk descriptors per operation: `%d`\n", r.asyncBulk.size)
+		writeMarkdown(&builder, "- Async bulk lifecycle timeout: `%s`\n", r.asyncBulk.timeout)
+		writeMarkdown(&builder, "- Async bulk poll interval: `%s`\n", r.asyncBulk.pollInterval)
+	}
 
 	writeMarkdown(&builder, "\n## Fixtures\n\n")
 	writeMarkdown(&builder, "| # | AAS ID | Submodel ID |\n| --- | --- | --- |\n")
@@ -123,11 +162,15 @@ func (r *scalabilityReport) markdown(createdAt time.Time, exitCode int) string {
 	writeMarkdown(&builder, "\n## Scenario results\n\n")
 	writeMarkdown(&builder, "| Fixture | User | Scenario | Requests | HTTP statuses | Total response bytes | Avg. response bytes | p50 | p95 | Max |\n| --- | --- | --- | ---: | --- | ---: | ---: | --- | --- | --- |\n")
 	for _, row := range r.rows {
+		fixture := "-"
+		if row.context.fixtureIndex > 0 {
+			fixture = fmt.Sprintf("%d", row.context.fixtureIndex)
+		}
 		averageBodyBytes := int64(0)
 		if row.requests > 0 {
 			averageBodyBytes = row.bodyBytes / int64(row.requests)
 		}
-		writeMarkdown(&builder, "| %d | `%s` | `%s` | %d | `%s` | %d | %d | `%s` | `%s` | `%s` |\n", row.context.fixtureIndex, row.context.user, row.scenario, row.requests, row.statusCounts, row.bodyBytes, averageBodyBytes, row.p50, row.p95, row.maximum)
+		writeMarkdown(&builder, "| %s | `%s` | `%s` | %d | `%s` | %d | %d | `%s` | `%s` | `%s` |\n", fixture, row.context.user, row.scenario, row.requests, row.statusCounts, row.bodyBytes, averageBodyBytes, row.p50, row.p95, row.maximum)
 	}
 
 	if len(r.failures) > 0 {

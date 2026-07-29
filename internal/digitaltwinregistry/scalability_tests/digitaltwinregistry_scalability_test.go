@@ -1,3 +1,29 @@
+/*******************************************************************************
+* Copyright (C) 2026 the Eclipse BaSyx Authors and Fraunhofer IESE
+*
+* Permission is hereby granted, free of charge, to any person obtaining
+* a copy of this software and associated documentation files (the
+* "Software"), to deal in the Software without restriction, including
+* without limitation the rights to use, copy, modify, merge, publish,
+* distribute, sublicense, and/or sell copies of the Software, and to
+* permit persons to whom the Software is furnished to do so, subject to
+* the following conditions:
+*
+* The above copyright notice and this permission notice shall be
+* included in all copies or substantial portions of the Software.
+*
+* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+* NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
+* LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+* OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
+* WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+*
+* SPDX-License-Identifier: MIT
+******************************************************************************/
+// Author: Aaron Zielstorff ( Fraunhofer IESE )
+
 package scalability_tests
 
 import (
@@ -5,6 +31,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -14,6 +41,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -21,21 +49,26 @@ import (
 )
 
 const (
-	composeFilePath    = "docker_compose/docker_compose.yml"
-	requestTimeout     = 10 * time.Second
-	keycloakClientID   = "basyx-ui"
-	globalAssetIDName  = "globalAssetId"
-	defaultPageLimit   = 50
-	defaultRepetitions = 5
-	defaultConcurrency = 2
-	anonymousUserName  = "anonymous"
-	environmentFile    = ".env"
+	composeFilePath                          = "docker_compose/docker_compose.yml"
+	requestTimeout                           = 10 * time.Second
+	keycloakClientID                         = "basyx-ui"
+	globalAssetIDName                        = "globalAssetId"
+	defaultPageLimit                         = 50
+	defaultRepetitions                       = 5
+	defaultConcurrency                       = 2
+	defaultAsyncBulkSize                     = 10
+	defaultAsyncBulkTimeoutSeconds           = 30
+	defaultAsyncBulkPollIntervalMilliseconds = 100
+	anonymousUserName                        = "anonymous"
+	environmentFile                          = ".env"
 )
 
 var (
 	dtrBaseURL              string
 	keycloakTokenURL        string
 	scalabilityResultReport *scalabilityReport
+	asyncBulkRunID          = fmt.Sprintf("%d-%d", os.Getpid(), time.Now().UTC().UnixNano())
+	asyncBulkSequence       atomic.Uint64
 )
 
 type fixture struct {
@@ -58,8 +91,9 @@ type testUser struct {
 }
 
 type scenario struct {
-	name string
-	run  func(context.Context) (responseMetadata, error)
+	name    string
+	timeout time.Duration
+	run     func(context.Context) (responseMetadata, error)
 }
 
 type requestResult struct {
@@ -70,8 +104,39 @@ type requestResult struct {
 }
 
 type responseMetadata struct {
-	status    int
-	bodyBytes int64
+	status           int
+	bodyBytes        int64
+	measuredDuration time.Duration
+}
+
+type httpResponseMetadata struct {
+	responseMetadata
+	headers http.Header
+}
+
+type temporaryAASDescriptor struct {
+	ID            string              `json:"id"`
+	IDShort       string              `json:"idShort"`
+	AssetType     string              `json:"assetType"`
+	GlobalAssetID string              `json:"globalAssetId"`
+	Endpoints     []temporaryEndpoint `json:"endpoints"`
+}
+
+type temporaryEndpoint struct {
+	Interface           string                       `json:"interface"`
+	ProtocolInformation temporaryProtocolInformation `json:"protocolInformation"`
+}
+
+type temporaryProtocolInformation struct {
+	Href             string `json:"href"`
+	EndpointProtocol string `json:"endpointProtocol"`
+}
+
+type asyncBulkConfig struct {
+	enabled      bool
+	size         int
+	timeout      time.Duration
+	pollInterval time.Duration
 }
 
 func TestMain(m *testing.M) {
@@ -136,7 +201,11 @@ func writeScalabilityReport(exitCode int) {
 
 func TestDTRScalability(t *testing.T) {
 	fixtures := fixturesFromEnvironment(t)
-	client := &http.Client{}
+	client := &http.Client{
+		CheckRedirect: func(_ *http.Request, _ []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
+	}
 	tokenProvider := testenv.NewPasswordGrantTokenProvider(keycloakTokenURL, keycloakClientID, requestTimeout)
 	users := testUsersFromEnvironment(t)
 	referenceUser := referenceTestUser(t, users)
@@ -144,7 +213,8 @@ func TestDTRScalability(t *testing.T) {
 	pageLimit := environmentInt(t, "DTR_SCALE_PAGE_LIMIT", defaultPageLimit)
 	repetitions := environmentInt(t, "DTR_SCALE_REQUEST_REPETITIONS", defaultRepetitions)
 	concurrency := environmentInt(t, "DTR_SCALE_REQUEST_CONCURRENCY", defaultConcurrency)
-	scalabilityResultReport.configure(fixtures, users, pageLimit, repetitions, concurrency)
+	asyncBulk := asyncBulkConfigFromEnvironment(t)
+	scalabilityResultReport.configure(fixtures, users, pageLimit, repetitions, concurrency, asyncBulk)
 	for index, item := range fixtures {
 		t.Run(fmt.Sprintf("fixture_%d", index+1), func(t *testing.T) {
 			primary, secondary, globalAssetLink := loadFixtureAssetLinks(t, client, referenceToken, item)
@@ -158,6 +228,15 @@ func TestDTRScalability(t *testing.T) {
 							user:         user.name,
 						})
 					}
+				})
+			}
+		})
+	}
+	if asyncBulk.enabled {
+		t.Run("async_bulk", func(t *testing.T) {
+			for _, scenarioItem := range buildAsyncBulkScenarios(client, referenceToken, asyncBulk) {
+				runScenario(t, scenarioItem, repetitions, concurrency, scenarioReportContext{
+					user: referenceUser.name,
 				})
 			}
 		})
@@ -200,33 +279,241 @@ func buildScenarios(t *testing.T, client *http.Client, token string, item fixtur
 
 func requestRunner(client *http.Client, token, method, endpoint string, payload []byte) func(context.Context) (responseMetadata, error) {
 	return func(ctx context.Context) (responseMetadata, error) {
-		var body io.Reader
-		if len(payload) > 0 {
-			body = bytes.NewReader(payload)
-		}
-		request, err := http.NewRequestWithContext(ctx, method, endpoint, body)
+		response, err := executeRequest(ctx, client, token, method, endpoint, payload)
 		if err != nil {
-			return responseMetadata{}, fmt.Errorf("DTRSCALE-REQUEST-BUILD: %w", err)
+			return responseMetadata{}, err
 		}
-		if token != "" {
-			request.Header.Set("Authorization", "Bearer "+token)
-		}
-		if len(payload) > 0 {
-			request.Header.Set("Content-Type", "application/json")
+		return response.responseMetadata, nil
+	}
+}
+
+func executeRequest(ctx context.Context, client *http.Client, token, method, endpoint string, payload []byte) (httpResponseMetadata, error) {
+	var body io.Reader
+	if len(payload) > 0 {
+		body = bytes.NewReader(payload)
+	}
+	request, err := http.NewRequestWithContext(ctx, method, endpoint, body)
+	if err != nil {
+		return httpResponseMetadata{}, fmt.Errorf("DTRSCALE-REQUEST-BUILD: %w", err)
+	}
+	if token != "" {
+		request.Header.Set("Authorization", "Bearer "+token)
+	}
+	if len(payload) > 0 {
+		request.Header.Set("Content-Type", "application/json")
+	}
+
+	// #nosec G704 -- Scalability tests call only the loopback DTR URL allocated by the test runtime.
+	response, err := client.Do(request)
+	if err != nil {
+		return httpResponseMetadata{}, fmt.Errorf("DTRSCALE-REQUEST-EXECUTE: %w", err)
+	}
+	defer func() { _ = response.Body.Close() }()
+	bodyBytes, err := io.Copy(io.Discard, response.Body)
+	if err != nil {
+		return httpResponseMetadata{}, fmt.Errorf("DTRSCALE-REQUEST-READBODY: %w", err)
+	}
+	return httpResponseMetadata{
+		responseMetadata: responseMetadata{status: response.StatusCode, bodyBytes: bodyBytes},
+		headers:          response.Header.Clone(),
+	}, nil
+}
+
+func buildAsyncBulkScenarios(client *http.Client, referenceToken string, config asyncBulkConfig) []scenario {
+	return []scenario{
+		{
+			name:    "async_bulk_create_shell_descriptors",
+			timeout: 2 * config.timeout,
+			run:     asyncBulkRunner(client, referenceToken, http.MethodPost, config),
+		},
+		{
+			name:    "async_bulk_put_shell_descriptors",
+			timeout: 2 * config.timeout,
+			run:     asyncBulkRunner(client, referenceToken, http.MethodPut, config),
+		},
+		{
+			name:    "async_bulk_delete_shell_descriptors",
+			timeout: 2 * config.timeout,
+			run:     asyncBulkRunner(client, referenceToken, http.MethodDelete, config),
+		},
+	}
+}
+
+func asyncBulkRunner(client *http.Client, token, method string, config asyncBulkConfig) func(context.Context) (responseMetadata, error) {
+	return func(ctx context.Context) (responseMetadata, error) {
+		descriptors, identifiers := newTemporaryAASDescriptors(config.size)
+		descriptorPayload, err := json.Marshal(descriptors)
+		if err != nil {
+			return responseMetadata{}, fmt.Errorf("DTRSCALE-BULK-MARSHALDESCRIPTORS: %w", err)
 		}
 
-		// #nosec G704 -- Scalability tests call only the loopback DTR URL allocated by the test runtime.
-		response, err := client.Do(request)
-		if err != nil {
-			return responseMetadata{}, fmt.Errorf("DTRSCALE-REQUEST-EXECUTE: %w", err)
+		if method != http.MethodPost {
+			setupCtx, cancelSetup := context.WithTimeout(ctx, config.timeout)
+			setup, setupErr := executeAsyncBulkLifecycle(setupCtx, client, token, http.MethodPost, descriptorPayload, config.pollInterval)
+			cancelSetup()
+			if setupErr != nil {
+				cleanupErr := cleanupTemporaryAASDescriptors(client, token, identifiers, config.timeout)
+				return responseMetadata{}, errors.Join(fmt.Errorf("DTRSCALE-BULK-SETUP: %w", setupErr), cleanupErr)
+			}
+			if setup.status != http.StatusNoContent {
+				cleanupErr := cleanupTemporaryAASDescriptors(client, token, identifiers, config.timeout)
+				return responseMetadata{}, errors.Join(
+					fmt.Errorf("DTRSCALE-BULK-SETUP-STATUS received HTTP status %d", setup.status),
+					cleanupErr,
+				)
+			}
 		}
-		defer func() { _ = response.Body.Close() }()
-		bodyBytes, err := io.Copy(io.Discard, response.Body)
-		if err != nil {
-			return responseMetadata{}, fmt.Errorf("DTRSCALE-REQUEST-READBODY: %w", err)
+		if method == http.MethodPut {
+			for index := range descriptors {
+				descriptors[index].AssetType = "dtr-scalability-updated"
+			}
+			descriptorPayload, err = json.Marshal(descriptors)
+			if err != nil {
+				return responseMetadata{}, fmt.Errorf("DTRSCALE-BULK-MARSHALUPDATEDDESCRIPTORS: %w", err)
+			}
 		}
-		return responseMetadata{status: response.StatusCode, bodyBytes: bodyBytes}, nil
+
+		payload := descriptorPayload
+		if method == http.MethodDelete {
+			payload, err = json.Marshal(identifiers)
+			if err != nil {
+				return responseMetadata{}, fmt.Errorf("DTRSCALE-BULK-MARSHALIDENTIFIERS: %w", err)
+			}
+		}
+
+		lifecycleCtx, cancelLifecycle := context.WithTimeout(ctx, config.timeout)
+		started := time.Now()
+		result, lifecycleErr := executeAsyncBulkLifecycle(lifecycleCtx, client, token, method, payload, config.pollInterval)
+		result.measuredDuration = time.Since(started)
+		cancelLifecycle()
+		if lifecycleErr == nil && result.status != http.StatusNoContent {
+			lifecycleErr = fmt.Errorf("DTRSCALE-BULK-RESULTSTATUS received HTTP status %d", result.status)
+		}
+		if method != http.MethodDelete || lifecycleErr != nil || result.status != http.StatusNoContent {
+			cleanupErr := cleanupTemporaryAASDescriptors(client, token, identifiers, config.timeout)
+			lifecycleErr = errors.Join(lifecycleErr, cleanupErr)
+		}
+		return result, lifecycleErr
 	}
+}
+
+func executeAsyncBulkLifecycle(
+	ctx context.Context,
+	client *http.Client,
+	token, method string,
+	payload []byte,
+	pollInterval time.Duration,
+) (responseMetadata, error) {
+	response, err := executeRequest(ctx, client, token, method, dtrBaseURL+"/bulk/shell-descriptors", payload)
+	if err != nil {
+		return responseMetadata{}, fmt.Errorf("DTRSCALE-BULK-START: %w", err)
+	}
+	result := response.responseMetadata
+	if response.status != http.StatusAccepted {
+		return result, nil
+	}
+
+	handleID, err := bulkHandleID(response.headers.Get("Location"), "status")
+	if err != nil {
+		return result, err
+	}
+	for {
+		statusResponse, statusErr := executeRequest(ctx, client, token, http.MethodGet, dtrBaseURL+"/bulk/status/"+url.PathEscape(handleID), nil)
+		if statusErr != nil {
+			return result, fmt.Errorf("DTRSCALE-BULK-STATUS: %w", statusErr)
+		}
+		result.status = statusResponse.status
+		result.bodyBytes += statusResponse.bodyBytes
+		switch statusResponse.status {
+		case http.StatusFound:
+			resultHandleID, locationErr := bulkHandleID(statusResponse.headers.Get("Location"), "result")
+			if locationErr != nil {
+				return result, locationErr
+			}
+			if resultHandleID != handleID {
+				return result, fmt.Errorf("DTRSCALE-BULK-RESULTLOCATION handle mismatch")
+			}
+			resultResponse, resultErr := executeRequest(ctx, client, token, http.MethodGet, dtrBaseURL+"/bulk/result/"+url.PathEscape(handleID), nil)
+			if resultErr != nil {
+				return result, fmt.Errorf("DTRSCALE-BULK-RESULT: %w", resultErr)
+			}
+			result.status = resultResponse.status
+			result.bodyBytes += resultResponse.bodyBytes
+			return result, nil
+		case http.StatusOK:
+			select {
+			case <-ctx.Done():
+				return result, fmt.Errorf("DTRSCALE-BULK-POLL: %w", ctx.Err())
+			case <-time.After(pollInterval):
+			}
+		default:
+			return result, nil
+		}
+	}
+}
+
+func bulkHandleID(location, expectedResource string) (string, error) {
+	parsed, err := url.Parse(location)
+	if err != nil {
+		return "", fmt.Errorf("DTRSCALE-BULK-LOCATION-PARSE: %w", err)
+	}
+	segments := strings.Split(strings.Trim(parsed.Path, "/"), "/")
+	if len(segments) < 3 || segments[len(segments)-2] != expectedResource {
+		return "", fmt.Errorf("DTRSCALE-BULK-LOCATION-VALIDATE invalid %s location %q", expectedResource, location)
+	}
+	handleID, err := url.PathUnescape(segments[len(segments)-1])
+	if err != nil || handleID == "" {
+		return "", fmt.Errorf("DTRSCALE-BULK-LOCATION-HANDLE invalid handle in %q", location)
+	}
+	return handleID, nil
+}
+
+func newTemporaryAASDescriptors(size int) ([]temporaryAASDescriptor, []string) {
+	sequence := asyncBulkSequence.Add(1)
+	descriptors := make([]temporaryAASDescriptor, 0, size)
+	identifiers := make([]string, 0, size)
+	for index := range size {
+		suffix := fmt.Sprintf("%s-%d-%d", asyncBulkRunID, sequence, index)
+		identifier := "urn:basyx:dtr-scalability:async-bulk:" + suffix
+		descriptors = append(descriptors, temporaryAASDescriptor{
+			ID:            identifier,
+			IDShort:       fmt.Sprintf("dtrScaleBulk%d_%d", sequence, index),
+			AssetType:     "dtr-scalability-created",
+			GlobalAssetID: identifier + ":asset",
+			Endpoints: []temporaryEndpoint{{
+				Interface: "AAS-3.0",
+				ProtocolInformation: temporaryProtocolInformation{
+					Href:             "https://example.invalid/aas/" + suffix,
+					EndpointProtocol: "https",
+				},
+			}},
+		})
+		identifiers = append(identifiers, identifier)
+	}
+	return descriptors, identifiers
+}
+
+func cleanupTemporaryAASDescriptors(client *http.Client, token string, identifiers []string, timeout time.Duration) error {
+	ctx, cancel := context.WithTimeout(context.TODO(), timeout)
+	defer cancel()
+	var cleanupErr error
+	for _, identifier := range identifiers {
+		response, err := executeRequest(ctx, client, token, http.MethodDelete, dtrBaseURL+"/shell-descriptors/"+encodeIdentifier(identifier), nil)
+		if err != nil {
+			cleanupErr = errors.Join(cleanupErr, fmt.Errorf("DTRSCALE-BULK-CLEANUP descriptor %q: %w", identifier, err))
+			if ctx.Err() != nil {
+				break
+			}
+			continue
+		}
+		if response.status != http.StatusNoContent && response.status != http.StatusNotFound {
+			cleanupErr = errors.Join(
+				cleanupErr,
+				fmt.Errorf("DTRSCALE-BULK-CLEANUP-STATUS descriptor %q returned HTTP status %d", identifier, response.status),
+			)
+		}
+	}
+	return cleanupErr
 }
 
 func loadFixtureAssetLinks(t *testing.T, client *http.Client, token string, item fixture) (assetLink, assetLink, assetLink) {
@@ -358,11 +645,19 @@ func runScenario(t *testing.T, item scenario, repetitions, concurrency int, repo
 		go func() {
 			defer workers.Done()
 			for range jobs {
+				timeout := item.timeout
+				if timeout == 0 {
+					timeout = requestTimeout
+				}
 				started := time.Now()
-				ctx, cancel := context.WithTimeout(context.TODO(), requestTimeout)
+				ctx, cancel := context.WithTimeout(context.TODO(), timeout)
 				response, err := item.run(ctx)
 				cancel()
-				results <- requestResult{duration: time.Since(started), status: response.status, bodyBytes: response.bodyBytes, err: err}
+				duration := time.Since(started)
+				if response.measuredDuration > 0 {
+					duration = response.measuredDuration
+				}
+				results <- requestResult{duration: duration, status: response.status, bodyBytes: response.bodyBytes, err: err}
 			}
 		}()
 	}
@@ -558,6 +853,20 @@ func environmentBool(t *testing.T, key string, fallback bool) bool {
 		t.Fatalf("DTRSCALE-ENV-VALIDATE %s must be a boolean", key)
 	}
 	return parsed
+}
+
+func asyncBulkConfigFromEnvironment(t *testing.T) asyncBulkConfig {
+	t.Helper()
+	return asyncBulkConfig{
+		enabled: environmentBool(t, "DTR_SCALE_ASYNC_BULK_ENABLED", false),
+		size:    environmentInt(t, "DTR_SCALE_ASYNC_BULK_SIZE", defaultAsyncBulkSize),
+		timeout: time.Duration(
+			environmentInt(t, "DTR_SCALE_ASYNC_BULK_TIMEOUT_SECONDS", defaultAsyncBulkTimeoutSeconds),
+		) * time.Second,
+		pollInterval: time.Duration(
+			environmentInt(t, "DTR_SCALE_ASYNC_BULK_POLL_INTERVAL_MILLISECONDS", defaultAsyncBulkPollIntervalMilliseconds),
+		) * time.Millisecond,
+	}
 }
 
 func encodedAssetLink(t *testing.T, link assetLink) string {
