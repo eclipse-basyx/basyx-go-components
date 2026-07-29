@@ -716,6 +716,58 @@ func TestLoadConfigRejectsInvalidPostgresPoolSettings(t *testing.T) {
 	}
 }
 
+func TestLoadConfigCapsDefaultPostgresMaxIdleAtExplicitMaxOpen(t *testing.T) {
+	tests := []struct {
+		name    string
+		content string
+		env     map[string]string
+	}{
+		{
+			name:    "yaml with omitted max idle",
+			content: "postgres:\n  maxOpenConnections: 10\n",
+		},
+		{
+			name:    "yaml with zero max idle",
+			content: "postgres:\n  maxOpenConnections: 10\n  maxIdleConnections: 0\n",
+		},
+		{
+			name: "environment with omitted max idle",
+			env: map[string]string{
+				"POSTGRES_MAXOPENCONNECTIONS": "10",
+			},
+		},
+		{
+			name: "environment with zero max idle",
+			env: map[string]string{
+				"POSTGRES_MAXOPENCONNECTIONS": "10",
+				"POSTGRES_MAXIDLECONNECTIONS": "0",
+			},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			withUnsetEnv(t, "POSTGRES_MAXOPENCONNECTIONS")
+			withUnsetEnv(t, "POSTGRES_MAXIDLECONNECTIONS")
+			for key, value := range test.env {
+				t.Setenv(key, value)
+			}
+			captureLogOutput(t)
+
+			cfg, err := LoadConfig(writeTempConfig(t, test.content))
+			if err != nil {
+				t.Fatalf("unexpected config load error: %v", err)
+			}
+			if cfg.Postgres.MaxOpenConnections != 10 {
+				t.Fatalf("max open connections = %d, want 10", cfg.Postgres.MaxOpenConnections)
+			}
+			if cfg.Postgres.MaxIdleConnections != 10 {
+				t.Fatalf("max idle connections = %d, want 10", cfg.Postgres.MaxIdleConnections)
+			}
+		})
+	}
+}
+
 func TestLoadConfigAppliesHistoryAndEventingDefaults(t *testing.T) {
 	withUnsetEnv(t, "BASYX_HISTORY_MODE")
 	withUnsetEnv(t, "BASYX_HISTORY_RETENTION_DAYS")

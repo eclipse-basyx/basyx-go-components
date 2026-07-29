@@ -65,6 +65,18 @@ func TestResolvePostgresPoolSettings(t *testing.T) {
 			},
 		},
 		{
+			name: "caps default max idle at explicit max open",
+			cfg: PostgresConfig{
+				MaxOpenConnections: 10,
+			},
+			want: PostgresPoolSettings{
+				MaxOpenConnections:     10,
+				MaxIdleConnections:     10,
+				ConnMaxLifetimeMinutes: 5,
+				ConnMaxIdleTimeMinutes: 0,
+			},
+		},
+		{
 			name:    "rejects negative max open",
 			cfg:     PostgresConfig{MaxOpenConnections: -1},
 			errCode: "CONFIG-POSTGRES-MAXOPEN",

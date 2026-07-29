@@ -57,13 +57,6 @@ type PostgresPoolSettings struct {
 // Zero uses the common default, except connMaxIdleTimeMinutes where zero disables
 // idle-time recycling.
 func ResolvePostgresPoolSettings(cfg PostgresConfig) (PostgresPoolSettings, error) {
-	settings := PostgresPoolSettings{
-		MaxOpenConnections:     defaultWhenZero(cfg.MaxOpenConnections, DefaultConfig.PgMaxOpen),
-		MaxIdleConnections:     defaultWhenZero(cfg.MaxIdleConnections, DefaultConfig.PgMaxIdle),
-		ConnMaxLifetimeMinutes: defaultWhenZero(cfg.ConnMaxLifetimeMinutes, DefaultConfig.PgConnLifetime),
-		ConnMaxIdleTimeMinutes: cfg.ConnMaxIdleTimeMinutes,
-	}
-
 	if cfg.MaxOpenConnections < 0 {
 		return PostgresPoolSettings{}, fmt.Errorf("CONFIG-POSTGRES-MAXOPEN postgres.maxOpenConnections must not be negative")
 	}
@@ -75,6 +68,16 @@ func ResolvePostgresPoolSettings(cfg PostgresConfig) (PostgresPoolSettings, erro
 	}
 	if cfg.ConnMaxIdleTimeMinutes < 0 {
 		return PostgresPoolSettings{}, fmt.Errorf("CONFIG-POSTGRES-CONNMAXIDLETIME postgres.connMaxIdleTimeMinutes must not be negative")
+	}
+
+	settings := PostgresPoolSettings{
+		MaxOpenConnections:     defaultWhenZero(cfg.MaxOpenConnections, DefaultConfig.PgMaxOpen),
+		MaxIdleConnections:     defaultWhenZero(cfg.MaxIdleConnections, DefaultConfig.PgMaxIdle),
+		ConnMaxLifetimeMinutes: defaultWhenZero(cfg.ConnMaxLifetimeMinutes, DefaultConfig.PgConnLifetime),
+		ConnMaxIdleTimeMinutes: cfg.ConnMaxIdleTimeMinutes,
+	}
+	if cfg.MaxIdleConnections == 0 && settings.MaxIdleConnections > settings.MaxOpenConnections {
+		settings.MaxIdleConnections = settings.MaxOpenConnections
 	}
 	if settings.MaxIdleConnections > settings.MaxOpenConnections {
 		return PostgresPoolSettings{}, fmt.Errorf(

@@ -507,6 +507,7 @@ func LoadConfig(configPath string) (*Config, error) {
 	applyAASPreconfigPathOverrides(cfg)
 	applyServerEnvOverrides(cfg)
 	applyGeneralEnvOverrides(cfg)
+	capDefaultPostgresMaxIdle(v, &cfg.Postgres)
 	if err = validatePostgresConfig(v, cfg.Postgres); err != nil {
 		return nil, err
 	}
@@ -643,6 +644,23 @@ func validatePostgresConfig(v *viper.Viper, cfg PostgresConfig) error {
 		return fmt.Errorf("CONFIG-POSTGRES-CONNECTTIMEOUT postgres.connectTimeoutSeconds must not be negative")
 	}
 	return nil
+}
+
+func capDefaultPostgresMaxIdle(v *viper.Viper, cfg *PostgresConfig) {
+	const configKey = "postgres.maxIdleConnections"
+	if cfg == nil || postgresPoolSettingConfigured(v, configKey) && v.GetInt(configKey) != 0 {
+		return
+	}
+
+	cfg.MaxIdleConnections = DefaultConfig.PgMaxIdle
+	maxOpen := defaultWhenZero(cfg.MaxOpenConnections, DefaultConfig.PgMaxOpen)
+	if maxOpen > 0 && DefaultConfig.PgMaxIdle > maxOpen {
+		cfg.MaxIdleConnections = maxOpen
+	}
+}
+
+func postgresPoolSettingConfigured(v *viper.Viper, configKey string) bool {
+	return v.InConfig(configKey) || postgresEnvConfigured(configKey)
 }
 
 func explicitlyConfiguredPostgresConnectionKeys(v *viper.Viper) []string {
