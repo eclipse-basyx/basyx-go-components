@@ -264,7 +264,8 @@ func TestDelegationOperation(t *testing.T) {
 		strings.TrimSuffix(statusLocation, path.Base(statusLocation)),
 	)
 
-	resultLocation := waitForDelegatedOperationResultLocation(t, noRedirectClient, statusLocation)
+	replicaStatusLocation := submodelRepositoryReplicaBaseURL + strings.TrimPrefix(statusLocation, baseURL)
+	resultLocation := waitForDelegatedOperationResultLocation(t, noRedirectClient, replicaStatusLocation)
 	// #nosec G704 -- resultLocation is issued by the fixed local repository endpoint.
 	asyncResultResponse, err := noRedirectClient.Get(resultLocation)
 	require.NoError(t, err)
