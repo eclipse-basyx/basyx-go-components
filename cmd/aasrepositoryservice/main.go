@@ -49,6 +49,7 @@ import (
 	commonmodel "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/security/abacpolicy"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/telemetry"
+	submodelrepositoryapi "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/api"
 	submodelrepositorydb "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence"
 	openapi "github.com/eclipse-basyx/basyx-go-components/pkg/aasrepositoryapi/go"
 )
@@ -166,6 +167,11 @@ func runServer(ctx context.Context, configPath string) error {
 		slog.ErrorContext(ctx, "submodel persistence initialization failed", "error.code", "AASREPOSITORY-SMREPOSITORY-INIT", "error", err)
 		return err
 	}
+	asyncJobManager, err := submodelrepositoryapi.NewAsyncJobManager(ctx, sharedDB)
+	if err != nil {
+		slog.ErrorContext(ctx, "async job persistence initialization failed", "error.code", "AASREPOSITORY-ASYNCJOB-INIT", "error", err)
+		return err
+	}
 	slog.InfoContext(ctx, "PostgreSQL connection established")
 
 	persistence := &aasenvironment.Persistence{
@@ -175,7 +181,7 @@ func runServer(ctx context.Context, configPath string) error {
 		SubmodelRepository: submodelDatabase,
 	}
 	aasSvc := aasenvironment.NewCustomAASRepositoryService(
-		api.NewAssetAdministrationShellRepositoryAPIAPIService(ctx, aasDatabase, submodelDatabase),
+		api.NewAssetAdministrationShellRepositoryAPIAPIService(ctx, aasDatabase, submodelDatabase, asyncJobManager),
 		persistence,
 		registrySyncConfig,
 	)

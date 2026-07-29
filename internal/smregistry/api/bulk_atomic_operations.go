@@ -33,7 +33,7 @@ import (
 	"strings"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
-	"github.com/eclipse-basyx/basyx-go-components/internal/common/asyncbulk"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/asyncjob"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/createprecheck"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/history"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
@@ -44,7 +44,7 @@ import (
 func (s *SubmodelRegistryAPIAPIService) ExecuteBulkCreateAtomic(
 	ctx context.Context,
 	descriptors []model.SubmodelDescriptor,
-) asyncbulk.OperationResult {
+) asyncjob.BulkResult {
 	if len(descriptors) == 0 {
 		return successfulAtomicResult(0)
 	}
@@ -62,7 +62,7 @@ func (s *SubmodelRegistryAPIAPIService) ExecuteBulkCreateAtomic(
 	)
 	if err != nil {
 		if failure.StatusCode == 0 {
-			failure = asyncbulk.ItemFailure{
+			failure = asyncjob.ItemFailure{
 				Index:      0,
 				StatusCode: http.StatusInternalServerError,
 				Message:    err.Error(),
@@ -77,7 +77,7 @@ func (s *SubmodelRegistryAPIAPIService) ExecuteBulkCreateAtomic(
 func (s *SubmodelRegistryAPIAPIService) ExecuteBulkPutAtomic(
 	ctx context.Context,
 	descriptors []model.SubmodelDescriptor,
-) asyncbulk.OperationResult {
+) asyncjob.BulkResult {
 	return s.executeAtomicSubmodelDescriptorBulk(
 		ctx,
 		descriptors,
@@ -91,7 +91,7 @@ func (s *SubmodelRegistryAPIAPIService) ExecuteBulkPutAtomic(
 func (s *SubmodelRegistryAPIAPIService) ExecuteBulkDeleteAtomic(
 	ctx context.Context,
 	submodelIdentifiers []string,
-) asyncbulk.OperationResult {
+) asyncjob.BulkResult {
 	return s.executeAtomicSubmodelIdentifierBulk(
 		ctx,
 		submodelIdentifiers,
@@ -106,8 +106,8 @@ func (s *SubmodelRegistryAPIAPIService) executeAtomicSubmodelDescriptorBulk(
 	startErrorCode string,
 	commitErrorCode string,
 	execute func(context.Context, *sql.Tx, model.SubmodelDescriptor) (int, error),
-) asyncbulk.OperationResult {
-	failure := asyncbulk.ItemFailure{}
+) asyncjob.BulkResult {
+	failure := asyncjob.ItemFailure{}
 	err := s.smRegistryBackend.ExecuteInTransaction(startErrorCode, commitErrorCode, func(tx *sql.Tx) error {
 		if lockErr := history.LockMutationsTx(ctx, tx, history.TableSubmodelDescriptor, descriptorIDsFromSubmodelDescriptors(descriptors)); lockErr != nil {
 			return lockErr
@@ -115,7 +115,7 @@ func (s *SubmodelRegistryAPIAPIService) executeAtomicSubmodelDescriptorBulk(
 		for idx, descriptor := range descriptors {
 			statusCode, descriptorErr := execute(ctx, tx, descriptor)
 			if descriptorErr != nil {
-				failure = asyncbulk.ItemFailure{
+				failure = asyncjob.ItemFailure{
 					Index:      idx,
 					Identifier: descriptor.Id,
 					StatusCode: statusCode,
@@ -128,7 +128,7 @@ func (s *SubmodelRegistryAPIAPIService) executeAtomicSubmodelDescriptorBulk(
 	})
 	if err != nil {
 		if failure.StatusCode == 0 {
-			failure = asyncbulk.ItemFailure{
+			failure = asyncjob.ItemFailure{
 				Index:      0,
 				StatusCode: http.StatusInternalServerError,
 				Message:    err.Error(),
@@ -144,14 +144,14 @@ func (s *SubmodelRegistryAPIAPIService) executeAtomicSubmodelIdentifierBulk(
 	submodelIdentifiers []string,
 	startErrorCode string,
 	commitErrorCode string,
-) asyncbulk.OperationResult {
-	failure := asyncbulk.ItemFailure{}
+) asyncjob.BulkResult {
+	failure := asyncjob.ItemFailure{}
 	err := s.smRegistryBackend.ExecuteInTransaction(startErrorCode, commitErrorCode, func(tx *sql.Tx) error {
 		return s.executeBulkDeleteSubmodelIdentifiersTx(ctx, tx, submodelIdentifiers, &failure)
 	})
 	if err != nil {
 		if failure.StatusCode == 0 {
-			failure = asyncbulk.ItemFailure{
+			failure = asyncjob.ItemFailure{
 				Index:      0,
 				StatusCode: http.StatusInternalServerError,
 				Message:    err.Error(),
@@ -166,7 +166,7 @@ func (s *SubmodelRegistryAPIAPIService) executeBulkCreateSubmodelDescriptorsTx(
 	ctx context.Context,
 	tx *sql.Tx,
 	descriptors []model.SubmodelDescriptor,
-	failure *asyncbulk.ItemFailure,
+	failure *asyncjob.ItemFailure,
 ) error {
 	identifiers := descriptorIDsFromSubmodelDescriptors(descriptors)
 	if err := s.ensureSubmodelDescriptorsDoNotExist(ctx, tx, identifiers, failure); err != nil {
@@ -182,7 +182,7 @@ func (s *SubmodelRegistryAPIAPIService) executeBulkCreateSubmodelDescriptorsTx(
 	if failedIndex < 0 || failedIndex >= len(descriptors) {
 		failedIndex = 0
 	}
-	*failure = asyncbulk.ItemFailure{
+	*failure = asyncjob.ItemFailure{
 		Index:      failedIndex,
 		Identifier: descriptors[failedIndex].Id,
 		StatusCode: smBulkCreateErrorStatusCode(err),
@@ -195,11 +195,11 @@ func (s *SubmodelRegistryAPIAPIService) ensureSubmodelDescriptorsDoNotExist(
 	ctx context.Context,
 	tx *sql.Tx,
 	identifiers []string,
-	failure *asyncbulk.ItemFailure,
+	failure *asyncjob.ItemFailure,
 ) error {
 	existing, err := s.smRegistryBackend.ExistingSubmodelDescriptorIDsInTransaction(ctx, tx, identifiers)
 	if err != nil {
-		*failure = asyncbulk.ItemFailure{Index: 0, Identifier: firstIdentifier(identifiers), StatusCode: http.StatusInternalServerError, Message: err.Error()}
+		*failure = asyncjob.ItemFailure{Index: 0, Identifier: firstIdentifier(identifiers), StatusCode: http.StatusInternalServerError, Message: err.Error()}
 		return err
 	}
 	return s.ensureVisibleSubmodelDescriptorDuplicates(ctx, tx, identifiers, existing, failure)
@@ -210,7 +210,7 @@ func (s *SubmodelRegistryAPIAPIService) ensureVisibleSubmodelDescriptorDuplicate
 	tx *sql.Tx,
 	identifiers []string,
 	existing map[string]struct{},
-	failure *asyncbulk.ItemFailure,
+	failure *asyncjob.ItemFailure,
 ) error {
 	for index, identifier := range identifiers {
 		if _, found := existing[identifier]; !found {
@@ -227,7 +227,7 @@ func (s *SubmodelRegistryAPIAPIService) ensureVisibleSubmodelDescriptorDuplicate
 			"Submodel Descriptor access not allowed",
 		)
 		if err != nil {
-			*failure = asyncbulk.ItemFailure{Index: index, Identifier: identifier, StatusCode: smBulkCreateErrorStatusCode(err), Message: err.Error()}
+			*failure = asyncjob.ItemFailure{Index: index, Identifier: identifier, StatusCode: smBulkCreateErrorStatusCode(err), Message: err.Error()}
 			return err
 		}
 	}
@@ -236,12 +236,12 @@ func (s *SubmodelRegistryAPIAPIService) ensureVisibleSubmodelDescriptorDuplicate
 
 func validateBulkCreateSubmodelDescriptorGraphs(
 	descriptors []model.SubmodelDescriptor,
-	failure *asyncbulk.ItemFailure,
+	failure *asyncjob.ItemFailure,
 ) error {
 	for index, descriptor := range descriptors {
 		if len(descriptor.Endpoints) == 0 {
 			err := common.NewErrBadRequest("Submodel Descriptor needs at least 1 Endpoint.")
-			*failure = asyncbulk.ItemFailure{
+			*failure = asyncjob.ItemFailure{
 				Index:      index,
 				Identifier: descriptor.Id,
 				StatusCode: smBulkCreateErrorStatusCode(err),
@@ -257,7 +257,7 @@ func (s *SubmodelRegistryAPIAPIService) executeBulkDeleteSubmodelIdentifiersTx(
 	ctx context.Context,
 	tx *sql.Tx,
 	rawIdentifiers []string,
-	failure *asyncbulk.ItemFailure,
+	failure *asyncjob.ItemFailure,
 ) error {
 	identifiers, err := s.validateBulkDeleteSubmodelIdentifiersTx(ctx, tx, rawIdentifiers, failure)
 	if err != nil {
@@ -270,7 +270,7 @@ func (s *SubmodelRegistryAPIAPIService) executeBulkDeleteSubmodelIdentifiersTx(
 	if failedIndex < 0 || failedIndex >= len(identifiers) {
 		failedIndex = 0
 	}
-	*failure = asyncbulk.ItemFailure{
+	*failure = asyncjob.ItemFailure{
 		Index:      failedIndex,
 		Identifier: identifiers[failedIndex],
 		StatusCode: smBulkDeleteErrorStatusCode(err),
@@ -283,12 +283,12 @@ func (s *SubmodelRegistryAPIAPIService) validateBulkDeleteSubmodelIdentifiersTx(
 	ctx context.Context,
 	tx *sql.Tx,
 	rawIdentifiers []string,
-	failure *asyncbulk.ItemFailure,
+	failure *asyncjob.ItemFailure,
 ) ([]string, error) {
 	identifiers := normalizeSubmodelIdentifiers(rawIdentifiers)
 	existing, err := s.smRegistryBackend.ExistingSubmodelDescriptorIDsInTransaction(ctx, tx, identifiers)
 	if err != nil {
-		*failure = asyncbulk.ItemFailure{Index: 0, Identifier: firstIdentifier(identifiers), StatusCode: http.StatusInternalServerError, Message: err.Error()}
+		*failure = asyncjob.ItemFailure{Index: 0, Identifier: firstIdentifier(identifiers), StatusCode: http.StatusInternalServerError, Message: err.Error()}
 		return nil, err
 	}
 	return identifiers, validateExistingSubmodelDeleteIdentifiers(rawIdentifiers, identifiers, existing, failure)
@@ -298,12 +298,12 @@ func validateExistingSubmodelDeleteIdentifiers(
 	rawIdentifiers []string,
 	identifiers []string,
 	existing map[string]struct{},
-	failure *asyncbulk.ItemFailure,
+	failure *asyncjob.ItemFailure,
 ) error {
 	seen := make(map[string]struct{}, len(identifiers))
 	for idx, identifier := range identifiers {
 		if identifier == "" {
-			*failure = asyncbulk.ItemFailure{
+			*failure = asyncjob.ItemFailure{
 				Index:      idx,
 				Identifier: rawIdentifiers[idx],
 				StatusCode: http.StatusBadRequest,
@@ -322,9 +322,9 @@ func validateExistingSubmodelDeleteIdentifiers(
 	return nil
 }
 
-func submodelBulkDeleteNotFound(index int, identifier string, failure *asyncbulk.ItemFailure) error {
+func submodelBulkDeleteNotFound(index int, identifier string, failure *asyncjob.ItemFailure) error {
 	err := common.NewErrNotFound("Submodel Descriptor not found")
-	*failure = asyncbulk.ItemFailure{
+	*failure = asyncjob.ItemFailure{
 		Index:      index,
 		Identifier: identifier,
 		StatusCode: smBulkDeleteErrorStatusCode(err),
@@ -333,14 +333,14 @@ func submodelBulkDeleteNotFound(index int, identifier string, failure *asyncbulk
 	return err
 }
 
-func validateBulkCreateSubmodelDescriptors(descriptors []model.SubmodelDescriptor) asyncbulk.ItemFailure {
+func validateBulkCreateSubmodelDescriptors(descriptors []model.SubmodelDescriptor) asyncjob.ItemFailure {
 	seen := make(map[string]struct{}, len(descriptors))
 	for index, descriptor := range descriptors {
 		identifier := strings.TrimSpace(descriptor.Id)
 		descriptors[index].Id = identifier
 		if identifier == "" {
 			err := common.NewErrBadRequest("SMR-BULK-CREATE-MISSINGID descriptor id must not be empty")
-			return asyncbulk.ItemFailure{
+			return asyncjob.ItemFailure{
 				Index:      index,
 				Identifier: identifier,
 				StatusCode: http.StatusBadRequest,
@@ -349,7 +349,7 @@ func validateBulkCreateSubmodelDescriptors(descriptors []model.SubmodelDescripto
 		}
 		if _, found := seen[identifier]; found {
 			err := common.NewErrConflict("Submodel with given id occurs multiple times in bulk request")
-			return asyncbulk.ItemFailure{
+			return asyncjob.ItemFailure{
 				Index:      index,
 				Identifier: identifier,
 				StatusCode: http.StatusConflict,
@@ -358,7 +358,7 @@ func validateBulkCreateSubmodelDescriptors(descriptors []model.SubmodelDescripto
 		}
 		seen[identifier] = struct{}{}
 	}
-	return asyncbulk.ItemFailure{}
+	return asyncjob.ItemFailure{}
 }
 
 func (s *SubmodelRegistryAPIAPIService) upsertDescriptorInTransaction(
@@ -391,8 +391,8 @@ func (s *SubmodelRegistryAPIAPIService) upsertDescriptorInTransaction(
 	return http.StatusNoContent, nil
 }
 
-func successfulAtomicResult(itemCount int) asyncbulk.OperationResult {
-	return asyncbulk.OperationResult{
+func successfulAtomicResult(itemCount int) asyncjob.BulkResult {
+	return asyncjob.BulkResult{
 		Success:         true,
 		ProcessedCount:  itemCount,
 		SuccessfulCount: itemCount,
@@ -400,10 +400,10 @@ func successfulAtomicResult(itemCount int) asyncbulk.OperationResult {
 	}
 }
 
-func failedAtomicResult(itemIdentifiers []string, failure asyncbulk.ItemFailure) asyncbulk.OperationResult {
-	failures := asyncbulk.ExpandAtomicFailures(itemIdentifiers, failure)
+func failedAtomicResult(itemIdentifiers []string, failure asyncjob.ItemFailure) asyncjob.BulkResult {
+	failures := asyncjob.ExpandAtomicFailures(itemIdentifiers, failure)
 	itemCount := len(itemIdentifiers)
-	return asyncbulk.OperationResult{
+	return asyncjob.BulkResult{
 		Success:         false,
 		ProcessedCount:  itemCount,
 		SuccessfulCount: 0,

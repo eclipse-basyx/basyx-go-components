@@ -35,7 +35,7 @@ import (
 	"time"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
-	"github.com/eclipse-basyx/basyx-go-components/internal/common/asyncbulk"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/asyncjob"
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	persistencepostgresql "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence"
 	openapi "github.com/eclipse-basyx/basyx-go-components/pkg/submodelrepositoryapi"
@@ -185,31 +185,32 @@ func TestAsyncDelegationContextStopsWithServiceLifecycle(t *testing.T) {
 	}
 }
 
-func TestAsyncRecordExpiryCoversExecutionAndRenewsForResultRetention(t *testing.T) {
+func TestAsyncRecordExpiryStartsAtTerminalTransition(t *testing.T) {
 	t.Parallel()
 
-	sut := NewSubmodelRepositoryAPIAPIService(t.Context(), persistencepostgresql.SubmodelDatabase{})
-	sut.asyncResultRetention = 5 * time.Minute
-	handleID, err := sut.asyncManager.Start("anonymous")
+	retention := 5 * time.Minute
+	manager := asyncjob.NewManager("SMREPO-ASYNC-TEST", retention)
+	sut := NewSubmodelRepositoryAPIAPIService(t.Context(), persistencepostgresql.SubmodelDatabase{}, manager)
+	executionDeadline := time.Now().UTC().Add(10 * time.Minute)
+	handleID, err := sut.asyncJobManager.Start(t.Context(), "anonymous", asyncjob.StartOptions{
+		JobKind:           "test",
+		ExecutionDeadline: executionDeadline,
+	})
 	require.NoError(t, err)
-	runningExpiry := time.Now().UTC().Add(10*time.Minute + sut.asyncResultRetention)
-	require.True(t, sut.asyncManager.UpdateWithExpiry(handleID, runningExpiry, func(record asyncbulk.Record) asyncbulk.Record {
-		return record
-	}))
 
-	runningRecord, found := sut.asyncManager.Get(handleID)
+	runningRecord, found, err := sut.asyncJobManager.Get(t.Context(), handleID)
+	require.NoError(t, err)
 	require.True(t, found)
-	require.Equal(t, runningExpiry, runningRecord.ExpiresAt)
+	require.True(t, runningRecord.ExpiresAt.IsZero())
+	require.Equal(t, executionDeadline, runningRecord.ExecutionDeadline)
 
 	beforeTerminalUpdate := time.Now().UTC()
-	sut.updateTerminalAsyncRecord(handleID, func(record asyncbulk.Record) asyncbulk.Record {
-		record.ExecutionState = "Completed"
-		return record
-	})
-	terminalRecord, found := sut.asyncManager.Get(handleID)
+	require.NoError(t, sut.asyncJobManager.CompletePayload(t.Context(), handleID, map[string]any{"success": true}))
+	terminalRecord, found, err := sut.asyncJobManager.Get(t.Context(), handleID)
+	require.NoError(t, err)
 	require.True(t, found)
 	require.Equal(t, "Completed", terminalRecord.ExecutionState)
-	require.GreaterOrEqual(t, terminalRecord.ExpiresAt, beforeTerminalUpdate.Add(sut.asyncResultRetention))
+	require.GreaterOrEqual(t, terminalRecord.ExpiresAt, beforeTerminalUpdate.Add(retention))
 }
 
 func TestPostSubmodelElementByPathSubmodelRepoMapsDeniedToForbidden(t *testing.T) {
@@ -227,16 +228,15 @@ func TestGetOperationAsyncStatusReturnsRedirectWithLocation(t *testing.T) {
 
 	decodedSubmodelID := "sm-redirect"
 	encodedSubmodelID := base64.RawURLEncoding.EncodeToString([]byte(decodedSubmodelID))
-	handleID, err := sut.asyncManager.Start("anonymous")
-	require.NoError(t, err)
-	sut.asyncManager.Update(handleID, func(record asyncbulk.Record) asyncbulk.Record {
-		record.ExecutionState = "Completed"
-		record.Metadata = map[string]string{
+	handleID, err := sut.asyncJobManager.Start(t.Context(), "anonymous", asyncjob.StartOptions{
+		JobKind: "test",
+		Metadata: map[string]string{
 			delegatedAsyncSubmodelIdentifierMetadataKey: decodedSubmodelID,
 			delegatedAsyncIDShortPathMetadataKey:        "Ops.Add",
-		}
-		return record
+		},
 	})
+	require.NoError(t, err)
+	require.NoError(t, sut.asyncJobManager.CompletePayload(t.Context(), handleID, map[string]any{"success": true}))
 
 	response, err := sut.GetOperationAsyncStatus(contextWithABACDisabled(t), encodedSubmodelID, "Ops.Add", handleID)
 	require.NoError(t, err)

@@ -39,7 +39,7 @@ import (
 	registryapiinternal "github.com/eclipse-basyx/basyx-go-components/internal/aasregistry/api"
 	registrydb "github.com/eclipse-basyx/basyx-go-components/internal/aasregistry/persistence"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
-	"github.com/eclipse-basyx/basyx-go-components/internal/common/asyncbulk"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/asyncjob"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/binarycontent"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/history"
 	commonmodel "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
@@ -152,7 +152,11 @@ func runServer(ctx context.Context, configPath string) error {
 	)
 
 	registryCtrl := registryapi.NewAssetAdministrationShellRegistryAPIAPIController(registrySvc, cfg.Server.ContextPath)
-	bulkManager := asyncbulk.NewManager("DTR-BULK", 0)
+	bulkManager, err := asyncjob.NewPostgresManager(ctx, sharedDB, "DTR-BULK", 0)
+	if err != nil {
+		slog.ErrorContext(ctx, "async bulk persistence initialization failed", "error.code", "DTR-ASYNCJOB-INIT", "error", err)
+		return err
+	}
 	bulkSvc := registryapiinternal.NewBulkService(registrySvc, bulkManager)
 	bulkHandler := registryapiinternal.NewBulkHTTPHandler(bulkSvc)
 	discoveryCtrl := openapi.NewAssetAdministrationShellBasicDiscoveryAPIAPIController(discoverySvc)

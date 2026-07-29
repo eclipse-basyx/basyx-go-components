@@ -36,7 +36,7 @@ import (
 
 	registryapiinternal "github.com/eclipse-basyx/basyx-go-components/internal/aasregistry/api"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
-	"github.com/eclipse-basyx/basyx-go-components/internal/common/asyncbulk"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/asyncjob"
 	descriptorsutil "github.com/eclipse-basyx/basyx-go-components/internal/common/descriptors"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
@@ -545,7 +545,7 @@ func (s *CustomRegistryService) PutSubmodelDescriptorByIdThroughSuperpath(
 func (s *CustomRegistryService) ExecuteBulkCreateAtomic(
 	ctx context.Context,
 	descriptors []model.AssetAdministrationShellDescriptor,
-) asyncbulk.OperationResult {
+) asyncjob.BulkResult {
 	ctx = withDTRDescriptorWriteContext(ctx)
 	return s.AssetAdministrationShellRegistryAPIAPIService.ExecuteBulkCreateAtomic(ctx, descriptors)
 }
@@ -554,7 +554,7 @@ func (s *CustomRegistryService) ExecuteBulkCreateAtomic(
 func (s *CustomRegistryService) ExecuteBulkPutAtomic(
 	ctx context.Context,
 	descriptors []model.AssetAdministrationShellDescriptor,
-) asyncbulk.OperationResult {
+) asyncjob.BulkResult {
 	ctx = withDTRDescriptorWriteContext(ctx)
 	return s.AssetAdministrationShellRegistryAPIAPIService.ExecuteBulkPutAtomic(ctx, descriptors)
 }

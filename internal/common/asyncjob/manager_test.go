@@ -24,7 +24,7 @@
 ******************************************************************************/
 // Author: Aaron Zielstorff ( Fraunhofer IESE )
 
-package asyncbulk
+package asyncjob
 
 import (
 	"testing"
@@ -36,7 +36,7 @@ import (
 func TestStartCreatesOpaqueHandle(t *testing.T) {
 	manager := NewManager("ASYNC-TEST", time.Minute)
 
-	handleID, err := manager.Start("owner-a")
+	handleID, err := manager.Start(t.Context(), "owner-a", StartOptions{JobKind: "test"})
 	require.NoError(t, err)
 	require.Contains(t, handleID, "ASYNC-TEST-")
 	require.NotContains(t, handleID, "|")
@@ -45,31 +45,46 @@ func TestStartCreatesOpaqueHandle(t *testing.T) {
 func TestGetForOwnerHidesForeignHandle(t *testing.T) {
 	manager := NewManager("ASYNC-TEST", time.Minute)
 
-	handleID, err := manager.Start("owner-a")
+	handleID, err := manager.Start(t.Context(), "owner-a", StartOptions{JobKind: "test"})
 	require.NoError(t, err)
 
-	_, found := manager.GetForOwner(handleID, "owner-b")
+	_, found, err := manager.GetForOwner(t.Context(), handleID, "owner-b")
+	require.NoError(t, err)
 	require.False(t, found)
 
-	_, found = manager.GetForOwner(handleID, "owner-a")
+	_, found, err = manager.GetForOwner(t.Context(), handleID, "owner-a")
+	require.NoError(t, err)
 	require.True(t, found)
 }
 
-func TestUpdateWithExpiryReplacesRecordExpiry(t *testing.T) {
+func TestCompleteStartsTerminalRetention(t *testing.T) {
 	manager := NewManager("ASYNC-TEST", time.Minute)
 
-	handleID, err := manager.Start("owner-a")
+	handleID, err := manager.Start(t.Context(), "owner-a", StartOptions{JobKind: "test"})
 	require.NoError(t, err)
-	expectedExpiry := time.Now().UTC().Add(5 * time.Minute)
+	beforeCompletion := time.Now().UTC()
+	require.NoError(t, manager.Complete(t.Context(), handleID, BulkResult{Success: true}))
 
-	updated := manager.UpdateWithExpiry(handleID, expectedExpiry, func(record Record) Record {
-		record.ExecutionState = "Completed"
-		return record
-	})
-	require.True(t, updated)
-
-	record, found := manager.Get(handleID)
+	record, found, err := manager.Get(t.Context(), handleID)
+	require.NoError(t, err)
 	require.True(t, found)
 	require.Equal(t, "Completed", record.ExecutionState)
-	require.Equal(t, expectedExpiry, record.ExpiresAt)
+	require.GreaterOrEqual(t, record.ExpiresAt, beforeCompletion.Add(time.Minute))
+	require.True(t, record.HasResult)
+}
+
+func TestAbandonedRunningRecordBecomesFailed(t *testing.T) {
+	manager := NewManager("ASYNC-TEST", time.Minute)
+	manager.leaseDuration = time.Millisecond
+
+	handleID, err := manager.Start(t.Context(), "owner-a", StartOptions{JobKind: "test"})
+	require.NoError(t, err)
+	time.Sleep(2 * time.Millisecond)
+
+	record, found, err := manager.Get(t.Context(), handleID)
+	require.NoError(t, err)
+	require.True(t, found)
+	require.Equal(t, "Failed", record.ExecutionState)
+	require.Equal(t, 500, record.ErrorStatus)
+	require.NotZero(t, record.ExpiresAt)
 }

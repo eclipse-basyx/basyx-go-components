@@ -31,6 +31,7 @@
 
 ## General Notes:
 - Use `database/base.sql` and `database/patches/` for reference when modifying database-related code.
+- Never modify `database/base.sql`; it is reference-only. Implement every database schema change exclusively through a versioned file under `database/patches/`.
 - Ensure that database schema changes add a versioned patch under `database/patches/`, are registered in `cmd/basyxconfigurationservice/main.go`, and update the schema version metadata in `internal/common/database.go` when they become the current schema.
 - When modifying code, consider the impact on related modules and ensure that changes are consistent across the codebase.
 - Always run integration tests after making changes to ensure that the modifications do not break existing functionality. Important: Clean Testcache before running tests to avoid false positives/negatives.
