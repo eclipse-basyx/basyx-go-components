@@ -23,8 +23,10 @@ services:
       LOGGING_FORMAT: json
       LOGGING_LEVEL: info
       OTEL_TRACES_EXPORTER: otlp
+      OTEL_METRICS_EXPORTER: otlp
       OTEL_EXPORTER_OTLP_PROTOCOL: http/protobuf
       OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
+      OTEL_METRIC_EXPORT_INTERVAL: "1000"
       OTEL_SERVICE_NAME: aasenvironmentservice
       OTEL_RESOURCE_ATTRIBUTES: deployment.environment.name=observability-example
     labels:
@@ -94,6 +96,19 @@ services:
         condition: service_started
     restart: unless-stopped
 
+  prometheus:
+    image: prom/prometheus:v3.13.1
+    command: ["--config.file=/etc/prometheus/prometheus.yml"]
+    ports:
+      - "127.0.0.1:9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    depends_on:
+      otel-collector:
+        condition: service_started
+    restart: unless-stopped
+
   tempo:
     image: grafana/tempo:3.0.2
     command: ["-target=all", "-config.file=/etc/tempo.yaml"]
@@ -144,8 +159,11 @@ services:
         condition: service_started
       loki:
         condition: service_started
+      prometheus:
+        condition: service_started
     restart: unless-stopped
 
 volumes:
   alloy-data:
+  prometheus-data:
   tempo-data:
