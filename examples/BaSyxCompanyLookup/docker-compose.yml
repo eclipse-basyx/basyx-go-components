@@ -16,9 +16,10 @@ services:
       - POSTGRES_USER=admin
       - POSTGRES_PASSWORD=admin123
       - POSTGRES_DBNAME=basyxCompanyLookupDB
-      - POSTGRES_MAXOPENCONNECTIONS=500
-      - POSTGRES_MAXIDLECONNECTIONS=500
+      - POSTGRES_MAXOPENCONNECTIONS=50
+      - POSTGRES_MAXIDLECONNECTIONS=25
       - POSTGRES_CONNMAXLIFETIMEMINUTES=5
+      - POSTGRES_CONNMAXIDLETIMEMINUTES=0
     healthcheck:
       test: ["CMD", "wget", "--quiet", "--tries=1", "--output-document=-", "http://localhost:5080/health"]
       interval: 10s
@@ -65,9 +66,10 @@ services:
       - POSTGRES_USER=admin
       - POSTGRES_PASSWORD=admin123
       - POSTGRES_DBNAME=basyxCompanyLookupDB
-      - POSTGRES_MAXOPENCONNECTIONS=500
-      - POSTGRES_MAXIDLECONNECTIONS=500
+      - POSTGRES_MAXOPENCONNECTIONS=50
+      - POSTGRES_MAXIDLECONNECTIONS=25
       - POSTGRES_CONNMAXLIFETIMEMINUTES=5
+      - POSTGRES_CONNMAXIDLETIMEMINUTES=0
     depends_on:
       db:
         condition: service_healthy
