@@ -115,6 +115,14 @@ type telemetryConfiguration struct {
 	propagator     propagation.TextMapPropagator
 }
 
+type exporterEnvironment struct {
+	endpoint    string
+	headers     string
+	protocol    string
+	compression string
+	timeout     string
+}
+
 // Configure initializes optional telemetry from standard OpenTelemetry
 // environment variables.
 func Configure(ctx context.Context, serviceName string) (*Runtime, error) {
@@ -399,59 +407,67 @@ func sdkDisabled() (bool, error) {
 }
 
 func validateExporterEnvironment(traceEnabled bool, metricEnabled bool) error {
-	endpointKeys := []string{}
-	headerKeys := []string{}
-	protocolKeys := []string{}
-	compressionKeys := []string{}
-	timeoutKeys := []string{}
+	for _, environment := range exporterEnvironments(traceEnabled, metricEnabled) {
+		if err := validateExporterEnvironmentValues(environment); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func exporterEnvironments(traceEnabled bool, metricEnabled bool) []exporterEnvironment {
+	environments := make([]exporterEnvironment, 0, 3)
 	if traceEnabled || metricEnabled {
-		endpointKeys = append(endpointKeys, "OTEL_EXPORTER_OTLP_ENDPOINT")
-		headerKeys = append(headerKeys, "OTEL_EXPORTER_OTLP_HEADERS")
-		protocolKeys = append(protocolKeys, "OTEL_EXPORTER_OTLP_PROTOCOL")
-		compressionKeys = append(compressionKeys, "OTEL_EXPORTER_OTLP_COMPRESSION")
-		timeoutKeys = append(timeoutKeys, "OTEL_EXPORTER_OTLP_TIMEOUT")
+		environments = append(environments, newExporterEnvironment(""))
 	}
 	if traceEnabled {
-		endpointKeys = append(endpointKeys, "OTEL_EXPORTER_OTLP_TRACES_ENDPOINT")
-		headerKeys = append(headerKeys, "OTEL_EXPORTER_OTLP_TRACES_HEADERS")
-		protocolKeys = append(protocolKeys, "OTEL_EXPORTER_OTLP_TRACES_PROTOCOL")
-		compressionKeys = append(compressionKeys, "OTEL_EXPORTER_OTLP_TRACES_COMPRESSION")
-		timeoutKeys = append(timeoutKeys, "OTEL_EXPORTER_OTLP_TRACES_TIMEOUT")
+		environments = append(environments, newExporterEnvironment("_TRACES"))
 	}
 	if metricEnabled {
-		endpointKeys = append(endpointKeys, "OTEL_EXPORTER_OTLP_METRICS_ENDPOINT")
-		headerKeys = append(headerKeys, "OTEL_EXPORTER_OTLP_METRICS_HEADERS")
-		protocolKeys = append(protocolKeys, "OTEL_EXPORTER_OTLP_METRICS_PROTOCOL")
-		compressionKeys = append(compressionKeys, "OTEL_EXPORTER_OTLP_METRICS_COMPRESSION")
-		timeoutKeys = append(timeoutKeys, "OTEL_EXPORTER_OTLP_METRICS_TIMEOUT")
+		environments = append(environments, newExporterEnvironment("_METRICS"))
 	}
+	return environments
+}
 
-	for _, key := range endpointKeys {
-		if err := validateEndpointEnvironment(key); err != nil {
-			return err
-		}
+func newExporterEnvironment(signal string) exporterEnvironment {
+	const prefix = "OTEL_EXPORTER_OTLP"
+	return exporterEnvironment{
+		endpoint:    prefix + signal + "_ENDPOINT",
+		headers:     prefix + signal + "_HEADERS",
+		protocol:    prefix + signal + "_PROTOCOL",
+		compression: prefix + signal + "_COMPRESSION",
+		timeout:     prefix + signal + "_TIMEOUT",
 	}
-	for _, key := range headerKeys {
-		if err := validateHeaderEnvironment(key); err != nil {
-			return err
-		}
+}
+
+func validateExporterEnvironmentValues(environment exporterEnvironment) error {
+	if err := validateEndpointEnvironment(environment.endpoint); err != nil {
+		return err
 	}
-	for _, key := range protocolKeys {
-		value := strings.ToLower(strings.TrimSpace(os.Getenv(key)))
-		if value != "" && value != "grpc" && value != "http/protobuf" {
-			return fmt.Errorf("OTEL-CONFIG-EXPORTER unsupported %s %q", key, value)
-		}
+	if err := validateHeaderEnvironment(environment.headers); err != nil {
+		return err
 	}
-	for _, key := range compressionKeys {
-		value := strings.ToLower(strings.TrimSpace(os.Getenv(key)))
-		if value != "" && value != "gzip" && value != "none" {
-			return fmt.Errorf("OTEL-CONFIG-EXPORTER unsupported %s %q", key, value)
-		}
+	if err := validateProtocolEnvironment(environment.protocol); err != nil {
+		return err
 	}
-	for _, key := range timeoutKeys {
-		if err := validatePositiveIntegerEnvironment(key, "OTEL-CONFIG-EXPORTER"); err != nil {
-			return err
-		}
+	if err := validateCompressionEnvironment(environment.compression); err != nil {
+		return err
+	}
+	return validatePositiveIntegerEnvironment(environment.timeout, "OTEL-CONFIG-EXPORTER")
+}
+
+func validateProtocolEnvironment(key string) error {
+	value := strings.ToLower(strings.TrimSpace(os.Getenv(key)))
+	if value != "" && value != "grpc" && value != "http/protobuf" {
+		return fmt.Errorf("OTEL-CONFIG-EXPORTER unsupported %s %q", key, value)
+	}
+	return nil
+}
+
+func validateCompressionEnvironment(key string) error {
+	value := strings.ToLower(strings.TrimSpace(os.Getenv(key)))
+	if value != "" && value != "gzip" && value != "none" {
+		return fmt.Errorf("OTEL-CONFIG-EXPORTER unsupported %s %q", key, value)
 	}
 	return nil
 }
