@@ -53,9 +53,17 @@ func TestPersistentAsyncHandleRecoversAbandonedWorkerAndCleansUp(t *testing.T) {
 	managerA, err := asyncjob.NewPostgresManager(t.Context(), db, "ASYNC-RECOVERY-IT", 50*time.Millisecond)
 	require.NoError(t, err)
 	handleID, err := managerA.Start(t.Context(), "owner-a", asyncjob.StartOptions{
-		JobKind: "integration.abandoned",
+		JobKind:           "integration.abandoned",
+		ExecutionDeadline: time.Now().UTC().Add(-time.Second),
 	})
 	require.NoError(t, err)
+
+	managerB, err := asyncjob.NewPostgresManager(t.Context(), db, "ASYNC-RECOVERY-IT", 50*time.Millisecond)
+	require.NoError(t, err)
+	record, found, err := managerB.GetForOwner(t.Context(), handleID, "owner-a")
+	require.NoError(t, err)
+	require.True(t, found)
+	require.Equal(t, "Running", record.ExecutionState)
 
 	expireLeaseQuery, expireLeaseArgs, err := goqu.Dialect("postgres").
 		Update("async_job").
@@ -66,9 +74,7 @@ func TestPersistentAsyncHandleRecoversAbandonedWorkerAndCleansUp(t *testing.T) {
 	_, err = db.ExecContext(t.Context(), expireLeaseQuery, expireLeaseArgs...)
 	require.NoError(t, err)
 
-	managerB, err := asyncjob.NewPostgresManager(t.Context(), db, "ASYNC-RECOVERY-IT", 50*time.Millisecond)
-	require.NoError(t, err)
-	record, found, err := managerB.GetForOwner(t.Context(), handleID, "owner-a")
+	record, found, err = managerB.GetForOwner(t.Context(), handleID, "owner-a")
 	require.NoError(t, err)
 	require.True(t, found)
 	require.Equal(t, "Failed", record.ExecutionState)
@@ -84,9 +90,7 @@ func TestPersistentAsyncHandleRecoversAbandonedWorkerAndCleansUp(t *testing.T) {
 	_, err = db.ExecContext(t.Context(), expireResultQuery, expireResultArgs...)
 	require.NoError(t, err)
 
-	managerC, err := asyncjob.NewPostgresManager(t.Context(), db, "ASYNC-RECOVERY-IT", 50*time.Millisecond)
-	require.NoError(t, err)
-	_, found, err = managerC.Get(t.Context(), handleID)
+	_, found, err = managerB.Get(t.Context(), handleID)
 	require.NoError(t, err)
 	require.False(t, found)
 }

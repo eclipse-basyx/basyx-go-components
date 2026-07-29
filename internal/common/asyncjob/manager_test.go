@@ -27,6 +27,7 @@
 package asyncjob
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -87,4 +88,65 @@ func TestAbandonedRunningRecordBecomesFailed(t *testing.T) {
 	require.Equal(t, "Failed", record.ExecutionState)
 	require.Equal(t, 500, record.ErrorStatus)
 	require.NotZero(t, record.ExpiresAt)
+}
+
+func TestGetHidesExpiredTerminalRecord(t *testing.T) {
+	manager := NewManager("ASYNC-TEST", time.Minute)
+
+	handleID, err := manager.Start(t.Context(), "owner-a", StartOptions{JobKind: "test"})
+	require.NoError(t, err)
+	require.NoError(t, manager.CompletePayload(t.Context(), handleID, map[string]any{"success": true}))
+
+	store := manager.store.(*memoryStore)
+	store.Lock()
+	record := store.records[handleID]
+	record.ExpiresAt = time.Now().UTC().Add(-time.Second)
+	store.records[handleID] = record
+	store.Unlock()
+
+	_, found, err := manager.Get(t.Context(), handleID)
+	require.NoError(t, err)
+	require.False(t, found)
+}
+
+func TestValidLeasePreventsDeadlineRecovery(t *testing.T) {
+	manager := NewManager("ASYNC-TEST", time.Minute)
+
+	handleID, err := manager.Start(t.Context(), "owner-a", StartOptions{
+		JobKind:           "test",
+		ExecutionDeadline: time.Now().UTC().Add(-time.Second),
+	})
+	require.NoError(t, err)
+
+	record, found, err := manager.Get(t.Context(), handleID)
+	require.NoError(t, err)
+	require.True(t, found)
+	require.Equal(t, "Running", record.ExecutionState)
+}
+
+func TestExecutionContextStopsWithManagerLifecycle(t *testing.T) {
+	lifecycleCtx, stopLifecycle := context.WithCancel(t.Context())
+	manager := newManager(lifecycleCtx, newMemoryStore(), "ASYNC-TEST", time.Minute)
+
+	executionCtx, cancelExecution := manager.NewExecutionContext(t.Context(), time.Minute)
+	defer cancelExecution()
+	stopLifecycle()
+
+	select {
+	case <-executionCtx.Done():
+		require.ErrorIs(t, executionCtx.Err(), context.Canceled)
+	case <-time.After(time.Second):
+		t.Fatal("execution context was not canceled with manager lifecycle")
+	}
+}
+
+func TestExecutionContextHasDeadline(t *testing.T) {
+	manager := NewManager("ASYNC-TEST", time.Minute)
+
+	executionCtx, cancelExecution := manager.NewExecutionContext(t.Context(), time.Minute)
+	defer cancelExecution()
+
+	deadline, hasDeadline := executionCtx.Deadline()
+	require.True(t, hasDeadline)
+	require.WithinDuration(t, time.Now().UTC().Add(time.Minute), deadline, time.Second)
 }

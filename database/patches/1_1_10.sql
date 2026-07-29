@@ -37,7 +37,8 @@ CREATE TABLE IF NOT EXISTS async_job (
 CREATE INDEX IF NOT EXISTS ix_async_job_owner
   ON async_job(handle_id, owner_key);
 CREATE INDEX IF NOT EXISTS ix_async_job_recovery
-  ON async_job(manager_key, execution_state, lease_expires_at, execution_deadline);
+  ON async_job(manager_key, lease_expires_at)
+  WHERE execution_state = 'Running';
 CREATE INDEX IF NOT EXISTS ix_async_job_cleanup
   ON async_job(manager_key, expires_at)
   WHERE execution_state <> 'Running';

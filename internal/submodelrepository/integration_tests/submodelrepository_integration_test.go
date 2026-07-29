@@ -2618,5 +2618,8 @@ func TestMain(m *testing.M) {
 		PreDownBeforeUp: true,
 		HealthURL:       submodelRepositoryBaseURL + "/health",
 		HealthTimeout:   150 * time.Second,
+		WaitForReady: func() error {
+			return testenv.WaitHealthyURL(submodelRepositoryReplicaBaseURL+"/health", 150*time.Second)
+		},
 	}))
 }

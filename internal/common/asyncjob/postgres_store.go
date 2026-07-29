@@ -54,14 +54,14 @@ func (s *postgresStore) Create(ctx context.Context, handleID string, record Reco
 	return nil
 }
 
-func (s *postgresStore) Get(ctx context.Context, handleID string) (Record, bool, error) {
+func (s *postgresStore) Get(ctx context.Context, handleID string, managerKey string) (Record, bool, error) {
 	query, args, err := s.dialect.From(asyncJobTable).
 		Select(
 			"manager_key", "job_kind", "execution_state", "owner_key", "metadata",
 			"bulk_result", "result_payload", "error_status", "error_payload", "worker_id",
 			"created_at", "terminal_at", "expires_at", "lease_expires_at", "execution_deadline",
 		).
-		Where(goqu.C("handle_id").Eq(handleID)).
+		Where(goqu.Ex{"handle_id": handleID, "manager_key": managerKey}).
 		ToSQL()
 	if err != nil {
 		return Record{}, false, fmt.Errorf("ASYNCJOB-PGGET-BUILDQUERY %w", err)
@@ -94,6 +94,7 @@ func (s *postgresStore) Get(ctx context.Context, handleID string) (Record, bool,
 func (s *postgresStore) Transition(
 	ctx context.Context,
 	handleID string,
+	managerKey string,
 	workerID string,
 	terminal Record,
 	expiresAt time.Time,
@@ -125,6 +126,7 @@ func (s *postgresStore) Transition(
 		}).
 		Where(goqu.Ex{
 			"handle_id":       handleID,
+			"manager_key":     managerKey,
 			"worker_id":       workerID,
 			"execution_state": executionStateRunning,
 		}).
@@ -142,6 +144,7 @@ func (s *postgresStore) Transition(
 func (s *postgresStore) RenewLease(
 	ctx context.Context,
 	handleID string,
+	managerKey string,
 	workerID string,
 	expiresAt time.Time,
 ) (bool, error) {
@@ -149,6 +152,7 @@ func (s *postgresStore) RenewLease(
 		Set(goqu.Record{"lease_expires_at": expiresAt, "updated_at": time.Now().UTC()}).
 		Where(goqu.Ex{
 			"handle_id":       handleID,
+			"manager_key":     managerKey,
 			"worker_id":       workerID,
 			"execution_state": executionStateRunning,
 		}).
@@ -163,9 +167,9 @@ func (s *postgresStore) RenewLease(
 	return affected(result)
 }
 
-func (s *postgresStore) Delete(ctx context.Context, handleID string) error {
+func (s *postgresStore) Delete(ctx context.Context, handleID string, managerKey string) error {
 	query, args, err := s.dialect.Delete(asyncJobTable).
-		Where(goqu.C("handle_id").Eq(handleID)).
+		Where(goqu.Ex{"handle_id": handleID, "manager_key": managerKey}).
 		ToSQL()
 	if err != nil {
 		return fmt.Errorf("ASYNCJOB-PGDELETE-BUILDQUERY %w", err)
@@ -179,12 +183,21 @@ func (s *postgresStore) Delete(ctx context.Context, handleID string) error {
 func (s *postgresStore) RecoverAbandoned(
 	ctx context.Context,
 	managerKey string,
+	handleID string,
 	now time.Time,
 	expiresAt time.Time,
 ) (int64, error) {
 	errorBody, err := json.Marshal(abandonedErrorBody())
 	if err != nil {
 		return 0, fmt.Errorf("ASYNCJOB-PGRECOVER-MARSHALERROR %w", err)
+	}
+	recoveryConditions := []goqu.Expression{
+		goqu.C("manager_key").Eq(managerKey),
+		goqu.C("execution_state").Eq(executionStateRunning),
+		goqu.C("lease_expires_at").Lte(now),
+	}
+	if handleID != "" {
+		recoveryConditions = append(recoveryConditions, goqu.C("handle_id").Eq(handleID))
 	}
 	query, args, err := s.dialect.Update(asyncJobTable).
 		Set(goqu.Record{
@@ -196,14 +209,7 @@ func (s *postgresStore) RecoverAbandoned(
 			"lease_expires_at": nil,
 			"updated_at":       now,
 		}).
-		Where(
-			goqu.C("manager_key").Eq(managerKey),
-			goqu.C("execution_state").Eq(executionStateRunning),
-			goqu.Or(
-				goqu.C("lease_expires_at").Lte(now),
-				goqu.C("execution_deadline").Lte(now),
-			),
-		).
+		Where(recoveryConditions...).
 		ToSQL()
 	if err != nil {
 		return 0, fmt.Errorf("ASYNCJOB-PGRECOVER-BUILDQUERY %w", err)

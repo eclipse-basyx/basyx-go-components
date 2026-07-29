@@ -43,6 +43,7 @@ const (
 	defaultRecordTTL           = 15 * time.Minute
 	defaultLeaseDuration       = 30 * time.Second
 	defaultMaintenanceInterval = time.Minute
+	defaultPersistenceTimeout  = 5 * time.Second
 	executionStateRunning      = "Running"
 	executionStateCompleted    = "Completed"
 	executionStateFailed       = "Failed"
@@ -97,11 +98,11 @@ type StartOptions struct {
 
 type recordStore interface {
 	Create(context.Context, string, Record) error
-	Get(context.Context, string) (Record, bool, error)
-	Transition(context.Context, string, string, Record, time.Time) (bool, error)
-	RenewLease(context.Context, string, string, time.Time) (bool, error)
-	Delete(context.Context, string) error
-	RecoverAbandoned(context.Context, string, time.Time, time.Time) (int64, error)
+	Get(context.Context, string, string) (Record, bool, error)
+	Transition(context.Context, string, string, string, Record, time.Time) (bool, error)
+	RenewLease(context.Context, string, string, string, time.Time) (bool, error)
+	Delete(context.Context, string, string) error
+	RecoverAbandoned(context.Context, string, string, time.Time, time.Time) (int64, error)
 	DeleteExpired(context.Context, string, time.Time) (int64, error)
 }
 
@@ -113,13 +114,14 @@ type Manager struct {
 	ttl                 time.Duration
 	leaseDuration       time.Duration
 	maintenanceInterval time.Duration
+	lifecycleContext    context.Context
 	maintenanceMu       sync.Mutex
 	lastCleanupAt       time.Time
 }
 
 // NewManager creates an in-memory manager intended for isolated tests.
 func NewManager(prefix string, ttl time.Duration) *Manager {
-	return newManager(newMemoryStore(), prefix, ttl)
+	return newManager(context.TODO(), newMemoryStore(), prefix, ttl)
 }
 
 // NewPostgresManager creates a shared PostgreSQL-backed manager and starts maintenance.
@@ -136,7 +138,7 @@ func NewPostgresManager(
 		return nil, errors.New("ASYNCJOB-NEWPOSTGRES-NILDB database handle must not be nil")
 	}
 
-	manager := newManager(newPostgresStore(db), prefix, ttl)
+	manager := newManager(ctx, newPostgresStore(db), prefix, ttl)
 	if err := manager.maintain(ctx, true); err != nil {
 		return nil, fmt.Errorf("ASYNCJOB-NEWPOSTGRES-MAINTAIN %w", err)
 	}
@@ -144,7 +146,7 @@ func NewPostgresManager(
 	return manager, nil
 }
 
-func newManager(store recordStore, prefix string, ttl time.Duration) *Manager {
+func newManager(lifecycleContext context.Context, store recordStore, prefix string, ttl time.Duration) *Manager {
 	if ttl <= 0 {
 		ttl = defaultRecordTTL
 	}
@@ -158,7 +160,28 @@ func newManager(store recordStore, prefix string, ttl time.Duration) *Manager {
 		ttl:                 ttl,
 		leaseDuration:       defaultLeaseDuration,
 		maintenanceInterval: defaultMaintenanceInterval,
+		lifecycleContext:    lifecycleContext,
 	}
+}
+
+// NewExecutionContext creates a request-value-preserving context bounded by both
+// the manager lifecycle and the supplied execution timeout.
+func (m *Manager) NewExecutionContext(
+	requestContext context.Context,
+	timeout time.Duration,
+) (context.Context, context.CancelFunc) {
+	executionContext, cancel := context.WithTimeout(context.WithoutCancel(requestContext), timeout)
+	stopLifecycleCancellation := context.AfterFunc(m.lifecycleContext, cancel)
+	return executionContext, func() {
+		stopLifecycleCancellation()
+		cancel()
+	}
+}
+
+// NewPersistenceContext creates a short-lived context for recording a terminal
+// state after an execution context has ended.
+func NewPersistenceContext(executionContext context.Context) (context.Context, context.CancelFunc) {
+	return context.WithTimeout(context.WithoutCancel(executionContext), defaultPersistenceTimeout)
 }
 
 // Start persists a new running job and returns its opaque handle.
@@ -223,7 +246,7 @@ func (m *Manager) Fail(ctx context.Context, handleID string, status int, body an
 
 func (m *Manager) transition(ctx context.Context, handleID string, terminal Record) error {
 	now := time.Now().UTC()
-	updated, err := m.store.Transition(ctx, handleID, m.workerID, terminal, now.Add(m.ttl))
+	updated, err := m.store.Transition(ctx, handleID, m.prefix, m.workerID, terminal, now.Add(m.ttl))
 	if err != nil {
 		return fmt.Errorf("ASYNCJOB-TRANSITION-EXECUTE %w", err)
 	}
@@ -233,16 +256,38 @@ func (m *Manager) transition(ctx context.Context, handleID string, terminal Reco
 	return nil
 }
 
-// Get returns a record after recovering abandoned work in the manager namespace.
+// Get returns a non-expired record and recovers the requested handle when its lease expired.
 func (m *Manager) Get(ctx context.Context, handleID string) (Record, bool, error) {
-	if err := m.recover(ctx); err != nil {
-		return Record{}, false, err
-	}
-	record, found, err := m.store.Get(ctx, handleID)
+	record, found, err := m.store.Get(ctx, handleID, m.prefix)
 	if err != nil {
 		return Record{}, false, fmt.Errorf("ASYNCJOB-GET-READ %w", err)
 	}
-	return record, found && record.ManagerKey == m.prefix, nil
+	if !found {
+		return Record{}, false, nil
+	}
+
+	now := time.Now().UTC()
+	if record.ExecutionState != executionStateRunning {
+		if record.ExpiresAt.IsZero() || record.ExpiresAt.After(now) {
+			return record, true, nil
+		}
+		if err := m.store.Delete(ctx, handleID, m.prefix); err != nil {
+			return Record{}, false, fmt.Errorf("ASYNCJOB-GET-DELETEEXPIRED %w", err)
+		}
+		return Record{}, false, nil
+	}
+
+	if record.LeaseExpiresAt.IsZero() || record.LeaseExpiresAt.After(now) {
+		return record, true, nil
+	}
+	if err := m.recover(ctx, handleID); err != nil {
+		return Record{}, false, err
+	}
+	record, found, err = m.store.Get(ctx, handleID, m.prefix)
+	if err != nil {
+		return Record{}, false, fmt.Errorf("ASYNCJOB-GET-READRECOVERED %w", err)
+	}
+	return record, found, nil
 }
 
 // GetForOwner returns a record only when handle and owner key match.
@@ -259,7 +304,7 @@ func (m *Manager) GetForOwner(ctx context.Context, handleID string, ownerKey str
 
 // Delete removes a handle from the shared store.
 func (m *Manager) Delete(ctx context.Context, handleID string) error {
-	if err := m.store.Delete(ctx, handleID); err != nil {
+	if err := m.store.Delete(ctx, handleID, m.prefix); err != nil {
 		return fmt.Errorf("ASYNCJOB-DELETE-EXECUTE %w", err)
 	}
 	return nil
@@ -279,6 +324,7 @@ func (m *Manager) KeepAlive(ctx context.Context, handleID string) func() {
 				renewed, err := m.store.RenewLease(
 					heartbeatCtx,
 					handleID,
+					m.prefix,
 					m.workerID,
 					now.UTC().Add(m.leaseDuration),
 				)
@@ -311,7 +357,7 @@ func (m *Manager) runMaintenance(ctx context.Context) {
 }
 
 func (m *Manager) maintain(ctx context.Context, force bool) error {
-	if err := m.recover(ctx); err != nil {
+	if err := m.recover(ctx, ""); err != nil {
 		return err
 	}
 
@@ -328,9 +374,9 @@ func (m *Manager) maintain(ctx context.Context, force bool) error {
 	return nil
 }
 
-func (m *Manager) recover(ctx context.Context) error {
+func (m *Manager) recover(ctx context.Context, handleID string) error {
 	now := time.Now().UTC()
-	if _, err := m.store.RecoverAbandoned(ctx, m.prefix, now, now.Add(m.ttl)); err != nil {
+	if _, err := m.store.RecoverAbandoned(ctx, m.prefix, handleID, now, now.Add(m.ttl)); err != nil {
 		return fmt.Errorf("ASYNCJOB-RECOVER-EXECUTE %w", err)
 	}
 	return nil
