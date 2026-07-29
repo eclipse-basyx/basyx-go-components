@@ -74,6 +74,20 @@ func TestPersistentAsyncHandleRecoversAbandonedWorkerAndCleansUp(t *testing.T) {
 	_, err = db.ExecContext(t.Context(), expireLeaseQuery, expireLeaseArgs...)
 	require.NoError(t, err)
 
+	_, found, err = managerB.GetForOwner(t.Context(), handleID, "owner-b")
+	require.NoError(t, err)
+	require.False(t, found)
+
+	stateQuery, stateArgs, err := goqu.Dialect("postgres").
+		From("async_job").
+		Select("execution_state").
+		Where(goqu.C("handle_id").Eq(handleID)).
+		ToSQL()
+	require.NoError(t, err)
+	var executionState string
+	require.NoError(t, db.QueryRowContext(t.Context(), stateQuery, stateArgs...).Scan(&executionState))
+	require.Equal(t, "Running", executionState)
+
 	record, found, err = managerB.GetForOwner(t.Context(), handleID, "owner-a")
 	require.NoError(t, err)
 	require.True(t, found)

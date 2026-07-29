@@ -40,13 +40,16 @@ import (
 )
 
 const (
-	defaultRecordTTL           = 15 * time.Minute
-	defaultLeaseDuration       = 30 * time.Second
-	defaultMaintenanceInterval = time.Minute
-	defaultPersistenceTimeout  = 5 * time.Second
-	executionStateRunning      = "Running"
-	executionStateCompleted    = "Completed"
-	executionStateFailed       = "Failed"
+	defaultRecordTTL                   = 15 * time.Minute
+	defaultLeaseDuration               = 30 * time.Second
+	defaultMaintenanceInterval         = time.Minute
+	defaultPersistenceTimeout          = 5 * time.Second
+	defaultMaximumConcurrentExecutions = 64
+	initialTransitionRetryDelay        = 50 * time.Millisecond
+	maximumTransitionRetryDelay        = 500 * time.Millisecond
+	executionStateRunning              = "Running"
+	executionStateCompleted            = "Completed"
+	executionStateFailed               = "Failed"
 )
 
 var errTransitionRejected = errors.New("asynchronous job is no longer running")
@@ -98,11 +101,11 @@ type StartOptions struct {
 
 type recordStore interface {
 	Create(context.Context, string, Record) error
-	Get(context.Context, string, string) (Record, bool, error)
+	Get(context.Context, string, string, string) (Record, bool, error)
 	Transition(context.Context, string, string, string, Record, time.Time) (bool, error)
 	RenewLease(context.Context, string, string, string, time.Time) (bool, error)
-	Delete(context.Context, string, string) error
-	RecoverAbandoned(context.Context, string, string, time.Time, time.Time) (int64, error)
+	Delete(context.Context, string, string, string) error
+	RecoverAbandoned(context.Context, string, string, string, time.Time, time.Time) (int64, error)
 	DeleteExpired(context.Context, string, time.Time) (int64, error)
 }
 
@@ -115,6 +118,7 @@ type Manager struct {
 	leaseDuration       time.Duration
 	maintenanceInterval time.Duration
 	lifecycleContext    context.Context
+	executionSlots      chan struct{}
 	maintenanceMu       sync.Mutex
 	lastCleanupAt       time.Time
 }
@@ -161,6 +165,7 @@ func newManager(lifecycleContext context.Context, store recordStore, prefix stri
 		leaseDuration:       defaultLeaseDuration,
 		maintenanceInterval: defaultMaintenanceInterval,
 		lifecycleContext:    lifecycleContext,
+		executionSlots:      make(chan struct{}, defaultMaximumConcurrentExecutions),
 	}
 }
 
@@ -184,10 +189,26 @@ func NewPersistenceContext(executionContext context.Context) (context.Context, c
 	return context.WithTimeout(context.WithoutCancel(executionContext), defaultPersistenceTimeout)
 }
 
+// TryAcquireExecutionSlot reserves bounded local execution capacity.
+// The returned release function is safe to call more than once.
+func (m *Manager) TryAcquireExecutionSlot() (func(), bool) {
+	select {
+	case m.executionSlots <- struct{}{}:
+		var releaseOnce sync.Once
+		return func() {
+			releaseOnce.Do(func() {
+				<-m.executionSlots
+			})
+		}, true
+	default:
+		return func() {}, false
+	}
+}
+
 // Start persists a new running job and returns its opaque handle.
 func (m *Manager) Start(ctx context.Context, ownerKey string, options StartOptions) (string, error) {
-	if err := m.maintain(ctx, false); err != nil {
-		return "", fmt.Errorf("ASYNCJOB-START-MAINTAIN %w", err)
+	if err := m.cleanup(ctx, false); err != nil {
+		return "", fmt.Errorf("ASYNCJOB-START-CLEANUP %w", err)
 	}
 
 	handle, err := newHandleID(m.prefix)
@@ -245,20 +266,67 @@ func (m *Manager) Fail(ctx context.Context, handleID string, status int, body an
 }
 
 func (m *Manager) transition(ctx context.Context, handleID string, terminal Record) error {
-	now := time.Now().UTC()
-	updated, err := m.store.Transition(ctx, handleID, m.prefix, m.workerID, terminal, now.Add(m.ttl))
-	if err != nil {
-		return fmt.Errorf("ASYNCJOB-TRANSITION-EXECUTE %w", err)
+	retryContext, cancelRetry := transitionRetryContext(ctx)
+	defer cancelRetry()
+
+	retryDelay := initialTransitionRetryDelay
+	for {
+		updated, err := m.store.Transition(
+			retryContext,
+			handleID,
+			m.prefix,
+			m.workerID,
+			terminal,
+			time.Now().UTC().Add(m.ttl),
+		)
+		if updated {
+			return nil
+		}
+		if m.transitionAlreadyApplied(retryContext, handleID, terminal.ExecutionState) {
+			return nil
+		}
+		if err == nil {
+			return fmt.Errorf("ASYNCJOB-TRANSITION-REJECTED %w", errTransitionRejected)
+		}
+		if !waitForTransitionRetry(retryContext, retryDelay) {
+			return fmt.Errorf("ASYNCJOB-TRANSITION-EXECUTE %w", err)
+		}
+		retryDelay = min(retryDelay*2, maximumTransitionRetryDelay)
 	}
-	if !updated {
-		return fmt.Errorf("ASYNCJOB-TRANSITION-REJECTED %w", errTransitionRejected)
+}
+
+func transitionRetryContext(ctx context.Context) (context.Context, context.CancelFunc) {
+	if _, hasDeadline := ctx.Deadline(); hasDeadline {
+		return ctx, func() {}
 	}
-	return nil
+	return context.WithTimeout(ctx, defaultPersistenceTimeout)
+}
+
+func (m *Manager) transitionAlreadyApplied(ctx context.Context, handleID string, executionState string) bool {
+	record, found, err := m.store.Get(ctx, handleID, m.prefix, "")
+	return err == nil && found &&
+		record.WorkerID == m.workerID &&
+		record.ExecutionState == executionState
+}
+
+func waitForTransitionRetry(ctx context.Context, delay time.Duration) bool {
+	timer := time.NewTimer(delay)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return false
+	case <-timer.C:
+		return true
+	}
 }
 
 // Get returns a non-expired record and recovers the requested handle when its lease expired.
 func (m *Manager) Get(ctx context.Context, handleID string) (Record, bool, error) {
-	record, found, err := m.store.Get(ctx, handleID, m.prefix)
+	return m.get(ctx, handleID, "")
+}
+
+func (m *Manager) get(ctx context.Context, handleID string, ownerKey string) (Record, bool, error) {
+	record, found, err := m.store.Get(ctx, handleID, m.prefix, ownerKey)
 	if err != nil {
 		return Record{}, false, fmt.Errorf("ASYNCJOB-GET-READ %w", err)
 	}
@@ -271,7 +339,7 @@ func (m *Manager) Get(ctx context.Context, handleID string) (Record, bool, error
 		if record.ExpiresAt.IsZero() || record.ExpiresAt.After(now) {
 			return record, true, nil
 		}
-		if err := m.store.Delete(ctx, handleID, m.prefix); err != nil {
+		if err := m.store.Delete(ctx, handleID, m.prefix, ownerKey); err != nil {
 			return Record{}, false, fmt.Errorf("ASYNCJOB-GET-DELETEEXPIRED %w", err)
 		}
 		return Record{}, false, nil
@@ -280,10 +348,10 @@ func (m *Manager) Get(ctx context.Context, handleID string) (Record, bool, error
 	if record.LeaseExpiresAt.IsZero() || record.LeaseExpiresAt.After(now) {
 		return record, true, nil
 	}
-	if err := m.recover(ctx, handleID); err != nil {
+	if err := m.recover(ctx, handleID, ownerKey); err != nil {
 		return Record{}, false, err
 	}
-	record, found, err = m.store.Get(ctx, handleID, m.prefix)
+	record, found, err = m.store.Get(ctx, handleID, m.prefix, ownerKey)
 	if err != nil {
 		return Record{}, false, fmt.Errorf("ASYNCJOB-GET-READRECOVERED %w", err)
 	}
@@ -292,19 +360,21 @@ func (m *Manager) Get(ctx context.Context, handleID string) (Record, bool, error
 
 // GetForOwner returns a record only when handle and owner key match.
 func (m *Manager) GetForOwner(ctx context.Context, handleID string, ownerKey string) (Record, bool, error) {
-	record, found, err := m.Get(ctx, handleID)
-	if err != nil || !found {
-		return Record{}, false, err
-	}
-	if record.OwnerKey != normalizeOwnerKey(ownerKey) {
-		return Record{}, false, nil
-	}
-	return record, true, nil
+	return m.get(ctx, handleID, normalizeOwnerKey(ownerKey))
 }
 
 // Delete removes a handle from the shared store.
 func (m *Manager) Delete(ctx context.Context, handleID string) error {
-	if err := m.store.Delete(ctx, handleID, m.prefix); err != nil {
+	return m.delete(ctx, handleID, "")
+}
+
+// DeleteForOwner removes a handle only when handle and owner key match.
+func (m *Manager) DeleteForOwner(ctx context.Context, handleID string, ownerKey string) error {
+	return m.delete(ctx, handleID, normalizeOwnerKey(ownerKey))
+}
+
+func (m *Manager) delete(ctx context.Context, handleID string, ownerKey string) error {
+	if err := m.store.Delete(ctx, handleID, m.prefix, ownerKey); err != nil {
 		return fmt.Errorf("ASYNCJOB-DELETE-EXECUTE %w", err)
 	}
 	return nil
@@ -357,10 +427,13 @@ func (m *Manager) runMaintenance(ctx context.Context) {
 }
 
 func (m *Manager) maintain(ctx context.Context, force bool) error {
-	if err := m.recover(ctx, ""); err != nil {
+	if err := m.recover(ctx, "", ""); err != nil {
 		return err
 	}
+	return m.cleanup(ctx, force)
+}
 
+func (m *Manager) cleanup(ctx context.Context, force bool) error {
 	m.maintenanceMu.Lock()
 	defer m.maintenanceMu.Unlock()
 	now := time.Now().UTC()
@@ -374,9 +447,9 @@ func (m *Manager) maintain(ctx context.Context, force bool) error {
 	return nil
 }
 
-func (m *Manager) recover(ctx context.Context, handleID string) error {
+func (m *Manager) recover(ctx context.Context, handleID string, ownerKey string) error {
 	now := time.Now().UTC()
-	if _, err := m.store.RecoverAbandoned(ctx, m.prefix, handleID, now, now.Add(m.ttl)); err != nil {
+	if _, err := m.store.RecoverAbandoned(ctx, m.prefix, handleID, ownerKey, now, now.Add(m.ttl)); err != nil {
 		return fmt.Errorf("ASYNCJOB-RECOVER-EXECUTE %w", err)
 	}
 	return nil

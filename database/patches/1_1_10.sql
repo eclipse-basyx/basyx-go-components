@@ -34,8 +34,6 @@ CREATE TABLE IF NOT EXISTS async_job (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX IF NOT EXISTS ix_async_job_owner
-  ON async_job(handle_id, owner_key);
 CREATE INDEX IF NOT EXISTS ix_async_job_recovery
   ON async_job(manager_key, lease_expires_at)
   WHERE execution_state = 'Running';

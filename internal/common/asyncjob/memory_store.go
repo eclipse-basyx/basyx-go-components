@@ -28,11 +28,11 @@ func (s *memoryStore) Create(_ context.Context, handleID string, record Record) 
 	return nil
 }
 
-func (s *memoryStore) Get(_ context.Context, handleID string, managerKey string) (Record, bool, error) {
+func (s *memoryStore) Get(_ context.Context, handleID string, managerKey string, ownerKey string) (Record, bool, error) {
 	s.Lock()
 	defer s.Unlock()
 	record, found := s.records[handleID]
-	if found && record.ManagerKey != managerKey {
+	if found && (record.ManagerKey != managerKey || (ownerKey != "" && record.OwnerKey != ownerKey)) {
 		return Record{}, false, nil
 	}
 	return record, found, nil
@@ -85,10 +85,12 @@ func (s *memoryStore) RenewLease(
 	return true, nil
 }
 
-func (s *memoryStore) Delete(_ context.Context, handleID string, managerKey string) error {
+func (s *memoryStore) Delete(_ context.Context, handleID string, managerKey string, ownerKey string) error {
 	s.Lock()
 	defer s.Unlock()
-	if record, found := s.records[handleID]; found && record.ManagerKey == managerKey {
+	if record, found := s.records[handleID]; found &&
+		record.ManagerKey == managerKey &&
+		(ownerKey == "" || record.OwnerKey == ownerKey) {
 		delete(s.records, handleID)
 	}
 	return nil
@@ -98,6 +100,7 @@ func (s *memoryStore) RecoverAbandoned(
 	_ context.Context,
 	managerKey string,
 	targetHandleID string,
+	ownerKey string,
 	now time.Time,
 	expiresAt time.Time,
 ) (int64, error) {
@@ -108,7 +111,9 @@ func (s *memoryStore) RecoverAbandoned(
 		if targetHandleID != "" && handleID != targetHandleID {
 			continue
 		}
-		if record.ManagerKey != managerKey || record.ExecutionState != executionStateRunning {
+		if record.ManagerKey != managerKey ||
+			(ownerKey != "" && record.OwnerKey != ownerKey) ||
+			record.ExecutionState != executionStateRunning {
 			continue
 		}
 		leaseExpired := !record.LeaseExpiresAt.IsZero() && !record.LeaseExpiresAt.After(now)

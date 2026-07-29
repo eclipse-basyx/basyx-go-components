@@ -54,14 +54,18 @@ func (s *postgresStore) Create(ctx context.Context, handleID string, record Reco
 	return nil
 }
 
-func (s *postgresStore) Get(ctx context.Context, handleID string, managerKey string) (Record, bool, error) {
+func (s *postgresStore) Get(ctx context.Context, handleID string, managerKey string, ownerKey string) (Record, bool, error) {
+	conditions := goqu.Ex{"handle_id": handleID, "manager_key": managerKey}
+	if ownerKey != "" {
+		conditions["owner_key"] = ownerKey
+	}
 	query, args, err := s.dialect.From(asyncJobTable).
 		Select(
 			"manager_key", "job_kind", "execution_state", "owner_key", "metadata",
 			"bulk_result", "result_payload", "error_status", "error_payload", "worker_id",
 			"created_at", "terminal_at", "expires_at", "lease_expires_at", "execution_deadline",
 		).
-		Where(goqu.Ex{"handle_id": handleID, "manager_key": managerKey}).
+		Where(conditions).
 		ToSQL()
 	if err != nil {
 		return Record{}, false, fmt.Errorf("ASYNCJOB-PGGET-BUILDQUERY %w", err)
@@ -167,9 +171,13 @@ func (s *postgresStore) RenewLease(
 	return affected(result)
 }
 
-func (s *postgresStore) Delete(ctx context.Context, handleID string, managerKey string) error {
+func (s *postgresStore) Delete(ctx context.Context, handleID string, managerKey string, ownerKey string) error {
+	conditions := goqu.Ex{"handle_id": handleID, "manager_key": managerKey}
+	if ownerKey != "" {
+		conditions["owner_key"] = ownerKey
+	}
 	query, args, err := s.dialect.Delete(asyncJobTable).
-		Where(goqu.Ex{"handle_id": handleID, "manager_key": managerKey}).
+		Where(conditions).
 		ToSQL()
 	if err != nil {
 		return fmt.Errorf("ASYNCJOB-PGDELETE-BUILDQUERY %w", err)
@@ -184,6 +192,7 @@ func (s *postgresStore) RecoverAbandoned(
 	ctx context.Context,
 	managerKey string,
 	handleID string,
+	ownerKey string,
 	now time.Time,
 	expiresAt time.Time,
 ) (int64, error) {
@@ -198,6 +207,9 @@ func (s *postgresStore) RecoverAbandoned(
 	}
 	if handleID != "" {
 		recoveryConditions = append(recoveryConditions, goqu.C("handle_id").Eq(handleID))
+	}
+	if ownerKey != "" {
+		recoveryConditions = append(recoveryConditions, goqu.C("owner_key").Eq(ownerKey))
 	}
 	query, args, err := s.dialect.Update(asyncJobTable).
 		Set(goqu.Record{

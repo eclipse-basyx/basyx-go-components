@@ -28,6 +28,7 @@ package asyncjob
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -56,6 +57,123 @@ func TestGetForOwnerHidesForeignHandle(t *testing.T) {
 	_, found, err = manager.GetForOwner(t.Context(), handleID, "owner-a")
 	require.NoError(t, err)
 	require.True(t, found)
+}
+
+func TestGetForOwnerDoesNotRecoverForeignHandle(t *testing.T) {
+	manager := NewManager("ASYNC-TEST", time.Minute)
+	manager.leaseDuration = -time.Second
+
+	handleID, err := manager.Start(t.Context(), "owner-a", StartOptions{JobKind: "test"})
+	require.NoError(t, err)
+
+	_, found, err := manager.GetForOwner(t.Context(), handleID, "owner-b")
+	require.NoError(t, err)
+	require.False(t, found)
+
+	store := manager.store.(*memoryStore)
+	store.Lock()
+	record := store.records[handleID]
+	store.Unlock()
+	require.Equal(t, executionStateRunning, record.ExecutionState)
+}
+
+func TestGetForOwnerDoesNotDeleteForeignExpiredHandle(t *testing.T) {
+	manager := NewManager("ASYNC-TEST", time.Minute)
+	handleID, err := manager.Start(t.Context(), "owner-a", StartOptions{JobKind: "test"})
+	require.NoError(t, err)
+	require.NoError(t, manager.CompletePayload(t.Context(), handleID, map[string]any{"success": true}))
+
+	store := manager.store.(*memoryStore)
+	store.Lock()
+	record := store.records[handleID]
+	record.ExpiresAt = time.Now().UTC().Add(-time.Second)
+	store.records[handleID] = record
+	store.Unlock()
+
+	_, found, err := manager.GetForOwner(t.Context(), handleID, "owner-b")
+	require.NoError(t, err)
+	require.False(t, found)
+
+	store.Lock()
+	_, stillStored := store.records[handleID]
+	store.Unlock()
+	require.True(t, stillStored)
+}
+
+func TestDeleteForOwnerDoesNotDeleteForeignHandle(t *testing.T) {
+	manager := NewManager("ASYNC-TEST", time.Minute)
+	handleID, err := manager.Start(t.Context(), "owner-a", StartOptions{JobKind: "test"})
+	require.NoError(t, err)
+
+	require.NoError(t, manager.DeleteForOwner(t.Context(), handleID, "owner-b"))
+	_, found, err := manager.GetForOwner(t.Context(), handleID, "owner-a")
+	require.NoError(t, err)
+	require.True(t, found)
+
+	require.NoError(t, manager.DeleteForOwner(t.Context(), handleID, "owner-a"))
+	_, found, err = manager.GetForOwner(t.Context(), handleID, "owner-a")
+	require.NoError(t, err)
+	require.False(t, found)
+}
+
+func TestStartDoesNotRunGlobalRecovery(t *testing.T) {
+	store := &recoveryCountingStore{recordStore: newMemoryStore()}
+	manager := newManager(t.Context(), store, "ASYNC-TEST", time.Minute)
+
+	_, err := manager.Start(t.Context(), "owner-a", StartOptions{JobKind: "test"})
+	require.NoError(t, err)
+	require.Zero(t, store.recoveryCalls)
+}
+
+func TestTransitionRetriesTransientStoreFailure(t *testing.T) {
+	store := &flakyTransitionStore{
+		memoryStore:       newMemoryStore(),
+		failuresRemaining: 1,
+	}
+	manager := newManager(t.Context(), store, "ASYNC-TEST", time.Minute)
+	handleID, err := manager.Start(t.Context(), "owner-a", StartOptions{JobKind: "test"})
+	require.NoError(t, err)
+
+	persistenceCtx, cancelPersistence := context.WithTimeout(t.Context(), time.Second)
+	defer cancelPersistence()
+	require.NoError(t, manager.CompletePayload(persistenceCtx, handleID, map[string]any{"success": true}))
+	require.Equal(t, 2, store.transitionCalls)
+}
+
+func TestTransitionAcceptsAmbiguousCommittedWrite(t *testing.T) {
+	store := &flakyTransitionStore{
+		memoryStore:       newMemoryStore(),
+		failuresRemaining: 1,
+		commitBeforeError: true,
+	}
+	manager := newManager(t.Context(), store, "ASYNC-TEST", time.Minute)
+	handleID, err := manager.Start(t.Context(), "owner-a", StartOptions{JobKind: "test"})
+	require.NoError(t, err)
+
+	persistenceCtx, cancelPersistence := context.WithTimeout(t.Context(), time.Second)
+	defer cancelPersistence()
+	require.NoError(t, manager.CompletePayload(persistenceCtx, handleID, map[string]any{"success": true}))
+}
+
+func TestExecutionSlotsAreBoundedAndReusable(t *testing.T) {
+	manager := NewManager("ASYNC-TEST", time.Minute)
+	releases := make([]func(), 0, defaultMaximumConcurrentExecutions)
+	for range defaultMaximumConcurrentExecutions {
+		release, acquired := manager.TryAcquireExecutionSlot()
+		require.True(t, acquired)
+		releases = append(releases, release)
+	}
+
+	_, acquired := manager.TryAcquireExecutionSlot()
+	require.False(t, acquired)
+
+	releases[0]()
+	release, acquired := manager.TryAcquireExecutionSlot()
+	require.True(t, acquired)
+	release()
+	for _, releaseSlot := range releases[1:] {
+		releaseSlot()
+	}
 }
 
 func TestCompleteStartsTerminalRetention(t *testing.T) {
@@ -149,4 +267,48 @@ func TestExecutionContextHasDeadline(t *testing.T) {
 	deadline, hasDeadline := executionCtx.Deadline()
 	require.True(t, hasDeadline)
 	require.WithinDuration(t, time.Now().UTC().Add(time.Minute), deadline, time.Second)
+}
+
+type recoveryCountingStore struct {
+	recordStore
+	recoveryCalls int
+}
+
+func (s *recoveryCountingStore) RecoverAbandoned(
+	_ context.Context,
+	_ string,
+	_ string,
+	_ string,
+	_ time.Time,
+	_ time.Time,
+) (int64, error) {
+	s.recoveryCalls++
+	return 0, nil
+}
+
+type flakyTransitionStore struct {
+	*memoryStore
+	failuresRemaining int
+	transitionCalls   int
+	commitBeforeError bool
+}
+
+func (s *flakyTransitionStore) Transition(
+	ctx context.Context,
+	handleID string,
+	managerKey string,
+	workerID string,
+	terminal Record,
+	expiresAt time.Time,
+) (bool, error) {
+	s.transitionCalls++
+	if s.failuresRemaining == 0 {
+		return s.memoryStore.Transition(ctx, handleID, managerKey, workerID, terminal, expiresAt)
+	}
+
+	s.failuresRemaining--
+	if s.commitBeforeError {
+		_, _ = s.memoryStore.Transition(ctx, handleID, managerKey, workerID, terminal, expiresAt)
+	}
+	return false, errors.New("ASYNCJOB-TEST-TRANSITION transient store failure")
 }
