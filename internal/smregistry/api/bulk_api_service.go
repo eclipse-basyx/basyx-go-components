@@ -33,6 +33,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/url"
+	"time"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/asyncjob"
@@ -42,6 +43,7 @@ import (
 
 const (
 	bulkJobRetryAfterSeconds = 2
+	bulkJobExecutionTimeout  = 15 * time.Minute
 )
 
 type smBulkDescriptorService interface {
@@ -69,81 +71,77 @@ func NewBulkService(descriptorService smBulkDescriptorService, manager *asyncjob
 
 // StartCreate starts a bulk create job.
 func (s *BulkService) StartCreate(ctx context.Context, descriptors []model.SubmodelDescriptor) model.ImplResponse {
-	handleID, handleErr := s.manager.Start(ctx, auth.OwnerKeyFromContext(ctx), asyncjob.StartOptions{
-		JobKind: "submodel-registry.bulk.create",
-	})
-	if handleErr != nil {
-		return common.NewErrorResponse(handleErr, http.StatusInternalServerError, componentName, "CreateBulkSubmodelDescriptors", "CreateHandle")
-	}
-	asyncCtx := context.WithoutCancel(ctx)
-
-	go func() {
-		stopHeartbeat := s.manager.KeepAlive(asyncCtx, handleID)
-		defer stopHeartbeat()
-		if err := s.manager.Complete(asyncCtx, handleID, s.descriptorService.ExecuteBulkCreateAtomic(asyncCtx, descriptors)); err != nil {
-			slog.ErrorContext(asyncCtx, "submodel registry bulk job completion failed", "error.code", "SMR-BULK-CREATE-COMPLETE", "error", err, "async_job.handle_id", handleID)
-		}
-	}()
-
-	return model.ResponseWithHeaders(http.StatusAccepted, nil, map[string]string{
-		"Location": fmt.Sprintf("/bulk/status/%s", url.PathEscape(handleID)),
+	return s.start(ctx, "submodel-registry.bulk.create", "CreateBulkSubmodelDescriptors", "SMR-BULK-CREATE-COMPLETE", func(executionContext context.Context) asyncjob.BulkResult {
+		return s.descriptorService.ExecuteBulkCreateAtomic(executionContext, descriptors)
 	})
 }
 
 // StartPut starts a bulk upsert job.
 func (s *BulkService) StartPut(ctx context.Context, descriptors []model.SubmodelDescriptor) model.ImplResponse {
-	handleID, handleErr := s.manager.Start(ctx, auth.OwnerKeyFromContext(ctx), asyncjob.StartOptions{
-		JobKind: "submodel-registry.bulk.put",
+	return s.start(ctx, "submodel-registry.bulk.put", "PutBulkSubmodelDescriptorsById", "SMR-BULK-PUT-COMPLETE", func(executionContext context.Context) asyncjob.BulkResult {
+		return s.descriptorService.ExecuteBulkPutAtomic(executionContext, descriptors)
 	})
-	if handleErr != nil {
-		return common.NewErrorResponse(handleErr, http.StatusInternalServerError, componentName, "PutBulkSubmodelDescriptorsById", "CreateHandle")
-	}
-	asyncCtx := context.WithoutCancel(ctx)
+}
 
-	go func() {
-		stopHeartbeat := s.manager.KeepAlive(asyncCtx, handleID)
-		defer stopHeartbeat()
-		if err := s.manager.Complete(asyncCtx, handleID, s.descriptorService.ExecuteBulkPutAtomic(asyncCtx, descriptors)); err != nil {
-			slog.ErrorContext(asyncCtx, "submodel registry bulk job completion failed", "error.code", "SMR-BULK-PUT-COMPLETE", "error", err, "async_job.handle_id", handleID)
-		}
-	}()
+// StartDelete starts a bulk delete job.
+func (s *BulkService) StartDelete(ctx context.Context, submodelIdentifiers []string) model.ImplResponse {
+	return s.start(ctx, "submodel-registry.bulk.delete", "DeleteBulkSubmodelDescriptorsById", "SMR-BULK-DELETE-COMPLETE", func(executionContext context.Context) asyncjob.BulkResult {
+		return s.descriptorService.ExecuteBulkDeleteAtomic(executionContext, submodelIdentifiers)
+	})
+}
+
+func (s *BulkService) start(
+	ctx context.Context,
+	jobKind string,
+	operationName string,
+	completionErrorCode string,
+	execute func(context.Context) asyncjob.BulkResult,
+) model.ImplResponse {
+	executionContext, cancelExecution := s.manager.NewExecutionContext(ctx, bulkJobExecutionTimeout)
+	executionDeadline, _ := executionContext.Deadline()
+	handleID, err := s.manager.Start(ctx, auth.OwnerKeyFromContext(ctx), asyncjob.StartOptions{
+		JobKind:           jobKind,
+		ExecutionDeadline: executionDeadline,
+	})
+	if err != nil {
+		cancelExecution()
+		return common.NewErrorResponse(err, http.StatusInternalServerError, componentName, operationName, "CreateHandle")
+	}
+
+	go s.execute(executionContext, handleID, cancelExecution, completionErrorCode, execute)
 
 	return model.ResponseWithHeaders(http.StatusAccepted, nil, map[string]string{
 		"Location": fmt.Sprintf("/bulk/status/%s", url.PathEscape(handleID)),
 	})
 }
 
-// StartDelete starts a bulk delete job.
-func (s *BulkService) StartDelete(ctx context.Context, submodelIdentifiers []string) model.ImplResponse {
-	handleID, handleErr := s.manager.Start(ctx, auth.OwnerKeyFromContext(ctx), asyncjob.StartOptions{
-		JobKind: "submodel-registry.bulk.delete",
-	})
-	if handleErr != nil {
-		return common.NewErrorResponse(handleErr, http.StatusInternalServerError, componentName, "DeleteBulkSubmodelDescriptorsById", "CreateHandle")
+func (s *BulkService) execute(
+	executionContext context.Context,
+	handleID string,
+	cancelExecution context.CancelFunc,
+	completionErrorCode string,
+	execute func(context.Context) asyncjob.BulkResult,
+) {
+	defer cancelExecution()
+	stopHeartbeat := s.manager.KeepAlive(executionContext, handleID)
+	defer stopHeartbeat()
+
+	result := execute(executionContext)
+	persistenceContext, cancelPersistence := asyncjob.NewPersistenceContext(executionContext)
+	defer cancelPersistence()
+	if err := s.manager.Complete(persistenceContext, handleID, result); err != nil {
+		slog.ErrorContext(persistenceContext, "submodel registry bulk job completion failed", "error.code", completionErrorCode, "error", err, "async_job.handle_id", handleID)
 	}
-	asyncCtx := context.WithoutCancel(ctx)
-
-	go func() {
-		stopHeartbeat := s.manager.KeepAlive(asyncCtx, handleID)
-		defer stopHeartbeat()
-		if err := s.manager.Complete(asyncCtx, handleID, s.descriptorService.ExecuteBulkDeleteAtomic(asyncCtx, submodelIdentifiers)); err != nil {
-			slog.ErrorContext(asyncCtx, "submodel registry bulk job completion failed", "error.code", "SMR-BULK-DELETE-COMPLETE", "error", err, "async_job.handle_id", handleID)
-		}
-	}()
-
-	return model.ResponseWithHeaders(http.StatusAccepted, nil, map[string]string{
-		"Location": fmt.Sprintf("/bulk/status/%s", url.PathEscape(handleID)),
-	})
 }
 
 // GetStatus returns bulk job execution status by handle id.
 func (s *BulkService) GetStatus(ctx context.Context, handleID string) model.ImplResponse {
 	record, found, err := s.manager.GetForOwner(ctx, handleID, auth.OwnerKeyFromContext(ctx))
 	if err != nil {
-		return common.NewErrorResponse(err, http.StatusInternalServerError, componentName, "GetBulkJobStatus", "ReadHandle")
+		return common.NewErrorResponse(err, http.StatusInternalServerError, componentName, "GetBulkAsyncStatus", "ReadHandle")
 	}
 	if !found {
-		return common.NewErrorResponse(common.NewErrNotFound(handleID), http.StatusNotFound, componentName, "GetBulkJobStatus", "HandleNotFound")
+		return common.NewErrorResponse(common.NewErrNotFound(handleID), http.StatusNotFound, componentName, "GetBulkAsyncStatus", "HandleNotFound")
 	}
 
 	if record.ExecutionState == "Running" {
@@ -162,19 +160,19 @@ func (s *BulkService) GetStatus(ctx context.Context, handleID string) model.Impl
 func (s *BulkService) GetResult(ctx context.Context, handleID string) model.ImplResponse {
 	record, found, err := s.manager.GetForOwner(ctx, handleID, auth.OwnerKeyFromContext(ctx))
 	if err != nil {
-		return common.NewErrorResponse(err, http.StatusInternalServerError, componentName, "GetBulkJobResult", "ReadHandle")
+		return common.NewErrorResponse(err, http.StatusInternalServerError, componentName, "GetBulkAsyncResult", "ReadHandle")
 	}
 	if !found {
-		return common.NewErrorResponse(common.NewErrNotFound(handleID), http.StatusNotFound, componentName, "GetBulkJobResult", "HandleNotFound")
+		return common.NewErrorResponse(common.NewErrNotFound(handleID), http.StatusNotFound, componentName, "GetBulkAsyncResult", "HandleNotFound")
 	}
 
 	if record.ExecutionState == "Running" {
-		runningErr := errors.New("SMR-BULK-GETRESULT-RUNNING bulk job is still running")
-		return common.NewErrorResponse(runningErr, http.StatusBadRequest, componentName, "GetBulkJobResult", "JobStillRunning")
+		runningErr := errors.New("SMR-BULK-GETRESULT-RUNNING bulk operation is still running")
+		return common.NewErrorResponse(runningErr, http.StatusBadRequest, componentName, "GetBulkAsyncResult", "OperationStillRunning")
 	}
 
 	if err := s.manager.Delete(ctx, handleID); err != nil {
-		return common.NewErrorResponse(err, http.StatusInternalServerError, componentName, "GetBulkJobResult", "DeleteHandle")
+		return common.NewErrorResponse(err, http.StatusInternalServerError, componentName, "GetBulkAsyncResult", "DeleteHandle")
 	}
 
 	if record.ExecutionState == "Failed" {
