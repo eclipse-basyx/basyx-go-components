@@ -517,6 +517,10 @@ func TestLoadConfigAppliesPostgresConnectionParameters(t *testing.T) {
   searchPath: tenant_a,public
   options: "-c statement_timeout=5000"
   timezone: Europe/Berlin
+  maxOpenConnections: 20
+  maxIdleConnections: 8
+  connMaxLifetimeMinutes: 30
+  connMaxIdleTimeMinutes: 10
 `)
 
 	cfg, err := LoadConfig(path)
@@ -533,7 +537,11 @@ func TestLoadConfigAppliesPostgresConnectionParameters(t *testing.T) {
 		cfg.Postgres.FallbackApplicationName != "basyx" ||
 		cfg.Postgres.SearchPath != "tenant_a,public" ||
 		cfg.Postgres.Options != "-c statement_timeout=5000" ||
-		cfg.Postgres.TimeZone != "Europe/Berlin" {
+		cfg.Postgres.TimeZone != "Europe/Berlin" ||
+		cfg.Postgres.MaxOpenConnections != 20 ||
+		cfg.Postgres.MaxIdleConnections != 8 ||
+		cfg.Postgres.ConnMaxLifetimeMinutes != 30 ||
+		cfg.Postgres.ConnMaxIdleTimeMinutes != 10 {
 		t.Fatalf("unexpected postgres config: %+v", cfg.Postgres)
 	}
 }
@@ -549,6 +557,7 @@ func TestLoadConfigAppliesPostgresEnvironmentOverrides(t *testing.T) {
 	t.Setenv("POSTGRES_SEARCHPATH", "env_schema,public")
 	t.Setenv("POSTGRES_OPTIONS", "-c lock_timeout=1000")
 	t.Setenv("POSTGRES_TIMEZONE", "UTC")
+	t.Setenv("POSTGRES_CONNMAXIDLETIMEMINUTES", "12")
 	captureLogOutput(t)
 
 	cfg, err := LoadConfig("")
@@ -565,7 +574,8 @@ func TestLoadConfigAppliesPostgresEnvironmentOverrides(t *testing.T) {
 		cfg.Postgres.FallbackApplicationName != "basyx-env" ||
 		cfg.Postgres.SearchPath != "env_schema,public" ||
 		cfg.Postgres.Options != "-c lock_timeout=1000" ||
-		cfg.Postgres.TimeZone != "UTC" {
+		cfg.Postgres.TimeZone != "UTC" ||
+		cfg.Postgres.ConnMaxIdleTimeMinutes != 12 {
 		t.Fatalf("unexpected postgres env config: %+v", cfg.Postgres)
 	}
 }
@@ -659,6 +669,50 @@ func TestLoadConfigRejectsNegativePostgresConnectTimeout(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "CONFIG-POSTGRES-CONNECTTIMEOUT") {
 		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestLoadConfigRejectsInvalidPostgresPoolSettings(t *testing.T) {
+	tests := []struct {
+		name    string
+		content string
+		errCode string
+	}{
+		{
+			name:    "negative max open",
+			content: "postgres:\n  maxOpenConnections: -1\n",
+			errCode: "CONFIG-POSTGRES-MAXOPEN",
+		},
+		{
+			name:    "negative max idle",
+			content: "postgres:\n  maxIdleConnections: -1\n",
+			errCode: "CONFIG-POSTGRES-MAXIDLE",
+		},
+		{
+			name:    "negative max lifetime",
+			content: "postgres:\n  connMaxLifetimeMinutes: -1\n",
+			errCode: "CONFIG-POSTGRES-CONNMAXLIFETIME",
+		},
+		{
+			name:    "negative max idle time",
+			content: "postgres:\n  connMaxIdleTimeMinutes: -1\n",
+			errCode: "CONFIG-POSTGRES-CONNMAXIDLETIME",
+		},
+		{
+			name:    "idle exceeds open",
+			content: "postgres:\n  maxOpenConnections: 5\n  maxIdleConnections: 6\n",
+			errCode: "CONFIG-POSTGRES-IDLEEXCEEDSOPEN",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			captureLogOutput(t)
+			_, err := LoadConfig(writeTempConfig(t, test.content))
+			if err == nil || !strings.Contains(err.Error(), test.errCode) {
+				t.Fatalf("expected %s error, got %v", test.errCode, err)
+			}
+		})
 	}
 }
 

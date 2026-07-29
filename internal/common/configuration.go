@@ -68,6 +68,7 @@ var DefaultConfig = struct {
 	PgMaxOpen                            int
 	PgMaxIdle                            int
 	PgConnLifetime                       int
+	PgConnIdleTime                       int
 	AllowedOrigins                       []string
 	AllowedMethods                       []string
 	AllowedHeaders                       []string
@@ -139,8 +140,9 @@ var DefaultConfig = struct {
 	PgDBName:                             "basyxTestDB",
 	PgSSLMode:                            "disable",
 	PgMaxOpen:                            50,
-	PgMaxIdle:                            50,
+	PgMaxIdle:                            25,
 	PgConnLifetime:                       5,
+	PgConnIdleTime:                       0,
 	AllowedOrigins:                       []string{},
 	AllowedMethods:                       []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
 	AllowedHeaders:                       []string{},
@@ -373,9 +375,10 @@ type PostgresConfig struct {
 	SearchPath              string `mapstructure:"searchPath" yaml:"searchPath"`                           // PostgreSQL search_path
 	Options                 string `mapstructure:"options" yaml:"options"`                                 // PostgreSQL startup options
 	TimeZone                string `mapstructure:"timezone" yaml:"timezone"`                               // PostgreSQL session timezone
-	MaxOpenConnections      int    `mapstructure:"maxOpenConnections" yaml:"maxOpenConnections"`           // Maximum open connections
-	MaxIdleConnections      int    `mapstructure:"maxIdleConnections" yaml:"maxIdleConnections"`           // Maximum idle connections
-	ConnMaxLifetimeMinutes  int    `mapstructure:"connMaxLifetimeMinutes" yaml:"connMaxLifetimeMinutes"`   // Connection lifetime in minutes
+	MaxOpenConnections      int    `mapstructure:"maxOpenConnections" yaml:"maxOpenConnections"`           // Maximum open connections; 0 uses the common default
+	MaxIdleConnections      int    `mapstructure:"maxIdleConnections" yaml:"maxIdleConnections"`           // Maximum idle connections; 0 uses the common default
+	ConnMaxLifetimeMinutes  int    `mapstructure:"connMaxLifetimeMinutes" yaml:"connMaxLifetimeMinutes"`   // Connection lifetime in minutes; 0 uses the common default
+	ConnMaxIdleTimeMinutes  int    `mapstructure:"connMaxIdleTimeMinutes" yaml:"connMaxIdleTimeMinutes"`   // Connection idle time in minutes; 0 disables idle-time recycling
 }
 
 // CorsConfig contains Cross-Origin Resource Sharing (CORS) policy settings.
@@ -620,6 +623,9 @@ func validateServerConfig(cfg ServerConfig) error {
 }
 
 func validatePostgresConfig(v *viper.Viper, cfg PostgresConfig) error {
+	if _, err := ResolvePostgresPoolSettings(cfg); err != nil {
+		return err
+	}
 	if strings.TrimSpace(cfg.DSN) != "" {
 		conflictingKeys := explicitlyConfiguredPostgresConnectionKeys(v)
 		if len(conflictingKeys) > 0 {
@@ -1121,9 +1127,10 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("postgres.searchPath", "")
 	v.SetDefault("postgres.options", "")
 	v.SetDefault("postgres.timezone", "")
-	v.SetDefault("postgres.maxOpenConnections", 50)
-	v.SetDefault("postgres.maxIdleConnections", 50)
-	v.SetDefault("postgres.connMaxLifetimeMinutes", 5)
+	v.SetDefault("postgres.maxOpenConnections", DefaultConfig.PgMaxOpen)
+	v.SetDefault("postgres.maxIdleConnections", DefaultConfig.PgMaxIdle)
+	v.SetDefault("postgres.connMaxLifetimeMinutes", DefaultConfig.PgConnLifetime)
+	v.SetDefault("postgres.connMaxIdleTimeMinutes", DefaultConfig.PgConnIdleTime)
 
 	// CORS defaults
 	v.SetDefault("cors.allowedOrigins", []string{})

@@ -65,19 +65,13 @@ func NewPostgreSQLAASRegistryDatabase(
 	connMaxLifetimeMinutes int,
 	cacheEnabled bool,
 ) (*PostgreSQLAASRegistryDatabase, error) {
-	db, err := common.NewDatabaseConnection(dsn)
+	db, err := common.NewDatabaseConnectionWithConfig(dsn, common.PostgresConfig{
+		MaxOpenConnections:     int(maxOpenConns),
+		MaxIdleConnections:     maxIdleConns,
+		ConnMaxLifetimeMinutes: connMaxLifetimeMinutes,
+	})
 	if err != nil {
 		return nil, err
-	}
-
-	if maxOpenConns > 0 {
-		db.SetMaxOpenConns(int(maxOpenConns))
-	}
-	if maxIdleConns > 0 {
-		db.SetMaxIdleConns(maxIdleConns)
-	}
-	if connMaxLifetimeMinutes > 0 {
-		db.SetConnMaxLifetime(time.Duration(connMaxLifetimeMinutes) * time.Minute)
 	}
 
 	return NewPostgreSQLAASRegistryDatabaseFromDB(db, cacheEnabled)

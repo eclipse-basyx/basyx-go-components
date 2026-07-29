@@ -30,7 +30,6 @@ package persistence
 import (
 	"crypto/rsa"
 	"database/sql"
-	"time"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/jws"
@@ -66,19 +65,13 @@ func (s *SubmodelDatabase) SetJWSCertificateChain(certificateChain []string) {
 
 // NewSubmodelDatabase creates a new instance of SubmodelDatabase with the provided database connection.
 func NewSubmodelDatabase(dsn string, maxOpenConnections int, maxIdleConnections int, connMaxLifetimeMinutes int, privateKey *rsa.PrivateKey, strictVerification string) (*SubmodelDatabase, error) {
-	db, err := common.NewDatabaseConnection(dsn)
+	db, err := common.NewDatabaseConnectionWithConfig(dsn, common.PostgresConfig{
+		MaxOpenConnections:     maxOpenConnections,
+		MaxIdleConnections:     maxIdleConnections,
+		ConnMaxLifetimeMinutes: connMaxLifetimeMinutes,
+	})
 	if err != nil {
 		return nil, err
-	}
-
-	if maxOpenConnections > 0 {
-		db.SetMaxOpenConns(int(maxOpenConnections))
-	}
-	if maxIdleConnections > 0 {
-		db.SetMaxIdleConns(maxIdleConnections)
-	}
-	if connMaxLifetimeMinutes > 0 {
-		db.SetConnMaxLifetime(time.Duration(connMaxLifetimeMinutes) * time.Minute)
 	}
 
 	return NewSubmodelDatabaseFromDB(db, privateKey, strictVerification)
