@@ -29,6 +29,7 @@ import (
 	"github.com/FriedJannik/aas-go-sdk/types"
 	persistencepostgresql "github.com/eclipse-basyx/basyx-go-components/internal/aasrepository/persistence"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/asyncjob"
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
@@ -46,6 +47,7 @@ type AssetAdministrationShellRepositoryAPIAPIService struct {
 	submodelBackend                 *submodelpersistence.SubmodelDatabase
 	submodelAPI                     *submodelapi.SubmodelRepositoryAPIAPIService
 	lifecycleContext                context.Context
+	asyncJobManager                 *asyncjob.Manager
 }
 
 const componentName = "AASREPO"
@@ -55,10 +57,15 @@ func NewAssetAdministrationShellRepositoryAPIAPIService(
 	ctx context.Context,
 	databaseBackendAssetAdministrationShell *persistencepostgresql.AssetAdministrationShellDatabase,
 	submodelBackend *submodelpersistence.SubmodelDatabase,
+	managers ...*asyncjob.Manager,
 ) *AssetAdministrationShellRepositoryAPIAPIService {
+	var asyncJobManager *asyncjob.Manager
+	if len(managers) > 0 {
+		asyncJobManager = managers[0]
+	}
 	var submodelService *submodelapi.SubmodelRepositoryAPIAPIService
 	if submodelBackend != nil {
-		submodelService = submodelapi.NewSubmodelRepositoryAPIAPIService(ctx, *submodelBackend)
+		submodelService = submodelapi.NewSubmodelRepositoryAPIAPIService(ctx, *submodelBackend, asyncJobManager)
 	}
 
 	return &AssetAdministrationShellRepositoryAPIAPIService{
@@ -66,6 +73,7 @@ func NewAssetAdministrationShellRepositoryAPIAPIService(
 		submodelBackend:                 submodelBackend,
 		submodelAPI:                     submodelService,
 		lifecycleContext:                ctx,
+		asyncJobManager:                 asyncJobManager,
 	}
 }
 
@@ -965,7 +973,7 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) ensureSubmodelBackend(
 		return gen.ImplResponse{}, nil, true
 	}
 	if s.submodelBackend != nil {
-		s.submodelAPI = submodelapi.NewSubmodelRepositoryAPIAPIService(s.lifecycleContext, *s.submodelBackend)
+		s.submodelAPI = submodelapi.NewSubmodelRepositoryAPIAPIService(s.lifecycleContext, *s.submodelBackend, s.asyncJobManager)
 		return gen.ImplResponse{}, nil, true
 	}
 

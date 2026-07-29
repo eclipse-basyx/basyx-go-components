@@ -31,7 +31,7 @@ import (
 	"testing"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
-	"github.com/eclipse-basyx/basyx-go-components/internal/common/asyncbulk"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/asyncjob"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	"github.com/stretchr/testify/require"
 )
@@ -75,7 +75,7 @@ func TestValidateBulkCreateSubmodelDescriptorsNormalizesIDs(t *testing.T) {
 func TestValidateBulkCreateSubmodelDescriptorGraphsReportsItemIndex(t *testing.T) {
 	t.Parallel()
 
-	failure := asyncbulk.ItemFailure{}
+	failure := asyncjob.ItemFailure{}
 	err := validateBulkCreateSubmodelDescriptorGraphs([]model.SubmodelDescriptor{
 		{Id: "urn:example:submodel:1", Endpoints: []model.Endpoint{{Interface: "SUBMODEL-3.0"}}},
 		{Id: "urn:example:submodel:2"},

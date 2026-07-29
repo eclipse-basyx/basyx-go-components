@@ -32,6 +32,7 @@ import (
 	"database/sql"
 	"embed"
 	"flag"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
@@ -44,7 +45,7 @@ import (
 	aasrepositoryapi "github.com/eclipse-basyx/basyx-go-components/internal/aasrepository/api"
 	aasrepositorydb "github.com/eclipse-basyx/basyx-go-components/internal/aasrepository/persistence"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
-	"github.com/eclipse-basyx/basyx-go-components/internal/common/asyncbulk"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/asyncjob"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/binarycontent"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/history"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/jws"
@@ -134,7 +135,7 @@ func runServer(ctx context.Context, configPath string) error {
 		return err
 	}
 
-	sharedDB, err := openSharedDatabase(ctx, cfg, dsn)
+	sharedDB, asyncJobManager, sharedBulkManager, err := openSharedDatabase(ctx, cfg, dsn)
 	if err != nil {
 		return err
 	}
@@ -188,7 +189,6 @@ func runServer(ctx context.Context, configPath string) error {
 		ConceptDescriptionRepository: cdrPersistence,
 		Discovery:                    discoveryPersistence,
 	}
-
 	customAASRegistry := aasenvironment.NewCustomAASRegistryService(
 		aasregistryapi.NewAssetAdministrationShellRegistryAPIAPIService(*aasRegistryPersistence),
 		persistence,
@@ -198,12 +198,12 @@ func runServer(ctx context.Context, configPath string) error {
 		persistence,
 	)
 	customAASRepository := aasenvironment.NewCustomAASRepositoryService(
-		aasrepositoryapi.NewAssetAdministrationShellRepositoryAPIAPIService(ctx, aasRepositoryPersistence, submodelRepositoryPersistence),
+		aasrepositoryapi.NewAssetAdministrationShellRepositoryAPIAPIService(ctx, aasRepositoryPersistence, submodelRepositoryPersistence, asyncJobManager),
 		persistence,
 		registrySyncConfig,
 	)
 	customSMRepository := aasenvironment.NewCustomSubmodelRepositoryService(
-		submodelrepositoryapi.NewSubmodelRepositoryAPIAPIService(ctx, *submodelRepositoryPersistence),
+		submodelrepositoryapi.NewSubmodelRepositoryAPIAPIService(ctx, *submodelRepositoryPersistence, asyncJobManager),
 		persistence,
 		registrySyncConfig,
 	)
@@ -219,7 +219,6 @@ func runServer(ctx context.Context, configPath string) error {
 		binarycontent.NewStager(sharedDB), sharedDB.Stats().MaxOpenConnections, 1,
 	)
 	serializationService := aasenvironment.NewSerializationAPIService(persistence, environmentStager)
-	sharedBulkManager := asyncbulk.NewManager("AASENV-BULK", 0)
 	aasBulkSvc := aasregistryapi.NewBulkService(customAASRegistry, sharedBulkManager)
 	smBulkSvc := smregistryapi.NewBulkService(customSMRegistry, sharedBulkManager)
 	aasBulkHandler := aasregistryapi.NewBulkHTTPHandler(aasBulkSvc)
@@ -310,16 +309,28 @@ func runServer(ctx context.Context, configPath string) error {
 	return runner.Wait(ctx)
 }
 
-func openSharedDatabase(ctx context.Context, cfg *common.Config, dsn string) (*sql.DB, error) {
+func openSharedDatabase(
+	ctx context.Context,
+	cfg *common.Config,
+	dsn string,
+) (*sql.DB, *asyncjob.Manager, *asyncjob.Manager, error) {
 	db, err := common.NewDatabaseConnection(dsn)
 	if err != nil {
-		return nil, err
+		return nil, nil, nil, err
 	}
 	configurePostgresPool(db, cfg.Postgres)
 	if err = history.ApplyPostgresGuardConfig(ctx, db); err != nil {
-		return nil, err
+		return nil, nil, nil, err
 	}
-	return db, nil
+	asyncJobManager, err := submodelrepositoryapi.NewAsyncJobManager(ctx, db)
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("AASENV-ASYNCJOB-INIT %w", err)
+	}
+	bulkManager, err := asyncjob.NewPostgresManager(ctx, db, "AASENV-BULK", 0)
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("AASENV-ASYNCJOB-INIT %w", err)
+	}
+	return db, asyncJobManager, bulkManager, nil
 }
 
 func configurePostgresPool(db *sql.DB, cfg common.PostgresConfig) {

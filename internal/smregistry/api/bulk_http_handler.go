@@ -53,8 +53,8 @@ func (h *BulkHTTPHandler) RegisterRoutes(router chi.Router, includeAsyncLookupRo
 	router.Delete("/bulk/submodel-descriptors", h.deleteBulkSubmodelDescriptorsByID)
 
 	if includeAsyncLookupRoutes {
-		router.Get("/bulk/status/{handleId}", h.getBulkAsyncStatus)
-		router.Get("/bulk/result/{handleId}", h.getBulkAsyncResult)
+		router.Get("/bulk/status/{handleId}", h.getBulkJobStatus)
+		router.Get("/bulk/result/{handleId}", h.getBulkJobResult)
 	}
 }
 
@@ -136,7 +136,7 @@ func (h *BulkHTTPHandler) deleteBulkSubmodelDescriptorsByID(w http.ResponseWrite
 	writeResponse(w, h.service.StartDelete(r.Context(), identifiers))
 }
 
-func (h *BulkHTTPHandler) getBulkAsyncStatus(w http.ResponseWriter, r *http.Request) {
+func (h *BulkHTTPHandler) getBulkJobStatus(w http.ResponseWriter, r *http.Request) {
 	handleID := chi.URLParam(r, "handleId")
 	resp := h.service.GetStatus(r.Context(), handleID)
 
@@ -153,7 +153,7 @@ func (h *BulkHTTPHandler) getBulkAsyncStatus(w http.ResponseWriter, r *http.Requ
 	writeResponse(w, resp)
 }
 
-func (h *BulkHTTPHandler) getBulkAsyncResult(w http.ResponseWriter, r *http.Request) {
+func (h *BulkHTTPHandler) getBulkJobResult(w http.ResponseWriter, r *http.Request) {
 	handleID := chi.URLParam(r, "handleId")
 	writeResponse(w, h.service.GetResult(r.Context(), handleID))
 }

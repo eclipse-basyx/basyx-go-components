@@ -24,7 +24,7 @@
 ******************************************************************************/
 // Author: Aaron Zielstorff ( Fraunhofer IESE )
 
-package asyncbulk
+package asyncjob
 
 import (
 	"testing"

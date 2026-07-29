@@ -39,7 +39,7 @@ import (
 	aasregistryapi "github.com/eclipse-basyx/basyx-go-components/internal/aasregistry/api"
 	aasregistrydatabase "github.com/eclipse-basyx/basyx-go-components/internal/aasregistry/persistence"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
-	"github.com/eclipse-basyx/basyx-go-components/internal/common/asyncbulk"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/asyncjob"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/binarycontent"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/history"
 	commonmodel "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
@@ -128,7 +128,11 @@ func runServer(ctx context.Context, configPath string) error {
 
 	smSvc := aasregistryapi.NewAssetAdministrationShellRegistryAPIAPIService(*smDatabase)
 	smCtrl := apis.NewAssetAdministrationShellRegistryAPIAPIController(smSvc, cfg.Server.ContextPath)
-	bulkManager := asyncbulk.NewManager("AASR-BULK", 0)
+	bulkManager, err := asyncjob.NewPostgresManager(ctx, sharedDB, "AASR-BULK", 0)
+	if err != nil {
+		slog.ErrorContext(ctx, "async job persistence initialization failed", "error.code", "AASREGISTRY-ASYNCJOB-INIT", "error", err)
+		return err
+	}
 	bulkSvc := aasregistryapi.NewBulkService(smSvc, bulkManager)
 	bulkHandler := aasregistryapi.NewBulkHTTPHandler(bulkSvc)
 
