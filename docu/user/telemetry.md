@@ -1,8 +1,9 @@
-# OpenTelemetry Tracing
+# OpenTelemetry Telemetry
 
 The 11 BaSyx commands that expose HTTP APIs support optional OpenTelemetry
-tracing. Tracing is configured only with standard OpenTelemetry environment
-variables; it does not add a BaSyx YAML section.
+tracing and PostgreSQL connection pool metrics. Telemetry is configured only
+with standard OpenTelemetry environment variables; it does not add a BaSyx
+YAML section.
 
 `basyxconfigurationservice` and `historyevidenceverifier` do not expose HTTP
 servers or traced operations, so they remain logging-only commands.
@@ -10,20 +11,24 @@ servers or traced operations, so they remain logging-only commands.
 ## Activation
 
 Tracing is disabled when `OTEL_TRACES_EXPORTER` is unset, empty, or `none`.
-`OTEL_SDK_DISABLED=true` also disables tracing regardless of the exporter.
+Metrics are independently disabled when `OTEL_METRICS_EXPORTER` is unset,
+empty, or `none`. `OTEL_SDK_DISABLED=true` disables both signals regardless of
+their exporters.
 
 Use an OTLP Collector in deployed environments:
 
 ```env
 OTEL_TRACES_EXPORTER=otlp
+OTEL_METRICS_EXPORTER=otlp
 OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf
 OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318
 ```
 
-The `console` exporter is available for local diagnostics:
+The `console` exporter is available independently for local diagnostics:
 
 ```env
 OTEL_TRACES_EXPORTER=console
+OTEL_METRICS_EXPORTER=console
 ```
 
 Unsupported explicit values stop startup with an `OTEL-CONFIG-*` error. A
@@ -33,27 +38,34 @@ without logging configured endpoints or OTLP headers.
 
 ## Standard Environment Variables
 
-BaSyx supports the standard trace settings provided by the OpenTelemetry Go
-SDK and auto-exporter:
+BaSyx supports these standard settings provided by the OpenTelemetry Go SDK
+and auto-exporter:
 
 - `OTEL_TRACES_EXPORTER`: `otlp`, `console`, or `none`
+- `OTEL_METRICS_EXPORTER`: `otlp`, `console`, or `none`
 - `OTEL_SDK_DISABLED`
 - `OTEL_EXPORTER_OTLP_ENDPOINT` and `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT`
+- `OTEL_EXPORTER_OTLP_METRICS_ENDPOINT`
 - `OTEL_EXPORTER_OTLP_PROTOCOL` and `OTEL_EXPORTER_OTLP_TRACES_PROTOCOL`
+- `OTEL_EXPORTER_OTLP_METRICS_PROTOCOL`
 - `OTEL_EXPORTER_OTLP_HEADERS` and `OTEL_EXPORTER_OTLP_TRACES_HEADERS`
+- `OTEL_EXPORTER_OTLP_METRICS_HEADERS`
 - `OTEL_EXPORTER_OTLP_COMPRESSION` and
   `OTEL_EXPORTER_OTLP_TRACES_COMPRESSION`
+- `OTEL_EXPORTER_OTLP_METRICS_COMPRESSION`
 - `OTEL_EXPORTER_OTLP_TIMEOUT` and `OTEL_EXPORTER_OTLP_TRACES_TIMEOUT`
+- `OTEL_EXPORTER_OTLP_METRICS_TIMEOUT`
 - `OTEL_SERVICE_NAME` and `OTEL_RESOURCE_ATTRIBUTES`
 - `OTEL_TRACES_SAMPLER` and `OTEL_TRACES_SAMPLER_ARG`
 - `OTEL_BSP_SCHEDULE_DELAY`, `OTEL_BSP_EXPORT_TIMEOUT`,
   `OTEL_BSP_MAX_QUEUE_SIZE`, and `OTEL_BSP_MAX_EXPORT_BATCH_SIZE`
+- `OTEL_METRIC_EXPORT_INTERVAL` and `OTEL_METRIC_EXPORT_TIMEOUT`
 - `OTEL_PROPAGATORS`
 
-The default trace resource `service.name` is the lowercase command directory
-name, such as `aasenvironmentservice`. `OTEL_SERVICE_NAME` overrides it. BaSyx
-does not invent a `service.version`; operators can provide one through
-`OTEL_RESOURCE_ATTRIBUTES`.
+The default telemetry resource `service.name` is the lowercase command
+directory name, such as `aasenvironmentservice`. `OTEL_SERVICE_NAME` overrides
+it. BaSyx does not invent a `service.version`; operators can provide one
+through `OTEL_RESOURCE_ATTRIBUTES`.
 
 The default propagators are W3C Trace Context and Baggage. Supported
 `OTEL_PROPAGATORS` values are `tracecontext`, `baggage`, and `none`.
@@ -63,6 +75,36 @@ specification](https://opentelemetry.io/docs/specs/otel/configuration/sdk-enviro
 and [Go auto-exporter
 documentation](https://pkg.go.dev/go.opentelemetry.io/contrib/exporters/autoexport)
 for the detailed value formats.
+
+## PostgreSQL Pool Metrics
+
+Each service registers its single shared PostgreSQL writer pool once. The
+metrics read `database/sql.DBStats()` during collection and do not execute
+database queries.
+
+| Metric | Type | `DBStats` source |
+| --- | --- | --- |
+| `db.client.connection.max` | up/down counter | `MaxOpenConnections` |
+| `db.client.connection.count` with `state=used` | up/down counter | `InUse` |
+| `db.client.connection.count` with `state=idle` | up/down counter | `Idle` |
+| `basyx.db.client.connection.waits` | cumulative counter | `WaitCount` |
+| `basyx.db.client.connection.wait_time` | cumulative counter in seconds | `WaitDuration` |
+| `basyx.db.client.connection.closed` with `reason=idle_limit` | cumulative counter | `MaxIdleClosed` |
+| `basyx.db.client.connection.closed` with `reason=idle_time` | cumulative counter | `MaxIdleTimeClosed` |
+| `basyx.db.client.connection.closed` with `reason=max_lifetime` | cumulative counter | `MaxLifetimeClosed` |
+
+Open connections are the sum of the `used` and `idle`
+`db.client.connection.count` points. Every point has
+`db.system.name=postgresql` and
+`db.client.connection.pool.name=writer`. The `service.name` resource attribute
+identifies the BaSyx service. These values are bounded; database names, hosts,
+users, DSNs, SQL text, AAS identifiers, and request data are not metric
+attributes.
+
+Use rates for the cumulative wait and closure counters. A rising wait rate
+while `used` approaches `max` indicates that the service pool is constraining
+concurrency. Low pool utilization with slow requests points elsewhere, such as
+PostgreSQL query execution, server capacity, or storage latency.
 
 ## Sampling and Lifecycle
 
@@ -75,9 +117,10 @@ OTEL_TRACES_SAMPLER=parentbased_traceidratio
 OTEL_TRACES_SAMPLER_ARG=0.1
 ```
 
-Completed spans are exported in batches. When a service stops, BaSyx flushes
-and shuts down the tracer provider with a fresh bounded context after HTTP
-shutdown has completed.
+Completed spans are exported in batches. Metrics use the SDK export interval
+and timeout. When a service stops, BaSyx flushes and shuts down the enabled
+trace and metric providers with fresh bounded contexts after HTTP shutdown has
+completed.
 
 ## HTTP Spans and Propagation
 
@@ -113,7 +156,8 @@ third-party HTTP clients.
 Trace spans never capture query strings, request or response bodies,
 authorization values, arbitrary headers, tokens, user agents, or client IP
 addresses. Delegated client spans contain only the method, scheme, hostname and
-port, path, response status, and a generic error marker.
+port, path, response status, and a generic error marker. PostgreSQL metrics
+contain only the bounded attributes documented above.
 
 ## Log Correlation
 
@@ -149,6 +193,6 @@ from Jaeger traces back to Loki.
 
 ## Scope
 
-This tracing foundation does not add metrics, OTLP log export, database spans,
-PostgreSQL instrumentation, AAS-domain spans, runtime reconfiguration, or
-custom exporter plugins.
+This telemetry foundation does not add OTLP log export, database query spans,
+SQL statement capture, AAS-domain spans, runtime reconfiguration, or custom
+exporter plugins.
