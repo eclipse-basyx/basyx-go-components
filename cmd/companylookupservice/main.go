@@ -32,7 +32,6 @@ import (
 	"flag"
 	"log/slog"
 	"os"
-	"time"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/binarycontent"
@@ -78,28 +77,14 @@ func runServer(ctx context.Context, configPath string) error {
 		slog.WarnContext(ctx, "Swagger UI unavailable", "error.code", "COMPANYLOOKUP-SWAGGER-INIT", "error", err)
 	}
 
-	dsn := common.BuildPostgresDSN(cfg.Postgres)
-
-	if err := common.ValidateSchemaVersionByDSN(dsn, common.CURRENT_DATABASE_VERSION); err != nil {
-		return err
-	}
 	slog.InfoContext(ctx, "connecting to PostgreSQL")
 
-	sharedDB, err := common.NewDatabaseConnection(dsn)
+	sharedDB, err := common.OpenPostgresWithSchemaValidation(ctx, cfg.Postgres, "companylookupservice", common.CURRENT_DATABASE_VERSION)
 	if err != nil {
 		slog.ErrorContext(ctx, "database connection failed", "error.code", "COMPANYLOOKUP-DB-CONNECT", "error", err)
 		return err
 	}
 	defer func() { _ = sharedDB.Close() }()
-	if cfg.Postgres.MaxOpenConnections > 0 {
-		sharedDB.SetMaxOpenConns(cfg.Postgres.MaxOpenConnections)
-	}
-	if cfg.Postgres.MaxIdleConnections > 0 {
-		sharedDB.SetMaxIdleConns(cfg.Postgres.MaxIdleConnections)
-	}
-	if cfg.Postgres.ConnMaxLifetimeMinutes > 0 {
-		sharedDB.SetConnMaxLifetime(time.Duration(cfg.Postgres.ConnMaxLifetimeMinutes) * time.Minute)
-	}
 	companyLookupDatabase, err := companylookuppostgresql.NewPostgreSQLCompanyLookupBackendFromDB(sharedDB, cfg.Server.CacheEnabled)
 	if err != nil {
 		slog.ErrorContext(ctx, "company lookup persistence initialization failed", "error.code", "COMPANYLOOKUP-DB-INIT", "error", err)
