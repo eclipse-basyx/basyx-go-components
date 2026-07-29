@@ -35,7 +35,10 @@ import (
 	"time"
 
 	"go.opentelemetry.io/otel"
+	noopmetric "go.opentelemetry.io/otel/metric/noop"
 	"go.opentelemetry.io/otel/propagation"
+	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
+	"go.opentelemetry.io/otel/sdk/metric/metricdata"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	nooptrace "go.opentelemetry.io/otel/trace/noop"
 )
@@ -43,6 +46,7 @@ import (
 func TestConfigureLeavesTelemetryDisabledByDefault(t *testing.T) {
 	clearTelemetryEnvironment(t)
 	previousProvider := otel.GetTracerProvider()
+	previousMeter := otel.GetMeterProvider()
 	previousPropagator := otel.GetTextMapPropagator()
 
 	runtime, err := Configure(t.Context(), "testservice")
@@ -54,6 +58,9 @@ func TestConfigureLeavesTelemetryDisabledByDefault(t *testing.T) {
 	}
 	if otel.GetTracerProvider() != previousProvider {
 		t.Fatal("disabled configuration replaced the tracer provider")
+	}
+	if otel.GetMeterProvider() != previousMeter {
+		t.Fatal("disabled configuration replaced the meter provider")
 	}
 	if otel.GetTextMapPropagator() != previousPropagator {
 		t.Fatal("disabled configuration replaced the propagator")
@@ -143,6 +150,36 @@ func TestConfigureEnablesOTLPExporter(t *testing.T) {
 	t.Cleanup(func() { runtime.Shutdown(t.Context()) })
 	if !runtime.Enabled() {
 		t.Fatal("OTLP telemetry was not enabled")
+	}
+}
+
+func TestConfigureEnablesMetricsWithoutChangingTracing(t *testing.T) {
+	clearTelemetryEnvironment(t)
+	t.Setenv("OTEL_METRICS_EXPORTER", "console")
+	originalMeter := otel.GetMeterProvider()
+	originalTracer := otel.GetTracerProvider()
+
+	runtime, err := Configure(t.Context(), "testservice")
+	if err != nil {
+		t.Fatalf("configure telemetry: %v", err)
+	}
+	if !runtime.Enabled() || !runtime.metricsEnabled {
+		t.Fatal("metrics were not enabled")
+	}
+	if runtime.tracingEnabled {
+		t.Fatal("tracing was unexpectedly enabled")
+	}
+	if otel.GetMeterProvider() == originalMeter {
+		t.Fatal("meter provider was not installed")
+	}
+	if otel.GetTracerProvider() != originalTracer {
+		t.Fatal("metrics-only configuration replaced the tracer provider")
+	}
+
+	runtime.Shutdown(t.Context())
+
+	if otel.GetMeterProvider() != originalMeter {
+		t.Fatal("meter provider was not restored")
 	}
 }
 
@@ -255,6 +292,39 @@ func TestConfigureDoesNotLogInvalidSensitiveExporterValues(t *testing.T) {
 	}
 }
 
+func TestConfigureRejectsInvalidMetricConfiguration(t *testing.T) {
+	for _, test := range []struct {
+		name  string
+		key   string
+		value string
+		code  string
+	}{
+		{name: "exporter", key: "OTEL_METRICS_EXPORTER", value: "statsd", code: "OTEL-CONFIG-EXPORTER"},
+		{name: "protocol", key: "OTEL_EXPORTER_OTLP_METRICS_PROTOCOL", value: "json", code: "OTEL-CONFIG-EXPORTER"},
+		{name: "endpoint", key: "OTEL_EXPORTER_OTLP_METRICS_ENDPOINT", value: "postgres://private-token@db", code: "OTEL-CONFIG-EXPORTER"},
+		{name: "headers", key: "OTEL_EXPORTER_OTLP_METRICS_HEADERS", value: "Authorization=private-token%ZZ", code: "OTEL-CONFIG-EXPORTER"},
+		{name: "interval", key: "OTEL_METRIC_EXPORT_INTERVAL", value: "immediately", code: "OTEL-CONFIG-METRICS"},
+		{name: "timeout", key: "OTEL_METRIC_EXPORT_TIMEOUT", value: "0", code: "OTEL-CONFIG-METRICS"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			clearTelemetryEnvironment(t)
+			t.Setenv("OTEL_METRICS_EXPORTER", "otlp")
+			t.Setenv(test.key, test.value)
+
+			runtime, err := Configure(t.Context(), "testservice")
+			if runtime != nil {
+				runtime.Shutdown(t.Context())
+			}
+			if err == nil || !strings.Contains(err.Error(), test.code) {
+				t.Fatalf("expected %s error, got %v", test.code, err)
+			}
+			if strings.Contains(err.Error(), "private-token") {
+				t.Fatalf("configuration error disclosed an operator-provided value: %v", err)
+			}
+		})
+	}
+}
+
 func TestShutdownUsesFreshContextForProviderCleanup(t *testing.T) {
 	processor := &blockingFlushProcessor{}
 	provider := sdktrace.NewTracerProvider(sdktrace.WithSpanProcessor(processor))
@@ -284,6 +354,37 @@ func TestShutdownUsesFreshContextForProviderCleanup(t *testing.T) {
 
 	if !processor.shutdownCalled.Load() {
 		t.Fatal("provider cleanup did not run after force flush timed out")
+	}
+}
+
+func TestShutdownFlushesAndCleansUpMetricProvider(t *testing.T) {
+	exporter := &blockingMetricExporter{}
+	reader := sdkmetric.NewPeriodicReader(exporter, sdkmetric.WithInterval(time.Hour))
+	provider := sdkmetric.NewMeterProvider(sdkmetric.WithReader(reader))
+	originalMeter := otel.GetMeterProvider()
+	previousMeter := noopmetric.NewMeterProvider()
+	otel.SetMeterProvider(provider)
+	t.Cleanup(func() {
+		otel.SetMeterProvider(originalMeter)
+	})
+	runtime := &Runtime{
+		enabled:        true,
+		metricsEnabled: true,
+		metricProvider: provider,
+		previousMeter:  previousMeter,
+		previousError:  otel.GetErrorHandler(),
+	}
+
+	runtime.shutdown(t.Context(), time.Millisecond)
+
+	if !exporter.flushCalled.Load() {
+		t.Fatal("metric provider was not flushed")
+	}
+	if !exporter.shutdownCalled.Load() {
+		t.Fatal("metric provider cleanup did not run after force flush timed out")
+	}
+	if otel.GetMeterProvider() != previousMeter {
+		t.Fatal("meter provider was not restored")
 	}
 }
 
@@ -335,5 +436,33 @@ func (*blockingFlushProcessor) ForceFlush(ctx context.Context) error {
 
 func (processor *blockingFlushProcessor) Shutdown(context.Context) error {
 	processor.shutdownCalled.Store(true)
+	return nil
+}
+
+type blockingMetricExporter struct {
+	flushCalled    atomic.Bool
+	shutdownCalled atomic.Bool
+}
+
+func (*blockingMetricExporter) Temporality(sdkmetric.InstrumentKind) metricdata.Temporality {
+	return metricdata.CumulativeTemporality
+}
+
+func (*blockingMetricExporter) Aggregation(kind sdkmetric.InstrumentKind) sdkmetric.Aggregation {
+	return sdkmetric.DefaultAggregationSelector(kind)
+}
+
+func (*blockingMetricExporter) Export(context.Context, *metricdata.ResourceMetrics) error {
+	return nil
+}
+
+func (exporter *blockingMetricExporter) ForceFlush(ctx context.Context) error {
+	exporter.flushCalled.Store(true)
+	<-ctx.Done()
+	return ctx.Err()
+}
+
+func (exporter *blockingMetricExporter) Shutdown(context.Context) error {
+	exporter.shutdownCalled.Store(true)
 	return nil
 }

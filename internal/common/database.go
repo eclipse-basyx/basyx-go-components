@@ -37,6 +37,7 @@ import (
 
 	"github.com/doug-martin/goqu/v9"
 	_ "github.com/doug-martin/goqu/v9/dialect/postgres"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/telemetry"
 	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
@@ -140,6 +141,10 @@ func OpenPostgres(ctx context.Context, cfg PostgresConfig, serviceName string) (
 	if err = db.PingContext(ctx); err != nil {
 		_ = db.Close()
 		return nil, fmt.Errorf("COMMON-OPENPOSTGRES-PING failed to connect to PostgreSQL: %w", err)
+	}
+	if err = telemetry.RegisterDatabasePool(db, telemetry.DatabasePoolRoleWriter); err != nil {
+		_ = db.Close()
+		return nil, fmt.Errorf("COMMON-OPENPOSTGRES-METRICS failed to register PostgreSQL connection pool: %w", err)
 	}
 
 	slog.InfoContext(

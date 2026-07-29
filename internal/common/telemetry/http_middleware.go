@@ -53,7 +53,7 @@ type httpTracingMiddleware struct {
 // It returns next directly when tracing is disabled.
 func HTTPMiddleware(next http.Handler) http.Handler {
 	runtime := activeRuntime.Load()
-	if runtime == nil || !runtime.enabled {
+	if runtime == nil || !runtime.tracingEnabled || runtime.provider == nil {
 		return next
 	}
 	return newHTTPMiddleware(next, runtime.provider, otel.GetTextMapPropagator())

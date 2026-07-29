@@ -49,7 +49,7 @@ func HTTPClientTransport(base http.RoundTripper) http.RoundTripper {
 		base = http.DefaultTransport
 	}
 	runtime := activeRuntime.Load()
-	if runtime == nil || !runtime.enabled {
+	if runtime == nil || !runtime.tracingEnabled || runtime.provider == nil {
 		return base
 	}
 	return newHTTPClientTransport(
