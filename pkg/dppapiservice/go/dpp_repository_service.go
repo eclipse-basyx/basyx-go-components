@@ -45,7 +45,6 @@ import (
 
 const (
 	defaultDPPPageLimit        int32 = 100
-	dppProductIDSearchPageSize int32 = 500
 	maxDPPProductIDSearchItems       = 100
 	maxDPPRequestBodyBytes     int64 = 10 << 20
 )
@@ -88,7 +87,7 @@ func (s *DPPRepositoryService) CreateDPPFromJSON(ctx context.Context, data []byt
 	}
 
 	sections := contentSections(doc)
-	submodels, refs, err := s.buildSubmodels(header, sections)
+	submodels, refs, err := s.buildSubmodels(header, sections, metadataSubmodelID(header.DigitalProductPassportID))
 	if err != nil {
 		return errorResponse(http.StatusBadRequest, err), nil
 	}
@@ -161,7 +160,7 @@ func (s *DPPRepositoryService) UpdateDPPFromJSON(ctx context.Context, dppID stri
 	}
 
 	sections := contentSections(merged)
-	submodels, refs, err := s.buildSubmodels(header, sections)
+	submodels, refs, err := s.buildSubmodels(header, sections, currentResolved.metadata.ID())
 	if err != nil {
 		return errorResponse(http.StatusBadRequest, err), nil
 	}
@@ -372,9 +371,14 @@ func (s *DPPRepositoryService) DeleteDPPById(ctx context.Context, dppID string) 
 //   - ImplResponse: HTTP-style response containing the resolved DPP or mapped error payload
 //   - error: Unexpected service error, if one occurs outside normal response mapping
 func (s *DPPRepositoryService) ReadDPPByProductId(ctx context.Context, productID string, representation Representation) (ImplResponse, error) {
-	ids := make([]string, 0)
-	seen := make(map[string]struct{})
-	if err := s.collectDPPIDsForProduct(ctx, productID, seen, &ids); err != nil {
+	ids, _, err := s.aasRepo.GetAssetAdministrationShellIDsByAssetAndSubmodelSemanticIDs(
+		ctx,
+		[]string{productID},
+		dppMetadataSemanticIDValues(),
+		2,
+		"",
+	)
+	if err != nil {
 		return mapPersistenceError(err, http.StatusNotFound), nil
 	}
 	if len(ids) == 0 {
@@ -421,53 +425,17 @@ func (s *DPPRepositoryService) ReadDPPVersionByIdAndDate(ctx context.Context, dp
 //   - ImplResponse: HTTP-style response containing a paged DPP ID search result
 //   - error: Unexpected service error, if one occurs outside normal response mapping
 func (s *DPPRepositoryService) ReadDPPIdsByProductIds(ctx context.Context, request ReadDppIdsByProductIdsRequest, limit int32, cursor string) (ImplResponse, error) {
-	ids := make([]string, 0)
-	seen := make(map[string]struct{})
-	for _, productID := range request.ProductIds {
-		if err := s.collectDPPIDsForProduct(ctx, productID, seen, &ids); err != nil {
-			return mapPersistenceError(err, http.StatusInternalServerError), nil
-		}
+	ids, nextCursor, err := s.aasRepo.GetAssetAdministrationShellIDsByAssetAndSubmodelSemanticIDs(
+		ctx,
+		request.ProductIds,
+		dppMetadataSemanticIDValues(),
+		limitOrDefault(limit),
+		cursor,
+	)
+	if err != nil {
+		return mapPersistenceError(err, http.StatusInternalServerError), nil
 	}
-	sort.Strings(ids)
-	paged, nextCursor := pageStrings(ids, limitOrDefault(limit), cursor)
-	return Response(http.StatusOK, DppidSearchResult{Items: paged, Cursor: nextCursor}), nil
-}
-
-func (s *DPPRepositoryService) collectDPPIDsForProduct(ctx context.Context, productID string, seen map[string]struct{}, ids *[]string) error {
-	cursor := ""
-	specificAssetIDs := []types.ISpecificAssetID{types.NewSpecificAssetID("globalAssetId", productID)}
-	for {
-		shells, nextCursor, err := s.aasRepo.GetAssetAdministrationShells(ctx, dppProductIDSearchPageSize, cursor, "", specificAssetIDs, time.Time{}, time.Time{})
-		if err != nil {
-			return fmt.Errorf("DPP-READIDS-GETAAS get AAS for product %s: %w", productID, err)
-		}
-		for _, shell := range shells {
-			if _, ok := seen[shell.ID()]; ok {
-				continue
-			}
-			if !isDPPShell(shell) {
-				continue
-			}
-			seen[shell.ID()] = struct{}{}
-			*ids = append(*ids, shell.ID())
-		}
-		if nextCursor == "" {
-			return nil
-		}
-		if nextCursor == cursor {
-			return fmt.Errorf("DPP-READIDS-CURSOR repository returned repeated cursor %q", cursor)
-		}
-		cursor = nextCursor
-	}
-}
-
-func isDPPShell(shell types.IAssetAdministrationShell) bool {
-	for _, ref := range shell.Submodels() {
-		if referenceLastValue(ref) == metadataSubmodelID(shell.ID()) {
-			return true
-		}
-	}
-	return false
+	return Response(http.StatusOK, DppidSearchResult{Items: ids, Cursor: nextCursor}), nil
 }
 
 // ReadDataElement reads one DPP data element by elementIdPath.
@@ -482,7 +450,7 @@ func isDPPShell(shell types.IAssetAdministrationShell) bool {
 //   - ImplResponse: HTTP-style response containing the DPP data element or mapped error payload
 //   - error: Unexpected service error, if one occurs outside normal response mapping
 func (s *DPPRepositoryService) ReadDataElement(ctx context.Context, dppID string, elementIDPath string, representation Representation) (ImplResponse, error) {
-	submodelID, idShortPath, err := s.resolveElementPath(ctx, dppID, elementIDPath)
+	submodelID, idShortPath, _, err := s.resolveElementPath(ctx, dppID, elementIDPath)
 	if err != nil {
 		return errorResponse(http.StatusBadRequest, err), nil
 	}
@@ -518,7 +486,7 @@ func (s *DPPRepositoryService) UpdateDataElementFromJSON(ctx context.Context, dp
 	if err := rejectExpandedDataElementShape(elementIDPath, value); err != nil {
 		return errorResponse(http.StatusBadRequest, err), nil
 	}
-	submodelID, idShortPath, err := s.resolveElementPath(ctx, dppID, elementIDPath)
+	submodelID, idShortPath, metadata, err := s.resolveElementPath(ctx, dppID, elementIDPath)
 	if err != nil {
 		return errorResponse(http.StatusBadRequest, err), nil
 	}
@@ -532,7 +500,7 @@ func (s *DPPRepositoryService) UpdateDataElementFromJSON(ctx context.Context, dp
 		return errorResponse(http.StatusBadRequest, err), nil
 	}
 	preserveElementMetadata(existing, element)
-	metadata, err := s.updatedMetadata(ctx, dppID)
+	metadata, err = updatedMetadata(metadata)
 	if err != nil {
 		return mapPersistenceError(err, http.StatusInternalServerError), nil
 	}
@@ -728,7 +696,7 @@ func (s *DPPRepositoryService) resolveSubmodels(ctx context.Context, dppID strin
 		if err != nil {
 			return resolvedDPP{}, fmt.Errorf("DPP-RESOLVE-GETSUBMODEL get submodel %s: %w", submodelID, err)
 		}
-		if hasDPPMetadataSemanticID(submodel) || idShortOrID(submodel) == dppMetadataIDShort {
+		if hasDPPMetadataSemanticID(submodel) {
 			metadata = submodel
 		}
 		submodels = append(submodels, submodel)
@@ -887,8 +855,8 @@ func contentSpecificationIDsFromStrings(rawItems []string) ([]string, error) {
 	return ids, nil
 }
 
-func (s *DPPRepositoryService) buildSubmodels(header dppHeader, sections map[string]any) ([]types.ISubmodel, []types.IReference, error) {
-	metadata := buildMetadataSubmodel(header.DigitalProductPassportID, header)
+func (s *DPPRepositoryService) buildSubmodels(header dppHeader, sections map[string]any, metadataID string) ([]types.ISubmodel, []types.IReference, error) {
+	metadata := buildMetadataSubmodelWithID(metadataID, header)
 	submodels := []types.ISubmodel{metadata}
 	refs := []types.IReference{submodelReference(metadata.ID())}
 
@@ -909,15 +877,16 @@ func (s *DPPRepositoryService) buildSubmodels(header dppHeader, sections map[str
 	return submodels, refs, nil
 }
 
-func (s *DPPRepositoryService) resolveElementPath(ctx context.Context, dppID string, elementIDPath string) (string, string, error) {
+func (s *DPPRepositoryService) resolveElementPath(ctx context.Context, dppID string, elementIDPath string) (string, string, types.ISubmodel, error) {
 	if err := validateDPPElementPath(elementIDPath); err != nil {
-		return "", "", err
+		return "", "", nil, err
 	}
 	resolved, err := s.resolveSubmodels(ctx, dppID, time.Time{})
 	if err != nil {
-		return "", "", err
+		return "", "", nil, err
 	}
-	return resolveDPPElementPathParts(resolved, elementIDPath)
+	submodelID, idShortPath, err := resolveDPPElementPathParts(resolved, elementIDPath)
+	return submodelID, idShortPath, resolved.metadata, err
 }
 
 func resolveDPPElementPath(resolved resolvedDPP, elementIDPath string) (string, string, error) {
@@ -970,11 +939,7 @@ func compressedContentSectionName(submodel types.ISubmodel, specificationSet map
 	return lowerFirst(idShortOrID(submodel))
 }
 
-func (s *DPPRepositoryService) updatedMetadata(ctx context.Context, dppID string) (types.ISubmodel, error) {
-	metadata, err := s.submodelRepo.GetSubmodelByID(ctx, metadataSubmodelID(dppID), "deep", false, true)
-	if err != nil {
-		return nil, fmt.Errorf("DPP-TOUCHMETA-GET get metadata: %w", err)
-	}
+func updatedMetadata(metadata types.ISubmodel) (types.ISubmodel, error) {
 	header, err := composeHeader(metadata)
 	if err != nil {
 		return nil, fmt.Errorf("DPP-TOUCHMETA-COMPOSE compose current metadata: %w", err)
@@ -1032,25 +997,4 @@ func limitOrDefault(limit int32) int32 {
 		return defaultDPPPageLimit
 	}
 	return limit
-}
-
-func pageStrings(values []string, limit int32, cursor string) ([]string, string) {
-	start := 0
-	if cursor != "" {
-		for index, value := range values {
-			if value == cursor {
-				start = index + 1
-				break
-			}
-		}
-	}
-	end := start + int(limit)
-	if end > len(values) {
-		end = len(values)
-	}
-	nextCursor := ""
-	if end < len(values) {
-		nextCursor = values[end-1]
-	}
-	return values[start:end], nextCursor
 }

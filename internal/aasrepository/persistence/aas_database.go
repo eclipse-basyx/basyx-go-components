@@ -872,6 +872,80 @@ func (s *AssetAdministrationShellDatabase) GetAssetAdministrationShells(ctx cont
 	return result, nextCursor, nil
 }
 
+// GetAssetAdministrationShellIDsByAssetAndSubmodelSemanticIDs returns AAS identifiers whose global asset ID and a referenced Submodel semantic ID match.
+func (s *AssetAdministrationShellDatabase) GetAssetAdministrationShellIDsByAssetAndSubmodelSemanticIDs(
+	ctx context.Context,
+	globalAssetIDs []string,
+	submodelSemanticIDs []string,
+	limit int32,
+	cursor string,
+) ([]string, string, error) {
+	if limit < 0 {
+		return nil, "", common.NewErrBadRequest("AASREPO-GETAASIDSBYASSETANDSMSEM-BADLIMIT Limit " + strconv.FormatInt(int64(limit), 10) + " too small")
+	}
+	if len(globalAssetIDs) == 0 || len(submodelSemanticIDs) == 0 {
+		return []string{}, "", nil
+	}
+
+	dialect := goqu.Dialect("postgres")
+	selectDS, err := buildGetAssetAdministrationShellIDsByAssetAndSubmodelSemanticIDsDataset(
+		&dialect,
+		globalAssetIDs,
+		submodelSemanticIDs,
+		limit,
+		cursor,
+	)
+	if err != nil {
+		return nil, "", common.NewInternalServerError("AASREPO-GETAASIDSBYASSETANDSMSEM-BUILDSQL " + err.Error())
+	}
+
+	collector, err := buildAASCollector()
+	if err != nil {
+		return nil, "", err
+	}
+	shouldEnforce, err := shouldEnforceFormula(ctx, "AASREPO-GETAASIDSBYASSETANDSMSEM-SHOULDENFORCE")
+	if err != nil {
+		return nil, "", err
+	}
+	if shouldEnforce {
+		selectDS, err = auth.AddFormulaQueryFromContext(ctx, selectDS, collector)
+		if err != nil {
+			return nil, "", common.NewInternalServerError("AASREPO-GETAASIDSBYASSETANDSMSEM-ABACFORMULA " + err.Error())
+		}
+	}
+
+	query, args, err := selectDS.ToSQL()
+	if err != nil {
+		return nil, "", common.NewInternalServerError("AASREPO-GETAASIDSBYASSETANDSMSEM-BUILDSQL " + err.Error())
+	}
+	rows, err := s.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, "", common.NewInternalServerError("AASREPO-GETAASIDSBYASSETANDSMSEM-EXECSQL " + err.Error())
+	}
+	defer func() {
+		_ = rows.Close()
+	}()
+
+	identifiers := make([]string, 0, limit+1)
+	for rows.Next() {
+		var identifier string
+		if err := rows.Scan(&identifier); err != nil {
+			return nil, "", common.NewInternalServerError("AASREPO-GETAASIDSBYASSETANDSMSEM-SCANROW " + err.Error())
+		}
+		identifiers = append(identifiers, identifier)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, "", common.NewInternalServerError("AASREPO-GETAASIDSBYASSETANDSMSEM-ITERROWS " + err.Error())
+	}
+
+	nextCursor := ""
+	if limit > 0 && len(identifiers) > int(limit) {
+		identifiers = identifiers[:limit]
+		nextCursor = identifiers[len(identifiers)-1]
+	}
+	return identifiers, nextCursor, nil
+}
+
 func (s *AssetAdministrationShellDatabase) assetAdministrationShellCursorExists(ctx context.Context, dialect *goqu.DialectWrapper, cursor string) (bool, error) {
 	query, args, buildErr := dialect.From("aas").Select(goqu.V(1)).Where(goqu.I("aas_id").Eq(cursor)).Limit(1).ToSQL()
 	if buildErr != nil {

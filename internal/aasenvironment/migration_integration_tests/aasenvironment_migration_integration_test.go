@@ -160,7 +160,7 @@ func TestMigrationFromReleaseCandidate5PreservesEnvironmentData(t *testing.T) {
 	require.NoError(t, testenv.WaitHealthyURL(migrationBaseURL+"/health", 5*time.Minute))
 
 	assertCollectionsContainFixtures(t, fixtures)
-	assertSchemaVersion(t, "v1.1.8")
+	assertSchemaVersion(t, "v1.1.9")
 	assertLongIdentifierEvidenceCatalogAccepts(t, longIdentifier)
 	assertLegacyBinaryStateUnchanged(t, legacyFile, readLegacyFileState(t, "LegacyFile"))
 	assertLegacyBinaryStateUnchanged(t, legacyUntouched, readLegacyFileState(t, "LegacyFileUntouched"))
