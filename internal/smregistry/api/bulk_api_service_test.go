@@ -126,6 +126,20 @@ func TestBulkServiceUnknownHandleReturnsNotFound(t *testing.T) {
 	require.Equal(t, http.StatusNotFound, service.GetResult(context.Background(), "SMR-BULK-TEST-unknown").Code)
 }
 
+func TestBulkServiceRejectsStartWhenExecutionCapacityIsExhausted(t *testing.T) {
+	manager := asyncjob.NewManager("SMR-BULK-TEST", time.Minute)
+	service := NewBulkService(smBulkServiceStub{}, manager)
+	releases := exhaustExecutionSlots(t, manager)
+	defer func() {
+		for _, release := range releases {
+			release()
+		}
+	}()
+
+	response := service.StartCreate(context.Background(), []model.SubmodelDescriptor{{Id: "urn:ok"}})
+	require.Equal(t, http.StatusTooManyRequests, response.Code)
+}
+
 func TestBulkServiceDeleteFailureResult(t *testing.T) {
 	manager := asyncjob.NewManager("SMR-BULK-TEST", time.Minute)
 	service := NewBulkService(smBulkServiceStub{
@@ -187,4 +201,16 @@ func withClaims(ctx context.Context, claims auth.Claims) context.Context {
 	}
 
 	return context.WithValue(ctx, auth.ClaimsKey, claims)
+}
+
+func exhaustExecutionSlots(t *testing.T, manager *asyncjob.Manager) []func() {
+	t.Helper()
+	releases := make([]func(), 0)
+	for {
+		release, acquired := manager.TryAcquireExecutionSlot()
+		if !acquired {
+			return releases
+		}
+		releases = append(releases, release)
+	}
 }

@@ -97,6 +97,12 @@ func (s *BulkService) start(
 	completionErrorCode string,
 	execute func(context.Context) asyncjob.BulkResult,
 ) model.ImplResponse {
+	releaseExecutionSlot, acquired := s.manager.TryAcquireExecutionSlot()
+	if !acquired {
+		capacityErr := errors.New("AASR-BULK-START-CAPACITY asynchronous execution capacity is exhausted")
+		return common.NewErrorResponse(capacityErr, http.StatusTooManyRequests, componentName, operationName, "ExecutionCapacityExhausted")
+	}
+
 	executionContext, cancelExecution := s.manager.NewExecutionContext(ctx, bulkJobExecutionTimeout)
 	executionDeadline, _ := executionContext.Deadline()
 	handleID, err := s.manager.Start(ctx, auth.OwnerKeyFromContext(ctx), asyncjob.StartOptions{
@@ -104,11 +110,12 @@ func (s *BulkService) start(
 		ExecutionDeadline: executionDeadline,
 	})
 	if err != nil {
+		releaseExecutionSlot()
 		cancelExecution()
 		return common.NewErrorResponse(err, http.StatusInternalServerError, componentName, operationName, "CreateHandle")
 	}
 
-	go s.execute(executionContext, handleID, cancelExecution, completionErrorCode, execute)
+	go s.execute(executionContext, handleID, cancelExecution, releaseExecutionSlot, completionErrorCode, execute)
 
 	return model.ResponseWithHeaders(http.StatusAccepted, nil, map[string]string{
 		"Location": fmt.Sprintf("/bulk/status/%s", url.PathEscape(handleID)),
@@ -119,9 +126,11 @@ func (s *BulkService) execute(
 	executionContext context.Context,
 	handleID string,
 	cancelExecution context.CancelFunc,
+	releaseExecutionSlot func(),
 	completionErrorCode string,
 	execute func(context.Context) asyncjob.BulkResult,
 ) {
+	defer releaseExecutionSlot()
 	defer cancelExecution()
 	stopHeartbeat := s.manager.KeepAlive(executionContext, handleID)
 	defer stopHeartbeat()
@@ -171,7 +180,7 @@ func (s *BulkService) GetResult(ctx context.Context, handleID string) model.Impl
 		return common.NewErrorResponse(runningErr, http.StatusBadRequest, componentName, "GetBulkAsyncResult", "OperationStillRunning")
 	}
 
-	if err := s.manager.Delete(ctx, handleID); err != nil {
+	if err := s.manager.DeleteForOwner(ctx, handleID, auth.OwnerKeyFromContext(ctx)); err != nil {
 		return common.NewErrorResponse(err, http.StatusInternalServerError, componentName, "GetBulkAsyncResult", "DeleteHandle")
 	}
 
