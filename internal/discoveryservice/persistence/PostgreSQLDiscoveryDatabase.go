@@ -133,7 +133,12 @@ func (p *PostgreSQLDiscoveryDatabase) readDB(ctx context.Context) *sql.DB {
 // read-only operations. If the AAS identifier is not found in the database, an ErrNotFound
 // error is returned.
 func (p *PostgreSQLDiscoveryDatabase) GetAllAssetLinks(ctx context.Context, aasID string) ([]types.ISpecificAssetID, error) {
-	links, err := descriptors.ReadSpecificAssetIDsByAASIdentifier(ctx, p.readDB(ctx), aasID)
+	var links []types.ISpecificAssetID
+	err := common.ExecuteInReadTransaction(ctx, p.readDB(ctx), "DISC-GETASSETLINKS-STARTTX", "DISC-GETASSETLINKS-COMMIT", func(tx *sql.Tx) error {
+		var txErr error
+		links, txErr = descriptors.ReadSpecificAssetIDsByAASIdentifier(ctx, tx, aasID)
+		return txErr
+	})
 	if err != nil {
 		switch {
 		case common.IsErrNotFound(err):

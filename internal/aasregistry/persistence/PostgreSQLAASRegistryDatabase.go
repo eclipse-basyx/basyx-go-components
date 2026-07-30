@@ -430,7 +430,13 @@ func (p *PostgreSQLAASRegistryDatabase) GetAssetAdministrationShellDescriptorByI
 	ctx context.Context,
 	aasIdentifier string,
 ) (model.AssetAdministrationShellDescriptor, error) {
-	return descriptors.GetAssetAdministrationShellDescriptorByID(ctx, p.readDB(ctx), aasIdentifier)
+	var result model.AssetAdministrationShellDescriptor
+	err := common.ExecuteInReadTransaction(ctx, p.readDB(ctx), "AASREG-GETAASDESC-STARTTX", "AASREG-GETAASDESC-COMMIT", func(tx *sql.Tx) error {
+		var txErr error
+		result, txErr = descriptors.GetAssetAdministrationShellDescriptorByIDTx(ctx, tx, aasIdentifier)
+		return txErr
+	})
+	return result, err
 }
 
 // GetAssetAdministrationShellDescriptorByIDInTransaction returns the AAS descriptor
@@ -631,7 +637,14 @@ func (p *PostgreSQLAASRegistryDatabase) ListAssetAdministrationShellDescriptors(
 	createdFrom time.Time,
 	updatedFrom time.Time,
 ) ([]model.AssetAdministrationShellDescriptor, string, error) {
-	return descriptors.ListAssetAdministrationShellDescriptors(ctx, p.readDB(ctx), limit, cursor, assetKind, assetType, "", createdFrom, updatedFrom)
+	var result []model.AssetAdministrationShellDescriptor
+	var nextCursor string
+	err := common.ExecuteInReadTransaction(ctx, p.readDB(ctx), "AASREG-LISTAASDESC-STARTTX", "AASREG-LISTAASDESC-COMMIT", func(tx *sql.Tx) error {
+		var txErr error
+		result, nextCursor, txErr = descriptors.ListAssetAdministrationShellDescriptors(ctx, tx, limit, cursor, assetKind, assetType, "", createdFrom, updatedFrom)
+		return txErr
+	})
+	return result, nextCursor, err
 }
 
 // ListSubmodelDescriptorsForAAS lists submodel descriptors for a given AAS ID
@@ -642,7 +655,14 @@ func (p *PostgreSQLAASRegistryDatabase) ListSubmodelDescriptorsForAAS(
 	limit int32,
 	cursor string,
 ) ([]model.SubmodelDescriptor, string, error) {
-	return descriptors.ListSubmodelDescriptorsForAAS(ctx, p.readDB(ctx), aasID, limit, cursor)
+	var result []model.SubmodelDescriptor
+	var nextCursor string
+	err := common.ExecuteInReadTransaction(ctx, p.readDB(ctx), "AASREG-LISTSMDESC-STARTTX", "AASREG-LISTSMDESC-COMMIT", func(tx *sql.Tx) error {
+		var txErr error
+		result, nextCursor, txErr = descriptors.ListSubmodelDescriptorsForAAS(ctx, tx, aasID, limit, cursor)
+		return txErr
+	})
+	return result, nextCursor, err
 }
 
 // InsertSubmodelDescriptorForAAS inserts a submodel descriptor and associates
@@ -716,7 +736,13 @@ func (p *PostgreSQLAASRegistryDatabase) GetSubmodelDescriptorForAASByID(
 	aasID string,
 	submodelID string,
 ) (model.SubmodelDescriptor, error) {
-	return descriptors.GetSubmodelDescriptorForAASByID(ctx, p.readDB(ctx), aasID, submodelID)
+	var result model.SubmodelDescriptor
+	err := common.ExecuteInReadTransaction(ctx, p.readDB(ctx), "AASREG-GETSMDESC-STARTTX", "AASREG-GETSMDESC-COMMIT", func(tx *sql.Tx) error {
+		var txErr error
+		result, txErr = descriptors.GetSubmodelDescriptorForAASByID(ctx, tx, aasID, submodelID)
+		return txErr
+	})
+	return result, err
 }
 
 // DeleteSubmodelDescriptorForAASByID deletes the submodel descriptor identified

@@ -64,7 +64,7 @@ var bdColumns = []auth.FilterColumnSpec{
 // discovery aas_identifier table.
 func ReadSpecificAssetIDsByAASIdentifier(
 	ctx context.Context,
-	db *sql.DB,
+	db DBQueryer,
 	aasID string,
 ) ([]types.ISpecificAssetID, error) {
 	var aasRef int64

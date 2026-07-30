@@ -466,7 +466,7 @@ func ReplaceCompanyDescriptor(ctx context.Context, db *sql.DB, companyDescriptor
 // nolint:revive // complexity is 31 which is +1 above the allowed threshold of 30
 func ListCompanyDescriptors(
 	ctx context.Context,
-	db *sql.DB,
+	db DBQueryer,
 	limit int32,
 	cursor string,
 	name string,
@@ -665,7 +665,7 @@ func ListCompanyDescriptors(
 
 // ExistsCompanyDescriptorByID performs a lightweight existence check for a company descriptor by its identifier
 // string. It returns true when a descriptor exists, false when it does not.
-func ExistsCompanyDescriptorByID(ctx context.Context, db *sql.DB, companyIdentifier string) (bool, error) {
+func ExistsCompanyDescriptorByID(ctx context.Context, db DBQueryer, companyIdentifier string) (bool, error) {
 	d := goqu.Dialect(common.Dialect)
 	comp := goqu.T(common.TblCompanyDescriptor).As("comp")
 

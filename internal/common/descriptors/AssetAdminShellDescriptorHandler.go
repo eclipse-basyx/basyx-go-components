@@ -859,7 +859,7 @@ func buildListAASDescriptorPageQuery(
 //nolint:revive // Its only 31 instead of 30 - 1 is okay
 func ListAssetAdministrationShellDescriptors(
 	ctx context.Context,
-	db *sql.DB,
+	db DBQueryer,
 	limit int32,
 	cursor string,
 	assetKind model.AssetKind,
@@ -873,7 +873,8 @@ func ListAssetAdministrationShellDescriptors(
 			slog.DebugContext(ctx, "AAS descriptor list completed", "duration", time.Since(start))
 		}(time.Now())
 	}
-	return listAssetAdministrationShellDescriptors(ctx, db, limit, cursor, assetKind, assetType, identifiable, createdFrom, updatedFrom, true)
+	_, inTransaction := db.(*sql.Tx)
+	return listAssetAdministrationShellDescriptors(ctx, db, limit, cursor, assetKind, assetType, identifiable, createdFrom, updatedFrom, !inTransaction)
 }
 
 //nolint:revive // has to be refactored later. i have no time

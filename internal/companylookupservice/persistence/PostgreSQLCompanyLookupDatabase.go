@@ -127,7 +127,13 @@ func (p *PostgreSQLCompanyLookupDatabase) GetCompanyDescriptorByID(
 	ctx context.Context,
 	companyIdentifier string,
 ) (model.CompanyDescriptor, error) {
-	return descriptors.GetCompanyDescriptorByID(ctx, p.readDB(ctx), companyIdentifier)
+	var result model.CompanyDescriptor
+	err := common.ExecuteInReadTransaction(ctx, p.readDB(ctx), "COMPANYLOOKUP-GETDESC-STARTTX", "COMPANYLOOKUP-GETDESC-COMMIT", func(tx *sql.Tx) error {
+		var txErr error
+		result, txErr = descriptors.GetCompanyDescriptorByIDTx(ctx, tx, companyIdentifier)
+		return txErr
+	})
+	return result, err
 }
 
 // DeleteCompanyDescriptorByID deletes the company descriptor
@@ -157,7 +163,14 @@ func (p *PostgreSQLCompanyLookupDatabase) ListCompanyDescriptors(
 	name string,
 	assetID string,
 ) ([]model.CompanyDescriptor, string, error) {
-	return descriptors.ListCompanyDescriptors(ctx, p.readDB(ctx), limit, cursor, name, assetID)
+	var result []model.CompanyDescriptor
+	var nextCursor string
+	err := common.ExecuteInReadTransaction(ctx, p.readDB(ctx), "COMPANYLOOKUP-LISTDESC-STARTTX", "COMPANYLOOKUP-LISTDESC-COMMIT", func(tx *sql.Tx) error {
+		var txErr error
+		result, nextCursor, txErr = descriptors.ListCompanyDescriptors(ctx, tx, limit, cursor, name, assetID)
+		return txErr
+	})
+	return result, nextCursor, err
 }
 
 // ExistsCompanyDescriptorByID reports whether a company descriptor with the given ID exists.
