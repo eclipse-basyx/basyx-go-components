@@ -35,7 +35,6 @@ package companylookuppostgresql
 import (
 	"context"
 	"database/sql"
-	"time"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/descriptors"
@@ -52,8 +51,9 @@ type PostgreSQLCompanyLookupDatabase struct {
 // NewPostgreSQLCompanyLookupBackend creates a Company Lookup backend with its
 // own PostgreSQL connection pool.
 //
-// Positive pool limits are applied to the new pool. Non-positive values retain
-// database/sql defaults. The backend retains the pool for its service lifetime.
+// Positive pool limits are applied to the new pool. Zero values use the common
+// pool defaults and negative values are rejected. The backend retains the pool
+// for its service lifetime.
 //
 // Parameters:
 //   - dsn: PostgreSQL connection string.
@@ -66,18 +66,13 @@ type PostgreSQLCompanyLookupDatabase struct {
 //   - *PostgreSQLCompanyLookupDatabase: Backend using the newly created pool.
 //   - error: Connection or backend validation error.
 func NewPostgreSQLCompanyLookupBackend(dsn string, maxOpenConns int32, maxIdleConns int, connMaxLifetimeMinutes int, cacheEnabled bool) (*PostgreSQLCompanyLookupDatabase, error) {
-	db, err := common.NewDatabaseConnection(dsn)
+	db, err := common.NewDatabaseConnectionWithConfig(dsn, common.PostgresConfig{
+		MaxOpenConnections:     int(maxOpenConns),
+		MaxIdleConnections:     maxIdleConns,
+		ConnMaxLifetimeMinutes: connMaxLifetimeMinutes,
+	})
 	if err != nil {
 		return nil, err
-	}
-	if maxOpenConns > 0 {
-		db.SetMaxOpenConns(int(maxOpenConns))
-	}
-	if maxIdleConns > 0 {
-		db.SetMaxIdleConns(maxIdleConns)
-	}
-	if connMaxLifetimeMinutes > 0 {
-		db.SetConnMaxLifetime(time.Duration(connMaxLifetimeMinutes) * time.Minute)
 	}
 
 	return NewPostgreSQLCompanyLookupBackendFromDB(db, cacheEnabled)

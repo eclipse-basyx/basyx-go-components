@@ -25,3 +25,4 @@ postgres:
   maxOpenConnections: 50
   maxIdleConnections: 25
   connMaxLifetimeMinutes: 5
+  connMaxIdleTimeMinutes: 0

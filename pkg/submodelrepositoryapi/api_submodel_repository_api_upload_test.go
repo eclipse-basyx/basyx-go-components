@@ -7,6 +7,7 @@ import (
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
+	"net/textproto"
 	"path/filepath"
 	"testing"
 
@@ -17,12 +18,20 @@ import (
 
 type captureSubmodelFileUploadService struct {
 	SubmodelRepositoryAPIAPIServicer
-	fileName string
-	content  []byte
-	readErr  error
+	fileName    string
+	contentType string
+	content     []byte
+	readErr     error
 }
 
-func (s *captureSubmodelFileUploadService) PutFileByPathSubmodelRepo(_ context.Context, _ string, _ string, fileName string, file io.Reader) (commonmodel.ImplResponse, error) {
+func (s *captureSubmodelFileUploadService) PutFileByPathSubmodelRepo(
+	_ context.Context,
+	_ string,
+	_ string,
+	fileName string,
+	contentType string,
+	file io.Reader,
+) (commonmodel.ImplResponse, error) {
 	content, err := io.ReadAll(file)
 	s.readErr = err
 	if err != nil {
@@ -30,6 +39,7 @@ func (s *captureSubmodelFileUploadService) PutFileByPathSubmodelRepo(_ context.C
 	}
 
 	s.fileName = fileName
+	s.contentType = contentType
 	s.content = content
 
 	return commonmodel.Response(http.StatusNoContent, nil), nil
@@ -54,6 +64,9 @@ func TestPutFileByPathSubmodelRepoDoesNotRequireTempDirectory(t *testing.T) {
 	}
 	if service.fileName != "attachment.txt" {
 		t.Fatalf("expected fileName attachment.txt, got %q", service.fileName)
+	}
+	if service.contentType != "application/x-step" {
+		t.Fatalf("expected content type application/x-step, got %q", service.contentType)
 	}
 	if !bytes.Equal(service.content, payload) {
 		t.Fatalf("expected uploaded payload %q, got %q", string(payload), string(service.content))
@@ -108,6 +121,9 @@ func TestPutFileByPathSubmodelRepoUsesFileNameFieldWhenItFollowsFile(t *testing.
 	if service.fileName != "metadata-name.txt" {
 		t.Fatalf("expected metadata filename metadata-name.txt, got %q", service.fileName)
 	}
+	if service.contentType != "application/x-step" {
+		t.Fatalf("expected content type application/x-step, got %q", service.contentType)
+	}
 	if !bytes.Equal(service.content, payload) {
 		t.Fatalf("expected uploaded payload %q, got %q", string(payload), string(service.content))
 	}
@@ -132,7 +148,10 @@ func newMultipartUploadRequestWithFileNameOrder(
 	if fileNameBeforeFile {
 		writeFileNameField(t, writer, fieldFileName)
 	}
-	part, err := writer.CreateFormFile("file", partFileName)
+	partHeader := textproto.MIMEHeader{}
+	partHeader.Set("Content-Disposition", `form-data; name="file"; filename="`+partFileName+`"`)
+	partHeader.Set("Content-Type", "application/x-step")
+	part, err := writer.CreatePart(partHeader)
 	if err != nil {
 		t.Fatalf("failed to create multipart file: %v", err)
 	}

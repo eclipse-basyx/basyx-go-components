@@ -33,45 +33,47 @@ import (
 	"testing"
 	"time"
 
-	"github.com/eclipse-basyx/basyx-go-components/internal/common/asyncbulk"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/asyncjob"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 	"github.com/stretchr/testify/require"
 )
 
 type smBulkServiceStub struct {
-	createResult asyncbulk.OperationResult
-	putResult    asyncbulk.OperationResult
-	deleteResult asyncbulk.OperationResult
+	createResult asyncjob.BulkResult
+	putResult    asyncjob.BulkResult
+	deleteResult asyncjob.BulkResult
 }
 
-func (s smBulkServiceStub) ExecuteBulkCreateAtomic(_ context.Context, _ []model.SubmodelDescriptor) asyncbulk.OperationResult {
+func (s smBulkServiceStub) ExecuteBulkCreateAtomic(_ context.Context, _ []model.SubmodelDescriptor) asyncjob.BulkResult {
 	return s.createResult
 }
 
-func (s smBulkServiceStub) ExecuteBulkPutAtomic(_ context.Context, _ []model.SubmodelDescriptor) asyncbulk.OperationResult {
+func (s smBulkServiceStub) ExecuteBulkPutAtomic(_ context.Context, _ []model.SubmodelDescriptor) asyncjob.BulkResult {
 	return s.putResult
 }
 
-func (s smBulkServiceStub) ExecuteBulkDeleteAtomic(_ context.Context, _ []string) asyncbulk.OperationResult {
+func (s smBulkServiceStub) ExecuteBulkDeleteAtomic(_ context.Context, _ []string) asyncjob.BulkResult {
 	return s.deleteResult
 }
 
 func TestBulkServiceResultLifecycle(t *testing.T) {
-	manager := asyncbulk.NewManager("SMR-BULK-TEST", time.Minute)
+	manager := asyncjob.NewManager("SMR-BULK-TEST", time.Minute)
 	service := NewBulkService(smBulkServiceStub{}, manager)
-	handleID, err := manager.Start("anonymous")
+	handleID, err := manager.Start(t.Context(), "anonymous", asyncjob.StartOptions{JobKind: "test"})
 	require.NoError(t, err)
 
 	running := service.GetResult(context.Background(), handleID)
 	require.Equal(t, http.StatusBadRequest, running.Code)
+	runningMessages := running.Body.([]model.Message)
+	require.Contains(t, runningMessages[0].CorrelationID, "-GetBulkAsyncResult-BadRequest-OperationStillRunning")
 
-	manager.Complete(handleID, asyncbulk.OperationResult{
+	require.NoError(t, manager.Complete(t.Context(), handleID, asyncjob.BulkResult{
 		Success:         true,
 		ProcessedCount:  1,
 		SuccessfulCount: 1,
 		FailedCount:     0,
-	})
+	}))
 
 	found := service.GetStatus(context.Background(), handleID)
 	require.Equal(t, http.StatusFound, found.Code)
@@ -81,10 +83,12 @@ func TestBulkServiceResultLifecycle(t *testing.T) {
 
 	notFound := service.GetResult(context.Background(), handleID)
 	require.Equal(t, http.StatusNotFound, notFound.Code)
+	notFoundMessages := notFound.Body.([]model.Message)
+	require.Contains(t, notFoundMessages[0].CorrelationID, "-GetBulkAsyncResult-NotFound-HandleNotFound")
 }
 
 func TestBulkServiceResultIsOwnerScoped(t *testing.T) {
-	manager := asyncbulk.NewManager("SMR-BULK-TEST", time.Minute)
+	manager := asyncjob.NewManager("SMR-BULK-TEST", time.Minute)
 	service := NewBulkService(smBulkServiceStub{}, manager)
 
 	ownerCtx := withClaims(context.Background(), auth.Claims{"sub": "owner-a", "iss": "issuer-a"})
@@ -98,7 +102,7 @@ func TestBulkServiceResultIsOwnerScoped(t *testing.T) {
 }
 
 func TestBulkServiceStatusIsOwnerScoped(t *testing.T) {
-	manager := asyncbulk.NewManager("SMR-BULK-TEST", time.Minute)
+	manager := asyncjob.NewManager("SMR-BULK-TEST", time.Minute)
 	service := NewBulkService(smBulkServiceStub{}, manager)
 
 	ownerCtx := withClaims(context.Background(), auth.Claims{"sub": "owner-a", "iss": "issuer-a"})
@@ -112,22 +116,39 @@ func TestBulkServiceStatusIsOwnerScoped(t *testing.T) {
 }
 
 func TestBulkServiceUnknownHandleReturnsNotFound(t *testing.T) {
-	manager := asyncbulk.NewManager("SMR-BULK-TEST", time.Minute)
+	manager := asyncjob.NewManager("SMR-BULK-TEST", time.Minute)
 	service := NewBulkService(smBulkServiceStub{}, manager)
 
-	require.Equal(t, http.StatusNotFound, service.GetStatus(context.Background(), "SMR-BULK-TEST-unknown").Code)
+	status := service.GetStatus(context.Background(), "SMR-BULK-TEST-unknown")
+	require.Equal(t, http.StatusNotFound, status.Code)
+	statusMessages := status.Body.([]model.Message)
+	require.Contains(t, statusMessages[0].CorrelationID, "-GetBulkAsyncStatus-NotFound-HandleNotFound")
 	require.Equal(t, http.StatusNotFound, service.GetResult(context.Background(), "SMR-BULK-TEST-unknown").Code)
 }
 
+func TestBulkServiceRejectsStartWhenExecutionCapacityIsExhausted(t *testing.T) {
+	manager := asyncjob.NewManager("SMR-BULK-TEST", time.Minute)
+	service := NewBulkService(smBulkServiceStub{}, manager)
+	releases := exhaustExecutionSlots(t, manager)
+	defer func() {
+		for _, release := range releases {
+			release()
+		}
+	}()
+
+	response := service.StartCreate(context.Background(), []model.SubmodelDescriptor{{Id: "urn:ok"}})
+	require.Equal(t, http.StatusTooManyRequests, response.Code)
+}
+
 func TestBulkServiceDeleteFailureResult(t *testing.T) {
-	manager := asyncbulk.NewManager("SMR-BULK-TEST", time.Minute)
+	manager := asyncjob.NewManager("SMR-BULK-TEST", time.Minute)
 	service := NewBulkService(smBulkServiceStub{
-		deleteResult: asyncbulk.OperationResult{
+		deleteResult: asyncjob.BulkResult{
 			Success:         false,
 			ProcessedCount:  2,
 			SuccessfulCount: 0,
 			FailedCount:     2,
-			Failures: []asyncbulk.ItemFailure{
+			Failures: []asyncjob.ItemFailure{
 				{Index: 1, Identifier: "urn:bad", StatusCode: http.StatusNotFound, Message: "not found"},
 			},
 		},
@@ -180,4 +201,16 @@ func withClaims(ctx context.Context, claims auth.Claims) context.Context {
 	}
 
 	return context.WithValue(ctx, auth.ClaimsKey, claims)
+}
+
+func exhaustExecutionSlots(t *testing.T, manager *asyncjob.Manager) []func() {
+	t.Helper()
+	releases := make([]func(), 0)
+	for {
+		release, acquired := manager.TryAcquireExecutionSlot()
+		if !acquired {
+			return releases
+		}
+		releases = append(releases, release)
+	}
 }

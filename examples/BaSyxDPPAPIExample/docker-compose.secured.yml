@@ -15,8 +15,9 @@ services:
       - POSTGRES_PASSWORD=admin123
       - POSTGRES_DBNAME=basyxDppSecuredExample
       - POSTGRES_MAXOPENCONNECTIONS=50
-      - POSTGRES_MAXIDLECONNECTIONS=50
+      - POSTGRES_MAXIDLECONNECTIONS=25
       - POSTGRES_CONNMAXLIFETIMEMINUTES=5
+      - POSTGRES_CONNMAXIDLETIMEMINUTES=0
       - ABAC_ENABLED=true
       - ABAC_MODELPATH=/security_env/access-rules.json
       - OIDC_TRUSTLISTPATH=/security_env/trustlist.json
@@ -99,8 +100,9 @@ services:
       - POSTGRES_PASSWORD=admin123
       - POSTGRES_DBNAME=basyxDppSecuredExample
       - POSTGRES_MAXOPENCONNECTIONS=50
-      - POSTGRES_MAXIDLECONNECTIONS=50
+      - POSTGRES_MAXIDLECONNECTIONS=25
       - POSTGRES_CONNMAXLIFETIMEMINUTES=5
+      - POSTGRES_CONNMAXIDLETIMEMINUTES=0
     depends_on:
       db:
         condition: service_healthy

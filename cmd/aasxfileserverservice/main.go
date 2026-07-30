@@ -32,7 +32,6 @@ import (
 	"flag"
 	"log/slog"
 	"os"
-	"time"
 
 	"github.com/go-chi/chi/v5"
 
@@ -77,28 +76,13 @@ func runServer(ctx context.Context, configPath string) error {
 		slog.WarnContext(ctx, "Swagger UI unavailable", "error.code", "AASXFILES-SWAGGER-INIT", "error", err)
 	}
 
-	dsn := common.BuildPostgresDSN(cfg.Postgres)
-	if err := common.ValidateSchemaVersionByDSN(dsn, common.CURRENT_DATABASE_VERSION); err != nil {
-		return err
-	}
-
 	slog.InfoContext(ctx, "connecting to PostgreSQL")
 
-	sharedDB, err := common.NewDatabaseConnection(dsn)
+	sharedDB, err := common.OpenPostgresWithSchemaValidation(ctx, cfg.Postgres, "aasxfileserverservice", common.CURRENT_DATABASE_VERSION)
 	if err != nil {
 		slog.ErrorContext(ctx, "database connection failed", "error.code", "AASXFILES-DB-CONNECT", "error", err)
 		return err
 	}
-	if cfg.Postgres.MaxOpenConnections > 0 {
-		sharedDB.SetMaxOpenConns(cfg.Postgres.MaxOpenConnections)
-	}
-	if cfg.Postgres.MaxIdleConnections > 0 {
-		sharedDB.SetMaxIdleConns(cfg.Postgres.MaxIdleConnections)
-	}
-	if cfg.Postgres.ConnMaxLifetimeMinutes > 0 {
-		sharedDB.SetConnMaxLifetime(time.Duration(cfg.Postgres.ConnMaxLifetimeMinutes) * time.Minute)
-	}
-
 	aasxDatabase, err := aasxpersistence.NewAASXFileServerDatabaseFromDB(sharedDB)
 	if err != nil {
 		slog.ErrorContext(ctx, "AASX persistence initialization failed", "error.code", "AASXFILES-DB-INIT", "error", err)

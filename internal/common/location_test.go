@@ -22,35 +22,60 @@
 *
 * SPDX-License-Identifier: MIT
 ******************************************************************************/
-// Author: Aaron Zielstorff ( Fraunhofer IESE )
 
-package asyncbulk
+package common
 
 import (
+	"net/http"
+	"net/http/httptest"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/require"
 )
 
-func TestStartCreatesOpaqueHandle(t *testing.T) {
-	manager := NewManager("ASYNC-TEST", time.Minute)
+func TestContextualizeAPIResourceLocationPreservesEscapedSegments(t *testing.T) {
+	t.Parallel()
 
-	handleID, err := manager.Start("owner-a")
-	require.NoError(t, err)
-	require.Contains(t, handleID, "ASYNC-TEST-")
-	require.NotContains(t, handleID, "|")
+	request := httptest.NewRequest(
+		http.MethodPost,
+		"http://example.com/api/submodels/c20/submodel-elements/Ops%2FAdd/invoke-async",
+		nil,
+	)
+
+	location := ContextualizeAPIResourceLocation(
+		request,
+		"/submodels/c20/submodel-elements/Ops%2FAdd/operation-status/handle-1",
+		"/submodels/",
+	)
+
+	require.Equal(
+		t,
+		"http://example.com/api/submodels/c20/submodel-elements/Ops%2FAdd/operation-status/handle-1",
+		location,
+	)
 }
 
-func TestGetForOwnerHidesForeignHandle(t *testing.T) {
-	manager := NewManager("ASYNC-TEST", time.Minute)
+func TestContextualizeAPIResourceLocationUsesEscapedExternalBaseURL(t *testing.T) {
+	t.Parallel()
 
-	handleID, err := manager.Start("owner-a")
-	require.NoError(t, err)
+	request := httptest.NewRequest(
+		http.MethodPost,
+		"http://internal.example/internal/submodels/c20/submodel-elements/Ops%2FAdd/invoke-async",
+		nil,
+	)
+	cfg := &Config{}
+	cfg.General.ExternalURL = "https://public.example/aas%20environment"
+	request = request.WithContext(ContextWithConfig(request.Context(), cfg))
 
-	_, found := manager.GetForOwner(handleID, "owner-b")
-	require.False(t, found)
+	location := ContextualizeAPIResourceLocation(
+		request,
+		"/submodels/c20/submodel-elements/Ops%2FAdd/operation-status/handle-1",
+		"/submodels/",
+	)
 
-	_, found = manager.GetForOwner(handleID, "owner-a")
-	require.True(t, found)
+	require.Equal(
+		t,
+		"https://public.example/aas%20environment/submodels/c20/submodel-elements/Ops%2FAdd/operation-status/handle-1",
+		location,
+	)
 }

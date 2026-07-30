@@ -34,10 +34,9 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
-	"time"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
-	"github.com/eclipse-basyx/basyx-go-components/internal/common/asyncbulk"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/asyncjob"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/binarycontent"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/history"
 	commonmodel "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
@@ -93,27 +92,12 @@ func runServer(ctx context.Context, configPath string) error {
 		slog.WarnContext(ctx, "Swagger UI unavailable", "error.code", "SMREGISTRY-SWAGGER-INIT", "error", err)
 	}
 
-	dsn := common.BuildPostgresDSN(cfg.Postgres)
-
-	if err := common.ValidateSchemaVersionByDSN(dsn, common.CURRENT_DATABASE_VERSION); err != nil {
-		return err
-	}
-
 	slog.InfoContext(ctx, "connecting to PostgreSQL")
 
-	sharedDB, err := common.NewDatabaseConnection(dsn)
+	sharedDB, err := common.OpenPostgresWithSchemaValidation(ctx, cfg.Postgres, "submodelregistryservice", common.CURRENT_DATABASE_VERSION)
 	if err != nil {
 		slog.ErrorContext(ctx, "database connection failed", "error.code", "SMREGISTRY-DB-CONNECT", "error", err)
 		return err
-	}
-	if cfg.Postgres.MaxOpenConnections > 0 {
-		sharedDB.SetMaxOpenConns(cfg.Postgres.MaxOpenConnections)
-	}
-	if cfg.Postgres.MaxIdleConnections > 0 {
-		sharedDB.SetMaxIdleConns(cfg.Postgres.MaxIdleConnections)
-	}
-	if cfg.Postgres.ConnMaxLifetimeMinutes > 0 {
-		sharedDB.SetConnMaxLifetime(time.Duration(cfg.Postgres.ConnMaxLifetimeMinutes) * time.Minute)
 	}
 	if err = history.ApplyPostgresGuardConfig(ctx, sharedDB); err != nil {
 		return err
@@ -127,7 +111,11 @@ func runServer(ctx context.Context, configPath string) error {
 
 	smSvc := smregistryapi.NewSubmodelRegistryAPIAPIService(*smDatabase)
 	smCtrl := smregistryopenapi.NewSubmodelRegistryAPIAPIController(smSvc, cfg.Server.ContextPath)
-	bulkManager := asyncbulk.NewManager("SMR-BULK", 0)
+	bulkManager, err := asyncjob.NewPostgresManager(ctx, sharedDB, "SMR-BULK", 0)
+	if err != nil {
+		slog.ErrorContext(ctx, "async job persistence initialization failed", "error.code", "SMREGISTRY-ASYNCJOB-INIT", "error", err)
+		return err
+	}
 	bulkSvc := smregistryapi.NewBulkService(smSvc, bulkManager)
 	bulkHandler := smregistryapi.NewBulkHTTPHandler(bulkSvc)
 

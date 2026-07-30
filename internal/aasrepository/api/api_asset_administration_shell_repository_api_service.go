@@ -17,8 +17,11 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
+	"net/url"
+	"path"
 	"strings"
 	"time"
 
@@ -26,12 +29,14 @@ import (
 	"github.com/FriedJannik/aas-go-sdk/types"
 	persistencepostgresql "github.com/eclipse-basyx/basyx-go-components/internal/aasrepository/persistence"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/asyncjob"
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 	submodelapi "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/api"
 	submodelpersistence "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence"
 	openapi "github.com/eclipse-basyx/basyx-go-components/pkg/aasrepositoryapi/go"
+	submodelopenapi "github.com/eclipse-basyx/basyx-go-components/pkg/submodelrepositoryapi"
 )
 
 // AssetAdministrationShellRepositoryAPIAPIService is a service that implements the logic for the AssetAdministrationShellRepositoryAPIAPIServicer
@@ -41,24 +46,34 @@ type AssetAdministrationShellRepositoryAPIAPIService struct {
 	assetAdministrationShellBackend *persistencepostgresql.AssetAdministrationShellDatabase
 	submodelBackend                 *submodelpersistence.SubmodelDatabase
 	submodelAPI                     *submodelapi.SubmodelRepositoryAPIAPIService
+	lifecycleContext                context.Context
+	asyncJobManager                 *asyncjob.Manager
 }
 
 const componentName = "AASREPO"
 
 // NewAssetAdministrationShellRepositoryAPIAPIService creates a default api service
 func NewAssetAdministrationShellRepositoryAPIAPIService(
+	ctx context.Context,
 	databaseBackendAssetAdministrationShell *persistencepostgresql.AssetAdministrationShellDatabase,
 	submodelBackend *submodelpersistence.SubmodelDatabase,
+	managers ...*asyncjob.Manager,
 ) *AssetAdministrationShellRepositoryAPIAPIService {
+	var asyncJobManager *asyncjob.Manager
+	if len(managers) > 0 {
+		asyncJobManager = managers[0]
+	}
 	var submodelService *submodelapi.SubmodelRepositoryAPIAPIService
 	if submodelBackend != nil {
-		submodelService = submodelapi.NewSubmodelRepositoryAPIAPIService(*submodelBackend)
+		submodelService = submodelapi.NewSubmodelRepositoryAPIAPIService(ctx, *submodelBackend, asyncJobManager)
 	}
 
 	return &AssetAdministrationShellRepositoryAPIAPIService{
 		assetAdministrationShellBackend: databaseBackendAssetAdministrationShell,
 		submodelBackend:                 submodelBackend,
 		submodelAPI:                     submodelService,
+		lifecycleContext:                ctx,
+		asyncJobManager:                 asyncJobManager,
 	}
 }
 
@@ -958,12 +973,49 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) ensureSubmodelBackend(
 		return gen.ImplResponse{}, nil, true
 	}
 	if s.submodelBackend != nil {
-		s.submodelAPI = submodelapi.NewSubmodelRepositoryAPIAPIService(*s.submodelBackend)
+		s.submodelAPI = submodelapi.NewSubmodelRepositoryAPIAPIService(s.lifecycleContext, *s.submodelBackend, s.asyncJobManager)
 		return gen.ImplResponse{}, nil, true
 	}
 
 	err := common.NewInternalServerError("AASREPO-NOSMBACKEND submodel backend is not configured")
 	return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "InternalServerError"), nil, false
+}
+
+func toAASOperationRedirect(
+	response gen.ImplResponse,
+	aasIdentifier string,
+	submodelIdentifier string,
+	idShortPath string,
+	targetSegment string,
+) gen.ImplResponse {
+	location := ""
+	switch redirect := response.Body.(type) {
+	case submodelopenapi.Redirect:
+		location = redirect.Location
+	case gen.Redirect:
+		location = redirect.Location
+	default:
+		return response
+	}
+
+	parsedLocation, err := url.Parse(location)
+	if err != nil {
+		return response
+	}
+	handleID := path.Base(parsedLocation.Path)
+	if handleID == "" || handleID == "." || handleID == "/" {
+		return response
+	}
+
+	response.Body = openapi.Redirect{Location: fmt.Sprintf(
+		"/shells/%s/submodels/%s/submodel-elements/%s/%s/%s",
+		url.PathEscape(aasIdentifier),
+		url.PathEscape(submodelIdentifier),
+		url.PathEscape(idShortPath),
+		targetSegment,
+		url.PathEscape(handleID),
+	)}
+	return response
 }
 
 func decodeAASAndSubmodelIdentifiers(aasIdentifier string, submodelIdentifier string, operation string) (string, string, gen.ImplResponse, bool) {
@@ -1510,7 +1562,15 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) GetFileByPathAasReposi
 }
 
 // PutFileByPathAasRepository - Uploads file content to an existing submodel element at a specified path within submodel elements hierarchy
-func (s *AssetAdministrationShellRepositoryAPIAPIService) PutFileByPathAasRepository(ctx context.Context, aasIdentifier string, submodelIdentifier string, idShortPath string, fileName string, file io.Reader) (gen.ImplResponse, error) {
+func (s *AssetAdministrationShellRepositoryAPIAPIService) PutFileByPathAasRepository(
+	ctx context.Context,
+	aasIdentifier string,
+	submodelIdentifier string,
+	idShortPath string,
+	fileName string,
+	contentType string,
+	file io.Reader,
+) (gen.ImplResponse, error) {
 	const operation = "PutFileByPathAasRepository"
 
 	if response, err, ok := s.ensureSubmodelBackend(operation); !ok {
@@ -1526,7 +1586,7 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) PutFileByPathAasReposi
 		return response, ensureErr
 	}
 
-	return s.submodelAPI.PutFileByPathSubmodelRepo(ctx, submodelIdentifier, idShortPath, fileName, file)
+	return s.submodelAPI.PutFileByPathSubmodelRepo(ctx, submodelIdentifier, idShortPath, fileName, contentType, file)
 }
 
 // DeleteFileByPathAasRepository - Deletes file content of an existing submodel element at a specified path within submodel elements hierarchy
@@ -1591,6 +1651,11 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) InvokeOperationValueOn
 func (s *AssetAdministrationShellRepositoryAPIAPIService) InvokeOperationAsyncAasRepository(ctx context.Context, aasIdentifier string, submodelIdentifier string, idShortPath string, operationRequest gen.OperationRequest) (gen.ImplResponse, error) {
 	const operation = "InvokeOperationAsyncAasRepository"
 
+	if strings.TrimSpace(operationRequest.ClientTimeoutDuration) == "" {
+		timeoutRequiredErr := errors.New("AASREPO-INVOKEOPASY-MISSINGTIMEOUT clientTimeoutDuration is required")
+		return newAPIErrorResponse(timeoutRequiredErr, http.StatusBadRequest, operation, "MissingClientTimeoutDuration"), nil
+	}
+
 	if response, err, ok := s.ensureSubmodelBackend(operation); !ok {
 		return response, err
 	}
@@ -1603,7 +1668,11 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) InvokeOperationAsyncAa
 		return response, ensureErr
 	}
 
-	return s.submodelAPI.InvokeOperationSubmodelRepo(ctx, submodelIdentifier, idShortPath, operationRequest, true)
+	response, invokeErr := s.submodelAPI.InvokeOperationAsync(ctx, submodelIdentifier, idShortPath, operationRequest)
+	if invokeErr != nil {
+		return response, invokeErr
+	}
+	return toAASOperationRedirect(response, aasIdentifier, submodelIdentifier, idShortPath, "operation-status"), nil
 }
 
 // InvokeOperationAsyncValueOnlyAasRepository - Asynchronously invokes an Operation at a specified path
@@ -1641,7 +1710,11 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) GetOperationAsyncStatu
 		return response, ensureErr
 	}
 
-	return s.submodelAPI.GetOperationAsyncStatus(ctx, submodelIdentifier, idShortPath, handleId)
+	response, statusErr := s.submodelAPI.GetOperationAsyncStatus(ctx, submodelIdentifier, idShortPath, handleId)
+	if statusErr != nil {
+		return response, statusErr
+	}
+	return toAASOperationRedirect(response, aasIdentifier, submodelIdentifier, idShortPath, "operation-results"), nil
 }
 
 // GetOperationAsyncResultAasRepository - Returns the Operation result of an asynchronous invoked Operation

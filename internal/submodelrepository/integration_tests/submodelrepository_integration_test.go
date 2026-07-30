@@ -36,6 +36,7 @@ import (
 	"io"
 	"mime/multipart"
 	"net/http"
+	"net/textproto"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -74,6 +75,7 @@ var (
 const actionAssertSignedSubmodel = "ASSERT_SIGNED_SUBMODEL"
 
 var submodelRepositoryBaseURL = testenv.LocalURLFromEnv("BASYX_IT_API_PORT", 6004)
+var submodelRepositoryReplicaBaseURL = testenv.LocalURLFromEnv("BASYX_IT_REPLICA_API_PORT", 6014)
 var submodelRepositoryInvalidBaseURL = testenv.LocalhostURLFromEnv("BASYX_IT_INVALID_API_PORT", 6007)
 var submodelRepositoryAASBaseURL = testenv.LocalhostURLFromEnv("BASYX_IT_AAS_API_PORT", 6006)
 var submodelRepositoryAASExternalURL = testenv.LocalURLFromEnv("BASYX_IT_AAS_API_PORT", 6006)
@@ -92,8 +94,21 @@ func uploadFileAttachment(endpoint string, filePath string, fileName string) (in
 	body := &bytes.Buffer{}
 	writer := multipart.NewWriter(body)
 
-	// Add the file field
-	part, err := writer.CreateFormFile("file", filepath.Base(filePath))
+	signature := make([]byte, 512)
+	readBytes, readErr := file.Read(signature)
+	if readErr != nil && readErr != io.EOF {
+		return 0, fmt.Errorf("failed to inspect file content type: %v", readErr)
+	}
+	if _, err = file.Seek(0, io.SeekStart); err != nil {
+		return 0, fmt.Errorf("failed to rewind file: %v", err)
+	}
+
+	partHeader := textproto.MIMEHeader{}
+	partHeader.Set("Content-Disposition", fmt.Sprintf(`form-data; name="file"; filename="%s"`, filepath.Base(filePath)))
+	if readBytes > 0 {
+		partHeader.Set("Content-Type", http.DetectContentType(signature[:readBytes]))
+	}
+	part, err := writer.CreatePart(partHeader)
 	if err != nil {
 		return 0, fmt.Errorf("failed to create form file: %v", err)
 	}
@@ -2571,6 +2586,7 @@ func TestMain(m *testing.M) {
 	if os.Getenv("BASYX_EXTERNAL_COMPOSE") == "1" {
 		testenv.SetEnvDefaultsOrExit(map[string]string{
 			"BASYX_IT_API_URL":         submodelRepositoryBaseURL,
+			"BASYX_IT_REPLICA_API_URL": submodelRepositoryReplicaBaseURL,
 			"BASYX_IT_AAS_API_URL":     submodelRepositoryAASExternalURL,
 			"BASYX_IT_SYNC_API_URL":    submodelRepositorySyncExternalURL,
 			"BASYX_IT_INVALID_API_URL": submodelRepositoryInvalidBaseURL,
@@ -2580,12 +2596,14 @@ func TestMain(m *testing.M) {
 
 	runtime := testenv.NewComposeRuntimeOrExit("submodelrepository-it", []testenv.PortBinding{
 		{Name: "api", EnvVar: "BASYX_IT_API_PORT"},
+		{Name: "replica-api", EnvVar: "BASYX_IT_REPLICA_API_PORT"},
 		{Name: "db", EnvVar: "BASYX_IT_DB_PORT"},
 		{Name: "aas-api", EnvVar: "BASYX_IT_AAS_API_PORT"},
 		{Name: "sync-api", EnvVar: "BASYX_IT_SYNC_API_PORT"},
 		{Name: "invalid-api", EnvVar: "BASYX_IT_INVALID_API_PORT"},
 	})
 	submodelRepositoryBaseURL = runtime.LocalURL("api")
+	submodelRepositoryReplicaBaseURL = runtime.LocalURL("replica-api")
 	submodelRepositoryAASBaseURL = runtime.LocalhostURL("aas-api")
 	submodelRepositoryAASExternalURL = runtime.LocalURL("aas-api")
 	submodelRepositorySyncBaseURL = runtime.LocalhostURL("sync-api")
@@ -2600,5 +2618,8 @@ func TestMain(m *testing.M) {
 		PreDownBeforeUp: true,
 		HealthURL:       submodelRepositoryBaseURL + "/health",
 		HealthTimeout:   150 * time.Second,
+		WaitForReady: func() error {
+			return testenv.WaitHealthyURL(submodelRepositoryReplicaBaseURL+"/health", 150*time.Second)
+		},
 	}))
 }

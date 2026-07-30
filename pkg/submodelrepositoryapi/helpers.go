@@ -104,6 +104,16 @@ func (c *SubmodelRepositoryAPIAPIController) buildSubmodelElementLocationFromEnc
 	return baseLocation + "/submodels/" + escapedSubmodelID + "/submodel-elements/" + escapedIDShortPath
 }
 
+func (c *SubmodelRepositoryAPIAPIController) contextualizeOperationRedirect(r *http.Request, body any) any {
+	redirect, ok := body.(Redirect)
+	if !ok || redirect.Location == "" {
+		return body
+	}
+
+	redirect.Location = common.ContextualizeAPIResourceLocation(r, redirect.Location, "/submodels/")
+	return redirect
+}
+
 // joinIDShortPath concatenates parent and child idShort segments using dot notation.
 func joinIDShortPath(parentPath string, childIDShort string) string {
 	if parentPath == "" {

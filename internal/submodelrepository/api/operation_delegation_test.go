@@ -29,6 +29,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -68,6 +69,28 @@ func TestParseDelegationTimeoutRejectsUnsupportedYears(t *testing.T) {
 	require.Error(t, err)
 }
 
+func TestParseDelegationTimeoutAcceptsMaximum(t *testing.T) {
+	t.Parallel()
+
+	duration, err := parseDelegationTimeout("PT15M")
+	require.NoError(t, err)
+	require.Equal(t, maximumDelegationTimeout, duration)
+}
+
+func TestParseDelegationTimeoutRejectsDurationAboveMaximum(t *testing.T) {
+	t.Parallel()
+
+	_, err := parseDelegationTimeout("PT15M0.001S")
+	require.ErrorContains(t, err, "SMREPO-PARSETO-TOOLARGE")
+}
+
+func TestParseDelegationTimeoutRejectsOverflow(t *testing.T) {
+	t.Parallel()
+
+	_, err := parseDelegationTimeout("P9223372036854775807D")
+	require.ErrorContains(t, err, "SMREPO-PARSETO-OVERFLOW")
+}
+
 func TestResolveDelegationURLReadsInvocationDelegationQualifier(t *testing.T) {
 	t.Parallel()
 
@@ -88,9 +111,17 @@ func TestResolveDelegationURLReadsInvocationDelegationQualifier(t *testing.T) {
 func TestToDelegatedOperationResultPayloadFromBodyForArrayKeepsInoutputEmpty(t *testing.T) {
 	t.Parallel()
 
-	delegatedBody := []types.IOperationVariable{&types.OperationVariable{}}
+	property := &types.Property{}
+	property.SetIDShort(stringPointer("out"))
+	property.SetValueType(types.DataTypeDefXSDString)
+	property.SetValue(stringPointer("output"))
+
+	operationVariable := &types.OperationVariable{}
+	operationVariable.SetValue(property)
+
+	delegatedBody := []types.IOperationVariable{operationVariable}
 	resultPayload, ok := toDelegatedOperationResultPayloadFromBody(delegatedBody)
-	require.True(t, ok)
+	require.NoError(t, ok)
 	resultPayloadBytes, err := json.Marshal(resultPayload)
 	require.NoError(t, err)
 
@@ -100,6 +131,12 @@ func TestToDelegatedOperationResultPayloadFromBodyForArrayKeepsInoutputEmpty(t *
 	outputArguments, outputOK := resultPayloadJSON["outputArguments"].([]any)
 	require.True(t, outputOK)
 	require.Len(t, outputArguments, 1)
+
+	firstOutput, firstOutputOK := outputArguments[0].(map[string]any)
+	require.True(t, firstOutputOK)
+	outputValue, outputValueOK := firstOutput["value"].(map[string]any)
+	require.True(t, outputValueOK)
+	require.Equal(t, "output", outputValue["value"])
 
 	inoutputArguments, inoutputOK := resultPayloadJSON["inoutputArguments"].([]any)
 	require.True(t, inoutputOK)
@@ -119,7 +156,7 @@ func TestToDelegatedOperationResultPayloadFromBodyForMapSeparatesOutputAndInoutp
 	}
 
 	resultPayload, ok := toDelegatedOperationResultPayloadFromBody(delegatedBody)
-	require.True(t, ok)
+	require.NoError(t, ok)
 	resultPayloadBytes, err := json.Marshal(resultPayload)
 	require.NoError(t, err)
 
@@ -130,9 +167,156 @@ func TestToDelegatedOperationResultPayloadFromBodyForMapSeparatesOutputAndInoutp
 	require.True(t, outputOK)
 	require.Len(t, outputArguments, 1)
 
+	firstOutput, firstOutputOK := outputArguments[0].(map[string]any)
+	require.True(t, firstOutputOK)
+	outputValue, outputValueOK := firstOutput["value"].(map[string]any)
+	require.True(t, outputValueOK)
+	require.Equal(t, "output", outputValue["value"])
+
 	inoutputArguments, inoutputOK := resultPayloadJSON["inoutputArguments"].([]any)
 	require.True(t, inoutputOK)
 	require.Len(t, inoutputArguments, 1)
+
+	firstInoutput, firstInoutputOK := inoutputArguments[0].(map[string]any)
+	require.True(t, firstInoutputOK)
+	inoutputValue, inoutputValueOK := firstInoutput["value"].(map[string]any)
+	require.True(t, inoutputValueOK)
+	require.Equal(t, "inoutput", inoutputValue["value"])
+}
+
+func TestToDelegatedOperationResultPayloadFromBodyForAnySliceUsesJsonization(t *testing.T) {
+	t.Parallel()
+
+	delegatedBody := []any{
+		map[string]any{
+			"value": map[string]any{"modelType": "Property", "idShort": "sum", "valueType": "xs:int", "value": "8"},
+		},
+		map[string]any{
+			"value": map[string]any{"modelType": "Property", "idShort": "diff", "valueType": "xs:int", "value": "2"},
+		},
+	}
+
+	resultPayload, ok := toDelegatedOperationResultPayloadFromBody(delegatedBody)
+	require.NoError(t, ok)
+	resultPayloadBytes, err := json.Marshal(resultPayload)
+	require.NoError(t, err)
+
+	resultPayloadJSON := map[string]any{}
+	require.NoError(t, json.Unmarshal(resultPayloadBytes, &resultPayloadJSON))
+
+	outputArguments, outputOK := resultPayloadJSON["outputArguments"].([]any)
+	require.True(t, outputOK)
+	require.Len(t, outputArguments, 2)
+
+	firstOutput, firstOutputOK := outputArguments[0].(map[string]any)
+	require.True(t, firstOutputOK)
+	firstValue, firstValueOK := firstOutput["value"].(map[string]any)
+	require.True(t, firstValueOK)
+	require.Equal(t, "8", firstValue["value"])
+
+	secondOutput, secondOutputOK := outputArguments[1].(map[string]any)
+	require.True(t, secondOutputOK)
+	secondValue, secondValueOK := secondOutput["value"].(map[string]any)
+	require.True(t, secondValueOK)
+	require.Equal(t, "2", secondValue["value"])
+
+	inoutputArguments, inoutputOK := resultPayloadJSON["inoutputArguments"].([]any)
+	require.True(t, inoutputOK)
+	require.Len(t, inoutputArguments, 0)
+}
+
+func TestDelegatedOperationResultPreservesFailureEnvelopeAndMessages(t *testing.T) {
+	t.Parallel()
+
+	delegatedBody := map[string]any{
+		"executionState": "Failed",
+		"success":        false,
+		"messages": []any{
+			map[string]any{"code": "DELEGATE-FAILED", "messageType": "Error", "text": "calculation failed"},
+		},
+		"outputArguments": []any{},
+	}
+
+	resultPayload, err := toDelegatedOperationResultPayloadFromBody(delegatedBody)
+	require.NoError(t, err)
+	require.Equal(t, "Failed", resultPayload["executionState"])
+	require.Equal(t, false, resultPayload["success"])
+	require.Equal(t, delegatedBody["messages"], resultPayload["messages"])
+}
+
+func TestDelegatedOperationResultCompletesPartialSuccessEnvelope(t *testing.T) {
+	t.Parallel()
+
+	delegatedBody := map[string]any{
+		"success": true,
+		"messages": []any{
+			map[string]any{"code": "DELEGATE-OK", "messageType": "Info", "text": "calculation completed"},
+		},
+		"outputArguments": []any{},
+	}
+
+	resultPayload, err := toDelegatedOperationResultPayloadFromBody(delegatedBody)
+	require.NoError(t, err)
+	require.Equal(t, "Completed", resultPayload["executionState"])
+	require.Equal(t, true, resultPayload["success"])
+	require.Equal(t, delegatedBody["messages"], resultPayload["messages"])
+}
+
+func TestDelegatedOperationResultRejectsMalformedPresentArgumentGroup(t *testing.T) {
+	t.Parallel()
+
+	delegatedBody := map[string]any{
+		"executionState":    "Completed",
+		"success":           true,
+		"outputArguments":   "not-an-array",
+		"inoutputArguments": []any{},
+	}
+
+	_, err := toDelegatedOperationResultPayloadFromBody(delegatedBody)
+	require.ErrorContains(t, err, "SMREPO-NORMDELRES-OUTPUTARGUMENTS")
+}
+
+func TestDelegatedOperationResultRejectsPartialOperationVariable(t *testing.T) {
+	t.Parallel()
+
+	delegatedBody := map[string]any{
+		"outputArguments": []any{
+			map[string]any{"value": map[string]any{"modelType": "Property", "idShort": "missingValueType"}},
+		},
+	}
+
+	_, err := toDelegatedOperationResultPayloadFromBody(delegatedBody)
+	require.ErrorContains(t, err, "SMREPO-NORMDELRES-OPVAR-0")
+}
+
+func TestReadDelegatedOperationResponseRejectsFixedOversizedBody(t *testing.T) {
+	t.Parallel()
+
+	response := &http.Response{
+		StatusCode:    http.StatusOK,
+		ContentLength: maximumDelegatedOperationResponseBytes + 1,
+		Body:          io.NopCloser(strings.NewReader("{}")),
+	}
+
+	_, _, err := readDelegatedOperationResponse(response)
+	require.ErrorContains(t, err, "SMREPO-DOOPDELG-RESPTOOLARGE")
+}
+
+func TestReadDelegatedOperationResponseRejectsChunkedOversizedBody(t *testing.T) {
+	t.Parallel()
+
+	response := &http.Response{
+		StatusCode:    http.StatusOK,
+		ContentLength: -1,
+		Body:          io.NopCloser(io.LimitReader(strings.NewReader(strings.Repeat("x", int(maximumDelegatedOperationResponseBytes)+1)), maximumDelegatedOperationResponseBytes+1)),
+	}
+
+	_, _, err := readDelegatedOperationResponse(response)
+	require.ErrorContains(t, err, "SMREPO-DOOPDELG-RESPTOOLARGE")
+}
+
+func stringPointer(value string) *string {
+	return &value
 }
 
 func TestDelegationAuthorityRejectsImplicitLocalAndInternalTrust(t *testing.T) {

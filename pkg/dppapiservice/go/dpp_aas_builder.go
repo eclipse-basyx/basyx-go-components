@@ -32,8 +32,11 @@ func buildAAS(header dppHeader, submodelRefs []types.IReference) types.IAssetAdm
 }
 
 func buildMetadataSubmodel(dppID string, header dppHeader) types.ISubmodel {
-	id := metadataSubmodelID(dppID)
-	submodel := types.NewSubmodel(id)
+	return buildMetadataSubmodelWithID(metadataSubmodelID(dppID), header)
+}
+
+func buildMetadataSubmodelWithID(metadataID string, header dppHeader) types.ISubmodel {
+	submodel := types.NewSubmodel(metadataID)
 	idShort := dppMetadataIDShort
 	submodel.SetIDShort(&idShort)
 	submodel.SetSemanticID(globalReference(dppMetadataSemanticID))

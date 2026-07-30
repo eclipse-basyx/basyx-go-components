@@ -36,6 +36,8 @@ services:
       POSTGRES_PASSWORD: admin123
       POSTGRES_DB: basyxDppLifecycleIT
     command: ["postgres", "-c", "listen_addresses=*"]
+    ports:
+      - "127.0.0.1:${DPP_IT_DB_PORT:-15432}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql
     healthcheck:

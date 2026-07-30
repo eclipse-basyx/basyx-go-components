@@ -192,6 +192,56 @@ func buildGetAssetAdministrationShellsDataset(dialect *goqu.DialectWrapper, limi
 	return ds, nil
 }
 
+func buildGetAssetAdministrationShellIDsByAssetAndSubmodelSemanticIDsDataset(
+	dialect *goqu.DialectWrapper,
+	globalAssetIDs []string,
+	submodelSemanticIDs []string,
+	limit int32,
+	cursor string,
+) (*goqu.SelectDataset, error) {
+	ds := dialect.
+		From(goqu.T("aas").As("aas")).
+		InnerJoin(
+			goqu.T("asset_information").As("asset_information"),
+			goqu.On(goqu.I("asset_information.asset_information_id").Eq(goqu.I("aas.id"))),
+		).
+		InnerJoin(
+			goqu.T("aas_submodel_reference").As("submodel_reference"),
+			goqu.On(goqu.I("submodel_reference.aas_id").Eq(goqu.I("aas.id"))),
+		).
+		InnerJoin(
+			goqu.T("aas_submodel_reference_key").As("submodel_reference_key"),
+			goqu.On(goqu.I("submodel_reference_key.reference_id").Eq(goqu.I("submodel_reference.id"))),
+		).
+		InnerJoin(
+			goqu.T("submodel").As("submodel"),
+			goqu.On(goqu.I("submodel.submodel_identifier").Eq(goqu.I("submodel_reference_key.value"))),
+		).
+		InnerJoin(
+			goqu.T("submodel_semantic_id_reference_key").As("semantic_id_key"),
+			goqu.On(goqu.I("semantic_id_key.reference_id").Eq(goqu.I("submodel.id"))),
+		).
+		Select(goqu.I("aas.aas_id")).
+		Distinct().
+		Where(
+			goqu.I("asset_information.global_asset_id").In(globalAssetIDs),
+			goqu.I("semantic_id_key.value").In(submodelSemanticIDs),
+		).
+		Order(goqu.I("aas.aas_id").Asc())
+
+	if cursor != "" {
+		ds = ds.Where(goqu.I("aas.aas_id").Gt(cursor))
+	}
+	if limit > 0 {
+		pageLimitPlusOne, err := buildPageLimitPlusOne(limit)
+		if err != nil {
+			return nil, err
+		}
+		ds = ds.Limit(pageLimitPlusOne)
+	}
+	return ds, nil
+}
+
 func buildSpecificAssetIDFilterExpression(dialect *goqu.DialectWrapper, specificAssetID types.ISpecificAssetID) goqu.Expression {
 	if specificAssetID.Name() == globalAssetIDSpecificAssetIDName {
 		return goqu.I("asset_information.global_asset_id").Eq(specificAssetID.Value())

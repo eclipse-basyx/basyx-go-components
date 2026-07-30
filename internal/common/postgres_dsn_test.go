@@ -29,6 +29,8 @@ package common
 import (
 	"net/url"
 	"testing"
+
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
 func TestBuildPostgresDSN(t *testing.T) {
@@ -134,6 +136,90 @@ func TestBuildPostgresDSNWithConfiguredParameters(t *testing.T) {
 	assertQueryValue(t, query, "search_path", "tenant_a,public")
 	assertQueryValue(t, query, "options", "-c statement_timeout=5000")
 	assertQueryValue(t, query, "TimeZone", "Europe/Berlin")
+}
+
+func TestBuildPostgresDSNForService(t *testing.T) {
+	tests := []struct {
+		name                string
+		cfg                 PostgresConfig
+		serviceName         string
+		wantApplicationName string
+	}{
+		{
+			name: "defaults application name for connection fields",
+			cfg: PostgresConfig{
+				Host:   "localhost",
+				Port:   5432,
+				User:   "user",
+				DBName: "basyx",
+			},
+			serviceName:         "submodelrepositoryservice",
+			wantApplicationName: "submodelrepositoryservice",
+		},
+		{
+			name: "preserves configured application name",
+			cfg: PostgresConfig{
+				Host:            "localhost",
+				Port:            5432,
+				User:            "user",
+				DBName:          "basyx",
+				ApplicationName: "custom-name",
+			},
+			serviceName:         "submodelrepositoryservice",
+			wantApplicationName: "custom-name",
+		},
+		{
+			name: "defaults application name for URL DSN",
+			cfg: PostgresConfig{
+				DSN: "postgres://user@localhost:5432/basyx?sslmode=disable",
+			},
+			serviceName:         "submodelrepositoryservice",
+			wantApplicationName: "submodelrepositoryservice",
+		},
+		{
+			name: "preserves application name in URL DSN",
+			cfg: PostgresConfig{
+				DSN: "postgres://user@localhost:5432/basyx?application_name=custom-name",
+			},
+			serviceName:         "submodelrepositoryservice",
+			wantApplicationName: "custom-name",
+		},
+		{
+			name: "defaults application name for keyword DSN",
+			cfg: PostgresConfig{
+				DSN: "host=localhost port=5432 user=user dbname=basyx sslmode=disable",
+			},
+			serviceName:         "submodelrepositoryservice",
+			wantApplicationName: "submodelrepositoryservice",
+		},
+		{
+			name: "preserves application name in keyword DSN",
+			cfg: PostgresConfig{
+				DSN: "host=localhost port=5432 user=user dbname=basyx application_name=custom-name",
+			},
+			serviceName:         "submodelrepositoryservice",
+			wantApplicationName: "custom-name",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			dsn, applicationName, err := BuildPostgresDSNForService(test.cfg, test.serviceName)
+			if err != nil {
+				t.Fatalf("BuildPostgresDSNForService() failed: %v", err)
+			}
+			if applicationName != test.wantApplicationName {
+				t.Fatalf("applicationName = %q, want %q", applicationName, test.wantApplicationName)
+			}
+			parsedConfig, err := pgconn.ParseConfig(dsn)
+			if err != nil {
+				t.Fatalf("parse generated DSN: %v", err)
+			}
+			if got := parsedConfig.RuntimeParams["application_name"]; got != test.wantApplicationName {
+				t.Fatalf("DSN application_name = %q, want %q", got, test.wantApplicationName)
+			}
+		})
+	}
 }
 
 func assertQueryValue(t *testing.T, query url.Values, key string, want string) {

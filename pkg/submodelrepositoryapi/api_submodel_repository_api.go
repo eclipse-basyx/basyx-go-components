@@ -2028,9 +2028,9 @@ func (c *SubmodelRepositoryAPIAPIController) PutFileByPathSubmodelRepo(w http.Re
 	}
 
 	var result model.ImplResponse
-	err := HandleMultipartFileStream(r, "file", "fileName", func(fileName string, file io.Reader) error {
+	err := HandleMultipartFileStreamWithContentType(r, "file", "fileName", func(fileName string, contentType string, file io.Reader) error {
 		var uploadErr error
-		result, uploadErr = c.service.PutFileByPathSubmodelRepo(r.Context(), submodelIdentifierParam, idShortPathParam, fileName, file)
+		result, uploadErr = c.service.PutFileByPathSubmodelRepo(r.Context(), submodelIdentifierParam, idShortPathParam, fileName, contentType, file)
 		return uploadErr
 	})
 	if err != nil {
@@ -2125,6 +2125,7 @@ func (c *SubmodelRepositoryAPIAPIController) InvokeOperationSubmodelRepo(w http.
 		return
 	}
 	// If no error, encode the body and the result code
+	result.Body = c.contextualizeOperationRedirect(r, result.Body)
 	_ = EncodeJSONResponse(result.Body, &result.Code, w)
 }
 
@@ -2214,6 +2215,7 @@ func (c *SubmodelRepositoryAPIAPIController) InvokeOperationAsync(w http.Respons
 		return
 	}
 	// If no error, encode the body and the result code
+	result.Body = c.contextualizeOperationRedirect(r, result.Body)
 	_ = EncodeJSONResponse(result.Body, &result.Code, w)
 }
 
@@ -2279,6 +2281,7 @@ func (c *SubmodelRepositoryAPIAPIController) GetOperationAsyncStatus(w http.Resp
 		return
 	}
 	// If no error, encode the body and the result code
+	result.Body = c.contextualizeOperationRedirect(r, result.Body)
 	_ = EncodeJSONResponse(result.Body, &result.Code, w)
 }
 

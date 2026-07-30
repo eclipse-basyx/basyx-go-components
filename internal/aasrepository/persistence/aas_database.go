@@ -100,19 +100,13 @@ func (s *AssetAdministrationShellDatabase) ExecuteInTransaction(startErrorCode s
 
 // NewAssetAdministrationShellDatabase creates a new instance of AssetAdministrationShellDatabase with the provided database connection.
 func NewAssetAdministrationShellDatabase(dsn string, maxOpenConnections int, maxIdleConnections int, connMaxLifetimeMinutes int, strictVerification string) (*AssetAdministrationShellDatabase, error) {
-	db, err := common.NewDatabaseConnection(dsn)
+	db, err := common.NewDatabaseConnectionWithConfig(dsn, common.PostgresConfig{
+		MaxOpenConnections:     maxOpenConnections,
+		MaxIdleConnections:     maxIdleConnections,
+		ConnMaxLifetimeMinutes: connMaxLifetimeMinutes,
+	})
 	if err != nil {
 		return nil, err
-	}
-
-	if maxOpenConnections > 0 {
-		db.SetMaxOpenConns(int(maxOpenConnections))
-	}
-	if maxIdleConnections > 0 {
-		db.SetMaxIdleConns(maxIdleConnections)
-	}
-	if connMaxLifetimeMinutes > 0 {
-		db.SetConnMaxLifetime(time.Duration(connMaxLifetimeMinutes) * time.Minute)
 	}
 
 	return NewAssetAdministrationShellDatabaseFromDB(db, strictVerification)
@@ -870,6 +864,80 @@ func (s *AssetAdministrationShellDatabase) GetAssetAdministrationShells(ctx cont
 	}
 
 	return result, nextCursor, nil
+}
+
+// GetAssetAdministrationShellIDsByAssetAndSubmodelSemanticIDs returns AAS identifiers whose global asset ID and a referenced Submodel semantic ID match.
+func (s *AssetAdministrationShellDatabase) GetAssetAdministrationShellIDsByAssetAndSubmodelSemanticIDs(
+	ctx context.Context,
+	globalAssetIDs []string,
+	submodelSemanticIDs []string,
+	limit int32,
+	cursor string,
+) ([]string, string, error) {
+	if limit < 0 {
+		return nil, "", common.NewErrBadRequest("AASREPO-GETAASIDSBYASSETANDSMSEM-BADLIMIT Limit " + strconv.FormatInt(int64(limit), 10) + " too small")
+	}
+	if len(globalAssetIDs) == 0 || len(submodelSemanticIDs) == 0 {
+		return []string{}, "", nil
+	}
+
+	dialect := goqu.Dialect("postgres")
+	selectDS, err := buildGetAssetAdministrationShellIDsByAssetAndSubmodelSemanticIDsDataset(
+		&dialect,
+		globalAssetIDs,
+		submodelSemanticIDs,
+		limit,
+		cursor,
+	)
+	if err != nil {
+		return nil, "", common.NewInternalServerError("AASREPO-GETAASIDSBYASSETANDSMSEM-BUILDSQL " + err.Error())
+	}
+
+	collector, err := buildAASCollector()
+	if err != nil {
+		return nil, "", err
+	}
+	shouldEnforce, err := shouldEnforceFormula(ctx, "AASREPO-GETAASIDSBYASSETANDSMSEM-SHOULDENFORCE")
+	if err != nil {
+		return nil, "", err
+	}
+	if shouldEnforce {
+		selectDS, err = auth.AddFormulaQueryFromContext(ctx, selectDS, collector)
+		if err != nil {
+			return nil, "", common.NewInternalServerError("AASREPO-GETAASIDSBYASSETANDSMSEM-ABACFORMULA " + err.Error())
+		}
+	}
+
+	query, args, err := selectDS.ToSQL()
+	if err != nil {
+		return nil, "", common.NewInternalServerError("AASREPO-GETAASIDSBYASSETANDSMSEM-BUILDSQL " + err.Error())
+	}
+	rows, err := s.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, "", common.NewInternalServerError("AASREPO-GETAASIDSBYASSETANDSMSEM-EXECSQL " + err.Error())
+	}
+	defer func() {
+		_ = rows.Close()
+	}()
+
+	identifiers := make([]string, 0, limit+1)
+	for rows.Next() {
+		var identifier string
+		if err := rows.Scan(&identifier); err != nil {
+			return nil, "", common.NewInternalServerError("AASREPO-GETAASIDSBYASSETANDSMSEM-SCANROW " + err.Error())
+		}
+		identifiers = append(identifiers, identifier)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, "", common.NewInternalServerError("AASREPO-GETAASIDSBYASSETANDSMSEM-ITERROWS " + err.Error())
+	}
+
+	nextCursor := ""
+	if limit > 0 && len(identifiers) > int(limit) {
+		identifiers = identifiers[:limit]
+		nextCursor = identifiers[len(identifiers)-1]
+	}
+	return identifiers, nextCursor, nil
 }
 
 func (s *AssetAdministrationShellDatabase) assetAdministrationShellCursorExists(ctx context.Context, dialect *goqu.DialectWrapper, cursor string) (bool, error) {

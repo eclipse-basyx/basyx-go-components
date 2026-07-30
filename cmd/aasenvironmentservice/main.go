@@ -32,11 +32,11 @@ import (
 	"database/sql"
 	"embed"
 	"flag"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
 	"sync/atomic"
-	"time"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/aasenvironment"
 	aasregistryapi "github.com/eclipse-basyx/basyx-go-components/internal/aasregistry/api"
@@ -44,7 +44,7 @@ import (
 	aasrepositoryapi "github.com/eclipse-basyx/basyx-go-components/internal/aasrepository/api"
 	aasrepositorydb "github.com/eclipse-basyx/basyx-go-components/internal/aasrepository/persistence"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
-	"github.com/eclipse-basyx/basyx-go-components/internal/common/asyncbulk"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/asyncjob"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/binarycontent"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/history"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/jws"
@@ -128,13 +128,7 @@ func runServer(ctx context.Context, configPath string) error {
 		slog.WarnContext(ctx, "Swagger UI unavailable", "error.code", "AASENV-SWAGGER-INIT", "error", err)
 	}
 
-	dsn := common.BuildPostgresDSN(cfg.Postgres)
-
-	if err := common.ValidateSchemaVersionByDSN(dsn, common.CURRENT_DATABASE_VERSION); err != nil {
-		return err
-	}
-
-	sharedDB, err := openSharedDatabase(ctx, cfg, dsn)
+	sharedDB, asyncJobManager, sharedBulkManager, err := openSharedDatabase(ctx, cfg)
 	if err != nil {
 		return err
 	}
@@ -188,7 +182,6 @@ func runServer(ctx context.Context, configPath string) error {
 		ConceptDescriptionRepository: cdrPersistence,
 		Discovery:                    discoveryPersistence,
 	}
-
 	customAASRegistry := aasenvironment.NewCustomAASRegistryService(
 		aasregistryapi.NewAssetAdministrationShellRegistryAPIAPIService(*aasRegistryPersistence),
 		persistence,
@@ -198,12 +191,12 @@ func runServer(ctx context.Context, configPath string) error {
 		persistence,
 	)
 	customAASRepository := aasenvironment.NewCustomAASRepositoryService(
-		aasrepositoryapi.NewAssetAdministrationShellRepositoryAPIAPIService(aasRepositoryPersistence, submodelRepositoryPersistence),
+		aasrepositoryapi.NewAssetAdministrationShellRepositoryAPIAPIService(ctx, aasRepositoryPersistence, submodelRepositoryPersistence, asyncJobManager),
 		persistence,
 		registrySyncConfig,
 	)
 	customSMRepository := aasenvironment.NewCustomSubmodelRepositoryService(
-		submodelrepositoryapi.NewSubmodelRepositoryAPIAPIService(*submodelRepositoryPersistence),
+		submodelrepositoryapi.NewSubmodelRepositoryAPIAPIService(ctx, *submodelRepositoryPersistence, asyncJobManager),
 		persistence,
 		registrySyncConfig,
 	)
@@ -219,7 +212,6 @@ func runServer(ctx context.Context, configPath string) error {
 		binarycontent.NewStager(sharedDB), sharedDB.Stats().MaxOpenConnections, 1,
 	)
 	serializationService := aasenvironment.NewSerializationAPIService(persistence, environmentStager)
-	sharedBulkManager := asyncbulk.NewManager("AASENV-BULK", 0)
 	aasBulkSvc := aasregistryapi.NewBulkService(customAASRegistry, sharedBulkManager)
 	smBulkSvc := smregistryapi.NewBulkService(customSMRegistry, sharedBulkManager)
 	aasBulkHandler := aasregistryapi.NewBulkHTTPHandler(aasBulkSvc)
@@ -310,28 +302,26 @@ func runServer(ctx context.Context, configPath string) error {
 	return runner.Wait(ctx)
 }
 
-func openSharedDatabase(ctx context.Context, cfg *common.Config, dsn string) (*sql.DB, error) {
-	db, err := common.NewDatabaseConnection(dsn)
+func openSharedDatabase(
+	ctx context.Context,
+	cfg *common.Config,
+) (*sql.DB, *asyncjob.Manager, *asyncjob.Manager, error) {
+	db, err := common.OpenPostgresWithSchemaValidation(ctx, cfg.Postgres, "aasenvironmentservice", common.CURRENT_DATABASE_VERSION)
 	if err != nil {
-		return nil, err
+		return nil, nil, nil, err
 	}
-	configurePostgresPool(db, cfg.Postgres)
 	if err = history.ApplyPostgresGuardConfig(ctx, db); err != nil {
-		return nil, err
+		return nil, nil, nil, err
 	}
-	return db, nil
-}
-
-func configurePostgresPool(db *sql.DB, cfg common.PostgresConfig) {
-	if cfg.MaxOpenConnections > 0 {
-		db.SetMaxOpenConns(cfg.MaxOpenConnections)
+	asyncJobManager, err := submodelrepositoryapi.NewAsyncJobManager(ctx, db)
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("AASENV-ASYNCJOB-INIT %w", err)
 	}
-	if cfg.MaxIdleConnections > 0 {
-		db.SetMaxIdleConns(cfg.MaxIdleConnections)
+	bulkManager, err := asyncjob.NewPostgresManager(ctx, db, "AASENV-BULK", 0)
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("AASENV-ASYNCJOB-INIT %w", err)
 	}
-	if cfg.ConnMaxLifetimeMinutes > 0 {
-		db.SetConnMaxLifetime(time.Duration(cfg.ConnMaxLifetimeMinutes) * time.Minute)
-	}
+	return db, asyncJobManager, bulkManager, nil
 }
 
 func main() {

@@ -58,7 +58,7 @@ The project is composed of DB-backed microservices for AAS and Submodel registri
 
 ### Prerequisites
 
-- Go >= 1.26.4
+- Go >= 1.26.5
 - Docker & Docker Compose
 - PostgreSQL (for local development)
 
@@ -148,9 +148,10 @@ postgres:
     searchPath: ""
     options: ""
     timezone: ""
-    maxOpenConnections: 500
-    maxIdleConnections: 500
+    maxOpenConnections: 50
+    maxIdleConnections: 25
     connMaxLifetimeMinutes: 5
+    connMaxIdleTimeMinutes: 0
 ```
 
 Or via `.env`:
@@ -179,12 +180,15 @@ POSTGRES_FALLBACKAPPLICATIONNAME=
 POSTGRES_SEARCHPATH=
 POSTGRES_OPTIONS=
 POSTGRES_TIMEZONE=
-POSTGRES_MAXOPENCONNECTIONS=500
-POSTGRES_MAXIDLECONNECTIONS=500
+POSTGRES_MAXOPENCONNECTIONS=50
+POSTGRES_MAXIDLECONNECTIONS=25
 POSTGRES_CONNMAXLIFETIMEMINUTES=5
+POSTGRES_CONNMAXIDLETIMEMINUTES=0
 ```
 
 All HTTP timeout values are in seconds and must be greater than zero. The legacy Viper-derived names such as `SERVER_READTIMEOUTSECONDS` still work; readable aliases with underscores and `BASYX_` prefixes, such as `BASYX_SERVER_READ_TIMEOUT_SECONDS`, are also supported.
+
+PostgreSQL pool limits apply to every service process or Kubernetes pod. Size the deployment so that the sum of `maxOpenConnections` across all replicas and database-backed services stays below PostgreSQL's usable connection budget, with capacity reserved for administration and migrations. The defaults are 50 open connections, 25 idle connections, and a five-minute connection lifetime. Zero uses the common default for these three values; when the default idle limit would exceed an explicitly smaller open limit, it is capped at the open limit. `connMaxIdleTimeMinutes: 0` disables idle-time recycling. An explicitly configured idle limit greater than the open limit is rejected during startup.
 
 Binary uploads and AASX package expansion are bounded independently:
 

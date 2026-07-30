@@ -14,6 +14,7 @@
 - Code Readability: Ensure the code is easy to read and understand, with proper indentation and spacing
 - Ensure that the Cognitive Complexity of functions does not exceed 15. Refactor complex functions into smaller, manageable pieces.
 - MANDATORY: Use GOQU for SQL Queries in go. No Plain Text.
+- Every new source file must use the repository's complete license header for its file type. Shortened headers containing only copyright and SPDX lines are not allowed; copy the full header from a neighboring file.
 - Try to implement scalable and performant code - no prototyping.
 
 ## Pre-Task Steps:
@@ -31,6 +32,7 @@
 
 ## General Notes:
 - Use `database/base.sql` and `database/patches/` for reference when modifying database-related code.
+- Never modify `database/base.sql`; it is reference-only. Implement every database schema change exclusively through a versioned file under `database/patches/`.
 - Ensure that database schema changes add a versioned patch under `database/patches/`, are registered in `cmd/basyxconfigurationservice/main.go`, and update the schema version metadata in `internal/common/database.go` when they become the current schema.
 - When modifying code, consider the impact on related modules and ensure that changes are consistent across the codebase.
 - Always run integration tests after making changes to ensure that the modifications do not break existing functionality. Important: Clean Testcache before running tests to avoid false positives/negatives.

@@ -27,6 +27,7 @@
 package common
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 	"fmt"
@@ -40,9 +41,119 @@ import (
 )
 
 const (
-	CURRENT_DATABASE_VERSION = "v1.1.8"
+	CURRENT_DATABASE_VERSION = "v1.1.10"
 	cleanSchemaState         = "clean"
 )
+
+// PostgresPoolSettings contains the effective database/sql pool limits.
+type PostgresPoolSettings struct {
+	MaxOpenConnections     int
+	MaxIdleConnections     int
+	ConnMaxLifetimeMinutes int
+	ConnMaxIdleTimeMinutes int
+}
+
+// ResolvePostgresPoolSettings validates and normalizes PostgreSQL pool settings.
+// Zero uses the common default, except connMaxIdleTimeMinutes where zero disables
+// idle-time recycling.
+func ResolvePostgresPoolSettings(cfg PostgresConfig) (PostgresPoolSettings, error) {
+	if cfg.MaxOpenConnections < 0 {
+		return PostgresPoolSettings{}, fmt.Errorf("CONFIG-POSTGRES-MAXOPEN postgres.maxOpenConnections must not be negative")
+	}
+	if cfg.MaxIdleConnections < 0 {
+		return PostgresPoolSettings{}, fmt.Errorf("CONFIG-POSTGRES-MAXIDLE postgres.maxIdleConnections must not be negative")
+	}
+	if cfg.ConnMaxLifetimeMinutes < 0 {
+		return PostgresPoolSettings{}, fmt.Errorf("CONFIG-POSTGRES-CONNMAXLIFETIME postgres.connMaxLifetimeMinutes must not be negative")
+	}
+	if cfg.ConnMaxIdleTimeMinutes < 0 {
+		return PostgresPoolSettings{}, fmt.Errorf("CONFIG-POSTGRES-CONNMAXIDLETIME postgres.connMaxIdleTimeMinutes must not be negative")
+	}
+
+	settings := PostgresPoolSettings{
+		MaxOpenConnections:     defaultWhenZero(cfg.MaxOpenConnections, DefaultConfig.PgMaxOpen),
+		MaxIdleConnections:     defaultWhenZero(cfg.MaxIdleConnections, DefaultConfig.PgMaxIdle),
+		ConnMaxLifetimeMinutes: defaultWhenZero(cfg.ConnMaxLifetimeMinutes, DefaultConfig.PgConnLifetime),
+		ConnMaxIdleTimeMinutes: cfg.ConnMaxIdleTimeMinutes,
+	}
+	if cfg.MaxIdleConnections == 0 && settings.MaxIdleConnections > settings.MaxOpenConnections {
+		settings.MaxIdleConnections = settings.MaxOpenConnections
+	}
+	if settings.MaxIdleConnections > settings.MaxOpenConnections {
+		return PostgresPoolSettings{}, fmt.Errorf(
+			"CONFIG-POSTGRES-IDLEEXCEEDSOPEN postgres.maxIdleConnections (%d) must not exceed postgres.maxOpenConnections (%d)",
+			settings.MaxIdleConnections,
+			settings.MaxOpenConnections,
+		)
+	}
+
+	return settings, nil
+}
+
+func defaultWhenZero(value int, defaultValue int) int {
+	if value == 0 {
+		return defaultValue
+	}
+	return value
+}
+
+// ConfigurePostgresPool validates and applies all database/sql pool settings.
+func ConfigurePostgresPool(db *sql.DB, cfg PostgresConfig) (PostgresPoolSettings, error) {
+	if db == nil {
+		return PostgresPoolSettings{}, fmt.Errorf("COMMON-POSTGRESPOOL-NILDB database handle is nil")
+	}
+
+	settings, err := ResolvePostgresPoolSettings(cfg)
+	if err != nil {
+		return PostgresPoolSettings{}, err
+	}
+	db.SetMaxOpenConns(settings.MaxOpenConnections)
+	db.SetMaxIdleConns(settings.MaxIdleConnections)
+	db.SetConnMaxLifetime(time.Duration(settings.ConnMaxLifetimeMinutes) * time.Minute)
+	db.SetConnMaxIdleTime(time.Duration(settings.ConnMaxIdleTimeMinutes) * time.Minute)
+	return settings, nil
+}
+
+// OpenPostgres opens, configures, and verifies the shared PostgreSQL connection pool.
+func OpenPostgres(ctx context.Context, cfg PostgresConfig, serviceName string) (*sql.DB, error) {
+	if ctx == nil {
+		return nil, fmt.Errorf("COMMON-OPENPOSTGRES-NOCONTEXT context is required")
+	}
+	if strings.TrimSpace(serviceName) == "" {
+		return nil, fmt.Errorf("COMMON-OPENPOSTGRES-NOSERVICE service name is required")
+	}
+
+	dsn, applicationName, err := BuildPostgresDSNForService(cfg, serviceName)
+	if err != nil {
+		return nil, err
+	}
+	db, err := sql.Open("pgx", dsn)
+	if err != nil {
+		return nil, fmt.Errorf("COMMON-OPENPOSTGRES-OPEN failed to open PostgreSQL connection pool: %w", err)
+	}
+
+	settings, err := ConfigurePostgresPool(db, cfg)
+	if err != nil {
+		_ = db.Close()
+		return nil, err
+	}
+	if err = db.PingContext(ctx); err != nil {
+		_ = db.Close()
+		return nil, fmt.Errorf("COMMON-OPENPOSTGRES-PING failed to connect to PostgreSQL: %w", err)
+	}
+
+	slog.InfoContext(
+		ctx,
+		"PostgreSQL connection pool configured",
+		"service.name", serviceName,
+		"application_name", applicationName,
+		"max_open_connections", settings.MaxOpenConnections,
+		"max_idle_connections", settings.MaxIdleConnections,
+		"conn_max_lifetime_minutes", settings.ConnMaxLifetimeMinutes,
+		"conn_max_idle_time_minutes", settings.ConnMaxIdleTimeMinutes,
+	)
+	return db, nil
+}
 
 // NewDatabaseConnection establishes a PostgreSQL database connection.
 //
@@ -71,15 +182,22 @@ const (
 //	}
 //	defer db.Close()
 func NewDatabaseConnection(dsn string) (*sql.DB, error) {
+	return NewDatabaseConnectionWithConfig(dsn, PostgresConfig{})
+}
+
+// NewDatabaseConnectionWithConfig opens a PostgreSQL pool for callers that do
+// not have a request or process context available.
+func NewDatabaseConnectionWithConfig(dsn string, cfg PostgresConfig) (*sql.DB, error) {
 	encodedDSN := NormalizePostgresDSN(dsn)
 	db, err := sql.Open("pgx", encodedDSN)
 	if err != nil {
 		return nil, err
 	}
 
-	db.SetMaxOpenConns(50)
-	db.SetMaxIdleConns(25)
-	db.SetConnMaxLifetime(time.Minute * 5)
+	if _, err = ConfigurePostgresPool(db, cfg); err != nil {
+		_ = db.Close()
+		return nil, err
+	}
 	if err := db.Ping(); err != nil {
 		_ = db.Close()
 		return nil, err
@@ -91,12 +209,32 @@ func NewDatabaseConnection(dsn string) (*sql.DB, error) {
 // ValidateSchemaVersion checks whether basyxsystem is clean and matches the expected schema version.
 // Returns an error if the state/version is missing, unreadable, dirty, or does not match.
 func ValidateSchemaVersion(db *sql.DB, expectedVersion string) error {
+	query, trimmedExpected, err := prepareSchemaVersionCheck(db, expectedVersion)
+	if err != nil {
+		return err
+	}
+	return validateSchemaVersionRow(db.QueryRow(query), trimmedExpected)
+}
+
+// ValidateSchemaVersionContext checks the schema version with cancellation support.
+func ValidateSchemaVersionContext(ctx context.Context, db *sql.DB, expectedVersion string) error {
+	if ctx == nil {
+		return fmt.Errorf("DB-CHECKVER-NOCONTEXT context is required")
+	}
+	query, trimmedExpected, err := prepareSchemaVersionCheck(db, expectedVersion)
+	if err != nil {
+		return err
+	}
+	return validateSchemaVersionRow(db.QueryRowContext(ctx, query), trimmedExpected)
+}
+
+func prepareSchemaVersionCheck(db *sql.DB, expectedVersion string) (string, string, error) {
 	if db == nil {
-		return fmt.Errorf("DB-CHECKVER-NILDB database handle is nil")
+		return "", "", fmt.Errorf("DB-CHECKVER-NILDB database handle is nil")
 	}
 	trimmedExpected := strings.TrimSpace(expectedVersion)
 	if trimmedExpected == "" {
-		return fmt.Errorf("DB-CHECKVER-NOEXPECTED expected version is empty")
+		return "", "", fmt.Errorf("DB-CHECKVER-NOEXPECTED expected version is empty")
 	}
 
 	query, _, err := goqu.Dialect("postgres").
@@ -106,12 +244,15 @@ func ValidateSchemaVersion(db *sql.DB, expectedVersion string) error {
 		Limit(1).
 		ToSQL()
 	if err != nil {
-		return fmt.Errorf("DB-CHECKVER-BUILDQUERY failed to build version query: %w", err)
+		return "", "", fmt.Errorf("DB-CHECKVER-BUILDQUERY failed to build version query: %w", err)
 	}
+	return query, trimmedExpected, nil
+}
 
+func validateSchemaVersionRow(row *sql.Row, trimmedExpected string) error {
 	var actualVersion string
 	var schemaState string
-	err = db.QueryRow(query).Scan(&actualVersion, &schemaState)
+	err := row.Scan(&actualVersion, &schemaState)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return fmt.Errorf("DB-CHECKVER-NOVERSIONROW basyxsystem has no version row")
@@ -138,6 +279,25 @@ func ValidateSchemaVersion(db *sql.DB, expectedVersion string) error {
 	}
 
 	return nil
+}
+
+// OpenPostgresWithSchemaValidation opens a shared pool and validates the schema
+// through the same context-aware connection.
+func OpenPostgresWithSchemaValidation(
+	ctx context.Context,
+	cfg PostgresConfig,
+	serviceName string,
+	expectedVersion string,
+) (*sql.DB, error) {
+	db, err := OpenPostgres(ctx, cfg, serviceName)
+	if err != nil {
+		return nil, err
+	}
+	if err = ValidateSchemaVersionContext(ctx, db, expectedVersion); err != nil {
+		_ = db.Close()
+		return nil, err
+	}
+	return db, nil
 }
 
 // ValidateSchemaVersionByDSN opens a temporary database connection and validates the schema version.

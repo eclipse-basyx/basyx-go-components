@@ -115,6 +115,16 @@ func (c *AssetAdministrationShellRepositoryAPIAPIController) buildSubmodelElemen
 	return c.buildSubmodelElementLocationFromEncodedIdentifier(r, encodedShellID, encodeIdentifierForPath(rawSubmodelID), idShortPath)
 }
 
+func (c *AssetAdministrationShellRepositoryAPIAPIController) contextualizeOperationRedirect(r *http.Request, body any) any {
+	redirect, ok := body.(Redirect)
+	if !ok || redirect.Location == "" {
+		return body
+	}
+
+	redirect.Location = common.ContextualizeAPIResourceLocation(r, redirect.Location, "/shells/")
+	return redirect
+}
+
 func joinIDShortPath(parentPath string, childIDShort string) string {
 	if parentPath == "" {
 		return childIDShort

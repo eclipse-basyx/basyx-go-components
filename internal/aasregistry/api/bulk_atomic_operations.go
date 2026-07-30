@@ -33,7 +33,7 @@ import (
 	"strings"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
-	"github.com/eclipse-basyx/basyx-go-components/internal/common/asyncbulk"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/asyncjob"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/createprecheck"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/history"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
@@ -44,7 +44,7 @@ import (
 func (s *AssetAdministrationShellRegistryAPIAPIService) ExecuteBulkCreateAtomic(
 	ctx context.Context,
 	descriptors []model.AssetAdministrationShellDescriptor,
-) asyncbulk.OperationResult {
+) asyncjob.BulkResult {
 	if len(descriptors) == 0 {
 		return successfulAtomicResult(0)
 	}
@@ -67,7 +67,7 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) ExecuteBulkCreateAtomic(
 				if failedIndex < 0 || failedIndex >= len(descriptors) {
 					failedIndex = 0
 				}
-				failure = asyncbulk.ItemFailure{
+				failure = asyncjob.ItemFailure{
 					Index:      failedIndex,
 					Identifier: descriptors[failedIndex].Id,
 					StatusCode: aasBulkCreateErrorStatusCode(insertErr),
@@ -80,7 +80,7 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) ExecuteBulkCreateAtomic(
 	)
 	if err != nil {
 		if failure.StatusCode == 0 {
-			failure = asyncbulk.ItemFailure{
+			failure = asyncjob.ItemFailure{
 				Index:      0,
 				StatusCode: http.StatusInternalServerError,
 				Message:    err.Error(),
@@ -95,11 +95,11 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) ensureAASDescriptorsDoNo
 	ctx context.Context,
 	tx *sql.Tx,
 	identifiers []string,
-	failure *asyncbulk.ItemFailure,
+	failure *asyncjob.ItemFailure,
 ) error {
 	existing, err := s.aasRegistryBackend.ExistingAASDescriptorIDsInTransaction(ctx, tx, identifiers)
 	if err != nil {
-		*failure = asyncbulk.ItemFailure{Index: 0, Identifier: firstIdentifier(identifiers), StatusCode: http.StatusInternalServerError, Message: err.Error()}
+		*failure = asyncjob.ItemFailure{Index: 0, Identifier: firstIdentifier(identifiers), StatusCode: http.StatusInternalServerError, Message: err.Error()}
 		return err
 	}
 	return s.ensureVisibleAASDescriptorDuplicates(ctx, tx, identifiers, existing, failure)
@@ -110,7 +110,7 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) ensureVisibleAASDescript
 	tx *sql.Tx,
 	identifiers []string,
 	existing map[string]struct{},
-	failure *asyncbulk.ItemFailure,
+	failure *asyncjob.ItemFailure,
 ) error {
 	for index, identifier := range identifiers {
 		if _, found := existing[identifier]; !found {
@@ -127,7 +127,7 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) ensureVisibleAASDescript
 			"AAS Descriptor access not allowed",
 		)
 		if err != nil {
-			*failure = asyncbulk.ItemFailure{Index: index, Identifier: identifier, StatusCode: aasBulkCreateErrorStatusCode(err), Message: err.Error()}
+			*failure = asyncjob.ItemFailure{Index: index, Identifier: identifier, StatusCode: aasBulkCreateErrorStatusCode(err), Message: err.Error()}
 			return err
 		}
 	}
@@ -138,7 +138,7 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) ensureVisibleAASDescript
 func (s *AssetAdministrationShellRegistryAPIAPIService) ExecuteBulkPutAtomic(
 	ctx context.Context,
 	descriptors []model.AssetAdministrationShellDescriptor,
-) asyncbulk.OperationResult {
+) asyncjob.BulkResult {
 	return s.executeAtomicAASDescriptorBulk(
 		ctx,
 		descriptors,
@@ -152,7 +152,7 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) ExecuteBulkPutAtomic(
 func (s *AssetAdministrationShellRegistryAPIAPIService) ExecuteBulkDeleteAtomic(
 	ctx context.Context,
 	aasIdentifiers []string,
-) asyncbulk.OperationResult {
+) asyncjob.BulkResult {
 	return s.executeAtomicAASIdentifierBulk(
 		ctx,
 		aasIdentifiers,
@@ -167,8 +167,8 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) executeAtomicAASDescript
 	startErrorCode string,
 	commitErrorCode string,
 	execute func(context.Context, *sql.Tx, model.AssetAdministrationShellDescriptor) (int, error),
-) asyncbulk.OperationResult {
-	failure := asyncbulk.ItemFailure{}
+) asyncjob.BulkResult {
+	failure := asyncjob.ItemFailure{}
 	err := s.aasRegistryBackend.ExecuteInTransaction(startErrorCode, commitErrorCode, func(tx *sql.Tx) error {
 		if lockErr := history.LockMutationsTx(ctx, tx, history.TableDescriptor, descriptorIDsFromAASDescriptors(descriptors)); lockErr != nil {
 			return lockErr
@@ -176,7 +176,7 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) executeAtomicAASDescript
 		for idx, descriptor := range descriptors {
 			statusCode, descriptorErr := execute(ctx, tx, descriptor)
 			if descriptorErr != nil {
-				failure = asyncbulk.ItemFailure{
+				failure = asyncjob.ItemFailure{
 					Index:      idx,
 					Identifier: descriptor.Id,
 					StatusCode: statusCode,
@@ -189,7 +189,7 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) executeAtomicAASDescript
 	})
 	if err != nil {
 		if failure.StatusCode == 0 {
-			failure = asyncbulk.ItemFailure{
+			failure = asyncjob.ItemFailure{
 				Index:      0,
 				StatusCode: http.StatusInternalServerError,
 				Message:    err.Error(),
@@ -205,14 +205,14 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) executeAtomicAASIdentifi
 	aasIdentifiers []string,
 	startErrorCode string,
 	commitErrorCode string,
-) asyncbulk.OperationResult {
-	failure := asyncbulk.ItemFailure{}
+) asyncjob.BulkResult {
+	failure := asyncjob.ItemFailure{}
 	err := s.aasRegistryBackend.ExecuteInTransaction(startErrorCode, commitErrorCode, func(tx *sql.Tx) error {
 		return s.executeBulkDeleteAASIdentifiersTx(ctx, tx, aasIdentifiers, &failure)
 	})
 	if err != nil {
 		if failure.StatusCode == 0 {
-			failure = asyncbulk.ItemFailure{
+			failure = asyncjob.ItemFailure{
 				Index:      0,
 				StatusCode: http.StatusInternalServerError,
 				Message:    err.Error(),
@@ -227,7 +227,7 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) executeBulkDeleteAASIden
 	ctx context.Context,
 	tx *sql.Tx,
 	rawIdentifiers []string,
-	failure *asyncbulk.ItemFailure,
+	failure *asyncjob.ItemFailure,
 ) error {
 	identifiers, err := s.validateBulkDeleteAASIdentifiersTx(ctx, tx, rawIdentifiers, failure)
 	if err != nil {
@@ -240,7 +240,7 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) executeBulkDeleteAASIden
 	if failedIndex < 0 || failedIndex >= len(identifiers) {
 		failedIndex = 0
 	}
-	*failure = asyncbulk.ItemFailure{
+	*failure = asyncjob.ItemFailure{
 		Index:      failedIndex,
 		Identifier: identifiers[failedIndex],
 		StatusCode: aasBulkDeleteErrorStatusCode(err),
@@ -253,12 +253,12 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) validateBulkDeleteAASIde
 	ctx context.Context,
 	tx *sql.Tx,
 	rawIdentifiers []string,
-	failure *asyncbulk.ItemFailure,
+	failure *asyncjob.ItemFailure,
 ) ([]string, error) {
 	identifiers := normalizeAASIdentifiers(rawIdentifiers)
 	existing, err := s.aasRegistryBackend.ExistingAASDescriptorIDsInTransaction(ctx, tx, identifiers)
 	if err != nil {
-		*failure = asyncbulk.ItemFailure{Index: 0, Identifier: firstIdentifier(identifiers), StatusCode: http.StatusInternalServerError, Message: err.Error()}
+		*failure = asyncjob.ItemFailure{Index: 0, Identifier: firstIdentifier(identifiers), StatusCode: http.StatusInternalServerError, Message: err.Error()}
 		return nil, err
 	}
 	return identifiers, validateExistingAASDeleteIdentifiers(rawIdentifiers, identifiers, existing, failure)
@@ -268,12 +268,12 @@ func validateExistingAASDeleteIdentifiers(
 	rawIdentifiers []string,
 	identifiers []string,
 	existing map[string]struct{},
-	failure *asyncbulk.ItemFailure,
+	failure *asyncjob.ItemFailure,
 ) error {
 	seen := make(map[string]struct{}, len(identifiers))
 	for idx, identifier := range identifiers {
 		if identifier == "" {
-			*failure = asyncbulk.ItemFailure{
+			*failure = asyncjob.ItemFailure{
 				Index:      idx,
 				Identifier: rawIdentifiers[idx],
 				StatusCode: http.StatusBadRequest,
@@ -292,9 +292,9 @@ func validateExistingAASDeleteIdentifiers(
 	return nil
 }
 
-func aasBulkDeleteNotFound(index int, identifier string, failure *asyncbulk.ItemFailure) error {
+func aasBulkDeleteNotFound(index int, identifier string, failure *asyncjob.ItemFailure) error {
 	err := common.NewErrNotFound("AAS Descriptor not found")
-	*failure = asyncbulk.ItemFailure{
+	*failure = asyncjob.ItemFailure{
 		Index:      index,
 		Identifier: identifier,
 		StatusCode: aasBulkDeleteErrorStatusCode(err),
@@ -303,14 +303,14 @@ func aasBulkDeleteNotFound(index int, identifier string, failure *asyncbulk.Item
 	return err
 }
 
-func validateBulkCreateDescriptors(descriptors []model.AssetAdministrationShellDescriptor) asyncbulk.ItemFailure {
+func validateBulkCreateDescriptors(descriptors []model.AssetAdministrationShellDescriptor) asyncjob.ItemFailure {
 	seen := make(map[string]struct{}, len(descriptors))
 	for index, descriptor := range descriptors {
 		identifier := strings.TrimSpace(descriptor.Id)
 		descriptors[index].Id = identifier
 		if identifier == "" {
 			err := common.NewErrBadRequest("AASR-BULK-CREATE-MISSINGID descriptor id must not be empty")
-			return asyncbulk.ItemFailure{
+			return asyncjob.ItemFailure{
 				Index:      index,
 				Identifier: identifier,
 				StatusCode: http.StatusBadRequest,
@@ -319,7 +319,7 @@ func validateBulkCreateDescriptors(descriptors []model.AssetAdministrationShellD
 		}
 		if _, found := seen[identifier]; found {
 			err := common.NewErrConflict("AAS with given id occurs multiple times in bulk request")
-			return asyncbulk.ItemFailure{
+			return asyncjob.ItemFailure{
 				Index:      index,
 				Identifier: identifier,
 				StatusCode: http.StatusConflict,
@@ -328,7 +328,7 @@ func validateBulkCreateDescriptors(descriptors []model.AssetAdministrationShellD
 		}
 		seen[identifier] = struct{}{}
 	}
-	return asyncbulk.ItemFailure{}
+	return asyncjob.ItemFailure{}
 }
 
 func (s *AssetAdministrationShellRegistryAPIAPIService) upsertDescriptorInTransaction(
@@ -361,8 +361,8 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) upsertDescriptorInTransa
 	return http.StatusNoContent, nil
 }
 
-func successfulAtomicResult(itemCount int) asyncbulk.OperationResult {
-	return asyncbulk.OperationResult{
+func successfulAtomicResult(itemCount int) asyncjob.BulkResult {
+	return asyncjob.BulkResult{
 		Success:         true,
 		ProcessedCount:  itemCount,
 		SuccessfulCount: itemCount,
@@ -370,10 +370,10 @@ func successfulAtomicResult(itemCount int) asyncbulk.OperationResult {
 	}
 }
 
-func failedAtomicResult(itemIdentifiers []string, failure asyncbulk.ItemFailure) asyncbulk.OperationResult {
-	failures := asyncbulk.ExpandAtomicFailures(itemIdentifiers, failure)
+func failedAtomicResult(itemIdentifiers []string, failure asyncjob.ItemFailure) asyncjob.BulkResult {
+	failures := asyncjob.ExpandAtomicFailures(itemIdentifiers, failure)
 	itemCount := len(itemIdentifiers)
-	return asyncbulk.OperationResult{
+	return asyncjob.BulkResult{
 		Success:         false,
 		ProcessedCount:  itemCount,
 		SuccessfulCount: 0,

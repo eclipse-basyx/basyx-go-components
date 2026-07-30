@@ -26,27 +26,14 @@
 package historyevidenceverifier
 
 import (
+	"context"
 	"database/sql"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 )
 
-func openDatabase(cfg *common.Config) (*sql.DB, error) {
-	dsn := common.BuildPostgresDSN(cfg.Postgres)
-	if err := common.ValidateSchemaVersionByDSN(dsn, common.CURRENT_DATABASE_VERSION); err != nil {
-		return nil, err
-	}
-	db, err := common.NewDatabaseConnection(dsn)
-	if err != nil {
-		return nil, err
-	}
-	if cfg.Postgres.MaxOpenConnections > 0 {
-		db.SetMaxOpenConns(cfg.Postgres.MaxOpenConnections)
-	}
-	if cfg.Postgres.MaxIdleConnections > 0 {
-		db.SetMaxIdleConns(cfg.Postgres.MaxIdleConnections)
-	}
-	return db, nil
+func openDatabase(ctx context.Context, cfg *common.Config) (*sql.DB, error) {
+	return common.OpenPostgresWithSchemaValidation(ctx, cfg.Postgres, "historyevidenceverifier", common.CURRENT_DATABASE_VERSION)
 }
 
 func closeDatabase(db *sql.DB) {

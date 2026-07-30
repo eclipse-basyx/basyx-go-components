@@ -33,8 +33,9 @@ postgres:
   # options: ""
   # timezone: ""
   maxOpenConnections: 50
-  maxIdleConnections: 50
+  maxIdleConnections: 25
   connMaxLifetimeMinutes: 5
+  connMaxIdleTimeMinutes: 0
 
 oidc:
   trustlistPath: "config/trustlist.json"

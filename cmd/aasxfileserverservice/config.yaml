@@ -32,9 +32,10 @@ postgres:
   # searchPath: ""
   # options: ""
   # timezone: ""
-  maxOpenConnections: 500
-  maxIdleConnections: 500
+  maxOpenConnections: 50
+  maxIdleConnections: 25
   connMaxLifetimeMinutes: 5
+  connMaxIdleTimeMinutes: 0
 
 general:
   uploadMaxSizeBytes: 134217728

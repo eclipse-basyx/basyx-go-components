@@ -1,0 +1,11 @@
+infrastructures:
+  default: delegatedOperations
+
+  delegatedOperations:
+    name: Delegated Operations
+    template: mono-all
+    components:
+      aasEnvironment:
+        baseUrl: "http://localhost:8090"
+    security:
+      type: none

@@ -38,6 +38,8 @@ import (
 )
 
 func main() {
+	ctx, stop := common.SignalContext()
+
 	configPath := ""
 	databaseSchema := ""
 	customPatchPath := ""
@@ -54,6 +56,7 @@ func main() {
 			"error.code", "BASYXCFG-MAIN-LOADCONFIG",
 			"error", err,
 		)
+		stop()
 		os.Exit(1)
 	}
 	if _, err = common.ConfigureLogging(cfg, "basyxconfigurationservice", configPath, os.Stderr); err != nil {
@@ -63,6 +66,7 @@ func main() {
 			"error.code", "BASYXCFG-MAIN-CONFIGLOGGING",
 			"error", err,
 		)
+		stop()
 		os.Exit(1)
 	}
 
@@ -71,7 +75,7 @@ func main() {
 		patchBasePath = customPatchPath
 	}
 
-	execCtx := &sequences.ExecutionContext{Config: cfg}
+	execCtx := &sequences.ExecutionContext{Context: ctx, Config: cfg}
 	schemInit := basyxconfigurationservice.NewSchemaInitializer()
 	schemInit.Register(sequences.NewDatabaseConnection(execCtx))
 	schemInit.Register(sequences.NewSystemTable(execCtx))
@@ -86,10 +90,13 @@ func main() {
 	schemInit.Register(sequences.NewSchemaPatch(execCtx, filepath.Join(patchBasePath, "1_1_5.sql"), "v1.1.5"))
 	schemInit.Register(sequences.NewSchemaPatch(execCtx, filepath.Join(patchBasePath, "1_1_6.sql"), "v1.1.6"))
 	schemInit.Register(sequences.NewSchemaPatch(execCtx, filepath.Join(patchBasePath, "1_1_7.sql"), "v1.1.7"))
-	schemInit.Register(sequences.NewSchemaPatch(execCtx, filepath.Join(patchBasePath, "1_1_8.sql"), common.CURRENT_DATABASE_VERSION))
+	schemInit.Register(sequences.NewSchemaPatch(execCtx, filepath.Join(patchBasePath, "1_1_8.sql"), "v1.1.8"))
+	schemInit.Register(sequences.NewSchemaPatch(execCtx, filepath.Join(patchBasePath, "1_1_9.sql"), "v1.1.9"))
+	schemInit.Register(sequences.NewSchemaPatch(execCtx, filepath.Join(patchBasePath, "1_1_10.sql"), common.CURRENT_DATABASE_VERSION))
 
 	if err = schemInit.Execute(); err != nil {
 		slog.Error("configuration failed", "error.code", "BASYXCFG-MAIN-EXECUTE", "error", err)
+		stop()
 		os.Exit(1)
 	}
 
@@ -98,4 +105,5 @@ func main() {
 	}
 
 	slog.Info("BaSyx configuration completed successfully")
+	stop()
 }

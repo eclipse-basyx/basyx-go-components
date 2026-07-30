@@ -31,62 +31,201 @@ func TestResolveUploadedContentType(t *testing.T) {
 	tests := []struct {
 		name                string
 		detected            string
-		declared            string
 		fileName            string
+		declared            []string
 		expectedContentType string
 		expectedMismatch    bool
 	}{
 		{
-			name:                "detected specific wins",
+			name:                "declared image wins over detected image",
 			detected:            "image/gif",
-			declared:            "image/png",
 			fileName:            "demo.bin",
-			expectedContentType: "image/gif",
+			declared:            []string{"image/png"},
+			expectedContentType: "image/png",
 			expectedMismatch:    true,
 		},
 		{
-			name:                "weak detected falls back to declared",
+			name:                "binary fallback detection does not report mismatch",
 			detected:            "application/octet-stream",
-			declared:            "image/tiff",
 			fileName:            "demo.bin",
-			expectedContentType: "image/tiff",
+			declared:            []string{"image/png"},
+			expectedContentType: "image/png",
 			expectedMismatch:    false,
 		},
 		{
-			name:                "weak detected with invalid declared falls back to extension",
-			detected:            "application/octet-stream",
-			declared:            "not/a valid content type",
-			fileName:            "picture.tif",
-			expectedContentType: "image/tiff",
+			name:                "declared ZIP is specific",
+			detected:            "application/zip",
+			fileName:            "archive.bin",
+			declared:            []string{"application/zip"},
+			expectedContentType: "application/zip",
 			expectedMismatch:    false,
 		},
 		{
-			name:                "all weak falls back to binary",
-			detected:            "application/octet-stream",
-			declared:            "",
-			fileName:            "",
-			expectedContentType: "application/octet-stream",
-			expectedMismatch:    false,
+			name:                "IFC declaration wins over text sniff",
+			detected:            "text/plain; charset=utf-8",
+			fileName:            "model.ifc",
+			declared:            []string{"application/x-step"},
+			expectedContentType: "application/x-step",
+			expectedMismatch:    true,
+		},
+		{
+			name:                "CSV declaration wins over text sniff",
+			detected:            "text/plain; charset=utf-8",
+			fileName:            "data.csv",
+			declared:            []string{"text/csv"},
+			expectedContentType: "text/csv",
+			expectedMismatch:    true,
+		},
+		{
+			name:                "SVG declaration wins over generic XML sniff",
+			detected:            "text/xml; charset=utf-8",
+			fileName:            "diagram.svg",
+			declared:            []string{"image/svg+xml"},
+			expectedContentType: "image/svg+xml",
+			expectedMismatch:    true,
 		},
 		{
 			name:                "detected with parameters normalized",
 			detected:            "text/plain; charset=utf-8",
-			declared:            "text/plain",
 			fileName:            "doc.txt",
+			declared:            []string{"TEXT/PLAIN; charset=us-ascii"},
 			expectedContentType: "text/plain",
+			expectedMismatch:    false,
+		},
+		{
+			name:                "first specific declaration wins",
+			detected:            "text/plain",
+			fileName:            "model.ifc",
+			declared:            []string{"application/octet-stream", "application/x-step", "text/csv"},
+			expectedContentType: "application/x-step",
+			expectedMismatch:    true,
+		},
+		{
+			name:                "invalid and generic declarations fall back to detected",
+			detected:            "image/gif",
+			fileName:            "demo.bin",
+			declared:            []string{"not/a valid content type", "application/octet-stream"},
+			expectedContentType: "image/gif",
+			expectedMismatch:    false,
+		},
+		{
+			name:                "weak detection and invalid declaration fall back to extension",
+			detected:            "application/octet-stream",
+			fileName:            "picture.tif",
+			declared:            []string{"not/a valid content type"},
+			expectedContentType: "image/tiff",
+			expectedMismatch:    false,
+		},
+		{
+			name:                "plain text detection falls back to CSV extension",
+			detected:            "text/plain; charset=utf-8",
+			fileName:            "data.csv",
+			expectedContentType: "text/csv",
+			expectedMismatch:    false,
+		},
+		{
+			name:                "generic XML detection falls back to SVG extension",
+			detected:            "text/xml; charset=utf-8",
+			fileName:            "diagram.svg",
+			expectedContentType: "image/svg+xml",
+			expectedMismatch:    false,
+		},
+		{
+			name:                "ZIP detection falls back to filename extension",
+			detected:            "application/zip",
+			fileName:            "diagram.svg",
+			expectedContentType: "image/svg+xml",
+			expectedMismatch:    false,
+		},
+		{
+			name:                "extension wins over generic declaration",
+			detected:            "application/octet-stream",
+			fileName:            "data.csv",
+			declared:            []string{"text/plain"},
+			expectedContentType: "text/csv",
+			expectedMismatch:    false,
+		},
+		{
+			name:                "generic declaration is retained after other fallbacks",
+			detected:            "application/octet-stream",
+			fileName:            "attachment.bin",
+			declared:            []string{"text/plain"},
+			expectedContentType: "text/plain",
+			expectedMismatch:    false,
+		},
+		{
+			name:                "binary placeholder does not mask later generic declaration",
+			detected:            "application/octet-stream",
+			fileName:            "attachment.bin",
+			declared:            []string{"application/octet-stream", "text/plain"},
+			expectedContentType: "text/plain",
+			expectedMismatch:    false,
+		},
+		{
+			name:                "all empty falls back to binary",
+			detected:            "",
+			fileName:            "",
+			expectedContentType: "application/octet-stream",
 			expectedMismatch:    false,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			resolved, mismatch := ResolveUploadedContentType(tt.detected, tt.declared, tt.fileName)
+			resolved, mismatch := ResolveUploadedContentType(tt.detected, tt.fileName, tt.declared...)
 
 			if resolved != tt.expectedContentType {
 				t.Fatalf("expected content type %q, got %q", tt.expectedContentType, resolved)
 			}
 			if mismatch != tt.expectedMismatch {
 				t.Fatalf("expected mismatch %t, got %t", tt.expectedMismatch, mismatch)
+			}
+		})
+	}
+}
+
+func TestHasAuthoritativeContentTypeDeclaration(t *testing.T) {
+	tests := []struct {
+		name         string
+		declarations []string
+		expected     bool
+	}{
+		{
+			name:         "specific declaration",
+			declarations: []string{"application/x-step"},
+			expected:     true,
+		},
+		{
+			name:         "plain text declaration",
+			declarations: []string{"text/plain; charset=utf-8"},
+			expected:     true,
+		},
+		{
+			name:         "XML declaration",
+			declarations: []string{"application/xml"},
+			expected:     true,
+		},
+		{
+			name:         "ZIP declaration",
+			declarations: []string{"application/zip"},
+			expected:     true,
+		},
+		{
+			name:         "binary placeholder",
+			declarations: []string{"application/octet-stream"},
+			expected:     false,
+		},
+		{
+			name:         "invalid and empty declarations",
+			declarations: []string{"", "not a content type"},
+			expected:     false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if actual := HasAuthoritativeContentTypeDeclaration(tt.declarations...); actual != tt.expected {
+				t.Fatalf("expected %t, got %t", tt.expected, actual)
 			}
 		})
 	}

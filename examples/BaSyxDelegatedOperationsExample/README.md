@@ -1,99 +1,92 @@
-# BaSyx Delegated Operations Example (Sync + Async)
+# BaSyx Delegated Operations Example
 
-This example provides a complete docker-compose setup for delegated operation invocation using the Go Submodel Repository.
+This Docker Compose example demonstrates synchronous and asynchronous delegated
+operations with:
 
-It includes:
-- AAS Repository (`http://localhost:8090`)
-- Submodel Repository (`http://localhost:8091`)
-- Delegated microservice (`http://localhost:8099`) implemented in Go
-- AAS Web UI (`http://localhost:3000`)
-- PostgreSQL
-- Data init container that preloads AAS and Submodel data
+- AAS Environment at `http://localhost:8090`
+- AAS Web UI at `http://localhost:3000`
+- delegated operation service at `http://localhost:8099`
+
+The example loads an AAS and a Submodel containing these operations:
+
+- `AddNumbersSync`
+- `AddNumbersAsync`
+
+Both add the input values `numberA` and `numberB` and return `sum`.
+`AddNumbersSync` delegates to an endpoint that responds immediately, while
+`AddNumbersAsync` delegates to one that simulates delayed work. This is
+independent of the invocation mode: either operation can be invoked
+synchronously or asynchronously through the AAS Environment.
 
 ## Start
-
-Run from this folder:
 
 ```bash
 docker compose up --build
 ```
 
-## Preloaded IDs
+## Delegation trust
 
-- Submodel ID: `https://example.com/ids/sm/delegated-operations`
-- Encoded Submodel ID: `aHR0cHM6Ly9leGFtcGxlLmNvbS9pZHMvc20vZGVsZWdhdGVkLW9wZXJhdGlvbnM`
-- AAS ID: `https://example.com/ids/aas/delegated-operations-example`
-- Encoded AAS ID: `aHR0cHM6Ly9leGFtcGxlLmNvbS9pZHMvYWFzL2RlbGVnYXRlZC1vcGVyYXRpb25zLWV4YW1wbGU`
+The delegated service has the static address `172.28.0.10`, and the example
+allowlists both its service name and IP address. If `172.28.0.0/24` conflicts
+with another Docker network, update the subnet, service address, and
+`SMREPO_DELEGATION_TRUSTED_HOSTS` together.
 
-## Delegated Operations
+## Invoke the operations
 
-The submodel contains two operation elements:
-- `AddNumbersSync` delegates to `http://delegated-operation-service:8080/delegate/add/sync`
-- `AddNumbersAsync` delegates to `http://delegated-operation-service:8080/delegate/add/async`
+Open `http://localhost:3000` and select `DelegatedOperationsAAS`, then
+`DelegatedOperationsSubmodel`. Select either operation, enter values for
+`numberA` and `numberB`, and execute it. The operation view lets you choose
+between synchronous and asynchronous invocation. For example, entering `5` and
+`3` displays `8` as `sum`.
 
-Operation elements JSON for manual loading is provided in:
+## Invoke through the API
 
-- `data/operation-submodel-elements.json`
+The request in `data/invoke-request-add-5-and-3.json` contains the same example
+input.
 
-## Sync Invocation
+### Synchronous invocation
 
 ```bash
-curl --location --request POST \
-  'http://localhost:8091/submodels/aHR0cHM6Ly9leGFtcGxlLmNvbS9pZHMvc20vZGVsZWdhdGVkLW9wZXJhdGlvbnM/submodel-elements/AddNumbersSync/invoke' \
+curl --fail-with-body --silent --show-error \
+  --request POST \
+  'http://localhost:8090/submodels/aHR0cHM6Ly9leGFtcGxlLmNvbS9pZHMvc20vZGVsZWdhdGVkLW9wZXJhdGlvbnM/submodel-elements/AddNumbersSync/invoke' \
+  --header 'Content-Type: application/json' \
+  --data @data/invoke-request-add-5-and-3.json |
+  jq
+```
+
+The response is an `OperationResult` with `executionState` `Completed`,
+`success` `true`, and an output variable `sum` with value `8`.
+
+### Asynchronous invocation
+
+AAS V3.2 uses `Location` headers for asynchronous operation resources. Keep
+automatic redirect following disabled so the `202` and `302` responses remain
+visible.
+
+Start the invocation:
+
+```bash
+curl --include --request POST \
+  'http://localhost:8090/submodels/aHR0cHM6Ly9leGFtcGxlLmNvbS9pZHMvc20vZGVsZWdhdGVkLW9wZXJhdGlvbnM/submodel-elements/AddNumbersAsync/invoke-async' \
   --header 'Content-Type: application/json' \
   --data @data/invoke-request-add-5-and-3.json
 ```
 
-Expected result contains `sum = 8` in `outputArguments`.
-
-## Async Invocation
-
-1) Start async invocation:
+The response is `202 Accepted`. Copy its `Location` header and request that URL:
 
 ```bash
-curl --location --request POST \
-  'http://localhost:8091/submodels/aHR0cHM6Ly9leGFtcGxlLmNvbS9pZHMvc20vZGVsZWdhdGVkLW9wZXJhdGlvbnM/submodel-elements/AddNumbersAsync/invoke-async' \
-  --header 'Content-Type: application/json' \
-  --data @data/invoke-request-add-5-and-3.json
+curl --include '<status Location>'
 ```
 
-Response contains a `handleId`.
+- `200 OK` with `executionState` `Initiated` or `Running`: repeat the status
+  request.
+- `302 Found`: copy the new `Location` header, which identifies the result.
 
-2) Poll status:
+Fetch the result:
 
 ```bash
-curl --location --request GET \
-  'http://localhost:8091/submodels/aHR0cHM6Ly9leGFtcGxlLmNvbS9pZHMvc20vZGVsZWdhdGVkLW9wZXJhdGlvbnM/submodel-elements/AddNumbersAsync/operation-status/<handleId>'
+curl --fail-with-body --silent --show-error '<result Location>' | jq
 ```
 
-- `200` with `executionState=Running` means still running.
-- `302` means result is available.
-
-3) Fetch result:
-
-```bash
-curl --location --request GET \
-  'http://localhost:8091/submodels/aHR0cHM6Ly9leGFtcGxlLmNvbS9pZHMvc20vZGVsZWdhdGVkLW9wZXJhdGlvbnM/submodel-elements/AddNumbersAsync/operation-results/<handleId>'
-```
-
-Expected result contains `sum = 8` in `outputArguments`.
-
-## AAS Web UI
-
-Open:
-
-- `http://localhost:3000`
-
-The UI is configured to use:
-- `AAS_REPO_PATH=http://localhost:8090/shells`
-- `SUBMODEL_REPO_PATH=http://localhost:8091/submodels`
-
-## Files
-
-- `docker-compose.yml` - complete stack
-- `startup.sh` - waits for services and preloads AAS/Submodel data
-- `data/aas-shell.json` - preloaded AAS payload
-- `data/submodel-delegated-operations.json` - preloaded submodel with delegated operations
-- `data/operation-submodel-elements.json` - operation elements only JSON
-- `delegated-operation-service/main.go` - delegated sync/async add service
-- `delegated-operation-service/Dockerfile` - delegated service container image
+The completed result contains `sum` with value `8`.

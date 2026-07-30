@@ -2201,7 +2201,7 @@ func (c *AssetAdministrationShellRepositoryAPIAPIController) PutFileByPathAasRep
 	}
 
 	var result model.ImplResponse
-	err := HandleMultipartFileStream(r, "file", "fileName", func(fileName string, file io.Reader) error {
+	err := HandleMultipartFileStreamWithContentType(r, "file", "fileName", func(fileName string, contentType string, file io.Reader) error {
 		var uploadErr error
 		result, uploadErr = c.service.PutFileByPathAasRepository(
 			r.Context(),
@@ -2209,6 +2209,7 @@ func (c *AssetAdministrationShellRepositoryAPIAPIController) PutFileByPathAasRep
 			submodelIdentifierParam,
 			idShortPathParam,
 			fileName,
+			contentType,
 			file,
 		)
 		return uploadErr
@@ -2391,6 +2392,7 @@ func (c *AssetAdministrationShellRepositoryAPIAPIController) InvokeOperationAsyn
 		return
 	}
 
+	result.Body = c.contextualizeOperationRedirect(r, result.Body)
 	_ = EncodeJSONResponse(result.Body, &result.Code, w)
 }
 
@@ -2486,6 +2488,7 @@ func (c *AssetAdministrationShellRepositoryAPIAPIController) GetOperationAsyncSt
 		return
 	}
 
+	result.Body = c.contextualizeOperationRedirect(r, result.Body)
 	_ = EncodeJSONResponse(result.Body, &result.Code, w)
 }
 

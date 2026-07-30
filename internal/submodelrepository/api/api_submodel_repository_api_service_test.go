@@ -32,9 +32,10 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
-	"github.com/eclipse-basyx/basyx-go-components/internal/common/asyncbulk"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/asyncjob"
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	persistencepostgresql "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence"
 	openapi "github.com/eclipse-basyx/basyx-go-components/pkg/submodelrepositoryapi"
@@ -116,7 +117,7 @@ func TestResolveModelReferencePathKeysBuildsListIndexSegment(t *testing.T) {
 func TestGetSubmodelElementByPathSubmodelRepoRejectsInvalidLevel(t *testing.T) {
 	t.Parallel()
 
-	sut := NewSubmodelRepositoryAPIAPIService(persistencepostgresql.SubmodelDatabase{})
+	sut := NewSubmodelRepositoryAPIAPIService(t.Context(), persistencepostgresql.SubmodelDatabase{})
 	encodedSubmodelID := base64.RawStdEncoding.EncodeToString([]byte("sm-1"))
 
 	response, err := sut.GetSubmodelElementByPathSubmodelRepo(contextWithABACDisabled(t), encodedSubmodelID, "a.b", "invalid-level", "")
@@ -127,7 +128,7 @@ func TestGetSubmodelElementByPathSubmodelRepoRejectsInvalidLevel(t *testing.T) {
 func TestGetSubmodelByIDPathRejectsInvalidLevel(t *testing.T) {
 	t.Parallel()
 
-	sut := NewSubmodelRepositoryAPIAPIService(persistencepostgresql.SubmodelDatabase{})
+	sut := NewSubmodelRepositoryAPIAPIService(t.Context(), persistencepostgresql.SubmodelDatabase{})
 	encodedSubmodelID := common.EncodeString("sm-1")
 
 	response, err := sut.GetSubmodelByIDPath(contextWithABACDisabled(t), encodedSubmodelID, "invalid-level")
@@ -138,10 +139,78 @@ func TestGetSubmodelByIDPathRejectsInvalidLevel(t *testing.T) {
 func TestInvokeOperationValueOnlyReturnsBadRequest(t *testing.T) {
 	t.Parallel()
 
-	sut := NewSubmodelRepositoryAPIAPIService(persistencepostgresql.SubmodelDatabase{})
+	sut := NewSubmodelRepositoryAPIAPIService(t.Context(), persistencepostgresql.SubmodelDatabase{})
 	response, err := sut.InvokeOperationValueOnly(contextWithABACDisabled(t), "", "", "", gen.OperationRequestValueOnly{}, false)
 	require.NoError(t, err)
 	require.Equal(t, 400, response.Code)
+}
+
+func TestInvokeOperationAsyncRequiresClientTimeoutDuration(t *testing.T) {
+	t.Parallel()
+
+	sut := NewSubmodelRepositoryAPIAPIService(t.Context(), persistencepostgresql.SubmodelDatabase{})
+	response, err := sut.InvokeOperationAsync(contextWithABACDisabled(t), "", "", gen.OperationRequest{})
+	require.NoError(t, err)
+	require.Equal(t, http.StatusBadRequest, response.Code)
+}
+
+func TestAsyncDelegationCapacityIsBounded(t *testing.T) {
+	t.Parallel()
+
+	sut := NewSubmodelRepositoryAPIAPIService(t.Context(), persistencepostgresql.SubmodelDatabase{})
+	sut.asyncDelegationSlots = make(chan struct{}, 1)
+
+	require.True(t, sut.tryAcquireAsyncDelegationSlot())
+	require.False(t, sut.tryAcquireAsyncDelegationSlot())
+	sut.releaseAsyncDelegationSlot()
+	require.True(t, sut.tryAcquireAsyncDelegationSlot())
+	sut.releaseAsyncDelegationSlot()
+}
+
+func TestAsyncDelegationContextStopsWithServiceLifecycle(t *testing.T) {
+	t.Parallel()
+
+	lifecycleContext, stopService := context.WithCancel(t.Context())
+	sut := NewSubmodelRepositoryAPIAPIService(lifecycleContext, persistencepostgresql.SubmodelDatabase{})
+	delegationContext, cancelDelegation := sut.newAsyncDelegationContext(contextWithABACDisabled(t), time.Minute)
+	defer cancelDelegation()
+
+	stopService()
+
+	select {
+	case <-delegationContext.Done():
+		require.ErrorIs(t, delegationContext.Err(), context.Canceled)
+	case <-time.After(time.Second):
+		t.Fatal("delegation context was not canceled with the service lifecycle")
+	}
+}
+
+func TestAsyncRecordExpiryStartsAtTerminalTransition(t *testing.T) {
+	t.Parallel()
+
+	retention := 5 * time.Minute
+	manager := asyncjob.NewManager("SMREPO-ASYNC-TEST", retention)
+	sut := NewSubmodelRepositoryAPIAPIService(t.Context(), persistencepostgresql.SubmodelDatabase{}, manager)
+	executionDeadline := time.Now().UTC().Add(10 * time.Minute)
+	handleID, err := sut.asyncJobManager.Start(t.Context(), "anonymous", asyncjob.StartOptions{
+		JobKind:           "test",
+		ExecutionDeadline: executionDeadline,
+	})
+	require.NoError(t, err)
+
+	runningRecord, found, err := sut.asyncJobManager.Get(t.Context(), handleID)
+	require.NoError(t, err)
+	require.True(t, found)
+	require.True(t, runningRecord.ExpiresAt.IsZero())
+	require.Equal(t, executionDeadline, runningRecord.ExecutionDeadline)
+
+	beforeTerminalUpdate := time.Now().UTC()
+	require.NoError(t, sut.asyncJobManager.CompletePayload(t.Context(), handleID, map[string]any{"success": true}))
+	terminalRecord, found, err := sut.asyncJobManager.Get(t.Context(), handleID)
+	require.NoError(t, err)
+	require.True(t, found)
+	require.Equal(t, "Completed", terminalRecord.ExecutionState)
+	require.GreaterOrEqual(t, terminalRecord.ExpiresAt, beforeTerminalUpdate.Add(retention))
 }
 
 func TestPostSubmodelElementByPathSubmodelRepoMapsDeniedToForbidden(t *testing.T) {
@@ -155,20 +224,19 @@ func TestPostSubmodelElementByPathSubmodelRepoMapsDeniedToForbidden(t *testing.T
 }
 
 func TestGetOperationAsyncStatusReturnsRedirectWithLocation(t *testing.T) {
-	sut := NewSubmodelRepositoryAPIAPIService(persistencepostgresql.SubmodelDatabase{})
+	sut := NewSubmodelRepositoryAPIAPIService(t.Context(), persistencepostgresql.SubmodelDatabase{})
 
 	decodedSubmodelID := "sm-redirect"
 	encodedSubmodelID := base64.RawURLEncoding.EncodeToString([]byte(decodedSubmodelID))
-	handleID, err := sut.asyncManager.Start("anonymous")
-	require.NoError(t, err)
-	sut.asyncManager.Update(handleID, func(record asyncbulk.Record) asyncbulk.Record {
-		record.ExecutionState = "Completed"
-		record.Metadata = map[string]string{
+	handleID, err := sut.asyncJobManager.Start(t.Context(), "anonymous", asyncjob.StartOptions{
+		JobKind: "test",
+		Metadata: map[string]string{
 			delegatedAsyncSubmodelIdentifierMetadataKey: decodedSubmodelID,
 			delegatedAsyncIDShortPathMetadataKey:        "Ops.Add",
-		}
-		return record
+		},
 	})
+	require.NoError(t, err)
+	require.NoError(t, sut.asyncJobManager.CompletePayload(t.Context(), handleID, map[string]any{"success": true}))
 
 	response, err := sut.GetOperationAsyncStatus(contextWithABACDisabled(t), encodedSubmodelID, "Ops.Add", handleID)
 	require.NoError(t, err)

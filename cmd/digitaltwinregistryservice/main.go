@@ -34,12 +34,11 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
-	"time"
 
 	registryapiinternal "github.com/eclipse-basyx/basyx-go-components/internal/aasregistry/api"
 	registrydb "github.com/eclipse-basyx/basyx-go-components/internal/aasregistry/persistence"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
-	"github.com/eclipse-basyx/basyx-go-components/internal/common/asyncbulk"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/asyncjob"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/binarycontent"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/history"
 	commonmodel "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
@@ -102,27 +101,12 @@ func runServer(ctx context.Context, configPath string) error {
 	base := common.NormalizeBasePath(cfg.Server.ContextPath)
 
 	// === Database ===
-	dsn := common.BuildPostgresDSN(cfg.Postgres)
-
-	if err := common.ValidateSchemaVersionByDSN(dsn, common.CURRENT_DATABASE_VERSION); err != nil {
-		return err
-	}
-
 	slog.InfoContext(ctx, "connecting to PostgreSQL")
 
-	sharedDB, err := common.NewDatabaseConnection(dsn)
+	sharedDB, err := common.OpenPostgresWithSchemaValidation(ctx, cfg.Postgres, "digitaltwinregistryservice", common.CURRENT_DATABASE_VERSION)
 	if err != nil {
 		slog.ErrorContext(ctx, "database connection failed", "error.code", "DTR-DB-CONNECT", "error", err)
 		return err
-	}
-	if cfg.Postgres.MaxOpenConnections > 0 {
-		sharedDB.SetMaxOpenConns(cfg.Postgres.MaxOpenConnections)
-	}
-	if cfg.Postgres.MaxIdleConnections > 0 {
-		sharedDB.SetMaxIdleConns(cfg.Postgres.MaxIdleConnections)
-	}
-	if cfg.Postgres.ConnMaxLifetimeMinutes > 0 {
-		sharedDB.SetConnMaxLifetime(time.Duration(cfg.Postgres.ConnMaxLifetimeMinutes) * time.Minute)
 	}
 	if err = history.ApplyPostgresGuardConfig(ctx, sharedDB); err != nil {
 		return err
@@ -152,7 +136,11 @@ func runServer(ctx context.Context, configPath string) error {
 	)
 
 	registryCtrl := registryapi.NewAssetAdministrationShellRegistryAPIAPIController(registrySvc, cfg.Server.ContextPath)
-	bulkManager := asyncbulk.NewManager("DTR-BULK", 0)
+	bulkManager, err := asyncjob.NewPostgresManager(ctx, sharedDB, "DTR-BULK", 0)
+	if err != nil {
+		slog.ErrorContext(ctx, "async job persistence initialization failed", "error.code", "DTR-ASYNCJOB-INIT", "error", err)
+		return err
+	}
 	bulkSvc := registryapiinternal.NewBulkService(registrySvc, bulkManager)
 	bulkHandler := registryapiinternal.NewBulkHTTPHandler(bulkSvc)
 	discoveryCtrl := openapi.NewAssetAdministrationShellBasicDiscoveryAPIAPIController(discoverySvc)

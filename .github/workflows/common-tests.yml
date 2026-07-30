@@ -43,8 +43,8 @@ jobs:
       - name: Run common root package tests
         run: go test -count=1 -v -cover ./internal/common
 
-      - name: Run common async bulk tests
-        run: go test -count=1 -v -cover ./internal/common/asyncbulk
+      - name: Run common async job tests
+        run: go test -count=1 -v -cover ./internal/common/asyncjob
 
       - name: Run common builder tests
         run: go test -count=1 -v -cover ./internal/common/builder

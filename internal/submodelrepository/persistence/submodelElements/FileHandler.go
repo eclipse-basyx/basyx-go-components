@@ -376,7 +376,7 @@ func (p PostgreSQLFileHandler) UploadFileAttachmentReaderTx(tx *sql.Tx, submodel
 		return err
 	}
 
-	resolvedFileName, resolvedContentType, uploadContent, err := resolveUploadFileMetadata(file, fileName, metadata)
+	resolvedFileName, resolvedContentType, uploadContent, err := resolveUploadFileMetadata(file, fileName, nil, metadata)
 	if err != nil {
 		return err
 	}
@@ -403,7 +403,30 @@ func (p PostgreSQLFileHandler) UploadFileAttachmentReaderTx(tx *sql.Tx, submodel
 }
 
 // UploadManagedFileAttachmentReaderTx stores a deduplicated internal attachment.
-func (p PostgreSQLFileHandler) UploadManagedFileAttachmentReaderTx(ctx context.Context, tx *sql.Tx, submodelID string, idShortPath string, file io.Reader, fileName string) (binarycontent.Reference, string, error) {
+//
+// Parameters:
+//   - ctx: Request context preserving authorization, history, and cancellation data.
+//   - tx: Transaction used for metadata and binary-reference persistence.
+//   - submodelID: Identifier of the attachment's parent submodel.
+//   - idShortPath: Path of the target File submodel element.
+//   - file: Attachment source consumed before the method returns.
+//   - fileName: Original attachment filename.
+//   - declaredContentTypes: Current upload declarations in descending priority.
+//
+// Existing File-element metadata is used only when the current upload has no
+// authoritative declaration.
+//
+// Returns the stored binary reference, resolved content type, and any
+// validation or persistence error.
+func (p PostgreSQLFileHandler) UploadManagedFileAttachmentReaderTx(
+	ctx context.Context,
+	tx *sql.Tx,
+	submodelID string,
+	idShortPath string,
+	file io.Reader,
+	fileName string,
+	declaredContentTypes ...string,
+) (binarycontent.Reference, string, error) {
 	if file == nil {
 		return binarycontent.Reference{}, "", common.NewErrBadRequest("SMREPO-UPLOADATTACHMENT-MISSINGFILE file payload is required")
 	}
@@ -412,7 +435,7 @@ func (p PostgreSQLFileHandler) UploadManagedFileAttachmentReaderTx(ctx context.C
 	if err != nil {
 		return binarycontent.Reference{}, "", err
 	}
-	resolvedFileName, resolvedContentType, uploadContent, err := resolveUploadFileMetadata(file, fileName, metadata)
+	resolvedFileName, resolvedContentType, uploadContent, err := resolveUploadFileMetadata(file, fileName, declaredContentTypes, metadata)
 	if err != nil {
 		return binarycontent.Reference{}, "", err
 	}
@@ -507,7 +530,12 @@ func readFileElementUploadMetadata(tx *sql.Tx, dialect goqu.DialectWrapper, subm
 	return metadata, nil
 }
 
-func resolveUploadFileMetadata(file io.Reader, fileName string, metadata fileElementUploadMetadata) (string, string, io.Reader, error) {
+func resolveUploadFileMetadata(
+	file io.Reader,
+	fileName string,
+	declaredContentTypes []string,
+	metadata fileElementUploadMetadata,
+) (string, string, io.Reader, error) {
 	detectedContentType, uploadContent, err := common.SniffContentTypeReader(file)
 	if err != nil {
 		return "", "", nil, fmt.Errorf("failed to read file for content type detection: %w", err)
@@ -518,9 +546,18 @@ func resolveUploadFileMetadata(file io.Reader, fileName string, metadata fileEle
 		resolvedFileName = metadata.existingFileName.String
 	}
 
-	resolvedContentType, mismatchDetectedVsDeclared := common.ResolveUploadedContentType(detectedContentType, metadata.existingContentType.String, resolvedFileName)
+	orderedDeclarations := make([]string, 0, len(declaredContentTypes)+1)
+	orderedDeclarations = append(orderedDeclarations, declaredContentTypes...)
+	if !common.HasAuthoritativeContentTypeDeclaration(declaredContentTypes...) {
+		orderedDeclarations = append(orderedDeclarations, metadata.existingContentType.String)
+	}
+	resolvedContentType, mismatchDetectedVsDeclared := common.ResolveUploadedContentType(
+		detectedContentType,
+		resolvedFileName,
+		orderedDeclarations...,
+	)
 	if mismatchDetectedVsDeclared {
-		slog.Warn("detected attachment content type differs from declared content type; using detected content type", "error.code", "SMREPO-UPLOADATTACHMENT-RESOLVEMIME")
+		slog.Warn("detected attachment content type differs from declared content type; preserving declared content type", "error.code", "SMREPO-UPLOADATTACHMENT-RESOLVEMIME")
 	}
 
 	return resolvedFileName, resolvedContentType, uploadContent, nil

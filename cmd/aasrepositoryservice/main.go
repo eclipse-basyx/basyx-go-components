@@ -34,7 +34,6 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
-	"time"
 
 	"github.com/go-chi/chi/v5"
 
@@ -49,6 +48,7 @@ import (
 	commonmodel "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/security/abacpolicy"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/telemetry"
+	submodelrepositoryapi "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/api"
 	submodelrepositorydb "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence"
 	openapi "github.com/eclipse-basyx/basyx-go-components/pkg/aasrepositoryapi/go"
 )
@@ -121,27 +121,12 @@ func runServer(ctx context.Context, configPath string) error {
 		slog.WarnContext(ctx, "JWS certificate chain unavailable; x5c headers are disabled", "error.code", "AASREPOSITORY-JWS-LOADCHAIN", "error", err)
 	}
 
-	dsn := common.BuildPostgresDSN(cfg.Postgres)
-
-	if err := common.ValidateSchemaVersionByDSN(dsn, common.CURRENT_DATABASE_VERSION); err != nil {
-		return err
-	}
-
 	slog.InfoContext(ctx, "connecting to PostgreSQL")
 
-	sharedDB, err := common.NewDatabaseConnection(dsn)
+	sharedDB, err := common.OpenPostgresWithSchemaValidation(ctx, cfg.Postgres, "aasrepositoryservice", common.CURRENT_DATABASE_VERSION)
 	if err != nil {
 		slog.ErrorContext(ctx, "database connection failed", "error.code", "AASREPOSITORY-DB-CONNECT", "error", err)
 		return err
-	}
-	if cfg.Postgres.MaxOpenConnections > 0 {
-		sharedDB.SetMaxOpenConns(cfg.Postgres.MaxOpenConnections)
-	}
-	if cfg.Postgres.MaxIdleConnections > 0 {
-		sharedDB.SetMaxIdleConns(cfg.Postgres.MaxIdleConnections)
-	}
-	if cfg.Postgres.ConnMaxLifetimeMinutes > 0 {
-		sharedDB.SetConnMaxLifetime(time.Duration(cfg.Postgres.ConnMaxLifetimeMinutes) * time.Minute)
 	}
 	if err = history.ApplyPostgresGuardConfig(ctx, sharedDB); err != nil {
 		return err
@@ -166,6 +151,11 @@ func runServer(ctx context.Context, configPath string) error {
 		slog.ErrorContext(ctx, "submodel persistence initialization failed", "error.code", "AASREPOSITORY-SMREPOSITORY-INIT", "error", err)
 		return err
 	}
+	asyncJobManager, err := submodelrepositoryapi.NewAsyncJobManager(ctx, sharedDB)
+	if err != nil {
+		slog.ErrorContext(ctx, "async job persistence initialization failed", "error.code", "AASREPOSITORY-ASYNCJOB-INIT", "error", err)
+		return err
+	}
 	slog.InfoContext(ctx, "PostgreSQL connection established")
 
 	persistence := &aasenvironment.Persistence{
@@ -175,7 +165,7 @@ func runServer(ctx context.Context, configPath string) error {
 		SubmodelRepository: submodelDatabase,
 	}
 	aasSvc := aasenvironment.NewCustomAASRepositoryService(
-		api.NewAssetAdministrationShellRepositoryAPIAPIService(aasDatabase, submodelDatabase),
+		api.NewAssetAdministrationShellRepositoryAPIAPIService(ctx, aasDatabase, submodelDatabase, asyncJobManager),
 		persistence,
 		registrySyncConfig,
 	)

@@ -29,6 +29,8 @@ import (
 	"fmt"
 	"net/url"
 	"strings"
+
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
 // BuildPostgresDSN creates a PostgreSQL DSN with URL-encoded credentials.
@@ -46,6 +48,53 @@ func BuildPostgresDSN(cfg PostgresConfig) string {
 	postgresURL.RawQuery = buildPostgresQuery(cfg).Encode()
 
 	return postgresURL.String()
+}
+
+// BuildPostgresDSNForService adds the service name as PostgreSQL application_name
+// when the configured connection fields or DSN do not already provide one.
+func BuildPostgresDSNForService(cfg PostgresConfig, serviceName string) (string, string, error) {
+	trimmedServiceName := strings.TrimSpace(serviceName)
+	if strings.TrimSpace(cfg.DSN) == "" {
+		if strings.TrimSpace(cfg.ApplicationName) == "" {
+			cfg.ApplicationName = trimmedServiceName
+		}
+		return BuildPostgresDSN(cfg), strings.TrimSpace(cfg.ApplicationName), nil
+	}
+
+	dsn := BuildPostgresDSN(cfg)
+	parsedConfig, err := pgconn.ParseConfig(dsn)
+	if err != nil {
+		return "", "", fmt.Errorf("COMMON-POSTGRESDSN-PARSE postgres.dsn is invalid")
+	}
+	if applicationName := strings.TrimSpace(parsedConfig.RuntimeParams["application_name"]); applicationName != "" {
+		return dsn, applicationName, nil
+	}
+	if trimmedServiceName == "" {
+		return dsn, "", nil
+	}
+
+	dsn, err = addPostgresApplicationName(dsn, trimmedServiceName)
+	if err != nil {
+		return "", "", err
+	}
+	return dsn, trimmedServiceName, nil
+}
+
+func addPostgresApplicationName(dsn string, applicationName string) (string, error) {
+	lowerDSN := strings.ToLower(dsn)
+	if strings.HasPrefix(lowerDSN, "postgres://") || strings.HasPrefix(lowerDSN, "postgresql://") {
+		parsed, err := url.Parse(dsn)
+		if err != nil {
+			return "", fmt.Errorf("COMMON-POSTGRESDSN-PARSEURL postgres.dsn URL is invalid")
+		}
+		query := parsed.Query()
+		query.Set("application_name", applicationName)
+		parsed.RawQuery = query.Encode()
+		return parsed.String(), nil
+	}
+
+	escapedApplicationName := strings.NewReplacer(`\`, `\\`, `'`, `\'`).Replace(applicationName)
+	return strings.TrimSpace(dsn) + " application_name='" + escapedApplicationName + "'", nil
 }
 
 func buildPostgresQuery(cfg PostgresConfig) url.Values {

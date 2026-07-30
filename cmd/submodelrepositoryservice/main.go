@@ -34,7 +34,6 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
-	"time"
 
 	"github.com/go-chi/chi/v5"
 
@@ -131,24 +130,9 @@ func runServer(ctx context.Context, configPath string) error {
 		slog.WarnContext(ctx, "JWS certificate chain unavailable; x5c headers are disabled", "error.code", "SMREPOSITORY-JWS-LOADCHAIN", "error", err)
 	}
 
-	dsn := common.BuildPostgresDSN(cfg.Postgres)
-
-	if err := common.ValidateSchemaVersionByDSN(dsn, common.CURRENT_DATABASE_VERSION); err != nil {
-		return err
-	}
-
-	sharedDB, err := common.NewDatabaseConnection(dsn)
+	sharedDB, err := common.OpenPostgresWithSchemaValidation(ctx, cfg.Postgres, "submodelrepositoryservice", common.CURRENT_DATABASE_VERSION)
 	if err != nil {
 		return err
-	}
-	if cfg.Postgres.MaxOpenConnections > 0 {
-		sharedDB.SetMaxOpenConns(cfg.Postgres.MaxOpenConnections)
-	}
-	if cfg.Postgres.MaxIdleConnections > 0 {
-		sharedDB.SetMaxIdleConns(cfg.Postgres.MaxIdleConnections)
-	}
-	if cfg.Postgres.ConnMaxLifetimeMinutes > 0 {
-		sharedDB.SetConnMaxLifetime(time.Duration(cfg.Postgres.ConnMaxLifetimeMinutes) * time.Minute)
 	}
 	if err = history.ApplyPostgresGuardConfig(ctx, sharedDB); err != nil {
 		return err
@@ -159,6 +143,11 @@ func runServer(ctx context.Context, configPath string) error {
 		return err
 	}
 	smDatabase.SetJWSCertificateChain(signingOptions.CertificateChain)
+	asyncJobManager, err := api.NewAsyncJobManager(ctx, sharedDB)
+	if err != nil {
+		slog.ErrorContext(ctx, "async job persistence initialization failed", "error.code", "SMREPOSITORY-ASYNCJOB-INIT", "error", err)
+		return err
+	}
 	smRegistryPersistence, err := smregistrydb.NewPostgreSQLSMBackendFromDB(sharedDB)
 	if err != nil {
 		return err
@@ -182,7 +171,7 @@ func runServer(ctx context.Context, configPath string) error {
 	}
 	enableReferencingAASDescriptorEmbeddingSync := registrySyncConfig.SubmodelRegistryIntegration
 	smSvc := aasenvironment.NewCustomSubmodelRepositoryServiceWithAASDescriptorEmbeddingSync(
-		api.NewSubmodelRepositoryAPIAPIService(*smDatabase),
+		api.NewSubmodelRepositoryAPIAPIService(ctx, *smDatabase, asyncJobManager),
 		persistence,
 		registrySyncConfig,
 		enableReferencingAASDescriptorEmbeddingSync,

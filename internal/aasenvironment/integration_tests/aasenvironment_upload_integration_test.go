@@ -37,13 +37,16 @@ import (
 	"net/textproto"
 	"net/url"
 	"os"
+	pathpkg "path"
 	"path/filepath"
 	"regexp"
 	"strings"
 	"testing"
 	"time"
 
+	aasx "github.com/aas-core-works/aas-package3-golang/v2"
 	"github.com/doug-martin/goqu/v9"
+	"github.com/eclipse-basyx/basyx-go-components/internal/aasenvironment"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/testenv"
 	_ "github.com/jackc/pgx/v5/stdlib"
 	"github.com/stretchr/testify/require"
@@ -75,11 +78,87 @@ type storedAttachment struct {
 	IDShortPath        string
 	FileReference      string
 	ContentType        string
+	FileName           string
+}
+
+type fixtureEmbeddedFile struct {
+	FileName    string
+	ContentType string
+	Content     []byte
+}
+
+type fixtureAttachmentKey struct {
+	SubmodelIdentifier string
+	IDShortPath        string
 }
 
 func TestUploadAASXIntegration(t *testing.T) {
 	resetDatabaseForUploadIT(t, uploadIntegrationDSN)
 	runUploadJSONSuite(t, "upload_it_config.json")
+}
+
+func TestUploadCombinedExampleEmbeddedFileMIMETypes(t *testing.T) {
+	fixtures := []string{
+		"BOMAAS.aasx",
+		"FileHandlingAAS.aasx",
+		"IESEDriveMotorDM3000.aasx",
+		"IFCShell.aasx",
+		"SensorExampleComplete.aasx",
+	}
+	observedContentTypes := make(map[string]struct{})
+
+	for _, fixture := range fixtures {
+		t.Run(fixture, func(t *testing.T) {
+			resetDatabaseForUploadIT(t, uploadIntegrationDSN)
+			fixturePath := filepath.Join("testdata", "combined_example", fixture)
+			runMultipartUploadAction(t, testenv.JSONSuiteStep{
+				Method:         http.MethodPost,
+				Endpoint:       aasEnvBaseURL + "/upload",
+				Data:           fixturePath,
+				ExpectedStatus: http.StatusOK,
+			})
+
+			expectedFiles := readFixtureEmbeddedFiles(t, fixturePath)
+			attachments := readStoredAttachmentsFromDB(t)
+			require.Len(t, attachments, len(expectedFiles), "stored attachment count differs from source package")
+
+			attachmentsByLocation := make(map[fixtureAttachmentKey]storedAttachment, len(attachments))
+			for _, attachment := range attachments {
+				key := fixtureAttachmentKey{
+					SubmodelIdentifier: attachment.SubmodelIdentifier,
+					IDShortPath:        attachment.IDShortPath,
+				}
+				require.NotContains(t, attachmentsByLocation, key, "duplicate stored attachment location")
+				attachmentsByLocation[key] = attachment
+			}
+
+			for location, expected := range expectedFiles {
+				attachment, found := attachmentsByLocation[location]
+				require.Truef(
+					t,
+					found,
+					"embedded file %q was not stored for submodel %q at %q",
+					expected.FileName,
+					location.SubmodelIdentifier,
+					location.IDShortPath,
+				)
+				require.Equal(t, expected.FileName, attachment.FileName, "persisted filename differs from supplementary package part")
+				require.Equal(t, expected.ContentType, attachment.ContentType, "persisted MIME differs from AASX File declaration")
+				verifyCombinedExampleAttachment(t, attachment, expected)
+				observedContentTypes[expected.ContentType] = struct{}{}
+			}
+		})
+	}
+
+	for _, requiredContentType := range []string{
+		"application/pdf",
+		"application/x-step",
+		"image/png",
+		"image/svg+xml",
+		"text/csv",
+	} {
+		require.Contains(t, observedContentTypes, requiredContentType)
+	}
 }
 
 func TestUploadAASXIntegrationProductionPlan(t *testing.T) {
@@ -380,6 +459,7 @@ func readStoredAttachmentsFromDB(t *testing.T) []storedAttachment {
 			goqu.I("sme.idshort_path"),
 			goqu.I("fe.value"),
 			goqu.I("fe.content_type"),
+			goqu.I("fe.file_name"),
 		).
 		Join(goqu.T("submodel_element").As("sme"), goqu.On(goqu.I("sme.submodel_id").Eq(goqu.I("sm.id")))).
 		Join(goqu.T("file_element").As("fe"), goqu.On(goqu.I("fe.id").Eq(goqu.I("sme.id")))).
@@ -401,6 +481,7 @@ func readStoredAttachmentsFromDB(t *testing.T) []storedAttachment {
 			&attachment.IDShortPath,
 			&attachment.FileReference,
 			&attachment.ContentType,
+			&attachment.FileName,
 		)
 		require.NoError(t, scanErr)
 		t.Logf("validated attachment candidate: submodel=%s path=%s value=%s contentType=%s", attachment.SubmodelIdentifier, attachment.IDShortPath, attachment.FileReference, attachment.ContentType)
@@ -408,6 +489,126 @@ func readStoredAttachmentsFromDB(t *testing.T) []storedAttachment {
 	}
 	require.NoError(t, rows.Err())
 	return result
+}
+
+func readFixtureEmbeddedFiles(t *testing.T, fixturePath string) map[fixtureAttachmentKey]fixtureEmbeddedFile {
+	t.Helper()
+
+	// #nosec G304 -- fixture paths are selected from source-controlled integration test data.
+	payload, err := os.ReadFile(fixturePath)
+	require.NoError(t, err)
+	packageReader, err := aasx.NewPackaging().OpenReadFromStream(bytes.NewReader(payload))
+	require.NoError(t, err)
+	defer func() { require.NoError(t, packageReader.Close()) }()
+
+	result := make(map[fixtureAttachmentKey]fixtureEmbeddedFile)
+	specPart, environment, err := aasenvironment.ReadEnvironmentFromAASXSpec(packageReader, fixturePath)
+	require.NoError(t, err)
+
+	supplementaryParts, err := packageReader.SupplementariesFor(specPart)
+	require.NoError(t, err)
+	supplementaryByURI := make(map[string]*aasx.Part, len(supplementaryParts))
+	for _, supplementaryPart := range supplementaryParts {
+		supplementaryByURI[normalizeFixturePartURI(supplementaryPart.URI)] = supplementaryPart
+	}
+
+	for _, location := range aasenvironment.CollectAASXFileElementLocations(environment) {
+		resolvedURI := resolveFixtureReference(location.FileValue, specPart.URI)
+		supplementaryPart, exists := supplementaryByURI[resolvedURI]
+		if !exists {
+			continue
+		}
+
+		contentType := ""
+		if location.FileElement.ContentType() != nil {
+			contentType = strings.TrimSpace(*location.FileElement.ContentType())
+		}
+		require.NotEmpty(t, contentType, "internal supplementary File element must declare a content type")
+
+		content, readErr := supplementaryPart.ReadAllBytes()
+		require.NoError(t, readErr)
+		key := fixtureAttachmentKey{
+			SubmodelIdentifier: location.SubmodelID,
+			IDShortPath:        location.IDShortPath,
+		}
+		require.NotContains(t, result, key, "duplicate embedded File element location in fixture")
+		result[key] = fixtureEmbeddedFile{
+			FileName:    pathpkg.Base(normalizeFixturePartURI(supplementaryPart.URI)),
+			ContentType: contentType,
+			Content:     content,
+		}
+	}
+	return result
+}
+
+func resolveFixtureReference(reference string, specURI *url.URL) string {
+	referenceURL, err := url.Parse(strings.TrimSpace(reference))
+	if err != nil {
+		return ""
+	}
+	if referenceURL.IsAbs() {
+		return normalizeFixturePartURI(referenceURL)
+	}
+	if specURI == nil {
+		return ""
+	}
+
+	base := &url.URL{Path: normalizeFixturePartURI(specURI)}
+	return normalizeFixturePartURI(base.ResolveReference(referenceURL))
+}
+
+func normalizeFixturePartURI(partURI *url.URL) string {
+	if partURI == nil {
+		return ""
+	}
+	uriPath := strings.TrimSpace(partURI.Path)
+	if uriPath == "" {
+		uriPath = strings.TrimSpace(partURI.String())
+	}
+	uriPath = strings.ReplaceAll(uriPath, "\\", "/")
+	if !strings.HasPrefix(uriPath, "/") {
+		uriPath = "/" + uriPath
+	}
+	return pathpkg.Clean(uriPath)
+}
+
+func verifyCombinedExampleAttachment(t *testing.T, attachment storedAttachment, expected fixtureEmbeddedFile) {
+	t.Helper()
+
+	encodedSubmodel := base64.RawURLEncoding.EncodeToString([]byte(attachment.SubmodelIdentifier))
+	elementURL := aasEnvBaseURL +
+		"/submodels/" + encodedSubmodel +
+		"/submodel-elements/" + url.PathEscape(attachment.IDShortPath)
+	client := &http.Client{Timeout: 60 * time.Second}
+
+	elementResponse := doHTTPIntegrationRequest(t, client, mustNewRequest(t, http.MethodGet, elementURL))
+	func() {
+		defer func() { _ = elementResponse.Body.Close() }()
+		body, err := io.ReadAll(elementResponse.Body)
+		require.NoError(t, err)
+		require.Equalf(t, http.StatusOK, elementResponse.StatusCode, "File element request failed: %s", string(body))
+		var element struct {
+			ContentType string `json:"contentType"`
+		}
+		require.NoError(t, json.Unmarshal(body, &element))
+		require.Equal(t, expected.ContentType, element.ContentType, "File element MIME differs from AASX declaration")
+	}()
+
+	attachmentResponse := doHTTPIntegrationRequest(t, client, mustNewRequest(t, http.MethodGet, elementURL+"/attachment"))
+	defer func() { _ = attachmentResponse.Body.Close() }()
+	body, err := io.ReadAll(attachmentResponse.Body)
+	require.NoError(t, err)
+	require.Equalf(t, http.StatusOK, attachmentResponse.StatusCode, "attachment request failed: %s", string(body))
+	require.Equal(t, expected.ContentType, attachmentResponse.Header.Get("Content-Type"))
+	require.Equal(t, expected.Content, body)
+}
+
+func mustNewRequest(t *testing.T, method string, endpoint string) *http.Request {
+	t.Helper()
+
+	request, err := http.NewRequest(method, endpoint, nil)
+	require.NoError(t, err)
+	return request
 }
 
 func verifyThumbnailEndpoints(t *testing.T, step testenv.JSONSuiteStep) {

@@ -32,6 +32,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"net/url"
 	"os"
@@ -45,6 +46,8 @@ import (
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 )
 
+const maximumDelegatedOperationResponseBytes int64 = 1024 * 1024
+
 func parseDelegationTimeout(clientTimeoutDuration string) (time.Duration, error) {
 	if strings.TrimSpace(clientTimeoutDuration) == "" {
 		return defaultDelegationTimeout, nil
@@ -55,10 +58,8 @@ func parseDelegationTimeout(clientTimeoutDuration string) (time.Duration, error)
 		return 0, fmt.Errorf("SMREPO-PARSETO-INVALID clientTimeoutDuration '%s' is not an ISO8601 duration", clientTimeoutDuration)
 	}
 
-	sign := 1.0
 	if strings.HasPrefix(trimmed, "-P") {
-		sign = -1.0
-		trimmed = strings.TrimPrefix(trimmed, "-")
+		return 0, errors.New("SMREPO-PARSETO-NONPOSITIVE clientTimeoutDuration must resolve to a positive duration")
 	}
 
 	trimmed = strings.TrimPrefix(trimmed, "P")
@@ -82,14 +83,22 @@ func parseDelegationTimeout(clientTimeoutDuration string) (time.Duration, error)
 	if err != nil {
 		return 0, err
 	}
-	totalDuration += timeDuration
-
-	computedDuration := time.Duration(float64(totalDuration) * sign)
-	if computedDuration <= 0 {
-		return 0, errors.New("SMREPO-PARSETO-NONPOSITIVE clientTimeoutDuration must resolve to a positive duration")
+	totalDuration, err = checkedAddDelegationDuration(totalDuration, timeDuration)
+	if err != nil {
+		return 0, err
 	}
 
-	return computedDuration, nil
+	if totalDuration <= 0 {
+		return 0, errors.New("SMREPO-PARSETO-NONPOSITIVE clientTimeoutDuration must resolve to a positive duration")
+	}
+	if totalDuration > maximumDelegationTimeout {
+		return 0, fmt.Errorf(
+			"SMREPO-PARSETO-TOOLARGE clientTimeoutDuration must not exceed %s",
+			maximumDelegationTimeout,
+		)
+	}
+
+	return totalDuration, nil
 }
 
 func parseDelegationDateDuration(datePart string) (time.Duration, error) {
@@ -97,11 +106,15 @@ func parseDelegationDateDuration(datePart string) (time.Duration, error) {
 	var totalDuration time.Duration
 	if strings.Contains(remainingDate, "D") {
 		dayParts := strings.SplitN(remainingDate, "D", 2)
-		days, err := strconv.Atoi(dayParts[0])
+		days, err := strconv.ParseInt(dayParts[0], 10, 64)
 		if err != nil {
 			return 0, fmt.Errorf("SMREPO-PARSETO-PARSEDAYS %w", err)
 		}
-		totalDuration += time.Duration(days) * 24 * time.Hour
+		dayDuration, multiplyErr := checkedMultiplyDelegationDuration(days, 24*time.Hour)
+		if multiplyErr != nil {
+			return 0, multiplyErr
+		}
+		totalDuration = dayDuration
 		remainingDate = dayParts[1]
 	}
 
@@ -120,21 +133,30 @@ func parseDelegationTimeDuration(timePart string) (time.Duration, error) {
 	if err != nil {
 		return 0, err
 	}
-	totalDuration += hourDuration
+	totalDuration, err = checkedAddDelegationDuration(totalDuration, hourDuration)
+	if err != nil {
+		return 0, err
+	}
 	remainingTime = rest
 
 	minuteDuration, rest, err := parseDelegationIntTimePart(remainingTime, "M", time.Minute, "SMREPO-PARSETO-PARSEMINUTES")
 	if err != nil {
 		return 0, err
 	}
-	totalDuration += minuteDuration
+	totalDuration, err = checkedAddDelegationDuration(totalDuration, minuteDuration)
+	if err != nil {
+		return 0, err
+	}
 	remainingTime = rest
 
 	secondDuration, rest, err := parseDelegationSecondsPart(remainingTime)
 	if err != nil {
 		return 0, err
 	}
-	totalDuration += secondDuration
+	totalDuration, err = checkedAddDelegationDuration(totalDuration, secondDuration)
+	if err != nil {
+		return 0, err
+	}
 	remainingTime = rest
 
 	if strings.TrimSpace(remainingTime) != "" {
@@ -150,12 +172,16 @@ func parseDelegationIntTimePart(remainingTime string, suffix string, unit time.D
 	}
 
 	parts := strings.SplitN(remainingTime, suffix, 2)
-	value, err := strconv.Atoi(parts[0])
+	value, err := strconv.ParseInt(parts[0], 10, 64)
 	if err != nil {
 		return 0, "", fmt.Errorf("%s %w", code, err)
 	}
 
-	return time.Duration(value) * unit, parts[1], nil
+	duration, err := checkedMultiplyDelegationDuration(value, unit)
+	if err != nil {
+		return 0, "", err
+	}
+	return duration, parts[1], nil
 }
 
 func parseDelegationSecondsPart(remainingTime string) (time.Duration, string, error) {
@@ -168,8 +194,25 @@ func parseDelegationSecondsPart(remainingTime string) (time.Duration, string, er
 	if err != nil {
 		return 0, "", fmt.Errorf("SMREPO-PARSETO-PARSESECONDS %w", err)
 	}
+	if math.IsInf(seconds, 0) || math.IsNaN(seconds) || seconds > float64(math.MaxInt64)/float64(time.Second) {
+		return 0, "", errors.New("SMREPO-PARSETO-OVERFLOW clientTimeoutDuration exceeds supported duration range")
+	}
 
 	return time.Duration(seconds * float64(time.Second)), secondsParts[1], nil
+}
+
+func checkedMultiplyDelegationDuration(value int64, unit time.Duration) (time.Duration, error) {
+	if value < 0 || (value > 0 && value > math.MaxInt64/int64(unit)) {
+		return 0, errors.New("SMREPO-PARSETO-OVERFLOW clientTimeoutDuration exceeds supported duration range")
+	}
+	return time.Duration(value) * unit, nil
+}
+
+func checkedAddDelegationDuration(left time.Duration, right time.Duration) (time.Duration, error) {
+	if left < 0 || right < 0 || left > time.Duration(math.MaxInt64)-right {
+		return 0, errors.New("SMREPO-PARSETO-OVERFLOW clientTimeoutDuration exceeds supported duration range")
+	}
+	return left + right, nil
 }
 
 func resolveDelegationURL(element types.ISubmodelElement) (string, error) {
@@ -222,7 +265,7 @@ func serializeDelegatedOperationPayload(payload []types.IOperationVariable) ([]b
 	return requestBody, nil
 }
 
-func toDelegatedOperationResultPayload(outputArguments []types.IOperationVariable, inoutputArguments []types.IOperationVariable) map[string]any {
+func toDelegatedOperationResultPayload(outputArguments []any, inoutputArguments []any) map[string]any {
 	return map[string]any{
 		"executionState":    "Completed",
 		"success":           true,
@@ -231,74 +274,155 @@ func toDelegatedOperationResultPayload(outputArguments []types.IOperationVariabl
 	}
 }
 
-func toOperationVariables(payload any) ([]types.IOperationVariable, bool) {
-	if payload == nil {
-		return nil, false
+func toJsonableOperationVariable(item any) (any, error) {
+	if item == nil {
+		return nil, errors.New("SMREPO-NORMDELRES-NILOPVAR operation variable must not be null")
 	}
 
-	if alreadyTyped, ok := payload.([]types.IOperationVariable); ok {
-		return alreadyTyped, true
+	operationVariable, err := jsonization.OperationVariableFromJsonable(item)
+	if err != nil {
+		return nil, fmt.Errorf("SMREPO-NORMDELRES-PARSEOPVAR %w", err)
 	}
+	jsonableOperationVariable, err := jsonization.ToJsonable(operationVariable)
+	if err != nil {
+		return nil, fmt.Errorf("SMREPO-NORMDELRES-SEROPVAR %w", err)
+	}
+	return jsonableOperationVariable, nil
+}
 
+func jsonableOperationVariablesFromArray(payload any) ([]any, error) {
 	switch typedPayload := payload.(type) {
+	case []types.IOperationVariable:
+		return jsonableOperationVariablesFromTyped(typedPayload)
 	case []any:
-		return operationVariablesFromItems(typedPayload)
+		return jsonableOperationVariablesFromItems(typedPayload)
 	case []map[string]any:
 		items := make([]any, 0, len(typedPayload))
 		for _, item := range typedPayload {
 			items = append(items, item)
 		}
-		return operationVariablesFromItems(items)
-	case map[string]any:
-		if _, hasValue := typedPayload["value"]; !hasValue {
-			return nil, false
-		}
-		operationVariable, err := jsonization.OperationVariableFromJsonable(typedPayload)
-		if err != nil {
-			return nil, false
-		}
-		return []types.IOperationVariable{operationVariable}, true
+		return jsonableOperationVariablesFromItems(items)
 	default:
-		return nil, false
+		return nil, fmt.Errorf("SMREPO-NORMDELRES-INVALIDOPVARGROUP expected an operation variable array, got %T", payload)
 	}
 }
 
-func operationVariablesFromItems(items []any) ([]types.IOperationVariable, bool) {
-	operationVariables := make([]types.IOperationVariable, 0, len(items))
-	for _, item := range items {
-		operationVariable, err := jsonization.OperationVariableFromJsonable(item)
-		if err != nil {
-			return nil, false
+func jsonableOperationVariablesFromTyped(payload []types.IOperationVariable) ([]any, error) {
+	jsonables := make([]any, 0, len(payload))
+	for index, operationVariable := range payload {
+		if operationVariable == nil {
+			return nil, fmt.Errorf("SMREPO-NORMDELRES-NILOPVAR-%d operation variable must not be nil", index)
 		}
-		operationVariables = append(operationVariables, operationVariable)
+		jsonable, err := jsonization.ToJsonable(operationVariable)
+		if err != nil {
+			return nil, fmt.Errorf("SMREPO-NORMDELRES-SEROPVAR-%d %w", index, err)
+		}
+		jsonables = append(jsonables, jsonable)
 	}
-	return operationVariables, true
+	return jsonables, nil
 }
 
-func toDelegatedOperationResultPayloadFromBody(delegatedBody any) (map[string]any, bool) {
-	if delegatedOutput, ok := delegatedBody.([]types.IOperationVariable); ok {
-		return toDelegatedOperationResultPayload(delegatedOutput, []types.IOperationVariable{}), true
+func jsonableOperationVariablesFromItems(items []any) ([]any, error) {
+	jsonables := make([]any, 0, len(items))
+	for index, item := range items {
+		jsonable, err := toJsonableOperationVariable(item)
+		if err != nil {
+			return nil, fmt.Errorf("SMREPO-NORMDELRES-OPVAR-%d %w", index, err)
+		}
+		jsonables = append(jsonables, jsonable)
+	}
+	return jsonables, nil
+}
+
+func toDelegatedOperationResultPayloadFromBody(delegatedBody any) (map[string]any, error) {
+	switch delegatedBody.(type) {
+	case []types.IOperationVariable, []any, []map[string]any:
+		outputArguments, err := jsonableOperationVariablesFromArray(delegatedBody)
+		if err != nil {
+			return nil, err
+		}
+		return toDelegatedOperationResultPayload(outputArguments, []any{}), nil
 	}
 
 	delegatedBodyMap, ok := delegatedBody.(map[string]any)
 	if !ok {
-		return nil, false
+		return nil, fmt.Errorf("SMREPO-NORMDELRES-INVALIDBODY expected an operation result object or output argument array, got %T", delegatedBody)
 	}
 
-	outputArguments, outputOK := toOperationVariables(delegatedBodyMap["outputArguments"])
-	inoutputArguments, inoutputOK := toOperationVariables(delegatedBodyMap["inoutputArguments"])
-	if !outputOK && !inoutputOK {
-		return nil, false
+	resultPayload := make(map[string]any, len(delegatedBodyMap)+2)
+	for key, value := range delegatedBodyMap {
+		resultPayload[key] = value
 	}
 
-	if !outputOK {
-		outputArguments = []types.IOperationVariable{}
-	}
-	if !inoutputOK {
-		inoutputArguments = []types.IOperationVariable{}
+	hasOperationArguments := false
+	for _, field := range []string{"outputArguments", "inoutputArguments"} {
+		rawArguments, present := delegatedBodyMap[field]
+		if !present {
+			continue
+		}
+
+		arguments, err := jsonableOperationVariablesFromArray(rawArguments)
+		if err != nil {
+			return nil, fmt.Errorf("SMREPO-NORMDELRES-%s %w", strings.ToUpper(field), err)
+		}
+		resultPayload[field] = arguments
+		hasOperationArguments = true
 	}
 
-	return toDelegatedOperationResultPayload(outputArguments, inoutputArguments), true
+	hasResultEnvelope := hasOperationArguments
+	for _, field := range []string{"executionState", "success", "messages"} {
+		if _, present := delegatedBodyMap[field]; present {
+			hasResultEnvelope = true
+		}
+	}
+	if !hasResultEnvelope {
+		return nil, errors.New("SMREPO-NORMDELRES-MISSINGFIELDS delegated response is not an operation result")
+	}
+
+	if !hasOperationResultStateTypes(delegatedBodyMap) {
+		return nil, errors.New("SMREPO-NORMDELRES-INVALIDSTATE operation result executionState or success has an invalid type or value")
+	}
+
+	if _, present := delegatedBodyMap["executionState"]; !present {
+		resultPayload["executionState"] = "Completed"
+	}
+	if _, present := delegatedBodyMap["success"]; !present {
+		resultPayload["success"] = true
+	}
+
+	return resultPayload, nil
+}
+
+func hasOperationResultStateTypes(payload map[string]any) bool {
+	if rawExecutionState, present := payload["executionState"]; present {
+		executionState, ok := rawExecutionState.(string)
+		if !ok || !isValidExecutionState(executionState) {
+			return false
+		}
+	}
+
+	if rawSuccess, present := payload["success"]; present {
+		if _, ok := rawSuccess.(bool); !ok {
+			return false
+		}
+	}
+
+	if rawMessages, present := payload["messages"]; present {
+		if _, ok := rawMessages.([]any); !ok {
+			return false
+		}
+	}
+
+	return true
+}
+
+func isValidExecutionState(executionState string) bool {
+	switch executionState {
+	case "Initiated", "Running", "Completed", "Canceled", "Failed", "Timeout":
+		return true
+	default:
+		return false
+	}
 }
 
 func parseDelegationAsyncTTL() time.Duration {
@@ -367,24 +491,33 @@ func doTrustedDelegatedOperationCall(
 }
 
 func readDelegatedOperationResponse(response *http.Response) (int, any, error) {
-	responseBytes, readErr := io.ReadAll(response.Body)
+	if response.ContentLength > maximumDelegatedOperationResponseBytes {
+		return 0, nil, fmt.Errorf(
+			"SMREPO-DOOPDELG-RESPTOOLARGE delegated response Content-Length %d exceeds limit %d",
+			response.ContentLength,
+			maximumDelegatedOperationResponseBytes,
+		)
+	}
+
+	responseBytes, readErr := io.ReadAll(io.LimitReader(response.Body, maximumDelegatedOperationResponseBytes+1))
 	if readErr != nil {
 		return 0, nil, fmt.Errorf("SMREPO-DOOPDELG-READRESP %w", readErr)
 	}
+	if int64(len(responseBytes)) > maximumDelegatedOperationResponseBytes {
+		return 0, nil, fmt.Errorf(
+			"SMREPO-DOOPDELG-RESPTOOLARGE delegated response exceeds limit %d",
+			maximumDelegatedOperationResponseBytes,
+		)
+	}
 
 	if len(responseBytes) == 0 {
-		return response.StatusCode, []types.IOperationVariable{}, nil
+		return response.StatusCode, []any{}, nil
 	}
 
-	var delegatedOutput []types.IOperationVariable
-	if unmarshalErr := json.Unmarshal(responseBytes, &delegatedOutput); unmarshalErr == nil {
-		return response.StatusCode, delegatedOutput, nil
+	var responseBody any
+	if unmarshalErr := json.Unmarshal(responseBytes, &responseBody); unmarshalErr != nil {
+		return response.StatusCode, map[string]any{"message": string(responseBytes)}, nil
 	}
 
-	var passthroughBody any
-	if unmarshalErr := json.Unmarshal(responseBytes, &passthroughBody); unmarshalErr != nil {
-		passthroughBody = map[string]any{"message": string(responseBytes)}
-	}
-
-	return response.StatusCode, passthroughBody, nil
+	return response.StatusCode, responseBody, nil
 }

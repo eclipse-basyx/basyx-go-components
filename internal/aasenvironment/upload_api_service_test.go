@@ -117,7 +117,7 @@ func TestReadEnvironmentFromAASXSpec_AdaptsLegacyNamespace(t *testing.T) {
 		_ = packageReader.Close()
 	}()
 
-	_, environment, parseErr := readEnvironmentFromAASXSpec(packageReader, filepath.Base(hartingPath))
+	_, environment, parseErr := ReadEnvironmentFromAASXSpec(packageReader, filepath.Base(hartingPath))
 	if parseErr != nil {
 		t.Fatalf("expected legacy namespace to be adapted successfully, got error: %v", parseErr)
 	}
@@ -179,7 +179,7 @@ func TestValidateAASXThumbnailLimitsRejectsOversizedThumbnailBeforeImport(t *tes
 		t.Fatalf("failed to open AASX package: %v", err)
 	}
 	defer func() { _ = packageReader.Close() }()
-	specPart, parsedEnvironment, err := readEnvironmentFromAASXSpec(packageReader, "environment.aasx")
+	specPart, parsedEnvironment, err := ReadEnvironmentFromAASXSpec(packageReader, "environment.aasx")
 	if err != nil {
 		t.Fatalf("failed to parse AASX environment: %v", err)
 	}
