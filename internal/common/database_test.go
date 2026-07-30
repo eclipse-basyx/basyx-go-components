@@ -27,6 +27,7 @@ package common
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"os"
 	"strings"
@@ -148,6 +149,168 @@ func TestConfigurePostgresPool(t *testing.T) {
 	}
 	if got := db.Stats().MaxOpenConnections; got != settings.MaxOpenConnections {
 		t.Fatalf("MaxOpenConnections = %d, want %d", got, settings.MaxOpenConnections)
+	}
+}
+
+func TestAttachPostgresReaderReusesWriterByDefault(t *testing.T) {
+	writer, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("sqlmock.New() failed: %v", err)
+	}
+	mock.ExpectClose()
+
+	openerCalled := false
+	pools, err := attachPostgresReader(
+		t.Context(),
+		PostgresConfig{},
+		"testservice",
+		writer,
+		func(context.Context, PostgresConfig, string, telemetry.DatabasePoolRole) (*sql.DB, error) {
+			openerCalled = true
+			return nil, errors.New("must not be called")
+		},
+	)
+	if err != nil {
+		t.Fatalf("attachPostgresReader() failed: %v", err)
+	}
+	if openerCalled {
+		t.Fatal("reader opener was called without reader configuration")
+	}
+	if pools.Writer != writer || pools.Reader != writer {
+		t.Fatal("expected writer handle to be reused for reads")
+	}
+	if err = pools.Close(); err != nil {
+		t.Fatalf("close pools: %v", err)
+	}
+	if err = mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("unmet SQL expectations: %v", err)
+	}
+}
+
+func TestAttachPostgresReaderOpensSeparateRole(t *testing.T) {
+	writer, writerMock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("writer sqlmock.New() failed: %v", err)
+	}
+	reader, readerMock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("reader sqlmock.New() failed: %v", err)
+	}
+	writerMock.ExpectClose()
+	readerMock.ExpectClose()
+
+	readerConfig := &PostgresConfig{Host: "reader.example", DBName: "basyx"}
+	var gotServiceName string
+	var gotRole telemetry.DatabasePoolRole
+	pools, err := attachPostgresReader(
+		t.Context(),
+		PostgresConfig{Reader: readerConfig},
+		"testservice",
+		writer,
+		func(_ context.Context, gotConfig PostgresConfig, serviceName string, role telemetry.DatabasePoolRole) (*sql.DB, error) {
+			if gotConfig.Host != readerConfig.Host {
+				t.Fatalf("unexpected reader config: %+v", gotConfig)
+			}
+			gotServiceName = serviceName
+			gotRole = role
+			return reader, nil
+		},
+	)
+	if err != nil {
+		t.Fatalf("attachPostgresReader() failed: %v", err)
+	}
+	if pools.Writer != writer || pools.Reader != reader {
+		t.Fatal("expected distinct writer and reader handles")
+	}
+	if gotServiceName != "testservice-reader" {
+		t.Fatalf("unexpected reader service name: %s", gotServiceName)
+	}
+	if gotRole != telemetry.DatabasePoolRoleReader {
+		t.Fatalf("unexpected reader role: %s", gotRole)
+	}
+	if err = pools.Close(); err != nil {
+		t.Fatalf("close pools: %v", err)
+	}
+	if err = writerMock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("unmet writer expectations: %v", err)
+	}
+	if err = readerMock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("unmet reader expectations: %v", err)
+	}
+}
+
+func TestAttachPostgresReaderClosesWriterAfterReaderFailure(t *testing.T) {
+	writer, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("sqlmock.New() failed: %v", err)
+	}
+	mock.ExpectClose()
+
+	_, err = attachPostgresReader(
+		t.Context(),
+		PostgresConfig{Reader: &PostgresConfig{Host: "reader.example", DBName: "basyx"}},
+		"testservice",
+		writer,
+		func(context.Context, PostgresConfig, string, telemetry.DatabasePoolRole) (*sql.DB, error) {
+			return nil, errors.New("reader unavailable")
+		},
+	)
+	if err == nil || !strings.Contains(err.Error(), "COMMON-OPENPOSTGRESPOOLS-READER") {
+		t.Fatalf("expected reader connection error, got %v", err)
+	}
+	if !strings.Contains(err.Error(), "reader unavailable") {
+		t.Fatalf("reader failure was not preserved: %v", err)
+	}
+	if err = mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("unmet SQL expectations: %v", err)
+	}
+}
+
+func TestAttachPostgresReaderClosesWriterAfterNilReader(t *testing.T) {
+	writer, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("sqlmock.New() failed: %v", err)
+	}
+	mock.ExpectClose()
+
+	_, err = attachPostgresReader(
+		t.Context(),
+		PostgresConfig{Reader: &PostgresConfig{Host: "reader.example", DBName: "basyx"}},
+		"testservice",
+		writer,
+		func(context.Context, PostgresConfig, string, telemetry.DatabasePoolRole) (*sql.DB, error) {
+			return nil, nil
+		},
+	)
+	if err == nil || !strings.Contains(err.Error(), "COMMON-OPENPOSTGRESPOOLS-NILREADER") {
+		t.Fatalf("expected nil reader error, got %v", err)
+	}
+	if err = mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("unmet SQL expectations: %v", err)
+	}
+}
+
+func TestPostgresReadPoolHonorsWriterConsistency(t *testing.T) {
+	writer, _, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("writer sqlmock.New() failed: %v", err)
+	}
+	defer func() { _ = writer.Close() }()
+	reader, _, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("reader sqlmock.New() failed: %v", err)
+	}
+	defer func() { _ = reader.Close() }()
+
+	if got := PostgresReadPool(t.Context(), writer, reader); got != reader {
+		t.Fatal("eventually consistent read did not select the reader")
+	}
+	writerCtx := WithWriterPostgresReads(t.Context())
+	if got := PostgresReadPool(writerCtx, writer, reader); got != writer {
+		t.Fatal("strongly consistent read did not select the writer")
+	}
+	if got := PostgresReadPool(t.Context(), writer, nil); got != writer {
+		t.Fatal("nil reader did not fall back to the writer")
 	}
 }
 

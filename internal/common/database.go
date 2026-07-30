@@ -54,6 +54,38 @@ type PostgresPoolSettings struct {
 	ConnMaxIdleTimeMinutes int
 }
 
+// PostgresPools contains the writer pool and the pool used for eligible,
+// eventually consistent reads. Reader is the same handle as Writer when no
+// separate reader connection is configured.
+type PostgresPools struct {
+	Writer *sql.DB
+	Reader *sql.DB
+}
+
+type writerPostgresReadsContextKey struct{}
+
+type postgresPoolOpener func(
+	context.Context,
+	PostgresConfig,
+	string,
+	telemetry.DatabasePoolRole,
+) (*sql.DB, error)
+
+// WithWriterPostgresReads marks database reads that decide, guard, or validate
+// a mutation and therefore require writer consistency.
+func WithWriterPostgresReads(ctx context.Context) context.Context {
+	return context.WithValue(ctx, writerPostgresReadsContextKey{}, true)
+}
+
+// PostgresReadPool selects the configured reader unless the context requires
+// writer consistency. A nil reader falls back to the writer.
+func PostgresReadPool(ctx context.Context, writer *sql.DB, reader *sql.DB) *sql.DB {
+	if reader == nil || ctx != nil && ctx.Value(writerPostgresReadsContextKey{}) == true {
+		return writer
+	}
+	return reader
+}
+
 // ResolvePostgresPoolSettings validates and normalizes PostgreSQL pool settings.
 // Zero uses the common default, except connMaxIdleTimeMinutes where zero disables
 // idle-time recycling.
@@ -117,6 +149,15 @@ func ConfigurePostgresPool(db *sql.DB, cfg PostgresConfig) (PostgresPoolSettings
 
 // OpenPostgres opens, configures, and verifies the shared PostgreSQL connection pool.
 func OpenPostgres(ctx context.Context, cfg PostgresConfig, serviceName string) (*sql.DB, error) {
+	return openPostgresForRole(ctx, cfg, serviceName, telemetry.DatabasePoolRoleWriter)
+}
+
+func openPostgresForRole(
+	ctx context.Context,
+	cfg PostgresConfig,
+	serviceName string,
+	role telemetry.DatabasePoolRole,
+) (*sql.DB, error) {
 	if ctx == nil {
 		return nil, fmt.Errorf("COMMON-OPENPOSTGRES-NOCONTEXT context is required")
 	}
@@ -142,7 +183,7 @@ func OpenPostgres(ctx context.Context, cfg PostgresConfig, serviceName string) (
 		_ = db.Close()
 		return nil, fmt.Errorf("COMMON-OPENPOSTGRES-PING failed to connect to PostgreSQL: %w", err)
 	}
-	if err = telemetry.RegisterDatabasePool(db, telemetry.DatabasePoolRoleWriter); err != nil {
+	if err = telemetry.RegisterDatabasePool(db, role); err != nil {
 		_ = db.Close()
 		return nil, fmt.Errorf("COMMON-OPENPOSTGRES-METRICS failed to register PostgreSQL connection pool: %w", err)
 	}
@@ -151,6 +192,7 @@ func OpenPostgres(ctx context.Context, cfg PostgresConfig, serviceName string) (
 		ctx,
 		"PostgreSQL connection pool configured",
 		"service.name", serviceName,
+		"pool.role", role,
 		"application_name", applicationName,
 		"max_open_connections", settings.MaxOpenConnections,
 		"max_idle_connections", settings.MaxIdleConnections,
@@ -158,6 +200,88 @@ func OpenPostgres(ctx context.Context, cfg PostgresConfig, serviceName string) (
 		"conn_max_idle_time_minutes", settings.ConnMaxIdleTimeMinutes,
 	)
 	return db, nil
+}
+
+// OpenPostgresPoolsWithSchemaValidation opens the writer and optional reader
+// pools. Schema validation always runs on the writer. The reader is opened only
+// when postgres.reader is configured.
+func OpenPostgresPoolsWithSchemaValidation(
+	ctx context.Context,
+	cfg PostgresConfig,
+	serviceName string,
+	expectedVersion string,
+) (*PostgresPools, error) {
+	writer, err := OpenPostgresWithSchemaValidation(ctx, cfg, serviceName, expectedVersion)
+	if err != nil {
+		return nil, fmt.Errorf("COMMON-OPENPOSTGRESPOOLS-WRITER writer connection failed: %w", err)
+	}
+	return attachPostgresReader(ctx, cfg, serviceName, writer, openPostgresForRole)
+}
+
+func attachPostgresReader(
+	ctx context.Context,
+	cfg PostgresConfig,
+	serviceName string,
+	writer *sql.DB,
+	opener postgresPoolOpener,
+) (*PostgresPools, error) {
+	if writer == nil {
+		return nil, fmt.Errorf("COMMON-OPENPOSTGRESPOOLS-NILWRITER writer database handle is nil")
+	}
+	if cfg.Reader == nil {
+		return &PostgresPools{Writer: writer, Reader: writer}, nil
+	}
+	if opener == nil {
+		closeErr := closePostgresPool(writer)
+		return nil, errors.Join(
+			errors.New("COMMON-OPENPOSTGRESPOOLS-NILOPENER PostgreSQL pool opener is nil"),
+			closeErr,
+		)
+	}
+
+	readerServiceName := serviceName + "-reader"
+	reader, err := opener(ctx, *cfg.Reader, readerServiceName, telemetry.DatabasePoolRoleReader)
+	if err != nil {
+		closeErr := closePostgresPool(writer)
+		return nil, fmt.Errorf(
+			"COMMON-OPENPOSTGRESPOOLS-READER reader connection failed: %w",
+			errors.Join(err, closeErr),
+		)
+	}
+	if reader == nil {
+		closeErr := closePostgresPool(writer)
+		return nil, errors.Join(
+			errors.New("COMMON-OPENPOSTGRESPOOLS-NILREADER reader database handle is nil"),
+			closeErr,
+		)
+	}
+	return &PostgresPools{Writer: writer, Reader: reader}, nil
+}
+
+// Close unregisters and closes each distinct database pool.
+func (p *PostgresPools) Close() error {
+	if p == nil {
+		return nil
+	}
+	var closeErrors []error
+	if p.Reader != nil && p.Reader != p.Writer {
+		if err := closePostgresPool(p.Reader); err != nil {
+			closeErrors = append(closeErrors, fmt.Errorf("COMMON-POSTGRESPOOLS-CLOSEREADER failed to close reader pool: %w", err))
+		}
+	}
+	if p.Writer != nil {
+		if err := closePostgresPool(p.Writer); err != nil {
+			closeErrors = append(closeErrors, fmt.Errorf("COMMON-POSTGRESPOOLS-CLOSEWRITER failed to close writer pool: %w", err))
+		}
+	}
+	return errors.Join(closeErrors...)
+}
+
+func closePostgresPool(db *sql.DB) error {
+	if db == nil {
+		return nil
+	}
+	return errors.Join(telemetry.UnregisterDatabasePool(db), db.Close())
 }
 
 // NewDatabaseConnection establishes a PostgreSQL database connection.
@@ -305,14 +429,13 @@ func OpenPostgresWithSchemaValidation(
 }
 
 func closePostgresAfterSchemaValidationFailure(db *sql.DB, validationErr error) error {
-	unregisterErr := telemetry.UnregisterDatabasePool(db)
-	_ = db.Close()
-	if unregisterErr == nil {
+	closeErr := closePostgresPool(db)
+	if closeErr == nil {
 		return validationErr
 	}
 	return fmt.Errorf(
-		"COMMON-OPENPOSTGRES-METRICS failed to unregister PostgreSQL connection pool after schema validation failure: %w",
-		errors.Join(validationErr, unregisterErr),
+		"COMMON-OPENPOSTGRES-CLOSE failed to close PostgreSQL connection pool after schema validation failure: %w",
+		errors.Join(validationErr, closeErr),
 	)
 }
 

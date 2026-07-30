@@ -193,6 +193,98 @@ func TestBulkBatchLimitRejectsNonPositiveValues(t *testing.T) {
 	}
 }
 
+func TestPostgresReaderIsDisabledByDefault(t *testing.T) {
+	cfg, err := LoadConfig("")
+	if err != nil {
+		t.Fatalf("unexpected config load error: %v", err)
+	}
+	if cfg.Postgres.Reader != nil {
+		t.Fatalf("expected no reader configuration, got %+v", cfg.Postgres.Reader)
+	}
+}
+
+func TestPostgresReaderLoadsFromYAML(t *testing.T) {
+	configPath := writeTempConfig(t, `
+postgres:
+  reader:
+    host: reader.example
+    port: 6432
+    user: basyx
+    password: secret
+    dbname: basyx
+    sslmode: require
+    maxOpenConnections: 12
+    maxIdleConnections: 4
+`)
+
+	cfg, err := LoadConfig(configPath)
+	if err != nil {
+		t.Fatalf("unexpected config load error: %v", err)
+	}
+	if cfg.Postgres.Reader == nil {
+		t.Fatal("expected reader configuration")
+	}
+	if cfg.Postgres.Reader.Host != "reader.example" || cfg.Postgres.Reader.Port != 6432 {
+		t.Fatalf("unexpected reader endpoint: %+v", cfg.Postgres.Reader)
+	}
+	if cfg.Postgres.Reader.MaxOpenConnections != 12 || cfg.Postgres.Reader.MaxIdleConnections != 4 {
+		t.Fatalf("unexpected reader pool limits: %+v", cfg.Postgres.Reader)
+	}
+}
+
+func TestPostgresReaderLoadsFromEnvironment(t *testing.T) {
+	t.Setenv("POSTGRES_READER_HOST", "reader.example")
+	t.Setenv("POSTGRES_READER_PORT", "6432")
+	t.Setenv("POSTGRES_READER_USER", "basyx")
+	t.Setenv("POSTGRES_READER_PASSWORD", "secret")
+	t.Setenv("POSTGRES_READER_DBNAME", "basyx")
+	t.Setenv("POSTGRES_READER_MAXOPENCONNECTIONS", "9")
+
+	cfg, err := LoadConfig("")
+	if err != nil {
+		t.Fatalf("unexpected config load error: %v", err)
+	}
+	if cfg.Postgres.Reader == nil {
+		t.Fatal("expected reader configuration")
+	}
+	if cfg.Postgres.Reader.Host != "reader.example" || cfg.Postgres.Reader.Port != 6432 {
+		t.Fatalf("unexpected reader endpoint: %+v", cfg.Postgres.Reader)
+	}
+	if cfg.Postgres.Reader.MaxOpenConnections != 9 {
+		t.Fatalf("unexpected max open connections: %d", cfg.Postgres.Reader.MaxOpenConnections)
+	}
+}
+
+func TestPostgresReaderRejectsIncompleteConnectionFields(t *testing.T) {
+	configPath := writeTempConfig(t, `
+postgres:
+  reader:
+    maxOpenConnections: 10
+`)
+
+	_, err := LoadConfig(configPath)
+	if err == nil || !strings.Contains(err.Error(), "CONFIG-POSTGRES-READER-INCOMPLETE") {
+		t.Fatalf("expected incomplete reader configuration error, got %v", err)
+	}
+}
+
+func TestPostgresReaderRejectsDSNAndConnectionFields(t *testing.T) {
+	configPath := writeTempConfig(t, `
+postgres:
+  reader:
+    dsn: postgres://basyx:secret@reader.example:5432/basyx
+    host: reader.example
+`)
+
+	_, err := LoadConfig(configPath)
+	if err == nil || !strings.Contains(err.Error(), "CONFIG-POSTGRES-DSN-CONFLICT") {
+		t.Fatalf("expected reader DSN conflict error, got %v", err)
+	}
+	if !strings.Contains(err.Error(), "postgres.reader.host") {
+		t.Fatalf("expected reader field in error, got %v", err)
+	}
+}
+
 func TestLogConfigurationExcludesSecrets(t *testing.T) {
 	var output bytes.Buffer
 	preserveGlobalLoggerState(t)
