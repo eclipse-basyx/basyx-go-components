@@ -65,6 +65,28 @@ if data_source.get("type") != "tempo" or data_source.get("url") != "http://tempo
   return 1
 }
 
+wait_for_grafana_prometheus() {
+  local attempts=40
+  local payload
+  for ((attempt = 1; attempt <= attempts; attempt++)); do
+    if payload=$(curl --fail --silent \
+      "http://127.0.0.1:3001/api/datasources/uid/prometheus" 2>/dev/null) &&
+      python3 -c '
+import json
+import sys
+
+data_source = json.load(sys.stdin)
+if data_source.get("type") != "prometheus" or data_source.get("url") != "http://prometheus:9090":
+    raise SystemExit(1)
+' <<<"${payload}"; then
+      return 0
+    fi
+    sleep 1
+  done
+  echo "Grafana Prometheus data source was not available" >&2
+  return 1
+}
+
 request_basyx() {
   curl --fail --silent --show-error \
     --dump-header "${response_headers}" \
@@ -84,6 +106,31 @@ shells = payload.get("result", [])
 if not any(shell.get("idShort") == "IESEDriveMotorDM3000" for shell in shells):
     raise SystemExit("preconfigured IESEDriveMotorDM3000 AAS was not found")
 ' <"${response_body}"
+}
+
+wait_for_pool_metric() {
+  local attempts=60
+  local payload
+  local query='db_client_connection_max{service_name="aasenvironmentservice",db_client_connection_pool_name="writer"}'
+  for ((attempt = 1; attempt <= attempts; attempt++)); do
+    if payload=$(curl --get --fail --silent \
+      "http://127.0.0.1:9090/api/v1/query" \
+      --data-urlencode "query=${query}" 2>/dev/null) &&
+      python3 -c '
+import json
+import sys
+
+payload = json.load(sys.stdin)
+results = payload.get("data", {}).get("result", [])
+if not any(float(result.get("value", [0, 0])[1]) > 0 for result in results):
+    raise SystemExit(1)
+' <<<"${payload}"; then
+      return 0
+    fi
+    sleep 1
+  done
+  echo "PostgreSQL writer pool capacity metric was not found in Prometheus" >&2
+  return 1
 }
 
 wait_for_trace() {
@@ -168,7 +215,9 @@ raise SystemExit(1)
 wait_for_ui
 wait_for_grafana_explore
 wait_for_grafana_tempo
+wait_for_grafana_prometheus
 request_basyx
+wait_for_pool_metric
 wait_for_trace
 wait_for_traceql_metrics
 wait_for_log

@@ -27,10 +27,13 @@ package common
 
 import (
 	"context"
+	"errors"
+	"os"
 	"strings"
 	"testing"
 
 	sqlmock "github.com/DATA-DOG/go-sqlmock"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/telemetry"
 )
 
 func TestResolvePostgresPoolSettings(t *testing.T) {
@@ -255,5 +258,54 @@ func TestValidateSchemaVersionContext(t *testing.T) {
 	}
 	if err = mock.ExpectationsWereMet(); err != nil {
 		t.Fatalf("unmet SQL expectations: %v", err)
+	}
+}
+
+func TestSchemaValidationFailureReleasesDatabasePoolRole(t *testing.T) {
+	clearOpenTelemetryEnvironment(t)
+	t.Setenv("OTEL_METRICS_EXPORTER", "console")
+	runtime, err := telemetry.Configure(t.Context(), "testservice")
+	if err != nil {
+		t.Fatalf("configure telemetry: %v", err)
+	}
+	t.Cleanup(func() { runtime.Shutdown(t.Context()) })
+
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("sqlmock.New() failed: %v", err)
+	}
+	mock.ExpectClose()
+	if err = telemetry.RegisterDatabasePool(db, telemetry.DatabasePoolRoleWriter); err != nil {
+		t.Fatalf("register database pool: %v", err)
+	}
+
+	validationErr := errors.New("DB-CHECKVER-MISMATCH test schema mismatch")
+	if got := closePostgresAfterSchemaValidationFailure(db, validationErr); !errors.Is(got, validationErr) {
+		t.Fatalf("schema validation error was not preserved: %v", got)
+	}
+	if err = mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("unmet SQL expectations: %v", err)
+	}
+
+	replacementDB, _, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("replacement sqlmock.New() failed: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = telemetry.UnregisterDatabasePool(replacementDB)
+		_ = replacementDB.Close()
+	})
+	if err = telemetry.RegisterDatabasePool(replacementDB, telemetry.DatabasePoolRoleWriter); err != nil {
+		t.Fatalf("register replacement database pool: %v", err)
+	}
+}
+
+func clearOpenTelemetryEnvironment(t *testing.T) {
+	t.Helper()
+	for _, environment := range os.Environ() {
+		key, _, found := strings.Cut(environment, "=")
+		if found && strings.HasPrefix(key, "OTEL_") {
+			t.Setenv(key, "")
+		}
 	}
 }

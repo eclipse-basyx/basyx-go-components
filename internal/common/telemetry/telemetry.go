@@ -23,7 +23,7 @@
 * SPDX-License-Identifier: MIT
 ******************************************************************************/
 
-// Package telemetry configures optional process-wide OpenTelemetry tracing.
+// Package telemetry configures optional process-wide OpenTelemetry signals.
 package telemetry
 
 import (
@@ -43,7 +43,9 @@ import (
 
 	"go.opentelemetry.io/contrib/exporters/autoexport"
 	"go.opentelemetry.io/otel"
+	otelmetric "go.opentelemetry.io/otel/metric"
 	"go.opentelemetry.io/otel/propagation"
+	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
 	"go.opentelemetry.io/otel/sdk/resource"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.40.0"
@@ -76,22 +78,52 @@ var telemetryEnvironmentKeys = []string{
 	"OTEL_BSP_MAX_QUEUE_SIZE",
 	"OTEL_BSP_MAX_EXPORT_BATCH_SIZE",
 	"OTEL_PROPAGATORS",
+	"OTEL_METRICS_EXPORTER",
+	"OTEL_EXPORTER_OTLP_METRICS_ENDPOINT",
+	"OTEL_EXPORTER_OTLP_METRICS_PROTOCOL",
+	"OTEL_EXPORTER_OTLP_METRICS_HEADERS",
+	"OTEL_EXPORTER_OTLP_METRICS_COMPRESSION",
+	"OTEL_EXPORTER_OTLP_METRICS_TIMEOUT",
+	"OTEL_METRIC_EXPORT_INTERVAL",
+	"OTEL_METRIC_EXPORT_TIMEOUT",
 }
 
 var activeRuntime atomic.Pointer[Runtime]
 
-// Runtime owns the global tracing state installed by Configure.
+// Runtime owns the global OpenTelemetry state installed by Configure.
 type Runtime struct {
 	enabled            bool
+	tracingEnabled     bool
+	metricsEnabled     bool
 	serviceName        string
 	provider           *sdktrace.TracerProvider
+	metricProvider     *sdkmetric.MeterProvider
 	previousProvider   trace.TracerProvider
+	previousMeter      otelmetric.MeterProvider
 	previousPropagator propagation.TextMapPropagator
 	previousError      otel.ErrorHandler
+	databasePools      databasePoolRegistry
 	shutdownOnce       sync.Once
 }
 
-// Configure initializes optional tracing from standard OpenTelemetry
+type telemetryConfiguration struct {
+	enabled        bool
+	traceEnabled   bool
+	metricsEnabled bool
+	resource       *resource.Resource
+	sampler        sdktrace.Sampler
+	propagator     propagation.TextMapPropagator
+}
+
+type exporterEnvironment struct {
+	endpoint    string
+	headers     string
+	protocol    string
+	compression string
+	timeout     string
+}
+
+// Configure initializes optional telemetry from standard OpenTelemetry
 // environment variables.
 func Configure(ctx context.Context, serviceName string) (*Runtime, error) {
 	if ctx == nil {
@@ -101,67 +133,161 @@ func Configure(ctx context.Context, serviceName string) (*Runtime, error) {
 		return nil, fmt.Errorf("OTEL-CONFIG-SERVICENAME invalid service name %q", serviceName)
 	}
 
-	disabled, err := sdkDisabled()
+	cfg, err := resolveTelemetryConfiguration(ctx, serviceName)
 	if err != nil {
 		return nil, err
 	}
-	exporterName := strings.ToLower(strings.TrimSpace(os.Getenv("OTEL_TRACES_EXPORTER")))
-	if disabled || exporterName == "" || exporterName == "none" {
+	if !cfg.enabled {
 		return &Runtime{serviceName: serviceName}, nil
-	}
-	if exporterName != "otlp" && exporterName != "console" {
-		return nil, fmt.Errorf("OTEL-CONFIG-EXPORTER unsupported OTEL_TRACES_EXPORTER %q", exporterName)
-	}
-	if err := validateExporterEnvironment(); err != nil {
-		return nil, err
-	}
-	sampler, err := samplerFromEnvironment()
-	if err != nil {
-		return nil, err
-	}
-	if err := validateBatchEnvironment(); err != nil {
-		return nil, err
-	}
-	propagator, err := propagatorFromEnvironment()
-	if err != nil {
-		return nil, err
-	}
-	res, err := telemetryResource(ctx, serviceName)
-	if err != nil {
-		return nil, err
-	}
-	exporter, err := autoexport.NewSpanExporter(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("OTEL-CONFIG-EXPORTER invalid exporter configuration (%s)", telemetryErrorType(err))
 	}
 
 	runtime := &Runtime{
 		enabled:            true,
-		serviceName:        resourceServiceName(res, serviceName),
+		tracingEnabled:     cfg.traceEnabled,
+		metricsEnabled:     cfg.metricsEnabled,
+		serviceName:        resourceServiceName(cfg.resource, serviceName),
 		previousProvider:   otel.GetTracerProvider(),
+		previousMeter:      otel.GetMeterProvider(),
 		previousPropagator: otel.GetTextMapPropagator(),
 		previousError:      otel.GetErrorHandler(),
+	}
+	if err = runtime.initializeProviders(ctx, cfg); err != nil {
+		return nil, err
+	}
+	runtime.install(cfg.propagator)
+	return runtime, nil
+}
+
+func resolveTelemetryConfiguration(ctx context.Context, serviceName string) (*telemetryConfiguration, error) {
+	disabled, err := sdkDisabled()
+	if err != nil {
+		return nil, err
+	}
+	if disabled {
+		return &telemetryConfiguration{}, nil
+	}
+
+	_, traceEnabled, err := configuredExporter("OTEL_TRACES_EXPORTER")
+	if err != nil {
+		return nil, err
+	}
+	_, metricsEnabled, err := configuredExporter("OTEL_METRICS_EXPORTER")
+	if err != nil {
+		return nil, err
+	}
+	cfg := &telemetryConfiguration{
+		enabled:        traceEnabled || metricsEnabled,
+		traceEnabled:   traceEnabled,
+		metricsEnabled: metricsEnabled,
+	}
+	if !cfg.enabled {
+		return cfg, nil
+	}
+	if err = validateExporterEnvironment(traceEnabled, metricsEnabled); err != nil {
+		return nil, err
+	}
+	if traceEnabled {
+		cfg.sampler, cfg.propagator, err = resolveTraceConfiguration()
+		if err != nil {
+			return nil, err
+		}
+	}
+	if metricsEnabled {
+		if err = validateMetricEnvironment(); err != nil {
+			return nil, err
+		}
+	}
+	cfg.resource, err = telemetryResource(ctx, serviceName)
+	if err != nil {
+		return nil, err
+	}
+	return cfg, nil
+}
+
+func resolveTraceConfiguration() (sdktrace.Sampler, propagation.TextMapPropagator, error) {
+	sampler, err := samplerFromEnvironment()
+	if err != nil {
+		return nil, nil, err
+	}
+	if err = validateBatchEnvironment(); err != nil {
+		return nil, nil, err
+	}
+	propagator, err := propagatorFromEnvironment()
+	if err != nil {
+		return nil, nil, err
+	}
+	return sampler, propagator, nil
+}
+
+func validateMetricEnvironment() error {
+	for _, key := range []string{"OTEL_METRIC_EXPORT_INTERVAL", "OTEL_METRIC_EXPORT_TIMEOUT"} {
+		if err := validatePositiveIntegerEnvironment(key, "OTEL-CONFIG-METRICS"); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (runtime *Runtime) initializeProviders(ctx context.Context, cfg *telemetryConfiguration) error {
+	if cfg.traceEnabled {
+		if err := runtime.initializeTraceProvider(ctx, cfg); err != nil {
+			return err
+		}
+	}
+	if cfg.metricsEnabled {
+		if err := runtime.initializeMetricProvider(ctx, cfg); err != nil {
+			runtime.shutdownProviders(ctx)
+			return err
+		}
+	}
+	return nil
+}
+
+func (runtime *Runtime) initializeTraceProvider(ctx context.Context, cfg *telemetryConfiguration) error {
+	exporter, err := autoexport.NewSpanExporter(ctx)
+	if err != nil {
+		return fmt.Errorf("OTEL-CONFIG-EXPORTER invalid trace exporter configuration (%s)", telemetryErrorType(err))
 	}
 	restoreSamplerEnvironment := unsetEmptyEnvironment("OTEL_TRACES_SAMPLER")
 	defer restoreSamplerEnvironment()
 	runtime.provider = sdktrace.NewTracerProvider(
-		sdktrace.WithResource(res),
-		sdktrace.WithSampler(sampler),
+		sdktrace.WithResource(cfg.resource),
+		sdktrace.WithSampler(cfg.sampler),
 		sdktrace.WithBatcher(exporter),
 	)
-	otel.SetErrorHandler(otel.ErrorHandlerFunc(handleRuntimeError))
-	otel.SetTextMapPropagator(propagator)
-	otel.SetTracerProvider(runtime.provider)
-	activeRuntime.Store(runtime)
-	return runtime, nil
+	return nil
 }
 
-// Enabled reports whether this runtime installed active tracing.
+func (runtime *Runtime) initializeMetricProvider(ctx context.Context, cfg *telemetryConfiguration) error {
+	reader, err := autoexport.NewMetricReader(ctx)
+	if err != nil {
+		return fmt.Errorf("OTEL-CONFIG-EXPORTER invalid metric exporter configuration (%s)", telemetryErrorType(err))
+	}
+	runtime.metricProvider = sdkmetric.NewMeterProvider(
+		sdkmetric.WithResource(cfg.resource),
+		sdkmetric.WithReader(reader),
+	)
+	return runtime.databasePools.initialize(runtime.metricProvider.Meter(instrumentationName))
+}
+
+func (runtime *Runtime) install(propagator propagation.TextMapPropagator) {
+	otel.SetErrorHandler(otel.ErrorHandlerFunc(handleRuntimeError))
+	if runtime.tracingEnabled {
+		otel.SetTextMapPropagator(propagator)
+		otel.SetTracerProvider(runtime.provider)
+	}
+	if runtime.metricsEnabled {
+		otel.SetMeterProvider(runtime.metricProvider)
+	}
+	activeRuntime.Store(runtime)
+}
+
+// Enabled reports whether this runtime installed any active telemetry signal.
 func (runtime *Runtime) Enabled() bool {
 	return runtime != nil && runtime.enabled
 }
 
-// ServiceName returns the effective trace resource service name.
+// ServiceName returns the effective telemetry resource service name.
 func (runtime *Runtime) ServiceName() string {
 	if runtime == nil {
 		return ""
@@ -169,7 +295,7 @@ func (runtime *Runtime) ServiceName() string {
 	return runtime.serviceName
 }
 
-// Shutdown flushes pending spans, shuts down the provider, and restores the
+// Shutdown flushes pending telemetry, shuts down the providers, and restores the
 // process-wide OpenTelemetry state that Configure replaced.
 func (runtime *Runtime) Shutdown(ctx context.Context) {
 	runtime.shutdown(ctx, shutdownTimeout)
@@ -180,28 +306,91 @@ func (runtime *Runtime) shutdown(ctx context.Context, timeout time.Duration) {
 		return
 	}
 	runtime.shutdownOnce.Do(func() {
+		traceActive := runtime.tracingEnabled || runtime.provider != nil
+		metricsActive := runtime.metricsEnabled || runtime.metricProvider != nil
 		shutdownParent := context.TODO()
 		if ctx != nil {
 			shutdownParent = context.WithoutCancel(ctx)
 		}
 
 		flushCtx, cancelFlush := context.WithTimeout(shutdownParent, timeout)
-		if err := runtime.provider.ForceFlush(flushCtx); err != nil {
-			logRuntimeWarning("OpenTelemetry flush failed", "OTEL-RUNTIME-FLUSH", err)
-		}
+		runtime.flushProviders(flushCtx, traceActive, metricsActive)
 		cancelFlush()
 
+		runtime.databasePools.unregister()
 		shutdownCtx, cancelShutdown := context.WithTimeout(shutdownParent, timeout)
-		if err := runtime.provider.Shutdown(shutdownCtx); err != nil {
-			logRuntimeWarning("OpenTelemetry shutdown failed", "OTEL-RUNTIME-SHUTDOWN", err)
-		}
+		runtime.shutdownActiveProviders(shutdownCtx, traceActive, metricsActive)
 		cancelShutdown()
 
-		otel.SetTracerProvider(runtime.previousProvider)
-		otel.SetTextMapPropagator(runtime.previousPropagator)
+		if traceActive {
+			otel.SetTracerProvider(runtime.previousProvider)
+			otel.SetTextMapPropagator(runtime.previousPropagator)
+		}
+		if metricsActive {
+			otel.SetMeterProvider(runtime.previousMeter)
+		}
 		otel.SetErrorHandler(runtime.previousError)
 		activeRuntime.CompareAndSwap(runtime, nil)
 	})
+}
+
+func (runtime *Runtime) flushProviders(ctx context.Context, traceActive bool, metricsActive bool) {
+	var waitGroup sync.WaitGroup
+	if metricsActive {
+		waitGroup.Go(func() {
+			if err := runtime.metricProvider.ForceFlush(ctx); err != nil {
+				logRuntimeWarning("OpenTelemetry metric flush failed", "OTEL-RUNTIME-METRICFLUSH", err)
+			}
+		})
+	}
+	if traceActive {
+		waitGroup.Go(func() {
+			if err := runtime.provider.ForceFlush(ctx); err != nil {
+				logRuntimeWarning("OpenTelemetry trace flush failed", "OTEL-RUNTIME-TRACEFLUSH", err)
+			}
+		})
+	}
+	waitGroup.Wait()
+}
+
+func (runtime *Runtime) shutdownActiveProviders(ctx context.Context, traceActive bool, metricsActive bool) {
+	var waitGroup sync.WaitGroup
+	if metricsActive {
+		waitGroup.Go(func() {
+			if err := runtime.metricProvider.Shutdown(ctx); err != nil {
+				logRuntimeWarning("OpenTelemetry metric shutdown failed", "OTEL-RUNTIME-METRICSHUTDOWN", err)
+			}
+		})
+	}
+	if traceActive {
+		waitGroup.Go(func() {
+			if err := runtime.provider.Shutdown(ctx); err != nil {
+				logRuntimeWarning("OpenTelemetry trace shutdown failed", "OTEL-RUNTIME-TRACESHUTDOWN", err)
+			}
+		})
+	}
+	waitGroup.Wait()
+}
+
+func (runtime *Runtime) shutdownProviders(ctx context.Context) {
+	if runtime.metricProvider != nil {
+		_ = runtime.metricProvider.Shutdown(ctx)
+	}
+	if runtime.provider != nil {
+		_ = runtime.provider.Shutdown(ctx)
+	}
+}
+
+func configuredExporter(key string) (string, bool, error) {
+	name := strings.ToLower(strings.TrimSpace(os.Getenv(key)))
+	switch name {
+	case "", "none":
+		return name, false, nil
+	case "otlp", "console":
+		return name, true, nil
+	default:
+		return "", false, fmt.Errorf("OTEL-CONFIG-EXPORTER unsupported %s %q", key, name)
+	}
 }
 
 func sdkDisabled() (bool, error) {
@@ -217,33 +406,68 @@ func sdkDisabled() (bool, error) {
 	return disabled, nil
 }
 
-func validateExporterEnvironment() error {
-	for _, key := range []string{"OTEL_EXPORTER_OTLP_ENDPOINT", "OTEL_EXPORTER_OTLP_TRACES_ENDPOINT"} {
-		if err := validateEndpointEnvironment(key); err != nil {
+func validateExporterEnvironment(traceEnabled bool, metricEnabled bool) error {
+	for _, environment := range exporterEnvironments(traceEnabled, metricEnabled) {
+		if err := validateExporterEnvironmentValues(environment); err != nil {
 			return err
 		}
 	}
-	for _, key := range []string{"OTEL_EXPORTER_OTLP_HEADERS", "OTEL_EXPORTER_OTLP_TRACES_HEADERS"} {
-		if err := validateHeaderEnvironment(key); err != nil {
-			return err
-		}
+	return nil
+}
+
+func exporterEnvironments(traceEnabled bool, metricEnabled bool) []exporterEnvironment {
+	environments := make([]exporterEnvironment, 0, 3)
+	if traceEnabled || metricEnabled {
+		environments = append(environments, newExporterEnvironment(""))
 	}
-	for _, key := range []string{"OTEL_EXPORTER_OTLP_PROTOCOL", "OTEL_EXPORTER_OTLP_TRACES_PROTOCOL"} {
-		value := strings.ToLower(strings.TrimSpace(os.Getenv(key)))
-		if value != "" && value != "grpc" && value != "http/protobuf" {
-			return fmt.Errorf("OTEL-CONFIG-EXPORTER unsupported %s %q", key, value)
-		}
+	if traceEnabled {
+		environments = append(environments, newExporterEnvironment("_TRACES"))
 	}
-	for _, key := range []string{"OTEL_EXPORTER_OTLP_COMPRESSION", "OTEL_EXPORTER_OTLP_TRACES_COMPRESSION"} {
-		value := strings.ToLower(strings.TrimSpace(os.Getenv(key)))
-		if value != "" && value != "gzip" && value != "none" {
-			return fmt.Errorf("OTEL-CONFIG-EXPORTER unsupported %s %q", key, value)
-		}
+	if metricEnabled {
+		environments = append(environments, newExporterEnvironment("_METRICS"))
 	}
-	for _, key := range []string{"OTEL_EXPORTER_OTLP_TIMEOUT", "OTEL_EXPORTER_OTLP_TRACES_TIMEOUT"} {
-		if err := validatePositiveIntegerEnvironment(key, "OTEL-CONFIG-EXPORTER"); err != nil {
-			return err
-		}
+	return environments
+}
+
+func newExporterEnvironment(signal string) exporterEnvironment {
+	const prefix = "OTEL_EXPORTER_OTLP"
+	return exporterEnvironment{
+		endpoint:    prefix + signal + "_ENDPOINT",
+		headers:     prefix + signal + "_HEADERS",
+		protocol:    prefix + signal + "_PROTOCOL",
+		compression: prefix + signal + "_COMPRESSION",
+		timeout:     prefix + signal + "_TIMEOUT",
+	}
+}
+
+func validateExporterEnvironmentValues(environment exporterEnvironment) error {
+	if err := validateEndpointEnvironment(environment.endpoint); err != nil {
+		return err
+	}
+	if err := validateHeaderEnvironment(environment.headers); err != nil {
+		return err
+	}
+	if err := validateProtocolEnvironment(environment.protocol); err != nil {
+		return err
+	}
+	if err := validateCompressionEnvironment(environment.compression); err != nil {
+		return err
+	}
+	return validatePositiveIntegerEnvironment(environment.timeout, "OTEL-CONFIG-EXPORTER")
+}
+
+func validateProtocolEnvironment(key string) error {
+	value := strings.ToLower(strings.TrimSpace(os.Getenv(key)))
+	if value != "" && value != "grpc" && value != "http/protobuf" {
+		return fmt.Errorf("OTEL-CONFIG-EXPORTER unsupported %s %q", key, value)
+	}
+	return nil
+}
+
+func validateCompressionEnvironment(key string) error {
+	value := strings.ToLower(strings.TrimSpace(os.Getenv(key)))
+	if value != "" && value != "gzip" && value != "none" {
+		return fmt.Errorf("OTEL-CONFIG-EXPORTER unsupported %s %q", key, value)
 	}
 	return nil
 }

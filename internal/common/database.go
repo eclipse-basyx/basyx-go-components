@@ -37,6 +37,7 @@ import (
 
 	"github.com/doug-martin/goqu/v9"
 	_ "github.com/doug-martin/goqu/v9/dialect/postgres"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/telemetry"
 	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
@@ -140,6 +141,10 @@ func OpenPostgres(ctx context.Context, cfg PostgresConfig, serviceName string) (
 	if err = db.PingContext(ctx); err != nil {
 		_ = db.Close()
 		return nil, fmt.Errorf("COMMON-OPENPOSTGRES-PING failed to connect to PostgreSQL: %w", err)
+	}
+	if err = telemetry.RegisterDatabasePool(db, telemetry.DatabasePoolRoleWriter); err != nil {
+		_ = db.Close()
+		return nil, fmt.Errorf("COMMON-OPENPOSTGRES-METRICS failed to register PostgreSQL connection pool: %w", err)
 	}
 
 	slog.InfoContext(
@@ -294,10 +299,21 @@ func OpenPostgresWithSchemaValidation(
 		return nil, err
 	}
 	if err = ValidateSchemaVersionContext(ctx, db, expectedVersion); err != nil {
-		_ = db.Close()
-		return nil, err
+		return nil, closePostgresAfterSchemaValidationFailure(db, err)
 	}
 	return db, nil
+}
+
+func closePostgresAfterSchemaValidationFailure(db *sql.DB, validationErr error) error {
+	unregisterErr := telemetry.UnregisterDatabasePool(db)
+	_ = db.Close()
+	if unregisterErr == nil {
+		return validationErr
+	}
+	return fmt.Errorf(
+		"COMMON-OPENPOSTGRES-METRICS failed to unregister PostgreSQL connection pool after schema validation failure: %w",
+		errors.Join(validationErr, unregisterErr),
+	)
 }
 
 // ValidateSchemaVersionByDSN opens a temporary database connection and validates the schema version.
