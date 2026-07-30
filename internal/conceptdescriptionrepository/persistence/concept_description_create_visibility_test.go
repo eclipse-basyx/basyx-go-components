@@ -27,9 +27,12 @@ package persistence
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
+	"time"
 
 	sqlmock "github.com/DATA-DOG/go-sqlmock"
 	"github.com/FriedJannik/aas-go-sdk/types"
@@ -53,6 +56,48 @@ func TestConceptDescriptionRepositoryReadPoolSelection(t *testing.T) {
 	require.Same(t, reader, backend.readDB(t.Context()))
 	require.Same(t, writer, backend.readDB(common.WithWriterPostgresReads(t.Context())))
 	require.NoError(t, writerMock.ExpectationsWereMet())
+}
+
+func TestGetConceptDescriptionsValidatesCursorInPageQuery(t *testing.T) {
+	t.Parallel()
+
+	matcher := sqlmock.QueryMatcherFunc(func(_ string, actualSQL string) error {
+		for _, expected := range []string{
+			`SELECT 1 FROM "concept_description" AS "cursor_cd"`,
+			`"cursor_cd"."id" = 'urn:cd:cursor'`,
+			`"id" >= 'urn:cd:cursor'`,
+		} {
+			if !strings.Contains(actualSQL, expected) {
+				return fmt.Errorf("expected SQL to contain %q, got: %s", expected, actualSQL)
+			}
+		}
+		return nil
+	})
+	db, mock, err := sqlmock.New(sqlmock.QueryMatcherOption(matcher))
+	require.NoError(t, err)
+	defer func() { _ = db.Close() }()
+
+	backend, err := NewConceptDescriptionBackendFromDB(db)
+	require.NoError(t, err)
+
+	mock.ExpectQuery("cursor query").
+		WillReturnRows(sqlmock.NewRows([]string{"id", "id_short", "data"}))
+
+	cursor := "urn:cd:cursor"
+	items, nextCursor, err := backend.GetConceptDescriptions(
+		contextWithConceptDescriptionConfig(t),
+		nil,
+		nil,
+		nil,
+		10,
+		&cursor,
+		time.Time{},
+		time.Time{},
+	)
+	require.NoError(t, err)
+	require.Empty(t, items)
+	require.Empty(t, nextCursor)
+	require.NoError(t, mock.ExpectationsWereMet())
 }
 
 func TestConceptDescriptionRepositoryCreateExistingUnauthorizedConceptDescriptionDoesNotReturnConflict(t *testing.T) {
@@ -86,6 +131,12 @@ func TestConceptDescriptionRepositoryCreateExistingUnauthorizedConceptDescriptio
 func contextWithRestrictedCreateConceptDescription(t *testing.T) context.Context {
 	t.Helper()
 
+	return auth.WithQueryFilter(contextWithConceptDescriptionConfig(t), limitedCreateQueryFilterForRepositoryTests())
+}
+
+func contextWithConceptDescriptionConfig(t *testing.T) context.Context {
+	t.Helper()
+
 	cfg := &common.Config{}
 	var cfgCtx context.Context
 	handler := common.ConfigMiddleware(cfg)(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
@@ -94,7 +145,7 @@ func contextWithRestrictedCreateConceptDescription(t *testing.T) context.Context
 	handler.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/", nil))
 
 	require.NotNil(t, cfgCtx)
-	return auth.WithQueryFilter(cfgCtx, limitedCreateQueryFilterForRepositoryTests())
+	return cfgCtx
 }
 
 func limitedCreateQueryFilterForRepositoryTests() *auth.QueryFilter {

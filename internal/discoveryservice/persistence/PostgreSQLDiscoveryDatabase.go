@@ -35,7 +35,6 @@ package persistencepostgresql
 import (
 	"context"
 	"database/sql"
-	"errors"
 	"fmt"
 	"log/slog"
 	"time"
@@ -144,7 +143,8 @@ func (p *PostgreSQLDiscoveryDatabase) GetAllAssetLinks(ctx context.Context, aasI
 		case common.IsErrNotFound(err):
 			return nil, err
 		default:
-			return nil, common.NewInternalServerError("Failed to query specific asset IDs. See console for information.")
+			slog.ErrorContext(ctx, "asset link query failed", "error.code", "DISC-GETASSETLINKS-QUERY", "error", err)
+			return nil, common.NewInternalServerError("DISC-GETASSETLINKS-QUERY failed to query specific asset IDs")
 		}
 	}
 	return links, nil
@@ -258,16 +258,6 @@ func (p *PostgreSQLDiscoveryDatabase) SearchAASIDsByAssetLinks(
 	if peekLimit < 0 {
 		return nil, "", common.NewErrBadRequest("Limit has to be higher than 0")
 	}
-	if cursor != "" {
-		cursorExists, cursorErr := p.discoveryCursorExists(ctx, cursor)
-		if cursorErr != nil {
-			return nil, "", cursorErr
-		}
-		if !cursorExists {
-			return []string{}, "", nil
-		}
-	}
-
 	d := goqu.Dialect("postgres")
 	ai := goqu.T("aas_identifier")
 	ad := goqu.T(common.TblAASDescriptor)
@@ -277,13 +267,16 @@ func (p *PostgreSQLDiscoveryDatabase) SearchAASIDsByAssetLinks(
 			ad,
 			goqu.On(ad.Col(common.ColAASID).Eq(ai.Col("aasid"))),
 		).
-		Select(ai.Col("aasid")).
-		Where(
-			goqu.Or(
-				goqu.V(cursor).Eq(""),
-				ai.Col("aasid").Gte(cursor),
-			),
-		)
+		Select(ai.Col("aasid"))
+	if cursor != "" {
+		cursorExists := d.
+			From(goqu.T("aas_identifier").As("cursor_ai")).
+			Select(goqu.V(1)).
+			Where(goqu.I("cursor_ai.aasid").Eq(cursor))
+		ds = ds.
+			Where(goqu.Func("EXISTS", cursorExists)).
+			Where(ai.Col("aasid").Gte(cursor))
+	}
 
 	uniqueLinks := uniqueAssetLinks(links)
 	if len(uniqueLinks) > 0 {
@@ -413,26 +406,4 @@ func uniqueAssetLinks(links []model.AssetLink) []model.AssetLink {
 		out = append(out, link)
 	}
 	return out
-}
-
-func (p *PostgreSQLDiscoveryDatabase) discoveryCursorExists(ctx context.Context, cursor string) (bool, error) {
-	d := goqu.Dialect("postgres")
-	query, args, buildErr := d.
-		From(goqu.T("aas_identifier").As("ai")).
-		Select(goqu.V(1)).
-		Where(goqu.I("ai.aasid").Eq(cursor)).
-		Limit(1).
-		ToSQL()
-	if buildErr != nil {
-		return false, common.NewInternalServerError("DISCOVERY-CHECKCURSOR-BUILDSQL " + buildErr.Error())
-	}
-
-	var one int
-	if queryErr := p.readDB(ctx).QueryRowContext(ctx, query, args...).Scan(&one); queryErr != nil {
-		if errors.Is(queryErr, sql.ErrNoRows) {
-			return false, nil
-		}
-		return false, common.NewInternalServerError("DISCOVERY-CHECKCURSOR-EXECSQL " + queryErr.Error())
-	}
-	return true, nil
 }

@@ -50,6 +50,17 @@ func withDescriptorDebugQueryer(ctx context.Context, db DBQueryer) DBQueryer {
 	}
 }
 
+func isTransactionQueryer(db DBQueryer) bool {
+	switch queryer := db.(type) {
+	case *sql.Tx:
+		return true
+	case *descriptorDebugQueryer:
+		return isTransactionQueryer(queryer.db)
+	default:
+		return false
+	}
+}
+
 func (d *descriptorDebugQueryer) QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error) {
 	if debugEnabled(ctx) || debugEnabled(d.ctx) {
 		slog.DebugContext(ctx, "descriptor database query started")

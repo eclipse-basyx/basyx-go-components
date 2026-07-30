@@ -367,7 +367,7 @@ func (s *SubmodelDatabase) getSubmodelsWithOptionalFiltersWithQueryer(ctx contex
 
 		if pageLimit > 0 && len(submodels) == pageLimit {
 			nextCursor = identifier.String
-			break
+			continue
 		}
 
 		var submodel types.ISubmodel

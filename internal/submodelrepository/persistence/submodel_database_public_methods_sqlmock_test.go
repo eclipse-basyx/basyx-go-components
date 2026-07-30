@@ -39,6 +39,7 @@ import (
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
+	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/stretchr/testify/require"
 )
@@ -104,6 +105,65 @@ func TestGetSubmodelsByListFiltersUsesIDShortColumn(t *testing.T) {
 	require.Error(t, err)
 	require.Nil(t, items)
 	require.Empty(t, cursor)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestGetSubmodelsClosesLookaheadRowsBeforeSupplementalReferenceQuery(t *testing.T) {
+	t.Parallel()
+
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer func() {
+		_ = db.Close()
+	}()
+
+	sut := &SubmodelDatabase{db: db}
+	visible := true
+	fragment := grammar.FragmentStringPattern("$sm#supplementalSemanticIds[]")
+	ctx := auth.WithQueryFilter(contextWithABACDisabled(t), &auth.QueryFilter{
+		Filters: auth.FragmentFilters{
+			fragment: {Boolean: &visible},
+		},
+	})
+
+	mock.ExpectBegin()
+	mainRows := sqlmock.NewRows([]string{
+		"submodel_identifier",
+		"id_short",
+		"category",
+		"kind",
+		"description",
+		"display_name",
+		"administrative_information",
+		"embedded_data_specification",
+		"supplemental_semantic_ids",
+		"extensions",
+		"qualifiers",
+		"semantic_id",
+		"supplemental_owner_id",
+	}).
+		AddRow("urn:sm:first", "First", nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, int64(1)).
+		AddRow("urn:sm:lookahead", "Lookahead", nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, int64(2))
+	mock.ExpectQuery(`SELECT .*FROM .*"submodel"`).
+		WillReturnRows(mainRows).
+		RowsWillBeClosed()
+	mock.ExpectQuery(`SELECT .*FROM .*"submodel_supplemental_semantic_id_reference"`).
+		WillReturnRows(sqlmock.NewRows([]string{
+			"owner_id",
+			"ref_id",
+			"ref_type",
+			"key_id",
+			"key_type",
+			"key_value",
+			"parent_reference_payload",
+		}))
+	mock.ExpectCommit()
+
+	items, nextCursor, err := sut.GetSubmodels(ctx, 1, "", "", "", time.Time{}, time.Time{})
+	require.NoError(t, err)
+	require.Len(t, items, 1)
+	require.Equal(t, "urn:sm:first", items[0].ID())
+	require.Equal(t, "urn:sm:lookahead", nextCursor)
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 

@@ -873,8 +873,7 @@ func ListAssetAdministrationShellDescriptors(
 			slog.DebugContext(ctx, "AAS descriptor list completed", "duration", time.Since(start))
 		}(time.Now())
 	}
-	_, inTransaction := db.(*sql.Tx)
-	return listAssetAdministrationShellDescriptors(ctx, db, limit, cursor, assetKind, assetType, identifiable, createdFrom, updatedFrom, !inTransaction)
+	return listAssetAdministrationShellDescriptors(ctx, db, limit, cursor, assetKind, assetType, identifiable, createdFrom, updatedFrom, !isTransactionQueryer(db))
 }
 
 //nolint:revive // has to be refactored later. i have no time
