@@ -87,3 +87,28 @@ func TestSearchAASIDsByAssetLinks_GlobalAssetIDUsesIndexedUnionCandidates(t *tes
 		t.Fatalf("expected query to be executed: %v", err)
 	}
 }
+
+func TestDiscoveryReadPoolSelection(t *testing.T) {
+	writer, _, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("writer sqlmock.New() failed: %v", err)
+	}
+	defer func() { _ = writer.Close() }()
+	reader, _, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("reader sqlmock.New() failed: %v", err)
+	}
+	defer func() { _ = reader.Close() }()
+
+	backend, err := NewPostgreSQLDiscoveryBackendFromPools(writer, reader)
+	if err != nil {
+		t.Fatalf("create backend: %v", err)
+	}
+	if got := backend.readDB(t.Context()); got != reader {
+		t.Fatal("eligible discovery read did not select the reader")
+	}
+	writerCtx := common.WithWriterPostgresReads(t.Context())
+	if got := backend.readDB(writerCtx); got != writer {
+		t.Fatal("consistency-sensitive discovery read did not select the writer")
+	}
+}

@@ -25,7 +25,12 @@
 
 package smregistrypostgresql
 
-import "testing"
+import (
+	"testing"
+
+	sqlmock "github.com/DATA-DOG/go-sqlmock"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common"
+)
 
 func TestBuildSubmodelDescriptorUpsertLockSQLUsesPostgresPlaceholders(t *testing.T) {
 	t.Parallel()
@@ -40,5 +45,30 @@ func TestBuildSubmodelDescriptorUpsertLockSQLUsesPostgresPlaceholders(t *testing
 	}
 	if len(args) != 2 || args[0] != "submodel_descriptor:submodel-1" || args[1] != int64(0) {
 		t.Fatalf("unexpected args: %#v", args)
+	}
+}
+
+func TestSubmodelRegistryReadPoolSelection(t *testing.T) {
+	writer, _, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("writer sqlmock.New() failed: %v", err)
+	}
+	defer func() { _ = writer.Close() }()
+	reader, _, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("reader sqlmock.New() failed: %v", err)
+	}
+	defer func() { _ = reader.Close() }()
+
+	backend, err := NewPostgreSQLSMBackendFromPools(writer, reader)
+	if err != nil {
+		t.Fatalf("create backend: %v", err)
+	}
+	if got := backend.readDB(t.Context()); got != reader {
+		t.Fatal("eligible registry read did not select the reader")
+	}
+	writerCtx := common.WithWriterPostgresReads(t.Context())
+	if got := backend.readDB(writerCtx); got != writer {
+		t.Fatal("consistency-sensitive registry read did not select the writer")
 	}
 }

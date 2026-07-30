@@ -94,16 +94,22 @@ func runServer(ctx context.Context, configPath string) error {
 
 	slog.InfoContext(ctx, "connecting to PostgreSQL")
 
-	sharedDB, err := common.OpenPostgresWithSchemaValidation(ctx, cfg.Postgres, "aasregistryservice", common.CURRENT_DATABASE_VERSION)
+	pools, err := common.OpenPostgresPoolsWithSchemaValidation(ctx, cfg.Postgres, "aasregistryservice", common.CURRENT_DATABASE_VERSION)
 	if err != nil {
 		slog.ErrorContext(ctx, "database connection failed", "error.code", "AASREGISTRY-DB-CONNECT", "error", err)
 		return err
 	}
+	defer func() {
+		if closeErr := pools.Close(); closeErr != nil {
+			slog.ErrorContext(ctx, "database pool shutdown failed", "error.code", "AASREGISTRY-DB-CLOSE", "error", closeErr)
+		}
+	}()
+	sharedDB := pools.Writer
 	if err = history.ApplyPostgresGuardConfig(ctx, sharedDB); err != nil {
 		return err
 	}
 
-	smDatabase, err := aasregistrydatabase.NewPostgreSQLAASRegistryDatabaseFromDB(sharedDB, cfg.Server.CacheEnabled)
+	smDatabase, err := aasregistrydatabase.NewPostgreSQLAASRegistryDatabaseFromPools(pools.Writer, pools.Reader, cfg.Server.CacheEnabled)
 	if err != nil {
 		slog.ErrorContext(ctx, "AAS registry persistence initialization failed", "error.code", "AASREGISTRY-DB-INIT", "error", err)
 		return err

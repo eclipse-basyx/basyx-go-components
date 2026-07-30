@@ -49,7 +49,8 @@ import (
 // PostgreSQLAASRegistryDatabase is a PostgreSQL-backed implementation of the AAS
 // registry database. It is safe for concurrent use by multiple goroutines.
 type PostgreSQLAASRegistryDatabase struct {
-	db           *sql.DB
+	writerDB     *sql.DB
+	readerDB     *sql.DB
 	cacheEnabled bool
 }
 
@@ -82,11 +83,32 @@ func NewPostgreSQLAASRegistryDatabaseFromDB(db *sql.DB, cacheEnabled bool) (*Pos
 	if db == nil {
 		return nil, common.NewErrBadRequest("AASREG-NEWFROMDB-NILDB database handle must not be nil")
 	}
+	return NewPostgreSQLAASRegistryDatabaseFromPools(db, db, cacheEnabled)
+}
+
+// NewPostgreSQLAASRegistryDatabaseFromPools creates a backend with separate
+// writer and reader pools.
+func NewPostgreSQLAASRegistryDatabaseFromPools(
+	writer *sql.DB,
+	reader *sql.DB,
+	cacheEnabled bool,
+) (*PostgreSQLAASRegistryDatabase, error) {
+	if writer == nil {
+		return nil, common.NewErrBadRequest("AASREG-NEWFROMPOOLS-NILWRITER writer database handle must not be nil")
+	}
+	if reader == nil {
+		return nil, common.NewErrBadRequest("AASREG-NEWFROMPOOLS-NILREADER reader database handle must not be nil")
+	}
 
 	return &PostgreSQLAASRegistryDatabase{
-		db:           db,
+		writerDB:     writer,
+		readerDB:     reader,
 		cacheEnabled: cacheEnabled,
 	}, nil
+}
+
+func (p *PostgreSQLAASRegistryDatabase) readDB(ctx context.Context) *sql.DB {
+	return common.PostgresReadPool(ctx, p.writerDB, p.readerDB)
 }
 
 // ExecuteInTransaction executes fn within a single database transaction.
@@ -95,7 +117,7 @@ func (p *PostgreSQLAASRegistryDatabase) ExecuteInTransaction(
 	commitErrorCode string,
 	fn func(tx *sql.Tx) error,
 ) error {
-	return common.ExecuteInTransaction(p.db, startErrorCode, commitErrorCode, fn)
+	return common.ExecuteInTransaction(p.writerDB, startErrorCode, commitErrorCode, fn)
 }
 
 func appendDescriptorHistoryTx(ctx context.Context, tx *sql.Tx, descriptor model.AssetAdministrationShellDescriptor, previousSnapshot map[string]any, changeType string, deleted bool) error {
@@ -152,7 +174,7 @@ func (p *PostgreSQLAASRegistryDatabase) InsertAdministrationShellDescriptor(
 	ctx context.Context,
 	aasd model.AssetAdministrationShellDescriptor,
 ) (model.AssetAdministrationShellDescriptor, error) {
-	if common.SupportsPostgreSQLBatch(p.db) &&
+	if common.SupportsPostgreSQLBatch(p.writerDB) &&
 		!history.MutationRecordingEnabled() &&
 		descriptors.CanSkipPostInsertReadback(ctx) {
 		return p.insertAdministrationShellDescriptorBatch(ctx, aasd)
@@ -164,7 +186,7 @@ func (p *PostgreSQLAASRegistryDatabase) InsertAdministrationShellDescriptor(
 	}
 
 	var result model.AssetAdministrationShellDescriptor
-	err = common.ExecuteInTransaction(p.db, "AASREG-INSERTAASDESC-STARTTX", "AASREG-INSERTAASDESC-COMMIT", func(tx *sql.Tx) error {
+	err = common.ExecuteInTransaction(p.writerDB, "AASREG-INSERTAASDESC-STARTTX", "AASREG-INSERTAASDESC-COMMIT", func(tx *sql.Tx) error {
 		if lockErr := history.LockMutationTx(ctx, tx, history.TableDescriptor, aasd.Id); lockErr != nil {
 			return lockErr
 		}
@@ -218,7 +240,7 @@ func (p *PostgreSQLAASRegistryDatabase) insertAdministrationShellDescriptorBatch
 	statements := batch.Statements()
 	mutationCount := len(statements) - 1
 	result := aasd
-	err = common.ExecutePostgreSQLBatchTransaction(ctx, p.db, statements, func(batchResults pgx.BatchResults) error {
+	err = common.ExecutePostgreSQLBatchTransaction(ctx, p.writerDB, statements, func(batchResults pgx.BatchResults) error {
 		for statementIndex := 0; statementIndex < mutationCount; statementIndex++ {
 			if _, execErr := batchResults.Exec(); execErr != nil {
 				if mappedErr := mapInsertAASDescriptorError(execErr); mappedErr != execErr {
@@ -408,7 +430,7 @@ func (p *PostgreSQLAASRegistryDatabase) GetAssetAdministrationShellDescriptorByI
 	ctx context.Context,
 	aasIdentifier string,
 ) (model.AssetAdministrationShellDescriptor, error) {
-	return descriptors.GetAssetAdministrationShellDescriptorByID(ctx, p.db, aasIdentifier)
+	return descriptors.GetAssetAdministrationShellDescriptorByID(ctx, p.readDB(ctx), aasIdentifier)
 }
 
 // GetAssetAdministrationShellDescriptorByIDInTransaction returns the AAS descriptor
@@ -431,7 +453,7 @@ func (p *PostgreSQLAASRegistryDatabase) DeleteAssetAdministrationShellDescriptor
 	ctx context.Context,
 	aasIdentifier string,
 ) error {
-	return common.ExecuteInTransaction(p.db, "AASREG-DELAASDESC-STARTTX", "AASREG-DELAASDESC-COMMIT", func(tx *sql.Tx) error {
+	return common.ExecuteInTransaction(p.writerDB, "AASREG-DELAASDESC-STARTTX", "AASREG-DELAASDESC-COMMIT", func(tx *sql.Tx) error {
 		previousSnapshot, err := loadDescriptorHistorySnapshotBeforeMutationTx(ctx, tx, aasIdentifier)
 		if err != nil {
 			return err
@@ -454,7 +476,7 @@ func (p *PostgreSQLAASRegistryDatabase) ReplaceAdministrationShellDescriptor(
 	aasd model.AssetAdministrationShellDescriptor,
 ) (model.AssetAdministrationShellDescriptor, error) {
 	var result model.AssetAdministrationShellDescriptor
-	err := common.ExecuteInTransaction(p.db, "AASREG-REPLACEAASDESC-STARTTX", "AASREG-REPLACEAASDESC-COMMIT", func(tx *sql.Tx) error {
+	err := common.ExecuteInTransaction(p.writerDB, "AASREG-REPLACEAASDESC-STARTTX", "AASREG-REPLACEAASDESC-COMMIT", func(tx *sql.Tx) error {
 		previousSnapshot, snapshotErr := loadDescriptorHistorySnapshotBeforeMutationTx(ctx, tx, aasd.Id)
 		if snapshotErr != nil {
 			return snapshotErr
@@ -609,7 +631,7 @@ func (p *PostgreSQLAASRegistryDatabase) ListAssetAdministrationShellDescriptors(
 	createdFrom time.Time,
 	updatedFrom time.Time,
 ) ([]model.AssetAdministrationShellDescriptor, string, error) {
-	return descriptors.ListAssetAdministrationShellDescriptors(ctx, p.db, limit, cursor, assetKind, assetType, "", createdFrom, updatedFrom)
+	return descriptors.ListAssetAdministrationShellDescriptors(ctx, p.readDB(ctx), limit, cursor, assetKind, assetType, "", createdFrom, updatedFrom)
 }
 
 // ListSubmodelDescriptorsForAAS lists submodel descriptors for a given AAS ID
@@ -620,7 +642,7 @@ func (p *PostgreSQLAASRegistryDatabase) ListSubmodelDescriptorsForAAS(
 	limit int32,
 	cursor string,
 ) ([]model.SubmodelDescriptor, string, error) {
-	return descriptors.ListSubmodelDescriptorsForAAS(ctx, p.db, aasID, limit, cursor)
+	return descriptors.ListSubmodelDescriptorsForAAS(ctx, p.readDB(ctx), aasID, limit, cursor)
 }
 
 // InsertSubmodelDescriptorForAAS inserts a submodel descriptor and associates
@@ -631,7 +653,7 @@ func (p *PostgreSQLAASRegistryDatabase) InsertSubmodelDescriptorForAAS(
 	submodel model.SubmodelDescriptor,
 ) (model.SubmodelDescriptor, error) {
 	var result model.SubmodelDescriptor
-	err := common.ExecuteInTransaction(p.db, "AASREG-INSERTSMDESCFORAAS-STARTTX", "AASREG-INSERTSMDESCFORAAS-COMMIT", func(tx *sql.Tx) error {
+	err := common.ExecuteInTransaction(p.writerDB, "AASREG-INSERTSMDESCFORAAS-STARTTX", "AASREG-INSERTSMDESCFORAAS-COMMIT", func(tx *sql.Tx) error {
 		previousSnapshot, snapshotErr := loadDescriptorHistorySnapshotBeforeMutationTx(ctx, tx, aasID)
 		if snapshotErr != nil {
 			return snapshotErr
@@ -660,7 +682,7 @@ func (p *PostgreSQLAASRegistryDatabase) ReplaceSubmodelDescriptorForAAS(
 	submodel model.SubmodelDescriptor,
 ) (model.SubmodelDescriptor, error) {
 	var result model.SubmodelDescriptor
-	err := common.ExecuteInTransaction(p.db, "AASREG-REPLACESMDESCFORAAS-STARTTX", "AASREG-REPLACESMDESCFORAAS-COMMIT", func(tx *sql.Tx) error {
+	err := common.ExecuteInTransaction(p.writerDB, "AASREG-REPLACESMDESCFORAAS-STARTTX", "AASREG-REPLACESMDESCFORAAS-COMMIT", func(tx *sql.Tx) error {
 		previousSnapshot, snapshotErr := loadDescriptorHistorySnapshotBeforeMutationTx(ctx, tx, aasID)
 		if snapshotErr != nil {
 			return snapshotErr
@@ -694,7 +716,7 @@ func (p *PostgreSQLAASRegistryDatabase) GetSubmodelDescriptorForAASByID(
 	aasID string,
 	submodelID string,
 ) (model.SubmodelDescriptor, error) {
-	return descriptors.GetSubmodelDescriptorForAASByID(ctx, p.db, aasID, submodelID)
+	return descriptors.GetSubmodelDescriptorForAASByID(ctx, p.readDB(ctx), aasID, submodelID)
 }
 
 // DeleteSubmodelDescriptorForAASByID deletes the submodel descriptor identified
@@ -704,7 +726,7 @@ func (p *PostgreSQLAASRegistryDatabase) DeleteSubmodelDescriptorForAASByID(
 	aasID string,
 	submodelID string,
 ) error {
-	return common.ExecuteInTransaction(p.db, "AASREG-DELSMDESCFORAAS-STARTTX", "AASREG-DELSMDESCFORAAS-COMMIT", func(tx *sql.Tx) error {
+	return common.ExecuteInTransaction(p.writerDB, "AASREG-DELSMDESCFORAAS-STARTTX", "AASREG-DELSMDESCFORAAS-COMMIT", func(tx *sql.Tx) error {
 		previousSnapshot, snapshotErr := loadDescriptorHistorySnapshotBeforeMutationTx(ctx, tx, aasID)
 		if snapshotErr != nil {
 			return snapshotErr
@@ -724,7 +746,7 @@ func (p *PostgreSQLAASRegistryDatabase) ExistsAASByID(
 	ctx context.Context,
 	aasID string,
 ) (bool, error) {
-	return descriptors.ExistsAASByID(ctx, p.db, aasID)
+	return descriptors.ExistsAASByID(ctx, p.writerDB, aasID)
 }
 
 // ExistsSubmodelForAAS reports whether the given submodel ID exists for the
@@ -734,5 +756,5 @@ func (p *PostgreSQLAASRegistryDatabase) ExistsSubmodelForAAS(
 	aasID,
 	submodelID string,
 ) (bool, error) {
-	return descriptors.ExistsSubmodelForAAS(ctx, p.db, aasID, submodelID)
+	return descriptors.ExistsSubmodelForAAS(ctx, p.writerDB, aasID, submodelID)
 }

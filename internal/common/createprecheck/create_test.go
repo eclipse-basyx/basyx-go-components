@@ -27,6 +27,7 @@ package createprecheck
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"testing"
 
@@ -49,6 +50,26 @@ func TestEnsureVisibleCreateSkipsReadWithoutQueryFilter(t *testing.T) {
 
 	require.Error(t, err)
 	require.True(t, common.IsErrConflict(err))
+}
+
+func TestEnsureVisibleCreateUsesWriterConsistentReads(t *testing.T) {
+	t.Parallel()
+
+	writer := new(sql.DB)
+	reader := new(sql.DB)
+	err := EnsureVisibleCreate(
+		t.Context(),
+		func(ctx context.Context) (bool, error) {
+			if common.PostgresReadPool(ctx, writer, reader) != writer {
+				t.Error("create precheck did not select the writer")
+			}
+			return false, nil
+		},
+		readMustNotBeCalled,
+		"descriptor already exists",
+		"descriptor access not allowed",
+	)
+	require.NoError(t, err)
 }
 
 func TestEnsureVisibleCreateSkipsReadWithUnrestrictedCreateFormula(t *testing.T) {

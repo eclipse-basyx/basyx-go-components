@@ -29,6 +29,7 @@ import (
 	"fmt"
 	"testing"
 
+	sqlmock "github.com/DATA-DOG/go-sqlmock"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/jackc/pgx/v5/pgconn"
 )
@@ -45,5 +46,30 @@ func TestMapInsertAASDescriptorErrorPreservesNonUniqueViolation(t *testing.T) {
 	err := mapInsertAASDescriptorError(originalErr)
 	if err != originalErr {
 		t.Fatalf("expected original error, got %v", err)
+	}
+}
+
+func TestAASRegistryReadPoolSelection(t *testing.T) {
+	writer, _, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("writer sqlmock.New() failed: %v", err)
+	}
+	defer func() { _ = writer.Close() }()
+	reader, _, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("reader sqlmock.New() failed: %v", err)
+	}
+	defer func() { _ = reader.Close() }()
+
+	backend, err := NewPostgreSQLAASRegistryDatabaseFromPools(writer, reader, false)
+	if err != nil {
+		t.Fatalf("create backend: %v", err)
+	}
+	if got := backend.readDB(t.Context()); got != reader {
+		t.Fatal("eligible registry read did not select the reader")
+	}
+	writerCtx := common.WithWriterPostgresReads(t.Context())
+	if got := backend.readDB(writerCtx); got != writer {
+		t.Fatal("consistency-sensitive registry read did not select the writer")
 	}
 }

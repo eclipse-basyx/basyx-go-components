@@ -55,7 +55,8 @@ import (
 // using connection pooling for efficient database access. The database schema can be initialized
 // on startup via the provided schema path.
 type PostgreSQLDiscoveryDatabase struct {
-	db *sql.DB
+	writerDB *sql.DB
+	readerDB *sql.DB
 }
 
 // NewPostgreSQLDiscoveryBackend creates and initializes a new PostgreSQL discovery database backend.
@@ -97,7 +98,23 @@ func NewPostgreSQLDiscoveryBackendFromDB(db *sql.DB) (*PostgreSQLDiscoveryDataba
 	if db == nil {
 		return nil, common.NewErrBadRequest("DISC-NEWFROMDB-NILDB database handle must not be nil")
 	}
-	return &PostgreSQLDiscoveryDatabase{db: db}, nil
+	return NewPostgreSQLDiscoveryBackendFromPools(db, db)
+}
+
+// NewPostgreSQLDiscoveryBackendFromPools creates a backend with separate
+// writer and reader pools.
+func NewPostgreSQLDiscoveryBackendFromPools(writer *sql.DB, reader *sql.DB) (*PostgreSQLDiscoveryDatabase, error) {
+	if writer == nil {
+		return nil, common.NewErrBadRequest("DISC-NEWFROMPOOLS-NILWRITER writer database handle must not be nil")
+	}
+	if reader == nil {
+		return nil, common.NewErrBadRequest("DISC-NEWFROMPOOLS-NILREADER reader database handle must not be nil")
+	}
+	return &PostgreSQLDiscoveryDatabase{writerDB: writer, readerDB: reader}, nil
+}
+
+func (p *PostgreSQLDiscoveryDatabase) readDB(ctx context.Context) *sql.DB {
+	return common.PostgresReadPool(ctx, p.writerDB, p.readerDB)
 }
 
 // GetAllAssetLinks retrieves all asset links associated with a specific AAS identifier.
@@ -116,7 +133,7 @@ func NewPostgreSQLDiscoveryBackendFromDB(db *sql.DB) (*PostgreSQLDiscoveryDataba
 // read-only operations. If the AAS identifier is not found in the database, an ErrNotFound
 // error is returned.
 func (p *PostgreSQLDiscoveryDatabase) GetAllAssetLinks(ctx context.Context, aasID string) ([]types.ISpecificAssetID, error) {
-	links, err := descriptors.ReadSpecificAssetIDsByAASIdentifier(ctx, p.db, aasID)
+	links, err := descriptors.ReadSpecificAssetIDsByAASIdentifier(ctx, p.readDB(ctx), aasID)
 	if err != nil {
 		switch {
 		case common.IsErrNotFound(err):
@@ -150,7 +167,7 @@ func (p *PostgreSQLDiscoveryDatabase) DeleteAllAssetLinks(ctx context.Context, a
 		slog.ErrorContext(ctx, "delete query construction failed", "error.code", "DISCOVERY-DELETE-BUILDQUERY", "error", err)
 		return common.NewInternalServerError("Failed to delete AAS identifier. See console for information.")
 	}
-	result, err := p.db.ExecContext(ctx, sqlStr, args...)
+	result, err := p.writerDB.ExecContext(ctx, sqlStr, args...)
 	if err != nil {
 		return common.NewInternalServerError("Failed to delete AAS identifier. See console for information.")
 	}
@@ -180,7 +197,7 @@ func (p *PostgreSQLDiscoveryDatabase) DeleteAllAssetLinks(ctx context.Context, a
 //
 // The use of COPY FROM makes this method highly efficient even for large numbers of asset links.
 func (p *PostgreSQLDiscoveryDatabase) CreateAllAssetLinks(ctx context.Context, aasID string, specificAssetIDs []types.ISpecificAssetID) error {
-	if err := descriptors.ReplaceSpecificAssetIDsByAASIdentifier(ctx, p.db, aasID, specificAssetIDs); err != nil {
+	if err := descriptors.ReplaceSpecificAssetIDsByAASIdentifier(ctx, p.writerDB, aasID, specificAssetIDs); err != nil {
 		return common.NewInternalServerError("Failed to store specific asset IDs. See console for information.")
 	}
 	return nil
@@ -188,7 +205,7 @@ func (p *PostgreSQLDiscoveryDatabase) CreateAllAssetLinks(ctx context.Context, a
 
 // AddAllAssetLinks appends missing asset links for an existing aas identifier.
 func (p *PostgreSQLDiscoveryDatabase) AddAllAssetLinks(ctx context.Context, aasID string, specificAssetIDs []types.ISpecificAssetID) error {
-	if err := descriptors.AddSpecificAssetIDsByAASIdentifier(ctx, p.db, aasID, specificAssetIDs); err != nil {
+	if err := descriptors.AddSpecificAssetIDsByAASIdentifier(ctx, p.writerDB, aasID, specificAssetIDs); err != nil {
 		return common.NewInternalServerError("Failed to store specific asset IDs. See console for information.")
 	}
 	return nil
@@ -310,12 +327,13 @@ func (p *PostgreSQLDiscoveryDatabase) SearchAASIDsByAssetLinks(
 	}
 
 	var rows *sql.Rows
+	readerDB := p.readDB(ctx)
 	if debugEnabled {
 		start := time.Now()
-		rows, err = p.db.QueryContext(ctx, sqlStr, args...)
+		rows, err = readerDB.QueryContext(ctx, sqlStr, args...)
 		slog.DebugContext(ctx, "discovery database query completed", "duration", time.Since(start))
 	} else {
-		rows, err = p.db.QueryContext(ctx, sqlStr, args...)
+		rows, err = readerDB.QueryContext(ctx, sqlStr, args...)
 	}
 	if err != nil {
 		slog.ErrorContext(ctx, "database query failed", "error.code", "DISCOVERY-SEARCH-EXECQUERY", "error", err)
@@ -405,7 +423,7 @@ func (p *PostgreSQLDiscoveryDatabase) discoveryCursorExists(ctx context.Context,
 	}
 
 	var one int
-	if queryErr := p.db.QueryRowContext(ctx, query, args...).Scan(&one); queryErr != nil {
+	if queryErr := p.readDB(ctx).QueryRowContext(ctx, query, args...).Scan(&one); queryErr != nil {
 		if errors.Is(queryErr, sql.ErrNoRows) {
 			return false, nil
 		}

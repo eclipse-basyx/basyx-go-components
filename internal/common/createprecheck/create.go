@@ -56,11 +56,12 @@ func EnsureVisibleCreate(
 		return common.NewInternalServerError("CREATEPRECHECK-CREATE-READCALLBACK read callback must not be nil")
 	}
 
-	resourceExists, err := exists(auth.WithoutQueryFilter(ctx))
+	writerCtx := common.WithWriterPostgresReads(ctx)
+	resourceExists, err := exists(auth.WithoutQueryFilter(writerCtx))
 	if err != nil {
 		return err
 	}
-	return EnsureVisibleDuplicate(ctx, resourceExists, read, conflictMessage, deniedMessage)
+	return EnsureVisibleDuplicate(writerCtx, resourceExists, read, conflictMessage, deniedMessage)
 }
 
 // EnsureVisibleDuplicate maps an existing resource to conflict or denied
