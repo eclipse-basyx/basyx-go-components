@@ -108,7 +108,14 @@ func (p *PostgreSQLSMDatabase) ListSubmodelDescriptors(
 	createdFrom time.Time,
 	updatedFrom time.Time,
 ) ([]model.SubmodelDescriptor, string, error) {
-	return descriptors.ListSubmodelDescriptors(ctx, p.readDB(ctx), limit, cursor, createdFrom, updatedFrom)
+	var result []model.SubmodelDescriptor
+	var nextCursor string
+	err := common.ExecuteInReadTransaction(ctx, p.readDB(ctx), "SMREG-LISTSMDESC-STARTTX", "SMREG-LISTSMDESC-COMMITTX", func(tx *sql.Tx) error {
+		var txErr error
+		result, nextCursor, txErr = descriptors.ListSubmodelDescriptors(ctx, tx, limit, cursor, createdFrom, updatedFrom)
+		return txErr
+	})
+	return result, nextCursor, err
 }
 
 func appendSubmodelDescriptorHistoryTx(ctx context.Context, tx *sql.Tx, descriptor model.SubmodelDescriptor, previousSnapshot map[string]any, changeType string, deleted bool) error {
@@ -391,7 +398,13 @@ func (p *PostgreSQLSMDatabase) GetSubmodelDescriptorByID(
 	ctx context.Context,
 	submodelID string,
 ) (model.SubmodelDescriptor, error) {
-	return descriptors.GetSubmodelDescriptorByID(ctx, p.readDB(ctx), submodelID)
+	var result model.SubmodelDescriptor
+	err := common.ExecuteInReadTransaction(ctx, p.readDB(ctx), "SMREG-GETSMDESC-STARTTX", "SMREG-GETSMDESC-COMMITTX", func(tx *sql.Tx) error {
+		var txErr error
+		result, txErr = descriptors.GetSubmodelDescriptorByID(ctx, tx, submodelID)
+		return txErr
+	})
+	return result, err
 }
 
 // GetSubmodelDescriptorByIDInTransaction returns a global submodel descriptor

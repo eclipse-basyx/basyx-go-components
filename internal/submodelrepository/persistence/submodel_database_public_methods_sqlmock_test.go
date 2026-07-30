@@ -39,6 +39,7 @@ import (
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
+	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/stretchr/testify/require"
 )
@@ -107,7 +108,7 @@ func TestGetSubmodelsByListFiltersUsesIDShortColumn(t *testing.T) {
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 
-func TestGetSubmodelByIDReturnsErrorWhenParallelReadsFail(t *testing.T) {
+func TestGetSubmodelsClosesLookaheadRowsBeforeSupplementalReferenceQuery(t *testing.T) {
 	t.Parallel()
 
 	db, mock, err := sqlmock.New()
@@ -116,11 +117,70 @@ func TestGetSubmodelByIDReturnsErrorWhenParallelReadsFail(t *testing.T) {
 		_ = db.Close()
 	}()
 
-	mock.MatchExpectationsInOrder(false)
+	sut := &SubmodelDatabase{db: db}
+	visible := true
+	fragment := grammar.FragmentStringPattern("$sm#supplementalSemanticIds[]")
+	ctx := auth.WithQueryFilter(contextWithABACDisabled(t), &auth.QueryFilter{
+		Filters: auth.FragmentFilters{
+			fragment: {Boolean: &visible},
+		},
+	})
+
+	mock.ExpectBegin()
+	mainRows := sqlmock.NewRows([]string{
+		"submodel_identifier",
+		"id_short",
+		"category",
+		"kind",
+		"description",
+		"display_name",
+		"administrative_information",
+		"embedded_data_specification",
+		"supplemental_semantic_ids",
+		"extensions",
+		"qualifiers",
+		"semantic_id",
+		"supplemental_owner_id",
+	}).
+		AddRow("urn:sm:first", "First", nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, int64(1)).
+		AddRow("urn:sm:lookahead", "Lookahead", nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, int64(2))
+	mock.ExpectQuery(`SELECT .*FROM .*"submodel"`).
+		WillReturnRows(mainRows).
+		RowsWillBeClosed()
+	mock.ExpectQuery(`SELECT .*FROM .*"submodel_supplemental_semantic_id_reference"`).
+		WillReturnRows(sqlmock.NewRows([]string{
+			"owner_id",
+			"ref_id",
+			"ref_type",
+			"key_id",
+			"key_type",
+			"key_value",
+			"parent_reference_payload",
+		}))
+	mock.ExpectCommit()
+
+	items, nextCursor, err := sut.GetSubmodels(ctx, 1, "", "", "", time.Time{}, time.Time{})
+	require.NoError(t, err)
+	require.Len(t, items, 1)
+	require.Equal(t, "urn:sm:first", items[0].ID())
+	require.Equal(t, "urn:sm:lookahead", nextCursor)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestGetSubmodelByIDRollsBackWhenSnapshotReadFails(t *testing.T) {
+	t.Parallel()
+
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer func() {
+		_ = db.Close()
+	}()
 
 	sut := &SubmodelDatabase{db: db}
 
+	mock.ExpectBegin()
 	mock.ExpectQuery(`SELECT .*`).WillReturnError(errors.New("read failed"))
+	mock.ExpectRollback()
 
 	item, err := sut.GetSubmodelByID(contextWithABACDisabled(t), "", "", false, true)
 	require.Error(t, err)
@@ -232,6 +292,7 @@ func TestGetSubmodelElementWithLevelCoreReturnsElementWithoutChildren(t *testing
 
 	sut := &SubmodelDatabase{db: db}
 
+	mock.ExpectBegin()
 	mock.ExpectQuery(`SELECT .*FROM "submodel"`).
 		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(1))
 
@@ -260,6 +321,7 @@ func TestGetSubmodelElementWithLevelCoreReturnsElementWithoutChildren(t *testing
 				true,
 			),
 		)
+	mock.ExpectCommit()
 
 	elem, err := sut.GetSubmodelElement(contextWithABACDisabled(t), "sm-core", "RootCollection", true, "core")
 	require.NoError(t, err)
@@ -302,6 +364,7 @@ func TestGetSubmodelElementsCoreReturnsOnlyRootElements(t *testing.T) {
 
 	sut := &SubmodelDatabase{db: db}
 
+	mock.ExpectBegin()
 	mock.ExpectQuery(`SELECT .*FROM "submodel"`).
 		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(1))
 
@@ -333,6 +396,7 @@ func TestGetSubmodelElementsCoreReturnsOnlyRootElements(t *testing.T) {
 				true,
 			),
 		)
+	mock.ExpectCommit()
 
 	elems, cursor, err := sut.GetSubmodelElements(contextWithABACDisabled(t), "sm-core", nil, "", true, "core")
 	require.NoError(t, err)
@@ -357,6 +421,7 @@ func TestGetSubmodelElementsDeepReturnsRootWithChildren(t *testing.T) {
 
 	sut := &SubmodelDatabase{db: db}
 
+	mock.ExpectBegin()
 	mock.ExpectQuery(`SELECT .*FROM "submodel"`).
 		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(1))
 
@@ -410,6 +475,7 @@ func TestGetSubmodelElementsDeepReturnsRootWithChildren(t *testing.T) {
 				true,
 			),
 		)
+	mock.ExpectCommit()
 
 	elems, cursor, err := sut.GetSubmodelElements(contextWithABACDisabled(t), "sm-deep", nil, "", true, "deep")
 	require.NoError(t, err)
@@ -1048,6 +1114,7 @@ func TestGetSubmodelElementReferencesReturnsReferencesWithPaginationCursor(t *te
 	sut := &SubmodelDatabase{db: db}
 	limit := 1
 
+	mock.ExpectBegin()
 	mock.ExpectQuery(`SELECT .*FROM "submodel"`).
 		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(42))
 
@@ -1060,6 +1127,7 @@ func TestGetSubmodelElementReferencesReturnsReferencesWithPaginationCursor(t *te
 		WillReturnRows(sqlmock.NewRows([]string{"id", "model_type"}).
 			AddRow(10, int64(types.ModelTypeProperty)).
 			AddRow(20, int64(types.ModelTypeRange)))
+	mock.ExpectCommit()
 
 	references, cursor, err := sut.GetSubmodelElementReferences(contextWithABACDisabled(t), "sm-1", &limit, "")
 	require.NoError(t, err)
@@ -1113,6 +1181,7 @@ func TestGetSubmodelElementPathPageReturnsCompositeCursorForDuplicatePaths(t *te
 	sut := &SubmodelDatabase{db: db}
 	limit := 1
 
+	mock.ExpectBegin()
 	mock.ExpectQuery(`SELECT .*FROM "submodel"`).
 		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(42))
 
@@ -1120,6 +1189,7 @@ func TestGetSubmodelElementPathPageReturnsCompositeCursorForDuplicatePaths(t *te
 		WillReturnRows(sqlmock.NewRows([]string{"idshort_path", "id"}).
 			AddRow("A", int64(10)).
 			AddRow("A", int64(20)))
+	mock.ExpectCommit()
 
 	paths, cursor, err := sut.GetSubmodelElementPathPage(contextWithABACDisabled(t), "sm-1", &limit, "", "")
 	require.NoError(t, err)
@@ -1141,6 +1211,7 @@ func TestGetSubmodelElementPathPageAcceptsCompositeCursor(t *testing.T) {
 	sut := &SubmodelDatabase{db: db}
 	limit := 2
 
+	mock.ExpectBegin()
 	mock.ExpectQuery(`SELECT .*FROM "submodel"`).
 		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(42))
 
@@ -1151,6 +1222,7 @@ func TestGetSubmodelElementPathPageAcceptsCompositeCursor(t *testing.T) {
 		WillReturnRows(sqlmock.NewRows([]string{"idshort_path", "id"}).
 			AddRow("A", int64(20)).
 			AddRow("B", int64(30)))
+	mock.ExpectCommit()
 
 	paths, cursor, err := sut.GetSubmodelElementPathPage(contextWithABACDisabled(t), "sm-1", &limit, "A|10", "")
 	require.NoError(t, err)

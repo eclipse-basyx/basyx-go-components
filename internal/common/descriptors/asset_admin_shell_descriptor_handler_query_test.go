@@ -27,6 +27,7 @@ package descriptors
 
 import (
 	"context"
+	stdsql "database/sql"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -37,6 +38,15 @@ import (
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 )
+
+func TestIsTransactionQueryerRecognizesDebugWrapper(t *testing.T) {
+	tx := &stdsql.Tx{}
+	wrapped := &descriptorDebugQueryer{db: tx}
+
+	if !isTransactionQueryer(wrapped) {
+		t.Fatal("expected a debug-wrapped transaction to retain transaction identity")
+	}
+}
 
 func contextWithABACDisabled(t *testing.T) context.Context {
 	t.Helper()

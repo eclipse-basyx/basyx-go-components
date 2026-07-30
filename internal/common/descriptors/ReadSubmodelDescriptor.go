@@ -28,7 +28,6 @@ package descriptors
 
 import (
 	"context"
-	"database/sql"
 	"log/slog"
 	"time"
 
@@ -88,10 +87,7 @@ func ReadSubmodelDescriptorsByDescriptorIDs(
 		return map[int64][]model.SubmodelDescriptor{}, nil
 	}
 
-	allowParallel := true
-	if _, ok := db.(*sql.Tx); ok {
-		allowParallel = false
-	}
+	allowParallel := !isTransactionQueryer(db)
 	uniqDesc := descriptorIDs
 
 	d := goqu.Dialect(common.Dialect)
@@ -230,10 +226,7 @@ func ReadSubmodelDescriptorsByAASDescriptorIDs(
 		return out, nil
 	}
 
-	allowParallel := true
-	if _, ok := db.(*sql.Tx); ok {
-		allowParallel = false
-	}
+	allowParallel := !isTransactionQueryer(db)
 	uniqAASDesc := aasDescriptorIDs
 
 	d := goqu.Dialect(common.Dialect)

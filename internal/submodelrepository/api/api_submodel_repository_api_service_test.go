@@ -197,7 +197,9 @@ func TestOperationInvocationReadsDefinitionFromWriter(t *testing.T) {
 
 			backend, err := persistencepostgresql.NewSubmodelDatabaseFromPools(writer, reader, nil, "off")
 			require.NoError(t, err)
+			writerMock.ExpectBegin()
 			writerMock.ExpectQuery("SELECT").WillReturnError(errors.New("writer lookup failed"))
+			writerMock.ExpectRollback()
 
 			service := NewSubmodelRepositoryAPIAPIService(t.Context(), *backend)
 			response, invokeErr := test.invoke(service, contextWithABACDisabled(t))

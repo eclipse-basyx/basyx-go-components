@@ -27,6 +27,7 @@ package persistencepostgresql
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"testing"
@@ -85,6 +86,83 @@ func TestSearchAASIDsByAssetLinks_GlobalAssetIDUsesIndexedUnionCandidates(t *tes
 	}
 	if err := mock.ExpectationsWereMet(); err != nil {
 		t.Fatalf("expected query to be executed: %v", err)
+	}
+}
+
+func TestSearchAASIDsByAssetLinks_ValidatesCursorInPageQuery(t *testing.T) {
+	t.Parallel()
+
+	matcher := sqlmock.QueryMatcherFunc(func(_ string, actualSQL string) error {
+		for _, expected := range []string{
+			`SELECT 1 FROM "aas_identifier" AS "cursor_ai"`,
+			`"cursor_ai"."aasid" = 'urn:aas:cursor'`,
+			`"aas_identifier"."aasid" >= 'urn:aas:cursor'`,
+		} {
+			if !strings.Contains(actualSQL, expected) {
+				return fmt.Errorf("expected SQL to contain %q, got: %s", expected, actualSQL)
+			}
+		}
+		return nil
+	})
+	db, mock, err := sqlmock.New(sqlmock.QueryMatcherOption(matcher))
+	if err != nil {
+		t.Fatalf("failed to create sqlmock database: %v", err)
+	}
+	defer func() { _ = db.Close() }()
+
+	backend, err := NewPostgreSQLDiscoveryBackendFromDB(db)
+	if err != nil {
+		t.Fatalf("failed to create backend: %v", err)
+	}
+
+	mock.ExpectQuery("cursor query").
+		WillReturnRows(sqlmock.NewRows([]string{"aasid"}))
+
+	ids, nextCursor, err := backend.SearchAASIDsByAssetLinks(
+		t.Context(),
+		nil,
+		10,
+		"urn:aas:cursor",
+	)
+	if err != nil {
+		t.Fatalf("expected cursor search to succeed: %v", err)
+	}
+	if len(ids) != 0 || nextCursor != "" {
+		t.Fatalf("expected an empty page without a next cursor, got ids=%#v cursor=%q", ids, nextCursor)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("cursor validation was not part of the page query: %v", err)
+	}
+}
+
+func TestGetAllAssetLinksReturnsCodedErrorWhenReadTransactionFails(t *testing.T) {
+	t.Parallel()
+
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("failed to create sqlmock database: %v", err)
+	}
+	defer func() { _ = db.Close() }()
+
+	backend, err := NewPostgreSQLDiscoveryBackendFromDB(db)
+	if err != nil {
+		t.Fatalf("failed to create backend: %v", err)
+	}
+
+	mock.ExpectBegin().WillReturnError(errors.New("begin failed"))
+
+	links, err := backend.GetAllAssetLinks(t.Context(), "urn:aas:test")
+	if err == nil {
+		t.Fatal("expected transaction start failure")
+	}
+	if links != nil {
+		t.Fatalf("expected no links, got %#v", links)
+	}
+	if !strings.Contains(err.Error(), "DISC-GETASSETLINKS-QUERY") {
+		t.Fatalf("expected coded discovery error, got %v", err)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("expected transaction start attempt: %v", err)
 	}
 }
 

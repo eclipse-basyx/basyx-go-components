@@ -102,7 +102,17 @@ func (p *AASXFileServerDatabase) readDB(ctx context.Context) *sql.DB {
 
 // ListPackages returns package metadata for a page and the next cursor identifier, if any.
 func (p *AASXFileServerDatabase) ListPackages(ctx context.Context, limit int32, cursorID int64, aasID string) ([]PackageRecord, int64, error) {
-	readDB := p.readDB(ctx)
+	var records []PackageRecord
+	var nextCursor int64
+	err := common.ExecuteInReadTransaction(ctx, p.readDB(ctx), "AASXFS-LISTPACKAGES-STARTTX", "AASXFS-LISTPACKAGES-COMMIT", func(tx *sql.Tx) error {
+		var txErr error
+		records, nextCursor, txErr = p.listPackagesInTransaction(ctx, tx, limit, cursorID, aasID)
+		return txErr
+	})
+	return records, nextCursor, err
+}
+
+func (p *AASXFileServerDatabase) listPackagesInTransaction(ctx context.Context, tx *sql.Tx, limit int32, cursorID int64, aasID string) ([]PackageRecord, int64, error) {
 	if limit <= 0 {
 		limit = 100
 	}
@@ -134,7 +144,7 @@ func (p *AASXFileServerDatabase) ListPackages(ctx context.Context, limit int32, 
 		return nil, 0, common.NewInternalServerError("AASXFS-LISTPACKAGES-BUILDSQL " + err.Error())
 	}
 
-	rows, err := readDB.QueryContext(ctx, sqlQuery, args...)
+	rows, err := tx.QueryContext(ctx, sqlQuery, args...)
 	if err != nil {
 		return nil, 0, common.NewInternalServerError("AASXFS-LISTPACKAGES-QUERY " + err.Error())
 	}
@@ -160,7 +170,7 @@ func (p *AASXFileServerDatabase) ListPackages(ctx context.Context, limit int32, 
 	}
 
 	for idx := range records {
-		aasIDs, aasErr := p.getAASIDs(ctx, readDB, records[idx].DBID)
+		aasIDs, aasErr := p.getAASIDsTx(ctx, tx, records[idx].DBID)
 		if aasErr != nil {
 			return nil, 0, aasErr
 		}
@@ -318,7 +328,7 @@ func persistStagedPackage(ctx context.Context, tx *sql.Tx, packageID string, new
 //   - *PackageBinary: Metadata and caller-owned content stream.
 //   - error: Not-found, query, transaction, or large-object open error.
 func (p *AASXFileServerDatabase) GetPackageByID(ctx context.Context, packageID string) (*PackageBinary, error) {
-	tx, err := p.readDB(ctx).BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
+	tx, err := common.BeginReadTransaction(ctx, p.readDB(ctx))
 	if err != nil {
 		return nil, common.NewInternalServerError("AASXFS-GETPACKAGE-STARTTX " + err.Error())
 	}
@@ -424,12 +434,6 @@ func (p *AASXFileServerDatabase) DeletePackageByID(ctx context.Context, packageI
 	}
 	committed = true
 	return nil
-}
-
-func (p *AASXFileServerDatabase) getAASIDs(ctx context.Context, queryable interface {
-	QueryContext(context.Context, string, ...any) (*sql.Rows, error)
-}, packageDBID int64) ([]string, error) {
-	return p.getAASIDsTx(ctx, queryable, packageDBID)
 }
 
 func (p *AASXFileServerDatabase) getAASIDsTx(ctx context.Context, queryable interface {

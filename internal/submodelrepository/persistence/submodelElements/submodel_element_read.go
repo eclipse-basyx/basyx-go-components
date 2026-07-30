@@ -50,9 +50,11 @@ import (
 	persistenceutils "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/utils"
 )
 
-type dbQueryer interface {
+// DBQueryer supports Submodel Element reads through a pool or transaction.
+type DBQueryer interface {
 	Query(query string, args ...any) (*sql.Rows, error)
 	QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error)
+	QueryRow(query string, args ...any) *sql.Row
 	QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row
 }
 
@@ -105,7 +107,7 @@ func GetSubmodelElementByIDShortOrPathTx(ctx context.Context, tx *sql.Tx, submod
 	return getSubmodelElementByIDShortOrPathWithSubmodelDBID(ctx, tx, submodelID, int64(submodelDatabaseID), idShortOrPath, level, includeBlobValue)
 }
 
-func getSubmodelElementByIDShortOrPathWithSubmodelDBID(ctx context.Context, db dbQueryer, submodelID string, submodelDatabaseID int64, idShortOrPath string, level string, includeBlobValue bool) (types.ISubmodelElement, error) {
+func getSubmodelElementByIDShortOrPathWithSubmodelDBID(ctx context.Context, db DBQueryer, submodelID string, submodelDatabaseID int64, idShortOrPath string, level string, includeBlobValue bool) (types.ISubmodelElement, error) {
 	includeChildren := level != "core"
 	parsedRows, readRowsErr := readSubmodelElementRowsByPath(ctx, db, submodelDatabaseID, idShortOrPath, includeChildren, includeBlobValue)
 
@@ -125,7 +127,7 @@ func getSubmodelElementByIDShortOrPathWithSubmodelDBID(ctx context.Context, db d
 }
 
 // GetSubmodelElementPathsBySubmodelID returns submodel element paths directly from persisted idshort_path values.
-func GetSubmodelElementPathsBySubmodelID(ctx context.Context, db *sql.DB, submodelID string, level string) ([]string, error) {
+func GetSubmodelElementPathsBySubmodelID(ctx context.Context, db DBQueryer, submodelID string, level string) ([]string, error) {
 	if submodelID == "" {
 		return nil, common.NewErrBadRequest("SMREPO-GETSMEPATHS-EMPTYSMID Submodel id must not be empty")
 	}
@@ -133,7 +135,7 @@ func GetSubmodelElementPathsBySubmodelID(ctx context.Context, db *sql.DB, submod
 		return nil, common.NewErrBadRequest("SMREPO-GETSMEPATHS-BADLEVEL level must be one of '', 'core', or 'deep'")
 	}
 
-	submodelDatabaseID, submodelIDErr := persistenceutils.GetSubmodelDatabaseIDFromDB(db, submodelID)
+	submodelDatabaseID, submodelIDErr := persistenceutils.GetSubmodelDatabaseIDFromQueryer(db, submodelID)
 	if submodelIDErr != nil {
 		if errors.Is(submodelIDErr, sql.ErrNoRows) {
 			return nil, common.NewErrNotFound(submodelID)
@@ -202,7 +204,7 @@ func GetSubmodelElementPathsBySubmodelID(ctx context.Context, db *sql.DB, submod
 }
 
 // GetSubmodelElementPathsPageBySubmodelID returns paged submodel element paths directly from persisted idshort_path values.
-func GetSubmodelElementPathsPageBySubmodelID(ctx context.Context, db *sql.DB, submodelID string, limit *int, cursor string, level string) ([]string, string, error) {
+func GetSubmodelElementPathsPageBySubmodelID(ctx context.Context, db DBQueryer, submodelID string, limit *int, cursor string, level string) ([]string, string, error) {
 	if submodelID == "" {
 		return nil, "", common.NewErrBadRequest("SMREPO-GETSMEPATHSPAGE-EMPTYSMID Submodel id must not be empty")
 	}
@@ -221,7 +223,7 @@ func GetSubmodelElementPathsPageBySubmodelID(ctx context.Context, db *sql.DB, su
 		return []string{}, "", nil
 	}
 
-	submodelDatabaseID, submodelIDErr := persistenceutils.GetSubmodelDatabaseIDFromDB(db, submodelID)
+	submodelDatabaseID, submodelIDErr := persistenceutils.GetSubmodelDatabaseIDFromQueryer(db, submodelID)
 	if submodelIDErr != nil {
 		if errors.Is(submodelIDErr, sql.ErrNoRows) {
 			return nil, "", common.NewErrNotFound(submodelID)
@@ -316,7 +318,7 @@ func GetSubmodelElementPathsPageBySubmodelID(ctx context.Context, db *sql.DB, su
 }
 
 // GetSubmodelElementPathsByPath returns persisted idshort_path values for a submodel element path and, for deep level, its descendants.
-func GetSubmodelElementPathsByPath(ctx context.Context, db *sql.DB, submodelID string, idShortPath string, level string) ([]string, error) {
+func GetSubmodelElementPathsByPath(ctx context.Context, db DBQueryer, submodelID string, idShortPath string, level string) ([]string, error) {
 	if submodelID == "" {
 		return nil, common.NewErrBadRequest("SMREPO-GETSMEPATHSBYPATH-EMPTYSMID Submodel id must not be empty")
 	}
@@ -327,7 +329,7 @@ func GetSubmodelElementPathsByPath(ctx context.Context, db *sql.DB, submodelID s
 		return nil, common.NewErrBadRequest("SMREPO-GETSMEPATHSBYPATH-BADLEVEL level must be one of '', 'core', or 'deep'")
 	}
 
-	submodelDatabaseID, submodelIDErr := persistenceutils.GetSubmodelDatabaseIDFromDB(db, submodelID)
+	submodelDatabaseID, submodelIDErr := persistenceutils.GetSubmodelDatabaseIDFromQueryer(db, submodelID)
 	if submodelIDErr != nil {
 		if errors.Is(submodelIDErr, sql.ErrNoRows) {
 			return nil, common.NewErrNotFound(submodelID)
@@ -463,7 +465,7 @@ func GetSubmodelElementsBySubmodelIDTx(ctx context.Context, tx *sql.Tx, submodel
 	return getSubmodelElementsByDatabaseID(ctx, tx, int64(submodelDatabaseID), limit, cursor, level, includeBlobValue)
 }
 
-func getSubmodelElementsByDatabaseID(ctx context.Context, db dbQueryer, submodelDatabaseID int64, limit *int, cursor string, level string, includeBlobValue bool) ([]types.ISubmodelElement, string, error) {
+func getSubmodelElementsByDatabaseID(ctx context.Context, db DBQueryer, submodelDatabaseID int64, limit *int, cursor string, level string, includeBlobValue bool) ([]types.ISubmodelElement, string, error) {
 	rootElements, nextCursor, rootPathErr := getRootElementPage(ctx, db, submodelDatabaseID, limit, cursor)
 	if rootPathErr != nil {
 		return nil, "", rootPathErr
@@ -503,7 +505,7 @@ func getSubmodelElementsByDatabaseID(ctx context.Context, db dbQueryer, submodel
 }
 
 // GetSubmodelElementReferencesBySubmodelID retrieves references for top-level submodel elements of a submodel with optional pagination.
-func GetSubmodelElementReferencesBySubmodelID(ctx context.Context, db *sql.DB, submodelID string, limit *int, cursor string) ([]types.IReference, string, error) {
+func GetSubmodelElementReferencesBySubmodelID(ctx context.Context, db DBQueryer, submodelID string, limit *int, cursor string) ([]types.IReference, string, error) {
 	if submodelID == "" {
 		return nil, "", common.NewErrBadRequest("SMREPO-GETSMEREFS-EMPTYSMID Submodel id must not be empty")
 	}
@@ -517,7 +519,7 @@ func GetSubmodelElementReferencesBySubmodelID(ctx context.Context, db *sql.DB, s
 		*limit = 100
 	}
 
-	submodelDatabaseID, submodelIDErr := persistenceutils.GetSubmodelDatabaseIDFromDB(db, submodelID)
+	submodelDatabaseID, submodelIDErr := persistenceutils.GetSubmodelDatabaseIDFromQueryer(db, submodelID)
 	if submodelIDErr != nil {
 		if errors.Is(submodelIDErr, sql.ErrNoRows) {
 			return nil, "", common.NewErrNotFound(submodelID)
@@ -658,7 +660,7 @@ type rootElementCursorRow struct {
 	path string
 }
 
-func getRootElementPage(ctx context.Context, db dbQueryer, submodelDatabaseID int64, limit *int, cursor string) ([]rootElementCursorRow, string, error) {
+func getRootElementPage(ctx context.Context, db DBQueryer, submodelDatabaseID int64, limit *int, cursor string) ([]rootElementCursorRow, string, error) {
 	if limit != nil && *limit == 0 {
 		return []rootElementCursorRow{}, "", nil
 	}
@@ -794,7 +796,7 @@ func addSMECursorBoundary(query *goqu.SelectDataset, cursor string) *goqu.Select
 	)
 }
 
-func submodelElementCursorExists(ctx context.Context, db dbQueryer, query *goqu.SelectDataset, cursor string) (bool, error) {
+func submodelElementCursorExists(ctx context.Context, db DBQueryer, query *goqu.SelectDataset, cursor string) (bool, error) {
 	cursorPath, cursorID, hasCursorID := parseRootCursor(cursor)
 	cursorQuery := query.Where(goqu.I("sme.idshort_path").Eq(cursorPath))
 	if hasCursorID {
@@ -1222,7 +1224,7 @@ func buildMaskedSMEValuePayloadExpr(rawValueAlias string) exp.Expression {
 	return goqu.L("(COALESCE(?::jsonb, '{}'::jsonb) - 'value')", goqu.I(rawValueAlias))
 }
 
-func readSubmodelElementRowsByPath(ctx context.Context, db dbQueryer, submodelDatabaseID int64, idShortOrPath string, includeChildren bool, includeBlobValue bool) ([]loadedSMERow, error) {
+func readSubmodelElementRowsByPath(ctx context.Context, db DBQueryer, submodelDatabaseID int64, idShortOrPath string, includeChildren bool, includeBlobValue bool) ([]loadedSMERow, error) {
 	dialect := goqu.Dialect("postgres")
 	rowCollector, collectorErr := grammar.NewResolvedFieldPathCollectorForSMERow("sme")
 	if collectorErr != nil {
@@ -1348,7 +1350,7 @@ func readSubmodelElementRowsByPath(ctx context.Context, db dbQueryer, submodelDa
 	return executeLoadedSMERowQuery(ctx, db, sqlQuery, args, "SMREPO-GETSMEBYPATH")
 }
 
-func readSubmodelElementRowsByRootIDs(ctx context.Context, db dbQueryer, submodelDatabaseID int64, rootIDs []int64, includeChildren bool, isGetSubmodelElements bool, includeBlobValue bool) ([]loadedSMERow, error) {
+func readSubmodelElementRowsByRootIDs(ctx context.Context, db DBQueryer, submodelDatabaseID int64, rootIDs []int64, includeChildren bool, isGetSubmodelElements bool, includeBlobValue bool) ([]loadedSMERow, error) {
 	if len(rootIDs) == 0 {
 		return []loadedSMERow{}, nil
 	}
@@ -1477,7 +1479,7 @@ func readSubmodelElementRowsByRootIDs(ctx context.Context, db dbQueryer, submode
 
 func executeLoadedSMERowQuery(
 	ctx context.Context,
-	db dbQueryer,
+	db DBQueryer,
 	sqlQuery string,
 	args []interface{},
 	errorCodePrefix string,
@@ -1589,7 +1591,7 @@ func hasSMESupplementalSemanticIDFilter(ctx context.Context) bool {
 
 func applyFilteredSMESupplementalSemanticIDs(
 	ctx context.Context,
-	db dbQueryer,
+	db DBQueryer,
 	rows []loadedSMERow,
 ) error {
 	ownerIDs := make([]int64, 0, len(rows))
@@ -1646,7 +1648,7 @@ type loadedSMENode struct {
 	valueVisible bool
 }
 
-func buildSubmodelElementTreeFromRows(db dbQueryer, parsedRows []loadedSMERow, submodelID string, idShortOrPath string) (types.ISubmodelElement, error) {
+func buildSubmodelElementTreeFromRows(db DBQueryer, parsedRows []loadedSMERow, submodelID string, idShortOrPath string) (types.ISubmodelElement, error) {
 	nodes, children, rootNodes, buildNodesErr := buildLoadedSubmodelElementNodes(db, parsedRows, "SMREPO-GETSMEBYPATH")
 	if buildNodesErr != nil {
 		return nil, buildNodesErr
@@ -1713,7 +1715,7 @@ func isDirectEntityStatementPath(entityPath string, candidatePath string) bool {
 	return false
 }
 
-func buildSubmodelElementForestFromRows(db dbQueryer, parsedRows []loadedSMERow) (map[int64]types.ISubmodelElement, error) {
+func buildSubmodelElementForestFromRows(db DBQueryer, parsedRows []loadedSMERow) (map[int64]types.ISubmodelElement, error) {
 	nodes, children, rootNodes, buildNodesErr := buildLoadedSubmodelElementNodes(db, parsedRows, "SMREPO-GETSMES-BUILDFOREST")
 	if buildNodesErr != nil {
 		return nil, buildNodesErr
@@ -1729,7 +1731,7 @@ func buildSubmodelElementForestFromRows(db dbQueryer, parsedRows []loadedSMERow)
 	return result, nil
 }
 
-func buildLoadedSubmodelElementNodes(db dbQueryer, parsedRows []loadedSMERow, errorCodePrefix string) (map[int64]*loadedSMENode, map[int64][]*loadedSMENode, []*loadedSMENode, error) {
+func buildLoadedSubmodelElementNodes(db DBQueryer, parsedRows []loadedSMERow, errorCodePrefix string) (map[int64]*loadedSMENode, map[int64][]*loadedSMENode, []*loadedSMENode, error) {
 	nodes := make(map[int64]*loadedSMENode, len(parsedRows))
 	children := make(map[int64][]*loadedSMENode, len(parsedRows))
 	rootNodes := make([]*loadedSMENode, 0, 1)
@@ -1898,7 +1900,7 @@ func setEntityChildren(parent types.ISubmodelElement, kids []*loadedSMENode) {
 	p.SetStatements(statements)
 }
 
-func getReferencesFromKeyTables(db dbQueryer, referenceTable string, referenceKeyTable string, referenceIDs []int64, errorCodePrefix string) (map[int64]types.IReference, error) {
+func getReferencesFromKeyTables(db DBQueryer, referenceTable string, referenceKeyTable string, referenceIDs []int64, errorCodePrefix string) (map[int64]types.IReference, error) {
 	if len(referenceIDs) == 0 {
 		return map[int64]types.IReference{}, nil
 	}
