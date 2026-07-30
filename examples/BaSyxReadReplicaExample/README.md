@@ -36,11 +36,12 @@ The AAS Environment APIs are available at [http://localhost:8084](http://localho
 The smoke test verifies:
 
 - PostgreSQL reports that `postgres-reader` is in recovery mode.
+- PostgreSQL reports that the standby WAL receiver is actively streaming.
 - the AAS Environment writer pool is connected to `postgres-primary`.
 - the reader pool is connected to `postgres-reader`.
 - no reader-pool connection is present on the primary.
 - the preconfigured shell is visible through a reader-routed API request.
-- the BaSyx Web UI is reachable.
+- the BaSyx Web UI is reachable and serves the expected `mono-all` infrastructure configuration.
 
 You can inspect the active connections directly:
 
@@ -60,6 +61,7 @@ The relevant application settings are visible in `docker-compose.yml`:
 - `POSTGRES_READER_HOST=postgres-reader`
 - independent writer and reader connection-pool limits
 - `default_transaction_read_only=on` as an additional reader-session guard
+- the bounded `basyx_reader` physical replication slot retains WAL while the standby is temporarily unavailable
 
 ## Consistency behavior
 

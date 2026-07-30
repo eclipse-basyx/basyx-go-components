@@ -3,21 +3,9 @@ infrastructures:
 
   read-replica:
     name: BaSyx PostgreSQL Read Replica
+    template: mono-all
     components:
-      aasDiscovery:
-        baseUrl: "http://localhost:8084/lookup/shells"
-      aasRegistry:
-        baseUrl: "http://localhost:8084/shell-descriptors"
-        hasDiscoveryIntegration: true
-      submodelRegistry:
-        baseUrl: "http://localhost:8084/submodel-descriptors"
-      aasRepository:
-        baseUrl: "http://localhost:8084/shells"
-        hasRegistryIntegration: true
-      submodelRepository:
-        baseUrl: "http://localhost:8084/submodels"
-        hasRegistryIntegration: true
-      conceptDescriptionRepository:
-        baseUrl: "http://localhost:8084/concept-descriptions"
+      aasEnvironment:
+        baseUrl: "http://localhost:8084"
     security:
       type: none
