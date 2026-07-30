@@ -40,9 +40,9 @@ postgres:
   # reader:
   #   host: postgres-reader
   #   port: 5432
-  #   user: admin
-  #   password: admin123
-  #   dbname: basyxTestDB
+  #   user: postgres
+  #   password: change-me
+  #   dbname: basyx
   #   sslmode: require
   #   maxOpenConnections: 50
   #   maxIdleConnections: 25
