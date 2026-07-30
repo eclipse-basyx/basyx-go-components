@@ -145,11 +145,13 @@
           },
           {
             "FRAGMENT": "$aasdesc#specificAssetIds[]",
-            "USEFORMULA": "bpn_or_public_with_header"
+            "USEFORMULA": "bpn_or_public_with_header",
+            "MATCH": true
           },
           {
             "FRAGMENT": "$aasdesc#specificAssetIds[].externalSubjectId.keys[]",
-            "USEFORMULA": "bpn_or_public_with_header"
+            "USEFORMULA": "bpn_or_public_with_header",
+            "MATCH": true
           }
         ]
       },
