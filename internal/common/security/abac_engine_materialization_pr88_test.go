@@ -73,3 +73,51 @@ func TestParseAccessModelCombinesInlineAndReferencedAttributesAndObjects(t *test
 		t.Fatalf("expected inline and referenced objects to be combined, got %d", len(rule.objs))
 	}
 }
+
+func TestParseAccessModelTreatsAlignedLegacyMatchAsValidationOnly(t *testing.T) {
+	t.Parallel()
+
+	const policy = `{
+		"AllAccessPermissionRules": {
+			"rules": [
+				{
+					"ACL": {
+						"ATTRIBUTES": [ { "GLOBAL": "ANONYMOUS" } ],
+						"RIGHTS": [ "READ" ],
+						"ACCESS": "ALLOW"
+					},
+					"OBJECTS": [ { "ROUTE": "/submodels" } ],
+					"FORMULA": { "$boolean": true },
+					"FILTERLIST": [
+						{
+							"FRAGMENT": "$aas#submodels[]",
+							"CONDITION": { "$boolean": true },
+							"MATCH": true
+						},
+						{
+							"FRAGMENT": "$aas#idShort",
+							"CONDITION": { "$boolean": true },
+							"MATCH": false
+						}
+					]
+				}
+			]
+		}
+	}`
+
+	model, err := ParseAccessModel([]byte(policy), nil, "")
+	if err != nil {
+		t.Fatalf("ParseAccessModel returned error: %v", err)
+	}
+	if len(model.rules) != 1 {
+		t.Fatalf("expected one materialized rule, got %d", len(model.rules))
+	}
+	if len(model.rules[0].filterList) != 2 {
+		t.Fatalf("expected two materialized filters, got %d", len(model.rules[0].filterList))
+	}
+	for i, filter := range model.rules[0].filterList {
+		if filter.MATCH != nil {
+			t.Fatalf("expected MATCH to be discarded from materialized filter %d", i+1)
+		}
+	}
+}

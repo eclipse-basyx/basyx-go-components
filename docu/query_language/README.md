@@ -425,7 +425,10 @@ remove individual array rows. An earlier `[]` in the path does not change this.
 The exact `$sme` fragment is a special case: it evaluates each submodel element
 in its own context, including elements reached during recursive traversal.
 
-`MATCH` is obsolete and rejected when present, including `MATCH: false`.
+`MATCH` is obsolete and has no effect on filtering. Legacy policies may still
+include it when its value agrees with the fragment: `MATCH: true` requires a
+fragment ending exactly in `[]`, while `MATCH: false` requires a fragment that
+does not end in `[]`.
 
 Implementation reference:
 - AddFilterQueryFromContext in [internal/common/security/filter_helpers.go](../../internal/common/security/filter_helpers.go)

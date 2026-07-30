@@ -323,7 +323,7 @@ Validation invariants enforced by the current implementation:
   - each filter entry must define exactly one of `CONDITION` or `USEFORMULA`
   - a `FRAGMENT` ending exactly in wildcard `[]` is evaluated row by row automatically
   - the exact `$sme` fragment is evaluated once per submodel element, including nested elements
-  - the obsolete `MATCH` field is rejected, whether its value is `true` or `false`
+  - the obsolete `MATCH` field has no filtering effect; when present, `true` requires a `FRAGMENT` ending in `[]` and `false` requires one that does not
 - Reference resolution:
   - `USEACL`, `USEATTRIBUTES`, `USEFORMULA`, and `USEOBJECTS` are resolved during model materialization at startup
   - unknown references fail fast (`... not found`)

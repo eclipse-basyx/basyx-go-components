@@ -32,19 +32,23 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestAccessPermissionRuleFilterRejectsLegacyMATCH(t *testing.T) {
+func TestAccessPermissionRuleFilterValidatesLegacyMATCHAgainstFragment(t *testing.T) {
 	tests := []struct {
-		name  string
-		match bool
+		name        string
+		fragment    string
+		match       bool
+		expectError bool
 	}{
-		{name: "MATCH true", match: true},
-		{name: "MATCH false", match: false},
+		{name: "MATCH true with array fragment", fragment: "$aas#submodels[]", match: true},
+		{name: "MATCH false with non-array fragment", fragment: "$aas#submodels", match: false},
+		{name: "MATCH true with non-array fragment", fragment: "$aas#submodels", match: true, expectError: true},
+		{name: "MATCH false with array fragment", fragment: "$aas#submodels[]", match: false, expectError: true},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			document, err := json.Marshal(map[string]any{
-				"FRAGMENT": "$aas#submodels[]",
+				"FRAGMENT": tt.fragment,
 				"CONDITION": map[string]any{
 					"$boolean": true,
 				},
@@ -55,10 +59,16 @@ func TestAccessPermissionRuleFilterRejectsLegacyMATCH(t *testing.T) {
 			var filter AccessPermissionRuleFILTER
 			err = json.Unmarshal(document, &filter)
 
-			require.Error(t, err)
-			require.ErrorContains(t, err, "MATCH")
-			require.ErrorContains(t, err, "unsupported")
-			require.ErrorContains(t, err, "ending in []")
+			if tt.expectError {
+				require.Error(t, err)
+				require.ErrorContains(t, err, "MATCH")
+				require.ErrorContains(t, err, "FRAGMENT")
+				require.ErrorContains(t, err, "ending in []")
+				return
+			}
+			require.NoError(t, err)
+			require.NotNil(t, filter.MATCH)
+			require.Equal(t, tt.match, *filter.MATCH)
 		})
 	}
 }

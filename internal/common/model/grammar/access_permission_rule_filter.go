@@ -30,7 +30,6 @@
 package grammar
 
 import (
-	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -82,8 +81,8 @@ type AccessPermissionRuleFILTER struct {
 	// FRAGMENT corresponds to the JSON schema field "FRAGMENT".
 	FRAGMENT *FragmentStringPattern `json:"FRAGMENT,omitempty" yaml:"FRAGMENT,omitempty" mapstructure:"FRAGMENT,omitempty"`
 
-	// MATCH is retained only so non-JSON materialization paths can reject the
-	// obsolete field with the same explicit validation error.
+	// MATCH is retained for compatibility with legacy policies. It is only
+	// validated against FRAGMENT and has no effect on filtering.
 	MATCH *bool `json:"MATCH,omitempty" yaml:"MATCH,omitempty" mapstructure:"MATCH,omitempty"`
 
 	// USEFORMULA corresponds to the JSON schema field "USEFORMULA".
@@ -96,14 +95,6 @@ type AccessPermissionRuleFILTER struct {
 //   - FRAGMENT is required
 //   - exactly one of CONDITION or USEFORMULA must be defined
 func (j *AccessPermissionRuleFILTER) UnmarshalJSON(value []byte) error {
-	var members map[string]json.RawMessage
-	if err := common.UnmarshalAndDisallowUnknownFields(value, &members); err != nil {
-		return err
-	}
-	if _, present := members["MATCH"]; present {
-		return fmt.Errorf("GRAMMAR-ACCESSFILTER-MATCHUNSUPPORTED MATCH is unsupported; row matching is inferred automatically from a FRAGMENT ending in []")
-	}
-
 	type Plain AccessPermissionRuleFILTER
 	var plain Plain
 
@@ -127,7 +118,28 @@ func (j *AccessPermissionRuleFILTER) UnmarshalJSON(value []byte) error {
 		}
 		return fmt.Errorf("AccessPermissionRuleFILTER: exactly one of CONDITION or USEFORMULA must be defined")
 	}
+	if err := AccessPermissionRuleFILTER(plain).ValidateMatchCompatibility(); err != nil {
+		return err
+	}
 
 	*j = AccessPermissionRuleFILTER(plain)
+	return nil
+}
+
+// ValidateMatchCompatibility ensures that the obsolete MATCH value agrees with
+// the automatic row scope inferred from FRAGMENT.
+func (j AccessPermissionRuleFILTER) ValidateMatchCompatibility() error {
+	if j.MATCH == nil || j.FRAGMENT == nil {
+		return nil
+	}
+
+	fragmentEndsInArray := strings.HasSuffix(string(*j.FRAGMENT), "[]")
+	if *j.MATCH != fragmentEndsInArray {
+		return fmt.Errorf(
+			"GRAMMAR-ACCESSFILTER-MATCHFRAGMENT MATCH must be true for a FRAGMENT ending in [] and false otherwise; got MATCH %t for %q",
+			*j.MATCH,
+			*j.FRAGMENT,
+		)
+	}
 	return nil
 }
