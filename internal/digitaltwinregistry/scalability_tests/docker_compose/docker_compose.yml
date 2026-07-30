@@ -1,0 +1,100 @@
+x-postgres-environment: &postgres-environment
+  POSTGRES_HOST: ${DTR_SCALE_POSTGRES_HOST:?Set DTR_SCALE_POSTGRES_HOST in .env}
+  POSTGRES_PORT: ${DTR_SCALE_POSTGRES_PORT:?Set DTR_SCALE_POSTGRES_PORT in .env}
+  POSTGRES_USER: ${DTR_SCALE_POSTGRES_USER:?Set DTR_SCALE_POSTGRES_USER in .env}
+  POSTGRES_PASSWORD: ${DTR_SCALE_POSTGRES_PASSWORD:?Set DTR_SCALE_POSTGRES_PASSWORD in .env}
+  POSTGRES_DBNAME: ${DTR_SCALE_POSTGRES_DBNAME:?Set DTR_SCALE_POSTGRES_DBNAME in .env}
+  POSTGRES_SSLMODE: ${DTR_SCALE_POSTGRES_SSLMODE:-disable}
+  POSTGRES_MAXOPENCONNECTIONS: ${DTR_SCALE_POSTGRES_MAX_OPEN_CONNECTIONS:-100}
+  POSTGRES_MAXIDLECONNECTIONS: ${DTR_SCALE_POSTGRES_MAX_IDLE_CONNECTIONS:-100}
+  POSTGRES_CONNMAXLIFETIMEMINUTES: ${DTR_SCALE_POSTGRES_CONN_MAX_LIFETIME_MINUTES:-5}
+
+services:
+  keycloak-db:
+    image: postgres:18
+    environment:
+      POSTGRES_USER: keycloak
+      POSTGRES_PASSWORD: ${DTR_SCALE_KEYCLOAK_DB_PASSWORD:?Set DTR_SCALE_KEYCLOAK_DB_PASSWORD in .env}
+      POSTGRES_DB: keycloak
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U keycloak -d keycloak"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  keycloak:
+    image: keycloak/keycloak:26.0.6
+    environment:
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://keycloak-db:5432/keycloak
+      KC_DB_USERNAME: keycloak
+      KC_DB_PASSWORD: ${DTR_SCALE_KEYCLOAK_DB_PASSWORD:?Set DTR_SCALE_KEYCLOAK_DB_PASSWORD in .env}
+      KC_HOSTNAME: localhost
+      KC_HOSTNAME_PORT: ${BASYX_IT_KEYCLOAK_PORT:-8080}
+      KC_HOSTNAME_URL: http://localhost:${BASYX_IT_KEYCLOAK_PORT:-8080}
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: admin
+      KC_HTTP_ENABLED: "true"
+      KC_HTTPS_ENABLED: "false"
+      KC_HEALTH_ENABLED: "true"
+      KC_HOSTNAME_STRICT: "false"
+      KC_HOSTNAME_STRICT_BACKCHANNEL: "false"
+      KC_IMPORT: /opt/keycloak/data/import/
+      KC_HTTP_MANAGEMENT_ENABLED: "true"
+    command: ["start-dev", "--import-realm", "--health-enabled=true"]
+    ports:
+      - ${BASYX_IT_KEYCLOAK_PORT:-8080}:8080
+    volumes:
+      - ../../integration_tests/docker_compose/keycloak/realm:/opt/keycloak/data/import:ro
+    depends_on:
+      keycloak-db:
+        condition: service_healthy
+
+  keycloak-healthcheck:
+    image: curlimages/curl:latest
+    command: >
+      sh -c "until curl -sf http://keycloak:9000/health/ready; do sleep 2; done"
+    depends_on:
+      - keycloak
+
+  basyx-configuration:
+    image: eclipsebasyx/basyxconfigurationservice-go:SNAPSHOT
+    pull_policy: always
+    environment: *postgres-environment
+    extra_hosts:
+      - host.docker.internal:host-gateway
+
+  digitaltwinregistry:
+    build:
+      context: ../../../..
+      dockerfile: ./cmd/digitaltwinregistryservice/Dockerfile
+    environment:
+      <<: *postgres-environment
+      SERVER_PORT: "5004"
+      SERVER_CONTEXTPATH: /api/v3
+      SERVER_STRICTVERIFICATION: "off"
+      ABAC_ENABLED: "true"
+      ABAC_MODELPATH: /security_env/access-rules.json
+      OIDC_TRUSTLISTPATH: /security_env/trustlist.json
+      GENERAL_ENABLEIMPLICITCASTS: "false"
+      GENERAL_ENABLEDESCRIPTORDEBUG: "false"
+      GENERAL_SUPPORTSSINGULARSUPPLEMENTALSEMANTICID: "true"
+      GENERAL_ENABLECUSTOMMIDDLEWAREHEADERINJECTION: "true"
+    ports:
+      - 127.0.0.1:${BASYX_IT_API_PORT:-5004}:5004
+    volumes:
+      - ${BASYX_IT_SECURITY_ENV:-../../integration_tests/docker_compose/security_env}:/security_env:ro
+    extra_hosts:
+      - host.docker.internal:host-gateway
+      - localhost:host-gateway
+    healthcheck:
+      test: ["CMD", "/bin/healthprobe"]
+      interval: 5s
+      timeout: 3s
+      retries: 24
+      start_period: 5s
+    depends_on:
+      basyx-configuration:
+        condition: service_completed_successfully
+      keycloak-healthcheck:
+        condition: service_completed_successfully
