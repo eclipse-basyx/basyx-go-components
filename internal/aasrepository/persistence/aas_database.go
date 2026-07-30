@@ -58,6 +58,7 @@ import (
 // AssetAdministrationShellDatabase is the implementation of the AssetAdministrationShellRepositoryDatabase interface using PostgreSQL as the underlying database.
 type AssetAdministrationShellDatabase struct {
 	db               *sql.DB
+	readerDB         *sql.DB
 	verificationMode commonmodel.VerificationMode
 	privateKey       *rsa.PrivateKey
 	signingOptions   jws.SigningOptions
@@ -117,6 +118,18 @@ func NewAssetAdministrationShellDatabaseFromDB(db *sql.DB, strictVerification st
 	if db == nil {
 		return nil, common.NewErrBadRequest("AASREPO-NEWFROMDB-NILDB database handle must not be nil")
 	}
+	return NewAssetAdministrationShellDatabaseFromPools(db, db, strictVerification)
+}
+
+// NewAssetAdministrationShellDatabaseFromPools creates a repository backend
+// from caller-owned writer and reader pools.
+func NewAssetAdministrationShellDatabaseFromPools(writer *sql.DB, reader *sql.DB, strictVerification string) (*AssetAdministrationShellDatabase, error) {
+	if writer == nil {
+		return nil, common.NewErrBadRequest("AASREPO-NEWFROMPOOLS-NILWRITER writer database handle must not be nil")
+	}
+	if reader == nil {
+		return nil, common.NewErrBadRequest("AASREPO-NEWFROMPOOLS-NILREADER reader database handle must not be nil")
+	}
 
 	verificationMode, err := commonmodel.ParseVerificationMode(strictVerification)
 	if err != nil {
@@ -124,9 +137,14 @@ func NewAssetAdministrationShellDatabaseFromDB(db *sql.DB, strictVerification st
 	}
 
 	return &AssetAdministrationShellDatabase{
-		db:               db,
+		db:               writer,
+		readerDB:         reader,
 		verificationMode: verificationMode,
 	}, nil
+}
+
+func (s *AssetAdministrationShellDatabase) readDB(ctx context.Context) *sql.DB {
+	return common.PostgresReadPool(ctx, s.db, s.readerDB)
 }
 
 // verifyAssetAdministrationShell validates an AAS when strict verification is enabled.
@@ -270,7 +288,7 @@ func (s *AssetAdministrationShellDatabase) GetSignedAssetAdministrationShell(ctx
 
 // GetAssetAdministrationShellByIDAndDate returns the AAS version valid at the requested instant.
 func (s *AssetAdministrationShellDatabase) GetAssetAdministrationShellByIDAndDate(ctx context.Context, aasIdentifier string, at time.Time) (types.IAssetAdministrationShell, error) {
-	snapshot, err := history.SnapshotByDate(ctx, s.db, history.TableAAS, aasIdentifier, at)
+	snapshot, err := history.SnapshotByDate(ctx, s.readDB(ctx), history.TableAAS, aasIdentifier, at)
 	if err != nil {
 		return nil, err
 	}
@@ -782,6 +800,7 @@ func (s *AssetAdministrationShellDatabase) checkIfSubmodelReferenceExistsInAsset
 // GetAssetAdministrationShells returns a paginated list of AAS objects and the next cursor.
 func (s *AssetAdministrationShellDatabase) GetAssetAdministrationShells(ctx context.Context, limit int32, cursor string, idShort string, specificAssetIDs []types.ISpecificAssetID, createdFrom time.Time, updatedFrom time.Time) ([]types.IAssetAdministrationShell, string, error) {
 	dialect := goqu.Dialect("postgres")
+	readDB := s.readDB(ctx)
 
 	if limit < 0 {
 		return nil, "", common.NewErrBadRequest("AASREPO-GETAASLIST-BADLIMIT Limit " + strconv.FormatInt(int64(limit), 10) + " too small")
@@ -821,7 +840,7 @@ func (s *AssetAdministrationShellDatabase) GetAssetAdministrationShells(ctx cont
 		return nil, "", common.NewInternalServerError("AASREPO-GETAASLIST-BUILDSQL " + toSQLErr.Error())
 	}
 
-	rows, err := s.db.QueryContext(ctx, sqlQuery, args...)
+	rows, err := readDB.QueryContext(ctx, sqlQuery, args...)
 	if err != nil {
 		return nil, "", common.NewInternalServerError("AASREPO-GETAASLIST-EXECSQL " + err.Error())
 	}
@@ -850,7 +869,7 @@ func (s *AssetAdministrationShellDatabase) GetAssetAdministrationShells(ctx cont
 		if cursorBuildErr != nil {
 			return nil, "", common.NewInternalServerError("AASREPO-GETAASLIST-BUILDCURSORSQL " + cursorBuildErr.Error())
 		}
-		if queryErr := s.db.QueryRow(cursorSQL, cursorArgs...).Scan(&nextCursor); queryErr != nil {
+		if queryErr := readDB.QueryRow(cursorSQL, cursorArgs...).Scan(&nextCursor); queryErr != nil {
 			return nil, "", common.NewInternalServerError("AASREPO-GETAASLIST-GETCURSOR " + queryErr.Error())
 		}
 	}
@@ -874,6 +893,7 @@ func (s *AssetAdministrationShellDatabase) GetAssetAdministrationShellIDsByAsset
 	limit int32,
 	cursor string,
 ) ([]string, string, error) {
+	readDB := s.readDB(ctx)
 	if limit < 0 {
 		return nil, "", common.NewErrBadRequest("AASREPO-GETAASIDSBYASSETANDSMSEM-BADLIMIT Limit " + strconv.FormatInt(int64(limit), 10) + " too small")
 	}
@@ -912,7 +932,7 @@ func (s *AssetAdministrationShellDatabase) GetAssetAdministrationShellIDsByAsset
 	if err != nil {
 		return nil, "", common.NewInternalServerError("AASREPO-GETAASIDSBYASSETANDSMSEM-BUILDSQL " + err.Error())
 	}
-	rows, err := s.db.QueryContext(ctx, query, args...)
+	rows, err := readDB.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, "", common.NewInternalServerError("AASREPO-GETAASIDSBYASSETANDSMSEM-EXECSQL " + err.Error())
 	}
@@ -947,7 +967,7 @@ func (s *AssetAdministrationShellDatabase) assetAdministrationShellCursorExists(
 	}
 
 	var one int
-	if queryErr := s.db.QueryRowContext(ctx, query, args...).Scan(&one); queryErr != nil {
+	if queryErr := s.readDB(ctx).QueryRowContext(ctx, query, args...).Scan(&one); queryErr != nil {
 		if errors.Is(queryErr, sql.ErrNoRows) {
 			return false, nil
 		}
@@ -984,7 +1004,7 @@ func (s *AssetAdministrationShellDatabase) GetAssetAdministrationShellByID(ctx c
 	}
 
 	var aasDBID int64
-	if queryErr := s.db.QueryRowContext(ctx, sqlQuery, args...).Scan(&aasDBID); queryErr != nil {
+	if queryErr := s.readDB(ctx).QueryRowContext(ctx, sqlQuery, args...).Scan(&aasDBID); queryErr != nil {
 		if queryErr == sql.ErrNoRows {
 			return nil, common.NewErrNotFound("AASREPO-GETAASBYID-AASNOTFOUND Asset Administration Shell with ID '" + aasIdentifier + "' not found")
 		}
@@ -1708,7 +1728,7 @@ func (s *AssetAdministrationShellDatabase) GetThumbnailByAASID(ctx context.Conte
 		return nil, "", "", "", err
 	}
 
-	thumbnailHandler, err := NewPostgreSQLThumbnailFileHandler(s.db)
+	thumbnailHandler, err := NewPostgreSQLThumbnailFileHandler(s.readDB(ctx))
 	if err != nil {
 		return nil, "", "", "", common.NewInternalServerError("AASREPO-GETTHUMBNAIL-NEWHANDLER " + err.Error())
 	}
@@ -1726,11 +1746,12 @@ func (s *AssetAdministrationShellDatabase) GetThumbnailByAASID(ctx context.Conte
 // Returns:
 //   - error: Visibility, lookup, consumer, stream, or transaction error.
 func (s *AssetAdministrationShellDatabase) StreamThumbnailByAASID(ctx context.Context, aasIdentifier string, consume func(string, string, string, int64, io.Reader) error) error {
-	thumbnailHandler, err := NewPostgreSQLThumbnailFileHandler(s.db)
+	readDB := s.readDB(ctx)
+	thumbnailHandler, err := NewPostgreSQLThumbnailFileHandler(readDB)
 	if err != nil {
 		return common.NewInternalServerError("AASREPO-STREAMTHUMBNAIL-NEWHANDLER " + err.Error())
 	}
-	tx, err := s.db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelRepeatableRead, ReadOnly: true})
+	tx, err := readDB.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelRepeatableRead, ReadOnly: true})
 	if err != nil {
 		return common.NewInternalServerError("AASREPO-STREAMTHUMBNAIL-STARTTX " + err.Error())
 	}
@@ -1926,7 +1947,7 @@ func (s *AssetAdministrationShellDatabase) DeleteThumbnailByAASID(ctx context.Co
 
 // GetAllSubmodelReferencesByAASID returns paginated submodel references while preserving ABAC visibility from ctx.
 func (s *AssetAdministrationShellDatabase) GetAllSubmodelReferencesByAASID(ctx context.Context, aasIdentifier string, limit int32, cursor string) ([]types.IReference, string, error) {
-	tx, cleanup, err := common.StartTransaction(s.db)
+	tx, cleanup, err := common.StartTransaction(s.readDB(ctx))
 	if err != nil {
 		return nil, "", common.NewInternalServerError("AASREPO-GETSMREFS-STARTTX " + err.Error())
 	}
@@ -2047,7 +2068,7 @@ func (s *AssetAdministrationShellDatabase) ListAASIdentifiersBySubmodelID(ctx co
 		return nil, common.NewInternalServerError("AASREPO-LISTAASBYSM-BUILDSQL " + buildErr.Error())
 	}
 
-	rows, queryErr := s.db.QueryContext(ctx, sqlQuery, args...)
+	rows, queryErr := s.readDB(ctx).QueryContext(ctx, sqlQuery, args...)
 	if queryErr != nil {
 		return nil, common.NewInternalServerError("AASREPO-LISTAASBYSM-EXECSQL " + queryErr.Error())
 	}
@@ -2234,7 +2255,7 @@ type coreAssetAdministrationShellRow struct {
 // nolint:revive // cyclomatic complexity of 32
 // getAssetAdministrationShellMapByDBID loads an AAS and maps it to a typed model.
 func (s *AssetAdministrationShellDatabase) getAssetAdministrationShellMapByDBID(ctx context.Context, aasDBID int64) (types.IAssetAdministrationShell, error) {
-	return s.getAssetAdministrationShellMapByDBIDWithQueryer(ctx, s.db, aasDBID)
+	return s.getAssetAdministrationShellMapByDBIDWithQueryer(ctx, s.readDB(ctx), aasDBID)
 }
 
 func (s *AssetAdministrationShellDatabase) getAssetAdministrationShellMapByDBIDInTransaction(ctx context.Context, tx *sql.Tx, aasDBID int64) (types.IAssetAdministrationShell, error) {
@@ -2318,7 +2339,8 @@ func (s *AssetAdministrationShellDatabase) getAssetAdministrationShellMapsByDBID
 		return nil, common.NewInternalServerError("AASREPO-MAPAASBATCH-BUILDSQL " + buildErr.Error())
 	}
 
-	rows, queryErr := s.db.QueryContext(ctx, querySQL, queryArgs...)
+	readDB := s.readDB(ctx)
+	rows, queryErr := readDB.QueryContext(ctx, querySQL, queryArgs...)
 	if queryErr != nil {
 		return nil, common.NewInternalServerError("AASREPO-MAPAASBATCH-EXECSQL " + queryErr.Error())
 	}
@@ -2355,12 +2377,12 @@ func (s *AssetAdministrationShellDatabase) getAssetAdministrationShellMapsByDBID
 		return nil, common.NewInternalServerError("AASREPO-MAPAASBATCH-ITERROWS " + rowsErr.Error())
 	}
 
-	submodelsByAASID, submodelErr := s.readSubmodelReferencePayloadsByAASDBIDs(ctx, s.db, aasDBIDs)
+	submodelsByAASID, submodelErr := s.readSubmodelReferencePayloadsByAASDBIDs(ctx, readDB, aasDBIDs)
 	if submodelErr != nil {
 		return nil, submodelErr
 	}
 
-	specificAssetIDsByAASID, specificErr := s.readSpecificAssetIDsByAssetInformationIDs(ctx, s.db, aasDBIDs)
+	specificAssetIDsByAASID, specificErr := s.readSpecificAssetIDsByAssetInformationIDs(ctx, readDB, aasDBIDs)
 	if specificErr != nil {
 		return nil, common.NewInternalServerError("AASREPO-MAPAASBATCH-READSPECIFICASSETIDS " + specificErr.Error())
 	}

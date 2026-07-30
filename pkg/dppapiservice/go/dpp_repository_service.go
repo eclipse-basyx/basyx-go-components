@@ -122,6 +122,7 @@ func (s *DPPRepositoryService) CreateDPPFromJSON(ctx context.Context, data []byt
 //   - ImplResponse: HTTP-style response containing the updated DPP or mapped error payload
 //   - error: Unexpected service error, if one occurs outside normal response mapping
 func (s *DPPRepositoryService) UpdateDPPFromJSON(ctx context.Context, dppID string, data []byte) (ImplResponse, error) {
+	ctx = common.WithWriterPostgresReads(ctx)
 	patch, _, err := decodeDPPDocument(data, false)
 	if err != nil {
 		return errorResponse(http.StatusBadRequest, err), nil
@@ -338,6 +339,7 @@ func (s *DPPRepositoryService) ReadDPPById(ctx context.Context, dppID string, re
 //   - ImplResponse: HTTP-style response with no body on success or a mapped error payload
 //   - error: Unexpected service error, if one occurs outside normal response mapping
 func (s *DPPRepositoryService) DeleteDPPById(ctx context.Context, dppID string) (ImplResponse, error) {
+	ctx = common.WithWriterPostgresReads(ctx)
 	resolved, err := s.resolveSubmodels(ctx, dppID, time.Time{})
 	if err != nil {
 		return mapPersistenceError(err, http.StatusNotFound), nil
@@ -477,6 +479,7 @@ func (s *DPPRepositoryService) ReadDataElement(ctx context.Context, dppID string
 //   - ImplResponse: HTTP-style response containing the updated DPP data element or mapped error payload
 //   - error: Unexpected service error, if one occurs outside normal response mapping
 func (s *DPPRepositoryService) UpdateDataElementFromJSON(ctx context.Context, dppID string, elementIDPath string, data []byte) (ImplResponse, error) {
+	ctx = common.WithWriterPostgresReads(ctx)
 	decoder := json.NewDecoder(strings.NewReader(string(data)))
 	decoder.UseNumber()
 	var value any

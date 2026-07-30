@@ -123,16 +123,22 @@ func runServer(ctx context.Context, configPath string) error {
 
 	slog.InfoContext(ctx, "connecting to PostgreSQL")
 
-	sharedDB, err := common.OpenPostgresWithSchemaValidation(ctx, cfg.Postgres, "aasrepositoryservice", common.CURRENT_DATABASE_VERSION)
+	pools, err := common.OpenPostgresPoolsWithSchemaValidation(ctx, cfg.Postgres, "aasrepositoryservice", common.CURRENT_DATABASE_VERSION)
 	if err != nil {
 		slog.ErrorContext(ctx, "database connection failed", "error.code", "AASREPOSITORY-DB-CONNECT", "error", err)
 		return err
 	}
+	defer func() {
+		if closeErr := pools.Close(); closeErr != nil {
+			slog.ErrorContext(ctx, "database pool shutdown failed", "error.code", "AASREPOSITORY-DB-CLOSE", "error", closeErr)
+		}
+	}()
+	sharedDB := pools.Writer
 	if err = history.ApplyPostgresGuardConfig(ctx, sharedDB); err != nil {
 		return err
 	}
 
-	aasDatabase, err := persistencepostgresql.NewAssetAdministrationShellDatabaseFromDB(sharedDB, cfg.Server.StrictVerification)
+	aasDatabase, err := persistencepostgresql.NewAssetAdministrationShellDatabaseFromPools(pools.Writer, pools.Reader, cfg.Server.StrictVerification)
 	if err != nil {
 		slog.ErrorContext(ctx, "AAS repository persistence initialization failed", "error.code", "AASREPOSITORY-DB-INIT", "error", err)
 		return err
@@ -140,13 +146,13 @@ func runServer(ctx context.Context, configPath string) error {
 	aasDatabase.SetJWSPrivateKey(privateKey)
 	aasDatabase.SetJWSCertificateChain(signingOptions.CertificateChain)
 
-	aasRegistryPersistence, err := aasregistrydb.NewPostgreSQLAASRegistryDatabaseFromDB(sharedDB, cfg.Server.CacheEnabled)
+	aasRegistryPersistence, err := aasregistrydb.NewPostgreSQLAASRegistryDatabaseFromPools(pools.Writer, pools.Reader, cfg.Server.CacheEnabled)
 	if err != nil {
 		slog.ErrorContext(ctx, "AAS registry persistence initialization failed", "error.code", "AASREPOSITORY-AASREGISTRY-INIT", "error", err)
 		return err
 	}
 
-	submodelDatabase, err := submodelrepositorydb.NewSubmodelDatabaseFromDB(sharedDB, nil, cfg.Server.StrictVerification)
+	submodelDatabase, err := submodelrepositorydb.NewSubmodelDatabaseFromPools(pools.Writer, pools.Reader, nil, cfg.Server.StrictVerification)
 	if err != nil {
 		slog.ErrorContext(ctx, "submodel persistence initialization failed", "error.code", "AASREPOSITORY-SMREPOSITORY-INIT", "error", err)
 		return err

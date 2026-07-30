@@ -51,6 +51,20 @@ func TestNewSubmodelDatabaseInvalidDSNReturnsError(t *testing.T) {
 	require.Nil(t, sut)
 }
 
+func TestSubmodelRepositoryReadPoolSelection(t *testing.T) {
+	writer, _, err := sqlmock.New()
+	require.NoError(t, err)
+	defer func() { _ = writer.Close() }()
+	reader, _, err := sqlmock.New()
+	require.NoError(t, err)
+	defer func() { _ = reader.Close() }()
+
+	backend, err := NewSubmodelDatabaseFromPools(writer, reader, nil, "off")
+	require.NoError(t, err)
+	require.Same(t, reader, backend.readDB(t.Context()))
+	require.Same(t, writer, backend.readDB(common.WithWriterPostgresReads(t.Context())))
+}
+
 func TestGetSubmodelsDatabaseQueryError(t *testing.T) {
 	t.Parallel()
 

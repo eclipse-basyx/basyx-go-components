@@ -78,12 +78,18 @@ func runServer(ctx context.Context, configPath string) error {
 
 	slog.InfoContext(ctx, "connecting to PostgreSQL")
 
-	sharedDB, err := common.OpenPostgresWithSchemaValidation(ctx, cfg.Postgres, "aasxfileserverservice", common.CURRENT_DATABASE_VERSION)
+	pools, err := common.OpenPostgresPoolsWithSchemaValidation(ctx, cfg.Postgres, "aasxfileserverservice", common.CURRENT_DATABASE_VERSION)
 	if err != nil {
 		slog.ErrorContext(ctx, "database connection failed", "error.code", "AASXFILES-DB-CONNECT", "error", err)
 		return err
 	}
-	aasxDatabase, err := aasxpersistence.NewAASXFileServerDatabaseFromDB(sharedDB)
+	defer func() {
+		if closeErr := pools.Close(); closeErr != nil {
+			slog.ErrorContext(ctx, "database pool shutdown failed", "error.code", "AASXFILES-DB-CLOSE", "error", closeErr)
+		}
+	}()
+	sharedDB := pools.Writer
+	aasxDatabase, err := aasxpersistence.NewAASXFileServerDatabaseFromPools(pools.Writer, pools.Reader)
 	if err != nil {
 		slog.ErrorContext(ctx, "AASX persistence initialization failed", "error.code", "AASXFILES-DB-INIT", "error", err)
 		return err

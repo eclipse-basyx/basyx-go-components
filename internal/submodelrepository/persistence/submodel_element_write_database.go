@@ -123,32 +123,32 @@ func (s *SubmodelDatabase) updateSubmodelElementInTransaction(tx *sql.Tx, submod
 
 // GetSubmodelElement retrieves a submodel element by path and applies optional ABAC formula filters from ctx.
 func (s *SubmodelDatabase) GetSubmodelElement(ctx context.Context, submodelID string, idShortOrPath string, includeBlobValue bool, level string) (types.ISubmodelElement, error) {
-	return submodelelements.GetSubmodelElementByIDShortOrPath(ctx, s.db, submodelID, idShortOrPath, includeBlobValue, level)
+	return submodelelements.GetSubmodelElementByIDShortOrPath(ctx, s.readDB(ctx), submodelID, idShortOrPath, includeBlobValue, level)
 }
 
 // GetSubmodelElements retrieves submodel elements and applies optional ABAC formula filters from ctx.
 func (s *SubmodelDatabase) GetSubmodelElements(ctx context.Context, submodelID string, limit *int, cursor string, includeBlobValue bool, level string) ([]types.ISubmodelElement, string, error) {
-	return submodelelements.GetSubmodelElementsBySubmodelID(ctx, s.db, submodelID, limit, cursor, includeBlobValue, level)
+	return submodelelements.GetSubmodelElementsBySubmodelID(ctx, s.readDB(ctx), submodelID, limit, cursor, includeBlobValue, level)
 }
 
 // GetSubmodelElementPaths retrieves submodel element paths directly from persisted idshort_path values.
 func (s *SubmodelDatabase) GetSubmodelElementPaths(ctx context.Context, submodelID string, level string) ([]string, error) {
-	return submodelelements.GetSubmodelElementPathsBySubmodelID(ctx, s.db, submodelID, level)
+	return submodelelements.GetSubmodelElementPathsBySubmodelID(ctx, s.readDB(ctx), submodelID, level)
 }
 
 // GetSubmodelElementPathPage retrieves paged submodel element paths directly from persisted idshort_path values.
 func (s *SubmodelDatabase) GetSubmodelElementPathPage(ctx context.Context, submodelID string, limit *int, cursor string, level string) ([]string, string, error) {
-	return submodelelements.GetSubmodelElementPathsPageBySubmodelID(ctx, s.db, submodelID, limit, cursor, level)
+	return submodelelements.GetSubmodelElementPathsPageBySubmodelID(ctx, s.readDB(ctx), submodelID, limit, cursor, level)
 }
 
 // GetSubmodelElementPathsByPath retrieves path notation for a specific submodel element path.
 func (s *SubmodelDatabase) GetSubmodelElementPathsByPath(ctx context.Context, submodelID string, idShortPath string, level string) ([]string, error) {
-	return submodelelements.GetSubmodelElementPathsByPath(ctx, s.db, submodelID, idShortPath, level)
+	return submodelelements.GetSubmodelElementPathsByPath(ctx, s.readDB(ctx), submodelID, idShortPath, level)
 }
 
 // GetSubmodelElementReferences retrieves SME references and applies optional ABAC formula filters from ctx.
 func (s *SubmodelDatabase) GetSubmodelElementReferences(ctx context.Context, submodelID string, limit *int, cursor string) ([]types.IReference, string, error) {
-	return submodelelements.GetSubmodelElementReferencesBySubmodelID(ctx, s.db, submodelID, limit, cursor)
+	return submodelelements.GetSubmodelElementReferencesBySubmodelID(ctx, s.readDB(ctx), submodelID, limit, cursor)
 }
 
 // AddSubmodelElement adds a top-level submodel element and performs an ABAC re-check before commit when ABAC is enabled.

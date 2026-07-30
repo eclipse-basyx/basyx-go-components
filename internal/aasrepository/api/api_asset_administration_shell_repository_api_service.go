@@ -773,6 +773,7 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) GetSubmodelByIdAasRepo
 
 // PutSubmodelByIdAasRepository - Creates or updates the Submodel
 func (s *AssetAdministrationShellRepositoryAPIAPIService) PutSubmodelByIdAasRepository(ctx context.Context, aasIdentifier string, submodelIdentifier string, submodel types.ISubmodel) (gen.ImplResponse, error) {
+	ctx = common.WithWriterPostgresReads(ctx)
 	const operation = "PutSubmodelByIdAasRepository"
 
 	if s.submodelBackend == nil {
@@ -866,6 +867,7 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) PutSubmodelByIdAasRepo
 
 // DeleteSubmodelByIdAasRepository - Deletes the submodel from the Asset Administration Shell and the Repository.
 func (s *AssetAdministrationShellRepositoryAPIAPIService) DeleteSubmodelByIdAasRepository(ctx context.Context, aasIdentifier string, submodelIdentifier string) (gen.ImplResponse, error) {
+	ctx = common.WithWriterPostgresReads(ctx)
 	const operation = "DeleteSubmodelByIdAasRepository"
 
 	if s.submodelBackend == nil {
@@ -1033,6 +1035,9 @@ func decodeAASAndSubmodelIdentifiers(aasIdentifier string, submodelIdentifier st
 }
 
 func (s *AssetAdministrationShellRepositoryAPIAPIService) ensureAASSubmodelReference(ctx context.Context, operation string, decodedAASIdentifier string, decodedSubmodelIdentifier string) (gen.ImplResponse, error, bool) {
+	if isAASSubmodelMutationOperation(operation) {
+		ctx = common.WithWriterPostgresReads(ctx)
+	}
 	_, aasLookupErr := s.assetAdministrationShellBackend.GetAssetAdministrationShellByID(ctx, decodedAASIdentifier)
 	if aasLookupErr != nil {
 		if common.IsErrDenied(aasLookupErr) {
@@ -1059,6 +1064,14 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) ensureAASSubmodelRefer
 	}
 
 	return gen.ImplResponse{}, nil, true
+}
+
+func isAASSubmodelMutationOperation(operation string) bool {
+	return strings.HasPrefix(operation, "Post") ||
+		strings.HasPrefix(operation, "Put") ||
+		strings.HasPrefix(operation, "Patch") ||
+		strings.HasPrefix(operation, "Delete") ||
+		strings.HasPrefix(operation, "Invoke")
 }
 
 // PatchSubmodelAasRepository - Updates the Submodel

@@ -79,13 +79,18 @@ func runServer(ctx context.Context, configPath string) error {
 
 	slog.InfoContext(ctx, "connecting to PostgreSQL")
 
-	sharedDB, err := common.OpenPostgresWithSchemaValidation(ctx, cfg.Postgres, "companylookupservice", common.CURRENT_DATABASE_VERSION)
+	pools, err := common.OpenPostgresPoolsWithSchemaValidation(ctx, cfg.Postgres, "companylookupservice", common.CURRENT_DATABASE_VERSION)
 	if err != nil {
 		slog.ErrorContext(ctx, "database connection failed", "error.code", "COMPANYLOOKUP-DB-CONNECT", "error", err)
 		return err
 	}
-	defer func() { _ = sharedDB.Close() }()
-	companyLookupDatabase, err := companylookuppostgresql.NewPostgreSQLCompanyLookupBackendFromDB(sharedDB, cfg.Server.CacheEnabled)
+	defer func() {
+		if closeErr := pools.Close(); closeErr != nil {
+			slog.ErrorContext(ctx, "database pool shutdown failed", "error.code", "COMPANYLOOKUP-DB-CLOSE", "error", closeErr)
+		}
+	}()
+	sharedDB := pools.Writer
+	companyLookupDatabase, err := companylookuppostgresql.NewPostgreSQLCompanyLookupBackendFromPools(pools.Writer, pools.Reader, cfg.Server.CacheEnabled)
 	if err != nil {
 		slog.ErrorContext(ctx, "company lookup persistence initialization failed", "error.code", "COMPANYLOOKUP-DB-INIT", "error", err)
 		return err

@@ -30,8 +30,23 @@ import (
 	"testing"
 
 	sqlmock "github.com/DATA-DOG/go-sqlmock"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/stretchr/testify/require"
 )
+
+func TestAASRepositoryReadPoolSelection(t *testing.T) {
+	writer, _, err := sqlmock.New()
+	require.NoError(t, err)
+	defer func() { _ = writer.Close() }()
+	reader, _, err := sqlmock.New()
+	require.NoError(t, err)
+	defer func() { _ = reader.Close() }()
+
+	backend, err := NewAssetAdministrationShellDatabaseFromPools(writer, reader, "off")
+	require.NoError(t, err)
+	require.Same(t, reader, backend.readDB(t.Context()))
+	require.Same(t, writer, backend.readDB(common.WithWriterPostgresReads(t.Context())))
+}
 
 func TestGetAssetAdministrationShellIDsByAssetAndSubmodelSemanticIDsUsesJoinedQuery(t *testing.T) {
 	t.Parallel()

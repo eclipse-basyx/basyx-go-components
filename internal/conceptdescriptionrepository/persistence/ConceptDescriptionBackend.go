@@ -53,7 +53,8 @@ import (
 // ConceptDescriptionBackend is the struct that implements the persistence layer for the Concept Description Repository API service.
 // It contains a reference to the database connection pool and provides methods for storing and retrieving concept descriptions.
 type ConceptDescriptionBackend struct {
-	db *sql.DB
+	db       *sql.DB
+	readerDB *sql.DB
 }
 
 // NewConceptDescriptionBackend creates a new instance of ConceptDescriptionBackend with the given database connection parameters.
@@ -86,14 +87,30 @@ func NewConceptDescriptionBackendFromDB(db *sql.DB) (*ConceptDescriptionBackend,
 	if db == nil {
 		return nil, common.NewErrBadRequest("CDREPO-NEWFROMDB-NILDB database handle must not be nil")
 	}
+	return NewConceptDescriptionBackendFromPools(db, db)
+}
 
-	healthy, err := testDBConnection(db)
+// NewConceptDescriptionBackendFromPools creates a backend from caller-owned
+// writer and reader pools.
+func NewConceptDescriptionBackendFromPools(writer *sql.DB, reader *sql.DB) (*ConceptDescriptionBackend, error) {
+	if writer == nil {
+		return nil, common.NewErrBadRequest("CDREPO-NEWFROMPOOLS-NILWRITER writer database handle must not be nil")
+	}
+	if reader == nil {
+		return nil, common.NewErrBadRequest("CDREPO-NEWFROMPOOLS-NILREADER reader database handle must not be nil")
+	}
+
+	healthy, err := testDBConnection(writer)
 	if !healthy {
 		slog.Error("database connection failed", "error.code", "CDREPO-TESTDBCON-FAIL", "error", err)
 		return nil, err
 	}
 
-	return &ConceptDescriptionBackend{db: db}, nil
+	return &ConceptDescriptionBackend{db: writer, readerDB: reader}, nil
+}
+
+func (b *ConceptDescriptionBackend) readDB(ctx context.Context) *sql.DB {
+	return common.PostgresReadPool(ctx, b.db, b.readerDB)
 }
 
 func testDBConnection(db *sql.DB) (bool, error) {
@@ -381,6 +398,7 @@ func (b *ConceptDescriptionBackend) CreateConceptDescription(ctx context.Context
 
 // GetConceptDescriptions retrieves a paginated list of concept descriptions with optional filters.
 func (b *ConceptDescriptionBackend) GetConceptDescriptions(ctx context.Context, idShort *string, isCaseOf *string, dataSpecificationRef *string, limit uint, cursor *string, createdFrom time.Time, updatedFrom time.Time) ([]types.IConceptDescription, string, error) {
+	readDB := b.readDB(ctx)
 	if limit == 0 {
 		limit = 100
 	}
@@ -466,7 +484,7 @@ func (b *ConceptDescriptionBackend) GetConceptDescriptions(ctx context.Context, 
 		return nil, "", fmt.Errorf("CDREPO-GCDS-BUILDSQL failed to build SQL query: %w", err)
 	}
 
-	rows, err := b.db.QueryContext(ctx, sqlQuery, args...)
+	rows, err := readDB.QueryContext(ctx, sqlQuery, args...)
 	if err != nil {
 		return nil, "", fmt.Errorf("CDREPO-GCDS-EXECQUERY failed to execute SQL query: %w", err)
 	}
@@ -525,7 +543,7 @@ func (b *ConceptDescriptionBackend) conceptDescriptionCursorExists(ctx context.C
 	}
 
 	var one int
-	if queryErr := b.db.QueryRowContext(ctx, query, args...).Scan(&one); queryErr != nil {
+	if queryErr := b.readDB(ctx).QueryRowContext(ctx, query, args...).Scan(&one); queryErr != nil {
 		if errors.Is(queryErr, sql.ErrNoRows) {
 			return false, nil
 		}
@@ -571,7 +589,7 @@ func (b *ConceptDescriptionBackend) GetConceptDescriptionByID(ctx context.Contex
 	var identifier string
 	var idShortValue sql.NullString
 	var data string
-	scanErr := b.db.QueryRowContext(ctx, sqlQuery, args...).Scan(&identifier, &idShortValue, &data)
+	scanErr := b.readDB(ctx).QueryRowContext(ctx, sqlQuery, args...).Scan(&identifier, &idShortValue, &data)
 	if scanErr != nil {
 		if errors.Is(scanErr, sql.ErrNoRows) {
 			return nil, common.NewErrNotFound("Concept description with the given ID does not exist")

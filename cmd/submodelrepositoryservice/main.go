@@ -130,15 +130,21 @@ func runServer(ctx context.Context, configPath string) error {
 		slog.WarnContext(ctx, "JWS certificate chain unavailable; x5c headers are disabled", "error.code", "SMREPOSITORY-JWS-LOADCHAIN", "error", err)
 	}
 
-	sharedDB, err := common.OpenPostgresWithSchemaValidation(ctx, cfg.Postgres, "submodelrepositoryservice", common.CURRENT_DATABASE_VERSION)
+	pools, err := common.OpenPostgresPoolsWithSchemaValidation(ctx, cfg.Postgres, "submodelrepositoryservice", common.CURRENT_DATABASE_VERSION)
 	if err != nil {
 		return err
 	}
+	defer func() {
+		if closeErr := pools.Close(); closeErr != nil {
+			slog.ErrorContext(ctx, "database pool shutdown failed", "error.code", "SMREPOSITORY-DB-CLOSE", "error", closeErr)
+		}
+	}()
+	sharedDB := pools.Writer
 	if err = history.ApplyPostgresGuardConfig(ctx, sharedDB); err != nil {
 		return err
 	}
 
-	smDatabase, err := persistencepostgresql.NewSubmodelDatabaseFromDB(sharedDB, privateKey, cfg.Server.StrictVerification)
+	smDatabase, err := persistencepostgresql.NewSubmodelDatabaseFromPools(pools.Writer, pools.Reader, privateKey, cfg.Server.StrictVerification)
 	if err != nil {
 		return err
 	}
@@ -148,15 +154,15 @@ func runServer(ctx context.Context, configPath string) error {
 		slog.ErrorContext(ctx, "async job persistence initialization failed", "error.code", "SMREPOSITORY-ASYNCJOB-INIT", "error", err)
 		return err
 	}
-	smRegistryPersistence, err := smregistrydb.NewPostgreSQLSMBackendFromDB(sharedDB)
+	smRegistryPersistence, err := smregistrydb.NewPostgreSQLSMBackendFromPools(pools.Writer, pools.Reader)
 	if err != nil {
 		return err
 	}
-	aasRepositoryPersistence, err := aasrepositorydb.NewAssetAdministrationShellDatabaseFromDB(sharedDB, cfg.Server.StrictVerification)
+	aasRepositoryPersistence, err := aasrepositorydb.NewAssetAdministrationShellDatabaseFromPools(pools.Writer, pools.Reader, cfg.Server.StrictVerification)
 	if err != nil {
 		return err
 	}
-	aasRegistryPersistence, err := aasregistrydb.NewPostgreSQLAASRegistryDatabaseFromDB(sharedDB, cfg.Server.CacheEnabled)
+	aasRegistryPersistence, err := aasregistrydb.NewPostgreSQLAASRegistryDatabaseFromPools(pools.Writer, pools.Reader, cfg.Server.CacheEnabled)
 
 	if err != nil {
 		return err

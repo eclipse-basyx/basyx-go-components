@@ -29,7 +29,6 @@ package main
 import (
 	"context"
 	"crypto/rsa"
-	"database/sql"
 	"embed"
 	"flag"
 	"fmt"
@@ -128,10 +127,16 @@ func runServer(ctx context.Context, configPath string) error {
 		slog.WarnContext(ctx, "Swagger UI unavailable", "error.code", "AASENV-SWAGGER-INIT", "error", err)
 	}
 
-	sharedDB, asyncJobManager, sharedBulkManager, err := openSharedDatabase(ctx, cfg)
+	pools, asyncJobManager, sharedBulkManager, err := openSharedDatabase(ctx, cfg)
 	if err != nil {
 		return err
 	}
+	defer func() {
+		if closeErr := pools.Close(); closeErr != nil {
+			slog.ErrorContext(ctx, "database pool shutdown failed", "error.code", "AASENV-DB-CLOSE", "error", closeErr)
+		}
+	}()
+	sharedDB := pools.Writer
 
 	var privateKey *rsa.PrivateKey
 	if cfg.JWS.PrivateKeyPath != "" {
@@ -145,30 +150,30 @@ func runServer(ctx context.Context, configPath string) error {
 		slog.WarnContext(ctx, "JWS certificate chain unavailable; x5c headers are disabled", "error.code", "AASENV-JWS-LOADCHAIN", "error", err)
 	}
 
-	aasRegistryPersistence, err := aasregistrydb.NewPostgreSQLAASRegistryDatabaseFromDB(sharedDB, cfg.Server.CacheEnabled)
+	aasRegistryPersistence, err := aasregistrydb.NewPostgreSQLAASRegistryDatabaseFromPools(pools.Writer, pools.Reader, cfg.Server.CacheEnabled)
 	if err != nil {
 		return err
 	}
-	smRegistryPersistence, err := smregistrydb.NewPostgreSQLSMBackendFromDB(sharedDB)
+	smRegistryPersistence, err := smregistrydb.NewPostgreSQLSMBackendFromPools(pools.Writer, pools.Reader)
 	if err != nil {
 		return err
 	}
-	aasRepositoryPersistence, err := aasrepositorydb.NewAssetAdministrationShellDatabaseFromDB(sharedDB, cfg.Server.StrictVerification)
+	aasRepositoryPersistence, err := aasrepositorydb.NewAssetAdministrationShellDatabaseFromPools(pools.Writer, pools.Reader, cfg.Server.StrictVerification)
 	if err != nil {
 		return err
 	}
 	aasRepositoryPersistence.SetJWSPrivateKey(privateKey)
 	aasRepositoryPersistence.SetJWSCertificateChain(signingOptions.CertificateChain)
-	submodelRepositoryPersistence, err := submodelrepositorydb.NewSubmodelDatabaseFromDB(sharedDB, privateKey, cfg.Server.StrictVerification)
+	submodelRepositoryPersistence, err := submodelrepositorydb.NewSubmodelDatabaseFromPools(pools.Writer, pools.Reader, privateKey, cfg.Server.StrictVerification)
 	if err != nil {
 		return err
 	}
 	submodelRepositoryPersistence.SetJWSCertificateChain(signingOptions.CertificateChain)
-	cdrPersistence, err := cdrdb.NewConceptDescriptionBackendFromDB(sharedDB)
+	cdrPersistence, err := cdrdb.NewConceptDescriptionBackendFromPools(pools.Writer, pools.Reader)
 	if err != nil {
 		return err
 	}
-	discoveryPersistence, err := discoverydb.NewPostgreSQLDiscoveryBackendFromDB(sharedDB)
+	discoveryPersistence, err := discoverydb.NewPostgreSQLDiscoveryBackendFromPools(pools.Writer, pools.Reader)
 	if err != nil {
 		return err
 	}
@@ -305,23 +310,27 @@ func runServer(ctx context.Context, configPath string) error {
 func openSharedDatabase(
 	ctx context.Context,
 	cfg *common.Config,
-) (*sql.DB, *asyncjob.Manager, *asyncjob.Manager, error) {
-	db, err := common.OpenPostgresWithSchemaValidation(ctx, cfg.Postgres, "aasenvironmentservice", common.CURRENT_DATABASE_VERSION)
+) (*common.PostgresPools, *asyncjob.Manager, *asyncjob.Manager, error) {
+	pools, err := common.OpenPostgresPoolsWithSchemaValidation(ctx, cfg.Postgres, "aasenvironmentservice", common.CURRENT_DATABASE_VERSION)
 	if err != nil {
 		return nil, nil, nil, err
 	}
+	db := pools.Writer
 	if err = history.ApplyPostgresGuardConfig(ctx, db); err != nil {
+		_ = pools.Close()
 		return nil, nil, nil, err
 	}
 	asyncJobManager, err := submodelrepositoryapi.NewAsyncJobManager(ctx, db)
 	if err != nil {
+		_ = pools.Close()
 		return nil, nil, nil, fmt.Errorf("AASENV-ASYNCJOB-INIT %w", err)
 	}
 	bulkManager, err := asyncjob.NewPostgresManager(ctx, db, "AASENV-BULK", 0)
 	if err != nil {
+		_ = pools.Close()
 		return nil, nil, nil, fmt.Errorf("AASENV-ASYNCJOB-INIT %w", err)
 	}
-	return db, asyncJobManager, bulkManager, nil
+	return pools, asyncJobManager, bulkManager, nil
 }
 
 func main() {
