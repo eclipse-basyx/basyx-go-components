@@ -86,6 +86,9 @@ The project is composed of DB-backed microservices for AAS and Submodel registri
      ```sh
      docker compose -f examples/BaSyxMinimalExample/docker-compose.yml up
      ```
+   To run BaSyx with distinct PostgreSQL writer and streaming-standby reader
+   endpoints, see the [PostgreSQL read replica
+   example](examples/BaSyxReadReplicaExample/README.md).
 
 ## 4. Environment Variables & Configuration
 
@@ -153,7 +156,7 @@ postgres:
     connMaxLifetimeMinutes: 5
     connMaxIdleTimeMinutes: 0
 
-    # Optional read-only endpoint for registry, discovery, and DTR reads.
+    # Optional read-only endpoint for eligible reads in PostgreSQL-backed HTTP services.
     # Omit this block to reuse the writer pool.
     # reader:
     #     host: postgres-reader
